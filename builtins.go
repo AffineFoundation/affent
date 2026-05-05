@@ -99,21 +99,33 @@ func formatShellOutput(res executor.ExecResult) string {
 // ---- file ops (operate on the host bind mount, never via docker exec --
 // way faster + we can preview/diff in the gateway) ----
 
-// safeWorkspacePath joins p onto the user's host workspace dir while
-// rejecting traversal outside it.
+// safeWorkspacePath resolves p against the workspace and rejects anything
+// that escapes it. Two rules, no sentinels:
+//
+//   - relative path  -> joined onto HostWorkspaceDir
+//   - absolute path  -> taken literally; must fall inside HostWorkspaceDir
+//
+// Earlier versions silently rewrote any leading "/" or "/workspace" prefix
+// into a workspace-relative path. That made `/etc/passwd` look like an
+// in-workspace lookup instead of an explicit escape (sandbox check missed
+// it) and caused real-mount paths like `/app/foo` to double-prefix into
+// `/app/app/foo` when the workspace happened to be `/app`. The two-rule
+// version below has no such ambiguity: callers that want the old "model
+// always sees /workspace" behaviour set HostWorkspaceDir to "/workspace"
+// and the absolute-path branch handles it directly.
 func safeWorkspacePath(deps BuiltinDeps, p string) (string, error) {
-	clean := filepath.Clean(p)
-	// Accept either container-style "/workspace/foo" or relative "foo".
-	clean = strings.TrimPrefix(clean, "/workspace/")
-	clean = strings.TrimPrefix(clean, "/workspace")
-	clean = strings.TrimPrefix(clean, "/")
-	if clean == "" {
-		clean = "."
+	if p == "" {
+		return deps.HostWorkspaceDir, nil
 	}
-	full := filepath.Join(deps.HostWorkspaceDir, clean)
+	var full string
+	if filepath.IsAbs(p) {
+		full = filepath.Clean(p)
+	} else {
+		full = filepath.Join(deps.HostWorkspaceDir, p)
+	}
 	rel, err := filepath.Rel(deps.HostWorkspaceDir, full)
-	if err != nil || strings.HasPrefix(rel, "..") {
-		return "", fmt.Errorf("path %q escapes /workspace", p)
+	if err != nil || rel == ".." || strings.HasPrefix(rel, ".."+string(filepath.Separator)) {
+		return "", fmt.Errorf("path %q escapes workspace %q", p, deps.HostWorkspaceDir)
 	}
 	return full, nil
 }
