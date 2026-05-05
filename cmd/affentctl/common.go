@@ -45,9 +45,9 @@ type commonFlags struct {
 
 func (c *commonFlags) bind(fs *flag.FlagSet) {
 	fs.StringVar(&c.workspace, "workspace", "./affent-workspace", "working dir for shell + file tools")
-	fs.StringVar(&c.baseURL, "base-url", os.Getenv("AFENTCTL_BASE_URL"), "OpenAI-compat endpoint")
-	fs.StringVar(&c.apiKey, "api-key", os.Getenv("AFENTCTL_API_KEY"), "API key")
-	fs.StringVar(&c.model, "model", os.Getenv("AFENTCTL_MODEL"), "model id")
+	fs.StringVar(&c.baseURL, "base-url", os.Getenv("AFFENTCTL_BASE_URL"), "OpenAI-compat endpoint")
+	fs.StringVar(&c.apiKey, "api-key", os.Getenv("AFFENTCTL_API_KEY"), "API key")
+	fs.StringVar(&c.model, "model", os.Getenv("AFFENTCTL_MODEL"), "model id")
 	fs.IntVar(&c.maxTurns, "max-turns", 10, "max tool-call rounds per user message")
 	fs.DurationVar(&c.callTimeout, "max-call-timeout", affent.DefaultPerCallTimeout, "per-LLM-call timeout")
 	fs.IntVar(&c.retryTransient, "retry-transient", affent.DefaultTransientRetries, "retry attempts on transient LLM errors (5xx/429/408/net/EOF/timeout); 0 disables")
@@ -57,7 +57,7 @@ func (c *commonFlags) bind(fs *flag.FlagSet) {
 	fs.BoolVar(&c.quiet, "quiet", false, "suppress stderr progress")
 	fs.StringVar(&c.sessionID, "session-id", "", "resume the named session (under --workspace/.affentctl/)")
 	fs.BoolVar(&c.continueLast, "continue", false, "resume the most recent session under --workspace")
-	fs.StringVar(&c.mcpConfigPath, "mcp-config", os.Getenv("AFENTCTL_MCP_CONFIG"), "path to MCP server config JSON ({\"servers\":[{...}]})")
+	fs.StringVar(&c.mcpConfigPath, "mcp-config", os.Getenv("AFFENTCTL_MCP_CONFIG"), "path to MCP server config JSON ({\"servers\":[{...}]})")
 }
 
 // loopBundle is everything a subcommand needs after setup: the loop
@@ -99,7 +99,7 @@ func setupLoop(c commonFlags) (*loopBundle, int) {
 		With().Timestamp().Logger()
 
 	if c.model == "" {
-		log.Error().Msg("--model (or AFENTCTL_MODEL) is required")
+		log.Error().Msg("--model (or AFFENTCTL_MODEL) is required")
 		return nil, 64
 	}
 
