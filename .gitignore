@@ -1,0 +1,11 @@
+.env
+.env.local
+
+# Go
+bin/
+*.test
+coverage.out
+
+# Local workspaces created by affentctl
+affent-workspace/
+.affentctl/
