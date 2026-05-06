@@ -310,14 +310,14 @@ func (l *Loop) consumeAndPersist(ctx context.Context, turnID string, stream <-ch
 		// Mirror message.end for reasoning: a single event carrying the
 		// full accumulated chain-of-thought, so consumers running with
 		// --trace-skip-deltas (training, batch eval) still capture it.
-		l.publish(sse.TypeThinkingEnd, sse.ThinkingEndPayload{
+		l.publish(sse.TypeThinkingDone, sse.ThinkingDonePayload{
 			TurnID: turnID, Text: finish.Final.ReasoningContent,
 		})
 	}
 	if sawText {
 		// Close the streaming bubble so the UI's accumulator marks the
 		// assistant text done before the next assistant message starts.
-		l.publish(sse.TypeMessageEnd, sse.MessageEndPayload{TurnID: turnID, Text: finish.Final.Content})
+		l.publish(sse.TypeMessageDone, sse.MessageDonePayload{TurnID: turnID, Text: finish.Final.Content})
 	}
 	// Persist the assembled assistant message (content + tool_calls +
 	// reasoning) so reload sees the same state. ReasoningContent is kept

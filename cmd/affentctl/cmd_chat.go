@@ -179,7 +179,7 @@ func drainInteractive(ctx context.Context, events <-chan sse.Event, trace *json.
 					thinkingShown = false
 				}
 				fmt.Fprint(os.Stdout, p.Delta)
-			case sse.TypeMessageEnd:
+			case sse.TypeMessageDone:
 				fmt.Fprintln(os.Stdout)
 			case sse.TypeToolRequest:
 				var p sse.ToolRequestPayload

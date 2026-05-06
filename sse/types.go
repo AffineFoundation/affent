@@ -2,13 +2,19 @@ package sse
 
 // Canonical event type strings. Frontend imports the same set via OpenAPI/types
 // generation later; for now the source of truth is this file + docs.
+// Event-type naming: ".done" means a streaming accumulation is complete
+// (the carried payload is the final value, more events for the same turn
+// may still follow). ".end" is a turn-level boundary: the loop has
+// finished and there will be no more events for that turn. Don't use
+// ".end" for stream-completion events — readers misread it as a boundary
+// and fail to wait for the next message.* / tool.* / etc. events.
 const (
 	TypeTurnStart      = "turn.start"
 	TypeUserMessage    = "user.message"
 	TypeMessageDelta   = "message.delta"
-	TypeMessageEnd     = "message.end"
+	TypeMessageDone    = "message.done"
 	TypeThinkingDelta  = "thinking.delta"
-	TypeThinkingEnd    = "thinking.end"
+	TypeThinkingDone   = "thinking.done"
 	TypeToolRequest    = "tool.request"
 	TypeToolOutput     = "tool.output"
 	TypeToolResult     = "tool.result"
@@ -36,7 +42,7 @@ type MessageDeltaPayload struct {
 	Delta  string `json:"delta"`
 }
 
-type MessageEndPayload struct {
+type MessageDonePayload struct {
 	TurnID string `json:"turn_id"`
 	Text   string `json:"text"`
 }
@@ -46,10 +52,10 @@ type ThinkingDeltaPayload struct {
 	Delta  string `json:"delta"`
 }
 
-// ThinkingEndPayload closes a reasoning stream with the full accumulated
-// text. Mirrors MessageEndPayload so trace consumers running with
+// ThinkingDonePayload closes a reasoning stream with the full accumulated
+// text. Mirrors MessageDonePayload so trace consumers running with
 // --trace-skip-deltas still see the reasoning content for the turn.
-type ThinkingEndPayload struct {
+type ThinkingDonePayload struct {
 	TurnID string `json:"turn_id"`
 	Text   string `json:"text"`
 }

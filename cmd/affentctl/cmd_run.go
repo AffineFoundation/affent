@@ -104,8 +104,8 @@ func drainBatch(ctx context.Context, events <-chan sse.Event, trace io.Writer, l
 				}
 			}
 			switch ev.Type {
-			case sse.TypeMessageEnd:
-				var p sse.MessageEndPayload
+			case sse.TypeMessageDone:
+				var p sse.MessageDonePayload
 				_ = json.Unmarshal(ev.Data, &p)
 				finalText = p.Text
 			case sse.TypeError:
