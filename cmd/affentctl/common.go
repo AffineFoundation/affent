@@ -63,7 +63,7 @@ func (c *commonFlags) bind(fs *flag.FlagSet) {
 	fs.StringVar(&c.sessionID, "session-id", "", "resume the named session (under --workspace/.affentctl/)")
 	fs.BoolVar(&c.continueLast, "continue", false, "resume the most recent session under --workspace")
 	fs.StringVar(&c.mcpConfigPath, "mcp-config", os.Getenv("AFFENTCTL_MCP_CONFIG"), "path to MCP server config JSON ({\"servers\":[{...}]})")
-	fs.IntVar(&c.compactTrigger, "compact-trigger", 150, "compact conversation when message count exceeds this; 0 disables proactive compaction (reactive still kicks in on context-overflow errors)")
+	fs.IntVar(&c.compactTrigger, "compact-trigger", 240, "compact conversation when message count exceeds this; 0 disables proactive compaction (reactive still kicks in on context-overflow errors)")
 	fs.IntVar(&c.compactKeepLast, "compact-keep-last", 10, "messages preserved verbatim at the tail of the conversation when compacting")
 }
 

@@ -40,7 +40,7 @@ type stubCompactor struct {
 func (s *stubCompactor) Compact(ctx context.Context, msgs []ChatMessage) ([]ChatMessage, error) {
 	keepFirst := s.KeepFirst
 	if keepFirst <= 0 {
-		keepFirst = 1
+		keepFirst = 2
 	}
 	keepLast := s.KeepLast
 	if keepLast <= 0 {
@@ -236,17 +236,22 @@ func TestIsContextOverflow(t *testing.T) {
 	}
 }
 
-// Defensive: prompt body should match OpenHands' standard verbatim
+// Defensive: prompt body should match OpenHands' V1 standard verbatim
 // (we deliberately don't fork the wording).
 func TestDefaultSummaryPrompt_StandardFields(t *testing.T) {
 	required := []string{
-		"USER_CONTEXT", "COMPLETED", "PENDING", "CURRENT_STATE",
-		"CODE_STATE", "TESTS", "CHANGES", "DEPS", "VERSION_CONTROL_STATUS",
-		"PRIORITIZE", "SKIP", "Example formats",
+		"USER_CONTEXT", "TASK_TRACKING", "COMPLETED", "PENDING",
+		"CURRENT_STATE", "CODE_STATE", "TESTS", "CHANGES", "DEPS",
+		"VERSION_CONTROL_STATUS", "PRIORITIZE", "SKIP", "Example formats",
 	}
 	for _, kw := range required {
 		if !strings.Contains(defaultSummaryPrompt, kw) {
 			t.Errorf("default prompt missing standard field %q", kw)
 		}
+	}
+	// PRESERVE TASK IDs is the V1-specific instruction; guard against
+	// accidental drop.
+	if !strings.Contains(defaultSummaryPrompt, "PRESERVE TASK IDs") {
+		t.Error("default prompt missing 'PRESERVE TASK IDs' V1 instruction")
 	}
 }

@@ -49,12 +49,12 @@ type LLMSummaryCompactor struct {
 	// TriggerMsgs is the proactive threshold: if the conversation has
 	// fewer messages, Compact short-circuits without work. Zero
 	// disables proactive compaction (reactive overflow path still
-	// works). Default 150 (matches OpenHands max_size).
+	// works). Default 240 (matches OpenHands V1 max_size).
 	TriggerMsgs int
 
 	// KeepFirst is how many leading non-system messages to preserve
-	// verbatim — typically the initial user prompt. Default 1.
-	// Anything higher and the rolling summary loses ground each pass.
+	// verbatim — typically the initial user prompt(s). Default 2,
+	// matching OpenHands V1.
 	KeepFirst int
 
 	// KeepLast is how many trailing messages to preserve verbatim.
@@ -71,18 +71,32 @@ type LLMSummaryCompactor struct {
 	SummaryPrompt string
 }
 
-// defaultSummaryPrompt is OpenHands' LLMSummarizingCondenser prompt,
-// reused verbatim. It's the de-facto standard among open-source SWE
-// agents — structured fields (USER_CONTEXT / COMPLETED / PENDING /
-// CODE_STATE / etc.), example-driven, rolling — and avoids reinventing
-// a less-validated alternative.
+// defaultSummaryPrompt mirrors OpenHands' V1 LLMSummarizingCondenser
+// prompt verbatim (modulo Jinja {% for %} which we render in Go).
+// It's the de-facto standard among open-source SWE agents —
+// structured fields, example-driven, rolling — and avoids
+// reinventing a less-validated alternative.
 //
-// Source:
+// Source: github.com/OpenHands/software-agent-sdk
 //
-//	openhands/memory/condenser/impl/llm_summarizing_condenser.py
-const defaultSummaryPrompt = `You are maintaining a context-aware state summary for an interactive agent. You will be given a list of events corresponding to actions taken by the agent, and the most recent previous summary if one exists. Track:
+//	openhands-sdk/openhands/sdk/context/condenser/prompts/summarizing_prompt.j2
+//
+// V1 differs from the older monolithic prompt in two ways:
+//  1. Adds a TASK_TRACKING field with hard MUST-include semantics, to
+//     preserve task IDs across condensations.
+//  2. Treats the previous summary as just another event in the list
+//     (no separate <PREVIOUS SUMMARY> block); we surface it as the
+//     first <EVENT> in the rendered list.
+const defaultSummaryPrompt = `You are maintaining a context-aware state summary for an interactive agent.
+You will be given a list of events corresponding to actions taken by the agent, which will include previous summaries.
+If the events being summarized contain ANY task-tracking, you MUST include a TASK_TRACKING section to maintain continuity.
+When referencing tasks make sure to preserve exact task IDs and statuses.
+
+Track:
 
 USER_CONTEXT: (Preserve essential user requirements, goals, and clarifications in concise form)
+
+TASK_TRACKING: {Active tasks, their IDs and statuses - PRESERVE TASK IDs}
 
 COMPLETED: (Tasks completed so far, with brief results)
 PENDING: (Tasks that still need to be done)
@@ -128,7 +142,7 @@ func (c *LLMSummaryCompactor) Compact(ctx context.Context, msgs []ChatMessage) (
 	}
 	keepFirst := c.KeepFirst
 	if keepFirst <= 0 {
-		keepFirst = 1
+		keepFirst = 2
 	}
 	keepLast := c.KeepLast
 	if keepLast <= 0 {
@@ -217,12 +231,15 @@ func (c *LLMSummaryCompactor) summarize(ctx context.Context, prevSummary string,
 	var b strings.Builder
 	b.WriteString(prompt)
 	b.WriteString("\n\n")
-	b.WriteString("<PREVIOUS SUMMARY>\n")
-	b.WriteString(prevSummary)
-	b.WriteString("\n</PREVIOUS SUMMARY>\n\n")
-	for i, ev := range events {
-		fmt.Fprintf(&b, "<EVENT id=%d>\n%s\n</EVENT>\n",
-			i, truncateChars(formatEvent(ev), maxLen))
+	// V1 prompt expects the previous summary inline as the first event,
+	// not in a dedicated <PREVIOUS SUMMARY> block. Match that shape.
+	if prevSummary != "" {
+		fmt.Fprintf(&b, "<EVENT>\nPrevious summary: %s\n</EVENT>\n",
+			truncateChars(prevSummary, maxLen))
+	}
+	for _, ev := range events {
+		fmt.Fprintf(&b, "<EVENT>\n%s\n</EVENT>\n",
+			truncateChars(formatEvent(ev), maxLen))
 	}
 	b.WriteString("\nNow summarize the events using the rules above.")
 
