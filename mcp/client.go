@@ -1,14 +1,10 @@
 package mcp
 
 import (
-	"bufio"
 	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
-	"io"
-	"os"
-	"os/exec"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -16,74 +12,42 @@ import (
 	"github.com/rs/zerolog"
 )
 
-// Client is one connection to a single MCP server. The server is run as
-// a child process; we feed JSON-RPC over its stdin and read replies
-// from stdout. Lines on stderr are logged but otherwise ignored.
+// Client is one connection to a single MCP server. The transport (stdio
+// or streamable-http) is hidden behind the wire interface — Client only
+// owns the JSON-RPC state machine.
 type Client struct {
 	spec ServerSpec
 	log  zerolog.Logger
 
-	cmd    *exec.Cmd
-	stdin  io.WriteCloser
-	stdout *bufio.Reader
+	w wire
 
-	// JSON-RPC plumbing.
 	nextID  atomic.Int64
 	mu      sync.Mutex
 	pending map[int64]chan rpcResponse
 	closed  atomic.Bool
-	writeMu sync.Mutex // serializes stdin writes
 }
 
-// Start launches the server and performs the initialize handshake. The
-// returned client is ready for ListTools / CallTool. Caller must Close
-// when done.
+// Start dials/launches the server and performs the initialize handshake.
+// The returned client is ready for ListTools / CallTool. Caller must
+// Close when done.
 func Start(ctx context.Context, spec ServerSpec, log zerolog.Logger) (*Client, error) {
-	if spec.Command == "" {
-		return nil, errors.New("mcp: server command is empty")
-	}
 	if spec.Name == "" {
 		return nil, errors.New("mcp: server name is empty")
 	}
-
-	cmd := exec.Command(spec.Command, spec.Args...)
-	if spec.Cwd != "" {
-		cmd.Dir = spec.Cwd
-	}
-	if len(spec.Env) > 0 {
-		cmd.Env = append(os.Environ(), spec.Env...)
-	}
-	stdin, err := cmd.StdinPipe()
+	w, err := startWire(ctx, spec, log.With().Str("mcp", spec.Name).Logger())
 	if err != nil {
-		return nil, fmt.Errorf("stdin pipe: %w", err)
+		return nil, err
 	}
-	stdout, err := cmd.StdoutPipe()
-	if err != nil {
-		return nil, fmt.Errorf("stdout pipe: %w", err)
-	}
-	stderr, err := cmd.StderrPipe()
-	if err != nil {
-		return nil, fmt.Errorf("stderr pipe: %w", err)
-	}
-	if err := cmd.Start(); err != nil {
-		return nil, fmt.Errorf("start %s: %w", spec.Command, err)
-	}
-
 	c := &Client{
 		spec:    spec,
 		log:     log.With().Str("mcp", spec.Name).Logger(),
-		cmd:     cmd,
-		stdin:   stdin,
-		stdout:  bufio.NewReaderSize(stdout, 64*1024),
+		w:       w,
 		pending: make(map[int64]chan rpcResponse),
 	}
-
 	go c.readLoop()
-	go c.drainStderr(stderr)
 
-	// Initialize within a bounded window. Servers usually answer within
-	// a few hundred ms; npx cold-start can hit several seconds, so 30s
-	// is generous but not silly.
+	// 30s is generous: stdio cold-start (npx fetch) can hit several
+	// seconds, http handshakes are usually sub-second.
 	initCtx, cancel := context.WithTimeout(ctx, 30*time.Second)
 	defer cancel()
 	if err := c.initialize(initCtx); err != nil {
@@ -93,25 +57,13 @@ func Start(ctx context.Context, spec ServerSpec, log zerolog.Logger) (*Client, e
 	return c, nil
 }
 
-// Close terminates the child process and rejects any in-flight calls.
+// Close terminates the transport and rejects any in-flight calls.
 // Idempotent.
 func (c *Client) Close() error {
 	if !c.closed.CompareAndSwap(false, true) {
 		return nil
 	}
-	_ = c.stdin.Close()
-	// Give the server ~1s to exit gracefully on stdin close, then kill.
-	done := make(chan struct{})
-	go func() {
-		_ = c.cmd.Wait()
-		close(done)
-	}()
-	select {
-	case <-done:
-	case <-time.After(time.Second):
-		_ = c.cmd.Process.Kill()
-		<-done
-	}
+	_ = c.w.close()
 	c.mu.Lock()
 	for id, ch := range c.pending {
 		close(ch)
@@ -163,9 +115,8 @@ func (c *Client) CallTool(ctx context.Context, name string, args json.RawMessage
 	}, nil
 }
 
-// initialize is the required handshake before any other method is
-// callable. Per spec: the client sends initialize, the server replies,
-// then the client sends a notifications/initialized notification.
+// initialize is the required handshake: client → server `initialize`
+// request, server replies, client sends `notifications/initialized`.
 func (c *Client) initialize(ctx context.Context) error {
 	params, _ := json.Marshal(initializeParams{
 		// Picking a recent published protocol version. Servers that
@@ -191,12 +142,12 @@ func (c *Client) initialize(ctx context.Context) error {
 		Str("server_version", ir.ServerInfo.Version).
 		Str("protocol", ir.ProtocolVersion).
 		Msg("mcp initialized")
-	return c.notify("notifications/initialized", nil)
+	return c.notify(ctx, "notifications/initialized", nil)
 }
 
-// call sends a request and waits for the matching response. Honors
-// ctx cancellation; on cancel we leak the pending entry until the
-// server eventually replies (or the client closes).
+// call sends a request and waits for the matching response. Honors ctx
+// cancellation; on cancel we leak the pending entry until the server
+// eventually replies (or the client closes).
 func (c *Client) call(ctx context.Context, method string, params json.RawMessage) (json.RawMessage, error) {
 	if c.closed.Load() {
 		return nil, errors.New("mcp client closed")
@@ -212,12 +163,16 @@ func (c *Client) call(ctx context.Context, method string, params json.RawMessage
 		c.mu.Unlock()
 	}()
 
-	if err := c.write(rpcRequest{
+	raw, err := json.Marshal(rpcRequest{
 		JSONRPC: "2.0",
 		ID:      id,
 		Method:  method,
 		Params:  params,
-	}); err != nil {
+	})
+	if err != nil {
+		return nil, err
+	}
+	if err := c.w.sendRequest(ctx, raw); err != nil {
 		return nil, err
 	}
 
@@ -235,44 +190,26 @@ func (c *Client) call(ctx context.Context, method string, params json.RawMessage
 	}
 }
 
-func (c *Client) notify(method string, params json.RawMessage) error {
-	return c.write(rpcRequest{
+func (c *Client) notify(ctx context.Context, method string, params json.RawMessage) error {
+	raw, err := json.Marshal(rpcRequest{
 		JSONRPC: "2.0",
 		Method:  method,
 		Params:  params,
 	})
-}
-
-func (c *Client) write(msg rpcRequest) error {
-	raw, err := json.Marshal(msg)
 	if err != nil {
 		return err
 	}
-	c.writeMu.Lock()
-	defer c.writeMu.Unlock()
-	if _, err := c.stdin.Write(raw); err != nil {
-		return err
-	}
-	_, err = c.stdin.Write([]byte("\n"))
-	return err
+	return c.w.sendNotification(ctx, raw)
 }
 
-// readLoop pumps incoming JSON-RPC messages into pending channels.
-// Notifications (no id) are logged at debug and dropped.
+// readLoop consumes server-originated frames from the wire, routes
+// responses back to call() via pending channels, and drops notifications
+// at debug level (the v0 client doesn't surface progress yet).
 func (c *Client) readLoop() {
-	for {
-		line, err := c.stdout.ReadBytes('\n')
-		if len(line) > 0 {
-			c.dispatch(line)
-		}
-		if err != nil {
-			if err != io.EOF {
-				c.log.Debug().Err(err).Msg("mcp read")
-			}
-			c.shutdownPending()
-			return
-		}
+	for line := range c.w.replies() {
+		c.dispatch(line)
 	}
+	c.shutdownPending()
 }
 
 func (c *Client) dispatch(line []byte) {
@@ -313,17 +250,9 @@ func (c *Client) shutdownPending() {
 	c.mu.Unlock()
 }
 
-func (c *Client) drainStderr(r io.Reader) {
-	sc := bufio.NewScanner(r)
-	sc.Buffer(make([]byte, 0, 8*1024), 256*1024)
-	for sc.Scan() {
-		c.log.Debug().Str("stderr", sc.Text()).Msg("mcp stderr")
-	}
-}
-
-// normalizeID coerces JSON id values (number or string) to int64.
-// We only ever issue integer ids ourselves, but a polite server might
-// echo them as float64 (after a json round-trip).
+// normalizeID coerces JSON id values (number or string) to int64. We
+// only ever issue integer ids ourselves, but a polite server might echo
+// them as float64 (after a json round-trip).
 func normalizeID(v any) (int64, bool) {
 	switch n := v.(type) {
 	case float64:
@@ -340,8 +269,8 @@ func normalizeID(v any) (int64, bool) {
 }
 
 // flattenContent picks all text blocks and concatenates them. Other
-// block kinds get a marker so the model knows something non-textual
-// was returned (binary blobs, images, resource refs).
+// block kinds get a marker so the model knows something non-textual was
+// returned.
 func flattenContent(blocks []contentBlock) string {
 	var buf []byte
 	for i, b := range blocks {

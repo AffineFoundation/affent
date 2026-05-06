@@ -20,17 +20,32 @@ package mcp
 
 import "encoding/json"
 
-// ServerSpec describes how to launch a single MCP server. Mirrors the
-// ~/.config/Claude/claude_desktop_config.json shape so users can
-// copy-paste server definitions.
+// ServerSpec describes how to reach a single MCP server. Two transports
+// are supported:
+//
+//   - stdio: set Command (and optionally Args / Env / Cwd). The server
+//     is launched as a child process and JSON-RPC flows over its
+//     stdin/stdout. Mirrors the claude_desktop_config.json shape.
+//
+//   - streamable-http: set URL (and optionally Headers). JSON-RPC flows
+//     over POSTs to the endpoint; per-request responses arrive either
+//     as application/json or as text/event-stream (SSE). Server-side
+//     session is tracked via the Mcp-Session-Id header. Spec rev
+//     2025-03-26.
+//
+// URL and Command are mutually exclusive — Start picks the transport
+// from whichever is set.
 type ServerSpec struct {
 	// Name is a short label like "fs" or "git". Becomes the prefix on
 	// every tool the server exports (e.g. "fs_read_file") so tool names
 	// don't collide across servers.
 	Name string `json:"name"`
+
+	// --- stdio transport ---
+
 	// Command is the executable to launch (e.g. "npx", "uvx",
-	// "/usr/local/bin/mcp-server-foo").
-	Command string `json:"command"`
+	// "/usr/local/bin/mcp-server-foo"). Required for stdio.
+	Command string `json:"command,omitempty"`
 	// Args are passed verbatim after Command.
 	Args []string `json:"args,omitempty"`
 	// Env are extra "KEY=VALUE" pairs layered on top of the parent
@@ -39,6 +54,15 @@ type ServerSpec struct {
 	// Cwd is the working directory for the child. Defaults to the
 	// parent's cwd.
 	Cwd string `json:"cwd,omitempty"`
+
+	// --- streamable-http transport ---
+
+	// URL is the streamable-http endpoint, e.g.
+	// "http://127.0.0.1:8123/mcp". Required for HTTP.
+	URL string `json:"url,omitempty"`
+	// Headers are extra HTTP headers sent on every request. Useful for
+	// auth tokens, version pinning, etc.
+	Headers map[string]string `json:"headers,omitempty"`
 }
 
 // ToolDescriptor is one tool returned by tools/list.

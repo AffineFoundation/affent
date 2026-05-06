@@ -1,0 +1,209 @@
+package mcp
+
+import (
+	"bufio"
+	"bytes"
+	"context"
+	"encoding/json"
+	"errors"
+	"fmt"
+	"io"
+	"net/http"
+	"strings"
+	"sync"
+	"sync/atomic"
+	"time"
+
+	"github.com/rs/zerolog"
+)
+
+// httpWire implements MCP streamable-http transport (spec rev
+// 2025-03-26). Single endpoint URL; client posts JSON-RPC requests; the
+// server replies either as application/json (single response) or as
+// text/event-stream (one or more JSON-RPC messages over SSE). Session
+// id is established by the server in initialize and echoed back on
+// every subsequent request via Mcp-Session-Id.
+type httpWire struct {
+	url     string
+	headers map[string]string
+	hc      *http.Client
+
+	out chan []byte // server-originated frames
+
+	mu        sync.Mutex
+	sessionID string
+
+	closed atomic.Bool
+	cancel context.CancelFunc
+	wg     sync.WaitGroup
+
+	log zerolog.Logger
+}
+
+func newHTTPWire(_ context.Context, spec ServerSpec, log zerolog.Logger) (wire, error) {
+	if spec.URL == "" {
+		return nil, errors.New("mcp http: ServerSpec.URL is empty")
+	}
+	wireCtx, cancel := context.WithCancel(context.Background())
+	w := &httpWire{
+		url:     spec.URL,
+		headers: spec.Headers,
+		hc: &http.Client{
+			// Per-request timeout is set on the request's ctx; the
+			// transport-level timeout protects against open-but-idle
+			// SSE responses that never finish.
+			Timeout: 10 * time.Minute,
+		},
+		out:    make(chan []byte, 64),
+		cancel: cancel,
+		log:    log,
+	}
+	_ = wireCtx // reserved for an optional GET-stream listener; not used in v0.
+	return w, nil
+}
+
+func (w *httpWire) sendRequest(ctx context.Context, raw []byte) error {
+	return w.post(ctx, raw, true)
+}
+
+func (w *httpWire) sendNotification(ctx context.Context, raw []byte) error {
+	return w.post(ctx, raw, false)
+}
+
+func (w *httpWire) replies() <-chan []byte { return w.out }
+
+func (w *httpWire) close() error {
+	if !w.closed.CompareAndSwap(false, true) {
+		return nil
+	}
+	w.cancel()
+	w.wg.Wait()
+	close(w.out)
+	return nil
+}
+
+func (w *httpWire) post(ctx context.Context, body []byte, expectReply bool) error {
+	if w.closed.Load() {
+		return errors.New("http wire closed")
+	}
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, w.url, bytes.NewReader(body))
+	if err != nil {
+		return err
+	}
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Accept", "application/json, text/event-stream")
+	if sid := w.sid(); sid != "" {
+		req.Header.Set("Mcp-Session-Id", sid)
+	}
+	for k, v := range w.headers {
+		req.Header.Set(k, v)
+	}
+
+	resp, err := w.hc.Do(req)
+	if err != nil {
+		return fmt.Errorf("mcp http POST: %w", err)
+	}
+
+	// 202 Accepted means "got it, no body". Notifications go this way.
+	if resp.StatusCode == http.StatusAccepted {
+		_, _ = io.Copy(io.Discard, resp.Body)
+		resp.Body.Close()
+		return nil
+	}
+	if resp.StatusCode/100 != 2 {
+		errBody, _ := io.ReadAll(resp.Body)
+		resp.Body.Close()
+		return fmt.Errorf("mcp http %d: %s", resp.StatusCode, errBody)
+	}
+
+	// Server-assigned session id arrives in the initialize response. We
+	// pin it for the rest of the connection's lifetime — server may
+	// rotate, but for v0 we trust the first one it gives us.
+	if sid := resp.Header.Get("Mcp-Session-Id"); sid != "" && w.sid() == "" {
+		w.setSID(sid)
+	}
+
+	ct := resp.Header.Get("Content-Type")
+	switch {
+	case strings.HasPrefix(ct, "application/json"):
+		body, err := io.ReadAll(resp.Body)
+		resp.Body.Close()
+		if err != nil {
+			return err
+		}
+		// Some servers return an empty body even with 200; treat as
+		// notification-style ack.
+		if len(bytes.TrimSpace(body)) == 0 {
+			return nil
+		}
+		w.emit(body)
+		return nil
+	case strings.HasPrefix(ct, "text/event-stream"):
+		// Drain the SSE stream until the server closes. Each "data:"
+		// line is a JSON-RPC message.
+		w.wg.Add(1)
+		go w.drainSSE(resp)
+		return nil
+	default:
+		body, _ := io.ReadAll(resp.Body)
+		resp.Body.Close()
+		if !expectReply && len(bytes.TrimSpace(body)) == 0 {
+			return nil
+		}
+		return fmt.Errorf("mcp http: unexpected content-type %q (body: %s)", ct, body)
+	}
+}
+
+func (w *httpWire) drainSSE(resp *http.Response) {
+	defer w.wg.Done()
+	defer resp.Body.Close()
+	sc := bufio.NewScanner(resp.Body)
+	sc.Buffer(make([]byte, 0, 64*1024), 4*1024*1024)
+	for sc.Scan() {
+		line := sc.Bytes()
+		if len(line) == 0 {
+			continue
+		}
+		// SSE frames: "event: ...", "data: ...", "id: ...", "retry: ...".
+		// We only care about data lines; the JSON-RPC payload is in there.
+		if !bytes.HasPrefix(line, []byte("data:")) {
+			continue
+		}
+		payload := bytes.TrimSpace(line[len("data:"):])
+		if len(payload) == 0 || bytes.Equal(payload, []byte("[DONE]")) {
+			continue
+		}
+		cp := make([]byte, len(payload))
+		copy(cp, payload)
+		w.emit(cp)
+	}
+	if err := sc.Err(); err != nil {
+		w.log.Debug().Err(err).Msg("mcp http SSE")
+	}
+}
+
+func (w *httpWire) emit(frame []byte) {
+	if w.closed.Load() {
+		return
+	}
+	select {
+	case w.out <- frame:
+	default:
+		w.log.Warn().Msg("mcp http replies channel full; dropping")
+	}
+}
+
+func (w *httpWire) sid() string {
+	w.mu.Lock()
+	defer w.mu.Unlock()
+	return w.sessionID
+}
+
+func (w *httpWire) setSID(s string) {
+	w.mu.Lock()
+	w.sessionID = s
+	w.mu.Unlock()
+}
+
+// guard against accidental json/strings unused in some build configs.
+var _ = json.RawMessage(nil)
