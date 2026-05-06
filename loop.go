@@ -85,6 +85,12 @@ type Loop struct {
 	// Lets trace consumers detect drops and order events independently
 	// of any downstream ring buffer's own ID space.
 	eventSeq atomic.Int64
+
+	// Compactor (optional) shrinks the conversation history when it
+	// crosses a threshold. Nil disables both proactive and reactive
+	// compaction — the conversation grows until the upstream rejects
+	// the request, which becomes a terminal turn.end{reason=error}.
+	Compactor Compactor
 }
 
 // SystemPrompt is fed once at session start. Kept short; the model figures
@@ -397,6 +403,11 @@ func (l *Loop) runStep(ctx context.Context, turnID string) (*FinishInfo, string,
 			return nil, sse.TurnEndCancelled, ctx.Err()
 		}
 
+		// Proactive compaction: shrink before the call when the log is
+		// long enough. The Compactor decides if it actually does work
+		// (LLMSummaryCompactor short-circuits below TriggerMsgs).
+		l.maybeCompact(ctx, false)
+
 		callCtx, callCancel := context.WithTimeout(ctx, timeout)
 		stream, err := l.LLM.Chat(callCtx, l.Conv.Snapshot(), l.Tools.Defs())
 		var final *FinishInfo
@@ -421,6 +432,22 @@ func (l *Loop) runStep(ctx context.Context, turnID string) (*FinishInfo, string,
 		}
 		if err == nil {
 			return final, "", nil
+		}
+
+		// Reactive compaction: upstream rejected the request because the
+		// conversation outgrew the context window. Compact aggressively
+		// and retry without consuming the transient-retry budget. Doesn't
+		// require sawMessage=false because context-overflow happens
+		// before any tokens stream back.
+		if IsContextOverflow(err) && l.Compactor != nil {
+			if l.maybeCompact(ctx, true) {
+				l.publish(sse.TypeError, sse.ErrorPayload{
+					Code:        code,
+					Message:     "context overflow; compacted and retrying: " + err.Error(),
+					Recoverable: true,
+				})
+				continue
+			}
 		}
 
 		// If the model already streamed visible content before failing,
@@ -459,6 +486,51 @@ func (l *Loop) runStep(ctx context.Context, turnID string) (*FinishInfo, string,
 			return nil, sse.TurnEndCancelled, ctx.Err()
 		}
 	}
+}
+
+// maybeCompact runs the configured Compactor against the current
+// conversation. Returns true if it actually shortened the log. When
+// reactive=true (called after a context-overflow rejection), the
+// LLMSummaryCompactor's keep_last is halved and its trigger threshold
+// is bypassed so we get an emergency-trim even on shorter logs whose
+// individual messages are unusually large. No-op if Compactor is nil.
+func (l *Loop) maybeCompact(ctx context.Context, reactive bool) bool {
+	if l.Compactor == nil {
+		return false
+	}
+	before := l.Conv.Snapshot()
+	if len(before) == 0 {
+		return false
+	}
+	compactor := l.Compactor
+	if reactive {
+		if c, ok := l.Compactor.(*LLMSummaryCompactor); ok {
+			emergency := *c
+			emergency.TriggerMsgs = 0
+			if emergency.KeepLast > 4 {
+				emergency.KeepLast /= 2
+			}
+			compactor = &emergency
+		}
+	}
+	after, err := compactor.Compact(ctx, before)
+	if err != nil {
+		l.Log.Warn().Err(err).Msg("compaction failed")
+		return false
+	}
+	if len(after) == 0 || len(after) >= len(before) {
+		return false
+	}
+	if err := l.Conv.Replace(after); err != nil {
+		l.Log.Warn().Err(err).Msg("conversation replace failed")
+		return false
+	}
+	l.Log.Info().
+		Int("before", len(before)).
+		Int("after", len(after)).
+		Bool("reactive", reactive).
+		Msg("conversation compacted")
+	return true
 }
 
 func (l *Loop) perCallTimeout() time.Duration {

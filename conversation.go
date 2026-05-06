@@ -93,3 +93,38 @@ func (c *Conversation) Snapshot() []ChatMessage {
 	copy(out, c.messages)
 	return out
 }
+
+// Replace overwrites the entire message log, on disk and in memory. Used
+// by Compactors after summarizing earlier turns; the caller is responsible
+// for preserving tool_calls / tool message pairing — Replace will not
+// validate or repair it. Atomic via temp-file + rename so a crash mid-
+// rewrite leaves the old log intact.
+func (c *Conversation) Replace(msgs []ChatMessage) error {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+
+	tmp := c.path + ".tmp"
+	f, err := os.OpenFile(tmp, os.O_CREATE|os.O_TRUNC|os.O_WRONLY, 0o644)
+	if err != nil {
+		return err
+	}
+	enc := json.NewEncoder(f)
+	enc.SetEscapeHTML(false)
+	for _, m := range msgs {
+		if err := enc.Encode(m); err != nil {
+			f.Close()
+			os.Remove(tmp)
+			return err
+		}
+	}
+	if err := f.Close(); err != nil {
+		os.Remove(tmp)
+		return err
+	}
+	if err := os.Rename(tmp, c.path); err != nil {
+		os.Remove(tmp)
+		return err
+	}
+	c.messages = append(c.messages[:0], msgs...)
+	return nil
+}

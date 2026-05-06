@@ -38,6 +38,9 @@ type commonFlags struct {
 	systemPromptPath string
 	quiet            bool
 
+	compactTrigger int // 0 disables proactive compaction; reactive still works
+	compactKeepLast int
+
 	sessionID    string // explicit; empty means "use --continue or new"
 	continueLast bool   // pick most recent session under workspace
 
@@ -60,6 +63,8 @@ func (c *commonFlags) bind(fs *flag.FlagSet) {
 	fs.StringVar(&c.sessionID, "session-id", "", "resume the named session (under --workspace/.affentctl/)")
 	fs.BoolVar(&c.continueLast, "continue", false, "resume the most recent session under --workspace")
 	fs.StringVar(&c.mcpConfigPath, "mcp-config", os.Getenv("AFFENTCTL_MCP_CONFIG"), "path to MCP server config JSON ({\"servers\":[{...}]})")
+	fs.IntVar(&c.compactTrigger, "compact-trigger", 150, "compact conversation when message count exceeds this; 0 disables proactive compaction (reactive still kicks in on context-overflow errors)")
+	fs.IntVar(&c.compactKeepLast, "compact-keep-last", 10, "messages preserved verbatim at the tail of the conversation when compacting")
 }
 
 // loopBundle is everything a subcommand needs after setup: the loop
@@ -174,8 +179,9 @@ func setupLoop(c commonFlags) (*loopBundle, int) {
 	}
 
 	events := make(chan sse.Event, 64)
+	llm := affent.NewLLMClient(c.baseURL, c.apiKey, c.model)
 	loop := &affent.Loop{
-		LLM:                 affent.NewLLMClient(c.baseURL, c.apiKey, c.model),
+		LLM:                 llm,
 		Tools:               tools,
 		Conv:                conv,
 		Events:              events,
@@ -184,6 +190,17 @@ func setupLoop(c commonFlags) (*loopBundle, int) {
 		PerCallTimeout:      c.callTimeout,
 		MaxTransientRetries: c.retryTransient,
 		TransientBackoff:    c.retryBackoff,
+	}
+	// Attach the default summary-style compactor unless the caller asked
+	// to disable it. Reuses the same LLM client so compactions hit the
+	// same provider/model the agent itself uses.
+	if c.compactTrigger > 0 || c.compactKeepLast > 0 {
+		loop.Compactor = &affent.LLMSummaryCompactor{
+			LLM:         llm,
+			TriggerMsgs: c.compactTrigger,
+			KeepFirst:   2,
+			KeepLast:    c.compactKeepLast,
+		}
 	}
 	if err := loop.EnsureSystemPrompt(systemPrompt); err != nil {
 		log.Error().Err(err).Msg("seed system prompt")
