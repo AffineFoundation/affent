@@ -8,6 +8,7 @@ const (
 	TypeMessageDelta   = "message.delta"
 	TypeMessageEnd     = "message.end"
 	TypeThinkingDelta  = "thinking.delta"
+	TypeThinkingEnd    = "thinking.end"
 	TypeToolRequest    = "tool.request"
 	TypeToolOutput     = "tool.output"
 	TypeToolResult     = "tool.result"
@@ -43,6 +44,14 @@ type MessageEndPayload struct {
 type ThinkingDeltaPayload struct {
 	TurnID string `json:"turn_id"`
 	Delta  string `json:"delta"`
+}
+
+// ThinkingEndPayload closes a reasoning stream with the full accumulated
+// text. Mirrors MessageEndPayload so trace consumers running with
+// --trace-skip-deltas still see the reasoning content for the turn.
+type ThinkingEndPayload struct {
+	TurnID string `json:"turn_id"`
+	Text   string `json:"text"`
 }
 
 type ToolRequestPayload struct {

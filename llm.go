@@ -134,12 +134,44 @@ func NewLLMClient(baseURL, apiKey, model string) *LLMClient {
 // ChatMessage is one entry in the conversation. We use OpenAI's role names.
 // Tool messages carry results back to the model; assistant messages may
 // include ToolCalls the model wants us to execute.
+//
+// ReasoningContent captures the model's hidden chain-of-thought when the
+// provider emits it (DeepSeek / Kimi / GLM-thinking style). It is local
+// state — persisted in the conversation log for replay/training but
+// stripped before sending the next request, since OpenAI-compat upstreams
+// reject this field on inbound messages.
 type ChatMessage struct {
-	Role       string     `json:"role"` // "system" | "user" | "assistant" | "tool"
+	Role             string     `json:"role"` // "system" | "user" | "assistant" | "tool"
+	Content          string     `json:"content,omitempty"`
+	ReasoningContent string     `json:"reasoning_content,omitempty"`
+	ToolCalls        []ToolCall `json:"tool_calls,omitempty"`
+	ToolCallID       string     `json:"tool_call_id,omitempty"`
+	Name             string     `json:"name,omitempty"` // tool name for role=tool (some providers want it)
+}
+
+// wireMessage is the on-the-wire request shape. Mirrors ChatMessage minus
+// the local-only ReasoningContent — keeps json.Marshal of chatRequest from
+// leaking it back to upstream.
+type wireMessage struct {
+	Role       string     `json:"role"`
 	Content    string     `json:"content,omitempty"`
 	ToolCalls  []ToolCall `json:"tool_calls,omitempty"`
 	ToolCallID string     `json:"tool_call_id,omitempty"`
-	Name       string     `json:"name,omitempty"` // tool name for role=tool (some providers want it)
+	Name       string     `json:"name,omitempty"`
+}
+
+func toWireMessages(msgs []ChatMessage) []wireMessage {
+	out := make([]wireMessage, len(msgs))
+	for i, m := range msgs {
+		out[i] = wireMessage{
+			Role:       m.Role,
+			Content:    m.Content,
+			ToolCalls:  m.ToolCalls,
+			ToolCallID: m.ToolCallID,
+			Name:       m.Name,
+		}
+	}
+	return out
 }
 
 type ToolCall struct {
@@ -163,7 +195,7 @@ type ToolDef struct {
 
 type chatRequest struct {
 	Model    string        `json:"model"`
-	Messages []ChatMessage `json:"messages"`
+	Messages []wireMessage `json:"messages"`
 	Tools    []ToolDef     `json:"tools,omitempty"`
 	Stream   bool          `json:"stream"`
 	// Stream usage in the final SSE chunk (OpenAI-compat extension).
@@ -213,7 +245,7 @@ type FinishInfo struct {
 func (c *LLMClient) Chat(ctx context.Context, msgs []ChatMessage, tools []ToolDef) (<-chan StreamEvent, error) {
 	body, _ := json.Marshal(chatRequest{
 		Model:         c.Model,
-		Messages:      msgs,
+		Messages:      toWireMessages(msgs),
 		Tools:         tools,
 		Stream:        true,
 		StreamOptions: &streamOptions{IncludeUsage: true},
@@ -334,6 +366,7 @@ func consumeStream(ctx context.Context, body io.ReadCloser, out chan<- StreamEve
 
 		for _, ch := range chunk.Choices {
 			if ch.Delta.ReasoningContent != "" {
+				final.ReasoningContent += ch.Delta.ReasoningContent
 				if !emit(StreamEvent{ReasoningDelta: ch.Delta.ReasoningContent}) {
 					return
 				}

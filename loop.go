@@ -306,13 +306,24 @@ func (l *Loop) consumeAndPersist(ctx context.Context, turnID string, stream <-ch
 		// vllm proxy hiccup that resolves on retry.
 		return nil, sawText, &RetryableError{Err: fmt.Errorf("stream ended without finish")}
 	}
+	if finish.Final.ReasoningContent != "" {
+		// Mirror message.end for reasoning: a single event carrying the
+		// full accumulated chain-of-thought, so consumers running with
+		// --trace-skip-deltas (training, batch eval) still capture it.
+		l.publish(sse.TypeThinkingEnd, sse.ThinkingEndPayload{
+			TurnID: turnID, Text: finish.Final.ReasoningContent,
+		})
+	}
 	if sawText {
 		// Close the streaming bubble so the UI's accumulator marks the
 		// assistant text done before the next assistant message starts.
 		l.publish(sse.TypeMessageEnd, sse.MessageEndPayload{TurnID: turnID, Text: finish.Final.Content})
 	}
-	// Persist the assembled assistant message including any tool_calls so
-	// reload sees the same state.
+	// Persist the assembled assistant message (content + tool_calls +
+	// reasoning) so reload sees the same state. ReasoningContent is kept
+	// in the conversation log for replay/training but stripped from
+	// outbound requests by toWireMessages — DeepSeek/Kimi/GLM emit it
+	// but reject it on inbound.
 	_ = l.Conv.Append(finish.Final)
 	return finish, sawText, nil
 }
