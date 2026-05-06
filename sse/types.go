@@ -18,8 +18,7 @@ const (
 )
 
 type TurnStartPayload struct {
-	TurnID        string `json:"turn_id"`
-	UserMessageID string `json:"user_message_id"`
+	TurnID string `json:"turn_id"`
 }
 
 // UserMessagePayload is emitted right after turn.start with the literal
