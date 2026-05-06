@@ -62,7 +62,7 @@ Required: --prompt, --model.`)
 	}
 	b.log.Info().Str("turn_id", turnID).Msg("turn started")
 
-	finalText, exit := drainBatch(ctx, b.events, b.trace, b.log)
+	finalText, exit := drainBatch(ctx, b.events, b.trace, b.log, cf.traceSkipDeltas)
 	if finalText != "" {
 		fmt.Println(finalText)
 	}
@@ -70,8 +70,12 @@ Required: --prompt, --model.`)
 }
 
 // drainBatch is the run-mode drain: writes every event to trace, returns
-// the assistant's last final text and an exit code on turn.end.
-func drainBatch(ctx context.Context, events <-chan sse.Event, trace io.Writer, log zerolog.Logger) (string, int) {
+// the assistant's last final text and an exit code on turn.end. When
+// skipDeltas is true, thinking.delta and message.delta are observed for
+// state but not written to trace — the final text remains available
+// through message.end. Useful for batch eval where token-level replay
+// has no value but trace size matters.
+func drainBatch(ctx context.Context, events <-chan sse.Event, trace io.Writer, log zerolog.Logger, skipDeltas bool) (string, int) {
 	enc := json.NewEncoder(trace)
 	enc.SetEscapeHTML(false)
 
@@ -92,8 +96,12 @@ func drainBatch(ctx context.Context, events <-chan sse.Event, trace io.Writer, l
 				}
 				return finalText, exit
 			}
-			if err := enc.Encode(ev); err != nil {
-				log.Error().Err(err).Msg("write trace")
+			writeTrace := !skipDeltas ||
+				(ev.Type != sse.TypeMessageDelta && ev.Type != sse.TypeThinkingDelta)
+			if writeTrace {
+				if err := enc.Encode(ev); err != nil {
+					log.Error().Err(err).Msg("write trace")
+				}
 			}
 			switch ev.Type {
 			case sse.TypeMessageEnd:

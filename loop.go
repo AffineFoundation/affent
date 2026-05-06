@@ -8,6 +8,7 @@ import (
 	"io"
 	"net"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/affinefoundation/affent/sse"
@@ -79,6 +80,11 @@ type Loop struct {
 	mu       sync.Mutex
 	current  string // currently active turn_id; empty if idle
 	cancelFn context.CancelFunc
+
+	// eventSeq numbers every published event monotonically per loop.
+	// Lets trace consumers detect drops and order events independently
+	// of any downstream ring buffer's own ID space.
+	eventSeq atomic.Int64
 }
 
 // SystemPrompt is fed once at session start. Kept short; the model figures
@@ -317,6 +323,7 @@ func (l *Loop) publish(t string, payload any) {
 		l.Log.Error().Err(err).Str("type", t).Msg("encode event")
 		return
 	}
+	ev.ID = l.eventSeq.Add(1)
 	select {
 	case l.Events <- ev:
 	default:

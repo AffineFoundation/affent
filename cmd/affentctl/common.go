@@ -34,6 +34,7 @@ type commonFlags struct {
 	retryTransient   int
 	retryBackoff     time.Duration
 	tracePath        string
+	traceSkipDeltas  bool
 	systemPromptPath string
 	quiet            bool
 
@@ -53,6 +54,7 @@ func (c *commonFlags) bind(fs *flag.FlagSet) {
 	fs.IntVar(&c.retryTransient, "retry-transient", affent.DefaultTransientRetries, "retry attempts on transient LLM errors (5xx/429/408/net/EOF/timeout); 0 disables")
 	fs.DurationVar(&c.retryBackoff, "retry-backoff", affent.DefaultTransientBackoff, "initial backoff between retries; doubles each attempt")
 	fs.StringVar(&c.tracePath, "trace", "", "JSONL trace path; '-' for stdout, '' for stderr")
+	fs.BoolVar(&c.traceSkipDeltas, "trace-skip-deltas", false, "skip thinking/message deltas in trace (smaller trace, no token-level replay; final text still in message.end)")
 	fs.StringVar(&c.systemPromptPath, "system-prompt", "", "override system prompt; '-' or file path or literal")
 	fs.BoolVar(&c.quiet, "quiet", false, "suppress stderr progress")
 	fs.StringVar(&c.sessionID, "session-id", "", "resume the named session (under --workspace/.affentctl/)")

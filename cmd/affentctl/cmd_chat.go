@@ -114,15 +114,15 @@ Slash commands inside the REPL:
 		}
 		_ = turnID
 
-		drainInteractive(turnCtx, b.events, traceEnc)
+		drainInteractive(turnCtx, b.events, traceEnc, cf.traceSkipDeltas)
 		cancelTurn()
 	}
 }
 
 // drainInteractive reads events for one turn, printing assistant text
 // live to stdout, tool activity compactly to stderr. trace gets every
-// event in JSONL.
-func drainInteractive(ctx context.Context, events <-chan sse.Event, trace *json.Encoder) {
+// event in JSONL — except thinking/message deltas when skipDeltas is on.
+func drainInteractive(ctx context.Context, events <-chan sse.Event, trace *json.Encoder, skipDeltas bool) {
 	const (
 		ansiDim   = "\x1b[2m"
 		ansiReset = "\x1b[0m"
@@ -148,7 +148,9 @@ func drainInteractive(ctx context.Context, events <-chan sse.Event, trace *json.
 					if !ok {
 						return
 					}
-					_ = trace.Encode(ev)
+					if !skipDeltas || (ev.Type != sse.TypeMessageDelta && ev.Type != sse.TypeThinkingDelta) {
+						_ = trace.Encode(ev)
+					}
 					if ev.Type == sse.TypeTurnEnd {
 						return
 					}
@@ -160,7 +162,9 @@ func drainInteractive(ctx context.Context, events <-chan sse.Event, trace *json.
 			if !ok {
 				return
 			}
-			_ = trace.Encode(ev)
+			if !skipDeltas || (ev.Type != sse.TypeMessageDelta && ev.Type != sse.TypeThinkingDelta) {
+				_ = trace.Encode(ev)
+			}
 			switch ev.Type {
 			case sse.TypeThinkingDelta:
 				if !thinkingShown {
