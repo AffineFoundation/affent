@@ -198,8 +198,10 @@ func setupLoop(c commonFlags) (*loopBundle, int) {
 		loop.Compactor = &affent.LLMSummaryCompactor{
 			LLM:         llm,
 			TriggerMsgs: c.compactTrigger,
-			KeepFirst:   2,
-			KeepLast:    c.compactKeepLast,
+			// KeepFirst defaults to 1 per the LLMSummaryCompactor docstring
+			// (OpenHands LLMSummarizingCondenser parity). Keeping more
+			// would shrink the rolling summary's available ground each pass.
+			KeepLast: c.compactKeepLast,
 		}
 	}
 	if err := loop.EnsureSystemPrompt(systemPrompt); err != nil {

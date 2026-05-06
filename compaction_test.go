@@ -7,24 +7,8 @@ import (
 	"testing"
 )
 
-// fakeLLM returns a deterministic summary for any request. We use it to
-// drive the compactor without hitting a real endpoint.
-type fakeLLM struct{}
-
-// fakeSummaryCompactor reuses LLMSummaryCompactor's structure but
-// short-circuits the LLM call to a fixed string. Lets us exercise the
-// keep-policy and boundary logic deterministically.
-func newTestCompactor(keepFirst, keepLast int) *LLMSummaryCompactor {
-	return &LLMSummaryCompactor{
-		KeepFirst:   keepFirst,
-		KeepLast:    keepLast,
-		TriggerMsgs: 0,
-	}
-}
-
 func TestBackUpToSafeBoundary(t *testing.T) {
 	// Sequence: assistant(tool_calls) → tool → tool → assistant → user
-	// Cutting at index 2 (mid tool replies) should back up to 0.
 	msgs := []ChatMessage{
 		{Role: "assistant", ToolCalls: []ToolCall{{ID: "a"}, {ID: "b"}}},
 		{Role: "tool", ToolCallID: "a", Content: "ra"},
@@ -34,9 +18,9 @@ func TestBackUpToSafeBoundary(t *testing.T) {
 	}
 	for in, want := range map[int]int{
 		0: 0, // already at start
-		2: 0, // cut on second tool reply: back up past both tools then past owner
-		3: 3, // assistant (no tool_calls) — already a safe boundary, no back-up
-		4: 4, // user — safe boundary
+		2: 0, // mid tool reply chain — back up past tools then past owner
+		3: 3, // assistant (no tool_calls) is a safe boundary, no back-up
+		4: 4, // user is safe
 	} {
 		got := backUpToSafeBoundary(msgs, in)
 		if got != want {
@@ -45,9 +29,63 @@ func TestBackUpToSafeBoundary(t *testing.T) {
 	}
 }
 
+// stubCompactor replicates the rolling Compact() flow but stubs out the
+// LLM call. Lets us exercise the head/middle/tail split + previous
+// summary detection deterministically.
+type stubCompactor struct {
+	*LLMSummaryCompactor
+	summary string
+}
+
+func (s *stubCompactor) Compact(ctx context.Context, msgs []ChatMessage) ([]ChatMessage, error) {
+	keepFirst := s.KeepFirst
+	if keepFirst <= 0 {
+		keepFirst = 1
+	}
+	keepLast := s.KeepLast
+	if keepLast <= 0 {
+		keepLast = 10
+	}
+	if s.TriggerMsgs > 0 && len(msgs) <= s.TriggerMsgs {
+		return msgs, nil
+	}
+
+	sysHead := 0
+	for sysHead < len(msgs) && msgs[sysHead].Role == "system" {
+		sysHead++
+	}
+	if len(msgs)-sysHead <= keepFirst+keepLast+1 {
+		return msgs, nil
+	}
+
+	headEnd := sysHead + keepFirst
+	summaryEnd := headEnd
+	if headEnd < len(msgs) {
+		if m := msgs[headEnd]; m.Role == "user" && strings.HasPrefix(m.Content, summaryPrefix) {
+			summaryEnd = headEnd + 1
+		}
+	}
+	tailStart := backUpToSafeBoundary(msgs, len(msgs)-keepLast)
+	if tailStart <= summaryEnd {
+		return msgs, nil
+	}
+	middle := msgs[summaryEnd:tailStart]
+	if len(middle) == 0 {
+		return msgs, nil
+	}
+
+	out := make([]ChatMessage, 0, headEnd+1+(len(msgs)-tailStart))
+	out = append(out, msgs[:headEnd]...)
+	out = append(out, ChatMessage{Role: "user", Content: summaryPrefix + s.summary})
+	out = append(out, msgs[tailStart:]...)
+	return out, nil
+}
+
 func TestCompact_BelowThreshold_NoOp(t *testing.T) {
-	c := newTestCompactor(2, 10)
-	c.LLM = &LLMClient{} // never invoked because below threshold
+	c := &stubCompactor{
+		LLMSummaryCompactor: &LLMSummaryCompactor{KeepFirst: 1, KeepLast: 10, TriggerMsgs: 100},
+		summary:             "S",
+	}
 	msgs := []ChatMessage{
 		{Role: "system", Content: "sys"},
 		{Role: "user", Content: "u1"},
@@ -58,52 +96,13 @@ func TestCompact_BelowThreshold_NoOp(t *testing.T) {
 		t.Fatalf("unexpected error: %v", err)
 	}
 	if len(out) != len(msgs) {
-		t.Errorf("below threshold: expected no change, got len=%d (was %d)", len(out), len(msgs))
+		t.Errorf("below threshold: expected no change, got len=%d", len(out))
 	}
-}
-
-// stubCompactor lets us assert the head/middle/tail split without
-// running a real LLM. Replaces summarize() via embedding.
-type stubCompactor struct {
-	*LLMSummaryCompactor
-	summary string
-}
-
-func (s *stubCompactor) Compact(ctx context.Context, msgs []ChatMessage) ([]ChatMessage, error) {
-	// Reimplement Compact() with summarize stubbed out — keeps tests
-	// independent of the real LLM client.
-	keepFirst := s.KeepFirst
-	if keepFirst <= 0 {
-		keepFirst = 2
-	}
-	keepLast := s.KeepLast
-	if keepLast <= 0 {
-		keepLast = 10
-	}
-	sysHead := 0
-	for sysHead < len(msgs) && msgs[sysHead].Role == "system" {
-		sysHead++
-	}
-	tail := msgs[sysHead:]
-	if len(tail) <= keepFirst+keepLast+1 {
-		return msgs, nil
-	}
-	head := msgs[:sysHead+keepFirst]
-	tailStart := backUpToSafeBoundary(msgs, len(msgs)-keepLast)
-	if tailStart <= len(head) {
-		return msgs, nil
-	}
-	out := make([]ChatMessage, 0, len(head)+1+(len(msgs)-tailStart))
-	out = append(out, head...)
-	out = append(out, ChatMessage{Role: "user", Content: "[summary of earlier work] " + s.summary})
-	out = append(out, msgs[tailStart:]...)
-	return out, nil
 }
 
 func TestCompact_PreservesHeadAndTail(t *testing.T) {
-	// Build: system + 20 alternating user/assistant. Trigger compaction
-	// with keep_first=2 keep_last=4. Expect: system + first 2 + summary
-	// + last 4 = 8 messages.
+	// system + 20 alternating user/assistant. KeepFirst=1, KeepLast=4 →
+	// system + 1 head + 1 summary + 4 tail = 7.
 	msgs := []ChatMessage{{Role: "system", Content: "sys"}}
 	for i := 0; i < 20; i++ {
 		role := "user"
@@ -113,40 +112,75 @@ func TestCompact_PreservesHeadAndTail(t *testing.T) {
 		msgs = append(msgs, ChatMessage{Role: role, Content: "msg" + string(rune('a'+i))})
 	}
 	c := &stubCompactor{
-		LLMSummaryCompactor: &LLMSummaryCompactor{KeepFirst: 2, KeepLast: 4, TriggerMsgs: 0},
+		LLMSummaryCompactor: &LLMSummaryCompactor{KeepFirst: 1, KeepLast: 4},
 		summary:             "earlier work",
 	}
 	out, err := c.Compact(context.Background(), msgs)
 	if err != nil {
 		t.Fatalf("compact: %v", err)
 	}
-	if len(out) != 1+2+1+4 {
-		t.Fatalf("unexpected len: got %d, want 8", len(out))
+	if len(out) != 1+1+1+4 {
+		t.Fatalf("unexpected len: got %d, want 7", len(out))
 	}
 	if out[0].Role != "system" {
 		t.Errorf("head[0] should be system; got %q", out[0].Role)
 	}
-	if out[1].Content != "msga" || out[2].Content != "msgb" {
-		t.Errorf("first two non-system messages should be preserved verbatim")
+	if out[1].Content != "msga" {
+		t.Errorf("first non-system message should be preserved verbatim; got %q", out[1].Content)
 	}
-	if !strings.Contains(out[3].Content, "[summary of earlier work]") {
-		t.Errorf("expected synthetic summary user message, got %+v", out[3])
-	}
-	if out[3].Role != "user" {
-		t.Errorf("summary message must be role=user (multiple system messages confuse models)")
+	if !strings.Contains(out[2].Content, summaryPrefix) {
+		t.Errorf("expected synthetic summary user message at index 2; got %+v", out[2])
 	}
 	last := msgs[len(msgs)-4:]
 	for i, m := range last {
-		if out[4+i].Content != m.Content {
-			t.Errorf("tail[%d]: got %q, want %q", i, out[4+i].Content, m.Content)
+		if out[3+i].Content != m.Content {
+			t.Errorf("tail[%d]: got %q, want %q", i, out[3+i].Content, m.Content)
 		}
 	}
 }
 
+// Rolling: a second compaction pass should detect the existing summary
+// (left by the first pass), not start over from msg #1.
+func TestCompact_RollingDoesNotMultiplySummary(t *testing.T) {
+	// Conversation already in post-compaction shape, then has more events
+	// appended that need re-compaction.
+	msgs := []ChatMessage{
+		{Role: "system", Content: "sys"},
+		{Role: "user", Content: "initial task"},
+		{Role: "user", Content: summaryPrefix + "old summary"},
+	}
+	for i := 0; i < 30; i++ {
+		role := "user"
+		if i%2 == 1 {
+			role = "assistant"
+		}
+		msgs = append(msgs, ChatMessage{Role: role, Content: "ev" + string(rune('a'+i))})
+	}
+	c := &stubCompactor{
+		LLMSummaryCompactor: &LLMSummaryCompactor{KeepFirst: 1, KeepLast: 4},
+		summary:             "rolled-up summary",
+	}
+	out, err := c.Compact(context.Background(), msgs)
+	if err != nil {
+		t.Fatalf("compact: %v", err)
+	}
+	// Expect: system + initial task + ONE summary (the new one replaces
+	// the old) + 4 tail events. Crucially not two summaries stacked.
+	summaryCount := 0
+	for _, m := range out {
+		if m.Role == "user" && strings.HasPrefix(m.Content, summaryPrefix) {
+			summaryCount++
+		}
+	}
+	if summaryCount != 1 {
+		t.Fatalf("expected exactly one rolling summary, got %d. out=%+v", summaryCount, out)
+	}
+	if len(out) != 1+1+1+4 {
+		t.Fatalf("unexpected len: got %d, want 7", len(out))
+	}
+}
+
 func TestCompact_DoesNotSeverToolCallPair(t *testing.T) {
-	// Build a sequence ending with assistant.tool_calls + 2 tool replies.
-	// keep_last=2 would cut between the assistant and its replies — the
-	// boundary fixer must back up to keep them paired.
 	msgs := []ChatMessage{
 		{Role: "system", Content: "sys"},
 		{Role: "user", Content: "u1"},
@@ -161,21 +195,19 @@ func TestCompact_DoesNotSeverToolCallPair(t *testing.T) {
 		{Role: "tool", ToolCallID: "t2", Content: "r2"},
 	}
 	c := &stubCompactor{
-		LLMSummaryCompactor: &LLMSummaryCompactor{KeepFirst: 1, KeepLast: 2, TriggerMsgs: 0},
+		LLMSummaryCompactor: &LLMSummaryCompactor{KeepFirst: 1, KeepLast: 2},
 		summary:             "S",
 	}
 	out, err := c.Compact(context.Background(), msgs)
 	if err != nil {
 		t.Fatalf("compact: %v", err)
 	}
-	// Walk out and verify: every assistant.tool_calls is immediately
-	// followed by exactly one role=tool per call_id.
 	for i := 0; i < len(out); i++ {
 		if len(out[i].ToolCalls) > 0 {
 			needed := len(out[i].ToolCalls)
 			for j := i + 1; j < i+1+needed; j++ {
 				if j >= len(out) || out[j].Role != "tool" {
-					t.Fatalf("tool_calls at %d (%d calls) not followed by %d role=tool messages; got %v",
+					t.Fatalf("tool_calls at %d (%d calls) not followed by %d role=tool messages; got %+v",
 						i, needed, needed, out[j:])
 				}
 			}
@@ -189,9 +221,9 @@ func TestIsContextOverflow(t *testing.T) {
 		`chat http 400: input length (12345 tokens) exceeds the maximum allowed length`: true,
 		`chat http 400: This model's maximum context length is 8192 tokens`:             true,
 		`ContextWindowExceededError: ...`:                                               true,
-		`chat http 429: rate limit exceeded`:                                             false,
-		`chat http 500: internal error`:                                                  false,
-		``:                                                                               false,
+		`chat http 429: rate limit exceeded`:                                            false,
+		`chat http 500: internal error`:                                                 false,
+		``:                                                                              false,
 	}
 	for msg, want := range cases {
 		var err error
@@ -200,6 +232,21 @@ func TestIsContextOverflow(t *testing.T) {
 		}
 		if got := IsContextOverflow(err); got != want {
 			t.Errorf("IsContextOverflow(%q) = %v, want %v", msg, got, want)
+		}
+	}
+}
+
+// Defensive: prompt body should match OpenHands' standard verbatim
+// (we deliberately don't fork the wording).
+func TestDefaultSummaryPrompt_StandardFields(t *testing.T) {
+	required := []string{
+		"USER_CONTEXT", "COMPLETED", "PENDING", "CURRENT_STATE",
+		"CODE_STATE", "TESTS", "CHANGES", "DEPS", "VERSION_CONTROL_STATUS",
+		"PRIORITIZE", "SKIP", "Example formats",
+	}
+	for _, kw := range required {
+		if !strings.Contains(defaultSummaryPrompt, kw) {
+			t.Errorf("default prompt missing standard field %q", kw)
 		}
 	}
 }
