@@ -108,7 +108,15 @@ executor/          Executor interface + LocalExecutor (in-process)
 sse/               canonical event type constants + payload structs
 mcp/               stdio + streamable-http MCP client; Registry adapter
 cmd/affentctl/     CLI: run / chat / sessions
+extras/            opt-in helper packages, separate sub-modules
+  web/             web_fetch + web_search (HTML→markdown, Tavily search default)
 ```
+
+The `extras/` directory holds **separate Go sub-modules** that aren't
+in the import graph of root `affent` — sandboxed eval / training rigs
+that don't want network access (or extra deps in their go.sum) simply
+don't import them. See [extras/web README usage](#using-extrasweb)
+below.
 
 ## SSE events (the wire contract)
 
@@ -261,6 +269,36 @@ The default system prompt assumes a "dev box" environment (a
 mentions `schedule_*` tools that the gateway registers. If you're
 embedding affent outside that environment, pass your own prompt to
 `EnsureSystemPrompt`.
+
+## Using extras/web
+
+`extras/web` ships `web_fetch` and `web_search` as opt-in tools. It's a
+separate Go sub-module — `go get github.com/affinefoundation/affent`
+won't pull `golang.org/x/net` or any search-backend deps unless you
+also `go get .../extras/web`.
+
+```go
+import (
+    "github.com/affinefoundation/affent"
+    affentweb "github.com/affinefoundation/affent/extras/web"
+)
+
+reg := affent.NewRegistry()
+affent.RegisterBuiltins(reg, deps)
+
+// Just the fetch tool — no external API key needed.
+affentweb.RegisterFetch(reg, affentweb.FetchConfig{})
+
+// Both fetch + search; default Tavily backend reads TAVILY_API_KEY.
+affentweb.RegisterAll(reg, affentweb.Options{})
+
+// Custom search provider (Brave, SearXNG, internal index, …):
+tool, _ := affentweb.SearchTool(affentweb.SearchConfig{Provider: myProvider})
+reg.Add(tool)
+```
+
+`SearchProvider` is the seam — implement `Search(ctx, query, n) ([]SearchResult, error)`
+and pass it via `Options.SearchProvider` or `SearchConfig.Provider`.
 
 ## Status
 
