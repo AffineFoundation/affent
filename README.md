@@ -274,8 +274,19 @@ embedding affent outside that environment, pass your own prompt to
 
 `extras/web` ships `web_fetch` and `web_search` as opt-in tools. It's a
 separate Go sub-module — `go get github.com/affinefoundation/affent`
-won't pull `golang.org/x/net` or any search-backend deps unless you
-also `go get .../extras/web`.
+won't pull any HTML-processing or search-backend deps unless you also
+`go get .../extras/web`.
+
+`web_fetch` runs the standard reader pipeline:
+[go-shiori/go-readability](https://github.com/go-shiori/go-readability)
+(Mozilla Readability Go port — extracts the article main content,
+drops nav/header/footer/sidebar) → [JohannesKaufmann/html-to-markdown](https://github.com/JohannesKaufmann/html-to-markdown)
+(commonmark-spec converter — handles bold/italic/lists/code/tables/
+links/images). We don't roll our own HTML processing.
+
+`web_search` ships a `SearchProvider` interface with a Tavily-backed
+default; swap to Brave / SearXNG / an internal index by implementing
+the interface.
 
 ```go
 import (

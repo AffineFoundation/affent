@@ -1,16 +1,21 @@
 package web
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
 	"net/http"
+	"net/url"
 	"strings"
 	"time"
 
+	htmltomarkdown "github.com/JohannesKaufmann/html-to-markdown/v2"
+	"github.com/JohannesKaufmann/html-to-markdown/v2/converter"
 	"github.com/affinefoundation/affent"
+	readability "github.com/go-shiori/go-readability"
 )
 
 // FetchConfig tunes WebFetchTool. Zero values pick sane defaults.
@@ -131,11 +136,32 @@ func renderBody(body []byte, contentType, finalURL string) string {
 	ct := strings.ToLower(strings.TrimSpace(contentType))
 	switch {
 	case strings.HasPrefix(ct, "text/html"), strings.HasPrefix(ct, "application/xhtml+xml"):
-		md, err := htmlToMarkdown(strings.NewReader(string(body)), finalURL)
+		// Standard reader pipeline: Readability extracts the article's
+		// main content (drops nav/header/footer/sidebar/ads), then
+		// html-to-markdown converts the cleaned HTML. Both libraries
+		// are the de-facto Go choices:
+		//   - go-shiori/go-readability — Mozilla Readability port
+		//   - JohannesKaufmann/html-to-markdown — commonmark-spec converter
+		// Falling back to direct conversion when readability can't
+		// identify a main article (e.g. on a homepage, listing, or
+		// non-article page) so the model still gets something useful.
+		htmlText := string(body)
+		var pageURL *url.URL
+		if u, err := url.Parse(finalURL); err == nil {
+			pageURL = u
+		}
+		articleHTML := htmlText
+		if art, err := readability.FromReader(bytes.NewReader(body), pageURL); err == nil && art.Content != "" {
+			articleHTML = art.Content
+		}
+
+		var opts []converter.ConvertOptionFunc
+		if domain := domainOf(finalURL); domain != "" {
+			opts = append(opts, converter.WithDomain(domain))
+		}
+		md, err := htmltomarkdown.ConvertString(articleHTML, opts...)
 		if err != nil {
-			// Fall back to raw text when the HTML is malformed enough
-			// to confuse the parser.
-			return string(body)
+			return htmlText
 		}
 		return md
 	case strings.HasPrefix(ct, "text/"),
@@ -147,4 +173,14 @@ func renderBody(body []byte, contentType, finalURL string) string {
 	default:
 		return fmt.Sprintf("[non-text response: Content-Type=%q, %d bytes]", contentType, len(body))
 	}
+}
+
+// domainOf extracts "scheme://host" from a URL, used to resolve
+// relative links/images against the page's origin.
+func domainOf(rawURL string) string {
+	u, err := url.Parse(rawURL)
+	if err != nil || u.Scheme == "" || u.Host == "" {
+		return ""
+	}
+	return u.Scheme + "://" + u.Host
 }
