@@ -74,9 +74,17 @@ type ToolOutputPayload struct {
 }
 
 type ToolResultPayload struct {
-	CallID         string `json:"call_id"`
-	ExitCode       int    `json:"exit_code"`
-	ResultSummary  string `json:"result_summary"`
+	CallID   string `json:"call_id"`
+	ExitCode int    `json:"exit_code"`
+	// ResultSummary is a short, UI-friendly preview of the tool's
+	// output (capped for chat-bubble rendering). It may be truncated
+	// with an ellipsis suffix and is NOT safe to JSON-parse.
+	ResultSummary string `json:"result_summary"`
+	// Result is the full tool output as the tool itself returned it
+	// (no event-side truncation). Trace and evaluation consumers that
+	// need to parse structured tool responses should read Result.
+	// Front-ends that only render the value should read ResultSummary.
+	Result string `json:"result"`
 }
 
 type FileChangedPayload struct {

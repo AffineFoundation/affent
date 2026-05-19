@@ -311,7 +311,10 @@ func (l *Loop) runTurn(ctx context.Context, turnID, userText string) {
 				exit = 1
 			}
 			l.publish(sse.TypeToolResult, sse.ToolResultPayload{
-				CallID: callID, ExitCode: exit, ResultSummary: previewN(result, MaxToolResultPreviewInEvent),
+				CallID:        callID,
+				ExitCode:      exit,
+				ResultSummary: previewN(result, MaxToolResultPreviewInEvent),
+				Result:        result,
 			})
 			_ = l.Conv.Append(ChatMessage{
 				Role:       "tool",
