@@ -91,6 +91,22 @@ type Loop struct {
 	// compaction — the conversation grows until the upstream rejects
 	// the request, which becomes a terminal turn.end{reason=error}.
 	Compactor Compactor
+
+	// Memory persists notes across sessions. When set,
+	// EnsureSystemPrompt composes the base prompt with the store's
+	// Snapshot at session start; on resumed conversations the
+	// existing system message is rewritten with the new composition.
+	// Mid-session mutations come from the `memory` tool registered
+	// via BuiltinDeps.Memory.
+	Memory MemoryStore
+
+	// ProjectContextDir, when non-empty, makes EnsureSystemPrompt
+	// load user-authored project notes (AGENTS.md, CONVENTIONS.md,
+	// .cursorrules, .clinerules, CLAUDE.md, GEMINI.md) from this
+	// directory and inline them into the system prompt at session
+	// start. The block sits between the base prompt and the memory
+	// snapshot. Files are read-only — affent never writes to them.
+	ProjectContextDir string
 }
 
 // SystemPrompt is fed once at session start. Kept short; the model figures
@@ -130,16 +146,57 @@ Don't promise things you didn't actually do. Don't claim a file exists
 without checking. After running a tool, report what you saw.
 `
 
-// EnsureSystemPrompt prepends the system prompt if the conversation is
-// empty. Idempotent.
+// EnsureSystemPrompt seeds the conversation's system message. Call
+// once per session before SendUser.
+//
+// Composition (top to bottom in the final system message):
+//
+//  1. `prompt` (or DefaultSystemPrompt if empty)
+//  2. Project context block from ProjectContextDir (if non-empty and
+//     any recognized files exist)
+//  3. Memory snapshot from Memory.Snapshot() (if Memory is non-nil)
+//
+// Empty conversation: the composed message is appended.
+//
+// Resumed conversation whose first message is a system message:
+// rewritten with the new composition when ProjectContextDir or
+// Memory is set. Without either, resumed conversations are left
+// untouched.
+//
+// An empty `prompt` falls back to DefaultSystemPrompt.
 func (l *Loop) EnsureSystemPrompt(prompt string) error {
-	if len(l.Conv.Snapshot()) > 0 {
-		return nil
-	}
 	if prompt == "" {
 		prompt = DefaultSystemPrompt
 	}
-	return l.Conv.Append(ChatMessage{Role: "system", Content: prompt})
+	combined := prompt
+	if l.ProjectContextDir != "" {
+		if ctx := LoadProjectContext(l.ProjectContextDir); ctx != "" {
+			combined = combined + "\n\n" + ctx
+		}
+	}
+	if l.Memory != nil {
+		if snap := l.Memory.Snapshot(); snap != "" {
+			combined = combined + "\n\n" + snap
+		}
+	}
+
+	snapshot := l.Conv.Snapshot()
+	if len(snapshot) == 0 {
+		return l.Conv.Append(ChatMessage{Role: "system", Content: combined})
+	}
+	if l.Memory == nil && l.ProjectContextDir == "" {
+		return nil
+	}
+	if snapshot[0].Role != "system" {
+		return nil
+	}
+	if snapshot[0].Content == combined {
+		return nil
+	}
+	newMsgs := make([]ChatMessage, len(snapshot))
+	copy(newMsgs, snapshot)
+	newMsgs[0] = ChatMessage{Role: "system", Content: combined}
+	return l.Conv.Replace(newMsgs)
 }
 
 // SendUser kicks off one turn for the given user message. Returns the

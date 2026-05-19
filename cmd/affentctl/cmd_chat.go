@@ -43,6 +43,10 @@ Slash commands inside the REPL:
 	if err := fs.Parse(args); err != nil {
 		return 64
 	}
+	if err := applyConfig(&cf, fs); err != nil {
+		fmt.Fprintf(os.Stderr, "config: %v\n", err)
+		return 64
+	}
 
 	// Chat is interactive; the JSONL trace would dump every event
 	// inline with the prompt. Default it to /dev/null unless the user

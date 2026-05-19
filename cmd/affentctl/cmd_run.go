@@ -33,6 +33,10 @@ Required: --prompt, --model.`)
 	if err := fs.Parse(args); err != nil {
 		return 64
 	}
+	if err := applyConfig(&cf, fs); err != nil {
+		fmt.Fprintf(os.Stderr, "config: %v\n", err)
+		return 64
+	}
 
 	prompt, err := readMaybeStdin(*promptFlag)
 	if err != nil || strings.TrimSpace(prompt) == "" {

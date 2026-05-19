@@ -77,6 +77,58 @@ Tiny dep graph: `uuid` + `zerolog` + stdlib.
   number of MCP servers — their tools surface as `<server>_<tool>`
   alongside the builtins.
 
+**Project context** (`project_context.go`)
+
+- User-authored project knowledge files, auto-loaded from the workspace
+  and inlined into the system prompt at session start. Read-only; affent
+  never writes to them.
+- Recognized filenames (in load order): `AGENTS.md`, `CLAUDE.md`,
+  `CONVENTIONS.md`, `.cursorrules`, `.clinerules`, `.clinerules.md`,
+  `GEMINI.md`. Multiple files concatenate, each under a `## <filename>`
+  header. Total cap `MaxProjectContextBytes = 32 KiB` (per-file
+  truncation past the budget).
+- Enabled by default; toggle via `affentctl --project-context=false`,
+  or set `Loop.ProjectContextDir = ""` when embedding.
+
+**Persistent memory** (`memory.go`)
+
+- Off by default. Opt in via `Loop.Memory = affent.NewFileMemoryStore(workspace)`
+  (or `affentctl --memory`).
+- Two stores: `MEMORY.md` for agent notes (env, conventions, lessons
+  learned — workspace-scoped) and `USER.md` for user profile
+  (preferences, communication style — user-scoped, default
+  `$XDG_CONFIG_HOME/affent/USER.md`).
+- Single `memory` tool with `action ∈ {add, replace, remove}` and
+  `target ∈ {memory, user}`. `replace`/`remove` use a short unique
+  substring (`old_text`) to identify the entry — no IDs.
+- Frozen-snapshot semantics: at session start, `MemoryStore.Snapshot()`
+  composes the on-disk state into the system prompt **once**. Mid-
+  session writes update on-disk + live tool responses but do NOT
+  re-snapshot, keeping the prefix cache stable for the rest of the
+  session.
+- Char-bounded (default `MEMORY=2200`, `USER=1375`; ~800 / ~500
+  tokens). On overflow, the tool returns `ok=false` with `entries`
+  listing the current state so the agent can consolidate in the same
+  turn.
+- Atomic writes (tempfile + rename). Minimal security scan blocks
+  invisible/bidi-override unicode, the literal delimiter sequence,
+  and `authorized_keys` substrings — not a full prompt-injection
+  regex list (those are mostly performative).
+
+**Session search** (`session_search.go`)
+
+- Registered as the `session_search` tool when `BuiltinDeps.SessionsDir`
+  is set (affentctl wires it automatically). The agent searches its
+  own past conversation logs in the workspace for `did we discuss X`
+  / `what was that command` / `last week's conclusion` questions.
+- Term-overlap scoring over JSONL session logs; user + assistant
+  messages only (system and tool results are skipped). The current
+  session is excluded so the agent doesn't match its own in-flight
+  turns.
+- Memory and session_search are complementary: memory holds compact
+  facts always present in the system prompt; session_search returns
+  full snippets on demand without paying per-turn token cost.
+
 **Persistence**
 
 - `Conversation`: append-only JSONL chat log on disk, includes system
@@ -101,6 +153,10 @@ Tiny dep graph: `uuid` + `zerolog` + stdlib.
 loop.go            agent loop (LLM <-> tools, streaming, reasoning, cancel)
 llm.go             OpenAI-compat streaming client (incl. reasoning_content, watchdog, retry classification)
 builtins.go        shell, read_file, write_file, edit_file, list_files (workspace-sandboxed)
+project_context.go LoadProjectContext: read AGENTS.md / CONVENTIONS.md / .cursorrules / .clinerules / CLAUDE.md / GEMINI.md
+memory.go          MemoryStore + FileMemoryStore (workspace MEMORY.md + user USER.md)
+memory_tool.go     the single `memory` tool (action × target dispatch)
+session_search.go  session_search tool: term-overlap retrieval over past JSONL session logs
 compaction.go      Compactor interface + LLMSummaryCompactor (OpenHands V1 prompt)
 conversation.go    JSONL-on-disk chat log, append-only + atomic Replace
 tool.go            Tool + Registry
@@ -112,11 +168,10 @@ extras/            opt-in helper packages, separate sub-modules
   web/             web_fetch + web_search (HTML→markdown, Tavily search default)
 ```
 
-The `extras/` directory holds **separate Go sub-modules** that aren't
-in the import graph of root `affent` — sandboxed eval / training rigs
-that don't want network access (or extra deps in their go.sum) simply
-don't import them. See [extras/web README usage](#using-extrasweb)
-below.
+The `extras/` directory holds opt-in helper packages as separate Go
+sub-modules. The root `affent` library does not import them; callers
+choose which extras to register, and consumers that don't import them
+don't pull their transitive deps.
 
 ## SSE events (the wire contract)
 
@@ -159,6 +214,7 @@ an existing conversation. Logs persist as JSONL under
 
 | flag                    | default                                          | env                    |
 |-------------------------|--------------------------------------------------|------------------------|
+| `--config`              |                                                  | `AFFENTCTL_CONFIG`     |
 | `--workspace`           | `./affent-workspace`                             |                        |
 | `--base-url`            |                                                  | `AFFENTCTL_BASE_URL`   |
 | `--api-key`             |                                                  | `AFFENTCTL_API_KEY`    |
@@ -172,11 +228,90 @@ an existing conversation. Logs persist as JSONL under
 | `--trace-skip-deltas`   | false (set true for batch eval — drop deltas)    |                        |
 | `--system-prompt`       | builtin (dev-box flavored); `-` / file / literal |                        |
 | `--quiet`               | false                                            |                        |
+| `--project-context`     | true (auto-loads AGENTS.md / CLAUDE.md / etc.)   |                        |
+| `--memory`              | false (opt in)                                   |                        |
+| `--memory-only`         | false (implies `--memory`, forces `--project-context=false`, rejects `--mcp-config`) | |
+| `--memory-workspace-store` | `<workspace>/.affent/MEMORY.md`               |                        |
+| `--memory-user-store`   | `$XDG_CONFIG_HOME/affent/USER.md`                |                        |
+| `--memory-max-chars`    | `2200,1375` (MEM,USER)                           |                        |
 | `--session-id`          | new session                                      |                        |
 | `--continue`            | resume newest session under `--workspace`        |                        |
 | `--mcp-config`          |                                                  | `AFFENTCTL_MCP_CONFIG` |
 | `--compact-trigger`     | 240 (matches OpenHands V1 max_size); 0 disables  |                        |
 | `--compact-keep-last`   | 10                                               |                        |
+
+### Project context
+
+`affentctl` auto-loads recognized project knowledge files from
+`--workspace` and inlines them into the system prompt at session
+start. Files are user-authored and read-only; affent never writes
+to them. Recognized names (concatenated in this order if multiple
+exist):
+
+```
+AGENTS.md
+CLAUDE.md
+CONVENTIONS.md
+.cursorrules
+.clinerules
+.clinerules.md
+GEMINI.md
+```
+
+Default on. Disable with `affentctl --project-context=false` for
+runs that need a clean baseline.
+
+### Persistent memory
+
+Memory is **off by default** so existing one-shot and dev-box workflows
+keep their current tool surface until the caller opts in.
+
+```bash
+# Real user: memory on. Agent persists notes in <workspace>/.affent/MEMORY.md
+# and user profile in $XDG_CONFIG_HOME/affent/USER.md.
+affentctl chat --workspace ./project --memory
+
+# Controlled memory run: only the `memory` tool, no shell/file/MCP escape hatches.
+affentctl run --memory-only --prompt @question.txt
+```
+
+Two stores: `memory` holds the agent's own notes (environment facts,
+project conventions, lessons learned) and travels with the workspace.
+`user` holds what the agent knows about the user (preferences,
+communication style) and crosses workspaces.
+
+Each store has a character cap (default `2200` / `1375`, ~`800` /
+`500` tokens). On overflow the tool returns the current entries so
+the agent can consolidate without an extra read. The frozen snapshot
+goes into the system prompt at session start; mid-session writes
+don't re-snapshot, so the prefix cache stays stable.
+
+### Config file
+
+`--config FILE` loads JSON configuration before building the loop. CLI
+flags override values from the config file.
+
+```json
+{
+  "workspace": "./task",
+  "base_url": "https://api.openai.com/v1",
+  "model": "gpt-4o-mini",
+  "max_turns": 8,
+  "trace_skip_deltas": true,
+  "project_context": true,
+  "memory": {
+    "enabled": true,
+    "only": false,
+    "workspace_store": ".affent/MEMORY.md",
+    "user_store": "",
+    "max_chars": "2200,1375"
+  },
+  "compact": {
+    "trigger": 240,
+    "keep_last": 10
+  }
+}
+```
 
 ### MCP config
 
@@ -233,10 +368,14 @@ import (
     "github.com/affinefoundation/affent/sse"
 )
 
+// Optional persistent memory. nil = disabled (default).
+mem := affent.NewFileMemoryStore("/tmp/task")
+
 reg := affent.NewRegistry()
 affent.RegisterBuiltins(reg, affent.BuiltinDeps{
     Executor:         executor.NewLocalExecutor("session-1", "/tmp/task"),
     HostWorkspaceDir: "/tmp/task",
+    Memory:           mem, // registers the `memory` tool too
 })
 
 conv, _ := affent.NewConversation("/tmp/task", "session-1")
@@ -248,6 +387,7 @@ loop := &affent.Loop{
     Tools:  reg,
     Conv:   conv,
     Events: events,
+    Memory: mem, // composes MEMORY.md / USER.md into the system prompt at session start
     // Optional: shrink history when it grows beyond TriggerMsgs.
     Compactor: &affent.LLMSummaryCompactor{
         LLM:         llm,
@@ -325,6 +465,9 @@ and pass it via `Options.SearchProvider` or `SearchConfig.Provider`.
 - context compaction (OpenHands V1 LLMSummarizingCondenser prompt
   verbatim, rolling summary with `[summary of earlier work]` marker,
   proactive + reactive paths, tool-call boundary safety)
+- persistent memory: two-store `FileMemoryStore` (workspace MEMORY.md
+  + user USER.md), single `memory` tool, frozen-snapshot system-
+  prompt injection, char-bounded with overflow consolidation
 - monotonic event ids + `--trace-skip-deltas` for batch-eval traces
 - `wireMessage` strips `reasoning_content` from outbound requests
   (DeepSeek / Kimi / GLM compat)

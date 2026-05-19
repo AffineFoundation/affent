@@ -10,6 +10,7 @@ import (
 	"os"
 	"path/filepath"
 	"sort"
+	"strconv"
 	"strings"
 	"time"
 
@@ -25,6 +26,7 @@ import (
 // trace destination, system-prompt override, session selection. Bind once,
 // register on each command's FlagSet via bind().
 type commonFlags struct {
+	configPath       string
 	workspace        string
 	baseURL          string
 	apiKey           string
@@ -38,7 +40,24 @@ type commonFlags struct {
 	systemPromptPath string
 	quiet            bool
 
-	compactTrigger int // 0 disables proactive compaction; reactive still works
+	// memoryEnabled composes the MEMORY.md / USER.md snapshot into
+	// the system prompt at session start and registers the `memory`
+	// tool.
+	memoryEnabled bool
+	// memoryOnly registers only the `memory` tool (no shell, files,
+	// MCP) and disables project-context injection. Implies memoryEnabled.
+	memoryOnly           bool
+	memoryWorkspaceStore string // path for MEMORY.md ("" → <workspace>/.affent/MEMORY.md)
+	memoryUserStore      string // path for USER.md  ("" → $XDG_CONFIG_HOME/affent/USER.md)
+	memoryMaxChars       string // "MEM,USER", e.g. "2200,1375"; "" → defaults
+
+	// projectContext loads recognized user-authored project notes
+	// (AGENTS.md, CONVENTIONS.md, .cursorrules, .clinerules, CLAUDE.md,
+	// GEMINI.md) from --workspace and inlines them into the system
+	// prompt. Default on; set --project-context=false to disable.
+	projectContext bool
+
+	compactTrigger  int // 0 disables proactive compaction; reactive still works
 	compactKeepLast int
 
 	sessionID    string // explicit; empty means "use --continue or new"
@@ -48,6 +67,7 @@ type commonFlags struct {
 }
 
 func (c *commonFlags) bind(fs *flag.FlagSet) {
+	fs.StringVar(&c.configPath, "config", os.Getenv("AFFENTCTL_CONFIG"), "JSON config file; CLI flags override config values")
 	fs.StringVar(&c.workspace, "workspace", "./affent-workspace", "working dir for shell + file tools")
 	fs.StringVar(&c.baseURL, "base-url", os.Getenv("AFFENTCTL_BASE_URL"), "OpenAI-compat endpoint")
 	fs.StringVar(&c.apiKey, "api-key", os.Getenv("AFFENTCTL_API_KEY"), "API key")
@@ -60,11 +80,138 @@ func (c *commonFlags) bind(fs *flag.FlagSet) {
 	fs.BoolVar(&c.traceSkipDeltas, "trace-skip-deltas", false, "skip thinking/message deltas in trace (smaller trace, no token-level replay; final text still in message.end)")
 	fs.StringVar(&c.systemPromptPath, "system-prompt", "", "override system prompt; '-' or file path or literal")
 	fs.BoolVar(&c.quiet, "quiet", false, "suppress stderr progress")
+	fs.BoolVar(&c.memoryEnabled, "memory", false, "enable persistent memory: inject MEMORY.md / USER.md snapshot into the system prompt and register the memory tool")
+	fs.BoolVar(&c.memoryOnly, "memory-only", false, "register only the memory tool (no shell/file/MCP) and disable project context; for memory benchmarks. Implies --memory")
+	fs.StringVar(&c.memoryWorkspaceStore, "memory-workspace-store", "", "path to MEMORY.md; default <workspace>/.affent/MEMORY.md")
+	fs.StringVar(&c.memoryUserStore, "memory-user-store", "", "path to USER.md; default $XDG_CONFIG_HOME/affent/USER.md (cross-workspace)")
+	fs.StringVar(&c.memoryMaxChars, "memory-max-chars", "", "memory char limits as MEM,USER (default 2200,1375)")
+	fs.BoolVar(&c.projectContext, "project-context", true, "auto-load AGENTS.md / CONVENTIONS.md / .cursorrules / .clinerules / CLAUDE.md / GEMINI.md from --workspace into the system prompt")
 	fs.StringVar(&c.sessionID, "session-id", "", "resume the named session (under --workspace/.affentctl/)")
 	fs.BoolVar(&c.continueLast, "continue", false, "resume the most recent session under --workspace")
 	fs.StringVar(&c.mcpConfigPath, "mcp-config", os.Getenv("AFFENTCTL_MCP_CONFIG"), "path to MCP server config JSON ({\"servers\":[{...}]})")
 	fs.IntVar(&c.compactTrigger, "compact-trigger", 240, "compact conversation when message count exceeds this; 0 disables proactive compaction (reactive still kicks in on context-overflow errors)")
 	fs.IntVar(&c.compactKeepLast, "compact-keep-last", 10, "messages preserved verbatim at the tail of the conversation when compacting")
+}
+
+type fileConfig struct {
+	Workspace       *string `json:"workspace"`
+	BaseURL         *string `json:"base_url"`
+	APIKey          *string `json:"api_key"`
+	Model           *string `json:"model"`
+	MaxTurns        *int    `json:"max_turns"`
+	MaxCallTimeout  *string `json:"max_call_timeout"`
+	RetryTransient  *int    `json:"retry_transient"`
+	RetryBackoff    *string `json:"retry_backoff"`
+	Trace           *string `json:"trace"`
+	TraceSkipDeltas *bool   `json:"trace_skip_deltas"`
+	SystemPrompt    *string `json:"system_prompt"`
+	Quiet           *bool   `json:"quiet"`
+	Memory          *struct {
+		Enabled        *bool   `json:"enabled"`
+		Only           *bool   `json:"only"`
+		WorkspaceStore *string `json:"workspace_store"`
+		UserStore      *string `json:"user_store"`
+		MaxChars       *string `json:"max_chars"`
+	} `json:"memory"`
+	ProjectContext *bool `json:"project_context"`
+	Compact        *struct {
+		Trigger  *int `json:"trigger"`
+		KeepLast *int `json:"keep_last"`
+	} `json:"compact"`
+	SessionID *string `json:"session_id"`
+	Continue  *bool   `json:"continue"`
+	MCPConfig *string `json:"mcp_config"`
+}
+
+func applyConfig(c *commonFlags, fs *flag.FlagSet) error {
+	if err := loadConfigFile(c, fs); err != nil {
+		return err
+	}
+	// memory-only is the isolation mode: register only the memory
+	// tool and inject no other content sources into the system prompt.
+	// It implies --memory=true and forces --project-context=false
+	// regardless of how either was set.
+	if c.memoryOnly {
+		c.memoryEnabled = true
+		c.projectContext = false
+	}
+	return nil
+}
+
+func loadConfigFile(c *commonFlags, fs *flag.FlagSet) error {
+	if c.configPath == "" {
+		return nil
+	}
+	raw, err := os.ReadFile(c.configPath)
+	if err != nil {
+		return fmt.Errorf("read config %s: %w", c.configPath, err)
+	}
+	var cfg fileConfig
+	if err := json.Unmarshal(raw, &cfg); err != nil {
+		return fmt.Errorf("parse config %s: %w", c.configPath, err)
+	}
+	setByCLI := map[string]bool{}
+	fs.Visit(func(f *flag.Flag) { setByCLI[f.Name] = true })
+
+	setString := func(name string, dst *string, v *string) {
+		if v != nil && !setByCLI[name] {
+			*dst = *v
+		}
+	}
+	setBool := func(name string, dst *bool, v *bool) {
+		if v != nil && !setByCLI[name] {
+			*dst = *v
+		}
+	}
+	setInt := func(name string, dst *int, v *int) {
+		if v != nil && !setByCLI[name] {
+			*dst = *v
+		}
+	}
+	setDuration := func(name string, dst *time.Duration, v *string) error {
+		if v == nil || setByCLI[name] {
+			return nil
+		}
+		d, err := time.ParseDuration(*v)
+		if err != nil {
+			return fmt.Errorf("parse %s duration %q: %w", name, *v, err)
+		}
+		*dst = d
+		return nil
+	}
+
+	setString("workspace", &c.workspace, cfg.Workspace)
+	setString("base-url", &c.baseURL, cfg.BaseURL)
+	setString("api-key", &c.apiKey, cfg.APIKey)
+	setString("model", &c.model, cfg.Model)
+	setInt("max-turns", &c.maxTurns, cfg.MaxTurns)
+	if err := setDuration("max-call-timeout", &c.callTimeout, cfg.MaxCallTimeout); err != nil {
+		return err
+	}
+	setInt("retry-transient", &c.retryTransient, cfg.RetryTransient)
+	if err := setDuration("retry-backoff", &c.retryBackoff, cfg.RetryBackoff); err != nil {
+		return err
+	}
+	setString("trace", &c.tracePath, cfg.Trace)
+	setBool("trace-skip-deltas", &c.traceSkipDeltas, cfg.TraceSkipDeltas)
+	setString("system-prompt", &c.systemPromptPath, cfg.SystemPrompt)
+	setBool("quiet", &c.quiet, cfg.Quiet)
+	if cfg.Memory != nil {
+		setBool("memory", &c.memoryEnabled, cfg.Memory.Enabled)
+		setBool("memory-only", &c.memoryOnly, cfg.Memory.Only)
+		setString("memory-workspace-store", &c.memoryWorkspaceStore, cfg.Memory.WorkspaceStore)
+		setString("memory-user-store", &c.memoryUserStore, cfg.Memory.UserStore)
+		setString("memory-max-chars", &c.memoryMaxChars, cfg.Memory.MaxChars)
+	}
+	setBool("project-context", &c.projectContext, cfg.ProjectContext)
+	if cfg.Compact != nil {
+		setInt("compact-trigger", &c.compactTrigger, cfg.Compact.Trigger)
+		setInt("compact-keep-last", &c.compactKeepLast, cfg.Compact.KeepLast)
+	}
+	setString("session-id", &c.sessionID, cfg.SessionID)
+	setBool("continue", &c.continueLast, cfg.Continue)
+	setString("mcp-config", &c.mcpConfigPath, cfg.MCPConfig)
+	return nil
 }
 
 // loopBundle is everything a subcommand needs after setup: the loop
@@ -150,13 +297,50 @@ func setupLoop(c commonFlags) (*loopBundle, int) {
 		return nil, 3
 	}
 
-	exec := executor.NewLocalExecutor(sid, workspace)
+	if c.memoryOnly && c.mcpConfigPath != "" {
+		log.Error().Msg("--memory-only cannot be combined with --mcp-config; --memory-only exposes only the memory tool")
+		_ = traceClose()
+		return nil, 64
+	}
+
+	var memStore affent.MemoryStore
+	if c.memoryEnabled {
+		fs := affent.NewFileMemoryStore(workspace)
+		if c.memoryWorkspaceStore != "" {
+			fs.MemoryPath = resolveStorePath(workspace, c.memoryWorkspaceStore)
+		}
+		if c.memoryUserStore != "" {
+			fs.UserPath = resolveStorePath(workspace, c.memoryUserStore)
+		}
+		if memCap, userCap, ok, perr := parseMemoryMaxChars(c.memoryMaxChars); perr != nil {
+			log.Error().Err(perr).Msg("parse --memory-max-chars")
+			_ = traceClose()
+			return nil, 64
+		} else if ok {
+			fs.MemoryCharLimit = memCap
+			fs.UserCharLimit = userCap
+		}
+		memStore = fs
+	}
 
 	tools := affent.NewRegistry()
-	affent.RegisterBuiltins(tools, affent.BuiltinDeps{
-		Executor:         exec,
-		HostWorkspaceDir: workspace,
-	})
+	if c.memoryOnly {
+		if memStore == nil {
+			log.Error().Msg("--memory-only requires a usable memory store; check --memory-workspace-store / --memory-user-store")
+			_ = traceClose()
+			return nil, 3
+		}
+		affent.RegisterMemoryOnly(tools, memStore)
+	} else {
+		exec := executor.NewLocalExecutor(sid, workspace)
+		affent.RegisterBuiltins(tools, affent.BuiltinDeps{
+			Executor:         exec,
+			HostWorkspaceDir: workspace,
+			Memory:           memStore,
+			SessionsDir:      convDir,
+			SessionID:        sid,
+		})
+	}
 
 	// Optional MCP servers, registered onto the same tool registry as
 	// the builtins. Tool names are namespaced "<server>_<tool>" so they
@@ -180,6 +364,10 @@ func setupLoop(c commonFlags) (*loopBundle, int) {
 
 	events := make(chan sse.Event, 64)
 	llm := affent.NewLLMClient(c.baseURL, c.apiKey, c.model)
+	projectContextDir := ""
+	if c.projectContext {
+		projectContextDir = workspace
+	}
 	loop := &affent.Loop{
 		LLM:                 llm,
 		Tools:               tools,
@@ -190,6 +378,8 @@ func setupLoop(c commonFlags) (*loopBundle, int) {
 		PerCallTimeout:      c.callTimeout,
 		MaxTransientRetries: c.retryTransient,
 		TransientBackoff:    c.retryBackoff,
+		Memory:              memStore,
+		ProjectContextDir:   projectContextDir,
 	}
 	// Attach the default summary-style compactor unless the caller asked
 	// to disable it. Reuses the same LLM client so compactions hit the
@@ -360,5 +550,46 @@ func openTrace(spec string, append bool) (io.Writer, func() error, error) {
 	return f, f.Close, nil
 }
 
-// quiet unused-import linter when helpers get trimmed.
-var _ = fmt.Sprintf
+// resolveStorePath turns a user-supplied --memory-*-store value into
+// a concrete path. Relative paths anchor to workspace; `~` expands to
+// $HOME; absolute paths pass through unchanged.
+func resolveStorePath(workspace, p string) string {
+	if strings.HasPrefix(p, "~/") || p == "~" {
+		if home, err := os.UserHomeDir(); err == nil && home != "" {
+			if p == "~" {
+				return home
+			}
+			return filepath.Join(home, p[2:])
+		}
+	}
+	if filepath.IsAbs(p) {
+		return p
+	}
+	return filepath.Join(workspace, p)
+}
+
+// parseMemoryMaxChars accepts "MEM,USER" and returns the two ints.
+// Returns ok=false when the input is empty (caller falls back to
+// FileMemoryStore defaults).
+func parseMemoryMaxChars(spec string) (memCap, userCap int, ok bool, err error) {
+	spec = strings.TrimSpace(spec)
+	if spec == "" {
+		return 0, 0, false, nil
+	}
+	parts := strings.SplitN(spec, ",", 2)
+	if len(parts) != 2 {
+		return 0, 0, false, fmt.Errorf("expected MEM,USER, got %q", spec)
+	}
+	m, mErr := strconv.Atoi(strings.TrimSpace(parts[0]))
+	if mErr != nil {
+		return 0, 0, false, fmt.Errorf("parse MEM cap: %w", mErr)
+	}
+	u, uErr := strconv.Atoi(strings.TrimSpace(parts[1]))
+	if uErr != nil {
+		return 0, 0, false, fmt.Errorf("parse USER cap: %w", uErr)
+	}
+	if m <= 0 || u <= 0 {
+		return 0, 0, false, fmt.Errorf("char limits must be positive, got mem=%d user=%d", m, u)
+	}
+	return m, u, true, nil
+}

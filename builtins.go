@@ -26,17 +26,41 @@ type BuiltinDeps struct {
 	// match (e.g. the gateway bind-mounts it as /workspace inside the
 	// container), but file tools always operate via the host path.
 	HostWorkspaceDir string
+	// Memory enables the `memory` tool. Pass the same store assigned
+	// to Loop.Memory so the snapshot in the system prompt and the
+	// tool see the same on-disk state.
+	Memory MemoryStore
+	// SessionsDir is the directory holding past session JSONL logs.
+	// When non-empty, the `session_search` tool is registered so the
+	// agent can retrieve snippets from past conversations.
+	SessionsDir string
+	// SessionID is the current session's id; session_search excludes
+	// it so the agent doesn't match its own in-progress turns.
+	SessionID string
 }
 
-// RegisterBuiltins registers shell + file tools (the always-on set) on
-// the registry. The gateway separately adds schedule tools, profile
-// tools, etc; the agent module stays free of that layer.
+// RegisterBuiltins registers shell + file tools on the registry, the
+// `memory` tool when deps.Memory is non-nil, and the `session_search`
+// tool when deps.SessionsDir is non-empty.
 func RegisterBuiltins(r *Registry, deps BuiltinDeps) {
 	r.Add(shellTool(deps))
 	r.Add(readFileTool(deps))
 	r.Add(writeFileTool(deps))
 	r.Add(editFileTool(deps))
 	r.Add(listFilesTool(deps))
+	if deps.Memory != nil {
+		r.Add(memoryTool(deps.Memory))
+	}
+	if deps.SessionsDir != "" {
+		r.Add(sessionSearchTool(deps.SessionsDir, deps.SessionID))
+	}
+}
+
+// RegisterMemoryOnly registers just the `memory` tool. This is useful
+// for controlled environments that must isolate memory behavior from
+// shell / file / MCP surfaces.
+func RegisterMemoryOnly(r *Registry, store MemoryStore) {
+	r.Add(memoryTool(store))
 }
 
 // ---- shell ----
@@ -331,4 +355,3 @@ func listFilesTool(deps BuiltinDeps) *Tool {
 		},
 	}
 }
-

@@ -72,13 +72,14 @@ const MaxRespectedRetryAfter = 5 * time.Minute
 // blocked until callCtx (default 3min) finally fires. The watchdog
 // cuts that wait short:
 //
-//   * StreamIdleTimeout — max gap between any two chunks before we
+//   - StreamIdleTimeout — max gap between any two chunks before we
 //     declare the stream stalled and force-close the body. Generous,
 //     because reasoning models can pause a long while between deltas
 //     while they think.
-//   * StreamPostFinishTimeout — how long we wait after seeing a
+//   - StreamPostFinishTimeout — how long we wait after seeing a
 //     finish_reason chunk for the (optional) usage chunk + [DONE]
 //     follow-up. Tight on purpose: anything past this is a server bug.
+//
 // vars (not consts) so tests / niche callers can override.
 var (
 	StreamIdleTimeout       = 60 * time.Second

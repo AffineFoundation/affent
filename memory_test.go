@@ -1,0 +1,349 @@
+package affent
+
+import (
+	"encoding/json"
+	"os"
+	"path/filepath"
+	"strings"
+	"testing"
+)
+
+func newTestStore(t *testing.T) *FileMemoryStore {
+	t.Helper()
+	dir := t.TempDir()
+	return &FileMemoryStore{
+		MemoryPath:      filepath.Join(dir, "MEMORY.md"),
+		UserPath:        filepath.Join(dir, "USER.md"),
+		MemoryCharLimit: 200,
+		UserCharLimit:   100,
+	}
+}
+
+func TestMemoryAddReadWrite(t *testing.T) {
+	s := newTestStore(t)
+	resp, err := s.Add(TargetMemory, "Project is Go 1.22, uses sqlc + chi")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !resp.OK {
+		t.Fatalf("add failed: %+v", resp)
+	}
+	if len(resp.Entries) != 1 || !strings.Contains(resp.Entries[0], "sqlc") {
+		t.Fatalf("entries not returned live: %+v", resp.Entries)
+	}
+
+	// File on disk should round-trip.
+	raw, err := os.ReadFile(s.MemoryPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(raw), "sqlc") {
+		t.Fatalf("on-disk content missing entry: %q", raw)
+	}
+}
+
+func TestMemoryAddRejectsDuplicate(t *testing.T) {
+	s := newTestStore(t)
+	if _, err := s.Add(TargetMemory, "fact"); err != nil {
+		t.Fatal(err)
+	}
+	resp, err := s.Add(TargetMemory, "fact")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !resp.OK {
+		t.Fatalf("duplicate should not error: %+v", resp)
+	}
+	if !strings.Contains(resp.Message, "duplicate") {
+		t.Fatalf("expected duplicate message, got %q", resp.Message)
+	}
+	if len(resp.Entries) != 1 {
+		t.Fatalf("duplicate must not produce second entry: %+v", resp.Entries)
+	}
+}
+
+func TestMemoryAddOverflow(t *testing.T) {
+	s := newTestStore(t)
+	s.MemoryCharLimit = 50
+	if _, err := s.Add(TargetMemory, strings.Repeat("a", 30)); err != nil {
+		t.Fatal(err)
+	}
+	resp, err := s.Add(TargetMemory, strings.Repeat("b", 30))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if resp.OK {
+		t.Fatalf("expected overflow rejection, got OK: %+v", resp)
+	}
+	if !strings.Contains(resp.Message, "exceed") {
+		t.Fatalf("expected exceed-limit message, got %q", resp.Message)
+	}
+	// Current state returned so agent can consolidate.
+	if len(resp.Entries) != 1 {
+		t.Fatalf("overflow rejection should carry current entries, got %+v", resp.Entries)
+	}
+}
+
+func TestMemoryReplaceSubstring(t *testing.T) {
+	s := newTestStore(t)
+	_, _ = s.Add(TargetMemory, "User prefers dark mode in editors")
+	resp, err := s.Replace(TargetMemory, "dark mode", "User prefers light mode in VS Code, dark mode in terminal")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !resp.OK {
+		t.Fatalf("replace failed: %+v", resp)
+	}
+	if !strings.Contains(resp.Entries[0], "light mode in VS Code") {
+		t.Fatalf("replacement did not take: %+v", resp.Entries)
+	}
+}
+
+func TestMemoryReplaceAmbiguous(t *testing.T) {
+	s := newTestStore(t)
+	_, _ = s.Add(TargetMemory, "use Go 1.22")
+	_, _ = s.Add(TargetMemory, "use sqlc not gorm")
+	resp, err := s.Replace(TargetMemory, "use", "REPLACED")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if resp.OK {
+		t.Fatalf("ambiguous replace should be rejected: %+v", resp)
+	}
+	if len(resp.Matches) != 2 {
+		t.Fatalf("expected 2 match previews, got %+v", resp.Matches)
+	}
+}
+
+func TestMemoryReplaceIdenticalDuplicatesTreatedAsOne(t *testing.T) {
+	s := newTestStore(t)
+	// Write file directly so we can simulate exact duplicates (Add
+	// would reject the second copy).
+	if err := writeMemoryFile(s.MemoryPath, []string{"identical fact", "identical fact"}); err != nil {
+		t.Fatal(err)
+	}
+	resp, err := s.Replace(TargetMemory, "identical fact", "updated")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !resp.OK {
+		t.Fatalf("exact-dupe replace should succeed (operate on first): %+v", resp)
+	}
+}
+
+func TestMemoryRemove(t *testing.T) {
+	s := newTestStore(t)
+	_, _ = s.Add(TargetMemory, "first")
+	_, _ = s.Add(TargetMemory, "second")
+	resp, err := s.Remove(TargetMemory, "first")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !resp.OK {
+		t.Fatalf("remove failed: %+v", resp)
+	}
+	if len(resp.Entries) != 1 || resp.Entries[0] != "second" {
+		t.Fatalf("remove left wrong entries: %+v", resp.Entries)
+	}
+}
+
+func TestMemoryRemoveNotFound(t *testing.T) {
+	s := newTestStore(t)
+	_, _ = s.Add(TargetMemory, "first")
+	resp, err := s.Remove(TargetMemory, "nonexistent")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if resp.OK {
+		t.Fatalf("remove of nonexistent should fail: %+v", resp)
+	}
+}
+
+func TestMemorySecurityScanRejectsAuthorizedKeys(t *testing.T) {
+	s := newTestStore(t)
+	resp, err := s.Add(TargetMemory, "echo my_key >> ~/.ssh/authorized_keys")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if resp.OK {
+		t.Fatalf("authorized_keys content should be blocked: %+v", resp)
+	}
+	if !strings.Contains(resp.Message, "blocked") {
+		t.Fatalf("expected blocked message, got %q", resp.Message)
+	}
+}
+
+func TestMemorySecurityScanRejectsInvisibleUnicode(t *testing.T) {
+	s := newTestStore(t)
+	resp, err := s.Add(TargetMemory, "innocent‮looking note")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if resp.OK {
+		t.Fatalf("invisible unicode should be blocked: %+v", resp)
+	}
+	if !strings.Contains(resp.Message, "invisible") {
+		t.Fatalf("expected invisible-unicode message, got %q", resp.Message)
+	}
+}
+
+func TestMemorySecurityScanRejectsDelimiter(t *testing.T) {
+	s := newTestStore(t)
+	resp, err := s.Add(TargetMemory, "fact\n§\nother")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if resp.OK {
+		t.Fatalf("delimiter sequence in content should be blocked: %+v", resp)
+	}
+}
+
+func TestMemorySnapshotReflectsDiskState(t *testing.T) {
+	s := newTestStore(t)
+	if got := s.Snapshot(); got != "" {
+		t.Fatalf("empty snapshot expected, got %q", got)
+	}
+	_, _ = s.Add(TargetMemory, "first fact")
+	snap1 := s.Snapshot()
+	if !strings.Contains(snap1, "first fact") {
+		t.Fatalf("snapshot missing first entry: %q", snap1)
+	}
+	// Snapshot is not internally cached: a second write surfaces on
+	// the next read. Per-session prompt stability is the Loop's job.
+	_, _ = s.Add(TargetMemory, "second fact")
+	snap2 := s.Snapshot()
+	if !strings.Contains(snap2, "second fact") {
+		t.Fatalf("snapshot should reflect post-write disk state: %q", snap2)
+	}
+	if snap1 == snap2 {
+		t.Fatalf("expected snapshot to change after a write, got identical %q", snap1)
+	}
+}
+
+func TestMemorySnapshotEmptyReturnsEmpty(t *testing.T) {
+	s := newTestStore(t)
+	if got := s.Snapshot(); got != "" {
+		t.Fatalf("expected empty snapshot, got %q", got)
+	}
+}
+
+func TestMemoryTwoTargetsIndependent(t *testing.T) {
+	s := newTestStore(t)
+	_, _ = s.Add(TargetMemory, "agent fact")
+	_, _ = s.Add(TargetUser, "user preference")
+
+	memEntries, err := readMemoryFile(s.MemoryPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	userEntries, err := readMemoryFile(s.UserPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(memEntries) != 1 || memEntries[0] != "agent fact" {
+		t.Fatalf("memory target wrong: %+v", memEntries)
+	}
+	if len(userEntries) != 1 || userEntries[0] != "user preference" {
+		t.Fatalf("user target wrong: %+v", userEntries)
+	}
+
+	snap := s.Snapshot()
+	if !strings.Contains(snap, "agent fact") || !strings.Contains(snap, "user preference") {
+		t.Fatalf("snapshot must include both targets:\n%s", snap)
+	}
+	if !strings.Contains(snap, "MEMORY") || !strings.Contains(snap, "USER PROFILE") {
+		t.Fatalf("snapshot missing headers:\n%s", snap)
+	}
+}
+
+func TestMemoryAtomicWriteRoundtrip(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "MEMORY.md")
+	entries := []string{"one", "two", "three"}
+	if err := writeMemoryFile(path, entries); err != nil {
+		t.Fatal(err)
+	}
+	got, err := readMemoryFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(got) != 3 || got[0] != "one" || got[2] != "three" {
+		t.Fatalf("roundtrip mismatch: %+v", got)
+	}
+	// No stray tempfiles.
+	matches, _ := filepath.Glob(filepath.Join(dir, ".mem-*.tmp"))
+	if len(matches) != 0 {
+		t.Fatalf("tempfile not cleaned up: %v", matches)
+	}
+}
+
+func TestMemoryDisabledTarget(t *testing.T) {
+	dir := t.TempDir()
+	s := &FileMemoryStore{
+		MemoryPath: filepath.Join(dir, "MEMORY.md"),
+		// UserPath intentionally empty
+		MemoryCharLimit: 200,
+	}
+	resp, err := s.Add(TargetUser, "anything")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if resp.OK {
+		t.Fatalf("user target with empty path should be disabled, got %+v", resp)
+	}
+	if !strings.Contains(resp.Message, "disabled") {
+		t.Fatalf("expected disabled message, got %q", resp.Message)
+	}
+}
+
+func TestMemoryResponse_UsageOmittedOnEarlyErrors(t *testing.T) {
+	s := newTestStore(t)
+	// Empty content fails before we compute usage; the resulting
+	// MemoryResponse should omit Usage entirely so the agent doesn't
+	// see misleading zero counters.
+	resp, err := s.Add(TargetMemory, "   ")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if resp.Usage != nil {
+		t.Fatalf("Usage should be omitted on validation error, got %+v", resp.Usage)
+	}
+	out, err := json.Marshal(resp)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(string(out), `"usage"`) {
+		t.Fatalf("serialized response should not include usage field: %s", out)
+	}
+}
+
+func TestMemoryResponse_UsagePresentOnSuccess(t *testing.T) {
+	s := newTestStore(t)
+	resp, err := s.Add(TargetMemory, "real entry")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if resp.Usage == nil {
+		t.Fatal("Usage should be present on successful add")
+	}
+	if resp.Usage.EntryCount != 1 {
+		t.Fatalf("Usage.EntryCount = %d, want 1", resp.Usage.EntryCount)
+	}
+	if resp.Usage.CharsLimit <= 0 {
+		t.Fatalf("Usage.CharsLimit should be set, got %d", resp.Usage.CharsLimit)
+	}
+}
+
+func TestMemoryInvalidTarget(t *testing.T) {
+	s := newTestStore(t)
+	resp, err := s.Add("garbage", "x")
+	if err != nil {
+		t.Fatalf("invalid target should surface as MemoryResponse, not Go error: %v", err)
+	}
+	if resp.OK {
+		t.Fatalf("invalid target should return OK=false, got %+v", resp)
+	}
+	if !strings.Contains(resp.Message, "invalid memory target") {
+		t.Fatalf("expected invalid-target message, got %q", resp.Message)
+	}
+}
