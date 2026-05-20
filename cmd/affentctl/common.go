@@ -64,6 +64,11 @@ type commonFlags struct {
 	continueLast bool   // pick most recent session under workspace
 
 	mcpConfigPath string // path to MCP server config JSON (optional)
+
+	// executor selects the shell-tool backend.
+	//   "local"            — run on the host (default; current behavior)
+	//   "docker:<cid>"     — run inside the named container via `docker exec`
+	executor string
 }
 
 func (c *commonFlags) bind(fs *flag.FlagSet) {
@@ -91,6 +96,14 @@ func (c *commonFlags) bind(fs *flag.FlagSet) {
 	fs.StringVar(&c.mcpConfigPath, "mcp-config", os.Getenv("AFFENTCTL_MCP_CONFIG"), "path to MCP server config JSON ({\"servers\":[{...}]})")
 	fs.IntVar(&c.compactTrigger, "compact-trigger", 240, "compact conversation when message count exceeds this; 0 disables proactive compaction (reactive still kicks in on context-overflow errors)")
 	fs.IntVar(&c.compactKeepLast, "compact-keep-last", 10, "messages preserved verbatim at the tail of the conversation when compacting")
+	fs.StringVar(&c.executor, "executor", envOr("AFFENTCTL_EXECUTOR", "local"), "shell-tool backend: 'local' (host; no isolation), or 'docker:<container_id>' (exec into an already-running container, e.g. 'docker:abc123def'; file tools also route through docker so they see the container's filesystem). Caller manages container lifecycle.")
+}
+
+func envOr(key, fallback string) string {
+	if v := os.Getenv(key); v != "" {
+		return v
+	}
+	return fallback
 }
 
 type fileConfig struct {
@@ -121,6 +134,7 @@ type fileConfig struct {
 	SessionID *string `json:"session_id"`
 	Continue  *bool   `json:"continue"`
 	MCPConfig *string `json:"mcp_config"`
+	Executor  *string `json:"executor"`
 }
 
 func applyConfig(c *commonFlags, fs *flag.FlagSet) error {
@@ -211,6 +225,7 @@ func loadConfigFile(c *commonFlags, fs *flag.FlagSet) error {
 	setString("session-id", &c.sessionID, cfg.SessionID)
 	setBool("continue", &c.continueLast, cfg.Continue)
 	setString("mcp-config", &c.mcpConfigPath, cfg.MCPConfig)
+	setString("executor", &c.executor, cfg.Executor)
 	return nil
 }
 
@@ -332,7 +347,12 @@ func setupLoop(c commonFlags) (*loopBundle, int) {
 		}
 		affent.RegisterMemoryOnly(tools, memStore)
 	} else {
-		exec := executor.NewLocalExecutor(sid, workspace)
+		exec, execErr := buildExecutor(c.executor, sid, workspace)
+		if execErr != nil {
+			log.Error().Err(execErr).Msg("executor")
+			_ = traceClose()
+			return nil, 64
+		}
 		affent.RegisterBuiltins(tools, affent.BuiltinDeps{
 			Executor:         exec,
 			HostWorkspaceDir: workspace,
@@ -414,6 +434,25 @@ func setupLoop(c commonFlags) (*loopBundle, int) {
 		log:        log,
 		mcpClients: mcpClients,
 	}, 0
+}
+
+// buildExecutor parses the --executor spec and returns the matching
+// affent executor. "local" (or empty) → LocalExecutor; "docker:<cid>" →
+// DockerExecExecutor pointed at the named container. Unknown specs are
+// a hard error so typos don't silently fall back.
+func buildExecutor(spec, sessionID, workspace string) (executor.Executor, error) {
+	switch {
+	case spec == "" || spec == "local":
+		return executor.NewLocalExecutor(sessionID, workspace), nil
+	case strings.HasPrefix(spec, "docker:"):
+		cid := strings.TrimPrefix(spec, "docker:")
+		if cid == "" {
+			return nil, fmt.Errorf("--executor docker: requires a container id (e.g. docker:abc123)")
+		}
+		return executor.NewDockerExecExecutor(sessionID, cid), nil
+	default:
+		return nil, fmt.Errorf("unknown --executor %q (valid: local, docker:<container_id>)", spec)
+	}
 }
 
 // mcpConfig is the on-disk shape for --mcp-config. Compatible with the

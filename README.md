@@ -70,9 +70,22 @@ Tiny dep graph: `uuid` + `zerolog` + stdlib.
   relative paths join onto the workspace, absolute paths are taken
   literally and must fall inside the workspace (no sentinel /
   trim-the-leading-slash hacks).
-- `shell` runs through an `executor.Executor` interface — `LocalExecutor`
-  for in-process / scripts, your own impl for Docker / Firecracker /
-  remote.
+- `shell` runs through an `executor.Executor` interface. Two stock
+  implementations ship in `executor/`:
+  - `LocalExecutor` — no isolation; commands run on the host. For CLI /
+    training rigs / when the caller is already sandboxed.
+  - `DockerExecExecutor` — `docker exec` into a pre-existing container
+    you started elsewhere (eval harnesses, multi-tenant attach,
+    CI jobs). Does NOT manage container lifecycle.
+  - your own impl for Firecracker / Kata / remote / etc.
+- File tools (`read_file` / `write_file` / `edit_file` / `list_files`)
+  default to touching the host workspace dir directly (fast: no exec
+  hop, lets the gateway preview/diff). When the active executor also
+  implements the optional `executor.FileOps` interface (e.g.
+  `DockerExecExecutor` does — it implements file ops via `docker exec`
+  internally), the builtins automatically route through it instead.
+  That makes file tools work even when the executor has its own
+  filesystem view that isn't bind-mounted from the host.
 - **MCP**: stdio + streamable-http (spec rev 2025-03-26). Plug in any
   number of MCP servers — their tools surface as `<server>_<tool>`
   alongside the builtins.
@@ -160,7 +173,7 @@ session_search.go  session_search tool: term-overlap retrieval over past JSONL s
 compaction.go      Compactor interface + LLMSummaryCompactor (OpenHands V1 prompt)
 conversation.go    JSONL-on-disk chat log, append-only + atomic Replace
 tool.go            Tool + Registry
-executor/          Executor interface + LocalExecutor (in-process)
+executor/          Executor + FileOps interfaces; LocalExecutor + DockerExecExecutor
 sse/               canonical event type constants + payload structs
 mcp/               stdio + streamable-http MCP client; Registry adapter
 cmd/affentctl/     CLI: run / chat / sessions
@@ -450,6 +463,30 @@ reg.Add(tool)
 
 `SearchProvider` is the seam — implement `Search(ctx, query, n) ([]SearchResult, error)`
 and pass it via `Options.SearchProvider` or `SearchConfig.Provider`.
+
+## Embedding non-local executors
+
+`executor.Executor` is the seam between affent's `shell` tool and the
+backing isolation boundary. Two stock implementations ship:
+
+| executor | isolation | use case |
+|---|---|---|
+| `LocalExecutor` | none — runs on host | CLI, training rigs, when the caller is already sandboxed |
+| `DockerExecExecutor` | `docker exec` into a pre-existing container | eval harnesses, attach-mode runs, CI jobs |
+
+`DockerExecExecutor` does NOT manage container lifecycle — the caller
+starts and stops the container. It implements the optional
+`executor.FileOps` interface so the builtin `read_file` / `write_file`
+/ `edit_file` / `list_files` tools automatically route through
+`docker exec` instead of touching the host filesystem. This makes
+file tools work even when the container's filesystem view isn't
+bind-mounted from the host. Write paths use base64-over-stdin to
+side-step shell quoting hazards with arbitrary content.
+
+`affentctl --executor docker:<container_id>` wires this up
+end-to-end; embedders that need Firecracker / Kata / remote / etc.
+implement their own `Executor` (and optionally `FileOps`) and pass it
+into `BuiltinDeps`.
 
 ## Status
 

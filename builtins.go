@@ -154,6 +154,18 @@ func safeWorkspacePath(deps BuiltinDeps, p string) (string, error) {
 	return full, nil
 }
 
+// fileOps returns deps.Executor as a FileOps if it implements the
+// extension interface. Tools route through it instead of touching the
+// host fs when set — that's how container-backed executors (e.g.
+// DockerExecExecutor) make file ops act on the container's view.
+func fileOps(deps BuiltinDeps) executor.FileOps {
+	if deps.Executor == nil {
+		return nil
+	}
+	fo, _ := deps.Executor.(executor.FileOps)
+	return fo
+}
+
 func readFileTool(deps BuiltinDeps) *Tool {
 	schema := json.RawMessage(`{
         "type": "object",
@@ -180,6 +192,9 @@ func readFileTool(deps BuiltinDeps) *Tool {
 			}
 			if p.MaxBytes <= 0 {
 				p.MaxBytes = 64 * 1024
+			}
+			if fo := fileOps(deps); fo != nil {
+				return fo.ReadFile(ctx, p.Path, p.MaxBytes)
 			}
 			full, err := safeWorkspacePath(deps, p.Path)
 			if err != nil {
@@ -224,6 +239,12 @@ func writeFileTool(deps BuiltinDeps) *Tool {
 			if p.Path == "" {
 				return "", errors.New("path is required")
 			}
+			if fo := fileOps(deps); fo != nil {
+				if err := fo.WriteFile(ctx, p.Path, p.Content); err != nil {
+					return "", err
+				}
+				return fmt.Sprintf("wrote %d bytes to %s", len(p.Content), p.Path), nil
+			}
 			full, err := safeWorkspacePath(deps, p.Path)
 			if err != nil {
 				return "", err
@@ -266,6 +287,13 @@ func editFileTool(deps BuiltinDeps) *Tool {
 			}
 			if p.Path == "" || p.Old == "" {
 				return "", errors.New("path and old are required")
+			}
+			if fo := fileOps(deps); fo != nil {
+				n, err := fo.EditFile(ctx, p.Path, p.Old, p.New, p.ReplaceAll)
+				if err != nil {
+					return "", err
+				}
+				return fmt.Sprintf("replaced %d occurrence(s) in %s", n, p.Path), nil
 			}
 			full, err := safeWorkspacePath(deps, p.Path)
 			if err != nil {
@@ -322,6 +350,28 @@ func listFilesTool(deps BuiltinDeps) *Tool {
 			}
 			if p.MaxEntries <= 0 {
 				p.MaxEntries = 200
+			}
+			if fo := fileOps(deps); fo != nil {
+				entries, err := fo.ListFiles(ctx, p.Path, p.MaxEntries+1)
+				if err != nil {
+					return "", err
+				}
+				var b strings.Builder
+				for i, e := range entries {
+					if i >= p.MaxEntries {
+						fmt.Fprintf(&b, "... and %d more\n", len(entries)-i)
+						break
+					}
+					kind := "file"
+					if e.IsDir {
+						kind = "dir "
+					}
+					fmt.Fprintf(&b, "%s  %10d  %s\n", kind, e.Size, e.Name)
+				}
+				if b.Len() == 0 {
+					return "(empty)", nil
+				}
+				return b.String(), nil
 			}
 			full, err := safeWorkspacePath(deps, p.Path)
 			if err != nil {
