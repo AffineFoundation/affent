@@ -1,0 +1,259 @@
+package browser
+
+import (
+	"context"
+	"errors"
+	"fmt"
+	"os"
+	"sync"
+	"sync/atomic"
+
+	"github.com/go-rod/rod"
+	"github.com/go-rod/rod/lib/launcher"
+	"github.com/go-rod/rod/lib/launcher/flags"
+	"github.com/go-rod/rod/lib/proto"
+)
+
+// SessionConfig tunes a Session at construction time. Zero values pick
+// safe defaults: headless Chromium, ephemeral profile, no sandbox
+// override (so it works inside Docker without SYS_ADMIN), 1280x800
+// viewport.
+type SessionConfig struct {
+	// Headed renders Chromium with a visible window. Defaults to
+	// false (headless). Set true for interactive debugging on a host
+	// with a display.
+	Headed bool
+
+	// UserAgent overrides the browser's UA string. Empty leaves
+	// Chromium's default. Some sites serve degraded content to
+	// automated UAs — embedders may inject a plain-Chrome string.
+	UserAgent string
+
+	// Viewport size in CSS pixels. Width or Height of 0 falls back to
+	// 1280x800.
+	ViewportWidth  int
+	ViewportHeight int
+
+	// BinaryPath overrides the discovered Chromium binary. Most
+	// embedders leave this empty and let rod's launcher resolve.
+	BinaryPath string
+
+	// UserDataDir holds Chromium's profile. Empty creates an ephemeral
+	// per-session tmp dir that Close() removes — the right default for
+	// short-lived agent sessions.
+	UserDataDir string
+
+	// ExtraArgs are appended to Chromium's command line as flag names
+	// (e.g. "disable-gpu"). Use sparingly.
+	ExtraArgs []string
+
+	// NoSandbox forces --no-sandbox. Required inside Docker without
+	// SYS_ADMIN. Defaults to off; flip on for containerized embedders.
+	NoSandbox bool
+
+	// DisableStealth turns off the go-rod/stealth bypass script that
+	// masks `navigator.webdriver` and other automation tells.
+	// Defaults to false (stealth on) — Cloudflare-fronted sites
+	// otherwise serve a challenge instead of the real page.
+	DisableStealth bool
+
+	// Intercept governs request blocking (resource types + domain
+	// list) and optional response caching. Zero value applies the
+	// documented defaults: block image/font/media + a starter
+	// tracker domain list, no cache.
+	Intercept InterceptConfig
+}
+
+func (c SessionConfig) viewport() (int, int) {
+	w, h := c.ViewportWidth, c.ViewportHeight
+	if w <= 0 {
+		w = 1280
+	}
+	if h <= 0 {
+		h = 800
+	}
+	return w, h
+}
+
+// Session is one isolated browser instance + its active page. Owns the
+// snapshot ref store: ref ids map to data-affent-ref attribute selectors
+// stamped on elements during the most recent Snapshot(). Older
+// snapshots' refs become stale and click/type against them fail
+// explicitly rather than silently targeting a different element.
+type Session struct {
+	cfg      SessionConfig
+	launcher *launcher.Launcher
+	browser  *rod.Browser
+	page     *rod.Page
+
+	// refsMu guards snapshotID. We don't keep a Go-side ref→element
+	// map because the JS side stamps data-affent-ref="N" on each
+	// element; Go-side lookups go through page.Element(`[data-affent-
+	// ref="N"]`). Each new Snapshot() clears the attribute on prior
+	// elements before stamping, so stale refs miss their selector.
+	refsMu     sync.Mutex
+	snapshotID int64
+
+	closedCount atomic.Int32
+	tmpDirs     []string
+
+	// hijackRouter and interceptStats are non-nil when the session
+	// installed a request interceptor (the default). Close() stops
+	// the router so its background goroutine exits.
+	hijackRouter   *rod.HijackRouter
+	interceptStats InterceptStats
+}
+
+// InterceptStats returns a snapshot of the session's request
+// interceptor counters. Useful for benchmark logs / debug.
+func (s *Session) InterceptStats() (blockedType, blockedDomain, cacheHit, cacheMiss, networkFetch int64) {
+	return s.interceptStats.BlockedByType.Load(),
+		s.interceptStats.BlockedByDomain.Load(),
+		s.interceptStats.CacheHit.Load(),
+		s.interceptStats.CacheMiss.Load(),
+		s.interceptStats.NetworkFetch.Load()
+}
+
+// NewSession boots a fresh browser and an about:blank page.
+func NewSession(cfg SessionConfig) (*Session, error) {
+	s := &Session{cfg: cfg}
+
+	l := launcher.New()
+	if cfg.BinaryPath != "" {
+		l = l.Bin(cfg.BinaryPath)
+	}
+	l = l.Headless(!cfg.Headed)
+	if cfg.NoSandbox {
+		l = l.NoSandbox(true)
+	}
+	if cfg.UserDataDir != "" {
+		l = l.UserDataDir(cfg.UserDataDir)
+	} else {
+		dir, err := os.MkdirTemp("", "affent-browser-*")
+		if err != nil {
+			return nil, fmt.Errorf("user data dir: %w", err)
+		}
+		s.tmpDirs = append(s.tmpDirs, dir)
+		l = l.UserDataDir(dir)
+	}
+	w, h := cfg.viewport()
+	l = l.Set(flags.Flag("window-size"), fmt.Sprintf("%d,%d", w, h))
+	for _, a := range cfg.ExtraArgs {
+		l = l.Set(flags.Flag(a))
+	}
+
+	url, err := l.Launch()
+	if err != nil {
+		s.cleanupTmpDirs()
+		return nil, fmt.Errorf("launch chromium: %w", err)
+	}
+	s.launcher = l
+
+	browser := rod.New().ControlURL(url)
+	if err := browser.Connect(); err != nil {
+		l.Kill()
+		s.cleanupTmpDirs()
+		return nil, fmt.Errorf("connect to chromium: %w", err)
+	}
+	s.browser = browser
+
+	page, err := browser.Page(proto.TargetCreateTarget{URL: "about:blank"})
+	if err != nil {
+		_ = browser.Close()
+		l.Kill()
+		s.cleanupTmpDirs()
+		return nil, fmt.Errorf("open initial page: %w", err)
+	}
+	if cfg.UserAgent != "" {
+		_ = page.SetUserAgent(&proto.NetworkSetUserAgentOverride{UserAgent: cfg.UserAgent})
+	}
+	// Non-fatal: SetViewport occasionally returns an error on slow
+	// startup; the launch flag above already constrained the window.
+	_ = page.SetViewport(&proto.EmulationSetDeviceMetricsOverride{
+		Width:             w,
+		Height:            h,
+		DeviceScaleFactor: 1,
+	})
+	s.page = page
+
+	// Stealth before the interceptor — the bypass JS runs on every
+	// document and includes the about:blank context; with the
+	// interceptor installed it doesn't interfere.
+	if !cfg.DisableStealth {
+		if err := applyStealth(page); err != nil {
+			_ = browser.Close()
+			l.Kill()
+			s.cleanupTmpDirs()
+			return nil, fmt.Errorf("apply stealth: %w", err)
+		}
+	}
+
+	router, err := installInterceptor(page, cfg.Intercept, &s.interceptStats)
+	if err != nil {
+		_ = browser.Close()
+		l.Kill()
+		s.cleanupTmpDirs()
+		return nil, fmt.Errorf("install interceptor: %w", err)
+	}
+	s.hijackRouter = router
+
+	return s, nil
+}
+
+// Close releases the browser, kills Chromium, and removes ephemeral
+// user-data directories. Idempotent.
+func (s *Session) Close() error {
+	if s.closedCount.Add(1) > 1 {
+		return nil
+	}
+	var firstErr error
+	if s.hijackRouter != nil {
+		if err := s.hijackRouter.Stop(); err != nil && firstErr == nil {
+			firstErr = err
+		}
+	}
+	if s.browser != nil {
+		if err := s.browser.Close(); err != nil && firstErr == nil {
+			firstErr = err
+		}
+	}
+	if s.launcher != nil {
+		s.launcher.Kill()
+	}
+	s.cleanupTmpDirs()
+	return firstErr
+}
+
+func (s *Session) cleanupTmpDirs() {
+	for _, d := range s.tmpDirs {
+		_ = os.RemoveAll(d)
+	}
+	s.tmpDirs = nil
+}
+
+// Page returns the active page. Exported for tests and embedders that
+// need direct rod access.
+func (s *Session) Page() *rod.Page { return s.page }
+
+// withContext returns a context-bound page clone so per-call ctx
+// cancellation propagates into rod's wait/eval logic.
+func (s *Session) withContext(ctx context.Context) *rod.Page {
+	if ctx == nil {
+		return s.page
+	}
+	return s.page.Context(ctx)
+}
+
+// newSnapshotID bumps the snapshot counter monotonically per session.
+func (s *Session) newSnapshotID() int64 {
+	s.refsMu.Lock()
+	defer s.refsMu.Unlock()
+	s.snapshotID++
+	return s.snapshotID
+}
+
+// ErrNoPage is returned when a tool runs before the session has any
+// page loaded. NewSession opens about:blank so this shouldn't fire in
+// practice; reserved for future code paths that close the page on
+// idle.
+var ErrNoPage = errors.New("browser session has no active page")

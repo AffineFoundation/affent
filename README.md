@@ -177,14 +177,20 @@ executor/          Executor + FileOps interfaces; LocalExecutor + DockerExecExec
 sse/               canonical event type constants + payload structs
 mcp/               stdio + streamable-http MCP client; Registry adapter
 cmd/affentctl/     CLI: run / chat / sessions
+cmd/affentserve/   HTTP server: OpenAI-compat /v1/chat/completions + native SSE event stream
 extras/            opt-in helper packages, separate sub-modules
   web/             web_fetch + web_search (HTML→markdown, Tavily search default)
+  browser/         real Chromium tools (navigate / click / type / scroll / snapshot / screenshot)
 ```
 
 The `extras/` directory holds opt-in helper packages as separate Go
 sub-modules. The root `affent` library does not import them; callers
 choose which extras to register, and consumers that don't import them
 don't pull their transitive deps.
+
+`cmd/affentserve/` is also a separate Go sub-module so the HTTP
+server's deps (browser, extras) don't bloat the core library or
+`affentctl`.
 
 ## SSE events (the wire contract)
 
@@ -463,6 +469,66 @@ reg.Add(tool)
 
 `SearchProvider` is the seam — implement `Search(ctx, query, n) ([]SearchResult, error)`
 and pass it via `Options.SearchProvider` or `SearchConfig.Provider`.
+
+## Using extras/browser
+
+`extras/browser` ships real browser tools driven by Chromium via
+go-rod. Six tools follow the Playwright MCP / Browser Use convention
+of "snapshot + ref": each `browser_snapshot` returns a list of
+interactive elements with stable integer ref ids, and action tools
+(`browser_click`, `browser_type`, `browser_scroll`) take a ref rather
+than a CSS selector. Refs let the model reason about the page it just
+saw instead of inventing query syntax.
+
+```go
+import (
+    "github.com/affinefoundation/affent"
+    affentbrowser "github.com/affinefoundation/affent/extras/browser"
+)
+
+sess, err := affentbrowser.NewSession(affentbrowser.SessionConfig{
+    Headless: true,
+})
+if err != nil { log.Fatal(err) }
+defer sess.Close()
+
+reg := affent.NewRegistry()
+affent.RegisterBuiltins(reg, deps)
+affentbrowser.RegisterAll(reg, sess, affentbrowser.Options{})
+```
+
+One `Session` corresponds to one isolated Chromium profile; most
+embedders create one Session per agent Loop and close it when the
+conversation ends. The package is a separate Go sub-module so the
+root affent library does not pull go-rod or its Chromium runtime
+unless you opt in.
+
+## affentserve (HTTP server)
+
+`cmd/affentserve` runs affent behind an OpenAI-compatible HTTP API
+so any OpenAI SDK (or generic eval harness) can drive it:
+
+```
+GET    /healthz
+GET    /v1/models
+POST   /v1/chat/completions          — OpenAI-compat, streaming via SSE
+GET    /v1/sessions/{id}/events      — affent's native 13-type event stream
+DELETE /v1/sessions/{id}             — close + remove
+```
+
+A `SessionPool` keeps per-session state in-process with LRU eviction
+when above `--max-sessions`, idle-TTL GC, and graceful shutdown that
+closes browser instances and removes workspaces. Optional features
+opt in via flags / JSON config: `--enable-browser`, `--enable-web`,
+`--enable-web-search`, `--enable-builtins` (shell + file tools —
+disabled by default for remote-driven servers), `--enable-memory`.
+`--auth-token` gates every endpoint except `/healthz` with a
+`Bearer` token.
+
+`cmd/affentserve` is also a separate Go sub-module — the server's
+deps (browser, web, MCP) stay out of the root module's transitive
+graph. Build it with `go build ./cmd/affentserve` from that
+sub-module's directory.
 
 ## Embedding non-local executors
 
