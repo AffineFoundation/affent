@@ -2,9 +2,11 @@ package affent
 
 import (
 	"encoding/json"
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 	"testing"
 )
 
@@ -331,6 +333,57 @@ func TestMemoryResponse_UsagePresentOnSuccess(t *testing.T) {
 	}
 	if resp.Usage.CharsLimit <= 0 {
 		t.Fatalf("Usage.CharsLimit should be set, got %d", resp.Usage.CharsLimit)
+	}
+}
+
+func TestMemoryFlockSerializesConcurrentStores(t *testing.T) {
+	// Two FileMemoryStore instances pointing at the same MEMORY.md
+	// stand in for two affent processes. Without cross-process flock,
+	// interleaved read-modify-write cycles drop entries; with flock,
+	// every add survives.
+	dir := t.TempDir()
+	memPath := filepath.Join(dir, "MEMORY.md")
+	newStore := func() *FileMemoryStore {
+		return &FileMemoryStore{
+			MemoryPath:      memPath,
+			MemoryCharLimit: 32 * 1024,
+		}
+	}
+
+	const writers = 4
+	const perWriter = 12
+	var wg sync.WaitGroup
+	errCh := make(chan error, writers*perWriter)
+	for w := 0; w < writers; w++ {
+		wg.Add(1)
+		go func(wid int) {
+			defer wg.Done()
+			s := newStore()
+			for i := 0; i < perWriter; i++ {
+				resp, err := s.Add(TargetMemory, fmt.Sprintf("writer-%d entry-%d", wid, i))
+				if err != nil {
+					errCh <- err
+					return
+				}
+				if !resp.OK {
+					errCh <- fmt.Errorf("writer %d add %d: not ok: %s", wid, i, resp.Message)
+					return
+				}
+			}
+		}(w)
+	}
+	wg.Wait()
+	close(errCh)
+	for err := range errCh {
+		t.Fatal(err)
+	}
+
+	final, err := readMemoryFile(memPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := len(final); got != writers*perWriter {
+		t.Fatalf("expected %d entries to survive concurrent writers, got %d", writers*perWriter, got)
 	}
 }
 

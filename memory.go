@@ -89,10 +89,12 @@ const memoryHeaderRuleWidth = 46
 // FileMemoryStore persists entries as plain Markdown files. The two
 // targets have independent paths and char limits.
 //
-// Mutations write through a tempfile + rename, so readers always see
-// a complete previous-or-new file. Locking is in-process via a
-// mutex; concurrent writers from separate processes targeting the
-// same file can lose one writer's last entry.
+// Mutations write through a tempfile + rename. The mutate path takes
+// an in-process mutex plus a per-file flock (POSIX advisory lock on a
+// "<path>.lock" side-file) so multiple affent processes serialize
+// their read-modify-write cycles against the same store. flock is a
+// no-op on non-Unix platforms — Windows callers running multiple
+// affent processes against the same file should serialize externally.
 type FileMemoryStore struct {
 	MemoryPath      string
 	UserPath        string
@@ -171,6 +173,15 @@ func (s *FileMemoryStore) Add(target MemoryTarget, content string) (MemoryRespon
 	if path == "" {
 		return MemoryResponse{Target: target, Message: "target is disabled (no path configured)"}, nil
 	}
+	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+		return MemoryResponse{}, err
+	}
+	release, lerr := lockFile(path)
+	if lerr != nil {
+		return MemoryResponse{}, lerr
+	}
+	defer release()
+
 	entries, err := readMemoryFile(path)
 	if err != nil {
 		return MemoryResponse{}, err
@@ -220,6 +231,15 @@ func (s *FileMemoryStore) Replace(target MemoryTarget, oldText, newContent strin
 	if path == "" {
 		return MemoryResponse{Target: target, Message: "target is disabled (no path configured)"}, nil
 	}
+	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+		return MemoryResponse{}, err
+	}
+	release, lerr := lockFile(path)
+	if lerr != nil {
+		return MemoryResponse{}, lerr
+	}
+	defer release()
+
 	entries, err := readMemoryFile(path)
 	if err != nil {
 		return MemoryResponse{}, err
@@ -267,6 +287,15 @@ func (s *FileMemoryStore) Remove(target MemoryTarget, oldText string) (MemoryRes
 	if path == "" {
 		return MemoryResponse{Target: target, Message: "target is disabled (no path configured)"}, nil
 	}
+	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+		return MemoryResponse{}, err
+	}
+	release, lerr := lockFile(path)
+	if lerr != nil {
+		return MemoryResponse{}, lerr
+	}
+	defer release()
+
 	entries, err := readMemoryFile(path)
 	if err != nil {
 		return MemoryResponse{}, err
