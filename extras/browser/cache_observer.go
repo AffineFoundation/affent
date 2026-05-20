@@ -7,11 +7,20 @@ import (
 	"net/http"
 	"strings"
 	"sync"
-	"sync/atomic"
 
 	"github.com/go-rod/rod"
 	"github.com/go-rod/rod/lib/proto"
 )
+
+// observerBodyFetchConcurrency caps how many `Network.getResponseBody`
+// CDP calls can be in flight at once across the observer's spawned
+// goroutines. Empirically, leaving it unbounded — one goroutine per
+// loadingFinished event — saturated rod's CDP channel on a page like
+// open-meteo's docs (hundreds of small JS/CSS fetches) and stalled
+// affent's Loop indefinitely. The semaphore guarantees forward
+// progress: cache writes for slower responses are skipped rather
+// than blocking the event dispatch loop.
+const observerBodyFetchConcurrency = 16
 
 // startCacheObserver subscribes to the page's Network domain events
 // and writes successful responses into the configured ResponseCache.
@@ -30,6 +39,10 @@ import (
 // only reads the result. Cloudflare etc. see real Chrome traffic,
 // not Go traffic.
 //
+// Concurrency: per-response goroutines are gated by a semaphore so a
+// burst of sub-resources doesn't saturate the CDP channel. Cap
+// (observerBodyFetchConcurrency) is per-session.
+//
 // Note: getResponseBody is a one-shot read; calling it twice fails.
 // We tolerate the error (means the body was already drained, e.g. by
 // a separate hijack callback).
@@ -44,6 +57,7 @@ func startCacheObserver(page *rod.Page, cache ResponseCache, stats *InterceptSta
 		mimeType   string
 	}
 	var pendingMap sync.Map
+	sem := make(chan struct{}, observerBodyFetchConcurrency)
 
 	go page.EachEvent(
 		func(e *proto.NetworkResponseReceived) {
@@ -87,25 +101,34 @@ func startCacheObserver(page *rod.Page, cache ResponseCache, stats *InterceptSta
 				return
 			}
 			p := raw.(pending)
-			// Get body. May fail for navigations the page redirected
-			// past, for already-drained streams, or for resources
-			// blocked by our hijack handler.
-			body, err := getResponseBody(page, e.RequestID)
-			if err != nil {
+			reqID := e.RequestID
+			// Best-effort acquire a semaphore slot. If we're already
+			// at the concurrency cap, drop this body fetch — better
+			// to skip a cache write than to back-pressure the CDP
+			// channel and block the affent Loop. The dropped entry
+			// will be fetched fresh on the next request that touches
+			// the same URL.
+			select {
+			case sem <- struct{}{}:
+			default:
 				return
 			}
-			entry := &CachedResponse{
-				URL:        p.url,
-				StatusCode: p.statusCode,
-				Headers:    p.headers,
-				Body:       body,
-			}
-			if err := cache.Put(context.Background(), p.url, entry); err == nil {
-				// Note: cache.Put rejects challenge bodies / paths
-				// internally too; CacheMiss counter was bumped at
-				// hijack time, this just records the write.
-				_ = stats // placeholder if we add a CacheWrite counter
-			}
+			go func() {
+				defer func() { <-sem }()
+				body, err := getResponseBody(page, reqID)
+				if err != nil {
+					return
+				}
+				entry := &CachedResponse{
+					URL:        p.url,
+					StatusCode: p.statusCode,
+					Headers:    p.headers,
+					Body:       body,
+				}
+				if err := cache.Put(context.Background(), p.url, entry); err == nil {
+					stats.CacheWrite.Add(1)
+				}
+			}()
 		},
 		// Drop pending state on loading failures so the sync.Map
 		// doesn't grow without bound when navigations are cancelled.
@@ -135,13 +158,4 @@ func decodeRespBody(r *proto.NetworkGetResponseBodyResult) ([]byte, error) {
 		return base64.StdEncoding.DecodeString(r.Body)
 	}
 	return []byte(r.Body), nil
-}
-
-// observerEnabled is a runtime kill-switch some tests want; not used
-// in production. Wired through atomic so a debug session can flip it
-// without restarting.
-var observerEnabled atomic.Bool
-
-func init() {
-	observerEnabled.Store(true)
 }

@@ -226,10 +226,11 @@ func looksLikeChallengeBody(body []byte) bool {
 // FetchedAt is older than the configured TTL. Returns the count of
 // deleted entries and any error.
 //
-// Safe to call concurrently with Get/Put — file deletion is atomic
-// from the filesystem's perspective, and we tolerate partial
-// half-deleted pairs (meta gone, body remains) by treating a missing
-// meta.json as a miss in Get.
+// Race-safety: the per-entry verify-and-remove section takes c.mu so
+// a concurrent Put cannot have its just-written file deleted by a
+// Sweep that decided "stale" against the old content. Listing the
+// directory is done unlocked because the result is just a worklist —
+// any entries created mid-list naturally pass the freshness check.
 //
 // A TTL of zero (or negative) makes Sweep a no-op since "never
 // expire" entries by definition can't be stale.
@@ -237,7 +238,6 @@ func (c *FileResponseCache) Sweep(ctx context.Context) (int, error) {
 	if c.ttl <= 0 {
 		return 0, nil
 	}
-	cutoff := time.Now().Add(-c.ttl)
 	entries, err := os.ReadDir(c.dir)
 	if err != nil {
 		return 0, fmt.Errorf("read cache dir: %w", err)
@@ -252,39 +252,54 @@ func (c *FileResponseCache) Sweep(ctx context.Context) (int, error) {
 			continue
 		}
 		metaPath := filepath.Join(c.dir, name)
-		// Cheap pre-filter on filesystem mtime — if the file was
-		// touched after cutoff we know it can't be older than TTL
-		// without reading it. (mtime updates on rename, so freshly-
-		// written entries always pass this check.)
-		info, err := os.Stat(metaPath)
-		if err != nil {
-			continue
-		}
-		if info.ModTime().After(cutoff) {
-			continue
-		}
-		// Confirm via on-disk content: someone may have backdated
-		// the mtime, or the body's FetchedAt may differ from mtime.
-		data, err := os.ReadFile(metaPath)
-		if err != nil {
-			continue
-		}
-		var meta CachedResponse
-		if err := json.Unmarshal(data, &meta); err != nil {
-			// Corrupt meta — drop it.
-			_ = os.Remove(metaPath)
+		if c.sweepOne(metaPath) {
 			deleted++
-			continue
 		}
-		if meta.FetchedAt.After(cutoff) {
-			continue
-		}
-		bodyPath := strings.TrimSuffix(metaPath, ".meta.json") + ".bin"
-		_ = os.Remove(metaPath)
-		_ = os.Remove(bodyPath)
-		deleted++
 	}
 	return deleted, nil
+}
+
+// sweepOne re-verifies staleness under c.mu and removes the pair if
+// still stale. Returns true on deletion. The mtime fast-path remains
+// outside the lock so an obviously-fresh entry costs zero contention.
+func (c *FileResponseCache) sweepOne(metaPath string) bool {
+	cutoff := time.Now().Add(-c.ttl)
+	info, err := os.Stat(metaPath)
+	if err != nil {
+		return false
+	}
+	if info.ModTime().After(cutoff) {
+		return false
+	}
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	// Re-stat under lock so a Put that won the race between the
+	// outer mtime check and the lock acquisition doesn't get
+	// retroactively deleted.
+	info2, err := os.Stat(metaPath)
+	if err != nil {
+		return false
+	}
+	if info2.ModTime().After(cutoff) {
+		return false
+	}
+	data, err := os.ReadFile(metaPath)
+	if err != nil {
+		return false
+	}
+	var meta CachedResponse
+	if err := json.Unmarshal(data, &meta); err != nil {
+		// Corrupt meta — drop it.
+		_ = os.Remove(metaPath)
+		return true
+	}
+	if meta.FetchedAt.After(cutoff) {
+		return false
+	}
+	bodyPath := strings.TrimSuffix(metaPath, ".meta.json") + ".bin"
+	_ = os.Remove(metaPath)
+	_ = os.Remove(bodyPath)
+	return true
 }
 
 // StartSweeper runs Sweep on a ticker until StopSweeper is called or

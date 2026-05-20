@@ -56,10 +56,14 @@ var DefaultBlockedResourceTypes = []string{
 	"Image", "Media", "Font",
 }
 
-// DefaultBlockedDomains is a starter tracker block list. Drawn from
-// uBlock Origin's most-pinged third-party domains; not exhaustive but
-// covers ~80% of CF-correlated fingerprints. Operators with stricter
-// needs should supply their own list.
+// DefaultBlockedDomains is a starter tracker block list. Curated from
+// uBlock Origin's most-pinged third-party domains plus signals
+// discovered empirically when running the benchmark (e.g. ad-delivery,
+// btloader, id5-sync — all observed leaking into the response cache
+// during CoinGecko / Open-Meteo navigation). Not exhaustive — operators
+// with stricter needs should supply their own list — but covers the
+// failure mode where stale per-session third-party state poisons the
+// cache and stalls subsequent Chrome navigations on replay.
 var DefaultBlockedDomains = []string{
 	// Analytics
 	"google-analytics.com",
@@ -68,19 +72,34 @@ var DefaultBlockedDomains = []string{
 	"analytics.google.com",
 	"region1.google-analytics.com",
 	"ssl.google-analytics.com",
-	// Ads
+	"stats.g.doubleclick.net",
+	// Ads (display + RTB)
 	"doubleclick.net",
 	"googlesyndication.com",
 	"adservice.google.com",
 	"adsystem.com",
 	"adnxs.com",
 	"adsrvr.org",
-	// Tag managers / pixels
+	"ad-delivery.net",
+	"btloader.com",
+	"id5-sync.com",
+	"static.criteo.net",
+	"creative-serving.com",
+	"openx.net",
+	"pubmatic.com",
+	"rubiconproject.com",
+	// Consent / cookie banners (typically inject extra trackers)
+	"onetrust.com",
+	"cookielaw.org",
+	// Social pixels
 	"facebook.net",
 	"connect.facebook.net",
 	"pixel.facebook.com",
+	// Session-recording / heatmaps
 	"hotjar.com",
 	"static.hotjar.com",
+	"clarity.ms",
+	// Product analytics
 	"cdn.heapanalytics.com",
 	"segment.io",
 	"cdn.segment.com",
@@ -88,10 +107,11 @@ var DefaultBlockedDomains = []string{
 	"api.mixpanel.com",
 	"amplitude.com",
 	"api.amplitude.com",
-	"static.criteo.net",
 	"intercom.io",
 	"widget.intercom.io",
-	"clarity.ms",
+	// Auth / sign-in widgets (serve per-session JS)
+	"accounts.google.com/gsi",
+	"apis.google.com/js",
 	// Error reporting / RUM (still trigger fingerprints)
 	"sentry.io",
 	"newrelic.com",
@@ -99,6 +119,8 @@ var DefaultBlockedDomains = []string{
 	"bugsnag.com",
 	"rollbar.com",
 	"raygun.io",
+	"cloudflareinsights.com",
+	"static.cloudflareinsights.com",
 }
 
 // resolvedConfig returns the effective lists with defaults applied.
@@ -115,6 +137,45 @@ func (c InterceptConfig) resolved() InterceptConfig {
 	return out
 }
 
+// isReplaySafeHeader reports whether a cached header value can be
+// served back to the browser on replay without leaking per-session
+// state or breaking content-negotiation invariants. The block list
+// is conservative — we drop anything that names a session, signs a
+// request, or carries content-length / date semantics that the
+// browser computes itself.
+func isReplaySafeHeader(name string) bool {
+	lower := strings.ToLower(name)
+	// Headers that carry session state or one-time tokens.
+	switch lower {
+	case "set-cookie",
+		"cookie",
+		"authorization",
+		"www-authenticate",
+		"proxy-authenticate",
+		"x-csrf-token",
+		"x-xsrf-token",
+		"x-request-id",
+		"x-amz-request-id",
+		"cf-ray",
+		"cf-cache-status",
+		"cf-mitigated",
+		"server-timing",
+		"date",
+		"age",
+		"expires",
+		"last-modified",
+		"etag",
+		"content-length":
+		return false
+	}
+	// Strip nonce-bearing CSP directives — replaying a stale nonce
+	// blocks legitimate inline scripts on the new navigation.
+	if lower == "content-security-policy" || lower == "content-security-policy-report-only" {
+		return false
+	}
+	return true
+}
+
 // InterceptStats tracks per-session counters. Exposed for tests and
 // for callers that want to log throughput / hit-rate metrics.
 type InterceptStats struct {
@@ -123,6 +184,12 @@ type InterceptStats struct {
 	CacheHit        atomic.Int64
 	CacheMiss       atomic.Int64
 	NetworkFetch    atomic.Int64
+	// CacheWrite counts successful out-of-band cache populations from
+	// the observer (separate from CacheMiss, which only records that
+	// the intercept stage didn't find a fresh entry). Useful for
+	// operators checking whether the new Chromium-native fetch path
+	// is actually keeping the cache populated.
+	CacheWrite atomic.Int64
 }
 
 // installInterceptor wires a rod HijackRouter onto the page that
@@ -176,9 +243,16 @@ func installInterceptor(page *rod.Page, cfg InterceptConfig, stats *InterceptSta
 				stats.CacheHit.Add(1)
 				h.Response.SetHeader("X-Affent-Cache", "HIT")
 				h.Response.Payload().ResponseCode = entry.StatusCode
+				// Replay headers but strip ones that carry per-
+				// session state. Keeping the original Set-Cookie /
+				// Authorization / CSP-with-nonce headers leaks state
+				// across sessions and has been observed to stall
+				// Chrome's navigation pipeline.
 				for k, vs := range entry.Headers {
-					for _, v := range vs {
-						h.Response.SetHeader(k, v)
+					if isReplaySafeHeader(k) {
+						for _, v := range vs {
+							h.Response.SetHeader(k, v)
+						}
 					}
 				}
 				h.Response.SetBody(entry.Body)

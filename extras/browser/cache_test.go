@@ -2,9 +2,12 @@ package browser
 
 import (
 	"context"
+	"fmt"
 	"net/http"
+	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 )
@@ -217,6 +220,72 @@ func TestFileResponseCache_Sweep_NoTTLIsNoOp(t *testing.T) {
 	}
 	if deleted != 0 {
 		t.Errorf("Sweep with ttl=0 must be a no-op, got deleted=%d", deleted)
+	}
+}
+
+func TestFileResponseCache_Sweep_DoesNotKillConcurrentPut(t *testing.T) {
+	// Regression: Sweep used to read FetchedAt, then Remove without
+	// holding the cache mutex, leaving a TOCTOU window during which a
+	// concurrent Put's freshly-written entry could be deleted. We
+	// drive Put + Sweep in parallel and assert every Put's URL is
+	// still readable afterward.
+	dir := t.TempDir()
+	c, err := NewFileResponseCache(dir, 50*time.Millisecond)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// Pre-seed enough stale entries that Sweep has real work to do
+	// while Puts race in.
+	stale := time.Now().Add(-time.Hour).UTC()
+	for i := 0; i < 32; i++ {
+		entry := &CachedResponse{
+			URL:        fmt.Sprintf("https://stale.example.com/%d", i),
+			StatusCode: 200,
+			Body:       []byte("stale-body"),
+			FetchedAt:  stale,
+		}
+		if err := c.Put(context.Background(), entry.URL, entry); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	const freshN = 64
+	var wg sync.WaitGroup
+	wg.Add(2)
+	go func() {
+		defer wg.Done()
+		for i := 0; i < freshN; i++ {
+			url := fmt.Sprintf("https://fresh.example.com/%d", i)
+			_ = c.Put(context.Background(), url, &CachedResponse{
+				StatusCode: 200,
+				Body:       []byte("fresh-body"),
+			})
+		}
+	}()
+	go func() {
+		defer wg.Done()
+		// Run Sweep repeatedly so its critical sections overlap with
+		// the Put loop's writes.
+		for i := 0; i < 8; i++ {
+			_, _ = c.Sweep(context.Background())
+		}
+	}()
+	wg.Wait()
+
+	// After the dust settles, every fresh URL must still resolve.
+	for i := 0; i < freshN; i++ {
+		url := fmt.Sprintf("https://fresh.example.com/%d", i)
+		got, ok, err := c.Get(context.Background(), url)
+		if err != nil {
+			t.Fatalf("Get %s: %v", url, err)
+		}
+		if !ok {
+			t.Fatalf("fresh entry %s was deleted by Sweep race", url)
+		}
+		if string(got.Body) != "fresh-body" {
+			t.Fatalf("fresh entry %s body wrong: %q", url, got.Body)
+		}
 	}
 }
 
