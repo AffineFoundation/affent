@@ -2,9 +2,17 @@ package main
 
 import (
 	"net/http"
+	"time"
 
 	"github.com/affinefoundation/affent/sse"
 )
+
+// sseKeepAliveInterval is how often an idle SSE stream emits a
+// comment line (`: ping\n\n`) to keep intermediaries (nginx default
+// proxy_read_timeout 60s, AWS ALB 60s idle, Cloudflare 100s) from
+// dropping the connection. SSE clients treat `:`-prefixed lines as
+// comments and ignore them; the bytes are only there to flow.
+const sseKeepAliveInterval = 25 * time.Second
 
 // handleSessionEvents tails the session's affent event stream and
 // passes events through to the SSE client verbatim. The client gets
@@ -40,11 +48,19 @@ func handleSessionEvents(pool *SessionPool, sessionID string, w http.ResponseWri
 	// Initial flush so curl / fetch unblocks waiting for headers.
 	flusher.Flush()
 
+	keepAlive := time.NewTicker(sseKeepAliveInterval)
+	defer keepAlive.Stop()
+
 	ctx := r.Context()
 	for {
 		select {
 		case <-ctx.Done():
 			return
+		case <-keepAlive.C:
+			if _, err := w.Write([]byte(": ping\n\n")); err != nil {
+				return
+			}
+			flusher.Flush()
 		case ev, ok := <-ch:
 			if !ok {
 				return

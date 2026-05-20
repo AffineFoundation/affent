@@ -295,11 +295,20 @@ func streamChatCompletion(w http.ResponseWriter, ctx context.Context, sess *Sess
 
 	send(map[string]any{"role": "assistant"}, "")
 
+	keepAlive := time.NewTicker(sseKeepAliveInterval)
+	defer keepAlive.Stop()
+
 	for {
 		select {
 		case <-ctx.Done():
 			sess.CancelTurn()
 			return
+		case <-keepAlive.C:
+			if _, err := w.Write([]byte(": ping\n\n")); err != nil {
+				sess.CancelTurn()
+				return
+			}
+			flusher.Flush()
 		case ev, ok := <-ch:
 			if !ok {
 				return
