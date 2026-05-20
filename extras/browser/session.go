@@ -57,6 +57,13 @@ type SessionConfig struct {
 	// otherwise serve a challenge instead of the real page.
 	DisableStealth bool
 
+	// DisableLaunchAntiDetect turns off the Chromium launch flags
+	// (--disable-blink-features=AutomationControlled etc.) that
+	// reduce the headless fingerprint at launch time. Defaults to
+	// false (anti-detect on). Operators studying raw headless
+	// behavior can opt out.
+	DisableLaunchAntiDetect bool
+
 	// Intercept governs request blocking (resource types + domain
 	// list) and optional response caching. Zero value applies the
 	// documented defaults: block image/font/media + a starter
@@ -138,6 +145,36 @@ func NewSession(cfg SessionConfig) (*Session, error) {
 	}
 	w, h := cfg.viewport()
 	l = l.Set(flags.Flag("window-size"), fmt.Sprintf("%d,%d", w, h))
+
+	// Anti-detection launch flags. The JS-side stealth patch
+	// (applyStealth) masks navigator.* signals AFTER the document
+	// loads; these Chromium flags close the launch-time gaps that
+	// CF-class bot detection keys on, BEFORE any script runs:
+	//   --disable-blink-features=AutomationControlled removes the
+	//     navigator.userAgentData/webdriver-related properties
+	//     Chromium normally exposes when started for automation.
+	//   --disable-features=IsolateOrigins,site-per-process relaxes
+	//     site isolation so CF challenge iframes share our stealth
+	//     patches with the parent document.
+	//   --disable-features=Translate,AutomationControlled removes a
+	//     couple of headless-only feature flags that fingerprinters
+	//     check.
+	//   --no-first-run, --disable-infobars suppress the headless-only
+	//     post-launch UI tells.
+	// Empirically this combination plus the JS-side stealth patch
+	// + a current Chrome UA + UserAgentMetadata gets past the
+	// Cloudflare Turnstile / 'Verifying you are human' interstitial
+	// on CoinGecko (validated 2026-05-20). Operators wanting raw
+	// Chromium for fingerprint debugging can pass DisableStealth +
+	// DisableLaunchAntiDetect to opt out.
+	if !cfg.DisableLaunchAntiDetect {
+		l = l.Set(flags.Flag("disable-blink-features"), "AutomationControlled")
+		l = l.Set(flags.Flag("disable-features"), "IsolateOrigins,site-per-process,Translate,AutomationControlled")
+		l = l.Set(flags.Flag("enable-features"), "NetworkService")
+		l = l.Set(flags.Flag("no-first-run"))
+		l = l.Set(flags.Flag("disable-infobars"))
+	}
+
 	for _, a := range cfg.ExtraArgs {
 		l = l.Set(flags.Flag(a))
 	}
@@ -164,9 +201,46 @@ func NewSession(cfg SessionConfig) (*Session, error) {
 		s.cleanupTmpDirs()
 		return nil, fmt.Errorf("open initial page: %w", err)
 	}
-	if cfg.UserAgent != "" {
-		_ = page.SetUserAgent(&proto.NetworkSetUserAgentOverride{UserAgent: cfg.UserAgent})
+	// User-agent override. go-rod/stealth.JS does NOT touch
+	// navigator.userAgent — so Chromium's default "HeadlessChrome /
+	// Chrome for Testing 145.x" UA leaks past the JS-side mask
+	// and trips Cloudflare-class fingerprinters that read the UA
+	// header directly. Default to a current Chrome stable UA on
+	// Linux so the HTTP-side fingerprint matches the JS-side mask.
+	//
+	// UserAgentMetadata populates the Sec-CH-UA-* client hint
+	// headers and navigator.userAgentData fields that modern Chrome
+	// always sends; CF and similar WAFs treat their absence as a
+	// strong bot signal. The brand mix and version split mirror
+	// real Chrome 132.
+	ua := cfg.UserAgent
+	if ua == "" {
+		ua = defaultStableUA
 	}
+	_ = page.SetUserAgent(&proto.NetworkSetUserAgentOverride{
+		UserAgent:      ua,
+		AcceptLanguage: "en-US,en;q=0.9",
+		Platform:       "Linux",
+		UserAgentMetadata: &proto.EmulationUserAgentMetadata{
+			Brands: []*proto.EmulationUserAgentBrandVersion{
+				{Brand: "Not_A Brand", Version: "8"},
+				{Brand: "Chromium", Version: "132"},
+				{Brand: "Google Chrome", Version: "132"},
+			},
+			FullVersionList: []*proto.EmulationUserAgentBrandVersion{
+				{Brand: "Not_A Brand", Version: "8.0.0.0"},
+				{Brand: "Chromium", Version: "132.0.0.0"},
+				{Brand: "Google Chrome", Version: "132.0.0.0"},
+			},
+			FullVersion:     "132.0.0.0",
+			Platform:        "Linux",
+			PlatformVersion: "6.5.0",
+			Architecture:    "x86",
+			Mobile:          false,
+			Bitness:         "64",
+			Wow64:           false,
+		},
+	})
 	// Non-fatal: SetViewport occasionally returns an error on slow
 	// startup; the launch flag above already constrained the window.
 	_ = page.SetViewport(&proto.EmulationSetDeviceMetricsOverride{
@@ -196,6 +270,12 @@ func NewSession(cfg SessionConfig) (*Session, error) {
 		return nil, fmt.Errorf("install interceptor: %w", err)
 	}
 	s.hijackRouter = router
+
+	// Cache writes happen out-of-band: Chrome fetches via its own
+	// network stack (preserving the real TLS fingerprint), and a
+	// Network domain observer copies successful responses into the
+	// cache afterwards.
+	startCacheObserver(page, cfg.Intercept.Cache, &s.interceptStats)
 
 	return s, nil
 }
@@ -257,3 +337,11 @@ func (s *Session) newSnapshotID() int64 {
 // practice; reserved for future code paths that close the page on
 // idle.
 var ErrNoPage = errors.New("browser session has no active page")
+
+// defaultStableUA is a current Chrome stable UA on Linux x86_64.
+// We override the headless "Chrome for Testing" UA with this so the
+// HTTP-side fingerprint blends with real-Chrome traffic. Bump on a
+// quarterly cadence — exact version doesn't need to be cutting-edge
+// but should stay within the last 2 Chrome releases to avoid the
+// "outdated UA" fingerprint vector.
+const defaultStableUA = "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/132.0.0.0 Safari/537.36"

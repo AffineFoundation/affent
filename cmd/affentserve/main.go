@@ -65,6 +65,7 @@ func parseFlagsAndConfig(argv []string) (Config, error) {
 		enableBuiltins   = fs.Bool("builtins", false, "Register shell + file builtins (LocalExecutor). DANGEROUS on a shared host — only enable in a sandboxed environment.")
 		browserCacheDir  = fs.String("browser-cache-dir", "", "Enable an on-disk response cache for browser sessions; empty disables caching.")
 		browserCacheTTL  = fs.String("browser-cache-ttl", "", "Cache TTL ('24h' default; '0s' disables expiry).")
+		browserCacheSweep = fs.String("browser-cache-sweep-interval", "", "How often the cache GC deletes expired files (default = TTL/8, min 5m).")
 		browserNoStealth = fs.Bool("browser-no-stealth", false, "Disable the webdriver-detection bypass script. Default off (stealth on).")
 		browserAllowAll  = fs.Bool("browser-allow-all-domains", false, "Allow third-party / tracker domains the default list normally blocks.")
 		systemPrompt     = fs.String("system-prompt", "", "Override affent.DefaultSystemPrompt. '-' reads from stdin, '@FILE' from a file, anything else is literal.")
@@ -129,6 +130,9 @@ func parseFlagsAndConfig(argv []string) (Config, error) {
 	}
 	if *browserCacheTTL != "" {
 		cfg.BrowserCacheTTL = *browserCacheTTL
+	}
+	if *browserCacheSweep != "" {
+		cfg.BrowserCacheSweepInterval = *browserCacheSweep
 	}
 	if fs.Lookup("browser-no-stealth").Value.String() == "true" {
 		cfg.BrowserNoStealth = *browserNoStealth

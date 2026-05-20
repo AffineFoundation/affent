@@ -86,6 +86,12 @@ type Config struct {
 	// Duration string ("1h", "30m"). "0s" disables expiry.
 	BrowserCacheTTL string `json:"browser_cache_ttl"`
 
+	// BrowserCacheSweepInterval is how often the cache GC walks the
+	// dir and deletes expired entries from disk. Default = TTL/8
+	// clamped to >= 5m. Operators with very large caches may want a
+	// longer interval to spread out the I/O cost of each sweep.
+	BrowserCacheSweepInterval string `json:"browser_cache_sweep_interval"`
+
 	// BrowserNoStealth disables the stealth bypass. Default off
 	// (stealth on). Flip when debugging fingerprint regressions.
 	BrowserNoStealth bool `json:"browser_no_stealth"`

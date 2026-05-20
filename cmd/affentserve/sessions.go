@@ -108,6 +108,27 @@ func NewSessionPool(cfg Config, logger zerolog.Logger) (*SessionPool, error) {
 			Str("dir", cfg.BrowserCacheDir).
 			Dur("ttl", cacheTTL).
 			Msg("browser response cache enabled")
+
+		// Cache GC: walk the dir periodically to actually delete
+		// entries past TTL. Without this, expired entries pile up on
+		// disk forever (Get just returns miss past TTL). Default
+		// interval = max(TTL/8, 5min) so a 24h TTL sweeps every 3h
+		// and a 30m TTL sweeps every 5min. Operators can override
+		// via BrowserCacheSweepInterval.
+		sweepInterval := cacheTTL / 8
+		if cfg.BrowserCacheSweepInterval != "" {
+			if d, err := time.ParseDuration(cfg.BrowserCacheSweepInterval); err == nil && d > 0 {
+				sweepInterval = d
+			}
+		}
+		if sweepInterval < 5*time.Minute {
+			sweepInterval = 5 * time.Minute
+		}
+		bc.StartSweeper(sweepInterval, func(deleted int) {
+			if deleted > 0 {
+				logger.Info().Int("deleted", deleted).Msg("browser cache sweep")
+			}
+		})
 	}
 	go pool.gcLoop()
 	return pool, nil
@@ -439,6 +460,11 @@ func (p *SessionPool) gcOnce() {
 // ErrShuttingDown instead of creating sessions that nobody will close.
 func (p *SessionPool) Shutdown() {
 	p.shutdownOnce.Do(func() {
+		if p.browserCache != nil {
+			if bc, ok := p.browserCache.(*affentbrowser.FileResponseCache); ok {
+				bc.StopSweeper()
+			}
+		}
 		close(p.gcStop)
 		<-p.gcDone
 

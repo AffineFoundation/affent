@@ -1,7 +1,6 @@
 package browser
 
 import (
-	"net/http"
 	"strings"
 	"sync/atomic"
 
@@ -176,7 +175,6 @@ func installInterceptor(page *rod.Page, cfg InterceptConfig, stats *InterceptSta
 			if entry, ok, _ := cfg.Cache.Get(req.Req().Context(), url); ok {
 				stats.CacheHit.Add(1)
 				h.Response.SetHeader("X-Affent-Cache", "HIT")
-				// Replay status, headers (subset), and body.
 				h.Response.Payload().ResponseCode = entry.StatusCode
 				for k, vs := range entry.Headers {
 					for _, v := range vs {
@@ -188,23 +186,27 @@ func installInterceptor(page *rod.Page, cfg InterceptConfig, stats *InterceptSta
 			}
 			stats.CacheMiss.Add(1)
 		}
-		// Real fetch
+		// CACHE MISS / NO CACHE: hand the request back to Chromium so
+		// the network fetch happens on Chrome's own TLS stack. The
+		// alternative — h.LoadResponse(http.DefaultClient, true) —
+		// re-issues the request through Go's net/http, exposing Go's
+		// crypto/tls ClientHello (JA3) to the server. Cloudflare and
+		// peer fingerprinters identify that fingerprint as
+		// non-browser traffic and serve a challenge, even when the
+		// JS-side stealth patch and HTTP UA are both correct.
+		// Letting Chromium fetch preserves the Chrome TLS fingerprint
+		// + the per-session __cf_bm / cf_clearance cookies that real
+		// users implicitly carry.
+		//
+		// Trade-off: with ContinueRequest, the response never lands
+		// in our hijack callback, so we cannot Put it into the
+		// FileResponseCache from here. Chrome's internal HTTP cache
+		// (workspace user-data-dir) still operates within the
+		// session. Cross-session population of FileResponseCache will
+		// require a future Response-stage interceptor (proto.Fetch
+		// requestStage="Response") — out of scope for v1.
 		stats.NetworkFetch.Add(1)
-		if err := h.LoadResponse(http.DefaultClient, true); err != nil {
-			h.Response.Fail(proto.NetworkErrorReasonFailed)
-			return
-		}
-		// Cache the response (success-only) for future replay.
-		if cfg.Cache != nil {
-			body := []byte(h.Response.Body())
-			entry := &CachedResponse{
-				URL:        url,
-				StatusCode: h.Response.Payload().ResponseCode,
-				Headers:    cloneHeader(h.Response.Headers()),
-				Body:       body,
-			}
-			_ = cfg.Cache.Put(req.Req().Context(), url, entry)
-		}
+		h.ContinueRequest(&proto.FetchContinueRequest{})
 	})
 	if err != nil {
 		return nil, err
@@ -213,12 +215,3 @@ func installInterceptor(page *rod.Page, cfg InterceptConfig, stats *InterceptSta
 	return router, nil
 }
 
-func cloneHeader(h http.Header) http.Header {
-	out := make(http.Header, len(h))
-	for k, vs := range h {
-		cp := make([]string, len(vs))
-		copy(cp, vs)
-		out[k] = cp
-	}
-	return out
-}
