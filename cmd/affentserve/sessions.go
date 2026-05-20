@@ -487,6 +487,44 @@ func (s *Session) SendUser(ctx context.Context, text string) (string, error) {
 	return s.loop.SendUser(ctx, text)
 }
 
+// CancelTurn signals the in-flight turn (if any) to abort. Used by
+// the chat-completions handler when the HTTP client disconnects mid-
+// turn, so the affent Loop and any in-flight tool call wind down
+// promptly instead of running to MaxTurnSteps with no listener.
+//
+// Idempotent — affent's Cancel is a no-op when no turn is active.
+func (s *Session) CancelTurn() {
+	if s == nil || s.loop == nil {
+		return
+	}
+	s.loop.Cancel()
+}
+
+// BrowserStatsSnapshot returns the session's browser interceptor
+// counters when a browser is attached; zeros otherwise. Used by the
+// /v1/stats endpoint and per-session debug logs.
+type BrowserStatsSnapshot struct {
+	BlockedByType   int64 `json:"blocked_by_type"`
+	BlockedByDomain int64 `json:"blocked_by_domain"`
+	CacheHit        int64 `json:"cache_hit"`
+	CacheMiss       int64 `json:"cache_miss"`
+	NetworkFetch    int64 `json:"network_fetch"`
+}
+
+func (s *Session) BrowserStatsSnapshot() BrowserStatsSnapshot {
+	if s == nil || s.browser == nil {
+		return BrowserStatsSnapshot{}
+	}
+	bt, bd, ch, cm, nf := s.browser.InterceptStats()
+	return BrowserStatsSnapshot{
+		BlockedByType:   bt,
+		BlockedByDomain: bd,
+		CacheHit:        ch,
+		CacheMiss:       cm,
+		NetworkFetch:    nf,
+	}
+}
+
 // Workspace exposes the session's on-disk directory for tests that
 // want to inspect the JSONL conversation log. Not used by production
 // paths.

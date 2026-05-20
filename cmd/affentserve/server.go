@@ -30,6 +30,7 @@ func newRouter(cfg Config, pool *SessionPool, logger zerolog.Logger) http.Handle
 	mux.Handle("/v1/models", authed(http.HandlerFunc(handleModels(cfg))))
 	mux.Handle("/v1/chat/completions", authed(http.HandlerFunc(handleChatCompletions(cfg, pool))))
 	mux.Handle("/v1/sessions/", authed(http.HandlerFunc(handleSessionRoutes(pool))))
+	mux.Handle("/v1/stats", authed(http.HandlerFunc(handleStats(cfg, pool))))
 
 	return mux
 }

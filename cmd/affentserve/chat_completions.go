@@ -100,10 +100,10 @@ func handleChatCompletions(cfg Config, pool *SessionPool) http.HandlerFunc {
 		}
 
 		if req.Stream {
-			streamChatCompletion(w, ctx, sess.ID, turnID, modelLabel, subCh)
+			streamChatCompletion(w, ctx, sess, turnID, modelLabel, subCh)
 			return
 		}
-		out, err := bufferChatCompletion(ctx, turnID, subCh)
+		out, err := bufferChatCompletion(ctx, sess, turnID, subCh)
 		if err != nil {
 			writeJSONError(w, http.StatusInternalServerError, "run turn", err)
 			return
@@ -135,11 +135,17 @@ type bufferedTurnResult struct {
 	Error            string
 }
 
-func bufferChatCompletion(ctx context.Context, turnID string, ch <-chan sse.Event) (*bufferedTurnResult, error) {
+// bufferChatCompletion drains events for a single turn until turn.end
+// or the request context is cancelled. On cancellation we propagate
+// the cancel into the affent Loop (sess.CancelTurn) so the browser /
+// LLM call doesn't keep running to MaxTurnSteps with no listener —
+// matters at benchmark scale where many questions may time out.
+func bufferChatCompletion(ctx context.Context, sess *Session, turnID string, ch <-chan sse.Event) (*bufferedTurnResult, error) {
 	out := &bufferedTurnResult{FinishReason: "stop"}
 	for {
 		select {
 		case <-ctx.Done():
+			sess.CancelTurn()
 			return out, ctx.Err()
 		case ev, ok := <-ch:
 			if !ok {
@@ -246,8 +252,11 @@ func writeChatCompletionResponse(w http.ResponseWriter, sessionID, model string,
 }
 
 // streamChatCompletion translates affent's SSE stream into OpenAI's
-// chat.completion.chunk protocol, line by line.
-func streamChatCompletion(w http.ResponseWriter, ctx context.Context, sessionID, turnID, model string, ch <-chan sse.Event) {
+// chat.completion.chunk protocol, line by line. On client disconnect
+// (ctx.Done) we propagate cancellation into the affent Loop so the
+// browser / LLM doesn't keep churning with no listener.
+func streamChatCompletion(w http.ResponseWriter, ctx context.Context, sess *Session, turnID, model string, ch <-chan sse.Event) {
+	sessionID := sess.ID
 	flusher, ok := w.(http.Flusher)
 	if !ok {
 		writeJSONError(w, http.StatusInternalServerError, "streaming unsupported by writer", nil)
@@ -289,6 +298,7 @@ func streamChatCompletion(w http.ResponseWriter, ctx context.Context, sessionID,
 	for {
 		select {
 		case <-ctx.Done():
+			sess.CancelTurn()
 			return
 		case ev, ok := <-ch:
 			if !ok {

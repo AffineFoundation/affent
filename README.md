@@ -511,6 +511,7 @@ so any OpenAI SDK (or generic eval harness) can drive it:
 ```
 GET    /healthz
 GET    /v1/models
+GET    /v1/stats                     — per-session + aggregate browser counters (JSON)
 POST   /v1/chat/completions          — OpenAI-compat, streaming via SSE
 GET    /v1/sessions/{id}/events      — affent's native 13-type event stream
 DELETE /v1/sessions/{id}             — close + remove

@@ -185,6 +185,15 @@ func run(cfg Config, logger zerolog.Logger) error {
 		Addr:              cfg.Listen,
 		Handler:           mux,
 		ReadHeaderTimeout: 15 * time.Second,
+		// IdleTimeout caps keep-alive connections so an abandoned
+		// client doesn't pin a goroutine forever. WriteTimeout is
+		// deliberately omitted: /v1/chat/completions and the events
+		// stream are long-running by design (LLM turns + SSE), and a
+		// global write deadline would cut them off mid-stream. The
+		// per-turn cap inside affent (MaxTurnSteps + PerCallTimeout)
+		// bounds runtime; client disconnect propagates via
+		// ctx.Done → Session.CancelTurn.
+		IdleTimeout: 120 * time.Second,
 	}
 
 	logger.Info().Str("listen", cfg.Listen).Msg("affentserve starting")
