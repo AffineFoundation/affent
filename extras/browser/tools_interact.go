@@ -8,9 +8,31 @@ import (
 	"time"
 
 	"github.com/affinefoundation/affent"
+	"github.com/go-rod/rod"
 	"github.com/go-rod/rod/lib/input"
 	"github.com/go-rod/rod/lib/proto"
 )
+
+// interactableTimeout caps how long Click / Type will wait for the
+// targeted element to become visible + not-covered + clickable. Set
+// short so a confused LLM gets a fast retry signal; a longer wait
+// just delays the next reasoning step without buying anything (the
+// element is either interactable now or has a layout problem the
+// agent needs to surface).
+const interactableTimeout = 2 * time.Second
+
+// waitInteractable wraps rod.Element.WaitInteractable with our bounded
+// timeout and a friendlier error string. Returns a helpful message
+// when the element is hidden / covered so the LLM can act (close the
+// modal, scroll, re-snapshot).
+func waitInteractable(ctx context.Context, el *rod.Element, ref int) error {
+	innerCtx, cancel := context.WithTimeout(ctx, interactableTimeout)
+	defer cancel()
+	if _, err := el.Context(innerCtx).WaitInteractable(); err != nil {
+		return fmt.Errorf("ref %d not interactable (hidden, disabled, or covered by another element): %w", ref, err)
+	}
+	return nil
+}
 
 // ClickTool returns `browser_click`. Looks up the element by ref id
 // from the most recent snapshot and clicks it; takes a fresh snapshot
@@ -54,6 +76,9 @@ func ClickTool(s *Session) *affent.Tool {
 			if err := el.ScrollIntoView(); err != nil {
 				// Non-fatal; click may still work if already in viewport.
 				_ = err
+			}
+			if err := waitInteractable(ctx, el, args.Ref); err != nil {
+				return "", err
 			}
 			if err := el.Click(proto.InputMouseButtonLeft, 1); err != nil {
 				return "", fmt.Errorf("click ref %d: %w", args.Ref, err)
@@ -119,6 +144,9 @@ func TypeTool(s *Session) *affent.Tool {
 			}
 			if err := el.ScrollIntoView(); err != nil {
 				_ = err
+			}
+			if err := waitInteractable(ctx, el, args.Ref); err != nil {
+				return "", err
 			}
 			if err := el.Focus(); err != nil {
 				return "", fmt.Errorf("focus ref %d: %w", args.Ref, err)
