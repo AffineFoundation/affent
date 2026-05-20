@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/affinefoundation/affent"
+	"github.com/go-rod/rod"
 )
 
 // NavigateTool returns the `browser_navigate` tool.
@@ -103,11 +104,48 @@ func waitForLoad(ctx context.Context, s *Session, waitUntil string, timeout time
 	case "load":
 		return page.WaitLoad()
 	case "domcontentloaded":
-		return page.WaitDOMStable(500*time.Millisecond, 0)
+		// Map to the web standard: document.readyState reaches
+		// "interactive" or "complete" — i.e. HTML parsed, sub-
+		// resources may still be loading. An earlier version called
+		// WaitDOMStable here, which waits for DOM *mutations* to
+		// stop. That can hang indefinitely on SPAs that keep
+		// mutating the DOM during their boot phase, even though
+		// DOMContentLoaded already fired. readyState polling
+		// matches what the agent (and the browser spec) means by
+		// the term.
+		return waitDOMContentLoaded(innerCtx, page, timeout)
 	case "networkidle":
 		return page.WaitIdle(timeout)
 	default:
 		return fmt.Errorf("unknown wait_until %q", waitUntil)
+	}
+}
+
+// waitDOMContentLoaded polls document.readyState until it reaches the
+// post-parse states ("interactive" = DOMContentLoaded fired,
+// "complete" = the load event also fired). 100ms poll cadence keeps
+// the overhead negligible while staying responsive.
+func waitDOMContentLoaded(ctx context.Context, page *rod.Page, timeout time.Duration) error {
+	deadline := time.Now().Add(timeout)
+	for {
+		if ctx.Err() != nil {
+			return ctx.Err()
+		}
+		if time.Now().After(deadline) {
+			return fmt.Errorf("timed out after %s waiting for DOMContentLoaded", timeout)
+		}
+		result, err := page.Eval(`() => document.readyState`)
+		if err == nil && result != nil {
+			state := result.Value.Str()
+			if state == "interactive" || state == "complete" {
+				return nil
+			}
+		}
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		case <-time.After(100 * time.Millisecond):
+		}
 	}
 }
 
