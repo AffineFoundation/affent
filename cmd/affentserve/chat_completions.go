@@ -221,6 +221,9 @@ func eventForTurn(ev sse.Event, turnID string) bool {
 
 func writeChatCompletionResponse(w http.ResponseWriter, sessionID, model string, out *bufferedTurnResult) {
 	w.Header().Set("Content-Type", "application/json")
+	// Mirror the streaming-path header so clients that ignore the
+	// non-standard affent_session_id JSON field can still find it.
+	w.Header().Set("X-Affent-Session-Id", sessionID)
 	if out.Error != "" {
 		writeJSONError(w, http.StatusBadGateway, "loop error: "+out.Error, nil)
 		return
@@ -266,6 +269,11 @@ func streamChatCompletion(w http.ResponseWriter, ctx context.Context, sess *Sess
 	w.Header().Set("Cache-Control", "no-cache")
 	w.Header().Set("Connection", "keep-alive")
 	w.Header().Set("X-Accel-Buffering", "no")
+	// Surface the session id as a response header too, so clients that
+	// only consume the event stream (and never JSON-decode the
+	// affent_session_id field on each chunk) can still pin to and
+	// resume this session via Last-Used / DELETE.
+	w.Header().Set("X-Affent-Session-Id", sessionID)
 
 	id := "chatcmpl-" + uuid.NewString()
 	created := time.Now().Unix()
@@ -327,16 +335,37 @@ func streamChatCompletion(w http.ResponseWriter, ctx context.Context, sess *Sess
 				if err := json.Unmarshal(ev.Data, &p); err == nil && p.Delta != "" {
 					send(map[string]any{"reasoning_content": p.Delta}, "")
 				}
+			case sse.TypeError:
+				// Surface non-recoverable loop errors as an OpenAI-shape
+				// error chunk before closing the stream. Recoverable
+				// errors are part of the retry path and not signaled to
+				// the client.
+				var p struct {
+					Message     string `json:"message"`
+					Recoverable bool   `json:"recoverable"`
+				}
+				if err := json.Unmarshal(ev.Data, &p); err == nil && !p.Recoverable && p.Message != "" {
+					raw, _ := json.Marshal(map[string]any{
+						"id":      id,
+						"object":  "chat.completion.chunk",
+						"created": created,
+						"model":   model,
+						"error": map[string]any{
+							"message": p.Message,
+							"type":    "loop_error",
+						},
+					})
+					_, _ = w.Write([]byte("data: "))
+					_, _ = w.Write(raw)
+					_, _ = w.Write([]byte("\n\n"))
+					flusher.Flush()
+				}
 			case sse.TypeTurnEnd:
 				var p struct {
 					Reason string `json:"reason"`
 				}
 				_ = json.Unmarshal(ev.Data, &p)
-				finish := "stop"
-				if p.Reason == "error" {
-					finish = "stop"
-				}
-				send(map[string]any{}, finish)
+				send(map[string]any{}, "stop")
 				_, _ = w.Write([]byte("data: [DONE]\n\n"))
 				flusher.Flush()
 				return

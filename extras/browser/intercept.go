@@ -121,6 +121,13 @@ var DefaultBlockedDomains = []string{
 	"raygun.io",
 	"cloudflareinsights.com",
 	"static.cloudflareinsights.com",
+	"s.go-mpulse.net",
+	"mpulse.net",
+	// Marketing automation seen on www.nasdaq.com etc.
+	"bizible.com",
+	"cdn.bizible.com",
+	"assets.adoberesources.net",
+	"adoberesources.net",
 }
 
 // resolvedConfig returns the effective lists with defaults applied.
