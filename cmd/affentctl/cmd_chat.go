@@ -12,10 +12,19 @@ import (
 	"os/signal"
 	"strings"
 	"syscall"
+	"time"
 
 	"github.com/affinefoundation/affent"
 	"github.com/affinefoundation/affent/sse"
 )
+
+// turnCancelDrainTimeout caps how long drainInteractive blocks after a
+// SIGINT cancel waiting for the Loop's `turn.end{cancelled}` event.
+// affent's Cancel() signals the loop but the in-flight LLM call /
+// tool dispatch needs a beat to wind down before publishing turn.end.
+// Without this wait the REPL's next SendUser races the still-active
+// turn and gets ErrTurnInFlight.
+const turnCancelDrainTimeout = 5 * time.Second
 
 // chatCmd is the REPL: read a line, drive one turn, stream the
 // assistant text + tool activity to stderr, then read the next line.
@@ -144,8 +153,13 @@ func drainInteractive(ctx context.Context, events <-chan sse.Event, trace *json.
 		select {
 		case <-ctx.Done():
 			fmt.Fprintln(os.Stderr, dim("\n[interrupted]"))
-			// Drain any straggler events so the next turn starts on a
-			// clean channel; bail out as soon as we see turn.end.
+			// Block until turn.end so the REPL's next SendUser sees
+			// a clean Loop state. Without the wait we'd race the
+			// loop goroutine winding down and the next message gets
+			// ErrTurnInFlight, forcing the user to retry or run
+			// /cancel again. Bounded so a hung loop doesn't pin the
+			// REPL.
+			deadline := time.After(turnCancelDrainTimeout)
 			for {
 				select {
 				case ev, ok := <-events:
@@ -158,7 +172,7 @@ func drainInteractive(ctx context.Context, events <-chan sse.Event, trace *json.
 					if ev.Type == sse.TypeTurnEnd {
 						return
 					}
-				default:
+				case <-deadline:
 					return
 				}
 			}
