@@ -1160,15 +1160,50 @@ func readMemoryFile(path string) ([]string, error) {
 }
 
 func writeMemoryFile(path string, entries []string) error {
-	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+	dir := filepath.Dir(path)
+	if err := os.MkdirAll(dir, 0o755); err != nil {
 		return err
 	}
 	body := strings.Join(entries, memoryEntryDelim)
 	tmp := path + ".tmp"
-	if err := os.WriteFile(tmp, []byte(body), 0o644); err != nil {
+	// temp + fsync + rename + fsync(dir) is the same durability
+	// recipe Conversation.Replace uses for the JSONL log. Without
+	// fsync, a crash between rename and the OS flushing buffers can
+	// leave the renamed file empty or partially written even though
+	// the rename itself is atomic. For long-running memory we want
+	// the same crash-survival guarantee the conv log has — same
+	// session_id, same restart, same data.
+	f, err := os.OpenFile(tmp, os.O_CREATE|os.O_TRUNC|os.O_WRONLY, 0o644)
+	if err != nil {
 		return err
 	}
-	return os.Rename(tmp, path)
+	if _, err := f.Write([]byte(body)); err != nil {
+		f.Close()
+		os.Remove(tmp)
+		return err
+	}
+	if err := f.Sync(); err != nil {
+		f.Close()
+		os.Remove(tmp)
+		return err
+	}
+	if err := f.Close(); err != nil {
+		os.Remove(tmp)
+		return err
+	}
+	if err := os.Rename(tmp, path); err != nil {
+		os.Remove(tmp)
+		return err
+	}
+	// Best-effort parent fsync so the rename itself survives a
+	// crash. Some filesystems (notably certain Windows configs) don't
+	// support directory fsync; failure here only weakens durability,
+	// not correctness — the rename is still atomic at the FS layer.
+	if d, derr := os.Open(dir); derr == nil {
+		_ = d.Sync()
+		_ = d.Close()
+	}
+	return nil
 }
 
 // memoryStopwords is the same tight set session_search uses.
