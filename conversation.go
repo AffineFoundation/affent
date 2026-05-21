@@ -3,10 +3,12 @@ package affent
 import (
 	"bufio"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"log"
 	"os"
 	"path/filepath"
+	"strings"
 	"sync"
 )
 
@@ -27,12 +29,26 @@ type Conversation struct {
 // MEMORY.md into, so a home-rooted setup keeps every persistent affent
 // artifact under one path. CLI / training drivers that want full
 // control of the file path should use OpenConversationAt instead.
+//
+// sessionID must be a plain filename component: no path separators, no
+// "..", no NUL. Untrusted callers (HTTP-driven servers) that pass user-
+// controlled ids would otherwise let `../escape` land the log outside
+// the sessions/ dir. Validated via filepath.Base round-trip — the
+// cheap, OS-portable equivalent of "reject anything that isn't a
+// single name".
 func NewConversation(homeDir, sessionID string) (*Conversation, error) {
+	if sessionID == "" {
+		return nil, errors.New("session id is required")
+	}
+	leaf := sessionID + ".jsonl"
+	if filepath.Base(leaf) != leaf || strings.ContainsAny(sessionID, "/\\\x00") || sessionID == ".." || sessionID == "." {
+		return nil, fmt.Errorf("invalid session id %q (must be a plain filename, no path separators)", sessionID)
+	}
 	dir := filepath.Join(homeDir, ".affent", "sessions")
 	if err := os.MkdirAll(dir, 0o755); err != nil {
 		return nil, fmt.Errorf("mkdir conversations: %w", err)
 	}
-	return OpenConversationAt(filepath.Join(dir, sessionID+".jsonl"))
+	return OpenConversationAt(filepath.Join(dir, leaf))
 }
 
 // OpenConversationAt opens or creates the conversation log at the given

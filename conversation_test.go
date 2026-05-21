@@ -9,6 +9,39 @@ import (
 	"testing"
 )
 
+// TestNewConversation_RejectsPathInjectionInSessionID pins the
+// untrusted-id guard. affentserve passes the request body's
+// session_id (or X-Affent-Session-Id header) straight into
+// NewConversation; without validation, an attacker setting
+// session_id="../../etc/passwd" could place the conversation log
+// outside the workspace's sessions/ dir. MkdirTemp in affentserve's
+// allocWorkspace rejects ids with slashes, so the affentserve path
+// is already safe in that exact spot, but NewConversation is a
+// public library entry point — embedders other than affentserve
+// could still call it with user-controlled ids. Validate at the
+// library boundary, defense in depth.
+func TestNewConversation_RejectsPathInjectionInSessionID(t *testing.T) {
+	home := t.TempDir()
+	bad := []string{
+		"../escape",
+		"foo/bar",
+		"..",
+		".",
+		"id\x00bytes",
+		"",
+	}
+	for _, id := range bad {
+		c, err := NewConversation(home, id)
+		if err == nil {
+			t.Errorf("NewConversation(%q) accepted; should have rejected (conv=%v)", id, c)
+		}
+	}
+	// And a perfectly normal id round-trips fine.
+	if _, err := NewConversation(home, "session-001_abc"); err != nil {
+		t.Errorf("plain id rejected: %v", err)
+	}
+}
+
 // TestOpenConversationAt_CorruptedLineIsLogged covers the load path:
 // a malformed JSONL row is skipped (so a single bad line doesn't
 // brick session resumption) but emits a log line so the operator
