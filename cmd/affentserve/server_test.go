@@ -129,11 +129,31 @@ func TestHandleSessionRoutes_RejectsUnknownSub(t *testing.T) {
 }
 
 func TestHealth_ReturnsOK(t *testing.T) {
+	pool := newTestPool(t, 4, "5m")
 	r := httptest.NewRequest("GET", "/healthz", nil)
 	w := httptest.NewRecorder()
-	handleHealth(w, r)
+	handleHealth(pool)(w, r)
 	body := w.Body.String()
 	if !strings.Contains(body, `"status":"ok"`) {
 		t.Errorf("body = %q", body)
+	}
+}
+
+// TestHealth_ReturnsShuttingDown pins that /healthz starts returning
+// 503 the moment Shutdown begins. Without it, a graceful-rollout load
+// balancer keeps routing fresh traffic at a dying pod until the LB's
+// own probe-failure threshold kicks in — wasting up to that many
+// seconds of requests on a server that's about to disappear.
+func TestHealth_ReturnsShuttingDown(t *testing.T) {
+	pool := newTestPool(t, 4, "5m")
+	pool.Shutdown()
+	r := httptest.NewRequest("GET", "/healthz", nil)
+	w := httptest.NewRecorder()
+	handleHealth(pool)(w, r)
+	if got := w.Result().StatusCode; got != http.StatusServiceUnavailable {
+		t.Errorf("status = %d, want 503", got)
+	}
+	if body := w.Body.String(); !strings.Contains(body, `"status":"shutting_down"`) {
+		t.Errorf("body = %q, expected shutting_down", body)
 	}
 }

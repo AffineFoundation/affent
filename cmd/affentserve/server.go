@@ -21,7 +21,7 @@ import (
 func newRouter(cfg Config, pool *SessionPool, logger zerolog.Logger) http.Handler {
 	mux := http.NewServeMux()
 
-	mux.HandleFunc("/healthz", handleHealth)
+	mux.Handle("/healthz", http.HandlerFunc(handleHealth(pool)))
 
 	authed := func(h http.Handler) http.Handler {
 		return requireAuth(cfg.AuthToken, logRequests(logger, h))

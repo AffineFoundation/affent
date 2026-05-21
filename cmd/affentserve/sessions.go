@@ -741,6 +741,15 @@ func (p *SessionPool) sweepRetentionOnce() {
 // call multiple times. Marks the pool as shutting-down before
 // snapshotting sessions so any concurrent GetOrCreate fails fast with
 // ErrShuttingDown instead of creating sessions that nobody will close.
+// IsShuttingDown reports whether Shutdown has begun. Used by /healthz
+// so a fronting load balancer can drain new traffic the moment a
+// graceful shutdown starts, before in-flight sessions finish closing.
+func (p *SessionPool) IsShuttingDown() bool {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	return p.shuttingDown
+}
+
 func (p *SessionPool) Shutdown() {
 	p.shutdownOnce.Do(func() {
 		if p.browserCache != nil {
@@ -748,13 +757,11 @@ func (p *SessionPool) Shutdown() {
 				bc.StopSweeper()
 			}
 		}
-		close(p.gcStop)
-		<-p.gcDone
-		if p.retentionStop != nil {
-			close(p.retentionStop)
-			<-p.retentionDone
-		}
-
+		// Mark shutdown FIRST so /healthz can start returning 503 and
+		// any front-line load balancer can drain new traffic from this
+		// pod. Pre-fix the flag was set only after the gc goroutines
+		// joined — which can take seconds — and the LB kept routing
+		// requests at a dying server during that window.
 		p.mu.Lock()
 		p.shuttingDown = true
 		ids := make([]string, 0, len(p.sessions))
@@ -762,6 +769,13 @@ func (p *SessionPool) Shutdown() {
 			ids = append(ids, id)
 		}
 		p.mu.Unlock()
+
+		close(p.gcStop)
+		<-p.gcDone
+		if p.retentionStop != nil {
+			close(p.retentionStop)
+			<-p.retentionDone
+		}
 
 		var wg sync.WaitGroup
 		for _, id := range ids {
