@@ -1,3 +1,5 @@
+//go:build browser_smoke
+
 package browser
 
 import (

@@ -2,6 +2,7 @@ package affent
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"net/http"
 	"net/http/httptest"
@@ -177,5 +178,106 @@ func TestConsumeStream_ParallelToolCalls(t *testing.T) {
 	}
 	if got, want := finish.Final.ToolCalls[1].Function.Arguments, `{"y":2}`; got != want {
 		t.Errorf("call[1].args = %q, want %q", got, want)
+	}
+}
+
+// TestRequestBody_StripsReasoning pins the wire-format contract: the
+// request body sent upstream must not contain reasoning_content. Some
+// providers emit it on responses but reject it on inbound messages.
+func TestRequestBody_StripsReasoning(t *testing.T) {
+	msgs := []ChatMessage{
+		{Role: "user", Content: "hi"},
+		{
+			Role:             "assistant",
+			Content:          "the answer",
+			ReasoningContent: "I should think step by step about this...",
+		},
+	}
+	body, err := json.Marshal(chatRequest{
+		Model:    "test",
+		Messages: toWireMessages(msgs),
+		Stream:   true,
+	})
+	if err != nil {
+		t.Fatalf("marshal: %v", err)
+	}
+	got := string(body)
+	if strings.Contains(got, "reasoning_content") {
+		t.Errorf("request body must not contain reasoning_content; got %s", got)
+	}
+	if !strings.Contains(got, `"content":"the answer"`) {
+		t.Errorf("expected visible content to survive; got %s", got)
+	}
+}
+
+func TestSanitizeToolCallArgs_ReplacesMalformedWithEmptyObject(t *testing.T) {
+	mk := func(args string) ToolCall {
+		var tc ToolCall
+		tc.ID = "call_1"
+		tc.Type = "function"
+		tc.Function.Name = "f"
+		tc.Function.Arguments = args
+		return tc
+	}
+	cases := []struct {
+		name string
+		in   string
+		want string
+	}{
+		{"valid passes through", `{"k":"v"}`, `{"k":"v"}`},
+		{"empty becomes {}", "", "{}"},
+		{"truncated becomes {}", `{"k":"long-pa`, "{}"},
+		{"plain text becomes {}", "not json at all", "{}"},
+		{"valid array passes through", `[1,2,3]`, `[1,2,3]`},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			got := sanitizeToolCallArgs([]ToolCall{mk(c.in)})
+			if got[0].Function.Arguments != c.want {
+				t.Errorf("got %q want %q", got[0].Function.Arguments, c.want)
+			}
+		})
+	}
+}
+
+func TestSanitizeToolCallArgs_PartialCorruption(t *testing.T) {
+	mk := func(args string) ToolCall {
+		var tc ToolCall
+		tc.Type = "function"
+		tc.Function.Arguments = args
+		return tc
+	}
+	in := []ToolCall{
+		mk(`{"path":"/tmp/a.txt"}`),
+		mk(`{"path":"/tmp/b`),
+		mk(`{"path":"/tmp/c.txt"}`),
+	}
+	out := sanitizeToolCallArgs(in)
+	if out[0].Function.Arguments != `{"path":"/tmp/a.txt"}` {
+		t.Errorf("good[0] mutated: %q", out[0].Function.Arguments)
+	}
+	if out[1].Function.Arguments != `{}` {
+		t.Errorf("bad[1] not rewritten: %q", out[1].Function.Arguments)
+	}
+	if out[2].Function.Arguments != `{"path":"/tmp/c.txt"}` {
+		t.Errorf("good[2] mutated: %q", out[2].Function.Arguments)
+	}
+	if in[1].Function.Arguments != `{"path":"/tmp/b` {
+		t.Errorf("input slice was mutated; sanitizer must copy-on-write")
+	}
+}
+
+func TestConversationLog_KeepsReasoning(t *testing.T) {
+	msg := ChatMessage{
+		Role:             "assistant",
+		Content:          "the answer",
+		ReasoningContent: "step-by-step thinking",
+	}
+	body, err := json.Marshal(msg)
+	if err != nil {
+		t.Fatalf("marshal: %v", err)
+	}
+	if !strings.Contains(string(body), `"reasoning_content":"step-by-step thinking"`) {
+		t.Errorf("conversation log dropped reasoning_content: %s", body)
 	}
 }

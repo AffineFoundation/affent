@@ -36,6 +36,14 @@ type Config struct {
 	// gets its own ephemeral workspace (for affent's Conversation JSONL).
 	WorkspaceRoot string `json:"workspace_root"`
 
+	// MemoryRoot is the parent directory for DURABLE per-session memory.
+	// Memory lives separately from the session workspace so it survives
+	// LRU eviction and server restarts: same session_id → same memory
+	// dir, regardless of how many times the workspace was recreated.
+	// Empty defaults to "<WorkspaceRoot>/memory" (or an OS temp dir
+	// when WorkspaceRoot itself is empty).
+	MemoryRoot string `json:"memory_root"`
+
 	// MaxSessions caps the in-memory session pool size. Sessions
 	// past the cap are LRU-evicted. Default 32.
 	MaxSessions int `json:"max_sessions"`
@@ -152,6 +160,9 @@ func (c *Config) Resolve() error {
 	}
 	if c.WorkspaceRoot == "" {
 		c.WorkspaceRoot = os.Getenv("AFFENTSERVE_WORKSPACE_ROOT")
+	}
+	if c.MemoryRoot == "" {
+		c.MemoryRoot = os.Getenv("AFFENTSERVE_MEMORY_ROOT")
 	}
 	if c.SessionIdleTTL == "" {
 		c.SessionIdleTTL = defaultSessionIdleTTL.String()

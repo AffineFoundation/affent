@@ -203,9 +203,23 @@ func (p *SessionPool) buildSession(id string) (*Session, error) {
 	// Memory store — used both as a tool dependency and as the
 	// snapshot source for Loop.EnsureSystemPrompt. Created once so
 	// builtins + standalone registration share the same on-disk state.
+	//
+	// Memory lives at a STABLE per-session path (not under the
+	// ephemeral workspace dir) so it survives LRU eviction and
+	// server restarts. The session workspace gets a random suffix
+	// every time it's allocated — using it for memory means "same
+	// client, same session_id" sees an empty memory after any
+	// restart, which defeats the long-running purpose.
 	var memStore affent.MemoryStore
 	if p.cfg.EnableMemory {
-		memStore = affent.NewFileMemoryStore(workspace)
+		memDir, err := p.allocMemoryDir(id)
+		if err != nil {
+			_ = os.RemoveAll(workspace)
+			return nil, fmt.Errorf("alloc memory dir: %w", err)
+		}
+		fms := affent.NewFileMemoryStore(workspace)
+		fms.MemoryDir = memDir
+		memStore = fms
 	}
 	if p.cfg.EnableBuiltins {
 		affent.RegisterBuiltins(reg, affent.BuiltinDeps{
@@ -308,6 +322,27 @@ func (p *SessionPool) allocWorkspace(id string) (string, error) {
 		return "", err
 	}
 	return os.MkdirTemp(root, id+"-")
+}
+
+// allocMemoryDir returns the durable memory path for id. Unlike
+// allocWorkspace, this is STABLE: same id → same path across server
+// restarts and LRU evictions, so persistent memory actually persists.
+// session_id has already been path-validated (NewConversation rejects
+// "/" / "\\" / ".." / etc earlier in the request handler).
+func (p *SessionPool) allocMemoryDir(id string) (string, error) {
+	root := p.cfg.MemoryRoot
+	if root == "" {
+		if p.cfg.WorkspaceRoot != "" {
+			root = filepath.Join(p.cfg.WorkspaceRoot, "memory")
+		} else {
+			root = filepath.Join(os.TempDir(), "affentserve-memory")
+		}
+	}
+	dir := filepath.Join(root, id)
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		return "", err
+	}
+	return dir, nil
 }
 
 // touch updates lastUsed under the pool lock.

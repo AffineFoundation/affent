@@ -1,17 +1,13 @@
 # Affent
 
-Affent is an OpenAI-compatible agent runtime for running tool-using agents from
-the command line, through an HTTP server, or as part of a larger deployment.
+Affent is an OpenAI-compatible agent runtime with a CLI, an HTTP server, and a
+Go API. It is built for practical tool-using agent sessions: running commands,
+editing workspace files, searching prior sessions, preserving durable memory,
+and streaming structured events to clients.
 
-It has grown beyond a minimal agent loop. Affent now owns the practical runtime
-concerns needed by a standalone agent: streamed chat completions, tool
-dispatch, event streaming, conversation persistence, retry and cancellation
-handling, context compaction, project context, persistent memory, MCP
-integration, optional browser and web tools, a CLI, and an OpenAI-compatible
-server.
-
-The project direction is a mature, self-contained agent runtime: usable on its
-own, while still exposing a Go API for integrations that need direct control.
+Affent owns the runtime concerns around model streaming, tool dispatch,
+conversation persistence, cancellation, retries, context compaction, project
+context, memory, MCP integration, and optional web/browser tools.
 
 ## Features
 
