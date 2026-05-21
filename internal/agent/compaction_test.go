@@ -3,9 +3,187 @@ package agent
 import (
 	"context"
 	"errors"
+	"net/http"
+	"net/http/httptest"
 	"strings"
 	"testing"
 )
+
+// TestFormatEvent_Roles pins the per-role rendering the summarizer
+// sees. Each <EVENT> block in the summarizer prompt comes from
+// formatEvent; if the format silently changes (e.g. tool_calls
+// dropped from assistant messages) the summary quality degrades
+// without anything obvious going red.
+func TestFormatEvent_Roles(t *testing.T) {
+	cases := []struct {
+		name string
+		msg  ChatMessage
+		want []string // substrings that must appear
+	}{
+		{
+			name: "plain user",
+			msg:  ChatMessage{Role: "user", Content: "what's the weather"},
+			want: []string{"USER:", "what's the weather"},
+		},
+		{
+			name: "assistant content + tool_calls",
+			msg: ChatMessage{
+				Role:    "assistant",
+				Content: "let me look that up",
+				ToolCalls: []ToolCall{{Function: struct {
+					Name      string `json:"name"`
+					Arguments string `json:"arguments"`
+				}{Name: "weather", Arguments: `{"city":"sf"}`}}},
+			},
+			want: []string{"ASSISTANT", "let me look that up", "tool weather", `{"city":"sf"}`},
+		},
+		{
+			name: "assistant reasoning surfaces as [thinking: ...]",
+			msg: ChatMessage{
+				Role:             "assistant",
+				ReasoningContent: "I should call the weather API",
+				Content:          "checking",
+			},
+			want: []string{"ASSISTANT", "[thinking:", "weather API", "checking"},
+		},
+		{
+			name: "tool result names its tool",
+			msg:  ChatMessage{Role: "tool", Name: "weather", Content: "59F"},
+			want: []string{"TOOL_RESULT[weather]", "59F"},
+		},
+		{
+			name: "unknown role falls through",
+			msg:  ChatMessage{Role: "system", Content: "be helpful"},
+			want: []string{"system:", "be helpful"},
+		},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			got := formatEvent(c.msg)
+			for _, s := range c.want {
+				if !strings.Contains(got, s) {
+					t.Errorf("missing %q in %q", s, got)
+				}
+			}
+		})
+	}
+}
+
+// TestTruncateChars pins the byte-cap + UTF-8-safe truncation +
+// "...(truncated)" marker. Called both from formatEvent and from
+// the summarizer prompt body — a regression would silently truncate
+// mid-rune and leak invalid UTF-8 into the summarizer LLM call.
+func TestTruncateChars(t *testing.T) {
+	t.Run("under limit unchanged", func(t *testing.T) {
+		if got := truncateChars("hello", 100); got != "hello" {
+			t.Errorf("got %q, want hello", got)
+		}
+	})
+	t.Run("over limit gets marker", func(t *testing.T) {
+		got := truncateChars(strings.Repeat("a", 100), 30)
+		if !strings.HasSuffix(got, "...(truncated)") {
+			t.Errorf("missing truncation marker: %q", got)
+		}
+	})
+	t.Run("multibyte boundary doesn't split rune", func(t *testing.T) {
+		// "你" is 3 bytes. Cap at 2 should align back to 0.
+		got := truncateChars("你好", 2)
+		if !strings.HasSuffix(got, "...(truncated)") {
+			t.Errorf("missing marker: %q", got)
+		}
+		head := strings.TrimSuffix(got, "...(truncated)")
+		for _, r := range head {
+			if r == 0xFFFD {
+				t.Errorf("produced invalid UTF-8: %q", got)
+			}
+		}
+	})
+}
+
+// TestLLMSummaryCompactor_Compact_Real drives the REAL Compact()
+// method (not the stub at the top of this file) through a fake LLM.
+// The stub-based tests cover the slicing logic; this one pins that
+// the live method actually invokes the LLM and threads its response
+// into the synthetic summary message at the right slot.
+func TestLLMSummaryCompactor_Compact_Real(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "text/event-stream")
+		w.WriteHeader(200)
+		fl := w.(http.Flusher)
+		lines := []string{
+			`data: {"choices":[{"delta":{"role":"assistant","content":"FAKE SUMMARY"},"finish_reason":"stop"}]}`,
+			`data: [DONE]`,
+		}
+		for _, l := range lines {
+			w.Write([]byte(l + "\n\n"))
+			fl.Flush()
+		}
+	}))
+	t.Cleanup(srv.Close)
+	llm := NewLLMClient(srv.URL, "", "fake")
+
+	mk := func(role, content string) ChatMessage {
+		return ChatMessage{Role: role, Content: content}
+	}
+
+	t.Run("nil LLM rejected", func(t *testing.T) {
+		c := &LLMSummaryCompactor{TriggerMsgs: 0}
+		_, err := c.Compact(context.Background(), []ChatMessage{mk("user", "x")})
+		if err == nil {
+			t.Error("nil LLM must error")
+		}
+	})
+
+	t.Run("below trigger is no-op", func(t *testing.T) {
+		c := &LLMSummaryCompactor{LLM: llm, TriggerMsgs: 100, KeepFirst: 2, KeepLast: 5}
+		msgs := []ChatMessage{
+			mk("system", "be helpful"),
+			mk("user", "q"),
+			mk("assistant", "a"),
+		}
+		got, _ := c.Compact(context.Background(), msgs)
+		if len(got) != len(msgs) {
+			t.Errorf("below-trigger compact must not change len; got %d want %d", len(got), len(msgs))
+		}
+	})
+
+	t.Run("above trigger folds middle into one summary msg", func(t *testing.T) {
+		c := &LLMSummaryCompactor{LLM: llm, TriggerMsgs: 0, KeepFirst: 2, KeepLast: 3}
+		// 1 system + 2 head + 6 middle + 3 tail = 12.
+		msgs := []ChatMessage{
+			mk("system", "be helpful"),
+			mk("user", "head1"),
+			mk("assistant", "head2"),
+			mk("user", "mid1"),
+			mk("assistant", "mid2"),
+			mk("user", "mid3"),
+			mk("assistant", "mid4"),
+			mk("user", "mid5"),
+			mk("assistant", "mid6"),
+			mk("user", "tail1"),
+			mk("assistant", "tail2"),
+			mk("user", "tail3"),
+		}
+		got, err := c.Compact(context.Background(), msgs)
+		if err != nil {
+			t.Fatal(err)
+		}
+		// Expect 1 system + 2 head + 1 summary + 3 tail = 7.
+		if len(got) != 7 {
+			t.Fatalf("expected 7 msgs after compaction, got %d: %+v", len(got), got)
+		}
+		if got[3].Role != "user" || !strings.HasPrefix(got[3].Content, summaryPrefix) {
+			t.Errorf("position 3 must be synthetic summary; got role=%q content=%q",
+				got[3].Role, got[3].Content)
+		}
+		if !strings.Contains(got[3].Content, "FAKE SUMMARY") {
+			t.Errorf("LLM response must be embedded in summary content; got %q", got[3].Content)
+		}
+		if got[1].Content != "head1" || got[6].Content != "tail3" {
+			t.Errorf("head/tail bookends wrong: head=%q tail=%q", got[1].Content, got[6].Content)
+		}
+	})
+}
 
 func TestBackUpToSafeBoundary(t *testing.T) {
 	// Sequence: assistant(tool_calls) → tool → tool → assistant → user
