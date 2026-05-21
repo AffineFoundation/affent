@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
 	"strings"
@@ -98,10 +99,11 @@ func shellTool(deps BuiltinDeps) *Tool {
 				WorkingDir: p.Cwd,
 				Timeout:    time.Duration(p.TimeoutSec) * time.Second,
 			})
-			if err != nil {
-				return "", err
-			}
-			return formatShellOutput(res), nil
+			// Pass the captured streams through even on error so the
+			// model can see partial output from a timed-out / killed
+			// command. The Loop's dispatch wraps a non-nil err alongside
+			// res into "Error: <err>\n<res>" — exactly what we want.
+			return formatShellOutput(res), err
 		},
 	}
 }
@@ -205,12 +207,24 @@ func readFileTool(deps BuiltinDeps) *Tool {
 				return "", err
 			}
 			defer f.Close()
-			buf := make([]byte, p.MaxBytes+1)
-			n, _ := f.Read(buf)
-			if n > p.MaxBytes {
-				return string(buf[:p.MaxBytes]) + fmt.Sprintf("\n... [truncated; %d-byte cap]", p.MaxBytes), nil
+			// Read MaxBytes+1 so we can detect when the file exceeds
+			// the cap without loading any more than necessary. A bare
+			// f.Read(buf) returns whatever the OS has buffered, often
+			// just one page — which silently truncated large files
+			// without emitting the cap marker the agent relies on to
+			// know more content exists.
+			buf, err := io.ReadAll(io.LimitReader(f, int64(p.MaxBytes)+1))
+			if err != nil {
+				return "", err
 			}
-			return string(buf[:n]), nil
+			if len(buf) > p.MaxBytes {
+				// Snap back to a UTF-8 rune boundary so a CJK / accented
+				// content read that lands mid-rune doesn't ship invalid
+				// bytes to the model.
+				cut := utf8AlignBackward(string(buf), p.MaxBytes)
+				return string(buf[:cut]) + fmt.Sprintf("\n... [truncated; %d-byte cap]", p.MaxBytes), nil
+			}
+			return string(buf), nil
 		},
 	}
 }

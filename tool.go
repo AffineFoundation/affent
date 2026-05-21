@@ -47,6 +47,27 @@ func (r *Registry) Add(t *Tool) {
 	r.tools[t.Name] = t
 }
 
+// Remove unregisters the tool named name. Returns true if the tool
+// was present. Useful when an extension that adds several tools (e.g.
+// an MCP server) needs to roll back after a partial-success failure;
+// without this, dangling entries point at backends the caller has
+// already torn down.
+func (r *Registry) Remove(name string) bool {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	if _, ok := r.tools[name]; !ok {
+		return false
+	}
+	delete(r.tools, name)
+	for i, n := range r.order {
+		if n == name {
+			r.order = append(r.order[:i], r.order[i+1:]...)
+			break
+		}
+	}
+	return true
+}
+
 func (r *Registry) Get(name string) (*Tool, bool) {
 	r.mu.RLock()
 	defer r.mu.RUnlock()
