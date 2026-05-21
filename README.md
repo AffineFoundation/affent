@@ -255,9 +255,10 @@ keys (`AFFENTCTL_BASE_URL` / `AFFENTCTL_API_KEY` / `AFFENTCTL_MODEL`,
 | `--project-context`     | true (auto-loads AGENTS.md / CLAUDE.md / etc.)   |                        |
 | `--memory`              | false (opt in)                                   |                        |
 | `--memory-only`         | false (implies `--memory`, forces `--project-context=false`, rejects `--mcp-config`) | |
-| `--memory-workspace-store` | `<workspace>/.affent/MEMORY.md`               |                        |
+| `--memory-dir`          | `<workspace>/.affent/memory/` (core.md + topics/) |                       |
+| `--memory-workspace-store` | (legacy) pre-v2 single-file MEMORY.md — triggers migration |        |
 | `--memory-user-store`   | `$XDG_CONFIG_HOME/affent/USER.md`                |                        |
-| `--memory-max-chars`    | `2200,1375` (MEM,USER)                           |                        |
+| `--memory-max-chars`    | `2200,1375` (CORE,USER); topic cap = `DefaultTopicCharLimit` |             |
 | `--session-id`          | new session                                      |                        |
 | `--continue`            | resume newest session under `--workspace`        |                        |
 | `--mcp-config`          |                                                  | `AFFENTCTL_MCP_CONFIG` |

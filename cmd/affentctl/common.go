@@ -65,9 +65,10 @@ type commonFlags struct {
 	// memoryOnly registers only the `memory` tool (no shell, files,
 	// MCP) and disables project-context injection. Implies memoryEnabled.
 	memoryOnly           bool
-	memoryWorkspaceStore string // path for MEMORY.md ("" → <workspace>/.affent/MEMORY.md)
+	memoryWorkspaceStore string // (legacy) path to a pre-v2 MEMORY.md file used only for migration detection
+	memoryDir            string // path for the v2 memory dir ("" → <workspace>/.affent/memory)
 	memoryUserStore      string // path for USER.md  ("" → $XDG_CONFIG_HOME/affent/USER.md)
-	memoryMaxChars       string // "MEM,USER", e.g. "2200,1375"; "" → defaults
+	memoryMaxChars       string // "CORE,USER" or legacy "MEM,USER"; "" → defaults
 
 	// projectContext loads recognized user-authored project notes
 	// (AGENTS.md, CONVENTIONS.md, .cursorrules, .clinerules, CLAUDE.md,
@@ -105,9 +106,10 @@ func (c *commonFlags) bind(fs *flag.FlagSet) {
 	fs.BoolVar(&c.quiet, "quiet", false, "suppress stderr progress")
 	fs.BoolVar(&c.memoryEnabled, "memory", false, "enable persistent memory: inject MEMORY.md / USER.md snapshot into the system prompt and register the memory tool")
 	fs.BoolVar(&c.memoryOnly, "memory-only", false, "register only the memory tool (no shell/file/MCP) and disable project context; for memory benchmarks. Implies --memory")
-	fs.StringVar(&c.memoryWorkspaceStore, "memory-workspace-store", "", "path to MEMORY.md; default <workspace>/.affent/MEMORY.md")
+	fs.StringVar(&c.memoryWorkspaceStore, "memory-workspace-store", "", "(legacy) path to a pre-v2 single-file MEMORY.md; if set, migration moves it into the v2 topic layout on first access. Prefer --memory-dir for new setups.")
+	fs.StringVar(&c.memoryDir, "memory-dir", "", "path to the v2 memory dir (core.md + topics/*.md); default <workspace>/.affent/memory")
 	fs.StringVar(&c.memoryUserStore, "memory-user-store", "", "path to USER.md; default $XDG_CONFIG_HOME/affent/USER.md (cross-workspace)")
-	fs.StringVar(&c.memoryMaxChars, "memory-max-chars", "", "memory char limits as MEM,USER (default 2200,1375)")
+	fs.StringVar(&c.memoryMaxChars, "memory-max-chars", "", "char limits as CORE,USER (default 2200,1375). Per-topic cap is fixed at affent.DefaultTopicCharLimit; configure FileMemoryStore directly for finer control.")
 	fs.BoolVar(&c.projectContext, "project-context", true, "auto-load AGENTS.md / CONVENTIONS.md / .cursorrules / .clinerules / CLAUDE.md / GEMINI.md from --workspace into the system prompt")
 	fs.StringVar(&c.sessionID, "session-id", "", "resume the named session (under --workspace/.affentctl/)")
 	fs.BoolVar(&c.continueLast, "continue", false, "resume the most recent session under --workspace")
@@ -156,7 +158,8 @@ type fileConfig struct {
 	Memory          *struct {
 		Enabled        *bool   `json:"enabled"`
 		Only           *bool   `json:"only"`
-		WorkspaceStore *string `json:"workspace_store"`
+		WorkspaceStore *string `json:"workspace_store"` // legacy single-file pointer; triggers migration
+		Dir            *string `json:"dir"`             // v2 memory directory
 		UserStore      *string `json:"user_store"`
 		MaxChars       *string `json:"max_chars"`
 	} `json:"memory"`
@@ -261,6 +264,7 @@ func loadConfigFile(c *commonFlags, fs *flag.FlagSet) error {
 		setBool("memory", &c.memoryEnabled, cfg.Memory.Enabled)
 		setBool("memory-only", &c.memoryOnly, cfg.Memory.Only)
 		setString("memory-workspace-store", &c.memoryWorkspaceStore, cfg.Memory.WorkspaceStore)
+		setString("memory-dir", &c.memoryDir, cfg.Memory.Dir)
 		setString("memory-user-store", &c.memoryUserStore, cfg.Memory.UserStore)
 		setString("memory-max-chars", &c.memoryMaxChars, cfg.Memory.MaxChars)
 	}
@@ -385,7 +389,12 @@ func setupLoop(c commonFlags) (*loopBundle, int) {
 	var memStore affent.MemoryStore
 	if c.memoryEnabled {
 		fs := affent.NewFileMemoryStore(workspace)
+		if c.memoryDir != "" {
+			fs.MemoryDir = resolveStorePath(workspace, c.memoryDir)
+		}
 		if c.memoryWorkspaceStore != "" {
+			// Legacy single-file pointer — migration code picks it up on
+			// first access and moves it into the v2 layout.
 			fs.MemoryPath = resolveStorePath(workspace, c.memoryWorkspaceStore)
 		}
 		if c.memoryUserStore != "" {
@@ -396,7 +405,10 @@ func setupLoop(c commonFlags) (*loopBundle, int) {
 			_ = traceClose()
 			return nil, 64
 		} else if ok {
-			fs.MemoryCharLimit = memCap
+			// memCap maps to core (always-in-prompt). Topic cap stays at
+			// DefaultTopicCharLimit unless the caller sets TopicCharLimit
+			// on the store directly.
+			fs.CoreCharLimit = memCap
 			fs.UserCharLimit = userCap
 		}
 		memStore = fs
