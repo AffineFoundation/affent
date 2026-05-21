@@ -3,7 +3,25 @@ package main
 import (
 	"net/http/httptest"
 	"testing"
+
+	"github.com/affinefoundation/affent/sse"
 )
+
+func TestOpenAIFinishReason(t *testing.T) {
+	cases := map[string]string{
+		sse.TurnEndMaxTurns:  "length",
+		sse.TurnEndCompleted: "stop",
+		sse.TurnEndCancelled: "stop",
+		sse.TurnEndError:     "stop",
+		"":                   "stop",
+		"unknown":            "stop",
+	}
+	for in, want := range cases {
+		if got := openAIFinishReason(in); got != want {
+			t.Errorf("openAIFinishReason(%q) = %q, want %q", in, got, want)
+		}
+	}
+}
 
 func TestWriteChatCompletionResponse_SetsSessionIDHeader(t *testing.T) {
 	w := httptest.NewRecorder()
