@@ -314,7 +314,14 @@ func setupLoop(c commonFlags) (*loopBundle, int) {
 
 	// Default system prompt; resumed conversations already have one in
 	// the log so EnsureSystemPrompt below is a no-op for them.
+	// --memory-only swaps to a memory-only-tailored prompt because the
+	// generic dev-box default tells the model about shell/file/schedule_*
+	// tools that aren't registered in this mode (leads to wasted "tool
+	// not available" tool calls + misleading the user about capabilities).
 	systemPrompt := affent.DefaultSystemPrompt
+	if c.memoryOnly {
+		systemPrompt = affent.MemoryOnlySystemPrompt
+	}
 	if c.systemPromptPath != "" {
 		raw, err := readMaybeStdin(c.systemPromptPath)
 		if err != nil {
@@ -322,12 +329,14 @@ func setupLoop(c commonFlags) (*loopBundle, int) {
 			return nil, 3
 		}
 		systemPrompt = raw
-	} else if workspace != "/workspace" {
+	} else if !c.memoryOnly && workspace != "/workspace" {
 		// DefaultSystemPrompt is framed for the affine-agents dev-box
 		// where /workspace is bind-mounted. Standalone affentctl points
 		// at an arbitrary --workspace, so the model would otherwise burn
 		// 1-2 tool calls calling /workspace paths before discovering the
 		// real path from the rejection message. Anchor it explicitly.
+		// Skipped under --memory-only — that mode has no file tools at
+		// all and the workspace anchor would be a non sequitur.
 		systemPrompt += "\n\nYour workspace directory is \"" + workspace +
 			"\". Use this exact path (or a relative path inside it) with the file tools."
 	}
