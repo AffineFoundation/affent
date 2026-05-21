@@ -11,6 +11,7 @@ import (
 	"sync/atomic"
 	"time"
 
+	"github.com/affinefoundation/affent/internal/textutil"
 	"github.com/affinefoundation/affent/sse"
 	"github.com/google/uuid"
 	"github.com/rs/zerolog"
@@ -487,7 +488,7 @@ func previewN(s string, n int) string {
 	if len(s) <= n {
 		return s
 	}
-	return s[:utf8AlignBackward(s, n)] + "..."
+	return s[:textutil.AlignBackward(s, n)] + "..."
 }
 
 // truncateForContext is what the model sees for an oversized tool result.
@@ -498,7 +499,7 @@ func truncateForContext(s string, max int) string {
 	if len(s) <= max {
 		return s
 	}
-	cut := utf8AlignBackward(s, max)
+	cut := textutil.AlignBackward(s, max)
 	return s[:cut] + fmt.Sprintf(
 		"\n\n[... %d more bytes truncated. Re-run the command piping through head/tail/grep/sed, or save to a file under /workspace and read it in chunks, if you need more.]",
 		len(s)-cut,

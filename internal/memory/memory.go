@@ -11,6 +11,8 @@ import (
 	"sync"
 	"time"
 	"unicode"
+
+	"github.com/affinefoundation/affent/internal/textutil"
 )
 
 // nowUTC is a package-level seam so tests can pin time. Defaults to
@@ -990,7 +992,7 @@ func findUnique(entries []string, oldText string) (int, []string) {
 	for _, i := range hits {
 		e := entryContent(entries[i])
 		if len(e) > 80 {
-			e = e[:utf8AlignBackward(e, 80)] + "..."
+			e = e[:textutil.AlignBackward(e, 80)] + "..."
 		}
 		previews = append(previews, e)
 	}

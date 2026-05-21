@@ -5,7 +5,8 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
-	"unicode/utf8"
+
+	"github.com/affinefoundation/affent/internal/textutil"
 )
 
 // Files lists user-authored project knowledge files recognized in a
@@ -84,21 +85,8 @@ func loadSections(workspaceDir string, budget int) ([]string, int) {
 func truncateFile(content string, limit int) string {
 	const marker = "\n... [truncated]"
 	if limit <= len(marker) {
-		return content[:utf8AlignBackward(content, limit)]
+		return content[:textutil.AlignBackward(content, limit)]
 	}
-	cut := utf8AlignBackward(content, limit-len(marker))
+	cut := textutil.AlignBackward(content, limit-len(marker))
 	return content[:cut] + marker
-}
-
-func utf8AlignBackward(s string, n int) int {
-	if n <= 0 {
-		return 0
-	}
-	if n >= len(s) {
-		return len(s)
-	}
-	for n > 0 && !utf8.RuneStart(s[n]) {
-		n--
-	}
-	return n
 }

@@ -5,6 +5,8 @@ import (
 	"errors"
 	"fmt"
 	"strings"
+
+	"github.com/affinefoundation/affent/internal/textutil"
 )
 
 // Compactor shrinks an oversized conversation history before the next LLM
@@ -313,7 +315,7 @@ func truncateChars(s string, n int) string {
 	if len(s) <= n {
 		return s
 	}
-	return s[:utf8AlignBackward(s, n)] + "...(truncated)"
+	return s[:textutil.AlignBackward(s, n)] + "...(truncated)"
 }
 
 // IsContextOverflow reports whether err looks like an upstream "input

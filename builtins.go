@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"github.com/affinefoundation/affent/executor"
+	"github.com/affinefoundation/affent/internal/textutil"
 )
 
 // looksBinary returns true when buf has a NUL byte in the first 8 KiB.
@@ -326,7 +327,7 @@ func readFileTool(deps BuiltinDeps) *Tool {
 				// Snap back to a UTF-8 rune boundary so a CJK / accented
 				// content read that lands mid-rune doesn't ship invalid
 				// bytes to the model.
-				cut := utf8AlignBackward(string(buf), p.MaxBytes)
+				cut := textutil.AlignBackward(string(buf), p.MaxBytes)
 				return string(buf[:cut]) + fmt.Sprintf("\n... [truncated; %d-byte cap]", p.MaxBytes), nil
 			}
 			return string(buf), nil

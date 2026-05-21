@@ -11,7 +11,8 @@ import (
 	"strings"
 	"time"
 	"unicode"
-	"unicode/utf8"
+
+	"github.com/affinefoundation/affent/internal/textutil"
 )
 
 // Hit is one matched message from a past session.
@@ -215,8 +216,8 @@ func SnippetAround(content string, terms []string) string {
 	if end > len(content) {
 		end = len(content)
 	}
-	start = utf8AlignForward(content, start)
-	end = utf8AlignBackward(content, end)
+	start = textutil.AlignForward(content, start)
+	end = textutil.AlignBackward(content, end)
 	if start >= end {
 		return ""
 	}
@@ -235,32 +236,6 @@ func TruncateSnippet(s string, n int) string {
 	if len(s) <= n {
 		return s
 	}
-	cut := utf8AlignBackward(s, n)
+	cut := textutil.AlignBackward(s, n)
 	return s[:cut] + "..."
-}
-
-func utf8AlignBackward(s string, n int) int {
-	if n <= 0 {
-		return 0
-	}
-	if n >= len(s) {
-		return len(s)
-	}
-	for n > 0 && !utf8.RuneStart(s[n]) {
-		n--
-	}
-	return n
-}
-
-func utf8AlignForward(s string, n int) int {
-	if n <= 0 {
-		return 0
-	}
-	if n >= len(s) {
-		return len(s)
-	}
-	for n < len(s) && !utf8.RuneStart(s[n]) {
-		n++
-	}
-	return n
 }
