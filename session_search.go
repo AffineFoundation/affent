@@ -212,16 +212,21 @@ func scoreFile(path, sid string, terms []string, maxPerSession int, mtime string
 
 // tokenize lowercases and splits on non-letter / non-digit runes,
 // across all scripts (CJK, Cyrillic, Arabic, etc., not only ASCII).
-// Tokens shorter than 2 bytes are dropped to filter noise.
+// Tokens shorter than 2 bytes are dropped to filter noise, and
+// common English stopwords are filtered so short queries don't
+// match every past message that happens to contain "the" / "is" /
+// "no". Pre-filter, a query like "zzzz-no-such-thing" tokenized to
+// [zzzz, no, such, thing] and the substring count of "no" inside
+// know / ignore / diagnose returned 3 spurious low-score hits.
 func tokenize(s string) []string {
 	s = strings.ToLower(s)
-	var out []string
+	var raw []string
 	var cur strings.Builder
 	flush := func() {
 		t := cur.String()
 		cur.Reset()
 		if len(t) >= 2 {
-			out = append(out, t)
+			raw = append(raw, t)
 		}
 	}
 	for _, r := range s {
@@ -232,7 +237,30 @@ func tokenize(s string) []string {
 		}
 	}
 	flush()
+	out := raw[:0]
+	for _, t := range raw {
+		if !stopwords[t] {
+			out = append(out, t)
+		}
+	}
 	return out
+}
+
+// stopwords is a small list of the most common English filler words.
+// Kept tight on purpose — we want to drop "the" / "and" / "is" noise
+// without scrubbing useful content words. Mainstream IR libraries
+// ship hundreds of stopwords; for an LLM-driven query rephrased into
+// keywords by the model, this tighter set keeps precision high
+// without erasing intent.
+var stopwords = map[string]bool{
+	"a": true, "an": true, "and": true, "are": true, "as": true,
+	"at": true, "be": true, "but": true, "by": true, "for": true,
+	"from": true, "has": true, "have": true, "in": true, "is": true,
+	"it": true, "its": true, "no": true, "not": true, "of": true,
+	"on": true, "or": true, "that": true, "the": true, "this": true,
+	"to": true, "was": true, "we": true, "were": true, "what": true,
+	"when": true, "where": true, "which": true, "who": true, "will": true,
+	"with": true, "you": true, "your": true,
 }
 
 // scoreContent counts unique-term overlap with a small boost for

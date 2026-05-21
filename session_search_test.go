@@ -211,6 +211,10 @@ func TestTokenize(t *testing.T) {
 		{"привет мир", []string{"привет", "мир"}},                  // Cyrillic
 		{"γεια κόσμος", []string{"γεια", "κόσμος"}},                // Greek
 		{"café naïve résumé", []string{"café", "naïve", "résumé"}}, // Latin w/ diacritics
+		// Stopword filter: common English filler words drop, content
+		// words survive. Tested separately in TestTokenize_DropsStopwords
+		// to catch the inverse (stopword-only queries → empty).
+		{"What is the secret code", []string{"secret", "code"}},
 	}
 	for _, c := range cases {
 		got := tokenize(c.in)
@@ -220,6 +224,34 @@ func TestTokenize(t *testing.T) {
 		for i, g := range got {
 			if g != c.want[i] {
 				t.Fatalf("tokenize(%q)[%d] = %q, want %q", c.in, i, g, c.want[i])
+			}
+		}
+	}
+}
+
+// TestTokenize_DropsStopwords pins the precision fix: a stopword-only
+// query produces no terms, so session_search returns nothing instead
+// of substring-matching "no" inside "know" across every past message.
+// Surfaced in real-LLM testing where `zzzz-no-such-thing-9999` got
+// three spurious low-score hits because "no" / "such" / "thing"
+// were treated as content terms.
+func TestTokenize_DropsStopwords(t *testing.T) {
+	cases := map[string][]string{
+		"what is the":            nil, // pure-stopword query → no terms
+		"the and of":             nil,
+		"no such thing":          {"such", "thing"}, // "no" drops, content stays
+		"deploy the new release": {"deploy", "new", "release"},
+		"the deploy itself":      {"deploy", "itself"},
+	}
+	for in, want := range cases {
+		got := tokenize(in)
+		if len(got) != len(want) {
+			t.Errorf("tokenize(%q) = %v, want %v", in, got, want)
+			continue
+		}
+		for i, g := range got {
+			if g != want[i] {
+				t.Errorf("tokenize(%q)[%d] = %q, want %q", in, i, g, want[i])
 			}
 		}
 	}
