@@ -188,11 +188,30 @@ func (p *SessionPool) GetOrCreate(id string) (*Session, error) {
 // buildSession constructs all per-session affent state. Errors here
 // propagate to the chat-completions caller and abort the request.
 func (p *SessionPool) buildSession(id string) (*Session, error) {
+	// Validate the id BEFORE any filesystem operations — defense in
+	// depth, even though the chat-completions handler already accepts
+	// only client-supplied ids that go through ValidateSessionID.
+	// Anything that joins this id into a path (workspace alloc,
+	// session-dir alloc) must be unreachable for traversal attempts.
+	if err := agent.ValidateSessionID(id); err != nil {
+		return nil, err
+	}
 	workspace, err := p.allocWorkspace(id)
 	if err != nil {
 		return nil, fmt.Errorf("alloc workspace: %w", err)
 	}
-	conv, err := agent.NewConversation(workspace, id)
+	// Stable per-session-id dir for durable state. Holds the
+	// conversation log (so the chat handler's "we treat the rest of
+	// history as already captured in the agent's Conversation log" is
+	// actually true across restarts) and the memory store's files
+	// (when EnableMemory is on). Both live here so one session_id
+	// resolves to one durable identity on disk.
+	sessionDir, err := p.allocSessionDir(id)
+	if err != nil {
+		_ = os.RemoveAll(workspace)
+		return nil, fmt.Errorf("alloc session dir: %w", err)
+	}
+	conv, err := agent.OpenConversationAt(filepath.Join(sessionDir, "conversation.jsonl"))
 	if err != nil {
 		_ = os.RemoveAll(workspace)
 		return nil, fmt.Errorf("conversation: %w", err)
@@ -212,13 +231,8 @@ func (p *SessionPool) buildSession(id string) (*Session, error) {
 	// restart, which defeats the long-running purpose.
 	var memStore agent.MemoryStore
 	if p.cfg.EnableMemory {
-		memDir, err := p.allocMemoryDir(id)
-		if err != nil {
-			_ = os.RemoveAll(workspace)
-			return nil, fmt.Errorf("alloc memory dir: %w", err)
-		}
 		fms := agent.NewFileMemoryStore(workspace)
-		fms.MemoryDir = memDir
+		fms.MemoryDir = sessionDir
 		// Scope the user-profile file under the per-session memory dir
 		// as well. The library default (defaultUserMemoryPath →
 		// ~/.config/affent/USER.md) is correct for affentctl, where
@@ -227,8 +241,8 @@ func (p *SessionPool) buildSession(id string) (*Session, error) {
 		// distinct tenants — leaving USER.md global would cross-leak
 		// "what you know about the user" across all clients of this
 		// server. Same-session_id round-trips still see the same
-		// profile because memDir is stable.
-		fms.UserPath = filepath.Join(memDir, "USER.md")
+		// profile because sessionDir is stable.
+		fms.UserPath = filepath.Join(sessionDir, "USER.md")
 		memStore = fms
 	}
 	if p.cfg.EnableBuiltins {
@@ -334,12 +348,19 @@ func (p *SessionPool) allocWorkspace(id string) (string, error) {
 	return os.MkdirTemp(root, id+"-")
 }
 
-// allocMemoryDir returns the durable memory path for id. Unlike
-// allocWorkspace, this is STABLE: same id → same path across server
-// restarts and LRU evictions, so persistent memory actually persists.
-// session_id has already been path-validated (NewConversation rejects
-// "/" / "\\" / ".." / etc earlier in the request handler).
-func (p *SessionPool) allocMemoryDir(id string) (string, error) {
+// allocSessionDir returns the durable per-session-id state dir. Holds
+// the JSONL conversation log and (when EnableMemory is on) the memory
+// store files. Unlike allocWorkspace, this is STABLE: same id → same
+// path across server restarts and LRU evictions, so the chat handler's
+// "the rest of history lives in the Conversation log keyed by
+// session_id" contract actually holds — and the long-running-memory
+// promise survives. Callers must have already passed id through
+// agent.ValidateSessionID; buildSession enforces this at the top.
+//
+// The historical name "MemoryRoot" predates conversation-log
+// durability; the dir now holds both, but the env/config knob keeps
+// its old name to avoid an unmotivated rename of a public surface.
+func (p *SessionPool) allocSessionDir(id string) (string, error) {
 	root := p.cfg.MemoryRoot
 	if root == "" {
 		if p.cfg.WorkspaceRoot != "" {

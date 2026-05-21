@@ -21,6 +21,23 @@ type Conversation struct {
 	path     string // host filesystem path of the JSONL log
 }
 
+// ValidateSessionID returns nil iff sessionID is safe to use as a
+// single filename component. Untrusted callers (HTTP-driven servers
+// that accept session_id from clients) MUST call this before joining
+// the id into any filesystem path — otherwise "../escape" lands the
+// derived file outside its intended root. Used by NewConversation
+// and by affentserve's per-session-dir allocator.
+func ValidateSessionID(sessionID string) error {
+	if sessionID == "" {
+		return errors.New("session id is required")
+	}
+	leaf := sessionID + ".jsonl"
+	if filepath.Base(leaf) != leaf || strings.ContainsAny(sessionID, "/\\\x00") || sessionID == ".." || sessionID == "." {
+		return fmt.Errorf("invalid session id %q (must be a plain filename, no path separators)", sessionID)
+	}
+	return nil
+}
+
 // NewConversation opens or creates the on-disk log for sessionID under the
 // user's home volume. The file lives at <homeDir>/.affent/sessions/
 // <sessionID>.jsonl. Existing entries are loaded into memory.
@@ -37,13 +54,10 @@ type Conversation struct {
 // cheap, OS-portable equivalent of "reject anything that isn't a
 // single name".
 func NewConversation(homeDir, sessionID string) (*Conversation, error) {
-	if sessionID == "" {
-		return nil, errors.New("session id is required")
+	if err := ValidateSessionID(sessionID); err != nil {
+		return nil, err
 	}
 	leaf := sessionID + ".jsonl"
-	if filepath.Base(leaf) != leaf || strings.ContainsAny(sessionID, "/\\\x00") || sessionID == ".." || sessionID == "." {
-		return nil, fmt.Errorf("invalid session id %q (must be a plain filename, no path separators)", sessionID)
-	}
 	dir := filepath.Join(homeDir, ".affent", "sessions")
 	if err := os.MkdirAll(dir, 0o755); err != nil {
 		return nil, fmt.Errorf("mkdir conversations: %w", err)

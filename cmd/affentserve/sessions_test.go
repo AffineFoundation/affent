@@ -126,20 +126,20 @@ func TestSessionPool_gcOnce_EvictsIdleSessions(t *testing.T) {
 	}
 }
 
-// TestSessionPool_allocMemoryDir_StableAcrossCalls pins the durable
+// TestSessionPool_allocSessionDir_StableAcrossCalls pins the durable
 // memory-dir contract: same session id MUST resolve to the same path
 // every time, regardless of how many times a workspace was allocated
 // in between. Without this stability the "long-running memory" claim
 // breaks on server restarts and LRU revives — same client, same
 // session_id, different memory dir, empty recall.
-func TestSessionPool_allocMemoryDir_StableAcrossCalls(t *testing.T) {
+func TestSessionPool_allocSessionDir_StableAcrossCalls(t *testing.T) {
 	pool := newTestPool(t, 4, "5m")
-	a1, err := pool.allocMemoryDir("customer-alpha")
+	a1, err := pool.allocSessionDir("customer-alpha")
 	if err != nil {
 		t.Fatal(err)
 	}
 	// Simulate a second call after eviction/restart.
-	a2, err := pool.allocMemoryDir("customer-alpha")
+	a2, err := pool.allocSessionDir("customer-alpha")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -147,7 +147,7 @@ func TestSessionPool_allocMemoryDir_StableAcrossCalls(t *testing.T) {
 		t.Errorf("memory dir for same id must be stable; got %q then %q", a1, a2)
 	}
 	// Different id → different dir.
-	b, err := pool.allocMemoryDir("customer-beta")
+	b, err := pool.allocSessionDir("customer-beta")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -162,14 +162,14 @@ func TestSessionPool_allocMemoryDir_StableAcrossCalls(t *testing.T) {
 	}
 }
 
-// TestSessionPool_allocMemoryDir_OutsideWorkspace pins that memory
+// TestSessionPool_allocSessionDir_OutsideWorkspace pins that memory
 // lives outside the per-session workspace, so Session.Close()'s
 // os.RemoveAll(workspace) doesn't blow it away. The cross-restart
 // persistence experiment that motivated this design only works if
 // the two paths don't overlap.
-func TestSessionPool_allocMemoryDir_OutsideWorkspace(t *testing.T) {
+func TestSessionPool_allocSessionDir_OutsideWorkspace(t *testing.T) {
 	pool := newTestPool(t, 4, "5m")
-	memDir, err := pool.allocMemoryDir("alpha")
+	memDir, err := pool.allocSessionDir("alpha")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -237,6 +237,78 @@ func TestSessionPool_UserMemoryIsolatedPerSession(t *testing.T) {
 	}
 	if strings.Contains(snapB, "alpha-only") {
 		t.Errorf("alpha's user fact leaked into beta's snapshot:\n%s", snapB)
+	}
+}
+
+// TestSessionPool_ConversationLogIsDurable pins that the JSONL chat
+// log survives session eviction + recreation under the same id.
+// Without this, the chat handler's design assumption — "we only
+// forward the last user message; the rest of the history lives in
+// the agent runtime's Conversation log keyed by session_id" — breaks
+// on every server restart or LRU revive: the new ephemeral workspace
+// holds no .jsonl, so the model wakes up with no prior context even
+// though memory is intact.
+func TestSessionPool_ConversationLogIsDurable(t *testing.T) {
+	cfg := Config{
+		Listen:         "127.0.0.1:0",
+		MaxSessions:    4,
+		SessionIdleTTL: "5m",
+		WorkspaceRoot:  t.TempDir(),
+		MemoryRoot:     t.TempDir(),
+		BaseURL:        "http://127.0.0.1:0",
+		APIKey:         "test",
+		Model:          "fake",
+	}
+	pool, err := NewSessionPool(cfg, zerolog.New(io.Discard))
+	if err != nil {
+		t.Fatalf("NewSessionPool: %v", err)
+	}
+	t.Cleanup(pool.Shutdown)
+
+	s1, err := pool.GetOrCreate("durable-client")
+	if err != nil {
+		t.Fatalf("GetOrCreate first: %v", err)
+	}
+	if err := s1.conv.Append(agent.ChatMessage{Role: "user", Content: "first turn marker"}); err != nil {
+		t.Fatalf("Append: %v", err)
+	}
+	// Force eviction: close + drop from the pool, simulating a restart
+	// or LRU eviction. The workspace dir is wiped by Close.
+	if err := s1.Close(); err != nil {
+		t.Fatalf("Close: %v", err)
+	}
+	pool.mu.Lock()
+	delete(pool.sessions, "durable-client")
+	pool.mu.Unlock()
+
+	// Same id again — must see the prior message on reload.
+	s2, err := pool.GetOrCreate("durable-client")
+	if err != nil {
+		t.Fatalf("GetOrCreate second: %v", err)
+	}
+	msgs := s2.conv.Snapshot()
+	found := false
+	for _, m := range msgs {
+		if strings.Contains(m.Content, "first turn marker") {
+			found = true
+		}
+	}
+	if !found {
+		t.Errorf("conversation log must persist across session re-create; got messages: %+v", msgs)
+	}
+}
+
+// TestBuildSession_RejectsTraversalSessionID pins that buildSession
+// refuses an id that would otherwise let filepath.Join inside the
+// session-dir allocator escape the configured MemoryRoot. The
+// ValidateSessionID guard runs BEFORE any filesystem call, so a
+// malicious client can't even land an empty dir outside the root.
+func TestBuildSession_RejectsTraversalSessionID(t *testing.T) {
+	pool := newTestPool(t, 4, "5m")
+	for _, bad := range []string{"..", "../escape", "a/b", "a\\b", "with\x00null"} {
+		if _, err := pool.buildSession(bad); err == nil {
+			t.Errorf("buildSession(%q) must reject path-unsafe id", bad)
+		}
 	}
 }
 
