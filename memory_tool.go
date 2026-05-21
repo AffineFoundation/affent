@@ -7,7 +7,7 @@ import (
 )
 
 // memoryActions enumerates the action values the `memory` tool accepts.
-var memoryActions = []string{"add", "replace", "remove", "search"}
+var memoryActions = []string{"add", "replace", "remove", "search", "list"}
 
 // memoryTool builds the `memory` tool. Four actions × two targets ×
 // topic-bucketed sub-storage:
@@ -30,7 +30,7 @@ func memoryTool(store MemoryStore) *Tool {
 			"action": map[string]any{
 				"type":        "string",
 				"enum":        memoryActions,
-				"description": "add (new entry), replace (update via unique old_text substring), remove (delete via unique old_text substring), search (return ranked entries matching query).",
+				"description": "add (new entry), replace (update via unique old_text substring), remove (delete via unique old_text substring), search (ranked entries matching query), list (enumerate topic names + entry counts without reading bodies — cheap discovery).",
 			},
 			"target": map[string]any{
 				"type":        "string",
@@ -39,7 +39,7 @@ func memoryTool(store MemoryStore) *Tool {
 			},
 			"topic": map[string]any{
 				"type":        "string",
-				"description": "Topic-bucket name (target=memory only; ignored for target=user). \"core\" lands entries in the always-in-prompt digest; other names go to on-demand topics retrieved via search. Defaults to \"general\". Pick durable, semantic names (\"auth\", \"deploy\", \"lessons\") so topics accumulate cleanly over many sessions.",
+				"description": "Topic-bucket name (target=memory only; ignored for target=user). When saving MULTIPLE distinct facts, put each in its OWN topic — don't lump unrelated things into one bucket (e.g. tech stack, deploy procedure, and incident reports should be three separate topics, not one combined entry). Pick durable semantic names: \"stack\", \"deploy\", \"incidents\", \"auth\", \"conventions\", \"people\". Special: \"core\" lands the entry in the always-in-prompt digest (use sparingly for facts you need on every turn); everything else is retrieved on demand via action=search. Defaults to \"general\".",
 			},
 			"content": map[string]any{
 				"type":        "string",
@@ -67,24 +67,40 @@ func memoryTool(store MemoryStore) *Tool {
 	}
 	return &Tool{
 		Name: "memory",
-		Description: "Save and recall durable information across sessions. Memory is topic-bucketed: " +
-			"the 'core' topic is always in the system prompt (use for tight, durable facts), other " +
-			"topics are on-demand and retrieved via the search action — capacity grows with topic " +
-			"count, not single-file cap.\n\n" +
-			"WHEN TO SAVE (proactively):\n" +
-			"- the user corrects you or says 'remember this' / 'don't do that again'\n" +
-			"- the user shares a preference, habit, or personal detail (name, role, timezone, coding style)\n" +
-			"- you discover something stable about the environment (OS, installed tools, project structure)\n" +
-			"- you learn a convention, API quirk, or workflow specific to this user's setup\n\n" +
+		Description: "Save and recall durable information across sessions. Two-tier memory inspired by " +
+			"working-memory + archival patterns (Letta/MemGPT) plus topic organization (OpenHands microagents):\n\n" +
+			"TIER 1 — IN-PROMPT (always visible)\n" +
+			"  - target=user             → user profile (who they are)\n" +
+			"  - target=memory topic=core → durable facts you need every turn\n" +
+			"  - target=memory topic=general (or unset) → default working notes\n\n" +
+			"TIER 2 — ARCHIVAL (search-only, capacity grows by topic count)\n" +
+			"  - target=memory topic=<name> → category bucket; read with action=search\n\n" +
+			"DECISION TREE — when something worth remembering shows up, ask yourself:\n" +
+			"  1. About the user (preference, role, name, comms style)?       → target=user\n" +
+			"  2. Hard constraint / fact you need on EVERY turn?              → topic=core (use sparingly)\n" +
+			"  3. Domain knowledge that fits a named category?                → topic=<category>\n" +
+			"     Good starter topics: stack, deploy, conventions, incidents, people, lessons, auth\n" +
+			"     Pick semantic names that will still make sense in 6 months.\n" +
+			"  4. Doesn't fit any topic yet?                                  → topic=general\n\n" +
+			"WHEN TO SAVE (proactively, don't wait to be asked):\n" +
+			"  - user corrects you or says 'remember this' / 'don't do that again'\n" +
+			"  - user shares a preference, habit, or stable personal detail\n" +
+			"  - you discover something stable about the environment (OS, tools, project layout)\n" +
+			"  - you learn a convention, API quirk, or workflow specific to this setup\n\n" +
 			"DO NOT save: task progress, completed-work logs, raw data dumps, large code blocks, " +
-			"or anything trivially re-discoverable.\n\n" +
-			"TARGETS: 'user' for who the user is (preferences, communication style); 'memory' " +
-			"for your own notes (env, conventions, lessons). When in doubt, prefer 'memory'.\n\n" +
-			"TOPICS (target=memory only): pick semantic names ('auth', 'deploy', 'lessons'). " +
-			"'core' = always in prompt; everything else = on-demand via search. Defaults to 'general'.\n\n" +
-			"ACTIONS: 'add' to append; 'replace' / 'remove' use a short unique old_text substring; " +
-			"'search' returns ranked entries matching a query across a topic (or all topics when " +
-			"topic is omitted).",
+			"transient state, or anything trivially re-discoverable from files / shell.\n\n" +
+			"ONE FACT PER ENTRY — split multi-part facts into separate add calls in their own " +
+			"topics. Lumping 'tech stack + team rules + comms style' into one entry makes future " +
+			"replace/remove ambiguous and search-relevance worse.\n\n" +
+			"ACTIONS\n" +
+			"  add      — append new entry. Duplicates are silently no-op.\n" +
+			"  replace  — update an entry; old_text is a short unique substring.\n" +
+			"  remove   — delete an entry; same uniqueness rules as replace.\n" +
+			"  search   — top-K ranked entries matching query (within a topic or all topics).\n" +
+			"             Search scores BOTH content AND topic name — a query like 'incident'\n" +
+			"             matches entries in the 'incidents' topic even when the word doesn't\n" +
+			"             appear in the body.\n" +
+			"  list     — topic names + counts, no bodies. Cheap before deciding which to search.",
 		Schema: json.RawMessage(schema),
 		Execute: func(ctx context.Context, args json.RawMessage) (string, error) {
 			var p struct {
@@ -130,6 +146,17 @@ func memoryTool(store MemoryStore) *Tool {
 					break
 				}
 				resp, err = store.Search(target, p.Topic, p.Query, p.TopK)
+			case "list":
+				if lister, ok := store.(interface {
+					ListTopics(MemoryTarget) (MemoryResponse, error)
+				}); ok {
+					resp, err = lister.ListTopics(target)
+				} else {
+					// Embedder swapped in a custom MemoryStore that
+					// doesn't implement the optional list extension.
+					// Surface a sane explanation rather than panic.
+					resp = MemoryResponse{Target: target, Message: "this MemoryStore does not support action=list"}
+				}
 			default:
 				resp = MemoryResponse{Target: target, Topic: p.Topic, Message: fmt.Sprintf("unknown action %q (expected add, replace, remove, search)", p.Action)}
 			}

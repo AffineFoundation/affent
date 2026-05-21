@@ -477,6 +477,33 @@ func TestMemorySnapshotInlinesGeneralButIndexesCustomTopics(t *testing.T) {
 	}
 }
 
+// TestMemorySearchMatchesTopicName pins a real-rollout finding:
+// users organize memory by topic and query with terms that echo
+// the topic name ("incident details"), but the topic word often
+// isn't inside the entry body. Pre-fix scoring against content
+// alone returned 0 hits; now topic name is part of the scored
+// corpus so the obvious match surfaces.
+func TestMemorySearchMatchesTopicName(t *testing.T) {
+	s := newTestStore(t)
+	_, _ = s.Add(TargetMemory, "incidents", "Yesterday DB connection pool exhausted at 14:30 UTC — diagnosed via pg_stat_activity.")
+	_, _ = s.Add(TargetMemory, "people", "Lead engineer is Wei, prefers async-only meetings.")
+
+	// Query echoes the topic name only — content has no "incident" word.
+	resp, err := s.Search(TargetMemory, "", "incident", 5)
+	if err != nil || !resp.OK || len(resp.Results) == 0 {
+		t.Fatalf("topic-name match must surface; got %+v err=%v", resp, err)
+	}
+	if resp.Results[0].Topic != "incidents" {
+		t.Errorf("expected incidents topic first, got %q", resp.Results[0].Topic)
+	}
+
+	// Same with "people" — content says "Lead engineer is Wei".
+	resp, _ = s.Search(TargetMemory, "", "people", 5)
+	if !resp.OK || len(resp.Results) == 0 {
+		t.Fatalf("topic-name match must surface for 'people' too: %+v", resp)
+	}
+}
+
 // TestMemorySearchAcrossTopics pins lexical scoring + stopword
 // filtering. A query lands ranked results across whichever topic
 // the matching content lives in; stopword-only queries return no

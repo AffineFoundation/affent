@@ -59,7 +59,7 @@ type MemoryStore interface {
 // can consolidate or refine in the same turn). Matches is populated
 // only when a Replace/Remove found multiple non-identical entries.
 // Usage is set whenever the response can carry a coherent count.
-// Results is set by Search.
+// Results is set by Search. Topics is set by ListTopics.
 type MemoryResponse struct {
 	OK      bool                 `json:"ok"`
 	Message string               `json:"message,omitempty"`
@@ -68,6 +68,7 @@ type MemoryResponse struct {
 	Entries []string             `json:"entries,omitempty"`
 	Matches []string             `json:"matches,omitempty"`
 	Results []MemorySearchResult `json:"results,omitempty"`
+	Topics  []MemoryTopicSummary `json:"topics,omitempty"`
 	Usage   *MemoryUsage         `json:"usage,omitempty"`
 }
 
@@ -76,6 +77,13 @@ type MemorySearchResult struct {
 	Topic   string  `json:"topic"`
 	Snippet string  `json:"snippet"`
 	Score   float64 `json:"score"`
+}
+
+// MemoryTopicSummary is one row in a ListTopics response.
+type MemoryTopicSummary struct {
+	Topic   string `json:"topic"`
+	Entries int    `json:"entries"`
+	Chars   int    `json:"chars"`
 }
 
 // MemoryUsage carries capacity numbers for a single bucket.
@@ -473,7 +481,15 @@ func (s *FileMemoryStore) Search(target MemoryTarget, topic, query string, topK 
 			continue
 		}
 		for _, e := range entries {
-			score := scoreMemoryEntry(e, terms)
+			// Score against content AND topic name. Real-rollout
+			// finding: a user organizing memory by topic ("incidents",
+			// "deploy", "auth") naturally queries with terms that
+			// echo the topic ("incident details"), but the topic name
+			// doesn't appear inside the entry body. Pre-fix this
+			// produced zero results despite an obvious topical match.
+			// Mixing the topic name into the scoring corpus surfaces
+			// those hits with a small boost.
+			score := scoreMemoryEntry(b.topic+" "+e, terms)
 			if score <= 0 {
 				continue
 			}
@@ -495,6 +511,52 @@ func (s *FileMemoryStore) Search(target MemoryTarget, topic, query string, topK 
 		Message: msg,
 		Results: hits,
 	}, nil
+}
+
+// ListTopics enumerates the buckets in target. For target=memory it
+// returns core + general + every custom topic, each row with entry
+// count and total chars — cheap discovery so the model can decide
+// which topic to search without doing N empty searches. For
+// target=user there's a single bucket; the response carries its
+// usage.
+func (s *FileMemoryStore) ListTopics(target MemoryTarget) (MemoryResponse, error) {
+	if err := validateTarget(target); err != nil {
+		return MemoryResponse{Target: target, Message: err.Error()}, nil
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	_ = s.migrateLegacyLocked()
+
+	if target == TargetUser {
+		entries, _ := readMemoryFile(s.UserPath)
+		return MemoryResponse{
+			OK:     true,
+			Target: target,
+			Topics: []MemoryTopicSummary{{Topic: "user", Entries: len(entries), Chars: joinedLen(entries)}},
+		}, nil
+	}
+	if s.MemoryDir == "" {
+		return MemoryResponse{Target: target, Message: "memory dir is not configured"}, nil
+	}
+	var topics []MemoryTopicSummary
+	corePath := filepath.Join(s.MemoryDir, "core.md")
+	if entries, _ := readMemoryFile(corePath); len(entries) > 0 {
+		topics = append(topics, MemoryTopicSummary{Topic: CoreTopic, Entries: len(entries), Chars: joinedLen(entries)})
+	}
+	dirEntries, _ := os.ReadDir(filepath.Join(s.MemoryDir, "topics"))
+	for _, e := range dirEntries {
+		if e.IsDir() || !strings.HasSuffix(e.Name(), ".md") {
+			continue
+		}
+		name := strings.TrimSuffix(e.Name(), ".md")
+		entries, _ := readMemoryFile(filepath.Join(s.MemoryDir, "topics", e.Name()))
+		if len(entries) == 0 {
+			continue
+		}
+		topics = append(topics, MemoryTopicSummary{Topic: name, Entries: len(entries), Chars: joinedLen(entries)})
+	}
+	sort.Slice(topics, func(i, j int) bool { return topics[i].Topic < topics[j].Topic })
+	return MemoryResponse{OK: true, Target: target, Topics: topics}, nil
 }
 
 // migrateLegacyLocked moves a pre-v2 .affent/MEMORY.md into
