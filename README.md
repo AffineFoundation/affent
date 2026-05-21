@@ -1,83 +1,72 @@
 # Affent
 
-Affent is an OpenAI-compatible agent runtime with a CLI, an HTTP server, and a
-Go API. It is built for practical tool-using agent sessions: running commands,
-editing workspace files, searching prior sessions, preserving durable memory,
-and streaming structured events to clients.
+Affent is an OpenAI-compatible agent runtime for practical tool-using sessions.
+It can run as a CLI for local work, as an HTTP service for clients that already
+speak the OpenAI API shape, or through its Go API when tighter integration is
+needed.
 
-Affent owns the runtime concerns around model streaming, tool dispatch,
-conversation persistence, cancellation, retries, context compaction, project
-context, memory, MCP integration, and optional web/browser tools.
+Affent focuses on the runtime layer of an agent: model streaming, tool
+execution, conversation state, cancellation, retries, context management,
+durable memory, session recall, MCP integration, and structured event output.
 
-## Features
+## Why Affent
 
-- OpenAI-compatible streaming chat client with reasoning-channel support.
-- Tool loop with bounded per-turn steps, cancellation, retries, watchdogs, and
-  capped tool-result context.
-- Built-in tools for shell execution and workspace file operations.
-- Pluggable executor interface for local, Docker, or custom sandboxes.
-- Append-only JSONL conversation persistence with atomic replacement for
-  compaction.
-- Context compaction using an OpenHands-style rolling summary prompt.
-- Project context loading from common agent instruction files.
-- Topic-bucketed persistent memory with on-demand lexical retrieval.
+Modern agent products need more than a chat-completions wrapper. They need a
+runtime that can keep a session alive, execute tools safely within a workspace,
+recover from provider and network failures, keep long conversations usable, and
+expose enough event data for a UI, trace, or evaluation harness to understand
+what happened.
+
+Affent is built around those concerns. It keeps the model-facing loop explicit,
+the tool surface configurable, and the persistent state inspectable on disk.
+
+## Capabilities
+
+- OpenAI-compatible streaming model calls, including providers that expose a
+  separate reasoning channel.
+- Tool execution with per-turn budgets, cancellation, transient retry, stream
+  watchdogs, and bounded tool output in model context.
+- Workspace tools for shell commands and file operations.
+- Executor abstraction for local execution, Docker attach mode, or a custom
+  sandbox.
+- JSONL conversation persistence with resumable sessions.
+- Context compaction for long-running conversations.
+- Project-context loading from common instruction files such as `AGENTS.md`.
+- Topic-bucketed persistent memory with search.
 - Session search over prior workspace transcripts.
-- MCP client support for stdio and streamable HTTP servers.
-- Canonical SSE event stream for UI, tracing, replay, and evaluation.
-- Optional extras for web search/fetch and real browser automation.
-- `affentctl` CLI and `affentserve` OpenAI-compatible HTTP server.
+- MCP stdio and streamable HTTP tool registration.
+- Structured SSE events for UI rendering, tracing, replay, and evaluation.
+- Optional web fetch/search and real browser automation packages.
 
-## Project Layout
+## Run Modes
 
-```text
-loop.go              Agent loop, streaming, tool execution, cancellation
-llm.go               OpenAI-compatible streaming client
-tool.go              Tool definition and registry
-builtins.go          Shell and workspace file tools
-conversation.go      JSONL conversation log
-compaction.go        Rolling context compaction
-project_context.go   Project instruction file loader
-memory.go            Persistent memory store
-memory_tool.go       Memory tool schema and dispatch
-session_search.go    Retrieval over prior session logs
-executor/            Executor and FileOps implementations
-internal/            Runtime internals behind the public root package
-mcp/                 MCP client and registry adapter
-sse/                 Event types and payloads
-cmd/affentctl/       CLI driver
-cmd/affentserve/     HTTP server
-extras/web/          Optional web_fetch and web_search tools
-extras/browser/      Optional Chromium browser tools
-```
+### CLI
 
-`cmd/affentserve`, `extras/web`, and `extras/browser` are separate Go
-submodules. Importing the root module does not pull their heavier
-dependencies.
+`affentctl` is the local and batch driver. It supports one-shot runs,
+interactive sessions, session resume, JSONL tracing, project context, memory,
+MCP, and local or Docker-backed tool execution.
 
-## Installation
+### HTTP Server
 
-Affent requires Go 1.22 or newer.
+`affentserve` exposes Affent through an OpenAI-compatible HTTP surface. It is
+useful for frontends, SDK-based clients, eval systems, and service-style
+deployments that want session pinning and access to Affent's native event
+stream.
 
-Use as a Go package:
+### Go API
 
-```bash
-go get github.com/affinefoundation/affent
-```
+The Go API is available for integrations that need direct control over the
+runtime, registry, executor, memory store, or event pipeline. The public root
+package is kept as the integration surface while implementation detail moves
+behind internal package boundaries.
+
+## Quick Start
 
 Build the CLI:
 
 ```bash
 go build -o ./bin/affentctl ./cmd/affentctl
 ```
-
-Build the HTTP server:
-
-```bash
-cd cmd/affentserve
-go build -o ../../bin/affentserve .
-```
-
-## Quick Start
 
 Run a one-shot task:
 
@@ -100,25 +89,24 @@ Start an interactive session:
   --model gpt-4o-mini
 ```
 
-List saved sessions:
+Resume the latest session in a workspace:
 
 ```bash
-./bin/affentctl sessions --workspace ./workspace
+./bin/affentctl chat --workspace ./workspace --continue
 ```
 
-Conversation logs are stored under:
+Build the HTTP server:
 
-```text
-<workspace>/.affentctl/<session_id>.jsonl
+```bash
+cd cmd/affentserve
+go build -o ../../bin/affentserve .
 ```
-
-Use `--session-id <id>` or `--continue` with `run` and `chat` to resume an
-existing conversation.
 
 ## Configuration
 
-Both `affentctl` and `affentserve` load `.env` files from the current
-directory and from:
+Affent uses CLI flags, JSON config files, and environment variables. Both
+`affentctl` and `affentserve` load `.env` files from the current directory and
+from:
 
 ```text
 ~/.config/affent/.env
@@ -144,11 +132,11 @@ AFFENTSERVE_BASE_URL
 AFFENTSERVE_API_KEY
 AFFENTSERVE_AUTH_TOKEN
 AFFENTSERVE_WORKSPACE_ROOT
+AFFENTSERVE_MEMORY_ROOT
 TAVILY_API_KEY
 ```
 
-`affentctl --config FILE` accepts JSON configuration. CLI flags override file
-values.
+Example `affentctl` config:
 
 ```json
 {
@@ -170,298 +158,50 @@ values.
 }
 ```
 
-## Go API
+## State And Memory
 
-Affent can also be used directly from Go. This is primarily useful for
-integrations that need to construct their own runtime, registry, executor, or
-event pipeline. A minimal setup creates an LLM client, a tool registry, a
-conversation log, and a loop.
+Affent keeps session state in JSONL conversation logs so runs can be resumed,
+replayed, or inspected. `affentctl` stores logs under the workspace by default.
+`affentserve` keeps per-session state in its session pool and exposes the active
+session id to clients.
 
-```go
-package main
+Persistent memory is opt-in. Workspace memory is topic-bucketed and can be
+searched on demand. User memory is a separate cross-workspace profile. The
+system prompt receives only compact always-relevant memory plus an index of
+retrievable topics, so memory can grow without turning the prompt into a
+database dump.
 
-import (
-	"context"
-	"log"
+Session search and persistent memory serve different roles:
 
-	"github.com/affinefoundation/affent"
-	"github.com/affinefoundation/affent/executor"
-	"github.com/affinefoundation/affent/sse"
-)
+- Session search recalls prior conversation snippets.
+- Memory stores durable facts that should survive across sessions.
 
-func main() {
-	ctx := context.Background()
-	workspace := "/tmp/affent-workspace"
+## Tools And Integrations
 
-	llm := affent.NewLLMClient(
-		"https://api.openai.com/v1",
-		"<api-key>",
-		"gpt-4o-mini",
-	)
+Affent ships with shell and file tools, optional memory and session-search
+tools, MCP registration, and optional web/browser packages. Tool availability is
+chosen by the runtime configuration rather than assumed globally.
 
-	mem := affent.NewFileMemoryStore(workspace)
+File tools are scoped to the configured workspace. Shell execution goes through
+an executor boundary. Production deployments should run tools inside a real
+sandbox such as a container, VM, or remote execution environment.
 
-	reg := affent.NewRegistry()
-	affent.RegisterBuiltins(reg, affent.BuiltinDeps{
-		Executor:         executor.NewLocalExecutor("session-1", workspace),
-		HostWorkspaceDir: workspace,
-		Memory:           mem,
-		SessionsDir:      workspace + "/.affentctl",
-		SessionID:        "session-1",
-	})
+MCP servers can be registered over stdio or streamable HTTP. Their tools are
+namespaced and become part of the same registry as Affent's built-in tools.
 
-	conv, err := affent.NewConversation(workspace, "session-1")
-	if err != nil {
-		log.Fatal(err)
-	}
+## Events And Observability
 
-	events := make(chan sse.Event, 256)
-	loop := &affent.Loop{
-		LLM:    llm,
-		Tools:  reg,
-		Conv:   conv,
-		Events: events,
-		Memory: mem,
-		Compactor: &affent.LLMSummaryCompactor{
-			LLM:         llm,
-			TriggerMsgs: affent.DefaultSummaryTriggerMsgs,
-			KeepFirst:   2,
-			KeepLast:    affent.DefaultSummaryKeepLast,
-		},
-	}
+Affent emits a structured SSE event stream covering turn boundaries, model
+output, reasoning output when available, tool requests, tool results, usage,
+and errors. The same event model supports CLI traces, HTTP clients, UIs, and
+evaluation harnesses.
 
-	if err := loop.EnsureSystemPrompt(""); err != nil {
-		log.Fatal(err)
-	}
+Trace output can include token-level deltas for replay or omit them for smaller
+batch-evaluation artifacts.
 
-	turnID, err := loop.SendUser(ctx, "Inspect this workspace.")
-	if err != nil {
-		log.Fatal(err)
-	}
+## HTTP API
 
-	_ = turnID
-	// Consume events until the matching turn.end event.
-}
-```
-
-The default system prompt assumes a developer workspace with shell and file
-tools. Integrations should provide their own prompt when the surrounding product
-has different capabilities or policy.
-
-## Architecture
-
-### Loop
-
-`Loop` is the runtime object for one conversation. It appends the user message,
-streams model output, dispatches tools, persists messages, publishes SSE events,
-and stops when the model returns a final answer or the turn budget is exhausted.
-
-Important defaults:
-
-| setting | default |
-| --- | --- |
-| `MaxTurnSteps` | `10` |
-| `PerCallTimeout` | `3m` |
-| `MaxTransientRetries` | `3` |
-| `TransientBackoff` | `4s` |
-| model-facing tool result cap | `8 KiB` |
-| event-preview tool result cap | `4 KiB` |
-
-### Tools
-
-Affent includes:
-
-- `shell`
-- `read_file`
-- `write_file`
-- `edit_file`
-- `list_files`
-- `memory` when a `MemoryStore` is configured
-- `session_search` when a sessions directory is configured
-
-File tools are scoped to the configured workspace. Relative paths are resolved
-inside the workspace; absolute paths must also resolve inside it. Symlinks are
-checked before file writes. `read_file` refuses binary-looking files using a
-NUL-byte heuristic.
-
-`shell` runs through `executor.Executor`. The built-in implementations are:
-
-| executor | isolation | notes |
-| --- | --- | --- |
-| `LocalExecutor` | none | Runs on the host. Use only when the caller already provides isolation. |
-| `DockerExecExecutor` | existing container | Uses `docker exec`; the caller manages container lifecycle. |
-
-Custom sandboxes can implement `executor.Executor` and optionally
-`executor.FileOps`.
-
-### Events
-
-Affent emits a canonical SSE event stream. The same event stream is used by the
-CLI trace writer, HTTP server, tests, and direct Go integrations.
-
-| event | meaning |
-| --- | --- |
-| `turn.start` | A user turn was accepted. |
-| `user.message` | Echo of the user message. |
-| `thinking.delta` | Incremental reasoning content when the provider exposes it. |
-| `thinking.done` | Completed reasoning block. |
-| `message.delta` | Incremental assistant text. |
-| `message.done` | Completed assistant message. |
-| `tool.request` | Model requested a tool call. |
-| `tool.output` | Optional live tool output stream. |
-| `tool.result` | Tool call completed. |
-| `file.changed` | Optional file-change notification. |
-| `usage` | Token usage for the turn. |
-| `turn.end` | Turn completed, failed, was cancelled, or hit max turns. |
-| `error` | Recoverable or terminal error event. |
-
-Every event has a monotonically increasing per-loop sequence id.
-
-### Context Compaction
-
-Long conversations can be compacted by attaching a `Compactor`.
-`LLMSummaryCompactor` keeps the beginning of the conversation, a rolling summary
-of older work, and the most recent messages. It also avoids splitting an
-assistant tool call from its corresponding tool result.
-
-Compaction has two activation paths:
-
-- proactive compaction after a configured message threshold
-- reactive compaction when the upstream provider reports context overflow
-
-### Project Context
-
-When `Loop.ProjectContextDir` is set, Affent loads recognized project
-instruction files and appends them to the system prompt at session start.
-
-Recognized files:
-
-```text
-AGENTS.md
-CLAUDE.md
-CONVENTIONS.md
-.cursorrules
-.clinerules
-.clinerules.md
-GEMINI.md
-```
-
-These files are read-only from Affent's perspective.
-
-### Persistent Memory
-
-Memory is disabled by default. Configure a `MemoryStore` or pass
-`affentctl --memory` to enable it.
-
-The default `FileMemoryStore` uses a topic-bucketed Markdown layout:
-
-```text
-<workspace>/.affent/memory/core.md
-<workspace>/.affent/memory/topics/general.md
-<workspace>/.affent/memory/topics/<topic>.md
-$XDG_CONFIG_HOME/affent/USER.md
-```
-
-`core.md`, `topics/general.md`, and `USER.md` are injected into the system prompt
-at session start. Other topic files are retrieved on demand through the
-`memory` tool's search action. This keeps durable facts available without
-turning the prompt into a long-term database.
-
-The memory tool supports:
-
-```text
-add
-replace
-remove
-search
-list
-```
-
-Workspace memory is topic-bucketed. User memory is a single cross-workspace
-profile.
-
-### Session Search
-
-`session_search` retrieves snippets from prior JSONL conversation logs in the
-same workspace. It is intended for transcript recall: previous conclusions,
-commands, or discussions. Persistent memory is for durable facts that should
-remain available across sessions.
-
-## MCP
-
-Affent supports MCP servers over stdio and streamable HTTP. Tools are registered
-into the same `Registry` as built-ins and are namespaced as:
-
-```text
-<server>_<tool>
-```
-
-Example `affentctl --mcp-config` file:
-
-```json
-{
-  "servers": [
-    {
-      "name": "git",
-      "command": "uvx",
-      "args": ["mcp-server-git", "--repository", "./workspace"]
-    },
-    {
-      "name": "internal",
-      "url": "http://localhost:8123/mcp",
-      "headers": {
-        "X-Auth-Token": "secret"
-      }
-    }
-  ]
-}
-```
-
-## Optional Extras
-
-### Web
-
-`extras/web` provides:
-
-- `web_fetch`
-- `web_search`
-
-`web_fetch` extracts readable page content and converts it to Markdown.
-`web_search` uses a pluggable `SearchProvider`; the default provider reads
-`TAVILY_API_KEY`.
-
-```go
-import affentweb "github.com/affinefoundation/affent/extras/web"
-
-affentweb.RegisterFetch(reg, affentweb.FetchConfig{})
-affentweb.RegisterAll(reg, affentweb.Options{})
-```
-
-### Browser
-
-`extras/browser` provides Chromium-backed browser tools using the common
-snapshot/ref interaction pattern: `browser_snapshot` returns stable element
-references, and action tools operate on those references.
-
-```go
-import affentbrowser "github.com/affinefoundation/affent/extras/browser"
-
-sess, err := affentbrowser.NewSession(affentbrowser.SessionConfig{
-	Headless: true,
-})
-if err != nil {
-	panic(err)
-}
-defer sess.Close()
-
-affentbrowser.RegisterAll(reg, sess, affentbrowser.Options{})
-```
-
-## HTTP Server
-
-`cmd/affentserve` runs Affent behind an HTTP API.
-
-Endpoints:
+`affentserve` provides:
 
 ```text
 GET    /healthz
@@ -472,48 +212,28 @@ GET    /v1/sessions/{id}/events
 DELETE /v1/sessions/{id}
 ```
 
-`/v1/chat/completions` is OpenAI-compatible. It supports streaming responses
-and exposes the active session id through `X-Affent-Session-Id` and
-`affent_session_id`.
+`/v1/chat/completions` follows the OpenAI-compatible shape. Clients can pin a
+session through `X-Affent-Session-Id`, `affent_session_id`, or `session_id`.
 
-Session id precedence:
-
-1. `X-Affent-Session-Id` request header
-2. `affent_session_id` request body field
-3. `session_id` request body field
-4. new session
-
-Server features are opt-in:
-
-```text
---browser
---browser-screenshot
---web
---web-search
---builtins
---memory
-```
-
-`--builtins` enables shell and file tools. It should only be enabled when the
-server process is already isolated.
+Server features such as browser tools, web tools, built-ins, and memory are
+explicitly enabled through flags or config.
 
 ## Security Model
 
 Affent is an agent runtime, not a security sandbox.
 
-The built-in file tools enforce workspace path checks, and the executor
-interface makes it straightforward to place shell execution behind Docker or a
-custom sandbox. Those protections are defense in depth. If untrusted users or
-untrusted model outputs can drive tools, the deployment must provide the real
-isolation boundary.
+Workspace path checks, output caps, binary-file refusal, and executor
+abstractions are defense-in-depth measures. They do not replace process,
+filesystem, or network isolation. If untrusted users or model outputs can drive
+tools, the deployment must provide the isolation boundary.
 
 Recommended production practices:
 
 - Run tool execution in an isolated container, VM, or remote sandbox.
-- Do not enable `--builtins` on a shared host without isolation.
+- Do not enable shell/file built-ins on a shared host without isolation.
 - Treat browser and web tools as network-capable capabilities.
 - Gate `affentserve` with `--auth-token` or an upstream proxy.
-- Keep persistent memory scoped to the user or workspace that owns it.
+- Keep memory scoped to the user, workspace, or session that owns it.
 
 ## Development
 
@@ -530,6 +250,9 @@ cd extras/web && go test ./...
 cd ../browser && go test ./...
 cd ../../cmd/affentserve && go test ./...
 ```
+
+Browser smoke tests are behind the `browser_smoke` build tag because they need a
+local Chromium binary.
 
 ## License
 
