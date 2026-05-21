@@ -241,7 +241,7 @@ func summarizeArgs(args map[string]any) string {
 		if v, ok := args[k]; ok {
 			s := fmt.Sprint(v)
 			if len(s) > 80 {
-				s = s[:77] + "..."
+				s = trimUTF8(s, 77) + "..."
 			}
 			return fmt.Sprintf("%s=%q", k, s)
 		}
@@ -249,7 +249,7 @@ func summarizeArgs(args map[string]any) string {
 	raw, _ := json.Marshal(args)
 	s := string(raw)
 	if len(s) > 80 {
-		s = s[:77] + "..."
+		s = trimUTF8(s, 77) + "..."
 	}
 	return s
 }
