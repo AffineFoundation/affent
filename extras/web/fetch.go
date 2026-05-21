@@ -7,9 +7,11 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"net"
 	"net/http"
 	"net/url"
 	"strings"
+	"syscall"
 	"time"
 	"unicode/utf8"
 
@@ -21,8 +23,13 @@ import (
 
 // FetchConfig tunes WebFetchTool. Zero values pick sane defaults.
 type FetchConfig struct {
-	// HTTP is reused across calls. Defaults to a client with a
-	// 30s timeout if nil.
+	// HTTP is reused across calls. When nil FetchTool builds a client
+	// with a 30s timeout AND an SSRF guard that blocks dialing to
+	// private / loopback / link-local / unspecified / multicast IPs
+	// (covers RFC1918, AWS-metadata at 169.254.169.254, 127.0.0.1,
+	// IPv6 ULA / link-local, etc.). When non-nil, the caller owns
+	// the safety story — pass in a hardened client or be sure your
+	// network can't reach anything sensitive.
 	HTTP *http.Client
 	// MaxBytes caps the response body the tool reads. Default 2 MiB —
 	// enough for most articles without letting a misconfigured server
@@ -36,6 +43,13 @@ type FetchConfig struct {
 	// "affent-webfetch/0.1" — override if a target server requires
 	// something specific.
 	UserAgent string
+	// AllowPrivateNetwork disables the default SSRF guard. Off by
+	// default — a model that decides to fetch http://127.0.0.1:7777
+	// (affentserve itself) or http://169.254.169.254 (cloud-metadata
+	// IMDSv1) shouldn't be able to without operator opt-in. Flip on
+	// only for development against local services, or when the agent
+	// is running inside a network namespace that already isolates it.
+	AllowPrivateNetwork bool
 }
 
 const (
@@ -51,7 +65,7 @@ const (
 // behaviour (10 hops max).
 func FetchTool(cfg FetchConfig) *agent.Tool {
 	if cfg.HTTP == nil {
-		cfg.HTTP = &http.Client{Timeout: 30 * time.Second}
+		cfg.HTTP = newGuardedClient(cfg.AllowPrivateNetwork)
 	}
 	if cfg.MaxBytes <= 0 {
 		cfg.MaxBytes = defaultMaxBytes
@@ -181,6 +195,70 @@ func renderBody(body []byte, contentType, finalURL string) string {
 	default:
 		return fmt.Sprintf("[non-text response: Content-Type=%q, %d bytes]", contentType, len(body))
 	}
+}
+
+// newGuardedClient builds an http.Client whose Transport refuses to
+// dial to any IP we don't want a model-driven URL to reach. The check
+// runs in net.Dialer.Control, AFTER DNS resolution but BEFORE the TCP
+// SYN, so we catch the actual IP the OS is about to connect to —
+// even when the hostname has multiple A/AAAA records or the resolver
+// returns a different answer than a separate "preflight" lookup
+// would (defeats trivial DNS-rebinding attacks on a single connect).
+// Redirects re-enter the same dialer per hop, so a public→private
+// hop is blocked too.
+//
+// When allowPrivate is true the control hook is omitted entirely so
+// dev / local-service fetching works as expected.
+func newGuardedClient(allowPrivate bool) *http.Client {
+	if allowPrivate {
+		return &http.Client{Timeout: 30 * time.Second}
+	}
+	dialer := &net.Dialer{
+		Timeout:   30 * time.Second,
+		KeepAlive: 30 * time.Second,
+		Control: func(network, address string, _ syscall.RawConn) error {
+			host, _, err := net.SplitHostPort(address)
+			if err != nil {
+				host = address
+			}
+			ip := net.ParseIP(host)
+			if ip == nil {
+				// Shouldn't happen — by the time Control fires, the
+				// Dialer has resolved to a numeric address. Be
+				// defensive: refuse rather than connect blind.
+				return fmt.Errorf("ssrf-guard: unparseable dial target %q", address)
+			}
+			if isBlockedIP(ip) {
+				return fmt.Errorf("ssrf-guard: refusing to dial %s (private / loopback / link-local / unspecified / multicast)", ip)
+			}
+			return nil
+		},
+	}
+	return &http.Client{
+		Timeout: 30 * time.Second,
+		Transport: &http.Transport{
+			DialContext:           dialer.DialContext,
+			TLSHandshakeTimeout:   10 * time.Second,
+			ResponseHeaderTimeout: 30 * time.Second,
+		},
+	}
+}
+
+// isBlockedIP collapses Go's net.IP category methods plus IPv4
+// broadcast into one check. IsPrivate covers RFC1918 + IPv6 ULA;
+// IsLoopback / IsLinkLocalUnicast / IsUnspecified / IsMulticast
+// cover the rest of the families that a model has no business
+// reaching through a fetch tool.
+func isBlockedIP(ip net.IP) bool {
+	if ip.IsPrivate() || ip.IsLoopback() || ip.IsLinkLocalUnicast() || ip.IsUnspecified() || ip.IsMulticast() {
+		return true
+	}
+	// 255.255.255.255 — not covered by any Is* method but obviously
+	// not a real fetch target.
+	if v4 := ip.To4(); v4 != nil && v4[0] == 255 && v4[1] == 255 && v4[2] == 255 && v4[3] == 255 {
+		return true
+	}
+	return false
 }
 
 // domainOf extracts "scheme://host" from a URL, used to resolve

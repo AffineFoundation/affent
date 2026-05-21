@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"net"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -26,7 +27,7 @@ func TestFetchTool_HTML(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	tool := FetchTool(FetchConfig{})
+	tool := FetchTool(FetchConfig{AllowPrivateNetwork: true})
 	args, _ := json.Marshal(map[string]string{"url": srv.URL})
 	out, err := tool.Execute(context.Background(), args)
 	if err != nil {
@@ -63,7 +64,7 @@ func TestFetchTool_PlainText(t *testing.T) {
 		w.Write([]byte("just some plain text"))
 	}))
 	defer srv.Close()
-	tool := FetchTool(FetchConfig{})
+	tool := FetchTool(FetchConfig{AllowPrivateNetwork: true})
 	args, _ := json.Marshal(map[string]string{"url": srv.URL})
 	out, err := tool.Execute(context.Background(), args)
 	if err != nil {
@@ -80,7 +81,7 @@ func TestFetchTool_NonText(t *testing.T) {
 		w.Write([]byte{0x89, 'P', 'N', 'G', 0, 1, 2, 3})
 	}))
 	defer srv.Close()
-	tool := FetchTool(FetchConfig{})
+	tool := FetchTool(FetchConfig{AllowPrivateNetwork: true})
 	args, _ := json.Marshal(map[string]string{"url": srv.URL})
 	out, err := tool.Execute(context.Background(), args)
 	if err != nil {
@@ -92,7 +93,7 @@ func TestFetchTool_NonText(t *testing.T) {
 }
 
 func TestFetchTool_RequiresURL(t *testing.T) {
-	tool := FetchTool(FetchConfig{})
+	tool := FetchTool(FetchConfig{AllowPrivateNetwork: true})
 	_, err := tool.Execute(context.Background(), json.RawMessage(`{}`))
 	if err == nil || !strings.Contains(err.Error(), "url is required") {
 		t.Errorf("expected url-required error, got %v", err)
@@ -108,7 +109,7 @@ func TestFetchTool_HTTPError(t *testing.T) {
 		http.Error(w, "nope", http.StatusForbidden)
 	}))
 	defer srv.Close()
-	tool := FetchTool(FetchConfig{})
+	tool := FetchTool(FetchConfig{AllowPrivateNetwork: true})
 	args, _ := json.Marshal(map[string]string{"url": srv.URL})
 	_, err := tool.Execute(context.Background(), args)
 	if err == nil || !strings.Contains(err.Error(), "http 403") {
@@ -160,7 +161,7 @@ func TestFetchTool_UTF8SafeTruncation(t *testing.T) {
 	}))
 	defer srv.Close()
 
-	tool := FetchTool(FetchConfig{MaxResultChars: 51}) // odd → mid-rune
+	tool := FetchTool(FetchConfig{MaxResultChars: 51, AllowPrivateNetwork: true}) // odd → mid-rune
 	args, _ := json.Marshal(map[string]string{"url": srv.URL})
 	out, err := tool.Execute(context.Background(), args)
 	if err != nil {
@@ -170,6 +171,87 @@ func TestFetchTool_UTF8SafeTruncation(t *testing.T) {
 	for i, r := range prefix {
 		if r == '�' {
 			t.Fatalf("truncation produced invalid UTF-8 at byte %d (U+FFFD)\nprefix=%q", i, prefix)
+		}
+	}
+}
+
+// TestFetchTool_SSRFGuardBlocksLoopback pins that the default
+// FetchConfig refuses to dial a loopback address. A model under
+// prompt injection that tries to fetch http://127.0.0.1:7777 (the
+// affentserve port itself) or http://169.254.169.254 (cloud-metadata
+// IMDSv1) hits the dialer's Control hook before TCP even opens.
+func TestFetchTool_SSRFGuardBlocksLoopback(t *testing.T) {
+	// httptest binds to 127.0.0.1; the guard should reject it.
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.Write([]byte("should not see this"))
+	}))
+	t.Cleanup(srv.Close)
+
+	tool := FetchTool(FetchConfig{}) // default: guard ON
+	args, _ := json.Marshal(map[string]string{"url": srv.URL})
+	out, err := tool.Execute(context.Background(), args)
+	if err == nil {
+		t.Fatalf("expected SSRF rejection; got out=%q", out)
+	}
+	if !strings.Contains(err.Error(), "ssrf-guard") {
+		t.Errorf("error must mention ssrf-guard so operators can grep; got %v", err)
+	}
+}
+
+// TestFetchTool_SSRFGuardOptInAllowsLoopback pins the escape hatch:
+// when AllowPrivateNetwork is on, the same loopback target succeeds.
+// This is the path dev / local-service fetching takes.
+func TestFetchTool_SSRFGuardOptInAllowsLoopback(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "text/plain")
+		w.Write([]byte("local ok"))
+	}))
+	t.Cleanup(srv.Close)
+
+	tool := FetchTool(FetchConfig{AllowPrivateNetwork: true})
+	args, _ := json.Marshal(map[string]string{"url": srv.URL})
+	out, err := tool.Execute(context.Background(), args)
+	if err != nil {
+		t.Fatalf("opt-in path must work: %v", err)
+	}
+	if !strings.Contains(out, "local ok") {
+		t.Errorf("expected body to come through; got %q", out)
+	}
+}
+
+// TestIsBlockedIP pins the category coverage so a future refactor of
+// isBlockedIP doesn't silently unblock something. Covers the
+// well-known SSRF targets agents see in the wild: cloud-metadata,
+// RFC1918 internal services, IPv6 ULA / link-local.
+func TestIsBlockedIP(t *testing.T) {
+	blocked := []string{
+		"127.0.0.1",        // loopback v4
+		"::1",              // loopback v6
+		"10.0.0.5",         // RFC1918
+		"172.16.0.5",       // RFC1918
+		"192.168.1.5",      // RFC1918
+		"169.254.169.254",  // AWS / Azure / GCP metadata
+		"fe80::1",          // IPv6 link-local
+		"fc00::1",          // IPv6 ULA
+		"0.0.0.0",          // unspecified
+		"255.255.255.255",  // broadcast
+		"224.0.0.1",        // IPv4 multicast
+		"ff02::1",          // IPv6 multicast
+	}
+	for _, s := range blocked {
+		if !isBlockedIP(net.ParseIP(s)) {
+			t.Errorf("isBlockedIP(%s) = false; want true", s)
+		}
+	}
+	allowed := []string{
+		"8.8.8.8",
+		"1.1.1.1",
+		"203.0.113.5", // TEST-NET-3 public-range example
+		"2606:4700:4700::1111",
+	}
+	for _, s := range allowed {
+		if isBlockedIP(net.ParseIP(s)) {
+			t.Errorf("isBlockedIP(%s) = true; want false (public IP)", s)
 		}
 	}
 }
