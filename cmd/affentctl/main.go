@@ -20,6 +20,10 @@ import (
 )
 
 func main() {
+	if err := loadDotEnv(); err != nil {
+		fmt.Fprintf(os.Stderr, "affentctl: load .env: %v\n", err)
+		os.Exit(64)
+	}
 	if len(os.Args) < 2 {
 		usage()
 		os.Exit(64)

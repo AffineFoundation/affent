@@ -26,6 +26,11 @@ func main() {
 		Out: os.Stderr, TimeFormat: time.RFC3339,
 	}).With().Timestamp().Logger()
 
+	if err := loadDotEnv(); err != nil {
+		fmt.Fprintf(os.Stderr, "affentserve: load .env: %v\n", err)
+		os.Exit(exitConfig)
+	}
+
 	cfg, err := parseFlagsAndConfig(os.Args[1:])
 	if err != nil {
 		if errors.Is(err, flag.ErrHelp) {

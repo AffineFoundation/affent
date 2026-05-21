@@ -229,6 +229,15 @@ affentctl sessions --workspace ./task                   # list past sessions
 an existing conversation. Logs persist as JSONL under
 `<workspace>/.affentctl/<session_id>.jsonl`.
 
+### .env file
+
+At startup both `affentctl` and `affentserve` load `.env` from cwd
+and from `~/.config/affent/.env`. Shell env wins over file, so a
+one-off `AFFENTCTL_MODEL=qwen-max affentctl run …` still works
+unchanged. See `.env.example` in the repo root for the supported
+keys (`AFFENTCTL_BASE_URL` / `AFFENTCTL_API_KEY` / `AFFENTCTL_MODEL`,
+`AFFENTSERVE_*`, `TAVILY_API_KEY`).
+
 ### Flags
 
 | flag                    | default                                          | env                    |

@@ -322,6 +322,14 @@ func setupLoop(c commonFlags) (*loopBundle, int) {
 			return nil, 3
 		}
 		systemPrompt = raw
+	} else if workspace != "/workspace" {
+		// DefaultSystemPrompt is framed for the affine-agents dev-box
+		// where /workspace is bind-mounted. Standalone affentctl points
+		// at an arbitrary --workspace, so the model would otherwise burn
+		// 1-2 tool calls calling /workspace paths before discovering the
+		// real path from the rejection message. Anchor it explicitly.
+		systemPrompt += "\n\nYour workspace directory is \"" + workspace +
+			"\". Use this exact path (or a relative path inside it) with the file tools."
 	}
 
 	traceWriter, traceClose, err := openTrace(c.tracePath, resumed)
