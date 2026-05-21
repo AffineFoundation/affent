@@ -543,11 +543,14 @@ opt in via flags / JSON config: `--browser` (plus
 default for remote-driven servers), `--memory`. `--auth-token`
 gates every endpoint except `/healthz` with a `Bearer` token.
 
-To pin requests to an existing session pass either `session_id` or
-`affent_session_id` in the JSON body — the affent-namespaced field
-wins when both are set, so a caller that copy-pastes the response's
-`affent_session_id` directly into a follow-up request gets the same
-session back.
+To pin requests to an existing session, pass the session id in any
+of three places — the request `X-Affent-Session-Id` header (highest
+priority; useful for proxies that can't rewrite the JSON body), the
+body's `affent_session_id` field (namespaced — won't collide with a
+future OpenAI extension), or the body's `session_id` field (legacy).
+The response sets `X-Affent-Session-Id` on every chat-completions
+reply and includes `affent_session_id` on each streaming chunk and
+the final non-streaming JSON, so any of those three round-trip back.
 
 `cmd/affentserve` is also a separate Go sub-module — the server's
 deps (browser, web, MCP) stay out of the root module's transitive
