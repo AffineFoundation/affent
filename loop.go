@@ -434,7 +434,11 @@ func (l *Loop) consumeAndPersist(ctx context.Context, turnID string, stream <-ch
 	if sawText {
 		// Close the streaming bubble so the UI's accumulator marks the
 		// assistant text done before the next assistant message starts.
-		l.publish(sse.TypeMessageDone, sse.MessageDonePayload{TurnID: turnID, Text: finish.Final.Content})
+		l.publish(sse.TypeMessageDone, sse.MessageDonePayload{
+			TurnID:       turnID,
+			Text:         finish.Final.Content,
+			FinishReason: finish.Reason,
+		})
 	}
 	// Persist the assembled assistant message (content + tool_calls +
 	// reasoning) so reload sees the same state. ReasoningContent is kept

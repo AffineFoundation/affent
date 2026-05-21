@@ -45,6 +45,16 @@ type MessageDeltaPayload struct {
 type MessageDonePayload struct {
 	TurnID string `json:"turn_id"`
 	Text   string `json:"text"`
+	// FinishReason mirrors the upstream OpenAI-compat `finish_reason`
+	// for this assistant message: "stop" (model finished naturally),
+	// "length" (max_tokens hit — content is TRUNCATED), "tool_calls"
+	// (turn continues with a tool round-trip), "content_filter", and
+	// provider-specific extensions. Empty on rare streams that close
+	// without one. Consumers use it to flag "this answer was cut off
+	// at the model's output cap, not because the model thought it was
+	// done" — otherwise a length-truncated reply looks identical to a
+	// short complete one and confuses UIs and eval rigs alike.
+	FinishReason string `json:"finish_reason,omitempty"`
 }
 
 type ThinkingDeltaPayload struct {
