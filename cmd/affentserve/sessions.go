@@ -200,11 +200,24 @@ func (p *SessionPool) buildSession(id string) (*Session, error) {
 	llm := affent.NewLLMClient(p.cfg.BaseURL, p.cfg.APIKey, p.cfg.Model)
 
 	reg := affent.NewRegistry()
+	// Memory store — used both as a tool dependency and as the
+	// snapshot source for Loop.EnsureSystemPrompt. Created once so
+	// builtins + standalone registration share the same on-disk state.
+	var memStore affent.MemoryStore
+	if p.cfg.EnableMemory {
+		memStore = affent.NewFileMemoryStore(workspace)
+	}
 	if p.cfg.EnableBuiltins {
 		affent.RegisterBuiltins(reg, affent.BuiltinDeps{
 			Executor:         executor.NewLocalExecutor(id, workspace),
 			HostWorkspaceDir: workspace,
+			Memory:           memStore,
 		})
+	} else if memStore != nil {
+		// Memory tool without the shell/file builtins — common for
+		// remote-driven affentserve deployments that don't want shell
+		// exposed but still want durable per-user notes.
+		affent.RegisterMemoryOnly(reg, memStore)
 	}
 
 	var browser *affentbrowser.Session
@@ -254,6 +267,10 @@ func (p *SessionPool) buildSession(id string) (*Session, error) {
 		Events:       events,
 		Log:          p.logger.With().Str("session_id", id).Logger(),
 		MaxTurnSteps: p.cfg.MaxTurnSteps,
+		// Snapshot source for EnsureSystemPrompt — when nil, the
+		// memory block is just omitted from the system prompt and
+		// the tool isn't registered above anyway.
+		Memory: memStore,
 	}
 	if err := loop.EnsureSystemPrompt(p.cfg.SystemPrompt); err != nil {
 		_ = os.RemoveAll(workspace)
