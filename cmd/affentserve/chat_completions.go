@@ -25,10 +25,12 @@ type chatRequest struct {
 	// copy-pasting the response field into a request used to silently
 	// open a fresh session. AffentSessionID wins when both are set —
 	// the namespaced field is the canonical channel and can't collide
-	// with a future OpenAI extension. The X-Affent-Session-Id header
-	// is still honored above this in middleware.
-	SessionID        string `json:"session_id"`
-	AffentSessionID  string `json:"affent_session_id"`
+	// with a future OpenAI extension. The X-Affent-Session-Id request
+	// header takes precedence over both body fields when present —
+	// proxies and middleware can pin a session without rewriting the
+	// JSON body.
+	SessionID       string `json:"session_id"`
+	AffentSessionID string `json:"affent_session_id"`
 	// We accept and ignore the other OpenAI knobs (temperature, top_p,
 	// stop, etc.) because affent owns sampling via its LLMClient.
 	// Surfacing them here would only be misleading.
@@ -91,7 +93,15 @@ func handleChatCompletions(cfg Config, pool *SessionPool) http.HandlerFunc {
 			return
 		}
 
-		sess, err := pool.GetOrCreate(req.resolvedSessionID())
+		// X-Affent-Session-Id header takes precedence over body fields
+		// so proxies / middleware can pin a session without rewriting
+		// the JSON body. Falls back to body.affent_session_id, then
+		// body.session_id, then empty (= fresh session).
+		sessionID := r.Header.Get("X-Affent-Session-Id")
+		if sessionID == "" {
+			sessionID = req.resolvedSessionID()
+		}
+		sess, err := pool.GetOrCreate(sessionID)
 		if err != nil {
 			if errors.Is(err, ErrShuttingDown) {
 				w.Header().Set("Retry-After", "5")

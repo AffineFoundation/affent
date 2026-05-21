@@ -1,11 +1,42 @@
 package main
 
 import (
+	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 
 	"github.com/affinefoundation/affent/sse"
 )
+
+// TestChatCompletions_HeaderBeatsBodyForSessionPinning pins the
+// precedence contract surfaced in real-rollout testing: a caller
+// passing X-Affent-Session-Id on the request header expected the
+// session to be reused, but only the body fields were being read.
+// New requests silently spawned fresh sessions, breaking pinning
+// for proxies / middleware that can't rewrite the JSON body.
+func TestChatCompletions_HeaderBeatsBodyForSessionPinning(t *testing.T) {
+	pool := newTestPool(t, 8, "5m")
+	cfg := Config{Model: "fake"}
+	handler := handleChatCompletions(cfg, pool)
+
+	// Body says session "from-body" but header overrides with "from-header".
+	body := `{"model":"fake","messages":[{"role":"user","content":"hi"}],"session_id":"from-body"}`
+	req := httptest.NewRequest(http.MethodPost, "/v1/chat/completions", strings.NewReader(body))
+	req.Header.Set("X-Affent-Session-Id", "from-header")
+	rec := httptest.NewRecorder()
+	// We don't need the upstream LLM to answer — it will error, but
+	// the session creation step happens first and that's what the
+	// pool will record. Cancel via a closed-on-completion ctx.
+	handler(rec, req)
+
+	if _, err := pool.Get("from-header"); err != nil {
+		t.Errorf("pool should contain 'from-header' session: %v", err)
+	}
+	if _, err := pool.Get("from-body"); err == nil {
+		t.Errorf("pool should NOT contain 'from-body' — header must win")
+	}
+}
 
 // TestResolvedSessionID_PrefersAffentNamespacedField pins the
 // request-vs-response symmetry fix. Real-LLM testing surfaced the
