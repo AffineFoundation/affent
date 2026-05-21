@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"log"
 	"os"
 	"path/filepath"
 	"strings"
@@ -330,6 +331,43 @@ func TestRegistry_dispatch_isErrFromExecuteError(t *testing.T) {
 	_, isErr = reg.dispatch(context.Background(), "no-such-tool", json.RawMessage(`{}`))
 	if !isErr {
 		t.Errorf("isErr=false for unknown tool")
+	}
+}
+
+// TestRegistry_dispatch_RecoversFromToolPanic pins that a panicking
+// tool does NOT crash the dispatch goroutine. Without recover, a
+// third-party tool with a latent nil-deref bug would tear down the
+// whole runTurn goroutine — and in affentserve, the Go runtime would
+// take every other concurrent session's goroutines down with it. The
+// dispatch wraps the panic into a tool error so the model sees it
+// and can adapt, and the stack is logged for operator triage.
+func TestRegistry_dispatch_RecoversFromToolPanic(t *testing.T) {
+	// Capture log output to verify the stack trace is recorded.
+	var logBuf bytes.Buffer
+	origOut := log.Writer()
+	log.SetOutput(&logBuf)
+	t.Cleanup(func() { log.SetOutput(origOut) })
+
+	reg := NewRegistry()
+	reg.Add(&Tool{
+		Name:   "panicker",
+		Schema: json.RawMessage(`{"type":"object"}`),
+		Execute: func(context.Context, json.RawMessage) (string, error) {
+			var nilPtr *string
+			return *nilPtr, nil // nil deref, panic
+		},
+	})
+
+	res, isErr := reg.dispatch(context.Background(), "panicker", json.RawMessage(`{}`))
+	if !isErr {
+		t.Errorf("panic must surface as isErr=true; got %q", res)
+	}
+	if !strings.Contains(res, "panicked") {
+		t.Errorf("result must mention the panic so the model sees it; got %q", res)
+	}
+	logged := logBuf.String()
+	if !strings.Contains(logged, "panicker") || !strings.Contains(logged, "goroutine") {
+		t.Errorf("expected stack trace logged for operator triage; got: %s", logged)
 	}
 }
 

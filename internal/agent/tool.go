@@ -4,6 +4,8 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"log"
+	"runtime/debug"
 	"sync"
 )
 
@@ -92,11 +94,25 @@ func (r *Registry) Defs() []ToolDef {
 // need so they don't have to prefix-sniff the result: a tool that
 // legitimately echoes "Error:" in its stdout (e.g. `echo Error: ...`
 // from a passing test) is success, not failure.
-func (r *Registry) dispatch(ctx context.Context, name string, args json.RawMessage) (string, bool) {
+func (r *Registry) dispatch(ctx context.Context, name string, args json.RawMessage) (out string, isErr bool) {
 	t, ok := r.Get(name)
 	if !ok {
 		return fmt.Sprintf("Error: tool %q is not available", name), true
 	}
+	// Recover from a panicking tool. Without this a buggy third-party
+	// tool brings down the entire process — the runTurn goroutine
+	// crashes, Go's runtime tears down every other goroutine in
+	// affentserve, and every concurrent client loses their session.
+	// Convert the panic into a tool error so the model sees it and
+	// can recover (try a different approach, surface the failure to
+	// the user), and log the stack so operators can root-cause.
+	defer func() {
+		if rec := recover(); rec != nil {
+			log.Printf("affent: tool %q panicked: %v\n%s", name, rec, debug.Stack())
+			out = fmt.Sprintf("Error: tool %q panicked: %v", name, rec)
+			isErr = true
+		}
+	}()
 	res, err := t.Execute(ctx, args)
 	if err != nil {
 		if res != "" {
