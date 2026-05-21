@@ -6,6 +6,14 @@
 // without network, etc.) don't pay for the html parser or any search
 // backend dependencies in their go.sum.
 //
+// Security default: web_fetch refuses to dial private / loopback /
+// link-local / multicast / unspecified IP ranges — including the
+// usual SSRF targets (127.0.0.1, RFC1918, 169.254.169.254 cloud
+// metadata, IPv6 ULA / link-local). A prompt-injected model can't
+// pivot from web_fetch into the host's internal network or cloud
+// IMDS without an explicit opt-in. Local-dev / local-service
+// fetching opts in via FetchConfig.AllowPrivateNetwork = true.
+//
 // Usage:
 //
 //	import (
@@ -16,13 +24,16 @@
 //	reg := agent.NewRegistry()
 //	agent.RegisterBuiltins(reg, deps)
 //
-//	// Just web_fetch (no search backend needed):
+//	// Just web_fetch (no search backend needed). SSRF guard ON:
 //	affentweb.RegisterFetch(reg, affentweb.FetchConfig{})
 //
 //	// Both tools, default Tavily backend (reads TAVILY_API_KEY):
 //	if err := affentweb.RegisterAll(reg, affentweb.Options{}); err != nil {
 //	    log.Fatal(err)
 //	}
+//
+//	// Dev mode against a local service (SSRF guard OFF):
+//	affentweb.RegisterFetch(reg, affentweb.FetchConfig{AllowPrivateNetwork: true})
 //
 //	// Custom search backend:
 //	affentweb.RegisterFetch(reg, affentweb.FetchConfig{})
