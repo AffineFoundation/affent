@@ -2,7 +2,8 @@
 
 Affent is an OpenAI-compatible agent runtime for practical tool-using sessions.
 It can run as a CLI for local work, as an HTTP service for clients that already
-speak the OpenAI API shape, and as a set of optional in-tree tool integrations.
+speak the OpenAI API shape, and with optional tool families for web, browser,
+memory, files, shell, and MCP enabled as needed.
 
 Affent focuses on the runtime layer of an agent: model streaming, tool
 execution, conversation state, cancellation, retries, context management,
@@ -54,15 +55,11 @@ stream.
 
 ## Quick Start
 
-Build the CLI:
+Build the CLI and run a one-shot task:
 
 ```bash
 go build -o ./bin/affentctl ./cmd/affentctl
-```
 
-Run a one-shot task:
-
-```bash
 ./bin/affentctl run \
   --workspace ./workspace \
   --base-url https://api.openai.com/v1 \
@@ -104,9 +101,7 @@ from:
 ~/.config/affent/.env
 ```
 
-Shell environment variables take precedence over `.env` values.
-
-Common CLI variables:
+The most commonly used variables are:
 
 ```text
 AFFENTCTL_BASE_URL
@@ -126,28 +121,6 @@ AFFENTSERVE_AUTH_TOKEN
 AFFENTSERVE_WORKSPACE_ROOT
 AFFENTSERVE_MEMORY_ROOT
 TAVILY_API_KEY
-```
-
-Example `affentctl` config:
-
-```json
-{
-  "workspace": "./workspace",
-  "base_url": "https://api.openai.com/v1",
-  "model": "gpt-4o-mini",
-  "max_turns": 10,
-  "project_context": true,
-  "memory": {
-    "enabled": true,
-    "dir": ".affent/memory",
-    "user_store": "",
-    "max_chars": "2200,1375"
-  },
-  "compact": {
-    "trigger": 240,
-    "keep_last": 10
-  }
-}
 ```
 
 ## State And Memory
@@ -193,31 +166,17 @@ batch-evaluation artifacts.
 
 ## Architecture
 
-Affent's external product surfaces are the CLI and HTTP server. The agent
-runtime lives under `internal/agent`; supporting storage, retrieval, text, and
-test packages live under `internal/*`. The root of the repository is kept as a
-project doorway rather than a Go package.
-
-More architecture notes live in `docs/architecture.md`.
+Affent's external product surfaces are the CLI, HTTP server, configuration,
+state layout, and event contracts. The repository root is a project doorway,
+not an importable Go package. Architecture notes live in
+`docs/architecture.md`.
 
 ## HTTP API
 
-`affentserve` provides:
-
-```text
-GET    /healthz
-GET    /v1/models
-GET    /v1/stats
-POST   /v1/chat/completions
-GET    /v1/sessions/{id}/events
-DELETE /v1/sessions/{id}
-```
-
-`/v1/chat/completions` follows the OpenAI-compatible shape. Clients can pin a
-session through `X-Affent-Session-Id`, `affent_session_id`, or `session_id`.
-
-Server features such as browser tools, web tools, built-ins, and memory are
-explicitly enabled through flags or config.
+`affentserve` exposes OpenAI-compatible chat completions, model listing,
+health/stats endpoints, session lifecycle operations, and a native session
+event stream. Clients can pin a session through `X-Affent-Session-Id`,
+`affent_session_id`, or `session_id`.
 
 ## Security Model
 
@@ -254,7 +213,3 @@ cd ../../cmd/affentserve && go test ./...
 
 Browser smoke tests are behind the `browser_smoke` build tag because they need a
 local Chromium binary.
-
-## License
-
-This repository does not currently declare a license file.
