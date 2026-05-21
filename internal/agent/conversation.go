@@ -22,11 +22,23 @@ type Conversation struct {
 }
 
 // ValidateSessionID returns nil iff sessionID is safe to use as a
-// single filename component. Untrusted callers (HTTP-driven servers
+// single filename component AND safe to embed in operator log lines
+// without splitting them. Untrusted callers (HTTP-driven servers
 // that accept session_id from clients) MUST call this before joining
 // the id into any filesystem path — otherwise "../escape" lands the
 // derived file outside its intended root. Used by NewConversation
 // and by affentserve's per-session-dir allocator.
+//
+// Rejected:
+//   - path separators ('/', '\\'), null byte, literal "." and ".."
+//     (filesystem traversal)
+//   - ASCII control characters (< 0x20 or 0x7F): newline, tab, CR,
+//     escape, etc. Newline-in-id was the path to log injection
+//     ("session_id=victim\nFAKE LOG LINE")
+//
+// Allowed: any visible character, including Unicode. A client that
+// uses "用户-001" or "user@host" as a session id stays valid; only
+// the categories above trip the check.
 func ValidateSessionID(sessionID string) error {
 	if sessionID == "" {
 		return errors.New("session id is required")
@@ -34,6 +46,11 @@ func ValidateSessionID(sessionID string) error {
 	leaf := sessionID + ".jsonl"
 	if filepath.Base(leaf) != leaf || strings.ContainsAny(sessionID, "/\\\x00") || sessionID == ".." || sessionID == "." {
 		return fmt.Errorf("invalid session id %q (must be a plain filename, no path separators)", sessionID)
+	}
+	for _, r := range sessionID {
+		if r < 0x20 || r == 0x7F {
+			return fmt.Errorf("invalid session id %q (contains ASCII control character U+%04X)", sessionID, r)
+		}
 	}
 	return nil
 }

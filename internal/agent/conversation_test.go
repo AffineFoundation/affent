@@ -29,6 +29,14 @@ func TestNewConversation_RejectsPathInjectionInSessionID(t *testing.T) {
 		".",
 		"id\x00bytes",
 		"",
+		// ASCII control characters — log injection vectors. Without
+		// rejection, "session=victim\nFAKE LOG LINE" gets baked into
+		// operator log streams.
+		"newline\nattack",
+		"carriage\rreturn",
+		"tab\there",
+		"escape\x1bbomb",
+		"del\x7fchar",
 	}
 	for _, id := range bad {
 		c, err := NewConversation(home, id)
@@ -39,6 +47,14 @@ func TestNewConversation_RejectsPathInjectionInSessionID(t *testing.T) {
 	// And a perfectly normal id round-trips fine.
 	if _, err := NewConversation(home, "session-001_abc"); err != nil {
 		t.Errorf("plain id rejected: %v", err)
+	}
+	// Visible non-ASCII characters stay legal: a client that picks
+	// "用户-001" or "user@host" as its session id is well-formed.
+	if err := ValidateSessionID("用户-001"); err != nil {
+		t.Errorf("Unicode visible id rejected: %v", err)
+	}
+	if err := ValidateSessionID("user@host"); err != nil {
+		t.Errorf("punctuation in visible id rejected: %v", err)
 	}
 }
 
