@@ -353,11 +353,7 @@ func (l *Loop) runTurn(ctx context.Context, turnID, userText string) {
 			l.publish(sse.TypeToolRequest, sse.ToolRequestPayload{
 				TurnID: turnID, CallID: callID, Tool: tc.Function.Name, Args: argsView,
 			})
-			result := l.Tools.dispatch(ctx, tc.Function.Name, args)
-			isErr := false
-			if len(result) >= 6 && result[:6] == "Error:" {
-				isErr = true
-			}
+			result, isErr := l.Tools.dispatch(ctx, tc.Function.Name, args)
 			exit := 0
 			if isErr {
 				exit = 1

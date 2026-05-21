@@ -202,6 +202,45 @@ func TestShellTool_ShellOverrideIsHonored(t *testing.T) {
 // registry, and subsequent Defs() / Get() reflect the removal.
 // Important for rollback paths (MCP RegisterAll, future extension
 // reloads) that previously had no way to clean up after themselves.
+// TestRegistry_dispatch_isErrFromExecuteError pins that the structured
+// isErr flag comes from the underlying Execute error, not from a
+// prefix scan on the result string. Surfaced when a `shell echo "Error:"`
+// (legitimate stdout starting with "Error:" but exit=0) was being
+// reported to consumers as exit_code=1.
+func TestRegistry_dispatch_isErrFromExecuteError(t *testing.T) {
+	reg := NewRegistry()
+	reg.Add(&Tool{
+		Name:   "ok_with_error_prefix",
+		Schema: json.RawMessage(`{"type":"object"}`),
+		Execute: func(context.Context, json.RawMessage) (string, error) {
+			return "Error: this looks like an error but actually success", nil
+		},
+	})
+	reg.Add(&Tool{
+		Name:   "real_failure",
+		Schema: json.RawMessage(`{"type":"object"}`),
+		Execute: func(context.Context, json.RawMessage) (string, error) {
+			return "", fmt.Errorf("boom")
+		},
+	})
+	res, isErr := reg.dispatch(context.Background(), "ok_with_error_prefix", json.RawMessage(`{}`))
+	if isErr {
+		t.Errorf("isErr=true for nil-error Execute; result prefix scan must not flip the bool: %q", res)
+	}
+	res, isErr = reg.dispatch(context.Background(), "real_failure", json.RawMessage(`{}`))
+	if !isErr {
+		t.Errorf("isErr=false for non-nil Execute error: %q", res)
+	}
+	if !strings.HasPrefix(res, "Error: ") {
+		t.Errorf("real_failure result must still carry 'Error: ' prefix so the model sees the failure: %q", res)
+	}
+	// Unknown tool is also an error (kept for parity with the previous behavior).
+	_, isErr = reg.dispatch(context.Background(), "no-such-tool", json.RawMessage(`{}`))
+	if !isErr {
+		t.Errorf("isErr=false for unknown tool")
+	}
+}
+
 func TestRegistry_RemovePullsToolFromBothMapAndOrder(t *testing.T) {
 	reg := NewRegistry()
 	mkTool := func(name string) *Tool {

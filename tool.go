@@ -85,20 +85,24 @@ func (r *Registry) Defs() []ToolDef {
 	return out
 }
 
-// dispatch runs the tool and returns its string result. Errors are
-// formatted as the result string so the model sees them and can recover --
-// most LLMs handle "Error: ..." better than a separate error channel.
-func (r *Registry) dispatch(ctx context.Context, name string, args json.RawMessage) string {
+// dispatch runs the tool and returns (result string, isErr). Errors are
+// folded into the result string with an "Error: " prefix so the model
+// sees them and can recover — most LLMs handle "Error: ..." better
+// than a separate error channel. isErr is the structured signal callers
+// need so they don't have to prefix-sniff the result: a tool that
+// legitimately echoes "Error:" in its stdout (e.g. `echo Error: ...`
+// from a passing test) is success, not failure.
+func (r *Registry) dispatch(ctx context.Context, name string, args json.RawMessage) (string, bool) {
 	t, ok := r.Get(name)
 	if !ok {
-		return fmt.Sprintf("Error: tool %q is not available", name)
+		return fmt.Sprintf("Error: tool %q is not available", name), true
 	}
 	res, err := t.Execute(ctx, args)
 	if err != nil {
 		if res != "" {
-			return fmt.Sprintf("Error: %s\n%s", err, res)
+			return fmt.Sprintf("Error: %s\n%s", err, res), true
 		}
-		return fmt.Sprintf("Error: %s", err)
+		return fmt.Sprintf("Error: %s", err), true
 	}
-	return res
+	return res, false
 }
