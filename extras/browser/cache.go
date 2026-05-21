@@ -107,10 +107,15 @@ func (c *FileResponseCache) Get(_ context.Context, url string) (*CachedResponse,
 	return &meta, true, nil
 }
 
-// Put writes a new entry. Atomic: tempfile + rename for each of the
-// two files. We accept the small (~ms) window where meta lands first;
-// a concurrent Get reading just-the-meta then reading the still-old
-// body is degenerate but not corrupting (the old body is well-formed).
+// Put writes a new entry. Each file is written via atomicWriteFile
+// (tempfile + fsync + rename) so a crash mid-write can't surface as
+// a half-written entry. We write the body first, then the meta — a
+// concurrent Get that interleaves between the two will read old meta
+// alongside the new body. The old meta's FetchedAt is still valid
+// (it's the previous fetch's timestamp), so the TTL gate stays
+// honest and the worst observable case is one stale-headers read.
+// Inverting the order would just trade that for "new meta + old
+// body", same shape of mismatch.
 //
 // We reject several classes of responses to avoid poisoning the cache
 // for downstream replays:
@@ -359,16 +364,34 @@ func atomicWriteFile(path string, data []byte) error {
 		return err
 	}
 	tmpName := tmp.Name()
+	renamed := false
 	defer func() {
-		// If we didn't rename successfully, clean the tmp file.
-		_ = os.Remove(tmpName)
+		// Only Remove the tmp if the rename below didn't claim it. After
+		// a successful rename the path is gone, and the unconditional
+		// Remove would only spend a syscall returning ENOENT.
+		if !renamed {
+			_ = os.Remove(tmpName)
+		}
 	}()
 	if _, err := tmp.Write(data); err != nil {
+		tmp.Close()
+		return err
+	}
+	// Sync before rename so the rename's atomicity carries through to
+	// durable bytes on disk; without it, a crash between the write and
+	// the kernel's writeback can leave the renamed file with truncated
+	// or empty contents — the Get path then either Decode-fails or
+	// returns a zero-status response that the LLM has to work around.
+	if err := tmp.Sync(); err != nil {
 		tmp.Close()
 		return err
 	}
 	if err := tmp.Close(); err != nil {
 		return err
 	}
-	return os.Rename(tmpName, path)
+	if err := os.Rename(tmpName, path); err != nil {
+		return err
+	}
+	renamed = true
+	return nil
 }

@@ -230,7 +230,13 @@ func TestFileResponseCache_Sweep_DoesNotKillConcurrentPut(t *testing.T) {
 	// drive Put + Sweep in parallel and assert every Put's URL is
 	// still readable afterward.
 	dir := t.TempDir()
-	c, err := NewFileResponseCache(dir, 50*time.Millisecond)
+	// TTL chosen so seeded entries (FetchedAt=now-1h) are stale and
+	// Sweep finds work, but every fresh Put stays comfortably within
+	// the window for the assertion. An earlier 50ms TTL was sensitive
+	// to per-Put latency: once atomicWriteFile started fsyncing the
+	// tmp file the cumulative time across 64 sequential Puts pushed
+	// the earliest entry past 50ms and made the test flake.
+	c, err := NewFileResponseCache(dir, 30*time.Second)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -354,6 +360,47 @@ func TestInterceptConfig_ExplicitBlockedTypesWins(t *testing.T) {
 	cfg := InterceptConfig{BlockedResourceTypes: []string{"Script"}}.resolved()
 	if len(cfg.BlockedResourceTypes) != 1 || cfg.BlockedResourceTypes[0] != "Script" {
 		t.Errorf("expected explicit BlockedResourceTypes preserved, got %v", cfg.BlockedResourceTypes)
+	}
+}
+
+func TestURLMatchesBlockedDomain(t *testing.T) {
+	patterns := []string{
+		"doubleclick.net",
+		"facebook.net",
+		"accounts.google.com/gsi",
+	}
+	cases := []struct {
+		url  string
+		want bool
+		why  string
+	}{
+		{"https://doubleclick.net/track", true, "exact host"},
+		{"https://stats.g.doubleclick.net/log", true, "subdomain"},
+		{"https://accounts.google.com/gsi/client.js?v=1", true, "host+path prefix"},
+		{"https://accounts.google.com/oauth/v2", false, "right host, wrong path"},
+
+		// False-positive prevention. strings.Contains used to flag all of
+		// these — they don't actually go to a blocked origin.
+		{"https://example.com/?ref=doubleclick.net", false, "tracker name in query string"},
+		{"https://example.com/static/doubleclick.net/sdk.js", false, "tracker name in path segment"},
+		{"https://my-doubleclick.net.attacker.com/", false, "lookalike suffix"},
+		{"https://notfacebook.net/", false, "lookalike prefix"},
+
+		// IPv6 + port don't trip the host parse.
+		{"http://[::1]:8080/health", false, "IPv6 loopback"},
+		{"https://doubleclick.net:443/x", true, "exact host with port"},
+
+		// Garbage in, false out.
+		{"not a url", false, "unparseable"},
+		{"", false, "empty"},
+	}
+	for _, c := range cases {
+		t.Run(c.why, func(t *testing.T) {
+			got := urlMatchesBlockedDomain(c.url, patterns)
+			if got != c.want {
+				t.Errorf("urlMatchesBlockedDomain(%q) = %v, want %v", c.url, got, c.want)
+			}
+		})
 	}
 }
 
