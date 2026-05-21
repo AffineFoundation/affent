@@ -212,6 +212,98 @@ func TestRunTurn_MaxStepsEmitsMaxTurnsReason(t *testing.T) {
 	}
 }
 
+// TestRunTurn_BackfillsMissingToolCallID pins the end-to-end path:
+// a model that emits a tool_call WITHOUT an `id` (some chutes-routed
+// / DeepSeek-mode providers do this) still produces a conv log where
+// the assistant's tool_call id matches the tool message's
+// tool_call_id. Pre-fix, persistence kept id="" while runTurn
+// generated a local "call_xxx" for the response — and the next LLM
+// request 400'd on the unmatched pair, bricking the session.
+func TestRunTurn_BackfillsMissingToolCallID(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "text/event-stream")
+		w.WriteHeader(200)
+		fl := w.(http.Flusher)
+		body, _ := readReqBody(r)
+		if strings.Contains(body, `"role":"tool"`) {
+			// Turn 2: produce a final answer once the tool result is in.
+			w.Write([]byte("data: {\"choices\":[{\"delta\":{\"role\":\"assistant\",\"content\":\"ok\"},\"finish_reason\":\"stop\"}]}\n\n"))
+			fl.Flush()
+			return
+		}
+		// Turn 1: emit a tool_call delta with NO "id" field — this is
+		// the upstream-bug shape that pre-fix would brick the session.
+		lines := []string{
+			`data: {"choices":[{"delta":{"role":"assistant","tool_calls":[{"index":0,"type":"function","function":{"name":"big","arguments":""}}]},"finish_reason":null}]}`,
+			`data: {"choices":[{"delta":{"tool_calls":[{"index":0,"function":{"arguments":"{}"}}]},"finish_reason":null}]}`,
+			`data: {"choices":[{"delta":{},"finish_reason":"tool_calls"}]}`,
+			`data: [DONE]`,
+		}
+		for _, l := range lines {
+			w.Write([]byte(l + "\n\n"))
+			fl.Flush()
+		}
+	}))
+	t.Cleanup(srv.Close)
+
+	conv, err := OpenConversationAt(filepath.Join(t.TempDir(), "sess.jsonl"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	reg := NewRegistry()
+	reg.Add(fakeBigResultTool("ok"))
+
+	events := make(chan sse.Event, 256)
+	llm := NewLLMClient(srv.URL, "", "fake-model")
+	loop := &Loop{
+		LLM: llm, Tools: reg, Conv: conv, Events: events,
+		MaxTurnSteps: 4, PerCallTimeout: 5 * time.Second,
+	}
+	if err := loop.EnsureSystemPrompt("base"); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := loop.SendUser(context.Background(), "go"); err != nil {
+		t.Fatal(err)
+	}
+
+	deadline := time.After(10 * time.Second)
+	for {
+		select {
+		case ev, ok := <-events:
+			if !ok {
+				t.Fatal("event channel closed before turn.end")
+			}
+			if ev.Type != sse.TypeTurnEnd {
+				continue
+			}
+			// Drain done — inspect the conv.
+			goto inspect
+		case <-deadline:
+			t.Fatal("timeout waiting for turn.end")
+		}
+	}
+inspect:
+	msgs := conv.Snapshot()
+	var assistantID, toolID string
+	for _, m := range msgs {
+		if m.Role == "assistant" && len(m.ToolCalls) > 0 {
+			assistantID = m.ToolCalls[0].ID
+		}
+		if m.Role == "tool" {
+			toolID = m.ToolCallID
+		}
+	}
+	if assistantID == "" {
+		t.Fatalf("assistant tool_call.id must be backfilled (not left empty); conv: %+v", msgs)
+	}
+	if toolID == "" {
+		t.Fatalf("tool message tool_call_id missing; conv: %+v", msgs)
+	}
+	if assistantID != toolID {
+		t.Errorf("assistant tool_call.id (%q) must match tool tool_call_id (%q) — strict OpenAI-compat backends 400 otherwise", assistantID, toolID)
+	}
+}
+
 // TestRunTurn_CancelMidBatchSkipsRemainingToolCalls pins that a
 // Loop.Cancel fired while the loop is partway through a batch of
 // tool_calls aborts the batch instead of running every remaining

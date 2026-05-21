@@ -267,6 +267,41 @@ func TestSanitizeToolCallArgs_PartialCorruption(t *testing.T) {
 	}
 }
 
+// TestEnsureToolCallIDs_BackfillsMissingButLeavesPresent pins the
+// contract: every call gets a non-empty ID after the pass, and IDs
+// that were already populated by the model are kept verbatim so a
+// downstream replay still references the same id. Without the
+// backfill, providers that omit ids on tool_call fragments (observed
+// on certain DeepSeek tool-call configurations and chutes-routed
+// models) would persist assistant.tool_calls[id=""], runTurn would
+// locally generate a "call_xxx" for the tool response, and the next
+// LLM request would fail the assistant↔tool linkage check.
+func TestEnsureToolCallIDs_BackfillsMissingButLeavesPresent(t *testing.T) {
+	calls := []ToolCall{
+		{ID: "", Type: "function"},              // missing
+		{ID: "call_existing", Type: "function"}, // already set
+		{ID: "", Type: "function"},              // also missing
+	}
+	calls[0].Function.Name = "a"
+	calls[1].Function.Name = "b"
+	calls[2].Function.Name = "c"
+
+	ensureToolCallIDs(calls)
+
+	if calls[0].ID == "" || !strings.HasPrefix(calls[0].ID, "call_") {
+		t.Errorf("missing id #0 not backfilled to call_<uuid>; got %q", calls[0].ID)
+	}
+	if calls[1].ID != "call_existing" {
+		t.Errorf("existing id was overwritten; got %q", calls[1].ID)
+	}
+	if calls[2].ID == "" || !strings.HasPrefix(calls[2].ID, "call_") {
+		t.Errorf("missing id #2 not backfilled to call_<uuid>; got %q", calls[2].ID)
+	}
+	if calls[0].ID == calls[2].ID {
+		t.Errorf("two missing ids got the same backfill; must be unique")
+	}
+}
+
 func TestConversationLog_KeepsReasoning(t *testing.T) {
 	msg := ChatMessage{
 		Role:             "assistant",

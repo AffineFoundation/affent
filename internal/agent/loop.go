@@ -359,26 +359,22 @@ func (l *Loop) runTurn(ctx context.Context, turnID, userText string) {
 			// messages". Mainstream frameworks (LangChain, OpenAI
 			// assistants) use the same placeholder pattern.
 			if ctx.Err() != nil {
+				// IDs are already non-empty (ensureToolCallIDs ran
+				// before persistence in consumeAndPersist) so we can
+				// use skipped.ID directly without the old fallback.
 				for _, skipped := range final.Final.ToolCalls[i:] {
-					skippedID := skipped.ID
-					if skippedID == "" {
-						skippedID = "call_" + uuid.NewString()
-					}
 					if appendErr := l.Conv.Append(ChatMessage{
 						Role:       "tool",
 						Content:    "(cancelled by user before this tool ran)",
-						ToolCallID: skippedID,
+						ToolCallID: skipped.ID,
 						Name:       skipped.Function.Name,
 					}); appendErr != nil {
-						l.Log.Error().Err(appendErr).Str("call_id", skippedID).Msg("conv append placeholder")
+						l.Log.Error().Err(appendErr).Str("call_id", skipped.ID).Msg("conv append placeholder")
 					}
 				}
 				break
 			}
 			callID := tc.ID
-			if callID == "" {
-				callID = "call_" + uuid.NewString()
-			}
 			args := json.RawMessage(tc.Function.Arguments)
 			if len(args) == 0 {
 				args = json.RawMessage("{}")
@@ -481,6 +477,14 @@ func (l *Loop) consumeAndPersist(ctx context.Context, turnID string, stream <-ch
 			FinishReason: finish.Reason,
 		})
 	}
+	// Backfill any tool_call IDs the model omitted. Done HERE — before
+	// the persistent Append — so the dispatch path, the eventual wire
+	// copy, and the tool-message tool_call_id all see the same value.
+	// Doing it later (e.g., inside the dispatch loop) leaves the conv
+	// with id="" on the assistant message and a generated id on the
+	// matching tool message, which every strict OpenAI-compat backend
+	// rejects on the next request.
+	ensureToolCallIDs(finish.Final.ToolCalls)
 	// Persist the assembled assistant message (content + tool_calls +
 	// reasoning) so reload sees the same state. ReasoningContent is kept
 	// in the conversation log for replay/training but stripped from

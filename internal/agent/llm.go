@@ -14,6 +14,8 @@ import (
 	"strconv"
 	"strings"
 	"time"
+
+	"github.com/google/uuid"
 )
 
 // RetryableError marks an error from a single chat call as a candidate
@@ -170,6 +172,29 @@ func toWireMessages(msgs []ChatMessage) []wireMessage {
 		}
 	}
 	return out
+}
+
+// ensureToolCallIDs guarantees every ToolCall has a non-empty ID,
+// generating one when the upstream model omitted it. Some providers
+// (notably non-OpenAI ones routed through proxies — observed on
+// DeepSeek tool-call mode and certain chutes-hosted models) emit a
+// tool_calls fragment with the function name but no `id`. Without
+// this fix the persistence path leaves ID="", runTurn locally
+// generates a fresh "call_xxx" for the tool response, and the
+// resulting (assistant.tool_calls[id=""], tool[tool_call_id="call_xxx"])
+// pair fails the linkage check every strict OpenAI-compat backend
+// applies on the NEXT request — turning one missing id into a
+// permanently-broken session.
+//
+// Mutates in place — the assistant ChatMessage will be persisted
+// with these IDs, so subsequent dispatch and the future wire copy
+// see the same value.
+func ensureToolCallIDs(calls []ToolCall) {
+	for i := range calls {
+		if calls[i].ID == "" {
+			calls[i].ID = "call_" + uuid.NewString()
+		}
+	}
 }
 
 // sanitizeToolCallArgs replaces unparseable tool_call.function.arguments
