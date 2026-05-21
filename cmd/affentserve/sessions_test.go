@@ -462,6 +462,120 @@ func TestBuildSession_RejectsTraversalSessionID(t *testing.T) {
 	}
 }
 
+// TestSessionPool_RetentionSweep pins the disk-level GC: dirs whose
+// conversation.jsonl mtime is older than the configured retention
+// get deleted, dirs newer than the cutoff are kept, and dirs whose
+// session is currently in the in-memory pool are NEVER touched no
+// matter how stale on disk (their in-memory state is authoritative).
+func TestSessionPool_RetentionSweep(t *testing.T) {
+	memRoot := t.TempDir()
+	// Hand-craft three dirs:
+	//   stale-evicted: stale jsonl, NOT in pool → should be deleted.
+	//   fresh-evicted: fresh jsonl, NOT in pool → kept (mtime newer).
+	//   stale-active: stale jsonl, IS in pool   → kept (active wins).
+	for _, id := range []string{"stale-evicted", "fresh-evicted", "stale-active"} {
+		dir := filepath.Join(memRoot, id)
+		if err := os.MkdirAll(dir, 0o755); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(filepath.Join(dir, "conversation.jsonl"), []byte("[]\n"), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	// Backdate the stale ones to a week ago.
+	long := time.Now().Add(-7 * 24 * time.Hour)
+	for _, id := range []string{"stale-evicted", "stale-active"} {
+		p := filepath.Join(memRoot, id, "conversation.jsonl")
+		if err := os.Chtimes(p, long, long); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	cfg := Config{
+		Listen:           "127.0.0.1:0",
+		MaxSessions:      4,
+		SessionIdleTTL:   "5m",
+		SessionRetention: "24h",
+		WorkspaceRoot:    t.TempDir(),
+		MemoryRoot:       memRoot,
+		BaseURL:          "http://127.0.0.1:0",
+		APIKey:           "test",
+		Model:            "fake",
+	}
+	pool, err := NewSessionPool(cfg, zerolog.New(io.Discard))
+	if err != nil {
+		t.Fatalf("NewSessionPool: %v", err)
+	}
+	t.Cleanup(pool.Shutdown)
+
+	// Make "stale-active" live in the pool so the sweep should skip it
+	// despite its on-disk file looking ancient.
+	if _, err := pool.GetOrCreate("stale-active"); err != nil {
+		t.Fatal(err)
+	}
+	// GetOrCreate refreshed the mtime by touching conversation.jsonl
+	// (via OpenConversationAt's MkdirAll), so re-backdate AFTER the
+	// session exists to model "live session but disk file looks old".
+	stalePath := filepath.Join(memRoot, "stale-active", "conversation.jsonl")
+	if err := os.Chtimes(stalePath, long, long); err != nil {
+		t.Fatal(err)
+	}
+
+	pool.sweepRetentionOnce()
+
+	if _, err := os.Stat(filepath.Join(memRoot, "stale-evicted")); !os.IsNotExist(err) {
+		t.Errorf("stale-evicted dir must be deleted; stat err=%v", err)
+	}
+	if _, err := os.Stat(filepath.Join(memRoot, "fresh-evicted")); err != nil {
+		t.Errorf("fresh-evicted dir must be kept; stat err=%v", err)
+	}
+	if _, err := os.Stat(filepath.Join(memRoot, "stale-active")); err != nil {
+		t.Errorf("stale-active dir must be kept (session in pool overrides disk staleness): %v", err)
+	}
+}
+
+// TestSessionPool_RetentionDisabledByDefault pins that without a
+// SessionRetention config, no sweep goroutine runs and stale dirs
+// stick around — the "long-running memory survives forever" promise
+// the package made before retention existed.
+func TestSessionPool_RetentionDisabledByDefault(t *testing.T) {
+	memRoot := t.TempDir()
+	dir := filepath.Join(memRoot, "ancient")
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, "conversation.jsonl"), []byte("[]\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	long := time.Now().Add(-365 * 24 * time.Hour)
+	_ = os.Chtimes(filepath.Join(dir, "conversation.jsonl"), long, long)
+
+	cfg := Config{
+		Listen:         "127.0.0.1:0",
+		MaxSessions:    4,
+		SessionIdleTTL: "5m",
+		// SessionRetention intentionally left empty.
+		WorkspaceRoot: t.TempDir(),
+		MemoryRoot:    memRoot,
+		BaseURL:       "http://127.0.0.1:0",
+		APIKey:        "test",
+		Model:         "fake",
+	}
+	pool, err := NewSessionPool(cfg, zerolog.New(io.Discard))
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(pool.Shutdown)
+
+	pool.sweepRetentionOnce() // no-op since retention == 0
+	if _, err := os.Stat(dir); err != nil {
+		t.Errorf("retention disabled must NOT delete anything; ancient dir gone: %v", err)
+	}
+	if pool.retentionStop != nil {
+		t.Errorf("retention sweep goroutine must not be started when SessionRetention is empty")
+	}
+}
+
 // TestSessionPool_AttachesRollingCompactor pins that every session
 // gets an LLMSummaryCompactor wired up. Without it the loop's
 // runStep treats upstream context-overflow errors as non-retryable

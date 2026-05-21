@@ -70,6 +70,13 @@ type SessionPool struct {
 	gcStop chan struct{}
 	gcDone chan struct{}
 
+	// retention controls the disk-level GC of durable session dirs.
+	// Zero = disabled (the empty SessionRetention config). retentionStop
+	// / retentionDone gate the sweeper goroutine.
+	retention     time.Duration
+	retentionStop chan struct{}
+	retentionDone chan struct{}
+
 	// shutdownOnce guards Shutdown from racing with itself when both
 	// the signal handler and a top-level defer call it.
 	shutdownOnce sync.Once
@@ -84,13 +91,18 @@ func NewSessionPool(cfg Config, logger zerolog.Logger) (*SessionPool, error) {
 	if err != nil {
 		return nil, err
 	}
+	retention, err := cfg.Retention()
+	if err != nil {
+		return nil, err
+	}
 	pool := &SessionPool{
-		cfg:      cfg,
-		logger:   logger,
-		idleTTL:  ttl,
-		sessions: map[string]*Session{},
-		gcStop:   make(chan struct{}),
-		gcDone:   make(chan struct{}),
+		cfg:       cfg,
+		logger:    logger,
+		idleTTL:   ttl,
+		sessions:  map[string]*Session{},
+		gcStop:    make(chan struct{}),
+		gcDone:    make(chan struct{}),
+		retention: retention,
 	}
 	if cfg.BrowserCacheDir != "" {
 		cacheTTL := 24 * time.Hour
@@ -133,6 +145,12 @@ func NewSessionPool(cfg Config, logger zerolog.Logger) (*SessionPool, error) {
 		})
 	}
 	go pool.gcLoop()
+	if pool.retention > 0 {
+		pool.retentionStop = make(chan struct{})
+		pool.retentionDone = make(chan struct{})
+		go pool.gcRetentionLoop()
+		logger.Info().Dur("retention", pool.retention).Msg("session retention sweep enabled")
+	}
 	return pool, nil
 }
 
@@ -604,6 +622,113 @@ func (p *SessionPool) gcOnce() {
 	p.mu.Unlock()
 }
 
+// gcRetentionLoop runs the disk-level GC of durable per-session dirs.
+// Sweep interval is min(retention/24, 24h) clamped to >= 10min — a
+// 30-day retention sweeps every 30min, a week sweeps every ~7min
+// (clamped to 10), a year-long retention sweeps every 24h. Trade-off:
+// frequent enough to catch stale dirs within a single retention window,
+// rare enough not to thrash a multi-thousand-id MemoryRoot.
+func (p *SessionPool) gcRetentionLoop() {
+	defer close(p.retentionDone)
+	interval := p.retention / 24
+	if interval > 24*time.Hour {
+		interval = 24 * time.Hour
+	}
+	if interval < 10*time.Minute {
+		interval = 10 * time.Minute
+	}
+	t := time.NewTicker(interval)
+	defer t.Stop()
+	for {
+		select {
+		case <-p.retentionStop:
+			return
+		case <-t.C:
+			p.sweepRetentionOnce()
+		}
+	}
+}
+
+// sweepRetentionOnce walks MemoryRoot looking for session dirs whose
+// conversation.jsonl mtime (or the dir mtime as fallback) is older
+// than the configured retention. Active sessions — those currently
+// in the in-memory pool — are skipped no matter how stale: their
+// users are mid-conversation, and the disk image isn't authoritative
+// while the loop's in-memory state holds the latest message.
+//
+// Exported (uppercase first letter inside the package) to make it
+// drive-testable: hand-craft stale dirs, call sweepRetentionOnce,
+// assert the right ones disappeared.
+func (p *SessionPool) sweepRetentionOnce() {
+	if p.retention <= 0 {
+		return
+	}
+	root := p.cfg.MemoryRoot
+	if root == "" {
+		if p.cfg.WorkspaceRoot != "" {
+			root = filepath.Join(p.cfg.WorkspaceRoot, "memory")
+		} else {
+			root = filepath.Join(os.TempDir(), "affentserve-memory")
+		}
+	}
+	entries, err := os.ReadDir(root)
+	if err != nil {
+		if !os.IsNotExist(err) {
+			p.logger.Warn().Err(err).Str("root", root).Msg("retention sweep read")
+		}
+		return
+	}
+	cutoff := time.Now().Add(-p.retention)
+	deleted := 0
+	for _, e := range entries {
+		if !e.IsDir() {
+			continue
+		}
+		id := e.Name()
+		if agent.ValidateSessionID(id) != nil {
+			// Some operator-placed file or a malformed name we wouldn't
+			// recognize as ours. Don't touch it.
+			continue
+		}
+		// Active sessions never get wiped — their in-memory state is
+		// the source of truth and could be flushing right now.
+		p.mu.Lock()
+		_, active := p.sessions[id]
+		p.mu.Unlock()
+		if active {
+			continue
+		}
+		dir := filepath.Join(root, id)
+		// Prefer conversation.jsonl mtime — it advances on every Append,
+		// so an idle session has a precisely-aging signal. Fall back to
+		// dir mtime if the conv log is missing (e.g., memory-only setup
+		// or a half-built session).
+		var mtime time.Time
+		if fi, err := os.Stat(filepath.Join(dir, "conversation.jsonl")); err == nil {
+			mtime = fi.ModTime()
+		} else if fi, err := os.Stat(dir); err == nil {
+			mtime = fi.ModTime()
+		} else {
+			continue
+		}
+		if !mtime.Before(cutoff) {
+			continue
+		}
+		if err := os.RemoveAll(dir); err != nil {
+			p.logger.Warn().Err(err).Str("session_id", id).Msg("retention sweep remove")
+			continue
+		}
+		deleted++
+		p.logger.Info().
+			Str("session_id", id).
+			Time("last_active", mtime).
+			Msg("retention sweep removed stale session dir")
+	}
+	if deleted > 0 {
+		p.logger.Info().Int("deleted", deleted).Msg("retention sweep")
+	}
+}
+
 // Shutdown closes every session and stops the GC goroutine. Safe to
 // call multiple times. Marks the pool as shutting-down before
 // snapshotting sessions so any concurrent GetOrCreate fails fast with
@@ -617,6 +742,10 @@ func (p *SessionPool) Shutdown() {
 		}
 		close(p.gcStop)
 		<-p.gcDone
+		if p.retentionStop != nil {
+			close(p.retentionStop)
+			<-p.retentionDone
+		}
 
 		p.mu.Lock()
 		p.shuttingDown = true

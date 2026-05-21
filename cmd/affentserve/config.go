@@ -52,6 +52,17 @@ type Config struct {
 	// this long. Default 10m. Use a duration string ("30s", "10m").
 	SessionIdleTTL string `json:"session_idle_ttl"`
 
+	// SessionRetention controls how long a session's DURABLE state
+	// (conversation log + memory under MemoryRoot/<id>/) is kept
+	// after the last activity. Empty (the default) disables the
+	// retention sweep — durable state lives forever until an
+	// explicit DELETE on the session id. Set to a Go duration
+	// string ("720h" for 30 days, "168h" for a week) to enable
+	// background GC. The sweep skips dirs whose session_id is
+	// currently in the in-memory pool, so an active session is
+	// never wiped under it.
+	SessionRetention string `json:"session_retention"`
+
 	// MaxTurnSteps overrides agent runtime's default per-turn step cap.
 	MaxTurnSteps int `json:"max_turn_steps"`
 
@@ -179,6 +190,21 @@ func (c Config) IdleTTL() (time.Duration, error) {
 	d, err := time.ParseDuration(c.SessionIdleTTL)
 	if err != nil {
 		return 0, fmt.Errorf("session_idle_ttl=%q: %w", c.SessionIdleTTL, err)
+	}
+	return d, nil
+}
+
+// Retention parses SessionRetention. Returns 0 (disabled) when the
+// field is empty, or the parsed duration when set. An invalid string
+// is a hard error so an operator's typo doesn't silently turn off
+// what they thought they enabled.
+func (c Config) Retention() (time.Duration, error) {
+	if c.SessionRetention == "" {
+		return 0, nil
+	}
+	d, err := time.ParseDuration(c.SessionRetention)
+	if err != nil {
+		return 0, fmt.Errorf("session_retention=%q: %w", c.SessionRetention, err)
 	}
 	return d, nil
 }
