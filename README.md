@@ -397,6 +397,8 @@ affent.RegisterBuiltins(reg, affent.BuiltinDeps{
     Memory:           mem, // registers the `memory` tool too
 })
 
+// Persists the conversation log at /tmp/task/.affent/sessions/session-1.jsonl.
+// For full control of the path use affent.OpenConversationAt instead.
 conv, _ := affent.NewConversation("/tmp/task", "session-1")
 events := make(chan sse.Event, 256)
 
