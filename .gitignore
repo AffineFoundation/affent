@@ -6,6 +6,18 @@ bin/
 *.test
 coverage.out
 
+# Build outputs produced by running `go build` inside command modules.
+cmd/*/affentctl
+cmd/*/affentserve
+
+# Local tool caches
+.pytest_cache/
+**/.pytest_cache/
+
+# Temporary scratch files
+.tmp
+*.tmp
+
 # Local workspaces created by affentctl
 affent-workspace/
 .affentctl/
