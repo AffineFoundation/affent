@@ -4,6 +4,8 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -300,6 +302,112 @@ func TestEnsureToolCallIDs_BackfillsMissingButLeavesPresent(t *testing.T) {
 	if calls[0].ID == calls[2].ID {
 		t.Errorf("two missing ids got the same backfill; must be unique")
 	}
+}
+
+// TestParseRetryAfter pins the RFC 7231 integer-seconds parse plus
+// the MaxRespectedRetryAfter cap. The cap matters because the value
+// comes from untrusted upstream — a hostile or misbehaving server
+// emitting "Retry-After: 86400" would otherwise pin the loop's next
+// attempt 24 hours out. parseRetryAfter returns 0 in that case so
+// runStep falls back to its own exponential schedule.
+func TestParseRetryAfter(t *testing.T) {
+	cases := []struct {
+		in   string
+		want time.Duration
+	}{
+		// Empty / whitespace → 0 (caller falls back).
+		{"", 0},
+		{"  ", 0},
+		// Non-positive / non-numeric → 0.
+		{"0", 0},
+		{"-5", 0},
+		{"not-a-number", 0},
+		{"5.5", 0}, // strconv.Atoi rejects floats; the spec is integer seconds.
+		// HTTP-date form silently ignored (spec allows but we don't parse).
+		{"Wed, 21 Oct 2026 07:28:00 GMT", 0},
+		// Valid integers pass through.
+		{"1", 1 * time.Second},
+		{"30", 30 * time.Second},
+		{"60", 60 * time.Second},
+		// At the cap.
+		{"300", MaxRespectedRetryAfter},
+		// Past the cap → 0, caller's exponential takes over.
+		{"301", 0},
+		{"86400", 0}, // 24h — the obvious hostile-server case.
+		// Whitespace trim.
+		{" 30 ", 30 * time.Second},
+	}
+	for _, c := range cases {
+		t.Run(c.in, func(t *testing.T) {
+			if got := parseRetryAfter(c.in); got != c.want {
+				t.Errorf("parseRetryAfter(%q) = %s, want %s", c.in, got, c.want)
+			}
+		})
+	}
+}
+
+// TestIsRetryableStatus pins the HTTP-status classification used by
+// the LLM client. 408 / 429 / 5xx are server-side / overload signals
+// safe to retry; everything else (400, 401, 403, 404, etc.) is the
+// caller's fault and retrying just burns budget.
+func TestIsRetryableStatus(t *testing.T) {
+	retry := []int{408, 429, 500, 502, 503, 504, 599}
+	for _, code := range retry {
+		if !isRetryableStatus(code) {
+			t.Errorf("isRetryableStatus(%d) = false, want true", code)
+		}
+	}
+	noRetry := []int{200, 201, 301, 302, 400, 401, 403, 404, 422, 600}
+	for _, code := range noRetry {
+		if isRetryableStatus(code) {
+			t.Errorf("isRetryableStatus(%d) = true, want false", code)
+		}
+	}
+}
+
+// TestIsTransient pins the error-classifier used by runStep's retry
+// gate. The categorization is load-bearing: false-positive (treating
+// a non-retryable error as transient) wastes retry budget and ships
+// a duplicate request; false-negative (treating a transient error
+// as terminal) gives up too early on flaky upstreams.
+func TestIsTransient(t *testing.T) {
+	t.Run("nil → false", func(t *testing.T) {
+		if isTransient(nil) {
+			t.Error("nil error should not be transient")
+		}
+	})
+	t.Run("plain error → false", func(t *testing.T) {
+		if isTransient(errors.New("oops")) {
+			t.Error("arbitrary error should not be transient")
+		}
+	})
+	t.Run("context.Canceled → false (caller asked to stop)", func(t *testing.T) {
+		if isTransient(context.Canceled) {
+			t.Error("context.Canceled is the user's decision, not a transient failure")
+		}
+	})
+	t.Run("context.DeadlineExceeded → true (upstream too slow)", func(t *testing.T) {
+		if !isTransient(context.DeadlineExceeded) {
+			t.Error("DeadlineExceeded should be transient — next attempt might be faster")
+		}
+	})
+	t.Run("RetryableError → true", func(t *testing.T) {
+		err := &RetryableError{Err: errors.New("upstream 503")}
+		if !isTransient(err) {
+			t.Error("RetryableError should be transient — that's the entire point of the type")
+		}
+	})
+	t.Run("wrapped RetryableError → true", func(t *testing.T) {
+		err := fmt.Errorf("step 3: %w", &RetryableError{Err: errors.New("upstream 503")})
+		if !isTransient(err) {
+			t.Error("errors.As should find a wrapped RetryableError")
+		}
+	})
+	t.Run("io.ErrUnexpectedEOF → true (mid-stream cut)", func(t *testing.T) {
+		if !isTransient(io.ErrUnexpectedEOF) {
+			t.Error("mid-stream EOF is a classic flaky-network case worth retrying")
+		}
+	})
 }
 
 func TestConversationLog_KeepsReasoning(t *testing.T) {
