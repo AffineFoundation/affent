@@ -8,6 +8,7 @@ import (
 	"strings"
 	"sync"
 	"testing"
+	"unicode/utf8"
 )
 
 func newTestStore(t *testing.T) *FileMemoryStore {
@@ -114,6 +115,36 @@ func TestMemoryReplaceAmbiguous(t *testing.T) {
 	}
 	if len(resp.Matches) != 2 {
 		t.Fatalf("expected 2 match previews, got %+v", resp.Matches)
+	}
+}
+
+// TestMemoryReplaceAmbiguousPreviewsAreUTF8Safe pins that the
+// multi-match preview clamping doesn't slice a multi-byte rune.
+// findUnique previously used e[:80], which corrupted Cyrillic /
+// CJK / accent previews when the cut landed inside a rune.
+func TestMemoryReplaceAmbiguousPreviewsAreUTF8Safe(t *testing.T) {
+	s := newTestStore(t)
+	// Two long Cyrillic entries containing the same trigger token —
+	// "use". Each rune is 2 bytes, so the 80-byte cap lands inside a
+	// rune for sure.
+	long := strings.Repeat("ё", 100)        // 200 bytes, exceeds 80
+	if _, err := s.Add(TargetMemory, "use "+long+" alpha"); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := s.Add(TargetMemory, "use "+long+" beta"); err != nil {
+		t.Fatal(err)
+	}
+	resp, err := s.Replace(TargetMemory, "use", "REPLACED")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if resp.OK {
+		t.Fatalf("ambiguous replace must be rejected: %+v", resp)
+	}
+	for i, p := range resp.Matches {
+		if !utf8.ValidString(p) {
+			t.Fatalf("match preview %d is not valid UTF-8: %q", i, p)
+		}
 	}
 }
 

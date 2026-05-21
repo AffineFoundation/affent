@@ -436,7 +436,9 @@ func findUnique(entries []string, oldText string) (int, []string) {
 	for _, i := range hits {
 		e := entries[i]
 		if len(e) > 80 {
-			e = e[:80] + "..."
+			// Snap back to a UTF-8 rune boundary so CJK / accented
+			// previews don't return invalid bytes to the model.
+			e = e[:utf8AlignBackward(e, 80)] + "..."
 		}
 		previews = append(previews, e)
 	}
@@ -497,6 +499,14 @@ func writeMemoryFile(path string, entries []string) error {
 	if err := os.Rename(tmpPath, path); err != nil {
 		os.Remove(tmpPath)
 		return err
+	}
+	// Best-effort directory fsync so the rename survives a crash.
+	// Same pattern as Conversation.Replace; non-Unix filesystems may
+	// reject this call and that's fine — we already have FS-level
+	// atomicity from rename(2).
+	if d, derr := os.Open(filepath.Dir(path)); derr == nil {
+		_ = d.Sync()
+		_ = d.Close()
 	}
 	return nil
 }
