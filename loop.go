@@ -24,6 +24,13 @@ import (
 // Override per-Loop via Loop.PerCallTimeout.
 const DefaultPerCallTimeout = 3 * time.Minute
 
+// DefaultMaxTurnSteps caps the assistant<->tool round trips per single
+// user turn when Loop.MaxTurnSteps is left at zero. Picked low on
+// purpose: most models drift into "one more search" loops past 5-6
+// calls. Embedders running heavier autonomy (SWE-bench, deep
+// research) typically bump this to 30-100.
+const DefaultMaxTurnSteps = 10
+
 // DefaultTransientRetries / DefaultTransientBackoff govern how the
 // loop reacts to LLM call failures the caller probably can't fix
 // (HTTP 408/429/5xx, network resets, mid-stream EOF, per-call
@@ -56,12 +63,16 @@ const MaxToolResultPreviewInEvent = 4 * 1024
 // Loop is the model<->tools cycle. One Loop per session. Stateful via the
 // attached Conversation; tools are looked up in Tools.
 type Loop struct {
-	LLM          *LLMClient
-	Tools        *Registry
-	Conv         *Conversation
+	LLM   *LLMClient
+	Tools *Registry
+	Conv  *Conversation
+	// Events receives every event the loop publishes (turn.start,
+	// message.delta, tool.request, etc.). Nil is allowed: the loop
+	// runs normally but is silent on the event side — useful for
+	// embedders that only consume the persisted Conversation log.
 	Events       chan<- sse.Event
 	Log          zerolog.Logger
-	MaxTurnSteps int // assistant<->tool round trips per user turn (default 16)
+	MaxTurnSteps int // assistant<->tool round trips per user turn; zero falls back to DefaultMaxTurnSteps
 
 	// PerCallTimeout overrides DefaultPerCallTimeout for this loop.
 	// Zero means "use the default".
@@ -202,7 +213,16 @@ func (l *Loop) EnsureSystemPrompt(prompt string) error {
 // SendUser kicks off one turn for the given user message. Returns the
 // turn_id once accepted; the actual work runs in a goroutine and emits
 // events on Events. ErrTurnInFlight is returned if a turn is still alive.
+//
+// ctx is observed only for "already cancelled?" at entry — if the caller's
+// ctx has already fired, SendUser returns ctx.Err() instead of allocating
+// a turn that no one is going to consume. The in-flight turn itself runs
+// on a detached context so it can outlive a transient HTTP disconnect;
+// callers wanting to cancel a running turn use Loop.Cancel().
 func (l *Loop) SendUser(ctx context.Context, text string) (string, error) {
+	if err := ctx.Err(); err != nil {
+		return "", err
+	}
 	l.mu.Lock()
 	if l.current != "" {
 		l.mu.Unlock()
@@ -252,7 +272,7 @@ func (l *Loop) takeTurn() {
 func (l *Loop) runTurn(ctx context.Context, turnID, userText string) {
 	steps := l.MaxTurnSteps
 	if steps <= 0 {
-		steps = 10
+		steps = DefaultMaxTurnSteps
 	}
 
 	l.publish(sse.TypeTurnStart, sse.TurnStartPayload{TurnID: turnID})
@@ -262,8 +282,16 @@ func (l *Loop) runTurn(ctx context.Context, turnID, userText string) {
 
 	totalIn, totalOut := 0, 0
 	endReason := sse.TurnEndCompleted
+	// finishedNaturally tracks whether the for-loop exited because the
+	// model returned an assistant message without tool_calls (the
+	// "done thinking" path). Falling out of the loop with this still
+	// false means we ran out of step budget while tool calls were
+	// still in flight — surface that explicitly instead of pretending
+	// the turn completed cleanly.
+	finishedNaturally := false
 
-	for step := 0; step < steps; step++ {
+	step := 0
+	for ; step < steps; step++ {
 		if ctx.Err() != nil {
 			endReason = sse.TurnEndCancelled
 			break
@@ -281,6 +309,7 @@ func (l *Loop) runTurn(ctx context.Context, turnID, userText string) {
 		totalOut += final.OutputTokens
 
 		if len(final.Final.ToolCalls) == 0 {
+			finishedNaturally = true
 			break
 		}
 
@@ -325,6 +354,9 @@ func (l *Loop) runTurn(ctx context.Context, turnID, userText string) {
 		}
 	}
 
+	if !finishedNaturally && endReason == sse.TurnEndCompleted && step >= steps {
+		endReason = sse.TurnEndMaxTurns
+	}
 	l.publish(sse.TypeUsage, sse.UsagePayload{TurnID: turnID, InputTokens: totalIn, OutputTokens: totalOut})
 	l.publish(sse.TypeTurnEnd, sse.TurnEndPayload{TurnID: turnID, Reason: endReason})
 }
@@ -395,6 +427,13 @@ func (l *Loop) consumeAndPersist(ctx context.Context, turnID string, stream <-ch
 }
 
 func (l *Loop) publish(t string, payload any) {
+	if l.Events == nil {
+		// Embedder opted out of the event stream entirely — no
+		// allocation, no log spam. The earlier select-default would
+		// have fired on every event with a misleading "channel full"
+		// warning since sends on a nil chan are never ready.
+		return
+	}
 	ev, err := sse.NewEvent(t, payload)
 	if err != nil {
 		l.Log.Error().Err(err).Str("type", t).Msg("encode event")
@@ -415,7 +454,7 @@ func previewN(s string, n int) string {
 	if len(s) <= n {
 		return s
 	}
-	return s[:n] + "..."
+	return s[:utf8AlignBackward(s, n)] + "..."
 }
 
 // truncateForContext is what the model sees for an oversized tool result.
@@ -426,9 +465,10 @@ func truncateForContext(s string, max int) string {
 	if len(s) <= max {
 		return s
 	}
-	return s[:max] + fmt.Sprintf(
+	cut := utf8AlignBackward(s, max)
+	return s[:cut] + fmt.Sprintf(
 		"\n\n[... %d more bytes truncated. Re-run the command piping through head/tail/grep/sed, or save to a file under /workspace and read it in chunks, if you need more.]",
-		len(s)-max,
+		len(s)-cut,
 	)
 }
 
