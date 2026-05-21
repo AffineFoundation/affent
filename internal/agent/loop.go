@@ -340,6 +340,20 @@ func (l *Loop) runTurn(ctx context.Context, turnID, userText string) {
 		// Execute every tool call in order, append each result to
 		// conversation, then loop back to ask the model for the next step.
 		for _, tc := range final.Final.ToolCalls {
+			// Honor cancellation BETWEEN tool calls within a batch, not
+			// just between turn steps. Without this, a Loop.Cancel
+			// fired mid-batch still runs every remaining tool — a
+			// 5-tool batch where the user cancels after #1 finishes
+			// would otherwise execute #2 through #5 with no way to
+			// stop. Individual tool impls may also observe ctx and
+			// short-circuit themselves, but framework-level honoring
+			// is needed for tools that don't (memory ops, fast
+			// helpers). endReason gets set by the outer for-loop's
+			// ctx-check on the next iteration; we only need to break
+			// out of this batch.
+			if ctx.Err() != nil {
+				break
+			}
 			callID := tc.ID
 			if callID == "" {
 				callID = "call_" + uuid.NewString()
