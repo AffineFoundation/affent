@@ -8,7 +8,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/affinefoundation/affent"
+	agent "github.com/affinefoundation/affent/internal/agent"
 	"github.com/go-rod/rod"
 )
 
@@ -24,7 +24,7 @@ import (
 // returned as the tool result string prefixed with "Error: ..." so the
 // LLM sees them and can recover, matching the rest of affent's
 // builtin-tool conventions.
-func NavigateTool(s *Session) *affent.Tool {
+func NavigateTool(s *Session) *agent.Tool {
 	schema := json.RawMessage(`{
         "type": "object",
         "required": ["url"],
@@ -41,7 +41,7 @@ func NavigateTool(s *Session) *affent.Tool {
         }
     }`)
 
-	return &affent.Tool{
+	return &agent.Tool{
 		Name: "browser_navigate",
 		Description: "Open a URL in the browser. Returns a structured snapshot of " +
 			"the loaded page: text content, plus interactive elements with stable " +
@@ -151,9 +151,9 @@ func waitDOMContentLoaded(ctx context.Context, page *rod.Page, timeout time.Dura
 
 // BackTool returns the `browser_back` tool — navigates one entry back
 // in history and returns the new page snapshot.
-func BackTool(s *Session) *affent.Tool {
+func BackTool(s *Session) *agent.Tool {
 	schema := json.RawMessage(`{"type":"object","properties":{}}`)
-	return &affent.Tool{
+	return &agent.Tool{
 		Name:        "browser_back",
 		Description: "Navigate one step back in the browser history. Returns the resulting page snapshot. No-op if there is no prior history entry.",
 		Schema:      schema,
@@ -177,7 +177,7 @@ func BackTool(s *Session) *affent.Tool {
 
 // WaitTool returns `browser_wait`. Lets the LLM explicitly wait for a
 // dynamic page condition before taking a snapshot.
-func WaitTool(s *Session) *affent.Tool {
+func WaitTool(s *Session) *agent.Tool {
 	schema := json.RawMessage(`{
         "type": "object",
         "required": ["for"],
@@ -199,7 +199,7 @@ func WaitTool(s *Session) *affent.Tool {
             }
         }
     }`)
-	return &affent.Tool{
+	return &agent.Tool{
 		Name: "browser_wait",
 		Description: "Explicitly wait for a page condition (load event, DOM stable, network idle, or a substring appearing) before taking a snapshot. " +
 			"Use when content is injected asynchronously and the previous snapshot showed it missing.",

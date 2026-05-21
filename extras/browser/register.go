@@ -1,6 +1,6 @@
 package browser
 
-import "github.com/affinefoundation/affent"
+import agent "github.com/affinefoundation/affent/internal/agent"
 
 // Options bundles optional configuration for RegisterAll.
 type Options struct {
@@ -24,7 +24,7 @@ type Options struct {
 // One Session is bound to one Loop. If you need multiple concurrent
 // agent sessions in the same process, build one Session per Loop and
 // call RegisterAll once per session-scoped Registry.
-func RegisterAll(reg *affent.Registry, s *Session, opts Options) {
+func RegisterAll(reg *agent.Registry, s *Session, opts Options) {
 	reg.Add(NavigateTool(s))
 	reg.Add(BackTool(s))
 	reg.Add(WaitTool(s))

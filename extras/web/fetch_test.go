@@ -9,7 +9,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/affinefoundation/affent"
+	agent "github.com/affinefoundation/affent/internal/agent"
 )
 
 func TestFetchTool_HTML(t *testing.T) {
@@ -197,7 +197,7 @@ func (failingProvider) Search(context.Context, string, int) ([]SearchResult, err
 // returning. Previously, RegisterAll left web_fetch dangling in the
 // registry after a missing-Tavily-key failure.
 func TestRegisterAll_RollsBackWebFetchOnSearchFailure(t *testing.T) {
-	reg := affent.NewRegistry()
+	reg := agent.NewRegistry()
 	// SearchConfig{Provider: nil} causes SearchTool() inside
 	// RegisterAll to return an error after RegisterFetch has already
 	// added web_fetch.

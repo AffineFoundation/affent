@@ -13,7 +13,7 @@ import (
 	"testing"
 	"time"
 
-	affent "github.com/affinefoundation/affent"
+	agent "github.com/affinefoundation/affent/internal/agent"
 	"github.com/affinefoundation/affent/sse"
 )
 
@@ -112,22 +112,22 @@ func TestE2E_MemoryAddPersistsAcrossSessions(t *testing.T) {
 	srv := newMockLLM(t, [][]string{turn1, turn2})
 
 	convPath := filepath.Join(workspaceDir, ".affentctl", "sess.jsonl")
-	conv, err := affent.OpenConversationAt(convPath)
+	conv, err := agent.OpenConversationAt(convPath)
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	memStore := affent.NewFileMemoryStore(workspaceDir)
+	memStore := agent.NewFileMemoryStore(workspaceDir)
 	// USER store off — keep the test focused on the workspace path.
 	memStore.UserPath = ""
 
-	reg := affent.NewRegistry()
+	reg := agent.NewRegistry()
 	// Don't need shell / files for this test; just register memory.
-	affent.RegisterMemoryOnly(reg, memStore)
+	agent.RegisterMemoryOnly(reg, memStore)
 
 	events := make(chan sse.Event, 256)
-	llm := affent.NewLLMClient(srv.URL, "", "fake-model")
-	loop := &affent.Loop{
+	llm := agent.NewLLMClient(srv.URL, "", "fake-model")
+	loop := &agent.Loop{
 		LLM:                 llm,
 		Tools:               reg,
 		Conv:                conv,
@@ -186,11 +186,11 @@ func TestE2E_MemoryAddPersistsAcrossSessions(t *testing.T) {
 	// hit the LLM, so we don't need to issue a SendUser. We just check
 	// the conversation log's system message.
 	conv2Path := filepath.Join(workspaceDir, ".affentctl", "sess2.jsonl")
-	conv2, err := affent.OpenConversationAt(conv2Path)
+	conv2, err := agent.OpenConversationAt(conv2Path)
 	if err != nil {
 		t.Fatal(err)
 	}
-	loop2 := &affent.Loop{Conv: conv2, Memory: memStore}
+	loop2 := &agent.Loop{Conv: conv2, Memory: memStore}
 	if err := loop2.EnsureSystemPrompt("base prompt"); err != nil {
 		t.Fatal(err)
 	}
@@ -226,9 +226,9 @@ func decodeReq(t *testing.T, raw []byte) chatReqShape {
 // file tools available, even if the embedder calls
 // RegisterBuiltins logic by mistake elsewhere.
 func TestE2E_MemoryOnlyRejectsShell(t *testing.T) {
-	memStore := affent.NewFileMemoryStore(t.TempDir())
-	reg := affent.NewRegistry()
-	affent.RegisterMemoryOnly(reg, memStore)
+	memStore := agent.NewFileMemoryStore(t.TempDir())
+	reg := agent.NewRegistry()
+	agent.RegisterMemoryOnly(reg, memStore)
 
 	names := []string{}
 	for _, d := range reg.Defs() {
@@ -248,13 +248,13 @@ func TestE2E_SessionSearchIntegratesWithRegistry(t *testing.T) {
 		t.Fatal(err)
 	}
 	// Write a prior session's log.
-	writeE2ESessionLog(t, convDir, "prev", []affent.ChatMessage{
+	writeE2ESessionLog(t, convDir, "prev", []agent.ChatMessage{
 		{Role: "user", Content: "we set up prometheus on port 9090"},
 		{Role: "assistant", Content: "yes, scrape config under /etc/prometheus"},
 	})
 
-	reg := affent.NewRegistry()
-	affent.RegisterBuiltins(reg, affent.BuiltinDeps{
+	reg := agent.NewRegistry()
+	agent.RegisterBuiltins(reg, agent.BuiltinDeps{
 		HostWorkspaceDir: dir,
 		SessionsDir:      convDir,
 		SessionID:        "current",
@@ -268,7 +268,7 @@ func TestE2E_SessionSearchIntegratesWithRegistry(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	var resp affent.SessionSearchResponse
+	var resp agent.SessionSearchResponse
 	if err := json.Unmarshal([]byte(out), &resp); err != nil {
 		t.Fatalf("response: %v body=%s", err, out)
 	}
@@ -284,7 +284,7 @@ func TestE2E_SessionSearchIntegratesWithRegistry(t *testing.T) {
 // search end-to-end test. Lived in session_search_test.go before the
 // internal/sessionsearch refactor; kept inline here so the e2e test
 // stays self-contained.
-func writeE2ESessionLog(t *testing.T, dir, sessionID string, msgs []affent.ChatMessage) {
+func writeE2ESessionLog(t *testing.T, dir, sessionID string, msgs []agent.ChatMessage) {
 	t.Helper()
 	path := filepath.Join(dir, sessionID+".jsonl")
 	f, err := os.Create(path)

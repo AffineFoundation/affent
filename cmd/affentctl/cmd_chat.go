@@ -14,7 +14,7 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/affinefoundation/affent"
+	agent "github.com/affinefoundation/affent/internal/agent"
 	"github.com/affinefoundation/affent/sse"
 )
 
@@ -28,7 +28,7 @@ const turnCancelDrainTimeout = 5 * time.Second
 
 // chatCmd is the REPL: read a line, drive one turn, stream the
 // assistant text + tool activity to stderr, then read the next line.
-// All turns share one *affent.Loop so the conversation accumulates and
+// All turns share one *agent.Loop so the conversation accumulates and
 // is persisted to .affentctl/<sid>.jsonl across runs.
 func chatCmd(args []string) int {
 	var cf commonFlags
@@ -128,7 +128,7 @@ Slash commands inside the REPL:
 		turnID, err := b.loop.SendUser(turnCtx, line)
 		if err != nil {
 			cancelTurn()
-			if errors.Is(err, affent.ErrTurnInFlight) {
+			if errors.Is(err, agent.ErrTurnInFlight) {
 				fmt.Fprintln(os.Stderr, "(a turn is still running; type /cancel to interrupt)")
 				continue
 			}
@@ -146,7 +146,7 @@ Slash commands inside the REPL:
 // live to stdout, tool activity compactly to stderr. trace gets every
 // event in JSONL — except thinking/message deltas when skipDeltas is on.
 //
-// loop is the active *affent.Loop. On SIGINT (ctx.Done) we MUST call
+// loop is the active *agent.Loop. On SIGINT (ctx.Done) we MUST call
 // Loop.Cancel — the Loop runs the turn on a detached background ctx
 // so cancelling the parent ctx alone leaves in-flight LLM calls and
 // shell-tool processes alive (e.g. `shell exec sleep 60` orphans).

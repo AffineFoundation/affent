@@ -9,7 +9,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/affinefoundation/affent"
+	agent "github.com/affinefoundation/affent/internal/agent"
 	"github.com/affinefoundation/affent/executor"
 	affentbrowser "github.com/affinefoundation/affent/extras/browser"
 	affentweb "github.com/affinefoundation/affent/extras/web"
@@ -18,7 +18,7 @@ import (
 	"github.com/rs/zerolog"
 )
 
-// Session is one server-managed agent session: an affent.Loop plus
+// Session is one server-managed agent session: an agent.Loop plus
 // its supporting state, plus a fan-out for events going to multiple
 // concurrent consumers (chat-completions accumulator + raw SSE
 // subscribers).
@@ -27,10 +27,10 @@ type Session struct {
 
 	mu sync.Mutex
 
-	loop      *affent.Loop
-	conv      *affent.Conversation
-	llm       *affent.LLMClient
-	registry  *affent.Registry
+	loop      *agent.Loop
+	conv      *agent.Conversation
+	llm       *agent.LLMClient
+	registry  *agent.Registry
 	events    chan sse.Event
 	browser   *affentbrowser.Session
 	workspace string
@@ -192,14 +192,14 @@ func (p *SessionPool) buildSession(id string) (*Session, error) {
 	if err != nil {
 		return nil, fmt.Errorf("alloc workspace: %w", err)
 	}
-	conv, err := affent.NewConversation(workspace, id)
+	conv, err := agent.NewConversation(workspace, id)
 	if err != nil {
 		_ = os.RemoveAll(workspace)
 		return nil, fmt.Errorf("conversation: %w", err)
 	}
-	llm := affent.NewLLMClient(p.cfg.BaseURL, p.cfg.APIKey, p.cfg.Model)
+	llm := agent.NewLLMClient(p.cfg.BaseURL, p.cfg.APIKey, p.cfg.Model)
 
-	reg := affent.NewRegistry()
+	reg := agent.NewRegistry()
 	// Memory store — used both as a tool dependency and as the
 	// snapshot source for Loop.EnsureSystemPrompt. Created once so
 	// builtins + standalone registration share the same on-disk state.
@@ -210,19 +210,19 @@ func (p *SessionPool) buildSession(id string) (*Session, error) {
 	// every time it's allocated — using it for memory means "same
 	// client, same session_id" sees an empty memory after any
 	// restart, which defeats the long-running purpose.
-	var memStore affent.MemoryStore
+	var memStore agent.MemoryStore
 	if p.cfg.EnableMemory {
 		memDir, err := p.allocMemoryDir(id)
 		if err != nil {
 			_ = os.RemoveAll(workspace)
 			return nil, fmt.Errorf("alloc memory dir: %w", err)
 		}
-		fms := affent.NewFileMemoryStore(workspace)
+		fms := agent.NewFileMemoryStore(workspace)
 		fms.MemoryDir = memDir
 		memStore = fms
 	}
 	if p.cfg.EnableBuiltins {
-		affent.RegisterBuiltins(reg, affent.BuiltinDeps{
+		agent.RegisterBuiltins(reg, agent.BuiltinDeps{
 			Executor:         executor.NewLocalExecutor(id, workspace),
 			HostWorkspaceDir: workspace,
 			Memory:           memStore,
@@ -231,7 +231,7 @@ func (p *SessionPool) buildSession(id string) (*Session, error) {
 		// Memory tool without the shell/file builtins — common for
 		// remote-driven affentserve deployments that don't want shell
 		// exposed but still want durable per-user notes.
-		affent.RegisterMemoryOnly(reg, memStore)
+		agent.RegisterMemoryOnly(reg, memStore)
 	}
 
 	var browser *affentbrowser.Session
@@ -274,7 +274,7 @@ func (p *SessionPool) buildSession(id string) (*Session, error) {
 	// during turn execution we don't want to block the loop on a slow
 	// subscriber.
 	events := make(chan sse.Event, 1024)
-	loop := &affent.Loop{
+	loop := &agent.Loop{
 		LLM:          llm,
 		Tools:        reg,
 		Conv:         conv,
@@ -573,7 +573,7 @@ func (p *SessionPool) Get(id string) (*Session, error) {
 
 // SendUser is the single-turn driver: take the lock, push a user
 // message, and signal the caller when the turn ends. Returns the
-// turn id assigned by affent.
+// turn id assigned by agent.
 func (s *Session) SendUser(ctx context.Context, text string) (string, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()

@@ -9,12 +9,12 @@
 // Usage:
 //
 //	import (
-//	    "github.com/affinefoundation/affent"
+//	    agent "github.com/affinefoundation/affent/internal/agent"
 //	    affentweb "github.com/affinefoundation/affent/extras/web"
 //	)
 //
-//	reg := affent.NewRegistry()
-//	affent.RegisterBuiltins(reg, deps)
+//	reg := agent.NewRegistry()
+//	agent.RegisterBuiltins(reg, deps)
 //
 //	// Just web_fetch (no search backend needed):
 //	affentweb.RegisterFetch(reg, affentweb.FetchConfig{})
@@ -30,7 +30,7 @@
 //	reg.Add(tool)
 package web
 
-import "github.com/affinefoundation/affent"
+import agent "github.com/affinefoundation/affent/internal/agent"
 
 // Options bundles the optional configuration for RegisterAll.
 type Options struct {
@@ -47,7 +47,7 @@ type Options struct {
 
 // RegisterFetch adds the web_fetch tool to reg. Always succeeds (no
 // external dependencies).
-func RegisterFetch(reg *affent.Registry, cfg FetchConfig) {
+func RegisterFetch(reg *agent.Registry, cfg FetchConfig) {
 	reg.Add(FetchTool(cfg))
 }
 
@@ -59,7 +59,7 @@ func RegisterFetch(reg *affent.Registry, cfg FetchConfig) {
 // On failure, every tool this call added is removed from reg before
 // returning so the caller doesn't end up with a half-registered
 // web_fetch pointing into a setup that's about to be torn down.
-func RegisterAll(reg *affent.Registry, opts Options) error {
+func RegisterAll(reg *agent.Registry, opts Options) error {
 	RegisterFetch(reg, opts.Fetch)
 	if opts.SkipSearch {
 		return nil

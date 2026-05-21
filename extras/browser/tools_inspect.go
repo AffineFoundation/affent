@@ -9,12 +9,12 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/affinefoundation/affent"
+	agent "github.com/affinefoundation/affent/internal/agent"
 	"github.com/go-rod/rod/lib/proto"
 )
 
 // resolveSavePath validates a screenshot save_path against an optional
-// workspace sandbox. Mirrors affent.safeWorkspacePath: relative joins
+// workspace sandbox. Mirrors agent.safeWorkspacePath: relative joins
 // onto workspaceDir, absolute must stay inside it. workspaceDir == ""
 // disables enforcement and returns the input path unchanged (back-
 // compat for embedders that gate the tool another way).
@@ -47,9 +47,9 @@ func resolveSavePath(workspaceDir, savePath string) (string, error) {
 // SnapshotTool returns `browser_snapshot`. Re-takes the snapshot of
 // the current page; the model uses this after dynamic content changes
 // (e.g. an XHR finished after the last navigation).
-func SnapshotTool(s *Session) *affent.Tool {
+func SnapshotTool(s *Session) *agent.Tool {
 	schema := json.RawMessage(`{"type":"object","properties":{}}`)
-	return &affent.Tool{
+	return &agent.Tool{
 		Name: "browser_snapshot",
 		Description: "Re-read the current page and return a fresh snapshot: text content " +
 			"plus interactive elements with current ref ids. Use whenever the page may " +
@@ -75,19 +75,19 @@ func SnapshotTool(s *Session) *affent.Tool {
 // Real-world Chromium screenshots almost always exceed this — the
 // `save_path` arg is the practical path for screenshots beyond a blank
 // page.
-const maxInlinePNGBytes = (affent.MaxToolResultBytesInContext - 64) * 3 / 4
+const maxInlinePNGBytes = (agent.MaxToolResultBytesInContext - 64) * 3 / 4
 
 // ScreenshotTool returns `browser_screenshot`. Captures a PNG of the
 // current viewport (or the full page). With `save_path` set, writes
 // the bytes to disk and returns the path. Without it, returns a base64
-// data URL — but only if small enough to fit inside affent's
+// data URL — but only if small enough to fit inside agent runtime's
 // MaxToolResultBytesInContext budget; oversize inline returns are
 // refused with an error instead of returning truncated base64 that
 // decodes to nothing.
 //
 // Opt-in via Options.IncludeScreenshot so text-only deployments don't
 // expose a tool whose output they cannot consume.
-func ScreenshotTool(s *Session) *affent.Tool {
+func ScreenshotTool(s *Session) *agent.Tool {
 	schema := json.RawMessage(`{
         "type": "object",
         "properties": {
@@ -101,12 +101,12 @@ func ScreenshotTool(s *Session) *affent.Tool {
             }
         }
     }`)
-	return &affent.Tool{
+	return &agent.Tool{
 		Name: "browser_screenshot",
 		Description: "Capture a PNG screenshot of the current page (viewport by default; " +
 			"set full_page=true for the whole document). With save_path set, writes the " +
 			"bytes to that path and returns the path. Without save_path, returns a base64 " +
-			"data URL — only viable for very small (near-blank) captures because affent's " +
+			"data URL — only viable for very small (near-blank) captures because agent runtime's " +
 			"tool-result context budget is 8 KiB. Text-only models should prefer " +
 			"browser_snapshot for structured page content.",
 		Schema: schema,
@@ -142,8 +142,8 @@ func ScreenshotTool(s *Session) *affent.Tool {
 			}
 			if len(png) > maxInlinePNGBytes {
 				return "", fmt.Errorf(
-					"screenshot is %d bytes (png); inline base64 would exceed affent's %d-byte tool-result context budget and be truncated to unparseable noise. Re-run with save_path=\"<path>.png\" to write the image to disk",
-					len(png), affent.MaxToolResultBytesInContext,
+					"screenshot is %d bytes (png); inline base64 would exceed agent runtime's %d-byte tool-result context budget and be truncated to unparseable noise. Re-run with save_path=\"<path>.png\" to write the image to disk",
+					len(png), agent.MaxToolResultBytesInContext,
 				)
 			}
 			return "data:image/png;base64," + base64.StdEncoding.EncodeToString(png), nil

@@ -12,7 +12,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/affinefoundation/affent"
+	agent "github.com/affinefoundation/affent/internal/agent"
 )
 
 // SearchResult is one hit returned by SearchProvider.
@@ -37,10 +37,10 @@ type SearchConfig struct {
 	MaxResults int
 }
 
-// SearchTool returns an affent.Tool that runs a web search and returns
+// SearchTool returns an agent.Tool that runs a web search and returns
 // a compact list of {title, url, snippet}. The model decides which URL
 // to follow up on with web_fetch.
-func SearchTool(cfg SearchConfig) (*affent.Tool, error) {
+func SearchTool(cfg SearchConfig) (*agent.Tool, error) {
 	if cfg.Provider == nil {
 		return nil, errors.New("SearchConfig.Provider is required")
 	}
@@ -58,7 +58,7 @@ func SearchTool(cfg SearchConfig) (*affent.Tool, error) {
         }
     }`)
 
-	return &affent.Tool{
+	return &agent.Tool{
 		Name: "web_search",
 		Description: "Run a web search and return ranked results as " +
 			"{title, url, snippet}. Use to discover URLs; follow up with " +

@@ -22,7 +22,7 @@
 // Usage
 //
 //	import (
-//	    "github.com/affinefoundation/affent"
+//	    agent "github.com/affinefoundation/affent/internal/agent"
 //	    affentbrowser "github.com/affinefoundation/affent/extras/browser"
 //	)
 //
@@ -32,8 +32,8 @@
 //	if err != nil { log.Fatal(err) }
 //	defer sess.Close()
 //
-//	reg := affent.NewRegistry()
-//	affent.RegisterBuiltins(reg, deps)
+//	reg := agent.NewRegistry()
+//	agent.RegisterBuiltins(reg, deps)
 //	affentbrowser.RegisterAll(reg, sess, affentbrowser.Options{})
 //
 // One Session corresponds to one isolated Chromium profile. Most

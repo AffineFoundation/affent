@@ -7,7 +7,7 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/affinefoundation/affent"
+	agent "github.com/affinefoundation/affent/internal/agent"
 	"github.com/go-rod/rod"
 	"github.com/go-rod/rod/lib/input"
 	"github.com/go-rod/rod/lib/proto"
@@ -38,7 +38,7 @@ func waitInteractable(ctx context.Context, el *rod.Element, ref int) error {
 // from the most recent snapshot and clicks it; takes a fresh snapshot
 // afterward (since the click may trigger navigation, DOM mutation, or
 // modal opening).
-func ClickTool(s *Session) *affent.Tool {
+func ClickTool(s *Session) *agent.Tool {
 	schema := json.RawMessage(`{
         "type": "object",
         "required": ["ref"],
@@ -50,7 +50,7 @@ func ClickTool(s *Session) *affent.Tool {
             }
         }
     }`)
-	return &affent.Tool{
+	return &agent.Tool{
 		Name: "browser_click",
 		Description: "Click an element identified by its ref id from the most recent " +
 			"snapshot. Returns a fresh snapshot after the click. If the page navigated, " +
@@ -98,7 +98,7 @@ func ClickTool(s *Session) *affent.Tool {
 // TypeTool returns `browser_type`. Focuses an element by ref, clears
 // existing value (for input/textarea), and types the given text. If
 // submit=true the input is followed by Enter, useful for search boxes.
-func TypeTool(s *Session) *affent.Tool {
+func TypeTool(s *Session) *agent.Tool {
 	schema := json.RawMessage(`{
         "type": "object",
         "required": ["ref", "text"],
@@ -118,7 +118,7 @@ func TypeTool(s *Session) *affent.Tool {
             }
         }
     }`)
-	return &affent.Tool{
+	return &agent.Tool{
 		Name: "browser_type",
 		Description: "Type text into a form field identified by ref id from the most recent snapshot. " +
 			"Clears any existing value first. Set submit=true to press Enter after typing (e.g. for a search box).",
@@ -180,7 +180,7 @@ func TypeTool(s *Session) *affent.Tool {
 // ScrollTool returns `browser_scroll`. Scrolls the viewport up, down,
 // or by a page. The amount parameter (CSS pixels) is honored for
 // up/down; page_up/page_down ignore it.
-func ScrollTool(s *Session) *affent.Tool {
+func ScrollTool(s *Session) *agent.Tool {
 	schema := json.RawMessage(`{
         "type": "object",
         "required": ["direction"],
@@ -196,7 +196,7 @@ func ScrollTool(s *Session) *affent.Tool {
             }
         }
     }`)
-	return &affent.Tool{
+	return &agent.Tool{
 		Name:        "browser_scroll",
 		Description: "Scroll the viewport. Use 'page_down'/'page_up' for one viewport's worth, 'top'/'bottom' to jump to extremes, or 'up'/'down' with an 'amount' in pixels. Returns a fresh snapshot of what's now visible.",
 		Schema:      schema,

@@ -57,9 +57,9 @@ type chatMessage struct {
 //   - The full message history is NOT replayed into affent on every
 //     request. The server treats `messages` like a conversation
 //     identifier: it pulls the LAST user message from the array and
-//     hands it to affent.SendUser. Earlier turns are already in
-//     affent's on-disk Conversation log, keyed by session_id.
-//   - Streaming maps affent's SSE event stream to OpenAI's
+//     hands it to agent.SendUser. Earlier turns are already in
+//     agent runtime's on-disk Conversation log, keyed by session_id.
+//   - Streaming maps agent runtime's SSE event stream to OpenAI's
 //     chat.completion.chunk delta protocol. Reasoning lands in
 //     `delta.reasoning_content` (the DeepSeek/Kimi convention). Tool
 //     calls do NOT appear in the OpenAI stream — they're internal to
@@ -148,7 +148,7 @@ func handleChatCompletions(cfg Config, pool *SessionPool) http.HandlerFunc {
 
 // extractLastUser pulls the rightmost role=user message's content out
 // of a chat history. We treat the rest of the history as already
-// captured in affent's Conversation log keyed by session_id.
+// captured in agent runtime's Conversation log keyed by session_id.
 func extractLastUser(msgs []chatMessage) string {
 	for i := len(msgs) - 1; i >= 0; i-- {
 		if msgs[i].Role == "user" {
@@ -256,7 +256,7 @@ func bufferChatCompletion(ctx context.Context, sess *Session, turnID string, ch 
 	}
 }
 
-// openAIFinishReason maps affent's TurnEnd reason vocabulary onto the
+// openAIFinishReason maps agent runtime's TurnEnd reason vocabulary onto the
 // OpenAI chat-completions `finish_reason` field. The two systems
 // don't fully overlap — affent has step-limit and cancelled, OpenAI
 // has length and content_filter — so we pick the closest semantic.
@@ -321,7 +321,7 @@ func writeChatCompletionResponse(w http.ResponseWriter, sessionID, model string,
 	_ = json.NewEncoder(w).Encode(resp)
 }
 
-// streamChatCompletion translates affent's SSE stream into OpenAI's
+// streamChatCompletion translates agent runtime's SSE stream into OpenAI's
 // chat.completion.chunk protocol, line by line. On client disconnect
 // (ctx.Done) we propagate cancellation into the affent Loop so the
 // browser / LLM doesn't keep churning with no listener.

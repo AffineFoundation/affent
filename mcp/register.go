@@ -5,12 +5,12 @@ import (
 	"encoding/json"
 	"fmt"
 
-	"github.com/affinefoundation/affent"
+	agent "github.com/affinefoundation/affent/internal/agent"
 	"github.com/rs/zerolog"
 )
 
 // RegisterServer launches the server, fetches its tool catalog, and
-// adds each tool to the affent.Registry under a "<server-name>_<tool>"
+// adds each tool to the agent.Registry under a "<server-name>_<tool>"
 // name so multiple servers can coexist without clashing.
 //
 // Returns the live Client + the affent tool names that were
@@ -19,7 +19,7 @@ import (
 // On any failure inside RegisterServer itself the partial state is
 // rolled back internally: the Client is closed and no tools are
 // added.
-func RegisterServer(ctx context.Context, reg *affent.Registry, spec ServerSpec, log zerolog.Logger) (*Client, []string, error) {
+func RegisterServer(ctx context.Context, reg *agent.Registry, spec ServerSpec, log zerolog.Logger) (*Client, []string, error) {
 	c, err := Start(ctx, spec, log)
 	if err != nil {
 		return nil, nil, err
@@ -33,7 +33,7 @@ func RegisterServer(ctx context.Context, reg *affent.Registry, spec ServerSpec, 
 	for _, t := range tools {
 		affentName := spec.Name + "_" + t.Name
 		schema := t.InputSchema
-		// affent.Tool requires a non-empty JSON Schema object.
+		// agent.Tool requires a non-empty JSON Schema object.
 		if len(schema) == 0 {
 			schema = json.RawMessage(`{"type":"object","properties":{}}`)
 		}
@@ -44,7 +44,7 @@ func RegisterServer(ctx context.Context, reg *affent.Registry, spec ServerSpec, 
 		if desc == "" {
 			desc = fmt.Sprintf("MCP tool %s/%s", spec.Name, t.Name)
 		}
-		reg.Add(&affent.Tool{
+		reg.Add(&agent.Tool{
 			Name:        affentName,
 			Description: desc,
 			Schema:      schema,
@@ -77,7 +77,7 @@ func RegisterServer(ctx context.Context, reg *affent.Registry, spec ServerSpec, 
 // its tools are unregistered from reg before the error is returned —
 // so the caller doesn't end up with a Registry whose entries point
 // at backends that have already been torn down.
-func RegisterAll(ctx context.Context, reg *affent.Registry, specs []ServerSpec, log zerolog.Logger) ([]*Client, error) {
+func RegisterAll(ctx context.Context, reg *agent.Registry, specs []ServerSpec, log zerolog.Logger) ([]*Client, error) {
 	type registered struct {
 		client *Client
 		names  []string

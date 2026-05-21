@@ -1,4 +1,4 @@
-package affent
+package agent
 
 import (
 	"bytes"

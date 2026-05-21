@@ -15,7 +15,7 @@ import (
 	"time"
 	"unicode/utf8"
 
-	"github.com/affinefoundation/affent"
+	agent "github.com/affinefoundation/affent/internal/agent"
 	"github.com/affinefoundation/affent/executor"
 	"github.com/affinefoundation/affent/mcp"
 	"github.com/affinefoundation/affent/sse"
@@ -98,9 +98,9 @@ func (c *commonFlags) bind(fs *flag.FlagSet) {
 	fs.StringVar(&c.apiKey, "api-key", os.Getenv("AFFENTCTL_API_KEY"), "API key")
 	fs.StringVar(&c.model, "model", os.Getenv("AFFENTCTL_MODEL"), "model id")
 	fs.IntVar(&c.maxTurns, "max-turns", 10, "max tool-call rounds per user message")
-	fs.DurationVar(&c.callTimeout, "max-call-timeout", affent.DefaultPerCallTimeout, "per-LLM-call timeout")
-	fs.IntVar(&c.retryTransient, "retry-transient", affent.DefaultTransientRetries, "retry attempts on transient LLM errors (5xx/429/408/net/EOF/timeout); 0 disables")
-	fs.DurationVar(&c.retryBackoff, "retry-backoff", affent.DefaultTransientBackoff, "initial backoff between retries; doubles each attempt")
+	fs.DurationVar(&c.callTimeout, "max-call-timeout", agent.DefaultPerCallTimeout, "per-LLM-call timeout")
+	fs.IntVar(&c.retryTransient, "retry-transient", agent.DefaultTransientRetries, "retry attempts on transient LLM errors (5xx/429/408/net/EOF/timeout); 0 disables")
+	fs.DurationVar(&c.retryBackoff, "retry-backoff", agent.DefaultTransientBackoff, "initial backoff between retries; doubles each attempt")
 	fs.StringVar(&c.tracePath, "trace", "", "JSONL trace path; '-' for stdout, '' for stderr")
 	fs.BoolVar(&c.traceSkipDeltas, "trace-skip-deltas", false, "skip thinking/message deltas in trace (smaller trace, no token-level replay; final text still in message.end)")
 	fs.StringVar(&c.systemPromptPath, "system-prompt", "", "override system prompt; '-' or file path or literal")
@@ -287,7 +287,7 @@ func loadConfigFile(c *commonFlags, fs *flag.FlagSet) error {
 // resolved session id, MCP clients to keep alive, and a closer to call
 // before exit.
 type loopBundle struct {
-	loop       *affent.Loop
+	loop       *agent.Loop
 	events     chan sse.Event
 	trace      io.Writer
 	traceClose func() error
@@ -353,9 +353,9 @@ func setupLoop(c commonFlags) (*loopBundle, int) {
 	// generic dev-box default tells the model about shell/file/schedule_*
 	// tools that aren't registered in this mode (leads to wasted "tool
 	// not available" tool calls + misleading the user about capabilities).
-	systemPrompt := affent.DefaultSystemPrompt
+	systemPrompt := agent.DefaultSystemPrompt
 	if c.memoryOnly {
-		systemPrompt = affent.MemoryOnlySystemPrompt
+		systemPrompt = agent.MemoryOnlySystemPrompt
 	}
 	if c.systemPromptPath != "" {
 		raw, err := readMaybeStdin(c.systemPromptPath)
@@ -388,9 +388,9 @@ func setupLoop(c commonFlags) (*loopBundle, int) {
 		return nil, 64
 	}
 
-	var memStore affent.MemoryStore
+	var memStore agent.MemoryStore
 	if c.memoryEnabled {
-		fs := affent.NewFileMemoryStore(workspace)
+		fs := agent.NewFileMemoryStore(workspace)
 		if c.memoryDir != "" {
 			fs.MemoryDir = resolveStorePath(workspace, c.memoryDir)
 		}
@@ -417,14 +417,14 @@ func setupLoop(c commonFlags) (*loopBundle, int) {
 		memStore = fs
 	}
 
-	tools := affent.NewRegistry()
+	tools := agent.NewRegistry()
 	if c.memoryOnly {
 		if memStore == nil {
 			log.Error().Msg("--memory-only requires a usable memory store; check --memory-workspace-store / --memory-user-store")
 			_ = traceClose()
 			return nil, 3
 		}
-		affent.RegisterMemoryOnly(tools, memStore)
+		agent.RegisterMemoryOnly(tools, memStore)
 	} else {
 		exec, execErr := buildExecutor(c.executor, sid, workspace)
 		if execErr != nil {
@@ -432,7 +432,7 @@ func setupLoop(c commonFlags) (*loopBundle, int) {
 			_ = traceClose()
 			return nil, 64
 		}
-		affent.RegisterBuiltins(tools, affent.BuiltinDeps{
+		agent.RegisterBuiltins(tools, agent.BuiltinDeps{
 			Executor:         exec,
 			HostWorkspaceDir: workspace,
 			Memory:           memStore,
@@ -451,7 +451,7 @@ func setupLoop(c commonFlags) (*loopBundle, int) {
 		return nil, 3
 	}
 
-	conv, err := affent.OpenConversationAt(filepath.Join(convDir, sid+".jsonl"))
+	conv, err := agent.OpenConversationAt(filepath.Join(convDir, sid+".jsonl"))
 	if err != nil {
 		log.Error().Err(err).Msg("conversation")
 		_ = traceClose()
@@ -462,12 +462,12 @@ func setupLoop(c commonFlags) (*loopBundle, int) {
 	}
 
 	events := make(chan sse.Event, 64)
-	llm := affent.NewLLMClient(c.baseURL, c.apiKey, c.model)
+	llm := agent.NewLLMClient(c.baseURL, c.apiKey, c.model)
 	projectContextDir := ""
 	if c.projectContext {
 		projectContextDir = workspace
 	}
-	loop := &affent.Loop{
+	loop := &agent.Loop{
 		LLM:                 llm,
 		Tools:               tools,
 		Conv:                conv,
@@ -487,13 +487,13 @@ func setupLoop(c commonFlags) (*loopBundle, int) {
 	// compactions hit the same provider/model the agent uses.
 	triggerMsgs := c.compactTrigger
 	if triggerMsgs <= 0 {
-		triggerMsgs = affent.DefaultSummaryTriggerMsgs
+		triggerMsgs = agent.DefaultSummaryTriggerMsgs
 	}
 	keepLast := c.compactKeepLast
 	if keepLast <= 0 {
-		keepLast = affent.DefaultSummaryKeepLast
+		keepLast = agent.DefaultSummaryKeepLast
 	}
-	loop.Compactor = &affent.LLMSummaryCompactor{
+	loop.Compactor = &agent.LLMSummaryCompactor{
 		LLM:         llm,
 		TriggerMsgs: triggerMsgs,
 		KeepLast:    keepLast,
@@ -546,7 +546,7 @@ type mcpConfig struct {
 	Servers []mcp.ServerSpec `json:"servers"`
 }
 
-func startMCP(configPath string, reg *affent.Registry, log zerolog.Logger) ([]*mcp.Client, error) {
+func startMCP(configPath string, reg *agent.Registry, log zerolog.Logger) ([]*mcp.Client, error) {
 	if configPath == "" {
 		return nil, nil
 	}

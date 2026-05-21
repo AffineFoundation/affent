@@ -1,6 +1,6 @@
 // Package mcp is a minimal Model Context Protocol client. It speaks
 // stdio JSON-RPC to one MCP server process and exposes the server's
-// tools/* surface as affent.Tool entries.
+// tools/* surface as agent.Tool entries.
 //
 // What's implemented:
 //
@@ -74,7 +74,7 @@ type ToolDescriptor struct {
 
 // CallResult is what tools/call returns. We flatten the standard MCP
 // "content" array (a list of typed blocks) into a single text string
-// for affent's plain-text tool result contract; binary / image content
+// for agent runtime's plain-text tool result contract; binary / image content
 // gets a placeholder.
 type CallResult struct {
 	Text    string

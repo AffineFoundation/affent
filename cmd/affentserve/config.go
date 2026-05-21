@@ -33,7 +33,7 @@ type Config struct {
 	AuthToken string `json:"auth_token"`
 
 	// WorkspaceRoot is the parent directory under which each session
-	// gets its own ephemeral workspace (for affent's Conversation JSONL).
+	// gets its own ephemeral workspace (for agent runtime's Conversation JSONL).
 	WorkspaceRoot string `json:"workspace_root"`
 
 	// MemoryRoot is the parent directory for DURABLE per-session memory.
@@ -52,7 +52,7 @@ type Config struct {
 	// this long. Default 10m. Use a duration string ("30s", "10m").
 	SessionIdleTTL string `json:"session_idle_ttl"`
 
-	// MaxTurnSteps overrides affent's default per-turn step cap.
+	// MaxTurnSteps overrides agent runtime's default per-turn step cap.
 	MaxTurnSteps int `json:"max_turn_steps"`
 
 	// EnableBrowser registers the extras/browser tool family on each
@@ -66,12 +66,12 @@ type Config struct {
 	EnableWeb       bool `json:"enable_web"`
 	EnableWebSearch bool `json:"enable_web_search"`
 
-	// EnableMemory exposes affent's `memory` tool. Disabled by
+	// EnableMemory exposes agent runtime's `memory` tool. Disabled by
 	// default; eval workloads should leave it off so per-question
 	// state doesn't accumulate.
 	EnableMemory bool `json:"enable_memory"`
 
-	// EnableBuiltins registers affent's shell + file tools. Defaults
+	// EnableBuiltins registers agent runtime's shell + file tools. Defaults
 	// to false — running shell on behalf of remote callers is
 	// dangerous on a shared host. Operators who want it must opt in
 	// explicitly. When enabled, shell commands run as the affentserve
@@ -79,8 +79,8 @@ type Config struct {
 	// isolation, run affentserve itself inside a sandbox.
 	EnableBuiltins bool `json:"enable_builtins"`
 
-	// SystemPrompt overrides affent.DefaultSystemPrompt. Empty falls
-	// through to affent's builtin.
+	// SystemPrompt overrides agent.DefaultSystemPrompt. Empty falls
+	// through to agent runtime's builtin.
 	SystemPrompt string `json:"system_prompt"`
 
 	// BrowserCacheDir, when non-empty, enables an on-disk response

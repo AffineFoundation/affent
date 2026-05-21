@@ -62,11 +62,11 @@ func parseFlagsAndConfig(argv []string) (Config, error) {
 		workspaceRoot    = fs.String("workspace-root", "", "Parent directory for per-session workspaces. Empty creates per-session temp dirs.")
 		maxSessions      = fs.Int("max-sessions", 0, "LRU upper bound on in-memory sessions (default 32).")
 		sessionIdleTTL   = fs.String("session-idle-ttl", "", "How long an idle session stays in the pool before GC (default 10m).")
-		maxTurnSteps     = fs.Int("max-turn-steps", 0, "Per-turn step cap (assistant↔tool round trips). 0 = affent's default.")
+		maxTurnSteps     = fs.Int("max-turn-steps", 0, "Per-turn step cap (assistant↔tool round trips). 0 = agent runtime's default.")
 		enableBrowser    = fs.Bool("browser", false, "Register the extras/browser tool family for each new session.")
 		enableWeb        = fs.Bool("web", false, "Register extras/web's web_fetch tool.")
 		enableWebSearch  = fs.Bool("web-search", false, "Register web_search alongside web_fetch (requires TAVILY_API_KEY by default).")
-		enableMemory     = fs.Bool("memory", false, "Register affent's memory tool. Off by default — eval workloads should leave it off.")
+		enableMemory     = fs.Bool("memory", false, "Register agent runtime's memory tool. Off by default — eval workloads should leave it off.")
 		enableBuiltins   = fs.Bool("builtins", false, "Register shell + file builtins (LocalExecutor). DANGEROUS on a shared host — only enable in a sandboxed environment.")
 		browserCacheDir  = fs.String("browser-cache-dir", "", "Enable an on-disk response cache for browser sessions; empty disables caching.")
 		browserCacheTTL  = fs.String("browser-cache-ttl", "", "Cache TTL ('24h' default; '0s' disables expiry).")
@@ -74,7 +74,7 @@ func parseFlagsAndConfig(argv []string) (Config, error) {
 		browserNoStealth = fs.Bool("browser-no-stealth", false, "Disable the webdriver-detection bypass script. Default off (stealth on).")
 		browserAllowAll  = fs.Bool("browser-allow-all-domains", false, "Allow third-party / tracker domains the default list normally blocks.")
 		browserScreenshot = fs.Bool("browser-screenshot", false, "Register the browser_screenshot tool. Off by default — base64 image payloads bloat tool result events; flip on for vision-capable models.")
-		systemPrompt     = fs.String("system-prompt", "", "Override affent.DefaultSystemPrompt. '-' reads from stdin, '@FILE' from a file, anything else is literal.")
+		systemPrompt     = fs.String("system-prompt", "", "Override agent.DefaultSystemPrompt. '-' reads from stdin, '@FILE' from a file, anything else is literal.")
 	)
 
 	if err := fs.Parse(argv); err != nil {

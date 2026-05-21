@@ -93,7 +93,7 @@ Required: --prompt, --model.`)
 // through message.end. Useful for batch eval where token-level replay
 // has no value but trace size matters.
 //
-// loop is the active *affent.Loop and may be nil only in unit tests. On
+// loop is the active *agent.Loop and may be nil only in unit tests. On
 // SIGINT (ctx.Done) we MUST call Loop.Cancel — the Loop runs its turn on
 // a detached background context so the parent ctx cancelling has no
 // effect on in-flight LLM calls or shell-tool processes. Without the

@@ -1,4 +1,4 @@
-package affent
+package agent
 
 import "github.com/affinefoundation/affent/internal/projectcontext"
 

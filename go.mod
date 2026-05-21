@@ -1,9 +1,3 @@
-// affent: a small, embeddable agent loop core.
-//
-// Drop into any environment that talks to an OpenAI-compatible chat
-// completions endpoint — affine-agents (gateway + UI), training rigs,
-// eval pipelines, scripts. Deps are deliberately tiny: uuid for ids,
-// zerolog for logging, stdlib for everything else.
 module github.com/affinefoundation/affent
 
 go 1.22

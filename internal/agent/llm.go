@@ -1,8 +1,6 @@
-// Package affent is an embeddable agent loop core. It talks directly to
-// an OpenAI-compatible chat completions endpoint, dispatches tool calls
-// to in-process tool handlers registered on a Registry, and streams
-// per-turn events through an SSE protocol (sse package).
-package affent
+// Package agent contains Affent's internal runtime loop: chat-completions
+// streaming, conversation persistence, tool dispatch, memory, and compaction.
+package agent
 
 import (
 	"bufio"
@@ -522,4 +520,3 @@ func consumeStream(ctx context.Context, body io.ReadCloser, out chan<- StreamEve
 		Final:        final,
 	}})
 }
-

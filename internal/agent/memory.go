@@ -1,4 +1,4 @@
-package affent
+package agent
 
 import internalmemory "github.com/affinefoundation/affent/internal/memory"
 

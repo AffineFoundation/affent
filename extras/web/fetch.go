@@ -15,7 +15,7 @@ import (
 
 	htmltomarkdown "github.com/JohannesKaufmann/html-to-markdown/v2"
 	"github.com/JohannesKaufmann/html-to-markdown/v2/converter"
-	"github.com/affinefoundation/affent"
+	agent "github.com/affinefoundation/affent/internal/agent"
 	readability "github.com/go-shiori/go-readability"
 )
 
@@ -44,12 +44,12 @@ const (
 	defaultUserAgent      = "affent-webfetch/0.1 (+https://github.com/AffineFoundation/affent)"
 )
 
-// FetchTool returns an affent.Tool that fetches a URL and returns its
+// FetchTool returns an agent.Tool that fetches a URL and returns its
 // text content. HTML is converted to markdown; other text/* types
 // (text/plain, application/json, …) are passed through; non-text bodies
 // get a placeholder. Redirects are followed by net/http's default
 // behaviour (10 hops max).
-func FetchTool(cfg FetchConfig) *affent.Tool {
+func FetchTool(cfg FetchConfig) *agent.Tool {
 	if cfg.HTTP == nil {
 		cfg.HTTP = &http.Client{Timeout: 30 * time.Second}
 	}
@@ -71,7 +71,7 @@ func FetchTool(cfg FetchConfig) *affent.Tool {
         }
     }`)
 
-	return &affent.Tool{
+	return &agent.Tool{
 		Name: "web_fetch",
 		Description: "Fetch a URL and return its text content. HTML is " +
 			"converted to compact markdown; text/plain, application/json, " +
