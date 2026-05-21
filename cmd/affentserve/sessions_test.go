@@ -462,6 +462,27 @@ func TestBuildSession_RejectsTraversalSessionID(t *testing.T) {
 	}
 }
 
+// TestSessionPool_AttachesRollingCompactor pins that every session
+// gets an LLMSummaryCompactor wired up. Without it the loop's
+// runStep treats upstream context-overflow errors as non-retryable
+// (the IsContextOverflow branch is gated on l.Compactor != nil), so
+// a session that's been chatting long enough to outgrow the model's
+// window dies at the boundary with no recovery. affentctl already
+// always-attaches; affentserve should do the same.
+func TestSessionPool_AttachesRollingCompactor(t *testing.T) {
+	pool := newTestPool(t, 4, "5m")
+	s, err := pool.GetOrCreate("compactor-check")
+	if err != nil {
+		t.Fatalf("GetOrCreate: %v", err)
+	}
+	if s.loop.Compactor == nil {
+		t.Fatal("loop.Compactor must be non-nil so context overflow can recover")
+	}
+	if _, ok := s.loop.Compactor.(*agent.LLMSummaryCompactor); !ok {
+		t.Errorf("expected *agent.LLMSummaryCompactor, got %T", s.loop.Compactor)
+	}
+}
+
 func TestSessionPool_MaxSessionsEvictsLRU(t *testing.T) {
 	pool := newTestPool(t, 2, "5m")
 	a, _ := pool.GetOrCreate("a")

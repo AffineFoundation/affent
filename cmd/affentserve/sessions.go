@@ -310,6 +310,21 @@ func (p *SessionPool) buildSession(id string) (*Session, error) {
 		// the tool isn't registered above anyway.
 		Memory: memStore,
 	}
+	// Always-on rolling-summary compactor, same posture affentctl
+	// takes. Without it, a long-running session eventually outgrows
+	// the upstream's context window and runStep returns a
+	// non-retryable error (context overflow is only recoverable when
+	// l.Compactor != nil). For affentserve specifically that means a
+	// session that's been chatting for a day dies at the boundary
+	// with no recovery — and since the conv log is durable across
+	// restarts, even reopening the same session_id won't help. The
+	// LLM client reuses the same provider/model so summarization
+	// hits the same backend the agent is already configured against.
+	loop.Compactor = &agent.LLMSummaryCompactor{
+		LLM:         llm,
+		TriggerMsgs: agent.DefaultSummaryTriggerMsgs,
+		KeepLast:    agent.DefaultSummaryKeepLast,
+	}
 	if err := loop.EnsureSystemPrompt(p.cfg.SystemPrompt); err != nil {
 		_ = os.RemoveAll(workspace)
 		if browser != nil {
