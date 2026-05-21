@@ -68,7 +68,12 @@ Required: --prompt, --model.`)
 	b.log.Info().Str("turn_id", turnID).Msg("turn started")
 
 	finalText, exit := drainBatch(ctx, b.loop, b.events, b.trace, b.log, cf.traceSkipDeltas)
-	if finalText != "" {
+	// When the user routed the trace to stdout (--trace -), printing the
+	// final assistant text on stdout too would interleave plain markdown
+	// into the JSONL stream and break every batch-eval consumer that
+	// pipes stdout through jq. The text is already on stdout via the
+	// message.done event in the trace, so we just skip the extra print.
+	if finalText != "" && cf.tracePath != "-" {
 		fmt.Println(finalText)
 	}
 	return exit
