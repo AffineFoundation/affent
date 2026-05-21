@@ -190,6 +190,13 @@ func (c Config) Validate() error {
 	if c.BaseURL == "" {
 		return errors.New("base_url is required (use --base-url or AFFENTSERVE_BASE_URL)")
 	}
+	if c.Model == "" {
+		// Without a model, the LLMClient sends `"model":""` upstream
+		// and every OpenAI-compat backend 400s the first request.
+		// Better to fail fast at startup than wait for the operator
+		// to discover this through a runtime error in a client log.
+		return errors.New("model is required (use --model or set model in config file)")
+	}
 	if _, err := c.IdleTTL(); err != nil {
 		return err
 	}

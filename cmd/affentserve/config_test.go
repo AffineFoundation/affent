@@ -102,6 +102,22 @@ func TestConfig_Validate_RequiresBaseURL(t *testing.T) {
 	}
 }
 
+// TestConfig_Validate_RequiresModel pins that startup fails when
+// --model is missing. Without this check the LLMClient sends an
+// empty `model` field upstream and every OpenAI-compat backend
+// 400s the first chat-completions call — failures the operator
+// only discovers via a client log error, well after deploy time.
+func TestConfig_Validate_RequiresModel(t *testing.T) {
+	cfg := Config{BaseURL: "https://example/v1"}
+	if err := cfg.Resolve(); err != nil {
+		t.Fatal(err)
+	}
+	err := cfg.Validate()
+	if err == nil || !strings.Contains(err.Error(), "model") {
+		t.Errorf("expected model validation error, got %v", err)
+	}
+}
+
 func TestConfig_IdleTTL_RejectsBadDuration(t *testing.T) {
 	cfg := Config{BaseURL: "https://example/v1", SessionIdleTTL: "not-a-duration"}
 	_, err := cfg.IdleTTL()
