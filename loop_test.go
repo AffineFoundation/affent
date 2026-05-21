@@ -5,6 +5,9 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"unicode/utf8"
+
+	"github.com/rs/zerolog"
 )
 
 func newTestConv(t *testing.T) *Conversation {
@@ -281,5 +284,62 @@ func TestEnsureSystemPrompt_SnapshotLiveAcrossSessions(t *testing.T) {
 	// And session 1's prompt must NOT have been retroactively changed.
 	if strings.Contains(conv1.Snapshot()[0].Content, "session-2 fact") {
 		t.Fatalf("session 1 prompt must not see session-2 fact retroactively")
+	}
+}
+
+// TestTruncateForContext_UTF8Safe verifies the helper that clamps
+// oversized tool results to the in-context budget doesn't split a
+// multi-byte UTF-8 rune. Before the fix it byte-sliced the input at
+// the raw `max` offset; if that offset landed inside a Cyrillic /
+// Greek / emoji rune the model received invalid UTF-8.
+func TestTruncateForContext_UTF8Safe(t *testing.T) {
+	// Each Cyrillic rune is 2 UTF-8 bytes. Sweeping all sub-rune
+	// offsets exercises both the "lands mid-rune" and "lands on
+	// boundary" paths.
+	in := "приветприветпривет"
+	for n := 1; n < len(in); n++ {
+		out := truncateForContext(in, n)
+		// truncateForContext appends a banner starting with "\n\n[...";
+		// the prefix is everything before that.
+		prefix := strings.SplitN(out, "\n\n[", 2)[0]
+		if !utf8.ValidString(prefix) {
+			t.Fatalf("truncateForContext(_, %d) produced invalid UTF-8 prefix: %q", n, prefix)
+		}
+	}
+}
+
+// TestPublish_NilEventsIsSilent pins the no-allocation, no-log path
+// when an embedder opts out of the event stream by leaving
+// Loop.Events nil. Pre-fix the publish call hit `case nil <- ev:
+// default:` which never proceeds, so every event triggered a
+// misleading "event channel full" warning.
+func TestPublish_NilEventsIsSilent(t *testing.T) {
+	var buf strings.Builder
+	loop := &Loop{
+		Log:    zerolog.New(&buf),
+		Events: nil,
+	}
+	// Spam a batch of varied events; none of them should log or panic.
+	for i := 0; i < 50; i++ {
+		loop.publish("message.delta", map[string]any{"delta": "x"})
+		loop.publish("turn.end", map[string]any{"reason": "completed"})
+	}
+	if strings.Contains(buf.String(), "channel full") {
+		t.Fatalf("nil Events must not produce \"channel full\" logs: %s", buf.String())
+	}
+	if buf.Len() != 0 {
+		t.Fatalf("nil Events must produce no log output, got %q", buf.String())
+	}
+}
+
+// TestPreviewN_UTF8Safe covers the event-bus preview path the same way.
+func TestPreviewN_UTF8Safe(t *testing.T) {
+	in := "héllo wörld" // 'é' and 'ö' are each 2 bytes
+	for n := 1; n < len(in); n++ {
+		out := previewN(in, n)
+		cut := strings.TrimSuffix(out, "...")
+		if !utf8.ValidString(cut) {
+			t.Fatalf("previewN(%q, %d) produced invalid UTF-8 prefix: %q", in, n, cut)
+		}
 	}
 }

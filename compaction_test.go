@@ -218,12 +218,22 @@ func TestCompact_DoesNotSeverToolCallPair(t *testing.T) {
 
 func TestIsContextOverflow(t *testing.T) {
 	cases := map[string]bool{
+		// Already covered before this iteration:
 		`chat http 400: input length (12345 tokens) exceeds the maximum allowed length`: true,
 		`chat http 400: This model's maximum context length is 8192 tokens`:             true,
 		`ContextWindowExceededError: ...`:                                               true,
-		`chat http 429: rate limit exceeded`:                                            false,
-		`chat http 500: internal error`:                                                 false,
-		``:                                                                              false,
+		// Real provider phrasings broadened in iter 16:
+		`chat http 400: prompt is too long: 100000 tokens > 80000 maximum`:    true, // Anthropic via proxy
+		`chat http 400: input is too long`:                                    true, // Anthropic
+		`chat http 413: Request too large`:                                    true, // Groq
+		`chat http 400: error code "request_too_large"`:                       true, // Groq enum
+		`chat http 400: too many tokens in messages`:                          true, // some Together/vLLM builds
+		`chat http 400: context_length_exceeded`:                              true, // vLLM error code
+		`chat http 400: ... is greater than the maximum allowed token count`:  true, // Fireworks/Together
+		// Non-overflow errors must still be classified as false:
+		`chat http 429: rate limit exceeded`: false,
+		`chat http 500: internal error`:      false,
+		``:                                   false,
 	}
 	for msg, want := range cases {
 		var err error

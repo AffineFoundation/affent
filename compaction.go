@@ -28,6 +28,15 @@ type Compactor interface {
 // OpenHands' LLMSummarizingCondenser behaviour).
 const summaryPrefix = "[summary of earlier work] "
 
+// DefaultSummaryTriggerMsgs is the conventional proactive threshold
+// borrowed from OpenHands V1 (max_size = 240). Used by embedders that
+// want a sane "compact long sessions" default without picking a
+// number themselves.
+const DefaultSummaryTriggerMsgs = 240
+
+// DefaultSummaryKeepLast is the OpenHands V1 keep_last value (10).
+const DefaultSummaryKeepLast = 10
+
 // LLMSummaryCompactor implements rolling LLM summarization. Layout
 // after a successful compaction:
 //
@@ -46,10 +55,12 @@ type LLMSummaryCompactor struct {
 	// LLM drives summarization. Required.
 	LLM *LLMClient
 
-	// TriggerMsgs is the proactive threshold: if the conversation has
-	// fewer messages, Compact short-circuits without work. Zero
-	// disables proactive compaction (reactive overflow path still
-	// works). Default 240 (matches OpenHands V1 max_size).
+	// TriggerMsgs is the proactive threshold: when the conversation
+	// has at MORE than this many messages, Compact runs; otherwise
+	// it short-circuits. Set to zero to skip the threshold entirely
+	// (Compact runs every call) — the reactive overflow path uses
+	// this internally by cloning the compactor with TriggerMsgs=0.
+	// Pick DefaultSummaryTriggerMsgs for an OpenHands-style default.
 	TriggerMsgs int
 
 	// KeepFirst is how many leading non-system messages to preserve
@@ -58,8 +69,8 @@ type LLMSummaryCompactor struct {
 	KeepFirst int
 
 	// KeepLast is how many trailing messages to preserve verbatim.
-	// Default 10. Backed up to a safe boundary so tool_calls / role=tool
-	// pairs aren't severed.
+	// Default DefaultSummaryKeepLast. Backed up to a safe boundary
+	// so tool_calls / role=tool pairs aren't severed.
 	KeepLast int
 
 	// MaxEventLength caps the per-event chars sent to the summarizer
@@ -302,12 +313,23 @@ func truncateChars(s string, n int) string {
 	if len(s) <= n {
 		return s
 	}
-	return s[:n] + "...(truncated)"
+	return s[:utf8AlignBackward(s, n)] + "...(truncated)"
 }
 
 // IsContextOverflow reports whether err looks like an upstream "input
 // length exceeds maximum context window" rejection — the trigger for
-// reactive compaction.
+// reactive compaction. The keyword list covers the phrasing each
+// major OpenAI-compatible provider actually emits (collected from
+// production errors, not the spec):
+//
+//   - OpenAI / Azure OpenAI: "maximum context length is N tokens. However, your messages resulted in ..."
+//   - Anthropic via proxy:  "prompt is too long: N tokens > M maximum", "input is too long"
+//   - Anthropic SDK:        "ContextWindowExceededError"
+//   - Groq:                 "Request too large", "request_too_large"
+//   - DeepSeek / Kimi:      "the messages length exceeds the maximum"
+//   - Together / Fireworks: "input length is greater than the maximum allowed", "is greater than the maximum allowed token count"
+//   - vLLM / sglang / TGI:  "context_length_exceeded", "string too long"
+//   - Chutes / OpenRouter:  pass-through of any of the above
 func IsContextOverflow(err error) bool {
 	if err == nil {
 		return false
@@ -315,7 +337,12 @@ func IsContextOverflow(err error) bool {
 	s := strings.ToLower(err.Error())
 	for _, kw := range []string{
 		"context length", "context window", "maximum context",
-		"maximum allowed length", "input length", "exceeds the maximum",
+		"context_length_exceeded",
+		"maximum allowed length", "maximum allowed token",
+		"input length", "input is too long",
+		"prompt is too long", "too many tokens",
+		"exceeds the maximum",
+		"request too large", "request_too_large",
 		"contextwindowexceedederror", "string too long",
 	} {
 		if strings.Contains(s, kw) {

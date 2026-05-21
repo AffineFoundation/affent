@@ -3,6 +3,7 @@ package affent
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"path/filepath"
@@ -140,4 +141,111 @@ func readReqBody(r *http.Request) (string, error) {
 	buf := make([]byte, 64*1024)
 	n, _ := r.Body.Read(buf)
 	return string(buf[:n]), nil
+}
+
+// TestRunTurn_MaxStepsEmitsMaxTurnsReason pins the "step limit" exit
+// path: a model that keeps issuing tool_calls forever must end with
+// reason=max_turns, not the misleading reason=completed the loop
+// emitted before this fix.
+func TestRunTurn_MaxStepsEmitsMaxTurnsReason(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "text/event-stream")
+		w.WriteHeader(200)
+		fl := w.(http.Flusher)
+		// Every call: emit a single tool_call and a finish_reason of
+		// "tool_calls". The loop will dispatch the tool and come back
+		// for the next turn — ad infinitum, until MaxTurnSteps kicks in.
+		lines := []string{
+			`data: {"choices":[{"delta":{"role":"assistant","tool_calls":[{"index":0,"id":"c","type":"function","function":{"name":"big","arguments":""}}]},"finish_reason":null}]}`,
+			`data: {"choices":[{"delta":{"tool_calls":[{"index":0,"function":{"arguments":"{}"}}]},"finish_reason":null}]}`,
+			`data: {"choices":[{"delta":{},"finish_reason":"tool_calls"}]}`,
+			`data: [DONE]`,
+		}
+		for _, l := range lines {
+			w.Write([]byte(l + "\n\n"))
+			fl.Flush()
+		}
+	}))
+	t.Cleanup(srv.Close)
+
+	conv, err := OpenConversationAt(filepath.Join(t.TempDir(), "sess.jsonl"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	reg := NewRegistry()
+	reg.Add(fakeBigResultTool("ok"))
+
+	events := make(chan sse.Event, 256)
+	llm := NewLLMClient(srv.URL, "", "fake-model")
+	loop := &Loop{
+		LLM: llm, Tools: reg, Conv: conv, Events: events,
+		MaxTurnSteps: 2, PerCallTimeout: 5 * time.Second,
+	}
+	if err := loop.EnsureSystemPrompt("base"); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := loop.SendUser(context.Background(), "go"); err != nil {
+		t.Fatal(err)
+	}
+
+	deadline := time.After(10 * time.Second)
+	for {
+		select {
+		case ev, ok := <-events:
+			if !ok {
+				t.Fatal("event channel closed before turn.end")
+			}
+			if ev.Type != sse.TypeTurnEnd {
+				continue
+			}
+			var p sse.TurnEndPayload
+			if err := json.Unmarshal(ev.Data, &p); err != nil {
+				t.Fatalf("decode turn.end: %v", err)
+			}
+			if p.Reason != sse.TurnEndMaxTurns {
+				t.Fatalf("expected reason=%q, got %q", sse.TurnEndMaxTurns, p.Reason)
+			}
+			return
+		case <-deadline:
+			t.Fatal("timeout waiting for turn.end")
+		}
+	}
+}
+
+// TestSendUser_HonorsCancelledCtx pins the entry-time ctx check.
+// Pre-fix, SendUser accepted a ctx in its signature but never read
+// it, so a caller whose ctx was already cancelled (e.g. an HTTP
+// request that disconnected before reaching the handler) would
+// still allocate a turn slot and start the loop. Now the call short-
+// circuits with ctx.Err() before any state changes.
+func TestSendUser_HonorsCancelledCtx(t *testing.T) {
+	conv, err := OpenConversationAt(filepath.Join(t.TempDir(), "sess.jsonl"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	loop := &Loop{
+		LLM:   &LLMClient{BaseURL: "http://unused", Model: "fake"},
+		Tools: NewRegistry(),
+		Conv:  conv,
+	}
+
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+
+	turnID, err := loop.SendUser(ctx, "hi")
+	if !errors.Is(err, context.Canceled) {
+		t.Fatalf("expected context.Canceled, got err=%v turnID=%q", err, turnID)
+	}
+	if turnID != "" {
+		t.Errorf("turnID must be empty when ctx was pre-cancelled, got %q", turnID)
+	}
+	// Verify the loop's state machine wasn't perturbed: the next valid
+	// call (uncancelled ctx) should still be able to start a turn, not
+	// see a stale "turn in flight" slot.
+	loop.mu.Lock()
+	current := loop.current
+	loop.mu.Unlock()
+	if current != "" {
+		t.Errorf("a cancelled SendUser must not leave loop.current set: got %q", current)
+	}
 }
