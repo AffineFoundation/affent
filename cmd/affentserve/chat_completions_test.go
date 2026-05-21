@@ -139,6 +139,36 @@ func TestOpenAIFinishReason(t *testing.T) {
 	}
 }
 
+// TestChatCompletions_OversizedBodyReturns413 pins that a request
+// body larger than the configured limit gets a clean 413 with a
+// "request too large" message, not a misleading 400 about decode.
+// Earlier the body was read through io.LimitReader, which silently
+// truncated at the limit and let the json decoder fail downstream
+// with "unexpected end of input" — operators couldn't tell whether
+// the client sent malformed JSON or just an oversized payload.
+func TestChatCompletions_OversizedBodyReturns413(t *testing.T) {
+	pool := newTestPool(t, 4, "5m")
+	cfg := Config{Model: "fake"}
+	handler := handleChatCompletions(cfg, pool)
+
+	// Pad past the 4 MiB limit. The padding sits inside a string
+	// field of a well-formed JSON object so a parser that DID see
+	// the whole body would accept it — meaning the rejection has to
+	// come from the size guard, not from JSON validation.
+	pad := strings.Repeat("x", 4*1024*1024+1024)
+	body := `{"model":"fake","messages":[{"role":"user","content":"` + pad + `"}]}`
+	req := httptest.NewRequest(http.MethodPost, "/v1/chat/completions", strings.NewReader(body))
+	rec := httptest.NewRecorder()
+	handler(rec, req)
+
+	if got := rec.Result().StatusCode; got != http.StatusRequestEntityTooLarge {
+		t.Errorf("status = %d, want 413", got)
+	}
+	if !strings.Contains(rec.Body.String(), "exceeds") {
+		t.Errorf("response body should mention the size limit; got %q", rec.Body.String())
+	}
+}
+
 func TestWriteChatCompletionResponse_SetsSessionIDHeader(t *testing.T) {
 	w := httptest.NewRecorder()
 	out := &bufferedTurnResult{Content: "hi", FinishReason: "stop"}

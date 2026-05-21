@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"io"
 	"net/http"
 	"time"
@@ -73,8 +74,21 @@ func handleChatCompletions(cfg Config, pool *SessionPool) http.HandlerFunc {
 			writeJSONErrorTyped(w, http.StatusMethodNotAllowed, "method not allowed", nil, "bad_request")
 			return
 		}
-		body, err := io.ReadAll(io.LimitReader(r.Body, 4*1024*1024))
+		// MaxBytesReader surfaces "body too large" distinctly. The old
+		// io.LimitReader silently truncated at the limit, so a client
+		// posting >4 MiB would get a misleading "decode body:
+		// unexpected EOF" 400 instead of a clear "request too large"
+		// signal — operators can't tell whether the client sent
+		// malformed JSON or just an oversized payload.
+		r.Body = http.MaxBytesReader(w, r.Body, 4*1024*1024)
+		body, err := io.ReadAll(r.Body)
 		if err != nil {
+			var mbe *http.MaxBytesError
+			if errors.As(err, &mbe) {
+				writeJSONErrorTyped(w, http.StatusRequestEntityTooLarge,
+					fmt.Sprintf("request body exceeds %d-byte limit", mbe.Limit), err, "bad_request")
+				return
+			}
 			writeJSONError(w, http.StatusBadRequest, "read body", err)
 			return
 		}
