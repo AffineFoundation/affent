@@ -222,7 +222,9 @@ func (p *SessionPool) buildSession(id string) (*Session, error) {
 			_ = os.RemoveAll(workspace)
 			return nil, fmt.Errorf("browser session: %w", err)
 		}
-		affentbrowser.RegisterAll(reg, bs, affentbrowser.Options{})
+		affentbrowser.RegisterAll(reg, bs, affentbrowser.Options{
+			IncludeScreenshot: p.cfg.BrowserScreenshot,
+		})
 		browser = bs
 	}
 	if p.cfg.EnableWeb {

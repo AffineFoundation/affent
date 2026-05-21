@@ -13,16 +13,35 @@ import (
 )
 
 // chatRequest is the subset of OpenAI's chat-completions request body
-// affentserve cares about. Extension fields (session_id) are tolerated
-// alongside the standard ones.
+// affentserve cares about. Extension fields (session_id /
+// affent_session_id) are tolerated alongside the standard ones.
 type chatRequest struct {
-	Model     string        `json:"model"`
-	Messages  []chatMessage `json:"messages"`
-	Stream    bool          `json:"stream"`
-	SessionID string        `json:"session_id"`
+	Model    string        `json:"model"`
+	Messages []chatMessage `json:"messages"`
+	Stream   bool          `json:"stream"`
+	// SessionID accepts either `session_id` (short) or
+	// `affent_session_id` (the namespaced form that response chunks
+	// emit). The asymmetry came up in real-LLM testing: a caller
+	// copy-pasting the response field into a request used to silently
+	// open a fresh session. AffentSessionID wins when both are set —
+	// the namespaced field is the canonical channel and can't collide
+	// with a future OpenAI extension. The X-Affent-Session-Id header
+	// is still honored above this in middleware.
+	SessionID        string `json:"session_id"`
+	AffentSessionID  string `json:"affent_session_id"`
 	// We accept and ignore the other OpenAI knobs (temperature, top_p,
 	// stop, etc.) because affent owns sampling via its LLMClient.
 	// Surfacing them here would only be misleading.
+}
+
+// resolvedSessionID picks the affent-namespaced field when present so
+// the caller's intent isn't ambiguous if a future OpenAI release ships
+// a `session_id` of its own.
+func (r *chatRequest) resolvedSessionID() string {
+	if r.AffentSessionID != "" {
+		return r.AffentSessionID
+	}
+	return r.SessionID
 }
 
 type chatMessage struct {
@@ -72,7 +91,7 @@ func handleChatCompletions(cfg Config, pool *SessionPool) http.HandlerFunc {
 			return
 		}
 
-		sess, err := pool.GetOrCreate(req.SessionID)
+		sess, err := pool.GetOrCreate(req.resolvedSessionID())
 		if err != nil {
 			if errors.Is(err, ErrShuttingDown) {
 				w.Header().Set("Retry-After", "5")

@@ -100,6 +100,14 @@ type Config struct {
 	// Useful when capturing full third-party traffic for trace
 	// inspection; harmful for Cloudflare-avoidance.
 	BrowserAllowAllDomains bool `json:"browser_allow_all_domains"`
+
+	// BrowserScreenshot registers the browser_screenshot tool. Off by
+	// default because the base64 image payload bloats tool result events
+	// and text-only models can't act on it. Vision-capable callers
+	// (qwen-vl, gpt-4o, claude-3.x) flip this on to let the agent see
+	// the rendered page; the tool's save_path option keeps base64 out
+	// of the result for callers that only want a PNG on disk.
+	BrowserScreenshot bool `json:"browser_screenshot"`
 }
 
 const (

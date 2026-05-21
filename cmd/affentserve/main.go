@@ -73,6 +73,7 @@ func parseFlagsAndConfig(argv []string) (Config, error) {
 		browserCacheSweep = fs.String("browser-cache-sweep-interval", "", "How often the cache GC deletes expired files (default = TTL/8, min 5m).")
 		browserNoStealth = fs.Bool("browser-no-stealth", false, "Disable the webdriver-detection bypass script. Default off (stealth on).")
 		browserAllowAll  = fs.Bool("browser-allow-all-domains", false, "Allow third-party / tracker domains the default list normally blocks.")
+		browserScreenshot = fs.Bool("browser-screenshot", false, "Register the browser_screenshot tool. Off by default — base64 image payloads bloat tool result events; flip on for vision-capable models.")
 		systemPrompt     = fs.String("system-prompt", "", "Override affent.DefaultSystemPrompt. '-' reads from stdin, '@FILE' from a file, anything else is literal.")
 	)
 
@@ -152,6 +153,9 @@ func parseFlagsAndConfig(argv []string) (Config, error) {
 	}
 	if setFlags["browser-allow-all-domains"] {
 		cfg.BrowserAllowAllDomains = *browserAllowAll
+	}
+	if setFlags["browser-screenshot"] {
+		cfg.BrowserScreenshot = *browserScreenshot
 	}
 	if *systemPrompt != "" {
 		resolved, err := resolveSystemPromptFlag(*systemPrompt)
