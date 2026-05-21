@@ -173,6 +173,43 @@ func TestReadFileTool_LargeFileFullyRead(t *testing.T) {
 	}
 }
 
+// TestReadFileTool_CapsRunawayMaxBytes pins the hard upper bound on
+// read_file's max_bytes. Pre-fix, a model emitting max_bytes=1<<30
+// would feed that into io.LimitReader and io.ReadAll, pulling
+// gigabytes into memory before the rest of the pipeline noticed.
+// Now MaxReadFileBytes (4 MiB) caps the request, so the result
+// gets at most that-many bytes plus the standard truncation marker
+// — same shape the model already handles for the 64-KiB default.
+func TestReadFileTool_CapsRunawayMaxBytes(t *testing.T) {
+	tmp := t.TempDir()
+	const fileSize = MaxReadFileBytes + 100*1024 // 100 KiB above the cap
+	body := bytes.Repeat([]byte("x"), fileSize)
+	path := filepath.Join(tmp, "huge.txt")
+	if err := os.WriteFile(path, body, 0o644); err != nil {
+		t.Fatalf("write fixture: %v", err)
+	}
+
+	deps := BuiltinDeps{HostWorkspaceDir: tmp}
+	tool := readFileTool(deps)
+
+	// Model asks for 1 GiB; cap kicks in and the read returns
+	// MaxReadFileBytes worth of content plus the truncation marker.
+	args, _ := json.Marshal(map[string]any{"path": "huge.txt", "max_bytes": 1 << 30})
+	out, err := tool.Execute(context.Background(), args)
+	if err != nil {
+		t.Fatalf("read_file: %v", err)
+	}
+	if !strings.Contains(out, fmt.Sprintf("[truncated; %d-byte cap]", MaxReadFileBytes)) {
+		t.Fatalf("expected MaxReadFileBytes truncation marker; got tail %q",
+			out[max(0, len(out)-200):])
+	}
+	// Total output size: content prefix + small marker. Must NOT be
+	// anywhere near the model-requested 1 GiB.
+	if len(out) > MaxReadFileBytes+1024 {
+		t.Fatalf("output ballooned past the cap: len=%d", len(out))
+	}
+}
+
 // TestReadFileTool_TruncationIsUTF8Safe pins the prefix of a capped
 // read to a valid UTF-8 boundary. Pre-fix the readFileTool sliced
 // the buffer at the raw byte offset, so a cap landing mid-rune

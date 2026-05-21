@@ -253,13 +253,20 @@ func fileOps(deps BuiltinDeps) executor.FileOps {
 	return fo
 }
 
+// MaxReadFileBytes hard-caps how much read_file will pull into
+// memory regardless of the model's max_bytes argument. Prevents an
+// untrusted/confused model from passing max_bytes=1<<30 and OOMing
+// the process while waiting for io.ReadAll. Anything larger than
+// this should be paginated via shell with head/tail/sed instead.
+const MaxReadFileBytes = 4 * 1024 * 1024
+
 func readFileTool(deps BuiltinDeps) *Tool {
 	schema := json.RawMessage(`{
         "type": "object",
         "required": ["path"],
         "properties": {
             "path": {"type": "string", "description": "Path; relative joins onto the workspace root, absolute must fall inside it."},
-            "max_bytes": {"type": "integer", "description": "Optional cap (default 64KiB)."}
+            "max_bytes": {"type": "integer", "description": "Optional cap (default 64 KiB, hard upper bound 4 MiB)."}
         }
     }`)
 	return &Tool{
@@ -279,6 +286,9 @@ func readFileTool(deps BuiltinDeps) *Tool {
 			}
 			if p.MaxBytes <= 0 {
 				p.MaxBytes = 64 * 1024
+			}
+			if p.MaxBytes > MaxReadFileBytes {
+				p.MaxBytes = MaxReadFileBytes
 			}
 			if fo := fileOps(deps); fo != nil {
 				return fo.ReadFile(ctx, p.Path, p.MaxBytes)
