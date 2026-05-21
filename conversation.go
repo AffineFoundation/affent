@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"encoding/json"
 	"fmt"
+	"log"
 	"os"
 	"path/filepath"
 	"sync"
@@ -58,9 +59,16 @@ func (c *Conversation) load() error {
 	defer f.Close()
 	sc := bufio.NewScanner(f)
 	sc.Buffer(make([]byte, 0, 64*1024), 4*1024*1024)
+	lineNo := 0
 	for sc.Scan() {
+		lineNo++
 		var m ChatMessage
 		if err := json.Unmarshal(sc.Bytes(), &m); err != nil {
+			// Surface — but don't fail — so an operator notices the
+			// corruption before the next Replace() compacts the file
+			// and quietly drops the bad line forever. Embedders that
+			// want structured handling can wrap log.SetOutput.
+			log.Printf("affent: conversation %s line %d: skipping corrupted JSON (%v)", c.path, lineNo, err)
 			continue
 		}
 		c.messages = append(c.messages, m)
@@ -97,8 +105,9 @@ func (c *Conversation) Snapshot() []ChatMessage {
 // Replace overwrites the entire message log, on disk and in memory. Used
 // by Compactors after summarizing earlier turns; the caller is responsible
 // for preserving tool_calls / tool message pairing — Replace will not
-// validate or repair it. Atomic via temp-file + rename so a crash mid-
-// rewrite leaves the old log intact.
+// validate or repair it. Atomic via temp-file + fsync + rename + fsync(dir)
+// so a crash mid-rewrite leaves either the old log fully intact or the
+// new log fully durable, never a half-written intermediate.
 func (c *Conversation) Replace(msgs []ChatMessage) error {
 	c.mu.Lock()
 	defer c.mu.Unlock()
@@ -117,6 +126,14 @@ func (c *Conversation) Replace(msgs []ChatMessage) error {
 			return err
 		}
 	}
+	// fsync the tmp file before rename so its contents are durable.
+	// Without this a crash between rename and the next sync could leave
+	// the renamed file with old-or-empty data instead of the new content.
+	if err := f.Sync(); err != nil {
+		f.Close()
+		os.Remove(tmp)
+		return err
+	}
 	if err := f.Close(); err != nil {
 		os.Remove(tmp)
 		return err
@@ -124,6 +141,15 @@ func (c *Conversation) Replace(msgs []ChatMessage) error {
 	if err := os.Rename(tmp, c.path); err != nil {
 		os.Remove(tmp)
 		return err
+	}
+	// fsync the parent directory so the rename itself survives a crash.
+	// Best-effort: directory fsync isn't supported on every filesystem
+	// (e.g. some Windows configurations) — the rename is still atomic
+	// on the FS layer, so failure here only weakens durability, not
+	// correctness.
+	if d, derr := os.Open(filepath.Dir(c.path)); derr == nil {
+		_ = d.Sync()
+		_ = d.Close()
 	}
 	c.messages = append(c.messages[:0], msgs...)
 	return nil

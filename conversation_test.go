@@ -1,0 +1,88 @@
+package affent
+
+import (
+	"bytes"
+	"log"
+	"os"
+	"path/filepath"
+	"strings"
+	"testing"
+)
+
+// TestOpenConversationAt_CorruptedLineIsLogged covers the load path:
+// a malformed JSONL row is skipped (so a single bad line doesn't
+// brick session resumption) but emits a log line so the operator
+// notices before the next Replace() rewrites the file and drops
+// the bad row forever.
+func TestOpenConversationAt_CorruptedLineIsLogged(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "sess.jsonl")
+	body := strings.Join([]string{
+		`{"role":"user","content":"hello"}`,
+		`{this is not valid json`,
+		`{"role":"assistant","content":"hi"}`,
+	}, "\n") + "\n"
+	if err := os.WriteFile(path, []byte(body), 0o644); err != nil {
+		t.Fatalf("write fixture: %v", err)
+	}
+
+	var buf bytes.Buffer
+	prev := log.Writer()
+	prevFlags := log.Flags()
+	log.SetOutput(&buf)
+	log.SetFlags(0)
+	t.Cleanup(func() {
+		log.SetOutput(prev)
+		log.SetFlags(prevFlags)
+	})
+
+	c, err := OpenConversationAt(path)
+	if err != nil {
+		t.Fatalf("open: %v", err)
+	}
+	msgs := c.Snapshot()
+	if got, want := len(msgs), 2; got != want {
+		t.Fatalf("loaded %d messages, want %d (corrupted line should be skipped)", got, want)
+	}
+	if msgs[0].Content != "hello" || msgs[1].Content != "hi" {
+		t.Fatalf("messages out of order or wrong content: %+v", msgs)
+	}
+	if !strings.Contains(buf.String(), "line 2") || !strings.Contains(buf.String(), "corrupted") {
+		t.Fatalf("expected corruption log mentioning line 2; got %q", buf.String())
+	}
+}
+
+// TestConversationReplace_AtomicWrite asserts the post-Replace file
+// contains exactly the new content. (Crash-safety is hard to test
+// without process-level fault injection; the encode + sync + rename
+// path is exercised end-to-end here.)
+func TestConversationReplace_AtomicWrite(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "sess.jsonl")
+	c, err := OpenConversationAt(path)
+	if err != nil {
+		t.Fatalf("open: %v", err)
+	}
+	if err := c.Append(ChatMessage{Role: "user", Content: "first"}); err != nil {
+		t.Fatalf("append: %v", err)
+	}
+	if err := c.Replace([]ChatMessage{
+		{Role: "user", Content: "replaced-1"},
+		{Role: "assistant", Content: "replaced-2"},
+	}); err != nil {
+		t.Fatalf("replace: %v", err)
+	}
+	if _, err := os.Stat(path + ".tmp"); !os.IsNotExist(err) {
+		t.Fatalf("tmp file leaked: stat err = %v", err)
+	}
+	raw, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatalf("read: %v", err)
+	}
+	if strings.Count(string(raw), "\n") != 2 {
+		t.Fatalf("expected 2 lines on disk, got %q", raw)
+	}
+	if strings.Contains(string(raw), "first") {
+		t.Fatalf("pre-replace content leaked: %q", raw)
+	}
+}
