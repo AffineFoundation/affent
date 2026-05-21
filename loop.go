@@ -364,12 +364,17 @@ func (l *Loop) runTurn(ctx context.Context, turnID, userText string) {
 				ResultSummary: previewN(result, MaxToolResultPreviewInEvent),
 				Result:        result,
 			})
-			_ = l.Conv.Append(ChatMessage{
+			if err := l.Conv.Append(ChatMessage{
 				Role:       "tool",
 				Content:    truncateForContext(result, MaxToolResultBytesInContext),
 				ToolCallID: callID,
 				Name:       tc.Function.Name,
-			})
+			}); err != nil {
+				// In-memory state has the result so the turn keeps going,
+				// but the on-disk log is now behind. Surface so operators
+				// notice before session resume reads a truncated log.
+				l.Log.Error().Err(err).Str("call_id", callID).Msg("conv append tool result")
+			}
 		}
 	}
 
@@ -445,7 +450,12 @@ func (l *Loop) consumeAndPersist(ctx context.Context, turnID string, stream <-ch
 	// in the conversation log for replay/training but stripped from
 	// outbound requests by toWireMessages — DeepSeek/Kimi/GLM emit it
 	// but reject it on inbound.
-	_ = l.Conv.Append(finish.Final)
+	if err := l.Conv.Append(finish.Final); err != nil {
+		// Same rationale as the tool-result append above: don't fail
+		// the turn (memory state is intact), but surface so the
+		// operator sees the on-disk log diverging.
+		l.Log.Error().Err(err).Str("turn_id", turnID).Msg("conv append assistant message")
+	}
 	return finish, sawText, nil
 }
 
