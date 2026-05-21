@@ -194,6 +194,52 @@ func TestMemoryAdd_DefaultMaxTopicsAllowsNormalUsage(t *testing.T) {
 	}
 }
 
+// TestMemoryRemove_NonexistentTopicDoesNotCreateLockFile pins the
+// orphan-sidecar fix: calling Remove (or Replace) on a topic that
+// doesn't exist used to lockFile() its way through anyway, leaving
+// a "<path>.lock" sidecar behind for a topic that was never even
+// created. Repeated misses (a model retrying remove on facts it
+// thinks exist) slowly accreted .lock files in topics/. Now the
+// path-doesn't-exist case short-circuits BEFORE lockFile.
+func TestMemoryRemove_NonexistentTopicDoesNotCreateLockFile(t *testing.T) {
+	s := newTestStore(t)
+
+	resp, err := s.Remove(TargetMemory, "never-existed", "anything")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if resp.OK {
+		t.Errorf("Remove on non-existent topic must return ok=false; got %+v", resp)
+	}
+	if !strings.Contains(resp.Message, "topic does not exist") {
+		t.Errorf("message should explain topic doesn't exist; got %q", resp.Message)
+	}
+	// The sidecar must NOT have been created. topics/ dir may not even
+	// exist, which is also acceptable.
+	lockPath := filepath.Join(s.MemoryDir, "topics", "never-existed.md.lock")
+	if _, err := os.Stat(lockPath); err == nil {
+		t.Errorf("orphan .lock file at %s after a missed Remove", lockPath)
+	}
+}
+
+// TestMemoryReplace_NonexistentTopicDoesNotCreateLockFile pins the
+// parallel guard for Replace.
+func TestMemoryReplace_NonexistentTopicDoesNotCreateLockFile(t *testing.T) {
+	s := newTestStore(t)
+
+	resp, err := s.Replace(TargetMemory, "never-existed", "old", "new")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if resp.OK {
+		t.Errorf("Replace on non-existent topic must return ok=false; got %+v", resp)
+	}
+	lockPath := filepath.Join(s.MemoryDir, "topics", "never-existed.md.lock")
+	if _, err := os.Stat(lockPath); err == nil {
+		t.Errorf("orphan .lock file at %s after a missed Replace", lockPath)
+	}
+}
+
 func TestMemoryReplaceSubstring(t *testing.T) {
 	s := newTestStore(t)
 	_, _ = s.Add(TargetMemory, "", "User prefers dark mode in editors")

@@ -556,6 +556,14 @@ func (s *FileMemoryStore) Replace(target MemoryTarget, topic, oldText, newConten
 	if path == "" {
 		return MemoryResponse{Target: target, Topic: topic, Message: "target is disabled (no path configured)"}, nil
 	}
+	// Same orphan-.lock-file prevention as Remove: short-circuit a
+	// non-existent topic before lockFile creates the sidecar that
+	// nobody's around to clean up.
+	if !fileExists(path) {
+		return s.respondLocked(target, topic, false,
+			fmt.Sprintf("no entry matched %q (topic does not exist)", oldText),
+			nil, nil), nil
+	}
 	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
 		return MemoryResponse{}, err
 	}
@@ -615,6 +623,20 @@ func (s *FileMemoryStore) Remove(target MemoryTarget, topic, oldText string) (Me
 	path := s.bucketPathLocked(target, topic)
 	if path == "" {
 		return MemoryResponse{Target: target, Topic: topic, Message: "target is disabled (no path configured)"}, nil
+	}
+	// Short-circuit on a non-existent topic BEFORE creating the lock
+	// sidecar. lockFile would otherwise create <path>.lock as a
+	// side-effect, and since we're about to return "no entry matched"
+	// (nothing to remove), that .lock file would never get cleaned
+	// up. Repeated misses on non-existent topics would slowly accrete
+	// orphan .lock files in topics/. Concurrent creation by another
+	// process between fileExists and now is fine — our caller asked
+	// to remove an entry that didn't exist at the moment we checked,
+	// "no entry matched" is still the right answer.
+	if !fileExists(path) {
+		return s.respondLocked(target, topic, false,
+			fmt.Sprintf("no entry matched %q (topic does not exist)", oldText),
+			nil, nil), nil
 	}
 	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
 		return MemoryResponse{}, err
