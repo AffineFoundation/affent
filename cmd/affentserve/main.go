@@ -64,6 +64,8 @@ func parseFlagsAndConfig(argv []string) (Config, error) {
 		sessionIdleTTL   = fs.String("session-idle-ttl", "", "How long an idle session stays in the pool before GC (default 10m).")
 		sessionRetention = fs.String("session-retention", "", "How long durable session dirs (conv log + memory) live on disk after last activity. Empty disables — dirs live until explicit DELETE. Set to a Go duration like '720h' (30d) to enable background GC.")
 		maxTurnSteps     = fs.Int("max-turn-steps", 0, "Per-turn step cap (assistant↔tool round trips). 0 = agent runtime's default.")
+		compactTrigger   = fs.Int("compact-trigger", 0, "Rolling-summary compactor's message threshold per session. 0 = agent runtime's default (240). Lower on small-context upstream models to compact earlier.")
+		compactKeepLast  = fs.Int("compact-keep-last", 0, "Messages preserved verbatim at the tail of the conversation when compacting. 0 = agent runtime's default (10).")
 		enableBrowser    = fs.Bool("browser", false, "Register the extras/browser tool family for each new session.")
 		enableWeb        = fs.Bool("web", false, "Register extras/web's web_fetch tool.")
 		enableWebSearch  = fs.Bool("web-search", false, "Register web_search alongside web_fetch (requires TAVILY_API_KEY by default).")
@@ -127,6 +129,12 @@ func parseFlagsAndConfig(argv []string) (Config, error) {
 	}
 	if *maxTurnSteps > 0 {
 		cfg.MaxTurnSteps = *maxTurnSteps
+	}
+	if *compactTrigger > 0 {
+		cfg.CompactTrigger = *compactTrigger
+	}
+	if *compactKeepLast > 0 {
+		cfg.CompactKeepLast = *compactKeepLast
 	}
 	if setFlags["browser"] {
 		cfg.EnableBrowser = *enableBrowser

@@ -620,6 +620,60 @@ func TestSessionPool_AttachesRollingCompactor(t *testing.T) {
 	}
 }
 
+// TestSessionPool_CompactorRespectsConfigOverrides pins that
+// non-zero CompactTrigger / CompactKeepLast in the config actually
+// reach the attached LLMSummaryCompactor. Without them an operator
+// running a small-context model has no way to compact earlier —
+// the compactor stays on the 240/10 defaults forever.
+func TestSessionPool_CompactorRespectsConfigOverrides(t *testing.T) {
+	cfg := Config{
+		Listen:          "127.0.0.1:0",
+		MaxSessions:     4,
+		SessionIdleTTL:  "5m",
+		WorkspaceRoot:   t.TempDir(),
+		BaseURL:         "http://127.0.0.1:0",
+		APIKey:          "test",
+		Model:           "fake",
+		CompactTrigger:  120,
+		CompactKeepLast: 4,
+	}
+	pool, err := NewSessionPool(cfg, zerolog.New(io.Discard))
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(pool.Shutdown)
+
+	s, err := pool.GetOrCreate("compact-cfg")
+	if err != nil {
+		t.Fatal(err)
+	}
+	lc, ok := s.loop.Compactor.(*agent.LLMSummaryCompactor)
+	if !ok {
+		t.Fatalf("compactor type = %T, want *LLMSummaryCompactor", s.loop.Compactor)
+	}
+	if lc.TriggerMsgs != 120 {
+		t.Errorf("TriggerMsgs = %d, want 120 from config", lc.TriggerMsgs)
+	}
+	if lc.KeepLast != 4 {
+		t.Errorf("KeepLast = %d, want 4 from config", lc.KeepLast)
+	}
+}
+
+// TestSessionPool_CompactorFallsBackToDefaults pins the zero-value
+// behavior: leaving the knobs at 0 means "use the agent defaults",
+// matching the precedent set by affentctl.
+func TestSessionPool_CompactorFallsBackToDefaults(t *testing.T) {
+	pool := newTestPool(t, 4, "5m") // no compact overrides
+	s, _ := pool.GetOrCreate("compact-default")
+	lc := s.loop.Compactor.(*agent.LLMSummaryCompactor)
+	if lc.TriggerMsgs != agent.DefaultSummaryTriggerMsgs {
+		t.Errorf("TriggerMsgs = %d, want default %d", lc.TriggerMsgs, agent.DefaultSummaryTriggerMsgs)
+	}
+	if lc.KeepLast != agent.DefaultSummaryKeepLast {
+		t.Errorf("KeepLast = %d, want default %d", lc.KeepLast, agent.DefaultSummaryKeepLast)
+	}
+}
+
 func TestSessionPool_MaxSessionsEvictsLRU(t *testing.T) {
 	pool := newTestPool(t, 2, "5m")
 	a, _ := pool.GetOrCreate("a")

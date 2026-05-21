@@ -66,6 +66,19 @@ type Config struct {
 	// MaxTurnSteps overrides agent runtime's default per-turn step cap.
 	MaxTurnSteps int `json:"max_turn_steps"`
 
+	// CompactTrigger overrides the rolling-summary compactor's
+	// per-session message threshold. Zero falls back to
+	// agent.DefaultSummaryTriggerMsgs (240). Lower it (e.g. 120) on
+	// small-context upstream models so compaction kicks in earlier
+	// and you spend less per turn shipping a near-full window.
+	CompactTrigger int `json:"compact_trigger"`
+
+	// CompactKeepLast overrides how many trailing messages survive
+	// compaction verbatim. Zero falls back to
+	// agent.DefaultSummaryKeepLast (10). Smaller = more aggressive
+	// reduction; larger = more context retained.
+	CompactKeepLast int `json:"compact_keep_last"`
+
 	// EnableBrowser registers the extras/browser tool family on each
 	// new session. Disabled by default since it adds a Chromium
 	// runtime dependency.

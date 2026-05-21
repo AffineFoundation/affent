@@ -338,10 +338,18 @@ func (p *SessionPool) buildSession(id string) (*Session, error) {
 	// restarts, even reopening the same session_id won't help. The
 	// LLM client reuses the same provider/model so summarization
 	// hits the same backend the agent is already configured against.
+	triggerMsgs := p.cfg.CompactTrigger
+	if triggerMsgs <= 0 {
+		triggerMsgs = agent.DefaultSummaryTriggerMsgs
+	}
+	keepLast := p.cfg.CompactKeepLast
+	if keepLast <= 0 {
+		keepLast = agent.DefaultSummaryKeepLast
+	}
 	loop.Compactor = &agent.LLMSummaryCompactor{
 		LLM:         llm,
-		TriggerMsgs: agent.DefaultSummaryTriggerMsgs,
-		KeepLast:    agent.DefaultSummaryKeepLast,
+		TriggerMsgs: triggerMsgs,
+		KeepLast:    keepLast,
 	}
 	if err := loop.EnsureSystemPrompt(p.cfg.SystemPrompt); err != nil {
 		_ = os.RemoveAll(workspace)
