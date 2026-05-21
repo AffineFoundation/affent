@@ -62,6 +62,7 @@ func parseFlagsAndConfig(argv []string) (Config, error) {
 		workspaceRoot    = fs.String("workspace-root", "", "Parent directory for per-session workspaces. Empty creates per-session temp dirs.")
 		maxSessions      = fs.Int("max-sessions", 0, "LRU upper bound on in-memory sessions (default 32).")
 		sessionIdleTTL   = fs.String("session-idle-ttl", "", "How long an idle session stays in the pool before GC (default 10m).")
+		sessionRetention = fs.String("session-retention", "", "How long durable session dirs (conv log + memory) live on disk after last activity. Empty disables — dirs live until explicit DELETE. Set to a Go duration like '720h' (30d) to enable background GC.")
 		maxTurnSteps     = fs.Int("max-turn-steps", 0, "Per-turn step cap (assistant↔tool round trips). 0 = agent runtime's default.")
 		enableBrowser    = fs.Bool("browser", false, "Register the extras/browser tool family for each new session.")
 		enableWeb        = fs.Bool("web", false, "Register extras/web's web_fetch tool.")
@@ -120,6 +121,9 @@ func parseFlagsAndConfig(argv []string) (Config, error) {
 	}
 	if *sessionIdleTTL != "" {
 		cfg.SessionIdleTTL = *sessionIdleTTL
+	}
+	if *sessionRetention != "" {
+		cfg.SessionRetention = *sessionRetention
 	}
 	if *maxTurnSteps > 0 {
 		cfg.MaxTurnSteps = *maxTurnSteps

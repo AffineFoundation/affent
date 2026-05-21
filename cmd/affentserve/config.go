@@ -178,6 +178,9 @@ func (c *Config) Resolve() error {
 	if c.SessionIdleTTL == "" {
 		c.SessionIdleTTL = defaultSessionIdleTTL.String()
 	}
+	if c.SessionRetention == "" {
+		c.SessionRetention = os.Getenv("AFFENTSERVE_SESSION_RETENTION")
+	}
 	return nil
 }
 

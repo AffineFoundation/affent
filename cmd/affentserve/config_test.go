@@ -118,6 +118,54 @@ func TestConfig_Validate_RequiresModel(t *testing.T) {
 	}
 }
 
+// TestConfig_Retention_HappyPath pins the parser: an explicit duration
+// returns the parsed Duration; an empty value returns 0 (= disabled).
+func TestConfig_Retention_HappyPath(t *testing.T) {
+	cases := []struct {
+		in   string
+		want time.Duration
+	}{
+		{"", 0},
+		{"24h", 24 * time.Hour},
+		{"720h", 720 * time.Hour},
+	}
+	for _, c := range cases {
+		cfg := Config{SessionRetention: c.in}
+		d, err := cfg.Retention()
+		if err != nil {
+			t.Errorf("Retention(%q): %v", c.in, err)
+		}
+		if d != c.want {
+			t.Errorf("Retention(%q) = %s, want %s", c.in, d, c.want)
+		}
+	}
+}
+
+// TestConfig_Retention_RejectsBadDuration pins that a typo is loud,
+// not silent — an operator who writes "30d" (Go doesn't support d)
+// should see an error, not have retention silently disabled.
+func TestConfig_Retention_RejectsBadDuration(t *testing.T) {
+	cfg := Config{SessionRetention: "30d"}
+	_, err := cfg.Retention()
+	if err == nil {
+		t.Errorf("expected error for unparseable duration; got nil")
+	}
+}
+
+// TestConfig_Resolve_PullsRetentionEnvFallback pins the env path —
+// AFFENTSERVE_SESSION_RETENTION acts the same way the other env
+// vars do (fills in only when the field is empty).
+func TestConfig_Resolve_PullsRetentionEnvFallback(t *testing.T) {
+	t.Setenv("AFFENTSERVE_SESSION_RETENTION", "168h")
+	cfg := Config{BaseURL: "https://example/v1"}
+	if err := cfg.Resolve(); err != nil {
+		t.Fatal(err)
+	}
+	if cfg.SessionRetention != "168h" {
+		t.Errorf("SessionRetention should pick up env, got %q", cfg.SessionRetention)
+	}
+}
+
 func TestConfig_IdleTTL_RejectsBadDuration(t *testing.T) {
 	cfg := Config{BaseURL: "https://example/v1", SessionIdleTTL: "not-a-duration"}
 	_, err := cfg.IdleTTL()
