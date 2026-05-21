@@ -3,10 +3,13 @@ package web
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"strings"
 	"testing"
+
+	"github.com/affinefoundation/affent"
 )
 
 func TestFetchTool_HTML(t *testing.T) {
@@ -142,10 +145,76 @@ func TestSearchTool_FormatsResults(t *testing.T) {
 	}
 }
 
+// TestFetchTool_UTF8SafeTruncation pins that the MaxResultChars cap
+// snaps back to a rune boundary instead of slicing mid-rune. Pre-fix
+// the byte slice produced invalid UTF-8 (orphaned continuation
+// bytes) which most providers either drop or render as U+FFFD.
+func TestFetchTool_UTF8SafeTruncation(t *testing.T) {
+	// 1000 Cyrillic ё's = 2000 bytes. Each rune is exactly 2 bytes,
+	// so capping at an odd byte offset deliberately lands inside a
+	// rune.
+	body := strings.Repeat("ё", 1000)
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "text/plain; charset=utf-8")
+		w.Write([]byte(body))
+	}))
+	defer srv.Close()
+
+	tool := FetchTool(FetchConfig{MaxResultChars: 51}) // odd → mid-rune
+	args, _ := json.Marshal(map[string]string{"url": srv.URL})
+	out, err := tool.Execute(context.Background(), args)
+	if err != nil {
+		t.Fatalf("Execute: %v", err)
+	}
+	prefix := strings.SplitN(out, "\n\n...(truncated)", 2)[0]
+	for i, r := range prefix {
+		if r == '�' {
+			t.Fatalf("truncation produced invalid UTF-8 at byte %d (U+FFFD)\nprefix=%q", i, prefix)
+		}
+	}
+}
+
 func TestSearchTool_EmptyQuery(t *testing.T) {
 	tool, _ := SearchTool(SearchConfig{Provider: stubProvider{}})
 	_, err := tool.Execute(context.Background(), json.RawMessage(`{"query":""}`))
 	if err == nil || !strings.Contains(err.Error(), "query is required") {
 		t.Errorf("expected query-required error, got %v", err)
+	}
+}
+
+// failingProvider always returns an error, so SearchTool construction
+// succeeds but RegisterAll fails to wire it in. Used to test that the
+// rollback path strips the already-registered web_fetch.
+type failingProvider struct{}
+
+func (failingProvider) Search(context.Context, string, int) ([]SearchResult, error) {
+	return nil, errors.New("intentional test failure")
+}
+
+// TestRegisterAll_RollsBackWebFetchOnSearchFailure pins the
+// partial-failure contract: if any tool RegisterAll meant to add
+// can't be wired up, every tool it already added is removed before
+// returning. Previously, RegisterAll left web_fetch dangling in the
+// registry after a missing-Tavily-key failure.
+func TestRegisterAll_RollsBackWebFetchOnSearchFailure(t *testing.T) {
+	reg := affent.NewRegistry()
+	// SearchConfig{Provider: nil} causes SearchTool() inside
+	// RegisterAll to return an error after RegisterFetch has already
+	// added web_fetch.
+	err := RegisterAll(reg, Options{
+		SearchProvider: nil,
+		// Force the Tavily branch (provider == nil + SkipSearch false).
+		// Setting TAVILY_API_KEY isn't available in the unit test env;
+		// NewTavilyProvider returns an error and we exercise the
+		// rollback path.
+	})
+	if err == nil {
+		t.Skip("expected RegisterAll to fail without TAVILY_API_KEY; env appears to have one set")
+	}
+	if _, ok := reg.Get("web_fetch"); ok {
+		t.Errorf("RegisterAll failure must roll web_fetch back out of the registry")
+	}
+	if _, ok := reg.Get("web_search"); ok {
+		t.Errorf("web_search should never have been registered when setup failed")
 	}
 }

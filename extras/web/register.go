@@ -55,6 +55,10 @@ func RegisterFetch(reg *affent.Registry, cfg FetchConfig) {
 // to reg. Returns an error if web_search is requested but no provider
 // is available — the caller can recover by setting SkipSearch and
 // calling RegisterFetch directly.
+//
+// On failure, every tool this call added is removed from reg before
+// returning so the caller doesn't end up with a half-registered
+// web_fetch pointing into a setup that's about to be torn down.
 func RegisterAll(reg *affent.Registry, opts Options) error {
 	RegisterFetch(reg, opts.Fetch)
 	if opts.SkipSearch {
@@ -64,6 +68,7 @@ func RegisterAll(reg *affent.Registry, opts Options) error {
 	if provider == nil {
 		p, err := NewTavilyProvider()
 		if err != nil {
+			reg.Remove("web_fetch")
 			return err
 		}
 		provider = p
@@ -73,6 +78,7 @@ func RegisterAll(reg *affent.Registry, opts Options) error {
 		MaxResults: opts.MaxSearchResults,
 	})
 	if err != nil {
+		reg.Remove("web_fetch")
 		return err
 	}
 	reg.Add(tool)

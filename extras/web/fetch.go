@@ -11,6 +11,7 @@ import (
 	"net/url"
 	"strings"
 	"time"
+	"unicode/utf8"
 
 	htmltomarkdown "github.com/JohannesKaufmann/html-to-markdown/v2"
 	"github.com/JohannesKaufmann/html-to-markdown/v2/converter"
@@ -127,7 +128,14 @@ func fetch(ctx context.Context, cfg FetchConfig, url string) (string, error) {
 	out := renderBody(body, ct, resp.Request.URL.String())
 
 	if len(out) > cfg.MaxResultChars {
-		out = out[:cfg.MaxResultChars] + "\n\n...(truncated)"
+		// Snap back to a UTF-8 rune boundary so accented Latin, CJK,
+		// or emoji content doesn't get cut mid-rune and land in the
+		// model's context as invalid UTF-8.
+		cut := cfg.MaxResultChars
+		for cut > 0 && !utf8.RuneStart(out[cut]) {
+			cut--
+		}
+		out = out[:cut] + "\n\n...(truncated)"
 	}
 	return out, nil
 }
