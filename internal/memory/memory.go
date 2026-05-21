@@ -286,6 +286,26 @@ const (
 	// today applies to core.md. Kept exported so existing callers
 	// (gateway, tests) don't break.
 	DefaultMemoryCharLimit = DefaultCoreCharLimit
+
+	// DefaultMaxTopics caps how many DISTINCT custom topics one
+	// memory dir can hold (general counts; core doesn't — it lives
+	// outside topics/). The limit exists because:
+	//
+	//   - Every topic gets one line in the system-prompt topic index
+	//     (~60 chars / ~15 tokens). 32 topics ≈ 500 tokens per turn,
+	//     paid forever once the model creates them.
+	//   - Snapshot() walks topics/ on every session start and reads
+	//     each file to compute newest_at. 32 = a few ms; hundreds
+	//     starts being noticeable.
+	//   - Models left unconstrained tend to spawn topics rather than
+	//     consolidate ("new month → new topic"), which is the same
+	//     drift pattern overflow-on-char-limit was added to catch.
+	//
+	// 32 is comfortably above the ~10–15 named categories a real
+	// project actually needs (stack, deploy, conventions, incidents,
+	// people, lessons, auth, …). Hit it = a signal the model is
+	// fragmenting rather than tracking real new categories.
+	DefaultMaxTopics = 32
 )
 
 // CoreTopic names the always-injected bucket. Writes with topic=""
@@ -367,6 +387,12 @@ type FileMemoryStore struct {
 	// "make the memory cap smaller" semantics).
 	MemoryCharLimit int
 	UserCharLimit   int
+
+	// MaxTopics caps the number of distinct topic files under topics/.
+	// Zero falls back to DefaultMaxTopics. Set to a very large number
+	// to effectively disable the cap (some benchmark / eval workloads
+	// legitimately want hundreds of named scratchpads).
+	MaxTopics int
 
 	mu sync.Mutex
 
@@ -452,6 +478,21 @@ func (s *FileMemoryStore) Add(target MemoryTarget, topic, content string) (Memor
 	path := s.bucketPathLocked(target, topic)
 	if path == "" {
 		return MemoryResponse{Target: target, Topic: topic, Message: "target is disabled (no path configured)"}, nil
+	}
+	// Topic count cap: only triggers when this Add would CREATE a new
+	// topic file. Writes to an existing topic (including general) go
+	// through regardless of how many topics already exist — same
+	// per-topic char limit catches over-stuffing within one topic
+	// anyway. core.md lives outside topics/ so it doesn't count.
+	if target == TargetMemory && topic != CoreTopic && !fileExists(path) {
+		cap := s.topicCountLimit()
+		have := s.countTopicsLocked()
+		if have >= cap {
+			return s.respondLocked(target, topic, false,
+				fmt.Sprintf("at %d/%d topics; creating a new topic %q would push past the limit. Either merge this fact into an existing topic (use action=add with that topic name) or remove an obsolete topic first (action=remove on every entry leaves the topic file gone).",
+					have, cap, topic),
+				nil, nil), nil
+		}
 	}
 	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
 		return MemoryResponse{}, err
@@ -879,6 +920,34 @@ func (s *FileMemoryStore) limitFor(target MemoryTarget, topic string) int {
 		return s.TopicCharLimit
 	}
 	return DefaultTopicCharLimit
+}
+
+// topicCountLimit returns the configured cap on distinct topic files.
+func (s *FileMemoryStore) topicCountLimit() int {
+	if s.MaxTopics > 0 {
+		return s.MaxTopics
+	}
+	return DefaultMaxTopics
+}
+
+// countTopicsLocked returns the current number of .md files under
+// topics/. Caller must hold s.mu. core.md doesn't live here so it
+// doesn't count toward the cap.
+func (s *FileMemoryStore) countTopicsLocked() int {
+	if s.MemoryDir == "" {
+		return 0
+	}
+	entries, err := os.ReadDir(filepath.Join(s.MemoryDir, "topics"))
+	if err != nil {
+		return 0
+	}
+	n := 0
+	for _, e := range entries {
+		if !e.IsDir() && strings.HasSuffix(e.Name(), ".md") {
+			n++
+		}
+	}
+	return n
 }
 
 // renderGeneralLocked renders the default "general" topic content

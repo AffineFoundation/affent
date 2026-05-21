@@ -95,6 +95,105 @@ func TestMemoryAddOverflow(t *testing.T) {
 	}
 }
 
+// TestMemoryAdd_HitsTopicCountCap pins that creating a NEW topic once
+// the dir is already at MaxTopics is rejected with the same overflow-
+// style "consolidate or remove" message — parallel to how the per-
+// topic char limit behaves. Without this cap a model that spins up a
+// new topic per session ("incidents-2026-05-21", "incidents-2026-05-22",
+// …) eventually slows session startup (Snapshot walks topics/) and
+// bloats the in-prompt topic index.
+func TestMemoryAdd_HitsTopicCountCap(t *testing.T) {
+	s := newTestStore(t)
+	s.MaxTopics = 3 // tight cap for the test
+
+	for i, name := range []string{"a", "b", "c"} {
+		resp, err := s.Add(TargetMemory, name, "fact "+name)
+		if err != nil {
+			t.Fatalf("add %d: %v", i, err)
+		}
+		if !resp.OK {
+			t.Fatalf("add %d (%q) should succeed under cap, got %+v", i, name, resp)
+		}
+	}
+
+	resp, err := s.Add(TargetMemory, "d", "fourth fact would exceed cap")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if resp.OK {
+		t.Fatalf("at 3/3 topics, a new topic must be rejected; got OK %+v", resp)
+	}
+	if !strings.Contains(resp.Message, "topics") || !strings.Contains(resp.Message, "3/3") {
+		t.Errorf("rejection message must name the cap and current count; got %q", resp.Message)
+	}
+}
+
+// TestMemoryAdd_ExistingTopicSucceedsAtCap pins the carve-out: at the
+// cap, writes to an already-existing topic still succeed. The cap is
+// "no NEW topics", not "no more writes" — once a topic exists, the
+// per-topic char limit governs growth.
+func TestMemoryAdd_ExistingTopicSucceedsAtCap(t *testing.T) {
+	s := newTestStore(t)
+	s.MaxTopics = 2
+	for _, name := range []string{"alpha", "beta"} {
+		if _, err := s.Add(TargetMemory, name, "first "+name); err != nil {
+			t.Fatal(err)
+		}
+	}
+	resp, err := s.Add(TargetMemory, "alpha", "another alpha fact")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !resp.OK {
+		t.Errorf("adding to an EXISTING topic at cap must succeed; got %+v", resp)
+	}
+}
+
+// TestMemoryAdd_CoreDoesNotCountTowardTopicCap pins that core.md lives
+// outside topics/ and is exempt from the count. Otherwise a project
+// could be stuck at "31 topics + core" unable to add even a single
+// custom topic.
+func TestMemoryAdd_CoreDoesNotCountTowardTopicCap(t *testing.T) {
+	s := newTestStore(t)
+	s.MaxTopics = 1
+	if _, err := s.Add(TargetMemory, CoreTopic, "durable fact"); err != nil {
+		t.Fatal(err)
+	}
+	// core.md exists, but topics/ is empty → first custom topic OK.
+	resp, err := s.Add(TargetMemory, "auth", "first custom fact")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !resp.OK {
+		t.Errorf("core.md must not count toward MaxTopics; got %+v", resp)
+	}
+}
+
+// TestMemoryAdd_DefaultMaxTopicsAllowsNormalUsage sanity-checks that
+// the package-level default (32) is comfortable for typical agent
+// use — adding a dozen named categories should never trip it.
+func TestMemoryAdd_DefaultMaxTopicsAllowsNormalUsage(t *testing.T) {
+	dir := t.TempDir()
+	s := &FileMemoryStore{
+		MemoryDir:      filepath.Join(dir, "memory"),
+		UserPath:       filepath.Join(dir, "USER.md"),
+		TopicCharLimit: 200,
+		// MaxTopics left at zero → DefaultMaxTopics (32).
+	}
+	for _, name := range []string{
+		"stack", "deploy", "conventions", "incidents", "people",
+		"lessons", "auth", "ops", "alerts", "perf", "docs", "links",
+	} {
+		resp, err := s.Add(TargetMemory, name, "fact "+name)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if !resp.OK {
+			t.Fatalf("12 topics must fit under default cap of 32; %q failed: %+v", name, resp)
+		}
+	}
+}
+
 func TestMemoryReplaceSubstring(t *testing.T) {
 	s := newTestStore(t)
 	_, _ = s.Add(TargetMemory, "", "User prefers dark mode in editors")
