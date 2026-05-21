@@ -247,7 +247,7 @@ func TestE2E_SessionSearchIntegratesWithRegistry(t *testing.T) {
 		t.Fatal(err)
 	}
 	// Write a prior session's log.
-	writeSessionLog(t, convDir, "prev", []ChatMessage{
+	writeE2ESessionLog(t, convDir, "prev", []ChatMessage{
 		{Role: "user", Content: "we set up prometheus on port 9090"},
 		{Role: "assistant", Content: "yes, scrape config under /etc/prometheus"},
 	})
@@ -276,5 +276,25 @@ func TestE2E_SessionSearchIntegratesWithRegistry(t *testing.T) {
 	}
 	if resp.Results[0].SessionID != "prev" {
 		t.Fatalf("expected hit in 'prev' session, got %s", resp.Results[0].SessionID)
+	}
+}
+
+// writeE2ESessionLog is the test helper used by the memory + session-
+// search end-to-end test. Lived in session_search_test.go before the
+// internal/sessionsearch refactor; kept inline here so the e2e test
+// stays self-contained.
+func writeE2ESessionLog(t *testing.T, dir, sessionID string, msgs []ChatMessage) {
+	t.Helper()
+	path := filepath.Join(dir, sessionID+".jsonl")
+	f, err := os.Create(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer f.Close()
+	enc := json.NewEncoder(f)
+	for _, m := range msgs {
+		if err := enc.Encode(m); err != nil {
+			t.Fatal(err)
+		}
 	}
 }

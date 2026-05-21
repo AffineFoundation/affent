@@ -5,11 +5,43 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"regexp"
 	"sort"
 	"strings"
 	"sync"
+	"time"
 	"unicode"
 )
+
+// nowUTC is a package-level seam so tests can pin time. Defaults to
+// time.Now().UTC().
+var nowUTC = func() time.Time { return time.Now().UTC() }
+
+// splitMemoryEntry extracts the leading timestamp (if any) from an
+// on-disk entry. Returns (createdAt, content). createdAt is "" for
+// undated entries (legacy or hand-edited).
+func splitMemoryEntry(raw string) (string, string) {
+	m := memoryTimestampPrefixRE.FindStringSubmatchIndex(raw)
+	if m == nil {
+		return "", raw
+	}
+	ts := raw[m[2]:m[3]]
+	content := raw[m[1]:]
+	return ts, content
+}
+
+// stampMemoryEntry prepends a fresh RFC3339-second timestamp.
+func stampMemoryEntry(content string) string {
+	return "[" + nowUTC().Format(time.RFC3339) + "]\n" + content
+}
+
+// entryContent strips the timestamp prefix if present, returning just
+// the user-visible body. Used wherever content is matched / displayed
+// without metadata.
+func entryContent(raw string) string {
+	_, c := splitMemoryEntry(raw)
+	return c
+}
 
 // MemoryTarget selects which of the two persistent stores a memory
 // tool call operates on.
@@ -74,9 +106,26 @@ type MemoryResponse struct {
 
 // MemorySearchResult is one ranked hit returned by Search.
 type MemorySearchResult struct {
-	Topic   string  `json:"topic"`
-	Snippet string  `json:"snippet"`
-	Score   float64 `json:"score"`
+	Topic     string  `json:"topic"`
+	Snippet   string  `json:"snippet"`
+	Score     float64 `json:"score"`
+	CreatedAt string  `json:"created_at,omitempty"` // RFC3339, "" for un-stamped legacy entries
+}
+
+// trimSnippet returns at most max bytes of s, ending at a UTF-8 rune
+// boundary, appending "..." when truncated. Used so a single long
+// entry doesn't dump its full body into the model context — the
+// snippet is enough to decide if the model wants to replace/refine
+// for the full content.
+func trimSnippet(s string, max int) string {
+	if len(s) <= max {
+		return s
+	}
+	cut := max
+	for cut > 0 && (s[cut]&0xC0) == 0x80 {
+		cut--
+	}
+	return s[:cut] + "..."
 }
 
 // MemoryTopicSummary is one row in a ListTopics response.
@@ -129,6 +178,24 @@ const DefaultTopic = "general"
 // the exact sequence is rejected by scanMemoryContent so round-
 // tripping stays safe.
 const memoryEntryDelim = "\n§\n"
+
+// memorySnippetMax caps the per-entry text returned in search hits.
+// Long entries (multi-paragraph deployment guides, incident postmortems)
+// would otherwise dump their full body into the model context — wasted
+// when the model can replay/refine the query for the full content.
+// Mirrors session_search's snippetLen.
+const memorySnippetMax = 300
+
+// memoryTimestampPrefixRE matches the optional leading "[<RFC3339>]\n"
+// stored at the head of each entry. Stamped entries look like:
+//
+//	[2026-05-21T09:42:11Z]
+//	my favorite color is teal
+//
+// Old entries (pre-stamping rollout, or hand-edited files) lack the
+// prefix and are treated as undated — their content is returned as-is
+// and score/snippet logic still works.
+var memoryTimestampPrefixRE = regexp.MustCompile(`^\[(\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z)\]\n`)
 
 // memoryHeaderRuleWidth is the horizontal-rule width for the snapshot
 // block headers.
@@ -276,12 +343,15 @@ func (s *FileMemoryStore) Add(target MemoryTarget, topic, content string) (Memor
 		return MemoryResponse{}, err
 	}
 	for _, e := range entries {
-		if e == content {
+		// Compare on content only — a legacy unstamped duplicate of
+		// new stamped content shouldn't be double-saved.
+		if entryContent(e) == content {
 			return s.respondLocked(target, topic, true, "entry already exists (no duplicate added)", entries, nil), nil
 		}
 	}
+	stamped := stampMemoryEntry(content)
 	limit := s.limitFor(target, topic)
-	newEntries := append(append([]string{}, entries...), content)
+	newEntries := append(append([]string{}, entries...), stamped)
 	if total := joinedLen(newEntries); limit > 0 && total > limit {
 		return s.respondLocked(target, topic, false,
 			fmt.Sprintf("at %d/%d chars; the new %d-char entry would push past the limit. Consolidate existing entries (use replace to merge related ones into one denser entry) or remove obsolete ones, THEN retry this add — don't just delete and lose information.",
@@ -345,7 +415,10 @@ func (s *FileMemoryStore) Replace(target MemoryTarget, topic, oldText, newConten
 	}
 
 	newEntries := append([]string{}, entries...)
-	newEntries[idx] = newContent
+	// Re-stamp on replace so the entry's freshness reflects this
+	// update, not the original creation. Helps the model see "I just
+	// re-confirmed this fact" vs "this is from 6 months ago".
+	newEntries[idx] = stampMemoryEntry(newContent)
 	limit := s.limitFor(target, topic)
 	if total := joinedLen(newEntries); limit > 0 && total > limit {
 		return s.respondLocked(target, topic, false,
@@ -401,7 +474,15 @@ func (s *FileMemoryStore) Remove(target MemoryTarget, topic, oldText string) (Me
 		return s.respondLocked(target, topic, false, fmt.Sprintf("no entry matched %q", oldText), entries, nil), nil
 	}
 	newEntries := append(entries[:idx:idx], entries[idx+1:]...)
-	if err := writeMemoryFile(path, newEntries); err != nil {
+	if len(newEntries) == 0 {
+		// Empty topic file is pollution — every operator-visible
+		// listing has to skip it, ListTopics filters it out, snapshot
+		// composition ignores it. Delete the file (plus its .lock
+		// sidecar) so the topic disappears from the directory listing
+		// after the last entry is removed.
+		_ = os.Remove(path)
+		_ = os.Remove(path + ".lock")
+	} else if err := writeMemoryFile(path, newEntries); err != nil {
 		return MemoryResponse{}, err
 	}
 	return s.respondLocked(target, topic, true, "entry removed", newEntries, nil), nil
@@ -481,6 +562,7 @@ func (s *FileMemoryStore) Search(target MemoryTarget, topic, query string, topK 
 			continue
 		}
 		for _, e := range entries {
+			createdAt, body := splitMemoryEntry(e)
 			// Score against content AND topic name. Real-rollout
 			// finding: a user organizing memory by topic ("incidents",
 			// "deploy", "auth") naturally queries with terms that
@@ -488,12 +570,18 @@ func (s *FileMemoryStore) Search(target MemoryTarget, topic, query string, topK 
 			// doesn't appear inside the entry body. Pre-fix this
 			// produced zero results despite an obvious topical match.
 			// Mixing the topic name into the scoring corpus surfaces
-			// those hits with a small boost.
-			score := scoreMemoryEntry(b.topic+" "+e, terms)
+			// those hits with a small boost. Timestamps are stripped
+			// so date digits don't pollute the term overlap.
+			score := scoreMemoryEntry(b.topic+" "+body, terms)
 			if score <= 0 {
 				continue
 			}
-			hits = append(hits, MemorySearchResult{Topic: b.topic, Snippet: e, Score: score})
+			hits = append(hits, MemorySearchResult{
+				Topic:     b.topic,
+				Snippet:   trimSnippet(body, memorySnippetMax),
+				Score:     score,
+				CreatedAt: createdAt,
+			})
 		}
 	}
 	sort.SliceStable(hits, func(i, j int) bool { return hits[i].Score > hits[j].Score })
@@ -744,12 +832,19 @@ func (s *FileMemoryStore) renderTopicIndexLocked() string {
 func (s *FileMemoryStore) respondLocked(target MemoryTarget, topic string, ok bool, msg string, entries, matches []string) MemoryResponse {
 	limit := s.limitFor(target, topic)
 	current := joinedLen(entries)
+	// Strip timestamp prefixes from the Entries field so the model
+	// sees its own content cleanly. Freshness data is available
+	// separately via Search (MemorySearchResult.CreatedAt).
+	cleaned := make([]string, len(entries))
+	for i, e := range entries {
+		cleaned[i] = entryContent(e)
+	}
 	return MemoryResponse{
 		OK:      ok,
 		Target:  target,
 		Topic:   topic,
 		Message: msg,
-		Entries: entries,
+		Entries: cleaned,
 		Matches: matches,
 		Usage: &MemoryUsage{
 			Percent:    pctOf(current, limit),
@@ -817,14 +912,30 @@ func joinedLen(entries []string) int {
 	if len(entries) == 0 {
 		return 0
 	}
-	return len(strings.Join(entries, memoryEntryDelim))
+	// Char limits count user-visible CONTENT, not the stamped
+	// on-disk text. Otherwise the 22-byte timestamp prefix on
+	// every entry eats into the configured cap and a 30-char
+	// "stack" entry suddenly costs ~52 chars against a 50-char
+	// limit — invisible cost that broke ports of the pre-stamp
+	// overflow contract.
+	total := 0
+	for i, e := range entries {
+		if i > 0 {
+			total += len(memoryEntryDelim)
+		}
+		total += len(entryContent(e))
+	}
+	return total
 }
 
 // findUnique locates the single entry matching oldText as a substring.
+// Matches against entry CONTENT — the leading timestamp prefix isn't
+// part of what callers thought they were searching, so it's stripped
+// before comparison. Previews are content-only for the same reason.
 func findUnique(entries []string, oldText string) (int, []string) {
 	var hits []int
 	for i, e := range entries {
-		if strings.Contains(e, oldText) {
+		if strings.Contains(entryContent(e), oldText) {
 			hits = append(hits, i)
 		}
 	}
@@ -836,14 +947,14 @@ func findUnique(entries []string, oldText string) (int, []string) {
 	}
 	seen := map[string]bool{}
 	for _, i := range hits {
-		seen[entries[i]] = true
+		seen[entryContent(entries[i])] = true
 	}
 	if len(seen) == 1 {
 		return hits[0], nil
 	}
 	previews := make([]string, 0, len(hits))
 	for _, i := range hits {
-		e := entries[i]
+		e := entryContent(entries[i])
 		if len(e) > 80 {
 			e = e[:utf8AlignBackward(e, 80)] + "..."
 		}

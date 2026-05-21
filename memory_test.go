@@ -280,10 +280,12 @@ func TestMemoryTwoTargetsIndependent(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(memEntries) != 1 || memEntries[0] != "agent fact" {
+	// On-disk entries carry a leading "[<RFC3339>]\n" timestamp prefix.
+	// Compare against stripped content via entryContent.
+	if len(memEntries) != 1 || entryContent(memEntries[0]) != "agent fact" {
 		t.Fatalf("memory target wrong: %+v", memEntries)
 	}
-	if len(userEntries) != 1 || userEntries[0] != "user preference" {
+	if len(userEntries) != 1 || entryContent(userEntries[0]) != "user preference" {
 		t.Fatalf("user target wrong: %+v", userEntries)
 	}
 
