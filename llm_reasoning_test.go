@@ -42,8 +42,8 @@ func TestRequestBody_StripsReasoning(t *testing.T) {
 // emits `{"path":"long-pa` — affent dispatch already returns an Error
 // for the parse failure, but the assistant message stays in the log
 // with the broken args. The very NEXT chat completion sends that bad
-// tool_call upstream, the upstream returns 400 "arguments parameter
-// must be in JSON format" (verified DashScope), the turn ends with
+// tool_call upstream, strict OpenAI-compat upstreams return 400
+// "arguments parameter must be in JSON format", the turn ends with
 // reason=error, and the model never gets to retry. Replacing the
 // broken args with "{}" on the wire keeps the turn alive — the
 // matching tool.result already explains what went wrong.

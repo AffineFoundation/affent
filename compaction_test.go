@@ -229,9 +229,10 @@ func TestIsContextOverflow(t *testing.T) {
 		`chat http 400: error code "request_too_large"`:                       true, // Groq enum
 		`chat http 400: too many tokens in messages`:                          true, // some Together/vLLM builds
 		`chat http 400: context_length_exceeded`:                              true, // vLLM error code
-		`chat http 400: ... is greater than the maximum allowed token count`:  true, // Fireworks/Together
-		// DashScope OpenAI-compat (Aliyun Bailian / Tongyi): "Range of input length should be [1, 229376]"
-		// — surfaced from real qwen3.6-35b-a3b rollout testing.
+		`chat http 400: ... is greater than the maximum allowed token count`:            true, // Fireworks/Together
+		// "Range of input length should be [1, N]" — another flavor matched
+		// via the existing "input length" keyword. Pinned so a future cleanup
+		// of the keyword list can't silently break reactive compaction.
 		`chat http 400: InvalidParameter: Range of input length should be [1, 229376]`: true,
 		// Non-overflow errors must still be classified as false:
 		`chat http 429: rate limit exceeded`: false,

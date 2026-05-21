@@ -175,10 +175,10 @@ func toWireMessages(msgs []ChatMessage) []wireMessage {
 }
 
 // sanitizeToolCallArgs replaces unparseable tool_call.function.arguments
-// with "{}" before they go on the wire. Most upstream OpenAI-compat APIs
-// (verified: DashScope) reject the entire chat completion with HTTP 400
-// `function.arguments parameter must be in JSON format` when a prior
-// assistant message has a malformed args string — which happens when
+// with "{}" before they go on the wire. Strict OpenAI-compat upstreams
+// reject the entire chat completion with HTTP 400 (e.g. "function.arguments
+// parameter must be in JSON format") when a prior assistant message has
+// a malformed args string — which happens when
 // the model is cut off mid-tool-call (max_tokens hit, output cap, or
 // just a flaky decode). Without this guard, one bad tool_call from
 // the model permanently bricks the turn: every subsequent step gets
