@@ -1,6 +1,6 @@
 //go:build !unix
 
-package affent
+package memory
 
 // lockFile is a no-op on non-Unix platforms. Callers fall back to the
 // in-process mutex only; cross-process locking is not available here.

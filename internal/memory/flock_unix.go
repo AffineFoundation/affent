@@ -1,6 +1,6 @@
 //go:build unix
 
-package affent
+package memory
 
 import (
 	"os"

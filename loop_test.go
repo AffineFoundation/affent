@@ -20,6 +20,18 @@ func newTestConv(t *testing.T) *Conversation {
 	return c
 }
 
+// newTestStore returns a FileMemoryStore wired to a temp dir with
+// tight caps suitable for loop-side tests. The internal/memory
+// package has its own copy with more knobs; this is the minimal
+// helper for the root package's tests.
+func newTestStore(t *testing.T) *FileMemoryStore {
+	t.Helper()
+	dir := t.TempDir()
+	s := NewFileMemoryStore(dir)
+	s.UserPath = filepath.Join(dir, "USER.md")
+	return s
+}
+
 func TestEnsureSystemPrompt_EmptyConv_NoMemory(t *testing.T) {
 	conv := newTestConv(t)
 	l := &Loop{Conv: conv}

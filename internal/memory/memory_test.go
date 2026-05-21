@@ -1,4 +1,4 @@
-package affent
+package memory
 
 import (
 	"encoding/json"
@@ -8,6 +8,7 @@ import (
 	"strings"
 	"sync"
 	"testing"
+	"time"
 	"unicode/utf8"
 )
 
@@ -564,6 +565,139 @@ func TestMemoryLegacyMigration(t *testing.T) {
 	body, err := os.ReadFile(migrated)
 	if err != nil || !strings.Contains(string(body), "legacy fact") {
 		t.Fatalf("migrated file missing/wrong: err=%v body=%q", err, body)
+	}
+}
+
+// TestMemoryAddStampsTimestamp pins that Add writes the on-disk entry
+// with a leading "[<RFC3339>]\n" prefix and that the response surfaces
+// only the bare content (no prefix leaking into the model context).
+func TestMemoryAddStampsTimestamp(t *testing.T) {
+	defer func(orig func() time.Time) { nowUTC = orig }(nowUTC)
+	fixed := time.Date(2026, 5, 21, 10, 30, 0, 0, time.UTC)
+	nowUTC = func() time.Time { return fixed }
+
+	s := newTestStore(t)
+	resp, err := s.Add(TargetMemory, "stack", "go 1.22 + sqlc")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !resp.OK {
+		t.Fatalf("add not ok: %+v", resp)
+	}
+	if len(resp.Entries) != 1 || resp.Entries[0] != "go 1.22 + sqlc" {
+		t.Errorf("response Entries should be content-only (no timestamp); got %+v", resp.Entries)
+	}
+	path := filepath.Join(s.MemoryDir, "topics", "stack.md")
+	raw, _ := os.ReadFile(path)
+	want := "[2026-05-21T10:30:00Z]\ngo 1.22 + sqlc"
+	if string(raw) != want {
+		t.Errorf("on-disk content = %q, want %q", raw, want)
+	}
+}
+
+// TestMemoryReplaceRestampsTimestamp pins that Replace updates the
+// timestamp — the entry was re-affirmed, so its freshness signal
+// should reflect now, not the original Add time.
+func TestMemoryReplaceRestampsTimestamp(t *testing.T) {
+	defer func(orig func() time.Time) { nowUTC = orig }(nowUTC)
+	t1 := time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)
+	t2 := time.Date(2026, 5, 1, 0, 0, 0, 0, time.UTC)
+	nowUTC = func() time.Time { return t1 }
+
+	s := newTestStore(t)
+	_, _ = s.Add(TargetMemory, "auth", "JWT rotates monthly")
+
+	nowUTC = func() time.Time { return t2 }
+	_, _ = s.Replace(TargetMemory, "auth", "JWT", "JWT rotates weekly")
+
+	raw, _ := os.ReadFile(filepath.Join(s.MemoryDir, "topics", "auth.md"))
+	if !strings.HasPrefix(string(raw), "[2026-05-01T00:00:00Z]") {
+		t.Errorf("Replace should re-stamp to now; on-disk: %q", raw)
+	}
+}
+
+// TestMemoryRemoveDeletesEmptyTopicFile pins the empty-file-cleanup
+// contract: after Remove drops the last entry, the topic file and
+// its .lock sidecar are gone — no zombie 0-byte files lingering in
+// the topics dir.
+func TestMemoryRemoveDeletesEmptyTopicFile(t *testing.T) {
+	s := newTestStore(t)
+	_, _ = s.Add(TargetMemory, "tmp", "only entry")
+	path := filepath.Join(s.MemoryDir, "topics", "tmp.md")
+	if _, err := os.Stat(path); err != nil {
+		t.Fatalf("expected topic file to exist: %v", err)
+	}
+	_, err := s.Remove(TargetMemory, "tmp", "only entry")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := os.Stat(path); !os.IsNotExist(err) {
+		t.Errorf("topic file should be gone after last Remove, got err=%v", err)
+	}
+	if _, err := os.Stat(path + ".lock"); !os.IsNotExist(err) {
+		t.Errorf("lock sidecar should also be gone, got err=%v", err)
+	}
+}
+
+// TestMemorySearchTrimsLongSnippet pins that search snippets cap at
+// memorySnippetMax chars + "..." marker. Without this, a single
+// multi-paragraph postmortem dumps its full body into the model
+// context every time something hits it.
+func TestMemorySearchTrimsLongSnippet(t *testing.T) {
+	s := newTestStore(t)
+	s.TopicCharLimit = 4000 // override the tight default so the long fixture fits
+	long := strings.Repeat("kubernetes operator deployment ", 30) // ~900 chars
+	_, _ = s.Add(TargetMemory, "infra", long)
+
+	resp, err := s.Search(TargetMemory, "infra", "kubernetes", 5)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(resp.Results) != 1 {
+		t.Fatalf("expected 1 hit, got %d", len(resp.Results))
+	}
+	snippet := resp.Results[0].Snippet
+	if !strings.HasSuffix(snippet, "...") {
+		t.Errorf("long snippet should end with '...'; got %q", snippet)
+	}
+	if len(snippet) > memorySnippetMax+5 {
+		t.Errorf("snippet length %d exceeds cap %d+marker", len(snippet), memorySnippetMax)
+	}
+	if resp.Results[0].CreatedAt == "" {
+		t.Errorf("CreatedAt should be populated for stamped entries")
+	}
+}
+
+// TestMemoryListTopicsCarriesNewestAt pins that ListTopics returns
+// the most-recent timestamp per topic — operators / models use this
+// to prioritize stale-vs-fresh topics without reading bodies.
+func TestMemoryListTopicsCarriesNewestAt(t *testing.T) {
+	defer func(orig func() time.Time) { nowUTC = orig }(nowUTC)
+
+	s := newTestStore(t)
+	nowUTC = func() time.Time { return time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC) }
+	_, _ = s.Add(TargetMemory, "old", "ancient fact")
+	nowUTC = func() time.Time { return time.Date(2026, 5, 1, 0, 0, 0, 0, time.UTC) }
+	_, _ = s.Add(TargetMemory, "fresh", "recent fact")
+
+	resp, err := s.ListTopics(TargetMemory)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var oldTS, freshTS string
+	for _, t := range resp.Topics {
+		switch t.Topic {
+		case "old":
+			oldTS = t.NewestAt
+		case "fresh":
+			freshTS = t.NewestAt
+		}
+	}
+	if oldTS != "2026-01-01T00:00:00Z" {
+		t.Errorf("old topic NewestAt = %q, want 2026-01-01", oldTS)
+	}
+	if freshTS != "2026-05-01T00:00:00Z" {
+		t.Errorf("fresh topic NewestAt = %q, want 2026-05-01", freshTS)
 	}
 }
 
