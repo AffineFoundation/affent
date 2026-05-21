@@ -70,6 +70,7 @@ type commonFlags struct {
 	memoryUserStore      string // path for USER.md  ("" → $XDG_CONFIG_HOME/affent/USER.md)
 	memoryMaxChars       string // "CORE,USER" or legacy "MEM,USER"; "" → defaults
 	memoryTopicMaxChars  int    // per-topic char cap; <=0 → DefaultTopicCharLimit
+	memoryMaxTopics      int    // distinct-topic count cap; <=0 → DefaultMaxTopics
 
 	// projectContext loads recognized user-authored project notes
 	// (AGENTS.md, CONVENTIONS.md, .cursorrules, .clinerules, CLAUDE.md,
@@ -112,6 +113,7 @@ func (c *commonFlags) bind(fs *flag.FlagSet) {
 	fs.StringVar(&c.memoryUserStore, "memory-user-store", "", "path to USER.md; default $XDG_CONFIG_HOME/affent/USER.md (cross-workspace)")
 	fs.StringVar(&c.memoryMaxChars, "memory-max-chars", "", "char limits as CORE,USER (default 2200,1375). Per-topic cap → --memory-topic-max-chars.")
 	fs.IntVar(&c.memoryTopicMaxChars, "memory-topic-max-chars", 0, "per-topic char cap; 0 → DefaultTopicCharLimit (4400). Each custom topic (auth, deploy, ...) is bounded independently; total memory grows by topic count.")
+	fs.IntVar(&c.memoryMaxTopics, "memory-max-topics", 0, "distinct-topic count cap; 0 → DefaultMaxTopics (32). Pass a large number (e.g. 1000) to effectively disable for memory benchmarks that legitimately want many named scratchpads.")
 	fs.BoolVar(&c.projectContext, "project-context", true, "auto-load AGENTS.md / CONVENTIONS.md / .cursorrules / .clinerules / CLAUDE.md / GEMINI.md from --workspace into the system prompt")
 	fs.StringVar(&c.sessionID, "session-id", "", "resume the named session (under --workspace/.affentctl/)")
 	fs.BoolVar(&c.continueLast, "continue", false, "resume the most recent session under --workspace")
@@ -413,6 +415,9 @@ func setupLoop(c commonFlags) (*loopBundle, int) {
 		}
 		if c.memoryTopicMaxChars > 0 {
 			fs.TopicCharLimit = c.memoryTopicMaxChars
+		}
+		if c.memoryMaxTopics > 0 {
+			fs.MaxTopics = c.memoryMaxTopics
 		}
 		memStore = fs
 	}
