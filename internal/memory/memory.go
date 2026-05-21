@@ -126,8 +126,8 @@ const (
 // TargetUser ignores Topic — there's one user profile, not many.
 //
 // FileMemoryStore is the default implementation. Embedders can plug
-// in their own (e.g. a Honcho / Mem0 / supermemory adapter) by
-// satisfying this interface.
+// in their own (an external memory service, a DB-backed adapter,
+// etc.) by satisfying this interface.
 type MemoryStore interface {
 	Snapshot() string
 	Add(target MemoryTarget, topic, content string) (MemoryResponse, error)
@@ -703,11 +703,12 @@ func (s *FileMemoryStore) Search(target MemoryTarget, topic, query string, topK 
 			// Recency boost: at equal term overlap, fresher facts rank
 			// above stale ones. Linear decay from 1.0 (today) down to
 			// a floor of 0.5 (1 year+ old). Old entries don't vanish
-			// — they just lose ties to newer entries. Mirrors how
-			// Mem0 / Letta both factor recency into retrieval. Entries
-			// without a timestamp (legacy un-stamped) get factor 1.0,
-			// not 0.5, so the rollout of stamping doesn't suddenly
-			// down-rank everything that was already there.
+			// — they just lose ties to newer entries. This is the
+			// standard "freshness boost" pattern from classical IR
+			// (Elastic / Lucene). Entries without a timestamp (legacy
+			// un-stamped) get factor 1.0, not 0.5, so the rollout of
+			// stamping doesn't suddenly down-rank everything that was
+			// already there.
 			score *= recencyFactor(createdAt)
 			hits = append(hits, MemorySearchResult{
 				Topic:     b.topic,

@@ -766,7 +766,7 @@ func TestMemorySearchSnippetFallsBackOnTopicMatch(t *testing.T) {
 // term overlap rank by freshness — the fresh one above the old one.
 // Without this, a stale fact with the same keyword density dominates
 // retrieval purely by lexical accident in a long-running memory.
-// Mirrors the Mem0 / Letta retrieval pattern; recencyFloor keeps old
+// Standard IR "freshness boost" pattern; recencyFloor keeps old
 // facts in the results, just behind fresh ones.
 func TestMemorySearchRecencyBoost(t *testing.T) {
 	defer func(orig func() time.Time) { nowUTC = orig }(nowUTC)
