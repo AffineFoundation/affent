@@ -104,6 +104,11 @@ const (
 	TurnEndCompleted = "completed"
 	TurnEndCancelled = "cancelled"
 	TurnEndError     = "error"
+	// TurnEndMaxTurns fires when the loop exhausted Loop.MaxTurnSteps
+	// while the model was still issuing tool calls. The conversation is
+	// left consistent (last role=tool result is the final entry); the
+	// next user message starts a new turn from there.
+	TurnEndMaxTurns = "max_turns"
 )
 
 type TurnEndPayload struct {

@@ -1,9 +1,7 @@
-// Package native is our own minimal agent loop, replacing goose. We talk
-// directly to an OpenAI-compatible chat completions endpoint, dispatch
-// tool calls to in-process tool handlers, and stream events into the
-// gateway's existing SSE infrastructure. No daemon inside the sandbox --
-// the loop runs in the gateway process; tools reach into the container
-// over docker exec or read/write the bind-mounted volumes directly.
+// Package affent is an embeddable agent loop core. It talks directly to
+// an OpenAI-compatible chat completions endpoint, dispatches tool calls
+// to in-process tool handlers registered on a Registry, and streams
+// per-turn events through an SSE protocol (sse package).
 package affent
 
 import (
@@ -14,6 +12,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"sort"
 	"strconv"
 	"strings"
 	"time"
@@ -340,14 +339,27 @@ func consumeStream(ctx context.Context, body io.ReadCloser, out chan<- StreamEve
 		if payload == "[DONE]" {
 			break
 		}
+		// streamingToolCall carries the per-delta `index` field that the
+		// persistent ToolCall doesn't need to model. *int (rather than
+		// int) distinguishes "explicitly 0" from "absent" — some
+		// providers omit index on every fragment.
+		type streamingToolCall struct {
+			Index    *int   `json:"index"`
+			ID       string `json:"id"`
+			Type     string `json:"type"`
+			Function struct {
+				Name      string `json:"name"`
+				Arguments string `json:"arguments"`
+			} `json:"function"`
+		}
 		var chunk struct {
 			Choices []struct {
 				Index int `json:"index"`
 				Delta struct {
-					Role             string     `json:"role"`
-					Content          string     `json:"content"`
-					ReasoningContent string     `json:"reasoning_content"` // GLM/DeepSeek "thinking"
-					ToolCalls        []ToolCall `json:"tool_calls"`
+					Role             string              `json:"role"`
+					Content          string              `json:"content"`
+					ReasoningContent string              `json:"reasoning_content"` // GLM/DeepSeek "thinking"
+					ToolCalls        []streamingToolCall `json:"tool_calls"`
 				} `json:"delta"`
 				FinishReason string `json:"finish_reason"`
 			} `json:"choices"`
@@ -379,12 +391,28 @@ func consumeStream(ctx context.Context, body io.ReadCloser, out chan<- StreamEve
 				}
 			}
 			for _, tc := range ch.Delta.ToolCalls {
-				// tc.Index isn't always set explicitly; fall back to len.
-				idx := len(calls)
-				// (the OpenAI streaming uses an index; on Chutes some models
-				// set it, some don't — we accept either)
-				if tc.ID != "" || tc.Function.Name != "" {
-					// New tool call begins.
+				// Resolve which logical tool call this fragment belongs
+				// to. Spec-conformant providers (OpenAI, Anthropic-via-
+				// proxy) emit `index` on every fragment. Some chutes /
+				// vLLM models omit it; fall back to len(calls) for new
+				// headers and "last call seen" for orphan arg deltas so
+				// the single-tool-call case stays compatible.
+				isHeader := tc.ID != "" || tc.Function.Name != ""
+				var idx int
+				switch {
+				case tc.Index != nil:
+					idx = *tc.Index
+				case isHeader:
+					idx = len(calls)
+				default:
+					idx = -1
+					for i := range calls {
+						if i > idx {
+							idx = i
+						}
+					}
+				}
+				if isHeader {
 					nc := &ToolCall{ID: tc.ID, Type: "function"}
 					nc.Function.Name = tc.Function.Name
 					calls[idx] = nc
@@ -393,27 +421,17 @@ func consumeStream(ctx context.Context, body io.ReadCloser, out chan<- StreamEve
 					}
 				}
 				if tc.Function.Arguments != "" {
-					// Argument fragment — append to the most recent call.
 					target := calls[idx]
 					if target == nil {
-						// Some providers stream arg deltas before a call
-						// header; use the last known call.
-						lastIdx := -1
-						for i := range calls {
-							if i > lastIdx {
-								lastIdx = i
-							}
-						}
-						if lastIdx >= 0 {
-							target = calls[lastIdx]
-							idx = lastIdx
-						}
+						// Arg fragment for a call whose header we never
+						// saw (or saw under a different index). Drop —
+						// reconstructing the JSON without a name would
+						// just confuse the model downstream.
+						continue
 					}
-					if target != nil {
-						target.Function.Arguments += tc.Function.Arguments
-						if !emit(StreamEvent{ToolCallArgsDelta: &ToolCallArgsDelta{Index: idx, Delta: tc.Function.Arguments}}) {
-							return
-						}
+					target.Function.Arguments += tc.Function.Arguments
+					if !emit(StreamEvent{ToolCallArgsDelta: &ToolCallArgsDelta{Index: idx, Delta: tc.Function.Arguments}}) {
+						return
 					}
 				}
 			}
@@ -443,13 +461,18 @@ func consumeStream(ctx context.Context, body io.ReadCloser, out chan<- StreamEve
 		}
 	}
 
-	// Assemble final tool calls in index order.
+	// Assemble final tool calls in ascending index order so downstream
+	// callers see a stable, model-intended sequence regardless of how
+	// the chunks interleaved on the wire.
 	if len(calls) > 0 {
+		indices := make([]int, 0, len(calls))
+		for i := range calls {
+			indices = append(indices, i)
+		}
+		sort.Ints(indices)
 		final.ToolCalls = make([]ToolCall, 0, len(calls))
-		for i := 0; i < len(calls)+8; i++ {
-			if c, ok := calls[i]; ok {
-				final.ToolCalls = append(final.ToolCalls, *c)
-			}
+		for _, i := range indices {
+			final.ToolCalls = append(final.ToolCalls, *calls[i])
 		}
 	}
 
@@ -461,5 +484,3 @@ func consumeStream(ctx context.Context, body io.ReadCloser, out chan<- StreamEve
 	}})
 }
 
-// quiet "time imported and not used" if the helper above gets trimmed.
-var _ = time.Second

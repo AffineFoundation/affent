@@ -15,6 +15,14 @@ type Event struct {
 }
 
 // Encode renders an event in SSE wire format.
+//
+// Each newline-separated chunk of Data gets its own "data: " prefix
+// per the SSE spec — without that, the parser treats every line
+// after the first as a separate (unknown) field and silently drops
+// the rest of the payload. json.Marshal doesn't produce literal
+// newlines, so today's callers never trip this; the split here makes
+// the encoder safe for any future payload (MarshalIndent output,
+// raw text payloads passed via the exported Data field, etc.).
 func (e Event) Encode() []byte {
 	out := make([]byte, 0, 64+len(e.Data))
 	out = append(out, "event: "...)
@@ -23,11 +31,31 @@ func (e Event) Encode() []byte {
 	out = append(out, "id: "...)
 	out = strconv.AppendInt(out, e.ID, 10)
 	out = append(out, '\n')
+	if len(e.Data) == 0 {
+		out = append(out, "data: \n\n"...)
+		return out
+	}
+	start := 0
+	for i := 0; i < len(e.Data); i++ {
+		if e.Data[i] != '\n' {
+			continue
+		}
+		out = append(out, "data: "...)
+		// Drop a trailing CR so \r\n line endings parse cleanly too.
+		seg := e.Data[start:i]
+		if n := len(seg); n > 0 && seg[n-1] == '\r' {
+			seg = seg[:n-1]
+		}
+		out = append(out, seg...)
+		out = append(out, '\n')
+		start = i + 1
+	}
 	out = append(out, "data: "...)
-	out = append(out, e.Data...)
+	out = append(out, e.Data[start:]...)
 	out = append(out, '\n', '\n')
 	return out
 }
+
 
 // NewEvent builds an event from any json-serializable payload. Caller assigns
 // the ID later (the ring buffer owns ID allocation).
