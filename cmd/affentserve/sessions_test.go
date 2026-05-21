@@ -1,6 +1,7 @@
 package main
 
 import (
+	"errors"
 	"io"
 	"os"
 	"path/filepath"
@@ -52,6 +53,19 @@ func TestSessionPool_GetOrCreate_FailsAfterShutdown(t *testing.T) {
 func TestSessionPool_SignalShutdown(t *testing.T) {
 	pool := newTestPool(t, 4, "5m")
 
+	// Build a session first, then SignalShutdown. Two things to pin:
+	// (a) NEW session creation after Signal fails with the specific
+	//     ErrShuttingDown sentinel (so chat_completions.go's typed
+	//     503-vs-500 branch keeps working);
+	// (b) Looking up the ALREADY-EXISTING session also fails with
+	//     ErrShuttingDown. The shutting-down check sits BEFORE the
+	//     existing-session lookup in GetOrCreate, so once the pool
+	//     is draining EVERY chat request is told to retry elsewhere
+	//     — even ones that would otherwise continue a live session.
+	if _, err := pool.GetOrCreate("alive"); err != nil {
+		t.Fatalf("pre-shutdown GetOrCreate: %v", err)
+	}
+
 	if pool.IsShuttingDown() {
 		t.Fatal("fresh pool must not report shutting down")
 	}
@@ -59,8 +73,11 @@ func TestSessionPool_SignalShutdown(t *testing.T) {
 	if !pool.IsShuttingDown() {
 		t.Fatal("after SignalShutdown, IsShuttingDown must be true")
 	}
-	if _, err := pool.GetOrCreate("new"); err == nil {
-		t.Errorf("GetOrCreate after SignalShutdown must fail (got nil err)")
+	if _, err := pool.GetOrCreate("new"); !errors.Is(err, ErrShuttingDown) {
+		t.Errorf("new-session GetOrCreate after Signal must return ErrShuttingDown; got %v", err)
+	}
+	if _, err := pool.GetOrCreate("alive"); !errors.Is(err, ErrShuttingDown) {
+		t.Errorf("existing-session GetOrCreate after Signal must also return ErrShuttingDown; got %v", err)
 	}
 	// Full Shutdown still completes cleanly. shutdownOnce guards the
 	// real drain, so calling Shutdown after SignalShutdown is fine.
