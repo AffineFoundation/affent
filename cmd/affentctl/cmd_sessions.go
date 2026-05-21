@@ -116,7 +116,7 @@ func oneLine(s string, max int) string {
 	s = strings.ReplaceAll(s, "\n", " ")
 	s = strings.TrimSpace(s)
 	if len(s) > max {
-		return s[:max-1] + "…"
+		return trimUTF8(s, max-1) + "…"
 	}
 	return s
 }

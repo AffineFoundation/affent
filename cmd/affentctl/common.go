@@ -13,6 +13,7 @@ import (
 	"strconv"
 	"strings"
 	"time"
+	"unicode/utf8"
 
 	"github.com/affinefoundation/affent"
 	"github.com/affinefoundation/affent/executor"
@@ -21,6 +22,23 @@ import (
 	"github.com/google/uuid"
 	"github.com/rs/zerolog"
 )
+
+// trimUTF8 returns s clipped to at most n bytes, snapping back to a
+// UTF-8 rune boundary so multi-byte sequences (CJK / Cyrillic /
+// accented Latin / emoji) aren't split across the cut. Callers append
+// their own ellipsis marker.
+func trimUTF8(s string, n int) string {
+	if n <= 0 {
+		return ""
+	}
+	if len(s) <= n {
+		return s
+	}
+	for n > 0 && !utf8.RuneStart(s[n]) {
+		n--
+	}
+	return s[:n]
+}
 
 // commonFlags is what every subcommand wants -- model endpoint, workspace,
 // trace destination, system-prompt override, session selection. Bind once,
@@ -401,18 +419,23 @@ func setupLoop(c commonFlags) (*loopBundle, int) {
 		Memory:              memStore,
 		ProjectContextDir:   projectContextDir,
 	}
-	// Attach the default summary-style compactor unless the caller asked
-	// to disable it. Reuses the same LLM client so compactions hit the
-	// same provider/model the agent itself uses.
-	if c.compactTrigger > 0 || c.compactKeepLast > 0 {
-		loop.Compactor = &affent.LLMSummaryCompactor{
-			LLM:         llm,
-			TriggerMsgs: c.compactTrigger,
-			// KeepFirst defaults to 1 per the LLMSummaryCompactor docstring
-			// (OpenHands LLMSummarizingCondenser parity). Keeping more
-			// would shrink the rolling summary's available ground each pass.
-			KeepLast: c.compactKeepLast,
-		}
+	// Always attach the rolling-summary compactor. Without it, an
+	// overflowed context kills the turn (the loop's reactive compaction
+	// path is gated on l.Compactor != nil). User knobs override the
+	// OpenHands-style defaults; reusing the same LLM client means
+	// compactions hit the same provider/model the agent uses.
+	triggerMsgs := c.compactTrigger
+	if triggerMsgs <= 0 {
+		triggerMsgs = affent.DefaultSummaryTriggerMsgs
+	}
+	keepLast := c.compactKeepLast
+	if keepLast <= 0 {
+		keepLast = affent.DefaultSummaryKeepLast
+	}
+	loop.Compactor = &affent.LLMSummaryCompactor{
+		LLM:         llm,
+		TriggerMsgs: triggerMsgs,
+		KeepLast:    keepLast,
 	}
 	if err := loop.EnsureSystemPrompt(systemPrompt); err != nil {
 		log.Error().Err(err).Msg("seed system prompt")

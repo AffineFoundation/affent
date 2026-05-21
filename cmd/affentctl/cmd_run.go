@@ -124,10 +124,10 @@ func drainBatch(ctx context.Context, events <-chan sse.Event, trace io.Writer, l
 					exit = 0
 				case sse.TurnEndCancelled:
 					exit = 130
+				case sse.TurnEndMaxTurns:
+					exit = 2
 				default:
-					if p.Reason == "max_turns" || p.Reason == "length" {
-						exit = 2
-					} else if exit == 0 {
+					if exit == 0 {
 						exit = 3
 					}
 				}

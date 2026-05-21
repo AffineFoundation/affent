@@ -4,9 +4,39 @@ import (
 	"flag"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
+	"unicode/utf8"
 )
+
+func TestTrimUTF8_SnapsToRuneBoundary(t *testing.T) {
+	cases := []struct {
+		name string
+		in   string
+		n    int
+	}{
+		{"cyrillic", strings.Repeat("ё", 50), 7},     // 2-byte runes, odd n lands mid-rune
+		{"chinese", strings.Repeat("你", 30), 8},     // 3-byte runes
+		{"emoji", strings.Repeat("🔧", 20), 9},       // 4-byte runes
+		{"ascii", strings.Repeat("a", 50), 7},        // single-byte, no snap-back needed
+		{"under-cap", "short", 100},                  // already under cap, returned verbatim
+		{"empty", "", 5},                             // empty stays empty
+		{"zero-cap", "anything", 0},                  // n<=0 returns empty
+		{"negative-cap", "anything", -5},             // same
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			got := trimUTF8(c.in, c.n)
+			if !utf8.ValidString(got) {
+				t.Fatalf("trimUTF8(%q, %d) = %q (invalid UTF-8)", c.in, c.n, got)
+			}
+			if len(got) > c.n && c.n > 0 {
+				t.Fatalf("trimUTF8(%q, %d) = %q (len %d exceeds cap)", c.in, c.n, got, len(got))
+			}
+		})
+	}
+}
 
 func TestApplyConfigMergesAndCLIOverrides(t *testing.T) {
 	dir := t.TempDir()
