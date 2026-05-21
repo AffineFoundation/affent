@@ -112,17 +112,20 @@ const snapshotJS = `() => {
     }
     if (tag === 'textarea') return 'textbox';
     if (tag === 'select') return 'combobox';
+    if (tag === 'summary') return 'button';
     if (el.isContentEditable) return 'textbox';
     return tag;
   }
 
   const interactiveSelectors = [
-    'a[href]', 'button',
+    'a[href]', 'button', 'summary',
     'input:not([type=hidden])', 'textarea', 'select',
     '[role=button]', '[role=link]', '[role=menuitem]', '[role=tab]',
     '[role=checkbox]', '[role=switch]', '[role=combobox]', '[role=textbox]',
-    '[contenteditable=true]',
+    '[role=radio]', '[role=option]',
+    '[contenteditable]:not([contenteditable=false])',
     '[onclick]',
+    '[tabindex]:not([tabindex="-1"])',
   ].join(',');
 
   let nextRef = 0;

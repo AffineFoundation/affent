@@ -1,12 +1,57 @@
 package browser
 
 import (
+	"net/url"
 	"strings"
 	"sync/atomic"
 
 	"github.com/go-rod/rod"
 	"github.com/go-rod/rod/lib/proto"
 )
+
+// urlMatchesBlockedDomain reports whether rawURL hits any entry in
+// patterns. Each pattern is one of:
+//
+//   - "host"        — matches the URL's host exactly, or any subdomain
+//     ("doubleclick.net" matches "ads.doubleclick.net" but not
+//     "my-doubleclick.net.evil.com" or "example.com/?ref=doubleclick.net").
+//   - "host/prefix" — exact-or-subdomain host match AND URL path starts
+//     with "/prefix" ("accounts.google.com/gsi" matches
+//     "https://accounts.google.com/gsi/client.js" but not
+//     "https://accounts.google.com/oauth").
+//
+// Empty patterns are ignored. URLs that don't parse return false.
+//
+// Earlier code used strings.Contains(url, pattern), which silently
+// over-blocked any URL that mentioned a tracker host anywhere in its
+// path or query string.
+func urlMatchesBlockedDomain(rawURL string, patterns []string) bool {
+	u, err := url.Parse(rawURL)
+	if err != nil || u.Host == "" {
+		return false
+	}
+	host := strings.ToLower(u.Hostname()) // strips port, handles IPv6 brackets
+	path := u.Path
+	for _, p := range patterns {
+		if p == "" {
+			continue
+		}
+		p = strings.ToLower(p)
+		patHost, patPath := p, ""
+		if i := strings.IndexByte(p, '/'); i >= 0 {
+			patHost = p[:i]
+			patPath = p[i:]
+		}
+		if host != patHost && !strings.HasSuffix(host, "."+patHost) {
+			continue
+		}
+		if patPath != "" && !strings.HasPrefix(path, patPath) {
+			continue
+		}
+		return true
+	}
+	return false
+}
 
 // InterceptConfig governs the request interceptor's behavior.
 //
@@ -33,8 +78,15 @@ type InterceptConfig struct {
 	// BlockedResourceTypes when both are set.
 	AllowedResourceTypes []string
 
-	// BlockedDomains is a list of URL substrings (host/path patterns)
-	// to fail. Matched against `request.URL` with strings.Contains.
+	// BlockedDomains lists host (or host/path-prefix) patterns whose
+	// requests should fail before the network call. Each entry is one
+	// of:
+	//   - "host"        — matches the URL's host exactly, or any
+	//     subdomain ("doubleclick.net" matches "ads.doubleclick.net"
+	//     but not "my-doubleclick.net.evil.com")
+	//   - "host/prefix" — host match AND URL path starts with the
+	//     "/prefix" segment ("accounts.google.com/gsi" hits
+	//     "/gsi/client.js" but not "/oauth")
 	// Empty leaves the default list active.
 	BlockedDomains []string
 
@@ -64,15 +116,15 @@ var DefaultBlockedResourceTypes = []string{
 // with stricter needs should supply their own list — but covers the
 // failure mode where stale per-session third-party state poisons the
 // cache and stalls subsequent Chrome navigations on replay.
+// Entries are host (or "host/path") patterns. urlMatchesBlockedDomain
+// already does subdomain matching, so listing both a parent and a
+// subdomain is redundant — listed parents below cover every
+// "ads.<parent>" / "stats.<parent>" automatically.
 var DefaultBlockedDomains = []string{
 	// Analytics
 	"google-analytics.com",
 	"googletagmanager.com",
-	"google-analytics.l.google.com",
 	"analytics.google.com",
-	"region1.google-analytics.com",
-	"ssl.google-analytics.com",
-	"stats.g.doubleclick.net",
 	// Ads (display + RTB)
 	"doubleclick.net",
 	"googlesyndication.com",
@@ -83,7 +135,7 @@ var DefaultBlockedDomains = []string{
 	"ad-delivery.net",
 	"btloader.com",
 	"id5-sync.com",
-	"static.criteo.net",
+	"criteo.net",
 	"creative-serving.com",
 	"openx.net",
 	"pubmatic.com",
@@ -93,22 +145,17 @@ var DefaultBlockedDomains = []string{
 	"cookielaw.org",
 	// Social pixels
 	"facebook.net",
-	"connect.facebook.net",
-	"pixel.facebook.com",
+	"pixel.facebook.com", // different TLD from facebook.net, listed separately
 	// Session-recording / heatmaps
 	"hotjar.com",
-	"static.hotjar.com",
 	"clarity.ms",
 	// Product analytics
-	"cdn.heapanalytics.com",
+	"heapanalytics.com",
 	"segment.io",
-	"cdn.segment.com",
+	"segment.com",
 	"mixpanel.com",
-	"api.mixpanel.com",
 	"amplitude.com",
-	"api.amplitude.com",
 	"intercom.io",
-	"widget.intercom.io",
 	// Auth / sign-in widgets (serve per-session JS)
 	"accounts.google.com/gsi",
 	"apis.google.com/js",
@@ -120,13 +167,10 @@ var DefaultBlockedDomains = []string{
 	"rollbar.com",
 	"raygun.io",
 	"cloudflareinsights.com",
-	"static.cloudflareinsights.com",
-	"s.go-mpulse.net",
+	"go-mpulse.net",
 	"mpulse.net",
 	// Marketing automation seen on www.nasdaq.com etc.
 	"bizible.com",
-	"cdn.bizible.com",
-	"assets.adoberesources.net",
 	"adoberesources.net",
 }
 
@@ -233,16 +277,12 @@ func installInterceptor(page *rod.Page, cfg InterceptConfig, stats *InterceptSta
 			h.Response.Fail(proto.NetworkErrorReasonBlockedByClient)
 			return
 		}
-		// Domain filter
-		for _, d := range cfg.BlockedDomains {
-			if d == "" {
-				continue
-			}
-			if strings.Contains(url, d) {
-				stats.BlockedByDomain.Add(1)
-				h.Response.Fail(proto.NetworkErrorReasonBlockedByClient)
-				return
-			}
+		// Domain filter — host/path-aware so a tracker name appearing
+		// in a query string doesn't fail the parent navigation.
+		if urlMatchesBlockedDomain(url, cfg.BlockedDomains) {
+			stats.BlockedByDomain.Add(1)
+			h.Response.Fail(proto.NetworkErrorReasonBlockedByClient)
+			return
 		}
 		// Cache hit?
 		if cfg.Cache != nil {
