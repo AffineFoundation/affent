@@ -95,6 +95,35 @@ func TestSession_Subscribe_BeforeCloseStillWorks(t *testing.T) {
 	}
 }
 
+// TestSessionPool_gcOnce_EvictsIdleSessions pins the idle-TTL eviction
+// path: a session whose lastUsed is older than now-idleTTL must be
+// reaped on the next sweep. Before the gcLoop inequality fix, the
+// loop's tick interval was clamped to >= 1m no matter how small the
+// TTL was, so `--session-idle-ttl 10s` actually evicted ~60s late.
+// gcOnce itself was always correct; we test it directly to keep the
+// test fast.
+func TestSessionPool_gcOnce_EvictsIdleSessions(t *testing.T) {
+	pool := newTestPool(t, 8, "50ms")
+	fresh, _ := pool.GetOrCreate("fresh")
+	if fresh == nil {
+		t.Fatal("create fresh")
+	}
+	// Backdate "stale" so its lastUsed is well past the 50ms TTL.
+	stale, _ := pool.GetOrCreate("stale")
+	stale.mu.Lock()
+	stale.lastUsed = time.Now().Add(-1 * time.Hour)
+	stale.mu.Unlock()
+
+	pool.gcOnce()
+
+	if _, err := pool.Get("fresh"); err != nil {
+		t.Errorf("fresh session was evicted: %v", err)
+	}
+	if _, err := pool.Get("stale"); err == nil {
+		t.Errorf("stale session survived gcOnce; should have been evicted")
+	}
+}
+
 func TestSessionPool_MaxSessionsEvictsLRU(t *testing.T) {
 	pool := newTestPool(t, 2, "5m")
 	a, _ := pool.GetOrCreate("a")

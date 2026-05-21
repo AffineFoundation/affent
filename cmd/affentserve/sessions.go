@@ -415,13 +415,23 @@ func (p *SessionPool) evictLocked(id string) bool {
 	return true
 }
 
-// gcLoop GCs idle sessions. Runs every minute (or idleTTL/4, whichever
-// is smaller).
+// gcLoop GCs idle sessions. Runs at min(idleTTL/4, 1m) — the doc-comment
+// always said "whichever is smaller", but the original code had the
+// inequality flipped: `if interval < time.Minute { interval = time.Minute }`
+// effectively clamped to >= 1 minute. With `--session-idle-ttl 10s`
+// the user got 60s of slop after the TTL expired before eviction
+// actually fired, contradicting the flag's promise.
+//
+// Lower clamp at 1 second so a misconfigured idleTTL=0 doesn't busy-
+// loop the ticker.
 func (p *SessionPool) gcLoop() {
 	defer close(p.gcDone)
 	interval := p.idleTTL / 4
-	if interval < time.Minute {
+	if interval > time.Minute {
 		interval = time.Minute
+	}
+	if interval < time.Second {
+		interval = time.Second
 	}
 	t := time.NewTicker(interval)
 	defer t.Stop()
