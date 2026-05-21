@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -66,6 +67,60 @@ func TestResolvedSessionID_PrefersAffentNamespacedField(t *testing.T) {
 			}
 		})
 	}
+}
+
+// TestBufferChatCompletion_PrefersModelFinishReason pins that the
+// OpenAI-compat layer surfaces the model's actual finish_reason
+// ("length" for max_tokens truncation, "content_filter", etc.) on a
+// clean "completed" turn instead of flattening every clean termination
+// to "stop". Affent-specific reasons (max_turns, cancelled, error)
+// still override.
+func TestBufferChatCompletion_PrefersModelFinishReason(t *testing.T) {
+	cases := []struct {
+		name              string
+		messageDoneFinish string
+		turnEndReason     string
+		want              string
+	}{
+		{"model 'length' on clean turn surfaces as length", "length", sse.TurnEndCompleted, "length"},
+		{"model 'stop' on clean turn stays stop", "stop", sse.TurnEndCompleted, "stop"},
+		{"intermediate 'tool_calls' ignored, final 'stop' kept", "stop", sse.TurnEndCompleted, "stop"},
+		{"max_turns overrides any model finish_reason", "stop", sse.TurnEndMaxTurns, "length"},
+		{"cancelled overrides", "stop", sse.TurnEndCancelled, "stop"}, // openAIFinishReason maps cancelled→stop
+		{"no model finish_reason falls back to turn-end map", "", sse.TurnEndCompleted, "stop"},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			ch := make(chan sse.Event, 8)
+			turnID := "turn-test"
+			// Emit an intermediate tool_calls done first to make sure
+			// the filter only adopts terminal finish_reasons.
+			pushMessageDone(ch, turnID, "intermediate", "tool_calls")
+			if c.messageDoneFinish != "" {
+				pushMessageDone(ch, turnID, "final content", c.messageDoneFinish)
+			}
+			pushTurnEnd(ch, turnID, c.turnEndReason)
+
+			pool := newTestPool(t, 4, "5m")
+			sess, _ := pool.GetOrCreate("buf-test")
+			out, _ := bufferChatCompletion(context.Background(), sess, turnID, ch)
+			if out.FinishReason != c.want {
+				t.Errorf("FinishReason = %q, want %q (case: %s)", out.FinishReason, c.want, c.name)
+			}
+		})
+	}
+}
+
+func pushMessageDone(ch chan sse.Event, turnID, text, finish string) {
+	ev, _ := sse.NewEvent(sse.TypeMessageDone, sse.MessageDonePayload{
+		TurnID: turnID, Text: text, FinishReason: finish,
+	})
+	ch <- ev
+}
+
+func pushTurnEnd(ch chan sse.Event, turnID, reason string) {
+	ev, _ := sse.NewEvent(sse.TypeTurnEnd, sse.TurnEndPayload{TurnID: turnID, Reason: reason})
+	ch <- ev
 }
 
 func TestOpenAIFinishReason(t *testing.T) {

@@ -194,6 +194,20 @@ func bufferChatCompletion(ctx context.Context, sess *Session, turnID string, ch 
 				if err := json.Unmarshal(ev.Data, &p); err == nil {
 					out.Content += p.Delta
 				}
+			case sse.TypeMessageDone:
+				// Capture the upstream-model's finish_reason from the
+				// final assistant message so a max_tokens truncation
+				// surfaces as "length" instead of being flattened to
+				// "stop" by the turn-end mapping below. Ignore
+				// "tool_calls" — that's an intermediate step, the
+				// next message.done from the model's continuation
+				// is the one that carries the terminal reason.
+				var p sse.MessageDonePayload
+				if err := json.Unmarshal(ev.Data, &p); err == nil {
+					if p.FinishReason != "" && p.FinishReason != "tool_calls" {
+						out.FinishReason = p.FinishReason
+					}
+				}
 			case sse.TypeThinkingDelta:
 				var p sse.ThinkingDeltaPayload
 				if err := json.Unmarshal(ev.Data, &p); err == nil {
@@ -223,7 +237,15 @@ func bufferChatCompletion(ctx context.Context, sess *Session, turnID string, ch 
 					Reason string `json:"reason"`
 				}
 				if err := json.Unmarshal(ev.Data, &p); err == nil {
-					out.FinishReason = openAIFinishReason(p.Reason)
+					// Turn-end mapping only overrides the model-level
+					// finish_reason captured above when the turn ended
+					// for an affent-specific reason (max_turns,
+					// cancelled, error). A clean "completed" turn keeps
+					// the upstream-model value so "length" doesn't get
+					// silently rewritten to "stop".
+					if p.Reason != sse.TurnEndCompleted {
+						out.FinishReason = openAIFinishReason(p.Reason)
+					}
 					if p.Reason == sse.TurnEndError && out.Error == "" {
 						out.Error = "turn ended with error"
 					}
@@ -348,6 +370,12 @@ func streamChatCompletion(w http.ResponseWriter, ctx context.Context, sess *Sess
 
 	send(map[string]any{"role": "assistant"}, "")
 
+	// Track the model's last terminal finish_reason from message.done
+	// events so a max_tokens truncation surfaces as "length" instead
+	// of being flattened to "stop" by the turn-end mapping. See the
+	// parallel logic in bufferChatCompletion.
+	modelFinish := ""
+
 	keepAlive := time.NewTicker(sseKeepAliveInterval)
 	defer keepAlive.Stop()
 
@@ -374,6 +402,13 @@ func streamChatCompletion(w http.ResponseWriter, ctx context.Context, sess *Sess
 				var p sse.MessageDeltaPayload
 				if err := json.Unmarshal(ev.Data, &p); err == nil && p.Delta != "" {
 					send(map[string]any{"content": p.Delta}, "")
+				}
+			case sse.TypeMessageDone:
+				var p sse.MessageDonePayload
+				if err := json.Unmarshal(ev.Data, &p); err == nil {
+					if p.FinishReason != "" && p.FinishReason != "tool_calls" {
+						modelFinish = p.FinishReason
+					}
 				}
 			case sse.TypeThinkingDelta:
 				var p sse.ThinkingDeltaPayload
@@ -410,7 +445,16 @@ func streamChatCompletion(w http.ResponseWriter, ctx context.Context, sess *Sess
 					Reason string `json:"reason"`
 				}
 				_ = json.Unmarshal(ev.Data, &p)
-				send(map[string]any{}, openAIFinishReason(p.Reason))
+				// Prefer the upstream-model's finish_reason on clean
+				// "completed" turns so max_tokens truncation is visible.
+				// affent-specific reasons (max_turns, cancelled, error)
+				// override since they describe something the model
+				// itself didn't see.
+				finish := openAIFinishReason(p.Reason)
+				if p.Reason == sse.TurnEndCompleted && modelFinish != "" {
+					finish = modelFinish
+				}
+				send(map[string]any{}, finish)
 				_, _ = w.Write([]byte("data: [DONE]\n\n"))
 				flusher.Flush()
 				return
