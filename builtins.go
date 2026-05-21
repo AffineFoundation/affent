@@ -266,7 +266,7 @@ func readFileTool(deps BuiltinDeps) *Tool {
         "required": ["path"],
         "properties": {
             "path": {"type": "string", "description": "Path; relative joins onto the workspace root, absolute must fall inside it."},
-            "max_bytes": {"type": "integer", "description": "Optional cap (default 64 KiB, hard upper bound 4 MiB)."}
+            "max_bytes": {"type": "integer", "minimum": 1, "maximum": 4194304, "description": "Optional cap (default 64 KiB, hard upper bound 4 MiB). Larger requests are clamped silently — use shell with head/tail/sed for anything past 4 MiB."}
         }
     }`)
 	return &Tool{
@@ -444,12 +444,21 @@ func editFileTool(deps BuiltinDeps) *Tool {
 	}
 }
 
+// MaxListFilesEntries hard-caps the number of directory entries
+// list_files will return regardless of the model's max_entries
+// argument. Mainly a string-builder allocation guard: a model
+// asking for a million entries on a busy /var/log shouldn't
+// trigger a multi-MB temporary buffer (the actual model-facing
+// output truncates to MaxToolResultBytesInContext = 8 KiB anyway,
+// so anything past a few hundred entries is wasted work).
+const MaxListFilesEntries = 1000
+
 func listFilesTool(deps BuiltinDeps) *Tool {
 	schema := json.RawMessage(`{
         "type": "object",
         "properties": {
             "path": {"type": "string", "description": "Directory; relative joins onto the workspace root. Empty / '.' lists the workspace root itself."},
-            "max_entries": {"type": "integer"}
+            "max_entries": {"type": "integer", "minimum": 1, "maximum": 1000, "description": "Optional cap (default 200, hard upper bound 1000). Use shell with find/ls for larger or filtered enumerations."}
         }
     }`)
 	return &Tool{
@@ -469,6 +478,9 @@ func listFilesTool(deps BuiltinDeps) *Tool {
 			}
 			if p.MaxEntries <= 0 {
 				p.MaxEntries = 200
+			}
+			if p.MaxEntries > MaxListFilesEntries {
+				p.MaxEntries = MaxListFilesEntries
 			}
 			if fo := fileOps(deps); fo != nil {
 				entries, err := fo.ListFiles(ctx, p.Path, p.MaxEntries+1)
