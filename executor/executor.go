@@ -43,6 +43,12 @@ type ExecOptions struct {
 	Timeout time.Duration
 	// Stdin, if non-nil, is fed to the command's stdin and closed.
 	Stdin io.Reader
+	// MaxOutputBytes caps how much per-stream (stdout, stderr) output
+	// the executor buffers in memory. Above the cap, bytes are
+	// accepted from the child (so its pipe doesn't block) but
+	// discarded, and a truncation marker is appended to the returned
+	// stream. Zero falls back to DefaultExecOutputCap.
+	MaxOutputBytes int
 }
 
 // ExecResult is what Exec returns.

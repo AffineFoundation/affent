@@ -1,7 +1,6 @@
 package executor
 
 import (
-	"bytes"
 	"context"
 	"encoding/base64"
 	"errors"
@@ -10,6 +9,7 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
+	"unicode/utf8"
 )
 
 // DockerExecExecutor runs the agent's shell + file tools against a
@@ -95,25 +95,37 @@ func (d *DockerExecExecutor) Exec(ctx context.Context, cmd []string, opts ExecOp
 	if opts.Stdin != nil {
 		c.Stdin = opts.Stdin
 	}
-	var stdout, stderr bytes.Buffer
-	c.Stdout = &stdout
-	c.Stderr = &stderr
+	stdout := newCappingWriter(opts.MaxOutputBytes)
+	stderr := newCappingWriter(opts.MaxOutputBytes)
+	c.Stdout = stdout
+	c.Stderr = stderr
 
 	err := c.Run()
 	exitCode := 0
+	var execErr error
 	if err != nil {
 		var ee *exec.ExitError
 		if errors.As(err, &ee) {
 			exitCode = ee.ExitCode()
 		} else {
-			return ExecResult{}, fmt.Errorf("docker exec: %w (stderr: %s)", err, strings.TrimSpace(stderr.String()))
+			// Spawn failure / docker daemon unreachable / fork failure.
+			execErr = fmt.Errorf("docker exec: %w (stderr: %s)", err, strings.TrimSpace(stderr.String()))
+			exitCode = -1
 		}
+	}
+	// Same shape as LocalExecutor: a ctx-fired kill produces an
+	// *ExitError with exit code -1; promote that into a clear timeout
+	// error so the LLM sees "killed for running too long" instead of
+	// "exited with -1".
+	if ctx.Err() != nil && execErr == nil {
+		execErr = fmt.Errorf("docker exec: %w (stderr: %s)", ctx.Err(), strings.TrimSpace(stderr.String()))
+		exitCode = -1
 	}
 	return ExecResult{
 		ExitCode: exitCode,
 		Stdout:   stdout.String(),
 		Stderr:   stderr.String(),
-	}, nil
+	}, execErr
 }
 
 // --- FileOps implementation ---
@@ -159,7 +171,13 @@ func (d *DockerExecExecutor) ReadFile(ctx context.Context, path string, maxBytes
 	}
 	out := res.Stdout
 	if len(out) > maxBytes {
-		return out[:maxBytes] + fmt.Sprintf("\n... [truncated; %d-byte cap]", maxBytes), nil
+		// Snap back to a UTF-8 rune boundary; head -c counts bytes
+		// and will happily cut a multi-byte rune in half.
+		cut := maxBytes
+		for cut > 0 && !utf8.RuneStart(out[cut]) {
+			cut--
+		}
+		return out[:cut] + fmt.Sprintf("\n... [truncated; %d-byte cap]", maxBytes), nil
 	}
 	return out, nil
 }
@@ -295,14 +313,32 @@ func (d *DockerExecExecutor) ListFiles(ctx context.Context, path string, maxEntr
 }
 
 // readFileFull reads the entire file out of the container with no
-// truncation. Used by EditFile.
+// in-container truncation. Used by EditFile, which must round-trip
+// the whole body unmodified before writing back — capping here would
+// silently chop the file on rewrite, corrupting anything past the
+// cap. We raise the per-stream Exec cap to 64 MiB so realistic
+// source / config / log files round-trip; any file beyond that is
+// rejected with a clear error so EditFile bails before writing a
+// truncated version back to disk.
+const readFileFullCap = 64 * 1024 * 1024
+
 func (d *DockerExecExecutor) readFileFull(ctx context.Context, path string) (string, error) {
-	res, err := d.Exec(ctx, []string{"sh", "-c", "cat " + shellQuote(path)}, ExecOptions{})
+	res, err := d.Exec(ctx, []string{"sh", "-c", "cat " + shellQuote(path)}, ExecOptions{
+		MaxOutputBytes: readFileFullCap,
+	})
 	if err != nil {
 		return "", err
 	}
 	if res.ExitCode != 0 {
 		return "", fmt.Errorf("read %s: exit %d: %s", path, res.ExitCode, strings.TrimSpace(res.Stderr))
+	}
+	// cappingWriter's String() appends a banner containing
+	// truncationMarker when the input exceeded the cap. Refuse the read
+	// in that case — returning the truncated body would let EditFile
+	// silently rewrite the file with the truncated content + banner
+	// text appended.
+	if strings.Contains(res.Stdout, truncationMarker) {
+		return "", fmt.Errorf("read %s: file exceeds %d-byte read-all cap; edit not possible in-memory (split the file or operate via shell)", path, readFileFullCap)
 	}
 	return res.Stdout, nil
 }
