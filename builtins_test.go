@@ -60,6 +60,61 @@ func TestSafeWorkspacePath(t *testing.T) {
 	}
 }
 
+// TestSafeWorkspacePath_RejectsSymlinkEscape pins the sandbox against
+// the lns -s attack: a symlink inside the workspace pointing OUT must
+// not let a relative-path file op land outside. Real-rollout setup:
+//
+//   ln -s /tmp/affent-escape-target ws/exit
+//   write_file path="exit/sneaky.txt"
+//
+// Pre-fix, filepath.Rel saw "exit/sneaky.txt" as inside the workspace
+// and accepted the write, which os.WriteFile then followed onto
+// /tmp/affent-escape-target/sneaky.txt — escaped.
+func TestSafeWorkspacePath_RejectsSymlinkEscape(t *testing.T) {
+	ws := t.TempDir()
+	outside := t.TempDir()
+	link := filepath.Join(ws, "exit")
+	if err := os.Symlink(outside, link); err != nil {
+		t.Fatalf("symlink: %v", err)
+	}
+	deps := BuiltinDeps{HostWorkspaceDir: ws}
+
+	// Both an existing leaf via the symlink and a not-yet-existing
+	// one must be rejected — write_file's "new file" case is exactly
+	// where the parent-resolves-symlink path lands.
+	for _, target := range []string{"exit/file.txt", "exit/nested/new.txt", "exit"} {
+		got, err := safeWorkspacePath(deps, target)
+		if err == nil {
+			t.Errorf("safeWorkspacePath(%q via symlink) = %q, want escape error", target, got)
+			continue
+		}
+		if !strings.Contains(err.Error(), "escape") {
+			t.Errorf("error %q should mention escape", err)
+		}
+	}
+}
+
+// TestSafeWorkspacePath_AllowsInWorkspaceSymlink confirms the fix
+// doesn't over-block: a symlink that points to a path STILL INSIDE
+// the workspace must work (common pattern: `ln -s ../shared a/link`).
+func TestSafeWorkspacePath_AllowsInWorkspaceSymlink(t *testing.T) {
+	ws := t.TempDir()
+	if err := os.MkdirAll(filepath.Join(ws, "shared"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink(filepath.Join(ws, "shared"), filepath.Join(ws, "link")); err != nil {
+		t.Fatal(err)
+	}
+	deps := BuiltinDeps{HostWorkspaceDir: ws}
+	got, err := safeWorkspacePath(deps, "link/file.txt")
+	if err != nil {
+		t.Fatalf("in-workspace symlink rejected: %v", err)
+	}
+	if got == "" {
+		t.Fatal("empty result")
+	}
+}
+
 // TestSafeWorkspacePath_NonStandardWorkspace exercises the case that broke
 // SWE-INFINITE: workspace mounted at the same real path the model addresses
 // in absolute form. Pre-fix this would silently double-prefix into /app/app.

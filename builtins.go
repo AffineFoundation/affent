@@ -170,6 +170,17 @@ func formatShellOutput(res executor.ExecResult) string {
 // version below has no such ambiguity: callers that want the old "model
 // always sees /workspace" behaviour set HostWorkspaceDir to "/workspace"
 // and the absolute-path branch handles it directly.
+//
+// Symlinks are resolved before the escape check (defeats
+// `ln -s /etc ws/escape` followed by write_file("escape/passwd") that
+// would otherwise drop a file at /etc/passwd). The longest-existing-
+// prefix variant supports write_file's new-file case where the leaf
+// hasn't been created yet.
+//
+// Caveat: still TOCTOU-vulnerable in theory — a sufficiently fast
+// attacker could swap a real subdir for a symlink between check and
+// write. Defense-in-depth only; this isn't a substitute for trusting
+// the executor / container boundary.
 func safeWorkspacePath(deps BuiltinDeps, p string) (string, error) {
 	if p == "" {
 		return deps.HostWorkspaceDir, nil
@@ -180,11 +191,54 @@ func safeWorkspacePath(deps BuiltinDeps, p string) (string, error) {
 	} else {
 		full = filepath.Join(deps.HostWorkspaceDir, p)
 	}
-	rel, err := filepath.Rel(deps.HostWorkspaceDir, full)
+	resolved, err := resolveAncestorSymlinks(full)
+	if err != nil {
+		return "", err
+	}
+	wsAbs := deps.HostWorkspaceDir
+	if r, err := filepath.EvalSymlinks(deps.HostWorkspaceDir); err == nil {
+		// Workspace itself may be a stable symlink in some deployments;
+		// resolve it so filepath.Rel below compares apples to apples.
+		wsAbs = r
+	}
+	rel, err := filepath.Rel(wsAbs, resolved)
 	if err != nil || rel == ".." || strings.HasPrefix(rel, ".."+string(filepath.Separator)) {
 		return "", fmt.Errorf("path %q escapes workspace %q", p, deps.HostWorkspaceDir)
 	}
 	return full, nil
+}
+
+// resolveAncestorSymlinks walks up `full` to the longest existing
+// prefix, EvalSymlinks that, then re-attaches any missing tail
+// components verbatim. Lets safeWorkspacePath validate paths whose
+// leaf hasn't been created yet (write_file creating a new file)
+// while still defeating symlinks that point outside the workspace
+// in any existing ancestor.
+func resolveAncestorSymlinks(full string) (string, error) {
+	cur := full
+	var missing []string
+	for {
+		if _, err := os.Lstat(cur); err == nil {
+			resolved, err := filepath.EvalSymlinks(cur)
+			if err != nil {
+				return "", err
+			}
+			for i := len(missing) - 1; i >= 0; i-- {
+				resolved = filepath.Join(resolved, missing[i])
+			}
+			return resolved, nil
+		}
+		parent := filepath.Dir(cur)
+		if parent == cur {
+			// Reached root without finding any existing component
+			// (workspace must not exist either). Fall back to the
+			// unresolved path; the caller's Rel check will still
+			// catch absolute-outside cases.
+			return full, nil
+		}
+		missing = append(missing, filepath.Base(cur))
+		cur = parent
+	}
 }
 
 // fileOps returns deps.Executor as a FileOps if it implements the
