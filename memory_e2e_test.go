@@ -152,14 +152,15 @@ func TestE2E_MemoryAddPersistsAcrossSessions(t *testing.T) {
 		t.Fatalf("turn ended with reason=%q; expected completed", reason)
 	}
 
-	// Verify MEMORY.md was written.
-	memPath := filepath.Join(workspaceDir, ".affent", "MEMORY.md")
+	// Verify the new bucket layout: default topic lives at
+	// .affent/memory/topics/general.md (was .affent/MEMORY.md pre-v2).
+	memPath := filepath.Join(workspaceDir, ".affent", "memory", "topics", "general.md")
 	raw, err := os.ReadFile(memPath)
 	if err != nil {
-		t.Fatalf("MEMORY.md missing: %v", err)
+		t.Fatalf("general topic file missing: %v", err)
 	}
 	if !strings.Contains(string(raw), "Go 1.22 + sqlc") {
-		t.Fatalf("MEMORY.md does not contain the added fact:\n%s", raw)
+		t.Fatalf("general topic does not contain the added fact:\n%s", raw)
 	}
 
 	// Verify the system prompt sent on turn 1 contained the (empty)

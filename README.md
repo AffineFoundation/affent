@@ -113,26 +113,16 @@ Tiny dep graph: `uuid` + `zerolog` + stdlib.
 
 - Off by default. Opt in via `Loop.Memory = affent.NewFileMemoryStore(workspace)`
   (or `affentctl --memory`).
-- Two stores: `MEMORY.md` for agent notes (env, conventions, lessons
-  learned — workspace-scoped) and `USER.md` for user profile
-  (preferences, communication style — user-scoped, default
-  `$XDG_CONFIG_HOME/affent/USER.md`).
-- Single `memory` tool with `action ∈ {add, replace, remove}` and
-  `target ∈ {memory, user}`. `replace`/`remove` use a short unique
-  substring (`old_text`) to identify the entry — no IDs.
-- Frozen-snapshot semantics: at session start, `MemoryStore.Snapshot()`
-  composes the on-disk state into the system prompt **once**. Mid-
-  session writes update on-disk + live tool responses but do NOT
-  re-snapshot, keeping the prefix cache stable for the rest of the
-  session.
-- Char-bounded (default `MEMORY=2200`, `USER=1375`; ~800 / ~500
-  tokens). On overflow, the tool returns `ok=false` with `entries`
-  listing the current state so the agent can consolidate in the same
-  turn.
-- Atomic writes (tempfile + rename). Minimal security scan blocks
-  invisible/bidi-override unicode, the literal delimiter sequence,
-  and `authorized_keys` substrings — not a full prompt-injection
-  regex list (those are mostly performative).
+- Topic-bucketed layout (v2):
+  - `<workspace>/.affent/memory/core.md` — durable facts, ALWAYS injected into the system prompt
+  - `<workspace>/.affent/memory/topics/general.md` — default bucket, also auto-injected (back-compat with the pre-v2 single-file UX: `add` a fact, see it next session)
+  - `<workspace>/.affent/memory/topics/<topic>.md` — model-named buckets ("auth", "deploy", "lessons" …), retrieved on demand via `action=search` rather than auto-injected. Memory grows with topic count, not a single-file cap.
+  - `$XDG_CONFIG_HOME/affent/USER.md` — user profile (preferences, communication style; cross-workspace; single bucket, auto-injected).
+- Single `memory` tool with `action ∈ {add, replace, remove, search}` and `target ∈ {memory, user}`. For `target=memory` the request also carries a `topic` (default `"general"`; `"core"` lands in the always-in-prompt digest). `replace`/`remove` use a short unique substring (`old_text`) to identify the entry — no IDs. `search` returns ranked entries from one topic or all topics; lexical scoring with stopword filtering, no embeddings.
+- Frozen-snapshot semantics: at session start, `MemoryStore.Snapshot()` composes `core.md` + `general.md` + USER.md + a one-line index of custom topics into the system prompt **once**. Mid-session writes update on-disk + live tool responses but do NOT re-snapshot, keeping the prefix cache stable for the rest of the session.
+- Char-bounded per bucket (defaults: core 2200, each topic 4400, user 1375; configurable on `FileMemoryStore`). On overflow, the tool returns `ok=false` with `entries` listing the current state so the agent can consolidate in the same turn.
+- Atomic writes (tempfile + rename). Minimal security scan blocks invisible/bidi-override unicode, the literal delimiter sequence, and `authorized_keys` substrings.
+- Legacy migration: an existing pre-v2 `<workspace>/.affent/MEMORY.md` is moved into `topics/general.md` on first access — no data loss on the layout bump.
 
 **Session search** (`session_search.go`)
 

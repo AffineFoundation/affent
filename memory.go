@@ -5,17 +5,19 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"sort"
 	"strings"
 	"sync"
+	"unicode"
 )
 
 // MemoryTarget selects which of the two persistent stores a memory
 // tool call operates on.
 //
 //   - TargetMemory: agent notes — environment, conventions, lessons
-//     learned. Workspace-scoped by default.
+//     learned. Workspace-scoped. Sub-bucketed by topic (see Topic).
 //   - TargetUser: user profile — name, role, preferences, style.
-//     User-scoped by default (crosses workspaces).
+//     User-scoped (crosses workspaces). Single bucket; Topic ignored.
 type MemoryTarget string
 
 const (
@@ -25,43 +27,58 @@ const (
 
 // MemoryStore is the abstraction the Loop uses to inject persistent
 // memory into the system prompt and the abstraction the `memory` tool
-// uses to mutate that state.
+// uses to mutate / retrieve that state.
 //
 // Loop.EnsureSystemPrompt calls Snapshot() once per session; the
-// returned text becomes the conversation log's first message (a
-// system message), which then stays in the log for the rest of the
-// session. Mid-session memory mutations write to disk and surface
-// live state through tool responses' Entries field. Snapshot()
-// always reads current store state — implementations don't need to
-// cache.
+// returned text becomes the conversation log's first message. Mid-
+// session memory mutations write to disk and surface live state
+// through tool responses' Entries field. Snapshot() always reads
+// current store state — implementations don't need to cache.
+//
+// Topic is the second-tier bucket inside TargetMemory: an arbitrary
+// string the model picks at write-time ("auth", "deploy", "lessons"…)
+// so memory can grow indefinitely without single-file char caps. A
+// special topic "core" lands content directly in the always-in-prompt
+// digest; everything else is on-demand-retrieved via Search.
+// TargetUser ignores Topic — there's one user profile, not many.
 //
 // FileMemoryStore is the default implementation. Embedders can plug
 // in their own (e.g. a Honcho / Mem0 / supermemory adapter) by
 // satisfying this interface.
 type MemoryStore interface {
 	Snapshot() string
-	Add(target MemoryTarget, content string) (MemoryResponse, error)
-	Replace(target MemoryTarget, oldText, newContent string) (MemoryResponse, error)
-	Remove(target MemoryTarget, oldText string) (MemoryResponse, error)
+	Add(target MemoryTarget, topic, content string) (MemoryResponse, error)
+	Replace(target MemoryTarget, topic, oldText, newContent string) (MemoryResponse, error)
+	Remove(target MemoryTarget, topic, oldText string) (MemoryResponse, error)
+	Search(target MemoryTarget, topic, query string, topK int) (MemoryResponse, error)
 }
 
 // MemoryResponse is the memory tool's return shape. Entries holds the
-// live state after the operation, or the current state when a
-// capacity / ambiguity error blocked it (so the agent can consolidate
-// or refine in the same turn). Matches is populated only when a
-// Replace/Remove found multiple non-identical entries. Usage is set
-// whenever the response can carry a coherent count; validation
-// errors that occur before the target is resolved leave it nil.
+// live state of the bucket the operation targeted, or the current
+// state when a capacity / ambiguity error blocked it (so the agent
+// can consolidate or refine in the same turn). Matches is populated
+// only when a Replace/Remove found multiple non-identical entries.
+// Usage is set whenever the response can carry a coherent count.
+// Results is set by Search.
 type MemoryResponse struct {
-	OK      bool         `json:"ok"`
-	Message string       `json:"message,omitempty"`
-	Target  MemoryTarget `json:"target"`
-	Entries []string     `json:"entries,omitempty"`
-	Matches []string     `json:"matches,omitempty"`
-	Usage   *MemoryUsage `json:"usage,omitempty"`
+	OK      bool                 `json:"ok"`
+	Message string               `json:"message,omitempty"`
+	Target  MemoryTarget         `json:"target"`
+	Topic   string               `json:"topic,omitempty"`
+	Entries []string             `json:"entries,omitempty"`
+	Matches []string             `json:"matches,omitempty"`
+	Results []MemorySearchResult `json:"results,omitempty"`
+	Usage   *MemoryUsage         `json:"usage,omitempty"`
 }
 
-// MemoryUsage carries capacity numbers for a single target.
+// MemorySearchResult is one ranked hit returned by Search.
+type MemorySearchResult struct {
+	Topic   string  `json:"topic"`
+	Snippet string  `json:"snippet"`
+	Score   float64 `json:"score"`
+}
+
+// MemoryUsage carries capacity numbers for a single bucket.
 type MemoryUsage struct {
 	Percent    int `json:"percent"`
 	CharsUsed  int `json:"chars_used"`
@@ -69,58 +86,105 @@ type MemoryUsage struct {
 	EntryCount int `json:"entry_count"`
 }
 
-// Default per-target character limits. Bound the system-prompt prefix
-// growth — each store's content is injected at session start. Both
-// can be overridden on FileMemoryStore.
+// Default per-bucket character limits.
+//
+//   - DefaultCoreCharLimit caps core.md (always injected into the
+//     system prompt at session start) so the prefix stays cache-
+//     friendly. Use for tight, durable facts only.
+//   - DefaultTopicCharLimit caps each per-topic file. Topics are
+//     NOT auto-injected; the model retrieves them via the search
+//     action, so the limit is per-topic and overall memory grows
+//     with topic count.
+//   - DefaultUserCharLimit caps the user profile (also injected).
 const (
-	DefaultMemoryCharLimit = 2200 // ~800 tokens
-	DefaultUserCharLimit   = 1375 // ~500 tokens
+	DefaultCoreCharLimit  = 2200 // ~800 tokens, fits a few durable facts
+	DefaultTopicCharLimit = 4400 // ~1600 tokens per topic
+	DefaultUserCharLimit  = 1375 // ~500 tokens
+
+	// DefaultMemoryCharLimit is the historical name for the cap that
+	// today applies to core.md. Kept exported so existing callers
+	// (gateway, tests) don't break.
+	DefaultMemoryCharLimit = DefaultCoreCharLimit
 )
 
-// memoryEntryDelim separates entries on disk and in the rendered
-// snapshot. Content containing the exact sequence is rejected by
-// scanMemoryContent so round-tripping stays safe.
+// CoreTopic names the always-injected bucket. Writes with topic=""
+// or topic="general" land in topics/general.md (still on-demand);
+// topic="core" lands in core.md (always in the prompt).
+const CoreTopic = "core"
+
+// DefaultTopic is the bucket used when the model omits the topic
+// field. Mirrors how the pre-v2 single-file MEMORY.md behaved: a
+// general grab-bag of agent notes.
+const DefaultTopic = "general"
+
+// memoryEntryDelim separates entries on disk. Content containing
+// the exact sequence is rejected by scanMemoryContent so round-
+// tripping stays safe.
 const memoryEntryDelim = "\n§\n"
 
 // memoryHeaderRuleWidth is the horizontal-rule width for the snapshot
-// block headers (visual separators rendered into the system prompt).
+// block headers.
 const memoryHeaderRuleWidth = 46
 
-// FileMemoryStore persists entries as plain Markdown files. The two
-// targets have independent paths and char limits.
+// FileMemoryStore persists entries as plain Markdown files under a
+// per-workspace memory directory:
+//
+//	<workspaceDir>/.affent/memory/
+//	  core.md                  — always injected into the system prompt
+//	  topics/general.md        — default bucket
+//	  topics/<topic>.md        — model-named buckets, retrieved on demand
+//
+// Plus a user-scoped, cross-workspace profile at $XDG_CONFIG_HOME/affent/USER.md.
 //
 // Mutations write through a tempfile + rename. The mutate path takes
-// an in-process mutex plus a per-file flock (POSIX advisory lock on a
-// "<path>.lock" side-file) so multiple affent processes serialize
+// an in-process mutex plus a per-file flock (POSIX advisory lock on
+// a "<path>.lock" side-file) so multiple affent processes serialize
 // their read-modify-write cycles against the same store. flock is a
-// no-op on non-Unix platforms — Windows callers running multiple
-// affent processes against the same file should serialize externally.
+// no-op on non-Unix platforms.
 type FileMemoryStore struct {
-	MemoryPath      string
-	UserPath        string
+	// MemoryDir is the workspace memory directory. Set automatically
+	// by NewFileMemoryStore from workspaceDir; the historical
+	// MemoryPath field still works as a back-compat shim
+	// (NewFileMemoryStore mirrors it to MemoryDir's general topic).
+	MemoryDir string
+
+	// MemoryPath is the LEGACY single-file location. When set and
+	// MemoryDir is empty, FileMemoryStore derives MemoryDir as the
+	// parent dir + "memory" subdirectory and migrates the file on
+	// first access. Kept so embedders that hardcoded MemoryPath keep
+	// working.
+	MemoryPath string
+
+	UserPath string
+
+	// CoreCharLimit caps core.md (always-injected). Zero falls back
+	// to DefaultCoreCharLimit.
+	CoreCharLimit int
+	// TopicCharLimit caps each topic file. Zero falls back to
+	// DefaultTopicCharLimit.
+	TopicCharLimit int
+	// MemoryCharLimit is the historical knob; when non-zero AND
+	// CoreCharLimit is zero, it sets the core cap (preserves old
+	// "make the memory cap smaller" semantics).
 	MemoryCharLimit int
 	UserCharLimit   int
 
 	mu sync.Mutex
+
+	// migrated tracks whether the legacy MEMORY.md → topics/general.md
+	// migration has been run for this process. Re-checked under mu.
+	migrated bool
 }
 
-// NewFileMemoryStore returns a FileMemoryStore with:
-//
-//   - MemoryPath = <workspaceDir>/.affent/MEMORY.md
-//   - UserPath   = $XDG_CONFIG_HOME/affent/USER.md, falling back to
-//     $HOME/.config/affent/USER.md, or "" when neither resolves
-//   - Char limits = DefaultMemoryCharLimit / DefaultUserCharLimit
-//
-// An empty workspaceDir leaves MemoryPath empty for the caller to
-// set. An empty path on either target disables that target.
+// NewFileMemoryStore returns a FileMemoryStore wired to the standard
+// workspace + user paths. An empty workspaceDir leaves MemoryDir
+// empty (the caller can set it directly).
 func NewFileMemoryStore(workspaceDir string) *FileMemoryStore {
 	s := &FileMemoryStore{
-		MemoryCharLimit: DefaultMemoryCharLimit,
-		UserCharLimit:   DefaultUserCharLimit,
-		UserPath:        defaultUserMemoryPath(),
+		UserPath: defaultUserMemoryPath(),
 	}
 	if workspaceDir != "" {
-		s.MemoryPath = filepath.Join(workspaceDir, ".affent", "MEMORY.md")
+		s.MemoryDir = filepath.Join(workspaceDir, ".affent", "memory")
 	}
 	return s
 }
@@ -137,41 +201,58 @@ func defaultUserMemoryPath() string {
 }
 
 // Snapshot reads current disk state and renders the system-prompt
-// block. Returns "" when both targets are empty.
+// block: core.md content (always-in-prompt durable facts) + USER.md
+// + a one-line index of any other topics (model uses Search to read
+// them on demand). Returns "" when nothing exists.
 func (s *FileMemoryStore) Snapshot() string {
 	s.mu.Lock()
 	defer s.mu.Unlock()
+	_ = s.migrateLegacyLocked() // idempotent; ignore errors so a half-broken disk doesn't break session start
 	var parts []string
-	if block := s.renderBlockLocked(TargetMemory); block != "" {
+	if block := s.renderCoreLocked(); block != "" {
 		parts = append(parts, block)
 	}
-	if block := s.renderBlockLocked(TargetUser); block != "" {
+	// "general" topic is auto-injected alongside core so the default
+	// `add` (no explicit topic) keeps the pre-v2 UX: write a fact,
+	// see it on the next session. Custom topics fall to the on-demand
+	// index below.
+	if block := s.renderGeneralLocked(); block != "" {
+		parts = append(parts, block)
+	}
+	if block := s.renderUserLocked(); block != "" {
+		parts = append(parts, block)
+	}
+	if block := s.renderTopicIndexLocked(); block != "" {
 		parts = append(parts, block)
 	}
 	return strings.Join(parts, "\n\n")
 }
 
-// Add appends content. Byte-identical duplicates are accepted as
-// no-op success. Over-limit additions return OK=false with the
-// current Entries.
-func (s *FileMemoryStore) Add(target MemoryTarget, content string) (MemoryResponse, error) {
+// Add appends content to a bucket. Topic is the per-target sub-bucket
+// for target=memory ("" or "general" → topics/general.md;
+// "core" → core.md; anything else → topics/<topic>.md). Ignored for
+// target=user. Byte-identical duplicates are accepted as no-op
+// success; over-limit additions return OK=false with current Entries.
+func (s *FileMemoryStore) Add(target MemoryTarget, topic, content string) (MemoryResponse, error) {
 	if err := validateTarget(target); err != nil {
 		return MemoryResponse{Target: target, Message: err.Error()}, nil
 	}
+	topic = normalizeTopic(target, topic)
 	content = strings.TrimSpace(content)
 	if content == "" {
-		return MemoryResponse{Target: target, Message: "content cannot be empty"}, nil
+		return MemoryResponse{Target: target, Topic: topic, Message: "content cannot be empty"}, nil
 	}
 	if reason := scanMemoryContent(content); reason != "" {
-		return MemoryResponse{Target: target, Message: "blocked: " + reason}, nil
+		return MemoryResponse{Target: target, Topic: topic, Message: "blocked: " + reason}, nil
 	}
 
 	s.mu.Lock()
 	defer s.mu.Unlock()
+	_ = s.migrateLegacyLocked()
 
-	path := s.pathFor(target)
+	path := s.bucketPathLocked(target, topic)
 	if path == "" {
-		return MemoryResponse{Target: target, Message: "target is disabled (no path configured)"}, nil
+		return MemoryResponse{Target: target, Topic: topic, Message: "target is disabled (no path configured)"}, nil
 	}
 	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
 		return MemoryResponse{}, err
@@ -188,13 +269,13 @@ func (s *FileMemoryStore) Add(target MemoryTarget, content string) (MemoryRespon
 	}
 	for _, e := range entries {
 		if e == content {
-			return s.respondLocked(target, true, "entry already exists (no duplicate added)", entries, nil), nil
+			return s.respondLocked(target, topic, true, "entry already exists (no duplicate added)", entries, nil), nil
 		}
 	}
-	limit := s.limitFor(target)
+	limit := s.limitFor(target, topic)
 	newEntries := append(append([]string{}, entries...), content)
 	if total := joinedLen(newEntries); limit > 0 && total > limit {
-		return s.respondLocked(target, false,
+		return s.respondLocked(target, topic, false,
 			fmt.Sprintf("at %d/%d chars; adding %d-char entry would exceed the limit. consolidate or remove first",
 				joinedLen(entries), limit, len(content)),
 			entries, nil), nil
@@ -202,34 +283,35 @@ func (s *FileMemoryStore) Add(target MemoryTarget, content string) (MemoryRespon
 	if err := writeMemoryFile(path, newEntries); err != nil {
 		return MemoryResponse{}, err
 	}
-	return s.respondLocked(target, true, "entry added", newEntries, nil), nil
+	return s.respondLocked(target, topic, true, "entry added", newEntries, nil), nil
 }
 
 // Replace substitutes newContent for the single entry containing
-// oldText as a substring. Multiple non-identical matches return
-// OK=false with Matches previews.
-func (s *FileMemoryStore) Replace(target MemoryTarget, oldText, newContent string) (MemoryResponse, error) {
+// oldText as a substring inside the named bucket.
+func (s *FileMemoryStore) Replace(target MemoryTarget, topic, oldText, newContent string) (MemoryResponse, error) {
 	if err := validateTarget(target); err != nil {
 		return MemoryResponse{Target: target, Message: err.Error()}, nil
 	}
+	topic = normalizeTopic(target, topic)
 	oldText = strings.TrimSpace(oldText)
 	newContent = strings.TrimSpace(newContent)
 	if oldText == "" {
-		return MemoryResponse{Target: target, Message: "old_text cannot be empty"}, nil
+		return MemoryResponse{Target: target, Topic: topic, Message: "old_text cannot be empty"}, nil
 	}
 	if newContent == "" {
-		return MemoryResponse{Target: target, Message: "new_content cannot be empty; use the remove action to delete"}, nil
+		return MemoryResponse{Target: target, Topic: topic, Message: "new_content cannot be empty; use the remove action to delete"}, nil
 	}
 	if reason := scanMemoryContent(newContent); reason != "" {
-		return MemoryResponse{Target: target, Message: "blocked: " + reason}, nil
+		return MemoryResponse{Target: target, Topic: topic, Message: "blocked: " + reason}, nil
 	}
 
 	s.mu.Lock()
 	defer s.mu.Unlock()
+	_ = s.migrateLegacyLocked()
 
-	path := s.pathFor(target)
+	path := s.bucketPathLocked(target, topic)
 	if path == "" {
-		return MemoryResponse{Target: target, Message: "target is disabled (no path configured)"}, nil
+		return MemoryResponse{Target: target, Topic: topic, Message: "target is disabled (no path configured)"}, nil
 	}
 	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
 		return MemoryResponse{}, err
@@ -247,45 +329,46 @@ func (s *FileMemoryStore) Replace(target MemoryTarget, oldText, newContent strin
 	idx, matches := findUnique(entries, oldText)
 	if idx < 0 {
 		if len(matches) > 1 {
-			return s.respondLocked(target, false,
+			return s.respondLocked(target, topic, false,
 				fmt.Sprintf("multiple entries matched %q; pass a more specific old_text", oldText),
 				entries, matches), nil
 		}
-		return s.respondLocked(target, false, fmt.Sprintf("no entry matched %q", oldText), entries, nil), nil
+		return s.respondLocked(target, topic, false, fmt.Sprintf("no entry matched %q", oldText), entries, nil), nil
 	}
 
 	newEntries := append([]string{}, entries...)
 	newEntries[idx] = newContent
-	limit := s.limitFor(target)
+	limit := s.limitFor(target, topic)
 	if total := joinedLen(newEntries); limit > 0 && total > limit {
-		return s.respondLocked(target, false,
-			fmt.Sprintf("replacement would put memory at %d/%d chars. shorten the new content or remove other entries first",
+		return s.respondLocked(target, topic, false,
+			fmt.Sprintf("replacement would put bucket at %d/%d chars. shorten the new content or remove other entries first",
 				total, limit),
 			entries, nil), nil
 	}
 	if err := writeMemoryFile(path, newEntries); err != nil {
 		return MemoryResponse{}, err
 	}
-	return s.respondLocked(target, true, "entry replaced", newEntries, nil), nil
+	return s.respondLocked(target, topic, true, "entry replaced", newEntries, nil), nil
 }
 
-// Remove drops the entry containing oldText as a substring. Same
-// match semantics as Replace.
-func (s *FileMemoryStore) Remove(target MemoryTarget, oldText string) (MemoryResponse, error) {
+// Remove drops the entry containing oldText as a substring.
+func (s *FileMemoryStore) Remove(target MemoryTarget, topic, oldText string) (MemoryResponse, error) {
 	if err := validateTarget(target); err != nil {
 		return MemoryResponse{Target: target, Message: err.Error()}, nil
 	}
+	topic = normalizeTopic(target, topic)
 	oldText = strings.TrimSpace(oldText)
 	if oldText == "" {
-		return MemoryResponse{Target: target, Message: "old_text cannot be empty"}, nil
+		return MemoryResponse{Target: target, Topic: topic, Message: "old_text cannot be empty"}, nil
 	}
 
 	s.mu.Lock()
 	defer s.mu.Unlock()
+	_ = s.migrateLegacyLocked()
 
-	path := s.pathFor(target)
+	path := s.bucketPathLocked(target, topic)
 	if path == "" {
-		return MemoryResponse{Target: target, Message: "target is disabled (no path configured)"}, nil
+		return MemoryResponse{Target: target, Topic: topic, Message: "target is disabled (no path configured)"}, nil
 	}
 	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
 		return MemoryResponse{}, err
@@ -303,70 +386,306 @@ func (s *FileMemoryStore) Remove(target MemoryTarget, oldText string) (MemoryRes
 	idx, matches := findUnique(entries, oldText)
 	if idx < 0 {
 		if len(matches) > 1 {
-			return s.respondLocked(target, false,
+			return s.respondLocked(target, topic, false,
 				fmt.Sprintf("multiple entries matched %q; pass a more specific old_text", oldText),
 				entries, matches), nil
 		}
-		return s.respondLocked(target, false, fmt.Sprintf("no entry matched %q", oldText), entries, nil), nil
+		return s.respondLocked(target, topic, false, fmt.Sprintf("no entry matched %q", oldText), entries, nil), nil
 	}
 	newEntries := append(entries[:idx:idx], entries[idx+1:]...)
 	if err := writeMemoryFile(path, newEntries); err != nil {
 		return MemoryResponse{}, err
 	}
-	return s.respondLocked(target, true, "entry removed", newEntries, nil), nil
+	return s.respondLocked(target, topic, true, "entry removed", newEntries, nil), nil
 }
 
-// pathFor / limitFor / renderBlockLocked / respondLocked must be called
-// with s.mu held.
+// Search returns up to topK entries matching query across the
+// indicated bucket. Topic="" searches all topics in target=memory
+// (the typical model use). For target=user, topic is ignored and the
+// single bucket is searched.
+//
+// Scoring is lexical (term-overlap with a small total-occurrence
+// boost). Stopwords filter out grammatical filler. Returns entries
+// sorted by score, descending.
+func (s *FileMemoryStore) Search(target MemoryTarget, topic, query string, topK int) (MemoryResponse, error) {
+	if err := validateTarget(target); err != nil {
+		return MemoryResponse{Target: target, Message: err.Error()}, nil
+	}
+	query = strings.TrimSpace(query)
+	if query == "" {
+		return MemoryResponse{Target: target, Topic: topic, Message: "query cannot be empty"}, nil
+	}
+	terms := tokenizeMemoryQuery(query)
+	if len(terms) == 0 {
+		return MemoryResponse{Target: target, Topic: topic, Message: "query had no content terms after stopword filtering"}, nil
+	}
+	if topK <= 0 {
+		topK = 5
+	}
 
-func (s *FileMemoryStore) pathFor(target MemoryTarget) string {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	_ = s.migrateLegacyLocked()
+
+	type bucket struct {
+		topic string
+		path  string
+	}
+	var buckets []bucket
+	switch target {
+	case TargetUser:
+		if s.UserPath != "" {
+			buckets = append(buckets, bucket{topic: "user", path: s.UserPath})
+		}
+	case TargetMemory:
+		// Empty topic on Search means "all topics" (the common model
+		// use). normalizeTopic would otherwise map "" to "general" —
+		// only invoke it when the caller explicitly asked for a
+		// specific bucket.
+		if strings.TrimSpace(topic) != "" {
+			topic = normalizeTopic(target, topic)
+			path := s.bucketPathLocked(target, topic)
+			if path != "" {
+				buckets = append(buckets, bucket{topic: topic, path: path})
+			}
+		} else {
+			if s.MemoryDir == "" {
+				return MemoryResponse{Target: target, Message: "memory dir is not configured"}, nil
+			}
+			if core := filepath.Join(s.MemoryDir, "core.md"); fileExists(core) {
+				buckets = append(buckets, bucket{topic: CoreTopic, path: core})
+			}
+			entries, _ := os.ReadDir(filepath.Join(s.MemoryDir, "topics"))
+			for _, e := range entries {
+				if e.IsDir() || !strings.HasSuffix(e.Name(), ".md") {
+					continue
+				}
+				name := strings.TrimSuffix(e.Name(), ".md")
+				buckets = append(buckets, bucket{topic: name, path: filepath.Join(s.MemoryDir, "topics", e.Name())})
+			}
+		}
+	}
+
+	var hits []MemorySearchResult
+	for _, b := range buckets {
+		entries, err := readMemoryFile(b.path)
+		if err != nil {
+			continue
+		}
+		for _, e := range entries {
+			score := scoreMemoryEntry(e, terms)
+			if score <= 0 {
+				continue
+			}
+			hits = append(hits, MemorySearchResult{Topic: b.topic, Snippet: e, Score: score})
+		}
+	}
+	sort.SliceStable(hits, func(i, j int) bool { return hits[i].Score > hits[j].Score })
+	if len(hits) > topK {
+		hits = hits[:topK]
+	}
+	msg := fmt.Sprintf("%d result(s)", len(hits))
+	if len(hits) == 0 {
+		msg = "no entries matched"
+	}
+	return MemoryResponse{
+		OK:      true,
+		Target:  target,
+		Topic:   topic,
+		Message: msg,
+		Results: hits,
+	}, nil
+}
+
+// migrateLegacyLocked moves a pre-v2 .affent/MEMORY.md into
+// .affent/memory/topics/general.md the first time the new layout
+// is touched, then marks the migration done. Idempotent and safe
+// when MEMORY.md doesn't exist (the common case for new users).
+//
+// Caller must hold s.mu.
+func (s *FileMemoryStore) migrateLegacyLocked() error {
+	if s.migrated {
+		return nil
+	}
+	s.migrated = true
+	if s.MemoryDir == "" {
+		// Derive from legacy MemoryPath if set: same parent + "memory".
+		if s.MemoryPath != "" {
+			s.MemoryDir = filepath.Join(filepath.Dir(s.MemoryPath), "memory")
+		} else {
+			return nil
+		}
+	}
+	if s.MemoryPath == "" {
+		// Standard derivation for migration detection.
+		s.MemoryPath = filepath.Join(filepath.Dir(s.MemoryDir), "MEMORY.md")
+	}
+	info, err := os.Stat(s.MemoryPath)
+	if err != nil || info.IsDir() {
+		return nil // nothing to migrate
+	}
+	dest := filepath.Join(s.MemoryDir, "topics", "general.md")
+	if _, err := os.Stat(dest); err == nil {
+		// New layout already populated — leave the legacy file in place,
+		// don't clobber.
+		return nil
+	}
+	if err := os.MkdirAll(filepath.Dir(dest), 0o755); err != nil {
+		return err
+	}
+	if err := os.Rename(s.MemoryPath, dest); err != nil {
+		return err
+	}
+	return nil
+}
+
+// bucketPathLocked returns the on-disk path for (target, topic).
+// Caller must hold s.mu.
+func (s *FileMemoryStore) bucketPathLocked(target MemoryTarget, topic string) string {
 	if target == TargetUser {
 		return s.UserPath
 	}
-	return s.MemoryPath
+	if s.MemoryDir == "" {
+		return ""
+	}
+	if topic == CoreTopic {
+		return filepath.Join(s.MemoryDir, "core.md")
+	}
+	if topic == "" {
+		topic = DefaultTopic
+	}
+	return filepath.Join(s.MemoryDir, "topics", topic+".md")
 }
 
-func (s *FileMemoryStore) limitFor(target MemoryTarget) int {
+// limitFor returns the char limit for (target, topic).
+func (s *FileMemoryStore) limitFor(target MemoryTarget, topic string) int {
 	if target == TargetUser {
 		if s.UserCharLimit > 0 {
 			return s.UserCharLimit
 		}
 		return DefaultUserCharLimit
 	}
-	if s.MemoryCharLimit > 0 {
-		return s.MemoryCharLimit
+	if topic == CoreTopic {
+		if s.CoreCharLimit > 0 {
+			return s.CoreCharLimit
+		}
+		if s.MemoryCharLimit > 0 {
+			// Back-compat: old MemoryCharLimit knob applied to the
+			// always-in-prompt store, which is now core.
+			return s.MemoryCharLimit
+		}
+		return DefaultCoreCharLimit
 	}
-	return DefaultMemoryCharLimit
+	if s.TopicCharLimit > 0 {
+		return s.TopicCharLimit
+	}
+	return DefaultTopicCharLimit
 }
 
-func (s *FileMemoryStore) renderBlockLocked(target MemoryTarget) string {
-	path := s.pathFor(target)
-	if path == "" {
+// renderGeneralLocked renders the default "general" topic content
+// directly into the snapshot — back-compat with the pre-v2 MEMORY.md
+// experience where `memory action=add target=memory content=fact`
+// landed something the model would see on the next session start.
+// Custom topics ("auth", "deploy", …) stay on-demand via search.
+func (s *FileMemoryStore) renderGeneralLocked() string {
+	if s.MemoryDir == "" {
 		return ""
 	}
-	entries, err := readMemoryFile(path)
+	generalPath := filepath.Join(s.MemoryDir, "topics", "general.md")
+	entries, err := readMemoryFile(generalPath)
 	if err != nil || len(entries) == 0 {
 		return ""
 	}
-	limit := s.limitFor(target)
+	limit := s.limitFor(TargetMemory, DefaultTopic)
 	body := strings.Join(entries, memoryEntryDelim)
 	pct := pctOf(len(body), limit)
-	var header string
-	if target == TargetUser {
-		header = fmt.Sprintf("USER PROFILE (what you know about the user) [%d%% — %d/%d chars]", pct, len(body), limit)
-	} else {
-		header = fmt.Sprintf("MEMORY (your persistent notes across sessions) [%d%% — %d/%d chars]", pct, len(body), limit)
-	}
+	header := fmt.Sprintf("MEMORY:general (default bucket — your persistent notes) [%d%% — %d/%d chars]", pct, len(body), limit)
 	sep := strings.Repeat("=", memoryHeaderRuleWidth)
 	return fmt.Sprintf("%s\n%s\n%s\n%s", sep, header, sep, body)
 }
 
-func (s *FileMemoryStore) respondLocked(target MemoryTarget, ok bool, msg string, entries, matches []string) MemoryResponse {
-	limit := s.limitFor(target)
+func (s *FileMemoryStore) renderCoreLocked() string {
+	corePath := filepath.Join(s.MemoryDir, "core.md")
+	entries, err := readMemoryFile(corePath)
+	if err != nil || len(entries) == 0 {
+		return ""
+	}
+	limit := s.limitFor(TargetMemory, CoreTopic)
+	body := strings.Join(entries, memoryEntryDelim)
+	pct := pctOf(len(body), limit)
+	header := fmt.Sprintf("MEMORY:core (durable facts always in scope) [%d%% — %d/%d chars]", pct, len(body), limit)
+	sep := strings.Repeat("=", memoryHeaderRuleWidth)
+	return fmt.Sprintf("%s\n%s\n%s\n%s", sep, header, sep, body)
+}
+
+func (s *FileMemoryStore) renderUserLocked() string {
+	if s.UserPath == "" {
+		return ""
+	}
+	entries, err := readMemoryFile(s.UserPath)
+	if err != nil || len(entries) == 0 {
+		return ""
+	}
+	limit := s.limitFor(TargetUser, "")
+	body := strings.Join(entries, memoryEntryDelim)
+	pct := pctOf(len(body), limit)
+	header := fmt.Sprintf("USER PROFILE (what you know about the user) [%d%% — %d/%d chars]", pct, len(body), limit)
+	sep := strings.Repeat("=", memoryHeaderRuleWidth)
+	return fmt.Sprintf("%s\n%s\n%s\n%s", sep, header, sep, body)
+}
+
+// renderTopicIndexLocked produces a one-liner per topic so the model
+// knows what buckets exist and uses the `search` action to read them.
+// Returns "" when no topic file exists.
+func (s *FileMemoryStore) renderTopicIndexLocked() string {
+	if s.MemoryDir == "" {
+		return ""
+	}
+	entries, err := os.ReadDir(filepath.Join(s.MemoryDir, "topics"))
+	if err != nil {
+		return ""
+	}
+	type topicInfo struct {
+		name  string
+		count int
+	}
+	var topics []topicInfo
+	for _, e := range entries {
+		if e.IsDir() || !strings.HasSuffix(e.Name(), ".md") {
+			continue
+		}
+		name := strings.TrimSuffix(e.Name(), ".md")
+		// "general" is rendered inline in renderGeneralLocked; the
+		// on-demand index covers only the custom topics.
+		if name == DefaultTopic {
+			continue
+		}
+		es, err := readMemoryFile(filepath.Join(s.MemoryDir, "topics", e.Name()))
+		if err != nil || len(es) == 0 {
+			continue
+		}
+		topics = append(topics, topicInfo{name: name, count: len(es)})
+	}
+	if len(topics) == 0 {
+		return ""
+	}
+	sort.Slice(topics, func(i, j int) bool { return topics[i].name < topics[j].name })
+	var b strings.Builder
+	sep := strings.Repeat("=", memoryHeaderRuleWidth)
+	fmt.Fprintf(&b, "%s\nMEMORY:topics (read with action=search) [%d topic(s)]\n%s\n", sep, len(topics), sep)
+	for _, t := range topics {
+		fmt.Fprintf(&b, "- %s: %d entry(ies)\n", t.name, t.count)
+	}
+	return strings.TrimRight(b.String(), "\n")
+}
+
+func (s *FileMemoryStore) respondLocked(target MemoryTarget, topic string, ok bool, msg string, entries, matches []string) MemoryResponse {
+	limit := s.limitFor(target, topic)
 	current := joinedLen(entries)
 	return MemoryResponse{
 		OK:      ok,
 		Target:  target,
+		Topic:   topic,
 		Message: msg,
 		Entries: entries,
 		Matches: matches,
@@ -379,7 +698,7 @@ func (s *FileMemoryStore) respondLocked(target MemoryTarget, ok bool, msg string
 	}
 }
 
-// pctOf returns 0..100, clamped, dividing safely when limit is 0.
+// pctOf returns 0..100, clamped.
 func pctOf(used, limit int) int {
 	if limit <= 0 {
 		return 0
@@ -400,6 +719,38 @@ func validateTarget(t MemoryTarget) error {
 	return nil
 }
 
+// normalizeTopic returns the canonical topic name. Target=user collapses
+// to "" (single bucket). Target=memory: "" → DefaultTopic; "core"
+// preserved; anything else is sanitized to plain filename chars.
+func normalizeTopic(target MemoryTarget, topic string) string {
+	if target == TargetUser {
+		return ""
+	}
+	topic = strings.TrimSpace(topic)
+	if topic == "" {
+		return DefaultTopic
+	}
+	if topic == CoreTopic {
+		return CoreTopic
+	}
+	// Allow [a-z0-9_-], normalize uppercase to lower, drop everything else.
+	// Keeps filesystem-safety simple without surprising the model — it
+	// gets back the normalized name in the response so the next call
+	// is consistent.
+	var b strings.Builder
+	for _, r := range strings.ToLower(topic) {
+		switch {
+		case r >= 'a' && r <= 'z', r >= '0' && r <= '9', r == '_', r == '-':
+			b.WriteRune(r)
+		}
+	}
+	out := b.String()
+	if out == "" {
+		return DefaultTopic
+	}
+	return out
+}
+
 func joinedLen(entries []string) int {
 	if len(entries) == 0 {
 		return 0
@@ -407,10 +758,7 @@ func joinedLen(entries []string) int {
 	return len(strings.Join(entries, memoryEntryDelim))
 }
 
-// findUnique locates the single entry matching oldText as a
-// substring. Returns (idx>=0, nil) on unique match, (-1, previews)
-// on multi-match, (-1, nil) on no match. Byte-identical duplicates
-// count as unique and resolve to the first index.
+// findUnique locates the single entry matching oldText as a substring.
 func findUnique(entries []string, oldText string) (int, []string) {
 	var hits []int
 	for i, e := range entries {
@@ -424,7 +772,6 @@ func findUnique(entries []string, oldText string) (int, []string) {
 	if len(hits) == 1 {
 		return hits[0], nil
 	}
-	// Byte-identical duplicates resolve to the first hit.
 	seen := map[string]bool{}
 	for _, i := range hits {
 		seen[entries[i]] = true
@@ -436,8 +783,6 @@ func findUnique(entries []string, oldText string) (int, []string) {
 	for _, i := range hits {
 		e := entries[i]
 		if len(e) > 80 {
-			// Snap back to a UTF-8 rune boundary so CJK / accented
-			// previews don't return invalid bytes to the model.
 			e = e[:utf8AlignBackward(e, 80)] + "..."
 		}
 		previews = append(previews, e)
@@ -445,8 +790,6 @@ func findUnique(entries []string, oldText string) (int, []string) {
 	return -1, previews
 }
 
-// readMemoryFile splits the on-disk file by memoryEntryDelim. A
-// missing file returns (nil, nil). Empty entries are filtered.
 func readMemoryFile(path string) ([]string, error) {
 	raw, err := os.ReadFile(path)
 	if err != nil {
@@ -462,63 +805,79 @@ func readMemoryFile(path string) ([]string, error) {
 	parts := strings.Split(text, memoryEntryDelim)
 	out := make([]string, 0, len(parts))
 	for _, p := range parts {
-		if p = strings.TrimSpace(p); p != "" {
+		p = strings.TrimSpace(p)
+		if p != "" {
 			out = append(out, p)
 		}
 	}
 	return out, nil
 }
 
-// writeMemoryFile writes entries via tempfile + rename. Parent dirs
-// are created. An empty slice writes an empty file (the next read
-// returns nil entries).
 func writeMemoryFile(path string, entries []string) error {
 	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
 		return err
 	}
 	body := strings.Join(entries, memoryEntryDelim)
-	tmp, err := os.CreateTemp(filepath.Dir(path), ".mem-*.tmp")
-	if err != nil {
+	tmp := path + ".tmp"
+	if err := os.WriteFile(tmp, []byte(body), 0o644); err != nil {
 		return err
 	}
-	tmpPath := tmp.Name()
-	if _, err := tmp.WriteString(body); err != nil {
-		tmp.Close()
-		os.Remove(tmpPath)
-		return err
+	return os.Rename(tmp, path)
+}
+
+// memoryStopwords is the same tight set session_search uses.
+var memoryStopwords = map[string]bool{
+	"a": true, "an": true, "and": true, "are": true, "as": true,
+	"at": true, "be": true, "but": true, "by": true, "for": true,
+	"from": true, "has": true, "have": true, "in": true, "is": true,
+	"it": true, "its": true, "no": true, "not": true, "of": true,
+	"on": true, "or": true, "that": true, "the": true, "this": true,
+	"to": true, "was": true, "we": true, "were": true, "what": true,
+	"when": true, "where": true, "which": true, "who": true, "will": true,
+	"with": true, "you": true, "your": true,
+}
+
+func tokenizeMemoryQuery(s string) []string {
+	s = strings.ToLower(s)
+	var out []string
+	var cur strings.Builder
+	flush := func() {
+		t := cur.String()
+		cur.Reset()
+		if len(t) >= 2 && !memoryStopwords[t] {
+			out = append(out, t)
+		}
 	}
-	if err := tmp.Sync(); err != nil {
-		tmp.Close()
-		os.Remove(tmpPath)
-		return err
+	for _, r := range s {
+		if unicode.IsLetter(r) || unicode.IsDigit(r) {
+			cur.WriteRune(r)
+		} else {
+			flush()
+		}
 	}
-	if err := tmp.Close(); err != nil {
-		os.Remove(tmpPath)
-		return err
+	flush()
+	return out
+}
+
+func scoreMemoryEntry(content string, terms []string) float64 {
+	lower := strings.ToLower(content)
+	unique := 0
+	total := 0
+	for _, t := range terms {
+		c := strings.Count(lower, t)
+		if c > 0 {
+			unique++
+			total += c
+		}
 	}
-	if err := os.Rename(tmpPath, path); err != nil {
-		os.Remove(tmpPath)
-		return err
+	if unique == 0 {
+		return 0
 	}
-	// Best-effort directory fsync so the rename survives a crash.
-	// Same pattern as Conversation.Replace; non-Unix filesystems may
-	// reject this call and that's fine — we already have FS-level
-	// atomicity from rename(2).
-	if d, derr := os.Open(filepath.Dir(path)); derr == nil {
-		_ = d.Sync()
-		_ = d.Close()
-	}
-	return nil
+	return float64(unique) + 0.1*float64(total)
 }
 
 // scanMemoryContent blocks content that would be unsafe to inject
 // into the system prompt or that would break on-disk round-trip.
-// Rejects:
-//
-//   - invisible / bidi-override unicode (zero-width, RTL/LTR override)
-//   - the entry delimiter sequence
-//   - the substring "authorized_keys"
-//
 // Returns the reason string on block, "" on accept.
 func scanMemoryContent(content string) string {
 	for _, r := range content {
@@ -535,4 +894,9 @@ func scanMemoryContent(content string) string {
 		return "references authorized_keys"
 	}
 	return ""
+}
+
+func fileExists(path string) bool {
+	_, err := os.Stat(path)
+	return err == nil
 }
