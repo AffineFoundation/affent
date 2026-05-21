@@ -4,24 +4,27 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"strings"
 )
 
 // memoryActions enumerates the action values the `memory` tool accepts.
 var memoryActions = []string{"add", "replace", "remove", "search", "list"}
 
-// memoryTool builds the `memory` tool. Four actions × two targets ×
+// memoryTool builds the `memory` tool. Five actions × two targets ×
 // topic-bucketed sub-storage:
 //
 //   - add / replace / remove operate on a single entry within a
 //     (target, topic) bucket. Topic is target-memory-only; for
 //     target=user the single profile applies.
 //   - search returns ranked entries from a topic (or all topics in
-//     target=memory). Use to read on-demand topics that aren't
-//     auto-injected into the system prompt.
+//     target=memory) with created_at timestamps. Use to read on-
+//     demand topics that aren't auto-injected into the system prompt.
+//   - list enumerates topic names + entry counts + newest_at without
+//     reading bodies. Cheap discovery before deciding what to search.
 //
-// Current state of the always-in-prompt buckets (core + user) reaches
-// the agent through the session-start snapshot. On-demand topics
-// surface via search.
+// Current state of the always-in-prompt buckets (core + general +
+// user) reaches the agent through the session-start snapshot. Custom
+// topics surface via search.
 func memoryTool(store MemoryStore) *Tool {
 	schema, err := json.Marshal(map[string]any{
 		"type":     "object",
@@ -75,13 +78,18 @@ func memoryTool(store MemoryStore) *Tool {
 			"  - target=memory topic=general (or unset) → default working notes\n\n" +
 			"TIER 2 — ARCHIVAL (search-only, capacity grows by topic count)\n" +
 			"  - target=memory topic=<name> → category bucket; read with action=search\n\n" +
-			"DECISION TREE — when something worth remembering shows up, ask yourself:\n" +
+			"DECISION TREE — when SAVING:\n" +
 			"  1. About the user (preference, role, name, comms style)?       → target=user\n" +
 			"  2. Hard constraint / fact you need on EVERY turn?              → topic=core (use sparingly)\n" +
 			"  3. Domain knowledge that fits a named category?                → topic=<category>\n" +
 			"     Good starter topics: stack, deploy, conventions, incidents, people, lessons, auth\n" +
 			"     Pick semantic names that will still make sense in 6 months.\n" +
 			"  4. Doesn't fit any topic yet?                                  → topic=general\n\n" +
+			"DECISION TREE — when RECALLING:\n" +
+			"  - Need core / general / user info?                             → already in the snapshot at session start, no tool call needed\n" +
+			"  - Looking for something in a specific named topic you know?    → action=search topic=<name> query=<keywords>\n" +
+			"  - Don't know which topic, or want a cross-topic answer?        → action=search (no topic) query=<keywords>\n" +
+			"  - Want to see what topics exist before deciding?               → action=list (cheap; returns names + counts + newest_at, no bodies)\n\n" +
 			"WHEN TO SAVE (proactively, don't wait to be asked):\n" +
 			"  - user corrects you or says 'remember this' / 'don't do that again'\n" +
 			"  - user shares a preference, habit, or stable personal detail\n" +
@@ -92,15 +100,19 @@ func memoryTool(store MemoryStore) *Tool {
 			"ONE FACT PER ENTRY — split multi-part facts into separate add calls in their own " +
 			"topics. Lumping 'tech stack + team rules + comms style' into one entry makes future " +
 			"replace/remove ambiguous and search-relevance worse.\n\n" +
+			"FRESHNESS — every entry carries a created_at timestamp (RFC3339). Search results\n" +
+			"  expose it on each hit; list exposes the per-topic newest_at. Use this to judge\n" +
+			"  staleness: a 6-month-old 'we use library X' might be wrong if the user has since\n" +
+			"  said they migrated. When in doubt, replace (re-stamps to now) rather than appending.\n\n" +
 			"ACTIONS\n" +
-			"  add      — append new entry. Duplicates are silently no-op.\n" +
-			"  replace  — update an entry; old_text is a short unique substring.\n" +
-			"  remove   — delete an entry; same uniqueness rules as replace.\n" +
+			"  add      — append new entry. Duplicate content is silently no-op.\n" +
+			"  replace  — update an entry; old_text is a short unique substring. Re-stamps timestamp.\n" +
+			"  remove   — delete an entry; same uniqueness rules as replace. Last entry removed → topic file deleted.\n" +
 			"  search   — top-K ranked entries matching query (within a topic or all topics).\n" +
-			"             Search scores BOTH content AND topic name — a query like 'incident'\n" +
-			"             matches entries in the 'incidents' topic even when the word doesn't\n" +
-			"             appear in the body.\n" +
-			"  list     — topic names + counts, no bodies. Cheap before deciding which to search.",
+			"             Search scores BOTH content AND topic name, returns trimmed snippet\n" +
+			"             + created_at — a query like 'incident' matches entries in the\n" +
+			"             'incidents' topic even when the word doesn't appear in the body.\n" +
+			"  list     — topic names + counts + newest_at, no bodies. Cheap discovery before search.",
 		Schema: json.RawMessage(schema),
 		Execute: func(ctx context.Context, args json.RawMessage) (string, error) {
 			var p struct {
@@ -166,7 +178,7 @@ func memoryTool(store MemoryStore) *Tool {
 					resp = MemoryResponse{Target: target, Message: "this MemoryStore does not support action=list"}
 				}
 			default:
-				resp = MemoryResponse{Target: target, Topic: p.Topic, Message: fmt.Sprintf("unknown action %q (expected add, replace, remove, search)", p.Action)}
+				resp = MemoryResponse{Target: target, Topic: p.Topic, Message: fmt.Sprintf("unknown action %q (expected one of: %s)", p.Action, strings.Join(memoryActions, ", "))}
 			}
 			if err != nil {
 				return "", err
