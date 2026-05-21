@@ -22,7 +22,9 @@ type stdioWire struct {
 	stdin  io.WriteCloser
 	stdout *bufio.Reader
 
-	out chan []byte // server-originated frames
+	out        chan []byte   // server-originated frames
+	closeCh    chan struct{} // closed when close() begins; lets readLoop bail mid-send
+	readerDone chan struct{} // closed when readLoop exits, gating close(out)
 
 	closed  atomic.Bool
 	writeMu sync.Mutex
@@ -55,11 +57,13 @@ func newStdioWire(_ context.Context, spec ServerSpec, log zerolog.Logger) (wire,
 	}
 
 	w := &stdioWire{
-		cmd:    cmd,
-		stdin:  stdin,
-		stdout: bufio.NewReaderSize(stdout, 64*1024),
-		out:    make(chan []byte, 64),
-		log:    log,
+		cmd:        cmd,
+		stdin:      stdin,
+		stdout:     bufio.NewReaderSize(stdout, 64*1024),
+		out:        make(chan []byte, 64),
+		closeCh:    make(chan struct{}),
+		readerDone: make(chan struct{}),
+		log:        log,
 	}
 	go w.readLoop()
 	go w.drainStderr(stderr)
@@ -80,6 +84,11 @@ func (w *stdioWire) close() error {
 	if !w.closed.CompareAndSwap(false, true) {
 		return nil
 	}
+	// Signal readLoop before closing stdin so any send it's currently
+	// blocked on (slow client + full out) unblocks immediately. Without
+	// this, the reader would sit on a chan send until the server's last
+	// flush arrives and EOFs the pipe.
+	close(w.closeCh)
 	_ = w.stdin.Close()
 	done := make(chan struct{})
 	go func() {
@@ -92,6 +101,10 @@ func (w *stdioWire) close() error {
 		_ = w.cmd.Process.Kill()
 		<-done
 	}
+	// Wait for readLoop to fully exit before closing out, otherwise a
+	// late `case w.out <- cp:` select branch could pick the send case
+	// and panic on a closed chan.
+	<-w.readerDone
 	close(w.out)
 	return nil
 }
@@ -110,6 +123,7 @@ func (w *stdioWire) write(raw []byte) error {
 }
 
 func (w *stdioWire) readLoop() {
+	defer close(w.readerDone)
 	for {
 		line, err := w.stdout.ReadBytes('\n')
 		if len(line) > 0 {
@@ -120,10 +134,15 @@ func (w *stdioWire) readLoop() {
 			}
 			cp := make([]byte, len(line))
 			copy(cp, line)
+			// Block until the frame is delivered. Earlier code dropped
+			// on a full buffer; that silently lost JSON-RPC responses
+			// and hung any caller waiting on the matching id. The
+			// closeCh escape lets us bail when the wire is shutting
+			// down so we don't deadlock on close.
 			select {
 			case w.out <- cp:
-			default:
-				w.log.Warn().Msg("mcp stdio replies channel full; dropping")
+			case <-w.closeCh:
+				return
 			}
 		}
 		if err != nil {

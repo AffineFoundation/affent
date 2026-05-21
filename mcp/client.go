@@ -146,8 +146,10 @@ func (c *Client) initialize(ctx context.Context) error {
 }
 
 // call sends a request and waits for the matching response. Honors ctx
-// cancellation; on cancel we leak the pending entry until the server
-// eventually replies (or the client closes).
+// cancellation: on ctx.Done the defer below removes the pending entry
+// before returning, so a late response from the server arrives at
+// dispatch and is dropped (the comment in dispatch's "no pending
+// caller" path covers that). No leak.
 func (c *Client) call(ctx context.Context, method string, params json.RawMessage) (json.RawMessage, error) {
 	if c.closed.Load() {
 		return nil, errors.New("mcp client closed")
