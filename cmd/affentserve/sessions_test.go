@@ -3,6 +3,7 @@ package main
 import (
 	"io"
 	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 	"time"
@@ -295,6 +296,113 @@ func TestSessionPool_ConversationLogIsDurable(t *testing.T) {
 	}
 	if !found {
 		t.Errorf("conversation log must persist across session re-create; got messages: %+v", msgs)
+	}
+}
+
+// TestSessionPool_DeletePurgesDurableState pins that DELETE is a real
+// delete: the durable session dir (conv log + memory) is gone, and a
+// subsequent GetOrCreate(id) starts a fresh session with no leaked
+// state. Idle eviction is the OTHER path that keeps durable state so
+// session resume works; this one explicitly cleans up because the
+// client asked us to.
+func TestSessionPool_DeletePurgesDurableState(t *testing.T) {
+	memRoot := t.TempDir()
+	cfg := Config{
+		Listen:         "127.0.0.1:0",
+		MaxSessions:    4,
+		SessionIdleTTL: "5m",
+		WorkspaceRoot:  t.TempDir(),
+		MemoryRoot:     memRoot,
+		EnableMemory:   true,
+		BaseURL:        "http://127.0.0.1:0",
+		APIKey:         "test",
+		Model:          "fake",
+	}
+	pool, err := NewSessionPool(cfg, zerolog.New(io.Discard))
+	if err != nil {
+		t.Fatalf("NewSessionPool: %v", err)
+	}
+	t.Cleanup(pool.Shutdown)
+
+	s1, err := pool.GetOrCreate("done-with-this")
+	if err != nil {
+		t.Fatalf("GetOrCreate: %v", err)
+	}
+	if _, err := s1.loop.Memory.Add(agent.TargetMemory, "core", "secret fact"); err != nil {
+		t.Fatalf("Add: %v", err)
+	}
+	if err := s1.conv.Append(agent.ChatMessage{Role: "user", Content: "first turn"}); err != nil {
+		t.Fatalf("Append: %v", err)
+	}
+
+	dir := filepath.Join(memRoot, "done-with-this")
+	if _, err := os.Stat(dir); err != nil {
+		t.Fatalf("expected durable dir to exist before delete: %v", err)
+	}
+
+	if !pool.Delete("done-with-this") {
+		t.Fatal("Delete returned false for known session")
+	}
+	if _, err := os.Stat(dir); !os.IsNotExist(err) {
+		t.Errorf("durable dir must be purged on Delete; stat err=%v", err)
+	}
+
+	// New session under the same id starts fresh: no leaked memory, no
+	// leaked conv messages from the deleted predecessor.
+	s2, err := pool.GetOrCreate("done-with-this")
+	if err != nil {
+		t.Fatalf("GetOrCreate after delete: %v", err)
+	}
+	if snap := s2.loop.Memory.Snapshot(); strings.Contains(snap, "secret fact") {
+		t.Errorf("deleted-session memory leaked into successor:\n%s", snap)
+	}
+	for _, m := range s2.conv.Snapshot() {
+		if strings.Contains(m.Content, "first turn") {
+			t.Errorf("deleted-session conv log leaked into successor")
+		}
+	}
+}
+
+// TestSessionPool_DeleteRejectsTraversalID pins that a malicious
+// DELETE /v1/sessions/.. cannot RemoveAll the MemoryRoot parent.
+// The agent.ValidateSessionID check runs BEFORE the disk purge.
+func TestSessionPool_DeleteRejectsTraversalID(t *testing.T) {
+	memRoot := t.TempDir()
+	// Drop a sentinel file at the MemoryRoot's parent so we can detect
+	// an out-of-bounds RemoveAll.
+	parent := filepath.Dir(memRoot)
+	sentinel := filepath.Join(parent, "delete-me-not.txt")
+	if err := os.WriteFile(sentinel, []byte("keep"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = os.Remove(sentinel) })
+
+	cfg := Config{
+		Listen:         "127.0.0.1:0",
+		MaxSessions:    4,
+		SessionIdleTTL: "5m",
+		WorkspaceRoot:  t.TempDir(),
+		MemoryRoot:     memRoot,
+		BaseURL:        "http://127.0.0.1:0",
+		APIKey:         "test",
+		Model:          "fake",
+	}
+	pool, err := NewSessionPool(cfg, zerolog.New(io.Discard))
+	if err != nil {
+		t.Fatalf("NewSessionPool: %v", err)
+	}
+	t.Cleanup(pool.Shutdown)
+
+	for _, bad := range []string{"..", "../escape", "a/b", "a\\b", "with\x00null"} {
+		if pool.Delete(bad) {
+			t.Errorf("Delete(%q) must reject path-unsafe id", bad)
+		}
+	}
+	if _, err := os.Stat(sentinel); err != nil {
+		t.Fatalf("sentinel at MemoryRoot's parent was removed: %v", err)
+	}
+	if _, err := os.Stat(memRoot); err != nil {
+		t.Fatalf("MemoryRoot itself was removed: %v", err)
 	}
 }
 

@@ -348,19 +348,15 @@ func (p *SessionPool) allocWorkspace(id string) (string, error) {
 	return os.MkdirTemp(root, id+"-")
 }
 
-// allocSessionDir returns the durable per-session-id state dir. Holds
-// the JSONL conversation log and (when EnableMemory is on) the memory
-// store files. Unlike allocWorkspace, this is STABLE: same id → same
-// path across server restarts and LRU evictions, so the chat handler's
-// "the rest of history lives in the Conversation log keyed by
-// session_id" contract actually holds — and the long-running-memory
-// promise survives. Callers must have already passed id through
-// agent.ValidateSessionID; buildSession enforces this at the top.
+// sessionDirPath computes the durable per-session-id state dir path
+// WITHOUT touching the filesystem. Caller must have already validated
+// id via agent.ValidateSessionID — passing an unsanitized id is a
+// path-traversal bug.
 //
 // The historical name "MemoryRoot" predates conversation-log
 // durability; the dir now holds both, but the env/config knob keeps
 // its old name to avoid an unmotivated rename of a public surface.
-func (p *SessionPool) allocSessionDir(id string) (string, error) {
+func (p *SessionPool) sessionDirPath(id string) string {
 	root := p.cfg.MemoryRoot
 	if root == "" {
 		if p.cfg.WorkspaceRoot != "" {
@@ -369,7 +365,19 @@ func (p *SessionPool) allocSessionDir(id string) (string, error) {
 			root = filepath.Join(os.TempDir(), "affentserve-memory")
 		}
 	}
-	dir := filepath.Join(root, id)
+	return filepath.Join(root, id)
+}
+
+// allocSessionDir returns the durable per-session-id state dir. Holds
+// the JSONL conversation log and (when EnableMemory is on) the memory
+// store files. Unlike allocWorkspace, this is STABLE: same id → same
+// path across server restarts and LRU evictions, so the chat handler's
+// "the rest of history lives in the Conversation log keyed by
+// session_id" contract actually holds — and the long-running-memory
+// promise survives. Callers must have already passed id through
+// agent.ValidateSessionID; buildSession enforces this at the top.
+func (p *SessionPool) allocSessionDir(id string) (string, error) {
+	dir := p.sessionDirPath(id)
 	if err := os.MkdirAll(dir, 0o755); err != nil {
 		return "", err
 	}
@@ -481,11 +489,34 @@ func (s *Session) Close() error {
 	return s.closeErr
 }
 
-// Delete removes a session from the pool and closes it.
+// Delete removes a session from the pool, closes it, AND purges the
+// on-disk durable state (conversation log + memory files). Unlike
+// idle-GC eviction — which keeps the durable dir so a future
+// GetOrCreate(id) resumes the same session — an explicit DELETE
+// means "I'm done with this session, clean up". Without the disk
+// purge the very next GetOrCreate(id) would resurrect a zombie
+// session with all the old conv history and memory intact,
+// contradicting what every other DELETE in the codebase promises.
+//
+// id is validated before any filesystem call so a malicious
+// DELETE /v1/sessions/.. can't RemoveAll the MemoryRoot parent.
 func (p *SessionPool) Delete(id string) bool {
+	if err := agent.ValidateSessionID(id); err != nil {
+		// Unknown / unsafe id — nothing to do. Matches the
+		// handler-level contract that DELETE is idempotent and
+		// doesn't 404 on unknown ids.
+		return false
+	}
 	p.mu.Lock()
-	defer p.mu.Unlock()
-	return p.evictLocked(id)
+	evicted := p.evictLocked(id)
+	dir := p.sessionDirPath(id)
+	p.mu.Unlock()
+	// RemoveAll outside the pool lock — it can do non-trivial fs
+	// work and we don't want to block other pool ops on it.
+	if err := os.RemoveAll(dir); err != nil {
+		p.logger.Warn().Err(err).Str("session_id", id).Msg("purge session dir")
+	}
+	return evicted
 }
 
 // evictLocked must be called with p.mu held.
