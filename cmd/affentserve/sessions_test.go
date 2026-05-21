@@ -3,6 +3,7 @@ package main
 import (
 	"io"
 	"os"
+	"strings"
 	"testing"
 	"time"
 
@@ -121,6 +122,63 @@ func TestSessionPool_gcOnce_EvictsIdleSessions(t *testing.T) {
 	}
 	if _, err := pool.Get("stale"); err == nil {
 		t.Errorf("stale session survived gcOnce; should have been evicted")
+	}
+}
+
+// TestSessionPool_allocMemoryDir_StableAcrossCalls pins the durable
+// memory-dir contract: same session id MUST resolve to the same path
+// every time, regardless of how many times a workspace was allocated
+// in between. Without this stability the "long-running memory" claim
+// breaks on server restarts and LRU revives — same client, same
+// session_id, different memory dir, empty recall.
+func TestSessionPool_allocMemoryDir_StableAcrossCalls(t *testing.T) {
+	pool := newTestPool(t, 4, "5m")
+	a1, err := pool.allocMemoryDir("customer-alpha")
+	if err != nil {
+		t.Fatal(err)
+	}
+	// Simulate a second call after eviction/restart.
+	a2, err := pool.allocMemoryDir("customer-alpha")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if a1 != a2 {
+		t.Errorf("memory dir for same id must be stable; got %q then %q", a1, a2)
+	}
+	// Different id → different dir.
+	b, err := pool.allocMemoryDir("customer-beta")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if a1 == b {
+		t.Errorf("different session ids must get different dirs; both got %q", a1)
+	}
+	// Both dirs created on disk.
+	for _, p := range []string{a1, b} {
+		if info, err := os.Stat(p); err != nil || !info.IsDir() {
+			t.Errorf("memory dir %q not a directory (err=%v info=%v)", p, err, info)
+		}
+	}
+}
+
+// TestSessionPool_allocMemoryDir_OutsideWorkspace pins that memory
+// lives outside the per-session workspace, so Session.Close()'s
+// os.RemoveAll(workspace) doesn't blow it away. The cross-restart
+// persistence experiment that motivated this design only works if
+// the two paths don't overlap.
+func TestSessionPool_allocMemoryDir_OutsideWorkspace(t *testing.T) {
+	pool := newTestPool(t, 4, "5m")
+	memDir, err := pool.allocMemoryDir("alpha")
+	if err != nil {
+		t.Fatal(err)
+	}
+	workspace, err := pool.allocWorkspace("alpha")
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = os.RemoveAll(workspace) })
+	if strings.HasPrefix(memDir, workspace) {
+		t.Errorf("memory dir %q must not live inside the ephemeral workspace %q", memDir, workspace)
 	}
 }
 
