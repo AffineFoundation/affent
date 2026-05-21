@@ -586,12 +586,16 @@ into `BuiltinDeps`.
 **Working**:
 
 - native loop with reasoning streaming (`thinking.delta` + `thinking.done`)
-  + cancel; transient-error retry with `Retry-After` honor + stream
-  watchdog
+  + cancel (Ctrl+C in CLI / client disconnect on affentserve both call
+  `Loop.Cancel` so the in-flight LLM call + shell process die promptly);
+  transient-error retry with `Retry-After` honor + stream watchdog
 - multi-turn REPL + session resume
 - MCP stdio + streamable-http (spec rev 2025-03-26)
 - workspace path sandboxing in builtin file tools (relative + absolute,
-  no sentinel hacks)
+  no sentinel hacks; symlinks resolved before the escape check so
+  `ln -s /etc ws/escape` can't smuggle writes out)
+- `read_file` refuses binary content (NUL-in-first-8-KiB heuristic) so
+  the model isn't fed walls of replacement characters
 - context compaction (OpenHands V1 LLMSummarizingCondenser prompt
   verbatim, rolling summary with `[summary of earlier work]` marker,
   proactive + reactive paths, tool-call boundary safety)
@@ -600,7 +604,12 @@ into `BuiltinDeps`.
   prompt injection, char-bounded with overflow consolidation
 - monotonic event ids + `--trace-skip-deltas` for batch-eval traces
 - `wireMessage` strips `reasoning_content` from outbound requests
-  (DeepSeek / Kimi / GLM compat)
+  (DeepSeek / Kimi / GLM compat) and normalizes unparseable tool_call
+  arguments to `{}` so a truncated assistant message can't brick the
+  next step on strict OpenAI-compat upstreams
+- upstream `finish_reason` ("length" for max_tokens truncation, etc.)
+  surfaces on `message.done` events and through affentserve's
+  OpenAI-compat stream, instead of being flattened to "stop"
 
 **Out of scope** (intentional):
 
