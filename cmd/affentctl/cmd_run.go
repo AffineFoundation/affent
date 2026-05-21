@@ -10,6 +10,7 @@ import (
 	"os/signal"
 	"strings"
 	"syscall"
+	"time"
 
 	"github.com/affinefoundation/affent/sse"
 	"github.com/rs/zerolog"
@@ -66,7 +67,7 @@ Required: --prompt, --model.`)
 	}
 	b.log.Info().Str("turn_id", turnID).Msg("turn started")
 
-	finalText, exit := drainBatch(ctx, b.events, b.trace, b.log, cf.traceSkipDeltas)
+	finalText, exit := drainBatch(ctx, b.loop, b.events, b.trace, b.log, cf.traceSkipDeltas)
 	if finalText != "" {
 		fmt.Println(finalText)
 	}
@@ -79,7 +80,14 @@ Required: --prompt, --model.`)
 // state but not written to trace — the final text remains available
 // through message.end. Useful for batch eval where token-level replay
 // has no value but trace size matters.
-func drainBatch(ctx context.Context, events <-chan sse.Event, trace io.Writer, log zerolog.Logger, skipDeltas bool) (string, int) {
+//
+// loop is the active *affent.Loop and may be nil only in unit tests. On
+// SIGINT (ctx.Done) we MUST call Loop.Cancel — the Loop runs its turn on
+// a detached background context so the parent ctx cancelling has no
+// effect on in-flight LLM calls or shell-tool processes. Without the
+// explicit Cancel a `shell exec sleep 60` survives the SIGKILL on
+// affentctl, leaving an orphan in the user's process table.
+func drainBatch(ctx context.Context, loop interface{ Cancel() }, events <-chan sse.Event, trace io.Writer, log zerolog.Logger, skipDeltas bool) (string, int) {
 	enc := json.NewEncoder(trace)
 	enc.SetEscapeHTML(false)
 
@@ -90,8 +98,44 @@ func drainBatch(ctx context.Context, events <-chan sse.Event, trace io.Writer, l
 	for {
 		select {
 		case <-ctx.Done():
-			log.Warn().Msg("interrupted")
-			return finalText, 130
+			// SIGINT here means "abort this run". The Loop runs the turn
+			// on a detached background ctx so we MUST call Cancel — only
+			// then does the loop's turnCtx fire, exec.CommandContext kills
+			// the running shell process, and runTurn emits turn.end with
+			// reason=cancelled. After Cancel we still wait briefly for
+			// runTurn to flush turn.end into the trace; otherwise the
+			// trace truncates mid-turn and replay tooling breaks.
+			log.Warn().Msg("interrupted; cancelling turn and draining")
+			if loop != nil {
+				loop.Cancel()
+			}
+			deadline := time.After(turnCancelDrainTimeout)
+			for {
+				select {
+				case ev, ok := <-events:
+					if !ok {
+						return finalText, 130
+					}
+					writeTrace := !skipDeltas ||
+						(ev.Type != sse.TypeMessageDelta && ev.Type != sse.TypeThinkingDelta)
+					if writeTrace {
+						if err := enc.Encode(ev); err != nil {
+							log.Error().Err(err).Msg("write trace")
+						}
+					}
+					if ev.Type == sse.TypeMessageDone {
+						var p sse.MessageDonePayload
+						_ = json.Unmarshal(ev.Data, &p)
+						finalText = p.Text
+					}
+					if ev.Type == sse.TypeTurnEnd {
+						return finalText, 130
+					}
+				case <-deadline:
+					log.Warn().Msg("turn.end never arrived after cancel; trace may be incomplete")
+					return finalText, 130
+				}
+			}
 		case ev, ok := <-events:
 			if !ok {
 				if !turnEnded {

@@ -127,7 +127,7 @@ Slash commands inside the REPL:
 		}
 		_ = turnID
 
-		drainInteractive(turnCtx, b.events, traceEnc, cf.traceSkipDeltas)
+		drainInteractive(turnCtx, b.loop, b.events, traceEnc, cf.traceSkipDeltas)
 		cancelTurn()
 	}
 }
@@ -135,7 +135,12 @@ Slash commands inside the REPL:
 // drainInteractive reads events for one turn, printing assistant text
 // live to stdout, tool activity compactly to stderr. trace gets every
 // event in JSONL — except thinking/message deltas when skipDeltas is on.
-func drainInteractive(ctx context.Context, events <-chan sse.Event, trace *json.Encoder, skipDeltas bool) {
+//
+// loop is the active *affent.Loop. On SIGINT (ctx.Done) we MUST call
+// Loop.Cancel — the Loop runs the turn on a detached background ctx
+// so cancelling the parent ctx alone leaves in-flight LLM calls and
+// shell-tool processes alive (e.g. `shell exec sleep 60` orphans).
+func drainInteractive(ctx context.Context, loop interface{ Cancel() }, events <-chan sse.Event, trace *json.Encoder, skipDeltas bool) {
 	const (
 		ansiDim   = "\x1b[2m"
 		ansiReset = "\x1b[0m"
@@ -153,12 +158,16 @@ func drainInteractive(ctx context.Context, events <-chan sse.Event, trace *json.
 		select {
 		case <-ctx.Done():
 			fmt.Fprintln(os.Stderr, dim("\n[interrupted]"))
-			// Block until turn.end so the REPL's next SendUser sees
-			// a clean Loop state. Without the wait we'd race the
-			// loop goroutine winding down and the next message gets
-			// ErrTurnInFlight, forcing the user to retry or run
+			// Loop runs on a detached ctx so signalling alone leaves
+			// the in-flight turn (and any shell process) alive. Cancel
+			// explicitly, then block until turn.end so the REPL's next
+			// SendUser sees a clean Loop state. Without both, the next
+			// message gets ErrTurnInFlight, forcing the user to retry or run
 			// /cancel again. Bounded so a hung loop doesn't pin the
 			// REPL.
+			if loop != nil {
+				loop.Cancel()
+			}
 			deadline := time.After(turnCancelDrainTimeout)
 			for {
 				select {
