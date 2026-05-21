@@ -339,7 +339,7 @@ func (l *Loop) runTurn(ctx context.Context, turnID, userText string) {
 
 		// Execute every tool call in order, append each result to
 		// conversation, then loop back to ask the model for the next step.
-		for _, tc := range final.Final.ToolCalls {
+		for i, tc := range final.Final.ToolCalls {
 			// Honor cancellation BETWEEN tool calls within a batch, not
 			// just between turn steps. Without this, a Loop.Cancel
 			// fired mid-batch still runs every remaining tool — a
@@ -348,10 +348,31 @@ func (l *Loop) runTurn(ctx context.Context, turnID, userText string) {
 			// stop. Individual tool impls may also observe ctx and
 			// short-circuit themselves, but framework-level honoring
 			// is needed for tools that don't (memory ops, fast
-			// helpers). endReason gets set by the outer for-loop's
-			// ctx-check on the next iteration; we only need to break
-			// out of this batch.
+			// helpers).
+			//
+			// On break we MUST emit a placeholder tool message for
+			// every unprocessed tool_call_id, otherwise the conv log
+			// has the assistant's tool_calls (already appended by
+			// consumeAndPersist) without matching tool responses — and
+			// the very next LLM request on this session would be
+			// rejected with "tool_calls expect matching tool
+			// messages". Mainstream frameworks (LangChain, OpenAI
+			// assistants) use the same placeholder pattern.
 			if ctx.Err() != nil {
+				for _, skipped := range final.Final.ToolCalls[i:] {
+					skippedID := skipped.ID
+					if skippedID == "" {
+						skippedID = "call_" + uuid.NewString()
+					}
+					if appendErr := l.Conv.Append(ChatMessage{
+						Role:       "tool",
+						Content:    "(cancelled by user before this tool ran)",
+						ToolCallID: skippedID,
+						Name:       skipped.Function.Name,
+					}); appendErr != nil {
+						l.Log.Error().Err(appendErr).Str("call_id", skippedID).Msg("conv append placeholder")
+					}
+				}
 				break
 			}
 			callID := tc.ID

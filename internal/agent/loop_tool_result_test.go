@@ -315,6 +315,35 @@ func TestRunTurn_CancelMidBatchSkipsRemainingToolCalls(t *testing.T) {
 	if got := atomic.LoadInt32(&calls); got != 1 {
 		t.Errorf("expected exactly 1 tool call before cancel propagated, got %d", got)
 	}
+
+	// The assistant message (already appended by consumeAndPersist
+	// before the tool loop ran) carries three tool_calls. The conv
+	// log must contain a matching tool message for every one of
+	// them, otherwise the next LLM request on this session is
+	// rejected by every OpenAI-compatible backend with "tool_calls
+	// expect matching tool messages". Cancellation must leave the
+	// log in a replayable state.
+	msgs := conv.Snapshot()
+	var toolCallIDs []string
+	respondedIDs := map[string]bool{}
+	for _, m := range msgs {
+		if m.Role == "assistant" {
+			for _, tc := range m.ToolCalls {
+				toolCallIDs = append(toolCallIDs, tc.ID)
+			}
+		}
+		if m.Role == "tool" && m.ToolCallID != "" {
+			respondedIDs[m.ToolCallID] = true
+		}
+	}
+	if len(toolCallIDs) != 3 {
+		t.Fatalf("expected the assistant message to carry 3 tool_calls; got %d in conv: %+v", len(toolCallIDs), msgs)
+	}
+	for _, id := range toolCallIDs {
+		if !respondedIDs[id] {
+			t.Errorf("tool_call %q has no matching tool message after cancel; conv would be rejected on next LLM request", id)
+		}
+	}
 }
 
 // TestSendUser_HonorsCancelledCtx pins the entry-time ctx check.
