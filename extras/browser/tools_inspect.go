@@ -38,7 +38,12 @@ func resolveSavePath(workspaceDir, savePath string) (string, error) {
 		target = filepath.Clean(filepath.Join(absWS, savePath))
 	}
 	rel, err := filepath.Rel(absWS, target)
-	if err != nil || strings.HasPrefix(rel, "..") || rel == ".." {
+	// Reject paths that escape upward. The check must distinguish the
+	// literal ".." path component from filenames that *start with*
+	// ".." (e.g. "..backup.png"). HasPrefix(rel, "..") would falsely
+	// reject the latter. Same shape as agent.safeWorkspacePath's
+	// escape check.
+	if err != nil || rel == ".." || strings.HasPrefix(rel, ".."+string(filepath.Separator)) {
 		return "", fmt.Errorf("save_path %q escapes workspace %q", savePath, absWS)
 	}
 	return target, nil

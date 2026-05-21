@@ -27,6 +27,12 @@ func TestResolveSavePath_SandboxesScreenshotWrites(t *testing.T) {
 		{"relative-with-traversal escape", ws, "../../../etc/passwd.png", true},
 		{"empty workspace disables enforcement", "", "/anywhere/shot.png", false},
 		{"empty workspace, relative pass-through", "", "shot.png", false},
+		// Filenames that start with ".." literally — must NOT be treated
+		// as a traversal escape. Pre-fix the HasPrefix(rel, "..") check
+		// rejected "..backup.png" because it shares the prefix with the
+		// "../" go-up token; correct check requires "..<sep>" specifically.
+		{"filename starting with two dots inside ws", ws, "..backup.png", false},
+		{"nested file starting with two dots", ws, "captures/..thumb.png", false},
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
