@@ -12,7 +12,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/affinefoundation/affent/sse"
+	"github.com/affinefoundation/affent/internal/sse"
 )
 
 // fakeBigResultTool returns a result whose length exceeds

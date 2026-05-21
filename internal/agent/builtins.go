@@ -12,7 +12,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/affinefoundation/affent/executor"
+	"github.com/affinefoundation/affent/internal/executor"
 	"github.com/affinefoundation/affent/internal/textutil"
 )
 

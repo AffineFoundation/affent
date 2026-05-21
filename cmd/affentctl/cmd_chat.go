@@ -15,7 +15,7 @@ import (
 	"time"
 
 	agent "github.com/affinefoundation/affent/internal/agent"
-	"github.com/affinefoundation/affent/sse"
+	"github.com/affinefoundation/affent/internal/sse"
 )
 
 // turnCancelDrainTimeout caps how long drainInteractive blocks after a

@@ -4,7 +4,7 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/affinefoundation/affent/sse"
+	"github.com/affinefoundation/affent/internal/sse"
 )
 
 // sseKeepAliveInterval is how often an idle SSE stream emits a

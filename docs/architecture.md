@@ -15,6 +15,9 @@ Supporting packages sit behind narrower boundaries:
 - `internal/memory`: file-backed persistent memory store.
 - `internal/sessionsearch`: transcript retrieval implementation.
 - `internal/projectcontext`: project instruction file loading.
+- `internal/executor`: local, Docker, and file-operation execution boundaries.
+- `internal/mcp`: MCP client and tool registration.
+- `internal/sse`: event contract shared by CLI and HTTP surfaces.
 - `internal/textutil`: shared UTF-8-safe truncation helpers.
 - `internal/e2e`: cross-package end-to-end coverage.
 
@@ -34,9 +37,6 @@ Optional tool families live outside the runtime:
 
 - `extras/web`: web fetch and search tools.
 - `extras/browser`: browser automation tools.
-- `mcp`: MCP client and tool registration.
-- `executor`: local, Docker, and file-operation execution boundaries.
-- `sse`: event contract shared by CLI and HTTP surfaces.
 
 ## Design Rules
 

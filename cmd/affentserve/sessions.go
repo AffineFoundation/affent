@@ -10,10 +10,10 @@ import (
 	"time"
 
 	agent "github.com/affinefoundation/affent/internal/agent"
-	"github.com/affinefoundation/affent/executor"
+	"github.com/affinefoundation/affent/internal/executor"
 	affentbrowser "github.com/affinefoundation/affent/extras/browser"
 	affentweb "github.com/affinefoundation/affent/extras/web"
-	"github.com/affinefoundation/affent/sse"
+	"github.com/affinefoundation/affent/internal/sse"
 	"github.com/google/uuid"
 	"github.com/rs/zerolog"
 )

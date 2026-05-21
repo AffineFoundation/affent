@@ -10,7 +10,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/affinefoundation/affent/executor"
+	"github.com/affinefoundation/affent/internal/executor"
 )
 
 // TestSafeWorkspacePath pins the path-resolution contract: relative paths

@@ -12,7 +12,7 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/affinefoundation/affent/sse"
+	"github.com/affinefoundation/affent/internal/sse"
 	"github.com/rs/zerolog"
 )
 

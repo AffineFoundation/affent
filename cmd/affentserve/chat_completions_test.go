@@ -7,7 +7,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/affinefoundation/affent/sse"
+	"github.com/affinefoundation/affent/internal/sse"
 )
 
 // TestChatCompletions_HeaderBeatsBodyForSessionPinning pins the

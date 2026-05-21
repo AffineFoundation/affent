@@ -16,9 +16,9 @@ import (
 	"unicode/utf8"
 
 	agent "github.com/affinefoundation/affent/internal/agent"
-	"github.com/affinefoundation/affent/executor"
-	"github.com/affinefoundation/affent/mcp"
-	"github.com/affinefoundation/affent/sse"
+	"github.com/affinefoundation/affent/internal/executor"
+	"github.com/affinefoundation/affent/internal/mcp"
+	"github.com/affinefoundation/affent/internal/sse"
 	"github.com/google/uuid"
 	"github.com/rs/zerolog"
 )

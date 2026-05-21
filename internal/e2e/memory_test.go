@@ -14,7 +14,7 @@ import (
 	"time"
 
 	agent "github.com/affinefoundation/affent/internal/agent"
-	"github.com/affinefoundation/affent/sse"
+	"github.com/affinefoundation/affent/internal/sse"
 )
 
 // mockLLM serves OpenAI-compat /chat/completions with a scripted
