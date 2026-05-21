@@ -42,7 +42,9 @@ type Session struct {
 	subs    map[int]chan sse.Event
 	nextSub int
 
-	closedCh chan struct{}
+	closedCh  chan struct{}
+	closeOnce sync.Once
+	closeErr  error
 }
 
 // SessionPool owns the in-memory session map plus an idle-GC goroutine.
@@ -362,7 +364,9 @@ func (s *Session) fanout() {
 	}
 }
 
-// Close releases all session resources. Idempotent.
+// Close releases all session resources. Idempotent and safe under
+// concurrent callers — sync.Once guarantees the close+cancel+remove
+// sequence runs at most once even if Delete races with Shutdown.
 //
 // Lifecycle invariant: we never close `s.events`. affent's Loop
 // publishes events with a plain `send` (not `select` with `default`
@@ -372,25 +376,19 @@ func (s *Session) fanout() {
 // to drain in the background is acceptable because the channel and
 // loop are both garbage-collectable once nothing else references them.
 func (s *Session) Close() error {
-	select {
-	case <-s.closedCh:
-		return nil
-	default:
-	}
-	close(s.closedCh)
-
-	s.loop.Cancel()
-
-	var firstErr error
-	if s.browser != nil {
-		if err := s.browser.Close(); err != nil && firstErr == nil {
-			firstErr = err
+	s.closeOnce.Do(func() {
+		close(s.closedCh)
+		s.loop.Cancel()
+		if s.browser != nil {
+			if err := s.browser.Close(); err != nil {
+				s.closeErr = err
+			}
 		}
-	}
-	if s.workspace != "" {
-		_ = os.RemoveAll(s.workspace)
-	}
-	return firstErr
+		if s.workspace != "" {
+			_ = os.RemoveAll(s.workspace)
+		}
+	})
+	return s.closeErr
 }
 
 // Delete removes a session from the pool and closes it.

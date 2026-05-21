@@ -78,6 +78,33 @@ func TestRequireAuth_AcceptsCorrectBearer(t *testing.T) {
 	}
 }
 
+// TestRequireAuth_RejectsNearMissAndWrongLength locks the
+// constant-time-comparison fix in place. The token's first byte
+// matching is the byte-by-byte timing-attack inroad if we ever
+// regress to a plain `!=` comparison; both same-length-wrong and
+// different-length cases must produce 401.
+func TestRequireAuth_RejectsNearMissAndWrongLength(t *testing.T) {
+	handler := requireAuth("topsecret", http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(204)
+	}))
+	cases := []string{
+		"Bearer topsecreX",  // same length, last byte off — would short-circuit late
+		"Bearer topxxxxxx",  // same length, early divergence — would short-circuit early
+		"Bearer topsecre",   // shorter — length mismatch
+		"Bearer topsecrets", // longer — length mismatch
+		"Bearer ",           // empty token after prefix
+	}
+	for _, h := range cases {
+		r := httptest.NewRequest("GET", "/v1/models", nil)
+		r.Header.Set("Authorization", h)
+		w := httptest.NewRecorder()
+		handler.ServeHTTP(w, r)
+		if got := w.Result().StatusCode; got != http.StatusUnauthorized {
+			t.Errorf("Authorization=%q produced %d, want 401", h, got)
+		}
+	}
+}
+
 // handleSessionRoutes path parsing — works without a real pool by
 // passing a nil one and checking only the 404/400 boundary cases.
 

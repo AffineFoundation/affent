@@ -19,9 +19,10 @@
 //
 // What this binary is NOT
 //
-//   - Not multi-tenant. One DASHSCOPE_API_KEY / one Tavily key per
-//     process. Use a reverse proxy + isolated affentserve instances
-//     if you need per-tenant credentials.
+//   - Not multi-tenant. One AFFENTSERVE_API_KEY (upstream LLM
+//     credential) / one Tavily key per process. Use a reverse proxy
+//     + isolated affentserve instances if you need per-tenant
+//     credentials.
 //   - Not horizontally scalable on its own — sessions are
 //     in-process. Stick a sticky load balancer in front and you can
 //     scale out, but the server itself doesn't try.

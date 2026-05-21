@@ -80,6 +80,14 @@ func parseFlagsAndConfig(argv []string) (Config, error) {
 		return cfg, err
 	}
 
+	// Track which flags the user actually passed so we can distinguish
+	// "explicit override" from "default left untouched". The earlier
+	// check, `fs.Lookup(...).Value.String() == "true"`, only fired
+	// when the boolean's resolved value was true — meaning a config
+	// file's true could not be overridden back to false from the CLI.
+	setFlags := map[string]bool{}
+	fs.Visit(func(f *flag.Flag) { setFlags[f.Name] = true })
+
 	// CLI flags override file values when set (non-zero / non-empty).
 	if *listen != "" {
 		cfg.Listen = *listen
@@ -110,19 +118,19 @@ func parseFlagsAndConfig(argv []string) (Config, error) {
 	if *maxTurnSteps > 0 {
 		cfg.MaxTurnSteps = *maxTurnSteps
 	}
-	if fs.Lookup("browser").Value.String() == "true" {
+	if setFlags["browser"] {
 		cfg.EnableBrowser = *enableBrowser
 	}
-	if fs.Lookup("web").Value.String() == "true" {
+	if setFlags["web"] {
 		cfg.EnableWeb = *enableWeb
 	}
-	if fs.Lookup("web-search").Value.String() == "true" {
+	if setFlags["web-search"] {
 		cfg.EnableWebSearch = *enableWebSearch
 	}
-	if fs.Lookup("memory").Value.String() == "true" {
+	if setFlags["memory"] {
 		cfg.EnableMemory = *enableMemory
 	}
-	if fs.Lookup("builtins").Value.String() == "true" {
+	if setFlags["builtins"] {
 		cfg.EnableBuiltins = *enableBuiltins
 	}
 	if *browserCacheDir != "" {
@@ -134,10 +142,10 @@ func parseFlagsAndConfig(argv []string) (Config, error) {
 	if *browserCacheSweep != "" {
 		cfg.BrowserCacheSweepInterval = *browserCacheSweep
 	}
-	if fs.Lookup("browser-no-stealth").Value.String() == "true" {
+	if setFlags["browser-no-stealth"] {
 		cfg.BrowserNoStealth = *browserNoStealth
 	}
-	if fs.Lookup("browser-allow-all-domains").Value.String() == "true" {
+	if setFlags["browser-allow-all-domains"] {
 		cfg.BrowserAllowAllDomains = *browserAllowAll
 	}
 	if *systemPrompt != "" {

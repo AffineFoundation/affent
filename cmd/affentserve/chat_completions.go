@@ -74,6 +74,11 @@ func handleChatCompletions(cfg Config, pool *SessionPool) http.HandlerFunc {
 
 		sess, err := pool.GetOrCreate(req.SessionID)
 		if err != nil {
+			if errors.Is(err, ErrShuttingDown) {
+				w.Header().Set("Retry-After", "5")
+				writeJSONError(w, http.StatusServiceUnavailable, "server shutting down", err)
+				return
+			}
 			writeJSONError(w, http.StatusInternalServerError, "create session", err)
 			return
 		}
@@ -189,21 +194,32 @@ func bufferChatCompletion(ctx context.Context, sess *Session, turnID string, ch 
 					Reason string `json:"reason"`
 				}
 				if err := json.Unmarshal(ev.Data, &p); err == nil {
-					switch p.Reason {
-					case "cancelled":
-						out.FinishReason = "stop"
-					case "error":
-						out.FinishReason = "stop"
-						if out.Error == "" {
-							out.Error = "turn ended with error"
-						}
-					default:
-						out.FinishReason = "stop"
+					out.FinishReason = openAIFinishReason(p.Reason)
+					if p.Reason == sse.TurnEndError && out.Error == "" {
+						out.Error = "turn ended with error"
 					}
 				}
 				return out, nil
 			}
 		}
+	}
+}
+
+// openAIFinishReason maps affent's TurnEnd reason vocabulary onto the
+// OpenAI chat-completions `finish_reason` field. The two systems
+// don't fully overlap — affent has step-limit and cancelled, OpenAI
+// has length and content_filter — so we pick the closest semantic.
+//
+// max_turns → "length" because both mean "ran out of budget"; clients
+// that retry on length also want to retry on max_turns. Everything
+// else collapses to "stop" since OpenAI lacks a dedicated cancelled
+// or error code in finish_reason.
+func openAIFinishReason(turnEndReason string) string {
+	switch turnEndReason {
+	case sse.TurnEndMaxTurns:
+		return "length"
+	default:
+		return "stop"
 	}
 }
 
@@ -365,7 +381,7 @@ func streamChatCompletion(w http.ResponseWriter, ctx context.Context, sess *Sess
 					Reason string `json:"reason"`
 				}
 				_ = json.Unmarshal(ev.Data, &p)
-				send(map[string]any{}, "stop")
+				send(map[string]any{}, openAIFinishReason(p.Reason))
 				_, _ = w.Write([]byte("data: [DONE]\n\n"))
 				flusher.Flush()
 				return
