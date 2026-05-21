@@ -1,11 +1,9 @@
 package executor
 
 import (
-	"bytes"
 	"context"
 	"errors"
 	"fmt"
-	"io"
 	"os/exec"
 )
 
@@ -52,29 +50,39 @@ func (h *LocalExecutor) Exec(ctx context.Context, cmd []string, opts ExecOptions
 		c.Stdin = opts.Stdin
 	}
 
-	var stdout, stderr bytes.Buffer
-	c.Stdout = &stdout
-	c.Stderr = &stderr
+	stdout := newCappingWriter(opts.MaxOutputBytes)
+	stderr := newCappingWriter(opts.MaxOutputBytes)
+	c.Stdout = stdout
+	c.Stderr = stderr
 
 	err := c.Run()
 	exitCode := 0
+	var execErr error
 	if err != nil {
 		var ee *exec.ExitError
 		if errors.As(err, &ee) {
 			exitCode = ee.ExitCode()
 		} else {
-			return ExecResult{}, fmt.Errorf("exec %q: %w", cmd[0], err)
+			// Spawn failure (binary missing, fork failed, etc.).
+			execErr = fmt.Errorf("exec %q: %w", cmd[0], err)
+			exitCode = -1
 		}
+	}
+	// CommandContext's SIGKILL on ctx.Done surfaces as *ExitError with
+	// ExitCode -1 — indistinguishable from a real `exit -1` until we
+	// also consult ctx. When ctx fired (timeout or parent cancel) we
+	// surface the timeout as the error so the LLM sees "killed for
+	// running too long" rather than "exited with code -1".
+	if ctx.Err() != nil && execErr == nil {
+		execErr = fmt.Errorf("exec %q: %w", cmd[0], ctx.Err())
+		exitCode = -1
 	}
 	return ExecResult{
 		ExitCode: exitCode,
 		Stdout:   stdout.String(),
 		Stderr:   stderr.String(),
-	}, nil
+	}, execErr
 }
 
 // Compile-time interface check.
 var _ Executor = (*LocalExecutor)(nil)
-
-// quiet unused-import linter when callers don't need io.
-var _ = io.Discard
