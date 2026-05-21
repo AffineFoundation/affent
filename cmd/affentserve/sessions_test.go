@@ -7,6 +7,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/affinefoundation/affent/internal/agent"
 	"github.com/rs/zerolog"
 )
 
@@ -179,6 +180,63 @@ func TestSessionPool_allocMemoryDir_OutsideWorkspace(t *testing.T) {
 	t.Cleanup(func() { _ = os.RemoveAll(workspace) })
 	if strings.HasPrefix(memDir, workspace) {
 		t.Errorf("memory dir %q must not live inside the ephemeral workspace %q", memDir, workspace)
+	}
+}
+
+// TestSessionPool_UserMemoryIsolatedPerSession pins that target=user
+// writes from one session_id do NOT leak into another session_id's
+// snapshot. The library default (~/.config/affent/USER.md) is correct
+// for affentctl — one OS user, many workspaces — but in a multi-
+// tenant affentserve deployment distinct session_ids are distinct
+// tenants, and sharing USER.md across them is a privacy bug.
+func TestSessionPool_UserMemoryIsolatedPerSession(t *testing.T) {
+	cfg := Config{
+		Listen:         "127.0.0.1:0",
+		MaxSessions:    4,
+		SessionIdleTTL: "5m",
+		WorkspaceRoot:  t.TempDir(),
+		MemoryRoot:     t.TempDir(),
+		EnableMemory:   true,
+		BaseURL:        "http://127.0.0.1:0",
+		APIKey:         "test",
+		Model:          "fake",
+	}
+	pool, err := NewSessionPool(cfg, zerolog.New(io.Discard))
+	if err != nil {
+		t.Fatalf("NewSessionPool: %v", err)
+	}
+	t.Cleanup(pool.Shutdown)
+
+	sa, err := pool.GetOrCreate("alpha")
+	if err != nil {
+		t.Fatalf("GetOrCreate alpha: %v", err)
+	}
+	sb, err := pool.GetOrCreate("beta")
+	if err != nil {
+		t.Fatalf("GetOrCreate beta: %v", err)
+	}
+	if sa.loop.Memory == nil || sb.loop.Memory == nil {
+		t.Fatal("both sessions must have a memory store when EnableMemory=true")
+	}
+	if _, err := sa.loop.Memory.Add(agent.TargetUser, "", "alpha-only fact"); err != nil {
+		t.Fatalf("alpha Add: %v", err)
+	}
+	if _, err := sb.loop.Memory.Add(agent.TargetUser, "", "beta-only fact"); err != nil {
+		t.Fatalf("beta Add: %v", err)
+	}
+	snapA := sa.loop.Memory.Snapshot()
+	snapB := sb.loop.Memory.Snapshot()
+	if !strings.Contains(snapA, "alpha-only") {
+		t.Errorf("alpha must see its own fact:\n%s", snapA)
+	}
+	if !strings.Contains(snapB, "beta-only") {
+		t.Errorf("beta must see its own fact:\n%s", snapB)
+	}
+	if strings.Contains(snapA, "beta-only") {
+		t.Errorf("beta's user fact leaked into alpha's snapshot:\n%s", snapA)
+	}
+	if strings.Contains(snapB, "alpha-only") {
+		t.Errorf("alpha's user fact leaked into beta's snapshot:\n%s", snapB)
 	}
 }
 

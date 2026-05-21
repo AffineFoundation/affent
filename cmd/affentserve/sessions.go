@@ -219,6 +219,16 @@ func (p *SessionPool) buildSession(id string) (*Session, error) {
 		}
 		fms := agent.NewFileMemoryStore(workspace)
 		fms.MemoryDir = memDir
+		// Scope the user-profile file under the per-session memory dir
+		// as well. The library default (defaultUserMemoryPath →
+		// ~/.config/affent/USER.md) is correct for affentctl, where
+		// one OS-user spans many workspaces and a shared USER.md is
+		// the intent. In affentserve, distinct session_ids are
+		// distinct tenants — leaving USER.md global would cross-leak
+		// "what you know about the user" across all clients of this
+		// server. Same-session_id round-trips still see the same
+		// profile because memDir is stable.
+		fms.UserPath = filepath.Join(memDir, "USER.md")
 		memStore = fms
 	}
 	if p.cfg.EnableBuiltins {
