@@ -70,7 +70,7 @@ type Loop struct {
 	// Events receives every event the loop publishes (turn.start,
 	// message.delta, tool.request, etc.). Nil is allowed: the loop
 	// runs normally but is silent on the event side — useful for
-	// embedders that only consume the persisted Conversation log.
+	// callers that only consume the persisted Conversation log.
 	Events       chan<- sse.Event
 	Log          zerolog.Logger
 	MaxTurnSteps int // assistant<->tool round trips per user turn; zero falls back to DefaultMaxTurnSteps

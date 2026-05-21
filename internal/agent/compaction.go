@@ -31,7 +31,7 @@ type Compactor interface {
 const summaryPrefix = "[summary of earlier work] "
 
 // DefaultSummaryTriggerMsgs is the conventional proactive threshold
-// borrowed from OpenHands V1 (max_size = 240). Used by embedders that
+// borrowed from OpenHands V1 (max_size = 240). Used by callers that
 // want a sane "compact long sessions" default without picking a
 // number themselves.
 const DefaultSummaryTriggerMsgs = 240

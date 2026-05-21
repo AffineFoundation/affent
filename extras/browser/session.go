@@ -26,7 +26,7 @@ type SessionConfig struct {
 
 	// UserAgent overrides the browser's UA string. Empty leaves
 	// Chromium's default. Some sites serve degraded content to
-	// automated UAs — embedders may inject a plain-Chrome string.
+	// automated UAs — callers may inject a plain-Chrome string.
 	UserAgent string
 
 	// Viewport size in CSS pixels. Width or Height of 0 falls back to
@@ -35,7 +35,7 @@ type SessionConfig struct {
 	ViewportHeight int
 
 	// BinaryPath overrides the discovered Chromium binary. Most
-	// embedders leave this empty and let rod's launcher resolve.
+	// callers leave this empty and let rod's launcher resolve.
 	BinaryPath string
 
 	// UserDataDir holds Chromium's profile. Empty creates an ephemeral
@@ -48,7 +48,7 @@ type SessionConfig struct {
 	ExtraArgs []string
 
 	// NoSandbox forces --no-sandbox. Required inside Docker without
-	// SYS_ADMIN. Defaults to off; flip on for containerized embedders.
+	// SYS_ADMIN. Defaults to off; flip on for containerized callers.
 	NoSandbox bool
 
 	// DisableStealth turns off the go-rod/stealth bypass script that
@@ -77,7 +77,7 @@ type SessionConfig struct {
 	// sandboxing the affent builtin file tools apply.
 	//
 	// Empty string disables enforcement and accepts any save_path —
-	// the right choice for embedders that already gate the tool set
+	// the right choice for callers that already gate the tool set
 	// some other way (a sandboxed container, a chroot, an internal
 	// allowlist). affentserve always sets this to the session's
 	// per-session workspace.
@@ -324,7 +324,7 @@ func (s *Session) cleanupTmpDirs() {
 	s.tmpDirs = nil
 }
 
-// Page returns the active page. Exported for tests and embedders that
+// Page returns the active page. Exported for tests and callers that
 // need direct rod access.
 func (s *Session) Page() *rod.Page { return s.page }
 

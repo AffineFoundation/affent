@@ -223,7 +223,7 @@ func decodeReq(t *testing.T, raw []byte) chatReqShape {
 
 // TestE2E_MemoryOnlyRejectsShell verifies RegisterMemoryOnly
 // actually limits the registry to the memory surface — no shell, no
-// file tools available, even if the embedder calls
+// file tools available, even if the caller calls
 // RegisterBuiltins logic by mistake elsewhere.
 func TestE2E_MemoryOnlyRejectsShell(t *testing.T) {
 	memStore := agent.NewFileMemoryStore(t.TempDir())

@@ -321,7 +321,7 @@ func TestTruncateForContext_UTF8Safe(t *testing.T) {
 }
 
 // TestPublish_NilEventsIsSilent pins the no-allocation, no-log path
-// when an embedder opts out of the event stream by leaving
+// when an caller opts out of the event stream by leaving
 // Loop.Events nil. Pre-fix the publish call hit `case nil <- ev:
 // default:` which never proceeds, so every event triggered a
 // misleading "event channel full" warning.

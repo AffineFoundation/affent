@@ -11,7 +11,7 @@ import (
 // "/etc/cron.d/anything.png" would have landed wherever the model
 // asked — inconsistent with write_file's safeWorkspacePath sandbox.
 // Now: WorkspaceDir != "" enforces the same boundary; "" preserves
-// back-compat for embedders that gate the tool some other way.
+// back-compat for callers that gate the tool some other way.
 func TestResolveSavePath_SandboxesScreenshotWrites(t *testing.T) {
 	ws := t.TempDir()
 	cases := []struct {

@@ -13,9 +13,9 @@
 //     REPL. The server has different lifecycle needs: per-session
 //     state across requests, idle GC, graceful shutdown of long-
 //     lived browser instances. Mixing the two would muddy both.
-//   - affent's design ethos keeps the core library tiny. The server
-//     and the extras it wires (browser, web, mcp) all opt in via
-//     this command's flags.
+//   - Affent's runtime is internal to the product. The server and the
+//     extras it wires (browser, web, mcp) opt in via this command's
+//     flags instead of assuming one global tool surface.
 //
 // What this binary is NOT
 //

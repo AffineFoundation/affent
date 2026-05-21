@@ -37,6 +37,6 @@
 //	affentbrowser.RegisterAll(reg, sess, affentbrowser.Options{})
 //
 // One Session corresponds to one isolated Chromium profile. Most
-// embedders create one Session per agent Loop (i.e. per conversation),
+// callers create one Session per agent Loop (i.e. per conversation),
 // and close it when the conversation ends.
 package browser

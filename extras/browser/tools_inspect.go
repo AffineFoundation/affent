@@ -17,7 +17,7 @@ import (
 // workspace sandbox. Mirrors agent.safeWorkspacePath: relative joins
 // onto workspaceDir, absolute must stay inside it. workspaceDir == ""
 // disables enforcement and returns the input path unchanged (back-
-// compat for embedders that gate the tool another way).
+// compat for callers that gate the tool another way).
 //
 // Without this, `save_path=/etc/cron.d/anything.png` would happily
 // land an attacker-controlled file at an arbitrary location. The

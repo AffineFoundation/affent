@@ -247,7 +247,7 @@ type FileMemoryStore struct {
 	// MemoryPath is the LEGACY single-file location. When set and
 	// MemoryDir is empty, FileMemoryStore derives MemoryDir as the
 	// parent dir + "memory" subdirectory and migrates the file on
-	// first access. Kept so embedders that hardcoded MemoryPath keep
+	// first access. Kept so callers that hardcoded MemoryPath keep
 	// working.
 	MemoryPath string
 

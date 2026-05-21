@@ -17,9 +17,9 @@ import (
 // outside the workspace's sessions/ dir. MkdirTemp in affentserve's
 // allocWorkspace rejects ids with slashes, so the affentserve path
 // is already safe in that exact spot, but NewConversation is a
-// public library entry point — embedders other than affentserve
+// runtime boundary — callers other than affentserve
 // could still call it with user-controlled ids. Validate at the
-// library boundary, defense in depth.
+// runtime boundary, defense in depth.
 func TestNewConversation_RejectsPathInjectionInSessionID(t *testing.T) {
 	home := t.TempDir()
 	bad := []string{

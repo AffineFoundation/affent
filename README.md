@@ -2,8 +2,7 @@
 
 Affent is an OpenAI-compatible agent runtime for practical tool-using sessions.
 It can run as a CLI for local work, as an HTTP service for clients that already
-speak the OpenAI API shape, or through its Go API when tighter integration is
-needed.
+speak the OpenAI API shape, and as a set of optional in-tree tool integrations.
 
 Affent focuses on the runtime layer of an agent: model streaming, tool
 execution, conversation state, cancellation, retries, context management,
@@ -52,13 +51,6 @@ MCP, and local or Docker-backed tool execution.
 useful for frontends, SDK-based clients, eval systems, and service-style
 deployments that want session pinning and access to Affent's native event
 stream.
-
-### Go API
-
-The Go API is available for integrations that need direct control over the
-runtime, registry, executor, memory store, or event pipeline. The public root
-package is kept as the integration surface while implementation detail moves
-behind internal package boundaries.
 
 ## Quick Start
 
@@ -198,6 +190,15 @@ evaluation harnesses.
 
 Trace output can include token-level deltas for replay or omit them for smaller
 batch-evaluation artifacts.
+
+## Architecture
+
+Affent's external product surfaces are the CLI and HTTP server. The agent
+runtime lives under `internal/agent`; supporting storage, retrieval, text, and
+test packages live under `internal/*`. The root of the repository is kept as a
+project doorway rather than a Go package.
+
+More architecture notes live in `docs/architecture.md`.
 
 ## HTTP API
 
