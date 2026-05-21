@@ -212,6 +212,11 @@ func (p *SessionPool) buildSession(id string) (*Session, error) {
 		bcfg := affentbrowser.SessionConfig{
 			NoSandbox:      true,
 			DisableStealth: p.cfg.BrowserNoStealth,
+			// Sandbox screenshot save_path to the per-session workspace
+			// so the model can't write PNGs to /etc/cron.d/ or similar.
+			// Mirrors the safeWorkspacePath guard the builtin file
+			// tools already apply.
+			WorkspaceDir: workspace,
 			Intercept: affentbrowser.InterceptConfig{
 				AllowAllDomains: p.cfg.BrowserAllowAllDomains,
 				Cache:           p.browserCache,

@@ -6,10 +6,43 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
+	"path/filepath"
+	"strings"
 
 	"github.com/affinefoundation/affent"
 	"github.com/go-rod/rod/lib/proto"
 )
+
+// resolveSavePath validates a screenshot save_path against an optional
+// workspace sandbox. Mirrors affent.safeWorkspacePath: relative joins
+// onto workspaceDir, absolute must stay inside it. workspaceDir == ""
+// disables enforcement and returns the input path unchanged (back-
+// compat for embedders that gate the tool another way).
+//
+// Without this, `save_path=/etc/cron.d/anything.png` would happily
+// land an attacker-controlled file at an arbitrary location. The
+// regular write_file tool already enforces via safeWorkspacePath;
+// screenshot save_path was the inconsistency.
+func resolveSavePath(workspaceDir, savePath string) (string, error) {
+	if workspaceDir == "" {
+		return savePath, nil
+	}
+	absWS, err := filepath.Abs(workspaceDir)
+	if err != nil {
+		return "", err
+	}
+	var target string
+	if filepath.IsAbs(savePath) {
+		target = filepath.Clean(savePath)
+	} else {
+		target = filepath.Clean(filepath.Join(absWS, savePath))
+	}
+	rel, err := filepath.Rel(absWS, target)
+	if err != nil || strings.HasPrefix(rel, "..") || rel == ".." {
+		return "", fmt.Errorf("save_path %q escapes workspace %q", savePath, absWS)
+	}
+	return target, nil
+}
 
 // SnapshotTool returns `browser_snapshot`. Re-takes the snapshot of
 // the current page; the model uses this after dynamic content changes
@@ -98,10 +131,14 @@ func ScreenshotTool(s *Session) *affent.Tool {
 				return "", fmt.Errorf("screenshot: %w", err)
 			}
 			if args.SavePath != "" {
-				if err := os.WriteFile(args.SavePath, png, 0o644); err != nil {
-					return "", fmt.Errorf("write screenshot to %s: %w", args.SavePath, err)
+				resolved, err := resolveSavePath(s.cfg.WorkspaceDir, args.SavePath)
+				if err != nil {
+					return "", err
 				}
-				return fmt.Sprintf("screenshot saved to %s (%d bytes, png)", args.SavePath, len(png)), nil
+				if err := os.WriteFile(resolved, png, 0o644); err != nil {
+					return "", fmt.Errorf("write screenshot to %s: %w", resolved, err)
+				}
+				return fmt.Sprintf("screenshot saved to %s (%d bytes, png)", resolved, len(png)), nil
 			}
 			if len(png) > maxInlinePNGBytes {
 				return "", fmt.Errorf(

@@ -69,6 +69,19 @@ type SessionConfig struct {
 	// documented defaults: block image/font/media + a starter
 	// tracker domain list, no cache.
 	Intercept InterceptConfig
+
+	// WorkspaceDir, when non-empty, restricts file-writing browser
+	// tools (currently just browser_screenshot's save_path) to paths
+	// inside this directory. Relative save_path values join onto it;
+	// absolute paths must fall within. Mirrors the same workspace
+	// sandboxing the affent builtin file tools apply.
+	//
+	// Empty string disables enforcement and accepts any save_path —
+	// the right choice for embedders that already gate the tool set
+	// some other way (a sandboxed container, a chroot, an internal
+	// allowlist). affentserve always sets this to the session's
+	// per-session workspace.
+	WorkspaceDir string
 }
 
 func (c SessionConfig) viewport() (int, int) {
