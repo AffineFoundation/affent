@@ -87,14 +87,24 @@ Slash commands inside the REPL:
 	traceEnc := json.NewEncoder(b.trace)
 	traceEnc.SetEscapeHTML(false)
 
+	// onEOF is the post-EOF cleanup: print a newline so the next shell
+	// prompt isn't glued onto our last "> ", then exit 0. We DON'T exit
+	// here when bufio returned a partial last line — that pattern fires
+	// for `echo -n "hi" | affentctl chat`, where dropping the line
+	// would silently swallow the user's actual message.
+	onEOF := func() int {
+		fmt.Fprintln(os.Stderr)
+		return 0
+	}
+
 	for {
 		fmt.Fprint(os.Stderr, "\n> ")
 		line, err := reader.ReadString('\n')
-		if err == io.EOF {
-			fmt.Fprintln(os.Stderr)
-			return 0
+		eofWithData := errors.Is(err, io.EOF) && line != ""
+		if errors.Is(err, io.EOF) && !eofWithData {
+			return onEOF()
 		}
-		if err != nil {
+		if err != nil && !eofWithData {
 			fmt.Fprintf(os.Stderr, "read input: %v\n", err)
 			return 3
 		}
