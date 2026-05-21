@@ -69,7 +69,13 @@ Tiny dep graph: `uuid` + `zerolog` + stdlib.
   `list_files`. File tools are sandboxed by `safeWorkspacePath`:
   relative paths join onto the workspace, absolute paths are taken
   literally and must fall inside the workspace (no sentinel /
-  trim-the-leading-slash hacks).
+  trim-the-leading-slash hacks). `read_file` refuses files with a
+  NUL byte in the first 8 KiB (same heuristic as file(1) / git /
+  `grep -I`) — binary blobs aren't useful context for the model.
+- `shell` wraps commands in `sh -c` by default (POSIX, works in
+  alpine / busybox / debian / centos). Set `BuiltinDeps.Shell` to
+  `["bash", "-lc"]` for the affine-agents dev-box pattern where
+  login-shell semantics matter (`~/.bashrc`, custom PATH).
 - `shell` runs through an `executor.Executor` interface. Two stock
   implementations ship in `executor/`:
   - `LocalExecutor` — no isolation; commands run on the host. For CLI /
@@ -531,11 +537,17 @@ DELETE /v1/sessions/{id}             — close + remove
 A `SessionPool` keeps per-session state in-process with LRU eviction
 when above `--max-sessions`, idle-TTL GC, and graceful shutdown that
 closes browser instances and removes workspaces. Optional features
-opt in via flags / JSON config: `--enable-browser`, `--enable-web`,
-`--enable-web-search`, `--enable-builtins` (shell + file tools —
-disabled by default for remote-driven servers), `--enable-memory`.
-`--auth-token` gates every endpoint except `/healthz` with a
-`Bearer` token.
+opt in via flags / JSON config: `--browser` (plus
+`--browser-screenshot` for vision-capable models), `--web`,
+`--web-search`, `--builtins` (shell + file tools — disabled by
+default for remote-driven servers), `--memory`. `--auth-token`
+gates every endpoint except `/healthz` with a `Bearer` token.
+
+To pin requests to an existing session pass either `session_id` or
+`affent_session_id` in the JSON body — the affent-namespaced field
+wins when both are set, so a caller that copy-pastes the response's
+`affent_session_id` directly into a follow-up request gets the same
+session back.
 
 `cmd/affentserve` is also a separate Go sub-module — the server's
 deps (browser, web, MCP) stay out of the root module's transitive
