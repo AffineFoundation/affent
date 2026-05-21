@@ -25,7 +25,7 @@ var memoryActions = []string{"add", "replace", "remove", "search", "list"}
 func memoryTool(store MemoryStore) *Tool {
 	schema, err := json.Marshal(map[string]any{
 		"type":     "object",
-		"required": []string{"action", "target"},
+		"required": []string{"action"},
 		"properties": map[string]any{
 			"action": map[string]any{
 				"type":        "string",
@@ -35,7 +35,7 @@ func memoryTool(store MemoryStore) *Tool {
 			"target": map[string]any{
 				"type":        "string",
 				"enum":        []string{string(TargetMemory), string(TargetUser)},
-				"description": "memory = your own notes (env, conventions, lessons learned); user = what you know about the user (name, preferences, communication style).",
+				"description": "memory (default) = your own notes (env, conventions, lessons learned); user = what you know about the user (name, preferences, communication style). Omit for the common case of agent notes.",
 			},
 			"topic": map[string]any{
 				"type":        "string",
@@ -114,6 +114,14 @@ func memoryTool(store MemoryStore) *Tool {
 			}
 			if err := json.Unmarshal(args, &p); err != nil {
 				return "", fmt.Errorf("decode args: %w", err)
+			}
+			// Default target to "memory" — the agent-notes case is far
+			// more common than user-profile updates, and forcing the
+			// model to specify on every call (when omission previously
+			// errored with "invalid memory target") wastes ~1.7k tokens
+			// per retry on a multi-search turn.
+			if p.Target == "" {
+				p.Target = string(TargetMemory)
 			}
 			target := MemoryTarget(p.Target)
 

@@ -69,6 +69,7 @@ type commonFlags struct {
 	memoryDir            string // path for the v2 memory dir ("" → <workspace>/.affent/memory)
 	memoryUserStore      string // path for USER.md  ("" → $XDG_CONFIG_HOME/affent/USER.md)
 	memoryMaxChars       string // "CORE,USER" or legacy "MEM,USER"; "" → defaults
+	memoryTopicMaxChars  int    // per-topic char cap; <=0 → DefaultTopicCharLimit
 
 	// projectContext loads recognized user-authored project notes
 	// (AGENTS.md, CONVENTIONS.md, .cursorrules, .clinerules, CLAUDE.md,
@@ -109,7 +110,8 @@ func (c *commonFlags) bind(fs *flag.FlagSet) {
 	fs.StringVar(&c.memoryWorkspaceStore, "memory-workspace-store", "", "(legacy) path to a pre-v2 single-file MEMORY.md; if set, migration moves it into the v2 topic layout on first access. Prefer --memory-dir for new setups.")
 	fs.StringVar(&c.memoryDir, "memory-dir", "", "path to the v2 memory dir (core.md + topics/*.md); default <workspace>/.affent/memory")
 	fs.StringVar(&c.memoryUserStore, "memory-user-store", "", "path to USER.md; default $XDG_CONFIG_HOME/affent/USER.md (cross-workspace)")
-	fs.StringVar(&c.memoryMaxChars, "memory-max-chars", "", "char limits as CORE,USER (default 2200,1375). Per-topic cap is fixed at affent.DefaultTopicCharLimit; configure FileMemoryStore directly for finer control.")
+	fs.StringVar(&c.memoryMaxChars, "memory-max-chars", "", "char limits as CORE,USER (default 2200,1375). Per-topic cap → --memory-topic-max-chars.")
+	fs.IntVar(&c.memoryTopicMaxChars, "memory-topic-max-chars", 0, "per-topic char cap; 0 → DefaultTopicCharLimit (4400). Each custom topic (auth, deploy, ...) is bounded independently; total memory grows by topic count.")
 	fs.BoolVar(&c.projectContext, "project-context", true, "auto-load AGENTS.md / CONVENTIONS.md / .cursorrules / .clinerules / CLAUDE.md / GEMINI.md from --workspace into the system prompt")
 	fs.StringVar(&c.sessionID, "session-id", "", "resume the named session (under --workspace/.affentctl/)")
 	fs.BoolVar(&c.continueLast, "continue", false, "resume the most recent session under --workspace")
@@ -405,11 +407,12 @@ func setupLoop(c commonFlags) (*loopBundle, int) {
 			_ = traceClose()
 			return nil, 64
 		} else if ok {
-			// memCap maps to core (always-in-prompt). Topic cap stays at
-			// DefaultTopicCharLimit unless the caller sets TopicCharLimit
-			// on the store directly.
+			// memCap maps to core (always-in-prompt).
 			fs.CoreCharLimit = memCap
 			fs.UserCharLimit = userCap
+		}
+		if c.memoryTopicMaxChars > 0 {
+			fs.TopicCharLimit = c.memoryTopicMaxChars
 		}
 		memStore = fs
 	}

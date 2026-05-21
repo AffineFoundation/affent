@@ -284,7 +284,7 @@ func (s *FileMemoryStore) Add(target MemoryTarget, topic, content string) (Memor
 	newEntries := append(append([]string{}, entries...), content)
 	if total := joinedLen(newEntries); limit > 0 && total > limit {
 		return s.respondLocked(target, topic, false,
-			fmt.Sprintf("at %d/%d chars; adding %d-char entry would exceed the limit. consolidate or remove first",
+			fmt.Sprintf("at %d/%d chars; the new %d-char entry would push past the limit. Consolidate existing entries (use replace to merge related ones into one denser entry) or remove obsolete ones, THEN retry this add — don't just delete and lose information.",
 				joinedLen(entries), limit, len(content)),
 			entries, nil), nil
 	}

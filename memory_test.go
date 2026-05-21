@@ -85,8 +85,8 @@ func TestMemoryAddOverflow(t *testing.T) {
 	if resp.OK {
 		t.Fatalf("expected overflow rejection, got OK: %+v", resp)
 	}
-	if !strings.Contains(resp.Message, "exceed") {
-		t.Fatalf("expected exceed-limit message, got %q", resp.Message)
+	if !strings.Contains(resp.Message, "push past the limit") {
+		t.Fatalf("expected limit-exceeded message, got %q", resp.Message)
 	}
 	// Current state returned so agent can consolidate.
 	if len(resp.Entries) != 1 {
