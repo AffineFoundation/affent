@@ -166,10 +166,49 @@ func toWireMessages(msgs []ChatMessage) []wireMessage {
 		out[i] = wireMessage{
 			Role:       m.Role,
 			Content:    m.Content,
-			ToolCalls:  m.ToolCalls,
+			ToolCalls:  sanitizeToolCallArgs(m.ToolCalls),
 			ToolCallID: m.ToolCallID,
 			Name:       m.Name,
 		}
+	}
+	return out
+}
+
+// sanitizeToolCallArgs replaces unparseable tool_call.function.arguments
+// with "{}" before they go on the wire. Most upstream OpenAI-compat APIs
+// (verified: DashScope) reject the entire chat completion with HTTP 400
+// `function.arguments parameter must be in JSON format` when a prior
+// assistant message has a malformed args string — which happens when
+// the model is cut off mid-tool-call (max_tokens hit, output cap, or
+// just a flaky decode). Without this guard, one bad tool_call from
+// the model permanently bricks the turn: every subsequent step gets
+// the same 400, the loop bails with reason=error, and the model never
+// gets a chance to retry with cleaner args.
+//
+// The on-disk Conversation log keeps the original malformed string for
+// debug / replay; only the wire copy is normalized. The matching
+// tool.result already carries the "decode args" error message so the
+// model can see what went wrong and correct itself.
+//
+// Returns the slice verbatim (no allocation) when nothing needs fixing
+// — the common case is every tool_call is well-formed.
+func sanitizeToolCallArgs(in []ToolCall) []ToolCall {
+	if len(in) == 0 {
+		return in
+	}
+	var out []ToolCall
+	for i := range in {
+		args := in[i].Function.Arguments
+		if args != "" && json.Valid([]byte(args)) {
+			continue
+		}
+		if out == nil {
+			out = append([]ToolCall(nil), in...)
+		}
+		out[i].Function.Arguments = "{}"
+	}
+	if out == nil {
+		return in
 	}
 	return out
 }
