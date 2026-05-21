@@ -110,3 +110,72 @@ func TestConsumeStream_IdleStallNoFinish(t *testing.T) {
 		t.Logf("informational: error message = %q", sawErr.Error())
 	}
 }
+
+// TestConsumeStream_ParallelToolCalls covers the OpenAI-style streaming
+// shape where the model issues two parallel tool calls and their
+// argument fragments arrive interleaved. The model-supplied `index`
+// field is what disambiguates which call each fragment belongs to.
+func TestConsumeStream_ParallelToolCalls(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "text/event-stream")
+		w.WriteHeader(200)
+		fl := w.(http.Flusher)
+		// Two parallel call headers.
+		w.Write([]byte(`data: {"choices":[{"delta":{"role":"assistant","tool_calls":[{"index":0,"id":"call_a","type":"function","function":{"name":"foo","arguments":""}}]},"finish_reason":null}]}` + "\n\n"))
+		fl.Flush()
+		w.Write([]byte(`data: {"choices":[{"delta":{"tool_calls":[{"index":1,"id":"call_b","type":"function","function":{"name":"bar","arguments":""}}]},"finish_reason":null}]}` + "\n\n"))
+		fl.Flush()
+		// Interleaved arg fragments — index field must route correctly.
+		w.Write([]byte(`data: {"choices":[{"delta":{"tool_calls":[{"index":1,"function":{"arguments":"{\"y\":"}}]},"finish_reason":null}]}` + "\n\n"))
+		fl.Flush()
+		w.Write([]byte(`data: {"choices":[{"delta":{"tool_calls":[{"index":0,"function":{"arguments":"{\"x\":"}}]},"finish_reason":null}]}` + "\n\n"))
+		fl.Flush()
+		w.Write([]byte(`data: {"choices":[{"delta":{"tool_calls":[{"index":1,"function":{"arguments":"2}"}}]},"finish_reason":null}]}` + "\n\n"))
+		fl.Flush()
+		w.Write([]byte(`data: {"choices":[{"delta":{"tool_calls":[{"index":0,"function":{"arguments":"1}"}}]},"finish_reason":null}]}` + "\n\n"))
+		fl.Flush()
+		w.Write([]byte(`data: {"choices":[{"delta":{},"finish_reason":"tool_calls"}]}` + "\n\n"))
+		fl.Flush()
+		w.Write([]byte("data: [DONE]\n\n"))
+		fl.Flush()
+	}))
+	t.Cleanup(srv.Close)
+
+	c := NewLLMClient(srv.URL, "", "fake")
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	stream, err := c.Chat(ctx, []ChatMessage{{Role: "user", Content: "hi"}}, nil)
+	if err != nil {
+		t.Fatalf("Chat: %v", err)
+	}
+	var finish *FinishInfo
+	for ev := range stream {
+		if ev.Err != nil {
+			t.Fatalf("stream error: %v", ev.Err)
+		}
+		if ev.Finish != nil {
+			finish = ev.Finish
+		}
+	}
+	if finish == nil {
+		t.Fatal("no Finish event")
+	}
+	if got, want := len(finish.Final.ToolCalls), 2; got != want {
+		t.Fatalf("tool call count = %d, want %d (calls=%+v)", got, want, finish.Final.ToolCalls)
+	}
+	// Index 0 = foo({"x":1})
+	if got, want := finish.Final.ToolCalls[0].Function.Name, "foo"; got != want {
+		t.Errorf("call[0].name = %q, want %q", got, want)
+	}
+	if got, want := finish.Final.ToolCalls[0].Function.Arguments, `{"x":1}`; got != want {
+		t.Errorf("call[0].args = %q, want %q — interleaved arg fragments routed to wrong call", got, want)
+	}
+	// Index 1 = bar({"y":2})
+	if got, want := finish.Final.ToolCalls[1].Function.Name, "bar"; got != want {
+		t.Errorf("call[1].name = %q, want %q", got, want)
+	}
+	if got, want := finish.Final.ToolCalls[1].Function.Arguments, `{"y":2}`; got != want {
+		t.Errorf("call[1].args = %q, want %q", got, want)
+	}
+}
