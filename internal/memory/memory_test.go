@@ -668,6 +668,70 @@ func TestMemorySearchTrimsLongSnippet(t *testing.T) {
 	}
 }
 
+// TestMemorySearchRecencyBoost pins that two entries with identical
+// term overlap rank by freshness — the fresh one above the old one.
+// Without this, a stale fact with the same keyword density dominates
+// retrieval purely by lexical accident in a long-running memory.
+// Mirrors the Mem0 / Letta retrieval pattern; recencyFloor keeps old
+// facts in the results, just behind fresh ones.
+func TestMemorySearchRecencyBoost(t *testing.T) {
+	defer func(orig func() time.Time) { nowUTC = orig }(nowUTC)
+	s := newTestStore(t)
+
+	nowUTC = func() time.Time { return time.Date(2025, 1, 1, 0, 0, 0, 0, time.UTC) }
+	_, _ = s.Add(TargetMemory, "ops", "deploy via fly.io main path")
+	nowUTC = func() time.Time { return time.Date(2026, 6, 1, 0, 0, 0, 0, time.UTC) }
+	_, _ = s.Add(TargetMemory, "ops", "deploy via fly.io fresh path")
+
+	nowUTC = func() time.Time { return time.Date(2026, 6, 1, 0, 1, 0, 0, time.UTC) }
+	resp, err := s.Search(TargetMemory, "ops", "deploy fly.io", 5)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(resp.Results) < 2 {
+		t.Fatalf("expected 2 results, got %d", len(resp.Results))
+	}
+	if !strings.Contains(resp.Results[0].Snippet, "fresh") {
+		t.Errorf("fresh entry should rank above year-old one; got order: %+v", resp.Results)
+	}
+	// Old entry must still appear (recencyFloor > 0 keeps it visible).
+	old := false
+	for _, r := range resp.Results {
+		if strings.Contains(r.Snippet, "main path") {
+			old = true
+		}
+	}
+	if !old {
+		t.Errorf("old entry should still appear (floor prevents complete burial)")
+	}
+}
+
+// TestMemoryRecencyFactorBoundaries pins the math: today=1.0, half-
+// horizon=midway, past-horizon=floor, empty/unparseable=1.0 (no
+// penalty for legacy unstamped entries — the rollout of stamping
+// shouldn't suddenly demote everything that was there before).
+func TestMemoryRecencyFactorBoundaries(t *testing.T) {
+	defer func(orig func() time.Time) { nowUTC = orig }(nowUTC)
+	nowUTC = func() time.Time { return time.Date(2026, 6, 1, 0, 0, 0, 0, time.UTC) }
+	cases := []struct {
+		name string
+		in   string
+		want float64
+	}{
+		{"empty → no penalty", "", 1.0},
+		{"unparseable → no penalty", "not-a-date", 1.0},
+		{"now → 1.0", "2026-06-01T00:00:00Z", 1.0},
+		{"half horizon → midway", "2025-12-02T00:00:00Z", 1.0 - (1.0-recencyFloor)*0.5},
+		{"past horizon → floor", "2024-01-01T00:00:00Z", recencyFloor},
+	}
+	for _, c := range cases {
+		got := recencyFactor(c.in)
+		if got < c.want-0.01 || got > c.want+0.01 {
+			t.Errorf("%s: recencyFactor(%q) = %v, want %v", c.name, c.in, got, c.want)
+		}
+	}
+}
+
 // TestMemoryListTopicsCarriesNewestAt pins that ListTopics returns
 // the most-recent timestamp per topic — operators / models use this
 // to prioritize stale-vs-fresh topics without reading bodies.

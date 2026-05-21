@@ -59,6 +59,41 @@ func newestEntryTimestamp(entries []string) string {
 	return newest
 }
 
+// recencyHalfLifeDays defines the soft horizon for the recency boost.
+// Linear decay from 1.0 today down to recencyFloor at horizon and
+// beyond. Picked so a quarter-year-old fact loses ~25% of its weight
+// vs a same-relevance fresh fact — enough to break ties, not enough
+// to bury still-useful old facts.
+const recencyHalfLifeDays = 365
+
+// recencyFloor is the minimum recency factor: ancient entries never
+// score below this fraction of their term-overlap value. Keeps long-
+// term memory useful — a year-old fact about "user prefers dark mode"
+// is still worth surfacing even if everything else is fresh.
+const recencyFloor = 0.5
+
+// recencyFactor returns a multiplier in [recencyFloor, 1.0] based on
+// how old the entry is. createdAt="" means un-stamped legacy entry —
+// these get factor 1.0 (no penalty) so the stamping rollout doesn't
+// suddenly demote pre-existing memory.
+func recencyFactor(createdAt string) float64 {
+	if createdAt == "" {
+		return 1.0
+	}
+	t, err := time.Parse(time.RFC3339, createdAt)
+	if err != nil {
+		return 1.0
+	}
+	ageDays := nowUTC().Sub(t).Hours() / 24
+	if ageDays <= 0 {
+		return 1.0
+	}
+	if ageDays >= recencyHalfLifeDays {
+		return recencyFloor
+	}
+	return 1.0 - (1.0-recencyFloor)*(ageDays/recencyHalfLifeDays)
+}
+
 // MemoryTarget selects which of the two persistent stores a memory
 // tool call operates on.
 //
@@ -597,6 +632,15 @@ func (s *FileMemoryStore) Search(target MemoryTarget, topic, query string, topK 
 			if score <= 0 {
 				continue
 			}
+			// Recency boost: at equal term overlap, fresher facts rank
+			// above stale ones. Linear decay from 1.0 (today) down to
+			// a floor of 0.5 (1 year+ old). Old entries don't vanish
+			// — they just lose ties to newer entries. Mirrors how
+			// Mem0 / Letta both factor recency into retrieval. Entries
+			// without a timestamp (legacy un-stamped) get factor 1.0,
+			// not 0.5, so the rollout of stamping doesn't suddenly
+			// down-rank everything that was already there.
+			score *= recencyFactor(createdAt)
 			hits = append(hits, MemorySearchResult{
 				Topic:     b.topic,
 				Snippet:   trimSnippet(body, memorySnippetMax),
