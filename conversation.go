@@ -20,14 +20,15 @@ type Conversation struct {
 }
 
 // NewConversation opens or creates the on-disk log for sessionID under the
-// user's home volume. The file lives at <homeDir>/.affine-agents/sessions/
+// user's home volume. The file lives at <homeDir>/.affent/sessions/
 // <sessionID>.jsonl. Existing entries are loaded into memory.
 //
-// This is the gateway-style constructor: it imposes the standard
-// directory layout. CLI / training drivers that want full control of
-// the file path should use OpenConversationAt instead.
+// The .affent/ directory is the same namespace FileMemoryStore writes
+// MEMORY.md into, so a home-rooted setup keeps every persistent affent
+// artifact under one path. CLI / training drivers that want full
+// control of the file path should use OpenConversationAt instead.
 func NewConversation(homeDir, sessionID string) (*Conversation, error) {
-	dir := filepath.Join(homeDir, ".affine-agents", "sessions")
+	dir := filepath.Join(homeDir, ".affent", "sessions")
 	if err := os.MkdirAll(dir, 0o755); err != nil {
 		return nil, fmt.Errorf("mkdir conversations: %w", err)
 	}
