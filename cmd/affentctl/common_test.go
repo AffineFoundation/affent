@@ -10,6 +10,46 @@ import (
 	"unicode/utf8"
 )
 
+// TestReadMaybeStdin_AtMissingFileIsError pins the @-prefix contract.
+// Real-test surface: `affentctl run --prompt @/typoed/path.txt` used
+// to send the literal string "/typoed/path.txt" to the model. The
+// model would gamely respond as if asked about that filename. Fix:
+// @path means MUST exist, return an error otherwise so the user
+// notices the typo before paying for a confused reply.
+func TestReadMaybeStdin_AtMissingFileIsError(t *testing.T) {
+	dir := t.TempDir()
+	missing := filepath.Join(dir, "does-not-exist.txt")
+	got, err := readMaybeStdin("@" + missing)
+	if err == nil {
+		t.Fatalf("@<missing> should error; got %q", got)
+	}
+	if !strings.Contains(err.Error(), "does-not-exist.txt") {
+		t.Errorf("error should mention the path: %v", err)
+	}
+}
+
+func TestReadMaybeStdin_AtExistingFile(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "p.txt")
+	if err := os.WriteFile(path, []byte("hello from file"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	got, err := readMaybeStdin("@" + path)
+	if err != nil {
+		t.Fatalf("read: %v", err)
+	}
+	if got != "hello from file" {
+		t.Errorf("got %q", got)
+	}
+}
+
+func TestReadMaybeStdin_LiteralPassesThrough(t *testing.T) {
+	got, err := readMaybeStdin("just a literal prompt")
+	if err != nil || got != "just a literal prompt" {
+		t.Errorf("literal mishandled: got=%q err=%v", got, err)
+	}
+}
+
 func TestTrimUTF8_SnapsToRuneBoundary(t *testing.T) {
 	cases := []struct {
 		name string

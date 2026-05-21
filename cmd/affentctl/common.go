@@ -585,6 +585,17 @@ func mostRecentSession(convDir string) (string, error) {
 
 // readMaybeStdin handles "-", a file path that exists, or a literal
 // string. Used for --prompt and --system-prompt flags.
+//
+// Behavior:
+//   - "" → ""
+//   - "-" → read stdin
+//   - "@path" → MUST be a readable file; missing/unreadable is a hard
+//     error. Pre-fix this silently fell through to the literal path
+//     so `--prompt @/typoed/path.txt` sent the literal "/typoed/path.txt"
+//     to the model — burning tokens on a confused reply.
+//   - anything else → take as-is (literal prompt). To pass a literal
+//     starting with "@", escape it (e.g. " @foo" with a leading space)
+//     or use --prompt - and pipe in.
 func readMaybeStdin(spec string) (string, error) {
 	if spec == "" {
 		return "", nil
@@ -594,11 +605,12 @@ func readMaybeStdin(spec string) (string, error) {
 		return string(b), err
 	}
 	if strings.HasPrefix(spec, "@") {
-		spec = spec[1:]
-	}
-	if _, err := os.Stat(spec); err == nil {
-		b, err := os.ReadFile(spec)
-		return string(b), err
+		path := spec[1:]
+		b, err := os.ReadFile(path)
+		if err != nil {
+			return "", fmt.Errorf("read %s: %w", path, err)
+		}
+		return string(b), nil
 	}
 	return spec, nil
 }

@@ -40,7 +40,14 @@ Required: --prompt, --model.`)
 	}
 
 	prompt, err := readMaybeStdin(*promptFlag)
-	if err != nil || strings.TrimSpace(prompt) == "" {
+	if err != nil {
+		// Distinguish "you forgot --prompt" (which goes to the
+		// "use '-' for stdin" hint) from "your @file path is wrong"
+		// (which the user needs to see verbatim to fix the typo).
+		fmt.Fprintf(os.Stderr, "--prompt: %v\n", err)
+		return 64
+	}
+	if strings.TrimSpace(prompt) == "" {
 		fmt.Fprintln(os.Stderr, "--prompt is required (use '-' for stdin)")
 		return 64
 	}
