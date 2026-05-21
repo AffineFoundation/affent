@@ -124,6 +124,22 @@ func envOr(key, fallback string) string {
 	return fallback
 }
 
+// flagEnvSources maps flag-name → env-var-name for every flag whose
+// default reads from an env var. Used by loadConfigFile so the env
+// var beats the config file (matches the documented precedence in
+// the flag table: env is a first-class lane, not a default).
+//
+// Bind kept in sync with the `bind` method above. Tests in
+// common_test.go catch drift.
+var flagEnvSources = map[string]string{
+	"config":     "AFFENTCTL_CONFIG",
+	"base-url":   "AFFENTCTL_BASE_URL",
+	"api-key":    "AFFENTCTL_API_KEY",
+	"model":      "AFFENTCTL_MODEL",
+	"mcp-config": "AFFENTCTL_MCP_CONFIG",
+	"executor":   "AFFENTCTL_EXECUTOR",
+}
+
 type fileConfig struct {
 	Workspace       *string `json:"workspace"`
 	BaseURL         *string `json:"base_url"`
@@ -182,8 +198,21 @@ func loadConfigFile(c *commonFlags, fs *flag.FlagSet) error {
 	if err := json.Unmarshal(raw, &cfg); err != nil {
 		return fmt.Errorf("parse config %s: %w", c.configPath, err)
 	}
-	setByCLI := map[string]bool{}
-	fs.Visit(func(f *flag.Flag) { setByCLI[f.Name] = true })
+	// Precedence: CLI flag > env var > config file > built-in default.
+	// Env vars are presented as a first-class column in the flag table
+	// (AFFENTCTL_*) — users who set them expect them to win over a
+	// static config file. The old code only tracked CLI-explicit flags
+	// (fs.Visit) and silently let the config override the env-derived
+	// default for unset flags. Treat env-derived as "user-set" so the
+	// config can only fill in things env didn't reach.
+	setByCLIOrEnv := map[string]bool{}
+	fs.Visit(func(f *flag.Flag) { setByCLIOrEnv[f.Name] = true })
+	for name, env := range flagEnvSources {
+		if os.Getenv(env) != "" {
+			setByCLIOrEnv[name] = true
+		}
+	}
+	setByCLI := setByCLIOrEnv
 
 	setString := func(name string, dst *string, v *string) {
 		if v != nil && !setByCLI[name] {

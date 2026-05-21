@@ -121,6 +121,41 @@ func TestApplyConfigMergesAndCLIOverrides(t *testing.T) {
 	}
 }
 
+// TestEnvVarBeatsConfigFile pins the documented precedence:
+// CLI > env > config > built-in default. Real test: a user had
+// AFFENTCTL_MODEL=qwen-plus exported, ran `affentctl --config c.json`
+// where c.json set "model":"old-default", and the run silently used
+// old-default — env was overridden by a static project file. The
+// flag table documents env as a peer of --model (not a default), so
+// env should win.
+func TestEnvVarBeatsConfigFile(t *testing.T) {
+	dir := t.TempDir()
+	cfgPath := filepath.Join(dir, "c.json")
+	if err := os.WriteFile(cfgPath, []byte(`{"model":"from-config","base_url":"http://from-config"}`), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("AFFENTCTL_MODEL", "from-env")
+	// base_url is NOT set in env — config should still fill that in.
+	t.Setenv("AFFENTCTL_BASE_URL", "")
+	os.Unsetenv("AFFENTCTL_BASE_URL")
+
+	var cf commonFlags
+	fs := flag.NewFlagSet("test", flag.ContinueOnError)
+	cf.bind(fs)
+	if err := fs.Parse([]string{"--config", cfgPath}); err != nil {
+		t.Fatal(err)
+	}
+	if err := applyConfig(&cf, fs); err != nil {
+		t.Fatal(err)
+	}
+	if cf.model != "from-env" {
+		t.Errorf("env-set AFFENTCTL_MODEL should win over config; got %q", cf.model)
+	}
+	if cf.baseURL != "http://from-config" {
+		t.Errorf("config should fill in base-url when env is unset; got %q", cf.baseURL)
+	}
+}
+
 func TestMemoryOnlyImpliesMemoryEnabled(t *testing.T) {
 	var cf commonFlags
 	fs := flag.NewFlagSet("test", flag.ContinueOnError)
