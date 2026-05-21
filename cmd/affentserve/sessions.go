@@ -690,23 +690,17 @@ func (p *SessionPool) sweepRetentionOnce() {
 			// recognize as ours. Don't touch it.
 			continue
 		}
-		// Active sessions never get wiped — their in-memory state is
-		// the source of truth and could be flushing right now.
-		p.mu.Lock()
-		_, active := p.sessions[id]
-		p.mu.Unlock()
-		if active {
-			continue
-		}
 		dir := filepath.Join(root, id)
-		// Prefer conversation.jsonl mtime — it advances on every Append,
-		// so an idle session has a precisely-aging signal. Fall back to
-		// dir mtime if the conv log is missing (e.g., memory-only setup
-		// or a half-built session).
+		// Stat is cheap and independent of pool state — do it outside
+		// the lock so we don't gate the lock on filesystem latency for
+		// every dir on every sweep, including the fresh ones we'll
+		// skip immediately.
 		var mtime time.Time
 		if fi, err := os.Stat(filepath.Join(dir, "conversation.jsonl")); err == nil {
 			mtime = fi.ModTime()
 		} else if fi, err := os.Stat(dir); err == nil {
+			// Conversation log missing (memory-only setup / half-built
+			// session) — fall back to the dir's own mtime.
 			mtime = fi.ModTime()
 		} else {
 			continue
@@ -714,10 +708,24 @@ func (p *SessionPool) sweepRetentionOnce() {
 		if !mtime.Before(cutoff) {
 			continue
 		}
+		// Active-check + RemoveAll must run UNDER THE SAME LOCK as
+		// GetOrCreate. Without that, a client reconnecting with this
+		// id between the active-check and the RemoveAll would land a
+		// freshly-built session pointing at conv.jsonl — and we'd then
+		// wipe the dir out from under it, breaking the next Append
+		// with ENOENT. Pre-fix the two operations sat in separate
+		// critical sections.
+		p.mu.Lock()
+		if _, active := p.sessions[id]; active {
+			p.mu.Unlock()
+			continue
+		}
 		if err := os.RemoveAll(dir); err != nil {
+			p.mu.Unlock()
 			p.logger.Warn().Err(err).Str("session_id", id).Msg("retention sweep remove")
 			continue
 		}
+		p.mu.Unlock()
 		deleted++
 		p.logger.Info().
 			Str("session_id", id).
