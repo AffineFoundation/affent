@@ -9,6 +9,8 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/affinefoundation/affent/executor"
 )
 
 // TestSafeWorkspacePath pins the path-resolution contract: relative paths
@@ -145,6 +147,53 @@ func TestReadFileTool_TruncationIsUTF8Safe(t *testing.T) {
 		if r == '�' {
 			t.Fatalf("UTF-8 replacement char in capped read prefix (mid-rune cut)\nprefix=%q", prefix)
 		}
+	}
+}
+
+// recordingExec captures the argv passed to Exec so tests can assert
+// shell-prefix wiring without a real shell.
+type recordingExec struct {
+	gotArgv []string
+}
+
+func (r *recordingExec) SessionID() string { return "test" }
+func (r *recordingExec) Exec(_ context.Context, cmd []string, _ executor.ExecOptions) (executor.ExecResult, error) {
+	r.gotArgv = append([]string(nil), cmd...)
+	return executor.ExecResult{ExitCode: 0, Stdout: "ok"}, nil
+}
+
+// TestShellTool_DefaultPrefixIsPortableSh pins the BuiltinDeps.Shell
+// default to `sh -c` so the tool works against alpine / busybox / any
+// POSIX-shell-only container. Hardcoding `bash -lc` (the old default)
+// failed with "exec: bash: executable file not found in $PATH" the
+// moment a real model tried `affentctl run --executor docker:<alpine>`
+// — observed and fixed in real-LLM rollout testing.
+func TestShellTool_DefaultPrefixIsPortableSh(t *testing.T) {
+	rec := &recordingExec{}
+	tool := shellTool(BuiltinDeps{Executor: rec})
+	args, _ := json.Marshal(map[string]any{"command": "echo hi"})
+	if _, err := tool.Execute(context.Background(), args); err != nil {
+		t.Fatalf("Execute: %v", err)
+	}
+	want := []string{"sh", "-c", "echo hi"}
+	if len(rec.gotArgv) != 3 || rec.gotArgv[0] != want[0] || rec.gotArgv[1] != want[1] || rec.gotArgv[2] != want[2] {
+		t.Fatalf("argv = %v, want %v", rec.gotArgv, want)
+	}
+}
+
+// TestShellTool_ShellOverrideIsHonored pins the gateway escape hatch:
+// dev-box deployments that want bash login semantics (PATH, ~/.bashrc)
+// pass `["bash","-lc"]` into BuiltinDeps.Shell and get that exact prefix.
+func TestShellTool_ShellOverrideIsHonored(t *testing.T) {
+	rec := &recordingExec{}
+	tool := shellTool(BuiltinDeps{Executor: rec, Shell: []string{"bash", "-lc"}})
+	args, _ := json.Marshal(map[string]any{"command": "pwd"})
+	if _, err := tool.Execute(context.Background(), args); err != nil {
+		t.Fatalf("Execute: %v", err)
+	}
+	want := []string{"bash", "-lc", "pwd"}
+	if len(rec.gotArgv) != 3 || rec.gotArgv[0] != want[0] || rec.gotArgv[1] != want[1] || rec.gotArgv[2] != want[2] {
+		t.Fatalf("argv = %v, want %v", rec.gotArgv, want)
 	}
 }
 

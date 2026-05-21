@@ -38,7 +38,20 @@ type BuiltinDeps struct {
 	// SessionID is the current session's id; session_search excludes
 	// it so the agent doesn't match its own in-progress turns.
 	SessionID string
+	// Shell is the command prefix the shell tool wraps the user's
+	// command in. Default is `["sh", "-c"]` — POSIX-portable across
+	// alpine / busybox / debian / centos containers. Gateways with a
+	// bash dev-box that needs login-shell semantics (PATH, ~/.bashrc)
+	// can set `["bash", "-lc"]` here.
+	Shell []string
 }
+
+// defaultShell is the portable fallback when BuiltinDeps.Shell is unset.
+// `sh -c` works in every shipping Linux container we've seen (alpine
+// has busybox sh, distroless usually doesn't get the shell tool at all).
+// `bash -lc` was the historical default — broke on alpine, see d1fecfe
+// follow-up.
+var defaultShell = []string{"sh", "-c"}
 
 // RegisterBuiltins registers shell + file tools on the registry, the
 // `memory` tool when deps.Memory is non-nil, and the `session_search`
@@ -71,14 +84,18 @@ func shellTool(deps BuiltinDeps) *Tool {
         "type": "object",
         "required": ["command"],
         "properties": {
-            "command": {"type": "string", "description": "Shell command to run via /bin/bash -lc inside the user's dev box. Working dir defaults to /workspace."},
-            "cwd": {"type": "string", "description": "Optional working directory inside the container."},
+            "command": {"type": "string", "description": "Shell command to run. Wrapped in a POSIX shell (sh -c by default; gateways may configure bash -lc)."},
+            "cwd": {"type": "string", "description": "Optional working directory."},
             "timeout_sec": {"type": "integer", "description": "Optional timeout in seconds (default 120)."}
         }
     }`)
+	shellPrefix := deps.Shell
+	if len(shellPrefix) == 0 {
+		shellPrefix = defaultShell
+	}
 	return &Tool{
 		Name:        "shell",
-		Description: "Run a bash command inside the user's persistent dev box (Linux). Use this for git/curl/python/node/installs/inspection/anything CLI. Output: combined stdout+stderr followed by an exit code line.",
+		Description: "Run a shell command (Linux). Use this for git/curl/python/node/installs/inspection/anything CLI. Output: combined stdout+stderr followed by an exit code line.",
 		Schema:      schema,
 		Execute: func(ctx context.Context, args json.RawMessage) (string, error) {
 			var p struct {
@@ -95,7 +112,8 @@ func shellTool(deps BuiltinDeps) *Tool {
 			if p.TimeoutSec <= 0 {
 				p.TimeoutSec = 120
 			}
-			res, err := deps.Executor.Exec(ctx, []string{"bash", "-lc", p.Command}, executor.ExecOptions{
+			argv := append(append([]string{}, shellPrefix...), p.Command)
+			res, err := deps.Executor.Exec(ctx, argv, executor.ExecOptions{
 				WorkingDir: p.Cwd,
 				Timeout:    time.Duration(p.TimeoutSec) * time.Second,
 			})
