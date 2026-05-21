@@ -212,6 +212,87 @@ func TestRunTurn_MaxStepsEmitsMaxTurnsReason(t *testing.T) {
 	}
 }
 
+// cancelOnFirstCompact is a Compactor that calls Loop.Cancel during
+// its very first invocation, then returns ctx.Err. Lets the test
+// trigger the "cancel during reactive compaction" race window.
+type cancelOnFirstCompact struct {
+	loop   *Loop
+	fired  *int32
+}
+
+func (c *cancelOnFirstCompact) Compact(ctx context.Context, msgs []ChatMessage) ([]ChatMessage, error) {
+	if atomic.AddInt32(c.fired, 1) == 1 && c.loop != nil {
+		c.loop.Cancel()
+	}
+	return nil, ctx.Err()
+}
+
+// TestRunTurn_CancelDuringReactiveCompactSurfacesCancelled pins that
+// a Loop.Cancel fired WHILE the reactive compactor is summarizing
+// surfaces as TurnEndCancelled, not as the misleading TurnEndError
+// carrying the upstream's context-overflow text. Pre-fix the path
+// was: LLM returns overflow → maybeCompact runs the (cancel-aware)
+// compactor → compactor returns ctx.Err → maybeCompact logs and
+// returns false → runStep falls through to the transient-retry
+// branch, finds the overflow err non-retryable, and bails with
+// reason=error. Operator's turn.end log entry was wrong about why
+// the turn ended.
+func TestRunTurn_CancelDuringReactiveCompactSurfacesCancelled(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		// Every request returns a non-retryable 400 whose body matches
+		// IsContextOverflow's keyword list — forcing the reactive
+		// compaction branch on every attempt.
+		w.WriteHeader(400)
+		_, _ = w.Write([]byte(`{"error":{"message":"This model's maximum context length is 8192 tokens. However, your messages resulted in 12345 tokens."}}`))
+	}))
+	t.Cleanup(srv.Close)
+
+	conv, err := OpenConversationAt(filepath.Join(t.TempDir(), "sess.jsonl"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	events := make(chan sse.Event, 256)
+	llm := NewLLMClient(srv.URL, "", "fake-model")
+	loop := &Loop{
+		LLM: llm, Tools: NewRegistry(), Conv: conv, Events: events,
+		MaxTurnSteps: 4, PerCallTimeout: 5 * time.Second,
+	}
+	fired := int32(0)
+	loop.Compactor = &cancelOnFirstCompact{loop: loop, fired: &fired}
+
+	if err := loop.EnsureSystemPrompt("base"); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := loop.SendUser(context.Background(), "trigger overflow"); err != nil {
+		t.Fatal(err)
+	}
+
+	deadline := time.After(10 * time.Second)
+	var endReason string
+	for endReason == "" {
+		select {
+		case ev, ok := <-events:
+			if !ok {
+				t.Fatal("event channel closed before turn.end")
+			}
+			if ev.Type != sse.TypeTurnEnd {
+				continue
+			}
+			var p sse.TurnEndPayload
+			if err := json.Unmarshal(ev.Data, &p); err != nil {
+				t.Fatalf("decode turn.end: %v", err)
+			}
+			endReason = p.Reason
+		case <-deadline:
+			t.Fatal("timeout waiting for turn.end")
+		}
+	}
+	if endReason != sse.TurnEndCancelled {
+		t.Errorf("expected reason=%q, got %q (compactor.fired=%d)",
+			sse.TurnEndCancelled, endReason, atomic.LoadInt32(&fired))
+	}
+}
+
 // TestRunTurn_BackfillsMissingToolCallID pins the end-to-end path:
 // a model that emits a tool_call WITHOUT an `id` (some chutes-routed
 // / DeepSeek-mode providers do this) still produces a conv log where

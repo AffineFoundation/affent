@@ -621,6 +621,14 @@ func (l *Loop) runStep(ctx context.Context, turnID string) (*FinishInfo, string,
 				})
 				continue
 			}
+			// Compaction itself may have failed because ctx was canceled
+			// mid-summarize (Loop.Cancel during the in-flight summary
+			// LLM call). Re-check so the turn ends as cancelled — the
+			// upstream overflow err is just what surfaced first; the
+			// user-visible reason should reflect the actual cancel.
+			if ctx.Err() != nil {
+				return nil, sse.TurnEndCancelled, ctx.Err()
+			}
 		}
 
 		// If the model already streamed visible content before failing,
