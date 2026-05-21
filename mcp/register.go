@@ -13,19 +13,23 @@ import (
 // adds each tool to the affent.Registry under a "<server-name>_<tool>"
 // name so multiple servers can coexist without clashing.
 //
-// Returns the live Client so the caller can Close() it on shutdown.
-// On any failure the partial state is rolled back: the Client is
-// closed and no tools are added.
-func RegisterServer(ctx context.Context, reg *affent.Registry, spec ServerSpec, log zerolog.Logger) (*Client, error) {
+// Returns the live Client + the affent tool names that were
+// registered so a higher-level caller (typically RegisterAll) can
+// roll them out of the Registry if a later server's startup fails.
+// On any failure inside RegisterServer itself the partial state is
+// rolled back internally: the Client is closed and no tools are
+// added.
+func RegisterServer(ctx context.Context, reg *affent.Registry, spec ServerSpec, log zerolog.Logger) (*Client, []string, error) {
 	c, err := Start(ctx, spec, log)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 	tools, err := c.ListTools(ctx)
 	if err != nil {
 		_ = c.Close()
-		return nil, fmt.Errorf("list tools on %s: %w", spec.Name, err)
+		return nil, nil, fmt.Errorf("list tools on %s: %w", spec.Name, err)
 	}
+	names := make([]string, 0, len(tools))
 	for _, t := range tools {
 		affentName := spec.Name + "_" + t.Name
 		schema := t.InputSchema
@@ -59,28 +63,42 @@ func RegisterServer(ctx context.Context, reg *affent.Registry, spec ServerSpec, 
 				return res.Text, nil
 			},
 		})
+		names = append(names, affentName)
 	}
 	log.Info().
 		Str("mcp", spec.Name).
 		Int("tools", len(tools)).
 		Msg("mcp tools registered")
-	return c, nil
+	return c, names, nil
 }
 
 // RegisterAll spins up every spec, accumulating live clients. If any
-// server fails to start, all already-started clients are closed and
-// the error is returned. Log-only warnings for empty spec list.
+// server fails to start, every already-started client is closed AND
+// its tools are unregistered from reg before the error is returned —
+// so the caller doesn't end up with a Registry whose entries point
+// at backends that have already been torn down.
 func RegisterAll(ctx context.Context, reg *affent.Registry, specs []ServerSpec, log zerolog.Logger) ([]*Client, error) {
-	var clients []*Client
+	type registered struct {
+		client *Client
+		names  []string
+	}
+	var done []registered
 	for _, s := range specs {
-		c, err := RegisterServer(ctx, reg, s, log)
+		c, names, err := RegisterServer(ctx, reg, s, log)
 		if err != nil {
-			for _, prev := range clients {
-				_ = prev.Close()
+			for _, r := range done {
+				_ = r.client.Close()
+				for _, n := range r.names {
+					reg.Remove(n)
+				}
 			}
 			return nil, err
 		}
-		clients = append(clients, c)
+		done = append(done, registered{c, names})
+	}
+	clients := make([]*Client, len(done))
+	for i, r := range done {
+		clients[i] = r.client
 	}
 	return clients, nil
 }

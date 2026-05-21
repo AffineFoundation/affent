@@ -4,7 +4,6 @@ import (
 	"bufio"
 	"bytes"
 	"context"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
@@ -28,7 +27,8 @@ type httpWire struct {
 	headers map[string]string
 	hc      *http.Client
 
-	out chan []byte // server-originated frames
+	out     chan []byte   // server-originated frames
+	closeCh chan struct{} // closed when close() begins; releases blocked emit() callers
 
 	mu        sync.Mutex
 	sessionID string
@@ -54,9 +54,10 @@ func newHTTPWire(_ context.Context, spec ServerSpec, log zerolog.Logger) (wire, 
 			// SSE responses that never finish.
 			Timeout: 10 * time.Minute,
 		},
-		out:    make(chan []byte, 64),
-		cancel: cancel,
-		log:    log,
+		out:     make(chan []byte, 64),
+		closeCh: make(chan struct{}),
+		cancel:  cancel,
+		log:     log,
 	}
 	_ = wireCtx // reserved for an optional GET-stream listener; not used in v0.
 	return w, nil
@@ -76,13 +77,21 @@ func (w *httpWire) close() error {
 	if !w.closed.CompareAndSwap(false, true) {
 		return nil
 	}
+	// Free any emit() blocked on a full out chan before anything else.
+	close(w.closeCh)
 	w.cancel()
+	// wg covers both drainSSE goroutines and post() bodies; once all
+	// emit() callers have exited, closing out is panic-safe.
 	w.wg.Wait()
 	close(w.out)
 	return nil
 }
 
 func (w *httpWire) post(ctx context.Context, body []byte, expectReply bool) error {
+	// Track the post body in wg so close() waits for any in-flight
+	// emit() the JSON branch is about to do before close(out) runs.
+	w.wg.Add(1)
+	defer w.wg.Done()
 	if w.closed.Load() {
 		return errors.New("http wire closed")
 	}
@@ -183,13 +192,12 @@ func (w *httpWire) drainSSE(resp *http.Response) {
 }
 
 func (w *httpWire) emit(frame []byte) {
-	if w.closed.Load() {
-		return
-	}
+	// Block on out so a slow consumer naturally backpressures the
+	// server side instead of silently dropping JSON-RPC responses.
+	// closeCh keeps shutdown from deadlocking when out is full.
 	select {
 	case w.out <- frame:
-	default:
-		w.log.Warn().Msg("mcp http replies channel full; dropping")
+	case <-w.closeCh:
 	}
 }
 
@@ -205,5 +213,3 @@ func (w *httpWire) setSID(s string) {
 	w.mu.Unlock()
 }
 
-// guard against accidental json/strings unused in some build configs.
-var _ = json.RawMessage(nil)
