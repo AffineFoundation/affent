@@ -243,6 +243,15 @@ func run(cfg Config, logger zerolog.Logger) error {
 		return nil
 	}
 
+	// Flip the shutting-down flag BEFORE srv.Shutdown so /healthz
+	// starts returning 503 immediately. Any LB probe that lands
+	// during the graceful-shutdown window sees the readiness change
+	// and drains traffic — without this, the flag only flipped via
+	// defer pool.Shutdown() after srv.Shutdown had already finished,
+	// by which time the LB had spent the whole drain window still
+	// sending fresh requests.
+	pool.SignalShutdown()
+
 	shutdownCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 	if err := srv.Shutdown(shutdownCtx); err != nil {

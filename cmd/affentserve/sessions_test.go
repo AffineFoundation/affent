@@ -44,6 +44,29 @@ func TestSessionPool_GetOrCreate_FailsAfterShutdown(t *testing.T) {
 	}
 }
 
+// TestSessionPool_SignalShutdown pins the early-flip contract:
+// SignalShutdown sets IsShuttingDown immediately (so /healthz can
+// return 503 the moment SIGTERM arrives), GetOrCreate fails with
+// ErrShuttingDown after it, and the regular Shutdown remains
+// callable (idempotent / safe to follow up with full drain).
+func TestSessionPool_SignalShutdown(t *testing.T) {
+	pool := newTestPool(t, 4, "5m")
+
+	if pool.IsShuttingDown() {
+		t.Fatal("fresh pool must not report shutting down")
+	}
+	pool.SignalShutdown()
+	if !pool.IsShuttingDown() {
+		t.Fatal("after SignalShutdown, IsShuttingDown must be true")
+	}
+	if _, err := pool.GetOrCreate("new"); err == nil {
+		t.Errorf("GetOrCreate after SignalShutdown must fail (got nil err)")
+	}
+	// Full Shutdown still completes cleanly. shutdownOnce guards the
+	// real drain, so calling Shutdown after SignalShutdown is fine.
+	pool.Shutdown()
+}
+
 func TestSessionPool_Shutdown_IsIdempotent(t *testing.T) {
 	pool := newTestPool(t, 4, "5m")
 	pool.Shutdown()

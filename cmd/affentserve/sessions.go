@@ -750,6 +750,25 @@ func (p *SessionPool) IsShuttingDown() bool {
 	return p.shuttingDown
 }
 
+// SignalShutdown flips the shutting-down flag WITHOUT actually
+// draining sessions or stopping goroutines. Lets the main loop
+// mark the pool as unavailable the moment a SIGTERM lands so
+// /healthz starts returning 503 immediately — the LB then has the
+// http-server's graceful-shutdown window to notice the readiness
+// flip and drain new traffic, instead of finding out only after
+// srv.Shutdown closed the listener.
+//
+// Idempotent. The real cleanup still runs through Shutdown (which
+// the main loop typically calls via defer), and Shutdown is a no-op
+// after SignalShutdown thanks to shutdownOnce in the original
+// implementation — but to be safe we set the flag under lock
+// without taking the once latch.
+func (p *SessionPool) SignalShutdown() {
+	p.mu.Lock()
+	p.shuttingDown = true
+	p.mu.Unlock()
+}
+
 func (p *SessionPool) Shutdown() {
 	p.shutdownOnce.Do(func() {
 		if p.browserCache != nil {
