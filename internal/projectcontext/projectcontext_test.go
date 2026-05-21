@@ -1,4 +1,4 @@
-package affent
+package projectcontext
 
 import (
 	"os"
@@ -15,23 +15,23 @@ func writeFile(t *testing.T, dir, name, content string) {
 	}
 }
 
-func TestLoadProjectContext_NoneFound(t *testing.T) {
-	if got := LoadProjectContext(t.TempDir()); got != "" {
+func TestLoad_NoneFound(t *testing.T) {
+	if got := Load(t.TempDir()); got != "" {
 		t.Fatalf("expected empty, got %q", got)
 	}
 }
 
-func TestLoadProjectContext_EmptyDirArg(t *testing.T) {
-	if got := LoadProjectContext(""); got != "" {
+func TestLoad_EmptyDirArg(t *testing.T) {
+	if got := Load(""); got != "" {
 		t.Fatalf("expected empty for empty dir, got %q", got)
 	}
 }
 
-func TestLoadProjectContext_SingleAgentsMd(t *testing.T) {
+func TestLoad_SingleAgentsMd(t *testing.T) {
 	dir := t.TempDir()
 	writeFile(t, dir, "AGENTS.md", "Use Go 1.22. Tests via `make test`.")
 
-	got := LoadProjectContext(dir)
+	got := Load(dir)
 	if !strings.Contains(got, "AGENTS.md") {
 		t.Fatalf("missing filename header:\n%s", got)
 	}
@@ -43,14 +43,13 @@ func TestLoadProjectContext_SingleAgentsMd(t *testing.T) {
 	}
 }
 
-func TestLoadProjectContext_PreservesOrder(t *testing.T) {
+func TestLoad_PreservesOrder(t *testing.T) {
 	dir := t.TempDir()
 	writeFile(t, dir, "CONVENTIONS.md", "third")
 	writeFile(t, dir, "AGENTS.md", "first")
 	writeFile(t, dir, "CLAUDE.md", "second")
 
-	got := LoadProjectContext(dir)
-	// AGENTS.md should come before CLAUDE.md should come before CONVENTIONS.md
+	got := Load(dir)
 	posAgents := strings.Index(got, "first")
 	posClaude := strings.Index(got, "second")
 	posConv := strings.Index(got, "third")
@@ -58,16 +57,16 @@ func TestLoadProjectContext_PreservesOrder(t *testing.T) {
 		t.Fatalf("missing files in output:\n%s", got)
 	}
 	if !(posAgents < posClaude && posClaude < posConv) {
-		t.Fatalf("expected order AGENTS → CLAUDE → CONVENTIONS, got positions %d %d %d",
+		t.Fatalf("expected order AGENTS -> CLAUDE -> CONVENTIONS, got positions %d %d %d",
 			posAgents, posClaude, posConv)
 	}
 }
 
-func TestLoadProjectContext_SkipsEmptyFile(t *testing.T) {
+func TestLoad_SkipsEmptyFile(t *testing.T) {
 	dir := t.TempDir()
 	writeFile(t, dir, "AGENTS.md", "   \n\n  ")
 	writeFile(t, dir, "CONVENTIONS.md", "real content")
-	got := LoadProjectContext(dir)
+	got := Load(dir)
 	if strings.Contains(got, "AGENTS.md") {
 		t.Fatalf("empty AGENTS.md should be skipped, got:\n%s", got)
 	}
@@ -76,29 +75,26 @@ func TestLoadProjectContext_SkipsEmptyFile(t *testing.T) {
 	}
 }
 
-func TestLoadProjectContext_TruncatesAtBudget(t *testing.T) {
+func TestLoad_TruncatesAtBudget(t *testing.T) {
 	dir := t.TempDir()
-	huge := strings.Repeat("a", MaxProjectContextBytes*2)
+	huge := strings.Repeat("a", MaxBytes*2)
 	writeFile(t, dir, "AGENTS.md", huge)
 
-	got := LoadProjectContext(dir)
-	if len(got) > MaxProjectContextBytes+512 {
-		t.Fatalf("output exceeded budget significantly: %d bytes > %d", len(got), MaxProjectContextBytes)
+	got := Load(dir)
+	if len(got) > MaxBytes+512 {
+		t.Fatalf("output exceeded budget significantly: %d bytes > %d", len(got), MaxBytes)
 	}
 	if !strings.Contains(got, "truncated") {
 		t.Fatalf("expected truncation marker:\n%s", got[:200])
 	}
 }
 
-func TestLoadProjectContext_StopsAtBudget_AcrossFiles(t *testing.T) {
+func TestLoad_StopsAtBudgetAcrossFiles(t *testing.T) {
 	dir := t.TempDir()
-	// AGENTS.md fills the budget so the second file's body has no
-	// usable room left (less than the 64-byte minimum). It must be
-	// skipped entirely.
-	writeFile(t, dir, "AGENTS.md", strings.Repeat("a", MaxProjectContextBytes-30))
+	writeFile(t, dir, "AGENTS.md", strings.Repeat("a", MaxBytes-30))
 	writeFile(t, dir, "CONVENTIONS.md", "should be skipped")
 
-	got := LoadProjectContext(dir)
+	got := Load(dir)
 	if strings.Contains(got, "should be skipped") {
 		t.Fatalf("over-budget secondary file should be skipped, got tail:\n%s",
 			got[max(0, len(got)-300):])
@@ -108,13 +104,13 @@ func TestLoadProjectContext_StopsAtBudget_AcrossFiles(t *testing.T) {
 	}
 }
 
-func TestLoadProjectContext_RecognizesAllSupportedFiles(t *testing.T) {
+func TestLoad_RecognizesAllSupportedFiles(t *testing.T) {
 	dir := t.TempDir()
-	for _, name := range projectContextFiles {
+	for _, name := range Files {
 		writeFile(t, dir, name, "content for "+name)
 	}
-	got := LoadProjectContext(dir)
-	for _, name := range projectContextFiles {
+	got := Load(dir)
+	for _, name := range Files {
 		if !strings.Contains(got, name) {
 			t.Fatalf("expected %s in output:\n%s", name, got)
 		}
@@ -124,17 +120,15 @@ func TestLoadProjectContext_RecognizesAllSupportedFiles(t *testing.T) {
 	}
 }
 
-func TestLoadProjectContext_NonexistentDir(t *testing.T) {
-	if got := LoadProjectContext(filepath.Join(t.TempDir(), "does-not-exist")); got != "" {
+func TestLoad_NonexistentDir(t *testing.T) {
+	if got := Load(filepath.Join(t.TempDir(), "does-not-exist")); got != "" {
 		t.Fatalf("expected empty for nonexistent dir, got %q", got)
 	}
 }
 
-func TestTruncateProjectFile_UTF8Safe(t *testing.T) {
-	// 4-byte emoji and 2-byte Cyrillic exercise both UTF-8 lengths.
-	// Truncating somewhere inside must not split a rune.
+func TestTruncateFile_UTF8Safe(t *testing.T) {
 	s := strings.Repeat("🔧", 100) + strings.Repeat("привет", 50)
-	out := truncateProjectFile(s, 50)
+	out := truncateFile(s, 50)
 	if len(out) > 50 {
 		t.Fatalf("truncated string exceeds limit: %d > 50", len(out))
 	}

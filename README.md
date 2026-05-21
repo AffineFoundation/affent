@@ -41,6 +41,7 @@ memory.go            Persistent memory store
 memory_tool.go       Memory tool schema and dispatch
 session_search.go    Retrieval over prior session logs
 executor/            Executor and FileOps implementations
+internal/            Runtime internals behind the public root package
 mcp/                 MCP client and registry adapter
 sse/                 Event types and payloads
 cmd/affentctl/       CLI driver
