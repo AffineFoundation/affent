@@ -172,11 +172,79 @@ func trimSnippet(s string, max int) string {
 	if len(s) <= max {
 		return s
 	}
-	cut := max
-	for cut > 0 && (s[cut]&0xC0) == 0x80 {
-		cut--
-	}
+	cut := textutil.AlignBackward(s, max)
 	return s[:cut] + "..."
+}
+
+// centerSnippet returns a max-byte window of body centered on the
+// first occurrence of any of terms, with leading/trailing ellipsis
+// when the window is interior. Falls back to trimSnippet (head-
+// truncation) when no term is found in body — this happens when the
+// scoring match was on topic name only, not on body content. UTF-8
+// boundaries are respected so we never split a multi-byte rune.
+//
+// Why this matters: with head-truncation, a 1k-byte postmortem
+// matching the query at byte 700 returns bytes 0–300, none of which
+// contain the matched term — the model sees a snippet that doesn't
+// explain why this hit ranked. Standard IR highlighters (Elastic,
+// Lucene) center the window on the match for this reason.
+func centerSnippet(body string, terms []string, max int) string {
+	if len(body) <= max {
+		return body
+	}
+	lower := strings.ToLower(body)
+	firstHit := -1
+	for _, t := range terms {
+		if t == "" {
+			continue
+		}
+		idx := strings.Index(lower, t)
+		if idx < 0 {
+			continue
+		}
+		if firstHit < 0 || idx < firstHit {
+			firstHit = idx
+		}
+	}
+	if firstHit < 0 {
+		return trimSnippet(body, max)
+	}
+	// Budget: ellipses cost 3 bytes each. Reserve up to 6 bytes so
+	// "..." + body + "..." stays within the same envelope callers
+	// already expected from trimSnippet (max body + a few marker
+	// bytes). When one side touches the entry edge, that side
+	// reclaims its 3-byte budget for body content.
+	const ellipsis = "..."
+	maxBody := max
+	if maxBody > 6 {
+		maxBody -= 6
+	}
+	half := maxBody / 2
+	start := firstHit - half
+	end := start + maxBody
+	if start < 0 {
+		end += -start
+		start = 0
+	}
+	if end > len(body) {
+		start -= end - len(body)
+		end = len(body)
+	}
+	if start < 0 {
+		start = 0
+	}
+	start = textutil.AlignBackward(body, start)
+	end = textutil.AlignForward(body, end)
+	left := start > 0
+	right := end < len(body)
+	out := body[start:end]
+	if left {
+		out = ellipsis + out
+	}
+	if right {
+		out = out + ellipsis
+	}
+	return out
 }
 
 // MemoryTopicSummary is one row in a ListTopics response. NewestAt
@@ -643,7 +711,7 @@ func (s *FileMemoryStore) Search(target MemoryTarget, topic, query string, topK 
 			score *= recencyFactor(createdAt)
 			hits = append(hits, MemorySearchResult{
 				Topic:     b.topic,
-				Snippet:   trimSnippet(body, memorySnippetMax),
+				Snippet:   centerSnippet(body, terms, memorySnippetMax),
 				Score:     score,
 				CreatedAt: createdAt,
 			})

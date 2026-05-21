@@ -668,6 +668,69 @@ func TestMemorySearchTrimsLongSnippet(t *testing.T) {
 	}
 }
 
+// TestMemorySearchSnippetCentersOnMatch pins that the search snippet
+// frames the matched term rather than always returning the entry's
+// first 300 bytes. Without this, a long entry whose match falls past
+// the truncation point shows a head-of-body snippet that doesn't
+// explain why the hit ranked.
+func TestMemorySearchSnippetCentersOnMatch(t *testing.T) {
+	s := newTestStore(t)
+	s.TopicCharLimit = 4000
+
+	// 600 bytes of filler, then the unique match term, then more filler.
+	body := strings.Repeat("filler one two three ", 30) + " UNIQUEKW middle marker " + strings.Repeat("tail words here ", 30)
+	_, _ = s.Add(TargetMemory, "infra", body)
+
+	resp, err := s.Search(TargetMemory, "infra", "uniquekw", 5)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(resp.Results) != 1 {
+		t.Fatalf("expected 1 hit, got %d", len(resp.Results))
+	}
+	snip := resp.Results[0].Snippet
+	if !strings.Contains(strings.ToLower(snip), "uniquekw") {
+		t.Errorf("snippet should contain the matched term; got %q", snip)
+	}
+	if !strings.HasPrefix(snip, "...") {
+		t.Errorf("interior match should have leading '...'; got %q", snip)
+	}
+	if !strings.HasSuffix(snip, "...") {
+		t.Errorf("interior match should have trailing '...'; got %q", snip)
+	}
+	if len(snip) > memorySnippetMax+8 {
+		t.Errorf("snippet length %d should stay within max+ellipsis budget", len(snip))
+	}
+}
+
+// TestMemorySearchSnippetFallsBackOnTopicMatch pins that when the
+// scoring hit came from the topic name (term doesn't appear in the
+// body), the snippet falls back to head-truncation — there's no
+// in-body position to center on.
+func TestMemorySearchSnippetFallsBackOnTopicMatch(t *testing.T) {
+	s := newTestStore(t)
+	s.TopicCharLimit = 4000
+
+	long := strings.Repeat("paged out detail line ", 30) // ~660 chars, no "incident" inside
+	_, _ = s.Add(TargetMemory, "incidents", long)
+
+	// Query word lives in the topic name, not the entry body.
+	resp, err := s.Search(TargetMemory, "incidents", "incident", 5)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(resp.Results) != 1 {
+		t.Fatalf("expected 1 hit, got %d", len(resp.Results))
+	}
+	snip := resp.Results[0].Snippet
+	if strings.HasPrefix(snip, "...") {
+		t.Errorf("topic-only match should head-truncate, not center; got %q", snip)
+	}
+	if !strings.HasSuffix(snip, "...") {
+		t.Errorf("long entry should still be truncated; got %q", snip)
+	}
+}
+
 // TestMemorySearchRecencyBoost pins that two entries with identical
 // term overlap rank by freshness — the fresh one above the old one.
 // Without this, a stale fact with the same keyword density dominates
