@@ -508,11 +508,17 @@ func (p *SessionPool) Delete(id string) bool {
 		return false
 	}
 	p.mu.Lock()
+	defer p.mu.Unlock()
 	evicted := p.evictLocked(id)
 	dir := p.sessionDirPath(id)
-	p.mu.Unlock()
-	// RemoveAll outside the pool lock — it can do non-trivial fs
-	// work and we don't want to block other pool ops on it.
+	// RemoveAll runs under the pool lock so a concurrent
+	// GetOrCreate(id) can't slip in between the eviction and the
+	// disk wipe — without that ordering it would observe the old
+	// dir, OpenConversationAt the stale jsonl, and build a fresh
+	// session backed by the predecessor's conv log and memory.
+	// GetOrCreate already serializes on this lock through
+	// buildSession, so we're not penalizing throughput here that
+	// wasn't already serialized.
 	if err := os.RemoveAll(dir); err != nil {
 		p.logger.Warn().Err(err).Str("session_id", id).Msg("purge session dir")
 	}

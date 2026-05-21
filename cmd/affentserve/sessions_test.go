@@ -363,6 +363,48 @@ func TestSessionPool_DeletePurgesDurableState(t *testing.T) {
 	}
 }
 
+// TestSessionPool_DeletePurgeIsSynchronous pins that Delete's disk
+// wipe completes BEFORE Delete returns. Earlier the RemoveAll ran
+// after releasing the pool lock so a concurrent GetOrCreate(id)
+// could observe the not-yet-deleted dir, OpenConversationAt the
+// stale jsonl, and resurrect a zombie session with the predecessor's
+// conv log + memory. Now Delete holds the lock until the dir is
+// gone — the next GetOrCreate sees a clean slate.
+func TestSessionPool_DeletePurgeIsSynchronous(t *testing.T) {
+	memRoot := t.TempDir()
+	cfg := Config{
+		Listen:         "127.0.0.1:0",
+		MaxSessions:    4,
+		SessionIdleTTL: "5m",
+		WorkspaceRoot:  t.TempDir(),
+		MemoryRoot:     memRoot,
+		EnableMemory:   true,
+		BaseURL:        "http://127.0.0.1:0",
+		APIKey:         "test",
+		Model:          "fake",
+	}
+	pool, err := NewSessionPool(cfg, zerolog.New(io.Discard))
+	if err != nil {
+		t.Fatalf("NewSessionPool: %v", err)
+	}
+	t.Cleanup(pool.Shutdown)
+
+	s, err := pool.GetOrCreate("sync-purge")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := s.loop.Memory.Add(agent.TargetMemory, "core", "must-be-gone"); err != nil {
+		t.Fatal(err)
+	}
+	dir := filepath.Join(memRoot, "sync-purge")
+
+	// Delete is supposed to be synchronous wrt the disk purge.
+	pool.Delete("sync-purge")
+	if _, err := os.Stat(dir); !os.IsNotExist(err) {
+		t.Errorf("sessionDir must be gone by the time Delete returns; stat err=%v", err)
+	}
+}
+
 // TestSessionPool_DeleteRejectsTraversalID pins that a malicious
 // DELETE /v1/sessions/.. cannot RemoveAll the MemoryRoot parent.
 // The agent.ValidateSessionID check runs BEFORE the disk purge.
