@@ -170,6 +170,17 @@ func (d *DockerExecExecutor) ReadFile(ctx context.Context, path string, maxBytes
 		return "", fmt.Errorf("read %s: exit %d: %s", path, res.ExitCode, strings.TrimSpace(res.Stderr))
 	}
 	out := res.Stdout
+	// Refuse binary files. Same NUL-in-first-8K heuristic the host
+	// readFileTool uses — dumping non-text into the model context is
+	// wasted tokens and the shell tool with file/xxd/base64 is the
+	// right escape hatch.
+	probe := out
+	if len(probe) > 8192 {
+		probe = probe[:8192]
+	}
+	if strings.IndexByte(probe, 0) >= 0 {
+		return "", fmt.Errorf("%s appears to be binary (contains null bytes); use shell with file/xxd/base64 to inspect", path)
+	}
 	if len(out) > maxBytes {
 		// Snap back to a UTF-8 rune boundary; head -c counts bytes
 		// and will happily cut a multi-byte rune in half.

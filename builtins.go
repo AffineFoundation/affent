@@ -1,6 +1,7 @@
 package affent
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
@@ -13,6 +14,18 @@ import (
 
 	"github.com/affinefoundation/affent/executor"
 )
+
+// looksBinary returns true when buf has a NUL byte in the first 8 KiB.
+// Mirrors file(1) / git / `grep -I` — NUL is rare in any text encoding
+// but ubiquitous in binary formats. Used by read_file to refuse rather
+// than dump 64 KiB of replacement characters into the model context.
+func looksBinary(buf []byte) bool {
+	n := len(buf)
+	if n > 8192 {
+		n = 8192
+	}
+	return bytes.IndexByte(buf[:n], 0) >= 0
+}
 
 // BuiltinDeps is what the built-in tools need to do their job. The agent
 // loop is intentionally tool-agnostic; the gateway (or a CLI driver)
@@ -191,7 +204,7 @@ func readFileTool(deps BuiltinDeps) *Tool {
         "type": "object",
         "required": ["path"],
         "properties": {
-            "path": {"type": "string", "description": "Path relative to /workspace, or absolute starting with /workspace."},
+            "path": {"type": "string", "description": "Path; relative joins onto the workspace root, absolute must fall inside it."},
             "max_bytes": {"type": "integer", "description": "Optional cap (default 64KiB)."}
         }
     }`)
@@ -234,6 +247,16 @@ func readFileTool(deps BuiltinDeps) *Tool {
 			buf, err := io.ReadAll(io.LimitReader(f, int64(p.MaxBytes)+1))
 			if err != nil {
 				return "", err
+			}
+			// Refuse binary files. Dumping null/non-UTF-8 bytes into
+			// the model context wastes tokens and almost never tells
+			// the model anything useful — the model just sees a wall
+			// of replacement characters. The shell tool with file/xxd/
+			// base64 is the right escape hatch for inspecting binary.
+			// Heuristic matches file(1) / git / grep -I: any NUL in
+			// the first 8 KiB.
+			if looksBinary(buf) {
+				return "", fmt.Errorf("%s appears to be binary (contains null bytes); use shell with file/xxd/base64 to inspect", p.Path)
 			}
 			if len(buf) > p.MaxBytes {
 				// Snap back to a UTF-8 rune boundary so a CJK / accented
@@ -361,7 +384,7 @@ func listFilesTool(deps BuiltinDeps) *Tool {
 	schema := json.RawMessage(`{
         "type": "object",
         "properties": {
-            "path": {"type": "string", "description": "Directory under /workspace; defaults to /workspace itself."},
+            "path": {"type": "string", "description": "Directory; relative joins onto the workspace root. Empty / '.' lists the workspace root itself."},
             "max_entries": {"type": "integer"}
         }
     }`)

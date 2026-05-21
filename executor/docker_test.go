@@ -69,7 +69,7 @@ func TestDockerExecFileOps_Roundtrip(t *testing.T) {
 	defer cancel()
 
 	// Write into a nested path; verify parent dirs auto-created.
-	content := "alpha\nbeta\ngamma\n\x00binary"
+	content := "alpha\nbeta\ngamma\n"
 	if err := d.WriteFile(ctx, "/work/notes/x.txt", content); err != nil {
 		t.Fatalf("write: %v", err)
 	}
@@ -79,6 +79,17 @@ func TestDockerExecFileOps_Roundtrip(t *testing.T) {
 	}
 	if got != content {
 		t.Fatalf("read mismatch:\n got %q\nwant %q", got, content)
+	}
+
+	// Binary content must be refused, not dumped into the model context.
+	// Earlier the test exercised a NUL-byte round-trip, which is no longer
+	// the contract — readFileTool / FileOps.ReadFile now reject binary.
+	if err := d.WriteFile(ctx, "/work/notes/bin.dat", "head\x00mid\x00tail"); err != nil {
+		t.Fatalf("write bin: %v", err)
+	}
+	if _, err := d.ReadFile(ctx, "/work/notes/bin.dat", 1024); err == nil ||
+		!strings.Contains(err.Error(), "binary") {
+		t.Errorf("expected binary-refusal error, got %v", err)
 	}
 
 	// Edit (unique match).
