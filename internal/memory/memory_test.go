@@ -480,6 +480,37 @@ func TestMemorySnapshotInlinesGeneralButIndexesCustomTopics(t *testing.T) {
 	}
 }
 
+// TestMemorySnapshotTopicIndexOrdersByRecency pins that the in-prompt
+// topic index lists freshest-first with a date marker, not lex-sorted.
+// Reason: in a long-running memory the model scans the system prompt
+// top-down — a topic touched yesterday is almost always more useful
+// to investigate than one last edited six months ago.
+func TestMemorySnapshotTopicIndexOrdersByRecency(t *testing.T) {
+	defer func(orig func() time.Time) { nowUTC = orig }(nowUTC)
+	s := newTestStore(t)
+
+	nowUTC = func() time.Time { return time.Date(2025, 1, 15, 0, 0, 0, 0, time.UTC) }
+	_, _ = s.Add(TargetMemory, "alpha-stale", "very old fact")
+	nowUTC = func() time.Time { return time.Date(2026, 5, 20, 0, 0, 0, 0, time.UTC) }
+	_, _ = s.Add(TargetMemory, "zeta-fresh", "just-written fact")
+
+	snap := s.Snapshot()
+	pStale := strings.Index(snap, "alpha-stale")
+	pFresh := strings.Index(snap, "zeta-fresh")
+	if pStale < 0 || pFresh < 0 {
+		t.Fatalf("both topics must appear in snapshot:\n%s", snap)
+	}
+	if pFresh > pStale {
+		t.Errorf("fresh topic must appear before stale one in index:\n%s", snap)
+	}
+	if !strings.Contains(snap, "newest 2026-05-20") {
+		t.Errorf("snapshot must show a date marker for the fresh topic:\n%s", snap)
+	}
+	if !strings.Contains(snap, "newest 2025-01-15") {
+		t.Errorf("snapshot must show a date marker for the stale topic too:\n%s", snap)
+	}
+}
+
 // TestMemorySearchMatchesTopicName pins a real-rollout finding:
 // users organize memory by topic and query with terms that echo
 // the topic name ("incident details"), but the topic word often

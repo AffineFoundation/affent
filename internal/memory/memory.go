@@ -944,8 +944,9 @@ func (s *FileMemoryStore) renderTopicIndexLocked() string {
 		return ""
 	}
 	type topicInfo struct {
-		name  string
-		count int
+		name     string
+		count    int
+		newestAt string
 	}
 	var topics []topicInfo
 	for _, e := range entries {
@@ -962,17 +963,40 @@ func (s *FileMemoryStore) renderTopicIndexLocked() string {
 		if err != nil || len(es) == 0 {
 			continue
 		}
-		topics = append(topics, topicInfo{name: name, count: len(es)})
+		topics = append(topics, topicInfo{
+			name:     name,
+			count:    len(es),
+			newestAt: newestEntryTimestamp(es),
+		})
 	}
 	if len(topics) == 0 {
 		return ""
 	}
-	sort.Slice(topics, func(i, j int) bool { return topics[i].name < topics[j].name })
+	// Order by recency: freshest topics surface first, stale ones
+	// sink. The model is scanning this top-down; what was touched
+	// today is almost always more interesting than something last
+	// written six months ago. Lexicographic-fallback on equal
+	// newest_at (and on un-stamped legacy topics) keeps the order
+	// stable and predictable.
+	sort.SliceStable(topics, func(i, j int) bool {
+		if topics[i].newestAt != topics[j].newestAt {
+			return topics[i].newestAt > topics[j].newestAt
+		}
+		return topics[i].name < topics[j].name
+	})
 	var b strings.Builder
 	sep := strings.Repeat("=", memoryHeaderRuleWidth)
 	fmt.Fprintf(&b, "%s\nMEMORY:topics (read with action=search) [%d topic(s)]\n%s\n", sep, len(topics), sep)
 	for _, t := range topics {
-		fmt.Fprintf(&b, "- %s: %d entry(ies)\n", t.name, t.count)
+		fresh := ""
+		if t.newestAt != "" {
+			// Date-only is enough signal for staleness scanning in a
+			// system prompt; full RFC3339 just costs tokens.
+			if parsed, err := time.Parse(time.RFC3339, t.newestAt); err == nil {
+				fresh = ", newest " + parsed.Format("2006-01-02")
+			}
+		}
+		fmt.Fprintf(&b, "- %s: %d entry(ies)%s\n", t.name, t.count, fresh)
 	}
 	return strings.TrimRight(b.String(), "\n")
 }
