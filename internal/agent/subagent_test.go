@@ -400,6 +400,79 @@ func TestRunSubagent_DoesNotPolluteParentConversation(t *testing.T) {
 	}
 }
 
+// TestSubagentTool_InputValidation pins the schema enforcement that
+// happens BEFORE we spin up a child Loop:
+//
+//   - empty task is rejected (a subagent with no task wastes tokens).
+//   - unknown mode is rejected (only explore / review are supported;
+//     "test", "research", etc. are listed in the design doc as future
+//     modes and must not silently fall through with the wrong toolset).
+//   - max_turns > maxSubagentMaxTurns is clamped silently (a bounded
+//     escape hatch from a confused model asking for max_turns=999).
+func TestSubagentTool_InputValidation(t *testing.T) {
+	tool := subagentTool(SubagentDeps{
+		LLM:              NewLLMClient("http://x", "", "m"),
+		HostWorkspaceDir: t.TempDir(),
+		Log:              zerolog.Nop(),
+	})
+
+	t.Run("empty task is rejected", func(t *testing.T) {
+		_, err := tool.Execute(context.Background(), json.RawMessage(`{"task":""}`))
+		if err == nil || !strings.Contains(err.Error(), "task is required") {
+			t.Errorf("empty task must be rejected; got err=%v", err)
+		}
+	})
+
+	t.Run("whitespace-only task is rejected", func(t *testing.T) {
+		_, err := tool.Execute(context.Background(), json.RawMessage(`{"task":"   "}`))
+		if err == nil || !strings.Contains(err.Error(), "task is required") {
+			t.Errorf("whitespace-only task must be rejected; got err=%v", err)
+		}
+	})
+
+	t.Run("unknown mode is rejected", func(t *testing.T) {
+		_, err := tool.Execute(context.Background(), json.RawMessage(`{"task":"x","mode":"test"}`))
+		if err == nil || !strings.Contains(err.Error(), "unsupported mode") {
+			t.Errorf("future-mode 'test' must be rejected until the v0 tool set actually supports it; got err=%v", err)
+		}
+	})
+}
+
+// TestSubagentTool_MaxTurnsClamp verifies that an oversized
+// max_turns from the model gets silently clamped to
+// maxSubagentMaxTurns instead of returning an error — operators
+// would rather have a bounded run than a thrown tool call.
+func TestSubagentTool_MaxTurnsClamp(t *testing.T) {
+	// Mock LLM that returns immediately so we can observe behavior
+	// without burning real budget.
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "text/event-stream")
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte("data: {\"choices\":[{\"delta\":{\"role\":\"assistant\",\"content\":\"Conclusion:\\nok\"},\"finish_reason\":\"stop\"}]}\n\n"))
+		_, _ = w.Write([]byte("data: [DONE]\n\n"))
+	}))
+	t.Cleanup(srv.Close)
+
+	tool := subagentTool(SubagentDeps{
+		LLM:              NewLLMClient(srv.URL, "", "fake"),
+		HostWorkspaceDir: t.TempDir(),
+		Log:              zerolog.Nop(),
+		PerCallTimeout:   5 * time.Second,
+	})
+	// max_turns=999 should not error; it should clamp.
+	out, err := tool.Execute(context.Background(), json.RawMessage(`{"task":"x","max_turns":999}`))
+	if err != nil {
+		t.Fatalf("oversized max_turns must clamp, not error: %v", err)
+	}
+	var resp subagentResponse
+	if err := json.Unmarshal([]byte(out), &resp); err != nil {
+		t.Fatal(err)
+	}
+	if !resp.OK {
+		t.Errorf("clamped run should still complete OK; got resp=%+v", resp)
+	}
+}
+
 func TestRunSubagentCancelsChildLoopWhenParentContextCancels(t *testing.T) {
 	block := make(chan struct{})
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
