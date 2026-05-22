@@ -3,6 +3,7 @@ package main
 import (
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 )
 
@@ -140,6 +141,54 @@ func TestParseFlagsAndConfig_CLIBeatsEnv(t *testing.T) {
 	}
 	if cfg.Model != "cli-model" {
 		t.Errorf("--model should win over AFFENTSERVE_MODEL; got %q", cfg.Model)
+	}
+}
+
+// TestParseFlagsAndConfig_SamplingFromEnv pins env support for the
+// three sampling knobs. Eval rigs running batches of affentserve
+// containers need to set deterministic decoding via env
+// (AFFENTSERVE_TEMPERATURE=0) without inlining --temperature into
+// every CMD. Same pattern as AFFENTSERVE_MODEL.
+//
+// Also: the parser uses pointers (so "unset" / "0" stays
+// distinguishable for the wire layer). A pointer to 0 must survive
+// env parsing — otherwise temperature=0 evals silently revert to
+// the provider default the moment env is the source.
+func TestParseFlagsAndConfig_SamplingFromEnv(t *testing.T) {
+	t.Setenv("AFFENTSERVE_BASE_URL", "https://example/v1")
+	t.Setenv("AFFENTSERVE_MODEL", "m")
+	t.Setenv("AFFENTSERVE_TEMPERATURE", "0")
+	t.Setenv("AFFENTSERVE_TOP_P", "0.95")
+	t.Setenv("AFFENTSERVE_MAX_TOKENS", "512")
+
+	cfg, err := parseFlagsAndConfig(nil)
+	if err != nil {
+		t.Fatalf("parseFlagsAndConfig: %v", err)
+	}
+	if cfg.Temperature == nil {
+		t.Fatal("Temperature pointer must be non-nil when env is 0 (not the same as unset)")
+	}
+	if *cfg.Temperature != 0 {
+		t.Errorf("Temperature = %v, want 0", *cfg.Temperature)
+	}
+	if cfg.TopP == nil || *cfg.TopP != 0.95 {
+		t.Errorf("TopP = %v, want 0.95", cfg.TopP)
+	}
+	if cfg.MaxTokens == nil || *cfg.MaxTokens != 512 {
+		t.Errorf("MaxTokens = %v, want 512", cfg.MaxTokens)
+	}
+}
+
+// TestParseFlagsAndConfig_SamplingEnvRejectsMalformed ensures a
+// typo in AFFENTSERVE_TEMPERATURE fails at boot (a 5xx during the
+// first chat request would otherwise be the first signal).
+func TestParseFlagsAndConfig_SamplingEnvRejectsMalformed(t *testing.T) {
+	t.Setenv("AFFENTSERVE_BASE_URL", "https://example/v1")
+	t.Setenv("AFFENTSERVE_MODEL", "m")
+	t.Setenv("AFFENTSERVE_TEMPERATURE", "warm")
+	_, err := parseFlagsAndConfig(nil)
+	if err == nil || !strings.Contains(err.Error(), "AFFENTSERVE_TEMPERATURE") {
+		t.Errorf("malformed AFFENTSERVE_TEMPERATURE must fail boot; got err=%v", err)
 	}
 }
 

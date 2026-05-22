@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"strconv"
 	"strings"
 	"time"
 )
@@ -250,6 +251,31 @@ func (c *Config) Resolve() error {
 	}
 	if v := os.Getenv("AFFENTSERVE_SESSION_RETENTION"); v != "" {
 		c.SessionRetention = v
+	}
+	// Sampling knobs: same env-beats-config posture. Parse errors
+	// surface at startup so a typo in AFFENTSERVE_TEMPERATURE doesn't
+	// silently keep the provider default for the lifetime of the
+	// deploy.
+	if v := os.Getenv("AFFENTSERVE_TEMPERATURE"); v != "" {
+		t, err := strconv.ParseFloat(v, 64)
+		if err != nil {
+			return fmt.Errorf("AFFENTSERVE_TEMPERATURE=%q: %w", v, err)
+		}
+		c.Temperature = &t
+	}
+	if v := os.Getenv("AFFENTSERVE_TOP_P"); v != "" {
+		t, err := strconv.ParseFloat(v, 64)
+		if err != nil {
+			return fmt.Errorf("AFFENTSERVE_TOP_P=%q: %w", v, err)
+		}
+		c.TopP = &t
+	}
+	if v := os.Getenv("AFFENTSERVE_MAX_TOKENS"); v != "" {
+		n, err := strconv.Atoi(v)
+		if err != nil {
+			return fmt.Errorf("AFFENTSERVE_MAX_TOKENS=%q: %w", v, err)
+		}
+		c.MaxTokens = &n
 	}
 	return nil
 }

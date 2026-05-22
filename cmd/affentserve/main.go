@@ -87,9 +87,9 @@ func parseFlagsAndConfig(argv []string) (Config, error) {
 		// unset flag is distinguishable from --temperature=0 — that
 		// distinction matters for evals where temperature=0 is the
 		// deterministic decode setting.
-		temperature = fs.String("temperature", "", "Sampling temperature forwarded to upstream LLM (omit to use provider default). Set 0 for deterministic decode in evals.")
-		topP        = fs.String("top-p", "", "Top-p (nucleus) sampling forwarded to upstream (omit to use provider default).")
-		maxTokens   = fs.String("max-tokens", "", "Max output tokens forwarded to upstream (omit to use provider default).")
+		temperature = fs.String("temperature", "", "Sampling temperature forwarded to upstream LLM (omit to use provider default). Set 0 for deterministic decode in evals. Env: AFFENTSERVE_TEMPERATURE.")
+		topP        = fs.String("top-p", "", "Top-p (nucleus) sampling forwarded to upstream (omit to use provider default). Env: AFFENTSERVE_TOP_P.")
+		maxTokens   = fs.String("max-tokens", "", "Max output tokens forwarded to upstream (omit to use provider default). Env: AFFENTSERVE_MAX_TOKENS.")
 	)
 
 	if err := fs.Parse(argv); err != nil {
