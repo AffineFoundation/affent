@@ -30,20 +30,26 @@ func BuiltinSkillProvider(userText string) string {
 	return ""
 }
 
+// webSnapshotTriggers are generic shape signals: the user mentioned a
+// URL, a browser, or "this page". A specific site name leaking into
+// this list (an earlier draft had "taostats") would make the codebase
+// carry domain-specific eval state and bias the router on unrelated
+// traffic without buying anything — a URL or "page" / "网页" match
+// already fires for the cases that motivated the trigger.
+var webSnapshotTriggers = []string{
+	"http://",
+	"https://",
+	"browser",
+	"web page",
+	"website",
+	"网页",
+	"页面",
+	"浏览器",
+	"访问",
+}
+
 func wantsWebSnapshotSkill(lowerUserText string) bool {
-	triggers := []string{
-		"http://",
-		"https://",
-		"browser",
-		"web page",
-		"website",
-		"网页",
-		"页面",
-		"浏览器",
-		"访问",
-		"taostats",
-	}
-	for _, trigger := range triggers {
+	for _, trigger := range webSnapshotTriggers {
 		if strings.Contains(lowerUserText, trigger) {
 			return true
 		}

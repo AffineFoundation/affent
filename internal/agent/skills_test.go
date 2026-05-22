@@ -27,6 +27,24 @@ func TestBuiltinSkillProvider_NoIrrelevantInjection(t *testing.T) {
 	}
 }
 
+// TestBuiltinSkillProvider_NoDomainSpecificTriggers pins that the
+// trigger list stays generic. An earlier draft included the literal
+// "taostats" — a specific site name from a single eval incident —
+// alongside the shape-based "url / browser / page" indicators. That
+// kind of leak biases the router on unrelated traffic and adds zero
+// value (the URL alone already fires when "taostats" is mentioned in
+// context). Test plants a sentence whose ONLY web-ish signal is a
+// site name and asserts the skill stays silent. A regression that
+// re-adds a domain-specific trigger fires this test.
+func TestBuiltinSkillProvider_NoDomainSpecificTriggers(t *testing.T) {
+	if got := BuiltinSkillProvider("how does taostats compare to coingecko"); got != "" {
+		t.Fatalf("mentioning a site name without a URL / browser / page indicator should NOT trigger the web skill:\n%s", got)
+	}
+	if got := BuiltinSkillProvider("rewrite the github action"); got != "" {
+		t.Fatalf("'github' is a site name, not a web-task signal; got skill:\n%s", got)
+	}
+}
+
 func TestLoopAppendUserMessageInjectsActiveSkillBeforeUser(t *testing.T) {
 	conv, err := OpenConversationAt(filepath.Join(t.TempDir(), "sess.jsonl"))
 	if err != nil {
