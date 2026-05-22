@@ -216,7 +216,8 @@ func LoadConfig(path string) (Config, error) {
 // way). Idempotent.
 //
 // Precedence the surrounding code constructs:
-//   CLI flag  >  env var  >  config file  >  built-in default
+//
+//	CLI flag  >  env var  >  config file  >  built-in default
 //
 // Resolve only handles the env > config > default tail. main.go's
 // CLI-override block runs AFTER Resolve so CLI flags still win over

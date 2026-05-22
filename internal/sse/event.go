@@ -61,7 +61,6 @@ func (e Event) Encode() []byte {
 	return out
 }
 
-
 // NewEvent builds an event from any json-serializable payload. ID is
 // left at zero — the Loop assigns it from its per-session sequence
 // counter just before publishing on Events.

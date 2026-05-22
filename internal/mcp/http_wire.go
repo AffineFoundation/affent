@@ -219,4 +219,3 @@ func (w *httpWire) setSID(s string) {
 	w.sessionID = s
 	w.mu.Unlock()
 }
-

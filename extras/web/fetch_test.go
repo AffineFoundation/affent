@@ -39,10 +39,10 @@ func TestFetchTool_HTML(t *testing.T) {
 	// h-levels or whitespace because that depends on readability's
 	// scoring; only the load-bearing facts are checked.
 	wantContains := []string{
-		"Hello, agent",          // heading text preserved
-		"[link]",                // anchor rendered as markdown link
-		srv.URL + "/docs",       // href resolved against base URL
-		"```",                   // pre block fenced
+		"Hello, agent",    // heading text preserved
+		"[link]",          // anchor rendered as markdown link
+		srv.URL + "/docs", // href resolved against base URL
+		"```",             // pre block fenced
 		`print("code block")`,
 	}
 	for _, s := range wantContains {

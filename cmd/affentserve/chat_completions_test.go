@@ -131,10 +131,10 @@ func TestChatCompletions_ResponseLabelsEchoRequestWhenCfgEmpty(t *testing.T) {
 // the caller's affent-specific intent.
 func TestResolvedSessionID_PrefersAffentNamespacedField(t *testing.T) {
 	cases := []struct {
-		name        string
-		session     string
-		affentSess  string
-		want        string
+		name       string
+		session    string
+		affentSess string
+		want       string
 	}{
 		{"only short field", "sess_short", "", "sess_short"},
 		{"only namespaced field", "", "sess_ns", "sess_ns"},

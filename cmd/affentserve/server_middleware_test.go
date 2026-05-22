@@ -117,7 +117,7 @@ func TestResponseRecorder_FlushOnNonFlushyWriterIsNoOp(t *testing.T) {
 
 type nonFlushy struct{}
 
-func (nonFlushy) Header() http.Header        { return http.Header{} }
+func (nonFlushy) Header() http.Header         { return http.Header{} }
 func (nonFlushy) Write(b []byte) (int, error) { return len(b), nil }
 func (nonFlushy) WriteHeader(int)             {}
 

@@ -280,7 +280,7 @@ func TestMemoryReplaceAmbiguousPreviewsAreUTF8Safe(t *testing.T) {
 	// Two long Cyrillic entries containing the same trigger token —
 	// "use". Each rune is 2 bytes, so the 80-byte cap lands inside a
 	// rune for sure.
-	long := strings.Repeat("ё", 100)        // 200 bytes, exceeds 80
+	long := strings.Repeat("ё", 100) // 200 bytes, exceeds 80
 	if _, err := s.Add(TargetMemory, "", "use "+long+" alpha"); err != nil {
 		t.Fatal(err)
 	}
@@ -821,7 +821,7 @@ func TestMemoryRemoveDeletesEmptyTopicFile(t *testing.T) {
 // context every time something hits it.
 func TestMemorySearchTrimsLongSnippet(t *testing.T) {
 	s := newTestStore(t)
-	s.TopicCharLimit = 4000 // override the tight default so the long fixture fits
+	s.TopicCharLimit = 4000                                       // override the tight default so the long fixture fits
 	long := strings.Repeat("kubernetes operator deployment ", 30) // ~900 chars
 	_, _ = s.Add(TargetMemory, "infra", long)
 

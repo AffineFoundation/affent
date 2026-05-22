@@ -335,4 +335,3 @@ func installInterceptor(page *rod.Page, cfg InterceptConfig, stats *InterceptSta
 	go router.Run()
 	return router, nil
 }
-

@@ -59,9 +59,9 @@ func TestMemoryTool_DispatchAdd(t *testing.T) {
 func TestMemoryTool_DispatchValidation(t *testing.T) {
 	tool, _ := newMemoryToolFixture(t)
 	cases := []struct {
-		name        string
-		args        string
-		wantInMsg   string
+		name      string
+		args      string
+		wantInMsg string
 	}{
 		{"no action", `{}`, "action is required"},
 		{"add without content", `{"action":"add"}`, "content is required"},
