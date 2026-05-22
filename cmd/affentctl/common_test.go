@@ -232,6 +232,58 @@ func TestNoEnvVarLeaksIntoFlagDefaults(t *testing.T) {
 	}
 }
 
+// TestParseSampling pins the string-shaped sampling flag parsing.
+// Empty strings stay nil (distinguishes "unset" from "explicit 0" so
+// upstream provider defaults still apply); explicit "0" must become a
+// non-nil pointer to 0 so deterministic-decode evals work.
+func TestParseSampling(t *testing.T) {
+	t.Run("all empty → all nil", func(t *testing.T) {
+		s, err := parseSampling("", "", "", "")
+		if err != nil {
+			t.Fatal(err)
+		}
+		if s.Temperature != nil || s.TopP != nil || s.MaxTokens != nil || s.Seed != nil {
+			t.Errorf("empty strings must yield nil pointers; got %+v", s)
+		}
+	})
+	t.Run("temperature=0 keeps a non-nil zero pointer", func(t *testing.T) {
+		s, err := parseSampling("0", "", "", "")
+		if err != nil {
+			t.Fatal(err)
+		}
+		if s.Temperature == nil {
+			t.Fatal("temperature=0 must produce non-nil pointer")
+		}
+		if *s.Temperature != 0 {
+			t.Errorf("temperature value lost: got %v", *s.Temperature)
+		}
+	})
+	t.Run("all set", func(t *testing.T) {
+		s, err := parseSampling("0.7", "0.95", "256", "42")
+		if err != nil {
+			t.Fatal(err)
+		}
+		if s.Temperature == nil || *s.Temperature != 0.7 {
+			t.Errorf("temperature: got %v", s.Temperature)
+		}
+		if s.TopP == nil || *s.TopP != 0.95 {
+			t.Errorf("top_p: got %v", s.TopP)
+		}
+		if s.MaxTokens == nil || *s.MaxTokens != 256 {
+			t.Errorf("max_tokens: got %v", s.MaxTokens)
+		}
+		if s.Seed == nil || *s.Seed != 42 {
+			t.Errorf("seed: got %v", s.Seed)
+		}
+	})
+	t.Run("invalid temperature surfaces the parse error", func(t *testing.T) {
+		_, err := parseSampling("hot", "", "", "")
+		if err == nil {
+			t.Fatal("expected parse error for non-numeric temperature")
+		}
+	})
+}
+
 func TestMemoryOnlyImpliesMemoryEnabled(t *testing.T) {
 	var cf commonFlags
 	fs := flag.NewFlagSet("test", flag.ContinueOnError)

@@ -91,13 +91,14 @@ type commonFlags struct {
 	//   "docker:<cid>"     — run inside the named container via `docker exec`
 	executor string
 
-	// Sampling knobs forwarded to the upstream OpenAI-compat chat
-	// completion. -1 means "leave unset" — the upstream picks its own
-	// default. Mostly useful for training-data generation where the
-	// caller wants N samples of the same prompt to actually diverge.
-	temperature float64
-	topP        float64
-	seed        int64
+	// Sampling pass-through to the upstream LLM. Strings preserve the
+	// "unset" / "explicit 0" distinction that evals need (temperature=0
+	// for deterministic decoding must not be confused with "use provider
+	// default"). Parsed into pointers in setupLoop.
+	temperature string
+	topP        string
+	maxTokens   string
+	seed        string
 }
 
 func (c *commonFlags) bind(fs *flag.FlagSet) {
@@ -129,9 +130,46 @@ func (c *commonFlags) bind(fs *flag.FlagSet) {
 	fs.IntVar(&c.compactTrigger, "compact-trigger", 240, "compact conversation when message count exceeds this. 0 / negative → fall back to agent runtime's default (240). Reactive compaction (on context-overflow errors) is unaffected.")
 	fs.IntVar(&c.compactKeepLast, "compact-keep-last", 10, "messages preserved verbatim at the tail of the conversation when compacting")
 	fs.StringVar(&c.executor, "executor", "local", "shell-tool backend: 'local' (host; no isolation), or 'docker:<container_id>' (exec into an already-running container, e.g. 'docker:abc123def'; file tools also route through docker so they see the container's filesystem). Caller manages container lifecycle. (env: AFFENTCTL_EXECUTOR)")
-	fs.Float64Var(&c.temperature, "temperature", -1, "sampling temperature for the upstream chat completion; <0 leaves the field unset and the upstream picks its default")
-	fs.Float64Var(&c.topP, "top-p", -1, "nucleus sampling cutoff for the upstream chat completion; <0 leaves unset")
-	fs.Int64Var(&c.seed, "seed", -1, "deterministic-sampling seed for the upstream chat completion; <0 leaves unset")
+	fs.StringVar(&c.temperature, "temperature", "", "sampling temperature forwarded to upstream LLM (omit → provider default; set 0 for deterministic eval decoding)")
+	fs.StringVar(&c.topP, "top-p", "", "top-p (nucleus) sampling forwarded to upstream (omit → provider default)")
+	fs.StringVar(&c.maxTokens, "max-tokens", "", "max output tokens forwarded to upstream (omit → provider default)")
+	fs.StringVar(&c.seed, "seed", "", "deterministic-sampling seed forwarded to upstream (omit → provider default)")
+}
+
+// parseSampling converts the string-shaped CLI/file values into a
+// SamplingDefaults. Empty strings stay nil — that's how affent
+// distinguishes "use upstream default" from "explicit 0".
+func parseSampling(temperature, topP, maxTokens, seed string) (agent.SamplingDefaults, error) {
+	var s agent.SamplingDefaults
+	if temperature != "" {
+		t, err := strconv.ParseFloat(temperature, 64)
+		if err != nil {
+			return s, fmt.Errorf("--temperature: %w", err)
+		}
+		s.Temperature = &t
+	}
+	if topP != "" {
+		t, err := strconv.ParseFloat(topP, 64)
+		if err != nil {
+			return s, fmt.Errorf("--top-p: %w", err)
+		}
+		s.TopP = &t
+	}
+	if maxTokens != "" {
+		n, err := strconv.Atoi(maxTokens)
+		if err != nil {
+			return s, fmt.Errorf("--max-tokens: %w", err)
+		}
+		s.MaxTokens = &n
+	}
+	if seed != "" {
+		n, err := strconv.ParseInt(seed, 10, 64)
+		if err != nil {
+			return s, fmt.Errorf("--seed: %w", err)
+		}
+		s.Seed = &n
+	}
+	return s, nil
 }
 
 // flagEnvSources maps flag-name → env-var-name for every flag whose
@@ -180,6 +218,13 @@ type fileConfig struct {
 	Continue  *bool   `json:"continue"`
 	MCPConfig *string `json:"mcp_config"`
 	Executor  *string `json:"executor"`
+	// Sampling forwarded to upstream. Kept as strings to mirror the CLI
+	// flags and preserve the "unset vs explicit 0" distinction that
+	// pointers give us at the wire layer.
+	Temperature *string `json:"temperature"`
+	TopP        *string `json:"top_p"`
+	MaxTokens   *string `json:"max_tokens"`
+	Seed        *string `json:"seed"`
 }
 
 func applyConfig(c *commonFlags, fs *flag.FlagSet) error {
@@ -293,6 +338,10 @@ func loadConfigFile(c *commonFlags, fs *flag.FlagSet) error {
 	setBool("continue", &c.continueLast, cfg.Continue)
 	setString("mcp-config", &c.mcpConfigPath, cfg.MCPConfig)
 	setString("executor", &c.executor, cfg.Executor)
+	setString("temperature", &c.temperature, cfg.Temperature)
+	setString("top-p", &c.topP, cfg.TopP)
+	setString("max-tokens", &c.maxTokens, cfg.MaxTokens)
+	setString("seed", &c.seed, cfg.Seed)
 	return nil
 }
 
@@ -502,17 +551,15 @@ func setupLoop(c commonFlags) (*loopBundle, int) {
 
 	events := make(chan sse.Event, 64)
 	llm := agent.NewLLMClient(c.baseURL, c.apiKey, c.model)
-	if c.temperature >= 0 {
-		t := c.temperature
-		llm.Temperature = &t
-	}
-	if c.topP >= 0 {
-		p := c.topP
-		llm.TopP = &p
-	}
-	if c.seed >= 0 {
-		s := c.seed
-		llm.Seed = &s
+	if sampling, err := parseSampling(c.temperature, c.topP, c.maxTokens, c.seed); err != nil {
+		log.Error().Err(err).Msg("parse sampling")
+		_ = traceClose()
+		for _, mc := range mcpClients {
+			_ = mc.Close()
+		}
+		return nil, 3
+	} else {
+		llm.Sampling = sampling
 	}
 	projectContextDir := ""
 	if c.projectContext {

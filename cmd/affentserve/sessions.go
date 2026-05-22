@@ -235,6 +235,11 @@ func (p *SessionPool) buildSession(id string) (*Session, error) {
 		return nil, fmt.Errorf("conversation: %w", err)
 	}
 	llm := agent.NewLLMClient(p.cfg.BaseURL, p.cfg.APIKey, p.cfg.Model)
+	llm.Sampling = agent.SamplingDefaults{
+		Temperature: p.cfg.Temperature,
+		TopP:        p.cfg.TopP,
+		MaxTokens:   p.cfg.MaxTokens,
+	}
 
 	reg := agent.NewRegistry()
 	// Memory store — used both as a tool dependency and as the

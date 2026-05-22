@@ -140,6 +140,16 @@ type Config struct {
 	// the rendered page; the tool's save_path option keeps base64 out
 	// of the result for callers that only want a PNG on disk.
 	BrowserScreenshot bool `json:"browser_screenshot"`
+
+	// Sampling knobs forwarded to the upstream LLM on every chat
+	// completion. Pointers so "unset" (nil) differs from "explicitly 0"
+	// — temperature=0 is the deterministic-decode setting evals rely
+	// on, not the same as "use provider default". Empty pointers leave
+	// the field off the wire so OpenAI / vLLM / sglang fall through to
+	// their own defaults.
+	Temperature *float64 `json:"temperature,omitempty"`
+	TopP        *float64 `json:"top_p,omitempty"`
+	MaxTokens   *int     `json:"max_tokens,omitempty"`
 }
 
 const (

@@ -114,13 +114,23 @@ type LLMClient struct {
 	APIKey  string
 	Model   string
 	HTTP    *http.Client
+	// Sampling is forwarded to upstream on every Chat call when fields
+	// are non-nil. Affent itself doesn't tune anything — this is the
+	// pass-through hook operators / eval drivers use to pin
+	// temperature=0 for determinism, bound max_tokens, etc. Per-request
+	// overrides aren't supported yet; this is a per-LLMClient default.
+	Sampling SamplingDefaults
+}
 
-	// Sampling knobs. nil pointers mean "let the upstream pick its
-	// default" — preserves the original zero-config behavior. Set them
-	// to control how diverse the rollouts are (training data wants
-	// non-trivial reward variance across N samples of the same task).
+// SamplingDefaults carries the OpenAI-shape sampling knobs forwarded on
+// every Chat call. Pointers distinguish "unset → omit field → upstream
+// default" from "explicitly zero → forward 0 → deterministic decode".
+// temperature=0 is a meaningful eval value and must not be confused
+// with "no preference".
+type SamplingDefaults struct {
 	Temperature *float64
 	TopP        *float64
+	MaxTokens   *int
 	Seed        *int64
 }
 
@@ -270,10 +280,14 @@ type chatRequest struct {
 	Stream   bool          `json:"stream"`
 	// Stream usage in the final SSE chunk (OpenAI-compat extension).
 	StreamOptions *streamOptions `json:"stream_options,omitempty"`
-	// Optional sampling knobs — pointer types so we can omit them
-	// entirely when the caller has not set them.
+	// Sampling knobs forwarded from LLMClient.Sampling when non-nil.
+	// omitempty on pointer types omits the field when the pointer is
+	// nil, so the wire request only carries values the operator
+	// actually set — a temperature=0 value (explicitly set to 0) still
+	// makes it through because the pointer is non-nil.
 	Temperature *float64 `json:"temperature,omitempty"`
 	TopP        *float64 `json:"top_p,omitempty"`
+	MaxTokens   *int     `json:"max_tokens,omitempty"`
 	Seed        *int64   `json:"seed,omitempty"`
 }
 
@@ -324,9 +338,10 @@ func (c *LLMClient) Chat(ctx context.Context, msgs []ChatMessage, tools []ToolDe
 		Tools:         tools,
 		Stream:        true,
 		StreamOptions: &streamOptions{IncludeUsage: true},
-		Temperature:   c.Temperature,
-		TopP:          c.TopP,
-		Seed:          c.Seed,
+		Temperature:   c.Sampling.Temperature,
+		TopP:          c.Sampling.TopP,
+		MaxTokens:     c.Sampling.MaxTokens,
+		Seed:          c.Sampling.Seed,
 	})
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, c.BaseURL+"/chat/completions", bytes.NewReader(body))
 	if err != nil {

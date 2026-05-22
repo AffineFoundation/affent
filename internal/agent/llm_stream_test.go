@@ -212,6 +212,54 @@ func TestRequestBody_StripsReasoning(t *testing.T) {
 	}
 }
 
+// TestRequestBody_SamplingForwarding pins the contract that
+// LLMClient.Sampling actually reaches the wire request when set, and
+// stays out of it when unset (so the upstream provider's defaults
+// apply). temperature=0 is the eval-critical edge case: a pointer to
+// 0.0 must marshal as "temperature":0, NOT be elided like an unset
+// field would be.
+func TestRequestBody_SamplingForwarding(t *testing.T) {
+	t.Run("all unset → no sampling fields on the wire", func(t *testing.T) {
+		body, _ := json.Marshal(chatRequest{Model: "m", Messages: toWireMessages(nil), Stream: true})
+		got := string(body)
+		for _, k := range []string{"temperature", "top_p", "max_tokens", "seed"} {
+			if strings.Contains(got, k) {
+				t.Errorf("unset Sampling must omit %q; got %s", k, got)
+			}
+		}
+	})
+	t.Run("temperature=0 must reach the wire as a literal 0", func(t *testing.T) {
+		zero := 0.0
+		body, _ := json.Marshal(chatRequest{
+			Model: "m", Messages: toWireMessages(nil), Stream: true,
+			Temperature: &zero,
+		})
+		got := string(body)
+		if !strings.Contains(got, `"temperature":0`) {
+			t.Errorf("temperature=0 must marshal as literal 0 (deterministic decode); got %s", got)
+		}
+	})
+	t.Run("non-zero values pass through", func(t *testing.T) {
+		temp := 0.7
+		top := 0.95
+		max := 512
+		seed := int64(42)
+		body, _ := json.Marshal(chatRequest{
+			Model: "m", Messages: toWireMessages(nil), Stream: true,
+			Temperature: &temp,
+			TopP:        &top,
+			MaxTokens:   &max,
+			Seed:        &seed,
+		})
+		got := string(body)
+		for _, want := range []string{`"temperature":0.7`, `"top_p":0.95`, `"max_tokens":512`, `"seed":42`} {
+			if !strings.Contains(got, want) {
+				t.Errorf("expected %q in wire body; got %s", want, got)
+			}
+		}
+	})
+}
+
 func TestSanitizeToolCallArgs_ReplacesMalformedWithEmptyObject(t *testing.T) {
 	mk := func(args string) ToolCall {
 		var tc ToolCall

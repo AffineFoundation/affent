@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"os"
 	"os/signal"
+	"strconv"
 	"syscall"
 	"time"
 
@@ -78,6 +79,13 @@ func parseFlagsAndConfig(argv []string) (Config, error) {
 		browserAllowAll  = fs.Bool("browser-allow-all-domains", false, "Allow third-party / tracker domains the default list normally blocks.")
 		browserScreenshot = fs.Bool("browser-screenshot", false, "Register the browser_screenshot tool. Off by default — base64 image payloads bloat tool result events; flip on for vision-capable models.")
 		systemPrompt     = fs.String("system-prompt", "", "Override agent.DefaultSystemPrompt. '-' reads from stdin, '@FILE' from a file, anything else is literal.")
+		// Sampling pass-through. Strings (not Float64Var / Int) so an
+		// unset flag is distinguishable from --temperature=0 — that
+		// distinction matters for evals where temperature=0 is the
+		// deterministic decode setting.
+		temperature = fs.String("temperature", "", "Sampling temperature forwarded to upstream LLM (omit to use provider default). Set 0 for deterministic decode in evals.")
+		topP        = fs.String("top-p", "", "Top-p (nucleus) sampling forwarded to upstream (omit to use provider default).")
+		maxTokens   = fs.String("max-tokens", "", "Max output tokens forwarded to upstream (omit to use provider default).")
 	)
 
 	if err := fs.Parse(argv); err != nil {
@@ -175,6 +183,27 @@ func parseFlagsAndConfig(argv []string) (Config, error) {
 			return cfg, fmt.Errorf("--system-prompt: %w", err)
 		}
 		cfg.SystemPrompt = resolved
+	}
+	if *temperature != "" {
+		t, err := strconv.ParseFloat(*temperature, 64)
+		if err != nil {
+			return cfg, fmt.Errorf("--temperature: %w", err)
+		}
+		cfg.Temperature = &t
+	}
+	if *topP != "" {
+		t, err := strconv.ParseFloat(*topP, 64)
+		if err != nil {
+			return cfg, fmt.Errorf("--top-p: %w", err)
+		}
+		cfg.TopP = &t
+	}
+	if *maxTokens != "" {
+		n, err := strconv.Atoi(*maxTokens)
+		if err != nil {
+			return cfg, fmt.Errorf("--max-tokens: %w", err)
+		}
+		cfg.MaxTokens = &n
 	}
 
 	if err := cfg.Resolve(); err != nil {
