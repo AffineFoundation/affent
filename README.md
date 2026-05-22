@@ -234,9 +234,10 @@ Design contract enforced in code (`internal/agent/subagent.go` +
 
 Registration:
 
-- `affentctl`: on by default; `--memory-only` disables it (the
-  memory-only isolation mode strips every non-memory tool, subagent
-  included).
+- `affentctl`: on by default. Disable with `--subagent=false`,
+  `AFFENTCTL_SUBAGENT=false`, or `"subagent": false` /
+  `"enable_subagent": false` in the config file. `--memory-only` also
+  disables it because that mode strips every non-memory tool.
 - `affentserve`: off by default. Enable with `--subagent` or
   `enable_subagent: true` in the config file. Independent of
   `--builtins` — the parent can have subagent without exposing host

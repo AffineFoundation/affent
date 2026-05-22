@@ -156,6 +156,117 @@ func TestEnvVarBeatsConfigFile(t *testing.T) {
 	}
 }
 
+func TestSubagentCanBeDisabledFromConfigEnvAndCLI(t *testing.T) {
+	t.Run("config subagent false", func(t *testing.T) {
+		dir := t.TempDir()
+		cfgPath := filepath.Join(dir, "c.json")
+		if err := os.WriteFile(cfgPath, []byte(`{"subagent":false}`), 0o644); err != nil {
+			t.Fatal(err)
+		}
+		var cf commonFlags
+		fs := flag.NewFlagSet("test", flag.ContinueOnError)
+		cf.bind(fs)
+		if err := fs.Parse([]string{"--config", cfgPath}); err != nil {
+			t.Fatal(err)
+		}
+		if err := applyConfig(&cf, fs); err != nil {
+			t.Fatal(err)
+		}
+		if cf.subagentEnabled {
+			t.Fatal("config subagent:false should disable subagent")
+		}
+	})
+
+	t.Run("enable_subagent alias", func(t *testing.T) {
+		dir := t.TempDir()
+		cfgPath := filepath.Join(dir, "c.json")
+		if err := os.WriteFile(cfgPath, []byte(`{"enable_subagent":false}`), 0o644); err != nil {
+			t.Fatal(err)
+		}
+		var cf commonFlags
+		fs := flag.NewFlagSet("test", flag.ContinueOnError)
+		cf.bind(fs)
+		if err := fs.Parse([]string{"--config", cfgPath}); err != nil {
+			t.Fatal(err)
+		}
+		if err := applyConfig(&cf, fs); err != nil {
+			t.Fatal(err)
+		}
+		if cf.subagentEnabled {
+			t.Fatal("config enable_subagent:false should disable subagent")
+		}
+	})
+
+	t.Run("env beats config", func(t *testing.T) {
+		dir := t.TempDir()
+		cfgPath := filepath.Join(dir, "c.json")
+		if err := os.WriteFile(cfgPath, []byte(`{"subagent":true}`), 0o644); err != nil {
+			t.Fatal(err)
+		}
+		t.Setenv("AFFENTCTL_SUBAGENT", "false")
+		var cf commonFlags
+		fs := flag.NewFlagSet("test", flag.ContinueOnError)
+		cf.bind(fs)
+		if err := fs.Parse([]string{"--config", cfgPath}); err != nil {
+			t.Fatal(err)
+		}
+		if err := applyConfig(&cf, fs); err != nil {
+			t.Fatal(err)
+		}
+		if cf.subagentEnabled {
+			t.Fatal("AFFENTCTL_SUBAGENT=false should win over config")
+		}
+	})
+
+	t.Run("cli beats env", func(t *testing.T) {
+		t.Setenv("AFFENTCTL_SUBAGENT", "false")
+		var cf commonFlags
+		fs := flag.NewFlagSet("test", flag.ContinueOnError)
+		cf.bind(fs)
+		if err := fs.Parse([]string{"--subagent=true"}); err != nil {
+			t.Fatal(err)
+		}
+		if err := applyConfig(&cf, fs); err != nil {
+			t.Fatal(err)
+		}
+		if !cf.subagentEnabled {
+			t.Fatal("--subagent=true should win over AFFENTCTL_SUBAGENT=false")
+		}
+	})
+}
+
+func TestSetupLoop_SubagentDisabledDoesNotRegisterToolOrPolicies(t *testing.T) {
+	var cf commonFlags
+	fs := flag.NewFlagSet("test", flag.ContinueOnError)
+	cf.bind(fs)
+	if err := fs.Parse([]string{
+		"--workspace", t.TempDir(),
+		"--model", "fake-model",
+		"--subagent=false",
+		"--quiet",
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if err := applyConfig(&cf, fs); err != nil {
+		t.Fatal(err)
+	}
+	b, code := setupLoop(cf)
+	if code != 0 {
+		t.Fatalf("setupLoop code=%d", code)
+	}
+	defer b.close()
+	if _, ok := b.loop.Tools.Get("subagent_run"); ok {
+		t.Fatal("subagent_run should not be registered when --subagent=false")
+	}
+	if b.loop.FirstToolPolicy != nil || b.loop.PostToolPolicy != nil {
+		t.Fatal("subagent policies should not be installed when --subagent=false")
+	}
+	msgs := b.loop.Conv.Snapshot()
+	if len(msgs) == 0 || strings.Contains(msgs[0].Content, "Subagent delegation:") {
+		t.Fatal("system prompt should not include subagent guidance when disabled")
+	}
+}
+
 func TestAPIKeyEnvDoesNotLeakIntoFlagDefaults(t *testing.T) {
 	t.Setenv("AFFENTCTL_API_KEY", "sk-test-secret")
 
@@ -201,6 +312,7 @@ func TestNoEnvVarLeaksIntoFlagDefaults(t *testing.T) {
 	for k, v := range planted {
 		t.Setenv(k, v)
 	}
+	t.Setenv("AFFENTCTL_SUBAGENT", "false")
 
 	var cf commonFlags
 	fs := flag.NewFlagSet("test", flag.ContinueOnError)
@@ -217,6 +329,8 @@ func TestNoEnvVarLeaksIntoFlagDefaults(t *testing.T) {
 		want := ""
 		if name == "executor" {
 			want = "local"
+		} else if name == "subagent" {
+			want = "true"
 		}
 		if got != want {
 			t.Errorf("%s default = %q, want %q (env-bound flags must not show env values in --help)", name, got, want)

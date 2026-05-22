@@ -92,6 +92,11 @@ type commonFlags struct {
 	//   "docker:<cid>"     — run inside the named container via `docker exec`
 	executor string
 
+	// subagentEnabled registers subagent_run for bounded read-only
+	// delegation. Default on for affentctl; disable for strict single-
+	// loop evals or when nested model calls are not desired.
+	subagentEnabled bool
+
 	// Sampling pass-through to the upstream LLM. Strings preserve the
 	// "unset" / "explicit 0" distinction that evals need (temperature=0
 	// for deterministic decoding must not be confused with "use provider
@@ -131,6 +136,7 @@ func (c *commonFlags) bind(fs *flag.FlagSet) {
 	fs.IntVar(&c.compactTrigger, "compact-trigger", 240, "compact conversation when message count exceeds this. 0 / negative → fall back to agent runtime's default (240). Reactive compaction (on context-overflow errors) is unaffected.")
 	fs.IntVar(&c.compactKeepLast, "compact-keep-last", 10, "messages preserved verbatim at the tail of the conversation when compacting")
 	fs.StringVar(&c.executor, "executor", "local", "shell-tool backend: 'local' (host; no isolation), or 'docker:<container_id>' (exec into an already-running container, e.g. 'docker:abc123def'; file tools also route through docker so they see the container's filesystem). Caller manages container lifecycle. (env: AFFENTCTL_EXECUTOR)")
+	fs.BoolVar(&c.subagentEnabled, "subagent", true, "register subagent_run for bounded read-only delegation; set false to force a single-loop agent (env: AFFENTCTL_SUBAGENT)")
 	fs.StringVar(&c.temperature, "temperature", "", "sampling temperature forwarded to upstream LLM (omit → provider default; set 0 for deterministic eval decoding)")
 	fs.StringVar(&c.topP, "top-p", "", "top-p (nucleus) sampling forwarded to upstream (omit → provider default)")
 	fs.StringVar(&c.maxTokens, "max-tokens", "", "max output tokens forwarded to upstream (omit → provider default)")
@@ -187,6 +193,7 @@ var flagEnvSources = map[string]string{
 	"model":      "AFFENTCTL_MODEL",
 	"mcp-config": "AFFENTCTL_MCP_CONFIG",
 	"executor":   "AFFENTCTL_EXECUTOR",
+	"subagent":   "AFFENTCTL_SUBAGENT",
 }
 
 type fileConfig struct {
@@ -219,6 +226,11 @@ type fileConfig struct {
 	Continue  *bool   `json:"continue"`
 	MCPConfig *string `json:"mcp_config"`
 	Executor  *string `json:"executor"`
+	// Subagent is the affentctl-native key. EnableSubagent mirrors
+	// affentserve's config spelling so shared config templates can
+	// use the same name in both binaries.
+	Subagent       *bool `json:"subagent"`
+	EnableSubagent *bool `json:"enable_subagent"`
 	// Sampling forwarded to upstream. Kept as strings to mirror the CLI
 	// flags and preserve the "unset vs explicit 0" distinction that
 	// pointers give us at the wire layer.
@@ -240,6 +252,7 @@ func applyConfig(c *commonFlags, fs *flag.FlagSet) error {
 	if c.memoryOnly {
 		c.memoryEnabled = true
 		c.projectContext = false
+		c.subagentEnabled = false
 	}
 	return nil
 }
@@ -339,6 +352,8 @@ func loadConfigFile(c *commonFlags, fs *flag.FlagSet) error {
 	setBool("continue", &c.continueLast, cfg.Continue)
 	setString("mcp-config", &c.mcpConfigPath, cfg.MCPConfig)
 	setString("executor", &c.executor, cfg.Executor)
+	setBool("subagent", &c.subagentEnabled, cfg.Subagent)
+	setBool("subagent", &c.subagentEnabled, cfg.EnableSubagent)
 	setString("temperature", &c.temperature, cfg.Temperature)
 	setString("top-p", &c.topP, cfg.TopP)
 	setString("max-tokens", &c.maxTokens, cfg.MaxTokens)
@@ -358,12 +373,26 @@ func applyEnvConfig(c *commonFlags, fs *flag.FlagSet) {
 			*dst = v
 		}
 	}
+	setBool := func(name, env string, dst *bool) {
+		if setByCLI[name] {
+			return
+		}
+		v := os.Getenv(env)
+		if v == "" {
+			return
+		}
+		parsed, err := strconv.ParseBool(v)
+		if err == nil {
+			*dst = parsed
+		}
+	}
 
 	setString("base-url", "AFFENTCTL_BASE_URL", &c.baseURL)
 	setString("api-key", "AFFENTCTL_API_KEY", &c.apiKey)
 	setString("model", "AFFENTCTL_MODEL", &c.model)
 	setString("mcp-config", "AFFENTCTL_MCP_CONFIG", &c.mcpConfigPath)
 	setString("executor", "AFFENTCTL_EXECUTOR", &c.executor)
+	setBool("subagent", "AFFENTCTL_SUBAGENT", &c.subagentEnabled)
 }
 
 // loopBundle is everything a subcommand needs after setup: the loop
@@ -575,7 +604,7 @@ func setupLoop(c commonFlags) (*loopBundle, int) {
 	if c.projectContext {
 		projectContextDir = workspace
 	}
-	if !c.memoryOnly {
+	if !c.memoryOnly && c.subagentEnabled {
 		agent.RegisterSubagent(tools, agent.SubagentDeps{
 			LLM:               llm,
 			Executor:          execBackend,
@@ -604,7 +633,7 @@ func setupLoop(c commonFlags) (*loopBundle, int) {
 		ProjectContextDir:   projectContextDir,
 		SkillProvider:       agent.BuiltinSkillProvider,
 	}
-	if !c.memoryOnly {
+	if !c.memoryOnly && c.subagentEnabled {
 		loop.FirstToolPolicy = agent.SubagentFirstToolPolicy()
 		loop.PostToolPolicy = agent.SubagentPostToolPolicy()
 	}
