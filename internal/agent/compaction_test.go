@@ -236,7 +236,7 @@ func (s *stubCompactor) Compact(ctx context.Context, msgs []ChatMessage) ([]Chat
 		return msgs, nil
 	}
 
-	headEnd := sysHead + keepFirst
+	headEnd := forwardToSafeBoundary(msgs, sysHead+keepFirst)
 	summaryEnd := headEnd
 	if headEnd < len(msgs) {
 		if m := msgs[headEnd]; m.Role == "user" && strings.HasPrefix(m.Content, summaryPrefix) {
@@ -387,6 +387,52 @@ func TestCompact_DoesNotSeverToolCallPair(t *testing.T) {
 				if j >= len(out) || out[j].Role != "tool" {
 					t.Fatalf("tool_calls at %d (%d calls) not followed by %d role=tool messages; got %+v",
 						i, needed, needed, out[j:])
+				}
+			}
+			i += needed
+		}
+	}
+}
+
+// TestCompact_DoesNotSeverToolCallPair_AtHeadBoundary pins the symmetric
+// boundary check at the HEAD side. The tail side already had
+// backUpToSafeBoundary protecting it, but if KeepFirst landed the head
+// right after an assistant.tool_calls, its tool replies got swept into
+// the middle and summarized — leaving the resulting head with an
+// assistant.tool_calls and NO matching tool replies. Strict
+// OpenAI-compat upstreams reject that pairing on the next request,
+// turning long sessions into reason=error the moment compaction fires.
+func TestCompact_DoesNotSeverToolCallPair_AtHeadBoundary(t *testing.T) {
+	msgs := []ChatMessage{
+		{Role: "system", Content: "sys"},
+		{Role: "user", Content: "u1"},
+		{Role: "assistant", ToolCalls: []ToolCall{{ID: "t1"}, {ID: "t2"}}},
+		{Role: "tool", ToolCallID: "t1", Content: "r1"},
+		{Role: "tool", ToolCallID: "t2", Content: "r2"},
+		{Role: "user", Content: "u2"},
+		{Role: "assistant", Content: "a2"},
+		{Role: "user", Content: "u3"},
+		{Role: "assistant", Content: "a3"},
+		{Role: "user", Content: "u4"},
+		{Role: "assistant", Content: "a4"},
+	}
+	// KeepFirst=2 means head=[system, user, assistant(tc)] without the
+	// safety fix — the tool replies go into the middle.
+	c := &stubCompactor{
+		LLMSummaryCompactor: &LLMSummaryCompactor{KeepFirst: 2, KeepLast: 2},
+		summary:             "S",
+	}
+	out, err := c.Compact(context.Background(), msgs)
+	if err != nil {
+		t.Fatalf("compact: %v", err)
+	}
+	for i := 0; i < len(out); i++ {
+		if len(out[i].ToolCalls) > 0 {
+			needed := len(out[i].ToolCalls)
+			for j := i + 1; j < i+1+needed; j++ {
+				if j >= len(out) || out[j].Role != "tool" {
+					t.Fatalf("assistant.tool_calls at %d (%d calls) not followed by %d role=tool messages; got conv:\n%+v",
+						i, needed, needed, out)
 				}
 			}
 			i += needed

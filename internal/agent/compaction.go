@@ -175,7 +175,10 @@ func (c *LLMSummaryCompactor) Compact(ctx context.Context, msgs []ChatMessage) (
 	}
 
 	// "head" preserves the first KeepFirst non-system messages verbatim.
-	headEnd := sysHead + keepFirst
+	// Push the boundary forward past any in-flight tool_calls/tool-replies
+	// group so the head doesn't end with an assistant.tool_calls whose
+	// replies just got summarized away.
+	headEnd := forwardToSafeBoundary(msgs, sysHead+keepFirst)
 
 	// If a previous summary already follows the head (left there by an
 	// earlier rolling pass), pull it out so we can feed it back to the
@@ -227,6 +230,23 @@ func backUpToSafeBoundary(msgs []ChatMessage, cut int) int {
 	}
 	if cut > 0 && len(msgs[cut].ToolCalls) > 0 {
 		cut--
+	}
+	return cut
+}
+
+// forwardToSafeBoundary moves cut later (toward len) past any role=tool
+// messages so the head ends after a complete assistant.tool_calls /
+// tool-replies group. The symmetric counterpart to backUpToSafeBoundary:
+// without it, KeepFirst landing right after an assistant.tool_calls
+// sweeps the matching tool replies into the summarized middle, and
+// strict OpenAI-compat upstreams reject the resulting head's orphan
+// tool_calls on the next request.
+func forwardToSafeBoundary(msgs []ChatMessage, cut int) int {
+	if cut <= 0 || cut >= len(msgs) {
+		return cut
+	}
+	for cut < len(msgs) && msgs[cut].Role == "tool" {
+		cut++
 	}
 	return cut
 }
