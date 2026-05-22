@@ -6,6 +6,10 @@ bin/
 *.test
 coverage.out
 
+# Local binaries from ad-hoc `go build -o ...` runs.
+/affentctl
+/affentserve
+
 # Build outputs produced by running `go build` inside command modules.
 cmd/*/affentctl
 cmd/*/affentserve
