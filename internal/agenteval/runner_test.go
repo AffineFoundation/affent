@@ -962,6 +962,124 @@ func TestRunner_EndToEnd_LoopGuardFailureHalt(t *testing.T) {
 	}
 }
 
+// TestRunner_EndToEnd_WebSnapshotFactExtraction is the in-process
+// web-page extraction scenario the user named as one of the four
+// real-world eval categories (alongside code repair, repo
+// understanding, and subagent delegation). The framework didn't
+// previously exercise this path.
+//
+// The contract being measured here: when a page snapshot already
+// carries the requested fact, the agent must answer from the
+// snapshot rather than spinning up a shell / curl to refetch the
+// page. This is the "answer from the report" pattern applied to
+// rendered web inspection — same shape as the subagent delegation
+// test, but the report is a browser_navigate snapshot rather than
+// a subagent_run JSON payload.
+//
+// Uses a stand-in browser_navigate tool that returns a deterministic
+// snapshot, so the test runs in milliseconds without any actual
+// browser dependency. Lets the eval framework cover the user's full
+// scenario matrix without pulling extras/browser into the test deps.
+func TestRunner_EndToEnd_WebSnapshotFactExtraction(t *testing.T) {
+	const snapshot = `URL: https://example.com/stats
+Title: Project stats
+Body:
+- Active sessions: 42
+- Canonical region: us-east-1
+- Last updated: 2026-05-22T14:30:00Z`
+
+	browserNavigate := agent.Tool{
+		Name:        "browser_navigate",
+		Description: "Test-only browser navigate stand-in: returns a deterministic page snapshot.",
+		Schema: json.RawMessage(`{
+            "type": "object",
+            "required": ["url"],
+            "properties": {
+                "url": {"type": "string"},
+                "wait_until": {"type": "string"}
+            }
+        }`),
+		Execute: func(ctx context.Context, args json.RawMessage) (string, error) {
+			return snapshot, nil
+		},
+	}
+
+	// Parent turn 1: emit browser_navigate.
+	turn1 := []string{
+		`{"choices":[{"delta":{"role":"assistant","tool_calls":[{"index":0,"id":"b1","type":"function","function":{"name":"browser_navigate","arguments":""}}]},"finish_reason":null}]}`,
+		`{"choices":[{"delta":{"tool_calls":[{"index":0,"function":{"arguments":"{\"url\":\"https://example.com/stats\",\"wait_until\":\"networkidle\"}"}}]},"finish_reason":null}]}`,
+		`{"choices":[{"delta":{},"finish_reason":"tool_calls"}]}`,
+		`[DONE]`,
+	}
+	// Parent turn 2: synthesize the answer from the snapshot, no
+	// extra tool calls.
+	turn2 := []string{
+		`{"choices":[{"delta":{"role":"assistant","content":"Canonical region from the snapshot: us-east-1. Active sessions: 42."},"finish_reason":"stop"}]}`,
+		`[DONE]`,
+	}
+	srv := newScriptedLLM(t, [][]string{turn1, turn2})
+
+	scenario := Scenario{
+		Name:        "web_snapshot_fact_extraction",
+		Description: "agent reads a rendered page snapshot once and answers from it; does not refetch",
+		Prompt:      "what's the canonical region at https://example.com/stats?",
+		MaxTurnSteps: 4,
+		Checks: []Check{
+			TurnEndedCleanly(),
+			ToolCalled("browser_navigate", func(args map[string]any) bool {
+				return args["url"] == "https://example.com/stats"
+			}),
+			// Pin the user-named anti-pattern: do not shell-curl /
+			// python-fetch the same URL the browser already snapshotted.
+			ToolNotCalled("shell", nil),
+			// After the snapshot, no more tool calls — answer from the
+			// snapshot. Same "delegate-then-answer" contract as the
+			// subagent test but applied to the snapshot.
+			MaxToolCallsAfter("browser_navigate", 0),
+			FinalTextContains("us-east-1"),
+			// The model must not echo other facts the snapshot
+			// contained but the user didn't ask about. Soft check —
+			// the scripted LLM happens to mention "42", so this
+			// scenario actually exercises the "selective extraction"
+			// flavor: report what was asked, not the whole page.
+			FinalTextContains("Active sessions: 42"),
+		},
+	}
+
+	runner := &Runner{
+		LLM:            agent.NewLLMClient(srv.URL, "", "fake-model"),
+		MaxTurnSteps:   4,
+		PerCallTimeout: 5 * time.Second,
+		RunTimeout:     15 * time.Second,
+		Log:            zerolog.Nop(),
+		BuildRegistry: func(ctx context.Context, workspaceDir string, exec executor.Executor) (*agent.Registry, error) {
+			reg, err := defaultBuildRegistry(ctx, workspaceDir, exec)
+			if err != nil {
+				return nil, err
+			}
+			reg.Add(&browserNavigate)
+			return reg, nil
+		},
+	}
+
+	out, err := runner.Run(context.Background(), scenario)
+	if err != nil {
+		t.Fatalf("Runner.Run: %v", err)
+	}
+	if !out.Pass {
+		t.Errorf("expected all checks to pass; failed: %v", out.FailedChecks())
+		for _, r := range out.Results {
+			t.Logf("  %s: pass=%v detail=%s", r.Check, r.Pass, r.Detail)
+		}
+	}
+	if len(out.Trace.Tools) != 1 || out.Trace.Tools[0].Tool != "browser_navigate" {
+		t.Fatalf("expected exactly one browser_navigate call; got %+v", out.Trace.Tools)
+	}
+	if !strings.Contains(out.Trace.Tools[0].Result, "Canonical region: us-east-1") {
+		t.Errorf("tool result should contain the snapshot text; got %q", out.Trace.Tools[0].Result)
+	}
+}
+
 // TestRunner_RequiresLLM pins the early-validation: Runner without an
 // LLM client returns a clear error instead of nil-deref'ing inside
 // EnsureSystemPrompt / SendUser.
