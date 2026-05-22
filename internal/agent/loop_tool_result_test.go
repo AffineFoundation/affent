@@ -212,12 +212,90 @@ func TestRunTurn_MaxStepsEmitsMaxTurnsReason(t *testing.T) {
 	}
 }
 
+func TestRunTurn_AllowsFinalAnswerAfterLastToolRound(t *testing.T) {
+	var calls int32
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "text/event-stream")
+		w.WriteHeader(200)
+		fl := w.(http.Flusher)
+		if atomic.AddInt32(&calls, 1) == 1 {
+			lines := []string{
+				`data: {"choices":[{"delta":{"role":"assistant","tool_calls":[{"index":0,"id":"c1","type":"function","function":{"name":"big","arguments":""}}]},"finish_reason":null}]}`,
+				`data: {"choices":[{"delta":{"tool_calls":[{"index":0,"function":{"arguments":"{}"}}]},"finish_reason":null}]}`,
+				`data: {"choices":[{"delta":{},"finish_reason":"tool_calls"}]}`,
+				`data: [DONE]`,
+			}
+			for _, l := range lines {
+				w.Write([]byte(l + "\n\n"))
+				fl.Flush()
+			}
+			return
+		}
+		w.Write([]byte("data: {\"choices\":[{\"delta\":{\"role\":\"assistant\",\"content\":\"done from tool evidence\"},\"finish_reason\":\"stop\"}]}\n\n"))
+		w.Write([]byte("data: [DONE]\n\n"))
+		fl.Flush()
+	}))
+	t.Cleanup(srv.Close)
+
+	conv, err := OpenConversationAt(filepath.Join(t.TempDir(), "sess.jsonl"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	reg := NewRegistry()
+	reg.Add(fakeBigResultTool("evidence"))
+
+	events := make(chan sse.Event, 256)
+	loop := &Loop{
+		LLM: NewLLMClient(srv.URL, "", "fake-model"), Tools: reg, Conv: conv, Events: events,
+		MaxTurnSteps: 1, PerCallTimeout: 5 * time.Second,
+	}
+	if err := loop.EnsureSystemPrompt("base"); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := loop.SendUser(context.Background(), "go"); err != nil {
+		t.Fatal(err)
+	}
+
+	deadline := time.After(10 * time.Second)
+	var finalText string
+	for {
+		select {
+		case ev, ok := <-events:
+			if !ok {
+				t.Fatal("event channel closed before turn.end")
+			}
+			switch ev.Type {
+			case sse.TypeMessageDone:
+				var p sse.MessageDonePayload
+				if err := json.Unmarshal(ev.Data, &p); err != nil {
+					t.Fatalf("decode message.done: %v", err)
+				}
+				finalText = p.Text
+			case sse.TypeTurnEnd:
+				var p sse.TurnEndPayload
+				if err := json.Unmarshal(ev.Data, &p); err != nil {
+					t.Fatalf("decode turn.end: %v", err)
+				}
+				if p.Reason != sse.TurnEndCompleted {
+					t.Fatalf("expected reason=%q, got %q", sse.TurnEndCompleted, p.Reason)
+				}
+				if finalText != "done from tool evidence" {
+					t.Fatalf("final answer missing after last tool round: %q", finalText)
+				}
+				return
+			}
+		case <-deadline:
+			t.Fatal("timeout waiting for turn.end")
+		}
+	}
+}
+
 // cancelOnFirstCompact is a Compactor that calls Loop.Cancel during
 // its very first invocation, then returns ctx.Err. Lets the test
 // trigger the "cancel during reactive compaction" race window.
 type cancelOnFirstCompact struct {
-	loop   *Loop
-	fired  *int32
+	loop  *Loop
+	fired *int32
 }
 
 func (c *cancelOnFirstCompact) Compact(ctx context.Context, msgs []ChatMessage) ([]ChatMessage, error) {

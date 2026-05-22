@@ -578,6 +578,7 @@ func setupLoop(c commonFlags) (*loopBundle, int) {
 			Log:               log,
 			PerCallTimeout:    c.callTimeout,
 		})
+		systemPrompt = agent.WithSubagentSystemGuidance(systemPrompt)
 	}
 	loop := &agent.Loop{
 		LLM:                 llm,

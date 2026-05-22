@@ -369,7 +369,11 @@ func (p *SessionPool) buildSession(id string) (*Session, error) {
 		TriggerMsgs: triggerMsgs,
 		KeepLast:    keepLast,
 	}
-	if err := loop.EnsureSystemPrompt(p.cfg.SystemPrompt); err != nil {
+	systemPrompt := p.cfg.SystemPrompt
+	if p.cfg.EnableBuiltins {
+		systemPrompt = agent.WithSubagentSystemGuidance(systemPrompt)
+	}
+	if err := loop.EnsureSystemPrompt(systemPrompt); err != nil {
 		_ = os.RemoveAll(workspace)
 		if browser != nil {
 			_ = browser.Close()

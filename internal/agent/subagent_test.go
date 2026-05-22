@@ -157,6 +157,19 @@ func TestReadOnlyMemoryToolRejectsWrites(t *testing.T) {
 	}
 }
 
+func TestWithSubagentSystemGuidance(t *testing.T) {
+	got := WithSubagentSystemGuidance("")
+	if !strings.Contains(got, DefaultSystemPrompt) {
+		t.Fatal("empty prompt should fall back to DefaultSystemPrompt")
+	}
+	if !strings.Contains(got, "Subagent delegation:") {
+		t.Fatal("guidance missing from default prompt")
+	}
+	if strings.Count(WithSubagentSystemGuidance(got), "Subagent delegation:") != 1 {
+		t.Fatal("guidance should not be appended twice")
+	}
+}
+
 // TestBuildSubagentRegistry_HasNoWriteAndNoNestedSubagent pins the
 // two load-bearing invariants of the subagent design:
 //

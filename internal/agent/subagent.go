@@ -21,6 +21,21 @@ const (
 	maxSubagentMaxTurns     = 12
 )
 
+const SubagentSystemGuidance = `Subagent delegation:
+- If the subagent_run tool is available and the user explicitly asks for a subagent, isolated review, broad exploration, or avoiding main-context pollution, call subagent_run as the first tool.
+- Do not spend parent context listing directories or reading large files just to prepare that delegation. Put likely paths, uncertainty, and the concrete question in the subagent task; the child can inspect them in its isolated context.
+- After subagent_run returns, answer from its report. Only do a small parent-side verification pass when the report is incomplete, contradictory, or the user asked you to implement a change.`
+
+func WithSubagentSystemGuidance(prompt string) string {
+	if strings.TrimSpace(prompt) == "" {
+		prompt = DefaultSystemPrompt
+	}
+	if strings.Contains(prompt, "Subagent delegation:") {
+		return prompt
+	}
+	return prompt + "\n\n" + SubagentSystemGuidance
+}
+
 // SubagentDeps wires the first-generation subagent tool. The subagent is a
 // fresh Loop with its own conversation log and a deliberately narrow tool set.
 // It is meant for bounded exploration/review, not autonomous worker swarms.
@@ -82,7 +97,7 @@ func subagentTool(deps SubagentDeps) *Tool {
     }`)
 	return &Tool{
 		Name:        "subagent_run",
-		Description: "Run a bounded subagent in an isolated context for codebase exploration or review. Use it when the main context would be polluted by lots of file reads, logs, or session_search results. The subagent has read_file/list_files, guarded read-only shell, memory, and session_search; it cannot use write_file/edit_file. It returns a structured evidence report for the main agent to act on. After this tool returns, answer from its report instead of reading the child transcript or repeating the same file reads/tests unless the report is incomplete or contradictory.",
+		Description: "Run a bounded subagent in an isolated context for codebase exploration or review. If the user explicitly asks for subagent, isolated review, broad exploration, or avoiding main-context pollution, call this as the first tool instead of listing/reading files in the parent context. The subagent has read_file/list_files, guarded read-only shell, memory, and session_search; it cannot use write_file/edit_file. It returns a structured evidence report for the main agent to act on. After this tool returns, answer from its report instead of reading the child transcript or repeating the same file reads/tests unless the report is incomplete or contradictory.",
 		Schema:      schema,
 		Execute: func(ctx context.Context, args json.RawMessage) (string, error) {
 			var p struct {

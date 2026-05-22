@@ -26,11 +26,13 @@ import (
 // Override per-Loop via Loop.PerCallTimeout.
 const DefaultPerCallTimeout = 3 * time.Minute
 
-// DefaultMaxTurnSteps caps the assistant<->tool round trips per single
-// user turn when Loop.MaxTurnSteps is left at zero. Picked low on
-// purpose: most models drift into "one more search" loops past 5-6
-// calls. Embedders running heavier autonomy (SWE-bench, deep
-// research) typically bump this to 30-100.
+// DefaultMaxTurnSteps caps the tool-execution rounds per single user turn
+// when Loop.MaxTurnSteps is left at zero. The loop still allows one final
+// no-tool model response after the last allowed tool round so a useful result
+// does not die as max_turns immediately after a large tool report returns.
+// Picked low on purpose: most models drift into "one more search" loops past
+// 5-6 calls. Embedders running heavier autonomy (SWE-bench, deep research)
+// typically bump this to 30-100.
 const DefaultMaxTurnSteps = 10
 
 // DefaultTransientRetries / DefaultTransientBackoff govern how the
@@ -137,6 +139,9 @@ Instruction hierarchy:
 Default work loop for engineering tasks:
 1. Inspect first: list/read the relevant files, docs, tests, configs, or prior
    session/memory context before editing.
+   If an available tool is explicitly designed for bounded exploration or
+   review, such as subagent_run, use it early for broad investigations instead
+   of spending the parent context on directory walks and large file reads.
 2. Reproduce when possible: run the failing test/command before changing code.
 3. Make the smallest coherent change. Prefer edit_file for surgical edits and
    write_file only when replacing or creating a whole file is clearer.
@@ -319,8 +324,11 @@ func (l *Loop) takeTurn() {
 	l.mu.Unlock()
 }
 
-// runTurn loops assistant<->tool calls until the model emits a final
-// answer (no tool calls), or we hit MaxTurnSteps.
+// runTurn loops assistant<->tool calls until the model emits a final answer
+// (no tool calls), or it consumes MaxTurnSteps tool-execution rounds. After
+// the last allowed tool round it still gives the model one final chance to
+// answer from the returned evidence; if that call asks for more tools, those
+// calls are recorded as skipped placeholders and the turn ends as max_turns.
 func (l *Loop) runTurn(ctx context.Context, turnID, userText string) {
 	steps := l.MaxTurnSteps
 	if steps <= 0 {
@@ -334,6 +342,9 @@ func (l *Loop) runTurn(ctx context.Context, turnID, userText string) {
 
 	totalIn, totalOut := 0, 0
 	endReason := sse.TurnEndCompleted
+	_, hasSubagent := l.Tools.Get("subagent_run")
+	requireSubagentFirst := shouldRequireSubagentFirst(userText) && hasSubagent
+	subagentFirstSatisfied := !requireSubagentFirst
 	// finishedNaturally tracks whether the for-loop exited because the
 	// model returned an assistant message without tool_calls (the
 	// "done thinking" path). Falling out of the loop with this still
@@ -342,8 +353,8 @@ func (l *Loop) runTurn(ctx context.Context, turnID, userText string) {
 	// the turn completed cleanly.
 	finishedNaturally := false
 
-	step := 0
-	for ; step < steps; step++ {
+	toolRounds := 0
+	for {
 		if ctx.Err() != nil {
 			endReason = sse.TurnEndCancelled
 			break
@@ -362,6 +373,11 @@ func (l *Loop) runTurn(ctx context.Context, turnID, userText string) {
 
 		if len(final.Final.ToolCalls) == 0 {
 			finishedNaturally = true
+			break
+		}
+		if toolRounds >= steps {
+			l.appendSkippedToolResults(turnID, final.Final.ToolCalls, "(max_turns reached before this tool ran)")
+			endReason = sse.TurnEndMaxTurns
 			break
 		}
 
@@ -390,16 +406,7 @@ func (l *Loop) runTurn(ctx context.Context, turnID, userText string) {
 				// IDs are already non-empty (ensureToolCallIDs ran
 				// before persistence in consumeAndPersist) so we can
 				// use skipped.ID directly without the old fallback.
-				for _, skipped := range final.Final.ToolCalls[i:] {
-					if appendErr := l.Conv.Append(ChatMessage{
-						Role:       "tool",
-						Content:    "(cancelled by user before this tool ran)",
-						ToolCallID: skipped.ID,
-						Name:       skipped.Function.Name,
-					}); appendErr != nil {
-						l.Log.Error().Err(appendErr).Str("call_id", skipped.ID).Msg("conv append placeholder")
-					}
-				}
+				l.appendSkippedToolResults(turnID, final.Final.ToolCalls[i:], "(cancelled by user before this tool ran)")
 				break
 			}
 			callID := tc.ID
@@ -413,6 +420,27 @@ func (l *Loop) runTurn(ctx context.Context, turnID, userText string) {
 			l.publish(sse.TypeToolRequest, sse.ToolRequestPayload{
 				TurnID: turnID, CallID: callID, Tool: tc.Function.Name, Args: argsView,
 			})
+			if requireSubagentFirst && !subagentFirstSatisfied && tc.Function.Name != "subagent_run" {
+				result := "subagent_first_policy: the user explicitly asked to use subagent_run first; call subagent_run before parent-side exploration tools."
+				l.publish(sse.TypeToolResult, sse.ToolResultPayload{
+					CallID:        callID,
+					ExitCode:      1,
+					ResultSummary: result,
+					Result:        result,
+				})
+				if err := l.Conv.Append(ChatMessage{
+					Role:       "tool",
+					Content:    result,
+					ToolCallID: callID,
+					Name:       tc.Function.Name,
+				}); err != nil {
+					l.Log.Error().Err(err).Str("call_id", callID).Msg("conv append tool guard result")
+				}
+				continue
+			}
+			if tc.Function.Name == "subagent_run" {
+				subagentFirstSatisfied = true
+			}
 			result, isErr := l.Tools.dispatch(ctx, tc.Function.Name, args)
 			exit := 0
 			if isErr {
@@ -439,13 +467,38 @@ func (l *Loop) runTurn(ctx context.Context, turnID, userText string) {
 				l.Log.Error().Err(err).Str("call_id", callID).Msg("conv append tool result")
 			}
 		}
+		toolRounds++
 	}
 
-	if !finishedNaturally && endReason == sse.TurnEndCompleted && step >= steps {
+	if !finishedNaturally && endReason == sse.TurnEndCompleted {
 		endReason = sse.TurnEndMaxTurns
 	}
 	l.publish(sse.TypeUsage, sse.UsagePayload{TurnID: turnID, InputTokens: totalIn, OutputTokens: totalOut})
 	l.publish(sse.TypeTurnEnd, sse.TurnEndPayload{TurnID: turnID, Reason: endReason})
+}
+
+func (l *Loop) appendSkippedToolResults(turnID string, calls []ToolCall, content string) {
+	for _, skipped := range calls {
+		callID := skipped.ID
+		name := skipped.Function.Name
+		l.publish(sse.TypeToolRequest, sse.ToolRequestPayload{
+			TurnID: turnID, CallID: callID, Tool: name, Args: map[string]any{},
+		})
+		l.publish(sse.TypeToolResult, sse.ToolResultPayload{
+			CallID:        callID,
+			ExitCode:      1,
+			ResultSummary: content,
+			Result:        content,
+		})
+		if appendErr := l.Conv.Append(ChatMessage{
+			Role:       "tool",
+			Content:    content,
+			ToolCallID: callID,
+			Name:       name,
+		}); appendErr != nil {
+			l.Log.Error().Err(appendErr).Str("call_id", callID).Msg("conv append skipped tool result")
+		}
+	}
 }
 
 // consumeAndPersist drains a single LLM streaming call: emits
