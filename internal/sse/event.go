@@ -6,8 +6,13 @@ import (
 	"strconv"
 )
 
-// Event is the canonical SSE payload, persisted in the per-session ring so
-// reconnecting clients can replay via Last-Event-ID.
+// Event is the canonical SSE payload. ID is a monotonically increasing
+// sequence number scoped to a single Loop — it shows up in the wire
+// format's `id:` line so clients can detect gaps, dedupe on reconnect,
+// and feed it back in `Last-Event-ID` if a future server-side replay
+// path lands. Today no ring buffer stores events, so a reconnect just
+// resumes the live stream from the next event; any missed events are
+// gone.
 type Event struct {
 	ID   int64           `json:"id"`
 	Type string          `json:"type"`
@@ -57,8 +62,9 @@ func (e Event) Encode() []byte {
 }
 
 
-// NewEvent builds an event from any json-serializable payload. Caller assigns
-// the ID later (the ring buffer owns ID allocation).
+// NewEvent builds an event from any json-serializable payload. ID is
+// left at zero — the Loop assigns it from its per-session sequence
+// counter just before publishing on Events.
 func NewEvent(eventType string, payload any) (Event, error) {
 	raw, err := json.Marshal(payload)
 	if err != nil {
