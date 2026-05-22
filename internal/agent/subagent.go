@@ -61,6 +61,8 @@ func SubagentPostToolPolicy() *PostToolPolicy {
 			}
 			return resp.OK
 		},
+		BlockedAfterToolResult: []string{SubagentToolName},
+		AfterToolResultReject:  "post_tool_policy: subagent_run already ran this turn; use its report as a focused evidence index and verify only the smallest missing facts instead of spawning another child.",
 		BlockedTools: []string{
 			"read_file",
 			"list_files",
@@ -221,6 +223,7 @@ func runSubagent(ctx context.Context, deps SubagentDeps, mode, task string, maxT
 		FinalNoToolsOnMaxTurns:      true,
 		Memory:                      deps.Memory,
 		ProjectContextDir:           deps.ProjectContextDir,
+		SkillProvider:               BuiltinSkillProvider,
 	}
 	if err := loop.EnsureSystemPrompt(subagentSystemPrompt(mode)); err != nil {
 		return "", fmt.Errorf("subagent system prompt: %w", err)

@@ -214,10 +214,10 @@ type fileConfig struct {
 		Trigger  *int `json:"trigger"`
 		KeepLast *int `json:"keep_last"`
 	} `json:"compact"`
-	SessionID      *string `json:"session_id"`
-	Continue       *bool   `json:"continue"`
-	MCPConfig      *string `json:"mcp_config"`
-	Executor       *string `json:"executor"`
+	SessionID *string `json:"session_id"`
+	Continue  *bool   `json:"continue"`
+	MCPConfig *string `json:"mcp_config"`
+	Executor  *string `json:"executor"`
 	// Sampling forwarded to upstream. Kept as strings to mirror the CLI
 	// flags and preserve the "unset vs explicit 0" distinction that
 	// pointers give us at the wire layer.
@@ -601,6 +601,7 @@ func setupLoop(c commonFlags) (*loopBundle, int) {
 		TransientBackoff:    c.retryBackoff,
 		Memory:              memStore,
 		ProjectContextDir:   projectContextDir,
+		SkillProvider:       agent.BuiltinSkillProvider,
 	}
 	if !c.memoryOnly {
 		loop.FirstToolPolicy = agent.SubagentFirstToolPolicy()

@@ -137,6 +137,12 @@ type Loop struct {
 	// final answer without hard-coding feature names in Loop.
 	PostToolPolicy *PostToolPolicy
 
+	// SkillProvider optionally injects a short, task-relevant system
+	// skill before each user message. Unlike project context, this is
+	// selected per turn from the actual request so small models get a
+	// narrow procedure instead of a permanently longer prompt.
+	SkillProvider SkillProvider
+
 	// FinalNoToolsOnMaxTurns gives the model one final no-tool response
 	// after the tool budget is exhausted. This is useful for bounded
 	// child agents: when inspection budget runs out, they should
@@ -151,8 +157,18 @@ type FirstToolPolicy struct {
 }
 
 type PostToolPolicy struct {
-	ToolName     string
-	Activate     func(result string, isErr bool) bool
+	ToolName string
+	Activate func(result string, isErr bool) bool
+
+	// BlockedAfterToolResult applies after ToolName returns any result,
+	// successful or not. Use this for loop-shape constraints such as
+	// "do not spawn a second subagent in the same turn".
+	BlockedAfterToolResult []string
+	AfterToolResultReject  string
+
+	// BlockedTools applies only after Activate returns true for the
+	// ToolName result. Use this for "the delegated report is good enough;
+	// answer from it instead of re-reading the same evidence".
 	BlockedTools []string
 	Rejection    string
 }
@@ -321,7 +337,7 @@ func (l *Loop) SendUser(ctx context.Context, text string) (string, error) {
 	l.cancelFn = cancel
 	l.mu.Unlock()
 
-	if err := l.Conv.Append(ChatMessage{Role: "user", Content: text}); err != nil {
+	if err := l.appendUserMessage(text); err != nil {
 		l.takeTurn()
 		cancel()
 		return "", err
@@ -335,6 +351,24 @@ func (l *Loop) SendUser(ctx context.Context, text string) (string, error) {
 		l.runTurn(turnCtx, turnID, text)
 	}()
 	return turnID, nil
+}
+
+func (l *Loop) appendActiveSkills(userText string) error {
+	if l.SkillProvider == nil {
+		return nil
+	}
+	block := strings.TrimSpace(l.SkillProvider(userText))
+	if block == "" {
+		return nil
+	}
+	return l.Conv.Append(ChatMessage{Role: "system", Content: block})
+}
+
+func (l *Loop) appendUserMessage(text string) error {
+	if err := l.appendActiveSkills(text); err != nil {
+		return err
+	}
+	return l.Conv.Append(ChatMessage{Role: "user", Content: text})
 }
 
 // Cancel aborts the current turn if any.
@@ -375,6 +409,7 @@ func (l *Loop) runTurn(ctx context.Context, turnID, userText string) {
 	firstToolPolicy := l.activeFirstToolPolicy(userText)
 	firstToolSatisfied := firstToolPolicy == nil
 	postToolPolicy := l.activePostToolPolicy()
+	postToolSeen := false
 	postToolActive := false
 	// finishedNaturally tracks whether the for-loop exited because the
 	// model returned an assistant message without tool_calls (the
@@ -499,6 +534,28 @@ func (l *Loop) runTurn(ctx context.Context, turnID, userText string) {
 			if firstToolPolicy != nil && tc.Function.Name == firstToolPolicy.ToolName {
 				firstToolSatisfied = true
 			}
+			if postToolSeen && postToolPolicy.blocksAfterToolResult(tc.Function.Name) {
+				result := postToolPolicy.AfterToolResultReject
+				if result == "" {
+					result = fmt.Sprintf("post_tool_policy: %s already ran this turn; do not call %s again.", postToolPolicy.ToolName, tc.Function.Name)
+				}
+				l.publish(sse.TypeToolResult, sse.ToolResultPayload{
+					CallID:        callID,
+					ExitCode:      1,
+					ResultSummary: result,
+					Result:        result,
+				})
+				if err := l.Conv.Append(ChatMessage{
+					Role:       "tool",
+					Content:    result,
+					ToolCallID: callID,
+					Name:       tc.Function.Name,
+				}); err != nil {
+					l.Log.Error().Err(err).Str("call_id", callID).Msg("conv append post-tool repeat guard result")
+				}
+				toolCallsUsed++
+				continue
+			}
 			if postToolActive && postToolPolicy.blocks(tc.Function.Name) {
 				result := postToolPolicy.Rejection
 				if result == "" {
@@ -547,6 +604,9 @@ func (l *Loop) runTurn(ctx context.Context, turnID, userText string) {
 				l.Log.Error().Err(err).Str("call_id", callID).Msg("conv append tool result")
 			}
 			toolCallsUsed++
+			if postToolPolicy != nil && tc.Function.Name == postToolPolicy.ToolName {
+				postToolSeen = true
+			}
 			if postToolPolicy != nil && tc.Function.Name == postToolPolicy.ToolName && postToolPolicy.shouldActivate(result, isErr) {
 				postToolActive = true
 			}
@@ -614,6 +674,18 @@ func (p *PostToolPolicy) shouldActivate(result string, isErr bool) bool {
 		return p.Activate(result, isErr)
 	}
 	return !isErr
+}
+
+func (p *PostToolPolicy) blocksAfterToolResult(toolName string) bool {
+	if p == nil {
+		return false
+	}
+	for _, blocked := range p.BlockedAfterToolResult {
+		if blocked == toolName {
+			return true
+		}
+	}
+	return false
 }
 
 func (p *PostToolPolicy) blocks(toolName string) bool {
