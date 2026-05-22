@@ -74,6 +74,11 @@ type Loop struct {
 	MaxTurnSteps int // assistant<->tool round trips per user turn; zero falls back to DefaultMaxTurnSteps
 	MaxToolCalls int // total tool calls per user turn; zero means uncapped
 
+	// ToolResultMaxBytesInContext caps the tool result bytes persisted
+	// into conversation history for subsequent LLM calls. Zero uses
+	// MaxToolResultBytesInContext. Full tool results still go to SSE.
+	ToolResultMaxBytesInContext int
+
 	// PerCallTimeout overrides DefaultPerCallTimeout for this loop.
 	// Zero means "use the default".
 	PerCallTimeout time.Duration
@@ -537,7 +542,7 @@ func (l *Loop) runTurn(ctx context.Context, turnID, userText string) {
 			})
 			if err := l.Conv.Append(ChatMessage{
 				Role:       "tool",
-				Content:    truncateForContext(result, MaxToolResultBytesInContext),
+				Content:    truncateForContext(result, l.toolResultMaxBytesInContext()),
 				ToolCallID: callID,
 				Name:       tc.Function.Name,
 			}); err != nil {
@@ -825,6 +830,13 @@ func (l *Loop) toolDefs() []ToolDef {
 		return nil
 	}
 	return l.Tools.Defs()
+}
+
+func (l *Loop) toolResultMaxBytesInContext() int {
+	if l.ToolResultMaxBytesInContext > 0 {
+		return l.ToolResultMaxBytesInContext
+	}
+	return MaxToolResultBytesInContext
 }
 
 func (l *Loop) runStep(ctx context.Context, turnID string, toolDefs []ToolDef) (*FinishInfo, string, error) {

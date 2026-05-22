@@ -19,13 +19,15 @@ import (
 const (
 	defaultSubagentMaxTurns = 6
 	maxSubagentMaxTurns     = 12
+	subagentToolResultBytes = 4 * 1024
 	SubagentToolName        = "subagent_run"
 )
 
 const SubagentSystemGuidance = `Subagent delegation:
 - If the subagent_run tool is available and the user explicitly asks for a subagent, isolated review, broad exploration, or avoiding main-context pollution, call subagent_run as the first tool.
 - Do not spend parent context listing directories or reading large files just to prepare that delegation. Put likely paths, uncertainty, and the concrete question in the subagent task; the child can inspect them in its isolated context.
-- After subagent_run returns, answer from its report. Only do a small parent-side verification pass when the report is incomplete, contradictory, or the user asked you to implement a change.`
+- After subagent_run returns, answer from its report. Only do a small parent-side verification pass when the report is incomplete, contradictory, or the user asked you to implement a change.
+- If subagent_run returns ok:false, treat its report as a partial index of attempted work, not as conclusive evidence. Verify the smallest missing facts before making claims.`
 
 func WithSubagentSystemGuidance(prompt string) string {
 	if strings.TrimSpace(prompt) == "" {
@@ -128,7 +130,7 @@ func subagentTool(deps SubagentDeps) *Tool {
     }`)
 	return &Tool{
 		Name:        SubagentToolName,
-		Description: "Run a bounded subagent in an isolated context for codebase exploration or review. If the user explicitly asks for subagent, isolated review, broad exploration, or avoiding main-context pollution, call this as the first tool instead of listing/reading files in the parent context. The subagent has read_file/list_files, guarded read-only shell, memory, and session_search; it cannot use write_file/edit_file. It returns a structured evidence report for the main agent to act on. After this tool returns, answer from its report instead of reading the child transcript or repeating the same file reads/tests unless the report is incomplete or contradictory.",
+		Description: "Run a bounded subagent in an isolated context for codebase exploration or review. If the user explicitly asks for subagent, isolated review, broad exploration, or avoiding main-context pollution, call this as the first tool instead of listing/reading files in the parent context. The subagent has read_file/list_files, guarded read-only shell, memory, and session_search; it cannot use write_file/edit_file. It returns a structured evidence report for the main agent to act on. After this tool returns, answer from its report instead of reading the child transcript or repeating the same file reads/tests unless the report is incomplete or contradictory. If ok=false, use the attempted files/tools as a focused verification index rather than as conclusive findings.",
 		Schema:      schema,
 		Execute: func(ctx context.Context, args json.RawMessage) (string, error) {
 			var p struct {
@@ -176,17 +178,18 @@ func runSubagent(ctx context.Context, deps SubagentDeps, mode, task string, maxT
 
 	events := make(chan sse.Event, 128)
 	loop := &Loop{
-		LLM:                    deps.LLM,
-		Tools:                  reg,
-		Conv:                   conv,
-		Events:                 events,
-		Log:                    deps.Log.With().Str("component", "subagent").Logger(),
-		MaxTurnSteps:           maxTurns,
-		MaxToolCalls:           maxTurns,
-		PerCallTimeout:         deps.PerCallTimeout,
-		FinalNoToolsOnMaxTurns: true,
-		Memory:                 deps.Memory,
-		ProjectContextDir:      deps.ProjectContextDir,
+		LLM:                         deps.LLM,
+		Tools:                       reg,
+		Conv:                        conv,
+		Events:                      events,
+		Log:                         deps.Log.With().Str("component", "subagent").Logger(),
+		MaxTurnSteps:                maxTurns,
+		MaxToolCalls:                maxTurns,
+		ToolResultMaxBytesInContext: subagentToolResultBytes,
+		PerCallTimeout:              deps.PerCallTimeout,
+		FinalNoToolsOnMaxTurns:      true,
+		Memory:                      deps.Memory,
+		ProjectContextDir:           deps.ProjectContextDir,
 	}
 	if err := loop.EnsureSystemPrompt(subagentSystemPrompt(mode)); err != nil {
 		return "", fmt.Errorf("subagent system prompt: %w", err)
@@ -292,7 +295,7 @@ func incompleteSubagentReport(reason string, toolCalls []subagentToolCall) strin
 	b.WriteString("Uncertainties:\n")
 	b.WriteString("- The child did not complete a final synthesis, so conclusions should be treated as partial.\n")
 	b.WriteString("Recommended next step:\n")
-	b.WriteString("Answer from the bounded evidence above, explicitly noting the incomplete subagent result.\n")
+	b.WriteString("Use the attempted files and tools above as a focused verification index; do not treat this partial report as conclusive evidence.\n")
 	return b.String()
 }
 
