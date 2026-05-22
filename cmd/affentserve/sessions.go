@@ -9,10 +9,10 @@ import (
 	"sync"
 	"time"
 
-	agent "github.com/affinefoundation/affent/internal/agent"
-	"github.com/affinefoundation/affent/internal/executor"
 	affentbrowser "github.com/affinefoundation/affent/extras/browser"
 	affentweb "github.com/affinefoundation/affent/extras/web"
+	agent "github.com/affinefoundation/affent/internal/agent"
+	"github.com/affinefoundation/affent/internal/executor"
 	"github.com/affinefoundation/affent/internal/sse"
 	"github.com/google/uuid"
 	"github.com/rs/zerolog"
@@ -263,9 +263,11 @@ func (p *SessionPool) buildSession(id string) (*Session, error) {
 		fms.UserPath = filepath.Join(sessionDir, "USER.md")
 		memStore = fms
 	}
+	var localExec *executor.LocalExecutor
 	if p.cfg.EnableBuiltins {
+		localExec = executor.NewLocalExecutor(id, workspace)
 		agent.RegisterBuiltins(reg, agent.BuiltinDeps{
-			Executor:         executor.NewLocalExecutor(id, workspace),
+			Executor:         localExec,
 			HostWorkspaceDir: workspace,
 			Memory:           memStore,
 		})
@@ -310,6 +312,17 @@ func (p *SessionPool) buildSession(id string) (*Session, error) {
 		} else {
 			affentweb.RegisterFetch(reg, affentweb.FetchConfig{})
 		}
+	}
+	if p.cfg.EnableBuiltins {
+		agent.RegisterSubagent(reg, agent.SubagentDeps{
+			LLM:              llm,
+			Executor:         localExec,
+			HostWorkspaceDir: workspace,
+			Memory:           memStore,
+			ParentSessionID:  id,
+			TranscriptDir:    filepath.Join(sessionDir, "subagents", id),
+			Log:              p.logger.With().Str("session_id", id).Logger(),
+		})
 	}
 
 	// Generous event buffer — chat handler subscribes and drains, but

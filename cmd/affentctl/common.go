@@ -455,6 +455,7 @@ func setupLoop(c commonFlags) (*loopBundle, int) {
 	}
 
 	tools := agent.NewRegistry()
+	var execBackend executor.Executor
 	if c.memoryOnly {
 		if memStore == nil {
 			log.Error().Msg("--memory-only requires a usable memory store; check --memory-workspace-store / --memory-user-store")
@@ -463,14 +464,15 @@ func setupLoop(c commonFlags) (*loopBundle, int) {
 		}
 		agent.RegisterMemoryOnly(tools, memStore)
 	} else {
-		exec, execErr := buildExecutor(c.executor, sid, workspace)
+		var execErr error
+		execBackend, execErr = buildExecutor(c.executor, sid, workspace)
 		if execErr != nil {
 			log.Error().Err(execErr).Msg("executor")
 			_ = traceClose()
 			return nil, 64
 		}
 		agent.RegisterBuiltins(tools, agent.BuiltinDeps{
-			Executor:         exec,
+			Executor:         execBackend,
 			HostWorkspaceDir: workspace,
 			Memory:           memStore,
 			SessionsDir:      convDir,
@@ -515,6 +517,20 @@ func setupLoop(c commonFlags) (*loopBundle, int) {
 	projectContextDir := ""
 	if c.projectContext {
 		projectContextDir = workspace
+	}
+	if !c.memoryOnly {
+		agent.RegisterSubagent(tools, agent.SubagentDeps{
+			LLM:               llm,
+			Executor:          execBackend,
+			HostWorkspaceDir:  workspace,
+			Memory:            memStore,
+			SessionsDir:       convDir,
+			ParentSessionID:   sid,
+			TranscriptDir:     filepath.Join(convDir, "subagents", sid),
+			ProjectContextDir: projectContextDir,
+			Log:               log,
+			PerCallTimeout:    c.callTimeout,
+		})
 	}
 	loop := &agent.Loop{
 		LLM:                 llm,
