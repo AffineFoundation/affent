@@ -153,6 +153,42 @@ func TestConfig_PerCallTimeout_HappyPath(t *testing.T) {
 	}
 }
 
+// TestConfig_RetryBackoff_HappyPath mirrors the PerCallTimeout
+// happy-path coverage for the second new duration knob. Empty → 0
+// (Loop falls back to agent.DefaultTransientBackoff). Non-positive
+// and unparseable both error so a typo at deploy time surfaces
+// before a flaky upstream silently uses the 4-second default.
+func TestConfig_RetryBackoff_HappyPath(t *testing.T) {
+	cases := []struct {
+		in      string
+		want    time.Duration
+		wantErr bool
+	}{
+		{"", 0, false},
+		{"1s", time.Second, false},
+		{"30s", 30 * time.Second, false},
+		{"0s", 0, true},
+		{"-1s", 0, true},
+		{"nope", 0, true},
+	}
+	for _, c := range cases {
+		cfg := Config{RetryBackoff: c.in}
+		d, err := cfg.RetryBackoffDuration()
+		if c.wantErr {
+			if err == nil {
+				t.Errorf("RetryBackoffDuration(%q) should error", c.in)
+			}
+			continue
+		}
+		if err != nil {
+			t.Errorf("RetryBackoffDuration(%q): %v", c.in, err)
+		}
+		if d != c.want {
+			t.Errorf("RetryBackoffDuration(%q) = %s, want %s", c.in, d, c.want)
+		}
+	}
+}
+
 // TestConfig_Validate_RejectsBadPerCallTimeout pins that a typo
 // fails at startup, not when the first chat request finds the
 // duration unparseable.

@@ -90,6 +90,32 @@ func TestParseFlagsAndConfig_ModelFromEnv(t *testing.T) {
 	}
 }
 
+// TestParseFlagsAndConfig_RetryFlagsReachConfig pins both new retry
+// knobs end-to-end. --max-transient-retries=-1 is the "disable
+// retries" case (some providers handle retries themselves and a
+// double-retry doubles spend on a flaky day); the explicit int
+// must reach cfg.MaxTransientRetries unchanged so Loop's negative
+// → disable path fires. --retry-backoff is a Go duration string
+// that just needs to survive parseFlagsAndConfig intact (parsing
+// happens lazily via cfg.RetryBackoffDuration()).
+func TestParseFlagsAndConfig_RetryFlagsReachConfig(t *testing.T) {
+	cfg, err := parseFlagsAndConfig([]string{
+		"--base-url", "https://example/v1",
+		"--model", "m",
+		"--max-transient-retries", "-1",
+		"--retry-backoff", "8s",
+	})
+	if err != nil {
+		t.Fatalf("parseFlagsAndConfig: %v", err)
+	}
+	if cfg.MaxTransientRetries != -1 {
+		t.Errorf("MaxTransientRetries = %d, want -1", cfg.MaxTransientRetries)
+	}
+	if cfg.RetryBackoff != "8s" {
+		t.Errorf("RetryBackoff = %q, want 8s", cfg.RetryBackoff)
+	}
+}
+
 // TestParseFlagsAndConfig_CLIBoolUnsetKeepsFileValue pins the
 // opposite direction: when the user does NOT pass a bool flag, the
 // file's value stays intact.

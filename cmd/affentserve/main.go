@@ -66,6 +66,8 @@ func parseFlagsAndConfig(argv []string) (Config, error) {
 		sessionRetention = fs.String("session-retention", "", "How long durable session dirs (conv log + memory) live on disk after last activity. Empty disables — dirs live until explicit DELETE. Set to a Go duration like '720h' (30d) to enable background GC.")
 		maxTurnSteps     = fs.Int("max-turn-steps", 0, "Per-turn step cap (assistant↔tool round trips). 0 = agent runtime's default.")
 		perCallTimeout   = fs.String("per-call-timeout", "", "Per-LLM-call timeout as a Go duration string (default 3m). Bump for reasoning models that may think for several minutes per call.")
+		maxRetries       = fs.Int("max-transient-retries", 0, "Retry budget for transient LLM failures (5xx/429/408/net/EOF/timeout). 0 = agent runtime's default (3); negative disables retries (use when the upstream provider already handles retries and you want a single attempt).")
+		retryBackoff     = fs.String("retry-backoff", "", "Initial backoff between transient-error retries (default 4s); each subsequent attempt doubles it. Go duration string.")
 		compactTrigger   = fs.Int("compact-trigger", 0, "Rolling-summary compactor's message threshold per session. 0 = agent runtime's default (240). Lower on small-context upstream models to compact earlier.")
 		compactKeepLast  = fs.Int("compact-keep-last", 0, "Messages preserved verbatim at the tail of the conversation when compacting. 0 = agent runtime's default (10).")
 		enableBrowser    = fs.Bool("browser", false, "Register the extras/browser tool family for each new session.")
@@ -144,6 +146,12 @@ func parseFlagsAndConfig(argv []string) (Config, error) {
 	}
 	if *perCallTimeout != "" {
 		cfg.PerCallTimeout = *perCallTimeout
+	}
+	if setFlags["max-transient-retries"] {
+		cfg.MaxTransientRetries = *maxRetries
+	}
+	if *retryBackoff != "" {
+		cfg.RetryBackoff = *retryBackoff
 	}
 	if *compactTrigger > 0 {
 		cfg.CompactTrigger = *compactTrigger

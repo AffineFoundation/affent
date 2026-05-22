@@ -73,6 +73,19 @@ type Config struct {
 	// default. Go duration string ("8m", "15m").
 	PerCallTimeout string `json:"per_call_timeout"`
 
+	// MaxTransientRetries overrides agent.DefaultTransientRetries (3)
+	// for retryable LLM failures (HTTP 408/429/5xx, mid-stream EOF,
+	// per-call timeout). Zero → fall back to the agent default;
+	// negative → disable retry entirely. Disabling is useful when
+	// the upstream provider already implements its own retry layer
+	// and a double-retry doubles spend on a flaky day.
+	MaxTransientRetries int `json:"max_transient_retries"`
+
+	// RetryBackoff is the initial wait between retries; each
+	// subsequent attempt doubles it. Empty falls back to
+	// agent.DefaultTransientBackoff (4s). Go duration string.
+	RetryBackoff string `json:"retry_backoff"`
+
 	// CompactTrigger overrides the rolling-summary compactor's
 	// per-session message threshold. Zero falls back to
 	// agent.DefaultSummaryTriggerMsgs (240). Lower it (e.g. 120) on
@@ -274,6 +287,24 @@ func (c Config) PerCallTimeoutDuration() (time.Duration, error) {
 	return d, nil
 }
 
+// RetryBackoffDuration parses RetryBackoff. Empty → 0 (Loop falls
+// back to agent.DefaultTransientBackoff). Same fail-fast posture
+// as PerCallTimeoutDuration: a typo at startup beats a silent
+// 4-second-default for the lifetime of the deploy.
+func (c Config) RetryBackoffDuration() (time.Duration, error) {
+	if c.RetryBackoff == "" {
+		return 0, nil
+	}
+	d, err := time.ParseDuration(c.RetryBackoff)
+	if err != nil {
+		return 0, fmt.Errorf("retry_backoff=%q: %w", c.RetryBackoff, err)
+	}
+	if d <= 0 {
+		return 0, fmt.Errorf("retry_backoff=%q must be positive", c.RetryBackoff)
+	}
+	return d, nil
+}
+
 // Validate reports unrecoverable configuration problems. Defaults are
 // applied by Resolve() before this is meaningful — callers should
 // always Resolve() then Validate().
@@ -292,6 +323,9 @@ func (c Config) Validate() error {
 		return err
 	}
 	if _, err := c.PerCallTimeoutDuration(); err != nil {
+		return err
+	}
+	if _, err := c.RetryBackoffDuration(); err != nil {
 		return err
 	}
 	return nil
