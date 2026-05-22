@@ -407,6 +407,118 @@ func TestRunTurn_SubagentFirstPolicyGuardsParentExploration(t *testing.T) {
 	}
 }
 
+func TestRunTurn_SubagentPostPolicyGuardsDuplicateExploration(t *testing.T) {
+	var calls int32
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "text/event-stream")
+		w.WriteHeader(200)
+		fl := w.(http.Flusher)
+		switch atomic.AddInt32(&calls, 1) {
+		case 1:
+			lines := []string{
+				`data: {"choices":[{"delta":{"role":"assistant","tool_calls":[{"index":0,"id":"c1","type":"function","function":{"name":"subagent_run","arguments":"{\"task\":\"review\",\"mode\":\"review\"}"}}]},"finish_reason":null}]}`,
+				`data: {"choices":[{"delta":{},"finish_reason":"tool_calls"}]}`,
+				`data: [DONE]`,
+			}
+			for _, l := range lines {
+				w.Write([]byte(l + "\n\n"))
+				fl.Flush()
+			}
+		case 2:
+			lines := []string{
+				`data: {"choices":[{"delta":{"role":"assistant","tool_calls":[{"index":0,"id":"c2","type":"function","function":{"name":"read_file","arguments":"{\"path\":\"internal/agent/subagent.go\"}"}}]},"finish_reason":null}]}`,
+				`data: {"choices":[{"delta":{},"finish_reason":"tool_calls"}]}`,
+				`data: [DONE]`,
+			}
+			for _, l := range lines {
+				w.Write([]byte(l + "\n\n"))
+				fl.Flush()
+			}
+		default:
+			w.Write([]byte("data: {\"choices\":[{\"delta\":{\"role\":\"assistant\",\"content\":\"answered from report\"},\"finish_reason\":\"stop\"}]}\n\n"))
+			w.Write([]byte("data: [DONE]\n\n"))
+			fl.Flush()
+		}
+	}))
+	t.Cleanup(srv.Close)
+
+	var readCalls int32
+	reg := NewRegistry()
+	reg.Add(&Tool{
+		Name:        "subagent_run",
+		Description: "test subagent",
+		Schema:      json.RawMessage(`{"type":"object","properties":{}}`),
+		Execute: func(context.Context, json.RawMessage) (string, error) {
+			return `{"report":"Conclusion:\nok","ok":true}`, nil
+		},
+	})
+	reg.Add(&Tool{
+		Name:        "read_file",
+		Description: "test read",
+		Schema:      json.RawMessage(`{"type":"object","properties":{}}`),
+		Execute: func(context.Context, json.RawMessage) (string, error) {
+			atomic.AddInt32(&readCalls, 1)
+			return "file contents", nil
+		},
+	})
+
+	conv, err := OpenConversationAt(filepath.Join(t.TempDir(), "sess.jsonl"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	events := make(chan sse.Event, 256)
+	loop := &Loop{
+		LLM: NewLLMClient(srv.URL, "", "fake-model"), Tools: reg, Conv: conv, Events: events,
+		MaxTurnSteps: 3, PerCallTimeout: 5 * time.Second,
+		PostToolPolicy: SubagentPostToolPolicy(),
+	}
+	if err := loop.EnsureSystemPrompt("base"); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := loop.SendUser(context.Background(), "review with subagent"); err != nil {
+		t.Fatal(err)
+	}
+
+	deadline := time.After(10 * time.Second)
+	var sawGuard bool
+	for {
+		select {
+		case ev, ok := <-events:
+			if !ok {
+				t.Fatal("event channel closed before turn.end")
+			}
+			if ev.Type == sse.TypeToolResult {
+				var p sse.ToolResultPayload
+				if err := json.Unmarshal(ev.Data, &p); err != nil {
+					t.Fatalf("decode tool.result: %v", err)
+				}
+				if strings.Contains(p.Result, "post_tool_policy") {
+					sawGuard = true
+				}
+			}
+			if ev.Type != sse.TypeTurnEnd {
+				continue
+			}
+			var p sse.TurnEndPayload
+			if err := json.Unmarshal(ev.Data, &p); err != nil {
+				t.Fatalf("decode turn.end: %v", err)
+			}
+			if p.Reason != sse.TurnEndCompleted {
+				t.Fatalf("expected completed, got %q", p.Reason)
+			}
+			if !sawGuard {
+				t.Fatal("expected duplicate parent exploration to be guarded after subagent_run")
+			}
+			if got := atomic.LoadInt32(&readCalls); got != 0 {
+				t.Fatalf("read_file should not execute after successful subagent_run; got %d calls", got)
+			}
+			return
+		case <-deadline:
+			t.Fatal("timeout waiting for turn.end")
+		}
+	}
+}
+
 // cancelOnFirstCompact is a Compactor that calls Loop.Cancel during
 // its very first invocation, then returns ctx.Err. Lets the test
 // trigger the "cancel during reactive compaction" race window.

@@ -124,12 +124,25 @@ type Loop struct {
 	// delegation instruction; feature-specific trigger logic belongs
 	// outside Loop.
 	FirstToolPolicy *FirstToolPolicy
+
+	// PostToolPolicy optionally blocks selected follow-up tools after a
+	// named tool returns a result that activates the policy. This lets a
+	// feature steer small models from "one more verification" back to a
+	// final answer without hard-coding feature names in Loop.
+	PostToolPolicy *PostToolPolicy
 }
 
 type FirstToolPolicy struct {
 	ToolName  string
 	Trigger   func(userText string) bool
 	Rejection string
+}
+
+type PostToolPolicy struct {
+	ToolName     string
+	Activate     func(result string, isErr bool) bool
+	BlockedTools []string
+	Rejection    string
 }
 
 // SystemPrompt is fed once at session start. It is deliberately operational:
@@ -357,6 +370,8 @@ func (l *Loop) runTurn(ctx context.Context, turnID, userText string) {
 	endReason := sse.TurnEndCompleted
 	firstToolPolicy := l.activeFirstToolPolicy(userText)
 	firstToolSatisfied := firstToolPolicy == nil
+	postToolPolicy := l.activePostToolPolicy()
+	postToolActive := false
 	// finishedNaturally tracks whether the for-loop exited because the
 	// model returned an assistant message without tool_calls (the
 	// "done thinking" path). Falling out of the loop with this still
@@ -456,6 +471,27 @@ func (l *Loop) runTurn(ctx context.Context, turnID, userText string) {
 			if firstToolPolicy != nil && tc.Function.Name == firstToolPolicy.ToolName {
 				firstToolSatisfied = true
 			}
+			if postToolActive && postToolPolicy.blocks(tc.Function.Name) {
+				result := postToolPolicy.Rejection
+				if result == "" {
+					result = fmt.Sprintf("post_tool_policy: answer from the prior %s result instead of calling %s.", postToolPolicy.ToolName, tc.Function.Name)
+				}
+				l.publish(sse.TypeToolResult, sse.ToolResultPayload{
+					CallID:        callID,
+					ExitCode:      1,
+					ResultSummary: result,
+					Result:        result,
+				})
+				if err := l.Conv.Append(ChatMessage{
+					Role:       "tool",
+					Content:    result,
+					ToolCallID: callID,
+					Name:       tc.Function.Name,
+				}); err != nil {
+					l.Log.Error().Err(err).Str("call_id", callID).Msg("conv append post-tool guard result")
+				}
+				continue
+			}
 			result, isErr := l.Tools.dispatch(ctx, tc.Function.Name, args)
 			exit := 0
 			if isErr {
@@ -481,6 +517,9 @@ func (l *Loop) runTurn(ctx context.Context, turnID, userText string) {
 				// the loud failure we want when the disk is sick.
 				l.Log.Error().Err(err).Str("call_id", callID).Msg("conv append tool result")
 			}
+			if postToolPolicy != nil && tc.Function.Name == postToolPolicy.ToolName && postToolPolicy.shouldActivate(result, isErr) {
+				postToolActive = true
+			}
 		}
 		toolRounds++
 	}
@@ -504,6 +543,39 @@ func (l *Loop) activeFirstToolPolicy(userText string) *FirstToolPolicy {
 		return nil
 	}
 	return p
+}
+
+func (l *Loop) activePostToolPolicy() *PostToolPolicy {
+	p := l.PostToolPolicy
+	if p == nil || p.ToolName == "" || l.Tools == nil {
+		return nil
+	}
+	if _, ok := l.Tools.Get(p.ToolName); !ok {
+		return nil
+	}
+	return p
+}
+
+func (p *PostToolPolicy) shouldActivate(result string, isErr bool) bool {
+	if p == nil {
+		return false
+	}
+	if p.Activate != nil {
+		return p.Activate(result, isErr)
+	}
+	return !isErr
+}
+
+func (p *PostToolPolicy) blocks(toolName string) bool {
+	if p == nil {
+		return false
+	}
+	for _, blocked := range p.BlockedTools {
+		if blocked == toolName {
+			return true
+		}
+	}
+	return false
 }
 
 func (l *Loop) appendSkippedToolResults(turnID string, calls []ToolCall, content string) {

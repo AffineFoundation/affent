@@ -45,6 +45,21 @@ func SubagentFirstToolPolicy() *FirstToolPolicy {
 	}
 }
 
+func SubagentPostToolPolicy() *PostToolPolicy {
+	return &PostToolPolicy{
+		ToolName: SubagentToolName,
+		Activate: func(result string, isErr bool) bool {
+			if isErr {
+				return false
+			}
+			var resp subagentResponse
+			return json.Unmarshal([]byte(result), &resp) == nil && resp.OK
+		},
+		BlockedTools: []string{"read_file", "list_files", "shell", "memory", "session_search"},
+		Rejection:    "post_tool_policy: subagent_run already returned a successful evidence report; answer from that report instead of repeating parent-side exploration.",
+	}
+}
+
 func explicitSubagentRequested(userText string) bool {
 	return strings.Contains(strings.ToLower(userText), "subagent")
 }

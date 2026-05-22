@@ -595,6 +595,7 @@ func setupLoop(c commonFlags) (*loopBundle, int) {
 	}
 	if !c.memoryOnly {
 		loop.FirstToolPolicy = agent.SubagentFirstToolPolicy()
+		loop.PostToolPolicy = agent.SubagentPostToolPolicy()
 	}
 	// Always attach the rolling-summary compactor. Without it, an
 	// overflowed context kills the turn (the loop's reactive compaction
