@@ -120,7 +120,12 @@ func (w *httpWire) post(ctx context.Context, body []byte, expectReply bool) erro
 		return nil
 	}
 	if resp.StatusCode/100 != 2 {
-		errBody, _ := io.ReadAll(resp.Body)
+		// Cap the error-body read at 64 KiB; same rationale as
+		// agent.LLMClient's non-2xx path — real MCP error envelopes
+		// (jsonrpc error objects, nginx 502 pages) fit comfortably,
+		// and an unbounded ReadAll would let a misbehaving server
+		// OOM us with a multi-GB error body.
+		errBody, _ := io.ReadAll(io.LimitReader(resp.Body, 64*1024))
 		resp.Body.Close()
 		return fmt.Errorf("mcp http %d: %s", resp.StatusCode, errBody)
 	}
@@ -154,7 +159,9 @@ func (w *httpWire) post(ctx context.Context, body []byte, expectReply bool) erro
 		go w.drainSSE(resp)
 		return nil
 	default:
-		body, _ := io.ReadAll(resp.Body)
+		// Body is only used for the error message; 4 KiB is plenty
+		// of context and bounds a misbehaving server's blast radius.
+		body, _ := io.ReadAll(io.LimitReader(resp.Body, 4*1024))
 		resp.Body.Close()
 		if !expectReply && len(bytes.TrimSpace(body)) == 0 {
 			return nil

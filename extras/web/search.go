@@ -172,7 +172,12 @@ func (p *TavilyProvider) Search(ctx context.Context, query string, n int) ([]Sea
 			Content string `json:"content"`
 		} `json:"results"`
 	}
-	if err := json.NewDecoder(resp.Body).Decode(&out); err != nil {
+	// Cap the body read. Real Tavily responses are tens of KiB at
+	// most; an unbounded decode lets a misbehaving (or proxy-
+	// intercepted) endpoint OOM the agent process by streaming
+	// indefinitely. 1 MiB is well past any realistic response and
+	// small enough that pathological streams can't dominate memory.
+	if err := json.NewDecoder(io.LimitReader(resp.Body, 1<<20)).Decode(&out); err != nil {
 		return nil, fmt.Errorf("tavily decode: %w", err)
 	}
 
