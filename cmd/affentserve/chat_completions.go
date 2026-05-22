@@ -33,9 +33,11 @@ type chatRequest struct {
 	// JSON body.
 	SessionID       string `json:"session_id"`
 	AffentSessionID string `json:"affent_session_id"`
-	// We accept and ignore the other OpenAI knobs (temperature, top_p,
-	// stop, etc.) because affent owns sampling via its LLMClient.
-	// Surfacing them here would only be misleading.
+	// The other OpenAI knobs (temperature, top_p, stop, presence_penalty,
+	// frequency_penalty, …) are accepted and dropped. affent's LLMClient
+	// doesn't forward them — the upstream provider's defaults apply.
+	// Surfacing them here would suggest tuning works through affent
+	// when in practice it doesn't.
 }
 
 // resolvedSessionID picks the affent-namespaced field when present so
