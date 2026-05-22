@@ -169,6 +169,35 @@ func TestChatCompletions_OversizedBodyReturns413(t *testing.T) {
 	}
 }
 
+// TestChatCompletions_SendUserErrors_MapsToDistinctStatuses pins the
+// error-routing fix. Pre-fix every SendUser error became 409 "session
+// busy", which:
+//   - hid I/O failures (conv.Append) behind a misleading "retry me"
+//     status — clients would retry the busy path forever, never knowing
+//     the server itself was broken.
+//   - reported "busy" for a client that had already disconnected, which
+//     showed up in logs as phantom 409s with no corresponding 200.
+//
+// Now ErrTurnInFlight → 409 (the only real busy signal), client-disconnect
+// → 499 (proxy-friendly), and everything else → 500.
+func TestChatCompletions_SendUserErrors_MapsToDistinctStatuses(t *testing.T) {
+	pool := newTestPool(t, 4, "5m")
+	cfg := Config{Model: "fake"}
+	handler := handleChatCompletions(cfg, pool)
+
+	// Cancelled ctx path: SendUser's entry-time ctx.Err() check returns
+	// context.Canceled. Must map to 499, not 409.
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	body := `{"model":"fake","messages":[{"role":"user","content":"hi"}]}`
+	req := httptest.NewRequest(http.MethodPost, "/v1/chat/completions", strings.NewReader(body)).WithContext(ctx)
+	rec := httptest.NewRecorder()
+	handler(rec, req)
+	if got := rec.Result().StatusCode; got != 499 {
+		t.Errorf("cancelled ctx: status = %d, want 499", got)
+	}
+}
+
 func TestWriteChatCompletionResponse_SetsSessionIDHeader(t *testing.T) {
 	w := httptest.NewRecorder()
 	out := &bufferedTurnResult{Content: "hi", FinishReason: "stop"}

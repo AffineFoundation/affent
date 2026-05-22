@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"time"
 
+	"github.com/affinefoundation/affent/internal/agent"
 	"github.com/affinefoundation/affent/internal/sse"
 	"github.com/google/uuid"
 )
@@ -135,7 +136,22 @@ func handleChatCompletions(cfg Config, pool *SessionPool) http.HandlerFunc {
 		ctx := r.Context()
 		turnID, err := sess.SendUser(ctx, userText)
 		if err != nil {
-			writeJSONError(w, http.StatusConflict, "session busy", err)
+			switch {
+			case errors.Is(err, agent.ErrTurnInFlight):
+				w.Header().Set("Retry-After", "1")
+				writeJSONError(w, http.StatusConflict, "session busy", err)
+			case errors.Is(err, context.Canceled), errors.Is(err, context.DeadlineExceeded):
+				// Client disconnected between body-parse and SendUser.
+				// 499 is nginx's "client closed request"; OpenAI clients
+				// won't see it (the conn is dead) but it gives proxies
+				// and logs the right signal.
+				writeJSONError(w, 499, "client disconnected", err)
+			default:
+				// e.g. conv.Append failed — disk full, permission
+				// denied. Don't tell the caller it's busy when the
+				// server itself failed.
+				writeJSONError(w, http.StatusInternalServerError, "send user", err)
+			}
 			return
 		}
 
