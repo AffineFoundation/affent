@@ -323,6 +323,95 @@ func TestRunner_EndToEnd_SubagentDelegation(t *testing.T) {
 	}
 }
 
+// TestRunner_EndToEnd_LoopGuardBlocksIdenticalRepeats verifies the
+// runtime mechanism end-to-end through the eval framework: the
+// toolLoopGuard blocks a tool call when the model emits the same
+// (tool, args) triple 3 times in a row. This is the exact
+// "failure mode -> mechanism -> trace check proves it fired" loop
+// the user named as the design pattern for affent.
+//
+// Without this test the guard is "code that exists"; with it the
+// guard is "behavior the framework can detect in a trace and
+// score against future regressions".
+func TestRunner_EndToEnd_LoopGuardBlocksIdenticalRepeats(t *testing.T) {
+	// Each turn: emit the SAME read_file call. The 3rd attempt should
+	// be blocked by the guard with a "loop_guard: blocked exact
+	// repeated call" tool result. Turn 4 emits a final answer.
+	repeatedCall := func(callID string) []string {
+		return []string{
+			`{"choices":[{"delta":{"role":"assistant","tool_calls":[{"index":0,"id":"` + callID + `","type":"function","function":{"name":"read_file","arguments":""}}]},"finish_reason":null}]}`,
+			`{"choices":[{"delta":{"tool_calls":[{"index":0,"function":{"arguments":"{\"path\":\"README.md\"}"}}]},"finish_reason":null}]}`,
+			`{"choices":[{"delta":{},"finish_reason":"tool_calls"}]}`,
+			`[DONE]`,
+		}
+	}
+	finalText := []string{
+		`{"choices":[{"delta":{"role":"assistant","content":"OK, stopping — the loop guard told me to."},"finish_reason":"stop"}]}`,
+		`[DONE]`,
+	}
+	srv := newScriptedLLM(t, [][]string{
+		repeatedCall("c1"),
+		repeatedCall("c2"),
+		repeatedCall("c3"),
+		finalText,
+	})
+
+	scenario := Scenario{
+		Name:        "loop_guard_blocks_repeats",
+		Description: "loop_guard refuses the 3rd identical tool call in a single turn",
+		Prompt:      "demonstrate the loop guard by repeating yourself",
+		Setup: func(workspaceDir string) error {
+			return os.WriteFile(filepath.Join(workspaceDir, "README.md"), []byte("anything"), 0o644)
+		},
+		MaxTurnSteps: 6,
+		Checks: []Check{
+			TurnEndedCleanly(),
+			ToolCalled("read_file", nil),
+			// The mechanism's signature is a tool result containing
+			// "loop_guard" — exactly the substring the runtime emits
+			// when it blocks a repeat. If the mechanism is removed or
+			// silently changed, this check fires.
+			ToolResultContains("read_file", "loop_guard"),
+		},
+	}
+
+	runner := &Runner{
+		LLM:            agent.NewLLMClient(srv.URL, "", "fake-model"),
+		MaxTurnSteps:   6,
+		PerCallTimeout: 5 * time.Second,
+		RunTimeout:     20 * time.Second,
+		Log:            zerolog.Nop(),
+	}
+
+	out, err := runner.Run(context.Background(), scenario)
+	if err != nil {
+		t.Fatalf("Runner.Run: %v", err)
+	}
+	if !out.Pass {
+		t.Errorf("expected all checks to pass; failed: %v", out.FailedChecks())
+		for _, r := range out.Results {
+			t.Logf("  %s: pass=%v detail=%s", r.Check, r.Pass, r.Detail)
+		}
+	}
+
+	// Independent assertions on the captured trace shape for diagnostic
+	// value when the mechanism actually IS broken.
+	if len(out.Trace.Tools) != 3 {
+		t.Fatalf("expected 3 tool call entries (first two real, third guard-blocked); got %d", len(out.Trace.Tools))
+	}
+	first, second, third := out.Trace.Tools[0], out.Trace.Tools[1], out.Trace.Tools[2]
+	if first.IsErr || second.IsErr {
+		t.Errorf("first two read_file calls must succeed before the guard fires; got first.IsErr=%v second.IsErr=%v",
+			first.IsErr, second.IsErr)
+	}
+	if !third.IsErr {
+		t.Errorf("3rd identical call must surface as an error tool result (guard rejection); got IsErr=false result=%q", third.Result)
+	}
+	if !strings.Contains(third.Result, "loop_guard: blocked exact repeated call") {
+		t.Errorf("3rd call must carry the exact guard message so trace consumers can grep for it; got %q", third.Result)
+	}
+}
+
 // TestRunner_RequiresLLM pins the early-validation: Runner without an
 // LLM client returns a clear error instead of nil-deref'ing inside
 // EnsureSystemPrompt / SendUser.
