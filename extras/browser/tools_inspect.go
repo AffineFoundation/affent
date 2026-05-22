@@ -140,6 +140,15 @@ func ScreenshotTool(s *Session) *agent.Tool {
 				if err != nil {
 					return "", err
 				}
+				// Match agent.writeFileTool's behavior: auto-create the
+				// parent dir so the model can drop screenshots into a
+				// fresh subdirectory ("./screenshots/page1.png") without
+				// having to first chain a shell mkdir. resolveSavePath
+				// already guarantees the path stays inside WorkspaceDir,
+				// so MkdirAll can't escape the sandbox.
+				if err := os.MkdirAll(filepath.Dir(resolved), 0o755); err != nil {
+					return "", fmt.Errorf("mkdir for screenshot %s: %w", resolved, err)
+				}
 				if err := os.WriteFile(resolved, png, 0o644); err != nil {
 					return "", fmt.Errorf("write screenshot to %s: %w", resolved, err)
 				}
