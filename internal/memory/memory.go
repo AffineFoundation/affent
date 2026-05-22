@@ -282,11 +282,6 @@ const (
 	DefaultTopicCharLimit = 4400 // ~1600 tokens per topic
 	DefaultUserCharLimit  = 1375 // ~500 tokens
 
-	// DefaultMemoryCharLimit is the historical name for the cap that
-	// today applies to core.md. Kept exported so existing callers
-	// (gateway, tests) don't break.
-	DefaultMemoryCharLimit = DefaultCoreCharLimit
-
 	// DefaultMaxTopics caps how many DISTINCT custom topics one
 	// memory dir can hold (general counts; core doesn't — it lives
 	// outside topics/). The limit exists because:

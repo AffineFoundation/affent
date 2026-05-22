@@ -42,11 +42,6 @@ const (
 	DefaultTransientBackoff = 4 * time.Second
 )
 
-// PerLLMCallTimeout is the legacy name for DefaultPerCallTimeout.
-// Kept as an alias so external callers that referenced the old
-// constant don't break.
-const PerLLMCallTimeout = DefaultPerCallTimeout
-
 // MaxToolResultBytesInContext caps how much of a tool's output we feed
 // back into the LLM as conversation history. The full result still goes
 // out in the SSE event (so the UI can show whatever it wants), but the

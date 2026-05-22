@@ -27,10 +27,9 @@ type MemoryTopicSummary = internalmemory.MemoryTopicSummary
 type MemoryUsage = internalmemory.MemoryUsage
 
 const (
-	DefaultCoreCharLimit   = internalmemory.DefaultCoreCharLimit
-	DefaultTopicCharLimit  = internalmemory.DefaultTopicCharLimit
-	DefaultUserCharLimit   = internalmemory.DefaultUserCharLimit
-	DefaultMemoryCharLimit = internalmemory.DefaultMemoryCharLimit
+	DefaultCoreCharLimit  = internalmemory.DefaultCoreCharLimit
+	DefaultTopicCharLimit = internalmemory.DefaultTopicCharLimit
+	DefaultUserCharLimit  = internalmemory.DefaultUserCharLimit
 
 	CoreTopic    = internalmemory.CoreTopic
 	DefaultTopic = internalmemory.DefaultTopic
