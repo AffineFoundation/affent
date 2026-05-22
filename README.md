@@ -155,6 +155,43 @@ sandbox such as a container, VM, or remote execution environment.
 MCP servers can be registered over stdio or streamable HTTP. Their tools are
 namespaced and become part of the same registry as Affent's built-in tools.
 
+## Subagent
+
+The optional `subagent_run` tool lets the main agent hand a bounded
+exploration or review task to a fresh isolated Loop with its own
+conversation, its own (read-only) tool set, and a step budget. Only the
+structured report comes back; the child's individual tool calls,
+file reads, and reasoning never enter the parent's conversation.
+
+Use it for tasks that would otherwise pollute the main context with
+noise — codebase exploration, multi-file inspection, log triage, code
+review pre-pass.
+
+Design contract enforced in code (`internal/agent/subagent.go` +
+`subagent_test.go`):
+
+- No `write_file` / `edit_file` in the child's registry.
+- No `subagent_run` in the child's registry — recursion is impossible.
+- Optional deps gate their tools: no Executor → no shell, no Memory →
+  no memory tool, no SessionsDir → no session_search.
+- The child has its own conversation file under `TranscriptDir`; the
+  parent's conversation only ever sees the structured response.
+- The shell tool inside a subagent is wrapped to reject mutating
+  commands (rm/mv/sed -i/git checkout/pip install/output redirection)
+  and reads into the audit-transcript path.
+- The memory tool inside a subagent is wrapped to allow only
+  `search` / `list` actions.
+- The structured response leads with `report` so the parent Loop's
+  8 KiB tool-result truncation never decapitates the conclusion.
+- Per-child token usage (`input_tokens` / `output_tokens`) and any
+  recoverable LLM-side errors the child fought through are surfaced
+  back to the parent for budget / debug visibility.
+
+CLI registers it automatically when `--memory-only` is off; HTTP
+server registers it through the same path on each new session. Pass
+`mode` (`explore` or `review`) and `task` to invoke; `max_turns`
+defaults to 6 with a hard cap of 12.
+
 ## Events And Observability
 
 Affent emits a structured SSE event stream covering turn boundaries, model
