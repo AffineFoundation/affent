@@ -8,6 +8,7 @@ import (
 	"log"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"testing"
 
@@ -65,8 +66,8 @@ func TestSafeWorkspacePath(t *testing.T) {
 // the lns -s attack: a symlink inside the workspace pointing OUT must
 // not let a relative-path file op land outside. Real-rollout setup:
 //
-//   ln -s /tmp/affent-escape-target ws/exit
-//   write_file path="exit/sneaky.txt"
+//	ln -s /tmp/affent-escape-target ws/exit
+//	write_file path="exit/sneaky.txt"
 //
 // Pre-fix, filepath.Rel saw "exit/sneaky.txt" as inside the workspace
 // and accepted the write, which os.WriteFile then followed onto
@@ -287,6 +288,48 @@ func TestShellTool_ShellOverrideIsHonored(t *testing.T) {
 	want := []string{"bash", "-lc", "pwd"}
 	if len(rec.gotArgv) != 3 || rec.gotArgv[0] != want[0] || rec.gotArgv[1] != want[1] || rec.gotArgv[2] != want[2] {
 		t.Fatalf("argv = %v, want %v", rec.gotArgv, want)
+	}
+}
+
+func TestShellToolRejectsUnboundedFilesystemScans(t *testing.T) {
+	tool := shellTool(BuiltinDeps{Executor: nilExecutor{}})
+	for _, command := range []string{
+		`find / -name go -type f`,
+		`grep -R "secret" /`,
+		`rg / --files`,
+	} {
+		_, err := tool.Execute(context.Background(), json.RawMessage(`{"command":`+strconv.Quote(command)+`}`))
+		if err == nil {
+			t.Fatalf("expected broad scan command to be rejected: %s", command)
+		}
+		if !strings.Contains(err.Error(), "unbounded filesystem scan") {
+			t.Fatalf("unexpected error for %s: %v", command, err)
+		}
+	}
+}
+
+func TestShellToolAllowsBoundedFinds(t *testing.T) {
+	tool := shellTool(BuiltinDeps{Executor: nilExecutor{}})
+	_, err := tool.Execute(context.Background(), json.RawMessage(`{"command":"find . -name '*.go' -maxdepth 3"}`))
+	if err != nil {
+		t.Fatalf("bounded workspace find should be allowed: %v", err)
+	}
+}
+
+func TestShellTool_ExtraBroadScanIndicators(t *testing.T) {
+	defaultTool := shellTool(BuiltinDeps{Executor: nilExecutor{}})
+	out, err := defaultTool.Execute(context.Background(), json.RawMessage(`{"command":"du / -h --max-depth=1"}`))
+	if err != nil && strings.Contains(err.Error(), "unbounded filesystem scan") {
+		t.Fatalf("'du /' should not be rejected by the default set; got %v out=%q", err, out)
+	}
+
+	customTool := shellTool(BuiltinDeps{
+		Executor:                 nilExecutor{},
+		ExtraBroadScanIndicators: []string{"du "},
+	})
+	_, err = customTool.Execute(context.Background(), json.RawMessage(`{"command":"du / -h --max-depth=1"}`))
+	if err == nil || !strings.Contains(err.Error(), "unbounded filesystem scan") {
+		t.Fatalf("with extra broad-scan indicator, 'du /' must be rejected; got %v", err)
 	}
 }
 

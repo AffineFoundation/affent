@@ -58,6 +58,9 @@ type BuiltinDeps struct {
 	// bash dev-box that needs login-shell semantics (PATH, ~/.bashrc)
 	// can set `["bash", "-lc"]` here.
 	Shell []string
+	// ExtraBroadScanIndicators extends the shell guard for deployment-
+	// specific unbounded scan commands. Defaults still apply.
+	ExtraBroadScanIndicators []string
 }
 
 // defaultShell is the portable fallback when BuiltinDeps.Shell is unset.
@@ -107,6 +110,8 @@ func shellTool(deps BuiltinDeps) *Tool {
 	if len(shellPrefix) == 0 {
 		shellPrefix = defaultShell
 	}
+	broadScanIndicators := append([]string{}, defaultBroadScanIndicators...)
+	broadScanIndicators = append(broadScanIndicators, deps.ExtraBroadScanIndicators...)
 	return &Tool{
 		Name:        "shell",
 		Description: "Run a shell command (Linux). Use this for tests/builds/git/grep/python/node/package commands and other CLI inspection. Output is combined stdout+stderr followed by an exit code line; base success/failure on that exit code. In the local executor this is not a filesystem sandbox, so prefer read_file/list_files for ordinary workspace reads and avoid inspecting paths outside the workspace unless the user explicitly asks.",
@@ -123,6 +128,9 @@ func shellTool(deps BuiltinDeps) *Tool {
 			if strings.TrimSpace(p.Command) == "" {
 				return "", errors.New("command is required")
 			}
+			if err := rejectBroadShellScan(p.Command, broadScanIndicators); err != nil {
+				return "", err
+			}
 			if p.TimeoutSec <= 0 {
 				p.TimeoutSec = 120
 			}
@@ -138,6 +146,35 @@ func shellTool(deps BuiltinDeps) *Tool {
 			return formatShellOutput(res), err
 		},
 	}
+}
+
+// defaultBroadScanIndicators are lowercased substrings that, together
+// with a "/" argument, identify unbounded filesystem scans. This keeps
+// normal root metadata checks such as `ls /` and `stat /` available.
+var defaultBroadScanIndicators = []string{
+	"find ",
+	"grep -r",
+	"rg ",
+}
+
+func rejectBroadShellScan(command string, indicators []string) error {
+	lower := strings.ToLower(command)
+	hasRootArg := false
+	for _, field := range strings.Fields(lower) {
+		if strings.Trim(field, `"'`) == "/" {
+			hasRootArg = true
+			break
+		}
+	}
+	if !hasRootArg {
+		return nil
+	}
+	for _, indicator := range indicators {
+		if strings.Contains(lower, indicator) {
+			return errors.New("shell command looks like an unbounded filesystem scan. Use a specific workspace path or a bounded tool-discovery path instead")
+		}
+	}
+	return nil
 }
 
 func formatShellOutput(res executor.ExecResult) string {
