@@ -22,8 +22,35 @@ func TestBuiltinSkillProvider_WebSnapshotTriggers(t *testing.T) {
 }
 
 func TestBuiltinSkillProvider_NoIrrelevantInjection(t *testing.T) {
-	if got := BuiltinSkillProvider("edit the README and run go test"); got != "" {
+	if got := BuiltinSkillProvider("summarize the project README"); got != "" {
 		t.Fatalf("non-web task should not inject web skill:\n%s", got)
+	}
+}
+
+func TestBuiltinSkillProvider_CodingRepairTriggers(t *testing.T) {
+	got := BuiltinSkillProvider("这个 Go 项目的测试失败，请修复代码并运行 go test")
+	for _, want := range []string{
+		"AFFENT ACTIVE SKILL: coding_repair_workflow",
+		"Reproduce first",
+		"do not edit tests",
+		"Do not run broad filesystem searches like find /",
+		"run the same failing command again",
+	} {
+		if !strings.Contains(got, want) {
+			t.Fatalf("coding skill output missing %q:\n%s", want, got)
+		}
+	}
+}
+
+func TestBuiltinSkillProvider_CanReturnMultipleSkills(t *testing.T) {
+	got := BuiltinSkillProvider("修复这个网页抽取代码，并访问 https://example.com 验证")
+	for _, want := range []string{
+		"web_snapshot_fact_extraction",
+		"coding_repair_workflow",
+	} {
+		if !strings.Contains(got, want) {
+			t.Fatalf("combined skill output missing %q:\n%s", want, got)
+		}
 	}
 }
 
@@ -42,6 +69,99 @@ func TestBuiltinSkillProvider_NoDomainSpecificTriggers(t *testing.T) {
 	}
 	if got := BuiltinSkillProvider("rewrite the github action"); got != "" {
 		t.Fatalf("'github' is a site name, not a web-task signal; got skill:\n%s", got)
+	}
+}
+
+// TestSkillRegistry_CustomSkillExtensionPoint pins the data-driven
+// router contract: adding a brand-new skill should be a Skill struct
+// literal + one Register call, with no router code changes. This
+// test stands up an empty registry, plants a one-off skill, and
+// verifies activation flows through Provide → SkillProvider →
+// Loop.appendUserMessage exactly like the builtins do.
+//
+// If a future refactor accidentally hardcodes the dispatch back to
+// the two builtins (web_snapshot, coding_repair), this test fires.
+func TestSkillRegistry_CustomSkillExtensionPoint(t *testing.T) {
+	reg := &SkillRegistry{}
+	reg.Register(Skill{
+		Name:     "test_skill",
+		Body:     "AFFENT ACTIVE SKILL: test_skill\nplant marker",
+		Triggers: []string{"sentinel-trigger-xyz"},
+	})
+
+	t.Run("fires on trigger", func(t *testing.T) {
+		got := reg.Provide("this contains sentinel-trigger-xyz somewhere")
+		if !strings.Contains(got, "plant marker") {
+			t.Errorf("custom skill should fire on its trigger; got %q", got)
+		}
+	})
+	t.Run("silent without trigger", func(t *testing.T) {
+		if got := reg.Provide("unrelated text"); got != "" {
+			t.Errorf("custom skill must NOT fire without trigger; got %q", got)
+		}
+	})
+	t.Run("Names lists registration order", func(t *testing.T) {
+		names := reg.Names()
+		if len(names) != 1 || names[0] != "test_skill" {
+			t.Errorf("Names() = %v, want [test_skill]", names)
+		}
+	})
+}
+
+// TestSkillRegistry_CustomMatchPredicate pins the Match override
+// path. Trigger lists handle "any-of substring" cases; some skills
+// need a real predicate (regex, length floor, multi-signal AND).
+// When Match is non-nil, Triggers must be ignored — the predicate
+// owns the decision.
+func TestSkillRegistry_CustomMatchPredicate(t *testing.T) {
+	reg := &SkillRegistry{}
+	reg.Register(Skill{
+		Name: "long_text_skill",
+		Body: "AFFENT ACTIVE SKILL: long_text_skill\nplant",
+		// Triggers populated but Match must override and be the
+		// sole source of truth.
+		Triggers: []string{"this-substring-should-be-ignored"},
+		Match: func(lower string) bool {
+			return len(lower) > 50
+		},
+	})
+
+	if got := reg.Provide("this-substring-should-be-ignored is here"); got != "" {
+		t.Errorf("Match override should make Triggers inert; got %q", got)
+	}
+	long := strings.Repeat("a", 60)
+	if got := reg.Provide(long); !strings.Contains(got, "plant") {
+		t.Errorf("Match predicate should activate the skill; got %q", got)
+	}
+}
+
+// TestSkillRegistry_RegisterDropsInvalidSkills pins the silent-drop
+// safety: a skill missing Name or with whitespace-only Body is
+// operator error, and the previous behavior of "ignore and keep
+// going" is preferred to failing the whole deploy on a typo in one
+// of N registered skills.
+func TestSkillRegistry_RegisterDropsInvalidSkills(t *testing.T) {
+	reg := &SkillRegistry{}
+	reg.Register(Skill{Name: "", Body: "x", Triggers: []string{"a"}})
+	reg.Register(Skill{Name: "n", Body: "   \t\n", Triggers: []string{"a"}})
+	reg.Register(Skill{Name: "valid", Body: "v", Triggers: []string{"a"}})
+
+	names := reg.Names()
+	if len(names) != 1 || names[0] != "valid" {
+		t.Errorf("only the valid skill should register; got %v", names)
+	}
+}
+
+// TestSkillRegistry_NilSafe pins that a nil *SkillRegistry safely
+// returns the empty string. Lets a Loop with no skills wired up
+// stay quiet without an extra nil check at the call site.
+func TestSkillRegistry_NilSafe(t *testing.T) {
+	var reg *SkillRegistry
+	if got := reg.Provide("anything"); got != "" {
+		t.Errorf("nil registry must return empty; got %q", got)
+	}
+	if got := reg.Names(); got != nil {
+		t.Errorf("nil registry Names() must be nil; got %v", got)
 	}
 }
 
