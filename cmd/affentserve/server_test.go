@@ -78,6 +78,43 @@ func TestRequireAuth_AcceptsCorrectBearer(t *testing.T) {
 	}
 }
 
+// TestRequireAuth_SchemeIsCaseInsensitive pins RFC 7235 §2.1
+// compliance: the "Bearer" scheme name must be matched
+// case-insensitively. Pre-fix the prefix check was strings.HasPrefix
+// against the literal "Bearer ", so a spec-compliant client that
+// sent "bearer topsecret" or "BEARER topsecret" hit 401 even though
+// the token was correct. The token value itself stays case-sensitive
+// (it's an opaque secret, not a protocol field).
+func TestRequireAuth_SchemeIsCaseInsensitive(t *testing.T) {
+	handler := requireAuth("topsecret", http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(204)
+	}))
+	for _, hdr := range []string{
+		"Bearer topsecret",
+		"bearer topsecret",
+		"BEARER topsecret",
+		"BeArEr topsecret",
+	} {
+		r := httptest.NewRequest("GET", "/v1/models", nil)
+		r.Header.Set("Authorization", hdr)
+		w := httptest.NewRecorder()
+		handler.ServeHTTP(w, r)
+		if w.Result().StatusCode != 204 {
+			t.Errorf("hdr=%q: status = %d, want 204", hdr, w.Result().StatusCode)
+		}
+	}
+
+	// Token value remains case-sensitive — it's the secret, not a
+	// protocol token.
+	r := httptest.NewRequest("GET", "/v1/models", nil)
+	r.Header.Set("Authorization", "Bearer TOPSECRET")
+	w := httptest.NewRecorder()
+	handler.ServeHTTP(w, r)
+	if w.Result().StatusCode != http.StatusUnauthorized {
+		t.Errorf("upper-cased token must still 401; got %d", w.Result().StatusCode)
+	}
+}
+
 // TestRequireAuth_RejectsNearMissAndWrongLength locks the
 // constant-time-comparison fix in place. The token's first byte
 // matching is the byte-by-byte timing-attack inroad if we ever

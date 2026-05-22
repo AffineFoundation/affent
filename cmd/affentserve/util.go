@@ -51,8 +51,12 @@ func requireAuth(token string, next http.Handler) http.Handler {
 	tokenBytes := []byte(token)
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		got := r.Header.Get("Authorization")
-		const prefix = "Bearer "
-		if !strings.HasPrefix(got, prefix) {
+		// RFC 7235 §2.1: auth scheme names are case-insensitive.
+		// "Bearer", "bearer", "BEARER" all need to match — spec-strict
+		// clients (and a few SDKs that lowercase auth schemes for
+		// canonicalization) would otherwise hit 401 with a valid token.
+		const prefix = "bearer "
+		if len(got) < len(prefix) || !strings.EqualFold(got[:len(prefix)], prefix) {
 			writeJSONErrorTyped(w, http.StatusUnauthorized, "unauthorized", nil, "auth_error")
 			return
 		}
