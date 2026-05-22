@@ -156,6 +156,31 @@ func TestEnvVarBeatsConfigFile(t *testing.T) {
 	}
 }
 
+func TestAPIKeyEnvDoesNotLeakIntoFlagDefaults(t *testing.T) {
+	t.Setenv("AFFENTCTL_API_KEY", "sk-test-secret")
+
+	var cf commonFlags
+	fs := flag.NewFlagSet("test", flag.ContinueOnError)
+	var help strings.Builder
+	fs.SetOutput(&help)
+	cf.bind(fs)
+	fs.PrintDefaults()
+
+	if got := fs.Lookup("api-key").DefValue; got != "" {
+		t.Fatalf("api-key flag default should stay empty so help cannot print secrets, got %q", got)
+	}
+	if strings.Contains(help.String(), "sk-test-secret") {
+		t.Fatalf("flag help leaked API key: %s", help.String())
+	}
+
+	if err := applyConfig(&cf, fs); err != nil {
+		t.Fatal(err)
+	}
+	if cf.apiKey != "sk-test-secret" {
+		t.Fatalf("env API key was not applied after parse; got %q", cf.apiKey)
+	}
+}
+
 func TestMemoryOnlyImpliesMemoryEnabled(t *testing.T) {
 	var cf commonFlags
 	fs := flag.NewFlagSet("test", flag.ContinueOnError)
@@ -235,6 +260,29 @@ func TestResolveStorePath(t *testing.T) {
 				t.Fatalf("resolveStorePath(%q, %q) = %q want %q", c.workspace, c.in, got, c.want)
 			}
 		})
+	}
+}
+
+func TestResolveStorePathKeepsRelativePathAlreadyInsideWorkspace(t *testing.T) {
+	cwd := t.TempDir()
+	oldwd, err := os.Getwd()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Chdir(cwd); err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() {
+		if err := os.Chdir(oldwd); err != nil {
+			t.Fatalf("restore cwd: %v", err)
+		}
+	})
+
+	workspace := filepath.Join(cwd, ".tmp", "eval", "ws")
+	in := filepath.Join(".tmp", "eval", "ws", ".affent", "memory")
+	want := filepath.Join(workspace, ".affent", "memory")
+	if got := resolveStorePath(workspace, in); got != want {
+		t.Fatalf("resolveStorePath(%q, %q) = %q want %q", workspace, in, got, want)
 	}
 }
 

@@ -95,9 +95,9 @@ type commonFlags struct {
 func (c *commonFlags) bind(fs *flag.FlagSet) {
 	fs.StringVar(&c.configPath, "config", os.Getenv("AFFENTCTL_CONFIG"), "JSON config file; CLI flags override config values")
 	fs.StringVar(&c.workspace, "workspace", "./affent-workspace", "working dir for shell + file tools")
-	fs.StringVar(&c.baseURL, "base-url", os.Getenv("AFFENTCTL_BASE_URL"), "OpenAI-compat endpoint")
-	fs.StringVar(&c.apiKey, "api-key", os.Getenv("AFFENTCTL_API_KEY"), "API key")
-	fs.StringVar(&c.model, "model", os.Getenv("AFFENTCTL_MODEL"), "model id")
+	fs.StringVar(&c.baseURL, "base-url", "", "OpenAI-compat endpoint (env: AFFENTCTL_BASE_URL)")
+	fs.StringVar(&c.apiKey, "api-key", "", "API key (env: AFFENTCTL_API_KEY)")
+	fs.StringVar(&c.model, "model", "", "model id (env: AFFENTCTL_MODEL)")
 	fs.IntVar(&c.maxTurns, "max-turns", 10, "max tool-call rounds per user message")
 	fs.DurationVar(&c.callTimeout, "max-call-timeout", agent.DefaultPerCallTimeout, "per-LLM-call timeout")
 	fs.IntVar(&c.retryTransient, "retry-transient", agent.DefaultTransientRetries, "retry attempts on transient LLM errors (5xx/429/408/net/EOF/timeout); 0 disables")
@@ -182,6 +182,7 @@ func applyConfig(c *commonFlags, fs *flag.FlagSet) error {
 	if err := loadConfigFile(c, fs); err != nil {
 		return err
 	}
+	applyEnvConfig(c, fs)
 	// memory-only is the isolation mode: register only the memory
 	// tool and inject no other content sources into the system prompt.
 	// It implies --memory=true and forces --project-context=false
@@ -282,6 +283,26 @@ func loadConfigFile(c *commonFlags, fs *flag.FlagSet) error {
 	setString("mcp-config", &c.mcpConfigPath, cfg.MCPConfig)
 	setString("executor", &c.executor, cfg.Executor)
 	return nil
+}
+
+func applyEnvConfig(c *commonFlags, fs *flag.FlagSet) {
+	setByCLI := map[string]bool{}
+	fs.Visit(func(f *flag.Flag) { setByCLI[f.Name] = true })
+
+	setString := func(name, env string, dst *string) {
+		if setByCLI[name] {
+			return
+		}
+		if v := os.Getenv(env); v != "" {
+			*dst = v
+		}
+	}
+
+	setString("base-url", "AFFENTCTL_BASE_URL", &c.baseURL)
+	setString("api-key", "AFFENTCTL_API_KEY", &c.apiKey)
+	setString("model", "AFFENTCTL_MODEL", &c.model)
+	setString("mcp-config", "AFFENTCTL_MCP_CONFIG", &c.mcpConfigPath)
+	setString("executor", "AFFENTCTL_EXECUTOR", &c.executor)
 }
 
 // loopBundle is everything a subcommand needs after setup: the loop
@@ -691,8 +712,12 @@ func openTrace(spec string, append bool) (io.Writer, func() error, error) {
 }
 
 // resolveStorePath turns a user-supplied --memory-*-store value into
-// a concrete path. Relative paths anchor to workspace; `~` expands to
-// $HOME; absolute paths pass through unchanged.
+// a concrete path. Relative paths normally anchor to workspace; `~`
+// expands to $HOME; absolute paths pass through unchanged. If the
+// relative path already points at the workspace from the caller's cwd
+// (for example ".tmp/eval/ws/.affent/memory" while --workspace is
+// ".tmp/eval/ws"), keep that cwd-relative target instead of nesting it
+// under workspace again.
 func resolveStorePath(workspace, p string) string {
 	if strings.HasPrefix(p, "~/") || p == "~" {
 		if home, err := os.UserHomeDir(); err == nil && home != "" {
@@ -705,7 +730,26 @@ func resolveStorePath(workspace, p string) string {
 	if filepath.IsAbs(p) {
 		return p
 	}
+	if absP, err := filepath.Abs(p); err == nil && pathInside(workspace, absP) {
+		return absP
+	}
 	return filepath.Join(workspace, p)
+}
+
+func pathInside(root, path string) bool {
+	absRoot, err := filepath.Abs(root)
+	if err != nil {
+		return false
+	}
+	absPath, err := filepath.Abs(path)
+	if err != nil {
+		return false
+	}
+	rel, err := filepath.Rel(absRoot, absPath)
+	if err != nil {
+		return false
+	}
+	return rel == "." || (rel != ".." && !strings.HasPrefix(rel, ".."+string(os.PathSeparator)))
 }
 
 // parseMemoryMaxChars accepts "MEM,USER" and returns the two ints.
