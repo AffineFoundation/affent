@@ -104,8 +104,8 @@ func runSubagent(ctx context.Context, deps SubagentDeps, mode, task string, maxT
 		return "", fmt.Errorf("subagent conversation: %w", err)
 	}
 	reg := NewRegistry()
-	reg.Add(readFileTool(BuiltinDeps{Executor: deps.Executor, HostWorkspaceDir: deps.HostWorkspaceDir}))
-	reg.Add(listFilesTool(BuiltinDeps{Executor: deps.Executor, HostWorkspaceDir: deps.HostWorkspaceDir}))
+	reg.Add(subagentReadFileTool(BuiltinDeps{Executor: deps.Executor, HostWorkspaceDir: deps.HostWorkspaceDir}))
+	reg.Add(subagentListFilesTool(BuiltinDeps{Executor: deps.Executor, HostWorkspaceDir: deps.HostWorkspaceDir}))
 	if deps.Executor != nil {
 		reg.Add(readOnlyShellTool(BuiltinDeps{Executor: deps.Executor, HostWorkspaceDir: deps.HostWorkspaceDir}))
 	}
@@ -277,8 +277,72 @@ func readOnlyShellTool(deps BuiltinDeps) *Tool {
 	return t
 }
 
+func subagentReadFileTool(deps BuiltinDeps) *Tool {
+	t := readFileTool(deps)
+	inner := t.Execute
+	t.Execute = func(ctx context.Context, args json.RawMessage) (string, error) {
+		var p struct {
+			Path string `json:"path"`
+		}
+		if err := json.Unmarshal(args, &p); err != nil {
+			return "", fmt.Errorf("decode args: %w", err)
+		}
+		if err := rejectSubagentPrivatePath(deps.HostWorkspaceDir, p.Path); err != nil {
+			return "", err
+		}
+		return inner(ctx, args)
+	}
+	return t
+}
+
+func subagentListFilesTool(deps BuiltinDeps) *Tool {
+	t := listFilesTool(deps)
+	inner := t.Execute
+	t.Execute = func(ctx context.Context, args json.RawMessage) (string, error) {
+		var p struct {
+			Path string `json:"path"`
+		}
+		if err := json.Unmarshal(args, &p); err != nil {
+			return "", fmt.Errorf("decode args: %w", err)
+		}
+		if err := rejectSubagentPrivatePath(deps.HostWorkspaceDir, p.Path); err != nil {
+			return "", err
+		}
+		return inner(ctx, args)
+	}
+	return t
+}
+
+func rejectSubagentPrivatePath(workspace, p string) error {
+	if workspace == "" {
+		return nil
+	}
+	if p == "" {
+		p = "."
+	}
+	var full string
+	if filepath.IsAbs(p) {
+		full = filepath.Clean(p)
+	} else {
+		full = filepath.Join(workspace, p)
+	}
+	rel, err := filepath.Rel(workspace, full)
+	if err != nil {
+		return nil
+	}
+	rel = filepath.Clean(rel)
+	privateRoot := filepath.Join(".affentctl", "subagents")
+	if rel == privateRoot || strings.HasPrefix(rel, privateRoot+string(filepath.Separator)) {
+		return fmt.Errorf("subagent transcripts are private audit records; use the subagent report or session_search instead")
+	}
+	return nil
+}
+
 func rejectMutatingShell(command string) error {
 	c := strings.ToLower(command)
+	if strings.Contains(filepath.ToSlash(c), ".affentctl/subagents") {
+		return errors.New("subagent transcripts are private audit records; use the subagent report or session_search instead")
+	}
 	withoutStderrRedirect := strings.ReplaceAll(c, "2>&1", "")
 	if strings.Contains(withoutStderrRedirect, ">") {
 		return errors.New("subagent shell is read-only; rejected output redirection")

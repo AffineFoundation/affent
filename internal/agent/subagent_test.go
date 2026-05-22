@@ -117,6 +117,33 @@ func TestReadOnlyShellToolRejectsMutatingCommands(t *testing.T) {
 	}
 }
 
+func TestSubagentFileToolsRejectTranscriptPaths(t *testing.T) {
+	ws := t.TempDir()
+	read := subagentReadFileTool(BuiltinDeps{HostWorkspaceDir: ws})
+	_, err := read.Execute(context.Background(), json.RawMessage(`{"path":".affentctl/subagents/parent/child.jsonl"}`))
+	if err == nil {
+		t.Fatal("expected read_file to reject subagent transcript path")
+	}
+	if !strings.Contains(err.Error(), "private audit") {
+		t.Fatalf("unexpected error: %v", err)
+	}
+
+	list := subagentListFilesTool(BuiltinDeps{HostWorkspaceDir: ws})
+	_, err = list.Execute(context.Background(), json.RawMessage(`{"path":".affentctl/subagents"}`))
+	if err == nil {
+		t.Fatal("expected list_files to reject subagent transcript root")
+	}
+
+	shell := readOnlyShellTool(BuiltinDeps{
+		Executor:         nilExecutor{},
+		HostWorkspaceDir: ws,
+	})
+	_, err = shell.Execute(context.Background(), json.RawMessage(`{"command":"cat .affentctl/subagents/parent/child.jsonl"}`))
+	if err == nil {
+		t.Fatal("expected shell to reject subagent transcript path")
+	}
+}
+
 func TestReadOnlyMemoryToolRejectsWrites(t *testing.T) {
 	store := newTestStore(t)
 	tool := readOnlyMemoryTool(store)
