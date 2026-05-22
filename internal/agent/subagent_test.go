@@ -121,6 +121,31 @@ func TestSubagentPostPolicyDoesNotActivateForPartialMaxTurnsReport(t *testing.T)
 	}
 }
 
+func TestSubagentPostPolicyBlocksParentBrowserAfterSuccessfulReport(t *testing.T) {
+	resp := subagentResponse{
+		Report:        "Conclusion:\nThe child gathered the page facts.\nEvidence:\n- browser snapshot",
+		OK:            true,
+		TurnEndReason: sse.TurnEndCompleted,
+	}
+	raw, err := json.Marshal(resp)
+	if err != nil {
+		t.Fatal(err)
+	}
+	policy := SubagentPostToolPolicy()
+	if !policy.shouldActivate(string(raw), false) {
+		t.Fatal("successful subagent report should activate post-tool policy")
+	}
+	blocked := map[string]bool{}
+	for _, name := range policy.BlockedTools {
+		blocked[name] = true
+	}
+	for _, name := range []string{"browser_navigate", "browser_snapshot", "browser_wait", "browser_click", "browser_scroll"} {
+		if !blocked[name] {
+			t.Fatalf("successful subagent report should block parent-side %s repeats; blocked=%v", name, policy.BlockedTools)
+		}
+	}
+}
+
 func TestReadOnlyShellToolRejectsMutatingCommands(t *testing.T) {
 	ws := t.TempDir()
 	tool := readOnlyShellTool(BuiltinDeps{
@@ -200,6 +225,20 @@ func TestSubagentUserPromptIncludesToolBudget(t *testing.T) {
 	}
 	if !strings.Contains(got, "Stop early when evidence is sufficient") {
 		t.Fatalf("prompt missing early-stop guidance:\n%s", got)
+	}
+}
+
+func TestSubagentSystemPromptIncludesWebExtractionGuidance(t *testing.T) {
+	got := subagentSystemPrompt("explore")
+	for _, want := range []string{
+		"use the browser tools instead of shell/curl/python scraping",
+		"call browser_navigate first",
+		"answer directly from the returned snapshot",
+		"Do not click through tabs",
+	} {
+		if !strings.Contains(got, want) {
+			t.Fatalf("subagent web guidance missing %q:\n%s", want, got)
+		}
 	}
 }
 

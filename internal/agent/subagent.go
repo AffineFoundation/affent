@@ -60,8 +60,22 @@ func SubagentPostToolPolicy() *PostToolPolicy {
 			}
 			return resp.OK
 		},
-		BlockedTools: []string{"read_file", "list_files", "shell", "memory", "session_search"},
-		Rejection:    "post_tool_policy: subagent_run already returned a successful evidence report; answer from that report instead of repeating parent-side exploration.",
+		BlockedTools: []string{
+			"read_file",
+			"list_files",
+			"shell",
+			"memory",
+			"session_search",
+			"browser_navigate",
+			"browser_back",
+			"browser_wait",
+			"browser_snapshot",
+			"browser_click",
+			"browser_type",
+			"browser_scroll",
+			"browser_screenshot",
+		},
+		Rejection: "post_tool_policy: subagent_run already returned a successful evidence report; answer from that report instead of repeating parent-side exploration.",
 	}
 }
 
@@ -385,7 +399,8 @@ func subagentSystemPrompt(mode string) string {
 Rules:
 - Return evidence, not broad plans.
 - Use only the tools needed to answer the assigned task.
-- If browser_* tools are available and the task involves rendered web pages, prefer browser_navigate/browser_snapshot over shell curl scraping.
+- If browser_* tools are available and the task involves rendered web pages, use the browser tools instead of shell/curl/python scraping.
+- For rendered web extraction: call browser_navigate first (use wait_until=networkidle for SPAs), then answer directly from the returned snapshot when it contains the requested facts. Call browser_wait/browser_snapshot at most once or twice when specific requested text is missing. Do not click through tabs, paginate, or broaden into a site-wide audit unless the task explicitly asks for that.
 - Prefer direct inspection of likely files over repository-wide search. Avoid broad find/grep sweeps when the task already names files, symbols, or modules.
 - Stop once you have enough evidence for a useful answer. Do not spend the whole budget just to make the review exhaustive.
 - If a tool result says a tool or turn budget was reached, immediately produce the final report from the evidence already gathered.
