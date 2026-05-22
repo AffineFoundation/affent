@@ -548,6 +548,94 @@ func TestRunner_EndToEnd_MaskedVerificationGuardBlocks(t *testing.T) {
 	}
 }
 
+// TestRunner_EndToEnd_ToolArgRepairFixesMalformedJSON pins the third
+// runtime mechanism through the eval harness: repairToolCallArgsForDispatch
+// turns model-emitted malformed JSON ({"path":"README.md",} — trailing
+// comma) into valid args before the tool sees them. Without this guard,
+// small models that emit slightly-off JSON brick the turn; with it,
+// they recover and the tool runs.
+//
+// Trace fields ArgsRepaired and RepairNotes were added specifically so
+// the eval harness can detect this from outside. This test closes the
+// loop by exercising the runtime, the trace plumbing, and the
+// ToolRequestRepaired check all together end-to-end.
+func TestRunner_EndToEnd_ToolArgRepairFixesMalformedJSON(t *testing.T) {
+	// Turn 1: model emits read_file with TRAILING COMMA in the args
+	// JSON — a real model misbehavior shape. parseToolArgJSON rejects
+	// it; stripTrailingCommas + parseToolArgJSON repairs it.
+	//
+	// The arguments string is sent as one streamed chunk. The literal
+	// JSON body the model "wrote" is: {"path":"README.md",} — note
+	// the comma before the closing brace.
+	turn1 := []string{
+		`{"choices":[{"delta":{"role":"assistant","tool_calls":[{"index":0,"id":"r1","type":"function","function":{"name":"read_file","arguments":""}}]},"finish_reason":null}]}`,
+		`{"choices":[{"delta":{"tool_calls":[{"index":0,"function":{"arguments":"{\"path\":\"README.md\",}"}}]},"finish_reason":null}]}`,
+		`{"choices":[{"delta":{},"finish_reason":"tool_calls"}]}`,
+		`[DONE]`,
+	}
+	turn2 := []string{
+		`{"choices":[{"delta":{"role":"assistant","content":"The README is the one-liner: hello agent."},"finish_reason":"stop"}]}`,
+		`[DONE]`,
+	}
+	srv := newScriptedLLM(t, [][]string{turn1, turn2})
+
+	scenario := Scenario{
+		Name:        "tool_arg_repair_trailing_comma",
+		Description: "runtime repairs trailing-comma JSON before tool dispatch; trace marks ArgsRepaired=true",
+		Prompt:      "read README.md",
+		Setup: func(workspaceDir string) error {
+			return os.WriteFile(filepath.Join(workspaceDir, "README.md"), []byte("hello agent"), 0o644)
+		},
+		MaxTurnSteps: 4,
+		Checks: []Check{
+			TurnEndedCleanly(),
+			ToolCalled("read_file", nil),
+			// The framework's existing check that asserts this exact
+			// mechanism — passes when ArgsRepaired || Canonicalized
+			// is true for any call matching the tool name.
+			ToolRequestRepaired("read_file"),
+			FinalTextContains("hello agent"),
+		},
+	}
+
+	runner := &Runner{
+		LLM:            agent.NewLLMClient(srv.URL, "", "fake-model"),
+		MaxTurnSteps:   4,
+		PerCallTimeout: 5 * time.Second,
+		RunTimeout:     15 * time.Second,
+		Log:            zerolog.Nop(),
+	}
+
+	out, err := runner.Run(context.Background(), scenario)
+	if err != nil {
+		t.Fatalf("Runner.Run: %v", err)
+	}
+	if !out.Pass {
+		t.Errorf("expected all checks to pass; failed: %v", out.FailedChecks())
+		for _, r := range out.Results {
+			t.Logf("  %s: pass=%v detail=%s", r.Check, r.Pass, r.Detail)
+		}
+	}
+
+	// Trace-shape assertions for diagnostic value when the mechanism IS broken.
+	if len(out.Trace.Tools) != 1 {
+		t.Fatalf("expected exactly one tool call (read_file with repaired args); got %d", len(out.Trace.Tools))
+	}
+	tc := out.Trace.Tools[0]
+	if !tc.ArgsRepaired {
+		t.Errorf("ArgsRepaired must be true after the runtime fixed the trailing comma; got false")
+	}
+	if tc.IsErr {
+		t.Errorf("repaired call should dispatch successfully; got IsErr=true result=%q", tc.Result)
+	}
+	if got, _ := tc.Args["path"].(string); got != "README.md" {
+		t.Errorf("repaired args should have path=README.md; got %q (full args=%v)", got, tc.Args)
+	}
+	if !strings.Contains(tc.Result, "hello agent") {
+		t.Errorf("repaired call's tool result should contain the file contents; got %q", tc.Result)
+	}
+}
+
 // TestRunner_RequiresLLM pins the early-validation: Runner without an
 // LLM client returns a clear error instead of nil-deref'ing inside
 // EnsureSystemPrompt / SendUser.
