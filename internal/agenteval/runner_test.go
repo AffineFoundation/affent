@@ -636,6 +636,90 @@ func TestRunner_EndToEnd_ToolArgRepairFixesMalformedJSON(t *testing.T) {
 	}
 }
 
+// TestRunner_EndToEnd_ToolSchemaCoercionFixesScalarType pins the
+// fourth runtime mechanism end-to-end: repairToolArgsWithSchema
+// coerces string-typed values to integers / booleans / etc. when the
+// tool schema declares the target type. This catches the common
+// small-model failure where every JSON value comes out a string —
+// without coercion, shell.timeout_sec=\"5\" would be decoded into an
+// int and silently end up as zero, then the tool runs without a
+// caller-set timeout and the model misreads what happened.
+//
+// Companion to the JSON-repair test (e379960). Both produce
+// ArgsRepaired=true on the captured ToolCall and trip the framework's
+// ToolRequestRepaired check — but they exercise different code paths
+// (parseToolArgJSON salvage vs repairToolArgsWithSchema coercion).
+func TestRunner_EndToEnd_ToolSchemaCoercionFixesScalarType(t *testing.T) {
+	// The args body is valid JSON, but timeout_sec is sent as the
+	// string \"5\" instead of the integer 5. Schema repair coerces it.
+	turn1 := []string{
+		`{"choices":[{"delta":{"role":"assistant","tool_calls":[{"index":0,"id":"sh1","type":"function","function":{"name":"shell","arguments":""}}]},"finish_reason":null}]}`,
+		`{"choices":[{"delta":{"tool_calls":[{"index":0,"function":{"arguments":"{\"command\":\"echo agent\",\"timeout_sec\":\"5\"}"}}]},"finish_reason":null}]}`,
+		`{"choices":[{"delta":{},"finish_reason":"tool_calls"}]}`,
+		`[DONE]`,
+	}
+	turn2 := []string{
+		`{"choices":[{"delta":{"role":"assistant","content":"Shell printed: agent."},"finish_reason":"stop"}]}`,
+		`[DONE]`,
+	}
+	srv := newScriptedLLM(t, [][]string{turn1, turn2})
+
+	scenario := Scenario{
+		Name:        "tool_schema_coercion_string_to_int",
+		Description: "runtime coerces shell.timeout_sec=\"5\" string to integer 5 before dispatch",
+		Prompt:      "run echo agent",
+		MaxTurnSteps: 4,
+		Checks: []Check{
+			TurnEndedCleanly(),
+			ToolCalled("shell", nil),
+			ToolRequestRepaired("shell"),
+			FinalTextContains("agent"),
+		},
+	}
+
+	runner := &Runner{
+		LLM:            agent.NewLLMClient(srv.URL, "", "fake-model"),
+		MaxTurnSteps:   4,
+		PerCallTimeout: 5 * time.Second,
+		RunTimeout:     15 * time.Second,
+		Log:            zerolog.Nop(),
+	}
+
+	out, err := runner.Run(context.Background(), scenario)
+	if err != nil {
+		t.Fatalf("Runner.Run: %v", err)
+	}
+	if !out.Pass {
+		t.Errorf("expected all checks to pass; failed: %v", out.FailedChecks())
+		for _, r := range out.Results {
+			t.Logf("  %s: pass=%v detail=%s", r.Check, r.Pass, r.Detail)
+		}
+	}
+
+	if len(out.Trace.Tools) != 1 {
+		t.Fatalf("expected exactly one shell call; got %d", len(out.Trace.Tools))
+	}
+	tc := out.Trace.Tools[0]
+	if !tc.ArgsRepaired {
+		t.Errorf("ArgsRepaired must be true after schema coercion; got false (args=%v notes=%v)",
+			tc.Args, tc.RepairNotes)
+	}
+	if tc.IsErr {
+		t.Errorf("coerced call should dispatch successfully; got IsErr=true result=%q", tc.Result)
+	}
+	// After coercion, timeout_sec should be a json.Number / float64 / int
+	// (encoding/json's map decode picks float64 for unmarshaled numbers).
+	// Either shape is fine — the assertion is "no longer the string
+	// '5'". A regression that disables coercion would leave it as a
+	// string, which is what this catches.
+	if got, isString := tc.Args["timeout_sec"].(string); isString {
+		t.Errorf("timeout_sec still a string after coercion: %q (schema_repair didn't fire)", got)
+	}
+	if !strings.Contains(tc.Result, "agent") {
+		t.Errorf("shell result should contain 'agent' (echo output); got %q", tc.Result)
+	}
+}
+
 // TestRunner_RequiresLLM pins the early-validation: Runner without an
 // LLM client returns a clear error instead of nil-deref'ing inside
 // EnsureSystemPrompt / SendUser.
