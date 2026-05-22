@@ -7,12 +7,13 @@ import (
 	"fmt"
 	"io"
 	"net"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"time"
 
-	"github.com/affinefoundation/affent/internal/textutil"
 	"github.com/affinefoundation/affent/internal/sse"
+	"github.com/affinefoundation/affent/internal/textutil"
 	"github.com/google/uuid"
 	"github.com/rs/zerolog"
 )
@@ -466,12 +467,25 @@ func (l *Loop) consumeAndPersist(ctx context.Context, turnID string, stream <-ch
 			TurnID: turnID, Text: finish.Final.ReasoningContent,
 		})
 	}
-	if sawText {
+	visibleText := finish.Final.Content
+	if visibleText == "" && len(finish.Final.ToolCalls) == 0 && finish.Final.ReasoningContent != "" {
+		// Some OpenAI-compatible reasoning models (observed with Qwen
+		// 3.x thinking endpoints) occasionally place the terminal answer
+		// only in reasoning_content. A completed turn with no
+		// message.done is unusable for CLI / HTTP callers, so surface
+		// that text as a last-resort visible answer only when there are
+		// no tool calls left to execute.
+		visibleText = strings.TrimSpace(finish.Final.ReasoningContent)
+		if finish.Final.Content == "" {
+			finish.Final.Content = visibleText
+		}
+	}
+	if visibleText != "" {
 		// Close the streaming bubble so the UI's accumulator marks the
 		// assistant text done before the next assistant message starts.
 		l.publish(sse.TypeMessageDone, sse.MessageDonePayload{
 			TurnID:       turnID,
-			Text:         finish.Final.Content,
+			Text:         visibleText,
 			FinishReason: finish.Reason,
 		})
 	}

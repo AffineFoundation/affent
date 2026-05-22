@@ -1,12 +1,15 @@
 package agent
 
 import (
+	"context"
+	"encoding/json"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
 	"unicode/utf8"
 
+	"github.com/affinefoundation/affent/internal/sse"
 	"github.com/rs/zerolog"
 )
 
@@ -44,6 +47,68 @@ func TestEnsureSystemPrompt_EmptyConv_NoMemory(t *testing.T) {
 	}
 	if msgs[0].Role != "system" || msgs[0].Content != "custom prompt" {
 		t.Fatalf("system message wrong: %+v", msgs[0])
+	}
+}
+
+func TestConsumeAndPersist_ReasoningOnlyTerminalEmitsMessageDone(t *testing.T) {
+	conv := newTestConv(t)
+	events := make(chan sse.Event, 8)
+	l := &Loop{Conv: conv, Events: events, Log: zerolog.Nop()}
+
+	stream := make(chan StreamEvent, 1)
+	stream <- StreamEvent{Finish: &FinishInfo{
+		Reason: "stop",
+		Final: ChatMessage{
+			Role:             "assistant",
+			ReasoningContent: "  final answer from reasoning channel  ",
+		},
+	}}
+	close(stream)
+
+	finish, sawText, err := l.consumeAndPersist(context.Background(), "turn-1", stream)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if sawText {
+		t.Fatal("reasoning-only output must not count as streamed visible text")
+	}
+	if finish.Final.Content != "final answer from reasoning channel" {
+		t.Fatalf("reasoning fallback did not populate visible content: %+v", finish.Final)
+	}
+
+	var gotMessageDone string
+	var gotThinkingDone string
+	for i := 0; i < 2; i++ {
+		select {
+		case ev := <-events:
+			switch ev.Type {
+			case sse.TypeMessageDone:
+				var p sse.MessageDonePayload
+				if err := json.Unmarshal(ev.Data, &p); err != nil {
+					t.Fatal(err)
+				}
+				gotMessageDone = p.Text
+			case sse.TypeThinkingDone:
+				var p sse.ThinkingDonePayload
+				if err := json.Unmarshal(ev.Data, &p); err != nil {
+					t.Fatal(err)
+				}
+				gotThinkingDone = p.Text
+			}
+		default:
+			t.Fatal("expected thinking.done and message.done events")
+		}
+	}
+	if gotThinkingDone != "  final answer from reasoning channel  " {
+		t.Fatalf("thinking.done changed reasoning payload: %q", gotThinkingDone)
+	}
+	if gotMessageDone != "final answer from reasoning channel" {
+		t.Fatalf("message.done fallback = %q", gotMessageDone)
+	}
+
+	msgs := conv.Snapshot()
+	if len(msgs) != 1 || msgs[0].Content != "final answer from reasoning channel" {
+		t.Fatalf("conversation did not persist fallback visible content: %+v", msgs)
 	}
 }
 
