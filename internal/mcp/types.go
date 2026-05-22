@@ -38,8 +38,14 @@ import "encoding/json"
 type ServerSpec struct {
 	// Name is a short label like "fs" or "git". Becomes the prefix on
 	// every tool the server exports (e.g. "fs_read_file") so tool names
-	// don't collide across servers.
+	// don't collide across servers when Namespace is unset or true.
 	Name string `json:"name"`
+
+	// Namespace controls whether tool names are advertised to the model
+	// as "<Name>_<tool>". Nil preserves the historical default of true.
+	// Set false only when the target model is tuned for unprefixed MCP
+	// tool names; the caller is then responsible for avoiding collisions.
+	Namespace *bool `json:"namespace,omitempty"`
 
 	// --- stdio transport ---
 

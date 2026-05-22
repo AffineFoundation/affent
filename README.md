@@ -153,7 +153,27 @@ an executor boundary. Production deployments should run tools inside a real
 sandbox such as a container, VM, or remote execution environment.
 
 MCP servers can be registered over stdio or streamable HTTP. Their tools are
-namespaced and become part of the same registry as Affent's built-in tools.
+namespaced by default and become part of the same registry as Affent's built-in
+tools:
+
+```json
+{
+  "servers": [
+    {
+      "name": "AMap",
+      "command": "python",
+      "args": ["amap_server.py"]
+    }
+  ]
+}
+```
+
+With the default namespace behavior, a server tool such as `poi_search` is
+advertised to the model as `AMap_poi_search`. For models fine-tuned around raw
+MCP tool names, set `"namespace": false` on a server, or pass
+`--mcp-no-namespace` to `affentctl` to disable MCP name prefixes for every
+configured server. When prefixes are disabled, Affent rejects duplicate final
+tool names at startup instead of silently overwriting a tool.
 
 ## Subagent
 

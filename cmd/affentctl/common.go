@@ -84,7 +84,8 @@ type commonFlags struct {
 	sessionID    string // explicit; empty means "use --continue or new"
 	continueLast bool   // pick most recent session under workspace
 
-	mcpConfigPath string // path to MCP server config JSON (optional)
+	mcpConfigPath  string // path to MCP server config JSON (optional)
+	mcpNoNamespace bool   // advertise MCP tools under their raw MCP tool names
 
 	// executor selects the shell-tool backend.
 	//   "local"            — run on the host (default; current behavior)
@@ -127,6 +128,7 @@ func (c *commonFlags) bind(fs *flag.FlagSet) {
 	fs.StringVar(&c.sessionID, "session-id", "", "resume the named session (under --workspace/.affentctl/)")
 	fs.BoolVar(&c.continueLast, "continue", false, "resume the most recent session under --workspace")
 	fs.StringVar(&c.mcpConfigPath, "mcp-config", "", "path to MCP server config JSON ({\"servers\":[{...}]}) (env: AFFENTCTL_MCP_CONFIG)")
+	fs.BoolVar(&c.mcpNoNamespace, "mcp-no-namespace", false, "advertise MCP tools to the model under their original names (no <server>_ prefix); use with models tuned for unprefixed MCP tool names")
 	fs.IntVar(&c.compactTrigger, "compact-trigger", 240, "compact conversation when message count exceeds this. 0 / negative → fall back to agent runtime's default (240). Reactive compaction (on context-overflow errors) is unaffected.")
 	fs.IntVar(&c.compactKeepLast, "compact-keep-last", 10, "messages preserved verbatim at the tail of the conversation when compacting")
 	fs.StringVar(&c.executor, "executor", "local", "shell-tool backend: 'local' (host; no isolation), or 'docker:<container_id>' (exec into an already-running container, e.g. 'docker:abc123def'; file tools also route through docker so they see the container's filesystem). Caller manages container lifecycle. (env: AFFENTCTL_EXECUTOR)")
@@ -214,10 +216,11 @@ type fileConfig struct {
 		Trigger  *int `json:"trigger"`
 		KeepLast *int `json:"keep_last"`
 	} `json:"compact"`
-	SessionID *string `json:"session_id"`
-	Continue  *bool   `json:"continue"`
-	MCPConfig *string `json:"mcp_config"`
-	Executor  *string `json:"executor"`
+	SessionID      *string `json:"session_id"`
+	Continue       *bool   `json:"continue"`
+	MCPConfig      *string `json:"mcp_config"`
+	MCPNoNamespace *bool   `json:"mcp_no_namespace"`
+	Executor       *string `json:"executor"`
 	// Sampling forwarded to upstream. Kept as strings to mirror the CLI
 	// flags and preserve the "unset vs explicit 0" distinction that
 	// pointers give us at the wire layer.
@@ -337,6 +340,7 @@ func loadConfigFile(c *commonFlags, fs *flag.FlagSet) error {
 	setString("session-id", &c.sessionID, cfg.SessionID)
 	setBool("continue", &c.continueLast, cfg.Continue)
 	setString("mcp-config", &c.mcpConfigPath, cfg.MCPConfig)
+	setBool("mcp-no-namespace", &c.mcpNoNamespace, cfg.MCPNoNamespace)
 	setString("executor", &c.executor, cfg.Executor)
 	setString("temperature", &c.temperature, cfg.Temperature)
 	setString("top-p", &c.topP, cfg.TopP)
@@ -530,9 +534,9 @@ func setupLoop(c commonFlags) (*loopBundle, int) {
 	}
 
 	// Optional MCP servers, registered onto the same tool registry as
-	// the builtins. Tool names are namespaced "<server>_<tool>" so they
-	// can't collide with the builtins or with each other.
-	mcpClients, err := startMCP(c.mcpConfigPath, tools, log)
+	// the builtins. Tool names are namespaced by default so they can't
+	// collide with the builtins or with each other.
+	mcpClients, err := startMCP(c.mcpConfigPath, c.mcpNoNamespace, tools, log)
 	if err != nil {
 		log.Error().Err(err).Msg("mcp setup")
 		_ = traceClose()
@@ -663,7 +667,7 @@ type mcpConfig struct {
 	Servers []mcp.ServerSpec `json:"servers"`
 }
 
-func startMCP(configPath string, reg *agent.Registry, log zerolog.Logger) ([]*mcp.Client, error) {
+func startMCP(configPath string, noNamespace bool, reg *agent.Registry, log zerolog.Logger) ([]*mcp.Client, error) {
 	if configPath == "" {
 		return nil, nil
 	}
@@ -677,6 +681,12 @@ func startMCP(configPath string, reg *agent.Registry, log zerolog.Logger) ([]*mc
 	}
 	if len(cfg.Servers) == 0 {
 		return nil, nil
+	}
+	if noNamespace {
+		disabled := false
+		for i := range cfg.Servers {
+			cfg.Servers[i].Namespace = &disabled
+		}
 	}
 	// Bound the launch + handshake total. Each Start has its own 30s
 	// initialize timeout; we wrap the loop in a slightly larger budget
