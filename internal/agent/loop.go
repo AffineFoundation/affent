@@ -72,6 +72,7 @@ type Loop struct {
 	Events       chan<- sse.Event
 	Log          zerolog.Logger
 	MaxTurnSteps int // assistant<->tool round trips per user turn; zero falls back to DefaultMaxTurnSteps
+	MaxToolCalls int // total tool calls per user turn; zero means uncapped
 
 	// PerCallTimeout overrides DefaultPerCallTimeout for this loop.
 	// Zero means "use the default".
@@ -130,6 +131,12 @@ type Loop struct {
 	// feature steer small models from "one more verification" back to a
 	// final answer without hard-coding feature names in Loop.
 	PostToolPolicy *PostToolPolicy
+
+	// FinalNoToolsOnMaxTurns gives the model one final no-tool response
+	// after the tool budget is exhausted. This is useful for bounded
+	// child agents: when inspection budget runs out, they should
+	// summarize partial evidence instead of trying one more tool call.
+	FinalNoToolsOnMaxTurns bool
 }
 
 type FirstToolPolicy struct {
@@ -381,13 +388,15 @@ func (l *Loop) runTurn(ctx context.Context, turnID, userText string) {
 	finishedNaturally := false
 
 	toolRounds := 0
+	toolCallsUsed := 0
+	toolBudgetExhausted := false
 	for {
 		if ctx.Err() != nil {
 			endReason = sse.TurnEndCancelled
 			break
 		}
 
-		final, reason, err := l.runStep(ctx, turnID)
+		final, reason, err := l.runStep(ctx, turnID, l.toolDefs())
 		if err != nil {
 			endReason = reason
 			break
@@ -404,6 +413,22 @@ func (l *Loop) runTurn(ctx context.Context, turnID, userText string) {
 		}
 		if toolRounds >= steps {
 			l.appendSkippedToolResults(turnID, final.Final.ToolCalls, "(max_turns reached before this tool ran)")
+			if l.FinalNoToolsOnMaxTurns {
+				final, reason, err := l.runStep(ctx, turnID, nil)
+				if err != nil {
+					endReason = reason
+					break
+				}
+				if final != nil {
+					totalIn += final.InputTokens
+					totalOut += final.OutputTokens
+					if len(final.Final.ToolCalls) == 0 {
+						finishedNaturally = true
+						break
+					}
+					l.appendSkippedToolResults(turnID, final.Final.ToolCalls, "(max_turns reached; final no-tool answer requested)")
+				}
+			}
 			endReason = sse.TurnEndMaxTurns
 			break
 		}
@@ -411,6 +436,11 @@ func (l *Loop) runTurn(ctx context.Context, turnID, userText string) {
 		// Execute every tool call in order, append each result to
 		// conversation, then loop back to ask the model for the next step.
 		for i, tc := range final.Final.ToolCalls {
+			if l.MaxToolCalls > 0 && toolCallsUsed >= l.MaxToolCalls {
+				l.appendSkippedToolResults(turnID, final.Final.ToolCalls[i:], "(tool call budget reached before this tool ran)")
+				toolBudgetExhausted = true
+				break
+			}
 			// Honor cancellation BETWEEN tool calls within a batch, not
 			// just between turn steps. Without this, a Loop.Cancel
 			// fired mid-batch still runs every remaining tool — a
@@ -466,6 +496,7 @@ func (l *Loop) runTurn(ctx context.Context, turnID, userText string) {
 				}); err != nil {
 					l.Log.Error().Err(err).Str("call_id", callID).Msg("conv append tool guard result")
 				}
+				toolCallsUsed++
 				continue
 			}
 			if firstToolPolicy != nil && tc.Function.Name == firstToolPolicy.ToolName {
@@ -490,6 +521,7 @@ func (l *Loop) runTurn(ctx context.Context, turnID, userText string) {
 				}); err != nil {
 					l.Log.Error().Err(err).Str("call_id", callID).Msg("conv append post-tool guard result")
 				}
+				toolCallsUsed++
 				continue
 			}
 			result, isErr := l.Tools.dispatch(ctx, tc.Function.Name, args)
@@ -517,9 +549,30 @@ func (l *Loop) runTurn(ctx context.Context, turnID, userText string) {
 				// the loud failure we want when the disk is sick.
 				l.Log.Error().Err(err).Str("call_id", callID).Msg("conv append tool result")
 			}
+			toolCallsUsed++
 			if postToolPolicy != nil && tc.Function.Name == postToolPolicy.ToolName && postToolPolicy.shouldActivate(result, isErr) {
 				postToolActive = true
 			}
+		}
+		if toolBudgetExhausted {
+			if l.FinalNoToolsOnMaxTurns {
+				final, reason, err := l.runStep(ctx, turnID, nil)
+				if err != nil {
+					endReason = reason
+					break
+				}
+				if final != nil {
+					totalIn += final.InputTokens
+					totalOut += final.OutputTokens
+					if len(final.Final.ToolCalls) == 0 {
+						finishedNaturally = true
+						break
+					}
+					l.appendSkippedToolResults(turnID, final.Final.ToolCalls, "(tool call budget reached; final no-tool answer requested)")
+				}
+			}
+			endReason = sse.TurnEndMaxTurns
+			break
 		}
 		toolRounds++
 	}
@@ -767,7 +820,14 @@ var ErrTurnInFlight = errors.New("turn already in flight")
 // the assistant message from deltas may see the earlier fragment as
 // stale; the persisted ChatMessage only reflects the successful
 // attempt.
-func (l *Loop) runStep(ctx context.Context, turnID string) (*FinishInfo, string, error) {
+func (l *Loop) toolDefs() []ToolDef {
+	if l.Tools == nil {
+		return nil
+	}
+	return l.Tools.Defs()
+}
+
+func (l *Loop) runStep(ctx context.Context, turnID string, toolDefs []ToolDef) (*FinishInfo, string, error) {
 	timeout := l.perCallTimeout()
 	maxRetries := l.maxTransientRetries()
 	backoff := l.transientBackoff()
@@ -783,7 +843,7 @@ func (l *Loop) runStep(ctx context.Context, turnID string) (*FinishInfo, string,
 		l.maybeCompact(ctx, false)
 
 		callCtx, callCancel := context.WithTimeout(ctx, timeout)
-		stream, err := l.LLM.Chat(callCtx, l.Conv.Snapshot(), l.Tools.Defs())
+		stream, err := l.LLM.Chat(callCtx, l.Conv.Snapshot(), toolDefs)
 		var final *FinishInfo
 		var perr error
 		var sawMessage bool

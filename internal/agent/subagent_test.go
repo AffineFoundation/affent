@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/affinefoundation/affent/internal/executor"
+	"github.com/affinefoundation/affent/internal/sse"
 	"github.com/rs/zerolog"
 )
 
@@ -61,7 +62,7 @@ func TestSubagentRun_ReturnsStructuredReport(t *testing.T) {
 	}
 }
 
-func TestSubagentRun_MaxTurnsReturnsToolErrorWithJSON(t *testing.T) {
+func TestSubagentRun_MaxTurnsReturnsStructuredPartialReport(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "text/event-stream")
 		w.WriteHeader(http.StatusOK)
@@ -80,21 +81,43 @@ func TestSubagentRun_MaxTurnsReturnsToolErrorWithJSON(t *testing.T) {
 	})
 	tool, _ := reg.Get("subagent_run")
 	out, err := tool.Execute(context.Background(), json.RawMessage(`{"mode":"explore","task":"loop","max_turns":1}`))
-	if err == nil {
-		t.Fatal("expected max_turns to return a tool error")
-	}
-	if !strings.Contains(err.Error(), "max_turns") {
-		t.Fatalf("unexpected error: %v", err)
+	if err != nil {
+		t.Fatalf("max_turns is a structured subagent result, not a transport/tool error: %v\n%s", err, out)
 	}
 	var resp struct {
 		OK            bool   `json:"ok"`
 		TurnEndReason string `json:"turn_end_reason"`
+		Report        string `json:"report"`
 	}
 	if err := json.Unmarshal([]byte(out), &resp); err != nil {
 		t.Fatalf("response should still be JSON: %v\n%s", err, out)
 	}
 	if resp.OK || resp.TurnEndReason != "max_turns" {
 		t.Fatalf("unexpected response: %+v", resp)
+	}
+	if !strings.Contains(resp.Report, "Subagent stopped before producing a complete final answer") {
+		t.Fatalf("partial report should explain the incomplete result:\n%s", resp.Report)
+	}
+	if !strings.Contains(resp.Report, "list_files") {
+		t.Fatalf("partial report should include attempted tool evidence:\n%s", resp.Report)
+	}
+}
+
+func TestSubagentPostPolicyDoesNotActivateForPartialMaxTurnsReport(t *testing.T) {
+	resp := subagentResponse{
+		Report:        "Conclusion:\nSubagent stopped before producing a complete final answer.",
+		OK:            false,
+		TurnEndReason: sse.TurnEndMaxTurns,
+	}
+	raw, err := json.Marshal(resp)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if SubagentPostToolPolicy().shouldActivate(string(raw), false) {
+		t.Fatal("partial max_turns subagent reports should allow focused parent-side verification")
+	}
+	if SubagentPostToolPolicy().shouldActivate(string(raw), true) {
+		t.Fatal("transport/tool errors should not activate post-tool policy")
 	}
 }
 
@@ -167,6 +190,16 @@ func TestWithSubagentSystemGuidance(t *testing.T) {
 	}
 	if strings.Count(WithSubagentSystemGuidance(got), "Subagent delegation:") != 1 {
 		t.Fatal("guidance should not be appended twice")
+	}
+}
+
+func TestSubagentUserPromptIncludesToolBudget(t *testing.T) {
+	got := subagentUserPrompt("review", "inspect auth", "/workspace", 6)
+	if !strings.Contains(got, "Tool budget: at most 6 tool calls/rounds") {
+		t.Fatalf("prompt missing tool budget guidance:\n%s", got)
+	}
+	if !strings.Contains(got, "Stop early when evidence is sufficient") {
+		t.Fatalf("prompt missing early-stop guidance:\n%s", got)
 	}
 }
 
