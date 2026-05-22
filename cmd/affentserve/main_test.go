@@ -90,6 +90,59 @@ func TestParseFlagsAndConfig_ModelFromEnv(t *testing.T) {
 	}
 }
 
+// TestParseFlagsAndConfig_EnvBeatsConfigFile pins the documented
+// precedence after the Resolve re-ordering: env > config file. The
+// previous code applied env only when both CLI and config left a
+// field empty, which meant a deploy overriding a stale config-file
+// model via AFFENTSERVE_MODEL silently kept the config value.
+// affentctl's docs and the README both promise the 12factor-style
+// "env beats config" ordering, so affentserve has to match.
+func TestParseFlagsAndConfig_EnvBeatsConfigFile(t *testing.T) {
+	dir := t.TempDir()
+	cfgPath := filepath.Join(dir, "cfg.json")
+	if err := os.WriteFile(cfgPath, []byte(`{
+        "base_url": "https://config-host/v1",
+        "model":    "config-model",
+        "api_key":  "config-key"
+    }`), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("AFFENTSERVE_BASE_URL", "https://env-host/v1")
+	t.Setenv("AFFENTSERVE_MODEL", "env-model")
+	t.Setenv("AFFENTSERVE_API_KEY", "env-key")
+
+	cfg, err := parseFlagsAndConfig([]string{"--config", cfgPath})
+	if err != nil {
+		t.Fatalf("parseFlagsAndConfig: %v", err)
+	}
+	if cfg.BaseURL != "https://env-host/v1" {
+		t.Errorf("env should override config base_url; got %q", cfg.BaseURL)
+	}
+	if cfg.Model != "env-model" {
+		t.Errorf("env should override config model; got %q", cfg.Model)
+	}
+	if cfg.APIKey != "env-key" {
+		t.Errorf("env should override config api_key; got %q", cfg.APIKey)
+	}
+}
+
+// TestParseFlagsAndConfig_CLIBeatsEnv pins the top of the precedence
+// chain: --model on the command line wins over AFFENTSERVE_MODEL
+// even when env is also set. Standard CLI-tops-everything posture.
+func TestParseFlagsAndConfig_CLIBeatsEnv(t *testing.T) {
+	t.Setenv("AFFENTSERVE_BASE_URL", "https://env/v1")
+	t.Setenv("AFFENTSERVE_MODEL", "env-model")
+	cfg, err := parseFlagsAndConfig([]string{
+		"--model", "cli-model",
+	})
+	if err != nil {
+		t.Fatalf("parseFlagsAndConfig: %v", err)
+	}
+	if cfg.Model != "cli-model" {
+		t.Errorf("--model should win over AFFENTSERVE_MODEL; got %q", cfg.Model)
+	}
+}
+
 // TestParseFlagsAndConfig_RetryFlagsReachConfig pins both new retry
 // knobs end-to-end. --max-transient-retries=-1 is the "disable
 // retries" case (some providers handle retries themselves and a

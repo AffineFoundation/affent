@@ -210,8 +210,16 @@ func LoadConfig(path string) (Config, error) {
 	return cfg, nil
 }
 
-// Resolve fills in defaults and reads supporting env vars. Idempotent
-// once values are set.
+// Resolve fills in defaults and applies env-var overrides. Env beats
+// the config file (12factor convention; affentctl already worked this
+// way). Idempotent.
+//
+// Precedence the surrounding code constructs:
+//   CLI flag  >  env var  >  config file  >  built-in default
+//
+// Resolve only handles the env > config > default tail. main.go's
+// CLI-override block runs AFTER Resolve so CLI flags still win over
+// whatever env produced.
 func (c *Config) Resolve() error {
 	if c.Listen == "" {
 		c.Listen = defaultListen
@@ -219,23 +227,29 @@ func (c *Config) Resolve() error {
 	if c.MaxSessions <= 0 {
 		c.MaxSessions = defaultMaxSessions
 	}
-	if c.APIKey == "" {
-		c.APIKey = os.Getenv("AFFENTSERVE_API_KEY")
+	if v := os.Getenv("AFFENTSERVE_BASE_URL"); v != "" {
+		c.BaseURL = v
 	}
-	if c.AuthToken == "" {
-		c.AuthToken = os.Getenv("AFFENTSERVE_AUTH_TOKEN")
+	if v := os.Getenv("AFFENTSERVE_API_KEY"); v != "" {
+		c.APIKey = v
 	}
-	if c.WorkspaceRoot == "" {
-		c.WorkspaceRoot = os.Getenv("AFFENTSERVE_WORKSPACE_ROOT")
+	if v := os.Getenv("AFFENTSERVE_MODEL"); v != "" {
+		c.Model = v
 	}
-	if c.MemoryRoot == "" {
-		c.MemoryRoot = os.Getenv("AFFENTSERVE_MEMORY_ROOT")
+	if v := os.Getenv("AFFENTSERVE_AUTH_TOKEN"); v != "" {
+		c.AuthToken = v
+	}
+	if v := os.Getenv("AFFENTSERVE_WORKSPACE_ROOT"); v != "" {
+		c.WorkspaceRoot = v
+	}
+	if v := os.Getenv("AFFENTSERVE_MEMORY_ROOT"); v != "" {
+		c.MemoryRoot = v
 	}
 	if c.SessionIdleTTL == "" {
 		c.SessionIdleTTL = defaultSessionIdleTTL.String()
 	}
-	if c.SessionRetention == "" {
-		c.SessionRetention = os.Getenv("AFFENTSERVE_SESSION_RETENTION")
+	if v := os.Getenv("AFFENTSERVE_SESSION_RETENTION"); v != "" {
+		c.SessionRetention = v
 	}
 	return nil
 }

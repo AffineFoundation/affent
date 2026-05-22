@@ -101,6 +101,13 @@ func parseFlagsAndConfig(argv []string) (Config, error) {
 		return cfg, err
 	}
 
+	// Resolve runs BEFORE the CLI-override block so env vars correctly
+	// beat config-file values (12factor); CLI then wins over env.
+	// Final precedence: CLI > env > config > built-in defaults.
+	if err := cfg.Resolve(); err != nil {
+		return cfg, err
+	}
+
 	// Track which flags the user actually passed so we can distinguish
 	// "explicit override" from "default left untouched". The earlier
 	// check, `fs.Lookup(...).Value.String() == "true"`, only fired
@@ -109,22 +116,18 @@ func parseFlagsAndConfig(argv []string) (Config, error) {
 	setFlags := map[string]bool{}
 	fs.Visit(func(f *flag.Flag) { setFlags[f.Name] = true })
 
-	// CLI flags override file values when set (non-zero / non-empty).
+	// CLI flags override file/env values when set (non-zero / non-empty).
 	if *listen != "" {
 		cfg.Listen = *listen
 	}
 	if *baseURL != "" {
 		cfg.BaseURL = *baseURL
-	} else if cfg.BaseURL == "" {
-		cfg.BaseURL = os.Getenv("AFFENTSERVE_BASE_URL")
 	}
 	if *apiKey != "" {
 		cfg.APIKey = *apiKey
 	}
 	if *model != "" {
 		cfg.Model = *model
-	} else if cfg.Model == "" {
-		cfg.Model = os.Getenv("AFFENTSERVE_MODEL")
 	}
 	if *authToken != "" {
 		cfg.AuthToken = *authToken
@@ -224,9 +227,6 @@ func parseFlagsAndConfig(argv []string) (Config, error) {
 		cfg.MaxTokens = &n
 	}
 
-	if err := cfg.Resolve(); err != nil {
-		return cfg, err
-	}
 	if err := cfg.Validate(); err != nil {
 		return cfg, err
 	}
