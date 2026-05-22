@@ -71,6 +71,25 @@ func TestParseFlagsAndConfig_SubagentIsIndependentFromBuiltins(t *testing.T) {
 	}
 }
 
+// TestParseFlagsAndConfig_ModelFromEnv pins the env fallback for the
+// required Model field. affentserve already honored AFFENTSERVE_BASE_URL
+// when neither --base-url nor the config file set it, but Model had no
+// env path even though it's required at startup. Container deploys
+// expect both vars to work the same way; without this an operator
+// running `docker run -e AFFENTSERVE_MODEL=...` got "model is required"
+// at boot.
+func TestParseFlagsAndConfig_ModelFromEnv(t *testing.T) {
+	t.Setenv("AFFENTSERVE_BASE_URL", "https://example/v1")
+	t.Setenv("AFFENTSERVE_MODEL", "qwen-plus")
+	cfg, err := parseFlagsAndConfig(nil) // no CLI args, no config file
+	if err != nil {
+		t.Fatalf("parseFlagsAndConfig: %v", err)
+	}
+	if cfg.Model != "qwen-plus" {
+		t.Errorf("AFFENTSERVE_MODEL env should set cfg.Model; got %q", cfg.Model)
+	}
+}
+
 // TestParseFlagsAndConfig_CLIBoolUnsetKeepsFileValue pins the
 // opposite direction: when the user does NOT pass a bool flag, the
 // file's value stays intact.
