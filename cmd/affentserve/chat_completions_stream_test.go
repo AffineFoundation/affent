@@ -46,7 +46,7 @@ func TestStreamChatCompletion_OpenAIShape(t *testing.T) {
 	close(ch)
 
 	w := httptest.NewRecorder()
-	streamChatCompletion(w, context.Background(), sess, turnID, "fake-model", ch)
+	streamChatCompletion(w, context.Background(), sess, turnID, "fake-model", ch, false)
 
 	body := w.Body.String()
 
@@ -135,7 +135,7 @@ func TestStreamChatCompletion_NonStreamingWriter(t *testing.T) {
 	ch := make(chan sse.Event)
 	close(ch)
 	w := &noFlusherWriter{ResponseWriter: httptest.NewRecorder()}
-	streamChatCompletion(w, context.Background(), sess, "turn_x", "m", ch)
+	streamChatCompletion(w, context.Background(), sess, "turn_x", "m", ch, false)
 	rec := w.ResponseWriter.(*httptest.ResponseRecorder)
 	if got := rec.Result().StatusCode; got != http.StatusInternalServerError {
 		t.Errorf("non-flusher writer: status = %d, want 500", got)
@@ -166,7 +166,7 @@ func TestStreamChatCompletion_ErrorChunkOnNonRecoverable(t *testing.T) {
 	close(ch)
 
 	w := httptest.NewRecorder()
-	streamChatCompletion(w, context.Background(), sess, turnID, "m", ch)
+	streamChatCompletion(w, context.Background(), sess, turnID, "m", ch, false)
 	body := w.Body.String()
 
 	if strings.Contains(body, "transient blip") {
@@ -177,5 +177,77 @@ func TestStreamChatCompletion_ErrorChunkOnNonRecoverable(t *testing.T) {
 	}
 	if !strings.Contains(body, `"type":"loop_error"`) {
 		t.Errorf("error chunk should carry type=loop_error so SDK error handlers can branch; body:\n%s", body)
+	}
+}
+
+// TestStreamChatCompletion_IncludeUsageEmitsFinalChunk pins
+// OpenAI's stream_options.include_usage contract. When the client
+// opts in, the SSE stream must emit a final chunk between the last
+// finish_reason chunk and [DONE] with empty choices and a populated
+// usage object. SDKs that read this skip the empty-choices chunk
+// for content and parse usage from it instead.
+//
+// Without this, eval rigs streaming the chat-completions endpoint
+// had no way to read token counts — they'd have to issue a separate
+// /v1/stats poll, which doesn't correlate to a specific request.
+func TestStreamChatCompletion_IncludeUsageEmitsFinalChunk(t *testing.T) {
+	turnID := "turn_usage"
+	sess := &Session{ID: "sess_usage"}
+
+	ch := make(chan sse.Event, 8)
+	pushEvent(t, ch, sse.TypeMessageDelta, sse.MessageDeltaPayload{TurnID: turnID, Delta: "ok"})
+	pushEvent(t, ch, sse.TypeMessageDone, sse.MessageDonePayload{TurnID: turnID, Text: "ok", FinishReason: "stop"})
+	pushEvent(t, ch, sse.TypeUsage, sse.UsagePayload{TurnID: turnID, InputTokens: 123, OutputTokens: 45})
+	pushEvent(t, ch, sse.TypeTurnEnd, sse.TurnEndPayload{TurnID: turnID, Reason: sse.TurnEndCompleted})
+	close(ch)
+
+	w := httptest.NewRecorder()
+	streamChatCompletion(w, context.Background(), sess, turnID, "m", ch, true)
+	body := w.Body.String()
+
+	// The usage chunk MUST appear before [DONE].
+	usageIdx := strings.Index(body, `"usage":{`)
+	doneIdx := strings.Index(body, "data: [DONE]")
+	if usageIdx < 0 {
+		t.Fatalf("expected a usage chunk in the stream; body:\n%s", body)
+	}
+	if doneIdx < 0 {
+		t.Fatalf("expected [DONE] terminator; body:\n%s", body)
+	}
+	if usageIdx > doneIdx {
+		t.Errorf("usage chunk must come BEFORE [DONE]; usage@%d done@%d", usageIdx, doneIdx)
+	}
+	for _, want := range []string{
+		`"prompt_tokens":123`,
+		`"completion_tokens":45`,
+		`"total_tokens":168`,
+	} {
+		if !strings.Contains(body, want) {
+			t.Errorf("usage chunk missing %q; body:\n%s", want, body)
+		}
+	}
+}
+
+// TestStreamChatCompletion_NoUsageWithoutOptIn pins the opposite:
+// when the client did NOT set stream_options.include_usage, the
+// usage chunk must NOT appear — sending it to clients that didn't
+// ask for it might confuse SDKs that expect choices-bearing chunks
+// only.
+func TestStreamChatCompletion_NoUsageWithoutOptIn(t *testing.T) {
+	turnID := "turn_no_usage"
+	sess := &Session{ID: "sess_no_usage"}
+
+	ch := make(chan sse.Event, 4)
+	pushEvent(t, ch, sse.TypeMessageDone, sse.MessageDonePayload{TurnID: turnID, Text: "ok", FinishReason: "stop"})
+	pushEvent(t, ch, sse.TypeUsage, sse.UsagePayload{TurnID: turnID, InputTokens: 10, OutputTokens: 5})
+	pushEvent(t, ch, sse.TypeTurnEnd, sse.TurnEndPayload{TurnID: turnID, Reason: sse.TurnEndCompleted})
+	close(ch)
+
+	w := httptest.NewRecorder()
+	streamChatCompletion(w, context.Background(), sess, turnID, "m", ch, false)
+	body := w.Body.String()
+
+	if strings.Contains(body, `"usage":{`) {
+		t.Errorf("usage chunk leaked despite include_usage=false; body:\n%s", body)
 	}
 }

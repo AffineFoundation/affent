@@ -33,11 +33,23 @@ type chatRequest struct {
 	// JSON body.
 	SessionID       string `json:"session_id"`
 	AffentSessionID string `json:"affent_session_id"`
+	// StreamOptions is OpenAI's per-request streaming control. The
+	// only field we honor is include_usage: when true AND stream=true,
+	// the SSE response emits a final chunk with token counts before
+	// [DONE]. Without it, eval rigs consuming the streaming endpoint
+	// have no way to read usage — the non-streaming response already
+	// has a `usage` field but switching paths just for token counts
+	// is awkward.
+	StreamOptions *streamOptions `json:"stream_options,omitempty"`
 	// The other OpenAI knobs (temperature, top_p, stop, presence_penalty,
 	// frequency_penalty, …) are accepted and dropped. affent's LLMClient
 	// doesn't forward them — the upstream provider's defaults apply.
 	// Surfacing them here would suggest tuning works through affent
 	// when in practice it doesn't.
+}
+
+type streamOptions struct {
+	IncludeUsage bool `json:"include_usage"`
 }
 
 // resolvedSessionID picks the affent-namespaced field when present so
@@ -176,7 +188,8 @@ func handleChatCompletions(cfg Config, pool *SessionPool) http.HandlerFunc {
 		}
 
 		if req.Stream {
-			streamChatCompletion(w, ctx, sess, turnID, modelLabel, subCh)
+			includeUsage := req.StreamOptions != nil && req.StreamOptions.IncludeUsage
+			streamChatCompletion(w, ctx, sess, turnID, modelLabel, subCh, includeUsage)
 			return
 		}
 		out, err := bufferChatCompletion(ctx, sess, turnID, subCh)
@@ -367,7 +380,7 @@ func writeChatCompletionResponse(w http.ResponseWriter, sessionID, model string,
 // chat.completion.chunk protocol, line by line. On client disconnect
 // (ctx.Done) we propagate cancellation into the affent Loop so the
 // browser / LLM doesn't keep churning with no listener.
-func streamChatCompletion(w http.ResponseWriter, ctx context.Context, sess *Session, turnID, model string, ch <-chan sse.Event) {
+func streamChatCompletion(w http.ResponseWriter, ctx context.Context, sess *Session, turnID, model string, ch <-chan sse.Event, includeUsage bool) {
 	sessionID := sess.ID
 	flusher, ok := w.(http.Flusher)
 	if !ok {
@@ -418,6 +431,13 @@ func streamChatCompletion(w http.ResponseWriter, ctx context.Context, sess *Sess
 	// parallel logic in bufferChatCompletion.
 	modelFinish := ""
 
+	// Per-turn token totals captured from the Loop's single
+	// TypeUsage event. Only forwarded to the client if they
+	// requested stream_options.include_usage. The chunk shape
+	// matches OpenAI's: empty choices array + a usage object,
+	// emitted between the last delta-bearing chunk and [DONE].
+	var inputTokens, outputTokens int
+
 	keepAlive := time.NewTicker(sseKeepAliveInterval)
 	defer keepAlive.Stop()
 
@@ -456,6 +476,15 @@ func streamChatCompletion(w http.ResponseWriter, ctx context.Context, sess *Sess
 				var p sse.ThinkingDeltaPayload
 				if err := json.Unmarshal(ev.Data, &p); err == nil && p.Delta != "" {
 					send(map[string]any{"reasoning_content": p.Delta}, "")
+				}
+			case sse.TypeUsage:
+				var p struct {
+					InputTokens  int `json:"input_tokens"`
+					OutputTokens int `json:"output_tokens"`
+				}
+				if err := json.Unmarshal(ev.Data, &p); err == nil {
+					inputTokens += p.InputTokens
+					outputTokens += p.OutputTokens
 				}
 			case sse.TypeError:
 				// Surface non-recoverable loop errors as an OpenAI-shape
@@ -497,6 +526,30 @@ func streamChatCompletion(w http.ResponseWriter, ctx context.Context, sess *Sess
 					finish = modelFinish
 				}
 				send(map[string]any{}, finish)
+				if includeUsage {
+					// OpenAI's stream_options.include_usage contract:
+					// a final chunk with empty choices and a populated
+					// usage object, BEFORE [DONE]. SDKs that opt in
+					// know to skip the empty-choices chunk for content
+					// and read usage from it instead.
+					usageChunk, _ := json.Marshal(map[string]any{
+						"id":                id,
+						"object":            "chat.completion.chunk",
+						"created":           created,
+						"model":             model,
+						"affent_session_id": sessionID,
+						"choices":           []any{},
+						"usage": map[string]any{
+							"prompt_tokens":     inputTokens,
+							"completion_tokens": outputTokens,
+							"total_tokens":      inputTokens + outputTokens,
+						},
+					})
+					_, _ = w.Write([]byte("data: "))
+					_, _ = w.Write(usageChunk)
+					_, _ = w.Write([]byte("\n\n"))
+					flusher.Flush()
+				}
 				_, _ = w.Write([]byte("data: [DONE]\n\n"))
 				flusher.Flush()
 				return
