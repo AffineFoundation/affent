@@ -181,6 +181,7 @@ func drainTrace(ctx context.Context, events <-chan sse.Event, turnID string, s S
 		Scenario:     s.Name,
 		WorkspaceDir: workspaceDir,
 		Prompt:       s.Prompt,
+		RawTypes:     map[string]int{},
 	}
 	pending := map[string]int{}
 	for {
@@ -192,6 +193,7 @@ func drainTrace(ctx context.Context, events <-chan sse.Event, turnID string, s S
 			if !ok {
 				return t
 			}
+			t.RawTypes[ev.Type]++
 			switch ev.Type {
 			case sse.TypeMessageDone:
 				var p sse.MessageDonePayload
