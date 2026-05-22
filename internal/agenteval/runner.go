@@ -212,9 +212,13 @@ func drainTrace(ctx context.Context, events <-chan sse.Event, turnID string, s S
 					}
 					pending[p.CallID] = len(t.Tools)
 					t.Tools = append(t.Tools, ToolCall{
-						CallID: p.CallID,
-						Tool:   p.Tool,
-						Args:   p.Args,
+						CallID:        p.CallID,
+						Tool:          p.Tool,
+						Args:          p.Args,
+						OriginalTool:  p.OriginalTool,
+						Canonicalized: p.Canonicalized,
+						ArgsRepaired:  p.ArgsRepaired,
+						RepairNotes:   p.RepairNotes,
 					})
 				}
 			case sse.TypeToolResult:

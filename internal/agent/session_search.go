@@ -25,15 +25,15 @@ func sessionSearchTool(sessionsDir, currentSessionID string) *Tool {
 		"properties": map[string]any{
 			"query": map[string]any{
 				"type":        "string",
-				"description": "Keywords or phrases to look for in past session transcripts. Multiple words = higher score for messages containing more of them.",
+				"description": "Keywords or phrase.",
 			},
 			"top_k": map[string]any{
 				"type":        "integer",
-				"description": "Maximum results to return. Default 5.",
+				"description": "Result count; default 5.",
 			},
 			"max_per_session": map[string]any{
 				"type":        "integer",
-				"description": "Cap on hits per session, to spread results across multiple sessions. Default 3.",
+				"description": "Hits per session; default 3.",
 			},
 		},
 	})

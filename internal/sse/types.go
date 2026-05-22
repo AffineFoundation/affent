@@ -69,10 +69,14 @@ type ThinkingDonePayload struct {
 }
 
 type ToolRequestPayload struct {
-	TurnID string         `json:"turn_id"`
-	CallID string         `json:"call_id"`
-	Tool   string         `json:"tool"`
-	Args   map[string]any `json:"args"`
+	TurnID        string         `json:"turn_id"`
+	CallID        string         `json:"call_id"`
+	Tool          string         `json:"tool"`
+	Args          map[string]any `json:"args"`
+	OriginalTool  string         `json:"original_tool,omitempty"`
+	Canonicalized bool           `json:"canonicalized,omitempty"`
+	ArgsRepaired  bool           `json:"args_repaired,omitempty"`
+	RepairNotes   []string       `json:"repair_notes,omitempty"`
 }
 
 type ToolResultPayload struct {

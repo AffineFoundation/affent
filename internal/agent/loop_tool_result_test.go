@@ -253,6 +253,7 @@ func TestRunTurn_RepairsToolArgumentsBeforeDispatch(t *testing.T) {
 	deadline := time.After(10 * time.Second)
 	gotArgs := ""
 	gotTool := ""
+	var gotRepair sse.ToolRequestPayload
 	for {
 		select {
 		case args := <-argsCh:
@@ -267,10 +268,17 @@ func TestRunTurn_RepairsToolArgumentsBeforeDispatch(t *testing.T) {
 					t.Fatalf("decode tool.request: %v", err)
 				}
 				gotTool = p.Tool
+				gotRepair = p
 			}
 			if ev.Type == sse.TypeTurnEnd {
 				if gotTool != "read_file" {
 					t.Fatalf("tool request name = %q, want canonical read_file", gotTool)
+				}
+				if !gotRepair.Canonicalized || !gotRepair.ArgsRepaired {
+					t.Fatalf("expected repair metadata, got %+v", gotRepair)
+				}
+				if len(gotRepair.RepairNotes) == 0 {
+					t.Fatalf("expected repair notes, got %+v", gotRepair)
 				}
 				if gotArgs != `{"max_bytes":128,"path":"README.md"}` {
 					t.Fatalf("tool saw args %s, want repaired compact json", gotArgs)
@@ -357,6 +365,87 @@ func TestRunTurn_BlocksExactRepeatedToolCalls(t *testing.T) {
 				}
 				if got := atomic.LoadInt32(&executed); got != 2 {
 					t.Fatalf("tool should execute twice before third repeat is blocked, got %d", got)
+				}
+				return
+			}
+		case <-deadline:
+			t.Fatal("timeout waiting for turn.end")
+		}
+	}
+}
+
+func TestRunTurn_LoopGuardForcesNoToolSummaryAfterRepeatedInterventions(t *testing.T) {
+	var reqs int32
+	noToolsReq := make(chan bool, 1)
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		body, _ := readReqBody(r)
+		w.Header().Set("Content-Type", "text/event-stream")
+		w.WriteHeader(200)
+		fl := w.(http.Flusher)
+		if atomic.AddInt32(&reqs, 1) <= 4 {
+			lines := []string{
+				`data: {"choices":[{"delta":{"role":"assistant","tool_calls":[{"index":0,"id":"c1","type":"function","function":{"name":"probe","arguments":"{\"q\":\"same\"}"}}]},"finish_reason":null}]}`,
+				`data: {"choices":[{"delta":{},"finish_reason":"tool_calls"}]}`,
+				`data: [DONE]`,
+			}
+			for _, l := range lines {
+				w.Write([]byte(l + "\n\n"))
+				fl.Flush()
+			}
+			return
+		}
+		noToolsReq <- !strings.Contains(body, `"tools"`)
+		w.Write([]byte("data: {\"choices\":[{\"delta\":{\"role\":\"assistant\",\"content\":\"summarized\"},\"finish_reason\":\"stop\"}]}\n\n"))
+		w.Write([]byte("data: [DONE]\n\n"))
+		fl.Flush()
+	}))
+	t.Cleanup(srv.Close)
+
+	conv, err := OpenConversationAt(filepath.Join(t.TempDir(), "sess.jsonl"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	var executed int32
+	reg := NewRegistry()
+	reg.Add(&Tool{
+		Name:        "probe",
+		Description: "probe",
+		Schema:      json.RawMessage(`{"type":"object","properties":{"q":{"type":"string"}}}`),
+		Execute: func(ctx context.Context, args json.RawMessage) (string, error) {
+			atomic.AddInt32(&executed, 1)
+			return "ok", nil
+		},
+	})
+	events := make(chan sse.Event, 256)
+	loop := &Loop{
+		LLM: NewLLMClient(srv.URL, "", "fake-model"), Tools: reg, Conv: conv, Events: events,
+		MaxTurnSteps: 6, PerCallTimeout: 5 * time.Second,
+	}
+	if err := loop.EnsureSystemPrompt("base"); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := loop.SendUser(context.Background(), "go"); err != nil {
+		t.Fatal(err)
+	}
+
+	deadline := time.After(10 * time.Second)
+	for {
+		select {
+		case ev, ok := <-events:
+			if !ok {
+				t.Fatal("event channel closed before turn.end")
+			}
+			if ev.Type == sse.TypeTurnEnd {
+				select {
+				case ok := <-noToolsReq:
+					if !ok {
+						t.Fatal("expected final recovery request to omit tools")
+					}
+				default:
+					t.Fatal("did not observe final no-tools request")
+				}
+				if got := atomic.LoadInt32(&executed); got != 2 {
+					t.Fatalf("tool should execute twice before repeated guard blocks, got %d", got)
 				}
 				return
 			}

@@ -139,6 +139,19 @@ type ToolCall struct {
 	Tool string
 	// Args is the JSON-decoded argument object the LLM sent.
 	Args map[string]any
+	// OriginalTool is the model-emitted tool name before runtime
+	// canonicalization, when different from Tool or when trace producers
+	// include it for diagnostics.
+	OriginalTool string
+	// Canonicalized reports that the runtime changed the tool name before
+	// dispatch, e.g. readFile -> read_file.
+	Canonicalized bool
+	// ArgsRepaired reports that the runtime repaired malformed JSON,
+	// schema aliases, or scalar types before dispatch.
+	ArgsRepaired bool
+	// RepairNotes are short runtime diagnostics explaining
+	// canonicalization or argument repair.
+	RepairNotes []string
 	// Result is the full tool output. Truncated only when the tool
 	// itself truncates; the framework does not clip.
 	Result string

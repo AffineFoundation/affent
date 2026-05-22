@@ -17,15 +17,16 @@ import (
 )
 
 type BatchScenario struct {
-	Name              string
-	Prompt            string
-	Files             map[string]string
-	VerifyCommand     string
-	ExpectedSkill     string
-	ForbiddenCommands []string
-	RequiredCommands  []string
-	ProtectedFiles    []string
-	MaxTurns          int
+	Name                    string
+	Prompt                  string
+	Files                   map[string]string
+	VerifyCommand           string
+	ExpectedSkill           string
+	ForbiddenCommands       []string
+	RequiredCommands        []string
+	ProtectedFiles          []string
+	ForbiddenFileSubstrings map[string][]string
+	MaxTurns                int
 }
 
 type BatchRunner struct {
@@ -52,6 +53,7 @@ type BatchResult struct {
 func BuiltinBatchScenarios() []BatchScenario {
 	return []BatchScenario{
 		goMedianScenario(),
+		goConfigPrecedenceScenario(),
 		pythonSlugScenario(),
 	}
 }
@@ -131,6 +133,9 @@ func (r BatchRunner) Run(ctx context.Context, scenario BatchScenario) BatchResul
 		res.Failures = append(res.Failures, fmt.Sprintf("affentctl run failed: exit=%d err=%v stderr=%s", exitCode, err, trimOneLine(stderr, 800)))
 	}
 	if err := verifyProtectedFiles(workspace, protected); err != nil {
+		res.Failures = append(res.Failures, err.Error())
+	}
+	if err := verifyForbiddenFileSubstrings(workspace, scenario.ForbiddenFileSubstrings); err != nil {
 		res.Failures = append(res.Failures, err.Error())
 	}
 	if scenario.VerifyCommand != "" {
@@ -257,6 +262,25 @@ func verifyProtectedFiles(root string, protected map[string]string) error {
 	return nil
 }
 
+func verifyForbiddenFileSubstrings(root string, forbidden map[string][]string) error {
+	for name, substrings := range forbidden {
+		raw, err := os.ReadFile(filepath.Join(root, filepath.FromSlash(name)))
+		if err != nil {
+			return fmt.Errorf("forbidden-content file %s missing: %w", name, err)
+		}
+		body := string(raw)
+		for _, substr := range substrings {
+			if substr == "" {
+				continue
+			}
+			if strings.Contains(body, substr) {
+				return fmt.Errorf("forbidden content %q found in %s", substr, name)
+			}
+		}
+	}
+	return nil
+}
+
 // ParseTraceFile reads a JSONL trace file emitted by affentctl (or any
 // SSE-event-shaped log) and returns the unified Trace the in-memory
 // Runner also produces. One trace type, one check library — the
@@ -288,15 +312,27 @@ func ParseTraceFile(path string) (Trace, error) {
 		switch ev.Type {
 		case "tool.request":
 			var p struct {
-				CallID string         `json:"call_id"`
-				Tool   string         `json:"tool"`
-				Args   map[string]any `json:"args"`
+				CallID        string         `json:"call_id"`
+				Tool          string         `json:"tool"`
+				Args          map[string]any `json:"args"`
+				OriginalTool  string         `json:"original_tool"`
+				Canonicalized bool           `json:"canonicalized"`
+				ArgsRepaired  bool           `json:"args_repaired"`
+				RepairNotes   []string       `json:"repair_notes"`
 			}
 			if err := json.Unmarshal(ev.Data, &p); err != nil {
 				return trace, err
 			}
 			pending[p.CallID] = len(trace.Tools)
-			trace.Tools = append(trace.Tools, ToolCall{CallID: p.CallID, Tool: p.Tool, Args: p.Args})
+			trace.Tools = append(trace.Tools, ToolCall{
+				CallID:        p.CallID,
+				Tool:          p.Tool,
+				Args:          p.Args,
+				OriginalTool:  p.OriginalTool,
+				Canonicalized: p.Canonicalized,
+				ArgsRepaired:  p.ArgsRepaired,
+				RepairNotes:   p.RepairNotes,
+			})
 		case "tool.result":
 			var p struct {
 				CallID   string `json:"call_id"`

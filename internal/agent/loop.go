@@ -426,13 +426,19 @@ func (l *Loop) runTurn(ctx context.Context, turnID, userText string) {
 	toolRounds := 0
 	toolCallsUsed := 0
 	toolBudgetExhausted := false
+	forceNoToolsNext := false
+	guardInterventions := 0
 	for {
 		if ctx.Err() != nil {
 			endReason = sse.TurnEndCancelled
 			break
 		}
 
-		final, reason, err := l.runStep(ctx, turnID, l.toolDefs())
+		toolDefs := l.toolDefs()
+		if forceNoToolsNext {
+			toolDefs = nil
+		}
+		final, reason, err := l.runStep(ctx, turnID, toolDefs)
 		if err != nil {
 			endReason = reason
 			break
@@ -445,6 +451,11 @@ func (l *Loop) runTurn(ctx context.Context, turnID, userText string) {
 
 		if len(final.Final.ToolCalls) == 0 {
 			finishedNaturally = true
+			break
+		}
+		if forceNoToolsNext {
+			l.appendSkippedToolResults(turnID, final.Final.ToolCalls, "(loop_guard requested a final answer; tools disabled for this step)")
+			endReason = sse.TurnEndMaxTurns
 			break
 		}
 		if toolRounds >= steps {
@@ -506,22 +517,39 @@ func (l *Loop) runTurn(ctx context.Context, turnID, userText string) {
 			args, argsRepaired, argsRepairErr := repairToolCallArgsForDispatch(tc.Function.Arguments)
 			toolName := tc.Function.Name
 			canonicalChanged := false
+			var repairNotes []string
 			if l.Tools != nil {
 				if canonical, ok, changed := l.Tools.canonicalName(toolName); ok {
+					originalTool := toolName
 					toolName = canonical
 					canonicalChanged = changed
+					if canonicalChanged {
+						repairNotes = append(repairNotes, fmt.Sprintf("canonicalized tool %s to %s", originalTool, toolName))
+					}
 					if t, _ := l.Tools.Get(toolName); t != nil {
 						var schemaRepaired bool
-						args, schemaRepaired = repairToolArgsWithSchema(args, t.Schema)
+						var schemaNotes []string
+						args, schemaRepaired, schemaNotes = repairToolArgsWithSchema(args, t.Schema)
 						argsRepaired = argsRepaired || schemaRepaired
+						repairNotes = append(repairNotes, schemaNotes...)
 					}
 				}
+			}
+			if argsRepaired && len(repairNotes) == 0 {
+				repairNotes = append(repairNotes, "repaired malformed JSON arguments")
 			}
 			var argsView map[string]any
 			_ = json.Unmarshal(args, &argsView)
 
 			l.publish(sse.TypeToolRequest, sse.ToolRequestPayload{
-				TurnID: turnID, CallID: callID, Tool: toolName, Args: argsView,
+				TurnID:        turnID,
+				CallID:        callID,
+				Tool:          toolName,
+				Args:          argsView,
+				OriginalTool:  tc.Function.Name,
+				Canonicalized: canonicalChanged,
+				ArgsRepaired:  argsRepaired,
+				RepairNotes:   repairNotes,
 			})
 			if argsRepairErr != nil {
 				result := fmt.Sprintf("tool_arg_repair: %v", argsRepairErr)
@@ -604,6 +632,10 @@ func (l *Loop) runTurn(ctx context.Context, turnID, userText string) {
 			if result := loopGuard.recordAttempt(toolName, args); result != "" {
 				l.publishAndAppendToolResult(callID, toolName, result, true)
 				toolCallsUsed++
+				guardInterventions++
+				if guardInterventions >= 2 {
+					forceNoToolsNext = true
+				}
 				continue
 			}
 			result, isErr := l.Tools.dispatch(ctx, toolName, args)
@@ -614,6 +646,10 @@ func (l *Loop) runTurn(ctx context.Context, turnID, userText string) {
 					result = guardResult
 				}
 				isErr = true
+				guardInterventions++
+				if guardInterventions >= 2 {
+					forceNoToolsNext = true
+				}
 			}
 			l.publishAndAppendToolResult(callID, toolName, result, isErr)
 			toolCallsUsed++

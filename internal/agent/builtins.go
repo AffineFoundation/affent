@@ -102,9 +102,9 @@ func shellTool(deps BuiltinDeps) *Tool {
         "type": "object",
         "required": ["command"],
         "properties": {
-            "command": {"type": "string", "description": "Shell command to run. Wrapped in a POSIX shell (sh -c by default; gateways may configure bash -lc)."},
-            "cwd": {"type": "string", "description": "Optional working directory."},
-            "timeout_sec": {"type": "integer", "description": "Optional timeout in seconds (default 120)."}
+            "command": {"type": "string", "description": "Command to run."},
+            "cwd": {"type": "string", "description": "Working directory."},
+            "timeout_sec": {"type": "integer", "description": "Timeout seconds; default 120."}
         }
     }`)
 	shellPrefix := deps.Shell
@@ -341,8 +341,8 @@ func readFileTool(deps BuiltinDeps) *Tool {
         "type": "object",
         "required": ["path"],
         "properties": {
-            "path": {"type": "string", "description": "Path; relative joins onto the workspace root, absolute must fall inside it."},
-            "max_bytes": {"type": "integer", "minimum": 1, "maximum": 4194304, "description": "Optional cap (default 64 KiB, hard upper bound 4 MiB). Larger requests are clamped silently — use shell with head/tail/sed for anything past 4 MiB."}
+            "path": {"type": "string", "description": "Workspace path."},
+            "max_bytes": {"type": "integer", "minimum": 1, "maximum": 4194304, "description": "Read cap; default 64 KiB, max 4 MiB."}
         }
     }`)
 	return &Tool{
@@ -461,7 +461,7 @@ func editFileTool(deps BuiltinDeps) *Tool {
         "required": ["path", "old", "new"],
         "properties": {
             "path": {"type": "string"},
-            "old":  {"type": "string", "description": "Exact string to find. Must occur exactly once unless replace_all is true."},
+            "old":  {"type": "string", "description": "Exact string to replace; unique unless replace_all=true."},
             "new":  {"type": "string"},
             "replace_all": {"type": "boolean", "default": false}
         }
@@ -501,10 +501,10 @@ func editFileTool(deps BuiltinDeps) *Tool {
 			body := string(raw)
 			n := strings.Count(body, p.Old)
 			if n == 0 {
-				return "", fmt.Errorf("old string not found in %s", p.Path)
+				return "", fmt.Errorf("old string not found in %s\nNext: call read_file on %s, copy the exact current text into old, keep enough surrounding context to make it unique, then retry edit_file", p.Path, p.Path)
 			}
 			if n > 1 && !p.ReplaceAll {
-				return "", fmt.Errorf("old string occurs %d times in %s; pass replace_all=true or include more context to make it unique", n, p.Path)
+				return "", fmt.Errorf("old string occurs %d times in %s\nNext: call read_file on %s and retry with a longer exact old string that occurs once, or set replace_all=true only if every occurrence must change", n, p.Path, p.Path)
 			}
 			var updated string
 			if p.ReplaceAll {
@@ -533,8 +533,8 @@ func listFilesTool(deps BuiltinDeps) *Tool {
 	schema := json.RawMessage(`{
         "type": "object",
         "properties": {
-            "path": {"type": "string", "description": "Directory; relative joins onto the workspace root. Empty / '.' lists the workspace root itself."},
-            "max_entries": {"type": "integer", "minimum": 1, "maximum": 1000, "description": "Optional cap (default 200, hard upper bound 1000). Use shell with find/ls for larger or filtered enumerations."}
+            "path": {"type": "string", "description": "Workspace directory; default root."},
+            "max_entries": {"type": "integer", "minimum": 1, "maximum": 1000, "description": "Entry cap; default 200, max 1000."}
         }
     }`)
 	return &Tool{

@@ -175,6 +175,7 @@ Use this procedure for code changes:
 - Keep the patch small and coherent. Prefer surgical edit_file changes over broad rewrites.
 - Preserve verification exit codes. Do not pipe tests/builds through head/tail, append "|| true", or append "echo $?" wrappers; rely on the shell tool's exit code line, or redirect output to a file and inspect chunks after the command finishes.
 - Do not add or install a new dependency to fix a failing test unless the project manifest already declares that dependency or the user explicitly asks for dependency work. Prefer standard-library fixes when they are enough.
+- Do not import a third-party package just because it is installed in the current environment. If the manifest does not declare it, treat it as unavailable; prefer standard-library implementations.
 - If a build/test tool is not on PATH, do bounded discovery: command -v, repo-local toolchains such as ./.tmp/toolchains, and common user-local paths such as $HOME/.local. Do not run broad filesystem searches like find /.
 - After editing, run the same failing command again. If the language has a standard formatter and it is available, run it before the final test.
 - In the final answer, state the files changed and the exact verification command/result.`

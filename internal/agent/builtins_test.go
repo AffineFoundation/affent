@@ -244,6 +244,23 @@ func TestReadFileTool_TruncationIsUTF8Safe(t *testing.T) {
 	}
 }
 
+func TestEditFileTool_OldNotFoundGivesCorrectiveNextStep(t *testing.T) {
+	tmp := t.TempDir()
+	if err := os.WriteFile(filepath.Join(tmp, "main.go"), []byte("package main\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	tool := editFileTool(BuiltinDeps{HostWorkspaceDir: tmp})
+	_, err := tool.Execute(context.Background(), json.RawMessage(`{"path":"main.go","old":"missing","new":"x"}`))
+	if err == nil {
+		t.Fatal("expected edit_file old-not-found error")
+	}
+	for _, want := range []string{"old string not found", "Next:", "call read_file", "exact current text"} {
+		if !strings.Contains(err.Error(), want) {
+			t.Fatalf("error missing %q:\n%s", want, err.Error())
+		}
+	}
+}
+
 // recordingExec captures the argv passed to Exec so tests can assert
 // shell-prefix wiring without a real shell.
 type recordingExec struct {

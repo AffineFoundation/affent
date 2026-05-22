@@ -20,17 +20,18 @@ type toolSchemaProperty struct {
 	Enum []any `json:"enum"`
 }
 
-func repairToolArgsWithSchema(args json.RawMessage, schema json.RawMessage) (json.RawMessage, bool) {
+func repairToolArgsWithSchema(args json.RawMessage, schema json.RawMessage) (json.RawMessage, bool, []string) {
 	var s toolSchema
 	if len(schema) == 0 || json.Unmarshal(schema, &s) != nil || len(s.Properties) == 0 {
-		return args, false
+		return args, false, nil
 	}
 	var obj map[string]any
 	if json.Unmarshal(args, &obj) != nil {
-		return args, false
+		return args, false, nil
 	}
 
 	changed := false
+	var notes []string
 	out := make(map[string]any, len(obj))
 	used := map[string]bool{}
 	for key, value := range obj {
@@ -42,11 +43,13 @@ func repairToolArgsWithSchema(args json.RawMessage, schema json.RawMessage) (jso
 				prop = s.Properties[alias]
 				ok = true
 				changed = true
+				notes = append(notes, fmt.Sprintf("renamed field %s to %s", key, target))
 			}
 		}
 		if !ok {
 			if shouldDropUnknownSchemaField(s) {
 				changed = true
+				notes = append(notes, fmt.Sprintf("dropped unknown field %s", key))
 				continue
 			}
 			out[key] = value
@@ -55,6 +58,7 @@ func repairToolArgsWithSchema(args json.RawMessage, schema json.RawMessage) (jso
 		coerced, didCoerce := coerceSchemaValue(value, prop)
 		if didCoerce {
 			changed = true
+			notes = append(notes, fmt.Sprintf("coerced field %s to %s", target, strings.Join(schemaPropertyTypes(prop), "|")))
 		}
 		out[target] = coerced
 		used[target] = true
@@ -67,16 +71,17 @@ func repairToolArgsWithSchema(args json.RawMessage, schema json.RawMessage) (jso
 		if value, ok := recoverRequiredSchemaValue(req, obj, s.Properties[req]); ok {
 			out[req] = value
 			changed = true
+			notes = append(notes, fmt.Sprintf("filled required field %s from alias", req))
 		}
 	}
 	if !changed {
-		return args, false
+		return args, false, nil
 	}
 	raw, err := json.Marshal(out)
 	if err != nil {
-		return args, false
+		return args, false, nil
 	}
-	return json.RawMessage(raw), true
+	return json.RawMessage(raw), true, notes
 }
 
 func schemaPropertyAlias(key string, props map[string]toolSchemaProperty) (string, bool) {
@@ -202,23 +207,26 @@ func toolErrorHelp(t *Tool, args json.RawMessage) string {
 		return ""
 	}
 	var b strings.Builder
-	b.WriteString("\nExpected args")
+	b.WriteString("\nExpected: ")
 	if len(required) > 0 {
-		b.WriteString(" require ")
+		b.WriteString("required ")
 		b.WriteString(strings.Join(required, ", "))
+	} else {
+		b.WriteString("no required fields")
 	}
 	if len(fields) > 0 {
-		b.WriteString("; allowed fields: ")
+		b.WriteString("\nAllowed: ")
 		b.WriteString(strings.Join(fields, ", "))
 	}
 	if example := toolArgsExample(t.Schema); example != "" {
-		b.WriteString(". Example: ")
+		b.WriteString("\nExample: ")
 		b.WriteString(example)
 	}
 	if len(args) > 0 {
-		b.WriteString(". Received: ")
+		b.WriteString("\nReceived: ")
 		b.WriteString(previewN(string(args), 240))
 	}
+	b.WriteString("\nNext: fix the arguments and retry once, or use a different tool if the same error repeats.")
 	return b.String()
 }
 

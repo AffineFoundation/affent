@@ -86,6 +86,23 @@ func ToolResultContains(toolName, substr string) Check {
 	}
 }
 
+func ToolRequestRepaired(toolName string) Check {
+	return Check{
+		Name: "tool_request_repaired:" + toolName,
+		Eval: func(t Trace) CheckResult {
+			for _, c := range t.Tools {
+				if c.Tool == toolName && (c.Canonicalized || c.ArgsRepaired) {
+					return CheckResult{Pass: true, Detail: fmt.Sprintf("matched call_id=%s notes=%v", c.CallID, c.RepairNotes)}
+				}
+			}
+			return CheckResult{
+				Pass:   false,
+				Detail: fmt.Sprintf("expected repaired %q request; tools=%s", toolName, toolNamesSummary(t.Tools)),
+			}
+		},
+	}
+}
+
 // ToolCalledBefore passes when at least one `earlier` call happens
 // before the first `later` call, AND a `later` call was made.
 //

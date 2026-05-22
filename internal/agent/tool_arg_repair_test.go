@@ -86,7 +86,7 @@ func TestRepairToolArgsWithSchema_RenamesAndCoercesFields(t *testing.T) {
 			"replace_all":{"type":"boolean"}
 		}
 	}`)
-	got, repaired := repairToolArgsWithSchema(json.RawMessage(`{
+	got, repaired, notes := repairToolArgsWithSchema(json.RawMessage(`{
 		"file_path":"README.md",
 		"maxBytes":"2048",
 		"replaceAll":"true",
@@ -99,6 +99,9 @@ func TestRepairToolArgsWithSchema_RenamesAndCoercesFields(t *testing.T) {
 	if string(got) != want {
 		t.Fatalf("got %s, want %s", got, want)
 	}
+	if len(notes) == 0 {
+		t.Fatal("expected repair notes")
+	}
 }
 
 func TestToolErrorHelpUsesSchema(t *testing.T) {
@@ -107,7 +110,7 @@ func TestToolErrorHelpUsesSchema(t *testing.T) {
 		Schema: json.RawMessage(`{"type":"object","required":["path"],"properties":{"path":{"type":"string"},"max_bytes":{"type":"integer"}}}`),
 	}
 	got := toolErrorHelp(tl, json.RawMessage(`{}`))
-	for _, want := range []string{"Expected args", "require path", "allowed fields", `"path":"relative/path.txt"`, "Received: {}"} {
+	for _, want := range []string{"Expected:", "required path", "Allowed:", `"path":"relative/path.txt"`, "Received: {}", "Next:"} {
 		if !strings.Contains(got, want) {
 			t.Fatalf("tool error help missing %q:\n%s", want, got)
 		}

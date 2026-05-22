@@ -35,32 +35,32 @@ func memoryTool(store memory.MemoryStore) *Tool {
 			"action": map[string]any{
 				"type":        "string",
 				"enum":        memoryActions,
-				"description": "add (new entry), replace (update via unique old_text substring), remove (delete via unique old_text substring), search (ranked entries matching query), list (enumerate topic names + entry counts without reading bodies — cheap discovery).",
+				"description": "add, replace, remove, search, or list.",
 			},
 			"target": map[string]any{
 				"type":        "string",
 				"enum":        []string{string(memory.TargetMemory), string(memory.TargetUser)},
-				"description": "memory (default) = your own notes (env, conventions, lessons learned); user = what you know about the user (name, preferences, communication style). Omit for the common case of agent notes.",
+				"description": "memory (default) for project/env notes; user for stable user preferences/details.",
 			},
 			"topic": map[string]any{
 				"type":        "string",
-				"description": "Topic-bucket name (target=memory only; ignored for target=user). When saving MULTIPLE distinct facts, put each in its OWN topic — don't lump unrelated things into one bucket (e.g. tech stack, deploy procedure, and incident reports should be three separate topics, not one combined entry). Pick durable semantic names: \"stack\", \"deploy\", \"incidents\", \"auth\", \"conventions\", \"people\". Special: \"core\" lands the entry in the always-in-prompt digest (use sparingly for facts you need on every turn); everything else is retrieved on demand via action=search. Defaults to \"general\".",
+				"description": "Memory topic. Use core sparingly; otherwise use semantic names like stack, deploy, auth, conventions. Defaults to general.",
 			},
 			"content": map[string]any{
 				"type":        "string",
-				"description": "Entry text. Required for add and replace. Keep compact and information-dense (one entry should pack related facts together, not split them into many short rows).",
+				"description": "Entry text for add/replace. Keep compact and durable.",
 			},
 			"old_text": map[string]any{
 				"type":        "string",
-				"description": "Short unique substring identifying the entry to replace or remove.",
+				"description": "Unique substring identifying the entry to replace/remove.",
 			},
 			"query": map[string]any{
 				"type":        "string",
-				"description": "Search query for action=search. Plain English keywords; tokenized and stopword-filtered.",
+				"description": "Search query.",
 			},
 			"top_k": map[string]any{
 				"type":        "integer",
-				"description": "How many search results to return. Default 5, max 20.",
+				"description": "Search result count. Default 5, max 20.",
 				"minimum":     1,
 				"maximum":     20,
 			},
