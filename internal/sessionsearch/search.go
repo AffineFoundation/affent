@@ -28,7 +28,7 @@ type Hit struct {
 // Response is the session_search tool return shape.
 type Response struct {
 	Query   string `json:"query"`
-	Total   int   `json:"total"`
+	Total   int    `json:"total"`
 	Results []Hit  `json:"results"`
 	Message string `json:"message,omitempty"`
 }
@@ -190,7 +190,11 @@ func ScoreContent(content string, terms []string) float64 {
 	return float64(unique) + 0.1*float64(total)
 }
 
-const snippetLen = 300
+// snippetLen is intentionally larger than a search-engine teaser. Session
+// search is used by the agent as working evidence; small models often need the
+// surrounding conclusion/test result in the same hit instead of a clipped
+// fragment that forces another query.
+const snippetLen = 900
 
 // SnippetAround returns a UTF-8-safe substring of content centered on
 // the first term hit.

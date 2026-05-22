@@ -43,7 +43,7 @@ func sessionSearchTool(sessionsDir, currentSessionID string) *Tool {
 	return &Tool{
 		Name: "session_search",
 		Description: "Search your past session transcripts in this workspace. Use it for 'did we discuss X' / 'what was the conclusion last time' / 'find that command I ran a week ago'. " +
-			"Returns short snippets with session id and turn index. " +
+			"Returns snippets with session id and turn index. If you need a specific final outcome (tests passed, final decision, command result), search for both the subject and outcome words such as 'OK', 'passed', '测试通过', 'final', or the session id from an earlier hit. " +
 			"Use this for transcript recall; use the memory tool for durable facts.",
 		Schema: json.RawMessage(schema),
 		Execute: func(ctx context.Context, args json.RawMessage) (string, error) {

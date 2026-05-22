@@ -253,10 +253,10 @@ func centerSnippet(body string, terms []string, max int) string {
 // model / operator prioritize topics by freshness without reading
 // each topic body.
 type MemoryTopicSummary struct {
-	Topic     string `json:"topic"`
-	Entries   int    `json:"entries"`
-	Chars     int    `json:"chars"`
-	NewestAt  string `json:"newest_at,omitempty"`
+	Topic    string `json:"topic"`
+	Entries  int    `json:"entries"`
+	Chars    int    `json:"chars"`
+	NewestAt string `json:"newest_at,omitempty"`
 }
 
 // MemoryUsage carries capacity numbers for a single bucket.
@@ -322,8 +322,7 @@ const memoryEntryDelim = "\n§\n"
 // Long entries (multi-paragraph deployment guides, incident postmortems)
 // would otherwise dump their full body into the model context — wasted
 // when the model can replay/refine the query for the full content.
-// Mirrors session_search's snippetLen.
-const memorySnippetMax = 300
+const memorySnippetMax = 500
 
 // memoryTimestampPrefixRE matches the optional leading "[<RFC3339>]\n"
 // stored at the head of each entry. Stamped entries look like:

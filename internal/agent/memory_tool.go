@@ -95,6 +95,12 @@ func memoryTool(store MemoryStore) *Tool {
 			"  - user shares a preference, habit, or stable personal detail\n" +
 			"  - you discover something stable about the environment (OS, tools, project layout)\n" +
 			"  - you learn a convention, API quirk, or workflow specific to this setup\n\n" +
+			"SAVE ACCURATELY:\n" +
+			"  - preserve the user's wording for constraints, preferences, and rules; do not add synonyms\n" +
+			"    or reinterpretations that could change meaning\n" +
+			"  - if a fact has a direction/order/negation (newest-to-oldest, do not, must), copy that\n" +
+			"    part exactly\n" +
+			"  - if you are unsure how to compress a fact safely, save the short original sentence\n\n" +
 			"DO NOT save: task progress, completed-work logs, raw data dumps, large code blocks, " +
 			"transient state, or anything trivially re-discoverable from files / shell.\n\n" +
 			"ONE FACT PER ENTRY — split multi-part facts into separate add calls in their own " +
