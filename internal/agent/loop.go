@@ -540,11 +540,11 @@ func truncateForContext(s string, max int) string {
 	)
 }
 
-// ErrTurnInFlight is the loop-level mirror of session.ErrTurnInFlight. We
-// can't import session here without a cycle (session imports nothing of
-// ours; we don't want to depend on api either), so the runtime adapter
-// translates this to the public error.
-var ErrTurnInFlight = fmt.Errorf("turn already in flight")
+// ErrTurnInFlight is returned by SendUser when a turn is already
+// running on this loop. Callers (affentctl, affentserve, cron driver)
+// match it with errors.Is to distinguish "busy — back off" from
+// genuine failures.
+var ErrTurnInFlight = errors.New("turn already in flight")
 
 // runStep performs a single LLM call (one assistant <-> tool round
 // trip, before any tool dispatch). On a transient failure the call is

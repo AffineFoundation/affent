@@ -101,6 +101,29 @@ func TestOpenConversationAt_CorruptedLineIsLogged(t *testing.T) {
 	}
 }
 
+// TestConversationAppend_NoGhostMessageOnDiskFailure pins the
+// persist-then-remember ordering. Pre-fix, Append wrote to the
+// in-memory slice BEFORE attempting the disk write, so a failed
+// write left a "ghost" message visible to Snapshot but missing from
+// the persisted log — the model would see it for the rest of the
+// session, then it'd vanish on resume. The fix writes to disk
+// first; if that fails, in-memory stays unchanged.
+func TestConversationAppend_NoGhostMessageOnDiskFailure(t *testing.T) {
+	dir := t.TempDir()
+	// Point Conversation at the dir itself, not a file inside it.
+	// OpenFile(dir, O_WRONLY) returns EISDIR — same failure mode as
+	// disk-full or permission-denied without needing chmod or syscall
+	// magic that varies across CI environments.
+	c := &Conversation{path: dir}
+	err := c.Append(ChatMessage{Role: "user", Content: "should not be remembered"})
+	if err == nil {
+		t.Fatalf("Append to a directory path must return an error")
+	}
+	if got := c.Snapshot(); len(got) != 0 {
+		t.Fatalf("Snapshot must be empty after a failed Append; got %d messages: %+v", len(got), got)
+	}
+}
+
 // TestConversationReplace_AtomicWrite asserts the post-Replace file
 // contains exactly the new content. (Crash-safety is hard to test
 // without process-level fault injection; the encode + sync + rename

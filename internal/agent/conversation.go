@@ -126,19 +126,32 @@ func (c *Conversation) load() error {
 
 // Append adds a message and persists it. Caller passes a fully-formed
 // ChatMessage (including any tool_calls / tool_call_id).
+//
+// Persist-then-remember ordering matters: if we appended to the
+// in-memory slice first and the disk write then failed, the next
+// Snapshot would feed the model a message that disappears the moment
+// the process restarts. Reversing the order keeps memory and disk in
+// lockstep — a failed Append leaves both empty of m, so the caller's
+// error path doesn't have a hidden ghost message to clean up.
 func (c *Conversation) Append(m ChatMessage) error {
 	c.mu.Lock()
 	defer c.mu.Unlock()
-	c.messages = append(c.messages, m)
 
 	f, err := os.OpenFile(c.path, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0o644)
 	if err != nil {
 		return err
 	}
-	defer f.Close()
 	enc := json.NewEncoder(f)
 	enc.SetEscapeHTML(false)
-	return enc.Encode(m)
+	if err := enc.Encode(m); err != nil {
+		_ = f.Close()
+		return err
+	}
+	if err := f.Close(); err != nil {
+		return err
+	}
+	c.messages = append(c.messages, m)
+	return nil
 }
 
 // Snapshot returns a copy of the message log for sending to the LLM.
