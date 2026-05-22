@@ -230,9 +230,17 @@ func (c *Client) dispatch(line []byte) {
 		c.log.Debug().Any("id", resp.ID).Msg("mcp non-int id; dropping")
 		return
 	}
+	// Keep the lock held across the send. Close/shutdownPending also
+	// hold the lock while they close the per-call channels, so taking
+	// it here makes the look-up-and-deliver pair atomic with respect
+	// to a teardown — without it, dispatch could capture ch, release
+	// the lock, lose the race to Close which closes ch, then panic
+	// (send-on-closed) inside the select. The send is non-blocking
+	// (ch is buffered to 1; default fires if it's full), so holding
+	// the lock for the duration is cheap.
 	c.mu.Lock()
+	defer c.mu.Unlock()
 	ch, found := c.pending[id]
-	c.mu.Unlock()
 	if !found {
 		c.log.Debug().Int64("id", id).Msg("mcp no pending caller")
 		return
