@@ -342,7 +342,10 @@ func (l *Loop) runTurn(ctx context.Context, turnID, userText string) {
 
 	totalIn, totalOut := 0, 0
 	endReason := sse.TurnEndCompleted
-	_, hasSubagent := l.Tools.Get("subagent_run")
+	hasSubagent := false
+	if l.Tools != nil {
+		_, hasSubagent = l.Tools.Get("subagent_run")
+	}
 	requireSubagentFirst := shouldRequireSubagentFirst(userText) && hasSubagent
 	subagentFirstSatisfied := !requireSubagentFirst
 	// finishedNaturally tracks whether the for-loop exited because the
@@ -475,6 +478,24 @@ func (l *Loop) runTurn(ctx context.Context, turnID, userText string) {
 	}
 	l.publish(sse.TypeUsage, sse.UsagePayload{TurnID: turnID, InputTokens: totalIn, OutputTokens: totalOut})
 	l.publish(sse.TypeTurnEnd, sse.TurnEndPayload{TurnID: turnID, Reason: endReason})
+}
+
+func shouldRequireSubagentFirst(userText string) bool {
+	t := strings.ToLower(userText)
+	for _, needle := range []string{
+		"subagent_run",
+		"use subagent",
+		"using subagent",
+		"用 subagent",
+		"使用 subagent",
+		"优先使用 subagent",
+		"先用 subagent",
+	} {
+		if strings.Contains(t, needle) {
+			return true
+		}
+	}
+	return false
 }
 
 func (l *Loop) appendSkippedToolResults(turnID string, calls []ToolCall, content string) {
