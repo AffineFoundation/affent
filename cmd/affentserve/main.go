@@ -276,7 +276,31 @@ func run(cfg Config, logger zerolog.Logger) error {
 		IdleTimeout: 120 * time.Second,
 	}
 
-	logger.Info().Str("listen", cfg.Listen).Msg("affentserve starting")
+	// Boot summary: one structured log line so operators dropping a
+	// fresh container can see at a glance which feature flags are on
+	// without grep'ing the original docker run / k8s spec. Secrets
+	// (api_key, auth_token) are deliberately NOT included — the auth
+	// status is summarized as "on" / "off" instead.
+	auth := "off"
+	if cfg.AuthToken != "" {
+		auth = "on"
+	}
+	logger.Info().
+		Str("listen", cfg.Listen).
+		Str("model", cfg.Model).
+		Str("base_url", cfg.BaseURL).
+		Str("auth", auth).
+		Bool("builtins", cfg.EnableBuiltins).
+		Bool("subagent", cfg.EnableSubagent).
+		Bool("memory", cfg.EnableMemory).
+		Bool("browser", cfg.EnableBrowser).
+		Bool("web", cfg.EnableWeb).
+		Bool("web_search", cfg.EnableWebSearch).
+		Int("max_sessions", cfg.MaxSessions).
+		Str("session_idle_ttl", cfg.SessionIdleTTL).
+		Str("session_retention", cfg.SessionRetention).
+		Str("per_call_timeout", cfg.PerCallTimeout).
+		Msg("affentserve starting")
 	errCh := make(chan error, 1)
 	go func() {
 		if err := srv.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
