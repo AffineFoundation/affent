@@ -203,6 +203,39 @@ func (p *SessionPool) GetOrCreate(id string) (*Session, error) {
 	return s, nil
 }
 
+func (p *SessionPool) newBrowserSession(workspace string) (*affentbrowser.Session, error) {
+	return affentbrowser.NewSession(affentbrowser.SessionConfig{
+		NoSandbox:      true,
+		DisableStealth: p.cfg.BrowserNoStealth,
+		// Sandbox screenshot save_path to the per-session workspace
+		// so the model can't write PNGs to /etc/cron.d/ or similar.
+		// Mirrors the safeWorkspacePath guard the builtin file tools
+		// already apply.
+		WorkspaceDir: workspace,
+		Intercept: affentbrowser.InterceptConfig{
+			AllowAllDomains: p.cfg.BrowserAllowAllDomains,
+			Cache:           p.browserCache,
+		},
+	})
+}
+
+func (p *SessionPool) subagentChildToolRegistrar(workspace string) func(context.Context, *agent.Registry) (func(), error) {
+	if !p.cfg.EnableBrowser {
+		return nil
+	}
+	return func(ctx context.Context, reg *agent.Registry) (func(), error) {
+		bs, err := p.newBrowserSession(workspace)
+		if err != nil {
+			return nil, err
+		}
+		// Keep child browser tools read-mostly and text-oriented. The
+		// parent may opt into browser_screenshot for vision models, but
+		// subagents should not gain a file-writing screenshot surface.
+		affentbrowser.RegisterAll(reg, bs, affentbrowser.Options{})
+		return func() { _ = bs.Close() }, nil
+	}
+}
+
 // buildSession constructs all per-session affent state. Errors here
 // propagate to the chat-completions caller and abort the request.
 func (p *SessionPool) buildSession(id string) (*Session, error) {
@@ -285,20 +318,7 @@ func (p *SessionPool) buildSession(id string) (*Session, error) {
 
 	var browser *affentbrowser.Session
 	if p.cfg.EnableBrowser {
-		bcfg := affentbrowser.SessionConfig{
-			NoSandbox:      true,
-			DisableStealth: p.cfg.BrowserNoStealth,
-			// Sandbox screenshot save_path to the per-session workspace
-			// so the model can't write PNGs to /etc/cron.d/ or similar.
-			// Mirrors the safeWorkspacePath guard the builtin file
-			// tools already apply.
-			WorkspaceDir: workspace,
-			Intercept: affentbrowser.InterceptConfig{
-				AllowAllDomains: p.cfg.BrowserAllowAllDomains,
-				Cache:           p.browserCache,
-			},
-		}
-		bs, err := affentbrowser.NewSession(bcfg)
+		bs, err := p.newBrowserSession(workspace)
 		if err != nil {
 			_ = os.RemoveAll(workspace)
 			return nil, fmt.Errorf("browser session: %w", err)
@@ -328,13 +348,14 @@ func (p *SessionPool) buildSession(id string) (*Session, error) {
 			subagentExec = localExec
 		}
 		agent.RegisterSubagent(reg, agent.SubagentDeps{
-			LLM:              llm,
-			Executor:         subagentExec,
-			HostWorkspaceDir: workspace,
-			Memory:           memStore,
-			ParentSessionID:  id,
-			TranscriptDir:    filepath.Join(sessionDir, "subagents", id),
-			Log:              p.logger.With().Str("session_id", id).Logger(),
+			LLM:                llm,
+			Executor:           subagentExec,
+			HostWorkspaceDir:   workspace,
+			Memory:             memStore,
+			ParentSessionID:    id,
+			TranscriptDir:      filepath.Join(sessionDir, "subagents", id),
+			RegisterChildTools: p.subagentChildToolRegistrar(workspace),
+			Log:                p.logger.With().Str("session_id", id).Logger(),
 		})
 	}
 

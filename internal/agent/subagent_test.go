@@ -446,6 +446,55 @@ func TestRunSubagent_DoesNotPolluteParentConversation(t *testing.T) {
 	}
 }
 
+func TestRunSubagent_RegisterChildToolsAddsAndCleansExtras(t *testing.T) {
+	var cleanupCalled bool
+	step := 0
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "text/event-stream")
+		w.WriteHeader(http.StatusOK)
+		step++
+		switch step {
+		case 1:
+			_, _ = w.Write([]byte(`data: {"choices":[{"delta":{"role":"assistant","tool_calls":[{"index":0,"id":"c1","type":"function","function":{"name":"browser_navigate","arguments":"{\"url\":\"https://example.com\"}"}}]},"finish_reason":"tool_calls"}]}` + "\n\n"))
+		default:
+			_, _ = w.Write([]byte(`data: {"choices":[{"delta":{"role":"assistant","content":"Conclusion:\nbrowser worked\nEvidence:\n- used browser_navigate"},"finish_reason":"stop"}]}` + "\n\n"))
+		}
+		_, _ = w.Write([]byte("data: [DONE]\n\n"))
+	}))
+	t.Cleanup(srv.Close)
+
+	out, err := runSubagent(context.Background(), SubagentDeps{
+		LLM:              NewLLMClient(srv.URL, "", "fake"),
+		HostWorkspaceDir: t.TempDir(),
+		Log:              zerolog.Nop(),
+		PerCallTimeout:   5 * time.Second,
+		RegisterChildTools: func(ctx context.Context, reg *Registry) (func(), error) {
+			reg.Add(&Tool{
+				Name:        "browser_navigate",
+				Description: "test browser navigate",
+				Schema:      json.RawMessage(`{"type":"object","required":["url"],"properties":{"url":{"type":"string"}}}`),
+				Execute: func(context.Context, json.RawMessage) (string, error) {
+					return "URL: https://example.com\nTitle: Example", nil
+				},
+			})
+			return func() { cleanupCalled = true }, nil
+		},
+	}, "explore", "open example", 4)
+	if err != nil {
+		t.Fatalf("runSubagent: %v\n%s", err, out)
+	}
+	if !cleanupCalled {
+		t.Fatal("RegisterChildTools cleanup was not called")
+	}
+	var resp subagentResponse
+	if err := json.Unmarshal([]byte(out), &resp); err != nil {
+		t.Fatalf("decode response: %v\n%s", err, out)
+	}
+	if len(resp.ToolCalls) != 1 || resp.ToolCalls[0].Tool != "browser_navigate" {
+		t.Fatalf("child extra tool was not executed: %+v", resp.ToolCalls)
+	}
+}
+
 // TestSubagentTool_InputValidation pins the schema enforcement that
 // happens BEFORE we spin up a child Loop:
 //

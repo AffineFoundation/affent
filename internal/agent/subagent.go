@@ -81,8 +81,15 @@ type SubagentDeps struct {
 	ParentSessionID   string
 	TranscriptDir     string
 	ProjectContextDir string
-	Log               zerolog.Logger
-	PerCallTimeout    time.Duration
+
+	// RegisterChildTools optionally adds extra tools to each child
+	// registry. The callback runs once per subagent_run and may return
+	// a cleanup function for session-scoped resources such as browsers.
+	// Core agent code stays dependency-free; callers that opt into
+	// heavier extras wire them here.
+	RegisterChildTools func(ctx context.Context, reg *Registry) (cleanup func(), err error)
+	Log                zerolog.Logger
+	PerCallTimeout     time.Duration
 }
 
 // RegisterSubagent registers the subagent_run tool when the required runtime
@@ -175,6 +182,15 @@ func runSubagent(ctx context.Context, deps SubagentDeps, mode, task string, maxT
 		return "", fmt.Errorf("subagent conversation: %w", err)
 	}
 	reg := buildSubagentRegistry(deps)
+	if deps.RegisterChildTools != nil {
+		childToolsCleanup, err := deps.RegisterChildTools(ctx, reg)
+		if err != nil {
+			return "", fmt.Errorf("subagent child tools: %w", err)
+		}
+		if childToolsCleanup != nil {
+			defer childToolsCleanup()
+		}
+	}
 
 	events := make(chan sse.Event, 128)
 	loop := &Loop{
@@ -369,6 +385,7 @@ func subagentSystemPrompt(mode string) string {
 Rules:
 - Return evidence, not broad plans.
 - Use only the tools needed to answer the assigned task.
+- If browser_* tools are available and the task involves rendered web pages, prefer browser_navigate/browser_snapshot over shell curl scraping.
 - Prefer direct inspection of likely files over repository-wide search. Avoid broad find/grep sweeps when the task already names files, symbols, or modules.
 - Stop once you have enough evidence for a useful answer. Do not spend the whole budget just to make the review exhaustive.
 - If a tool result says a tool or turn budget was reached, immediately produce the final report from the evidence already gathered.
