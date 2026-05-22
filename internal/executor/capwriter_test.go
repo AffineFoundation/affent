@@ -2,6 +2,7 @@ package executor
 
 import (
 	"context"
+	"path/filepath"
 	"strings"
 	"testing"
 	"time"
@@ -97,6 +98,87 @@ func TestLocalExecutor_TimeoutSurfacesPartialOutput(t *testing.T) {
 	}
 	if res.ExitCode != -1 {
 		t.Errorf("ExitCode = %d, want -1 (abnormal exit marker)", res.ExitCode)
+	}
+}
+
+// pathFromEnv returns the PATH value from a slice of KEY=VALUE env
+// entries, or "" if PATH isn't present.
+func pathFromEnv(env []string) string {
+	for _, kv := range env {
+		if strings.HasPrefix(kv, "PATH=") {
+			return strings.TrimPrefix(kv, "PATH=")
+		}
+	}
+	return ""
+}
+
+func TestLocalExecutor_DefaultExtraPathDirsAppended(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+	e := NewLocalExecutor("test", "")
+	// nil ExtraPathDirs → DefaultExtraPathDirs() applies.
+	got := pathFromEnv(e.augmentPath([]string{"PATH=/bin"}))
+	for _, want := range []string{
+		"/bin",
+		filepath.Join(home, ".local", "go-toolchain", "go", "bin"),
+		filepath.Join(home, ".local", "bin"),
+		filepath.Join(home, "go", "bin"),
+		"/usr/local/go/bin",
+	} {
+		if !strings.Contains(got, want) {
+			t.Fatalf("PATH missing %q:\n%s", want, got)
+		}
+	}
+}
+
+// TestLocalExecutor_ExtraPathDirsOverride pins the data-driven knob.
+// Operators that want a different candidate set (or want to remove
+// the default heuristic for a minimal-container deploy) set
+// ExtraPathDirs directly; nil → defaults; empty slice → augmentation
+// disabled.
+func TestLocalExecutor_ExtraPathDirsOverride(t *testing.T) {
+	home := t.TempDir()
+	t.Setenv("HOME", home)
+
+	t.Run("explicit non-empty replaces defaults", func(t *testing.T) {
+		e := NewLocalExecutor("test", "")
+		e.ExtraPathDirs = []string{"/custom/toolchain/bin", "/other/bin"}
+		got := pathFromEnv(e.augmentPath([]string{"PATH=/bin"}))
+		// Custom dirs land.
+		for _, want := range []string{"/custom/toolchain/bin", "/other/bin"} {
+			if !strings.Contains(got, want) {
+				t.Errorf("explicit ExtraPathDirs missing %q in PATH:\n%s", want, got)
+			}
+		}
+		// Default dirs (~/.local/go-toolchain/go/bin etc.) MUST NOT
+		// appear — operator-specified set replaces them, doesn't merge.
+		if strings.Contains(got, filepath.Join(home, ".local", "go-toolchain")) {
+			t.Errorf("default toolchain path leaked despite explicit override:\n%s", got)
+		}
+	})
+
+	t.Run("non-nil empty disables augmentation", func(t *testing.T) {
+		e := NewLocalExecutor("test", "")
+		e.ExtraPathDirs = []string{} // not nil — explicit "no augmentation"
+		got := pathFromEnv(e.augmentPath([]string{"PATH=/bin"}))
+		if got != "/bin" {
+			t.Errorf("empty ExtraPathDirs should leave PATH untouched; got %q", got)
+		}
+	})
+}
+
+// TestLocalExecutor_ExtraPathDirsNoDuplicates pins that PATH segments
+// already present aren't re-appended. Without this, calling Exec
+// repeatedly on a session that inherits a previously-augmented PATH
+// would grow PATH on every call (each round adds the same default
+// candidates again).
+func TestLocalExecutor_ExtraPathDirsNoDuplicates(t *testing.T) {
+	e := NewLocalExecutor("test", "")
+	e.ExtraPathDirs = []string{"/a/bin", "/b/bin"}
+	first := pathFromEnv(e.augmentPath([]string{"PATH=/bin"}))
+	second := pathFromEnv(e.augmentPath([]string{"PATH=" + first}))
+	if first != second {
+		t.Errorf("augmenting an already-augmented PATH should be idempotent:\nfirst:  %q\nsecond: %q", first, second)
 	}
 }
 

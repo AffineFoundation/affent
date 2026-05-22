@@ -4,7 +4,10 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"os"
 	"os/exec"
+	"path/filepath"
+	"strings"
 )
 
 // LocalExecutor satisfies Executor by running commands directly on the
@@ -19,6 +22,44 @@ import (
 type LocalExecutor struct {
 	id           string
 	workspaceDir string
+
+	// ExtraPathDirs are appended to the spawned process's PATH (in
+	// addition to whatever the inherited / opts.Env PATH already has).
+	// Controls the convenience "find tools the operator installed in
+	// the usual places" behavior:
+	//
+	//   nil          → use DefaultExtraPathDirs() (common Unix paths
+	//                   like /usr/local/go/bin, ~/.local/bin, ~/go/bin).
+	//   []string{}   → DISABLED. PATH is left exactly as the caller
+	//                   passed it; operators who pin PATH explicitly
+	//                   (e.g. inside a minimal container image) take
+	//                   this path to keep affent from injecting.
+	//   non-empty    → use these dirs verbatim, replacing the default.
+	//
+	// Data-driven so operators don't have to fork the package to add
+	// or remove a candidate dir.
+	ExtraPathDirs []string
+}
+
+// DefaultExtraPathDirs returns the candidate set used when
+// LocalExecutor.ExtraPathDirs is nil. They're the locations a user
+// commonly installs a Go / Python / Node toolchain into when the
+// system package manager didn't (or in a non-root setup like the
+// dev-box / training-rig affentctl is typically run on). Operators
+// who want a different list pass their own slice via ExtraPathDirs.
+func DefaultExtraPathDirs() []string {
+	dirs := []string{
+		"/usr/local/go/bin",
+		"/snap/bin",
+	}
+	if home, err := os.UserHomeDir(); err == nil && home != "" {
+		dirs = append([]string{
+			filepath.Join(home, ".local", "go-toolchain", "go", "bin"),
+			filepath.Join(home, ".local", "bin"),
+			filepath.Join(home, "go", "bin"),
+		}, dirs...)
+	}
+	return dirs
 }
 
 func NewLocalExecutor(sessionID, workspaceDir string) *LocalExecutor {
@@ -43,9 +84,7 @@ func (h *LocalExecutor) Exec(ctx context.Context, cmd []string, opts ExecOptions
 	} else {
 		c.Dir = h.workspaceDir
 	}
-	if len(opts.Env) > 0 {
-		c.Env = append(c.Environ(), opts.Env...)
-	}
+	c.Env = h.augmentPath(append(c.Environ(), opts.Env...))
 	if opts.Stdin != nil {
 		c.Stdin = opts.Stdin
 	}
@@ -86,6 +125,68 @@ func (h *LocalExecutor) Exec(ctx context.Context, cmd []string, opts ExecOptions
 		Stdout:   stdout.String(),
 		Stderr:   stderr.String(),
 	}, execErr
+}
+
+// augmentPath appends the executor's configured ExtraPathDirs (or the
+// default set when nil) to env's PATH variable. A non-nil empty
+// ExtraPathDirs disables augmentation entirely — operators with a
+// pinned PATH (minimal-container deploys) opt into that.
+func (h *LocalExecutor) augmentPath(env []string) []string {
+	candidates := h.ExtraPathDirs
+	if candidates == nil {
+		candidates = DefaultExtraPathDirs()
+	}
+	if len(candidates) == 0 {
+		return env
+	}
+	return withExtraPathDirs(env, candidates)
+}
+
+// withExtraPathDirs is the pure helper. Takes the env and the
+// candidate dirs; returns env with PATH augmented (or appended if
+// PATH wasn't there). Pulled out so tests can exercise the slice
+// logic without instantiating a LocalExecutor.
+func withExtraPathDirs(env []string, candidates []string) []string {
+	pathIdx := -1
+	pathVal := ""
+	for i, kv := range env {
+		if strings.HasPrefix(kv, "PATH=") {
+			pathIdx = i
+			pathVal = strings.TrimPrefix(kv, "PATH=")
+		}
+	}
+	if pathIdx < 0 {
+		return append(env, "PATH="+strings.Join(candidates, string(os.PathListSeparator)))
+	}
+	seen := map[string]bool{}
+	for _, part := range filepath.SplitList(pathVal) {
+		if part != "" {
+			seen[part] = true
+		}
+	}
+	additions := make([]string, 0, len(candidates))
+	for _, candidate := range candidates {
+		if candidate != "" && !seen[candidate] {
+			additions = append(additions, candidate)
+			seen[candidate] = true
+		}
+	}
+	if len(additions) == 0 {
+		return env
+	}
+	next := make([]string, 0, len(env))
+	for _, kv := range env {
+		if !strings.HasPrefix(kv, "PATH=") {
+			next = append(next, kv)
+		}
+	}
+	finalPath := pathVal
+	if finalPath == "" {
+		finalPath = strings.Join(additions, string(os.PathListSeparator))
+	} else {
+		finalPath = finalPath + string(os.PathListSeparator) + strings.Join(additions, string(os.PathListSeparator))
+	}
+	return append(next, "PATH="+finalPath)
 }
 
 // Compile-time interface check.
