@@ -8,7 +8,7 @@ import (
 )
 
 func TestCheckTraceFlagsProcessRegressions(t *testing.T) {
-	trace := BatchTrace{ToolRequests: []BatchToolRequest{
+	trace := Trace{Tools: []ToolCall{
 		{Tool: "shell", Args: map[string]any{"command": "python -m pytest 2>&1 | head -80"}},
 		{Tool: "edit_file", Args: map[string]any{"path": "test_slug.py"}},
 	}}
@@ -27,11 +27,12 @@ func TestCheckTraceFlagsProcessRegressions(t *testing.T) {
 }
 
 func TestCheckTraceIgnoresGuardRejectedForbiddenCommand(t *testing.T) {
-	trace := BatchTrace{ToolRequests: []BatchToolRequest{
+	trace := Trace{Tools: []ToolCall{
 		{
 			Tool:     "shell",
 			Args:     map[string]any{"command": "python -m pytest 2>&1 | head -80"},
 			ExitCode: 1,
+			IsErr:    true,
 			Result:   "Error: shell command masks a test/build exit code",
 		},
 		{
@@ -48,22 +49,74 @@ func TestCheckTraceIgnoresGuardRejectedForbiddenCommand(t *testing.T) {
 	}
 }
 
-func TestParseTraceReadsToolRequests(t *testing.T) {
+func TestParseTraceFileReadsToolRequestsAndFinalText(t *testing.T) {
 	dir := t.TempDir()
 	tracePath := filepath.Join(dir, "trace.jsonl")
-	body := `{"type":"tool.request","data":{"tool":"shell","args":{"command":"go test ./..."}}}` + "\n"
+	body := strings.Join([]string{
+		`{"type":"tool.request","data":{"call_id":"c1","tool":"shell","args":{"command":"go test ./..."}}}`,
+		`{"type":"tool.result","data":{"call_id":"c1","result":"ok","exit_code":0}}`,
+		`{"type":"message.done","data":{"text":"Conclusion: green","finish_reason":"stop"}}`,
+		`{"type":"turn.end","data":{"reason":"completed"}}`,
+	}, "\n") + "\n"
 	if err := os.WriteFile(tracePath, []byte(body), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	trace, err := ParseBatchTrace(tracePath)
+	trace, err := ParseTraceFile(tracePath)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(trace.ToolRequests) != 1 {
-		t.Fatalf("tool requests = %d, want 1", len(trace.ToolRequests))
+	if len(trace.Tools) != 1 {
+		t.Fatalf("tools = %d, want 1", len(trace.Tools))
 	}
-	if got := trace.ToolRequests[0].Args["command"]; got != "go test ./..." {
-		t.Fatalf("command = %v", got)
+	tc := trace.Tools[0]
+	if tc.Tool != "shell" || tc.Args["command"] != "go test ./..." {
+		t.Fatalf("first tool call wrong: %+v", tc)
+	}
+	if tc.Result != "ok" || tc.ExitCode != 0 || tc.IsErr {
+		t.Fatalf("tool result not stitched into request: %+v", tc)
+	}
+	if trace.FinalText != "Conclusion: green" {
+		t.Fatalf("FinalText = %q", trace.FinalText)
+	}
+	if trace.FinishReason != "stop" {
+		t.Fatalf("FinishReason = %q", trace.FinishReason)
+	}
+	if trace.TurnEndReason != "completed" {
+		t.Fatalf("TurnEndReason = %q", trace.TurnEndReason)
+	}
+	if got := trace.RawTypes["tool.request"]; got != 1 {
+		t.Fatalf("RawTypes[tool.request] = %d", got)
+	}
+}
+
+// TestBatchScenarioChecks_UsesSharedCheckLibrary pins the unification:
+// a BatchScenario's declarative fields map to the same Check builders
+// the in-process Runner uses, so adding a check happens once. A
+// regression that grows a parallel check pipeline back into eval.go
+// fires this test by leaving one of the asserted check names off the
+// list.
+func TestBatchScenarioChecks_UsesSharedCheckLibrary(t *testing.T) {
+	scenario := BatchScenario{
+		RequiredCommands:  []string{`go test`, `gofmt`},
+		ForbiddenCommands: []string{"| head", "|| true"},
+		ProtectedFiles:    []string{"main_test.go", "doc_test.go"},
+	}
+	checks := BatchScenarioChecks(scenario)
+
+	wantPrefixes := []string{
+		"shell_command_matching:go test",
+		"shell_command_matching:gofmt",
+		"shell_command_lacks_unguarded:| head",
+		"shell_command_lacks_unguarded:|| true",
+		"file_not_edited:",
+	}
+	if len(checks) != len(wantPrefixes) {
+		t.Fatalf("checks count = %d, want %d (%v)", len(checks), len(wantPrefixes), checks)
+	}
+	for i, want := range wantPrefixes {
+		if !strings.HasPrefix(checks[i].Name, want) {
+			t.Errorf("check[%d].Name = %q, want prefix %q", i, checks[i].Name, want)
+		}
 	}
 }
 

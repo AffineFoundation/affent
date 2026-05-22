@@ -348,6 +348,140 @@ func TestEvaluateChecks_NilEvalIsFailureNotPanic(t *testing.T) {
 	}
 }
 
+func TestShellCommandMatching(t *testing.T) {
+	t.Run("regex match", func(t *testing.T) {
+		trace := Trace{Tools: []ToolCall{
+			{Tool: "shell", Args: map[string]any{"command": "python3 -m pytest tests/"}},
+		}}
+		if res := ShellCommandMatching(`python(3)? -m pytest`).Eval(trace); !res.Pass {
+			t.Errorf("regex should match python3 invocation: %+v", res)
+		}
+	})
+	t.Run("substring fallback when pattern is not a valid regex", func(t *testing.T) {
+		trace := Trace{Tools: []ToolCall{
+			{Tool: "shell", Args: map[string]any{"command": "go test ./... -count=1"}},
+		}}
+		if res := ShellCommandMatching("go test ./...").Eval(trace); !res.Pass {
+			t.Errorf("substring fallback should pass: %+v", res)
+		}
+	})
+	t.Run("fails when no command matches", func(t *testing.T) {
+		trace := Trace{Tools: []ToolCall{
+			{Tool: "shell", Args: map[string]any{"command": "ls -la"}},
+		}}
+		res := ShellCommandMatching(`go test`).Eval(trace)
+		if res.Pass {
+			t.Errorf("expected fail; got pass")
+		}
+		if !strings.Contains(res.Detail, "go test") {
+			t.Errorf("detail should name the missing pattern: %s", res.Detail)
+		}
+	})
+	t.Run("ignores tool calls without command arg", func(t *testing.T) {
+		trace := Trace{Tools: []ToolCall{
+			{Tool: "read_file", Args: map[string]any{"path": "README.md"}},
+			{Tool: "shell", Args: map[string]any{"command": "go test ./..."}},
+		}}
+		if res := ShellCommandMatching("go test").Eval(trace); !res.Pass {
+			t.Errorf("non-shell calls should be skipped, not block the match: %+v", res)
+		}
+	})
+}
+
+func TestShellCommandLacksUnguarded(t *testing.T) {
+	t.Run("fails on unguarded forbidden", func(t *testing.T) {
+		trace := Trace{Tools: []ToolCall{
+			{Tool: "shell", Args: map[string]any{"command": "pytest tests/ | head -50"}, ExitCode: 0},
+		}}
+		res := ShellCommandLacksUnguarded("| head").Eval(trace)
+		if res.Pass {
+			t.Errorf("unguarded | head should fail; got pass")
+		}
+	})
+	t.Run("ignores guard-rejected attempt", func(t *testing.T) {
+		// This is the key contract: the model tried `pytest | head`,
+		// the runtime shell guard refused. The check must NOT
+		// penalize that — the mechanism worked.
+		trace := Trace{Tools: []ToolCall{
+			{
+				Tool:     "shell",
+				Args:     map[string]any{"command": "pytest tests/ | head -50"},
+				ExitCode: 1,
+				IsErr:    true,
+				Result:   "Error: shell command masks a test/build exit code",
+			},
+		}}
+		if res := ShellCommandLacksUnguarded("| head").Eval(trace); !res.Pass {
+			t.Errorf("guard-rejected attempts must not fail this check: %+v", res)
+		}
+	})
+	t.Run("ignores guard-rejected broad scan", func(t *testing.T) {
+		trace := Trace{Tools: []ToolCall{
+			{
+				Tool:     "shell",
+				Args:     map[string]any{"command": "find / -name go"},
+				ExitCode: 1,
+				IsErr:    true,
+				Result:   "Error: shell command looks like an unbounded filesystem scan.",
+			},
+		}}
+		if res := ShellCommandLacksUnguarded("find /").Eval(trace); !res.Pass {
+			t.Errorf("guard-rejected find / must not fail check: %+v", res)
+		}
+	})
+	t.Run("case-insensitive substring", func(t *testing.T) {
+		trace := Trace{Tools: []ToolCall{
+			{Tool: "shell", Args: map[string]any{"command": "echo XYZ || True"}, ExitCode: 0},
+		}}
+		// Forbidden written lowercase; command uses "True". Match should still fire.
+		res := ShellCommandLacksUnguarded("|| true").Eval(trace)
+		if res.Pass {
+			t.Errorf("case-insensitive match should fire; got pass")
+		}
+	})
+}
+
+func TestFileNotEdited(t *testing.T) {
+	t.Run("fails when protected file edited", func(t *testing.T) {
+		trace := Trace{Tools: []ToolCall{
+			{Tool: "edit_file", Args: map[string]any{"path": "pkg/main_test.go"}},
+		}}
+		res := FileNotEdited([]string{"main_test.go"}).Eval(trace)
+		if res.Pass {
+			t.Errorf("path suffix match should fire; got pass")
+		}
+		if !strings.Contains(res.Detail, "main_test.go") {
+			t.Errorf("detail should name the file: %s", res.Detail)
+		}
+	})
+	t.Run("fails for write_file too, not just edit_file", func(t *testing.T) {
+		trace := Trace{Tools: []ToolCall{
+			{Tool: "write_file", Args: map[string]any{"path": "main_test.go", "content": "..."}},
+		}}
+		if res := FileNotEdited([]string{"main_test.go"}).Eval(trace); res.Pass {
+			t.Errorf("write_file on protected path should fail; got pass")
+		}
+	})
+	t.Run("passes when only non-protected files edited", func(t *testing.T) {
+		trace := Trace{Tools: []ToolCall{
+			{Tool: "edit_file", Args: map[string]any{"path": "main.go"}},
+		}}
+		if res := FileNotEdited([]string{"main_test.go"}).Eval(trace); !res.Pass {
+			t.Errorf("editing impl file must pass; got fail: %+v", res)
+		}
+	})
+	t.Run("exact match (no suffix collision)", func(t *testing.T) {
+		// Suffix matching is "ends with /name" so "go" doesn't catch
+		// "main.go"; only "go" at workspace root or under a dir.
+		trace := Trace{Tools: []ToolCall{
+			{Tool: "edit_file", Args: map[string]any{"path": "main.go"}},
+		}}
+		if res := FileNotEdited([]string{"go"}).Eval(trace); !res.Pass {
+			t.Errorf(`unrelated edits must not match short name; got fail: %+v`, res)
+		}
+	})
+}
+
 // TestEvaluateChecks_FillsCheckNameIfEvalForgot pins the small UX
 // guarantee: a Check's Eval that returns CheckResult{Pass:true} without
 // setting Check still produces a named result. Otherwise reports look

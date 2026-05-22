@@ -118,6 +118,13 @@ type Trace struct {
 	// etc.). A non-empty list with TurnEndReason="completed" is
 	// fine; non-empty with TurnEndReason="error" is the kill signal.
 	LoopErrors []string
+
+	// RawTypes counts every event type the run produced, by name
+	// (e.g. {"tool.request": 5, "message.delta": 1300}). Populated
+	// by both the in-process Runner and the disk-replay
+	// ParseTraceFile path so checks that just want "did at least
+	// one usage event arrive" can read this without scanning Tools.
+	RawTypes map[string]int
 }
 
 // ToolCall is one tool invocation by the agent, with its result.

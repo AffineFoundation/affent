@@ -11,7 +11,6 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
-	"regexp"
 	"sort"
 	"strings"
 	"time"
@@ -139,7 +138,7 @@ func (r BatchRunner) Run(ctx context.Context, scenario BatchScenario) BatchResul
 			res.Failures = append(res.Failures, fmt.Sprintf("verify command failed: %s: %v\n%s", scenario.VerifyCommand, err, trimOneLine(out, 1200)))
 		}
 	}
-	trace, err := ParseBatchTrace(tracePath)
+	trace, err := ParseTraceFile(tracePath)
 	if err != nil {
 		res.Failures = append(res.Failures, fmt.Sprintf("parse trace: %v", err))
 	} else {
@@ -258,26 +257,23 @@ func verifyProtectedFiles(root string, protected map[string]string) error {
 	return nil
 }
 
-type BatchTrace struct {
-	ToolRequests []BatchToolRequest
-	RawTypes     map[string]int
-}
-
-type BatchToolRequest struct {
-	CallID   string
-	Tool     string
-	Args     map[string]any
-	Result   string
-	ExitCode int
-}
-
-func ParseBatchTrace(path string) (BatchTrace, error) {
+// ParseTraceFile reads a JSONL trace file emitted by affentctl (or any
+// SSE-event-shaped log) and returns the unified Trace the in-memory
+// Runner also produces. One trace type, one check library — the
+// BatchRunner path used to ship its own BatchTrace/BatchToolRequest
+// twins which forced every check to be written twice.
+//
+// The file format is one JSON object per line with `{"type":"...",
+// "data":{...}}`. Unknown event types are counted into RawTypes but
+// otherwise ignored.
+func ParseTraceFile(path string) (Trace, error) {
 	f, err := os.Open(path)
 	if err != nil {
-		return BatchTrace{}, err
+		return Trace{}, err
 	}
 	defer f.Close()
-	trace := BatchTrace{RawTypes: map[string]int{}}
+	trace := Trace{RawTypes: map[string]int{}}
+	pending := map[string]int{}
 	sc := bufio.NewScanner(f)
 	sc.Buffer(make([]byte, 0, 64*1024), 4*1024*1024)
 	for sc.Scan() {
@@ -299,7 +295,8 @@ func ParseBatchTrace(path string) (BatchTrace, error) {
 			if err := json.Unmarshal(ev.Data, &p); err != nil {
 				return trace, err
 			}
-			trace.ToolRequests = append(trace.ToolRequests, BatchToolRequest{CallID: p.CallID, Tool: p.Tool, Args: p.Args})
+			pending[p.CallID] = len(trace.Tools)
+			trace.Tools = append(trace.Tools, ToolCall{CallID: p.CallID, Tool: p.Tool, Args: p.Args})
 		case "tool.result":
 			var p struct {
 				CallID   string `json:"call_id"`
@@ -309,12 +306,37 @@ func ParseBatchTrace(path string) (BatchTrace, error) {
 			if err := json.Unmarshal(ev.Data, &p); err != nil {
 				return trace, err
 			}
-			for i := range trace.ToolRequests {
-				if trace.ToolRequests[i].CallID == p.CallID {
-					trace.ToolRequests[i].Result = p.Result
-					trace.ToolRequests[i].ExitCode = p.ExitCode
-					break
+			if idx, ok := pending[p.CallID]; ok {
+				trace.Tools[idx].Result = p.Result
+				trace.Tools[idx].ExitCode = p.ExitCode
+				trace.Tools[idx].IsErr = p.ExitCode != 0
+				continue
+			}
+			// Result without a matching request still gets recorded
+			// so checks that count "guard rejections" see the failure.
+			trace.Tools = append(trace.Tools, ToolCall{
+				CallID:   p.CallID,
+				Result:   p.Result,
+				ExitCode: p.ExitCode,
+				IsErr:    p.ExitCode != 0,
+			})
+		case "message.done":
+			var p struct {
+				Text         string `json:"text"`
+				FinishReason string `json:"finish_reason"`
+			}
+			if err := json.Unmarshal(ev.Data, &p); err == nil {
+				trace.FinalText = p.Text
+				if p.FinishReason != "" {
+					trace.FinishReason = p.FinishReason
 				}
+			}
+		case "turn.end":
+			var p struct {
+				Reason string `json:"reason"`
+			}
+			if err := json.Unmarshal(ev.Data, &p); err == nil && p.Reason != "" {
+				trace.TurnEndReason = p.Reason
 			}
 		default:
 			continue
@@ -323,81 +345,38 @@ func ParseBatchTrace(path string) (BatchTrace, error) {
 	return trace, sc.Err()
 }
 
-func CheckBatchTrace(trace BatchTrace, scenario BatchScenario) []string {
-	var failures []string
-	var shellCalls []BatchToolRequest
-	for _, req := range trace.ToolRequests {
-		if req.Tool == "shell" {
-			if command, _ := req.Args["command"].(string); command != "" {
-				shellCalls = append(shellCalls, req)
-			}
-		}
-		if (req.Tool == "write_file" || req.Tool == "edit_file") && protectedPathTouched(req, scenario.ProtectedFiles) {
-			failures = append(failures, fmt.Sprintf("modified protected file through %s: %v", req.Tool, req.Args["path"]))
-		}
-	}
+// BatchScenarioChecks returns the Check slice derived from the
+// declarative fields of a BatchScenario: RequiredCommands become
+// ShellCommandMatching checks, ForbiddenCommands become
+// ShellCommandLacksUnguarded checks, ProtectedFiles become
+// FileNotEdited checks. Lets one Check library cover both pipelines.
+func BatchScenarioChecks(scenario BatchScenario) []Check {
+	var checks []Check
 	for _, want := range scenario.RequiredCommands {
-		if !commandMatches(shellCommands(shellCalls), want) {
-			failures = append(failures, fmt.Sprintf("missing required command match %q; commands=%v", want, shellCommands(shellCalls)))
-		}
+		checks = append(checks, ShellCommandMatching(want))
 	}
 	for _, forbidden := range scenario.ForbiddenCommands {
-		for _, call := range shellCalls {
-			command, _ := call.Args["command"].(string)
-			if commandRejectedByGuard(call) {
-				continue
-			}
-			if strings.Contains(strings.ToLower(command), strings.ToLower(forbidden)) {
-				failures = append(failures, fmt.Sprintf("forbidden command substring %q in %q", forbidden, command))
-			}
+		checks = append(checks, ShellCommandLacksUnguarded(forbidden))
+	}
+	if len(scenario.ProtectedFiles) > 0 {
+		checks = append(checks, FileNotEdited(scenario.ProtectedFiles))
+	}
+	return checks
+}
+
+// CheckBatchTrace runs BatchScenarioChecks against the trace and
+// returns failure detail strings — the legacy signature BatchRunner.Run
+// expects. New code should compose Check slices directly and read
+// Outcome.FailedChecks() / Outcome.Results.
+func CheckBatchTrace(trace Trace, scenario BatchScenario) []string {
+	results := evaluateChecks(trace, BatchScenarioChecks(scenario))
+	var failures []string
+	for _, r := range results {
+		if !r.Pass {
+			failures = append(failures, r.Detail)
 		}
 	}
 	return failures
-}
-
-func shellCommands(calls []BatchToolRequest) []string {
-	out := make([]string, 0, len(calls))
-	for _, call := range calls {
-		if command, _ := call.Args["command"].(string); command != "" {
-			out = append(out, command)
-		}
-	}
-	return out
-}
-
-func commandRejectedByGuard(req BatchToolRequest) bool {
-	return req.ExitCode != 0 &&
-		(strings.Contains(req.Result, "masks a test/build exit code") ||
-			strings.Contains(req.Result, "unbounded filesystem scan"))
-}
-
-func protectedPathTouched(req BatchToolRequest, protected []string) bool {
-	path, _ := req.Args["path"].(string)
-	path = filepath.ToSlash(path)
-	for _, name := range protected {
-		if path == name || strings.HasSuffix(path, "/"+name) {
-			return true
-		}
-	}
-	return false
-}
-
-func commandMatches(commands []string, pattern string) bool {
-	re, err := regexp.Compile(pattern)
-	if err != nil {
-		for _, command := range commands {
-			if strings.Contains(command, pattern) {
-				return true
-			}
-		}
-		return false
-	}
-	for _, command := range commands {
-		if re.MatchString(command) {
-			return true
-		}
-	}
-	return false
 }
 
 func checkConversationSkill(workspace, skill string) error {
