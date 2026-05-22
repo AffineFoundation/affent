@@ -9,19 +9,17 @@ package sse
 // ".end" for stream-completion events — readers misread it as a boundary
 // and fail to wait for the next message.* / tool.* / etc. events.
 const (
-	TypeTurnStart      = "turn.start"
-	TypeUserMessage    = "user.message"
-	TypeMessageDelta   = "message.delta"
-	TypeMessageDone    = "message.done"
-	TypeThinkingDelta  = "thinking.delta"
-	TypeThinkingDone   = "thinking.done"
-	TypeToolRequest    = "tool.request"
-	TypeToolOutput     = "tool.output"
-	TypeToolResult     = "tool.result"
-	TypeFileChanged    = "file.changed"
-	TypeUsage          = "usage"
-	TypeTurnEnd        = "turn.end"
-	TypeError          = "error"
+	TypeTurnStart     = "turn.start"
+	TypeUserMessage   = "user.message"
+	TypeMessageDelta  = "message.delta"
+	TypeMessageDone   = "message.done"
+	TypeThinkingDelta = "thinking.delta"
+	TypeThinkingDone  = "thinking.done"
+	TypeToolRequest   = "tool.request"
+	TypeToolResult    = "tool.result"
+	TypeUsage         = "usage"
+	TypeTurnEnd       = "turn.end"
+	TypeError         = "error"
 )
 
 type TurnStartPayload struct {
@@ -77,12 +75,6 @@ type ToolRequestPayload struct {
 	Args   map[string]any `json:"args"`
 }
 
-type ToolOutputPayload struct {
-	CallID string `json:"call_id"`
-	Stream string `json:"stream"` // "stdout" | "stderr"
-	Chunk  string `json:"chunk"`
-}
-
 type ToolResultPayload struct {
 	CallID   string `json:"call_id"`
 	ExitCode int    `json:"exit_code"`
@@ -95,11 +87,6 @@ type ToolResultPayload struct {
 	// need to parse structured tool responses should read Result.
 	// Front-ends that only render the value should read ResultSummary.
 	Result string `json:"result"`
-}
-
-type FileChangedPayload struct {
-	Path   string `json:"path"`
-	Change string `json:"change"` // "created" | "modified" | "deleted"
 }
 
 type UsagePayload struct {
