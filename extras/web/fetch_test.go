@@ -225,18 +225,29 @@ func TestFetchTool_SSRFGuardOptInAllowsLoopback(t *testing.T) {
 // RFC1918 internal services, IPv6 ULA / link-local.
 func TestIsBlockedIP(t *testing.T) {
 	blocked := []string{
-		"127.0.0.1",        // loopback v4
-		"::1",              // loopback v6
-		"10.0.0.5",         // RFC1918
-		"172.16.0.5",       // RFC1918
-		"192.168.1.5",      // RFC1918
-		"169.254.169.254",  // AWS / Azure / GCP metadata
-		"fe80::1",          // IPv6 link-local
-		"fc00::1",          // IPv6 ULA
-		"0.0.0.0",          // unspecified
-		"255.255.255.255",  // broadcast
-		"224.0.0.1",        // IPv4 multicast
-		"ff02::1",          // IPv6 multicast
+		"127.0.0.1",       // loopback v4
+		"::1",             // loopback v6
+		"10.0.0.5",        // RFC1918
+		"172.16.0.5",      // RFC1918
+		"192.168.1.5",     // RFC1918
+		"169.254.169.254", // AWS / Azure / GCP metadata
+		"fe80::1",         // IPv6 link-local
+		"fc00::1",         // IPv6 ULA
+		"0.0.0.0",         // unspecified
+		"255.255.255.255", // broadcast
+		"224.0.0.1",       // IPv4 multicast
+		"ff02::1",         // IPv6 multicast
+		// IPv6-mapped IPv4 ("::ffff:N.N.N.N") is the bypass shape a
+		// motivated attacker reaches for once the straightforward
+		// IPv4 SSRF check is in place. net.IP.IsLoopback /
+		// IsPrivate / IsLinkLocalUnicast in Go's standard library
+		// already understand the v4-mapped form (they call .To4()
+		// internally), so these should all block — pin the
+		// assumption so a refactor that bypasses To4() can't quietly
+		// regress the guard.
+		"::ffff:127.0.0.1",       // v4-mapped loopback
+		"::ffff:10.0.0.5",        // v4-mapped RFC1918
+		"::ffff:169.254.169.254", // v4-mapped cloud-metadata
 	}
 	for _, s := range blocked {
 		if !isBlockedIP(net.ParseIP(s)) {
