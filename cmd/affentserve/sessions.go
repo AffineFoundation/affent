@@ -362,14 +362,27 @@ func (p *SessionPool) buildSession(id string) (*Session, error) {
 	// Generous event buffer — chat handler subscribes and drains, but
 	// during turn execution we don't want to block the loop on a slow
 	// subscriber.
+	// PerCallTimeoutDuration was already validated by cfg.Validate() at
+	// startup, so a parse error here would mean someone bypassed the
+	// pipeline — keep the error path for safety but it shouldn't fire.
+	perCallTimeout, err := p.cfg.PerCallTimeoutDuration()
+	if err != nil {
+		_ = os.RemoveAll(workspace)
+		if browser != nil {
+			_ = browser.Close()
+		}
+		return nil, fmt.Errorf("per call timeout: %w", err)
+	}
+
 	events := make(chan sse.Event, 1024)
 	loop := &agent.Loop{
-		LLM:          llm,
-		Tools:        reg,
-		Conv:         conv,
-		Events:       events,
-		Log:          p.logger.With().Str("session_id", id).Logger(),
-		MaxTurnSteps: p.cfg.MaxTurnSteps,
+		LLM:            llm,
+		Tools:          reg,
+		Conv:           conv,
+		Events:         events,
+		Log:            p.logger.With().Str("session_id", id).Logger(),
+		MaxTurnSteps:   p.cfg.MaxTurnSteps,
+		PerCallTimeout: perCallTimeout,
 		// Snapshot source for EnsureSystemPrompt — when nil, the
 		// memory block is just omitted from the system prompt and
 		// the tool isn't registered above anyway.

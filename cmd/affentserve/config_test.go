@@ -118,6 +118,58 @@ func TestConfig_Validate_RequiresModel(t *testing.T) {
 	}
 }
 
+// TestConfig_PerCallTimeout_HappyPath pins the parser: empty → 0
+// (Loop falls back to agent.DefaultPerCallTimeout), explicit
+// duration parses, invalid string and non-positive both error so a
+// typo in a deploy config doesn't silently keep the 3-minute default.
+func TestConfig_PerCallTimeout_HappyPath(t *testing.T) {
+	cases := []struct {
+		in      string
+		want    time.Duration
+		wantErr bool
+	}{
+		{"", 0, false},
+		{"3m", 3 * time.Minute, false},
+		{"10m", 10 * time.Minute, false},
+		{"0s", 0, true},  // non-positive must error
+		{"-5s", 0, true}, // negative must error
+		{"abc", 0, true}, // unparseable must error
+	}
+	for _, c := range cases {
+		cfg := Config{PerCallTimeout: c.in}
+		d, err := cfg.PerCallTimeoutDuration()
+		if c.wantErr {
+			if err == nil {
+				t.Errorf("PerCallTimeoutDuration(%q) should error", c.in)
+			}
+			continue
+		}
+		if err != nil {
+			t.Errorf("PerCallTimeoutDuration(%q): %v", c.in, err)
+		}
+		if d != c.want {
+			t.Errorf("PerCallTimeoutDuration(%q) = %s, want %s", c.in, d, c.want)
+		}
+	}
+}
+
+// TestConfig_Validate_RejectsBadPerCallTimeout pins that a typo
+// fails at startup, not when the first chat request finds the
+// duration unparseable.
+func TestConfig_Validate_RejectsBadPerCallTimeout(t *testing.T) {
+	cfg := Config{
+		BaseURL:        "https://example/v1",
+		Model:          "m",
+		PerCallTimeout: "not-a-duration",
+	}
+	if err := cfg.Resolve(); err != nil {
+		t.Fatal(err)
+	}
+	if err := cfg.Validate(); err == nil || !strings.Contains(err.Error(), "per_call_timeout") {
+		t.Errorf("expected per_call_timeout validation error, got %v", err)
+	}
+}
+
 // TestConfig_Retention_HappyPath pins the parser: an explicit duration
 // returns the parsed Duration; an empty value returns 0 (= disabled).
 func TestConfig_Retention_HappyPath(t *testing.T) {

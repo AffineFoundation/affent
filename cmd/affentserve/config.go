@@ -66,6 +66,13 @@ type Config struct {
 	// MaxTurnSteps overrides agent runtime's default per-turn step cap.
 	MaxTurnSteps int `json:"max_turn_steps"`
 
+	// PerCallTimeout overrides agent.DefaultPerCallTimeout (3 min) on
+	// every LLM call the Loop makes. Reasoning models (o1, Claude
+	// extended-thinking, Qwen QwQ) can take 5+ minutes to think; the
+	// default trips them mid-stream. Empty falls back to the agent
+	// default. Go duration string ("8m", "15m").
+	PerCallTimeout string `json:"per_call_timeout"`
+
 	// CompactTrigger overrides the rolling-summary compactor's
 	// per-session message threshold. Zero falls back to
 	// agent.DefaultSummaryTriggerMsgs (240). Lower it (e.g. 120) on
@@ -248,6 +255,25 @@ func (c Config) Retention() (time.Duration, error) {
 	return d, nil
 }
 
+// PerCallTimeoutDuration parses PerCallTimeout into a duration.
+// Returns 0 when the field is empty (the Loop then falls back to
+// agent.DefaultPerCallTimeout). An invalid string is a hard error
+// so an operator's typo on a "raise timeout for reasoning models"
+// change surfaces at startup, not as a silent 3-minute cap.
+func (c Config) PerCallTimeoutDuration() (time.Duration, error) {
+	if c.PerCallTimeout == "" {
+		return 0, nil
+	}
+	d, err := time.ParseDuration(c.PerCallTimeout)
+	if err != nil {
+		return 0, fmt.Errorf("per_call_timeout=%q: %w", c.PerCallTimeout, err)
+	}
+	if d <= 0 {
+		return 0, fmt.Errorf("per_call_timeout=%q must be positive", c.PerCallTimeout)
+	}
+	return d, nil
+}
+
 // Validate reports unrecoverable configuration problems. Defaults are
 // applied by Resolve() before this is meaningful — callers should
 // always Resolve() then Validate().
@@ -263,6 +289,9 @@ func (c Config) Validate() error {
 		return errors.New("model is required (use --model or set model in config file)")
 	}
 	if _, err := c.IdleTTL(); err != nil {
+		return err
+	}
+	if _, err := c.PerCallTimeoutDuration(); err != nil {
 		return err
 	}
 	return nil

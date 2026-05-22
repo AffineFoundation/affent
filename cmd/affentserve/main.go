@@ -65,6 +65,7 @@ func parseFlagsAndConfig(argv []string) (Config, error) {
 		sessionIdleTTL   = fs.String("session-idle-ttl", "", "How long an idle session stays in the pool before GC (default 10m).")
 		sessionRetention = fs.String("session-retention", "", "How long durable session dirs (conv log + memory) live on disk after last activity. Empty disables — dirs live until explicit DELETE. Set to a Go duration like '720h' (30d) to enable background GC.")
 		maxTurnSteps     = fs.Int("max-turn-steps", 0, "Per-turn step cap (assistant↔tool round trips). 0 = agent runtime's default.")
+		perCallTimeout   = fs.String("per-call-timeout", "", "Per-LLM-call timeout as a Go duration string (default 3m). Bump for reasoning models that may think for several minutes per call.")
 		compactTrigger   = fs.Int("compact-trigger", 0, "Rolling-summary compactor's message threshold per session. 0 = agent runtime's default (240). Lower on small-context upstream models to compact earlier.")
 		compactKeepLast  = fs.Int("compact-keep-last", 0, "Messages preserved verbatim at the tail of the conversation when compacting. 0 = agent runtime's default (10).")
 		enableBrowser    = fs.Bool("browser", false, "Register the extras/browser tool family for each new session.")
@@ -140,6 +141,9 @@ func parseFlagsAndConfig(argv []string) (Config, error) {
 	}
 	if *maxTurnSteps > 0 {
 		cfg.MaxTurnSteps = *maxTurnSteps
+	}
+	if *perCallTimeout != "" {
+		cfg.PerCallTimeout = *perCallTimeout
 	}
 	if *compactTrigger > 0 {
 		cfg.CompactTrigger = *compactTrigger
