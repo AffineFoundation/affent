@@ -181,6 +181,57 @@ func TestAPIKeyEnvDoesNotLeakIntoFlagDefaults(t *testing.T) {
 	}
 }
 
+// TestNoEnvVarLeaksIntoFlagDefaults pins the broader contract for every
+// flag listed in flagEnvSources — none of them may use os.Getenv() as
+// the bind default. The previous fix only caught api-key/base-url/model;
+// config, mcp-config, and executor still used env-as-default and would
+// have printed the operator's path or backend setting in --help.
+func TestNoEnvVarLeaksIntoFlagDefaults(t *testing.T) {
+	// Sentinels deliberately do not appear in any flag's hardcoded
+	// help text (which includes example values like "docker:abc123def"
+	// that would false-trigger a substring match).
+	planted := map[string]string{
+		"AFFENTCTL_CONFIG":     "/sentinel-config-XYZ123",
+		"AFFENTCTL_BASE_URL":   "https://sentinel-base-XYZ123",
+		"AFFENTCTL_API_KEY":    "sk-sentinel-XYZ123",
+		"AFFENTCTL_MODEL":      "sentinel-model-XYZ123",
+		"AFFENTCTL_MCP_CONFIG": "/sentinel-mcp-XYZ123",
+		"AFFENTCTL_EXECUTOR":   "docker:sentinel-XYZ123",
+	}
+	for k, v := range planted {
+		t.Setenv(k, v)
+	}
+
+	var cf commonFlags
+	fs := flag.NewFlagSet("test", flag.ContinueOnError)
+	var help strings.Builder
+	fs.SetOutput(&help)
+	cf.bind(fs)
+	fs.PrintDefaults()
+
+	for name := range flagEnvSources {
+		got := fs.Lookup(name).DefValue
+		// "executor" has a non-env default ("local") which is fine to
+		// surface. Every other flag must have an empty default so
+		// nothing in the env table reaches --help.
+		want := ""
+		if name == "executor" {
+			want = "local"
+		}
+		if got != want {
+			t.Errorf("%s default = %q, want %q (env-bound flags must not show env values in --help)", name, got, want)
+		}
+	}
+	for _, v := range planted {
+		if v == "local" {
+			continue // executor's built-in default matches "local"; impossible to plant
+		}
+		if strings.Contains(help.String(), v) {
+			t.Fatalf("help output leaked planted env value %q:\n%s", v, help.String())
+		}
+	}
+}
+
 func TestMemoryOnlyImpliesMemoryEnabled(t *testing.T) {
 	var cf commonFlags
 	fs := flag.NewFlagSet("test", flag.ContinueOnError)

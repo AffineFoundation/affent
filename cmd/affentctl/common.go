@@ -101,7 +101,7 @@ type commonFlags struct {
 }
 
 func (c *commonFlags) bind(fs *flag.FlagSet) {
-	fs.StringVar(&c.configPath, "config", os.Getenv("AFFENTCTL_CONFIG"), "JSON config file; CLI flags override config values")
+	fs.StringVar(&c.configPath, "config", "", "JSON config file; CLI flags override config values (env: AFFENTCTL_CONFIG)")
 	fs.StringVar(&c.workspace, "workspace", "./affent-workspace", "working dir for shell + file tools")
 	fs.StringVar(&c.baseURL, "base-url", "", "OpenAI-compat endpoint (env: AFFENTCTL_BASE_URL)")
 	fs.StringVar(&c.apiKey, "api-key", "", "API key (env: AFFENTCTL_API_KEY)")
@@ -125,20 +125,13 @@ func (c *commonFlags) bind(fs *flag.FlagSet) {
 	fs.BoolVar(&c.projectContext, "project-context", true, "auto-load AGENTS.md / CONVENTIONS.md / .cursorrules / .clinerules / CLAUDE.md / GEMINI.md from --workspace into the system prompt")
 	fs.StringVar(&c.sessionID, "session-id", "", "resume the named session (under --workspace/.affentctl/)")
 	fs.BoolVar(&c.continueLast, "continue", false, "resume the most recent session under --workspace")
-	fs.StringVar(&c.mcpConfigPath, "mcp-config", os.Getenv("AFFENTCTL_MCP_CONFIG"), "path to MCP server config JSON ({\"servers\":[{...}]})")
+	fs.StringVar(&c.mcpConfigPath, "mcp-config", "", "path to MCP server config JSON ({\"servers\":[{...}]}) (env: AFFENTCTL_MCP_CONFIG)")
 	fs.IntVar(&c.compactTrigger, "compact-trigger", 240, "compact conversation when message count exceeds this. 0 / negative → fall back to agent runtime's default (240). Reactive compaction (on context-overflow errors) is unaffected.")
 	fs.IntVar(&c.compactKeepLast, "compact-keep-last", 10, "messages preserved verbatim at the tail of the conversation when compacting")
-	fs.StringVar(&c.executor, "executor", envOr("AFFENTCTL_EXECUTOR", "local"), "shell-tool backend: 'local' (host; no isolation), or 'docker:<container_id>' (exec into an already-running container, e.g. 'docker:abc123def'; file tools also route through docker so they see the container's filesystem). Caller manages container lifecycle.")
+	fs.StringVar(&c.executor, "executor", "local", "shell-tool backend: 'local' (host; no isolation), or 'docker:<container_id>' (exec into an already-running container, e.g. 'docker:abc123def'; file tools also route through docker so they see the container's filesystem). Caller manages container lifecycle. (env: AFFENTCTL_EXECUTOR)")
 	fs.Float64Var(&c.temperature, "temperature", -1, "sampling temperature for the upstream chat completion; <0 leaves the field unset and the upstream picks its default")
 	fs.Float64Var(&c.topP, "top-p", -1, "nucleus sampling cutoff for the upstream chat completion; <0 leaves unset")
 	fs.Int64Var(&c.seed, "seed", -1, "deterministic-sampling seed for the upstream chat completion; <0 leaves unset")
-}
-
-func envOr(key, fallback string) string {
-	if v := os.Getenv(key); v != "" {
-		return v
-	}
-	return fallback
 }
 
 // flagEnvSources maps flag-name → env-var-name for every flag whose
@@ -207,7 +200,14 @@ func applyConfig(c *commonFlags, fs *flag.FlagSet) error {
 
 func loadConfigFile(c *commonFlags, fs *flag.FlagSet) error {
 	if c.configPath == "" {
-		return nil
+		// AFFENTCTL_CONFIG was previously surfaced as a flag default,
+		// which leaked the path into --help output. The default is now
+		// empty; the env-var lookup moves here so --config still has
+		// its env lane without showing up in usage.
+		c.configPath = os.Getenv("AFFENTCTL_CONFIG")
+		if c.configPath == "" {
+			return nil
+		}
 	}
 	raw, err := os.ReadFile(c.configPath)
 	if err != nil {
