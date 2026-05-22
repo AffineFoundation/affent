@@ -59,7 +59,7 @@ func subagentTool(deps SubagentDeps) *Tool {
     }`)
 	return &Tool{
 		Name:        "subagent_run",
-		Description: "Run a bounded subagent in an isolated context for codebase exploration or review. Use it when the main context would be polluted by lots of file reads, logs, or session_search results. The subagent has read_file/list_files, guarded read-only shell, memory, and session_search; it cannot use write_file/edit_file. It returns a structured evidence report for the main agent to act on. After this tool returns, answer from its report instead of repeating the same file reads/tests unless the report is incomplete or contradictory.",
+		Description: "Run a bounded subagent in an isolated context for codebase exploration or review. Use it when the main context would be polluted by lots of file reads, logs, or session_search results. The subagent has read_file/list_files, guarded read-only shell, memory, and session_search; it cannot use write_file/edit_file. It returns a structured evidence report for the main agent to act on. After this tool returns, answer from its report instead of reading the child transcript or repeating the same file reads/tests unless the report is incomplete or contradictory.",
 		Schema:      schema,
 		Execute: func(ctx context.Context, args json.RawMessage) (string, error) {
 			var p struct {
@@ -93,7 +93,7 @@ func subagentTool(deps SubagentDeps) *Tool {
 
 func runSubagent(ctx context.Context, deps SubagentDeps, mode, task string, maxTurns int) (string, error) {
 	childID := "subagent_" + uuid.NewString()
-	convPath, publicPath, cleanup, err := subagentConversationPath(deps.TranscriptDir, childID)
+	convPath, cleanup, err := subagentConversationPath(deps.TranscriptDir, childID)
 	if err != nil {
 		return "", err
 	}
@@ -136,11 +136,13 @@ func runSubagent(ctx context.Context, deps SubagentDeps, mode, task string, maxT
 		return "", err
 	}
 	report, reason, toolCalls, err := drainSubagent(ctx, events, turnID)
+	if err != nil {
+		loop.Cancel()
+	}
 	resp := map[string]any{
 		"ok":               err == nil && reason == sse.TurnEndCompleted,
 		"mode":             mode,
 		"child_session_id": childID,
-		"transcript_path":  publicPath,
 		"turn_end_reason":  reason,
 		"report":           report,
 		"tool_calls":       toolCalls,
@@ -155,19 +157,19 @@ func runSubagent(ctx context.Context, deps SubagentDeps, mode, task string, maxT
 	return string(out), err
 }
 
-func subagentConversationPath(root, childID string) (path string, publicPath string, cleanup func(), err error) {
+func subagentConversationPath(root, childID string) (path string, cleanup func(), err error) {
 	if root != "" {
 		if err := os.MkdirAll(root, 0o755); err != nil {
-			return "", "", func() {}, fmt.Errorf("subagent transcript dir: %w", err)
+			return "", func() {}, fmt.Errorf("subagent transcript dir: %w", err)
 		}
 		path := filepath.Join(root, childID+".jsonl")
-		return path, path, func() {}, nil
+		return path, func() {}, nil
 	}
 	dir, err := os.MkdirTemp("", "affent-subagent-*")
 	if err != nil {
-		return "", "", func() {}, fmt.Errorf("subagent temp dir: %w", err)
+		return "", func() {}, fmt.Errorf("subagent temp dir: %w", err)
 	}
-	return filepath.Join(dir, "conversation.jsonl"), "", func() { _ = os.RemoveAll(dir) }, nil
+	return filepath.Join(dir, "conversation.jsonl"), func() { _ = os.RemoveAll(dir) }, nil
 }
 
 func subagentSystemPrompt(mode string) string {

@@ -43,7 +43,6 @@ func TestSubagentRun_ReturnsStructuredReport(t *testing.T) {
 	var resp struct {
 		Mode          string `json:"mode"`
 		ChildID       string `json:"child_session_id"`
-		Transcript    string `json:"transcript_path"`
 		TurnEndReason string `json:"turn_end_reason"`
 		Report        string `json:"report"`
 	}
@@ -53,8 +52,8 @@ func TestSubagentRun_ReturnsStructuredReport(t *testing.T) {
 	if resp.Mode != "explore" || resp.TurnEndReason != "completed" {
 		t.Fatalf("unexpected response metadata: %+v", resp)
 	}
-	if !strings.HasPrefix(resp.ChildID, "subagent_") || resp.Transcript == "" {
-		t.Fatalf("missing child transcript metadata: %+v", resp)
+	if !strings.HasPrefix(resp.ChildID, "subagent_") {
+		t.Fatalf("missing child session id: %+v", resp)
 	}
 	if !strings.Contains(resp.Report, "Conclusion:") || !strings.Contains(resp.Report, "found it") {
 		t.Fatalf("report missing model output: %+v", resp)
@@ -90,6 +89,29 @@ func TestReadOnlyMemoryToolRejectsWrites(t *testing.T) {
 	}
 	if !strings.Contains(err.Error(), "read-only") {
 		t.Fatalf("unexpected error: %v", err)
+	}
+}
+
+func TestRunSubagentCancelsChildLoopWhenParentContextCancels(t *testing.T) {
+	block := make(chan struct{})
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		<-block
+	}))
+	t.Cleanup(func() {
+		close(block)
+		srv.Close()
+	})
+
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Millisecond)
+	defer cancel()
+	_, err := runSubagent(ctx, SubagentDeps{
+		LLM:              NewLLMClient(srv.URL, "", "fake"),
+		HostWorkspaceDir: t.TempDir(),
+		Log:              zerolog.Nop(),
+		PerCallTimeout:   5 * time.Second,
+	}, "explore", "inspect", 1)
+	if err == nil {
+		t.Fatal("expected cancelled context error")
 	}
 }
 
