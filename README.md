@@ -91,6 +91,28 @@ cd cmd/affentserve
 go build -o ../../bin/affentserve .
 ```
 
+Run it. CLI flags and env vars are interchangeable; this example uses
+env so the same setup ports cleanly to `docker run -e …` or a
+Kubernetes pod spec:
+
+```bash
+AFFENTSERVE_BASE_URL=https://api.openai.com/v1 \
+AFFENTSERVE_API_KEY="$OPENAI_API_KEY" \
+AFFENTSERVE_MODEL=gpt-4o-mini \
+./bin/affentserve --listen 127.0.0.1:7777
+```
+
+Test the chat endpoint with any OpenAI SDK or curl. `affent_session_id`
+in the response pins the session; pass it back as a header or in the
+body to continue the same conversation:
+
+```bash
+curl -sS http://127.0.0.1:7777/v1/chat/completions \
+  -H 'Content-Type: application/json' \
+  -d '{"model":"gpt-4o-mini","messages":[{"role":"user","content":"hi"}]}' \
+  | jq '{content: .choices[0].message.content, session_id: .affent_session_id}'
+```
+
 ## Configuration
 
 Affent uses CLI flags, JSON config files, and environment variables. Both
