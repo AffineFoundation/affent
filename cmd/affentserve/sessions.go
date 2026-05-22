@@ -883,9 +883,3 @@ func (s *Session) BrowserStatsSnapshot() BrowserStatsSnapshot {
 // want to inspect the JSONL conversation log. Not used by production
 // paths.
 func (s *Session) Workspace() string { return s.workspace }
-
-// filename helper kept here so test code outside the package can rely
-// on the stable JSONL log name in the workspace.
-func sessionLogPath(workspace, id string) string {
-	return filepath.Join(workspace, ".affentctl", id+".jsonl")
-}
