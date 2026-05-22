@@ -187,9 +187,17 @@ Design contract enforced in code (`internal/agent/subagent.go` +
   recoverable LLM-side errors the child fought through are surfaced
   back to the parent for budget / debug visibility.
 
-CLI registers it automatically when `--memory-only` is off; HTTP
-server registers it through the same path on each new session. Pass
-`mode` (`explore` or `review`) and `task` to invoke; `max_turns`
+Registration:
+
+- `affentctl`: on by default; `--memory-only` disables it (the
+  memory-only isolation mode strips every non-memory tool, subagent
+  included).
+- `affentserve`: off by default. Enable with `--subagent` or
+  `enable_subagent: true` in the config file. Independent of
+  `--builtins` — the parent can have subagent without exposing host
+  shell, and conversely host shell doesn't pull subagent in.
+
+Pass `mode` (`explore` or `review`) and `task` to invoke; `max_turns`
 defaults to 6 with a hard cap of 12.
 
 ## Events And Observability
