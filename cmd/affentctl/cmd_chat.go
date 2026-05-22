@@ -46,7 +46,10 @@ Slash commands inside the REPL:
   /help       show commands
   /sid        print current session id
   /exit       quit (Ctrl+D also works)
-  /cancel     interrupt the current turn (Ctrl+C also works)`)
+  /cancel     interrupt a background turn (e.g. a cron-fired one). To
+              cancel the turn you just kicked off from this prompt,
+              use Ctrl+C — the REPL is busy streaming events and
+              can't read a slash command while a turn is in flight.`)
 		fs.PrintDefaults()
 	}
 	if err := fs.Parse(args); err != nil {
@@ -283,7 +286,8 @@ func handleSlash(line string, b *loopBundle) (bool, int) {
 		fmt.Fprintln(os.Stderr, `commands:
   /help        show this
   /sid         print current session id
-  /cancel      interrupt the current turn (or use Ctrl+C)
+  /cancel      interrupt a background (cron-fired) turn; use Ctrl+C
+               to cancel a turn you typed from this prompt
   /exit        quit`)
 		return true, 0
 	case "/sid":
