@@ -7,6 +7,7 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"reflect"
 	"strings"
 	"testing"
 	"time"
@@ -278,7 +279,7 @@ func TestSubagentToolDescriptionMentionsCallerProvidedBrowserTools(t *testing.T)
 // two load-bearing invariants of the subagent design:
 //
 //  1. The child cannot recursively spawn another subagent (would
-//     produce unbounded fan-out + token spend with no operator
+//     produce unbounded fan-out + token spend with no parent-side
 //     visibility).
 //  2. The child cannot mutate the workspace (subagent is for
 //     exploration / review; writes go through the parent so the
@@ -394,7 +395,7 @@ func TestSubagentRun_ReportComesFirstInResponse(t *testing.T) {
 
 // TestSubagentRun_SurfacesUsage pins the token-cost contract. The
 // subagent's whole reason for existing is to keep the parent
-// context clean, but operators still need visibility into what each
+// context clean, but the parent still needs visibility into what each
 // child cost. Without this, a parent that fires off N subagents has
 // no way to budget — token counts only show up in trace events the
 // parent never sees.
@@ -485,7 +486,7 @@ func TestRunSubagent_DoesNotPolluteParentConversation(t *testing.T) {
 		TranscriptDir:    transcripts,
 		Log:              zerolog.Nop(),
 		PerCallTimeout:   5 * time.Second,
-	}, "explore", "find marker file", 4)
+	}, SubagentMode{Name: "explore"}, "find marker file", 4)
 	if err != nil {
 		t.Fatalf("runSubagent: %v\n%s", err, out)
 	}
@@ -550,7 +551,7 @@ func TestRunSubagent_RegisterChildToolsAddsAndCleansExtras(t *testing.T) {
 			})
 			return func() { cleanupCalled = true }, nil
 		},
-	}, "explore", "open example", 4)
+	}, SubagentMode{Name: "explore"}, "open example", 4)
 	if err != nil {
 		t.Fatalf("runSubagent: %v\n%s", err, out)
 	}
@@ -597,17 +598,153 @@ func TestSubagentTool_InputValidation(t *testing.T) {
 	})
 
 	t.Run("unknown mode is rejected", func(t *testing.T) {
-		_, err := tool.Execute(context.Background(), json.RawMessage(`{"task":"x","mode":"test"}`))
+		// "frobnicate" is intentionally not a registered mode. The
+		// rejection message must enumerate the actually-valid modes so
+		// the model can see what
+		// the registry contains for this deployment, not a stale enum
+		// pinned by the schema.
+		_, err := tool.Execute(context.Background(), json.RawMessage(`{"task":"x","mode":"frobnicate"}`))
 		if err == nil || !strings.Contains(err.Error(), "unsupported mode") {
-			t.Errorf("future-mode 'test' must be rejected until the v0 tool set actually supports it; got err=%v", err)
+			t.Errorf("unknown mode must be rejected; got err=%v", err)
+		}
+		if err != nil {
+			for _, want := range DefaultSubagentModeRegistry().Names() {
+				if !strings.Contains(err.Error(), want) {
+					t.Errorf("rejection should list valid modes (missing %q): %v", want, err)
+				}
+			}
+		}
+	})
+}
+
+// TestSubagentModeRegistry_DataDrivenContract pins the core extensibility
+// guarantee: adding a new mode is one Register call, and the new mode
+// flows through to schema enum, validation, and prompt assembly without
+// any code change in subagentTool / runSubagent.
+//
+// A regression that hardcodes the dispatch back to a fixed enum (the
+// pre-refactor shape) fires this test.
+func TestSubagentModeRegistry_DataDrivenContract(t *testing.T) {
+	t.Run("Register drops duplicates and empty names", func(t *testing.T) {
+		r := &SubagentModeRegistry{}
+		r.Register(SubagentMode{Name: "alpha", Description: "first"})
+		r.Register(SubagentMode{Name: "alpha", Description: "second-shouldnt-replace"})
+		r.Register(SubagentMode{Name: "", Description: "empty-name"})
+		r.Register(SubagentMode{Name: "  ", Description: "whitespace-only"})
+		r.Register(SubagentMode{Name: "beta", Description: "real"})
+		if got := r.Names(); !reflect.DeepEqual(got, []string{"alpha", "beta"}) {
+			t.Errorf("registry should silently drop duplicates and empty names; got %v", got)
+		}
+		// First-registered wins on duplicate Name.
+		if m, _ := r.Lookup("alpha"); m.Description != "first" {
+			t.Errorf("duplicate registration must NOT replace existing entry; got %q", m.Description)
+		}
+	})
+
+	t.Run("Default returns first registered mode", func(t *testing.T) {
+		r := DefaultSubagentModeRegistry()
+		if got := r.Default(); got != "explore" {
+			t.Errorf("Default should be the first-registered mode; got %q", got)
+		}
+		if got := (&SubagentModeRegistry{}).Default(); got != "" {
+			t.Errorf("empty registry Default should be empty; got %q", got)
+		}
+	})
+
+	t.Run("custom mode lands in the schema enum", func(t *testing.T) {
+		custom := &SubagentModeRegistry{}
+		custom.Register(SubagentMode{
+			Name:        "migrate",
+			Description: "deployment-specific schema migration delegation",
+		})
+		tool := subagentTool(SubagentDeps{
+			LLM:              NewLLMClient("http://x", "", "m"),
+			HostWorkspaceDir: t.TempDir(),
+			Log:              zerolog.Nop(),
+			ModeRegistry:     custom,
+		})
+		raw := string(tool.Schema)
+		if !strings.Contains(raw, `"migrate"`) {
+			t.Errorf("custom mode should appear in schema enum:\n%s", raw)
+		}
+		if !strings.Contains(raw, "deployment-specific schema migration") {
+			t.Errorf("custom mode description should appear in schema:\n%s", raw)
+		}
+		// And the default registry's modes must NOT leak in when the
+		// caller passes a non-empty custom registry.
+		if strings.Contains(raw, `"explore"`) {
+			t.Errorf("custom registry should replace defaults, not merge with them:\n%s", raw)
+		}
+	})
+
+	t.Run("nil/empty ModeRegistry falls back to defaults", func(t *testing.T) {
+		for _, name := range []string{"nil registry", "empty registry"} {
+			deps := SubagentDeps{
+				LLM:              NewLLMClient("http://x", "", "m"),
+				HostWorkspaceDir: t.TempDir(),
+				Log:              zerolog.Nop(),
+			}
+			if name == "empty registry" {
+				deps.ModeRegistry = &SubagentModeRegistry{}
+			}
+			tool := subagentTool(deps)
+			raw := string(tool.Schema)
+			for _, want := range []string{`"explore"`, `"review"`, `"test"`, `"research"`} {
+				if !strings.Contains(raw, want) {
+					t.Errorf("%s: schema missing default mode %s:\n%s", name, want, raw)
+				}
+			}
+		}
+	})
+
+	t.Run("SystemPromptHints land in the system prompt", func(t *testing.T) {
+		// 'review' has hints; 'explore' does not.
+		got := subagentSystemPrompt("review")
+		if !strings.Contains(got, "Mode hint: review.") {
+			t.Errorf("review mode hints should be appended to system prompt:\n%s", got)
+		}
+		gotExplore := subagentSystemPrompt("explore")
+		if strings.Contains(gotExplore, "Mode hint:") {
+			t.Errorf("explore has empty hints; system prompt should NOT include a Mode hint section:\n%s", gotExplore)
+		}
+	})
+
+	t.Run("test mode is callable end-to-end", func(t *testing.T) {
+		// The newly-registered 'test' mode must pass the validator. No
+		// real LLM round-trip needed — schema acceptance + validator
+		// acceptance is enough; the runtime path is exercised by other
+		// tests.
+		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			w.Header().Set("Content-Type", "text/event-stream")
+			w.WriteHeader(http.StatusOK)
+			_, _ = w.Write([]byte("data: {\"choices\":[{\"delta\":{\"role\":\"assistant\",\"content\":\"Conclusion:\\nok\"},\"finish_reason\":\"stop\"}]}\n\n"))
+			_, _ = w.Write([]byte("data: [DONE]\n\n"))
+		}))
+		t.Cleanup(srv.Close)
+		tool := subagentTool(SubagentDeps{
+			LLM:              NewLLMClient(srv.URL, "", "fake"),
+			HostWorkspaceDir: t.TempDir(),
+			Log:              zerolog.Nop(),
+			PerCallTimeout:   5 * time.Second,
+		})
+		out, err := tool.Execute(context.Background(), json.RawMessage(`{"task":"x","mode":"test"}`))
+		if err != nil {
+			t.Fatalf("'test' mode should be accepted by the registry: %v", err)
+		}
+		var resp subagentResponse
+		if err := json.Unmarshal([]byte(out), &resp); err != nil {
+			t.Fatal(err)
+		}
+		if resp.Mode != "test" {
+			t.Errorf("response should echo the actual mode; got %q", resp.Mode)
 		}
 	})
 }
 
 // TestSubagentTool_MaxTurnsClamp verifies that an oversized
 // max_turns from the model gets silently clamped to
-// maxSubagentMaxTurns instead of returning an error — operators
-// would rather have a bounded run than a thrown tool call.
+// maxSubagentMaxTurns instead of returning an error. A bounded run is
+// more useful than a thrown tool call when the model asks for 999 turns.
 func TestSubagentTool_MaxTurnsClamp(t *testing.T) {
 	// Mock LLM that returns immediately so we can observe behavior
 	// without burning real budget.
@@ -656,7 +793,7 @@ func TestRunSubagentCancelsChildLoopWhenParentContextCancels(t *testing.T) {
 		HostWorkspaceDir: t.TempDir(),
 		Log:              zerolog.Nop(),
 		PerCallTimeout:   5 * time.Second,
-	}, "explore", "inspect", 1)
+	}, SubagentMode{Name: "explore"}, "inspect", 1)
 	if err == nil {
 		t.Fatal("expected cancelled context error")
 	}

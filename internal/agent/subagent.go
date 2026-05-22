@@ -23,6 +23,127 @@ const (
 	SubagentToolName        = "subagent_run"
 )
 
+// SubagentMode is one registered operating mode for the subagent_run
+// tool. Adding a new mode is a Register call on a SubagentModeRegistry,
+// not a code change in subagentTool / runSubagent — the schema enum,
+// validation, and per-mode system-prompt hints all read from the
+// registry.
+type SubagentMode struct {
+	// Name is the short identifier surfaced in the schema enum and in
+	// the structured response's "mode" field. Lowercase, no spaces.
+	Name string
+	// Description is what the LLM sees in the schema to decide which
+	// mode to pick. Keep it concrete and behavior-shaped.
+	Description string
+	// SystemPromptHints is appended verbatim to the base subagent
+	// system prompt when this mode is active. May be empty when the
+	// base prompt is already shaped for the mode (true for "explore").
+	SystemPromptHints string
+}
+
+// SubagentModeRegistry is an ordered set of subagent modes. The first
+// registered mode is the default when the caller omits "mode".
+type SubagentModeRegistry struct {
+	modes []SubagentMode
+}
+
+// Register appends a mode. Modes with empty Name or duplicates of an
+// existing Name are dropped silently — registration is best-effort
+// like skill registration, so a typo in one of N entries doesn't fail
+// the whole deploy.
+func (r *SubagentModeRegistry) Register(m SubagentMode) {
+	if r == nil || strings.TrimSpace(m.Name) == "" {
+		return
+	}
+	for _, existing := range r.modes {
+		if existing.Name == m.Name {
+			return
+		}
+	}
+	r.modes = append(r.modes, m)
+}
+
+// Lookup returns the registered mode with the given Name and whether
+// it exists. Empty-name lookups never match.
+func (r *SubagentModeRegistry) Lookup(name string) (SubagentMode, bool) {
+	if r == nil || name == "" {
+		return SubagentMode{}, false
+	}
+	for _, m := range r.modes {
+		if m.Name == name {
+			return m, true
+		}
+	}
+	return SubagentMode{}, false
+}
+
+// Names returns the registered mode names in registration order. Used
+// to build the schema enum.
+func (r *SubagentModeRegistry) Names() []string {
+	if r == nil {
+		return nil
+	}
+	out := make([]string, 0, len(r.modes))
+	for _, m := range r.modes {
+		out = append(out, m.Name)
+	}
+	return out
+}
+
+// Default returns the first registered mode's Name, or "" if the
+// registry is empty. Used when the caller omits "mode".
+func (r *SubagentModeRegistry) Default() string {
+	if r == nil || len(r.modes) == 0 {
+		return ""
+	}
+	return r.modes[0].Name
+}
+
+// DefaultSubagentModeRegistry returns the built-in mode set.
+//
+// Mode order matters: the first entry is the implicit default when the
+// caller omits "mode". "explore" stays first because investigate-and-
+// summarize is the safest default for ambiguous delegation.
+func DefaultSubagentModeRegistry() *SubagentModeRegistry {
+	r := &SubagentModeRegistry{}
+	r.Register(SubagentMode{
+		Name:        "explore",
+		Description: "investigate and summarize evidence",
+		// Base prompt is already explore-shaped; no extra hints needed.
+		SystemPromptHints: "",
+	})
+	r.Register(SubagentMode{
+		Name:        "review",
+		Description: "inspect existing changes/claim and look for risks",
+		SystemPromptHints: `Mode hint: review.
+- Focus on risks in the named change/claim: incorrect assumptions, missing tests, race conditions, error-handling gaps, unhandled edge cases.
+- Read the changed files and one level of caller context. Do not propose unrelated refactors.
+- Surface what is missing as explicit "Risks:" and "Missing tests:" sections inside the Conclusion/Evidence frame.`,
+	})
+	r.Register(SubagentMode{
+		Name:        "test",
+		Description: "reproduce failing tests, classify the failure, identify a minimal repro",
+		SystemPromptHints: `Mode hint: test.
+- Reproduce first with the narrowest test/command before reading widely.
+- Capture the exact error message and the file:line it surfaces from.
+- Suggest the smallest repro command in the Recommended next step section.
+- Do not propose a code fix unless the user explicitly asked for one; the parent agent decides whether to act on the diagnosis.`,
+	})
+	r.Register(SubagentMode{
+		Name:        "research",
+		Description: "search session history, memory, project context, and docs for prior decisions",
+		SystemPromptHints: `Mode hint: research.
+- Prefer session_search and memory action=search/list over wide shell sweeps; cite each finding with its source (session id, memory topic, or doc path).
+- When the question is open-ended, end with the smallest set of follow-up reads that would resolve it rather than speculating.`,
+	})
+	return r
+}
+
+// defaultSubagentModeRegistry backs the package-level helpers
+// (subagentSystemPrompt / schema generation) that don't have a deps
+// handle. SubagentDeps.ModeRegistry overrides it per-run.
+var defaultSubagentModeRegistry = DefaultSubagentModeRegistry()
+
 const SubagentSystemGuidance = `Subagent delegation:
 - If the subagent_run tool is available and the user explicitly asks for a subagent, isolated review, broad exploration, or avoiding main-context pollution, call subagent_run as the first tool.
 - Do not spend parent context listing directories or reading large files just to prepare that delegation. Put likely paths, uncertainty, and the concrete question in the subagent task; the child can inspect them in its isolated context.
@@ -107,6 +228,25 @@ type SubagentDeps struct {
 	RegisterChildTools func(ctx context.Context, reg *Registry) (cleanup func(), err error)
 	Log                zerolog.Logger
 	PerCallTimeout     time.Duration
+
+	// ModeRegistry overrides the built-in subagent operating modes.
+	// nil → DefaultSubagentModeRegistry() applies (explore, review,
+	// test, research). Runtime wiring can provide a deployment-specific
+	// set, such as a "migrate" mode for schema-rewrite investigations.
+	ModeRegistry *SubagentModeRegistry
+}
+
+// resolveModeRegistry returns the registry to use for this deps
+// instance: the caller-supplied one if non-nil and non-empty, else the
+// package default. An empty (but non-nil) registry falls back to the
+// default — an empty registry would leave subagent_run with no valid
+// modes, which is configuration error worth tolerating like the silent-drop
+// path in Register.
+func (d SubagentDeps) resolveModeRegistry() *SubagentModeRegistry {
+	if d.ModeRegistry == nil || len(d.ModeRegistry.modes) == 0 {
+		return defaultSubagentModeRegistry
+	}
+	return d.ModeRegistry
 }
 
 // RegisterSubagent registers the subagent_run tool when the required runtime
@@ -143,19 +283,11 @@ func buildSubagentRegistry(deps SubagentDeps) *Registry {
 }
 
 func subagentTool(deps SubagentDeps) *Tool {
-	schema := json.RawMessage(`{
-        "type": "object",
-        "required": ["task"],
-        "properties": {
-            "task": {"type": "string", "description": "Concrete bounded task for the isolated subagent. Include the files, question, or risk to inspect. For web pages, specify whether to extract only current-page visible snapshot facts or to inspect additional tabs/pages."},
-            "mode": {"type": "string", "enum": ["explore", "review"], "description": "explore = investigate and summarize evidence; review = inspect existing changes/claim and look for risks. Default explore."},
-            "max_turns": {"type": "integer", "minimum": 1, "maximum": 12, "description": "Subagent tool-call step budget. Default 6, hard max 12."}
-        }
-    }`)
+	reg := deps.resolveModeRegistry()
 	return &Tool{
 		Name:        SubagentToolName,
 		Description: "Run a bounded subagent in an isolated context for codebase exploration, review, or caller-provided extra capabilities such as browser-based web inspection. If the user explicitly asks for subagent, isolated review, broad exploration, web inspection without main-context pollution, or avoiding main-context pollution, call this as the first tool instead of exploring in the parent context. The child always has read_file/list_files and may also have guarded read-only shell, memory, session_search, and session-scoped extra tools registered by the caller (for example browser_navigate/browser_snapshot when affentserve runs with --browser). It cannot use write_file/edit_file. It returns a structured evidence report for the main agent to act on. After this tool returns, answer from its report instead of reading the child transcript or repeating the same file reads/tests/browser steps unless the report is incomplete or contradictory. If ok=false, use the attempted files/tools as a focused verification index rather than as conclusive findings.",
-		Schema:      schema,
+		Schema:      subagentToolSchema(reg),
 		Execute: func(ctx context.Context, args json.RawMessage) (string, error) {
 			var p struct {
 				Task     string `json:"task"`
@@ -170,10 +302,11 @@ func subagentTool(deps SubagentDeps) *Tool {
 				return "", errors.New("task is required")
 			}
 			if p.Mode == "" {
-				p.Mode = "explore"
+				p.Mode = reg.Default()
 			}
-			if p.Mode != "explore" && p.Mode != "review" {
-				return "", fmt.Errorf("unsupported mode %q (valid: explore, review)", p.Mode)
+			mode, ok := reg.Lookup(p.Mode)
+			if !ok {
+				return "", fmt.Errorf("unsupported mode %q (valid: %s)", p.Mode, strings.Join(reg.Names(), ", "))
 			}
 			if p.MaxTurns <= 0 {
 				p.MaxTurns = defaultSubagentMaxTurns
@@ -181,12 +314,45 @@ func subagentTool(deps SubagentDeps) *Tool {
 			if p.MaxTurns > maxSubagentMaxTurns {
 				p.MaxTurns = maxSubagentMaxTurns
 			}
-			return runSubagent(ctx, deps, p.Mode, p.Task, p.MaxTurns)
+			return runSubagent(ctx, deps, mode, p.Task, p.MaxTurns)
 		},
 	}
 }
 
-func runSubagent(ctx context.Context, deps SubagentDeps, mode, task string, maxTurns int) (string, error) {
+// subagentToolSchema renders the JSON schema for subagent_run, building
+// the "mode" enum and its description from the registry so adding a
+// mode flows through to the LLM-visible schema without touching this
+// function.
+func subagentToolSchema(reg *SubagentModeRegistry) json.RawMessage {
+	enum, _ := json.Marshal(reg.Names())
+	var modeDesc strings.Builder
+	for i, m := range reg.modes {
+		if i > 0 {
+			modeDesc.WriteString("; ")
+		}
+		modeDesc.WriteString(m.Name)
+		modeDesc.WriteString(" = ")
+		modeDesc.WriteString(m.Description)
+	}
+	if def := reg.Default(); def != "" {
+		modeDesc.WriteString(". Default ")
+		modeDesc.WriteString(def)
+		modeDesc.WriteString(".")
+	}
+	modeBlock := fmt.Sprintf(`"mode": {"type": "string", "enum": %s, "description": %q}`, enum, modeDesc.String())
+	schemaJSON := `{
+        "type": "object",
+        "required": ["task"],
+        "properties": {
+            "task": {"type": "string", "description": "Concrete bounded task for the isolated subagent. Include the files, question, or risk to inspect. For web pages, specify whether to extract only current-page visible snapshot facts or to inspect additional tabs/pages."},
+            ` + modeBlock + `,
+            "max_turns": {"type": "integer", "minimum": 1, "maximum": 12, "description": "Subagent tool-call step budget. Default 6, hard max 12."}
+        }
+    }`
+	return json.RawMessage(schemaJSON)
+}
+
+func runSubagent(ctx context.Context, deps SubagentDeps, mode SubagentMode, task string, maxTurns int) (string, error) {
 	childID := "subagent_" + uuid.NewString()
 	convPath, cleanup, err := subagentConversationPath(deps.TranscriptDir, childID)
 	if err != nil {
@@ -225,10 +391,10 @@ func runSubagent(ctx context.Context, deps SubagentDeps, mode, task string, maxT
 		ProjectContextDir:           deps.ProjectContextDir,
 		SkillProvider:               BuiltinSkillProvider,
 	}
-	if err := loop.EnsureSystemPrompt(subagentSystemPrompt(mode)); err != nil {
+	if err := loop.EnsureSystemPrompt(subagentSystemPromptFor(mode)); err != nil {
 		return "", fmt.Errorf("subagent system prompt: %w", err)
 	}
-	turnID, err := loop.SendUser(ctx, subagentUserPrompt(mode, task, deps.HostWorkspaceDir, maxTurns))
+	turnID, err := loop.SendUser(ctx, subagentUserPrompt(mode.Name, task, deps.HostWorkspaceDir, maxTurns))
 	if err != nil {
 		return "", err
 	}
@@ -248,7 +414,7 @@ func runSubagent(ctx context.Context, deps SubagentDeps, mode, task string, maxT
 		Report:         report,
 		OK:             err == nil && reason == sse.TurnEndCompleted,
 		TurnEndReason:  reason,
-		Mode:           mode,
+		Mode:           mode.Name,
 		ChildSessionID: childID,
 		Usage:          usage,
 		ToolCalls:      toolCalls,
@@ -258,7 +424,7 @@ func runSubagent(ctx context.Context, deps SubagentDeps, mode, task string, maxT
 	} else if len(errMsgs) > 0 {
 		// LLM-level errors that didn't kill the turn (recoverable
 		// retries that ultimately succeeded, etc.) get surfaced so
-		// the parent / operator can see what the child fought through.
+		// the parent can see what the child fought through.
 		resp.LoopErrors = errMsgs
 	}
 	out, merr := json.Marshal(resp)
@@ -374,9 +540,8 @@ type subagentResponse struct {
 }
 
 // subagentUsage is the per-turn token accounting summed across every
-// LLM call the child made. Lets the parent (and operators tracking
-// $/turn) see what the subagent actually cost without diffing trace
-// events themselves.
+// LLM call the child made. Lets the parent see what the subagent cost
+// without diffing trace events itself.
 type subagentUsage struct {
 	InputTokens  int `json:"input_tokens"`
 	OutputTokens int `json:"output_tokens"`
@@ -397,8 +562,31 @@ func subagentConversationPath(root, childID string) (path string, cleanup func()
 	return filepath.Join(dir, "conversation.jsonl"), func() { _ = os.RemoveAll(dir) }, nil
 }
 
-func subagentSystemPrompt(mode string) string {
-	return `You are an isolated Affent subagent. Your job is bounded ` + mode + ` work for a parent agent.
+// subagentSystemPrompt builds the system prompt for a subagent run by
+// mode name, looking up the mode in the package-level default registry.
+// Callers with a custom registry (the SubagentDeps path) take the
+// subagentSystemPromptFor variant instead.
+func subagentSystemPrompt(modeName string) string {
+	if m, ok := defaultSubagentModeRegistry.Lookup(modeName); ok {
+		return subagentSystemPromptFor(m)
+	}
+	// Unknown mode name still produces a coherent prompt for tests and
+	// defensive fallback paths.
+	return subagentSystemPromptFor(SubagentMode{Name: modeName})
+}
+
+// subagentSystemPromptFor renders the prompt for a resolved
+// SubagentMode. The base prompt is mode-agnostic except for the label
+// in the first line; mode-specific guidance comes from
+// SubagentMode.SystemPromptHints, appended at the end so the base
+// safety/output rules can't be overridden by a hint that contradicts
+// them.
+func subagentSystemPromptFor(mode SubagentMode) string {
+	label := mode.Name
+	if label == "" {
+		label = "investigation"
+	}
+	base := `You are an isolated Affent subagent. Your job is bounded ` + label + ` work for a parent agent.
 
 Rules:
 - Return evidence, not broad plans.
@@ -426,6 +614,10 @@ Uncertainties:
 - ...
 Recommended next step:
 ...`
+	if strings.TrimSpace(mode.SystemPromptHints) != "" {
+		base += "\n\n" + mode.SystemPromptHints
+	}
+	return base
 }
 
 func subagentUserPrompt(mode, task, workspace string, maxTurns int) string {
