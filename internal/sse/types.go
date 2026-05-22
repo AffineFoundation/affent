@@ -127,6 +127,14 @@ type TurnEndPayload struct {
 }
 
 type ErrorPayload struct {
+	// TurnID names the in-flight turn this error belongs to. Without
+	// it, chat-completions handlers' eventForTurn filter silently
+	// drops every error event — so the streaming path emits no
+	// `data: error` chunk and the buffered path falls through to
+	// the generic "turn ended with error" message instead of the
+	// specific upstream cause. Populated by Loop.runStep at both
+	// publish sites.
+	TurnID      string `json:"turn_id"`
 	Code        string `json:"code"`
 	Message     string `json:"message"`
 	Recoverable bool   `json:"recoverable"`

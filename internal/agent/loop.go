@@ -615,6 +615,7 @@ func (l *Loop) runStep(ctx context.Context, turnID string) (*FinishInfo, string,
 		if IsContextOverflow(err) && l.Compactor != nil {
 			if l.maybeCompact(ctx, true) {
 				l.publish(sse.TypeError, sse.ErrorPayload{
+					TurnID:      turnID,
 					Code:        code,
 					Message:     "context overflow; compacted and retrying: " + err.Error(),
 					Recoverable: true,
@@ -638,6 +639,7 @@ func (l *Loop) runStep(ctx context.Context, turnID string) (*FinishInfo, string,
 		// deltas don't count — clients render those separately.)
 		retryable := isTransient(err) && attempt < maxRetries && !sawMessage
 		l.publish(sse.TypeError, sse.ErrorPayload{
+			TurnID:      turnID,
 			Code:        code,
 			Message:     err.Error(),
 			Recoverable: retryable,
