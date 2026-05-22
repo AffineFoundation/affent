@@ -158,3 +158,100 @@ func TestConversationReplace_AtomicWrite(t *testing.T) {
 		t.Fatalf("pre-replace content leaked: %q", raw)
 	}
 }
+
+// TestOpenConversationAt_RepairsCrashMidTurnToolCalls plants the
+// exact disk shape a process crash mid-turn leaves behind: an
+// assistant message with two tool_calls and only one matching tool
+// response on the next line. The next request snapshot would
+// otherwise carry that broken pairing to a strict OpenAI-compat
+// upstream and get rejected with 400.
+//
+// load() must synthesize a placeholder tool message for the missing
+// call_id, persist the repair so the next process also sees a clean
+// file, and leave Snapshot() returning a structurally valid
+// sequence.
+func TestOpenConversationAt_RepairsCrashMidTurnToolCalls(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "sess.jsonl")
+	// Plant the inconsistent log directly: assistant tool_calls=[c1, c2],
+	// then only c1's response. c2 is missing — the crash window.
+	body := `{"role":"system","content":"sys"}
+{"role":"user","content":"go"}
+{"role":"assistant","content":"","tool_calls":[{"id":"c1","type":"function","function":{"name":"f","arguments":"{}"}},{"id":"c2","type":"function","function":{"name":"g","arguments":"{}"}}]}
+{"role":"tool","content":"r1","tool_call_id":"c1","name":"f"}
+{"role":"user","content":"next"}
+`
+	if err := os.WriteFile(path, []byte(body), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	c, err := OpenConversationAt(path)
+	if err != nil {
+		t.Fatalf("open: %v", err)
+	}
+
+	snap := c.Snapshot()
+	// Expected after repair: system, user, assistant(c1,c2), tool(c1),
+	// tool(c2 placeholder), user — six messages.
+	if len(snap) != 6 {
+		t.Fatalf("snapshot len after repair = %d, want 6: %+v", len(snap), snap)
+	}
+	// Verify the c2 placeholder sits BETWEEN c1's response and the
+	// follow-up user message so the tool window is contiguous.
+	if snap[3].Role != "tool" || snap[3].ToolCallID != "c1" {
+		t.Errorf("snap[3] should be tool(c1); got %+v", snap[3])
+	}
+	if snap[4].Role != "tool" || snap[4].ToolCallID != "c2" {
+		t.Errorf("snap[4] should be the synthesized tool(c2); got %+v", snap[4])
+	}
+	if !strings.Contains(snap[4].Content, "tool result missing") {
+		t.Errorf("placeholder content should explain the gap; got %q", snap[4].Content)
+	}
+	if snap[5].Role != "user" || snap[5].Content != "next" {
+		t.Errorf("post-window user message should survive intact; got %+v", snap[5])
+	}
+
+	// Disk should match memory now — second OpenConversationAt must
+	// observe a clean log with no further repair needed.
+	c2, err := OpenConversationAt(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(c2.Snapshot()) != 6 {
+		t.Errorf("repaired file should reload to 6 messages, not be repaired again; got %d", len(c2.Snapshot()))
+	}
+}
+
+// TestOpenConversationAt_CleanLogIsNotRewritten pins the no-op path:
+// a well-formed JSONL must NOT trigger the repair rewrite. Otherwise
+// every load would touch the file even when nothing's wrong, which
+// burns sync/rename calls and bumps the mtime in a way operators
+// watching retention sweeps would find confusing.
+func TestOpenConversationAt_CleanLogIsNotRewritten(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "sess.jsonl")
+	body := `{"role":"system","content":"sys"}
+{"role":"user","content":"hi"}
+{"role":"assistant","content":"hello"}
+`
+	if err := os.WriteFile(path, []byte(body), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	before, err := os.Stat(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	beforeMtime := before.ModTime()
+
+	if _, err := OpenConversationAt(path); err != nil {
+		t.Fatal(err)
+	}
+
+	after, err := os.Stat(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !after.ModTime().Equal(beforeMtime) {
+		t.Errorf("clean log should not be rewritten on load; mtime changed from %v to %v", beforeMtime, after.ModTime())
+	}
+}

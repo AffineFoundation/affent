@@ -121,7 +121,111 @@ func (c *Conversation) load() error {
 		}
 		c.messages = append(c.messages, m)
 	}
-	return sc.Err()
+	if err := sc.Err(); err != nil {
+		return err
+	}
+	// Post-load repair: if the previous process crashed mid-turn we
+	// may have an assistant.tool_calls on disk with no matching tool
+	// responses. Strict OpenAI-compat upstreams reject that pairing
+	// on the next request, which would brick the session permanently
+	// even though it could trivially be patched. Synthesize a
+	// placeholder tool result per unmatched call_id and persist the
+	// repair so the next resume sees a clean log.
+	return c.repairToolCallPairs()
+}
+
+// repairToolCallPairs walks the loaded messages and ensures every
+// assistant.tool_calls is immediately followed by exactly one
+// role=tool message per call_id. Missing tool messages — left over
+// from a crash between assistant Append and tool-result Append —
+// get a synthetic placeholder so the conversation is structurally
+// valid for resume. When the in-memory state changes, the on-disk
+// JSONL is atomically rewritten via Replace; otherwise this is a
+// no-op.
+func (c *Conversation) repairToolCallPairs() error {
+	var out []ChatMessage
+	inserted := 0
+	for i := 0; i < len(c.messages); i++ {
+		m := c.messages[i]
+		out = append(out, m)
+		if m.Role != "assistant" || len(m.ToolCalls) == 0 {
+			continue
+		}
+		// Collect the contiguous tool-response window. Any
+		// non-tool message ends it (a well-formed log puts every
+		// matching tool message right after the assistant).
+		seen := map[string]bool{}
+		j := i + 1
+		for j < len(c.messages) && c.messages[j].Role == "tool" {
+			seen[c.messages[j].ToolCallID] = true
+			j++
+		}
+		// Copy the actual tool messages first so disk-order
+		// (typically the order tools finished in) is preserved.
+		// Placeholders fill in the gaps at the end of the window.
+		for k := i + 1; k < j; k++ {
+			out = append(out, c.messages[k])
+		}
+		for _, tc := range m.ToolCalls {
+			if tc.ID == "" || seen[tc.ID] {
+				continue
+			}
+			out = append(out, ChatMessage{
+				Role:       "tool",
+				Content:    "(tool result missing on resume; process likely crashed mid-turn)",
+				ToolCallID: tc.ID,
+				Name:       tc.Function.Name,
+			})
+			inserted++
+		}
+		i = j - 1
+	}
+	if inserted == 0 {
+		return nil
+	}
+	log.Printf("affent: conversation %s: repaired %d missing tool result(s) from a prior crashed turn", c.path, inserted)
+	return c.replaceWithoutLock(out)
+}
+
+// replaceWithoutLock is Replace's body without c.mu acquisition.
+// load() runs at construction time before any caller has a handle
+// to the Conversation, so the mutex isn't meaningful there; calling
+// Replace directly would re-enter the lock and (more importantly)
+// hide the load-only context from a reader skimming the file.
+func (c *Conversation) replaceWithoutLock(msgs []ChatMessage) error {
+	tmp := c.path + ".tmp"
+	f, err := os.OpenFile(tmp, os.O_CREATE|os.O_TRUNC|os.O_WRONLY, 0o644)
+	if err != nil {
+		return err
+	}
+	enc := json.NewEncoder(f)
+	enc.SetEscapeHTML(false)
+	for _, m := range msgs {
+		if err := enc.Encode(m); err != nil {
+			f.Close()
+			os.Remove(tmp)
+			return err
+		}
+	}
+	if err := f.Sync(); err != nil {
+		f.Close()
+		os.Remove(tmp)
+		return err
+	}
+	if err := f.Close(); err != nil {
+		os.Remove(tmp)
+		return err
+	}
+	if err := os.Rename(tmp, c.path); err != nil {
+		os.Remove(tmp)
+		return err
+	}
+	if d, derr := os.Open(filepath.Dir(c.path)); derr == nil {
+		_ = d.Sync()
+		_ = d.Close()
+	}
+	c.messages = append(c.messages[:0], msgs...)
+	return nil
 }
 
 // Append adds a message and persists it. Caller passes a fully-formed
@@ -172,46 +276,5 @@ func (c *Conversation) Snapshot() []ChatMessage {
 func (c *Conversation) Replace(msgs []ChatMessage) error {
 	c.mu.Lock()
 	defer c.mu.Unlock()
-
-	tmp := c.path + ".tmp"
-	f, err := os.OpenFile(tmp, os.O_CREATE|os.O_TRUNC|os.O_WRONLY, 0o644)
-	if err != nil {
-		return err
-	}
-	enc := json.NewEncoder(f)
-	enc.SetEscapeHTML(false)
-	for _, m := range msgs {
-		if err := enc.Encode(m); err != nil {
-			f.Close()
-			os.Remove(tmp)
-			return err
-		}
-	}
-	// fsync the tmp file before rename so its contents are durable.
-	// Without this a crash between rename and the next sync could leave
-	// the renamed file with old-or-empty data instead of the new content.
-	if err := f.Sync(); err != nil {
-		f.Close()
-		os.Remove(tmp)
-		return err
-	}
-	if err := f.Close(); err != nil {
-		os.Remove(tmp)
-		return err
-	}
-	if err := os.Rename(tmp, c.path); err != nil {
-		os.Remove(tmp)
-		return err
-	}
-	// fsync the parent directory so the rename itself survives a crash.
-	// Best-effort: directory fsync isn't supported on every filesystem
-	// (e.g. some Windows configurations) — the rename is still atomic
-	// on the FS layer, so failure here only weakens durability, not
-	// correctness.
-	if d, derr := os.Open(filepath.Dir(c.path)); derr == nil {
-		_ = d.Sync()
-		_ = d.Close()
-	}
-	c.messages = append(c.messages[:0], msgs...)
-	return nil
+	return c.replaceWithoutLock(msgs)
 }
