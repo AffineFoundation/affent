@@ -154,7 +154,13 @@ func runSubagent(ctx context.Context, deps SubagentDeps, mode, task string, maxT
 	if merr != nil {
 		return "", merr
 	}
-	return string(out), err
+	if err != nil {
+		return string(out), err
+	}
+	if reason != sse.TurnEndCompleted {
+		return string(out), fmt.Errorf("subagent ended with reason %s", reason)
+	}
+	return string(out), nil
 }
 
 func subagentConversationPath(root, childID string) (path string, cleanup func(), err error) {

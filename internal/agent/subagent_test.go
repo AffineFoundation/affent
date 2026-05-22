@@ -60,6 +60,43 @@ func TestSubagentRun_ReturnsStructuredReport(t *testing.T) {
 	}
 }
 
+func TestSubagentRun_MaxTurnsReturnsToolErrorWithJSON(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "text/event-stream")
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte(`data: {"choices":[{"delta":{"role":"assistant","tool_calls":[{"index":0,"id":"c1","type":"function","function":{"name":"list_files","arguments":"{\"path\":\".\"}"}}]},"finish_reason":null}]}` + "\n\n"))
+		_, _ = w.Write([]byte(`data: {"choices":[{"delta":{},"finish_reason":"tool_calls"}]}` + "\n\n"))
+		_, _ = w.Write([]byte("data: [DONE]\n\n"))
+	}))
+	t.Cleanup(srv.Close)
+
+	reg := NewRegistry()
+	RegisterSubagent(reg, SubagentDeps{
+		LLM:              NewLLMClient(srv.URL, "", "fake"),
+		HostWorkspaceDir: t.TempDir(),
+		Log:              zerolog.Nop(),
+		PerCallTimeout:   5 * time.Second,
+	})
+	tool, _ := reg.Get("subagent_run")
+	out, err := tool.Execute(context.Background(), json.RawMessage(`{"mode":"explore","task":"loop","max_turns":1}`))
+	if err == nil {
+		t.Fatal("expected max_turns to return a tool error")
+	}
+	if !strings.Contains(err.Error(), "max_turns") {
+		t.Fatalf("unexpected error: %v", err)
+	}
+	var resp struct {
+		OK            bool   `json:"ok"`
+		TurnEndReason string `json:"turn_end_reason"`
+	}
+	if err := json.Unmarshal([]byte(out), &resp); err != nil {
+		t.Fatalf("response should still be JSON: %v\n%s", err, out)
+	}
+	if resp.OK || resp.TurnEndReason != "max_turns" {
+		t.Fatalf("unexpected response: %+v", resp)
+	}
+}
+
 func TestReadOnlyShellToolRejectsMutatingCommands(t *testing.T) {
 	ws := t.TempDir()
 	tool := readOnlyShellTool(BuiltinDeps{
