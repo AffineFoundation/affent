@@ -720,6 +720,125 @@ func TestRunner_EndToEnd_ToolSchemaCoercionFixesScalarType(t *testing.T) {
 	}
 }
 
+// TestRunner_EndToEnd_SubagentDepthBudgetBlocksNestedDelegation pins
+// the runtime's recursive-delegation cap end-to-end through the eval
+// harness. With MaxDepth=1, buildSubagentRegistry must NOT register
+// subagent_run in the child's tool set; if the child still tries to
+// call it, the dispatch should return "tool \"subagent_run\" is not
+// available", and that refusal text must surface in the parent's
+// captured tool.result (which carries the child's JSON report).
+//
+// Same shape as the loop_guard / shell-guard eval tests — a runtime
+// invariant that is unit-tested inside the agent package becomes
+// trace-observable through the eval framework, so a regression that
+// silently raises the depth cap or drops the check fails CI.
+func TestRunner_EndToEnd_SubagentDepthBudgetBlocksNestedDelegation(t *testing.T) {
+	// Parent turn 1: ask for subagent_run.
+	parentTurn1 := []string{
+		`{"choices":[{"delta":{"role":"assistant","tool_calls":[{"index":0,"id":"p1","type":"function","function":{"name":"subagent_run","arguments":""}}]},"finish_reason":null}]}`,
+		`{"choices":[{"delta":{"tool_calls":[{"index":0,"function":{"arguments":"{\"task\":\"recursively delegate one more time\",\"mode\":\"explore\"}"}}]},"finish_reason":null}]}`,
+		`{"choices":[{"delta":{},"finish_reason":"tool_calls"}]}`,
+		`[DONE]`,
+	}
+	// Child turn 1: attempt to call subagent_run again. With MaxDepth=1
+	// this tool is NOT in the child's registry, so dispatch returns the
+	// "tool not available" Error string.
+	childTurn1 := []string{
+		`{"choices":[{"delta":{"role":"assistant","tool_calls":[{"index":0,"id":"c1","type":"function","function":{"name":"subagent_run","arguments":""}}]},"finish_reason":null}]}`,
+		`{"choices":[{"delta":{"tool_calls":[{"index":0,"function":{"arguments":"{\"task\":\"go one level deeper\",\"mode\":\"explore\"}"}}]},"finish_reason":null}]}`,
+		`{"choices":[{"delta":{},"finish_reason":"tool_calls"}]}`,
+		`[DONE]`,
+	}
+	// Child turn 2: after the "not available" error, surrender with a
+	// report that quotes the failure shape verbatim. Lets the parent's
+	// trace consumer grep for the refusal as evidence.
+	childTurn2 := []string{
+		`{"choices":[{"delta":{"role":"assistant","content":"Conclusion:\nDepth budget refused further delegation.\nEvidence:\n- attempted subagent_run; runtime answered: tool \"subagent_run\" is not available"},"finish_reason":"stop"}]}`,
+		`[DONE]`,
+	}
+	// Parent turn 2: synthesize from the report.
+	parentTurn2 := []string{
+		`{"choices":[{"delta":{"role":"assistant","content":"Recursive delegation was refused by the depth budget."},"finish_reason":"stop"}]}`,
+		`[DONE]`,
+	}
+	srv := newScriptedLLM(t, [][]string{parentTurn1, childTurn1, childTurn2, parentTurn2})
+
+	scenario := Scenario{
+		Name:        "subagent_depth_budget_enforces_max_depth_1",
+		Description: "with MaxDepth=1 the child must not see subagent_run in its registry",
+		Prompt:      "delegate to a subagent and ask it to delegate further",
+		MaxTurnSteps: 6,
+		Checks: []Check{
+			TurnEndedCleanly(),
+			ToolCalled("subagent_run", nil),
+			// The depth-budget signature: the child's report must
+			// surface the runtime's exact rejection wording. A
+			// regression that silently allows recursive delegation
+			// would not see "is not available" in the report,
+			// failing this check.
+			ToolResultContains("subagent_run", `is not available`),
+		},
+	}
+
+	llmClient := agent.NewLLMClient(srv.URL, "", "fake-model")
+	runner := &Runner{
+		LLM:            llmClient,
+		MaxTurnSteps:   6,
+		PerCallTimeout: 5 * time.Second,
+		RunTimeout:     30 * time.Second,
+		Log:            zerolog.Nop(),
+		BuildRegistry: func(ctx context.Context, workspaceDir string, exec executor.Executor) (*agent.Registry, error) {
+			reg, err := defaultBuildRegistry(ctx, workspaceDir, exec)
+			if err != nil {
+				return nil, err
+			}
+			// MaxDepth=1 is the load-bearing knob. The parent's
+			// childDepth() is 1, and 1 < 1 is false, so the child
+			// registry skips subagent_run.
+			agent.RegisterSubagent(reg, agent.SubagentDeps{
+				LLM:              llmClient,
+				Executor:         exec,
+				HostWorkspaceDir: workspaceDir,
+				Log:              zerolog.Nop(),
+				PerCallTimeout:   5 * time.Second,
+				MaxDepth:         1,
+			})
+			return reg, nil
+		},
+	}
+
+	out, err := runner.Run(context.Background(), scenario)
+	if err != nil {
+		t.Fatalf("Runner.Run: %v", err)
+	}
+	if !out.Pass {
+		t.Errorf("expected all checks to pass; failed: %v", out.FailedChecks())
+		for _, r := range out.Results {
+			t.Logf("  %s: pass=%v detail=%s", r.Check, r.Pass, r.Detail)
+		}
+		t.Logf("trace.Tools count=%d:", len(out.Trace.Tools))
+		for i, c := range out.Trace.Tools {
+			t.Logf("    [%d] %s exit=%d result=%s", i, c.Tool, c.ExitCode, c.Result[:min(200, len(c.Result))])
+		}
+	}
+
+	// Independent trace-shape assertions for diagnostic value.
+	if len(out.Trace.Tools) != 1 {
+		t.Fatalf("parent should have made exactly ONE tool call (subagent_run); got %d", len(out.Trace.Tools))
+	}
+	tc := out.Trace.Tools[0]
+	if tc.Tool != "subagent_run" {
+		t.Errorf("parent's only tool call should be subagent_run; got %q", tc.Tool)
+	}
+	// The parent's subagent_run itself succeeded; what failed was the
+	// CHILD's nested attempt. The parent sees the report (which quotes
+	// the refusal). isErr on the parent's tool should be false because
+	// the parent's call did not error — only the recursion did.
+	if tc.IsErr {
+		t.Errorf("parent's subagent_run itself should not error; got IsErr=true result=%q", tc.Result)
+	}
+}
+
 // TestRunner_RequiresLLM pins the early-validation: Runner without an
 // LLM client returns a clear error instead of nil-deref'ing inside
 // EnsureSystemPrompt / SendUser.
