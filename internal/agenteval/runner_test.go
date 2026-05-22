@@ -412,6 +412,142 @@ func TestRunner_EndToEnd_LoopGuardBlocksIdenticalRepeats(t *testing.T) {
 	}
 }
 
+// TestRunner_EndToEnd_BroadShellScanGuardBlocks pins the shell guard
+// for unbounded filesystem scans (find / -name ..., grep -r / ...,
+// rg / --files). The runtime refuses the call before it reaches the
+// executor; the rejection surfaces in the trace as IsErr=true with
+// "unbounded filesystem scan" in the result.
+//
+// Same failure-mode -> mechanism -> trace-check pattern as the
+// loop_guard test. The guard is the user's earliest mechanism
+// (commit 4e7c993); this closes the loop by making it observable
+// from the eval harness.
+func TestRunner_EndToEnd_BroadShellScanGuardBlocks(t *testing.T) {
+	// LLM tries `find / -name go -type f` then emits a final answer.
+	turn1 := []string{
+		`{"choices":[{"delta":{"role":"assistant","tool_calls":[{"index":0,"id":"s1","type":"function","function":{"name":"shell","arguments":""}}]},"finish_reason":null}]}`,
+		`{"choices":[{"delta":{"tool_calls":[{"index":0,"function":{"arguments":"{\"command\":\"find / -name go -type f\"}"}}]},"finish_reason":null}]}`,
+		`{"choices":[{"delta":{},"finish_reason":"tool_calls"}]}`,
+		`[DONE]`,
+	}
+	turn2 := []string{
+		`{"choices":[{"delta":{"role":"assistant","content":"Guard refused the scan; will use a bounded path instead."},"finish_reason":"stop"}]}`,
+		`[DONE]`,
+	}
+	srv := newScriptedLLM(t, [][]string{turn1, turn2})
+
+	scenario := Scenario{
+		Name:        "broad_shell_scan_blocked",
+		Description: "shell guard refuses 'find / -name ...' before it reaches the executor",
+		Prompt:      "find every go binary on this system",
+		Checks: []Check{
+			TurnEndedCleanly(),
+			ToolCalled("shell", nil),
+			ToolResultContains("shell", "unbounded filesystem scan"),
+		},
+	}
+	runner := &Runner{
+		LLM:            agent.NewLLMClient(srv.URL, "", "fake-model"),
+		MaxTurnSteps:   4,
+		PerCallTimeout: 5 * time.Second,
+		RunTimeout:     15 * time.Second,
+		Log:            zerolog.Nop(),
+	}
+
+	out, err := runner.Run(context.Background(), scenario)
+	if err != nil {
+		t.Fatalf("Runner.Run: %v", err)
+	}
+	if !out.Pass {
+		t.Errorf("expected all checks to pass; failed: %v", out.FailedChecks())
+		for _, r := range out.Results {
+			t.Logf("  %s: pass=%v detail=%s", r.Check, r.Pass, r.Detail)
+		}
+	}
+	if len(out.Trace.Tools) != 1 {
+		t.Fatalf("expected exactly one shell call (rejected); got %d", len(out.Trace.Tools))
+	}
+	tc := out.Trace.Tools[0]
+	if !tc.IsErr {
+		t.Errorf("rejected scan must surface as IsErr=true; got false (result=%q)", tc.Result)
+	}
+	// Cross-check: a path-bounded find must NOT trigger the guard.
+	// We don't run a second scenario here — the agent's own unit tests
+	// in builtins_test.go cover that path — but pinning the
+	// substring keeps the rejection wording diff-friendly.
+	if !strings.Contains(tc.Result, "Use a specific workspace path or a bounded tool-discovery path instead") {
+		t.Errorf("rejection should suggest a remedy; got %q", tc.Result)
+	}
+}
+
+// TestRunner_EndToEnd_MaskedVerificationGuardBlocks pins the shell
+// guard for exit-code-masking pipes (pytest | head, go test || true,
+// echo $? wrappers). Same shape as the broad-scan test: model emits
+// a masked command; runtime refuses; trace contains the guard's
+// signature substring.
+//
+// This guard is the mechanism that came out of the "small model
+// pipes test output to head, then claims success" incident.
+// Verifying it through eval prevents a silent regression that
+// would let small models mask verification failures again.
+func TestRunner_EndToEnd_MaskedVerificationGuardBlocks(t *testing.T) {
+	// The masking pattern: `python -m pytest 2>&1 | head -80`. The
+	// 2>&1 redirects stderr into stdout, `| head` discards the rest
+	// (and the exit code), so a real test failure would look like a
+	// successful run with truncated output. The guard rejects the
+	// shape before the executor sees it.
+	turn1 := []string{
+		`{"choices":[{"delta":{"role":"assistant","tool_calls":[{"index":0,"id":"s1","type":"function","function":{"name":"shell","arguments":""}}]},"finish_reason":null}]}`,
+		`{"choices":[{"delta":{"tool_calls":[{"index":0,"function":{"arguments":"{\"command\":\"python -m pytest 2>&1 | head -80\"}"}}]},"finish_reason":null}]}`,
+		`{"choices":[{"delta":{},"finish_reason":"tool_calls"}]}`,
+		`[DONE]`,
+	}
+	turn2 := []string{
+		`{"choices":[{"delta":{"role":"assistant","content":"OK, will run pytest directly without piping to head."},"finish_reason":"stop"}]}`,
+		`[DONE]`,
+	}
+	srv := newScriptedLLM(t, [][]string{turn1, turn2})
+
+	scenario := Scenario{
+		Name:        "masked_verification_blocked",
+		Description: "shell guard refuses 'pytest | head' style exit-code-masking pipes",
+		Prompt:      "run pytest and show me only the head of the output",
+		Checks: []Check{
+			TurnEndedCleanly(),
+			ToolCalled("shell", nil),
+			ToolResultContains("shell", "masks a test/build exit code"),
+		},
+	}
+	runner := &Runner{
+		LLM:            agent.NewLLMClient(srv.URL, "", "fake-model"),
+		MaxTurnSteps:   4,
+		PerCallTimeout: 5 * time.Second,
+		RunTimeout:     15 * time.Second,
+		Log:            zerolog.Nop(),
+	}
+
+	out, err := runner.Run(context.Background(), scenario)
+	if err != nil {
+		t.Fatalf("Runner.Run: %v", err)
+	}
+	if !out.Pass {
+		t.Errorf("expected all checks to pass; failed: %v", out.FailedChecks())
+		for _, r := range out.Results {
+			t.Logf("  %s: pass=%v detail=%s", r.Check, r.Pass, r.Detail)
+		}
+	}
+	if len(out.Trace.Tools) != 1 {
+		t.Fatalf("expected exactly one shell call (rejected); got %d", len(out.Trace.Tools))
+	}
+	tc := out.Trace.Tools[0]
+	if !tc.IsErr {
+		t.Errorf("rejected masked command must surface as IsErr=true; got false (result=%q)", tc.Result)
+	}
+	if !strings.Contains(tc.Result, "Run the verification command directly") {
+		t.Errorf("rejection should suggest the remedy; got %q", tc.Result)
+	}
+}
+
 // TestRunner_RequiresLLM pins the early-validation: Runner without an
 // LLM client returns a clear error instead of nil-deref'ing inside
 // EnsureSystemPrompt / SendUser.
