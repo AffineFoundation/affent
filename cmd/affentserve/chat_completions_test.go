@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"encoding/json"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -36,6 +37,87 @@ func TestChatCompletions_HeaderBeatsBodyForSessionPinning(t *testing.T) {
 	}
 	if _, err := pool.Get("from-body"); err == nil {
 		t.Errorf("pool should NOT contain 'from-body' — header must win")
+	}
+}
+
+// TestChatCompletions_ResponseLabelsWithConfiguredModel pins that the
+// response's "model" field reports the actually-driven backend
+// (cfg.Model), not whatever the client put in its request. Pre-fix
+// the precedence was req.Model > cfg.Model > "affent", so a client
+// asking for "gpt-5" got a response labeled "gpt-5" even though
+// affentserve was wired to drive "qwen-plus" — actively misleading,
+// and inconsistent with /v1/models which already truthfully reports
+// cfg.Model.
+//
+// Mock LLM returns a final assistant message immediately so the
+// full handler path runs end-to-end.
+func TestChatCompletions_ResponseLabelsWithConfiguredModel(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "text/event-stream")
+		w.WriteHeader(200)
+		_, _ = w.Write([]byte("data: {\"choices\":[{\"delta\":{\"role\":\"assistant\",\"content\":\"hi\"},\"finish_reason\":\"stop\"}]}\n\n"))
+		_, _ = w.Write([]byte("data: [DONE]\n\n"))
+	}))
+	t.Cleanup(srv.Close)
+
+	pool := newTestPool(t, 4, "5m")
+	pool.cfg.BaseURL = srv.URL
+	pool.cfg.Model = "qwen-plus"
+
+	cfg := Config{Model: "qwen-plus", BaseURL: srv.URL}
+	handler := handleChatCompletions(cfg, pool)
+
+	// Client claims model=gpt-5; affentserve is configured for qwen-plus.
+	body := `{"model":"gpt-5","messages":[{"role":"user","content":"hi"}]}`
+	req := httptest.NewRequest(http.MethodPost, "/v1/chat/completions", strings.NewReader(body))
+	rec := httptest.NewRecorder()
+	handler(rec, req)
+
+	var resp struct {
+		Model string `json:"model"`
+	}
+	if err := json.Unmarshal(rec.Body.Bytes(), &resp); err != nil {
+		t.Fatalf("decode response: %v\nbody: %s", err, rec.Body.String())
+	}
+	if resp.Model != "qwen-plus" {
+		t.Errorf("response model = %q, want %q (cfg.Model must win over req.Model)", resp.Model, "qwen-plus")
+	}
+}
+
+// TestChatCompletions_ResponseLabelsEchoRequestWhenCfgEmpty pins
+// the escape hatch: when cfg.Model is left empty (operator wants
+// the client to pick), the response label echoes the request's
+// model so OpenAI SDKs that compare request/response model strings
+// still match.
+func TestChatCompletions_ResponseLabelsEchoRequestWhenCfgEmpty(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "text/event-stream")
+		w.WriteHeader(200)
+		_, _ = w.Write([]byte("data: {\"choices\":[{\"delta\":{\"role\":\"assistant\",\"content\":\"hi\"},\"finish_reason\":\"stop\"}]}\n\n"))
+		_, _ = w.Write([]byte("data: [DONE]\n\n"))
+	}))
+	t.Cleanup(srv.Close)
+
+	pool := newTestPool(t, 4, "5m")
+	pool.cfg.BaseURL = srv.URL
+	pool.cfg.Model = "" // operator declined to configure a default
+
+	cfg := Config{BaseURL: srv.URL}
+	handler := handleChatCompletions(cfg, pool)
+
+	body := `{"model":"gpt-5","messages":[{"role":"user","content":"hi"}]}`
+	req := httptest.NewRequest(http.MethodPost, "/v1/chat/completions", strings.NewReader(body))
+	rec := httptest.NewRecorder()
+	handler(rec, req)
+
+	var resp struct {
+		Model string `json:"model"`
+	}
+	if err := json.Unmarshal(rec.Body.Bytes(), &resp); err != nil {
+		t.Fatalf("decode response: %v\nbody: %s", err, rec.Body.String())
+	}
+	if resp.Model != "gpt-5" {
+		t.Errorf("response model = %q, want gpt-5 (cfg.Model empty → echo request)", resp.Model)
 	}
 }
 

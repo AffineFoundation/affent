@@ -157,9 +157,19 @@ func handleChatCompletions(cfg Config, pool *SessionPool) http.HandlerFunc {
 			return
 		}
 
-		modelLabel := req.Model
+		// The configured cfg.Model is the actual backend being driven
+		// (the LLMClient was wired with it at session-build time). When
+		// it's set, that's what the response label has to say — echoing
+		// the client's req.Model would be a lie if the two diverge, and
+		// /v1/models already truthfully advertises cfg.Model so a client
+		// comparing the two would catch the inconsistency. Only fall
+		// through to req.Model when cfg.Model is empty (rare; means the
+		// operator didn't configure a default and is letting the client
+		// choose). The "affent" floor is the last-resort label so the
+		// response object is never empty.
+		modelLabel := cfg.Model
 		if modelLabel == "" {
-			modelLabel = cfg.Model
+			modelLabel = req.Model
 		}
 		if modelLabel == "" {
 			modelLabel = "affent"
