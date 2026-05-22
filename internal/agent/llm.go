@@ -346,7 +346,12 @@ func (c *LLMClient) Chat(ctx context.Context, msgs []ChatMessage, tools []ToolDe
 		return nil, &RetryableError{Err: fmt.Errorf("chat request: %w", err)}
 	}
 	if resp.StatusCode/100 != 2 {
-		errBody, _ := io.ReadAll(resp.Body)
+		// Cap the error-body read. Real upstream error envelopes
+		// (OpenAI, Anthropic, vLLM, sglang) are well under 64 KiB; an
+		// unbounded ReadAll would let a hostile or misconfigured
+		// endpoint OOM the loop by serving a multi-GB HTML error page
+		// on a 502.
+		errBody, _ := io.ReadAll(io.LimitReader(resp.Body, 64*1024))
 		retryAfter := parseRetryAfter(resp.Header.Get("Retry-After"))
 		resp.Body.Close()
 		base := fmt.Errorf("chat http %d: %s", resp.StatusCode, errBody)
