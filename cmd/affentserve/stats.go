@@ -26,6 +26,7 @@ type sessionStatsResponse struct {
 	ID         string               `json:"id"`
 	CreatedAt  string               `json:"created_at"`
 	LastUsedAt string               `json:"last_used_at"`
+	Usage      UsageSnapshot        `json:"usage"`
 	Browser    BrowserStatsSnapshot `json:"browser"`
 }
 
@@ -35,6 +36,9 @@ type aggregateStats struct {
 	CacheHit        int64 `json:"cache_hit"`
 	CacheMiss       int64 `json:"cache_miss"`
 	NetworkFetch    int64 `json:"network_fetch"`
+	InputTokens     int64 `json:"input_tokens"`
+	OutputTokens    int64 `json:"output_tokens"`
+	Turns           int64 `json:"turns"`
 }
 
 func handleStats(cfg Config, pool *SessionPool) http.HandlerFunc {
@@ -59,10 +63,12 @@ func handleStats(cfg Config, pool *SessionPool) http.HandlerFunc {
 			created, lastUsed := s.createdAt, s.lastUsed
 			s.mu.Unlock()
 			b := s.BrowserStatsSnapshot()
+			u := s.UsageSnapshot()
 			sess = append(sess, sessionStatsResponse{
 				ID:         s.ID,
 				CreatedAt:  created.UTC().Format(time.RFC3339),
 				LastUsedAt: lastUsed.UTC().Format(time.RFC3339),
+				Usage:      u,
 				Browser:    b,
 			})
 			agg.BlockedByType += b.BlockedByType
@@ -70,6 +76,9 @@ func handleStats(cfg Config, pool *SessionPool) http.HandlerFunc {
 			agg.CacheHit += b.CacheHit
 			agg.CacheMiss += b.CacheMiss
 			agg.NetworkFetch += b.NetworkFetch
+			agg.InputTokens += u.InputTokens
+			agg.OutputTokens += u.OutputTokens
+			agg.Turns += u.Turns
 		}
 
 		resp := statsResponse{

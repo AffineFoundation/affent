@@ -2,11 +2,13 @@ package main
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	affentbrowser "github.com/affinefoundation/affent/extras/browser"
@@ -36,6 +38,15 @@ type Session struct {
 	workspace string
 	createdAt time.Time
 	lastUsed  time.Time
+
+	// Per-session lifetime token counters, accumulated in fanout as
+	// sse.TypeUsage events flow through. Atomic so the /v1/stats
+	// reader doesn't need to hold s.mu. The Loop emits one Usage event
+	// per turn with the per-turn totals; these sum to a session
+	// lifetime spend that operators can poll without subscribing.
+	inputTokens  atomic.Int64
+	outputTokens atomic.Int64
+	turns        atomic.Int64
 
 	// fan-out
 	subsMu  sync.Mutex
@@ -583,6 +594,7 @@ func (s *Session) fanout() {
 			if !ok {
 				return
 			}
+			s.observeForStats(ev)
 			s.subsMu.Lock()
 			for _, ch := range s.subs {
 				select {
@@ -972,6 +984,55 @@ func (s *Session) BrowserStatsSnapshot() BrowserStatsSnapshot {
 		CacheHit:        ch,
 		CacheMiss:       cm,
 		NetworkFetch:    nf,
+	}
+}
+
+// UsageSnapshot returns the per-session token totals + turn count
+// accumulated by observeForStats. Atomic loads so /v1/stats can
+// read without grabbing s.mu — the counters are advisory and a
+// torn read (input updated, output not yet) is at most a few
+// tokens off, which doesn't matter for a polling stats surface.
+type UsageSnapshot struct {
+	InputTokens  int64 `json:"input_tokens"`
+	OutputTokens int64 `json:"output_tokens"`
+	Turns        int64 `json:"turns"`
+}
+
+func (s *Session) UsageSnapshot() UsageSnapshot {
+	if s == nil {
+		return UsageSnapshot{}
+	}
+	return UsageSnapshot{
+		InputTokens:  s.inputTokens.Load(),
+		OutputTokens: s.outputTokens.Load(),
+		Turns:        s.turns.Load(),
+	}
+}
+
+// observeForStats updates per-session counters from events flowing
+// through fanout. Called once per event, before subscribers receive
+// it, so the counters reflect everything the Loop emitted regardless
+// of subscriber liveness. Misshapen JSON in the Usage payload is
+// dropped silently — it's a stats surface, not a correctness one.
+func (s *Session) observeForStats(ev sse.Event) {
+	switch ev.Type {
+	case sse.TypeUsage:
+		var p sse.UsagePayload
+		if err := json.Unmarshal(ev.Data, &p); err != nil {
+			return
+		}
+		if p.InputTokens > 0 {
+			s.inputTokens.Add(int64(p.InputTokens))
+		}
+		if p.OutputTokens > 0 {
+			s.outputTokens.Add(int64(p.OutputTokens))
+		}
+	case sse.TypeTurnEnd:
+		// One turn-end per turn (regardless of reason). Count even
+		// max_turns / error / cancelled — operators tracking spend
+		// usually want to know how many turns the session has gone
+		// through, completed or not.
+		s.turns.Add(1)
 	}
 }
 

@@ -5,6 +5,9 @@ import (
 	"net/http/httptest"
 	"strings"
 	"testing"
+	"time"
+
+	"github.com/affinefoundation/affent/internal/sse"
 )
 
 func TestHandleStats_EmptyPool(t *testing.T) {
@@ -85,6 +88,61 @@ func TestSession_CancelTurn_IsIdempotentWithoutActiveTurn(t *testing.T) {
 	// return promptly. Calling it twice in a row must be safe.
 	s.CancelTurn()
 	s.CancelTurn()
+}
+
+// TestSession_UsageSnapshot_AccumulatesFromEvents pins the per-session
+// token counter contract. fanout observes every event flowing through
+// and bumps the counters on sse.TypeUsage / sse.TypeTurnEnd. Operators
+// polling /v1/stats use this to track spend per session without
+// subscribing to the event stream.
+//
+// The test bypasses the real Loop and feeds events directly to the
+// session's events channel, which fanout drains in a background
+// goroutine. We poll UsageSnapshot until the counters reflect the
+// planted events, with a generous deadline to absorb scheduler jitter.
+func TestSession_UsageSnapshot_AccumulatesFromEvents(t *testing.T) {
+	pool := newTestPool(t, 4, "5m")
+	s, err := pool.GetOrCreate("usage-test")
+	if err != nil {
+		t.Fatalf("GetOrCreate: %v", err)
+	}
+
+	// Plant two usage events and two turn-end events. Counters should
+	// sum the usage payloads and increment Turns by 2.
+	for _, p := range []sse.UsagePayload{
+		{TurnID: "t1", InputTokens: 100, OutputTokens: 20},
+		{TurnID: "t2", InputTokens: 200, OutputTokens: 40},
+	} {
+		ev, err := sse.NewEvent(sse.TypeUsage, p)
+		if err != nil {
+			t.Fatal(err)
+		}
+		s.events <- ev
+	}
+	for _, p := range []sse.TurnEndPayload{
+		{TurnID: "t1", Reason: sse.TurnEndCompleted},
+		{TurnID: "t2", Reason: sse.TurnEndCompleted},
+	} {
+		ev, err := sse.NewEvent(sse.TypeTurnEnd, p)
+		if err != nil {
+			t.Fatal(err)
+		}
+		s.events <- ev
+	}
+
+	// fanout is async; poll briefly until counters reach the expected
+	// totals.
+	deadline := time.Now().Add(2 * time.Second)
+	for {
+		u := s.UsageSnapshot()
+		if u.InputTokens == 300 && u.OutputTokens == 60 && u.Turns == 2 {
+			return
+		}
+		if time.Now().After(deadline) {
+			t.Fatalf("UsageSnapshot never reached expected totals: got %+v, want input=300 output=60 turns=2", u)
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
 }
 
 func TestSession_BrowserStatsSnapshot_ZeroWhenNoBrowser(t *testing.T) {
