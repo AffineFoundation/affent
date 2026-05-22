@@ -391,6 +391,18 @@ func (p *SessionPool) buildSession(id string) (*Session, error) {
 		// won't get duplicated.
 		systemPrompt = agent.WithSubagentSystemGuidance(systemPrompt)
 	}
+	if p.cfg.EnableBuiltins {
+		// affentserve's per-session workspace is a freshly-allocated
+		// temp dir, not /workspace. DefaultSystemPrompt's "save under
+		// /workspace" guidance would otherwise have the model probe
+		// non-existent paths for 1-2 tool calls before discovering
+		// the real one from a rejection. Anchor it explicitly, same
+		// shape as affentctl. Gated on EnableBuiltins because without
+		// shell/file tools the anchor is irrelevant — the model has
+		// nothing that consumes a workspace path.
+		systemPrompt += "\n\nYour workspace directory is \"" + workspace +
+			"\". Use this exact path (or a relative path inside it) with the file tools."
+	}
 	if err := loop.EnsureSystemPrompt(systemPrompt); err != nil {
 		_ = os.RemoveAll(workspace)
 		if browser != nil {

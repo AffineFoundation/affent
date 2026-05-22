@@ -215,7 +215,7 @@ the user what's missing and ask for guidance.
 Tool outputs are truncated for your context after ~8KB. If you see a
 "[... N more bytes truncated]" marker and need the rest, re-run the
 command piping through head/tail/grep/sed, or save the output to a file
-under /workspace and read it in chunks.
+inside the configured workspace and read it in chunks.
 
 Be concise. When given a task, execute it; don't lecture. Use the shell
 freely for git, curl, python, node, builds, installs -- the box is the
@@ -799,7 +799,7 @@ func truncateForContext(s string, max int) string {
 	}
 	cut := textutil.AlignBackward(s, max)
 	return s[:cut] + fmt.Sprintf(
-		"\n\n[... %d more bytes truncated. Re-run the command piping through head/tail/grep/sed, or save to a file under /workspace and read it in chunks, if you need more.]",
+		"\n\n[... %d more bytes truncated. Re-run the command piping through head/tail/grep/sed, or save the output to a file inside the configured workspace and read it in chunks, if you need more.]",
 		len(s)-cut,
 	)
 }
