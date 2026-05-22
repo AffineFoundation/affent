@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"os"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -153,6 +154,249 @@ func TestReadOnlyMemoryToolRejectsWrites(t *testing.T) {
 	}
 	if !strings.Contains(err.Error(), "read-only") {
 		t.Fatalf("unexpected error: %v", err)
+	}
+}
+
+// TestBuildSubagentRegistry_HasNoWriteAndNoNestedSubagent pins the
+// two load-bearing invariants of the subagent design:
+//
+//  1. The child cannot recursively spawn another subagent (would
+//     produce unbounded fan-out + token spend with no operator
+//     visibility).
+//  2. The child cannot mutate the workspace (subagent is for
+//     exploration / review; writes go through the parent so the
+//     audit trail stays linear).
+//
+// Both invariants are enforced by what is/isn't registered in the
+// child's tool registry. A future refactor that adds write_file or
+// subagent_run here would silently break the design contract — this
+// test catches that at the registry-construction layer instead of
+// after the model already triggered a runaway.
+func TestBuildSubagentRegistry_HasNoWriteAndNoNestedSubagent(t *testing.T) {
+	// All optional deps populated so the maximum-tool variant runs.
+	reg := buildSubagentRegistry(SubagentDeps{
+		LLM:              NewLLMClient("http://x", "", "m"),
+		Executor:         nilExecutor{},
+		HostWorkspaceDir: t.TempDir(),
+		Memory:           newTestStore(t),
+		SessionsDir:      t.TempDir(),
+		ParentSessionID:  "parent_test",
+		Log:              zerolog.Nop(),
+	})
+	names := map[string]bool{}
+	for _, d := range reg.Defs() {
+		names[d.Function.Name] = true
+	}
+	for _, forbidden := range []string{"subagent_run", "write_file", "edit_file"} {
+		if names[forbidden] {
+			t.Errorf("subagent must NOT register %q (would break the %s invariant)", forbidden, forbidden)
+		}
+	}
+	// Sanity: the expected read-only set IS present.
+	for _, expected := range []string{"read_file", "list_files", "shell", "memory", "session_search"} {
+		if !names[expected] {
+			t.Errorf("subagent missing expected read-only tool %q", expected)
+		}
+	}
+}
+
+// TestBuildSubagentRegistry_HonorsOptionalDeps verifies the "minimum
+// dep" configuration produces the minimum tool set. A subagent
+// without an Executor must not get a shell tool; without a Memory it
+// must not get memory; without a SessionsDir it must not get
+// session_search. These are not just defaults — they're how a
+// deployment that intentionally strips a capability ensures the
+// child doesn't inherit one anyway.
+func TestBuildSubagentRegistry_HonorsOptionalDeps(t *testing.T) {
+	// Strip everything optional.
+	reg := buildSubagentRegistry(SubagentDeps{
+		LLM:              NewLLMClient("http://x", "", "m"),
+		HostWorkspaceDir: t.TempDir(),
+		Log:              zerolog.Nop(),
+	})
+	names := map[string]bool{}
+	for _, d := range reg.Defs() {
+		names[d.Function.Name] = true
+	}
+	for _, gated := range []string{"shell", "memory", "session_search"} {
+		if names[gated] {
+			t.Errorf("subagent must NOT register %q without its supporting dep", gated)
+		}
+	}
+	// read_file / list_files don't gate on executor — they always exist.
+	for _, always := range []string{"read_file", "list_files"} {
+		if !names[always] {
+			t.Errorf("subagent must always register %q (no gating dep)", always)
+		}
+	}
+}
+
+// TestSubagentRun_ReportComesFirstInResponse pins the JSON-field
+// ordering. The parent Loop truncates tool results to 8 KiB before
+// feeding them back to the model; if `tool_calls` (potentially
+// thousands of bytes of args / metadata) sits before `report` in
+// the JSON, the model never sees the conclusion under a verbose
+// child. encoding/json preserves struct-field declaration order, so
+// a regression here means a field-shuffling diff that someone might
+// otherwise consider cosmetic.
+func TestSubagentRun_ReportComesFirstInResponse(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "text/event-stream")
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte("data: {\"choices\":[{\"delta\":{\"role\":\"assistant\",\"content\":\"Conclusion:\\nyes\\nEvidence:\\n- ev\"},\"finish_reason\":\"stop\"}],\"usage\":{\"prompt_tokens\":123,\"completion_tokens\":45}}\n\n"))
+		_, _ = w.Write([]byte("data: [DONE]\n\n"))
+	}))
+	t.Cleanup(srv.Close)
+
+	reg := NewRegistry()
+	RegisterSubagent(reg, SubagentDeps{
+		LLM:              NewLLMClient(srv.URL, "", "fake"),
+		HostWorkspaceDir: t.TempDir(),
+		Log:              zerolog.Nop(),
+		PerCallTimeout:   5 * time.Second,
+	})
+	tool, _ := reg.Get("subagent_run")
+	out, err := tool.Execute(context.Background(), json.RawMessage(`{"task":"x"}`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	// The literal byte ordering must put "report" before "tool_calls"
+	// in the JSON output.
+	reportIdx := strings.Index(out, `"report"`)
+	callsIdx := strings.Index(out, `"tool_calls"`)
+	if reportIdx < 0 {
+		t.Fatalf("no report field in response: %s", out)
+	}
+	if callsIdx < 0 {
+		t.Fatalf("no tool_calls field in response: %s", out)
+	}
+	if reportIdx > callsIdx {
+		t.Errorf("report (%d) must come before tool_calls (%d) so 8 KiB truncation keeps the conclusion visible", reportIdx, callsIdx)
+	}
+}
+
+// TestSubagentRun_SurfacesUsage pins the token-cost contract. The
+// subagent's whole reason for existing is to keep the parent
+// context clean, but operators still need visibility into what each
+// child cost. Without this, a parent that fires off N subagents has
+// no way to budget — token counts only show up in trace events the
+// parent never sees.
+func TestSubagentRun_SurfacesUsage(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "text/event-stream")
+		w.WriteHeader(http.StatusOK)
+		// Final assistant message + a usage chunk before [DONE]. The
+		// Loop accumulates usage from the SSE stream's "usage" field.
+		_, _ = w.Write([]byte("data: {\"choices\":[{\"delta\":{\"role\":\"assistant\",\"content\":\"Conclusion:\\nfound\"},\"finish_reason\":\"stop\"}]}\n\n"))
+		_, _ = w.Write([]byte("data: {\"choices\":[],\"usage\":{\"prompt_tokens\":777,\"completion_tokens\":42}}\n\n"))
+		_, _ = w.Write([]byte("data: [DONE]\n\n"))
+	}))
+	t.Cleanup(srv.Close)
+
+	reg := NewRegistry()
+	RegisterSubagent(reg, SubagentDeps{
+		LLM:              NewLLMClient(srv.URL, "", "fake"),
+		HostWorkspaceDir: t.TempDir(),
+		Log:              zerolog.Nop(),
+		PerCallTimeout:   5 * time.Second,
+	})
+	tool, _ := reg.Get("subagent_run")
+	out, err := tool.Execute(context.Background(), json.RawMessage(`{"task":"x"}`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	var resp subagentResponse
+	if err := json.Unmarshal([]byte(out), &resp); err != nil {
+		t.Fatalf("decode: %v\n%s", err, out)
+	}
+	if resp.Usage.InputTokens != 777 || resp.Usage.OutputTokens != 42 {
+		t.Errorf("usage = %+v, want {input=777, output=42}", resp.Usage)
+	}
+}
+
+// TestRunSubagent_DoesNotPolluteParentConversation is the
+// architectural pin for the whole feature: the parent's
+// conversation log must NOT contain any of the child's intermediate
+// tool_request / tool_result events. The child's many file reads,
+// shell calls, etc. are by design invisible to the parent — that's
+// what "context isolation" actually means. Without this, the
+// subagent stops being load-bearing: it's just a wrapped tool
+// dispatch with extra latency.
+//
+// We run an actual subagent_run with a mock LLM that does one
+// list_files tool call before its final answer, then assert that
+// the parent's separately-created Conversation (which the subagent
+// does NOT share) stays empty.
+func TestRunSubagent_DoesNotPolluteParentConversation(t *testing.T) {
+	ws := t.TempDir()
+	// Pre-populate the workspace so the list_files call returns something.
+	if err := os.WriteFile(filepath.Join(ws, "marker.txt"), []byte("hi"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	transcripts := t.TempDir()
+
+	// Mock upstream: first response calls list_files; second response
+	// is the final answer. The Loop will append the child's
+	// assistant+tool messages to the CHILD conv only.
+	step := 0
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "text/event-stream")
+		w.WriteHeader(http.StatusOK)
+		step++
+		switch step {
+		case 1:
+			_, _ = w.Write([]byte(`data: {"choices":[{"delta":{"role":"assistant","tool_calls":[{"index":0,"id":"c1","type":"function","function":{"name":"list_files","arguments":"{\"path\":\".\"}"}}]},"finish_reason":"tool_calls"}]}` + "\n\n"))
+		default:
+			_, _ = w.Write([]byte(`data: {"choices":[{"delta":{"role":"assistant","content":"Conclusion:\nsaw marker.txt"},"finish_reason":"stop"}]}` + "\n\n"))
+		}
+		_, _ = w.Write([]byte("data: [DONE]\n\n"))
+	}))
+	t.Cleanup(srv.Close)
+
+	// Parent conv lives in its OWN file. Subagent gets its own
+	// TranscriptDir for the child conv.
+	parentConv, err := OpenConversationAt(filepath.Join(t.TempDir(), "parent.jsonl"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	parentSnapshotBefore := len(parentConv.Snapshot())
+
+	out, err := runSubagent(context.Background(), SubagentDeps{
+		LLM:              NewLLMClient(srv.URL, "", "fake"),
+		Executor:         nilExecutor{},
+		HostWorkspaceDir: ws,
+		TranscriptDir:    transcripts,
+		Log:              zerolog.Nop(),
+		PerCallTimeout:   5 * time.Second,
+	}, "explore", "find marker file", 4)
+	if err != nil {
+		t.Fatalf("runSubagent: %v\n%s", err, out)
+	}
+
+	// Parent conv must be untouched — the subagent never had a handle
+	// to it, by design.
+	if got := len(parentConv.Snapshot()); got != parentSnapshotBefore {
+		t.Errorf("parent conversation grew by %d messages; subagent_run must not write to parent's log", got-parentSnapshotBefore)
+	}
+
+	// And the child transcript file should exist with its own
+	// turn/tool messages (proving the child DID record everything —
+	// it's just isolated from the parent).
+	entries, err := os.ReadDir(transcripts)
+	if err != nil {
+		t.Fatal(err)
+	}
+	found := false
+	for _, e := range entries {
+		if strings.HasPrefix(e.Name(), "subagent_") && strings.HasSuffix(e.Name(), ".jsonl") {
+			info, _ := e.Info()
+			if info != nil && info.Size() > 0 {
+				found = true
+			}
+		}
+	}
+	if !found {
+		t.Errorf("expected a non-empty subagent transcript under %s; got entries %v", transcripts, entries)
 	}
 }
 

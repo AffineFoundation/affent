@@ -47,6 +47,29 @@ func RegisterSubagent(r *Registry, deps SubagentDeps) {
 	r.Add(subagentTool(deps))
 }
 
+// buildSubagentRegistry assembles the child Loop's tool set: read-only
+// inspection tools only. Deliberately exposed (lowercase but accessed
+// in tests) so the no-nested-subagent and no-write-tool invariants
+// can be asserted without spinning up a real subagent run. If a
+// future change accidentally registers subagent_run, write_file, or
+// edit_file here the invariant tests fail loudly.
+func buildSubagentRegistry(deps SubagentDeps) *Registry {
+	reg := NewRegistry()
+	bd := BuiltinDeps{Executor: deps.Executor, HostWorkspaceDir: deps.HostWorkspaceDir}
+	reg.Add(subagentReadFileTool(bd))
+	reg.Add(subagentListFilesTool(bd))
+	if deps.Executor != nil {
+		reg.Add(readOnlyShellTool(bd))
+	}
+	if deps.Memory != nil {
+		reg.Add(readOnlyMemoryTool(deps.Memory))
+	}
+	if deps.SessionsDir != "" {
+		reg.Add(sessionSearchTool(deps.SessionsDir, deps.ParentSessionID))
+	}
+	return reg
+}
+
 func subagentTool(deps SubagentDeps) *Tool {
 	schema := json.RawMessage(`{
         "type": "object",
@@ -103,18 +126,7 @@ func runSubagent(ctx context.Context, deps SubagentDeps, mode, task string, maxT
 	if err != nil {
 		return "", fmt.Errorf("subagent conversation: %w", err)
 	}
-	reg := NewRegistry()
-	reg.Add(subagentReadFileTool(BuiltinDeps{Executor: deps.Executor, HostWorkspaceDir: deps.HostWorkspaceDir}))
-	reg.Add(subagentListFilesTool(BuiltinDeps{Executor: deps.Executor, HostWorkspaceDir: deps.HostWorkspaceDir}))
-	if deps.Executor != nil {
-		reg.Add(readOnlyShellTool(BuiltinDeps{Executor: deps.Executor, HostWorkspaceDir: deps.HostWorkspaceDir}))
-	}
-	if deps.Memory != nil {
-		reg.Add(readOnlyMemoryTool(deps.Memory))
-	}
-	if deps.SessionsDir != "" {
-		reg.Add(sessionSearchTool(deps.SessionsDir, deps.ParentSessionID))
-	}
+	reg := buildSubagentRegistry(deps)
 
 	events := make(chan sse.Event, 128)
 	loop := &Loop{
@@ -135,20 +147,31 @@ func runSubagent(ctx context.Context, deps SubagentDeps, mode, task string, maxT
 	if err != nil {
 		return "", err
 	}
-	report, reason, toolCalls, err := drainSubagent(ctx, events, turnID)
+	report, reason, toolCalls, usage, errMsgs, err := drainSubagent(ctx, events, turnID)
 	if err != nil {
 		loop.Cancel()
 	}
-	resp := map[string]any{
-		"ok":               err == nil && reason == sse.TurnEndCompleted,
-		"mode":             mode,
-		"child_session_id": childID,
-		"turn_end_reason":  reason,
-		"report":           report,
-		"tool_calls":       toolCalls,
+	resp := subagentResponse{
+		// Report is FIRST so when the parent Loop's
+		// MaxToolResultBytesInContext truncation (8 KiB) clips this
+		// JSON, the model still sees the conclusion + evidence even
+		// if tool_calls / metadata tail off. Order matters because
+		// Go's encoding/json preserves struct-field declaration order.
+		Report:         report,
+		OK:             err == nil && reason == sse.TurnEndCompleted,
+		TurnEndReason:  reason,
+		Mode:           mode,
+		ChildSessionID: childID,
+		Usage:          usage,
+		ToolCalls:      toolCalls,
 	}
 	if err != nil {
-		resp["error"] = err.Error()
+		resp.Error = err.Error()
+	} else if len(errMsgs) > 0 {
+		// LLM-level errors that didn't kill the turn (recoverable
+		// retries that ultimately succeeded, etc.) get surfaced so
+		// the parent / operator can see what the child fought through.
+		resp.LoopErrors = errMsgs
 	}
 	out, merr := json.Marshal(resp)
 	if merr != nil {
@@ -161,6 +184,30 @@ func runSubagent(ctx context.Context, deps SubagentDeps, mode, task string, maxT
 		return string(out), fmt.Errorf("subagent ended with reason %s", reason)
 	}
 	return string(out), nil
+}
+
+// subagentResponse is the structured payload subagent_run hands back
+// to the parent agent. Field order matters — see runSubagent for why
+// Report is first.
+type subagentResponse struct {
+	Report         string             `json:"report"`
+	OK             bool               `json:"ok"`
+	TurnEndReason  string             `json:"turn_end_reason"`
+	Mode           string             `json:"mode"`
+	ChildSessionID string             `json:"child_session_id"`
+	Error          string             `json:"error,omitempty"`
+	LoopErrors     []string           `json:"loop_errors,omitempty"`
+	Usage          subagentUsage      `json:"usage"`
+	ToolCalls      []subagentToolCall `json:"tool_calls"`
+}
+
+// subagentUsage is the per-turn token accounting summed across every
+// LLM call the child made. Lets the parent (and operators tracking
+// $/turn) see what the subagent actually cost without diffing trace
+// events themselves.
+type subagentUsage struct {
+	InputTokens  int `json:"input_tokens"`
+	OutputTokens int `json:"output_tokens"`
 }
 
 func subagentConversationPath(root, childID string) (path string, cleanup func(), err error) {
@@ -214,21 +261,23 @@ type subagentToolCall struct {
 	ExitCode int            `json:"exit_code,omitempty"`
 }
 
-func drainSubagent(ctx context.Context, events <-chan sse.Event, turnID string) (string, string, []subagentToolCall, error) {
+func drainSubagent(ctx context.Context, events <-chan sse.Event, turnID string) (string, string, []subagentToolCall, subagentUsage, []string, error) {
 	var finalText string
 	var reason string
 	var calls []subagentToolCall
+	var usage subagentUsage
+	var loopErrors []string
 	pending := map[string]int{}
 	for {
 		select {
 		case <-ctx.Done():
-			return finalText, reason, calls, ctx.Err()
+			return finalText, reason, calls, usage, loopErrors, ctx.Err()
 		case ev, ok := <-events:
 			if !ok {
 				if reason == "" {
-					return finalText, reason, calls, errors.New("subagent event stream closed before turn.end")
+					return finalText, reason, calls, usage, loopErrors, errors.New("subagent event stream closed before turn.end")
 				}
-				return finalText, reason, calls, nil
+				return finalText, reason, calls, usage, loopErrors, nil
 			}
 			switch ev.Type {
 			case sse.TypeMessageDone:
@@ -246,12 +295,32 @@ func drainSubagent(ctx context.Context, events <-chan sse.Event, turnID string) 
 				if idx, ok := pending[p.CallID]; ok {
 					calls[idx].ExitCode = p.ExitCode
 				}
+			case sse.TypeUsage:
+				// The Loop emits ONE usage event per turn with the
+				// per-turn totals (see Loop.runTurn). Subagent_run is
+				// a single turn so this fires at most once, but we
+				// accumulate defensively in case that contract evolves.
+				var p sse.UsagePayload
+				if err := json.Unmarshal(ev.Data, &p); err == nil {
+					usage.InputTokens += p.InputTokens
+					usage.OutputTokens += p.OutputTokens
+				}
+			case sse.TypeError:
+				// Recoverable errors (transient retries) still get
+				// surfaced so the parent sees what the child fought
+				// through. Non-recoverable errors will be followed by
+				// turn.end{reason=error}; including them here is
+				// additive context, not the primary error signal.
+				var p sse.ErrorPayload
+				if err := json.Unmarshal(ev.Data, &p); err == nil && p.Message != "" {
+					loopErrors = append(loopErrors, p.Message)
+				}
 			case sse.TypeTurnEnd:
 				var p sse.TurnEndPayload
 				_ = json.Unmarshal(ev.Data, &p)
 				if p.TurnID == "" || p.TurnID == turnID {
 					reason = p.Reason
-					return finalText, reason, calls, nil
+					return finalText, reason, calls, usage, loopErrors, nil
 				}
 			}
 		}
