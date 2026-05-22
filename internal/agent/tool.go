@@ -6,6 +6,8 @@ import (
 	"fmt"
 	"log"
 	"runtime/debug"
+	"sort"
+	"strings"
 	"sync"
 )
 
@@ -77,12 +79,74 @@ func (r *Registry) Get(name string) (*Tool, bool) {
 	return t, ok
 }
 
+func (r *Registry) canonicalName(name string) (string, bool, bool) {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+	if _, ok := r.tools[name]; ok {
+		return name, true, false
+	}
+	want := normalizeToolIdentifier(name)
+	if want == "" {
+		return name, false, false
+	}
+	canonical := ""
+	for _, toolName := range r.order {
+		if normalizeToolIdentifier(toolName) != want {
+			continue
+		}
+		if canonical != "" {
+			return name, false, false
+		}
+		canonical = toolName
+	}
+	if canonical == "" {
+		return name, false, false
+	}
+	return canonical, true, true
+}
+
 func (r *Registry) Defs() []ToolDef {
 	r.mu.RLock()
 	defer r.mu.RUnlock()
 	out := make([]ToolDef, 0, len(r.order))
 	for _, n := range r.order {
 		out = append(out, r.tools[n].AsDef())
+	}
+	return out
+}
+
+func (r *Registry) suggestions(name string, limit int) []string {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+	type candidate struct {
+		name     string
+		distance int
+		rank     int
+	}
+	candidates := make([]candidate, 0, len(r.order))
+	lowerName := strings.ToLower(name)
+	for rank, toolName := range r.order {
+		lowerTool := strings.ToLower(toolName)
+		distance := levenshtein(lowerName, lowerTool)
+		if strings.Contains(lowerTool, lowerName) || strings.Contains(lowerName, lowerTool) {
+			distance = 0
+		}
+		if distance <= 3 {
+			candidates = append(candidates, candidate{name: toolName, distance: distance, rank: rank})
+		}
+	}
+	sort.Slice(candidates, func(i, j int) bool {
+		if candidates[i].distance != candidates[j].distance {
+			return candidates[i].distance < candidates[j].distance
+		}
+		return candidates[i].rank < candidates[j].rank
+	})
+	if len(candidates) > limit {
+		candidates = candidates[:limit]
+	}
+	out := make([]string, 0, len(candidates))
+	for _, c := range candidates {
+		out = append(out, c.name)
 	}
 	return out
 }
@@ -95,10 +159,15 @@ func (r *Registry) Defs() []ToolDef {
 // legitimately echoes "Error:" in its stdout (e.g. `echo Error: ...`
 // from a passing test) is success, not failure.
 func (r *Registry) dispatch(ctx context.Context, name string, args json.RawMessage) (out string, isErr bool) {
-	t, ok := r.Get(name)
+	canonical, ok, _ := r.canonicalName(name)
 	if !ok {
-		return fmt.Sprintf("Error: tool %q is not available", name), true
+		msg := fmt.Sprintf("Error: tool %q is not available", name)
+		if suggestions := r.suggestions(name, 3); len(suggestions) > 0 {
+			msg += fmt.Sprintf(". Did you mean: %s?", strings.Join(suggestions, ", "))
+		}
+		return msg, true
 	}
+	t, _ := r.Get(canonical)
 	// Recover from a panicking tool. Without this a buggy third-party
 	// tool brings down the entire process — the runTurn goroutine
 	// crashes, Go's runtime tears down every other goroutine in
@@ -108,17 +177,61 @@ func (r *Registry) dispatch(ctx context.Context, name string, args json.RawMessa
 	// the user), and log the stack so operators can root-cause.
 	defer func() {
 		if rec := recover(); rec != nil {
-			log.Printf("affent: tool %q panicked: %v\n%s", name, rec, debug.Stack())
-			out = fmt.Sprintf("Error: tool %q panicked: %v", name, rec)
+			log.Printf("affent: tool %q panicked: %v\n%s", canonical, rec, debug.Stack())
+			out = fmt.Sprintf("Error: tool %q panicked: %v", canonical, rec)
 			isErr = true
 		}
 	}()
 	res, err := t.Execute(ctx, args)
 	if err != nil {
+		help := toolErrorHelp(t, args)
 		if res != "" {
-			return fmt.Sprintf("Error: %s\n%s", err, res), true
+			return fmt.Sprintf("Error: %s\n%s%s", err, res, help), true
 		}
-		return fmt.Sprintf("Error: %s", err), true
+		return fmt.Sprintf("Error: %s%s", err, help), true
 	}
 	return res, false
+}
+
+func levenshtein(a, b string) int {
+	ar := []rune(a)
+	br := []rune(b)
+	if len(ar) == 0 {
+		return len(br)
+	}
+	if len(br) == 0 {
+		return len(ar)
+	}
+	prev := make([]int, len(br)+1)
+	curr := make([]int, len(br)+1)
+	for j := range prev {
+		prev[j] = j
+	}
+	for i, ra := range ar {
+		curr[0] = i + 1
+		for j, rb := range br {
+			cost := 0
+			if ra != rb {
+				cost = 1
+			}
+			curr[j+1] = min(prev[j+1]+1, curr[j]+1, prev[j]+cost)
+		}
+		prev, curr = curr, prev
+	}
+	return prev[len(br)]
+}
+
+func normalizeToolIdentifier(s string) string {
+	var b strings.Builder
+	for _, r := range s {
+		switch {
+		case r >= 'a' && r <= 'z':
+			b.WriteRune(r)
+		case r >= 'A' && r <= 'Z':
+			b.WriteRune(r + ('a' - 'A'))
+		case r >= '0' && r <= '9':
+			b.WriteRune(r)
+		}
+	}
+	return b.String()
 }

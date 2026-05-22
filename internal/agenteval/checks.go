@@ -62,6 +62,30 @@ func ToolNotCalled(toolName string, argMatcher func(args map[string]any) bool) C
 	}
 }
 
+// ToolResultContains passes when a named tool returned output containing
+// substr. It is useful for runtime guard evals: the model may attempt a
+// bad call, but the loop must surface a corrective tool result instead
+// of crashing or spinning.
+func ToolResultContains(toolName, substr string) Check {
+	return Check{
+		Name: "tool_result_contains:" + toolName + ":" + previewSubstr(substr, 32),
+		Eval: func(t Trace) CheckResult {
+			for _, c := range t.Tools {
+				if c.Tool != toolName {
+					continue
+				}
+				if strings.Contains(c.Result, substr) {
+					return CheckResult{Pass: true, Detail: "matched call_id=" + c.CallID}
+				}
+			}
+			return CheckResult{
+				Pass:   false,
+				Detail: fmt.Sprintf("expected %q result to contain %q; tools=%s", toolName, substr, toolNamesSummary(t.Tools)),
+			}
+		},
+	}
+}
+
 // ToolCalledBefore passes when at least one `earlier` call happens
 // before the first `later` call, AND a `later` call was made.
 //

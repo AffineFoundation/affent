@@ -414,6 +414,7 @@ func (l *Loop) runTurn(ctx context.Context, turnID, userText string) {
 	postToolPolicy := l.activePostToolPolicy()
 	postToolSeen := false
 	postToolActive := false
+	loopGuard := newToolLoopGuard()
 	// finishedNaturally tracks whether the for-loop exited because the
 	// model returned an assistant message without tool_calls (the
 	// "done thinking" path). Falling out of the loop with this still
@@ -502,17 +503,36 @@ func (l *Loop) runTurn(ctx context.Context, turnID, userText string) {
 				break
 			}
 			callID := tc.ID
-			args := json.RawMessage(tc.Function.Arguments)
-			if len(args) == 0 {
-				args = json.RawMessage("{}")
+			args, argsRepaired, argsRepairErr := repairToolCallArgsForDispatch(tc.Function.Arguments)
+			toolName := tc.Function.Name
+			canonicalChanged := false
+			if l.Tools != nil {
+				if canonical, ok, changed := l.Tools.canonicalName(toolName); ok {
+					toolName = canonical
+					canonicalChanged = changed
+					if t, _ := l.Tools.Get(toolName); t != nil {
+						var schemaRepaired bool
+						args, schemaRepaired = repairToolArgsWithSchema(args, t.Schema)
+						argsRepaired = argsRepaired || schemaRepaired
+					}
+				}
 			}
 			var argsView map[string]any
 			_ = json.Unmarshal(args, &argsView)
 
 			l.publish(sse.TypeToolRequest, sse.ToolRequestPayload{
-				TurnID: turnID, CallID: callID, Tool: tc.Function.Name, Args: argsView,
+				TurnID: turnID, CallID: callID, Tool: toolName, Args: argsView,
 			})
-			if firstToolPolicy != nil && !firstToolSatisfied && tc.Function.Name != firstToolPolicy.ToolName {
+			if argsRepairErr != nil {
+				result := fmt.Sprintf("tool_arg_repair: %v", argsRepairErr)
+				l.publishAndAppendToolResult(callID, toolName, result, true)
+				toolCallsUsed++
+				continue
+			}
+			if repairMsg := formatRepairDebug(toolName, canonicalChanged, argsRepaired); repairMsg != "" {
+				l.Log.Debug().Str("tool", toolName).Str("call_id", callID).Msg(repairMsg)
+			}
+			if firstToolPolicy != nil && !firstToolSatisfied && toolName != firstToolPolicy.ToolName {
 				result := firstToolPolicy.Rejection
 				if result == "" {
 					result = fmt.Sprintf("first_tool_policy: call %s before other tools.", firstToolPolicy.ToolName)
@@ -527,20 +547,20 @@ func (l *Loop) runTurn(ctx context.Context, turnID, userText string) {
 					Role:       "tool",
 					Content:    result,
 					ToolCallID: callID,
-					Name:       tc.Function.Name,
+					Name:       toolName,
 				}); err != nil {
 					l.Log.Error().Err(err).Str("call_id", callID).Msg("conv append tool guard result")
 				}
 				toolCallsUsed++
 				continue
 			}
-			if firstToolPolicy != nil && tc.Function.Name == firstToolPolicy.ToolName {
+			if firstToolPolicy != nil && toolName == firstToolPolicy.ToolName {
 				firstToolSatisfied = true
 			}
-			if postToolSeen && postToolPolicy.blocksAfterToolResult(tc.Function.Name) {
+			if postToolSeen && postToolPolicy.blocksAfterToolResult(toolName) {
 				result := postToolPolicy.AfterToolResultReject
 				if result == "" {
-					result = fmt.Sprintf("post_tool_policy: %s already ran this turn; do not call %s again.", postToolPolicy.ToolName, tc.Function.Name)
+					result = fmt.Sprintf("post_tool_policy: %s already ran this turn; do not call %s again.", postToolPolicy.ToolName, toolName)
 				}
 				l.publish(sse.TypeToolResult, sse.ToolResultPayload{
 					CallID:        callID,
@@ -552,17 +572,17 @@ func (l *Loop) runTurn(ctx context.Context, turnID, userText string) {
 					Role:       "tool",
 					Content:    result,
 					ToolCallID: callID,
-					Name:       tc.Function.Name,
+					Name:       toolName,
 				}); err != nil {
 					l.Log.Error().Err(err).Str("call_id", callID).Msg("conv append post-tool repeat guard result")
 				}
 				toolCallsUsed++
 				continue
 			}
-			if postToolActive && postToolPolicy.blocks(tc.Function.Name) {
+			if postToolActive && postToolPolicy.blocks(toolName) {
 				result := postToolPolicy.Rejection
 				if result == "" {
-					result = fmt.Sprintf("post_tool_policy: answer from the prior %s result instead of calling %s.", postToolPolicy.ToolName, tc.Function.Name)
+					result = fmt.Sprintf("post_tool_policy: answer from the prior %s result instead of calling %s.", postToolPolicy.ToolName, toolName)
 				}
 				l.publish(sse.TypeToolResult, sse.ToolResultPayload{
 					CallID:        callID,
@@ -574,43 +594,33 @@ func (l *Loop) runTurn(ctx context.Context, turnID, userText string) {
 					Role:       "tool",
 					Content:    result,
 					ToolCallID: callID,
-					Name:       tc.Function.Name,
+					Name:       toolName,
 				}); err != nil {
 					l.Log.Error().Err(err).Str("call_id", callID).Msg("conv append post-tool guard result")
 				}
 				toolCallsUsed++
 				continue
 			}
-			result, isErr := l.Tools.dispatch(ctx, tc.Function.Name, args)
-			exit := 0
-			if isErr {
-				exit = 1
+			if result := loopGuard.recordAttempt(toolName, args); result != "" {
+				l.publishAndAppendToolResult(callID, toolName, result, true)
+				toolCallsUsed++
+				continue
 			}
-			l.publish(sse.TypeToolResult, sse.ToolResultPayload{
-				CallID:        callID,
-				ExitCode:      exit,
-				ResultSummary: previewN(result, MaxToolResultPreviewInEvent),
-				Result:        result,
-			})
-			if err := l.Conv.Append(ChatMessage{
-				Role:       "tool",
-				Content:    truncateForContext(result, l.toolResultMaxBytesInContext()),
-				ToolCallID: callID,
-				Name:       tc.Function.Name,
-			}); err != nil {
-				// Append is lockstep (memory follows disk), so a failure
-				// here drops the tool result from both. The next LLM call's
-				// Snapshot will be missing this tool message — strict
-				// OpenAI-compat upstreams reject that pairing and the turn
-				// will end with reason=error on the next runStep, which is
-				// the loud failure we want when the disk is sick.
-				l.Log.Error().Err(err).Str("call_id", callID).Msg("conv append tool result")
+			result, isErr := l.Tools.dispatch(ctx, toolName, args)
+			if guardResult := loopGuard.recordOutcome(toolName, !isErr); guardResult != "" {
+				if result != "" {
+					result += "\n\n" + guardResult
+				} else {
+					result = guardResult
+				}
+				isErr = true
 			}
+			l.publishAndAppendToolResult(callID, toolName, result, isErr)
 			toolCallsUsed++
-			if postToolPolicy != nil && tc.Function.Name == postToolPolicy.ToolName {
+			if postToolPolicy != nil && toolName == postToolPolicy.ToolName {
 				postToolSeen = true
 			}
-			if postToolPolicy != nil && tc.Function.Name == postToolPolicy.ToolName && postToolPolicy.shouldActivate(result, isErr) {
+			if postToolPolicy != nil && toolName == postToolPolicy.ToolName && postToolPolicy.shouldActivate(result, isErr) {
 				postToolActive = true
 			}
 		}
@@ -701,6 +711,31 @@ func (p *PostToolPolicy) blocks(toolName string) bool {
 		}
 	}
 	return false
+}
+
+func (l *Loop) publishAndAppendToolResult(callID, name, result string, isErr bool) {
+	exit := 0
+	if isErr {
+		exit = 1
+	}
+	l.publish(sse.TypeToolResult, sse.ToolResultPayload{
+		CallID:        callID,
+		ExitCode:      exit,
+		ResultSummary: previewN(result, MaxToolResultPreviewInEvent),
+		Result:        result,
+	})
+	if err := l.Conv.Append(ChatMessage{
+		Role:       "tool",
+		Content:    truncateForContext(result, l.toolResultMaxBytesInContext()),
+		ToolCallID: callID,
+		Name:       name,
+	}); err != nil {
+		// Append is lockstep (memory follows disk), so a failure here
+		// drops the tool result from both. The next LLM call's Snapshot
+		// will be missing this tool message, and strict upstreams reject
+		// that pairing loudly.
+		l.Log.Error().Err(err).Str("call_id", callID).Msg("conv append tool result")
+	}
 }
 
 func (l *Loop) appendSkippedToolResults(turnID string, calls []ToolCall, content string) {

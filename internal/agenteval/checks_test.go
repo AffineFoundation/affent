@@ -110,6 +110,23 @@ func TestToolNotCalled(t *testing.T) {
 	})
 }
 
+func TestToolResultContains(t *testing.T) {
+	trace := Trace{Tools: []ToolCall{
+		{CallID: "c1", Tool: "read_file", Result: "ok"},
+		{CallID: "c2", Tool: "probe", Result: "loop_guard: blocked exact repeated call"},
+	}}
+	if res := ToolResultContains("probe", "loop_guard: blocked").Eval(trace); !res.Pass {
+		t.Fatalf("expected result substring to pass: %+v", res)
+	}
+	res := ToolResultContains("probe", "missing").Eval(trace)
+	if res.Pass {
+		t.Fatal("expected missing substring to fail")
+	}
+	if !strings.Contains(res.Detail, "expected") {
+		t.Fatalf("failure detail should explain missing result: %s", res.Detail)
+	}
+}
+
 func TestToolCalledBefore(t *testing.T) {
 	t.Run("passes when earlier precedes later", func(t *testing.T) {
 		trace := Trace{

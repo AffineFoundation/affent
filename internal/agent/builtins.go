@@ -115,7 +115,7 @@ func shellTool(deps BuiltinDeps) *Tool {
 	broadScanIndicators = append(broadScanIndicators, deps.ExtraBroadScanIndicators...)
 	return &Tool{
 		Name:        "shell",
-		Description: "Run a shell command (Linux). Use this for tests/builds/git/grep/python/node/package commands and other CLI inspection. Output is combined stdout+stderr followed by an exit code line; base success/failure on that exit code. Do not append echo $? or pipe tests/builds through head/tail/|| true because that masks the real exit code. In the local executor this is not a filesystem sandbox, so prefer read_file/list_files for ordinary workspace reads and avoid inspecting paths outside the workspace unless the user explicitly asks.",
+		Description: "Run one Linux shell command for tests/builds/git/rg/python/node/package checks. Output includes stdout, stderr, and [exit N]. Do not mask verification exits with | head, | tail, || true, or echo $?. Prefer read_file/list_files for ordinary workspace reads.",
 		Schema:      schema,
 		Execute: func(ctx context.Context, args json.RawMessage) (string, error) {
 			var p struct {
@@ -347,7 +347,7 @@ func readFileTool(deps BuiltinDeps) *Tool {
     }`)
 	return &Tool{
 		Name:        "read_file",
-		Description: "Read a text file from the workspace. Use this before editing code or configs so you have exact context. For very large files, use shell with grep/head/tail/sed to inspect relevant chunks.",
+		Description: "Read one text file from the workspace. Use before editing. For huge files, inspect targeted chunks with shell grep/sed/head/tail.",
 		Schema:      schema,
 		Execute: func(ctx context.Context, args json.RawMessage) (string, error) {
 			var p struct {
@@ -421,7 +421,7 @@ func writeFileTool(deps BuiltinDeps) *Tool {
     }`)
 	return &Tool{
 		Name:        "write_file",
-		Description: "Write or overwrite a whole file in the workspace. Creates parent dirs as needed. Prefer edit_file for small changes to existing files so unrelated content is not accidentally rewritten.",
+		Description: "Create or overwrite one workspace file. Prefer edit_file for small changes to existing files.",
 		Schema:      schema,
 		Execute: func(ctx context.Context, args json.RawMessage) (string, error) {
 			var p struct {
@@ -468,7 +468,7 @@ func editFileTool(deps BuiltinDeps) *Tool {
     }`)
 	return &Tool{
 		Name:        "edit_file",
-		Description: "Find-and-replace within a workspace file. Use this for surgical code edits after read_file. The 'old' string must match exactly (whitespace + newlines); include enough surrounding context to make it unique.",
+		Description: "Exact find-and-replace in one workspace file. Use after read_file; old must match exactly and uniquely unless replace_all=true.",
 		Schema:      schema,
 		Execute: func(ctx context.Context, args json.RawMessage) (string, error) {
 			var p struct {
@@ -539,7 +539,7 @@ func listFilesTool(deps BuiltinDeps) *Tool {
     }`)
 	return &Tool{
 		Name:        "list_files",
-		Description: "List files/directories inside the workspace. Start with this when orienting in an unfamiliar project. For deep recursion or filtering, use shell with find/ls/rg.",
+		Description: "List one workspace directory. Use for orientation; use shell find/ls/rg for deep or filtered searches.",
 		Schema:      schema,
 		Execute: func(ctx context.Context, args json.RawMessage) (string, error) {
 			var p struct {
