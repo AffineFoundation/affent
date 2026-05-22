@@ -67,15 +67,19 @@ func (h *LocalExecutor) Exec(ctx context.Context, cmd []string, opts ExecOptions
 			execErr = fmt.Errorf("exec %q: %w", cmd[0], err)
 			exitCode = -1
 		}
-	}
-	// CommandContext's SIGKILL on ctx.Done surfaces as *ExitError with
-	// ExitCode -1 — indistinguishable from a real `exit -1` until we
-	// also consult ctx. When ctx fired (timeout or parent cancel) we
-	// surface the timeout as the error so the LLM sees "killed for
-	// running too long" rather than "exited with code -1".
-	if ctx.Err() != nil && execErr == nil {
-		execErr = fmt.Errorf("exec %q: %w", cmd[0], ctx.Err())
-		exitCode = -1
+		// CommandContext's SIGKILL on ctx.Done surfaces as *ExitError
+		// with ExitCode -1 — indistinguishable from a real `exit -1`
+		// until we also consult ctx. When the cmd failed AND ctx is
+		// done, the kill was the ctx-signal; report the timeout/cancel
+		// as the cause so the LLM sees "killed for running too long"
+		// rather than "exited with code -1". Gated on err != nil
+		// because a command that completed cleanly just before its
+		// deadline must not be flipped to a "timeout" — c.Run already
+		// gave us the truth.
+		if ctx.Err() != nil && execErr == nil {
+			execErr = fmt.Errorf("exec %q: %w", cmd[0], ctx.Err())
+			exitCode = -1
+		}
 	}
 	return ExecResult{
 		ExitCode: exitCode,
