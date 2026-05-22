@@ -90,10 +90,9 @@ type ToolResultPayload struct {
 }
 
 type UsagePayload struct {
-	TurnID       string  `json:"turn_id"`
-	InputTokens  int     `json:"input_tokens"`
-	OutputTokens int     `json:"output_tokens"`
-	CostUSD      float64 `json:"cost_usd"`
+	TurnID       string `json:"turn_id"`
+	InputTokens  int    `json:"input_tokens"`
+	OutputTokens int    `json:"output_tokens"`
 }
 
 // TurnEndReason values.
