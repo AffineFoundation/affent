@@ -65,15 +65,27 @@ func handleSessionEvents(pool *SessionPool, sessionID string, w http.ResponseWri
 			if !ok {
 				return
 			}
-			writeSSE(w, flusher, ev)
+			if err := writeSSE(w, flusher, ev); err != nil {
+				// Client disconnected (broken pipe, RST). Detecting
+				// this via write failure is faster than waiting for
+				// ctx.Done — Go marks the request ctx Done lazily when
+				// the runtime notices the closed conn, which can be
+				// many seconds for an SSE stream that doesn't try to
+				// read. The keep-alive case above already returns on
+				// write error; this brings the event-emit path in line.
+				return
+			}
 		}
 	}
 }
 
-func writeSSE(w http.ResponseWriter, flusher http.Flusher, ev sse.Event) {
+func writeSSE(w http.ResponseWriter, flusher http.Flusher, ev sse.Event) error {
 	out := ev.Encode()
-	_, _ = w.Write(out)
+	if _, err := w.Write(out); err != nil {
+		return err
+	}
 	flusher.Flush()
+	return nil
 }
 
 // handleSessionDelete closes a session immediately. Returns 204 even

@@ -87,7 +87,9 @@ func TestWriteSSE_EncodesAndFlushes(t *testing.T) {
 		t.Fatal(err)
 	}
 	ev.ID = 42
-	writeSSE(spy, spy, ev)
+	if err := writeSSE(spy, spy, ev); err != nil {
+		t.Fatalf("writeSSE on a healthy writer should not error: %v", err)
+	}
 
 	if !spy.flushed {
 		t.Error("writeSSE must Flush — without it, SSE buffers and client sees nothing until close")
@@ -132,3 +134,37 @@ type flushSpyRecorder struct {
 }
 
 func (f *flushSpyRecorder) Flush() { f.flushed = true }
+
+// TestWriteSSE_BubblesWriteError pins that a downstream-broken
+// connection surfaces as a non-nil error so handleSessionEvents
+// can return immediately. Pre-fix writeSSE discarded write errors
+// (_, _ = w.Write(...)), so the SSE loop kept draining events into
+// a dead socket until Go's HTTP layer eventually noticed the close
+// — many seconds of wasted goroutine time for an event stream
+// that doesn't try to read.
+func TestWriteSSE_BubblesWriteError(t *testing.T) {
+	ev, err := sse.NewEvent(sse.TypeUsage, sse.UsagePayload{TurnID: "x"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	w := &errorWriter{}
+	if err := writeSSE(w, w, ev); err == nil {
+		t.Fatal("writeSSE on a broken writer must return the write error so the handler can bail")
+	}
+}
+
+// errorWriter implements http.ResponseWriter + http.Flusher but
+// returns an error from Write — the broken-pipe shape.
+type errorWriter struct {
+	hdr http.Header
+}
+
+func (e *errorWriter) Write([]byte) (int, error) { return 0, http.ErrBodyNotAllowed }
+func (e *errorWriter) WriteHeader(int)           {}
+func (e *errorWriter) Flush()                    {}
+func (e *errorWriter) Header() http.Header {
+	if e.hdr == nil {
+		e.hdr = http.Header{}
+	}
+	return e.hdr
+}
