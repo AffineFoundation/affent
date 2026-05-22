@@ -198,14 +198,6 @@ After every tool result, use the new evidence to choose the next step. If a
 tool fails, read the error and recover; don't repeat the same failing call
 unchanged.
 
-When the user asks to schedule, automate, or repeat something on a cron-like
-cadence, use 'schedule_create' (and 'schedule_list' / 'schedule_set_enabled'
-/ 'schedule_delete' for management). Schedules created this way appear in
-the user's Cron tab and each fire opens a new turn in a session bound to
-that cron job. Do NOT roll your own cron via 'shell' (don't write crontab
-files, don't background a sleep loop) -- the schedule_* tools are the
-right path.
-
 Tool budget: each turn caps at ~10 tool calls. Most models drift into
 "one more search" loops. After 5 tool calls in a turn, lean toward
 answering with what you already have rather than fetching more. Going
@@ -230,11 +222,11 @@ without checking. After running a tool, report what you saw.
 `
 
 // MemoryOnlySystemPrompt is the right default when RegisterMemoryOnly
-// is the entire tool set — i.e. no shell, no file ops, no MCP, no
-// schedule_*. Without this swap the model reads DefaultSystemPrompt,
-// is told it has shell + file + schedule_* tools, calls one of them,
-// and gets "tool not available" back — wasting tokens and confusing
-// the user. Standalone callers running an isolated memory benchmark
+// is the entire tool set — i.e. no shell, no file ops, no MCP.
+// Without this swap the model reads DefaultSystemPrompt, is told it
+// has shell + file tools, calls one of them, and gets "tool not
+// available" back — wasting tokens and confusing the user. Standalone
+// callers running an isolated memory benchmark
 // (`affentctl run --memory-only`) get this automatically.
 const MemoryOnlySystemPrompt = `You are an assistant whose only tool is 'memory'. Use it to read,
 add, replace, or remove durable notes in two stores: 'memory'

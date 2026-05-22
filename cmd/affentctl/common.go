@@ -433,9 +433,9 @@ func setupLoop(c commonFlags) (*loopBundle, int) {
 	// Default system prompt; resumed conversations already have one in
 	// the log so EnsureSystemPrompt below is a no-op for them.
 	// --memory-only swaps to a memory-only-tailored prompt because the
-	// generic dev-box default tells the model about shell/file/schedule_*
-	// tools that aren't registered in this mode (leads to wasted "tool
-	// not available" tool calls + misleading the user about capabilities).
+	// generic dev-box default tells the model about shell/file tools
+	// that aren't registered in this mode (leads to wasted "tool not
+	// available" tool calls + misleading the user about capabilities).
 	systemPrompt := agent.DefaultSystemPrompt
 	if c.memoryOnly {
 		systemPrompt = agent.MemoryOnlySystemPrompt
