@@ -170,10 +170,9 @@ tools:
 
 With the default namespace behavior, a server tool such as `poi_search` is
 advertised to the model as `AMap_poi_search`. For models fine-tuned around raw
-MCP tool names, set `"namespace": false` on a server, or pass
-`--mcp-no-namespace` to `affentctl` to disable MCP name prefixes for every
-configured server. When prefixes are disabled, Affent rejects duplicate final
-tool names at startup instead of silently overwriting a tool.
+MCP tool names, set `"namespace": false` on that server. When prefixes are
+disabled, Affent rejects duplicate final tool names at startup instead of
+silently overwriting a tool.
 
 ## Subagent
 

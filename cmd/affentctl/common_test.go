@@ -1,19 +1,13 @@
 package main
 
 import (
-	"encoding/json"
 	"flag"
-	"net/http"
-	"net/http/httptest"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
 	"time"
 	"unicode/utf8"
-
-	agent "github.com/affinefoundation/affent/internal/agent"
-	"github.com/rs/zerolog"
 )
 
 // TestReadMaybeStdin_AtMissingFileIsError pins the @-prefix contract.
@@ -91,7 +85,6 @@ func TestApplyConfigMergesAndCLIOverrides(t *testing.T) {
 		"workspace": "./from-config",
 		"model": "config-model",
 		"max_call_timeout": "9s",
-		"mcp_no_namespace": true,
 		"compact": {"trigger": 10, "keep_last": 4}
 	}`), 0o644); err != nil {
 		t.Fatal(err)
@@ -122,9 +115,6 @@ func TestApplyConfigMergesAndCLIOverrides(t *testing.T) {
 	}
 	if cf.compactTrigger != 10 {
 		t.Fatalf("compact.trigger not loaded from config: %d", cf.compactTrigger)
-	}
-	if !cf.mcpNoNamespace {
-		t.Fatalf("mcp_no_namespace not loaded from config")
 	}
 	if cf.compactKeepLast != 7 {
 		t.Fatalf("CLI compact-keep-last did not override config: %d", cf.compactKeepLast)
@@ -313,90 +303,6 @@ func TestMemoryOnlyImpliesMemoryEnabled(t *testing.T) {
 	if cf.projectContext {
 		t.Fatal("--memory-only must disable project context")
 	}
-}
-
-func TestStartMCPNoNamespaceFlagOverridesConfigServers(t *testing.T) {
-	srv := newCommonTestMCPServer(t)
-	dir := t.TempDir()
-	cfgPath := filepath.Join(dir, "mcp.json")
-	cfg := map[string]any{
-		"servers": []map[string]any{{
-			"name":      "Noop",
-			"namespace": true,
-			"url":       srv.URL,
-		}},
-	}
-	raw, err := json.Marshal(cfg)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if err := os.WriteFile(cfgPath, raw, 0o644); err != nil {
-		t.Fatal(err)
-	}
-
-	reg := agent.NewRegistry()
-	clients, err := startMCP(cfgPath, true, reg, zerolog.Nop())
-	if err != nil {
-		t.Fatal(err)
-	}
-	for _, c := range clients {
-		_ = c.Close()
-	}
-	if _, ok := reg.Get("poi_search"); !ok {
-		t.Fatalf("--mcp-no-namespace should advertise the raw MCP tool name")
-	}
-	if _, ok := reg.Get("Noop_poi_search"); ok {
-		t.Fatalf("--mcp-no-namespace should override config namespace=true")
-	}
-}
-
-func newCommonTestMCPServer(t *testing.T) *httptest.Server {
-	t.Helper()
-	type rpcReq struct {
-		ID     any             `json:"id,omitempty"`
-		Method string          `json:"method"`
-		Params json.RawMessage `json:"params,omitempty"`
-	}
-	type rpcResp struct {
-		JSONRPC string `json:"jsonrpc"`
-		ID      any    `json:"id,omitempty"`
-		Result  any    `json:"result,omitempty"`
-	}
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		var req rpcReq
-		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-			t.Errorf("decode MCP request: %v", err)
-			http.Error(w, err.Error(), http.StatusBadRequest)
-			return
-		}
-		if req.Method == "notifications/initialized" {
-			w.WriteHeader(http.StatusAccepted)
-			return
-		}
-		w.Header().Set("Content-Type", "application/json")
-		resp := rpcResp{JSONRPC: "2.0", ID: req.ID}
-		switch req.Method {
-		case "initialize":
-			resp.Result = map[string]any{
-				"protocolVersion": "2025-06-18",
-				"capabilities":    map[string]any{},
-				"serverInfo":      map[string]any{"name": "fake", "version": "test"},
-			}
-		case "tools/list":
-			resp.Result = map[string]any{
-				"tools": []map[string]any{{
-					"name":        "poi_search",
-					"inputSchema": map[string]any{"type": "object", "properties": map[string]any{}},
-				}},
-			}
-		default:
-			http.Error(w, "unexpected MCP method: "+req.Method, http.StatusBadRequest)
-			return
-		}
-		_ = json.NewEncoder(w).Encode(resp)
-	}))
-	t.Cleanup(srv.Close)
-	return srv
 }
 
 func TestMemoryConfigFromFile(t *testing.T) {
