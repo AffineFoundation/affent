@@ -240,6 +240,21 @@ func newGuardedClient(allowPrivate bool) *http.Client {
 			DialContext:           dialer.DialContext,
 			TLSHandshakeTimeout:   10 * time.Second,
 			ResponseHeaderTimeout: 30 * time.Second,
+			// Match http.DefaultTransport's idle-pool bounds. A
+			// zero-value Transport keeps idle conns forever (no
+			// IdleConnTimeout) and the pool is effectively unbounded;
+			// a long-running affentserve fetching many distinct
+			// hosts would accumulate sockets until something killed
+			// the process. 90 s / 100 conns are net/http's own
+			// defaults.
+			MaxIdleConns:    100,
+			IdleConnTimeout: 90 * time.Second,
+			// HTTP/2 needs an explicit opt-in once any field on the
+			// Transport is set (Go's transport stops auto-upgrading
+			// in that case). Without this, every fetch is HTTP/1.1,
+			// missing out on multiplexing and ALPN for hosts that
+			// only optimize the h2 path.
+			ForceAttemptHTTP2: true,
 		},
 	}
 }
