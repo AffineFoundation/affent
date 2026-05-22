@@ -133,6 +133,19 @@ type Config struct {
 	// inspection; harmful for Cloudflare-avoidance.
 	BrowserAllowAllDomains bool `json:"browser_allow_all_domains"`
 
+	// EnableSubagent registers the subagent_run tool. The subagent is
+	// a fresh isolated Loop with read-only tools (read_file, list_files,
+	// guarded shell, read-only memory) and a step budget. Off by
+	// default so the only cost an operator opts into is the upstream
+	// LLM bill; on for deployments that want bounded exploration /
+	// review without polluting the main session context. The
+	// subagent's tools are read-only by design — enabling this does
+	// NOT enable shell or file writes for the parent agent. The
+	// previous wiring tied subagent registration to EnableBuiltins,
+	// which mixed two unrelated capabilities; operators relying on
+	// that coupling must now set EnableSubagent: true explicitly.
+	EnableSubagent bool `json:"enable_subagent"`
+
 	// BrowserScreenshot registers the browser_screenshot tool. Off by
 	// default because the base64 image payload bloats tool result events
 	// and text-only models can't act on it. Vision-capable callers

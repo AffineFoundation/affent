@@ -47,6 +47,30 @@ func TestParseFlagsAndConfig_CLIBoolCanOverrideFileTrue(t *testing.T) {
 	}
 }
 
+// TestParseFlagsAndConfig_SubagentIsIndependentFromBuiltins pins the
+// new gating: subagent_run registration must be controlled by its
+// own EnableSubagent flag, not coupled to EnableBuiltins. An
+// operator wanting bounded read-only delegation without exposing
+// the parent agent's shell / file-write builtins should be able to
+// say --subagent --builtins=false and get exactly that.
+func TestParseFlagsAndConfig_SubagentIsIndependentFromBuiltins(t *testing.T) {
+	cfg, err := parseFlagsAndConfig([]string{
+		"--base-url", "https://example/v1",
+		"--model", "demo",
+		"--subagent",
+		"--builtins=false",
+	})
+	if err != nil {
+		t.Fatalf("parseFlagsAndConfig: %v", err)
+	}
+	if !cfg.EnableSubagent {
+		t.Error("--subagent must enable EnableSubagent")
+	}
+	if cfg.EnableBuiltins {
+		t.Error("--builtins=false must leave EnableBuiltins off — subagent should not pull it in")
+	}
+}
+
 // TestParseFlagsAndConfig_CLIBoolUnsetKeepsFileValue pins the
 // opposite direction: when the user does NOT pass a bool flag, the
 // file's value stays intact.

@@ -72,6 +72,7 @@ func parseFlagsAndConfig(argv []string) (Config, error) {
 		enableWebSearch  = fs.Bool("web-search", false, "Register web_search alongside web_fetch (requires TAVILY_API_KEY by default).")
 		enableMemory     = fs.Bool("memory", false, "Register agent runtime's memory tool. Off by default — eval workloads should leave it off.")
 		enableBuiltins   = fs.Bool("builtins", false, "Register shell + file builtins (LocalExecutor). DANGEROUS on a shared host — only enable in a sandboxed environment.")
+		enableSubagent   = fs.Bool("subagent", false, "Register the subagent_run tool — a bounded isolated Loop with read-only inspection tools. Off by default; doesn't require --builtins but inherits the shell tool when --builtins is also on.")
 		browserCacheDir  = fs.String("browser-cache-dir", "", "Enable an on-disk response cache for browser sessions; empty disables caching.")
 		browserCacheTTL  = fs.String("browser-cache-ttl", "", "Cache TTL ('24h' default; '0s' disables expiry).")
 		browserCacheSweep = fs.String("browser-cache-sweep-interval", "", "How often the cache GC deletes expired files (default = TTL/8, min 5m).")
@@ -158,6 +159,9 @@ func parseFlagsAndConfig(argv []string) (Config, error) {
 	}
 	if setFlags["builtins"] {
 		cfg.EnableBuiltins = *enableBuiltins
+	}
+	if setFlags["subagent"] {
+		cfg.EnableSubagent = *enableSubagent
 	}
 	if *browserCacheDir != "" {
 		cfg.BrowserCacheDir = *browserCacheDir

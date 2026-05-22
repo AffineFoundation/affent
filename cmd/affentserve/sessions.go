@@ -318,10 +318,18 @@ func (p *SessionPool) buildSession(id string) (*Session, error) {
 			affentweb.RegisterFetch(reg, affentweb.FetchConfig{})
 		}
 	}
-	if p.cfg.EnableBuiltins {
+	if p.cfg.EnableSubagent {
+		// Executor is passed through if EnableBuiltins is also on —
+		// without an Executor the child can't run shell, but
+		// read_file / list_files still work via the host fs path.
+		// A subagent without shell is still useful for code reading.
+		var subagentExec executor.Executor
+		if p.cfg.EnableBuiltins {
+			subagentExec = localExec
+		}
 		agent.RegisterSubagent(reg, agent.SubagentDeps{
 			LLM:              llm,
-			Executor:         localExec,
+			Executor:         subagentExec,
 			HostWorkspaceDir: workspace,
 			Memory:           memStore,
 			ParentSessionID:  id,
@@ -370,7 +378,13 @@ func (p *SessionPool) buildSession(id string) (*Session, error) {
 		KeepLast:    keepLast,
 	}
 	systemPrompt := p.cfg.SystemPrompt
-	if p.cfg.EnableBuiltins {
+	if p.cfg.EnableSubagent {
+		// Tell the model when to delegate. Without this hint the model
+		// sees subagent_run in its tool list but defaults to direct
+		// read_file / list_files in the parent context — the very
+		// pollution this feature exists to avoid. Idempotent on the
+		// guidance marker so a custom prompt that already inlines it
+		// won't get duplicated.
 		systemPrompt = agent.WithSubagentSystemGuidance(systemPrompt)
 	}
 	if err := loop.EnsureSystemPrompt(systemPrompt); err != nil {
