@@ -354,6 +354,9 @@ func (p *SessionPool) buildSession(id string) (*Session, error) {
 		// the tool isn't registered above anyway.
 		Memory: memStore,
 	}
+	if p.cfg.EnableSubagent {
+		loop.FirstToolPolicy = agent.SubagentFirstToolPolicy()
+	}
 	// Always-on rolling-summary compactor, same posture affentctl
 	// takes. Without it, a long-running session eventually outgrows
 	// the upstream's context window and runStep returns a

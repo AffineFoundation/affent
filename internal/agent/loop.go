@@ -117,6 +117,19 @@ type Loop struct {
 	// start. The block sits between the base prompt and the memory
 	// snapshot. Files are read-only — affent never writes to them.
 	ProjectContextDir string
+
+	// FirstToolPolicy optionally forces a named tool to be used before
+	// other tools for turns matching Trigger. This is a generic runtime
+	// guardrail for small models that ignore a user's explicit
+	// delegation instruction; feature-specific trigger logic belongs
+	// outside Loop.
+	FirstToolPolicy *FirstToolPolicy
+}
+
+type FirstToolPolicy struct {
+	ToolName  string
+	Trigger   func(userText string) bool
+	Rejection string
 }
 
 // SystemPrompt is fed once at session start. It is deliberately operational:
@@ -342,12 +355,8 @@ func (l *Loop) runTurn(ctx context.Context, turnID, userText string) {
 
 	totalIn, totalOut := 0, 0
 	endReason := sse.TurnEndCompleted
-	hasSubagent := false
-	if l.Tools != nil {
-		_, hasSubagent = l.Tools.Get("subagent_run")
-	}
-	requireSubagentFirst := shouldRequireSubagentFirst(userText) && hasSubagent
-	subagentFirstSatisfied := !requireSubagentFirst
+	firstToolPolicy := l.activeFirstToolPolicy(userText)
+	firstToolSatisfied := firstToolPolicy == nil
 	// finishedNaturally tracks whether the for-loop exited because the
 	// model returned an assistant message without tool_calls (the
 	// "done thinking" path). Falling out of the loop with this still
@@ -423,8 +432,11 @@ func (l *Loop) runTurn(ctx context.Context, turnID, userText string) {
 			l.publish(sse.TypeToolRequest, sse.ToolRequestPayload{
 				TurnID: turnID, CallID: callID, Tool: tc.Function.Name, Args: argsView,
 			})
-			if requireSubagentFirst && !subagentFirstSatisfied && tc.Function.Name != "subagent_run" {
-				result := "subagent_first_policy: the user explicitly asked to use subagent_run first; call subagent_run before parent-side exploration tools."
+			if firstToolPolicy != nil && !firstToolSatisfied && tc.Function.Name != firstToolPolicy.ToolName {
+				result := firstToolPolicy.Rejection
+				if result == "" {
+					result = fmt.Sprintf("first_tool_policy: call %s before other tools.", firstToolPolicy.ToolName)
+				}
 				l.publish(sse.TypeToolResult, sse.ToolResultPayload{
 					CallID:        callID,
 					ExitCode:      1,
@@ -441,8 +453,8 @@ func (l *Loop) runTurn(ctx context.Context, turnID, userText string) {
 				}
 				continue
 			}
-			if tc.Function.Name == "subagent_run" {
-				subagentFirstSatisfied = true
+			if firstToolPolicy != nil && tc.Function.Name == firstToolPolicy.ToolName {
+				firstToolSatisfied = true
 			}
 			result, isErr := l.Tools.dispatch(ctx, tc.Function.Name, args)
 			exit := 0
@@ -480,22 +492,18 @@ func (l *Loop) runTurn(ctx context.Context, turnID, userText string) {
 	l.publish(sse.TypeTurnEnd, sse.TurnEndPayload{TurnID: turnID, Reason: endReason})
 }
 
-func shouldRequireSubagentFirst(userText string) bool {
-	t := strings.ToLower(userText)
-	for _, needle := range []string{
-		"subagent_run",
-		"use subagent",
-		"using subagent",
-		"用 subagent",
-		"使用 subagent",
-		"优先使用 subagent",
-		"先用 subagent",
-	} {
-		if strings.Contains(t, needle) {
-			return true
-		}
+func (l *Loop) activeFirstToolPolicy(userText string) *FirstToolPolicy {
+	p := l.FirstToolPolicy
+	if p == nil || p.ToolName == "" || l.Tools == nil {
+		return nil
 	}
-	return false
+	if _, ok := l.Tools.Get(p.ToolName); !ok {
+		return nil
+	}
+	if p.Trigger != nil && !p.Trigger(userText) {
+		return nil
+	}
+	return p
 }
 
 func (l *Loop) appendSkippedToolResults(turnID string, calls []ToolCall, content string) {

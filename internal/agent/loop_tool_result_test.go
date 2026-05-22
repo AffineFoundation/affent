@@ -355,6 +355,7 @@ func TestRunTurn_SubagentFirstPolicyGuardsParentExploration(t *testing.T) {
 	loop := &Loop{
 		LLM: NewLLMClient(srv.URL, "", "fake-model"), Tools: reg, Conv: conv, Events: events,
 		MaxTurnSteps: 3, PerCallTimeout: 5 * time.Second,
+		FirstToolPolicy: SubagentFirstToolPolicy(),
 	}
 	if err := loop.EnsureSystemPrompt("base"); err != nil {
 		t.Fatal(err)
@@ -376,7 +377,7 @@ func TestRunTurn_SubagentFirstPolicyGuardsParentExploration(t *testing.T) {
 				if err := json.Unmarshal(ev.Data, &p); err != nil {
 					t.Fatalf("decode tool.result: %v", err)
 				}
-				if strings.Contains(p.Result, "subagent_first_policy") {
+				if strings.Contains(p.Result, "first_tool_policy") {
 					sawGuard = true
 				}
 			}

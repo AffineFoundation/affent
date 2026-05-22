@@ -19,6 +19,7 @@ import (
 const (
 	defaultSubagentMaxTurns = 6
 	maxSubagentMaxTurns     = 12
+	SubagentToolName        = "subagent_run"
 )
 
 const SubagentSystemGuidance = `Subagent delegation:
@@ -34,6 +35,18 @@ func WithSubagentSystemGuidance(prompt string) string {
 		return prompt
 	}
 	return prompt + "\n\n" + SubagentSystemGuidance
+}
+
+func SubagentFirstToolPolicy() *FirstToolPolicy {
+	return &FirstToolPolicy{
+		ToolName:  SubagentToolName,
+		Trigger:   explicitSubagentRequested,
+		Rejection: "first_tool_policy: the user explicitly requested subagent delegation; call subagent_run before parent-side exploration tools.",
+	}
+}
+
+func explicitSubagentRequested(userText string) bool {
+	return strings.Contains(strings.ToLower(userText), "subagent")
 }
 
 // SubagentDeps wires the first-generation subagent tool. The subagent is a
@@ -96,7 +109,7 @@ func subagentTool(deps SubagentDeps) *Tool {
         }
     }`)
 	return &Tool{
-		Name:        "subagent_run",
+		Name:        SubagentToolName,
 		Description: "Run a bounded subagent in an isolated context for codebase exploration or review. If the user explicitly asks for subagent, isolated review, broad exploration, or avoiding main-context pollution, call this as the first tool instead of listing/reading files in the parent context. The subagent has read_file/list_files, guarded read-only shell, memory, and session_search; it cannot use write_file/edit_file. It returns a structured evidence report for the main agent to act on. After this tool returns, answer from its report instead of reading the child transcript or repeating the same file reads/tests unless the report is incomplete or contradictory.",
 		Schema:      schema,
 		Execute: func(ctx context.Context, args json.RawMessage) (string, error) {
