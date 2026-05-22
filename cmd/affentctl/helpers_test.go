@@ -7,6 +7,9 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	agent "github.com/affinefoundation/affent/internal/agent"
+	"github.com/affinefoundation/affent/internal/executor"
 )
 
 // TestScanLog_CountAndPreview pins the JSONL scan that feeds
@@ -235,4 +238,152 @@ func TestSummarizeArgs_TruncatesLongCommand(t *testing.T) {
 	if len(got) > 95 {
 		t.Errorf("truncated output should be ~85 chars max; got %d", len(got))
 	}
+}
+
+// TestHandleSlash pins the REPL slash-command dispatcher. /exit and
+// its aliases must return (continue=false, exit=0); /help / /sid /
+// /cancel / unknown must keep the REPL alive. Casing and trailing
+// whitespace must be tolerated (operators often type "  /Exit "
+// without thinking). A regression that breaks any of these
+// strands the user in a session they can't quit cleanly.
+func TestHandleSlash(t *testing.T) {
+	b := &loopBundle{loop: &agent.Loop{}, sessionID: "sess_test"}
+	cases := []struct {
+		in     string
+		want   bool // continue
+		wantEx int
+	}{
+		{"/exit", false, 0},
+		{"/quit", false, 0},
+		{"/q", false, 0},
+		{"/EXIT", false, 0}, // case-insensitive
+		{"  /exit  ", false, 0},
+		{"/help", true, 0},
+		{"/h", true, 0},
+		{"/?", true, 0},
+		{"/sid", true, 0},
+		{"/cancel", true, 0}, // Loop with nil cancelFn → Cancel is a no-op
+		{"/bogus", true, 0},  // unknown still keeps REPL alive
+	}
+	for _, c := range cases {
+		t.Run(c.in, func(t *testing.T) {
+			got, ex := handleSlash(c.in, b)
+			if got != c.want || ex != c.wantEx {
+				t.Errorf("handleSlash(%q) = (%v, %d), want (%v, %d)", c.in, got, ex, c.want, c.wantEx)
+			}
+		})
+	}
+}
+
+// TestResolveSessionID pins the three branches that decide which
+// session a `run` / `chat` invocation operates on:
+//   - explicit --session-id existing → reuse + resumed=true
+//   - explicit --session-id new → reuse the name + resumed=false
+//   - --continue with no prior session → error pointing at the dir
+//   - --continue with prior sessions → most-recent + resumed=true
+//   - default (no flags) → fresh "run_<uuid>" + resumed=false
+func TestResolveSessionID(t *testing.T) {
+	t.Run("explicit existing", func(t *testing.T) {
+		dir := t.TempDir()
+		path := filepath.Join(dir, "named.jsonl")
+		if err := os.WriteFile(path, []byte("{}"), 0o644); err != nil {
+			t.Fatal(err)
+		}
+		sid, resumed, err := resolveSessionID(dir, "named", false)
+		if err != nil || sid != "named" || !resumed {
+			t.Errorf("got (%q, %v, %v), want (named, true, nil)", sid, resumed, err)
+		}
+	})
+	t.Run("explicit new", func(t *testing.T) {
+		dir := t.TempDir()
+		sid, resumed, err := resolveSessionID(dir, "fresh", false)
+		if err != nil || sid != "fresh" || resumed {
+			t.Errorf("got (%q, %v, %v), want (fresh, false, nil)", sid, resumed, err)
+		}
+	})
+	t.Run("continueLast with no priors", func(t *testing.T) {
+		dir := t.TempDir()
+		_, _, err := resolveSessionID(dir, "", true)
+		if err == nil || !strings.Contains(err.Error(), "--continue") {
+			t.Errorf("expected --continue error, got %v", err)
+		}
+	})
+	t.Run("continueLast picks most recent", func(t *testing.T) {
+		dir := t.TempDir()
+		older := filepath.Join(dir, "old.jsonl")
+		newer := filepath.Join(dir, "new.jsonl")
+		for _, p := range []string{older, newer} {
+			if err := os.WriteFile(p, []byte("{}"), 0o644); err != nil {
+				t.Fatal(err)
+			}
+		}
+		past := time.Now().Add(-1 * time.Hour)
+		if err := os.Chtimes(older, past, past); err != nil {
+			t.Fatal(err)
+		}
+		sid, resumed, err := resolveSessionID(dir, "", true)
+		if err != nil || sid != "new" || !resumed {
+			t.Errorf("got (%q, %v, %v), want (new, true, nil)", sid, resumed, err)
+		}
+	})
+	t.Run("default fresh", func(t *testing.T) {
+		dir := t.TempDir()
+		sid, resumed, err := resolveSessionID(dir, "", false)
+		if err != nil || resumed {
+			t.Errorf("got (%q, %v, %v); want non-empty, false, nil", sid, resumed, err)
+		}
+		if !strings.HasPrefix(sid, "run_") {
+			t.Errorf("default sid should start with run_; got %q", sid)
+		}
+	})
+}
+
+// TestBuildExecutor pins the --executor flag's three accepted
+// shapes: empty / "local" → LocalExecutor; "docker:<cid>" →
+// DockerExecExecutor; anything else (including bare "docker:")
+// fails so a typo doesn't silently fall back to LocalExecutor on
+// a host where the operator deliberately wanted container-only
+// shell.
+func TestBuildExecutor(t *testing.T) {
+	t.Run("empty → local", func(t *testing.T) {
+		got, err := buildExecutor("", "sess", "/tmp")
+		if err != nil {
+			t.Fatal(err)
+		}
+		if _, ok := got.(*executor.LocalExecutor); !ok {
+			t.Errorf("empty spec should produce LocalExecutor; got %T", got)
+		}
+	})
+	t.Run("local → local", func(t *testing.T) {
+		got, err := buildExecutor("local", "sess", "/tmp")
+		if err != nil {
+			t.Fatal(err)
+		}
+		if _, ok := got.(*executor.LocalExecutor); !ok {
+			t.Errorf("'local' should produce LocalExecutor; got %T", got)
+		}
+	})
+	t.Run("docker:<cid> → docker", func(t *testing.T) {
+		got, err := buildExecutor("docker:abc123", "sess", "/tmp")
+		if err != nil {
+			t.Fatal(err)
+		}
+		// We can't construct a DockerExecExecutor in this test
+		// without a running daemon — just check it isn't a Local.
+		if _, isLocal := got.(*executor.LocalExecutor); isLocal {
+			t.Errorf("'docker:abc123' must NOT produce LocalExecutor; got %T", got)
+		}
+	})
+	t.Run("bare docker: errors", func(t *testing.T) {
+		_, err := buildExecutor("docker:", "sess", "/tmp")
+		if err == nil || !strings.Contains(err.Error(), "container id") {
+			t.Errorf("'docker:' must error mentioning container id; got %v", err)
+		}
+	})
+	t.Run("unknown spec errors", func(t *testing.T) {
+		_, err := buildExecutor("kata:foo", "sess", "/tmp")
+		if err == nil || !strings.Contains(err.Error(), "unknown") {
+			t.Errorf("unknown spec should error with 'unknown'; got %v", err)
+		}
+	})
 }
