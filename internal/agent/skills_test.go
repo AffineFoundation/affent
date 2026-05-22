@@ -33,6 +33,8 @@ func TestBuiltinSkillProvider_CodingRepairTriggers(t *testing.T) {
 		"AFFENT ACTIVE SKILL: coding_repair_workflow",
 		"Reproduce first",
 		"do not edit tests",
+		"Preserve verification exit codes",
+		"Do not pipe tests/builds through head/tail",
 		"Do not run broad filesystem searches like find /",
 		"run the same failing command again",
 	} {
