@@ -32,9 +32,12 @@ func TestBuiltinSkillProvider_CodingRepairTriggers(t *testing.T) {
 	for _, want := range []string{
 		"AFFENT ACTIVE SKILL: coding_repair_workflow",
 		"Reproduce first",
+		"Run test/build commands directly",
 		"do not edit tests",
 		"Preserve verification exit codes",
 		"Do not pipe tests/builds through head/tail",
+		"echo $?",
+		"Do not add or install a new dependency",
 		"Do not run broad filesystem searches like find /",
 		"run the same failing command again",
 	} {

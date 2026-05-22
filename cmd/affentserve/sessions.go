@@ -15,6 +15,7 @@ import (
 	affentweb "github.com/affinefoundation/affent/extras/web"
 	agent "github.com/affinefoundation/affent/internal/agent"
 	"github.com/affinefoundation/affent/internal/executor"
+	"github.com/affinefoundation/affent/internal/memory"
 	"github.com/affinefoundation/affent/internal/sse"
 	"github.com/google/uuid"
 	"github.com/rs/zerolog"
@@ -296,9 +297,9 @@ func (p *SessionPool) buildSession(id string) (*Session, error) {
 	// every time it's allocated — using it for memory means "same
 	// client, same session_id" sees an empty memory after any
 	// restart, which defeats the long-running purpose.
-	var memStore agent.MemoryStore
+	var memStore memory.MemoryStore
 	if p.cfg.EnableMemory {
-		fms := agent.NewFileMemoryStore(workspace)
+		fms := memory.NewFileMemoryStore(workspace)
 		fms.MemoryDir = sessionDir
 		// Scope the user-profile file under the per-session memory dir
 		// as well. The library default (defaultUserMemoryPath →

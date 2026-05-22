@@ -333,6 +333,32 @@ func TestShellTool_ExtraBroadScanIndicators(t *testing.T) {
 	}
 }
 
+func TestShellToolRejectsMaskedVerificationCommands(t *testing.T) {
+	tool := shellTool(BuiltinDeps{Executor: nilExecutor{}})
+	for _, command := range []string{
+		`python -m pytest -x --tb=short 2>&1 | head -80`,
+		`go test ./... || true`,
+		`npm test | tail -200`,
+		`python -m pytest -x -v 2>&1; echo "EXIT:$?"`,
+	} {
+		_, err := tool.Execute(context.Background(), json.RawMessage(`{"command":`+strconv.Quote(command)+`}`))
+		if err == nil {
+			t.Fatalf("expected masked verification command to be rejected: %s", command)
+		}
+		if !strings.Contains(err.Error(), "masks a test/build exit code") {
+			t.Fatalf("unexpected error for %s: %v", command, err)
+		}
+	}
+}
+
+func TestShellToolAllowsInspectionPipes(t *testing.T) {
+	tool := shellTool(BuiltinDeps{Executor: nilExecutor{}})
+	_, err := tool.Execute(context.Background(), json.RawMessage(`{"command":"printf 'a\\nb\\n' | head -1"}`))
+	if err != nil {
+		t.Fatalf("non-verification inspection pipe should be allowed: %v", err)
+	}
+}
+
 // TestRegistry_RemovePullsToolFromBothMapAndOrder pins the symmetric
 // counterpart to Add: callers can take a tool back out of the
 // registry, and subsequent Defs() / Get() reflect the removal.

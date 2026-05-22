@@ -9,6 +9,7 @@ import (
 	"testing"
 	"unicode/utf8"
 
+	"github.com/affinefoundation/affent/internal/memory"
 	"github.com/affinefoundation/affent/internal/sse"
 	"github.com/rs/zerolog"
 )
@@ -27,10 +28,10 @@ func newTestConv(t *testing.T) *Conversation {
 // tight caps suitable for loop-side tests. The internal/memory
 // package has its own copy with more knobs; this is the minimal
 // helper for the root package's tests.
-func newTestStore(t *testing.T) *FileMemoryStore {
+func newTestStore(t *testing.T) *memory.FileMemoryStore {
 	t.Helper()
 	dir := t.TempDir()
-	s := NewFileMemoryStore(dir)
+	s := memory.NewFileMemoryStore(dir)
 	s.UserPath = filepath.Join(dir, "USER.md")
 	return s
 }
@@ -115,7 +116,7 @@ func TestConsumeAndPersist_ReasoningOnlyTerminalEmitsMessageDone(t *testing.T) {
 func TestEnsureSystemPrompt_EmptyConv_WithMemory(t *testing.T) {
 	conv := newTestConv(t)
 	mem := newTestStore(t)
-	if _, err := mem.Add(TargetMemory, "", "User uses Go 1.22 + sqlc"); err != nil {
+	if _, err := mem.Add(memory.TargetMemory, "", "User uses Go 1.22 + sqlc"); err != nil {
 		t.Fatal(err)
 	}
 	l := &Loop{Conv: conv, Memory: mem}
@@ -172,7 +173,7 @@ func TestEnsureSystemPrompt_ResumedConv_WithMemory_Rewritten(t *testing.T) {
 	}
 
 	mem := newTestStore(t)
-	if _, err := mem.Add(TargetMemory, "", "Fresh fact for this session"); err != nil {
+	if _, err := mem.Add(memory.TargetMemory, "", "Fresh fact for this session"); err != nil {
 		t.Fatal(err)
 	}
 	l := &Loop{Conv: conv, Memory: mem}
@@ -204,7 +205,7 @@ func TestEnsureSystemPrompt_ResumedConv_WithMemory_Rewritten(t *testing.T) {
 func TestEnsureSystemPrompt_ResumedConv_WithMemory_AlreadyEqual_NoOp(t *testing.T) {
 	conv := newTestConv(t)
 	mem := newTestStore(t)
-	if _, err := mem.Add(TargetMemory, "", "stable fact"); err != nil {
+	if _, err := mem.Add(memory.TargetMemory, "", "stable fact"); err != nil {
 		t.Fatal(err)
 	}
 	// Compute what EnsureSystemPrompt would produce and pre-seed the
@@ -271,7 +272,7 @@ func TestEnsureSystemPrompt_ProjectContextPlusMemory_Order(t *testing.T) {
 		t.Fatal(err)
 	}
 	mem := newTestStore(t)
-	if _, err := mem.Add(TargetMemory, "", "agent-authored fact"); err != nil {
+	if _, err := mem.Add(memory.TargetMemory, "", "agent-authored fact"); err != nil {
 		t.Fatal(err)
 	}
 	l := &Loop{Conv: conv, ProjectContextDir: dir, Memory: mem}
@@ -332,7 +333,7 @@ func TestEnsureSystemPrompt_SnapshotLiveAcrossSessions(t *testing.T) {
 	// One store, two sessions: each session's system message reflects
 	// store state at that session's start.
 	mem := newTestStore(t)
-	if _, err := mem.Add(TargetMemory, "", "session-1 fact"); err != nil {
+	if _, err := mem.Add(memory.TargetMemory, "", "session-1 fact"); err != nil {
 		t.Fatal(err)
 	}
 
@@ -345,7 +346,7 @@ func TestEnsureSystemPrompt_SnapshotLiveAcrossSessions(t *testing.T) {
 		t.Fatalf("session 1 system msg missing the fact")
 	}
 
-	if _, err := mem.Add(TargetMemory, "", "session-2 fact"); err != nil {
+	if _, err := mem.Add(memory.TargetMemory, "", "session-2 fact"); err != nil {
 		t.Fatal(err)
 	}
 	conv2 := newTestConv(t)

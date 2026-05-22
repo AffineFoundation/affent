@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/affinefoundation/affent/internal/agent"
+	"github.com/affinefoundation/affent/internal/memory"
 	"github.com/rs/zerolog"
 )
 
@@ -259,10 +260,10 @@ func TestSessionPool_UserMemoryIsolatedPerSession(t *testing.T) {
 	if sa.loop.Memory == nil || sb.loop.Memory == nil {
 		t.Fatal("both sessions must have a memory store when EnableMemory=true")
 	}
-	if _, err := sa.loop.Memory.Add(agent.TargetUser, "", "alpha-only fact"); err != nil {
+	if _, err := sa.loop.Memory.Add(memory.TargetUser, "", "alpha-only fact"); err != nil {
 		t.Fatalf("alpha Add: %v", err)
 	}
-	if _, err := sb.loop.Memory.Add(agent.TargetUser, "", "beta-only fact"); err != nil {
+	if _, err := sb.loop.Memory.Add(memory.TargetUser, "", "beta-only fact"); err != nil {
 		t.Fatalf("beta Add: %v", err)
 	}
 	snapA := sa.loop.Memory.Snapshot()
@@ -368,7 +369,7 @@ func TestSessionPool_DeletePurgesDurableState(t *testing.T) {
 	if err != nil {
 		t.Fatalf("GetOrCreate: %v", err)
 	}
-	if _, err := s1.loop.Memory.Add(agent.TargetMemory, "core", "secret fact"); err != nil {
+	if _, err := s1.loop.Memory.Add(memory.TargetMemory, "core", "secret fact"); err != nil {
 		t.Fatalf("Add: %v", err)
 	}
 	if err := s1.conv.Append(agent.ChatMessage{Role: "user", Content: "first turn"}); err != nil {
@@ -433,7 +434,7 @@ func TestSessionPool_DeletePurgeIsSynchronous(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if _, err := s.loop.Memory.Add(agent.TargetMemory, "core", "must-be-gone"); err != nil {
+	if _, err := s.loop.Memory.Add(memory.TargetMemory, "core", "must-be-gone"); err != nil {
 		t.Fatal(err)
 	}
 	dir := filepath.Join(memRoot, "sync-purge")

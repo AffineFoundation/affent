@@ -18,6 +18,7 @@ import (
 	agent "github.com/affinefoundation/affent/internal/agent"
 	"github.com/affinefoundation/affent/internal/executor"
 	"github.com/affinefoundation/affent/internal/mcp"
+	"github.com/affinefoundation/affent/internal/memory"
 	"github.com/affinefoundation/affent/internal/sse"
 	"github.com/google/uuid"
 	"github.com/rs/zerolog"
@@ -480,9 +481,9 @@ func setupLoop(c commonFlags) (*loopBundle, int) {
 		return nil, 64
 	}
 
-	var memStore agent.MemoryStore
+	var memStore memory.MemoryStore
 	if c.memoryEnabled {
-		fs := agent.NewFileMemoryStore(workspace)
+		fs := memory.NewFileMemoryStore(workspace)
 		if c.memoryDir != "" {
 			fs.MemoryDir = resolveStorePath(workspace, c.memoryDir)
 		}

@@ -9,10 +9,12 @@ coverage.out
 # Local binaries from ad-hoc `go build -o ...` runs.
 /affentctl
 /affentserve
+/affenteval
 
 # Build outputs produced by running `go build` inside command modules.
 cmd/*/affentctl
 cmd/*/affentserve
+cmd/*/affenteval
 
 # Local tool caches
 .pytest_cache/

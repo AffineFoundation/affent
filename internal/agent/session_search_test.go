@@ -7,6 +7,8 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/affinefoundation/affent/internal/memory"
 )
 
 // writeSessionLog drops a JSONL conversation file for one past
@@ -129,7 +131,7 @@ func TestMarshalSessionSearchResp_EmptyResultsIsArray(t *testing.T) {
 // named "memory", no others.
 func TestRegisterMemoryOnly_RegistersJustMemory(t *testing.T) {
 	reg := NewRegistry()
-	store := NewFileMemoryStore(t.TempDir())
+	store := memory.NewFileMemoryStore(t.TempDir())
 	RegisterMemoryOnly(reg, store)
 
 	defs := reg.Defs()

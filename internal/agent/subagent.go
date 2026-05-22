@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/affinefoundation/affent/internal/executor"
+	"github.com/affinefoundation/affent/internal/memory"
 	"github.com/affinefoundation/affent/internal/sse"
 	"github.com/google/uuid"
 	"github.com/rs/zerolog"
@@ -214,7 +215,7 @@ type SubagentDeps struct {
 	LLM               *LLMClient
 	Executor          executor.Executor
 	HostWorkspaceDir  string
-	Memory            MemoryStore
+	Memory            memory.MemoryStore
 	SessionsDir       string
 	ParentSessionID   string
 	TranscriptDir     string
@@ -803,7 +804,7 @@ func rejectMutatingShell(command string) error {
 	return nil
 }
 
-func readOnlyMemoryTool(store MemoryStore) *Tool {
+func readOnlyMemoryTool(store memory.MemoryStore) *Tool {
 	t := memoryTool(store)
 	t.Description = "Read durable memory only. Allowed actions: search and list. Do not add, replace, or remove memory from a subagent."
 	inner := t.Execute

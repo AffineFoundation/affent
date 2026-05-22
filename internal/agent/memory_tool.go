@@ -5,6 +5,8 @@ import (
 	"encoding/json"
 	"fmt"
 	"strings"
+
+	"github.com/affinefoundation/affent/internal/memory"
 )
 
 // memoryActions enumerates the action values the `memory` tool accepts.
@@ -25,7 +27,7 @@ var memoryActions = []string{"add", "replace", "remove", "search", "list"}
 // Current state of the always-in-prompt buckets (core + general +
 // user) reaches the agent through the session-start snapshot. Custom
 // topics surface via search.
-func memoryTool(store MemoryStore) *Tool {
+func memoryTool(store memory.MemoryStore) *Tool {
 	schema, err := json.Marshal(map[string]any{
 		"type":     "object",
 		"required": []string{"action"},
@@ -37,7 +39,7 @@ func memoryTool(store MemoryStore) *Tool {
 			},
 			"target": map[string]any{
 				"type":        "string",
-				"enum":        []string{string(TargetMemory), string(TargetUser)},
+				"enum":        []string{string(memory.TargetMemory), string(memory.TargetUser)},
 				"description": "memory (default) = your own notes (env, conventions, lessons learned); user = what you know about the user (name, preferences, communication style). Omit for the common case of agent notes.",
 			},
 			"topic": map[string]any{
@@ -139,52 +141,52 @@ func memoryTool(store MemoryStore) *Tool {
 			// errored with "invalid memory target") wastes ~1.7k tokens
 			// per retry on a multi-search turn.
 			if p.Target == "" {
-				p.Target = string(TargetMemory)
+				p.Target = string(memory.TargetMemory)
 			}
-			target := MemoryTarget(p.Target)
+			target := memory.MemoryTarget(p.Target)
 
-			var resp MemoryResponse
+			var resp memory.MemoryResponse
 			var err error
 			switch p.Action {
 			case "":
-				resp = MemoryResponse{Target: target, Topic: p.Topic, Message: "action is required"}
+				resp = memory.MemoryResponse{Target: target, Topic: p.Topic, Message: "action is required"}
 			case "add":
 				if p.Content == "" {
-					resp = MemoryResponse{Target: target, Topic: p.Topic, Message: "content is required for action=add"}
+					resp = memory.MemoryResponse{Target: target, Topic: p.Topic, Message: "content is required for action=add"}
 					break
 				}
 				resp, err = store.Add(target, p.Topic, p.Content)
 			case "replace":
 				if p.OldText == "" || p.Content == "" {
-					resp = MemoryResponse{Target: target, Topic: p.Topic, Message: "old_text and content are required for action=replace"}
+					resp = memory.MemoryResponse{Target: target, Topic: p.Topic, Message: "old_text and content are required for action=replace"}
 					break
 				}
 				resp, err = store.Replace(target, p.Topic, p.OldText, p.Content)
 			case "remove":
 				if p.OldText == "" {
-					resp = MemoryResponse{Target: target, Topic: p.Topic, Message: "old_text is required for action=remove"}
+					resp = memory.MemoryResponse{Target: target, Topic: p.Topic, Message: "old_text is required for action=remove"}
 					break
 				}
 				resp, err = store.Remove(target, p.Topic, p.OldText)
 			case "search":
 				if p.Query == "" {
-					resp = MemoryResponse{Target: target, Topic: p.Topic, Message: "query is required for action=search"}
+					resp = memory.MemoryResponse{Target: target, Topic: p.Topic, Message: "query is required for action=search"}
 					break
 				}
 				resp, err = store.Search(target, p.Topic, p.Query, p.TopK)
 			case "list":
 				if lister, ok := store.(interface {
-					ListTopics(MemoryTarget) (MemoryResponse, error)
+					ListTopics(memory.MemoryTarget) (memory.MemoryResponse, error)
 				}); ok {
 					resp, err = lister.ListTopics(target)
 				} else {
-					// Embedder swapped in a custom MemoryStore that
-					// doesn't implement the optional list extension.
+					// A custom MemoryStore may not implement the
+					// optional list extension.
 					// Surface a sane explanation rather than panic.
-					resp = MemoryResponse{Target: target, Message: "this MemoryStore does not support action=list"}
+					resp = memory.MemoryResponse{Target: target, Message: "this MemoryStore does not support action=list"}
 				}
 			default:
-				resp = MemoryResponse{Target: target, Topic: p.Topic, Message: fmt.Sprintf("unknown action %q (expected one of: %s)", p.Action, strings.Join(memoryActions, ", "))}
+				resp = memory.MemoryResponse{Target: target, Topic: p.Topic, Message: fmt.Sprintf("unknown action %q (expected one of: %s)", p.Action, strings.Join(memoryActions, ", "))}
 			}
 			if err != nil {
 				return "", err

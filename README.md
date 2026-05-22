@@ -242,8 +242,25 @@ Registration:
   `--builtins` — the parent can have subagent without exposing host
   shell, and conversely host shell doesn't pull subagent in.
 
-Pass `mode` (`explore` or `review`) and `task` to invoke; `max_turns`
-defaults to 6 with a hard cap of 12.
+Pass `mode` (`explore`, `review`, `test`, or `research`) and `task` to
+invoke; `max_turns` defaults to 6 with a hard cap of 12.
+
+## Evaluation
+
+Affent includes an internal evaluation runner for real agent scenarios. It
+creates temporary workspaces, runs `affentctl` against a configured model, and
+checks both the final outcome and the trace-level process quality: whether the
+agent reproduced failures, avoided broad filesystem scans, preserved test exit
+codes, kept tests unchanged, and ran a final verification.
+
+```bash
+go run ./cmd/affenteval --list
+go run ./cmd/affenteval --scenario coding-python-slug --temperature 0
+```
+
+The runner is intentionally small and scenario-driven. It is meant to turn
+observed failures from real models into repeatable regression checks before the
+same lesson becomes a prompt, skill, guard, or tool-policy change.
 
 ## Events And Observability
 

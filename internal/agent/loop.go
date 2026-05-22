@@ -12,6 +12,7 @@ import (
 	"sync/atomic"
 	"time"
 
+	"github.com/affinefoundation/affent/internal/memory"
 	"github.com/affinefoundation/affent/internal/sse"
 	"github.com/affinefoundation/affent/internal/textutil"
 	"github.com/google/uuid"
@@ -114,7 +115,7 @@ type Loop struct {
 	// existing system message is rewritten with the new composition.
 	// Mid-session mutations come from the `memory` tool registered
 	// via BuiltinDeps.Memory.
-	Memory MemoryStore
+	Memory memory.MemoryStore
 
 	// ProjectContextDir, when non-empty, makes EnsureSystemPrompt
 	// load user-authored project notes (AGENTS.md, CONVENTIONS.md,
@@ -222,8 +223,10 @@ the user what's missing and ask for guidance.
 
 Tool outputs are truncated for your context after ~8KB. If you see a
 "[... N more bytes truncated]" marker and need the rest, re-run the
-command piping through head/tail/grep/sed, or save the output to a file
-inside the configured workspace and read it in chunks.
+inspection command piping through head/tail/grep/sed, or save the output to a
+file inside the configured workspace and read it in chunks. Do not do this for
+tests/builds/verifiers, because the shell tool already reports the real exit
+code and shell pipelines or "echo $?" wrappers can hide failures.
 
 Be concise. When given a task, execute it; don't lecture. Use the shell
 freely for git, curl, python, node, builds, installs -- the box is the

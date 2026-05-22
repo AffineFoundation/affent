@@ -14,6 +14,7 @@ import (
 	"time"
 
 	agent "github.com/affinefoundation/affent/internal/agent"
+	"github.com/affinefoundation/affent/internal/memory"
 	"github.com/affinefoundation/affent/internal/sse"
 )
 
@@ -117,7 +118,7 @@ func TestE2E_MemoryAddPersistsAcrossSessions(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	memStore := agent.NewFileMemoryStore(workspaceDir)
+	memStore := memory.NewFileMemoryStore(workspaceDir)
 	// USER store off — keep the test focused on the workspace path.
 	memStore.UserPath = ""
 
@@ -226,7 +227,7 @@ func decodeReq(t *testing.T, raw []byte) chatReqShape {
 // file tools available, even if the caller calls
 // RegisterBuiltins logic by mistake elsewhere.
 func TestE2E_MemoryOnlyRejectsShell(t *testing.T) {
-	memStore := agent.NewFileMemoryStore(t.TempDir())
+	memStore := memory.NewFileMemoryStore(t.TempDir())
 	reg := agent.NewRegistry()
 	agent.RegisterMemoryOnly(reg, memStore)
 

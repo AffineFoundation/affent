@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"github.com/affinefoundation/affent/internal/executor"
+	"github.com/affinefoundation/affent/internal/memory"
 	"github.com/affinefoundation/affent/internal/textutil"
 )
 
@@ -44,7 +45,7 @@ type BuiltinDeps struct {
 	// Memory enables the `memory` tool. Pass the same store assigned
 	// to Loop.Memory so the snapshot in the system prompt and the
 	// tool see the same on-disk state.
-	Memory MemoryStore
+	Memory memory.MemoryStore
 	// SessionsDir is the directory holding past session JSONL logs.
 	// When non-empty, the `session_search` tool is registered so the
 	// agent can retrieve snippets from past conversations.
@@ -90,7 +91,7 @@ func RegisterBuiltins(r *Registry, deps BuiltinDeps) {
 // RegisterMemoryOnly registers just the `memory` tool. This is useful
 // for controlled environments that must isolate memory behavior from
 // shell / file / MCP surfaces.
-func RegisterMemoryOnly(r *Registry, store MemoryStore) {
+func RegisterMemoryOnly(r *Registry, store memory.MemoryStore) {
 	r.Add(memoryTool(store))
 }
 
@@ -114,7 +115,7 @@ func shellTool(deps BuiltinDeps) *Tool {
 	broadScanIndicators = append(broadScanIndicators, deps.ExtraBroadScanIndicators...)
 	return &Tool{
 		Name:        "shell",
-		Description: "Run a shell command (Linux). Use this for tests/builds/git/grep/python/node/package commands and other CLI inspection. Output is combined stdout+stderr followed by an exit code line; base success/failure on that exit code. In the local executor this is not a filesystem sandbox, so prefer read_file/list_files for ordinary workspace reads and avoid inspecting paths outside the workspace unless the user explicitly asks.",
+		Description: "Run a shell command (Linux). Use this for tests/builds/git/grep/python/node/package commands and other CLI inspection. Output is combined stdout+stderr followed by an exit code line; base success/failure on that exit code. Do not append echo $? or pipe tests/builds through head/tail/|| true because that masks the real exit code. In the local executor this is not a filesystem sandbox, so prefer read_file/list_files for ordinary workspace reads and avoid inspecting paths outside the workspace unless the user explicitly asks.",
 		Schema:      schema,
 		Execute: func(ctx context.Context, args json.RawMessage) (string, error) {
 			var p struct {
@@ -129,6 +130,9 @@ func shellTool(deps BuiltinDeps) *Tool {
 				return "", errors.New("command is required")
 			}
 			if err := rejectBroadShellScan(p.Command, broadScanIndicators); err != nil {
+				return "", err
+			}
+			if err := rejectMaskedVerificationCommand(p.Command); err != nil {
 				return "", err
 			}
 			if p.TimeoutSec <= 0 {
@@ -172,6 +176,40 @@ func rejectBroadShellScan(command string, indicators []string) error {
 	for _, indicator := range indicators {
 		if strings.Contains(lower, indicator) {
 			return errors.New("shell command looks like an unbounded filesystem scan. Use a specific workspace path or a bounded tool-discovery path instead")
+		}
+	}
+	return nil
+}
+
+var verificationCommandIndicators = []string{
+	"pytest",
+	"go test",
+	"go build",
+	"go vet",
+	"npm test",
+	"npm run test",
+	"npm run build",
+	"pnpm test",
+	"yarn test",
+	"cargo test",
+	"mvn test",
+	"gradle test",
+	"make test",
+	"tsc",
+}
+
+func rejectMaskedVerificationCommand(command string) error {
+	lower := strings.ToLower(command)
+	masksExit := strings.Contains(lower, "| head") ||
+		strings.Contains(lower, "| tail") ||
+		strings.Contains(lower, "|| true") ||
+		(strings.Contains(lower, "echo") && strings.Contains(lower, "$?"))
+	if !masksExit {
+		return nil
+	}
+	for _, indicator := range verificationCommandIndicators {
+		if strings.Contains(lower, indicator) {
+			return errors.New("shell command masks a test/build exit code. Run the verification command directly, rely on tool truncation, or redirect output to a file and inspect chunks after it finishes")
 		}
 	}
 	return nil
