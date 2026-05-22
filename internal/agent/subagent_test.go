@@ -230,9 +230,12 @@ func TestWithSubagentSystemGuidance(t *testing.T) {
 }
 
 func TestSubagentUserPromptIncludesToolBudget(t *testing.T) {
-	got := subagentUserPrompt("review", "inspect auth", "/workspace", 6)
+	got := subagentUserPrompt("review", "inspect auth", "/workspace", 6, 1, 2)
 	if !strings.Contains(got, "Tool budget: at most 6 tool calls/rounds") {
 		t.Fatalf("prompt missing tool budget guidance:\n%s", got)
+	}
+	if !strings.Contains(got, "Subagent depth: 1 of 2") {
+		t.Fatalf("prompt missing depth guidance:\n%s", got)
 	}
 	if !strings.Contains(got, "Stop early when evidence is sufficient") {
 		t.Fatalf("prompt missing early-stop guidance:\n%s", got)
@@ -275,22 +278,21 @@ func TestSubagentToolDescriptionMentionsCallerProvidedBrowserTools(t *testing.T)
 	}
 }
 
-// TestBuildSubagentRegistry_HasNoWriteAndNoNestedSubagent pins the
+// TestBuildSubagentRegistry_HasNoWriteAndBoundedNestedSubagent pins the
 // two load-bearing invariants of the subagent design:
 //
-//  1. The child cannot recursively spawn another subagent (would
-//     produce unbounded fan-out + token spend with no parent-side
-//     visibility).
+//  1. Recursive delegation is bounded by MaxDepth, not model
+//     self-discipline.
 //  2. The child cannot mutate the workspace (subagent is for
 //     exploration / review; writes go through the parent so the
 //     audit trail stays linear).
 //
 // Both invariants are enforced by what is/isn't registered in the
 // child's tool registry. A future refactor that adds write_file or
-// subagent_run here would silently break the design contract — this
-// test catches that at the registry-construction layer instead of
-// after the model already triggered a runaway.
-func TestBuildSubagentRegistry_HasNoWriteAndNoNestedSubagent(t *testing.T) {
+// lets subagent_run past the configured depth would silently break the
+// design contract — this test catches that at the registry-construction
+// layer instead of after the model already triggered a runaway.
+func TestBuildSubagentRegistry_HasNoWriteAndBoundedNestedSubagent(t *testing.T) {
 	// All optional deps populated so the maximum-tool variant runs.
 	reg := buildSubagentRegistry(SubagentDeps{
 		LLM:              NewLLMClient("http://x", "", "m"),
@@ -300,21 +302,33 @@ func TestBuildSubagentRegistry_HasNoWriteAndNoNestedSubagent(t *testing.T) {
 		SessionsDir:      t.TempDir(),
 		ParentSessionID:  "parent_test",
 		Log:              zerolog.Nop(),
+		MaxDepth:         2,
 	})
 	names := map[string]bool{}
 	for _, d := range reg.Defs() {
 		names[d.Function.Name] = true
 	}
-	for _, forbidden := range []string{"subagent_run", "write_file", "edit_file"} {
+	for _, forbidden := range []string{"write_file", "edit_file"} {
 		if names[forbidden] {
-			t.Errorf("subagent must NOT register %q (would break the %s invariant)", forbidden, forbidden)
+			t.Errorf("subagent must NOT register %q", forbidden)
 		}
 	}
 	// Sanity: the expected read-only set IS present.
-	for _, expected := range []string{"read_file", "list_files", "shell", "memory", "session_search"} {
+	for _, expected := range []string{"read_file", "list_files", "shell", "memory", "session_search", "subagent_run"} {
 		if !names[expected] {
 			t.Errorf("subagent missing expected read-only tool %q", expected)
 		}
+	}
+
+	atLimit := buildSubagentRegistry(SubagentDeps{
+		LLM:              NewLLMClient("http://x", "", "m"),
+		HostWorkspaceDir: t.TempDir(),
+		Log:              zerolog.Nop(),
+		Depth:            1,
+		MaxDepth:         2,
+	})
+	if _, ok := atLimit.Get("subagent_run"); ok {
+		t.Fatal("subagent at MaxDepth must not receive another subagent_run tool")
 	}
 }
 

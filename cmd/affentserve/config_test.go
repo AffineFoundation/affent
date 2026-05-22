@@ -6,6 +6,8 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/affinefoundation/affent/internal/agent"
 )
 
 func TestLoadConfig_EmptyPath(t *testing.T) {
@@ -27,7 +29,10 @@ func TestLoadConfig_File(t *testing.T) {
         "model": "demo",
         "max_sessions": 8,
         "session_idle_ttl": "30s",
-        "enable_browser": true
+        "enable_browser": true,
+        "enable_memory": false,
+        "enable_subagent": false,
+        "subagent_max_depth": 1
     }`), 0o600); err != nil {
 		t.Fatal(err)
 	}
@@ -46,6 +51,15 @@ func TestLoadConfig_File(t *testing.T) {
 	}
 	if !cfg.EnableBrowser {
 		t.Errorf("EnableBrowser should be true")
+	}
+	if cfg.EnableMemory {
+		t.Errorf("EnableMemory should preserve explicit false")
+	}
+	if cfg.EnableSubagent {
+		t.Errorf("EnableSubagent should preserve explicit false")
+	}
+	if cfg.SubagentMaxDepth != 1 {
+		t.Errorf("SubagentMaxDepth = %d, want 1", cfg.SubagentMaxDepth)
 	}
 }
 
@@ -70,12 +84,47 @@ func TestConfig_Resolve_AppliesDefaults(t *testing.T) {
 	if cfg.MaxSessions != defaultMaxSessions {
 		t.Errorf("MaxSessions default = %d", cfg.MaxSessions)
 	}
+	if !cfg.EnableMemory {
+		t.Errorf("EnableMemory should default on")
+	}
+	if !cfg.EnableSubagent {
+		t.Errorf("EnableSubagent should default on")
+	}
+	if cfg.SubagentMaxDepth != agent.DefaultSubagentMaxDepth {
+		t.Errorf("SubagentMaxDepth default = %d", cfg.SubagentMaxDepth)
+	}
 	ttl, err := cfg.IdleTTL()
 	if err != nil {
 		t.Fatal(err)
 	}
 	if ttl != defaultSessionIdleTTL {
 		t.Errorf("IdleTTL default = %s", ttl)
+	}
+}
+
+func TestConfig_Resolve_PreservesExplicitSubagentAndMemoryFalse(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "cfg.json")
+	if err := os.WriteFile(path, []byte(`{
+        "base_url": "https://example/v1",
+        "model": "demo",
+        "enable_memory": false,
+        "enable_subagent": false
+    }`), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	cfg, err := LoadConfig(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := cfg.Resolve(); err != nil {
+		t.Fatal(err)
+	}
+	if cfg.EnableMemory {
+		t.Fatal("explicit enable_memory:false should survive Resolve")
+	}
+	if cfg.EnableSubagent {
+		t.Fatal("explicit enable_subagent:false should survive Resolve")
 	}
 }
 

@@ -48,6 +48,64 @@ func TestParseFlagsAndConfig_CLIBoolCanOverrideFileTrue(t *testing.T) {
 	}
 }
 
+func TestParseFlagsAndConfig_SubagentAndMemoryDefaultOnCanBeDisabled(t *testing.T) {
+	cfg, err := parseFlagsAndConfig([]string{
+		"--base-url", "https://example/v1",
+		"--model", "demo",
+	})
+	if err != nil {
+		t.Fatalf("parseFlagsAndConfig: %v", err)
+	}
+	if !cfg.EnableSubagent {
+		t.Fatal("subagent should default on")
+	}
+	if !cfg.EnableMemory {
+		t.Fatal("memory should default on")
+	}
+
+	cfg, err = parseFlagsAndConfig([]string{
+		"--base-url", "https://example/v1",
+		"--model", "demo",
+		"--subagent=false",
+		"--memory=false",
+	})
+	if err != nil {
+		t.Fatalf("parseFlagsAndConfig: %v", err)
+	}
+	if cfg.EnableSubagent {
+		t.Fatal("--subagent=false should disable subagent")
+	}
+	if cfg.EnableMemory {
+		t.Fatal("--memory=false should disable memory")
+	}
+}
+
+func TestParseFlagsAndConfig_SubagentMaxDepth(t *testing.T) {
+	t.Setenv("AFFENTSERVE_SUBAGENT_MAX_DEPTH", "3")
+	cfg, err := parseFlagsAndConfig([]string{
+		"--base-url", "https://example/v1",
+		"--model", "demo",
+	})
+	if err != nil {
+		t.Fatalf("parseFlagsAndConfig: %v", err)
+	}
+	if cfg.SubagentMaxDepth != 3 {
+		t.Fatalf("env subagent max depth = %d, want 3", cfg.SubagentMaxDepth)
+	}
+
+	cfg, err = parseFlagsAndConfig([]string{
+		"--base-url", "https://example/v1",
+		"--model", "demo",
+		"--subagent-max-depth=1",
+	})
+	if err != nil {
+		t.Fatalf("parseFlagsAndConfig: %v", err)
+	}
+	if cfg.SubagentMaxDepth != 1 {
+		t.Fatalf("cli subagent max depth = %d, want 1", cfg.SubagentMaxDepth)
+	}
+}
+
 // TestParseFlagsAndConfig_SubagentIsIndependentFromBuiltins pins the
 // new gating: subagent_run registration must be controlled by its
 // own EnableSubagent flag, not coupled to EnableBuiltins. An

@@ -8,6 +8,8 @@ import (
 	"strconv"
 	"strings"
 	"time"
+
+	"github.com/affinefoundation/affent/internal/agent"
 )
 
 // Config is the resolved, post-flag-merge configuration the server runs
@@ -111,10 +113,9 @@ type Config struct {
 	EnableWeb       bool `json:"enable_web"`
 	EnableWebSearch bool `json:"enable_web_search"`
 
-	// EnableMemory exposes agent runtime's `memory` tool. Disabled by
-	// default; eval workloads should leave it off so per-question
-	// state doesn't accumulate.
-	EnableMemory bool `json:"enable_memory"`
+	// EnableMemory exposes agent runtime's `memory` tool.
+	EnableMemory    bool `json:"enable_memory"`
+	enableMemorySet bool
 
 	// EnableBuiltins registers agent runtime's shell + file tools. Defaults
 	// to false — running shell on behalf of remote callers is
@@ -156,16 +157,18 @@ type Config struct {
 
 	// EnableSubagent registers the subagent_run tool. The subagent is
 	// a fresh isolated Loop with read-only tools (read_file, list_files,
-	// guarded shell, read-only memory) and a step budget. Off by
-	// default so the only cost an operator opts into is the upstream
-	// LLM bill; on for deployments that want bounded exploration /
-	// review without polluting the main session context. The
+	// guarded shell, read-only memory) and a step budget. On by
+	// default for context isolation; disable it for strict single-loop
+	// evals or deployments that do not want nested model calls. The
 	// subagent's tools are read-only by design — enabling this does
-	// NOT enable shell or file writes for the parent agent. The
-	// previous wiring tied subagent registration to EnableBuiltins,
-	// which mixed two unrelated capabilities; operators relying on
-	// that coupling must now set EnableSubagent: true explicitly.
-	EnableSubagent bool `json:"enable_subagent"`
+	// NOT enable shell or file writes for the parent agent.
+	EnableSubagent    bool `json:"enable_subagent"`
+	enableSubagentSet bool
+
+	// SubagentMaxDepth caps recursive subagent layers. 1 means only a
+	// direct child; the default allows one child to delegate one noisy
+	// subtask while preventing open-ended agent chains.
+	SubagentMaxDepth int `json:"subagent_max_depth"`
 
 	// BrowserScreenshot registers the browser_screenshot tool. Off by
 	// default because the base64 image payload bloats tool result events
@@ -208,6 +211,15 @@ func LoadConfig(path string) (Config, error) {
 	if err := dec.Decode(&cfg); err != nil {
 		return cfg, fmt.Errorf("parse config %s: %w", path, err)
 	}
+	var raw struct {
+		EnableMemory   *bool `json:"enable_memory"`
+		EnableSubagent *bool `json:"enable_subagent"`
+	}
+	if err := json.Unmarshal(data, &raw); err != nil {
+		return cfg, fmt.Errorf("parse config %s: %w", path, err)
+	}
+	cfg.enableMemorySet = raw.EnableMemory != nil
+	cfg.enableSubagentSet = raw.EnableSubagent != nil
 	return cfg, nil
 }
 
@@ -229,6 +241,15 @@ func (c *Config) Resolve() error {
 	if c.MaxSessions <= 0 {
 		c.MaxSessions = defaultMaxSessions
 	}
+	if !c.enableMemorySet {
+		c.EnableMemory = true
+	}
+	if !c.enableSubagentSet {
+		c.EnableSubagent = true
+	}
+	if c.SubagentMaxDepth <= 0 {
+		c.SubagentMaxDepth = agent.DefaultSubagentMaxDepth
+	}
 	if v := os.Getenv("AFFENTSERVE_BASE_URL"); v != "" {
 		c.BaseURL = v
 	}
@@ -246,6 +267,27 @@ func (c *Config) Resolve() error {
 	}
 	if v := os.Getenv("AFFENTSERVE_MEMORY_ROOT"); v != "" {
 		c.MemoryRoot = v
+	}
+	if v := os.Getenv("AFFENTSERVE_MEMORY"); v != "" {
+		enabled, err := strconv.ParseBool(v)
+		if err != nil {
+			return fmt.Errorf("AFFENTSERVE_MEMORY=%q: %w", v, err)
+		}
+		c.EnableMemory = enabled
+	}
+	if v := os.Getenv("AFFENTSERVE_SUBAGENT"); v != "" {
+		enabled, err := strconv.ParseBool(v)
+		if err != nil {
+			return fmt.Errorf("AFFENTSERVE_SUBAGENT=%q: %w", v, err)
+		}
+		c.EnableSubagent = enabled
+	}
+	if v := os.Getenv("AFFENTSERVE_SUBAGENT_MAX_DEPTH"); v != "" {
+		maxDepth, err := strconv.Atoi(v)
+		if err != nil {
+			return fmt.Errorf("AFFENTSERVE_SUBAGENT_MAX_DEPTH=%q: %w", v, err)
+		}
+		c.SubagentMaxDepth = maxDepth
 	}
 	if c.SessionIdleTTL == "" {
 		c.SessionIdleTTL = defaultSessionIdleTTL.String()
@@ -368,6 +410,9 @@ func (c Config) Validate() error {
 	}
 	if _, err := c.RetryBackoffDuration(); err != nil {
 		return err
+	}
+	if c.SubagentMaxDepth < 1 || c.SubagentMaxDepth > agent.MaxSubagentDepth {
+		return fmt.Errorf("subagent_max_depth must be between 1 and %d", agent.MaxSubagentDepth)
 	}
 	return nil
 }

@@ -216,7 +216,8 @@ Design contract enforced in code (`internal/agent/subagent.go` +
 `subagent_test.go`):
 
 - No `write_file` / `edit_file` in the child's registry.
-- No `subagent_run` in the child's registry — recursion is impossible.
+- Recursive `subagent_run` is bounded by `subagent_max_depth`; set the
+  depth to `1` for single-layer delegation.
 - Optional deps gate their tools: no Executor → no shell, no Memory →
   no memory tool, no SessionsDir → no session_search.
 - The child has its own conversation file under `TranscriptDir`; the
@@ -234,17 +235,21 @@ Design contract enforced in code (`internal/agent/subagent.go` +
 
 Registration:
 
-- `affentctl`: on by default. Disable with `--subagent=false`,
+- `affentctl`: subagent and memory are on by default. Disable subagent
+  with `--subagent=false`,
   `AFFENTCTL_SUBAGENT=false`, or `"subagent": false` /
   `"enable_subagent": false` in the config file. `--memory-only` also
-  disables it because that mode strips every non-memory tool.
-- `affentserve`: off by default. Enable with `--subagent` or
-  `enable_subagent: true` in the config file. Independent of
-  `--builtins` — the parent can have subagent without exposing host
+  disables it because that mode strips every non-memory tool. Disable
+  memory with `--memory=false`.
+- `affentserve`: subagent and memory are on by default. Disable with
+  `--subagent=false`, `--memory=false`, `AFFENTSERVE_SUBAGENT=false`,
+  `AFFENTSERVE_MEMORY=false`, or the matching config keys. Independent
+  of `--builtins` — the parent can have subagent without exposing host
   shell, and conversely host shell doesn't pull subagent in.
 
 Pass `mode` (`explore`, `review`, `test`, or `research`) and `task` to
 invoke; `max_turns` defaults to 6 with a hard cap of 12.
+`subagent_max_depth` defaults to 2 and is hard-capped at 4.
 
 ## Evaluation
 

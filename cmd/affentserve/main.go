@@ -12,6 +12,7 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/affinefoundation/affent/internal/agent"
 	"github.com/rs/zerolog"
 )
 
@@ -73,9 +74,10 @@ func parseFlagsAndConfig(argv []string) (Config, error) {
 		enableBrowser     = fs.Bool("browser", false, "Register the extras/browser tool family for each new session.")
 		enableWeb         = fs.Bool("web", false, "Register extras/web's web_fetch tool.")
 		enableWebSearch   = fs.Bool("web-search", false, "Register web_search alongside web_fetch (requires TAVILY_API_KEY by default).")
-		enableMemory      = fs.Bool("memory", false, "Register agent runtime's memory tool. Off by default — eval workloads should leave it off.")
+		enableMemory      = fs.Bool("memory", true, "Register agent runtime's memory tool.")
 		enableBuiltins    = fs.Bool("builtins", false, "Register shell + file builtins (LocalExecutor). DANGEROUS on a shared host — only enable in a sandboxed environment.")
-		enableSubagent    = fs.Bool("subagent", false, "Register the subagent_run tool — a bounded isolated Loop with read-only inspection tools. Off by default; doesn't require --builtins but inherits the shell tool when --builtins is also on.")
+		enableSubagent    = fs.Bool("subagent", true, "Register the subagent_run tool — a bounded isolated Loop with read-only inspection tools. Doesn't require --builtins but inherits the shell tool when --builtins is also on.")
+		subagentMaxDepth  = fs.Int("subagent-max-depth", agent.DefaultSubagentMaxDepth, "Maximum recursive subagent depth; 1 disables nested subagents, hard max 4. Env: AFFENTSERVE_SUBAGENT_MAX_DEPTH.")
 		browserCacheDir   = fs.String("browser-cache-dir", "", "Enable an on-disk response cache for browser sessions; empty disables caching.")
 		browserCacheTTL   = fs.String("browser-cache-ttl", "", "Cache TTL ('24h' default; '0s' disables expiry).")
 		browserCacheSweep = fs.String("browser-cache-sweep-interval", "", "How often the cache GC deletes expired files (default = TTL/8, min 5m).")
@@ -178,7 +180,11 @@ func parseFlagsAndConfig(argv []string) (Config, error) {
 		cfg.EnableBuiltins = *enableBuiltins
 	}
 	if setFlags["subagent"] {
+		cfg.enableSubagentSet = true
 		cfg.EnableSubagent = *enableSubagent
+	}
+	if setFlags["subagent-max-depth"] {
+		cfg.SubagentMaxDepth = *subagentMaxDepth
 	}
 	if *browserCacheDir != "" {
 		cfg.BrowserCacheDir = *browserCacheDir
@@ -292,6 +298,7 @@ func run(cfg Config, logger zerolog.Logger) error {
 		Str("auth", auth).
 		Bool("builtins", cfg.EnableBuiltins).
 		Bool("subagent", cfg.EnableSubagent).
+		Int("subagent_max_depth", cfg.SubagentMaxDepth).
 		Bool("memory", cfg.EnableMemory).
 		Bool("browser", cfg.EnableBrowser).
 		Bool("web", cfg.EnableWeb).

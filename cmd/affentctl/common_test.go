@@ -235,6 +235,93 @@ func TestSubagentCanBeDisabledFromConfigEnvAndCLI(t *testing.T) {
 	})
 }
 
+func TestMemoryDefaultsOnAndCanBeDisabled(t *testing.T) {
+	var cf commonFlags
+	fs := flag.NewFlagSet("test", flag.ContinueOnError)
+	cf.bind(fs)
+	if err := fs.Parse(nil); err != nil {
+		t.Fatal(err)
+	}
+	if err := applyConfig(&cf, fs); err != nil {
+		t.Fatal(err)
+	}
+	if !cf.memoryEnabled {
+		t.Fatal("memory should default on for affentctl")
+	}
+
+	var disabled commonFlags
+	fs = flag.NewFlagSet("test", flag.ContinueOnError)
+	disabled.bind(fs)
+	if err := fs.Parse([]string{"--memory=false"}); err != nil {
+		t.Fatal(err)
+	}
+	if err := applyConfig(&disabled, fs); err != nil {
+		t.Fatal(err)
+	}
+	if disabled.memoryEnabled {
+		t.Fatal("--memory=false should disable memory")
+	}
+}
+
+func TestSubagentMaxDepthFromConfigEnvAndCLI(t *testing.T) {
+	t.Run("config", func(t *testing.T) {
+		dir := t.TempDir()
+		cfgPath := filepath.Join(dir, "c.json")
+		if err := os.WriteFile(cfgPath, []byte(`{"subagent_max_depth":1}`), 0o644); err != nil {
+			t.Fatal(err)
+		}
+		var cf commonFlags
+		fs := flag.NewFlagSet("test", flag.ContinueOnError)
+		cf.bind(fs)
+		if err := fs.Parse([]string{"--config", cfgPath}); err != nil {
+			t.Fatal(err)
+		}
+		if err := applyConfig(&cf, fs); err != nil {
+			t.Fatal(err)
+		}
+		if cf.subagentMaxDepth != 1 {
+			t.Fatalf("config subagent_max_depth = %d, want 1", cf.subagentMaxDepth)
+		}
+	})
+
+	t.Run("env beats config", func(t *testing.T) {
+		dir := t.TempDir()
+		cfgPath := filepath.Join(dir, "c.json")
+		if err := os.WriteFile(cfgPath, []byte(`{"subagent_max_depth":1}`), 0o644); err != nil {
+			t.Fatal(err)
+		}
+		t.Setenv("AFFENTCTL_SUBAGENT_MAX_DEPTH", "3")
+		var cf commonFlags
+		fs := flag.NewFlagSet("test", flag.ContinueOnError)
+		cf.bind(fs)
+		if err := fs.Parse([]string{"--config", cfgPath}); err != nil {
+			t.Fatal(err)
+		}
+		if err := applyConfig(&cf, fs); err != nil {
+			t.Fatal(err)
+		}
+		if cf.subagentMaxDepth != 3 {
+			t.Fatalf("env subagent max depth = %d, want 3", cf.subagentMaxDepth)
+		}
+	})
+
+	t.Run("cli beats env", func(t *testing.T) {
+		t.Setenv("AFFENTCTL_SUBAGENT_MAX_DEPTH", "3")
+		var cf commonFlags
+		fs := flag.NewFlagSet("test", flag.ContinueOnError)
+		cf.bind(fs)
+		if err := fs.Parse([]string{"--subagent-max-depth=1"}); err != nil {
+			t.Fatal(err)
+		}
+		if err := applyConfig(&cf, fs); err != nil {
+			t.Fatal(err)
+		}
+		if cf.subagentMaxDepth != 1 {
+			t.Fatalf("cli subagent max depth = %d, want 1", cf.subagentMaxDepth)
+		}
+	})
+}
+
 func TestSetupLoop_SubagentDisabledDoesNotRegisterToolOrPolicies(t *testing.T) {
 	var cf commonFlags
 	fs := flag.NewFlagSet("test", flag.ContinueOnError)
@@ -302,12 +389,13 @@ func TestNoEnvVarLeaksIntoFlagDefaults(t *testing.T) {
 	// help text (which includes example values like "docker:abc123def"
 	// that would false-trigger a substring match).
 	planted := map[string]string{
-		"AFFENTCTL_CONFIG":     "/sentinel-config-XYZ123",
-		"AFFENTCTL_BASE_URL":   "https://sentinel-base-XYZ123",
-		"AFFENTCTL_API_KEY":    "sk-sentinel-XYZ123",
-		"AFFENTCTL_MODEL":      "sentinel-model-XYZ123",
-		"AFFENTCTL_MCP_CONFIG": "/sentinel-mcp-XYZ123",
-		"AFFENTCTL_EXECUTOR":   "docker:sentinel-XYZ123",
+		"AFFENTCTL_CONFIG":             "/sentinel-config-XYZ123",
+		"AFFENTCTL_BASE_URL":           "https://sentinel-base-XYZ123",
+		"AFFENTCTL_API_KEY":            "sk-sentinel-XYZ123",
+		"AFFENTCTL_MODEL":              "sentinel-model-XYZ123",
+		"AFFENTCTL_MCP_CONFIG":         "/sentinel-mcp-XYZ123",
+		"AFFENTCTL_EXECUTOR":           "docker:sentinel-XYZ123",
+		"AFFENTCTL_SUBAGENT_MAX_DEPTH": "99",
 	}
 	for k, v := range planted {
 		t.Setenv(k, v)
@@ -331,6 +419,8 @@ func TestNoEnvVarLeaksIntoFlagDefaults(t *testing.T) {
 			want = "local"
 		} else if name == "subagent" {
 			want = "true"
+		} else if name == "subagent-max-depth" {
+			want = "2"
 		}
 		if got != want {
 			t.Errorf("%s default = %q, want %q (env-bound flags must not show env values in --help)", name, got, want)

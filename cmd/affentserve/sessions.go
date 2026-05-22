@@ -368,6 +368,7 @@ func (p *SessionPool) buildSession(id string) (*Session, error) {
 			TranscriptDir:      filepath.Join(sessionDir, "subagents", id),
 			RegisterChildTools: p.subagentChildToolRegistrar(workspace),
 			Log:                p.logger.With().Str("session_id", id).Logger(),
+			MaxDepth:           p.cfg.SubagentMaxDepth,
 		})
 	}
 
