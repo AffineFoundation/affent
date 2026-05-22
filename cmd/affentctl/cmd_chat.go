@@ -45,6 +45,7 @@ the next message. Conversation persists under
 Slash commands inside the REPL:
   /help       show commands
   /sid        print current session id
+  /usage      running token totals for this session (input/output/total)
   /exit       quit (Ctrl+D also works)
   /cancel     interrupt a background turn (e.g. a cron-fired one). To
               cancel the turn you just kicked off from this prompt,
@@ -140,7 +141,12 @@ Slash commands inside the REPL:
 		}
 		_ = turnID
 
-		drainInteractive(turnCtx, b.loop, b.events, traceEnc, cf.traceSkipDeltas)
+		inTok, outTok := drainInteractive(turnCtx, b.loop, b.events, traceEnc, cf.traceSkipDeltas)
+		b.inputTokens += inTok
+		b.outputTokens += outTok
+		if inTok > 0 || outTok > 0 {
+			b.turnsSeen++
+		}
 		cancelTurn()
 	}
 }
@@ -148,12 +154,14 @@ Slash commands inside the REPL:
 // drainInteractive reads events for one turn, printing assistant text
 // live to stdout, tool activity compactly to stderr. trace gets every
 // event in JSONL — except thinking/message deltas when skipDeltas is on.
+// Returns the per-turn token totals seen on TypeUsage so the REPL's
+// loopBundle can accumulate session-lifetime spend for /usage.
 //
 // loop is the active *agent.Loop. On SIGINT (ctx.Done) we MUST call
 // Loop.Cancel — the Loop runs the turn on a detached background ctx
 // so cancelling the parent ctx alone leaves in-flight LLM calls and
 // shell-tool processes alive (e.g. `shell exec sleep 60` orphans).
-func drainInteractive(ctx context.Context, loop interface{ Cancel() }, events <-chan sse.Event, trace *json.Encoder, skipDeltas bool) {
+func drainInteractive(ctx context.Context, loop interface{ Cancel() }, events <-chan sse.Event, trace *json.Encoder, skipDeltas bool) (inputTokens, outputTokens int) {
 	const (
 		ansiDim   = "\x1b[2m"
 		ansiReset = "\x1b[0m"
@@ -240,6 +248,8 @@ func drainInteractive(ctx context.Context, loop interface{ Cancel() }, events <-
 			case sse.TypeUsage:
 				var p sse.UsagePayload
 				_ = json.Unmarshal(ev.Data, &p)
+				inputTokens += p.InputTokens
+				outputTokens += p.OutputTokens
 				fmt.Fprintln(os.Stderr, dim(fmt.Sprintf("  [usage] in=%d out=%d", p.InputTokens, p.OutputTokens)))
 			case sse.TypeTurnEnd:
 				var p sse.TurnEndPayload
@@ -286,12 +296,17 @@ func handleSlash(line string, b *loopBundle) (bool, int) {
 		fmt.Fprintln(os.Stderr, `commands:
   /help        show this
   /sid         print current session id
+  /usage       running token totals (input/output) for this session
   /cancel      interrupt a background (cron-fired) turn; use Ctrl+C
                to cancel a turn you typed from this prompt
   /exit        quit`)
 		return true, 0
 	case "/sid":
 		fmt.Fprintln(os.Stderr, b.sessionID)
+		return true, 0
+	case "/usage":
+		fmt.Fprintf(os.Stderr, "session %s — %d turn(s), input=%d output=%d total=%d tokens\n",
+			b.sessionID, b.turnsSeen, b.inputTokens, b.outputTokens, b.inputTokens+b.outputTokens)
 		return true, 0
 	case "/cancel":
 		b.loop.Cancel()

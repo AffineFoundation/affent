@@ -240,6 +240,50 @@ func TestSummarizeArgs_TruncatesLongCommand(t *testing.T) {
 	}
 }
 
+// TestHandleSlashUsageReportsAccumulatedTokens pins the /usage
+// command's contract: it must read the bundle's running totals
+// (drainInteractive accumulates them on every TypeUsage event)
+// and print a single human-readable line including session id,
+// turn count, input/output, and the computed total. A regression
+// where the print drops a field would silently hide spend from
+// the user inside the REPL.
+func TestHandleSlashUsageReportsAccumulatedTokens(t *testing.T) {
+	// Capture os.Stderr to inspect the printed line. The /usage path
+	// prints to Stderr via fmt.Fprintf, so we swap the global for the
+	// duration of the call.
+	r, w, _ := os.Pipe()
+	orig := os.Stderr
+	os.Stderr = w
+	defer func() { os.Stderr = orig }()
+
+	b := &loopBundle{
+		loop:         &agent.Loop{},
+		sessionID:    "sess_usage_test",
+		turnsSeen:    3,
+		inputTokens:  1000,
+		outputTokens: 250,
+	}
+	cont, exit := handleSlash("/usage", b)
+	if !cont || exit != 0 {
+		t.Errorf("/usage should keep REPL alive with exit=0; got (%v, %d)", cont, exit)
+	}
+	_ = w.Close()
+	out, _ := io.ReadAll(r)
+	got := string(out)
+
+	for _, want := range []string{
+		"sess_usage_test",
+		"3 turn(s)",
+		"input=1000",
+		"output=250",
+		"total=1250",
+	} {
+		if !strings.Contains(got, want) {
+			t.Errorf("/usage output missing %q:\n%s", want, got)
+		}
+	}
+}
+
 // TestHandleSlash pins the REPL slash-command dispatcher. /exit and
 // its aliases must return (continue=false, exit=0); /help / /sid /
 // /cancel / unknown must keep the REPL alive. Casing and trailing
@@ -263,6 +307,7 @@ func TestHandleSlash(t *testing.T) {
 		{"/?", true, 0},
 		{"/sid", true, 0},
 		{"/cancel", true, 0}, // Loop with nil cancelFn → Cancel is a no-op
+		{"/usage", true, 0},  // running totals; reads loopBundle counters
 		{"/bogus", true, 0},  // unknown still keeps REPL alive
 	}
 	for _, c := range cases {

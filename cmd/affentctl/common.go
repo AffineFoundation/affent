@@ -379,6 +379,15 @@ type loopBundle struct {
 	workspace  string
 	log        zerolog.Logger
 
+	// turnsSeen / inputTokens / outputTokens accumulate across every
+	// drain*() pass for this REPL session. drainInteractive bumps them
+	// on TypeUsage / TypeTurnEnd; /usage in handleSlash reports the
+	// running totals. drainBatch (one-shot run) doesn't touch them
+	// since it exits after a single turn.
+	turnsSeen    int
+	inputTokens  int
+	outputTokens int
+
 	mcpClients []*mcp.Client
 }
 
