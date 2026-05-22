@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/affinefoundation/affent/internal/agent"
+	"github.com/affinefoundation/affent/internal/executor"
 	"github.com/rs/zerolog"
 )
 
@@ -205,6 +206,120 @@ func TestRunner_EndToEnd_FailedChecksDoNotFailRun(t *testing.T) {
 	}
 	if len(out.FailedChecks()) != 1 {
 		t.Errorf("expected exactly one failed check; got %v", out.FailedChecks())
+	}
+}
+
+// TestRunner_EndToEnd_SubagentDelegation drives the full delegation
+// loop end-to-end with a scripted LLM:
+//
+//  1. Parent calls subagent_run with a task
+//  2. Child (same scripted LLM, sequentially advanced) calls
+//     read_file inside its isolated context
+//  3. Child returns a structured report
+//  4. Parent answers from the report without re-reading the file
+//
+// Pins the user-named subagent design contract — the parent's Trace
+// must contain subagent_run and NOTHING else exploration-shaped
+// after it, even though the user asked a question whose answer is
+// on disk. ToolNotCalledAfter is the load-bearing check that
+// captures this.
+func TestRunner_EndToEnd_SubagentDelegation(t *testing.T) {
+	// Parent turn 1: ask for subagent_run.
+	parentTurn1 := []string{
+		`{"choices":[{"delta":{"role":"assistant","tool_calls":[{"index":0,"id":"p1","type":"function","function":{"name":"subagent_run","arguments":""}}]},"finish_reason":null}]}`,
+		`{"choices":[{"delta":{"tool_calls":[{"index":0,"function":{"arguments":"{\"task\":\"read README.md and tell me what it says\",\"mode\":\"explore\"}"}}]},"finish_reason":null}]}`,
+		`{"choices":[{"delta":{},"finish_reason":"tool_calls"}]}`,
+		`[DONE]`,
+	}
+	// Child turn 1: read_file.
+	childTurn1 := []string{
+		`{"choices":[{"delta":{"role":"assistant","tool_calls":[{"index":0,"id":"c1","type":"function","function":{"name":"read_file","arguments":""}}]},"finish_reason":null}]}`,
+		`{"choices":[{"delta":{"tool_calls":[{"index":0,"function":{"arguments":"{\"path\":\"README.md\"}"}}]},"finish_reason":null}]}`,
+		`{"choices":[{"delta":{},"finish_reason":"tool_calls"}]}`,
+		`[DONE]`,
+	}
+	// Child turn 2: emit structured report and stop.
+	childTurn2 := []string{
+		`{"choices":[{"delta":{"role":"assistant","content":"Conclusion:\nREADME announces the project.\nEvidence:\n- README.md contains: hello agent"},"finish_reason":"stop"}]}`,
+		`[DONE]`,
+	}
+	// Parent turn 2: synthesize final answer from the subagent report
+	// WITHOUT calling any parent-side exploration tools.
+	parentTurn2 := []string{
+		`{"choices":[{"delta":{"role":"assistant","content":"Based on the subagent's report, the README says: hello agent."},"finish_reason":"stop"}]}`,
+		`[DONE]`,
+	}
+	srv := newScriptedLLM(t, [][]string{parentTurn1, childTurn1, childTurn2, parentTurn2})
+
+	scenario := Scenario{
+		Name:        "subagent_delegation_readme",
+		Description: "parent delegates a small read task to subagent_run and answers from its report",
+		Prompt:      "what does README.md say? please use a subagent to investigate",
+		Setup: func(workspaceDir string) error {
+			return os.WriteFile(filepath.Join(workspaceDir, "README.md"), []byte("hello agent"), 0o644)
+		},
+		MaxTurnSteps: 6,
+		Checks: []Check{
+			TurnEndedCleanly(),
+			ToolCalled("subagent_run", nil),
+			// The load-bearing pollution-reduction assertion: after the
+			// subagent returns a successful report, the parent must NOT
+			// re-do the same exploration in its own context.
+			ToolNotCalledAfter("subagent_run", []string{
+				"read_file", "list_files", "shell", "edit_file", "write_file",
+			}),
+			MaxToolCallsAfter("subagent_run", 0),
+			FinalTextContains("hello agent"),
+		},
+	}
+
+	llmClient := agent.NewLLMClient(srv.URL, "", "fake-model")
+	runner := &Runner{
+		LLM:            llmClient,
+		MaxTurnSteps:   6,
+		PerCallTimeout: 5 * time.Second,
+		RunTimeout:     30 * time.Second,
+		Log:            zerolog.Nop(),
+		// Custom registry that also wires the subagent tool. Reuses
+		// the default builtins under the hood so the child's
+		// read_file works through the same LocalExecutor.
+		BuildRegistry: func(ctx context.Context, workspaceDir string, exec executor.Executor) (*agent.Registry, error) {
+			reg, err := defaultBuildRegistry(ctx, workspaceDir, exec)
+			if err != nil {
+				return nil, err
+			}
+			agent.RegisterSubagent(reg, agent.SubagentDeps{
+				LLM:              llmClient,
+				Executor:         exec,
+				HostWorkspaceDir: workspaceDir,
+				Log:              zerolog.Nop(),
+				PerCallTimeout:   5 * time.Second,
+			})
+			return reg, nil
+		},
+	}
+
+	out, err := runner.Run(context.Background(), scenario)
+	if err != nil {
+		t.Fatalf("Runner.Run: %v", err)
+	}
+	if !out.Pass {
+		t.Errorf("expected all checks to pass; failed: %v", out.FailedChecks())
+		for _, r := range out.Results {
+			t.Logf("  %s: pass=%v detail=%s", r.Check, r.Pass, r.Detail)
+		}
+		t.Logf("trace.Tools count=%d:", len(out.Trace.Tools))
+		for i, c := range out.Trace.Tools {
+			t.Logf("    [%d] %s exit=%d", i, c.Tool, c.ExitCode)
+		}
+	}
+	// Independent assertions on the captured trace for diagnostic value
+	// when the test does fail.
+	if len(out.Trace.Tools) != 1 {
+		t.Errorf("parent should have made exactly ONE tool call (subagent_run); got %d", len(out.Trace.Tools))
+	}
+	if len(out.Trace.Tools) > 0 && out.Trace.Tools[0].Tool != "subagent_run" {
+		t.Errorf("first parent tool call should be subagent_run; got %q", out.Trace.Tools[0].Tool)
 	}
 }
 
