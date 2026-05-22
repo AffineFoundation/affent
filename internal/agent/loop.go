@@ -397,9 +397,12 @@ func (l *Loop) runTurn(ctx context.Context, turnID, userText string) {
 				ToolCallID: callID,
 				Name:       tc.Function.Name,
 			}); err != nil {
-				// In-memory state has the result so the turn keeps going,
-				// but the on-disk log is now behind. Surface so operators
-				// notice before session resume reads a truncated log.
+				// Append is lockstep (memory follows disk), so a failure
+				// here drops the tool result from both. The next LLM call's
+				// Snapshot will be missing this tool message — strict
+				// OpenAI-compat upstreams reject that pairing and the turn
+				// will end with reason=error on the next runStep, which is
+				// the loud failure we want when the disk is sick.
 				l.Log.Error().Err(err).Str("call_id", callID).Msg("conv append tool result")
 			}
 		}
@@ -486,9 +489,12 @@ func (l *Loop) consumeAndPersist(ctx context.Context, turnID string, stream <-ch
 	// outbound requests by toWireMessages — DeepSeek/Kimi/GLM emit it
 	// but reject it on inbound.
 	if err := l.Conv.Append(finish.Final); err != nil {
-		// Same rationale as the tool-result append above: don't fail
-		// the turn (memory state is intact), but surface so the
-		// operator sees the on-disk log diverging.
+		// Append is lockstep — memory and disk both miss this message on
+		// failure. The dispatch loop above still has finish.Final in hand
+		// so the in-flight tool round trip completes; subsequent steps,
+		// however, snapshot via the Conversation and will see the gap.
+		// Loud failure mode (turn ends with reason=error) preferred over
+		// silent state divergence.
 		l.Log.Error().Err(err).Str("turn_id", turnID).Msg("conv append assistant message")
 	}
 	return finish, sawText, nil
