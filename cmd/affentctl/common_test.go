@@ -56,14 +56,14 @@ func TestTrimUTF8_SnapsToRuneBoundary(t *testing.T) {
 		in   string
 		n    int
 	}{
-		{"cyrillic", strings.Repeat("ё", 50), 7},     // 2-byte runes, odd n lands mid-rune
-		{"chinese", strings.Repeat("你", 30), 8},     // 3-byte runes
-		{"emoji", strings.Repeat("🔧", 20), 9},       // 4-byte runes
-		{"ascii", strings.Repeat("a", 50), 7},        // single-byte, no snap-back needed
-		{"under-cap", "short", 100},                  // already under cap, returned verbatim
-		{"empty", "", 5},                             // empty stays empty
-		{"zero-cap", "anything", 0},                  // n<=0 returns empty
-		{"negative-cap", "anything", -5},             // same
+		{"cyrillic", strings.Repeat("ё", 50), 7}, // 2-byte runes, odd n lands mid-rune
+		{"chinese", strings.Repeat("你", 30), 8},  // 3-byte runes
+		{"emoji", strings.Repeat("🔧", 20), 9},    // 4-byte runes
+		{"ascii", strings.Repeat("a", 50), 7},    // single-byte, no snap-back needed
+		{"under-cap", "short", 100},              // already under cap, returned verbatim
+		{"empty", "", 5},                         // empty stays empty
+		{"zero-cap", "anything", 0},              // n<=0 returns empty
+		{"negative-cap", "anything", -5},         // same
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
