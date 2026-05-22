@@ -216,6 +216,16 @@ func TestWithSubagentSystemGuidance(t *testing.T) {
 	if strings.Count(WithSubagentSystemGuidance(got), "Subagent delegation:") != 1 {
 		t.Fatal("guidance should not be appended twice")
 	}
+	for _, want := range []string{
+		"delegate a narrow page/snapshot objective",
+		"current-page visible information",
+		"not to click tabs",
+		"Split cross-tab or multi-page audits",
+	} {
+		if !strings.Contains(got, want) {
+			t.Fatalf("subagent guidance missing web delegation constraint %q:\n%s", want, got)
+		}
+	}
 }
 
 func TestSubagentUserPromptIncludesToolBudget(t *testing.T) {
@@ -239,6 +249,28 @@ func TestSubagentSystemPromptIncludesWebExtractionGuidance(t *testing.T) {
 		if !strings.Contains(got, want) {
 			t.Fatalf("subagent web guidance missing %q:\n%s", want, got)
 		}
+	}
+}
+
+func TestSubagentToolDescriptionMentionsCallerProvidedBrowserTools(t *testing.T) {
+	tool := subagentTool(SubagentDeps{
+		LLM:              NewLLMClient("http://x", "", "m"),
+		HostWorkspaceDir: t.TempDir(),
+		Log:              zerolog.Nop(),
+	})
+	for _, want := range []string{
+		"caller-provided extra capabilities",
+		"browser_navigate/browser_snapshot",
+		"when affentserve runs with --browser",
+		"repeating the same file reads/tests/browser steps",
+	} {
+		if !strings.Contains(tool.Description, want) {
+			t.Fatalf("subagent tool description missing %q:\n%s", want, tool.Description)
+		}
+	}
+	raw := string(tool.Schema)
+	if !strings.Contains(raw, "current-page visible snapshot facts") {
+		t.Fatalf("subagent task schema should guide bounded web delegation:\n%s", raw)
 	}
 }
 

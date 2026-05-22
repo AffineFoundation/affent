@@ -26,6 +26,7 @@ const (
 const SubagentSystemGuidance = `Subagent delegation:
 - If the subagent_run tool is available and the user explicitly asks for a subagent, isolated review, broad exploration, or avoiding main-context pollution, call subagent_run as the first tool.
 - Do not spend parent context listing directories or reading large files just to prepare that delegation. Put likely paths, uncertainty, and the concrete question in the subagent task; the child can inspect them in its isolated context.
+- For rendered web pages, delegate a narrow page/snapshot objective. If the user asks for current-page visible information, say that explicitly in the subagent task and tell the child not to click tabs or broaden across the site. Split cross-tab or multi-page audits into separate bounded requests instead of asking for "all information" in one child run.
 - After subagent_run returns, answer from its report. Only do a small parent-side verification pass when the report is incomplete, contradictory, or the user asked you to implement a change.
 - If subagent_run returns ok:false, treat its report as a partial index of attempted work, not as conclusive evidence. Verify the smallest missing facts before making claims.`
 
@@ -144,14 +145,14 @@ func subagentTool(deps SubagentDeps) *Tool {
         "type": "object",
         "required": ["task"],
         "properties": {
-            "task": {"type": "string", "description": "Concrete bounded task for the isolated subagent. Include the files, question, or risk to inspect."},
+            "task": {"type": "string", "description": "Concrete bounded task for the isolated subagent. Include the files, question, or risk to inspect. For web pages, specify whether to extract only current-page visible snapshot facts or to inspect additional tabs/pages."},
             "mode": {"type": "string", "enum": ["explore", "review"], "description": "explore = investigate and summarize evidence; review = inspect existing changes/claim and look for risks. Default explore."},
             "max_turns": {"type": "integer", "minimum": 1, "maximum": 12, "description": "Subagent tool-call step budget. Default 6, hard max 12."}
         }
     }`)
 	return &Tool{
 		Name:        SubagentToolName,
-		Description: "Run a bounded subagent in an isolated context for codebase exploration or review. If the user explicitly asks for subagent, isolated review, broad exploration, or avoiding main-context pollution, call this as the first tool instead of listing/reading files in the parent context. The subagent has read_file/list_files, guarded read-only shell, memory, and session_search; it cannot use write_file/edit_file. It returns a structured evidence report for the main agent to act on. After this tool returns, answer from its report instead of reading the child transcript or repeating the same file reads/tests unless the report is incomplete or contradictory. If ok=false, use the attempted files/tools as a focused verification index rather than as conclusive findings.",
+		Description: "Run a bounded subagent in an isolated context for codebase exploration, review, or caller-provided extra capabilities such as browser-based web inspection. If the user explicitly asks for subagent, isolated review, broad exploration, web inspection without main-context pollution, or avoiding main-context pollution, call this as the first tool instead of exploring in the parent context. The child always has read_file/list_files and may also have guarded read-only shell, memory, session_search, and session-scoped extra tools registered by the caller (for example browser_navigate/browser_snapshot when affentserve runs with --browser). It cannot use write_file/edit_file. It returns a structured evidence report for the main agent to act on. After this tool returns, answer from its report instead of reading the child transcript or repeating the same file reads/tests/browser steps unless the report is incomplete or contradictory. If ok=false, use the attempted files/tools as a focused verification index rather than as conclusive findings.",
 		Schema:      schema,
 		Execute: func(ctx context.Context, args json.RawMessage) (string, error) {
 			var p struct {
