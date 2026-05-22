@@ -2,6 +2,9 @@ package agenteval
 
 import (
 	"context"
+	"encoding/json"
+	"errors"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -836,6 +839,126 @@ func TestRunner_EndToEnd_SubagentDepthBudgetBlocksNestedDelegation(t *testing.T)
 	// the parent's call did not error — only the recursion did.
 	if tc.IsErr {
 		t.Errorf("parent's subagent_run itself should not error; got IsErr=true result=%q", tc.Result)
+	}
+}
+
+// TestRunner_EndToEnd_LoopGuardFailureHalt pins the seventh and final
+// item in the runtime mechanism coverage matrix: toolLoopGuard's
+// failure-counting branch. After 3 consecutive failures of the same
+// tool, the guard appends a warning to the result; after 8, it halts
+// the tool ('Stop retrying it'). Both thresholds are now trace-observable
+// from the eval harness.
+//
+// Distinct from the loop_guard identical-call test (c64fabb): that
+// blocks an exact-repeated (tool, args) hash; this counts consecutive
+// failures of the tool itself regardless of args. Both branches need
+// their own coverage because a regression in one wouldn't fail the
+// other's test.
+func TestRunner_EndToEnd_LoopGuardFailureHalt(t *testing.T) {
+	// A custom tool that always errors. The Runner's BuildRegistry
+	// hook lets us inject it into the child run without touching
+	// the production builtins.
+	flakyDescriptor := agent.Tool{
+		Name:        "flaky_probe",
+		Description: "Test-only probe that always returns an error. Used to exercise the toolLoopGuard failure-counting branch.",
+		Schema:      json.RawMessage(`{"type":"object","properties":{}}`),
+		Execute: func(ctx context.Context, args json.RawMessage) (string, error) {
+			return "", errors.New("simulated probe failure")
+		},
+	}
+
+	// Each turn emits one flaky_probe call. The args change slightly
+	// each time so the identical-call guard (block at 3 same-hash
+	// attempts) doesn't fire — only the failure-counting branch should.
+	flakyTurn := func(callID string, marker int) []string {
+		argBody := fmt.Sprintf(`{\"attempt\":%d}`, marker)
+		return []string{
+			`{"choices":[{"delta":{"role":"assistant","tool_calls":[{"index":0,"id":"` + callID + `","type":"function","function":{"name":"flaky_probe","arguments":""}}]},"finish_reason":null}]}`,
+			`{"choices":[{"delta":{"tool_calls":[{"index":0,"function":{"arguments":"` + argBody + `"}}]},"finish_reason":null}]}`,
+			`{"choices":[{"delta":{},"finish_reason":"tool_calls"}]}`,
+			`[DONE]`,
+		}
+	}
+	finalText := []string{
+		`{"choices":[{"delta":{"role":"assistant","content":"OK, the guard halted me — I will stop retrying."},"finish_reason":"stop"}]}`,
+		`[DONE]`,
+	}
+	script := [][]string{
+		flakyTurn("a1", 1),
+		flakyTurn("a2", 2),
+		flakyTurn("a3", 3),
+		flakyTurn("a4", 4),
+		flakyTurn("a5", 5),
+		flakyTurn("a6", 6),
+		flakyTurn("a7", 7),
+		flakyTurn("a8", 8),
+		finalText,
+	}
+	srv := newScriptedLLM(t, script)
+
+	scenario := Scenario{
+		Name:        "loop_guard_failure_halt",
+		Description: "8 consecutive flaky_probe failures: trace must show warn @ 3 and halt @ 8",
+		Prompt:      "exercise the failing probe to verify the guard",
+		MaxTurnSteps: 12,
+		Checks: []Check{
+			TurnEndedCleanly(),
+			ToolCalled("flaky_probe", nil),
+			ToolResultContains("flaky_probe", "failed 3 consecutive times"),
+			ToolResultContains("flaky_probe", "failed 8 consecutive times"),
+			ToolResultContains("flaky_probe", "Stop retrying"),
+		},
+	}
+
+	runner := &Runner{
+		LLM:            agent.NewLLMClient(srv.URL, "", "fake-model"),
+		MaxTurnSteps:   12,
+		PerCallTimeout: 5 * time.Second,
+		RunTimeout:     30 * time.Second,
+		Log:            zerolog.Nop(),
+		BuildRegistry: func(ctx context.Context, workspaceDir string, exec executor.Executor) (*agent.Registry, error) {
+			reg, err := defaultBuildRegistry(ctx, workspaceDir, exec)
+			if err != nil {
+				return nil, err
+			}
+			reg.Add(&flakyDescriptor)
+			return reg, nil
+		},
+	}
+
+	out, err := runner.Run(context.Background(), scenario)
+	if err != nil {
+		t.Fatalf("Runner.Run: %v", err)
+	}
+	if !out.Pass {
+		t.Errorf("expected all checks to pass; failed: %v", out.FailedChecks())
+		for _, r := range out.Results {
+			t.Logf("  %s: pass=%v detail=%s", r.Check, r.Pass, r.Detail)
+		}
+		t.Logf("trace.Tools count=%d:", len(out.Trace.Tools))
+		for i, c := range out.Trace.Tools {
+			result := c.Result
+			if len(result) > 150 {
+				result = result[:150] + "..."
+			}
+			t.Logf("    [%d] %s isErr=%v result=%s", i, c.Tool, c.IsErr, result)
+		}
+	}
+
+	// Shape assertions: every flaky_probe call should be marked IsErr
+	// (either by the underlying error or by the guard). At least 8 calls
+	// should have happened so the halt threshold has data to count.
+	flakyCalls := 0
+	for _, tc := range out.Trace.Tools {
+		if tc.Tool == "flaky_probe" {
+			flakyCalls++
+			if !tc.IsErr {
+				t.Errorf("call_id=%s flaky_probe must surface as error; got IsErr=false", tc.CallID)
+			}
+		}
+	}
+	if flakyCalls < 8 {
+		t.Errorf("expected at least 8 flaky_probe calls to exercise the halt threshold; got %d", flakyCalls)
 	}
 }
 
