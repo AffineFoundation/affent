@@ -642,6 +642,7 @@ func TestRunRuntimeImageUsesPersistentWorkspaceAndLimits(t *testing.T) {
 	workspace := filepath.Join(t.TempDir(), "runtime ws")
 	runner := &fakeCommandRunner{}
 	opts := runtimeRunOptions{
+		Name:      "affent-runtime",
 		Image:     "example/affent:local",
 		Workspace: workspace,
 		Memory:    "768m",
@@ -666,6 +667,7 @@ func TestRunRuntimeImageUsesPersistentWorkspaceAndLimits(t *testing.T) {
 	}
 	for _, want := range []string{
 		"--rm",
+		"--name", "affent-runtime",
 		"-i",
 		"--init",
 		"--memory", "768m",
@@ -842,6 +844,7 @@ func TestRunRuntimeImageRequiresMeaningfulInputs(t *testing.T) {
 		{name: "image", edit: func(o *runtimeRunOptions) { o.Image = "" }, want: "--image is required"},
 		{name: "image whitespace", edit: func(o *runtimeRunOptions) { o.Image = "bad image" }, want: "--image must not contain whitespace"},
 		{name: "image leading dash", edit: func(o *runtimeRunOptions) { o.Image = "-bad" }, want: "--image must not start"},
+		{name: "name bad char", edit: func(o *runtimeRunOptions) { o.Name = "bad/name" }, want: "--name may contain only"},
 		{name: "workspace", edit: func(o *runtimeRunOptions) { o.Workspace = "" }, want: "--workspace is required"},
 		{name: "memory", edit: func(o *runtimeRunOptions) { o.Memory = "" }, want: "--memory is required"},
 		{name: "invalid memory", edit: func(o *runtimeRunOptions) { o.Memory = "wat" }, want: "positive Docker memory limit"},

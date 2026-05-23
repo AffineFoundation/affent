@@ -293,6 +293,7 @@ func (f *stringListFlag) Set(v string) error {
 }
 
 type runtimeRunOptions struct {
+	Name      string
 	Image     string
 	Workspace string
 	Memory    string
@@ -313,6 +314,7 @@ func imageRunCmd(args []string, runner commandRunner, _ io.Writer, stderr io.Wri
 	publish := stringListFlag(opts.Publish)
 	fs := flag.NewFlagSet("image run", flag.ContinueOnError)
 	fs.SetOutput(stderr)
+	fs.StringVar(&opts.Name, "name", opts.Name, "optional Docker container name; empty lets Docker choose")
 	fs.StringVar(&opts.Image, "image", opts.Image, "Docker image to run")
 	fs.StringVar(&opts.Workspace, "workspace", opts.Workspace, "persistent host workspace mounted at /workspace")
 	fs.StringVar(&opts.Memory, "memory", opts.Memory, "Docker memory limit")
@@ -571,6 +573,7 @@ func runRuntimeImage(opts runtimeRunOptions, runner commandRunner) error {
 		return errors.New("docker runner is nil")
 	}
 	opts.Image = strings.TrimSpace(opts.Image)
+	opts.Name = strings.TrimSpace(opts.Name)
 	opts.Workspace = strings.TrimSpace(opts.Workspace)
 	opts.Memory = strings.TrimSpace(opts.Memory)
 	opts.CPUs = strings.TrimSpace(opts.CPUs)
@@ -581,6 +584,11 @@ func runRuntimeImage(opts runtimeRunOptions, runner commandRunner) error {
 	}
 	if err := validateDockerImageRef("--image", opts.Image); err != nil {
 		return err
+	}
+	if opts.Name != "" {
+		if err := validateDockerContainerName("--name", opts.Name); err != nil {
+			return err
+		}
 	}
 	if opts.Workspace == "" {
 		return errors.New("--workspace is required")
@@ -644,6 +652,9 @@ func runRuntimeImage(opts runtimeRunOptions, runner commandRunner) error {
 	runArgs := []string{"run"}
 	if opts.Remove {
 		runArgs = append(runArgs, "--rm")
+	}
+	if opts.Name != "" {
+		runArgs = append(runArgs, "--name", opts.Name)
 	}
 	runArgs = append(runArgs,
 		"-i",
