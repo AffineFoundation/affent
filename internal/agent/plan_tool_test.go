@@ -354,3 +354,37 @@ func TestWithPlanSystemGuidanceIsIdempotent(t *testing.T) {
 		t.Fatalf("missing guidance marker:\n%s", first)
 	}
 }
+
+func TestPlanFirstToolPolicyAlwaysRequiresPlan(t *testing.T) {
+	policy := PlanFirstToolPolicy()
+	if policy == nil {
+		t.Fatal("policy missing")
+	}
+	if policy.ToolName != PlanToolName {
+		t.Fatalf("policy tool = %q, want %q", policy.ToolName, PlanToolName)
+	}
+	if policy.Trigger == nil || !policy.Trigger("change several files") || !policy.Trigger("") {
+		t.Fatal("plan-first policy should trigger for every plan-only request")
+	}
+	if !strings.Contains(policy.Rejection, "plan_only") || !strings.Contains(policy.Rejection, "action=set") {
+		t.Fatalf("rejection should guide recovery, got %q", policy.Rejection)
+	}
+}
+
+func TestPlanOnlyUserPromptPreservesRequestAndForbidsExecution(t *testing.T) {
+	got := PlanOnlyUserPrompt("  fix the failing tests  ")
+	for _, want := range []string{
+		"Plan-only mode is enabled.",
+		"Do not execute the task yet.",
+		"plan tool",
+		"Do not call shell",
+		"fix the failing tests",
+	} {
+		if !strings.Contains(got, want) {
+			t.Fatalf("plan-only prompt missing %q:\n%s", want, got)
+		}
+	}
+	if strings.Contains(got, "  fix the failing tests  ") {
+		t.Fatalf("plan-only prompt should trim request:\n%s", got)
+	}
+}

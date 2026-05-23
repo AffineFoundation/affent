@@ -538,3 +538,25 @@ func WithPlanSystemGuidance(prompt string) string {
 - Do not use plan for simple one-shot questions or a single file read.
 - Keep plans short, update them when evidence changes, and clear them when the task is done.`
 }
+
+func PlanFirstToolPolicy() *FirstToolPolicy {
+	return &FirstToolPolicy{
+		ToolName: PlanToolName,
+		Trigger:  func(string) bool { return true },
+		Rejection: "plan_only: create or update the persisted task plan before using any other tool.\n" +
+			"Next: call plan with action=set for a new plan, or action=update when revising an existing plan.",
+	}
+}
+
+func PlanOnlyUserPrompt(request string) string {
+	request = strings.TrimSpace(request)
+	if request == "" {
+		request = "(empty request)"
+	}
+	return `Plan-only mode is enabled.
+
+Do not execute the task yet. Create or update a concise persisted plan with the plan tool, then answer with the proposed plan and what confirmation is needed before execution. Do not call shell, file, web, browser, memory, skill, subagent, or focused-task tools in this turn.
+
+Original user request:
+` + request
+}

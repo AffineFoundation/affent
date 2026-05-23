@@ -11,6 +11,7 @@ import (
 	"syscall"
 	"time"
 
+	agent "github.com/affinefoundation/affent/internal/agent"
 	"github.com/affinefoundation/affent/internal/eventlog"
 	"github.com/affinefoundation/affent/internal/sse"
 	"github.com/rs/zerolog"
@@ -21,6 +22,7 @@ func runCmd(args []string) int {
 	fs := flag.NewFlagSet("run", flag.ExitOnError)
 	cf.bind(fs)
 	promptFlag := fs.String("prompt", "", "user prompt; '-' for stdin, '@file', or literal")
+	planOnly := fs.Bool("plan-only", false, "create or update the persisted task plan and stop before executing tools")
 	fs.Usage = func() {
 		fmt.Fprintln(os.Stderr, `usage: affentctl run [flags]
 
@@ -57,6 +59,13 @@ Required: --prompt, --model.`)
 		return code
 	}
 	defer b.close()
+	if *planOnly {
+		if err := enableRunPlanOnly(b); err != nil {
+			fmt.Fprintf(os.Stderr, "plan-only: %v\n", err)
+			return exitUsage
+		}
+		prompt = agent.PlanOnlyUserPrompt(prompt)
+	}
 
 	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
 	defer stop()
@@ -88,6 +97,19 @@ Required: --prompt, --model.`)
 		fmt.Println(finalText)
 	}
 	return exit
+}
+
+func enableRunPlanOnly(b *loopBundle) error {
+	if b == nil || b.loop == nil || b.loop.Tools == nil {
+		return fmt.Errorf("agent loop is not initialized")
+	}
+	if _, ok := b.loop.Tools.Get(agent.PlanToolName); !ok {
+		return fmt.Errorf("plan tool is not available")
+	}
+	b.loop.FirstToolPolicy = agent.PlanFirstToolPolicy()
+	b.loop.MaxToolCalls = 1
+	b.loop.FinalNoToolsOnMaxTurns = true
+	return nil
 }
 
 // drainBatch is the run-mode drain: records every event via rec,
