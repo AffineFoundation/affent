@@ -692,6 +692,7 @@ func setupLoop(c commonFlags) (*loopBundle, int) {
 	tools := agent.NewRegistry()
 	var execBackend executor.Executor
 	var skillReg *agent.SkillRegistry
+	var conv *agent.Conversation
 	if c.memoryOnly {
 		if memStore == nil {
 			log.Error().Msg("--memory-only requires a usable memory store; check --memory-workspace-store / --memory-user-store")
@@ -726,6 +727,9 @@ func setupLoop(c commonFlags) (*loopBundle, int) {
 			SessionID:        sid,
 			SkillRegistry:    skillReg,
 			SkillDir:         skillDir,
+			SkillInstallConfirmer: func(proposalID string) bool {
+				return agent.UserConfirmedRuntimeSkillProposal(conv, proposalID)
+			},
 		})
 	}
 
@@ -739,7 +743,7 @@ func setupLoop(c commonFlags) (*loopBundle, int) {
 		closers = append(closers, func() { _ = mc.Close() })
 	}
 
-	conv, err := agent.OpenConversationAt(filepath.Join(convDir, sid+".jsonl"))
+	conv, err = agent.OpenConversationAt(filepath.Join(convDir, sid+".jsonl"))
 	if err != nil {
 		log.Error().Err(err).Msg("conversation")
 		return nil, exitRuntime

@@ -354,7 +354,7 @@ func RegisterSubagent(r *Registry, deps SubagentDeps) {
 func buildSubagentRegistry(deps SubagentDeps) *Registry {
 	reg := NewRegistry()
 	bd := BuiltinDeps{Executor: deps.Executor, HostWorkspaceDir: deps.HostWorkspaceDir}
-	reg.Add(skillTool(builtinSkillProviderRegistry, ""))
+	reg.Add(skillTool(builtinSkillProviderRegistry, "", nil))
 	reg.Add(subagentReadFileTool(bd))
 	reg.Add(subagentListFilesTool(bd))
 	if deps.Executor != nil {

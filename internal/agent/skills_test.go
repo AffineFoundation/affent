@@ -122,7 +122,8 @@ func TestBuiltinSkillProvider_SkillInstallWorkflowTriggers(t *testing.T) {
 		"Do not install from a source you have not read",
 		"Ask for explicit user confirmation",
 		"Do not install in the same response",
-		"skill action=install",
+		"skill action=propose_install",
+		"skill action=confirm_install",
 	} {
 		if !strings.Contains(got, want) {
 			t.Fatalf("skill install workflow missing %q:\n%s", want, got)
@@ -278,6 +279,41 @@ func TestSkillRegistry_NilSafe(t *testing.T) {
 	}
 	if got := reg.Names(); got != nil {
 		t.Errorf("nil registry Names() must be nil; got %v", got)
+	}
+}
+
+func TestUserConfirmedRuntimeSkillProposalRequiresLatestUserApproval(t *testing.T) {
+	proposalID := "0123456789abcdef"
+	conv, err := OpenConversationAt(filepath.Join(t.TempDir(), "sess.jsonl"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if UserConfirmedRuntimeSkillProposal(conv, proposalID) {
+		t.Fatal("empty conversation should not confirm proposal")
+	}
+	if err := conv.Append(ChatMessage{Role: "user", Content: "please install a skill"}); err != nil {
+		t.Fatal(err)
+	}
+	if UserConfirmedRuntimeSkillProposal(conv, proposalID) {
+		t.Fatal("user text without proposal id should not confirm proposal")
+	}
+	if err := conv.Append(ChatMessage{Role: "assistant", Content: "proposal_id=0123456789abcdef"}); err != nil {
+		t.Fatal(err)
+	}
+	if UserConfirmedRuntimeSkillProposal(conv, proposalID) {
+		t.Fatal("assistant text must not count as user confirmation")
+	}
+	if err := conv.Append(ChatMessage{Role: "user", Content: "不要安装 proposal_id=0123456789abcdef"}); err != nil {
+		t.Fatal(err)
+	}
+	if UserConfirmedRuntimeSkillProposal(conv, proposalID) {
+		t.Fatal("negative confirmation should not authorize install")
+	}
+	if err := conv.Append(ChatMessage{Role: "user", Content: "确认安装 proposal_id=0123456789abcdef"}); err != nil {
+		t.Fatal(err)
+	}
+	if !UserConfirmedRuntimeSkillProposal(conv, proposalID) {
+		t.Fatal("latest explicit user confirmation with proposal id should authorize install")
 	}
 }
 

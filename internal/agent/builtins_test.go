@@ -578,7 +578,7 @@ func TestBuiltinToolSchemasRejectUnknownArguments(t *testing.T) {
 		name string
 		tool *Tool
 	}{
-		{name: "skill", tool: skillTool(DefaultSkillRegistry(), "")},
+		{name: "skill", tool: skillTool(DefaultSkillRegistry(), "", nil)},
 		{name: "shell", tool: shellTool(BuiltinDeps{Executor: &recordingExec{}})},
 		{name: "read_file", tool: readFileTool(BuiltinDeps{HostWorkspaceDir: t.TempDir()})},
 		{name: "write_file", tool: writeFileTool(BuiltinDeps{HostWorkspaceDir: t.TempDir()})},
@@ -1340,7 +1340,7 @@ func TestBuiltinFileOpsDoesNotRequireHostWorkspace(t *testing.T) {
 }
 
 func TestSkillToolListsAndReadsEmbeddedSkills(t *testing.T) {
-	tool := skillTool(DefaultSkillRegistry(), "")
+	tool := skillTool(DefaultSkillRegistry(), "", nil)
 	ctx := context.Background()
 	list, err := tool.Execute(ctx, json.RawMessage(`{"action":"list"}`))
 	if err != nil {
@@ -1366,7 +1366,7 @@ func TestSkillToolListsAndReadsEmbeddedSkills(t *testing.T) {
 func TestSkillToolInstallsRuntimeSkillWithoutRestart(t *testing.T) {
 	dir := t.TempDir()
 	reg := &SkillRegistry{}
-	tool := skillTool(reg, dir)
+	tool := skillTool(reg, dir, nil)
 	body := "AFFENT ACTIVE SKILL: runtime_demo\nUse the runtime demo workflow."
 	args, err := json.Marshal(map[string]any{
 		"action":      "install",
@@ -1408,7 +1408,10 @@ func TestSkillToolInstallsRuntimeSkillWithoutRestart(t *testing.T) {
 func TestSkillToolProposesThenConfirmsRuntimeSkillInstall(t *testing.T) {
 	dir := t.TempDir()
 	reg := &SkillRegistry{}
-	tool := skillTool(reg, dir)
+	confirmedByUser := false
+	tool := skillTool(reg, dir, func(proposalID string) bool {
+		return confirmedByUser
+	})
 	body := "AFFENT ACTIVE SKILL: reviewed_demo\nUse only after proposal confirmation."
 	args, err := json.Marshal(map[string]any{
 		"action":      "propose_install",
@@ -1443,6 +1446,10 @@ func TestSkillToolProposesThenConfirmsRuntimeSkillInstall(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+	if _, err := tool.Execute(context.Background(), confirmArgs); err == nil || !strings.Contains(err.Error(), "pending explicit user confirmation") {
+		t.Fatalf("confirm before user approval should fail, got %v", err)
+	}
+	confirmedByUser = true
 	confirmed, err := tool.Execute(context.Background(), confirmArgs)
 	if err != nil {
 		t.Fatalf("skill confirm_install: %v", err)
@@ -1468,7 +1475,7 @@ func extractProposalID(out string) string {
 }
 
 func TestSkillToolInstallRequiresConfiguredDirectory(t *testing.T) {
-	tool := skillTool(&SkillRegistry{}, "")
+	tool := skillTool(&SkillRegistry{}, "", nil)
 	_, err := tool.Execute(context.Background(), json.RawMessage(`{"action":"install","name":"demo","body":"AFFENT ACTIVE SKILL: demo"}`))
 	if err == nil || !strings.Contains(err.Error(), "install is not configured") || !strings.Contains(err.Error(), "Next:") {
 		t.Fatalf("install without dir error = %v", err)
@@ -1476,7 +1483,7 @@ func TestSkillToolInstallRequiresConfiguredDirectory(t *testing.T) {
 }
 
 func TestSkillToolPublishesAndRejectsBlankRequiredStrings(t *testing.T) {
-	tool := skillTool(DefaultSkillRegistry(), "")
+	tool := skillTool(DefaultSkillRegistry(), "", nil)
 	var schema struct {
 		Properties map[string]struct {
 			MinLength int `json:"minLength"`

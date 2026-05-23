@@ -104,10 +104,16 @@ func (r *Runner) Run(ctx context.Context, s Scenario) (Outcome, error) {
 		return Outcome{}, fmt.Errorf("build executor: %w", err)
 	}
 
+	convPath := filepath.Join(workspace, ".agenteval-conv.jsonl")
+	conv, err := agent.OpenConversationAt(convPath)
+	if err != nil {
+		return Outcome{}, fmt.Errorf("conversation: %w", err)
+	}
+
 	var reg *agent.Registry
 	var skillProvider agent.SkillProvider
 	if r.BuildRegistry == nil {
-		rt, err := defaultBuildRuntime(workspace, exec)
+		rt, err := defaultBuildRuntime(workspace, exec, conv)
 		if err != nil {
 			return Outcome{}, fmt.Errorf("build registry: %w", err)
 		}
@@ -122,12 +128,6 @@ func (r *Runner) Run(ctx context.Context, s Scenario) (Outcome, error) {
 	}
 	if r.SkillProvider != nil {
 		skillProvider = r.SkillProvider
-	}
-
-	convPath := filepath.Join(workspace, ".agenteval-conv.jsonl")
-	conv, err := agent.OpenConversationAt(convPath)
-	if err != nil {
-		return Outcome{}, fmt.Errorf("conversation: %w", err)
 	}
 
 	events := make(chan sse.Event, 256)
@@ -193,7 +193,7 @@ type runnerRuntime struct {
 	SkillProvider agent.SkillProvider
 }
 
-func defaultBuildRuntime(workspaceDir string, exec executor.Executor) (runnerRuntime, error) {
+func defaultBuildRuntime(workspaceDir string, exec executor.Executor, conv *agent.Conversation) (runnerRuntime, error) {
 	reg := agent.NewRegistry()
 	skillDir := agent.DefaultWorkspaceSkillDir(workspaceDir)
 	skillReg, err := agent.RuntimeSkillRegistry(skillDir)
@@ -205,12 +205,15 @@ func defaultBuildRuntime(workspaceDir string, exec executor.Executor) (runnerRun
 		HostWorkspaceDir: workspaceDir,
 		SkillRegistry:    skillReg,
 		SkillDir:         skillDir,
+		SkillInstallConfirmer: func(proposalID string) bool {
+			return agent.UserConfirmedRuntimeSkillProposal(conv, proposalID)
+		},
 	})
 	return runnerRuntime{Registry: reg, SkillProvider: skillReg.Provide}, nil
 }
 
 func defaultBuildRegistry(_ context.Context, workspaceDir string, exec executor.Executor) (*agent.Registry, error) {
-	rt, err := defaultBuildRuntime(workspaceDir, exec)
+	rt, err := defaultBuildRuntime(workspaceDir, exec, nil)
 	if err != nil {
 		return nil, err
 	}

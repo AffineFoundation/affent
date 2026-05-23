@@ -76,6 +76,11 @@ type BuiltinDeps struct {
 	// SkillDir is where skill action=install persists runtime skills.
 	// Empty disables install while keeping list/read available.
 	SkillDir string
+	// SkillInstallConfirmer authorizes action=confirm_install. It should
+	// return true only after the user explicitly confirmed the specific
+	// pending proposal id, usually by inspecting the latest user message
+	// in the conversation.
+	SkillInstallConfirmer SkillInstallConfirmer
 }
 
 // defaultShell is the portable fallback when BuiltinDeps.Shell is unset.
@@ -102,11 +107,13 @@ const (
 func RegisterBuiltins(r *Registry, deps BuiltinDeps) {
 	skills := deps.SkillRegistry
 	skillDir := deps.SkillDir
+	skillConfirmer := deps.SkillInstallConfirmer
 	if skills == nil {
 		skills = builtinSkillProviderRegistry
 		skillDir = ""
+		skillConfirmer = nil
 	}
-	r.Add(skillTool(skills, skillDir))
+	r.Add(skillTool(skills, skillDir, skillConfirmer))
 	r.Add(shellTool(deps))
 	r.Add(readFileTool(deps))
 	r.Add(writeFileTool(deps))
@@ -120,7 +127,9 @@ func RegisterBuiltins(r *Registry, deps BuiltinDeps) {
 	}
 }
 
-func skillTool(reg *SkillRegistry, skillDir string) *Tool {
+type SkillInstallConfirmer func(proposalID string) bool
+
+func skillTool(reg *SkillRegistry, skillDir string, confirmInstall SkillInstallConfirmer) *Tool {
 	if reg == nil {
 		reg = builtinSkillProviderRegistry
 	}
@@ -215,6 +224,9 @@ func skillTool(reg *SkillRegistry, skillDir string) *Tool {
 				proposalID := strings.TrimSpace(p.ProposalID)
 				if proposalID == "" {
 					return "", errors.New("proposal_id is required when action=confirm_install\nNext: ask the user to confirm a prepared proposal, then retry with the exact proposal_id returned by propose_install")
+				}
+				if confirmInstall == nil || !confirmInstall(proposalID) {
+					return "", fmt.Errorf("skill proposal %q is still pending explicit user confirmation\nNext: show the proposal to the user and ask them to reply with a confirmation that includes proposal_id=%s, then retry action=confirm_install", proposalID, proposalID)
 				}
 				installed, err := ConfirmRuntimeSkillProposal(skillDir, proposalID)
 				if err != nil {

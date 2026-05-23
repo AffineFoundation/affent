@@ -322,6 +322,9 @@ func (p *SessionPool) buildSession(id string) (*Session, error) {
 			Memory:           memStore,
 			SkillRegistry:    skillReg,
 			SkillDir:         skillDir,
+			SkillInstallConfirmer: func(proposalID string) bool {
+				return agent.UserConfirmedRuntimeSkillProposal(conv, proposalID)
+			},
 		})
 	} else if memStore != nil {
 		// Memory tool without the shell/file builtins — common for

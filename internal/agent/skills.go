@@ -575,6 +575,47 @@ func ConfirmRuntimeSkillProposal(root, id string) (Skill, error) {
 	return installed, nil
 }
 
+func UserConfirmedRuntimeSkillProposal(conv *Conversation, proposalID string) bool {
+	if conv == nil {
+		return false
+	}
+	msgs := conv.Snapshot()
+	for i := len(msgs) - 1; i >= 0; i-- {
+		if msgs[i].Role == "user" {
+			return userTextConfirmsRuntimeSkillProposal(msgs[i].Content, proposalID)
+		}
+	}
+	return false
+}
+
+func userTextConfirmsRuntimeSkillProposal(text, proposalID string) bool {
+	proposalID = strings.ToLower(strings.TrimSpace(proposalID))
+	if !validRuntimeSkillProposalID(proposalID) {
+		return false
+	}
+	lower := strings.ToLower(text)
+	if !strings.Contains(lower, proposalID) {
+		return false
+	}
+	for _, phrase := range []string{
+		"do not", "don't", "dont", "not install", "cancel", "reject", "no ",
+		"不要", "别", "不安装", "取消", "拒绝", "不同意",
+	} {
+		if strings.Contains(lower, phrase) {
+			return false
+		}
+	}
+	for _, phrase := range []string{
+		"confirm", "confirmed", "approve", "approved", "install", "yes", "ok", "okay", "go ahead", "proceed",
+		"确认", "同意", "批准", "安装", "可以", "继续", "没问题",
+	} {
+		if strings.Contains(lower, phrase) {
+			return true
+		}
+	}
+	return false
+}
+
 func loadRuntimeSkill(dir string) (Skill, error) {
 	manifestPath := filepath.Join(dir, "skill.json")
 	manifestRaw, err := readRuntimeSkillFile(manifestPath, maxRuntimeSkillManifestBytes)
