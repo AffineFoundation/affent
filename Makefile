@@ -28,7 +28,7 @@ TEST_DIR ?= .
 GO_TEST_FLAGS ?= -p=1
 TEST_PACKAGES ?= ./...
 
-.PHONY: affentctl affentctl-local doctor sandbox-start sandbox-status sandbox-stop image-build image-run image-serve image-serve-status image-serve-logs image-serve-stop eval-container test-container
+.PHONY: affentctl affentctl-local doctor sandbox-start sandbox-status sandbox-stop image-build image-run image-serve image-serve-status image-serve-logs image-serve-stop image-serve-restart eval-container test-container
 
 affentctl:
 	mkdir -p "$(dir $(AFFENTCTL))" .tmp/go-build .tmp/go-mod
@@ -109,6 +109,21 @@ image-serve-stop:
 		exit 2; \
 	fi
 	docker rm -f "$(SERVE_CONTAINER_NAME)"
+
+image-serve-restart:
+	@if test -z "$(SERVE_CONTAINER_NAME)"; then \
+		echo "SERVE_CONTAINER_NAME is required, e.g. make image-serve-restart SERVE_CONTAINER_NAME=affent-serve" >&2; \
+		exit 2; \
+	fi; \
+	if docker inspect "$(SERVE_CONTAINER_NAME)" >/dev/null 2>&1; then \
+		label=$$(docker inspect "$(SERVE_CONTAINER_NAME)" --format '{{index .Config.Labels "affent.runtime"}}' 2>/dev/null); \
+		if test "$$label" != "true"; then \
+			echo "container $(SERVE_CONTAINER_NAME) is not an Affent runtime container" >&2; \
+			exit 2; \
+		fi; \
+		docker rm -f "$(SERVE_CONTAINER_NAME)"; \
+	fi
+	$(MAKE) image-serve
 
 eval-container: affentctl
 	"$(AFFENTCTL)" image build --image "$(EVAL_IMAGE)" --memory "$(CONTAINER_MEMORY)" $(IMAGE_BUILD_ARGS)
