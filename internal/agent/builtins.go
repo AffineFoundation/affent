@@ -186,7 +186,7 @@ func skillTool(reg *SkillRegistry, skillDir string, confirmInstall SkillInstallC
 			if err != nil {
 				return "", fmt.Errorf("decode args: %w", err)
 			}
-			action := strings.TrimSpace(p.Action)
+			action := strings.ToLower(strings.TrimSpace(p.Action))
 			if action == "" {
 				return "", errors.New("action is required\nNext: retry skill with action=list to inspect skills, or action=read with a valid name")
 			}

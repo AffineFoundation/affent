@@ -1436,6 +1436,35 @@ func TestSkillToolInstallsRuntimeSkillWithoutRestart(t *testing.T) {
 	}
 }
 
+func TestSkillToolNormalizesActionCase(t *testing.T) {
+	dir := t.TempDir()
+	reg := &SkillRegistry{}
+	tool := skillTool(reg, dir, nil)
+	body := "AFFENT ACTIVE SKILL: case_demo\nUse the case demo workflow."
+	args, err := json.Marshal(map[string]any{
+		"action":   " INSTALL ",
+		"name":     "case_demo",
+		"body":     body,
+		"triggers": []string{"case demo"},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := tool.Execute(context.Background(), args); err != nil {
+		t.Fatalf("skill install with uppercase action: %v", err)
+	}
+	if got := reg.Provide("case demo please"); !strings.Contains(got, body) {
+		t.Fatalf("installed skill should activate, got %q", got)
+	}
+
+	if _, err := tool.Execute(context.Background(), json.RawMessage(`{"action":" READ ","name":"case_demo"}`)); err != nil {
+		t.Fatalf("skill read with uppercase action: %v", err)
+	}
+	if _, err := tool.Execute(context.Background(), json.RawMessage(`{"action":" LIST "}`)); err != nil {
+		t.Fatalf("skill list with uppercase action: %v", err)
+	}
+}
+
 func TestSkillToolProposesThenConfirmsRuntimeSkillInstall(t *testing.T) {
 	dir := t.TempDir()
 	reg := &SkillRegistry{}
