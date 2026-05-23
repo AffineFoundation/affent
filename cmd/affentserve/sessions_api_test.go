@@ -3,6 +3,7 @@ package main
 import (
 	"bytes"
 	"encoding/json"
+	"errors"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -296,6 +297,76 @@ func TestHandleSessionPlan_Returns404WhenNoPlan(t *testing.T) {
 	handleSessionRoutes(pool).ServeHTTP(w, r)
 	if got := w.Result().StatusCode; got != http.StatusNotFound {
 		t.Fatalf("status = %d, want 404; body=%s", got, w.Body.String())
+	}
+}
+
+func TestHandleSessionPlanDelete_RemovesDurablePlanWithoutReopeningSession(t *testing.T) {
+	memRoot := t.TempDir()
+	pool := newPoolWithMemoryRoot(t, memRoot)
+	createDurableSessionDir(t, pool, "clear-plan")
+	planPath := filepath.Join(pool.sessionDirPath("clear-plan"), "plan.json")
+	if err := os.WriteFile(planPath, []byte(`{"version":1,"steps":[{"text":"stale"}]}`+"\n"), 0o644); err != nil {
+		t.Fatalf("write plan: %v", err)
+	}
+
+	r := httptest.NewRequest(http.MethodDelete, "/v1/sessions/clear-plan/plan", nil)
+	w := httptest.NewRecorder()
+	handleSessionRoutes(pool).ServeHTTP(w, r)
+	if got := w.Result().StatusCode; got != http.StatusOK {
+		t.Fatalf("status = %d, want 200; body=%s", got, w.Body.String())
+	}
+	if activeSessionByID(pool, "clear-plan") != nil {
+		t.Fatal("DELETE plan must not reopen an inactive durable session")
+	}
+	var resp sessionPlanDeleteResponse
+	if err := json.Unmarshal(w.Body.Bytes(), &resp); err != nil {
+		t.Fatalf("decode: %v", err)
+	}
+	if resp.SessionID != "clear-plan" || !resp.Cleared {
+		t.Fatalf("delete response = %+v, want cleared clear-plan", resp)
+	}
+	if _, err := os.Lstat(planPath); !errors.Is(err, os.ErrNotExist) {
+		t.Fatalf("plan path after delete err = %v, want not exists", err)
+	}
+
+	r = httptest.NewRequest(http.MethodDelete, "/v1/sessions/clear-plan/plan", nil)
+	w = httptest.NewRecorder()
+	handleSessionRoutes(pool).ServeHTTP(w, r)
+	if got := w.Result().StatusCode; got != http.StatusOK {
+		t.Fatalf("second status = %d, want 200; body=%s", got, w.Body.String())
+	}
+	if err := json.Unmarshal(w.Body.Bytes(), &resp); err != nil {
+		t.Fatalf("decode second: %v", err)
+	}
+	if resp.Cleared {
+		t.Fatalf("second delete response = %+v, want cleared=false", resp)
+	}
+}
+
+func TestHandleSessionPlanDelete_RejectsSymlinkPlan(t *testing.T) {
+	memRoot := t.TempDir()
+	pool := newPoolWithMemoryRoot(t, memRoot)
+	createDurableSessionDir(t, pool, "clear-link-plan")
+	outside := filepath.Join(t.TempDir(), "outside-plan.json")
+	if err := os.WriteFile(outside, []byte(`{"version":1}`), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	link := filepath.Join(pool.sessionDirPath("clear-link-plan"), "plan.json")
+	if err := os.Symlink(outside, link); err != nil {
+		t.Skipf("symlink unavailable: %v", err)
+	}
+
+	r := httptest.NewRequest(http.MethodDelete, "/v1/sessions/clear-link-plan/plan", nil)
+	w := httptest.NewRecorder()
+	handleSessionRoutes(pool).ServeHTTP(w, r)
+	if got := w.Result().StatusCode; got != http.StatusInternalServerError {
+		t.Fatalf("status = %d, want 500; body=%s", got, w.Body.String())
+	}
+	if _, err := os.Lstat(link); err != nil {
+		t.Fatalf("symlink plan should remain for operator inspection: %v", err)
+	}
+	if _, err := os.Lstat(outside); err != nil {
+		t.Fatalf("outside plan should remain: %v", err)
 	}
 }
 

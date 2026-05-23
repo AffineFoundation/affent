@@ -19,6 +19,7 @@ import (
 //	GET    /v1/sessions/{id}/events
 //	GET    /v1/sessions/{id}/history
 //	GET    /v1/sessions/{id}/plan
+//	DELETE /v1/sessions/{id}/plan
 //	GET    /v1/sessions/{id}/tools
 //	GET    /v1/sessions/{id}/transcripts
 //	GET    /v1/sessions/{id}/transcripts/{path...}
@@ -54,6 +55,7 @@ func newRouter(cfg Config, pool *SessionPool, logger zerolog.Logger) http.Handle
 //	GET    /v1/sessions/{id}/events  → SSE passthrough
 //	GET    /v1/sessions/{id}/history → persisted JSONL replay
 //	GET    /v1/sessions/{id}/plan    → persisted plan snapshot
+//	DELETE /v1/sessions/{id}/plan    → remove persisted plan snapshot
 //	GET    /v1/sessions/{id}/tools   → active session tool catalog
 //	GET    /v1/sessions/{id}/transcripts[/path] → child loop transcripts
 //	GET    /v1/sessions/{id}/artifacts[/path] → tool-result artifacts
@@ -84,6 +86,8 @@ func handleSessionRoutes(pool *SessionPool) http.HandlerFunc {
 			handleSessionHistory(pool, sessionID, w, r)
 		case sub == "plan" && r.Method == http.MethodGet:
 			handleSessionPlan(pool, sessionID, w, r)
+		case sub == "plan" && r.Method == http.MethodDelete:
+			handleSessionPlanDelete(pool, sessionID, w, r)
 		case sub == "tools" && r.Method == http.MethodGet:
 			handleSessionTools(pool, sessionID, w, r)
 		case (sub == "transcripts" || strings.HasPrefix(sub, "transcripts/")) && r.Method == http.MethodGet:

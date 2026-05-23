@@ -22,6 +22,11 @@ type sessionPlanResponse struct {
 	Summary   *sessionPlanSummary `json:"summary,omitempty"`
 }
 
+type sessionPlanDeleteResponse struct {
+	SessionID string `json:"session_id"`
+	Cleared   bool   `json:"cleared"`
+}
+
 type sessionPlanSummary = planstate.Summary
 
 func handleSessionPlan(pool *SessionPool, sessionID string, w http.ResponseWriter, _ *http.Request) {
@@ -52,6 +57,27 @@ func handleSessionPlan(pool *SessionPool, sessionID string, w http.ResponseWrite
 		SessionID: sessionID,
 		Plan:      plan,
 		Summary:   &summary,
+	})
+}
+
+func handleSessionPlanDelete(pool *SessionPool, sessionID string, w http.ResponseWriter, _ *http.Request) {
+	if pool == nil {
+		writeJSONError(w, http.StatusNotFound, "session not found", nil)
+		return
+	}
+	if err := agent.ValidateSessionID(sessionID); err != nil {
+		writeJSONErrorTyped(w, http.StatusBadRequest, "invalid session id", err, "bad_request")
+		return
+	}
+	cleared, err := clearSessionPlan(pool, sessionID)
+	if err != nil {
+		writeJSONError(w, http.StatusInternalServerError, "clear session plan", err)
+		return
+	}
+	w.Header().Set("Content-Type", "application/json")
+	_ = json.NewEncoder(w).Encode(sessionPlanDeleteResponse{
+		SessionID: sessionID,
+		Cleared:   cleared,
 	})
 }
 
@@ -94,6 +120,34 @@ func readSessionPlan(pool *SessionPool, sessionID string) (json.RawMessage, bool
 		return nil, false, errors.New("plan file is not valid JSON")
 	}
 	return json.RawMessage(raw), true, nil
+}
+
+func clearSessionPlan(pool *SessionPool, sessionID string) (bool, error) {
+	path := filepath.Join(pool.sessionDirPath(sessionID), "plan.json")
+	info, err := os.Lstat(path)
+	if err != nil {
+		if errors.Is(err, os.ErrNotExist) {
+			return false, nil
+		}
+		return false, err
+	}
+	if info.IsDir() {
+		return false, errors.New("plan path is a directory")
+	}
+	if info.Mode()&os.ModeSymlink != 0 {
+		return false, errors.New("plan path must not be a symlink")
+	}
+	if err := os.Remove(path); err != nil {
+		if errors.Is(err, os.ErrNotExist) {
+			return false, nil
+		}
+		return false, err
+	}
+	if d, err := os.Open(filepath.Dir(path)); err == nil {
+		_ = d.Sync()
+		_ = d.Close()
+	}
+	return true, nil
 }
 
 func summarizeSessionPlanFile(pool *SessionPool, sessionID string) *sessionPlanSummary {
