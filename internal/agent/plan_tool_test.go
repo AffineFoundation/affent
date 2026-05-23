@@ -3,6 +3,7 @@ package agent
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
@@ -448,5 +449,33 @@ func TestWithActivePlanSkillProviderSkipsCompletedPlan(t *testing.T) {
 	}
 	if got != "AFFENT ACTIVE SKILL: demo" {
 		t.Fatalf("next provider should still run, got %q", got)
+	}
+}
+
+func TestWithActivePlanSkillProviderCompactsInlineDetails(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "plan.json")
+	longText := strings.Repeat("t", maxActivePlanStepTextBytes+20)
+	longNote := strings.Repeat("n", maxActivePlanNoteBytes+20)
+	longEvidence := strings.Repeat("e", maxActivePlanEvidenceRefBytes+20)
+	raw := fmt.Sprintf(`{"version":1,"steps":[{"text":%q,"status":"in_progress","evidence":[%q,"ref2","ref3","ref4"],"note":%q}]}`+"\n", longText, longEvidence, longNote)
+	if err := os.WriteFile(path, []byte(raw), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	got := WithActivePlanSkillProvider(path, nil)("continue")
+	if !strings.Contains(got, "1. [in_progress] "+strings.Repeat("t", maxActivePlanStepTextBytes)+"...") {
+		t.Fatalf("step text should be compacted, got:\n%s", got)
+	}
+	if !strings.Contains(got, strings.Repeat("e", maxActivePlanEvidenceRefBytes)+"...") {
+		t.Fatalf("evidence ref should be compacted, got:\n%s", got)
+	}
+	if !strings.Contains(got, "(+1 more)") {
+		t.Fatalf("evidence summary should report omitted refs, got:\n%s", got)
+	}
+	if strings.Contains(got, "ref4") {
+		t.Fatalf("evidence beyond cap should be omitted, got:\n%s", got)
+	}
+	if !strings.Contains(got, "note: "+strings.Repeat("n", maxActivePlanNoteBytes)+"...") {
+		t.Fatalf("note should be compacted, got:\n%s", got)
 	}
 }

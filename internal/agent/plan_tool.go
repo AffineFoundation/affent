@@ -24,6 +24,11 @@ const (
 	maxPlanEvidenceBytes = 240
 	maxPlanStateBytes    = 32 * 1024
 	planStateVersion     = 1
+
+	maxActivePlanStepTextBytes    = 160
+	maxActivePlanNoteBytes        = 160
+	maxActivePlanEvidenceRefs     = 3
+	maxActivePlanEvidenceRefBytes = 120
 )
 
 type planToolArgs struct {
@@ -591,20 +596,48 @@ func activePlanSkillBlock(planPath string) string {
 	b.WriteString("AFFENT ACTIVE PLAN:\n")
 	b.WriteString("This is the persisted task plan for the current session. Continue from it, update it when progress changes, and avoid restarting already completed steps.\n")
 	for i, step := range st.Steps {
-		status := strings.TrimSpace(step.Status)
-		if status == "" {
-			status = "pending"
-		}
-		fmt.Fprintf(&b, "%d. [%s] %s", i+1, status, strings.TrimSpace(step.Text))
-		if len(step.Evidence) > 0 {
-			fmt.Fprintf(&b, " evidence: %s", strings.Join(step.Evidence, ", "))
-		}
-		if note := strings.TrimSpace(step.Note); note != "" {
-			fmt.Fprintf(&b, " note: %s", note)
-		}
-		b.WriteByte('\n')
+		b.WriteString(formatActivePlanStep(i+1, step))
 	}
 	return strings.TrimSpace(b.String())
+}
+
+func formatActivePlanStep(index int, step planStep) string {
+	status := strings.TrimSpace(step.Status)
+	if status == "" {
+		status = "pending"
+	}
+	var b strings.Builder
+	fmt.Fprintf(&b, "%d. [%s] %s", index, status, previewN(strings.TrimSpace(step.Text), maxActivePlanStepTextBytes))
+	if evidence := activePlanEvidenceSummary(step.Evidence); evidence != "" {
+		fmt.Fprintf(&b, " evidence: %s", evidence)
+	}
+	if note := strings.TrimSpace(step.Note); note != "" {
+		fmt.Fprintf(&b, " note: %s", previewN(note, maxActivePlanNoteBytes))
+	}
+	b.WriteByte('\n')
+	return b.String()
+}
+
+func activePlanEvidenceSummary(evidence []string) string {
+	refs := make([]string, 0, min(len(evidence), maxActivePlanEvidenceRefs))
+	for _, ref := range evidence {
+		ref = strings.TrimSpace(ref)
+		if ref == "" {
+			continue
+		}
+		refs = append(refs, previewN(ref, maxActivePlanEvidenceRefBytes))
+		if len(refs) == maxActivePlanEvidenceRefs {
+			break
+		}
+	}
+	if len(refs) == 0 {
+		return ""
+	}
+	summary := strings.Join(refs, ", ")
+	if omitted := len(evidence) - len(refs); omitted > 0 {
+		summary += fmt.Sprintf(" (+%d more)", omitted)
+	}
+	return summary
 }
 
 func planStateDone(st planState) bool {
