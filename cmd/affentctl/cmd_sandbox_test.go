@@ -237,7 +237,7 @@ func TestMakeImageServeEnablesBuiltinsInsideRuntimeContainer(t *testing.T) {
 		`host_memory_bytes={{.HostConfig.Memory}}`,
 		`docker rm -f "$(SERVE_CONTAINER_NAME)"`,
 		`$(if $(SERVE_CONTAINER_NAME),--name "$(SERVE_CONTAINER_NAME)")`,
-		`--detach --publish "$(SERVE_PUBLISH)"`,
+		`--detach --rm=false --publish "$(SERVE_PUBLISH)"`,
 		"affentserve --listen \"$(SERVE_LISTEN)\" --workspace-root \"$(SERVE_WORKSPACE_ROOT)\" --memory-root \"$(SERVE_MEMORY_ROOT)\" --builtins $(SERVE_ARGS)",
 	} {
 		if !strings.Contains(body, want) {
@@ -285,7 +285,7 @@ func TestMakeOneClickContainerTargetsUseSharedLimits(t *testing.T) {
 			`image run --workspace "$(IMAGE_WORKSPACE)" --memory "$(CONTAINER_MEMORY)" --cpus "$(CONTAINER_CPUS)" --pids-limit "$(CONTAINER_PIDS)" $(IMAGE_RUN_ARGS)`,
 		},
 		"image-serve": {
-			`image run --workspace "$(IMAGE_WORKSPACE)" --memory "$(CONTAINER_MEMORY)" --cpus "$(CONTAINER_CPUS)" --pids-limit "$(CONTAINER_PIDS)" $(if $(SERVE_CONTAINER_NAME),--name "$(SERVE_CONTAINER_NAME)") --detach`,
+			`image run --workspace "$(IMAGE_WORKSPACE)" --memory "$(CONTAINER_MEMORY)" --cpus "$(CONTAINER_CPUS)" --pids-limit "$(CONTAINER_PIDS)" $(if $(SERVE_CONTAINER_NAME),--name "$(SERVE_CONTAINER_NAME)") --detach --rm=false`,
 		},
 		"eval-container": {
 			`image build --image "$(EVAL_IMAGE)" --memory "$(CONTAINER_MEMORY)"`,
