@@ -51,6 +51,9 @@ func TestSafeWorkspacePath(t *testing.T) {
 				if !strings.Contains(err.Error(), "escape") {
 					t.Errorf("error %q should mention escape", err)
 				}
+				if !strings.Contains(err.Error(), "Next:") {
+					t.Errorf("escape error %q should include recovery guidance", err)
+				}
 				return
 			}
 			if err != nil {
@@ -94,6 +97,9 @@ func TestSafeWorkspacePath_RejectsSymlinkEscape(t *testing.T) {
 		}
 		if !strings.Contains(err.Error(), "escape") {
 			t.Errorf("error %q should mention escape", err)
+		}
+		if !strings.Contains(err.Error(), "Next:") {
+			t.Errorf("escape error %q should include recovery guidance", err)
 		}
 	}
 }
@@ -141,6 +147,9 @@ func TestSafeWorkspacePathRequiresWorkspace(t *testing.T) {
 	if !strings.Contains(err.Error(), "workspace is not configured") {
 		t.Fatalf("error should explain missing workspace, got %v", err)
 	}
+	if !strings.Contains(err.Error(), "Next:") {
+		t.Fatalf("missing workspace error should guide recovery, got %v", err)
+	}
 }
 
 func TestFileToolsRequireWorkspaceForHostFallback(t *testing.T) {
@@ -163,6 +172,9 @@ func TestFileToolsRequireWorkspaceForHostFallback(t *testing.T) {
 			}
 			if !strings.Contains(err.Error(), "workspace is not configured") {
 				t.Fatalf("error should explain missing workspace, got %v", err)
+			}
+			if !strings.Contains(err.Error(), "Next:") {
+				t.Fatalf("missing workspace error should guide recovery, got %v", err)
 			}
 		})
 	}
@@ -294,6 +306,23 @@ func TestReadFileTool_NotFoundGivesListFilesNextStep(t *testing.T) {
 	}
 }
 
+func TestReadFileTool_BinaryGivesShellInspectionNextStep(t *testing.T) {
+	tmp := t.TempDir()
+	if err := os.WriteFile(filepath.Join(tmp, "bin.dat"), []byte{'a', 0, 'b'}, 0o644); err != nil {
+		t.Fatal(err)
+	}
+	tool := readFileTool(BuiltinDeps{HostWorkspaceDir: tmp})
+	_, err := tool.Execute(context.Background(), json.RawMessage(`{"path":"bin.dat"}`))
+	if err == nil {
+		t.Fatal("expected binary file error")
+	}
+	for _, want := range []string{"binary", "Next:", "file/xxd/base64"} {
+		if !strings.Contains(err.Error(), want) {
+			t.Fatalf("error missing %q:\n%s", want, err.Error())
+		}
+	}
+}
+
 func TestReadFileTool_FileOpsNotFoundGivesListFilesNextStep(t *testing.T) {
 	fake := newFakeFileOpsExecutor()
 	tool := readFileTool(BuiltinDeps{Executor: fake})
@@ -302,6 +331,19 @@ func TestReadFileTool_FileOpsNotFoundGivesListFilesNextStep(t *testing.T) {
 		t.Fatal("expected missing file error")
 	}
 	for _, want := range []string{"not found", "Next:", "list_files", "/work/docs"} {
+		if !strings.Contains(err.Error(), want) {
+			t.Fatalf("error missing %q:\n%s", want, err.Error())
+		}
+	}
+}
+
+func TestEditFileTool_NotFoundGivesListFilesNextStep(t *testing.T) {
+	tool := editFileTool(BuiltinDeps{HostWorkspaceDir: t.TempDir()})
+	_, err := tool.Execute(context.Background(), json.RawMessage(`{"path":"docs/missing.md","old":"x","new":"y"}`))
+	if err == nil {
+		t.Fatal("expected missing file error")
+	}
+	for _, want := range []string{"not found", "Next:", "list_files", "read_file"} {
 		if !strings.Contains(err.Error(), want) {
 			t.Fatalf("error missing %q:\n%s", want, err.Error())
 		}
@@ -361,6 +403,19 @@ func TestEditFileToolRejectsOversizedFileBeforeRead(t *testing.T) {
 		t.Fatal("expected oversized edit_file error")
 	}
 	for _, want := range []string{"supports files up to", "Next:", "read_file", "shell"} {
+		if !strings.Contains(err.Error(), want) {
+			t.Fatalf("error missing %q:\n%s", want, err.Error())
+		}
+	}
+}
+
+func TestListFilesTool_NotFoundGivesListFilesNextStep(t *testing.T) {
+	tool := listFilesTool(BuiltinDeps{HostWorkspaceDir: t.TempDir()})
+	_, err := tool.Execute(context.Background(), json.RawMessage(`{"path":"docs/missing"}`))
+	if err == nil {
+		t.Fatal("expected missing directory error")
+	}
+	for _, want := range []string{"not found", "Next:", "list_files", "docs"} {
 		if !strings.Contains(err.Error(), want) {
 			t.Fatalf("error missing %q:\n%s", want, err.Error())
 		}
@@ -859,6 +914,9 @@ func TestShellToolRejectsUnboundedFilesystemScans(t *testing.T) {
 		if !strings.Contains(err.Error(), "unbounded filesystem scan") {
 			t.Fatalf("unexpected error for %s: %v", command, err)
 		}
+		if !strings.Contains(err.Error(), "Next:") {
+			t.Fatalf("broad scan error should guide recovery for %s: %v", command, err)
+		}
 	}
 }
 
@@ -885,6 +943,9 @@ func TestShellTool_ExtraBroadScanIndicators(t *testing.T) {
 	if err == nil || !strings.Contains(err.Error(), "unbounded filesystem scan") {
 		t.Fatalf("with extra broad-scan indicator, 'du /' must be rejected; got %v", err)
 	}
+	if !strings.Contains(err.Error(), "Next:") {
+		t.Fatalf("custom broad-scan rejection should guide recovery: %v", err)
+	}
 }
 
 func TestShellToolRejectsMaskedVerificationCommands(t *testing.T) {
@@ -901,6 +962,9 @@ func TestShellToolRejectsMaskedVerificationCommands(t *testing.T) {
 		}
 		if !strings.Contains(err.Error(), "masks a test/build exit code") {
 			t.Fatalf("unexpected error for %s: %v", command, err)
+		}
+		if !strings.Contains(err.Error(), "Next:") {
+			t.Fatalf("masked verification error should guide recovery for %s: %v", command, err)
 		}
 	}
 }
@@ -919,6 +983,9 @@ func TestShellTool_ExtraVerificationIndicators(t *testing.T) {
 	_, err := customTool.Execute(context.Background(), json.RawMessage(`{"command":`+strconv.Quote(command)+`}`))
 	if err == nil || !strings.Contains(err.Error(), "masks a test/build exit code") {
 		t.Fatalf("custom verifier with masked exit should be rejected; got %v", err)
+	}
+	if !strings.Contains(err.Error(), "Next:") {
+		t.Fatalf("custom masked-verification rejection should guide recovery: %v", err)
 	}
 }
 

@@ -274,7 +274,7 @@ func rejectBroadShellScan(command string, indicators []string) error {
 	}
 	for _, indicator := range indicators {
 		if strings.Contains(lower, indicator) {
-			return errors.New("shell command looks like an unbounded filesystem scan. Use a specific workspace path or a bounded tool-discovery path instead")
+			return errors.New("shell command looks like an unbounded filesystem scan. Use a specific workspace path or a bounded tool-discovery path instead\nNext: retry with a workspace-relative path such as . or a named subdirectory, and add depth/name filters when scanning")
 		}
 	}
 	return nil
@@ -308,7 +308,7 @@ func rejectMaskedVerificationCommand(command string, indicators []string) error 
 	}
 	for _, indicator := range indicators {
 		if strings.Contains(lower, indicator) {
-			return errors.New("shell command masks a test/build exit code. Run the verification command directly, rely on tool truncation, or redirect output to a file and inspect chunks after it finishes")
+			return errors.New("shell command masks a test/build exit code. Run the verification command directly, rely on tool truncation, or redirect output to a file and inspect chunks after it finishes\nNext: retry the verification command without | head, | tail, || true, or echo $?")
 		}
 	}
 	return nil
@@ -358,7 +358,7 @@ func formatShellOutput(res executor.ExecResult) string {
 // the executor / container boundary.
 func safeWorkspacePath(deps BuiltinDeps, p string) (string, error) {
 	if strings.TrimSpace(deps.HostWorkspaceDir) == "" {
-		return "", errors.New("workspace is not configured; file tools require HostWorkspaceDir or a container FileOps executor")
+		return "", errors.New("workspace is not configured; file tools require HostWorkspaceDir or a container FileOps executor\nNext: restart affent with a workspace root or a docker/sandbox executor before retrying file tools")
 	}
 	if p == "" {
 		return deps.HostWorkspaceDir, nil
@@ -381,7 +381,7 @@ func safeWorkspacePath(deps BuiltinDeps, p string) (string, error) {
 	}
 	rel, err := filepath.Rel(wsAbs, resolved)
 	if err != nil || rel == ".." || strings.HasPrefix(rel, ".."+string(filepath.Separator)) {
-		return "", fmt.Errorf("path %q escapes workspace %q", p, deps.HostWorkspaceDir)
+		return "", fmt.Errorf("path %q escapes workspace %q\nNext: retry with a workspace-relative path under the workspace, or call list_files on . to discover valid paths", p, deps.HostWorkspaceDir)
 	}
 	return full, nil
 }
@@ -539,7 +539,7 @@ func readFileTool(deps BuiltinDeps) *Tool {
 			// Heuristic matches file(1) / git / grep -I: any NUL in
 			// the first 8 KiB.
 			if looksBinary(buf) {
-				return "", fmt.Errorf("%s appears to be binary (contains null bytes); use shell with file/xxd/base64 to inspect", p.Path)
+				return "", recoverableFileToolError("read_file", p.Path, fmt.Errorf("%s appears to be binary (contains null bytes); use shell with file/xxd/base64 to inspect", p.Path))
 			}
 			if len(buf) > p.MaxBytes {
 				// Snap back to a UTF-8 rune boundary so a CJK / accented
@@ -626,6 +626,8 @@ func recoverableFileToolError(tool, path string, err error) error {
 		return fmt.Errorf("%s\nNext: call read_file on %s and retry with a longer exact old string that occurs once, or set replace_all=true only if every occurrence must change", msg, path)
 	case tool == "edit_file" && strings.Contains(msg, "supports files up to"):
 		return fmt.Errorf("%s\nNext: use read_file with max_bytes or shell grep/sed to inspect targeted chunks, then apply a focused command or split the file before editing", msg)
+	case strings.Contains(msg, "appears to be binary"):
+		return fmt.Errorf("%s\nNext: use shell with file/xxd/base64 on a targeted path, or choose a text file instead", msg)
 	}
 	return err
 }
@@ -727,14 +729,14 @@ func editFileTool(deps BuiltinDeps) *Tool {
 			}
 			info, err := os.Stat(full)
 			if err != nil {
-				return "", err
+				return "", recoverableFileToolError("edit_file", p.Path, err)
 			}
 			if info.Size() > MaxEditFileBytes {
 				return "", fmt.Errorf("%s is %d bytes; edit_file supports files up to %d bytes\nNext: use read_file with max_bytes or shell grep/sed to inspect targeted chunks, then apply a focused command or split the file before editing", p.Path, info.Size(), MaxEditFileBytes)
 			}
 			raw, err := os.ReadFile(full)
 			if err != nil {
-				return "", err
+				return "", recoverableFileToolError("edit_file", p.Path, err)
 			}
 			body := string(raw)
 			n := strings.Count(body, p.Old)
@@ -829,7 +831,7 @@ func listFilesTool(deps BuiltinDeps) *Tool {
 			}
 			f, err := os.Open(full)
 			if err != nil {
-				return "", err
+				return "", recoverableFileToolError("list_files", p.Path, err)
 			}
 			defer f.Close()
 			entries, err := f.ReadDir(p.MaxEntries + 1)
