@@ -28,6 +28,11 @@ import (
 
 const maxConfigInputBytes = 1024 * 1024
 
+const (
+	minMCPStartupTimeout       = 60 * time.Second
+	mcpStartupPerServerOverrun = 5 * time.Second
+)
+
 // trimUTF8 returns s clipped to at most n bytes, snapping back to a
 // UTF-8 rune boundary so multi-byte sequences (CJK / Cyrillic /
 // accented Latin / emoji) aren't split across the cut. Callers append
@@ -925,12 +930,31 @@ func startMCP(configPath string, reg *agent.Registry, log zerolog.Logger) ([]*mc
 		}
 		specs = append(specs, spec)
 	}
-	// Bound the launch + handshake total. Each Start has its own 30s
-	// initialize timeout; we wrap the loop in a slightly larger budget
-	// for sanity.
-	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
+	// Bound the launch + handshake total. Each Start has its own
+	// initialize timeout; the outer budget is derived from the same
+	// per-server values so a configured init_timeout is not cut off by
+	// a stale fixed wrapper.
+	ctx, cancel := context.WithTimeout(context.Background(), mcpStartupTimeout(specs))
 	defer cancel()
 	return mcp.RegisterAll(ctx, reg, specs, log)
+}
+
+func mcpStartupTimeout(specs []mcp.ServerSpec) time.Duration {
+	if len(specs) == 0 {
+		return minMCPStartupTimeout
+	}
+	total := time.Duration(0)
+	for _, spec := range specs {
+		initTimeout := spec.InitTimeout
+		if initTimeout <= 0 {
+			initTimeout = mcp.DefaultInitTimeout
+		}
+		total += initTimeout + mcpStartupPerServerOverrun
+	}
+	if total < minMCPStartupTimeout {
+		return minMCPStartupTimeout
+	}
+	return total
 }
 
 // resolveSessionID picks the session id and tells the caller whether

@@ -11,6 +11,7 @@ import (
 	"unicode/utf8"
 
 	"github.com/affinefoundation/affent/internal/agent"
+	"github.com/affinefoundation/affent/internal/mcp"
 )
 
 // TestReadMaybeStdin_AtMissingFileIsError pins the @-prefix contract.
@@ -284,6 +285,31 @@ func TestMCPConfigServerParsesInitTimeout(t *testing.T) {
 	_, err = (mcpConfigServer{Name: "bad", Command: "sh", InitTimeout: "0s"}).serverSpec()
 	if err == nil || !strings.Contains(err.Error(), "must be positive") {
 		t.Fatalf("zero init timeout error = %v, want positive rejection", err)
+	}
+}
+
+func TestMCPStartupTimeoutHonorsConfiguredInitTimeout(t *testing.T) {
+	got := mcpStartupTimeout([]mcp.ServerSpec{
+		{Name: "slow", InitTimeout: 2 * time.Minute},
+	})
+	want := 2*time.Minute + mcpStartupPerServerOverrun
+	if got != want {
+		t.Fatalf("startup timeout = %s, want %s", got, want)
+	}
+}
+
+func TestMCPStartupTimeoutScalesWithDefaultServers(t *testing.T) {
+	got := mcpStartupTimeout([]mcp.ServerSpec{{Name: "one"}, {Name: "two"}})
+	want := 2 * (mcp.DefaultInitTimeout + mcpStartupPerServerOverrun)
+	if got != want {
+		t.Fatalf("startup timeout = %s, want %s", got, want)
+	}
+}
+
+func TestMCPStartupTimeoutKeepsMinimumForSmallConfigs(t *testing.T) {
+	got := mcpStartupTimeout([]mcp.ServerSpec{{Name: "fast", InitTimeout: time.Second}})
+	if got != minMCPStartupTimeout {
+		t.Fatalf("startup timeout = %s, want minimum %s", got, minMCPStartupTimeout)
 	}
 }
 
