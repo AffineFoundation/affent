@@ -1,10 +1,12 @@
 package agenteval
 
 import (
+	"context"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 )
 
 func TestCheckTraceFlagsProcessRegressions(t *testing.T) {
@@ -217,5 +219,18 @@ func TestBatchRunnerKeepsFailingWorkspace(t *testing.T) {
 	}
 	if _, err := os.Stat(workspace); err != nil {
 		t.Fatalf("failing workspace should remain: %v", err)
+	}
+}
+
+func TestBatchRunnerRunVerifierHonorsContext(t *testing.T) {
+	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Millisecond)
+	defer cancel()
+	start := time.Now()
+	_, err := (BatchRunner{}).runVerifier(ctx, t.TempDir(), ".", "sleep 1")
+	if err == nil {
+		t.Fatal("expected verifier to be killed by context timeout")
+	}
+	if elapsed := time.Since(start); elapsed > 500*time.Millisecond {
+		t.Fatalf("verifier ignored context timeout; elapsed=%s err=%v", elapsed, err)
 	}
 }

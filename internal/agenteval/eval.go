@@ -218,7 +218,7 @@ func (r BatchRunner) Run(ctx context.Context, scenario BatchScenario) BatchResul
 		res.Failures = append(res.Failures, err.Error())
 	}
 	if scenario.VerifyCommand != "" {
-		if out, err := r.runVerifier(ctx, workspace, repoRoot, scenario.VerifyCommand); err != nil {
+		if out, err := r.runVerifier(runCtx, workspace, repoRoot, scenario.VerifyCommand); err != nil {
 			res.Failures = append(res.Failures, fmt.Sprintf("verify command failed: %s: %v\n%s", scenario.VerifyCommand, err, trimOneLine(out, 1200)))
 		}
 	}
@@ -299,7 +299,7 @@ func (r BatchRunner) runAffentctl(ctx context.Context, repoRoot, workspace, trac
 	var stdout, stderr bytes.Buffer
 	cmd.Stdout = &stdout
 	cmd.Stderr = &stderr
-	err := cmd.Run()
+	err := runEvalCommand(ctx, cmd)
 	exitCode := 0
 	if err != nil {
 		exitCode = -1
@@ -315,8 +315,29 @@ func (r BatchRunner) runVerifier(ctx context.Context, workspace, repoRoot, comma
 	cmd := exec.CommandContext(ctx, "sh", "-c", command)
 	cmd.Dir = workspace
 	cmd.Env = append(os.Environ(), "PATH="+evalPath(repoRoot))
-	out, err := cmd.CombinedOutput()
-	return string(out), err
+	var out bytes.Buffer
+	cmd.Stdout = &out
+	cmd.Stderr = &out
+	err := runEvalCommand(ctx, cmd)
+	return out.String(), err
+}
+
+func runEvalCommand(ctx context.Context, cmd *exec.Cmd) error {
+	if err := startEvalCommand(cmd); err != nil {
+		return err
+	}
+	done := make(chan error, 1)
+	go func() {
+		done <- cmd.Wait()
+	}()
+	select {
+	case err := <-done:
+		return err
+	case <-ctx.Done():
+		killEvalCommandGroup(cmd)
+		<-done
+		return ctx.Err()
+	}
 }
 
 func writeScenarioFiles(root string, files map[string]string) error {
