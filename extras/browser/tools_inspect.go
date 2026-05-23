@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/base64"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -81,7 +82,10 @@ func SnapshotTool(s *Session) *agent.Tool {
 // Real-world Chromium screenshots almost always exceed this — the
 // `save_path` arg is the practical path for screenshots beyond a blank
 // page.
-const maxInlinePNGBytes = (agent.MaxToolResultBytesInContext - 64) * 3 / 4
+const (
+	maxInlinePNGBytes          = (agent.MaxToolResultBytesInContext - 64) * 3 / 4
+	maxScreenshotSavePathBytes = 4096
+)
 
 // ScreenshotTool returns `browser_screenshot`. Captures a PNG of the
 // current viewport (or the full page). With `save_path` set, writes
@@ -94,7 +98,7 @@ const maxInlinePNGBytes = (agent.MaxToolResultBytesInContext - 64) * 3 / 4
 // Opt-in via Options.IncludeScreenshot so text-only deployments don't
 // expose a tool whose output they cannot consume.
 func ScreenshotTool(s *Session) *agent.Tool {
-	schema := json.RawMessage(`{
+	schema := json.RawMessage(fmt.Sprintf(`{
         "type": "object",
         "properties": {
             "full_page": {
@@ -103,10 +107,11 @@ func ScreenshotTool(s *Session) *agent.Tool {
             },
             "save_path": {
                 "type": "string",
+                "maxLength": %d,
                 "description": "Filesystem path to write the PNG bytes to. Returns the path on success. Recommended for any non-blank page: inline base64 of a real screenshot exceeds the tool-result context budget."
             }
         }
-    }`)
+    }`, maxScreenshotSavePathBytes))
 	return &agent.Tool{
 		Name: "browser_screenshot",
 		Description: "Capture a PNG screenshot of the current page (viewport by default; " +
@@ -118,13 +123,24 @@ func ScreenshotTool(s *Session) *agent.Tool {
 		Schema: schema,
 		Execute: func(ctx context.Context, raw json.RawMessage) (string, error) {
 			var args struct {
-				FullPage bool   `json:"full_page"`
-				SavePath string `json:"save_path"`
+				FullPage bool    `json:"full_page"`
+				SavePath *string `json:"save_path"`
 			}
 			if len(raw) > 0 {
-				_ = json.Unmarshal(raw, &args)
+				if err := json.Unmarshal(raw, &args); err != nil {
+					return "", fmt.Errorf("decode args: %w", err)
+				}
 			}
-			args.SavePath = strings.TrimSpace(args.SavePath)
+			var savePath string
+			if args.SavePath != nil {
+				savePath = strings.TrimSpace(*args.SavePath)
+			}
+			if len(savePath) > maxScreenshotSavePathBytes {
+				return "", fmt.Errorf("save_path is %d bytes; browser_screenshot supports save_path up to %d bytes", len(savePath), maxScreenshotSavePathBytes)
+			}
+			if args.SavePath != nil && savePath == "" {
+				return "", errors.New("save_path must not be blank when provided")
+			}
 			if s.page == nil {
 				return "", ErrNoPage
 			}
@@ -137,8 +153,8 @@ func ScreenshotTool(s *Session) *agent.Tool {
 			if err != nil {
 				return "", fmt.Errorf("screenshot: %w", err)
 			}
-			if args.SavePath != "" {
-				resolved, err := resolveSavePath(s.cfg.WorkspaceDir, args.SavePath)
+			if savePath != "" {
+				resolved, err := resolveSavePath(s.cfg.WorkspaceDir, savePath)
 				if err != nil {
 					return "", err
 				}

@@ -1,6 +1,8 @@
 package browser
 
 import (
+	"context"
+	"encoding/json"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -58,5 +60,28 @@ func TestResolveSavePath_SandboxesScreenshotWrites(t *testing.T) {
 				t.Errorf("empty ws should pass through trimmed %q, got %q", c.in, got)
 			}
 		})
+	}
+}
+
+func TestScreenshotToolValidatesArgsBeforePageCheck(t *testing.T) {
+	tool := ScreenshotTool(&Session{})
+	if !strings.Contains(string(tool.Schema), `"maxLength": 4096`) {
+		t.Fatalf("schema should publish save_path maxLength: %s", tool.Schema)
+	}
+
+	_, err := tool.Execute(context.Background(), json.RawMessage(`{"save_path":`))
+	if err == nil || !strings.Contains(err.Error(), "decode args") {
+		t.Fatalf("invalid JSON error = %v, want decode args", err)
+	}
+
+	_, err = tool.Execute(context.Background(), json.RawMessage(`{"save_path":"   "}`))
+	if err == nil || !strings.Contains(err.Error(), "save_path must not be blank") {
+		t.Fatalf("blank save_path error = %v, want blank save_path rejection", err)
+	}
+
+	longPath := strings.Repeat("x", maxScreenshotSavePathBytes+1)
+	_, err = tool.Execute(context.Background(), json.RawMessage(`{"save_path":"`+longPath+`"}`))
+	if err == nil || !strings.Contains(err.Error(), "browser_screenshot supports save_path up to") {
+		t.Fatalf("oversized save_path error = %v, want save_path length rejection", err)
 	}
 }
