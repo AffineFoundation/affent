@@ -116,8 +116,8 @@ func printSessionPlan(convDir, sessionID string) int {
 }
 
 func sessionPlanExists(convDir, sessionID string) bool {
-	info, err := os.Stat(localSessionPlanPath(convDir, sessionID))
-	return err == nil && !info.IsDir()
+	info, err := os.Lstat(localSessionPlanPath(convDir, sessionID))
+	return err == nil && !info.IsDir() && info.Mode()&os.ModeSymlink == 0
 }
 
 func readLocalSessionPlan(convDir, sessionID string) (json.RawMessage, bool, error) {
@@ -128,7 +128,21 @@ func readLocalSessionPlan(convDir, sessionID string) (json.RawMessage, bool, err
 	if strings.ContainsAny(sessionID, `/\`) || sessionID == "." || sessionID == ".." {
 		return nil, false, fmt.Errorf("invalid session id %q", sessionID)
 	}
-	f, err := os.Open(localSessionPlanPath(convDir, sessionID))
+	path := localSessionPlanPath(convDir, sessionID)
+	info, err := os.Lstat(path)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return nil, false, nil
+		}
+		return nil, false, err
+	}
+	if info.IsDir() {
+		return nil, false, errors.New("plan path is a directory")
+	}
+	if info.Mode()&os.ModeSymlink != 0 {
+		return nil, false, errors.New("plan path must not be a symlink")
+	}
+	f, err := os.Open(path)
 	if err != nil {
 		if os.IsNotExist(err) {
 			return nil, false, nil

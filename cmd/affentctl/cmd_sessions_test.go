@@ -63,6 +63,28 @@ func TestReadLocalSessionPlan_RejectsUnsafeOrBadPlan(t *testing.T) {
 	}
 }
 
+func TestReadLocalSessionPlan_RejectsSymlinkPlan(t *testing.T) {
+	convDir := t.TempDir()
+	outside := filepath.Join(t.TempDir(), "outside-plan.json")
+	if err := os.WriteFile(outside, []byte(`{"version":1}`), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink(outside, localSessionPlanPath(convDir, "linked")); err != nil {
+		t.Skipf("symlink unavailable: %v", err)
+	}
+
+	_, found, err := readLocalSessionPlan(convDir, "linked")
+	if err == nil || found {
+		t.Fatalf("readLocalSessionPlan symlink = found:%v err:%v, want error", found, err)
+	}
+	if !strings.Contains(err.Error(), "symlink") {
+		t.Fatalf("error = %v, want symlink", err)
+	}
+	if sessionPlanExists(convDir, "linked") {
+		t.Fatal("sessionPlanExists must not follow symlink plans")
+	}
+}
+
 func TestSessionsCmd_PrintsPlanAndMarksListing(t *testing.T) {
 	workspace := t.TempDir()
 	convDir := filepath.Join(workspace, ".affentctl")

@@ -439,10 +439,14 @@ func summarizeDurableSession(pool *SessionPool, id string) (sessionSummary, bool
 		return sessionSummary{}, false, err
 	}
 	summary.HasEvents = exists
-	if exists, err = mergeStat(filepath.Join(dir, "plan.json")); err != nil {
+	var planMod time.Time
+	if exists, planMod, err = durableRegularFileModTime(filepath.Join(dir, "plan.json")); err != nil {
 		return sessionSummary{}, false, err
 	}
 	summary.HasPlan = exists
+	if exists && planMod.After(newest) {
+		newest = planMod
+	}
 	summary.HasArtifacts = dirHasAnyEntry(filepath.Join(dir, filepath.FromSlash(artifactPathPrefix)))
 	summary.HasRuntimeSkills = dirHasAnyEntry(agent.DefaultWorkspaceSkillDir(dir))
 	summary.HasMemory = durableMemoryExists(dir)
@@ -491,6 +495,20 @@ func mergeSessionSummaries(a, b sessionSummary) sessionSummary {
 		a.Capabilities = b.Capabilities
 	}
 	return a
+}
+
+func durableRegularFileModTime(path string) (bool, time.Time, error) {
+	fi, err := os.Lstat(path)
+	if err != nil {
+		if errors.Is(err, os.ErrNotExist) {
+			return false, time.Time{}, nil
+		}
+		return false, time.Time{}, err
+	}
+	if fi.IsDir() || fi.Mode()&os.ModeSymlink != 0 {
+		return false, time.Time{}, nil
+	}
+	return true, fi.ModTime(), nil
 }
 
 func durableMemoryExists(sessionDir string) bool {

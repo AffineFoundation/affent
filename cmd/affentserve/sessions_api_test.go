@@ -8,6 +8,7 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/rs/zerolog"
@@ -241,6 +242,37 @@ func TestHandleSessionPlan_Returns404WhenNoPlan(t *testing.T) {
 	handleSessionRoutes(pool).ServeHTTP(w, r)
 	if got := w.Result().StatusCode; got != http.StatusNotFound {
 		t.Fatalf("status = %d, want 404; body=%s", got, w.Body.String())
+	}
+}
+
+func TestHandleSessionPlanRejectsSymlinkPlan(t *testing.T) {
+	memRoot := t.TempDir()
+	pool := newPoolWithMemoryRoot(t, memRoot)
+	createDurableSessionDir(t, pool, "link-plan")
+	outside := filepath.Join(t.TempDir(), "outside-plan.json")
+	if err := os.WriteFile(outside, []byte(`{"version":1}`), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink(outside, filepath.Join(pool.sessionDirPath("link-plan"), "plan.json")); err != nil {
+		t.Skipf("symlink unavailable: %v", err)
+	}
+
+	_, found, err := readSessionPlan(pool, "link-plan")
+	if err == nil || found {
+		t.Fatalf("readSessionPlan symlink = found:%v err:%v, want error", found, err)
+	}
+	if !strings.Contains(err.Error(), "symlink") {
+		t.Fatalf("error = %v, want symlink", err)
+	}
+	summary, foundSummary, err := summarizeDurableSession(pool, "link-plan")
+	if err != nil {
+		t.Fatalf("summarizeDurableSession: %v", err)
+	}
+	if !foundSummary {
+		t.Fatal("durable session should still be found")
+	}
+	if summary.HasPlan {
+		t.Fatalf("symlink plan must not set has_plan: %+v", summary)
 	}
 }
 

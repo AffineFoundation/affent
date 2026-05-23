@@ -47,6 +47,19 @@ func handleSessionPlan(pool *SessionPool, sessionID string, w http.ResponseWrite
 
 func readSessionPlan(pool *SessionPool, sessionID string) (json.RawMessage, bool, error) {
 	path := filepath.Join(pool.sessionDirPath(sessionID), "plan.json")
+	info, err := os.Lstat(path)
+	if err != nil {
+		if errors.Is(err, os.ErrNotExist) {
+			return nil, false, nil
+		}
+		return nil, false, err
+	}
+	if info.IsDir() {
+		return nil, false, errors.New("plan path is a directory")
+	}
+	if info.Mode()&os.ModeSymlink != 0 {
+		return nil, false, errors.New("plan path must not be a symlink")
+	}
 	f, err := os.Open(path)
 	if err != nil {
 		if errors.Is(err, os.ErrNotExist) {
