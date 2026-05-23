@@ -62,6 +62,7 @@ func parseFlagsAndConfig(argv []string) (Config, error) {
 		model              = fs.String("model", "", "Default model id reported by /v1/models and used when a request omits 'model' (env: AFFENTSERVE_MODEL).")
 		authToken          = fs.String("auth-token", "", "Optional bearer token gating the server itself (env: AFFENTSERVE_AUTH_TOKEN).")
 		workspaceRoot      = fs.String("workspace-root", "", "Parent directory for per-session workspaces. Empty creates per-session temp dirs.")
+		memoryRoot         = fs.String("memory-root", "", "Parent directory for durable per-session state: conversation log, event log, runtime skills, and memory. Empty defaults under --workspace-root. Env: AFFENTSERVE_MEMORY_ROOT.")
 		maxSessions        = fs.Int("max-sessions", 0, "LRU upper bound on in-memory sessions (default 32).")
 		sessionIdleTTL     = fs.String("session-idle-ttl", "", "Positive duration for how long an idle session stays in the pool before GC (default 10m).")
 		sessionRetention   = fs.String("session-retention", "", "How long durable session dirs (conv log + memory) live on disk after last activity. Empty disables — dirs live until explicit DELETE. Set to a Go duration like '720h' (30d) to enable background GC.")
@@ -137,6 +138,9 @@ func parseFlagsAndConfig(argv []string) (Config, error) {
 	}
 	if *workspaceRoot != "" {
 		cfg.WorkspaceRoot = *workspaceRoot
+	}
+	if *memoryRoot != "" {
+		cfg.MemoryRoot = *memoryRoot
 	}
 	if setFlags["max-sessions"] {
 		cfg.maxSessionsSet = true

@@ -240,16 +240,18 @@ directories or calls Docker; Docker memory limits must be at least `128m`, and
 `make image-serve` is the shortest production-image smoke path for the HTTP
 service. It runs the runtime image through `affentctl image run`, publishes
 `127.0.0.1:7777:7777` by default, listens on `0.0.0.0:7777` inside the
-container, and stores server session workspaces under the persistent
-`/workspace/sessions` mount. Because this entrypoint is already inside the
-memory-limited runtime container, it enables `affentserve --builtins` so the HTTP
-service can use shell/file tools; pass `SERVE_ARGS='--builtins=false'` when you
-intentionally want a read-only/tool-light service. It also sets `--timeout 0s`
-so the wrapper does not stop the service after the one-shot command default.
-Override `SERVE_PUBLISH`, `SERVE_LISTEN`, `SERVE_WORKSPACE_ROOT`,
-`IMAGE_RUN_ARGS`, or `SERVE_ARGS` only when that value is intentionally
-different for your deployment; use `SERVE_PUBLISH=7777:7777` only when you
-intentionally want Docker to bind on all host interfaces.
+container, stores per-session workspaces under `/workspace/sessions`, and stores
+durable session state under `/workspace/session-state`. Both paths are inside
+the persistent `/workspace` mount. Because this entrypoint is already inside the
+memory-limited runtime container, it enables `affentserve --builtins` so the
+HTTP service can use shell/file tools; pass `SERVE_ARGS='--builtins=false'` when
+you intentionally want a read-only/tool-light service. It also sets
+`--timeout 0s` so the wrapper does not stop the service after the one-shot
+command default. Override `SERVE_PUBLISH`, `SERVE_LISTEN`,
+`SERVE_WORKSPACE_ROOT`, `SERVE_MEMORY_ROOT`, `IMAGE_RUN_ARGS`, or `SERVE_ARGS`
+only when that value is intentionally different for your deployment; use
+`SERVE_PUBLISH=7777:7777` only when you intentionally want Docker to bind on all
+host interfaces.
 
 For repeatable local use or evals:
 
@@ -341,8 +343,10 @@ AFFENTSERVE_AUTH_TOKEN
 AFFENTSERVE_WORKSPACE_ROOT
 AFFENTSERVE_MEMORY_ROOT
 AFFENTSERVE_MEMORY
+AFFENTSERVE_BUILTINS
 AFFENTSERVE_SUBAGENT
 AFFENTSERVE_SUBAGENT_MAX_DEPTH
+AFFENTSERVE_FOCUSED_TASKS
 AFFENTSERVE_SESSION_RETENTION
 AFFENTSERVE_TEMPERATURE
 AFFENTSERVE_TOP_P

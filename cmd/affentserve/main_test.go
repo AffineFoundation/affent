@@ -165,6 +165,21 @@ func TestParseFlagsAndConfig_BuiltinsFromEnv(t *testing.T) {
 	}
 }
 
+func TestParseFlagsAndConfig_MemoryRootFromCLI(t *testing.T) {
+	t.Setenv("AFFENTSERVE_MEMORY_ROOT", "/env-state")
+	cfg, err := parseFlagsAndConfig([]string{
+		"--base-url", "https://example/v1",
+		"--model", "demo",
+		"--memory-root", "/cli-state",
+	})
+	if err != nil {
+		t.Fatalf("parseFlagsAndConfig: %v", err)
+	}
+	if cfg.MemoryRoot != "/cli-state" {
+		t.Fatalf("--memory-root should override AFFENTSERVE_MEMORY_ROOT, got %q", cfg.MemoryRoot)
+	}
+}
+
 func TestParseFlagsAndConfig_RejectsNonPositiveLimitsFromCLI(t *testing.T) {
 	for _, c := range []struct {
 		name string

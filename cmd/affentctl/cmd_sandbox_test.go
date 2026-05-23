@@ -222,9 +222,10 @@ func TestMakeImageServeEnablesBuiltinsInsideRuntimeContainer(t *testing.T) {
 	}
 	body := string(raw)
 	for _, want := range []string{
+		"SERVE_MEMORY_ROOT ?= /workspace/session-state",
 		"image-serve: affentctl",
 		"image run --timeout 0s --publish \"$(SERVE_PUBLISH)\"",
-		"affentserve --listen \"$(SERVE_LISTEN)\" --workspace-root \"$(SERVE_WORKSPACE_ROOT)\" --builtins $(SERVE_ARGS)",
+		"affentserve --listen \"$(SERVE_LISTEN)\" --workspace-root \"$(SERVE_WORKSPACE_ROOT)\" --memory-root \"$(SERVE_MEMORY_ROOT)\" --builtins $(SERVE_ARGS)",
 	} {
 		if !strings.Contains(body, want) {
 			t.Fatalf("Makefile image-serve target missing %q", want)
