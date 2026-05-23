@@ -128,6 +128,14 @@ func TestSessionSearchTool_BadArgs(t *testing.T) {
 	}
 }
 
+func TestSessionSearchToolRejectsUnknownArgs(t *testing.T) {
+	tool := sessionSearchTool(t.TempDir(), "current")
+	_, err := tool.Execute(context.Background(), json.RawMessage(`{"query":"deploy","session_id":"past"}`))
+	if err == nil || !strings.Contains(err.Error(), `unknown field "session_id"`) {
+		t.Fatalf("error = %v, want unknown field", err)
+	}
+}
+
 // TestSessionSearchTool_HitsAndCurrentSessionExcluded pins the two
 // load-bearing behaviors: (a) search across other sessions finds
 // matching transcript lines; (b) the CURRENT session is excluded

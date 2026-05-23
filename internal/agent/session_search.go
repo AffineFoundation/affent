@@ -53,12 +53,12 @@ func sessionSearchTool(sessionsDir, currentSessionID string) *Tool {
 		Description: "Search past session transcripts in this workspace. Returns snippets with session id and turn index. Use for transcript recall; use memory for durable facts.",
 		Schema:      json.RawMessage(schema),
 		Execute: func(ctx context.Context, args json.RawMessage) (string, error) {
-			var p struct {
+			p, err := decodeStrictToolArgs[struct {
 				Query         string `json:"query"`
 				TopK          int    `json:"top_k"`
 				MaxPerSession int    `json:"max_per_session"`
-			}
-			if err := json.Unmarshal(args, &p); err != nil {
+			}](args)
+			if err != nil {
 				return "", fmt.Errorf("decode args: %w", err)
 			}
 			p.Query = sessionsearch.NormalizeQuery(p.Query)
