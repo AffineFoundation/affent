@@ -97,7 +97,13 @@ image-serve-up:
 			echo "container $(SERVE_CONTAINER_NAME) is not an Affent runtime container" >&2; \
 			exit 2; \
 		fi; \
-		echo "container $(SERVE_CONTAINER_NAME) already exists; waiting for health"; \
+		running=$$(docker inspect "$(SERVE_CONTAINER_NAME)" --format '{{.State.Running}}' 2>/dev/null); \
+		if test "$$running" = "true"; then \
+			echo "container $(SERVE_CONTAINER_NAME) already running; waiting for health"; \
+		else \
+			echo "container $(SERVE_CONTAINER_NAME) exists but is not running; starting"; \
+			docker start "$(SERVE_CONTAINER_NAME)"; \
+		fi; \
 	else \
 		$(MAKE) image-serve; \
 	fi
