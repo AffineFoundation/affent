@@ -76,12 +76,18 @@ type ToolRequestPayload struct {
 	// Small values are exact; large strings may include a truncation
 	// marker, and extremely large argument objects may be replaced with
 	// __affent_truncated metadata.
-	Args                map[string]any `json:"args"`
-	OriginalTool        string         `json:"original_tool,omitempty"`
-	OriginalArgsSummary string         `json:"original_args_summary,omitempty"`
-	Canonicalized       bool           `json:"canonicalized,omitempty"`
-	ArgsRepaired        bool           `json:"args_repaired,omitempty"`
-	RepairNotes         []string       `json:"repair_notes,omitempty"`
+	Args map[string]any `json:"args"`
+	// Args* fields describe event-level argument capping so UIs/evals
+	// do not need to parse marker strings in Args.
+	ArgsTruncated       bool     `json:"args_truncated"`
+	ArgsBytes           int      `json:"args_bytes"`
+	ArgsOmittedBytes    int      `json:"args_omitted_bytes"`
+	ArgsCapBytes        int      `json:"args_cap_bytes"`
+	OriginalTool        string   `json:"original_tool,omitempty"`
+	OriginalArgsSummary string   `json:"original_args_summary,omitempty"`
+	Canonicalized       bool     `json:"canonicalized,omitempty"`
+	ArgsRepaired        bool     `json:"args_repaired,omitempty"`
+	RepairNotes         []string `json:"repair_notes,omitempty"`
 }
 
 type ToolResultPayload struct {

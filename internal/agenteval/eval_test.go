@@ -55,7 +55,7 @@ func TestParseTraceFileReadsToolRequestsAndFinalText(t *testing.T) {
 	dir := t.TempDir()
 	tracePath := filepath.Join(dir, "trace.jsonl")
 	body := strings.Join([]string{
-		`{"type":"tool.request","data":{"call_id":"c1","tool":"shell","args":{"command":"go test ./..."},"original_tool":"Shell","original_args_summary":"{\"cmd\":\"go test ./...\"}","canonicalized":true,"args_repaired":true,"repair_notes":["renamed tool","renamed field"]}}`,
+		`{"type":"tool.request","data":{"call_id":"c1","tool":"shell","args":{"command":"go test ./..."},"args_truncated":true,"args_bytes":70000,"args_omitted_bytes":512,"args_cap_bytes":65536,"original_tool":"Shell","original_args_summary":"{\"cmd\":\"go test ./...\"}","canonicalized":true,"args_repaired":true,"repair_notes":["renamed tool","renamed field"]}}`,
 		`{"type":"tool.result","data":{"call_id":"c1","result":"ok","exit_code":0,"duration_ms":17,"result_truncated":true,"result_bytes":300000,"result_omitted_bytes":4096,"result_cap_bytes":262144}}`,
 		`{"type":"tool.result","data":{"call_id":"guarded","result":"blocked","exit_code":1}}`,
 		`{"type":"usage","data":{"input_tokens":11,"output_tokens":7}}`,
@@ -79,6 +79,9 @@ func TestParseTraceFileReadsToolRequestsAndFinalText(t *testing.T) {
 	}
 	if !tc.Canonicalized || !tc.ArgsRepaired || tc.OriginalTool != "Shell" || !strings.Contains(tc.OriginalArgsSummary, "cmd") || len(tc.RepairNotes) != 2 {
 		t.Fatalf("tool repair metadata missing: %+v", tc)
+	}
+	if !tc.ArgsTruncated || tc.ArgsBytes != 70000 || tc.ArgsOmittedBytes != 512 || tc.ArgsCapBytes != 65536 {
+		t.Fatalf("tool request truncation metadata not parsed: %+v", tc)
 	}
 	if tc.Result != "ok" || tc.ExitCode != 0 || tc.IsErr {
 		t.Fatalf("tool result not stitched into request: %+v", tc)

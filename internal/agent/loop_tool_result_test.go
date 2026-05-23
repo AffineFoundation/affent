@@ -436,6 +436,18 @@ func TestRunTurn_RepairsToolArgumentsBeforeDispatch(t *testing.T) {
 				if len(gotRepair.RepairNotes) == 0 {
 					t.Fatalf("expected repair notes, got %+v", gotRepair)
 				}
+				if gotRepair.ArgsTruncated {
+					t.Fatalf("small repaired args should not be marked truncated: %+v", gotRepair)
+				}
+				if gotRepair.ArgsBytes != len(gotArgs) {
+					t.Fatalf("ArgsBytes = %d, want %d", gotRepair.ArgsBytes, len(gotArgs))
+				}
+				if gotRepair.ArgsOmittedBytes != 0 {
+					t.Fatalf("ArgsOmittedBytes = %d, want 0", gotRepair.ArgsOmittedBytes)
+				}
+				if gotRepair.ArgsCapBytes != maxToolRequestArgsEventBytes {
+					t.Fatalf("ArgsCapBytes = %d, want %d", gotRepair.ArgsCapBytes, maxToolRequestArgsEventBytes)
+				}
 				if gotArgs != `{"max_bytes":128,"path":"README.md"}` {
 					t.Fatalf("tool saw args %s, want repaired compact json", gotArgs)
 				}
@@ -449,9 +461,22 @@ func TestRunTurn_RepairsToolArgumentsBeforeDispatch(t *testing.T) {
 
 func TestToolRequestArgsViewCapsLargeStringValues(t *testing.T) {
 	raw := json.RawMessage(`{"path":"huge.txt","content":` + mustJSON(t, strings.Repeat("x", maxToolRequestArgStringBytes+1024)) + `}`)
-	got := toolRequestArgsView(raw)
+	view := toolRequestArgsEventView(raw)
+	got := view.Args
 	if got["path"] != "huge.txt" {
 		t.Fatalf("small field should survive exactly, got %+v", got)
+	}
+	if !view.Truncated {
+		t.Fatal("large string arg should mark request args truncated")
+	}
+	if view.Bytes != len(raw) {
+		t.Fatalf("ArgsBytes = %d, want %d", view.Bytes, len(raw))
+	}
+	if view.OmittedBytes != 1024 {
+		t.Fatalf("ArgsOmittedBytes = %d, want 1024", view.OmittedBytes)
+	}
+	if view.CapBytes != maxToolRequestArgsEventBytes {
+		t.Fatalf("ArgsCapBytes = %d, want %d", view.CapBytes, maxToolRequestArgsEventBytes)
 	}
 	content, ok := got["content"].(string)
 	if !ok {
@@ -477,12 +502,25 @@ func TestToolRequestArgsViewFallsBackWhenObjectStillTooLarge(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	got := toolRequestArgsView(raw)
+	view := toolRequestArgsEventView(raw)
+	got := view.Args
 	if got["__affent_truncated"] == nil {
 		t.Fatalf("expected fallback truncation metadata, got %v", got)
 	}
 	if got["__affent_original_bytes"] == nil {
 		t.Fatalf("expected original byte count, got %v", got)
+	}
+	if !view.Truncated {
+		t.Fatal("fallback args event should be marked truncated")
+	}
+	if view.Bytes != len(raw) {
+		t.Fatalf("ArgsBytes = %d, want %d", view.Bytes, len(raw))
+	}
+	if view.OmittedBytes != len(raw) {
+		t.Fatalf("ArgsOmittedBytes = %d, want original %d", view.OmittedBytes, len(raw))
+	}
+	if view.CapBytes != maxToolRequestArgsEventBytes {
+		t.Fatalf("ArgsCapBytes = %d, want %d", view.CapBytes, maxToolRequestArgsEventBytes)
 	}
 	encoded, err := json.Marshal(got)
 	if err != nil {

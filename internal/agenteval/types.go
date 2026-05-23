@@ -145,6 +145,14 @@ type ToolCall struct {
 	// tool.request event. Small values are exact; large argument values
 	// may be event-capped by the runtime.
 	Args map[string]any
+	// ArgsTruncated reports whether tool.request args hit a value or
+	// event cap. ArgsBytes is the repaired argument JSON byte count;
+	// ArgsOmittedBytes is the number of original argument bytes omitted
+	// from Args; ArgsCapBytes is the event cap used by the runtime.
+	ArgsTruncated    bool
+	ArgsBytes        int
+	ArgsOmittedBytes int
+	ArgsCapBytes     int
 	// OriginalTool is the model-emitted tool name before runtime
 	// canonicalization, when different from Tool or when trace producers
 	// include it for diagnostics.

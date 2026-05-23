@@ -2,6 +2,7 @@ package agent
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
@@ -582,11 +583,16 @@ func (l *Loop) runTurn(ctx context.Context, turnID, userText string) {
 				originalArgsSummary = summarizeOriginalToolArgs(tc.Function.Arguments)
 			}
 			toolStats.ToolRequests++
+			argsView := toolRequestArgsEventView(args)
 			l.publish(sse.TypeToolRequest, sse.ToolRequestPayload{
 				TurnID:              turnID,
 				CallID:              callID,
 				Tool:                toolName,
-				Args:                toolRequestArgsView(args),
+				Args:                argsView.Args,
+				ArgsTruncated:       argsView.Truncated,
+				ArgsBytes:           argsView.Bytes,
+				ArgsOmittedBytes:    argsView.OmittedBytes,
+				ArgsCapBytes:        argsView.CapBytes,
 				OriginalTool:        tc.Function.Name,
 				OriginalArgsSummary: originalArgsSummary,
 				Canonicalized:       canonicalChanged,
@@ -817,13 +823,20 @@ func (l *Loop) publishAndAppendToolResult(callID, name, result string, isErr boo
 	}
 }
 
-
 func (l *Loop) appendSkippedToolResults(turnID string, calls []ToolCall, content string) int {
 	for _, skipped := range calls {
 		callID := skipped.ID
 		name := skipped.Function.Name
+		argsView := toolRequestArgsEventView(json.RawMessage(`{}`))
 		l.publish(sse.TypeToolRequest, sse.ToolRequestPayload{
-			TurnID: turnID, CallID: callID, Tool: name, Args: map[string]any{},
+			TurnID:           turnID,
+			CallID:           callID,
+			Tool:             name,
+			Args:             argsView.Args,
+			ArgsBytes:        argsView.Bytes,
+			ArgsCapBytes:     argsView.CapBytes,
+			ArgsTruncated:    argsView.Truncated,
+			ArgsOmittedBytes: argsView.OmittedBytes,
 		})
 		l.publish(sse.TypeToolResult, toolResultEventPayload(callID, 1, content))
 		if appendErr := l.Conv.Append(ChatMessage{
@@ -959,7 +972,6 @@ func (l *Loop) publish(t string, payload any) {
 		l.Log.Warn().Str("type", t).Msg("event channel full; dropped")
 	}
 }
-
 
 // ErrTurnInFlight is returned by SendUser when a turn is already
 // running on this loop. Callers (affentctl, affentserve, cron driver)

@@ -26,53 +26,76 @@ func summarizeOriginalToolArgs(raw string) string {
 }
 
 func toolRequestArgsView(args json.RawMessage) map[string]any {
+	return toolRequestArgsEventView(args).Args
+}
+
+type toolRequestArgsEvent struct {
+	Args         map[string]any
+	Truncated    bool
+	Bytes        int
+	OmittedBytes int
+	CapBytes     int
+}
+
+func toolRequestArgsEventView(args json.RawMessage) toolRequestArgsEvent {
+	view := toolRequestArgsEvent{
+		Args:     map[string]any{},
+		Bytes:    len(args),
+		CapBytes: maxToolRequestArgsEventBytes,
+	}
 	var obj map[string]any
 	if err := json.Unmarshal(args, &obj); err != nil || obj == nil {
-		return map[string]any{}
+		return view
 	}
-	cappedAny, _ := capToolRequestArgValue(obj)
+	cappedAny, omitted := capToolRequestArgValue(obj)
 	capped, ok := cappedAny.(map[string]any)
 	if !ok || capped == nil {
-		return map[string]any{}
+		return view
 	}
 	raw, err := json.Marshal(capped)
 	if err == nil && len(raw) <= maxToolRequestArgsEventBytes {
-		return capped
+		view.Args = capped
+		view.Truncated = omitted > 0
+		view.OmittedBytes = omitted
+		return view
 	}
-	return map[string]any{
+	view.Args = map[string]any{
 		"__affent_truncated":      fmt.Sprintf("tool request args exceeded %d-byte event cap", maxToolRequestArgsEventBytes),
 		"__affent_original_bytes": len(args),
 	}
+	view.Truncated = true
+	view.OmittedBytes = len(args)
+	return view
 }
 
-func capToolRequestArgValue(v any) (any, bool) {
+func capToolRequestArgValue(v any) (any, int) {
 	switch x := v.(type) {
 	case string:
 		if len(x) <= maxToolRequestArgStringBytes {
-			return x, false
+			return x, 0
 		}
 		cut := textutil.AlignBackward(x, maxToolRequestArgStringBytes)
-		return x[:cut] + fmt.Sprintf("\n... [%d more bytes truncated from tool.request arg string]", len(x)-cut), true
+		return x[:cut] + fmt.Sprintf("\n... [%d more bytes truncated from tool.request arg string]", len(x)-cut), len(x) - cut
 	case map[string]any:
 		out := make(map[string]any, len(x))
-		truncated := false
+		omitted := 0
 		for k, v := range x {
-			capped, did := capToolRequestArgValue(v)
+			capped, n := capToolRequestArgValue(v)
 			out[k] = capped
-			truncated = truncated || did
+			omitted += n
 		}
-		return out, truncated
+		return out, omitted
 	case []any:
 		out := make([]any, len(x))
-		truncated := false
+		omitted := 0
 		for i, v := range x {
-			capped, did := capToolRequestArgValue(v)
+			capped, n := capToolRequestArgValue(v)
 			out[i] = capped
-			truncated = truncated || did
+			omitted += n
 		}
-		return out, truncated
+		return out, omitted
 	default:
-		return v, false
+		return v, 0
 	}
 }
 
