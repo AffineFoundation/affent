@@ -87,7 +87,20 @@ image-serve: affentctl
 	"$(AFFENTCTL)" image run --workspace "$(IMAGE_WORKSPACE)" --memory "$(CONTAINER_MEMORY)" --cpus "$(CONTAINER_CPUS)" --pids-limit "$(CONTAINER_PIDS)" $(if $(SERVE_CONTAINER_NAME),--name "$(SERVE_CONTAINER_NAME)") --detach --rm=false --publish "$(SERVE_PUBLISH)" $(IMAGE_RUN_ARGS) -- affentserve --listen "$(SERVE_LISTEN)" --workspace-root "$(SERVE_WORKSPACE_ROOT)" --memory-root "$(SERVE_MEMORY_ROOT)" --builtins $(SERVE_ARGS)
 
 image-serve-up:
-	$(MAKE) image-serve
+	@if test -z "$(SERVE_CONTAINER_NAME)"; then \
+		echo "SERVE_CONTAINER_NAME is required, e.g. make image-serve-up SERVE_CONTAINER_NAME=affent-serve" >&2; \
+		exit 2; \
+	fi; \
+	if docker inspect "$(SERVE_CONTAINER_NAME)" >/dev/null 2>&1; then \
+		label=$$(docker inspect "$(SERVE_CONTAINER_NAME)" --format '{{index .Config.Labels "affent.runtime"}}' 2>/dev/null); \
+		if test "$$label" != "true"; then \
+			echo "container $(SERVE_CONTAINER_NAME) is not an Affent runtime container" >&2; \
+			exit 2; \
+		fi; \
+		echo "container $(SERVE_CONTAINER_NAME) already exists; waiting for health"; \
+	else \
+		$(MAKE) image-serve; \
+	fi
 	$(MAKE) image-serve-health-wait
 
 image-serve-status:
