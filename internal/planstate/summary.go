@@ -20,6 +20,7 @@ type Summary struct {
 	CompletedSteps   int    `json:"completed_steps"`
 	Active           bool   `json:"active"`
 	Blocked          bool   `json:"blocked"`
+	Done             bool   `json:"done"`
 	CurrentStep      string `json:"current_step,omitempty"`
 	CurrentStepIndex int    `json:"current_step_index,omitempty"`
 	Error            bool   `json:"error"`
@@ -59,6 +60,11 @@ func SummarizeJSON(raw json.RawMessage) (Summary, error) {
 		}
 	}
 	out.Label = fmt.Sprintf("plan:%d/%d", out.CompletedSteps, out.TotalSteps)
+	if out.CompletedSteps == out.TotalSteps {
+		out.Done = true
+		out.Label += ":done"
+		return out, nil
+	}
 	if out.Active {
 		out.Label += ":active"
 	}

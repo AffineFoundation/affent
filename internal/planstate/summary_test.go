@@ -28,6 +28,11 @@ func TestSummarizeJSONLabelsPlanProgress(t *testing.T) {
 			want: Summary{Label: "plan:0/1", TotalSteps: 1, CurrentStep: "next step", CurrentStepIndex: 1},
 		},
 		{
+			name: "completed plan is done",
+			raw:  `{"steps":[{"text":"done one","status":"completed"},{"text":"done two","status":"completed"}]}`,
+			want: Summary{Label: "plan:2/2:done", TotalSteps: 2, CompletedSteps: 2, Done: true},
+		},
+		{
 			name: "empty plan",
 			raw:  `{"steps":[]}`,
 			want: Summary{Label: LabelEmpty},

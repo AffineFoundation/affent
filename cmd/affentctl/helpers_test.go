@@ -480,6 +480,24 @@ func TestFormatExistingPlanLineSkipsMissingPlan(t *testing.T) {
 	}
 }
 
+func TestFormatExistingPlanLineReportsDonePlan(t *testing.T) {
+	workspace := t.TempDir()
+	convDir := filepath.Join(workspace, ".affentctl")
+	if err := os.MkdirAll(convDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	b := &loopBundle{
+		sessionID: "sess_done_plan",
+		workspace: workspace,
+	}
+	if err := os.WriteFile(localSessionPlanPath(convDir, b.sessionID), []byte(`{"version":1,"steps":[{"text":"inspect","status":"completed"},{"text":"commit","status":"completed"}]}`+"\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if got := formatExistingPlanLine(currentSessionPlanSummary(b)); got != "[plan] plan:2/2:done" {
+		t.Fatalf("done plan line = %q", got)
+	}
+}
+
 // TestHandleSlash pins the REPL slash-command dispatcher. /exit and
 // its aliases must return (continue=false, exit=0); /help / /sid /
 // /plan / /plan clear / /cancel / unknown must keep the REPL alive. Casing and trailing
