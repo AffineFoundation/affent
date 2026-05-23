@@ -236,6 +236,37 @@ func normalizePlanSteps(steps []planStep) ([]planStep, error) {
 	return out, nil
 }
 
+func normalizePersistedPlanSteps(steps []planStep) ([]planStep, error) {
+	out := make([]planStep, 0, len(steps))
+	seenText := map[string]bool{}
+	inProgress := 0
+	for i, step := range steps {
+		n, err := normalizePlanStep(step)
+		if err != nil {
+			return nil, fmt.Errorf("step %d: %w", i+1, err)
+		}
+		textKey := canonicalPlanStepText(n.Text)
+		if seenText[textKey] {
+			continue
+		}
+		seenText[textKey] = true
+		if n.Status == "" {
+			n.Status = "pending"
+		}
+		if n.Status == "in_progress" {
+			inProgress++
+		}
+		out = append(out, n)
+	}
+	if len(out) > maxPlanSteps {
+		return nil, fmt.Errorf("plan supports at most %d steps\nNext: clear the plan and set a concise replacement", maxPlanSteps)
+	}
+	if inProgress > 1 {
+		return nil, errors.New("only one plan step may be in_progress\nNext: clear the plan and set a concise replacement")
+	}
+	return out, nil
+}
+
 func canonicalPlanStepText(text string) string {
 	return strings.ToLower(strings.Join(strings.Fields(text), " "))
 }
@@ -396,7 +427,7 @@ func readPlanState(path string) (planState, error) {
 		st.Steps = []planStep{}
 	}
 	if len(st.Steps) > 0 {
-		steps, err := normalizePlanSteps(st.Steps)
+		steps, err := normalizePersistedPlanSteps(st.Steps)
 		if err != nil {
 			return planState{}, fmt.Errorf("read plan state: %w", err)
 		}

@@ -53,7 +53,7 @@ func TestPlanToolSetUpdateViewPersists(t *testing.T) {
 
 func TestPlanToolViewNormalizesPersistedPlanState(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "plan.json")
-	if err := os.WriteFile(path, []byte(`{"version":1,"steps":[{"text":"  Ship  ","status":" IN_PROGRESS ","evidence":[" file ","file"," test "]},{"text":"Finish"}]}`), 0o644); err != nil {
+	if err := os.WriteFile(path, []byte(`{"version":1,"steps":[{"text":"  Ship  ","status":" IN_PROGRESS ","evidence":[" file ","file"," test "]},{"text":" ship ","status":"pending"},{"text":"Finish"}]}`), 0o644); err != nil {
 		t.Fatal(err)
 	}
 	out, err := planTool(path).Execute(context.Background(), json.RawMessage(`{"action":"view"}`))
@@ -63,6 +63,9 @@ func TestPlanToolViewNormalizesPersistedPlanState(t *testing.T) {
 	var st planState
 	if err := json.Unmarshal([]byte(out), &st); err != nil {
 		t.Fatalf("decode view response: %v\n%s", err, out)
+	}
+	if len(st.Steps) != 2 {
+		t.Fatalf("steps len = %d, want duplicate persisted step dropped: %+v", len(st.Steps), st.Steps)
 	}
 	if st.Steps[0].Text != "Ship" || st.Steps[0].Status != "in_progress" || st.Steps[1].Status != "pending" {
 		t.Fatalf("normalized steps = %+v", st.Steps)
