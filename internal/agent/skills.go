@@ -486,7 +486,18 @@ func InstallRuntimeSkill(root string, skill Skill) (Skill, error) {
 	if err := os.MkdirAll(dir, 0o755); err != nil {
 		return Skill{}, fmt.Errorf("create skill directory: %w", err)
 	}
+	if err := rejectRuntimeSkillDirSymlink(dir); err != nil {
+		return Skill{}, err
+	}
 	normalized.Source = "file://" + filepath.ToSlash(filepath.Join(dir, "SKILL.md"))
+	manifestPath := filepath.Join(dir, "skill.json")
+	bodyPath := filepath.Join(dir, "SKILL.md")
+	if err := rejectRuntimeSkillFileTarget(manifestPath); err != nil {
+		return Skill{}, err
+	}
+	if err := rejectRuntimeSkillFileTarget(bodyPath); err != nil {
+		return Skill{}, err
+	}
 	manifest := runtimeSkillManifest{
 		Name:           normalized.Name,
 		Description:    normalized.Description,
@@ -496,10 +507,10 @@ func InstallRuntimeSkill(root string, skill Skill) (Skill, error) {
 	if err != nil {
 		return Skill{}, err
 	}
-	if err := os.WriteFile(filepath.Join(dir, "skill.json"), append(raw, '\n'), 0o644); err != nil {
+	if err := writeRuntimeSkillFile(manifestPath, append(raw, '\n')); err != nil {
 		return Skill{}, fmt.Errorf("write skill manifest: %w", err)
 	}
-	if err := os.WriteFile(filepath.Join(dir, "SKILL.md"), []byte(normalized.Body+"\n"), 0o644); err != nil {
+	if err := writeRuntimeSkillFile(bodyPath, []byte(normalized.Body+"\n")); err != nil {
 		return Skill{}, fmt.Errorf("write skill body: %w", err)
 	}
 	return normalized, nil
@@ -527,6 +538,9 @@ func ProposeRuntimeSkill(root string, skill Skill) (RuntimeSkillProposal, error)
 	if err := os.MkdirAll(dir, 0o755); err != nil {
 		return RuntimeSkillProposal{}, fmt.Errorf("create pending skill directory: %w", err)
 	}
+	if err := rejectRuntimeSkillDirSymlink(dir); err != nil {
+		return RuntimeSkillProposal{}, err
+	}
 	raw, err := json.MarshalIndent(proposal, "", "  ")
 	if err != nil {
 		return RuntimeSkillProposal{}, err
@@ -534,7 +548,7 @@ func ProposeRuntimeSkill(root string, skill Skill) (RuntimeSkillProposal, error)
 	if len(raw) > maxRuntimeSkillProposalBytes {
 		return RuntimeSkillProposal{}, fmt.Errorf("skill proposal is %d bytes; max %d", len(raw), maxRuntimeSkillProposalBytes)
 	}
-	if err := os.WriteFile(filepath.Join(dir, id+".json"), append(raw, '\n'), 0o644); err != nil {
+	if err := writeRuntimeSkillFile(filepath.Join(dir, id+".json"), append(raw, '\n')); err != nil {
 		return RuntimeSkillProposal{}, fmt.Errorf("write pending skill proposal: %w", err)
 	}
 	return proposal, nil
@@ -641,12 +655,15 @@ func loadRuntimeSkill(dir string) (Skill, error) {
 }
 
 func readRuntimeSkillFile(path string, maxBytes int) ([]byte, error) {
-	st, err := os.Stat(path)
+	st, err := os.Lstat(path)
 	if err != nil {
 		return nil, err
 	}
 	if st.IsDir() {
 		return nil, fmt.Errorf("%s is a directory", path)
+	}
+	if st.Mode()&os.ModeSymlink != 0 {
+		return nil, fmt.Errorf("%s must not be a symlink", path)
 	}
 	if st.Size() > int64(maxBytes) {
 		return nil, fmt.Errorf("%s is %d bytes; max %d", path, st.Size(), maxBytes)
@@ -659,6 +676,74 @@ func readRuntimeSkillFile(path string, maxBytes int) ([]byte, error) {
 		return nil, fmt.Errorf("%s is %d bytes; max %d", path, len(raw), maxBytes)
 	}
 	return raw, nil
+}
+
+func rejectRuntimeSkillDirSymlink(dir string) error {
+	info, err := os.Lstat(dir)
+	if err != nil {
+		return err
+	}
+	if info.Mode()&os.ModeSymlink != 0 {
+		return fmt.Errorf("%s must not be a symlink", dir)
+	}
+	if !info.IsDir() {
+		return fmt.Errorf("%s is not a directory", dir)
+	}
+	return nil
+}
+
+func writeRuntimeSkillFile(path string, raw []byte) error {
+	if err := rejectRuntimeSkillFileTarget(path); err != nil {
+		return err
+	}
+	tmp := path + ".tmp"
+	if err := os.Remove(tmp); err != nil && !os.IsNotExist(err) {
+		return err
+	}
+	f, err := os.OpenFile(tmp, os.O_CREATE|os.O_EXCL|os.O_WRONLY, 0o644)
+	if err != nil {
+		return err
+	}
+	if _, err := f.Write(raw); err != nil {
+		_ = f.Close()
+		_ = os.Remove(tmp)
+		return err
+	}
+	if err := f.Sync(); err != nil {
+		_ = f.Close()
+		_ = os.Remove(tmp)
+		return err
+	}
+	if err := f.Close(); err != nil {
+		_ = os.Remove(tmp)
+		return err
+	}
+	if err := os.Rename(tmp, path); err != nil {
+		_ = os.Remove(tmp)
+		return err
+	}
+	if d, err := os.Open(filepath.Dir(path)); err == nil {
+		_ = d.Sync()
+		_ = d.Close()
+	}
+	return nil
+}
+
+func rejectRuntimeSkillFileTarget(path string) error {
+	info, err := os.Lstat(path)
+	if os.IsNotExist(err) {
+		return nil
+	}
+	if err != nil {
+		return err
+	}
+	if info.Mode()&os.ModeSymlink != 0 {
+		return fmt.Errorf("%s must not be a symlink", path)
+	}
+	if info.IsDir() {
+		return fmt.Errorf("%s is a directory", path)
+	}
+	return nil
 }
 
 func normalizeRuntimeSkill(s Skill) (Skill, error) {

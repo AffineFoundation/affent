@@ -1,6 +1,7 @@
 package agent
 
 import (
+	"os"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -139,6 +140,116 @@ func TestBuiltinSkillProvider_DoesNotTreatCodebaseSearchAsRepair(t *testing.T) {
 	got = BuiltinSkillProvider("这次发布失败的原因是什么？先帮我整理现象")
 	if strings.Contains(got, "coding_repair_workflow") {
 		t.Fatalf("generic failure analysis should not inject coding repair workflow:\n%s", got)
+	}
+}
+
+func TestInstallRuntimeSkillRejectsSymlinkBodyFile(t *testing.T) {
+	root := t.TempDir()
+	dir := filepath.Join(root, "demo")
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	outside := filepath.Join(t.TempDir(), "outside.md")
+	if err := os.WriteFile(outside, []byte("outside"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink(outside, filepath.Join(dir, "SKILL.md")); err != nil {
+		t.Skipf("symlink unavailable: %v", err)
+	}
+
+	_, err := InstallRuntimeSkill(root, Skill{
+		Name: "demo",
+		Body: "AFFENT ACTIVE SKILL: demo\nUse demo.",
+	})
+	if err == nil || !strings.Contains(err.Error(), "symlink") {
+		t.Fatalf("InstallRuntimeSkill symlink body err = %v, want symlink rejection", err)
+	}
+	raw, err := os.ReadFile(outside)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(raw) != "outside" {
+		t.Fatalf("outside file was overwritten through symlink: %q", raw)
+	}
+	if _, err := os.Lstat(filepath.Join(dir, "skill.json")); !os.IsNotExist(err) {
+		t.Fatalf("manifest should not be written after body symlink rejection, err=%v", err)
+	}
+}
+
+func TestInstallRuntimeSkillRejectsSymlinkSkillDir(t *testing.T) {
+	root := t.TempDir()
+	outsideDir := t.TempDir()
+	if err := os.Symlink(outsideDir, filepath.Join(root, "demo")); err != nil {
+		t.Skipf("symlink unavailable: %v", err)
+	}
+
+	_, err := InstallRuntimeSkill(root, Skill{
+		Name: "demo",
+		Body: "AFFENT ACTIVE SKILL: demo\nUse demo.",
+	})
+	if err == nil || !strings.Contains(err.Error(), "symlink") {
+		t.Fatalf("InstallRuntimeSkill symlink dir err = %v, want symlink rejection", err)
+	}
+	if _, err := os.Lstat(filepath.Join(outsideDir, "SKILL.md")); !os.IsNotExist(err) {
+		t.Fatalf("outside dir should not receive skill body, err=%v", err)
+	}
+}
+
+func TestLoadSkillDirRejectsSymlinkBodyFile(t *testing.T) {
+	root := t.TempDir()
+	dir := filepath.Join(root, "demo")
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, "skill.json"), []byte(`{"name":"demo"}`), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	outside := filepath.Join(t.TempDir(), "outside.md")
+	if err := os.WriteFile(outside, []byte("AFFENT ACTIVE SKILL: outside"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink(outside, filepath.Join(dir, "SKILL.md")); err != nil {
+		t.Skipf("symlink unavailable: %v", err)
+	}
+
+	if _, err := LoadSkillDir(root); err == nil || !strings.Contains(err.Error(), "symlink") {
+		t.Fatalf("LoadSkillDir symlink body err = %v, want symlink rejection", err)
+	}
+}
+
+func TestProposeRuntimeSkillRejectsSymlinkPendingFile(t *testing.T) {
+	root := t.TempDir()
+	skill := Skill{
+		Name:   "demo",
+		Source: "https://example.invalid/demo",
+		Body:   "AFFENT ACTIVE SKILL: demo\nUse demo.",
+	}
+	normalized, err := normalizeRuntimeSkill(skill)
+	if err != nil {
+		t.Fatal(err)
+	}
+	id := runtimeSkillProposalID(normalized)
+	pending := filepath.Join(root, ".pending")
+	if err := os.MkdirAll(pending, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	outside := filepath.Join(t.TempDir(), "outside.json")
+	if err := os.WriteFile(outside, []byte("outside"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink(outside, filepath.Join(pending, id+".json")); err != nil {
+		t.Skipf("symlink unavailable: %v", err)
+	}
+
+	if _, err := ProposeRuntimeSkill(root, skill); err == nil || !strings.Contains(err.Error(), "symlink") {
+		t.Fatalf("ProposeRuntimeSkill symlink pending err = %v, want symlink rejection", err)
+	}
+	raw, err := os.ReadFile(outside)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(raw) != "outside" {
+		t.Fatalf("outside proposal was overwritten through symlink: %q", raw)
 	}
 }
 
