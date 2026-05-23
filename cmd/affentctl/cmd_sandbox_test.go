@@ -233,6 +233,29 @@ func TestMakeImageServeEnablesBuiltinsInsideRuntimeContainer(t *testing.T) {
 	}
 }
 
+func TestMakeSandboxStatusAcceptsArgs(t *testing.T) {
+	_, contextDir, ok, err := findSandboxBuildSource()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !ok {
+		t.Fatal("test requires source checkout with Makefile")
+	}
+	raw, err := os.ReadFile(filepath.Join(contextDir, "Makefile"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	body := string(raw)
+	for _, want := range []string{
+		"SANDBOX_STATUS_ARGS ?=",
+		`sandbox status $(SANDBOX_STATUS_ARGS)`,
+	} {
+		if !strings.Contains(body, want) {
+			t.Fatalf("Makefile sandbox-status target missing %q", want)
+		}
+	}
+}
+
 func TestAffentEntrypointUsesSharedGoCgroupEnvHelper(t *testing.T) {
 	_, contextDir, ok, err := findSandboxBuildSource()
 	if err != nil {

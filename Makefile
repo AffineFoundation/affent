@@ -2,6 +2,7 @@ GO ?= go
 AFFENTCTL ?= ./bin/affentctl
 
 SANDBOX_START_ARGS ?=
+SANDBOX_STATUS_ARGS ?=
 SANDBOX_STOP_ARGS ?=
 IMAGE_BUILD_ARGS ?=
 IMAGE_RUN_ARGS ?=
@@ -53,7 +54,7 @@ sandbox-start: affentctl
 	"$(AFFENTCTL)" sandbox start --memory "$(CONTAINER_MEMORY)" --cpus "$(CONTAINER_CPUS)" --pids-limit "$(CONTAINER_PIDS)" $(SANDBOX_START_ARGS)
 
 sandbox-status: affentctl
-	"$(AFFENTCTL)" sandbox status
+	"$(AFFENTCTL)" sandbox status $(SANDBOX_STATUS_ARGS)
 
 sandbox-stop: affentctl
 	"$(AFFENTCTL)" sandbox stop $(SANDBOX_STOP_ARGS)
