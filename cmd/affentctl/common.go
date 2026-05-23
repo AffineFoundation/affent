@@ -904,18 +904,22 @@ type mcpConfigServer struct {
 	URL         string            `json:"url,omitempty"`
 	Headers     map[string]string `json:"headers,omitempty"`
 	InitTimeout string            `json:"init_timeout,omitempty"`
+	AllowTools  []string          `json:"allow_tools,omitempty"`
+	DenyTools   []string          `json:"deny_tools,omitempty"`
 }
 
 func (s mcpConfigServer) serverSpec() (mcp.ServerSpec, error) {
 	spec := mcp.ServerSpec{
-		Name:      s.Name,
-		Namespace: s.Namespace,
-		Command:   s.Command,
-		Args:      s.Args,
-		Env:       s.Env,
-		Cwd:       s.Cwd,
-		URL:       s.URL,
-		Headers:   s.Headers,
+		Name:          s.Name,
+		Namespace:     s.Namespace,
+		Command:       s.Command,
+		Args:          s.Args,
+		Env:           s.Env,
+		Cwd:           s.Cwd,
+		URL:           s.URL,
+		Headers:       s.Headers,
+		ToolAllowlist: append([]string{}, s.AllowTools...),
+		ToolDenylist:  append([]string{}, s.DenyTools...),
 	}
 	if strings.TrimSpace(s.InitTimeout) != "" {
 		d, err := time.ParseDuration(s.InitTimeout)

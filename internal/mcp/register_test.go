@@ -245,6 +245,85 @@ func TestRegisterServerDefaultsEmptyInputSchema(t *testing.T) {
 	}
 }
 
+func TestRegisterServerFiltersAllowedTools(t *testing.T) {
+	fake := newFakeRegisterMCP(t, []ToolDescriptor{
+		{Name: "search"},
+		{Name: "geocode"},
+		{Name: "admin_delete"},
+	})
+	reg := agent.NewRegistry()
+	client, names, err := RegisterServer(context.Background(), reg, ServerSpec{
+		Name:          "maps",
+		URL:           fake.srv.URL,
+		ToolAllowlist: []string{"search", "geocode"},
+	}, zerolog.Nop())
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer client.Close()
+	if strings.Join(names, ",") != "maps_search,maps_geocode" {
+		t.Fatalf("registered names = %v, want only allowed tools", names)
+	}
+	if _, ok := reg.Get("maps_admin_delete"); ok {
+		t.Fatalf("denied-by-allowlist tool should not be registered")
+	}
+}
+
+func TestRegisterServerDenylistRunsBeforeAdvertisedNameValidation(t *testing.T) {
+	fake := newFakeRegisterMCP(t, []ToolDescriptor{
+		{Name: "search"},
+		{Name: "bad/name"},
+	})
+	reg := agent.NewRegistry()
+	client, names, err := RegisterServer(context.Background(), reg, ServerSpec{
+		Name:         "maps",
+		URL:          fake.srv.URL,
+		ToolDenylist: []string{"bad/name"},
+	}, zerolog.Nop())
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer client.Close()
+	if len(names) != 1 || names[0] != "maps_search" {
+		t.Fatalf("registered names = %v, want only maps_search", names)
+	}
+	if _, ok := reg.Get("maps_bad/name"); ok {
+		t.Fatalf("denylisted invalid-name tool should not be registered")
+	}
+}
+
+func TestRegisterServerRejectsInvalidToolFilters(t *testing.T) {
+	for _, tc := range []struct {
+		name string
+		spec ServerSpec
+		want string
+	}{
+		{name: "blank allow", spec: ServerSpec{ToolAllowlist: []string{" "}}, want: "allow_tools values must not be empty"},
+		{name: "duplicate deny", spec: ServerSpec{ToolDenylist: []string{"search", "search"}}, want: "deny_tools contains duplicate"},
+		{name: "allow unknown", spec: ServerSpec{ToolAllowlist: []string{"missing"}}, want: "allow_tools references unknown tool"},
+		{name: "deny unknown", spec: ServerSpec{ToolDenylist: []string{"missing"}}, want: "deny_tools references unknown tool"},
+		{name: "allow deny overlap", spec: ServerSpec{ToolAllowlist: []string{"search"}, ToolDenylist: []string{"search"}}, want: "both allow_tools and deny_tools"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			fake := newFakeRegisterMCP(t, []ToolDescriptor{{Name: "search"}})
+			reg := agent.NewRegistry()
+			spec := tc.spec
+			spec.Name = "maps"
+			spec.URL = fake.srv.URL
+			client, names, err := RegisterServer(context.Background(), reg, spec, zerolog.Nop())
+			if err == nil || !strings.Contains(err.Error(), tc.want) {
+				t.Fatalf("RegisterServer error = %v, want contains %q", err, tc.want)
+			}
+			if client != nil || names != nil {
+				t.Fatalf("client=%v names=%v, want nils on filter failure", client, names)
+			}
+			if _, ok := reg.Get("maps_search"); ok {
+				t.Fatalf("filter failure should not register tools")
+			}
+		})
+	}
+}
+
 func TestRegisterServerRejectsInvalidInputSchemas(t *testing.T) {
 	cases := []struct {
 		name   string

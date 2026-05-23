@@ -354,6 +354,9 @@ func TestValidateMCPServerSpecRejectsInvalidStaticConfig(t *testing.T) {
 		{name: "bad url", raw: `{"servers":[{"name":"x","url":"::://bad"}]}`, want: "invalid url"},
 		{name: "bad env", raw: `{"servers":[{"name":"x","command":"sh","env":["=bad"]}]}`, want: "invalid env"},
 		{name: "bad init timeout", raw: `{"servers":[{"name":"x","command":"sh","init_timeout":"0s"}]}`, want: "init_timeout"},
+		{name: "blank allow tool", raw: `{"servers":[{"name":"x","command":"sh","allow_tools":[" "]}]}`, want: "allow_tools values must not be empty"},
+		{name: "duplicate deny tool", raw: `{"servers":[{"name":"x","command":"sh","deny_tools":["search","search"]}]}`, want: "deny_tools contains duplicate"},
+		{name: "overlapping allow deny", raw: `{"servers":[{"name":"x","command":"sh","allow_tools":["search"],"deny_tools":["search"]}]}`, want: "appears in both allow_tools and deny_tools"},
 		{name: "unknown server field", raw: `{"servers":[{"name":"x","command":"sh","unused":true}]}`, want: "unknown field \"unused\""},
 	} {
 		t.Run(c.name, func(t *testing.T) {

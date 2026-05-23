@@ -295,6 +295,24 @@ func TestMCPConfigServerParsesInitTimeout(t *testing.T) {
 	}
 }
 
+func TestMCPConfigServerParsesToolFilters(t *testing.T) {
+	spec, err := (mcpConfigServer{
+		Name:       "maps",
+		Command:    "sh",
+		AllowTools: []string{"search", "geocode"},
+		DenyTools:  []string{"admin_delete"},
+	}).serverSpec()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Join(spec.ToolAllowlist, ",") != "search,geocode" {
+		t.Fatalf("ToolAllowlist = %v", spec.ToolAllowlist)
+	}
+	if strings.Join(spec.ToolDenylist, ",") != "admin_delete" {
+		t.Fatalf("ToolDenylist = %v", spec.ToolDenylist)
+	}
+}
+
 func TestMCPStartupTimeoutHonorsConfiguredInitTimeout(t *testing.T) {
 	got := mcpStartupTimeout([]mcp.ServerSpec{
 		{Name: "slow", InitTimeout: 2 * time.Minute},

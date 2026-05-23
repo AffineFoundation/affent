@@ -92,6 +92,12 @@ type ServerSpec struct {
 	// InitTimeout caps how long the client waits for the server's
 	// initialize handshake. Zero falls back to DefaultInitTimeout.
 	InitTimeout time.Duration `json:"-"`
+
+	// ToolAllowlist and ToolDenylist filter raw MCP tool names before
+	// Affent namespaces or advertises them. Empty allowlist means all
+	// server tools are eligible; denylist removes matching raw names.
+	ToolAllowlist []string `json:"allow_tools,omitempty"`
+	ToolDenylist  []string `json:"deny_tools,omitempty"`
 }
 
 // ToolDescriptor is one tool returned by tools/list.

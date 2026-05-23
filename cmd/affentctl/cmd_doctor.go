@@ -277,6 +277,37 @@ func validateMCPServerSpec(spec mcp.ServerSpec) error {
 			return fmt.Errorf("invalid env %q; want KEY=VALUE", env)
 		}
 	}
+	if err := validateMCPToolFilter("allow_tools", spec.ToolAllowlist); err != nil {
+		return err
+	}
+	if err := validateMCPToolFilter("deny_tools", spec.ToolDenylist); err != nil {
+		return err
+	}
+	allowed := map[string]bool{}
+	for _, name := range spec.ToolAllowlist {
+		allowed[strings.TrimSpace(name)] = true
+	}
+	for _, name := range spec.ToolDenylist {
+		name = strings.TrimSpace(name)
+		if allowed[name] {
+			return fmt.Errorf("tool %q appears in both allow_tools and deny_tools", name)
+		}
+	}
+	return nil
+}
+
+func validateMCPToolFilter(field string, names []string) error {
+	seen := map[string]bool{}
+	for _, raw := range names {
+		name := strings.TrimSpace(raw)
+		if name == "" {
+			return fmt.Errorf("%s values must not be empty", field)
+		}
+		if seen[name] {
+			return fmt.Errorf("%s contains duplicate tool %q", field, name)
+		}
+		seen[name] = true
+	}
 	return nil
 }
 

@@ -45,6 +45,11 @@ func registerServer(ctx context.Context, reg *agent.Registry, spec ServerSpec, l
 		_ = c.Close()
 		return nil, nil, fmt.Errorf("list tools on %s: %w", spec.Name, err)
 	}
+	tools, err = filterServerTools(spec, tools)
+	if err != nil {
+		_ = c.Close()
+		return nil, nil, err
+	}
 	names := make([]string, 0, len(tools))
 	for _, t := range tools {
 		if strings.TrimSpace(t.Name) == "" {
@@ -120,6 +125,62 @@ func registerServer(ctx context.Context, reg *agent.Registry, spec ServerSpec, l
 		Int("tools", len(tools)).
 		Msg("mcp tools registered")
 	return c, names, nil
+}
+
+func filterServerTools(spec ServerSpec, tools []ToolDescriptor) ([]ToolDescriptor, error) {
+	allow, err := normalizedToolNameSet("allow_tools", spec.ToolAllowlist)
+	if err != nil {
+		return nil, fmt.Errorf("mcp server %s: %w", spec.Name, err)
+	}
+	deny, err := normalizedToolNameSet("deny_tools", spec.ToolDenylist)
+	if err != nil {
+		return nil, fmt.Errorf("mcp server %s: %w", spec.Name, err)
+	}
+	for name := range allow {
+		if deny[name] {
+			return nil, fmt.Errorf("mcp server %s: tool %q appears in both allow_tools and deny_tools", spec.Name, name)
+		}
+	}
+	exported := make(map[string]bool, len(tools))
+	for _, t := range tools {
+		exported[t.Name] = true
+	}
+	for name := range allow {
+		if !exported[name] {
+			return nil, fmt.Errorf("mcp server %s: allow_tools references unknown tool %q", spec.Name, name)
+		}
+	}
+	for name := range deny {
+		if !exported[name] {
+			return nil, fmt.Errorf("mcp server %s: deny_tools references unknown tool %q", spec.Name, name)
+		}
+	}
+	out := make([]ToolDescriptor, 0, len(tools))
+	for _, t := range tools {
+		if deny[t.Name] {
+			continue
+		}
+		if len(allow) > 0 && !allow[t.Name] {
+			continue
+		}
+		out = append(out, t)
+	}
+	return out, nil
+}
+
+func normalizedToolNameSet(field string, names []string) (map[string]bool, error) {
+	out := make(map[string]bool, len(names))
+	for _, raw := range names {
+		name := strings.TrimSpace(raw)
+		if name == "" {
+			return nil, fmt.Errorf("%s values must not be empty", field)
+		}
+		if out[name] {
+			return nil, fmt.Errorf("%s contains duplicate tool %q", field, name)
+		}
+		out[name] = true
+	}
+	return out, nil
 }
 
 func validateAdvertisedToolName(name string) error {
