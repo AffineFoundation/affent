@@ -15,6 +15,12 @@ import (
 
 func TestHandleSessionCreate_ExplicitIDAndDetail(t *testing.T) {
 	pool := newTestPool(t, 4, "5m")
+	pool.cfg.EnableBuiltins = true
+	pool.cfg.EnableMemory = true
+	pool.cfg.EnableWeb = true
+	pool.cfg.EnableSubagent = true
+	pool.cfg.SubagentMaxDepth = 3
+	pool.cfg.EnableFocusedTasks = true
 	h := handleSessionsCollection(pool)
 
 	r := httptest.NewRequest(http.MethodPost, "/v1/sessions", bytes.NewBufferString(`{"session_id":"client-one"}`))
@@ -30,6 +36,14 @@ func TestHandleSessionCreate_ExplicitIDAndDetail(t *testing.T) {
 	if created.Session.ID != "client-one" || !created.Session.Active || !created.Session.Durable {
 		t.Fatalf("created session = %+v, want active durable client-one", created.Session)
 	}
+	assertSessionCapabilities(t, created.Session.Capabilities, sessionCapabilities{
+		Builtins:         true,
+		Memory:           true,
+		Web:              true,
+		Subagent:         true,
+		SubagentMaxDepth: 3,
+		FocusedTasks:     true,
+	})
 
 	r = httptest.NewRequest(http.MethodPost, "/v1/sessions", bytes.NewBufferString(`{"session_id":"client-one"}`))
 	w = httptest.NewRecorder()
@@ -51,6 +65,7 @@ func TestHandleSessionCreate_ExplicitIDAndDetail(t *testing.T) {
 	if detail.Session.ID != "client-one" || !detail.Session.Active || !detail.Session.Durable {
 		t.Fatalf("detail session = %+v, want active durable client-one", detail.Session)
 	}
+	assertSessionCapabilities(t, detail.Session.Capabilities, *created.Session.Capabilities)
 }
 
 func TestHandleSessionCreate_GeneratedID(t *testing.T) {
@@ -164,6 +179,9 @@ func TestHandleSessionDetail_ReadsDurableSessionAfterRestart(t *testing.T) {
 	if resp.Session.ID != "restartable" || resp.Session.Active || !resp.Session.Durable || !resp.Session.HasConversation {
 		t.Fatalf("session = %+v, want durable-only restartable with conversation", resp.Session)
 	}
+	if resp.Session.Capabilities != nil {
+		t.Fatalf("durable-only session should not report active capabilities, got %+v", resp.Session.Capabilities)
+	}
 }
 
 func TestHandleSessionDetail_RejectsUnsafeID(t *testing.T) {
@@ -228,4 +246,14 @@ func sameStrings(a, b []string) bool {
 		}
 	}
 	return true
+}
+
+func assertSessionCapabilities(t *testing.T, got *sessionCapabilities, want sessionCapabilities) {
+	t.Helper()
+	if got == nil {
+		t.Fatalf("capabilities = nil, want %+v", want)
+	}
+	if *got != want {
+		t.Fatalf("capabilities = %+v, want %+v", *got, want)
+	}
 }

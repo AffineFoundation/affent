@@ -598,9 +598,13 @@ event stream. Clients can pin a session through `X-Affent-Session-Id`,
 Native session endpoints:
 
 - `GET /v1/sessions?limit=100&after=<session_id>` lists sessions from the
-  in-memory pool plus durable session directories.
-- `POST /v1/sessions` creates or reopens a session.
-- `GET /v1/sessions/{id}` returns session status.
+  in-memory pool plus durable session directories. Active session summaries
+  include the enabled capabilities (`builtins`, `memory`, `subagent`,
+  `focused_tasks`, web/browser flags).
+- `POST /v1/sessions` creates or reopens a session and returns the same active
+  capability summary.
+- `GET /v1/sessions/{id}` returns session status and, when active, capability
+  summary.
 - `GET /v1/sessions/{id}/events` streams live SSE events.
 - `GET /v1/sessions/{id}/history?after=-1&limit=100` pages persisted events.
 - `GET /v1/sessions/{id}/tools` lists the active session's actual tool

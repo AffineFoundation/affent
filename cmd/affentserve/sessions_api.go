@@ -45,6 +45,7 @@ type sessionSummary struct {
 	Durable          bool                  `json:"durable"`
 	CreatedAt        string                `json:"created_at,omitempty"`
 	LastUsedAt       string                `json:"last_used_at,omitempty"`
+	Capabilities     *sessionCapabilities  `json:"capabilities,omitempty"`
 	HasConversation  bool                  `json:"has_conversation"`
 	HasEvents        bool                  `json:"has_events"`
 	HasArtifacts     bool                  `json:"has_artifacts"`
@@ -52,6 +53,18 @@ type sessionSummary struct {
 	HasRuntimeSkills bool                  `json:"has_runtime_skills"`
 	Usage            *UsageSnapshot        `json:"usage,omitempty"`
 	Browser          *BrowserStatsSnapshot `json:"browser,omitempty"`
+}
+
+type sessionCapabilities struct {
+	Builtins          bool `json:"builtins"`
+	Memory            bool `json:"memory"`
+	Browser           bool `json:"browser"`
+	BrowserScreenshot bool `json:"browser_screenshot"`
+	Web               bool `json:"web"`
+	WebSearch         bool `json:"web_search"`
+	Subagent          bool `json:"subagent"`
+	SubagentMaxDepth  int  `json:"subagent_max_depth"`
+	FocusedTasks      bool `json:"focused_tasks"`
 }
 
 type sessionListOptions struct {
@@ -327,7 +340,7 @@ func activeSessionByID(pool *SessionPool, id string) *Session {
 func summarizeSession(pool *SessionPool, id string, active *Session) (sessionSummary, bool, error) {
 	summary := sessionSummary{ID: id}
 	if active != nil {
-		summary = mergeSessionSummaries(summary, summarizeActiveSession(active))
+		summary = mergeSessionSummaries(summary, summarizeActiveSession(active, pool.cfg))
 	}
 	durable, found, err := summarizeDurableSession(pool, id)
 	if err != nil {
@@ -339,7 +352,7 @@ func summarizeSession(pool *SessionPool, id string, active *Session) (sessionSum
 	return summary, active != nil || found, nil
 }
 
-func summarizeActiveSession(s *Session) sessionSummary {
+func summarizeActiveSession(s *Session, cfg Config) sessionSummary {
 	s.mu.Lock()
 	createdAt, lastUsedAt := s.createdAt, s.lastUsed
 	s.mu.Unlock()
@@ -350,8 +363,19 @@ func summarizeActiveSession(s *Session) sessionSummary {
 		Active:     true,
 		CreatedAt:  formatTime(createdAt),
 		LastUsedAt: formatTime(lastUsedAt),
-		Usage:      &usage,
-		Browser:    &browser,
+		Capabilities: &sessionCapabilities{
+			Builtins:          cfg.EnableBuiltins,
+			Memory:            cfg.EnableMemory,
+			Browser:           cfg.EnableBrowser,
+			BrowserScreenshot: cfg.BrowserScreenshot,
+			Web:               cfg.EnableWeb,
+			WebSearch:         cfg.EnableWebSearch,
+			Subagent:          cfg.EnableSubagent,
+			SubagentMaxDepth:  cfg.SubagentMaxDepth,
+			FocusedTasks:      cfg.EnableFocusedTasks,
+		},
+		Usage:   &usage,
+		Browser: &browser,
 	}
 }
 
@@ -437,6 +461,9 @@ func mergeSessionSummaries(a, b sessionSummary) sessionSummary {
 	}
 	if b.Browser != nil {
 		a.Browser = b.Browser
+	}
+	if b.Capabilities != nil {
+		a.Capabilities = b.Capabilities
 	}
 	return a
 }
