@@ -216,6 +216,7 @@ type ToolTruncationStats struct {
 	ArgsOmittedBytes    int
 	ResultsTruncated    int
 	ResultsOmittedBytes int
+	ResultArtifacts     int
 }
 
 // Usage aggregates per-turn token accounting summed across every LLM

@@ -517,6 +517,9 @@ func SummarizeToolTruncation(trace Trace) ToolTruncationStats {
 			stats.ResultsTruncated++
 		}
 		stats.ResultsOmittedBytes += tool.ResultOmittedBytes
+		if tool.ResultArtifactPath != "" {
+			stats.ResultArtifacts++
+		}
 	}
 	return stats
 }

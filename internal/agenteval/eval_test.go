@@ -99,7 +99,7 @@ func TestParseTraceFileReadsToolRequestsAndFinalText(t *testing.T) {
 	if tc.ResultArtifactPath != ".affent/artifacts/tool-results/000001-c1.txt" {
 		t.Fatalf("ResultArtifactPath = %q", tc.ResultArtifactPath)
 	}
-	if stats := SummarizeToolTruncation(trace); stats.ArgsTruncated != 1 || stats.ArgsOmittedBytes != 512 || stats.ResultsTruncated != 1 || stats.ResultsOmittedBytes != 4096 {
+	if stats := SummarizeToolTruncation(trace); stats.ArgsTruncated != 1 || stats.ArgsOmittedBytes != 512 || stats.ResultsTruncated != 1 || stats.ResultsOmittedBytes != 4096 || stats.ResultArtifacts != 1 {
 		t.Fatalf("ToolTruncationStats = %+v", stats)
 	}
 	if guarded := trace.Tools[1]; guarded.CallID != "guarded" || !guarded.IsErr || guarded.ExitCode != 1 {

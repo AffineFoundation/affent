@@ -142,6 +142,7 @@ type batchSummary struct {
 	ToolArgsOmittedBytes    int
 	ToolResultsTruncated    int
 	ToolResultsOmittedBytes int
+	ToolResultArtifacts     int
 	TraceSchemaVersions     map[int]int
 	InputTokens             int
 	OutputTokens            int
@@ -171,6 +172,7 @@ func (s *batchSummary) add(res agenteval.BatchResult) {
 	s.ToolArgsOmittedBytes += res.ToolTruncation.ArgsOmittedBytes
 	s.ToolResultsTruncated += res.ToolTruncation.ResultsTruncated
 	s.ToolResultsOmittedBytes += res.ToolTruncation.ResultsOmittedBytes
+	s.ToolResultArtifacts += res.ToolTruncation.ResultArtifacts
 	if res.TraceSchemaVersion > 0 {
 		if s.TraceSchemaVersions == nil {
 			s.TraceSchemaVersions = map[int]int{}
@@ -206,7 +208,7 @@ func (s *batchSummary) add(res agenteval.BatchResult) {
 }
 
 func printBatchSummary(w io.Writer, s batchSummary) {
-	fmt.Fprintf(w, "SUMMARY scenarios=%d passed=%d failed=%d duration=%s tools=%d errors=%d repaired=%d tool_ms=%d trunc=args:%d,results:%d omitted=%d/%d tokens=%d/%d ends=completed:%d,max_turns:%d,error:%d,cancelled:%d,unknown:%d failure_kinds=%s removed_workspaces=%d cleanup_errors=%d\n",
+	fmt.Fprintf(w, "SUMMARY scenarios=%d passed=%d failed=%d duration=%s tools=%d errors=%d repaired=%d tool_ms=%d trunc=args:%d,results:%d,artifacts:%d omitted=%d/%d tokens=%d/%d ends=completed:%d,max_turns:%d,error:%d,cancelled:%d,unknown:%d failure_kinds=%s removed_workspaces=%d cleanup_errors=%d\n",
 		s.Total,
 		s.Passed,
 		s.Failed,
@@ -217,6 +219,7 @@ func printBatchSummary(w io.Writer, s batchSummary) {
 		s.ToolDurationMS,
 		s.ToolArgsTruncated,
 		s.ToolResultsTruncated,
+		s.ToolResultArtifacts,
 		s.ToolArgsOmittedBytes,
 		s.ToolResultsOmittedBytes,
 		s.InputTokens,
@@ -304,6 +307,7 @@ type batchResultRecord struct {
 	ToolArgsOmittedBytes    int            `json:"tool_args_omitted_bytes"`
 	ToolResultsTruncated    int            `json:"tool_results_truncated"`
 	ToolResultsOmittedBytes int            `json:"tool_results_omitted_bytes"`
+	ToolResultArtifacts     int            `json:"tool_result_artifacts"`
 	InputTokens             int            `json:"input_tokens"`
 	OutputTokens            int            `json:"output_tokens"`
 	WorkspaceRemoved        bool           `json:"workspace_removed,omitempty"`
@@ -327,6 +331,7 @@ type batchSummaryRecord struct {
 	ToolArgsOmittedBytes    int            `json:"tool_args_omitted_bytes"`
 	ToolResultsTruncated    int            `json:"tool_results_truncated"`
 	ToolResultsOmittedBytes int            `json:"tool_results_omitted_bytes"`
+	ToolResultArtifacts     int            `json:"tool_result_artifacts"`
 	TraceSchemaVersions     map[int]int    `json:"trace_schema_versions,omitempty"`
 	InputTokens             int            `json:"input_tokens"`
 	OutputTokens            int            `json:"output_tokens"`
@@ -359,6 +364,7 @@ func printBatchResultJSONL(w io.Writer, meta evalJSONLMetadata, res agenteval.Ba
 		ToolArgsOmittedBytes:    res.ToolTruncation.ArgsOmittedBytes,
 		ToolResultsTruncated:    res.ToolTruncation.ResultsTruncated,
 		ToolResultsOmittedBytes: res.ToolTruncation.ResultsOmittedBytes,
+		ToolResultArtifacts:     res.ToolTruncation.ResultArtifacts,
 		InputTokens:             res.Usage.InputTokens,
 		OutputTokens:            res.Usage.OutputTokens,
 		WorkspaceRemoved:        res.WorkspaceRemoved,
@@ -384,6 +390,7 @@ func printBatchSummaryJSONL(w io.Writer, meta evalJSONLMetadata, s batchSummary)
 		ToolArgsOmittedBytes:    s.ToolArgsOmittedBytes,
 		ToolResultsTruncated:    s.ToolResultsTruncated,
 		ToolResultsOmittedBytes: s.ToolResultsOmittedBytes,
+		ToolResultArtifacts:     s.ToolResultArtifacts,
 		TraceSchemaVersions:     cloneTraceSchemaVersions(s.TraceSchemaVersions),
 		InputTokens:             s.InputTokens,
 		OutputTokens:            s.OutputTokens,
@@ -461,9 +468,10 @@ func printBatchResult(w io.Writer, res agenteval.BatchResult) {
 		res.Usage.OutputTokens,
 	)
 	if hasToolTruncation(res.ToolTruncation) {
-		fmt.Fprintf(w, " trunc=args:%d,results:%d omitted=%d/%d",
+		fmt.Fprintf(w, " trunc=args:%d,results:%d,artifacts:%d omitted=%d/%d",
 			res.ToolTruncation.ArgsTruncated,
 			res.ToolTruncation.ResultsTruncated,
+			res.ToolTruncation.ResultArtifacts,
 			res.ToolTruncation.ArgsOmittedBytes,
 			res.ToolTruncation.ResultsOmittedBytes,
 		)
@@ -481,7 +489,8 @@ func hasToolTruncation(stats agenteval.ToolTruncationStats) bool {
 	return stats.ArgsTruncated > 0 ||
 		stats.ArgsOmittedBytes > 0 ||
 		stats.ResultsTruncated > 0 ||
-		stats.ResultsOmittedBytes > 0
+		stats.ResultsOmittedBytes > 0 ||
+		stats.ResultArtifacts > 0
 }
 
 func failureKind(failure string) string {
