@@ -106,6 +106,16 @@ func TestRunRejectsInvalidConfigBeforeScenarios(t *testing.T) {
 			want: "requires a container name",
 		},
 		{
+			name: "docker executor requires work root",
+			args: []string{"--executor=docker:affent-eval"},
+			want: "requires explicit --work-root",
+		},
+		{
+			name: "docker executor requires absolute work root",
+			args: []string{"--executor=docker:affent-eval", "--work-root=relative-eval"},
+			want: "--work-root must be an absolute path",
+		},
+		{
 			name: "sandbox suite rejected",
 			args: []string{"--executor=sandbox", "--suite=small-model-tools"},
 			want: "--executor sandbox is only supported for one selected scenario",

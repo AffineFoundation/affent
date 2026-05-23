@@ -497,8 +497,8 @@ you need every workspace and trace left on disk.
 `--executor` is forwarded to the `affentctl run` process under test. It
 defaults to `local`. Use `--executor sandbox` for one selected scenario when you
 want Affent to auto-start its default memory-limited sandbox. For suites,
-pre-start one sandbox mounted over the eval work root and pass it explicitly so
-every scenario workspace lives under the same container mount:
+pre-start one sandbox mounted over an explicit absolute eval work root and pass
+it explicitly so every scenario workspace lives under the same container mount:
 
 ```bash
 ./bin/affentctl sandbox start --name affent-eval-sandbox --workspace /tmp/affent-eval --replace

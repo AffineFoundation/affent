@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"path/filepath"
 	"strconv"
 	"strings"
 	"time"
@@ -85,7 +86,7 @@ success and trace-level process quality.`)
 		fmt.Fprintf(os.Stderr, "scenario: %v\n", err)
 		return 64
 	}
-	if err := validateRunConfig(*temperature, *timeout, *executor, len(scenarios)); err != nil {
+	if err := validateRunConfig(*temperature, *timeout, *executor, len(scenarios), *workRoot, flagWasSet(fs, "work-root")); err != nil {
 		fmt.Fprintf(os.Stderr, "config: %v\n", err)
 		return 64
 	}
@@ -288,11 +289,11 @@ func printBatchResult(w io.Writer, res agenteval.BatchResult) {
 	}
 }
 
-func validateRunConfig(temperature string, timeout time.Duration, executor string, scenarioCount int) error {
+func validateRunConfig(temperature string, timeout time.Duration, executor string, scenarioCount int, workRoot string, workRootSet bool) error {
 	if timeout <= 0 {
 		return fmt.Errorf("--timeout must be a positive duration")
 	}
-	if err := validateEvalExecutor(executor, scenarioCount); err != nil {
+	if err := validateEvalExecutor(executor, scenarioCount, workRoot, workRootSet); err != nil {
 		return err
 	}
 	if strings.TrimSpace(temperature) == "" {
@@ -309,7 +310,7 @@ func validateRunConfig(temperature string, timeout time.Duration, executor strin
 	return nil
 }
 
-func validateEvalExecutor(executor string, scenarioCount int) error {
+func validateEvalExecutor(executor string, scenarioCount int, workRoot string, workRootSet bool) error {
 	executor = strings.TrimSpace(executor)
 	switch {
 	case executor == "", executor == "local":
@@ -327,10 +328,26 @@ func validateEvalExecutor(executor string, scenarioCount int) error {
 		if strings.ContainsAny(name, " \t\r\n") {
 			return fmt.Errorf("--executor docker:<container> must not contain whitespace")
 		}
+		if !workRootSet || strings.TrimSpace(workRoot) == "" {
+			return fmt.Errorf("--executor docker:<container> requires explicit --work-root mounted at the same absolute path inside the container")
+		}
+		if !filepath.IsAbs(workRoot) {
+			return fmt.Errorf("--work-root must be an absolute path when using --executor docker:<container>")
+		}
 		return nil
 	default:
 		return fmt.Errorf("unknown --executor %q (valid: local, sandbox, docker:<container>)", executor)
 	}
+}
+
+func flagWasSet(fs *flag.FlagSet, name string) bool {
+	wasSet := false
+	fs.Visit(func(f *flag.Flag) {
+		if f.Name == name {
+			wasSet = true
+		}
+	})
+	return wasSet
 }
 
 func splitCSV(s string) []string {
