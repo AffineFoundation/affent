@@ -154,9 +154,12 @@ func TestPrintBatchResultIncludesTraceMetrics(t *testing.T) {
 		ToolCalls:        3,
 		WorkspaceRemoved: true,
 		ToolStats: agenteval.ToolRuntimeStats{
-			ToolArgsRepaired: 1,
-			ToolErrors:       2,
-			ToolDurationMS:   45,
+			ToolArgsRepaired:       1,
+			ToolNameCanonicalized:  1,
+			ToolErrors:             2,
+			ToolDurationMS:         45,
+			LoopGuardInterventions: 2,
+			ForcedNoTools:          1,
 		},
 		ToolTruncation: agenteval.ToolTruncationStats{
 			ArgsTruncated:       1,
@@ -183,7 +186,7 @@ func TestPrintBatchResultIncludesTraceMetrics(t *testing.T) {
 		"PASS sample (1.234s)",
 		"workspace: /tmp/ws (removed)",
 		"trace: /tmp/ws/trace.jsonl",
-		"metrics: tools=3 errors=2 repaired=1 tool_ms=45 tokens=100/25 trunc=args:1,results:1,artifacts:1 omitted=512/4096 end=completed",
+		"metrics: tools=3 errors=2 repaired=1 canonicalized=1 loop_guard=2 forced_no_tools=1 tool_ms=45 tokens=100/25 trunc=args:1,results:1,artifacts:1 omitted=512/4096 end=completed",
 		`verifier: pass exit=0 duration=80ms output=1200 truncated omitted=176 cap=1024 command="go test ./..."`,
 	} {
 		if !strings.Contains(got, want) {
@@ -202,9 +205,11 @@ func TestBatchSummaryAggregatesRuntimeMetrics(t *testing.T) {
 		TraceSchemaVersion: 1,
 		TurnEndReason:      "completed",
 		ToolStats: agenteval.ToolRuntimeStats{
-			ToolArgsRepaired: 1,
-			ToolErrors:       0,
-			ToolDurationMS:   10,
+			ToolArgsRepaired:       1,
+			ToolNameCanonicalized:  1,
+			ToolErrors:             0,
+			ToolDurationMS:         10,
+			LoopGuardInterventions: 1,
 		},
 		ToolTruncation: agenteval.ToolTruncationStats{
 			ArgsTruncated:    1,
@@ -224,9 +229,12 @@ func TestBatchSummaryAggregatesRuntimeMetrics(t *testing.T) {
 			`missing required command match "go test"; commands=[]`,
 		},
 		ToolStats: agenteval.ToolRuntimeStats{
-			ToolArgsRepaired: 2,
-			ToolErrors:       1,
-			ToolDurationMS:   40,
+			ToolArgsRepaired:       2,
+			ToolNameCanonicalized:  1,
+			ToolErrors:             1,
+			ToolDurationMS:         40,
+			LoopGuardInterventions: 2,
+			ForcedNoTools:          1,
 		},
 		ToolTruncation: agenteval.ToolTruncationStats{
 			ResultsTruncated:    2,
@@ -247,7 +255,7 @@ func TestBatchSummaryAggregatesRuntimeMetrics(t *testing.T) {
 
 	var out bytes.Buffer
 	printBatchSummary(&out, summary)
-	want := "SUMMARY scenarios=2 passed=1 failed=1 duration=350ms tools=5 errors=1 repaired=3 tool_ms=50 trunc=args:1,results:2,artifacts:1 omitted=128/2048 verifier=run:2,passed:1,failed:1,truncated:1,omitted:2048 tokens=90/20 ends=completed:1,max_turns:1,error:0,cancelled:0,unknown:0 failure_kinds=missing_command:1,turn_end:1 removed_workspaces=1 cleanup_errors=0"
+	want := "SUMMARY scenarios=2 passed=1 failed=1 duration=350ms tools=5 errors=1 repaired=3 canonicalized=2 loop_guard=3 forced_no_tools=1 tool_ms=50 trunc=args:1,results:2,artifacts:1 omitted=128/2048 verifier=run:2,passed:1,failed:1,truncated:1,omitted:2048 tokens=90/20 ends=completed:1,max_turns:1,error:0,cancelled:0,unknown:0 failure_kinds=missing_command:1,turn_end:1 removed_workspaces=1 cleanup_errors=0"
 	if !strings.Contains(out.String(), want) {
 		t.Fatalf("summary output missing %q:\n%s", want, out.String())
 	}
@@ -269,9 +277,12 @@ func TestPrintBatchResultJSONL(t *testing.T) {
 		ToolCalls:          4,
 		WorkspaceRemoved:   true,
 		ToolStats: agenteval.ToolRuntimeStats{
-			ToolArgsRepaired: 2,
-			ToolErrors:       1,
-			ToolDurationMS:   75,
+			ToolArgsRepaired:       2,
+			ToolNameCanonicalized:  1,
+			ToolErrors:             1,
+			ToolDurationMS:         75,
+			LoopGuardInterventions: 3,
+			ForcedNoTools:          1,
 		},
 		ToolTruncation: agenteval.ToolTruncationStats{
 			ArgsTruncated:       2,
@@ -315,6 +326,9 @@ func TestPrintBatchResultJSONL(t *testing.T) {
 		"tool_calls":                    float64(4),
 		"tool_errors":                   float64(1),
 		"tool_repaired":                 float64(2),
+		"tool_name_canonicalized":       float64(1),
+		"loop_guard_interventions":      float64(3),
+		"forced_no_tools":               float64(1),
 		"tool_duration_ms":              float64(75),
 		"tool_args_truncated":           float64(2),
 		"tool_args_omitted_bytes":       float64(1024),
@@ -393,6 +407,9 @@ func TestPrintBatchSummaryJSONL(t *testing.T) {
 		ToolCalls:                  5,
 		ToolErrors:                 1,
 		ToolRepaired:               3,
+		ToolNameCanonicalized:      2,
+		LoopGuardInterventions:     3,
+		ForcedNoTools:              1,
 		ToolDurationMS:             120,
 		ToolArgsTruncated:          1,
 		ToolArgsOmittedBytes:       256,
@@ -436,6 +453,9 @@ func TestPrintBatchSummaryJSONL(t *testing.T) {
 		"tool_calls":                    float64(5),
 		"tool_errors":                   float64(1),
 		"tool_repaired":                 float64(3),
+		"tool_name_canonicalized":       float64(2),
+		"loop_guard_interventions":      float64(3),
+		"forced_no_tools":               float64(1),
 		"tool_duration_ms":              float64(120),
 		"tool_args_truncated":           float64(1),
 		"tool_args_omitted_bytes":       float64(256),

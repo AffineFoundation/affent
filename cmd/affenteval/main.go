@@ -139,6 +139,9 @@ type batchSummary struct {
 	ToolCalls                  int
 	ToolErrors                 int
 	ToolRepaired               int
+	ToolNameCanonicalized      int
+	LoopGuardInterventions     int
+	ForcedNoTools              int
 	ToolDurationMS             int64
 	ToolArgsTruncated          int
 	ToolArgsOmittedBytes       int
@@ -174,6 +177,9 @@ func (s *batchSummary) add(res agenteval.BatchResult) {
 	s.ToolCalls += res.ToolCalls
 	s.ToolErrors += res.ToolStats.ToolErrors
 	s.ToolRepaired += res.ToolStats.ToolArgsRepaired
+	s.ToolNameCanonicalized += res.ToolStats.ToolNameCanonicalized
+	s.LoopGuardInterventions += res.ToolStats.LoopGuardInterventions
+	s.ForcedNoTools += res.ToolStats.ForcedNoTools
 	s.ToolDurationMS += res.ToolStats.ToolDurationMS
 	s.ToolArgsTruncated += res.ToolTruncation.ArgsTruncated
 	s.ToolArgsOmittedBytes += res.ToolTruncation.ArgsOmittedBytes
@@ -227,7 +233,7 @@ func (s *batchSummary) add(res agenteval.BatchResult) {
 }
 
 func printBatchSummary(w io.Writer, s batchSummary) {
-	fmt.Fprintf(w, "SUMMARY scenarios=%d passed=%d failed=%d duration=%s tools=%d errors=%d repaired=%d tool_ms=%d trunc=args:%d,results:%d,artifacts:%d omitted=%d/%d verifier=run:%d,passed:%d,failed:%d,truncated:%d,omitted:%d tokens=%d/%d ends=completed:%d,max_turns:%d,error:%d,cancelled:%d,unknown:%d failure_kinds=%s removed_workspaces=%d cleanup_errors=%d\n",
+	fmt.Fprintf(w, "SUMMARY scenarios=%d passed=%d failed=%d duration=%s tools=%d errors=%d repaired=%d canonicalized=%d loop_guard=%d forced_no_tools=%d tool_ms=%d trunc=args:%d,results:%d,artifacts:%d omitted=%d/%d verifier=run:%d,passed:%d,failed:%d,truncated:%d,omitted:%d tokens=%d/%d ends=completed:%d,max_turns:%d,error:%d,cancelled:%d,unknown:%d failure_kinds=%s removed_workspaces=%d cleanup_errors=%d\n",
 		s.Total,
 		s.Passed,
 		s.Failed,
@@ -235,6 +241,9 @@ func printBatchSummary(w io.Writer, s batchSummary) {
 		s.ToolCalls,
 		s.ToolErrors,
 		s.ToolRepaired,
+		s.ToolNameCanonicalized,
+		s.LoopGuardInterventions,
+		s.ForcedNoTools,
 		s.ToolDurationMS,
 		s.ToolArgsTruncated,
 		s.ToolResultsTruncated,
@@ -326,6 +335,9 @@ type batchResultRecord struct {
 	ToolCalls                  int            `json:"tool_calls"`
 	ToolErrors                 int            `json:"tool_errors"`
 	ToolRepaired               int            `json:"tool_repaired"`
+	ToolNameCanonicalized      int            `json:"tool_name_canonicalized"`
+	LoopGuardInterventions     int            `json:"loop_guard_interventions"`
+	ForcedNoTools              int            `json:"forced_no_tools"`
 	ToolDurationMS             int64          `json:"tool_duration_ms"`
 	ToolArgsTruncated          int            `json:"tool_args_truncated"`
 	ToolArgsOmittedBytes       int            `json:"tool_args_omitted_bytes"`
@@ -359,6 +371,9 @@ type batchSummaryRecord struct {
 	ToolCalls                  int            `json:"tool_calls"`
 	ToolErrors                 int            `json:"tool_errors"`
 	ToolRepaired               int            `json:"tool_repaired"`
+	ToolNameCanonicalized      int            `json:"tool_name_canonicalized"`
+	LoopGuardInterventions     int            `json:"loop_guard_interventions"`
+	ForcedNoTools              int            `json:"forced_no_tools"`
 	ToolDurationMS             int64          `json:"tool_duration_ms"`
 	ToolArgsTruncated          int            `json:"tool_args_truncated"`
 	ToolArgsOmittedBytes       int            `json:"tool_args_omitted_bytes"`
@@ -397,6 +412,9 @@ func printBatchResultJSONL(w io.Writer, meta evalJSONLMetadata, res agenteval.Ba
 		ToolCalls:                  res.ToolCalls,
 		ToolErrors:                 res.ToolStats.ToolErrors,
 		ToolRepaired:               res.ToolStats.ToolArgsRepaired,
+		ToolNameCanonicalized:      res.ToolStats.ToolNameCanonicalized,
+		LoopGuardInterventions:     res.ToolStats.LoopGuardInterventions,
+		ForcedNoTools:              res.ToolStats.ForcedNoTools,
 		ToolDurationMS:             res.ToolStats.ToolDurationMS,
 		ToolArgsTruncated:          res.ToolTruncation.ArgsTruncated,
 		ToolArgsOmittedBytes:       res.ToolTruncation.ArgsOmittedBytes,
@@ -432,6 +450,9 @@ func printBatchSummaryJSONL(w io.Writer, meta evalJSONLMetadata, s batchSummary)
 		ToolCalls:                  s.ToolCalls,
 		ToolErrors:                 s.ToolErrors,
 		ToolRepaired:               s.ToolRepaired,
+		ToolNameCanonicalized:      s.ToolNameCanonicalized,
+		LoopGuardInterventions:     s.LoopGuardInterventions,
+		ForcedNoTools:              s.ForcedNoTools,
 		ToolDurationMS:             s.ToolDurationMS,
 		ToolArgsTruncated:          s.ToolArgsTruncated,
 		ToolArgsOmittedBytes:       s.ToolArgsOmittedBytes,
@@ -511,10 +532,13 @@ func printBatchResult(w io.Writer, res agenteval.BatchResult) {
 	}
 	fmt.Fprintln(w)
 	fmt.Fprintf(w, "  trace: %s\n", res.TracePath)
-	fmt.Fprintf(w, "  metrics: tools=%d errors=%d repaired=%d tool_ms=%d tokens=%d/%d",
+	fmt.Fprintf(w, "  metrics: tools=%d errors=%d repaired=%d canonicalized=%d loop_guard=%d forced_no_tools=%d tool_ms=%d tokens=%d/%d",
 		res.ToolCalls,
 		res.ToolStats.ToolErrors,
 		res.ToolStats.ToolArgsRepaired,
+		res.ToolStats.ToolNameCanonicalized,
+		res.ToolStats.LoopGuardInterventions,
+		res.ToolStats.ForcedNoTools,
 		res.ToolStats.ToolDurationMS,
 		res.Usage.InputTokens,
 		res.Usage.OutputTokens,

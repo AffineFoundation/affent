@@ -32,6 +32,10 @@ Scenario records describe one eval case:
 - `tool_calls`: number of tool calls in the trace.
 - `tool_errors`: runtime tool error count.
 - `tool_repaired`: runtime tool argument repair count.
+- `tool_name_canonicalized`: runtime tool name canonicalization count.
+- `loop_guard_interventions`: runtime loop guard intervention count.
+- `forced_no_tools`: count of forced no-tool follow-up requests after repeated
+  loop guard interventions.
 - `tool_duration_ms`: total runtime tool dispatch duration.
 - `tool_args_truncated`: count of event-capped tool requests.
 - `tool_args_omitted_bytes`: omitted request bytes across tool events.
@@ -65,6 +69,7 @@ Summary records aggregate all scenario records from the same process:
 
 - `scenarios`, `passed`, `failed`, `duration_ms`.
 - Tool totals: `tool_calls`, `tool_errors`, `tool_repaired`,
+  `tool_name_canonicalized`, `loop_guard_interventions`, `forced_no_tools`,
   `tool_duration_ms`.
 - Truncation totals: `tool_args_truncated`, `tool_args_omitted_bytes`,
   `tool_results_truncated`, `tool_results_omitted_bytes`,
