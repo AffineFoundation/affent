@@ -808,6 +808,23 @@ func TestShellToolRejectsMaskedVerificationCommands(t *testing.T) {
 	}
 }
 
+func TestShellTool_ExtraVerificationIndicators(t *testing.T) {
+	defaultTool := shellTool(BuiltinDeps{Executor: nilExecutor{}})
+	command := `customcheck ./... | head -50`
+	if _, err := defaultTool.Execute(context.Background(), json.RawMessage(`{"command":`+strconv.Quote(command)+`}`)); err != nil {
+		t.Fatalf("custom verifier should not be rejected without explicit indicator: %v", err)
+	}
+
+	customTool := shellTool(BuiltinDeps{
+		Executor:                    nilExecutor{},
+		ExtraVerificationIndicators: []string{"customcheck"},
+	})
+	_, err := customTool.Execute(context.Background(), json.RawMessage(`{"command":`+strconv.Quote(command)+`}`))
+	if err == nil || !strings.Contains(err.Error(), "masks a test/build exit code") {
+		t.Fatalf("custom verifier with masked exit should be rejected; got %v", err)
+	}
+}
+
 func TestShellToolAllowsInspectionPipes(t *testing.T) {
 	tool := shellTool(BuiltinDeps{Executor: nilExecutor{}})
 	_, err := tool.Execute(context.Background(), json.RawMessage(`{"command":"printf 'a\\nb\\n' | head -1"}`))

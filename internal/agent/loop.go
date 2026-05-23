@@ -1025,22 +1025,29 @@ func (l *Loop) toolResultMaxBytesInContext() int {
 	return MaxToolResultBytesInContext
 }
 
+// defaultToolResultLimits maps tool names to their context-byte caps.
+// Tools that produce structured, high-value output (read_file) get a
+// larger budget; tools whose output is mostly confirmation (write/edit)
+// get a smaller one. Unlisted tools fall back to
+// MaxToolResultBytesInContext.
+var defaultToolResultLimits = map[string]int{
+	"read_file":      12 * 1024,
+	"shell":          6 * 1024,
+	"memory":         4 * 1024,
+	"session_search": 4 * 1024,
+	"list_files":     4 * 1024,
+	"write_file":     2 * 1024,
+	"edit_file":      2 * 1024,
+}
+
 func (l *Loop) toolResultMaxBytesInContextFor(toolName string) int {
 	if l.ToolResultMaxBytesInContext > 0 {
 		return l.ToolResultMaxBytesInContext
 	}
-	switch toolName {
-	case "read_file":
-		return 12 * 1024
-	case "shell":
-		return 6 * 1024
-	case "memory", "session_search", "list_files":
-		return 4 * 1024
-	case "write_file", "edit_file":
-		return 2 * 1024
-	default:
-		return l.toolResultMaxBytesInContext()
+	if limit, ok := defaultToolResultLimits[toolName]; ok {
+		return limit
 	}
+	return l.toolResultMaxBytesInContext()
 }
 
 func (l *Loop) runStep(ctx context.Context, turnID string, toolDefs []ToolDef) (*FinishInfo, string, error) {
