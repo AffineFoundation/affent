@@ -597,6 +597,9 @@ Native session endpoints:
 - `GET /v1/sessions/{id}/history?after=-1&limit=100` pages persisted events.
 - `GET /v1/sessions/{id}/tools` lists the active session's actual tool
   catalog, including JSON schemas.
+- `GET /v1/sessions/{id}/transcripts` lists durable child-loop transcripts
+  from `run_task` and `subagent_run`.
+- `GET /v1/sessions/{id}/transcripts/{path}` reads a bounded transcript chunk.
 - `GET /v1/sessions/{id}/artifacts` lists durable tool-result artifacts.
 - `GET /v1/sessions/{id}/artifacts/{path}` reads a bounded artifact chunk.
 - `POST /v1/sessions/{id}/messages` starts an async user turn and returns the

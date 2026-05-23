@@ -19,6 +19,8 @@ import (
 //	GET    /v1/sessions/{id}/events
 //	GET    /v1/sessions/{id}/history
 //	GET    /v1/sessions/{id}/tools
+//	GET    /v1/sessions/{id}/transcripts
+//	GET    /v1/sessions/{id}/transcripts/{path...}
 //	GET    /v1/sessions/{id}/artifacts
 //	GET    /v1/sessions/{id}/artifacts/{path...}
 //	POST   /v1/sessions/{id}/messages
@@ -51,6 +53,7 @@ func newRouter(cfg Config, pool *SessionPool, logger zerolog.Logger) http.Handle
 //	GET    /v1/sessions/{id}/events  → SSE passthrough
 //	GET    /v1/sessions/{id}/history → persisted JSONL replay
 //	GET    /v1/sessions/{id}/tools   → active session tool catalog
+//	GET    /v1/sessions/{id}/transcripts[/path] → child loop transcripts
 //	GET    /v1/sessions/{id}/artifacts[/path] → tool-result artifacts
 //	POST   /v1/sessions/{id}/messages → start async user turn
 //	POST   /v1/sessions/{id}/cancel  → cancel active turn
@@ -79,6 +82,8 @@ func handleSessionRoutes(pool *SessionPool) http.HandlerFunc {
 			handleSessionHistory(pool, sessionID, w, r)
 		case sub == "tools" && r.Method == http.MethodGet:
 			handleSessionTools(pool, sessionID, w, r)
+		case (sub == "transcripts" || strings.HasPrefix(sub, "transcripts/")) && r.Method == http.MethodGet:
+			handleSessionTranscripts(pool, sessionID, strings.TrimPrefix(sub, "transcripts"), w, r)
 		case (sub == "artifacts" || strings.HasPrefix(sub, "artifacts/")) && r.Method == http.MethodGet:
 			handleSessionArtifacts(pool, sessionID, strings.TrimPrefix(sub, "artifacts"), w, r)
 		case sub == "messages" && r.Method == http.MethodPost:
