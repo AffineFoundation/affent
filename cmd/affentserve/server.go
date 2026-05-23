@@ -14,6 +14,7 @@ import (
 //	GET    /v1/models
 //	POST   /v1/chat/completions
 //	GET    /v1/sessions/{id}/events
+//	GET    /v1/sessions/{id}/history
 //	DELETE /v1/sessions/{id}
 //
 // Authentication, when --auth-token is set, wraps every endpoint
@@ -38,6 +39,7 @@ func newRouter(cfg Config, pool *SessionPool, logger zerolog.Logger) http.Handle
 // handleSessionRoutes demuxes the per-session sub-paths:
 //
 //	GET    /v1/sessions/{id}/events  → SSE passthrough
+//	GET    /v1/sessions/{id}/history → persisted JSONL replay
 //	DELETE /v1/sessions/{id}         → close + remove
 func handleSessionRoutes(pool *SessionPool) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
@@ -57,6 +59,8 @@ func handleSessionRoutes(pool *SessionPool) http.HandlerFunc {
 		switch {
 		case sub == "events" && r.Method == http.MethodGet:
 			handleSessionEvents(pool, sessionID, w, r)
+		case sub == "history" && r.Method == http.MethodGet:
+			handleSessionHistory(pool, sessionID, w, r)
 		case sub == "" && r.Method == http.MethodDelete:
 			handleSessionDelete(pool, sessionID, w, r)
 		default:

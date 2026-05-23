@@ -373,6 +373,10 @@ all survive container restarts when that root is backed by a host volume.
 Clients resume by sending the same `X-Affent-Session-Id` header or
 `affent_session_id` / `session_id` request field. `DELETE /v1/sessions/{id}`
 intentionally removes that durable state.
+Use `GET /v1/sessions/{id}/history?after=-1&limit=100` to page through the
+persisted event log. The `after` cursor is a JSONL line number (`next_after`
+from the previous response), not an event id, so replay remains correct across
+server restarts where runtime event ids can start over.
 
 Persistent memory is opt-in. Workspace memory is topic-bucketed and can be
 searched on demand. User memory is a separate cross-workspace profile. The

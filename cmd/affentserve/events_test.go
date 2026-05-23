@@ -2,12 +2,15 @@ package main
 
 import (
 	"encoding/json"
+	"io"
 	"net/http"
 	"net/http/httptest"
+	"path/filepath"
 	"strings"
 	"testing"
 
 	"github.com/affinefoundation/affent/internal/sse"
+	"github.com/rs/zerolog"
 )
 
 // TestHandleSessionEvents_UnknownSessionReturns404 pins the
@@ -151,6 +154,165 @@ func TestWriteSSE_BubblesWriteError(t *testing.T) {
 	if err := writeSSE(w, w, ev); err == nil {
 		t.Fatal("writeSSE on a broken writer must return the write error so the handler can bail")
 	}
+}
+
+func TestHandleSessionHistory_ReplaysDurableEventsByLineCursor(t *testing.T) {
+	memRoot := t.TempDir()
+	cfg := Config{
+		Listen:         "127.0.0.1:0",
+		MaxSessions:    4,
+		SessionIdleTTL: "5m",
+		WorkspaceRoot:  t.TempDir(),
+		MemoryRoot:     memRoot,
+		BaseURL:        "http://127.0.0.1:0",
+		APIKey:         "test",
+		Model:          "fake",
+	}
+	pool, err := NewSessionPool(cfg, zerologDiscard())
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(pool.Shutdown)
+	s, err := pool.GetOrCreate("history-client")
+	if err != nil {
+		t.Fatal(err)
+	}
+	tracePath := filepath.Join(memRoot, "history-client", "events.jsonl")
+	for _, turnID := range []string{"turn-one", "turn-two"} {
+		ev, err := sse.NewEvent(sse.TypeTurnStart, sse.TurnStartPayload{TurnID: turnID})
+		if err != nil {
+			t.Fatal(err)
+		}
+		// Deliberately reuse the same event id: history pagination must
+		// use JSONL line cursor, not process-local event ids that can
+		// repeat across restart.
+		ev.ID = 1
+		s.events <- ev
+	}
+	waitForFileSubstring(t, tracePath, `"turn_id":"turn-two"`)
+
+	r := httptest.NewRequest(http.MethodGet, "/v1/sessions/history-client/history?limit=2", nil)
+	w := httptest.NewRecorder()
+	handleSessionHistory(pool, "history-client", w, r)
+	if got := w.Result().StatusCode; got != http.StatusOK {
+		t.Fatalf("status = %d, want 200: %s", got, w.Body.String())
+	}
+	var page1 sessionHistoryResponse
+	if err := json.Unmarshal(w.Body.Bytes(), &page1); err != nil {
+		t.Fatalf("decode page1: %v\n%s", err, w.Body.String())
+	}
+	if !page1.TraceSchemaDetected || page1.TraceSchemaVersion != sse.TraceSchemaVersion {
+		t.Fatalf("trace schema metadata missing: %+v", page1)
+	}
+	if len(page1.Events) != 2 || page1.Events[0].Type != sse.TypeTraceMeta || page1.Events[1].Type != sse.TypeTurnStart {
+		t.Fatalf("page1 events = %+v", page1.Events)
+	}
+	if !page1.HasMore || page1.NextAfter != 1 {
+		t.Fatalf("page1 cursor = next_after:%d has_more:%v, want 1/true", page1.NextAfter, page1.HasMore)
+	}
+
+	r = httptest.NewRequest(http.MethodGet, "/v1/sessions/history-client/history?after=1&limit=2", nil)
+	w = httptest.NewRecorder()
+	handleSessionHistory(pool, "history-client", w, r)
+	var page2 sessionHistoryResponse
+	if err := json.Unmarshal(w.Body.Bytes(), &page2); err != nil {
+		t.Fatalf("decode page2: %v\n%s", err, w.Body.String())
+	}
+	if len(page2.Events) != 1 || page2.Events[0].Type != sse.TypeTurnStart || page2.NextAfter != 2 || page2.HasMore {
+		t.Fatalf("page2 = %+v", page2)
+	}
+	var payload sse.TurnStartPayload
+	if err := json.Unmarshal(page2.Events[0].Data, &payload); err != nil {
+		t.Fatal(err)
+	}
+	if payload.TurnID != "turn-two" {
+		t.Fatalf("page2 turn_id = %q, want turn-two", payload.TurnID)
+	}
+}
+
+func TestHandleSessionHistory_ReadsAfterRestartWithoutActiveSession(t *testing.T) {
+	memRoot := t.TempDir()
+	cfg := Config{
+		Listen:         "127.0.0.1:0",
+		MaxSessions:    4,
+		SessionIdleTTL: "5m",
+		WorkspaceRoot:  t.TempDir(),
+		MemoryRoot:     memRoot,
+		BaseURL:        "http://127.0.0.1:0",
+		APIKey:         "test",
+		Model:          "fake",
+	}
+	pool, err := NewSessionPool(cfg, zerologDiscard())
+	if err != nil {
+		t.Fatal(err)
+	}
+	s, err := pool.GetOrCreate("history-restart")
+	if err != nil {
+		t.Fatal(err)
+	}
+	ev, err := sse.NewEvent(sse.TypeUsage, sse.UsagePayload{TurnID: "t1", InputTokens: 1, OutputTokens: 2})
+	if err != nil {
+		t.Fatal(err)
+	}
+	s.events <- ev
+	waitForFileSubstring(t, filepath.Join(memRoot, "history-restart", "events.jsonl"), `"turn_id":"t1"`)
+	pool.Shutdown()
+
+	pool2, err := NewSessionPool(cfg, zerologDiscard())
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(pool2.Shutdown)
+	r := httptest.NewRequest(http.MethodGet, "/v1/sessions/history-restart/history", nil)
+	w := httptest.NewRecorder()
+	handleSessionHistory(pool2, "history-restart", w, r)
+	if got := w.Result().StatusCode; got != http.StatusOK {
+		body, _ := io.ReadAll(w.Result().Body)
+		t.Fatalf("status = %d, want 200: %s", got, string(body))
+	}
+	var resp sessionHistoryResponse
+	if err := json.Unmarshal(w.Body.Bytes(), &resp); err != nil {
+		t.Fatal(err)
+	}
+	if len(resp.Events) < 2 {
+		t.Fatalf("history should include trace.meta and usage after restart: %+v", resp.Events)
+	}
+}
+
+func TestHandleSessionHistory_RejectsBadQueryAndUnsafeID(t *testing.T) {
+	pool := newTestPool(t, 4, "5m")
+	for _, tc := range []struct {
+		name      string
+		sessionID string
+		url       string
+	}{
+		{name: "bad after", sessionID: "abc", url: "/v1/sessions/abc/history?after=nope"},
+		{name: "bad limit", sessionID: "abc", url: "/v1/sessions/abc/history?limit=0"},
+		{name: "unsafe id", sessionID: "..", url: "/v1/sessions/../history"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			r := httptest.NewRequest(http.MethodGet, tc.url, nil)
+			w := httptest.NewRecorder()
+			handleSessionHistory(pool, tc.sessionID, w, r)
+			if got := w.Result().StatusCode; got != http.StatusBadRequest {
+				t.Fatalf("status = %d, want 400: %s", got, w.Body.String())
+			}
+		})
+	}
+}
+
+func TestHandleSessionHistory_MissingLogReturns404(t *testing.T) {
+	pool := newTestPool(t, 4, "5m")
+	r := httptest.NewRequest(http.MethodGet, "/v1/sessions/missing/history", nil)
+	w := httptest.NewRecorder()
+	handleSessionHistory(pool, "missing", w, r)
+	if got := w.Result().StatusCode; got != http.StatusNotFound {
+		t.Fatalf("status = %d, want 404: %s", got, w.Body.String())
+	}
+}
+
+func zerologDiscard() zerolog.Logger {
+	return zerolog.New(io.Discard)
 }
 
 // errorWriter implements http.ResponseWriter + http.Flusher but

@@ -1,9 +1,16 @@
 package main
 
 import (
+	"bufio"
+	"encoding/json"
+	"errors"
 	"net/http"
+	"os"
+	"path/filepath"
+	"strconv"
 	"time"
 
+	agent "github.com/affinefoundation/affent/internal/agent"
 	"github.com/affinefoundation/affent/internal/sse"
 )
 
@@ -13,6 +20,11 @@ import (
 // dropping the connection. SSE clients treat `:`-prefixed lines as
 // comments and ignore them; the bytes are only there to flow.
 const sseKeepAliveInterval = 25 * time.Second
+
+const (
+	defaultHistoryLimit = 100
+	maxHistoryLimit     = 500
+)
 
 // handleSessionEvents tails the session's affent event stream and
 // passes events through to the SSE client verbatim. The client gets
@@ -86,6 +98,122 @@ func writeSSE(w http.ResponseWriter, flusher http.Flusher, ev sse.Event) error {
 	}
 	flusher.Flush()
 	return nil
+}
+
+type sessionHistoryResponse struct {
+	SessionID           string      `json:"session_id"`
+	Events              []sse.Event `json:"events"`
+	NextAfter           int64       `json:"next_after"`
+	HasMore             bool        `json:"has_more"`
+	TraceSchemaVersion  int         `json:"trace_schema_version,omitempty"`
+	TraceSchemaDetected bool        `json:"trace_schema_detected"`
+}
+
+// handleSessionHistory replays persisted session events from
+// events.jsonl. The cursor is the zero-based JSONL line number, not
+// sse.Event.ID: Loop event ids are per-process and can repeat after a
+// server restart, while line numbers remain stable for append-only
+// durable replay.
+func handleSessionHistory(pool *SessionPool, sessionID string, w http.ResponseWriter, r *http.Request) {
+	if pool == nil {
+		writeJSONError(w, http.StatusNotFound, "session not found", nil)
+		return
+	}
+	if err := agent.ValidateSessionID(sessionID); err != nil {
+		writeJSONErrorTyped(w, http.StatusBadRequest, "invalid session id", err, "bad_request")
+		return
+	}
+	after, limit, err := parseHistoryQuery(r)
+	if err != nil {
+		writeJSONErrorTyped(w, http.StatusBadRequest, "invalid history query", err, "bad_request")
+		return
+	}
+	resp, err := readSessionHistory(pool.sessionDirPath(sessionID), sessionID, after, limit)
+	if err != nil {
+		if errors.Is(err, os.ErrNotExist) {
+			writeJSONError(w, http.StatusNotFound, "session history not found", err)
+			return
+		}
+		writeJSONError(w, http.StatusInternalServerError, "read session history", err)
+		return
+	}
+	w.Header().Set("Content-Type", "application/json")
+	_ = json.NewEncoder(w).Encode(resp)
+}
+
+func parseHistoryQuery(r *http.Request) (after int64, limit int, err error) {
+	after = -1
+	limit = defaultHistoryLimit
+	q := r.URL.Query()
+	if raw := q.Get("after"); raw != "" {
+		n, err := strconv.ParseInt(raw, 10, 64)
+		if err != nil {
+			return 0, 0, err
+		}
+		if n < -1 {
+			return 0, 0, errors.New("after must be -1 or greater")
+		}
+		after = n
+	}
+	if raw := q.Get("limit"); raw != "" {
+		n, err := strconv.Atoi(raw)
+		if err != nil {
+			return 0, 0, err
+		}
+		if n <= 0 {
+			return 0, 0, errors.New("limit must be positive")
+		}
+		if n > maxHistoryLimit {
+			n = maxHistoryLimit
+		}
+		limit = n
+	}
+	return after, limit, nil
+}
+
+func readSessionHistory(sessionDir, sessionID string, after int64, limit int) (sessionHistoryResponse, error) {
+	path := filepath.Join(sessionDir, "events.jsonl")
+	f, err := os.Open(path)
+	if err != nil {
+		return sessionHistoryResponse{}, err
+	}
+	defer f.Close()
+
+	resp := sessionHistoryResponse{
+		SessionID: sessionID,
+		Events:    []sse.Event{},
+		NextAfter: after,
+	}
+	sc := bufio.NewScanner(f)
+	sc.Buffer(make([]byte, 0, 64*1024), 4*1024*1024)
+	lineNo := int64(-1)
+	for sc.Scan() {
+		lineNo++
+		var ev sse.Event
+		if err := json.Unmarshal(sc.Bytes(), &ev); err != nil {
+			continue
+		}
+		if ev.Type == sse.TypeTraceMeta {
+			var meta sse.TraceMetaPayload
+			if err := json.Unmarshal(ev.Data, &meta); err == nil {
+				resp.TraceSchemaVersion = meta.SchemaVersion
+				resp.TraceSchemaDetected = true
+			}
+		}
+		if lineNo <= after {
+			continue
+		}
+		if len(resp.Events) >= limit {
+			resp.HasMore = true
+			break
+		}
+		resp.Events = append(resp.Events, ev)
+		resp.NextAfter = lineNo
+	}
+	if err := sc.Err(); err != nil {
+		return sessionHistoryResponse{}, err
+	}
+	return resp, nil
 }
 
 // handleSessionDelete closes a session immediately. Returns 204 even

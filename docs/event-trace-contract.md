@@ -24,6 +24,11 @@ sessions append to the existing trace and keep its original metadata.
 `affentserve` applies the same rule to each durable session's `events.jsonl`
 under the session state root.
 
+`GET /v1/sessions/{id}/history` returns pages from that JSONL file. Its
+`after` cursor is the zero-based JSONL line number (`next_after` in the previous
+response), not `Event.id`; loop event ids are process-local and may repeat after
+server restart.
+
 ## Event Envelope
 
 Every event record has:
