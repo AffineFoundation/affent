@@ -445,6 +445,12 @@ func LoadSkillDir(root string) ([]Skill, error) {
 	if root == "" {
 		return nil, nil
 	}
+	if err := rejectRuntimeSkillRootSymlink(root); err != nil {
+		if os.IsNotExist(err) {
+			return nil, nil
+		}
+		return nil, err
+	}
 	entries, err := os.ReadDir(root)
 	if os.IsNotExist(err) {
 		return nil, nil
@@ -477,6 +483,9 @@ func InstallRuntimeSkill(root string, skill Skill) (Skill, error) {
 	root = strings.TrimSpace(root)
 	if root == "" {
 		return Skill{}, fmt.Errorf("runtime skill directory is not configured")
+	}
+	if err := ensureRuntimeSkillRoot(root); err != nil {
+		return Skill{}, err
 	}
 	normalized, err := normalizeRuntimeSkill(skill)
 	if err != nil {
@@ -521,6 +530,9 @@ func ProposeRuntimeSkill(root string, skill Skill) (RuntimeSkillProposal, error)
 	if root == "" {
 		return RuntimeSkillProposal{}, fmt.Errorf("runtime skill directory is not configured")
 	}
+	if err := ensureRuntimeSkillRoot(root); err != nil {
+		return RuntimeSkillProposal{}, err
+	}
 	normalized, err := normalizeRuntimeSkill(skill)
 	if err != nil {
 		return RuntimeSkillProposal{}, err
@@ -558,6 +570,9 @@ func ConfirmRuntimeSkillProposal(root, id string) (Skill, error) {
 	root = strings.TrimSpace(root)
 	if root == "" {
 		return Skill{}, fmt.Errorf("runtime skill directory is not configured")
+	}
+	if err := rejectRuntimeSkillRootSymlink(root); err != nil {
+		return Skill{}, err
 	}
 	id = strings.TrimSpace(id)
 	if !validRuntimeSkillProposalID(id) {
@@ -676,6 +691,17 @@ func readRuntimeSkillFile(path string, maxBytes int) ([]byte, error) {
 		return nil, fmt.Errorf("%s is %d bytes; max %d", path, len(raw), maxBytes)
 	}
 	return raw, nil
+}
+
+func ensureRuntimeSkillRoot(root string) error {
+	if err := os.MkdirAll(root, 0o755); err != nil {
+		return err
+	}
+	return rejectRuntimeSkillRootSymlink(root)
+}
+
+func rejectRuntimeSkillRootSymlink(root string) error {
+	return rejectRuntimeSkillDirSymlink(root)
 }
 
 func rejectRuntimeSkillDirSymlink(dir string) error {

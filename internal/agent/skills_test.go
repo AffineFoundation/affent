@@ -195,6 +195,39 @@ func TestInstallRuntimeSkillRejectsSymlinkSkillDir(t *testing.T) {
 	}
 }
 
+func TestRuntimeSkillOperationsRejectSymlinkRoot(t *testing.T) {
+	parent := t.TempDir()
+	outsideRoot := t.TempDir()
+	root := filepath.Join(parent, "skills")
+	if err := os.Symlink(outsideRoot, root); err != nil {
+		t.Skipf("symlink unavailable: %v", err)
+	}
+	skill := Skill{
+		Name:   "demo",
+		Source: "https://example.invalid/demo",
+		Body:   "AFFENT ACTIVE SKILL: demo\nUse demo.",
+	}
+
+	if _, err := InstallRuntimeSkill(root, skill); err == nil || !strings.Contains(err.Error(), "symlink") {
+		t.Fatalf("InstallRuntimeSkill symlink root err = %v, want symlink rejection", err)
+	}
+	if _, err := ProposeRuntimeSkill(root, skill); err == nil || !strings.Contains(err.Error(), "symlink") {
+		t.Fatalf("ProposeRuntimeSkill symlink root err = %v, want symlink rejection", err)
+	}
+	if _, err := LoadSkillDir(root); err == nil || !strings.Contains(err.Error(), "symlink") {
+		t.Fatalf("LoadSkillDir symlink root err = %v, want symlink rejection", err)
+	}
+	if _, err := ConfirmRuntimeSkillProposal(root, "0123456789abcdef"); err == nil || !strings.Contains(err.Error(), "symlink") {
+		t.Fatalf("ConfirmRuntimeSkillProposal symlink root err = %v, want symlink rejection", err)
+	}
+	if _, err := os.Lstat(filepath.Join(outsideRoot, "demo")); !os.IsNotExist(err) {
+		t.Fatalf("outside root should not receive installed skill dir, err=%v", err)
+	}
+	if _, err := os.Lstat(filepath.Join(outsideRoot, ".pending")); !os.IsNotExist(err) {
+		t.Fatalf("outside root should not receive pending proposal dir, err=%v", err)
+	}
+}
+
 func TestLoadSkillDirRejectsSymlinkBodyFile(t *testing.T) {
 	root := t.TempDir()
 	dir := filepath.Join(root, "demo")
