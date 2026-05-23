@@ -225,6 +225,9 @@ func TestMakeImageServeEnablesBuiltinsInsideRuntimeContainer(t *testing.T) {
 		"SERVE_CONTAINER_NAME ?=",
 		"SERVE_MEMORY_ROOT ?= /workspace/session-state",
 		"image-serve: affentctl",
+		"image-serve-stop:",
+		`SERVE_CONTAINER_NAME is required`,
+		`docker rm -f "$(SERVE_CONTAINER_NAME)"`,
 		`$(if $(SERVE_CONTAINER_NAME),--name "$(SERVE_CONTAINER_NAME)")`,
 		"affentserve --listen \"$(SERVE_LISTEN)\" --workspace-root \"$(SERVE_WORKSPACE_ROOT)\" --memory-root \"$(SERVE_MEMORY_ROOT)\" --builtins $(SERVE_ARGS)",
 	} {
