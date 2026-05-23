@@ -28,7 +28,7 @@ TEST_DIR ?= .
 GO_TEST_FLAGS ?= -p=1
 TEST_PACKAGES ?= ./...
 
-.PHONY: affentctl affentctl-local doctor sandbox-start sandbox-status sandbox-stop image-build image-run image-serve image-serve-status image-serve-stop eval-container test-container
+.PHONY: affentctl affentctl-local doctor sandbox-start sandbox-status sandbox-stop image-build image-run image-serve image-serve-status image-serve-logs image-serve-stop eval-container test-container
 
 affentctl:
 	mkdir -p "$(dir $(AFFENTCTL))" .tmp/go-build .tmp/go-mod
@@ -79,6 +79,9 @@ image-serve-status:
 		echo "SERVE_CONTAINER_NAME is required, e.g. make image-serve-status SERVE_CONTAINER_NAME=affent-serve" >&2; \
 		exit 2; \
 	fi
+
+image-serve-logs:
+	@if test -n "$(SERVE_CONTAINER_NAME)"; then docker logs --tail 100 "$(SERVE_CONTAINER_NAME)"; else echo "SERVE_CONTAINER_NAME is required, e.g. make image-serve-logs SERVE_CONTAINER_NAME=affent-serve" >&2; exit 2; fi
 
 image-serve-stop:
 	@if test -n "$(SERVE_CONTAINER_NAME)"; then docker rm -f "$(SERVE_CONTAINER_NAME)"; else echo "SERVE_CONTAINER_NAME is required, e.g. make image-serve-stop SERVE_CONTAINER_NAME=affent-serve" >&2; exit 2; fi
