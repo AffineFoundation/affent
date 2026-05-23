@@ -503,7 +503,7 @@ func TestRepairToolArgsWithSchema_UnwrapsSingleArgumentsJSONStringObject(t *test
 	}
 }
 
-func TestRepairToolArgsWithSchema_DoesNotUnwrapWrapperPlainString(t *testing.T) {
+func TestRepairToolArgsWithSchema_UnwrapsSingleArgumentsPlainString(t *testing.T) {
 	schema := json.RawMessage(`{
 		"type":"object",
 		"required":["path"],
@@ -513,14 +513,57 @@ func TestRepairToolArgsWithSchema_DoesNotUnwrapWrapperPlainString(t *testing.T) 
 	}`)
 	got, repaired, notes := repairToolArgsWithSchema(json.RawMessage(`{"arguments":"README.md"}`), schema)
 	if !repaired {
-		t.Fatal("expected unknown plain wrapper field to be dropped")
+		t.Fatal("expected plain wrapper string to be repaired")
+	}
+	if string(got) != `{"path":"README.md"}` {
+		t.Fatalf("got %s, want wrapped path; notes=%v", got, notes)
+	}
+	if joined := strings.Join(notes, "\n"); !strings.Contains(joined, "unwrapped field arguments") || !strings.Contains(joined, "wrapped arguments as path") {
+		t.Fatalf("missing wrapper scalar repair notes: %v", notes)
+	}
+}
+
+func TestRepairToolArgsWithSchema_DoesNotUnwrapWrapperPlainStringBelowMinLength(t *testing.T) {
+	schema := json.RawMessage(`{
+		"type":"object",
+		"required":["query"],
+		"properties":{
+			"query":{"type":"string","minLength":1}
+		}
+	}`)
+	got, repaired, notes := repairToolArgsWithSchema(json.RawMessage(`{"arguments":"   "}`), schema)
+	if !repaired {
+		t.Fatal("expected invalid wrapper field to be dropped")
 	}
 	if string(got) != `{}` {
-		t.Fatalf("plain string wrapper should not be unwrapped; got %s notes=%v", got, notes)
+		t.Fatalf("blank wrapper value should not be wrapped; got %s notes=%v", got, notes)
 	}
 	for _, note := range notes {
-		if strings.Contains(note, "unwrapped field") {
-			t.Fatalf("plain string wrapper should not report unwrap; notes=%v", notes)
+		if strings.Contains(note, "wrapped arguments") {
+			t.Fatalf("blank wrapper value should not report scalar wrap; notes=%v", notes)
+		}
+	}
+}
+
+func TestRepairToolArgsWithSchema_DoesNotUnwrapWrapperPlainStringForMultipleRequiredFields(t *testing.T) {
+	schema := json.RawMessage(`{
+		"type":"object",
+		"required":["path","content"],
+		"properties":{
+			"path":{"type":"string"},
+			"content":{"type":"string"}
+		}
+	}`)
+	got, repaired, notes := repairToolArgsWithSchema(json.RawMessage(`{"arguments":"README.md"}`), schema)
+	if !repaired {
+		t.Fatal("expected ambiguous wrapper field to be dropped")
+	}
+	if string(got) != `{}` {
+		t.Fatalf("multi-required plain wrapper should not be guessed; got %s notes=%v", got, notes)
+	}
+	for _, note := range notes {
+		if strings.Contains(note, "wrapped arguments") {
+			t.Fatalf("multi-required wrapper should not report scalar wrap; notes=%v", notes)
 		}
 	}
 }

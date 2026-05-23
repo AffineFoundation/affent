@@ -46,6 +46,11 @@ func repairToolArgsWithSchema(args json.RawMessage, schema json.RawMessage) (jso
 		changed = true
 		notes = append(notes, "unwrapped field "+key)
 	}
+	if wrapped, key, ok := wrapSingleRequiredValueWrapper(obj, s); ok {
+		notes = append(notes, "unwrapped field "+key)
+		notes = append(notes, "wrapped arguments as "+s.Required[0])
+		return wrapped, true, notes
+	}
 	if wrapped, ok := wrapSingleRequiredObjectArgs(obj, s); ok {
 		notes = append(notes, "wrapped object arguments as "+s.Required[0])
 		return wrapped, true, notes
@@ -147,16 +152,20 @@ func parseObjectString(s string) (map[string]any, bool) {
 }
 
 func wrapSingleRequiredValueArgs(args json.RawMessage, s toolSchema) (json.RawMessage, bool) {
+	var value any
+	if err := json.Unmarshal(args, &value); err != nil {
+		return nil, false
+	}
+	return wrapSingleRequiredValue(value, s)
+}
+
+func wrapSingleRequiredValue(value any, s toolSchema) (json.RawMessage, bool) {
 	if len(s.Required) != 1 {
 		return nil, false
 	}
 	name := s.Required[0]
 	prop, ok := s.Properties[name]
 	if !ok {
-		return nil, false
-	}
-	var value any
-	if err := json.Unmarshal(args, &value); err != nil {
 		return nil, false
 	}
 	switch value.(type) {
@@ -172,6 +181,24 @@ func wrapSingleRequiredValueArgs(args json.RawMessage, s toolSchema) (json.RawMe
 		return nil, false
 	}
 	return json.RawMessage(raw), true
+}
+
+func wrapSingleRequiredValueWrapper(obj map[string]any, s toolSchema) (json.RawMessage, string, bool) {
+	if len(obj) != 1 {
+		return nil, "", false
+	}
+	for key, value := range obj {
+		if _, isSchemaField := s.Properties[key]; isSchemaField {
+			return nil, "", false
+		}
+		if !wrapperFieldNames[normalizeToolIdentifier(key)] {
+			return nil, "", false
+		}
+		if wrapped, ok := wrapSingleRequiredValue(value, s); ok {
+			return wrapped, key, true
+		}
+	}
+	return nil, "", false
 }
 
 func wrapSingleRequiredObjectArgs(obj map[string]any, s toolSchema) (json.RawMessage, bool) {
