@@ -1,0 +1,139 @@
+package main
+
+import (
+	"encoding/json"
+	"net/http"
+	"net/http/httptest"
+	"os"
+	"path/filepath"
+	"strings"
+	"testing"
+)
+
+func TestSessionPool_ToolResultArtifactsUseDurableSessionDir(t *testing.T) {
+	memRoot := t.TempDir()
+	cfg := Config{
+		Listen:         "127.0.0.1:0",
+		MaxSessions:    4,
+		SessionIdleTTL: "5m",
+		WorkspaceRoot:  t.TempDir(),
+		MemoryRoot:     memRoot,
+		BaseURL:        "http://127.0.0.1:0",
+		APIKey:         "test",
+		Model:          "fake",
+	}
+	pool, err := NewSessionPool(cfg, zerologDiscard())
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(pool.Shutdown)
+
+	s, err := pool.GetOrCreate("artifact-durable")
+	if err != nil {
+		t.Fatal(err)
+	}
+	wantPrefix := filepath.Join(memRoot, "artifact-durable", ".affent", "artifacts", "tool-results")
+	if s.loop.ToolResultArtifactDir != wantPrefix {
+		t.Fatalf("ToolResultArtifactDir = %q, want durable session dir %q", s.loop.ToolResultArtifactDir, wantPrefix)
+	}
+	if strings.HasPrefix(s.loop.ToolResultArtifactDir, s.workspace) {
+		t.Fatalf("tool-result artifacts must not live under ephemeral workspace %q", s.workspace)
+	}
+}
+
+func TestHandleSessionArtifacts_ListAndReadChunks(t *testing.T) {
+	memRoot := t.TempDir()
+	pool := artifactTestPool(t, memRoot)
+	sessionID := "artifact-client"
+	artifactRel := filepath.ToSlash(filepath.Join(artifactPathPrefix, "000001-c1.txt"))
+	artifactPath := filepath.Join(memRoot, sessionID, filepath.FromSlash(artifactRel))
+	if err := os.MkdirAll(filepath.Dir(artifactPath), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(artifactPath, []byte("0123456789abcdef"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	r := httptest.NewRequest(http.MethodGet, "/v1/sessions/"+sessionID+"/artifacts", nil)
+	w := httptest.NewRecorder()
+	handleSessionArtifacts(pool, sessionID, "", w, r)
+	if got := w.Result().StatusCode; got != http.StatusOK {
+		t.Fatalf("list status = %d: %s", got, w.Body.String())
+	}
+	var list artifactListResponse
+	if err := json.Unmarshal(w.Body.Bytes(), &list); err != nil {
+		t.Fatalf("decode list: %v\n%s", err, w.Body.String())
+	}
+	if len(list.Artifacts) != 1 || list.Artifacts[0].Path != artifactRel || list.Artifacts[0].Size != 16 {
+		t.Fatalf("artifact list = %+v", list.Artifacts)
+	}
+
+	r = httptest.NewRequest(http.MethodGet, "/v1/sessions/"+sessionID+"/artifacts/"+artifactRel+"?offset=4&limit=6", nil)
+	w = httptest.NewRecorder()
+	handleSessionArtifacts(pool, sessionID, "/"+artifactRel, w, r)
+	if got := w.Result().StatusCode; got != http.StatusOK {
+		t.Fatalf("read status = %d: %s", got, w.Body.String())
+	}
+	if got := w.Body.String(); got != "456789" {
+		t.Fatalf("chunk = %q, want 456789", got)
+	}
+	if got := w.Result().Header.Get("X-Affent-Artifact-Path"); got != artifactRel {
+		t.Fatalf("artifact path header = %q, want %q", got, artifactRel)
+	}
+}
+
+func TestHandleSessionArtifacts_RejectsTraversalAndSymlinkEscape(t *testing.T) {
+	memRoot := t.TempDir()
+	pool := artifactTestPool(t, memRoot)
+	sessionID := "artifact-safe"
+	root := filepath.Join(memRoot, sessionID, filepath.FromSlash(artifactPathPrefix))
+	if err := os.MkdirAll(root, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	outside := filepath.Join(t.TempDir(), "outside.txt")
+	if err := os.WriteFile(outside, []byte("secret"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	link := filepath.Join(root, "link.txt")
+	if err := os.Symlink(outside, link); err != nil {
+		t.Skipf("symlink not available: %v", err)
+	}
+
+	for _, tc := range []struct {
+		name string
+		path string
+	}{
+		{name: "dotdot", path: "/../outside.txt"},
+		{name: "wrong prefix", path: "/tmp/outside.txt"},
+		{name: "symlink", path: "/" + filepath.ToSlash(filepath.Join(artifactPathPrefix, "link.txt"))},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			r := httptest.NewRequest(http.MethodGet, "/v1/sessions/"+sessionID+"/artifacts"+tc.path, nil)
+			w := httptest.NewRecorder()
+			handleSessionArtifacts(pool, sessionID, tc.path, w, r)
+			if got := w.Result().StatusCode; got != http.StatusBadRequest {
+				t.Fatalf("status = %d, want 400: %s", got, w.Body.String())
+			}
+		})
+	}
+}
+
+func artifactTestPool(t *testing.T, memRoot string) *SessionPool {
+	t.Helper()
+	cfg := Config{
+		Listen:         "127.0.0.1:0",
+		MaxSessions:    4,
+		SessionIdleTTL: "5m",
+		WorkspaceRoot:  t.TempDir(),
+		MemoryRoot:     memRoot,
+		BaseURL:        "http://127.0.0.1:0",
+		APIKey:         "test",
+		Model:          "fake",
+	}
+	pool, err := NewSessionPool(cfg, zerologDiscard())
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(pool.Shutdown)
+	return pool
+}

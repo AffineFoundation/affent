@@ -454,7 +454,7 @@ func (p *SessionPool) buildSession(id string) (*Session, error) {
 		MaxTransientRetries: p.cfg.MaxTransientRetries,
 		TransientBackoff:    retryBackoff,
 		ToolResultArtifactDir: filepath.Join(
-			workspace,
+			sessionDir,
 			".affent",
 			"artifacts",
 			"tool-results",

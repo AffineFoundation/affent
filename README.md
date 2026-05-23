@@ -559,6 +559,9 @@ for the stable event envelope, payload fields, and compatibility rules.
 parsing the human-readable marker appended to oversized results. When a runtime
 workspace is configured, truncated tool results also include
 `result_artifact_path`, a workspace-relative path to the complete output.
+For `affentserve`, tool-result artifacts are stored under the durable session
+state root and can be listed with `GET /v1/sessions/{id}/artifacts` or read in
+bounded chunks with `GET /v1/sessions/{id}/artifacts/{result_artifact_path}`.
 `tool.request` similarly includes `args_truncated`, `args_bytes`,
 `args_omitted_bytes`, and `args_cap_bytes` for capped argument payloads.
 
