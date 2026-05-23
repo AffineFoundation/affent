@@ -104,6 +104,62 @@ func TestRepairToolArgsWithSchema_RenamesAndCoercesFields(t *testing.T) {
 	}
 }
 
+func TestRepairToolArgsWithSchema_RenamesBrowserAndWebAliases(t *testing.T) {
+	schema := json.RawMessage(`{
+		"type":"object",
+		"required":["url","ref","text"],
+		"properties":{
+			"url":{"type":"string","minLength":1},
+			"ref":{"type":"integer","minimum":1},
+			"text":{"type":"string","minLength":1},
+			"num_results":{"type":"integer","minimum":1,"maximum":20},
+			"save_path":{"type":"string","maxLength":64},
+			"full_page":{"type":"boolean"},
+			"timeout_ms":{"type":"integer","minimum":100,"maximum":60000}
+		}
+	}`)
+	got, repaired, notes := repairToolArgsWithSchema(json.RawMessage(`{
+		"href":"https://example.com",
+		"ref_id":"3",
+		"value":"hello",
+		"n":"5",
+		"savePath":"shots/page.png",
+		"fullPage":"true",
+		"timeoutMs":"1000"
+	}`), schema)
+	if !repaired {
+		t.Fatal("expected browser/web aliases to repair")
+	}
+	want := `{"full_page":true,"num_results":5,"ref":3,"save_path":"shots/page.png","text":"hello","timeout_ms":1000,"url":"https://example.com"}`
+	if string(got) != want {
+		t.Fatalf("got %s, want %s; notes=%v", got, want, notes)
+	}
+}
+
+func TestRepairToolArgsWithSchema_RenamesSubagentAliases(t *testing.T) {
+	schema := json.RawMessage(`{
+		"type":"object",
+		"required":["task"],
+		"properties":{
+			"task":{"type":"string","minLength":1},
+			"mode":{"type":"string","enum":["explore","review"]},
+			"max_turns":{"type":"integer","minimum":1,"maximum":12}
+		}
+	}`)
+	got, repaired, notes := repairToolArgsWithSchema(json.RawMessage(`{
+		"instructions":"inspect docs",
+		"type":"Review",
+		"turns":"6"
+	}`), schema)
+	if !repaired {
+		t.Fatal("expected subagent aliases to repair")
+	}
+	want := `{"max_turns":6,"mode":"review","task":"inspect docs"}`
+	if string(got) != want {
+		t.Fatalf("got %s, want %s; notes=%v", got, want, notes)
+	}
+}
+
 func TestRepairToolArgsWithSchema_WrapsScalarForSingleRequiredField(t *testing.T) {
 	schema := json.RawMessage(`{
 		"type":"object",

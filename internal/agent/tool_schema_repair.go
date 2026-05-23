@@ -420,8 +420,22 @@ var commonSchemaFieldAliases = map[string][]string{
 	"replace_all":     {"replaceAll", "all"},
 	"content":         {"body", "text"},
 	"query":           {"q", "search", "keywords"},
+	"url":             {"uri", "link", "href"},
+	"ref":             {"ref_id", "refId", "element", "element_id", "elementId", "element_ref", "elementRef", "id"},
+	"text":            {"input", "input_text", "inputText", "value"},
+	"value":           {"expected_text", "expectedText", "text"},
+	"direction":       {"dir"},
+	"amount":          {"pixels", "delta", "scroll_amount", "scrollAmount"},
+	"wait_until":      {"waitUntil", "wait_for", "waitFor"},
+	"timeout_ms":      {"timeout", "timeoutMS", "timeoutMs", "timeout_millis", "timeoutMilliseconds"},
+	"num_results":     {"n", "count", "limit", "max_results", "maxResults"},
 	"top_k":           {"topK", "limit"},
 	"max_per_session": {"maxPerSession", "per_session"},
+	"save_path":       {"savePath", "path", "file", "filename", "file_path", "filepath"},
+	"full_page":       {"fullPage", "full", "capture_full_page", "captureFullPage"},
+	"task":            {"prompt", "instruction", "instructions", "query"},
+	"mode":            {"type", "kind"},
+	"max_turns":       {"maxTurns", "turns", "limit", "budget"},
 }
 
 func shouldDropUnknownSchemaField(s toolSchema) bool {
