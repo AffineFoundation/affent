@@ -101,6 +101,14 @@ func TestPlanToolRejectsAmbiguousInProgress(t *testing.T) {
 	}
 }
 
+func TestPlanToolRejectsDuplicateSteps(t *testing.T) {
+	tool := planTool(filepath.Join(t.TempDir(), "plan.json"))
+	_, err := tool.Execute(context.Background(), json.RawMessage(`{"action":"set","steps":[{"text":"Run tests"},{"text":" run   TESTS "}]}`))
+	if err == nil || !strings.Contains(err.Error(), "step 2 duplicates step 1") {
+		t.Fatalf("error = %v, want duplicate-step rejection", err)
+	}
+}
+
 func TestPlanToolDeduplicatesEvidenceRefs(t *testing.T) {
 	tool := planTool(filepath.Join(t.TempDir(), "plan.json"))
 	out, err := tool.Execute(context.Background(), json.RawMessage(`{"action":"set","steps":[{"text":"ship","evidence":[" internal/agent/plan_tool.go ","internal/agent/plan_tool.go","go test ./internal/agent","go test ./internal/agent"]}]}`))

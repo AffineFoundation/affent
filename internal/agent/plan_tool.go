@@ -210,12 +210,18 @@ func normalizePlanSteps(steps []planStep) ([]planStep, error) {
 		return nil, fmt.Errorf("plan supports at most %d steps\nNext: merge or drop low-value steps", maxPlanSteps)
 	}
 	out := make([]planStep, 0, len(steps))
+	seenText := map[string]int{}
 	inProgress := 0
 	for i, step := range steps {
 		n, err := normalizePlanStep(step)
 		if err != nil {
 			return nil, fmt.Errorf("step %d: %w", i+1, err)
 		}
+		textKey := canonicalPlanStepText(n.Text)
+		if first, ok := seenText[textKey]; ok {
+			return nil, fmt.Errorf("step %d duplicates step %d\nNext: merge duplicate plan steps or replace one with a distinct action", i+1, first)
+		}
+		seenText[textKey] = i + 1
 		if n.Status == "" {
 			n.Status = "pending"
 		}
@@ -228,6 +234,10 @@ func normalizePlanSteps(steps []planStep) ([]planStep, error) {
 		return nil, errors.New("only one plan step may be in_progress\nNext: mark one active step in_progress and keep the rest pending, completed, or blocked")
 	}
 	return out, nil
+}
+
+func canonicalPlanStepText(text string) string {
+	return strings.ToLower(strings.Join(strings.Fields(text), " "))
 }
 
 func normalizePlanStep(step planStep) (planStep, error) {
