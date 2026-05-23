@@ -29,7 +29,7 @@ func TestSummarizeJSONLabelsPlanProgress(t *testing.T) {
 		},
 		{
 			name: "blank status counts as pending",
-			raw:  `{"steps":[{"text":"  next\nstep  ","status":"  "}]}`,
+			raw:  `{"steps":[{"text":"  next\n\t  step  ","status":"  "}]}`,
 			want: Summary{Label: "plan:0/1", TotalSteps: 1, CurrentStep: "next step", CurrentStepIndex: 1},
 		},
 		{

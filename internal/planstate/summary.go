@@ -92,7 +92,7 @@ func currentStepPriority(status string) int {
 }
 
 func compactCurrentStep(text string) string {
-	text = strings.TrimSpace(strings.ReplaceAll(text, "\n", " "))
+	text = strings.Join(strings.Fields(text), " ")
 	if len(text) <= maxCurrentStepBytes {
 		return text
 	}
