@@ -353,48 +353,44 @@ type termHit struct {
 }
 
 func firstTermTokenIndex(content string, terms []string) int {
-	hits := termTokenHits(content, terms)
-	if len(hits) == 0 {
-		return -1
-	}
-	best := hits[0]
-	bestCovered := 0
-	half := snippetLen / 2
-	for _, hit := range hits {
-		start := hit.start - half
-		if start < 0 {
-			start = 0
-		}
-		end := start + snippetLen
-		covered := map[string]bool{}
-		for _, other := range hits {
-			if other.start >= start && other.start < end {
-				covered[other.term] = true
-			}
-		}
-		if len(covered) > bestCovered {
-			best = hit
-			bestCovered = len(covered)
-		}
-	}
-	return best.start
-}
-
-func termTokenHits(content string, terms []string) []termHit {
 	want := make(map[string]bool, len(terms))
 	for _, term := range terms {
 		if term != "" {
 			want[term] = true
 		}
 	}
-	var hits []termHit
+	bestStart := -1
+	bestCovered := 0
+	var window []termHit
+	counts := map[string]int{}
+	half := snippetLen / 2
+	consider := func(hit termHit) {
+		window = append(window, hit)
+		counts[hit.term]++
+		minStart := hit.start - half
+		trim := 0
+		for trim < len(window) && window[trim].start < minStart {
+			counts[window[trim].term]--
+			if counts[window[trim].term] == 0 {
+				delete(counts, window[trim].term)
+			}
+			trim++
+		}
+		if trim > 0 {
+			window = window[trim:]
+		}
+		if len(counts) > bestCovered {
+			bestStart = hit.start
+			bestCovered = len(counts)
+		}
+	}
 	tokenStart := -1
 	var cur strings.Builder
 	flush := func() {
 		t := strings.ToLower(cur.String())
 		cur.Reset()
 		if tokenStart >= 0 && want[t] {
-			hits = append(hits, termHit{start: tokenStart, term: t})
+			consider(termHit{start: tokenStart, term: t})
 		}
 		tokenStart = -1
 	}
@@ -409,7 +405,7 @@ func termTokenHits(content string, terms []string) []termHit {
 		flush()
 	}
 	flush()
-	return hits
+	return bestStart
 }
 
 func TruncateSnippet(s string, n int) string {
