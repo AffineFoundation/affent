@@ -38,6 +38,14 @@ const (
 	sandboxLabelCPUs      = "affent.sandbox.cpus"
 	sandboxLabelPIDsLimit = "affent.sandbox.pids_limit"
 	sandboxLabelUser      = "affent.sandbox.user"
+
+	runtimeLabelManaged   = "affent.runtime"
+	runtimeLabelImage     = "affent.runtime.image"
+	runtimeLabelWorkspace = "affent.runtime.workspace"
+	runtimeLabelMemory    = "affent.runtime.memory"
+	runtimeLabelCPUs      = "affent.runtime.cpus"
+	runtimeLabelPIDsLimit = "affent.runtime.pids_limit"
+	runtimeLabelUser      = "affent.runtime.user"
 )
 
 var (
@@ -644,6 +652,13 @@ func runRuntimeImage(opts runtimeRunOptions, runner commandRunner) error {
 		"--memory-swap", opts.Memory,
 		"--cpus", opts.CPUs,
 		"--pids-limit", opts.PIDsLimit,
+		"--label", runtimeLabelManaged+"=true",
+		"--label", runtimeLabelImage+"="+opts.Image,
+		"--label", runtimeLabelWorkspace+"="+opts.Workspace,
+		"--label", runtimeLabelMemory+"="+opts.Memory,
+		"--label", runtimeLabelCPUs+"="+opts.CPUs,
+		"--label", runtimeLabelPIDsLimit+"="+opts.PIDsLimit,
+		"--label", runtimeLabelUser+"="+opts.User,
 		"-v", opts.Workspace+":/workspace",
 		"-w", "/workspace",
 	)
