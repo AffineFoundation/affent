@@ -44,14 +44,16 @@ func applyTraceEvent(t *Trace, pending map[string]int, typ string, data json.Raw
 		if idx, ok := pending[p.CallID]; ok {
 			t.Tools[idx].Result = p.Result
 			t.Tools[idx].ExitCode = p.ExitCode
+			t.Tools[idx].DurationMS = p.DurationMS
 			t.Tools[idx].IsErr = p.ExitCode != 0
 			return false, nil
 		}
 		t.Tools = append(t.Tools, ToolCall{
-			CallID:   p.CallID,
-			Result:   p.Result,
-			ExitCode: p.ExitCode,
-			IsErr:    p.ExitCode != 0,
+			CallID:     p.CallID,
+			Result:     p.Result,
+			ExitCode:   p.ExitCode,
+			DurationMS: p.DurationMS,
+			IsErr:      p.ExitCode != 0,
 		})
 	case sse.TypeUsage:
 		var p sse.UsagePayload

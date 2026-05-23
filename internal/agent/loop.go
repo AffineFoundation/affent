@@ -597,7 +597,7 @@ func (l *Loop) runTurn(ctx context.Context, turnID, userText string) {
 			})
 			if argsRepairErr != nil {
 				result := fmt.Sprintf("tool_arg_repair: %v", argsRepairErr)
-				l.publishAndAppendToolResult(callID, toolName, result, true)
+				l.publishAndAppendToolResult(callID, toolName, result, true, 0)
 				toolCallsUsed++
 				toolStats.ToolErrors++
 				continue
@@ -663,7 +663,7 @@ func (l *Loop) runTurn(ctx context.Context, turnID, userText string) {
 				continue
 			}
 			if result := loopGuard.recordAttempt(toolName, args); result != "" {
-				l.publishAndAppendToolResult(callID, toolName, result, true)
+				l.publishAndAppendToolResult(callID, toolName, result, true, 0)
 				toolCallsUsed++
 				toolStats.ToolErrors++
 				guardInterventions++
@@ -676,7 +676,9 @@ func (l *Loop) runTurn(ctx context.Context, turnID, userText string) {
 				}
 				continue
 			}
+			toolStart := time.Now()
 			result, isErr := l.Tools.dispatch(ctx, toolName, args)
+			toolDuration := time.Since(toolStart)
 			if guardResult := loopGuard.recordOutcome(toolName, !isErr); guardResult != "" {
 				if result != "" {
 					result += "\n\n" + guardResult
@@ -693,7 +695,7 @@ func (l *Loop) runTurn(ctx context.Context, turnID, userText string) {
 					forceNoToolsNext = true
 				}
 			}
-			l.publishAndAppendToolResult(callID, toolName, result, isErr)
+			l.publishAndAppendToolResult(callID, toolName, result, isErr, toolDuration)
 			toolCallsUsed++
 			if postToolPolicy != nil && toolName == postToolPolicy.ToolName {
 				postToolSeen = true
@@ -796,12 +798,12 @@ func (p *PostToolPolicy) blocks(toolName string) bool {
 	return false
 }
 
-func (l *Loop) publishAndAppendToolResult(callID, name, result string, isErr bool) {
+func (l *Loop) publishAndAppendToolResult(callID, name, result string, isErr bool, duration time.Duration) {
 	exit := 0
 	if isErr {
 		exit = 1
 	}
-	l.publish(sse.TypeToolResult, toolResultEventPayload(callID, exit, result))
+	l.publish(sse.TypeToolResult, toolResultEventPayloadWithDuration(callID, exit, result, duration))
 	if err := l.Conv.Append(ChatMessage{
 		Role:       "tool",
 		Content:    truncateForContext(result, l.toolResultMaxBytesInContextFor(name)),
@@ -1043,6 +1045,14 @@ func toolResultEventPayload(callID string, exitCode int, result string) sse.Tool
 		ResultSummary: previewN(result, MaxToolResultPreviewInEvent),
 		Result:        truncateForEvent(result, MaxToolResultBytesInEvent),
 	}
+}
+
+func toolResultEventPayloadWithDuration(callID string, exitCode int, result string, duration time.Duration) sse.ToolResultPayload {
+	payload := toolResultEventPayload(callID, exitCode, result)
+	if duration >= time.Millisecond {
+		payload.DurationMS = duration.Milliseconds()
+	}
+	return payload
 }
 
 func truncateForEvent(s string, max int) string {

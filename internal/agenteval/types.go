@@ -168,6 +168,9 @@ type ToolCall struct {
 	// exits (timeout, killed). Non-zero is a failure even if the
 	// tool returned without a Go error.
 	ExitCode int
+	// DurationMS is the runtime-measured implementation time for a
+	// dispatched tool. Zero means unavailable or shorter than 1ms.
+	DurationMS int64
 	// IsErr is true when the tool returned a Go error (vs returning
 	// a non-zero exit code via a successful execution).
 	IsErr bool

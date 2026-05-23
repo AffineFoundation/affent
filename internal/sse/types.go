@@ -87,6 +87,9 @@ type ToolRequestPayload struct {
 type ToolResultPayload struct {
 	CallID   string `json:"call_id"`
 	ExitCode int    `json:"exit_code"`
+	// DurationMS is present only for tool implementations that were
+	// actually dispatched. Guard rejections and skipped calls omit it.
+	DurationMS int64 `json:"duration_ms,omitempty"`
 	// ResultSummary is a short, UI-friendly preview of the tool's
 	// output (capped for chat-bubble rendering). It may be truncated
 	// with an ellipsis suffix and is NOT safe to JSON-parse.
