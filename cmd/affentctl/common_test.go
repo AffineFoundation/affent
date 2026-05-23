@@ -637,6 +637,43 @@ func TestSetupLoop_RuntimeSkillInstallUpdatesActiveProvider(t *testing.T) {
 	}
 }
 
+func TestSetupLoop_SkillProviderInjectsActivePlan(t *testing.T) {
+	var cf commonFlags
+	fs := flag.NewFlagSet("test", flag.ContinueOnError)
+	cf.bind(fs)
+	workspace := t.TempDir()
+	if err := fs.Parse([]string{
+		"--workspace", workspace,
+		"--model", "fake-model",
+		"--base-url", "http://127.0.0.1:1/v1",
+		"--subagent=false",
+		"--quiet",
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if err := applyConfig(&cf, fs); err != nil {
+		t.Fatal(err)
+	}
+	b, code := setupLoop(cf)
+	if code != 0 {
+		t.Fatalf("setupLoop code=%d", code)
+	}
+	defer b.close()
+
+	convDir := filepath.Join(workspace, ".affentctl")
+	planPath := localSessionPlanPath(convDir, b.sessionID)
+	if err := os.WriteFile(planPath, []byte(`{"version":1,"steps":[{"text":"resume implementation","status":"in_progress","evidence":["cmd/affentctl/common.go"]}]}`+"\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	got := b.loop.SkillProvider("continue")
+	if !strings.Contains(got, "AFFENT ACTIVE PLAN:") || !strings.Contains(got, "resume implementation") {
+		t.Fatalf("active plan should be injected, got %q", got)
+	}
+	if !strings.Contains(got, "cmd/affentctl/common.go") {
+		t.Fatalf("active plan evidence missing, got %q", got)
+	}
+}
+
 func TestAPIKeyEnvDoesNotLeakIntoFlagDefaults(t *testing.T) {
 	t.Setenv("AFFENTCTL_API_KEY", "sk-test-secret")
 

@@ -388,3 +388,47 @@ func TestPlanOnlyUserPromptPreservesRequestAndForbidsExecution(t *testing.T) {
 		t.Fatalf("plan-only prompt should trim request:\n%s", got)
 	}
 }
+
+func TestWithActivePlanSkillProviderInjectsPersistedPlan(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "plan.json")
+	tool := planTool(path)
+	if _, err := tool.Execute(context.Background(), json.RawMessage(`{"action":"set","steps":[{"text":"inspect resume state","status":"completed","evidence":["cmd/affentctl/cmd_chat.go"]},{"text":"continue implementation","status":"in_progress","note":"resume here"}]}`)); err != nil {
+		t.Fatalf("set plan: %v", err)
+	}
+	provider := WithActivePlanSkillProvider(path, func(userText string) string {
+		if userText != "continue" {
+			t.Fatalf("userText = %q, want continue", userText)
+		}
+		return "AFFENT ACTIVE SKILL: demo\nUse demo workflow."
+	})
+
+	got := provider("continue")
+	for _, want := range []string{
+		"AFFENT ACTIVE PLAN:",
+		"1. [completed] inspect resume state evidence: cmd/affentctl/cmd_chat.go",
+		"2. [in_progress] continue implementation note: resume here",
+		"AFFENT ACTIVE SKILL: demo",
+	} {
+		if !strings.Contains(got, want) {
+			t.Fatalf("active plan provider missing %q:\n%s", want, got)
+		}
+	}
+}
+
+func TestWithActivePlanSkillProviderSkipsMissingOrInvalidPlan(t *testing.T) {
+	provider := WithActivePlanSkillProvider(filepath.Join(t.TempDir(), "missing.json"), func(string) string {
+		return "AFFENT ACTIVE SKILL: demo"
+	})
+	if got := provider("anything"); got != "AFFENT ACTIVE SKILL: demo" {
+		t.Fatalf("missing plan provider = %q", got)
+	}
+
+	badPath := filepath.Join(t.TempDir(), "bad.json")
+	if err := os.WriteFile(badPath, []byte("{"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	provider = WithActivePlanSkillProvider(badPath, nil)
+	if got := provider("anything"); got != "" {
+		t.Fatalf("invalid plan should be skipped, got %q", got)
+	}
+}

@@ -560,3 +560,46 @@ Do not execute the task yet. Create or update a concise persisted plan with the 
 Original user request:
 ` + request
 }
+
+func WithActivePlanSkillProvider(planPath string, next SkillProvider) SkillProvider {
+	return func(userText string) string {
+		blocks := make([]string, 0, 2)
+		if block := activePlanSkillBlock(planPath); block != "" {
+			blocks = append(blocks, block)
+		}
+		if next != nil {
+			if block := strings.TrimSpace(next(userText)); block != "" {
+				blocks = append(blocks, block)
+			}
+		}
+		return strings.Join(blocks, "\n\n")
+	}
+}
+
+func activePlanSkillBlock(planPath string) string {
+	if strings.TrimSpace(planPath) == "" {
+		return ""
+	}
+	st, err := readPlanState(planPath)
+	if err != nil || len(st.Steps) == 0 {
+		return ""
+	}
+	var b strings.Builder
+	b.WriteString("AFFENT ACTIVE PLAN:\n")
+	b.WriteString("This is the persisted task plan for the current session. Continue from it, update it when progress changes, and avoid restarting already completed steps.\n")
+	for i, step := range st.Steps {
+		status := strings.TrimSpace(step.Status)
+		if status == "" {
+			status = "pending"
+		}
+		fmt.Fprintf(&b, "%d. [%s] %s", i+1, status, strings.TrimSpace(step.Text))
+		if len(step.Evidence) > 0 {
+			fmt.Fprintf(&b, " evidence: %s", strings.Join(step.Evidence, ", "))
+		}
+		if note := strings.TrimSpace(step.Note); note != "" {
+			fmt.Fprintf(&b, " note: %s", note)
+		}
+		b.WriteByte('\n')
+	}
+	return strings.TrimSpace(b.String())
+}

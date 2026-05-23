@@ -716,6 +716,7 @@ func setupLoop(c commonFlags) (*loopBundle, int) {
 	var execBackend executor.Executor
 	var skillReg *agent.SkillRegistry
 	var conv *agent.Conversation
+	planPath := ""
 	if c.memoryOnly {
 		if memStore == nil {
 			log.Error().Msg("--memory-only requires a usable memory store; check --memory-workspace-store / --memory-user-store")
@@ -742,13 +743,14 @@ func setupLoop(c commonFlags) (*loopBundle, int) {
 			log.Error().Err(skillErr).Msg("skills")
 			return nil, exitRuntime
 		}
+		planPath = filepath.Join(convDir, sid+".plan.json")
 		agent.RegisterBuiltins(tools, agent.BuiltinDeps{
 			Executor:         execBackend,
 			HostWorkspaceDir: workspace,
 			Memory:           memStore,
 			SessionsDir:      convDir,
 			SessionID:        sid,
-			PlanPath:         filepath.Join(convDir, sid+".plan.json"),
+			PlanPath:         planPath,
 			SkillRegistry:    skillReg,
 			SkillDir:         skillDir,
 			SkillInstallConfirmer: func(proposalID string) bool {
@@ -849,6 +851,9 @@ func setupLoop(c commonFlags) (*loopBundle, int) {
 	}
 	if skillReg != nil {
 		loop.SkillProvider = skillReg.Provide
+	}
+	if planPath != "" {
+		loop.SkillProvider = agent.WithActivePlanSkillProvider(planPath, loop.SkillProvider)
 	}
 	if !c.memoryOnly && c.subagentEnabled {
 		loop.FirstToolPolicy = agent.SubagentFirstToolPolicy()
