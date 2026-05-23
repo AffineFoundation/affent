@@ -478,11 +478,16 @@ go run ./cmd/affenteval --list-suites
 go run ./cmd/affenteval --list --suite small-model-tools
 go run ./cmd/affenteval --suite small-model-tools --temperature 0
 go run ./cmd/affenteval --scenario coding-python-slug --temperature 0
+go run ./cmd/affenteval --suite small-model-tools --jsonl > eval.jsonl
 ```
 
 The runner is intentionally small and scenario-driven. It is meant to turn
 observed failures from real models into repeatable regression checks before the
-same lesson becomes a prompt, skill, guard, or tool-policy change.
+same lesson becomes a prompt, skill, guard, or tool-policy change. Text output
+includes per-scenario and summary metrics for tool calls, tool errors, argument
+repairs, measured tool time, token usage, and turn end reason. Use `--jsonl`
+when comparing models or storing CI artifacts; it emits one `scenario` record
+per run plus a final `summary` record with the same metrics.
 
 ## Events And Observability
 

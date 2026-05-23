@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"flag"
 	"fmt"
@@ -38,6 +39,7 @@ func run(args []string) int {
 		model       = fs.String("model", "", "model id (env: AFFENTCTL_MODEL)")
 		temperature = fs.String("temperature", "0", "sampling temperature forwarded to affentctl")
 		timeout     = fs.Duration("timeout", 5*time.Minute, "per-scenario timeout")
+		jsonl       = fs.Bool("jsonl", false, "emit machine-readable JSONL records instead of text")
 	)
 	fs.Usage = func() {
 		fmt.Fprintln(fs.Output(), `usage: affenteval [flags]
@@ -99,9 +101,17 @@ success and trace-level process quality.`)
 	for _, scenario := range scenarios {
 		res := runner.Run(ctx, scenario)
 		summary.add(res)
-		printBatchResult(os.Stdout, res)
+		if *jsonl {
+			printBatchResultJSONL(os.Stdout, res)
+		} else {
+			printBatchResult(os.Stdout, res)
+		}
 	}
-	printBatchSummary(os.Stdout, summary)
+	if *jsonl {
+		printBatchSummaryJSONL(os.Stdout, summary)
+	} else {
+		printBatchSummary(os.Stdout, summary)
+	}
 	if summary.Failed > 0 {
 		return 1
 	}
@@ -150,6 +160,78 @@ func printBatchSummary(w io.Writer, s batchSummary) {
 		s.InputTokens,
 		s.OutputTokens,
 	)
+}
+
+type batchResultRecord struct {
+	Type           string   `json:"type"`
+	Scenario       string   `json:"scenario"`
+	OK             bool     `json:"ok"`
+	DurationMS     int64    `json:"duration_ms"`
+	Workspace      string   `json:"workspace"`
+	TracePath      string   `json:"trace_path"`
+	TurnEndReason  string   `json:"turn_end_reason,omitempty"`
+	ToolCalls      int      `json:"tool_calls"`
+	ToolErrors     int      `json:"tool_errors"`
+	ToolRepaired   int      `json:"tool_repaired"`
+	ToolDurationMS int64    `json:"tool_duration_ms"`
+	InputTokens    int      `json:"input_tokens"`
+	OutputTokens   int      `json:"output_tokens"`
+	Failures       []string `json:"failures,omitempty"`
+}
+
+type batchSummaryRecord struct {
+	Type           string `json:"type"`
+	Scenarios      int    `json:"scenarios"`
+	Passed         int    `json:"passed"`
+	Failed         int    `json:"failed"`
+	DurationMS     int64  `json:"duration_ms"`
+	ToolCalls      int    `json:"tool_calls"`
+	ToolErrors     int    `json:"tool_errors"`
+	ToolRepaired   int    `json:"tool_repaired"`
+	ToolDurationMS int64  `json:"tool_duration_ms"`
+	InputTokens    int    `json:"input_tokens"`
+	OutputTokens   int    `json:"output_tokens"`
+}
+
+func printBatchResultJSONL(w io.Writer, res agenteval.BatchResult) {
+	writeJSONLine(w, batchResultRecord{
+		Type:           "scenario",
+		Scenario:       res.BatchScenario,
+		OK:             res.OK,
+		DurationMS:     res.Duration.Milliseconds(),
+		Workspace:      res.Workspace,
+		TracePath:      res.TracePath,
+		TurnEndReason:  res.TurnEndReason,
+		ToolCalls:      res.ToolCalls,
+		ToolErrors:     res.ToolStats.ToolErrors,
+		ToolRepaired:   res.ToolStats.ToolArgsRepaired,
+		ToolDurationMS: res.ToolStats.ToolDurationMS,
+		InputTokens:    res.Usage.InputTokens,
+		OutputTokens:   res.Usage.OutputTokens,
+		Failures:       res.Failures,
+	})
+}
+
+func printBatchSummaryJSONL(w io.Writer, s batchSummary) {
+	writeJSONLine(w, batchSummaryRecord{
+		Type:           "summary",
+		Scenarios:      s.Total,
+		Passed:         s.Passed,
+		Failed:         s.Failed,
+		DurationMS:     s.Duration.Milliseconds(),
+		ToolCalls:      s.ToolCalls,
+		ToolErrors:     s.ToolErrors,
+		ToolRepaired:   s.ToolRepaired,
+		ToolDurationMS: s.ToolDurationMS,
+		InputTokens:    s.InputTokens,
+		OutputTokens:   s.OutputTokens,
+	})
+}
+
+func writeJSONLine(w io.Writer, v any) {
+	enc := json.NewEncoder(w)
+	enc.SetEscapeHTML(false)
+	_ = enc.Encode(v)
 }
 
 func printBatchResult(w io.Writer, res agenteval.BatchResult) {
