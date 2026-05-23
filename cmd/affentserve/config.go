@@ -314,6 +314,7 @@ func (c *Config) Resolve() error {
 		dest *bool
 	}{
 		{"AFFENTSERVE_MEMORY", &c.EnableMemory},
+		{"AFFENTSERVE_BUILTINS", &c.EnableBuiltins},
 		{"AFFENTSERVE_SUBAGENT", &c.EnableSubagent},
 		{"AFFENTSERVE_FOCUSED_TASKS", &c.EnableFocusedTasks},
 	} {

@@ -139,6 +139,32 @@ func TestParseFlagsAndConfig_FocusedTasksFromEnv(t *testing.T) {
 	}
 }
 
+func TestParseFlagsAndConfig_BuiltinsFromEnv(t *testing.T) {
+	t.Setenv("AFFENTSERVE_BUILTINS", "true")
+	cfg, err := parseFlagsAndConfig([]string{
+		"--base-url", "https://example/v1",
+		"--model", "demo",
+	})
+	if err != nil {
+		t.Fatalf("parseFlagsAndConfig: %v", err)
+	}
+	if !cfg.EnableBuiltins {
+		t.Fatal("AFFENTSERVE_BUILTINS=true should enable builtins")
+	}
+
+	cfg, err = parseFlagsAndConfig([]string{
+		"--base-url", "https://example/v1",
+		"--model", "demo",
+		"--builtins=false",
+	})
+	if err != nil {
+		t.Fatalf("parseFlagsAndConfig cli override: %v", err)
+	}
+	if cfg.EnableBuiltins {
+		t.Fatal("--builtins=false should override AFFENTSERVE_BUILTINS=true")
+	}
+}
+
 func TestParseFlagsAndConfig_RejectsNonPositiveLimitsFromCLI(t *testing.T) {
 	for _, c := range []struct {
 		name string
