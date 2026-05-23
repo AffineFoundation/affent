@@ -43,7 +43,7 @@ if test "$$label" != "true"; then \
 fi
 endef
 
-.PHONY: affentctl affentctl-local doctor sandbox-start sandbox-status sandbox-stop image-build image-run image-serve image-serve-status image-serve-health image-serve-health-wait image-serve-logs image-serve-stop image-serve-restart eval-container test-container
+.PHONY: affentctl affentctl-local doctor sandbox-start sandbox-status sandbox-stop image-build image-run image-serve image-serve-up image-serve-status image-serve-health image-serve-health-wait image-serve-logs image-serve-stop image-serve-restart eval-container test-container
 
 affentctl:
 	mkdir -p "$(dir $(AFFENTCTL))" .tmp/go-build .tmp/go-mod
@@ -85,6 +85,10 @@ image-run: affentctl
 
 image-serve: affentctl
 	"$(AFFENTCTL)" image run --workspace "$(IMAGE_WORKSPACE)" --memory "$(CONTAINER_MEMORY)" --cpus "$(CONTAINER_CPUS)" --pids-limit "$(CONTAINER_PIDS)" $(if $(SERVE_CONTAINER_NAME),--name "$(SERVE_CONTAINER_NAME)") --detach --rm=false --publish "$(SERVE_PUBLISH)" $(IMAGE_RUN_ARGS) -- affentserve --listen "$(SERVE_LISTEN)" --workspace-root "$(SERVE_WORKSPACE_ROOT)" --memory-root "$(SERVE_MEMORY_ROOT)" --builtins $(SERVE_ARGS)
+
+image-serve-up:
+	$(MAKE) image-serve
+	$(MAKE) image-serve-health-wait
 
 image-serve-status:
 	@$(call require_affent_runtime_container,image-serve-status); \
