@@ -14,10 +14,33 @@ const (
 	toolFailureHaltThreshold        = 8
 )
 
+// perTurnCallCaps maps tool names to maximum total calls per parent turn,
+// counting attempts with any arguments. Most tools (read_file, shell,
+// memory, session_search) have no cap because the model legitimately
+// needs many calls in a single turn. The exceptions are delegation
+// tools whose budget is itself an entire bounded child Loop. Three
+// calls per turn is already strong evidence of over-delegation, and a
+// fourth call almost always burns context without progress.
+//
+// Today only run_task is capped. subagent_run is uncapped because it
+// already has depth/recursion guards and is the lower-level developer
+// surface; if usage patterns warrant a cap there too, add it here.
+//
+// Editing this map is a design decision, not a configuration knob:
+// the cap exists to enforce the focused-task surface's "bounded
+// delegation" contract, not to be tuned per deployment.
+var perTurnCallCaps = map[string]int{
+	FocusedTaskToolName: 3,
+}
+
 type toolLoopGuard struct {
 	callCounts    map[toolCallKey]int
 	failureCounts map[string]int
 	haltedTools   map[string]bool
+	// perToolCounts tracks total per-turn call counts for tools that
+	// appear in perTurnCallCaps. Entries are created lazily so most
+	// turns pay no allocation for this layer.
+	perToolCounts map[string]int
 }
 
 type toolCallKey struct {
@@ -39,6 +62,20 @@ func (g *toolLoopGuard) recordAttempt(tool string, args json.RawMessage) string 
 	}
 	if g.haltedTools[tool] {
 		return fmt.Sprintf("loop_guard: tool %q has already failed %d consecutive times this turn. Stop retrying it and choose a different approach.\nNext: use a different tool, change the evidence source, or answer from the evidence already gathered.", tool, toolFailureHaltThreshold)
+	}
+	// Per-turn-call cap is checked BEFORE the args-hash logic so a
+	// model that varies arguments across N+1 delegation attempts still
+	// gets the over-delegation message rather than the misleading
+	// "same effective arguments" message. The args-hash guard remains
+	// a secondary defense for repeats with identical inputs.
+	if cap, capped := perTurnCallCaps[tool]; capped {
+		if g.perToolCounts[tool] >= cap {
+			return fmt.Sprintf("loop_guard: tool %q exceeded the per-turn delegation cap of %d calls. Each focused task is itself a bounded child Loop with its own budget; spawning more in one turn burns parent context without progress.\nNext: answer from the focused-task results you already have, or issue a single broader objective instead of multiple narrow ones.", tool, cap)
+		}
+		if g.perToolCounts == nil {
+			g.perToolCounts = map[string]int{}
+		}
+		g.perToolCounts[tool]++
 	}
 	key := toolCallKey{name: tool, hash: hashCanonicalToolArgs(tool, args)}
 	g.callCounts[key]++

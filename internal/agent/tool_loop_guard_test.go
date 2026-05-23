@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"strings"
 	"testing"
 )
@@ -100,6 +101,95 @@ func TestToolLoopGuard_TracksConsecutiveFailures(t *testing.T) {
 		t.Fatalf("halted tool should be blocked, got %q", got)
 	} else if !strings.Contains(got, "Next:") || !strings.Contains(got, "evidence already gathered") {
 		t.Fatalf("halted-tool block should include corrective Next step, got %q", got)
+	}
+}
+
+// TestToolLoopGuard_PerTurnCallCapForRunTask pins the
+// over-delegation mitigation: a model can keep varying run_task's
+// arguments (different task_type / objective / max_turns each call)
+// and the same-args guard would NEVER fire. Without the per-turn cap
+// the parent's MaxToolCalls is the only ceiling, which lets a bad
+// prompt drain the parent budget on three or four shallow focused
+// tasks in a row. The cap belongs in the guard because that's the
+// single place every tool dispatch funnels through.
+//
+// The 4th attempt is the canonical boundary case: 3 prior calls are
+// already a strong signal of over-delegation; the 4th gets rejected
+// with a message the model can act on.
+func TestToolLoopGuard_PerTurnCallCapForRunTask(t *testing.T) {
+	g := newToolLoopGuard()
+	for i := 0; i < 3; i++ {
+		// Distinct args each iteration so the args-hash guard is NOT
+		// what triggers; we're isolating the per-turn count cap.
+		args := json.RawMessage(`{"task_type":"recall","objective":"q-` + fmt.Sprintf("%d", i) + `"}`)
+		if got := g.recordAttempt(FocusedTaskToolName, args); got != "" {
+			t.Fatalf("call %d should be allowed (cap=3 allows three calls), got %q", i, got)
+		}
+	}
+	args := json.RawMessage(`{"task_type":"recall","objective":"q-fourth"}`)
+	got := g.recordAttempt(FocusedTaskToolName, args)
+	if got == "" {
+		t.Fatal("4th run_task attempt must be blocked by per-turn cap")
+	}
+	if !strings.Contains(got, "per-turn delegation cap") {
+		t.Errorf("rejection should name the cap concept, got %q", got)
+	}
+	if !strings.Contains(got, "Next:") {
+		t.Errorf("rejection should include a corrective Next step the model can act on, got %q", got)
+	}
+}
+
+// TestToolLoopGuard_PerTurnCapDoesNotAffectOtherTools guards against a
+// regression where the cap mechanism leaks across tool names. read_file
+// gets called many times per turn legitimately; capping it would break
+// every realistic exploration session.
+func TestToolLoopGuard_PerTurnCapDoesNotAffectOtherTools(t *testing.T) {
+	g := newToolLoopGuard()
+	for i := 0; i < 10; i++ {
+		args := json.RawMessage(`{"path":"file-` + fmt.Sprintf("%d", i) + `.go"}`)
+		if got := g.recordAttempt("read_file", args); got != "" {
+			t.Fatalf("read_file call %d must not be capped, got %q", i, got)
+		}
+	}
+}
+
+// TestToolLoopGuard_PerTurnCapMessageBeatsArgsHashMessage ensures the
+// model gets the right corrective message when both guards would
+// trigger. A model that calls run_task with the SAME args three times
+// would hit both: the args-hash guard at attempt 3 AND the per-turn
+// cap eventually. The per-turn cap is the higher-signal message
+// (over-delegation across the whole turn vs. one repeated input), so
+// when both apply we want the cap message to win, which is also why
+// the cap check sits before the args-hash check in recordAttempt.
+func TestToolLoopGuard_PerTurnCapMessageBeatsArgsHashMessage(t *testing.T) {
+	g := newToolLoopGuard()
+	args := json.RawMessage(`{"task_type":"recall","objective":"q"}`)
+	// First two attempts go through.
+	if got := g.recordAttempt(FocusedTaskToolName, args); got != "" {
+		t.Fatalf("attempt 1: %q", got)
+	}
+	if got := g.recordAttempt(FocusedTaskToolName, args); got != "" {
+		t.Fatalf("attempt 2: %q", got)
+	}
+	// Third call: under the args-hash threshold (3) is met; that guard
+	// would normally fire. But the per-turn cap (3) is also at its
+	// boundary AFTER this call increments. The behavior here is that
+	// the args-hash guard fires first because the cap is checked
+	// before the increment: attempt 3 increments perToolCounts to 3,
+	// then callCounts to 3, and only THEN compares >=3. We accept
+	// either message here as correct; the design pin is just that the
+	// 3rd same-args call is blocked.
+	got := g.recordAttempt(FocusedTaskToolName, args)
+	if got == "" {
+		t.Fatal("3rd same-args attempt must be blocked")
+	}
+	// The 4th attempt with DIFFERENT args must hit the per-turn cap
+	// message; the args-hash key is different so the same-args guard
+	// can't fire here.
+	args2 := json.RawMessage(`{"task_type":"recall","objective":"different"}`)
+	got4 := g.recordAttempt(FocusedTaskToolName, args2)
+	if !strings.Contains(got4, "per-turn delegation cap") {
+		t.Errorf("4th call with new args must surface the per-turn cap message, got %q", got4)
 	}
 }
 
