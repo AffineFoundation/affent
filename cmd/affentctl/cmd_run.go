@@ -13,6 +13,7 @@ import (
 
 	agent "github.com/affinefoundation/affent/internal/agent"
 	"github.com/affinefoundation/affent/internal/eventlog"
+	"github.com/affinefoundation/affent/internal/planstate"
 	"github.com/affinefoundation/affent/internal/sse"
 	"github.com/rs/zerolog"
 )
@@ -25,17 +26,22 @@ func runCmd(args []string) int {
 	cf.bind(fs)
 	promptFlag := fs.String("prompt", "", "user prompt; '-' for stdin, '@file', or literal")
 	planOnly := fs.Bool("plan-only", false, "create or update the persisted task plan and stop before executing tools")
+	executePlan := fs.Bool("execute-plan", false, "execute the current session's persisted plan after user confirmation; requires an unfinished non-blocked plan")
 	fs.Usage = func() {
 		fmt.Fprintln(os.Stderr, `usage: affentctl run [flags]
 
 One-shot: feed a single prompt, drive the loop until turn.end, print
 the final assistant text on stdout. Designed for training / eval.
 
-Required: --prompt, --model.`)
+Required: --model. --prompt is required unless --execute-plan is set.`)
 		fs.PrintDefaults()
 		fmt.Fprintln(os.Stderr, "\nExit codes: 0 completed, 2 max_turns, 3 error, 130 cancelled.")
 	}
 	if err := fs.Parse(args); err != nil {
+		return exitUsage
+	}
+	if *planOnly && *executePlan {
+		fmt.Fprintln(os.Stderr, "--plan-only and --execute-plan cannot be used together")
 		return exitUsage
 	}
 	if err := applyConfig(&cf, fs); err != nil {
@@ -51,7 +57,7 @@ Required: --prompt, --model.`)
 		fmt.Fprintf(os.Stderr, "--prompt: %v\n", err)
 		return exitUsage
 	}
-	if strings.TrimSpace(prompt) == "" {
+	if strings.TrimSpace(prompt) == "" && !*executePlan {
 		fmt.Fprintln(os.Stderr, "--prompt is required (use '-' for stdin)")
 		return exitUsage
 	}
@@ -67,6 +73,13 @@ Required: --prompt, --model.`)
 			return exitUsage
 		}
 		prompt = agent.PlanOnlyUserPrompt(prompt)
+	} else if *executePlan {
+		var err error
+		prompt, err = prepareRunExecutePlan(b, prompt)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "execute-plan: %v\n", err)
+			return exitUsage
+		}
 	}
 
 	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
@@ -116,6 +129,44 @@ func enableRunPlanOnly(b *loopBundle) error {
 	b.loop.MaxToolCalls = runPlanOnlyMaxToolCalls
 	b.loop.FinalNoToolsOnMaxTurns = true
 	return nil
+}
+
+func prepareRunExecutePlan(b *loopBundle, prompt string) (string, error) {
+	if b == nil || strings.TrimSpace(b.workspace) == "" || strings.TrimSpace(b.sessionID) == "" {
+		return "", fmt.Errorf("session plan is not available")
+	}
+	summary := currentSessionPlanSummary(b)
+	switch {
+	case summary.Error:
+		return "", fmt.Errorf("session %q has an unreadable plan; inspect or clear it with affentctl sessions --plan/--clear-plan", b.sessionID)
+	case summary.Label == planstate.LabelMissing:
+		return "", fmt.Errorf("session %q has no persisted plan; create one with --plan-only first", b.sessionID)
+	case summary.Label == planstate.LabelEmpty:
+		return "", fmt.Errorf("session %q has an empty plan; create a concrete plan with --plan-only first", b.sessionID)
+	case summary.Done:
+		return "", fmt.Errorf("session %q plan is already done; clear it or create a new plan", b.sessionID)
+	case summary.Blocked:
+		return "", fmt.Errorf("session %q plan is blocked at step %d; resolve the blocker before executing", b.sessionID, summary.CurrentStepIndex)
+	case summary.TotalSteps == 0:
+		return "", fmt.Errorf("session %q has no executable plan steps", b.sessionID)
+	}
+	if strings.TrimSpace(prompt) == "" {
+		prompt = "Proceed with the active persisted plan."
+	}
+	return runExecutePlanPrompt(prompt, summary.Label), nil
+}
+
+func runExecutePlanPrompt(request, label string) string {
+	request = strings.TrimSpace(request)
+	if request == "" {
+		request = "Proceed with the active persisted plan."
+	}
+	return `Execute-plan mode is enabled.
+
+The user has confirmed execution of this session's persisted task plan (` + strings.TrimSpace(label) + `). Continue from AFFENT ACTIVE PLAN, execute the next concrete step, update the plan as progress changes, and do not restart planning unless the persisted plan is stale or impossible to execute.
+
+User confirmation/request:
+` + request
 }
 
 // drainBatch is the run-mode drain: records every event via rec,
