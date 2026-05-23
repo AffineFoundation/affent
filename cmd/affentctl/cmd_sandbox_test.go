@@ -185,6 +185,8 @@ func TestAffentDockerfilePackagesRuntimeBinaries(t *testing.T) {
 	}
 	body := string(raw)
 	for _, want := range []string{
+		"COPY docker/go-cgroup-env.sh /tmp/affent-go-cgroup-env",
+		". /tmp/affent-go-cgroup-env",
 		"go build -trimpath -ldflags=\"-s -w\" -o /out/affentctl ./cmd/affentctl",
 		"go build -trimpath -ldflags=\"-s -w\" -o /out/affenteval ./cmd/affenteval",
 		"go build -trimpath -ldflags=\"-s -w\" -o /out/affentserve .",

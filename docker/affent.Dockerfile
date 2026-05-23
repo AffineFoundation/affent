@@ -20,10 +20,12 @@ COPY cmd/affentserve/go.mod cmd/affentserve/go.sum ./cmd/affentserve/
 RUN --mount=type=cache,target=/go/pkg/mod \
     cd cmd/affentserve && go mod download
 
+COPY docker/go-cgroup-env.sh /tmp/affent-go-cgroup-env
 COPY . .
 RUN --mount=type=cache,target=/go/pkg/mod \
     --mount=type=cache,target=/root/.cache/go-build \
-    CGO_ENABLED=0 go build -trimpath -ldflags="-s -w" -o /out/affentctl ./cmd/affentctl \
+    . /tmp/affent-go-cgroup-env \
+    && CGO_ENABLED=0 go build -trimpath -ldflags="-s -w" -o /out/affentctl ./cmd/affentctl \
     && CGO_ENABLED=0 go build -trimpath -ldflags="-s -w" -o /out/affenteval ./cmd/affenteval \
     && cd cmd/affentserve \
     && CGO_ENABLED=0 go build -trimpath -ldflags="-s -w" -o /out/affentserve .
