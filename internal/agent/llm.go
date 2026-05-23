@@ -52,8 +52,13 @@ func (e *RetryableError) Unwrap() error {
 	return e.Err
 }
 
+var retryableHTTPStatuses = map[int]bool{
+	408: true, // Request Timeout
+	429: true, // Too Many Requests
+}
+
 func isRetryableStatus(code int) bool {
-	if code == 408 || code == 429 {
+	if retryableHTTPStatuses[code] {
 		return true
 	}
 	return code >= 500 && code <= 599
@@ -64,6 +69,13 @@ func isRetryableStatus(code int) bool {
 // 86400" would otherwise mean "come back tomorrow"). Hit this cap and
 // we fall back to exponential backoff for that attempt.
 const MaxRespectedRetryAfter = 5 * time.Minute
+
+const (
+	maxLLMErrorBodyBytes   = 64 * 1024
+	streamEventChanBuffer  = 32
+	streamScannerInitBytes = 64 * 1024
+	streamScannerMaxBytes  = 4 * 1024 * 1024
+)
 
 // Stream watchdog. Some upstreams (notably GLM tool_call mode through
 // chutes) emit a finish_reason chunk and then forget to send the
@@ -368,7 +380,7 @@ func (c *LLMClient) Chat(ctx context.Context, msgs []ChatMessage, tools []ToolDe
 		// unbounded ReadAll would let a hostile or misconfigured
 		// endpoint OOM the loop by serving a multi-GB HTML error page
 		// on a 502.
-		errBody, _ := io.ReadAll(io.LimitReader(resp.Body, 64*1024))
+		errBody, _ := io.ReadAll(io.LimitReader(resp.Body, maxLLMErrorBodyBytes))
 		retryAfter := parseRetryAfter(resp.Header.Get("Retry-After"))
 		resp.Body.Close()
 		base := fmt.Errorf("chat http %d: %s", resp.StatusCode, errBody)
@@ -378,7 +390,7 @@ func (c *LLMClient) Chat(ctx context.Context, msgs []ChatMessage, tools []ToolDe
 		return nil, base
 	}
 
-	out := make(chan StreamEvent, 32)
+	out := make(chan StreamEvent, streamEventChanBuffer)
 	go consumeStream(ctx, resp.Body, out)
 	return out, nil
 }
@@ -395,7 +407,7 @@ func consumeStream(ctx context.Context, body io.ReadCloser, out chan<- StreamEve
 	defer body.Close()
 
 	sc := bufio.NewScanner(body)
-	sc.Buffer(make([]byte, 0, 64*1024), 4*1024*1024)
+	sc.Buffer(make([]byte, 0, streamScannerInitBytes), streamScannerMaxBytes)
 
 	// idleTimeout is reset every time a chunk arrives. If the gap
 	// between chunks exceeds it, the watchdog calls body.Close() which

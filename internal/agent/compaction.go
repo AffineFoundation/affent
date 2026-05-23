@@ -352,21 +352,26 @@ func truncateChars(s string, n int) string {
 //   - Together / Fireworks: "input length is greater than the maximum allowed", "is greater than the maximum allowed token count"
 //   - vLLM / sglang / TGI:  "context_length_exceeded", "string too long"
 //   - Chutes / OpenRouter:  pass-through of any of the above
+// contextOverflowKeywords covers the phrasing each major
+// OpenAI-compatible provider emits when input length exceeds the
+// context window. Collected from production errors, not the spec.
+var contextOverflowKeywords = []string{
+	"context length", "context window", "maximum context",
+	"context_length_exceeded",
+	"maximum allowed length", "maximum allowed token",
+	"input length", "input is too long",
+	"prompt is too long", "too many tokens",
+	"exceeds the maximum",
+	"request too large", "request_too_large",
+	"contextwindowexceedederror", "string too long",
+}
+
 func IsContextOverflow(err error) bool {
 	if err == nil {
 		return false
 	}
 	s := strings.ToLower(err.Error())
-	for _, kw := range []string{
-		"context length", "context window", "maximum context",
-		"context_length_exceeded",
-		"maximum allowed length", "maximum allowed token",
-		"input length", "input is too long",
-		"prompt is too long", "too many tokens",
-		"exceeds the maximum",
-		"request too large", "request_too_large",
-		"contextwindowexceedederror", "string too long",
-	} {
+	for _, kw := range contextOverflowKeywords {
 		if strings.Contains(s, kw) {
 			return true
 		}
