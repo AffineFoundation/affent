@@ -119,6 +119,9 @@ func planTool(path string) *Tool {
 				if len(st.Steps) == 0 {
 					return "", errors.New("no active plan to update\nNext: call plan with action=set and concise steps before updating a step")
 				}
+				if !present["index"] {
+					return "", errors.New("index is required when action=update\nNext: call plan with action=view, then retry with a valid 1-based index")
+				}
 				if p.Index < 1 || p.Index > len(st.Steps) {
 					return "", fmt.Errorf("index %d is outside the current plan length %d\nNext: call plan with action=view, then update a valid 1-based index", p.Index, len(st.Steps))
 				}

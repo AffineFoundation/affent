@@ -224,6 +224,17 @@ func TestPlanToolUpdateRequiresChangedField(t *testing.T) {
 	}
 }
 
+func TestPlanToolUpdateRequiresIndexWhenPlanExists(t *testing.T) {
+	tool := planTool(filepath.Join(t.TempDir(), "plan.json"))
+	if _, err := tool.Execute(context.Background(), json.RawMessage(`{"action":"set","steps":[{"text":"x"}]}`)); err != nil {
+		t.Fatalf("set: %v", err)
+	}
+	_, err := tool.Execute(context.Background(), json.RawMessage(`{"action":"update","status":"completed"}`))
+	if err == nil || !strings.Contains(err.Error(), "index is required when action=update") {
+		t.Fatalf("error = %v, want missing-index rejection", err)
+	}
+}
+
 func TestPlanToolSchemaRejectsUnknownArguments(t *testing.T) {
 	tool := planTool(filepath.Join(t.TempDir(), "plan.json"))
 	var schema struct {
