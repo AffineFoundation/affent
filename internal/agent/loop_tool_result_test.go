@@ -536,6 +536,9 @@ func TestRunTurn_LoopGuardForcesNoToolSummaryAfterRepeatedInterventions(t *testi
 				if p.ToolStats == nil || p.ToolStats.LoopGuardInterventions < 2 || p.ToolStats.ForcedNoTools != 1 {
 					t.Fatalf("expected guard stats in turn.end, got %+v", p.ToolStats)
 				}
+				if p.ToolStats.ToolErrors < 2 {
+					t.Fatalf("expected guard tool errors in turn.end, got %+v", p.ToolStats)
+				}
 				select {
 				case ok := <-noToolsReq:
 					if !ok {
@@ -882,6 +885,9 @@ func TestRunTurn_MaxToolCallsForcesNoToolSummary(t *testing.T) {
 			}
 			if !sawSkipped {
 				t.Fatal("expected skipped tool result for capped second tool")
+			}
+			if p.ToolStats == nil || p.ToolStats.ToolRequests != 2 || p.ToolStats.ToolErrors != 1 {
+				t.Fatalf("expected one successful request and one skipped error, got %+v", p.ToolStats)
 			}
 			if got := atomic.LoadInt32(&secondToolRan); got != 0 {
 				t.Fatalf("second tool should not run after cap; got %d calls", got)

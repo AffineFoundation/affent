@@ -123,6 +123,7 @@ var toolStatsAccessors = map[string]func(ToolRuntimeStats) int{
 	"tool_requests":            func(s ToolRuntimeStats) int { return s.ToolRequests },
 	"tool_name_canonicalized":  func(s ToolRuntimeStats) int { return s.ToolNameCanonicalized },
 	"tool_args_repaired":       func(s ToolRuntimeStats) int { return s.ToolArgsRepaired },
+	"tool_errors":              func(s ToolRuntimeStats) int { return s.ToolErrors },
 	"loop_guard_interventions": func(s ToolRuntimeStats) int { return s.LoopGuardInterventions },
 	"forced_no_tools":          func(s ToolRuntimeStats) int { return s.ForcedNoTools },
 }

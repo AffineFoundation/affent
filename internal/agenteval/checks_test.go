@@ -141,9 +141,12 @@ func TestToolRequestRepaired(t *testing.T) {
 }
 
 func TestToolStatsAtLeast(t *testing.T) {
-	trace := Trace{ToolStats: ToolRuntimeStats{ToolArgsRepaired: 2}}
+	trace := Trace{ToolStats: ToolRuntimeStats{ToolArgsRepaired: 2, ToolErrors: 1}}
 	if res := ToolStatsAtLeast("tool_args_repaired", 2).Eval(trace); !res.Pass {
 		t.Fatalf("expected stats check to pass: %+v", res)
+	}
+	if res := ToolStatsAtLeast("tool_errors", 1).Eval(trace); !res.Pass {
+		t.Fatalf("expected tool_errors stats check to pass: %+v", res)
 	}
 	if res := ToolStatsAtLeast("tool_args_repaired", 3).Eval(trace); res.Pass {
 		t.Fatal("expected stats check below threshold to fail")

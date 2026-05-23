@@ -479,12 +479,16 @@ func (l *Loop) runTurn(ctx context.Context, turnID, userText string) {
 			break
 		}
 		if forceNoToolsNext {
-			l.appendSkippedToolResults(turnID, final.Final.ToolCalls, "(loop_guard requested a final answer; tools disabled for this step)")
+			skipped := l.appendSkippedToolResults(turnID, final.Final.ToolCalls, "(loop_guard requested a final answer; tools disabled for this step)")
+			toolStats.ToolRequests += skipped
+			toolStats.ToolErrors += skipped
 			endReason = sse.TurnEndMaxTurns
 			break
 		}
 		if toolRounds >= steps {
-			l.appendSkippedToolResults(turnID, final.Final.ToolCalls, "(max_turns reached before this tool ran)")
+			skipped := l.appendSkippedToolResults(turnID, final.Final.ToolCalls, "(max_turns reached before this tool ran)")
+			toolStats.ToolRequests += skipped
+			toolStats.ToolErrors += skipped
 			if l.FinalNoToolsOnMaxTurns {
 				final, reason, err := l.runStep(ctx, turnID, nil)
 				if err != nil {
@@ -498,7 +502,9 @@ func (l *Loop) runTurn(ctx context.Context, turnID, userText string) {
 						finishedNaturally = true
 						break
 					}
-					l.appendSkippedToolResults(turnID, final.Final.ToolCalls, "(max_turns reached; final no-tool answer requested)")
+					skipped := l.appendSkippedToolResults(turnID, final.Final.ToolCalls, "(max_turns reached; final no-tool answer requested)")
+					toolStats.ToolRequests += skipped
+					toolStats.ToolErrors += skipped
 				}
 			}
 			endReason = sse.TurnEndMaxTurns
@@ -509,7 +515,9 @@ func (l *Loop) runTurn(ctx context.Context, turnID, userText string) {
 		// conversation, then loop back to ask the model for the next step.
 		for i, tc := range final.Final.ToolCalls {
 			if l.MaxToolCalls > 0 && toolCallsUsed >= l.MaxToolCalls {
-				l.appendSkippedToolResults(turnID, final.Final.ToolCalls[i:], "(tool call budget reached before this tool ran)")
+				skipped := l.appendSkippedToolResults(turnID, final.Final.ToolCalls[i:], "(tool call budget reached before this tool ran)")
+				toolStats.ToolRequests += skipped
+				toolStats.ToolErrors += skipped
 				toolBudgetExhausted = true
 				break
 			}
@@ -535,7 +543,9 @@ func (l *Loop) runTurn(ctx context.Context, turnID, userText string) {
 				// IDs are already non-empty (ensureToolCallIDs ran
 				// before persistence in consumeAndPersist) so we can
 				// use skipped.ID directly without the old fallback.
-				l.appendSkippedToolResults(turnID, final.Final.ToolCalls[i:], "(cancelled by user before this tool ran)")
+				skipped := l.appendSkippedToolResults(turnID, final.Final.ToolCalls[i:], "(cancelled by user before this tool ran)")
+				toolStats.ToolRequests += skipped
+				toolStats.ToolErrors += skipped
 				break
 			}
 			callID := tc.ID
@@ -589,6 +599,7 @@ func (l *Loop) runTurn(ctx context.Context, turnID, userText string) {
 				result := fmt.Sprintf("tool_arg_repair: %v", argsRepairErr)
 				l.publishAndAppendToolResult(callID, toolName, result, true)
 				toolCallsUsed++
+				toolStats.ToolErrors++
 				continue
 			}
 			if repairMsg := formatRepairDebug(toolName, canonicalChanged, argsRepaired); repairMsg != "" {
@@ -609,6 +620,7 @@ func (l *Loop) runTurn(ctx context.Context, turnID, userText string) {
 					l.Log.Error().Err(err).Str("call_id", callID).Msg("conv append tool guard result")
 				}
 				toolCallsUsed++
+				toolStats.ToolErrors++
 				continue
 			}
 			if firstToolPolicy != nil && toolName == firstToolPolicy.ToolName {
@@ -629,6 +641,7 @@ func (l *Loop) runTurn(ctx context.Context, turnID, userText string) {
 					l.Log.Error().Err(err).Str("call_id", callID).Msg("conv append post-tool repeat guard result")
 				}
 				toolCallsUsed++
+				toolStats.ToolErrors++
 				continue
 			}
 			if postToolActive && postToolPolicy.blocks(toolName) {
@@ -646,11 +659,13 @@ func (l *Loop) runTurn(ctx context.Context, turnID, userText string) {
 					l.Log.Error().Err(err).Str("call_id", callID).Msg("conv append post-tool guard result")
 				}
 				toolCallsUsed++
+				toolStats.ToolErrors++
 				continue
 			}
 			if result := loopGuard.recordAttempt(toolName, args); result != "" {
 				l.publishAndAppendToolResult(callID, toolName, result, true)
 				toolCallsUsed++
+				toolStats.ToolErrors++
 				guardInterventions++
 				toolStats.LoopGuardInterventions++
 				if guardInterventions >= 2 {
@@ -686,6 +701,9 @@ func (l *Loop) runTurn(ctx context.Context, turnID, userText string) {
 			if postToolPolicy != nil && toolName == postToolPolicy.ToolName && postToolPolicy.shouldActivate(result, isErr) {
 				postToolActive = true
 			}
+			if isErr {
+				toolStats.ToolErrors++
+			}
 		}
 		if toolBudgetExhausted {
 			if l.FinalNoToolsOnMaxTurns {
@@ -701,7 +719,9 @@ func (l *Loop) runTurn(ctx context.Context, turnID, userText string) {
 						finishedNaturally = true
 						break
 					}
-					l.appendSkippedToolResults(turnID, final.Final.ToolCalls, "(tool call budget reached; final no-tool answer requested)")
+					skipped := l.appendSkippedToolResults(turnID, final.Final.ToolCalls, "(tool call budget reached; final no-tool answer requested)")
+					toolStats.ToolRequests += skipped
+					toolStats.ToolErrors += skipped
 				}
 			}
 			endReason = sse.TurnEndMaxTurns
@@ -859,6 +879,7 @@ func toolRuntimeStatsPtr(stats sse.ToolRuntimeStats) *sse.ToolRuntimeStats {
 	if stats.ToolRequests == 0 &&
 		stats.ToolNameCanonicalized == 0 &&
 		stats.ToolArgsRepaired == 0 &&
+		stats.ToolErrors == 0 &&
 		stats.LoopGuardInterventions == 0 &&
 		stats.ForcedNoTools == 0 {
 		return nil
@@ -866,7 +887,7 @@ func toolRuntimeStatsPtr(stats sse.ToolRuntimeStats) *sse.ToolRuntimeStats {
 	return &stats
 }
 
-func (l *Loop) appendSkippedToolResults(turnID string, calls []ToolCall, content string) {
+func (l *Loop) appendSkippedToolResults(turnID string, calls []ToolCall, content string) int {
 	for _, skipped := range calls {
 		callID := skipped.ID
 		name := skipped.Function.Name
@@ -883,6 +904,7 @@ func (l *Loop) appendSkippedToolResults(turnID string, calls []ToolCall, content
 			l.Log.Error().Err(appendErr).Str("call_id", callID).Msg("conv append skipped tool result")
 		}
 	}
+	return len(calls)
 }
 
 // consumeAndPersist drains a single LLM streaming call: emits
