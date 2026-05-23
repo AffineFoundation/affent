@@ -595,6 +595,8 @@ Native session endpoints:
 - `GET /v1/sessions/{id}` returns session status.
 - `GET /v1/sessions/{id}/events` streams live SSE events.
 - `GET /v1/sessions/{id}/history?after=-1&limit=100` pages persisted events.
+- `GET /v1/sessions/{id}/tools` lists the active session's actual tool
+  catalog, including JSON schemas.
 - `GET /v1/sessions/{id}/artifacts` lists durable tool-result artifacts.
 - `GET /v1/sessions/{id}/artifacts/{path}` reads a bounded artifact chunk.
 - `DELETE /v1/sessions/{id}` closes and purges the session.
