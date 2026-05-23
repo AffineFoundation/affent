@@ -5,6 +5,7 @@ import (
 	"errors"
 	"flag"
 	"fmt"
+	"io"
 	"os"
 	"strconv"
 	"strings"
@@ -97,22 +98,40 @@ success and trace-level process quality.`)
 	failures := 0
 	for _, scenario := range scenarios {
 		res := runner.Run(ctx, scenario)
-		status := "PASS"
 		if !res.OK {
-			status = "FAIL"
 			failures++
 		}
-		fmt.Printf("%s %s (%s)\n", status, res.BatchScenario, res.Duration.Round(time.Millisecond))
-		fmt.Printf("  workspace: %s\n", res.Workspace)
-		fmt.Printf("  trace: %s\n", res.TracePath)
-		for _, failure := range res.Failures {
-			fmt.Printf("  - %s\n", failure)
-		}
+		printBatchResult(os.Stdout, res)
 	}
 	if failures > 0 {
 		return 1
 	}
 	return 0
+}
+
+func printBatchResult(w io.Writer, res agenteval.BatchResult) {
+	status := "PASS"
+	if !res.OK {
+		status = "FAIL"
+	}
+	fmt.Fprintf(w, "%s %s (%s)\n", status, res.BatchScenario, res.Duration.Round(time.Millisecond))
+	fmt.Fprintf(w, "  workspace: %s\n", res.Workspace)
+	fmt.Fprintf(w, "  trace: %s\n", res.TracePath)
+	fmt.Fprintf(w, "  metrics: tools=%d errors=%d repaired=%d tool_ms=%d tokens=%d/%d",
+		res.ToolCalls,
+		res.ToolStats.ToolErrors,
+		res.ToolStats.ToolArgsRepaired,
+		res.ToolStats.ToolDurationMS,
+		res.Usage.InputTokens,
+		res.Usage.OutputTokens,
+	)
+	if res.TurnEndReason != "" {
+		fmt.Fprintf(w, " end=%s", res.TurnEndReason)
+	}
+	fmt.Fprintln(w)
+	for _, failure := range res.Failures {
+		fmt.Fprintf(w, "  - %s\n", failure)
+	}
 }
 
 func validateRunConfig(temperature string, timeout time.Duration) error {

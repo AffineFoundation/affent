@@ -60,6 +60,10 @@ type BatchResult struct {
 	Failures      []string
 	Duration      time.Duration
 	FinalText     string
+	TurnEndReason string
+	ToolCalls     int
+	ToolStats     ToolRuntimeStats
+	Usage         Usage
 }
 
 func BuiltinBatchScenarios() []BatchScenario {
@@ -219,6 +223,10 @@ func (r BatchRunner) Run(ctx context.Context, scenario BatchScenario) BatchResul
 	if err != nil {
 		res.Failures = append(res.Failures, fmt.Sprintf("parse trace: %v", err))
 	} else {
+		res.TurnEndReason = trace.TurnEndReason
+		res.ToolCalls = len(trace.Tools)
+		res.ToolStats = trace.ToolStats
+		res.Usage = trace.Usage
 		res.Failures = append(res.Failures, CheckBatchTrace(trace, scenario)...)
 	}
 	if scenario.ExpectedSkill != "" {

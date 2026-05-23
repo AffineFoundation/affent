@@ -6,6 +6,9 @@ import (
 	"os"
 	"strings"
 	"testing"
+	"time"
+
+	"github.com/affinefoundation/affent/internal/agenteval"
 )
 
 func TestRunListSuites(t *testing.T) {
@@ -104,6 +107,36 @@ func TestRunRejectsInvalidConfigBeforeScenarios(t *testing.T) {
 				t.Fatalf("stderr missing %q:\n%s", tc.want, stderr)
 			}
 		})
+	}
+}
+
+func TestPrintBatchResultIncludesTraceMetrics(t *testing.T) {
+	var out bytes.Buffer
+	printBatchResult(&out, agenteval.BatchResult{
+		BatchScenario: "sample",
+		Workspace:     "/tmp/ws",
+		TracePath:     "/tmp/ws/trace.jsonl",
+		OK:            true,
+		Duration:      1234 * time.Millisecond,
+		TurnEndReason: "completed",
+		ToolCalls:     3,
+		ToolStats: agenteval.ToolRuntimeStats{
+			ToolArgsRepaired: 1,
+			ToolErrors:       2,
+			ToolDurationMS:   45,
+		},
+		Usage: agenteval.Usage{InputTokens: 100, OutputTokens: 25},
+	})
+	got := out.String()
+	for _, want := range []string{
+		"PASS sample (1.234s)",
+		"workspace: /tmp/ws",
+		"trace: /tmp/ws/trace.jsonl",
+		"metrics: tools=3 errors=2 repaired=1 tool_ms=45 tokens=100/25 end=completed",
+	} {
+		if !strings.Contains(got, want) {
+			t.Fatalf("output missing %q:\n%s", want, got)
+		}
 	}
 }
 
