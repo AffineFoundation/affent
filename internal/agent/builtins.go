@@ -129,6 +129,20 @@ func RegisterBuiltins(r *Registry, deps BuiltinDeps) {
 
 type SkillInstallConfirmer func(proposalID string) bool
 
+func decodeStrictToolArgs[T any](args json.RawMessage) (T, error) {
+	var p T
+	dec := json.NewDecoder(bytes.NewReader(args))
+	dec.DisallowUnknownFields()
+	if err := dec.Decode(&p); err != nil {
+		return p, err
+	}
+	var extra struct{}
+	if err := dec.Decode(&extra); !errors.Is(err, io.EOF) {
+		return p, errors.New("arguments must contain a single JSON object")
+	}
+	return p, nil
+}
+
 type skillToolArgs struct {
 	Action      string   `json:"action"`
 	Name        string   `json:"name"`
@@ -274,15 +288,9 @@ func skillTool(reg *SkillRegistry, skillDir string, confirmInstall SkillInstallC
 }
 
 func decodeSkillToolArgs(args json.RawMessage) (skillToolArgs, map[string]bool, error) {
-	var p skillToolArgs
-	dec := json.NewDecoder(bytes.NewReader(args))
-	dec.DisallowUnknownFields()
-	if err := dec.Decode(&p); err != nil {
+	p, err := decodeStrictToolArgs[skillToolArgs](args)
+	if err != nil {
 		return skillToolArgs{}, nil, err
-	}
-	var extra struct{}
-	if err := dec.Decode(&extra); !errors.Is(err, io.EOF) {
-		return skillToolArgs{}, nil, errors.New("arguments must contain a single JSON object")
 	}
 	var raw map[string]json.RawMessage
 	if err := json.Unmarshal(args, &raw); err != nil {
@@ -369,12 +377,12 @@ func shellTool(deps BuiltinDeps) *Tool {
 		Description: "Run one Linux shell command for tests/builds/git/rg/python/node/package checks. Output includes stdout, stderr, and [exit N]. Large stdout/stderr streams are capped; redirect huge logs to files and inspect chunks. Do not mask verification exits with | head, | tail, || true, or echo $?. Prefer read_file/list_files for ordinary workspace reads.",
 		Schema:      schema,
 		Execute: func(ctx context.Context, args json.RawMessage) (string, error) {
-			var p struct {
+			p, err := decodeStrictToolArgs[struct {
 				Command    string `json:"command"`
 				Cwd        string `json:"cwd"`
 				TimeoutSec int    `json:"timeout_sec"`
-			}
-			if err := json.Unmarshal(args, &p); err != nil {
+			}](args)
+			if err != nil {
 				return "", fmt.Errorf("decode args: %w", err)
 			}
 			if strings.TrimSpace(p.Command) == "" {
@@ -655,11 +663,11 @@ func readFileTool(deps BuiltinDeps) *Tool {
 		Description: "Read one text file from the workspace. Use before editing. For huge files, inspect targeted chunks with shell grep/sed/head/tail.",
 		Schema:      schema,
 		Execute: func(ctx context.Context, args json.RawMessage) (string, error) {
-			var p struct {
+			p, err := decodeStrictToolArgs[struct {
 				Path     string `json:"path"`
 				MaxBytes int    `json:"max_bytes"`
-			}
-			if err := json.Unmarshal(args, &p); err != nil {
+			}](args)
+			if err != nil {
 				return "", err
 			}
 			p.Path = strings.TrimSpace(p.Path)
@@ -820,11 +828,11 @@ func writeFileTool(deps BuiltinDeps) *Tool {
 		Description: fmt.Sprintf("Create or overwrite one workspace file, up to %d bytes. Prefer edit_file for small changes to existing files; use shell to generate large artifacts inside the workspace.", MaxWriteFileBytes),
 		Schema:      schema,
 		Execute: func(ctx context.Context, args json.RawMessage) (string, error) {
-			var p struct {
+			p, err := decodeStrictToolArgs[struct {
 				Path    string `json:"path"`
 				Content string `json:"content"`
-			}
-			if err := json.Unmarshal(args, &p); err != nil {
+			}](args)
+			if err != nil {
 				return "", err
 			}
 			p.Path = strings.TrimSpace(p.Path)
@@ -875,13 +883,13 @@ func editFileTool(deps BuiltinDeps) *Tool {
 		Description: "Exact find-and-replace in one workspace file. Use after read_file; old must match exactly and uniquely unless replace_all=true.",
 		Schema:      schema,
 		Execute: func(ctx context.Context, args json.RawMessage) (string, error) {
-			var p struct {
+			p, err := decodeStrictToolArgs[struct {
 				Path       string `json:"path"`
 				Old        string `json:"old"`
 				New        string `json:"new"`
 				ReplaceAll bool   `json:"replace_all"`
-			}
-			if err := json.Unmarshal(args, &p); err != nil {
+			}](args)
+			if err != nil {
 				return "", err
 			}
 			p.Path = strings.TrimSpace(p.Path)
@@ -959,11 +967,11 @@ func listFilesTool(deps BuiltinDeps) *Tool {
 		Description: "List one workspace directory. Use for orientation; use shell find/ls/rg for deep or filtered searches.",
 		Schema:      schema,
 		Execute: func(ctx context.Context, args json.RawMessage) (string, error) {
-			var p struct {
+			p, err := decodeStrictToolArgs[struct {
 				Path       string `json:"path"`
 				MaxEntries int    `json:"max_entries"`
-			}
-			if err := json.Unmarshal(args, &p); err != nil {
+			}](args)
+			if err != nil {
 				return "", err
 			}
 			p.Path = strings.TrimSpace(p.Path)

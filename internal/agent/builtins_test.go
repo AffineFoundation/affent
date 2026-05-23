@@ -602,6 +602,35 @@ func TestBuiltinToolSchemasRejectUnknownArguments(t *testing.T) {
 	}
 }
 
+func TestBuiltinToolsRejectUnknownArgumentsAtRuntime(t *testing.T) {
+	tmp := t.TempDir()
+	if err := os.WriteFile(filepath.Join(tmp, "note.txt"), []byte("hello"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	cases := []struct {
+		name string
+		tool *Tool
+		args json.RawMessage
+	}{
+		{name: "shell", tool: shellTool(BuiltinDeps{Executor: &recordingExec{}}), args: json.RawMessage(`{"command":"pwd","unused":true}`)},
+		{name: "read_file", tool: readFileTool(BuiltinDeps{HostWorkspaceDir: tmp}), args: json.RawMessage(`{"path":"note.txt","unused":true}`)},
+		{name: "write_file", tool: writeFileTool(BuiltinDeps{HostWorkspaceDir: tmp}), args: json.RawMessage(`{"path":"out.txt","content":"x","mode":"0644"}`)},
+		{name: "edit_file", tool: editFileTool(BuiltinDeps{HostWorkspaceDir: tmp}), args: json.RawMessage(`{"path":"note.txt","old":"hello","new":"hi","dry_run":true}`)},
+		{name: "list_files", tool: listFilesTool(BuiltinDeps{HostWorkspaceDir: tmp}), args: json.RawMessage(`{"path":".","recursive":true}`)},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			_, err := c.tool.Execute(context.Background(), c.args)
+			if err == nil {
+				t.Fatal("expected unknown field error")
+			}
+			if !strings.Contains(err.Error(), "unknown field") {
+				t.Fatalf("error = %v, want unknown field", err)
+			}
+		})
+	}
+}
+
 func TestFileToolsRejectBlankRequiredStrings(t *testing.T) {
 	for _, c := range []struct {
 		name string
