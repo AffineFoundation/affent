@@ -131,10 +131,10 @@ func skillTool(reg *SkillRegistry) *Tool {
 			}
 			action := strings.TrimSpace(p.Action)
 			if action == "" {
-				return "", errors.New("action is required")
+				return "", errors.New("action is required\nNext: retry skill with action=list to inspect skills, or action=read with a valid name")
 			}
 			if len(action) > maxSkillActionBytes {
-				return "", fmt.Errorf("action is %d bytes; skill action supports up to %d bytes", len(action), maxSkillActionBytes)
+				return "", fmt.Errorf("action is %d bytes; skill action supports up to %d bytes\nNext: retry skill with action=list or action=read", len(action), maxSkillActionBytes)
 			}
 			switch action {
 			case "list":
@@ -146,18 +146,18 @@ func skillTool(reg *SkillRegistry) *Tool {
 			case "read":
 				name := strings.TrimSpace(p.Name)
 				if name == "" {
-					return "", errors.New("name is required when action=read")
+					return "", errors.New("name is required when action=read\nNext: call skill with action=list, then retry action=read with one of the listed names")
 				}
 				if len(name) > maxSkillNameBytes {
-					return "", fmt.Errorf("name is %d bytes; skill name supports up to %d bytes", len(name), maxSkillNameBytes)
+					return "", fmt.Errorf("name is %d bytes; skill name supports up to %d bytes\nNext: call skill with action=list, then retry action=read with the exact listed skill name", len(name), maxSkillNameBytes)
 				}
 				s, ok := reg.Lookup(name)
 				if !ok {
-					return "", fmt.Errorf("unknown skill %q (valid: %s)", name, strings.Join(reg.Names(), ", "))
+					return "", fmt.Errorf("unknown skill %q (valid: %s)\nNext: call skill with action=list and retry action=read with one of the listed names", name, strings.Join(reg.Names(), ", "))
 				}
 				return strings.TrimSpace(s.Body), nil
 			default:
-				return "", fmt.Errorf("unsupported action %q (valid: list, read)", action)
+				return "", fmt.Errorf("unsupported action %q (valid: list, read)\nNext: retry skill with action=list or action=read", action)
 			}
 		},
 	}

@@ -1241,8 +1241,8 @@ func TestSkillToolListsAndReadsEmbeddedSkills(t *testing.T) {
 	if !strings.Contains(body, "AFFENT ACTIVE SKILL: coding_repair_workflow") || !strings.Contains(body, "Reproduce first") {
 		t.Fatalf("skill read returned unexpected body:\n%s", body)
 	}
-	if _, err := tool.Execute(ctx, json.RawMessage(`{"action":"read","name":"missing"}`)); err == nil {
-		t.Fatal("unknown skill should fail")
+	if _, err := tool.Execute(ctx, json.RawMessage(`{"action":"read","name":"missing"}`)); err == nil || !strings.Contains(err.Error(), "Next:") {
+		t.Fatalf("unknown skill error = %v, want Next guidance", err)
 	}
 }
 
@@ -1268,19 +1268,22 @@ func TestSkillToolPublishesAndRejectsBlankRequiredStrings(t *testing.T) {
 	if schema.Properties["name"].MaxLength != maxSkillNameBytes {
 		t.Fatalf("name maxLength = %d, want %d", schema.Properties["name"].MaxLength, maxSkillNameBytes)
 	}
-	if _, err := tool.Execute(context.Background(), json.RawMessage(`{"action":"   "}`)); err == nil || !strings.Contains(err.Error(), "action is required") {
+	if _, err := tool.Execute(context.Background(), json.RawMessage(`{"action":"   "}`)); err == nil || !strings.Contains(err.Error(), "action is required") || !strings.Contains(err.Error(), "Next:") {
 		t.Fatalf("blank action error = %v, want action is required", err)
 	}
-	if _, err := tool.Execute(context.Background(), json.RawMessage(`{"action":"read","name":"   "}`)); err == nil || !strings.Contains(err.Error(), "name is required") {
+	if _, err := tool.Execute(context.Background(), json.RawMessage(`{"action":"read","name":"   "}`)); err == nil || !strings.Contains(err.Error(), "name is required") || !strings.Contains(err.Error(), "Next:") {
 		t.Fatalf("blank name error = %v, want name is required", err)
 	}
 	longAction := strings.Repeat("x", maxSkillActionBytes+1)
-	if _, err := tool.Execute(context.Background(), json.RawMessage(`{"action":"`+longAction+`"}`)); err == nil || !strings.Contains(err.Error(), "skill action supports up to") {
+	if _, err := tool.Execute(context.Background(), json.RawMessage(`{"action":"`+longAction+`"}`)); err == nil || !strings.Contains(err.Error(), "skill action supports up to") || !strings.Contains(err.Error(), "Next:") {
 		t.Fatalf("oversized action error = %v, want action length error", err)
 	}
 	longName := strings.Repeat("x", maxSkillNameBytes+1)
-	if _, err := tool.Execute(context.Background(), json.RawMessage(`{"action":"read","name":"`+longName+`"}`)); err == nil || !strings.Contains(err.Error(), "skill name supports up to") {
+	if _, err := tool.Execute(context.Background(), json.RawMessage(`{"action":"read","name":"`+longName+`"}`)); err == nil || !strings.Contains(err.Error(), "skill name supports up to") || !strings.Contains(err.Error(), "Next:") {
 		t.Fatalf("oversized name error = %v, want name length error", err)
+	}
+	if _, err := tool.Execute(context.Background(), json.RawMessage(`{"action":"load"}`)); err == nil || !strings.Contains(err.Error(), "unsupported action") || !strings.Contains(err.Error(), "Next:") {
+		t.Fatalf("unsupported action error = %v, want Next guidance", err)
 	}
 }
 
