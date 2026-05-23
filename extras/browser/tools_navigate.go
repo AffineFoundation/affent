@@ -12,6 +12,11 @@ import (
 	"github.com/go-rod/rod"
 )
 
+const (
+	maxBrowserURLBytes      = 4096
+	maxBrowserWaitTextBytes = 2048
+)
+
 // NavigateTool returns the `browser_navigate` tool.
 //
 // Behavior:
@@ -25,13 +30,14 @@ import (
 // LLM sees them and can recover, matching the rest of affent's
 // builtin-tool conventions.
 func NavigateTool(s *Session) *agent.Tool {
-	schema := json.RawMessage(`{
+	schema := json.RawMessage(fmt.Sprintf(`{
         "type": "object",
         "required": ["url"],
         "properties": {
             "url": {
                 "type": "string",
                 "minLength": 1,
+                "maxLength": %d,
                 "description": "The fully-qualified URL to open (http:// or https://)."
             },
             "wait_until": {
@@ -40,7 +46,7 @@ func NavigateTool(s *Session) *agent.Tool {
                 "description": "What event ends the navigation. Default 'load'. Use 'networkidle' for SPAs whose content arrives via XHR after load."
             }
         }
-    }`)
+    }`, maxBrowserURLBytes))
 
 	return &agent.Tool{
 		Name: "browser_navigate",
@@ -59,6 +65,9 @@ func NavigateTool(s *Session) *agent.Tool {
 			args.URL = strings.TrimSpace(args.URL)
 			if args.URL == "" {
 				return "", errors.New("url is required")
+			}
+			if len(args.URL) > maxBrowserURLBytes {
+				return "", fmt.Errorf("url is %d bytes; browser_navigate supports URLs up to %d bytes", len(args.URL), maxBrowserURLBytes)
 			}
 			if !strings.HasPrefix(args.URL, "http://") && !strings.HasPrefix(args.URL, "https://") {
 				return "", fmt.Errorf("url must start with http:// or https:// (got %q)", args.URL)
@@ -198,6 +207,7 @@ func WaitTool(s *Session) *agent.Tool {
             "value": {
                 "type": "string",
                 "minLength": 1,
+                "maxLength": %d,
                 "description": "Required when 'for' is 'text'; the substring to wait for in the page body."
             },
             "timeout_ms": {
@@ -207,7 +217,7 @@ func WaitTool(s *Session) *agent.Tool {
                 "description": "Max time to wait in milliseconds. Default %d."
             }
         }
-    }`, minBrowserWaitTimeoutMS, maxBrowserWaitTimeoutMS, defaultBrowserWaitTimeoutMS))
+    }`, maxBrowserWaitTextBytes, minBrowserWaitTimeoutMS, maxBrowserWaitTimeoutMS, defaultBrowserWaitTimeoutMS))
 	return &agent.Tool{
 		Name: "browser_wait",
 		Description: "Explicitly wait for a page condition (load event, DOM stable, network idle, or a substring appearing) before taking a snapshot. " +
@@ -234,6 +244,9 @@ func WaitTool(s *Session) *agent.Tool {
 			if args.For == "text" {
 				if args.Value == "" {
 					return "", errors.New("'value' is required when 'for'='text'")
+				}
+				if len(args.Value) > maxBrowserWaitTextBytes {
+					return "", fmt.Errorf("'value' is %d bytes; browser_wait text supports values up to %d bytes", len(args.Value), maxBrowserWaitTextBytes)
 				}
 			}
 			if s.page == nil {
