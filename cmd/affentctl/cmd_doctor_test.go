@@ -156,6 +156,17 @@ func TestDoctorCmdReportsReadyLocalConfig(t *testing.T) {
 		"repairable_tool_args=1MiB",
 		"project_context=32KiB",
 		"mcp_result=256KiB",
+		"ok capabilities:",
+		"shell_file=true",
+		"skill_install=true",
+		"memory=true",
+		"memory_only=false",
+		"session_search=true",
+		"project_context=true",
+		"subagent=true",
+		"subagent_max_depth=2",
+		"focused_tasks=true",
+		"executor=local",
 		"ok executor:",
 		"local",
 		"ok runtime-image:",
@@ -166,6 +177,36 @@ func TestDoctorCmdReportsReadyLocalConfig(t *testing.T) {
 	}
 	if strings.Contains(got, "error ") {
 		t.Fatalf("doctor output should not contain errors:\n%s", got)
+	}
+}
+
+func TestDoctorCapabilitySummaryMemoryOnlyMatchesRegisteredTools(t *testing.T) {
+	got := doctorCapabilitySummary(commonFlags{
+		memoryEnabled:       true,
+		memoryOnly:          true,
+		projectContext:      true,
+		mcpConfigPath:       "/tmp/mcp.json",
+		subagentEnabled:     true,
+		subagentMaxDepth:    4,
+		focusedTasksEnabled: true,
+		executor:            "sandbox",
+	})
+	for _, want := range []string{
+		"shell_file=false",
+		"skill_install=false",
+		"memory=true",
+		"memory_only=true",
+		"session_search=false",
+		"project_context=false",
+		"mcp=false",
+		"subagent=false",
+		"subagent_max_depth=4",
+		"focused_tasks=false",
+		"executor=sandbox",
+	} {
+		if !strings.Contains(got, want) {
+			t.Fatalf("capability summary missing %q:\n%s", want, got)
+		}
 	}
 }
 

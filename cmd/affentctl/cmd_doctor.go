@@ -106,6 +106,7 @@ func diagnoseAffentctl(c commonFlags, runner commandRunner) []doctorFinding {
 	trigger, keepLast := resolveCompactionConfig(c.compactTrigger, c.compactKeepLast)
 	add("ok", "compaction", fmt.Sprintf("trigger=%d keep_last=%d", trigger, keepLast))
 	add("ok", "boundaries", doctorBoundarySummary(c))
+	add("ok", "capabilities", doctorCapabilitySummary(c))
 	if status, msg := doctorSystemPrompt(c.systemPromptPath); status != "" {
 		add(status, "system-prompt", msg)
 	}
@@ -176,6 +177,48 @@ func diagnoseAffentctl(c commonFlags, runner commandRunner) []doctorFinding {
 	}
 
 	return out
+}
+
+func doctorCapabilitySummary(c commonFlags) string {
+	builtins := !c.memoryOnly
+	mcpEnabled := builtins && strings.TrimSpace(c.mcpConfigPath) != ""
+	subagentEnabled := builtins && c.subagentEnabled
+	focusedTasksEnabled := builtins && c.focusedTasksEnabled
+	skillInstall := builtins
+	sessionSearch := builtins
+	projectContext := builtins && c.projectContext
+	memoryTool := c.memoryEnabled
+	if c.memoryOnly {
+		memoryTool = true
+	}
+	return fmt.Sprintf(
+		"shell_file=%t skill_install=%t memory=%t memory_only=%t session_search=%t project_context=%t mcp=%t subagent=%t subagent_max_depth=%d focused_tasks=%t executor=%s",
+		builtins,
+		skillInstall,
+		memoryTool,
+		c.memoryOnly,
+		sessionSearch,
+		projectContext,
+		mcpEnabled,
+		subagentEnabled,
+		c.subagentMaxDepth,
+		focusedTasksEnabled,
+		doctorCapabilityExecutor(c.executor),
+	)
+}
+
+func doctorCapabilityExecutor(executor string) string {
+	executor = strings.TrimSpace(executor)
+	if executor == "local" || executor == "sandbox" {
+		return executor
+	}
+	if strings.HasPrefix(executor, "docker:") {
+		return "docker"
+	}
+	if executor == "" {
+		return "unset"
+	}
+	return "custom"
 }
 
 func doctorBoundarySummary(c commonFlags) string {

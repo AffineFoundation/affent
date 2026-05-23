@@ -112,7 +112,10 @@ names, namespace mode, and filtered tool reasons so a workflow-specific
 allowlist/denylist can be checked before a model sees the tools.
 `doctor` also prints the active runtime boundary caps, including prompt/config
 input limits, LLM request and stream accumulator caps, tool request/result event
-caps, tool result context cap, and MCP result cap.
+caps, tool result context cap, and MCP result cap. Its capability line
+summarizes the tool surface the resolved config will expose, including
+shell/file tools, skill install, memory, session search, MCP, subagent,
+focused tasks, project context, and executor class.
 
 Run a single prompt:
 
