@@ -21,6 +21,7 @@ import (
 //	GET    /v1/sessions/{id}/tools
 //	GET    /v1/sessions/{id}/artifacts
 //	GET    /v1/sessions/{id}/artifacts/{path...}
+//	POST   /v1/sessions/{id}/cancel
 //	DELETE /v1/sessions/{id}
 //
 // Authentication, when --auth-token is set, wraps every endpoint
@@ -50,6 +51,7 @@ func newRouter(cfg Config, pool *SessionPool, logger zerolog.Logger) http.Handle
 //	GET    /v1/sessions/{id}/history → persisted JSONL replay
 //	GET    /v1/sessions/{id}/tools   → active session tool catalog
 //	GET    /v1/sessions/{id}/artifacts[/path] → tool-result artifacts
+//	POST   /v1/sessions/{id}/cancel  → cancel active turn
 //	DELETE /v1/sessions/{id}         → close + remove
 func handleSessionRoutes(pool *SessionPool) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
@@ -77,6 +79,8 @@ func handleSessionRoutes(pool *SessionPool) http.HandlerFunc {
 			handleSessionTools(pool, sessionID, w, r)
 		case (sub == "artifacts" || strings.HasPrefix(sub, "artifacts/")) && r.Method == http.MethodGet:
 			handleSessionArtifacts(pool, sessionID, strings.TrimPrefix(sub, "artifacts"), w, r)
+		case sub == "cancel" && r.Method == http.MethodPost:
+			handleSessionCancel(pool, sessionID, w, r)
 		case sub == "" && r.Method == http.MethodDelete:
 			handleSessionDelete(pool, sessionID, w, r)
 		default:

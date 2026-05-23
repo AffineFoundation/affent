@@ -599,6 +599,8 @@ Native session endpoints:
   catalog, including JSON schemas.
 - `GET /v1/sessions/{id}/artifacts` lists durable tool-result artifacts.
 - `GET /v1/sessions/{id}/artifacts/{path}` reads a bounded artifact chunk.
+- `POST /v1/sessions/{id}/cancel` asks an active session to stop its current
+  turn.
 - `DELETE /v1/sessions/{id}` closes and purges the session.
 
 ## Security Model

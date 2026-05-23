@@ -145,6 +145,7 @@ func TestNewRouter_RegistersExpectedRoutes(t *testing.T) {
 		{http.MethodGet, "/v1/sessions/abc"},
 		{http.MethodGet, "/v1/sessions/abc/events"}, // handler-404 (session unknown) is OK
 		{http.MethodGet, "/v1/sessions/abc/tools"},
+		{http.MethodPost, "/v1/sessions/abc/cancel"},
 		{http.MethodDelete, "/v1/sessions/abc"},
 		{http.MethodGet, "/v1/stats"},
 	}
