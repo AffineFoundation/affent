@@ -10,7 +10,6 @@ import (
 	"io"
 	"os"
 	"path/filepath"
-	"sort"
 	"strconv"
 	"strings"
 	"time"
@@ -1086,36 +1085,40 @@ func resolveSessionID(convDir, explicit string, continueLast bool) (string, bool
 }
 
 func mostRecentSession(convDir string) (string, error) {
-	entries, err := os.ReadDir(convDir)
+	dir, err := os.Open(convDir)
 	if err != nil {
 		if os.IsNotExist(err) {
 			return "", nil
 		}
 		return "", err
 	}
-	type item struct {
-		sid string
-		mt  time.Time
-	}
-	var items []item
-	for _, e := range entries {
-		if e.IsDir() || !strings.HasSuffix(e.Name(), ".jsonl") {
-			continue
+	defer dir.Close()
+
+	var latestID string
+	var latestMod time.Time
+	for {
+		entries, rerr := dir.ReadDir(localSessionDirReadBatch)
+		if rerr != nil && !errors.Is(rerr, io.EOF) {
+			return "", rerr
 		}
-		info, err := e.Info()
-		if err != nil {
-			continue
+		for _, e := range entries {
+			if e.IsDir() || !strings.HasSuffix(e.Name(), ".jsonl") {
+				continue
+			}
+			info, err := e.Info()
+			if err != nil {
+				continue
+			}
+			if latestID == "" || info.ModTime().After(latestMod) {
+				latestID = strings.TrimSuffix(e.Name(), ".jsonl")
+				latestMod = info.ModTime()
+			}
 		}
-		items = append(items, item{
-			sid: strings.TrimSuffix(e.Name(), ".jsonl"),
-			mt:  info.ModTime(),
-		})
+		if errors.Is(rerr, io.EOF) {
+			break
+		}
 	}
-	if len(items) == 0 {
-		return "", nil
-	}
-	sort.Slice(items, func(i, j int) bool { return items[i].mt.After(items[j].mt) })
-	return items[0].sid, nil
+	return latestID, nil
 }
 
 // readMaybeStdin handles "-", a file path that exists, or a literal

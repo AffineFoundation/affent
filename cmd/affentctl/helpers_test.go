@@ -3,6 +3,7 @@ package main
 import (
 	"bytes"
 	"encoding/json"
+	"fmt"
 	"io"
 	"os"
 	"path/filepath"
@@ -109,6 +110,30 @@ func TestMostRecentSession_PicksByMtime(t *testing.T) {
 	}
 	if got != "newest" {
 		t.Errorf("got %q, want newest", got)
+	}
+}
+
+func TestMostRecentSessionReadsPastOneDirectoryBatch(t *testing.T) {
+	dir := t.TempDir()
+	base := time.Now().Add(-time.Hour)
+	for i := 0; i < localSessionDirReadBatch+2; i++ {
+		p := filepath.Join(dir, fmt.Sprintf("sess_%04d.jsonl", i))
+		if err := os.WriteFile(p, []byte("{}"), 0o644); err != nil {
+			t.Fatal(err)
+		}
+		when := base.Add(time.Duration(i) * time.Second)
+		if err := os.Chtimes(p, when, when); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	got, err := mostRecentSession(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	want := fmt.Sprintf("sess_%04d", localSessionDirReadBatch+1)
+	if got != want {
+		t.Fatalf("most recent session = %q, want %q", got, want)
 	}
 }
 
