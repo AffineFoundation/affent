@@ -13,6 +13,8 @@ import (
 	"sort"
 	"strings"
 	"time"
+
+	"github.com/affinefoundation/affent/internal/planstate"
 )
 
 const maxLocalSessionPlanBytes = 32 * 1024
@@ -120,53 +122,16 @@ func sessionPlanExists(convDir, sessionID string) bool {
 func sessionPlanSummary(convDir, sessionID string) string {
 	raw, found, err := readLocalSessionPlan(convDir, sessionID)
 	if err != nil {
-		return "plan:error"
+		return planstate.LabelError
 	}
 	if !found {
-		return "-"
+		return planstate.LabelMissing
 	}
-	summary, err := summarizeLocalSessionPlan(raw)
+	summary, err := planstate.SummarizeJSON(raw)
 	if err != nil {
-		return "plan:error"
+		return planstate.LabelError
 	}
-	return summary
-}
-
-type localSessionPlanSummaryState struct {
-	Steps []struct {
-		Status string `json:"status"`
-	} `json:"steps"`
-}
-
-func summarizeLocalSessionPlan(raw json.RawMessage) (string, error) {
-	var st localSessionPlanSummaryState
-	if err := json.Unmarshal(raw, &st); err != nil {
-		return "", err
-	}
-	if len(st.Steps) == 0 {
-		return "plan:empty", nil
-	}
-	completed := 0
-	active := false
-	blocked := false
-	for _, step := range st.Steps {
-		switch strings.TrimSpace(step.Status) {
-		case "completed":
-			completed++
-		case "in_progress":
-			active = true
-		case "blocked":
-			blocked = true
-		}
-	}
-	label := fmt.Sprintf("plan:%d/%d", completed, len(st.Steps))
-	if active {
-		label += ":active"
-	}
-	if blocked {
-		label += ":blocked"
-	}
-	return label, nil
+	return summary.Label
 }
 
 func readLocalSessionPlan(convDir, sessionID string) (json.RawMessage, bool, error) {
