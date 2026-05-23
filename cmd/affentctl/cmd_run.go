@@ -112,6 +112,11 @@ Required: --model. --prompt is required unless --execute-plan is set.`)
 	if finalText != "" && cf.tracePath != "-" {
 		fmt.Println(finalText)
 	}
+	if *planOnly && exit == 0 {
+		if line := runPlanOnlyNextStepLine(b); line != "" {
+			fmt.Fprintln(os.Stderr, line)
+		}
+	}
 	return exit
 }
 
@@ -173,6 +178,17 @@ func runSessionPlanSummary(b *loopBundle) planstate.Summary {
 	}
 	convDir := filepath.Join(b.workspace, ".affentctl")
 	return localSessionPlanSummary(convDir, b.sessionID)
+}
+
+func runPlanOnlyNextStepLine(b *loopBundle) string {
+	if b == nil || strings.TrimSpace(b.workspace) == "" || strings.TrimSpace(b.sessionID) == "" {
+		return ""
+	}
+	summary := runSessionPlanSummary(b)
+	if summary.Error || summary.Label == planstate.LabelMissing || summary.Label == planstate.LabelEmpty || summary.Done || summary.Blocked || summary.TotalSteps == 0 {
+		return ""
+	}
+	return fmt.Sprintf("[plan] saved for session %q; after confirmation run: affentctl run --workspace %s --session-id %s --execute-plan", b.sessionID, shellQuoteForEnv(b.workspace), shellQuoteForEnv(b.sessionID))
 }
 
 func runExecutePlanPrompt(request, label string) string {

@@ -145,3 +145,56 @@ func TestPrepareRunExecutePlanRejectsNonExecutablePlans(t *testing.T) {
 		})
 	}
 }
+
+func TestRunPlanOnlyNextStepLinePrintsExecutablePlanCommand(t *testing.T) {
+	workspace := filepath.Join(t.TempDir(), "work dir's")
+	convDir := filepath.Join(workspace, ".affentctl")
+	if err := os.MkdirAll(convDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(localSessionPlanPath(convDir, "planned"), []byte(`{"version":1,"steps":[{"text":"ship","status":"pending"}]}`+"\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	got := runPlanOnlyNextStepLine(&loopBundle{workspace: workspace, sessionID: "planned"})
+	for _, want := range []string{
+		`[plan] saved for session "planned"`,
+		"affentctl run",
+		"--execute-plan",
+		"--workspace " + shellQuoteForEnv(workspace),
+		"--session-id 'planned'",
+	} {
+		if !strings.Contains(got, want) {
+			t.Fatalf("next-step line missing %q:\n%s", want, got)
+		}
+	}
+}
+
+func TestRunPlanOnlyNextStepLineSkipsNonExecutablePlans(t *testing.T) {
+	for _, tc := range []struct {
+		name string
+		raw  string
+	}{
+		{name: "missing"},
+		{name: "empty", raw: `{"version":1,"steps":[]}`},
+		{name: "done", raw: `{"version":1,"steps":[{"text":"done","status":"completed"}]}`},
+		{name: "blocked", raw: `{"version":1,"steps":[{"text":"need input","status":"blocked"}]}`},
+		{name: "bad", raw: `{`},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			workspace := t.TempDir()
+			convDir := filepath.Join(workspace, ".affentctl")
+			if err := os.MkdirAll(convDir, 0o755); err != nil {
+				t.Fatal(err)
+			}
+			if tc.raw != "" {
+				if err := os.WriteFile(localSessionPlanPath(convDir, "planned"), []byte(tc.raw), 0o644); err != nil {
+					t.Fatal(err)
+				}
+			}
+			if got := runPlanOnlyNextStepLine(&loopBundle{workspace: workspace, sessionID: "planned"}); got != "" {
+				t.Fatalf("next-step line = %q, want empty", got)
+			}
+		})
+	}
+}
