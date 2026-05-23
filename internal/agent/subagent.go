@@ -20,6 +20,8 @@ import (
 const (
 	defaultSubagentMaxTurns = 6
 	maxSubagentMaxTurns     = 12
+	maxSubagentTaskBytes    = 8 * 1024
+	maxSubagentModeBytes    = 64
 	DefaultSubagentMaxDepth = 2
 	MaxSubagentDepth        = 4
 	subagentToolResultBytes = 4 * 1024
@@ -390,7 +392,13 @@ func subagentTool(deps SubagentDeps) *Tool {
 			if p.Task == "" {
 				return "", errors.New("task is required")
 			}
+			if len(p.Task) > maxSubagentTaskBytes {
+				return "", fmt.Errorf("task is %d bytes; subagent_run supports tasks up to %d bytes", len(p.Task), maxSubagentTaskBytes)
+			}
 			p.Mode = strings.TrimSpace(p.Mode)
+			if len(p.Mode) > maxSubagentModeBytes {
+				return "", fmt.Errorf("mode is %d bytes; subagent_run supports modes up to %d bytes", len(p.Mode), maxSubagentModeBytes)
+			}
 			if p.Mode == "" {
 				p.Mode = reg.Default()
 			}
@@ -429,12 +437,12 @@ func subagentToolSchema(reg *SubagentModeRegistry, maxDepth int) json.RawMessage
 		modeDesc.WriteString(def)
 		modeDesc.WriteString(".")
 	}
-	modeBlock := fmt.Sprintf(`"mode": {"type": "string", "minLength": 1, "enum": %s, "description": %q}`, enum, modeDesc.String())
+	modeBlock := fmt.Sprintf(`"mode": {"type": "string", "minLength": 1, "maxLength": %d, "enum": %s, "description": %q}`, maxSubagentModeBytes, enum, modeDesc.String())
 	schemaJSON := `{
         "type": "object",
         "required": ["task"],
         "properties": {
-            "task": {"type": "string", "minLength": 1, "description": "Concrete bounded task for the isolated subagent. Include the files, question, or risk to inspect. For web pages, specify whether to extract only current-page visible snapshot facts or to inspect additional tabs/pages. If nested delegation is available, assign only one separable noisy subtask to the child."},
+            "task": {"type": "string", "minLength": 1, "maxLength": ` + fmt.Sprint(maxSubagentTaskBytes) + `, "description": "Concrete bounded task for the isolated subagent. Include the files, question, or risk to inspect. For web pages, specify whether to extract only current-page visible snapshot facts or to inspect additional tabs/pages. If nested delegation is available, assign only one separable noisy subtask to the child."},
             ` + modeBlock + `,
             "max_turns": {"type": "integer", "minimum": 1, "maximum": 12, "description": "Subagent tool-call step budget. Default 6, hard max 12. Recursive delegation is capped at depth ` + fmt.Sprint(maxDepth) + `."}
         }

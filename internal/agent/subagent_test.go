@@ -3,6 +3,7 @@ package agent
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -431,8 +432,14 @@ func TestSubagentToolDescriptionMentionsCallerProvidedBrowserTools(t *testing.T)
 	if !strings.Contains(raw, `"task": {"type": "string", "minLength": 1`) {
 		t.Fatalf("subagent task schema should publish non-empty task constraint:\n%s", raw)
 	}
+	if !strings.Contains(raw, fmt.Sprintf(`"maxLength": %d`, maxSubagentTaskBytes)) {
+		t.Fatalf("subagent task schema should publish task maxLength:\n%s", raw)
+	}
 	if !strings.Contains(raw, `"mode": {"type": "string", "minLength": 1`) {
 		t.Fatalf("subagent mode schema should publish non-empty mode constraint:\n%s", raw)
+	}
+	if !strings.Contains(raw, fmt.Sprintf(`"maxLength": %d`, maxSubagentModeBytes)) {
+		t.Fatalf("subagent mode schema should publish mode maxLength:\n%s", raw)
 	}
 }
 
@@ -766,6 +773,22 @@ func TestSubagentTool_InputValidation(t *testing.T) {
 		_, err := tool.Execute(context.Background(), json.RawMessage(`{"task":"   "}`))
 		if err == nil || !strings.Contains(err.Error(), "task is required") {
 			t.Errorf("whitespace-only task must be rejected; got err=%v", err)
+		}
+	})
+
+	t.Run("oversized task is rejected", func(t *testing.T) {
+		task := strings.Repeat("x", maxSubagentTaskBytes+1)
+		_, err := tool.Execute(context.Background(), json.RawMessage(`{"task":"`+task+`"}`))
+		if err == nil || !strings.Contains(err.Error(), "subagent_run supports tasks up to") {
+			t.Errorf("oversized task must be rejected; got err=%v", err)
+		}
+	})
+
+	t.Run("oversized mode is rejected", func(t *testing.T) {
+		mode := strings.Repeat("x", maxSubagentModeBytes+1)
+		_, err := tool.Execute(context.Background(), json.RawMessage(`{"task":"x","mode":"`+mode+`"}`))
+		if err == nil || !strings.Contains(err.Error(), "subagent_run supports modes up to") {
+			t.Errorf("oversized mode must be rejected; got err=%v", err)
 		}
 	})
 
