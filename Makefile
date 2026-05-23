@@ -15,6 +15,7 @@ EVAL_DOCKER_ARGS ?=
 SERVE_ARGS ?=
 SERVE_LISTEN ?= 0.0.0.0:7777
 SERVE_PUBLISH ?= 127.0.0.1:7777:7777
+SERVE_HEALTH_URL ?= http://127.0.0.1:7777/healthz
 SERVE_CONTAINER_NAME ?= affent-serve
 SERVE_WORKSPACE_ROOT ?= /workspace/sessions
 SERVE_MEMORY_ROOT ?= /workspace/session-state
@@ -40,7 +41,7 @@ if test "$$label" != "true"; then \
 fi
 endef
 
-.PHONY: affentctl affentctl-local doctor sandbox-start sandbox-status sandbox-stop image-build image-run image-serve image-serve-status image-serve-logs image-serve-stop image-serve-restart eval-container test-container
+.PHONY: affentctl affentctl-local doctor sandbox-start sandbox-status sandbox-stop image-build image-run image-serve image-serve-status image-serve-health image-serve-logs image-serve-stop image-serve-restart eval-container test-container
 
 affentctl:
 	mkdir -p "$(dir $(AFFENTCTL))" .tmp/go-build .tmp/go-mod
@@ -89,6 +90,10 @@ image-serve-status:
 		--format 'name={{.Name}} state={{.State.Status}} image={{.Config.Image}} workspace={{index .Config.Labels "affent.runtime.workspace"}} memory={{index .Config.Labels "affent.runtime.memory"}} cpus={{index .Config.Labels "affent.runtime.cpus"}} pids_limit={{index .Config.Labels "affent.runtime.pids_limit"}} host_memory_bytes={{.HostConfig.Memory}} host_nano_cpus={{.HostConfig.NanoCpus}} host_pids_limit={{.HostConfig.PidsLimit}}'; \
 	ports=$$(docker port "$(SERVE_CONTAINER_NAME)" 2>/dev/null || true); \
 	if test -n "$$ports"; then printf 'ports:\n%s\n' "$$ports"; else echo "ports: none"; fi
+
+image-serve-health:
+	@$(call require_affent_runtime_container,image-serve-health)
+	curl -fsS "$(SERVE_HEALTH_URL)"
 
 image-serve-logs:
 	@$(call require_affent_runtime_container,image-serve-logs)
