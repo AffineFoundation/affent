@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"math"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -17,6 +18,7 @@ import (
 const (
 	maxMCPToolResultBytes        = 256 * 1024
 	mcpToolResultTruncatedMarker = "\n... [truncated; MCP tool result cap reached]"
+	maxExactFloatID              = 1 << 53
 )
 
 // Client is one connection to a single MCP server. The transport (stdio
@@ -275,6 +277,9 @@ func (c *Client) shutdownPending() {
 func normalizeID(v any) (int64, bool) {
 	switch n := v.(type) {
 	case float64:
+		if math.Trunc(n) != n || n < -maxExactFloatID || n > maxExactFloatID {
+			return 0, false
+		}
 		return int64(n), true
 	case int64:
 		return n, true

@@ -35,7 +35,8 @@ func TestNormalizeID_AllJSONNumericForms(t *testing.T) {
 		{"string id rejected (non-numeric type)", "abc", 0, false},
 		{"nil rejected", nil, 0, false},
 		{"bool rejected", true, 0, false},
-		{"float64 truncates toward zero", float64(7.9), 7, true},
+		{"float64 fractional rejected", float64(7.9), 0, false},
+		{"float64 too large rejected", float64(maxExactFloatID + 2), 0, false},
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
