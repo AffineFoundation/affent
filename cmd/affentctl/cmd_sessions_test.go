@@ -153,6 +153,50 @@ func TestSessionsCmd_PrintsPlanAndMarksListingProgress(t *testing.T) {
 	}
 }
 
+func TestSessionsCmd_ClearPlanRemovesPersistedPlan(t *testing.T) {
+	workspace := t.TempDir()
+	convDir := filepath.Join(workspace, ".affentctl")
+	if err := os.MkdirAll(convDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	planPath := localSessionPlanPath(convDir, "sess_clear")
+	if err := os.WriteFile(planPath, []byte(`{"version":1}`), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	out := captureStdout(t, func() {
+		if code := sessionsCmd([]string{"--workspace", workspace, "--clear-plan", "sess_clear"}); code != 0 {
+			t.Fatalf("sessionsCmd clear-plan exit = %d, want 0", code)
+		}
+	})
+	if !strings.Contains(out, `cleared plan for session "sess_clear"`) {
+		t.Fatalf("clear-plan output = %s", out)
+	}
+	if _, err := os.Lstat(planPath); !os.IsNotExist(err) {
+		t.Fatalf("plan path after clear err = %v, want not exists", err)
+	}
+
+	errOut := captureStderr(t, func() {
+		if code := sessionsCmd([]string{"--workspace", workspace, "--clear-plan", "sess_clear"}); code != 0 {
+			t.Fatalf("second clear-plan exit = %d, want 0", code)
+		}
+	})
+	if !strings.Contains(errOut, `no plan for session "sess_clear"`) {
+		t.Fatalf("second clear-plan stderr = %s", errOut)
+	}
+}
+
+func TestSessionsCmd_RejectsPlanAndClearPlanTogether(t *testing.T) {
+	errOut := captureStderr(t, func() {
+		if code := sessionsCmd([]string{"--workspace", t.TempDir(), "--plan", "sess", "--clear-plan", "sess"}); code != exitUsage {
+			t.Fatalf("sessionsCmd conflict exit = %d, want %d", code, exitUsage)
+		}
+	})
+	if !strings.Contains(errOut, "--plan and --clear-plan cannot be used together") {
+		t.Fatalf("conflict stderr = %s", errOut)
+	}
+}
+
 func TestSessionPlanSummaryReportsEmptyBlockedAndErrors(t *testing.T) {
 	convDir := t.TempDir()
 	if got := sessionPlanSummary(convDir, "missing"); got != "-" {
@@ -220,6 +264,30 @@ func captureStdout(t *testing.T, fn func()) string {
 	}
 	os.Stdout = w
 	defer func() { os.Stdout = orig }()
+
+	fn()
+	if err := w.Close(); err != nil {
+		t.Fatal(err)
+	}
+	out, err := io.ReadAll(r)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := r.Close(); err != nil {
+		t.Fatal(err)
+	}
+	return string(out)
+}
+
+func captureStderr(t *testing.T, fn func()) string {
+	t.Helper()
+	orig := os.Stderr
+	r, w, err := os.Pipe()
+	if err != nil {
+		t.Fatal(err)
+	}
+	os.Stderr = w
+	defer func() { os.Stderr = orig }()
 
 	fn()
 	if err := w.Close(); err != nil {

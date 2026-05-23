@@ -26,14 +26,18 @@ func sessionsCmd(args []string) int {
 	fs := flag.NewFlagSet("sessions", flag.ExitOnError)
 	workspace := fs.String("workspace", "./affent-workspace", "working dir to inspect")
 	planID := fs.String("plan", "", "print the persisted plan JSON for a session id")
+	clearPlanID := fs.String("clear-plan", "", "remove the persisted plan JSON for a session id")
 	fs.Usage = func() {
-		fmt.Fprintln(os.Stderr, `usage: affentctl sessions [--workspace DIR] [--plan SESSION_ID]
+		fmt.Fprintln(os.Stderr, `usage: affentctl sessions [--workspace DIR] [--plan SESSION_ID] [--clear-plan SESSION_ID]
 
 List prior conversation logs under <workspace>/.affentctl/, newest
 first. Each row: <session_id>  <mtime>  <messages>  <plan progress>  <first user msg>.
 
 Use --plan SESSION_ID to print <workspace>/.affentctl/<session_id>.plan.json
-without starting or resuming the agent.`)
+without starting or resuming the agent.
+
+Use --clear-plan SESSION_ID to remove that session's persisted plan without
+starting or resuming the agent.`)
 		fs.PrintDefaults()
 	}
 	if err := fs.Parse(args); err != nil {
@@ -45,8 +49,15 @@ without starting or resuming the agent.`)
 	}
 
 	convDir := filepath.Join(*workspace, ".affentctl")
+	if *planID != "" && *clearPlanID != "" {
+		fmt.Fprintln(os.Stderr, "--plan and --clear-plan cannot be used together")
+		return exitUsage
+	}
 	if *planID != "" {
 		return printSessionPlan(convDir, *planID)
+	}
+	if *clearPlanID != "" {
+		return clearSessionPlanCmd(convDir, *clearPlanID)
 	}
 	entries, err := os.ReadDir(convDir)
 	if err != nil {
@@ -97,6 +108,20 @@ without starting or resuming the agent.`)
 			plan,
 			r.preview)
 	}
+	return 0
+}
+
+func clearSessionPlanCmd(convDir, sessionID string) int {
+	removed, err := clearLocalSessionPlan(convDir, sessionID)
+	if err != nil {
+		fmt.Fprintln(os.Stderr, err)
+		return exitRuntime
+	}
+	if !removed {
+		fmt.Fprintf(os.Stderr, "no plan for session %q\n", sessionID)
+		return 0
+	}
+	fmt.Fprintf(os.Stdout, "cleared plan for session %q\n", sessionID)
 	return 0
 }
 
