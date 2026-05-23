@@ -347,23 +347,56 @@ func SnippetAround(content string, terms []string) string {
 	return prefix + content[start:end] + suffix
 }
 
+type termHit struct {
+	start int
+	term  string
+}
+
 func firstTermTokenIndex(content string, terms []string) int {
+	hits := termTokenHits(content, terms)
+	if len(hits) == 0 {
+		return -1
+	}
+	best := hits[0]
+	bestCovered := 0
+	half := snippetLen / 2
+	for _, hit := range hits {
+		start := hit.start - half
+		if start < 0 {
+			start = 0
+		}
+		end := start + snippetLen
+		covered := map[string]bool{}
+		for _, other := range hits {
+			if other.start >= start && other.start < end {
+				covered[other.term] = true
+			}
+		}
+		if len(covered) > bestCovered {
+			best = hit
+			bestCovered = len(covered)
+		}
+	}
+	return best.start
+}
+
+func termTokenHits(content string, terms []string) []termHit {
 	want := make(map[string]bool, len(terms))
 	for _, term := range terms {
 		if term != "" {
 			want[term] = true
 		}
 	}
+	var hits []termHit
 	tokenStart := -1
 	var cur strings.Builder
-	flush := func() int {
+	flush := func() {
 		t := strings.ToLower(cur.String())
 		cur.Reset()
 		if tokenStart >= 0 && want[t] {
-			return tokenStart
+			hits = append(hits, termHit{start: tokenStart, term: t})
 		}
 		tokenStart = -1
-		return -1
 	}
 	for i, r := range content {
 		if unicode.IsLetter(r) || unicode.IsDigit(r) {
@@ -373,11 +406,10 @@ func firstTermTokenIndex(content string, terms []string) int {
 			cur.WriteRune(r)
 			continue
 		}
-		if hit := flush(); hit >= 0 {
-			return hit
-		}
+		flush()
 	}
-	return flush()
+	flush()
+	return hits
 }
 
 func TruncateSnippet(s string, n int) string {

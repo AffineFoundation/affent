@@ -326,3 +326,14 @@ func TestSnippetAroundUsesWholeTokenHit(t *testing.T) {
 		t.Fatalf("snippet should include whole-token hit: %q", snip)
 	}
 }
+
+func TestSnippetAroundPrefersWindowWithMoreTerms(t *testing.T) {
+	content := "postgres early " + strings.Repeat("filler ", 180) + "postgres docker final"
+	snip := SnippetAround(content, Tokenize("postgres docker"))
+	if strings.Contains(snip, "postgres early") {
+		t.Fatalf("snippet centered on weaker early hit: %q", snip)
+	}
+	if !strings.Contains(snip, "postgres docker final") {
+		t.Fatalf("snippet should include stronger multi-term hit: %q", snip)
+	}
+}
