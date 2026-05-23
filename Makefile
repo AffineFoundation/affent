@@ -63,7 +63,7 @@ image-run: affentctl
 	"$(AFFENTCTL)" image run $(IMAGE_RUN_ARGS) -- $(IMAGE_COMMAND)
 
 image-serve: affentctl
-	"$(AFFENTCTL)" image run --timeout 0s --publish "$(SERVE_PUBLISH)" $(IMAGE_RUN_ARGS) -- affentserve --listen "$(SERVE_LISTEN)" --workspace-root "$(SERVE_WORKSPACE_ROOT)" $(SERVE_ARGS)
+	"$(AFFENTCTL)" image run --timeout 0s --publish "$(SERVE_PUBLISH)" $(IMAGE_RUN_ARGS) -- affentserve --listen "$(SERVE_LISTEN)" --workspace-root "$(SERVE_WORKSPACE_ROOT)" --builtins $(SERVE_ARGS)
 
 eval-container: affentctl
 	"$(AFFENTCTL)" image build --image "$(EVAL_IMAGE)" $(IMAGE_BUILD_ARGS)

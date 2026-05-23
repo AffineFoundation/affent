@@ -223,8 +223,9 @@ sets `GOMEMLIMIT` to 75% of the Docker memory limit and `GOMAXPROCS` from the
 Docker CPU limit, so Go-based tools inside the runtime image respect the same
 resource envelope by default. The command also forwards portable model, auth,
 sampling, and feature-toggle env vars such as
-`AFFENTCTL_BASE_URL`, `AFFENTSERVE_MODEL`, and `TAVILY_API_KEY` when they are
-set. Host path or executor env vars such as `AFFENTCTL_WORKSPACE`,
+`AFFENTCTL_BASE_URL`, `AFFENTSERVE_MODEL`, `AFFENTSERVE_BUILTINS`, and
+`TAVILY_API_KEY` when they are set. Host path or executor env vars such as
+`AFFENTCTL_WORKSPACE`,
 `AFFENTCTL_CONFIG`, `AFFENTCTL_MCP_CONFIG`, `AFFENTCTL_EXECUTOR`,
 `AFFENTSERVE_WORKSPACE_ROOT`, and `AFFENTSERVE_MEMORY_ROOT` are not
 auto-forwarded because their host values usually do not exist inside the
@@ -240,12 +241,15 @@ directories or calls Docker; Docker memory limits must be at least `128m`, and
 service. It runs the runtime image through `affentctl image run`, publishes
 `127.0.0.1:7777:7777` by default, listens on `0.0.0.0:7777` inside the
 container, and stores server session workspaces under the persistent
-`/workspace/sessions` mount. It also sets `--timeout 0s` so the wrapper does not
-stop the service after the one-shot command default. Override `SERVE_PUBLISH`,
-`SERVE_LISTEN`, `SERVE_WORKSPACE_ROOT`, `IMAGE_RUN_ARGS`, or `SERVE_ARGS` only
-when that value is intentionally different for your deployment; use
-`SERVE_PUBLISH=7777:7777` only when you intentionally want Docker to bind on all
-host interfaces.
+`/workspace/sessions` mount. Because this entrypoint is already inside the
+memory-limited runtime container, it enables `affentserve --builtins` so the HTTP
+service can use shell/file tools; pass `SERVE_ARGS='--builtins=false'` when you
+intentionally want a read-only/tool-light service. It also sets `--timeout 0s`
+so the wrapper does not stop the service after the one-shot command default.
+Override `SERVE_PUBLISH`, `SERVE_LISTEN`, `SERVE_WORKSPACE_ROOT`,
+`IMAGE_RUN_ARGS`, or `SERVE_ARGS` only when that value is intentionally
+different for your deployment; use `SERVE_PUBLISH=7777:7777` only when you
+intentionally want Docker to bind on all host interfaces.
 
 For repeatable local use or evals:
 
