@@ -75,6 +75,9 @@ func Search(ctx context.Context, sessionsDir, currentSessionID, query string, to
 			if ent.IsDir() || !strings.HasSuffix(ent.Name(), ".jsonl") {
 				continue
 			}
+			if entryIsSymlink(ent) {
+				continue
+			}
 			sid := strings.TrimSuffix(ent.Name(), ".jsonl")
 			if sid == currentSessionID {
 				continue
@@ -120,6 +123,13 @@ func NormalizeLimits(topK, maxPerSession int) (int, int) {
 }
 
 func scoreFile(path, sid string, terms []string, maxPerSession int, mtime string) ([]Hit, error) {
+	info, err := os.Lstat(path)
+	if err != nil {
+		return nil, err
+	}
+	if info.IsDir() || info.Mode()&os.ModeSymlink != 0 {
+		return nil, errors.New("session log must be a regular file")
+	}
 	f, err := os.Open(path)
 	if err != nil {
 		return nil, err
@@ -163,6 +173,11 @@ func scoreFile(path, sid string, terms []string, maxPerSession int, mtime string
 		fileHits = fileHits[:maxPerSession]
 	}
 	return fileHits, nil
+}
+
+func entryIsSymlink(ent os.DirEntry) bool {
+	info, err := ent.Info()
+	return err == nil && info.Mode()&os.ModeSymlink != 0
 }
 
 func appendBoundedHits(hits []Hit, hit Hit, limit int) []Hit {

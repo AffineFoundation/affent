@@ -79,6 +79,31 @@ func TestSearchExcludesCurrentAndSkipsNonConversationRoles(t *testing.T) {
 	}
 }
 
+func TestSearchSkipsSymlinkSessionLogs(t *testing.T) {
+	dir := t.TempDir()
+	outside := filepath.Join(t.TempDir(), "outside.jsonl")
+	if err := os.WriteFile(outside, []byte(`{"role":"user","content":"needle from outside"}`+"\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink(outside, filepath.Join(dir, "linked.jsonl")); err != nil {
+		t.Skipf("symlink unavailable: %v", err)
+	}
+	writeSessionLog(t, dir, "real", []testMessage{
+		{Role: "user", Content: "needle from real session"},
+	})
+
+	hits, err := Search(context.Background(), dir, "", "needle", 10, 3)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(hits) != 1 || hits[0].SessionID != "real" {
+		t.Fatalf("search should skip symlink logs and keep real hit, got %+v", hits)
+	}
+	if _, err := scoreFile(filepath.Join(dir, "linked.jsonl"), "linked", []string{"needle"}, 3, ""); err == nil || !strings.Contains(err.Error(), "regular file") {
+		t.Fatalf("scoreFile symlink error = %v, want regular file", err)
+	}
+}
+
 func TestSearchCapsPerSession(t *testing.T) {
 	dir := t.TempDir()
 	writeSessionLog(t, dir, "many", []testMessage{

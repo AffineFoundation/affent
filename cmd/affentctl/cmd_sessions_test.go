@@ -117,6 +117,39 @@ func TestSessionsCmd_PrintsPlanAndMarksListing(t *testing.T) {
 	}
 }
 
+func TestSessionsCmdSkipsSymlinkLogs(t *testing.T) {
+	workspace := t.TempDir()
+	convDir := filepath.Join(workspace, ".affentctl")
+	if err := os.MkdirAll(convDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(convDir, "real.jsonl"), []byte(`{"role":"user","content":"hello"}`+"\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	outside := filepath.Join(t.TempDir(), "outside.jsonl")
+	if err := os.WriteFile(outside, []byte(`{"role":"user","content":"outside"}`+"\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink(outside, filepath.Join(convDir, "linked.jsonl")); err != nil {
+		t.Skipf("symlink unavailable: %v", err)
+	}
+
+	if n, preview := scanLog(filepath.Join(convDir, "linked.jsonl")); n != 0 || preview != "" {
+		t.Fatalf("scanLog symlink = (%d, %q), want zero/empty", n, preview)
+	}
+	listOut := captureStdout(t, func() {
+		if code := sessionsCmd([]string{"--workspace", workspace}); code != 0 {
+			t.Fatalf("sessionsCmd list exit = %d, want 0", code)
+		}
+	})
+	if strings.Contains(listOut, "linked") || strings.Contains(listOut, "outside") {
+		t.Fatalf("list output should skip symlink log, got:\n%s", listOut)
+	}
+	if !strings.Contains(listOut, "real") {
+		t.Fatalf("list output should keep real session, got:\n%s", listOut)
+	}
+}
+
 func captureStdout(t *testing.T, fn func()) string {
 	t.Helper()
 	orig := os.Stdout

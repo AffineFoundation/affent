@@ -64,7 +64,7 @@ without starting or resuming the agent.`)
 	}
 	var rows []row
 	for _, e := range entries {
-		if e.IsDir() || !strings.HasSuffix(e.Name(), ".jsonl") {
+		if e.IsDir() || !strings.HasSuffix(e.Name(), ".jsonl") || dirEntryIsSymlink(e) {
 			continue
 		}
 		info, err := e.Info()
@@ -175,6 +175,10 @@ func localSessionPlanPath(convDir, sessionID string) string {
 // first user message preview). Cheap pass; we don't load everything
 // into memory.
 func scanLog(path string) (int, string) {
+	info, err := os.Lstat(path)
+	if err != nil || info.IsDir() || info.Mode()&os.ModeSymlink != 0 {
+		return 0, ""
+	}
 	f, err := os.Open(path)
 	if err != nil {
 		return 0, ""
@@ -201,6 +205,11 @@ func scanLog(path string) (int, string) {
 		}
 	}
 	return count, preview
+}
+
+func dirEntryIsSymlink(e os.DirEntry) bool {
+	info, err := e.Info()
+	return err == nil && info.Mode()&os.ModeSymlink != 0
 }
 
 func oneLine(s string, max int) string {
