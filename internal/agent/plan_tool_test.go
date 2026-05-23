@@ -101,6 +101,27 @@ func TestPlanToolRejectsAmbiguousInProgress(t *testing.T) {
 	}
 }
 
+func TestPlanToolDeduplicatesEvidenceRefs(t *testing.T) {
+	tool := planTool(filepath.Join(t.TempDir(), "plan.json"))
+	out, err := tool.Execute(context.Background(), json.RawMessage(`{"action":"set","steps":[{"text":"ship","evidence":[" internal/agent/plan_tool.go ","internal/agent/plan_tool.go","go test ./internal/agent","go test ./internal/agent"]}]}`))
+	if err != nil {
+		t.Fatalf("set: %v", err)
+	}
+	var st planState
+	if err := json.Unmarshal([]byte(out), &st); err != nil {
+		t.Fatalf("decode set response: %v\n%s", err, out)
+	}
+	want := []string{"internal/agent/plan_tool.go", "go test ./internal/agent"}
+	if len(st.Steps) != 1 || len(st.Steps[0].Evidence) != len(want) {
+		t.Fatalf("evidence = %+v, want %+v", st.Steps, want)
+	}
+	for i := range want {
+		if st.Steps[0].Evidence[i] != want[i] {
+			t.Fatalf("evidence[%d] = %q, want %q", i, st.Steps[0].Evidence[i], want[i])
+		}
+	}
+}
+
 func TestPlanToolRejectsSymlinkPlanFile(t *testing.T) {
 	dir := t.TempDir()
 	outside := filepath.Join(t.TempDir(), "outside-plan.json")

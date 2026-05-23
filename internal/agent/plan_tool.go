@@ -266,6 +266,7 @@ func normalizePlanEvidence(in []string) ([]string, error) {
 		return nil, fmt.Errorf("evidence supports at most %d refs\nNext: keep only the strongest file, command, or URL refs", maxPlanEvidence)
 	}
 	out := make([]string, 0, len(in))
+	seen := map[string]bool{}
 	for _, ref := range in {
 		ref = strings.TrimSpace(ref)
 		if ref == "" {
@@ -274,6 +275,10 @@ func normalizePlanEvidence(in []string) ([]string, error) {
 		if len(ref) > maxPlanEvidenceBytes {
 			return nil, fmt.Errorf("evidence ref is %d bytes; max is %d", len(ref), maxPlanEvidenceBytes)
 		}
+		if seen[ref] {
+			continue
+		}
+		seen[ref] = true
 		out = append(out, ref)
 	}
 	return out, nil
