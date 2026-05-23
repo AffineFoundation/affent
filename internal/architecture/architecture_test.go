@@ -42,7 +42,7 @@ const modulePath = "github.com/affinefoundation/affent"
 //	leaves      - sse, textutil                              (zero internal deps)
 //	leaf-deps   - projectcontext, sessionsearch, memory      (only textutil; no cross-layer)
 //	exec        - executor                                   (no internal deps)
-//	wire        - mcp                                        (sse + agent adapter — see note)
+//	wire        - mcp                                        (textutil caps + sse + agent adapter — see note)
 //	core        - agent                                      (everything below)
 //	app         - agenteval, e2e                             (depends on agent)
 //
@@ -81,8 +81,9 @@ var allowedDeps = map[string]map[string]bool{
 
 	// --- protocol wire ---
 	"internal/mcp": {
-		"internal/sse":   true,
-		"internal/agent": true, // see package-level note on register.go
+		"internal/textutil": true,
+		"internal/sse":      true,
+		"internal/agent":    true, // see package-level note on register.go
 	},
 
 	// --- agent runtime ---

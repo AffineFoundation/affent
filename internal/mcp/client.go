@@ -5,11 +5,18 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"time"
 
+	"github.com/affinefoundation/affent/internal/textutil"
 	"github.com/rs/zerolog"
+)
+
+const (
+	maxMCPToolResultBytes        = 256 * 1024
+	mcpToolResultTruncatedMarker = "\n... [truncated; MCP tool result cap reached]"
 )
 
 // Client is one connection to a single MCP server. The transport (stdio
@@ -284,21 +291,46 @@ func normalizeID(v any) (int64, bool) {
 // block kinds get a marker so the model knows something non-textual was
 // returned.
 func flattenContent(blocks []contentBlock) string {
-	var buf []byte
+	var buf strings.Builder
+	contentLimit := maxMCPToolResultBytes - len(mcpToolResultTruncatedMarker)
+	if contentLimit < 0 {
+		contentLimit = maxMCPToolResultBytes
+	}
+	truncated := false
+	appendPart := func(part string) {
+		if truncated || part == "" {
+			return
+		}
+		remaining := contentLimit - buf.Len()
+		if remaining <= 0 {
+			truncated = true
+			return
+		}
+		if len(part) <= remaining {
+			buf.WriteString(part)
+			return
+		}
+		cut := textutil.AlignBackward(part, remaining)
+		buf.WriteString(part[:cut])
+		truncated = true
+	}
 	for i, b := range blocks {
 		if i > 0 {
-			buf = append(buf, '\n')
+			appendPart("\n")
 		}
 		switch b.Type {
 		case "text":
-			buf = append(buf, b.Text...)
+			appendPart(b.Text)
 		case "image":
-			buf = append(buf, fmt.Sprintf("[image %s, %d bytes (omitted)]", b.MimeType, len(b.Data))...)
+			appendPart(fmt.Sprintf("[image %s, %d bytes (omitted)]", b.MimeType, len(b.Data)))
 		case "resource":
-			buf = append(buf, fmt.Sprintf("[resource ref: %s]", string(b.Resource))...)
+			appendPart(fmt.Sprintf("[resource ref: %s]", string(b.Resource)))
 		default:
-			buf = append(buf, fmt.Sprintf("[content type=%q]", b.Type)...)
+			appendPart(fmt.Sprintf("[content type=%q]", b.Type))
 		}
 	}
-	return string(buf)
+	if truncated && buf.Len()+len(mcpToolResultTruncatedMarker) <= maxMCPToolResultBytes {
+		buf.WriteString(mcpToolResultTruncatedMarker)
+	}
+	return buf.String()
 }

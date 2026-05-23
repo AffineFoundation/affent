@@ -15,6 +15,10 @@ import (
 	"github.com/rs/zerolog"
 )
 
+const maxStdioJSONFrameBytes = 4 * 1024 * 1024
+
+var errStdioFrameTooLarge = errors.New("mcp stdio response frame too large")
+
 // stdioWire runs the server as a child process and shuttles JSON-RPC
 // frames over its stdin/stdout, newline-delimited.
 type stdioWire struct {
@@ -125,13 +129,8 @@ func (w *stdioWire) write(raw []byte) error {
 func (w *stdioWire) readLoop() {
 	defer close(w.readerDone)
 	for {
-		line, err := w.stdout.ReadBytes('\n')
+		line, err := readStdioFrameCapped(w.stdout, maxStdioJSONFrameBytes)
 		if len(line) > 0 {
-			// Trim the trailing newline; downstream uses json.Unmarshal
-			// which doesn't care, but cleaner for logs.
-			if line[len(line)-1] == '\n' {
-				line = line[:len(line)-1]
-			}
 			cp := make([]byte, len(line))
 			copy(cp, line)
 			// Block until the frame is delivered. Earlier code dropped
@@ -152,6 +151,49 @@ func (w *stdioWire) readLoop() {
 			return
 		}
 	}
+}
+
+func readStdioFrameCapped(r *bufio.Reader, limit int) ([]byte, error) {
+	var line []byte
+	for {
+		frag, err := r.ReadSlice('\n')
+		if len(frag) > 0 {
+			if len(line)+len(frag) > limit {
+				if errors.Is(err, bufio.ErrBufferFull) {
+					discardStdioFrameRemainder(r)
+				}
+				return nil, fmt.Errorf("%w: exceeds %d-byte limit", errStdioFrameTooLarge, limit)
+			}
+			line = append(line, frag...)
+		}
+		switch {
+		case err == nil:
+			return trimStdioFrameNewline(line), nil
+		case errors.Is(err, bufio.ErrBufferFull):
+			continue
+		case errors.Is(err, io.EOF) && len(line) > 0:
+			return trimStdioFrameNewline(line), io.EOF
+		default:
+			return nil, err
+		}
+	}
+}
+
+func discardStdioFrameRemainder(r *bufio.Reader) {
+	for {
+		_, err := r.ReadSlice('\n')
+		if errors.Is(err, bufio.ErrBufferFull) {
+			continue
+		}
+		return
+	}
+}
+
+func trimStdioFrameNewline(line []byte) []byte {
+	if len(line) > 0 && line[len(line)-1] == '\n' {
+		return line[:len(line)-1]
+	}
+	return line
 }
 
 func (w *stdioWire) drainStderr(r io.Reader) {

@@ -1,7 +1,10 @@
 package mcp
 
 import (
+	"bufio"
 	"encoding/json"
+	"errors"
+	"io"
 	"strings"
 	"testing"
 	"time"
@@ -116,6 +119,64 @@ func TestFlattenContent_KnownBlockKinds(t *testing.T) {
 		parts := strings.Split(got, "\n")
 		if len(parts) != 3 || parts[0] != "first" || parts[2] != "third" {
 			t.Errorf("mixed-type order: got %q", got)
+		}
+	})
+}
+
+func TestFlattenContent_CapsLargeResult(t *testing.T) {
+	got := flattenContent([]contentBlock{{Type: "text", Text: strings.Repeat("x", maxMCPToolResultBytes+1024)}})
+	if len(got) > maxMCPToolResultBytes {
+		t.Fatalf("flattened content length = %d, want <= %d", len(got), maxMCPToolResultBytes)
+	}
+	if !strings.Contains(got, "MCP tool result cap reached") {
+		t.Fatalf("truncated result missing cap marker: tail %q", got[max(0, len(got)-96):])
+	}
+}
+
+func TestFlattenContent_CapKeepsValidUTF8(t *testing.T) {
+	got := flattenContent([]contentBlock{{Type: "text", Text: strings.Repeat("你", maxMCPToolResultBytes)}})
+	if !strings.Contains(got, "MCP tool result cap reached") {
+		t.Fatalf("truncated result missing cap marker")
+	}
+	prefix := strings.SplitN(got, mcpToolResultTruncatedMarker, 2)[0]
+	if strings.ToValidUTF8(prefix, "") != prefix {
+		t.Fatalf("truncated prefix is not valid UTF-8")
+	}
+}
+
+func TestReadStdioFrameCapped(t *testing.T) {
+	t.Run("short line trims newline", func(t *testing.T) {
+		got, err := readStdioFrameCapped(bufio.NewReader(strings.NewReader("hello\n")), 16)
+		if err != nil {
+			t.Fatalf("read frame: %v", err)
+		}
+		if string(got) != "hello" {
+			t.Fatalf("frame = %q, want hello", got)
+		}
+	})
+
+	t.Run("partial EOF returns frame and EOF", func(t *testing.T) {
+		got, err := readStdioFrameCapped(bufio.NewReader(strings.NewReader("hello")), 16)
+		if !errors.Is(err, io.EOF) {
+			t.Fatalf("err = %v, want EOF", err)
+		}
+		if string(got) != "hello" {
+			t.Fatalf("frame = %q, want hello", got)
+		}
+	})
+
+	t.Run("oversized line is rejected and discarded", func(t *testing.T) {
+		r := bufio.NewReaderSize(strings.NewReader("abcdef\nnext\n"), 4)
+		_, err := readStdioFrameCapped(r, 5)
+		if !errors.Is(err, errStdioFrameTooLarge) {
+			t.Fatalf("err = %v, want errStdioFrameTooLarge", err)
+		}
+		got, err := readStdioFrameCapped(r, 16)
+		if err != nil {
+			t.Fatalf("read next frame: %v", err)
+		}
+		if string(got) != "next" {
+			t.Fatalf("next frame = %q, want next", got)
 		}
 	})
 }
