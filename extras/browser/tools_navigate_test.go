@@ -51,3 +51,18 @@ func TestNavigateToolRejectsBlankURLAndPublishesMinLength(t *testing.T) {
 		t.Fatalf("blank URL error = %v, want url is required", err)
 	}
 }
+
+func TestWaitToolRejectsBlankRequiredTextAndPublishesMinLength(t *testing.T) {
+	tool := WaitTool(&Session{})
+	if count := strings.Count(string(tool.Schema), `"minLength": 1`); count < 2 {
+		t.Fatalf("schema should publish minLength for for/value fields: %s", tool.Schema)
+	}
+	_, err := tool.Execute(context.Background(), json.RawMessage(`{"for":"   "}`))
+	if err == nil || !strings.Contains(err.Error(), "'for' is required") {
+		t.Fatalf("blank for error = %v, want 'for' is required", err)
+	}
+	_, err = tool.Execute(context.Background(), json.RawMessage(`{"for":"text","value":"   "}`))
+	if err == nil || !strings.Contains(err.Error(), "'value' is required") {
+		t.Fatalf("blank text value error = %v, want value is required", err)
+	}
+}

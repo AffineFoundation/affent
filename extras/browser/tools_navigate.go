@@ -191,11 +191,13 @@ func WaitTool(s *Session) *agent.Tool {
         "properties": {
             "for": {
                 "type": "string",
+                "minLength": 1,
                 "enum": ["load", "domcontentloaded", "networkidle", "text"],
                 "description": "What to wait for. 'text' polls until the page body contains the substring given in 'value'."
             },
             "value": {
                 "type": "string",
+                "minLength": 1,
                 "description": "Required when 'for' is 'text'; the substring to wait for in the page body."
             },
             "timeout_ms": {
@@ -220,6 +222,8 @@ func WaitTool(s *Session) *agent.Tool {
 			if err := json.Unmarshal(raw, &args); err != nil {
 				return "", fmt.Errorf("decode args: %w", err)
 			}
+			args.For = strings.TrimSpace(args.For)
+			args.Value = strings.TrimSpace(args.Value)
 			if args.For == "" {
 				return "", errors.New("'for' is required")
 			}
@@ -227,13 +231,15 @@ func WaitTool(s *Session) *agent.Tool {
 			if err != nil {
 				return "", err
 			}
-			if s.page == nil {
-				return "", ErrNoPage
-			}
 			if args.For == "text" {
 				if args.Value == "" {
 					return "", errors.New("'value' is required when 'for'='text'")
 				}
+			}
+			if s.page == nil {
+				return "", ErrNoPage
+			}
+			if args.For == "text" {
 				if err := waitForText(ctx, s, args.Value, timeout); err != nil {
 					return "", err
 				}
