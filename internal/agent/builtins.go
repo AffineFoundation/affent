@@ -204,13 +204,13 @@ func shellTool(deps BuiltinDeps) *Tool {
 				return "", fmt.Errorf("decode args: %w", err)
 			}
 			if strings.TrimSpace(p.Command) == "" {
-				return "", errors.New("command is required")
+				return "", errors.New("command is required\nNext: retry shell with one concrete command, or use read_file/list_files for ordinary workspace inspection")
 			}
 			if len(p.Command) > maxShellCommandBytes {
-				return "", fmt.Errorf("command is %d bytes; shell command supports up to %d bytes. Put long scripts in a workspace file and run that file instead", len(p.Command), maxShellCommandBytes)
+				return "", fmt.Errorf("command is %d bytes; shell command supports up to %d bytes. Put long scripts in a workspace file and run that file instead\nNext: write the script to a workspace file, then retry shell with a short command that runs it", len(p.Command), maxShellCommandBytes)
 			}
 			if len(p.Cwd) > maxShellCwdBytes {
-				return "", fmt.Errorf("cwd is %d bytes; shell cwd supports up to %d bytes", len(p.Cwd), maxShellCwdBytes)
+				return "", fmt.Errorf("cwd is %d bytes; shell cwd supports up to %d bytes\nNext: retry shell with a shorter workspace-relative cwd, or omit cwd and cd inside the command", len(p.Cwd), maxShellCwdBytes)
 			}
 			if err := rejectBroadShellScan(p.Command, broadScanIndicators); err != nil {
 				return "", err
@@ -219,16 +219,16 @@ func shellTool(deps BuiltinDeps) *Tool {
 				return "", err
 			}
 			if p.TimeoutSec < 0 {
-				return "", fmt.Errorf("timeout_sec must be between 1 and %d seconds", maxShellTimeoutSec)
+				return "", fmt.Errorf("timeout_sec must be between 1 and %d seconds\nNext: omit timeout_sec to use the default, or retry with a positive timeout within the cap", maxShellTimeoutSec)
 			}
 			if p.TimeoutSec == 0 {
 				p.TimeoutSec = defaultShellTimeoutSec
 			}
 			if p.TimeoutSec > maxShellTimeoutSec {
-				return "", fmt.Errorf("timeout_sec must be between 1 and %d seconds", maxShellTimeoutSec)
+				return "", fmt.Errorf("timeout_sec must be between 1 and %d seconds\nNext: retry with timeout_sec <= %d, or split the command into smaller steps", maxShellTimeoutSec, maxShellTimeoutSec)
 			}
 			if deps.Executor == nil {
-				return "", errors.New("shell executor is not configured; use file tools, memory, or run affent with --executor local/sandbox/docker:<container>")
+				return "", errors.New("shell executor is not configured; use file tools, memory, or run affent with --executor local/sandbox/docker:<container>\nNext: use read_file/list_files/edit_file when possible, or restart affent with a configured executor before retrying shell")
 			}
 			argv := append(append([]string{}, shellPrefix...), p.Command)
 			res, err := deps.Executor.Exec(ctx, argv, executor.ExecOptions{

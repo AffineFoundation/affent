@@ -756,11 +756,23 @@ func TestShellToolRejectsOversizedCommandBeforeExec(t *testing.T) {
 	if err == nil {
 		t.Fatal("expected oversized command error")
 	}
-	if !strings.Contains(err.Error(), "shell command supports") || !strings.Contains(err.Error(), "workspace file") {
+	if !strings.Contains(err.Error(), "shell command supports") || !strings.Contains(err.Error(), "workspace file") || !strings.Contains(err.Error(), "Next:") {
 		t.Fatalf("unexpected oversized command error: %v", err)
 	}
 	if rec.gotArgv != nil {
 		t.Fatalf("oversized command should not execute: %v", rec.gotArgv)
+	}
+}
+
+func TestShellToolRejectsBlankCommandBeforeExec(t *testing.T) {
+	rec := &recordingExec{}
+	tool := shellTool(BuiltinDeps{Executor: rec})
+	_, err := tool.Execute(context.Background(), json.RawMessage(`{"command":"   "}`))
+	if err == nil || !strings.Contains(err.Error(), "command is required") || !strings.Contains(err.Error(), "Next:") {
+		t.Fatalf("blank command error = %v, want Next guidance", err)
+	}
+	if rec.gotArgv != nil {
+		t.Fatalf("blank command should not execute: %v", rec.gotArgv)
 	}
 }
 
@@ -775,7 +787,7 @@ func TestShellToolRejectsOversizedCwdBeforeExec(t *testing.T) {
 	if err == nil {
 		t.Fatal("expected oversized cwd error")
 	}
-	if !strings.Contains(err.Error(), "cwd is") {
+	if !strings.Contains(err.Error(), "cwd is") || !strings.Contains(err.Error(), "Next:") {
 		t.Fatalf("unexpected oversized cwd error: %v", err)
 	}
 	if rec.gotArgv != nil {
@@ -791,7 +803,7 @@ func TestShellTool_RejectsTimeoutAboveHardCap(t *testing.T) {
 	if err == nil {
 		t.Fatal("expected timeout_sec above hard cap to fail")
 	}
-	if !strings.Contains(err.Error(), fmt.Sprintf("%d", maxShellTimeoutSec)) {
+	if !strings.Contains(err.Error(), fmt.Sprintf("%d", maxShellTimeoutSec)) || !strings.Contains(err.Error(), "Next:") {
 		t.Fatalf("error should mention hard cap %d: %v", maxShellTimeoutSec, err)
 	}
 	if rec.gotArgv != nil {
@@ -806,6 +818,9 @@ func TestShellToolRejectsNegativeTimeout(t *testing.T) {
 	if err == nil {
 		t.Fatal("expected negative timeout error")
 	}
+	if !strings.Contains(err.Error(), "Next:") {
+		t.Fatalf("negative timeout error should guide recovery: %v", err)
+	}
 	if rec.gotArgv != nil {
 		t.Fatalf("negative timeout should not execute: %v", rec.gotArgv)
 	}
@@ -817,7 +832,7 @@ func TestShellToolMissingExecutorGivesClearError(t *testing.T) {
 	if err == nil {
 		t.Fatal("expected missing executor error")
 	}
-	for _, want := range []string{"executor", "--executor", "sandbox"} {
+	for _, want := range []string{"executor", "--executor", "sandbox", "Next:"} {
 		if !strings.Contains(err.Error(), want) {
 			t.Fatalf("error missing %q:\n%s", want, err.Error())
 		}
