@@ -5,6 +5,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"os"
+	"path"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -79,6 +80,40 @@ func TestHandleSessionArtifacts_ListAndReadChunks(t *testing.T) {
 	}
 	if got := w.Result().Header.Get("X-Affent-Artifact-Path"); got != artifactRel {
 		t.Fatalf("artifact path header = %q, want %q", got, artifactRel)
+	}
+}
+
+func TestHandleSessionArtifacts_ListSkipsSymlinks(t *testing.T) {
+	memRoot := t.TempDir()
+	pool := artifactTestPool(t, memRoot)
+	sessionID := "artifact-link-list"
+	root := filepath.Join(memRoot, sessionID, filepath.FromSlash(artifactPathPrefix))
+	if err := os.MkdirAll(root, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(root, "real.txt"), []byte("real"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	outside := filepath.Join(t.TempDir(), "outside.txt")
+	if err := os.WriteFile(outside, []byte("outside"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink(outside, filepath.Join(root, "linked.txt")); err != nil {
+		t.Skipf("symlink not available: %v", err)
+	}
+
+	r := httptest.NewRequest(http.MethodGet, "/v1/sessions/"+sessionID+"/artifacts", nil)
+	w := httptest.NewRecorder()
+	handleSessionArtifacts(pool, sessionID, "", w, r)
+	if got := w.Result().StatusCode; got != http.StatusOK {
+		t.Fatalf("status = %d: %s", got, w.Body.String())
+	}
+	var list artifactListResponse
+	if err := json.Unmarshal(w.Body.Bytes(), &list); err != nil {
+		t.Fatalf("decode list: %v\n%s", err, w.Body.String())
+	}
+	if len(list.Artifacts) != 1 || list.Artifacts[0].Path != path.Join(artifactPathPrefix, "real.txt") {
+		t.Fatalf("artifact list should include only real artifact: %+v", list.Artifacts)
 	}
 }
 

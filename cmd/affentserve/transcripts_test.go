@@ -45,6 +45,38 @@ func TestHandleSessionTranscripts_ListsFocusedAndSubagentTranscripts(t *testing.
 	}
 }
 
+func TestHandleSessionTranscripts_ListSkipsSymlinks(t *testing.T) {
+	pool := newTestPool(t, 4, "5m")
+	root := filepath.Join(pool.sessionDirPath("traceable-links"), "focused-tasks", "traceable-links")
+	if err := os.MkdirAll(root, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(root, "real.jsonl"), []byte("real\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	outside := filepath.Join(t.TempDir(), "outside.jsonl")
+	if err := os.WriteFile(outside, []byte("outside\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink(outside, filepath.Join(root, "linked.jsonl")); err != nil {
+		t.Skipf("symlink unavailable: %v", err)
+	}
+
+	r := httptest.NewRequest(http.MethodGet, "/v1/sessions/traceable-links/transcripts", nil)
+	w := httptest.NewRecorder()
+	handleSessionRoutes(pool).ServeHTTP(w, r)
+	if got := w.Result().StatusCode; got != http.StatusOK {
+		t.Fatalf("status = %d, want 200; body=%s", got, w.Body.String())
+	}
+	var resp transcriptListResponse
+	if err := json.Unmarshal(w.Body.Bytes(), &resp); err != nil {
+		t.Fatalf("decode: %v body=%s", err, w.Body.String())
+	}
+	if len(resp.Transcripts) != 1 || resp.Transcripts[0].ChildID != "real" {
+		t.Fatalf("transcript list should include only real transcript: %+v", resp.Transcripts)
+	}
+}
+
 func TestHandleSessionTranscripts_ReadsBoundedChunk(t *testing.T) {
 	pool := newTestPool(t, 4, "5m")
 	writeTranscriptFixture(t, pool, "traceable", "focused-tasks", "focused_one", "0123456789")

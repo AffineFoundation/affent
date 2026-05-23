@@ -54,18 +54,17 @@ func handleSessionTranscripts(pool *SessionPool, sessionID, transcriptPath strin
 }
 
 func handleSessionTranscriptList(sessionDir, sessionID string, w http.ResponseWriter) {
-	if _, err := os.Stat(sessionDir); err != nil {
-		if errors.Is(err, os.ErrNotExist) {
-			writeJSONError(w, http.StatusNotFound, "session not found", err)
-			return
-		}
+	if _, found, err := durableSessionDirInfo(sessionDir); err != nil {
 		writeJSONError(w, http.StatusInternalServerError, "stat session", err)
+		return
+	} else if !found {
+		writeJSONError(w, http.StatusNotFound, "session not found", os.ErrNotExist)
 		return
 	}
 	out := transcriptListResponse{SessionID: sessionID, Transcripts: []transcriptInfo{}}
 	for _, root := range transcriptRoots(sessionID) {
 		dir := filepath.Join(sessionDir, filepath.FromSlash(root.rel))
-		entries, err := os.ReadDir(dir)
+		entries, err := durableReadDir(dir)
 		if err != nil {
 			if errors.Is(err, os.ErrNotExist) {
 				continue
@@ -74,7 +73,7 @@ func handleSessionTranscriptList(sessionDir, sessionID string, w http.ResponseWr
 			return
 		}
 		for _, ent := range entries {
-			if ent.IsDir() || !strings.HasSuffix(ent.Name(), ".jsonl") {
+			if ent.IsDir() || durableDirEntryIsSymlink(ent) || !strings.HasSuffix(ent.Name(), ".jsonl") {
 				continue
 			}
 			info, err := ent.Info()

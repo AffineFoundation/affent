@@ -52,16 +52,15 @@ func handleSessionArtifacts(pool *SessionPool, sessionID, artifactPath string, w
 }
 
 func handleSessionArtifactList(sessionDir, sessionID string, w http.ResponseWriter) {
-	if _, err := os.Stat(sessionDir); err != nil {
-		if errors.Is(err, os.ErrNotExist) {
-			writeJSONError(w, http.StatusNotFound, "session not found", err)
-			return
-		}
+	if _, found, err := durableSessionDirInfo(sessionDir); err != nil {
 		writeJSONError(w, http.StatusInternalServerError, "stat session", err)
+		return
+	} else if !found {
+		writeJSONError(w, http.StatusNotFound, "session not found", os.ErrNotExist)
 		return
 	}
 	root := filepath.Join(sessionDir, filepath.FromSlash(artifactPathPrefix))
-	entries, err := os.ReadDir(root)
+	entries, err := durableReadDir(root)
 	if err != nil {
 		if errors.Is(err, os.ErrNotExist) {
 			w.Header().Set("Content-Type", "application/json")
@@ -73,7 +72,7 @@ func handleSessionArtifactList(sessionDir, sessionID string, w http.ResponseWrit
 	}
 	out := artifactListResponse{SessionID: sessionID, Artifacts: []artifactInfo{}}
 	for _, ent := range entries {
-		if ent.IsDir() {
+		if ent.IsDir() || durableDirEntryIsSymlink(ent) {
 			continue
 		}
 		info, err := ent.Info()

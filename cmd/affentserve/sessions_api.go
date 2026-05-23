@@ -549,6 +549,24 @@ func durableStatePathExists(path string) bool {
 	return err == nil && info.Mode()&os.ModeSymlink == 0
 }
 
+func durableReadDir(dir string) ([]os.DirEntry, error) {
+	info, err := os.Lstat(dir)
+	if err != nil {
+		return nil, err
+	}
+	if !info.IsDir() {
+		return nil, errors.New("durable path is not a directory")
+	}
+	if info.Mode()&os.ModeSymlink != 0 {
+		return nil, errors.New("durable path must not be a symlink")
+	}
+	return os.ReadDir(dir)
+}
+
+func durableDirEntryIsSymlink(ent os.DirEntry) bool {
+	return ent.Type()&os.ModeSymlink != 0
+}
+
 func dirHasAnyEntry(dir string) bool {
 	info, err := os.Lstat(dir)
 	if err != nil || !info.IsDir() || info.Mode()&os.ModeSymlink != 0 {
