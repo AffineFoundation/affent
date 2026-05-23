@@ -441,6 +441,15 @@ func TestSubagentToolDescriptionMentionsCallerProvidedBrowserTools(t *testing.T)
 	if !strings.Contains(raw, fmt.Sprintf(`"maxLength": %d`, maxSubagentModeBytes)) {
 		t.Fatalf("subagent mode schema should publish mode maxLength:\n%s", raw)
 	}
+	if !strings.Contains(raw, `"default": "explore"`) {
+		t.Fatalf("subagent mode schema should publish default mode:\n%s", raw)
+	}
+	if !strings.Contains(raw, fmt.Sprintf(`"maximum": %d`, maxSubagentMaxTurns)) {
+		t.Fatalf("subagent max_turns schema should publish maximum:\n%s", raw)
+	}
+	if !strings.Contains(raw, fmt.Sprintf(`"default": %d`, defaultSubagentMaxTurns)) {
+		t.Fatalf("subagent max_turns schema should publish default:\n%s", raw)
+	}
 }
 
 // TestBuildSubagentRegistry_HasNoWriteAndBoundedNestedSubagent pins the
@@ -767,6 +776,9 @@ func TestSubagentTool_InputValidation(t *testing.T) {
 		if err == nil || !strings.Contains(err.Error(), "task is required") {
 			t.Errorf("empty task must be rejected; got err=%v", err)
 		}
+		if err == nil || !strings.Contains(err.Error(), "Next:") {
+			t.Errorf("empty task error should include Next step; got err=%v", err)
+		}
 	})
 
 	t.Run("whitespace-only task is rejected", func(t *testing.T) {
@@ -801,6 +813,9 @@ func TestSubagentTool_InputValidation(t *testing.T) {
 		_, err := tool.Execute(context.Background(), json.RawMessage(`{"task":"x","mode":"frobnicate"}`))
 		if err == nil || !strings.Contains(err.Error(), "unsupported mode") {
 			t.Errorf("unknown mode must be rejected; got err=%v", err)
+		}
+		if err == nil || !strings.Contains(err.Error(), "Next:") {
+			t.Errorf("unknown mode error should include Next step; got err=%v", err)
 		}
 		if err != nil {
 			for _, want := range DefaultSubagentModeRegistry().Names() {
@@ -892,6 +907,9 @@ func TestSubagentModeRegistry_DataDrivenContract(t *testing.T) {
 		}
 		if !strings.Contains(raw, "deployment-specific schema migration") {
 			t.Errorf("custom mode description should appear in schema:\n%s", raw)
+		}
+		if !strings.Contains(raw, `"default": "migrate"`) {
+			t.Errorf("custom registry first mode should be schema default:\n%s", raw)
 		}
 		// And the default registry's modes must NOT leak in when the
 		// caller passes a non-empty custom registry.

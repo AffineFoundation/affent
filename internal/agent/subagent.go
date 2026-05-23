@@ -390,7 +390,7 @@ func subagentTool(deps SubagentDeps) *Tool {
 			}
 			p.Task = strings.TrimSpace(p.Task)
 			if p.Task == "" {
-				return "", errors.New("task is required")
+				return "", errors.New("task is required. Next: retry with one concrete bounded investigation or review task for the isolated subagent")
 			}
 			if len(p.Task) > maxSubagentTaskBytes {
 				return "", fmt.Errorf("task is %d bytes; subagent_run supports tasks up to %d bytes", len(p.Task), maxSubagentTaskBytes)
@@ -404,7 +404,7 @@ func subagentTool(deps SubagentDeps) *Tool {
 			}
 			mode, ok := reg.Lookup(p.Mode)
 			if !ok {
-				return "", fmt.Errorf("unsupported mode %q (valid: %s)", p.Mode, strings.Join(reg.Names(), ", "))
+				return "", fmt.Errorf("unsupported mode %q (valid: %s). Next: retry with one listed mode or omit mode to use the default", p.Mode, strings.Join(reg.Names(), ", "))
 			}
 			if p.MaxTurns <= 0 {
 				p.MaxTurns = defaultSubagentMaxTurns
@@ -437,14 +437,15 @@ func subagentToolSchema(reg *SubagentModeRegistry, maxDepth int) json.RawMessage
 		modeDesc.WriteString(def)
 		modeDesc.WriteString(".")
 	}
-	modeBlock := fmt.Sprintf(`"mode": {"type": "string", "minLength": 1, "maxLength": %d, "enum": %s, "description": %q}`, maxSubagentModeBytes, enum, modeDesc.String())
+	modeDefault := reg.Default()
+	modeBlock := fmt.Sprintf(`"mode": {"type": "string", "minLength": 1, "maxLength": %d, "enum": %s, "default": %q, "description": %q}`, maxSubagentModeBytes, enum, modeDefault, modeDesc.String())
 	schemaJSON := `{
         "type": "object",
         "required": ["task"],
         "properties": {
             "task": {"type": "string", "minLength": 1, "maxLength": ` + fmt.Sprint(maxSubagentTaskBytes) + `, "description": "Concrete bounded task for the isolated subagent. Include the files, question, or risk to inspect. For web pages, specify whether to extract only current-page visible snapshot facts or to inspect additional tabs/pages. If nested delegation is available, assign only one separable noisy subtask to the child."},
             ` + modeBlock + `,
-            "max_turns": {"type": "integer", "minimum": 1, "maximum": 12, "description": "Subagent tool-call step budget. Default 6, hard max 12. Recursive delegation is capped at depth ` + fmt.Sprint(maxDepth) + `."}
+            "max_turns": {"type": "integer", "minimum": 1, "maximum": ` + fmt.Sprint(maxSubagentMaxTurns) + `, "default": ` + fmt.Sprint(defaultSubagentMaxTurns) + `, "description": "Subagent tool-call step budget. Default ` + fmt.Sprint(defaultSubagentMaxTurns) + `, hard max ` + fmt.Sprint(maxSubagentMaxTurns) + `. Recursive delegation is capped at depth ` + fmt.Sprint(maxDepth) + `."}
         }
     }`
 	return json.RawMessage(schemaJSON)
