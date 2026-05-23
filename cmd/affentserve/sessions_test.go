@@ -2,6 +2,7 @@ package main
 
 import (
 	"errors"
+	"fmt"
 	"io"
 	"os"
 	"path/filepath"
@@ -572,6 +573,52 @@ func TestSessionPool_RetentionSweep(t *testing.T) {
 	}
 	if _, err := os.Stat(filepath.Join(memRoot, "stale-active")); err != nil {
 		t.Errorf("stale-active dir must be kept (session in pool overrides disk staleness): %v", err)
+	}
+}
+
+func TestSessionPool_RetentionSweepProcessesMultipleDirectoryBatches(t *testing.T) {
+	memRoot := t.TempDir()
+	long := time.Now().Add(-7 * 24 * time.Hour)
+	total := sessionRetentionReadDirBatch + 19
+	for i := 0; i < total; i++ {
+		id := fmt.Sprintf("stale-%03d", i)
+		dir := filepath.Join(memRoot, id)
+		if err := os.MkdirAll(dir, 0o755); err != nil {
+			t.Fatal(err)
+		}
+		conv := filepath.Join(dir, "conversation.jsonl")
+		if err := os.WriteFile(conv, []byte("[]\n"), 0o644); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.Chtimes(conv, long, long); err != nil {
+			t.Fatal(err)
+		}
+	}
+	cfg := Config{
+		Listen:           "127.0.0.1:0",
+		MaxSessions:      4,
+		SessionIdleTTL:   "5m",
+		SessionRetention: "24h",
+		WorkspaceRoot:    t.TempDir(),
+		MemoryRoot:       memRoot,
+		BaseURL:          "http://127.0.0.1:0",
+		APIKey:           "test",
+		Model:            "fake",
+	}
+	pool, err := NewSessionPool(cfg, zerolog.New(io.Discard))
+	if err != nil {
+		t.Fatalf("NewSessionPool: %v", err)
+	}
+	t.Cleanup(pool.Shutdown)
+
+	pool.sweepRetentionOnce()
+
+	entries, err := os.ReadDir(memRoot)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(entries) != 0 {
+		t.Fatalf("remaining session dirs = %d, want 0", len(entries))
 	}
 }
 

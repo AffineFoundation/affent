@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
 	"sync"
@@ -759,6 +760,8 @@ func (p *SessionPool) gcRetentionLoop() {
 	}
 }
 
+const sessionRetentionReadDirBatch = 128
+
 // sweepRetentionOnce walks MemoryRoot looking for session dirs whose
 // conversation.jsonl mtime (or the dir mtime as fallback) is older
 // than the configured retention. Active sessions — those currently
@@ -781,66 +784,77 @@ func (p *SessionPool) sweepRetentionOnce() {
 			root = filepath.Join(os.TempDir(), "affentserve-memory")
 		}
 	}
-	entries, err := os.ReadDir(root)
+	dirFile, err := os.Open(root)
 	if err != nil {
 		if !os.IsNotExist(err) {
 			p.logger.Warn().Err(err).Str("root", root).Msg("retention sweep read")
 		}
 		return
 	}
+	defer dirFile.Close()
 	cutoff := time.Now().Add(-p.retention)
 	deleted := 0
-	for _, e := range entries {
-		if !e.IsDir() {
-			continue
+	for {
+		entries, err := dirFile.ReadDir(sessionRetentionReadDirBatch)
+		if err != nil && !errors.Is(err, io.EOF) {
+			p.logger.Warn().Err(err).Str("root", root).Msg("retention sweep read")
+			return
 		}
-		id := e.Name()
-		if agent.ValidateSessionID(id) != nil {
-			// Some operator-placed file or a malformed name we wouldn't
-			// recognize as ours. Don't touch it.
-			continue
-		}
-		dir := filepath.Join(root, id)
-		// Stat is cheap and independent of pool state — do it outside
-		// the lock so we don't gate the lock on filesystem latency for
-		// every dir on every sweep, including the fresh ones we'll
-		// skip immediately.
-		var mtime time.Time
-		if fi, err := os.Stat(filepath.Join(dir, "conversation.jsonl")); err == nil {
-			mtime = fi.ModTime()
-		} else if fi, err := os.Stat(dir); err == nil {
-			// Conversation log missing (memory-only setup / half-built
-			// session) — fall back to the dir's own mtime.
-			mtime = fi.ModTime()
-		} else {
-			continue
-		}
-		if !mtime.Before(cutoff) {
-			continue
-		}
-		// Active-check + RemoveAll must run UNDER THE SAME LOCK as
-		// GetOrCreate. Without that, a client reconnecting with this
-		// id between the active-check and the RemoveAll would land a
-		// freshly-built session pointing at conv.jsonl — and we'd then
-		// wipe the dir out from under it, breaking the next Append
-		// with ENOENT. Pre-fix the two operations sat in separate
-		// critical sections.
-		p.mu.Lock()
-		if _, active := p.sessions[id]; active {
+		for _, e := range entries {
+			if !e.IsDir() {
+				continue
+			}
+			id := e.Name()
+			if agent.ValidateSessionID(id) != nil {
+				// Some operator-placed file or a malformed name we wouldn't
+				// recognize as ours. Don't touch it.
+				continue
+			}
+			dir := filepath.Join(root, id)
+			// Stat is cheap and independent of pool state — do it outside
+			// the lock so we don't gate the lock on filesystem latency for
+			// every dir on every sweep, including the fresh ones we'll
+			// skip immediately.
+			var mtime time.Time
+			if fi, err := os.Stat(filepath.Join(dir, "conversation.jsonl")); err == nil {
+				mtime = fi.ModTime()
+			} else if fi, err := os.Stat(dir); err == nil {
+				// Conversation log missing (memory-only setup / half-built
+				// session) — fall back to the dir's own mtime.
+				mtime = fi.ModTime()
+			} else {
+				continue
+			}
+			if !mtime.Before(cutoff) {
+				continue
+			}
+			// Active-check + RemoveAll must run UNDER THE SAME LOCK as
+			// GetOrCreate. Without that, a client reconnecting with this
+			// id between the active-check and the RemoveAll would land a
+			// freshly-built session pointing at conv.jsonl — and we'd then
+			// wipe the dir out from under it, breaking the next Append
+			// with ENOENT. Pre-fix the two operations sat in separate
+			// critical sections.
+			p.mu.Lock()
+			if _, active := p.sessions[id]; active {
+				p.mu.Unlock()
+				continue
+			}
+			if err := os.RemoveAll(dir); err != nil {
+				p.mu.Unlock()
+				p.logger.Warn().Err(err).Str("session_id", id).Msg("retention sweep remove")
+				continue
+			}
 			p.mu.Unlock()
-			continue
+			deleted++
+			p.logger.Info().
+				Str("session_id", id).
+				Time("last_active", mtime).
+				Msg("retention sweep removed stale session dir")
 		}
-		if err := os.RemoveAll(dir); err != nil {
-			p.mu.Unlock()
-			p.logger.Warn().Err(err).Str("session_id", id).Msg("retention sweep remove")
-			continue
+		if errors.Is(err, io.EOF) {
+			break
 		}
-		p.mu.Unlock()
-		deleted++
-		p.logger.Info().
-			Str("session_id", id).
-			Time("last_active", mtime).
-			Msg("retention sweep removed stale session dir")
 	}
 	if deleted > 0 {
 		p.logger.Info().Int("deleted", deleted).Msg("retention sweep")
