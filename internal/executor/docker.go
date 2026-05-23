@@ -149,6 +149,9 @@ const (
 
 	dockerFileOpStatusCap     = 64 * 1024
 	dockerFileOpStatOutputCap = 1024
+
+	dockerBinaryProbeBytes       = 8192
+	defaultDockerListFileEntries = 200
 )
 
 var dockerFileOpTimeout = 30 * time.Second
@@ -192,8 +195,8 @@ func (d *DockerExecExecutor) ReadFile(ctx context.Context, path string, maxBytes
 	// wasted tokens and the shell tool with file/xxd/base64 is the
 	// right escape hatch.
 	probe := out
-	if len(probe) > 8192 {
-		probe = probe[:8192]
+	if len(probe) > dockerBinaryProbeBytes {
+		probe = probe[:dockerBinaryProbeBytes]
 	}
 	if strings.IndexByte(probe, 0) >= 0 {
 		return "", fmt.Errorf("%s appears to be binary (contains null bytes); use shell with file/xxd/base64 to inspect", path)
@@ -295,7 +298,7 @@ func (d *DockerExecExecutor) ListFiles(ctx context.Context, path string, maxEntr
 		path = "/"
 	}
 	if maxEntries <= 0 {
-		maxEntries = 200
+		maxEntries = defaultDockerListFileEntries
 	}
 	if exists, err := d.pathExists(ctx, path); err != nil {
 		return nil, err
