@@ -130,6 +130,22 @@ func TestPlanToolDeduplicatesEvidenceRefs(t *testing.T) {
 	}
 }
 
+func TestPlanToolEvidenceLimitCountsUniqueRefs(t *testing.T) {
+	tool := planTool(filepath.Join(t.TempDir(), "plan.json"))
+	evidence := strings.Repeat(`"internal/agent/plan_tool.go",`, maxPlanEvidence+2) + `"go test ./internal/agent"`
+	out, err := tool.Execute(context.Background(), json.RawMessage(`{"action":"set","steps":[{"text":"ship","evidence":[`+evidence+`]}]}`))
+	if err != nil {
+		t.Fatalf("set with repeated refs: %v", err)
+	}
+	var st planState
+	if err := json.Unmarshal([]byte(out), &st); err != nil {
+		t.Fatalf("decode set response: %v\n%s", err, out)
+	}
+	if got := len(st.Steps[0].Evidence); got != 2 {
+		t.Fatalf("evidence len = %d, want 2 unique refs", got)
+	}
+}
+
 func TestPlanToolNormalizesActionAndStatusCase(t *testing.T) {
 	tool := planTool(filepath.Join(t.TempDir(), "plan.json"))
 	out, err := tool.Execute(context.Background(), json.RawMessage(`{"action":" Set ","steps":[{"text":"ship","status":" IN_PROGRESS "}]}`))

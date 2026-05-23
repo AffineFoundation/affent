@@ -279,9 +279,6 @@ func normalizePlanStatus(status string) (string, error) {
 }
 
 func normalizePlanEvidence(in []string) ([]string, error) {
-	if len(in) > maxPlanEvidence {
-		return nil, fmt.Errorf("evidence supports at most %d refs\nNext: keep only the strongest file, command, or URL refs", maxPlanEvidence)
-	}
 	out := make([]string, 0, len(in))
 	seen := map[string]bool{}
 	for _, ref := range in {
@@ -297,6 +294,9 @@ func normalizePlanEvidence(in []string) ([]string, error) {
 		}
 		seen[ref] = true
 		out = append(out, ref)
+	}
+	if len(out) > maxPlanEvidence {
+		return nil, fmt.Errorf("evidence supports at most %d refs\nNext: keep only the strongest file, command, or URL refs", maxPlanEvidence)
 	}
 	return out, nil
 }
