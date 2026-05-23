@@ -373,6 +373,11 @@ all survive container restarts when that root is backed by a host volume.
 Clients resume by sending the same `X-Affent-Session-Id` header or
 `affent_session_id` / `session_id` request field. `DELETE /v1/sessions/{id}`
 intentionally removes that durable state.
+Use `GET /v1/sessions?limit=100&after=<session_id>` to list active and durable
+sessions without reading full logs. `POST /v1/sessions` creates or reopens a
+session explicitly; pass `{"session_id":"..."}` to choose a stable id, or an
+empty body to generate one. `GET /v1/sessions/{id}` returns the merged active
+and durable status for one session.
 Use `GET /v1/sessions/{id}/history?after=-1&limit=100` to page through the
 persisted event log. The `after` cursor is a JSONL line number (`next_after`
 from the previous response), not an event id, so replay remains correct across
@@ -581,6 +586,18 @@ not an importable Go package. Architecture notes live in
 health/stats endpoints, session lifecycle operations, and a native session
 event stream. Clients can pin a session through `X-Affent-Session-Id`,
 `affent_session_id`, or `session_id`.
+
+Native session endpoints:
+
+- `GET /v1/sessions?limit=100&after=<session_id>` lists sessions from the
+  in-memory pool plus durable session directories.
+- `POST /v1/sessions` creates or reopens a session.
+- `GET /v1/sessions/{id}` returns session status.
+- `GET /v1/sessions/{id}/events` streams live SSE events.
+- `GET /v1/sessions/{id}/history?after=-1&limit=100` pages persisted events.
+- `GET /v1/sessions/{id}/artifacts` lists durable tool-result artifacts.
+- `GET /v1/sessions/{id}/artifacts/{path}` reads a bounded artifact chunk.
+- `DELETE /v1/sessions/{id}` closes and purges the session.
 
 ## Security Model
 

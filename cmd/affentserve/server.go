@@ -13,6 +13,9 @@ import (
 //	GET    /healthz
 //	GET    /v1/models
 //	POST   /v1/chat/completions
+//	GET    /v1/sessions
+//	POST   /v1/sessions
+//	GET    /v1/sessions/{id}
 //	GET    /v1/sessions/{id}/events
 //	GET    /v1/sessions/{id}/history
 //	GET    /v1/sessions/{id}/artifacts
@@ -32,6 +35,7 @@ func newRouter(cfg Config, pool *SessionPool, logger zerolog.Logger) http.Handle
 
 	mux.Handle("/v1/models", authed(http.HandlerFunc(handleModels(cfg))))
 	mux.Handle("/v1/chat/completions", authed(http.HandlerFunc(handleChatCompletions(cfg, pool))))
+	mux.Handle("/v1/sessions", authed(http.HandlerFunc(handleSessionsCollection(pool))))
 	mux.Handle("/v1/sessions/", authed(http.HandlerFunc(handleSessionRoutes(pool))))
 	mux.Handle("/v1/stats", authed(http.HandlerFunc(handleStats(cfg, pool))))
 
@@ -40,6 +44,7 @@ func newRouter(cfg Config, pool *SessionPool, logger zerolog.Logger) http.Handle
 
 // handleSessionRoutes demuxes the per-session sub-paths:
 //
+//	GET    /v1/sessions/{id}         → durable/active session detail
 //	GET    /v1/sessions/{id}/events  → SSE passthrough
 //	GET    /v1/sessions/{id}/history → persisted JSONL replay
 //	GET    /v1/sessions/{id}/artifacts[/path] → tool-result artifacts
@@ -60,6 +65,8 @@ func handleSessionRoutes(pool *SessionPool) http.HandlerFunc {
 		}
 
 		switch {
+		case sub == "" && r.Method == http.MethodGet:
+			handleSessionDetail(pool, sessionID, w, r)
 		case sub == "events" && r.Method == http.MethodGet:
 			handleSessionEvents(pool, sessionID, w, r)
 		case sub == "history" && r.Method == http.MethodGet:

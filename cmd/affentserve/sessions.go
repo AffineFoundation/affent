@@ -606,6 +606,10 @@ func (p *SessionPool) allocWorkspace(id string) (string, error) {
 // durability; the dir now holds both, but the env/config knob keeps
 // its old name to avoid an unmotivated rename of a public surface.
 func (p *SessionPool) sessionDirPath(id string) string {
+	return filepath.Join(p.sessionRootPath(), id)
+}
+
+func (p *SessionPool) sessionRootPath() string {
 	root := p.cfg.MemoryRoot
 	if root == "" {
 		if p.cfg.WorkspaceRoot != "" {
@@ -614,7 +618,7 @@ func (p *SessionPool) sessionDirPath(id string) string {
 			root = filepath.Join(os.TempDir(), "affentserve-memory")
 		}
 	}
-	return filepath.Join(root, id)
+	return root
 }
 
 // allocSessionDir returns the durable per-session-id state dir. Holds
@@ -897,14 +901,7 @@ func (p *SessionPool) sweepRetentionOnce() {
 	if p.retention <= 0 {
 		return
 	}
-	root := p.cfg.MemoryRoot
-	if root == "" {
-		if p.cfg.WorkspaceRoot != "" {
-			root = filepath.Join(p.cfg.WorkspaceRoot, "memory")
-		} else {
-			root = filepath.Join(os.TempDir(), "affentserve-memory")
-		}
-	}
+	root := p.sessionRootPath()
 	dirFile, err := os.Open(root)
 	if err != nil {
 		if !os.IsNotExist(err) {

@@ -140,6 +140,9 @@ func TestNewRouter_RegistersExpectedRoutes(t *testing.T) {
 		{http.MethodGet, "/healthz"},
 		{http.MethodGet, "/v1/models"},
 		{http.MethodPost, "/v1/chat/completions"},
+		{http.MethodGet, "/v1/sessions"},
+		{http.MethodPost, "/v1/sessions"},
+		{http.MethodGet, "/v1/sessions/abc"},
 		{http.MethodGet, "/v1/sessions/abc/events"}, // handler-404 (session unknown) is OK
 		{http.MethodDelete, "/v1/sessions/abc"},
 		{http.MethodGet, "/v1/stats"},
