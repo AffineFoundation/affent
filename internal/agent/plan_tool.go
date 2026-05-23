@@ -595,7 +595,19 @@ func activePlanSkillBlock(planPath string) string {
 	var b strings.Builder
 	b.WriteString("AFFENT ACTIVE PLAN:\n")
 	b.WriteString("This is the persisted task plan for the current session. Continue from it, update it when progress changes, and avoid restarting already completed steps.\n")
+	completed := 0
+	for _, step := range st.Steps {
+		if planStepCompleted(step) {
+			completed++
+		}
+	}
+	if completed > 0 {
+		fmt.Fprintf(&b, "Completed steps: %d (details omitted from active context).\n", completed)
+	}
 	for i, step := range st.Steps {
+		if planStepCompleted(step) {
+			continue
+		}
 		b.WriteString(formatActivePlanStep(i+1, step))
 	}
 	return strings.TrimSpace(b.String())
@@ -645,9 +657,13 @@ func planStateDone(st planState) bool {
 		return false
 	}
 	for _, step := range st.Steps {
-		if strings.TrimSpace(step.Status) != "completed" {
+		if !planStepCompleted(step) {
 			return false
 		}
 	}
 	return true
+}
+
+func planStepCompleted(step planStep) bool {
+	return strings.TrimSpace(step.Status) == "completed"
 }

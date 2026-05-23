@@ -406,13 +406,16 @@ func TestWithActivePlanSkillProviderInjectsPersistedPlan(t *testing.T) {
 	got := provider("continue")
 	for _, want := range []string{
 		"AFFENT ACTIVE PLAN:",
-		"1. [completed] inspect resume state evidence: cmd/affentctl/cmd_chat.go",
+		"Completed steps: 1 (details omitted from active context).",
 		"2. [in_progress] continue implementation note: resume here",
 		"AFFENT ACTIVE SKILL: demo",
 	} {
 		if !strings.Contains(got, want) {
 			t.Fatalf("active plan provider missing %q:\n%s", want, got)
 		}
+	}
+	if strings.Contains(got, "inspect resume state") || strings.Contains(got, "cmd/affentctl/cmd_chat.go") {
+		t.Fatalf("completed step details should be omitted from active context:\n%s", got)
 	}
 }
 
