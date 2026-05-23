@@ -26,6 +26,11 @@ type ToolOrderRequirement struct {
 	Later   string
 }
 
+type CommandToolOrderRequirement struct {
+	Command string
+	Tool    string
+}
+
 type BatchScenario struct {
 	Name                         string
 	Suites                       []string
@@ -36,6 +41,8 @@ type BatchScenario struct {
 	ForbiddenCommands            []string
 	RequiredCommands             []string
 	RequiredCommandCounts        map[string]int
+	RequiredCommandBeforeTool    []CommandToolOrderRequirement
+	RequiredCommandAfterTool     []CommandToolOrderRequirement
 	RequiredTools                []string
 	ForbiddenTools               []string
 	RequiredFinalText            []string
@@ -505,6 +512,12 @@ func BatchScenarioChecks(scenario BatchScenario) []Check {
 	}
 	for _, pattern := range sortedStringMapKeys(scenario.RequiredCommandCounts) {
 		checks = append(checks, ShellCommandMatchingAtLeast(pattern, scenario.RequiredCommandCounts[pattern]))
+	}
+	for _, order := range scenario.RequiredCommandBeforeTool {
+		checks = append(checks, ShellCommandMatchingBeforeTool(order.Command, order.Tool))
+	}
+	for _, order := range scenario.RequiredCommandAfterTool {
+		checks = append(checks, ShellCommandMatchingAfterTool(order.Command, order.Tool))
 	}
 	for _, forbidden := range scenario.ForbiddenCommands {
 		checks = append(checks, ShellCommandLacksUnguarded(forbidden))

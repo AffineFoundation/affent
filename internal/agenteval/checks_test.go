@@ -666,6 +666,56 @@ func TestShellCommandMatchingAtLeast(t *testing.T) {
 	})
 }
 
+func TestShellCommandMatchingBeforeAfterTool(t *testing.T) {
+	trace := Trace{Tools: []ToolCall{
+		{Tool: "shell", Args: map[string]any{"command": "go test ./..."}},
+		{Tool: "read_file", Args: map[string]any{"path": "calc/calc.go"}},
+		{Tool: "edit_file", Args: map[string]any{"path": "calc/calc.go"}},
+		{Tool: "shell", Args: map[string]any{"command": "go test ./... -count=1"}},
+	}}
+	if res := ShellCommandMatchingBeforeTool(`go test`, "edit_file").Eval(trace); !res.Pass {
+		t.Fatalf("expected go test before edit_file to pass: %+v", res)
+	}
+	if res := ShellCommandMatchingAfterTool(`go test`, "edit_file").Eval(trace); !res.Pass {
+		t.Fatalf("expected go test after edit_file to pass: %+v", res)
+	}
+
+	editFirst := Trace{Tools: []ToolCall{
+		{Tool: "edit_file", Args: map[string]any{"path": "calc/calc.go"}},
+		{Tool: "shell", Args: map[string]any{"command": "go test ./..."}},
+	}}
+	res := ShellCommandMatchingBeforeTool(`go test`, "edit_file").Eval(editFirst)
+	if res.Pass {
+		t.Fatal("expected missing pre-edit command to fail")
+	}
+	if !strings.Contains(res.Detail, "before") {
+		t.Fatalf("detail should explain order failure: %s", res.Detail)
+	}
+
+	noPostVerify := Trace{Tools: []ToolCall{
+		{Tool: "shell", Args: map[string]any{"command": "go test ./..."}},
+		{Tool: "edit_file", Args: map[string]any{"path": "calc/calc.go"}},
+	}}
+	res = ShellCommandMatchingAfterTool(`go test`, "edit_file").Eval(noPostVerify)
+	if res.Pass {
+		t.Fatal("expected missing post-edit command to fail")
+	}
+	if !strings.Contains(res.Detail, "after") {
+		t.Fatalf("detail should explain order failure: %s", res.Detail)
+	}
+
+	noEdit := Trace{Tools: []ToolCall{
+		{Tool: "shell", Args: map[string]any{"command": "go test ./..."}},
+	}}
+	res = ShellCommandMatchingAfterTool(`go test`, "edit_file").Eval(noEdit)
+	if res.Pass {
+		t.Fatal("expected missing edit_file to fail")
+	}
+	if !strings.Contains(res.Detail, "never observed") {
+		t.Fatalf("detail should explain missing tool: %s", res.Detail)
+	}
+}
+
 func TestShellCommandLacksUnguarded(t *testing.T) {
 	t.Run("fails on unguarded forbidden", func(t *testing.T) {
 		trace := Trace{Tools: []ToolCall{

@@ -75,6 +75,13 @@ func TestMedianDoesNotMutateInput(t *testing.T) {
 		RequiredCommandCounts: map[string]int{
 			`go test`: 2,
 		},
+		RequiredTools: []string{"edit_file"},
+		RequiredCommandBeforeTool: []CommandToolOrderRequirement{
+			{Command: `go test`, Tool: "edit_file"},
+		},
+		RequiredCommandAfterTool: []CommandToolOrderRequirement{
+			{Command: `go test`, Tool: "edit_file"},
+		},
 		ForbiddenCommands: defaultForbiddenCommands,
 		ProtectedFiles:    []string{"calc/calc_test.go"},
 		MaxTurns:          10,
@@ -223,6 +230,13 @@ func TestResolveInvalidRetriesIsAnError(t *testing.T) {
 		RequiredCommandCounts: map[string]int{
 			`go test`: 2,
 		},
+		RequiredTools: []string{"edit_file"},
+		RequiredCommandBeforeTool: []CommandToolOrderRequirement{
+			{Command: `go test`, Tool: "edit_file"},
+		},
+		RequiredCommandAfterTool: []CommandToolOrderRequirement{
+			{Command: `go test`, Tool: "edit_file"},
+		},
 		ForbiddenCommands: defaultForbiddenCommands,
 		ProtectedFiles:    []string{"config/config_test.go"},
 		MaxTurns:          10,
@@ -283,6 +297,13 @@ def test_unique_slug_uses_first_free_number_after_existing_suffixes():
 		RequiredCommands: []string{`python(3)? -m pytest`},
 		RequiredCommandCounts: map[string]int{
 			`python(3)? -m pytest`: 2,
+		},
+		RequiredTools: []string{"edit_file"},
+		RequiredCommandBeforeTool: []CommandToolOrderRequirement{
+			{Command: `python(3)? -m pytest`, Tool: "edit_file"},
+		},
+		RequiredCommandAfterTool: []CommandToolOrderRequirement{
+			{Command: `python(3)? -m pytest`, Tool: "edit_file"},
 		},
 		ForbiddenCommands: defaultForbiddenCommands,
 		ProtectedFiles:    []string{"test_slug.py"},
@@ -364,6 +385,13 @@ func TestRedactSecretsIgnoresEmptySecret(t *testing.T) {
 		RequiredCommandCounts: map[string]int{
 			`go test`: 2,
 		},
+		RequiredTools: []string{"edit_file"},
+		RequiredCommandBeforeTool: []CommandToolOrderRequirement{
+			{Command: `go test`, Tool: "edit_file"},
+		},
+		RequiredCommandAfterTool: []CommandToolOrderRequirement{
+			{Command: `go test`, Tool: "edit_file"},
+		},
 		ForbiddenCommands: defaultForbiddenCommands,
 		ProtectedFiles:    []string{"redactor/redactor_test.go"},
 		MaxTurns:          12,
@@ -422,6 +450,13 @@ def test_parse_config_preserves_empty_values_and_trims_keys():
 		RequiredCommands: []string{`python(3)? -m pytest`},
 		RequiredCommandCounts: map[string]int{
 			`python(3)? -m pytest`: 2,
+		},
+		RequiredTools: []string{"edit_file"},
+		RequiredCommandBeforeTool: []CommandToolOrderRequirement{
+			{Command: `python(3)? -m pytest`, Tool: "edit_file"},
+		},
+		RequiredCommandAfterTool: []CommandToolOrderRequirement{
+			{Command: `python(3)? -m pytest`, Tool: "edit_file"},
 		},
 		ForbiddenCommands: defaultForbiddenCommands,
 		ProtectedFiles:    []string{"test_parser.py"},

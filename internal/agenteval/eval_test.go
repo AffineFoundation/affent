@@ -177,6 +177,12 @@ func TestBatchScenarioChecks_UsesSharedCheckLibrary(t *testing.T) {
 		RequiredCommandCounts: map[string]int{
 			`go test`: 2,
 		},
+		RequiredCommandBeforeTool: []CommandToolOrderRequirement{
+			{Command: `go test`, Tool: "edit_file"},
+		},
+		RequiredCommandAfterTool: []CommandToolOrderRequirement{
+			{Command: `go test`, Tool: "edit_file"},
+		},
 		ForbiddenCommands: []string{"| head", "|| true"},
 		ProtectedFiles:    []string{"main_test.go", "doc_test.go"},
 	}
@@ -196,6 +202,8 @@ func TestBatchScenarioChecks_UsesSharedCheckLibrary(t *testing.T) {
 		"shell_command_matching:go test",
 		"shell_command_matching:gofmt",
 		"shell_command_matching_at_least:go test:2",
+		"shell_command_before_tool:go test->edit_file",
+		"shell_command_after_tool:go test->edit_file",
 		"shell_command_lacks_unguarded:| head",
 		"shell_command_lacks_unguarded:|| true",
 		"file_not_edited:",
@@ -278,6 +286,16 @@ func TestRepairScenariosRequireRepeatedVerification(t *testing.T) {
 			if scenario.RequiredCommandCounts[pattern] != min {
 				t.Fatalf("%s RequiredCommandCounts[%q] = %d, want %d; all counts=%#v", scenario.Name, pattern, scenario.RequiredCommandCounts[pattern], min, scenario.RequiredCommandCounts)
 			}
+			if !stringSliceContains(scenario.RequiredTools, "edit_file") {
+				t.Fatalf("%s RequiredTools = %#v, want edit_file", scenario.Name, scenario.RequiredTools)
+			}
+			wantBefore := CommandToolOrderRequirement{Command: pattern, Tool: "edit_file"}
+			if !commandToolOrderContains(scenario.RequiredCommandBeforeTool, wantBefore) {
+				t.Fatalf("%s RequiredCommandBeforeTool = %#v, want %#v", scenario.Name, scenario.RequiredCommandBeforeTool, wantBefore)
+			}
+			if !commandToolOrderContains(scenario.RequiredCommandAfterTool, wantBefore) {
+				t.Fatalf("%s RequiredCommandAfterTool = %#v, want %#v", scenario.Name, scenario.RequiredCommandAfterTool, wantBefore)
+			}
 		}
 	}
 	for name := range want {
@@ -285,6 +303,24 @@ func TestRepairScenariosRequireRepeatedVerification(t *testing.T) {
 			t.Fatalf("missing repair scenario %s", name)
 		}
 	}
+}
+
+func stringSliceContains(values []string, want string) bool {
+	for _, value := range values {
+		if value == want {
+			return true
+		}
+	}
+	return false
+}
+
+func commandToolOrderContains(values []CommandToolOrderRequirement, want CommandToolOrderRequirement) bool {
+	for _, value := range values {
+		if value == want {
+			return true
+		}
+	}
+	return false
 }
 
 func TestProtectedFiles(t *testing.T) {

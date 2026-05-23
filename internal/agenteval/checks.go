@@ -472,11 +472,7 @@ func ShellCommandMatching(pattern string) Check {
 					continue
 				}
 				observed = append(observed, cmd)
-				if reErr == nil {
-					if re.MatchString(cmd) {
-						return CheckResult{Pass: true}
-					}
-				} else if strings.Contains(cmd, pattern) {
+				if shellCommandMatches(pattern, re, reErr, cmd) {
 					return CheckResult{Pass: true}
 				}
 			}
@@ -504,11 +500,7 @@ func ShellCommandMatchingAtLeast(pattern string, min int) Check {
 					continue
 				}
 				observed = append(observed, cmd)
-				if reErr == nil {
-					if re.MatchString(cmd) {
-						matches++
-					}
-				} else if strings.Contains(cmd, pattern) {
+				if shellCommandMatches(pattern, re, reErr, cmd) {
 					matches++
 				}
 			}
@@ -521,6 +513,89 @@ func ShellCommandMatchingAtLeast(pattern string, min int) Check {
 			}
 		},
 	}
+}
+
+func ShellCommandMatchingBeforeTool(pattern, toolName string) Check {
+	re, reErr := regexp.Compile(pattern)
+	return Check{
+		Name: fmt.Sprintf("shell_command_before_tool:%s->%s", previewSubstr(pattern, 48), toolName),
+		Eval: func(t Trace) CheckResult {
+			firstTool := -1
+			firstMatch := -1
+			var observed []string
+			for i, c := range t.Tools {
+				if c.Tool == toolName && firstTool == -1 {
+					firstTool = i
+				}
+				cmd, ok := c.Args["command"].(string)
+				if !ok || cmd == "" {
+					continue
+				}
+				observed = append(observed, cmd)
+				if shellCommandMatches(pattern, re, reErr, cmd) && firstMatch == -1 {
+					firstMatch = i
+				}
+			}
+			switch {
+			case firstTool == -1:
+				return CheckResult{Pass: false, Detail: fmt.Sprintf("never observed a %q call", toolName)}
+			case firstMatch == -1:
+				return CheckResult{Pass: false, Detail: fmt.Sprintf("never observed command match %q before %q; commands=%v", pattern, toolName, observed)}
+			case firstMatch >= firstTool:
+				return CheckResult{
+					Pass:   false,
+					Detail: fmt.Sprintf("expected command match %q before %q; first command at step %d, first %q at step %d", pattern, toolName, firstMatch, toolName, firstTool),
+				}
+			default:
+				return CheckResult{Pass: true}
+			}
+		},
+	}
+}
+
+func ShellCommandMatchingAfterTool(pattern, toolName string) Check {
+	re, reErr := regexp.Compile(pattern)
+	return Check{
+		Name: fmt.Sprintf("shell_command_after_tool:%s->%s", previewSubstr(pattern, 48), toolName),
+		Eval: func(t Trace) CheckResult {
+			lastTool := -1
+			lastMatch := -1
+			var observed []string
+			for i, c := range t.Tools {
+				if c.Tool == toolName {
+					lastTool = i
+				}
+				cmd, ok := c.Args["command"].(string)
+				if !ok || cmd == "" {
+					continue
+				}
+				observed = append(observed, cmd)
+				if shellCommandMatches(pattern, re, reErr, cmd) {
+					lastMatch = i
+				}
+			}
+			switch {
+			case lastTool == -1:
+				return CheckResult{Pass: false, Detail: fmt.Sprintf("never observed a %q call", toolName)}
+			case lastMatch == -1:
+				return CheckResult{Pass: false, Detail: fmt.Sprintf("never observed command match %q after %q; commands=%v", pattern, toolName, observed)}
+			case lastMatch <= lastTool:
+				return CheckResult{
+					Pass:   false,
+					Detail: fmt.Sprintf("expected command match %q after %q; last command at step %d, last %q at step %d", pattern, toolName, lastMatch, toolName, lastTool),
+				}
+			default:
+				return CheckResult{Pass: true}
+			}
+		},
+	}
+}
+
+func shellCommandMatches(pattern string, re *regexp.Regexp, reErr error, cmd string) bool {
+	if reErr == nil {
+		return re.MatchString(cmd)
+	}
+	return strings.Contains(cmd, pattern)
 }
 
 // ShellCommandLacksUnguarded is ShellCommandLacks with one important
