@@ -426,6 +426,49 @@ func TestRepairToolArgsWithSchema_UnwrapsSingleArgumentsObject(t *testing.T) {
 	}
 }
 
+func TestRepairToolArgsWithSchema_UnwrapsSingleArgumentsJSONStringObject(t *testing.T) {
+	schema := json.RawMessage(`{
+		"type":"object",
+		"required":["path"],
+		"properties":{
+			"path":{"type":"string"},
+			"max_bytes":{"type":"integer"}
+		}
+	}`)
+	got, repaired, notes := repairToolArgsWithSchema(json.RawMessage(`{"arguments":"{\"file_path\":\"README.md\",\"maxBytes\":\"2048\"}"}`), schema)
+	if !repaired {
+		t.Fatal("expected JSON-string arguments wrapper to be unwrapped")
+	}
+	if string(got) != `{"max_bytes":2048,"path":"README.md"}` {
+		t.Fatalf("got %s, want unwrapped repaired object; notes=%v", got, notes)
+	}
+	if len(notes) == 0 || !strings.Contains(strings.Join(notes, "\n"), "unwrapped field arguments") {
+		t.Fatalf("missing unwrap note: %v", notes)
+	}
+}
+
+func TestRepairToolArgsWithSchema_DoesNotUnwrapWrapperPlainString(t *testing.T) {
+	schema := json.RawMessage(`{
+		"type":"object",
+		"required":["path"],
+		"properties":{
+			"path":{"type":"string"}
+		}
+	}`)
+	got, repaired, notes := repairToolArgsWithSchema(json.RawMessage(`{"arguments":"README.md"}`), schema)
+	if !repaired {
+		t.Fatal("expected unknown plain wrapper field to be dropped")
+	}
+	if string(got) != `{}` {
+		t.Fatalf("plain string wrapper should not be unwrapped; got %s notes=%v", got, notes)
+	}
+	for _, note := range notes {
+		if strings.Contains(note, "unwrapped field") {
+			t.Fatalf("plain string wrapper should not report unwrap; notes=%v", notes)
+		}
+	}
+}
+
 func TestRepairToolArgsWithSchema_UnwrapsSingleInputObject(t *testing.T) {
 	schema := json.RawMessage(`{
 		"type":"object",

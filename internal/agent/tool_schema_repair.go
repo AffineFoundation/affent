@@ -124,9 +124,26 @@ func unwrapSingleToolArgsWrapper(obj map[string]any, props map[string]toolSchema
 			if inner, ok := value.(map[string]any); ok {
 				return inner, key, true
 			}
+			if s, ok := value.(string); ok {
+				if inner, ok := parseObjectString(s); ok {
+					return inner, key, true
+				}
+			}
 		}
 	}
 	return nil, "", false
+}
+
+func parseObjectString(s string) (map[string]any, bool) {
+	s = strings.TrimSpace(s)
+	if !strings.HasPrefix(s, "{") {
+		return nil, false
+	}
+	var obj map[string]any
+	if err := json.Unmarshal([]byte(s), &obj); err != nil || obj == nil {
+		return nil, false
+	}
+	return obj, true
 }
 
 func wrapSingleRequiredValueArgs(args json.RawMessage, s toolSchema) (json.RawMessage, bool) {
