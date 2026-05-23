@@ -20,7 +20,12 @@ import (
 // just delays the next reasoning step without buying anything (the
 // element is either interactable now or has a layout problem the
 // agent needs to surface).
-const interactableTimeout = 2 * time.Second
+const (
+	interactableTimeout        = 2 * time.Second
+	maxBrowserTypeTextBytes    = 4096
+	defaultBrowserScrollAmount = 600
+	maxBrowserScrollAmount     = 5000
+)
 
 // waitInteractable wraps rod.Element.WaitInteractable with our bounded
 // timeout and a friendlier error string. Returns a helpful message
@@ -100,7 +105,7 @@ func ClickTool(s *Session) *agent.Tool {
 // existing value (for input/textarea), and types the given text. If
 // submit=true the input is followed by Enter, useful for search boxes.
 func TypeTool(s *Session) *agent.Tool {
-	schema := json.RawMessage(`{
+	schema := json.RawMessage(fmt.Sprintf(`{
         "type": "object",
         "required": ["ref", "text"],
         "properties": {
@@ -111,6 +116,7 @@ func TypeTool(s *Session) *agent.Tool {
             },
             "text": {
                 "type": "string",
+                "maxLength": %d,
                 "description": "Text to type. Existing value is cleared first."
             },
             "submit": {
@@ -118,7 +124,7 @@ func TypeTool(s *Session) *agent.Tool {
                 "description": "If true, press Enter after typing — submits the form / triggers search."
             }
         }
-    }`)
+    }`, maxBrowserTypeTextBytes))
 	return &agent.Tool{
 		Name: "browser_type",
 		Description: "Type text into a form field identified by ref id from the most recent snapshot. " +
@@ -135,6 +141,9 @@ func TypeTool(s *Session) *agent.Tool {
 			}
 			if args.Ref <= 0 {
 				return "", errors.New("ref must be a positive integer")
+			}
+			if len(args.Text) > maxBrowserTypeTextBytes {
+				return "", fmt.Errorf("text is %d bytes; browser_type supports text up to %d bytes", len(args.Text), maxBrowserTypeTextBytes)
 			}
 			if s.page == nil {
 				return "", ErrNoPage
@@ -182,7 +191,7 @@ func TypeTool(s *Session) *agent.Tool {
 // or by a page. The amount parameter (CSS pixels) is honored for
 // up/down; page_up/page_down ignore it.
 func ScrollTool(s *Session) *agent.Tool {
-	schema := json.RawMessage(`{
+	schema := json.RawMessage(fmt.Sprintf(`{
         "type": "object",
         "required": ["direction"],
         "properties": {
@@ -194,10 +203,12 @@ func ScrollTool(s *Session) *agent.Tool {
             },
             "amount": {
                 "type": "integer",
+                "minimum": 1,
+                "maximum": %d,
                 "description": "CSS pixels for up/down (ignored otherwise). Default 600."
             }
         }
-    }`)
+    }`, maxBrowserScrollAmount))
 	return &agent.Tool{
 		Name:        "browser_scroll",
 		Description: "Scroll the viewport. Use 'page_down'/'page_up' for one viewport's worth, 'top'/'bottom' to jump to extremes, or 'up'/'down' with an 'amount' in pixels. Returns a fresh snapshot of what's now visible.",
@@ -213,7 +224,10 @@ func ScrollTool(s *Session) *agent.Tool {
 			args.Direction = strings.TrimSpace(args.Direction)
 			amount := args.Amount
 			if amount <= 0 {
-				amount = 600
+				amount = defaultBrowserScrollAmount
+			}
+			if amount > maxBrowserScrollAmount {
+				return "", fmt.Errorf("amount must be between 1 and %d CSS pixels", maxBrowserScrollAmount)
 			}
 			var js string
 			switch args.Direction {

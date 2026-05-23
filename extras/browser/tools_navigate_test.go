@@ -88,6 +88,9 @@ func TestScrollToolRejectsBlankDirectionBeforePageCheck(t *testing.T) {
 	if !strings.Contains(string(tool.Schema), `"minLength": 1`) {
 		t.Fatalf("schema should publish direction minLength: %s", tool.Schema)
 	}
+	if !strings.Contains(string(tool.Schema), `"maximum": 5000`) {
+		t.Fatalf("schema should publish amount maximum: %s", tool.Schema)
+	}
 	_, err := tool.Execute(context.Background(), json.RawMessage(`{"direction":"   "}`))
 	if err == nil || !strings.Contains(err.Error(), "'direction' is required") {
 		t.Fatalf("blank direction error = %v, want direction is required", err)
@@ -95,5 +98,21 @@ func TestScrollToolRejectsBlankDirectionBeforePageCheck(t *testing.T) {
 	_, err = tool.Execute(context.Background(), json.RawMessage(`{"direction":"sideways"}`))
 	if err == nil || !strings.Contains(err.Error(), `unknown direction "sideways"`) {
 		t.Fatalf("unknown direction error = %v, want unknown direction", err)
+	}
+	_, err = tool.Execute(context.Background(), json.RawMessage(`{"direction":"down","amount":5001}`))
+	if err == nil || !strings.Contains(err.Error(), "amount must be between 1 and 5000") {
+		t.Fatalf("oversized amount error = %v, want amount maximum", err)
+	}
+}
+
+func TestTypeToolRejectsOversizedTextBeforePageCheck(t *testing.T) {
+	tool := TypeTool(&Session{})
+	if !strings.Contains(string(tool.Schema), `"maxLength": 4096`) {
+		t.Fatalf("schema should publish text maxLength: %s", tool.Schema)
+	}
+	text := strings.Repeat("x", maxBrowserTypeTextBytes+1)
+	_, err := tool.Execute(context.Background(), json.RawMessage(`{"ref":1,"text":"`+text+`"}`))
+	if err == nil || !strings.Contains(err.Error(), "browser_type supports text up to") {
+		t.Fatalf("oversized text error = %v, want text length error", err)
 	}
 }
