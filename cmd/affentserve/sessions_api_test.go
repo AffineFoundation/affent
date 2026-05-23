@@ -270,6 +270,9 @@ func TestHandleSessionPlan_ReadsDurablePlanWithoutReopeningSession(t *testing.T)
 	if resp.SessionID != "planned" {
 		t.Fatalf("session_id = %q, want planned", resp.SessionID)
 	}
+	if resp.Summary == nil || resp.Summary.Label != "plan:0/1:active" || resp.Summary.TotalSteps != 1 || !resp.Summary.Active {
+		t.Fatalf("summary = %+v, want active 0/1", resp.Summary)
+	}
 	var plan struct {
 		Steps []struct {
 			Text   string `json:"text"`

@@ -17,8 +17,9 @@ import (
 const maxSessionPlanBytes = 32 * 1024
 
 type sessionPlanResponse struct {
-	SessionID string          `json:"session_id"`
-	Plan      json.RawMessage `json:"plan"`
+	SessionID string              `json:"session_id"`
+	Plan      json.RawMessage     `json:"plan"`
+	Summary   *sessionPlanSummary `json:"summary,omitempty"`
 }
 
 type sessionPlanSummary = planstate.Summary
@@ -41,10 +42,16 @@ func handleSessionPlan(pool *SessionPool, sessionID string, w http.ResponseWrite
 		writeJSONErrorTyped(w, http.StatusNotFound, "session plan not found", nil, "not_found")
 		return
 	}
+	summary, err := planstate.SummarizeJSON(plan)
+	if err != nil {
+		writeJSONError(w, http.StatusInternalServerError, "summarize session plan", err)
+		return
+	}
 	w.Header().Set("Content-Type", "application/json")
 	_ = json.NewEncoder(w).Encode(sessionPlanResponse{
 		SessionID: sessionID,
 		Plan:      plan,
+		Summary:   &summary,
 	})
 }
 
