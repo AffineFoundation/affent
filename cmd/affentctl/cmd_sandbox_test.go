@@ -234,6 +234,8 @@ func TestMakeImageServeEnablesBuiltinsInsideRuntimeContainer(t *testing.T) {
 		`docker inspect "$(SERVE_CONTAINER_NAME)"`,
 		`{{index .Config.Labels "affent.runtime"}}`,
 		`is not an Affent runtime container`,
+		`docker port "$(SERVE_CONTAINER_NAME)"`,
+		`ports: none`,
 		`docker logs --tail 100 "$(SERVE_CONTAINER_NAME)"`,
 		`affent.runtime.memory`,
 		`host_memory_bytes={{.HostConfig.Memory}}`,
