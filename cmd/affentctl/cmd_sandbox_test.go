@@ -250,19 +250,76 @@ func TestMakeOneClickContainerTargetsUseSharedLimits(t *testing.T) {
 		"CONTAINER_MEMORY ?= 1g",
 		"CONTAINER_CPUS ?= 2",
 		"CONTAINER_PIDS ?= 512",
-		`sandbox start --memory "$(CONTAINER_MEMORY)" --cpus "$(CONTAINER_CPUS)" --pids-limit "$(CONTAINER_PIDS)"`,
-		`image build --memory "$(CONTAINER_MEMORY)"`,
-		`image run --memory "$(CONTAINER_MEMORY)" --cpus "$(CONTAINER_CPUS)" --pids-limit "$(CONTAINER_PIDS)" $(IMAGE_RUN_ARGS)`,
-		`image build --image "$(EVAL_IMAGE)" --memory "$(CONTAINER_MEMORY)"`,
-		`--memory "$(CONTAINER_MEMORY)"`,
-		`--memory-swap "$(CONTAINER_MEMORY)"`,
-		`--cpus "$(CONTAINER_CPUS)"`,
-		`--pids-limit "$(CONTAINER_PIDS)"`,
 	} {
 		if !strings.Contains(body, want) {
 			t.Fatalf("Makefile one-click container targets missing %q", want)
 		}
 	}
+	for target, wants := range map[string][]string{
+		"affentctl": {
+			`--memory "$(CONTAINER_MEMORY)"`,
+			`--memory-swap "$(CONTAINER_MEMORY)"`,
+			`--cpus "$(CONTAINER_CPUS)"`,
+			`--pids-limit "$(CONTAINER_PIDS)"`,
+		},
+		"sandbox-start": {
+			`sandbox start --memory "$(CONTAINER_MEMORY)" --cpus "$(CONTAINER_CPUS)" --pids-limit "$(CONTAINER_PIDS)"`,
+		},
+		"image-build": {
+			`image build --memory "$(CONTAINER_MEMORY)"`,
+		},
+		"image-run": {
+			`image run --memory "$(CONTAINER_MEMORY)" --cpus "$(CONTAINER_CPUS)" --pids-limit "$(CONTAINER_PIDS)" $(IMAGE_RUN_ARGS)`,
+		},
+		"image-serve": {
+			`image run --memory "$(CONTAINER_MEMORY)" --cpus "$(CONTAINER_CPUS)" --pids-limit "$(CONTAINER_PIDS)" --timeout 0s`,
+		},
+		"eval-container": {
+			`image build --image "$(EVAL_IMAGE)" --memory "$(CONTAINER_MEMORY)"`,
+			`--memory "$(CONTAINER_MEMORY)"`,
+			`--memory-swap "$(CONTAINER_MEMORY)"`,
+			`--cpus "$(CONTAINER_CPUS)"`,
+			`--pids-limit "$(CONTAINER_PIDS)"`,
+		},
+		"test-container": {
+			`--memory "$(CONTAINER_MEMORY)"`,
+			`--memory-swap "$(CONTAINER_MEMORY)"`,
+			`--cpus "$(CONTAINER_CPUS)"`,
+			`--pids-limit "$(CONTAINER_PIDS)"`,
+		},
+	} {
+		block := makefileTargetBlock(t, body, target)
+		for _, want := range wants {
+			if !strings.Contains(block, want) {
+				t.Fatalf("Makefile target %s missing %q\nblock:\n%s", target, want, block)
+			}
+		}
+	}
+}
+
+func makefileTargetBlock(t *testing.T, body, target string) string {
+	t.Helper()
+	startNeedle := "\n" + target + ":"
+	start := strings.Index(body, startNeedle)
+	if start < 0 {
+		if strings.HasPrefix(body, target+":") {
+			start = 0
+		} else {
+			t.Fatalf("Makefile target %s not found", target)
+		}
+	} else {
+		start++
+	}
+	rest := body[start:]
+	for i, line := range strings.Split(rest, "\n") {
+		if i == 0 || strings.HasPrefix(line, "\t") || strings.TrimSpace(line) == "" {
+			continue
+		}
+		if strings.Contains(line, ":") {
+			return strings.Join(strings.Split(rest, "\n")[:i], "\n")
+		}
+	}
+	return rest
 }
 
 func TestMakeSandboxStatusAcceptsArgs(t *testing.T) {
