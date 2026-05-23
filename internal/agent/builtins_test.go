@@ -437,6 +437,12 @@ func TestWriteFileToolSchemaPublishesContentCap(t *testing.T) {
 	}
 }
 
+func TestWriteFileToolCapMatchesStreamToolArgCap(t *testing.T) {
+	if MaxWriteFileBytes != maxStreamToolArgBytes {
+		t.Fatalf("MaxWriteFileBytes = %d, want stream tool-argument cap %d", MaxWriteFileBytes, maxStreamToolArgBytes)
+	}
+}
+
 func TestFileToolSchemasPublishNonEmptyRequiredStrings(t *testing.T) {
 	for _, c := range []struct {
 		name string

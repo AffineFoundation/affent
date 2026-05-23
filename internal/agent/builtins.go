@@ -449,12 +449,11 @@ const (
 const MaxEditFileBytes = MaxReadFileBytes
 
 // MaxWriteFileBytes caps write_file content before routing to either
-// host fs or a container FileOps backend. The tool receives content
-// as one JSON string, and DockerExecExecutor base64-encodes it for
-// stdin, so accepting unbounded content can spike memory before any
-// filesystem write starts. Large generated artifacts should be created
-// by a bounded shell command inside the workspace/sandbox.
-const MaxWriteFileBytes = MaxReadFileBytes
+// host fs or a container FileOps backend. The model has to send
+// content as one streamed JSON string, so this cap must stay aligned
+// with maxStreamToolArgBytes; larger generated artifacts should be
+// created by a bounded shell command inside the workspace/sandbox.
+const MaxWriteFileBytes = maxStreamToolArgBytes
 
 const maxFileToolPathBytes = 4096
 
