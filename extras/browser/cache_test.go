@@ -392,6 +392,34 @@ func TestFileResponseCache_Sweep_KeepsFreshEntries(t *testing.T) {
 	}
 }
 
+func TestFileResponseCache_SweepProcessesMultipleDirectoryBatches(t *testing.T) {
+	dir := t.TempDir()
+	c, err := NewFileResponseCache(dir, 1*time.Millisecond)
+	if err != nil {
+		t.Fatal(err)
+	}
+	total := cacheSweepReadDirBatch + 17
+	for i := 0; i < total; i++ {
+		if err := c.Put(context.Background(), fmt.Sprintf("https://example.com/%d", i), &CachedResponse{
+			StatusCode: 200,
+			Body:       []byte("body"),
+		}); err != nil {
+			t.Fatalf("Put %d: %v", i, err)
+		}
+	}
+	time.Sleep(5 * time.Millisecond)
+	deleted, err := c.Sweep(context.Background())
+	if err != nil {
+		t.Fatalf("Sweep: %v", err)
+	}
+	if deleted != total {
+		t.Fatalf("deleted = %d, want %d", deleted, total)
+	}
+	if got := countFiles(t, dir, ".meta.json"); got != 0 {
+		t.Fatalf("remaining meta files = %d, want 0", got)
+	}
+}
+
 func TestFileResponseCache_Sweep_NoTTLIsNoOp(t *testing.T) {
 	dir := t.TempDir()
 	c, err := NewFileResponseCache(dir, 0)

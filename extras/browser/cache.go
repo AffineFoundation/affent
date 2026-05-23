@@ -33,6 +33,7 @@ type CachedResponse struct {
 const (
 	maxCachedResponseBodyBytes = 8 * 1024 * 1024
 	maxCachedResponseMetaBytes = 256 * 1024
+	cacheSweepReadDirBatch     = 128
 )
 
 // ResponseCache is the interceptor's pluggable cache backend. v1
@@ -322,22 +323,35 @@ func (c *FileResponseCache) Sweep(ctx context.Context) (int, error) {
 	if c.ttl <= 0 {
 		return 0, nil
 	}
-	entries, err := os.ReadDir(c.dir)
+	dir, err := os.Open(c.dir)
 	if err != nil {
 		return 0, fmt.Errorf("read cache dir: %w", err)
 	}
+	defer dir.Close()
 	deleted := 0
-	for _, e := range entries {
+	for {
 		if ctx.Err() != nil {
 			break
 		}
-		name := e.Name()
-		if !strings.HasSuffix(name, ".meta.json") {
-			continue
+		entries, err := dir.ReadDir(cacheSweepReadDirBatch)
+		if err != nil && !errors.Is(err, io.EOF) {
+			return deleted, fmt.Errorf("read cache dir: %w", err)
 		}
-		metaPath := filepath.Join(c.dir, name)
-		if c.sweepOne(metaPath) {
-			deleted++
+		for _, e := range entries {
+			if ctx.Err() != nil {
+				break
+			}
+			name := e.Name()
+			if !strings.HasSuffix(name, ".meta.json") {
+				continue
+			}
+			metaPath := filepath.Join(c.dir, name)
+			if c.sweepOne(metaPath) {
+				deleted++
+			}
+		}
+		if errors.Is(err, io.EOF) {
+			break
 		}
 	}
 	return deleted, nil
