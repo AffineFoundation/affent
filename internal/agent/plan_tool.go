@@ -395,6 +395,13 @@ func readPlanState(path string) (planState, error) {
 	if st.Steps == nil {
 		st.Steps = []planStep{}
 	}
+	if len(st.Steps) > 0 {
+		steps, err := normalizePlanSteps(st.Steps)
+		if err != nil {
+			return planState{}, fmt.Errorf("read plan state: %w", err)
+		}
+		st.Steps = steps
+	}
 	return st, nil
 }
 

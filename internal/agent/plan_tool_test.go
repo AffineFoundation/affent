@@ -51,6 +51,28 @@ func TestPlanToolSetUpdateViewPersists(t *testing.T) {
 	}
 }
 
+func TestPlanToolViewNormalizesPersistedPlanState(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "plan.json")
+	if err := os.WriteFile(path, []byte(`{"version":1,"steps":[{"text":"  Ship  ","status":" IN_PROGRESS ","evidence":[" file ","file"," test "]},{"text":"Finish"}]}`), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	out, err := planTool(path).Execute(context.Background(), json.RawMessage(`{"action":"view"}`))
+	if err != nil {
+		t.Fatalf("view: %v", err)
+	}
+	var st planState
+	if err := json.Unmarshal([]byte(out), &st); err != nil {
+		t.Fatalf("decode view response: %v\n%s", err, out)
+	}
+	if st.Steps[0].Text != "Ship" || st.Steps[0].Status != "in_progress" || st.Steps[1].Status != "pending" {
+		t.Fatalf("normalized steps = %+v", st.Steps)
+	}
+	wantEvidence := []string{"file", "test"}
+	if got := st.Steps[0].Evidence; len(got) != len(wantEvidence) || got[0] != wantEvidence[0] || got[1] != wantEvidence[1] {
+		t.Fatalf("evidence = %+v, want %+v", got, wantEvidence)
+	}
+}
+
 func TestPlanToolClearRemovesPersistedPlan(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "plan.json")
 	tool := planTool(path)
