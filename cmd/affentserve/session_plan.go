@@ -1,11 +1,7 @@
 package main
 
 import (
-	"bytes"
 	"encoding/json"
-	"errors"
-	"fmt"
-	"io"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -13,8 +9,6 @@ import (
 	agent "github.com/affinefoundation/affent/internal/agent"
 	"github.com/affinefoundation/affent/internal/planstate"
 )
-
-const maxSessionPlanBytes = 32 * 1024
 
 type sessionPlanResponse struct {
 	SessionID string              `json:"session_id"`
@@ -83,71 +77,20 @@ func handleSessionPlanDelete(pool *SessionPool, sessionID string, w http.Respons
 
 func readSessionPlan(pool *SessionPool, sessionID string) (json.RawMessage, bool, error) {
 	path := filepath.Join(pool.sessionDirPath(sessionID), "plan.json")
-	info, err := os.Lstat(path)
-	if err != nil {
-		if errors.Is(err, os.ErrNotExist) {
-			return nil, false, nil
-		}
-		return nil, false, err
-	}
-	if info.IsDir() {
-		return nil, false, errors.New("plan path is a directory")
-	}
-	if info.Mode()&os.ModeSymlink != 0 {
-		return nil, false, errors.New("plan path must not be a symlink")
-	}
-	f, err := os.Open(path)
-	if err != nil {
-		if errors.Is(err, os.ErrNotExist) {
-			return nil, false, nil
-		}
-		return nil, false, err
-	}
-	defer f.Close()
-
-	raw, err := io.ReadAll(io.LimitReader(f, maxSessionPlanBytes+1))
-	if err != nil {
-		return nil, false, err
-	}
-	if len(raw) > maxSessionPlanBytes {
-		return nil, false, fmt.Errorf("plan file exceeds %d bytes", maxSessionPlanBytes)
-	}
-	raw = bytes.TrimSpace(raw)
-	if len(raw) == 0 {
-		return nil, false, errors.New("plan file is empty")
-	}
-	if !json.Valid(raw) {
-		return nil, false, errors.New("plan file is not valid JSON")
-	}
-	return json.RawMessage(raw), true, nil
+	return planstate.ReadFile(path)
 }
 
 func clearSessionPlan(pool *SessionPool, sessionID string) (bool, error) {
 	path := filepath.Join(pool.sessionDirPath(sessionID), "plan.json")
-	info, err := os.Lstat(path)
-	if err != nil {
-		if errors.Is(err, os.ErrNotExist) {
-			return false, nil
-		}
-		return false, err
-	}
-	if info.IsDir() {
-		return false, errors.New("plan path is a directory")
-	}
-	if info.Mode()&os.ModeSymlink != 0 {
-		return false, errors.New("plan path must not be a symlink")
-	}
-	if err := os.Remove(path); err != nil {
-		if errors.Is(err, os.ErrNotExist) {
-			return false, nil
-		}
-		return false, err
+	removed, err := planstate.RemoveFile(path)
+	if err != nil || !removed {
+		return removed, err
 	}
 	if d, err := os.Open(filepath.Dir(path)); err == nil {
 		_ = d.Sync()
 		_ = d.Close()
 	}
-	return true, nil
+	return removed, nil
 }
 
 func summarizeSessionPlanFile(pool *SessionPool, sessionID string) *sessionPlanSummary {

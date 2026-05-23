@@ -2,12 +2,10 @@ package main
 
 import (
 	"bufio"
-	"bytes"
 	"encoding/json"
 	"errors"
 	"flag"
 	"fmt"
-	"io"
 	"os"
 	"path/filepath"
 	"sort"
@@ -17,7 +15,7 @@ import (
 	"github.com/affinefoundation/affent/internal/planstate"
 )
 
-const maxLocalSessionPlanBytes = 32 * 1024
+const maxLocalSessionPlanBytes = planstate.MaxFileBytes
 
 // sessionsCmd lists prior sessions found under <workspace>/.affentctl/.
 // For each session shows the id, mtime, message count, and the first
@@ -171,43 +169,7 @@ func readLocalSessionPlan(convDir, sessionID string) (json.RawMessage, bool, err
 	if strings.ContainsAny(sessionID, `/\`) || sessionID == "." || sessionID == ".." {
 		return nil, false, fmt.Errorf("invalid session id %q", sessionID)
 	}
-	path := localSessionPlanPath(convDir, sessionID)
-	info, err := os.Lstat(path)
-	if err != nil {
-		if os.IsNotExist(err) {
-			return nil, false, nil
-		}
-		return nil, false, err
-	}
-	if info.IsDir() {
-		return nil, false, errors.New("plan path is a directory")
-	}
-	if info.Mode()&os.ModeSymlink != 0 {
-		return nil, false, errors.New("plan path must not be a symlink")
-	}
-	f, err := os.Open(path)
-	if err != nil {
-		if os.IsNotExist(err) {
-			return nil, false, nil
-		}
-		return nil, false, err
-	}
-	defer f.Close()
-	raw, err := io.ReadAll(io.LimitReader(f, maxLocalSessionPlanBytes+1))
-	if err != nil {
-		return nil, false, err
-	}
-	if len(raw) > maxLocalSessionPlanBytes {
-		return nil, false, fmt.Errorf("plan file exceeds %d bytes", maxLocalSessionPlanBytes)
-	}
-	raw = bytes.TrimSpace(raw)
-	if len(raw) == 0 {
-		return nil, false, errors.New("plan file is empty")
-	}
-	if !json.Valid(raw) {
-		return nil, false, errors.New("plan file is not valid JSON")
-	}
-	return json.RawMessage(raw), true, nil
+	return planstate.ReadFile(localSessionPlanPath(convDir, sessionID))
 }
 
 func clearLocalSessionPlan(convDir, sessionID string) (bool, error) {
@@ -218,27 +180,7 @@ func clearLocalSessionPlan(convDir, sessionID string) (bool, error) {
 	if strings.ContainsAny(sessionID, `/\`) || sessionID == "." || sessionID == ".." {
 		return false, fmt.Errorf("invalid session id %q", sessionID)
 	}
-	path := localSessionPlanPath(convDir, sessionID)
-	info, err := os.Lstat(path)
-	if err != nil {
-		if os.IsNotExist(err) {
-			return false, nil
-		}
-		return false, err
-	}
-	if info.IsDir() {
-		return false, errors.New("plan path is a directory")
-	}
-	if info.Mode()&os.ModeSymlink != 0 {
-		return false, errors.New("plan path must not be a symlink")
-	}
-	if err := os.Remove(path); err != nil {
-		if os.IsNotExist(err) {
-			return false, nil
-		}
-		return false, err
-	}
-	return true, nil
+	return planstate.RemoveFile(localSessionPlanPath(convDir, sessionID))
 }
 
 func localSessionPlanPath(convDir, sessionID string) string {
