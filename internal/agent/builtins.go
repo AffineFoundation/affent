@@ -129,6 +129,16 @@ func RegisterBuiltins(r *Registry, deps BuiltinDeps) {
 
 type SkillInstallConfirmer func(proposalID string) bool
 
+type skillToolArgs struct {
+	Action      string   `json:"action"`
+	Name        string   `json:"name"`
+	Description string   `json:"description"`
+	Body        string   `json:"body"`
+	Triggers    []string `json:"triggers"`
+	Source      string   `json:"source"`
+	ProposalID  string   `json:"proposal_id"`
+}
+
 func skillTool(reg *SkillRegistry, skillDir string, confirmInstall SkillInstallConfirmer) *Tool {
 	if reg == nil {
 		reg = builtinSkillProviderRegistry
@@ -152,16 +162,8 @@ func skillTool(reg *SkillRegistry, skillDir string, confirmInstall SkillInstallC
 		Description: "List, read, or install reusable operational skills. Installed skills are prompt/workflow documents, persisted under the workspace, and become available without restarting. Use install only when the user explicitly provides an exact skill body to install, or after you have shown a proposal for a remote/searched candidate and the user explicitly confirms that specific candidate.",
 		Schema:      schema,
 		Execute: func(ctx context.Context, args json.RawMessage) (string, error) {
-			var p struct {
-				Action      string   `json:"action"`
-				Name        string   `json:"name"`
-				Description string   `json:"description"`
-				Body        string   `json:"body"`
-				Triggers    []string `json:"triggers"`
-				Source      string   `json:"source"`
-				ProposalID  string   `json:"proposal_id"`
-			}
-			if err := json.Unmarshal(args, &p); err != nil {
+			p, present, err := decodeSkillToolArgs(args)
+			if err != nil {
 				return "", fmt.Errorf("decode args: %w", err)
 			}
 			action := strings.TrimSpace(p.Action)
@@ -170,6 +172,9 @@ func skillTool(reg *SkillRegistry, skillDir string, confirmInstall SkillInstallC
 			}
 			if len(action) > maxSkillActionBytes {
 				return "", fmt.Errorf("action is %d bytes; skill action supports up to %d bytes\nNext: retry skill with action=list, action=read, action=propose_install, action=confirm_install, or action=install", len(action), maxSkillActionBytes)
+			}
+			if err := rejectUnusedSkillArgs(action, present); err != nil {
+				return "", err
 			}
 			switch action {
 			case "list":
@@ -266,6 +271,61 @@ func skillTool(reg *SkillRegistry, skillDir string, confirmInstall SkillInstallC
 			}
 		},
 	}
+}
+
+func decodeSkillToolArgs(args json.RawMessage) (skillToolArgs, map[string]bool, error) {
+	var p skillToolArgs
+	dec := json.NewDecoder(bytes.NewReader(args))
+	dec.DisallowUnknownFields()
+	if err := dec.Decode(&p); err != nil {
+		return skillToolArgs{}, nil, err
+	}
+	var extra struct{}
+	if err := dec.Decode(&extra); !errors.Is(err, io.EOF) {
+		return skillToolArgs{}, nil, errors.New("arguments must contain a single JSON object")
+	}
+	var raw map[string]json.RawMessage
+	if err := json.Unmarshal(args, &raw); err != nil {
+		return skillToolArgs{}, nil, err
+	}
+	present := make(map[string]bool, len(raw))
+	for field := range raw {
+		present[field] = true
+	}
+	return p, present, nil
+}
+
+func rejectUnusedSkillArgs(action string, present map[string]bool) error {
+	allowed := map[string]bool{"action": true}
+	switch action {
+	case "list":
+	case "read":
+		allowed["name"] = true
+	case "propose_install", "install":
+		allowed["name"] = true
+		allowed["description"] = true
+		allowed["body"] = true
+		allowed["triggers"] = true
+		allowed["source"] = true
+	case "confirm_install":
+		allowed["proposal_id"] = true
+	default:
+		return nil
+	}
+	var unused []string
+	for field := range present {
+		if !allowed[field] {
+			unused = append(unused, field)
+		}
+	}
+	if len(unused) == 0 {
+		return nil
+	}
+	sort.Strings(unused)
+	if len(unused) == 1 {
+		return fmt.Errorf("%s is not used when action=%s\nNext: retry skill with only the fields that action uses", unused[0], action)
+	}
+	return fmt.Errorf("%s are not used when action=%s\nNext: retry skill with only the fields that action uses", strings.Join(unused, ", "), action)
 }
 
 func skillInstallSuccessMessage(installed Skill) string {
