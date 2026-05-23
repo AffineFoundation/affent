@@ -526,7 +526,7 @@ func TestFileToolsRejectBlankRequiredStrings(t *testing.T) {
 	} {
 		t.Run(c.name, func(t *testing.T) {
 			_, err := c.tool.Execute(context.Background(), c.args)
-			if err == nil || !strings.Contains(err.Error(), c.want) {
+			if err == nil || !strings.Contains(err.Error(), c.want) || !strings.Contains(err.Error(), "Next:") {
 				t.Fatalf("error = %v, want contains %q", err, c.want)
 			}
 		})
@@ -548,7 +548,7 @@ func TestFileToolsRejectOversizedPathBeforeUse(t *testing.T) {
 	} {
 		t.Run(c.name, func(t *testing.T) {
 			_, err := c.tool.Execute(context.Background(), c.args)
-			if err == nil || !strings.Contains(err.Error(), c.want) {
+			if err == nil || !strings.Contains(err.Error(), c.want) || !strings.Contains(err.Error(), "Next:") {
 				t.Fatalf("error = %v, want contains %q", err, c.want)
 			}
 		})

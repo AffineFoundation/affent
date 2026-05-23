@@ -458,9 +458,13 @@ const maxFileToolPathBytes = 4096
 
 func validateFileToolPath(tool, path string) error {
 	if len(path) > maxFileToolPathBytes {
-		return fmt.Errorf("path is %d bytes; %s supports paths up to %d bytes", len(path), tool, maxFileToolPathBytes)
+		return fmt.Errorf("path is %d bytes; %s supports paths up to %d bytes\nNext: retry %s with a shorter workspace-relative path, or use shell to generate deeply nested artifacts inside the workspace", len(path), tool, maxFileToolPathBytes, tool)
 	}
 	return nil
+}
+
+func requiredFileToolPathError(tool string) error {
+	return fmt.Errorf("path is required\nNext: retry %s with a non-empty workspace path, or call list_files on . to discover available paths", tool)
 }
 
 func readFileTool(deps BuiltinDeps) *Tool {
@@ -486,7 +490,7 @@ func readFileTool(deps BuiltinDeps) *Tool {
 			}
 			p.Path = strings.TrimSpace(p.Path)
 			if p.Path == "" {
-				return "", errors.New("path is required")
+				return "", requiredFileToolPathError("read_file")
 			}
 			if err := validateFileToolPath("read_file", p.Path); err != nil {
 				return "", err
@@ -648,7 +652,7 @@ func writeFileTool(deps BuiltinDeps) *Tool {
 			}
 			p.Path = strings.TrimSpace(p.Path)
 			if p.Path == "" {
-				return "", errors.New("path is required")
+				return "", requiredFileToolPathError("write_file")
 			}
 			if err := validateFileToolPath("write_file", p.Path); err != nil {
 				return "", err
@@ -704,7 +708,7 @@ func editFileTool(deps BuiltinDeps) *Tool {
 			}
 			p.Path = strings.TrimSpace(p.Path)
 			if p.Path == "" || strings.TrimSpace(p.Old) == "" {
-				return "", errors.New("path and old are required")
+				return "", errors.New("path and old are required\nNext: call read_file on the target file, copy the exact current text into old, then retry edit_file with a non-empty path")
 			}
 			if err := validateFileToolPath("edit_file", p.Path); err != nil {
 				return "", err
