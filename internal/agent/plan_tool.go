@@ -560,7 +560,7 @@ func PlanOnlyUserPrompt(request string) string {
 	}
 	return `Plan-only mode is enabled.
 
-Do not execute the task yet. Create or update a concise persisted plan with the plan tool, then answer with the proposed plan and what confirmation is needed before execution. Do not call shell, file, web, browser, memory, skill, subagent, or focused-task tools in this turn.
+Do not execute the task yet. Create or update a concise persisted plan with the plan tool, then answer with the proposed plan, what confirmation is needed before execution, and that execution should continue in the same session with affentctl run --execute-plan after confirmation. Do not call shell, file, web, browser, memory, skill, subagent, or focused-task tools in this turn.
 
 Original user request:
 ` + request

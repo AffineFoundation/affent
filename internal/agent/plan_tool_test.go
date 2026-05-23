@@ -378,6 +378,8 @@ func TestPlanOnlyUserPromptPreservesRequestAndForbidsExecution(t *testing.T) {
 		"Plan-only mode is enabled.",
 		"Do not execute the task yet.",
 		"plan tool",
+		"affentctl run --execute-plan",
+		"same session",
 		"Do not call shell",
 		"fix the failing tests",
 	} {
