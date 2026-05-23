@@ -233,6 +233,37 @@ func TestMakeImageServeEnablesBuiltinsInsideRuntimeContainer(t *testing.T) {
 	}
 }
 
+func TestMakeOneClickContainerTargetsUseSharedLimits(t *testing.T) {
+	_, contextDir, ok, err := findSandboxBuildSource()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !ok {
+		t.Fatal("test requires source checkout with Makefile")
+	}
+	raw, err := os.ReadFile(filepath.Join(contextDir, "Makefile"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	body := string(raw)
+	for _, want := range []string{
+		"CONTAINER_MEMORY ?= 1g",
+		"CONTAINER_CPUS ?= 2",
+		"CONTAINER_PIDS ?= 512",
+		`sandbox start --memory "$(CONTAINER_MEMORY)" --cpus "$(CONTAINER_CPUS)" --pids-limit "$(CONTAINER_PIDS)"`,
+		`image build --memory "$(CONTAINER_MEMORY)"`,
+		`image run --memory "$(CONTAINER_MEMORY)" --cpus "$(CONTAINER_CPUS)" --pids-limit "$(CONTAINER_PIDS)" $(IMAGE_RUN_ARGS)`,
+		`image build --image "$(EVAL_IMAGE)" --memory "$(CONTAINER_MEMORY)"`,
+		`--memory "$(CONTAINER_MEMORY)"`,
+		`--memory-swap "$(CONTAINER_MEMORY)"`,
+		`--cpus "$(CONTAINER_CPUS)"`,
+	} {
+		if !strings.Contains(body, want) {
+			t.Fatalf("Makefile one-click container targets missing %q", want)
+		}
+	}
+}
+
 func TestMakeSandboxStatusAcceptsArgs(t *testing.T) {
 	_, contextDir, ok, err := findSandboxBuildSource()
 	if err != nil {
