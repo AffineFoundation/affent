@@ -48,7 +48,7 @@ var (
 
 const sandboxInspectTemplate = "{{.State.Running}}\n{{index .Config.Labels \"" + sandboxLabelManaged + "\"}}\n{{index .Config.Labels \"" + sandboxLabelImage + "\"}}\n{{index .Config.Labels \"" + sandboxLabelWorkspace + "\"}}\n{{index .Config.Labels \"" + sandboxLabelMemory + "\"}}\n{{index .Config.Labels \"" + sandboxLabelCPUs + "\"}}\n{{index .Config.Labels \"" + sandboxLabelPIDsLimit + "\"}}\n{{index .Config.Labels \"" + sandboxLabelUser + "\"}}\n{{.HostConfig.Memory}}\n{{.HostConfig.MemorySwap}}\n{{.HostConfig.NanoCpus}}\n{{.HostConfig.PidsLimit}}"
 
-const sandboxStatusTemplate = "{{.State.Status}}\n{{.State.Running}}\n{{index .Config.Labels \"" + sandboxLabelManaged + "\"}}\n{{index .Config.Labels \"" + sandboxLabelImage + "\"}}\n{{index .Config.Labels \"" + sandboxLabelWorkspace + "\"}}\n{{index .Config.Labels \"" + sandboxLabelMemory + "\"}}\n{{index .Config.Labels \"" + sandboxLabelCPUs + "\"}}\n{{index .Config.Labels \"" + sandboxLabelPIDsLimit + "\"}}\n{{index .Config.Labels \"" + sandboxLabelUser + "\"}}\n{{.HostConfig.Memory}}\n{{.HostConfig.MemorySwap}}\n{{.HostConfig.PidsLimit}}\n{{.Config.WorkingDir}}"
+const sandboxStatusTemplate = "{{.State.Status}}\n{{.State.Running}}\n{{index .Config.Labels \"" + sandboxLabelManaged + "\"}}\n{{index .Config.Labels \"" + sandboxLabelImage + "\"}}\n{{index .Config.Labels \"" + sandboxLabelWorkspace + "\"}}\n{{index .Config.Labels \"" + sandboxLabelMemory + "\"}}\n{{index .Config.Labels \"" + sandboxLabelCPUs + "\"}}\n{{index .Config.Labels \"" + sandboxLabelPIDsLimit + "\"}}\n{{index .Config.Labels \"" + sandboxLabelUser + "\"}}\n{{.HostConfig.Memory}}\n{{.HostConfig.MemorySwap}}\n{{.HostConfig.NanoCpus}}\n{{.HostConfig.PidsLimit}}\n{{.Config.WorkingDir}}"
 
 type commandRunner interface {
 	Run(name string, args ...string) (string, error)
@@ -1320,6 +1320,7 @@ type sandboxStatus struct {
 	User            string
 	MemoryBytes     string
 	MemorySwapBytes string
+	NanoCPUsActual  string
 	PIDsLimitActual string
 	WorkingDir      string
 }
@@ -1345,7 +1346,7 @@ func inspectSandboxStatus(name string, runner commandRunner) (sandboxStatus, err
 
 func parseSandboxStatus(name, inspect string) (sandboxStatus, error) {
 	lines := strings.Split(strings.TrimSpace(inspect), "\n")
-	for len(lines) < 13 {
+	for len(lines) < 14 {
 		lines = append(lines, "")
 	}
 	if strings.TrimSpace(lines[2]) != "true" {
@@ -1363,8 +1364,9 @@ func parseSandboxStatus(name, inspect string) (sandboxStatus, error) {
 		User:            strings.TrimSpace(lines[8]),
 		MemoryBytes:     strings.TrimSpace(lines[9]),
 		MemorySwapBytes: strings.TrimSpace(lines[10]),
-		PIDsLimitActual: strings.TrimSpace(lines[11]),
-		WorkingDir:      strings.TrimSpace(lines[12]),
+		NanoCPUsActual:  strings.TrimSpace(lines[11]),
+		PIDsLimitActual: strings.TrimSpace(lines[12]),
+		WorkingDir:      strings.TrimSpace(lines[13]),
 	}, nil
 }
 
@@ -1376,7 +1378,7 @@ func printSandboxStatus(w io.Writer, s sandboxStatus) {
 	fmt.Fprintf(w, "workspace: %s\n", s.Workspace)
 	fmt.Fprintf(w, "memory: %s (%s bytes)\n", s.Memory, s.MemoryBytes)
 	fmt.Fprintf(w, "memory_swap_bytes: %s\n", s.MemorySwapBytes)
-	fmt.Fprintf(w, "cpus: %s\n", s.CPUs)
+	fmt.Fprintf(w, "cpus: %s (%s nanocpus actual)\n", s.CPUs, s.NanoCPUsActual)
 	fmt.Fprintf(w, "pids_limit: %s (%s actual)\n", s.PIDsLimit, s.PIDsLimitActual)
 	fmt.Fprintf(w, "user: %s\n", s.User)
 	fmt.Fprintf(w, "working_dir: %s\n", s.WorkingDir)

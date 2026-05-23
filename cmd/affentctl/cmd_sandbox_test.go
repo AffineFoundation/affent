@@ -224,7 +224,7 @@ func TestMakeImageServeEnablesBuiltinsInsideRuntimeContainer(t *testing.T) {
 	for _, want := range []string{
 		"SERVE_MEMORY_ROOT ?= /workspace/session-state",
 		"image-serve: affentctl",
-		"image run --timeout 0s --publish \"$(SERVE_PUBLISH)\"",
+		"image run --memory \"$(CONTAINER_MEMORY)\" --cpus \"$(CONTAINER_CPUS)\" --pids-limit \"$(CONTAINER_PIDS)\" --timeout 0s --publish \"$(SERVE_PUBLISH)\"",
 		"affentserve --listen \"$(SERVE_LISTEN)\" --workspace-root \"$(SERVE_WORKSPACE_ROOT)\" --memory-root \"$(SERVE_MEMORY_ROOT)\" --builtins $(SERVE_ARGS)",
 	} {
 		if !strings.Contains(body, want) {
@@ -1389,12 +1389,12 @@ func TestInspectSandboxStatus(t *testing.T) {
 		PIDsLimit: "512",
 		User:      "123:456",
 	}
-	runner := &fakeCommandRunner{inspectOut: sandboxStatusOutput("running", "true", opts, "1073741824", "1073741824", "512", "/tmp/ws")}
+	runner := &fakeCommandRunner{inspectOut: sandboxStatusOutput("running", "true", opts, "1073741824", "1073741824", "2000000000", "512", "/tmp/ws")}
 	got, err := inspectSandboxStatus("affent-test", runner)
 	if err != nil {
 		t.Fatalf("inspectSandboxStatus: %v", err)
 	}
-	if got.Name != "affent-test" || !got.Running || got.Workspace != "/tmp/ws" || got.User != "123:456" || got.MemoryBytes != "1073741824" || got.WorkingDir != "/tmp/ws" {
+	if got.Name != "affent-test" || !got.Running || got.Workspace != "/tmp/ws" || got.User != "123:456" || got.MemoryBytes != "1073741824" || got.NanoCPUsActual != "2000000000" || got.WorkingDir != "/tmp/ws" {
 		t.Fatalf("unexpected status: %+v", got)
 	}
 	if len(runner.calls) != 1 || runner.calls[0].args[0] != "inspect" || runner.calls[0].args[2] != sandboxStatusTemplate {
@@ -1404,7 +1404,7 @@ func TestInspectSandboxStatus(t *testing.T) {
 
 func TestInspectSandboxStatusRejectsUnmanagedContainer(t *testing.T) {
 	runner := &fakeCommandRunner{inspectOut: strings.Join([]string{
-		"running", "true", "", "", "", "", "", "", "", "0", "0", "0", "/",
+		"running", "true", "", "", "", "", "", "", "", "0", "0", "0", "0", "/",
 	}, "\n")}
 	_, err := inspectSandboxStatus("affent-test", runner)
 	if err == nil || !strings.Contains(err.Error(), "not an affent sandbox") {
@@ -1433,7 +1433,7 @@ func TestStopSandbox(t *testing.T) {
 		PIDsLimit: "512",
 	}
 	t.Run("stop", func(t *testing.T) {
-		runner := &fakeCommandRunner{inspectOut: sandboxStatusOutput("running", "true", opts, "1", "1", "512", "/tmp/ws")}
+		runner := &fakeCommandRunner{inspectOut: sandboxStatusOutput("running", "true", opts, "1", "1", "2000000000", "512", "/tmp/ws")}
 		if err := stopSandbox("affent-test", false, runner); err != nil {
 			t.Fatalf("stopSandbox: %v", err)
 		}
@@ -1446,7 +1446,7 @@ func TestStopSandbox(t *testing.T) {
 		}
 	})
 	t.Run("remove", func(t *testing.T) {
-		runner := &fakeCommandRunner{inspectOut: sandboxStatusOutput("running", "true", opts, "1", "1", "512", "/tmp/ws")}
+		runner := &fakeCommandRunner{inspectOut: sandboxStatusOutput("running", "true", opts, "1", "1", "2000000000", "512", "/tmp/ws")}
 		if err := stopSandbox("affent-test", true, runner); err != nil {
 			t.Fatalf("stopSandbox remove: %v", err)
 		}
@@ -1476,7 +1476,7 @@ func contains(xs []string, want string) bool {
 	return false
 }
 
-func sandboxStatusOutput(state, running string, opts sandboxStartOptions, memoryBytes, swapBytes, pidsActual, workingDir string) string {
+func sandboxStatusOutput(state, running string, opts sandboxStartOptions, memoryBytes, swapBytes, nanoCPUs, pidsActual, workingDir string) string {
 	return strings.Join([]string{
 		state,
 		running,
@@ -1489,6 +1489,7 @@ func sandboxStatusOutput(state, running string, opts sandboxStartOptions, memory
 		opts.User,
 		memoryBytes,
 		swapBytes,
+		nanoCPUs,
 		pidsActual,
 		workingDir,
 	}, "\n")
