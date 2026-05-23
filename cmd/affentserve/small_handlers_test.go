@@ -135,6 +135,18 @@ func TestResolveSystemPromptFlag_AtFile(t *testing.T) {
 	}
 }
 
+func TestResolveSystemPromptFlag_AtFileRejectsOversize(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "huge-prompt.txt")
+	if err := os.WriteFile(path, []byte(strings.Repeat("x", maxSystemPromptBytes+1)), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	_, err := resolveSystemPromptFlag("@" + path)
+	if err == nil || !strings.Contains(err.Error(), "system prompt exceeds") {
+		t.Fatalf("oversized prompt file error = %v, want system prompt exceeds", err)
+	}
+}
+
 // TestResolveSystemPromptFlag_AtMissingFile pins the error path:
 // "@missing.txt" must error so the operator sees the typo, not
 // silently fall through to the literal string "@missing.txt".
@@ -170,5 +182,25 @@ func TestResolveSystemPromptFlag_Stdin(t *testing.T) {
 	}
 	if !strings.Contains(got, "stdin prompt") {
 		t.Errorf("got %q, want content from stdin", got)
+	}
+}
+
+func TestResolveSystemPromptFlag_StdinRejectsOversize(t *testing.T) {
+	r, w, err := os.Pipe()
+	if err != nil {
+		t.Fatal(err)
+	}
+	orig := os.Stdin
+	os.Stdin = r
+	t.Cleanup(func() { os.Stdin = orig })
+
+	go func() {
+		_, _ = io.WriteString(w, strings.Repeat("x", maxSystemPromptBytes+1))
+		_ = w.Close()
+	}()
+
+	_, err = resolveSystemPromptFlag("-")
+	if err == nil || !strings.Contains(err.Error(), "system prompt exceeds") {
+		t.Fatalf("oversized stdin prompt error = %v, want system prompt exceeds", err)
 	}
 }

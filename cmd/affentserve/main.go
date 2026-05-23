@@ -243,18 +243,23 @@ func parseFlagsAndConfig(argv []string) (Config, error) {
 
 func resolveSystemPromptFlag(v string) (string, error) {
 	if v == "-" {
-		data, err := readAll(os.Stdin)
+		data, err := readSystemPrompt(os.Stdin)
 		if err != nil {
 			return "", fmt.Errorf("read stdin: %w", err)
 		}
 		return data, nil
 	}
 	if len(v) > 1 && v[0] == '@' {
-		data, err := os.ReadFile(v[1:])
+		f, err := os.Open(v[1:])
 		if err != nil {
 			return "", fmt.Errorf("read %s: %w", v[1:], err)
 		}
-		return string(data), nil
+		defer f.Close()
+		data, err := readSystemPrompt(f)
+		if err != nil {
+			return "", fmt.Errorf("read %s: %w", v[1:], err)
+		}
+		return data, nil
 	}
 	return v, nil
 }

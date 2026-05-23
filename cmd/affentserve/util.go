@@ -3,15 +3,21 @@ package main
 import (
 	"crypto/subtle"
 	"encoding/json"
+	"fmt"
 	"io"
 	"net/http"
 	"strings"
 )
 
-func readAll(r io.Reader) (string, error) {
-	b, err := io.ReadAll(r)
+const maxSystemPromptBytes = 256 * 1024
+
+func readSystemPrompt(r io.Reader) (string, error) {
+	b, err := io.ReadAll(io.LimitReader(r, maxSystemPromptBytes+1))
 	if err != nil {
 		return "", err
+	}
+	if len(b) > maxSystemPromptBytes {
+		return "", fmt.Errorf("system prompt exceeds %d-byte limit", maxSystemPromptBytes)
 	}
 	return string(b), nil
 }
