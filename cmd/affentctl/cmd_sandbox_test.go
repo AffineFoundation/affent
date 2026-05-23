@@ -235,6 +235,7 @@ func TestMakeImageServeEnablesBuiltinsInsideRuntimeContainer(t *testing.T) {
 		`host_memory_bytes={{.HostConfig.Memory}}`,
 		`docker rm -f "$(SERVE_CONTAINER_NAME)"`,
 		`$(if $(SERVE_CONTAINER_NAME),--name "$(SERVE_CONTAINER_NAME)")`,
+		`--detach --publish "$(SERVE_PUBLISH)"`,
 		"affentserve --listen \"$(SERVE_LISTEN)\" --workspace-root \"$(SERVE_WORKSPACE_ROOT)\" --memory-root \"$(SERVE_MEMORY_ROOT)\" --builtins $(SERVE_ARGS)",
 	} {
 		if !strings.Contains(body, want) {
@@ -282,7 +283,7 @@ func TestMakeOneClickContainerTargetsUseSharedLimits(t *testing.T) {
 			`image run --workspace "$(IMAGE_WORKSPACE)" --memory "$(CONTAINER_MEMORY)" --cpus "$(CONTAINER_CPUS)" --pids-limit "$(CONTAINER_PIDS)" $(IMAGE_RUN_ARGS)`,
 		},
 		"image-serve": {
-			`image run --workspace "$(IMAGE_WORKSPACE)" --memory "$(CONTAINER_MEMORY)" --cpus "$(CONTAINER_CPUS)" --pids-limit "$(CONTAINER_PIDS)" $(if $(SERVE_CONTAINER_NAME),--name "$(SERVE_CONTAINER_NAME)") --timeout 0s`,
+			`image run --workspace "$(IMAGE_WORKSPACE)" --memory "$(CONTAINER_MEMORY)" --cpus "$(CONTAINER_CPUS)" --pids-limit "$(CONTAINER_PIDS)" $(if $(SERVE_CONTAINER_NAME),--name "$(SERVE_CONTAINER_NAME)") --detach`,
 		},
 		"eval-container": {
 			`image build --image "$(EVAL_IMAGE)" --memory "$(CONTAINER_MEMORY)"`,
@@ -724,6 +725,38 @@ func TestRunRuntimeImageUsesPersistentWorkspaceAndLimits(t *testing.T) {
 	}
 }
 
+func TestRunRuntimeImageDetachRunsInBackground(t *testing.T) {
+	workspace := filepath.Join(t.TempDir(), "runtime")
+	runner := &fakeCommandRunner{}
+	opts := runtimeRunOptions{
+		Name:      "affent-serve",
+		Image:     "example/affent:local",
+		Workspace: workspace,
+		Memory:    "768m",
+		CPUs:      "1.5",
+		PIDsLimit: "256",
+		Detach:    true,
+		Remove:    true,
+		Command:   []string{"affentserve", "--listen", "0.0.0.0:7777"},
+	}
+	if err := runRuntimeImage(opts, runner); err != nil {
+		t.Fatalf("runRuntimeImage: %v", err)
+	}
+	if len(runner.calls) != 1 {
+		t.Fatalf("calls = %+v, want one docker run", runner.calls)
+	}
+	args := runner.calls[0].args
+	if !contains(args, "--detach") {
+		t.Fatalf("detached runtime missing --detach:\n%v", args)
+	}
+	if contains(args, "-i") {
+		t.Fatalf("detached runtime should not keep stdin open:\n%v", args)
+	}
+	if !contains(args, "--name") || !contains(args, "affent-serve") {
+		t.Fatalf("detached service should keep a stable container name:\n%v", args)
+	}
+}
+
 func TestRuntimeForwardEnvIncludesPortableCLIAndServeConfig(t *testing.T) {
 	for _, name := range runtimeForwardEnvNames() {
 		t.Setenv(name, "host-"+name)
@@ -834,6 +867,35 @@ func TestImageRunCmdDefaultsCommandAndLimits(t *testing.T) {
 		if !contains(args, want) {
 			t.Fatalf("docker run args missing %q:\n%v", want, args)
 		}
+	}
+}
+
+func TestImageRunCmdAcceptsDetachFlag(t *testing.T) {
+	workspace := t.TempDir()
+	runner := &fakeCommandRunner{}
+	var stdout, stderr strings.Builder
+	code := imageRunCmd([]string{
+		"--image", "example/affent:local",
+		"--workspace", workspace,
+		"--detach",
+		"--",
+		"affentserve",
+	}, runner, &stdout, &stderr)
+	if code != 0 {
+		t.Fatalf("exit = %d stderr=%s", code, stderr.String())
+	}
+	if stdout.String() != "" {
+		t.Fatalf("stdout = %q, want command output only", stdout.String())
+	}
+	if len(runner.calls) != 1 {
+		t.Fatalf("calls = %+v, want one docker run", runner.calls)
+	}
+	args := runner.calls[0].args
+	if !contains(args, "--detach") {
+		t.Fatalf("docker run args missing --detach:\n%v", args)
+	}
+	if contains(args, "-i") {
+		t.Fatalf("detached image run should not pass -i:\n%v", args)
 	}
 }
 

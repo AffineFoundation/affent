@@ -302,6 +302,7 @@ type runtimeRunOptions struct {
 	User      string
 	Timeout   time.Duration
 	TTY       bool
+	Detach    bool
 	Remove    bool
 	Env       []string
 	Publish   []string
@@ -323,6 +324,7 @@ func imageRunCmd(args []string, runner commandRunner, _ io.Writer, stderr io.Wri
 	fs.StringVar(&opts.User, "user", opts.User, "Docker user UID:GID; empty uses the image default")
 	fs.DurationVar(&opts.Timeout, "timeout", opts.Timeout, "Docker run timeout; 0 disables the wrapper timeout")
 	fs.BoolVar(&opts.TTY, "tty", false, "allocate a TTY for interactive commands")
+	fs.BoolVar(&opts.Detach, "detach", false, "run the container in the background")
 	fs.BoolVar(&opts.Remove, "rm", true, "remove the container after the command exits")
 	fs.Var(&env, "env", "extra environment variable to pass through as KEY=VALUE; repeatable")
 	fs.Var(&publish, "publish", "publish a container port, e.g. 7777:7777; repeatable")
@@ -657,7 +659,6 @@ func runRuntimeImage(opts runtimeRunOptions, runner commandRunner) error {
 		runArgs = append(runArgs, "--name", opts.Name)
 	}
 	runArgs = append(runArgs,
-		"-i",
 		"--init",
 		"--memory", opts.Memory,
 		"--memory-swap", opts.Memory,
@@ -673,6 +674,11 @@ func runRuntimeImage(opts runtimeRunOptions, runner commandRunner) error {
 		"-v", opts.Workspace+":/workspace",
 		"-w", "/workspace",
 	)
+	if opts.Detach {
+		runArgs = append(runArgs, "--detach")
+	} else {
+		runArgs = append(runArgs, "-i")
+	}
 	if opts.TTY {
 		runArgs = append(runArgs, "-t")
 	}
