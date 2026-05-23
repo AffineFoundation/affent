@@ -5,7 +5,7 @@
 //	affentctl chat  — REPL: ongoing dialogue with the same conversation
 //	                  state, like codex/goose. Best for interactive
 //	                  debugging.
-//	affentctl sessions — list previous sessions stored under workspace.
+//	affentctl sessions — list previous sessions and inspect local plans.
 //
 // Both run and chat support --session-id <id> and --continue to pick up
 // an existing conversation log instead of starting fresh.
@@ -61,7 +61,7 @@ Commands:
   doctor     check config, workspace, executor, and Docker readiness
   sandbox    start a persistent, memory-limited Docker tool container
   image      build the full Affent runtime Docker image
-  sessions   list previous sessions in --workspace
+  sessions   list previous sessions and inspect local plans
   help       show this message
 
 Run 'affentctl <command> -h' for command-specific flags.`)

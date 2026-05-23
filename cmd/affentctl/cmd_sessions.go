@@ -2,9 +2,12 @@ package main
 
 import (
 	"bufio"
+	"bytes"
 	"encoding/json"
+	"errors"
 	"flag"
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
 	"sort"
@@ -12,24 +15,37 @@ import (
 	"time"
 )
 
+const maxLocalSessionPlanBytes = 32 * 1024
+
 // sessionsCmd lists prior sessions found under <workspace>/.affentctl/.
 // For each session shows the id, mtime, message count, and the first
 // user message as a preview. Useful before deciding what to --continue.
 func sessionsCmd(args []string) int {
 	fs := flag.NewFlagSet("sessions", flag.ExitOnError)
 	workspace := fs.String("workspace", "./affent-workspace", "working dir to inspect")
+	planID := fs.String("plan", "", "print the persisted plan JSON for a session id")
 	fs.Usage = func() {
-		fmt.Fprintln(os.Stderr, `usage: affentctl sessions [--workspace DIR]
+		fmt.Fprintln(os.Stderr, `usage: affentctl sessions [--workspace DIR] [--plan SESSION_ID]
 
 List prior conversation logs under <workspace>/.affentctl/, newest
-first. Each row: <session_id>  <mtime>  <messages>  <first user msg>.`)
+first. Each row: <session_id>  <mtime>  <messages>  <plan>  <first user msg>.
+
+Use --plan SESSION_ID to print <workspace>/.affentctl/<session_id>.plan.json
+without starting or resuming the agent.`)
 		fs.PrintDefaults()
 	}
 	if err := fs.Parse(args); err != nil {
 		return exitUsage
 	}
+	if fs.NArg() != 0 {
+		fmt.Fprintf(os.Stderr, "unexpected argument(s): %s\n", strings.Join(fs.Args(), " "))
+		return exitUsage
+	}
 
 	convDir := filepath.Join(*workspace, ".affentctl")
+	if *planID != "" {
+		return printSessionPlan(convDir, *planID)
+	}
 	entries, err := os.ReadDir(convDir)
 	if err != nil {
 		if os.IsNotExist(err) {
@@ -71,13 +87,74 @@ first. Each row: <session_id>  <mtime>  <messages>  <first user msg>.`)
 	sort.Slice(rows, func(i, j int) bool { return rows[i].mt.After(rows[j].mt) })
 
 	for _, r := range rows {
-		fmt.Printf("%s\t%s\t%d msgs\t%s\n",
+		plan := "-"
+		if sessionPlanExists(convDir, r.sid) {
+			plan = "plan"
+		}
+		fmt.Printf("%s\t%s\t%d msgs\t%s\t%s\n",
 			r.sid,
 			r.mt.Local().Format("2006-01-02 15:04"),
 			r.nMsgs,
+			plan,
 			r.preview)
 	}
 	return 0
+}
+
+func printSessionPlan(convDir, sessionID string) int {
+	plan, found, err := readLocalSessionPlan(convDir, sessionID)
+	if err != nil {
+		fmt.Fprintln(os.Stderr, err)
+		return exitRuntime
+	}
+	if !found {
+		fmt.Fprintf(os.Stderr, "no plan for session %q\n", sessionID)
+		return exitUsage
+	}
+	fmt.Println(string(plan))
+	return 0
+}
+
+func sessionPlanExists(convDir, sessionID string) bool {
+	info, err := os.Stat(localSessionPlanPath(convDir, sessionID))
+	return err == nil && !info.IsDir()
+}
+
+func readLocalSessionPlan(convDir, sessionID string) (json.RawMessage, bool, error) {
+	sessionID = strings.TrimSpace(sessionID)
+	if sessionID == "" {
+		return nil, false, errors.New("session id is required")
+	}
+	if strings.ContainsAny(sessionID, `/\`) || sessionID == "." || sessionID == ".." {
+		return nil, false, fmt.Errorf("invalid session id %q", sessionID)
+	}
+	f, err := os.Open(localSessionPlanPath(convDir, sessionID))
+	if err != nil {
+		if os.IsNotExist(err) {
+			return nil, false, nil
+		}
+		return nil, false, err
+	}
+	defer f.Close()
+	raw, err := io.ReadAll(io.LimitReader(f, maxLocalSessionPlanBytes+1))
+	if err != nil {
+		return nil, false, err
+	}
+	if len(raw) > maxLocalSessionPlanBytes {
+		return nil, false, fmt.Errorf("plan file exceeds %d bytes", maxLocalSessionPlanBytes)
+	}
+	raw = bytes.TrimSpace(raw)
+	if len(raw) == 0 {
+		return nil, false, errors.New("plan file is empty")
+	}
+	if !json.Valid(raw) {
+		return nil, false, errors.New("plan file is not valid JSON")
+	}
+	return json.RawMessage(raw), true, nil
+}
+
+func localSessionPlanPath(convDir, sessionID string) string {
+	return filepath.Join(convDir, sessionID+".plan.json")
 }
 
 // scanLog walks the JSONL conversation log and returns (message count,
