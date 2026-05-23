@@ -106,8 +106,8 @@ func skillTool(reg *SkillRegistry) *Tool {
         "type": "object",
         "required": ["action"],
         "properties": {
-            "action": {"type": "string", "enum": ["list", "read"], "description": "Use list to inspect available skills; use read to load one skill body."},
-            "name": {"type": "string", "description": "Skill name to read when action=read."}
+            "action": {"type": "string", "minLength": 1, "enum": ["list", "read"], "description": "Use list to inspect available skills; use read to load one skill body."},
+            "name": {"type": "string", "minLength": 1, "description": "Skill name to read when action=read."}
         }
     }`)
 	return &Tool{
@@ -122,7 +122,11 @@ func skillTool(reg *SkillRegistry) *Tool {
 			if err := json.Unmarshal(args, &p); err != nil {
 				return "", fmt.Errorf("decode args: %w", err)
 			}
-			switch strings.TrimSpace(p.Action) {
+			action := strings.TrimSpace(p.Action)
+			if action == "" {
+				return "", errors.New("action is required")
+			}
+			switch action {
 			case "list":
 				out, err := json.MarshalIndent(reg.Catalog(), "", "  ")
 				if err != nil {
@@ -140,7 +144,7 @@ func skillTool(reg *SkillRegistry) *Tool {
 				}
 				return strings.TrimSpace(s.Body), nil
 			default:
-				return "", fmt.Errorf("unsupported action %q (valid: list, read)", p.Action)
+				return "", fmt.Errorf("unsupported action %q (valid: list, read)", action)
 			}
 		},
 	}
@@ -735,7 +739,7 @@ func listFilesTool(deps BuiltinDeps) *Tool {
 			if err := json.Unmarshal(args, &p); err != nil {
 				return "", err
 			}
-			if p.Path == "" {
+			if strings.TrimSpace(p.Path) == "" {
 				p.Path = "."
 			}
 			if p.MaxEntries <= 0 {

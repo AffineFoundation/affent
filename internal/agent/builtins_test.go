@@ -515,6 +515,21 @@ func TestListFilesToolEmptyLocalDirectory(t *testing.T) {
 	}
 }
 
+func TestListFilesToolBlankPathDefaultsToWorkspaceRoot(t *testing.T) {
+	tmp := t.TempDir()
+	if err := os.WriteFile(filepath.Join(tmp, "root.txt"), []byte("x"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	tool := listFilesTool(BuiltinDeps{HostWorkspaceDir: tmp})
+	out, err := tool.Execute(context.Background(), json.RawMessage(`{"path":"   "}`))
+	if err != nil {
+		t.Fatalf("list_files blank path: %v", err)
+	}
+	if !strings.Contains(out, "root.txt") {
+		t.Fatalf("blank path should list workspace root, got:\n%s", out)
+	}
+}
+
 // recordingExec captures the argv passed to Exec so tests can assert
 // shell-prefix wiring without a real shell.
 type recordingExec struct {
@@ -1052,6 +1067,29 @@ func TestSkillToolListsAndReadsEmbeddedSkills(t *testing.T) {
 	}
 	if _, err := tool.Execute(ctx, json.RawMessage(`{"action":"read","name":"missing"}`)); err == nil {
 		t.Fatal("unknown skill should fail")
+	}
+}
+
+func TestSkillToolPublishesAndRejectsBlankRequiredStrings(t *testing.T) {
+	tool := skillTool(DefaultSkillRegistry())
+	var schema struct {
+		Properties map[string]struct {
+			MinLength int `json:"minLength"`
+		} `json:"properties"`
+	}
+	if err := json.Unmarshal(tool.Schema, &schema); err != nil {
+		t.Fatal(err)
+	}
+	for _, field := range []string{"action", "name"} {
+		if schema.Properties[field].MinLength != 1 {
+			t.Fatalf("%s minLength = %d, want 1", field, schema.Properties[field].MinLength)
+		}
+	}
+	if _, err := tool.Execute(context.Background(), json.RawMessage(`{"action":"   "}`)); err == nil || !strings.Contains(err.Error(), "action is required") {
+		t.Fatalf("blank action error = %v, want action is required", err)
+	}
+	if _, err := tool.Execute(context.Background(), json.RawMessage(`{"action":"read","name":"   "}`)); err == nil || !strings.Contains(err.Error(), "name is required") {
+		t.Fatalf("blank name error = %v, want name is required", err)
 	}
 }
 
