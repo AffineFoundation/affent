@@ -2,6 +2,7 @@ package main
 
 import (
 	"flag"
+	"io"
 	"os"
 	"path/filepath"
 	"strings"
@@ -42,6 +43,38 @@ func TestReadMaybeStdin_AtExistingFile(t *testing.T) {
 	}
 	if got != "hello from file" {
 		t.Errorf("got %q", got)
+	}
+}
+
+func TestReadMaybeStdin_AtFileRejectsOversize(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "huge.txt")
+	if err := os.WriteFile(path, []byte(strings.Repeat("x", maxPromptInputBytes+1)), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	_, err := readMaybeStdin("@" + path)
+	if err == nil || !strings.Contains(err.Error(), "prompt input exceeds") {
+		t.Fatalf("oversized prompt file error = %v, want prompt input exceeds", err)
+	}
+}
+
+func TestReadMaybeStdin_StdinRejectsOversize(t *testing.T) {
+	r, w, err := os.Pipe()
+	if err != nil {
+		t.Fatal(err)
+	}
+	orig := os.Stdin
+	os.Stdin = r
+	t.Cleanup(func() { os.Stdin = orig })
+
+	go func() {
+		_, _ = io.WriteString(w, strings.Repeat("x", maxPromptInputBytes+1))
+		_ = w.Close()
+	}()
+
+	_, err = readMaybeStdin("-")
+	if err == nil || !strings.Contains(err.Error(), "prompt input exceeds") {
+		t.Fatalf("oversized stdin prompt error = %v, want prompt input exceeds", err)
 	}
 }
 

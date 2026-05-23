@@ -931,23 +931,40 @@ func mostRecentSession(convDir string) (string, error) {
 //   - anything else → take as-is (literal prompt). To pass a literal
 //     starting with "@", escape it (e.g. " @foo" with a leading space)
 //     or use --prompt - and pipe in.
+const maxPromptInputBytes = 256 * 1024
+
 func readMaybeStdin(spec string) (string, error) {
 	if spec == "" {
 		return "", nil
 	}
 	if spec == "-" {
-		b, err := io.ReadAll(os.Stdin)
-		return string(b), err
+		return readPromptInput(os.Stdin)
 	}
 	if strings.HasPrefix(spec, "@") {
 		path := spec[1:]
-		b, err := os.ReadFile(path)
+		f, err := os.Open(path)
 		if err != nil {
 			return "", fmt.Errorf("read %s: %w", path, err)
 		}
-		return string(b), nil
+		defer f.Close()
+		b, err := readPromptInput(f)
+		if err != nil {
+			return "", fmt.Errorf("read %s: %w", path, err)
+		}
+		return b, nil
 	}
 	return spec, nil
+}
+
+func readPromptInput(r io.Reader) (string, error) {
+	b, err := io.ReadAll(io.LimitReader(r, maxPromptInputBytes+1))
+	if err != nil {
+		return "", err
+	}
+	if len(b) > maxPromptInputBytes {
+		return "", fmt.Errorf("prompt input exceeds %d-byte limit", maxPromptInputBytes)
+	}
+	return string(b), nil
 }
 
 // openTrace opens the JSONL trace destination. For resumed sessions we
