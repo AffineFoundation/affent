@@ -1,10 +1,12 @@
 package agent
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"strings"
 	"time"
 
@@ -263,12 +265,8 @@ func focusedTaskTool(deps FocusedTaskDeps, available []FocusedTaskProfile) *Tool
 		Description: focusedTaskToolDescription(available),
 		Schema:      focusedTaskToolSchema(available),
 		Execute: func(ctx context.Context, args json.RawMessage) (string, error) {
-			var p struct {
-				TaskType  string `json:"task_type"`
-				Objective string `json:"objective"`
-				MaxTurns  int    `json:"max_turns"`
-			}
-			if err := json.Unmarshal(args, &p); err != nil {
+			p, err := decodeFocusedTaskArgs(args)
+			if err != nil {
 				return "", fmt.Errorf("decode args: %w", err)
 			}
 			p.TaskType = strings.TrimSpace(p.TaskType)
@@ -307,6 +305,26 @@ func focusedTaskTool(deps FocusedTaskDeps, available []FocusedTaskProfile) *Tool
 			return runFocusedTask(ctx, deps, profile, p.Objective, p.MaxTurns)
 		},
 	}
+}
+
+type focusedTaskArgs struct {
+	TaskType  string `json:"task_type"`
+	Objective string `json:"objective"`
+	MaxTurns  int    `json:"max_turns"`
+}
+
+func decodeFocusedTaskArgs(args json.RawMessage) (focusedTaskArgs, error) {
+	var p focusedTaskArgs
+	dec := json.NewDecoder(bytes.NewReader(args))
+	dec.DisallowUnknownFields()
+	if err := dec.Decode(&p); err != nil {
+		return focusedTaskArgs{}, err
+	}
+	var extra struct{}
+	if err := dec.Decode(&extra); !errors.Is(err, io.EOF) {
+		return focusedTaskArgs{}, errors.New("arguments must contain a single JSON object")
+	}
+	return p, nil
 }
 
 // runFocusedTask is the focused-task counterpart to runSubagent. It

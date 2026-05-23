@@ -228,6 +228,8 @@ func TestFocusedTaskTool_ArgValidation(t *testing.T) {
 		{"empty objective", `{"task_type":"recall","objective":"   "}`, "objective is required"},
 		{"too long task_type", `{"task_type":"` + strings.Repeat("x", maxFocusedTaskTypeBytes+1) + `","objective":"o"}`, "task_type is"},
 		{"too long objective", `{"task_type":"recall","objective":"` + strings.Repeat("a", maxFocusedTaskObjectiveBytes+1) + `"}`, "objective is"},
+		{"unknown field", `{"task_type":"recall","objective":"o","temperature":0.9}`, `unknown field "temperature"`},
+		{"multiple json values", `{"task_type":"recall","objective":"o"} {"task_type":"recall","objective":"again"}`, "single JSON object"},
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
