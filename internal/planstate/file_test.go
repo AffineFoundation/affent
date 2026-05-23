@@ -52,6 +52,37 @@ func TestReadFileRejectsSymlink(t *testing.T) {
 	}
 }
 
+func TestSummarizeFileReportsMissingAndErrors(t *testing.T) {
+	missing, found := SummarizeFile(filepath.Join(t.TempDir(), "missing.json"))
+	if found || missing.Label != LabelMissing {
+		t.Fatalf("missing summary = %+v found=%v, want %s/not found", missing, found, LabelMissing)
+	}
+
+	path := filepath.Join(t.TempDir(), "bad.json")
+	if err := os.WriteFile(path, []byte("{"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	bad, found := SummarizeFile(path)
+	if !found || !bad.Error || bad.Label != LabelError {
+		t.Fatalf("bad summary = %+v found=%v, want %s/error", bad, found, LabelError)
+	}
+}
+
+func TestSummarizeFileReturnsPlanSummary(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "plan.json")
+	if err := os.WriteFile(path, []byte(`{"steps":[{"text":"done","status":"completed"},{"text":"next","status":"in_progress"}]}`), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	summary, found := SummarizeFile(path)
+	if !found {
+		t.Fatal("SummarizeFile found=false, want true")
+	}
+	if summary.Label != "plan:1/2:active" || summary.CurrentStep != "next" || summary.CurrentStepIndex != 2 {
+		t.Fatalf("summary = %+v, want active plan", summary)
+	}
+}
+
 func TestRemoveFileRejectsSymlinkAndRemovesRegularFile(t *testing.T) {
 	dir := t.TempDir()
 	target := filepath.Join(dir, "target.json")

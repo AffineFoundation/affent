@@ -51,6 +51,21 @@ func ReadFile(path string) (json.RawMessage, bool, error) {
 	return json.RawMessage(raw), true, nil
 }
 
+func SummarizeFile(path string) (Summary, bool) {
+	raw, found, err := ReadFile(path)
+	if err != nil {
+		return ErrorSummary(), true
+	}
+	if !found {
+		return Summary{Label: LabelMissing}, false
+	}
+	summary, err := SummarizeJSON(raw)
+	if err != nil {
+		return ErrorSummary(), true
+	}
+	return summary, true
+}
+
 func RemoveFile(path string) (bool, error) {
 	info, err := os.Lstat(path)
 	if err != nil {

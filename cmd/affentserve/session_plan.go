@@ -94,18 +94,9 @@ func clearSessionPlan(pool *SessionPool, sessionID string) (bool, error) {
 }
 
 func summarizeSessionPlanFile(pool *SessionPool, sessionID string) *sessionPlanSummary {
-	raw, found, err := readSessionPlan(pool, sessionID)
-	if err != nil {
-		summary := planstate.ErrorSummary()
-		return &summary
-	}
+	summary, found := planstate.SummarizeFile(filepath.Join(pool.sessionDirPath(sessionID), "plan.json"))
 	if !found {
 		return nil
-	}
-	summary, err := planstate.SummarizeJSON(raw)
-	if err != nil {
-		summary := planstate.ErrorSummary()
-		return &summary
 	}
 	return &summary
 }

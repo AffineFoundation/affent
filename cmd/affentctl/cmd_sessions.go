@@ -147,17 +147,11 @@ func sessionPlanSummary(convDir, sessionID string) string {
 }
 
 func localSessionPlanSummary(convDir, sessionID string) planstate.Summary {
-	raw, found, err := readLocalSessionPlan(convDir, sessionID)
-	if err != nil {
+	sessionID = strings.TrimSpace(sessionID)
+	if sessionID == "" || strings.ContainsAny(sessionID, `/\`) || sessionID == "." || sessionID == ".." {
 		return planstate.ErrorSummary()
 	}
-	if !found {
-		return planstate.Summary{Label: planstate.LabelMissing}
-	}
-	summary, err := planstate.SummarizeJSON(raw)
-	if err != nil {
-		return planstate.ErrorSummary()
-	}
+	summary, _ := planstate.SummarizeFile(localSessionPlanPath(convDir, sessionID))
 	return summary
 }
 
