@@ -193,6 +193,57 @@ func TestHandleSessionDetail_ReadsDurableSessionAfterRestart(t *testing.T) {
 	}
 }
 
+func TestHandleSessionPlan_ReadsDurablePlanWithoutReopeningSession(t *testing.T) {
+	memRoot := t.TempDir()
+	pool := newPoolWithMemoryRoot(t, memRoot)
+	createDurableSessionDir(t, pool, "planned")
+	planJSON := `{"version":1,"steps":[{"text":"resume work","status":"in_progress"}]}`
+	if err := os.WriteFile(filepath.Join(pool.sessionDirPath("planned"), "plan.json"), []byte(planJSON+"\n"), 0o644); err != nil {
+		t.Fatalf("write plan: %v", err)
+	}
+
+	r := httptest.NewRequest(http.MethodGet, "/v1/sessions/planned/plan", nil)
+	w := httptest.NewRecorder()
+	handleSessionRoutes(pool).ServeHTTP(w, r)
+	if got := w.Result().StatusCode; got != http.StatusOK {
+		t.Fatalf("status = %d, want 200; body=%s", got, w.Body.String())
+	}
+	if activeSessionByID(pool, "planned") != nil {
+		t.Fatal("GET plan must not reopen an inactive durable session")
+	}
+	var resp sessionPlanResponse
+	if err := json.Unmarshal(w.Body.Bytes(), &resp); err != nil {
+		t.Fatalf("decode: %v", err)
+	}
+	if resp.SessionID != "planned" {
+		t.Fatalf("session_id = %q, want planned", resp.SessionID)
+	}
+	var plan struct {
+		Steps []struct {
+			Text   string `json:"text"`
+			Status string `json:"status"`
+		} `json:"steps"`
+	}
+	if err := json.Unmarshal(resp.Plan, &plan); err != nil {
+		t.Fatalf("decode plan: %v", err)
+	}
+	if len(plan.Steps) != 1 || plan.Steps[0].Text != "resume work" || plan.Steps[0].Status != "in_progress" {
+		t.Fatalf("plan = %+v", plan)
+	}
+}
+
+func TestHandleSessionPlan_Returns404WhenNoPlan(t *testing.T) {
+	pool := newTestPool(t, 4, "5m")
+	createDurableSessionDir(t, pool, "no-plan")
+
+	r := httptest.NewRequest(http.MethodGet, "/v1/sessions/no-plan/plan", nil)
+	w := httptest.NewRecorder()
+	handleSessionRoutes(pool).ServeHTTP(w, r)
+	if got := w.Result().StatusCode; got != http.StatusNotFound {
+		t.Fatalf("status = %d, want 404; body=%s", got, w.Body.String())
+	}
+}
+
 func TestSessionCapabilitiesReflectActualRegisteredTools(t *testing.T) {
 	pool := newTestPool(t, 4, "5m")
 	pool.cfg.EnableBuiltins = false

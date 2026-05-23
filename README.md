@@ -398,6 +398,8 @@ Use `GET /v1/sessions/{id}/history?after=-1&limit=100` to page through the
 persisted event log. The `after` cursor is a JSONL line number (`next_after`
 from the previous response), not an event id, so replay remains correct across
 server restarts where runtime event ids can start over.
+Use `GET /v1/sessions/{id}/plan` to read the persisted `plan.json` snapshot
+without reopening an inactive session.
 
 Persistent memory is opt-in. Workspace memory is topic-bucketed and can be
 searched on demand. User memory is a separate cross-workspace profile. The
@@ -617,6 +619,8 @@ Native session endpoints:
   summary.
 - `GET /v1/sessions/{id}/events` streams live SSE events.
 - `GET /v1/sessions/{id}/history?after=-1&limit=100` pages persisted events.
+- `GET /v1/sessions/{id}/plan` returns the persisted plan snapshot without
+  reopening an inactive session.
 - `GET /v1/sessions/{id}/tools` lists the active session's actual tool
   catalog, including JSON schemas.
 - `GET /v1/sessions/{id}/transcripts` lists durable child-loop transcripts
