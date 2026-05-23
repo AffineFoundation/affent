@@ -262,6 +262,30 @@ func TestFileResponseCache_GetSkipsOversizedMetaFile(t *testing.T) {
 	}
 }
 
+func TestReadCacheFileCapped(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "cache.bin")
+	if err := os.WriteFile(path, []byte("12345"), 0o644); err != nil {
+		t.Fatalf("write cache file: %v", err)
+	}
+
+	got, err := readCacheFileCapped(path, 5)
+	if err != nil {
+		t.Fatalf("read exact limit: %v", err)
+	}
+	if string(got) != "12345" {
+		t.Fatalf("read exact limit = %q, want 12345", got)
+	}
+
+	got, err = readCacheFileCapped(path, 4)
+	if err != nil {
+		t.Fatalf("read over limit: %v", err)
+	}
+	if got != nil {
+		t.Fatalf("over limit read returned %d bytes, want nil miss", len(got))
+	}
+}
+
 func TestFileResponseCache_RejectsCloudflareChallengePaths(t *testing.T) {
 	c, err := NewFileResponseCache(t.TempDir(), 0)
 	if err != nil {

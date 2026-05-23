@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -101,16 +102,18 @@ func (c *FileResponseCache) Get(ctx context.Context, url string) (*CachedRespons
 	} else if info.Size() > maxCachedResponseMetaBytes {
 		return nil, false, nil
 	}
-	mf, err := os.Open(metaPath)
+	var meta CachedResponse
+	metaBytes, err := readCacheFileCapped(metaPath, maxCachedResponseMetaBytes)
 	if err != nil {
 		if os.IsNotExist(err) {
 			return nil, false, nil
 		}
-		return nil, false, fmt.Errorf("open meta: %w", err)
+		return nil, false, fmt.Errorf("read meta: %w", err)
 	}
-	defer mf.Close()
-	var meta CachedResponse
-	if err := json.NewDecoder(mf).Decode(&meta); err != nil {
+	if metaBytes == nil {
+		return nil, false, nil
+	}
+	if err := json.Unmarshal(metaBytes, &meta); err != nil {
 		return nil, false, fmt.Errorf("decode meta: %w", err)
 	}
 	if c.ttl > 0 && time.Since(meta.FetchedAt) > c.ttl {
@@ -130,15 +133,34 @@ func (c *FileResponseCache) Get(ctx context.Context, url string) (*CachedRespons
 	if err := ctx.Err(); err != nil {
 		return nil, false, err
 	}
-	body, err := os.ReadFile(bodyPath)
+	body, err := readCacheFileCapped(bodyPath, maxCachedResponseBodyBytes)
 	if err != nil {
 		if os.IsNotExist(err) {
 			return nil, false, nil
 		}
 		return nil, false, fmt.Errorf("read body: %w", err)
 	}
+	if body == nil {
+		return nil, false, nil
+	}
 	meta.Body = body
 	return &meta, true, nil
+}
+
+func readCacheFileCapped(path string, limit int64) ([]byte, error) {
+	f, err := os.Open(path)
+	if err != nil {
+		return nil, err
+	}
+	defer f.Close()
+	data, err := io.ReadAll(io.LimitReader(f, limit+1))
+	if err != nil {
+		return nil, err
+	}
+	if int64(len(data)) > limit {
+		return nil, nil
+	}
+	return data, nil
 }
 
 // Put writes a new entry. Each file is written via atomicWriteFile
@@ -353,9 +375,15 @@ func (c *FileResponseCache) sweepOne(metaPath string) bool {
 		_ = os.Remove(bodyPath)
 		return true
 	}
-	data, err := os.ReadFile(metaPath)
+	data, err := readCacheFileCapped(metaPath, maxCachedResponseMetaBytes)
 	if err != nil {
 		return false
+	}
+	if data == nil {
+		bodyPath := strings.TrimSuffix(metaPath, ".meta.json") + ".bin"
+		_ = os.Remove(metaPath)
+		_ = os.Remove(bodyPath)
+		return true
 	}
 	var meta CachedResponse
 	if err := json.Unmarshal(data, &meta); err != nil {
