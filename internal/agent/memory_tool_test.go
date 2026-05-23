@@ -108,14 +108,23 @@ func TestMemoryToolSchemaPublishesSearchLimits(t *testing.T) {
 	if schema.Properties["action"].MinLength != 1 {
 		t.Fatalf("action minLength = %d, want 1", schema.Properties["action"].MinLength)
 	}
+	if schema.Properties["action"].MaxLength != maxMemoryActionBytes {
+		t.Fatalf("action maxLength = %d, want %d", schema.Properties["action"].MaxLength, maxMemoryActionBytes)
+	}
 	if got, want := strings.Join(schema.Properties["action"].Enum, ","), strings.Join(memoryActions, ","); got != want {
 		t.Fatalf("action enum = %s, want %s", got, want)
 	}
 	if schema.Properties["target"].MinLength != 1 {
 		t.Fatalf("target minLength = %d, want 1", schema.Properties["target"].MinLength)
 	}
+	if schema.Properties["target"].MaxLength != maxMemoryTargetBytes {
+		t.Fatalf("target maxLength = %d, want %d", schema.Properties["target"].MaxLength, maxMemoryTargetBytes)
+	}
 	if schema.Properties["topic"].MinLength != 1 {
 		t.Fatalf("topic minLength = %d, want 1", schema.Properties["topic"].MinLength)
+	}
+	if schema.Properties["topic"].MaxLength != maxMemoryTopicBytes {
+		t.Fatalf("topic maxLength = %d, want %d", schema.Properties["topic"].MaxLength, maxMemoryTopicBytes)
 	}
 	if schema.Properties["query"].MinLength != 1 {
 		t.Fatalf("query minLength = %d, want 1", schema.Properties["query"].MinLength)
@@ -123,8 +132,14 @@ func TestMemoryToolSchemaPublishesSearchLimits(t *testing.T) {
 	if schema.Properties["content"].MinLength != 1 {
 		t.Fatalf("content minLength = %d, want 1", schema.Properties["content"].MinLength)
 	}
+	if schema.Properties["content"].MaxLength != maxMemoryContentBytes {
+		t.Fatalf("content maxLength = %d, want %d", schema.Properties["content"].MaxLength, maxMemoryContentBytes)
+	}
 	if schema.Properties["old_text"].MinLength != 1 {
 		t.Fatalf("old_text minLength = %d, want 1", schema.Properties["old_text"].MinLength)
+	}
+	if schema.Properties["old_text"].MaxLength != maxMemoryOldTextBytes {
+		t.Fatalf("old_text maxLength = %d, want %d", schema.Properties["old_text"].MaxLength, maxMemoryOldTextBytes)
 	}
 	if schema.Properties["query"].MaxLength != memory.MaxSearchQueryBytes {
 		t.Fatalf("query maxLength = %d, want %d", schema.Properties["query"].MaxLength, memory.MaxSearchQueryBytes)
@@ -134,6 +149,57 @@ func TestMemoryToolSchemaPublishesSearchLimits(t *testing.T) {
 	}
 	if schema.Properties["top_k"].Default != memory.DefaultSearchTopK {
 		t.Fatalf("top_k default = %d, want %d", schema.Properties["top_k"].Default, memory.DefaultSearchTopK)
+	}
+}
+
+func TestMemoryToolRejectsOversizedArgsBeforeStore(t *testing.T) {
+	store := &captureMemoryStore{}
+	tool := memoryTool(store)
+	cases := []struct {
+		name string
+		args string
+		want string
+	}{
+		{
+			name: "action",
+			args: `{"action":` + mustJSON(t, strings.Repeat("a", maxMemoryActionBytes+1)) + `}`,
+			want: "action must be at most",
+		},
+		{
+			name: "target",
+			args: `{"action":"add","target":` + mustJSON(t, strings.Repeat("t", maxMemoryTargetBytes+1)) + `,"content":"fact"}`,
+			want: "target must be at most",
+		},
+		{
+			name: "topic",
+			args: `{"action":"add","topic":` + mustJSON(t, strings.Repeat("t", maxMemoryTopicBytes+1)) + `,"content":"fact"}`,
+			want: "topic must be at most",
+		},
+		{
+			name: "content",
+			args: `{"action":"add","content":` + mustJSON(t, strings.Repeat("x", maxMemoryContentBytes+1)) + `}`,
+			want: "content must be at most",
+		},
+		{
+			name: "old_text",
+			args: `{"action":"remove","old_text":` + mustJSON(t, strings.Repeat("x", maxMemoryOldTextBytes+1)) + `}`,
+			want: "old_text must be at most",
+		},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			store.reset()
+			out, err := tool.Execute(context.Background(), json.RawMessage(tc.args))
+			if err != nil {
+				t.Fatal(err)
+			}
+			if !strings.Contains(out, tc.want) || !strings.Contains(out, "Next:") {
+				t.Fatalf("oversized response = %s, want %q and Next step", out, tc.want)
+			}
+			if store.calls != 0 {
+				t.Fatalf("store should not be called for oversized %s arg; calls=%d", tc.name, store.calls)
+			}
+		})
 	}
 }
 
@@ -302,6 +368,30 @@ func (s *captureSearchStore) Remove(target memory.MemoryTarget, topic, oldText s
 func (s *captureSearchStore) Search(target memory.MemoryTarget, topic, query string, topK int) (memory.MemoryResponse, error) {
 	s.query = query
 	s.topK = topK
+	return memory.MemoryResponse{OK: true, Target: target}, nil
+}
+
+type captureMemoryStore struct {
+	calls int
+}
+
+func (s *captureMemoryStore) reset() { s.calls = 0 }
+
+func (s *captureMemoryStore) Snapshot() string { return "" }
+func (s *captureMemoryStore) Add(target memory.MemoryTarget, topic, content string) (memory.MemoryResponse, error) {
+	s.calls++
+	return memory.MemoryResponse{OK: true, Target: target}, nil
+}
+func (s *captureMemoryStore) Replace(target memory.MemoryTarget, topic, oldText, newContent string) (memory.MemoryResponse, error) {
+	s.calls++
+	return memory.MemoryResponse{OK: true, Target: target}, nil
+}
+func (s *captureMemoryStore) Remove(target memory.MemoryTarget, topic, oldText string) (memory.MemoryResponse, error) {
+	s.calls++
+	return memory.MemoryResponse{OK: true, Target: target}, nil
+}
+func (s *captureMemoryStore) Search(target memory.MemoryTarget, topic, query string, topK int) (memory.MemoryResponse, error) {
+	s.calls++
 	return memory.MemoryResponse{OK: true, Target: target}, nil
 }
 

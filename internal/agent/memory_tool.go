@@ -17,9 +17,27 @@ const (
 	memoryActionList    = "list"
 )
 
+const (
+	maxMemoryActionBytes  = 16
+	maxMemoryTargetBytes  = 16
+	maxMemoryTopicBytes   = 128
+	maxMemoryContentBytes = 16 * 1024
+	maxMemoryOldTextBytes = 4 * 1024
+)
+
 var memoryActions = []string{
 	memoryActionAdd, memoryActionReplace, memoryActionRemove,
 	memoryActionSearch, memoryActionList,
+}
+
+type memoryToolArgs struct {
+	Action  string `json:"action"`
+	Target  string `json:"target"`
+	Topic   string `json:"topic"`
+	Content string `json:"content"`
+	OldText string `json:"old_text"`
+	Query   string `json:"query"`
+	TopK    int    `json:"top_k"`
 }
 
 // memoryTool builds the `memory` tool. Five actions × two targets ×
@@ -45,28 +63,33 @@ func memoryTool(store memory.MemoryStore) *Tool {
 			"action": map[string]any{
 				"type":        "string",
 				"minLength":   1,
+				"maxLength":   maxMemoryActionBytes,
 				"enum":        memoryActions,
 				"description": "add, replace, remove, search, or list.",
 			},
 			"target": map[string]any{
 				"type":        "string",
 				"minLength":   1,
+				"maxLength":   maxMemoryTargetBytes,
 				"enum":        []string{string(memory.TargetMemory), string(memory.TargetUser)},
 				"description": "memory (default) for project/env notes; user for stable user preferences/details.",
 			},
 			"topic": map[string]any{
 				"type":        "string",
 				"minLength":   1,
+				"maxLength":   maxMemoryTopicBytes,
 				"description": "Memory topic. Use core sparingly; otherwise use semantic names like stack, deploy, auth, conventions. Defaults to general.",
 			},
 			"content": map[string]any{
 				"type":        "string",
 				"minLength":   1,
+				"maxLength":   maxMemoryContentBytes,
 				"description": "Entry text for add/replace. Keep compact and durable.",
 			},
 			"old_text": map[string]any{
 				"type":        "string",
 				"minLength":   1,
+				"maxLength":   maxMemoryOldTextBytes,
 				"description": "Unique substring identifying the entry to replace/remove.",
 			},
 			"query": map[string]any{
@@ -93,15 +116,7 @@ func memoryTool(store memory.MemoryStore) *Tool {
 		Description: "Save or recall durable facts across sessions. Use target=user for stable user preferences/details; target=memory topic=core only for facts needed every turn; named topics for project/domain facts. Actions: add, replace, remove, search, list. Do not save transient task progress, raw dumps, or facts easily re-read from files.",
 		Schema:      json.RawMessage(schema),
 		Execute: func(ctx context.Context, args json.RawMessage) (string, error) {
-			var p struct {
-				Action  string `json:"action"`
-				Target  string `json:"target"`
-				Topic   string `json:"topic"`
-				Content string `json:"content"`
-				OldText string `json:"old_text"`
-				Query   string `json:"query"`
-				TopK    int    `json:"top_k"`
-			}
+			var p memoryToolArgs
 			if err := json.Unmarshal(args, &p); err != nil {
 				return "", fmt.Errorf("decode args: %w", err)
 			}
@@ -118,6 +133,13 @@ func memoryTool(store memory.MemoryStore) *Tool {
 			}
 			p.Content = strings.TrimSpace(p.Content)
 			p.OldText = strings.TrimSpace(p.OldText)
+			if resp, ok := validateMemoryToolInputLengths(p); ok {
+				out, jerr := json.Marshal(resp)
+				if jerr != nil {
+					return "", jerr
+				}
+				return string(out), nil
+			}
 			target := memory.MemoryTarget(p.Target)
 
 			var resp memory.MemoryResponse
@@ -175,4 +197,37 @@ func memoryTool(store memory.MemoryStore) *Tool {
 			return string(out), nil
 		},
 	}
+}
+
+func validateMemoryToolInputLengths(p memoryToolArgs) (memory.MemoryResponse, bool) {
+	target := memory.TargetMemory
+	if p.Target == string(memory.TargetUser) {
+		target = memory.TargetUser
+	}
+	check := func(name, value string, max int) (memory.MemoryResponse, bool) {
+		if len(value) <= max {
+			return memory.MemoryResponse{}, false
+		}
+		return memory.MemoryResponse{
+			Target: target,
+			Message: fmt.Sprintf("%s must be at most %d bytes. Next: retry with a compact %s; do not pass raw dumps or oversized identifiers to memory.",
+				name, max, name),
+		}, true
+	}
+	if resp, ok := check("action", p.Action, maxMemoryActionBytes); ok {
+		return resp, true
+	}
+	if resp, ok := check("target", p.Target, maxMemoryTargetBytes); ok {
+		return resp, true
+	}
+	if resp, ok := check("topic", p.Topic, maxMemoryTopicBytes); ok {
+		return resp, true
+	}
+	if resp, ok := check("content", p.Content, maxMemoryContentBytes); ok {
+		return resp, true
+	}
+	if resp, ok := check("old_text", p.OldText, maxMemoryOldTextBytes); ok {
+		return resp, true
+	}
+	return memory.MemoryResponse{}, false
 }
