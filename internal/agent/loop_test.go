@@ -3,6 +3,7 @@ package agent
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
@@ -34,6 +35,19 @@ func newTestStore(t *testing.T) *memory.FileMemoryStore {
 	s := memory.NewFileMemoryStore(dir)
 	s.UserPath = filepath.Join(dir, "USER.md")
 	return s
+}
+
+func TestDefaultSystemPromptReflectsRuntimeBudgets(t *testing.T) {
+	for _, want := range []string{
+		fmt.Sprintf("~%d tool calls", DefaultMaxTurnSteps),
+		fmt.Sprintf("After %d tool calls", DefaultMaxTurnSteps/2),
+		fmt.Sprintf("past %d calls", DefaultMaxTurnSteps*4/5),
+		fmt.Sprintf("~%dKB", MaxToolResultBytesInContext/1024),
+	} {
+		if !strings.Contains(DefaultSystemPrompt, want) {
+			t.Fatalf("DefaultSystemPrompt missing %q:\n%s", want, DefaultSystemPrompt)
+		}
+	}
 }
 
 func TestEnsureSystemPrompt_EmptyConv_NoMemory(t *testing.T) {
