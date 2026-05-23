@@ -749,12 +749,14 @@ func setupLoop(c commonFlags) (*loopBundle, int) {
 			Memory:           memStore,
 			SessionsDir:      convDir,
 			SessionID:        sid,
+			PlanPath:         filepath.Join(convDir, sid+".plan.json"),
 			SkillRegistry:    skillReg,
 			SkillDir:         skillDir,
 			SkillInstallConfirmer: func(proposalID string) bool {
 				return agent.UserConfirmedRuntimeSkillProposal(conv, proposalID)
 			},
 		})
+		systemPrompt = agent.WithPlanSystemGuidance(systemPrompt)
 	}
 
 	mcpClients, err := startMCP(c.mcpConfigPath, tools, log)

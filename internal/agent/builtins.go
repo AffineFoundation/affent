@@ -56,6 +56,9 @@ type BuiltinDeps struct {
 	// SessionID is the current session's id; session_search excludes
 	// it so the agent doesn't match its own in-progress turns.
 	SessionID string
+	// PlanPath is the JSON file used by the `plan` tool for the
+	// current session's task state. Empty disables the tool.
+	PlanPath string
 	// Shell is the command prefix the shell tool wraps the user's
 	// command in. Default is `["sh", "-c"]` — POSIX-portable across
 	// alpine / busybox / debian / centos containers. Gateways with a
@@ -124,6 +127,9 @@ func RegisterBuiltins(r *Registry, deps BuiltinDeps) {
 	}
 	if deps.SessionsDir != "" {
 		r.Add(sessionSearchTool(deps.SessionsDir, deps.SessionID))
+	}
+	if deps.PlanPath != "" {
+		r.Add(planTool(deps.PlanPath))
 	}
 }
 

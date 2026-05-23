@@ -203,6 +203,7 @@ func defaultBuildRuntime(workspaceDir string, exec executor.Executor, conv *agen
 	agent.RegisterBuiltins(reg, agent.BuiltinDeps{
 		Executor:         exec,
 		HostWorkspaceDir: workspaceDir,
+		PlanPath:         filepath.Join(workspaceDir, ".affent", "plan.json"),
 		SkillRegistry:    skillReg,
 		SkillDir:         skillDir,
 		SkillInstallConfirmer: func(proposalID string) bool {

@@ -348,6 +348,7 @@ func (p *SessionPool) buildSession(id string) (*Session, error) {
 			Executor:         localExec,
 			HostWorkspaceDir: workspace,
 			Memory:           memStore,
+			PlanPath:         filepath.Join(sessionDir, "plan.json"),
 			SkillRegistry:    skillReg,
 			SkillDir:         skillDir,
 			SkillInstallConfirmer: func(proposalID string) bool {
@@ -520,6 +521,9 @@ func (p *SessionPool) buildSession(id string) (*Session, error) {
 		if _, ok := reg.Get(agent.FocusedTaskToolName); ok {
 			systemPrompt = agent.WithFocusedTaskSystemGuidance(systemPrompt)
 		}
+	}
+	if _, ok := reg.Get(agent.PlanToolName); ok {
+		systemPrompt = agent.WithPlanSystemGuidance(systemPrompt)
 	}
 	if p.cfg.EnableBuiltins {
 		// affentserve's per-session workspace is a freshly-allocated

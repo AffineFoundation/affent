@@ -584,6 +584,7 @@ func TestBuiltinToolSchemasRejectUnknownArguments(t *testing.T) {
 		{name: "write_file", tool: writeFileTool(BuiltinDeps{HostWorkspaceDir: t.TempDir()})},
 		{name: "edit_file", tool: editFileTool(BuiltinDeps{HostWorkspaceDir: t.TempDir()})},
 		{name: "list_files", tool: listFilesTool(BuiltinDeps{HostWorkspaceDir: t.TempDir()})},
+		{name: "plan", tool: planTool(filepath.Join(t.TempDir(), "plan.json"))},
 	} {
 		t.Run(c.name, func(t *testing.T) {
 			var schema struct {
@@ -617,6 +618,7 @@ func TestBuiltinToolsRejectUnknownArgumentsAtRuntime(t *testing.T) {
 		{name: "write_file", tool: writeFileTool(BuiltinDeps{HostWorkspaceDir: tmp}), args: json.RawMessage(`{"path":"out.txt","content":"x","mode":"0644"}`)},
 		{name: "edit_file", tool: editFileTool(BuiltinDeps{HostWorkspaceDir: tmp}), args: json.RawMessage(`{"path":"note.txt","old":"hello","new":"hi","dry_run":true}`)},
 		{name: "list_files", tool: listFilesTool(BuiltinDeps{HostWorkspaceDir: tmp}), args: json.RawMessage(`{"path":".","recursive":true}`)},
+		{name: "plan", tool: planTool(filepath.Join(tmp, "plan.json")), args: json.RawMessage(`{"action":"view","session_id":"x"}`)},
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
