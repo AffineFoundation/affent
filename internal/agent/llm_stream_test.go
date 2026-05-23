@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"math"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -258,6 +259,58 @@ func TestRequestBody_SamplingForwarding(t *testing.T) {
 			}
 		}
 	})
+}
+
+func TestSamplingDefaultsValidate(t *testing.T) {
+	tempZero := 0.0
+	tempMax := 2.0
+	topZero := 0.0
+	topMax := 1.0
+	maxTokens := 1
+	if err := (SamplingDefaults{
+		Temperature: &tempZero,
+		TopP:        &topZero,
+		MaxTokens:   &maxTokens,
+	}).Validate(); err != nil {
+		t.Fatalf("valid lower bounds rejected: %v", err)
+	}
+	if err := (SamplingDefaults{
+		Temperature: &tempMax,
+		TopP:        &topMax,
+		MaxTokens:   &maxTokens,
+	}).Validate(); err != nil {
+		t.Fatalf("valid upper bounds rejected: %v", err)
+	}
+	if err := (SamplingDefaults{}).Validate(); err != nil {
+		t.Fatalf("nil sampling should be valid: %v", err)
+	}
+
+	tempNaN := math.NaN()
+	tempInf := math.Inf(1)
+	tempHigh := 2.1
+	topInf := math.Inf(-1)
+	topHigh := 1.1
+	zeroTokens := 0
+	cases := []struct {
+		name string
+		in   SamplingDefaults
+		want string
+	}{
+		{name: "temperature NaN", in: SamplingDefaults{Temperature: &tempNaN}, want: "temperature must be between 0 and 2"},
+		{name: "temperature inf", in: SamplingDefaults{Temperature: &tempInf}, want: "temperature must be between 0 and 2"},
+		{name: "temperature high", in: SamplingDefaults{Temperature: &tempHigh}, want: "temperature must be between 0 and 2"},
+		{name: "top_p inf", in: SamplingDefaults{TopP: &topInf}, want: "top_p must be between 0 and 1"},
+		{name: "top_p high", in: SamplingDefaults{TopP: &topHigh}, want: "top_p must be between 0 and 1"},
+		{name: "max_tokens zero", in: SamplingDefaults{MaxTokens: &zeroTokens}, want: "max_tokens must be a positive integer"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			err := tc.in.Validate()
+			if err == nil || !strings.Contains(err.Error(), tc.want) {
+				t.Fatalf("Validate error = %v, want contains %q", err, tc.want)
+			}
+		})
+	}
 }
 
 func TestSanitizeToolCallArgs_ReplacesMalformedWithEmptyObject(t *testing.T) {
