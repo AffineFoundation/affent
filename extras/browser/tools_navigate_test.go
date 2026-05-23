@@ -66,3 +66,18 @@ func TestWaitToolRejectsBlankRequiredTextAndPublishesMinLength(t *testing.T) {
 		t.Fatalf("blank text value error = %v, want value is required", err)
 	}
 }
+
+func TestScrollToolRejectsBlankDirectionBeforePageCheck(t *testing.T) {
+	tool := ScrollTool(&Session{})
+	if !strings.Contains(string(tool.Schema), `"minLength": 1`) {
+		t.Fatalf("schema should publish direction minLength: %s", tool.Schema)
+	}
+	_, err := tool.Execute(context.Background(), json.RawMessage(`{"direction":"   "}`))
+	if err == nil || !strings.Contains(err.Error(), "'direction' is required") {
+		t.Fatalf("blank direction error = %v, want direction is required", err)
+	}
+	_, err = tool.Execute(context.Background(), json.RawMessage(`{"direction":"sideways"}`))
+	if err == nil || !strings.Contains(err.Error(), `unknown direction "sideways"`) {
+		t.Fatalf("unknown direction error = %v, want unknown direction", err)
+	}
+}

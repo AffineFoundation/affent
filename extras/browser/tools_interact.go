@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"strings"
 	"time"
 
 	agent "github.com/affinefoundation/affent/internal/agent"
@@ -187,6 +188,7 @@ func ScrollTool(s *Session) *agent.Tool {
         "properties": {
             "direction": {
                 "type": "string",
+                "minLength": 1,
                 "enum": ["up", "down", "page_up", "page_down", "top", "bottom"],
                 "description": "Scroll direction."
             },
@@ -208,9 +210,7 @@ func ScrollTool(s *Session) *agent.Tool {
 			if err := json.Unmarshal(raw, &args); err != nil {
 				return "", fmt.Errorf("decode args: %w", err)
 			}
-			if s.page == nil {
-				return "", ErrNoPage
-			}
+			args.Direction = strings.TrimSpace(args.Direction)
 			amount := args.Amount
 			if amount <= 0 {
 				amount = 600
@@ -229,8 +229,13 @@ func ScrollTool(s *Session) *agent.Tool {
 				js = "() => window.scrollTo(0, 0)"
 			case "bottom":
 				js = "() => window.scrollTo(0, document.body.scrollHeight)"
+			case "":
+				return "", errors.New("'direction' is required")
 			default:
 				return "", fmt.Errorf("unknown direction %q", args.Direction)
+			}
+			if s.page == nil {
+				return "", ErrNoPage
 			}
 			page := s.withContext(ctx)
 			if _, err := page.Eval(js); err != nil {

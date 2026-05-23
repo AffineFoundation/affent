@@ -24,6 +24,7 @@ import (
 // regular write_file tool already enforces via safeWorkspacePath;
 // screenshot save_path was the inconsistency.
 func resolveSavePath(workspaceDir, savePath string) (string, error) {
+	savePath = strings.TrimSpace(savePath)
 	if workspaceDir == "" {
 		return savePath, nil
 	}
@@ -123,6 +124,7 @@ func ScreenshotTool(s *Session) *agent.Tool {
 			if len(raw) > 0 {
 				_ = json.Unmarshal(raw, &args)
 			}
+			args.SavePath = strings.TrimSpace(args.SavePath)
 			if s.page == nil {
 				return "", ErrNoPage
 			}

@@ -21,12 +21,14 @@ func TestResolveSavePath_SandboxesScreenshotWrites(t *testing.T) {
 		wantErr bool
 	}{
 		{"relative inside ws", ws, "shot.png", false},
+		{"relative trims surrounding spaces", ws, "  shot.png  ", false},
 		{"nested relative inside ws", ws, "captures/page1.png", false},
 		{"absolute inside ws", ws, filepath.Join(ws, "shot.png"), false},
 		{"absolute outside ws", ws, "/etc/cron.d/evil.png", true},
 		{"relative-with-traversal escape", ws, "../../../etc/passwd.png", true},
 		{"empty workspace disables enforcement", "", "/anywhere/shot.png", false},
 		{"empty workspace, relative pass-through", "", "shot.png", false},
+		{"empty workspace, blank path normalizes empty", "", "   ", false},
 		// Filenames that start with ".." literally — must NOT be treated
 		// as a traversal escape. Pre-fix the HasPrefix(rel, "..") check
 		// rejected "..backup.png" because it shares the prefix with the
@@ -52,8 +54,8 @@ func TestResolveSavePath_SandboxesScreenshotWrites(t *testing.T) {
 			if c.ws != "" && !strings.HasPrefix(got, c.ws) {
 				t.Errorf("resolved %q to %q, should be inside ws %q", c.in, got, c.ws)
 			}
-			if c.ws == "" && got != c.in {
-				t.Errorf("empty ws should pass through %q, got %q", c.in, got)
+			if c.ws == "" && got != strings.TrimSpace(c.in) {
+				t.Errorf("empty ws should pass through trimmed %q, got %q", c.in, got)
 			}
 		})
 	}
