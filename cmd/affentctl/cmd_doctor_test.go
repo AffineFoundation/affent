@@ -403,7 +403,7 @@ func TestDoctorCmdChecksSystemPromptTraceAndMCPConfig(t *testing.T) {
 		t.Fatal(err)
 	}
 	server := mcpDoctorHelperServer(t, "maps", []map[string]any{
-		{"name": "poi_search", "description": "search places", "inputSchema": map[string]any{"type": "object", "properties": map[string]any{}}},
+		{"name": "poi_search", "description": strings.Repeat("search places ", 300), "inputSchema": map[string]any{"type": "object", "properties": map[string]any{}}},
 		{"name": "debug", "description": "debug helper", "inputSchema": map[string]any{"type": "object", "properties": map[string]any{}}},
 	})
 	server["allow_tools"] = []string{"poi_search"}
@@ -428,7 +428,12 @@ func TestDoctorCmdChecksSystemPromptTraceAndMCPConfig(t *testing.T) {
 		filepath.Join(dir, "traces", "run.jsonl"),
 		"ok mcp:",
 		"1 server(s) raw=2 filtered=1 advertised=1",
-		"maps namespace=true raw=2 filtered=1 advertised=[maps_poi_search]",
+		"schema=",
+		"description=",
+		"description_truncated=1",
+		"maps namespace=true raw=2 filtered=1",
+		"advertised=[maps_poi_search]",
+		"description_warnings=[maps_poi_search]",
 		"rejected=[debug:not in allow_tools]",
 	} {
 		if !strings.Contains(got, want) {

@@ -301,38 +301,60 @@ func doctorMCPConfig(path string) (string, error) {
 
 func formatMCPGovernanceSummary(reports []mcp.ToolGovernanceReport) string {
 	totalRaw, totalFiltered, totalAccepted := 0, 0, 0
+	totalSchemaBytes, totalDescriptionBytes, totalDescriptionTruncated := 0, 0, 0
 	parts := make([]string, 0, len(reports))
 	for _, r := range reports {
 		totalRaw += r.RawToolCount
 		totalFiltered += r.FilteredToolCount
 		totalAccepted += len(r.AcceptedTools)
+		serverSchemaBytes, serverDescriptionBytes, serverDescriptionTruncated := 0, 0, 0
 		accepted := make([]string, 0, len(r.AcceptedTools))
+		descriptionWarnings := make([]string, 0)
 		for _, tool := range r.AcceptedTools {
 			accepted = append(accepted, tool.AdvertisedName)
+			serverSchemaBytes += tool.InputSchemaBytes
+			serverDescriptionBytes += tool.DescriptionBytes
+			if tool.DescriptionTruncated {
+				serverDescriptionTruncated++
+				descriptionWarnings = append(descriptionWarnings, tool.AdvertisedName)
+			}
 		}
+		totalSchemaBytes += serverSchemaBytes
+		totalDescriptionBytes += serverDescriptionBytes
+		totalDescriptionTruncated += serverDescriptionTruncated
 		sort.Strings(accepted)
+		sort.Strings(descriptionWarnings)
 		rejected := make([]string, 0, len(r.RejectedTools))
 		for _, tool := range r.RejectedTools {
 			rejected = append(rejected, tool.RawName+":"+tool.Reason)
 		}
 		sort.Strings(rejected)
-		part := fmt.Sprintf("%s namespace=%t raw=%d filtered=%d advertised=%s",
+		part := fmt.Sprintf("%s namespace=%t raw=%d filtered=%d schema=%s description=%s description_truncated=%d advertised=%s",
 			r.ServerName,
 			r.NamespaceEnabled,
 			r.RawToolCount,
 			r.FilteredToolCount,
+			formatBytes(serverSchemaBytes),
+			formatBytes(serverDescriptionBytes),
+			serverDescriptionTruncated,
 			formatDoctorList(accepted),
 		)
+		if len(descriptionWarnings) > 0 {
+			part += " description_warnings=" + formatDoctorList(descriptionWarnings)
+		}
 		if len(rejected) > 0 {
 			part += " rejected=" + formatDoctorList(rejected)
 		}
 		parts = append(parts, part)
 	}
-	return fmt.Sprintf("%d server(s) raw=%d filtered=%d advertised=%d; %s",
+	return fmt.Sprintf("%d server(s) raw=%d filtered=%d advertised=%d schema=%s description=%s description_truncated=%d; %s",
 		len(reports),
 		totalRaw,
 		totalFiltered,
 		totalAccepted,
+		formatBytes(totalSchemaBytes),
+		formatBytes(totalDescriptionBytes),
+		totalDescriptionTruncated,
 		strings.Join(parts, "; "),
 	)
 }

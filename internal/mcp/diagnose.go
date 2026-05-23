@@ -21,8 +21,11 @@ type ToolGovernanceReport struct {
 }
 
 type GovernedTool struct {
-	RawName        string
-	AdvertisedName string
+	RawName              string
+	AdvertisedName       string
+	InputSchemaBytes     int
+	DescriptionBytes     int
+	DescriptionTruncated bool
 }
 
 type RejectedTool struct {
@@ -93,12 +96,21 @@ func DiagnoseServerTools(ctx context.Context, spec ServerSpec, owners map[string
 		if prior, ok := owners[advertisedName]; ok {
 			return report, fmt.Errorf("mcp tool name collision: %q registered by both %q and %q", advertisedName, prior, spec.Name)
 		}
-		if _, err := normalizedInputSchema(spec.Name, rawName, t.InputSchema); err != nil {
+		schema, err := normalizedInputSchema(spec.Name, rawName, t.InputSchema)
+		if err != nil {
 			return report, err
 		}
+		rawDesc := strings.TrimSpace(t.Description)
+		desc := normalizeToolDescription(t.Description)
+		if desc == "" {
+			desc = fmt.Sprintf("MCP tool %s/%s", spec.Name, rawName)
+		}
 		report.AcceptedTools = append(report.AcceptedTools, GovernedTool{
-			RawName:        rawName,
-			AdvertisedName: advertisedName,
+			RawName:              rawName,
+			AdvertisedName:       advertisedName,
+			InputSchemaBytes:     len(schema),
+			DescriptionBytes:     len(desc),
+			DescriptionTruncated: len(rawDesc) > maxToolDescriptionBytes,
 		})
 		if owners != nil {
 			owners[advertisedName] = spec.Name
