@@ -432,3 +432,21 @@ func TestWithActivePlanSkillProviderSkipsMissingOrInvalidPlan(t *testing.T) {
 		t.Fatalf("invalid plan should be skipped, got %q", got)
 	}
 }
+
+func TestWithActivePlanSkillProviderSkipsCompletedPlan(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "plan.json")
+	tool := planTool(path)
+	if _, err := tool.Execute(context.Background(), json.RawMessage(`{"action":"set","steps":[{"text":"inspect","status":"completed"},{"text":"ship","status":"completed"}]}`)); err != nil {
+		t.Fatalf("set plan: %v", err)
+	}
+	provider := WithActivePlanSkillProvider(path, func(string) string {
+		return "AFFENT ACTIVE SKILL: demo"
+	})
+	got := provider("new task")
+	if strings.Contains(got, "AFFENT ACTIVE PLAN") || strings.Contains(got, "inspect") {
+		t.Fatalf("completed plan should not be injected, got %q", got)
+	}
+	if got != "AFFENT ACTIVE SKILL: demo" {
+		t.Fatalf("next provider should still run, got %q", got)
+	}
+}
