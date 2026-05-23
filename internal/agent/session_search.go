@@ -32,12 +32,14 @@ func sessionSearchTool(sessionsDir, currentSessionID string) *Tool {
 				"type":        "integer",
 				"minimum":     1,
 				"maximum":     sessionsearch.MaxTopK,
+				"default":     sessionsearch.DefaultTopK,
 				"description": "Result count; default 5, max 20.",
 			},
 			"max_per_session": map[string]any{
 				"type":        "integer",
 				"minimum":     1,
 				"maximum":     sessionsearch.MaxPerSession,
+				"default":     sessionsearch.DefaultMaxPerSession,
 				"description": "Hits per session; default 3, max 5.",
 			},
 		},
@@ -60,7 +62,7 @@ func sessionSearchTool(sessionsDir, currentSessionID string) *Tool {
 			}
 			p.Query = sessionsearch.NormalizeQuery(p.Query)
 			if p.Query == "" {
-				return marshalSessionSearchResp(SessionSearchResponse{Message: "query is required"}), nil
+				return marshalSessionSearchResp(SessionSearchResponse{Message: "query is required. Next: retry with 2-6 specific keywords from the past session you want to recall."}), nil
 			}
 			p.TopK, p.MaxPerSession = sessionsearch.NormalizeLimits(p.TopK, p.MaxPerSession)
 			if sessionsDir == "" {

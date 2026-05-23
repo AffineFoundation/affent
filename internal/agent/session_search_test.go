@@ -46,6 +46,9 @@ func TestSessionSearchTool_QueryRequired(t *testing.T) {
 	if !strings.Contains(out, "query is required") {
 		t.Errorf("missing 'query is required' in %q", out)
 	}
+	if !strings.Contains(out, "Next:") {
+		t.Errorf("query-required response should include a corrective Next step: %q", out)
+	}
 }
 
 func TestSessionSearchToolSchemaPublishesQueryLimit(t *testing.T) {
@@ -54,6 +57,8 @@ func TestSessionSearchToolSchemaPublishesQueryLimit(t *testing.T) {
 		Properties map[string]struct {
 			MinLength int `json:"minLength"`
 			MaxLength int `json:"maxLength"`
+			Default   int `json:"default"`
+			Maximum   int `json:"maximum"`
 		} `json:"properties"`
 	}
 	if err := json.Unmarshal(tool.Schema, &schema); err != nil {
@@ -64,6 +69,18 @@ func TestSessionSearchToolSchemaPublishesQueryLimit(t *testing.T) {
 	}
 	if schema.Properties["query"].MaxLength != sessionsearch.MaxQueryBytes {
 		t.Fatalf("query maxLength = %d, want %d", schema.Properties["query"].MaxLength, sessionsearch.MaxQueryBytes)
+	}
+	if schema.Properties["top_k"].Default != sessionsearch.DefaultTopK {
+		t.Fatalf("top_k default = %d, want %d", schema.Properties["top_k"].Default, sessionsearch.DefaultTopK)
+	}
+	if schema.Properties["top_k"].Maximum != sessionsearch.MaxTopK {
+		t.Fatalf("top_k maximum = %d, want %d", schema.Properties["top_k"].Maximum, sessionsearch.MaxTopK)
+	}
+	if schema.Properties["max_per_session"].Default != sessionsearch.DefaultMaxPerSession {
+		t.Fatalf("max_per_session default = %d, want %d", schema.Properties["max_per_session"].Default, sessionsearch.DefaultMaxPerSession)
+	}
+	if schema.Properties["max_per_session"].Maximum != sessionsearch.MaxPerSession {
+		t.Fatalf("max_per_session maximum = %d, want %d", schema.Properties["max_per_session"].Maximum, sessionsearch.MaxPerSession)
 	}
 }
 
