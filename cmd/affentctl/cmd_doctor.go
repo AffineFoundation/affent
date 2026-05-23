@@ -1,7 +1,6 @@
 package main
 
 import (
-	"encoding/json"
 	"flag"
 	"fmt"
 	"io"
@@ -219,15 +218,15 @@ func doctorTrace(spec string) (string, string) {
 }
 
 func doctorMCPConfig(path string) (string, error) {
-	raw, err := os.ReadFile(path)
-	if err != nil {
-		return "", fmt.Errorf("read %s: %w", path, err)
-	}
 	var cfg mcpConfig
-	if err := json.Unmarshal(raw, &cfg); err != nil {
-		return "", fmt.Errorf("parse %s: %w", path, err)
+	if err := readConfigJSON(path, &cfg); err != nil {
+		return "", fmt.Errorf("load %s: %w", path, err)
 	}
-	for i, spec := range cfg.Servers {
+	for i, server := range cfg.Servers {
+		spec, err := server.serverSpec()
+		if err != nil {
+			return "", fmt.Errorf("servers[%d]: %w", i, err)
+		}
 		if err := validateMCPServerSpec(spec); err != nil {
 			return "", fmt.Errorf("servers[%d]: %w", i, err)
 		}

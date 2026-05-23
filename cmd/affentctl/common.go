@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
@@ -24,6 +25,8 @@ import (
 	"github.com/google/uuid"
 	"github.com/rs/zerolog"
 )
+
+const maxConfigInputBytes = 1024 * 1024
 
 // trimUTF8 returns s clipped to at most n bytes, snapping back to a
 // UTF-8 rune boundary so multi-byte sequences (CJK / Cyrillic /
@@ -358,15 +361,9 @@ func loadConfigFile(c *commonFlags, fs *flag.FlagSet) error {
 			return nil
 		}
 	}
-	raw, err := os.ReadFile(c.configPath)
-	if err != nil {
-		return fmt.Errorf("read config %s: %w", c.configPath, err)
-	}
 	var cfg fileConfig
-	dec := json.NewDecoder(strings.NewReader(string(raw)))
-	dec.DisallowUnknownFields()
-	if err := dec.Decode(&cfg); err != nil {
-		return fmt.Errorf("parse config %s: %w", c.configPath, err)
+	if err := readConfigJSON(c.configPath, &cfg); err != nil {
+		return fmt.Errorf("load config %s: %w", c.configPath, err)
 	}
 	// Precedence: CLI flag > env var > config file > built-in default.
 	// Env vars are presented as a first-class column in the flag table
@@ -454,6 +451,42 @@ func loadConfigFile(c *commonFlags, fs *flag.FlagSet) error {
 	setString("max-tokens", &c.maxTokens, cfg.MaxTokens)
 	setString("seed", &c.seed, cfg.Seed)
 	return nil
+}
+
+func readConfigJSON(path string, dst any) error {
+	data, err := readConfigFileLimited(path)
+	if err != nil {
+		return fmt.Errorf("read: %w", err)
+	}
+	dec := json.NewDecoder(bytes.NewReader(data))
+	dec.DisallowUnknownFields()
+	if err := dec.Decode(dst); err != nil {
+		return fmt.Errorf("parse: %w", err)
+	}
+	var extra any
+	if err := dec.Decode(&extra); err != io.EOF {
+		if err == nil {
+			return errors.New("parse: multiple JSON values")
+		}
+		return fmt.Errorf("parse: %w", err)
+	}
+	return nil
+}
+
+func readConfigFileLimited(path string) ([]byte, error) {
+	f, err := os.Open(path)
+	if err != nil {
+		return nil, err
+	}
+	defer f.Close()
+	data, err := io.ReadAll(io.LimitReader(f, maxConfigInputBytes+1))
+	if err != nil {
+		return nil, err
+	}
+	if len(data) > maxConfigInputBytes {
+		return nil, fmt.Errorf("config exceeds %d-byte limit", maxConfigInputBytes)
+	}
+	return data, nil
 }
 
 func applyEnvConfig(c *commonFlags, fs *flag.FlagSet) error {
@@ -834,30 +867,70 @@ func buildExecutor(spec, sessionID, workspace string) (executor.Executor, error)
 // "servers" array shape used by Claude Desktop / Goose configs (just
 // our flat field names).
 type mcpConfig struct {
-	Servers []mcp.ServerSpec `json:"servers"`
+	Servers []mcpConfigServer `json:"servers"`
+}
+
+type mcpConfigServer struct {
+	Name        string            `json:"name"`
+	Namespace   *bool             `json:"namespace,omitempty"`
+	Command     string            `json:"command,omitempty"`
+	Args        []string          `json:"args,omitempty"`
+	Env         []string          `json:"env,omitempty"`
+	Cwd         string            `json:"cwd,omitempty"`
+	URL         string            `json:"url,omitempty"`
+	Headers     map[string]string `json:"headers,omitempty"`
+	InitTimeout string            `json:"init_timeout,omitempty"`
+}
+
+func (s mcpConfigServer) serverSpec() (mcp.ServerSpec, error) {
+	spec := mcp.ServerSpec{
+		Name:      s.Name,
+		Namespace: s.Namespace,
+		Command:   s.Command,
+		Args:      s.Args,
+		Env:       s.Env,
+		Cwd:       s.Cwd,
+		URL:       s.URL,
+		Headers:   s.Headers,
+	}
+	if strings.TrimSpace(s.InitTimeout) != "" {
+		d, err := time.ParseDuration(s.InitTimeout)
+		if err != nil {
+			return spec, fmt.Errorf("init_timeout=%q: %w", s.InitTimeout, err)
+		}
+		if d <= 0 {
+			return spec, fmt.Errorf("init_timeout=%q must be positive", s.InitTimeout)
+		}
+		spec.InitTimeout = d
+	}
+	return spec, nil
 }
 
 func startMCP(configPath string, reg *agent.Registry, log zerolog.Logger) ([]*mcp.Client, error) {
 	if configPath == "" {
 		return nil, nil
 	}
-	raw, err := os.ReadFile(configPath)
-	if err != nil {
-		return nil, fmt.Errorf("read mcp config %s: %w", configPath, err)
-	}
 	var cfg mcpConfig
-	if err := json.Unmarshal(raw, &cfg); err != nil {
-		return nil, fmt.Errorf("parse mcp config: %w", err)
+	if err := readConfigJSON(configPath, &cfg); err != nil {
+		return nil, fmt.Errorf("load mcp config %s: %w", configPath, err)
 	}
 	if len(cfg.Servers) == 0 {
 		return nil, nil
+	}
+	specs := make([]mcp.ServerSpec, 0, len(cfg.Servers))
+	for i, server := range cfg.Servers {
+		spec, err := server.serverSpec()
+		if err != nil {
+			return nil, fmt.Errorf("parse mcp config servers[%d]: %w", i, err)
+		}
+		specs = append(specs, spec)
 	}
 	// Bound the launch + handshake total. Each Start has its own 30s
 	// initialize timeout; we wrap the loop in a slightly larger budget
 	// for sanity.
 	ctx, cancel := context.WithTimeout(context.Background(), 60*time.Second)
 	defer cancel()
-	return mcp.RegisterAll(ctx, reg, cfg.Servers, log)
+	return mcp.RegisterAll(ctx, reg, specs, log)
 }
 
 // resolveSessionID picks the session id and tells the caller whether

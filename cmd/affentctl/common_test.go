@@ -233,6 +233,60 @@ func TestApplyConfigRejectsUnknownConfigFields(t *testing.T) {
 	}
 }
 
+func TestApplyConfigRejectsOversizeConfigFile(t *testing.T) {
+	dir := t.TempDir()
+	cfgPath := filepath.Join(dir, "huge.json")
+	if err := os.WriteFile(cfgPath, []byte(strings.Repeat("x", maxConfigInputBytes+1)), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	var cf commonFlags
+	fs := flag.NewFlagSet("test", flag.ContinueOnError)
+	cf.bind(fs)
+	if err := fs.Parse([]string{"--config", cfgPath}); err != nil {
+		t.Fatal(err)
+	}
+	err := applyConfig(&cf, fs)
+	if err == nil || !strings.Contains(err.Error(), "config exceeds") {
+		t.Fatalf("error = %v, want config exceeds", err)
+	}
+}
+
+func TestApplyConfigRejectsMultipleJSONValues(t *testing.T) {
+	dir := t.TempDir()
+	cfgPath := filepath.Join(dir, "multi.json")
+	if err := os.WriteFile(cfgPath, []byte(`{"model":"one"} {"model":"two"}`), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	var cf commonFlags
+	fs := flag.NewFlagSet("test", flag.ContinueOnError)
+	cf.bind(fs)
+	if err := fs.Parse([]string{"--config", cfgPath}); err != nil {
+		t.Fatal(err)
+	}
+	err := applyConfig(&cf, fs)
+	if err == nil || !strings.Contains(err.Error(), "multiple JSON values") {
+		t.Fatalf("error = %v, want multiple JSON values", err)
+	}
+}
+
+func TestMCPConfigServerParsesInitTimeout(t *testing.T) {
+	spec, err := (mcpConfigServer{
+		Name:        "maps",
+		Command:     "sh",
+		InitTimeout: "250ms",
+	}).serverSpec()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if spec.InitTimeout != 250*time.Millisecond {
+		t.Fatalf("InitTimeout = %s, want 250ms", spec.InitTimeout)
+	}
+	_, err = (mcpConfigServer{Name: "bad", Command: "sh", InitTimeout: "0s"}).serverSpec()
+	if err == nil || !strings.Contains(err.Error(), "must be positive") {
+		t.Fatalf("zero init timeout error = %v, want positive rejection", err)
+	}
+}
+
 func TestSubagentCanBeDisabledFromConfigEnvAndCLI(t *testing.T) {
 	t.Run("config subagent false", func(t *testing.T) {
 		dir := t.TempDir()

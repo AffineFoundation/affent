@@ -386,12 +386,16 @@ tools:
     {
       "name": "AMap",
       "command": "python",
-      "args": ["amap_server.py"]
+      "args": ["amap_server.py"],
+      "init_timeout": "30s"
     }
   ]
 }
 ```
 
+MCP config files are capped at 1 MiB and reject unknown fields so typos do not
+silently produce unused configuration. `init_timeout` is optional and defaults
+to `30s`; raise it only for slow stdio servers that need extra cold-start time.
 With the default namespace behavior, a server tool such as `poi_search` is
 advertised to the model as `AMap_poi_search`. For models fine-tuned around raw
 MCP tool names, set `"namespace": false` on that server. When prefixes are
