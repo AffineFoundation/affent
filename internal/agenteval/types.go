@@ -203,6 +203,13 @@ type ToolRuntimeStats struct {
 	ForcedNoTools          int
 }
 
+type ToolTruncationStats struct {
+	ArgsTruncated       int
+	ArgsOmittedBytes    int
+	ResultsTruncated    int
+	ResultsOmittedBytes int
+}
+
 // Usage aggregates per-turn token accounting summed across every LLM
 // call in the run.
 type Usage struct {

@@ -502,10 +502,11 @@ The runner is intentionally small and scenario-driven. It is meant to turn
 observed failures from real models into repeatable regression checks before the
 same lesson becomes a prompt, skill, guard, or tool-policy change. Text output
 includes per-scenario and summary metrics for tool calls, tool errors, argument
-repairs, measured tool time, token usage, per-scenario turn end reason, and
-summary end-reason/failure-kind distribution. Use `--jsonl` when comparing
-models or storing CI artifacts; it emits one `scenario` record per run plus a
-final `summary` record with the same metrics. Passing scenario workspaces are
+repairs, measured tool time, request/result truncation counts and omitted byte
+totals, token usage, per-scenario turn end reason, and summary
+end-reason/failure-kind distribution. Use `--jsonl` when comparing models or
+storing CI artifacts; it emits one `scenario` record per run plus a final
+`summary` record with the same metrics. Passing scenario workspaces are
 removed by default to avoid filling the machine during repeated evals; failing
 workspaces are kept for debugging. Pass `--keep-workspaces` when you need every
 workspace and trace left on disk.

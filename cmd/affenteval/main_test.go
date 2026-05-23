@@ -152,6 +152,12 @@ func TestPrintBatchResultIncludesTraceMetrics(t *testing.T) {
 			ToolErrors:       2,
 			ToolDurationMS:   45,
 		},
+		ToolTruncation: agenteval.ToolTruncationStats{
+			ArgsTruncated:       1,
+			ArgsOmittedBytes:    512,
+			ResultsTruncated:    1,
+			ResultsOmittedBytes: 4096,
+		},
 		Usage: agenteval.Usage{InputTokens: 100, OutputTokens: 25},
 	})
 	got := out.String()
@@ -159,7 +165,7 @@ func TestPrintBatchResultIncludesTraceMetrics(t *testing.T) {
 		"PASS sample (1.234s)",
 		"workspace: /tmp/ws (removed)",
 		"trace: /tmp/ws/trace.jsonl",
-		"metrics: tools=3 errors=2 repaired=1 tool_ms=45 tokens=100/25 end=completed",
+		"metrics: tools=3 errors=2 repaired=1 tool_ms=45 tokens=100/25 trunc=args:1,results:1 omitted=512/4096 end=completed",
 	} {
 		if !strings.Contains(got, want) {
 			t.Fatalf("output missing %q:\n%s", want, got)
@@ -180,6 +186,10 @@ func TestBatchSummaryAggregatesRuntimeMetrics(t *testing.T) {
 			ToolErrors:       0,
 			ToolDurationMS:   10,
 		},
+		ToolTruncation: agenteval.ToolTruncationStats{
+			ArgsTruncated:    1,
+			ArgsOmittedBytes: 128,
+		},
 		Usage: agenteval.Usage{InputTokens: 20, OutputTokens: 5},
 	})
 	summary.add(agenteval.BatchResult{
@@ -196,12 +206,16 @@ func TestBatchSummaryAggregatesRuntimeMetrics(t *testing.T) {
 			ToolErrors:       1,
 			ToolDurationMS:   40,
 		},
+		ToolTruncation: agenteval.ToolTruncationStats{
+			ResultsTruncated:    2,
+			ResultsOmittedBytes: 2048,
+		},
 		Usage: agenteval.Usage{InputTokens: 70, OutputTokens: 15},
 	})
 
 	var out bytes.Buffer
 	printBatchSummary(&out, summary)
-	want := "SUMMARY scenarios=2 passed=1 failed=1 duration=350ms tools=5 errors=1 repaired=3 tool_ms=50 tokens=90/20 ends=completed:1,max_turns:1,error:0,cancelled:0,unknown:0 failure_kinds=missing_command:1,turn_end:1 removed_workspaces=1 cleanup_errors=0"
+	want := "SUMMARY scenarios=2 passed=1 failed=1 duration=350ms tools=5 errors=1 repaired=3 tool_ms=50 trunc=args:1,results:2 omitted=128/2048 tokens=90/20 ends=completed:1,max_turns:1,error:0,cancelled:0,unknown:0 failure_kinds=missing_command:1,turn_end:1 removed_workspaces=1 cleanup_errors=0"
 	if !strings.Contains(out.String(), want) {
 		t.Fatalf("summary output missing %q:\n%s", want, out.String())
 	}
@@ -223,6 +237,12 @@ func TestPrintBatchResultJSONL(t *testing.T) {
 			ToolErrors:       1,
 			ToolDurationMS:   75,
 		},
+		ToolTruncation: agenteval.ToolTruncationStats{
+			ArgsTruncated:       2,
+			ArgsOmittedBytes:    1024,
+			ResultsTruncated:    1,
+			ResultsOmittedBytes: 8192,
+		},
 		Usage: agenteval.Usage{InputTokens: 200, OutputTokens: 50},
 	})
 
@@ -231,18 +251,22 @@ func TestPrintBatchResultJSONL(t *testing.T) {
 		t.Fatalf("jsonl result did not decode: %v\n%s", err, out.String())
 	}
 	for key, want := range map[string]any{
-		"type":              "scenario",
-		"scenario":          "sample",
-		"ok":                true,
-		"duration_ms":       float64(1500),
-		"turn_end_reason":   "completed",
-		"tool_calls":        float64(4),
-		"tool_errors":       float64(1),
-		"tool_repaired":     float64(2),
-		"tool_duration_ms":  float64(75),
-		"input_tokens":      float64(200),
-		"output_tokens":     float64(50),
-		"workspace_removed": true,
+		"type":                       "scenario",
+		"scenario":                   "sample",
+		"ok":                         true,
+		"duration_ms":                float64(1500),
+		"turn_end_reason":            "completed",
+		"tool_calls":                 float64(4),
+		"tool_errors":                float64(1),
+		"tool_repaired":              float64(2),
+		"tool_duration_ms":           float64(75),
+		"tool_args_truncated":        float64(2),
+		"tool_args_omitted_bytes":    float64(1024),
+		"tool_results_truncated":     float64(1),
+		"tool_results_omitted_bytes": float64(8192),
+		"input_tokens":               float64(200),
+		"output_tokens":              float64(50),
+		"workspace_removed":          true,
 	} {
 		if got[key] != want {
 			t.Fatalf("%s = %v, want %v\njson=%s", key, got[key], want, out.String())
@@ -256,23 +280,27 @@ func TestPrintBatchResultJSONL(t *testing.T) {
 func TestPrintBatchSummaryJSONL(t *testing.T) {
 	var out bytes.Buffer
 	printBatchSummaryJSONL(&out, batchSummary{
-		Total:             2,
-		Passed:            1,
-		Failed:            1,
-		Duration:          2500 * time.Millisecond,
-		ToolCalls:         5,
-		ToolErrors:        1,
-		ToolRepaired:      3,
-		ToolDurationMS:    120,
-		InputTokens:       90,
-		OutputTokens:      20,
-		EndCompleted:      1,
-		EndMaxTurns:       1,
-		EndErrors:         0,
-		EndCancelled:      0,
-		EndUnknown:        0,
-		FailureKinds:      map[string]int{"missing_command": 1, "turn_end": 1},
-		RemovedWorkspaces: 1,
+		Total:                   2,
+		Passed:                  1,
+		Failed:                  1,
+		Duration:                2500 * time.Millisecond,
+		ToolCalls:               5,
+		ToolErrors:              1,
+		ToolRepaired:            3,
+		ToolDurationMS:          120,
+		ToolArgsTruncated:       1,
+		ToolArgsOmittedBytes:    256,
+		ToolResultsTruncated:    2,
+		ToolResultsOmittedBytes: 4096,
+		InputTokens:             90,
+		OutputTokens:            20,
+		EndCompleted:            1,
+		EndMaxTurns:             1,
+		EndErrors:               0,
+		EndCancelled:            0,
+		EndUnknown:              0,
+		FailureKinds:            map[string]int{"missing_command": 1, "turn_end": 1},
+		RemovedWorkspaces:       1,
 	})
 
 	var got map[string]any
@@ -280,24 +308,28 @@ func TestPrintBatchSummaryJSONL(t *testing.T) {
 		t.Fatalf("jsonl summary did not decode: %v\n%s", err, out.String())
 	}
 	for key, want := range map[string]any{
-		"type":               "summary",
-		"scenarios":          float64(2),
-		"passed":             float64(1),
-		"failed":             float64(1),
-		"duration_ms":        float64(2500),
-		"tool_calls":         float64(5),
-		"tool_errors":        float64(1),
-		"tool_repaired":      float64(3),
-		"tool_duration_ms":   float64(120),
-		"input_tokens":       float64(90),
-		"output_tokens":      float64(20),
-		"end_completed":      float64(1),
-		"end_max_turns":      float64(1),
-		"end_errors":         float64(0),
-		"end_cancelled":      float64(0),
-		"end_unknown":        float64(0),
-		"removed_workspaces": float64(1),
-		"cleanup_errors":     float64(0),
+		"type":                       "summary",
+		"scenarios":                  float64(2),
+		"passed":                     float64(1),
+		"failed":                     float64(1),
+		"duration_ms":                float64(2500),
+		"tool_calls":                 float64(5),
+		"tool_errors":                float64(1),
+		"tool_repaired":              float64(3),
+		"tool_duration_ms":           float64(120),
+		"tool_args_truncated":        float64(1),
+		"tool_args_omitted_bytes":    float64(256),
+		"tool_results_truncated":     float64(2),
+		"tool_results_omitted_bytes": float64(4096),
+		"input_tokens":               float64(90),
+		"output_tokens":              float64(20),
+		"end_completed":              float64(1),
+		"end_max_turns":              float64(1),
+		"end_errors":                 float64(0),
+		"end_cancelled":              float64(0),
+		"end_unknown":                float64(0),
+		"removed_workspaces":         float64(1),
+		"cleanup_errors":             float64(0),
 	} {
 		if got[key] != want {
 			t.Fatalf("%s = %v, want %v\njson=%s", key, got[key], want, out.String())

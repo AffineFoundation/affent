@@ -92,6 +92,9 @@ func TestParseTraceFileReadsToolRequestsAndFinalText(t *testing.T) {
 	if !tc.ResultTruncated || tc.ResultBytes != 300000 || tc.ResultOmittedBytes != 4096 || tc.ResultCapBytes != 262144 {
 		t.Fatalf("tool result truncation metadata not parsed: %+v", tc)
 	}
+	if stats := SummarizeToolTruncation(trace); stats.ArgsTruncated != 1 || stats.ArgsOmittedBytes != 512 || stats.ResultsTruncated != 1 || stats.ResultsOmittedBytes != 4096 {
+		t.Fatalf("ToolTruncationStats = %+v", stats)
+	}
 	if guarded := trace.Tools[1]; guarded.CallID != "guarded" || !guarded.IsErr || guarded.ExitCode != 1 {
 		t.Fatalf("unmatched error tool result not recorded: %+v", guarded)
 	}

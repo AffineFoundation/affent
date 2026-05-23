@@ -65,6 +65,7 @@ type BatchResult struct {
 	TurnEndReason    string
 	ToolCalls        int
 	ToolStats        ToolRuntimeStats
+	ToolTruncation   ToolTruncationStats
 	Usage            Usage
 	WorkspaceRemoved bool
 	CleanupError     string
@@ -230,6 +231,7 @@ func (r BatchRunner) Run(ctx context.Context, scenario BatchScenario) BatchResul
 		res.TurnEndReason = trace.TurnEndReason
 		res.ToolCalls = len(trace.Tools)
 		res.ToolStats = trace.ToolStats
+		res.ToolTruncation = SummarizeToolTruncation(trace)
 		res.Usage = trace.Usage
 		res.Failures = append(res.Failures, CheckBatchTrace(trace, scenario)...)
 	}
@@ -490,6 +492,21 @@ func sortedStringMapKeys[V any](m map[string]V) []string {
 	}
 	sort.Strings(keys)
 	return keys
+}
+
+func SummarizeToolTruncation(trace Trace) ToolTruncationStats {
+	var stats ToolTruncationStats
+	for _, tool := range trace.Tools {
+		if tool.ArgsTruncated {
+			stats.ArgsTruncated++
+		}
+		stats.ArgsOmittedBytes += tool.ArgsOmittedBytes
+		if tool.ResultTruncated {
+			stats.ResultsTruncated++
+		}
+		stats.ResultsOmittedBytes += tool.ResultOmittedBytes
+	}
+	return stats
 }
 
 // CheckBatchTrace runs BatchScenarioChecks against the trace and

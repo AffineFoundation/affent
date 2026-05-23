@@ -126,24 +126,28 @@ success and trace-level process quality.`)
 }
 
 type batchSummary struct {
-	Total             int
-	Passed            int
-	Failed            int
-	Duration          time.Duration
-	ToolCalls         int
-	ToolErrors        int
-	ToolRepaired      int
-	ToolDurationMS    int64
-	InputTokens       int
-	OutputTokens      int
-	EndCompleted      int
-	EndMaxTurns       int
-	EndErrors         int
-	EndCancelled      int
-	EndUnknown        int
-	FailureKinds      map[string]int
-	RemovedWorkspaces int
-	CleanupErrors     int
+	Total                   int
+	Passed                  int
+	Failed                  int
+	Duration                time.Duration
+	ToolCalls               int
+	ToolErrors              int
+	ToolRepaired            int
+	ToolDurationMS          int64
+	ToolArgsTruncated       int
+	ToolArgsOmittedBytes    int
+	ToolResultsTruncated    int
+	ToolResultsOmittedBytes int
+	InputTokens             int
+	OutputTokens            int
+	EndCompleted            int
+	EndMaxTurns             int
+	EndErrors               int
+	EndCancelled            int
+	EndUnknown              int
+	FailureKinds            map[string]int
+	RemovedWorkspaces       int
+	CleanupErrors           int
 }
 
 func (s *batchSummary) add(res agenteval.BatchResult) {
@@ -158,6 +162,10 @@ func (s *batchSummary) add(res agenteval.BatchResult) {
 	s.ToolErrors += res.ToolStats.ToolErrors
 	s.ToolRepaired += res.ToolStats.ToolArgsRepaired
 	s.ToolDurationMS += res.ToolStats.ToolDurationMS
+	s.ToolArgsTruncated += res.ToolTruncation.ArgsTruncated
+	s.ToolArgsOmittedBytes += res.ToolTruncation.ArgsOmittedBytes
+	s.ToolResultsTruncated += res.ToolTruncation.ResultsTruncated
+	s.ToolResultsOmittedBytes += res.ToolTruncation.ResultsOmittedBytes
 	s.InputTokens += res.Usage.InputTokens
 	s.OutputTokens += res.Usage.OutputTokens
 	switch res.TurnEndReason {
@@ -187,7 +195,7 @@ func (s *batchSummary) add(res agenteval.BatchResult) {
 }
 
 func printBatchSummary(w io.Writer, s batchSummary) {
-	fmt.Fprintf(w, "SUMMARY scenarios=%d passed=%d failed=%d duration=%s tools=%d errors=%d repaired=%d tool_ms=%d tokens=%d/%d ends=completed:%d,max_turns:%d,error:%d,cancelled:%d,unknown:%d failure_kinds=%s removed_workspaces=%d cleanup_errors=%d\n",
+	fmt.Fprintf(w, "SUMMARY scenarios=%d passed=%d failed=%d duration=%s tools=%d errors=%d repaired=%d tool_ms=%d trunc=args:%d,results:%d omitted=%d/%d tokens=%d/%d ends=completed:%d,max_turns:%d,error:%d,cancelled:%d,unknown:%d failure_kinds=%s removed_workspaces=%d cleanup_errors=%d\n",
 		s.Total,
 		s.Passed,
 		s.Failed,
@@ -196,6 +204,10 @@ func printBatchSummary(w io.Writer, s batchSummary) {
 		s.ToolErrors,
 		s.ToolRepaired,
 		s.ToolDurationMS,
+		s.ToolArgsTruncated,
+		s.ToolResultsTruncated,
+		s.ToolArgsOmittedBytes,
+		s.ToolResultsOmittedBytes,
 		s.InputTokens,
 		s.OutputTokens,
 		s.EndCompleted,
@@ -226,88 +238,104 @@ func formatFailureKinds(counts map[string]int) string {
 }
 
 type batchResultRecord struct {
-	Type             string   `json:"type"`
-	Scenario         string   `json:"scenario"`
-	OK               bool     `json:"ok"`
-	DurationMS       int64    `json:"duration_ms"`
-	Workspace        string   `json:"workspace"`
-	TracePath        string   `json:"trace_path"`
-	TurnEndReason    string   `json:"turn_end_reason,omitempty"`
-	ToolCalls        int      `json:"tool_calls"`
-	ToolErrors       int      `json:"tool_errors"`
-	ToolRepaired     int      `json:"tool_repaired"`
-	ToolDurationMS   int64    `json:"tool_duration_ms"`
-	InputTokens      int      `json:"input_tokens"`
-	OutputTokens     int      `json:"output_tokens"`
-	WorkspaceRemoved bool     `json:"workspace_removed,omitempty"`
-	CleanupError     string   `json:"cleanup_error,omitempty"`
-	Failures         []string `json:"failures,omitempty"`
+	Type                    string   `json:"type"`
+	Scenario                string   `json:"scenario"`
+	OK                      bool     `json:"ok"`
+	DurationMS              int64    `json:"duration_ms"`
+	Workspace               string   `json:"workspace"`
+	TracePath               string   `json:"trace_path"`
+	TurnEndReason           string   `json:"turn_end_reason,omitempty"`
+	ToolCalls               int      `json:"tool_calls"`
+	ToolErrors              int      `json:"tool_errors"`
+	ToolRepaired            int      `json:"tool_repaired"`
+	ToolDurationMS          int64    `json:"tool_duration_ms"`
+	ToolArgsTruncated       int      `json:"tool_args_truncated"`
+	ToolArgsOmittedBytes    int      `json:"tool_args_omitted_bytes"`
+	ToolResultsTruncated    int      `json:"tool_results_truncated"`
+	ToolResultsOmittedBytes int      `json:"tool_results_omitted_bytes"`
+	InputTokens             int      `json:"input_tokens"`
+	OutputTokens            int      `json:"output_tokens"`
+	WorkspaceRemoved        bool     `json:"workspace_removed,omitempty"`
+	CleanupError            string   `json:"cleanup_error,omitempty"`
+	Failures                []string `json:"failures,omitempty"`
 }
 
 type batchSummaryRecord struct {
-	Type              string         `json:"type"`
-	Scenarios         int            `json:"scenarios"`
-	Passed            int            `json:"passed"`
-	Failed            int            `json:"failed"`
-	DurationMS        int64          `json:"duration_ms"`
-	ToolCalls         int            `json:"tool_calls"`
-	ToolErrors        int            `json:"tool_errors"`
-	ToolRepaired      int            `json:"tool_repaired"`
-	ToolDurationMS    int64          `json:"tool_duration_ms"`
-	InputTokens       int            `json:"input_tokens"`
-	OutputTokens      int            `json:"output_tokens"`
-	EndCompleted      int            `json:"end_completed"`
-	EndMaxTurns       int            `json:"end_max_turns"`
-	EndErrors         int            `json:"end_errors"`
-	EndCancelled      int            `json:"end_cancelled"`
-	EndUnknown        int            `json:"end_unknown"`
-	FailureKinds      map[string]int `json:"failure_kinds,omitempty"`
-	RemovedWorkspaces int            `json:"removed_workspaces"`
-	CleanupErrors     int            `json:"cleanup_errors"`
+	Type                    string         `json:"type"`
+	Scenarios               int            `json:"scenarios"`
+	Passed                  int            `json:"passed"`
+	Failed                  int            `json:"failed"`
+	DurationMS              int64          `json:"duration_ms"`
+	ToolCalls               int            `json:"tool_calls"`
+	ToolErrors              int            `json:"tool_errors"`
+	ToolRepaired            int            `json:"tool_repaired"`
+	ToolDurationMS          int64          `json:"tool_duration_ms"`
+	ToolArgsTruncated       int            `json:"tool_args_truncated"`
+	ToolArgsOmittedBytes    int            `json:"tool_args_omitted_bytes"`
+	ToolResultsTruncated    int            `json:"tool_results_truncated"`
+	ToolResultsOmittedBytes int            `json:"tool_results_omitted_bytes"`
+	InputTokens             int            `json:"input_tokens"`
+	OutputTokens            int            `json:"output_tokens"`
+	EndCompleted            int            `json:"end_completed"`
+	EndMaxTurns             int            `json:"end_max_turns"`
+	EndErrors               int            `json:"end_errors"`
+	EndCancelled            int            `json:"end_cancelled"`
+	EndUnknown              int            `json:"end_unknown"`
+	FailureKinds            map[string]int `json:"failure_kinds,omitempty"`
+	RemovedWorkspaces       int            `json:"removed_workspaces"`
+	CleanupErrors           int            `json:"cleanup_errors"`
 }
 
 func printBatchResultJSONL(w io.Writer, res agenteval.BatchResult) {
 	writeJSONLine(w, batchResultRecord{
-		Type:             "scenario",
-		Scenario:         res.BatchScenario,
-		OK:               res.OK,
-		DurationMS:       res.Duration.Milliseconds(),
-		Workspace:        res.Workspace,
-		TracePath:        res.TracePath,
-		TurnEndReason:    res.TurnEndReason,
-		ToolCalls:        res.ToolCalls,
-		ToolErrors:       res.ToolStats.ToolErrors,
-		ToolRepaired:     res.ToolStats.ToolArgsRepaired,
-		ToolDurationMS:   res.ToolStats.ToolDurationMS,
-		InputTokens:      res.Usage.InputTokens,
-		OutputTokens:     res.Usage.OutputTokens,
-		WorkspaceRemoved: res.WorkspaceRemoved,
-		CleanupError:     res.CleanupError,
-		Failures:         res.Failures,
+		Type:                    "scenario",
+		Scenario:                res.BatchScenario,
+		OK:                      res.OK,
+		DurationMS:              res.Duration.Milliseconds(),
+		Workspace:               res.Workspace,
+		TracePath:               res.TracePath,
+		TurnEndReason:           res.TurnEndReason,
+		ToolCalls:               res.ToolCalls,
+		ToolErrors:              res.ToolStats.ToolErrors,
+		ToolRepaired:            res.ToolStats.ToolArgsRepaired,
+		ToolDurationMS:          res.ToolStats.ToolDurationMS,
+		ToolArgsTruncated:       res.ToolTruncation.ArgsTruncated,
+		ToolArgsOmittedBytes:    res.ToolTruncation.ArgsOmittedBytes,
+		ToolResultsTruncated:    res.ToolTruncation.ResultsTruncated,
+		ToolResultsOmittedBytes: res.ToolTruncation.ResultsOmittedBytes,
+		InputTokens:             res.Usage.InputTokens,
+		OutputTokens:            res.Usage.OutputTokens,
+		WorkspaceRemoved:        res.WorkspaceRemoved,
+		CleanupError:            res.CleanupError,
+		Failures:                res.Failures,
 	})
 }
 
 func printBatchSummaryJSONL(w io.Writer, s batchSummary) {
 	writeJSONLine(w, batchSummaryRecord{
-		Type:              "summary",
-		Scenarios:         s.Total,
-		Passed:            s.Passed,
-		Failed:            s.Failed,
-		DurationMS:        s.Duration.Milliseconds(),
-		ToolCalls:         s.ToolCalls,
-		ToolErrors:        s.ToolErrors,
-		ToolRepaired:      s.ToolRepaired,
-		ToolDurationMS:    s.ToolDurationMS,
-		InputTokens:       s.InputTokens,
-		OutputTokens:      s.OutputTokens,
-		EndCompleted:      s.EndCompleted,
-		EndMaxTurns:       s.EndMaxTurns,
-		EndErrors:         s.EndErrors,
-		EndCancelled:      s.EndCancelled,
-		EndUnknown:        s.EndUnknown,
-		FailureKinds:      cloneFailureKinds(s.FailureKinds),
-		RemovedWorkspaces: s.RemovedWorkspaces,
-		CleanupErrors:     s.CleanupErrors,
+		Type:                    "summary",
+		Scenarios:               s.Total,
+		Passed:                  s.Passed,
+		Failed:                  s.Failed,
+		DurationMS:              s.Duration.Milliseconds(),
+		ToolCalls:               s.ToolCalls,
+		ToolErrors:              s.ToolErrors,
+		ToolRepaired:            s.ToolRepaired,
+		ToolDurationMS:          s.ToolDurationMS,
+		ToolArgsTruncated:       s.ToolArgsTruncated,
+		ToolArgsOmittedBytes:    s.ToolArgsOmittedBytes,
+		ToolResultsTruncated:    s.ToolResultsTruncated,
+		ToolResultsOmittedBytes: s.ToolResultsOmittedBytes,
+		InputTokens:             s.InputTokens,
+		OutputTokens:            s.OutputTokens,
+		EndCompleted:            s.EndCompleted,
+		EndMaxTurns:             s.EndMaxTurns,
+		EndErrors:               s.EndErrors,
+		EndCancelled:            s.EndCancelled,
+		EndUnknown:              s.EndUnknown,
+		FailureKinds:            cloneFailureKinds(s.FailureKinds),
+		RemovedWorkspaces:       s.RemovedWorkspaces,
+		CleanupErrors:           s.CleanupErrors,
 	})
 }
 
@@ -351,6 +379,14 @@ func printBatchResult(w io.Writer, res agenteval.BatchResult) {
 		res.Usage.InputTokens,
 		res.Usage.OutputTokens,
 	)
+	if hasToolTruncation(res.ToolTruncation) {
+		fmt.Fprintf(w, " trunc=args:%d,results:%d omitted=%d/%d",
+			res.ToolTruncation.ArgsTruncated,
+			res.ToolTruncation.ResultsTruncated,
+			res.ToolTruncation.ArgsOmittedBytes,
+			res.ToolTruncation.ResultsOmittedBytes,
+		)
+	}
 	if res.TurnEndReason != "" {
 		fmt.Fprintf(w, " end=%s", res.TurnEndReason)
 	}
@@ -358,6 +394,13 @@ func printBatchResult(w io.Writer, res agenteval.BatchResult) {
 	for _, failure := range res.Failures {
 		fmt.Fprintf(w, "  - %s\n", failure)
 	}
+}
+
+func hasToolTruncation(stats agenteval.ToolTruncationStats) bool {
+	return stats.ArgsTruncated > 0 ||
+		stats.ArgsOmittedBytes > 0 ||
+		stats.ResultsTruncated > 0 ||
+		stats.ResultsOmittedBytes > 0
 }
 
 func failureKind(failure string) string {
