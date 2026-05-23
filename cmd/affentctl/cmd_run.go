@@ -32,11 +32,11 @@ Required: --prompt, --model.`)
 		fmt.Fprintln(os.Stderr, "\nExit codes: 0 completed, 2 max_turns, 3 error, 130 cancelled.")
 	}
 	if err := fs.Parse(args); err != nil {
-		return 64
+		return exitUsage
 	}
 	if err := applyConfig(&cf, fs); err != nil {
 		fmt.Fprintf(os.Stderr, "config: %v\n", err)
-		return 64
+		return exitUsage
 	}
 
 	prompt, err := readMaybeStdin(*promptFlag)
@@ -45,11 +45,11 @@ Required: --prompt, --model.`)
 		// "use '-' for stdin" hint) from "your @file path is wrong"
 		// (which the user needs to see verbatim to fix the typo).
 		fmt.Fprintf(os.Stderr, "--prompt: %v\n", err)
-		return 64
+		return exitUsage
 	}
 	if strings.TrimSpace(prompt) == "" {
 		fmt.Fprintln(os.Stderr, "--prompt is required (use '-' for stdin)")
-		return 64
+		return exitUsage
 	}
 
 	b, code := setupLoop(cf)
@@ -70,7 +70,7 @@ Required: --prompt, --model.`)
 	turnID, err := b.loop.SendUser(ctx, prompt)
 	if err != nil {
 		b.log.Error().Err(err).Msg("send user")
-		return 3
+		return exitRuntime
 	}
 	b.log.Info().Str("turn_id", turnID).Msg("turn started")
 

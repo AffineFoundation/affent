@@ -29,6 +29,15 @@ import (
 const maxConfigInputBytes = 1024 * 1024
 
 const (
+	// exitUsage signals a user/config error (bad flags, missing required
+	// args). Matches sysexits.h EX_USAGE.
+	exitUsage = 64
+	// exitRuntime signals a runtime failure the user couldn't prevent
+	// via flags (I/O errors, model failures, container problems).
+	exitRuntime = 3
+)
+
+const (
 	minMCPStartupTimeout       = 60 * time.Second
 	mcpStartupPerServerOverrun = 5 * time.Second
 )

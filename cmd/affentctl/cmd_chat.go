@@ -54,11 +54,11 @@ Slash commands inside the REPL:
 		fs.PrintDefaults()
 	}
 	if err := fs.Parse(args); err != nil {
-		return 64
+		return exitUsage
 	}
 	if err := applyConfig(&cf, fs); err != nil {
 		fmt.Fprintf(os.Stderr, "config: %v\n", err)
-		return 64
+		return exitUsage
 	}
 
 	// Chat is interactive; the JSONL trace would dump every event
@@ -110,7 +110,7 @@ Slash commands inside the REPL:
 		}
 		if err != nil && !eofWithData {
 			fmt.Fprintf(os.Stderr, "read input: %v\n", err)
-			return 3
+			return exitRuntime
 		}
 		line = strings.TrimSpace(line)
 		if line == "" {
@@ -137,7 +137,7 @@ Slash commands inside the REPL:
 				continue
 			}
 			fmt.Fprintf(os.Stderr, "send user: %v\n", err)
-			return 3
+			return exitRuntime
 		}
 		_ = turnID
 

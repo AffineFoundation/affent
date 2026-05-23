@@ -38,15 +38,15 @@ and local image build sources without calling the model or starting containers.`
 		fs.PrintDefaults()
 	}
 	if err := fs.Parse(args); err != nil {
-		return 64
+		return exitUsage
 	}
 	if fs.NArg() != 0 {
 		fmt.Fprintf(stderr, "doctor: unexpected argument %q\n", fs.Arg(0))
-		return 64
+		return exitUsage
 	}
 	if err := applyConfig(&cf, fs); err != nil {
 		fmt.Fprintf(stderr, "doctor: %v\n", err)
-		return 64
+		return exitUsage
 	}
 	findings := diagnoseAffentctl(cf, runner)
 	hasError := false
@@ -57,7 +57,7 @@ and local image build sources without calling the model or starting containers.`
 		fmt.Fprintf(stdout, "%s %-18s %s\n", f.Status, f.Subject+":", f.Message)
 	}
 	if hasError {
-		return 3
+		return exitRuntime
 	}
 	return 0
 }

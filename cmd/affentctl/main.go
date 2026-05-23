@@ -23,11 +23,11 @@ import (
 func main() {
 	if err := loadDotEnv(); err != nil {
 		fmt.Fprintf(os.Stderr, "affentctl: load .env: %v\n", err)
-		os.Exit(64)
+		os.Exit(exitUsage)
 	}
 	if len(os.Args) < 2 {
 		usage()
-		os.Exit(64)
+		os.Exit(exitUsage)
 	}
 	switch os.Args[1] {
 	case "run":
@@ -48,7 +48,7 @@ func main() {
 	default:
 		fmt.Fprintf(os.Stderr, "unknown subcommand: %s\n\n", os.Args[1])
 		usage()
-		os.Exit(64)
+		os.Exit(exitUsage)
 	}
 }
 

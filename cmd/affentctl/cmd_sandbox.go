@@ -117,7 +117,7 @@ func (r osCommandRunner) Run(name string, args ...string) (string, error) {
 func sandboxCmd(args []string) int {
 	if len(args) == 0 {
 		sandboxUsage(os.Stderr)
-		return 64
+		return exitUsage
 	}
 	switch args[0] {
 	case "build":
@@ -134,7 +134,7 @@ func sandboxCmd(args []string) int {
 	default:
 		fmt.Fprintf(os.Stderr, "unknown sandbox subcommand: %s\n\n", args[0])
 		sandboxUsage(os.Stderr)
-		return 64
+		return exitUsage
 	}
 }
 
@@ -153,7 +153,7 @@ Run 'affentctl sandbox <command> -h' for flags.`)
 func imageCmd(args []string) int {
 	if len(args) == 0 {
 		imageUsage(os.Stderr)
-		return 64
+		return exitUsage
 	}
 	switch args[0] {
 	case "build":
@@ -166,7 +166,7 @@ func imageCmd(args []string) int {
 	default:
 		fmt.Fprintf(os.Stderr, "unknown image subcommand: %s\n\n", args[0])
 		imageUsage(os.Stderr)
-		return 64
+		return exitUsage
 	}
 }
 
@@ -206,7 +206,7 @@ likely to make the host unusable.`)
 		fs.PrintDefaults()
 	}
 	if err := fs.Parse(args); err != nil {
-		return 64
+		return exitUsage
 	}
 	opts.Image = strings.TrimSpace(opts.Image)
 	opts.Dockerfile = strings.TrimSpace(opts.Dockerfile)
@@ -214,7 +214,7 @@ likely to make the host unusable.`)
 	opts.Memory = strings.TrimSpace(opts.Memory)
 	if err := buildDockerImage(opts, runner); err != nil {
 		fmt.Fprintf(stderr, "sandbox build: %v\n", err)
-		return 3
+		return exitRuntime
 	}
 	fmt.Fprintf(stdout, "image: %s\n", strings.TrimSpace(opts.Image))
 	return 0
@@ -238,7 +238,7 @@ is memory-limited by default.`)
 		fs.PrintDefaults()
 	}
 	if err := fs.Parse(args); err != nil {
-		return 64
+		return exitUsage
 	}
 	opts.Image = strings.TrimSpace(opts.Image)
 	opts.Dockerfile = strings.TrimSpace(opts.Dockerfile)
@@ -246,7 +246,7 @@ is memory-limited by default.`)
 	opts.Memory = strings.TrimSpace(opts.Memory)
 	if err := buildDockerImage(opts, runner); err != nil {
 		fmt.Fprintf(stderr, "image build: %v\n", err)
-		return 3
+		return exitRuntime
 	}
 	fmt.Fprintf(stdout, "image: %s\n", opts.Image)
 	return 0
@@ -324,7 +324,7 @@ host workspace mounted at /workspace. With no command, runs affentctl --help.`)
 		fs.PrintDefaults()
 	}
 	if err := fs.Parse(args); err != nil {
-		return 64
+		return exitUsage
 	}
 	opts.Env = []string(env)
 	opts.Publish = []string(publish)
@@ -342,7 +342,7 @@ host workspace mounted at /workspace. With no command, runs affentctl --help.`)
 	}
 	if err := runRuntimeImage(opts, runner); err != nil {
 		fmt.Fprintf(stderr, "image run: %v\n", err)
-		return 3
+		return exitRuntime
 	}
 	return 0
 }
@@ -399,11 +399,11 @@ path. The container is memory-limited by default.`)
 		fs.PrintDefaults()
 	}
 	if err := fs.Parse(args); err != nil {
-		return 64
+		return exitUsage
 	}
 	if err := startSandbox(opts, runner); err != nil {
 		fmt.Fprintf(stderr, "sandbox start: %v\n", err)
-		return 3
+		return exitRuntime
 	}
 	printSandboxStartResult(stdout, opts)
 	return 0
@@ -419,12 +419,12 @@ func sandboxStatusCmd(args []string, runner commandRunner, stdout, stderr io.Wri
 		fs.PrintDefaults()
 	}
 	if err := fs.Parse(args); err != nil {
-		return 64
+		return exitUsage
 	}
 	status, err := inspectSandboxStatus(strings.TrimSpace(name), runner)
 	if err != nil {
 		fmt.Fprintf(stderr, "sandbox status: %v\n", err)
-		return 3
+		return exitRuntime
 	}
 	printSandboxStatus(stdout, status)
 	return 0
@@ -442,11 +442,11 @@ func sandboxStopCmd(args []string, runner commandRunner, _ io.Writer, stderr io.
 		fs.PrintDefaults()
 	}
 	if err := fs.Parse(args); err != nil {
-		return 64
+		return exitUsage
 	}
 	if err := stopSandbox(strings.TrimSpace(name), remove, runner); err != nil {
 		fmt.Fprintf(stderr, "sandbox stop: %v\n", err)
-		return 3
+		return exitRuntime
 	}
 	return 0
 }

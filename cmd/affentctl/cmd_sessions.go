@@ -26,7 +26,7 @@ first. Each row: <session_id>  <mtime>  <messages>  <first user msg>.`)
 		fs.PrintDefaults()
 	}
 	if err := fs.Parse(args); err != nil {
-		return 64
+		return exitUsage
 	}
 
 	convDir := filepath.Join(*workspace, ".affentctl")
@@ -37,7 +37,7 @@ first. Each row: <session_id>  <mtime>  <messages>  <first user msg>.`)
 			return 0
 		}
 		fmt.Fprintln(os.Stderr, err)
-		return 3
+		return exitRuntime
 	}
 
 	type row struct {
