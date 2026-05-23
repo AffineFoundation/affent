@@ -140,6 +140,39 @@ func TestPrintBatchResultIncludesTraceMetrics(t *testing.T) {
 	}
 }
 
+func TestBatchSummaryAggregatesRuntimeMetrics(t *testing.T) {
+	var summary batchSummary
+	summary.add(agenteval.BatchResult{
+		OK:        true,
+		Duration:  100 * time.Millisecond,
+		ToolCalls: 2,
+		ToolStats: agenteval.ToolRuntimeStats{
+			ToolArgsRepaired: 1,
+			ToolErrors:       0,
+			ToolDurationMS:   10,
+		},
+		Usage: agenteval.Usage{InputTokens: 20, OutputTokens: 5},
+	})
+	summary.add(agenteval.BatchResult{
+		OK:        false,
+		Duration:  250 * time.Millisecond,
+		ToolCalls: 3,
+		ToolStats: agenteval.ToolRuntimeStats{
+			ToolArgsRepaired: 2,
+			ToolErrors:       1,
+			ToolDurationMS:   40,
+		},
+		Usage: agenteval.Usage{InputTokens: 70, OutputTokens: 15},
+	})
+
+	var out bytes.Buffer
+	printBatchSummary(&out, summary)
+	want := "SUMMARY scenarios=2 passed=1 failed=1 duration=350ms tools=5 errors=1 repaired=3 tool_ms=50 tokens=90/20"
+	if !strings.Contains(out.String(), want) {
+		t.Fatalf("summary output missing %q:\n%s", want, out.String())
+	}
+}
+
 func captureStdout(t *testing.T, fn func() int) (string, int) {
 	t.Helper()
 	old := os.Stdout

@@ -95,18 +95,61 @@ success and trace-level process quality.`)
 		Timeout:     *timeout,
 	}
 	ctx := context.Background()
-	failures := 0
+	var summary batchSummary
 	for _, scenario := range scenarios {
 		res := runner.Run(ctx, scenario)
-		if !res.OK {
-			failures++
-		}
+		summary.add(res)
 		printBatchResult(os.Stdout, res)
 	}
-	if failures > 0 {
+	printBatchSummary(os.Stdout, summary)
+	if summary.Failed > 0 {
 		return 1
 	}
 	return 0
+}
+
+type batchSummary struct {
+	Total          int
+	Passed         int
+	Failed         int
+	Duration       time.Duration
+	ToolCalls      int
+	ToolErrors     int
+	ToolRepaired   int
+	ToolDurationMS int64
+	InputTokens    int
+	OutputTokens   int
+}
+
+func (s *batchSummary) add(res agenteval.BatchResult) {
+	s.Total++
+	if res.OK {
+		s.Passed++
+	} else {
+		s.Failed++
+	}
+	s.Duration += res.Duration
+	s.ToolCalls += res.ToolCalls
+	s.ToolErrors += res.ToolStats.ToolErrors
+	s.ToolRepaired += res.ToolStats.ToolArgsRepaired
+	s.ToolDurationMS += res.ToolStats.ToolDurationMS
+	s.InputTokens += res.Usage.InputTokens
+	s.OutputTokens += res.Usage.OutputTokens
+}
+
+func printBatchSummary(w io.Writer, s batchSummary) {
+	fmt.Fprintf(w, "SUMMARY scenarios=%d passed=%d failed=%d duration=%s tools=%d errors=%d repaired=%d tool_ms=%d tokens=%d/%d\n",
+		s.Total,
+		s.Passed,
+		s.Failed,
+		s.Duration.Round(time.Millisecond),
+		s.ToolCalls,
+		s.ToolErrors,
+		s.ToolRepaired,
+		s.ToolDurationMS,
+		s.InputTokens,
+		s.OutputTokens,
+	)
 }
 
 func printBatchResult(w io.Writer, res agenteval.BatchResult) {
