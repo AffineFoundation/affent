@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"path/filepath"
@@ -15,9 +16,9 @@ import (
 	"github.com/affinefoundation/affent/internal/sse"
 )
 
-// fakeBigResultTool returns a result whose length exceeds
-// MaxToolResultPreviewInEvent (4 KiB) so the tool.result event must
-// truncate ResultSummary while keeping Result intact.
+// fakeBigResultTool returns a caller-selected payload so tests can pin
+// the separate tool.result caps for summary, event payload, and model
+// context.
 func fakeBigResultTool(payload string) *Tool {
 	return &Tool{
 		Name:        "big",
@@ -29,15 +30,19 @@ func fakeBigResultTool(payload string) *Tool {
 	}
 }
 
-// TestToolResult_FullResultBypasses4KiBSummaryCap verifies the fix for
-// the SSE-trace fidelity bug: when a tool's output exceeds
-// MaxToolResultPreviewInEvent, the SSE event's ResultSummary may be
-// truncated but the Result field carries the complete output.
-func TestToolResult_FullResultBypasses4KiBSummaryCap(t *testing.T) {
+// TestToolResult_ResultBypasses4KiBSummaryCap verifies the trace
+// fidelity contract for ordinary structured results: ResultSummary is
+// capped for UI display, but Result still carries the complete payload
+// while it is under MaxToolResultBytesInEvent.
+func TestToolResult_ResultBypasses4KiBSummaryCap(t *testing.T) {
 	const payloadLen = 10 * 1024 // 10 KiB
 	if payloadLen <= MaxToolResultPreviewInEvent {
 		t.Fatalf("test premise broken: payload %d not above preview cap %d",
 			payloadLen, MaxToolResultPreviewInEvent)
+	}
+	if payloadLen > MaxToolResultBytesInEvent {
+		t.Fatalf("test premise broken: payload %d above event cap %d",
+			payloadLen, MaxToolResultBytesInEvent)
 	}
 	payload := strings.Repeat("X", payloadLen)
 
@@ -132,6 +137,42 @@ done:
 	if !strings.HasSuffix(sawResult.ResultSummary, "...") {
 		t.Fatalf("ResultSummary expected ellipsis suffix on truncation, got tail %q",
 			sawResult.ResultSummary[max(0, len(sawResult.ResultSummary)-10):])
+	}
+}
+
+func TestToolResult_ResultCapsEventPayload(t *testing.T) {
+	payload := strings.Repeat("X", MaxToolResultBytesInEvent+4096)
+	got := toolResultEventPayload("c1", 0, payload)
+	if len(got.Result) > MaxToolResultBytesInEvent {
+		t.Fatalf("Result length = %d, want <= %d", len(got.Result), MaxToolResultBytesInEvent)
+	}
+	if !strings.Contains(got.Result, "truncated from tool.result event payload") {
+		t.Fatalf("Result missing event truncation marker: tail %q", got.Result[max(0, len(got.Result)-120):])
+	}
+	markerIdx := strings.Index(got.Result, "\n... [")
+	if markerIdx < 0 {
+		t.Fatalf("Result missing marker prefix: tail %q", got.Result[max(0, len(got.Result)-120):])
+	}
+	if want := fmt.Sprintf("[%d more bytes truncated", len(payload)-markerIdx); !strings.Contains(got.Result, want) {
+		t.Fatalf("Result marker should report actual omitted bytes, got tail %q", got.Result[max(0, len(got.Result)-120):])
+	}
+	if got.Result == payload {
+		t.Fatal("oversized Result must not carry the complete payload")
+	}
+	if len(got.ResultSummary) > MaxToolResultPreviewInEvent+8 {
+		t.Fatalf("ResultSummary length = %d, want near %d", len(got.ResultSummary), MaxToolResultPreviewInEvent)
+	}
+}
+
+func TestToolResult_ResultEventCapKeepsValidUTF8(t *testing.T) {
+	payload := strings.Repeat("你", MaxToolResultBytesInEvent)
+	got := toolResultEventPayload("c1", 0, payload)
+	if !strings.Contains(got.Result, "truncated from tool.result event payload") {
+		t.Fatalf("Result missing event truncation marker")
+	}
+	prefix := strings.SplitN(got.Result, "\n... [", 2)[0]
+	if strings.ToValidUTF8(prefix, "") != prefix {
+		t.Fatalf("truncated Result prefix is not valid UTF-8")
 	}
 }
 

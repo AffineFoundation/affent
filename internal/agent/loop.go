@@ -60,6 +60,13 @@ const MaxToolResultBytesInContext = 8 * 1024
 // chat-bubble length.
 const MaxToolResultPreviewInEvent = 4 * 1024
 
+// MaxToolResultBytesInEvent caps the full tool.result event payload.
+// The conversation context has its own smaller cap above; this one
+// protects SSE/trace consumers from one huge tool output occupying
+// unbounded memory while still preserving complete small structured
+// results for evals and debugging.
+const MaxToolResultBytesInEvent = 256 * 1024
+
 // Loop is the model<->tools cycle. One Loop per session. Stateful via the
 // attached Conversation; tools are looked up in Tools.
 type Loop struct {
@@ -590,12 +597,7 @@ func (l *Loop) runTurn(ctx context.Context, turnID, userText string) {
 				if result == "" {
 					result = fmt.Sprintf("first_tool_policy: call %s before other tools.", firstToolPolicy.ToolName)
 				}
-				l.publish(sse.TypeToolResult, sse.ToolResultPayload{
-					CallID:        callID,
-					ExitCode:      1,
-					ResultSummary: result,
-					Result:        result,
-				})
+				l.publish(sse.TypeToolResult, toolResultEventPayload(callID, 1, result))
 				if err := l.Conv.Append(ChatMessage{
 					Role:       "tool",
 					Content:    result,
@@ -615,12 +617,7 @@ func (l *Loop) runTurn(ctx context.Context, turnID, userText string) {
 				if result == "" {
 					result = fmt.Sprintf("post_tool_policy: %s already ran this turn; do not call %s again.", postToolPolicy.ToolName, toolName)
 				}
-				l.publish(sse.TypeToolResult, sse.ToolResultPayload{
-					CallID:        callID,
-					ExitCode:      1,
-					ResultSummary: result,
-					Result:        result,
-				})
+				l.publish(sse.TypeToolResult, toolResultEventPayload(callID, 1, result))
 				if err := l.Conv.Append(ChatMessage{
 					Role:       "tool",
 					Content:    result,
@@ -637,12 +634,7 @@ func (l *Loop) runTurn(ctx context.Context, turnID, userText string) {
 				if result == "" {
 					result = fmt.Sprintf("post_tool_policy: answer from the prior %s result instead of calling %s.", postToolPolicy.ToolName, toolName)
 				}
-				l.publish(sse.TypeToolResult, sse.ToolResultPayload{
-					CallID:        callID,
-					ExitCode:      1,
-					ResultSummary: result,
-					Result:        result,
-				})
+				l.publish(sse.TypeToolResult, toolResultEventPayload(callID, 1, result))
 				if err := l.Conv.Append(ChatMessage{
 					Role:       "tool",
 					Content:    result,
@@ -787,12 +779,7 @@ func (l *Loop) publishAndAppendToolResult(callID, name, result string, isErr boo
 	if isErr {
 		exit = 1
 	}
-	l.publish(sse.TypeToolResult, sse.ToolResultPayload{
-		CallID:        callID,
-		ExitCode:      exit,
-		ResultSummary: previewN(result, MaxToolResultPreviewInEvent),
-		Result:        result,
-	})
+	l.publish(sse.TypeToolResult, toolResultEventPayload(callID, exit, result))
 	if err := l.Conv.Append(ChatMessage{
 		Role:       "tool",
 		Content:    truncateForContext(result, l.toolResultMaxBytesInContextFor(name)),
@@ -833,12 +820,7 @@ func (l *Loop) appendSkippedToolResults(turnID string, calls []ToolCall, content
 		l.publish(sse.TypeToolRequest, sse.ToolRequestPayload{
 			TurnID: turnID, CallID: callID, Tool: name, Args: map[string]any{},
 		})
-		l.publish(sse.TypeToolResult, sse.ToolResultPayload{
-			CallID:        callID,
-			ExitCode:      1,
-			ResultSummary: content,
-			Result:        content,
-		})
+		l.publish(sse.TypeToolResult, toolResultEventPayload(callID, 1, content))
 		if appendErr := l.Conv.Append(ChatMessage{
 			Role:       "tool",
 			Content:    content,
@@ -977,6 +959,35 @@ func previewN(s string, n int) string {
 		return s
 	}
 	return s[:textutil.AlignBackward(s, n)] + "..."
+}
+
+func toolResultEventPayload(callID string, exitCode int, result string) sse.ToolResultPayload {
+	return sse.ToolResultPayload{
+		CallID:        callID,
+		ExitCode:      exitCode,
+		ResultSummary: previewN(result, MaxToolResultPreviewInEvent),
+		Result:        truncateForEvent(result, MaxToolResultBytesInEvent),
+	}
+}
+
+func truncateForEvent(s string, max int) string {
+	if len(s) <= max {
+		return s
+	}
+	omitted := len(s) - max
+	for {
+		marker := fmt.Sprintf("\n... [%d more bytes truncated from tool.result event payload]", omitted)
+		limit := max - len(marker)
+		if limit <= 0 {
+			return s[:textutil.AlignBackward(s, max)]
+		}
+		cut := textutil.AlignBackward(s, limit)
+		actualOmitted := len(s) - cut
+		if actualOmitted == omitted {
+			return s[:cut] + marker
+		}
+		omitted = actualOmitted
+	}
 }
 
 // truncateForContext is what the model sees for an oversized tool result.

@@ -87,9 +87,10 @@ type ToolResultPayload struct {
 	// output (capped for chat-bubble rendering). It may be truncated
 	// with an ellipsis suffix and is NOT safe to JSON-parse.
 	ResultSummary string `json:"result_summary"`
-	// Result is the full tool output as the tool itself returned it
-	// (no event-side truncation). Trace and evaluation consumers that
-	// need to parse structured tool responses should read Result.
+	// Result is the tool output capped by the agent event budget. Trace
+	// and evaluation consumers that need to parse structured tool
+	// responses should read Result, but must still tolerate a trailing
+	// truncation marker for oversized outputs.
 	// Front-ends that only render the value should read ResultSummary.
 	Result string `json:"result"`
 }
