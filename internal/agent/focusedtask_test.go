@@ -571,6 +571,126 @@ func TestRunFocusedTask_HappyPathReturnsStructuredResult(t *testing.T) {
 	}
 }
 
+// TestRunFocusedTask_ExploreWithoutExecutorAvoidsLyingShellHints
+// covers the graceful-degradation contract for explore. Under permissive
+// profileAvailable semantics, explore stays registered when only
+// HostWorkspaceDir is wired (no Executor -> no shell). The risk we
+// guard against is the system prompt telling the model to "use shell"
+// unconditionally, which would make the model burn turns on a tool
+// that isn't in its registry.
+//
+// What this pins:
+//   - Child registry has read_file and list_files but NOT shell.
+//   - The system prompt does NOT contain unconditional "use shell"
+//     directives -- references to shell are gated on "if a shell tool
+//     is registered" so a model reading the prompt + tool list can
+//     reconcile.
+//   - The run still completes end-to-end and produces a structured
+//     result with findings sourced by file path, proving the
+//     degraded surface is actually usable.
+func TestRunFocusedTask_ExploreWithoutExecutorAvoidsLyingShellHints(t *testing.T) {
+	ws := t.TempDir()
+	if err := os.WriteFile(filepath.Join(ws, "marker.txt"), []byte("hello"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	transcripts := t.TempDir()
+
+	// Step 1: model calls list_files. Step 2: emits structured JSON.
+	// No shell call -- proves the model can complete with the degraded
+	// surface, and gives us a transcript to inspect for prompt hygiene.
+	step := 0
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "text/event-stream")
+		w.WriteHeader(http.StatusOK)
+		step++
+		switch step {
+		case 1:
+			_, _ = w.Write([]byte(`data: {"choices":[{"delta":{"role":"assistant","tool_calls":[{"index":0,"id":"c1","type":"function","function":{"name":"list_files","arguments":"{\"path\":\".\"}"}}]},"finish_reason":"tool_calls"}]}` + "\n\n"))
+		default:
+			body := `{"task_type":"explore","ok":true,"summary":"found marker.txt","findings":[{"claim":"marker.txt is present","evidence":"list_files showed marker.txt","source":"marker.txt"}]}`
+			_, _ = w.Write([]byte("data: {\"choices\":[{\"delta\":{\"role\":\"assistant\",\"content\":" + strconvQuote(body) + "},\"finish_reason\":\"stop\"}]}\n\n"))
+		}
+		_, _ = w.Write([]byte("data: [DONE]\n\n"))
+	}))
+	t.Cleanup(srv.Close)
+
+	// Build deps WITHOUT Executor -- explore.Tools.AllowReadOnlyShell is
+	// declared but Executor is nil, so the child registry must skip the
+	// shell tool. This is the corner the test guards.
+	deps := FocusedTaskDeps{
+		LLM:              NewLLMClient(srv.URL, "", "fake"),
+		HostWorkspaceDir: ws,
+		// no Executor
+		TranscriptDir:  transcripts,
+		Log:            zerolog.Nop(),
+		PerCallTimeout: 5 * time.Second,
+	}
+
+	// First: independently assert that the child registry the profile
+	// would build does NOT contain shell. If it did, the rest of the
+	// test would be invalid -- we'd be testing prompt hygiene under a
+	// surface that contradicts our premise.
+	reg, cleanup, err := buildFocusedTaskRegistry(context.Background(), deps, exploreProfile())
+	if err != nil {
+		t.Fatalf("buildFocusedTaskRegistry: %v", err)
+	}
+	t.Cleanup(cleanup)
+	if _, ok := reg.Get("shell"); ok {
+		t.Fatal("shell must NOT be in the child registry when Executor is nil")
+	}
+	if _, ok := reg.Get("read_file"); !ok {
+		t.Fatal("read_file should still be wired without Executor")
+	}
+	if _, ok := reg.Get("list_files"); !ok {
+		t.Fatal("list_files should still be wired without Executor")
+	}
+
+	raw, err := runFocusedTask(context.Background(), deps, exploreProfile(), "locate marker.txt", 4)
+	if err != nil {
+		t.Fatalf("runFocusedTask: %v\n%s", err, raw)
+	}
+	var got FocusedTaskResult
+	if err := json.Unmarshal([]byte(raw), &got); err != nil {
+		t.Fatalf("decode: %v\n%s", err, raw)
+	}
+	if !got.OK || len(got.Findings) == 0 {
+		t.Fatalf("degraded explore must still produce a usable result: %+v", got)
+	}
+
+	// Inspect the child transcript: the system prompt must not give
+	// the model unconditional "use shell" guidance. The conditional
+	// phrasing ("If a guarded shell tool is registered") is the
+	// contract -- this is what stops a model from blindly trying
+	// shell when it isn't in its tool list.
+	entries, _ := os.ReadDir(transcripts)
+	var transcriptPath string
+	for _, e := range entries {
+		if strings.HasPrefix(e.Name(), "focused_") && strings.HasSuffix(e.Name(), ".jsonl") {
+			transcriptPath = filepath.Join(transcripts, e.Name())
+			break
+		}
+	}
+	if transcriptPath == "" {
+		t.Fatalf("no focused_ transcript found in %s", transcripts)
+	}
+	contents, err := os.ReadFile(transcriptPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	prompt := string(contents)
+
+	// The conditional phrasing must be present -- this is what makes
+	// the prompt honest under graceful degradation.
+	if !strings.Contains(prompt, "If a guarded shell tool is registered") {
+		t.Errorf("explore prompt should hedge shell usage on registration; got transcript:\n%s", prompt)
+	}
+	// And the old unconditional phrasing must be absent -- if anyone
+	// reverts the hint back to "Use shell rg/find" the test fails.
+	if strings.Contains(prompt, "Use shell rg/find/grep only when") {
+		t.Errorf("explore prompt still has unconditional shell directive; the hint should be conditional. transcript:\n%s", prompt)
+	}
+}
+
 // TestRunFocusedTask_ExploreUsesToolsThenEmitsJSON is the load-bearing
 // integration test for the whole focused-task surface: a real child
 // Loop runs against an httptest LLM that drives list_files →

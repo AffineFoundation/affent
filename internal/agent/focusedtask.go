@@ -637,10 +637,10 @@ func recallProfile() FocusedTaskProfile {
 			AllowSessionSearch: true,
 		},
 		SystemPromptHints: `recall hints:
-- Search durable memory (action=search/list) before session_search. Project context is already in your system prompt; do not re-derive it.
+- Use the durable memory tool (action=search/list) first; if a session_search tool is also registered, search prior sessions second. Project context is already in your system prompt; do not re-derive it.
 - Each finding's "source" must be the memory topic identifier or the session id you found it in.
 - For preference-style facts, quote the user's exact wording in "evidence" when memory exposes it; otherwise paraphrase and lower the confidence accordingly.
-- Do NOT speculate. If memory and session_search are empty for the objective, emit a not_found entry naming what you looked for.`,
+- Do NOT speculate. If your registered lookup tools come back empty for the objective, emit a not_found entry naming what you looked for.`,
 	}
 }
 
@@ -656,7 +656,7 @@ func exploreProfile() FocusedTaskProfile {
 			AllowSessionSearch: true,
 		},
 		SystemPromptHints: `explore hints:
-- Prefer list_files and read_file over shell sweeps. Use shell rg/find/grep only when the file location is not obvious from listing.
+- Prefer list_files and read_file. If a guarded shell tool is registered, use rg/find/grep only when the file location is not obvious from listing; otherwise navigate via list_files + read_file alone.
 - Each finding's "source" must be a workspace-relative file path, ideally with a line number (e.g., "internal/agent/loop.go:142").
 - Cap "findings" at the smallest set that answers the objective. If the objective is broader than ~10 files, surface a warning and propose a narrower next step in suggested_next instead of reading everything.
 - Do not open files outside the workspace. Do not modify any file.`,
@@ -691,9 +691,9 @@ func verifyProfile() FocusedTaskProfile {
 			AllowSessionSearch: true,
 		},
 		SystemPromptHints: `verify hints:
-- Run the SMALLEST check that resolves the claim: one targeted test, one file inspection, one symbol grep. Stop after the first decisive result.
+- Run the SMALLEST check that resolves the claim: one targeted file inspection, or (if a guarded shell tool is registered) one test or symbol grep. Stop after the first decisive result.
 - "ok": true means the claim was VERIFIED. "ok": false means the claim was FALSIFIED. If you could not run the check (missing tool, file gone), keep ok=true and surface the gap in warnings + not_found instead of fabricating a pass/fail.
-- Every finding must cite either the shell command + an excerpt of its output (with exit code), or the file:line consulted.
+- Every finding must cite either the file:line consulted or, when a shell tool is registered, the shell command plus an excerpt of its output with exit code.
 - Do not propose code fixes. Verification is not repair — the parent agent decides whether to act.`,
 	}
 }
