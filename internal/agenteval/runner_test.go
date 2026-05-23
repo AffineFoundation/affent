@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -134,6 +135,85 @@ func TestRunner_EndToEnd_OneToolCall(t *testing.T) {
 	}
 	if got := out.Trace.RawTypes["tool.request"]; got != 1 {
 		t.Errorf("RawTypes[tool.request] = %d, want 1", got)
+	}
+}
+
+func TestRunner_DefaultRuntimeLoadsWorkspaceSkills(t *testing.T) {
+	type capturedRequest struct {
+		Messages []struct {
+			Role    string `json:"role"`
+			Content string `json:"content"`
+		} `json:"messages"`
+	}
+	requests := make(chan capturedRequest, 1)
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		raw, err := io.ReadAll(r.Body)
+		if err != nil {
+			t.Errorf("read request body: %v", err)
+		}
+		var req capturedRequest
+		if err := json.Unmarshal(raw, &req); err != nil {
+			t.Errorf("decode request body: %v", err)
+		}
+		select {
+		case requests <- req:
+		default:
+		}
+		w.Header().Set("Content-Type", "text/event-stream")
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte("data: " + `{"choices":[{"delta":{"role":"assistant","content":"done"},"finish_reason":"stop"}]}` + "\n\n"))
+		_, _ = w.Write([]byte("data: [DONE]\n\n"))
+	}))
+	t.Cleanup(srv.Close)
+
+	scenario := Scenario{
+		Name:        "runtime_skill_provider",
+		Description: "default eval runtime injects workspace-installed skills",
+		Prompt:      "please use the runtime eval trigger",
+		Setup: func(workspaceDir string) error {
+			_, err := agent.InstallRuntimeSkill(agent.DefaultWorkspaceSkillDir(workspaceDir), agent.Skill{
+				Name:        "eval_runtime_demo",
+				Description: "Eval runtime demo.",
+				Body:        "AFFENT ACTIVE SKILL: eval_runtime_demo\nRUNTIME_EVAL_SKILL_MARKER",
+				AutoActivation: agent.SkillAutoActivation{
+					Any: []string{"runtime eval trigger"},
+				},
+			})
+			return err
+		},
+		MaxTurnSteps: 2,
+		Checks: []Check{
+			TurnEndedCleanly(),
+			FinalTextContains("done"),
+		},
+	}
+	runner := &Runner{
+		LLM:            agent.NewLLMClient(srv.URL, "", "fake-model"),
+		MaxTurnSteps:   2,
+		PerCallTimeout: 5 * time.Second,
+		RunTimeout:     10 * time.Second,
+		Log:            zerolog.Nop(),
+	}
+	out, err := runner.Run(context.Background(), scenario)
+	if err != nil {
+		t.Fatalf("Runner.Run: %v", err)
+	}
+	if !out.Pass {
+		t.Fatalf("expected all checks to pass; failed: %v", out.FailedChecks())
+	}
+	select {
+	case req := <-requests:
+		found := false
+		for _, msg := range req.Messages {
+			if msg.Role == "system" && strings.Contains(msg.Content, "RUNTIME_EVAL_SKILL_MARKER") {
+				found = true
+			}
+		}
+		if !found {
+			t.Fatalf("runtime skill was not injected into LLM request: %+v", req.Messages)
+		}
+	case <-time.After(2 * time.Second):
+		t.Fatal("LLM request was not captured")
 	}
 }
 

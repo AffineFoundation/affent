@@ -36,6 +36,12 @@ type Runner struct {
 	// to register browser/subagent/MCP tools for richer scenarios.
 	BuildRegistry RunnerRegistryBuilder
 
+	// SkillProvider optionally injects task-relevant skill blocks into
+	// the eval conversation. Nil uses the default runtime skill provider
+	// when BuildRegistry is also nil; custom registries opt in by setting
+	// this field explicitly.
+	SkillProvider agent.SkillProvider
+
 	// MaxTurnSteps caps assistant<->tool round trips. Scenario value
 	// overrides; zero here falls back to 8.
 	MaxTurnSteps int
@@ -98,13 +104,24 @@ func (r *Runner) Run(ctx context.Context, s Scenario) (Outcome, error) {
 		return Outcome{}, fmt.Errorf("build executor: %w", err)
 	}
 
-	buildReg := r.BuildRegistry
-	if buildReg == nil {
-		buildReg = defaultBuildRegistry
+	var reg *agent.Registry
+	var skillProvider agent.SkillProvider
+	if r.BuildRegistry == nil {
+		rt, err := defaultBuildRuntime(workspace, exec)
+		if err != nil {
+			return Outcome{}, fmt.Errorf("build registry: %w", err)
+		}
+		reg = rt.Registry
+		skillProvider = rt.SkillProvider
+	} else {
+		var err error
+		reg, err = r.BuildRegistry(ctx, workspace, exec)
+		if err != nil {
+			return Outcome{}, fmt.Errorf("build registry: %w", err)
+		}
 	}
-	reg, err := buildReg(ctx, workspace, exec)
-	if err != nil {
-		return Outcome{}, fmt.Errorf("build registry: %w", err)
+	if r.SkillProvider != nil {
+		skillProvider = r.SkillProvider
 	}
 
 	convPath := filepath.Join(workspace, ".agenteval-conv.jsonl")
@@ -137,6 +154,7 @@ func (r *Runner) Run(ctx context.Context, s Scenario) (Outcome, error) {
 			"tool-results",
 		),
 		ToolResultArtifactPathPrefix: ".affent/artifacts/tool-results",
+		SkillProvider:                skillProvider,
 	}
 	if err := loop.EnsureSystemPrompt(""); err != nil {
 		return Outcome{}, fmt.Errorf("system prompt: %w", err)
@@ -170,12 +188,17 @@ func defaultBuildExecutor(scenarioName string) RunnerExecutorBuilder {
 	}
 }
 
-func defaultBuildRegistry(_ context.Context, workspaceDir string, exec executor.Executor) (*agent.Registry, error) {
+type runnerRuntime struct {
+	Registry      *agent.Registry
+	SkillProvider agent.SkillProvider
+}
+
+func defaultBuildRuntime(workspaceDir string, exec executor.Executor) (runnerRuntime, error) {
 	reg := agent.NewRegistry()
 	skillDir := agent.DefaultWorkspaceSkillDir(workspaceDir)
 	skillReg, err := agent.RuntimeSkillRegistry(skillDir)
 	if err != nil {
-		return nil, err
+		return runnerRuntime{}, err
 	}
 	agent.RegisterBuiltins(reg, agent.BuiltinDeps{
 		Executor:         exec,
@@ -183,7 +206,15 @@ func defaultBuildRegistry(_ context.Context, workspaceDir string, exec executor.
 		SkillRegistry:    skillReg,
 		SkillDir:         skillDir,
 	})
-	return reg, nil
+	return runnerRuntime{Registry: reg, SkillProvider: skillReg.Provide}, nil
+}
+
+func defaultBuildRegistry(_ context.Context, workspaceDir string, exec executor.Executor) (*agent.Registry, error) {
+	rt, err := defaultBuildRuntime(workspaceDir, exec)
+	if err != nil {
+		return nil, err
+	}
+	return rt.Registry, nil
 }
 
 // drainTrace consumes Loop events until turn.end for turnID arrives
