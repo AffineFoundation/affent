@@ -222,6 +222,7 @@ func TestMakeImageServeEnablesBuiltinsInsideRuntimeContainer(t *testing.T) {
 	}
 	body := string(raw)
 	for _, want := range []string{
+		"IMAGE_WORKSPACE ?= $(CURDIR)/.tmp/runtime-workspace",
 		"SERVE_CONTAINER_NAME ?=",
 		"SERVE_MEMORY_ROOT ?= /workspace/session-state",
 		"image-serve: affentctl",
@@ -278,10 +279,10 @@ func TestMakeOneClickContainerTargetsUseSharedLimits(t *testing.T) {
 			`image build --memory "$(CONTAINER_MEMORY)"`,
 		},
 		"image-run": {
-			`image run --memory "$(CONTAINER_MEMORY)" --cpus "$(CONTAINER_CPUS)" --pids-limit "$(CONTAINER_PIDS)" $(IMAGE_RUN_ARGS)`,
+			`image run --workspace "$(IMAGE_WORKSPACE)" --memory "$(CONTAINER_MEMORY)" --cpus "$(CONTAINER_CPUS)" --pids-limit "$(CONTAINER_PIDS)" $(IMAGE_RUN_ARGS)`,
 		},
 		"image-serve": {
-			`image run --memory "$(CONTAINER_MEMORY)" --cpus "$(CONTAINER_CPUS)" --pids-limit "$(CONTAINER_PIDS)" $(if $(SERVE_CONTAINER_NAME),--name "$(SERVE_CONTAINER_NAME)") --timeout 0s`,
+			`image run --workspace "$(IMAGE_WORKSPACE)" --memory "$(CONTAINER_MEMORY)" --cpus "$(CONTAINER_CPUS)" --pids-limit "$(CONTAINER_PIDS)" $(if $(SERVE_CONTAINER_NAME),--name "$(SERVE_CONTAINER_NAME)") --timeout 0s`,
 		},
 		"eval-container": {
 			`image build --image "$(EVAL_IMAGE)" --memory "$(CONTAINER_MEMORY)"`,
