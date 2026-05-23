@@ -38,7 +38,10 @@ func TestHandleSessionCreate_ExplicitIDAndDetail(t *testing.T) {
 	}
 	assertSessionCapabilities(t, created.Session.Capabilities, sessionCapabilities{
 		Builtins:         true,
+		SkillInstall:     true,
+		Plan:             true,
 		Memory:           true,
+		SessionSearch:    false,
 		Web:              true,
 		Subagent:         true,
 		SubagentMaxDepth: 3,
@@ -181,6 +184,25 @@ func TestHandleSessionDetail_ReadsDurableSessionAfterRestart(t *testing.T) {
 	}
 	if resp.Session.Capabilities != nil {
 		t.Fatalf("durable-only session should not report active capabilities, got %+v", resp.Session.Capabilities)
+	}
+}
+
+func TestSessionCapabilitiesReflectActualRegisteredTools(t *testing.T) {
+	pool := newTestPool(t, 4, "5m")
+	pool.cfg.EnableBuiltins = false
+	pool.cfg.EnableMemory = true
+	pool.cfg.EnableSubagent = true
+	pool.cfg.EnableFocusedTasks = true
+	s, err := pool.GetOrCreate("tool-light")
+	if err != nil {
+		t.Fatal(err)
+	}
+	caps := summarizeActiveCapabilities(s, pool.cfg)
+	if caps.Builtins || caps.SkillInstall || caps.Plan || caps.SessionSearch {
+		t.Fatalf("tool-light session should not report builtin-only tools: %+v", caps)
+	}
+	if !caps.Memory || !caps.Subagent || !caps.FocusedTasks {
+		t.Fatalf("tool-light session should report actually registered non-builtin tools: %+v", caps)
 	}
 }
 

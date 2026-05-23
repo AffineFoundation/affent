@@ -57,7 +57,10 @@ type sessionSummary struct {
 
 type sessionCapabilities struct {
 	Builtins          bool `json:"builtins"`
+	SkillInstall      bool `json:"skill_install"`
+	Plan              bool `json:"plan"`
 	Memory            bool `json:"memory"`
+	SessionSearch     bool `json:"session_search"`
 	Browser           bool `json:"browser"`
 	BrowserScreenshot bool `json:"browser_screenshot"`
 	Web               bool `json:"web"`
@@ -358,24 +361,40 @@ func summarizeActiveSession(s *Session, cfg Config) sessionSummary {
 	s.mu.Unlock()
 	usage := s.UsageSnapshot()
 	browser := s.BrowserStatsSnapshot()
+	caps := summarizeActiveCapabilities(s, cfg)
 	return sessionSummary{
-		ID:         s.ID,
-		Active:     true,
-		CreatedAt:  formatTime(createdAt),
-		LastUsedAt: formatTime(lastUsedAt),
-		Capabilities: &sessionCapabilities{
-			Builtins:          cfg.EnableBuiltins,
-			Memory:            cfg.EnableMemory,
-			Browser:           cfg.EnableBrowser,
-			BrowserScreenshot: cfg.BrowserScreenshot,
-			Web:               cfg.EnableWeb,
-			WebSearch:         cfg.EnableWebSearch,
-			Subagent:          cfg.EnableSubagent,
-			SubagentMaxDepth:  cfg.SubagentMaxDepth,
-			FocusedTasks:      cfg.EnableFocusedTasks,
-		},
-		Usage:   &usage,
-		Browser: &browser,
+		ID:           s.ID,
+		Active:       true,
+		CreatedAt:    formatTime(createdAt),
+		LastUsedAt:   formatTime(lastUsedAt),
+		Capabilities: &caps,
+		Usage:        &usage,
+		Browser:      &browser,
+	}
+}
+
+func summarizeActiveCapabilities(s *Session, cfg Config) sessionCapabilities {
+	hasTool := func(name string) bool {
+		_, ok := s.registry.Get(name)
+		return ok
+	}
+	return sessionCapabilities{
+		Builtins: hasTool("shell") &&
+			hasTool("read_file") &&
+			hasTool("write_file") &&
+			hasTool("edit_file") &&
+			hasTool("list_files"),
+		SkillInstall:      hasTool("skill"),
+		Plan:              hasTool(agent.PlanToolName),
+		Memory:            hasTool("memory"),
+		SessionSearch:     hasTool("session_search"),
+		Browser:           hasTool("browser_navigate") || hasTool("browser_snapshot"),
+		BrowserScreenshot: hasTool("browser_screenshot"),
+		Web:               hasTool("web_fetch"),
+		WebSearch:         hasTool("web_search"),
+		Subagent:          hasTool(agent.SubagentToolName),
+		SubagentMaxDepth:  cfg.SubagentMaxDepth,
+		FocusedTasks:      hasTool(agent.FocusedTaskToolName),
 	}
 }
 

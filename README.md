@@ -602,8 +602,9 @@ Native session endpoints:
 
 - `GET /v1/sessions?limit=100&after=<session_id>` lists sessions from the
   in-memory pool plus durable session directories. Active session summaries
-  include the enabled capabilities (`builtins`, `memory`, `subagent`,
-  `focused_tasks`, web/browser flags).
+  include the actual registered capabilities (`builtins`, `skill_install`,
+  `plan`, `memory`, `session_search`, `subagent`, `focused_tasks`, web/browser
+  flags).
 - `POST /v1/sessions` creates or reopens a session and returns the same active
   capability summary.
 - `GET /v1/sessions/{id}` returns session status and, when active, capability
