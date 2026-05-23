@@ -144,6 +144,11 @@ func TestRunner_DefaultRuntimeLoadsWorkspaceSkills(t *testing.T) {
 			Role    string `json:"role"`
 			Content string `json:"content"`
 		} `json:"messages"`
+		Tools []struct {
+			Function struct {
+				Name string `json:"name"`
+			} `json:"function"`
+		} `json:"tools"`
 	}
 	requests := make(chan capturedRequest, 1)
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -203,14 +208,30 @@ func TestRunner_DefaultRuntimeLoadsWorkspaceSkills(t *testing.T) {
 	}
 	select {
 	case req := <-requests:
-		found := false
+		foundSkill := false
+		foundPlanGuidance := false
 		for _, msg := range req.Messages {
 			if msg.Role == "system" && strings.Contains(msg.Content, "RUNTIME_EVAL_SKILL_MARKER") {
-				found = true
+				foundSkill = true
+			}
+			if msg.Role == "system" && strings.Contains(msg.Content, "Affent plan tool guidance:") {
+				foundPlanGuidance = true
 			}
 		}
-		if !found {
+		if !foundSkill {
 			t.Fatalf("runtime skill was not injected into LLM request: %+v", req.Messages)
+		}
+		if !foundPlanGuidance {
+			t.Fatalf("default runtime registered plan but prompt missed plan guidance: %+v", req.Messages)
+		}
+		foundPlanTool := false
+		for _, tool := range req.Tools {
+			if tool.Function.Name == agent.PlanToolName {
+				foundPlanTool = true
+			}
+		}
+		if !foundPlanTool {
+			t.Fatalf("default runtime should advertise plan tool; tools=%+v", req.Tools)
 		}
 	case <-time.After(2 * time.Second):
 		t.Fatal("LLM request was not captured")
