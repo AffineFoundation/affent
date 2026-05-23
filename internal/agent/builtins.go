@@ -22,10 +22,12 @@ import (
 // Mirrors file(1) / git / `grep -I` — NUL is rare in any text encoding
 // but ubiquitous in binary formats. Used by read_file to refuse rather
 // than dump 64 KiB of replacement characters into the model context.
+const binaryProbeBytes = 8192
+
 func looksBinary(buf []byte) bool {
 	n := len(buf)
-	if n > 8192 {
-		n = 8192
+	if n > binaryProbeBytes {
+		n = binaryProbeBytes
 	}
 	return bytes.IndexByte(buf[:n], 0) >= 0
 }

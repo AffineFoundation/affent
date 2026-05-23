@@ -39,6 +39,11 @@ const DefaultSummaryTriggerMsgs = 240
 // DefaultSummaryKeepLast is the OpenHands V1 keep_last value (10).
 const DefaultSummaryKeepLast = 10
 
+const (
+	compactReasoningMaxChars = 500
+	compactToolArgsMaxChars  = 300
+)
+
 // LLMSummaryCompactor implements rolling LLM summarization. Layout
 // after a successful compaction:
 //
@@ -313,7 +318,7 @@ func formatEvent(m ChatMessage) string {
 		b.WriteString("ASSISTANT")
 		if m.ReasoningContent != "" {
 			b.WriteString(" [thinking: ")
-			b.WriteString(truncateChars(m.ReasoningContent, 500))
+			b.WriteString(truncateChars(m.ReasoningContent, compactReasoningMaxChars))
 			b.WriteString("]")
 		}
 		if m.Content != "" {
@@ -321,7 +326,7 @@ func formatEvent(m ChatMessage) string {
 			b.WriteString(m.Content)
 		}
 		for _, tc := range m.ToolCalls {
-			fmt.Fprintf(&b, "\n  → tool %s args=%s", tc.Function.Name, truncateChars(tc.Function.Arguments, 300))
+			fmt.Fprintf(&b, "\n  → tool %s args=%s", tc.Function.Name, truncateChars(tc.Function.Arguments, compactToolArgsMaxChars))
 		}
 	case "tool":
 		fmt.Fprintf(&b, "TOOL_RESULT[%s]: %s", m.Name, m.Content)

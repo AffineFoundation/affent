@@ -1079,6 +1079,8 @@ var mutatingShellNeedles = []string{
 	"pip install", "npm install", "pnpm install", "yarn add", "go get",
 }
 
+var harmlessStderrRedirects = []string{"2>/dev/null", "2> /dev/null"}
+
 var mutatingShellPrefixes = []string{
 	"rm ", "mv ", "cp ", "mkdir ", "touch ", "chmod ", "chown ",
 }
@@ -1089,7 +1091,7 @@ func rejectMutatingShell(command string) error {
 		return errors.New("subagent transcripts are private audit records; use the subagent report or session_search instead")
 	}
 	withoutStderrRedirect := strings.ReplaceAll(c, "2>&1", "")
-	for _, harmless := range []string{"2>/dev/null", "2> /dev/null"} {
+	for _, harmless := range harmlessStderrRedirects {
 		withoutStderrRedirect = strings.ReplaceAll(withoutStderrRedirect, harmless, "")
 	}
 	if strings.Contains(withoutStderrRedirect, ">") {
