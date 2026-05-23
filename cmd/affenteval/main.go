@@ -28,18 +28,19 @@ func run(args []string) int {
 	fs := flag.NewFlagSet("affenteval", flag.ContinueOnError)
 	fs.SetOutput(os.Stderr)
 	var (
-		list        = fs.Bool("list", false, "list built-in scenarios and exit")
-		listSuites  = fs.Bool("list-suites", false, "list built-in scenario suites and exit")
-		suite       = fs.String("suite", "", "scenario suite to run/list (e.g. small-model-tools)")
-		scenarioCSV = fs.String("scenario", "", "comma-separated scenario names; empty runs all")
-		repoRoot    = fs.String("repo-root", ".", "Affent repository root")
-		workRoot    = fs.String("work-root", "", "directory for temporary scenario workspaces; default $TMPDIR/affent-eval")
-		baseURL     = fs.String("base-url", "", "OpenAI-compatible endpoint (env: AFFENTCTL_BASE_URL)")
-		apiKey      = fs.String("api-key", "", "API key (env: AFFENTCTL_API_KEY)")
-		model       = fs.String("model", "", "model id (env: AFFENTCTL_MODEL)")
-		temperature = fs.String("temperature", "0", "sampling temperature forwarded to affentctl")
-		timeout     = fs.Duration("timeout", 5*time.Minute, "per-scenario timeout")
-		jsonl       = fs.Bool("jsonl", false, "emit machine-readable JSONL records instead of text")
+		list           = fs.Bool("list", false, "list built-in scenarios and exit")
+		listSuites     = fs.Bool("list-suites", false, "list built-in scenario suites and exit")
+		suite          = fs.String("suite", "", "scenario suite to run/list (e.g. small-model-tools)")
+		scenarioCSV    = fs.String("scenario", "", "comma-separated scenario names; empty runs all")
+		repoRoot       = fs.String("repo-root", ".", "Affent repository root")
+		workRoot       = fs.String("work-root", "", "directory for temporary scenario workspaces; default $TMPDIR/affent-eval")
+		baseURL        = fs.String("base-url", "", "OpenAI-compatible endpoint (env: AFFENTCTL_BASE_URL)")
+		apiKey         = fs.String("api-key", "", "API key (env: AFFENTCTL_API_KEY)")
+		model          = fs.String("model", "", "model id (env: AFFENTCTL_MODEL)")
+		temperature    = fs.String("temperature", "0", "sampling temperature forwarded to affentctl")
+		timeout        = fs.Duration("timeout", 5*time.Minute, "per-scenario timeout")
+		jsonl          = fs.Bool("jsonl", false, "emit machine-readable JSONL records instead of text")
+		keepWorkspaces = fs.Bool("keep-workspaces", false, "keep passing scenario workspaces; failing scenario workspaces are always kept")
 	)
 	fs.Usage = func() {
 		fmt.Fprintln(fs.Output(), `usage: affenteval [flags]
@@ -88,13 +89,14 @@ success and trace-level process quality.`)
 		return 64
 	}
 	runner := agenteval.BatchRunner{
-		RepoRoot:    *repoRoot,
-		WorkRoot:    *workRoot,
-		BaseURL:     *baseURL,
-		APIKey:      *apiKey,
-		Model:       *model,
-		Temperature: *temperature,
-		Timeout:     *timeout,
+		RepoRoot:                 *repoRoot,
+		WorkRoot:                 *workRoot,
+		BaseURL:                  *baseURL,
+		APIKey:                   *apiKey,
+		Model:                    *model,
+		Temperature:              *temperature,
+		Timeout:                  *timeout,
+		CleanupPassingWorkspaces: !*keepWorkspaces,
 	}
 	ctx := context.Background()
 	var summary batchSummary
@@ -119,16 +121,18 @@ success and trace-level process quality.`)
 }
 
 type batchSummary struct {
-	Total          int
-	Passed         int
-	Failed         int
-	Duration       time.Duration
-	ToolCalls      int
-	ToolErrors     int
-	ToolRepaired   int
-	ToolDurationMS int64
-	InputTokens    int
-	OutputTokens   int
+	Total             int
+	Passed            int
+	Failed            int
+	Duration          time.Duration
+	ToolCalls         int
+	ToolErrors        int
+	ToolRepaired      int
+	ToolDurationMS    int64
+	InputTokens       int
+	OutputTokens      int
+	RemovedWorkspaces int
+	CleanupErrors     int
 }
 
 func (s *batchSummary) add(res agenteval.BatchResult) {
@@ -145,10 +149,16 @@ func (s *batchSummary) add(res agenteval.BatchResult) {
 	s.ToolDurationMS += res.ToolStats.ToolDurationMS
 	s.InputTokens += res.Usage.InputTokens
 	s.OutputTokens += res.Usage.OutputTokens
+	if res.WorkspaceRemoved {
+		s.RemovedWorkspaces++
+	}
+	if res.CleanupError != "" {
+		s.CleanupErrors++
+	}
 }
 
 func printBatchSummary(w io.Writer, s batchSummary) {
-	fmt.Fprintf(w, "SUMMARY scenarios=%d passed=%d failed=%d duration=%s tools=%d errors=%d repaired=%d tool_ms=%d tokens=%d/%d\n",
+	fmt.Fprintf(w, "SUMMARY scenarios=%d passed=%d failed=%d duration=%s tools=%d errors=%d repaired=%d tool_ms=%d tokens=%d/%d removed_workspaces=%d cleanup_errors=%d\n",
 		s.Total,
 		s.Passed,
 		s.Failed,
@@ -159,72 +169,82 @@ func printBatchSummary(w io.Writer, s batchSummary) {
 		s.ToolDurationMS,
 		s.InputTokens,
 		s.OutputTokens,
+		s.RemovedWorkspaces,
+		s.CleanupErrors,
 	)
 }
 
 type batchResultRecord struct {
-	Type           string   `json:"type"`
-	Scenario       string   `json:"scenario"`
-	OK             bool     `json:"ok"`
-	DurationMS     int64    `json:"duration_ms"`
-	Workspace      string   `json:"workspace"`
-	TracePath      string   `json:"trace_path"`
-	TurnEndReason  string   `json:"turn_end_reason,omitempty"`
-	ToolCalls      int      `json:"tool_calls"`
-	ToolErrors     int      `json:"tool_errors"`
-	ToolRepaired   int      `json:"tool_repaired"`
-	ToolDurationMS int64    `json:"tool_duration_ms"`
-	InputTokens    int      `json:"input_tokens"`
-	OutputTokens   int      `json:"output_tokens"`
-	Failures       []string `json:"failures,omitempty"`
+	Type             string   `json:"type"`
+	Scenario         string   `json:"scenario"`
+	OK               bool     `json:"ok"`
+	DurationMS       int64    `json:"duration_ms"`
+	Workspace        string   `json:"workspace"`
+	TracePath        string   `json:"trace_path"`
+	TurnEndReason    string   `json:"turn_end_reason,omitempty"`
+	ToolCalls        int      `json:"tool_calls"`
+	ToolErrors       int      `json:"tool_errors"`
+	ToolRepaired     int      `json:"tool_repaired"`
+	ToolDurationMS   int64    `json:"tool_duration_ms"`
+	InputTokens      int      `json:"input_tokens"`
+	OutputTokens     int      `json:"output_tokens"`
+	WorkspaceRemoved bool     `json:"workspace_removed,omitempty"`
+	CleanupError     string   `json:"cleanup_error,omitempty"`
+	Failures         []string `json:"failures,omitempty"`
 }
 
 type batchSummaryRecord struct {
-	Type           string `json:"type"`
-	Scenarios      int    `json:"scenarios"`
-	Passed         int    `json:"passed"`
-	Failed         int    `json:"failed"`
-	DurationMS     int64  `json:"duration_ms"`
-	ToolCalls      int    `json:"tool_calls"`
-	ToolErrors     int    `json:"tool_errors"`
-	ToolRepaired   int    `json:"tool_repaired"`
-	ToolDurationMS int64  `json:"tool_duration_ms"`
-	InputTokens    int    `json:"input_tokens"`
-	OutputTokens   int    `json:"output_tokens"`
+	Type              string `json:"type"`
+	Scenarios         int    `json:"scenarios"`
+	Passed            int    `json:"passed"`
+	Failed            int    `json:"failed"`
+	DurationMS        int64  `json:"duration_ms"`
+	ToolCalls         int    `json:"tool_calls"`
+	ToolErrors        int    `json:"tool_errors"`
+	ToolRepaired      int    `json:"tool_repaired"`
+	ToolDurationMS    int64  `json:"tool_duration_ms"`
+	InputTokens       int    `json:"input_tokens"`
+	OutputTokens      int    `json:"output_tokens"`
+	RemovedWorkspaces int    `json:"removed_workspaces"`
+	CleanupErrors     int    `json:"cleanup_errors"`
 }
 
 func printBatchResultJSONL(w io.Writer, res agenteval.BatchResult) {
 	writeJSONLine(w, batchResultRecord{
-		Type:           "scenario",
-		Scenario:       res.BatchScenario,
-		OK:             res.OK,
-		DurationMS:     res.Duration.Milliseconds(),
-		Workspace:      res.Workspace,
-		TracePath:      res.TracePath,
-		TurnEndReason:  res.TurnEndReason,
-		ToolCalls:      res.ToolCalls,
-		ToolErrors:     res.ToolStats.ToolErrors,
-		ToolRepaired:   res.ToolStats.ToolArgsRepaired,
-		ToolDurationMS: res.ToolStats.ToolDurationMS,
-		InputTokens:    res.Usage.InputTokens,
-		OutputTokens:   res.Usage.OutputTokens,
-		Failures:       res.Failures,
+		Type:             "scenario",
+		Scenario:         res.BatchScenario,
+		OK:               res.OK,
+		DurationMS:       res.Duration.Milliseconds(),
+		Workspace:        res.Workspace,
+		TracePath:        res.TracePath,
+		TurnEndReason:    res.TurnEndReason,
+		ToolCalls:        res.ToolCalls,
+		ToolErrors:       res.ToolStats.ToolErrors,
+		ToolRepaired:     res.ToolStats.ToolArgsRepaired,
+		ToolDurationMS:   res.ToolStats.ToolDurationMS,
+		InputTokens:      res.Usage.InputTokens,
+		OutputTokens:     res.Usage.OutputTokens,
+		WorkspaceRemoved: res.WorkspaceRemoved,
+		CleanupError:     res.CleanupError,
+		Failures:         res.Failures,
 	})
 }
 
 func printBatchSummaryJSONL(w io.Writer, s batchSummary) {
 	writeJSONLine(w, batchSummaryRecord{
-		Type:           "summary",
-		Scenarios:      s.Total,
-		Passed:         s.Passed,
-		Failed:         s.Failed,
-		DurationMS:     s.Duration.Milliseconds(),
-		ToolCalls:      s.ToolCalls,
-		ToolErrors:     s.ToolErrors,
-		ToolRepaired:   s.ToolRepaired,
-		ToolDurationMS: s.ToolDurationMS,
-		InputTokens:    s.InputTokens,
-		OutputTokens:   s.OutputTokens,
+		Type:              "summary",
+		Scenarios:         s.Total,
+		Passed:            s.Passed,
+		Failed:            s.Failed,
+		DurationMS:        s.Duration.Milliseconds(),
+		ToolCalls:         s.ToolCalls,
+		ToolErrors:        s.ToolErrors,
+		ToolRepaired:      s.ToolRepaired,
+		ToolDurationMS:    s.ToolDurationMS,
+		InputTokens:       s.InputTokens,
+		OutputTokens:      s.OutputTokens,
+		RemovedWorkspaces: s.RemovedWorkspaces,
+		CleanupErrors:     s.CleanupErrors,
 	})
 }
 
@@ -240,7 +260,14 @@ func printBatchResult(w io.Writer, res agenteval.BatchResult) {
 		status = "FAIL"
 	}
 	fmt.Fprintf(w, "%s %s (%s)\n", status, res.BatchScenario, res.Duration.Round(time.Millisecond))
-	fmt.Fprintf(w, "  workspace: %s\n", res.Workspace)
+	fmt.Fprintf(w, "  workspace: %s", res.Workspace)
+	if res.WorkspaceRemoved {
+		fmt.Fprint(w, " (removed)")
+	}
+	if res.CleanupError != "" {
+		fmt.Fprintf(w, " (cleanup_error=%s)", res.CleanupError)
+	}
+	fmt.Fprintln(w)
 	fmt.Fprintf(w, "  trace: %s\n", res.TracePath)
 	fmt.Fprintf(w, "  metrics: tools=%d errors=%d repaired=%d tool_ms=%d tokens=%d/%d",
 		res.ToolCalls,

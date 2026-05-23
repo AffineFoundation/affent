@@ -487,7 +487,10 @@ same lesson becomes a prompt, skill, guard, or tool-policy change. Text output
 includes per-scenario and summary metrics for tool calls, tool errors, argument
 repairs, measured tool time, token usage, and turn end reason. Use `--jsonl`
 when comparing models or storing CI artifacts; it emits one `scenario` record
-per run plus a final `summary` record with the same metrics.
+per run plus a final `summary` record with the same metrics. Passing scenario
+workspaces are removed by default to avoid filling the machine during repeated
+evals; failing workspaces are kept for debugging. Pass `--keep-workspaces` when
+you need every workspace and trace left on disk.
 
 ## Events And Observability
 

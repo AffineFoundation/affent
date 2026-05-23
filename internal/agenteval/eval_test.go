@@ -191,3 +191,31 @@ func TestProtectedFiles(t *testing.T) {
 		t.Fatal("expected protected file change to be detected")
 	}
 }
+
+func TestBatchRunnerCleanupPassingWorkspace(t *testing.T) {
+	dir := t.TempDir()
+	workspace := filepath.Join(dir, "passing")
+	if err := os.MkdirAll(workspace, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	res := BatchResult{OK: true}
+	BatchRunner{CleanupPassingWorkspaces: true}.cleanupPassingWorkspace(&res, workspace)
+	if !res.WorkspaceRemoved || res.CleanupError != "" {
+		t.Fatalf("cleanup result = %+v, want removed without error", res)
+	}
+	if _, err := os.Stat(workspace); !os.IsNotExist(err) {
+		t.Fatalf("workspace should be removed, stat err=%v", err)
+	}
+}
+
+func TestBatchRunnerKeepsFailingWorkspace(t *testing.T) {
+	workspace := t.TempDir()
+	res := BatchResult{OK: false}
+	BatchRunner{CleanupPassingWorkspaces: true}.cleanupPassingWorkspace(&res, workspace)
+	if res.WorkspaceRemoved || res.CleanupError != "" {
+		t.Fatalf("cleanup result = %+v, want untouched failure", res)
+	}
+	if _, err := os.Stat(workspace); err != nil {
+		t.Fatalf("failing workspace should remain: %v", err)
+	}
+}

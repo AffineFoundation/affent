@@ -42,28 +42,31 @@ type BatchScenario struct {
 }
 
 type BatchRunner struct {
-	RepoRoot    string
-	WorkRoot    string
-	BaseURL     string
-	APIKey      string
-	Model       string
-	Temperature string
-	GoBin       string
-	Timeout     time.Duration
+	RepoRoot                 string
+	WorkRoot                 string
+	BaseURL                  string
+	APIKey                   string
+	Model                    string
+	Temperature              string
+	GoBin                    string
+	Timeout                  time.Duration
+	CleanupPassingWorkspaces bool
 }
 
 type BatchResult struct {
-	BatchScenario string
-	Workspace     string
-	TracePath     string
-	OK            bool
-	Failures      []string
-	Duration      time.Duration
-	FinalText     string
-	TurnEndReason string
-	ToolCalls     int
-	ToolStats     ToolRuntimeStats
-	Usage         Usage
+	BatchScenario    string
+	Workspace        string
+	TracePath        string
+	OK               bool
+	Failures         []string
+	Duration         time.Duration
+	FinalText        string
+	TurnEndReason    string
+	ToolCalls        int
+	ToolStats        ToolRuntimeStats
+	Usage            Usage
+	WorkspaceRemoved bool
+	CleanupError     string
 }
 
 func BuiltinBatchScenarios() []BatchScenario {
@@ -236,7 +239,19 @@ func (r BatchRunner) Run(ctx context.Context, scenario BatchScenario) BatchResul
 	}
 	res.Duration = time.Since(start)
 	res.OK = len(res.Failures) == 0
+	r.cleanupPassingWorkspace(&res, workspace)
 	return res
+}
+
+func (r BatchRunner) cleanupPassingWorkspace(res *BatchResult, workspace string) {
+	if res == nil || !res.OK || !r.CleanupPassingWorkspaces {
+		return
+	}
+	if err := os.RemoveAll(workspace); err != nil {
+		res.CleanupError = err.Error()
+		return
+	}
+	res.WorkspaceRemoved = true
 }
 
 func (r BatchResult) fail(format string, args ...any) BatchResult {

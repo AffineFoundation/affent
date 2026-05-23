@@ -114,13 +114,14 @@ func TestRunRejectsInvalidConfigBeforeScenarios(t *testing.T) {
 func TestPrintBatchResultIncludesTraceMetrics(t *testing.T) {
 	var out bytes.Buffer
 	printBatchResult(&out, agenteval.BatchResult{
-		BatchScenario: "sample",
-		Workspace:     "/tmp/ws",
-		TracePath:     "/tmp/ws/trace.jsonl",
-		OK:            true,
-		Duration:      1234 * time.Millisecond,
-		TurnEndReason: "completed",
-		ToolCalls:     3,
+		BatchScenario:    "sample",
+		Workspace:        "/tmp/ws",
+		TracePath:        "/tmp/ws/trace.jsonl",
+		OK:               true,
+		Duration:         1234 * time.Millisecond,
+		TurnEndReason:    "completed",
+		ToolCalls:        3,
+		WorkspaceRemoved: true,
 		ToolStats: agenteval.ToolRuntimeStats{
 			ToolArgsRepaired: 1,
 			ToolErrors:       2,
@@ -131,7 +132,7 @@ func TestPrintBatchResultIncludesTraceMetrics(t *testing.T) {
 	got := out.String()
 	for _, want := range []string{
 		"PASS sample (1.234s)",
-		"workspace: /tmp/ws",
+		"workspace: /tmp/ws (removed)",
 		"trace: /tmp/ws/trace.jsonl",
 		"metrics: tools=3 errors=2 repaired=1 tool_ms=45 tokens=100/25 end=completed",
 	} {
@@ -144,9 +145,10 @@ func TestPrintBatchResultIncludesTraceMetrics(t *testing.T) {
 func TestBatchSummaryAggregatesRuntimeMetrics(t *testing.T) {
 	var summary batchSummary
 	summary.add(agenteval.BatchResult{
-		OK:        true,
-		Duration:  100 * time.Millisecond,
-		ToolCalls: 2,
+		OK:               true,
+		Duration:         100 * time.Millisecond,
+		ToolCalls:        2,
+		WorkspaceRemoved: true,
 		ToolStats: agenteval.ToolRuntimeStats{
 			ToolArgsRepaired: 1,
 			ToolErrors:       0,
@@ -168,7 +170,7 @@ func TestBatchSummaryAggregatesRuntimeMetrics(t *testing.T) {
 
 	var out bytes.Buffer
 	printBatchSummary(&out, summary)
-	want := "SUMMARY scenarios=2 passed=1 failed=1 duration=350ms tools=5 errors=1 repaired=3 tool_ms=50 tokens=90/20"
+	want := "SUMMARY scenarios=2 passed=1 failed=1 duration=350ms tools=5 errors=1 repaired=3 tool_ms=50 tokens=90/20 removed_workspaces=1 cleanup_errors=0"
 	if !strings.Contains(out.String(), want) {
 		t.Fatalf("summary output missing %q:\n%s", want, out.String())
 	}
@@ -177,20 +179,20 @@ func TestBatchSummaryAggregatesRuntimeMetrics(t *testing.T) {
 func TestPrintBatchResultJSONL(t *testing.T) {
 	var out bytes.Buffer
 	printBatchResultJSONL(&out, agenteval.BatchResult{
-		BatchScenario: "sample",
-		Workspace:     "/tmp/ws",
-		TracePath:     "/tmp/ws/trace.jsonl",
-		OK:            false,
-		Duration:      1500 * time.Millisecond,
-		TurnEndReason: "max_turns",
-		ToolCalls:     4,
+		BatchScenario:    "sample",
+		Workspace:        "/tmp/ws",
+		TracePath:        "/tmp/ws/trace.jsonl",
+		OK:               true,
+		Duration:         1500 * time.Millisecond,
+		TurnEndReason:    "completed",
+		ToolCalls:        4,
+		WorkspaceRemoved: true,
 		ToolStats: agenteval.ToolRuntimeStats{
 			ToolArgsRepaired: 2,
 			ToolErrors:       1,
 			ToolDurationMS:   75,
 		},
-		Usage:    agenteval.Usage{InputTokens: 200, OutputTokens: 50},
-		Failures: []string{"missing final"},
+		Usage: agenteval.Usage{InputTokens: 200, OutputTokens: 50},
 	})
 
 	var got map[string]any
@@ -198,40 +200,42 @@ func TestPrintBatchResultJSONL(t *testing.T) {
 		t.Fatalf("jsonl result did not decode: %v\n%s", err, out.String())
 	}
 	for key, want := range map[string]any{
-		"type":             "scenario",
-		"scenario":         "sample",
-		"ok":               false,
-		"duration_ms":      float64(1500),
-		"turn_end_reason":  "max_turns",
-		"tool_calls":       float64(4),
-		"tool_errors":      float64(1),
-		"tool_repaired":    float64(2),
-		"tool_duration_ms": float64(75),
-		"input_tokens":     float64(200),
-		"output_tokens":    float64(50),
+		"type":              "scenario",
+		"scenario":          "sample",
+		"ok":                true,
+		"duration_ms":       float64(1500),
+		"turn_end_reason":   "completed",
+		"tool_calls":        float64(4),
+		"tool_errors":       float64(1),
+		"tool_repaired":     float64(2),
+		"tool_duration_ms":  float64(75),
+		"input_tokens":      float64(200),
+		"output_tokens":     float64(50),
+		"workspace_removed": true,
 	} {
 		if got[key] != want {
 			t.Fatalf("%s = %v, want %v\njson=%s", key, got[key], want, out.String())
 		}
 	}
-	if failures, ok := got["failures"].([]any); !ok || len(failures) != 1 || failures[0] != "missing final" {
-		t.Fatalf("failures = %#v, want one failure", got["failures"])
+	if _, ok := got["failures"]; ok {
+		t.Fatalf("passing result should omit failures, got %#v", got["failures"])
 	}
 }
 
 func TestPrintBatchSummaryJSONL(t *testing.T) {
 	var out bytes.Buffer
 	printBatchSummaryJSONL(&out, batchSummary{
-		Total:          2,
-		Passed:         1,
-		Failed:         1,
-		Duration:       2500 * time.Millisecond,
-		ToolCalls:      5,
-		ToolErrors:     1,
-		ToolRepaired:   3,
-		ToolDurationMS: 120,
-		InputTokens:    90,
-		OutputTokens:   20,
+		Total:             2,
+		Passed:            1,
+		Failed:            1,
+		Duration:          2500 * time.Millisecond,
+		ToolCalls:         5,
+		ToolErrors:        1,
+		ToolRepaired:      3,
+		ToolDurationMS:    120,
+		InputTokens:       90,
+		OutputTokens:      20,
+		RemovedWorkspaces: 1,
 	})
 
 	var got map[string]any
@@ -239,17 +243,19 @@ func TestPrintBatchSummaryJSONL(t *testing.T) {
 		t.Fatalf("jsonl summary did not decode: %v\n%s", err, out.String())
 	}
 	for key, want := range map[string]any{
-		"type":             "summary",
-		"scenarios":        float64(2),
-		"passed":           float64(1),
-		"failed":           float64(1),
-		"duration_ms":      float64(2500),
-		"tool_calls":       float64(5),
-		"tool_errors":      float64(1),
-		"tool_repaired":    float64(3),
-		"tool_duration_ms": float64(120),
-		"input_tokens":     float64(90),
-		"output_tokens":    float64(20),
+		"type":               "summary",
+		"scenarios":          float64(2),
+		"passed":             float64(1),
+		"failed":             float64(1),
+		"duration_ms":        float64(2500),
+		"tool_calls":         float64(5),
+		"tool_errors":        float64(1),
+		"tool_repaired":      float64(3),
+		"tool_duration_ms":   float64(120),
+		"input_tokens":       float64(90),
+		"output_tokens":      float64(20),
+		"removed_workspaces": float64(1),
+		"cleanup_errors":     float64(0),
 	} {
 		if got[key] != want {
 			t.Fatalf("%s = %v, want %v\njson=%s", key, got[key], want, out.String())
