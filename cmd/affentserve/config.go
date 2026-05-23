@@ -42,10 +42,11 @@ type Config struct {
 	// gets its own ephemeral workspace (for agent runtime's Conversation JSONL).
 	WorkspaceRoot string `json:"workspace_root"`
 
-	// MemoryRoot is the parent directory for DURABLE per-session memory.
-	// Memory lives separately from the session workspace so it survives
-	// LRU eviction and server restarts: same session_id → same memory
-	// dir, regardless of how many times the workspace was recreated.
+	// MemoryRoot is the parent directory for DURABLE per-session state.
+	// Conversation logs, runtime-installed skills, and memory live
+	// separately from the session workspace so they survive LRU eviction
+	// and server restarts: same session_id → same state dir, regardless
+	// of how many times the workspace was recreated.
 	// Empty defaults to "<WorkspaceRoot>/memory" (or an OS temp dir
 	// when WorkspaceRoot itself is empty).
 	MemoryRoot string `json:"memory_root"`
@@ -60,7 +61,7 @@ type Config struct {
 	SessionIdleTTL string `json:"session_idle_ttl"`
 
 	// SessionRetention controls how long a session's DURABLE state
-	// (conversation log + memory under MemoryRoot/<id>/) is kept
+	// (conversation log + runtime skills + memory under MemoryRoot/<id>/) is kept
 	// after the last activity. Empty (the default) disables the
 	// retention sweep — durable state lives forever until an
 	// explicit DELETE on the session id. Set to a Go duration

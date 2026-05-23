@@ -258,9 +258,9 @@ func (p *SessionPool) buildSession(id string) (*Session, error) {
 	// Stable per-session-id dir for durable state. Holds the
 	// conversation log (so the chat handler's "we treat the rest of
 	// history as already captured in the agent's Conversation log" is
-	// actually true across restarts) and the memory store's files
-	// (when EnableMemory is on). Both live here so one session_id
-	// resolves to one durable identity on disk.
+	// actually true across restarts), runtime-installed skills, and the
+	// memory store's files (when EnableMemory is on). These live here so
+	// one session_id resolves to one durable identity on disk.
 	sessionDir, err := p.allocSessionDir(id)
 	if err != nil {
 		_ = os.RemoveAll(workspace)
@@ -309,7 +309,7 @@ func (p *SessionPool) buildSession(id string) (*Session, error) {
 	var skillReg *agent.SkillRegistry
 	if p.cfg.EnableBuiltins {
 		localExec = executor.NewLocalExecutor(id, workspace)
-		skillDir := agent.DefaultWorkspaceSkillDir(workspace)
+		skillDir := agent.DefaultWorkspaceSkillDir(sessionDir)
 		var skillErr error
 		skillReg, skillErr = agent.RuntimeSkillRegistry(skillDir)
 		if skillErr != nil {
@@ -535,13 +535,14 @@ func (p *SessionPool) sessionDirPath(id string) string {
 }
 
 // allocSessionDir returns the durable per-session-id state dir. Holds
-// the JSONL conversation log and (when EnableMemory is on) the memory
-// store files. Unlike allocWorkspace, this is STABLE: same id → same
-// path across server restarts and LRU evictions, so the chat handler's
-// "the rest of history lives in the Conversation log keyed by
-// session_id" contract actually holds — and the long-running-memory
-// promise survives. Callers must have already passed id through
-// agent.ValidateSessionID; buildSession enforces this at the top.
+// the JSONL conversation log, runtime-installed skills, and (when
+// EnableMemory is on) the memory store files. Unlike allocWorkspace,
+// this is STABLE: same id → same path across server restarts and LRU
+// evictions, so the chat handler's "the rest of history lives in the
+// Conversation log keyed by session_id" contract actually holds — and
+// the long-running-memory / runtime-skill promise survives. Callers
+// must have already passed id through agent.ValidateSessionID;
+// buildSession enforces this at the top.
 func (p *SessionPool) allocSessionDir(id string) (string, error) {
 	dir := p.sessionDirPath(id)
 	if err := os.MkdirAll(dir, 0o755); err != nil {

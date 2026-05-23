@@ -1,6 +1,8 @@
 package main
 
 import (
+	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
@@ -338,6 +340,69 @@ func TestSessionPool_ConversationLogIsDurable(t *testing.T) {
 	}
 	if !found {
 		t.Errorf("conversation log must persist across session re-create; got messages: %+v", msgs)
+	}
+}
+
+func TestSessionPool_RuntimeSkillsAreDurable(t *testing.T) {
+	memRoot := t.TempDir()
+	cfg := Config{
+		Listen:         "127.0.0.1:0",
+		MaxSessions:    4,
+		SessionIdleTTL: "5m",
+		WorkspaceRoot:  t.TempDir(),
+		MemoryRoot:     memRoot,
+		EnableBuiltins: true,
+		BaseURL:        "http://127.0.0.1:0",
+		APIKey:         "test",
+		Model:          "fake",
+	}
+	pool, err := NewSessionPool(cfg, zerolog.New(io.Discard))
+	if err != nil {
+		t.Fatalf("NewSessionPool: %v", err)
+	}
+	t.Cleanup(pool.Shutdown)
+
+	const body = "AFFENT ACTIVE SKILL: durable_demo\nSERVER_RUNTIME_SKILL_MARKER"
+	s1, err := pool.GetOrCreate("durable-skill-client")
+	if err != nil {
+		t.Fatalf("GetOrCreate first: %v", err)
+	}
+	tool, ok := s1.loop.Tools.Get("skill")
+	if !ok {
+		t.Fatal("skill tool missing")
+	}
+	args, err := json.Marshal(map[string]any{
+		"action":   "install",
+		"name":     "durable_demo",
+		"body":     body,
+		"triggers": []string{"durable demo"},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := tool.Execute(context.Background(), args); err != nil {
+		t.Fatalf("install runtime skill: %v", err)
+	}
+	skillPath := filepath.Join(memRoot, "durable-skill-client", ".affent", "skills", "durable_demo", "SKILL.md")
+	if _, err := os.Stat(skillPath); err != nil {
+		t.Fatalf("runtime skill should be stored in durable session dir: %v", err)
+	}
+	if strings.HasPrefix(skillPath, s1.workspace) {
+		t.Fatalf("runtime skill path %q must not live under ephemeral workspace %q", skillPath, s1.workspace)
+	}
+	if err := s1.Close(); err != nil {
+		t.Fatalf("Close: %v", err)
+	}
+	pool.mu.Lock()
+	delete(pool.sessions, "durable-skill-client")
+	pool.mu.Unlock()
+
+	s2, err := pool.GetOrCreate("durable-skill-client")
+	if err != nil {
+		t.Fatalf("GetOrCreate second: %v", err)
+	}
+	if got := s2.loop.SkillProvider("please use durable demo"); !strings.Contains(got, "SERVER_RUNTIME_SKILL_MARKER") {
+		t.Fatalf("durable runtime skill should reload for same session id, got %q", got)
 	}
 }
 
