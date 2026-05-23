@@ -44,7 +44,7 @@ func SummarizeJSON(raw json.RawMessage) (Summary, error) {
 	out := Summary{TotalSteps: len(st.Steps)}
 	currentPriority := 0
 	for i, step := range st.Steps {
-		status := strings.TrimSpace(step.Status)
+		status := normalizeStatus(step.Status)
 		switch status {
 		case "completed":
 			out.CompletedSteps++
@@ -72,6 +72,10 @@ func SummarizeJSON(raw json.RawMessage) (Summary, error) {
 		out.Label += ":blocked"
 	}
 	return out, nil
+}
+
+func normalizeStatus(status string) string {
+	return strings.ToLower(strings.TrimSpace(status))
 }
 
 func currentStepPriority(status string) int {
