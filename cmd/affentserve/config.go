@@ -6,7 +6,6 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"math"
 	"os"
 	"strconv"
 	"strings"
@@ -542,27 +541,13 @@ func (c Config) Validate() error {
 	if c.SubagentMaxDepth < 1 || c.SubagentMaxDepth > agent.MaxSubagentDepth {
 		return fmt.Errorf("subagent_max_depth must be between 1 and %d", agent.MaxSubagentDepth)
 	}
-	if err := c.validateSampling(); err != nil {
+	sampling := agent.SamplingDefaults{
+		Temperature: c.Temperature,
+		TopP:        c.TopP,
+		MaxTokens:   c.MaxTokens,
+	}
+	if err := sampling.Validate(); err != nil {
 		return err
-	}
-	return nil
-}
-
-func (c Config) validateSampling() error {
-	if c.Temperature != nil {
-		t := *c.Temperature
-		if math.IsNaN(t) || math.IsInf(t, 0) || t < 0 || t > 2 {
-			return fmt.Errorf("temperature must be between 0 and 2")
-		}
-	}
-	if c.TopP != nil {
-		t := *c.TopP
-		if math.IsNaN(t) || math.IsInf(t, 0) || t < 0 || t > 1 {
-			return fmt.Errorf("top_p must be between 0 and 1")
-		}
-	}
-	if c.MaxTokens != nil && *c.MaxTokens <= 0 {
-		return fmt.Errorf("max_tokens must be a positive integer")
 	}
 	return nil
 }

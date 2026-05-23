@@ -766,7 +766,7 @@ func TestParseSampling(t *testing.T) {
 		}
 		for _, c := range cases {
 			t.Run(c.name, func(t *testing.T) {
-				_, err := parseSampling(c.temperature, c.topP, c.maxTokens)
+				_, err := parseSampling(c.temperature, c.topP, c.maxTokens, "")
 				if err == nil || !strings.Contains(err.Error(), c.want) {
 					t.Fatalf("error = %v, want contains %q", err, c.want)
 				}

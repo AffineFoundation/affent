@@ -9,6 +9,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"math"
 	"net/http"
 	"sort"
 	"strconv"
@@ -144,6 +145,25 @@ type SamplingDefaults struct {
 	TopP        *float64
 	MaxTokens   *int
 	Seed        *int64
+}
+
+func (s SamplingDefaults) Validate() error {
+	if s.Temperature != nil {
+		t := *s.Temperature
+		if math.IsNaN(t) || math.IsInf(t, 0) || t < 0 || t > 2 {
+			return fmt.Errorf("temperature must be between 0 and 2")
+		}
+	}
+	if s.TopP != nil {
+		t := *s.TopP
+		if math.IsNaN(t) || math.IsInf(t, 0) || t < 0 || t > 1 {
+			return fmt.Errorf("top_p must be between 0 and 1")
+		}
+	}
+	if s.MaxTokens != nil && *s.MaxTokens <= 0 {
+		return fmt.Errorf("max_tokens must be a positive integer")
+	}
+	return nil
 }
 
 const DefaultBaseURL = "https://api.openai.com/v1"

@@ -8,7 +8,6 @@ import (
 	"flag"
 	"fmt"
 	"io"
-	"math"
 	"os"
 	"path/filepath"
 	"sort"
@@ -176,9 +175,6 @@ func parseSampling(temperature, topP, maxTokens, seed string) (agent.SamplingDef
 		if err != nil {
 			return s, fmt.Errorf("--temperature: %w", err)
 		}
-		if math.IsNaN(t) || math.IsInf(t, 0) || t < 0 || t > 2 {
-			return s, fmt.Errorf("--temperature must be between 0 and 2")
-		}
 		s.Temperature = &t
 	}
 	if topP != "" {
@@ -186,18 +182,12 @@ func parseSampling(temperature, topP, maxTokens, seed string) (agent.SamplingDef
 		if err != nil {
 			return s, fmt.Errorf("--top-p: %w", err)
 		}
-		if math.IsNaN(t) || math.IsInf(t, 0) || t < 0 || t > 1 {
-			return s, fmt.Errorf("--top-p must be between 0 and 1")
-		}
 		s.TopP = &t
 	}
 	if maxTokens != "" {
 		n, err := strconv.Atoi(maxTokens)
 		if err != nil {
 			return s, fmt.Errorf("--max-tokens: %w", err)
-		}
-		if n <= 0 {
-			return s, fmt.Errorf("--max-tokens must be a positive integer")
 		}
 		s.MaxTokens = &n
 	}
@@ -208,7 +198,27 @@ func parseSampling(temperature, topP, maxTokens, seed string) (agent.SamplingDef
 		}
 		s.Seed = &n
 	}
+	if err := s.Validate(); err != nil {
+		return s, samplingFlagError(err)
+	}
 	return s, nil
+}
+
+func samplingFlagError(err error) error {
+	if err == nil {
+		return nil
+	}
+	msg := err.Error()
+	switch {
+	case strings.HasPrefix(msg, "temperature "):
+		return fmt.Errorf("--temperature %s", strings.TrimPrefix(msg, "temperature "))
+	case strings.HasPrefix(msg, "top_p "):
+		return fmt.Errorf("--top-p %s", strings.TrimPrefix(msg, "top_p "))
+	case strings.HasPrefix(msg, "max_tokens "):
+		return fmt.Errorf("--max-tokens %s", strings.TrimPrefix(msg, "max_tokens "))
+	default:
+		return err
+	}
 }
 
 func effectiveBaseURL(baseURL string) string {
