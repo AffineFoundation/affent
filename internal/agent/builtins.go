@@ -457,7 +457,8 @@ func readFileTool(deps BuiltinDeps) *Tool {
 			if err := json.Unmarshal(args, &p); err != nil {
 				return "", err
 			}
-			if strings.TrimSpace(p.Path) == "" {
+			p.Path = strings.TrimSpace(p.Path)
+			if p.Path == "" {
 				return "", errors.New("path is required")
 			}
 			if p.MaxBytes <= 0 {
@@ -613,7 +614,8 @@ func writeFileTool(deps BuiltinDeps) *Tool {
 			if err := json.Unmarshal(args, &p); err != nil {
 				return "", err
 			}
-			if strings.TrimSpace(p.Path) == "" {
+			p.Path = strings.TrimSpace(p.Path)
+			if p.Path == "" {
 				return "", errors.New("path is required")
 			}
 			if len(p.Content) > MaxWriteFileBytes {
@@ -665,7 +667,8 @@ func editFileTool(deps BuiltinDeps) *Tool {
 			if err := json.Unmarshal(args, &p); err != nil {
 				return "", err
 			}
-			if strings.TrimSpace(p.Path) == "" || strings.TrimSpace(p.Old) == "" {
+			p.Path = strings.TrimSpace(p.Path)
+			if p.Path == "" || strings.TrimSpace(p.Old) == "" {
 				return "", errors.New("path and old are required")
 			}
 			if fo := fileOps(deps); fo != nil {
@@ -739,7 +742,8 @@ func listFilesTool(deps BuiltinDeps) *Tool {
 			if err := json.Unmarshal(args, &p); err != nil {
 				return "", err
 			}
-			if strings.TrimSpace(p.Path) == "" {
+			p.Path = strings.TrimSpace(p.Path)
+			if p.Path == "" {
 				p.Path = "."
 			}
 			if p.MaxEntries <= 0 {

@@ -483,6 +483,44 @@ func TestFileToolsRejectBlankRequiredStrings(t *testing.T) {
 	}
 }
 
+func TestFileToolsTrimPathBeforeUse(t *testing.T) {
+	tmp := t.TempDir()
+	if err := os.WriteFile(filepath.Join(tmp, "note.txt"), []byte("alpha beta"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	read := readFileTool(BuiltinDeps{HostWorkspaceDir: tmp})
+	out, err := read.Execute(context.Background(), json.RawMessage(`{"path":"  note.txt  "}`))
+	if err != nil {
+		t.Fatalf("read_file should trim path: %v", err)
+	}
+	if out != "alpha beta" {
+		t.Fatalf("read_file output = %q, want alpha beta", out)
+	}
+
+	edit := editFileTool(BuiltinDeps{HostWorkspaceDir: tmp})
+	if _, err := edit.Execute(context.Background(), json.RawMessage(`{"path":"  note.txt  ","old":"alpha","new":"ALPHA"}`)); err != nil {
+		t.Fatalf("edit_file should trim path: %v", err)
+	}
+
+	write := writeFileTool(BuiltinDeps{HostWorkspaceDir: tmp})
+	if _, err := write.Execute(context.Background(), json.RawMessage(`{"path":"  nested/out.txt  ","content":"ok"}`)); err != nil {
+		t.Fatalf("write_file should trim path: %v", err)
+	}
+	if _, err := os.Stat(filepath.Join(tmp, "nested", "out.txt")); err != nil {
+		t.Fatalf("write_file should create trimmed path: %v", err)
+	}
+
+	list := listFilesTool(BuiltinDeps{HostWorkspaceDir: tmp})
+	listOut, err := list.Execute(context.Background(), json.RawMessage(`{"path":"  nested  "}`))
+	if err != nil {
+		t.Fatalf("list_files should trim path: %v", err)
+	}
+	if !strings.Contains(listOut, "out.txt") {
+		t.Fatalf("list_files on trimmed path missing out.txt:\n%s", listOut)
+	}
+}
+
 func TestListFilesToolLocalDirectoryCapsEntries(t *testing.T) {
 	tmp := t.TempDir()
 	for _, name := range []string{"a.txt", "b.txt", "c.txt"} {
@@ -917,6 +955,10 @@ type fakeFileOpsExecutor struct {
 	writeCalls              int
 	editCalls               int
 	listCalls               int
+	lastReadPath            string
+	lastWritePath           string
+	lastEditPath            string
+	lastListPath            string
 	listErr                 error
 
 	files map[string]string
@@ -931,6 +973,7 @@ func newFakeFileOpsExecutor() *fakeFileOpsExecutor {
 
 func (f *fakeFileOpsExecutor) ReadFile(_ context.Context, path string, _ int) (string, error) {
 	f.readCalls++
+	f.lastReadPath = path
 	if v, ok := f.files[path]; ok {
 		return v, nil
 	}
@@ -939,12 +982,14 @@ func (f *fakeFileOpsExecutor) ReadFile(_ context.Context, path string, _ int) (s
 
 func (f *fakeFileOpsExecutor) WriteFile(_ context.Context, path, content string) error {
 	f.writeCalls++
+	f.lastWritePath = path
 	f.files[path] = content
 	return nil
 }
 
 func (f *fakeFileOpsExecutor) EditFile(_ context.Context, path, oldStr, newStr string, replaceAll bool) (int, error) {
 	f.editCalls++
+	f.lastEditPath = path
 	body, ok := f.files[path]
 	if !ok {
 		return 0, os.ErrNotExist
@@ -961,8 +1006,9 @@ func (f *fakeFileOpsExecutor) EditFile(_ context.Context, path, oldStr, newStr s
 	return n, nil
 }
 
-func (f *fakeFileOpsExecutor) ListFiles(_ context.Context, _ string, _ int) ([]executor.FileEntry, error) {
+func (f *fakeFileOpsExecutor) ListFiles(_ context.Context, path string, _ int) ([]executor.FileEntry, error) {
 	f.listCalls++
+	f.lastListPath = path
 	if f.listErr != nil {
 		return nil, f.listErr
 	}
@@ -1020,6 +1066,43 @@ func TestBuiltinFileToolsRouteThroughFileOps(t *testing.T) {
 	}
 	if fake.listCalls != 1 || !strings.Contains(out, "foo.txt") {
 		t.Fatalf("list_files: listCalls=%d out=%q", fake.listCalls, out)
+	}
+}
+
+func TestBuiltinFileToolsTrimPathBeforeFileOps(t *testing.T) {
+	fake := newFakeFileOpsExecutor()
+	ctx := context.Background()
+
+	write := writeFileTool(BuiltinDeps{Executor: fake})
+	if _, err := write.Execute(ctx, json.RawMessage(`{"path":"  /c/foo.txt  ","content":"hello"}`)); err != nil {
+		t.Fatalf("write_file: %v", err)
+	}
+	if fake.lastWritePath != "/c/foo.txt" {
+		t.Fatalf("write_file FileOps path = %q, want /c/foo.txt", fake.lastWritePath)
+	}
+
+	read := readFileTool(BuiltinDeps{Executor: fake})
+	if _, err := read.Execute(ctx, json.RawMessage(`{"path":"  /c/foo.txt  "}`)); err != nil {
+		t.Fatalf("read_file: %v", err)
+	}
+	if fake.lastReadPath != "/c/foo.txt" {
+		t.Fatalf("read_file FileOps path = %q, want /c/foo.txt", fake.lastReadPath)
+	}
+
+	edit := editFileTool(BuiltinDeps{Executor: fake})
+	if _, err := edit.Execute(ctx, json.RawMessage(`{"path":"  /c/foo.txt  ","old":"hello","new":"HELLO"}`)); err != nil {
+		t.Fatalf("edit_file: %v", err)
+	}
+	if fake.lastEditPath != "/c/foo.txt" {
+		t.Fatalf("edit_file FileOps path = %q, want /c/foo.txt", fake.lastEditPath)
+	}
+
+	list := listFilesTool(BuiltinDeps{Executor: fake})
+	if _, err := list.Execute(ctx, json.RawMessage(`{"path":"  /c  "}`)); err != nil {
+		t.Fatalf("list_files: %v", err)
+	}
+	if fake.lastListPath != "/c" {
+		t.Fatalf("list_files FileOps path = %q, want /c", fake.lastListPath)
 	}
 }
 
