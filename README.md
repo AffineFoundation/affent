@@ -511,6 +511,12 @@ removed by default to avoid filling the machine during repeated evals; failing
 workspaces are kept for debugging. Pass `--keep-workspaces` when you need every
 workspace and trace left on disk.
 
+Eval JSONL records include `schema_version=1` plus run metadata such as suite,
+model, optional `provider_label`, executor, temperature, and timeout so stored
+artifacts can be compared without guessing which runtime configuration produced
+them. Set `--provider-label` when multiple OpenAI-compatible providers serve the
+same model id.
+
 `--executor` is forwarded to the `affentctl run` process under test. It
 defaults to `local`. Use `--executor sandbox` for one selected scenario when you
 want Affent to auto-start its default memory-limited sandbox. For suites,

@@ -45,6 +45,7 @@ func TestRunHelpDoesNotLeakEnvSecrets(t *testing.T) {
 	t.Setenv("AFFENTCTL_BASE_URL", "https://sentinel-base.example")
 	t.Setenv("AFFENTCTL_API_KEY", "sk-sentinel-secret")
 	t.Setenv("AFFENTCTL_MODEL", "sentinel-model")
+	t.Setenv("AFFENTEVAL_PROVIDER_LABEL", "sentinel-provider")
 
 	help, code := captureStderr(t, func() int {
 		return run([]string{"--help"})
@@ -52,12 +53,12 @@ func TestRunHelpDoesNotLeakEnvSecrets(t *testing.T) {
 	if code != 0 {
 		t.Fatalf("run --help exit = %d", code)
 	}
-	for _, secret := range []string{"https://sentinel-base.example", "sk-sentinel-secret", "sentinel-model"} {
+	for _, secret := range []string{"https://sentinel-base.example", "sk-sentinel-secret", "sentinel-model", "sentinel-provider"} {
 		if strings.Contains(help, secret) {
 			t.Fatalf("--help leaked env value %q:\n%s", secret, help)
 		}
 	}
-	for _, want := range []string{"AFFENTCTL_BASE_URL", "AFFENTCTL_API_KEY", "AFFENTCTL_MODEL"} {
+	for _, want := range []string{"AFFENTCTL_BASE_URL", "AFFENTCTL_API_KEY", "AFFENTCTL_MODEL", "AFFENTEVAL_PROVIDER_LABEL"} {
 		if !strings.Contains(help, want) {
 			t.Fatalf("--help missing env hint %q:\n%s", want, help)
 		}
@@ -223,7 +224,7 @@ func TestBatchSummaryAggregatesRuntimeMetrics(t *testing.T) {
 
 func TestPrintBatchResultJSONL(t *testing.T) {
 	var out bytes.Buffer
-	printBatchResultJSONL(&out, agenteval.BatchResult{
+	printBatchResultJSONL(&out, testEvalJSONLMetadata(), agenteval.BatchResult{
 		BatchScenario:    "sample",
 		Workspace:        "/tmp/ws",
 		TracePath:        "/tmp/ws/trace.jsonl",
@@ -251,7 +252,14 @@ func TestPrintBatchResultJSONL(t *testing.T) {
 		t.Fatalf("jsonl result did not decode: %v\n%s", err, out.String())
 	}
 	for key, want := range map[string]any{
+		"schema_version":             float64(1),
 		"type":                       "scenario",
+		"suite":                      "small-model-tools",
+		"model":                      "eval-model",
+		"provider_label":             "eval-provider",
+		"executor":                   "docker:affent-eval",
+		"temperature":                "0.2",
+		"timeout_ms":                 float64(300000),
 		"scenario":                   "sample",
 		"ok":                         true,
 		"duration_ms":                float64(1500),
@@ -279,7 +287,7 @@ func TestPrintBatchResultJSONL(t *testing.T) {
 
 func TestPrintBatchSummaryJSONL(t *testing.T) {
 	var out bytes.Buffer
-	printBatchSummaryJSONL(&out, batchSummary{
+	printBatchSummaryJSONL(&out, testEvalJSONLMetadata(), batchSummary{
 		Total:                   2,
 		Passed:                  1,
 		Failed:                  1,
@@ -308,7 +316,14 @@ func TestPrintBatchSummaryJSONL(t *testing.T) {
 		t.Fatalf("jsonl summary did not decode: %v\n%s", err, out.String())
 	}
 	for key, want := range map[string]any{
+		"schema_version":             float64(1),
 		"type":                       "summary",
+		"suite":                      "small-model-tools",
+		"model":                      "eval-model",
+		"provider_label":             "eval-provider",
+		"executor":                   "docker:affent-eval",
+		"temperature":                "0.2",
+		"timeout_ms":                 float64(300000),
 		"scenarios":                  float64(2),
 		"passed":                     float64(1),
 		"failed":                     float64(1),
@@ -341,6 +356,41 @@ func TestPrintBatchSummaryJSONL(t *testing.T) {
 	}
 	if failureKinds["missing_command"] != float64(1) || failureKinds["turn_end"] != float64(1) {
 		t.Fatalf("failure_kinds = %#v", failureKinds)
+	}
+}
+
+func TestEvalJSONLMetadataFromConfig(t *testing.T) {
+	t.Setenv("AFFENTCTL_MODEL", "env-model")
+	t.Setenv("AFFENTEVAL_PROVIDER_LABEL", "env-provider")
+	meta := evalJSONLMetadataFromConfig("small-model-tools", "", "", "", "0", 5*time.Minute)
+	if meta.SchemaVersion != evalJSONLSchemaVersion {
+		t.Fatalf("SchemaVersion = %d, want %d", meta.SchemaVersion, evalJSONLSchemaVersion)
+	}
+	if meta.Model != "env-model" || meta.ProviderLabel != "env-provider" {
+		t.Fatalf("env metadata not used: %+v", meta)
+	}
+	if meta.Executor != "local" {
+		t.Fatalf("Executor = %q, want local", meta.Executor)
+	}
+	if meta.Suite != "small-model-tools" || meta.Temperature != "0" || meta.TimeoutMS != int64(300000) {
+		t.Fatalf("metadata = %+v", meta)
+	}
+
+	meta = evalJSONLMetadataFromConfig(" custom ", " flag-model ", " flag-provider ", " sandbox ", " 0.4 ", time.Second)
+	if meta.Model != "flag-model" || meta.ProviderLabel != "flag-provider" || meta.Executor != "sandbox" || meta.Temperature != "0.4" || meta.Suite != "custom" || meta.TimeoutMS != 1000 {
+		t.Fatalf("flag metadata not normalized: %+v", meta)
+	}
+}
+
+func testEvalJSONLMetadata() evalJSONLMetadata {
+	return evalJSONLMetadata{
+		SchemaVersion: evalJSONLSchemaVersion,
+		Suite:         "small-model-tools",
+		Model:         "eval-model",
+		ProviderLabel: "eval-provider",
+		Executor:      "docker:affent-eval",
+		Temperature:   "0.2",
+		TimeoutMS:     int64(300000),
 	}
 }
 

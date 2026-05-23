@@ -19,6 +19,8 @@ import (
 	"github.com/affinefoundation/affent/internal/sse"
 )
 
+const evalJSONLSchemaVersion = 1
+
 func main() {
 	if err := loadDotEnv(); err != nil {
 		fmt.Fprintf(os.Stderr, "affenteval: load .env: %v\n", err)
@@ -40,6 +42,7 @@ func run(args []string) int {
 		baseURL        = fs.String("base-url", "", "OpenAI-compatible endpoint (env: AFFENTCTL_BASE_URL)")
 		apiKey         = fs.String("api-key", "", "API key (env: AFFENTCTL_API_KEY)")
 		model          = fs.String("model", "", "model id (env: AFFENTCTL_MODEL)")
+		providerLabel  = fs.String("provider-label", "", "provider label written to JSONL for comparisons (env: AFFENTEVAL_PROVIDER_LABEL)")
 		temperature    = fs.String("temperature", "0", "sampling temperature forwarded to affentctl")
 		executor       = fs.String("executor", "local", "affentctl tool executor for scenario runs: local, sandbox, or docker:<container>")
 		timeout        = fs.Duration("timeout", 5*time.Minute, "per-scenario timeout")
@@ -103,19 +106,20 @@ success and trace-level process quality.`)
 		Timeout:                  *timeout,
 		CleanupPassingWorkspaces: !*keepWorkspaces,
 	}
+	jsonlMeta := evalJSONLMetadataFromConfig(*suite, *model, *providerLabel, *executor, *temperature, *timeout)
 	ctx := context.Background()
 	var summary batchSummary
 	for _, scenario := range scenarios {
 		res := runner.Run(ctx, scenario)
 		summary.add(res)
 		if *jsonl {
-			printBatchResultJSONL(os.Stdout, res)
+			printBatchResultJSONL(os.Stdout, jsonlMeta, res)
 		} else {
 			printBatchResult(os.Stdout, res)
 		}
 	}
 	if *jsonl {
-		printBatchSummaryJSONL(os.Stdout, summary)
+		printBatchSummaryJSONL(os.Stdout, jsonlMeta, summary)
 	} else {
 		printBatchSummary(os.Stdout, summary)
 	}
@@ -237,7 +241,46 @@ func formatFailureKinds(counts map[string]int) string {
 	return strings.Join(parts, ",")
 }
 
+type evalJSONLMetadata struct {
+	SchemaVersion int    `json:"schema_version"`
+	Suite         string `json:"suite,omitempty"`
+	Model         string `json:"model,omitempty"`
+	ProviderLabel string `json:"provider_label,omitempty"`
+	Executor      string `json:"executor"`
+	Temperature   string `json:"temperature,omitempty"`
+	TimeoutMS     int64  `json:"timeout_ms"`
+}
+
+func evalJSONLMetadataFromConfig(suite, model, providerLabel, executor, temperature string, timeout time.Duration) evalJSONLMetadata {
+	model = strings.TrimSpace(model)
+	if model == "" {
+		model = strings.TrimSpace(os.Getenv("AFFENTCTL_MODEL"))
+	}
+	providerLabel = strings.TrimSpace(providerLabel)
+	if providerLabel == "" {
+		providerLabel = strings.TrimSpace(os.Getenv("AFFENTEVAL_PROVIDER_LABEL"))
+	}
+	return evalJSONLMetadata{
+		SchemaVersion: evalJSONLSchemaVersion,
+		Suite:         strings.TrimSpace(suite),
+		Model:         model,
+		ProviderLabel: providerLabel,
+		Executor:      normalizedEvalExecutor(executor),
+		Temperature:   strings.TrimSpace(temperature),
+		TimeoutMS:     timeout.Milliseconds(),
+	}
+}
+
+func normalizedEvalExecutor(executor string) string {
+	executor = strings.TrimSpace(executor)
+	if executor == "" {
+		return "local"
+	}
+	return executor
+}
+
 type batchResultRecord struct {
+	evalJSONLMetadata
 	Type                    string   `json:"type"`
 	Scenario                string   `json:"scenario"`
 	OK                      bool     `json:"ok"`
@@ -261,6 +304,7 @@ type batchResultRecord struct {
 }
 
 type batchSummaryRecord struct {
+	evalJSONLMetadata
 	Type                    string         `json:"type"`
 	Scenarios               int            `json:"scenarios"`
 	Passed                  int            `json:"passed"`
@@ -286,8 +330,9 @@ type batchSummaryRecord struct {
 	CleanupErrors           int            `json:"cleanup_errors"`
 }
 
-func printBatchResultJSONL(w io.Writer, res agenteval.BatchResult) {
+func printBatchResultJSONL(w io.Writer, meta evalJSONLMetadata, res agenteval.BatchResult) {
 	writeJSONLine(w, batchResultRecord{
+		evalJSONLMetadata:       meta,
 		Type:                    "scenario",
 		Scenario:                res.BatchScenario,
 		OK:                      res.OK,
@@ -311,8 +356,9 @@ func printBatchResultJSONL(w io.Writer, res agenteval.BatchResult) {
 	})
 }
 
-func printBatchSummaryJSONL(w io.Writer, s batchSummary) {
+func printBatchSummaryJSONL(w io.Writer, meta evalJSONLMetadata, s batchSummary) {
 	writeJSONLine(w, batchSummaryRecord{
+		evalJSONLMetadata:       meta,
 		Type:                    "summary",
 		Scenarios:               s.Total,
 		Passed:                  s.Passed,
