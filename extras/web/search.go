@@ -64,7 +64,7 @@ func SearchTool(cfg SearchConfig) (*agent.Tool, error) {
         "type": "object",
         "required": ["query"],
         "properties": {
-            "query": {"type": "string", "description": "Search query (plain English; the tool handles tokenization)."},
+            "query": {"type": "string", "minLength": 1, "description": "Search query (plain English; the tool handles tokenization)."},
             "num_results": {"type": "integer", "description": "How many results to return. Default %d, max %d.", "minimum": 1, "maximum": %d}
         }
     }`, defaultN, max, max))

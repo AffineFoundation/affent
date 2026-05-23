@@ -31,6 +31,7 @@ func NavigateTool(s *Session) *agent.Tool {
         "properties": {
             "url": {
                 "type": "string",
+                "minLength": 1,
                 "description": "The fully-qualified URL to open (http:// or https://)."
             },
             "wait_until": {
@@ -55,6 +56,7 @@ func NavigateTool(s *Session) *agent.Tool {
 			if err := json.Unmarshal(raw, &args); err != nil {
 				return "", fmt.Errorf("decode args: %w", err)
 			}
+			args.URL = strings.TrimSpace(args.URL)
 			if args.URL == "" {
 				return "", errors.New("url is required")
 			}

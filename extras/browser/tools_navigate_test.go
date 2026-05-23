@@ -1,6 +1,9 @@
 package browser
 
 import (
+	"context"
+	"encoding/json"
+	"strings"
 	"testing"
 	"time"
 )
@@ -35,5 +38,16 @@ func TestResolveBrowserWaitTimeout(t *testing.T) {
 				t.Fatalf("resolveBrowserWaitTimeout(%d) = %s, want %s", c.in, got, c.want)
 			}
 		})
+	}
+}
+
+func TestNavigateToolRejectsBlankURLAndPublishesMinLength(t *testing.T) {
+	tool := NavigateTool(&Session{})
+	if !strings.Contains(string(tool.Schema), `"minLength": 1`) {
+		t.Fatalf("schema should publish url minLength: %s", tool.Schema)
+	}
+	_, err := tool.Execute(context.Background(), json.RawMessage(`{"url":"   "}`))
+	if err == nil || !strings.Contains(err.Error(), "url is required") {
+		t.Fatalf("blank URL error = %v, want url is required", err)
 	}
 }

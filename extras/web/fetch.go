@@ -81,7 +81,7 @@ func FetchTool(cfg FetchConfig) *agent.Tool {
         "type": "object",
         "required": ["url"],
         "properties": {
-            "url": {"type": "string", "description": "The fully-qualified URL to fetch (http:// or https://)."}
+            "url": {"type": "string", "minLength": 1, "description": "The fully-qualified URL to fetch (http:// or https://)."}
         }
     }`)
 
@@ -99,6 +99,7 @@ func FetchTool(cfg FetchConfig) *agent.Tool {
 			if err := json.Unmarshal(raw, &args); err != nil {
 				return "", fmt.Errorf("decode args: %w", err)
 			}
+			args.URL = strings.TrimSpace(args.URL)
 			if args.URL == "" {
 				return "", errors.New("url is required")
 			}

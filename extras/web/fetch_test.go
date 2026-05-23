@@ -98,9 +98,20 @@ func TestFetchTool_RequiresURL(t *testing.T) {
 	if err == nil || !strings.Contains(err.Error(), "url is required") {
 		t.Errorf("expected url-required error, got %v", err)
 	}
+	_, err = tool.Execute(context.Background(), json.RawMessage(`{"url":"   "}`))
+	if err == nil || !strings.Contains(err.Error(), "url is required") {
+		t.Errorf("expected blank-url required error, got %v", err)
+	}
 	_, err = tool.Execute(context.Background(), json.RawMessage(`{"url":"ftp://x"}`))
 	if err == nil || !strings.Contains(err.Error(), "http://") {
 		t.Errorf("expected scheme guard error, got %v", err)
+	}
+}
+
+func TestFetchToolSchemaPublishesURLMinLength(t *testing.T) {
+	tool := FetchTool(FetchConfig{AllowPrivateNetwork: true})
+	if !strings.Contains(string(tool.Schema), `"minLength": 1`) {
+		t.Fatalf("schema should publish url minLength: %s", tool.Schema)
 	}
 }
 
@@ -345,6 +356,13 @@ func TestSearchTool_EmptyQuery(t *testing.T) {
 	_, err := tool.Execute(context.Background(), json.RawMessage(`{"query":""}`))
 	if err == nil || !strings.Contains(err.Error(), "query is required") {
 		t.Errorf("expected query-required error, got %v", err)
+	}
+	_, err = tool.Execute(context.Background(), json.RawMessage(`{"query":"   "}`))
+	if err == nil || !strings.Contains(err.Error(), "query is required") {
+		t.Errorf("expected blank-query required error, got %v", err)
+	}
+	if !strings.Contains(string(tool.Schema), `"minLength": 1`) {
+		t.Fatalf("schema should publish query minLength: %s", tool.Schema)
 	}
 }
 
