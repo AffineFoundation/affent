@@ -174,6 +174,7 @@ func TestBatchSummaryAggregatesRuntimeMetrics(t *testing.T) {
 		Duration:         100 * time.Millisecond,
 		ToolCalls:        2,
 		WorkspaceRemoved: true,
+		TurnEndReason:    "completed",
 		ToolStats: agenteval.ToolRuntimeStats{
 			ToolArgsRepaired: 1,
 			ToolErrors:       0,
@@ -182,9 +183,10 @@ func TestBatchSummaryAggregatesRuntimeMetrics(t *testing.T) {
 		Usage: agenteval.Usage{InputTokens: 20, OutputTokens: 5},
 	})
 	summary.add(agenteval.BatchResult{
-		OK:        false,
-		Duration:  250 * time.Millisecond,
-		ToolCalls: 3,
+		OK:            false,
+		Duration:      250 * time.Millisecond,
+		ToolCalls:     3,
+		TurnEndReason: "max_turns",
 		ToolStats: agenteval.ToolRuntimeStats{
 			ToolArgsRepaired: 2,
 			ToolErrors:       1,
@@ -195,7 +197,7 @@ func TestBatchSummaryAggregatesRuntimeMetrics(t *testing.T) {
 
 	var out bytes.Buffer
 	printBatchSummary(&out, summary)
-	want := "SUMMARY scenarios=2 passed=1 failed=1 duration=350ms tools=5 errors=1 repaired=3 tool_ms=50 tokens=90/20 removed_workspaces=1 cleanup_errors=0"
+	want := "SUMMARY scenarios=2 passed=1 failed=1 duration=350ms tools=5 errors=1 repaired=3 tool_ms=50 tokens=90/20 ends=completed:1,max_turns:1,error:0,cancelled:0,unknown:0 removed_workspaces=1 cleanup_errors=0"
 	if !strings.Contains(out.String(), want) {
 		t.Fatalf("summary output missing %q:\n%s", want, out.String())
 	}
@@ -260,6 +262,11 @@ func TestPrintBatchSummaryJSONL(t *testing.T) {
 		ToolDurationMS:    120,
 		InputTokens:       90,
 		OutputTokens:      20,
+		EndCompleted:      1,
+		EndMaxTurns:       1,
+		EndErrors:         0,
+		EndCancelled:      0,
+		EndUnknown:        0,
 		RemovedWorkspaces: 1,
 	})
 
@@ -279,6 +286,11 @@ func TestPrintBatchSummaryJSONL(t *testing.T) {
 		"tool_duration_ms":   float64(120),
 		"input_tokens":       float64(90),
 		"output_tokens":      float64(20),
+		"end_completed":      float64(1),
+		"end_max_turns":      float64(1),
+		"end_errors":         float64(0),
+		"end_cancelled":      float64(0),
+		"end_unknown":        float64(0),
 		"removed_workspaces": float64(1),
 		"cleanup_errors":     float64(0),
 	} {

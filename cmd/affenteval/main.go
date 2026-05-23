@@ -15,6 +15,7 @@ import (
 
 	"github.com/affinefoundation/affent/internal/agent"
 	"github.com/affinefoundation/affent/internal/agenteval"
+	"github.com/affinefoundation/affent/internal/sse"
 )
 
 func main() {
@@ -134,6 +135,11 @@ type batchSummary struct {
 	ToolDurationMS    int64
 	InputTokens       int
 	OutputTokens      int
+	EndCompleted      int
+	EndMaxTurns       int
+	EndErrors         int
+	EndCancelled      int
+	EndUnknown        int
 	RemovedWorkspaces int
 	CleanupErrors     int
 }
@@ -152,6 +158,18 @@ func (s *batchSummary) add(res agenteval.BatchResult) {
 	s.ToolDurationMS += res.ToolStats.ToolDurationMS
 	s.InputTokens += res.Usage.InputTokens
 	s.OutputTokens += res.Usage.OutputTokens
+	switch res.TurnEndReason {
+	case sse.TurnEndCompleted:
+		s.EndCompleted++
+	case sse.TurnEndMaxTurns:
+		s.EndMaxTurns++
+	case sse.TurnEndError:
+		s.EndErrors++
+	case sse.TurnEndCancelled:
+		s.EndCancelled++
+	default:
+		s.EndUnknown++
+	}
 	if res.WorkspaceRemoved {
 		s.RemovedWorkspaces++
 	}
@@ -161,7 +179,7 @@ func (s *batchSummary) add(res agenteval.BatchResult) {
 }
 
 func printBatchSummary(w io.Writer, s batchSummary) {
-	fmt.Fprintf(w, "SUMMARY scenarios=%d passed=%d failed=%d duration=%s tools=%d errors=%d repaired=%d tool_ms=%d tokens=%d/%d removed_workspaces=%d cleanup_errors=%d\n",
+	fmt.Fprintf(w, "SUMMARY scenarios=%d passed=%d failed=%d duration=%s tools=%d errors=%d repaired=%d tool_ms=%d tokens=%d/%d ends=completed:%d,max_turns:%d,error:%d,cancelled:%d,unknown:%d removed_workspaces=%d cleanup_errors=%d\n",
 		s.Total,
 		s.Passed,
 		s.Failed,
@@ -172,6 +190,11 @@ func printBatchSummary(w io.Writer, s batchSummary) {
 		s.ToolDurationMS,
 		s.InputTokens,
 		s.OutputTokens,
+		s.EndCompleted,
+		s.EndMaxTurns,
+		s.EndErrors,
+		s.EndCancelled,
+		s.EndUnknown,
 		s.RemovedWorkspaces,
 		s.CleanupErrors,
 	)
@@ -208,6 +231,11 @@ type batchSummaryRecord struct {
 	ToolDurationMS    int64  `json:"tool_duration_ms"`
 	InputTokens       int    `json:"input_tokens"`
 	OutputTokens      int    `json:"output_tokens"`
+	EndCompleted      int    `json:"end_completed"`
+	EndMaxTurns       int    `json:"end_max_turns"`
+	EndErrors         int    `json:"end_errors"`
+	EndCancelled      int    `json:"end_cancelled"`
+	EndUnknown        int    `json:"end_unknown"`
 	RemovedWorkspaces int    `json:"removed_workspaces"`
 	CleanupErrors     int    `json:"cleanup_errors"`
 }
@@ -246,6 +274,11 @@ func printBatchSummaryJSONL(w io.Writer, s batchSummary) {
 		ToolDurationMS:    s.ToolDurationMS,
 		InputTokens:       s.InputTokens,
 		OutputTokens:      s.OutputTokens,
+		EndCompleted:      s.EndCompleted,
+		EndMaxTurns:       s.EndMaxTurns,
+		EndErrors:         s.EndErrors,
+		EndCancelled:      s.EndCancelled,
+		EndUnknown:        s.EndUnknown,
 		RemovedWorkspaces: s.RemovedWorkspaces,
 		CleanupErrors:     s.CleanupErrors,
 	})
