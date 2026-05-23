@@ -121,6 +121,16 @@ func TestPlanToolRejectsSymlinkPlanFile(t *testing.T) {
 	if err == nil || !strings.Contains(err.Error(), "plan path must not be a symlink") {
 		t.Fatalf("set error = %v, want symlink rejection", err)
 	}
+	_, err = tool.Execute(context.Background(), json.RawMessage(`{"action":"clear"}`))
+	if err == nil || !strings.Contains(err.Error(), "plan path must not be a symlink") {
+		t.Fatalf("clear error = %v, want symlink rejection", err)
+	}
+	if _, err := os.Lstat(path); err != nil {
+		t.Fatalf("symlink plan should remain for operator inspection: %v", err)
+	}
+	if _, err := os.Lstat(outside); err != nil {
+		t.Fatalf("outside plan should remain: %v", err)
+	}
 }
 
 func TestPlanToolRejectsOversizedPlanFile(t *testing.T) {
@@ -133,6 +143,21 @@ func TestPlanToolRejectsOversizedPlanFile(t *testing.T) {
 	_, err := tool.Execute(context.Background(), json.RawMessage(`{"action":"view"}`))
 	if err == nil || !strings.Contains(err.Error(), "plan file exceeds") {
 		t.Fatalf("view error = %v, want size rejection", err)
+	}
+}
+
+func TestPlanToolClearRejectsDirectoryPlanPath(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "plan.json")
+	if err := os.Mkdir(path, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	tool := planTool(path)
+	_, err := tool.Execute(context.Background(), json.RawMessage(`{"action":"clear"}`))
+	if err == nil || !strings.Contains(err.Error(), "plan path is a directory") {
+		t.Fatalf("clear error = %v, want directory rejection", err)
+	}
+	if info, err := os.Lstat(path); err != nil || !info.IsDir() {
+		t.Fatalf("directory plan path should remain, info=%+v err=%v", info, err)
 	}
 }
 
