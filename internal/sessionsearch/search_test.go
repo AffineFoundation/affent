@@ -214,6 +214,20 @@ func TestScoreFileKeepsBestHitsWithinLimitWhileScanning(t *testing.T) {
 	}
 }
 
+func TestScoreFileReportsScannerErrors(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "bad.jsonl")
+	raw := `{"role":"user","content":"needle before scanner error"}` + "\n" +
+		`{"role":"user","content":"` + strings.Repeat("x", 4*1024*1024+1) + `"}` + "\n"
+	if err := os.WriteFile(path, []byte(raw), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	if hits, err := scoreFile(path, "bad", []string{"needle"}, 3, ""); err == nil {
+		t.Fatalf("scoreFile should report scanner error, got hits %+v", hits)
+	}
+}
+
 func TestScoreContentMatchesWholeTokens(t *testing.T) {
 	terms := Tokenize("go")
 	if got := ScoreContent("ongoing cargo", terms); got != 0 {

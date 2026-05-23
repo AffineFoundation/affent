@@ -168,6 +168,9 @@ func scoreFile(path, sid string, terms []string, maxPerSession int, mtime string
 			ModTime:   mtime,
 		}, maxPerSession)
 	}
+	if err := sc.Err(); err != nil {
+		return nil, err
+	}
 	sortHits(fileHits)
 	if maxPerSession > 0 && len(fileHits) > maxPerSession {
 		fileHits = fileHits[:maxPerSession]
