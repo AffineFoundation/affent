@@ -6,6 +6,7 @@ import (
 	"errors"
 	"flag"
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
 	"sort"
@@ -15,7 +16,17 @@ import (
 	"github.com/affinefoundation/affent/internal/planstate"
 )
 
-const maxLocalSessionPlanBytes = planstate.MaxFileBytes
+const (
+	maxLocalSessionPlanBytes = planstate.MaxFileBytes
+	localSessionDirReadBatch = 128
+)
+
+type sessionListRow struct {
+	sid     string
+	mt      time.Time
+	nMsgs   int
+	preview string
+}
 
 // sessionsCmd lists prior sessions found under <workspace>/.affentctl/.
 // For each session shows the id, mtime, message count, and the first
@@ -57,7 +68,7 @@ starting or resuming the agent.`)
 	if *clearPlanID != "" {
 		return clearSessionPlanCmd(convDir, *clearPlanID)
 	}
-	entries, err := os.ReadDir(convDir)
+	rows, err := readSessionRows(convDir)
 	if err != nil {
 		if os.IsNotExist(err) {
 			fmt.Fprintln(os.Stderr, "(no sessions in this workspace)")
@@ -65,31 +76,6 @@ starting or resuming the agent.`)
 		}
 		fmt.Fprintln(os.Stderr, err)
 		return exitRuntime
-	}
-
-	type row struct {
-		sid     string
-		mt      time.Time
-		nMsgs   int
-		preview string
-	}
-	var rows []row
-	for _, e := range entries {
-		if e.IsDir() || !strings.HasSuffix(e.Name(), ".jsonl") || dirEntryIsSymlink(e) {
-			continue
-		}
-		info, err := e.Info()
-		if err != nil {
-			continue
-		}
-		full := filepath.Join(convDir, e.Name())
-		n, preview := scanLog(full)
-		rows = append(rows, row{
-			sid:     strings.TrimSuffix(e.Name(), ".jsonl"),
-			mt:      info.ModTime(),
-			nMsgs:   n,
-			preview: preview,
-		})
 	}
 	if len(rows) == 0 {
 		fmt.Fprintln(os.Stderr, "(no sessions in this workspace)")
@@ -107,6 +93,43 @@ starting or resuming the agent.`)
 			r.preview)
 	}
 	return 0
+}
+
+func readSessionRows(convDir string) ([]sessionListRow, error) {
+	dir, err := os.Open(convDir)
+	if err != nil {
+		return nil, err
+	}
+	defer dir.Close()
+
+	var rows []sessionListRow
+	for {
+		entries, rerr := dir.ReadDir(localSessionDirReadBatch)
+		if rerr != nil && !errors.Is(rerr, io.EOF) {
+			return nil, rerr
+		}
+		for _, e := range entries {
+			if e.IsDir() || !strings.HasSuffix(e.Name(), ".jsonl") || dirEntryIsSymlink(e) {
+				continue
+			}
+			info, err := e.Info()
+			if err != nil {
+				continue
+			}
+			full := filepath.Join(convDir, e.Name())
+			n, preview := scanLog(full)
+			rows = append(rows, sessionListRow{
+				sid:     strings.TrimSuffix(e.Name(), ".jsonl"),
+				mt:      info.ModTime(),
+				nMsgs:   n,
+				preview: preview,
+			})
+		}
+		if errors.Is(rerr, io.EOF) {
+			break
+		}
+	}
+	return rows, nil
 }
 
 func clearSessionPlanCmd(convDir, sessionID string) int {

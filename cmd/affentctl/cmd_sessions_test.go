@@ -2,6 +2,7 @@ package main
 
 import (
 	"bytes"
+	"fmt"
 	"io"
 	"os"
 	"path/filepath"
@@ -252,6 +253,29 @@ func TestSessionsCmdSkipsSymlinkLogs(t *testing.T) {
 	}
 	if !strings.Contains(listOut, "real") {
 		t.Fatalf("list output should keep real session, got:\n%s", listOut)
+	}
+}
+
+func TestSessionsCmdReadsPastOneDirectoryBatch(t *testing.T) {
+	workspace := t.TempDir()
+	convDir := filepath.Join(workspace, ".affentctl")
+	if err := os.MkdirAll(convDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	for i := 0; i < localSessionDirReadBatch+2; i++ {
+		name := filepath.Join(convDir, fmt.Sprintf("sess_%04d.jsonl", i))
+		if err := os.WriteFile(name, []byte(`{"role":"user","content":"hello"}`+"\n"), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	listOut := captureStdout(t, func() {
+		if code := sessionsCmd([]string{"--workspace", workspace}); code != 0 {
+			t.Fatalf("sessionsCmd list exit = %d, want 0", code)
+		}
+	})
+	if got := strings.Count(listOut, " msgs\t"); got != localSessionDirReadBatch+2 {
+		t.Fatalf("listed sessions = %d, want %d\n%s", got, localSessionDirReadBatch+2, listOut)
 	}
 }
 
