@@ -56,10 +56,20 @@ func TestNavigateToolRejectsBlankURLAndPublishesMinLength(t *testing.T) {
 	if err == nil || !strings.Contains(err.Error(), "url is required") {
 		t.Fatalf("blank URL error = %v, want url is required", err)
 	}
+	if !strings.Contains(err.Error(), "Next:") {
+		t.Fatalf("blank URL error should include Next step, got %v", err)
+	}
 	longURL := "https://example.com/" + strings.Repeat("x", maxBrowserURLBytes-len("https://example.com/")+1)
 	_, err = tool.Execute(context.Background(), json.RawMessage(`{"url":"`+longURL+`"}`))
 	if err == nil || !strings.Contains(err.Error(), "browser_navigate supports URLs up to") {
 		t.Fatalf("oversized URL error = %v, want URL length error", err)
+	}
+	if !strings.Contains(err.Error(), "Next:") {
+		t.Fatalf("oversized URL error should include Next step, got %v", err)
+	}
+	_, err = tool.Execute(context.Background(), json.RawMessage(`{"url":"example.com"}`))
+	if err == nil || !strings.Contains(err.Error(), "url must start with") || !strings.Contains(err.Error(), "Next:") {
+		t.Fatalf("scheme error = %v, want Next guidance", err)
 	}
 }
 
@@ -93,6 +103,13 @@ func TestWaitToolRejectsBlankRequiredTextAndPublishesMinLength(t *testing.T) {
 	if err == nil || !strings.Contains(err.Error(), "browser_wait text supports values up to") {
 		t.Fatalf("oversized text value error = %v, want value length error", err)
 	}
+	if !strings.Contains(err.Error(), "Next:") {
+		t.Fatalf("oversized text value error should include Next step, got %v", err)
+	}
+	_, err = tool.Execute(context.Background(), json.RawMessage(`{"for":"load","timeout_ms":1}`))
+	if err == nil || !strings.Contains(err.Error(), "timeout_ms must be between") || !strings.Contains(err.Error(), "Next:") {
+		t.Fatalf("invalid timeout error = %v, want Next guidance", err)
+	}
 }
 
 func TestScrollToolRejectsBlankDirectionBeforePageCheck(t *testing.T) {
@@ -124,6 +141,9 @@ func TestScrollToolRejectsBlankDirectionBeforePageCheck(t *testing.T) {
 	if err == nil || !strings.Contains(err.Error(), "amount must be between 1 and 5000") {
 		t.Fatalf("oversized amount error = %v, want amount maximum", err)
 	}
+	if !strings.Contains(err.Error(), "Next:") {
+		t.Fatalf("oversized amount error should include Next step, got %v", err)
+	}
 }
 
 func TestTypeToolRejectsOversizedTextBeforePageCheck(t *testing.T) {
@@ -131,9 +151,24 @@ func TestTypeToolRejectsOversizedTextBeforePageCheck(t *testing.T) {
 	if !strings.Contains(string(tool.Schema), `"maxLength": 4096`) {
 		t.Fatalf("schema should publish text maxLength: %s", tool.Schema)
 	}
+	_, err := tool.Execute(context.Background(), json.RawMessage(`{"ref":0,"text":"hi"}`))
+	if err == nil || !strings.Contains(err.Error(), "ref must be a positive integer") || !strings.Contains(err.Error(), "Next:") {
+		t.Fatalf("invalid ref error = %v, want Next guidance", err)
+	}
 	text := strings.Repeat("x", maxBrowserTypeTextBytes+1)
-	_, err := tool.Execute(context.Background(), json.RawMessage(`{"ref":1,"text":"`+text+`"}`))
+	_, err = tool.Execute(context.Background(), json.RawMessage(`{"ref":1,"text":"`+text+`"}`))
 	if err == nil || !strings.Contains(err.Error(), "browser_type supports text up to") {
 		t.Fatalf("oversized text error = %v, want text length error", err)
+	}
+	if !strings.Contains(err.Error(), "Next:") {
+		t.Fatalf("oversized text error should include Next step, got %v", err)
+	}
+}
+
+func TestClickToolRejectsInvalidRefBeforePageCheck(t *testing.T) {
+	tool := ClickTool(&Session{})
+	_, err := tool.Execute(context.Background(), json.RawMessage(`{"ref":0}`))
+	if err == nil || !strings.Contains(err.Error(), "ref must be a positive integer") || !strings.Contains(err.Error(), "Next:") {
+		t.Fatalf("invalid ref error = %v, want Next guidance", err)
 	}
 }

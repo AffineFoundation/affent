@@ -136,10 +136,10 @@ func ScreenshotTool(s *Session) *agent.Tool {
 				savePath = strings.TrimSpace(*args.SavePath)
 			}
 			if len(savePath) > maxScreenshotSavePathBytes {
-				return "", fmt.Errorf("save_path is %d bytes; browser_screenshot supports save_path up to %d bytes", len(savePath), maxScreenshotSavePathBytes)
+				return "", fmt.Errorf("save_path is %d bytes; browser_screenshot supports save_path up to %d bytes\nNext: retry with a shorter workspace-relative PNG path, for example screenshots/page.png", len(savePath), maxScreenshotSavePathBytes)
 			}
 			if args.SavePath != nil && savePath == "" {
-				return "", errors.New("save_path must not be blank when provided")
+				return "", errors.New("save_path must not be blank when provided\nNext: omit save_path for inline output, or retry with a workspace-relative PNG path")
 			}
 			if s.page == nil {
 				return "", ErrNoPage
@@ -174,7 +174,7 @@ func ScreenshotTool(s *Session) *agent.Tool {
 			}
 			if len(png) > maxInlinePNGBytes {
 				return "", fmt.Errorf(
-					"screenshot is %d bytes (png); inline base64 would exceed agent runtime's %d-byte tool-result context budget and be truncated to unparseable noise. Re-run with save_path=\"<path>.png\" to write the image to disk",
+					"screenshot is %d bytes (png); inline base64 would exceed agent runtime's %d-byte tool-result context budget and be truncated to unparseable noise.\nNext: re-run browser_screenshot with save_path=\"<path>.png\" to write the image to disk",
 					len(png), agent.MaxToolResultBytesInContext,
 				)
 			}

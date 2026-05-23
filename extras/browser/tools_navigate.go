@@ -65,13 +65,13 @@ func NavigateTool(s *Session) *agent.Tool {
 			}
 			args.URL = strings.TrimSpace(args.URL)
 			if args.URL == "" {
-				return "", errors.New("url is required")
+				return "", errors.New("url is required\nNext: retry browser_navigate with a fully-qualified http:// or https:// URL")
 			}
 			if len(args.URL) > maxBrowserURLBytes {
-				return "", fmt.Errorf("url is %d bytes; browser_navigate supports URLs up to %d bytes", len(args.URL), maxBrowserURLBytes)
+				return "", fmt.Errorf("url is %d bytes; browser_navigate supports URLs up to %d bytes\nNext: retry browser_navigate with the canonical page URL, or use web_search to find a shorter result URL", len(args.URL), maxBrowserURLBytes)
 			}
 			if !strings.HasPrefix(args.URL, "http://") && !strings.HasPrefix(args.URL, "https://") {
-				return "", fmt.Errorf("url must start with http:// or https:// (got %q)", args.URL)
+				return "", fmt.Errorf("url must start with http:// or https:// (got %q)\nNext: retry browser_navigate with the full URL including the http:// or https:// scheme", args.URL)
 			}
 			return runNavigate(ctx, s, args.URL, args.WaitUntil)
 		},
@@ -241,14 +241,14 @@ func WaitTool(s *Session) *agent.Tool {
 			}
 			timeout, err := resolveBrowserWaitTimeout(args.TimeoutMS)
 			if err != nil {
-				return "", err
+				return "", fmt.Errorf("%w\nNext: omit timeout_ms to use the default, or retry with a value between %d and %d", err, minBrowserWaitTimeoutMS, maxBrowserWaitTimeoutMS)
 			}
 			if args.For == "text" {
 				if args.Value == "" {
 					return "", errors.New("'value' is required when 'for'='text'. Next: retry with the exact short substring you expect to appear")
 				}
 				if len(args.Value) > maxBrowserWaitTextBytes {
-					return "", fmt.Errorf("'value' is %d bytes; browser_wait text supports values up to %d bytes", len(args.Value), maxBrowserWaitTextBytes)
+					return "", fmt.Errorf("'value' is %d bytes; browser_wait text supports values up to %d bytes\nNext: retry browser_wait with a shorter exact substring that appears on the page", len(args.Value), maxBrowserWaitTextBytes)
 				}
 			}
 			if s.page == nil {

@@ -78,10 +78,16 @@ func TestScreenshotToolValidatesArgsBeforePageCheck(t *testing.T) {
 	if err == nil || !strings.Contains(err.Error(), "save_path must not be blank") {
 		t.Fatalf("blank save_path error = %v, want blank save_path rejection", err)
 	}
+	if !strings.Contains(err.Error(), "Next:") {
+		t.Fatalf("blank save_path error should include Next step, got %v", err)
+	}
 
 	longPath := strings.Repeat("x", maxScreenshotSavePathBytes+1)
 	_, err = tool.Execute(context.Background(), json.RawMessage(`{"save_path":"`+longPath+`"}`))
 	if err == nil || !strings.Contains(err.Error(), "browser_screenshot supports save_path up to") {
 		t.Fatalf("oversized save_path error = %v, want save_path length rejection", err)
+	}
+	if !strings.Contains(err.Error(), "Next:") {
+		t.Fatalf("oversized save_path error should include Next step, got %v", err)
 	}
 }
