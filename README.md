@@ -182,10 +182,11 @@ That image includes `affentctl`, `affentserve`, `affenteval`, and the same
 packages listed in `docker/tool-packages.txt` that the sandbox image installs.
 `image build` uses `docker/affent.Dockerfile`, applies a `1g` Docker build
 memory limit by default, and tags `affinefoundation/affent:latest` unless you set
-`--image`. Its entrypoint derives `GOMEMLIMIT` and `GOMAXPROCS` from the
-container's cgroup limits unless you set those env vars yourself. Run it through
-the same CLI so memory/process limits and the persistent `/workspace` mount are
-applied by default:
+`--image`. Its entrypoint still derives `GOMEMLIMIT` and `GOMAXPROCS` from the
+container's cgroup limits as a fallback, but `affentctl image run` also passes
+those Go runtime limits explicitly from `--memory` and `--cpus`. Run it through
+the same CLI so memory/process limits, Go runtime limits, and the persistent
+`/workspace` mount are applied by default:
 
 ```bash
 AFFENTCTL_BASE_URL=https://api.openai.com/v1 \
@@ -201,7 +202,10 @@ AFFENTCTL_MODEL=gpt-4o-mini \
 usable home directory, it falls back to `./affent/runtime/workspace`. When run
 from a source checkout with the default runtime image tag, it builds the image
 first if it is missing locally, using the same `1g` build memory limit. It
-forwards portable model, auth, sampling, and feature-toggle env vars such as
+sets `GOMEMLIMIT` to 75% of the Docker memory limit and `GOMAXPROCS` from the
+Docker CPU limit, so Go-based tools inside the runtime image respect the same
+resource envelope by default. The command also forwards portable model, auth,
+sampling, and feature-toggle env vars such as
 `AFFENTCTL_BASE_URL`, `AFFENTSERVE_MODEL`, and `TAVILY_API_KEY` when they are
 set. Host path or executor env vars such as `AFFENTCTL_WORKSPACE`,
 `AFFENTCTL_CONFIG`, `AFFENTCTL_MCP_CONFIG`, `AFFENTCTL_EXECUTOR`,
