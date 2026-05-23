@@ -435,10 +435,14 @@ func summarizeDurableSession(pool *SessionPool, id string) (sessionSummary, bool
 		return sessionSummary{}, false, err
 	}
 	summary.HasConversation = exists
-	if exists, err = mergeStat(filepath.Join(dir, "events.jsonl")); err != nil {
+	var eventMod time.Time
+	if exists, eventMod, err = durableRegularFileModTime(filepath.Join(dir, "events.jsonl")); err != nil {
 		return sessionSummary{}, false, err
 	}
 	summary.HasEvents = exists
+	if exists && eventMod.After(newest) {
+		newest = eventMod
+	}
 	var planMod time.Time
 	if exists, planMod, err = durableRegularFileModTime(filepath.Join(dir, "plan.json")); err != nil {
 		return sessionSummary{}, false, err

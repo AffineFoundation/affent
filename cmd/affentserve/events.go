@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -173,6 +174,16 @@ func parseHistoryQuery(r *http.Request) (after int64, limit int, err error) {
 
 func readSessionHistory(sessionDir, sessionID string, after int64, limit int) (sessionHistoryResponse, error) {
 	path := filepath.Join(sessionDir, "events.jsonl")
+	info, err := os.Lstat(path)
+	if err != nil {
+		return sessionHistoryResponse{}, err
+	}
+	if info.IsDir() {
+		return sessionHistoryResponse{}, fmt.Errorf("events path is a directory")
+	}
+	if info.Mode()&os.ModeSymlink != 0 {
+		return sessionHistoryResponse{}, fmt.Errorf("events path must not be a symlink")
+	}
 	f, err := os.Open(path)
 	if err != nil {
 		return sessionHistoryResponse{}, err

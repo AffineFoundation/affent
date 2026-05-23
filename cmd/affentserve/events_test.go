@@ -5,6 +5,7 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"os"
 	"path/filepath"
 	"strings"
 	"testing"
@@ -308,6 +309,38 @@ func TestHandleSessionHistory_MissingLogReturns404(t *testing.T) {
 	handleSessionHistory(pool, "missing", w, r)
 	if got := w.Result().StatusCode; got != http.StatusNotFound {
 		t.Fatalf("status = %d, want 404: %s", got, w.Body.String())
+	}
+}
+
+func TestHandleSessionHistoryRejectsSymlinkLog(t *testing.T) {
+	memRoot := t.TempDir()
+	pool := newPoolWithMemoryRoot(t, memRoot)
+	createDurableSessionDir(t, pool, "link-history")
+	eventsPath := filepath.Join(pool.sessionDirPath("link-history"), "events.jsonl")
+	if err := os.Remove(eventsPath); err != nil {
+		t.Fatal(err)
+	}
+	outside := filepath.Join(t.TempDir(), "outside-events.jsonl")
+	if err := os.WriteFile(outside, []byte("{}\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink(outside, eventsPath); err != nil {
+		t.Skipf("symlink unavailable: %v", err)
+	}
+
+	_, err := readSessionHistory(pool.sessionDirPath("link-history"), "link-history", -1, 100)
+	if err == nil || !strings.Contains(err.Error(), "symlink") {
+		t.Fatalf("readSessionHistory symlink error = %v, want symlink", err)
+	}
+	summary, found, err := summarizeDurableSession(pool, "link-history")
+	if err != nil {
+		t.Fatalf("summarizeDurableSession: %v", err)
+	}
+	if !found {
+		t.Fatal("durable session should still be found")
+	}
+	if summary.HasEvents {
+		t.Fatalf("symlink events log must not set has_events: %+v", summary)
 	}
 }
 
