@@ -451,15 +451,24 @@ const MaxEditFileBytes = MaxReadFileBytes
 // by a bounded shell command inside the workspace/sandbox.
 const MaxWriteFileBytes = MaxReadFileBytes
 
+const maxFileToolPathBytes = 4096
+
+func validateFileToolPath(tool, path string) error {
+	if len(path) > maxFileToolPathBytes {
+		return fmt.Errorf("path is %d bytes; %s supports paths up to %d bytes", len(path), tool, maxFileToolPathBytes)
+	}
+	return nil
+}
+
 func readFileTool(deps BuiltinDeps) *Tool {
-	schema := json.RawMessage(`{
+	schema := json.RawMessage(fmt.Sprintf(`{
         "type": "object",
         "required": ["path"],
         "properties": {
-            "path": {"type": "string", "minLength": 1, "description": "Workspace path."},
-            "max_bytes": {"type": "integer", "minimum": 1, "maximum": 4194304, "description": "Read cap; default 64 KiB, max 4 MiB."}
+            "path": {"type": "string", "minLength": 1, "maxLength": %d, "description": "Workspace path."},
+            "max_bytes": {"type": "integer", "minimum": 1, "maximum": %d, "description": "Read cap; default 64 KiB, max 4 MiB."}
         }
-    }`)
+    }`, maxFileToolPathBytes, MaxReadFileBytes))
 	return &Tool{
 		Name:        "read_file",
 		Description: "Read one text file from the workspace. Use before editing. For huge files, inspect targeted chunks with shell grep/sed/head/tail.",
@@ -475,6 +484,9 @@ func readFileTool(deps BuiltinDeps) *Tool {
 			p.Path = strings.TrimSpace(p.Path)
 			if p.Path == "" {
 				return "", errors.New("path is required")
+			}
+			if err := validateFileToolPath("read_file", p.Path); err != nil {
+				return "", err
 			}
 			if p.MaxBytes <= 0 {
 				p.MaxBytes = 64 * 1024
@@ -615,10 +627,10 @@ func writeFileTool(deps BuiltinDeps) *Tool {
         "type": "object",
         "required": ["path", "content"],
         "properties": {
-            "path": {"type": "string", "minLength": 1},
+            "path": {"type": "string", "minLength": 1, "maxLength": %d},
             "content": {"type": "string", "maxLength": %d, "description": "Full file content; max %d bytes."}
         }
-    }`, MaxWriteFileBytes, MaxWriteFileBytes))
+    }`, maxFileToolPathBytes, MaxWriteFileBytes, MaxWriteFileBytes))
 	return &Tool{
 		Name:        "write_file",
 		Description: fmt.Sprintf("Create or overwrite one workspace file, up to %d bytes. Prefer edit_file for small changes to existing files; use shell to generate large artifacts inside the workspace.", MaxWriteFileBytes),
@@ -634,6 +646,9 @@ func writeFileTool(deps BuiltinDeps) *Tool {
 			p.Path = strings.TrimSpace(p.Path)
 			if p.Path == "" {
 				return "", errors.New("path is required")
+			}
+			if err := validateFileToolPath("write_file", p.Path); err != nil {
+				return "", err
 			}
 			if len(p.Content) > MaxWriteFileBytes {
 				return "", fmt.Errorf("content is %d bytes; write_file supports content up to %d bytes\nNext: write large generated artifacts with a shell command inside the workspace/sandbox, or split the file into smaller chunks", len(p.Content), MaxWriteFileBytes)
@@ -660,16 +675,16 @@ func writeFileTool(deps BuiltinDeps) *Tool {
 }
 
 func editFileTool(deps BuiltinDeps) *Tool {
-	schema := json.RawMessage(`{
+	schema := json.RawMessage(fmt.Sprintf(`{
         "type": "object",
         "required": ["path", "old", "new"],
         "properties": {
-            "path": {"type": "string", "minLength": 1},
+            "path": {"type": "string", "minLength": 1, "maxLength": %d},
             "old":  {"type": "string", "minLength": 1, "description": "Exact string to replace; unique unless replace_all=true."},
             "new":  {"type": "string"},
             "replace_all": {"type": "boolean", "default": false}
         }
-    }`)
+    }`, maxFileToolPathBytes))
 	return &Tool{
 		Name:        "edit_file",
 		Description: "Exact find-and-replace in one workspace file. Use after read_file; old must match exactly and uniquely unless replace_all=true.",
@@ -687,6 +702,9 @@ func editFileTool(deps BuiltinDeps) *Tool {
 			p.Path = strings.TrimSpace(p.Path)
 			if p.Path == "" || strings.TrimSpace(p.Old) == "" {
 				return "", errors.New("path and old are required")
+			}
+			if err := validateFileToolPath("edit_file", p.Path); err != nil {
+				return "", err
 			}
 			if fo := fileOps(deps); fo != nil {
 				n, err := fo.EditFile(ctx, p.Path, p.Old, p.New, p.ReplaceAll)
@@ -740,13 +758,13 @@ func editFileTool(deps BuiltinDeps) *Tool {
 const MaxListFilesEntries = 1000
 
 func listFilesTool(deps BuiltinDeps) *Tool {
-	schema := json.RawMessage(`{
+	schema := json.RawMessage(fmt.Sprintf(`{
         "type": "object",
         "properties": {
-            "path": {"type": "string", "description": "Workspace directory; default root."},
-            "max_entries": {"type": "integer", "minimum": 1, "maximum": 1000, "description": "Entry cap; default 200, max 1000."}
+            "path": {"type": "string", "maxLength": %d, "description": "Workspace directory; default root."},
+            "max_entries": {"type": "integer", "minimum": 1, "maximum": %d, "description": "Entry cap; default 200, max 1000."}
         }
-    }`)
+    }`, maxFileToolPathBytes, MaxListFilesEntries))
 	return &Tool{
 		Name:        "list_files",
 		Description: "List one workspace directory. Use for orientation; use shell find/ls/rg for deep or filtered searches.",
@@ -762,6 +780,9 @@ func listFilesTool(deps BuiltinDeps) *Tool {
 			p.Path = strings.TrimSpace(p.Path)
 			if p.Path == "" {
 				p.Path = "."
+			}
+			if err := validateFileToolPath("list_files", p.Path); err != nil {
+				return "", err
 			}
 			if p.MaxEntries <= 0 {
 				p.MaxEntries = 200

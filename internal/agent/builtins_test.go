@@ -429,6 +429,9 @@ func TestWriteFileToolSchemaPublishesContentCap(t *testing.T) {
 	if schema.Properties["path"].MinLength != 1 {
 		t.Fatalf("path minLength = %d, want 1", schema.Properties["path"].MinLength)
 	}
+	if schema.Properties["path"].MaxLength != maxFileToolPathBytes {
+		t.Fatalf("path maxLength = %d, want %d", schema.Properties["path"].MaxLength, maxFileToolPathBytes)
+	}
 	if schema.Properties["content"].MaxLength != MaxWriteFileBytes {
 		t.Fatalf("content maxLength = %d, want %d", schema.Properties["content"].MaxLength, MaxWriteFileBytes)
 	}
@@ -448,6 +451,7 @@ func TestFileToolSchemasPublishNonEmptyRequiredStrings(t *testing.T) {
 			var schema struct {
 				Properties map[string]struct {
 					MinLength int `json:"minLength"`
+					MaxLength int `json:"maxLength"`
 				} `json:"properties"`
 			}
 			if err := json.Unmarshal(c.tool.Schema, &schema); err != nil {
@@ -457,6 +461,9 @@ func TestFileToolSchemasPublishNonEmptyRequiredStrings(t *testing.T) {
 				if schema.Properties[field].MinLength != 1 {
 					t.Fatalf("%s minLength = %d, want 1", field, schema.Properties[field].MinLength)
 				}
+			}
+			if schema.Properties["path"].MaxLength != maxFileToolPathBytes {
+				t.Fatalf("path maxLength = %d, want %d", schema.Properties["path"].MaxLength, maxFileToolPathBytes)
 			}
 		})
 	}
@@ -473,6 +480,28 @@ func TestFileToolsRejectBlankRequiredStrings(t *testing.T) {
 		{name: "write path", tool: writeFileTool(BuiltinDeps{HostWorkspaceDir: t.TempDir()}), args: json.RawMessage(`{"path":"   ","content":"x"}`), want: "path is required"},
 		{name: "edit path", tool: editFileTool(BuiltinDeps{HostWorkspaceDir: t.TempDir()}), args: json.RawMessage(`{"path":"   ","old":"x","new":"y"}`), want: "path and old are required"},
 		{name: "edit old", tool: editFileTool(BuiltinDeps{HostWorkspaceDir: t.TempDir()}), args: json.RawMessage(`{"path":"a.txt","old":"   ","new":"y"}`), want: "path and old are required"},
+	} {
+		t.Run(c.name, func(t *testing.T) {
+			_, err := c.tool.Execute(context.Background(), c.args)
+			if err == nil || !strings.Contains(err.Error(), c.want) {
+				t.Fatalf("error = %v, want contains %q", err, c.want)
+			}
+		})
+	}
+}
+
+func TestFileToolsRejectOversizedPathBeforeUse(t *testing.T) {
+	longPath := strings.Repeat("x", maxFileToolPathBytes+1)
+	for _, c := range []struct {
+		name string
+		tool *Tool
+		args json.RawMessage
+		want string
+	}{
+		{name: "read_file", tool: readFileTool(BuiltinDeps{HostWorkspaceDir: t.TempDir()}), args: json.RawMessage(`{"path":"` + longPath + `"}`), want: "read_file supports paths up to"},
+		{name: "write_file", tool: writeFileTool(BuiltinDeps{HostWorkspaceDir: t.TempDir()}), args: json.RawMessage(`{"path":"` + longPath + `","content":"x"}`), want: "write_file supports paths up to"},
+		{name: "edit_file", tool: editFileTool(BuiltinDeps{HostWorkspaceDir: t.TempDir()}), args: json.RawMessage(`{"path":"` + longPath + `","old":"x","new":"y"}`), want: "edit_file supports paths up to"},
+		{name: "list_files", tool: listFilesTool(BuiltinDeps{HostWorkspaceDir: t.TempDir()}), args: json.RawMessage(`{"path":"` + longPath + `"}`), want: "list_files supports paths up to"},
 	} {
 		t.Run(c.name, func(t *testing.T) {
 			_, err := c.tool.Execute(context.Background(), c.args)
