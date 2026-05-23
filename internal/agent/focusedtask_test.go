@@ -390,6 +390,137 @@ func TestFocusedTaskPolicies(t *testing.T) {
 	}
 }
 
+// TestRunFocusedTask_ResearchUsesWebToolThenEmitsJSON exercises the
+// research profile end-to-end. Research is the only built-in profile
+// whose tool whitelist (AllowWeb) is satisfied by an EXTERNAL deps
+// hook rather than by an internal Affent registrar -- without this
+// test the RegisterWebTools wiring is a code path that has never
+// actually been driven by a focused-task run.
+//
+// What this pins:
+//   - RegisterWebTools is called exactly once per run_task invocation;
+//     its cleanup runs after the child Loop returns (gated via a
+//     closure flag the test inspects).
+//   - The research profile's child registry contains web_fetch (the
+//     stub we register) and nothing else from the file/shell/memory
+//     surface -- research is a pure external-lookup task.
+//   - The child actually calls web_fetch with the URL the model chose;
+//     the stub records it so we can prove the hook ran on the real
+//     dispatch path, not just on registry construction.
+//   - The structured result carries findings[0].source = the URL
+//     (per the research prompt hint that every finding must cite its
+//     source URL).
+func TestRunFocusedTask_ResearchUsesWebToolThenEmitsJSON(t *testing.T) {
+	var fetchedURL string
+	var cleanupRan bool
+	webRegistrar := func(ctx context.Context, reg *Registry) (func(), error) {
+		reg.Add(&Tool{
+			Name:        "web_fetch",
+			Description: "stub web_fetch for tests",
+			Schema:      json.RawMessage(`{"type":"object","required":["url"],"properties":{"url":{"type":"string"}}}`),
+			Execute: func(_ context.Context, args json.RawMessage) (string, error) {
+				var p struct {
+					URL string `json:"url"`
+				}
+				if err := json.Unmarshal(args, &p); err != nil {
+					return "", err
+				}
+				fetchedURL = p.URL
+				return "stub page body for " + p.URL, nil
+			},
+		})
+		return func() { cleanupRan = true }, nil
+	}
+
+	step := 0
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "text/event-stream")
+		w.WriteHeader(http.StatusOK)
+		step++
+		switch step {
+		case 1:
+			_, _ = w.Write([]byte(`data: {"choices":[{"delta":{"role":"assistant","tool_calls":[{"index":0,"id":"c1","type":"function","function":{"name":"web_fetch","arguments":"{\"url\":\"https://example.com/api/release\"}"}}]},"finish_reason":"tool_calls"}]}` + "\n\n"))
+		default:
+			body := `{"task_type":"research","ok":true,"summary":"latest stable is v2.4","findings":[{"claim":"current stable is v2.4","evidence":"release notes excerpt: v2.4 GA","source":"https://example.com/api/release"}]}`
+			_, _ = w.Write([]byte("data: {\"choices\":[{\"delta\":{\"role\":\"assistant\",\"content\":" + strconvQuote(body) + "},\"finish_reason\":\"stop\"}]}\n\n"))
+		}
+		_, _ = w.Write([]byte("data: [DONE]\n\n"))
+	}))
+	t.Cleanup(srv.Close)
+
+	raw, err := runFocusedTask(context.Background(), FocusedTaskDeps{
+		LLM:              NewLLMClient(srv.URL, "", "fake"),
+		HostWorkspaceDir: t.TempDir(),
+		TranscriptDir:    t.TempDir(),
+		Log:              zerolog.Nop(),
+		PerCallTimeout:   5 * time.Second,
+		RegisterWebTools: webRegistrar,
+	}, researchProfile(), "find the current stable release", 4)
+	if err != nil {
+		t.Fatalf("runFocusedTask: %v\n%s", err, raw)
+	}
+
+	var got FocusedTaskResult
+	if err := json.Unmarshal([]byte(raw), &got); err != nil {
+		t.Fatalf("decode: %v\n%s", err, raw)
+	}
+	if !got.OK || got.TaskType != FocusedTaskResearch {
+		t.Fatalf("metadata: %+v", got)
+	}
+	if len(got.Findings) != 1 {
+		t.Fatalf("expected one finding, got %+v", got.Findings)
+	}
+	if got.Findings[0].Source != "https://example.com/api/release" {
+		t.Errorf("findings[0].source = %q, want the URL the child fetched", got.Findings[0].Source)
+	}
+	if fetchedURL != "https://example.com/api/release" {
+		t.Errorf("web_fetch stub was not invoked on the dispatch path; fetchedURL=%q", fetchedURL)
+	}
+	if !cleanupRan {
+		t.Errorf("RegisterWebTools cleanup must run after the focused-task call returns")
+	}
+	sawFetch := false
+	for _, c := range got.ToolCalls {
+		if c.Tool == "web_fetch" {
+			sawFetch = true
+			break
+		}
+	}
+	if !sawFetch {
+		t.Errorf("tool_calls metadata missing web_fetch entry: %+v", got.ToolCalls)
+	}
+}
+
+// TestRunFocusedTask_ResearchUnavailableWithoutWebRegistrar pins the
+// "no web registrar -> research is invisible" contract end-to-end.
+// The schema enum should drop research, and the tool itself should
+// reject task_type=research with the unknown-task_type error so a
+// model that guesses the kind still gets a clear correction.
+func TestRunFocusedTask_ResearchUnavailableWithoutWebRegistrar(t *testing.T) {
+	reg := NewRegistry()
+	RegisterFocusedTasks(reg, FocusedTaskDeps{
+		LLM:              dummyLLM(t),
+		HostWorkspaceDir: t.TempDir(),
+		Memory:           stubMemoryStore{},
+		SessionsDir:      t.TempDir(),
+		Log:              zerolog.Nop(),
+	})
+	tool, ok := reg.Get(FocusedTaskToolName)
+	if !ok {
+		t.Fatal("run_task should still register without web")
+	}
+	if strings.Contains(string(tool.Schema), `"research"`) {
+		t.Errorf("schema must drop research when no web registrar is wired:\n%s", tool.Schema)
+	}
+	_, err := tool.Execute(context.Background(), json.RawMessage(`{"task_type":"research","objective":"x"}`))
+	if err == nil {
+		t.Fatal("calling research without a web registrar must return an unknown-task_type error")
+	}
+	if !strings.Contains(err.Error(), "unsupported task_type") {
+		t.Errorf("error should say unsupported task_type, got %q", err)
+	}
+}
+
 func TestRunFocusedTask_HappyPathReturnsStructuredResult(t *testing.T) {
 	jsonReply := `{"task_type":"recall","ok":true,"summary":"one fact","findings":[{"claim":"user prefers terse responses","evidence":"\"don't summarize at the end\"","source":"session:abc","confidence":"high"}]}`
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
