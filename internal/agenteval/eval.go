@@ -56,20 +56,21 @@ type BatchRunner struct {
 }
 
 type BatchResult struct {
-	BatchScenario    string
-	Workspace        string
-	TracePath        string
-	OK               bool
-	Failures         []string
-	Duration         time.Duration
-	FinalText        string
-	TurnEndReason    string
-	ToolCalls        int
-	ToolStats        ToolRuntimeStats
-	ToolTruncation   ToolTruncationStats
-	Usage            Usage
-	WorkspaceRemoved bool
-	CleanupError     string
+	BatchScenario      string
+	Workspace          string
+	TracePath          string
+	OK                 bool
+	Failures           []string
+	Duration           time.Duration
+	FinalText          string
+	TraceSchemaVersion int
+	TurnEndReason      string
+	ToolCalls          int
+	ToolStats          ToolRuntimeStats
+	ToolTruncation     ToolTruncationStats
+	Usage              Usage
+	WorkspaceRemoved   bool
+	CleanupError       string
 }
 
 func BuiltinBatchScenarios() []BatchScenario {
@@ -230,6 +231,7 @@ func (r BatchRunner) Run(ctx context.Context, scenario BatchScenario) BatchResul
 	if err != nil {
 		res.Failures = append(res.Failures, fmt.Sprintf("parse trace: %v", err))
 	} else {
+		res.TraceSchemaVersion = trace.SchemaVersion
 		res.TurnEndReason = trace.TurnEndReason
 		res.ToolCalls = len(trace.Tools)
 		res.ToolStats = trace.ToolStats

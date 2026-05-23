@@ -177,11 +177,12 @@ func TestPrintBatchResultIncludesTraceMetrics(t *testing.T) {
 func TestBatchSummaryAggregatesRuntimeMetrics(t *testing.T) {
 	var summary batchSummary
 	summary.add(agenteval.BatchResult{
-		OK:               true,
-		Duration:         100 * time.Millisecond,
-		ToolCalls:        2,
-		WorkspaceRemoved: true,
-		TurnEndReason:    "completed",
+		OK:                 true,
+		Duration:           100 * time.Millisecond,
+		ToolCalls:          2,
+		WorkspaceRemoved:   true,
+		TraceSchemaVersion: 1,
+		TurnEndReason:      "completed",
 		ToolStats: agenteval.ToolRuntimeStats{
 			ToolArgsRepaired: 1,
 			ToolErrors:       0,
@@ -194,10 +195,11 @@ func TestBatchSummaryAggregatesRuntimeMetrics(t *testing.T) {
 		Usage: agenteval.Usage{InputTokens: 20, OutputTokens: 5},
 	})
 	summary.add(agenteval.BatchResult{
-		OK:            false,
-		Duration:      250 * time.Millisecond,
-		ToolCalls:     3,
-		TurnEndReason: "max_turns",
+		OK:                 false,
+		Duration:           250 * time.Millisecond,
+		ToolCalls:          3,
+		TraceSchemaVersion: 1,
+		TurnEndReason:      "max_turns",
 		Failures: []string{
 			`turn ended with reason "max_turns" (expected completed)`,
 			`missing required command match "go test"; commands=[]`,
@@ -220,19 +222,23 @@ func TestBatchSummaryAggregatesRuntimeMetrics(t *testing.T) {
 	if !strings.Contains(out.String(), want) {
 		t.Fatalf("summary output missing %q:\n%s", want, out.String())
 	}
+	if summary.TraceSchemaVersions[1] != 2 {
+		t.Fatalf("TraceSchemaVersions = %#v, want version 1 count 2", summary.TraceSchemaVersions)
+	}
 }
 
 func TestPrintBatchResultJSONL(t *testing.T) {
 	var out bytes.Buffer
 	printBatchResultJSONL(&out, testEvalJSONLMetadata(), agenteval.BatchResult{
-		BatchScenario:    "sample",
-		Workspace:        "/tmp/ws",
-		TracePath:        "/tmp/ws/trace.jsonl",
-		OK:               true,
-		Duration:         1500 * time.Millisecond,
-		TurnEndReason:    "completed",
-		ToolCalls:        4,
-		WorkspaceRemoved: true,
+		BatchScenario:      "sample",
+		Workspace:          "/tmp/ws",
+		TracePath:          "/tmp/ws/trace.jsonl",
+		OK:                 true,
+		Duration:           1500 * time.Millisecond,
+		TraceSchemaVersion: 1,
+		TurnEndReason:      "completed",
+		ToolCalls:          4,
+		WorkspaceRemoved:   true,
 		ToolStats: agenteval.ToolRuntimeStats{
 			ToolArgsRepaired: 2,
 			ToolErrors:       1,
@@ -263,6 +269,7 @@ func TestPrintBatchResultJSONL(t *testing.T) {
 		"scenario":                   "sample",
 		"ok":                         true,
 		"duration_ms":                float64(1500),
+		"trace_schema_version":       float64(1),
 		"turn_end_reason":            "completed",
 		"tool_calls":                 float64(4),
 		"tool_errors":                float64(1),
@@ -291,12 +298,13 @@ func TestPrintBatchResultJSONL(t *testing.T) {
 func TestPrintBatchResultJSONLIncludesFailureKinds(t *testing.T) {
 	var out bytes.Buffer
 	printBatchResultJSONL(&out, testEvalJSONLMetadata(), agenteval.BatchResult{
-		BatchScenario: "failing",
-		Workspace:     "/tmp/ws",
-		TracePath:     "/tmp/ws/trace.jsonl",
-		OK:            false,
-		Duration:      500 * time.Millisecond,
-		TurnEndReason: "max_turns",
+		BatchScenario:      "failing",
+		Workspace:          "/tmp/ws",
+		TracePath:          "/tmp/ws/trace.jsonl",
+		OK:                 false,
+		Duration:           500 * time.Millisecond,
+		TraceSchemaVersion: 1,
+		TurnEndReason:      "max_turns",
 		Failures: []string{
 			`turn ended with reason "max_turns" (expected completed)`,
 			`missing required command match "go test"; commands=[]`,
@@ -319,6 +327,9 @@ func TestPrintBatchResultJSONLIncludesFailureKinds(t *testing.T) {
 	if failureKinds["turn_end"] != float64(1) || failureKinds["missing_command"] != float64(2) {
 		t.Fatalf("failure_kinds = %#v", failureKinds)
 	}
+	if got["trace_schema_version"] != float64(1) {
+		t.Fatalf("trace_schema_version = %#v, want 1", got["trace_schema_version"])
+	}
 }
 
 func TestPrintBatchSummaryJSONL(t *testing.T) {
@@ -336,6 +347,7 @@ func TestPrintBatchSummaryJSONL(t *testing.T) {
 		ToolArgsOmittedBytes:    256,
 		ToolResultsTruncated:    2,
 		ToolResultsOmittedBytes: 4096,
+		TraceSchemaVersions:     map[int]int{1: 2},
 		InputTokens:             90,
 		OutputTokens:            20,
 		EndCompleted:            1,
@@ -392,6 +404,28 @@ func TestPrintBatchSummaryJSONL(t *testing.T) {
 	}
 	if failureKinds["missing_command"] != float64(1) || failureKinds["turn_end"] != float64(1) {
 		t.Fatalf("failure_kinds = %#v", failureKinds)
+	}
+	traceSchemaVersions, ok := got["trace_schema_versions"].(map[string]any)
+	if !ok {
+		t.Fatalf("trace_schema_versions missing or wrong type: %#v\njson=%s", got["trace_schema_versions"], out.String())
+	}
+	if traceSchemaVersions["1"] != float64(2) {
+		t.Fatalf("trace_schema_versions = %#v", traceSchemaVersions)
+	}
+}
+
+func TestCloneTraceSchemaVersions(t *testing.T) {
+	if got := cloneTraceSchemaVersions(nil); got != nil {
+		t.Fatalf("nil trace schema versions should produce nil map, got %#v", got)
+	}
+	in := map[int]int{1: 2}
+	got := cloneTraceSchemaVersions(in)
+	if got[1] != 2 {
+		t.Fatalf("cloneTraceSchemaVersions = %#v, want version 1 count 2", got)
+	}
+	got[1] = 3
+	if in[1] != 2 {
+		t.Fatalf("cloneTraceSchemaVersions should not alias input, input = %#v", in)
 	}
 }
 

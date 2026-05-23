@@ -142,6 +142,7 @@ type batchSummary struct {
 	ToolArgsOmittedBytes    int
 	ToolResultsTruncated    int
 	ToolResultsOmittedBytes int
+	TraceSchemaVersions     map[int]int
 	InputTokens             int
 	OutputTokens            int
 	EndCompleted            int
@@ -170,6 +171,12 @@ func (s *batchSummary) add(res agenteval.BatchResult) {
 	s.ToolArgsOmittedBytes += res.ToolTruncation.ArgsOmittedBytes
 	s.ToolResultsTruncated += res.ToolTruncation.ResultsTruncated
 	s.ToolResultsOmittedBytes += res.ToolTruncation.ResultsOmittedBytes
+	if res.TraceSchemaVersion > 0 {
+		if s.TraceSchemaVersions == nil {
+			s.TraceSchemaVersions = map[int]int{}
+		}
+		s.TraceSchemaVersions[res.TraceSchemaVersion]++
+	}
 	s.InputTokens += res.Usage.InputTokens
 	s.OutputTokens += res.Usage.OutputTokens
 	switch res.TurnEndReason {
@@ -287,6 +294,7 @@ type batchResultRecord struct {
 	DurationMS              int64          `json:"duration_ms"`
 	Workspace               string         `json:"workspace"`
 	TracePath               string         `json:"trace_path"`
+	TraceSchemaVersion      int            `json:"trace_schema_version,omitempty"`
 	TurnEndReason           string         `json:"turn_end_reason,omitempty"`
 	ToolCalls               int            `json:"tool_calls"`
 	ToolErrors              int            `json:"tool_errors"`
@@ -319,6 +327,7 @@ type batchSummaryRecord struct {
 	ToolArgsOmittedBytes    int            `json:"tool_args_omitted_bytes"`
 	ToolResultsTruncated    int            `json:"tool_results_truncated"`
 	ToolResultsOmittedBytes int            `json:"tool_results_omitted_bytes"`
+	TraceSchemaVersions     map[int]int    `json:"trace_schema_versions,omitempty"`
 	InputTokens             int            `json:"input_tokens"`
 	OutputTokens            int            `json:"output_tokens"`
 	EndCompleted            int            `json:"end_completed"`
@@ -340,6 +349,7 @@ func printBatchResultJSONL(w io.Writer, meta evalJSONLMetadata, res agenteval.Ba
 		DurationMS:              res.Duration.Milliseconds(),
 		Workspace:               res.Workspace,
 		TracePath:               res.TracePath,
+		TraceSchemaVersion:      res.TraceSchemaVersion,
 		TurnEndReason:           res.TurnEndReason,
 		ToolCalls:               res.ToolCalls,
 		ToolErrors:              res.ToolStats.ToolErrors,
@@ -374,6 +384,7 @@ func printBatchSummaryJSONL(w io.Writer, meta evalJSONLMetadata, s batchSummary)
 		ToolArgsOmittedBytes:    s.ToolArgsOmittedBytes,
 		ToolResultsTruncated:    s.ToolResultsTruncated,
 		ToolResultsOmittedBytes: s.ToolResultsOmittedBytes,
+		TraceSchemaVersions:     cloneTraceSchemaVersions(s.TraceSchemaVersions),
 		InputTokens:             s.InputTokens,
 		OutputTokens:            s.OutputTokens,
 		EndCompleted:            s.EndCompleted,
@@ -392,6 +403,17 @@ func cloneFailureKinds(in map[string]int) map[string]int {
 		return nil
 	}
 	out := make(map[string]int, len(in))
+	for k, v := range in {
+		out[k] = v
+	}
+	return out
+}
+
+func cloneTraceSchemaVersions(in map[int]int) map[int]int {
+	if len(in) == 0 {
+		return nil
+	}
+	out := make(map[int]int, len(in))
 	for k, v := range in {
 		out[k] = v
 	}
