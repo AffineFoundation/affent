@@ -33,21 +33,22 @@ func run(args []string) int {
 	fs := flag.NewFlagSet("affenteval", flag.ContinueOnError)
 	fs.SetOutput(os.Stderr)
 	var (
-		list           = fs.Bool("list", false, "list built-in scenarios and exit")
-		listSuites     = fs.Bool("list-suites", false, "list built-in scenario suites and exit")
-		suite          = fs.String("suite", "", "scenario suite to run/list (e.g. small-model-tools)")
-		scenarioCSV    = fs.String("scenario", "", "comma-separated scenario names; empty runs all")
-		repoRoot       = fs.String("repo-root", ".", "Affent repository root")
-		workRoot       = fs.String("work-root", "", "directory for temporary scenario workspaces; default $TMPDIR/affent-eval")
-		baseURL        = fs.String("base-url", "", "OpenAI-compatible endpoint (env: AFFENTCTL_BASE_URL)")
-		apiKey         = fs.String("api-key", "", "API key (env: AFFENTCTL_API_KEY)")
-		model          = fs.String("model", "", "model id (env: AFFENTCTL_MODEL)")
-		providerLabel  = fs.String("provider-label", "", "provider label written to JSONL for comparisons (env: AFFENTEVAL_PROVIDER_LABEL)")
-		temperature    = fs.String("temperature", "0", "sampling temperature forwarded to affentctl")
-		executor       = fs.String("executor", "local", "affentctl tool executor for scenario runs: local, sandbox, or docker:<container>")
-		timeout        = fs.Duration("timeout", 5*time.Minute, "per-scenario timeout")
-		jsonl          = fs.Bool("jsonl", false, "emit machine-readable JSONL records instead of text")
-		keepWorkspaces = fs.Bool("keep-workspaces", false, "keep passing scenario workspaces; failing scenario workspaces are always kept")
+		list              = fs.Bool("list", false, "list built-in scenarios and exit")
+		listSuites        = fs.Bool("list-suites", false, "list built-in scenario suites and exit")
+		suite             = fs.String("suite", "", "scenario suite to run/list (e.g. small-model-tools)")
+		scenarioCSV       = fs.String("scenario", "", "comma-separated scenario names; empty runs all")
+		repoRoot          = fs.String("repo-root", ".", "Affent repository root")
+		workRoot          = fs.String("work-root", "", "directory for temporary scenario workspaces; default $TMPDIR/affent-eval")
+		baseURL           = fs.String("base-url", "", "OpenAI-compatible endpoint (env: AFFENTCTL_BASE_URL)")
+		apiKey            = fs.String("api-key", "", "API key (env: AFFENTCTL_API_KEY)")
+		model             = fs.String("model", "", "model id (env: AFFENTCTL_MODEL)")
+		providerLabel     = fs.String("provider-label", "", "provider label written to JSONL for comparisons (env: AFFENTEVAL_PROVIDER_LABEL)")
+		temperature       = fs.String("temperature", "0", "sampling temperature forwarded to affentctl")
+		executor          = fs.String("executor", "local", "affentctl tool executor for scenario runs: local, sandbox, or docker:<container>")
+		timeout           = fs.Duration("timeout", 5*time.Minute, "per-scenario timeout")
+		verifierOutputCap = fs.Int("verifier-output-cap", agenteval.DefaultVerifierOutputCapBytes, "maximum verifier output bytes buffered per scenario")
+		jsonl             = fs.Bool("jsonl", false, "emit machine-readable JSONL records instead of text")
+		keepWorkspaces    = fs.Bool("keep-workspaces", false, "keep passing scenario workspaces; failing scenario workspaces are always kept")
 	)
 	fs.Usage = func() {
 		fmt.Fprintln(fs.Output(), `usage: affenteval [flags]
@@ -91,7 +92,7 @@ success and trace-level process quality.`)
 		fmt.Fprintf(os.Stderr, "scenario: %v\n", err)
 		return 64
 	}
-	if err := validateRunConfig(*temperature, *timeout, *executor, len(scenarios), *workRoot, flagWasSet(fs, "work-root")); err != nil {
+	if err := validateRunConfig(*temperature, *timeout, *executor, len(scenarios), *workRoot, flagWasSet(fs, "work-root"), *verifierOutputCap); err != nil {
 		fmt.Fprintf(os.Stderr, "config: %v\n", err)
 		return 64
 	}
@@ -104,6 +105,7 @@ success and trace-level process quality.`)
 		Temperature:              *temperature,
 		Executor:                 *executor,
 		Timeout:                  *timeout,
+		VerifierOutputCapBytes:   *verifierOutputCap,
 		CleanupPassingWorkspaces: !*keepWorkspaces,
 	}
 	jsonlMeta := evalJSONLMetadataFromConfig(*suite, *model, *providerLabel, *executor, *temperature, *timeout)
@@ -130,30 +132,35 @@ success and trace-level process quality.`)
 }
 
 type batchSummary struct {
-	Total                   int
-	Passed                  int
-	Failed                  int
-	Duration                time.Duration
-	ToolCalls               int
-	ToolErrors              int
-	ToolRepaired            int
-	ToolDurationMS          int64
-	ToolArgsTruncated       int
-	ToolArgsOmittedBytes    int
-	ToolResultsTruncated    int
-	ToolResultsOmittedBytes int
-	ToolResultArtifacts     int
-	TraceSchemaVersions     map[int]int
-	InputTokens             int
-	OutputTokens            int
-	EndCompleted            int
-	EndMaxTurns             int
-	EndErrors               int
-	EndCancelled            int
-	EndUnknown              int
-	FailureKinds            map[string]int
-	RemovedWorkspaces       int
-	CleanupErrors           int
+	Total                      int
+	Passed                     int
+	Failed                     int
+	Duration                   time.Duration
+	ToolCalls                  int
+	ToolErrors                 int
+	ToolRepaired               int
+	ToolDurationMS             int64
+	ToolArgsTruncated          int
+	ToolArgsOmittedBytes       int
+	ToolResultsTruncated       int
+	ToolResultsOmittedBytes    int
+	ToolResultArtifacts        int
+	VerifierRuns               int
+	VerifierPassed             int
+	VerifierFailed             int
+	VerifierOutputTruncated    int
+	VerifierOutputOmittedBytes int
+	TraceSchemaVersions        map[int]int
+	InputTokens                int
+	OutputTokens               int
+	EndCompleted               int
+	EndMaxTurns                int
+	EndErrors                  int
+	EndCancelled               int
+	EndUnknown                 int
+	FailureKinds               map[string]int
+	RemovedWorkspaces          int
+	CleanupErrors              int
 }
 
 func (s *batchSummary) add(res agenteval.BatchResult) {
@@ -173,6 +180,18 @@ func (s *batchSummary) add(res agenteval.BatchResult) {
 	s.ToolResultsTruncated += res.ToolTruncation.ResultsTruncated
 	s.ToolResultsOmittedBytes += res.ToolTruncation.ResultsOmittedBytes
 	s.ToolResultArtifacts += res.ToolTruncation.ResultArtifacts
+	if res.Verifier.Ran {
+		s.VerifierRuns++
+		if res.Verifier.OK {
+			s.VerifierPassed++
+		} else {
+			s.VerifierFailed++
+		}
+		if res.Verifier.OutputTruncated {
+			s.VerifierOutputTruncated++
+		}
+		s.VerifierOutputOmittedBytes += res.Verifier.OutputOmittedBytes
+	}
 	if res.TraceSchemaVersion > 0 {
 		if s.TraceSchemaVersions == nil {
 			s.TraceSchemaVersions = map[int]int{}
@@ -208,7 +227,7 @@ func (s *batchSummary) add(res agenteval.BatchResult) {
 }
 
 func printBatchSummary(w io.Writer, s batchSummary) {
-	fmt.Fprintf(w, "SUMMARY scenarios=%d passed=%d failed=%d duration=%s tools=%d errors=%d repaired=%d tool_ms=%d trunc=args:%d,results:%d,artifacts:%d omitted=%d/%d tokens=%d/%d ends=completed:%d,max_turns:%d,error:%d,cancelled:%d,unknown:%d failure_kinds=%s removed_workspaces=%d cleanup_errors=%d\n",
+	fmt.Fprintf(w, "SUMMARY scenarios=%d passed=%d failed=%d duration=%s tools=%d errors=%d repaired=%d tool_ms=%d trunc=args:%d,results:%d,artifacts:%d omitted=%d/%d verifier=run:%d,passed:%d,failed:%d,truncated:%d,omitted:%d tokens=%d/%d ends=completed:%d,max_turns:%d,error:%d,cancelled:%d,unknown:%d failure_kinds=%s removed_workspaces=%d cleanup_errors=%d\n",
 		s.Total,
 		s.Passed,
 		s.Failed,
@@ -222,6 +241,11 @@ func printBatchSummary(w io.Writer, s batchSummary) {
 		s.ToolResultArtifacts,
 		s.ToolArgsOmittedBytes,
 		s.ToolResultsOmittedBytes,
+		s.VerifierRuns,
+		s.VerifierPassed,
+		s.VerifierFailed,
+		s.VerifierOutputTruncated,
+		s.VerifierOutputOmittedBytes,
 		s.InputTokens,
 		s.OutputTokens,
 		s.EndCompleted,
@@ -291,117 +315,145 @@ func normalizedEvalExecutor(executor string) string {
 
 type batchResultRecord struct {
 	evalJSONLMetadata
-	Type                    string         `json:"type"`
-	Scenario                string         `json:"scenario"`
-	OK                      bool           `json:"ok"`
-	DurationMS              int64          `json:"duration_ms"`
-	Workspace               string         `json:"workspace"`
-	TracePath               string         `json:"trace_path"`
-	TraceSchemaVersion      int            `json:"trace_schema_version,omitempty"`
-	TurnEndReason           string         `json:"turn_end_reason,omitempty"`
-	ToolCalls               int            `json:"tool_calls"`
-	ToolErrors              int            `json:"tool_errors"`
-	ToolRepaired            int            `json:"tool_repaired"`
-	ToolDurationMS          int64          `json:"tool_duration_ms"`
-	ToolArgsTruncated       int            `json:"tool_args_truncated"`
-	ToolArgsOmittedBytes    int            `json:"tool_args_omitted_bytes"`
-	ToolResultsTruncated    int            `json:"tool_results_truncated"`
-	ToolResultsOmittedBytes int            `json:"tool_results_omitted_bytes"`
-	ToolResultArtifacts     int            `json:"tool_result_artifacts"`
-	InputTokens             int            `json:"input_tokens"`
-	OutputTokens            int            `json:"output_tokens"`
-	WorkspaceRemoved        bool           `json:"workspace_removed,omitempty"`
-	CleanupError            string         `json:"cleanup_error,omitempty"`
-	Failures                []string       `json:"failures,omitempty"`
-	FailureKinds            map[string]int `json:"failure_kinds,omitempty"`
+	Type                       string         `json:"type"`
+	Scenario                   string         `json:"scenario"`
+	OK                         bool           `json:"ok"`
+	DurationMS                 int64          `json:"duration_ms"`
+	Workspace                  string         `json:"workspace"`
+	TracePath                  string         `json:"trace_path"`
+	TraceSchemaVersion         int            `json:"trace_schema_version,omitempty"`
+	TurnEndReason              string         `json:"turn_end_reason,omitempty"`
+	ToolCalls                  int            `json:"tool_calls"`
+	ToolErrors                 int            `json:"tool_errors"`
+	ToolRepaired               int            `json:"tool_repaired"`
+	ToolDurationMS             int64          `json:"tool_duration_ms"`
+	ToolArgsTruncated          int            `json:"tool_args_truncated"`
+	ToolArgsOmittedBytes       int            `json:"tool_args_omitted_bytes"`
+	ToolResultsTruncated       int            `json:"tool_results_truncated"`
+	ToolResultsOmittedBytes    int            `json:"tool_results_omitted_bytes"`
+	ToolResultArtifacts        int            `json:"tool_result_artifacts"`
+	VerifierCommand            string         `json:"verifier_command,omitempty"`
+	VerifierRan                bool           `json:"verifier_ran"`
+	VerifierOK                 bool           `json:"verifier_ok"`
+	VerifierExitCode           int            `json:"verifier_exit_code"`
+	VerifierDurationMS         int64          `json:"verifier_duration_ms"`
+	VerifierOutputBytes        int            `json:"verifier_output_bytes"`
+	VerifierOutputTruncated    bool           `json:"verifier_output_truncated"`
+	VerifierOutputOmittedBytes int            `json:"verifier_output_omitted_bytes"`
+	VerifierOutputCapBytes     int            `json:"verifier_output_cap_bytes"`
+	InputTokens                int            `json:"input_tokens"`
+	OutputTokens               int            `json:"output_tokens"`
+	WorkspaceRemoved           bool           `json:"workspace_removed,omitempty"`
+	CleanupError               string         `json:"cleanup_error,omitempty"`
+	Failures                   []string       `json:"failures,omitempty"`
+	FailureKinds               map[string]int `json:"failure_kinds,omitempty"`
 }
 
 type batchSummaryRecord struct {
 	evalJSONLMetadata
-	Type                    string         `json:"type"`
-	Scenarios               int            `json:"scenarios"`
-	Passed                  int            `json:"passed"`
-	Failed                  int            `json:"failed"`
-	DurationMS              int64          `json:"duration_ms"`
-	ToolCalls               int            `json:"tool_calls"`
-	ToolErrors              int            `json:"tool_errors"`
-	ToolRepaired            int            `json:"tool_repaired"`
-	ToolDurationMS          int64          `json:"tool_duration_ms"`
-	ToolArgsTruncated       int            `json:"tool_args_truncated"`
-	ToolArgsOmittedBytes    int            `json:"tool_args_omitted_bytes"`
-	ToolResultsTruncated    int            `json:"tool_results_truncated"`
-	ToolResultsOmittedBytes int            `json:"tool_results_omitted_bytes"`
-	ToolResultArtifacts     int            `json:"tool_result_artifacts"`
-	TraceSchemaVersions     map[int]int    `json:"trace_schema_versions,omitempty"`
-	InputTokens             int            `json:"input_tokens"`
-	OutputTokens            int            `json:"output_tokens"`
-	EndCompleted            int            `json:"end_completed"`
-	EndMaxTurns             int            `json:"end_max_turns"`
-	EndErrors               int            `json:"end_errors"`
-	EndCancelled            int            `json:"end_cancelled"`
-	EndUnknown              int            `json:"end_unknown"`
-	FailureKinds            map[string]int `json:"failure_kinds,omitempty"`
-	RemovedWorkspaces       int            `json:"removed_workspaces"`
-	CleanupErrors           int            `json:"cleanup_errors"`
+	Type                       string         `json:"type"`
+	Scenarios                  int            `json:"scenarios"`
+	Passed                     int            `json:"passed"`
+	Failed                     int            `json:"failed"`
+	DurationMS                 int64          `json:"duration_ms"`
+	ToolCalls                  int            `json:"tool_calls"`
+	ToolErrors                 int            `json:"tool_errors"`
+	ToolRepaired               int            `json:"tool_repaired"`
+	ToolDurationMS             int64          `json:"tool_duration_ms"`
+	ToolArgsTruncated          int            `json:"tool_args_truncated"`
+	ToolArgsOmittedBytes       int            `json:"tool_args_omitted_bytes"`
+	ToolResultsTruncated       int            `json:"tool_results_truncated"`
+	ToolResultsOmittedBytes    int            `json:"tool_results_omitted_bytes"`
+	ToolResultArtifacts        int            `json:"tool_result_artifacts"`
+	VerifierRuns               int            `json:"verifier_runs"`
+	VerifierPassed             int            `json:"verifier_passed"`
+	VerifierFailed             int            `json:"verifier_failed"`
+	VerifierOutputTruncated    int            `json:"verifier_output_truncated"`
+	VerifierOutputOmittedBytes int            `json:"verifier_output_omitted_bytes"`
+	TraceSchemaVersions        map[int]int    `json:"trace_schema_versions,omitempty"`
+	InputTokens                int            `json:"input_tokens"`
+	OutputTokens               int            `json:"output_tokens"`
+	EndCompleted               int            `json:"end_completed"`
+	EndMaxTurns                int            `json:"end_max_turns"`
+	EndErrors                  int            `json:"end_errors"`
+	EndCancelled               int            `json:"end_cancelled"`
+	EndUnknown                 int            `json:"end_unknown"`
+	FailureKinds               map[string]int `json:"failure_kinds,omitempty"`
+	RemovedWorkspaces          int            `json:"removed_workspaces"`
+	CleanupErrors              int            `json:"cleanup_errors"`
 }
 
 func printBatchResultJSONL(w io.Writer, meta evalJSONLMetadata, res agenteval.BatchResult) {
 	writeJSONLine(w, batchResultRecord{
-		evalJSONLMetadata:       meta,
-		Type:                    "scenario",
-		Scenario:                res.BatchScenario,
-		OK:                      res.OK,
-		DurationMS:              res.Duration.Milliseconds(),
-		Workspace:               res.Workspace,
-		TracePath:               res.TracePath,
-		TraceSchemaVersion:      res.TraceSchemaVersion,
-		TurnEndReason:           res.TurnEndReason,
-		ToolCalls:               res.ToolCalls,
-		ToolErrors:              res.ToolStats.ToolErrors,
-		ToolRepaired:            res.ToolStats.ToolArgsRepaired,
-		ToolDurationMS:          res.ToolStats.ToolDurationMS,
-		ToolArgsTruncated:       res.ToolTruncation.ArgsTruncated,
-		ToolArgsOmittedBytes:    res.ToolTruncation.ArgsOmittedBytes,
-		ToolResultsTruncated:    res.ToolTruncation.ResultsTruncated,
-		ToolResultsOmittedBytes: res.ToolTruncation.ResultsOmittedBytes,
-		ToolResultArtifacts:     res.ToolTruncation.ResultArtifacts,
-		InputTokens:             res.Usage.InputTokens,
-		OutputTokens:            res.Usage.OutputTokens,
-		WorkspaceRemoved:        res.WorkspaceRemoved,
-		CleanupError:            res.CleanupError,
-		Failures:                res.Failures,
-		FailureKinds:            failureKindsForResult(res.Failures),
+		evalJSONLMetadata:          meta,
+		Type:                       "scenario",
+		Scenario:                   res.BatchScenario,
+		OK:                         res.OK,
+		DurationMS:                 res.Duration.Milliseconds(),
+		Workspace:                  res.Workspace,
+		TracePath:                  res.TracePath,
+		TraceSchemaVersion:         res.TraceSchemaVersion,
+		TurnEndReason:              res.TurnEndReason,
+		ToolCalls:                  res.ToolCalls,
+		ToolErrors:                 res.ToolStats.ToolErrors,
+		ToolRepaired:               res.ToolStats.ToolArgsRepaired,
+		ToolDurationMS:             res.ToolStats.ToolDurationMS,
+		ToolArgsTruncated:          res.ToolTruncation.ArgsTruncated,
+		ToolArgsOmittedBytes:       res.ToolTruncation.ArgsOmittedBytes,
+		ToolResultsTruncated:       res.ToolTruncation.ResultsTruncated,
+		ToolResultsOmittedBytes:    res.ToolTruncation.ResultsOmittedBytes,
+		ToolResultArtifacts:        res.ToolTruncation.ResultArtifacts,
+		VerifierCommand:            res.Verifier.Command,
+		VerifierRan:                res.Verifier.Ran,
+		VerifierOK:                 res.Verifier.OK,
+		VerifierExitCode:           res.Verifier.ExitCode,
+		VerifierDurationMS:         res.Verifier.Duration.Milliseconds(),
+		VerifierOutputBytes:        res.Verifier.OutputBytes,
+		VerifierOutputTruncated:    res.Verifier.OutputTruncated,
+		VerifierOutputOmittedBytes: res.Verifier.OutputOmittedBytes,
+		VerifierOutputCapBytes:     res.Verifier.OutputCapBytes,
+		InputTokens:                res.Usage.InputTokens,
+		OutputTokens:               res.Usage.OutputTokens,
+		WorkspaceRemoved:           res.WorkspaceRemoved,
+		CleanupError:               res.CleanupError,
+		Failures:                   res.Failures,
+		FailureKinds:               failureKindsForResult(res.Failures),
 	})
 }
 
 func printBatchSummaryJSONL(w io.Writer, meta evalJSONLMetadata, s batchSummary) {
 	writeJSONLine(w, batchSummaryRecord{
-		evalJSONLMetadata:       meta,
-		Type:                    "summary",
-		Scenarios:               s.Total,
-		Passed:                  s.Passed,
-		Failed:                  s.Failed,
-		DurationMS:              s.Duration.Milliseconds(),
-		ToolCalls:               s.ToolCalls,
-		ToolErrors:              s.ToolErrors,
-		ToolRepaired:            s.ToolRepaired,
-		ToolDurationMS:          s.ToolDurationMS,
-		ToolArgsTruncated:       s.ToolArgsTruncated,
-		ToolArgsOmittedBytes:    s.ToolArgsOmittedBytes,
-		ToolResultsTruncated:    s.ToolResultsTruncated,
-		ToolResultsOmittedBytes: s.ToolResultsOmittedBytes,
-		ToolResultArtifacts:     s.ToolResultArtifacts,
-		TraceSchemaVersions:     cloneTraceSchemaVersions(s.TraceSchemaVersions),
-		InputTokens:             s.InputTokens,
-		OutputTokens:            s.OutputTokens,
-		EndCompleted:            s.EndCompleted,
-		EndMaxTurns:             s.EndMaxTurns,
-		EndErrors:               s.EndErrors,
-		EndCancelled:            s.EndCancelled,
-		EndUnknown:              s.EndUnknown,
-		FailureKinds:            cloneFailureKinds(s.FailureKinds),
-		RemovedWorkspaces:       s.RemovedWorkspaces,
-		CleanupErrors:           s.CleanupErrors,
+		evalJSONLMetadata:          meta,
+		Type:                       "summary",
+		Scenarios:                  s.Total,
+		Passed:                     s.Passed,
+		Failed:                     s.Failed,
+		DurationMS:                 s.Duration.Milliseconds(),
+		ToolCalls:                  s.ToolCalls,
+		ToolErrors:                 s.ToolErrors,
+		ToolRepaired:               s.ToolRepaired,
+		ToolDurationMS:             s.ToolDurationMS,
+		ToolArgsTruncated:          s.ToolArgsTruncated,
+		ToolArgsOmittedBytes:       s.ToolArgsOmittedBytes,
+		ToolResultsTruncated:       s.ToolResultsTruncated,
+		ToolResultsOmittedBytes:    s.ToolResultsOmittedBytes,
+		ToolResultArtifacts:        s.ToolResultArtifacts,
+		VerifierRuns:               s.VerifierRuns,
+		VerifierPassed:             s.VerifierPassed,
+		VerifierFailed:             s.VerifierFailed,
+		VerifierOutputTruncated:    s.VerifierOutputTruncated,
+		VerifierOutputOmittedBytes: s.VerifierOutputOmittedBytes,
+		TraceSchemaVersions:        cloneTraceSchemaVersions(s.TraceSchemaVersions),
+		InputTokens:                s.InputTokens,
+		OutputTokens:               s.OutputTokens,
+		EndCompleted:               s.EndCompleted,
+		EndMaxTurns:                s.EndMaxTurns,
+		EndErrors:                  s.EndErrors,
+		EndCancelled:               s.EndCancelled,
+		EndUnknown:                 s.EndUnknown,
+		FailureKinds:               cloneFailureKinds(s.FailureKinds),
+		RemovedWorkspaces:          s.RemovedWorkspaces,
+		CleanupErrors:              s.CleanupErrors,
 	})
 }
 
@@ -480,6 +532,25 @@ func printBatchResult(w io.Writer, res agenteval.BatchResult) {
 		fmt.Fprintf(w, " end=%s", res.TurnEndReason)
 	}
 	fmt.Fprintln(w)
+	if res.Verifier.Ran {
+		status := "pass"
+		if !res.Verifier.OK {
+			status = "fail"
+		}
+		fmt.Fprintf(w, "  verifier: %s exit=%d duration=%s output=%d",
+			status,
+			res.Verifier.ExitCode,
+			res.Verifier.Duration.Round(time.Millisecond),
+			res.Verifier.OutputBytes,
+		)
+		if res.Verifier.OutputTruncated {
+			fmt.Fprintf(w, " truncated omitted=%d cap=%d",
+				res.Verifier.OutputOmittedBytes,
+				res.Verifier.OutputCapBytes,
+			)
+		}
+		fmt.Fprintf(w, " command=%q\n", res.Verifier.Command)
+	}
 	for _, failure := range res.Failures {
 		fmt.Fprintf(w, "  - %s\n", failure)
 	}
@@ -528,9 +599,12 @@ func failureKind(failure string) string {
 	}
 }
 
-func validateRunConfig(temperature string, timeout time.Duration, executor string, scenarioCount int, workRoot string, workRootSet bool) error {
+func validateRunConfig(temperature string, timeout time.Duration, executor string, scenarioCount int, workRoot string, workRootSet bool, verifierOutputCap int) error {
 	if timeout <= 0 {
 		return fmt.Errorf("--timeout must be a positive duration")
+	}
+	if verifierOutputCap <= 0 {
+		return fmt.Errorf("--verifier-output-cap must be positive")
 	}
 	if err := validateEvalExecutor(executor, scenarioCount, workRoot, workRootSet); err != nil {
 		return err

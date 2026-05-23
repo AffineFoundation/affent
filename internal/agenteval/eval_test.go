@@ -143,6 +143,42 @@ func TestParseTraceFileRejectsUnsupportedSchemaVersion(t *testing.T) {
 	}
 }
 
+func TestRunVerifierCapsOutputAndRecordsStats(t *testing.T) {
+	runner := BatchRunner{VerifierOutputCapBytes: 8}
+	got := runner.runVerifier(context.Background(), t.TempDir(), t.TempDir(), "printf 1234567890; exit 7")
+	if got.Err == nil {
+		t.Fatal("runVerifier err = nil, want failing exit")
+	}
+	if got.Result.Command != "printf 1234567890; exit 7" || !got.Result.Ran || got.Result.OK {
+		t.Fatalf("verifier result state wrong: %+v", got.Result)
+	}
+	if got.Result.ExitCode != 7 {
+		t.Fatalf("ExitCode = %d, want 7", got.Result.ExitCode)
+	}
+	if got.Result.OutputBytes != 10 || !got.Result.OutputTruncated || got.Result.OutputOmittedBytes != 2 || got.Result.OutputCapBytes != 8 {
+		t.Fatalf("output stats = %+v, want bytes=10 truncated omitted=2 cap=8", got.Result)
+	}
+	if !strings.Contains(got.Output, "12345678") || !strings.Contains(got.Output, "2 more bytes truncated from verifier output") {
+		t.Fatalf("capped output missing prefix or marker: %q", got.Output)
+	}
+}
+
+func TestRunVerifierRecordsSuccess(t *testing.T) {
+	got := (BatchRunner{}).runVerifier(context.Background(), t.TempDir(), t.TempDir(), "printf ok")
+	if got.Err != nil {
+		t.Fatalf("runVerifier err = %v", got.Err)
+	}
+	if !got.Result.Ran || !got.Result.OK || got.Result.ExitCode != 0 {
+		t.Fatalf("verifier result state wrong: %+v", got.Result)
+	}
+	if got.Result.OutputBytes != 2 || got.Result.OutputTruncated || got.Result.OutputCapBytes != DefaultVerifierOutputCapBytes {
+		t.Fatalf("output stats = %+v", got.Result)
+	}
+	if got.Output != "ok" {
+		t.Fatalf("Output = %q, want ok", got.Output)
+	}
+}
+
 func TestCheckBatchTraceRequiresCleanTurnEnd(t *testing.T) {
 	failures := CheckBatchTrace(Trace{TurnEndReason: "max_turns"}, BatchScenario{})
 	if len(failures) != 1 || !strings.Contains(failures[0], "turn ended with reason") {
@@ -372,12 +408,15 @@ func TestBatchRunnerRunVerifierHonorsContext(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Millisecond)
 	defer cancel()
 	start := time.Now()
-	_, err := (BatchRunner{}).runVerifier(ctx, t.TempDir(), ".", "sleep 1")
-	if err == nil {
+	got := (BatchRunner{}).runVerifier(ctx, t.TempDir(), ".", "sleep 1")
+	if got.Err == nil {
 		t.Fatal("expected verifier to be killed by context timeout")
 	}
+	if got.Result.ExitCode != -1 {
+		t.Fatalf("ExitCode = %d, want -1 on timeout", got.Result.ExitCode)
+	}
 	if elapsed := time.Since(start); elapsed > 500*time.Millisecond {
-		t.Fatalf("verifier ignored context timeout; elapsed=%s err=%v", elapsed, err)
+		t.Fatalf("verifier ignored context timeout; elapsed=%s err=%v", elapsed, got.Err)
 	}
 }
 

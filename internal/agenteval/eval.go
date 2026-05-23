@@ -13,12 +13,14 @@ import (
 	"path/filepath"
 	"sort"
 	"strings"
+	"sync"
 	"time"
 )
 
 const (
-	DefaultBatchTimeout      = 5 * time.Minute
-	DefaultBatchMaxTurnSteps = 10
+	DefaultBatchTimeout           = 5 * time.Minute
+	DefaultBatchMaxTurnSteps      = 10
+	DefaultVerifierOutputCapBytes = 1 * 1024 * 1024
 )
 
 type ToolOrderRequirement struct {
@@ -68,6 +70,7 @@ type BatchRunner struct {
 	Executor                 string
 	GoBin                    string
 	Timeout                  time.Duration
+	VerifierOutputCapBytes   int
 	CleanupPassingWorkspaces bool
 }
 
@@ -85,8 +88,21 @@ type BatchResult struct {
 	ToolStats          ToolRuntimeStats
 	ToolTruncation     ToolTruncationStats
 	Usage              Usage
+	Verifier           VerifierResult
 	WorkspaceRemoved   bool
 	CleanupError       string
+}
+
+type VerifierResult struct {
+	Command            string
+	Ran                bool
+	OK                 bool
+	ExitCode           int
+	Duration           time.Duration
+	OutputBytes        int
+	OutputTruncated    bool
+	OutputOmittedBytes int
+	OutputCapBytes     int
 }
 
 func BuiltinBatchScenarios() []BatchScenario {
@@ -239,8 +255,10 @@ func (r BatchRunner) Run(ctx context.Context, scenario BatchScenario) BatchResul
 		res.Failures = append(res.Failures, err.Error())
 	}
 	if scenario.VerifyCommand != "" {
-		if out, err := r.runVerifier(runCtx, workspace, repoRoot, scenario.VerifyCommand); err != nil {
-			res.Failures = append(res.Failures, fmt.Sprintf("verify command failed: %s: %v\n%s", scenario.VerifyCommand, err, trimOneLine(out, 1200)))
+		verifier := r.runVerifier(runCtx, workspace, repoRoot, scenario.VerifyCommand)
+		res.Verifier = verifier.Result
+		if verifier.Err != nil {
+			res.Failures = append(res.Failures, fmt.Sprintf("verify command failed: %s: %v\n%s", scenario.VerifyCommand, verifier.Err, trimOneLine(verifier.Output, 1200)))
 		}
 	}
 	trace, err := ParseTraceFile(tracePath)
@@ -309,15 +327,7 @@ func (r BatchRunner) runAffentctl(ctx context.Context, repoRoot, workspace, trac
 	cmd.Stdout = &stdout
 	cmd.Stderr = &stderr
 	err := runEvalCommand(ctx, cmd)
-	exitCode := 0
-	if err != nil {
-		exitCode = -1
-		var ee *exec.ExitError
-		if errors.As(err, &ee) {
-			exitCode = ee.ExitCode()
-		}
-	}
-	return stdout.String(), stderr.String(), exitCode, err
+	return stdout.String(), stderr.String(), exitCodeFromError(err), err
 }
 
 func (r BatchRunner) affentctlRunArgs(workspace, tracePath string, scenario BatchScenario) []string {
@@ -345,15 +355,111 @@ func (r BatchRunner) affentctlRunArgs(workspace, tracePath string, scenario Batc
 	return args
 }
 
-func (r BatchRunner) runVerifier(ctx context.Context, workspace, repoRoot, command string) (string, error) {
+type verifierRun struct {
+	Result VerifierResult
+	Output string
+	Err    error
+}
+
+func (r BatchRunner) runVerifier(ctx context.Context, workspace, repoRoot, command string) verifierRun {
 	cmd := exec.CommandContext(ctx, "sh", "-c", command)
 	cmd.Dir = workspace
 	cmd.Env = append(os.Environ(), "PATH="+evalPath(repoRoot))
-	var out bytes.Buffer
-	cmd.Stdout = &out
-	cmd.Stderr = &out
+	out := newVerifierOutputBuffer(r.VerifierOutputCapBytes)
+	cmd.Stdout = out
+	cmd.Stderr = out
+	start := time.Now()
 	err := runEvalCommand(ctx, cmd)
-	return out.String(), err
+	output := out.String()
+	stats := out.Stats()
+	result := VerifierResult{
+		Command:            command,
+		Ran:                true,
+		OK:                 err == nil,
+		ExitCode:           exitCodeFromError(err),
+		Duration:           time.Since(start),
+		OutputBytes:        stats.Bytes,
+		OutputTruncated:    stats.Truncated,
+		OutputOmittedBytes: stats.OmittedBytes,
+		OutputCapBytes:     stats.CapBytes,
+	}
+	return verifierRun{Result: result, Output: output, Err: err}
+}
+
+func exitCodeFromError(err error) int {
+	if err == nil {
+		return 0
+	}
+	var ee *exec.ExitError
+	if errors.As(err, &ee) {
+		return ee.ExitCode()
+	}
+	return -1
+}
+
+type verifierOutputStats struct {
+	Bytes        int
+	Truncated    bool
+	OmittedBytes int
+	CapBytes     int
+}
+
+type verifierOutputBuffer struct {
+	mu        sync.Mutex
+	buf       []byte
+	cap       int
+	bytes     int
+	omitted   int
+	truncated bool
+}
+
+func newVerifierOutputBuffer(capBytes int) *verifierOutputBuffer {
+	if capBytes <= 0 {
+		capBytes = DefaultVerifierOutputCapBytes
+	}
+	return &verifierOutputBuffer{cap: capBytes}
+}
+
+func (b *verifierOutputBuffer) Write(p []byte) (int, error) {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+
+	b.bytes += len(p)
+	room := b.cap - len(b.buf)
+	switch {
+	case room <= 0:
+		b.omitted += len(p)
+		b.truncated = true
+	case len(p) > room:
+		b.buf = append(b.buf, p[:room]...)
+		b.omitted += len(p) - room
+		b.truncated = true
+	default:
+		b.buf = append(b.buf, p...)
+	}
+	return len(p), nil
+}
+
+func (b *verifierOutputBuffer) String() string {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+
+	if !b.truncated {
+		return string(b.buf)
+	}
+	return string(b.buf) + fmt.Sprintf("\n[... %d more bytes truncated from verifier output; %d-byte cap.]", b.omitted, b.cap)
+}
+
+func (b *verifierOutputBuffer) Stats() verifierOutputStats {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+
+	return verifierOutputStats{
+		Bytes:        b.bytes,
+		Truncated:    b.truncated,
+		OmittedBytes: b.omitted,
+		CapBytes:     b.cap,
+	}
 }
 
 func runEvalCommand(ctx context.Context, cmd *exec.Cmd) error {

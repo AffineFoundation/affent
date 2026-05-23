@@ -1,0 +1,85 @@
+# Eval JSONL Contract
+
+`affenteval --jsonl` emits one JSON object per line. Each line carries
+`schema_version`; consumers should reject future versions they do not
+understand.
+
+## Schema Version 1
+
+Shared metadata fields:
+
+- `schema_version`: integer eval JSONL schema version.
+- `type`: `scenario` or `summary`.
+- `suite`: optional suite label.
+- `model`: optional model id.
+- `provider_label`: optional provider label for cross-run comparisons.
+- `executor`: eval executor label, such as `local`, `sandbox`, or
+  `docker:<container>`.
+- `temperature`: sampling temperature passed to `affentctl`.
+- `timeout_ms`: per-scenario timeout in milliseconds.
+
+## Scenario Record
+
+Scenario records describe one eval case:
+
+- `scenario`: scenario id.
+- `ok`: whether the scenario passed every check.
+- `duration_ms`: wall-clock scenario duration.
+- `workspace`: scenario workspace path.
+- `trace_path`: trace JSONL path.
+- `trace_schema_version`: parsed runtime trace schema version, when available.
+- `turn_end_reason`: runtime turn end reason, when available.
+- `tool_calls`: number of tool calls in the trace.
+- `tool_errors`: runtime tool error count.
+- `tool_repaired`: runtime tool argument repair count.
+- `tool_duration_ms`: total runtime tool dispatch duration.
+- `tool_args_truncated`: count of event-capped tool requests.
+- `tool_args_omitted_bytes`: omitted request bytes across tool events.
+- `tool_results_truncated`: count of event-capped tool results.
+- `tool_results_omitted_bytes`: omitted result bytes across tool events.
+- `tool_result_artifacts`: count of tool result artifact references.
+- `verifier_command`: verifier shell command, when configured.
+- `verifier_ran`: whether a verifier command ran.
+- `verifier_ok`: whether the verifier exited successfully.
+- `verifier_exit_code`: verifier process exit code, or `-1` for abnormal
+  termination.
+- `verifier_duration_ms`: verifier duration in milliseconds.
+- `verifier_output_bytes`: verifier stdout/stderr byte count before capping.
+- `verifier_output_truncated`: whether verifier output hit the cap.
+- `verifier_output_omitted_bytes`: verifier output bytes omitted by the cap.
+- `verifier_output_cap_bytes`: verifier output cap used for the run.
+- `input_tokens`: summed provider input tokens.
+- `output_tokens`: summed provider output tokens.
+- `workspace_removed`: whether a passing workspace was cleaned up.
+- `cleanup_error`: workspace cleanup error, when cleanup failed.
+- `failures`: failure details for failed scenarios.
+- `failure_kinds`: grouped failure counters for summaries.
+
+Verifier output text is not written to JSONL. Failure reports may include a
+bounded preview in `failures`; the structured verifier fields are the stable
+surface for trend analysis.
+
+## Summary Record
+
+Summary records aggregate all scenario records from the same process:
+
+- `scenarios`, `passed`, `failed`, `duration_ms`.
+- Tool totals: `tool_calls`, `tool_errors`, `tool_repaired`,
+  `tool_duration_ms`.
+- Truncation totals: `tool_args_truncated`, `tool_args_omitted_bytes`,
+  `tool_results_truncated`, `tool_results_omitted_bytes`,
+  `tool_result_artifacts`.
+- Verifier totals: `verifier_runs`, `verifier_passed`, `verifier_failed`,
+  `verifier_output_truncated`, `verifier_output_omitted_bytes`.
+- Trace versions: `trace_schema_versions`.
+- Token totals: `input_tokens`, `output_tokens`.
+- Turn end totals: `end_completed`, `end_max_turns`, `end_errors`,
+  `end_cancelled`, `end_unknown`.
+- Failure totals: `failure_kinds`.
+- Cleanup totals: `removed_workspaces`, `cleanup_errors`.
+
+## Compatibility
+
+Adding optional fields is backward compatible. Removing or renaming fields, or
+changing the meaning of an existing field, requires incrementing
+`schema_version`.
