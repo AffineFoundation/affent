@@ -56,6 +56,7 @@ type FetchConfig struct {
 }
 
 const (
+	maxFetchURLBytes      = 4096
 	defaultMaxBytes       = 2 * 1024 * 1024
 	maxFetchBytes         = 8 * 1024 * 1024
 	defaultMaxResultChars = 8000
@@ -70,13 +71,13 @@ const (
 // behaviour (10 hops max).
 func FetchTool(cfg FetchConfig) *agent.Tool {
 	cfg = normalizeFetchConfig(cfg)
-	schema := json.RawMessage(`{
+	schema := json.RawMessage(fmt.Sprintf(`{
         "type": "object",
         "required": ["url"],
         "properties": {
-            "url": {"type": "string", "minLength": 1, "description": "The fully-qualified URL to fetch (http:// or https://)."}
+            "url": {"type": "string", "minLength": 1, "maxLength": %d, "description": "The fully-qualified URL to fetch (http:// or https://)."}
         }
-    }`)
+    }`, maxFetchURLBytes))
 
 	return &agent.Tool{
 		Name: "web_fetch",
@@ -95,6 +96,9 @@ func FetchTool(cfg FetchConfig) *agent.Tool {
 			args.URL = strings.TrimSpace(args.URL)
 			if args.URL == "" {
 				return "", errors.New("url is required")
+			}
+			if len(args.URL) > maxFetchURLBytes {
+				return "", fmt.Errorf("url is %d bytes; web_fetch supports URLs up to %d bytes", len(args.URL), maxFetchURLBytes)
 			}
 			if !strings.HasPrefix(args.URL, "http://") && !strings.HasPrefix(args.URL, "https://") {
 				return "", fmt.Errorf("url must start with http:// or https:// (got %q)", args.URL)

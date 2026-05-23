@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"io"
 	"net"
 	"net/http"
 	"net/http/httptest"
@@ -12,6 +13,12 @@ import (
 
 	agent "github.com/affinefoundation/affent/internal/agent"
 )
+
+type roundTripFunc func(*http.Request) (*http.Response, error)
+
+func (f roundTripFunc) RoundTrip(req *http.Request) (*http.Response, error) {
+	return f(req)
+}
 
 func TestFetchTool_HTML(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -112,6 +119,38 @@ func TestFetchToolSchemaPublishesURLMinLength(t *testing.T) {
 	tool := FetchTool(FetchConfig{AllowPrivateNetwork: true})
 	if !strings.Contains(string(tool.Schema), `"minLength": 1`) {
 		t.Fatalf("schema should publish url minLength: %s", tool.Schema)
+	}
+	if !strings.Contains(string(tool.Schema), `"maxLength": 4096`) {
+		t.Fatalf("schema should publish url maxLength: %s", tool.Schema)
+	}
+}
+
+func TestFetchTool_URLMaxLength(t *testing.T) {
+	called := false
+	tool := FetchTool(FetchConfig{
+		HTTP: &http.Client{Transport: roundTripFunc(func(req *http.Request) (*http.Response, error) {
+			called = true
+			return &http.Response{
+				StatusCode: 200,
+				Status:     "200 OK",
+				Header:     http.Header{"Content-Type": []string{"text/plain"}},
+				Body:       io.NopCloser(strings.NewReader("ok")),
+				Request:    req,
+			}, nil
+		})},
+	})
+	url := "https://example.com/" + strings.Repeat("x", maxFetchURLBytes-len("https://example.com/"))
+	if _, err := tool.Execute(context.Background(), json.RawMessage(`{"url":"`+url+`"}`)); err != nil {
+		t.Fatalf("max-size URL should pass validation and reach HTTP client: %v", err)
+	}
+	if !called {
+		t.Fatal("max-size URL did not reach HTTP client")
+	}
+
+	url += "x"
+	_, err := tool.Execute(context.Background(), json.RawMessage(`{"url":"`+url+`"}`))
+	if err == nil || !strings.Contains(err.Error(), "web_fetch supports URLs up to") {
+		t.Fatalf("expected oversized URL error, got %v", err)
 	}
 }
 
