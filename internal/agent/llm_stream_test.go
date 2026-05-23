@@ -10,6 +10,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"strings"
+	"sync/atomic"
 	"testing"
 	"time"
 )
@@ -346,6 +347,54 @@ func TestRequestBody_StripsReasoning(t *testing.T) {
 	}
 	if !strings.Contains(got, `"content":"the answer"`) {
 		t.Errorf("expected visible content to survive; got %s", got)
+	}
+}
+
+func TestChat_RejectsOversizedRequestBeforeHTTP(t *testing.T) {
+	var called int32
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		atomic.AddInt32(&called, 1)
+		w.WriteHeader(http.StatusTeapot)
+	}))
+	t.Cleanup(srv.Close)
+
+	c := NewLLMClient(srv.URL, "", "fake")
+	_, err := c.Chat(context.Background(), []ChatMessage{{
+		Role:    "user",
+		Content: strings.Repeat("x", maxLLMRequestBodyBytes+1),
+	}}, nil)
+	if err == nil || !strings.Contains(err.Error(), "chat request body exceeds") {
+		t.Fatalf("Chat error = %v, want request body cap", err)
+	}
+	if !IsContextOverflow(err) {
+		t.Fatalf("request body cap error should trigger compaction path: %v", err)
+	}
+	if got := atomic.LoadInt32(&called); got != 0 {
+		t.Fatalf("oversized request must be rejected before HTTP; server calls = %d", got)
+	}
+}
+
+func TestChat_RejectsEscapedRequestAfterMarshal(t *testing.T) {
+	var called int32
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		atomic.AddInt32(&called, 1)
+		w.WriteHeader(http.StatusTeapot)
+	}))
+	t.Cleanup(srv.Close)
+
+	c := NewLLMClient(srv.URL, "", "fake")
+	_, err := c.Chat(context.Background(), []ChatMessage{{
+		Role:    "user",
+		Content: strings.Repeat(`\`, maxLLMRequestBodyBytes/2+2048),
+	}}, nil)
+	if err == nil || !strings.Contains(err.Error(), "exceeds") {
+		t.Fatalf("Chat error = %v, want exact marshaled request body cap", err)
+	}
+	if !IsContextOverflow(err) {
+		t.Fatalf("marshaled request cap error should trigger compaction path: %v", err)
+	}
+	if got := atomic.LoadInt32(&called); got != 0 {
+		t.Fatalf("oversized request must be rejected before HTTP; server calls = %d", got)
 	}
 }
 

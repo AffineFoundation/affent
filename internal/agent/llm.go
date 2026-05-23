@@ -73,6 +73,7 @@ const MaxRespectedRetryAfter = 5 * time.Minute
 
 const (
 	maxLLMErrorBodyBytes   = 64 * 1024
+	maxLLMRequestBodyBytes = 8 * 1024 * 1024
 	streamEventChanBuffer  = 32
 	streamScannerInitBytes = 64 * 1024
 	streamScannerMaxBytes  = 4 * 1024 * 1024
@@ -376,7 +377,10 @@ type FinishInfo struct {
 // fully-assembled tool calls) is delivered as the last event before close
 // in StreamEvent.Finish.Final.
 func (c *LLMClient) Chat(ctx context.Context, msgs []ChatMessage, tools []ToolDef) (<-chan StreamEvent, error) {
-	body, _ := json.Marshal(chatRequest{
+	if estimateChatRequestBodyBytes(c.Model, msgs, tools) > maxLLMRequestBodyBytes {
+		return nil, fmt.Errorf("chat request body exceeds %d-byte cap before marshal; context window likely too large", maxLLMRequestBodyBytes)
+	}
+	reqBody := chatRequest{
 		Model:         c.Model,
 		Messages:      toWireMessages(msgs),
 		Tools:         tools,
@@ -386,7 +390,14 @@ func (c *LLMClient) Chat(ctx context.Context, msgs []ChatMessage, tools []ToolDe
 		TopP:          c.Sampling.TopP,
 		MaxTokens:     c.Sampling.MaxTokens,
 		Seed:          c.Sampling.Seed,
-	})
+	}
+	body, err := json.Marshal(reqBody)
+	if err != nil {
+		return nil, err
+	}
+	if len(body) > maxLLMRequestBodyBytes {
+		return nil, fmt.Errorf("chat request body is %d bytes; exceeds %d-byte cap; context window likely too large", len(body), maxLLMRequestBodyBytes)
+	}
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, c.BaseURL+"/chat/completions", bytes.NewReader(body))
 	if err != nil {
 		return nil, err
@@ -423,6 +434,26 @@ func (c *LLMClient) Chat(ctx context.Context, msgs []ChatMessage, tools []ToolDe
 	out := make(chan StreamEvent, streamEventChanBuffer)
 	go consumeStream(ctx, resp.Body, out)
 	return out, nil
+}
+
+func estimateChatRequestBodyBytes(model string, msgs []ChatMessage, tools []ToolDef) int {
+	n := 256 + len(model)
+	for _, m := range msgs {
+		n += 64 + len(m.Role) + len(m.Content) + len(m.ToolCallID) + len(m.Name)
+		for _, tc := range m.ToolCalls {
+			n += 96 + len(tc.ID) + len(tc.Type) + len(tc.Function.Name) + len(tc.Function.Arguments)
+		}
+		if n > maxLLMRequestBodyBytes {
+			return n
+		}
+	}
+	for _, t := range tools {
+		n += 128 + len(t.Type) + len(t.Function.Name) + len(t.Function.Description) + len(t.Function.Parameters)
+		if n > maxLLMRequestBodyBytes {
+			return n
+		}
+	}
+	return n
 }
 
 // consumeStream parses an OpenAI-compatible SSE stream of chat-completion
