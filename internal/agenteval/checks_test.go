@@ -127,6 +127,23 @@ func TestToolResultContains(t *testing.T) {
 	}
 }
 
+func TestToolResultTruncated(t *testing.T) {
+	trace := Trace{Tools: []ToolCall{
+		{CallID: "c1", Tool: "shell", ResultTruncated: true, ResultOmittedBytes: 4096, ResultCapBytes: 262144},
+		{CallID: "c2", Tool: "read_file"},
+	}}
+	if res := ToolResultTruncated("shell").Eval(trace); !res.Pass {
+		t.Fatalf("expected truncated shell result to pass: %+v", res)
+	}
+	res := ToolResultTruncated("read_file").Eval(trace)
+	if res.Pass {
+		t.Fatal("expected non-truncated read_file result to fail")
+	}
+	if !strings.Contains(res.Detail, "event-truncated") {
+		t.Fatalf("failure detail should explain missing truncation: %s", res.Detail)
+	}
+}
+
 func TestToolRequestRepaired(t *testing.T) {
 	trace := Trace{Tools: []ToolCall{
 		{CallID: "c1", Tool: "read_file", ArgsRepaired: true, RepairNotes: []string{"renamed field file_path to path"}},

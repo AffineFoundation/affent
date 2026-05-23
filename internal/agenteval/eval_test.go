@@ -162,9 +162,10 @@ func TestBatchScenarioChecks_UsesSharedCheckLibrary(t *testing.T) {
 			"subagent_run": {"report"},
 			"skill":        {"AFFENT ACTIVE SKILL"},
 		},
-		RequiredCommands:  []string{`go test`, `gofmt`},
-		ForbiddenCommands: []string{"| head", "|| true"},
-		ProtectedFiles:    []string{"main_test.go", "doc_test.go"},
+		RequiredTruncatedResults: []string{"shell"},
+		RequiredCommands:         []string{`go test`, `gofmt`},
+		ForbiddenCommands:        []string{"| head", "|| true"},
+		ProtectedFiles:           []string{"main_test.go", "doc_test.go"},
 	}
 	checks := BatchScenarioChecks(scenario)
 
@@ -175,6 +176,7 @@ func TestBatchScenarioChecks_UsesSharedCheckLibrary(t *testing.T) {
 		"final_text_contains:done",
 		"tool_result_contains:skill:AFFENT ACTIVE SKILL",
 		"tool_result_contains:subagent_run:report",
+		"tool_result_truncated:shell",
 		"shell_command_matching:go test",
 		"shell_command_matching:gofmt",
 		"shell_command_lacks_unguarded:| head",
@@ -199,10 +201,17 @@ func TestSelectBatchScenariosForSuite(t *testing.T) {
 	if len(scenarios) < 6 {
 		t.Fatalf("small-model-tools suite size = %d, want at least 6", len(scenarios))
 	}
+	foundOversized := false
 	for _, scenario := range scenarios {
 		if !scenarioInSuite(scenario, "small-model-tools") {
 			t.Fatalf("scenario %s missing suite marker", scenario.Name)
 		}
+		if scenario.Name == "runtime-oversized-tool-result" {
+			foundOversized = true
+		}
+	}
+	if !foundOversized {
+		t.Fatalf("small-model-tools suite missing runtime-oversized-tool-result")
 	}
 	one, err := SelectBatchScenariosForSuite("small-model-tools", []string{"small-tools-wrong-field-read"})
 	if err != nil {

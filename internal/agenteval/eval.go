@@ -22,23 +22,24 @@ const (
 )
 
 type BatchScenario struct {
-	Name                    string
-	Suites                  []string
-	Prompt                  string
-	Files                   map[string]string
-	VerifyCommand           string
-	ExpectedSkill           string
-	ForbiddenCommands       []string
-	RequiredCommands        []string
-	RequiredTools           []string
-	ForbiddenTools          []string
-	RequiredFinalText       []string
-	ForbiddenFinalText      []string
-	RequiredToolResultText  map[string][]string
-	ProtectedFiles          []string
-	ForbiddenFileSubstrings map[string][]string
-	MaxParentToolCalls      int
-	MaxTurns                int
+	Name                     string
+	Suites                   []string
+	Prompt                   string
+	Files                    map[string]string
+	VerifyCommand            string
+	ExpectedSkill            string
+	ForbiddenCommands        []string
+	RequiredCommands         []string
+	RequiredTools            []string
+	ForbiddenTools           []string
+	RequiredFinalText        []string
+	ForbiddenFinalText       []string
+	RequiredToolResultText   map[string][]string
+	RequiredTruncatedResults []string
+	ProtectedFiles           []string
+	ForbiddenFileSubstrings  map[string][]string
+	MaxParentToolCalls       int
+	MaxTurns                 int
 }
 
 type BatchRunner struct {
@@ -89,6 +90,7 @@ func BuiltinBatchScenarios() []BatchScenario {
 		smallToolRepeatedReadScenario(),
 		smallToolEditRecoveryScenario(),
 		smallToolShellFailureScenario(),
+		oversizedToolResultScenario(),
 	}
 }
 
@@ -470,6 +472,9 @@ func BatchScenarioChecks(scenario BatchScenario) []Check {
 		for _, substr := range substrings {
 			checks = append(checks, ToolResultContains(tool, substr))
 		}
+	}
+	for _, tool := range scenario.RequiredTruncatedResults {
+		checks = append(checks, ToolResultTruncated(tool))
 	}
 	if scenario.MaxParentToolCalls > 0 {
 		checks = append(checks, MaxSuccessfulToolCalls(scenario.MaxParentToolCalls))

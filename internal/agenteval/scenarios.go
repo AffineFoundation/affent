@@ -650,6 +650,27 @@ func smallToolShellFailureScenario() BatchScenario {
 	}
 }
 
+func oversizedToolResultScenario() BatchScenario {
+	return BatchScenario{
+		Name:   "runtime-oversized-tool-result",
+		Suites: []string{smallModelToolsSuite},
+		Prompt: "请用 shell 运行一个 Python 命令生成一段很大的输出：第一行必须是 marker=OVERSIZE-OK，后面打印至少 300000 个字母 X。然后根据工具输出回答 marker 的精确值。不要修改文件，不要把大输出写入文件。",
+		Files: map[string]string{
+			"README.md": "# Oversized Tool Result Eval\n",
+		},
+		RequiredTools: []string{"shell"},
+		RequiredToolResultText: map[string][]string{
+			"shell": {"marker=OVERSIZE-OK"},
+		},
+		RequiredTruncatedResults: []string{"shell"},
+		RequiredFinalText:        []string{"OVERSIZE-OK"},
+		ForbiddenTools:           []string{"write_file", "edit_file"},
+		ForbiddenCommands:        []string{" > ", ">>", "| head", "|| true"},
+		ProtectedFiles:           []string{"README.md"},
+		MaxTurns:                 6,
+	}
+}
+
 func subagentNestedFactsScenario() BatchScenario {
 	return BatchScenario{
 		Name:   "subagent-nested-facts",

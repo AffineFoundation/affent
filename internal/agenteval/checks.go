@@ -86,6 +86,26 @@ func ToolResultContains(toolName, substr string) Check {
 	}
 }
 
+func ToolResultTruncated(toolName string) Check {
+	return Check{
+		Name: "tool_result_truncated:" + toolName,
+		Eval: func(t Trace) CheckResult {
+			for _, c := range t.Tools {
+				if c.Tool == toolName && c.ResultTruncated {
+					return CheckResult{
+						Pass:   true,
+						Detail: fmt.Sprintf("matched call_id=%s omitted=%d cap=%d", c.CallID, c.ResultOmittedBytes, c.ResultCapBytes),
+					}
+				}
+			}
+			return CheckResult{
+				Pass:   false,
+				Detail: fmt.Sprintf("expected %q result to be event-truncated; tools=%s", toolName, toolNamesSummary(t.Tools)),
+			}
+		},
+	}
+}
+
 func ToolRequestRepaired(toolName string) Check {
 	return Check{
 		Name: "tool_request_repaired:" + toolName,
