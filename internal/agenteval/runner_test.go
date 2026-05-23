@@ -413,7 +413,7 @@ func TestRunner_EndToEnd_LoopGuardBlocksIdenticalRepeats(t *testing.T) {
 	if !third.IsErr {
 		t.Errorf("3rd identical call must surface as an error tool result (guard rejection); got IsErr=false result=%q", third.Result)
 	}
-	if !strings.Contains(third.Result, "loop_guard: blocked exact repeated call") {
+	if !strings.Contains(third.Result, "loop_guard: blocked repeated call") {
 		t.Errorf("3rd call must carry the exact guard message so trace consumers can grep for it; got %q", third.Result)
 	}
 }

@@ -18,7 +18,7 @@ func TestToolLoopGuard_BlocksExactRepeatedCalls(t *testing.T) {
 		t.Fatalf("second attempt blocked: %s", got)
 	}
 	got := g.recordAttempt("read_file", args)
-	if !strings.Contains(got, "blocked exact repeated call") {
+	if !strings.Contains(got, "blocked repeated call") {
 		t.Fatalf("third attempt should be blocked, got %q", got)
 	}
 	if !strings.Contains(got, "Next:") || !strings.Contains(got, "change the arguments") {
@@ -26,6 +26,50 @@ func TestToolLoopGuard_BlocksExactRepeatedCalls(t *testing.T) {
 	}
 	if got := g.recordAttempt("read_file", json.RawMessage(`{"path":"b.txt"}`)); got != "" {
 		t.Fatalf("different args should pass, got %q", got)
+	}
+}
+
+func TestToolLoopGuard_NormalizesFileToolPathVariants(t *testing.T) {
+	g := newToolLoopGuard()
+	for i, args := range []json.RawMessage{
+		json.RawMessage(`{"path":"docs/readme.md"}`),
+		json.RawMessage(`{"path":"./docs//readme.md"}`),
+		json.RawMessage(`{"path":" docs/./readme.md "}`),
+	} {
+		got := g.recordAttempt("read_file", args)
+		if i < 2 && got != "" {
+			t.Fatalf("attempt %d should pass, got %q", i+1, got)
+		}
+		if i == 2 && !strings.Contains(got, "blocked repeated call") {
+			t.Fatalf("third normalized path variant should be blocked, got %q", got)
+		}
+	}
+}
+
+func TestToolLoopGuard_KeepsMeaningfulFileToolArgsDistinct(t *testing.T) {
+	g := newToolLoopGuard()
+	first := json.RawMessage(`{"path":"docs/readme.md","max_bytes":128}`)
+	second := json.RawMessage(`{"path":"./docs/readme.md","max_bytes":256}`)
+	if got := g.recordAttempt("read_file", first); got != "" {
+		t.Fatalf("first attempt blocked: %q", got)
+	}
+	if got := g.recordAttempt("read_file", first); got != "" {
+		t.Fatalf("second same-cap attempt blocked too early: %q", got)
+	}
+	if got := g.recordAttempt("read_file", second); got != "" {
+		t.Fatalf("changed max_bytes should stay distinct, got %q", got)
+	}
+}
+
+func TestToolLoopGuard_DoesNotNormalizeShellCommandPaths(t *testing.T) {
+	g := newToolLoopGuard()
+	first := json.RawMessage(`{"path":"docs/readme.md"}`)
+	second := json.RawMessage(`{"path":"./docs//readme.md"}`)
+	third := json.RawMessage(`{"path":" docs/./readme.md "}`)
+	_ = g.recordAttempt("shell", first)
+	_ = g.recordAttempt("shell", second)
+	if got := g.recordAttempt("shell", third); got != "" {
+		t.Fatalf("non-file tools should not normalize path-like fields, got %q", got)
 	}
 }
 

@@ -622,7 +622,7 @@ func TestRunTurn_BlocksExactRepeatedToolCalls(t *testing.T) {
 				if err := json.Unmarshal(ev.Data, &p); err != nil {
 					t.Fatalf("decode tool.result: %v", err)
 				}
-				if strings.Contains(p.Result, "loop_guard: blocked exact repeated call") {
+				if strings.Contains(p.Result, "loop_guard: blocked repeated call") {
 					sawGuard = true
 				}
 			}

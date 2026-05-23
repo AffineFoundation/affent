@@ -115,7 +115,7 @@ func TestToolNotCalled(t *testing.T) {
 func TestToolResultContains(t *testing.T) {
 	trace := Trace{Tools: []ToolCall{
 		{CallID: "c1", Tool: "read_file", Result: "ok"},
-		{CallID: "c2", Tool: "probe", Result: "loop_guard: blocked exact repeated call"},
+		{CallID: "c2", Tool: "probe", Result: "loop_guard: blocked repeated call"},
 	}}
 	if res := ToolResultContains("probe", "loop_guard: blocked").Eval(trace); !res.Pass {
 		t.Fatalf("expected result substring to pass: %+v", res)
