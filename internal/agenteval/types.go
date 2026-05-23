@@ -47,9 +47,9 @@ type Scenario struct {
 	Checks []Check
 }
 
-// Check is one named binary assertion over a Trace. Checks must be
-// pure functions of the Trace — no I/O, no time-dependent behavior
-// — so reruns of the same Trace produce the same CheckResult.
+// Check is one named binary assertion over a Trace. Checks should be
+// deterministic from the trace and its workspace artifacts: no network,
+// clocks, mutation, or unbounded filesystem walks.
 type Check struct {
 	// Name shows up in CheckResult.Check and reports. Should be a
 	// short rule statement, not a description of the implementation
@@ -85,10 +85,9 @@ type Trace struct {
 	// Scenario is the Scenario.Name that produced this Trace.
 	Scenario string
 
-	// WorkspaceDir is the per-run workspace path (cleaned up after
-	// Run returns). Checks that want to inspect on-disk state must
-	// read it BEFORE the Runner cleans up — meaning checks today are
-	// trace-only. A future FilePostCheck phase can change this.
+	// WorkspaceDir is the per-run workspace path. Checks may use it only
+	// for bounded validation of files referenced by the trace, such as
+	// tool result artifacts.
 	WorkspaceDir string
 
 	// Prompt is the user message that was sent.

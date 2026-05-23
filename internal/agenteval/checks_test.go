@@ -1,6 +1,8 @@
 package agenteval
 
 import (
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 )
@@ -145,12 +147,32 @@ func TestToolResultTruncated(t *testing.T) {
 }
 
 func TestToolResultArtifact(t *testing.T) {
+	workspace := t.TempDir()
+	payload := "complete oversized output"
+	artifactPath := filepath.Join(workspace, ".affent", "artifacts", "tool-results", "000001-c1.txt")
+	if err := os.MkdirAll(filepath.Dir(artifactPath), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(artifactPath, []byte(payload), 0o644); err != nil {
+		t.Fatal(err)
+	}
 	trace := Trace{Tools: []ToolCall{
-		{CallID: "c1", Tool: "shell", ResultArtifactPath: ".affent/artifacts/tool-results/000001-c1.txt"},
+		{
+			CallID:             "c1",
+			Tool:               "shell",
+			ResultBytes:        len(payload),
+			ResultArtifactPath: ".affent/artifacts/tool-results/000001-c1.txt",
+		},
 		{CallID: "c2", Tool: "read_file"},
-	}}
+	}, WorkspaceDir: workspace}
 	if res := ToolResultArtifact("shell").Eval(trace); !res.Pass {
 		t.Fatalf("expected shell artifact to pass: %+v", res)
+	}
+	pathOnlyTrace := Trace{Tools: []ToolCall{
+		{CallID: "c1", Tool: "shell", ResultArtifactPath: ".affent/artifacts/tool-results/000001-c1.txt"},
+	}}
+	if res := ToolResultArtifact("shell").Eval(pathOnlyTrace); !res.Pass {
+		t.Fatalf("expected path-only shell artifact to pass: %+v", res)
 	}
 	res := ToolResultArtifact("read_file").Eval(trace)
 	if res.Pass {
@@ -158,6 +180,90 @@ func TestToolResultArtifact(t *testing.T) {
 	}
 	if !strings.Contains(res.Detail, "artifact path") {
 		t.Fatalf("failure detail should explain missing artifact: %s", res.Detail)
+	}
+}
+
+func TestToolResultArtifactRejectsUnsafeOrMissingArtifacts(t *testing.T) {
+	workspace := t.TempDir()
+	cases := []struct {
+		name string
+		call ToolCall
+		want string
+	}{
+		{
+			name: "absolute",
+			call: ToolCall{CallID: "c1", Tool: "shell", ResultArtifactPath: "/tmp/out.txt"},
+			want: "workspace-relative",
+		},
+		{
+			name: "traversal",
+			call: ToolCall{CallID: "c1", Tool: "shell", ResultArtifactPath: "../out.txt"},
+			want: "escapes workspace",
+		},
+		{
+			name: "missing",
+			call: ToolCall{CallID: "c1", Tool: "shell", ResultArtifactPath: ".affent/artifacts/tool-results/missing.txt"},
+			want: "not readable",
+		},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			trace := Trace{WorkspaceDir: workspace, Tools: []ToolCall{tc.call}}
+			res := ToolResultArtifact("shell").Eval(trace)
+			if res.Pass {
+				t.Fatalf("expected invalid artifact to fail: %+v", res)
+			}
+			if !strings.Contains(res.Detail, tc.want) {
+				t.Fatalf("detail missing %q: %s", tc.want, res.Detail)
+			}
+		})
+	}
+}
+
+func TestToolResultArtifactChecksSizeAndSymlinkEscape(t *testing.T) {
+	workspace := t.TempDir()
+	artifactDir := filepath.Join(workspace, ".affent", "artifacts", "tool-results")
+	if err := os.MkdirAll(artifactDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	smallPath := filepath.Join(artifactDir, "small.txt")
+	if err := os.WriteFile(smallPath, []byte("small"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	sizeTrace := Trace{WorkspaceDir: workspace, Tools: []ToolCall{{
+		CallID:             "c1",
+		Tool:               "shell",
+		ResultBytes:        999,
+		ResultArtifactPath: ".affent/artifacts/tool-results/small.txt",
+	}}}
+	res := ToolResultArtifact("shell").Eval(sizeTrace)
+	if res.Pass {
+		t.Fatalf("expected size mismatch to fail: %+v", res)
+	}
+	if !strings.Contains(res.Detail, "want result_bytes=999") {
+		t.Fatalf("detail should explain size mismatch: %s", res.Detail)
+	}
+
+	outside := filepath.Join(t.TempDir(), "outside.txt")
+	if err := os.WriteFile(outside, []byte("outside"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	linkPath := filepath.Join(artifactDir, "link.txt")
+	if err := os.Symlink(outside, linkPath); err != nil {
+		t.Skipf("symlink unavailable: %v", err)
+	}
+	linkTrace := Trace{WorkspaceDir: workspace, Tools: []ToolCall{{
+		CallID:             "c1",
+		Tool:               "shell",
+		ResultBytes:        len("outside"),
+		ResultArtifactPath: ".affent/artifacts/tool-results/link.txt",
+	}}}
+	res = ToolResultArtifact("shell").Eval(linkTrace)
+	if res.Pass {
+		t.Fatalf("expected symlink escape to fail: %+v", res)
+	}
+	if !strings.Contains(res.Detail, "escapes workspace") {
+		t.Fatalf("detail should explain symlink escape: %s", res.Detail)
 	}
 }
 

@@ -232,6 +232,7 @@ func (r BatchRunner) Run(ctx context.Context, scenario BatchScenario) BatchResul
 	if err != nil {
 		res.Failures = append(res.Failures, fmt.Sprintf("parse trace: %v", err))
 	} else {
+		trace.WorkspaceDir = workspace
 		res.TraceSchemaVersion = trace.SchemaVersion
 		res.TurnEndReason = trace.TurnEndReason
 		res.ToolCalls = len(trace.Tools)

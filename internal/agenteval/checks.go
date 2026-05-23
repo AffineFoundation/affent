@@ -2,6 +2,7 @@ package agenteval
 
 import (
 	"fmt"
+	"os"
 	"path/filepath"
 	"regexp"
 	"strings"
@@ -111,11 +112,24 @@ func ToolResultArtifact(toolName string) Check {
 		Name: "tool_result_artifact:" + toolName,
 		Eval: func(t Trace) CheckResult {
 			for _, c := range t.Tools {
-				if c.Tool == toolName && c.ResultArtifactPath != "" {
+				if c.Tool != toolName || c.ResultArtifactPath == "" {
+					continue
+				}
+				if err := validateToolResultArtifact(t.WorkspaceDir, c); err != nil {
+					return CheckResult{
+						Pass:   false,
+						Detail: fmt.Sprintf("%q result artifact invalid: %v", toolName, err),
+					}
+				}
+				if t.WorkspaceDir == "" {
 					return CheckResult{
 						Pass:   true,
-						Detail: fmt.Sprintf("matched call_id=%s artifact=%s", c.CallID, c.ResultArtifactPath),
+						Detail: fmt.Sprintf("matched call_id=%s artifact=%s (path only)", c.CallID, c.ResultArtifactPath),
 					}
+				}
+				return CheckResult{
+					Pass:   true,
+					Detail: fmt.Sprintf("matched call_id=%s artifact=%s", c.CallID, c.ResultArtifactPath),
 				}
 			}
 			return CheckResult{
@@ -124,6 +138,69 @@ func ToolResultArtifact(toolName string) Check {
 			}
 		},
 	}
+}
+
+func validateToolResultArtifact(workspace string, c ToolCall) error {
+	rel, err := cleanTraceArtifactPath(c.ResultArtifactPath)
+	if err != nil {
+		return err
+	}
+	if strings.TrimSpace(workspace) == "" {
+		return nil
+	}
+	workspaceAbs, err := filepath.Abs(workspace)
+	if err != nil {
+		return fmt.Errorf("resolve workspace: %w", err)
+	}
+	if resolved, err := filepath.EvalSymlinks(workspaceAbs); err == nil {
+		workspaceAbs = resolved
+	}
+	full := filepath.Join(workspaceAbs, rel)
+	resolvedFull, err := filepath.EvalSymlinks(full)
+	if err != nil {
+		return fmt.Errorf("artifact %q not readable: %w", c.ResultArtifactPath, err)
+	}
+	inside, err := pathWithin(workspaceAbs, resolvedFull)
+	if err != nil {
+		return err
+	}
+	if !inside {
+		return fmt.Errorf("artifact %q escapes workspace", c.ResultArtifactPath)
+	}
+	st, err := os.Stat(resolvedFull)
+	if err != nil {
+		return fmt.Errorf("stat artifact %q: %w", c.ResultArtifactPath, err)
+	}
+	if st.IsDir() {
+		return fmt.Errorf("artifact %q is a directory", c.ResultArtifactPath)
+	}
+	if c.ResultBytes > 0 && st.Size() != int64(c.ResultBytes) {
+		return fmt.Errorf("artifact %q has %d bytes, want result_bytes=%d", c.ResultArtifactPath, st.Size(), c.ResultBytes)
+	}
+	return nil
+}
+
+func cleanTraceArtifactPath(path string) (string, error) {
+	path = strings.TrimSpace(path)
+	if path == "" {
+		return "", fmt.Errorf("artifact path is empty")
+	}
+	rel := filepath.Clean(filepath.FromSlash(path))
+	if filepath.IsAbs(rel) {
+		return "", fmt.Errorf("artifact path %q must be workspace-relative", path)
+	}
+	if rel == "." || rel == ".." || strings.HasPrefix(rel, ".."+string(filepath.Separator)) {
+		return "", fmt.Errorf("artifact path %q escapes workspace", path)
+	}
+	return rel, nil
+}
+
+func pathWithin(root, candidate string) (bool, error) {
+	rel, err := filepath.Rel(root, candidate)
+	if err != nil {
+		return false, fmt.Errorf("compare artifact path to workspace: %w", err)
+	}
+	return rel == "." || (rel != ".." && !strings.HasPrefix(rel, ".."+string(filepath.Separator))), nil
 }
 
 func ToolRequestRepaired(toolName string) Check {
