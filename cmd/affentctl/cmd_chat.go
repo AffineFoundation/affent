@@ -18,6 +18,7 @@ import (
 
 	agent "github.com/affinefoundation/affent/internal/agent"
 	"github.com/affinefoundation/affent/internal/eventlog"
+	"github.com/affinefoundation/affent/internal/planstate"
 	"github.com/affinefoundation/affent/internal/sse"
 )
 
@@ -135,6 +136,7 @@ Slash commands inside the REPL:
 		// turn, not the REPL.
 		turnCtx, cancelTurn := signal.NotifyContext(ctx, syscall.SIGINT)
 
+		planBefore := currentSessionPlanSummary(b)
 		turnID, err := b.loop.SendUser(turnCtx, line)
 		if err != nil {
 			cancelTurn()
@@ -153,6 +155,7 @@ Slash commands inside the REPL:
 		if inTok > 0 || outTok > 0 {
 			b.turnsSeen++
 		}
+		emitPlanChange(planBefore, currentSessionPlanSummary(b))
 		cancelTurn()
 	}
 }
@@ -354,6 +357,39 @@ func clearCurrentSessionPlan(b *loopBundle) {
 		return
 	}
 	fmt.Fprintf(os.Stderr, "cleared plan for session %s\n", b.sessionID)
+}
+
+func currentSessionPlanSummary(b *loopBundle) planstate.Summary {
+	convDir := filepath.Join(b.workspace, ".affentctl")
+	return localSessionPlanSummary(convDir, b.sessionID)
+}
+
+func emitPlanChange(before, after planstate.Summary) {
+	if before == after {
+		return
+	}
+	if line := formatPlanChangeLine(after); line != "" {
+		fmt.Fprintln(os.Stderr, line)
+	}
+}
+
+func formatPlanChangeLine(summary planstate.Summary) string {
+	switch summary.Label {
+	case "":
+		return ""
+	case planstate.LabelMissing:
+		return "[plan] cleared"
+	case planstate.LabelEmpty, planstate.LabelError:
+		return "[plan] " + summary.Label
+	}
+	line := "[plan] " + summary.Label
+	if summary.CurrentStepIndex > 0 {
+		line += fmt.Sprintf(" - step %d", summary.CurrentStepIndex)
+		if strings.TrimSpace(summary.CurrentStep) != "" {
+			line += ": " + oneLine(summary.CurrentStep, 120)
+		}
+	}
+	return line
 }
 
 type chatPlanState struct {

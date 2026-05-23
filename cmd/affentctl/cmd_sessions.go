@@ -145,18 +145,22 @@ func sessionPlanExists(convDir, sessionID string) bool {
 }
 
 func sessionPlanSummary(convDir, sessionID string) string {
+	return localSessionPlanSummary(convDir, sessionID).Label
+}
+
+func localSessionPlanSummary(convDir, sessionID string) planstate.Summary {
 	raw, found, err := readLocalSessionPlan(convDir, sessionID)
 	if err != nil {
-		return planstate.LabelError
+		return planstate.ErrorSummary()
 	}
 	if !found {
-		return planstate.LabelMissing
+		return planstate.Summary{Label: planstate.LabelMissing}
 	}
 	summary, err := planstate.SummarizeJSON(raw)
 	if err != nil {
-		return planstate.LabelError
+		return planstate.ErrorSummary()
 	}
-	return summary.Label
+	return summary
 }
 
 func readLocalSessionPlan(convDir, sessionID string) (json.RawMessage, bool, error) {

@@ -415,6 +415,43 @@ func TestFormatSessionPlanForChatFallsBackToRawJSON(t *testing.T) {
 	}
 }
 
+func TestEmitPlanChangeShowsUpdatedPlanSummary(t *testing.T) {
+	workspace := t.TempDir()
+	convDir := filepath.Join(workspace, ".affentctl")
+	if err := os.MkdirAll(convDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	b := &loopBundle{
+		sessionID: "sess_plan_delta",
+		workspace: workspace,
+	}
+	before := currentSessionPlanSummary(b)
+	if err := os.WriteFile(localSessionPlanPath(convDir, b.sessionID), []byte(`{"version":1,"steps":[{"text":"inspect runtime behavior","status":"in_progress"},{"text":"patch feedback"}]}`+"\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	after := currentSessionPlanSummary(b)
+
+	out := captureStderr(t, func() {
+		emitPlanChange(before, after)
+	})
+	if !strings.Contains(out, "[plan] plan:0/2:active - step 1: inspect runtime behavior") {
+		t.Fatalf("plan change output = %s", out)
+	}
+
+	out = captureStderr(t, func() {
+		emitPlanChange(after, after)
+	})
+	if out != "" {
+		t.Fatalf("unchanged plan should be quiet, got %s", out)
+	}
+}
+
+func TestFormatPlanChangeLineReportsClearedPlan(t *testing.T) {
+	if got := formatPlanChangeLine(currentSessionPlanSummary(&loopBundle{workspace: t.TempDir(), sessionID: "missing"})); got != "[plan] cleared" {
+		t.Fatalf("cleared line = %q", got)
+	}
+}
+
 // TestHandleSlash pins the REPL slash-command dispatcher. /exit and
 // its aliases must return (continue=false, exit=0); /help / /sid /
 // /plan / /plan clear / /cancel / unknown must keep the REPL alive. Casing and trailing
