@@ -610,102 +610,65 @@ func setupLoop(c commonFlags) (*loopBundle, int) {
 
 	if err := validateLLMConfig(c); err != nil {
 		log.Error().Err(err).Msg("llm config")
-		return nil, 64
+		return nil, exitUsage
 	}
 
 	workspace, err := filepath.Abs(c.workspace)
 	if err != nil {
 		log.Error().Err(err).Msg("resolve workspace")
-		return nil, 3
+		return nil, exitRuntime
 	}
 	if err := os.MkdirAll(workspace, 0o755); err != nil {
 		log.Error().Err(err).Msg("mkdir workspace")
-		return nil, 3
+		return nil, exitRuntime
 	}
 
 	convDir := filepath.Join(workspace, ".affentctl")
 	if err := os.MkdirAll(convDir, 0o755); err != nil {
 		log.Error().Err(err).Msg("mkdir conv dir")
-		return nil, 3
+		return nil, exitRuntime
 	}
 
 	sid, resumed, err := resolveSessionID(convDir, c.sessionID, c.continueLast)
 	if err != nil {
 		log.Error().Err(err).Msg("resolve session id")
-		return nil, 3
+		return nil, exitRuntime
 	}
 
-	// Default system prompt; resumed conversations already have one in
-	// the log so EnsureSystemPrompt below is a no-op for them.
-	// --memory-only swaps to a memory-only-tailored prompt because the
-	// generic dev-box default tells the model about shell/file tools
-	// that aren't registered in this mode (leads to wasted "tool not
-	// available" tool calls + misleading the user about capabilities).
-	systemPrompt := agent.DefaultSystemPrompt
-	if c.memoryOnly {
-		systemPrompt = agent.MemoryOnlySystemPrompt
+	systemPrompt, code := resolveSystemPrompt(c, workspace)
+	if code != 0 {
+		log.Error().Msg("system-prompt")
+		return nil, code
 	}
-	if c.systemPromptPath != "" {
-		raw, err := readMaybeStdin(c.systemPromptPath)
-		if err != nil {
-			log.Error().Err(err).Msg("read system-prompt")
-			return nil, 3
+
+	// Deferred cleanup: any resource opened below registers a closer.
+	// On success, closers is transferred to the bundle; on error, the
+	// defer tears everything down so early-return paths don't leak.
+	var closers []func()
+	success := false
+	defer func() {
+		if !success {
+			for i := len(closers) - 1; i >= 0; i-- {
+				closers[i]()
+			}
 		}
-		systemPrompt = raw
-	} else if !c.memoryOnly && workspace != "/workspace" {
-		// DefaultSystemPrompt is framed for the affine-agents dev-box
-		// where /workspace is bind-mounted. Standalone affentctl points
-		// at an arbitrary --workspace, so the model would otherwise burn
-		// 1-2 tool calls calling /workspace paths before discovering the
-		// real path from the rejection message. Anchor it explicitly.
-		// Skipped under --memory-only — that mode has no file tools at
-		// all and the workspace anchor would be a non sequitur.
-		systemPrompt += "\n\nYour workspace directory is \"" + workspace +
-			"\". Use this exact path (or a relative path inside it) with the file tools."
-	}
+	}()
 
 	traceWriter, traceClose, err := openTrace(c.tracePath, resumed)
 	if err != nil {
 		log.Error().Err(err).Msg("open trace")
-		return nil, 3
+		return nil, exitRuntime
 	}
+	closers = append(closers, func() { _ = traceClose() })
 
 	if c.memoryOnly && c.mcpConfigPath != "" {
 		log.Error().Msg("--memory-only cannot be combined with --mcp-config; --memory-only exposes only the memory tool")
-		_ = traceClose()
-		return nil, 64
+		return nil, exitUsage
 	}
 
-	var memStore memory.MemoryStore
-	if c.memoryEnabled {
-		fs := memory.NewFileMemoryStore(workspace)
-		if c.memoryDir != "" {
-			fs.MemoryDir = resolveStorePath(workspace, c.memoryDir)
-		}
-		if c.memoryWorkspaceStore != "" {
-			// Legacy single-file pointer — migration code picks it up on
-			// first access and moves it into the v2 layout.
-			fs.MemoryPath = resolveStorePath(workspace, c.memoryWorkspaceStore)
-		}
-		if c.memoryUserStore != "" {
-			fs.UserPath = resolveStorePath(workspace, c.memoryUserStore)
-		}
-		if memCap, userCap, ok, perr := parseMemoryMaxChars(c.memoryMaxChars); perr != nil {
-			log.Error().Err(perr).Msg("parse --memory-max-chars")
-			_ = traceClose()
-			return nil, 64
-		} else if ok {
-			// memCap maps to core (always-in-prompt).
-			fs.CoreCharLimit = memCap
-			fs.UserCharLimit = userCap
-		}
-		if c.memoryTopicMaxChars > 0 {
-			fs.TopicCharLimit = c.memoryTopicMaxChars
-		}
-		if c.memoryMaxTopics > 0 {
-			fs.MaxTopics = c.memoryMaxTopics
-		}
-		memStore = fs
+	memStore, code := setupMemoryStore(c, workspace, log)
+	if code != 0 {
+		return nil, code
 	}
 
 	tools := agent.NewRegistry()
@@ -713,8 +676,7 @@ func setupLoop(c commonFlags) (*loopBundle, int) {
 	if c.memoryOnly {
 		if memStore == nil {
 			log.Error().Msg("--memory-only requires a usable memory store; check --memory-workspace-store / --memory-user-store")
-			_ = traceClose()
-			return nil, 3
+			return nil, exitRuntime
 		}
 		agent.RegisterMemoryOnly(tools, memStore)
 	} else {
@@ -723,14 +685,12 @@ func setupLoop(c commonFlags) (*loopBundle, int) {
 		executorSpec, execErr = maybeStartSandboxExecutor(executorSpec, workspace, osCommandRunner{buildTimeout: sandboxDockerBuildTimeout, stdout: os.Stdout, stderr: os.Stderr, streamBuild: true})
 		if execErr != nil {
 			log.Error().Err(execErr).Msg("sandbox")
-			_ = traceClose()
-			return nil, 3
+			return nil, exitRuntime
 		}
 		execBackend, execErr = buildExecutor(executorSpec, sid, workspace)
 		if execErr != nil {
 			log.Error().Err(execErr).Msg("executor")
-			_ = traceClose()
-			return nil, 64
+			return nil, exitUsage
 		}
 		agent.RegisterBuiltins(tools, agent.BuiltinDeps{
 			Executor:         execBackend,
@@ -741,35 +701,27 @@ func setupLoop(c commonFlags) (*loopBundle, int) {
 		})
 	}
 
-	// Optional MCP servers, registered onto the same tool registry as
-	// the builtins. Tool names are namespaced by default so they can't
-	// collide with the builtins or with each other.
 	mcpClients, err := startMCP(c.mcpConfigPath, tools, log)
 	if err != nil {
 		log.Error().Err(err).Msg("mcp setup")
-		_ = traceClose()
-		return nil, 3
+		return nil, exitRuntime
+	}
+	for _, mc := range mcpClients {
+		mc := mc
+		closers = append(closers, func() { _ = mc.Close() })
 	}
 
 	conv, err := agent.OpenConversationAt(filepath.Join(convDir, sid+".jsonl"))
 	if err != nil {
 		log.Error().Err(err).Msg("conversation")
-		_ = traceClose()
-		for _, mc := range mcpClients {
-			_ = mc.Close()
-		}
-		return nil, 3
+		return nil, exitRuntime
 	}
 
 	events := make(chan sse.Event, 64)
 	llm := agent.NewLLMClient(c.baseURL, c.apiKey, c.model)
 	if sampling, err := parseSampling(c.temperature, c.topP, c.maxTokens, c.seed); err != nil {
 		log.Error().Err(err).Msg("parse sampling")
-		_ = traceClose()
-		for _, mc := range mcpClients {
-			_ = mc.Close()
-		}
-		return nil, 3
+		return nil, exitRuntime
 	} else {
 		llm.Sampling = sampling
 	}
@@ -811,11 +763,6 @@ func setupLoop(c commonFlags) (*loopBundle, int) {
 		loop.FirstToolPolicy = agent.SubagentFirstToolPolicy()
 		loop.PostToolPolicy = agent.SubagentPostToolPolicy()
 	}
-	// Always attach the rolling-summary compactor. Without it, an
-	// overflowed context kills the turn (the loop's reactive compaction
-	// path is gated on l.Compactor != nil). User knobs override the
-	// OpenHands-style defaults; reusing the same LLM client means
-	// compactions hit the same provider/model the agent uses.
 	triggerMsgs, keepLast := resolveCompactionConfig(c.compactTrigger, c.compactKeepLast)
 	loop.Compactor = &agent.LLMSummaryCompactor{
 		LLM:         llm,
@@ -824,13 +771,10 @@ func setupLoop(c commonFlags) (*loopBundle, int) {
 	}
 	if err := loop.EnsureSystemPrompt(systemPrompt); err != nil {
 		log.Error().Err(err).Msg("seed system prompt")
-		_ = traceClose()
-		for _, mc := range mcpClients {
-			_ = mc.Close()
-		}
-		return nil, 3
+		return nil, exitRuntime
 	}
 
+	success = true
 	return &loopBundle{
 		loop:       loop,
 		events:     events,
@@ -842,6 +786,54 @@ func setupLoop(c commonFlags) (*loopBundle, int) {
 		log:        log,
 		mcpClients: mcpClients,
 	}, 0
+}
+
+func resolveSystemPrompt(c commonFlags, workspace string) (string, int) {
+	systemPrompt := agent.DefaultSystemPrompt
+	if c.memoryOnly {
+		systemPrompt = agent.MemoryOnlySystemPrompt
+	}
+	if c.systemPromptPath != "" {
+		raw, err := readMaybeStdin(c.systemPromptPath)
+		if err != nil {
+			return "", exitRuntime
+		}
+		systemPrompt = raw
+	} else if !c.memoryOnly && workspace != "/workspace" {
+		systemPrompt += "\n\nYour workspace directory is \"" + workspace +
+			"\". Use this exact path (or a relative path inside it) with the file tools."
+	}
+	return systemPrompt, 0
+}
+
+func setupMemoryStore(c commonFlags, workspace string, log zerolog.Logger) (memory.MemoryStore, int) {
+	if !c.memoryEnabled {
+		return nil, 0
+	}
+	fs := memory.NewFileMemoryStore(workspace)
+	if c.memoryDir != "" {
+		fs.MemoryDir = resolveStorePath(workspace, c.memoryDir)
+	}
+	if c.memoryWorkspaceStore != "" {
+		fs.MemoryPath = resolveStorePath(workspace, c.memoryWorkspaceStore)
+	}
+	if c.memoryUserStore != "" {
+		fs.UserPath = resolveStorePath(workspace, c.memoryUserStore)
+	}
+	if memCap, userCap, ok, perr := parseMemoryMaxChars(c.memoryMaxChars); perr != nil {
+		log.Error().Err(perr).Msg("parse --memory-max-chars")
+		return nil, exitUsage
+	} else if ok {
+		fs.CoreCharLimit = memCap
+		fs.UserCharLimit = userCap
+	}
+	if c.memoryTopicMaxChars > 0 {
+		fs.TopicCharLimit = c.memoryTopicMaxChars
+	}
+	if c.memoryMaxTopics > 0 {
+		fs.MaxTopics = c.memoryMaxTopics
+	}
+	return fs, 0
 }
 
 func resolveCompactionConfig(trigger, keepLast int) (int, int) {
