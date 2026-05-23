@@ -72,19 +72,41 @@ image-serve: affentctl
 	"$(AFFENTCTL)" image run --workspace "$(IMAGE_WORKSPACE)" --memory "$(CONTAINER_MEMORY)" --cpus "$(CONTAINER_CPUS)" --pids-limit "$(CONTAINER_PIDS)" $(if $(SERVE_CONTAINER_NAME),--name "$(SERVE_CONTAINER_NAME)") --detach --rm=false --publish "$(SERVE_PUBLISH)" $(IMAGE_RUN_ARGS) -- affentserve --listen "$(SERVE_LISTEN)" --workspace-root "$(SERVE_WORKSPACE_ROOT)" --memory-root "$(SERVE_MEMORY_ROOT)" --builtins $(SERVE_ARGS)
 
 image-serve-status:
-	@if test -n "$(SERVE_CONTAINER_NAME)"; then \
-		docker inspect "$(SERVE_CONTAINER_NAME)" \
-			--format 'name={{.Name}} state={{.State.Status}} image={{.Config.Image}} workspace={{index .Config.Labels "affent.runtime.workspace"}} memory={{index .Config.Labels "affent.runtime.memory"}} cpus={{index .Config.Labels "affent.runtime.cpus"}} pids_limit={{index .Config.Labels "affent.runtime.pids_limit"}} host_memory_bytes={{.HostConfig.Memory}} host_nano_cpus={{.HostConfig.NanoCpus}} host_pids_limit={{.HostConfig.PidsLimit}}'; \
-	else \
+	@if test -z "$(SERVE_CONTAINER_NAME)"; then \
 		echo "SERVE_CONTAINER_NAME is required, e.g. make image-serve-status SERVE_CONTAINER_NAME=affent-serve" >&2; \
 		exit 2; \
-	fi
+	fi; \
+	label=$$(docker inspect "$(SERVE_CONTAINER_NAME)" --format '{{index .Config.Labels "affent.runtime"}}' 2>/dev/null) || { echo "container $(SERVE_CONTAINER_NAME) not found" >&2; exit 2; }; \
+	if test "$$label" != "true"; then \
+		echo "container $(SERVE_CONTAINER_NAME) is not an Affent runtime container" >&2; \
+		exit 2; \
+	fi; \
+	docker inspect "$(SERVE_CONTAINER_NAME)" \
+		--format 'name={{.Name}} state={{.State.Status}} image={{.Config.Image}} workspace={{index .Config.Labels "affent.runtime.workspace"}} memory={{index .Config.Labels "affent.runtime.memory"}} cpus={{index .Config.Labels "affent.runtime.cpus"}} pids_limit={{index .Config.Labels "affent.runtime.pids_limit"}} host_memory_bytes={{.HostConfig.Memory}} host_nano_cpus={{.HostConfig.NanoCpus}} host_pids_limit={{.HostConfig.PidsLimit}}'
 
 image-serve-logs:
-	@if test -n "$(SERVE_CONTAINER_NAME)"; then docker logs --tail 100 "$(SERVE_CONTAINER_NAME)"; else echo "SERVE_CONTAINER_NAME is required, e.g. make image-serve-logs SERVE_CONTAINER_NAME=affent-serve" >&2; exit 2; fi
+	@if test -z "$(SERVE_CONTAINER_NAME)"; then \
+		echo "SERVE_CONTAINER_NAME is required, e.g. make image-serve-logs SERVE_CONTAINER_NAME=affent-serve" >&2; \
+		exit 2; \
+	fi; \
+	label=$$(docker inspect "$(SERVE_CONTAINER_NAME)" --format '{{index .Config.Labels "affent.runtime"}}' 2>/dev/null) || { echo "container $(SERVE_CONTAINER_NAME) not found" >&2; exit 2; }; \
+	if test "$$label" != "true"; then \
+		echo "container $(SERVE_CONTAINER_NAME) is not an Affent runtime container" >&2; \
+		exit 2; \
+	fi
+	docker logs --tail 100 "$(SERVE_CONTAINER_NAME)"
 
 image-serve-stop:
-	@if test -n "$(SERVE_CONTAINER_NAME)"; then docker rm -f "$(SERVE_CONTAINER_NAME)"; else echo "SERVE_CONTAINER_NAME is required, e.g. make image-serve-stop SERVE_CONTAINER_NAME=affent-serve" >&2; exit 2; fi
+	@if test -z "$(SERVE_CONTAINER_NAME)"; then \
+		echo "SERVE_CONTAINER_NAME is required, e.g. make image-serve-stop SERVE_CONTAINER_NAME=affent-serve" >&2; \
+		exit 2; \
+	fi; \
+	label=$$(docker inspect "$(SERVE_CONTAINER_NAME)" --format '{{index .Config.Labels "affent.runtime"}}' 2>/dev/null) || { echo "container $(SERVE_CONTAINER_NAME) not found" >&2; exit 2; }; \
+	if test "$$label" != "true"; then \
+		echo "container $(SERVE_CONTAINER_NAME) is not an Affent runtime container" >&2; \
+		exit 2; \
+	fi
+	docker rm -f "$(SERVE_CONTAINER_NAME)"
 
 eval-container: affentctl
 	"$(AFFENTCTL)" image build --image "$(EVAL_IMAGE)" --memory "$(CONTAINER_MEMORY)" $(IMAGE_BUILD_ARGS)
