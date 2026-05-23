@@ -80,7 +80,7 @@ func planTool(path string) *Tool {
 			if err != nil {
 				return "", fmt.Errorf("decode args: %w", err)
 			}
-			action := strings.TrimSpace(p.Action)
+			action := normalizePlanAction(p.Action)
 			if action == "" {
 				return "", errors.New("action is required\nNext: call plan with action=view, action=set, action=update, or action=clear")
 			}
@@ -170,6 +170,10 @@ func decodePlanToolArgs(args json.RawMessage) (planToolArgs, map[string]bool, er
 	return p, present, nil
 }
 
+func normalizePlanAction(action string) string {
+	return strings.ToLower(strings.TrimSpace(action))
+}
+
 func rejectUnusedPlanArgs(action string, present map[string]bool) error {
 	allowed := map[string]bool{"action": true}
 	switch action {
@@ -252,7 +256,7 @@ func normalizePlanStep(step planStep) (planStep, error) {
 }
 
 func normalizePlanStatus(status string) (string, error) {
-	status = strings.TrimSpace(status)
+	status = strings.ToLower(strings.TrimSpace(status))
 	if status == "" {
 		return "", nil
 	}

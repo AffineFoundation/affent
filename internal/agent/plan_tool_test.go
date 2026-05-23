@@ -122,6 +122,32 @@ func TestPlanToolDeduplicatesEvidenceRefs(t *testing.T) {
 	}
 }
 
+func TestPlanToolNormalizesActionAndStatusCase(t *testing.T) {
+	tool := planTool(filepath.Join(t.TempDir(), "plan.json"))
+	out, err := tool.Execute(context.Background(), json.RawMessage(`{"action":" Set ","steps":[{"text":"ship","status":" IN_PROGRESS "}]}`))
+	if err != nil {
+		t.Fatalf("set: %v", err)
+	}
+	var st planState
+	if err := json.Unmarshal([]byte(out), &st); err != nil {
+		t.Fatalf("decode set response: %v\n%s", err, out)
+	}
+	if len(st.Steps) != 1 || st.Steps[0].Status != "in_progress" {
+		t.Fatalf("steps = %+v, want normalized in_progress", st.Steps)
+	}
+
+	out, err = tool.Execute(context.Background(), json.RawMessage(`{"action":"UPDATE","index":1,"status":" Completed "}`))
+	if err != nil {
+		t.Fatalf("update: %v", err)
+	}
+	if err := json.Unmarshal([]byte(out), &st); err != nil {
+		t.Fatalf("decode update response: %v\n%s", err, out)
+	}
+	if st.Steps[0].Status != "completed" {
+		t.Fatalf("status = %q, want completed", st.Steps[0].Status)
+	}
+}
+
 func TestPlanToolRejectsSymlinkPlanFile(t *testing.T) {
 	dir := t.TempDir()
 	outside := filepath.Join(t.TempDir(), "outside-plan.json")
