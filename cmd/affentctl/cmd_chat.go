@@ -2,6 +2,7 @@ package main
 
 import (
 	"bufio"
+	"bytes"
 	"context"
 	"encoding/json"
 	"errors"
@@ -333,7 +334,63 @@ func printCurrentSessionPlan(b *loopBundle) {
 		fmt.Fprintf(os.Stderr, "no active plan for session %s\n", b.sessionID)
 		return
 	}
-	fmt.Fprintln(os.Stderr, string(plan))
+	fmt.Fprintln(os.Stderr, formatSessionPlanForChat(b.sessionID, plan))
+}
+
+type chatPlanState struct {
+	UpdatedAt string         `json:"updated_at"`
+	Steps     []chatPlanStep `json:"steps"`
+}
+
+type chatPlanStep struct {
+	Text     string   `json:"text"`
+	Status   string   `json:"status"`
+	Evidence []string `json:"evidence"`
+	Note     string   `json:"note"`
+}
+
+func formatSessionPlanForChat(sessionID string, raw json.RawMessage) string {
+	raw = bytes.TrimSpace(raw)
+	var st chatPlanState
+	if err := json.Unmarshal(raw, &st); err != nil || len(st.Steps) == 0 {
+		return string(raw)
+	}
+	var out strings.Builder
+	fmt.Fprintf(&out, "plan for session %s", sessionID)
+	if strings.TrimSpace(st.UpdatedAt) != "" {
+		fmt.Fprintf(&out, " (updated %s)", strings.TrimSpace(st.UpdatedAt))
+	}
+	out.WriteByte('\n')
+	for i, step := range st.Steps {
+		status := strings.TrimSpace(step.Status)
+		if status == "" {
+			status = "pending"
+		}
+		text := strings.TrimSpace(step.Text)
+		if text == "" {
+			text = "(untitled)"
+		}
+		fmt.Fprintf(&out, "%d. [%s] %s\n", i+1, status, oneLine(text, 160))
+		if evidence := compactPlanEvidence(step.Evidence); evidence != "" {
+			fmt.Fprintf(&out, "   evidence: %s\n", evidence)
+		}
+		if note := strings.TrimSpace(step.Note); note != "" {
+			fmt.Fprintf(&out, "   note: %s\n", oneLine(note, 160))
+		}
+	}
+	return strings.TrimRight(out.String(), "\n")
+}
+
+func compactPlanEvidence(evidence []string) string {
+	refs := make([]string, 0, len(evidence))
+	for _, ref := range evidence {
+		ref = strings.TrimSpace(ref)
+		if ref == "" {
+			continue
+		}
+		refs = append(refs, oneLine(ref, 120))
+	}
+	return strings.Join(refs, ", ")
 }
 
 func isTTY(f *os.File) bool {

@@ -315,7 +315,7 @@ func TestHandleSlashPlanPrintsCurrentSessionPlan(t *testing.T) {
 	if err := os.MkdirAll(convDir, 0o755); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.WriteFile(localSessionPlanPath(convDir, "sess_plan_test"), []byte(`{"version":1,"steps":[{"text":"ship plan","status":"in_progress"}]}`+"\n"), 0o644); err != nil {
+	if err := os.WriteFile(localSessionPlanPath(convDir, "sess_plan_test"), []byte(`{"version":1,"updated_at":"2026-05-23T00:00:00Z","steps":[{"text":"ship plan","status":"in_progress","evidence":["cmd/affentctl/cmd_chat.go"],"note":"keep it short"}]}`+"\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
 
@@ -336,8 +336,16 @@ func TestHandleSlashPlanPrintsCurrentSessionPlan(t *testing.T) {
 	_ = w.Close()
 	out, _ := io.ReadAll(r)
 	got := string(out)
-	if !strings.Contains(got, `"steps"`) || !strings.Contains(got, "ship plan") {
-		t.Fatalf("/plan output = %s", got)
+	for _, want := range []string{
+		"plan for session sess_plan_test",
+		"(updated 2026-05-23T00:00:00Z)",
+		"1. [in_progress] ship plan",
+		"evidence: cmd/affentctl/cmd_chat.go",
+		"note: keep it short",
+	} {
+		if !strings.Contains(got, want) {
+			t.Fatalf("/plan output missing %q:\n%s", want, got)
+		}
 	}
 }
 
@@ -361,6 +369,14 @@ func TestHandleSlashPlanReportsMissingPlan(t *testing.T) {
 	out, _ := io.ReadAll(r)
 	if got := string(out); !strings.Contains(got, "no active plan for session sess_no_plan") {
 		t.Fatalf("/plan missing output = %s", got)
+	}
+}
+
+func TestFormatSessionPlanForChatFallsBackToRawJSON(t *testing.T) {
+	raw := json.RawMessage(`{"version":2,"items":[{"title":"future schema"}]}`)
+	got := formatSessionPlanForChat("sess_future", raw)
+	if got != string(raw) {
+		t.Fatalf("fallback = %s, want raw JSON", got)
 	}
 }
 
