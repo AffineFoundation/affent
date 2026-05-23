@@ -172,9 +172,16 @@ func defaultBuildExecutor(scenarioName string) RunnerExecutorBuilder {
 
 func defaultBuildRegistry(_ context.Context, workspaceDir string, exec executor.Executor) (*agent.Registry, error) {
 	reg := agent.NewRegistry()
+	skillDir := agent.DefaultWorkspaceSkillDir(workspaceDir)
+	skillReg, err := agent.RuntimeSkillRegistry(skillDir)
+	if err != nil {
+		return nil, err
+	}
 	agent.RegisterBuiltins(reg, agent.BuiltinDeps{
 		Executor:         exec,
 		HostWorkspaceDir: workspaceDir,
+		SkillRegistry:    skillReg,
+		SkillDir:         skillDir,
 	})
 	return reg, nil
 }

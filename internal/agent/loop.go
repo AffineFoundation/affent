@@ -71,6 +71,9 @@ const MaxToolResultBytesInEvent = 256 * 1024
 const (
 	maxToolRequestArgStringBytes = 4 * 1024
 	maxToolRequestArgsEventBytes = 64 * 1024
+
+	defaultArtifactPathPrefix = ".affent/artifacts/tool-results"
+	maxArtifactComponentLen   = 80
 )
 
 // Loop is the model<->tools cycle. One Loop per session. Stateful via the
@@ -846,7 +849,7 @@ func (l *Loop) attachToolResultArtifact(payload *sse.ToolResultPayload, callID, 
 	}
 	prefix := strings.Trim(strings.TrimSpace(l.ToolResultArtifactPathPrefix), "/")
 	if prefix == "" {
-		prefix = ".affent/artifacts/tool-results"
+		prefix = defaultArtifactPathPrefix
 	}
 	filename := fmt.Sprintf("%06d-%s.txt", l.artifactSeq.Add(1), safeToolResultArtifactComponent(callID))
 	path := filepath.Join(dir, filename)
@@ -876,7 +879,7 @@ func safeToolResultArtifactComponent(s string) string {
 		default:
 			b.WriteByte('-')
 		}
-		if b.Len() >= 80 {
+		if b.Len() >= maxArtifactComponentLen {
 			break
 		}
 	}
