@@ -94,7 +94,8 @@ func TestMemoryTool_DispatchValidation(t *testing.T) {
 func TestMemoryToolSchemaPublishesSearchLimits(t *testing.T) {
 	tool, _ := newMemoryToolFixture(t)
 	var schema struct {
-		Properties map[string]struct {
+		AdditionalProperties *bool `json:"additionalProperties"`
+		Properties           map[string]struct {
 			MinLength int      `json:"minLength"`
 			MaxLength int      `json:"maxLength"`
 			Default   int      `json:"default"`
@@ -104,6 +105,12 @@ func TestMemoryToolSchemaPublishesSearchLimits(t *testing.T) {
 	}
 	if err := json.Unmarshal(tool.Schema, &schema); err != nil {
 		t.Fatal(err)
+	}
+	if schema.AdditionalProperties == nil {
+		t.Fatal("memory schema missing additionalProperties")
+	}
+	if *schema.AdditionalProperties {
+		t.Fatal("memory schema allows unknown arguments")
 	}
 	if schema.Properties["action"].MinLength != 1 {
 		t.Fatalf("action minLength = %d, want 1", schema.Properties["action"].MinLength)

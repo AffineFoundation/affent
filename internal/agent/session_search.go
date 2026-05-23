@@ -19,8 +19,9 @@ type SessionSearchResponse = sessionsearch.Response
 // turns.
 func sessionSearchTool(sessionsDir, currentSessionID string) *Tool {
 	schema, err := json.Marshal(map[string]any{
-		"type":     "object",
-		"required": []string{"query"},
+		"type":                 "object",
+		"additionalProperties": false,
+		"required":             []string{"query"},
 		"properties": map[string]any{
 			"query": map[string]any{
 				"type":        "string",

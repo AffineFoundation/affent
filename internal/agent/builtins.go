@@ -113,6 +113,7 @@ func skillTool(reg *SkillRegistry) *Tool {
 	}
 	schema := json.RawMessage(fmt.Sprintf(`{
         "type": "object",
+        "additionalProperties": false,
         "required": ["action"],
         "properties": {
             "action": {"type": "string", "minLength": 1, "maxLength": %d, "enum": ["list", "read"], "description": "Use list to inspect available skills; use read to load one skill body."},
@@ -177,6 +178,7 @@ func RegisterMemoryOnly(r *Registry, store memory.MemoryStore) {
 func shellTool(deps BuiltinDeps) *Tool {
 	schema := json.RawMessage(fmt.Sprintf(`{
         "type": "object",
+        "additionalProperties": false,
         "required": ["command"],
         "properties": {
             "command": {"type": "string", "minLength": 1, "maxLength": %d, "description": "Command to run."},
@@ -471,6 +473,7 @@ func requiredFileToolPathError(tool string) error {
 func readFileTool(deps BuiltinDeps) *Tool {
 	schema := json.RawMessage(fmt.Sprintf(`{
         "type": "object",
+        "additionalProperties": false,
         "required": ["path"],
         "properties": {
             "path": {"type": "string", "minLength": 1, "maxLength": %d, "description": "Workspace path."},
@@ -635,6 +638,7 @@ func recoverableFileToolError(tool, path string, err error) error {
 func writeFileTool(deps BuiltinDeps) *Tool {
 	schema := json.RawMessage(fmt.Sprintf(`{
         "type": "object",
+        "additionalProperties": false,
         "required": ["path", "content"],
         "properties": {
             "path": {"type": "string", "minLength": 1, "maxLength": %d},
@@ -687,6 +691,7 @@ func writeFileTool(deps BuiltinDeps) *Tool {
 func editFileTool(deps BuiltinDeps) *Tool {
 	schema := json.RawMessage(fmt.Sprintf(`{
         "type": "object",
+        "additionalProperties": false,
         "required": ["path", "old", "new"],
         "properties": {
             "path": {"type": "string", "minLength": 1, "maxLength": %d},
@@ -773,6 +778,7 @@ const (
 func listFilesTool(deps BuiltinDeps) *Tool {
 	schema := json.RawMessage(fmt.Sprintf(`{
         "type": "object",
+        "additionalProperties": false,
         "properties": {
             "path": {"type": "string", "maxLength": %d, "description": "Workspace directory; default root."},
             "max_entries": {"type": "integer", "minimum": 1, "maximum": %d, "default": %d, "description": "Entry cap; default 200, max 1000."}

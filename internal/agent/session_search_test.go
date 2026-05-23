@@ -54,7 +54,8 @@ func TestSessionSearchTool_QueryRequired(t *testing.T) {
 func TestSessionSearchToolSchemaPublishesQueryLimit(t *testing.T) {
 	tool := sessionSearchTool(t.TempDir(), "current")
 	var schema struct {
-		Properties map[string]struct {
+		AdditionalProperties *bool `json:"additionalProperties"`
+		Properties           map[string]struct {
 			MinLength int `json:"minLength"`
 			MaxLength int `json:"maxLength"`
 			Default   int `json:"default"`
@@ -63,6 +64,12 @@ func TestSessionSearchToolSchemaPublishesQueryLimit(t *testing.T) {
 	}
 	if err := json.Unmarshal(tool.Schema, &schema); err != nil {
 		t.Fatal(err)
+	}
+	if schema.AdditionalProperties == nil {
+		t.Fatal("session_search schema missing additionalProperties")
+	}
+	if *schema.AdditionalProperties {
+		t.Fatal("session_search schema allows unknown arguments")
 	}
 	if schema.Properties["query"].MinLength != 1 {
 		t.Fatalf("query minLength = %d, want 1", schema.Properties["query"].MinLength)

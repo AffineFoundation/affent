@@ -432,6 +432,9 @@ func TestSubagentToolDescriptionMentionsCallerProvidedBrowserTools(t *testing.T)
 	if !strings.Contains(raw, `"task": {"type": "string", "minLength": 1`) {
 		t.Fatalf("subagent task schema should publish non-empty task constraint:\n%s", raw)
 	}
+	if !strings.Contains(raw, `"additionalProperties": false`) {
+		t.Fatalf("subagent schema should reject unknown arguments:\n%s", raw)
+	}
 	if !strings.Contains(raw, fmt.Sprintf(`"maxLength": %d`, maxSubagentTaskBytes)) {
 		t.Fatalf("subagent task schema should publish task maxLength:\n%s", raw)
 	}

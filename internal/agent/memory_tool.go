@@ -57,8 +57,9 @@ type memoryToolArgs struct {
 // topics surface via search.
 func memoryTool(store memory.MemoryStore) *Tool {
 	schema, err := json.Marshal(map[string]any{
-		"type":     "object",
-		"required": []string{"action"},
+		"type":                 "object",
+		"additionalProperties": false,
+		"required":             []string{"action"},
 		"properties": map[string]any{
 			"action": map[string]any{
 				"type":        "string",

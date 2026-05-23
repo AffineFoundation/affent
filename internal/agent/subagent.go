@@ -441,6 +441,7 @@ func subagentToolSchema(reg *SubagentModeRegistry, maxDepth int) json.RawMessage
 	modeBlock := fmt.Sprintf(`"mode": {"type": "string", "minLength": 1, "maxLength": %d, "enum": %s, "default": %q, "description": %q}`, maxSubagentModeBytes, enum, modeDefault, modeDesc.String())
 	schemaJSON := `{
         "type": "object",
+        "additionalProperties": false,
         "required": ["task"],
         "properties": {
             "task": {"type": "string", "minLength": 1, "maxLength": ` + fmt.Sprint(maxSubagentTaskBytes) + `, "description": "Concrete bounded task for the isolated subagent. Include the files, question, or risk to inspect. For web pages, specify whether to extract only current-page visible snapshot facts or to inspect additional tabs/pages. If nested delegation is available, assign only one separable noisy subtask to the child."},

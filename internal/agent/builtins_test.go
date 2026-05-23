@@ -573,6 +573,35 @@ func TestFileToolSchemasPublishNumericDefaults(t *testing.T) {
 	}
 }
 
+func TestBuiltinToolSchemasRejectUnknownArguments(t *testing.T) {
+	for _, c := range []struct {
+		name string
+		tool *Tool
+	}{
+		{name: "skill", tool: skillTool(DefaultSkillRegistry())},
+		{name: "shell", tool: shellTool(BuiltinDeps{Executor: &recordingExec{}})},
+		{name: "read_file", tool: readFileTool(BuiltinDeps{HostWorkspaceDir: t.TempDir()})},
+		{name: "write_file", tool: writeFileTool(BuiltinDeps{HostWorkspaceDir: t.TempDir()})},
+		{name: "edit_file", tool: editFileTool(BuiltinDeps{HostWorkspaceDir: t.TempDir()})},
+		{name: "list_files", tool: listFilesTool(BuiltinDeps{HostWorkspaceDir: t.TempDir()})},
+	} {
+		t.Run(c.name, func(t *testing.T) {
+			var schema struct {
+				AdditionalProperties *bool `json:"additionalProperties"`
+			}
+			if err := json.Unmarshal(c.tool.Schema, &schema); err != nil {
+				t.Fatal(err)
+			}
+			if schema.AdditionalProperties == nil {
+				t.Fatalf("%s schema missing additionalProperties", c.name)
+			}
+			if *schema.AdditionalProperties {
+				t.Fatalf("%s schema allows unknown arguments", c.name)
+			}
+		})
+	}
+}
+
 func TestFileToolsRejectBlankRequiredStrings(t *testing.T) {
 	for _, c := range []struct {
 		name string
