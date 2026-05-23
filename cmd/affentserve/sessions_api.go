@@ -526,14 +526,23 @@ func durableMemoryExists(sessionDir string) bool {
 		filepath.Join(sessionDir, "MEMORY.md"),
 		filepath.Join(sessionDir, "topics"),
 	} {
-		if _, err := os.Stat(path); err == nil {
+		if durableStatePathExists(path) {
 			return true
 		}
 	}
 	return false
 }
 
+func durableStatePathExists(path string) bool {
+	info, err := os.Lstat(path)
+	return err == nil && info.Mode()&os.ModeSymlink == 0
+}
+
 func dirHasAnyEntry(dir string) bool {
+	info, err := os.Lstat(dir)
+	if err != nil || !info.IsDir() || info.Mode()&os.ModeSymlink != 0 {
+		return false
+	}
 	f, err := os.Open(dir)
 	if err != nil {
 		return false

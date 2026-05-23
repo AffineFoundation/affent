@@ -11,6 +11,7 @@ import (
 	"strings"
 	"testing"
 
+	agent "github.com/affinefoundation/affent/internal/agent"
 	"github.com/rs/zerolog"
 )
 
@@ -301,6 +302,60 @@ func TestSummarizeDurableSessionIgnoresSymlinkConversation(t *testing.T) {
 	}
 	if summary.HasConversation {
 		t.Fatalf("symlink conversation must not set has_conversation: %+v", summary)
+	}
+}
+
+func TestSummarizeDurableSessionIgnoresSymlinkDurableStateMarkers(t *testing.T) {
+	memRoot := t.TempDir()
+	pool := newPoolWithMemoryRoot(t, memRoot)
+	createDurableSessionDir(t, pool, "link-state")
+	dir := pool.sessionDirPath("link-state")
+
+	artifactDir := filepath.Join(dir, filepath.FromSlash(artifactPathPrefix))
+	if err := os.MkdirAll(filepath.Dir(artifactDir), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	outsideArtifacts := t.TempDir()
+	if err := os.WriteFile(filepath.Join(outsideArtifacts, "artifact.txt"), []byte("outside"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink(outsideArtifacts, artifactDir); err != nil {
+		t.Skipf("symlink unavailable: %v", err)
+	}
+
+	skillDir := agent.DefaultWorkspaceSkillDir(dir)
+	if err := os.MkdirAll(filepath.Dir(skillDir), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	outsideSkills := t.TempDir()
+	if err := os.WriteFile(filepath.Join(outsideSkills, "skill.json"), []byte("{}"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink(outsideSkills, skillDir); err != nil {
+		t.Skipf("symlink unavailable: %v", err)
+	}
+
+	topics := filepath.Join(dir, "topics")
+	if err := os.RemoveAll(topics); err != nil {
+		t.Fatal(err)
+	}
+	outsideTopics := t.TempDir()
+	if err := os.WriteFile(filepath.Join(outsideTopics, "topic.md"), []byte("outside"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink(outsideTopics, topics); err != nil {
+		t.Skipf("symlink unavailable: %v", err)
+	}
+
+	summary, found, err := summarizeDurableSession(pool, "link-state")
+	if err != nil {
+		t.Fatalf("summarizeDurableSession: %v", err)
+	}
+	if !found {
+		t.Fatal("durable session should still be found")
+	}
+	if summary.HasArtifacts || summary.HasRuntimeSkills || summary.HasMemory {
+		t.Fatalf("symlink state markers must not be reported: %+v", summary)
 	}
 }
 
