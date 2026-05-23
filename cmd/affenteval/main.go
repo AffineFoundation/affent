@@ -281,26 +281,27 @@ func normalizedEvalExecutor(executor string) string {
 
 type batchResultRecord struct {
 	evalJSONLMetadata
-	Type                    string   `json:"type"`
-	Scenario                string   `json:"scenario"`
-	OK                      bool     `json:"ok"`
-	DurationMS              int64    `json:"duration_ms"`
-	Workspace               string   `json:"workspace"`
-	TracePath               string   `json:"trace_path"`
-	TurnEndReason           string   `json:"turn_end_reason,omitempty"`
-	ToolCalls               int      `json:"tool_calls"`
-	ToolErrors              int      `json:"tool_errors"`
-	ToolRepaired            int      `json:"tool_repaired"`
-	ToolDurationMS          int64    `json:"tool_duration_ms"`
-	ToolArgsTruncated       int      `json:"tool_args_truncated"`
-	ToolArgsOmittedBytes    int      `json:"tool_args_omitted_bytes"`
-	ToolResultsTruncated    int      `json:"tool_results_truncated"`
-	ToolResultsOmittedBytes int      `json:"tool_results_omitted_bytes"`
-	InputTokens             int      `json:"input_tokens"`
-	OutputTokens            int      `json:"output_tokens"`
-	WorkspaceRemoved        bool     `json:"workspace_removed,omitempty"`
-	CleanupError            string   `json:"cleanup_error,omitempty"`
-	Failures                []string `json:"failures,omitempty"`
+	Type                    string         `json:"type"`
+	Scenario                string         `json:"scenario"`
+	OK                      bool           `json:"ok"`
+	DurationMS              int64          `json:"duration_ms"`
+	Workspace               string         `json:"workspace"`
+	TracePath               string         `json:"trace_path"`
+	TurnEndReason           string         `json:"turn_end_reason,omitempty"`
+	ToolCalls               int            `json:"tool_calls"`
+	ToolErrors              int            `json:"tool_errors"`
+	ToolRepaired            int            `json:"tool_repaired"`
+	ToolDurationMS          int64          `json:"tool_duration_ms"`
+	ToolArgsTruncated       int            `json:"tool_args_truncated"`
+	ToolArgsOmittedBytes    int            `json:"tool_args_omitted_bytes"`
+	ToolResultsTruncated    int            `json:"tool_results_truncated"`
+	ToolResultsOmittedBytes int            `json:"tool_results_omitted_bytes"`
+	InputTokens             int            `json:"input_tokens"`
+	OutputTokens            int            `json:"output_tokens"`
+	WorkspaceRemoved        bool           `json:"workspace_removed,omitempty"`
+	CleanupError            string         `json:"cleanup_error,omitempty"`
+	Failures                []string       `json:"failures,omitempty"`
+	FailureKinds            map[string]int `json:"failure_kinds,omitempty"`
 }
 
 type batchSummaryRecord struct {
@@ -353,6 +354,7 @@ func printBatchResultJSONL(w io.Writer, meta evalJSONLMetadata, res agenteval.Ba
 		WorkspaceRemoved:        res.WorkspaceRemoved,
 		CleanupError:            res.CleanupError,
 		Failures:                res.Failures,
+		FailureKinds:            failureKindsForResult(res.Failures),
 	})
 }
 
@@ -392,6 +394,17 @@ func cloneFailureKinds(in map[string]int) map[string]int {
 	out := make(map[string]int, len(in))
 	for k, v := range in {
 		out[k] = v
+	}
+	return out
+}
+
+func failureKindsForResult(failures []string) map[string]int {
+	if len(failures) == 0 {
+		return nil
+	}
+	out := make(map[string]int, len(failures))
+	for _, failure := range failures {
+		out[failureKind(failure)]++
 	}
 	return out
 }

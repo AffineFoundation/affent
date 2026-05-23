@@ -518,7 +518,8 @@ Eval JSONL records include `schema_version=1` plus run metadata such as suite,
 model, optional `provider_label`, executor, temperature, and timeout so stored
 artifacts can be compared without guessing which runtime configuration produced
 them. Set `--provider-label` when multiple OpenAI-compatible providers serve the
-same model id.
+same model id. Failing scenario records include both the raw `failures` strings
+and a structured `failure_kinds` count map for stable aggregation.
 
 `--executor` is forwarded to the `affentctl run` process under test. It
 defaults to `local`. Use `--executor sandbox` for one selected scenario when you

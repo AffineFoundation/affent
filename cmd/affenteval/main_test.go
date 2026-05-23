@@ -283,6 +283,42 @@ func TestPrintBatchResultJSONL(t *testing.T) {
 	if _, ok := got["failures"]; ok {
 		t.Fatalf("passing result should omit failures, got %#v", got["failures"])
 	}
+	if _, ok := got["failure_kinds"]; ok {
+		t.Fatalf("passing result should omit failure_kinds, got %#v", got["failure_kinds"])
+	}
+}
+
+func TestPrintBatchResultJSONLIncludesFailureKinds(t *testing.T) {
+	var out bytes.Buffer
+	printBatchResultJSONL(&out, testEvalJSONLMetadata(), agenteval.BatchResult{
+		BatchScenario: "failing",
+		Workspace:     "/tmp/ws",
+		TracePath:     "/tmp/ws/trace.jsonl",
+		OK:            false,
+		Duration:      500 * time.Millisecond,
+		TurnEndReason: "max_turns",
+		Failures: []string{
+			`turn ended with reason "max_turns" (expected completed)`,
+			`missing required command match "go test"; commands=[]`,
+			`missing required command match "pytest"; commands=[]`,
+		},
+	})
+
+	var got map[string]any
+	if err := json.Unmarshal(out.Bytes(), &got); err != nil {
+		t.Fatalf("jsonl result did not decode: %v\n%s", err, out.String())
+	}
+	failures, ok := got["failures"].([]any)
+	if !ok || len(failures) != 3 {
+		t.Fatalf("failures = %#v, want 3 entries\njson=%s", got["failures"], out.String())
+	}
+	failureKinds, ok := got["failure_kinds"].(map[string]any)
+	if !ok {
+		t.Fatalf("failure_kinds missing or wrong type: %#v\njson=%s", got["failure_kinds"], out.String())
+	}
+	if failureKinds["turn_end"] != float64(1) || failureKinds["missing_command"] != float64(2) {
+		t.Fatalf("failure_kinds = %#v", failureKinds)
+	}
 }
 
 func TestPrintBatchSummaryJSONL(t *testing.T) {
@@ -379,6 +415,20 @@ func TestEvalJSONLMetadataFromConfig(t *testing.T) {
 	meta = evalJSONLMetadataFromConfig(" custom ", " flag-model ", " flag-provider ", " sandbox ", " 0.4 ", time.Second)
 	if meta.Model != "flag-model" || meta.ProviderLabel != "flag-provider" || meta.Executor != "sandbox" || meta.Temperature != "0.4" || meta.Suite != "custom" || meta.TimeoutMS != 1000 {
 		t.Fatalf("flag metadata not normalized: %+v", meta)
+	}
+}
+
+func TestFailureKindsForResult(t *testing.T) {
+	if got := failureKindsForResult(nil); got != nil {
+		t.Fatalf("nil failures should produce nil map, got %#v", got)
+	}
+	got := failureKindsForResult([]string{
+		`turn ended with reason "max_turns" (expected completed)`,
+		`missing required command match "go test"; commands=[]`,
+		`missing required command match "pytest"; commands=[]`,
+	})
+	if got["turn_end"] != 1 || got["missing_command"] != 2 {
+		t.Fatalf("failureKindsForResult = %#v", got)
 	}
 }
 
