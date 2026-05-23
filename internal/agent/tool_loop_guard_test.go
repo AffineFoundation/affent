@@ -20,6 +20,9 @@ func TestToolLoopGuard_BlocksExactRepeatedCalls(t *testing.T) {
 	if !strings.Contains(got, "blocked exact repeated call") {
 		t.Fatalf("third attempt should be blocked, got %q", got)
 	}
+	if !strings.Contains(got, "Next:") || !strings.Contains(got, "change the arguments") {
+		t.Fatalf("repeat guard should include corrective Next step, got %q", got)
+	}
 	if got := g.recordAttempt("read_file", json.RawMessage(`{"path":"b.txt"}`)); got != "" {
 		t.Fatalf("different args should pass, got %q", got)
 	}
@@ -34,6 +37,8 @@ func TestToolLoopGuard_TracksConsecutiveFailures(t *testing.T) {
 	}
 	if got := g.recordOutcome("shell", false); !strings.Contains(got, "failed 3 consecutive times") {
 		t.Fatalf("expected warning, got %q", got)
+	} else if !strings.Contains(got, "Next:") || !strings.Contains(got, "verify prerequisites") {
+		t.Fatalf("failure warning should include corrective Next step, got %q", got)
 	}
 	if got := g.recordOutcome("shell", true); got != "" {
 		t.Fatalf("success should reset failures, got %q", got)
@@ -43,9 +48,13 @@ func TestToolLoopGuard_TracksConsecutiveFailures(t *testing.T) {
 	}
 	if got := g.recordOutcome("shell", false); !strings.Contains(got, "failed 8 consecutive times") {
 		t.Fatalf("expected halt message, got %q", got)
+	} else if !strings.Contains(got, "Next:") || !strings.Contains(got, "different tool") {
+		t.Fatalf("halt message should include corrective Next step, got %q", got)
 	}
 	if got := g.recordAttempt("shell", json.RawMessage(`{}`)); !strings.Contains(got, "already failed 8 consecutive times") {
 		t.Fatalf("halted tool should be blocked, got %q", got)
+	} else if !strings.Contains(got, "Next:") || !strings.Contains(got, "evidence already gathered") {
+		t.Fatalf("halted-tool block should include corrective Next step, got %q", got)
 	}
 }
 

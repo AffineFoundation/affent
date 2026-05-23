@@ -907,6 +907,7 @@ func TestRunner_EndToEnd_LoopGuardFailureHalt(t *testing.T) {
 			ToolResultContains("flaky_probe", "failed 3 consecutive times"),
 			ToolResultContains("flaky_probe", "failed 8 consecutive times"),
 			ToolResultContains("flaky_probe", "Stop retrying"),
+			ToolResultContains("flaky_probe", "Next:"),
 		},
 	}
 

@@ -36,12 +36,12 @@ func (g *toolLoopGuard) recordAttempt(tool string, args json.RawMessage) string 
 		return ""
 	}
 	if g.haltedTools[tool] {
-		return fmt.Sprintf("loop_guard: tool %q has already failed %d consecutive times this turn. Stop retrying it and choose a different approach.", tool, toolFailureHaltThreshold)
+		return fmt.Sprintf("loop_guard: tool %q has already failed %d consecutive times this turn. Stop retrying it and choose a different approach.\nNext: use a different tool, change the evidence source, or answer from the evidence already gathered.", tool, toolFailureHaltThreshold)
 	}
 	key := toolCallKey{name: tool, hash: hashCanonicalToolArgs(args)}
 	g.callCounts[key]++
 	if g.callCounts[key] >= identicalToolCallBlockThreshold {
-		return fmt.Sprintf("loop_guard: blocked exact repeated call to %q with the same arguments after %d attempts this turn. Change the arguments, use a different tool, or answer from the evidence already gathered.", tool, g.callCounts[key])
+		return fmt.Sprintf("loop_guard: blocked exact repeated call to %q with the same arguments after %d attempts this turn.\nNext: change the arguments, use a different tool, or answer from the evidence already gathered.", tool, g.callCounts[key])
 	}
 	return ""
 }
@@ -57,10 +57,10 @@ func (g *toolLoopGuard) recordOutcome(tool string, ok bool) string {
 	g.failureCounts[tool]++
 	switch g.failureCounts[tool] {
 	case toolFailureWarnThreshold:
-		return fmt.Sprintf("loop_guard: tool %q has failed %d consecutive times this turn. Read the error and change approach before retrying.", tool, toolFailureWarnThreshold)
+		return fmt.Sprintf("loop_guard: tool %q has failed %d consecutive times this turn. Read the latest error before retrying.\nNext: change the arguments, verify prerequisites with another tool, or stop using %q if the same error persists.", tool, toolFailureWarnThreshold, tool)
 	case toolFailureHaltThreshold:
 		g.haltedTools[tool] = true
-		return fmt.Sprintf("loop_guard: tool %q has failed %d consecutive times this turn. Stop retrying it and choose a different approach.", tool, toolFailureHaltThreshold)
+		return fmt.Sprintf("loop_guard: tool %q has failed %d consecutive times this turn. Stop retrying it and choose a different approach.\nNext: use a different tool, change the evidence source, or answer from the evidence already gathered.", tool, toolFailureHaltThreshold)
 	default:
 		return ""
 	}
