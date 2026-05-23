@@ -282,7 +282,12 @@ func focusedTaskTool(deps FocusedTaskDeps, available []FocusedTaskProfile) *Tool
 			if !ok {
 				return "", fmt.Errorf("unsupported task_type %q (valid: %s). Next: retry with one listed task_type", p.TaskType, joinKinds(available))
 			}
-			p.Objective = strings.TrimSpace(p.Objective)
+			// Strip control bytes before the byte cap so a "long" objective
+			// padded with NUL / ESC noise can't slip past the cap by
+			// leveraging escape-encoded bytes that the model would never
+			// actually need. Sanitization also reaches the user prompt
+			// (built from p.Objective below) and the echoed result.Objective.
+			p.Objective = sanitizeUntrustedText(strings.TrimSpace(p.Objective))
 			if p.Objective == "" {
 				return "", errors.New("objective is required. Next: retry with a single concrete bounded objective for the focused task")
 			}

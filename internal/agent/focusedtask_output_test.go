@@ -1,6 +1,7 @@
 package agent
 
 import (
+	"encoding/json"
 	"errors"
 	"strings"
 	"testing"
@@ -165,14 +166,18 @@ func TestBuildFocusedTaskResult_PropagatesRuntimeError(t *testing.T) {
 	res := childRunResult{
 		Report:        "",
 		TurnEndReason: "error",
-		Err:           errors.New("upstream 500"),
+		Err:           errors.New("upstream 500\x1b[31m"),
+		LoopErrors:    []string{"retry failed\x00once"},
 	}
 	result := buildFocusedTaskResult(verifyProfile(), "obj", "focused_v", 1, res)
 	if result.OK {
 		t.Fatal("runtime error must yield ok=false")
 	}
-	if result.Error != "upstream 500" {
+	if result.Error != "upstream 500[31m" {
 		t.Fatalf("error field: %q", result.Error)
+	}
+	if len(result.LoopErrors) != 1 || result.LoopErrors[0] != "retry failedonce" {
+		t.Fatalf("loop errors not sanitized: %+v", result.LoopErrors)
 	}
 }
 
@@ -219,6 +224,106 @@ func TestTrimAndCapStringList_DropsBlankAndCaps(t *testing.T) {
 	}
 }
 
+func TestSanitizeUntrustedText_StripsControlBytesPreservesWhitespace(t *testing.T) {
+	cases := []struct {
+		name string
+		in   string
+		want string
+	}{
+		{
+			name: "preserves printable + tab/newline/cr",
+			in:   "hello\n\ttabbed\r\nworld",
+			want: "hello\n\ttabbed\r\nworld",
+		},
+		{
+			name: "drops NUL inside a string",
+			in:   "before\x00after",
+			want: "beforeafter",
+		},
+		{
+			name: "drops the ESC that starts an ANSI sequence",
+			in:   "red \x1b[31mword\x1b[0m end",
+			want: "red [31mword[0m end",
+		},
+		{
+			name: "drops DEL",
+			in:   "abc\x7fdef",
+			want: "abcdef",
+		},
+		{
+			name: "strips a grab-bag of C0 controls",
+			in:   "x\x01\x02\x03\x07\x08\x0b\x0c\x0e\x1fz",
+			want: "xz",
+		},
+		{
+			name: "clean input passes through unchanged",
+			in:   "the quick brown fox",
+			want: "the quick brown fox",
+		},
+		{
+			name: "invalid utf8 is normalized",
+			in:   "bad:\xff",
+			want: "bad:\ufffd",
+		},
+		{
+			name: "empty stays empty",
+			in:   "",
+			want: "",
+		},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			if got := sanitizeUntrustedText(c.in); got != c.want {
+				t.Errorf("got %q want %q", got, c.want)
+			}
+		})
+	}
+}
+
+func TestSanitizeFindings_StripsControlBytesFromEvidence(t *testing.T) {
+	// A real attack file might embed ANSI escapes (terminal hijack on
+	// trace UIs), NUL bytes (downstream string-handling footgun), or
+	// just noise C0 controls. Evidence that's been read from such a
+	// file must arrive at the parent agent with these bytes removed.
+	in := []FocusedTaskFinding{
+		{
+			Claim:    "found the secret\x00 in env file",
+			Evidence: "line:\n  AWS_KEY=\x1b[31mAKIA...\x1b[0m\x07",
+			Source:   "config/\x00leak.env:42",
+		},
+	}
+	out := sanitizeFindings(in)
+	if len(out) != 1 {
+		t.Fatalf("expected one finding, got %d", len(out))
+	}
+	if strings.ContainsAny(out[0].Claim, "\x00\x07\x1b") {
+		t.Errorf("claim still contains control bytes: %q", out[0].Claim)
+	}
+	if strings.ContainsAny(out[0].Evidence, "\x00\x07\x1b") {
+		t.Errorf("evidence still contains control bytes: %q", out[0].Evidence)
+	}
+	if strings.ContainsAny(out[0].Source, "\x00\x07\x1b") {
+		t.Errorf("source still contains control bytes: %q", out[0].Source)
+	}
+	// Whitespace MUST survive — file excerpts depend on it for
+	// readability and for the parent to cite by line.
+	if !strings.Contains(out[0].Evidence, "\n") {
+		t.Errorf("evidence newline was stripped: %q", out[0].Evidence)
+	}
+}
+
+func TestTrimAndCapStringList_AlsoSanitizesControlBytes(t *testing.T) {
+	got := trimAndCapStringList([]string{"normal", "bad\x00chars", "ansi\x1b[2Jescape"})
+	for _, s := range got {
+		if strings.ContainsAny(s, "\x00\x1b") {
+			t.Errorf("entry still has control bytes: %q", s)
+		}
+	}
+	if len(got) != 3 {
+		t.Fatalf("entries lost during sanitize: %+v", got)
+	}
+}
+
 func TestNormalizeSeverityAndConfidence(t *testing.T) {
 	cases := []struct {
 		in, want string
@@ -249,4 +354,87 @@ func contains(haystack []string, needle string) bool {
 		}
 	}
 	return false
+}
+
+// TestFocusedTaskResult_FieldOrderSurvives8KiBTruncation pins the
+// design property that earned FocusedTaskResult its struct-field
+// ordering: the parent Loop's per-tool-result truncation (default
+// MaxToolResultBytesInContext = 8 KiB) clips from the tail, so when
+// the child returns a verbose result the parent agent must still see
+// task_type / ok / summary / first findings — the load-bearing
+// content. Later findings and metadata may be clipped.
+//
+// Without this assertion, someone could reorder fields (alphabetize,
+// "group related fields", whatever) and silently regress the parent
+// agent's view of a large focused-task result without any test
+// failing. Field order in Go's encoding/json is a documented
+// behavior (declaration order), so the regression vector is real.
+func TestFocusedTaskResult_FieldOrderSurvives8KiBTruncation(t *testing.T) {
+	// Build a result that will marshal past 8 KiB: 20 findings each
+	// with ~600 bytes of evidence, plus the metadata tail.
+	findings := make([]FocusedTaskFinding, 0, maxFocusedTaskFindings)
+	for i := 0; i < maxFocusedTaskFindings; i++ {
+		findings = append(findings, FocusedTaskFinding{
+			Claim:    "the implementation has property " + strings.Repeat("X", 20),
+			Evidence: strings.Repeat("evidence-line ", 40),
+			Source:   "internal/agent/file.go:" + strings.Repeat("9", 3),
+		})
+	}
+	toolCalls := make([]subagentToolCall, 0, maxFocusedTaskToolCalls)
+	for i := 0; i < maxFocusedTaskToolCalls; i++ {
+		toolCalls = append(toolCalls, subagentToolCall{
+			Tool: "read_file",
+			Args: map[string]any{"path": "internal/agent/file_" + strings.Repeat("z", 20) + ".go"},
+		})
+	}
+	result := FocusedTaskResult{
+		TaskType:       FocusedTaskExplore,
+		OK:             true,
+		Summary:        "located 20 implementations across the agent package",
+		Findings:       findings,
+		Objective:      "find every X in the agent package",
+		ChildSessionID: "focused_abc123",
+		TurnEndReason:  "completed",
+		Depth:          1,
+		Usage:          subagentUsage{InputTokens: 1234, OutputTokens: 567},
+		ToolCalls:      toolCalls,
+	}
+
+	raw, err := json.Marshal(result)
+	if err != nil {
+		t.Fatalf("marshal: %v", err)
+	}
+	if len(raw) <= MaxToolResultBytesInContext {
+		t.Fatalf("test self-check: result %d bytes is not large enough to exercise truncation (need > %d)", len(raw), MaxToolResultBytesInContext)
+	}
+
+	truncated := truncateForContext(string(raw), MaxToolResultBytesInContext)
+
+	// Critical fields the parent agent MUST still see after truncation.
+	mustContain := []string{
+		`"task_type":"explore"`,
+		`"ok":true`,
+		`"summary":"located 20 implementations`,
+		// First finding's claim — proves at least one finding survived.
+		`"the implementation has property`,
+	}
+	for _, needle := range mustContain {
+		if !strings.Contains(truncated, needle) {
+			t.Errorf("truncated result missing %q\n--- truncated (last 400 bytes) ---\n%s", needle, lastN(truncated, 400))
+		}
+	}
+
+	// The truncation marker must be present so the model knows content
+	// was clipped (otherwise it might assume the JSON is complete and
+	// emit follow-ups based on missing fields).
+	if !strings.Contains(truncated, "more bytes truncated") {
+		t.Errorf("expected truncation marker in result; got tail:\n%s", lastN(truncated, 200))
+	}
+}
+
+func lastN(s string, n int) string {
+	if len(s) <= n {
+		return s
+	}
+	return "..." + s[len(s)-n:]
 }

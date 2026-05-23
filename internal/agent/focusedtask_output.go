@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"errors"
 	"strings"
+	"unicode/utf8"
 
 	"github.com/affinefoundation/affent/internal/sse"
 )
@@ -220,16 +221,16 @@ func buildFocusedTaskResult(profile FocusedTaskProfile, objective, childID strin
 		// whether to retry / narrow / give up; no model content is
 		// trusted under this branch.
 		result.OK = false
-		result.Summary = previewN(strings.TrimSpace(res.Report), maxFocusedTaskSummaryBytes)
+		result.Summary = sanitizeUntrustedText(previewN(strings.TrimSpace(res.Report), maxFocusedTaskSummaryBytes))
 		if result.Summary == "" {
 			result.Summary = "focused task did not complete: " + nonEmpty(res.TurnEndReason, "unknown")
 		}
 		result.Warnings = []string{"child_did_not_complete:" + nonEmpty(res.TurnEndReason, "unknown")}
 		if res.Err != nil {
-			result.Error = res.Err.Error()
+			result.Error = sanitizeUntrustedText(previewN(strings.TrimSpace(res.Err.Error()), maxFocusedTaskFindingEvidenceBytes))
 		}
 		if len(res.LoopErrors) > 0 {
-			result.LoopErrors = res.LoopErrors
+			result.LoopErrors = trimAndCapStringList(res.LoopErrors)
 		}
 		return result
 	}
@@ -241,10 +242,10 @@ func buildFocusedTaskResult(profile FocusedTaskProfile, objective, childID strin
 		// loses the structured slices and is warned to treat summary
 		// as free-form.
 		result.OK = true
-		result.Summary = previewN(strings.TrimSpace(res.Report), maxFocusedTaskSummaryBytes)
+		result.Summary = sanitizeUntrustedText(previewN(strings.TrimSpace(res.Report), maxFocusedTaskSummaryBytes))
 		result.Warnings = []string{"structured_output_parse_failed"}
 		if len(res.LoopErrors) > 0 {
-			result.LoopErrors = res.LoopErrors
+			result.LoopErrors = trimAndCapStringList(res.LoopErrors)
 		}
 		return result
 	}
@@ -255,13 +256,13 @@ func buildFocusedTaskResult(profile FocusedTaskProfile, objective, childID strin
 		// FALSE → ok:false), but cannot upgrade past runtime success.
 		result.OK = result.OK && *parsed.OK
 	}
-	result.Summary = previewN(strings.TrimSpace(parsed.Summary), maxFocusedTaskSummaryBytes)
+	result.Summary = sanitizeUntrustedText(previewN(strings.TrimSpace(parsed.Summary), maxFocusedTaskSummaryBytes))
 	result.Findings = sanitizeFindings(parsed.Findings)
 	result.NotFound = trimAndCapStringList(parsed.NotFound)
 	result.Warnings = trimAndCapStringList(parsed.Warnings)
 	result.SuggestedNext = trimAndCapStringList(parsed.SuggestedNext)
 	if len(res.LoopErrors) > 0 {
-		result.LoopErrors = res.LoopErrors
+		result.LoopErrors = trimAndCapStringList(res.LoopErrors)
 	}
 	return result
 }
@@ -275,14 +276,14 @@ func sanitizeFindings(in []FocusedTaskFinding) []FocusedTaskFinding {
 	}
 	out := make([]FocusedTaskFinding, 0, len(in))
 	for _, f := range in {
-		claim := strings.TrimSpace(f.Claim)
+		claim := sanitizeUntrustedText(strings.TrimSpace(f.Claim))
 		if claim == "" {
 			continue
 		}
 		out = append(out, FocusedTaskFinding{
 			Claim:      claim,
-			Evidence:   previewN(strings.TrimSpace(f.Evidence), maxFocusedTaskFindingEvidenceBytes),
-			Source:     strings.TrimSpace(f.Source),
+			Evidence:   sanitizeUntrustedText(previewN(strings.TrimSpace(f.Evidence), maxFocusedTaskFindingEvidenceBytes)),
+			Source:     sanitizeUntrustedText(strings.TrimSpace(f.Source)),
 			Severity:   normalizeSeverity(f.Severity),
 			Confidence: normalizeConfidence(f.Confidence),
 		})
@@ -302,7 +303,7 @@ func trimAndCapStringList(in []string) []string {
 	}
 	out := make([]string, 0, len(in))
 	for _, s := range in {
-		s = strings.TrimSpace(s)
+		s = sanitizeUntrustedText(strings.TrimSpace(s))
 		if s == "" {
 			continue
 		}
@@ -312,6 +313,56 @@ func trimAndCapStringList(in []string) []string {
 		return nil
 	}
 	return out
+}
+
+// sanitizeUntrustedText scrubs C0 control bytes that have no place in
+// human-readable evidence quoted to the parent agent. Preserves \t \n
+// \r so multi-line file excerpts and indented snippets stay useful;
+// drops everything else under 0x20 (notably 0x1B / ESC which starts
+// ANSI escape sequences) and 0x7F / DEL.
+//
+// This is byte-level hygiene, not semantic injection scrubbing.
+// Content that says "ignore previous instructions" passes through
+// verbatim — the parent agent's system-prompt rule that tool outputs
+// are untrusted is the defense layer for that. Sanitizing for
+// semantic content here would create false positives on legitimate
+// evidence ("the test case explicitly checks the 'ignore previous'
+// jailbreak phrase") and a false sense of safety.
+//
+// Invalid UTF-8 bytes are folded to U+FFFD by Go's `range` rune
+// decoding, which normalizes downstream string handling without
+// having to write a separate UTF-8 validator.
+func sanitizeUntrustedText(s string) string {
+	if s == "" {
+		return s
+	}
+	clean := utf8.ValidString(s)
+	for i := 0; i < len(s); i++ {
+		c := s[i]
+		if c == '\t' || c == '\n' || c == '\r' {
+			continue
+		}
+		if c < 0x20 || c == 0x7F {
+			clean = false
+			break
+		}
+	}
+	if clean {
+		return s
+	}
+	var b strings.Builder
+	b.Grow(len(s))
+	for _, r := range s {
+		switch {
+		case r == '\t' || r == '\n' || r == '\r':
+			b.WriteRune(r)
+		case r < 0x20, r == 0x7F:
+			// dropped: C0 controls (incl. NUL and ESC) and DEL
+		default:
+			b.WriteRune(r)
+		}
+	}
+	return b.String()
 }
 
 func capToolCalls(in []subagentToolCall) []subagentToolCall {
