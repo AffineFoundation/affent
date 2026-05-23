@@ -28,7 +28,7 @@ func sessionsCmd(args []string) int {
 		fmt.Fprintln(os.Stderr, `usage: affentctl sessions [--workspace DIR] [--plan SESSION_ID]
 
 List prior conversation logs under <workspace>/.affentctl/, newest
-first. Each row: <session_id>  <mtime>  <messages>  <plan>  <first user msg>.
+first. Each row: <session_id>  <mtime>  <messages>  <plan progress>  <first user msg>.
 
 Use --plan SESSION_ID to print <workspace>/.affentctl/<session_id>.plan.json
 without starting or resuming the agent.`)
@@ -87,10 +87,7 @@ without starting or resuming the agent.`)
 	sort.Slice(rows, func(i, j int) bool { return rows[i].mt.After(rows[j].mt) })
 
 	for _, r := range rows {
-		plan := "-"
-		if sessionPlanExists(convDir, r.sid) {
-			plan = "plan"
-		}
+		plan := sessionPlanSummary(convDir, r.sid)
 		fmt.Printf("%s\t%s\t%d msgs\t%s\t%s\n",
 			r.sid,
 			r.mt.Local().Format("2006-01-02 15:04"),
@@ -118,6 +115,58 @@ func printSessionPlan(convDir, sessionID string) int {
 func sessionPlanExists(convDir, sessionID string) bool {
 	info, err := os.Lstat(localSessionPlanPath(convDir, sessionID))
 	return err == nil && !info.IsDir() && info.Mode()&os.ModeSymlink == 0
+}
+
+func sessionPlanSummary(convDir, sessionID string) string {
+	raw, found, err := readLocalSessionPlan(convDir, sessionID)
+	if err != nil {
+		return "plan:error"
+	}
+	if !found {
+		return "-"
+	}
+	summary, err := summarizeLocalSessionPlan(raw)
+	if err != nil {
+		return "plan:error"
+	}
+	return summary
+}
+
+type localSessionPlanSummaryState struct {
+	Steps []struct {
+		Status string `json:"status"`
+	} `json:"steps"`
+}
+
+func summarizeLocalSessionPlan(raw json.RawMessage) (string, error) {
+	var st localSessionPlanSummaryState
+	if err := json.Unmarshal(raw, &st); err != nil {
+		return "", err
+	}
+	if len(st.Steps) == 0 {
+		return "plan:empty", nil
+	}
+	completed := 0
+	active := false
+	blocked := false
+	for _, step := range st.Steps {
+		switch strings.TrimSpace(step.Status) {
+		case "completed":
+			completed++
+		case "in_progress":
+			active = true
+		case "blocked":
+			blocked = true
+		}
+	}
+	label := fmt.Sprintf("plan:%d/%d", completed, len(st.Steps))
+	if active {
+		label += ":active"
+	}
+	if blocked {
+		label += ":blocked"
+	}
+	return label, nil
 }
 
 func readLocalSessionPlan(convDir, sessionID string) (json.RawMessage, bool, error) {

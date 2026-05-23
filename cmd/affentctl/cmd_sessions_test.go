@@ -85,7 +85,7 @@ func TestReadLocalSessionPlan_RejectsSymlinkPlan(t *testing.T) {
 	}
 }
 
-func TestSessionsCmd_PrintsPlanAndMarksListing(t *testing.T) {
+func TestSessionsCmd_PrintsPlanAndMarksListingProgress(t *testing.T) {
 	workspace := t.TempDir()
 	convDir := filepath.Join(workspace, ".affentctl")
 	if err := os.MkdirAll(convDir, 0o755); err != nil {
@@ -94,7 +94,7 @@ func TestSessionsCmd_PrintsPlanAndMarksListing(t *testing.T) {
 	if err := os.WriteFile(filepath.Join(convDir, "sess_one.jsonl"), []byte(`{"role":"user","content":"hello"}`+"\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	if err := os.WriteFile(localSessionPlanPath(convDir, "sess_one"), []byte(`{"version":1,"steps":[{"text":"ship","status":"pending"}]}`+"\n"), 0o644); err != nil {
+	if err := os.WriteFile(localSessionPlanPath(convDir, "sess_one"), []byte(`{"version":1,"steps":[{"text":"inspect","status":"completed"},{"text":"ship","status":"in_progress"}]}`+"\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
 
@@ -103,8 +103,8 @@ func TestSessionsCmd_PrintsPlanAndMarksListing(t *testing.T) {
 			t.Fatalf("sessionsCmd list exit = %d, want 0", code)
 		}
 	})
-	if !strings.Contains(listOut, "\tplan\t") {
-		t.Fatalf("list output should mark sessions with plans, got:\n%s", listOut)
+	if !strings.Contains(listOut, "\tplan:1/2:active\t") {
+		t.Fatalf("list output should mark session plan progress, got:\n%s", listOut)
 	}
 
 	planOut := captureStdout(t, func() {
@@ -114,6 +114,31 @@ func TestSessionsCmd_PrintsPlanAndMarksListing(t *testing.T) {
 	})
 	if !strings.Contains(planOut, `"steps"`) || !strings.Contains(planOut, `"ship"`) {
 		t.Fatalf("plan output = %s", planOut)
+	}
+}
+
+func TestSessionPlanSummaryReportsEmptyBlockedAndErrors(t *testing.T) {
+	convDir := t.TempDir()
+	if got := sessionPlanSummary(convDir, "missing"); got != "-" {
+		t.Fatalf("missing summary = %q, want -", got)
+	}
+	if err := os.WriteFile(localSessionPlanPath(convDir, "empty"), []byte(`{"version":1,"steps":[]}`), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if got := sessionPlanSummary(convDir, "empty"); got != "plan:empty" {
+		t.Fatalf("empty summary = %q, want plan:empty", got)
+	}
+	if err := os.WriteFile(localSessionPlanPath(convDir, "blocked"), []byte(`{"version":1,"steps":[{"status":"completed"},{"status":"blocked"}]}`), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if got := sessionPlanSummary(convDir, "blocked"); got != "plan:1/2:blocked" {
+		t.Fatalf("blocked summary = %q, want plan:1/2:blocked", got)
+	}
+	if err := os.WriteFile(localSessionPlanPath(convDir, "bad"), []byte(`{`), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if got := sessionPlanSummary(convDir, "bad"); got != "plan:error" {
+		t.Fatalf("bad summary = %q, want plan:error", got)
 	}
 }
 
