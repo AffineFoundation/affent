@@ -327,6 +327,21 @@ func TestDoctorCmdReportsBadSystemPromptTraceAndMCPConfig(t *testing.T) {
 	}
 }
 
+func TestDoctorSystemPromptRejectsOversizeFile(t *testing.T) {
+	dir := t.TempDir()
+	promptPath := filepath.Join(dir, "huge.md")
+	if err := os.WriteFile(promptPath, []byte(strings.Repeat("x", maxPromptInputBytes+1)), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	status, msg := doctorSystemPrompt("@" + promptPath)
+	if status != "error" {
+		t.Fatalf("status = %q msg=%q, want error", status, msg)
+	}
+	if !strings.Contains(msg, "prompt input exceeds") {
+		t.Fatalf("message = %q, want prompt input exceeds", msg)
+	}
+}
+
 func TestValidateMCPServerSpecRejectsInvalidStaticConfig(t *testing.T) {
 	for _, c := range []struct {
 		name string

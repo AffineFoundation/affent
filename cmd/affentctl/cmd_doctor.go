@@ -183,7 +183,12 @@ func doctorSystemPrompt(spec string) (string, string) {
 		return "warn", "stdin prompt cannot be checked without consuming stdin"
 	case strings.HasPrefix(spec, "@"):
 		path := strings.TrimPrefix(spec, "@")
-		raw, err := os.ReadFile(path)
+		f, err := os.Open(path)
+		if err != nil {
+			return "error", fmt.Sprintf("read %s: %v", path, err)
+		}
+		defer f.Close()
+		raw, err := readPromptInput(f)
 		if err != nil {
 			return "error", fmt.Sprintf("read %s: %v", path, err)
 		}
