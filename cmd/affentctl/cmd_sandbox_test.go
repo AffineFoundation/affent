@@ -1194,6 +1194,50 @@ func TestStartSandboxRejectsMismatchedExistingContainer(t *testing.T) {
 	}
 }
 
+func TestStartSandboxRejectsExistingContainerWithDriftedRuntimeLimits(t *testing.T) {
+	opts := sandboxStartOptions{
+		Name:      "affent-test",
+		Image:     "image",
+		Workspace: t.TempDir(),
+		Memory:    "1g",
+		CPUs:      defaultSandboxCPUs,
+		PIDsLimit: "512",
+	}
+	cases := []struct {
+		name       string
+		inspectOut string
+		want       string
+	}{
+		{
+			name:       "memory",
+			inspectOut: sandboxInspectOutputWithRuntimeLimits("true", opts, "0", "1073741824", "512"),
+			want:       "HostConfig.Memory",
+		},
+		{
+			name:       "memory swap",
+			inspectOut: sandboxInspectOutputWithRuntimeLimits("true", opts, "1073741824", "0", "512"),
+			want:       "HostConfig.MemorySwap",
+		},
+		{
+			name:       "pids",
+			inspectOut: sandboxInspectOutputWithRuntimeLimits("true", opts, "1073741824", "1073741824", "0"),
+			want:       "HostConfig.PidsLimit",
+		},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			runner := &fakeCommandRunner{inspectOut: c.inspectOut}
+			err := startSandbox(opts, runner)
+			if err == nil || !strings.Contains(err.Error(), c.want) || !strings.Contains(err.Error(), "--replace") {
+				t.Fatalf("error = %v, want %q and --replace", err, c.want)
+			}
+			if len(runner.calls) != 1 {
+				t.Fatalf("drifted container must not be started or replaced implicitly; calls=%+v", runner.calls)
+			}
+		})
+	}
+}
+
 func TestStartSandboxRequiresResourceLimits(t *testing.T) {
 	for _, c := range []struct {
 		name string
@@ -1446,6 +1490,14 @@ func sandboxStatusOutput(state, running string, opts sandboxStartOptions, memory
 }
 
 func sandboxInspectOutput(running string, opts sandboxStartOptions) string {
+	memoryBytes := "0"
+	if n, ok := parseDockerMemoryBytes(opts.Memory); ok {
+		memoryBytes = strconv.FormatInt(n, 10)
+	}
+	return sandboxInspectOutputWithRuntimeLimits(running, opts, memoryBytes, memoryBytes, opts.PIDsLimit)
+}
+
+func sandboxInspectOutputWithRuntimeLimits(running string, opts sandboxStartOptions, memoryBytes, swapBytes, pidsActual string) string {
 	return strings.Join([]string{
 		running,
 		"true",
@@ -1455,6 +1507,9 @@ func sandboxInspectOutput(running string, opts sandboxStartOptions) string {
 		opts.CPUs,
 		opts.PIDsLimit,
 		opts.User,
+		memoryBytes,
+		swapBytes,
+		pidsActual,
 	}, "\n")
 }
 

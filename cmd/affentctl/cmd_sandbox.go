@@ -46,7 +46,7 @@ var (
 	runtimeDockerRunTimeout     = 30 * time.Minute
 )
 
-const sandboxInspectTemplate = "{{.State.Running}}\n{{index .Config.Labels \"" + sandboxLabelManaged + "\"}}\n{{index .Config.Labels \"" + sandboxLabelImage + "\"}}\n{{index .Config.Labels \"" + sandboxLabelWorkspace + "\"}}\n{{index .Config.Labels \"" + sandboxLabelMemory + "\"}}\n{{index .Config.Labels \"" + sandboxLabelCPUs + "\"}}\n{{index .Config.Labels \"" + sandboxLabelPIDsLimit + "\"}}\n{{index .Config.Labels \"" + sandboxLabelUser + "\"}}"
+const sandboxInspectTemplate = "{{.State.Running}}\n{{index .Config.Labels \"" + sandboxLabelManaged + "\"}}\n{{index .Config.Labels \"" + sandboxLabelImage + "\"}}\n{{index .Config.Labels \"" + sandboxLabelWorkspace + "\"}}\n{{index .Config.Labels \"" + sandboxLabelMemory + "\"}}\n{{index .Config.Labels \"" + sandboxLabelCPUs + "\"}}\n{{index .Config.Labels \"" + sandboxLabelPIDsLimit + "\"}}\n{{index .Config.Labels \"" + sandboxLabelUser + "\"}}\n{{.HostConfig.Memory}}\n{{.HostConfig.MemorySwap}}\n{{.HostConfig.PidsLimit}}"
 
 const sandboxStatusTemplate = "{{.State.Status}}\n{{.State.Running}}\n{{index .Config.Labels \"" + sandboxLabelManaged + "\"}}\n{{index .Config.Labels \"" + sandboxLabelImage + "\"}}\n{{index .Config.Labels \"" + sandboxLabelWorkspace + "\"}}\n{{index .Config.Labels \"" + sandboxLabelMemory + "\"}}\n{{index .Config.Labels \"" + sandboxLabelCPUs + "\"}}\n{{index .Config.Labels \"" + sandboxLabelPIDsLimit + "\"}}\n{{index .Config.Labels \"" + sandboxLabelUser + "\"}}\n{{.HostConfig.Memory}}\n{{.HostConfig.MemorySwap}}\n{{.HostConfig.PidsLimit}}\n{{.Config.WorkingDir}}"
 
@@ -1404,7 +1404,7 @@ func stopSandbox(name string, remove bool, runner commandRunner) error {
 
 func validateExistingSandbox(inspect string, opts sandboxStartOptions) (bool, error) {
 	lines := strings.Split(strings.TrimSpace(inspect), "\n")
-	for len(lines) < 8 {
+	for len(lines) < 11 {
 		lines = append(lines, "")
 	}
 	running := strings.TrimSpace(lines[0]) == "true"
@@ -1431,7 +1431,27 @@ func validateExistingSandbox(inspect string, opts sandboxStartOptions) (bool, er
 			return false, fmt.Errorf("container %q already exists but does not match requested sandbox %s=%q (got %q). Re-run with --replace to recreate it", opts.Name, label, wantValue, got[label])
 		}
 	}
+	if err := validateExistingSandboxRuntimeLimits(lines[8], lines[9], lines[10], opts); err != nil {
+		return false, err
+	}
 	return running, nil
+}
+
+func validateExistingSandboxRuntimeLimits(memory, memorySwap, pids string, opts sandboxStartOptions) error {
+	wantMemory, ok := parseDockerMemoryBytes(opts.Memory)
+	if !ok {
+		return fmt.Errorf("requested sandbox memory %q is invalid", opts.Memory)
+	}
+	if got := strings.TrimSpace(memory); got != strconv.FormatInt(wantMemory, 10) {
+		return fmt.Errorf("container %q already exists but HostConfig.Memory=%q does not match requested %s (%d bytes). Re-run with --replace to recreate it", opts.Name, got, opts.Memory, wantMemory)
+	}
+	if got := strings.TrimSpace(memorySwap); got != strconv.FormatInt(wantMemory, 10) {
+		return fmt.Errorf("container %q already exists but HostConfig.MemorySwap=%q does not match requested %s (%d bytes). Re-run with --replace to recreate it", opts.Name, got, opts.Memory, wantMemory)
+	}
+	if got := strings.TrimSpace(pids); got != strings.TrimSpace(opts.PIDsLimit) {
+		return fmt.Errorf("container %q already exists but HostConfig.PidsLimit=%q does not match requested %s. Re-run with --replace to recreate it", opts.Name, got, opts.PIDsLimit)
+	}
+	return nil
 }
 
 func printSandboxStartResult(w io.Writer, opts sandboxStartOptions) {
