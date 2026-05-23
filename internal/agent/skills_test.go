@@ -325,6 +325,29 @@ func TestProposeRuntimeSkillRejectsSymlinkPendingFile(t *testing.T) {
 	}
 }
 
+func TestConfirmRuntimeSkillRejectsSymlinkPendingDir(t *testing.T) {
+	root := t.TempDir()
+	outsidePending := t.TempDir()
+	pending := filepath.Join(root, ".pending")
+	if err := os.Symlink(outsidePending, pending); err != nil {
+		t.Skipf("symlink unavailable: %v", err)
+	}
+	id := "0123456789abcdef"
+	if err := os.WriteFile(filepath.Join(outsidePending, id+".json"), []byte(`{"id":"0123456789abcdef","name":"demo","body":"AFFENT ACTIVE SKILL: demo"}`), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	if _, err := ConfirmRuntimeSkillProposal(root, id); err == nil || !strings.Contains(err.Error(), "symlink") {
+		t.Fatalf("ConfirmRuntimeSkillProposal symlink pending dir err = %v, want symlink rejection", err)
+	}
+	if _, err := os.Lstat(filepath.Join(root, "demo")); !os.IsNotExist(err) {
+		t.Fatalf("skill should not install from symlink pending dir, err=%v", err)
+	}
+	if _, err := os.Lstat(filepath.Join(outsidePending, id+".json")); err != nil {
+		t.Fatalf("outside pending proposal should remain, err=%v", err)
+	}
+}
+
 func TestBuiltinSkillProvider_CanReturnMultipleSkills(t *testing.T) {
 	got := BuiltinSkillProvider("修复这个网页抽取代码，并访问 https://example.com 验证")
 	for _, want := range []string{

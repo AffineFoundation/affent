@@ -587,7 +587,11 @@ func ConfirmRuntimeSkillProposal(root, id string) (Skill, error) {
 	if !validRuntimeSkillProposalID(id) {
 		return Skill{}, fmt.Errorf("skill proposal id %q is invalid", id)
 	}
-	path := filepath.Join(root, ".pending", id+".json")
+	pendingDir := filepath.Join(root, ".pending")
+	if err := rejectRuntimeSkillDirSymlinkIfExists(pendingDir); err != nil {
+		return Skill{}, err
+	}
+	path := filepath.Join(pendingDir, id+".json")
 	raw, err := readRuntimeSkillFile(path, maxRuntimeSkillProposalBytes)
 	if err != nil {
 		return Skill{}, fmt.Errorf("load pending skill proposal: %w", err)
@@ -655,6 +659,9 @@ func userTextConfirmsRuntimeSkillProposal(text, proposalID string) bool {
 }
 
 func loadRuntimeSkill(dir string) (Skill, error) {
+	if err := rejectRuntimeSkillDirSymlink(dir); err != nil {
+		return Skill{}, err
+	}
 	manifestPath := filepath.Join(dir, "skill.json")
 	manifestRaw, err := readRuntimeSkillFile(manifestPath, maxRuntimeSkillManifestBytes)
 	if err != nil {
@@ -711,6 +718,23 @@ func ensureRuntimeSkillRoot(root string) error {
 
 func rejectRuntimeSkillRootSymlink(root string) error {
 	return rejectRuntimeSkillDirSymlink(root)
+}
+
+func rejectRuntimeSkillDirSymlinkIfExists(dir string) error {
+	info, err := os.Lstat(dir)
+	if os.IsNotExist(err) {
+		return nil
+	}
+	if err != nil {
+		return err
+	}
+	if info.Mode()&os.ModeSymlink != 0 {
+		return fmt.Errorf("%s must not be a symlink", dir)
+	}
+	if !info.IsDir() {
+		return fmt.Errorf("%s is not a directory", dir)
+	}
+	return nil
 }
 
 func rejectRuntimeSkillDirSymlink(dir string) error {
