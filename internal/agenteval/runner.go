@@ -179,10 +179,11 @@ func defaultBuildRegistry(_ context.Context, workspaceDir string, exec executor.
 // handles them.
 func drainTrace(ctx context.Context, events <-chan sse.Event, turnID string, s Scenario, workspaceDir string) Trace {
 	t := Trace{
-		Scenario:     s.Name,
-		WorkspaceDir: workspaceDir,
-		Prompt:       s.Prompt,
-		RawTypes:     map[string]int{},
+		SchemaVersion: sse.TraceSchemaVersion,
+		Scenario:      s.Name,
+		WorkspaceDir:  workspaceDir,
+		Prompt:        s.Prompt,
+		RawTypes:      map[string]int{},
 	}
 	pending := map[string]int{}
 	for {

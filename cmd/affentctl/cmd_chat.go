@@ -77,6 +77,10 @@ Slash commands inside the REPL:
 	if b.resumed {
 		fmt.Fprintf(os.Stderr, "resumed session %s (workspace %s)\n", b.sessionID, b.workspace)
 	} else {
+		if err := writeTraceMeta(b.trace); err != nil {
+			fmt.Fprintf(os.Stderr, "write trace metadata: %v\n", err)
+			return exitRuntime
+		}
 		fmt.Fprintf(os.Stderr, "new session %s (workspace %s)\n", b.sessionID, b.workspace)
 	}
 	fmt.Fprintln(os.Stderr, "type your message; '/help' for commands, '/exit' or Ctrl+D to quit.")

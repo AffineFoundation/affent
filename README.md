@@ -529,6 +529,10 @@ output, reasoning output when available, tool requests, tool results, usage,
 and errors. The same event model supports CLI traces, HTTP clients, UIs, and
 evaluation harnesses.
 
+Trace JSONL files start with a `trace.meta` record carrying
+`schema_version=1`; see [docs/event-trace-contract.md](docs/event-trace-contract.md)
+for the stable event envelope, payload fields, and compatibility rules.
+
 `tool.result` keeps `result` bounded for event transport and includes
 `result_truncated`, `result_bytes`, `result_omitted_bytes`, and
 `result_cap_bytes` so UIs and evals can detect event-level truncation without

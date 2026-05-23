@@ -55,6 +55,7 @@ func TestParseTraceFileReadsToolRequestsAndFinalText(t *testing.T) {
 	dir := t.TempDir()
 	tracePath := filepath.Join(dir, "trace.jsonl")
 	body := strings.Join([]string{
+		`{"type":"trace.meta","data":{"schema_version":1}}`,
 		`{"type":"tool.request","data":{"call_id":"c1","tool":"shell","args":{"command":"go test ./..."},"args_truncated":true,"args_bytes":70000,"args_omitted_bytes":512,"args_cap_bytes":65536,"original_tool":"Shell","original_args_summary":"{\"cmd\":\"go test ./...\"}","canonicalized":true,"args_repaired":true,"repair_notes":["renamed tool","renamed field"]}}`,
 		`{"type":"tool.result","data":{"call_id":"c1","result":"ok","exit_code":0,"duration_ms":17,"result_truncated":true,"result_bytes":300000,"result_omitted_bytes":4096,"result_cap_bytes":262144}}`,
 		`{"type":"tool.result","data":{"call_id":"guarded","result":"blocked","exit_code":1}}`,
@@ -69,6 +70,9 @@ func TestParseTraceFileReadsToolRequestsAndFinalText(t *testing.T) {
 	trace, err := ParseTraceFile(tracePath)
 	if err != nil {
 		t.Fatal(err)
+	}
+	if trace.SchemaVersion != 1 {
+		t.Fatalf("SchemaVersion = %d, want 1", trace.SchemaVersion)
 	}
 	if len(trace.Tools) != 2 {
 		t.Fatalf("tools = %d, want 2", len(trace.Tools))
@@ -116,8 +120,23 @@ func TestParseTraceFileReadsToolRequestsAndFinalText(t *testing.T) {
 	if trace.ToolStats.ToolRequests != 2 || trace.ToolStats.ToolArgsRepaired != 1 || trace.ToolStats.ToolErrors != 1 || trace.ToolStats.ToolDurationMS != 17 || trace.ToolStats.ForcedNoTools != 1 {
 		t.Fatalf("ToolStats = %+v", trace.ToolStats)
 	}
+	if got := trace.RawTypes["trace.meta"]; got != 1 {
+		t.Fatalf("RawTypes[trace.meta] = %d", got)
+	}
 	if got := trace.RawTypes["tool.request"]; got != 1 {
 		t.Fatalf("RawTypes[tool.request] = %d", got)
+	}
+}
+
+func TestParseTraceFileRejectsUnsupportedSchemaVersion(t *testing.T) {
+	tracePath := filepath.Join(t.TempDir(), "trace.jsonl")
+	body := `{"type":"trace.meta","data":{"schema_version":999}}` + "\n"
+	if err := os.WriteFile(tracePath, []byte(body), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	_, err := ParseTraceFile(tracePath)
+	if err == nil || !strings.Contains(err.Error(), "unsupported trace schema_version 999") {
+		t.Fatalf("ParseTraceFile err = %v, want unsupported schema version", err)
 	}
 }
 

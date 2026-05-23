@@ -9,6 +9,7 @@ package sse
 // ".end" for stream-completion events — readers misread it as a boundary
 // and fail to wait for the next message.* / tool.* / etc. events.
 const (
+	TypeTraceMeta     = "trace.meta"
 	TypeTurnStart     = "turn.start"
 	TypeUserMessage   = "user.message"
 	TypeMessageDelta  = "message.delta"
@@ -21,6 +22,12 @@ const (
 	TypeTurnEnd       = "turn.end"
 	TypeError         = "error"
 )
+
+const TraceSchemaVersion = 1
+
+type TraceMetaPayload struct {
+	SchemaVersion int `json:"schema_version"`
+}
 
 type TurnStartPayload struct {
 	TurnID string `json:"turn_id"`

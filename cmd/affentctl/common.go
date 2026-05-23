@@ -1113,6 +1113,16 @@ func openTrace(spec string, append bool) (io.Writer, func() error, error) {
 	return f, f.Close, nil
 }
 
+func writeTraceMeta(w io.Writer) error {
+	ev, err := sse.NewEvent(sse.TypeTraceMeta, sse.TraceMetaPayload{SchemaVersion: sse.TraceSchemaVersion})
+	if err != nil {
+		return err
+	}
+	enc := json.NewEncoder(w)
+	enc.SetEscapeHTML(false)
+	return enc.Encode(ev)
+}
+
 // resolveStorePath turns a user-supplied --memory-*-store value into
 // a concrete path. Relative paths normally anchor to workspace; `~`
 // expands to $HOME; absolute paths pass through unchanged. If the

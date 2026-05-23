@@ -1,6 +1,8 @@
 package main
 
 import (
+	"bytes"
+	"encoding/json"
 	"io"
 	"os"
 	"path/filepath"
@@ -10,6 +12,7 @@ import (
 
 	agent "github.com/affinefoundation/affent/internal/agent"
 	"github.com/affinefoundation/affent/internal/executor"
+	"github.com/affinefoundation/affent/internal/sse"
 )
 
 // TestScanLog_CountAndPreview pins the JSONL scan that feeds
@@ -186,6 +189,27 @@ func TestOpenTrace_FileAppendVsTruncate(t *testing.T) {
 	got, _ = os.ReadFile(path)
 	if string(got) != "fresh\nmore\n" {
 		t.Errorf("append mode should preserve prior content; got %q", got)
+	}
+}
+
+func TestWriteTraceMeta(t *testing.T) {
+	var buf bytes.Buffer
+	if err := writeTraceMeta(&buf); err != nil {
+		t.Fatal(err)
+	}
+	var ev sse.Event
+	if err := json.Unmarshal(buf.Bytes(), &ev); err != nil {
+		t.Fatalf("decode trace meta: %v\n%s", err, buf.String())
+	}
+	if ev.Type != sse.TypeTraceMeta {
+		t.Fatalf("Type = %q, want %q", ev.Type, sse.TypeTraceMeta)
+	}
+	var payload sse.TraceMetaPayload
+	if err := json.Unmarshal(ev.Data, &payload); err != nil {
+		t.Fatalf("decode trace meta payload: %v", err)
+	}
+	if payload.SchemaVersion != sse.TraceSchemaVersion {
+		t.Fatalf("SchemaVersion = %d, want %d", payload.SchemaVersion, sse.TraceSchemaVersion)
 	}
 }
 

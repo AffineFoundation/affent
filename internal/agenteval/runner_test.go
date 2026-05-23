@@ -117,6 +117,9 @@ func TestRunner_EndToEnd_OneToolCall(t *testing.T) {
 	if out.Trace.TurnEndReason != "completed" {
 		t.Errorf("TurnEndReason = %q, want completed", out.Trace.TurnEndReason)
 	}
+	if out.Trace.SchemaVersion != 1 {
+		t.Errorf("SchemaVersion = %d, want 1", out.Trace.SchemaVersion)
+	}
 	if len(out.Trace.Tools) != 1 || out.Trace.Tools[0].Tool != "read_file" {
 		t.Fatalf("expected exactly one read_file tool call; got %+v", out.Trace.Tools)
 	}
@@ -668,9 +671,9 @@ func TestRunner_EndToEnd_ToolSchemaCoercionFixesScalarType(t *testing.T) {
 	srv := newScriptedLLM(t, [][]string{turn1, turn2})
 
 	scenario := Scenario{
-		Name:        "tool_schema_coercion_string_to_int",
-		Description: "runtime coerces shell.timeout_sec=\"5\" string to integer 5 before dispatch",
-		Prompt:      "run echo agent",
+		Name:         "tool_schema_coercion_string_to_int",
+		Description:  "runtime coerces shell.timeout_sec=\"5\" string to integer 5 before dispatch",
+		Prompt:       "run echo agent",
 		MaxTurnSteps: 4,
 		Checks: []Check{
 			TurnEndedCleanly(),
@@ -767,9 +770,9 @@ func TestRunner_EndToEnd_SubagentDepthBudgetBlocksNestedDelegation(t *testing.T)
 	srv := newScriptedLLM(t, [][]string{parentTurn1, childTurn1, childTurn2, parentTurn2})
 
 	scenario := Scenario{
-		Name:        "subagent_depth_budget_enforces_max_depth_1",
-		Description: "with MaxDepth=1 the child must not see subagent_run in its registry",
-		Prompt:      "delegate to a subagent and ask it to delegate further",
+		Name:         "subagent_depth_budget_enforces_max_depth_1",
+		Description:  "with MaxDepth=1 the child must not see subagent_run in its registry",
+		Prompt:       "delegate to a subagent and ask it to delegate further",
 		MaxTurnSteps: 6,
 		Checks: []Check{
 			TurnEndedCleanly(),
@@ -897,9 +900,9 @@ func TestRunner_EndToEnd_LoopGuardFailureHalt(t *testing.T) {
 	srv := newScriptedLLM(t, script)
 
 	scenario := Scenario{
-		Name:        "loop_guard_failure_halt",
-		Description: "8 consecutive flaky_probe failures: trace must show warn @ 3 and halt @ 8",
-		Prompt:      "exercise the failing probe to verify the guard",
+		Name:         "loop_guard_failure_halt",
+		Description:  "8 consecutive flaky_probe failures: trace must show warn @ 3 and halt @ 8",
+		Prompt:       "exercise the failing probe to verify the guard",
 		MaxTurnSteps: 12,
 		Checks: []Check{
 			TurnEndedCleanly(),
@@ -1021,9 +1024,9 @@ Body:
 	srv := newScriptedLLM(t, [][]string{turn1, turn2})
 
 	scenario := Scenario{
-		Name:        "web_snapshot_fact_extraction",
-		Description: "agent reads a rendered page snapshot once and answers from it; does not refetch",
-		Prompt:      "what's the canonical region at https://example.com/stats?",
+		Name:         "web_snapshot_fact_extraction",
+		Description:  "agent reads a rendered page snapshot once and answers from it; does not refetch",
+		Prompt:       "what's the canonical region at https://example.com/stats?",
 		MaxTurnSteps: 4,
 		Checks: []Check{
 			TurnEndedCleanly(),

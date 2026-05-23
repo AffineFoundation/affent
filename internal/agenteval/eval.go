@@ -417,8 +417,9 @@ func verifyForbiddenFileSubstrings(root string, forbidden map[string][]string) e
 // twins which forced every check to be written twice.
 //
 // The file format is one JSON object per line with `{"type":"...",
-// "data":{...}}`. Unknown event types are counted into RawTypes but
-// otherwise ignored.
+// "data":{...}}`; new traces start with trace.meta carrying the schema
+// version. Unknown event types are counted into RawTypes but otherwise
+// ignored.
 func ParseTraceFile(path string) (Trace, error) {
 	f, err := os.Open(path)
 	if err != nil {

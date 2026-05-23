@@ -64,6 +64,10 @@ Required: --prompt, --model.`)
 	if b.resumed {
 		b.log.Info().Str("session_id", b.sessionID).Msg("resumed")
 	} else {
+		if err := writeTraceMeta(b.trace); err != nil {
+			b.log.Error().Err(err).Msg("write trace metadata")
+			return exitRuntime
+		}
 		b.log.Info().Str("session_id", b.sessionID).Msg("new session")
 	}
 

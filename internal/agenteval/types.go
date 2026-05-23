@@ -78,6 +78,10 @@ type CheckResult struct {
 // from the Loop's event stream; consumed by Checks. Trace has no
 // methods that mutate; once Run returns it, treat it as immutable.
 type Trace struct {
+	// SchemaVersion is the trace JSONL contract version from trace.meta.
+	// Zero means the trace was produced before versioned headers existed.
+	SchemaVersion int
+
 	// Scenario is the Scenario.Name that produced this Trace.
 	Scenario string
 

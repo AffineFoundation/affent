@@ -2,12 +2,25 @@ package agenteval
 
 import (
 	"encoding/json"
+	"fmt"
 
 	"github.com/affinefoundation/affent/internal/sse"
 )
 
 func applyTraceEvent(t *Trace, pending map[string]int, typ string, data json.RawMessage, turnID string) (bool, error) {
 	switch typ {
+	case sse.TypeTraceMeta:
+		var p sse.TraceMetaPayload
+		if err := json.Unmarshal(data, &p); err != nil {
+			return false, err
+		}
+		if p.SchemaVersion <= 0 {
+			return false, fmt.Errorf("invalid trace schema_version %d", p.SchemaVersion)
+		}
+		if p.SchemaVersion > sse.TraceSchemaVersion {
+			return false, fmt.Errorf("unsupported trace schema_version %d (max %d)", p.SchemaVersion, sse.TraceSchemaVersion)
+		}
+		t.SchemaVersion = p.SchemaVersion
 	case sse.TypeMessageDone:
 		var p sse.MessageDonePayload
 		if err := json.Unmarshal(data, &p); err == nil {

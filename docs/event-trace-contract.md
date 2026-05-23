@@ -1,0 +1,138 @@
+# Event And Trace Contract
+
+Affent emits runtime events as JSON payloads over SSE and writes the same
+`sse.Event` shape to trace JSONL files:
+
+```json
+{"id":1,"type":"tool.request","data":{...}}
+```
+
+## Trace Schema
+
+New trace files start with a metadata record:
+
+```json
+{"id":0,"type":"trace.meta","data":{"schema_version":1}}
+```
+
+`schema_version` is the JSONL trace contract version. Consumers should treat a
+missing `trace.meta` as a legacy trace with version `0`, and should reject
+future versions they do not understand rather than silently mis-parsing them.
+
+`affentctl` writes `trace.meta` only when creating a fresh trace. Resumed
+sessions append to the existing trace and keep its original metadata.
+
+## Event Envelope
+
+Every event record has:
+
+- `id`: monotonic runtime event id. `trace.meta` uses `0` because it is a file
+  header, not a loop event.
+- `type`: event type string.
+- `data`: type-specific JSON object.
+
+Unknown event types must be ignored by default and may be counted for
+diagnostics.
+
+## Stable Event Types
+
+### `trace.meta`
+
+- `schema_version`: integer trace contract version.
+
+### `turn.start`
+
+- `turn_id`: runtime turn id.
+
+### `user.message`
+
+- `turn_id`: runtime turn id.
+- `text`: user message text.
+
+### `message.delta`
+
+- `turn_id`: runtime turn id.
+- `delta`: assistant text chunk.
+
+### `message.done`
+
+- `turn_id`: runtime turn id.
+- `text`: complete assistant message text for the stream.
+- `finish_reason`: optional upstream model finish reason.
+
+### `thinking.delta`
+
+- `turn_id`: runtime turn id.
+- `delta`: reasoning text chunk when the provider exposes one.
+
+### `thinking.done`
+
+- `turn_id`: runtime turn id.
+- `text`: complete reasoning text for the stream.
+
+### `tool.request`
+
+- `turn_id`: runtime turn id.
+- `call_id`: model tool call id.
+- `tool`: canonical runtime tool name.
+- `args`: repaired argument object capped for event transport.
+- `args_truncated`: whether event-level argument capping happened.
+- `args_bytes`: repaired argument JSON byte count before event capping.
+- `args_omitted_bytes`: original argument bytes omitted from `args`.
+- `args_cap_bytes`: event cap used for arguments.
+- `original_tool`: optional model-emitted tool name before canonicalization.
+- `original_args_summary`: optional bounded preview of model-emitted args before
+  repair.
+- `canonicalized`: optional true when the runtime changed the tool name.
+- `args_repaired`: optional true when the runtime repaired arguments.
+- `repair_notes`: optional short diagnostics for canonicalization or argument
+  repair.
+
+### `tool.result`
+
+- `call_id`: model tool call id.
+- `exit_code`: tool exit code. Non-zero means the call failed.
+- `duration_ms`: optional measured implementation time for dispatched tools.
+- `result_summary`: short UI preview, not parse-safe.
+- `result`: event-capped tool output.
+- `result_truncated`: whether event-level result capping happened.
+- `result_bytes`: original result byte count before event capping.
+- `result_omitted_bytes`: original result bytes omitted from `result`.
+- `result_cap_bytes`: event cap used for results.
+
+### `usage`
+
+- `turn_id`: runtime turn id.
+- `input_tokens`: input tokens reported by the provider.
+- `output_tokens`: output tokens reported by the provider.
+
+### `turn.end`
+
+- `turn_id`: runtime turn id.
+- `reason`: one of `completed`, `cancelled`, `error`, or `max_turns`.
+- `tool_stats`: optional per-turn tool metrics.
+
+`tool_stats` fields are optional and default to zero:
+
+- `tool_requests`
+- `tool_name_canonicalized`
+- `tool_args_repaired`
+- `tool_errors`
+- `tool_duration_ms`
+- `loop_guard_interventions`
+- `forced_no_tools`
+
+### `error`
+
+- `turn_id`: runtime turn id.
+- `code`: machine-readable error code.
+- `message`: human-readable error.
+- `recoverable`: whether the turn can continue.
+
+## Compatibility Rules
+
+- Adding new optional payload fields is backward compatible.
+- Removing or renaming fields requires a new `schema_version`.
+- Changing an event type's meaning requires a new `schema_version`.
+- Bounded fields may be truncated only when a matching structured truncation
+  flag and byte counters are present.
