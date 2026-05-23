@@ -130,6 +130,18 @@ done:
 	if sawResult.Result != payload {
 		t.Fatalf("Result bytes do not match the payload exactly")
 	}
+	if sawResult.ResultTruncated {
+		t.Fatal("ResultTruncated = true for payload under event cap")
+	}
+	if sawResult.ResultBytes != payloadLen {
+		t.Fatalf("ResultBytes = %d, want %d", sawResult.ResultBytes, payloadLen)
+	}
+	if sawResult.ResultOmittedBytes != 0 {
+		t.Fatalf("ResultOmittedBytes = %d, want 0", sawResult.ResultOmittedBytes)
+	}
+	if sawResult.ResultCapBytes != MaxToolResultBytesInEvent {
+		t.Fatalf("ResultCapBytes = %d, want %d", sawResult.ResultCapBytes, MaxToolResultBytesInEvent)
+	}
 	if len(sawResult.ResultSummary) > MaxToolResultPreviewInEvent+8 {
 		t.Fatalf("ResultSummary should be truncated near %d, got %d",
 			MaxToolResultPreviewInEvent, len(sawResult.ResultSummary))
@@ -149,11 +161,24 @@ func TestToolResult_ResultCapsEventPayload(t *testing.T) {
 	if !strings.Contains(got.Result, "truncated from tool.result event payload") {
 		t.Fatalf("Result missing event truncation marker: tail %q", got.Result[max(0, len(got.Result)-120):])
 	}
+	if !got.ResultTruncated {
+		t.Fatal("ResultTruncated = false for oversized event payload")
+	}
+	if got.ResultBytes != len(payload) {
+		t.Fatalf("ResultBytes = %d, want %d", got.ResultBytes, len(payload))
+	}
+	if got.ResultCapBytes != MaxToolResultBytesInEvent {
+		t.Fatalf("ResultCapBytes = %d, want %d", got.ResultCapBytes, MaxToolResultBytesInEvent)
+	}
 	markerIdx := strings.Index(got.Result, "\n... [")
 	if markerIdx < 0 {
 		t.Fatalf("Result missing marker prefix: tail %q", got.Result[max(0, len(got.Result)-120):])
 	}
-	if want := fmt.Sprintf("[%d more bytes truncated", len(payload)-markerIdx); !strings.Contains(got.Result, want) {
+	wantOmitted := len(payload) - markerIdx
+	if got.ResultOmittedBytes != wantOmitted {
+		t.Fatalf("ResultOmittedBytes = %d, want %d", got.ResultOmittedBytes, wantOmitted)
+	}
+	if want := fmt.Sprintf("[%d more bytes truncated", wantOmitted); !strings.Contains(got.Result, want) {
 		t.Fatalf("Result marker should report actual omitted bytes, got tail %q", got.Result[max(0, len(got.Result)-120):])
 	}
 	if got.Result == payload {

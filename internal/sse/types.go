@@ -99,7 +99,11 @@ type ToolResultPayload struct {
 	// responses should read Result, but must still tolerate a trailing
 	// truncation marker for oversized outputs.
 	// Front-ends that only render the value should read ResultSummary.
-	Result string `json:"result"`
+	Result             string `json:"result"`
+	ResultTruncated    bool   `json:"result_truncated"`
+	ResultBytes        int    `json:"result_bytes"`
+	ResultOmittedBytes int    `json:"result_omitted_bytes"`
+	ResultCapBytes     int    `json:"result_cap_bytes"`
 }
 
 type UsagePayload struct {

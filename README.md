@@ -528,6 +528,11 @@ output, reasoning output when available, tool requests, tool results, usage,
 and errors. The same event model supports CLI traces, HTTP clients, UIs, and
 evaluation harnesses.
 
+`tool.result` keeps `result` bounded for event transport and includes
+`result_truncated`, `result_bytes`, `result_omitted_bytes`, and
+`result_cap_bytes` so UIs and evals can detect event-level truncation without
+parsing the human-readable marker appended to oversized results.
+
 Trace output can include token-level deltas for replay or omit them for smaller
 batch-evaluation artifacts.
 

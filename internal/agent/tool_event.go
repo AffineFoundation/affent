@@ -90,11 +90,16 @@ func toolRuntimeStatsPtr(stats sse.ToolRuntimeStats) *sse.ToolRuntimeStats {
 }
 
 func toolResultEventPayload(callID string, exitCode int, result string) sse.ToolResultPayload {
+	cappedResult, truncated, omitted := truncateForEventWithStats(result, MaxToolResultBytesInEvent)
 	return sse.ToolResultPayload{
-		CallID:        callID,
-		ExitCode:      exitCode,
-		ResultSummary: previewN(result, MaxToolResultPreviewInEvent),
-		Result:        truncateForEvent(result, MaxToolResultBytesInEvent),
+		CallID:             callID,
+		ExitCode:           exitCode,
+		ResultSummary:      previewN(result, MaxToolResultPreviewInEvent),
+		Result:             cappedResult,
+		ResultTruncated:    truncated,
+		ResultBytes:        len(result),
+		ResultOmittedBytes: omitted,
+		ResultCapBytes:     MaxToolResultBytesInEvent,
 	}
 }
 
@@ -107,20 +112,26 @@ func toolResultEventPayloadWithDuration(callID string, exitCode int, result stri
 }
 
 func truncateForEvent(s string, max int) string {
+	out, _, _ := truncateForEventWithStats(s, max)
+	return out
+}
+
+func truncateForEventWithStats(s string, max int) (string, bool, int) {
 	if len(s) <= max {
-		return s
+		return s, false, 0
 	}
 	omitted := len(s) - max
 	for {
 		marker := fmt.Sprintf("\n... [%d more bytes truncated from tool.result event payload]", omitted)
 		limit := max - len(marker)
 		if limit <= 0 {
-			return s[:textutil.AlignBackward(s, max)]
+			cut := textutil.AlignBackward(s, max)
+			return s[:cut], true, len(s) - cut
 		}
 		cut := textutil.AlignBackward(s, limit)
 		actualOmitted := len(s) - cut
 		if actualOmitted == omitted {
-			return s[:cut] + marker
+			return s[:cut] + marker, true, actualOmitted
 		}
 		omitted = actualOmitted
 	}

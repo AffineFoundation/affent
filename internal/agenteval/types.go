@@ -161,9 +161,18 @@ type ToolCall struct {
 	// RepairNotes are short runtime diagnostics explaining
 	// canonicalization or argument repair.
 	RepairNotes []string
-	// Result is the full tool output. Truncated only when the tool
-	// itself truncates; the framework does not clip.
+	// Result is the tool output carried by the tool.result event. It may
+	// be clipped by the runtime's event cap; inspect ResultTruncated and
+	// the byte counters before treating it as complete.
 	Result string
+	// ResultTruncated reports whether the tool.result event hit its
+	// event transport cap. ResultBytes is the original output byte count;
+	// ResultOmittedBytes is the byte count omitted from Result; and
+	// ResultCapBytes is the event cap used by the runtime.
+	ResultTruncated    bool
+	ResultBytes        int
+	ResultOmittedBytes int
+	ResultCapBytes     int
 	// ExitCode is the tool's reported exit code. -1 marks abnormal
 	// exits (timeout, killed). Non-zero is a failure even if the
 	// tool returned without a Go error.

@@ -56,7 +56,7 @@ func TestParseTraceFileReadsToolRequestsAndFinalText(t *testing.T) {
 	tracePath := filepath.Join(dir, "trace.jsonl")
 	body := strings.Join([]string{
 		`{"type":"tool.request","data":{"call_id":"c1","tool":"shell","args":{"command":"go test ./..."},"original_tool":"Shell","original_args_summary":"{\"cmd\":\"go test ./...\"}","canonicalized":true,"args_repaired":true,"repair_notes":["renamed tool","renamed field"]}}`,
-		`{"type":"tool.result","data":{"call_id":"c1","result":"ok","exit_code":0,"duration_ms":17}}`,
+		`{"type":"tool.result","data":{"call_id":"c1","result":"ok","exit_code":0,"duration_ms":17,"result_truncated":true,"result_bytes":300000,"result_omitted_bytes":4096,"result_cap_bytes":262144}}`,
 		`{"type":"tool.result","data":{"call_id":"guarded","result":"blocked","exit_code":1}}`,
 		`{"type":"usage","data":{"input_tokens":11,"output_tokens":7}}`,
 		`{"type":"error","data":{"message":"transient stream warning"}}`,
@@ -85,6 +85,9 @@ func TestParseTraceFileReadsToolRequestsAndFinalText(t *testing.T) {
 	}
 	if tc.DurationMS != 17 {
 		t.Fatalf("tool duration not parsed: %+v", tc)
+	}
+	if !tc.ResultTruncated || tc.ResultBytes != 300000 || tc.ResultOmittedBytes != 4096 || tc.ResultCapBytes != 262144 {
+		t.Fatalf("tool result truncation metadata not parsed: %+v", tc)
 	}
 	if guarded := trace.Tools[1]; guarded.CallID != "guarded" || !guarded.IsErr || guarded.ExitCode != 1 {
 		t.Fatalf("unmatched error tool result not recorded: %+v", guarded)
