@@ -22,25 +22,26 @@ const (
 )
 
 type BatchScenario struct {
-	Name                     string
-	Suites                   []string
-	Prompt                   string
-	Files                    map[string]string
-	VerifyCommand            string
-	ExpectedSkill            string
-	ForbiddenCommands        []string
-	RequiredCommands         []string
-	RequiredTools            []string
-	ForbiddenTools           []string
-	RequiredFinalText        []string
-	ForbiddenFinalText       []string
-	RequiredToolResultText   map[string][]string
-	RequiredTruncatedResults []string
-	RequiredResultArtifacts  []string
-	ProtectedFiles           []string
-	ForbiddenFileSubstrings  map[string][]string
-	MaxParentToolCalls       int
-	MaxTurns                 int
+	Name                         string
+	Suites                       []string
+	Prompt                       string
+	Files                        map[string]string
+	VerifyCommand                string
+	ExpectedSkill                string
+	ForbiddenCommands            []string
+	RequiredCommands             []string
+	RequiredTools                []string
+	ForbiddenTools               []string
+	RequiredFinalText            []string
+	ForbiddenFinalText           []string
+	RequiredToolResultText       map[string][]string
+	RequiredTruncatedResults     []string
+	RequiredResultArtifacts      []string
+	ProtectedFiles               []string
+	ForbiddenFileSubstrings      map[string][]string
+	MaxParentToolCalls           int
+	MaxSuccessfulToolCallsByTool map[string]int
+	MaxTurns                     int
 }
 
 type BatchRunner struct {
@@ -485,6 +486,9 @@ func BatchScenarioChecks(scenario BatchScenario) []Check {
 	}
 	if scenario.MaxParentToolCalls > 0 {
 		checks = append(checks, MaxSuccessfulToolCalls(scenario.MaxParentToolCalls))
+	}
+	for _, tool := range sortedStringMapKeys(scenario.MaxSuccessfulToolCallsByTool) {
+		checks = append(checks, MaxSuccessfulToolCallsForTool(tool, scenario.MaxSuccessfulToolCallsByTool[tool]))
 	}
 	for _, want := range scenario.RequiredCommands {
 		checks = append(checks, ShellCommandMatching(want))

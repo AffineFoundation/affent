@@ -167,9 +167,12 @@ func TestBatchScenarioChecks_UsesSharedCheckLibrary(t *testing.T) {
 		},
 		RequiredTruncatedResults: []string{"shell"},
 		RequiredResultArtifacts:  []string{"shell"},
-		RequiredCommands:         []string{`go test`, `gofmt`},
-		ForbiddenCommands:        []string{"| head", "|| true"},
-		ProtectedFiles:           []string{"main_test.go", "doc_test.go"},
+		MaxSuccessfulToolCallsByTool: map[string]int{
+			"read_file": 1,
+		},
+		RequiredCommands:  []string{`go test`, `gofmt`},
+		ForbiddenCommands: []string{"| head", "|| true"},
+		ProtectedFiles:    []string{"main_test.go", "doc_test.go"},
 	}
 	checks := BatchScenarioChecks(scenario)
 
@@ -182,6 +185,7 @@ func TestBatchScenarioChecks_UsesSharedCheckLibrary(t *testing.T) {
 		"tool_result_contains:subagent_run:report",
 		"tool_result_truncated:shell",
 		"tool_result_artifact:shell",
+		"max_successful_tool_calls:read_file:1",
 		"shell_command_matching:go test",
 		"shell_command_matching:gofmt",
 		"shell_command_lacks_unguarded:| head",
@@ -207,6 +211,7 @@ func TestSelectBatchScenariosForSuite(t *testing.T) {
 		t.Fatalf("small-model-tools suite size = %d, want at least 6", len(scenarios))
 	}
 	foundOversized := false
+	foundRepeatedRead := false
 	for _, scenario := range scenarios {
 		if !scenarioInSuite(scenario, "small-model-tools") {
 			t.Fatalf("scenario %s missing suite marker", scenario.Name)
@@ -214,9 +219,18 @@ func TestSelectBatchScenariosForSuite(t *testing.T) {
 		if scenario.Name == "runtime-oversized-tool-result" {
 			foundOversized = true
 		}
+		if scenario.Name == "small-tools-repeated-read" {
+			foundRepeatedRead = true
+			if scenario.MaxSuccessfulToolCallsByTool["read_file"] != 1 {
+				t.Fatalf("small-tools-repeated-read read_file cap = %#v, want 1", scenario.MaxSuccessfulToolCallsByTool)
+			}
+		}
 	}
 	if !foundOversized {
 		t.Fatalf("small-model-tools suite missing runtime-oversized-tool-result")
+	}
+	if !foundRepeatedRead {
+		t.Fatalf("small-model-tools suite missing small-tools-repeated-read")
 	}
 	one, err := SelectBatchScenariosForSuite("small-model-tools", []string{"small-tools-wrong-field-read"})
 	if err != nil {

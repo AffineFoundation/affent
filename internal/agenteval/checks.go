@@ -429,6 +429,30 @@ func MaxSuccessfulToolCalls(n int) Check {
 	}
 }
 
+func MaxSuccessfulToolCallsForTool(toolName string, n int) Check {
+	return Check{
+		Name: fmt.Sprintf("max_successful_tool_calls:%s:%d", toolName, n),
+		Eval: func(t Trace) CheckResult {
+			if n < 0 {
+				return CheckResult{Pass: true}
+			}
+			count := 0
+			for _, c := range t.Tools {
+				if c.Tool == toolName && c.ExitCode == 0 && !c.IsErr {
+					count++
+				}
+			}
+			if count <= n {
+				return CheckResult{Pass: true}
+			}
+			return CheckResult{
+				Pass:   false,
+				Detail: fmt.Sprintf("expected at most %d successful %q calls, observed %d; tools=%s", n, toolName, count, toolNamesSummary(t.Tools)),
+			}
+		},
+	}
+}
+
 // ShellCommandMatching passes when at least one shell tool call's
 // `command` argument matches the given pattern. Pattern is a Go
 // regexp; on regex compile failure it falls back to plain substring

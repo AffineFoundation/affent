@@ -615,7 +615,10 @@ func smallToolRepeatedReadScenario() BatchScenario {
 		ForbiddenTools:    []string{"write_file", "edit_file"},
 		RequiredFinalText: []string{"READ-ONCE-7"},
 		ProtectedFiles:    []string{"facts/a.txt"},
-		MaxTurns:          5,
+		MaxSuccessfulToolCallsByTool: map[string]int{
+			"read_file": 1,
+		},
+		MaxTurns: 5,
 	}
 }
 

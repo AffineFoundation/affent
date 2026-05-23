@@ -516,6 +516,39 @@ func TestMaxSuccessfulToolCalls(t *testing.T) {
 	})
 }
 
+func TestMaxSuccessfulToolCallsForTool(t *testing.T) {
+	trace := Trace{Tools: []ToolCall{
+		{Tool: "read_file", ExitCode: 0},
+		{Tool: "list_files", ExitCode: 0},
+		{Tool: "read_file", ExitCode: 1, IsErr: true},
+		{Tool: "read_file", ExitCode: 0},
+	}}
+	t.Run("counts only successful matching tool", func(t *testing.T) {
+		if res := MaxSuccessfulToolCallsForTool("read_file", 2).Eval(trace); !res.Pass {
+			t.Fatalf("two successful read_file calls should pass cap=2: %+v", res)
+		}
+	})
+	t.Run("fails matching tool over cap", func(t *testing.T) {
+		res := MaxSuccessfulToolCallsForTool("read_file", 1).Eval(trace)
+		if res.Pass {
+			t.Fatal("expected two successful read_file calls over cap=1 to fail")
+		}
+		if !strings.Contains(res.Detail, `successful "read_file" calls`) {
+			t.Fatalf("detail should mention tool-specific count: %s", res.Detail)
+		}
+	})
+	t.Run("ignores other tools", func(t *testing.T) {
+		if res := MaxSuccessfulToolCallsForTool("list_files", 1).Eval(trace); !res.Pass {
+			t.Fatalf("one successful list_files call should pass: %+v", res)
+		}
+	})
+	t.Run("negative cap means unbounded", func(t *testing.T) {
+		if res := MaxSuccessfulToolCallsForTool("read_file", -1).Eval(trace); !res.Pass {
+			t.Fatalf("negative cap should pass: %+v", res)
+		}
+	})
+}
+
 // TestOutcomeAggregates pins Outcome.PassCount and Outcome.FailedChecks —
 // they're the load-bearing summary methods reporters / next-iteration
 // loops will read.
