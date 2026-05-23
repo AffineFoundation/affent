@@ -168,7 +168,7 @@ func TestHandleSessionDetail_ReadsDurableSessionAfterRestart(t *testing.T) {
 	memRoot := t.TempDir()
 	pool1 := newPoolWithMemoryRoot(t, memRoot)
 	createDurableSessionDir(t, pool1, "restartable")
-	if err := os.WriteFile(filepath.Join(pool1.sessionDirPath("restartable"), "plan.json"), []byte(`{"version":1,"steps":[{"text":"resume work","status":"pending"}]}`+"\n"), 0o644); err != nil {
+	if err := os.WriteFile(filepath.Join(pool1.sessionDirPath("restartable"), "plan.json"), []byte(`{"version":1,"steps":[{"text":"inspect","status":"completed"},{"text":"resume work","status":"in_progress"}]}`+"\n"), 0o644); err != nil {
 		t.Fatalf("write plan: %v", err)
 	}
 	pool1.Shutdown()
@@ -190,8 +190,58 @@ func TestHandleSessionDetail_ReadsDurableSessionAfterRestart(t *testing.T) {
 	if !resp.Session.HasPlan {
 		t.Fatalf("session = %+v, want durable-only restartable with plan", resp.Session)
 	}
+	if resp.Session.PlanSummary == nil || resp.Session.PlanSummary.Label != "plan:1/2:active" || resp.Session.PlanSummary.CompletedSteps != 1 || resp.Session.PlanSummary.TotalSteps != 2 || !resp.Session.PlanSummary.Active {
+		t.Fatalf("plan summary = %+v, want active 1/2", resp.Session.PlanSummary)
+	}
 	if resp.Session.Capabilities != nil {
 		t.Fatalf("durable-only session should not report active capabilities, got %+v", resp.Session.Capabilities)
+	}
+}
+
+func TestHandleSessionList_ReportsPlanSummary(t *testing.T) {
+	memRoot := t.TempDir()
+	pool := newPoolWithMemoryRoot(t, memRoot)
+	createDurableSessionDir(t, pool, "planned-list")
+	if err := os.WriteFile(filepath.Join(pool.sessionDirPath("planned-list"), "plan.json"), []byte(`{"version":1,"steps":[{"text":"done","status":"completed"},{"text":"blocked","status":"blocked"}]}`+"\n"), 0o644); err != nil {
+		t.Fatalf("write plan: %v", err)
+	}
+
+	r := httptest.NewRequest(http.MethodGet, "/v1/sessions", nil)
+	w := httptest.NewRecorder()
+	handleSessionsCollection(pool).ServeHTTP(w, r)
+	if got := w.Result().StatusCode; got != http.StatusOK {
+		t.Fatalf("status = %d, want 200; body=%s", got, w.Body.String())
+	}
+	var resp sessionListResponse
+	if err := json.Unmarshal(w.Body.Bytes(), &resp); err != nil {
+		t.Fatalf("decode: %v", err)
+	}
+	if len(resp.Sessions) != 1 {
+		t.Fatalf("sessions = %+v, want one session", resp.Sessions)
+	}
+	summary := resp.Sessions[0].PlanSummary
+	if summary == nil || summary.Label != "plan:1/2:blocked" || summary.CompletedSteps != 1 || summary.TotalSteps != 2 || !summary.Blocked {
+		t.Fatalf("plan summary = %+v, want blocked 1/2", summary)
+	}
+}
+
+func TestSummarizeDurableSessionReportsBadPlanSummaryWithoutFailing(t *testing.T) {
+	memRoot := t.TempDir()
+	pool := newPoolWithMemoryRoot(t, memRoot)
+	createDurableSessionDir(t, pool, "bad-plan")
+	if err := os.WriteFile(filepath.Join(pool.sessionDirPath("bad-plan"), "plan.json"), []byte(`{`), 0o644); err != nil {
+		t.Fatalf("write plan: %v", err)
+	}
+
+	summary, found, err := summarizeDurableSession(pool, "bad-plan")
+	if err != nil {
+		t.Fatalf("summarizeDurableSession: %v", err)
+	}
+	if !found {
+		t.Fatal("durable session should be found")
+	}
+	if !summary.HasPlan || summary.PlanSummary == nil || !summary.PlanSummary.Error || summary.PlanSummary.Label != "plan:error" {
+		t.Fatalf("bad plan summary = %+v", summary)
 	}
 }
 

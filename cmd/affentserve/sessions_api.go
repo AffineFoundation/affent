@@ -50,6 +50,7 @@ type sessionSummary struct {
 	HasConversation  bool                  `json:"has_conversation"`
 	HasEvents        bool                  `json:"has_events"`
 	HasPlan          bool                  `json:"has_plan"`
+	PlanSummary      *sessionPlanSummary   `json:"plan_summary,omitempty"`
 	HasArtifacts     bool                  `json:"has_artifacts"`
 	HasMemory        bool                  `json:"has_memory"`
 	HasRuntimeSkills bool                  `json:"has_runtime_skills"`
@@ -453,6 +454,9 @@ func summarizeDurableSession(pool *SessionPool, id string) (sessionSummary, bool
 	if exists && planMod.After(newest) {
 		newest = planMod
 	}
+	if exists {
+		summary.PlanSummary = summarizeSessionPlanFile(pool, id)
+	}
 	summary.HasArtifacts = dirHasAnyEntry(filepath.Join(dir, filepath.FromSlash(artifactPathPrefix)))
 	summary.HasRuntimeSkills = dirHasAnyEntry(agent.DefaultWorkspaceSkillDir(dir))
 	summary.HasMemory = durableMemoryExists(dir)
@@ -484,6 +488,9 @@ func mergeSessionSummaries(a, b sessionSummary) sessionSummary {
 	a.HasConversation = a.HasConversation || b.HasConversation
 	a.HasEvents = a.HasEvents || b.HasEvents
 	a.HasPlan = a.HasPlan || b.HasPlan
+	if b.PlanSummary != nil {
+		a.PlanSummary = b.PlanSummary
+	}
 	a.HasArtifacts = a.HasArtifacts || b.HasArtifacts
 	a.HasMemory = a.HasMemory || b.HasMemory
 	a.HasRuntimeSkills = a.HasRuntimeSkills || b.HasRuntimeSkills
