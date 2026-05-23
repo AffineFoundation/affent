@@ -99,6 +99,8 @@ diagnostics.
 - `result_bytes`: original result byte count before event capping.
 - `result_omitted_bytes`: original result bytes omitted from `result`.
 - `result_cap_bytes`: event cap used for results.
+- `result_artifact_path`: optional workspace-relative path to the complete tool
+  output when `result_truncated` is true and artifact persistence is enabled.
 
 ### `usage`
 

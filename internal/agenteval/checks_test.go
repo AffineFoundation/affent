@@ -144,6 +144,23 @@ func TestToolResultTruncated(t *testing.T) {
 	}
 }
 
+func TestToolResultArtifact(t *testing.T) {
+	trace := Trace{Tools: []ToolCall{
+		{CallID: "c1", Tool: "shell", ResultArtifactPath: ".affent/artifacts/tool-results/000001-c1.txt"},
+		{CallID: "c2", Tool: "read_file"},
+	}}
+	if res := ToolResultArtifact("shell").Eval(trace); !res.Pass {
+		t.Fatalf("expected shell artifact to pass: %+v", res)
+	}
+	res := ToolResultArtifact("read_file").Eval(trace)
+	if res.Pass {
+		t.Fatal("expected read_file without artifact to fail")
+	}
+	if !strings.Contains(res.Detail, "artifact path") {
+		t.Fatalf("failure detail should explain missing artifact: %s", res.Detail)
+	}
+}
+
 func TestToolRequestRepaired(t *testing.T) {
 	trace := Trace{Tools: []ToolCall{
 		{CallID: "c1", Tool: "read_file", ArgsRepaired: true, RepairNotes: []string{"renamed field file_path to path"}},

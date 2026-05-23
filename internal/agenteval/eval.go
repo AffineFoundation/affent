@@ -36,6 +36,7 @@ type BatchScenario struct {
 	ForbiddenFinalText       []string
 	RequiredToolResultText   map[string][]string
 	RequiredTruncatedResults []string
+	RequiredResultArtifacts  []string
 	ProtectedFiles           []string
 	ForbiddenFileSubstrings  map[string][]string
 	MaxParentToolCalls       int
@@ -477,6 +478,9 @@ func BatchScenarioChecks(scenario BatchScenario) []Check {
 	}
 	for _, tool := range scenario.RequiredTruncatedResults {
 		checks = append(checks, ToolResultTruncated(tool))
+	}
+	for _, tool := range scenario.RequiredResultArtifacts {
+		checks = append(checks, ToolResultArtifact(tool))
 	}
 	if scenario.MaxParentToolCalls > 0 {
 		checks = append(checks, MaxSuccessfulToolCalls(scenario.MaxParentToolCalls))

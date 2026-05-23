@@ -398,7 +398,14 @@ func (p *SessionPool) buildSession(id string) (*Session, error) {
 		PerCallTimeout:      perCallTimeout,
 		MaxTransientRetries: p.cfg.MaxTransientRetries,
 		TransientBackoff:    retryBackoff,
-		SkillProvider:       agent.BuiltinSkillProvider,
+		ToolResultArtifactDir: filepath.Join(
+			workspace,
+			".affent",
+			"artifacts",
+			"tool-results",
+		),
+		ToolResultArtifactPathPrefix: ".affent/artifacts/tool-results",
+		SkillProvider:                agent.BuiltinSkillProvider,
 		// Snapshot source for EnsureSystemPrompt — when nil, the
 		// memory block is just omitted from the system prompt and
 		// the tool isn't registered above anyway.

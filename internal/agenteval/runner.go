@@ -130,6 +130,13 @@ func (r *Runner) Run(ctx context.Context, s Scenario) (Outcome, error) {
 		MaxTurnSteps:   maxTurns,
 		MaxToolCalls:   maxTurns,
 		PerCallTimeout: r.PerCallTimeout,
+		ToolResultArtifactDir: filepath.Join(
+			workspace,
+			".affent",
+			"artifacts",
+			"tool-results",
+		),
+		ToolResultArtifactPathPrefix: ".affent/artifacts/tool-results",
 	}
 	if err := loop.EnsureSystemPrompt(""); err != nil {
 		return Outcome{}, fmt.Errorf("system prompt: %w", err)

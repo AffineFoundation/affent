@@ -185,6 +185,10 @@ type ToolCall struct {
 	ResultBytes        int
 	ResultOmittedBytes int
 	ResultCapBytes     int
+	// ResultArtifactPath is a workspace-relative path to the complete
+	// tool result when the event payload was truncated and the runtime
+	// persisted an artifact.
+	ResultArtifactPath string
 	// ExitCode is the tool's reported exit code. -1 marks abnormal
 	// exits (timeout, killed). Non-zero is a failure even if the
 	// tool returned without a Go error.

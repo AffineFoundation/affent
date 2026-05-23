@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"os"
 	"path/filepath"
 	"strings"
 	"sync/atomic"
@@ -186,6 +187,32 @@ func TestToolResult_ResultCapsEventPayload(t *testing.T) {
 	}
 	if len(got.ResultSummary) > MaxToolResultPreviewInEvent+8 {
 		t.Fatalf("ResultSummary length = %d, want near %d", len(got.ResultSummary), MaxToolResultPreviewInEvent)
+	}
+}
+
+func TestToolResultArtifactStoresFullTruncatedPayload(t *testing.T) {
+	payload := strings.Repeat("X", MaxToolResultBytesInEvent+4096)
+	got := toolResultEventPayload("c/../bad\nid", 0, payload)
+	loop := &Loop{
+		ToolResultArtifactDir:        t.TempDir(),
+		ToolResultArtifactPathPrefix: ".affent/artifacts/tool-results",
+	}
+	loop.attachToolResultArtifact(&got, "c/../bad\nid", payload)
+	if got.ResultArtifactPath == "" {
+		t.Fatal("truncated result should expose an artifact path")
+	}
+	if strings.Contains(got.ResultArtifactPath, "..") || strings.Contains(got.ResultArtifactPath, "\n") {
+		t.Fatalf("artifact path should not contain unsafe call_id bytes: %q", got.ResultArtifactPath)
+	}
+	if !strings.HasPrefix(got.ResultArtifactPath, ".affent/artifacts/tool-results/") {
+		t.Fatalf("artifact path = %q, want workspace-relative artifact prefix", got.ResultArtifactPath)
+	}
+	full, err := os.ReadFile(filepath.Join(loop.ToolResultArtifactDir, filepath.Base(got.ResultArtifactPath)))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(full) != payload {
+		t.Fatalf("artifact did not preserve full payload: got %d bytes, want %d", len(full), len(payload))
 	}
 }
 

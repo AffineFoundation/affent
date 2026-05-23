@@ -773,9 +773,16 @@ func setupLoop(c commonFlags) (*loopBundle, int) {
 		PerCallTimeout:      c.callTimeout,
 		MaxTransientRetries: c.retryTransient,
 		TransientBackoff:    c.retryBackoff,
-		Memory:              memStore,
-		ProjectContextDir:   projectContextDir,
-		SkillProvider:       agent.BuiltinSkillProvider,
+		ToolResultArtifactDir: filepath.Join(
+			workspace,
+			".affent",
+			"artifacts",
+			"tool-results",
+		),
+		ToolResultArtifactPathPrefix: ".affent/artifacts/tool-results",
+		Memory:                       memStore,
+		ProjectContextDir:            projectContextDir,
+		SkillProvider:                agent.BuiltinSkillProvider,
 	}
 	if !c.memoryOnly && c.subagentEnabled {
 		loop.FirstToolPolicy = agent.SubagentFirstToolPolicy()

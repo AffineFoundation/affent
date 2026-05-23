@@ -663,6 +663,7 @@ func oversizedToolResultScenario() BatchScenario {
 			"shell": {"marker=OVERSIZE-OK"},
 		},
 		RequiredTruncatedResults: []string{"shell"},
+		RequiredResultArtifacts:  []string{"shell"},
 		RequiredFinalText:        []string{"OVERSIZE-OK"},
 		ForbiddenTools:           []string{"write_file", "edit_file"},
 		ForbiddenCommands:        []string{" > ", ">>", "| head", "|| true"},

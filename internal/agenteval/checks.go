@@ -106,6 +106,26 @@ func ToolResultTruncated(toolName string) Check {
 	}
 }
 
+func ToolResultArtifact(toolName string) Check {
+	return Check{
+		Name: "tool_result_artifact:" + toolName,
+		Eval: func(t Trace) CheckResult {
+			for _, c := range t.Tools {
+				if c.Tool == toolName && c.ResultArtifactPath != "" {
+					return CheckResult{
+						Pass:   true,
+						Detail: fmt.Sprintf("matched call_id=%s artifact=%s", c.CallID, c.ResultArtifactPath),
+					}
+				}
+			}
+			return CheckResult{
+				Pass:   false,
+				Detail: fmt.Sprintf("expected %q result to expose an artifact path; tools=%s", toolName, toolNamesSummary(t.Tools)),
+			}
+		},
+	}
+}
+
 func ToolRequestRepaired(toolName string) Check {
 	return Check{
 		Name: "tool_request_repaired:" + toolName,

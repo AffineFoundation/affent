@@ -117,6 +117,10 @@ type ToolResultPayload struct {
 	ResultBytes        int    `json:"result_bytes"`
 	ResultOmittedBytes int    `json:"result_omitted_bytes"`
 	ResultCapBytes     int    `json:"result_cap_bytes"`
+	// ResultArtifactPath is a workspace-relative path to the complete
+	// tool output when ResultTruncated is true and the loop has artifact
+	// persistence configured. Empty means no full artifact is available.
+	ResultArtifactPath string `json:"result_artifact_path,omitempty"`
 }
 
 type UsagePayload struct {

@@ -57,7 +57,7 @@ func TestParseTraceFileReadsToolRequestsAndFinalText(t *testing.T) {
 	body := strings.Join([]string{
 		`{"type":"trace.meta","data":{"schema_version":1}}`,
 		`{"type":"tool.request","data":{"call_id":"c1","tool":"shell","args":{"command":"go test ./..."},"args_truncated":true,"args_bytes":70000,"args_omitted_bytes":512,"args_cap_bytes":65536,"original_tool":"Shell","original_args_summary":"{\"cmd\":\"go test ./...\"}","canonicalized":true,"args_repaired":true,"repair_notes":["renamed tool","renamed field"]}}`,
-		`{"type":"tool.result","data":{"call_id":"c1","result":"ok","exit_code":0,"duration_ms":17,"result_truncated":true,"result_bytes":300000,"result_omitted_bytes":4096,"result_cap_bytes":262144}}`,
+		`{"type":"tool.result","data":{"call_id":"c1","result":"ok","exit_code":0,"duration_ms":17,"result_truncated":true,"result_bytes":300000,"result_omitted_bytes":4096,"result_cap_bytes":262144,"result_artifact_path":".affent/artifacts/tool-results/000001-c1.txt"}}`,
 		`{"type":"tool.result","data":{"call_id":"guarded","result":"blocked","exit_code":1}}`,
 		`{"type":"usage","data":{"input_tokens":11,"output_tokens":7}}`,
 		`{"type":"error","data":{"message":"transient stream warning"}}`,
@@ -95,6 +95,9 @@ func TestParseTraceFileReadsToolRequestsAndFinalText(t *testing.T) {
 	}
 	if !tc.ResultTruncated || tc.ResultBytes != 300000 || tc.ResultOmittedBytes != 4096 || tc.ResultCapBytes != 262144 {
 		t.Fatalf("tool result truncation metadata not parsed: %+v", tc)
+	}
+	if tc.ResultArtifactPath != ".affent/artifacts/tool-results/000001-c1.txt" {
+		t.Fatalf("ResultArtifactPath = %q", tc.ResultArtifactPath)
 	}
 	if stats := SummarizeToolTruncation(trace); stats.ArgsTruncated != 1 || stats.ArgsOmittedBytes != 512 || stats.ResultsTruncated != 1 || stats.ResultsOmittedBytes != 4096 {
 		t.Fatalf("ToolTruncationStats = %+v", stats)
@@ -163,6 +166,7 @@ func TestBatchScenarioChecks_UsesSharedCheckLibrary(t *testing.T) {
 			"skill":        {"AFFENT ACTIVE SKILL"},
 		},
 		RequiredTruncatedResults: []string{"shell"},
+		RequiredResultArtifacts:  []string{"shell"},
 		RequiredCommands:         []string{`go test`, `gofmt`},
 		ForbiddenCommands:        []string{"| head", "|| true"},
 		ProtectedFiles:           []string{"main_test.go", "doc_test.go"},
@@ -177,6 +181,7 @@ func TestBatchScenarioChecks_UsesSharedCheckLibrary(t *testing.T) {
 		"tool_result_contains:skill:AFFENT ACTIVE SKILL",
 		"tool_result_contains:subagent_run:report",
 		"tool_result_truncated:shell",
+		"tool_result_artifact:shell",
 		"shell_command_matching:go test",
 		"shell_command_matching:gofmt",
 		"shell_command_lacks_unguarded:| head",

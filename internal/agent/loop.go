@@ -7,6 +7,8 @@ import (
 	"fmt"
 	"io"
 	"net"
+	"os"
+	"path/filepath"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -90,6 +92,11 @@ type Loop struct {
 	// into conversation history for subsequent LLM calls. Zero uses
 	// MaxToolResultBytesInContext. Full tool results still go to SSE.
 	ToolResultMaxBytesInContext int
+	// ToolResultArtifactDir, when set, stores full tool outputs that were
+	// too large for the tool.result event. ToolResultArtifactPathPrefix is
+	// the workspace-relative prefix exposed in the event payload.
+	ToolResultArtifactDir        string
+	ToolResultArtifactPathPrefix string
 
 	// PerCallTimeout overrides DefaultPerCallTimeout for this loop.
 	// Zero means "use the default".
@@ -113,6 +120,9 @@ type Loop struct {
 	// Lets trace consumers detect drops and order events independently
 	// of any downstream ring buffer's own ID space.
 	eventSeq atomic.Int64
+	// artifactSeq gives tool-result artifact filenames deterministic
+	// ordering within a loop without trusting model-provided call IDs.
+	artifactSeq atomic.Int64
 
 	// Compactor (optional) shrinks the conversation history when it
 	// crosses a threshold. Nil disables both proactive and reactive
@@ -808,7 +818,9 @@ func (l *Loop) publishAndAppendToolResult(callID, name, result string, isErr boo
 	if isErr {
 		exit = 1
 	}
-	l.publish(sse.TypeToolResult, toolResultEventPayloadWithDuration(callID, exit, result, duration))
+	payload := toolResultEventPayloadWithDuration(callID, exit, result, duration)
+	l.attachToolResultArtifact(&payload, callID, result)
+	l.publish(sse.TypeToolResult, payload)
 	if err := l.Conv.Append(ChatMessage{
 		Role:       "tool",
 		Content:    truncateForContext(result, l.toolResultMaxBytesInContextFor(name)),
@@ -821,6 +833,58 @@ func (l *Loop) publishAndAppendToolResult(callID, name, result string, isErr boo
 		// that pairing loudly.
 		l.Log.Error().Err(err).Str("call_id", callID).Msg("conv append tool result")
 	}
+}
+
+func (l *Loop) attachToolResultArtifact(payload *sse.ToolResultPayload, callID, result string) {
+	if payload == nil || !payload.ResultTruncated || strings.TrimSpace(l.ToolResultArtifactDir) == "" {
+		return
+	}
+	dir := l.ToolResultArtifactDir
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		l.Log.Warn().Err(err).Str("call_id", callID).Msg("tool result artifact mkdir")
+		return
+	}
+	prefix := strings.Trim(strings.TrimSpace(l.ToolResultArtifactPathPrefix), "/")
+	if prefix == "" {
+		prefix = ".affent/artifacts/tool-results"
+	}
+	filename := fmt.Sprintf("%06d-%s.txt", l.artifactSeq.Add(1), safeToolResultArtifactComponent(callID))
+	path := filepath.Join(dir, filename)
+	if err := os.WriteFile(path, []byte(result), 0o644); err != nil {
+		l.Log.Warn().Err(err).Str("call_id", callID).Msg("tool result artifact write")
+		return
+	}
+	payload.ResultArtifactPath = filepath.ToSlash(filepath.Join(prefix, filename))
+}
+
+func safeToolResultArtifactComponent(s string) string {
+	s = strings.TrimSpace(s)
+	if s == "" {
+		return "call"
+	}
+	var b strings.Builder
+	for _, r := range s {
+		switch {
+		case r >= 'a' && r <= 'z':
+			b.WriteRune(r)
+		case r >= 'A' && r <= 'Z':
+			b.WriteRune(r)
+		case r >= '0' && r <= '9':
+			b.WriteRune(r)
+		case r == '-' || r == '_':
+			b.WriteRune(r)
+		default:
+			b.WriteByte('-')
+		}
+		if b.Len() >= 80 {
+			break
+		}
+	}
+	out := strings.Trim(b.String(), ".-")
+	if out == "" || out == "." || out == ".." {
+		return "call"
+	}
+	return out
 }
 
 func (l *Loop) appendSkippedToolResults(turnID string, calls []ToolCall, content string) int {

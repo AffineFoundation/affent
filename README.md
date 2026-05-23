@@ -548,7 +548,9 @@ for the stable event envelope, payload fields, and compatibility rules.
 `tool.result` keeps `result` bounded for event transport and includes
 `result_truncated`, `result_bytes`, `result_omitted_bytes`, and
 `result_cap_bytes` so UIs and evals can detect event-level truncation without
-parsing the human-readable marker appended to oversized results.
+parsing the human-readable marker appended to oversized results. When a runtime
+workspace is configured, truncated tool results also include
+`result_artifact_path`, a workspace-relative path to the complete output.
 `tool.request` similarly includes `args_truncated`, `args_bytes`,
 `args_omitted_bytes`, and `args_cap_bytes` for capped argument payloads.
 
