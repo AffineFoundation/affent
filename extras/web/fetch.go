@@ -95,13 +95,13 @@ func FetchTool(cfg FetchConfig) *agent.Tool {
 			}
 			args.URL = strings.TrimSpace(args.URL)
 			if args.URL == "" {
-				return "", errors.New("url is required")
+				return "", errors.New("url is required\nNext: retry web_fetch with a fully-qualified http:// or https:// URL")
 			}
 			if len(args.URL) > maxFetchURLBytes {
-				return "", fmt.Errorf("url is %d bytes; web_fetch supports URLs up to %d bytes", len(args.URL), maxFetchURLBytes)
+				return "", fmt.Errorf("url is %d bytes; web_fetch supports URLs up to %d bytes\nNext: retry web_fetch with the canonical page URL, or use web_search to find a shorter result URL", len(args.URL), maxFetchURLBytes)
 			}
 			if !strings.HasPrefix(args.URL, "http://") && !strings.HasPrefix(args.URL, "https://") {
-				return "", fmt.Errorf("url must start with http:// or https:// (got %q)", args.URL)
+				return "", fmt.Errorf("url must start with http:// or https:// (got %q)\nNext: retry web_fetch with the full URL including the http:// or https:// scheme", args.URL)
 			}
 			return fetch(ctx, cfg, args.URL)
 		},

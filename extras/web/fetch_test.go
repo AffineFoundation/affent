@@ -103,15 +103,15 @@ func TestFetchTool_NonText(t *testing.T) {
 func TestFetchTool_RequiresURL(t *testing.T) {
 	tool := FetchTool(FetchConfig{AllowPrivateNetwork: true})
 	_, err := tool.Execute(context.Background(), json.RawMessage(`{}`))
-	if err == nil || !strings.Contains(err.Error(), "url is required") {
+	if err == nil || !strings.Contains(err.Error(), "url is required") || !strings.Contains(err.Error(), "Next:") {
 		t.Errorf("expected url-required error, got %v", err)
 	}
 	_, err = tool.Execute(context.Background(), json.RawMessage(`{"url":"   "}`))
-	if err == nil || !strings.Contains(err.Error(), "url is required") {
+	if err == nil || !strings.Contains(err.Error(), "url is required") || !strings.Contains(err.Error(), "Next:") {
 		t.Errorf("expected blank-url required error, got %v", err)
 	}
 	_, err = tool.Execute(context.Background(), json.RawMessage(`{"url":"ftp://x"}`))
-	if err == nil || !strings.Contains(err.Error(), "http://") {
+	if err == nil || !strings.Contains(err.Error(), "http://") || !strings.Contains(err.Error(), "Next:") {
 		t.Errorf("expected scheme guard error, got %v", err)
 	}
 }
@@ -150,7 +150,7 @@ func TestFetchTool_URLMaxLength(t *testing.T) {
 
 	url += "x"
 	_, err := tool.Execute(context.Background(), json.RawMessage(`{"url":"`+url+`"}`))
-	if err == nil || !strings.Contains(err.Error(), "web_fetch supports URLs up to") {
+	if err == nil || !strings.Contains(err.Error(), "web_fetch supports URLs up to") || !strings.Contains(err.Error(), "Next:") {
 		t.Fatalf("expected oversized URL error, got %v", err)
 	}
 }
