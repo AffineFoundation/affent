@@ -348,6 +348,28 @@ func TestConfirmRuntimeSkillRejectsSymlinkPendingDir(t *testing.T) {
 	}
 }
 
+func TestConfirmRuntimeSkillProposalNormalizesIDCase(t *testing.T) {
+	root := t.TempDir()
+	proposal, err := ProposeRuntimeSkill(root, Skill{
+		Name: "demo",
+		Body: "AFFENT ACTIVE SKILL: demo\nUse demo.",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	installed, err := ConfirmRuntimeSkillProposal(root, strings.ToUpper(proposal.ID))
+	if err != nil {
+		t.Fatalf("ConfirmRuntimeSkillProposal uppercase id: %v", err)
+	}
+	if installed.Name != "demo" {
+		t.Fatalf("installed skill = %+v, want demo", installed)
+	}
+	if _, err := os.Lstat(filepath.Join(root, ".pending", proposal.ID+".json")); !os.IsNotExist(err) {
+		t.Fatalf("confirmed proposal should be removed, err=%v", err)
+	}
+}
+
 func TestBuiltinSkillProvider_CanReturnMultipleSkills(t *testing.T) {
 	got := BuiltinSkillProvider("修复这个网页抽取代码，并访问 https://example.com 验证")
 	for _, want := range []string{

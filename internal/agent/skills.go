@@ -583,7 +583,7 @@ func ConfirmRuntimeSkillProposal(root, id string) (Skill, error) {
 	if err := rejectRuntimeSkillRootSymlink(root); err != nil {
 		return Skill{}, err
 	}
-	id = strings.TrimSpace(id)
+	id = strings.ToLower(strings.TrimSpace(id))
 	if !validRuntimeSkillProposalID(id) {
 		return Skill{}, fmt.Errorf("skill proposal id %q is invalid", id)
 	}
