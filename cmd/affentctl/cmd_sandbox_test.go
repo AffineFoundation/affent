@@ -223,7 +223,7 @@ func TestMakeImageServeEnablesBuiltinsInsideRuntimeContainer(t *testing.T) {
 	body := string(raw)
 	for _, want := range []string{
 		"IMAGE_WORKSPACE ?= $(CURDIR)/.tmp/runtime-workspace",
-		"SERVE_CONTAINER_NAME ?=",
+		"SERVE_CONTAINER_NAME ?= affent-serve",
 		"SERVE_MEMORY_ROOT ?= /workspace/session-state",
 		"image-serve: affentctl",
 		"image-serve-status:",
