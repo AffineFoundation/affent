@@ -1210,17 +1210,22 @@ func TestStartSandboxRejectsExistingContainerWithDriftedRuntimeLimits(t *testing
 	}{
 		{
 			name:       "memory",
-			inspectOut: sandboxInspectOutputWithRuntimeLimits("true", opts, "0", "1073741824", "512"),
+			inspectOut: sandboxInspectOutputWithRuntimeLimits("true", opts, "0", "1073741824", "2000000000", "512"),
 			want:       "HostConfig.Memory",
 		},
 		{
 			name:       "memory swap",
-			inspectOut: sandboxInspectOutputWithRuntimeLimits("true", opts, "1073741824", "0", "512"),
+			inspectOut: sandboxInspectOutputWithRuntimeLimits("true", opts, "1073741824", "0", "2000000000", "512"),
 			want:       "HostConfig.MemorySwap",
 		},
 		{
+			name:       "cpus",
+			inspectOut: sandboxInspectOutputWithRuntimeLimits("true", opts, "1073741824", "1073741824", "1000000000", "512"),
+			want:       "HostConfig.NanoCpus",
+		},
+		{
 			name:       "pids",
-			inspectOut: sandboxInspectOutputWithRuntimeLimits("true", opts, "1073741824", "1073741824", "0"),
+			inspectOut: sandboxInspectOutputWithRuntimeLimits("true", opts, "1073741824", "1073741824", "2000000000", "0"),
 			want:       "HostConfig.PidsLimit",
 		},
 	}
@@ -1494,10 +1499,14 @@ func sandboxInspectOutput(running string, opts sandboxStartOptions) string {
 	if n, ok := parseDockerMemoryBytes(opts.Memory); ok {
 		memoryBytes = strconv.FormatInt(n, 10)
 	}
-	return sandboxInspectOutputWithRuntimeLimits(running, opts, memoryBytes, memoryBytes, opts.PIDsLimit)
+	nanoCPUs := "0"
+	if n, ok := dockerNanoCPUs(opts.CPUs); ok {
+		nanoCPUs = strconv.FormatInt(n, 10)
+	}
+	return sandboxInspectOutputWithRuntimeLimits(running, opts, memoryBytes, memoryBytes, nanoCPUs, opts.PIDsLimit)
 }
 
-func sandboxInspectOutputWithRuntimeLimits(running string, opts sandboxStartOptions, memoryBytes, swapBytes, pidsActual string) string {
+func sandboxInspectOutputWithRuntimeLimits(running string, opts sandboxStartOptions, memoryBytes, swapBytes, nanoCPUs, pidsActual string) string {
 	return strings.Join([]string{
 		running,
 		"true",
@@ -1509,6 +1518,7 @@ func sandboxInspectOutputWithRuntimeLimits(running string, opts sandboxStartOpti
 		opts.User,
 		memoryBytes,
 		swapBytes,
+		nanoCPUs,
 		pidsActual,
 	}, "\n")
 }

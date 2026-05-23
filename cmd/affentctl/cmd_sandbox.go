@@ -46,7 +46,7 @@ var (
 	runtimeDockerRunTimeout     = 30 * time.Minute
 )
 
-const sandboxInspectTemplate = "{{.State.Running}}\n{{index .Config.Labels \"" + sandboxLabelManaged + "\"}}\n{{index .Config.Labels \"" + sandboxLabelImage + "\"}}\n{{index .Config.Labels \"" + sandboxLabelWorkspace + "\"}}\n{{index .Config.Labels \"" + sandboxLabelMemory + "\"}}\n{{index .Config.Labels \"" + sandboxLabelCPUs + "\"}}\n{{index .Config.Labels \"" + sandboxLabelPIDsLimit + "\"}}\n{{index .Config.Labels \"" + sandboxLabelUser + "\"}}\n{{.HostConfig.Memory}}\n{{.HostConfig.MemorySwap}}\n{{.HostConfig.PidsLimit}}"
+const sandboxInspectTemplate = "{{.State.Running}}\n{{index .Config.Labels \"" + sandboxLabelManaged + "\"}}\n{{index .Config.Labels \"" + sandboxLabelImage + "\"}}\n{{index .Config.Labels \"" + sandboxLabelWorkspace + "\"}}\n{{index .Config.Labels \"" + sandboxLabelMemory + "\"}}\n{{index .Config.Labels \"" + sandboxLabelCPUs + "\"}}\n{{index .Config.Labels \"" + sandboxLabelPIDsLimit + "\"}}\n{{index .Config.Labels \"" + sandboxLabelUser + "\"}}\n{{.HostConfig.Memory}}\n{{.HostConfig.MemorySwap}}\n{{.HostConfig.NanoCpus}}\n{{.HostConfig.PidsLimit}}"
 
 const sandboxStatusTemplate = "{{.State.Status}}\n{{.State.Running}}\n{{index .Config.Labels \"" + sandboxLabelManaged + "\"}}\n{{index .Config.Labels \"" + sandboxLabelImage + "\"}}\n{{index .Config.Labels \"" + sandboxLabelWorkspace + "\"}}\n{{index .Config.Labels \"" + sandboxLabelMemory + "\"}}\n{{index .Config.Labels \"" + sandboxLabelCPUs + "\"}}\n{{index .Config.Labels \"" + sandboxLabelPIDsLimit + "\"}}\n{{index .Config.Labels \"" + sandboxLabelUser + "\"}}\n{{.HostConfig.Memory}}\n{{.HostConfig.MemorySwap}}\n{{.HostConfig.PidsLimit}}\n{{.Config.WorkingDir}}"
 
@@ -1404,7 +1404,7 @@ func stopSandbox(name string, remove bool, runner commandRunner) error {
 
 func validateExistingSandbox(inspect string, opts sandboxStartOptions) (bool, error) {
 	lines := strings.Split(strings.TrimSpace(inspect), "\n")
-	for len(lines) < 11 {
+	for len(lines) < 12 {
 		lines = append(lines, "")
 	}
 	running := strings.TrimSpace(lines[0]) == "true"
@@ -1431,16 +1431,20 @@ func validateExistingSandbox(inspect string, opts sandboxStartOptions) (bool, er
 			return false, fmt.Errorf("container %q already exists but does not match requested sandbox %s=%q (got %q). Re-run with --replace to recreate it", opts.Name, label, wantValue, got[label])
 		}
 	}
-	if err := validateExistingSandboxRuntimeLimits(lines[8], lines[9], lines[10], opts); err != nil {
+	if err := validateExistingSandboxRuntimeLimits(lines[8], lines[9], lines[10], lines[11], opts); err != nil {
 		return false, err
 	}
 	return running, nil
 }
 
-func validateExistingSandboxRuntimeLimits(memory, memorySwap, pids string, opts sandboxStartOptions) error {
+func validateExistingSandboxRuntimeLimits(memory, memorySwap, nanoCPUs, pids string, opts sandboxStartOptions) error {
 	wantMemory, ok := parseDockerMemoryBytes(opts.Memory)
 	if !ok {
 		return fmt.Errorf("requested sandbox memory %q is invalid", opts.Memory)
+	}
+	wantNanoCPUs, ok := dockerNanoCPUs(opts.CPUs)
+	if !ok {
+		return fmt.Errorf("requested sandbox cpus %q is invalid", opts.CPUs)
 	}
 	if got := strings.TrimSpace(memory); got != strconv.FormatInt(wantMemory, 10) {
 		return fmt.Errorf("container %q already exists but HostConfig.Memory=%q does not match requested %s (%d bytes). Re-run with --replace to recreate it", opts.Name, got, opts.Memory, wantMemory)
@@ -1448,10 +1452,25 @@ func validateExistingSandboxRuntimeLimits(memory, memorySwap, pids string, opts 
 	if got := strings.TrimSpace(memorySwap); got != strconv.FormatInt(wantMemory, 10) {
 		return fmt.Errorf("container %q already exists but HostConfig.MemorySwap=%q does not match requested %s (%d bytes). Re-run with --replace to recreate it", opts.Name, got, opts.Memory, wantMemory)
 	}
+	if got := strings.TrimSpace(nanoCPUs); got != strconv.FormatInt(wantNanoCPUs, 10) {
+		return fmt.Errorf("container %q already exists but HostConfig.NanoCpus=%q does not match requested %s (%d nanocpus). Re-run with --replace to recreate it", opts.Name, got, opts.CPUs, wantNanoCPUs)
+	}
 	if got := strings.TrimSpace(pids); got != strings.TrimSpace(opts.PIDsLimit) {
 		return fmt.Errorf("container %q already exists but HostConfig.PidsLimit=%q does not match requested %s. Re-run with --replace to recreate it", opts.Name, got, opts.PIDsLimit)
 	}
 	return nil
+}
+
+func dockerNanoCPUs(raw string) (int64, bool) {
+	f, err := strconv.ParseFloat(strings.TrimSpace(raw), 64)
+	if err != nil || math.IsNaN(f) || math.IsInf(f, 0) || f <= 0 {
+		return 0, false
+	}
+	n := int64(math.Round(f * 1_000_000_000))
+	if n <= 0 {
+		return 0, false
+	}
+	return n, true
 }
 
 func printSandboxStartResult(w io.Writer, opts sandboxStartOptions) {
