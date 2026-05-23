@@ -5,12 +5,12 @@ import (
 	"errors"
 	"flag"
 	"fmt"
-	"math"
 	"os"
 	"strconv"
 	"strings"
 	"time"
 
+	"github.com/affinefoundation/affent/internal/agent"
 	"github.com/affinefoundation/affent/internal/agenteval"
 )
 
@@ -126,8 +126,9 @@ func validateRunConfig(temperature string, timeout time.Duration) error {
 	if err != nil {
 		return fmt.Errorf("--temperature: %w", err)
 	}
-	if math.IsNaN(t) || math.IsInf(t, 0) || t < 0 || t > 2 {
-		return fmt.Errorf("--temperature must be between 0 and 2")
+	sampling := agent.SamplingDefaults{Temperature: &t}
+	if err := sampling.Validate(); err != nil {
+		return fmt.Errorf("--%s", err.Error())
 	}
 	return nil
 }
