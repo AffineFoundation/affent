@@ -2,6 +2,7 @@ package projectcontext
 
 import (
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
 	"strings"
@@ -51,26 +52,21 @@ func loadSections(workspaceDir string, budget int) ([]string, int) {
 	used := 0
 	for _, name := range Files {
 		path := filepath.Join(workspaceDir, name)
-		raw, err := os.ReadFile(path)
-		if err != nil {
-			continue
-		}
-		content := strings.TrimSpace(string(raw))
-		if content == "" {
-			continue
-		}
-		if used >= budget {
-			break
-		}
-		remaining := budget - used
 		header := fmt.Sprintf("## %s\n\n", name)
 		// Reserve header bytes from the budget so the truncated body
 		// plus header still fits.
-		bodyRoom := remaining - len(header)
+		bodyRoom := budget - used - len(header)
 		if bodyRoom < 64 {
 			break
 		}
-		if len(content) > bodyRoom {
+		content, truncated, err := readContextFile(path, bodyRoom)
+		if err != nil {
+			continue
+		}
+		if content == "" {
+			continue
+		}
+		if truncated || len(content) > bodyRoom {
 			content = truncateFile(content, bodyRoom)
 		}
 		section := header + content
@@ -78,6 +74,24 @@ func loadSections(workspaceDir string, budget int) ([]string, int) {
 		used += len(section)
 	}
 	return sections, used
+}
+
+func readContextFile(path string, limit int) (string, bool, error) {
+	f, err := os.Open(path)
+	if err != nil {
+		return "", false, err
+	}
+	defer f.Close()
+	raw, err := io.ReadAll(io.LimitReader(f, int64(limit)+1))
+	if err != nil {
+		return "", false, err
+	}
+	truncated := len(raw) > limit
+	if truncated {
+		s := string(raw)
+		raw = []byte(s[:textutil.AlignBackward(s, limit)])
+	}
+	return strings.TrimSpace(string(raw)), truncated, nil
 }
 
 // truncateFile clips at a UTF-8-safe boundary and appends a

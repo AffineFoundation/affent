@@ -89,6 +89,45 @@ func TestLoad_TruncatesAtBudget(t *testing.T) {
 	}
 }
 
+func TestReadContextFileReadsOnlyLimitPlusSentinel(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "AGENTS.md")
+	if err := os.WriteFile(path, []byte(strings.Repeat("a", 100)+"TAIL"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	got, truncated, err := readContextFile(path, 10)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !truncated {
+		t.Fatal("expected truncated=true for file larger than limit")
+	}
+	if got != strings.Repeat("a", 10) {
+		t.Fatalf("got %q, want first 10 bytes only", got)
+	}
+	if strings.Contains(got, "TAIL") {
+		t.Fatalf("limited read leaked tail content: %q", got)
+	}
+}
+
+func TestReadContextFile_UTF8SafeLimit(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "AGENTS.md")
+	if err := os.WriteFile(path, []byte(strings.Repeat("你", 20)), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	got, truncated, err := readContextFile(path, 10)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !truncated {
+		t.Fatal("expected truncated=true")
+	}
+	if !utf8.ValidString(got) {
+		t.Fatalf("limited read returned invalid UTF-8: %q", got)
+	}
+}
+
 func TestLoad_StopsAtBudgetAcrossFiles(t *testing.T) {
 	dir := t.TempDir()
 	writeFile(t, dir, "AGENTS.md", strings.Repeat("a", MaxBytes-30))
