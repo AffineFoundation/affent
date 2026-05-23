@@ -601,8 +601,8 @@ func runRuntimeImage(opts runtimeRunOptions, runner commandRunner) error {
 	if opts.Timeout < 0 {
 		return errors.New("--timeout must be zero or a positive duration")
 	}
-	if len(opts.Command) == 0 {
-		return errors.New("runtime command is required")
+	if err := validateRuntimeCommand(opts.Command); err != nil {
+		return err
 	}
 	envs, err := runtimeForwardEnv(opts.Env)
 	if err != nil {
@@ -664,6 +664,16 @@ func runRuntimeImage(opts runtimeRunOptions, runner commandRunner) error {
 	runArgs = append(runArgs, opts.Command...)
 	_, err = runner.Run("docker", runArgs...)
 	return err
+}
+
+func validateRuntimeCommand(command []string) error {
+	if len(command) == 0 {
+		return errors.New("runtime command is required")
+	}
+	if strings.TrimSpace(command[0]) == "" {
+		return errors.New("runtime command executable is required")
+	}
+	return nil
 }
 
 func runtimePersistentDirs(hostWorkspace string) []string {

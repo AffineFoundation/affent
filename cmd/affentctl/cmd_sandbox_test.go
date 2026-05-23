@@ -707,6 +707,7 @@ func TestRunRuntimeImageRequiresMeaningfulInputs(t *testing.T) {
 		{name: "user invalid char", edit: func(o *runtimeRunOptions) { o.User = "bad/user" }, want: "--user user must use letters"},
 		{name: "timeout", edit: func(o *runtimeRunOptions) { o.Timeout = -time.Second }, want: "--timeout must be zero or a positive duration"},
 		{name: "command", edit: func(o *runtimeRunOptions) { o.Command = nil }, want: "runtime command is required"},
+		{name: "blank command executable", edit: func(o *runtimeRunOptions) { o.Command = []string{"   ", "--help"} }, want: "runtime command executable is required"},
 		{name: "env", edit: func(o *runtimeRunOptions) { o.Env = []string{"=bad"} }, want: "missing variable name"},
 		{name: "env missing value separator", edit: func(o *runtimeRunOptions) { o.Env = []string{"AFFENTCTL_API_KEY"} }, want: "expected KEY=VALUE"},
 		{name: "env invalid name", edit: func(o *runtimeRunOptions) { o.Env = []string{"BAD NAME=1"} }, want: "variable name must match"},
