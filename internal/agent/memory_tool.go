@@ -9,8 +9,18 @@ import (
 	"github.com/affinefoundation/affent/internal/memory"
 )
 
-// memoryActions enumerates the action values the `memory` tool accepts.
-var memoryActions = []string{"add", "replace", "remove", "search", "list"}
+const (
+	memoryActionAdd     = "add"
+	memoryActionReplace = "replace"
+	memoryActionRemove  = "remove"
+	memoryActionSearch  = "search"
+	memoryActionList    = "list"
+)
+
+var memoryActions = []string{
+	memoryActionAdd, memoryActionReplace, memoryActionRemove,
+	memoryActionSearch, memoryActionList,
+}
 
 // memoryTool builds the `memory` tool. Five actions × two targets ×
 // topic-bucketed sub-storage:
@@ -115,25 +125,25 @@ func memoryTool(store memory.MemoryStore) *Tool {
 			switch p.Action {
 			case "":
 				resp = memory.MemoryResponse{Target: target, Topic: p.Topic, Message: "action is required. Next: retry with action=list to discover topics, action=search with query to recall, or action=add with content to save a durable fact."}
-			case "add":
+			case memoryActionAdd:
 				if p.Content == "" {
 					resp = memory.MemoryResponse{Target: target, Topic: p.Topic, Message: "content is required for action=add. Next: retry with compact durable content, target=memory for project facts or target=user for stable user preferences."}
 					break
 				}
 				resp, err = store.Add(target, p.Topic, p.Content)
-			case "replace":
+			case memoryActionReplace:
 				if p.OldText == "" || p.Content == "" {
 					resp = memory.MemoryResponse{Target: target, Topic: p.Topic, Message: "old_text and content are required for action=replace. Next: search/list first, then retry with a unique old_text substring and the full replacement content."}
 					break
 				}
 				resp, err = store.Replace(target, p.Topic, p.OldText, p.Content)
-			case "remove":
+			case memoryActionRemove:
 				if p.OldText == "" {
 					resp = memory.MemoryResponse{Target: target, Topic: p.Topic, Message: "old_text is required for action=remove. Next: search/list first, then retry with a unique old_text substring from the entry to remove."}
 					break
 				}
 				resp, err = store.Remove(target, p.Topic, p.OldText)
-			case "search":
+			case memoryActionSearch:
 				p.Query = memory.NormalizeSearchQuery(p.Query)
 				p.TopK = memory.NormalizeSearchTopK(p.TopK)
 				if p.Query == "" {
@@ -141,7 +151,7 @@ func memoryTool(store memory.MemoryStore) *Tool {
 					break
 				}
 				resp, err = store.Search(target, p.Topic, p.Query, p.TopK)
-			case "list":
+			case memoryActionList:
 				if lister, ok := store.(interface {
 					ListTopics(memory.MemoryTarget) (memory.MemoryResponse, error)
 				}); ok {

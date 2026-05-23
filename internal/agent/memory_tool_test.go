@@ -95,10 +95,11 @@ func TestMemoryToolSchemaPublishesSearchLimits(t *testing.T) {
 	tool, _ := newMemoryToolFixture(t)
 	var schema struct {
 		Properties map[string]struct {
-			MinLength int `json:"minLength"`
-			MaxLength int `json:"maxLength"`
-			Default   int `json:"default"`
-			Maximum   int `json:"maximum"`
+			MinLength int      `json:"minLength"`
+			MaxLength int      `json:"maxLength"`
+			Default   int      `json:"default"`
+			Maximum   int      `json:"maximum"`
+			Enum      []string `json:"enum"`
 		} `json:"properties"`
 	}
 	if err := json.Unmarshal(tool.Schema, &schema); err != nil {
@@ -106,6 +107,9 @@ func TestMemoryToolSchemaPublishesSearchLimits(t *testing.T) {
 	}
 	if schema.Properties["action"].MinLength != 1 {
 		t.Fatalf("action minLength = %d, want 1", schema.Properties["action"].MinLength)
+	}
+	if got, want := strings.Join(schema.Properties["action"].Enum, ","), strings.Join(memoryActions, ","); got != want {
+		t.Fatalf("action enum = %s, want %s", got, want)
 	}
 	if schema.Properties["target"].MinLength != 1 {
 		t.Fatalf("target minLength = %d, want 1", schema.Properties["target"].MinLength)

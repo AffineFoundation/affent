@@ -1112,9 +1112,9 @@ func readOnlyMemoryTool(store memory.MemoryStore) *Tool {
 		}
 		action := strings.TrimSpace(p.Action)
 		if action == "" {
-			action = "search"
+			action = memoryActionSearch
 		}
-		if action != "search" && action != "list" {
+		if action != memoryActionSearch && action != memoryActionList {
 			return "", fmt.Errorf("subagent memory is read-only; rejected action %q", action)
 		}
 		return inner(ctx, args)
