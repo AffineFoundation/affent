@@ -6,6 +6,8 @@ import (
 	"errors"
 	"net/http"
 	"net/http/httptest"
+	"os"
+	"path/filepath"
 	"reflect"
 	"strings"
 	"testing"
@@ -396,6 +398,160 @@ func TestRunFocusedTask_HappyPathReturnsStructuredResult(t *testing.T) {
 	}
 	if got.Objective != "find user response preferences" {
 		t.Fatalf("objective not propagated: %q", got.Objective)
+	}
+}
+
+// TestRunFocusedTask_ExploreUsesToolsThenEmitsJSON is the load-bearing
+// integration test for the whole focused-task surface: a real child
+// Loop runs against an httptest LLM that drives list_files →
+// read_file → final structured JSON. It pins:
+//   - the child registry built from a profile actually accepts the
+//     tool calls the prompt would induce (no schema-vs-registry drift),
+//   - the structured output parser cleanly receives the JSON the
+//     model emits after its tool steps,
+//   - tool_calls in the result carry both inner steps in order so the
+//     parent can see what the child did,
+//   - the parent's separate Conversation is not written to (the whole
+//     point of focused tasks is context isolation; without this assert
+//     run_task is just a tool dispatch with extra latency),
+//   - the child transcript file lands under the configured
+//     TranscriptDir prefixed by focused_.
+func TestRunFocusedTask_ExploreUsesToolsThenEmitsJSON(t *testing.T) {
+	ws := t.TempDir()
+	if err := os.WriteFile(filepath.Join(ws, "marker.txt"), []byte("hello world"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	transcripts := t.TempDir()
+
+	step := 0
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "text/event-stream")
+		w.WriteHeader(http.StatusOK)
+		step++
+		switch step {
+		case 1:
+			_, _ = w.Write([]byte(`data: {"choices":[{"delta":{"role":"assistant","tool_calls":[{"index":0,"id":"c1","type":"function","function":{"name":"list_files","arguments":"{\"path\":\".\"}"}}]},"finish_reason":"tool_calls"}]}` + "\n\n"))
+		case 2:
+			_, _ = w.Write([]byte(`data: {"choices":[{"delta":{"role":"assistant","tool_calls":[{"index":0,"id":"c2","type":"function","function":{"name":"read_file","arguments":"{\"path\":\"marker.txt\"}"}}]},"finish_reason":"tool_calls"}]}` + "\n\n"))
+		default:
+			body := `{"task_type":"explore","ok":true,"summary":"found marker.txt with greeting","findings":[{"claim":"marker.txt contains \"hello world\"","evidence":"file body \"hello world\"","source":"marker.txt:1"}],"suggested_next":["nothing further"]}`
+			_, _ = w.Write([]byte("data: {\"choices\":[{\"delta\":{\"role\":\"assistant\",\"content\":" + strconvQuote(body) + "},\"finish_reason\":\"stop\"}]}\n\n"))
+		}
+		_, _ = w.Write([]byte("data: [DONE]\n\n"))
+	}))
+	t.Cleanup(srv.Close)
+
+	parentConv, err := OpenConversationAt(filepath.Join(t.TempDir(), "parent.jsonl"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	parentSnapshotBefore := len(parentConv.Snapshot())
+
+	out, err := runFocusedTask(context.Background(), FocusedTaskDeps{
+		LLM:              NewLLMClient(srv.URL, "", "fake"),
+		Executor:         nilExecutor{},
+		HostWorkspaceDir: ws,
+		TranscriptDir:    transcripts,
+		Log:              zerolog.Nop(),
+		PerCallTimeout:   5 * time.Second,
+	}, exploreProfile(), "find marker file and report contents", 4)
+	if err != nil {
+		t.Fatalf("runFocusedTask: %v\n%s", err, out)
+	}
+
+	var got FocusedTaskResult
+	if err := json.Unmarshal([]byte(out), &got); err != nil {
+		t.Fatalf("decode result: %v\n%s", err, out)
+	}
+	if !got.OK || got.TaskType != FocusedTaskExplore {
+		t.Fatalf("unexpected runtime metadata: %+v", got)
+	}
+	if len(got.Findings) != 1 || got.Findings[0].Source != "marker.txt:1" {
+		t.Fatalf("findings not propagated: %+v", got.Findings)
+	}
+	if len(got.ToolCalls) < 2 {
+		t.Fatalf("expected at least 2 tool calls (list_files, read_file), got %+v", got.ToolCalls)
+	}
+	gotTools := []string{got.ToolCalls[0].Tool, got.ToolCalls[1].Tool}
+	if gotTools[0] != "list_files" || gotTools[1] != "read_file" {
+		t.Fatalf("tool call order: %+v want [list_files read_file]", gotTools)
+	}
+
+	// Architectural pin: focused-task child must not touch the parent
+	// conversation. Without this assert, the whole feature degenerates
+	// to "free-form tool dispatch with extra latency" — focused tasks
+	// exist exactly to keep this conversation clean.
+	if got := len(parentConv.Snapshot()); got != parentSnapshotBefore {
+		t.Fatalf("parent conversation grew by %d messages; focused tasks must not write to parent's log", got-parentSnapshotBefore)
+	}
+
+	// Child transcript should exist under TranscriptDir, prefixed
+	// "focused_" so trace UIs can distinguish subagent vs focused-task
+	// children at a glance.
+	entries, err := os.ReadDir(transcripts)
+	if err != nil {
+		t.Fatal(err)
+	}
+	found := false
+	for _, e := range entries {
+		if strings.HasPrefix(e.Name(), "focused_") && strings.HasSuffix(e.Name(), ".jsonl") {
+			info, _ := e.Info()
+			if info != nil && info.Size() > 0 {
+				found = true
+			}
+		}
+	}
+	if !found {
+		t.Fatalf("expected a non-empty focused_ transcript under %s; got entries %v", transcripts, entries)
+	}
+}
+
+// TestRunFocusedTask_MaxTurnsHitYieldsOKFalse pins the incomplete-child
+// branch of buildFocusedTaskResult: when the child uses its whole
+// budget without emitting JSON, the parent sees ok=false plus an
+// explicit child_did_not_complete warning, not a structured-output
+// parse error. Catches a regression where the two failure paths could
+// be conflated (parse-failed-but-runtime-ok vs child-never-completed).
+func TestRunFocusedTask_MaxTurnsHitYieldsOKFalse(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "text/event-stream")
+		w.WriteHeader(http.StatusOK)
+		// Always return a tool_calls response with a no-op list_files —
+		// the loop will hit max_turns before any final answer.
+		_, _ = w.Write([]byte(`data: {"choices":[{"delta":{"role":"assistant","tool_calls":[{"index":0,"id":"c1","type":"function","function":{"name":"list_files","arguments":"{\"path\":\".\"}"}}]},"finish_reason":"tool_calls"}]}` + "\n\n"))
+		_, _ = w.Write([]byte("data: [DONE]\n\n"))
+	}))
+	t.Cleanup(srv.Close)
+
+	out, err := runFocusedTask(context.Background(), FocusedTaskDeps{
+		LLM:              NewLLMClient(srv.URL, "", "fake"),
+		Executor:         nilExecutor{},
+		HostWorkspaceDir: t.TempDir(),
+		TranscriptDir:    t.TempDir(),
+		Log:              zerolog.Nop(),
+		PerCallTimeout:   5 * time.Second,
+	}, exploreProfile(), "loop forever", 1)
+	if err != nil {
+		// runFocusedTask returns (json, err) on hard errors; max_turns
+		// is a clean turn-end, not a runtime error, so err must be nil.
+		t.Fatalf("max_turns is a structured result, not a transport/tool error: %v\n%s", err, out)
+	}
+
+	var got FocusedTaskResult
+	if err := json.Unmarshal([]byte(out), &got); err != nil {
+		t.Fatalf("decode result: %v\n%s", err, out)
+	}
+	if got.OK {
+		t.Fatalf("max_turns must yield ok=false: %+v", got)
+	}
+	if got.TurnEndReason != "max_turns" {
+		t.Fatalf("turn_end_reason = %q, want max_turns", got.TurnEndReason)
+	}
+	if !contains(got.Warnings, "child_did_not_complete:max_turns") {
+		t.Fatalf("expected child_did_not_complete warning, got %+v", got.Warnings)
+	}
+	if contains(got.Warnings, "structured_output_parse_failed") {
+		t.Fatalf("must NOT report parse failure when the child never reached a final message: %+v", got.Warnings)
 	}
 }
 
