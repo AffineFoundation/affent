@@ -59,7 +59,7 @@ func TestParseTraceFileReadsToolRequestsAndFinalText(t *testing.T) {
 		`{"type":"usage","data":{"input_tokens":11,"output_tokens":7}}`,
 		`{"type":"error","data":{"message":"transient stream warning"}}`,
 		`{"type":"message.done","data":{"text":"Conclusion: green","finish_reason":"stop"}}`,
-		`{"type":"turn.end","data":{"reason":"completed","tool_stats":{"tool_requests":2,"tool_name_canonicalized":1,"tool_args_repaired":1,"tool_errors":1,"loop_guard_interventions":1,"forced_no_tools":1}}}`,
+		`{"type":"turn.end","data":{"reason":"completed","tool_stats":{"tool_requests":2,"tool_name_canonicalized":1,"tool_args_repaired":1,"tool_errors":1,"tool_duration_ms":17,"loop_guard_interventions":1,"forced_no_tools":1}}}`,
 	}, "\n") + "\n"
 	if err := os.WriteFile(tracePath, []byte(body), 0o644); err != nil {
 		t.Fatal(err)
@@ -102,7 +102,7 @@ func TestParseTraceFileReadsToolRequestsAndFinalText(t *testing.T) {
 	if trace.TurnEndReason != "completed" {
 		t.Fatalf("TurnEndReason = %q", trace.TurnEndReason)
 	}
-	if trace.ToolStats.ToolRequests != 2 || trace.ToolStats.ToolArgsRepaired != 1 || trace.ToolStats.ToolErrors != 1 || trace.ToolStats.ForcedNoTools != 1 {
+	if trace.ToolStats.ToolRequests != 2 || trace.ToolStats.ToolArgsRepaired != 1 || trace.ToolStats.ToolErrors != 1 || trace.ToolStats.ToolDurationMS != 17 || trace.ToolStats.ForcedNoTools != 1 {
 		t.Fatalf("ToolStats = %+v", trace.ToolStats)
 	}
 	if got := trace.RawTypes["tool.request"]; got != 1 {

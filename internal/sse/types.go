@@ -132,9 +132,12 @@ type ToolRuntimeStats struct {
 	ToolArgsRepaired      int `json:"tool_args_repaired,omitempty"`
 	// ToolErrors counts tool results emitted with exit_code != 0,
 	// including guard rejections and skipped calls.
-	ToolErrors             int `json:"tool_errors,omitempty"`
-	LoopGuardInterventions int `json:"loop_guard_interventions,omitempty"`
-	ForcedNoTools          int `json:"forced_no_tools,omitempty"`
+	ToolErrors int `json:"tool_errors,omitempty"`
+	// ToolDurationMS sums measured implementation time for dispatched
+	// tools. Guard rejections and skipped calls do not contribute.
+	ToolDurationMS         int64 `json:"tool_duration_ms,omitempty"`
+	LoopGuardInterventions int   `json:"loop_guard_interventions,omitempty"`
+	ForcedNoTools          int   `json:"forced_no_tools,omitempty"`
 }
 
 type ErrorPayload struct {

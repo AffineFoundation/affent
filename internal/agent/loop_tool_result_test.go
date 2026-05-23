@@ -245,6 +245,13 @@ func TestRunTurn_ToolResultReportsDispatchDuration(t *testing.T) {
 				if durationMS < 1 {
 					t.Fatalf("tool.result should report dispatch duration, got %dms", durationMS)
 				}
+				var p sse.TurnEndPayload
+				if err := json.Unmarshal(ev.Data, &p); err != nil {
+					t.Fatalf("decode turn.end: %v", err)
+				}
+				if p.ToolStats == nil || p.ToolStats.ToolDurationMS < durationMS {
+					t.Fatalf("turn.end should summarize tool duration >= %dms, got %+v", durationMS, p.ToolStats)
+				}
 				return
 			}
 		case <-deadline:

@@ -111,7 +111,7 @@ func ToolStatsAtLeast(field string, min int) Check {
 			if !ok {
 				return CheckResult{Pass: false, Detail: fmt.Sprintf("unknown tool stats field %q", field)}
 			}
-			if got >= min {
+			if got >= int64(min) {
 				return CheckResult{Pass: true, Detail: fmt.Sprintf("%s=%d", field, got)}
 			}
 			return CheckResult{Pass: false, Detail: fmt.Sprintf("%s=%d, want >= %d", field, got, min)}
@@ -119,16 +119,17 @@ func ToolStatsAtLeast(field string, min int) Check {
 	}
 }
 
-var toolStatsAccessors = map[string]func(ToolRuntimeStats) int{
-	"tool_requests":            func(s ToolRuntimeStats) int { return s.ToolRequests },
-	"tool_name_canonicalized":  func(s ToolRuntimeStats) int { return s.ToolNameCanonicalized },
-	"tool_args_repaired":       func(s ToolRuntimeStats) int { return s.ToolArgsRepaired },
-	"tool_errors":              func(s ToolRuntimeStats) int { return s.ToolErrors },
-	"loop_guard_interventions": func(s ToolRuntimeStats) int { return s.LoopGuardInterventions },
-	"forced_no_tools":          func(s ToolRuntimeStats) int { return s.ForcedNoTools },
+var toolStatsAccessors = map[string]func(ToolRuntimeStats) int64{
+	"tool_requests":            func(s ToolRuntimeStats) int64 { return int64(s.ToolRequests) },
+	"tool_name_canonicalized":  func(s ToolRuntimeStats) int64 { return int64(s.ToolNameCanonicalized) },
+	"tool_args_repaired":       func(s ToolRuntimeStats) int64 { return int64(s.ToolArgsRepaired) },
+	"tool_errors":              func(s ToolRuntimeStats) int64 { return int64(s.ToolErrors) },
+	"tool_duration_ms":         func(s ToolRuntimeStats) int64 { return s.ToolDurationMS },
+	"loop_guard_interventions": func(s ToolRuntimeStats) int64 { return int64(s.LoopGuardInterventions) },
+	"forced_no_tools":          func(s ToolRuntimeStats) int64 { return int64(s.ForcedNoTools) },
 }
 
-func toolStatsField(stats ToolRuntimeStats, field string) (int, bool) {
+func toolStatsField(stats ToolRuntimeStats, field string) (int64, bool) {
 	accessor, ok := toolStatsAccessors[field]
 	if !ok {
 		return 0, false

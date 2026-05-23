@@ -679,6 +679,7 @@ func (l *Loop) runTurn(ctx context.Context, turnID, userText string) {
 			toolStart := time.Now()
 			result, isErr := l.Tools.dispatch(ctx, toolName, args)
 			toolDuration := time.Since(toolStart)
+			toolStats.ToolDurationMS += toolDuration.Milliseconds()
 			if guardResult := loopGuard.recordOutcome(toolName, !isErr); guardResult != "" {
 				if result != "" {
 					result += "\n\n" + guardResult
@@ -882,6 +883,7 @@ func toolRuntimeStatsPtr(stats sse.ToolRuntimeStats) *sse.ToolRuntimeStats {
 		stats.ToolNameCanonicalized == 0 &&
 		stats.ToolArgsRepaired == 0 &&
 		stats.ToolErrors == 0 &&
+		stats.ToolDurationMS == 0 &&
 		stats.LoopGuardInterventions == 0 &&
 		stats.ForcedNoTools == 0 {
 		return nil

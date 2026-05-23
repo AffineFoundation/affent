@@ -181,6 +181,7 @@ type ToolRuntimeStats struct {
 	ToolNameCanonicalized  int
 	ToolArgsRepaired       int
 	ToolErrors             int
+	ToolDurationMS         int64
 	LoopGuardInterventions int
 	ForcedNoTools          int
 }
