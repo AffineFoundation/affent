@@ -89,11 +89,31 @@ func OpenConversationAt(path string) (*Conversation, error) {
 	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
 		return nil, fmt.Errorf("mkdir conversations: %w", err)
 	}
+	if err := rejectUnsafeConversationPath(path); err != nil {
+		return nil, err
+	}
 	c := &Conversation{path: path}
 	if err := c.load(); err != nil {
 		return nil, err
 	}
 	return c, nil
+}
+
+func rejectUnsafeConversationPath(path string) error {
+	fi, err := os.Lstat(path)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return nil
+		}
+		return err
+	}
+	if fi.IsDir() {
+		return fmt.Errorf("conversation path is a directory: %s", path)
+	}
+	if fi.Mode()&os.ModeSymlink != 0 {
+		return fmt.Errorf("conversation path must not be a symlink: %s", path)
+	}
+	return nil
 }
 
 func (c *Conversation) load() error {
@@ -193,6 +213,9 @@ func (c *Conversation) repairToolCallPairs() error {
 // Replace directly would re-enter the lock and (more importantly)
 // hide the load-only context from a reader skimming the file.
 func (c *Conversation) replaceWithoutLock(msgs []ChatMessage) error {
+	if err := rejectUnsafeConversationPath(c.path); err != nil {
+		return err
+	}
 	tmp := c.path + ".tmp"
 	f, err := os.OpenFile(tmp, os.O_CREATE|os.O_TRUNC|os.O_WRONLY, 0o644)
 	if err != nil {
@@ -241,6 +264,9 @@ func (c *Conversation) Append(m ChatMessage) error {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 
+	if err := rejectUnsafeConversationPath(c.path); err != nil {
+		return err
+	}
 	f, err := os.OpenFile(c.path, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0o644)
 	if err != nil {
 		return err

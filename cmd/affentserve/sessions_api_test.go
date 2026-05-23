@@ -276,6 +276,34 @@ func TestHandleSessionPlanRejectsSymlinkPlan(t *testing.T) {
 	}
 }
 
+func TestSummarizeDurableSessionIgnoresSymlinkConversation(t *testing.T) {
+	memRoot := t.TempDir()
+	pool := newPoolWithMemoryRoot(t, memRoot)
+	createDurableSessionDir(t, pool, "link-conversation")
+	convPath := filepath.Join(pool.sessionDirPath("link-conversation"), "conversation.jsonl")
+	if err := os.Remove(convPath); err != nil {
+		t.Fatal(err)
+	}
+	outside := filepath.Join(t.TempDir(), "outside-conversation.jsonl")
+	if err := os.WriteFile(outside, []byte(`{"role":"user","content":"outside"}`+"\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink(outside, convPath); err != nil {
+		t.Skipf("symlink unavailable: %v", err)
+	}
+
+	summary, found, err := summarizeDurableSession(pool, "link-conversation")
+	if err != nil {
+		t.Fatalf("summarizeDurableSession: %v", err)
+	}
+	if !found {
+		t.Fatal("durable session should still be found")
+	}
+	if summary.HasConversation {
+		t.Fatalf("symlink conversation must not set has_conversation: %+v", summary)
+	}
+}
+
 func TestSessionCapabilitiesReflectActualRegisteredTools(t *testing.T) {
 	pool := newTestPool(t, 4, "5m")
 	pool.cfg.EnableBuiltins = false

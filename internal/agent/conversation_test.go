@@ -124,6 +124,50 @@ func TestConversationAppend_NoGhostMessageOnDiskFailure(t *testing.T) {
 	}
 }
 
+func TestOpenConversationAtRejectsSymlinkLog(t *testing.T) {
+	dir := t.TempDir()
+	outside := filepath.Join(t.TempDir(), "outside.jsonl")
+	if err := os.WriteFile(outside, []byte(`{"role":"user","content":"outside"}`+"\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	path := filepath.Join(dir, "sess.jsonl")
+	if err := os.Symlink(outside, path); err != nil {
+		t.Skipf("symlink unavailable: %v", err)
+	}
+
+	if _, err := OpenConversationAt(path); err == nil || !strings.Contains(err.Error(), "symlink") {
+		t.Fatalf("OpenConversationAt symlink error = %v, want symlink", err)
+	}
+}
+
+func TestConversationAppendRejectsSymlinkSwappedAfterOpen(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "sess.jsonl")
+	c, err := OpenConversationAt(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	outside := filepath.Join(t.TempDir(), "outside.jsonl")
+	if err := os.WriteFile(outside, []byte(""), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink(outside, path); err != nil {
+		t.Skipf("symlink unavailable: %v", err)
+	}
+
+	err = c.Append(ChatMessage{Role: "user", Content: "must not follow symlink"})
+	if err == nil || !strings.Contains(err.Error(), "symlink") {
+		t.Fatalf("Append symlink error = %v, want symlink", err)
+	}
+	raw, err := os.ReadFile(outside)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(raw) != 0 {
+		t.Fatalf("outside symlink target was written: %q", raw)
+	}
+}
+
 // TestConversationReplace_AtomicWrite asserts the post-Replace file
 // contains exactly the new content. (Crash-safety is hard to test
 // without process-level fault injection; the encode + sync + rename
