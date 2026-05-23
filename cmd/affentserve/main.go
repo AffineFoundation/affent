@@ -72,9 +72,9 @@ func parseFlagsAndConfig(argv []string) (Config, error) {
 		retryBackoff       = fs.String("retry-backoff", "", "Initial backoff between transient-error retries (default 4s); each subsequent attempt doubles it. Go duration string.")
 		compactTrigger     = fs.Int("compact-trigger", 0, "Rolling-summary compactor's message threshold per session. 0 = agent runtime's default (240). Lower on small-context upstream models to compact earlier.")
 		compactKeepLast    = fs.Int("compact-keep-last", 0, "Messages preserved verbatim at the tail of the conversation when compacting. 0 = agent runtime's default (10).")
-		enableBrowser      = fs.Bool("browser", false, "Register the extras/browser tool family for each new session.")
-		enableWeb          = fs.Bool("web", false, "Register extras/web's web_fetch tool.")
-		enableWebSearch    = fs.Bool("web-search", false, "Register web_search alongside web_fetch (requires TAVILY_API_KEY by default).")
+		enableBrowser      = fs.Bool("browser", false, "Register the extras/browser tool family for each new session. Env: AFFENTSERVE_BROWSER.")
+		enableWeb          = fs.Bool("web", false, "Register extras/web's web_fetch tool. Env: AFFENTSERVE_WEB.")
+		enableWebSearch    = fs.Bool("web-search", false, "Register web_search alongside web_fetch (requires TAVILY_API_KEY by default). Env: AFFENTSERVE_WEB_SEARCH.")
 		enableMemory       = fs.Bool("memory", true, "Register agent runtime's memory tool.")
 		enableBuiltins     = fs.Bool("builtins", false, "Register shell + file builtins (LocalExecutor). DANGEROUS on a shared host — only enable in a sandboxed environment. Env: AFFENTSERVE_BUILTINS.")
 		enableSubagent     = fs.Bool("subagent", true, "Register the subagent_run tool — a bounded isolated Loop with read-only inspection tools. Doesn't require --builtins but inherits the shell tool when --builtins is also on.")
@@ -85,7 +85,7 @@ func parseFlagsAndConfig(argv []string) (Config, error) {
 		browserCacheSweep  = fs.String("browser-cache-sweep-interval", "", "How often cache GC deletes expired files when --browser-cache-dir is set (default = TTL/8, min 5m; explicit values must be >=5m).")
 		browserNoStealth   = fs.Bool("browser-no-stealth", false, "Disable the webdriver-detection bypass script. Default off (stealth on).")
 		browserAllowAll    = fs.Bool("browser-allow-all-domains", false, "Allow third-party / tracker domains the default list normally blocks.")
-		browserScreenshot  = fs.Bool("browser-screenshot", false, "Register the browser_screenshot tool. Off by default — base64 image payloads bloat tool result events; flip on for vision-capable models.")
+		browserScreenshot  = fs.Bool("browser-screenshot", false, "Register the browser_screenshot tool. Off by default — base64 image payloads bloat tool result events; flip on for vision-capable models. Env: AFFENTSERVE_BROWSER_SCREENSHOT.")
 		systemPrompt       = fs.String("system-prompt", "", "Override agent.DefaultSystemPrompt. '-' reads from stdin, '@FILE' from a file, anything else is literal.")
 		// Sampling pass-through. Strings (not Float64Var / Int) so an
 		// unset flag is distinguishable from --temperature=0 — that

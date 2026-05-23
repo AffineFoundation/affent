@@ -313,6 +313,10 @@ func (c *Config) Resolve() error {
 		env  string
 		dest *bool
 	}{
+		{"AFFENTSERVE_BROWSER", &c.EnableBrowser},
+		{"AFFENTSERVE_BROWSER_SCREENSHOT", &c.BrowserScreenshot},
+		{"AFFENTSERVE_WEB", &c.EnableWeb},
+		{"AFFENTSERVE_WEB_SEARCH", &c.EnableWebSearch},
 		{"AFFENTSERVE_MEMORY", &c.EnableMemory},
 		{"AFFENTSERVE_BUILTINS", &c.EnableBuiltins},
 		{"AFFENTSERVE_SUBAGENT", &c.EnableSubagent},

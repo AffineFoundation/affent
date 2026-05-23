@@ -168,6 +168,38 @@ func TestParseFlagsAndConfig_BuiltinsFromEnv(t *testing.T) {
 	}
 }
 
+func TestParseFlagsAndConfig_NetworkToolsFromEnv(t *testing.T) {
+	t.Setenv("AFFENTSERVE_BROWSER", "true")
+	t.Setenv("AFFENTSERVE_BROWSER_SCREENSHOT", "true")
+	t.Setenv("AFFENTSERVE_WEB", "true")
+	t.Setenv("AFFENTSERVE_WEB_SEARCH", "true")
+	cfg, err := parseFlagsAndConfig([]string{
+		"--base-url", "https://example/v1",
+		"--model", "demo",
+	})
+	if err != nil {
+		t.Fatalf("parseFlagsAndConfig: %v", err)
+	}
+	if !cfg.EnableBrowser || !cfg.BrowserScreenshot || !cfg.EnableWeb || !cfg.EnableWebSearch {
+		t.Fatalf("network tool envs should enable browser/web capabilities: %+v", cfg)
+	}
+
+	cfg, err = parseFlagsAndConfig([]string{
+		"--base-url", "https://example/v1",
+		"--model", "demo",
+		"--browser=false",
+		"--browser-screenshot=false",
+		"--web=false",
+		"--web-search=false",
+	})
+	if err != nil {
+		t.Fatalf("parseFlagsAndConfig cli override: %v", err)
+	}
+	if cfg.EnableBrowser || cfg.BrowserScreenshot || cfg.EnableWeb || cfg.EnableWebSearch {
+		t.Fatalf("CLI false flags should override network tool envs: %+v", cfg)
+	}
+}
+
 func TestParseFlagsAndConfig_MemoryRootFromCLI(t *testing.T) {
 	t.Setenv("AFFENTSERVE_MEMORY_ROOT", "/env-state")
 	cfg, err := parseFlagsAndConfig([]string{
