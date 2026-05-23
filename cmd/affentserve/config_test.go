@@ -74,6 +74,18 @@ func TestLoadConfig_RejectsUnknownFields(t *testing.T) {
 	}
 }
 
+func TestLoadConfig_RejectsOversizeFile(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "huge.json")
+	if err := os.WriteFile(path, []byte(strings.Repeat("x", maxConfigBytes+1)), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	_, err := LoadConfig(path)
+	if err == nil || !strings.Contains(err.Error(), "config exceeds") {
+		t.Fatalf("oversized config error = %v, want config exceeds", err)
+	}
+}
+
 func TestConfig_Resolve_AppliesDefaults(t *testing.T) {
 	cfg := Config{BaseURL: "https://example/v1"}
 	if err := cfg.Resolve(); err != nil {

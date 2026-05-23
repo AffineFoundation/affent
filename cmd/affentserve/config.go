@@ -1,9 +1,11 @@
 package main
 
 import (
+	"bytes"
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"math"
 	"os"
 	"strconv"
@@ -199,6 +201,7 @@ const (
 	defaultSessionIdleTTL        = 10 * time.Minute
 	defaultBrowserCacheTTL       = 24 * time.Hour
 	minBrowserCacheSweepInterval = 5 * time.Minute
+	maxConfigBytes               = 1024 * 1024
 )
 
 // LoadConfig reads a JSON file and returns the parsed Config. An empty
@@ -208,11 +211,11 @@ func LoadConfig(path string) (Config, error) {
 	if path == "" {
 		return cfg, nil
 	}
-	data, err := os.ReadFile(path)
+	data, err := readConfigFile(path)
 	if err != nil {
 		return cfg, fmt.Errorf("read config %s: %w", path, err)
 	}
-	dec := json.NewDecoder(strings.NewReader(string(data)))
+	dec := json.NewDecoder(bytes.NewReader(data))
 	dec.DisallowUnknownFields()
 	if err := dec.Decode(&cfg); err != nil {
 		return cfg, fmt.Errorf("parse config %s: %w", path, err)
@@ -231,6 +234,22 @@ func LoadConfig(path string) (Config, error) {
 	cfg.enableSubagentSet = raw.EnableSubagent != nil
 	cfg.subagentMaxDepthSet = raw.SubagentMaxDepth != nil
 	return cfg, nil
+}
+
+func readConfigFile(path string) ([]byte, error) {
+	f, err := os.Open(path)
+	if err != nil {
+		return nil, err
+	}
+	defer f.Close()
+	data, err := io.ReadAll(io.LimitReader(f, maxConfigBytes+1))
+	if err != nil {
+		return nil, err
+	}
+	if len(data) > maxConfigBytes {
+		return nil, fmt.Errorf("config exceeds %d-byte limit", maxConfigBytes)
+	}
+	return data, nil
 }
 
 // Resolve fills in defaults and applies env-var overrides. Env beats
