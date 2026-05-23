@@ -662,6 +662,8 @@ func TestImageRunCmdDefaultsCommandAndLimits(t *testing.T) {
 		"--cpus", defaultSandboxCPUs,
 		"--pids-limit", defaultSandboxPIDs,
 		"-v", workspace + ":/workspace",
+		"-e", "GOMEMLIMIT=768MiB",
+		"-e", "GOMAXPROCS=2",
 		"example/affent:local",
 		"affentctl",
 		"--help",

@@ -653,7 +653,7 @@ func runRuntimeImage(opts runtimeRunOptions, runner commandRunner) error {
 	if opts.User != "" {
 		runArgs = append(runArgs, "--user", opts.User)
 	}
-	runArgs = append(runArgs, runtimePersistentEnv()...)
+	runArgs = append(runArgs, runtimePersistentEnv(opts.Memory, opts.CPUs)...)
 	for _, env := range envs {
 		runArgs = append(runArgs, "-e", env)
 	}
@@ -687,8 +687,8 @@ func runtimePersistentDirs(hostWorkspace string) []string {
 	}
 }
 
-func runtimePersistentEnv() []string {
-	return []string{
+func runtimePersistentEnv(memory, cpus string) []string {
+	env := []string{
 		"-e", "HOME=/workspace/.home",
 		"-e", "XDG_CACHE_HOME=/workspace/.cache",
 		"-e", "GOCACHE=/workspace/.cache/go-build",
@@ -696,6 +696,13 @@ func runtimePersistentEnv() []string {
 		"-e", "NPM_CONFIG_CACHE=/workspace/.cache/npm",
 		"-e", "PIP_CACHE_DIR=/workspace/.cache/pip",
 	}
+	if gomem := sandboxGoMemLimit(memory); gomem != "" {
+		env = append(env, "-e", "GOMEMLIMIT="+gomem)
+	}
+	if gomax := sandboxGoMaxProcs(cpus); gomax != "" {
+		env = append(env, "-e", "GOMAXPROCS="+gomax)
+	}
+	return env
 }
 
 func runtimeForwardEnv(extra []string) ([]string, error) {
