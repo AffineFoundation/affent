@@ -723,6 +723,9 @@ func runtimeForwardEnv(extra []string) ([]string, error) {
 		if !validEnvName(name) {
 			return fmt.Errorf("invalid --env %q: variable name must match [A-Za-z_][A-Za-z0-9_]*", kv)
 		}
+		if runtimeManagedEnvName(name) {
+			return fmt.Errorf("invalid --env %q: %s is managed by affentctl image run", kv, name)
+		}
 		if seen[name] {
 			return fmt.Errorf("invalid --env %q: duplicate variable %s", kv, name)
 		}
@@ -748,6 +751,22 @@ func runtimeForwardEnv(extra []string) ([]string, error) {
 		}
 	}
 	return out, nil
+}
+
+func runtimeManagedEnvName(name string) bool {
+	switch name {
+	case "HOME",
+		"XDG_CACHE_HOME",
+		"GOCACHE",
+		"GOMODCACHE",
+		"NPM_CONFIG_CACHE",
+		"PIP_CACHE_DIR",
+		"GOMEMLIMIT",
+		"GOMAXPROCS":
+		return true
+	default:
+		return false
+	}
 }
 
 func runtimeForwardEnvNames() []string {

@@ -862,6 +862,37 @@ func TestRunRuntimeImageRejectsInvalidEnvBeforeAutoBuild(t *testing.T) {
 	}
 }
 
+func TestRunRuntimeImageRejectsManagedEnvBeforeAutoBuild(t *testing.T) {
+	for _, name := range []string{
+		"HOME",
+		"XDG_CACHE_HOME",
+		"GOCACHE",
+		"GOMODCACHE",
+		"NPM_CONFIG_CACHE",
+		"PIP_CACHE_DIR",
+		"GOMEMLIMIT",
+		"GOMAXPROCS",
+	} {
+		t.Run(name, func(t *testing.T) {
+			workspace := filepath.Join(t.TempDir(), "ws")
+			runner := &fakeCommandRunner{imageInspectErr: errors.New("missing image")}
+			opts := defaultRuntimeRunOptions(workspace)
+			opts.Env = []string{name + "=override"}
+			opts.Command = []string{"affentctl", "--help"}
+			err := runRuntimeImage(opts, runner)
+			if err == nil || !strings.Contains(err.Error(), "managed by affentctl image run") {
+				t.Fatalf("runRuntimeImage error = %v, want managed env rejection", err)
+			}
+			if len(runner.calls) != 0 {
+				t.Fatalf("managed env must be rejected before Docker calls, calls=%+v", runner.calls)
+			}
+			if _, statErr := os.Stat(workspace); !errors.Is(statErr, os.ErrNotExist) {
+				t.Fatalf("managed env must be rejected before creating workspace; stat err=%v", statErr)
+			}
+		})
+	}
+}
+
 func TestRunRuntimeImageAutoBuildsDefaultImageWhenMissing(t *testing.T) {
 	workspace := filepath.Join(t.TempDir(), "ws")
 	dockerfile, contextDir, ok, err := findRuntimeBuildSource()
