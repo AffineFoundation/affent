@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"io"
 	"net"
 	"net/http"
@@ -274,6 +275,7 @@ func TestSearchTool_NumResultsMatchesAdvertisedCap(t *testing.T) {
 		args          string
 		wantN         int
 		wantSchemaMax string
+		wantDefault   int
 	}{
 		{
 			name:          "default cap",
@@ -281,6 +283,7 @@ func TestSearchTool_NumResultsMatchesAdvertisedCap(t *testing.T) {
 			args:          `{"query":"anything","num_results":20}`,
 			wantN:         defaultSearchResults,
 			wantSchemaMax: `"maximum": 8`,
+			wantDefault:   defaultSearchResults,
 		},
 		{
 			name:          "custom lower cap",
@@ -288,6 +291,7 @@ func TestSearchTool_NumResultsMatchesAdvertisedCap(t *testing.T) {
 			args:          `{"query":"anything","num_results":20}`,
 			wantN:         3,
 			wantSchemaMax: `"maximum": 3`,
+			wantDefault:   3,
 		},
 		{
 			name:          "custom cap above hard maximum",
@@ -295,6 +299,7 @@ func TestSearchTool_NumResultsMatchesAdvertisedCap(t *testing.T) {
 			args:          `{"query":"anything","num_results":100}`,
 			wantN:         maxSearchResults,
 			wantSchemaMax: `"maximum": 20`,
+			wantDefault:   defaultSearchResults,
 		},
 		{
 			name:          "missing argument uses effective default",
@@ -302,6 +307,7 @@ func TestSearchTool_NumResultsMatchesAdvertisedCap(t *testing.T) {
 			args:          `{"query":"anything"}`,
 			wantN:         defaultSearchResults,
 			wantSchemaMax: `"maximum": 20`,
+			wantDefault:   defaultSearchResults,
 		},
 		{
 			name:          "default follows lower custom cap",
@@ -309,6 +315,7 @@ func TestSearchTool_NumResultsMatchesAdvertisedCap(t *testing.T) {
 			args:          `{"query":"anything"}`,
 			wantN:         5,
 			wantSchemaMax: `"maximum": 5`,
+			wantDefault:   5,
 		},
 	}
 	for _, c := range cases {
@@ -320,6 +327,9 @@ func TestSearchTool_NumResultsMatchesAdvertisedCap(t *testing.T) {
 			}
 			if !strings.Contains(string(tool.Schema), c.wantSchemaMax) {
 				t.Fatalf("schema %s missing %s", tool.Schema, c.wantSchemaMax)
+			}
+			if !strings.Contains(string(tool.Schema), fmt.Sprintf(`"default": %d`, c.wantDefault)) {
+				t.Fatalf("schema %s missing default %d", tool.Schema, c.wantDefault)
 			}
 			if _, err := tool.Execute(context.Background(), json.RawMessage(c.args)); err != nil {
 				t.Fatalf("Execute: %v", err)
@@ -458,9 +468,15 @@ func TestSearchTool_EmptyQuery(t *testing.T) {
 	if err == nil || !strings.Contains(err.Error(), "query is required") {
 		t.Errorf("expected query-required error, got %v", err)
 	}
+	if err == nil || !strings.Contains(err.Error(), "Next:") {
+		t.Errorf("query-required error should include corrective Next step, got %v", err)
+	}
 	_, err = tool.Execute(context.Background(), json.RawMessage(`{"query":"   "}`))
 	if err == nil || !strings.Contains(err.Error(), "query is required") {
 		t.Errorf("expected blank-query required error, got %v", err)
+	}
+	if err == nil || !strings.Contains(err.Error(), "Next:") {
+		t.Errorf("blank-query error should include corrective Next step, got %v", err)
 	}
 	if !strings.Contains(string(tool.Schema), `"minLength": 1`) {
 		t.Fatalf("schema should publish query minLength: %s", tool.Schema)

@@ -66,9 +66,9 @@ func SearchTool(cfg SearchConfig) (*agent.Tool, error) {
         "required": ["query"],
         "properties": {
             "query": {"type": "string", "minLength": 1, "maxLength": %d, "description": "Search query (plain English; the tool handles tokenization)."},
-            "num_results": {"type": "integer", "description": "How many results to return. Default %d, max %d.", "minimum": 1, "maximum": %d}
+            "num_results": {"type": "integer", "description": "How many results to return. Default %d, max %d.", "minimum": 1, "maximum": %d, "default": %d}
         }
-    }`, maxSearchQueryBytes, defaultN, max, max))
+    }`, maxSearchQueryBytes, defaultN, max, max, defaultN))
 
 	return &agent.Tool{
 		Name: "web_search",
@@ -86,7 +86,7 @@ func SearchTool(cfg SearchConfig) (*agent.Tool, error) {
 			}
 			query := strings.TrimSpace(args.Query)
 			if query == "" {
-				return "", errors.New("query is required")
+				return "", errors.New("query is required. Next: retry with 2-6 specific keywords, named entities, error text, or the URL/topic you need to discover")
 			}
 			if len(query) > maxSearchQueryBytes {
 				return "", fmt.Errorf("query is %d bytes; web_search supports queries up to %d bytes", len(query), maxSearchQueryBytes)
