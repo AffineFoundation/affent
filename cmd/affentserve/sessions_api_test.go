@@ -190,7 +190,7 @@ func TestHandleSessionDetail_ReadsDurableSessionAfterRestart(t *testing.T) {
 	if !resp.Session.HasPlan {
 		t.Fatalf("session = %+v, want durable-only restartable with plan", resp.Session)
 	}
-	if resp.Session.PlanSummary == nil || resp.Session.PlanSummary.Label != "plan:1/2:active" || resp.Session.PlanSummary.CompletedSteps != 1 || resp.Session.PlanSummary.TotalSteps != 2 || !resp.Session.PlanSummary.Active || resp.Session.PlanSummary.CurrentStep != "resume work" {
+	if resp.Session.PlanSummary == nil || resp.Session.PlanSummary.Label != "plan:1/2:active" || resp.Session.PlanSummary.CompletedSteps != 1 || resp.Session.PlanSummary.TotalSteps != 2 || !resp.Session.PlanSummary.Active || resp.Session.PlanSummary.CurrentStep != "resume work" || resp.Session.PlanSummary.CurrentStepIndex != 2 {
 		t.Fatalf("plan summary = %+v, want active 1/2", resp.Session.PlanSummary)
 	}
 	if resp.Session.Capabilities != nil {
@@ -220,7 +220,7 @@ func TestHandleSessionList_ReportsPlanSummary(t *testing.T) {
 		t.Fatalf("sessions = %+v, want one session", resp.Sessions)
 	}
 	summary := resp.Sessions[0].PlanSummary
-	if summary == nil || summary.Label != "plan:1/2:blocked" || summary.CompletedSteps != 1 || summary.TotalSteps != 2 || !summary.Blocked || summary.CurrentStep != "blocked" {
+	if summary == nil || summary.Label != "plan:1/2:blocked" || summary.CompletedSteps != 1 || summary.TotalSteps != 2 || !summary.Blocked || summary.CurrentStep != "blocked" || summary.CurrentStepIndex != 2 {
 		t.Fatalf("plan summary = %+v, want blocked 1/2", summary)
 	}
 }
@@ -270,7 +270,7 @@ func TestHandleSessionPlan_ReadsDurablePlanWithoutReopeningSession(t *testing.T)
 	if resp.SessionID != "planned" {
 		t.Fatalf("session_id = %q, want planned", resp.SessionID)
 	}
-	if resp.Summary == nil || resp.Summary.Label != "plan:0/1:active" || resp.Summary.TotalSteps != 1 || !resp.Summary.Active || resp.Summary.CurrentStep != "resume work" {
+	if resp.Summary == nil || resp.Summary.Label != "plan:0/1:active" || resp.Summary.TotalSteps != 1 || !resp.Summary.Active || resp.Summary.CurrentStep != "resume work" || resp.Summary.CurrentStepIndex != 1 {
 		t.Fatalf("summary = %+v, want active 0/1", resp.Summary)
 	}
 	var plan struct {

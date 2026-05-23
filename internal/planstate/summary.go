@@ -15,13 +15,14 @@ const (
 )
 
 type Summary struct {
-	Label          string `json:"label"`
-	TotalSteps     int    `json:"total_steps"`
-	CompletedSteps int    `json:"completed_steps"`
-	Active         bool   `json:"active"`
-	Blocked        bool   `json:"blocked"`
-	CurrentStep    string `json:"current_step,omitempty"`
-	Error          bool   `json:"error"`
+	Label            string `json:"label"`
+	TotalSteps       int    `json:"total_steps"`
+	CompletedSteps   int    `json:"completed_steps"`
+	Active           bool   `json:"active"`
+	Blocked          bool   `json:"blocked"`
+	CurrentStep      string `json:"current_step,omitempty"`
+	CurrentStepIndex int    `json:"current_step_index,omitempty"`
+	Error            bool   `json:"error"`
 }
 
 type summaryState struct {
@@ -41,7 +42,7 @@ func SummarizeJSON(raw json.RawMessage) (Summary, error) {
 	}
 	out := Summary{TotalSteps: len(st.Steps)}
 	currentPriority := 0
-	for _, step := range st.Steps {
+	for i, step := range st.Steps {
 		status := strings.TrimSpace(step.Status)
 		switch status {
 		case "completed":
@@ -52,10 +53,9 @@ func SummarizeJSON(raw json.RawMessage) (Summary, error) {
 			out.Blocked = true
 		}
 		if priority := currentStepPriority(status); priority > currentPriority {
-			if text := compactCurrentStep(step.Text); text != "" {
-				currentPriority = priority
-				out.CurrentStep = text
-			}
+			currentPriority = priority
+			out.CurrentStepIndex = i + 1
+			out.CurrentStep = compactCurrentStep(step.Text)
 		}
 	}
 	out.Label = fmt.Sprintf("plan:%d/%d", out.CompletedSteps, out.TotalSteps)

@@ -15,17 +15,17 @@ func TestSummarizeJSONLabelsPlanProgress(t *testing.T) {
 		{
 			name: "active progress",
 			raw:  `{"steps":[{"text":"done","status":"completed"},{"text":"resume work","status":"in_progress"},{"text":"later","status":"pending"}]}`,
-			want: Summary{Label: "plan:1/3:active", TotalSteps: 3, CompletedSteps: 1, Active: true, CurrentStep: "resume work"},
+			want: Summary{Label: "plan:1/3:active", TotalSteps: 3, CompletedSteps: 1, Active: true, CurrentStep: "resume work", CurrentStepIndex: 2},
 		},
 		{
 			name: "blocked progress",
 			raw:  `{"steps":[{"text":"done","status":"completed"},{"text":"need input","status":"blocked"}]}`,
-			want: Summary{Label: "plan:1/2:blocked", TotalSteps: 2, CompletedSteps: 1, Blocked: true, CurrentStep: "need input"},
+			want: Summary{Label: "plan:1/2:blocked", TotalSteps: 2, CompletedSteps: 1, Blocked: true, CurrentStep: "need input", CurrentStepIndex: 2},
 		},
 		{
 			name: "blank status counts as pending",
 			raw:  `{"steps":[{"text":"  next\nstep  ","status":"  "}]}`,
-			want: Summary{Label: "plan:0/1", TotalSteps: 1, CurrentStep: "next step"},
+			want: Summary{Label: "plan:0/1", TotalSteps: 1, CurrentStep: "next step", CurrentStepIndex: 1},
 		},
 		{
 			name: "empty plan",
@@ -52,6 +52,19 @@ func TestSummarizeJSONCurrentStepPriority(t *testing.T) {
 	}
 	if got.CurrentStep != "active third" {
 		t.Fatalf("current step = %q, want active third", got.CurrentStep)
+	}
+	if got.CurrentStepIndex != 3 {
+		t.Fatalf("current step index = %d, want 3", got.CurrentStepIndex)
+	}
+}
+
+func TestSummarizeJSONCurrentStepIndexSurvivesBlankText(t *testing.T) {
+	got, err := SummarizeJSON(json.RawMessage(`{"steps":[{"text":"","status":"in_progress"}]}`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.CurrentStep != "" || got.CurrentStepIndex != 1 {
+		t.Fatalf("current step = %q index=%d, want blank/index 1", got.CurrentStep, got.CurrentStepIndex)
 	}
 }
 
