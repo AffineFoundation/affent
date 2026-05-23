@@ -41,7 +41,7 @@ func TestCheckTraceIgnoresGuardRejectedForbiddenCommand(t *testing.T) {
 			Tool: "shell",
 			Args: map[string]any{"command": "python -m pytest"},
 		},
-	}}
+	}, TurnEndReason: "completed"}
 	scenario := BatchScenario{
 		RequiredCommands:  []string{`python(3)? -m pytest`},
 		ForbiddenCommands: []string{"| head"},
@@ -112,6 +112,13 @@ func TestParseTraceFileReadsToolRequestsAndFinalText(t *testing.T) {
 	}
 }
 
+func TestCheckBatchTraceRequiresCleanTurnEnd(t *testing.T) {
+	failures := CheckBatchTrace(Trace{TurnEndReason: "max_turns"}, BatchScenario{})
+	if len(failures) != 1 || !strings.Contains(failures[0], "turn ended with reason") {
+		t.Fatalf("failures = %+v, want turn-end failure", failures)
+	}
+}
+
 // TestBatchScenarioChecks_UsesSharedCheckLibrary pins the unification:
 // a BatchScenario's declarative fields map to the same Check builders
 // the in-process Runner uses, so adding a check happens once. A
@@ -134,6 +141,7 @@ func TestBatchScenarioChecks_UsesSharedCheckLibrary(t *testing.T) {
 	checks := BatchScenarioChecks(scenario)
 
 	wantPrefixes := []string{
+		"turn_ended_cleanly",
 		"tool_called:read_file",
 		"tool_not_called:write_file",
 		"final_text_contains:done",

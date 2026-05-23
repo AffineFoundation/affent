@@ -469,8 +469,9 @@ invoke; `max_turns` defaults to 6 with a hard cap of 12.
 Affent includes an internal evaluation runner for real agent scenarios. It
 creates temporary workspaces, runs `affentctl` against a configured model, and
 checks both the final outcome and the trace-level process quality: whether the
-agent reproduced failures, avoided broad filesystem scans, preserved test exit
-codes, kept tests unchanged, and ran a final verification.
+agent completed the turn cleanly, reproduced failures, avoided broad filesystem
+scans, preserved test exit codes, kept tests unchanged, and ran a final
+verification.
 
 ```bash
 go run ./cmd/affenteval --list

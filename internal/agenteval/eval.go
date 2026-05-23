@@ -438,7 +438,7 @@ func ParseTraceFile(path string) (Trace, error) {
 // ShellCommandLacksUnguarded checks, ProtectedFiles become
 // FileNotEdited checks. Lets one Check library cover both pipelines.
 func BatchScenarioChecks(scenario BatchScenario) []Check {
-	var checks []Check
+	checks := []Check{TurnEndedCleanly()}
 	for _, tool := range scenario.RequiredTools {
 		checks = append(checks, ToolCalled(tool, nil))
 	}
