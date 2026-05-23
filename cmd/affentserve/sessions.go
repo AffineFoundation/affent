@@ -335,6 +335,7 @@ func (p *SessionPool) buildSession(id string) (*Session, error) {
 	}
 	var localExec *executor.LocalExecutor
 	var skillReg *agent.SkillRegistry
+	planPath := ""
 	if p.cfg.EnableBuiltins {
 		localExec = executor.NewLocalExecutor(id, workspace)
 		skillDir := agent.DefaultWorkspaceSkillDir(sessionDir)
@@ -344,11 +345,12 @@ func (p *SessionPool) buildSession(id string) (*Session, error) {
 			_ = os.RemoveAll(workspace)
 			return nil, fmt.Errorf("skills: %w", skillErr)
 		}
+		planPath = filepath.Join(sessionDir, "plan.json")
 		agent.RegisterBuiltins(reg, agent.BuiltinDeps{
 			Executor:         localExec,
 			HostWorkspaceDir: workspace,
 			Memory:           memStore,
-			PlanPath:         filepath.Join(sessionDir, "plan.json"),
+			PlanPath:         planPath,
 			SkillRegistry:    skillReg,
 			SkillDir:         skillDir,
 			SkillInstallConfirmer: func(proposalID string) bool {
@@ -469,6 +471,9 @@ func (p *SessionPool) buildSession(id string) (*Session, error) {
 	}
 	if skillReg != nil {
 		loop.SkillProvider = skillReg.Provide
+	}
+	if planPath != "" {
+		loop.SkillProvider = agent.WithActivePlanSkillProvider(planPath, loop.SkillProvider)
 	}
 	if p.cfg.EnableSubagent {
 		loop.FirstToolPolicy = agent.SubagentFirstToolPolicy()

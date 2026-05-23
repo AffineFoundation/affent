@@ -1063,6 +1063,26 @@ func TestSessionPool_FocusedTasksCanBeDisabled(t *testing.T) {
 	}
 }
 
+func TestSessionPool_SkillProviderInjectsActivePlan(t *testing.T) {
+	pool := newTestPool(t, 4, "5m")
+	pool.cfg.EnableBuiltins = true
+	s, err := pool.GetOrCreate("planned-skill")
+	if err != nil {
+		t.Fatal(err)
+	}
+	planPath := filepath.Join(pool.sessionDirPath("planned-skill"), "plan.json")
+	if err := os.WriteFile(planPath, []byte(`{"version":1,"steps":[{"text":"resume serve work","status":"in_progress","evidence":["cmd/affentserve/sessions.go"]}]}`+"\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	got := s.loop.SkillProvider("continue")
+	if !strings.Contains(got, "AFFENT ACTIVE PLAN:") || !strings.Contains(got, "resume serve work") {
+		t.Fatalf("active plan should be injected, got %q", got)
+	}
+	if !strings.Contains(got, "cmd/affentserve/sessions.go") {
+		t.Fatalf("active plan evidence missing, got %q", got)
+	}
+}
+
 func TestSessionPool_MaxSessionsEvictsLRU(t *testing.T) {
 	pool := newTestPool(t, 2, "5m")
 	a, _ := pool.GetOrCreate("a")
