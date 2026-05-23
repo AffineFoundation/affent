@@ -499,6 +499,9 @@ func (c Config) Validate() error {
 	if c.CompactKeepLast < 0 {
 		return fmt.Errorf("compact_keep_last must be zero or a positive integer")
 	}
+	if c.EnableWebSearch && !c.EnableWeb {
+		return errors.New("enable_web_search requires enable_web")
+	}
 	if _, err := c.IdleTTL(); err != nil {
 		return err
 	}
@@ -508,7 +511,26 @@ func (c Config) Validate() error {
 	if _, err := c.RetryBackoffDuration(); err != nil {
 		return err
 	}
-	if c.BrowserCacheDir == "" {
+	if !c.EnableBrowser {
+		if c.BrowserCacheDir != "" {
+			return errors.New("browser_cache_dir requires enable_browser")
+		}
+		if c.BrowserCacheTTL != "" {
+			return errors.New("browser_cache_ttl requires enable_browser")
+		}
+		if c.BrowserCacheSweepInterval != "" {
+			return errors.New("browser_cache_sweep_interval requires enable_browser")
+		}
+		if c.BrowserNoStealth {
+			return errors.New("browser_no_stealth requires enable_browser")
+		}
+		if c.BrowserAllowAllDomains {
+			return errors.New("browser_allow_all_domains requires enable_browser")
+		}
+		if c.BrowserScreenshot {
+			return errors.New("browser_screenshot requires enable_browser")
+		}
+	} else if c.BrowserCacheDir == "" {
 		if c.BrowserCacheTTL != "" {
 			return errors.New("browser_cache_ttl requires browser_cache_dir")
 		}

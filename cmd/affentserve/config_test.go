@@ -551,13 +551,18 @@ func TestConfig_Validate_RejectsUnusedBrowserCacheDurations(t *testing.T) {
 		want string
 	}{
 		{
+			name: "cache dir without browser",
+			cfg:  Config{BaseURL: "https://example/v1", Model: "m", BrowserCacheDir: t.TempDir()},
+			want: "browser_cache_dir requires enable_browser",
+		},
+		{
 			name: "ttl without cache dir",
-			cfg:  Config{BaseURL: "https://example/v1", Model: "m", BrowserCacheTTL: "1h"},
+			cfg:  Config{BaseURL: "https://example/v1", Model: "m", EnableBrowser: true, BrowserCacheTTL: "1h"},
 			want: "browser_cache_ttl requires browser_cache_dir",
 		},
 		{
 			name: "sweep without cache dir",
-			cfg:  Config{BaseURL: "https://example/v1", Model: "m", BrowserCacheSweepInterval: "10m"},
+			cfg:  Config{BaseURL: "https://example/v1", Model: "m", EnableBrowser: true, BrowserCacheSweepInterval: "10m"},
 			want: "browser_cache_sweep_interval requires browser_cache_dir",
 		},
 		{
@@ -565,10 +570,51 @@ func TestConfig_Validate_RejectsUnusedBrowserCacheDurations(t *testing.T) {
 			cfg: Config{
 				BaseURL:                   "https://example/v1",
 				Model:                     "m",
+				EnableBrowser:             true,
 				BrowserCacheDir:           t.TempDir(),
 				BrowserCacheSweepInterval: "1m",
 			},
 			want: "at least",
+		},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			if err := tc.cfg.Resolve(); err != nil {
+				t.Fatal(err)
+			}
+			err := tc.cfg.Validate()
+			if err == nil || !strings.Contains(err.Error(), tc.want) {
+				t.Fatalf("Validate error = %v, want contains %q", err, tc.want)
+			}
+		})
+	}
+}
+
+func TestConfig_Validate_RejectsUnusedFeatureSubOptions(t *testing.T) {
+	cases := []struct {
+		name string
+		cfg  Config
+		want string
+	}{
+		{
+			name: "web search without web",
+			cfg:  Config{BaseURL: "https://example/v1", Model: "m", EnableWebSearch: true},
+			want: "enable_web_search requires enable_web",
+		},
+		{
+			name: "browser screenshot without browser",
+			cfg:  Config{BaseURL: "https://example/v1", Model: "m", BrowserScreenshot: true},
+			want: "browser_screenshot requires enable_browser",
+		},
+		{
+			name: "browser no stealth without browser",
+			cfg:  Config{BaseURL: "https://example/v1", Model: "m", BrowserNoStealth: true},
+			want: "browser_no_stealth requires enable_browser",
+		},
+		{
+			name: "browser allow all without browser",
+			cfg:  Config{BaseURL: "https://example/v1", Model: "m", BrowserAllowAllDomains: true},
+			want: "browser_allow_all_domains requires enable_browser",
 		},
 	}
 	for _, tc := range cases {
