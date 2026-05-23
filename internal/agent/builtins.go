@@ -246,7 +246,7 @@ func skillTool(reg *SkillRegistry, skillDir string, confirmInstall SkillInstallC
 				if strings.TrimSpace(skillDir) == "" {
 					return "", errors.New("skill install is not configured for this runtime\nNext: ask the operator to run affent with a workspace-backed skill directory, or paste the skill body into the current task without installing it")
 				}
-				proposalID := strings.TrimSpace(p.ProposalID)
+				proposalID := strings.ToLower(strings.TrimSpace(p.ProposalID))
 				if proposalID == "" {
 					return "", errors.New("proposal_id is required when action=confirm_install\nNext: ask the user to confirm a prepared proposal, then retry with the exact proposal_id returned by propose_install")
 				}

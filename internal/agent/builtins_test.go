@@ -1501,7 +1501,7 @@ func TestSkillToolProposesThenConfirmsRuntimeSkillInstall(t *testing.T) {
 
 	confirmArgs, err := json.Marshal(map[string]any{
 		"action":      "confirm_install",
-		"proposal_id": proposalID,
+		"proposal_id": strings.ToUpper(proposalID),
 	})
 	if err != nil {
 		t.Fatal(err)
