@@ -414,6 +414,9 @@ func TestSubagentToolDescriptionMentionsCallerProvidedBrowserTools(t *testing.T)
 	if !strings.Contains(raw, `"task": {"type": "string", "minLength": 1`) {
 		t.Fatalf("subagent task schema should publish non-empty task constraint:\n%s", raw)
 	}
+	if !strings.Contains(raw, `"mode": {"type": "string", "minLength": 1`) {
+		t.Fatalf("subagent mode schema should publish non-empty mode constraint:\n%s", raw)
+	}
 }
 
 // TestBuildSubagentRegistry_HasNoWriteAndBoundedNestedSubagent pins the
@@ -767,6 +770,34 @@ func TestSubagentTool_InputValidation(t *testing.T) {
 			}
 		}
 	})
+}
+
+func TestSubagentTool_BlankModeDefaultsToExplore(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "text/event-stream")
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte("data: {\"choices\":[{\"delta\":{\"role\":\"assistant\",\"content\":\"Conclusion:\\nok\"},\"finish_reason\":\"stop\"}]}\n\n"))
+		_, _ = w.Write([]byte("data: [DONE]\n\n"))
+	}))
+	t.Cleanup(srv.Close)
+
+	tool := subagentTool(SubagentDeps{
+		LLM:              NewLLMClient(srv.URL, "", "fake"),
+		HostWorkspaceDir: t.TempDir(),
+		Log:              zerolog.Nop(),
+		PerCallTimeout:   5 * time.Second,
+	})
+	out, err := tool.Execute(context.Background(), json.RawMessage(`{"task":"x","mode":"   "}`))
+	if err != nil {
+		t.Fatalf("blank mode should default, not error: %v", err)
+	}
+	var resp subagentResponse
+	if err := json.Unmarshal([]byte(out), &resp); err != nil {
+		t.Fatal(err)
+	}
+	if resp.Mode != "explore" || !resp.OK {
+		t.Fatalf("blank mode should use default explore; got %+v", resp)
+	}
 }
 
 // TestSubagentModeRegistry_DataDrivenContract pins the core extensibility

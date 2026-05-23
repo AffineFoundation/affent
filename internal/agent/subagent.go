@@ -388,6 +388,7 @@ func subagentTool(deps SubagentDeps) *Tool {
 			if p.Task == "" {
 				return "", errors.New("task is required")
 			}
+			p.Mode = strings.TrimSpace(p.Mode)
 			if p.Mode == "" {
 				p.Mode = reg.Default()
 			}
@@ -426,7 +427,7 @@ func subagentToolSchema(reg *SubagentModeRegistry, maxDepth int) json.RawMessage
 		modeDesc.WriteString(def)
 		modeDesc.WriteString(".")
 	}
-	modeBlock := fmt.Sprintf(`"mode": {"type": "string", "enum": %s, "description": %q}`, enum, modeDesc.String())
+	modeBlock := fmt.Sprintf(`"mode": {"type": "string", "minLength": 1, "enum": %s, "description": %q}`, enum, modeDesc.String())
 	schemaJSON := `{
         "type": "object",
         "required": ["task"],
