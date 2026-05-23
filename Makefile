@@ -6,6 +6,10 @@ SANDBOX_STOP_ARGS ?=
 IMAGE_BUILD_ARGS ?=
 IMAGE_RUN_ARGS ?=
 IMAGE_COMMAND ?= affentctl --help
+EVAL_IMAGE ?= affinefoundation/affent:latest
+EVAL_ARGS ?= --list
+EVAL_WORK_ROOT ?= /workspace/.tmp/eval
+EVAL_DOCKER_ARGS ?=
 SERVE_ARGS ?=
 SERVE_LISTEN ?= 0.0.0.0:7777
 SERVE_PUBLISH ?= 127.0.0.1:7777:7777
@@ -19,7 +23,7 @@ TEST_DIR ?= .
 GO_TEST_FLAGS ?= -p=1
 TEST_PACKAGES ?= ./...
 
-.PHONY: affentctl affentctl-local doctor sandbox-start sandbox-status sandbox-stop image-build image-run image-serve test-container
+.PHONY: affentctl affentctl-local doctor sandbox-start sandbox-status sandbox-stop image-build image-run image-serve eval-container test-container
 
 affentctl:
 	mkdir -p "$(dir $(AFFENTCTL))" .tmp/go-build .tmp/go-mod
@@ -60,6 +64,32 @@ image-run: affentctl
 
 image-serve: affentctl
 	"$(AFFENTCTL)" image run --timeout 0s --publish "$(SERVE_PUBLISH)" $(IMAGE_RUN_ARGS) -- affentserve --listen "$(SERVE_LISTEN)" --workspace-root "$(SERVE_WORKSPACE_ROOT)" $(SERVE_ARGS)
+
+eval-container: affentctl
+	"$(AFFENTCTL)" image build --image "$(EVAL_IMAGE)" $(IMAGE_BUILD_ARGS)
+	mkdir -p .tmp/eval-container/home .tmp/eval-container/cache .tmp/eval-container/go-build .tmp/eval-container/go-mod .tmp/eval-container/npm .tmp/eval-container/pip .tmp/eval
+	docker run --rm \
+		--memory "$(CONTAINER_MEMORY)" \
+		--memory-swap "$(CONTAINER_MEMORY)" \
+		--cpus "$(CONTAINER_CPUS)" \
+		--user "$$(id -u):$$(id -g)" \
+		-e HOME=/workspace/.tmp/eval-container/home \
+		-e XDG_CACHE_HOME=/workspace/.tmp/eval-container/cache \
+		-e GOCACHE=/workspace/.tmp/eval-container/go-build \
+		-e GOMODCACHE=/workspace/.tmp/eval-container/go-mod \
+		-e NPM_CONFIG_CACHE=/workspace/.tmp/eval-container/npm \
+		-e PIP_CACHE_DIR=/workspace/.tmp/eval-container/pip \
+		-e AFFENTCTL_BASE_URL \
+		-e AFFENTCTL_API_KEY \
+		-e AFFENTCTL_MODEL \
+		-e AFFENTCTL_TEMPERATURE \
+		-e AFFENTCTL_TOP_P \
+		-e AFFENTCTL_MAX_TOKENS \
+		-v "$(CURDIR):/workspace" \
+		-w /workspace \
+		$(EVAL_DOCKER_ARGS) \
+		"$(EVAL_IMAGE)" \
+		go run ./cmd/affenteval --repo-root /workspace --work-root "$(EVAL_WORK_ROOT)" --executor local $(EVAL_ARGS)
 
 test-container:
 	mkdir -p .tmp/go-build .tmp/go-mod

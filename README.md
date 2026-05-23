@@ -68,6 +68,7 @@ make affentctl-local
 make sandbox-start
 make image-run IMAGE_COMMAND='affentctl --help'
 make image-serve
+make eval-container EVAL_ARGS='--list'
 make test-container TEST_PACKAGES=./internal/agent
 make test-container TEST_DIR=cmd/affentserve TEST_PACKAGES=./...
 ```
@@ -80,6 +81,13 @@ knob. Use `make affentctl-local` only when you explicitly want the host Go
 toolchain. Set `TEST_DIR` for nested modules such as `cmd/affentserve` or
 `extras/web`. The other targets use `affentctl` so the same default persistent
 workspaces, image tags, and resource limits apply.
+
+`make eval-container` builds the full Affent runtime image, runs the checkout's
+`cmd/affenteval` inside it with the same Docker memory/CPU defaults, mounts the
+checkout at `/workspace`, stores scenario workspaces under `/workspace/.tmp/eval`,
+and keeps runtime HOME/caches under `/workspace/.tmp/eval-container`. It
+defaults to `EVAL_ARGS='--list'` so it does not call a model unless you request
+scenarios explicitly.
 
 The equivalent host build, when you intentionally want to bypass Docker, is:
 
@@ -481,6 +489,7 @@ go run ./cmd/affenteval --suite small-model-tools --temperature 0
 go run ./cmd/affenteval --scenario coding-python-slug --temperature 0
 go run ./cmd/affenteval --suite small-model-tools --jsonl > eval.jsonl
 go run ./cmd/affenteval --scenario coding-python-slug --executor sandbox
+make eval-container EVAL_ARGS='--suite small-model-tools --temperature 0'
 ```
 
 The runner is intentionally small and scenario-driven. It is meant to turn
