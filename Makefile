@@ -20,6 +20,7 @@ DOCTOR_ARGS ?=
 CONTAINER_GO_IMAGE ?= golang:1.24-bookworm
 CONTAINER_MEMORY ?= 1g
 CONTAINER_CPUS ?= 2
+CONTAINER_PIDS ?= 512
 TEST_DIR ?= .
 GO_TEST_FLAGS ?= -p=1
 TEST_PACKAGES ?= ./...
@@ -49,7 +50,7 @@ doctor: affentctl
 	"$(AFFENTCTL)" doctor $(DOCTOR_ARGS)
 
 sandbox-start: affentctl
-	"$(AFFENTCTL)" sandbox start $(SANDBOX_START_ARGS)
+	"$(AFFENTCTL)" sandbox start --memory "$(CONTAINER_MEMORY)" --cpus "$(CONTAINER_CPUS)" --pids-limit "$(CONTAINER_PIDS)" $(SANDBOX_START_ARGS)
 
 sandbox-status: affentctl
 	"$(AFFENTCTL)" sandbox status
@@ -58,16 +59,16 @@ sandbox-stop: affentctl
 	"$(AFFENTCTL)" sandbox stop $(SANDBOX_STOP_ARGS)
 
 image-build: affentctl
-	"$(AFFENTCTL)" image build $(IMAGE_BUILD_ARGS)
+	"$(AFFENTCTL)" image build --memory "$(CONTAINER_MEMORY)" $(IMAGE_BUILD_ARGS)
 
 image-run: affentctl
-	"$(AFFENTCTL)" image run $(IMAGE_RUN_ARGS) -- $(IMAGE_COMMAND)
+	"$(AFFENTCTL)" image run --memory "$(CONTAINER_MEMORY)" --cpus "$(CONTAINER_CPUS)" --pids-limit "$(CONTAINER_PIDS)" $(IMAGE_RUN_ARGS) -- $(IMAGE_COMMAND)
 
 image-serve: affentctl
-	"$(AFFENTCTL)" image run --timeout 0s --publish "$(SERVE_PUBLISH)" $(IMAGE_RUN_ARGS) -- affentserve --listen "$(SERVE_LISTEN)" --workspace-root "$(SERVE_WORKSPACE_ROOT)" --memory-root "$(SERVE_MEMORY_ROOT)" --builtins $(SERVE_ARGS)
+	"$(AFFENTCTL)" image run --memory "$(CONTAINER_MEMORY)" --cpus "$(CONTAINER_CPUS)" --pids-limit "$(CONTAINER_PIDS)" --timeout 0s --publish "$(SERVE_PUBLISH)" $(IMAGE_RUN_ARGS) -- affentserve --listen "$(SERVE_LISTEN)" --workspace-root "$(SERVE_WORKSPACE_ROOT)" --memory-root "$(SERVE_MEMORY_ROOT)" --builtins $(SERVE_ARGS)
 
 eval-container: affentctl
-	"$(AFFENTCTL)" image build --image "$(EVAL_IMAGE)" $(IMAGE_BUILD_ARGS)
+	"$(AFFENTCTL)" image build --image "$(EVAL_IMAGE)" --memory "$(CONTAINER_MEMORY)" $(IMAGE_BUILD_ARGS)
 	mkdir -p .tmp/eval-container/home .tmp/eval-container/cache .tmp/eval-container/go-build .tmp/eval-container/go-mod .tmp/eval-container/npm .tmp/eval-container/pip .tmp/eval
 	docker run --rm \
 		--memory "$(CONTAINER_MEMORY)" \
