@@ -644,11 +644,14 @@ func userTextConfirmsRuntimeSkillProposal(text, proposalID string) bool {
 		"不要", "别", "不安装", "取消", "拒绝", "不同意",
 	} {
 		if strings.Contains(lower, phrase) {
+			if phrase == "no " && containsAny(lower, []string{"no problem", "no worries"}) {
+				continue
+			}
 			return false
 		}
 	}
 	for _, phrase := range []string{
-		"confirm", "confirmed", "approve", "approved", "install", "yes", "ok", "okay", "go ahead", "proceed",
+		"confirm", "confirmed", "approve", "approved", "install", "yes", "ok", "okay", "go ahead", "proceed", "no problem", "no worries",
 		"确认", "同意", "批准", "安装", "可以", "继续", "没问题",
 	} {
 		if strings.Contains(lower, phrase) {

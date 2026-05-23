@@ -545,6 +545,19 @@ func TestUserConfirmedRuntimeSkillProposalRequiresLatestUserApproval(t *testing.
 	}
 }
 
+func TestUserConfirmedRuntimeSkillProposalHandlesNoProblem(t *testing.T) {
+	proposalID := "0123456789abcdef"
+	if !userTextConfirmsRuntimeSkillProposal("no problem, install proposal_id=0123456789abcdef", proposalID) {
+		t.Fatal("no problem with install should count as confirmation")
+	}
+	if userTextConfirmsRuntimeSkillProposal("no problem, do not install proposal_id=0123456789abcdef", proposalID) {
+		t.Fatal("explicit rejection must override no problem")
+	}
+	if userTextConfirmsRuntimeSkillProposal("no, proposal_id=0123456789abcdef", proposalID) {
+		t.Fatal("plain no should not confirm proposal")
+	}
+}
+
 func TestLoopAppendUserMessageInjectsActiveSkillBeforeUser(t *testing.T) {
 	conv, err := OpenConversationAt(filepath.Join(t.TempDir(), "sess.jsonl"))
 	if err != nil {
