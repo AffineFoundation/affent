@@ -101,6 +101,72 @@ func TestPlanToolRejectsAmbiguousInProgress(t *testing.T) {
 	}
 }
 
+func TestPlanToolRejectsSymlinkPlanFile(t *testing.T) {
+	dir := t.TempDir()
+	outside := filepath.Join(t.TempDir(), "outside-plan.json")
+	if err := os.WriteFile(outside, []byte(`{"version":1,"steps":[{"text":"outside"}]}`), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	path := filepath.Join(dir, "plan.json")
+	if err := os.Symlink(outside, path); err != nil {
+		t.Skipf("symlink unavailable: %v", err)
+	}
+
+	tool := planTool(path)
+	_, err := tool.Execute(context.Background(), json.RawMessage(`{"action":"view"}`))
+	if err == nil || !strings.Contains(err.Error(), "plan path must not be a symlink") {
+		t.Fatalf("view error = %v, want symlink rejection", err)
+	}
+	_, err = tool.Execute(context.Background(), json.RawMessage(`{"action":"set","steps":[{"text":"safe"}]}`))
+	if err == nil || !strings.Contains(err.Error(), "plan path must not be a symlink") {
+		t.Fatalf("set error = %v, want symlink rejection", err)
+	}
+}
+
+func TestPlanToolRejectsOversizedPlanFile(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "plan.json")
+	if err := os.WriteFile(path, []byte(strings.Repeat(" ", maxPlanStateBytes+1)), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	tool := planTool(path)
+	_, err := tool.Execute(context.Background(), json.RawMessage(`{"action":"view"}`))
+	if err == nil || !strings.Contains(err.Error(), "plan file exceeds") {
+		t.Fatalf("view error = %v, want size rejection", err)
+	}
+}
+
+func TestPlanToolWriteDoesNotFollowStaleTempSymlink(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "plan.json")
+	outside := filepath.Join(t.TempDir(), "outside-plan.json")
+	if err := os.WriteFile(outside, []byte("outside"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink(outside, path+".tmp"); err != nil {
+		t.Skipf("symlink unavailable: %v", err)
+	}
+
+	tool := planTool(path)
+	if _, err := tool.Execute(context.Background(), json.RawMessage(`{"action":"set","steps":[{"text":"safe"}]}`)); err != nil {
+		t.Fatalf("set: %v", err)
+	}
+	raw, err := os.ReadFile(outside)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(raw) != "outside" {
+		t.Fatalf("outside file was modified through temp symlink: %q", raw)
+	}
+	info, err := os.Lstat(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if info.Mode()&os.ModeSymlink != 0 {
+		t.Fatal("plan file must be a regular file, not a symlink")
+	}
+}
+
 func TestPlanToolUpdateRequiresChangedField(t *testing.T) {
 	tool := planTool(filepath.Join(t.TempDir(), "plan.json"))
 	if _, err := tool.Execute(context.Background(), json.RawMessage(`{"action":"set","steps":[{"text":"x"}]}`)); err != nil {

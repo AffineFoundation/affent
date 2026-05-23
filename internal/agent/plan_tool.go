@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
 	"sort"
@@ -21,6 +22,7 @@ const (
 	maxPlanNoteBytes     = 500
 	maxPlanEvidence      = 6
 	maxPlanEvidenceBytes = 240
+	maxPlanStateBytes    = 32 * 1024
 	planStateVersion     = 1
 )
 
@@ -333,12 +335,33 @@ func newPlanState(steps []planStep, message string) planState {
 }
 
 func readPlanState(path string) (planState, error) {
-	raw, err := os.ReadFile(path)
+	info, err := os.Lstat(path)
 	if errors.Is(err, os.ErrNotExist) {
 		return newPlanState(nil, ""), nil
 	}
 	if err != nil {
 		return planState{}, err
+	}
+	if info.IsDir() {
+		return planState{}, errors.New("plan path is a directory")
+	}
+	if info.Mode()&os.ModeSymlink != 0 {
+		return planState{}, errors.New("plan path must not be a symlink")
+	}
+	f, err := os.Open(path)
+	if errors.Is(err, os.ErrNotExist) {
+		return newPlanState(nil, ""), nil
+	}
+	if err != nil {
+		return planState{}, err
+	}
+	defer f.Close()
+	raw, err := io.ReadAll(io.LimitReader(f, maxPlanStateBytes+1))
+	if err != nil {
+		return planState{}, err
+	}
+	if len(raw) > maxPlanStateBytes {
+		return planState{}, fmt.Errorf("plan file exceeds %d bytes\nNext: clear the plan and set a concise replacement", maxPlanStateBytes)
 	}
 	var st planState
 	if err := json.Unmarshal(raw, &st); err != nil {
@@ -357,12 +380,25 @@ func writePlanState(path string, st planState) error {
 	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
 		return err
 	}
+	if info, err := os.Lstat(path); err == nil {
+		if info.IsDir() {
+			return errors.New("plan path is a directory")
+		}
+		if info.Mode()&os.ModeSymlink != 0 {
+			return errors.New("plan path must not be a symlink")
+		}
+	} else if !errors.Is(err, os.ErrNotExist) {
+		return err
+	}
 	raw, err := json.MarshalIndent(st, "", "  ")
 	if err != nil {
 		return err
 	}
 	tmp := path + ".tmp"
-	f, err := os.OpenFile(tmp, os.O_CREATE|os.O_TRUNC|os.O_WRONLY, 0o644)
+	if err := os.Remove(tmp); err != nil && !errors.Is(err, os.ErrNotExist) {
+		return err
+	}
+	f, err := os.OpenFile(tmp, os.O_CREATE|os.O_EXCL|os.O_WRONLY, 0o644)
 	if err != nil {
 		return err
 	}
