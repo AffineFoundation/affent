@@ -129,16 +129,18 @@ func skillTool(reg *SkillRegistry, skillDir string) *Tool {
         "additionalProperties": false,
         "required": ["action"],
         "properties": {
-            "action": {"type": "string", "minLength": 1, "maxLength": %d, "enum": ["list", "read", "install"], "description": "Use list to inspect skills, read to load one body, or install to add/update a runtime skill."},
-            "name": {"type": "string", "minLength": 1, "maxLength": %d, "description": "Skill name for read/install."},
+            "action": {"type": "string", "minLength": 1, "maxLength": %d, "enum": ["list", "read", "propose_install", "confirm_install", "install"], "description": "Use list to inspect skills, read to load one body, propose_install to prepare a candidate for user confirmation, confirm_install after explicit user confirmation, or install only for exact user-provided skill bodies."},
+            "name": {"type": "string", "minLength": 1, "maxLength": %d, "description": "Skill name for read/propose_install/install."},
             "description": {"type": "string", "maxLength": %d, "description": "One-line skill catalog description for install."},
             "body": {"type": "string", "maxLength": %d, "description": "Full SKILL.md body for install."},
-            "triggers": {"type": "array", "maxItems": %d, "items": {"type": "string", "minLength": 1, "maxLength": %d}, "description": "Optional phrases that auto-activate this skill on future turns."}
+            "triggers": {"type": "array", "maxItems": %d, "items": {"type": "string", "minLength": 1, "maxLength": %d}, "description": "Optional phrases that auto-activate this skill on future turns."},
+            "source": {"type": "string", "maxLength": %d, "description": "Candidate source URL or path for propose_install/install provenance."},
+            "proposal_id": {"type": "string", "minLength": 16, "maxLength": 16, "description": "Pending proposal id returned by propose_install, required for confirm_install."}
         }
-    }`, maxSkillActionBytes, maxSkillNameBytes, maxRuntimeSkillDescriptionBytes, maxRuntimeSkillBodyBytes, maxRuntimeSkillTriggers, maxRuntimeSkillTriggerBytes))
+    }`, maxSkillActionBytes, maxSkillNameBytes, maxRuntimeSkillDescriptionBytes, maxRuntimeSkillBodyBytes, maxRuntimeSkillTriggers, maxRuntimeSkillTriggerBytes, maxRuntimeSkillSourceBytes))
 	return &Tool{
 		Name:        "skill",
-		Description: "List, read, or install reusable operational skills. Installed skills are prompt/workflow documents, persisted under the workspace, and become available without restarting. Use install only when the user explicitly asks to add a skill or provides a concrete skill body.",
+		Description: "List, read, or install reusable operational skills. Installed skills are prompt/workflow documents, persisted under the workspace, and become available without restarting. Use install only when the user explicitly provides an exact skill body to install, or after you have shown a proposal for a remote/searched candidate and the user explicitly confirms that specific candidate.",
 		Schema:      schema,
 		Execute: func(ctx context.Context, args json.RawMessage) (string, error) {
 			var p struct {
@@ -147,6 +149,8 @@ func skillTool(reg *SkillRegistry, skillDir string) *Tool {
 				Description string   `json:"description"`
 				Body        string   `json:"body"`
 				Triggers    []string `json:"triggers"`
+				Source      string   `json:"source"`
+				ProposalID  string   `json:"proposal_id"`
 			}
 			if err := json.Unmarshal(args, &p); err != nil {
 				return "", fmt.Errorf("decode args: %w", err)
@@ -156,7 +160,7 @@ func skillTool(reg *SkillRegistry, skillDir string) *Tool {
 				return "", errors.New("action is required\nNext: retry skill with action=list to inspect skills, or action=read with a valid name")
 			}
 			if len(action) > maxSkillActionBytes {
-				return "", fmt.Errorf("action is %d bytes; skill action supports up to %d bytes\nNext: retry skill with action=list, action=read, or action=install", len(action), maxSkillActionBytes)
+				return "", fmt.Errorf("action is %d bytes; skill action supports up to %d bytes\nNext: retry skill with action=list, action=read, action=propose_install, action=confirm_install, or action=install", len(action), maxSkillActionBytes)
 			}
 			switch action {
 			case "list":
@@ -178,6 +182,48 @@ func skillTool(reg *SkillRegistry, skillDir string) *Tool {
 					return "", fmt.Errorf("unknown skill %q (valid: %s)\nNext: call skill with action=list and retry action=read with one of the listed names", name, strings.Join(reg.Names(), ", "))
 				}
 				return strings.TrimSpace(s.Body), nil
+			case "propose_install":
+				if strings.TrimSpace(skillDir) == "" {
+					return "", errors.New("skill install is not configured for this runtime\nNext: ask the operator to run affent with a workspace-backed skill directory, or paste the skill body into the current task without installing it")
+				}
+				name := strings.TrimSpace(p.Name)
+				if name == "" {
+					return "", errors.New("name is required when action=propose_install\nNext: retry with a short skill name using ASCII letters, digits, '_' or '-'")
+				}
+				skill := Skill{
+					Name:        name,
+					Description: p.Description,
+					Source:      p.Source,
+					Body:        p.Body,
+					AutoActivation: SkillAutoActivation{
+						Any: p.Triggers,
+					},
+				}
+				proposal, err := ProposeRuntimeSkill(skillDir, skill)
+				if err != nil {
+					return "", fmt.Errorf("%s\nNext: retry with a valid name, source, non-empty body under %d bytes, and at most %d concise triggers", err, maxRuntimeSkillBodyBytes, maxRuntimeSkillTriggers)
+				}
+				triggerSummary := "none"
+				if len(proposal.AutoActivation.Any) > 0 {
+					triggerSummary = strings.Join(proposal.AutoActivation.Any, ", ")
+				}
+				return fmt.Sprintf("prepared skill install proposal_id=%s name=%q source=%s triggers=%s body_bytes=%d\n\nReview this proposal with the user and ask for explicit confirmation before installing. After the user confirms this exact proposal, call skill with action=confirm_install and proposal_id=%q.\n\nbody_preview:\n%s", proposal.ID, proposal.Name, proposal.Source, triggerSummary, len(proposal.Body), proposal.ID, previewN(strings.TrimSpace(proposal.Body), MaxToolResultPreviewInEvent)), nil
+			case "confirm_install":
+				if strings.TrimSpace(skillDir) == "" {
+					return "", errors.New("skill install is not configured for this runtime\nNext: ask the operator to run affent with a workspace-backed skill directory, or paste the skill body into the current task without installing it")
+				}
+				proposalID := strings.TrimSpace(p.ProposalID)
+				if proposalID == "" {
+					return "", errors.New("proposal_id is required when action=confirm_install\nNext: ask the user to confirm a prepared proposal, then retry with the exact proposal_id returned by propose_install")
+				}
+				installed, err := ConfirmRuntimeSkillProposal(skillDir, proposalID)
+				if err != nil {
+					return "", fmt.Errorf("%s\nNext: call skill with action=propose_install to prepare a fresh proposal, ask the user to confirm it, then retry action=confirm_install", err)
+				}
+				if err := reg.Upsert(installed); err != nil {
+					return "", fmt.Errorf("%s\nNext: retry with a valid pending proposal", err)
+				}
+				return skillInstallSuccessMessage(installed), nil
 			case "install":
 				if strings.TrimSpace(skillDir) == "" {
 					return "", errors.New("skill install is not configured for this runtime\nNext: ask the operator to run affent with a workspace-backed skill directory, or paste the skill body into the current task without installing it")
@@ -189,11 +235,11 @@ func skillTool(reg *SkillRegistry, skillDir string) *Tool {
 				skill := Skill{
 					Name:        name,
 					Description: p.Description,
+					Source:      p.Source,
 					Body:        p.Body,
 					AutoActivation: SkillAutoActivation{
 						Any: p.Triggers,
 					},
-					Source: "file://" + filepath.ToSlash(filepath.Join(skillDir, name, "SKILL.md")),
 				}
 				installed, err := InstallRuntimeSkill(skillDir, skill)
 				if err != nil {
@@ -202,16 +248,20 @@ func skillTool(reg *SkillRegistry, skillDir string) *Tool {
 				if err := reg.Upsert(installed); err != nil {
 					return "", fmt.Errorf("%s\nNext: retry with a valid install payload", err)
 				}
-				triggerSummary := "none"
-				if len(installed.AutoActivation.Any) > 0 {
-					triggerSummary = strings.Join(installed.AutoActivation.Any, ", ")
-				}
-				return fmt.Sprintf("installed skill %q source=%s triggers=%s\n\n%s", installed.Name, installed.Source, triggerSummary, strings.TrimSpace(installed.Body)), nil
+				return skillInstallSuccessMessage(installed), nil
 			default:
-				return "", fmt.Errorf("unsupported action %q (valid: list, read, install)\nNext: retry skill with action=list, action=read, or action=install", action)
+				return "", fmt.Errorf("unsupported action %q (valid: list, read, propose_install, confirm_install, install)\nNext: retry skill with action=list, action=read, action=propose_install, action=confirm_install, or action=install", action)
 			}
 		},
 	}
+}
+
+func skillInstallSuccessMessage(installed Skill) string {
+	triggerSummary := "none"
+	if len(installed.AutoActivation.Any) > 0 {
+		triggerSummary = strings.Join(installed.AutoActivation.Any, ", ")
+	}
+	return fmt.Sprintf("installed skill %q source=%s triggers=%s\n\n%s", installed.Name, installed.Source, triggerSummary, strings.TrimSpace(installed.Body))
 }
 
 // RegisterMemoryOnly registers just the `memory` tool. This is useful

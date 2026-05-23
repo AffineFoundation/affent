@@ -1,6 +1,7 @@
 package agent
 
 import (
+	"crypto/sha256"
 	"embed"
 	"encoding/json"
 	"fmt"
@@ -105,10 +106,12 @@ const (
 	maxRuntimeSkillNameBytes        = 128
 	maxRuntimeSkillDescriptionBytes = 512
 	maxRuntimeSkillBodyBytes        = 64 * 1024
+	maxRuntimeSkillSourceBytes      = 2 * 1024
 	maxRuntimeSkills                = 128
 	maxRuntimeSkillTriggers         = 20
 	maxRuntimeSkillTriggerBytes     = 128
 	maxRuntimeSkillManifestBytes    = maxRuntimeSkillDescriptionBytes + maxRuntimeSkillTriggerBytes*maxRuntimeSkillTriggers + 1024
+	maxRuntimeSkillProposalBytes    = maxRuntimeSkillBodyBytes + maxRuntimeSkillManifestBytes + maxRuntimeSkillSourceBytes + 4096
 )
 
 func (a SkillAutoActivation) hasRules() bool {
@@ -280,6 +283,15 @@ type runtimeSkillManifest struct {
 	AutoActivation SkillAutoActivation `json:"auto_activation,omitempty"`
 }
 
+type RuntimeSkillProposal struct {
+	ID             string              `json:"id"`
+	Name           string              `json:"name"`
+	Description    string              `json:"description,omitempty"`
+	Source         string              `json:"source,omitempty"`
+	Body           string              `json:"body"`
+	AutoActivation SkillAutoActivation `json:"auto_activation,omitempty"`
+}
+
 func mustBuiltinSkill(name string) Skill {
 	s, _, err := loadBuiltinSkill(builtinSkillFS, name)
 	if err != nil {
@@ -445,6 +457,9 @@ func LoadSkillDir(root string) ([]Skill, error) {
 		if !entry.IsDir() {
 			continue
 		}
+		if strings.HasPrefix(entry.Name(), ".") {
+			continue
+		}
 		if len(out) >= maxRuntimeSkills {
 			return nil, fmt.Errorf("runtime skill directory %s has more than %d skills", root, maxRuntimeSkills)
 		}
@@ -488,6 +503,76 @@ func InstallRuntimeSkill(root string, skill Skill) (Skill, error) {
 		return Skill{}, fmt.Errorf("write skill body: %w", err)
 	}
 	return normalized, nil
+}
+
+func ProposeRuntimeSkill(root string, skill Skill) (RuntimeSkillProposal, error) {
+	root = strings.TrimSpace(root)
+	if root == "" {
+		return RuntimeSkillProposal{}, fmt.Errorf("runtime skill directory is not configured")
+	}
+	normalized, err := normalizeRuntimeSkill(skill)
+	if err != nil {
+		return RuntimeSkillProposal{}, err
+	}
+	id := runtimeSkillProposalID(normalized)
+	proposal := RuntimeSkillProposal{
+		ID:             id,
+		Name:           normalized.Name,
+		Description:    normalized.Description,
+		Source:         normalized.Source,
+		Body:           normalized.Body,
+		AutoActivation: normalized.AutoActivation,
+	}
+	dir := filepath.Join(root, ".pending")
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		return RuntimeSkillProposal{}, fmt.Errorf("create pending skill directory: %w", err)
+	}
+	raw, err := json.MarshalIndent(proposal, "", "  ")
+	if err != nil {
+		return RuntimeSkillProposal{}, err
+	}
+	if len(raw) > maxRuntimeSkillProposalBytes {
+		return RuntimeSkillProposal{}, fmt.Errorf("skill proposal is %d bytes; max %d", len(raw), maxRuntimeSkillProposalBytes)
+	}
+	if err := os.WriteFile(filepath.Join(dir, id+".json"), append(raw, '\n'), 0o644); err != nil {
+		return RuntimeSkillProposal{}, fmt.Errorf("write pending skill proposal: %w", err)
+	}
+	return proposal, nil
+}
+
+func ConfirmRuntimeSkillProposal(root, id string) (Skill, error) {
+	root = strings.TrimSpace(root)
+	if root == "" {
+		return Skill{}, fmt.Errorf("runtime skill directory is not configured")
+	}
+	id = strings.TrimSpace(id)
+	if !validRuntimeSkillProposalID(id) {
+		return Skill{}, fmt.Errorf("skill proposal id %q is invalid", id)
+	}
+	path := filepath.Join(root, ".pending", id+".json")
+	raw, err := readRuntimeSkillFile(path, maxRuntimeSkillProposalBytes)
+	if err != nil {
+		return Skill{}, fmt.Errorf("load pending skill proposal: %w", err)
+	}
+	var proposal RuntimeSkillProposal
+	if err := json.Unmarshal(raw, &proposal); err != nil {
+		return Skill{}, fmt.Errorf("parse pending skill proposal: %w", err)
+	}
+	if proposal.ID != id {
+		return Skill{}, fmt.Errorf("pending skill proposal id mismatch: file has %q", proposal.ID)
+	}
+	installed, err := InstallRuntimeSkill(root, Skill{
+		Name:           proposal.Name,
+		Description:    proposal.Description,
+		Source:         proposal.Source,
+		Body:           proposal.Body,
+		AutoActivation: proposal.AutoActivation,
+	})
+	if err != nil {
+		return Skill{}, err
+	}
+	_ = os.Remove(path)
+	return installed, nil
 }
 
 func loadRuntimeSkill(dir string) (Skill, error) {
@@ -551,6 +636,10 @@ func normalizeRuntimeSkill(s Skill) (Skill, error) {
 	if len(s.Description) > maxRuntimeSkillDescriptionBytes {
 		return Skill{}, fmt.Errorf("skill description is %d bytes; max %d", len(s.Description), maxRuntimeSkillDescriptionBytes)
 	}
+	s.Source = strings.TrimSpace(s.Source)
+	if len(s.Source) > maxRuntimeSkillSourceBytes {
+		return Skill{}, fmt.Errorf("skill source is %d bytes; max %d", len(s.Source), maxRuntimeSkillSourceBytes)
+	}
 	if s.Body == "" {
 		return Skill{}, fmt.Errorf("skill body is required")
 	}
@@ -602,6 +691,42 @@ func validateRuntimeSkillTrigger(trigger string) error {
 func validRuntimeSkillName(name string) bool {
 	for _, r := range name {
 		if r == '_' || r == '-' || ('A' <= r && r <= 'Z') || ('a' <= r && r <= 'z') || ('0' <= r && r <= '9') {
+			continue
+		}
+		return false
+	}
+	return true
+}
+
+func runtimeSkillProposalID(skill Skill) string {
+	h := sha256.New()
+	_, _ = h.Write([]byte(skill.Name))
+	_, _ = h.Write([]byte{0})
+	_, _ = h.Write([]byte(skill.Description))
+	_, _ = h.Write([]byte{0})
+	_, _ = h.Write([]byte(skill.Source))
+	_, _ = h.Write([]byte{0})
+	_, _ = h.Write([]byte(skill.Body))
+	for _, trigger := range skill.AutoActivation.Any {
+		_, _ = h.Write([]byte{0})
+		_, _ = h.Write([]byte(trigger))
+	}
+	for _, group := range skill.AutoActivation.AllAny {
+		for _, trigger := range group {
+			_, _ = h.Write([]byte{0})
+			_, _ = h.Write([]byte(trigger))
+		}
+	}
+	sum := h.Sum(nil)
+	return fmt.Sprintf("%x", sum[:8])
+}
+
+func validRuntimeSkillProposalID(id string) bool {
+	if len(id) != 16 {
+		return false
+	}
+	for _, r := range id {
+		if ('0' <= r && r <= '9') || ('a' <= r && r <= 'f') {
 			continue
 		}
 		return false

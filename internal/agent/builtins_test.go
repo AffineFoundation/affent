@@ -1405,6 +1405,68 @@ func TestSkillToolInstallsRuntimeSkillWithoutRestart(t *testing.T) {
 	}
 }
 
+func TestSkillToolProposesThenConfirmsRuntimeSkillInstall(t *testing.T) {
+	dir := t.TempDir()
+	reg := &SkillRegistry{}
+	tool := skillTool(reg, dir)
+	body := "AFFENT ACTIVE SKILL: reviewed_demo\nUse only after proposal confirmation."
+	args, err := json.Marshal(map[string]any{
+		"action":      "propose_install",
+		"name":        "reviewed_demo",
+		"description": "Reviewed demo workflow.",
+		"source":      "https://github.com/example/skills/reviewed_demo",
+		"body":        body,
+		"triggers":    []string{"reviewed demo"},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	out, err := tool.Execute(context.Background(), args)
+	if err != nil {
+		t.Fatalf("skill propose_install: %v", err)
+	}
+	proposalID := extractProposalID(out)
+	if proposalID == "" {
+		t.Fatalf("proposal output should include proposal_id:\n%s", out)
+	}
+	if got := reg.Provide("please use reviewed demo"); got != "" {
+		t.Fatalf("proposed skill should not activate before confirmation, got %q", got)
+	}
+	if _, err := os.Stat(filepath.Join(dir, "reviewed_demo", "SKILL.md")); !os.IsNotExist(err) {
+		t.Fatalf("proposed skill should not be installed yet, stat err=%v", err)
+	}
+
+	confirmArgs, err := json.Marshal(map[string]any{
+		"action":      "confirm_install",
+		"proposal_id": proposalID,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	confirmed, err := tool.Execute(context.Background(), confirmArgs)
+	if err != nil {
+		t.Fatalf("skill confirm_install: %v", err)
+	}
+	if !strings.Contains(confirmed, `installed skill "reviewed_demo"`) || !strings.Contains(confirmed, body) {
+		t.Fatalf("confirm output should install and expose body:\n%s", confirmed)
+	}
+	if got := reg.Provide("please use reviewed demo"); !strings.Contains(got, body) {
+		t.Fatalf("confirmed skill should activate without restart, got %q", got)
+	}
+	if _, err := os.Stat(filepath.Join(dir, ".pending", proposalID+".json")); !os.IsNotExist(err) {
+		t.Fatalf("confirmed proposal should be removed, stat err=%v", err)
+	}
+}
+
+func extractProposalID(out string) string {
+	for _, field := range strings.Fields(out) {
+		if strings.HasPrefix(field, "proposal_id=") {
+			return strings.TrimPrefix(field, "proposal_id=")
+		}
+	}
+	return ""
+}
+
 func TestSkillToolInstallRequiresConfiguredDirectory(t *testing.T) {
 	tool := skillTool(&SkillRegistry{}, "")
 	_, err := tool.Execute(context.Background(), json.RawMessage(`{"action":"install","name":"demo","body":"AFFENT ACTIVE SKILL: demo"}`))

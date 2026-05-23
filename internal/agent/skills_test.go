@@ -68,6 +68,7 @@ func TestBuiltinSkillBodiesLoadFromEmbeddedFiles(t *testing.T) {
 		{"evidence_fact_extraction", "AFFENT ACTIVE SKILL: evidence_fact_extraction"},
 		{"web_snapshot_fact_extraction", "AFFENT ACTIVE SKILL: web_snapshot_fact_extraction"},
 		{"coding_repair_workflow", "AFFENT ACTIVE SKILL: coding_repair_workflow"},
+		{"skill_install_workflow", "AFFENT ACTIVE SKILL: skill_install_workflow"},
 	} {
 		raw, err := builtinSkillFS.ReadFile("builtin_skills/" + tc.name + "/SKILL.md")
 		if err != nil {
@@ -85,6 +86,7 @@ func TestDefaultSkillRegistryLoadsEmbeddedManifestCatalog(t *testing.T) {
 		"evidence_fact_extraction",
 		"web_snapshot_fact_extraction",
 		"coding_repair_workflow",
+		"skill_install_workflow",
 	}
 	gotNames := reg.Names()
 	if len(gotNames) != len(wantNames) {
@@ -109,6 +111,21 @@ func TestDefaultSkillRegistryLoadsEmbeddedManifestCatalog(t *testing.T) {
 		}
 		if !s.AutoActivation.hasRules() {
 			t.Fatalf("%s should declare manifest auto-activation rules", name)
+		}
+	}
+}
+
+func TestBuiltinSkillProvider_SkillInstallWorkflowTriggers(t *testing.T) {
+	got := BuiltinSkillProvider("我想安装一个能帮我做 Go 代码审查的 skill，可以从 github 找")
+	for _, want := range []string{
+		"AFFENT ACTIVE SKILL: skill_install_workflow",
+		"Do not install from a source you have not read",
+		"Ask for explicit user confirmation",
+		"Do not install in the same response",
+		"skill action=install",
+	} {
+		if !strings.Contains(got, want) {
+			t.Fatalf("skill install workflow missing %q:\n%s", want, got)
 		}
 	}
 }

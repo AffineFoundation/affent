@@ -1,0 +1,21 @@
+{
+  "name": "skill_install_workflow",
+  "description": "Safe workflow for finding, reviewing, confirming, and installing runtime skills.",
+  "order": 40,
+  "auto_activation": {
+    "any": [
+      "install skill",
+      "add skill",
+      "find skill",
+      "skill from github",
+      "安装 skill",
+      "安装技能",
+      "添加 skill",
+      "添加技能"
+    ],
+    "all_any": [
+      ["skill", "技能"],
+      ["install", "add", "find", "search", "github", "安装", "添加", "检索", "查找"]
+    ]
+  }
+}
