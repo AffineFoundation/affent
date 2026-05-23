@@ -309,9 +309,64 @@ func TestHandleSlashUsageReportsAccumulatedTokens(t *testing.T) {
 	}
 }
 
+func TestHandleSlashPlanPrintsCurrentSessionPlan(t *testing.T) {
+	workspace := t.TempDir()
+	convDir := filepath.Join(workspace, ".affentctl")
+	if err := os.MkdirAll(convDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(localSessionPlanPath(convDir, "sess_plan_test"), []byte(`{"version":1,"steps":[{"text":"ship plan","status":"in_progress"}]}`+"\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	r, w, _ := os.Pipe()
+	orig := os.Stderr
+	os.Stderr = w
+	defer func() { os.Stderr = orig }()
+
+	b := &loopBundle{
+		loop:      &agent.Loop{},
+		sessionID: "sess_plan_test",
+		workspace: workspace,
+	}
+	cont, exit := handleSlash("/plan", b)
+	if !cont || exit != 0 {
+		t.Errorf("/plan should keep REPL alive with exit=0; got (%v, %d)", cont, exit)
+	}
+	_ = w.Close()
+	out, _ := io.ReadAll(r)
+	got := string(out)
+	if !strings.Contains(got, `"steps"`) || !strings.Contains(got, "ship plan") {
+		t.Fatalf("/plan output = %s", got)
+	}
+}
+
+func TestHandleSlashPlanReportsMissingPlan(t *testing.T) {
+	workspace := t.TempDir()
+	r, w, _ := os.Pipe()
+	orig := os.Stderr
+	os.Stderr = w
+	defer func() { os.Stderr = orig }()
+
+	b := &loopBundle{
+		loop:      &agent.Loop{},
+		sessionID: "sess_no_plan",
+		workspace: workspace,
+	}
+	cont, exit := handleSlash("/plan", b)
+	if !cont || exit != 0 {
+		t.Errorf("/plan should keep REPL alive with exit=0; got (%v, %d)", cont, exit)
+	}
+	_ = w.Close()
+	out, _ := io.ReadAll(r)
+	if got := string(out); !strings.Contains(got, "no active plan for session sess_no_plan") {
+		t.Fatalf("/plan missing output = %s", got)
+	}
+}
+
 // TestHandleSlash pins the REPL slash-command dispatcher. /exit and
 // its aliases must return (continue=false, exit=0); /help / /sid /
-// /cancel / unknown must keep the REPL alive. Casing and trailing
+// /plan / /cancel / unknown must keep the REPL alive. Casing and trailing
 // whitespace must be tolerated (operators often type "  /Exit "
 // without thinking). A regression that breaks any of these
 // strands the user in a session they can't quit cleanly.
@@ -331,6 +386,7 @@ func TestHandleSlash(t *testing.T) {
 		{"/h", true, 0},
 		{"/?", true, 0},
 		{"/sid", true, 0},
+		{"/plan", true, 0},   // current persisted plan, if any
 		{"/cancel", true, 0}, // Loop with nil cancelFn → Cancel is a no-op
 		{"/usage", true, 0},  // running totals; reads loopBundle counters
 		{"/bogus", true, 0},  // unknown still keeps REPL alive

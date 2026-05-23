@@ -10,6 +10,7 @@ import (
 	"io"
 	"os"
 	"os/signal"
+	"path/filepath"
 	"strings"
 	"syscall"
 	"time"
@@ -46,6 +47,7 @@ the next message. Conversation persists under
 Slash commands inside the REPL:
   /help       show commands
   /sid        print current session id
+  /plan       print current session plan, if any
   /usage      running token totals for this session (input/output/total)
   /exit       quit (Ctrl+D also works)
   /cancel     interrupt a background turn (e.g. a cron-fired one). To
@@ -295,6 +297,7 @@ func handleSlash(line string, b *loopBundle) (bool, int) {
 		fmt.Fprintln(os.Stderr, `commands:
   /help        show this
   /sid         print current session id
+  /plan        print current session plan, if any
   /usage       running token totals (input/output) for this session
   /cancel      interrupt a background (cron-fired) turn; use Ctrl+C
                to cancel a turn you typed from this prompt
@@ -302,6 +305,9 @@ func handleSlash(line string, b *loopBundle) (bool, int) {
 		return true, 0
 	case "/sid":
 		fmt.Fprintln(os.Stderr, b.sessionID)
+		return true, 0
+	case "/plan":
+		printCurrentSessionPlan(b)
 		return true, 0
 	case "/usage":
 		fmt.Fprintf(os.Stderr, "session %s — %d turn(s), input=%d output=%d total=%d tokens\n",
@@ -314,6 +320,20 @@ func handleSlash(line string, b *loopBundle) (bool, int) {
 		fmt.Fprintf(os.Stderr, "unknown command: %s\n", line)
 		return true, 0
 	}
+}
+
+func printCurrentSessionPlan(b *loopBundle) {
+	convDir := filepath.Join(b.workspace, ".affentctl")
+	plan, found, err := readLocalSessionPlan(convDir, b.sessionID)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "read plan: %v\n", err)
+		return
+	}
+	if !found {
+		fmt.Fprintf(os.Stderr, "no active plan for session %s\n", b.sessionID)
+		return
+	}
+	fmt.Fprintln(os.Stderr, string(plan))
 }
 
 func isTTY(f *os.File) bool {
