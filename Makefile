@@ -28,6 +28,18 @@ TEST_DIR ?= .
 GO_TEST_FLAGS ?= -p=1
 TEST_PACKAGES ?= ./...
 
+define require_affent_runtime_container
+if test -z "$(SERVE_CONTAINER_NAME)"; then \
+	echo "SERVE_CONTAINER_NAME is required, e.g. make $(1) SERVE_CONTAINER_NAME=affent-serve" >&2; \
+	exit 2; \
+fi; \
+label=$$(docker inspect "$(SERVE_CONTAINER_NAME)" --format '{{index .Config.Labels "affent.runtime"}}' 2>/dev/null) || { echo "container $(SERVE_CONTAINER_NAME) not found" >&2; exit 2; }; \
+if test "$$label" != "true"; then \
+	echo "container $(SERVE_CONTAINER_NAME) is not an Affent runtime container" >&2; \
+	exit 2; \
+fi
+endef
+
 .PHONY: affentctl affentctl-local doctor sandbox-start sandbox-status sandbox-stop image-build image-run image-serve image-serve-status image-serve-logs image-serve-stop image-serve-restart eval-container test-container
 
 affentctl:
@@ -72,42 +84,18 @@ image-serve: affentctl
 	"$(AFFENTCTL)" image run --workspace "$(IMAGE_WORKSPACE)" --memory "$(CONTAINER_MEMORY)" --cpus "$(CONTAINER_CPUS)" --pids-limit "$(CONTAINER_PIDS)" $(if $(SERVE_CONTAINER_NAME),--name "$(SERVE_CONTAINER_NAME)") --detach --rm=false --publish "$(SERVE_PUBLISH)" $(IMAGE_RUN_ARGS) -- affentserve --listen "$(SERVE_LISTEN)" --workspace-root "$(SERVE_WORKSPACE_ROOT)" --memory-root "$(SERVE_MEMORY_ROOT)" --builtins $(SERVE_ARGS)
 
 image-serve-status:
-	@if test -z "$(SERVE_CONTAINER_NAME)"; then \
-		echo "SERVE_CONTAINER_NAME is required, e.g. make image-serve-status SERVE_CONTAINER_NAME=affent-serve" >&2; \
-		exit 2; \
-	fi; \
-	label=$$(docker inspect "$(SERVE_CONTAINER_NAME)" --format '{{index .Config.Labels "affent.runtime"}}' 2>/dev/null) || { echo "container $(SERVE_CONTAINER_NAME) not found" >&2; exit 2; }; \
-	if test "$$label" != "true"; then \
-		echo "container $(SERVE_CONTAINER_NAME) is not an Affent runtime container" >&2; \
-		exit 2; \
-	fi; \
+	@$(call require_affent_runtime_container,image-serve-status); \
 	docker inspect "$(SERVE_CONTAINER_NAME)" \
 		--format 'name={{.Name}} state={{.State.Status}} image={{.Config.Image}} workspace={{index .Config.Labels "affent.runtime.workspace"}} memory={{index .Config.Labels "affent.runtime.memory"}} cpus={{index .Config.Labels "affent.runtime.cpus"}} pids_limit={{index .Config.Labels "affent.runtime.pids_limit"}} host_memory_bytes={{.HostConfig.Memory}} host_nano_cpus={{.HostConfig.NanoCpus}} host_pids_limit={{.HostConfig.PidsLimit}}'; \
 	ports=$$(docker port "$(SERVE_CONTAINER_NAME)" 2>/dev/null || true); \
 	if test -n "$$ports"; then printf 'ports:\n%s\n' "$$ports"; else echo "ports: none"; fi
 
 image-serve-logs:
-	@if test -z "$(SERVE_CONTAINER_NAME)"; then \
-		echo "SERVE_CONTAINER_NAME is required, e.g. make image-serve-logs SERVE_CONTAINER_NAME=affent-serve" >&2; \
-		exit 2; \
-	fi; \
-	label=$$(docker inspect "$(SERVE_CONTAINER_NAME)" --format '{{index .Config.Labels "affent.runtime"}}' 2>/dev/null) || { echo "container $(SERVE_CONTAINER_NAME) not found" >&2; exit 2; }; \
-	if test "$$label" != "true"; then \
-		echo "container $(SERVE_CONTAINER_NAME) is not an Affent runtime container" >&2; \
-		exit 2; \
-	fi
+	@$(call require_affent_runtime_container,image-serve-logs)
 	docker logs --tail 100 "$(SERVE_CONTAINER_NAME)"
 
 image-serve-stop:
-	@if test -z "$(SERVE_CONTAINER_NAME)"; then \
-		echo "SERVE_CONTAINER_NAME is required, e.g. make image-serve-stop SERVE_CONTAINER_NAME=affent-serve" >&2; \
-		exit 2; \
-	fi; \
-	label=$$(docker inspect "$(SERVE_CONTAINER_NAME)" --format '{{index .Config.Labels "affent.runtime"}}' 2>/dev/null) || { echo "container $(SERVE_CONTAINER_NAME) not found" >&2; exit 2; }; \
-	if test "$$label" != "true"; then \
-		echo "container $(SERVE_CONTAINER_NAME) is not an Affent runtime container" >&2; \
-		exit 2; \
-	fi
+	@$(call require_affent_runtime_container,image-serve-stop)
 	docker rm -f "$(SERVE_CONTAINER_NAME)"
 
 image-serve-restart:
