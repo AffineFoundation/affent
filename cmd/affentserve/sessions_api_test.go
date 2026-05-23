@@ -166,6 +166,9 @@ func TestHandleSessionDetail_ReadsDurableSessionAfterRestart(t *testing.T) {
 	memRoot := t.TempDir()
 	pool1 := newPoolWithMemoryRoot(t, memRoot)
 	createDurableSessionDir(t, pool1, "restartable")
+	if err := os.WriteFile(filepath.Join(pool1.sessionDirPath("restartable"), "plan.json"), []byte(`{"version":1,"steps":[{"text":"resume work","status":"pending"}]}`+"\n"), 0o644); err != nil {
+		t.Fatalf("write plan: %v", err)
+	}
 	pool1.Shutdown()
 
 	pool2 := newPoolWithMemoryRoot(t, memRoot)
@@ -181,6 +184,9 @@ func TestHandleSessionDetail_ReadsDurableSessionAfterRestart(t *testing.T) {
 	}
 	if resp.Session.ID != "restartable" || resp.Session.Active || !resp.Session.Durable || !resp.Session.HasConversation {
 		t.Fatalf("session = %+v, want durable-only restartable with conversation", resp.Session)
+	}
+	if !resp.Session.HasPlan {
+		t.Fatalf("session = %+v, want durable-only restartable with plan", resp.Session)
 	}
 	if resp.Session.Capabilities != nil {
 		t.Fatalf("durable-only session should not report active capabilities, got %+v", resp.Session.Capabilities)

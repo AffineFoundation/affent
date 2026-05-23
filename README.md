@@ -383,8 +383,9 @@ when you expect many topic buckets so disk state stays bounded:
 Affent keeps session state in JSONL conversation logs so runs can be resumed,
 replayed, or inspected. `affentctl` stores logs under the workspace by default.
 `affentserve` stores each session's durable state under its session state root:
-`conversation.jsonl`, `events.jsonl`, runtime-installed skills, and memory files
-all survive container restarts when that root is backed by a host volume.
+`conversation.jsonl`, `events.jsonl`, `plan.json`, runtime-installed skills,
+and memory files all survive container restarts when that root is backed by a
+host volume.
 Clients resume by sending the same `X-Affent-Session-Id` header or
 `affent_session_id` / `session_id` request field. `DELETE /v1/sessions/{id}`
 intentionally removes that durable state.
@@ -605,10 +606,11 @@ event stream. Clients can pin a session through `X-Affent-Session-Id`,
 Native session endpoints:
 
 - `GET /v1/sessions?limit=100&after=<session_id>` lists sessions from the
-  in-memory pool plus durable session directories. Active session summaries
-  include the actual registered capabilities (`builtins`, `skill_install`,
-  `plan`, `memory`, `session_search`, `subagent`, `focused_tasks`, web/browser
-  flags).
+  in-memory pool plus durable session directories. Durable summaries include
+  `has_conversation`, `has_events`, `has_plan`, `has_artifacts`, `has_memory`,
+  and `has_runtime_skills`; active summaries also include the actual registered
+  capabilities (`builtins`, `skill_install`, `plan`, `memory`, `session_search`,
+  `subagent`, `focused_tasks`, web/browser flags).
 - `POST /v1/sessions` creates or reopens a session and returns the same active
   capability summary.
 - `GET /v1/sessions/{id}` returns session status and, when active, capability
