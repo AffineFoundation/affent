@@ -34,6 +34,7 @@ affentctl:
 		--memory "$(CONTAINER_MEMORY)" \
 		--memory-swap "$(CONTAINER_MEMORY)" \
 		--cpus "$(CONTAINER_CPUS)" \
+		--pids-limit "$(CONTAINER_PIDS)" \
 		-e HOST_UID="$$(id -u)" \
 		-e HOST_GID="$$(id -g)" \
 		-e GOCACHE=/work/.tmp/go-build \
@@ -75,6 +76,7 @@ eval-container: affentctl
 		--memory "$(CONTAINER_MEMORY)" \
 		--memory-swap "$(CONTAINER_MEMORY)" \
 		--cpus "$(CONTAINER_CPUS)" \
+		--pids-limit "$(CONTAINER_PIDS)" \
 		--user "$$(id -u):$$(id -g)" \
 		-e HOME=/workspace/.tmp/eval-container/home \
 		-e XDG_CACHE_HOME=/workspace/.tmp/eval-container/cache \
@@ -100,6 +102,7 @@ test-container:
 		--memory "$(CONTAINER_MEMORY)" \
 		--memory-swap "$(CONTAINER_MEMORY)" \
 		--cpus "$(CONTAINER_CPUS)" \
+		--pids-limit "$(CONTAINER_PIDS)" \
 		--user "$$(id -u):$$(id -g)" \
 		-e GOCACHE=/work/.tmp/go-build \
 		-e GOMODCACHE=/work/.tmp/go-mod \

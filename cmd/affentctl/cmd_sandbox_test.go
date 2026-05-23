@@ -257,6 +257,7 @@ func TestMakeOneClickContainerTargetsUseSharedLimits(t *testing.T) {
 		`--memory "$(CONTAINER_MEMORY)"`,
 		`--memory-swap "$(CONTAINER_MEMORY)"`,
 		`--cpus "$(CONTAINER_CPUS)"`,
+		`--pids-limit "$(CONTAINER_PIDS)"`,
 	} {
 		if !strings.Contains(body, want) {
 			t.Fatalf("Makefile one-click container targets missing %q", want)
