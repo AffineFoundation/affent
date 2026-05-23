@@ -34,10 +34,13 @@ type FetchConfig struct {
 	// MaxBytes caps the response body the tool reads. Default 2 MiB —
 	// enough for most articles without letting a misconfigured server
 	// stream gigabytes into memory. Pages larger than this are
-	// truncated (bytes) before HTML→markdown.
+	// truncated (bytes) before HTML→markdown. Values above the hard
+	// cap are clamped so callers cannot accidentally disable the
+	// memory guard.
 	MaxBytes int64
 	// MaxResultChars caps the markdown output handed back to the LLM.
-	// Default 8000. Truncated output gets a "...(truncated)" marker.
+	// Default 8000. Values above the hard cap are clamped. Truncated
+	// output gets a "...(truncated)" marker.
 	MaxResultChars int
 	// UserAgent is sent on every request. Defaults to a generic
 	// "affent-webfetch/0.1" — override if a target server requires
@@ -54,7 +57,9 @@ type FetchConfig struct {
 
 const (
 	defaultMaxBytes       = 2 * 1024 * 1024
+	maxFetchBytes         = 8 * 1024 * 1024
 	defaultMaxResultChars = 8000
+	maxFetchResultChars   = 64 * 1024
 	defaultUserAgent      = "affent-webfetch/0.1 (+https://github.com/AffineFoundation/affent)"
 )
 
@@ -64,19 +69,7 @@ const (
 // get a placeholder. Redirects are followed by net/http's default
 // behaviour (10 hops max).
 func FetchTool(cfg FetchConfig) *agent.Tool {
-	if cfg.HTTP == nil {
-		cfg.HTTP = newGuardedClient(cfg.AllowPrivateNetwork)
-	}
-	if cfg.MaxBytes <= 0 {
-		cfg.MaxBytes = defaultMaxBytes
-	}
-	if cfg.MaxResultChars <= 0 {
-		cfg.MaxResultChars = defaultMaxResultChars
-	}
-	if cfg.UserAgent == "" {
-		cfg.UserAgent = defaultUserAgent
-	}
-
+	cfg = normalizeFetchConfig(cfg)
 	schema := json.RawMessage(`{
         "type": "object",
         "required": ["url"],
@@ -111,6 +104,26 @@ func FetchTool(cfg FetchConfig) *agent.Tool {
 	}
 }
 
+func normalizeFetchConfig(cfg FetchConfig) FetchConfig {
+	if cfg.HTTP == nil {
+		cfg.HTTP = newGuardedClient(cfg.AllowPrivateNetwork)
+	}
+	if cfg.MaxBytes <= 0 {
+		cfg.MaxBytes = defaultMaxBytes
+	} else if cfg.MaxBytes > maxFetchBytes {
+		cfg.MaxBytes = maxFetchBytes
+	}
+	if cfg.MaxResultChars <= 0 {
+		cfg.MaxResultChars = defaultMaxResultChars
+	} else if cfg.MaxResultChars > maxFetchResultChars {
+		cfg.MaxResultChars = maxFetchResultChars
+	}
+	if cfg.UserAgent == "" {
+		cfg.UserAgent = defaultUserAgent
+	}
+	return cfg
+}
+
 func fetch(ctx context.Context, cfg FetchConfig, url string) (string, error) {
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
 	if err != nil {
@@ -134,9 +147,13 @@ func fetch(ctx context.Context, cfg FetchConfig, url string) (string, error) {
 			resp.StatusCode, resp.Status, strings.TrimSpace(string(preview)))
 	}
 
-	body, err := io.ReadAll(io.LimitReader(resp.Body, cfg.MaxBytes))
+	body, err := io.ReadAll(io.LimitReader(resp.Body, cfg.MaxBytes+1))
 	if err != nil {
 		return "", fmt.Errorf("read body: %w", err)
+	}
+	bodyTruncated := int64(len(body)) > cfg.MaxBytes
+	if bodyTruncated {
+		body = body[:cfg.MaxBytes]
 	}
 
 	ct := resp.Header.Get("Content-Type")
@@ -151,6 +168,9 @@ func fetch(ctx context.Context, cfg FetchConfig, url string) (string, error) {
 			cut--
 		}
 		out = out[:cut] + "\n\n...(truncated)"
+	}
+	if bodyTruncated {
+		out = strings.TrimSpace(out) + "\n\n...(response body truncated)"
 	}
 	return out, nil
 }

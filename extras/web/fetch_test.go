@@ -128,6 +128,68 @@ func TestFetchTool_HTTPError(t *testing.T) {
 	}
 }
 
+func TestFetchTool_BodyCapReportsTruncation(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "text/plain; charset=utf-8")
+		w.Write([]byte("abcdefghi"))
+	}))
+	defer srv.Close()
+
+	tool := FetchTool(FetchConfig{
+		MaxBytes:            5,
+		MaxResultChars:      100,
+		AllowPrivateNetwork: true,
+	})
+	args, _ := json.Marshal(map[string]string{"url": srv.URL})
+	out, err := tool.Execute(context.Background(), args)
+	if err != nil {
+		t.Fatalf("Execute: %v", err)
+	}
+	if !strings.Contains(out, "abcde") || strings.Contains(out, "fghi") {
+		t.Fatalf("body cap not applied correctly:\n%s", out)
+	}
+	if !strings.Contains(out, "response body truncated") {
+		t.Fatalf("truncated fetch should be explicit to the model:\n%s", out)
+	}
+
+	tool = FetchTool(FetchConfig{
+		MaxBytes:            5,
+		MaxResultChars:      4,
+		AllowPrivateNetwork: true,
+	})
+	out, err = tool.Execute(context.Background(), args)
+	if err != nil {
+		t.Fatalf("Execute with result cap: %v", err)
+	}
+	for _, want := range []string{"...(truncated)", "response body truncated"} {
+		if !strings.Contains(out, want) {
+			t.Fatalf("truncated fetch should preserve marker %q after result cap:\n%s", want, out)
+		}
+	}
+}
+
+func TestNormalizeFetchConfigClampsHardCaps(t *testing.T) {
+	cfg := normalizeFetchConfig(FetchConfig{
+		HTTP:           &http.Client{},
+		MaxBytes:       maxFetchBytes + 1,
+		MaxResultChars: maxFetchResultChars + 1,
+	})
+	if cfg.MaxBytes != maxFetchBytes {
+		t.Fatalf("MaxBytes = %d, want hard cap %d", cfg.MaxBytes, maxFetchBytes)
+	}
+	if cfg.MaxResultChars != maxFetchResultChars {
+		t.Fatalf("MaxResultChars = %d, want hard cap %d", cfg.MaxResultChars, maxFetchResultChars)
+	}
+
+	defaults := normalizeFetchConfig(FetchConfig{HTTP: &http.Client{}})
+	if defaults.MaxBytes != defaultMaxBytes {
+		t.Fatalf("default MaxBytes = %d, want %d", defaults.MaxBytes, defaultMaxBytes)
+	}
+	if defaults.MaxResultChars != defaultMaxResultChars {
+		t.Fatalf("default MaxResultChars = %d, want %d", defaults.MaxResultChars, defaultMaxResultChars)
+	}
+}
+
 // stubProvider lets us test SearchTool without a real backend.
 type stubProvider struct{ results []SearchResult }
 
