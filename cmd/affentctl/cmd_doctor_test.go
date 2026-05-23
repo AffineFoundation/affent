@@ -139,6 +139,23 @@ func TestDoctorCmdReportsReadyLocalConfig(t *testing.T) {
 		"ok model:",
 		"gpt-4o-mini",
 		"ok api-key:",
+		"ok boundaries:",
+		"prompt_input=256KiB",
+		"config=1MiB",
+		"max_turns=10",
+		"call_timeout=3m0s",
+		"llm_request=8MiB",
+		"llm_error_body=64KiB",
+		"stream_content=1MiB",
+		"stream_tool_calls=64",
+		"stream_scanner=4MiB",
+		"tool_args_event=64KiB",
+		"tool_arg_string=4KiB",
+		"tool_result_context=8KiB",
+		"tool_result_event=256KiB",
+		"repairable_tool_args=1MiB",
+		"project_context=32KiB",
+		"mcp_result=256KiB",
 		"ok executor:",
 		"local",
 		"ok runtime-image:",
@@ -149,6 +166,44 @@ func TestDoctorCmdReportsReadyLocalConfig(t *testing.T) {
 	}
 	if strings.Contains(got, "error ") {
 		t.Fatalf("doctor output should not contain errors:\n%s", got)
+	}
+}
+
+func TestDoctorBoundarySummaryUsesConfiguredTurnLimits(t *testing.T) {
+	got := doctorBoundarySummary(commonFlags{
+		maxTurns:    7,
+		callTimeout: 9,
+	})
+	for _, want := range []string{
+		"max_turns=7",
+		"call_timeout=9ns",
+		"prompt_input=256KiB",
+		"system_prompt=256KiB",
+		"config=1MiB",
+		"llm_request=8MiB",
+		"stream_reasoning=1MiB",
+		"tool_result_preview=4KiB",
+		"repairable_tool_args=1MiB",
+		"project_context=32KiB",
+	} {
+		if !strings.Contains(got, want) {
+			t.Fatalf("boundary summary missing %q:\n%s", want, got)
+		}
+	}
+}
+
+func TestFormatBytes(t *testing.T) {
+	cases := map[int]string{
+		0:           "0B",
+		1:           "1B",
+		1024:        "1KiB",
+		256 * 1024:  "256KiB",
+		1024 * 1024: "1MiB",
+	}
+	for n, want := range cases {
+		if got := formatBytes(n); got != want {
+			t.Fatalf("formatBytes(%d) = %q, want %q", n, got, want)
+		}
 	}
 }
 

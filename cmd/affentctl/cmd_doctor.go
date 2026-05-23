@@ -105,6 +105,7 @@ func diagnoseAffentctl(c commonFlags, runner commandRunner) []doctorFinding {
 	}
 	trigger, keepLast := resolveCompactionConfig(c.compactTrigger, c.compactKeepLast)
 	add("ok", "compaction", fmt.Sprintf("trigger=%d keep_last=%d", trigger, keepLast))
+	add("ok", "boundaries", doctorBoundarySummary(c))
 	if status, msg := doctorSystemPrompt(c.systemPromptPath); status != "" {
 		add(status, "system-prompt", msg)
 	}
@@ -175,6 +176,46 @@ func diagnoseAffentctl(c commonFlags, runner commandRunner) []doctorFinding {
 	}
 
 	return out
+}
+
+func doctorBoundarySummary(c commonFlags) string {
+	ab := agent.DefaultRuntimeBoundaries()
+	mb := mcp.DefaultRuntimeBoundaries()
+	return fmt.Sprintf(
+		"prompt_input=%s system_prompt=%s config=%s max_turns=%d call_timeout=%s llm_request=%s llm_error_body=%s stream_content=%s stream_reasoning=%s stream_tool_args=%s stream_tool_calls=%d stream_scanner=%s tool_args_event=%s tool_arg_string=%s tool_result_context=%s tool_result_event=%s tool_result_preview=%s repairable_tool_args=%s project_context=%s mcp_result=%s",
+		formatBytes(maxPromptInputBytes),
+		formatBytes(maxPromptInputBytes),
+		formatBytes(maxConfigInputBytes),
+		c.maxTurns,
+		c.callTimeout,
+		formatBytes(ab.LLMRequestBodyBytes),
+		formatBytes(ab.LLMErrorBodyBytes),
+		formatBytes(ab.StreamContentBytes),
+		formatBytes(ab.StreamReasoningBytes),
+		formatBytes(ab.StreamToolArgBytes),
+		ab.StreamToolCalls,
+		formatBytes(ab.StreamScannerBytes),
+		formatBytes(ab.ToolRequestArgsEvent),
+		formatBytes(ab.ToolRequestArgString),
+		formatBytes(ab.ToolResultContextBytes),
+		formatBytes(ab.ToolResultEventBytes),
+		formatBytes(ab.ToolResultPreviewBytes),
+		formatBytes(ab.RepairableToolArgBytes),
+		formatBytes(ab.ProjectContextBytes),
+		formatBytes(mb.ToolResultBytes),
+	)
+}
+
+func formatBytes(n int) string {
+	const kib = 1024
+	if n > 0 && n%kib == 0 {
+		kiB := n / kib
+		if kiB%kib == 0 {
+			return fmt.Sprintf("%dMiB", kiB/kib)
+		}
+		return fmt.Sprintf("%dKiB", kiB)
+	}
+	return fmt.Sprintf("%dB", n)
 }
 
 func doctorSystemPrompt(spec string) (string, string) {

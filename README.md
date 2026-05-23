@@ -110,6 +110,9 @@ server and calls `tools/list` within the configured `init_timeout` budget. The
 MCP line reports raw tool count, filtered tool count, final advertised tool
 names, namespace mode, and filtered tool reasons so a workflow-specific
 allowlist/denylist can be checked before a model sees the tools.
+`doctor` also prints the active runtime boundary caps, including prompt/config
+input limits, LLM request and stream accumulator caps, tool request/result event
+caps, tool result context cap, and MCP result cap.
 
 Run a single prompt:
 
