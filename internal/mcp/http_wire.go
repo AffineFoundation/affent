@@ -40,6 +40,8 @@ type httpWire struct {
 	log zerolog.Logger
 }
 
+const maxHTTPJSONResponseBytes = 4 * 1024 * 1024
+
 func newHTTPWire(_ context.Context, spec ServerSpec, log zerolog.Logger) (wire, error) {
 	if spec.URL == "" {
 		return nil, errors.New("mcp http: ServerSpec.URL is empty")
@@ -140,7 +142,7 @@ func (w *httpWire) post(ctx context.Context, body []byte, expectReply bool) erro
 	ct := resp.Header.Get("Content-Type")
 	switch {
 	case strings.HasPrefix(ct, "application/json"):
-		body, err := io.ReadAll(resp.Body)
+		body, err := readHTTPBodyCapped(resp.Body, maxHTTPJSONResponseBytes)
 		resp.Body.Close()
 		if err != nil {
 			return err
@@ -168,6 +170,17 @@ func (w *httpWire) post(ctx context.Context, body []byte, expectReply bool) erro
 		}
 		return fmt.Errorf("mcp http: unexpected content-type %q (body: %s)", ct, body)
 	}
+}
+
+func readHTTPBodyCapped(r io.Reader, limit int64) ([]byte, error) {
+	body, err := io.ReadAll(io.LimitReader(r, limit+1))
+	if err != nil {
+		return nil, err
+	}
+	if int64(len(body)) > limit {
+		return nil, fmt.Errorf("mcp http response body exceeds %d-byte limit", limit)
+	}
+	return body, nil
 }
 
 func (w *httpWire) drainSSE(resp *http.Response) {

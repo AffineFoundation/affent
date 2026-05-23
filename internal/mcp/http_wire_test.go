@@ -122,6 +122,28 @@ func TestHTTPWire_ListAndCall(t *testing.T) {
 	}
 }
 
+func TestHTTPWireRejectsOversizedJSONResponse(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = io.WriteString(w, strings.Repeat("x", maxHTTPJSONResponseBytes+1))
+	}))
+	t.Cleanup(srv.Close)
+
+	wire, err := newHTTPWire(context.Background(), ServerSpec{
+		Name: "huge",
+		URL:  srv.URL,
+	}, zerolog.Nop())
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer wire.close()
+
+	err = wire.sendRequest(context.Background(), []byte(`{"jsonrpc":"2.0","id":1,"method":"ping"}`))
+	if err == nil || !strings.Contains(err.Error(), "response body exceeds") {
+		t.Fatalf("oversized JSON response error = %v, want response body exceeds", err)
+	}
+}
+
 func TestStartWire_RejectsBothCommandAndURL(t *testing.T) {
 	_, err := startWire(context.Background(), ServerSpec{
 		Name:    "bad",
