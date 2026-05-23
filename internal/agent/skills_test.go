@@ -1,6 +1,7 @@
 package agent
 
 import (
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
@@ -247,6 +248,44 @@ func TestLoadSkillDirRejectsSymlinkBodyFile(t *testing.T) {
 
 	if _, err := LoadSkillDir(root); err == nil || !strings.Contains(err.Error(), "symlink") {
 		t.Fatalf("LoadSkillDir symlink body err = %v, want symlink rejection", err)
+	}
+}
+
+func TestLoadSkillDirReadsPastOneDirectoryBatch(t *testing.T) {
+	root := t.TempDir()
+	for i := 0; i < runtimeSkillDirReadBatch+2; i++ {
+		name := fmt.Sprintf("demo_%03d", i)
+		if _, err := InstallRuntimeSkill(root, Skill{
+			Name: name,
+			Body: "AFFENT ACTIVE SKILL: " + name + "\nUse demo.",
+		}); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	skills, err := LoadSkillDir(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(skills) != runtimeSkillDirReadBatch+2 {
+		t.Fatalf("loaded skills = %d, want %d", len(skills), runtimeSkillDirReadBatch+2)
+	}
+}
+
+func TestLoadSkillDirRejectsTooManySkills(t *testing.T) {
+	root := t.TempDir()
+	for i := 0; i < maxRuntimeSkills+1; i++ {
+		name := fmt.Sprintf("demo_%03d", i)
+		if _, err := InstallRuntimeSkill(root, Skill{
+			Name: name,
+			Body: "AFFENT ACTIVE SKILL: " + name + "\nUse demo.",
+		}); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	if _, err := LoadSkillDir(root); err == nil || !strings.Contains(err.Error(), "more than") {
+		t.Fatalf("LoadSkillDir too many err = %v, want max skills rejection", err)
 	}
 }
 

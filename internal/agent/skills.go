@@ -5,6 +5,7 @@ import (
 	"embed"
 	"encoding/json"
 	"fmt"
+	"io"
 	"io/fs"
 	"os"
 	"path"
@@ -108,6 +109,7 @@ const (
 	maxRuntimeSkillBodyBytes        = 64 * 1024
 	maxRuntimeSkillSourceBytes      = 2 * 1024
 	maxRuntimeSkills                = 128
+	runtimeSkillDirReadBatch        = 64
 	maxRuntimeSkillTriggers         = 20
 	maxRuntimeSkillTriggerBytes     = 128
 	maxRuntimeSkillManifestBytes    = maxRuntimeSkillDescriptionBytes + maxRuntimeSkillTriggerBytes*maxRuntimeSkillTriggers + 1024
@@ -451,29 +453,36 @@ func LoadSkillDir(root string) ([]Skill, error) {
 		}
 		return nil, err
 	}
-	entries, err := os.ReadDir(root)
-	if os.IsNotExist(err) {
-		return nil, nil
-	}
+	dir, err := os.Open(root)
 	if err != nil {
 		return nil, fmt.Errorf("list skills %s: %w", root, err)
 	}
+	defer dir.Close()
 	var out []Skill
-	for _, entry := range entries {
-		if !entry.IsDir() {
-			continue
+	for {
+		entries, rerr := dir.ReadDir(runtimeSkillDirReadBatch)
+		if rerr != nil && rerr != io.EOF {
+			return nil, fmt.Errorf("list skills %s: %w", root, rerr)
 		}
-		if strings.HasPrefix(entry.Name(), ".") {
-			continue
+		for _, entry := range entries {
+			if !entry.IsDir() {
+				continue
+			}
+			if strings.HasPrefix(entry.Name(), ".") {
+				continue
+			}
+			if len(out) >= maxRuntimeSkills {
+				return nil, fmt.Errorf("runtime skill directory %s has more than %d skills", root, maxRuntimeSkills)
+			}
+			skill, err := loadRuntimeSkill(filepath.Join(root, entry.Name()))
+			if err != nil {
+				return nil, err
+			}
+			out = append(out, skill)
 		}
-		if len(out) >= maxRuntimeSkills {
-			return nil, fmt.Errorf("runtime skill directory %s has more than %d skills", root, maxRuntimeSkills)
+		if rerr == io.EOF {
+			break
 		}
-		skill, err := loadRuntimeSkill(filepath.Join(root, entry.Name()))
-		if err != nil {
-			return nil, err
-		}
-		out = append(out, skill)
 	}
 	sort.SliceStable(out, func(i, j int) bool { return out[i].Name < out[j].Name })
 	return out, nil
