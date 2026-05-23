@@ -452,6 +452,34 @@ func TestFormatPlanChangeLineReportsClearedPlan(t *testing.T) {
 	}
 }
 
+func TestPrintStartupPlanSummaryShowsExistingPlan(t *testing.T) {
+	workspace := t.TempDir()
+	convDir := filepath.Join(workspace, ".affentctl")
+	if err := os.MkdirAll(convDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	b := &loopBundle{
+		sessionID: "sess_resume_plan",
+		workspace: workspace,
+	}
+	if err := os.WriteFile(localSessionPlanPath(convDir, b.sessionID), []byte(`{"version":1,"steps":[{"text":"continue implementation","status":"in_progress"},{"text":"run tests"}]}`+"\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	out := captureStderr(t, func() {
+		printStartupPlanSummary(b)
+	})
+	if !strings.Contains(out, "[plan] plan:0/2:active - step 1: continue implementation") {
+		t.Fatalf("startup plan output = %s", out)
+	}
+}
+
+func TestFormatExistingPlanLineSkipsMissingPlan(t *testing.T) {
+	if got := formatExistingPlanLine(currentSessionPlanSummary(&loopBundle{workspace: t.TempDir(), sessionID: "missing"})); got != "" {
+		t.Fatalf("missing startup plan line = %q, want quiet", got)
+	}
+}
+
 // TestHandleSlash pins the REPL slash-command dispatcher. /exit and
 // its aliases must return (continue=false, exit=0); /help / /sid /
 // /plan / /plan clear / /cancel / unknown must keep the REPL alive. Casing and trailing

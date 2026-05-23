@@ -89,6 +89,7 @@ Slash commands inside the REPL:
 		}
 		fmt.Fprintf(os.Stderr, "new session %s (workspace %s)\n", b.sessionID, b.workspace)
 	}
+	printStartupPlanSummary(b)
 	fmt.Fprintln(os.Stderr, "type your message; '/help' for commands, '/exit' or Ctrl+D to quit.")
 
 	// Top-level signal handling: Ctrl+C cancels the in-flight turn (if
@@ -373,12 +374,25 @@ func emitPlanChange(before, after planstate.Summary) {
 	}
 }
 
+func printStartupPlanSummary(b *loopBundle) {
+	if line := formatExistingPlanLine(currentSessionPlanSummary(b)); line != "" {
+		fmt.Fprintln(os.Stderr, line)
+	}
+}
+
 func formatPlanChangeLine(summary planstate.Summary) string {
+	if summary.Label == planstate.LabelMissing {
+		return "[plan] cleared"
+	}
+	return formatExistingPlanLine(summary)
+}
+
+func formatExistingPlanLine(summary planstate.Summary) string {
 	switch summary.Label {
 	case "":
 		return ""
 	case planstate.LabelMissing:
-		return "[plan] cleared"
+		return ""
 	case planstate.LabelEmpty, planstate.LabelError:
 		return "[plan] " + summary.Label
 	}
