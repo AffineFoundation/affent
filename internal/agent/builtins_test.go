@@ -469,6 +469,49 @@ func TestFileToolSchemasPublishNonEmptyRequiredStrings(t *testing.T) {
 	}
 }
 
+func TestFileToolSchemasPublishNumericDefaults(t *testing.T) {
+	for _, c := range []struct {
+		name      string
+		tool      *Tool
+		field     string
+		wantMax   int
+		wantValue int
+	}{
+		{
+			name:      "read_file",
+			tool:      readFileTool(BuiltinDeps{HostWorkspaceDir: t.TempDir()}),
+			field:     "max_bytes",
+			wantMax:   MaxReadFileBytes,
+			wantValue: defaultReadFileBytes,
+		},
+		{
+			name:      "list_files",
+			tool:      listFilesTool(BuiltinDeps{HostWorkspaceDir: t.TempDir()}),
+			field:     "max_entries",
+			wantMax:   MaxListFilesEntries,
+			wantValue: defaultListFilesEntries,
+		},
+	} {
+		t.Run(c.name, func(t *testing.T) {
+			var schema struct {
+				Properties map[string]struct {
+					Maximum int `json:"maximum"`
+					Default int `json:"default"`
+				} `json:"properties"`
+			}
+			if err := json.Unmarshal(c.tool.Schema, &schema); err != nil {
+				t.Fatal(err)
+			}
+			if schema.Properties[c.field].Maximum != c.wantMax {
+				t.Fatalf("%s maximum = %d, want %d", c.field, schema.Properties[c.field].Maximum, c.wantMax)
+			}
+			if schema.Properties[c.field].Default != c.wantValue {
+				t.Fatalf("%s default = %d, want %d", c.field, schema.Properties[c.field].Default, c.wantValue)
+			}
+		})
+	}
+}
+
 func TestFileToolsRejectBlankRequiredStrings(t *testing.T) {
 	for _, c := range []struct {
 		name string
@@ -682,6 +725,7 @@ func TestShellToolSchemaPublishesInputCaps(t *testing.T) {
 			MinLength int `json:"minLength"`
 			MaxLength int `json:"maxLength"`
 			Maximum   int `json:"maximum"`
+			Default   int `json:"default"`
 		} `json:"properties"`
 	}
 	if err := json.Unmarshal(tool.Schema, &schema); err != nil {
@@ -698,6 +742,9 @@ func TestShellToolSchemaPublishesInputCaps(t *testing.T) {
 	}
 	if schema.Properties["timeout_sec"].Maximum != maxShellTimeoutSec {
 		t.Fatalf("timeout maximum = %d, want %d", schema.Properties["timeout_sec"].Maximum, maxShellTimeoutSec)
+	}
+	if schema.Properties["timeout_sec"].Default != defaultShellTimeoutSec {
+		t.Fatalf("timeout default = %d, want %d", schema.Properties["timeout_sec"].Default, defaultShellTimeoutSec)
 	}
 }
 

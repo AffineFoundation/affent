@@ -179,9 +179,9 @@ func shellTool(deps BuiltinDeps) *Tool {
         "properties": {
             "command": {"type": "string", "minLength": 1, "maxLength": %d, "description": "Command to run."},
             "cwd": {"type": "string", "maxLength": %d, "description": "Working directory."},
-            "timeout_sec": {"type": "integer", "minimum": 1, "maximum": %d, "description": "Timeout seconds; default %d, max %d."}
+            "timeout_sec": {"type": "integer", "minimum": 1, "maximum": %d, "default": %d, "description": "Timeout seconds; default %d, max %d."}
         }
-    }`, maxShellCommandBytes, maxShellCwdBytes, maxShellTimeoutSec, defaultShellTimeoutSec, maxShellTimeoutSec))
+    }`, maxShellCommandBytes, maxShellCwdBytes, maxShellTimeoutSec, defaultShellTimeoutSec, defaultShellTimeoutSec, maxShellTimeoutSec))
 	shellPrefix := deps.Shell
 	if len(shellPrefix) == 0 {
 		shellPrefix = defaultShell
@@ -434,7 +434,10 @@ func fileOps(deps BuiltinDeps) executor.FileOps {
 // untrusted/confused model from passing max_bytes=1<<30 and OOMing
 // the process while waiting for io.ReadAll. Anything larger than
 // this should be paginated via shell with head/tail/sed instead.
-const MaxReadFileBytes = 4 * 1024 * 1024
+const (
+	defaultReadFileBytes = 64 * 1024
+	MaxReadFileBytes     = 4 * 1024 * 1024
+)
 
 // MaxEditFileBytes caps edit_file's local read/replace path. edit_file
 // necessarily materializes the whole file to count and replace exact
@@ -466,9 +469,9 @@ func readFileTool(deps BuiltinDeps) *Tool {
         "required": ["path"],
         "properties": {
             "path": {"type": "string", "minLength": 1, "maxLength": %d, "description": "Workspace path."},
-            "max_bytes": {"type": "integer", "minimum": 1, "maximum": %d, "description": "Read cap; default 64 KiB, max 4 MiB."}
+            "max_bytes": {"type": "integer", "minimum": 1, "maximum": %d, "default": %d, "description": "Read cap; default 64 KiB, max 4 MiB."}
         }
-    }`, maxFileToolPathBytes, MaxReadFileBytes))
+    }`, maxFileToolPathBytes, MaxReadFileBytes, defaultReadFileBytes))
 	return &Tool{
 		Name:        "read_file",
 		Description: "Read one text file from the workspace. Use before editing. For huge files, inspect targeted chunks with shell grep/sed/head/tail.",
@@ -489,7 +492,7 @@ func readFileTool(deps BuiltinDeps) *Tool {
 				return "", err
 			}
 			if p.MaxBytes <= 0 {
-				p.MaxBytes = 64 * 1024
+				p.MaxBytes = defaultReadFileBytes
 			}
 			if p.MaxBytes > MaxReadFileBytes {
 				p.MaxBytes = MaxReadFileBytes
@@ -755,16 +758,19 @@ func editFileTool(deps BuiltinDeps) *Tool {
 // argument. A model asking for a million entries on a busy directory
 // should not force os.ReadDir to materialize the whole directory when
 // the model-facing output is capped anyway.
-const MaxListFilesEntries = 1000
+const (
+	defaultListFilesEntries = 200
+	MaxListFilesEntries     = 1000
+)
 
 func listFilesTool(deps BuiltinDeps) *Tool {
 	schema := json.RawMessage(fmt.Sprintf(`{
         "type": "object",
         "properties": {
             "path": {"type": "string", "maxLength": %d, "description": "Workspace directory; default root."},
-            "max_entries": {"type": "integer", "minimum": 1, "maximum": %d, "description": "Entry cap; default 200, max 1000."}
+            "max_entries": {"type": "integer", "minimum": 1, "maximum": %d, "default": %d, "description": "Entry cap; default 200, max 1000."}
         }
-    }`, maxFileToolPathBytes, MaxListFilesEntries))
+    }`, maxFileToolPathBytes, MaxListFilesEntries, defaultListFilesEntries))
 	return &Tool{
 		Name:        "list_files",
 		Description: "List one workspace directory. Use for orientation; use shell find/ls/rg for deep or filtered searches.",
@@ -785,7 +791,7 @@ func listFilesTool(deps BuiltinDeps) *Tool {
 				return "", err
 			}
 			if p.MaxEntries <= 0 {
-				p.MaxEntries = 200
+				p.MaxEntries = defaultListFilesEntries
 			}
 			if p.MaxEntries > MaxListFilesEntries {
 				p.MaxEntries = MaxListFilesEntries
