@@ -205,10 +205,11 @@ func ScrollTool(s *Session) *agent.Tool {
                 "type": "integer",
                 "minimum": 1,
                 "maximum": %d,
+                "default": %d,
                 "description": "CSS pixels for up/down (ignored otherwise). Default 600."
             }
         }
-    }`, maxBrowserScrollAmount))
+    }`, maxBrowserScrollAmount, defaultBrowserScrollAmount))
 	return &agent.Tool{
 		Name:        "browser_scroll",
 		Description: "Scroll the viewport. Use 'page_down'/'page_up' for one viewport's worth, 'top'/'bottom' to jump to extremes, or 'up'/'down' with an 'amount' in pixels. Returns a fresh snapshot of what's now visible.",
@@ -244,9 +245,9 @@ func ScrollTool(s *Session) *agent.Tool {
 			case "bottom":
 				js = "() => window.scrollTo(0, document.body.scrollHeight)"
 			case "":
-				return "", errors.New("'direction' is required")
+				return "", errors.New("'direction' is required. Next: retry with one of up, down, page_up, page_down, top, or bottom")
 			default:
-				return "", fmt.Errorf("unknown direction %q", args.Direction)
+				return "", fmt.Errorf("unknown direction %q. Next: retry with one of up, down, page_up, page_down, top, or bottom", args.Direction)
 			}
 			if s.page == nil {
 				return "", ErrNoPage

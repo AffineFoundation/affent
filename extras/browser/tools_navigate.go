@@ -43,6 +43,7 @@ func NavigateTool(s *Session) *agent.Tool {
             "wait_until": {
                 "type": "string",
                 "enum": ["load", "domcontentloaded", "networkidle"],
+                "default": "load",
                 "description": "What event ends the navigation. Default 'load'. Use 'networkidle' for SPAs whose content arrives via XHR after load."
             }
         }
@@ -214,10 +215,11 @@ func WaitTool(s *Session) *agent.Tool {
                 "type": "integer",
                 "minimum": %d,
                 "maximum": %d,
+                "default": %d,
                 "description": "Max time to wait in milliseconds. Default %d."
             }
         }
-    }`, maxBrowserWaitTextBytes, minBrowserWaitTimeoutMS, maxBrowserWaitTimeoutMS, defaultBrowserWaitTimeoutMS))
+    }`, maxBrowserWaitTextBytes, minBrowserWaitTimeoutMS, maxBrowserWaitTimeoutMS, defaultBrowserWaitTimeoutMS, defaultBrowserWaitTimeoutMS))
 	return &agent.Tool{
 		Name: "browser_wait",
 		Description: "Explicitly wait for a page condition (load event, DOM stable, network idle, or a substring appearing) before taking a snapshot. " +
@@ -235,7 +237,7 @@ func WaitTool(s *Session) *agent.Tool {
 			args.For = strings.TrimSpace(args.For)
 			args.Value = strings.TrimSpace(args.Value)
 			if args.For == "" {
-				return "", errors.New("'for' is required")
+				return "", errors.New("'for' is required. Next: retry with one of load, domcontentloaded, networkidle, or text")
 			}
 			timeout, err := resolveBrowserWaitTimeout(args.TimeoutMS)
 			if err != nil {
@@ -243,7 +245,7 @@ func WaitTool(s *Session) *agent.Tool {
 			}
 			if args.For == "text" {
 				if args.Value == "" {
-					return "", errors.New("'value' is required when 'for'='text'")
+					return "", errors.New("'value' is required when 'for'='text'. Next: retry with the exact short substring you expect to appear")
 				}
 				if len(args.Value) > maxBrowserWaitTextBytes {
 					return "", fmt.Errorf("'value' is %d bytes; browser_wait text supports values up to %d bytes", len(args.Value), maxBrowserWaitTextBytes)

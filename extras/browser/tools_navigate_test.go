@@ -49,6 +49,9 @@ func TestNavigateToolRejectsBlankURLAndPublishesMinLength(t *testing.T) {
 	if !strings.Contains(string(tool.Schema), `"maxLength": 4096`) {
 		t.Fatalf("schema should publish url maxLength: %s", tool.Schema)
 	}
+	if !strings.Contains(string(tool.Schema), `"default": "load"`) {
+		t.Fatalf("schema should publish wait_until default: %s", tool.Schema)
+	}
 	_, err := tool.Execute(context.Background(), json.RawMessage(`{"url":"   "}`))
 	if err == nil || !strings.Contains(err.Error(), "url is required") {
 		t.Fatalf("blank URL error = %v, want url is required", err)
@@ -68,13 +71,22 @@ func TestWaitToolRejectsBlankRequiredTextAndPublishesMinLength(t *testing.T) {
 	if !strings.Contains(string(tool.Schema), `"maxLength": 2048`) {
 		t.Fatalf("schema should publish value maxLength: %s", tool.Schema)
 	}
+	if !strings.Contains(string(tool.Schema), `"default": 10000`) {
+		t.Fatalf("schema should publish timeout_ms default: %s", tool.Schema)
+	}
 	_, err := tool.Execute(context.Background(), json.RawMessage(`{"for":"   "}`))
 	if err == nil || !strings.Contains(err.Error(), "'for' is required") {
 		t.Fatalf("blank for error = %v, want 'for' is required", err)
 	}
+	if !strings.Contains(err.Error(), "Next:") {
+		t.Fatalf("blank for error should include Next step, got %v", err)
+	}
 	_, err = tool.Execute(context.Background(), json.RawMessage(`{"for":"text","value":"   "}`))
 	if err == nil || !strings.Contains(err.Error(), "'value' is required") {
 		t.Fatalf("blank text value error = %v, want value is required", err)
+	}
+	if !strings.Contains(err.Error(), "Next:") {
+		t.Fatalf("blank text value error should include Next step, got %v", err)
 	}
 	longValue := strings.Repeat("x", maxBrowserWaitTextBytes+1)
 	_, err = tool.Execute(context.Background(), json.RawMessage(`{"for":"text","value":"`+longValue+`"}`))
@@ -91,13 +103,22 @@ func TestScrollToolRejectsBlankDirectionBeforePageCheck(t *testing.T) {
 	if !strings.Contains(string(tool.Schema), `"maximum": 5000`) {
 		t.Fatalf("schema should publish amount maximum: %s", tool.Schema)
 	}
+	if !strings.Contains(string(tool.Schema), `"default": 600`) {
+		t.Fatalf("schema should publish amount default: %s", tool.Schema)
+	}
 	_, err := tool.Execute(context.Background(), json.RawMessage(`{"direction":"   "}`))
 	if err == nil || !strings.Contains(err.Error(), "'direction' is required") {
 		t.Fatalf("blank direction error = %v, want direction is required", err)
 	}
+	if !strings.Contains(err.Error(), "Next:") {
+		t.Fatalf("blank direction error should include Next step, got %v", err)
+	}
 	_, err = tool.Execute(context.Background(), json.RawMessage(`{"direction":"sideways"}`))
 	if err == nil || !strings.Contains(err.Error(), `unknown direction "sideways"`) {
 		t.Fatalf("unknown direction error = %v, want unknown direction", err)
+	}
+	if !strings.Contains(err.Error(), "Next:") {
+		t.Fatalf("unknown direction error should include Next step, got %v", err)
 	}
 	_, err = tool.Execute(context.Background(), json.RawMessage(`{"direction":"down","amount":5001}`))
 	if err == nil || !strings.Contains(err.Error(), "amount must be between 1 and 5000") {
