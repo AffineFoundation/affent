@@ -155,12 +155,20 @@ type Loop struct {
 	// delegation instruction; feature-specific trigger logic belongs
 	// outside Loop.
 	FirstToolPolicy *FirstToolPolicy
+	// FirstToolPolicies extends FirstToolPolicy for runtimes that expose
+	// multiple delegation surfaces. The legacy FirstToolPolicy field is
+	// still honored first for compatibility.
+	FirstToolPolicies []*FirstToolPolicy
 
 	// PostToolPolicy optionally blocks selected follow-up tools after a
 	// named tool returns a result that activates the policy. This lets a
 	// feature steer small models from "one more verification" back to a
 	// final answer without hard-coding feature names in Loop.
 	PostToolPolicy *PostToolPolicy
+	// PostToolPolicies extends PostToolPolicy for multiple independent
+	// delegation surfaces. The legacy PostToolPolicy field is still
+	// honored first for compatibility.
+	PostToolPolicies []*PostToolPolicy
 
 	// SkillProvider optionally injects a short, task-relevant system
 	// skill before each user message. Unlike project context, this is
@@ -447,9 +455,7 @@ func (l *Loop) runTurn(ctx context.Context, turnID, userText string) {
 	endReason := sse.TurnEndCompleted
 	firstToolPolicy := l.activeFirstToolPolicy(userText)
 	firstToolSatisfied := firstToolPolicy == nil
-	postToolPolicy := l.activePostToolPolicy()
-	postToolSeen := false
-	postToolActive := false
+	postToolPolicies := l.activePostToolPolicies()
 	loopGuard := newToolLoopGuard()
 	// finishedNaturally tracks whether the for-loop exited because the
 	// model returned an assistant message without tool_calls (the
@@ -643,11 +649,7 @@ func (l *Loop) runTurn(ctx context.Context, turnID, userText string) {
 			if firstToolPolicy != nil && toolName == firstToolPolicy.ToolName {
 				firstToolSatisfied = true
 			}
-			if postToolSeen && postToolPolicy.blocksAfterToolResult(toolName) {
-				result := postToolPolicy.AfterToolResultReject
-				if result == "" {
-					result = fmt.Sprintf("post_tool_policy: %s already ran this turn; do not call %s again.", postToolPolicy.ToolName, toolName)
-				}
+			if result, ok := postToolRepeatRejection(postToolPolicies, toolName); ok {
 				l.publish(sse.TypeToolResult, toolResultEventPayload(callID, 1, result))
 				if err := l.Conv.Append(ChatMessage{
 					Role:       "tool",
@@ -661,11 +663,7 @@ func (l *Loop) runTurn(ctx context.Context, turnID, userText string) {
 				toolStats.ToolErrors++
 				continue
 			}
-			if postToolActive && postToolPolicy.blocks(toolName) {
-				result := postToolPolicy.Rejection
-				if result == "" {
-					result = fmt.Sprintf("post_tool_policy: answer from the prior %s result instead of calling %s.", postToolPolicy.ToolName, toolName)
-				}
+			if result, ok := postToolActiveRejection(postToolPolicies, toolName); ok {
 				l.publish(sse.TypeToolResult, toolResultEventPayload(callID, 1, result))
 				if err := l.Conv.Append(ChatMessage{
 					Role:       "tool",
@@ -715,11 +713,14 @@ func (l *Loop) runTurn(ctx context.Context, turnID, userText string) {
 			}
 			l.publishAndAppendToolResult(callID, toolName, result, isErr, toolDuration)
 			toolCallsUsed++
-			if postToolPolicy != nil && toolName == postToolPolicy.ToolName {
-				postToolSeen = true
-			}
-			if postToolPolicy != nil && toolName == postToolPolicy.ToolName && postToolPolicy.shouldActivate(result, isErr) {
-				postToolActive = true
+			for _, state := range postToolPolicies {
+				if toolName != state.policy.ToolName {
+					continue
+				}
+				state.seen = true
+				if state.policy.shouldActivate(result, isErr) {
+					state.active = true
+				}
 			}
 			if isErr {
 				toolStats.ToolErrors++
@@ -758,28 +759,91 @@ func (l *Loop) runTurn(ctx context.Context, turnID, userText string) {
 }
 
 func (l *Loop) activeFirstToolPolicy(userText string) *FirstToolPolicy {
-	p := l.FirstToolPolicy
-	if p == nil || p.ToolName == "" || l.Tools == nil {
+	if l.Tools == nil {
 		return nil
 	}
-	if _, ok := l.Tools.Get(p.ToolName); !ok {
-		return nil
+	for _, p := range l.configuredFirstToolPolicies() {
+		if p == nil || p.ToolName == "" {
+			continue
+		}
+		if _, ok := l.Tools.Get(p.ToolName); !ok {
+			continue
+		}
+		if p.Trigger != nil && !p.Trigger(userText) {
+			continue
+		}
+		return p
 	}
-	if p.Trigger != nil && !p.Trigger(userText) {
-		return nil
-	}
-	return p
+	return nil
 }
 
-func (l *Loop) activePostToolPolicy() *PostToolPolicy {
-	p := l.PostToolPolicy
-	if p == nil || p.ToolName == "" || l.Tools == nil {
+func (l *Loop) configuredFirstToolPolicies() []*FirstToolPolicy {
+	out := make([]*FirstToolPolicy, 0, 1+len(l.FirstToolPolicies))
+	if l.FirstToolPolicy != nil {
+		out = append(out, l.FirstToolPolicy)
+	}
+	out = append(out, l.FirstToolPolicies...)
+	return out
+}
+
+type activePostToolPolicyState struct {
+	policy *PostToolPolicy
+	seen   bool
+	active bool
+}
+
+func (l *Loop) activePostToolPolicies() []*activePostToolPolicyState {
+	if l.Tools == nil {
 		return nil
 	}
-	if _, ok := l.Tools.Get(p.ToolName); !ok {
-		return nil
+	policies := make([]*PostToolPolicy, 0, 1+len(l.PostToolPolicies))
+	if l.PostToolPolicy != nil {
+		policies = append(policies, l.PostToolPolicy)
 	}
-	return p
+	policies = append(policies, l.PostToolPolicies...)
+	out := make([]*activePostToolPolicyState, 0, len(policies))
+	seen := map[string]bool{}
+	for _, p := range policies {
+		if p == nil || p.ToolName == "" || seen[p.ToolName] {
+			continue
+		}
+		if _, ok := l.Tools.Get(p.ToolName); !ok {
+			continue
+		}
+		seen[p.ToolName] = true
+		out = append(out, &activePostToolPolicyState{policy: p})
+	}
+	return out
+}
+
+func postToolRepeatRejection(states []*activePostToolPolicyState, toolName string) (string, bool) {
+	for _, state := range states {
+		p := state.policy
+		if !state.seen || !p.blocksAfterToolResult(toolName) {
+			continue
+		}
+		result := p.AfterToolResultReject
+		if result == "" {
+			result = fmt.Sprintf("post_tool_policy: %s already ran this turn; do not call %s again.", p.ToolName, toolName)
+		}
+		return result, true
+	}
+	return "", false
+}
+
+func postToolActiveRejection(states []*activePostToolPolicyState, toolName string) (string, bool) {
+	for _, state := range states {
+		p := state.policy
+		if !state.active || !p.blocks(toolName) {
+			continue
+		}
+		result := p.Rejection
+		if result == "" {
+			result = fmt.Sprintf("post_tool_policy: answer from the prior %s result instead of calling %s.", p.ToolName, toolName)
+		}
+		return result, true
+	}
+	return "", false
 }
 
 func (p *PostToolPolicy) shouldActivate(result string, isErr bool) bool {

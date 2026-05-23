@@ -354,6 +354,39 @@ func TestWithFocusedTaskSystemGuidance_AppendsOnce(t *testing.T) {
 	}
 }
 
+func TestFocusedTaskPolicies(t *testing.T) {
+	if !explicitFocusedTaskRequested("please use run_task first to inspect docs") {
+		t.Fatal("explicit run_task request should trigger focused-task first-tool policy")
+	}
+	if !explicitFocusedTaskRequested("请使用 run_task 隔离上下文检查这个项目") {
+		t.Fatal("explicit Chinese run_task request should trigger focused-task first-tool policy")
+	}
+	if explicitFocusedTaskRequested("focused task work is not finished yet") {
+		t.Fatal("plain product discussion should not trigger first-tool policy")
+	}
+	if explicitFocusedTaskRequested("Workspace: /tmp/focused-task-work\nObjective: inspect docs") {
+		t.Fatal("workspace/path-bearing child prompts should not trigger first-tool policy")
+	}
+
+	okResult, err := json.Marshal(FocusedTaskResult{TaskType: FocusedTaskExplore, OK: true, Summary: "done"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !FocusedTaskPostToolPolicy().shouldActivate(string(okResult), false) {
+		t.Fatal("successful focused-task result should activate post-tool policy")
+	}
+	badResult, err := json.Marshal(FocusedTaskResult{TaskType: FocusedTaskExplore, OK: false, Summary: "partial"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if FocusedTaskPostToolPolicy().shouldActivate(string(badResult), false) {
+		t.Fatal("partial focused-task result should not block parent-side verification")
+	}
+	if FocusedTaskPostToolPolicy().shouldActivate(string(okResult), true) {
+		t.Fatal("tool errors should not activate focused-task post policy")
+	}
+}
+
 func TestRunFocusedTask_HappyPathReturnsStructuredResult(t *testing.T) {
 	jsonReply := `{"task_type":"recall","ok":true,"summary":"one fact","findings":[{"claim":"user prefers terse responses","evidence":"\"don't summarize at the end\"","source":"session:abc","confidence":"high"}]}`
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {

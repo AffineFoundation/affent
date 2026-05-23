@@ -473,6 +473,12 @@ func (p *SessionPool) buildSession(id string) (*Session, error) {
 		loop.FirstToolPolicy = agent.SubagentFirstToolPolicy()
 		loop.PostToolPolicy = agent.SubagentPostToolPolicy()
 	}
+	if p.cfg.EnableFocusedTasks {
+		if _, ok := reg.Get(agent.FocusedTaskToolName); ok {
+			loop.FirstToolPolicies = append(loop.FirstToolPolicies, agent.FocusedTaskFirstToolPolicy())
+			loop.PostToolPolicies = append(loop.PostToolPolicies, agent.FocusedTaskPostToolPolicy())
+		}
+	}
 	// Always-on rolling-summary compactor, same posture affentctl
 	// takes. Without it, a long-running session eventually outgrows
 	// the upstream's context window and runStep returns a

@@ -1384,6 +1384,201 @@ func TestRunTurn_SubagentPostPolicyGuardsRepeatedSubagentAfterFailure(t *testing
 	}
 }
 
+func TestRunTurn_FocusedTaskFirstPolicyComposesWithSubagentPolicy(t *testing.T) {
+	var calls int32
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "text/event-stream")
+		w.WriteHeader(http.StatusOK)
+		fl, _ := w.(http.Flusher)
+		switch atomic.AddInt32(&calls, 1) {
+		case 1:
+			_, _ = w.Write([]byte(`data: {"choices":[{"delta":{"role":"assistant","tool_calls":[{"index":0,"id":"c1","type":"function","function":{"name":"list_files","arguments":"{\"path\":\".\"}"}}]},"finish_reason":"tool_calls"}]}` + "\n\n"))
+			_, _ = w.Write([]byte("data: [DONE]\n\n"))
+		case 2:
+			_, _ = w.Write([]byte(`data: {"choices":[{"delta":{"role":"assistant","tool_calls":[{"index":0,"id":"c2","type":"function","function":{"name":"run_task","arguments":"{\"task_type\":\"explore\",\"objective\":\"inspect docs\"}"}}]},"finish_reason":"tool_calls"}]}` + "\n\n"))
+			_, _ = w.Write([]byte("data: [DONE]\n\n"))
+		default:
+			_, _ = w.Write([]byte(`data: {"choices":[{"delta":{"role":"assistant","content":"answered from focused task"},"finish_reason":"stop"}]}` + "\n\n"))
+			_, _ = w.Write([]byte("data: [DONE]\n\n"))
+		}
+		if fl != nil {
+			fl.Flush()
+		}
+	}))
+	t.Cleanup(srv.Close)
+
+	var listCalls int32
+	var runTaskCalls int32
+	reg := NewRegistry()
+	reg.Add(&Tool{
+		Name:        "list_files",
+		Description: "test list",
+		Schema:      json.RawMessage(`{"type":"object","properties":{}}`),
+		Execute: func(context.Context, json.RawMessage) (string, error) {
+			atomic.AddInt32(&listCalls, 1)
+			return "listed", nil
+		},
+	})
+	reg.Add(&Tool{
+		Name:        FocusedTaskToolName,
+		Description: "test focused task",
+		Schema:      json.RawMessage(`{"type":"object","properties":{}}`),
+		Execute: func(context.Context, json.RawMessage) (string, error) {
+			atomic.AddInt32(&runTaskCalls, 1)
+			return `{"task_type":"explore","ok":true,"summary":"done","findings":[],"child_session_id":"focused_test","turn_end_reason":"completed","depth":1,"usage":{}}`, nil
+		},
+	})
+
+	conv, err := OpenConversationAt(filepath.Join(t.TempDir(), "sess.jsonl"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	events := make(chan sse.Event, 256)
+	loop := &Loop{
+		LLM: NewLLMClient(srv.URL, "", "fake-model"), Tools: reg, Conv: conv, Events: events,
+		MaxTurnSteps: 3, PerCallTimeout: 5 * time.Second,
+		// Legacy subagent policy remains installed while the focused-task
+		// policy in the slice still gets a chance to match this turn.
+		FirstToolPolicy:   SubagentFirstToolPolicy(),
+		FirstToolPolicies: []*FirstToolPolicy{FocusedTaskFirstToolPolicy()},
+	}
+	if err := loop.EnsureSystemPrompt("base"); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := loop.SendUser(context.Background(), "please use run_task first to inspect docs"); err != nil {
+		t.Fatal(err)
+	}
+
+	deadline := time.After(10 * time.Second)
+	var sawGuard bool
+	for {
+		select {
+		case ev, ok := <-events:
+			if !ok {
+				t.Fatal("event channel closed before turn.end")
+			}
+			if ev.Type == sse.TypeToolResult {
+				var p sse.ToolResultPayload
+				if err := json.Unmarshal(ev.Data, &p); err != nil {
+					t.Fatalf("decode tool.result: %v", err)
+				}
+				if strings.Contains(p.Result, "first_tool_policy") {
+					sawGuard = true
+				}
+			}
+			if ev.Type != sse.TypeTurnEnd {
+				continue
+			}
+			if !sawGuard {
+				t.Fatal("expected parent exploration tool to be guarded before run_task")
+			}
+			if got := atomic.LoadInt32(&listCalls); got != 0 {
+				t.Fatalf("list_files should not execute before run_task; got %d calls", got)
+			}
+			if got := atomic.LoadInt32(&runTaskCalls); got != 1 {
+				t.Fatalf("run_task should execute once; got %d", got)
+			}
+			return
+		case <-deadline:
+			t.Fatal("timeout waiting for turn.end")
+		}
+	}
+}
+
+func TestRunTurn_FocusedTaskPostPolicyGuardsDuplicateExploration(t *testing.T) {
+	var calls int32
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "text/event-stream")
+		w.WriteHeader(http.StatusOK)
+		fl, _ := w.(http.Flusher)
+		switch atomic.AddInt32(&calls, 1) {
+		case 1:
+			_, _ = w.Write([]byte(`data: {"choices":[{"delta":{"role":"assistant","tool_calls":[{"index":0,"id":"c1","type":"function","function":{"name":"run_task","arguments":"{\"task_type\":\"explore\",\"objective\":\"find facts\"}"}}]},"finish_reason":"tool_calls"}]}` + "\n\n"))
+			_, _ = w.Write([]byte("data: [DONE]\n\n"))
+		case 2:
+			_, _ = w.Write([]byte(`data: {"choices":[{"delta":{"role":"assistant","tool_calls":[{"index":0,"id":"c2","type":"function","function":{"name":"read_file","arguments":"{\"path\":\"docs/facts.md\"}"}}]},"finish_reason":"tool_calls"}]}` + "\n\n"))
+			_, _ = w.Write([]byte("data: [DONE]\n\n"))
+		default:
+			_, _ = w.Write([]byte(`data: {"choices":[{"delta":{"role":"assistant","content":"answered from structured result"},"finish_reason":"stop"}]}` + "\n\n"))
+			_, _ = w.Write([]byte("data: [DONE]\n\n"))
+		}
+		if fl != nil {
+			fl.Flush()
+		}
+	}))
+	t.Cleanup(srv.Close)
+
+	var readCalls int32
+	reg := NewRegistry()
+	reg.Add(&Tool{
+		Name:        FocusedTaskToolName,
+		Description: "test focused task",
+		Schema:      json.RawMessage(`{"type":"object","properties":{}}`),
+		Execute: func(context.Context, json.RawMessage) (string, error) {
+			return `{"task_type":"explore","ok":true,"summary":"found docs/facts.md","findings":[{"claim":"x","source":"docs/facts.md:1"}],"child_session_id":"focused_test","turn_end_reason":"completed","depth":1,"usage":{}}`, nil
+		},
+	})
+	reg.Add(&Tool{
+		Name:        "read_file",
+		Description: "test read",
+		Schema:      json.RawMessage(`{"type":"object","properties":{}}`),
+		Execute: func(context.Context, json.RawMessage) (string, error) {
+			atomic.AddInt32(&readCalls, 1)
+			return "file contents", nil
+		},
+	})
+
+	conv, err := OpenConversationAt(filepath.Join(t.TempDir(), "sess.jsonl"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	events := make(chan sse.Event, 256)
+	loop := &Loop{
+		LLM: NewLLMClient(srv.URL, "", "fake-model"), Tools: reg, Conv: conv, Events: events,
+		MaxTurnSteps: 3, PerCallTimeout: 5 * time.Second,
+		PostToolPolicy:   SubagentPostToolPolicy(),
+		PostToolPolicies: []*PostToolPolicy{FocusedTaskPostToolPolicy()},
+	}
+	if err := loop.EnsureSystemPrompt("base"); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := loop.SendUser(context.Background(), "use run_task to find docs facts"); err != nil {
+		t.Fatal(err)
+	}
+
+	deadline := time.After(10 * time.Second)
+	var sawGuard bool
+	for {
+		select {
+		case ev, ok := <-events:
+			if !ok {
+				t.Fatal("event channel closed before turn.end")
+			}
+			if ev.Type == sse.TypeToolResult {
+				var p sse.ToolResultPayload
+				if err := json.Unmarshal(ev.Data, &p); err != nil {
+					t.Fatalf("decode tool.result: %v", err)
+				}
+				if strings.Contains(p.Result, "run_task already returned") {
+					sawGuard = true
+				}
+			}
+			if ev.Type != sse.TypeTurnEnd {
+				continue
+			}
+			if !sawGuard {
+				t.Fatal("expected duplicate parent exploration to be guarded after run_task")
+			}
+			if got := atomic.LoadInt32(&readCalls); got != 0 {
+				t.Fatalf("read_file should not execute after successful run_task; got %d", got)
+			}
+			return
+		case <-deadline:
+			t.Fatal("timeout waiting for turn.end")
+		}
+	}
+}
+
 // cancelOnFirstCompact is a Compactor that calls Loop.Cancel during
 // its very first invocation, then returns ctx.Err. Lets the test
 // trigger the "cancel during reactive compaction" race window.

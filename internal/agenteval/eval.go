@@ -113,6 +113,7 @@ func BuiltinBatchScenarios() []BatchScenario {
 		goRedactionScenario(),
 		pythonConfigParserScenario(),
 		promptInjectionFactsScenario(),
+		focusedTaskProjectFactsScenario(),
 		subagentProjectFactsScenario(),
 		subagentNoisyFactsScenario(),
 		subagentNestedFactsScenario(),

@@ -519,6 +519,99 @@ func WithFocusedTaskSystemGuidance(prompt string) string {
 	return prompt + "\n\n" + FocusedTaskSystemGuidance
 }
 
+func FocusedTaskFirstToolPolicy() *FirstToolPolicy {
+	return &FirstToolPolicy{
+		ToolName:  FocusedTaskToolName,
+		Trigger:   explicitFocusedTaskRequested,
+		Rejection: "first_tool_policy: the user explicitly requested a focused task; call run_task before parent-side exploration tools.",
+	}
+}
+
+func FocusedTaskPostToolPolicy() *PostToolPolicy {
+	return &PostToolPolicy{
+		ToolName: FocusedTaskToolName,
+		Activate: func(result string, isErr bool) bool {
+			if isErr {
+				return false
+			}
+			var resp FocusedTaskResult
+			if json.Unmarshal([]byte(result), &resp) != nil {
+				return false
+			}
+			return resp.OK
+		},
+		BlockedAfterToolResult: []string{FocusedTaskToolName},
+		AfterToolResultReject:  "post_tool_policy: run_task already ran this turn; use its structured result instead of spawning another focused task.",
+		BlockedTools: []string{
+			"read_file",
+			"list_files",
+			"shell",
+			"memory",
+			"session_search",
+			"web_fetch",
+			"web_search",
+			"browser_navigate",
+			"browser_back",
+			"browser_wait",
+			"browser_snapshot",
+			"browser_click",
+			"browser_type",
+			"browser_scroll",
+			"browser_screenshot",
+		},
+		Rejection: "post_tool_policy: run_task already returned a successful structured result; answer from its summary/findings instead of repeating parent-side exploration.",
+	}
+}
+
+func explicitFocusedTaskRequested(userText string) bool {
+	var b strings.Builder
+	for _, line := range strings.Split(userText, "\n") {
+		trimmed := strings.TrimSpace(line)
+		lowerLine := strings.ToLower(trimmed)
+		if strings.HasPrefix(lowerLine, "task type:") ||
+			strings.HasPrefix(lowerLine, "workspace:") ||
+			strings.HasPrefix(lowerLine, "tool budget:") ||
+			strings.Contains(lowerLine, "/") {
+			continue
+		}
+		b.WriteString(line)
+		b.WriteByte('\n')
+	}
+	lower := strings.ToLower(b.String())
+	for _, phrase := range focusedTaskDelegationPhrases {
+		if strings.Contains(lower, phrase) {
+			return true
+		}
+	}
+	return false
+}
+
+var focusedTaskDelegationPhrases = []string{
+	"use run_task",
+	"using run_task",
+	"call run_task",
+	"run_task first",
+	"use focused task",
+	"using focused task",
+	"call focused task",
+	"focused task first",
+	"use a focused task",
+	"using a focused task",
+	"call a focused task",
+	"focused-task",
+	"使用 run_task",
+	"使用run_task",
+	"调用 run_task",
+	"调用run_task",
+	"用 run_task",
+	"用run_task",
+	"使用 focused task",
+	"使用focused task",
+	"用 focused task",
+	"用focused task",
+	"聚焦任务工具",
+}
+
 // -----------------------------------------------------------------------------
 // Built-in profile definitions.
 //

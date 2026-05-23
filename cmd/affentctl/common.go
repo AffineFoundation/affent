@@ -853,6 +853,12 @@ func setupLoop(c commonFlags) (*loopBundle, int) {
 		loop.FirstToolPolicy = agent.SubagentFirstToolPolicy()
 		loop.PostToolPolicy = agent.SubagentPostToolPolicy()
 	}
+	if !c.memoryOnly && c.focusedTasksEnabled {
+		if _, ok := tools.Get(agent.FocusedTaskToolName); ok {
+			loop.FirstToolPolicies = append(loop.FirstToolPolicies, agent.FocusedTaskFirstToolPolicy())
+			loop.PostToolPolicies = append(loop.PostToolPolicies, agent.FocusedTaskPostToolPolicy())
+		}
+	}
 	triggerMsgs, keepLast := resolveCompactionConfig(c.compactTrigger, c.compactKeepLast)
 	loop.Compactor = &agent.LLMSummaryCompactor{
 		LLM:         llm,
