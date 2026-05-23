@@ -347,6 +347,32 @@ func TestSubagentFileToolsRejectTranscriptPaths(t *testing.T) {
 	}
 }
 
+func TestSubagentWrappedToolsRejectUnknownArguments(t *testing.T) {
+	ws := t.TempDir()
+	if err := os.WriteFile(filepath.Join(ws, "note.txt"), []byte("hello"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	store := newTestStore(t)
+	cases := []struct {
+		name string
+		tool *Tool
+		args json.RawMessage
+	}{
+		{name: "read_file", tool: subagentReadFileTool(BuiltinDeps{HostWorkspaceDir: ws}), args: json.RawMessage(`{"path":"note.txt","unused":true}`)},
+		{name: "list_files", tool: subagentListFilesTool(BuiltinDeps{HostWorkspaceDir: ws}), args: json.RawMessage(`{"path":".","recursive":true}`)},
+		{name: "shell", tool: readOnlyShellTool(BuiltinDeps{Executor: nilExecutor{}, HostWorkspaceDir: ws}), args: json.RawMessage(`{"command":"pwd","write":false}`)},
+		{name: "memory", tool: readOnlyMemoryTool(store), args: json.RawMessage(`{"action":"search","query":"hello","unused":true}`)},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			_, err := tc.tool.Execute(context.Background(), tc.args)
+			if err == nil || !strings.Contains(err.Error(), "unknown field") {
+				t.Fatalf("error = %v, want unknown field", err)
+			}
+		})
+	}
+}
+
 func TestReadOnlyMemoryToolRejectsWrites(t *testing.T) {
 	store := newTestStore(t)
 	tool := readOnlyMemoryTool(store)
@@ -788,6 +814,13 @@ func TestSubagentTool_InputValidation(t *testing.T) {
 		_, err := tool.Execute(context.Background(), json.RawMessage(`{"task":"   "}`))
 		if err == nil || !strings.Contains(err.Error(), "task is required") {
 			t.Errorf("whitespace-only task must be rejected; got err=%v", err)
+		}
+	})
+
+	t.Run("unknown field is rejected", func(t *testing.T) {
+		_, err := tool.Execute(context.Background(), json.RawMessage(`{"task":"x","temperature":0.9}`))
+		if err == nil || !strings.Contains(err.Error(), `unknown field "temperature"`) {
+			t.Errorf("unknown field must be rejected; got err=%v", err)
 		}
 	})
 
