@@ -224,11 +224,15 @@ func TestMakeImageServeEnablesBuiltinsInsideRuntimeContainer(t *testing.T) {
 	for _, want := range []string{
 		"IMAGE_WORKSPACE ?= $(CURDIR)/.tmp/runtime-workspace",
 		"SERVE_CONTAINER_NAME ?= affent-serve",
+		"SERVE_BASE_URL ?= $(or $(AFFENTSERVE_BASE_URL),$(AFFENTCTL_BASE_URL))",
+		"SERVE_API_KEY ?= $(or $(AFFENTSERVE_API_KEY),$(AFFENTCTL_API_KEY))",
+		"SERVE_MODEL ?= $(or $(AFFENTSERVE_MODEL),$(AFFENTCTL_MODEL))",
 		"SERVE_HEALTH_URL ?= http://127.0.0.1:7777/healthz",
 		"SERVE_HEALTH_ATTEMPTS ?= 30",
 		"SERVE_HEALTH_INTERVAL ?= 1",
 		"SERVE_MEMORY_ROOT ?= /workspace/session-state",
-		"image-serve: affentctl",
+		"image-run: image-build",
+		"image-serve: image-build",
 		"image-serve-up:",
 		"image-serve-status:",
 		"image-serve-health:",
@@ -259,8 +263,11 @@ func TestMakeImageServeEnablesBuiltinsInsideRuntimeContainer(t *testing.T) {
 		`$(MAKE) image-serve`,
 		`$(MAKE) image-serve-health-wait`,
 		`$(if $(SERVE_CONTAINER_NAME),--name "$(SERVE_CONTAINER_NAME)")`,
+		`$(if $(SERVE_BASE_URL),--base-url "$(SERVE_BASE_URL)")`,
+		`$(if $(SERVE_API_KEY),--api-key "$(SERVE_API_KEY)")`,
+		`$(if $(SERVE_MODEL),--model "$(SERVE_MODEL)")`,
 		`--detach --rm=false --publish "$(SERVE_PUBLISH)"`,
-		"affentserve --listen \"$(SERVE_LISTEN)\" --workspace-root \"$(SERVE_WORKSPACE_ROOT)\" --memory-root \"$(SERVE_MEMORY_ROOT)\" --builtins $(SERVE_ARGS)",
+		"affentserve --listen \"$(SERVE_LISTEN)\" $(if $(SERVE_BASE_URL),--base-url \"$(SERVE_BASE_URL)\") $(if $(SERVE_API_KEY),--api-key \"$(SERVE_API_KEY)\") $(if $(SERVE_MODEL),--model \"$(SERVE_MODEL)\") --workspace-root \"$(SERVE_WORKSPACE_ROOT)\" --memory-root \"$(SERVE_MEMORY_ROOT)\" --builtins $(SERVE_ARGS)",
 	} {
 		if !strings.Contains(body, want) {
 			t.Fatalf("Makefile image-serve target missing %q", want)

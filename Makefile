@@ -13,6 +13,9 @@ EVAL_ARGS ?= --list
 EVAL_WORK_ROOT ?= /workspace/.tmp/eval
 EVAL_DOCKER_ARGS ?=
 SERVE_ARGS ?=
+SERVE_BASE_URL ?= $(or $(AFFENTSERVE_BASE_URL),$(AFFENTCTL_BASE_URL))
+SERVE_API_KEY ?= $(or $(AFFENTSERVE_API_KEY),$(AFFENTCTL_API_KEY))
+SERVE_MODEL ?= $(or $(AFFENTSERVE_MODEL),$(AFFENTCTL_MODEL))
 SERVE_LISTEN ?= 0.0.0.0:7777
 SERVE_PUBLISH ?= 127.0.0.1:7777:7777
 SERVE_HEALTH_URL ?= http://127.0.0.1:7777/healthz
@@ -80,11 +83,11 @@ sandbox-stop: affentctl
 image-build: affentctl
 	"$(AFFENTCTL)" image build --memory "$(CONTAINER_MEMORY)" $(IMAGE_BUILD_ARGS)
 
-image-run: affentctl
+image-run: image-build
 	"$(AFFENTCTL)" image run --workspace "$(IMAGE_WORKSPACE)" --memory "$(CONTAINER_MEMORY)" --cpus "$(CONTAINER_CPUS)" --pids-limit "$(CONTAINER_PIDS)" $(IMAGE_RUN_ARGS) -- $(IMAGE_COMMAND)
 
-image-serve: affentctl
-	"$(AFFENTCTL)" image run --workspace "$(IMAGE_WORKSPACE)" --memory "$(CONTAINER_MEMORY)" --cpus "$(CONTAINER_CPUS)" --pids-limit "$(CONTAINER_PIDS)" $(if $(SERVE_CONTAINER_NAME),--name "$(SERVE_CONTAINER_NAME)") --detach --rm=false --publish "$(SERVE_PUBLISH)" $(IMAGE_RUN_ARGS) -- affentserve --listen "$(SERVE_LISTEN)" --workspace-root "$(SERVE_WORKSPACE_ROOT)" --memory-root "$(SERVE_MEMORY_ROOT)" --builtins $(SERVE_ARGS)
+image-serve: image-build
+	"$(AFFENTCTL)" image run --workspace "$(IMAGE_WORKSPACE)" --memory "$(CONTAINER_MEMORY)" --cpus "$(CONTAINER_CPUS)" --pids-limit "$(CONTAINER_PIDS)" $(if $(SERVE_CONTAINER_NAME),--name "$(SERVE_CONTAINER_NAME)") --detach --rm=false --publish "$(SERVE_PUBLISH)" $(IMAGE_RUN_ARGS) -- affentserve --listen "$(SERVE_LISTEN)" $(if $(SERVE_BASE_URL),--base-url "$(SERVE_BASE_URL)") $(if $(SERVE_API_KEY),--api-key "$(SERVE_API_KEY)") $(if $(SERVE_MODEL),--model "$(SERVE_MODEL)") --workspace-root "$(SERVE_WORKSPACE_ROOT)" --memory-root "$(SERVE_MEMORY_ROOT)" --builtins $(SERVE_ARGS)
 
 image-serve-up:
 	@if test -z "$(SERVE_CONTAINER_NAME)"; then \
