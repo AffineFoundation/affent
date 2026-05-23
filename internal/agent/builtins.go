@@ -77,6 +77,9 @@ type BuiltinDeps struct {
 var defaultShell = []string{"sh", "-c"}
 
 const (
+	maxSkillActionBytes = 16
+	maxSkillNameBytes   = 128
+
 	defaultShellTimeoutSec = 120
 	maxShellTimeoutSec     = 300
 	maxShellOutputBytes    = 256 * 1024
@@ -106,14 +109,14 @@ func skillTool(reg *SkillRegistry) *Tool {
 	if reg == nil {
 		reg = builtinSkillProviderRegistry
 	}
-	schema := json.RawMessage(`{
+	schema := json.RawMessage(fmt.Sprintf(`{
         "type": "object",
         "required": ["action"],
         "properties": {
-            "action": {"type": "string", "minLength": 1, "enum": ["list", "read"], "description": "Use list to inspect available skills; use read to load one skill body."},
-            "name": {"type": "string", "minLength": 1, "description": "Skill name to read when action=read."}
+            "action": {"type": "string", "minLength": 1, "maxLength": %d, "enum": ["list", "read"], "description": "Use list to inspect available skills; use read to load one skill body."},
+            "name": {"type": "string", "minLength": 1, "maxLength": %d, "description": "Skill name to read when action=read."}
         }
-    }`)
+    }`, maxSkillActionBytes, maxSkillNameBytes))
 	return &Tool{
 		Name:        "skill",
 		Description: "List or read reusable operational skills. Use this when a task needs a workflow that may be available as a skill; do not call it if an active skill is already present and sufficient.",
@@ -130,6 +133,9 @@ func skillTool(reg *SkillRegistry) *Tool {
 			if action == "" {
 				return "", errors.New("action is required")
 			}
+			if len(action) > maxSkillActionBytes {
+				return "", fmt.Errorf("action is %d bytes; skill action supports up to %d bytes", len(action), maxSkillActionBytes)
+			}
 			switch action {
 			case "list":
 				out, err := json.MarshalIndent(reg.Catalog(), "", "  ")
@@ -141,6 +147,9 @@ func skillTool(reg *SkillRegistry) *Tool {
 				name := strings.TrimSpace(p.Name)
 				if name == "" {
 					return "", errors.New("name is required when action=read")
+				}
+				if len(name) > maxSkillNameBytes {
+					return "", fmt.Errorf("name is %d bytes; skill name supports up to %d bytes", len(name), maxSkillNameBytes)
 				}
 				s, ok := reg.Lookup(name)
 				if !ok {

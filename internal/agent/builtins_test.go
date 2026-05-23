@@ -1175,6 +1175,7 @@ func TestSkillToolPublishesAndRejectsBlankRequiredStrings(t *testing.T) {
 	var schema struct {
 		Properties map[string]struct {
 			MinLength int `json:"minLength"`
+			MaxLength int `json:"maxLength"`
 		} `json:"properties"`
 	}
 	if err := json.Unmarshal(tool.Schema, &schema); err != nil {
@@ -1185,11 +1186,25 @@ func TestSkillToolPublishesAndRejectsBlankRequiredStrings(t *testing.T) {
 			t.Fatalf("%s minLength = %d, want 1", field, schema.Properties[field].MinLength)
 		}
 	}
+	if schema.Properties["action"].MaxLength != maxSkillActionBytes {
+		t.Fatalf("action maxLength = %d, want %d", schema.Properties["action"].MaxLength, maxSkillActionBytes)
+	}
+	if schema.Properties["name"].MaxLength != maxSkillNameBytes {
+		t.Fatalf("name maxLength = %d, want %d", schema.Properties["name"].MaxLength, maxSkillNameBytes)
+	}
 	if _, err := tool.Execute(context.Background(), json.RawMessage(`{"action":"   "}`)); err == nil || !strings.Contains(err.Error(), "action is required") {
 		t.Fatalf("blank action error = %v, want action is required", err)
 	}
 	if _, err := tool.Execute(context.Background(), json.RawMessage(`{"action":"read","name":"   "}`)); err == nil || !strings.Contains(err.Error(), "name is required") {
 		t.Fatalf("blank name error = %v, want name is required", err)
+	}
+	longAction := strings.Repeat("x", maxSkillActionBytes+1)
+	if _, err := tool.Execute(context.Background(), json.RawMessage(`{"action":"`+longAction+`"}`)); err == nil || !strings.Contains(err.Error(), "skill action supports up to") {
+		t.Fatalf("oversized action error = %v, want action length error", err)
+	}
+	longName := strings.Repeat("x", maxSkillNameBytes+1)
+	if _, err := tool.Execute(context.Background(), json.RawMessage(`{"action":"read","name":"`+longName+`"}`)); err == nil || !strings.Contains(err.Error(), "skill name supports up to") {
+		t.Fatalf("oversized name error = %v, want name length error", err)
 	}
 }
 
