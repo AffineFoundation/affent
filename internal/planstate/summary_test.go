@@ -28,6 +28,16 @@ func TestSummarizeJSONLabelsPlanProgress(t *testing.T) {
 			want: Summary{Label: "plan:1/2:blocked", TotalSteps: 2, CompletedSteps: 1, Blocked: true, CurrentStep: "need input", CurrentStepIndex: 2},
 		},
 		{
+			name: "duplicate steps count once",
+			raw:  `{"steps":[{"text":"Run tests","status":"completed"},{"text":" run   TESTS ","status":"completed"},{"text":"ship","status":"in_progress"}]}`,
+			want: Summary{Label: "plan:1/2:active", TotalSteps: 2, CompletedSteps: 1, Active: true, CurrentStep: "ship", CurrentStepIndex: 2},
+		},
+		{
+			name: "same text with different status remains distinct",
+			raw:  `{"steps":[{"text":"","status":"completed"},{"text":"","status":"blocked"}]}`,
+			want: Summary{Label: "plan:1/2:blocked", TotalSteps: 2, CompletedSteps: 1, Blocked: true, CurrentStepIndex: 2},
+		},
+		{
 			name: "blank status counts as pending",
 			raw:  `{"steps":[{"text":"  next\n\t  step  ","status":"  "}]}`,
 			want: Summary{Label: "plan:0/1", TotalSteps: 1, CurrentStep: "next step", CurrentStepIndex: 1},

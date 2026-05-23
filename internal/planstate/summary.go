@@ -41,10 +41,17 @@ func SummarizeJSON(raw json.RawMessage) (Summary, error) {
 	if len(st.Steps) == 0 {
 		return Summary{Label: LabelEmpty}, nil
 	}
-	out := Summary{TotalSteps: len(st.Steps)}
+	out := Summary{}
+	seenSteps := map[string]bool{}
 	currentPriority := 0
-	for i, step := range st.Steps {
+	for _, step := range st.Steps {
 		status := normalizeStatus(step.Status)
+		stepKey := canonicalStepKey(step.Text, status)
+		if seenSteps[stepKey] {
+			continue
+		}
+		seenSteps[stepKey] = true
+		out.TotalSteps++
 		switch status {
 		case "completed":
 			out.CompletedSteps++
@@ -55,7 +62,7 @@ func SummarizeJSON(raw json.RawMessage) (Summary, error) {
 		}
 		if priority := currentStepPriority(status); priority > currentPriority {
 			currentPriority = priority
-			out.CurrentStepIndex = i + 1
+			out.CurrentStepIndex = out.TotalSteps
 			out.CurrentStep = compactCurrentStep(step.Text)
 		}
 	}
@@ -76,6 +83,10 @@ func SummarizeJSON(raw json.RawMessage) (Summary, error) {
 
 func normalizeStatus(status string) string {
 	return strings.ToLower(strings.TrimSpace(status))
+}
+
+func canonicalStepKey(text, status string) string {
+	return strings.ToLower(strings.Join(strings.Fields(text), " ")) + "\x00" + status
 }
 
 func currentStepPriority(status string) int {
