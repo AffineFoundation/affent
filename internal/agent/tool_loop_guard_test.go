@@ -61,6 +61,23 @@ func TestRegistryDispatch_SuggestsUnknownToolNames(t *testing.T) {
 	if !strings.Contains(out, `Did you mean: read_file?`) {
 		t.Fatalf("expected suggestion, got %q", out)
 	}
+	if !strings.Contains(out, "Next:") || !strings.Contains(out, "exact tool names") {
+		t.Fatalf("unknown tool suggestion should include corrective Next step, got %q", out)
+	}
+}
+
+func TestRegistryDispatch_UnknownToolWithoutSuggestionGivesNextStep(t *testing.T) {
+	reg := NewRegistry()
+	reg.Add(&Tool{Name: "read_file", Execute: func(ctx context.Context, args json.RawMessage) (string, error) {
+		return "", nil
+	}})
+	out, isErr := reg.dispatch(context.Background(), "browser_use", json.RawMessage(`{}`))
+	if !isErr {
+		t.Fatal("unknown tool should be an error")
+	}
+	if !strings.Contains(out, "Next:") || !strings.Contains(out, "advertised tool list") {
+		t.Fatalf("unknown tool without suggestion should include recovery guidance, got %q", out)
+	}
 }
 
 func TestRegistryDispatch_CanonicalizesToolNameAliases(t *testing.T) {

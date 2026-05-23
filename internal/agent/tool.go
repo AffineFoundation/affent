@@ -163,7 +163,9 @@ func (r *Registry) dispatch(ctx context.Context, name string, args json.RawMessa
 	if !ok {
 		msg := fmt.Sprintf("Error: tool %q is not available", name)
 		if suggestions := r.suggestions(name, 3); len(suggestions) > 0 {
-			msg += fmt.Sprintf(". Did you mean: %s?", strings.Join(suggestions, ", "))
+			msg += fmt.Sprintf(". Did you mean: %s?\nNext: retry once with one of those exact tool names, or choose a different available tool.", strings.Join(suggestions, ", "))
+		} else {
+			msg += "\nNext: choose a tool from the advertised tool list exactly as named; do not call this unavailable tool again."
 		}
 		return msg, true
 	}
