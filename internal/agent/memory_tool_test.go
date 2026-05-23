@@ -64,6 +64,7 @@ func TestMemoryTool_DispatchValidation(t *testing.T) {
 		wantInMsg string
 	}{
 		{"no action", `{}`, "action is required"},
+		{"blank action", `{"action":"   "}`, "action is required"},
 		{"add without content", `{"action":"add"}`, "content is required"},
 		{"add with blank content", `{"action":"add","content":"   "}`, "content is required"},
 		{"replace without old_text", `{"action":"replace","content":"x"}`, "old_text and content are required"},
@@ -103,6 +104,15 @@ func TestMemoryToolSchemaPublishesSearchLimits(t *testing.T) {
 	if err := json.Unmarshal(tool.Schema, &schema); err != nil {
 		t.Fatal(err)
 	}
+	if schema.Properties["action"].MinLength != 1 {
+		t.Fatalf("action minLength = %d, want 1", schema.Properties["action"].MinLength)
+	}
+	if schema.Properties["target"].MinLength != 1 {
+		t.Fatalf("target minLength = %d, want 1", schema.Properties["target"].MinLength)
+	}
+	if schema.Properties["topic"].MinLength != 1 {
+		t.Fatalf("topic minLength = %d, want 1", schema.Properties["topic"].MinLength)
+	}
 	if schema.Properties["query"].MinLength != 1 {
 		t.Fatalf("query minLength = %d, want 1", schema.Properties["query"].MinLength)
 	}
@@ -137,6 +147,28 @@ func TestMemoryToolNormalizesSearchArgsBeforeStore(t *testing.T) {
 	}
 	if len(store.query) > memory.MaxSearchQueryBytes {
 		t.Fatalf("query passed to store is %d bytes, want <= %d", len(store.query), memory.MaxSearchQueryBytes)
+	}
+}
+
+func TestMemoryToolTrimsRoutingArgs(t *testing.T) {
+	tool, _ := newMemoryToolFixture(t)
+	out, err := tool.Execute(context.Background(), json.RawMessage(
+		`{"action":" add ","target":"   ","topic":"  deploy  ","content":"ship via fly.io"}`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	var resp memory.MemoryResponse
+	if err := json.Unmarshal([]byte(out), &resp); err != nil {
+		t.Fatal(err)
+	}
+	if !resp.OK {
+		t.Fatalf("add should succeed after trimming routing args: %+v", resp)
+	}
+	if resp.Target != memory.TargetMemory {
+		t.Fatalf("blank target should default to memory, got %q", resp.Target)
+	}
+	if resp.Topic != "deploy" {
+		t.Fatalf("topic should be trimmed before store normalization, got %q", resp.Topic)
 	}
 }
 

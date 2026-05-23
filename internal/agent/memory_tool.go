@@ -34,16 +34,19 @@ func memoryTool(store memory.MemoryStore) *Tool {
 		"properties": map[string]any{
 			"action": map[string]any{
 				"type":        "string",
+				"minLength":   1,
 				"enum":        memoryActions,
 				"description": "add, replace, remove, search, or list.",
 			},
 			"target": map[string]any{
 				"type":        "string",
+				"minLength":   1,
 				"enum":        []string{string(memory.TargetMemory), string(memory.TargetUser)},
 				"description": "memory (default) for project/env notes; user for stable user preferences/details.",
 			},
 			"topic": map[string]any{
 				"type":        "string",
+				"minLength":   1,
 				"description": "Memory topic. Use core sparingly; otherwise use semantic names like stack, deploy, auth, conventions. Defaults to general.",
 			},
 			"content": map[string]any{
@@ -92,6 +95,9 @@ func memoryTool(store memory.MemoryStore) *Tool {
 			if err := json.Unmarshal(args, &p); err != nil {
 				return "", fmt.Errorf("decode args: %w", err)
 			}
+			p.Action = strings.TrimSpace(p.Action)
+			p.Target = strings.TrimSpace(p.Target)
+			p.Topic = strings.TrimSpace(p.Topic)
 			// Default target to "memory" — the agent-notes case is far
 			// more common than user-profile updates, and forcing the
 			// model to specify on every call (when omission previously
