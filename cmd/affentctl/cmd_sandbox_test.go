@@ -155,7 +155,7 @@ func TestDockerImagesShareToolPackageManifest(t *testing.T) {
 		seen[pkg] = true
 		prev = pkg
 	}
-	for _, want := range []string{"bash", "build-essential", "git", "jq", "nodejs", "npm", "python3", "ripgrep", "sqlite3"} {
+	for _, want := range []string{"bash", "build-essential", "git", "jq", "nodejs", "npm", "python-is-python3", "python3", "ripgrep", "sqlite3"} {
 		if !seen[want] {
 			t.Fatalf("tool package manifest missing %s", want)
 		}
