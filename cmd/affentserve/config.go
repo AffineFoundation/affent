@@ -279,68 +279,61 @@ func (c *Config) Resolve() error {
 	if !c.subagentMaxDepthSet && c.SubagentMaxDepth <= 0 {
 		c.SubagentMaxDepth = agent.DefaultSubagentMaxDepth
 	}
-	if v := os.Getenv("AFFENTSERVE_BASE_URL"); v != "" {
-		c.BaseURL = v
-	}
-	if v := os.Getenv("AFFENTSERVE_API_KEY"); v != "" {
-		c.APIKey = v
-	}
-	if v := os.Getenv("AFFENTSERVE_MODEL"); v != "" {
-		c.Model = v
-	}
-	if v := os.Getenv("AFFENTSERVE_AUTH_TOKEN"); v != "" {
-		c.AuthToken = v
-	}
-	if v := os.Getenv("AFFENTSERVE_WORKSPACE_ROOT"); v != "" {
-		c.WorkspaceRoot = v
-	}
-	if v := os.Getenv("AFFENTSERVE_MEMORY_ROOT"); v != "" {
-		c.MemoryRoot = v
-	}
-	if v := os.Getenv("AFFENTSERVE_MEMORY"); v != "" {
-		enabled, err := strconv.ParseBool(v)
-		if err != nil {
-			return fmt.Errorf("AFFENTSERVE_MEMORY=%q: %w", v, err)
+	for _, e := range []struct {
+		env  string
+		dest *string
+	}{
+		{"AFFENTSERVE_BASE_URL", &c.BaseURL},
+		{"AFFENTSERVE_API_KEY", &c.APIKey},
+		{"AFFENTSERVE_MODEL", &c.Model},
+		{"AFFENTSERVE_AUTH_TOKEN", &c.AuthToken},
+		{"AFFENTSERVE_WORKSPACE_ROOT", &c.WorkspaceRoot},
+		{"AFFENTSERVE_MEMORY_ROOT", &c.MemoryRoot},
+		{"AFFENTSERVE_SESSION_RETENTION", &c.SessionRetention},
+	} {
+		if v := os.Getenv(e.env); v != "" {
+			*e.dest = v
 		}
-		c.EnableMemory = enabled
 	}
-	if v := os.Getenv("AFFENTSERVE_SUBAGENT"); v != "" {
-		enabled, err := strconv.ParseBool(v)
-		if err != nil {
-			return fmt.Errorf("AFFENTSERVE_SUBAGENT=%q: %w", v, err)
+	for _, e := range []struct {
+		env  string
+		dest *bool
+	}{
+		{"AFFENTSERVE_MEMORY", &c.EnableMemory},
+		{"AFFENTSERVE_SUBAGENT", &c.EnableSubagent},
+	} {
+		if v := os.Getenv(e.env); v != "" {
+			b, err := strconv.ParseBool(v)
+			if err != nil {
+				return fmt.Errorf("%s=%q: %w", e.env, v, err)
+			}
+			*e.dest = b
 		}
-		c.EnableSubagent = enabled
 	}
 	if v := os.Getenv("AFFENTSERVE_SUBAGENT_MAX_DEPTH"); v != "" {
-		maxDepth, err := strconv.Atoi(v)
+		n, err := strconv.Atoi(v)
 		if err != nil {
 			return fmt.Errorf("AFFENTSERVE_SUBAGENT_MAX_DEPTH=%q: %w", v, err)
 		}
-		c.SubagentMaxDepth = maxDepth
+		c.SubagentMaxDepth = n
 	}
 	if c.SessionIdleTTL == "" {
 		c.SessionIdleTTL = defaultSessionIdleTTL.String()
 	}
-	if v := os.Getenv("AFFENTSERVE_SESSION_RETENTION"); v != "" {
-		c.SessionRetention = v
-	}
-	// Sampling knobs: same env-beats-config posture. Parse errors
-	// surface at startup so a typo in AFFENTSERVE_TEMPERATURE doesn't
-	// silently keep the provider default for the lifetime of the
-	// deploy.
-	if v := os.Getenv("AFFENTSERVE_TEMPERATURE"); v != "" {
-		t, err := strconv.ParseFloat(v, 64)
-		if err != nil {
-			return fmt.Errorf("AFFENTSERVE_TEMPERATURE=%q: %w", v, err)
+	for _, e := range []struct {
+		env  string
+		dest **float64
+	}{
+		{"AFFENTSERVE_TEMPERATURE", &c.Temperature},
+		{"AFFENTSERVE_TOP_P", &c.TopP},
+	} {
+		if v := os.Getenv(e.env); v != "" {
+			f, err := strconv.ParseFloat(v, 64)
+			if err != nil {
+				return fmt.Errorf("%s=%q: %w", e.env, v, err)
+			}
+			*e.dest = &f
 		}
-		c.Temperature = &t
-	}
-	if v := os.Getenv("AFFENTSERVE_TOP_P"); v != "" {
-		t, err := strconv.ParseFloat(v, 64)
-		if err != nil {
-			return fmt.Errorf("AFFENTSERVE_TOP_P=%q: %w", v, err)
-		}
-		c.TopP = &t
 	}
 	if v := os.Getenv("AFFENTSERVE_MAX_TOKENS"); v != "" {
 		n, err := strconv.Atoi(v)
