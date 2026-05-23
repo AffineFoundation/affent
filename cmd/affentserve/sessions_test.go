@@ -14,6 +14,7 @@ import (
 
 	"github.com/affinefoundation/affent/internal/agent"
 	"github.com/affinefoundation/affent/internal/memory"
+	"github.com/affinefoundation/affent/internal/sse"
 	"github.com/rs/zerolog"
 )
 
@@ -388,6 +389,92 @@ func TestSessionPool_ShutdownPreservesDurableState(t *testing.T) {
 		}
 	}
 	t.Fatalf("conversation log must reload after graceful shutdown; got %+v", s2.conv.Snapshot())
+}
+
+func TestSessionPool_EventLogIsDurable(t *testing.T) {
+	memRoot := t.TempDir()
+	cfg := Config{
+		Listen:         "127.0.0.1:0",
+		MaxSessions:    4,
+		SessionIdleTTL: "5m",
+		WorkspaceRoot:  t.TempDir(),
+		MemoryRoot:     memRoot,
+		BaseURL:        "http://127.0.0.1:0",
+		APIKey:         "test",
+		Model:          "fake",
+	}
+	tracePath := filepath.Join(memRoot, "trace-client", "events.jsonl")
+
+	pool, err := NewSessionPool(cfg, zerolog.New(io.Discard))
+	if err != nil {
+		t.Fatalf("NewSessionPool first: %v", err)
+	}
+	s1, err := pool.GetOrCreate("trace-client")
+	if err != nil {
+		t.Fatalf("GetOrCreate first: %v", err)
+	}
+	ev1, err := sse.NewEvent(sse.TypeTurnStart, sse.TurnStartPayload{TurnID: "turn-one"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	ev1.ID = 1
+	s1.events <- ev1
+	waitForFileSubstring(t, tracePath, `"turn_id":"turn-one"`)
+	pool.Shutdown()
+
+	first, err := os.ReadFile(tracePath)
+	if err != nil {
+		t.Fatalf("read first event log: %v", err)
+	}
+	if strings.Count(string(first), `"type":"trace.meta"`) != 1 {
+		t.Fatalf("fresh event log should have exactly one trace.meta header:\n%s", string(first))
+	}
+
+	pool2, err := NewSessionPool(cfg, zerolog.New(io.Discard))
+	if err != nil {
+		t.Fatalf("NewSessionPool second: %v", err)
+	}
+	t.Cleanup(pool2.Shutdown)
+	s2, err := pool2.GetOrCreate("trace-client")
+	if err != nil {
+		t.Fatalf("GetOrCreate second: %v", err)
+	}
+	ev2, err := sse.NewEvent(sse.TypeUsage, sse.UsagePayload{TurnID: "turn-two", InputTokens: 3, OutputTokens: 4})
+	if err != nil {
+		t.Fatal(err)
+	}
+	ev2.ID = 2
+	s2.events <- ev2
+	waitForFileSubstring(t, tracePath, `"turn_id":"turn-two"`)
+
+	final, err := os.ReadFile(tracePath)
+	if err != nil {
+		t.Fatalf("read final event log: %v", err)
+	}
+	if strings.Count(string(final), `"type":"trace.meta"`) != 1 {
+		t.Fatalf("resuming a session must append without a second trace.meta header:\n%s", string(final))
+	}
+	if !strings.Contains(string(final), `"type":"turn.start"`) || !strings.Contains(string(final), `"type":"usage"`) {
+		t.Fatalf("event log should preserve events across restart:\n%s", string(final))
+	}
+}
+
+func waitForFileSubstring(t *testing.T, path, want string) {
+	t.Helper()
+	deadline := time.Now().Add(2 * time.Second)
+	for {
+		data, err := os.ReadFile(path)
+		if err == nil && strings.Contains(string(data), want) {
+			return
+		}
+		if time.Now().After(deadline) {
+			if err != nil {
+				t.Fatalf("timed out waiting for %q in %s; last read error: %v", want, path, err)
+			}
+			t.Fatalf("timed out waiting for %q in %s; file content:\n%s", want, path, string(data))
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
 }
 
 func TestSessionPool_RuntimeSkillsAreDurable(t *testing.T) {

@@ -15,6 +15,7 @@ import (
 	affentbrowser "github.com/affinefoundation/affent/extras/browser"
 	affentweb "github.com/affinefoundation/affent/extras/web"
 	agent "github.com/affinefoundation/affent/internal/agent"
+	"github.com/affinefoundation/affent/internal/eventlog"
 	"github.com/affinefoundation/affent/internal/executor"
 	"github.com/affinefoundation/affent/internal/memory"
 	"github.com/affinefoundation/affent/internal/sse"
@@ -40,6 +41,8 @@ type Session struct {
 	workspace string
 	createdAt time.Time
 	lastUsed  time.Time
+	trace     *eventlog.Recorder
+	traceFile *os.File
 
 	// Per-session lifetime token counters, accumulated in fanout as
 	// sse.TypeUsage events flow through. Atomic so the /v1/stats
@@ -55,9 +58,10 @@ type Session struct {
 	subs    map[int]chan sse.Event
 	nextSub int
 
-	closedCh  chan struct{}
-	closeOnce sync.Once
-	closeErr  error
+	closedCh   chan struct{}
+	fanoutDone chan struct{}
+	closeOnce  sync.Once
+	closeErr   error
 }
 
 // SessionPool owns the in-memory session map plus an idle-GC goroutine.
@@ -530,23 +534,55 @@ func (p *SessionPool) buildSession(id string) (*Session, error) {
 		}
 		return nil, fmt.Errorf("system prompt: %w", err)
 	}
+	trace, traceFile, err := openSessionEventLog(sessionDir)
+	if err != nil {
+		_ = os.RemoveAll(workspace)
+		if browser != nil {
+			_ = browser.Close()
+		}
+		return nil, fmt.Errorf("event log: %w", err)
+	}
 
 	s := &Session{
-		ID:        id,
-		loop:      loop,
-		conv:      conv,
-		llm:       llm,
-		registry:  reg,
-		events:    events,
-		browser:   browser,
-		workspace: workspace,
-		createdAt: time.Now(),
-		lastUsed:  time.Now(),
-		subs:      map[int]chan sse.Event{},
-		closedCh:  make(chan struct{}),
+		ID:         id,
+		loop:       loop,
+		conv:       conv,
+		llm:        llm,
+		registry:   reg,
+		events:     events,
+		browser:    browser,
+		workspace:  workspace,
+		createdAt:  time.Now(),
+		lastUsed:   time.Now(),
+		trace:      trace,
+		traceFile:  traceFile,
+		subs:       map[int]chan sse.Event{},
+		closedCh:   make(chan struct{}),
+		fanoutDone: make(chan struct{}),
 	}
 	go s.fanout()
 	return s, nil
+}
+
+func openSessionEventLog(sessionDir string) (*eventlog.Recorder, *os.File, error) {
+	path := filepath.Join(sessionDir, "events.jsonl")
+	f, err := os.OpenFile(path, os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0o644)
+	if err != nil {
+		return nil, nil, err
+	}
+	info, err := f.Stat()
+	if err != nil {
+		_ = f.Close()
+		return nil, nil, err
+	}
+	rec := eventlog.NewRecorder(f, eventlog.Options{})
+	if info.Size() == 0 {
+		if err := rec.WriteMeta(); err != nil {
+			_ = f.Close()
+			return nil, nil, err
+		}
+	}
+	return rec, f, nil
 }
 
 func (p *SessionPool) allocWorkspace(id string) (string, error) {
@@ -651,6 +687,7 @@ func (s *Session) fanout() {
 			delete(s.subs, id)
 		}
 		s.subsMu.Unlock()
+		close(s.fanoutDone)
 	}()
 	for {
 		select {
@@ -659,6 +696,11 @@ func (s *Session) fanout() {
 		case ev, ok := <-s.events:
 			if !ok {
 				return
+			}
+			if s.trace != nil {
+				if err := s.trace.Write(ev); err != nil {
+					s.loop.Log.Warn().Err(err).Str("session_id", s.ID).Msg("event log write")
+				}
 			}
 			s.observeForStats(ev)
 			s.subsMu.Lock()
@@ -692,8 +734,16 @@ func (s *Session) Close() error {
 	s.closeOnce.Do(func() {
 		close(s.closedCh)
 		s.loop.Cancel()
+		if s.fanoutDone != nil {
+			<-s.fanoutDone
+		}
 		if s.browser != nil {
 			if err := s.browser.Close(); err != nil {
+				s.closeErr = err
+			}
+		}
+		if s.traceFile != nil {
+			if err := s.traceFile.Close(); err != nil && s.closeErr == nil {
 				s.closeErr = err
 			}
 		}

@@ -21,6 +21,8 @@ future versions they do not understand rather than silently mis-parsing them.
 
 `affentctl` writes `trace.meta` only when creating a fresh trace. Resumed
 sessions append to the existing trace and keep its original metadata.
+`affentserve` applies the same rule to each durable session's `events.jsonl`
+under the session state root.
 
 ## Event Envelope
 

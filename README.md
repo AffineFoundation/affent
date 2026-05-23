@@ -368,11 +368,11 @@ when you expect many topic buckets so disk state stays bounded:
 Affent keeps session state in JSONL conversation logs so runs can be resumed,
 replayed, or inspected. `affentctl` stores logs under the workspace by default.
 `affentserve` stores each session's durable state under its session state root:
-`conversation.jsonl`, runtime-installed skills, and memory files all survive
-container restarts when that root is backed by a host volume. Clients resume by
-sending the same `X-Affent-Session-Id` header or `affent_session_id` /
-`session_id` request field. `DELETE /v1/sessions/{id}` intentionally removes
-that durable state.
+`conversation.jsonl`, `events.jsonl`, runtime-installed skills, and memory files
+all survive container restarts when that root is backed by a host volume.
+Clients resume by sending the same `X-Affent-Session-Id` header or
+`affent_session_id` / `session_id` request field. `DELETE /v1/sessions/{id}`
+intentionally removes that durable state.
 
 Persistent memory is opt-in. Workspace memory is topic-bucketed and can be
 searched on demand. User memory is a separate cross-workspace profile. The
