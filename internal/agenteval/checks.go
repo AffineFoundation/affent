@@ -36,6 +36,27 @@ func ToolCalled(toolName string, argMatcher func(args map[string]any) bool) Chec
 	}
 }
 
+func ToolCalledAtLeast(toolName string, min int) Check {
+	return Check{
+		Name: fmt.Sprintf("tool_called_at_least:%s:%d", toolName, min),
+		Eval: func(t Trace) CheckResult {
+			count := 0
+			for _, c := range t.Tools {
+				if c.Tool == toolName {
+					count++
+				}
+			}
+			if count >= min {
+				return CheckResult{Pass: true, Detail: fmt.Sprintf("%s calls=%d", toolName, count)}
+			}
+			return CheckResult{
+				Pass:   false,
+				Detail: fmt.Sprintf("expected at least %d %q invocation(s), got %d tool calls (%s)", min, toolName, count, toolNamesSummary(t.Tools)),
+			}
+		},
+	}
+}
+
 // ToolNotCalled passes when the agent never invoked the named tool.
 // Used to pin "the agent must not edit tests" / "the agent must not
 // run broad shell scans".

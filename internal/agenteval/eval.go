@@ -43,6 +43,7 @@ type BatchScenario struct {
 	ForbiddenCommands            []string
 	RequiredCommands             []string
 	RequiredCommandCounts        map[string]int
+	RequiredToolCounts           map[string]int
 	RequiredCommandBeforeTool    []CommandToolOrderRequirement
 	RequiredCommandAfterTool     []CommandToolOrderRequirement
 	RequiredTools                []string
@@ -121,6 +122,8 @@ func BuiltinBatchScenarios() []BatchScenario {
 		smallToolWrongFieldReadScenario(),
 		smallToolWrongToolNameScenario(),
 		skillToolReadScenario(),
+		planCodingRepairScenario(),
+		planNotForSimpleReadScenario(),
 		smallToolRepeatedReadScenario(),
 		smallToolEditRecoveryScenario(),
 		smallToolShellFailureScenario(),
@@ -607,6 +610,9 @@ func BatchScenarioChecks(scenario BatchScenario) []Check {
 	}
 	for _, order := range scenario.RequiredToolOrder {
 		checks = append(checks, ToolCalledBefore(order.Earlier, order.Later))
+	}
+	for _, tool := range sortedStringMapKeys(scenario.RequiredToolCounts) {
+		checks = append(checks, ToolCalledAtLeast(tool, scenario.RequiredToolCounts[tool]))
 	}
 	if scenario.MaxParentToolCalls > 0 {
 		checks = append(checks, MaxSuccessfulToolCalls(scenario.MaxParentToolCalls))

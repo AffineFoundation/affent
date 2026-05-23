@@ -63,6 +63,26 @@ func TestToolCalled(t *testing.T) {
 	})
 }
 
+func TestToolCalledAtLeast(t *testing.T) {
+	trace := Trace{
+		Tools: []ToolCall{
+			{CallID: "a", Tool: "plan"},
+			{CallID: "b", Tool: "read_file"},
+			{CallID: "c", Tool: "plan"},
+		},
+	}
+	if res := ToolCalledAtLeast("plan", 2).Eval(trace); !res.Pass {
+		t.Fatalf("expected plan>=2 to pass: %+v", res)
+	}
+	res := ToolCalledAtLeast("plan", 3).Eval(trace)
+	if res.Pass {
+		t.Fatal("expected plan>=3 to fail")
+	}
+	if !strings.Contains(res.Detail, "at least 3") || !strings.Contains(res.Detail, "read_file") {
+		t.Fatalf("failure detail should explain count and observed tools: %s", res.Detail)
+	}
+}
+
 func TestToolNotCalled(t *testing.T) {
 	trace := Trace{
 		Tools: []ToolCall{

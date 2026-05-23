@@ -206,6 +206,9 @@ func TestBatchScenarioChecks_UsesSharedCheckLibrary(t *testing.T) {
 		RequiredToolOrder: []ToolOrderRequirement{
 			{Earlier: "read_file", Later: "edit_file"},
 		},
+		RequiredToolCounts: map[string]int{
+			"plan": 2,
+		},
 		MaxSuccessfulToolCallsByTool: map[string]int{
 			"read_file": 1,
 		},
@@ -234,6 +237,7 @@ func TestBatchScenarioChecks_UsesSharedCheckLibrary(t *testing.T) {
 		"tool_result_truncated:shell",
 		"tool_result_artifact:shell",
 		"tool_called_before:read_file->edit_file",
+		"tool_called_at_least:plan:2",
 		"max_successful_tool_calls:read_file:1",
 		"shell_command_matching:go test",
 		"shell_command_matching:gofmt",
@@ -265,6 +269,8 @@ func TestSelectBatchScenariosForSuite(t *testing.T) {
 	foundOversized := false
 	foundRepeatedRead := false
 	foundEditRecovery := false
+	foundPlanRepair := false
+	foundPlanSkip := false
 	for _, scenario := range scenarios {
 		if !scenarioInSuite(scenario, "small-model-tools") {
 			t.Fatalf("scenario %s missing suite marker", scenario.Name)
@@ -284,6 +290,24 @@ func TestSelectBatchScenariosForSuite(t *testing.T) {
 				t.Fatalf("small-tools-edit-recovery order = %#v, want read_file before edit_file", scenario.RequiredToolOrder)
 			}
 		}
+		if scenario.Name == "plan-coding-repair" {
+			foundPlanRepair = true
+			if !stringSliceContains(scenario.RequiredTools, "plan") {
+				t.Fatalf("plan-coding-repair RequiredTools = %#v, want plan", scenario.RequiredTools)
+			}
+			if scenario.RequiredToolCounts["plan"] != 2 {
+				t.Fatalf("plan-coding-repair RequiredToolCounts = %#v, want plan=2", scenario.RequiredToolCounts)
+			}
+			if len(scenario.RequiredToolOrder) != 1 || scenario.RequiredToolOrder[0] != (ToolOrderRequirement{Earlier: "plan", Later: "edit_file"}) {
+				t.Fatalf("plan-coding-repair order = %#v, want plan before edit_file", scenario.RequiredToolOrder)
+			}
+		}
+		if scenario.Name == "plan-not-for-simple-read" {
+			foundPlanSkip = true
+			if !stringSliceContains(scenario.ForbiddenTools, "plan") {
+				t.Fatalf("plan-not-for-simple-read ForbiddenTools = %#v, want plan", scenario.ForbiddenTools)
+			}
+		}
 	}
 	if !foundOversized {
 		t.Fatalf("small-model-tools suite missing runtime-oversized-tool-result")
@@ -293,6 +317,12 @@ func TestSelectBatchScenariosForSuite(t *testing.T) {
 	}
 	if !foundEditRecovery {
 		t.Fatalf("small-model-tools suite missing small-tools-edit-recovery")
+	}
+	if !foundPlanRepair {
+		t.Fatalf("small-model-tools suite missing plan-coding-repair")
+	}
+	if !foundPlanSkip {
+		t.Fatalf("small-model-tools suite missing plan-not-for-simple-read")
 	}
 	one, err := SelectBatchScenariosForSuite("small-model-tools", []string{"small-tools-wrong-field-read"})
 	if err != nil {
@@ -310,6 +340,7 @@ func TestRepairScenariosRequireRepeatedVerification(t *testing.T) {
 		"coding-python-slug":          {`python(3)? -m pytest`: 2},
 		"coding-go-redaction-overlap": {`go test`: 2},
 		"coding-python-config-parser": {`python(3)? -m pytest`: 2},
+		"plan-coding-repair":          {`go test`: 2},
 	}
 	seen := map[string]bool{}
 	for _, scenario := range BuiltinBatchScenarios() {

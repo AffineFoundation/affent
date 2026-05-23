@@ -692,6 +692,99 @@ func skillToolReadScenario() BatchScenario {
 	}
 }
 
+func planCodingRepairScenario() BatchScenario {
+	return BatchScenario{
+		Name:   "plan-coding-repair",
+		Suites: []string{smallModelToolsSuite},
+		Prompt: "这个 Go 项目的测试失败。请先用 plan 工具制定一个简短计划并在过程中更新，然后运行测试复现，修复 AddUnique 的实现，最后再次运行测试确认。不要修改测试，只改必要文件。",
+		Files: map[string]string{
+			"go.mod": `module example.com/unique
+
+go 1.22
+`,
+			"unique/unique.go": `package unique
+
+func AddUnique(values []string, value string) []string {
+	return append(values, value)
+}
+`,
+			"unique/unique_test.go": `package unique
+
+import (
+	"reflect"
+	"testing"
+)
+
+func TestAddUniqueAppendsMissingValue(t *testing.T) {
+	got := AddUnique([]string{"alpha"}, "beta")
+	want := []string{"alpha", "beta"}
+	if !reflect.DeepEqual(got, want) {
+		t.Fatalf("AddUnique missing = %#v, want %#v", got, want)
+	}
+}
+
+func TestAddUniqueSkipsExistingValue(t *testing.T) {
+	got := AddUnique([]string{"alpha", "beta"}, "alpha")
+	want := []string{"alpha", "beta"}
+	if !reflect.DeepEqual(got, want) {
+		t.Fatalf("AddUnique duplicate = %#v, want %#v", got, want)
+	}
+}
+
+func TestAddUniqueDoesNotMutateInputWhenAppending(t *testing.T) {
+	in := []string{"alpha"}
+	before := append([]string(nil), in...)
+	_ = AddUnique(in, "beta")
+	if !reflect.DeepEqual(in, before) {
+		t.Fatalf("input mutated: got %#v want %#v", in, before)
+	}
+}
+`,
+		},
+		VerifyCommand:    "go test ./...",
+		ExpectedSkill:    "AFFENT ACTIVE SKILL: coding_repair_workflow",
+		RequiredCommands: []string{`go test`},
+		RequiredCommandCounts: map[string]int{
+			`go test`: 2,
+		},
+		RequiredTools: []string{"plan", "edit_file"},
+		RequiredToolResultText: map[string][]string{
+			"plan": {"plan set"},
+		},
+		RequiredToolCounts: map[string]int{
+			"plan": 2,
+		},
+		RequiredToolOrder: []ToolOrderRequirement{
+			{Earlier: "plan", Later: "edit_file"},
+		},
+		RequiredCommandBeforeTool: []CommandToolOrderRequirement{
+			{Command: `go test`, Tool: "edit_file"},
+		},
+		RequiredCommandAfterTool: []CommandToolOrderRequirement{
+			{Command: `go test`, Tool: "edit_file"},
+		},
+		ForbiddenCommands: defaultForbiddenCommands,
+		ProtectedFiles:    []string{"unique/unique_test.go"},
+		MaxTurns:          10,
+	}
+}
+
+func planNotForSimpleReadScenario() BatchScenario {
+	return BatchScenario{
+		Name:   "plan-not-for-simple-read",
+		Suites: []string{smallModelToolsSuite},
+		Prompt: "读取 facts.txt 并回答 release marker 的精确值。这个任务很简单，不要制定计划，不要修改文件。",
+		Files: map[string]string{
+			"facts.txt": "release marker: PLAN-SKIP-31\n",
+		},
+		RequiredTools:     []string{"read_file"},
+		ForbiddenTools:    []string{"plan", "shell", "write_file", "edit_file"},
+		RequiredFinalText: []string{"PLAN-SKIP-31"},
+		ProtectedFiles:    []string{"facts.txt"},
+		MaxTurns:          5,
+	}
+}
+
 func smallToolRepeatedReadScenario() BatchScenario {
 	return BatchScenario{
 		Name:   "small-tools-repeated-read",
