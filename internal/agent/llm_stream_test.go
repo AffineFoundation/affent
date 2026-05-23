@@ -184,6 +184,142 @@ func TestConsumeStream_ParallelToolCalls(t *testing.T) {
 	}
 }
 
+func TestConsumeStream_CapsAssistantContent(t *testing.T) {
+	events := collectStreamEvents(t,
+		streamDelta(t, map[string]any{"content": strings.Repeat("a", maxStreamContentBytes)}, "")+
+			streamDelta(t, map[string]any{"content": "b"}, "")+
+			"data: [DONE]\n\n",
+	)
+	err := firstStreamError(events)
+	if err == nil || !strings.Contains(err.Error(), "assistant content exceeds") {
+		t.Fatalf("expected assistant content cap error, got %v", err)
+	}
+	if finish := lastFinish(events); finish != nil {
+		t.Fatalf("oversized content stream must not emit Finish: %+v", finish)
+	}
+}
+
+func TestConsumeStream_CapsReasoningContent(t *testing.T) {
+	events := collectStreamEvents(t,
+		streamDelta(t, map[string]any{"reasoning_content": strings.Repeat("r", maxStreamReasoningBytes)}, "")+
+			streamDelta(t, map[string]any{"reasoning_content": "r"}, "")+
+			"data: [DONE]\n\n",
+	)
+	err := firstStreamError(events)
+	if err == nil || !strings.Contains(err.Error(), "reasoning_content exceeds") {
+		t.Fatalf("expected reasoning content cap error, got %v", err)
+	}
+	if finish := lastFinish(events); finish != nil {
+		t.Fatalf("oversized reasoning stream must not emit Finish: %+v", finish)
+	}
+}
+
+func TestConsumeStream_CapsToolCallArguments(t *testing.T) {
+	header := map[string]any{
+		"index": 0,
+		"id":    "call_big",
+		"type":  "function",
+		"function": map[string]any{
+			"name":      "big",
+			"arguments": "",
+		},
+	}
+	arg1 := map[string]any{
+		"index": 0,
+		"function": map[string]any{
+			"arguments": strings.Repeat("x", maxStreamToolArgBytes),
+		},
+	}
+	arg2 := map[string]any{
+		"index": 0,
+		"function": map[string]any{
+			"arguments": "x",
+		},
+	}
+	events := collectStreamEvents(t,
+		streamDelta(t, map[string]any{"tool_calls": []any{header}}, "")+
+			streamDelta(t, map[string]any{"tool_calls": []any{arg1}}, "")+
+			streamDelta(t, map[string]any{"tool_calls": []any{arg2}}, "")+
+			"data: [DONE]\n\n",
+	)
+	err := firstStreamError(events)
+	if err == nil || !strings.Contains(err.Error(), "tool call arguments exceed") {
+		t.Fatalf("expected tool argument cap error, got %v", err)
+	}
+	if finish := lastFinish(events); finish != nil {
+		t.Fatalf("oversized tool-argument stream must not emit Finish: %+v", finish)
+	}
+}
+
+func TestConsumeStream_CapsToolCallCount(t *testing.T) {
+	var raw strings.Builder
+	for i := 0; i <= maxStreamToolCalls; i++ {
+		raw.WriteString(streamDelta(t, map[string]any{"tool_calls": []any{map[string]any{
+			"index": i,
+			"id":    fmt.Sprintf("call_%d", i),
+			"type":  "function",
+			"function": map[string]any{
+				"name":      fmt.Sprintf("tool_%d", i),
+				"arguments": "",
+			},
+		}}}, ""))
+	}
+	raw.WriteString("data: [DONE]\n\n")
+
+	events := collectStreamEvents(t, raw.String())
+	err := firstStreamError(events)
+	if err == nil || !strings.Contains(err.Error(), "tool_calls exceeds") {
+		t.Fatalf("expected tool call count cap error, got %v", err)
+	}
+	if finish := lastFinish(events); finish != nil {
+		t.Fatalf("oversized tool-call stream must not emit Finish: %+v", finish)
+	}
+}
+
+func collectStreamEvents(t *testing.T, raw string) []StreamEvent {
+	t.Helper()
+	ch := make(chan StreamEvent, 256)
+	consumeStream(context.Background(), io.NopCloser(strings.NewReader(raw)), ch)
+	var events []StreamEvent
+	for ev := range ch {
+		events = append(events, ev)
+	}
+	return events
+}
+
+func streamDelta(t *testing.T, delta map[string]any, finishReason string) string {
+	t.Helper()
+	raw, err := json.Marshal(map[string]any{
+		"choices": []any{map[string]any{
+			"delta":         delta,
+			"finish_reason": finishReason,
+		}},
+	})
+	if err != nil {
+		t.Fatalf("marshal stream delta: %v", err)
+	}
+	return "data: " + string(raw) + "\n\n"
+}
+
+func firstStreamError(events []StreamEvent) error {
+	for _, ev := range events {
+		if ev.Err != nil {
+			return ev.Err
+		}
+	}
+	return nil
+}
+
+func lastFinish(events []StreamEvent) *FinishInfo {
+	var finish *FinishInfo
+	for _, ev := range events {
+		if ev.Finish != nil {
+			finish = ev.Finish
+		}
+	}
+	return finish
+}
+
 // TestRequestBody_StripsReasoning pins the wire-format contract: the
 // request body sent upstream must not contain reasoning_content. Some
 // providers emit it on responses but reject it on inbound messages.

@@ -78,6 +78,16 @@ const (
 	streamScannerMaxBytes  = 4 * 1024 * 1024
 )
 
+// Stream accumulation safety caps. These are runtime guardrails, not
+// sampling knobs: they bound memory held while assembling one upstream
+// response before the agent loop can apply conversation/event caps.
+const (
+	maxStreamContentBytes   = 1 * 1024 * 1024
+	maxStreamReasoningBytes = 1 * 1024 * 1024
+	maxStreamToolArgBytes   = 1 * 1024 * 1024
+	maxStreamToolCalls      = 64
+)
+
 // Stream watchdog. Some upstreams (notably GLM tool_call mode through
 // chutes) emit a finish_reason chunk and then forget to send the
 // trailing [DONE] / close the connection — which leaves the scanner
@@ -511,12 +521,20 @@ func consumeStream(ctx context.Context, body io.ReadCloser, out chan<- StreamEve
 
 		for _, ch := range chunk.Choices {
 			if ch.Delta.ReasoningContent != "" {
+				if len(final.ReasoningContent)+len(ch.Delta.ReasoningContent) > maxStreamReasoningBytes {
+					emit(StreamEvent{Err: fmt.Errorf("stream reasoning_content exceeds %d-byte cap", maxStreamReasoningBytes)})
+					return
+				}
 				final.ReasoningContent += ch.Delta.ReasoningContent
 				if !emit(StreamEvent{ReasoningDelta: ch.Delta.ReasoningContent}) {
 					return
 				}
 			}
 			if ch.Delta.Content != "" {
+				if len(final.Content)+len(ch.Delta.Content) > maxStreamContentBytes {
+					emit(StreamEvent{Err: fmt.Errorf("stream assistant content exceeds %d-byte cap", maxStreamContentBytes)})
+					return
+				}
 				final.Content += ch.Delta.Content
 				if !emit(StreamEvent{ContentDelta: ch.Delta.Content}) {
 					return
@@ -545,6 +563,10 @@ func consumeStream(ctx context.Context, body io.ReadCloser, out chan<- StreamEve
 					}
 				}
 				if isHeader {
+					if _, exists := calls[idx]; !exists && len(calls) >= maxStreamToolCalls {
+						emit(StreamEvent{Err: fmt.Errorf("stream tool_calls exceeds %d-call cap", maxStreamToolCalls)})
+						return
+					}
 					nc := &ToolCall{ID: tc.ID, Type: "function"}
 					nc.Function.Name = tc.Function.Name
 					calls[idx] = nc
@@ -560,6 +582,10 @@ func consumeStream(ctx context.Context, body io.ReadCloser, out chan<- StreamEve
 						// reconstructing the JSON without a name would
 						// just confuse the model downstream.
 						continue
+					}
+					if len(target.Function.Arguments)+len(tc.Function.Arguments) > maxStreamToolArgBytes {
+						emit(StreamEvent{Err: fmt.Errorf("stream tool call arguments exceed %d-byte cap", maxStreamToolArgBytes)})
+						return
 					}
 					target.Function.Arguments += tc.Function.Arguments
 					if !emit(StreamEvent{ToolCallArgsDelta: &ToolCallArgsDelta{Index: idx, Delta: tc.Function.Arguments}}) {
