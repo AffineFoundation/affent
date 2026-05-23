@@ -99,7 +99,7 @@ func TestSearchSkipsSymlinkSessionLogs(t *testing.T) {
 	if len(hits) != 1 || hits[0].SessionID != "real" {
 		t.Fatalf("search should skip symlink logs and keep real hit, got %+v", hits)
 	}
-	if _, err := scoreFile(filepath.Join(dir, "linked.jsonl"), "linked", []string{"needle"}, 3, ""); err == nil || !strings.Contains(err.Error(), "regular file") {
+	if _, err := scoreFile(context.Background(), filepath.Join(dir, "linked.jsonl"), "linked", []string{"needle"}, 3, ""); err == nil || !strings.Contains(err.Error(), "regular file") {
 		t.Fatalf("scoreFile symlink error = %v, want regular file", err)
 	}
 }
@@ -202,7 +202,7 @@ func TestScoreFileKeepsBestHitsWithinLimitWhileScanning(t *testing.T) {
 		{Role: "user", Content: "needle strong strong strong"},
 		{Role: "user", Content: "needle weak"},
 	})
-	hits, err := scoreFile(filepath.Join(dir, "many.jsonl"), "many", []string{"needle", "strong"}, 1, "")
+	hits, err := scoreFile(context.Background(), filepath.Join(dir, "many.jsonl"), "many", []string{"needle", "strong"}, 1, "")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -223,8 +223,21 @@ func TestScoreFileReportsScannerErrors(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	if hits, err := scoreFile(path, "bad", []string{"needle"}, 3, ""); err == nil {
+	if hits, err := scoreFile(context.Background(), path, "bad", []string{"needle"}, 3, ""); err == nil {
 		t.Fatalf("scoreFile should report scanner error, got hits %+v", hits)
+	}
+}
+
+func TestScoreFileHonorsCanceledContext(t *testing.T) {
+	dir := t.TempDir()
+	writeSessionLog(t, dir, "cancel", []testMessage{
+		{Role: "user", Content: "needle"},
+	})
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+
+	if hits, err := scoreFile(ctx, filepath.Join(dir, "cancel.jsonl"), "cancel", []string{"needle"}, 3, ""); err != context.Canceled {
+		t.Fatalf("scoreFile canceled err = %v hits=%+v, want context.Canceled", err, hits)
 	}
 }
 

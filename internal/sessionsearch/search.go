@@ -87,8 +87,11 @@ func Search(ctx context.Context, sessionsDir, currentSessionID, query string, to
 			if ierr == nil {
 				mtime = info.ModTime().UTC().Format(time.RFC3339)
 			}
-			hits, serr := scoreFile(filepath.Join(sessionsDir, ent.Name()), sid, terms, maxPerSession, mtime)
+			hits, serr := scoreFile(ctx, filepath.Join(sessionsDir, ent.Name()), sid, terms, maxPerSession, mtime)
 			if serr != nil {
+				if ctx.Err() != nil {
+					return nil, ctx.Err()
+				}
 				continue
 			}
 			for _, hit := range hits {
@@ -122,7 +125,10 @@ func NormalizeLimits(topK, maxPerSession int) (int, int) {
 	return topK, maxPerSession
 }
 
-func scoreFile(path, sid string, terms []string, maxPerSession int, mtime string) ([]Hit, error) {
+func scoreFile(ctx context.Context, path, sid string, terms []string, maxPerSession int, mtime string) ([]Hit, error) {
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
 	info, err := os.Lstat(path)
 	if err != nil {
 		return nil, err
@@ -140,6 +146,9 @@ func scoreFile(path, sid string, terms []string, maxPerSession int, mtime string
 	var fileHits []Hit
 	turn := 0
 	for sc.Scan() {
+		if err := ctx.Err(); err != nil {
+			return nil, err
+		}
 		turn++
 		var m struct {
 			Role    string `json:"role"`
