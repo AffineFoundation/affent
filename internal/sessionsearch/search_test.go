@@ -214,6 +214,16 @@ func TestScoreFileKeepsBestHitsWithinLimitWhileScanning(t *testing.T) {
 	}
 }
 
+func TestScoreContentMatchesWholeTokens(t *testing.T) {
+	terms := Tokenize("go")
+	if got := ScoreContent("ongoing cargo", terms); got != 0 {
+		t.Fatalf("substring-only matches should not score, got %v", got)
+	}
+	if got := ScoreContent("go go cargo", terms); got != 1.2 {
+		t.Fatalf("whole-token matches score = %v, want 1.2", got)
+	}
+}
+
 func TestSearchEmptyAndMissingDirReturnNoHits(t *testing.T) {
 	hits, err := Search(context.Background(), t.TempDir(), "", "", 5, 3)
 	if err != nil {

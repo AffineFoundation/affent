@@ -270,20 +270,43 @@ var stopwords = map[string]bool{
 // ScoreContent counts unique-term overlap with a small boost for
 // total-occurrence count.
 func ScoreContent(content string, terms []string) float64 {
-	lower := strings.ToLower(content)
-	unique := 0
-	total := 0
-	for _, t := range terms {
-		c := strings.Count(lower, t)
-		if c > 0 {
-			unique++
-			total += c
-		}
+	counts := countContentTerms(content, terms)
+	unique, total := 0, 0
+	for _, c := range counts {
+		unique++
+		total += c
 	}
 	if unique == 0 {
 		return 0
 	}
 	return float64(unique) + 0.1*float64(total)
+}
+
+func countContentTerms(content string, terms []string) map[string]int {
+	want := make(map[string]bool, len(terms))
+	for _, term := range terms {
+		if term != "" {
+			want[term] = true
+		}
+	}
+	counts := map[string]int{}
+	var cur strings.Builder
+	flush := func() {
+		t := strings.ToLower(cur.String())
+		cur.Reset()
+		if want[t] {
+			counts[t]++
+		}
+	}
+	for _, r := range content {
+		if unicode.IsLetter(r) || unicode.IsDigit(r) {
+			cur.WriteRune(r)
+		} else {
+			flush()
+		}
+	}
+	flush()
+	return counts
 }
 
 // snippetLen is intentionally larger than a search-engine teaser. Session
