@@ -14,6 +14,7 @@ EVAL_DOCKER_ARGS ?=
 SERVE_ARGS ?=
 SERVE_LISTEN ?= 0.0.0.0:7777
 SERVE_PUBLISH ?= 127.0.0.1:7777:7777
+SERVE_CONTAINER_NAME ?=
 SERVE_WORKSPACE_ROOT ?= /workspace/sessions
 SERVE_MEMORY_ROOT ?= /workspace/session-state
 DOCTOR_ARGS ?=
@@ -67,7 +68,7 @@ image-run: affentctl
 	"$(AFFENTCTL)" image run --memory "$(CONTAINER_MEMORY)" --cpus "$(CONTAINER_CPUS)" --pids-limit "$(CONTAINER_PIDS)" $(IMAGE_RUN_ARGS) -- $(IMAGE_COMMAND)
 
 image-serve: affentctl
-	"$(AFFENTCTL)" image run --memory "$(CONTAINER_MEMORY)" --cpus "$(CONTAINER_CPUS)" --pids-limit "$(CONTAINER_PIDS)" --timeout 0s --publish "$(SERVE_PUBLISH)" $(IMAGE_RUN_ARGS) -- affentserve --listen "$(SERVE_LISTEN)" --workspace-root "$(SERVE_WORKSPACE_ROOT)" --memory-root "$(SERVE_MEMORY_ROOT)" --builtins $(SERVE_ARGS)
+	"$(AFFENTCTL)" image run --memory "$(CONTAINER_MEMORY)" --cpus "$(CONTAINER_CPUS)" --pids-limit "$(CONTAINER_PIDS)" $(if $(SERVE_CONTAINER_NAME),--name "$(SERVE_CONTAINER_NAME)") --timeout 0s --publish "$(SERVE_PUBLISH)" $(IMAGE_RUN_ARGS) -- affentserve --listen "$(SERVE_LISTEN)" --workspace-root "$(SERVE_WORKSPACE_ROOT)" --memory-root "$(SERVE_MEMORY_ROOT)" --builtins $(SERVE_ARGS)
 
 eval-container: affentctl
 	"$(AFFENTCTL)" image build --image "$(EVAL_IMAGE)" --memory "$(CONTAINER_MEMORY)" $(IMAGE_BUILD_ARGS)
