@@ -141,7 +141,9 @@ type ToolCall struct {
 	CallID string
 	// Tool is the tool name (e.g. "read_file", "shell", "edit_file").
 	Tool string
-	// Args is the JSON-decoded argument object the LLM sent.
+	// Args is the JSON-decoded argument object captured from the
+	// tool.request event. Small values are exact; large argument values
+	// may be event-capped by the runtime.
 	Args map[string]any
 	// OriginalTool is the model-emitted tool name before runtime
 	// canonicalization, when different from Tool or when trace producers

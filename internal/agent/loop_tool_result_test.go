@@ -338,6 +338,52 @@ func TestRunTurn_RepairsToolArgumentsBeforeDispatch(t *testing.T) {
 	}
 }
 
+func TestToolRequestArgsViewCapsLargeStringValues(t *testing.T) {
+	raw := json.RawMessage(`{"path":"huge.txt","content":` + mustJSON(t, strings.Repeat("x", maxToolRequestArgStringBytes+1024)) + `}`)
+	got := toolRequestArgsView(raw)
+	if got["path"] != "huge.txt" {
+		t.Fatalf("small field should survive exactly, got %+v", got)
+	}
+	content, ok := got["content"].(string)
+	if !ok {
+		t.Fatalf("content field type = %T, want string", got["content"])
+	}
+	if len(content) > maxToolRequestArgStringBytes+128 {
+		t.Fatalf("content event preview length = %d, want near cap %d", len(content), maxToolRequestArgStringBytes)
+	}
+	if !strings.Contains(content, "truncated from tool.request arg string") {
+		t.Fatalf("content missing truncation marker: tail %q", content[max(0, len(content)-120):])
+	}
+	if strings.Contains(content, strings.Repeat("x", 5120)) {
+		t.Fatal("tool.request args leaked oversized content tail")
+	}
+}
+
+func TestToolRequestArgsViewFallsBackWhenObjectStillTooLarge(t *testing.T) {
+	obj := make(map[string]string)
+	for i := 0; i < 80; i++ {
+		obj[fmt.Sprintf("k%02d", i)] = strings.Repeat("x", maxToolRequestArgStringBytes+1)
+	}
+	raw, err := json.Marshal(obj)
+	if err != nil {
+		t.Fatal(err)
+	}
+	got := toolRequestArgsView(raw)
+	if got["__affent_truncated"] == nil {
+		t.Fatalf("expected fallback truncation metadata, got %v", got)
+	}
+	if got["__affent_original_bytes"] == nil {
+		t.Fatalf("expected original byte count, got %v", got)
+	}
+	encoded, err := json.Marshal(got)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(encoded) > maxToolRequestArgsEventBytes {
+		t.Fatalf("fallback args event size = %d, want <= %d", len(encoded), maxToolRequestArgsEventBytes)
+	}
+}
+
 func TestRunTurn_BlocksExactRepeatedToolCalls(t *testing.T) {
 	var reqs int32
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {

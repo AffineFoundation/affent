@@ -69,9 +69,13 @@ type ThinkingDonePayload struct {
 }
 
 type ToolRequestPayload struct {
-	TurnID              string         `json:"turn_id"`
-	CallID              string         `json:"call_id"`
-	Tool                string         `json:"tool"`
+	TurnID string `json:"turn_id"`
+	CallID string `json:"call_id"`
+	Tool   string `json:"tool"`
+	// Args is the repaired argument object capped for event transport.
+	// Small values are exact; large strings may include a truncation
+	// marker, and extremely large argument objects may be replaced with
+	// __affent_truncated metadata.
 	Args                map[string]any `json:"args"`
 	OriginalTool        string         `json:"original_tool,omitempty"`
 	OriginalArgsSummary string         `json:"original_args_summary,omitempty"`

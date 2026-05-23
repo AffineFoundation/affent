@@ -67,6 +67,11 @@ const MaxToolResultPreviewInEvent = 4 * 1024
 // results for evals and debugging.
 const MaxToolResultBytesInEvent = 256 * 1024
 
+const (
+	maxToolRequestArgStringBytes = 4 * 1024
+	maxToolRequestArgsEventBytes = 64 * 1024
+)
+
 // Loop is the model<->tools cycle. One Loop per session. Stateful via the
 // attached Conversation; tools are looked up in Tools.
 type Loop struct {
@@ -564,9 +569,6 @@ func (l *Loop) runTurn(ctx context.Context, turnID, userText string) {
 			if argsRepaired {
 				toolStats.ToolArgsRepaired++
 			}
-			var argsView map[string]any
-			_ = json.Unmarshal(args, &argsView)
-
 			originalArgsSummary := ""
 			if canonicalChanged || argsRepaired || argsRepairErr != nil {
 				originalArgsSummary = summarizeOriginalToolArgs(tc.Function.Arguments)
@@ -576,7 +578,7 @@ func (l *Loop) runTurn(ctx context.Context, turnID, userText string) {
 				TurnID:              turnID,
 				CallID:              callID,
 				Tool:                toolName,
-				Args:                argsView,
+				Args:                toolRequestArgsView(args),
 				OriginalTool:        tc.Function.Name,
 				OriginalArgsSummary: originalArgsSummary,
 				Canonicalized:       canonicalChanged,
@@ -800,6 +802,57 @@ func summarizeOriginalToolArgs(raw string) string {
 		return ""
 	}
 	return previewN(raw, 512)
+}
+
+func toolRequestArgsView(args json.RawMessage) map[string]any {
+	var obj map[string]any
+	if err := json.Unmarshal(args, &obj); err != nil || obj == nil {
+		return map[string]any{}
+	}
+	cappedAny, _ := capToolRequestArgValue(obj)
+	capped, ok := cappedAny.(map[string]any)
+	if !ok || capped == nil {
+		return map[string]any{}
+	}
+	raw, err := json.Marshal(capped)
+	if err == nil && len(raw) <= maxToolRequestArgsEventBytes {
+		return capped
+	}
+	return map[string]any{
+		"__affent_truncated":      fmt.Sprintf("tool request args exceeded %d-byte event cap", maxToolRequestArgsEventBytes),
+		"__affent_original_bytes": len(args),
+	}
+}
+
+func capToolRequestArgValue(v any) (any, bool) {
+	switch x := v.(type) {
+	case string:
+		if len(x) <= maxToolRequestArgStringBytes {
+			return x, false
+		}
+		cut := textutil.AlignBackward(x, maxToolRequestArgStringBytes)
+		return x[:cut] + fmt.Sprintf("\n... [%d more bytes truncated from tool.request arg string]", len(x)-cut), true
+	case map[string]any:
+		out := make(map[string]any, len(x))
+		truncated := false
+		for k, v := range x {
+			capped, did := capToolRequestArgValue(v)
+			out[k] = capped
+			truncated = truncated || did
+		}
+		return out, truncated
+	case []any:
+		out := make([]any, len(x))
+		truncated := false
+		for i, v := range x {
+			capped, did := capToolRequestArgValue(v)
+			out[i] = capped
+			truncated = truncated || did
+		}
+		return out, truncated
+	default:
+		return v, false
+	}
 }
 
 func toolRuntimeStatsPtr(stats sse.ToolRuntimeStats) *sse.ToolRuntimeStats {
