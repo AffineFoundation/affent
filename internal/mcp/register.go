@@ -6,12 +6,18 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"strings"
 
 	agent "github.com/affinefoundation/affent/internal/agent"
+	"github.com/affinefoundation/affent/internal/textutil"
 	"github.com/rs/zerolog"
 )
 
-const maxInputSchemaBytes = 32 * 1024
+const (
+	maxInputSchemaBytes     = 32 * 1024
+	maxToolNameBytes        = 64
+	maxToolDescriptionBytes = 2048
+)
 
 // RegisterServer launches the server, fetches its tool catalog, and
 // adds each tool to the agent.Registry. By default tools are advertised
@@ -41,7 +47,21 @@ func registerServer(ctx context.Context, reg *agent.Registry, spec ServerSpec, l
 	}
 	names := make([]string, 0, len(tools))
 	for _, t := range tools {
+		if strings.TrimSpace(t.Name) == "" {
+			_ = c.Close()
+			for _, n := range names {
+				reg.Remove(n)
+			}
+			return nil, nil, fmt.Errorf("mcp server %s returned a tool with an empty name", spec.Name)
+		}
 		affentName := advertisedToolName(spec, t.Name)
+		if err := validateAdvertisedToolName(affentName); err != nil {
+			_ = c.Close()
+			for _, n := range names {
+				reg.Remove(n)
+			}
+			return nil, nil, fmt.Errorf("mcp tool %s/%s: %w", spec.Name, t.Name, err)
+		}
 		if prior, ok := owners[affentName]; ok {
 			_ = c.Close()
 			for _, n := range names {
@@ -67,7 +87,7 @@ func registerServer(ctx context.Context, reg *agent.Registry, spec ServerSpec, l
 		// Capture loop-iteration vars so the closure points at this
 		// specific tool, not the last one.
 		toolName := t.Name
-		desc := t.Description
+		desc := normalizeToolDescription(t.Description)
 		if desc == "" {
 			desc = fmt.Sprintf("MCP tool %s/%s", spec.Name, t.Name)
 		}
@@ -100,6 +120,35 @@ func registerServer(ctx context.Context, reg *agent.Registry, spec ServerSpec, l
 		Int("tools", len(tools)).
 		Msg("mcp tools registered")
 	return c, names, nil
+}
+
+func validateAdvertisedToolName(name string) error {
+	if strings.TrimSpace(name) == "" {
+		return fmt.Errorf("advertised tool name is required")
+	}
+	if len(name) > maxToolNameBytes {
+		return fmt.Errorf("advertised tool name %q is %d bytes; max %d", name, len(name), maxToolNameBytes)
+	}
+	for _, r := range name {
+		if r == '_' || r == '-' || ('A' <= r && r <= 'Z') || ('a' <= r && r <= 'z') || ('0' <= r && r <= '9') {
+			continue
+		}
+		return fmt.Errorf("advertised tool name %q may contain only ASCII letters, digits, '_' or '-'", name)
+	}
+	return nil
+}
+
+func normalizeToolDescription(desc string) string {
+	desc = strings.TrimSpace(desc)
+	if len(desc) <= maxToolDescriptionBytes {
+		return desc
+	}
+	const marker = "\n... [truncated]"
+	limit := maxToolDescriptionBytes - len(marker)
+	if limit < 0 {
+		return desc[:textutil.AlignBackward(desc, maxToolDescriptionBytes)]
+	}
+	return desc[:textutil.AlignBackward(desc, limit)] + marker
 }
 
 func normalizedInputSchema(serverName, toolName string, schema json.RawMessage) (json.RawMessage, error) {

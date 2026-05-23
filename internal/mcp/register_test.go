@@ -136,6 +136,67 @@ func TestRegisterServerDefaultPrefixesAdvertisedNameButCallsRawTool(t *testing.T
 	}
 }
 
+func TestRegisterServerRejectsInvalidAdvertisedToolNames(t *testing.T) {
+	longName := strings.Repeat("a", maxToolNameBytes+1)
+	cases := []struct {
+		name       string
+		serverName string
+		toolName   string
+		namespace  bool
+		want       string
+	}{
+		{name: "blank raw name", serverName: "MCP", toolName: "", namespace: false, want: "empty name"},
+		{name: "space in raw name", serverName: "MCP", toolName: "bad name", namespace: false, want: "may contain only ASCII"},
+		{name: "slash in prefixed name", serverName: "MCP", toolName: "bad/name", namespace: true, want: "may contain only ASCII"},
+		{name: "too long", serverName: "MCP", toolName: longName, namespace: false, want: "max"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			fake := newFakeRegisterMCP(t, []ToolDescriptor{{Name: tc.toolName}})
+			reg := agent.NewRegistry()
+			namespace := tc.namespace
+			client, names, err := RegisterServer(context.Background(), reg, ServerSpec{
+				Name:      tc.serverName,
+				Namespace: &namespace,
+				URL:       fake.srv.URL,
+			}, zerolog.Nop())
+			if err == nil || !strings.Contains(err.Error(), tc.want) {
+				t.Fatalf("RegisterServer error = %v, want contains %q", err, tc.want)
+			}
+			if client != nil || names != nil {
+				t.Fatalf("client=%v names=%v, want nils on invalid tool name", client, names)
+			}
+		})
+	}
+}
+
+func TestRegisterServerTruncatesLongDescriptions(t *testing.T) {
+	desc := strings.Repeat("你", maxToolDescriptionBytes)
+	fake := newFakeRegisterMCP(t, []ToolDescriptor{{
+		Name:        "describe",
+		Description: desc,
+	}})
+	reg := agent.NewRegistry()
+	client, _, err := RegisterServer(context.Background(), reg, ServerSpec{
+		Name: "MCP",
+		URL:  fake.srv.URL,
+	}, zerolog.Nop())
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer client.Close()
+	tool, ok := reg.Get("MCP_describe")
+	if !ok {
+		t.Fatalf("tool not registered")
+	}
+	if len(tool.Description) > maxToolDescriptionBytes {
+		t.Fatalf("description length = %d, want <= %d", len(tool.Description), maxToolDescriptionBytes)
+	}
+	if !strings.Contains(tool.Description, "[truncated]") {
+		t.Fatalf("truncated description missing marker: %q", tool.Description[max(0, len(tool.Description)-80):])
+	}
+}
+
 func TestRegisterServerNamespaceFalseAdvertisesRawName(t *testing.T) {
 	fake := newFakeRegisterMCP(t, []ToolDescriptor{{Name: "poi_search"}})
 	reg := agent.NewRegistry()
