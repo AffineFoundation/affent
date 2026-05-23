@@ -161,6 +161,81 @@ func TestRegisterServerNamespaceFalseAdvertisesRawName(t *testing.T) {
 	}
 }
 
+func TestRegisterServerDefaultsEmptyInputSchema(t *testing.T) {
+	fake := newFakeRegisterMCP(t, []ToolDescriptor{{Name: "ping"}})
+	reg := agent.NewRegistry()
+	client, names, err := RegisterServer(context.Background(), reg, ServerSpec{
+		Name: "MCP",
+		URL:  fake.srv.URL,
+	}, zerolog.Nop())
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer client.Close()
+	if len(names) != 1 || names[0] != "MCP_ping" {
+		t.Fatalf("registered names = %v, want [MCP_ping]", names)
+	}
+	tool, ok := reg.Get("MCP_ping")
+	if !ok {
+		t.Fatalf("tool not registered")
+	}
+	if string(tool.Schema) != `{"type":"object","properties":{}}` {
+		t.Fatalf("default schema = %s", tool.Schema)
+	}
+}
+
+func TestRegisterServerRejectsInvalidInputSchemas(t *testing.T) {
+	cases := []struct {
+		name   string
+		schema json.RawMessage
+		want   string
+	}{
+		{name: "non object", schema: json.RawMessage(`[]`), want: "inputSchema is not valid JSON"},
+		{name: "null", schema: json.RawMessage(`null`), want: "must be a JSON object"},
+		{name: "too large", schema: json.RawMessage(`{"description":"` + strings.Repeat("x", maxInputSchemaBytes) + `"}`), want: "max"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			fake := newFakeRegisterMCP(t, []ToolDescriptor{{
+				Name:        "bad",
+				InputSchema: tc.schema,
+			}})
+			reg := agent.NewRegistry()
+			client, names, err := RegisterServer(context.Background(), reg, ServerSpec{
+				Name: "MCP",
+				URL:  fake.srv.URL,
+			}, zerolog.Nop())
+			if err == nil || !strings.Contains(err.Error(), tc.want) {
+				t.Fatalf("RegisterServer error = %v, want contains %q", err, tc.want)
+			}
+			if client != nil || names != nil {
+				t.Fatalf("client=%v names=%v, want nils on invalid schema", client, names)
+			}
+			if _, ok := reg.Get("MCP_bad"); ok {
+				t.Fatalf("invalid schema tool should not be registered")
+			}
+		})
+	}
+}
+
+func TestNormalizedInputSchemaRejectsMalformedJSON(t *testing.T) {
+	for _, tc := range []struct {
+		name   string
+		schema json.RawMessage
+		want   string
+	}{
+		{name: "invalid json", schema: json.RawMessage(`{`), want: "not valid JSON"},
+		{name: "trailing json", schema: json.RawMessage(`{"type":"object"} {"type":"object"}`), want: "trailing JSON"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			_, err := normalizedInputSchema("MCP", "bad", tc.schema)
+			if err == nil || !strings.Contains(err.Error(), tc.want) {
+				t.Fatalf("normalizedInputSchema error = %v, want contains %q", err, tc.want)
+			}
+		})
+	}
+}
+
 func TestRegisterAllRejectsNameCollisionAndRollsBack(t *testing.T) {
 	first := newFakeRegisterMCP(t, []ToolDescriptor{{Name: "search"}})
 	second := newFakeRegisterMCP(t, []ToolDescriptor{{Name: "search"}})

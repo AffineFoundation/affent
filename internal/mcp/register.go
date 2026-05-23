@@ -1,13 +1,17 @@
 package mcp
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
+	"io"
 
 	agent "github.com/affinefoundation/affent/internal/agent"
 	"github.com/rs/zerolog"
 )
+
+const maxInputSchemaBytes = 32 * 1024
 
 // RegisterServer launches the server, fetches its tool catalog, and
 // adds each tool to the agent.Registry. By default tools are advertised
@@ -52,10 +56,13 @@ func registerServer(ctx context.Context, reg *agent.Registry, spec ServerSpec, l
 			}
 			return nil, nil, fmt.Errorf("mcp tool name collision: %q from server %q is already registered", affentName, spec.Name)
 		}
-		schema := t.InputSchema
-		// agent.Tool requires a non-empty JSON Schema object.
-		if len(schema) == 0 {
-			schema = json.RawMessage(`{"type":"object","properties":{}}`)
+		schema, err := normalizedInputSchema(spec.Name, t.Name, t.InputSchema)
+		if err != nil {
+			_ = c.Close()
+			for _, n := range names {
+				reg.Remove(n)
+			}
+			return nil, nil, err
 		}
 		// Capture loop-iteration vars so the closure points at this
 		// specific tool, not the last one.
@@ -93,6 +100,33 @@ func registerServer(ctx context.Context, reg *agent.Registry, spec ServerSpec, l
 		Int("tools", len(tools)).
 		Msg("mcp tools registered")
 	return c, names, nil
+}
+
+func normalizedInputSchema(serverName, toolName string, schema json.RawMessage) (json.RawMessage, error) {
+	// agent.Tool requires a non-empty JSON Schema object. MCP servers
+	// occasionally omit inputSchema for argument-less tools.
+	if len(schema) == 0 {
+		return json.RawMessage(`{"type":"object","properties":{}}`), nil
+	}
+	if len(schema) > maxInputSchemaBytes {
+		return nil, fmt.Errorf("mcp tool %s/%s inputSchema is %d bytes; max %d", serverName, toolName, len(schema), maxInputSchemaBytes)
+	}
+	dec := json.NewDecoder(bytes.NewReader(schema))
+	var obj map[string]json.RawMessage
+	if err := dec.Decode(&obj); err != nil {
+		return nil, fmt.Errorf("mcp tool %s/%s inputSchema is not valid JSON: %w", serverName, toolName, err)
+	}
+	if obj == nil {
+		return nil, fmt.Errorf("mcp tool %s/%s inputSchema must be a JSON object", serverName, toolName)
+	}
+	var extra any
+	if err := dec.Decode(&extra); err != nil {
+		if err == io.EOF {
+			return schema, nil
+		}
+		return nil, fmt.Errorf("mcp tool %s/%s inputSchema has trailing JSON: %w", serverName, toolName, err)
+	}
+	return nil, fmt.Errorf("mcp tool %s/%s inputSchema has trailing JSON", serverName, toolName)
 }
 
 func namespaceEnabled(spec ServerSpec) bool {
