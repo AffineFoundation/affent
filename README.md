@@ -105,6 +105,12 @@ Check local setup without calling a model:
   --model gpt-4o-mini
 ```
 
+When `--mcp-config` is set, `doctor` also initializes each configured MCP
+server and calls `tools/list` within the configured `init_timeout` budget. The
+MCP line reports raw tool count, filtered tool count, final advertised tool
+names, namespace mode, and filtered tool reasons so a workflow-specific
+allowlist/denylist can be checked before a model sees the tools.
+
 Run a single prompt:
 
 ```bash

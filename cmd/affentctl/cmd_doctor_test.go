@@ -1,7 +1,10 @@
 package main
 
 import (
+	"bufio"
+	"encoding/json"
 	"errors"
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
@@ -9,6 +12,61 @@ import (
 
 	"github.com/affinefoundation/affent/internal/agent"
 )
+
+func TestMCPDoctorHelper(t *testing.T) {
+	if os.Getenv("AFFENT_MCP_DOCTOR_HELPER") != "1" {
+		return
+	}
+	toolsJSON := os.Getenv("AFFENT_MCP_DOCTOR_TOOLS")
+	if strings.TrimSpace(toolsJSON) == "" {
+		toolsJSON = "[]"
+	}
+	var tools []map[string]any
+	if err := json.Unmarshal([]byte(toolsJSON), &tools); err != nil {
+		fmt.Fprintln(os.Stderr, err)
+		os.Exit(2)
+	}
+	writeResult := func(id any, result any) {
+		raw, err := json.Marshal(map[string]any{
+			"jsonrpc": "2.0",
+			"id":      id,
+			"result":  result,
+		})
+		if err != nil {
+			fmt.Fprintln(os.Stderr, err)
+			os.Exit(2)
+		}
+		fmt.Println(string(raw))
+	}
+	sc := bufio.NewScanner(os.Stdin)
+	for sc.Scan() {
+		var req struct {
+			ID     any    `json:"id"`
+			Method string `json:"method"`
+		}
+		if err := json.Unmarshal(sc.Bytes(), &req); err != nil {
+			fmt.Fprintln(os.Stderr, err)
+			os.Exit(2)
+		}
+		switch req.Method {
+		case "initialize":
+			writeResult(req.ID, map[string]any{
+				"protocolVersion": "2025-06-18",
+				"capabilities":    map[string]any{},
+				"serverInfo": map[string]any{
+					"name":    "doctor-helper",
+					"version": "test",
+				},
+			})
+		case "notifications/initialized":
+		case "tools/list":
+			writeResult(req.ID, map[string]any{"tools": tools})
+		default:
+			writeResult(req.ID, map[string]any{})
+		}
+	}
+	os.Exit(0)
+}
 
 type errorCommandRunner struct {
 	err error
@@ -30,6 +88,36 @@ func (r *dockerInspectRunner) Run(name string, args ...string) (string, error) {
 		return r.out, r.err
 	}
 	return "", nil
+}
+
+func mcpDoctorHelperServer(t *testing.T, name string, tools []map[string]any) map[string]any {
+	t.Helper()
+	rawTools, err := json.Marshal(tools)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return map[string]any{
+		"name":    name,
+		"command": os.Args[0],
+		"args":    []string{"-test.run=TestMCPDoctorHelper"},
+		"env": []string{
+			"AFFENT_MCP_DOCTOR_HELPER=1",
+			"AFFENT_MCP_DOCTOR_TOOLS=" + string(rawTools),
+		},
+	}
+}
+
+func writeMCPDoctorConfig(t *testing.T, dir string, servers []map[string]any) string {
+	t.Helper()
+	raw, err := json.Marshal(map[string]any{"servers": servers})
+	if err != nil {
+		t.Fatal(err)
+	}
+	path := filepath.Join(dir, "mcp.json")
+	if err := os.WriteFile(path, raw, 0o644); err != nil {
+		t.Fatal(err)
+	}
+	return path
 }
 
 func TestDoctorCmdReportsReadyLocalConfig(t *testing.T) {
@@ -259,10 +347,12 @@ func TestDoctorCmdChecksSystemPromptTraceAndMCPConfig(t *testing.T) {
 	if err := os.WriteFile(promptPath, []byte("custom prompt"), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	mcpPath := filepath.Join(dir, "mcp.json")
-	if err := os.WriteFile(mcpPath, []byte(`{"servers":[{"name":"shell","command":"sh","args":["-c","cat"]}]}`), 0o644); err != nil {
-		t.Fatal(err)
-	}
+	server := mcpDoctorHelperServer(t, "maps", []map[string]any{
+		{"name": "poi_search", "description": "search places", "inputSchema": map[string]any{"type": "object", "properties": map[string]any{}}},
+		{"name": "debug", "description": "debug helper", "inputSchema": map[string]any{"type": "object", "properties": map[string]any{}}},
+	})
+	server["allow_tools"] = []string{"poi_search"}
+	mcpPath := writeMCPDoctorConfig(t, dir, []map[string]any{server})
 	var stdout, stderr strings.Builder
 	code := doctorCmdWithRunner([]string{
 		"--workspace", filepath.Join(dir, "ws"),
@@ -282,7 +372,9 @@ func TestDoctorCmdChecksSystemPromptTraceAndMCPConfig(t *testing.T) {
 		"ok trace:",
 		filepath.Join(dir, "traces", "run.jsonl"),
 		"ok mcp:",
-		"1 server(s)",
+		"1 server(s) raw=2 filtered=1 advertised=1",
+		"maps namespace=true raw=2 filtered=1 advertised=[maps_poi_search]",
+		"rejected=[debug:not in allow_tools]",
 	} {
 		if !strings.Contains(got, want) {
 			t.Fatalf("doctor output missing %q:\n%s", want, got)
@@ -369,6 +461,34 @@ func TestValidateMCPServerSpecRejectsInvalidStaticConfig(t *testing.T) {
 				t.Fatalf("error = %v, want contains %q", err, c.want)
 			}
 		})
+	}
+}
+
+func TestDoctorMCPConfigReportsEmptyLiveToolSet(t *testing.T) {
+	dir := t.TempDir()
+	mcpPath := writeMCPDoctorConfig(t, dir, []map[string]any{
+		mcpDoctorHelperServer(t, "empty", nil),
+	})
+	_, err := doctorMCPConfig(mcpPath)
+	if err == nil || !strings.Contains(err.Error(), "exposes no usable tools") {
+		t.Fatalf("error = %v, want empty tool set rejection", err)
+	}
+}
+
+func TestDoctorMCPConfigReportsAdvertisedToolCollision(t *testing.T) {
+	dir := t.TempDir()
+	first := mcpDoctorHelperServer(t, "one", []map[string]any{
+		{"name": "search", "inputSchema": map[string]any{"type": "object", "properties": map[string]any{}}},
+	})
+	first["namespace"] = false
+	second := mcpDoctorHelperServer(t, "two", []map[string]any{
+		{"name": "search", "inputSchema": map[string]any{"type": "object", "properties": map[string]any{}}},
+	})
+	second["namespace"] = false
+	mcpPath := writeMCPDoctorConfig(t, dir, []map[string]any{first, second})
+	_, err := doctorMCPConfig(mcpPath)
+	if err == nil || !strings.Contains(err.Error(), "tool name collision") {
+		t.Fatalf("error = %v, want tool name collision", err)
 	}
 }
 

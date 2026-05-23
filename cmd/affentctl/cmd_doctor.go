@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"flag"
 	"fmt"
 	"io"
@@ -8,11 +9,13 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"sort"
 	"strings"
 
 	agent "github.com/affinefoundation/affent/internal/agent"
 	"github.com/affinefoundation/affent/internal/mcp"
 	"github.com/affinefoundation/affent/internal/memory"
+	"github.com/rs/zerolog"
 )
 
 type doctorFinding struct {
@@ -227,6 +230,7 @@ func doctorMCPConfig(path string) (string, error) {
 	if err := readConfigJSON(path, &cfg); err != nil {
 		return "", fmt.Errorf("load %s: %w", path, err)
 	}
+	specs := make([]mcp.ServerSpec, 0, len(cfg.Servers))
 	for i, server := range cfg.Servers {
 		spec, err := server.serverSpec()
 		if err != nil {
@@ -235,8 +239,75 @@ func doctorMCPConfig(path string) (string, error) {
 		if err := validateMCPServerSpec(spec); err != nil {
 			return "", fmt.Errorf("servers[%d]: %w", i, err)
 		}
+		specs = append(specs, spec)
 	}
-	return fmt.Sprintf("%d server(s)", len(cfg.Servers)), nil
+	if len(specs) == 0 {
+		return "0 server(s)", nil
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), mcpStartupTimeout(specs))
+	defer cancel()
+	owners := map[string]string{}
+	reports := make([]mcp.ToolGovernanceReport, 0, len(specs))
+	for i, spec := range specs {
+		report, err := mcp.DiagnoseServerTools(ctx, spec, owners, zerolog.Nop())
+		if err != nil {
+			return "", fmt.Errorf("servers[%d]: %w", i, err)
+		}
+		reports = append(reports, report)
+	}
+	return formatMCPGovernanceSummary(reports), nil
+}
+
+func formatMCPGovernanceSummary(reports []mcp.ToolGovernanceReport) string {
+	totalRaw, totalFiltered, totalAccepted := 0, 0, 0
+	parts := make([]string, 0, len(reports))
+	for _, r := range reports {
+		totalRaw += r.RawToolCount
+		totalFiltered += r.FilteredToolCount
+		totalAccepted += len(r.AcceptedTools)
+		accepted := make([]string, 0, len(r.AcceptedTools))
+		for _, tool := range r.AcceptedTools {
+			accepted = append(accepted, tool.AdvertisedName)
+		}
+		sort.Strings(accepted)
+		rejected := make([]string, 0, len(r.RejectedTools))
+		for _, tool := range r.RejectedTools {
+			rejected = append(rejected, tool.RawName+":"+tool.Reason)
+		}
+		sort.Strings(rejected)
+		part := fmt.Sprintf("%s namespace=%t raw=%d filtered=%d advertised=%s",
+			r.ServerName,
+			r.NamespaceEnabled,
+			r.RawToolCount,
+			r.FilteredToolCount,
+			formatDoctorList(accepted),
+		)
+		if len(rejected) > 0 {
+			part += " rejected=" + formatDoctorList(rejected)
+		}
+		parts = append(parts, part)
+	}
+	return fmt.Sprintf("%d server(s) raw=%d filtered=%d advertised=%d; %s",
+		len(reports),
+		totalRaw,
+		totalFiltered,
+		totalAccepted,
+		strings.Join(parts, "; "),
+	)
+}
+
+func formatDoctorList(items []string) string {
+	const maxItems = 20
+	if len(items) == 0 {
+		return "[]"
+	}
+	shown := items
+	suffix := ""
+	if len(items) > maxItems {
+		shown = items[:maxItems]
+		suffix = fmt.Sprintf(",+%d", len(items)-maxItems)
+	}
+	return "[" + strings.Join(shown, ",") + suffix + "]"
 }
 
 func validateMCPServerSpec(spec mcp.ServerSpec) error {
