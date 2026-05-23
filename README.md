@@ -497,12 +497,12 @@ observed failures from real models into repeatable regression checks before the
 same lesson becomes a prompt, skill, guard, or tool-policy change. Text output
 includes per-scenario and summary metrics for tool calls, tool errors, argument
 repairs, measured tool time, token usage, per-scenario turn end reason, and
-summary end-reason distribution. Use `--jsonl` when comparing models or storing
-CI artifacts; it emits one `scenario` record per run plus a final `summary`
-record with the same metrics. Passing scenario workspaces are removed by default
-to avoid filling the machine during repeated evals; failing workspaces are kept
-for debugging. Pass `--keep-workspaces` when you need every workspace and trace
-left on disk.
+summary end-reason/failure-kind distribution. Use `--jsonl` when comparing
+models or storing CI artifacts; it emits one `scenario` record per run plus a
+final `summary` record with the same metrics. Passing scenario workspaces are
+removed by default to avoid filling the machine during repeated evals; failing
+workspaces are kept for debugging. Pass `--keep-workspaces` when you need every
+workspace and trace left on disk.
 
 `--executor` is forwarded to the `affentctl run` process under test. It
 defaults to `local`. Use `--executor sandbox` for one selected scenario when you

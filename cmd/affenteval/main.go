@@ -9,6 +9,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"sort"
 	"strconv"
 	"strings"
 	"time"
@@ -140,6 +141,7 @@ type batchSummary struct {
 	EndErrors         int
 	EndCancelled      int
 	EndUnknown        int
+	FailureKinds      map[string]int
 	RemovedWorkspaces int
 	CleanupErrors     int
 }
@@ -176,10 +178,16 @@ func (s *batchSummary) add(res agenteval.BatchResult) {
 	if res.CleanupError != "" {
 		s.CleanupErrors++
 	}
+	for _, failure := range res.Failures {
+		if s.FailureKinds == nil {
+			s.FailureKinds = map[string]int{}
+		}
+		s.FailureKinds[failureKind(failure)]++
+	}
 }
 
 func printBatchSummary(w io.Writer, s batchSummary) {
-	fmt.Fprintf(w, "SUMMARY scenarios=%d passed=%d failed=%d duration=%s tools=%d errors=%d repaired=%d tool_ms=%d tokens=%d/%d ends=completed:%d,max_turns:%d,error:%d,cancelled:%d,unknown:%d removed_workspaces=%d cleanup_errors=%d\n",
+	fmt.Fprintf(w, "SUMMARY scenarios=%d passed=%d failed=%d duration=%s tools=%d errors=%d repaired=%d tool_ms=%d tokens=%d/%d ends=completed:%d,max_turns:%d,error:%d,cancelled:%d,unknown:%d failure_kinds=%s removed_workspaces=%d cleanup_errors=%d\n",
 		s.Total,
 		s.Passed,
 		s.Failed,
@@ -195,9 +203,26 @@ func printBatchSummary(w io.Writer, s batchSummary) {
 		s.EndErrors,
 		s.EndCancelled,
 		s.EndUnknown,
+		formatFailureKinds(s.FailureKinds),
 		s.RemovedWorkspaces,
 		s.CleanupErrors,
 	)
+}
+
+func formatFailureKinds(counts map[string]int) string {
+	if len(counts) == 0 {
+		return "none"
+	}
+	keys := make([]string, 0, len(counts))
+	for key := range counts {
+		keys = append(keys, key)
+	}
+	sort.Strings(keys)
+	parts := make([]string, 0, len(keys))
+	for _, key := range keys {
+		parts = append(parts, fmt.Sprintf("%s:%d", key, counts[key]))
+	}
+	return strings.Join(parts, ",")
 }
 
 type batchResultRecord struct {
@@ -220,24 +245,25 @@ type batchResultRecord struct {
 }
 
 type batchSummaryRecord struct {
-	Type              string `json:"type"`
-	Scenarios         int    `json:"scenarios"`
-	Passed            int    `json:"passed"`
-	Failed            int    `json:"failed"`
-	DurationMS        int64  `json:"duration_ms"`
-	ToolCalls         int    `json:"tool_calls"`
-	ToolErrors        int    `json:"tool_errors"`
-	ToolRepaired      int    `json:"tool_repaired"`
-	ToolDurationMS    int64  `json:"tool_duration_ms"`
-	InputTokens       int    `json:"input_tokens"`
-	OutputTokens      int    `json:"output_tokens"`
-	EndCompleted      int    `json:"end_completed"`
-	EndMaxTurns       int    `json:"end_max_turns"`
-	EndErrors         int    `json:"end_errors"`
-	EndCancelled      int    `json:"end_cancelled"`
-	EndUnknown        int    `json:"end_unknown"`
-	RemovedWorkspaces int    `json:"removed_workspaces"`
-	CleanupErrors     int    `json:"cleanup_errors"`
+	Type              string         `json:"type"`
+	Scenarios         int            `json:"scenarios"`
+	Passed            int            `json:"passed"`
+	Failed            int            `json:"failed"`
+	DurationMS        int64          `json:"duration_ms"`
+	ToolCalls         int            `json:"tool_calls"`
+	ToolErrors        int            `json:"tool_errors"`
+	ToolRepaired      int            `json:"tool_repaired"`
+	ToolDurationMS    int64          `json:"tool_duration_ms"`
+	InputTokens       int            `json:"input_tokens"`
+	OutputTokens      int            `json:"output_tokens"`
+	EndCompleted      int            `json:"end_completed"`
+	EndMaxTurns       int            `json:"end_max_turns"`
+	EndErrors         int            `json:"end_errors"`
+	EndCancelled      int            `json:"end_cancelled"`
+	EndUnknown        int            `json:"end_unknown"`
+	FailureKinds      map[string]int `json:"failure_kinds,omitempty"`
+	RemovedWorkspaces int            `json:"removed_workspaces"`
+	CleanupErrors     int            `json:"cleanup_errors"`
 }
 
 func printBatchResultJSONL(w io.Writer, res agenteval.BatchResult) {
@@ -279,9 +305,21 @@ func printBatchSummaryJSONL(w io.Writer, s batchSummary) {
 		EndErrors:         s.EndErrors,
 		EndCancelled:      s.EndCancelled,
 		EndUnknown:        s.EndUnknown,
+		FailureKinds:      cloneFailureKinds(s.FailureKinds),
 		RemovedWorkspaces: s.RemovedWorkspaces,
 		CleanupErrors:     s.CleanupErrors,
 	})
+}
+
+func cloneFailureKinds(in map[string]int) map[string]int {
+	if len(in) == 0 {
+		return nil
+	}
+	out := make(map[string]int, len(in))
+	for k, v := range in {
+		out[k] = v
+	}
+	return out
 }
 
 func writeJSONLine(w io.Writer, v any) {
@@ -319,6 +357,41 @@ func printBatchResult(w io.Writer, res agenteval.BatchResult) {
 	fmt.Fprintln(w)
 	for _, failure := range res.Failures {
 		fmt.Fprintf(w, "  - %s\n", failure)
+	}
+}
+
+func failureKind(failure string) string {
+	failure = strings.TrimSpace(failure)
+	lower := strings.ToLower(failure)
+	switch {
+	case strings.HasPrefix(lower, "affentctl run failed:"):
+		return "affentctl_run"
+	case strings.HasPrefix(lower, "verify command failed:"):
+		return "verify_command"
+	case strings.HasPrefix(lower, "parse trace:"):
+		return "parse_trace"
+	case strings.Contains(lower, "turn ended with reason"):
+		return "turn_end"
+	case strings.Contains(lower, "missing required command match"):
+		return "missing_command"
+	case strings.Contains(lower, "forbidden command substring") || strings.Contains(lower, "used forbidden"):
+		return "forbidden_command"
+	case strings.Contains(lower, "protected file") || strings.Contains(lower, "modified protected file"):
+		return "protected_file"
+	case strings.Contains(lower, "forbidden content"):
+		return "forbidden_content"
+	case strings.Contains(lower, "final text did not contain"):
+		return "final_text_missing"
+	case strings.Contains(lower, "final text contained forbidden") || strings.Contains(lower, "final text leaked"):
+		return "final_text_forbidden"
+	case strings.Contains(lower, "expected at least one") && strings.Contains(lower, "invocation"):
+		return "missing_tool"
+	case strings.Contains(lower, "found forbidden") && strings.Contains(lower, "call"):
+		return "forbidden_tool"
+	case strings.Contains(lower, "result to contain"):
+		return "tool_result_missing"
+	default:
+		return "other"
 	}
 }
 

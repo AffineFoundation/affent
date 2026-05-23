@@ -187,6 +187,10 @@ func TestBatchSummaryAggregatesRuntimeMetrics(t *testing.T) {
 		Duration:      250 * time.Millisecond,
 		ToolCalls:     3,
 		TurnEndReason: "max_turns",
+		Failures: []string{
+			`turn ended with reason "max_turns" (expected completed)`,
+			`missing required command match "go test"; commands=[]`,
+		},
 		ToolStats: agenteval.ToolRuntimeStats{
 			ToolArgsRepaired: 2,
 			ToolErrors:       1,
@@ -197,7 +201,7 @@ func TestBatchSummaryAggregatesRuntimeMetrics(t *testing.T) {
 
 	var out bytes.Buffer
 	printBatchSummary(&out, summary)
-	want := "SUMMARY scenarios=2 passed=1 failed=1 duration=350ms tools=5 errors=1 repaired=3 tool_ms=50 tokens=90/20 ends=completed:1,max_turns:1,error:0,cancelled:0,unknown:0 removed_workspaces=1 cleanup_errors=0"
+	want := "SUMMARY scenarios=2 passed=1 failed=1 duration=350ms tools=5 errors=1 repaired=3 tool_ms=50 tokens=90/20 ends=completed:1,max_turns:1,error:0,cancelled:0,unknown:0 failure_kinds=missing_command:1,turn_end:1 removed_workspaces=1 cleanup_errors=0"
 	if !strings.Contains(out.String(), want) {
 		t.Fatalf("summary output missing %q:\n%s", want, out.String())
 	}
@@ -267,6 +271,7 @@ func TestPrintBatchSummaryJSONL(t *testing.T) {
 		EndErrors:         0,
 		EndCancelled:      0,
 		EndUnknown:        0,
+		FailureKinds:      map[string]int{"missing_command": 1, "turn_end": 1},
 		RemovedWorkspaces: 1,
 	})
 
@@ -296,6 +301,40 @@ func TestPrintBatchSummaryJSONL(t *testing.T) {
 	} {
 		if got[key] != want {
 			t.Fatalf("%s = %v, want %v\njson=%s", key, got[key], want, out.String())
+		}
+	}
+	failureKinds, ok := got["failure_kinds"].(map[string]any)
+	if !ok {
+		t.Fatalf("failure_kinds missing or wrong type: %#v\njson=%s", got["failure_kinds"], out.String())
+	}
+	if failureKinds["missing_command"] != float64(1) || failureKinds["turn_end"] != float64(1) {
+		t.Fatalf("failure_kinds = %#v", failureKinds)
+	}
+}
+
+func TestFailureKind(t *testing.T) {
+	cases := []struct {
+		failure string
+		want    string
+	}{
+		{"affentctl run failed: exit=1", "affentctl_run"},
+		{"verify command failed: go test: exit status 1", "verify_command"},
+		{"parse trace: open trace.jsonl: no such file", "parse_trace"},
+		{`turn ended with reason "max_turns" (expected completed)`, "turn_end"},
+		{`missing required command match "go test"; commands=[]`, "missing_command"},
+		{`forbidden command substring "| head" in "go test | head"`, "forbidden_command"},
+		{`protected file changed: app_test.go`, "protected_file"},
+		{`forbidden content "bad" found in config.py`, "forbidden_content"},
+		{`final text did not contain "done"; got ""`, "final_text_missing"},
+		{`final text leaked 1 forbidden substring(s): [ignore me]`, "final_text_forbidden"},
+		{`expected at least one "read_file" invocation, got 0 tool calls`, "missing_tool"},
+		{`found forbidden "write_file" call (call_id=c1 args=map[])`, "forbidden_tool"},
+		{`expected "shell" result to contain "ok"; tools=shell`, "tool_result_missing"},
+		{`something else`, "other"},
+	}
+	for _, tc := range cases {
+		if got := failureKind(tc.failure); got != tc.want {
+			t.Fatalf("failureKind(%q) = %q, want %q", tc.failure, got, tc.want)
 		}
 	}
 }
