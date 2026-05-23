@@ -1,9 +1,13 @@
 package agent
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
+	"io"
+	"sort"
 	"strings"
 
 	"github.com/affinefoundation/affent/internal/memory"
@@ -117,8 +121,8 @@ func memoryTool(store memory.MemoryStore) *Tool {
 		Description: "Save or recall durable facts across sessions. Use target=user for stable user preferences/details; target=memory topic=core only for facts needed every turn; named topics for project/domain facts. Actions: add, replace, remove, search, list. Do not save transient task progress, raw dumps, or facts easily re-read from files.",
 		Schema:      json.RawMessage(schema),
 		Execute: func(ctx context.Context, args json.RawMessage) (string, error) {
-			var p memoryToolArgs
-			if err := json.Unmarshal(args, &p); err != nil {
+			p, present, err := decodeMemoryToolArgs(args)
+			if err != nil {
 				return "", fmt.Errorf("decode args: %w", err)
 			}
 			p.Action = strings.TrimSpace(p.Action)
@@ -134,6 +138,13 @@ func memoryTool(store memory.MemoryStore) *Tool {
 			}
 			p.Content = strings.TrimSpace(p.Content)
 			p.OldText = strings.TrimSpace(p.OldText)
+			if resp, ok := rejectUnusedMemoryArgs(p, present); ok {
+				out, jerr := json.Marshal(resp)
+				if jerr != nil {
+					return "", jerr
+				}
+				return string(out), nil
+			}
 			if resp, ok := validateMemoryToolInputLengths(p); ok {
 				out, jerr := json.Marshal(resp)
 				if jerr != nil {
@@ -144,7 +155,7 @@ func memoryTool(store memory.MemoryStore) *Tool {
 			target := memory.MemoryTarget(p.Target)
 
 			var resp memory.MemoryResponse
-			var err error
+			var storeErr error
 			switch p.Action {
 			case "":
 				resp = memory.MemoryResponse{Target: target, Topic: p.Topic, Message: "action is required. Next: retry with action=list to discover topics, action=search with query to recall, or action=add with content to save a durable fact."}
@@ -153,19 +164,19 @@ func memoryTool(store memory.MemoryStore) *Tool {
 					resp = memory.MemoryResponse{Target: target, Topic: p.Topic, Message: "content is required for action=add. Next: retry with compact durable content, target=memory for project facts or target=user for stable user preferences."}
 					break
 				}
-				resp, err = store.Add(target, p.Topic, p.Content)
+				resp, storeErr = store.Add(target, p.Topic, p.Content)
 			case memoryActionReplace:
 				if p.OldText == "" || p.Content == "" {
 					resp = memory.MemoryResponse{Target: target, Topic: p.Topic, Message: "old_text and content are required for action=replace. Next: search/list first, then retry with a unique old_text substring and the full replacement content."}
 					break
 				}
-				resp, err = store.Replace(target, p.Topic, p.OldText, p.Content)
+				resp, storeErr = store.Replace(target, p.Topic, p.OldText, p.Content)
 			case memoryActionRemove:
 				if p.OldText == "" {
 					resp = memory.MemoryResponse{Target: target, Topic: p.Topic, Message: "old_text is required for action=remove. Next: search/list first, then retry with a unique old_text substring from the entry to remove."}
 					break
 				}
-				resp, err = store.Remove(target, p.Topic, p.OldText)
+				resp, storeErr = store.Remove(target, p.Topic, p.OldText)
 			case memoryActionSearch:
 				p.Query = memory.NormalizeSearchQuery(p.Query)
 				p.TopK = memory.NormalizeSearchTopK(p.TopK)
@@ -173,12 +184,12 @@ func memoryTool(store memory.MemoryStore) *Tool {
 					resp = memory.MemoryResponse{Target: target, Topic: p.Topic, Message: "query is required for action=search. Next: retry with 2-6 specific keywords, or use action=list to discover available topics first."}
 					break
 				}
-				resp, err = store.Search(target, p.Topic, p.Query, p.TopK)
+				resp, storeErr = store.Search(target, p.Topic, p.Query, p.TopK)
 			case memoryActionList:
 				if lister, ok := store.(interface {
 					ListTopics(memory.MemoryTarget) (memory.MemoryResponse, error)
 				}); ok {
-					resp, err = lister.ListTopics(target)
+					resp, storeErr = lister.ListTopics(target)
 				} else {
 					// A custom MemoryStore may not implement the
 					// optional list extension.
@@ -188,8 +199,8 @@ func memoryTool(store memory.MemoryStore) *Tool {
 			default:
 				resp = memory.MemoryResponse{Target: target, Topic: p.Topic, Message: fmt.Sprintf("unknown action %q (expected one of: %s). Next: retry with one valid action: add, replace, remove, search, or list.", p.Action, strings.Join(memoryActions, ", "))}
 			}
-			if err != nil {
-				return "", err
+			if storeErr != nil {
+				return "", storeErr
 			}
 			out, jerr := json.Marshal(resp)
 			if jerr != nil {
@@ -198,6 +209,82 @@ func memoryTool(store memory.MemoryStore) *Tool {
 			return string(out), nil
 		},
 	}
+}
+
+func decodeMemoryToolArgs(args json.RawMessage) (memoryToolArgs, map[string]bool, error) {
+	var p memoryToolArgs
+	dec := json.NewDecoder(bytes.NewReader(args))
+	dec.DisallowUnknownFields()
+	if err := dec.Decode(&p); err != nil {
+		return memoryToolArgs{}, nil, err
+	}
+	var extra struct{}
+	if err := dec.Decode(&extra); !errors.Is(err, io.EOF) {
+		return memoryToolArgs{}, nil, errors.New("arguments must contain a single JSON object")
+	}
+	var raw map[string]json.RawMessage
+	if err := json.Unmarshal(args, &raw); err != nil {
+		return memoryToolArgs{}, nil, err
+	}
+	present := make(map[string]bool, len(raw))
+	for field := range raw {
+		present[field] = true
+	}
+	return p, present, nil
+}
+
+func rejectUnusedMemoryArgs(p memoryToolArgs, present map[string]bool) (memory.MemoryResponse, bool) {
+	allowed := map[string]bool{"action": true}
+	switch p.Action {
+	case "":
+		return memory.MemoryResponse{}, false
+	case memoryActionAdd:
+		allowed["target"] = true
+		allowed["topic"] = true
+		allowed["content"] = true
+	case memoryActionReplace:
+		allowed["target"] = true
+		allowed["topic"] = true
+		allowed["old_text"] = true
+		allowed["content"] = true
+	case memoryActionRemove:
+		allowed["target"] = true
+		allowed["topic"] = true
+		allowed["old_text"] = true
+	case memoryActionSearch:
+		allowed["target"] = true
+		allowed["topic"] = true
+		allowed["query"] = true
+		allowed["top_k"] = true
+	case memoryActionList:
+		allowed["target"] = true
+	default:
+		return memory.MemoryResponse{}, false
+	}
+	var unused []string
+	for field := range present {
+		if !allowed[field] {
+			unused = append(unused, field)
+		}
+	}
+	if len(unused) == 0 {
+		return memory.MemoryResponse{}, false
+	}
+	sort.Strings(unused)
+	target := memory.MemoryTarget(p.Target)
+	if target == "" {
+		target = memory.TargetMemory
+	}
+	verb := "is"
+	if len(unused) > 1 {
+		verb = "are"
+	}
+	return memory.MemoryResponse{
+		Target: target,
+		Topic:  p.Topic,
+		Message: fmt.Sprintf("%s %s not used when action=%s. Next: retry memory with only the fields that action uses.",
+			strings.Join(unused, ", "), verb, p.Action),
+	}, true
 }
 
 func validateMemoryToolInputLengths(p memoryToolArgs) (memory.MemoryResponse, bool) {
