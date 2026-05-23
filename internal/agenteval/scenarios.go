@@ -633,7 +633,10 @@ func smallToolEditRecoveryScenario() BatchScenario {
 		RequiredTools:  []string{"read_file", "edit_file"},
 		ForbiddenTools: []string{"write_file"},
 		VerifyCommand:  "grep -q '^color=green$' config.ini",
-		MaxTurns:       6,
+		RequiredToolOrder: []ToolOrderRequirement{
+			{Earlier: "read_file", Later: "edit_file"},
+		},
+		MaxTurns: 6,
 	}
 }
 

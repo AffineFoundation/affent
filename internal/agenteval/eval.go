@@ -21,6 +21,11 @@ const (
 	DefaultBatchMaxTurnSteps = 10
 )
 
+type ToolOrderRequirement struct {
+	Earlier string
+	Later   string
+}
+
 type BatchScenario struct {
 	Name                         string
 	Suites                       []string
@@ -37,6 +42,7 @@ type BatchScenario struct {
 	RequiredToolResultText       map[string][]string
 	RequiredTruncatedResults     []string
 	RequiredResultArtifacts      []string
+	RequiredToolOrder            []ToolOrderRequirement
 	ProtectedFiles               []string
 	ForbiddenFileSubstrings      map[string][]string
 	MaxParentToolCalls           int
@@ -483,6 +489,9 @@ func BatchScenarioChecks(scenario BatchScenario) []Check {
 	}
 	for _, tool := range scenario.RequiredResultArtifacts {
 		checks = append(checks, ToolResultArtifact(tool))
+	}
+	for _, order := range scenario.RequiredToolOrder {
+		checks = append(checks, ToolCalledBefore(order.Earlier, order.Later))
 	}
 	if scenario.MaxParentToolCalls > 0 {
 		checks = append(checks, MaxSuccessfulToolCalls(scenario.MaxParentToolCalls))

@@ -167,6 +167,9 @@ func TestBatchScenarioChecks_UsesSharedCheckLibrary(t *testing.T) {
 		},
 		RequiredTruncatedResults: []string{"shell"},
 		RequiredResultArtifacts:  []string{"shell"},
+		RequiredToolOrder: []ToolOrderRequirement{
+			{Earlier: "read_file", Later: "edit_file"},
+		},
 		MaxSuccessfulToolCallsByTool: map[string]int{
 			"read_file": 1,
 		},
@@ -185,6 +188,7 @@ func TestBatchScenarioChecks_UsesSharedCheckLibrary(t *testing.T) {
 		"tool_result_contains:subagent_run:report",
 		"tool_result_truncated:shell",
 		"tool_result_artifact:shell",
+		"tool_called_before:read_file->edit_file",
 		"max_successful_tool_calls:read_file:1",
 		"shell_command_matching:go test",
 		"shell_command_matching:gofmt",
@@ -212,6 +216,7 @@ func TestSelectBatchScenariosForSuite(t *testing.T) {
 	}
 	foundOversized := false
 	foundRepeatedRead := false
+	foundEditRecovery := false
 	for _, scenario := range scenarios {
 		if !scenarioInSuite(scenario, "small-model-tools") {
 			t.Fatalf("scenario %s missing suite marker", scenario.Name)
@@ -225,12 +230,21 @@ func TestSelectBatchScenariosForSuite(t *testing.T) {
 				t.Fatalf("small-tools-repeated-read read_file cap = %#v, want 1", scenario.MaxSuccessfulToolCallsByTool)
 			}
 		}
+		if scenario.Name == "small-tools-edit-recovery" {
+			foundEditRecovery = true
+			if len(scenario.RequiredToolOrder) != 1 || scenario.RequiredToolOrder[0] != (ToolOrderRequirement{Earlier: "read_file", Later: "edit_file"}) {
+				t.Fatalf("small-tools-edit-recovery order = %#v, want read_file before edit_file", scenario.RequiredToolOrder)
+			}
+		}
 	}
 	if !foundOversized {
 		t.Fatalf("small-model-tools suite missing runtime-oversized-tool-result")
 	}
 	if !foundRepeatedRead {
 		t.Fatalf("small-model-tools suite missing small-tools-repeated-read")
+	}
+	if !foundEditRecovery {
+		t.Fatalf("small-model-tools suite missing small-tools-edit-recovery")
 	}
 	one, err := SelectBatchScenariosForSuite("small-model-tools", []string{"small-tools-wrong-field-read"})
 	if err != nil {
