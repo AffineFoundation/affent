@@ -139,6 +139,29 @@ func TestToolLoopGuard_PerTurnCallCapForRunTask(t *testing.T) {
 	}
 }
 
+func TestToolLoopGuard_PerTurnCallCapForPlan(t *testing.T) {
+	g := newToolLoopGuard()
+	for i := 0; i < perTurnCallCaps[PlanToolName]; i++ {
+		args := json.RawMessage(`{"action":"update","index":1,"note":"step-` + fmt.Sprintf("%d", i) + `"}`)
+		if got := g.recordAttempt(PlanToolName, args); got != "" {
+			t.Fatalf("plan call %d should be allowed, got %q", i+1, got)
+		}
+	}
+	got := g.recordAttempt(PlanToolName, json.RawMessage(`{"action":"view"}`))
+	if got == "" {
+		t.Fatal("plan call over cap must be blocked")
+	}
+	if !strings.Contains(got, "per-turn planning cap") {
+		t.Fatalf("plan cap message should name planning cap, got %q", got)
+	}
+	if strings.Contains(got, "focused task") || strings.Contains(got, "delegation cap") {
+		t.Fatalf("plan cap message should not use focused-task delegation wording, got %q", got)
+	}
+	if !strings.Contains(got, "Next:") || !strings.Contains(got, "execute the next concrete step") {
+		t.Fatalf("plan cap message should include useful recovery guidance, got %q", got)
+	}
+}
+
 // TestToolLoopGuard_PerTurnCapDoesNotAffectOtherTools guards against a
 // regression where the cap mechanism leaks across tool names. read_file
 // gets called many times per turn legitimately; capping it would break

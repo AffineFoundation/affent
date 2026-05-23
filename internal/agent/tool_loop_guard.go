@@ -16,21 +16,22 @@ const (
 
 // perTurnCallCaps maps tool names to maximum total calls per parent turn,
 // counting attempts with any arguments. Most tools (read_file, shell,
-// memory, session_search) have no cap because the model legitimately
-// needs many calls in a single turn. The exceptions are delegation
-// tools whose budget is itself an entire bounded child Loop. Three
-// calls per turn is already strong evidence of over-delegation, and a
-// fourth call almost always burns context without progress.
+// memory, session_search) have no cap because the model may legitimately
+// need many calls in a single turn. The capped exceptions are stateful
+// workflow tools where repeated calls usually indicate drift: run_task
+// is a whole bounded child Loop, and plan is a compact task-state tool
+// that should be updated sparingly rather than churned.
 //
-// Today only run_task is capped. subagent_run is uncapped because it
-// already has depth/recursion guards and is the lower-level developer
-// surface; if usage patterns warrant a cap there too, add it here.
+// subagent_run is uncapped because it already has depth/recursion guards
+// and is the lower-level developer surface; if usage patterns warrant a
+// cap there too, add it here.
 //
 // Editing this map is a design decision, not a configuration knob:
-// the cap exists to enforce the focused-task surface's "bounded
-// delegation" contract, not to be tuned per deployment.
+// these caps enforce runtime workflow contracts, not per-deployment
+// policy.
 var perTurnCallCaps = map[string]int{
 	FocusedTaskToolName: 3,
+	PlanToolName:        6,
 }
 
 type toolLoopGuard struct {
@@ -70,7 +71,7 @@ func (g *toolLoopGuard) recordAttempt(tool string, args json.RawMessage) string 
 	// a secondary defense for repeats with identical inputs.
 	if cap, capped := perTurnCallCaps[tool]; capped {
 		if g.perToolCounts[tool] >= cap {
-			return fmt.Sprintf("loop_guard: tool %q exceeded the per-turn delegation cap of %d calls. Each focused task is itself a bounded child Loop with its own budget; spawning more in one turn burns parent context without progress.\nNext: answer from the focused-task results you already have, or issue a single broader objective instead of multiple narrow ones.", tool, cap)
+			return perTurnCapMessage(tool, cap)
 		}
 		if g.perToolCounts == nil {
 			g.perToolCounts = map[string]int{}
@@ -83,6 +84,17 @@ func (g *toolLoopGuard) recordAttempt(tool string, args json.RawMessage) string 
 		return fmt.Sprintf("loop_guard: blocked repeated call to %q with the same effective arguments after %d attempts this turn.\nNext: change the arguments, use a different tool, or answer from the evidence already gathered.", tool, g.callCounts[key])
 	}
 	return ""
+}
+
+func perTurnCapMessage(tool string, cap int) string {
+	switch tool {
+	case FocusedTaskToolName:
+		return fmt.Sprintf("loop_guard: tool %q exceeded the per-turn delegation cap of %d calls. Each focused task is itself a bounded child Loop with its own budget; spawning more in one turn burns parent context without progress.\nNext: answer from the focused-task results you already have, or issue a single broader objective instead of multiple narrow ones.", tool, cap)
+	case PlanToolName:
+		return fmt.Sprintf("loop_guard: tool %q exceeded the per-turn planning cap of %d calls. Planning should summarize state, not become the task.\nNext: continue from the current plan state, execute the next concrete step, or give the user the best current result.", tool, cap)
+	default:
+		return fmt.Sprintf("loop_guard: tool %q exceeded the per-turn cap of %d calls.\nNext: stop repeating this tool and continue from the evidence already gathered.", tool, cap)
+	}
 }
 
 func (g *toolLoopGuard) recordOutcome(tool string, ok bool) string {
