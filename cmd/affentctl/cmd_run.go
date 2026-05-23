@@ -17,6 +17,8 @@ import (
 	"github.com/rs/zerolog"
 )
 
+const runPlanOnlyMaxToolCalls = 2
+
 func runCmd(args []string) int {
 	var cf commonFlags
 	fs := flag.NewFlagSet("run", flag.ExitOnError)
@@ -106,8 +108,12 @@ func enableRunPlanOnly(b *loopBundle) error {
 	if _, ok := b.loop.Tools.Get(agent.PlanToolName); !ok {
 		return fmt.Errorf("plan tool is not available")
 	}
+	planTool, _ := b.loop.Tools.Get(agent.PlanToolName)
+	planOnlyTools := agent.NewRegistry()
+	planOnlyTools.Add(planTool)
+	b.loop.Tools = planOnlyTools
 	b.loop.FirstToolPolicy = agent.PlanFirstToolPolicy()
-	b.loop.MaxToolCalls = 1
+	b.loop.MaxToolCalls = runPlanOnlyMaxToolCalls
 	b.loop.FinalNoToolsOnMaxTurns = true
 	return nil
 }

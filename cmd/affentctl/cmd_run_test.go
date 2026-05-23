@@ -17,6 +17,13 @@ func TestEnableRunPlanOnlyInstallsPlanPolicyAndBudget(t *testing.T) {
 			return "{}", nil
 		},
 	})
+	reg.Add(&agent.Tool{
+		Name: "shell",
+		Execute: func(context.Context, json.RawMessage) (string, error) {
+			t.Fatal("plan-only must not keep executable non-plan tools")
+			return "", nil
+		},
+	})
 	b := &loopBundle{loop: &agent.Loop{Tools: reg}}
 
 	if err := enableRunPlanOnly(b); err != nil {
@@ -25,11 +32,18 @@ func TestEnableRunPlanOnlyInstallsPlanPolicyAndBudget(t *testing.T) {
 	if b.loop.FirstToolPolicy == nil || b.loop.FirstToolPolicy.ToolName != agent.PlanToolName {
 		t.Fatalf("first tool policy = %+v, want plan", b.loop.FirstToolPolicy)
 	}
-	if b.loop.MaxToolCalls != 1 {
-		t.Fatalf("MaxToolCalls = %d, want 1", b.loop.MaxToolCalls)
+	if b.loop.MaxToolCalls != runPlanOnlyMaxToolCalls {
+		t.Fatalf("MaxToolCalls = %d, want %d", b.loop.MaxToolCalls, runPlanOnlyMaxToolCalls)
 	}
 	if !b.loop.FinalNoToolsOnMaxTurns {
 		t.Fatal("FinalNoToolsOnMaxTurns should be enabled for plan-only")
+	}
+	defs := b.loop.Tools.Defs()
+	if len(defs) != 1 || defs[0].Function.Name != agent.PlanToolName {
+		t.Fatalf("plan-only tool defs = %+v, want only plan", defs)
+	}
+	if _, ok := b.loop.Tools.Get("shell"); ok {
+		t.Fatal("plan-only should remove non-plan tools from the run registry")
 	}
 }
 
