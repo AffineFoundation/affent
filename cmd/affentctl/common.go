@@ -17,6 +17,7 @@ import (
 	"unicode/utf8"
 
 	agent "github.com/affinefoundation/affent/internal/agent"
+	"github.com/affinefoundation/affent/internal/eventlog"
 	"github.com/affinefoundation/affent/internal/executor"
 	"github.com/affinefoundation/affent/internal/mcp"
 	"github.com/affinefoundation/affent/internal/memory"
@@ -118,6 +119,13 @@ type commonFlags struct {
 	// subtask while still preventing open-ended agent chains.
 	subagentMaxDepth int
 
+	// focusedTasksEnabled registers the productized run_task tool for
+	// bounded, structured-output delegation (recall / explore /
+	// research / verify / review). Independent of subagentEnabled —
+	// the two surfaces target different model behaviors and can be
+	// toggled independently. Default on.
+	focusedTasksEnabled bool
+
 	// Sampling pass-through to the upstream LLM. Strings preserve the
 	// "unset" / "explicit 0" distinction that evals need (temperature=0
 	// for deterministic decoding must not be confused with "use provider
@@ -159,6 +167,7 @@ func (c *commonFlags) bind(fs *flag.FlagSet) {
 	fs.StringVar(&c.executor, "executor", "local", "shell-tool backend: 'local' (host; no isolation), 'sandbox' (auto-start affentctl's memory-limited Docker sandbox), or 'docker:<container_id>' (exec into an existing container). (env: AFFENTCTL_EXECUTOR)")
 	fs.BoolVar(&c.subagentEnabled, "subagent", true, "register subagent_run for bounded read-only delegation; set false to force a single-loop agent (env: AFFENTCTL_SUBAGENT)")
 	fs.IntVar(&c.subagentMaxDepth, "subagent-max-depth", agent.DefaultSubagentMaxDepth, "maximum recursive subagent depth; 1 disables nested subagents, hard max 4 (env: AFFENTCTL_SUBAGENT_MAX_DEPTH)")
+	fs.BoolVar(&c.focusedTasksEnabled, "focused-tasks", true, "register run_task for bounded focused tasks (recall/explore/research/verify/review) with structured output; set false to hide the surface (env: AFFENTCTL_FOCUSED_TASKS)")
 	fs.StringVar(&c.temperature, "temperature", "", "sampling temperature forwarded to upstream LLM (omit → provider default; set 0 for deterministic eval decoding; env: AFFENTCTL_TEMPERATURE)")
 	fs.StringVar(&c.topP, "top-p", "", "top-p (nucleus) sampling forwarded to upstream (omit → provider default; env: AFFENTCTL_TOP_P)")
 	fs.StringVar(&c.maxTokens, "max-tokens", "", "max output tokens forwarded to upstream (omit → provider default; env: AFFENTCTL_MAX_TOKENS)")
@@ -260,6 +269,7 @@ var flagEnvSources = map[string]string{
 	"executor":           "AFFENTCTL_EXECUTOR",
 	"subagent":           "AFFENTCTL_SUBAGENT",
 	"subagent-max-depth": "AFFENTCTL_SUBAGENT_MAX_DEPTH",
+	"focused-tasks":      "AFFENTCTL_FOCUSED_TASKS",
 	"temperature":        "AFFENTCTL_TEMPERATURE",
 	"top-p":              "AFFENTCTL_TOP_P",
 	"max-tokens":         "AFFENTCTL_MAX_TOKENS",
@@ -304,6 +314,11 @@ type fileConfig struct {
 	Subagent         *bool `json:"subagent"`
 	EnableSubagent   *bool `json:"enable_subagent"`
 	SubagentMaxDepth *int  `json:"subagent_max_depth"`
+	// FocusedTasks is the affentctl-native key. EnableFocusedTasks
+	// mirrors affentserve's config spelling so shared config templates
+	// can use the same name in both binaries.
+	FocusedTasks       *bool `json:"focused_tasks"`
+	EnableFocusedTasks *bool `json:"enable_focused_tasks"`
 	// Sampling forwarded to upstream. Kept as strings to mirror the CLI
 	// flags and preserve the "unset vs explicit 0" distinction that
 	// pointers give us at the wire layer.
@@ -331,6 +346,10 @@ func applyConfig(c *commonFlags, fs *flag.FlagSet) error {
 		c.memoryEnabled = true
 		c.projectContext = false
 		c.subagentEnabled = false
+		// Focused tasks need a workspace tool surface (read_file,
+		// shell, web) that memory-only mode deliberately omits, so
+		// they're disabled together for the same isolation reason.
+		c.focusedTasksEnabled = false
 	}
 	if err := normalizeRuntimeLimits(c); err != nil {
 		return err
@@ -474,6 +493,8 @@ func loadConfigFile(c *commonFlags, fs *flag.FlagSet) error {
 	setBool("subagent", &c.subagentEnabled, cfg.Subagent)
 	setBool("subagent", &c.subagentEnabled, cfg.EnableSubagent)
 	setInt("subagent-max-depth", &c.subagentMaxDepth, cfg.SubagentMaxDepth)
+	setBool("focused-tasks", &c.focusedTasksEnabled, cfg.FocusedTasks)
+	setBool("focused-tasks", &c.focusedTasksEnabled, cfg.EnableFocusedTasks)
 	setString("temperature", &c.temperature, cfg.Temperature)
 	setString("top-p", &c.topP, cfg.TopP)
 	setString("max-tokens", &c.maxTokens, cfg.MaxTokens)
@@ -557,6 +578,9 @@ func applyEnvConfig(c *commonFlags, fs *flag.FlagSet) error {
 	if err := setBoolStrict("subagent", "AFFENTCTL_SUBAGENT", &c.subagentEnabled); err != nil {
 		return err
 	}
+	if err := setBoolStrict("focused-tasks", "AFFENTCTL_FOCUSED_TASKS", &c.focusedTasksEnabled); err != nil {
+		return err
+	}
 	setString("workspace", "AFFENTCTL_WORKSPACE", &c.workspace)
 	setInt := func(name, env string, dst *int) error {
 		if setByCLI[name] {
@@ -580,13 +604,13 @@ func applyEnvConfig(c *commonFlags, fs *flag.FlagSet) error {
 }
 
 // loopBundle is everything a subcommand needs after setup: the loop
-// (already system-primed), its events channel, the trace writer, the
+// (already system-primed), its events channel, the trace recorder, the
 // resolved session id, MCP clients to keep alive, and a closer to call
 // before exit.
 type loopBundle struct {
 	loop       *agent.Loop
 	events     chan sse.Event
-	trace      io.Writer
+	recorder   *eventlog.Recorder
 	traceClose func() error
 	sessionID  string
 	resumed    bool // true if we loaded an existing conversation
@@ -777,6 +801,30 @@ func setupLoop(c commonFlags) (*loopBundle, int) {
 		})
 		systemPrompt = agent.WithSubagentSystemGuidance(systemPrompt)
 	}
+	if !c.memoryOnly && c.focusedTasksEnabled {
+		// RegisterFocusedTasks itself filters out profiles whose deps
+		// aren't satisfied — e.g., `research` is dropped because
+		// affentctl doesn't wire a web registrar by default. If every
+		// profile gets filtered out, the function is a no-op and the
+		// system-prompt fragment is still appended so the model knows
+		// run_task isn't available; we sniff registration to keep the
+		// prompt and the schema consistent.
+		agent.RegisterFocusedTasks(tools, agent.FocusedTaskDeps{
+			LLM:               llm,
+			Executor:          execBackend,
+			HostWorkspaceDir:  workspace,
+			Memory:            memStore,
+			SessionsDir:       convDir,
+			ParentSessionID:   sid,
+			TranscriptDir:     filepath.Join(convDir, "focused-tasks", sid),
+			ProjectContextDir: projectContextDir,
+			Log:               log,
+			PerCallTimeout:    c.callTimeout,
+		})
+		if _, ok := tools.Get(agent.FocusedTaskToolName); ok {
+			systemPrompt = agent.WithFocusedTaskSystemGuidance(systemPrompt)
+		}
+	}
 	loop := &agent.Loop{
 		LLM:                 llm,
 		Tools:               tools,
@@ -820,7 +868,7 @@ func setupLoop(c commonFlags) (*loopBundle, int) {
 	return &loopBundle{
 		loop:       loop,
 		events:     events,
-		trace:      traceWriter,
+		recorder:   eventlog.NewRecorder(traceWriter, eventlog.Options{SkipDeltas: c.traceSkipDeltas}),
 		traceClose: traceClose,
 		sessionID:  sid,
 		resumed:    resumed,
@@ -1135,16 +1183,6 @@ func openTrace(spec string, append bool) (io.Writer, func() error, error) {
 		return nil, nil, err
 	}
 	return f, f.Close, nil
-}
-
-func writeTraceMeta(w io.Writer) error {
-	ev, err := sse.NewEvent(sse.TypeTraceMeta, sse.TraceMetaPayload{SchemaVersion: sse.TraceSchemaVersion})
-	if err != nil {
-		return err
-	}
-	enc := json.NewEncoder(w)
-	enc.SetEscapeHTML(false)
-	return enc.Encode(ev)
 }
 
 // resolveStorePath turns a user-supplied --memory-*-store value into

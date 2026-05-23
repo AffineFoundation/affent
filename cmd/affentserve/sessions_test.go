@@ -804,6 +804,71 @@ func TestSessionPool_CompactorFallsBackToDefaults(t *testing.T) {
 	}
 }
 
+func TestSessionPool_FocusedTasksRegisterWhenEnabled(t *testing.T) {
+	cfg := Config{
+		Listen:             "127.0.0.1:0",
+		MaxSessions:        4,
+		SessionIdleTTL:     "5m",
+		WorkspaceRoot:      t.TempDir(),
+		BaseURL:            "http://127.0.0.1:0",
+		APIKey:             "test",
+		Model:              "fake",
+		EnableSubagent:     false,
+		EnableFocusedTasks: true,
+	}
+	pool, err := NewSessionPool(cfg, zerolog.New(io.Discard))
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(pool.Shutdown)
+
+	s, err := pool.GetOrCreate("focused-on")
+	if err != nil {
+		t.Fatal(err)
+	}
+	tool, ok := s.registry.Get(agent.FocusedTaskToolName)
+	if !ok {
+		t.Fatal("run_task should be registered when EnableFocusedTasks is true")
+	}
+	if strings.Contains(string(tool.Schema), `"research"`) {
+		t.Fatalf("research should be filtered out when web is disabled:\n%s", string(tool.Schema))
+	}
+	msgs := s.conv.Snapshot()
+	if len(msgs) == 0 || !strings.Contains(msgs[0].Content, "Focused tasks (run_task):") {
+		t.Fatalf("system prompt should include focused-task guidance, got %+v", msgs)
+	}
+}
+
+func TestSessionPool_FocusedTasksCanBeDisabled(t *testing.T) {
+	cfg := Config{
+		Listen:             "127.0.0.1:0",
+		MaxSessions:        4,
+		SessionIdleTTL:     "5m",
+		WorkspaceRoot:      t.TempDir(),
+		BaseURL:            "http://127.0.0.1:0",
+		APIKey:             "test",
+		Model:              "fake",
+		EnableFocusedTasks: false,
+	}
+	pool, err := NewSessionPool(cfg, zerolog.New(io.Discard))
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(pool.Shutdown)
+
+	s, err := pool.GetOrCreate("focused-off")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, ok := s.registry.Get(agent.FocusedTaskToolName); ok {
+		t.Fatal("run_task should not be registered when EnableFocusedTasks is false")
+	}
+	msgs := s.conv.Snapshot()
+	if len(msgs) > 0 && strings.Contains(msgs[0].Content, "Focused tasks (run_task):") {
+		t.Fatal("system prompt should not include focused-task guidance when disabled")
+	}
+}
+
 func TestSessionPool_MaxSessionsEvictsLRU(t *testing.T) {
 	pool := newTestPool(t, 2, "5m")
 	a, _ := pool.GetOrCreate("a")

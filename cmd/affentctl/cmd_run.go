@@ -5,13 +5,13 @@ import (
 	"encoding/json"
 	"flag"
 	"fmt"
-	"io"
 	"os"
 	"os/signal"
 	"strings"
 	"syscall"
 	"time"
 
+	"github.com/affinefoundation/affent/internal/eventlog"
 	"github.com/affinefoundation/affent/internal/sse"
 	"github.com/rs/zerolog"
 )
@@ -64,7 +64,7 @@ Required: --prompt, --model.`)
 	if b.resumed {
 		b.log.Info().Str("session_id", b.sessionID).Msg("resumed")
 	} else {
-		if err := writeTraceMeta(b.trace); err != nil {
+		if err := b.recorder.WriteMeta(); err != nil {
 			b.log.Error().Err(err).Msg("write trace metadata")
 			return exitRuntime
 		}
@@ -78,7 +78,7 @@ Required: --prompt, --model.`)
 	}
 	b.log.Info().Str("turn_id", turnID).Msg("turn started")
 
-	finalText, exit := drainBatch(ctx, b.loop, b.events, b.trace, b.log, cf.traceSkipDeltas)
+	finalText, exit := drainBatch(ctx, b.loop, b.events, b.recorder, b.log)
 	// When the user routed the trace to stdout (--trace -), printing the
 	// final assistant text on stdout too would interleave plain markdown
 	// into the JSONL stream and break every batch-eval consumer that
@@ -90,12 +90,12 @@ Required: --prompt, --model.`)
 	return exit
 }
 
-// drainBatch is the run-mode drain: writes every event to trace, returns
-// the assistant's last final text and an exit code on turn.end. When
-// skipDeltas is true, thinking.delta and message.delta are observed for
-// state but not written to trace — the final text remains available
-// through message.end. Useful for batch eval where token-level replay
-// has no value but trace size matters.
+// drainBatch is the run-mode drain: records every event via rec,
+// returns the assistant's last final text and an exit code on turn.end.
+// When rec was built with SkipDeltas, thinking.delta and message.delta
+// are still observed for state but not written — the final text remains
+// available through message.done. Useful for batch eval where
+// token-level replay has no value but trace size matters.
 //
 // loop is the active *agent.Loop and may be nil only in unit tests. On
 // SIGINT (ctx.Done) we MUST call Loop.Cancel — the Loop runs its turn on
@@ -103,10 +103,7 @@ Required: --prompt, --model.`)
 // effect on in-flight LLM calls or shell-tool processes. Without the
 // explicit Cancel a `shell exec sleep 60` survives the SIGKILL on
 // affentctl, leaving an orphan in the user's process table.
-func drainBatch(ctx context.Context, loop interface{ Cancel() }, events <-chan sse.Event, trace io.Writer, log zerolog.Logger, skipDeltas bool) (string, int) {
-	enc := json.NewEncoder(trace)
-	enc.SetEscapeHTML(false)
-
+func drainBatch(ctx context.Context, loop interface{ Cancel() }, events <-chan sse.Event, rec *eventlog.Recorder, log zerolog.Logger) (string, int) {
 	var finalText string
 	exit := 0
 	turnEnded := false
@@ -132,12 +129,8 @@ func drainBatch(ctx context.Context, loop interface{ Cancel() }, events <-chan s
 					if !ok {
 						return finalText, 130
 					}
-					writeTrace := !skipDeltas ||
-						(ev.Type != sse.TypeMessageDelta && ev.Type != sse.TypeThinkingDelta)
-					if writeTrace {
-						if err := enc.Encode(ev); err != nil {
-							log.Error().Err(err).Msg("write trace")
-						}
+					if err := rec.Write(ev); err != nil {
+						log.Error().Err(err).Msg("write trace")
 					}
 					if ev.Type == sse.TypeMessageDone {
 						var p sse.MessageDonePayload
@@ -160,12 +153,8 @@ func drainBatch(ctx context.Context, loop interface{ Cancel() }, events <-chan s
 				}
 				return finalText, exit
 			}
-			writeTrace := !skipDeltas ||
-				(ev.Type != sse.TypeMessageDelta && ev.Type != sse.TypeThinkingDelta)
-			if writeTrace {
-				if err := enc.Encode(ev); err != nil {
-					log.Error().Err(err).Msg("write trace")
-				}
+			if err := rec.Write(ev); err != nil {
+				log.Error().Err(err).Msg("write trace")
 			}
 			switch ev.Type {
 			case sse.TypeMessageDone:

@@ -11,6 +11,7 @@ import (
 	"time"
 
 	agent "github.com/affinefoundation/affent/internal/agent"
+	"github.com/affinefoundation/affent/internal/eventlog"
 	"github.com/affinefoundation/affent/internal/executor"
 	"github.com/affinefoundation/affent/internal/sse"
 )
@@ -194,7 +195,7 @@ func TestOpenTrace_FileAppendVsTruncate(t *testing.T) {
 
 func TestWriteTraceMeta(t *testing.T) {
 	var buf bytes.Buffer
-	if err := writeTraceMeta(&buf); err != nil {
+	if err := eventlog.NewRecorder(&buf, eventlog.Options{}).WriteMeta(); err != nil {
 		t.Fatal(err)
 	}
 	var ev sse.Event

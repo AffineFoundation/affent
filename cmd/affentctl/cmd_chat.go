@@ -15,6 +15,7 @@ import (
 	"time"
 
 	agent "github.com/affinefoundation/affent/internal/agent"
+	"github.com/affinefoundation/affent/internal/eventlog"
 	"github.com/affinefoundation/affent/internal/sse"
 )
 
@@ -77,7 +78,7 @@ Slash commands inside the REPL:
 	if b.resumed {
 		fmt.Fprintf(os.Stderr, "resumed session %s (workspace %s)\n", b.sessionID, b.workspace)
 	} else {
-		if err := writeTraceMeta(b.trace); err != nil {
+		if err := b.recorder.WriteMeta(); err != nil {
 			fmt.Fprintf(os.Stderr, "write trace metadata: %v\n", err)
 			return exitRuntime
 		}
@@ -91,9 +92,6 @@ Slash commands inside the REPL:
 	defer stopAll()
 
 	reader := bufio.NewReader(os.Stdin)
-
-	traceEnc := json.NewEncoder(b.trace)
-	traceEnc.SetEscapeHTML(false)
 
 	// onEOF is the post-EOF cleanup: print a newline so the next shell
 	// prompt isn't glued onto our last "> ", then exit 0. We DON'T exit
@@ -145,7 +143,7 @@ Slash commands inside the REPL:
 		}
 		_ = turnID
 
-		inTok, outTok := drainInteractive(turnCtx, b.loop, b.events, traceEnc, cf.traceSkipDeltas)
+		inTok, outTok := drainInteractive(turnCtx, b.loop, b.events, b.recorder)
 		b.inputTokens += inTok
 		b.outputTokens += outTok
 		if inTok > 0 || outTok > 0 {
@@ -156,16 +154,17 @@ Slash commands inside the REPL:
 }
 
 // drainInteractive reads events for one turn, printing assistant text
-// live to stdout, tool activity compactly to stderr. trace gets every
-// event in JSONL — except thinking/message deltas when skipDeltas is on.
-// Returns the per-turn token totals seen on TypeUsage so the REPL's
-// loopBundle can accumulate session-lifetime spend for /usage.
+// live to stdout, tool activity compactly to stderr. rec records every
+// event as JSONL — minus thinking/message deltas when the recorder was
+// built with SkipDeltas. Returns the per-turn token totals seen on
+// TypeUsage so the REPL's loopBundle can accumulate session-lifetime
+// spend for /usage.
 //
 // loop is the active *agent.Loop. On SIGINT (ctx.Done) we MUST call
 // Loop.Cancel — the Loop runs the turn on a detached background ctx
 // so cancelling the parent ctx alone leaves in-flight LLM calls and
 // shell-tool processes alive (e.g. `shell exec sleep 60` orphans).
-func drainInteractive(ctx context.Context, loop interface{ Cancel() }, events <-chan sse.Event, trace *json.Encoder, skipDeltas bool) (inputTokens, outputTokens int) {
+func drainInteractive(ctx context.Context, loop interface{ Cancel() }, events <-chan sse.Event, rec *eventlog.Recorder) (inputTokens, outputTokens int) {
 	const (
 		ansiDim   = "\x1b[2m"
 		ansiReset = "\x1b[0m"
@@ -200,9 +199,7 @@ func drainInteractive(ctx context.Context, loop interface{ Cancel() }, events <-
 					if !ok {
 						return
 					}
-					if !skipDeltas || (ev.Type != sse.TypeMessageDelta && ev.Type != sse.TypeThinkingDelta) {
-						_ = trace.Encode(ev)
-					}
+					_ = rec.Write(ev)
 					if ev.Type == sse.TypeTurnEnd {
 						return
 					}
@@ -214,9 +211,7 @@ func drainInteractive(ctx context.Context, loop interface{ Cancel() }, events <-
 			if !ok {
 				return
 			}
-			if !skipDeltas || (ev.Type != sse.TypeMessageDelta && ev.Type != sse.TypeThinkingDelta) {
-				_ = trace.Encode(ev)
-			}
+			_ = rec.Write(ev)
 			switch ev.Type {
 			case sse.TypeThinkingDelta:
 				if !thinkingShown {

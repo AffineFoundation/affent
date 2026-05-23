@@ -240,6 +240,30 @@ func (p *SessionPool) subagentChildToolRegistrar(workspace string) func(context.
 	}
 }
 
+// focusedTaskWebRegistrar returns the per-call hook that gives a
+// focused-task child the web_fetch (+ optional web_search) tools when
+// the deployment has enabled web globally. nil disables the research
+// profile via FocusedTaskDeps.profileAvailable; the run_task schema
+// drops research from the enum in that case so the model never sees an
+// option it can't fulfill.
+func (p *SessionPool) focusedTaskWebRegistrar() func(context.Context, *agent.Registry) (func(), error) {
+	if !p.cfg.EnableWeb {
+		return nil
+	}
+	return func(ctx context.Context, reg *agent.Registry) (func(), error) {
+		if p.cfg.EnableWebSearch {
+			if err := affentweb.RegisterAll(reg, affentweb.Options{}); err != nil {
+				p.logger.Warn().Err(err).Msg("focused task web_search not available; registering web_fetch only")
+				affentweb.RegisterFetch(reg, affentweb.FetchConfig{})
+			}
+		} else {
+			affentweb.RegisterFetch(reg, affentweb.FetchConfig{})
+		}
+		// Web tools are stateless — no per-call cleanup required.
+		return nil, nil
+	}
+}
+
 // buildSession constructs all per-session affent state. Errors here
 // propagate to the chat-completions caller and abort the request.
 func (p *SessionPool) buildSession(id string) (*Session, error) {
@@ -355,18 +379,18 @@ func (p *SessionPool) buildSession(id string) (*Session, error) {
 			affentweb.RegisterFetch(reg, affentweb.FetchConfig{})
 		}
 	}
+	// Both subagent and focused-task children inherit shell only when
+	// EnableBuiltins is on; read_file / list_files still work via the
+	// host fs path without an executor, so a tool-light child is still
+	// useful for code reading.
+	var childExec executor.Executor
+	if p.cfg.EnableBuiltins {
+		childExec = localExec
+	}
 	if p.cfg.EnableSubagent {
-		// Executor is passed through if EnableBuiltins is also on —
-		// without an Executor the child can't run shell, but
-		// read_file / list_files still work via the host fs path.
-		// A subagent without shell is still useful for code reading.
-		var subagentExec executor.Executor
-		if p.cfg.EnableBuiltins {
-			subagentExec = localExec
-		}
 		agent.RegisterSubagent(reg, agent.SubagentDeps{
 			LLM:                llm,
-			Executor:           subagentExec,
+			Executor:           childExec,
 			HostWorkspaceDir:   workspace,
 			Memory:             memStore,
 			ParentSessionID:    id,
@@ -374,6 +398,20 @@ func (p *SessionPool) buildSession(id string) (*Session, error) {
 			RegisterChildTools: p.subagentChildToolRegistrar(workspace),
 			Log:                p.logger.With().Str("session_id", id).Logger(),
 			MaxDepth:           p.cfg.SubagentMaxDepth,
+		})
+	}
+	if p.cfg.EnableFocusedTasks {
+		agent.RegisterFocusedTasks(reg, agent.FocusedTaskDeps{
+			LLM:              llm,
+			Executor:         childExec,
+			HostWorkspaceDir: workspace,
+			Memory:           memStore,
+			TranscriptDir:    filepath.Join(sessionDir, "focused-tasks", id),
+			Log:              p.logger.With().Str("session_id", id).Logger(),
+			// Research profile needs web tools; we wire the registrar
+			// only when the deployment has opted into web globally, so
+			// availableProfiles() drops research cleanly when it's not.
+			RegisterWebTools: p.focusedTaskWebRegistrar(),
 		})
 	}
 
@@ -463,6 +501,15 @@ func (p *SessionPool) buildSession(id string) (*Session, error) {
 		// guidance marker so a custom prompt that already inlines it
 		// won't get duplicated.
 		systemPrompt = agent.WithSubagentSystemGuidance(systemPrompt)
+	}
+	if p.cfg.EnableFocusedTasks {
+		// Only append focused-task guidance if at least one profile
+		// actually got registered (the deps-driven filter may have
+		// dropped every profile — see RegisterFocusedTasks). Keeps the
+		// prompt aligned with the visible tool surface.
+		if _, ok := reg.Get(agent.FocusedTaskToolName); ok {
+			systemPrompt = agent.WithFocusedTaskSystemGuidance(systemPrompt)
+		}
 	}
 	if p.cfg.EnableBuiltins {
 		// affentserve's per-session workspace is a freshly-allocated

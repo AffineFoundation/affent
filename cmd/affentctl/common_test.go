@@ -711,6 +711,8 @@ func TestNoEnvVarLeaksIntoFlagDefaults(t *testing.T) {
 			want = "true"
 		} else if name == "subagent-max-depth" {
 			want = "2"
+		} else if name == "focused-tasks" {
+			want = "true"
 		}
 		if got != want {
 			t.Errorf("%s default = %q, want %q (env-bound flags must not show env values in --help)", name, got, want)

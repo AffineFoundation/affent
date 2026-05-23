@@ -33,6 +33,7 @@ func TestLoadConfig_File(t *testing.T) {
         "enable_browser": true,
         "enable_memory": false,
         "enable_subagent": false,
+        "enable_focused_tasks": false,
         "subagent_max_depth": 1
     }`), 0o600); err != nil {
 		t.Fatal(err)
@@ -58,6 +59,9 @@ func TestLoadConfig_File(t *testing.T) {
 	}
 	if cfg.EnableSubagent {
 		t.Errorf("EnableSubagent should preserve explicit false")
+	}
+	if cfg.EnableFocusedTasks {
+		t.Errorf("EnableFocusedTasks should preserve explicit false")
 	}
 	if cfg.SubagentMaxDepth != 1 {
 		t.Errorf("SubagentMaxDepth = %d, want 1", cfg.SubagentMaxDepth)
@@ -102,6 +106,9 @@ func TestConfig_Resolve_AppliesDefaults(t *testing.T) {
 	}
 	if !cfg.EnableSubagent {
 		t.Errorf("EnableSubagent should default on")
+	}
+	if !cfg.EnableFocusedTasks {
+		t.Errorf("EnableFocusedTasks should default on")
 	}
 	if cfg.SubagentMaxDepth != agent.DefaultSubagentMaxDepth {
 		t.Errorf("SubagentMaxDepth default = %d", cfg.SubagentMaxDepth)
@@ -208,7 +215,8 @@ func TestConfig_Resolve_PreservesExplicitSubagentAndMemoryFalse(t *testing.T) {
         "base_url": "https://example/v1",
         "model": "demo",
         "enable_memory": false,
-        "enable_subagent": false
+        "enable_subagent": false,
+        "enable_focused_tasks": false
     }`), 0o600); err != nil {
 		t.Fatal(err)
 	}
@@ -224,6 +232,9 @@ func TestConfig_Resolve_PreservesExplicitSubagentAndMemoryFalse(t *testing.T) {
 	}
 	if cfg.EnableSubagent {
 		t.Fatal("explicit enable_subagent:false should survive Resolve")
+	}
+	if cfg.EnableFocusedTasks {
+		t.Fatal("explicit enable_focused_tasks:false should survive Resolve")
 	}
 }
 

@@ -455,16 +455,7 @@ func subagentToolSchema(reg *SubagentModeRegistry, maxDepth int) json.RawMessage
 func runSubagent(ctx context.Context, deps SubagentDeps, mode SubagentMode, task string, maxTurns int) (string, error) {
 	childID := "subagent_" + uuid.NewString()
 	childDepth := deps.childDepth()
-	convPath, cleanup, err := subagentConversationPath(deps.TranscriptDir, childID)
-	if err != nil {
-		return "", err
-	}
-	defer cleanup()
 
-	conv, err := OpenConversationAt(convPath)
-	if err != nil {
-		return "", fmt.Errorf("subagent conversation: %w", err)
-	}
 	reg := buildSubagentRegistry(deps)
 	if deps.RegisterChildTools != nil {
 		childToolsCleanup, err := deps.RegisterChildTools(ctx, reg)
@@ -476,41 +467,34 @@ func runSubagent(ctx context.Context, deps SubagentDeps, mode SubagentMode, task
 		}
 	}
 
-	events := make(chan sse.Event, 128)
-	loop := &Loop{
+	spec := childRunSpec{
+		ChildID:                     childID,
+		LogComponent:                "subagent",
+		TranscriptDir:               deps.TranscriptDir,
 		LLM:                         deps.LLM,
 		Tools:                       reg,
-		Conv:                        conv,
-		Events:                      events,
-		Log:                         deps.Log.With().Str("component", "subagent").Logger(),
-		MaxTurnSteps:                maxTurns,
-		MaxToolCalls:                maxTurns,
+		MaxTurns:                    maxTurns,
 		ToolResultMaxBytesInContext: subagentToolResultBytes,
 		PerCallTimeout:              deps.PerCallTimeout,
-		FinalNoToolsOnMaxTurns:      true,
 		Memory:                      deps.Memory,
 		ProjectContextDir:           deps.ProjectContextDir,
-		SkillProvider:               BuiltinSkillProvider,
+		Log:                         deps.Log,
+		SystemPrompt:                subagentSystemPromptFor(mode),
+		UserPrompt:                  subagentUserPrompt(mode.Name, task, deps.HostWorkspaceDir, maxTurns, childDepth, deps.resolvedMaxDepth()),
 	}
 	if deps.childMayDelegate() {
-		loop.FirstToolPolicy = SubagentFirstToolPolicy()
-		loop.PostToolPolicy = NestedSubagentPostToolPolicy()
+		spec.FirstToolPolicy = SubagentFirstToolPolicy()
+		spec.PostToolPolicy = NestedSubagentPostToolPolicy()
 	}
-	if err := loop.EnsureSystemPrompt(subagentSystemPromptFor(mode)); err != nil {
-		return "", fmt.Errorf("subagent system prompt: %w", err)
-	}
-	turnID, err := loop.SendUser(ctx, subagentUserPrompt(mode.Name, task, deps.HostWorkspaceDir, maxTurns, childDepth, deps.resolvedMaxDepth()))
-	if err != nil {
-		return "", err
-	}
-	report, reason, toolCalls, usage, errMsgs, err := drainSubagent(ctx, events, turnID)
-	if err != nil {
-		loop.Cancel()
-	}
-	if err == nil && reason != sse.TurnEndCompleted && incompleteSubagentReportNeeded(report) {
-		report = incompleteSubagentReport(reason, toolCalls)
+
+	res := runChildLoop(ctx, spec)
+
+	report := res.Report
+	if res.Err == nil && res.TurnEndReason != sse.TurnEndCompleted && incompleteSubagentReportNeeded(report) {
+		report = incompleteSubagentReport(res.TurnEndReason, res.ToolCalls)
 	}
 	report = sanitizeSubagentReportForParent(report)
+
 	resp := subagentResponse{
 		// Report is FIRST so when the parent Loop's
 		// MaxToolResultBytesInContext truncation (8 KiB) clips this
@@ -518,29 +502,29 @@ func runSubagent(ctx context.Context, deps SubagentDeps, mode SubagentMode, task
 		// if tool_calls / metadata tail off. Order matters because
 		// Go's encoding/json preserves struct-field declaration order.
 		Report:         report,
-		OK:             err == nil && reason == sse.TurnEndCompleted,
-		TurnEndReason:  reason,
+		OK:             res.Err == nil && res.TurnEndReason == sse.TurnEndCompleted,
+		TurnEndReason:  res.TurnEndReason,
 		Mode:           mode.Name,
 		ChildSessionID: childID,
 		Depth:          childDepth,
 		MaxDepth:       deps.resolvedMaxDepth(),
-		Usage:          usage,
-		ToolCalls:      toolCalls,
+		Usage:          res.Usage,
+		ToolCalls:      res.ToolCalls,
 	}
-	if err != nil {
-		resp.Error = err.Error()
-	} else if len(errMsgs) > 0 {
+	if res.Err != nil {
+		resp.Error = res.Err.Error()
+	} else if len(res.LoopErrors) > 0 {
 		// LLM-level errors that didn't kill the turn (recoverable
 		// retries that ultimately succeeded, etc.) get surfaced so
 		// the parent can see what the child fought through.
-		resp.LoopErrors = errMsgs
+		resp.LoopErrors = res.LoopErrors
 	}
 	out, merr := json.Marshal(resp)
 	if merr != nil {
 		return "", merr
 	}
-	if err != nil {
-		return string(out), err
+	if res.Err != nil {
+		return string(out), res.Err
 	}
 	return string(out), nil
 }

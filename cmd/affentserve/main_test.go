@@ -48,7 +48,7 @@ func TestParseFlagsAndConfig_CLIBoolCanOverrideFileTrue(t *testing.T) {
 	}
 }
 
-func TestParseFlagsAndConfig_SubagentAndMemoryDefaultOnCanBeDisabled(t *testing.T) {
+func TestParseFlagsAndConfig_DefaultOnToolsCanBeDisabled(t *testing.T) {
 	cfg, err := parseFlagsAndConfig([]string{
 		"--base-url", "https://example/v1",
 		"--model", "demo",
@@ -62,12 +62,16 @@ func TestParseFlagsAndConfig_SubagentAndMemoryDefaultOnCanBeDisabled(t *testing.
 	if !cfg.EnableMemory {
 		t.Fatal("memory should default on")
 	}
+	if !cfg.EnableFocusedTasks {
+		t.Fatal("focused tasks should default on")
+	}
 
 	cfg, err = parseFlagsAndConfig([]string{
 		"--base-url", "https://example/v1",
 		"--model", "demo",
 		"--subagent=false",
 		"--memory=false",
+		"--focused-tasks=false",
 	})
 	if err != nil {
 		t.Fatalf("parseFlagsAndConfig: %v", err)
@@ -77,6 +81,9 @@ func TestParseFlagsAndConfig_SubagentAndMemoryDefaultOnCanBeDisabled(t *testing.
 	}
 	if cfg.EnableMemory {
 		t.Fatal("--memory=false should disable memory")
+	}
+	if cfg.EnableFocusedTasks {
+		t.Fatal("--focused-tasks=false should disable focused tasks")
 	}
 }
 
@@ -103,6 +110,32 @@ func TestParseFlagsAndConfig_SubagentMaxDepth(t *testing.T) {
 	}
 	if cfg.SubagentMaxDepth != 1 {
 		t.Fatalf("cli subagent max depth = %d, want 1", cfg.SubagentMaxDepth)
+	}
+}
+
+func TestParseFlagsAndConfig_FocusedTasksFromEnv(t *testing.T) {
+	t.Setenv("AFFENTSERVE_FOCUSED_TASKS", "false")
+	cfg, err := parseFlagsAndConfig([]string{
+		"--base-url", "https://example/v1",
+		"--model", "demo",
+	})
+	if err != nil {
+		t.Fatalf("parseFlagsAndConfig: %v", err)
+	}
+	if cfg.EnableFocusedTasks {
+		t.Fatal("AFFENTSERVE_FOCUSED_TASKS=false should disable focused tasks")
+	}
+
+	cfg, err = parseFlagsAndConfig([]string{
+		"--base-url", "https://example/v1",
+		"--model", "demo",
+		"--focused-tasks=true",
+	})
+	if err != nil {
+		t.Fatalf("parseFlagsAndConfig cli override: %v", err)
+	}
+	if !cfg.EnableFocusedTasks {
+		t.Fatal("--focused-tasks=true should override AFFENTSERVE_FOCUSED_TASKS=false")
 	}
 }
 

@@ -55,36 +55,37 @@ func parseFlagsAndConfig(argv []string) (Config, error) {
 	fs.SetOutput(os.Stderr)
 
 	var (
-		configPath        = fs.String("config", "", "Path to JSON config file (CLI flags override).")
-		listen            = fs.String("listen", "", "Address to listen on (default 127.0.0.1:7777).")
-		baseURL           = fs.String("base-url", "", "Upstream OpenAI-compatible chat completions URL (env: AFFENTSERVE_BASE_URL).")
-		apiKey            = fs.String("api-key", "", "API key for --base-url (env: AFFENTSERVE_API_KEY).")
-		model             = fs.String("model", "", "Default model id reported by /v1/models and used when a request omits 'model' (env: AFFENTSERVE_MODEL).")
-		authToken         = fs.String("auth-token", "", "Optional bearer token gating the server itself (env: AFFENTSERVE_AUTH_TOKEN).")
-		workspaceRoot     = fs.String("workspace-root", "", "Parent directory for per-session workspaces. Empty creates per-session temp dirs.")
-		maxSessions       = fs.Int("max-sessions", 0, "LRU upper bound on in-memory sessions (default 32).")
-		sessionIdleTTL    = fs.String("session-idle-ttl", "", "Positive duration for how long an idle session stays in the pool before GC (default 10m).")
-		sessionRetention  = fs.String("session-retention", "", "How long durable session dirs (conv log + memory) live on disk after last activity. Empty disables — dirs live until explicit DELETE. Set to a Go duration like '720h' (30d) to enable background GC.")
-		maxTurnSteps      = fs.Int("max-turn-steps", 0, "Per-turn step cap (assistant↔tool round trips). 0 = agent runtime's default.")
-		perCallTimeout    = fs.String("per-call-timeout", "", "Per-LLM-call timeout as a Go duration string (default 3m). Bump for reasoning models that may think for several minutes per call.")
-		maxRetries        = fs.Int("max-transient-retries", 0, "Retry budget for transient LLM failures (5xx/429/408/net/EOF/timeout). 0 = agent runtime's default (3); negative disables retries (use when the upstream provider already handles retries and you want a single attempt).")
-		retryBackoff      = fs.String("retry-backoff", "", "Initial backoff between transient-error retries (default 4s); each subsequent attempt doubles it. Go duration string.")
-		compactTrigger    = fs.Int("compact-trigger", 0, "Rolling-summary compactor's message threshold per session. 0 = agent runtime's default (240). Lower on small-context upstream models to compact earlier.")
-		compactKeepLast   = fs.Int("compact-keep-last", 0, "Messages preserved verbatim at the tail of the conversation when compacting. 0 = agent runtime's default (10).")
-		enableBrowser     = fs.Bool("browser", false, "Register the extras/browser tool family for each new session.")
-		enableWeb         = fs.Bool("web", false, "Register extras/web's web_fetch tool.")
-		enableWebSearch   = fs.Bool("web-search", false, "Register web_search alongside web_fetch (requires TAVILY_API_KEY by default).")
-		enableMemory      = fs.Bool("memory", true, "Register agent runtime's memory tool.")
-		enableBuiltins    = fs.Bool("builtins", false, "Register shell + file builtins (LocalExecutor). DANGEROUS on a shared host — only enable in a sandboxed environment.")
-		enableSubagent    = fs.Bool("subagent", true, "Register the subagent_run tool — a bounded isolated Loop with read-only inspection tools. Doesn't require --builtins but inherits the shell tool when --builtins is also on.")
-		subagentMaxDepth  = fs.Int("subagent-max-depth", agent.DefaultSubagentMaxDepth, "Maximum recursive subagent depth; 1 disables nested subagents, hard max 4. Env: AFFENTSERVE_SUBAGENT_MAX_DEPTH.")
-		browserCacheDir   = fs.String("browser-cache-dir", "", "Enable an on-disk response cache for browser sessions; empty disables caching.")
-		browserCacheTTL   = fs.String("browser-cache-ttl", "", "Cache TTL when --browser-cache-dir is set ('24h' default; '0s' disables expiry).")
-		browserCacheSweep = fs.String("browser-cache-sweep-interval", "", "How often cache GC deletes expired files when --browser-cache-dir is set (default = TTL/8, min 5m; explicit values must be >=5m).")
-		browserNoStealth  = fs.Bool("browser-no-stealth", false, "Disable the webdriver-detection bypass script. Default off (stealth on).")
-		browserAllowAll   = fs.Bool("browser-allow-all-domains", false, "Allow third-party / tracker domains the default list normally blocks.")
-		browserScreenshot = fs.Bool("browser-screenshot", false, "Register the browser_screenshot tool. Off by default — base64 image payloads bloat tool result events; flip on for vision-capable models.")
-		systemPrompt      = fs.String("system-prompt", "", "Override agent.DefaultSystemPrompt. '-' reads from stdin, '@FILE' from a file, anything else is literal.")
+		configPath         = fs.String("config", "", "Path to JSON config file (CLI flags override).")
+		listen             = fs.String("listen", "", "Address to listen on (default 127.0.0.1:7777).")
+		baseURL            = fs.String("base-url", "", "Upstream OpenAI-compatible chat completions URL (env: AFFENTSERVE_BASE_URL).")
+		apiKey             = fs.String("api-key", "", "API key for --base-url (env: AFFENTSERVE_API_KEY).")
+		model              = fs.String("model", "", "Default model id reported by /v1/models and used when a request omits 'model' (env: AFFENTSERVE_MODEL).")
+		authToken          = fs.String("auth-token", "", "Optional bearer token gating the server itself (env: AFFENTSERVE_AUTH_TOKEN).")
+		workspaceRoot      = fs.String("workspace-root", "", "Parent directory for per-session workspaces. Empty creates per-session temp dirs.")
+		maxSessions        = fs.Int("max-sessions", 0, "LRU upper bound on in-memory sessions (default 32).")
+		sessionIdleTTL     = fs.String("session-idle-ttl", "", "Positive duration for how long an idle session stays in the pool before GC (default 10m).")
+		sessionRetention   = fs.String("session-retention", "", "How long durable session dirs (conv log + memory) live on disk after last activity. Empty disables — dirs live until explicit DELETE. Set to a Go duration like '720h' (30d) to enable background GC.")
+		maxTurnSteps       = fs.Int("max-turn-steps", 0, "Per-turn step cap (assistant↔tool round trips). 0 = agent runtime's default.")
+		perCallTimeout     = fs.String("per-call-timeout", "", "Per-LLM-call timeout as a Go duration string (default 3m). Bump for reasoning models that may think for several minutes per call.")
+		maxRetries         = fs.Int("max-transient-retries", 0, "Retry budget for transient LLM failures (5xx/429/408/net/EOF/timeout). 0 = agent runtime's default (3); negative disables retries (use when the upstream provider already handles retries and you want a single attempt).")
+		retryBackoff       = fs.String("retry-backoff", "", "Initial backoff between transient-error retries (default 4s); each subsequent attempt doubles it. Go duration string.")
+		compactTrigger     = fs.Int("compact-trigger", 0, "Rolling-summary compactor's message threshold per session. 0 = agent runtime's default (240). Lower on small-context upstream models to compact earlier.")
+		compactKeepLast    = fs.Int("compact-keep-last", 0, "Messages preserved verbatim at the tail of the conversation when compacting. 0 = agent runtime's default (10).")
+		enableBrowser      = fs.Bool("browser", false, "Register the extras/browser tool family for each new session.")
+		enableWeb          = fs.Bool("web", false, "Register extras/web's web_fetch tool.")
+		enableWebSearch    = fs.Bool("web-search", false, "Register web_search alongside web_fetch (requires TAVILY_API_KEY by default).")
+		enableMemory       = fs.Bool("memory", true, "Register agent runtime's memory tool.")
+		enableBuiltins     = fs.Bool("builtins", false, "Register shell + file builtins (LocalExecutor). DANGEROUS on a shared host — only enable in a sandboxed environment.")
+		enableSubagent     = fs.Bool("subagent", true, "Register the subagent_run tool — a bounded isolated Loop with read-only inspection tools. Doesn't require --builtins but inherits the shell tool when --builtins is also on.")
+		subagentMaxDepth   = fs.Int("subagent-max-depth", agent.DefaultSubagentMaxDepth, "Maximum recursive subagent depth; 1 disables nested subagents, hard max 4. Env: AFFENTSERVE_SUBAGENT_MAX_DEPTH.")
+		enableFocusedTasks = fs.Bool("focused-tasks", true, "Register the run_task tool — bounded focused tasks (recall/explore/research/verify/review) with a per-kind tool whitelist and structured JSON output. Independent of --subagent. Env: AFFENTSERVE_FOCUSED_TASKS.")
+		browserCacheDir    = fs.String("browser-cache-dir", "", "Enable an on-disk response cache for browser sessions; empty disables caching.")
+		browserCacheTTL    = fs.String("browser-cache-ttl", "", "Cache TTL when --browser-cache-dir is set ('24h' default; '0s' disables expiry).")
+		browserCacheSweep  = fs.String("browser-cache-sweep-interval", "", "How often cache GC deletes expired files when --browser-cache-dir is set (default = TTL/8, min 5m; explicit values must be >=5m).")
+		browserNoStealth   = fs.Bool("browser-no-stealth", false, "Disable the webdriver-detection bypass script. Default off (stealth on).")
+		browserAllowAll    = fs.Bool("browser-allow-all-domains", false, "Allow third-party / tracker domains the default list normally blocks.")
+		browserScreenshot  = fs.Bool("browser-screenshot", false, "Register the browser_screenshot tool. Off by default — base64 image payloads bloat tool result events; flip on for vision-capable models.")
+		systemPrompt       = fs.String("system-prompt", "", "Override agent.DefaultSystemPrompt. '-' reads from stdin, '@FILE' from a file, anything else is literal.")
 		// Sampling pass-through. Strings (not Float64Var / Int) so an
 		// unset flag is distinguishable from --temperature=0 — that
 		// distinction matters for evals where temperature=0 is the
@@ -187,6 +188,10 @@ func parseFlagsAndConfig(argv []string) (Config, error) {
 	if setFlags["subagent-max-depth"] {
 		cfg.subagentMaxDepthSet = true
 		cfg.SubagentMaxDepth = *subagentMaxDepth
+	}
+	if setFlags["focused-tasks"] {
+		cfg.enableFocusedTasksSet = true
+		cfg.EnableFocusedTasks = *enableFocusedTasks
 	}
 	if *browserCacheDir != "" {
 		cfg.BrowserCacheDir = *browserCacheDir
@@ -306,6 +311,7 @@ func run(cfg Config, logger zerolog.Logger) error {
 		Bool("builtins", cfg.EnableBuiltins).
 		Bool("subagent", cfg.EnableSubagent).
 		Int("subagent_max_depth", cfg.SubagentMaxDepth).
+		Bool("focused_tasks", cfg.EnableFocusedTasks).
 		Bool("memory", cfg.EnableMemory).
 		Bool("browser", cfg.EnableBrowser).
 		Bool("web", cfg.EnableWeb).

@@ -176,6 +176,15 @@ type Config struct {
 	SubagentMaxDepth    int `json:"subagent_max_depth"`
 	subagentMaxDepthSet bool
 
+	// EnableFocusedTasks registers the run_task tool — bounded focused
+	// tasks (recall / explore / research / verify / review) with a
+	// per-kind tool whitelist and structured JSON output. Independent
+	// of EnableSubagent: a deployment can run focused tasks without
+	// exposing the free-form subagent_run surface, and vice versa.
+	// On by default.
+	EnableFocusedTasks    bool `json:"enable_focused_tasks"`
+	enableFocusedTasksSet bool
+
 	// BrowserScreenshot registers the browser_screenshot tool. Off by
 	// default because the base64 image payload bloats tool result events
 	// and text-only models can't act on it. Vision-capable callers
@@ -221,10 +230,11 @@ func LoadConfig(path string) (Config, error) {
 		return cfg, fmt.Errorf("parse config %s: %w", path, err)
 	}
 	var raw struct {
-		MaxSessions      *int  `json:"max_sessions"`
-		EnableMemory     *bool `json:"enable_memory"`
-		EnableSubagent   *bool `json:"enable_subagent"`
-		SubagentMaxDepth *int  `json:"subagent_max_depth"`
+		MaxSessions        *int  `json:"max_sessions"`
+		EnableMemory       *bool `json:"enable_memory"`
+		EnableSubagent     *bool `json:"enable_subagent"`
+		SubagentMaxDepth   *int  `json:"subagent_max_depth"`
+		EnableFocusedTasks *bool `json:"enable_focused_tasks"`
 	}
 	if err := json.Unmarshal(data, &raw); err != nil {
 		return cfg, fmt.Errorf("parse config %s: %w", path, err)
@@ -233,6 +243,7 @@ func LoadConfig(path string) (Config, error) {
 	cfg.enableMemorySet = raw.EnableMemory != nil
 	cfg.enableSubagentSet = raw.EnableSubagent != nil
 	cfg.subagentMaxDepthSet = raw.SubagentMaxDepth != nil
+	cfg.enableFocusedTasksSet = raw.EnableFocusedTasks != nil
 	return cfg, nil
 }
 
@@ -279,6 +290,9 @@ func (c *Config) Resolve() error {
 	if !c.subagentMaxDepthSet && c.SubagentMaxDepth <= 0 {
 		c.SubagentMaxDepth = agent.DefaultSubagentMaxDepth
 	}
+	if !c.enableFocusedTasksSet {
+		c.EnableFocusedTasks = true
+	}
 	for _, e := range []struct {
 		env  string
 		dest *string
@@ -301,6 +315,7 @@ func (c *Config) Resolve() error {
 	}{
 		{"AFFENTSERVE_MEMORY", &c.EnableMemory},
 		{"AFFENTSERVE_SUBAGENT", &c.EnableSubagent},
+		{"AFFENTSERVE_FOCUSED_TASKS", &c.EnableFocusedTasks},
 	} {
 		if v := os.Getenv(e.env); v != "" {
 			b, err := strconv.ParseBool(v)
