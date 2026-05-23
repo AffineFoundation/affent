@@ -324,6 +324,35 @@ func TestRegisterServerRejectsInvalidToolFilters(t *testing.T) {
 	}
 }
 
+func TestRegisterServerRejectsNoUsableTools(t *testing.T) {
+	for _, tc := range []struct {
+		name  string
+		tools []ToolDescriptor
+		spec  ServerSpec
+	}{
+		{name: "server exports none", tools: nil},
+		{name: "deny filters all", tools: []ToolDescriptor{{Name: "search"}}, spec: ServerSpec{ToolDenylist: []string{"search"}}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			fake := newFakeRegisterMCP(t, tc.tools)
+			reg := agent.NewRegistry()
+			spec := tc.spec
+			spec.Name = "maps"
+			spec.URL = fake.srv.URL
+			client, names, err := RegisterServer(context.Background(), reg, spec, zerolog.Nop())
+			if err == nil || !strings.Contains(err.Error(), "exposes no usable tools") {
+				t.Fatalf("RegisterServer error = %v, want no-usable-tools error", err)
+			}
+			if client != nil || names != nil {
+				t.Fatalf("client=%v names=%v, want nils on no-usable-tools failure", client, names)
+			}
+			if len(reg.Defs()) != 0 {
+				t.Fatalf("no-usable-tools failure should not register tools: %+v", reg.Defs())
+			}
+		})
+	}
+}
+
 func TestRegisterServerRejectsInvalidInputSchemas(t *testing.T) {
 	cases := []struct {
 		name   string

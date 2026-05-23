@@ -50,6 +50,10 @@ func registerServer(ctx context.Context, reg *agent.Registry, spec ServerSpec, l
 		_ = c.Close()
 		return nil, nil, err
 	}
+	if len(tools) == 0 {
+		_ = c.Close()
+		return nil, nil, fmt.Errorf("mcp server %s exposes no usable tools after allow_tools/deny_tools filtering", spec.Name)
+	}
 	names := make([]string, 0, len(tools))
 	for _, t := range tools {
 		if strings.TrimSpace(t.Name) == "" {

@@ -404,7 +404,9 @@ to `30s`; raise it only for slow stdio servers that need extra cold-start time.
 Use `allow_tools` or `deny_tools` with raw MCP tool names when a server exposes
 more tools than the current workflow should show the model. Empty, duplicate,
 overlapping, or unknown filter entries are rejected so a misspelled tool filter
-does not silently widen the tool surface.
+does not silently widen the tool surface. Affent also rejects a server that
+would expose zero usable tools after filtering; remove that server from the MCP
+config instead of keeping a no-op entry.
 With the default namespace behavior, a server tool such as `poi_search` is
 advertised to the model as `AMap_poi_search`. For models fine-tuned around raw
 MCP tool names, set `"namespace": false` on that server. When prefixes are
