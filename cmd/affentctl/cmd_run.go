@@ -27,7 +27,7 @@ func runCmd(args []string) int {
 	cf.bind(fs)
 	promptFlag := fs.String("prompt", "", "user prompt; '-' for stdin, '@file', or literal")
 	planOnly := fs.Bool("plan-only", false, "create or update the persisted task plan and stop before executing tools")
-	executePlan := fs.Bool("execute-plan", false, "execute the current session's persisted plan after user confirmation; requires an unfinished non-blocked plan")
+	executePlan := fs.Bool("execute-plan", false, "execute the selected session's persisted plan after user confirmation; requires --session-id or --continue and an unfinished non-blocked plan")
 	fs.Usage = func() {
 		fmt.Fprintln(os.Stderr, `usage: affentctl run [flags]
 
@@ -41,12 +41,12 @@ Required: --model. --prompt is required unless --execute-plan is set.`)
 	if err := fs.Parse(args); err != nil {
 		return exitUsage
 	}
-	if *planOnly && *executePlan {
-		fmt.Fprintln(os.Stderr, "--plan-only and --execute-plan cannot be used together")
-		return exitUsage
-	}
 	if err := applyConfig(&cf, fs); err != nil {
 		fmt.Fprintf(os.Stderr, "config: %v\n", err)
+		return exitUsage
+	}
+	if err := validateRunModeFlags(cf, *planOnly, *executePlan); err != nil {
+		fmt.Fprintln(os.Stderr, err)
 		return exitUsage
 	}
 
@@ -129,6 +129,16 @@ func enableRunPlanOnly(b *loopBundle) error {
 	b.loop.FirstToolPolicy = agent.PlanFirstToolPolicy()
 	b.loop.MaxToolCalls = runPlanOnlyMaxToolCalls
 	b.loop.FinalNoToolsOnMaxTurns = true
+	return nil
+}
+
+func validateRunModeFlags(c commonFlags, planOnly, executePlan bool) error {
+	if planOnly && executePlan {
+		return fmt.Errorf("--plan-only and --execute-plan cannot be used together")
+	}
+	if executePlan && strings.TrimSpace(c.sessionID) == "" && !c.continueLast {
+		return fmt.Errorf("--execute-plan requires --session-id or --continue so execution resumes the confirmed plan session")
+	}
 	return nil
 }
 

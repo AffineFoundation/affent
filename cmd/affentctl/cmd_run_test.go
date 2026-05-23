@@ -56,6 +56,37 @@ func TestEnableRunPlanOnlyRequiresPlanTool(t *testing.T) {
 	}
 }
 
+func TestValidateRunModeFlags(t *testing.T) {
+	for _, tc := range []struct {
+		name        string
+		flags       commonFlags
+		planOnly    bool
+		executePlan bool
+		wantErr     string
+	}{
+		{name: "normal run", flags: commonFlags{}, wantErr: ""},
+		{name: "plan only", flags: commonFlags{}, planOnly: true, wantErr: ""},
+		{name: "execute explicit session", flags: commonFlags{sessionID: "planned"}, executePlan: true, wantErr: ""},
+		{name: "execute continue", flags: commonFlags{continueLast: true}, executePlan: true, wantErr: ""},
+		{name: "conflict", flags: commonFlags{sessionID: "planned"}, planOnly: true, executePlan: true, wantErr: "cannot be used together"},
+		{name: "execute needs selected session", flags: commonFlags{}, executePlan: true, wantErr: "requires --session-id or --continue"},
+		{name: "blank session id still needs selection", flags: commonFlags{sessionID: " \t "}, executePlan: true, wantErr: "requires --session-id or --continue"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			err := validateRunModeFlags(tc.flags, tc.planOnly, tc.executePlan)
+			if tc.wantErr == "" {
+				if err != nil {
+					t.Fatalf("validateRunModeFlags error = %v, want nil", err)
+				}
+				return
+			}
+			if err == nil || !strings.Contains(err.Error(), tc.wantErr) {
+				t.Fatalf("validateRunModeFlags error = %v, want %q", err, tc.wantErr)
+			}
+		})
+	}
+}
+
 func TestPrepareRunExecutePlanUsesPersistedUnfinishedPlan(t *testing.T) {
 	workspace := t.TempDir()
 	convDir := filepath.Join(workspace, ".affentctl")
