@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"strings"
 	"testing"
+	"time"
 )
 
 // TestNormalizeID_AllJSONNumericForms pins the four JSON-id encodings
@@ -40,6 +41,18 @@ func TestNormalizeID_AllJSONNumericForms(t *testing.T) {
 				t.Errorf("normalizeID(%v) = (%d, %v), want (%d, %v)", c.in, got, ok, c.want, c.ok)
 			}
 		})
+	}
+}
+
+func TestResolveInitTimeout(t *testing.T) {
+	if got := resolveInitTimeout(ServerSpec{}); got != DefaultInitTimeout {
+		t.Fatalf("default init timeout = %s, want %s", got, DefaultInitTimeout)
+	}
+	if got := resolveInitTimeout(ServerSpec{InitTimeout: -time.Second}); got != DefaultInitTimeout {
+		t.Fatalf("negative init timeout = %s, want default %s", got, DefaultInitTimeout)
+	}
+	if got := resolveInitTimeout(ServerSpec{InitTimeout: 250 * time.Millisecond}); got != 250*time.Millisecond {
+		t.Fatalf("custom init timeout = %s, want 250ms", got)
 	}
 }
 

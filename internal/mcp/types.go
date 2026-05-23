@@ -1,24 +1,41 @@
-// Package mcp is a minimal Model Context Protocol client. It speaks
-// stdio JSON-RPC to one MCP server process and exposes the server's
+// Package mcp is a minimal Model Context Protocol client. It supports
+// stdio and streamable-http transports and exposes the server's
 // tools/* surface as agent.Tool entries.
 //
 // What's implemented:
 //
 //   - stdio transport (newline-delimited JSON-RPC 2.0)
+//   - streamable-http transport (POST + SSE, spec rev 2025-03-26)
 //   - initialize / initialized handshake
 //   - tools/list, tools/call
 //   - graceful shutdown via Close
 //
-// What's not (and probably doesn't need to be for v0):
+// What's not (and probably doesn't need to be yet):
 //
 //   - resources/*, prompts/*, sampling (server -> client requests)
-//   - HTTP/SSE transport
 //   - progress / cancellation notifications
 //
 // The MCP spec lives at https://spec.modelcontextprotocol.io.
 package mcp
 
-import "encoding/json"
+import (
+	"encoding/json"
+	"time"
+)
+
+const (
+	// ProtocolVersion is the MCP protocol revision the client advertises
+	// during the initialize handshake. Servers that support an older or
+	// newer revision usually negotiate down; if a server is strict we'll
+	// discover that early and can bump.
+	ProtocolVersion = "2025-06-18"
+
+	// DefaultInitTimeout caps how long the client waits for the
+	// initialize handshake to complete. stdio cold-starts (npx fetch)
+	// can hit several seconds; http handshakes are usually sub-second.
+	// Override per-server via ServerSpec.InitTimeout.
+	DefaultInitTimeout = 30 * time.Second
+)
 
 // ServerSpec describes how to reach a single MCP server. Two transports
 // are supported:
@@ -69,6 +86,12 @@ type ServerSpec struct {
 	// Headers are extra HTTP headers sent on every request. Useful for
 	// auth tokens, version pinning, etc.
 	Headers map[string]string `json:"headers,omitempty"`
+
+	// --- shared ---
+
+	// InitTimeout caps how long the client waits for the server's
+	// initialize handshake. Zero falls back to DefaultInitTimeout.
+	InitTimeout time.Duration `json:"-"`
 }
 
 // ToolDescriptor is one tool returned by tools/list.

@@ -46,15 +46,20 @@ func Start(ctx context.Context, spec ServerSpec, log zerolog.Logger) (*Client, e
 	}
 	go c.readLoop()
 
-	// 30s is generous: stdio cold-start (npx fetch) can hit several
-	// seconds, http handshakes are usually sub-second.
-	initCtx, cancel := context.WithTimeout(ctx, 30*time.Second)
+	initCtx, cancel := context.WithTimeout(ctx, resolveInitTimeout(spec))
 	defer cancel()
 	if err := c.initialize(initCtx); err != nil {
 		_ = c.Close()
 		return nil, fmt.Errorf("initialize %s: %w", spec.Name, err)
 	}
 	return c, nil
+}
+
+func resolveInitTimeout(spec ServerSpec) time.Duration {
+	if spec.InitTimeout > 0 {
+		return spec.InitTimeout
+	}
+	return DefaultInitTimeout
 }
 
 // Close terminates the transport and rejects any in-flight calls.
@@ -119,10 +124,7 @@ func (c *Client) CallTool(ctx context.Context, name string, args json.RawMessage
 // request, server replies, client sends `notifications/initialized`.
 func (c *Client) initialize(ctx context.Context) error {
 	params, _ := json.Marshal(initializeParams{
-		// Picking a recent published protocol version. Servers that
-		// support an older or newer one usually negotiate down without
-		// erroring; if a server is strict we'll find out and bump.
-		ProtocolVersion: "2025-06-18",
+		ProtocolVersion: ProtocolVersion,
 		Capabilities:    map[string]any{},
 		ClientInfo: clientInfo{
 			Name:    "affent",

@@ -52,7 +52,7 @@ func fakeMCPServer(t *testing.T) *httptest.Server {
 		switch req.Method {
 		case "initialize":
 			result := map[string]any{
-				"protocolVersion": "2025-06-18",
+				"protocolVersion": ProtocolVersion,
 				"serverInfo":      map[string]string{"name": "fake-server", "version": "0.1"},
 				"capabilities":    map[string]any{},
 			}

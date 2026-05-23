@@ -35,7 +35,7 @@ func newFakeRegisterMCP(t *testing.T, tools []ToolDescriptor) *fakeRegisterMCP {
 		switch req.Method {
 		case "initialize":
 			f.writeResult(w, req.ID, initializeResult{
-				ProtocolVersion: "2025-06-18",
+				ProtocolVersion: ProtocolVersion,
 				Capabilities:    map[string]any{},
 				ServerInfo:      serverInfo{Name: "fake", Version: "test"},
 			})
