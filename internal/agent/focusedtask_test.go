@@ -364,6 +364,9 @@ func TestFocusedTaskPolicies(t *testing.T) {
 	if explicitFocusedTaskRequested("focused task work is not finished yet") {
 		t.Fatal("plain product discussion should not trigger first-tool policy")
 	}
+	if explicitFocusedTaskRequested("focused-task feature work is not finished yet") {
+		t.Fatal("hyphenated product discussion should not trigger first-tool policy")
+	}
 	if explicitFocusedTaskRequested("Workspace: /tmp/focused-task-work\nObjective: inspect docs") {
 		t.Fatal("workspace/path-bearing child prompts should not trigger first-tool policy")
 	}
