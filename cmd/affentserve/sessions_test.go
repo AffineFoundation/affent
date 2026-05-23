@@ -229,6 +229,24 @@ func TestSessionPool_allocSessionDir_OutsideWorkspace(t *testing.T) {
 	}
 }
 
+func TestSessionPool_allocSessionDirRejectsSymlinkLeaf(t *testing.T) {
+	memRoot := t.TempDir()
+	pool := newPoolWithMemoryRoot(t, memRoot)
+	outside := t.TempDir()
+	if err := os.Symlink(outside, filepath.Join(memRoot, "linked")); err != nil {
+		t.Skipf("symlink unavailable: %v", err)
+	}
+
+	if _, err := pool.allocSessionDir("linked"); err == nil || !strings.Contains(err.Error(), "symlink") {
+		t.Fatalf("allocSessionDir symlink error = %v, want symlink", err)
+	}
+	if entries, err := os.ReadDir(outside); err != nil {
+		t.Fatal(err)
+	} else if len(entries) != 0 {
+		t.Fatalf("outside target should not be populated, got %v", entries)
+	}
+}
+
 // TestSessionPool_UserMemoryIsolatedPerSession pins that target=user
 // writes from one session_id do NOT leak into another session_id's
 // snapshot. The library default (~/.config/affent/USER.md) is correct
@@ -772,6 +790,48 @@ func TestSessionPool_RetentionSweep(t *testing.T) {
 	}
 	if _, err := os.Stat(filepath.Join(memRoot, "stale-active")); err != nil {
 		t.Errorf("stale-active dir must be kept (session in pool overrides disk staleness): %v", err)
+	}
+}
+
+func TestSessionPool_RetentionSweepIgnoresSymlinkConversationMtime(t *testing.T) {
+	memRoot := t.TempDir()
+	dir := filepath.Join(memRoot, "linked-conversation")
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	outside := filepath.Join(t.TempDir(), "outside.jsonl")
+	if err := os.WriteFile(outside, []byte("[]\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	old := time.Now().Add(-7 * 24 * time.Hour)
+	if err := os.Chtimes(outside, old, old); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink(outside, filepath.Join(dir, "conversation.jsonl")); err != nil {
+		t.Skipf("symlink unavailable: %v", err)
+	}
+
+	cfg := Config{
+		Listen:           "127.0.0.1:0",
+		MaxSessions:      4,
+		SessionIdleTTL:   "5m",
+		SessionRetention: "24h",
+		WorkspaceRoot:    t.TempDir(),
+		MemoryRoot:       memRoot,
+		BaseURL:          "http://127.0.0.1:0",
+		APIKey:           "test",
+		Model:            "fake",
+	}
+	pool, err := NewSessionPool(cfg, zerolog.New(io.Discard))
+	if err != nil {
+		t.Fatalf("NewSessionPool: %v", err)
+	}
+	t.Cleanup(pool.Shutdown)
+
+	pool.sweepRetentionOnce()
+
+	if _, err := os.Lstat(dir); err != nil {
+		t.Fatalf("session dir with symlink conversation should be kept by fresh dir mtime: %v", err)
 	}
 }
 

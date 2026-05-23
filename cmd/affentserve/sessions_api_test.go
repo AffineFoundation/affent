@@ -305,6 +305,29 @@ func TestSummarizeDurableSessionIgnoresSymlinkConversation(t *testing.T) {
 	}
 }
 
+func TestSummarizeDurableSessionIgnoresSymlinkSessionDir(t *testing.T) {
+	memRoot := t.TempDir()
+	pool := newPoolWithMemoryRoot(t, memRoot)
+	outside := t.TempDir()
+	if err := os.WriteFile(filepath.Join(outside, "conversation.jsonl"), []byte(`{"role":"user","content":"outside"}`+"\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink(outside, pool.sessionDirPath("link-dir")); err != nil {
+		t.Skipf("symlink unavailable: %v", err)
+	}
+
+	summary, found, err := summarizeDurableSession(pool, "link-dir")
+	if err != nil {
+		t.Fatalf("summarizeDurableSession: %v", err)
+	}
+	if found || summary.ID != "" {
+		t.Fatalf("symlink session dir should not be durable: found=%v summary=%+v", found, summary)
+	}
+	if sessionKnown(pool, "link-dir") {
+		t.Fatal("sessionKnown must not follow symlink session dirs")
+	}
+}
+
 func TestSummarizeDurableSessionIgnoresSymlinkDurableStateMarkers(t *testing.T) {
 	memRoot := t.TempDir()
 	pool := newPoolWithMemoryRoot(t, memRoot)

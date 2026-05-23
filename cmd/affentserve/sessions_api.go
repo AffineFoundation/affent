@@ -330,8 +330,8 @@ func sessionKnown(pool *SessionPool, id string) bool {
 	if activeSessionByID(pool, id) != nil {
 		return true
 	}
-	info, err := os.Stat(pool.sessionDirPath(id))
-	return err == nil && info.IsDir()
+	_, found, err := durableSessionDirInfo(pool.sessionDirPath(id))
+	return err == nil && found
 }
 
 func activeSessionByID(pool *SessionPool, id string) *Session {
@@ -401,14 +401,11 @@ func summarizeActiveCapabilities(s *Session, cfg Config) sessionCapabilities {
 
 func summarizeDurableSession(pool *SessionPool, id string) (sessionSummary, bool, error) {
 	dir := pool.sessionDirPath(id)
-	info, err := os.Stat(dir)
+	info, found, err := durableSessionDirInfo(dir)
 	if err != nil {
-		if errors.Is(err, os.ErrNotExist) {
-			return sessionSummary{}, false, nil
-		}
 		return sessionSummary{}, false, err
 	}
-	if !info.IsDir() {
+	if !found {
 		return sessionSummary{}, false, nil
 	}
 	summary := sessionSummary{
@@ -503,6 +500,20 @@ func mergeSessionSummaries(a, b sessionSummary) sessionSummary {
 		a.Capabilities = b.Capabilities
 	}
 	return a
+}
+
+func durableSessionDirInfo(path string) (os.FileInfo, bool, error) {
+	fi, err := os.Lstat(path)
+	if err != nil {
+		if errors.Is(err, os.ErrNotExist) {
+			return nil, false, nil
+		}
+		return nil, false, err
+	}
+	if !fi.IsDir() || fi.Mode()&os.ModeSymlink != 0 {
+		return nil, false, nil
+	}
+	return fi, true, nil
 }
 
 func durableRegularFileModTime(path string) (bool, time.Time, error) {

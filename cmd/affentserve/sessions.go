@@ -642,8 +642,23 @@ func (p *SessionPool) sessionRootPath() string {
 // buildSession enforces this at the top.
 func (p *SessionPool) allocSessionDir(id string) (string, error) {
 	dir := p.sessionDirPath(id)
+	if _, found, err := durableSessionDirInfo(dir); err != nil {
+		return "", err
+	} else if found {
+		return dir, nil
+	}
+	if fi, err := os.Lstat(dir); err == nil && fi.Mode()&os.ModeSymlink != 0 {
+		return "", fmt.Errorf("session dir must not be a symlink: %s", dir)
+	} else if err != nil && !os.IsNotExist(err) {
+		return "", err
+	}
 	if err := os.MkdirAll(dir, 0o755); err != nil {
 		return "", err
+	}
+	if fi, err := os.Lstat(dir); err != nil {
+		return "", err
+	} else if !fi.IsDir() || fi.Mode()&os.ModeSymlink != 0 {
+		return "", fmt.Errorf("session dir is not a directory: %s", dir)
 	}
 	return dir, nil
 }
@@ -944,9 +959,11 @@ func (p *SessionPool) sweepRetentionOnce() {
 			// every dir on every sweep, including the fresh ones we'll
 			// skip immediately.
 			var mtime time.Time
-			if fi, err := os.Stat(filepath.Join(dir, "conversation.jsonl")); err == nil {
-				mtime = fi.ModTime()
-			} else if fi, err := os.Stat(dir); err == nil {
+			if exists, mod, err := durableRegularFileModTime(filepath.Join(dir, "conversation.jsonl")); err != nil {
+				continue
+			} else if exists {
+				mtime = mod
+			} else if fi, found, err := durableSessionDirInfo(dir); err == nil && found {
 				// Conversation log missing (memory-only setup / half-built
 				// session) — fall back to the dir's own mtime.
 				mtime = fi.ModTime()
