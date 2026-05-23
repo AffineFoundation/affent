@@ -117,13 +117,9 @@ func NewSessionPool(cfg Config, logger zerolog.Logger) (*SessionPool, error) {
 		retention: retention,
 	}
 	if cfg.BrowserCacheDir != "" {
-		cacheTTL := 24 * time.Hour
-		if cfg.BrowserCacheTTL != "" {
-			parsed, err := time.ParseDuration(cfg.BrowserCacheTTL)
-			if err != nil {
-				return nil, fmt.Errorf("parse browser_cache_ttl=%q: %w", cfg.BrowserCacheTTL, err)
-			}
-			cacheTTL = parsed
+		cacheTTL, err := cfg.BrowserCacheTTLDuration()
+		if err != nil {
+			return nil, err
 		}
 		bc, err := affentbrowser.NewFileResponseCache(cfg.BrowserCacheDir, cacheTTL)
 		if err != nil {
@@ -141,14 +137,9 @@ func NewSessionPool(cfg Config, logger zerolog.Logger) (*SessionPool, error) {
 		// interval = max(TTL/8, 5min) so a 24h TTL sweeps every 3h
 		// and a 30m TTL sweeps every 5min. Operators can override
 		// via BrowserCacheSweepInterval.
-		sweepInterval := cacheTTL / 8
-		if cfg.BrowserCacheSweepInterval != "" {
-			if d, err := time.ParseDuration(cfg.BrowserCacheSweepInterval); err == nil && d > 0 {
-				sweepInterval = d
-			}
-		}
-		if sweepInterval < 5*time.Minute {
-			sweepInterval = 5 * time.Minute
+		sweepInterval, err := cfg.BrowserCacheSweepIntervalDuration(cacheTTL)
+		if err != nil {
+			return nil, err
 		}
 		bc.StartSweeper(sweepInterval, func(deleted int) {
 			if deleted > 0 {

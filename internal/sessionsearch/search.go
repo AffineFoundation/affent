@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"io"
 	"os"
 	"path/filepath"
 	"sort"
@@ -36,51 +37,86 @@ type Response struct {
 // Search scans sessionsDir/*.jsonl for messages matching query. The
 // current session is excluded. Scoring is lexical term overlap, which
 // is enough for local recall over one workspace's transcript history.
+const (
+	DefaultTopK          = 5
+	MaxTopK              = 20
+	DefaultMaxPerSession = 3
+	MaxPerSession        = 5
+	MaxQueryBytes        = 2048
+	MaxQueryTerms        = 16
+
+	sessionDirReadBatch = 128
+)
+
 func Search(ctx context.Context, sessionsDir, currentSessionID, query string, topK, maxPerSession int) ([]Hit, error) {
+	topK, maxPerSession = NormalizeLimits(topK, maxPerSession)
 	terms := Tokenize(query)
 	if len(terms) == 0 {
 		return nil, nil
 	}
-	entries, err := os.ReadDir(sessionsDir)
+	dir, err := os.Open(sessionsDir)
 	if err != nil {
 		if errors.Is(err, os.ErrNotExist) {
 			return nil, nil
 		}
 		return nil, err
 	}
+	defer dir.Close()
 	var all []Hit
-	for _, ent := range entries {
-		if ctx.Err() != nil {
-			return nil, ctx.Err()
+	for {
+		entries, rerr := dir.ReadDir(sessionDirReadBatch)
+		if rerr != nil && !errors.Is(rerr, io.EOF) {
+			return nil, rerr
 		}
-		if ent.IsDir() || !strings.HasSuffix(ent.Name(), ".jsonl") {
-			continue
+		for _, ent := range entries {
+			if ctx.Err() != nil {
+				return nil, ctx.Err()
+			}
+			if ent.IsDir() || !strings.HasSuffix(ent.Name(), ".jsonl") {
+				continue
+			}
+			sid := strings.TrimSuffix(ent.Name(), ".jsonl")
+			if sid == currentSessionID {
+				continue
+			}
+			info, ierr := ent.Info()
+			mtime := ""
+			if ierr == nil {
+				mtime = info.ModTime().UTC().Format(time.RFC3339)
+			}
+			hits, serr := scoreFile(filepath.Join(sessionsDir, ent.Name()), sid, terms, maxPerSession, mtime)
+			if serr != nil {
+				continue
+			}
+			for _, hit := range hits {
+				all = appendBoundedHits(all, hit, topK)
+			}
 		}
-		sid := strings.TrimSuffix(ent.Name(), ".jsonl")
-		if sid == currentSessionID {
-			continue
+		if errors.Is(rerr, io.EOF) {
+			break
 		}
-		info, ierr := ent.Info()
-		mtime := ""
-		if ierr == nil {
-			mtime = info.ModTime().UTC().Format(time.RFC3339)
-		}
-		hits, serr := scoreFile(filepath.Join(sessionsDir, ent.Name()), sid, terms, maxPerSession, mtime)
-		if serr != nil {
-			continue
-		}
-		all = append(all, hits...)
 	}
-	sort.SliceStable(all, func(i, j int) bool {
-		if all[i].Score != all[j].Score {
-			return all[i].Score > all[j].Score
-		}
-		return all[i].ModTime > all[j].ModTime
-	})
+	sortHits(all)
 	if topK > 0 && len(all) > topK {
 		all = all[:topK]
 	}
 	return all, nil
+}
+
+func NormalizeLimits(topK, maxPerSession int) (int, int) {
+	if topK <= 0 {
+		topK = DefaultTopK
+	}
+	if topK > MaxTopK {
+		topK = MaxTopK
+	}
+	if maxPerSession <= 0 {
+		maxPerSession = DefaultMaxPerSession
+	}
+	if maxPerSession > MaxPerSession {
+		maxPerSession = MaxPerSession
+	}
+	return topK, maxPerSession
 }
 
 func scoreFile(path, sid string, terms []string, maxPerSession int, mtime string) ([]Hit, error) {
@@ -113,26 +149,56 @@ func scoreFile(path, sid string, terms []string, maxPerSession int, mtime string
 		if score <= 0 {
 			continue
 		}
-		fileHits = append(fileHits, Hit{
+		fileHits = appendBoundedHits(fileHits, Hit{
 			SessionID: sid,
 			TurnIdx:   turn,
 			Role:      m.Role,
 			Snippet:   SnippetAround(content, terms),
 			Score:     score,
 			ModTime:   mtime,
-		})
+		}, maxPerSession)
 	}
-	sort.SliceStable(fileHits, func(i, j int) bool { return fileHits[i].Score > fileHits[j].Score })
+	sortHits(fileHits)
 	if maxPerSession > 0 && len(fileHits) > maxPerSession {
 		fileHits = fileHits[:maxPerSession]
 	}
 	return fileHits, nil
 }
 
+func appendBoundedHits(hits []Hit, hit Hit, limit int) []Hit {
+	if limit <= 0 {
+		return append(hits, hit)
+	}
+	hits = append(hits, hit)
+	sortHits(hits)
+	if len(hits) > limit {
+		hits = hits[:limit]
+	}
+	return hits
+}
+
+func sortHits(hits []Hit) {
+	sort.SliceStable(hits, func(i, j int) bool { return hitLess(hits[i], hits[j]) })
+}
+
+func hitLess(a, b Hit) bool {
+	if a.Score != b.Score {
+		return a.Score > b.Score
+	}
+	if a.ModTime != b.ModTime {
+		return a.ModTime > b.ModTime
+	}
+	if a.SessionID != b.SessionID {
+		return a.SessionID < b.SessionID
+	}
+	return a.TurnIdx < b.TurnIdx
+}
+
 // Tokenize lowercases and splits on non-letter / non-digit runes
 // across scripts. Tokens shorter than 2 bytes and common English
 // stopwords are dropped.
 func Tokenize(s string) []string {
+	s = NormalizeQuery(s)
 	s = strings.ToLower(s)
 	var raw []string
 	var cur strings.Builder
@@ -152,12 +218,27 @@ func Tokenize(s string) []string {
 	}
 	flush()
 	out := raw[:0]
+	seen := map[string]bool{}
 	for _, t := range raw {
-		if !stopwords[t] {
-			out = append(out, t)
+		if stopwords[t] || seen[t] {
+			continue
+		}
+		seen[t] = true
+		out = append(out, t)
+		if len(out) >= MaxQueryTerms {
+			break
 		}
 	}
 	return out
+}
+
+func NormalizeQuery(s string) string {
+	s = strings.TrimSpace(s)
+	if len(s) <= MaxQueryBytes {
+		return s
+	}
+	cut := textutil.AlignBackward(s, MaxQueryBytes)
+	return strings.TrimSpace(s[:cut])
 }
 
 var stopwords = map[string]bool{

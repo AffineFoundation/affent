@@ -147,6 +147,136 @@ func TestSubagentPostPolicyBlocksParentBrowserAfterSuccessfulReport(t *testing.T
 	}
 }
 
+func TestNestedSubagentPostPolicyOnlyBlocksMoreNestedSubagents(t *testing.T) {
+	policy := NestedSubagentPostToolPolicy()
+	if !policy.blocksAfterToolResult(SubagentToolName) {
+		t.Fatal("nested policy should block repeated nested subagent_run calls")
+	}
+	for _, allowed := range []string{"read_file", "list_files", "shell", "memory", "session_search"} {
+		if policy.blocks(allowed) {
+			t.Fatalf("nested policy should allow child to continue local evidence work with %s", allowed)
+		}
+	}
+}
+
+func TestExplicitSubagentRequestedIgnoresDepthMetadata(t *testing.T) {
+	if explicitSubagentRequested("Mode: explore\nSubagent depth: 1 of 2\nTask:\nread docs") {
+		t.Fatal("subagent depth metadata alone must not trigger delegation")
+	}
+	if explicitSubagentRequested("Mode: explore\nWorkspace: /tmp/affent-eval/subagent-noisy-facts-123\nTask:\nread docs") {
+		t.Fatal("workspace path containing subagent must not trigger delegation")
+	}
+	if !explicitSubagentRequested("Mode: explore\nSubagent depth: 1 of 2\nTask:\nuse a child subagent for backend docs") {
+		t.Fatal("explicit task text should still trigger delegation")
+	}
+	if !explicitSubagentRequested("请使用 subagent 隔离上下文检查这个项目") {
+		t.Fatal("explicit Chinese subagent request should trigger delegation")
+	}
+}
+
+func TestSanitizeSubagentReportForParentDropsRejectedCandidateSection(t *testing.T) {
+	t.Run("english rejected heading", func(t *testing.T) {
+		report := `## Conclusion:
+| Field | Accepted Value |
+|---|---|
+| scheduler | 03:00-04:30 UTC |
+
+### Rejected candidates
+| file | value |
+|---|---|
+| old.md | 06:00 UTC |
+| injected.md | 00:00-00:01 UTC |
+
+Files inspected:
+- source-of-truth.md
+- old.md`
+		got := sanitizeSubagentReportForParent(report)
+		for _, leaked := range []string{"06:00", "00:00-00:01"} {
+			if strings.Contains(got, leaked) {
+				t.Fatalf("sanitized report leaked %q:\n%s", leaked, got)
+			}
+		}
+		for _, want := range []string{"03:00-04:30 UTC", "Rejected/noisy candidate details were omitted", "Files inspected:", "source-of-truth.md"} {
+			if !strings.Contains(got, want) {
+				t.Fatalf("sanitized report missing %q:\n%s", want, got)
+			}
+		}
+	})
+	t.Run("chinese excluded conflict heading", func(t *testing.T) {
+		report := `## Evidence:
+- source-of-truth.md: 03:00-04:30 UTC
+
+- **冲突来源已排除：**
+  - incident.md 声称窗口为 06:00 UTC，但已过时。
+  - vendor.md 声称窗口为 00:00-00:01 UTC。
+
+## Files inspected:
+- source-of-truth.md
+- incident.md`
+		got := sanitizeSubagentReportForParent(report)
+		for _, leaked := range []string{"06:00", "00:00-00:01"} {
+			if strings.Contains(got, leaked) {
+				t.Fatalf("sanitized report leaked %q:\n%s", leaked, got)
+			}
+		}
+		if !strings.Contains(got, "## Files inspected:") {
+			t.Fatalf("sanitized report should resume at files inspected:\n%s", got)
+		}
+	})
+	t.Run("english sources ignored heading", func(t *testing.T) {
+		report := `## Conclusion:
+- accepted: 03:00-04:30 UTC
+
+Noise sources filtered out:
+- incident.md claimed window 06:00 UTC
+- logs.txt had window=08:00-09:00
+
+Files inspected:
+- source-of-truth.md`
+		got := sanitizeSubagentReportForParent(report)
+		for _, leaked := range []string{"06:00", "08:00-09:00"} {
+			if strings.Contains(got, leaked) {
+				t.Fatalf("sanitized report leaked %q:\n%s", leaked, got)
+			}
+		}
+	})
+	t.Run("files inspected content summaries", func(t *testing.T) {
+		report := `## Files Inspected:
+| File | Content Summary |
+|------|-----------------|
+| README.md | Project root |
+| docs/source-of-truth.md | Canonical definitions: window 03:00-04:30 UTC, 12 shards |
+| docs/incident-2025-12.md | Historical incident override (06:00 UTC, 3 shards), marked non-canonical |
+| logs/sample-a.txt | Runtime log: window=08:00-09:00, shards=4 |`
+		got := sanitizeSubagentReportForParent(report)
+		for _, leaked := range []string{"06:00", "08:00-09:00"} {
+			if strings.Contains(got, leaked) {
+				t.Fatalf("sanitized report leaked %q:\n%s", leaked, got)
+			}
+		}
+		for _, want := range []string{"03:00-04:30 UTC", "docs/incident-2025-12.md", "logs/sample-a.txt", "details omitted"} {
+			if !strings.Contains(got, want) {
+				t.Fatalf("sanitized report missing %q:\n%s", want, got)
+			}
+		}
+	})
+}
+
+func TestIncompleteSubagentReportIncludesSuccessfulResultSummaries(t *testing.T) {
+	report := incompleteSubagentReport("max_turns", []subagentToolCall{
+		{Tool: "read_file", Args: map[string]any{"path": "docs/runtime.md"}, ResultSummary: "Default request timeout: 1500ms\nRetry budget: 3 attempts"},
+		{Tool: "read_file", Args: map[string]any{"path": "missing.md"}, ExitCode: 1, ResultSummary: "not found"},
+	})
+	for _, want := range []string{"Successful tool result summaries", "docs/runtime.md", "1500ms", "3 attempts"} {
+		if !strings.Contains(report, want) {
+			t.Fatalf("incomplete report missing %q:\n%s", want, report)
+		}
+	}
+	if strings.Contains(report, "not found") {
+		t.Fatalf("failed tool summaries should not be promoted:\n%s", report)
+	}
+}
+
 func TestReadOnlyShellToolRejectsMutatingCommands(t *testing.T) {
 	ws := t.TempDir()
 	tool := readOnlyShellTool(BuiltinDeps{
@@ -164,6 +294,11 @@ func TestReadOnlyShellToolRejectsMutatingCommands(t *testing.T) {
 	_, err = tool.Execute(context.Background(), json.RawMessage(`{"command":"python -m pytest ./...", "cwd":"`+filepath.ToSlash(ws)+`"}`))
 	if err != nil {
 		t.Fatalf("read-only command should pass guard and reach executor: %v", err)
+	}
+
+	_, err = tool.Execute(context.Background(), json.RawMessage(`{"command":"grep -R timeout . 2>/dev/null | head -20"}`))
+	if err != nil {
+		t.Fatalf("stderr-to-dev-null inspection command should pass guard: %v", err)
 	}
 }
 
@@ -276,6 +411,9 @@ func TestSubagentToolDescriptionMentionsCallerProvidedBrowserTools(t *testing.T)
 	if !strings.Contains(raw, "current-page visible snapshot facts") {
 		t.Fatalf("subagent task schema should guide bounded web delegation:\n%s", raw)
 	}
+	if !strings.Contains(raw, `"task": {"type": "string", "minLength": 1`) {
+		t.Fatalf("subagent task schema should publish non-empty task constraint:\n%s", raw)
+	}
 }
 
 // TestBuildSubagentRegistry_HasNoWriteAndBoundedNestedSubagent pins the
@@ -314,7 +452,7 @@ func TestBuildSubagentRegistry_HasNoWriteAndBoundedNestedSubagent(t *testing.T) 
 		}
 	}
 	// Sanity: the expected read-only set IS present.
-	for _, expected := range []string{"read_file", "list_files", "shell", "memory", "session_search", "subagent_run"} {
+	for _, expected := range []string{"skill", "read_file", "list_files", "shell", "memory", "session_search", "subagent_run"} {
 		if !names[expected] {
 			t.Errorf("subagent missing expected read-only tool %q", expected)
 		}
@@ -355,8 +493,8 @@ func TestBuildSubagentRegistry_HonorsOptionalDeps(t *testing.T) {
 			t.Errorf("subagent must NOT register %q without its supporting dep", gated)
 		}
 	}
-	// read_file / list_files don't gate on executor — they always exist.
-	for _, always := range []string{"read_file", "list_files"} {
+	// skill / read_file / list_files don't gate on executor — they always exist.
+	for _, always := range []string{"skill", "read_file", "list_files"} {
 		if !names[always] {
 			t.Errorf("subagent must always register %q (no gating dep)", always)
 		}

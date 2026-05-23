@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
+	"math"
 	"sort"
 	"strconv"
 	"strings"
@@ -16,8 +17,13 @@ type toolSchema struct {
 }
 
 type toolSchemaProperty struct {
-	Type any   `json:"type"`
-	Enum []any `json:"enum"`
+	Type      any   `json:"type"`
+	Enum      []any `json:"enum"`
+	Minimum   any   `json:"minimum"`
+	Maximum   any   `json:"maximum"`
+	MinLength int   `json:"minLength"`
+	MaxLength int   `json:"maxLength"`
+	Default   any   `json:"default"`
 }
 
 func repairToolArgsWithSchema(args json.RawMessage, schema json.RawMessage) (json.RawMessage, bool, []string) {
@@ -26,24 +32,39 @@ func repairToolArgsWithSchema(args json.RawMessage, schema json.RawMessage) (jso
 		return args, false, nil
 	}
 	var obj map[string]any
-	if json.Unmarshal(args, &obj) != nil {
+	if err := json.Unmarshal(args, &obj); err != nil || obj == nil {
+		if wrapped, ok := wrapSingleRequiredValueArgs(args, s); ok {
+			return wrapped, true, []string{"wrapped arguments as " + s.Required[0]}
+		}
 		return args, false, nil
 	}
 
 	changed := false
 	var notes []string
+	if inner, key, ok := unwrapSingleToolArgsWrapper(obj, s.Properties); ok {
+		obj = inner
+		changed = true
+		notes = append(notes, "unwrapped field "+key)
+	}
+	if wrapped, ok := wrapSingleRequiredObjectArgs(obj, s); ok {
+		notes = append(notes, "wrapped object arguments as "+s.Required[0])
+		return wrapped, true, notes
+	}
 	out := make(map[string]any, len(obj))
 	used := map[string]bool{}
 	for key, value := range obj {
 		prop, ok := s.Properties[key]
 		target := key
 		if !ok {
-			if alias, found := schemaPropertyAlias(key, s.Properties); found {
-				target = alias
-				prop = s.Properties[alias]
-				ok = true
-				changed = true
-				notes = append(notes, fmt.Sprintf("renamed field %s to %s", key, target))
+			if alias, found := schemaPropertyAlias(key, s.Properties, s.Required); found {
+				aliasProp := s.Properties[alias]
+				if shouldRenameSchemaField(key, alias, value, aliasProp, s.Required, obj) {
+					target = alias
+					prop = aliasProp
+					ok = true
+					changed = true
+					notes = append(notes, fmt.Sprintf("renamed field %s to %s", key, target))
+				}
 			}
 		}
 		if !ok {
@@ -68,7 +89,7 @@ func repairToolArgsWithSchema(args json.RawMessage, schema json.RawMessage) (jso
 		if used[req] || out[req] != nil {
 			continue
 		}
-		if value, ok := recoverRequiredSchemaValue(req, obj, s.Properties[req]); ok {
+		if value, ok := recoverRequiredSchemaValue(req, obj, s.Properties, s.Required); ok {
 			out[req] = value
 			changed = true
 			notes = append(notes, fmt.Sprintf("filled required field %s from alias", req))
@@ -84,23 +105,290 @@ func repairToolArgsWithSchema(args json.RawMessage, schema json.RawMessage) (jso
 	return json.RawMessage(raw), true, notes
 }
 
-func schemaPropertyAlias(key string, props map[string]toolSchemaProperty) (string, bool) {
+var wrapperFieldNames = map[string]bool{
+	"args":       true,
+	"arguments":  true,
+	"input":      true,
+	"parameters": true,
+}
+
+func unwrapSingleToolArgsWrapper(obj map[string]any, props map[string]toolSchemaProperty) (map[string]any, string, bool) {
+	if len(obj) != 1 {
+		return nil, "", false
+	}
+	for key, value := range obj {
+		if _, isSchemaField := props[key]; isSchemaField {
+			return nil, "", false
+		}
+		if wrapperFieldNames[normalizeToolIdentifier(key)] {
+			if inner, ok := value.(map[string]any); ok {
+				return inner, key, true
+			}
+		}
+	}
+	return nil, "", false
+}
+
+func wrapSingleRequiredValueArgs(args json.RawMessage, s toolSchema) (json.RawMessage, bool) {
+	if len(s.Required) != 1 {
+		return nil, false
+	}
+	name := s.Required[0]
+	prop, ok := s.Properties[name]
+	if !ok {
+		return nil, false
+	}
+	var value any
+	if err := json.Unmarshal(args, &value); err != nil {
+		return nil, false
+	}
+	switch value.(type) {
+	case map[string]any:
+		return nil, false
+	}
+	if !schemaValueMatchesOrCanCoerce(value, prop) {
+		return nil, false
+	}
+	value = coerceSchemaValueOrOriginal(value, prop)
+	raw, err := json.Marshal(map[string]any{name: value})
+	if err != nil {
+		return nil, false
+	}
+	return json.RawMessage(raw), true
+}
+
+func wrapSingleRequiredObjectArgs(obj map[string]any, s toolSchema) (json.RawMessage, bool) {
+	if len(obj) == 0 || len(s.Required) != 1 || len(s.Properties) != 1 {
+		return nil, false
+	}
+	name := s.Required[0]
+	if _, exists := obj[name]; exists {
+		return nil, false
+	}
+	prop, ok := s.Properties[name]
+	if !ok || !schemaPropertyIncludesType(prop, "object") {
+		return nil, false
+	}
+	raw, err := json.Marshal(map[string]any{name: obj})
+	if err != nil {
+		return nil, false
+	}
+	return json.RawMessage(raw), true
+}
+
+func shouldRenameSchemaField(key, target string, value any, prop toolSchemaProperty, required []string, obj map[string]any) bool {
+	if _, exists := obj[target]; exists {
+		return false
+	}
+	if normalizeToolIdentifier(key) == normalizeToolIdentifier(target) {
+		return true
+	}
+	for _, req := range required {
+		if req == target {
+			return schemaValueMatchesOrCanCoerce(value, prop)
+		}
+	}
+	return schemaValueMatchesOrCanCoerce(value, prop)
+}
+
+func schemaValueMatchesOrCanCoerce(v any, prop toolSchemaProperty) bool {
+	if coerced, ok := coerceSchemaValue(v, prop); ok {
+		return schemaValueWithinBounds(coerced, prop)
+	}
+	if !schemaValueMatchesTypes(v, schemaPropertyTypes(prop)) {
+		return false
+	}
+	return schemaValueWithinBounds(v, prop)
+}
+
+func schemaValueWithinBounds(v any, prop toolSchemaProperty) bool {
+	return schemaValueWithinNumericBounds(v, prop) && schemaValueWithinStringBounds(v, prop)
+}
+
+func schemaValueWithinNumericBounds(v any, prop toolSchemaProperty) bool {
+	n, ok := schemaNumericValue(v)
+	if !ok {
+		return true
+	}
+	if min, ok := schemaBoundaryNumber(prop.Minimum); ok && n < min {
+		return false
+	}
+	if max, ok := schemaBoundaryNumber(prop.Maximum); ok && n > max {
+		return false
+	}
+	return true
+}
+
+func schemaValueWithinStringBounds(v any, prop toolSchemaProperty) bool {
+	if prop.MinLength <= 0 && prop.MaxLength <= 0 {
+		return true
+	}
+	s, ok := v.(string)
+	if !ok {
+		return true
+	}
+	if prop.MinLength > 0 && len(strings.TrimSpace(s)) < prop.MinLength {
+		return false
+	}
+	if prop.MaxLength > 0 && len(s) > prop.MaxLength {
+		return false
+	}
+	return true
+}
+
+func schemaNumericValue(v any) (float64, bool) {
+	switch x := v.(type) {
+	case float64:
+		if math.IsNaN(x) || math.IsInf(x, 0) {
+			return 0, false
+		}
+		return x, true
+	case int:
+		return float64(x), true
+	case int64:
+		return float64(x), true
+	case json.Number:
+		f, err := x.Float64()
+		if err != nil || math.IsNaN(f) || math.IsInf(f, 0) {
+			return 0, false
+		}
+		return f, true
+	default:
+		return 0, false
+	}
+}
+
+func schemaBoundaryNumber(v any) (float64, bool) {
+	switch x := v.(type) {
+	case float64:
+		if math.IsNaN(x) || math.IsInf(x, 0) {
+			return 0, false
+		}
+		return x, true
+	case int:
+		return float64(x), true
+	case int64:
+		return float64(x), true
+	case json.Number:
+		f, err := x.Float64()
+		if err != nil || math.IsNaN(f) || math.IsInf(f, 0) {
+			return 0, false
+		}
+		return f, true
+	case string:
+		return parseNumberString(x)
+	default:
+		return 0, false
+	}
+}
+
+func schemaValueMatchesTypes(v any, types []string) bool {
+	for _, typ := range types {
+		switch typ {
+		case "null":
+			if v == nil {
+				return true
+			}
+		case "string":
+			if _, ok := v.(string); ok {
+				return true
+			}
+		case "integer":
+			if f, ok := v.(float64); ok && isIntegralFloat64(f) {
+				return true
+			}
+		case "number":
+			if _, ok := v.(float64); ok {
+				return true
+			}
+		case "boolean":
+			if _, ok := v.(bool); ok {
+				return true
+			}
+		case "array":
+			if _, ok := v.([]any); ok {
+				return true
+			}
+		case "object":
+			if _, ok := v.(map[string]any); ok {
+				return true
+			}
+		}
+	}
+	return false
+}
+
+func schemaPropertyIncludesType(prop toolSchemaProperty, want string) bool {
+	for _, typ := range schemaPropertyTypes(prop) {
+		if typ == want {
+			return true
+		}
+	}
+	return false
+}
+
+func schemaPropertyAlias(key string, props map[string]toolSchemaProperty, required []string) (string, bool) {
 	norm := normalizeToolIdentifier(key)
 	for name := range props {
 		if normalizeToolIdentifier(name) == norm {
 			return name, true
 		}
 	}
+	var candidates []string
 	for name, aliases := range commonSchemaFieldAliases {
+		if _, ok := props[name]; !ok {
+			continue
+		}
 		for _, alias := range aliases {
 			if normalizeToolIdentifier(alias) == norm {
-				if _, ok := props[name]; ok {
-					return name, true
-				}
+				candidates = append(candidates, name)
+				break
 			}
 		}
 	}
+	if len(candidates) == 0 {
+		return "", false
+	}
+	sort.Strings(candidates)
+	candidates = compactStrings(candidates)
+	if len(candidates) == 1 {
+		return candidates[0], true
+	}
+	if requiredAlias, ok := uniqueRequiredCandidate(candidates, required); ok {
+		return requiredAlias, true
+	}
 	return "", false
+}
+
+func compactStrings(in []string) []string {
+	if len(in) < 2 {
+		return in
+	}
+	out := in[:1]
+	for _, s := range in[1:] {
+		if s != out[len(out)-1] {
+			out = append(out, s)
+		}
+	}
+	return out
+}
+
+func uniqueRequiredCandidate(candidates []string, required []string) (string, bool) {
+	requiredSet := map[string]bool{}
+	for _, req := range required {
+		requiredSet[req] = true
+	}
+	found := ""
+	for _, candidate := range candidates {
+		if !requiredSet[candidate] {
+			continue
+		}
+		if found != "" {
+			return "", false
+		}
+		found = candidate
+	}
+	return found, found != ""
 }
 
 var commonSchemaFieldAliases = map[string][]string{
@@ -130,36 +418,145 @@ func shouldDropUnknownSchemaField(s toolSchema) bool {
 }
 
 func coerceSchemaValue(v any, prop toolSchemaProperty) (any, bool) {
+	if coerced, ok := coerceEnumValue(v, prop); ok {
+		if schemaValueWithinBounds(coerced, prop) {
+			return coerced, true
+		}
+	}
 	types := schemaPropertyTypes(prop)
+	if schemaValueMatchesTypes(v, types) {
+		return v, false
+	}
 	for _, typ := range types {
 		switch typ {
 		case "integer":
 			switch x := v.(type) {
 			case string:
-				n, err := strconv.Atoi(strings.TrimSpace(x))
-				if err == nil {
-					return n, true
+				if n, ok := parseIntegerString(x); ok {
+					if schemaValueWithinBounds(n, prop) {
+						return n, true
+					}
 				}
 			case float64:
-				if x == float64(int(x)) {
-					return int(x), true
+				if isIntegralFloat64(x) {
+					n := int(x)
+					if schemaValueWithinBounds(n, prop) {
+						return n, true
+					}
+				}
+			}
+		case "number":
+			switch x := v.(type) {
+			case string:
+				if n, ok := parseNumberString(x); ok {
+					if schemaValueWithinBounds(n, prop) {
+						return n, true
+					}
 				}
 			}
 		case "boolean":
-			if s, ok := v.(string); ok {
-				b, err := strconv.ParseBool(strings.TrimSpace(s))
+			switch x := v.(type) {
+			case string:
+				b, err := strconv.ParseBool(strings.TrimSpace(x))
 				if err == nil {
 					return b, true
+				}
+			case float64:
+				if x == 1 {
+					return true, true
+				}
+				if x == 0 {
+					return false, true
 				}
 			}
 		case "string":
 			switch x := v.(type) {
 			case float64:
-				return strconv.FormatFloat(x, 'f', -1, 64), true
+				s := strconv.FormatFloat(x, 'f', -1, 64)
+				if schemaValueWithinBounds(s, prop) {
+					return s, true
+				}
 			case bool:
-				return strconv.FormatBool(x), true
+				s := strconv.FormatBool(x)
+				if schemaValueWithinBounds(s, prop) {
+					return s, true
+				}
 			}
 		}
+	}
+	return v, false
+}
+
+func parseIntegerString(s string) (int, bool) {
+	s = strings.TrimSpace(s)
+	if s == "" {
+		return 0, false
+	}
+	if n, err := strconv.Atoi(s); err == nil {
+		return n, true
+	}
+	f, err := strconv.ParseFloat(s, 64)
+	if err != nil || !isIntegralFloat64(f) {
+		return 0, false
+	}
+	return int(f), true
+}
+
+func parseNumberString(s string) (float64, bool) {
+	s = strings.TrimSpace(s)
+	if s == "" {
+		return 0, false
+	}
+	f, err := strconv.ParseFloat(s, 64)
+	if err != nil || math.IsNaN(f) || math.IsInf(f, 0) {
+		return 0, false
+	}
+	return f, true
+}
+
+func isIntegralFloat64(f float64) bool {
+	if math.IsNaN(f) || math.IsInf(f, 0) {
+		return false
+	}
+	const maxExactIntegerFloat64 = 1<<53 - 1
+	if f < -maxExactIntegerFloat64 || f > maxExactIntegerFloat64 {
+		return false
+	}
+	if f < float64(math.MinInt) || f > float64(math.MaxInt) {
+		return false
+	}
+	return f == math.Trunc(f)
+}
+
+func coerceEnumValue(v any, prop toolSchemaProperty) (any, bool) {
+	if len(prop.Enum) == 0 {
+		return v, false
+	}
+	s, ok := v.(string)
+	if !ok {
+		return v, false
+	}
+	trimmed := strings.TrimSpace(s)
+	var relaxedMatches []string
+	for _, enumValue := range prop.Enum {
+		candidate, ok := enumValue.(string)
+		if !ok {
+			continue
+		}
+		if trimmed == candidate {
+			if s == candidate {
+				return v, false
+			}
+			return candidate, true
+		}
+		if strings.EqualFold(trimmed, candidate) || normalizeToolIdentifier(trimmed) == normalizeToolIdentifier(candidate) {
+			relaxedMatches = append(relaxedMatches, candidate)
+		}
+	}
+	sort.Strings(relaxedMatches)
+	relaxedMatches = compactStrings(relaxedMatches)
+	if len(relaxedMatches) == 1 {
+		return relaxedMatches[0], true
 	}
 	return v, false
 }
@@ -181,10 +578,21 @@ func schemaPropertyTypes(prop toolSchemaProperty) []string {
 	}
 }
 
-func recoverRequiredSchemaValue(name string, obj map[string]any, prop toolSchemaProperty) (any, bool) {
+func recoverRequiredSchemaValue(name string, obj map[string]any, props map[string]toolSchemaProperty, required []string) (any, bool) {
+	prop, ok := props[name]
+	if !ok {
+		return nil, false
+	}
 	aliases := commonSchemaFieldAliases[name]
 	for _, alias := range aliases {
 		if v, ok := obj[alias]; ok {
+			target, ok := schemaPropertyAlias(alias, props, required)
+			if !ok || target != name {
+				continue
+			}
+			if !schemaValueMatchesOrCanCoerce(v, prop) {
+				continue
+			}
 			return coerceSchemaValueOrOriginal(v, prop), true
 		}
 	}
@@ -238,11 +646,74 @@ func summarizeToolSchema(schema json.RawMessage) ([]string, []string) {
 	required := append([]string{}, s.Required...)
 	sort.Strings(required)
 	fields := make([]string, 0, len(s.Properties))
-	for name := range s.Properties {
-		fields = append(fields, name)
+	for name, prop := range s.Properties {
+		fields = append(fields, schemaFieldSummary(name, prop))
 	}
 	sort.Strings(fields)
 	return required, fields
+}
+
+func schemaFieldSummary(name string, prop toolSchemaProperty) string {
+	var parts []string
+	if enum := stringEnumSummary(prop.Enum); enum != "" {
+		parts = append(parts, "enum="+enum)
+	}
+	if min := schemaLiteral(prop.Minimum); min != "" {
+		parts = append(parts, "min="+min)
+	}
+	if max := schemaLiteral(prop.Maximum); max != "" {
+		parts = append(parts, "max="+max)
+	}
+	if prop.MinLength > 0 {
+		parts = append(parts, "minLength="+strconv.Itoa(prop.MinLength))
+	}
+	if prop.MaxLength > 0 {
+		parts = append(parts, "maxLength="+strconv.Itoa(prop.MaxLength))
+	}
+	if def := schemaLiteral(prop.Default); def != "" {
+		parts = append(parts, "default="+def)
+	}
+	if len(parts) == 0 {
+		return name
+	}
+	return name + " (" + strings.Join(parts, ", ") + ")"
+}
+
+func stringEnumSummary(values []any) string {
+	if len(values) == 0 {
+		return ""
+	}
+	out := make([]string, 0, len(values))
+	for _, v := range values {
+		if s, ok := v.(string); ok {
+			out = append(out, s)
+		}
+	}
+	if len(out) == 0 {
+		return ""
+	}
+	sort.Strings(out)
+	return strings.Join(out, "|")
+}
+
+func schemaLiteral(v any) string {
+	if v == nil {
+		return ""
+	}
+	switch x := v.(type) {
+	case string:
+		return x
+	case float64:
+		return strconv.FormatFloat(x, 'f', -1, 64)
+	case bool:
+		return strconv.FormatBool(x)
+	default:
+		raw, err := json.Marshal(x)
+		if err != nil {
+			return fmt.Sprint(x)
+		}
+		return string(raw)
+	}
 }
 
 func toolArgsExample(schema json.RawMessage) string {
@@ -279,32 +750,32 @@ func toolArgsExample(schema json.RawMessage) string {
 	return compact.String()
 }
 
+var typeExampleValues = map[string]any{
+	"integer": 1,
+	"boolean": false,
+	"array":   []any{},
+	"object":  map[string]any{},
+}
+
+var propertyNameExamples = map[string]string{
+	"path":    "relative/path.txt",
+	"command": "go test ./...",
+	"query":   "keywords",
+}
+
 func exampleValueForProperty(name string, prop toolSchemaProperty) any {
 	if len(prop.Enum) > 0 {
 		return prop.Enum[0]
 	}
 	for _, typ := range schemaPropertyTypes(prop) {
-		switch typ {
-		case "integer":
-			return 1
-		case "boolean":
-			return false
-		case "array":
-			return []any{}
-		case "object":
-			return map[string]any{}
+		if v, ok := typeExampleValues[typ]; ok {
+			return v
 		}
 	}
-	switch name {
-	case "path":
-		return "relative/path.txt"
-	case "command":
-		return "go test ./..."
-	case "query":
-		return "keywords"
-	default:
-		return "value"
+	if v, ok := propertyNameExamples[name]; ok {
+		return v
 	}
+	return "value"
 }
 
 func formatRepairDebug(tool string, canonicalChanged, argsChanged bool) string {

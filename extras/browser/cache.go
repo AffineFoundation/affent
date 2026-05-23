@@ -25,6 +25,15 @@ type CachedResponse struct {
 	FetchedAt  time.Time   `json:"fetched_at"`
 }
 
+// maxCachedResponseBodyBytes and maxCachedResponseMetaBytes are hard
+// safety caps, not tuning knobs. Browser snapshots and text
+// extraction do not need replaying giant binary/script bodies, and
+// reading oversized cache files can otherwise spike process memory.
+const (
+	maxCachedResponseBodyBytes = 8 * 1024 * 1024
+	maxCachedResponseMetaBytes = 256 * 1024
+)
+
 // ResponseCache is the interceptor's pluggable cache backend. v1
 // ships FileResponseCache; production deployments may wire a redis-
 // backed implementation for cross-process sharing.
@@ -79,8 +88,19 @@ func (c *FileResponseCache) paths(url string) (meta, body string) {
 // Get returns the cached entry for the URL, or ok=false on a miss.
 // Errors reflect disk-level problems (corrupt JSON, permission
 // failures); the caller should fall through to network.
-func (c *FileResponseCache) Get(_ context.Context, url string) (*CachedResponse, bool, error) {
+func (c *FileResponseCache) Get(ctx context.Context, url string) (*CachedResponse, bool, error) {
+	if err := ctx.Err(); err != nil {
+		return nil, false, err
+	}
 	metaPath, bodyPath := c.paths(url)
+	if info, err := os.Stat(metaPath); err != nil {
+		if os.IsNotExist(err) {
+			return nil, false, nil
+		}
+		return nil, false, fmt.Errorf("stat meta: %w", err)
+	} else if info.Size() > maxCachedResponseMetaBytes {
+		return nil, false, nil
+	}
 	mf, err := os.Open(metaPath)
 	if err != nil {
 		if os.IsNotExist(err) {
@@ -95,6 +115,20 @@ func (c *FileResponseCache) Get(_ context.Context, url string) (*CachedResponse,
 	}
 	if c.ttl > 0 && time.Since(meta.FetchedAt) > c.ttl {
 		return nil, false, nil
+	}
+	if err := ctx.Err(); err != nil {
+		return nil, false, err
+	}
+	if info, err := os.Stat(bodyPath); err != nil {
+		if os.IsNotExist(err) {
+			return nil, false, nil
+		}
+		return nil, false, fmt.Errorf("stat body: %w", err)
+	} else if info.Size() > maxCachedResponseBodyBytes {
+		return nil, false, nil
+	}
+	if err := ctx.Err(); err != nil {
+		return nil, false, err
 	}
 	body, err := os.ReadFile(bodyPath)
 	if err != nil {
@@ -132,38 +166,61 @@ func (c *FileResponseCache) Get(_ context.Context, url string) (*CachedResponse,
 //     challenge, our cache must not freeze that challenge state — the
 //     same URL is supposed to serve real content once the challenge
 //     clears.
-func (c *FileResponseCache) Put(_ context.Context, url string, entry *CachedResponse) error {
+func (c *FileResponseCache) Put(ctx context.Context, url string, entry *CachedResponse) error {
+	_, err := c.PutResult(ctx, url, entry)
+	return err
+}
+
+// PutResult is FileResponseCache's richer write path. It reports
+// whether the response was actually persisted; false,nil means the
+// response was intentionally skipped (non-2xx, challenge, or too large).
+func (c *FileResponseCache) PutResult(ctx context.Context, url string, entry *CachedResponse) (bool, error) {
+	if err := ctx.Err(); err != nil {
+		return false, err
+	}
 	if entry == nil {
-		return errors.New("nil entry")
+		return false, errors.New("nil entry")
 	}
 	if entry.StatusCode <= 0 || entry.StatusCode >= 400 {
-		return nil
+		return false, nil
+	}
+	if len(entry.Body) > maxCachedResponseBodyBytes {
+		return false, nil
 	}
 	if isChallengePathURL(url) {
-		return nil
+		return false, nil
 	}
 	if looksLikeChallengeBody(entry.Body) {
-		return nil
+		return false, nil
 	}
 	entry.URL = url
 	if entry.FetchedAt.IsZero() {
 		entry.FetchedAt = time.Now().UTC()
 	}
+	if err := ctx.Err(); err != nil {
+		return false, err
+	}
 	c.mu.Lock()
 	defer c.mu.Unlock()
+	if err := ctx.Err(); err != nil {
+		return false, err
+	}
 
 	metaPath, bodyPath := c.paths(url)
 	if err := atomicWriteFile(bodyPath, entry.Body); err != nil {
-		return fmt.Errorf("write body: %w", err)
+		return false, fmt.Errorf("write body: %w", err)
+	}
+	if err := ctx.Err(); err != nil {
+		return false, err
 	}
 	metaBytes, err := json.Marshal(entry)
 	if err != nil {
-		return fmt.Errorf("marshal meta: %w", err)
+		return false, fmt.Errorf("marshal meta: %w", err)
 	}
 	if err := atomicWriteFile(metaPath, metaBytes); err != nil {
-		return fmt.Errorf("write meta: %w", err)
+		return false, fmt.Errorf("write meta: %w", err)
 	}
-	return nil
+	return true, nil
 }
 
 // challengePathSubstrings lists URL substrings that always indicate
@@ -287,6 +344,14 @@ func (c *FileResponseCache) sweepOne(metaPath string) bool {
 	}
 	if info2.ModTime().After(cutoff) {
 		return false
+	}
+	if info2.Size() > maxCachedResponseMetaBytes {
+		// Oversized meta is either corrupt or hostile input. Drop the
+		// pair so future sweeps and Gets don't repeatedly touch it.
+		bodyPath := strings.TrimSuffix(metaPath, ".meta.json") + ".bin"
+		_ = os.Remove(metaPath)
+		_ = os.Remove(bodyPath)
+		return true
 	}
 	data, err := os.ReadFile(metaPath)
 	if err != nil {

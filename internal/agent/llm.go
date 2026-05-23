@@ -134,9 +134,11 @@ type SamplingDefaults struct {
 	Seed        *int64
 }
 
+const DefaultBaseURL = "https://api.openai.com/v1"
+
 func NewLLMClient(baseURL, apiKey, model string) *LLMClient {
 	if baseURL == "" {
-		baseURL = "https://api.openai.com/v1"
+		baseURL = DefaultBaseURL
 	}
 	return &LLMClient{
 		BaseURL: strings.TrimRight(baseURL, "/"),

@@ -3,6 +3,7 @@ package sessionsearch
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
@@ -95,6 +96,99 @@ func TestSearchCapsPerSession(t *testing.T) {
 	}
 }
 
+func TestSearchNormalizesRunawayLimits(t *testing.T) {
+	dir := t.TempDir()
+	var msgs []testMessage
+	for i := 0; i < MaxPerSession+3; i++ {
+		msgs = append(msgs, testMessage{Role: "user", Content: "needle repeated repeated"})
+	}
+	writeSessionLog(t, dir, "many", msgs)
+
+	topK, maxPerSession := NormalizeLimits(1<<30, 1<<30)
+	if topK != MaxTopK || maxPerSession != MaxPerSession {
+		t.Fatalf("NormalizeLimits runaway = (%d,%d), want (%d,%d)", topK, maxPerSession, MaxTopK, MaxPerSession)
+	}
+	hits, err := Search(context.Background(), dir, "", "needle", 1<<30, 1<<30)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(hits) != MaxPerSession {
+		t.Fatalf("runaway max_per_session should cap hits at %d, got %d", MaxPerSession, len(hits))
+	}
+}
+
+func TestSearchKeepsGlobalTopKWhileScanning(t *testing.T) {
+	dir := t.TempDir()
+	writeSessionLog(t, dir, "a-low", []testMessage{
+		{Role: "user", Content: "needle only"},
+	})
+	writeSessionLog(t, dir, "b-low", []testMessage{
+		{Role: "user", Content: "needle again"},
+	})
+	writeSessionLog(t, dir, "y-high", []testMessage{
+		{Role: "user", Content: "needle strong strong strong"},
+	})
+	writeSessionLog(t, dir, "z-high", []testMessage{
+		{Role: "user", Content: "needle strong strong final"},
+	})
+
+	hits, err := Search(context.Background(), dir, "", "needle strong", 2, 1)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(hits) != 2 {
+		t.Fatalf("top_k=2 should return exactly 2 hits, got %+v", hits)
+	}
+	gotSessions := map[string]bool{}
+	for _, hit := range hits {
+		gotSessions[hit.SessionID] = true
+	}
+	for _, want := range []string{"y-high", "z-high"} {
+		if !gotSessions[want] {
+			t.Fatalf("bounded global aggregation dropped later high-scoring hit %q: %+v", want, hits)
+		}
+	}
+}
+
+func TestSearchReadsPastOneDirectoryBatch(t *testing.T) {
+	dir := t.TempDir()
+	for i := 0; i < sessionDirReadBatch+2; i++ {
+		writeSessionLog(t, dir, fmt.Sprintf("low-%03d", i), []testMessage{
+			{Role: "user", Content: "needle only"},
+		})
+	}
+	writeSessionLog(t, dir, "winner", []testMessage{
+		{Role: "user", Content: "needle strong strong strong"},
+	})
+
+	hits, err := Search(context.Background(), dir, "", "needle strong", 1, 1)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(hits) != 1 || hits[0].SessionID != "winner" {
+		t.Fatalf("search should scan beyond one directory batch and keep best hit, got %+v", hits)
+	}
+}
+
+func TestScoreFileKeepsBestHitsWithinLimitWhileScanning(t *testing.T) {
+	dir := t.TempDir()
+	writeSessionLog(t, dir, "many", []testMessage{
+		{Role: "user", Content: "needle"},
+		{Role: "user", Content: "needle strong strong strong"},
+		{Role: "user", Content: "needle weak"},
+	})
+	hits, err := scoreFile(filepath.Join(dir, "many.jsonl"), "many", []string{"needle", "strong"}, 1, "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(hits) != 1 {
+		t.Fatalf("scoreFile limit=1 returned %d hits: %+v", len(hits), hits)
+	}
+	if !strings.Contains(hits[0].Snippet, "strong") {
+		t.Fatalf("bounded scoring should keep best hit, got %+v", hits[0])
+	}
+}
+
 func TestSearchEmptyAndMissingDirReturnNoHits(t *testing.T) {
 	hits, err := Search(context.Background(), t.TempDir(), "", "", 5, 3)
 	if err != nil {
@@ -136,6 +230,37 @@ func TestTokenize(t *testing.T) {
 				t.Fatalf("Tokenize(%q)[%d] = %q, want %q", c.in, i, g, c.want[i])
 			}
 		}
+	}
+}
+
+func TestTokenizeDedupesAndCapsTerms(t *testing.T) {
+	var parts []string
+	for i := 0; i < MaxQueryTerms+5; i++ {
+		parts = append(parts, fmt.Sprintf("term%02d", i))
+	}
+	parts = append(parts, "term00", "term01")
+
+	got := Tokenize(strings.Join(parts, " "))
+	if len(got) != MaxQueryTerms {
+		t.Fatalf("Tokenize should cap terms at %d, got %d: %v", MaxQueryTerms, len(got), got)
+	}
+	seen := map[string]bool{}
+	for _, term := range got {
+		if seen[term] {
+			t.Fatalf("Tokenize should dedupe terms, got duplicate %q in %v", term, got)
+		}
+		seen[term] = true
+	}
+}
+
+func TestNormalizeQueryCapsBytesSafely(t *testing.T) {
+	in := strings.Repeat("界", MaxQueryBytes)
+	got := NormalizeQuery(in)
+	if len(got) > MaxQueryBytes {
+		t.Fatalf("NormalizeQuery returned %d bytes, want <= %d", len(got), MaxQueryBytes)
+	}
+	if !utf8.ValidString(got) {
+		t.Fatalf("NormalizeQuery returned invalid UTF-8: %q", got)
 	}
 }
 

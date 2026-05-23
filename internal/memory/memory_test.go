@@ -95,6 +95,38 @@ func TestMemoryAddOverflow(t *testing.T) {
 	}
 }
 
+func TestMemoryResponseEntriesArePreviewCapped(t *testing.T) {
+	s := newTestStore(t)
+	s.TopicCharLimit = 1200
+	long := "prefix " + strings.Repeat("x", memoryResponseEntryMax+500) + " tail"
+	if err := writeMemoryFile(s.generalPath(), []string{long}); err != nil {
+		t.Fatal(err)
+	}
+
+	resp, err := s.Add(TargetMemory, "", "new fact triggers overflow")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if resp.OK {
+		t.Fatalf("expected overflow rejection, got %+v", resp)
+	}
+	if len(resp.Entries) != 1 {
+		t.Fatalf("expected one current-entry preview, got %+v", resp.Entries)
+	}
+	if len(resp.Entries[0]) > memoryResponseEntryMax+len("...") {
+		t.Fatalf("entry preview length = %d, want <= %d", len(resp.Entries[0]), memoryResponseEntryMax+len("..."))
+	}
+	if !strings.HasSuffix(resp.Entries[0], "...") {
+		t.Fatalf("truncated entry preview should end with ellipsis, got %q", resp.Entries[0])
+	}
+	if strings.Contains(resp.Entries[0], " tail") {
+		t.Fatalf("entry preview leaked tail beyond cap: %q", resp.Entries[0])
+	}
+	if resp.Usage == nil || resp.Usage.CharsUsed <= memoryResponseEntryMax {
+		t.Fatalf("usage should preserve true bucket size despite preview cap, got %+v", resp.Usage)
+	}
+}
+
 // TestMemoryAdd_HitsTopicCountCap pins that creating a NEW topic once
 // the dir is already at MaxTopics is rejected with the same overflow-
 // style "consolidate or remove" message — parallel to how the per-
@@ -191,6 +223,63 @@ func TestMemoryAdd_DefaultMaxTopicsAllowsNormalUsage(t *testing.T) {
 		if !resp.OK {
 			t.Fatalf("12 topics must fit under default cap of 32; %q failed: %+v", name, resp)
 		}
+	}
+}
+
+func TestMemoryTopicDirectoryScanHonorsMaxTopics(t *testing.T) {
+	s := newTestStore(t)
+	s.MaxTopics = 3
+	topicsDir := filepath.Join(s.MemoryDir, "topics")
+	for i := 0; i < s.MaxTopics+3; i++ {
+		if err := writeMemoryFile(filepath.Join(topicsDir, fmt.Sprintf("manual-%02d.md", i)), []string{"needle fact"}); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	files, truncated := s.listTopicFilesLocked(s.topicCountLimit())
+	if len(files) != s.MaxTopics || !truncated {
+		t.Fatalf("listTopicFilesLocked returned len=%d truncated=%v, want len=%d truncated=true", len(files), truncated, s.MaxTopics)
+	}
+	if got := s.countTopicsLocked(); got != s.MaxTopics {
+		t.Fatalf("countTopicsLocked should stop at cap; got %d want %d", got, s.MaxTopics)
+	}
+
+	listResp, err := s.ListTopics(TargetMemory)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(listResp.Topics) != s.MaxTopics {
+		t.Fatalf("ListTopics returned %d topics, want cap %d: %+v", len(listResp.Topics), s.MaxTopics, listResp.Topics)
+	}
+	if !strings.Contains(listResp.Message, "exceeds") {
+		t.Fatalf("ListTopics should mention capped directory, got message %q", listResp.Message)
+	}
+
+	searchResp, err := s.Search(TargetMemory, "", "needle", MaxSearchTopK)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(searchResp.Results) > s.MaxTopics {
+		t.Fatalf("Search should not scan beyond topic cap; got %d results over cap %d", len(searchResp.Results), s.MaxTopics)
+	}
+	if snap := s.Snapshot(); !strings.Contains(snap, "capped at 3 topic file") {
+		t.Fatalf("Snapshot topic index should mention cap, got:\n%s", snap)
+	}
+}
+
+func TestMemoryTopicDirectoryScanReadsPastOneBatch(t *testing.T) {
+	s := newTestStore(t)
+	s.MaxTopics = memoryTopicDirReadBatch + 2
+	topicsDir := filepath.Join(s.MemoryDir, "topics")
+	for i := 0; i < s.MaxTopics+1; i++ {
+		if err := writeMemoryFile(filepath.Join(topicsDir, fmt.Sprintf("batch-%03d.md", i)), []string{"fact"}); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	files, truncated := s.listTopicFilesLocked(s.topicCountLimit())
+	if len(files) != s.MaxTopics || !truncated {
+		t.Fatalf("batched topic scan returned len=%d truncated=%v, want len=%d truncated=true", len(files), truncated, s.MaxTopics)
 	}
 }
 
@@ -406,6 +495,54 @@ func TestMemorySnapshotReflectsDiskState(t *testing.T) {
 	}
 }
 
+func TestMemorySnapshotCapsHandEditedInlineBuckets(t *testing.T) {
+	s := newTestStore(t)
+	s.CoreCharLimit = 40
+	s.TopicCharLimit = 45
+	s.UserCharLimit = 35
+
+	if err := writeMemoryFile(filepath.Join(s.MemoryDir, "core.md"), []string{"core " + strings.Repeat("a", 80) + " core-tail"}); err != nil {
+		t.Fatal(err)
+	}
+	if err := writeMemoryFile(s.generalPath(), []string{"general " + strings.Repeat("b", 80) + " general-tail"}); err != nil {
+		t.Fatal(err)
+	}
+	if err := writeMemoryFile(s.UserPath, []string{"user " + strings.Repeat("c", 80) + " user-tail"}); err != nil {
+		t.Fatal(err)
+	}
+
+	snap := s.Snapshot()
+	for _, want := range []string{"core aaaa", "general bbbb", "user cccc"} {
+		if !strings.Contains(snap, want) {
+			t.Fatalf("snapshot missing expected prefix %q:\n%s", want, snap)
+		}
+	}
+	for _, forbidden := range []string{"core-tail", "general-tail", "user-tail"} {
+		if strings.Contains(snap, forbidden) {
+			t.Fatalf("snapshot leaked truncated tail %q:\n%s", forbidden, snap)
+		}
+	}
+	if got := strings.Count(snap, "snapshot injected first"); got != 3 {
+		t.Fatalf("snapshot should mark all three inline buckets as truncated, got %d markers:\n%s", got, snap)
+	}
+}
+
+func TestMemorySnapshotStripsEntryTimestamps(t *testing.T) {
+	defer func(orig func() time.Time) { nowUTC = orig }(nowUTC)
+	nowUTC = func() time.Time { return time.Date(2026, 5, 23, 12, 34, 56, 0, time.UTC) }
+	s := newTestStore(t)
+	if _, err := s.Add(TargetMemory, "", "fact without timestamp noise"); err != nil {
+		t.Fatal(err)
+	}
+	snap := s.Snapshot()
+	if !strings.Contains(snap, "fact without timestamp noise") {
+		t.Fatalf("snapshot missing fact:\n%s", snap)
+	}
+	if strings.Contains(snap, "[2026-05-23T12:34:56Z]") {
+		t.Fatalf("snapshot should not inject storage timestamp prefixes:\n%s", snap)
+	}
+}
+
 func TestMemorySnapshotEmptyReturnsEmpty(t *testing.T) {
 	s := newTestStore(t)
 	if got := s.Snapshot(); got != "" {
@@ -462,6 +599,70 @@ func TestMemoryAtomicWriteRoundtrip(t *testing.T) {
 	matches, _ := filepath.Glob(filepath.Join(dir, ".mem-*.tmp"))
 	if len(matches) != 0 {
 		t.Fatalf("tempfile not cleaned up: %v", matches)
+	}
+}
+
+func TestMemoryReadRejectsOversizedFile(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "MEMORY.md")
+	f, err := os.Create(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := f.Truncate(MaxMemoryFileBytes + 1); err != nil {
+		t.Fatal(err)
+	}
+	if err := f.Close(); err != nil {
+		t.Fatal(err)
+	}
+
+	_, err = readMemoryFile(path)
+	if err == nil {
+		t.Fatal("readMemoryFile should reject oversized files")
+	}
+	if !strings.Contains(err.Error(), "exceeds") {
+		t.Fatalf("oversized error should explain cap, got %v", err)
+	}
+}
+
+func TestMemoryWriteRejectsOversizedFile(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "MEMORY.md")
+	err := writeMemoryFile(path, []string{strings.Repeat("x", MaxMemoryFileBytes+1)})
+	if err == nil {
+		t.Fatal("writeMemoryFile should reject oversized files")
+	}
+	if !strings.Contains(err.Error(), "would exceed") {
+		t.Fatalf("oversized write error should explain cap, got %v", err)
+	}
+}
+
+func TestMemorySearchSkipsOversizedTopicAndKeepsUsableResults(t *testing.T) {
+	s := newTestStore(t)
+	topicsDir := filepath.Join(s.MemoryDir, "topics")
+	if err := os.MkdirAll(topicsDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	huge, err := os.Create(filepath.Join(topicsDir, "huge.md"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := huge.Truncate(MaxMemoryFileBytes + 1); err != nil {
+		t.Fatal(err)
+	}
+	if err := huge.Close(); err != nil {
+		t.Fatal(err)
+	}
+	if err := writeMemoryFile(filepath.Join(topicsDir, "usable.md"), []string{"needle survives"}); err != nil {
+		t.Fatal(err)
+	}
+
+	resp, err := s.Search(TargetMemory, "", "needle", 5)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(resp.Results) != 1 || resp.Results[0].Topic != "usable" {
+		t.Fatalf("search should skip oversized topic and keep usable result, got %+v", resp.Results)
 	}
 }
 
@@ -712,6 +913,105 @@ func TestMemorySearchAcrossTopics(t *testing.T) {
 	resp, _ = s.Search(TargetMemory, "", "the and of with", 5)
 	if resp.OK {
 		t.Errorf("stopword-only query should be rejected with OK=false; got %+v", resp)
+	}
+	if !strings.Contains(resp.Message, "Next:") || !strings.Contains(resp.Message, "concrete nouns") {
+		t.Errorf("stopword-only query should include a corrective Next step, got %q", resp.Message)
+	}
+}
+
+func TestMemorySearchNoResultsSuggestsRecovery(t *testing.T) {
+	s := newTestStore(t)
+	_, _ = s.Add(TargetMemory, "deploy", "deploys go through fly.io")
+
+	resp, err := s.Search(TargetMemory, "", "kubernetes helm", 5)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !resp.OK {
+		t.Fatalf("no-hit search should still be a successful search response: %+v", resp)
+	}
+	if len(resp.Results) != 0 {
+		t.Fatalf("expected no results, got %+v", resp.Results)
+	}
+	for _, want := range []string{"no entries matched", "Next:", "action=list"} {
+		if !strings.Contains(resp.Message, want) {
+			t.Fatalf("message missing %q: %q", want, resp.Message)
+		}
+	}
+}
+
+func TestMemorySearchNormalizesRunawayLimits(t *testing.T) {
+	s := newTestStore(t)
+	path := filepath.Join(s.MemoryDir, "topics", "ops.md")
+	var entries []string
+	for i := 0; i < MaxSearchTopK+3; i++ {
+		entries = append(entries, fmt.Sprintf("needle entry %02d", i))
+	}
+	if err := writeMemoryFile(path, entries); err != nil {
+		t.Fatal(err)
+	}
+
+	topK := NormalizeSearchTopK(1 << 30)
+	if topK != MaxSearchTopK {
+		t.Fatalf("NormalizeSearchTopK runaway = %d, want %d", topK, MaxSearchTopK)
+	}
+	resp, err := s.Search(TargetMemory, "ops", "needle", 1<<30)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(resp.Results) != MaxSearchTopK {
+		t.Fatalf("runaway top_k returned %d results, want %d", len(resp.Results), MaxSearchTopK)
+	}
+}
+
+func TestMemorySearchKeepsBestHitsWithinTopKWhileScanning(t *testing.T) {
+	s := newTestStore(t)
+	path := filepath.Join(s.MemoryDir, "topics", "ops.md")
+	if err := writeMemoryFile(path, []string{
+		"needle only",
+		"needle weak",
+		"needle strong strong strong",
+	}); err != nil {
+		t.Fatal(err)
+	}
+
+	resp, err := s.Search(TargetMemory, "ops", "needle strong", 1)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(resp.Results) != 1 {
+		t.Fatalf("top_k=1 returned %d results: %+v", len(resp.Results), resp.Results)
+	}
+	if !strings.Contains(resp.Results[0].Snippet, "strong") {
+		t.Fatalf("bounded search should keep later high-scoring hit, got %+v", resp.Results)
+	}
+}
+
+func TestMemorySearchQueryNormalization(t *testing.T) {
+	in := strings.Repeat("界", MaxSearchQueryBytes)
+	got := NormalizeSearchQuery(in)
+	if len(got) > MaxSearchQueryBytes {
+		t.Fatalf("NormalizeSearchQuery returned %d bytes, want <= %d", len(got), MaxSearchQueryBytes)
+	}
+	if !utf8.ValidString(got) {
+		t.Fatalf("NormalizeSearchQuery returned invalid UTF-8: %q", got)
+	}
+
+	var parts []string
+	for i := 0; i < MaxSearchQueryTerms+5; i++ {
+		parts = append(parts, fmt.Sprintf("term%02d", i))
+	}
+	parts = append(parts, "term00", "term01")
+	terms := tokenizeMemoryQuery(strings.Join(parts, " "))
+	if len(terms) != MaxSearchQueryTerms {
+		t.Fatalf("tokenizeMemoryQuery returned %d terms, want %d: %v", len(terms), MaxSearchQueryTerms, terms)
+	}
+	seen := map[string]bool{}
+	for _, term := range terms {
+		if seen[term] {
+			t.Fatalf("tokenizeMemoryQuery should dedupe terms, duplicate %q in %v", term, terms)
+		}
+		seen[term] = true
 	}
 }
 
@@ -1015,5 +1315,8 @@ func TestMemoryInvalidTarget(t *testing.T) {
 	}
 	if !strings.Contains(resp.Message, "invalid memory target") {
 		t.Fatalf("expected invalid-target message, got %q", resp.Message)
+	}
+	if !strings.Contains(resp.Message, "Next:") || !strings.Contains(resp.Message, "target=memory") || !strings.Contains(resp.Message, "target=user") {
+		t.Fatalf("invalid-target message should tell the model how to recover, got %q", resp.Message)
 	}
 }

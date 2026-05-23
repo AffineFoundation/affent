@@ -7,6 +7,7 @@ import (
 	"flag"
 	"fmt"
 	"io"
+	"math"
 	"os"
 	"path/filepath"
 	"sort"
@@ -79,7 +80,7 @@ type commonFlags struct {
 	// prompt. Default on; set --project-context=false to disable.
 	projectContext bool
 
-	compactTrigger  int // 0 disables proactive compaction; reactive still works
+	compactTrigger  int // <=0 falls back to agent.DefaultSummaryTriggerMsgs
 	compactKeepLast int
 
 	sessionID    string // explicit; empty means "use --continue or new"
@@ -139,7 +140,7 @@ func (c *commonFlags) bind(fs *flag.FlagSet) {
 	fs.StringVar(&c.mcpConfigPath, "mcp-config", "", "path to MCP server config JSON ({\"servers\":[{...}]}) (env: AFFENTCTL_MCP_CONFIG)")
 	fs.IntVar(&c.compactTrigger, "compact-trigger", 240, "compact conversation when message count exceeds this. 0 / negative → fall back to agent runtime's default (240). Reactive compaction (on context-overflow errors) is unaffected.")
 	fs.IntVar(&c.compactKeepLast, "compact-keep-last", 10, "messages preserved verbatim at the tail of the conversation when compacting")
-	fs.StringVar(&c.executor, "executor", "local", "shell-tool backend: 'local' (host; no isolation), or 'docker:<container_id>' (exec into an already-running container, e.g. 'docker:abc123def'; file tools also route through docker so they see the container's filesystem). Caller manages container lifecycle. (env: AFFENTCTL_EXECUTOR)")
+	fs.StringVar(&c.executor, "executor", "local", "shell-tool backend: 'local' (host; no isolation), 'sandbox' (auto-start affentctl's memory-limited Docker sandbox), or 'docker:<container_id>' (exec into an existing container). (env: AFFENTCTL_EXECUTOR)")
 	fs.BoolVar(&c.subagentEnabled, "subagent", true, "register subagent_run for bounded read-only delegation; set false to force a single-loop agent (env: AFFENTCTL_SUBAGENT)")
 	fs.IntVar(&c.subagentMaxDepth, "subagent-max-depth", agent.DefaultSubagentMaxDepth, "maximum recursive subagent depth; 1 disables nested subagents, hard max 4 (env: AFFENTCTL_SUBAGENT_MAX_DEPTH)")
 	fs.StringVar(&c.temperature, "temperature", "", "sampling temperature forwarded to upstream LLM (omit → provider default; set 0 for deterministic eval decoding)")
@@ -158,6 +159,9 @@ func parseSampling(temperature, topP, maxTokens, seed string) (agent.SamplingDef
 		if err != nil {
 			return s, fmt.Errorf("--temperature: %w", err)
 		}
+		if math.IsNaN(t) || math.IsInf(t, 0) || t < 0 || t > 2 {
+			return s, fmt.Errorf("--temperature must be between 0 and 2")
+		}
 		s.Temperature = &t
 	}
 	if topP != "" {
@@ -165,12 +169,18 @@ func parseSampling(temperature, topP, maxTokens, seed string) (agent.SamplingDef
 		if err != nil {
 			return s, fmt.Errorf("--top-p: %w", err)
 		}
+		if math.IsNaN(t) || math.IsInf(t, 0) || t < 0 || t > 1 {
+			return s, fmt.Errorf("--top-p must be between 0 and 1")
+		}
 		s.TopP = &t
 	}
 	if maxTokens != "" {
 		n, err := strconv.Atoi(maxTokens)
 		if err != nil {
 			return s, fmt.Errorf("--max-tokens: %w", err)
+		}
+		if n <= 0 {
+			return s, fmt.Errorf("--max-tokens must be a positive integer")
 		}
 		s.MaxTokens = &n
 	}
@@ -184,6 +194,28 @@ func parseSampling(temperature, topP, maxTokens, seed string) (agent.SamplingDef
 	return s, nil
 }
 
+func effectiveBaseURL(baseURL string) string {
+	baseURL = strings.TrimSpace(baseURL)
+	if baseURL == "" {
+		return agent.DefaultBaseURL
+	}
+	return strings.TrimRight(baseURL, "/")
+}
+
+func defaultEndpointRequiresAPIKey(baseURL string) bool {
+	return effectiveBaseURL(baseURL) == agent.DefaultBaseURL
+}
+
+func validateLLMConfig(c commonFlags) error {
+	if strings.TrimSpace(c.model) == "" {
+		return fmt.Errorf("--model (or AFFENTCTL_MODEL) is required")
+	}
+	if defaultEndpointRequiresAPIKey(c.baseURL) && strings.TrimSpace(c.apiKey) == "" {
+		return fmt.Errorf("--api-key (or AFFENTCTL_API_KEY) is required when using the default %s endpoint; set --base-url for an endpoint that does not require auth", agent.DefaultBaseURL)
+	}
+	return nil
+}
+
 // flagEnvSources maps flag-name → env-var-name for every flag whose
 // default reads from an env var. Used by loadConfigFile so the env
 // var beats the config file (matches the documented precedence in
@@ -193,6 +225,7 @@ func parseSampling(temperature, topP, maxTokens, seed string) (agent.SamplingDef
 // common_test.go catch drift.
 var flagEnvSources = map[string]string{
 	"config":             "AFFENTCTL_CONFIG",
+	"workspace":          "AFFENTCTL_WORKSPACE",
 	"base-url":           "AFFENTCTL_BASE_URL",
 	"api-key":            "AFFENTCTL_API_KEY",
 	"model":              "AFFENTCTL_MODEL",
@@ -222,6 +255,8 @@ type fileConfig struct {
 		Dir            *string `json:"dir"`             // v2 memory directory
 		UserStore      *string `json:"user_store"`
 		MaxChars       *string `json:"max_chars"`
+		TopicMaxChars  *int    `json:"topic_max_chars"`
+		MaxTopics      *int    `json:"max_topics"`
 	} `json:"memory"`
 	ProjectContext *bool `json:"project_context"`
 	Compact        *struct {
@@ -251,7 +286,12 @@ func applyConfig(c *commonFlags, fs *flag.FlagSet) error {
 	if err := loadConfigFile(c, fs); err != nil {
 		return err
 	}
-	applyEnvConfig(c, fs)
+	if err := applyEnvConfig(c, fs); err != nil {
+		return err
+	}
+	if c.executor == "sandbox" && c.workspace == "./affent-workspace" && !flagWasSet(fs, "workspace") && os.Getenv("AFFENTCTL_WORKSPACE") == "" {
+		c.workspace = defaultSandboxWorkspace()
+	}
 	// memory-only is the isolation mode: register only the memory
 	// tool and inject no other content sources into the system prompt.
 	// It implies --memory=true and forces --project-context=false
@@ -261,7 +301,50 @@ func applyConfig(c *commonFlags, fs *flag.FlagSet) error {
 		c.projectContext = false
 		c.subagentEnabled = false
 	}
+	if err := normalizeRuntimeLimits(c); err != nil {
+		return err
+	}
 	return nil
+}
+
+func normalizeRuntimeLimits(c *commonFlags) error {
+	if c.maxTurns <= 0 {
+		return fmt.Errorf("--max-turns must be a positive integer")
+	}
+	if c.callTimeout <= 0 {
+		return fmt.Errorf("--max-call-timeout must be a positive duration")
+	}
+	if c.retryTransient < 0 {
+		return fmt.Errorf("--retry-transient must be zero or a positive integer")
+	}
+	if c.retryTransient == 0 {
+		// Loop uses negative to disable transient retries; affentctl's
+		// user-facing flag documents 0 as the disable value.
+		c.retryTransient = -1
+	}
+	if c.retryBackoff <= 0 {
+		return fmt.Errorf("--retry-backoff must be a positive duration")
+	}
+	if c.memoryTopicMaxChars < 0 {
+		return fmt.Errorf("--memory-topic-max-chars must be zero or a positive integer")
+	}
+	if c.memoryMaxTopics < 0 {
+		return fmt.Errorf("--memory-max-topics must be zero or a positive integer")
+	}
+	if c.subagentMaxDepth < 1 || c.subagentMaxDepth > agent.MaxSubagentDepth {
+		return fmt.Errorf("--subagent-max-depth must be between 1 and %d", agent.MaxSubagentDepth)
+	}
+	return nil
+}
+
+func flagWasSet(fs *flag.FlagSet, name string) bool {
+	wasSet := false
+	fs.Visit(func(f *flag.Flag) {
+		if f.Name == name {
+			wasSet = true
+		}
+	})
+	return wasSet
 }
 
 func loadConfigFile(c *commonFlags, fs *flag.FlagSet) error {
@@ -280,7 +363,9 @@ func loadConfigFile(c *commonFlags, fs *flag.FlagSet) error {
 		return fmt.Errorf("read config %s: %w", c.configPath, err)
 	}
 	var cfg fileConfig
-	if err := json.Unmarshal(raw, &cfg); err != nil {
+	dec := json.NewDecoder(strings.NewReader(string(raw)))
+	dec.DisallowUnknownFields()
+	if err := dec.Decode(&cfg); err != nil {
 		return fmt.Errorf("parse config %s: %w", c.configPath, err)
 	}
 	// Precedence: CLI flag > env var > config file > built-in default.
@@ -349,6 +434,8 @@ func loadConfigFile(c *commonFlags, fs *flag.FlagSet) error {
 		setString("memory-dir", &c.memoryDir, cfg.Memory.Dir)
 		setString("memory-user-store", &c.memoryUserStore, cfg.Memory.UserStore)
 		setString("memory-max-chars", &c.memoryMaxChars, cfg.Memory.MaxChars)
+		setInt("memory-topic-max-chars", &c.memoryTopicMaxChars, cfg.Memory.TopicMaxChars)
+		setInt("memory-max-topics", &c.memoryMaxTopics, cfg.Memory.MaxTopics)
 	}
 	setBool("project-context", &c.projectContext, cfg.ProjectContext)
 	if cfg.Compact != nil {
@@ -369,7 +456,7 @@ func loadConfigFile(c *commonFlags, fs *flag.FlagSet) error {
 	return nil
 }
 
-func applyEnvConfig(c *commonFlags, fs *flag.FlagSet) {
+func applyEnvConfig(c *commonFlags, fs *flag.FlagSet) error {
 	setByCLI := map[string]bool{}
 	fs.Visit(func(f *flag.Flag) { setByCLI[f.Name] = true })
 
@@ -381,18 +468,20 @@ func applyEnvConfig(c *commonFlags, fs *flag.FlagSet) {
 			*dst = v
 		}
 	}
-	setBool := func(name, env string, dst *bool) {
+	setBoolStrict := func(name, env string, dst *bool) error {
 		if setByCLI[name] {
-			return
+			return nil
 		}
 		v := os.Getenv(env)
 		if v == "" {
-			return
+			return nil
 		}
 		parsed, err := strconv.ParseBool(v)
-		if err == nil {
-			*dst = parsed
+		if err != nil {
+			return fmt.Errorf("%s=%q: %w", env, v, err)
 		}
+		*dst = parsed
+		return nil
 	}
 
 	setString("base-url", "AFFENTCTL_BASE_URL", &c.baseURL)
@@ -400,21 +489,29 @@ func applyEnvConfig(c *commonFlags, fs *flag.FlagSet) {
 	setString("model", "AFFENTCTL_MODEL", &c.model)
 	setString("mcp-config", "AFFENTCTL_MCP_CONFIG", &c.mcpConfigPath)
 	setString("executor", "AFFENTCTL_EXECUTOR", &c.executor)
-	setBool("subagent", "AFFENTCTL_SUBAGENT", &c.subagentEnabled)
-	setInt := func(name, env string, dst *int) {
+	if err := setBoolStrict("subagent", "AFFENTCTL_SUBAGENT", &c.subagentEnabled); err != nil {
+		return err
+	}
+	setString("workspace", "AFFENTCTL_WORKSPACE", &c.workspace)
+	setInt := func(name, env string, dst *int) error {
 		if setByCLI[name] {
-			return
+			return nil
 		}
 		v := os.Getenv(env)
 		if v == "" {
-			return
+			return nil
 		}
 		parsed, err := strconv.Atoi(v)
-		if err == nil {
-			*dst = parsed
+		if err != nil {
+			return fmt.Errorf("%s=%q: %w", env, v, err)
 		}
+		*dst = parsed
+		return nil
 	}
-	setInt("subagent-max-depth", "AFFENTCTL_SUBAGENT_MAX_DEPTH", &c.subagentMaxDepth)
+	if err := setInt("subagent-max-depth", "AFFENTCTL_SUBAGENT_MAX_DEPTH", &c.subagentMaxDepth); err != nil {
+		return err
+	}
+	return nil
 }
 
 // loopBundle is everything a subcommand needs after setup: the loop
@@ -464,8 +561,8 @@ func setupLoop(c commonFlags) (*loopBundle, int) {
 		Level(logLevel).
 		With().Timestamp().Logger()
 
-	if c.model == "" {
-		log.Error().Msg("--model (or AFFENTCTL_MODEL) is required")
+	if err := validateLLMConfig(c); err != nil {
+		log.Error().Err(err).Msg("llm config")
 		return nil, 64
 	}
 
@@ -575,7 +672,14 @@ func setupLoop(c commonFlags) (*loopBundle, int) {
 		agent.RegisterMemoryOnly(tools, memStore)
 	} else {
 		var execErr error
-		execBackend, execErr = buildExecutor(c.executor, sid, workspace)
+		executorSpec := c.executor
+		executorSpec, execErr = maybeStartSandboxExecutor(executorSpec, workspace, osCommandRunner{buildTimeout: sandboxDockerBuildTimeout, stdout: os.Stdout, stderr: os.Stderr, streamBuild: true})
+		if execErr != nil {
+			log.Error().Err(execErr).Msg("sandbox")
+			_ = traceClose()
+			return nil, 3
+		}
+		execBackend, execErr = buildExecutor(executorSpec, sid, workspace)
 		if execErr != nil {
 			log.Error().Err(execErr).Msg("executor")
 			_ = traceClose()
@@ -665,14 +769,7 @@ func setupLoop(c commonFlags) (*loopBundle, int) {
 	// path is gated on l.Compactor != nil). User knobs override the
 	// OpenHands-style defaults; reusing the same LLM client means
 	// compactions hit the same provider/model the agent uses.
-	triggerMsgs := c.compactTrigger
-	if triggerMsgs <= 0 {
-		triggerMsgs = agent.DefaultSummaryTriggerMsgs
-	}
-	keepLast := c.compactKeepLast
-	if keepLast <= 0 {
-		keepLast = agent.DefaultSummaryKeepLast
-	}
+	triggerMsgs, keepLast := resolveCompactionConfig(c.compactTrigger, c.compactKeepLast)
 	loop.Compactor = &agent.LLMSummaryCompactor{
 		LLM:         llm,
 		TriggerMsgs: triggerMsgs,
@@ -700,10 +797,21 @@ func setupLoop(c commonFlags) (*loopBundle, int) {
 	}, 0
 }
 
-// buildExecutor parses the --executor spec and returns the matching
-// affent executor. "local" (or empty) → LocalExecutor; "docker:<cid>" →
-// DockerExecExecutor pointed at the named container. Unknown specs are
-// a hard error so typos don't silently fall back.
+func resolveCompactionConfig(trigger, keepLast int) (int, int) {
+	if trigger <= 0 {
+		trigger = agent.DefaultSummaryTriggerMsgs
+	}
+	if keepLast <= 0 {
+		keepLast = agent.DefaultSummaryKeepLast
+	}
+	return trigger, keepLast
+}
+
+// buildExecutor parses the resolved --executor spec and returns the
+// matching affent executor. "local" (or empty) → LocalExecutor;
+// "docker:<cid>" → DockerExecExecutor pointed at the named container.
+// The user-facing "sandbox" alias is expanded before this function.
+// Unknown specs are a hard error so typos don't silently fall back.
 func buildExecutor(spec, sessionID, workspace string) (executor.Executor, error) {
 	switch {
 	case spec == "" || spec == "local":
@@ -713,9 +821,12 @@ func buildExecutor(spec, sessionID, workspace string) (executor.Executor, error)
 		if cid == "" {
 			return nil, fmt.Errorf("--executor docker: requires a container id (e.g. docker:abc123)")
 		}
-		return executor.NewDockerExecExecutor(sessionID, cid), nil
+		if err := validateDockerContainerName("--executor docker", cid); err != nil {
+			return nil, err
+		}
+		return executor.NewDockerExecExecutor(sessionID, cid).WithDefaultCwd(workspace), nil
 	default:
-		return nil, fmt.Errorf("unknown --executor %q (valid: local, docker:<container_id>)", spec)
+		return nil, fmt.Errorf("unknown --executor %q (valid: local, sandbox, docker:<container_id>)", spec)
 	}
 }
 

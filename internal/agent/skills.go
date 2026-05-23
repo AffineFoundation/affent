@@ -1,6 +1,17 @@
 package agent
 
-import "strings"
+import (
+	"embed"
+	"encoding/json"
+	"fmt"
+	"io/fs"
+	"path"
+	"sort"
+	"strings"
+)
+
+//go:embed builtin_skills/*/SKILL.md builtin_skills/*/skill.json
+var builtinSkillFS embed.FS
 
 // SkillProvider returns a concise, task-relevant system block for the
 // current user turn. It is deliberately a tiny interface: deployments
@@ -16,24 +27,39 @@ type SkillProvider func(userText string) string
 //
 // Activation precedence:
 //
-//  1. If Match is non-nil, it owns the decision (used for trained
-//     classifiers or multi-signal rules).
+//  1. If Match is non-nil, it owns the decision. Built-ins use this
+//     for conservative multi-signal predicates instead of broad word
+//     triggers.
 //  2. Otherwise, the skill fires when any string in Triggers is a
 //     case-insensitive substring of the user message.
 //
-// Triggers should stay as generic shape signals ("http://", "page",
-// "测试") not specific site / project / company names — domain-
-// specific tokens leak eval state into the router and bias unrelated
-// traffic. The router itself does not enforce that; reviewers do.
+// Triggers are a simple extension point, not the long-term skill
+// selection architecture. They should stay as generic shape signals
+// ("http://", "page") rather than specific site / project / company
+// names. The production direction is a manifest/indexed catalog plus
+// explicit skill loading; this layer exists as a deterministic,
+// eval-pinned bootstrap for small models.
 type Skill struct {
 	// Name is the skill's identifier. Surfaced in the Body's header
 	// (e.g. "AFFENT ACTIVE SKILL: web_snapshot_fact_extraction") so
 	// trace consumers and operators can grep / filter.
 	Name string
+	// Description is a one-line catalog summary used by skill listing
+	// surfaces. It should describe when the skill helps, not repeat
+	// the full procedure.
+	Description string
+	// Source identifies where the skill body came from. Built-ins use
+	// an embedded SKILL.md path; deployments can use file://, mcp://,
+	// or any operator-defined label.
+	Source string
 	// Body is the system-prompt block injected verbatim when the
 	// skill activates. Multi-line markdown is fine; the registry
 	// joins multiple active skills with a blank line.
 	Body string
+	// AutoActivation is a manifest-declared conservative local rule
+	// for automatic injection. It keeps built-in skill routing data
+	// near the skill file instead of scattering it through Go code.
+	AutoActivation SkillAutoActivation
 	// Triggers are substrings of the lowercased user text that fire
 	// this skill. Ignored when Match is non-nil.
 	Triggers []string
@@ -50,6 +76,9 @@ func (s Skill) activates(lowerUserText string) bool {
 	if s.Match != nil {
 		return s.Match(lowerUserText)
 	}
+	if s.AutoActivation.hasRules() {
+		return s.AutoActivation.matches(lowerUserText)
+	}
 	for _, trigger := range s.Triggers {
 		if trigger == "" {
 			continue
@@ -61,11 +90,44 @@ func (s Skill) activates(lowerUserText string) bool {
 	return false
 }
 
+type SkillAutoActivation struct {
+	// Any activates the skill when any phrase is present.
+	Any []string `json:"any,omitempty"`
+	// AllAny activates the skill when each group has at least one
+	// present phrase. Example: verb group AND domain group.
+	AllAny [][]string `json:"all_any,omitempty"`
+}
+
+func (a SkillAutoActivation) hasRules() bool {
+	return len(a.Any) > 0 || len(a.AllAny) > 0
+}
+
+func (a SkillAutoActivation) matches(lowerUserText string) bool {
+	if containsAny(lowerUserText, a.Any) {
+		return true
+	}
+	if len(a.AllAny) == 0 {
+		return false
+	}
+	for _, group := range a.AllAny {
+		if !containsAny(lowerUserText, group) {
+			return false
+		}
+	}
+	return true
+}
+
 // SkillRegistry is an ordered set of skills. The router iterates in
 // registration order so multiple active skills compose deterministically
 // (matters for prompt-shape stability across reproducible eval runs).
 type SkillRegistry struct {
 	skills []Skill
+}
+
+type SkillCatalogEntry struct {
+	Name        string `json:"name"`
+	Description string `json:"description,omitempty"`
+	Source      string `json:"source,omitempty"`
 }
 
 // Register appends a skill. Operators wiring a custom registry call
@@ -80,6 +142,37 @@ func (r *SkillRegistry) Register(s Skill) {
 		return
 	}
 	r.skills = append(r.skills, s)
+}
+
+// Lookup returns a registered skill by exact name.
+func (r *SkillRegistry) Lookup(name string) (Skill, bool) {
+	if r == nil {
+		return Skill{}, false
+	}
+	for _, s := range r.skills {
+		if s.Name == name {
+			return s, true
+		}
+	}
+	return Skill{}, false
+}
+
+// Catalog returns the non-body metadata for registered skills. Tool
+// surfaces use this to let the model discover reusable workflows
+// without injecting every skill body into the prompt.
+func (r *SkillRegistry) Catalog() []SkillCatalogEntry {
+	if r == nil {
+		return nil
+	}
+	out := make([]SkillCatalogEntry, 0, len(r.skills))
+	for _, s := range r.skills {
+		out = append(out, SkillCatalogEntry{
+			Name:        s.Name,
+			Description: s.Description,
+			Source:      s.Source,
+		})
+	}
+	return out
 }
 
 // Provide is the SkillProvider implementation backed by this
@@ -114,102 +207,138 @@ func (r *SkillRegistry) Names() []string {
 
 // --- builtin skill catalog ---
 
-// webSnapshotTriggers are generic shape signals: the user mentioned a
-// URL, a browser, or "this page". A specific site name leaking into
-// this list (an earlier draft had "taostats") would make the codebase
-// carry domain-specific eval state and bias the router on unrelated
-// traffic without buying anything — a URL or "page" / "网页" match
-// already fires for the cases that motivated the trigger.
-var webSnapshotTriggers = []string{
-	"http://",
-	"https://",
-	"browser",
-	"web page",
-	"website",
-	"网页",
-	"页面",
-	"浏览器",
-	"访问",
+func containsAny(text string, needles []string) bool {
+	for _, needle := range needles {
+		if needle != "" && strings.Contains(text, needle) {
+			return true
+		}
+	}
+	return false
 }
 
-// codingRepairTriggers are vocabulary signals that the user is asking
-// for a code edit / test fix. Same rule: stay generic — no project /
-// language-version / framework names, since those would over-trigger
-// on planning conversations.
-var codingRepairTriggers = []string{
-	"fix",
-	"bug",
-	"failing test",
-	"test fails",
-	"implement",
-	"refactor",
-	"code",
-	"compile",
-	"go test",
-	"pytest",
-	"npm test",
-	"修复",
-	"失败",
-	"测试",
-	"实现",
-	"代码",
-	"编译",
+type builtinSkillManifest struct {
+	Name           string              `json:"name"`
+	Description    string              `json:"description"`
+	Order          int                 `json:"order,omitempty"`
+	AutoActivation SkillAutoActivation `json:"auto_activation"`
 }
 
-const webSnapshotSkillBody = `AFFENT ACTIVE SKILL: web_snapshot_fact_extraction
+func mustBuiltinSkill(name string) Skill {
+	s, _, err := loadBuiltinSkill(builtinSkillFS, name)
+	if err != nil {
+		panic(err.Error())
+	}
+	return s
+}
 
-Use this procedure for rendered web-page fact extraction:
-- Keep the scope narrow. If the user asks for current-page visible facts, extract only the current page/snapshot and do not click tabs, paginate, or broaden across the site.
-- Prefer browser_navigate with wait_until=networkidle, then read the returned snapshot. Use browser_wait/browser_snapshot/one small scroll only when the requested fact is missing.
-- Do not use shell/curl/python to fetch the same web page when the user asked for browser-based access or when browser_* tools are available.
-- Treat page titles, labels, and values separately. Do not label a nearby number as a metric unless the snapshot gives enough context.
-- When a page exposes multiple price-like values, report them separately with their visible source (for example: title price vs body/top-bar USD price). Do not replace a small title decimal with a nearby large USD value, and do not infer which one is the asset price unless the label says so.
-- If the user asks for "all information" on a dynamic site, report the visible overview first and say which extra tabs/pages require separate bounded inspection instead of trying to audit the whole site in one run.`
+func mustBuiltinSkills() []Skill {
+	skills, err := loadBuiltinSkills(builtinSkillFS)
+	if err != nil {
+		panic(err.Error())
+	}
+	return skills
+}
 
-const codingRepairSkillBody = `AFFENT ACTIVE SKILL: coding_repair_workflow
+type orderedBuiltinSkill struct {
+	skill Skill
+	order int
+}
 
-Use this procedure for code changes:
-- Reproduce first with the narrowest relevant test or command before editing, unless the user only asked for analysis.
-- Run test/build commands directly: use commands like go test ./..., python -m pytest, npm test, etc. Do not wrap the first reproduction in cd ... && ... | head, ; echo "$?", or || true.
-- Inspect the failing code and the failing test/spec. Change implementation files by default; do not edit tests unless the user asks or the test is clearly wrong.
-- Keep the patch small and coherent. Prefer surgical edit_file changes over broad rewrites.
-- Preserve verification exit codes. Do not pipe tests/builds through head/tail, append "|| true", or append "echo $?" wrappers; rely on the shell tool's exit code line, or redirect output to a file and inspect chunks after the command finishes.
-- Do not add or install a new dependency to fix a failing test unless the project manifest already declares that dependency or the user explicitly asks for dependency work. Prefer standard-library fixes when they are enough.
-- Do not import a third-party package just because it is installed in the current environment. If the manifest does not declare it, treat it as unavailable; prefer standard-library implementations.
-- If a build/test tool is not on PATH, do bounded discovery: command -v, repo-local toolchains such as ./.tmp/toolchains, and common user-local paths such as $HOME/.local. Do not run broad filesystem searches like find /.
-- After editing, run the same failing command again. If the language has a standard formatter and it is available, run it before the final test.
-- In the final answer, state the files changed and the exact verification command/result.`
+func loadBuiltinSkills(fsys fs.FS) ([]Skill, error) {
+	entries, err := fs.ReadDir(fsys, "builtin_skills")
+	if err != nil {
+		return nil, fmt.Errorf("list builtin skills: %w", err)
+	}
+	ordered := make([]orderedBuiltinSkill, 0, len(entries))
+	for _, entry := range entries {
+		if !entry.IsDir() {
+			continue
+		}
+		skill, order, err := loadBuiltinSkill(fsys, entry.Name())
+		if err != nil {
+			return nil, err
+		}
+		ordered = append(ordered, orderedBuiltinSkill{skill: skill, order: order})
+	}
+	sort.SliceStable(ordered, func(i, j int) bool {
+		if ordered[i].order != ordered[j].order {
+			return ordered[i].order < ordered[j].order
+		}
+		return ordered[i].skill.Name < ordered[j].skill.Name
+	})
+	skills := make([]Skill, 0, len(ordered))
+	for _, item := range ordered {
+		skills = append(skills, item.skill)
+	}
+	return skills, nil
+}
+
+func loadBuiltinSkill(fsys fs.FS, dir string) (Skill, int, error) {
+	base := path.Join("builtin_skills", dir)
+	body, err := fs.ReadFile(fsys, path.Join(base, "SKILL.md"))
+	if err != nil {
+		return Skill{}, 0, fmt.Errorf("load builtin skill %s: %w", dir, err)
+	}
+	manifestRaw, err := fs.ReadFile(fsys, path.Join(base, "skill.json"))
+	if err != nil {
+		return Skill{}, 0, fmt.Errorf("load builtin skill manifest %s: %w", dir, err)
+	}
+	var manifest builtinSkillManifest
+	if err := json.Unmarshal(manifestRaw, &manifest); err != nil {
+		return Skill{}, 0, fmt.Errorf("parse builtin skill manifest %s: %w", dir, err)
+	}
+	if manifest.Name == "" {
+		manifest.Name = dir
+	}
+	if manifest.Name != dir {
+		return Skill{}, 0, fmt.Errorf("builtin skill %s manifest name %q does not match directory", dir, manifest.Name)
+	}
+	if strings.TrimSpace(string(body)) == "" {
+		return Skill{}, 0, fmt.Errorf("builtin skill %s has empty SKILL.md", dir)
+	}
+	return Skill{
+		Name:           manifest.Name,
+		Description:    manifest.Description,
+		Source:         "embed:internal/agent/" + path.Join(base, "SKILL.md"),
+		Body:           strings.TrimSpace(string(body)),
+		AutoActivation: manifest.AutoActivation,
+	}, builtinSkillOrder(manifest), nil
+}
+
+func builtinSkillOrder(manifest builtinSkillManifest) int {
+	if manifest.Order > 0 {
+		return manifest.Order
+	}
+	return 1000
+}
 
 // WebSnapshotSkill is the built-in skill for rendered web-page fact
 // extraction. Exported so operators composing a custom registry can
 // keep it without copy-pasting the body.
 func WebSnapshotSkill() Skill {
-	return Skill{
-		Name:     "web_snapshot_fact_extraction",
-		Body:     webSnapshotSkillBody,
-		Triggers: webSnapshotTriggers,
-	}
+	return mustBuiltinSkill("web_snapshot_fact_extraction")
 }
 
 // CodingRepairSkill is the built-in skill for code-edit / test-fix
 // workflows. Same rationale as WebSnapshotSkill — exported so a
 // custom registry can include it selectively.
 func CodingRepairSkill() Skill {
-	return Skill{
-		Name:     "coding_repair_workflow",
-		Body:     codingRepairSkillBody,
-		Triggers: codingRepairTriggers,
-	}
+	return mustBuiltinSkill("coding_repair_workflow")
+}
+
+func EvidenceFactExtractionSkill() Skill {
+	return mustBuiltinSkill("evidence_fact_extraction")
 }
 
 // DefaultSkillRegistry returns the registry affentctl / affentserve
-// install when the operator doesn't override SkillProvider. Adding a
-// new builtin skill is two lines: a Skill struct above and one
-// Register call here. No router code changes.
+// install when the operator doesn't override SkillProvider. Built-in
+// skills are discovered from embedded skill.json manifests so adding
+// one is a new directory, not a router edit.
 func DefaultSkillRegistry() *SkillRegistry {
 	r := &SkillRegistry{}
-	r.Register(WebSnapshotSkill())
-	r.Register(CodingRepairSkill())
+	for _, skill := range mustBuiltinSkills() {
+		r.Register(skill)
+	}
 	return r
 }
 
@@ -218,10 +347,12 @@ func DefaultSkillRegistry() *SkillRegistry {
 // just a slice iteration, not a fresh registry build.
 var builtinSkillProviderRegistry = DefaultSkillRegistry()
 
-// BuiltinSkillProvider is the default lightweight skill router. It
-// delegates to DefaultSkillRegistry, which uses high-precision
-// substring triggers over broad semantic guesses because injecting
-// irrelevant instructions hurts smaller models more than it helps.
+// BuiltinSkillProvider is the default lightweight skill bootstrap. It
+// delegates to DefaultSkillRegistry, which only auto-injects skills
+// when conservative local signals match. This is intentionally modest:
+// irrelevant skill prompts hurt smaller models, and a mature skill
+// system should expose catalog/search/load behavior rather than hide
+// every decision in Go predicates.
 //
 // Custom deployments can build their own SkillRegistry (or any
 // SkillProvider function) and wire it via Loop.SkillProvider without

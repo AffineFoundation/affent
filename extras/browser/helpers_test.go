@@ -1,11 +1,25 @@
 package browser
 
 import (
+	"context"
 	"encoding/base64"
 	"testing"
 
 	"github.com/go-rod/rod/lib/proto"
 )
+
+type legacyTestCache struct {
+	putCalls int
+}
+
+func (c *legacyTestCache) Get(context.Context, string) (*CachedResponse, bool, error) {
+	return nil, false, nil
+}
+
+func (c *legacyTestCache) Put(context.Context, string, *CachedResponse) error {
+	c.putCalls++
+	return nil
+}
 
 // TestIsReplaySafeHeader pins the predicate that the response cache
 // uses to decide what to store + replay. Returning true on a
@@ -113,6 +127,58 @@ func TestDecodeRespBody(t *testing.T) {
 			t.Error("invalid base64 must error")
 		}
 	})
+}
+
+func TestShouldFetchResponseBodyForCache(t *testing.T) {
+	cases := []struct {
+		name              string
+		encodedDataLength float64
+		want              bool
+	}{
+		{name: "unknown length allowed", encodedDataLength: 0, want: true},
+		{name: "negative length allowed", encodedDataLength: -1, want: true},
+		{name: "under cap allowed", encodedDataLength: maxCachedResponseBodyBytes, want: true},
+		{name: "over cap skipped", encodedDataLength: maxCachedResponseBodyBytes + 1, want: false},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			got := shouldFetchResponseBodyForCache(c.encodedDataLength)
+			if got != c.want {
+				t.Fatalf("shouldFetchResponseBodyForCache(%v) = %t, want %t", c.encodedDataLength, got, c.want)
+			}
+		})
+	}
+}
+
+func TestPutResponseCacheUsesPreciseFileCacheResult(t *testing.T) {
+	c, err := NewFileResponseCache(t.TempDir(), 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	stored, err := putResponseCache(context.Background(), c, "https://example.com/challenge", &CachedResponse{
+		StatusCode: 200,
+		Body:       []byte("<html><title>Just a moment...</title></html>"),
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if stored {
+		t.Fatal("challenge body should be skipped, not counted as stored")
+	}
+}
+
+func TestPutResponseCacheFallsBackForLegacyCache(t *testing.T) {
+	c := &legacyTestCache{}
+	stored, err := putResponseCache(context.Background(), c, "https://example.com/ok", &CachedResponse{
+		StatusCode: 200,
+		Body:       []byte("ok"),
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !stored || c.putCalls != 1 {
+		t.Fatalf("legacy cache stored=%t putCalls=%d, want stored with one Put call", stored, c.putCalls)
+	}
 }
 
 // TestSessionConfig_Viewport pins the default-viewport contract:

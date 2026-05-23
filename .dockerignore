@@ -1,0 +1,14 @@
+.affentctl/
+.claude/
+.git/
+.tmp/
+affent-workspace/
+bin/
+dist/
+node_modules/
+
+affentctl
+affenteval
+
+*.log
+*.tmp

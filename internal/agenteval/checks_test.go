@@ -140,6 +140,19 @@ func TestToolRequestRepaired(t *testing.T) {
 	}
 }
 
+func TestToolStatsAtLeast(t *testing.T) {
+	trace := Trace{ToolStats: ToolRuntimeStats{ToolArgsRepaired: 2}}
+	if res := ToolStatsAtLeast("tool_args_repaired", 2).Eval(trace); !res.Pass {
+		t.Fatalf("expected stats check to pass: %+v", res)
+	}
+	if res := ToolStatsAtLeast("tool_args_repaired", 3).Eval(trace); res.Pass {
+		t.Fatal("expected stats check below threshold to fail")
+	}
+	if res := ToolStatsAtLeast("bogus", 1).Eval(trace); res.Pass {
+		t.Fatal("expected unknown stats field to fail")
+	}
+}
+
 func TestToolCalledBefore(t *testing.T) {
 	t.Run("passes when earlier precedes later", func(t *testing.T) {
 		trace := Trace{
@@ -330,6 +343,29 @@ func TestMaxToolCalls(t *testing.T) {
 	t.Run("negative cap means unbounded", func(t *testing.T) {
 		if res := MaxToolCalls(-1).Eval(trace); !res.Pass {
 			t.Errorf("negative cap = unbounded should pass; got %+v", res)
+		}
+	})
+}
+
+func TestMaxSuccessfulToolCalls(t *testing.T) {
+	trace := Trace{Tools: []ToolCall{
+		{Tool: "list_files", ExitCode: 1, IsErr: true, Result: "first_tool_policy: call subagent_run before other tools"},
+		{Tool: "subagent_run", ExitCode: 0},
+		{Tool: "read_file", ExitCode: 0},
+	}}
+	t.Run("ignores guard rejected attempts", func(t *testing.T) {
+		if res := MaxSuccessfulToolCalls(2).Eval(trace); !res.Pass {
+			t.Fatalf("two successful calls should pass despite one rejected attempt: %+v", res)
+		}
+	})
+	t.Run("fails over cap", func(t *testing.T) {
+		if res := MaxSuccessfulToolCalls(1).Eval(trace); res.Pass {
+			t.Fatal("expected two successful calls over cap=1 to fail")
+		}
+	})
+	t.Run("negative cap means unbounded", func(t *testing.T) {
+		if res := MaxSuccessfulToolCalls(-1).Eval(trace); !res.Pass {
+			t.Fatalf("negative cap should pass: %+v", res)
 		}
 	})
 }

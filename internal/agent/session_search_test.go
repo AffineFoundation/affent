@@ -9,6 +9,7 @@ import (
 	"testing"
 
 	"github.com/affinefoundation/affent/internal/memory"
+	"github.com/affinefoundation/affent/internal/sessionsearch"
 )
 
 // writeSessionLog drops a JSONL conversation file for one past
@@ -47,6 +48,25 @@ func TestSessionSearchTool_QueryRequired(t *testing.T) {
 	}
 }
 
+func TestSessionSearchToolSchemaPublishesQueryLimit(t *testing.T) {
+	tool := sessionSearchTool(t.TempDir(), "current")
+	var schema struct {
+		Properties map[string]struct {
+			MinLength int `json:"minLength"`
+			MaxLength int `json:"maxLength"`
+		} `json:"properties"`
+	}
+	if err := json.Unmarshal(tool.Schema, &schema); err != nil {
+		t.Fatal(err)
+	}
+	if schema.Properties["query"].MinLength != 1 {
+		t.Fatalf("query minLength = %d, want 1", schema.Properties["query"].MinLength)
+	}
+	if schema.Properties["query"].MaxLength != sessionsearch.MaxQueryBytes {
+		t.Fatalf("query maxLength = %d, want %d", schema.Properties["query"].MaxLength, sessionsearch.MaxQueryBytes)
+	}
+}
+
 // TestSessionSearchTool_NoConfiguredDir pins the unconfigured path:
 // when sessionsDir is empty, the tool returns a clear message
 // rather than a stat error.
@@ -58,6 +78,19 @@ func TestSessionSearchTool_NoConfiguredDir(t *testing.T) {
 	}
 	if !strings.Contains(out, "not configured") {
 		t.Errorf("missing 'not configured' in %q", out)
+	}
+}
+
+func TestSessionSearchTool_NoResultsSuggestsRetryShape(t *testing.T) {
+	tool := sessionSearchTool(t.TempDir(), "current")
+	out, err := tool.Execute(context.Background(), json.RawMessage(`{"query":"nothing matches this"}`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, want := range []string{"no results", "Next:", "different keywords", "outcome words"} {
+		if !strings.Contains(out, want) {
+			t.Fatalf("output missing %q:\n%s", want, out)
+		}
 	}
 }
 
@@ -112,6 +145,31 @@ func TestSessionSearchTool_HitsAndCurrentSessionExcluded(t *testing.T) {
 		}
 	}
 }
+
+func TestSessionSearchToolCapsRunawayLimits(t *testing.T) {
+	dir := t.TempDir()
+	var msgs []ChatMessage
+	for i := 0; i < sessionsearchMaxPerSessionForTest()+2; i++ {
+		msgs = append(msgs, ChatMessage{Role: "user", Content: "needle session recall"})
+	}
+	writeSessionLog(t, dir, "past", msgs...)
+
+	tool := sessionSearchTool(dir, "current")
+	out, err := tool.Execute(context.Background(), json.RawMessage(
+		`{"query":"needle","top_k":999999,"max_per_session":999999}`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	var resp SessionSearchResponse
+	if err := json.Unmarshal([]byte(out), &resp); err != nil {
+		t.Fatalf("decode response: %v\n%s", err, out)
+	}
+	if len(resp.Results) != sessionsearchMaxPerSessionForTest() {
+		t.Fatalf("runaway limits returned %d results, want %d", len(resp.Results), sessionsearchMaxPerSessionForTest())
+	}
+}
+
+func sessionsearchMaxPerSessionForTest() int { return sessionsearch.MaxPerSession }
 
 // TestMarshalSessionSearchResp_EmptyResultsIsArray pins the
 // JSON-shape detail clients depend on: Results must marshal to []

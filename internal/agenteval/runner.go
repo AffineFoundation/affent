@@ -2,7 +2,6 @@ package agenteval
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"os"
@@ -14,6 +13,8 @@ import (
 	"github.com/affinefoundation/affent/internal/sse"
 	"github.com/rs/zerolog"
 )
+
+const DefaultRunnerMaxTurnSteps = 8
 
 // Runner drives one Scenario through a fresh agent.Loop and captures
 // the result as a Trace. It is deliberately not reusable across
@@ -118,7 +119,7 @@ func (r *Runner) Run(ctx context.Context, s Scenario) (Outcome, error) {
 		maxTurns = r.MaxTurnSteps
 	}
 	if maxTurns <= 0 {
-		maxTurns = 8
+		maxTurns = DefaultRunnerMaxTurnSteps
 	}
 	loop := &agent.Loop{
 		LLM:            r.LLM,
@@ -194,75 +195,12 @@ func drainTrace(ctx context.Context, events <-chan sse.Event, turnID string, s S
 				return t
 			}
 			t.RawTypes[ev.Type]++
-			switch ev.Type {
-			case sse.TypeMessageDone:
-				var p sse.MessageDonePayload
-				if err := json.Unmarshal(ev.Data, &p); err == nil {
-					if p.TurnID != "" && p.TurnID != turnID {
-						continue
-					}
-					t.FinalText = p.Text
-					t.FinishReason = p.FinishReason
-				}
-			case sse.TypeToolRequest:
-				var p sse.ToolRequestPayload
-				if err := json.Unmarshal(ev.Data, &p); err == nil {
-					if p.TurnID != "" && p.TurnID != turnID {
-						continue
-					}
-					pending[p.CallID] = len(t.Tools)
-					t.Tools = append(t.Tools, ToolCall{
-						CallID:        p.CallID,
-						Tool:          p.Tool,
-						Args:          p.Args,
-						OriginalTool:  p.OriginalTool,
-						Canonicalized: p.Canonicalized,
-						ArgsRepaired:  p.ArgsRepaired,
-						RepairNotes:   p.RepairNotes,
-					})
-				}
-			case sse.TypeToolResult:
-				var p sse.ToolResultPayload
-				if err := json.Unmarshal(ev.Data, &p); err == nil {
-					idx, found := pending[p.CallID]
-					if !found {
-						// Result arrived without a matching request —
-						// keep it as a synthesized ToolCall so checks
-						// still see the failure shape.
-						t.Tools = append(t.Tools, ToolCall{
-							CallID:   p.CallID,
-							Result:   p.Result,
-							ExitCode: p.ExitCode,
-						})
-						continue
-					}
-					t.Tools[idx].Result = p.Result
-					t.Tools[idx].ExitCode = p.ExitCode
-					t.Tools[idx].IsErr = p.ExitCode != 0
-				}
-			case sse.TypeUsage:
-				var p sse.UsagePayload
-				if err := json.Unmarshal(ev.Data, &p); err == nil {
-					if p.TurnID != "" && p.TurnID != turnID {
-						continue
-					}
-					t.Usage.InputTokens += p.InputTokens
-					t.Usage.OutputTokens += p.OutputTokens
-				}
-			case sse.TypeTurnEnd:
-				var p sse.TurnEndPayload
-				if err := json.Unmarshal(ev.Data, &p); err == nil {
-					if p.TurnID != "" && p.TurnID != turnID {
-						continue
-					}
-					t.TurnEndReason = p.Reason
-					return t
-				}
-			case sse.TypeError:
-				var p sse.ErrorPayload
-				if err := json.Unmarshal(ev.Data, &p); err == nil && p.Message != "" {
-					t.LoopErrors = append(t.LoopErrors, p.Message)
-				}
+			done, err := applyTraceEvent(&t, pending, ev.Type, ev.Data, turnID)
+			if err != nil {
+				t.LoopErrors = append(t.LoopErrors, err.Error())
+			}
+			if done {
+				return t
 			}
 		}
 	}

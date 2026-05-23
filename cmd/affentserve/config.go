@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"math"
 	"os"
 	"strconv"
 	"strings"
@@ -22,8 +23,9 @@ type Config struct {
 	// will talk to. Required.
 	BaseURL string `json:"base_url"`
 
-	// APIKey for BaseURL. Empty allowed (some endpoints don't require
-	// auth). Reads AFFENTSERVE_API_KEY env var if unset on disk.
+	// APIKey for BaseURL. Empty is allowed for endpoints that do not
+	// require auth, but not for the default OpenAI endpoint. Reads
+	// AFFENTSERVE_API_KEY env var if unset on disk.
 	APIKey string `json:"api_key"`
 
 	// Model the loop drives. Empty falls back to whatever the request
@@ -49,7 +51,8 @@ type Config struct {
 
 	// MaxSessions caps the in-memory session pool size. Sessions
 	// past the cap are LRU-evicted. Default 32.
-	MaxSessions int `json:"max_sessions"`
+	MaxSessions    int `json:"max_sessions"`
+	maxSessionsSet bool
 
 	// SessionIdleTTL closes sessions with no activity for at least
 	// this long. Default 10m. Use a duration string ("30s", "10m").
@@ -168,7 +171,8 @@ type Config struct {
 	// SubagentMaxDepth caps recursive subagent layers. 1 means only a
 	// direct child; the default allows one child to delegate one noisy
 	// subtask while preventing open-ended agent chains.
-	SubagentMaxDepth int `json:"subagent_max_depth"`
+	SubagentMaxDepth    int `json:"subagent_max_depth"`
+	subagentMaxDepthSet bool
 
 	// BrowserScreenshot registers the browser_screenshot tool. Off by
 	// default because the base64 image payload bloats tool result events
@@ -190,9 +194,11 @@ type Config struct {
 }
 
 const (
-	defaultListen         = "127.0.0.1:7777"
-	defaultMaxSessions    = 32
-	defaultSessionIdleTTL = 10 * time.Minute
+	defaultListen                = "127.0.0.1:7777"
+	defaultMaxSessions           = 32
+	defaultSessionIdleTTL        = 10 * time.Minute
+	defaultBrowserCacheTTL       = 24 * time.Hour
+	minBrowserCacheSweepInterval = 5 * time.Minute
 )
 
 // LoadConfig reads a JSON file and returns the parsed Config. An empty
@@ -212,14 +218,18 @@ func LoadConfig(path string) (Config, error) {
 		return cfg, fmt.Errorf("parse config %s: %w", path, err)
 	}
 	var raw struct {
-		EnableMemory   *bool `json:"enable_memory"`
-		EnableSubagent *bool `json:"enable_subagent"`
+		MaxSessions      *int  `json:"max_sessions"`
+		EnableMemory     *bool `json:"enable_memory"`
+		EnableSubagent   *bool `json:"enable_subagent"`
+		SubagentMaxDepth *int  `json:"subagent_max_depth"`
 	}
 	if err := json.Unmarshal(data, &raw); err != nil {
 		return cfg, fmt.Errorf("parse config %s: %w", path, err)
 	}
+	cfg.maxSessionsSet = raw.MaxSessions != nil
 	cfg.enableMemorySet = raw.EnableMemory != nil
 	cfg.enableSubagentSet = raw.EnableSubagent != nil
+	cfg.subagentMaxDepthSet = raw.SubagentMaxDepth != nil
 	return cfg, nil
 }
 
@@ -238,7 +248,7 @@ func (c *Config) Resolve() error {
 	if c.Listen == "" {
 		c.Listen = defaultListen
 	}
-	if c.MaxSessions <= 0 {
+	if !c.maxSessionsSet && c.MaxSessions <= 0 {
 		c.MaxSessions = defaultMaxSessions
 	}
 	if !c.enableMemorySet {
@@ -247,7 +257,7 @@ func (c *Config) Resolve() error {
 	if !c.enableSubagentSet {
 		c.EnableSubagent = true
 	}
-	if c.SubagentMaxDepth <= 0 {
+	if !c.subagentMaxDepthSet && c.SubagentMaxDepth <= 0 {
 		c.SubagentMaxDepth = agent.DefaultSubagentMaxDepth
 	}
 	if v := os.Getenv("AFFENTSERVE_BASE_URL"); v != "" {
@@ -333,6 +343,9 @@ func (c Config) IdleTTL() (time.Duration, error) {
 	if err != nil {
 		return 0, fmt.Errorf("session_idle_ttl=%q: %w", c.SessionIdleTTL, err)
 	}
+	if d <= 0 {
+		return 0, fmt.Errorf("session_idle_ttl=%q must be positive", c.SessionIdleTTL)
+	}
 	return d, nil
 }
 
@@ -347,6 +360,56 @@ func (c Config) Retention() (time.Duration, error) {
 	d, err := time.ParseDuration(c.SessionRetention)
 	if err != nil {
 		return 0, fmt.Errorf("session_retention=%q: %w", c.SessionRetention, err)
+	}
+	if d <= 0 {
+		return 0, fmt.Errorf("session_retention=%q must be positive when set", c.SessionRetention)
+	}
+	return d, nil
+}
+
+// BrowserCacheTTLDuration parses BrowserCacheTTL. Empty falls back to
+// 24h; 0s is allowed and means "cache forever" (FileResponseCache's
+// documented no-expiry mode). Negative values are rejected because
+// they turn a freshness window into an always-stale cache.
+func (c Config) BrowserCacheTTLDuration() (time.Duration, error) {
+	if c.BrowserCacheTTL == "" {
+		return defaultBrowserCacheTTL, nil
+	}
+	d, err := time.ParseDuration(c.BrowserCacheTTL)
+	if err != nil {
+		return 0, fmt.Errorf("browser_cache_ttl=%q: %w", c.BrowserCacheTTL, err)
+	}
+	if d < 0 {
+		return 0, fmt.Errorf("browser_cache_ttl=%q must be zero or positive", c.BrowserCacheTTL)
+	}
+	return d, nil
+}
+
+// BrowserCacheSweepIntervalDuration parses the optional cache-GC
+// interval. Empty derives the documented default from the cache TTL.
+// A configured value must be at least minBrowserCacheSweepInterval;
+// tighter sweeps add directory-walk I/O without improving agent
+// behavior in normal deployments.
+func (c Config) BrowserCacheSweepIntervalDuration(cacheTTL time.Duration) (time.Duration, error) {
+	if c.BrowserCacheSweepInterval != "" {
+		if cacheTTL <= 0 {
+			return 0, errors.New("browser_cache_sweep_interval requires a positive browser_cache_ttl")
+		}
+		d, err := time.ParseDuration(c.BrowserCacheSweepInterval)
+		if err != nil {
+			return 0, fmt.Errorf("browser_cache_sweep_interval=%q: %w", c.BrowserCacheSweepInterval, err)
+		}
+		if d < minBrowserCacheSweepInterval {
+			return 0, fmt.Errorf("browser_cache_sweep_interval=%q must be at least %s", c.BrowserCacheSweepInterval, minBrowserCacheSweepInterval)
+		}
+		return d, nil
+	}
+	if cacheTTL <= 0 {
+		return 0, nil
+	}
+	d := cacheTTL / 8
+	if d < minBrowserCacheSweepInterval {
+		d = minBrowserCacheSweepInterval
 	}
 	return d, nil
 }
@@ -395,12 +458,27 @@ func (c Config) Validate() error {
 	if c.BaseURL == "" {
 		return errors.New("base_url is required (use --base-url or AFFENTSERVE_BASE_URL)")
 	}
+	if strings.TrimRight(c.BaseURL, "/") == agent.DefaultBaseURL && strings.TrimSpace(c.APIKey) == "" {
+		return fmt.Errorf("api_key is required when base_url is %s (use --api-key or AFFENTSERVE_API_KEY)", agent.DefaultBaseURL)
+	}
 	if c.Model == "" {
 		// Without a model, the LLMClient sends `"model":""` upstream
 		// and every OpenAI-compat backend 400s the first request.
 		// Better to fail fast at startup than wait for the operator
 		// to discover this through a runtime error in a client log.
 		return errors.New("model is required (use --model or set model in config file)")
+	}
+	if c.MaxSessions <= 0 {
+		return fmt.Errorf("max_sessions must be a positive integer")
+	}
+	if c.MaxTurnSteps < 0 {
+		return fmt.Errorf("max_turn_steps must be zero or a positive integer")
+	}
+	if c.CompactTrigger < 0 {
+		return fmt.Errorf("compact_trigger must be zero or a positive integer")
+	}
+	if c.CompactKeepLast < 0 {
+		return fmt.Errorf("compact_keep_last must be zero or a positive integer")
 	}
 	if _, err := c.IdleTTL(); err != nil {
 		return err
@@ -411,8 +489,46 @@ func (c Config) Validate() error {
 	if _, err := c.RetryBackoffDuration(); err != nil {
 		return err
 	}
+	if c.BrowserCacheDir == "" {
+		if c.BrowserCacheTTL != "" {
+			return errors.New("browser_cache_ttl requires browser_cache_dir")
+		}
+		if c.BrowserCacheSweepInterval != "" {
+			return errors.New("browser_cache_sweep_interval requires browser_cache_dir")
+		}
+	} else {
+		cacheTTL, err := c.BrowserCacheTTLDuration()
+		if err != nil {
+			return err
+		}
+		if _, err := c.BrowserCacheSweepIntervalDuration(cacheTTL); err != nil {
+			return err
+		}
+	}
 	if c.SubagentMaxDepth < 1 || c.SubagentMaxDepth > agent.MaxSubagentDepth {
 		return fmt.Errorf("subagent_max_depth must be between 1 and %d", agent.MaxSubagentDepth)
+	}
+	if err := c.validateSampling(); err != nil {
+		return err
+	}
+	return nil
+}
+
+func (c Config) validateSampling() error {
+	if c.Temperature != nil {
+		t := *c.Temperature
+		if math.IsNaN(t) || math.IsInf(t, 0) || t < 0 || t > 2 {
+			return fmt.Errorf("temperature must be between 0 and 2")
+		}
+	}
+	if c.TopP != nil {
+		t := *c.TopP
+		if math.IsNaN(t) || math.IsInf(t, 0) || t < 0 || t > 1 {
+			return fmt.Errorf("top_p must be between 0 and 1")
+		}
+	}
+	if c.MaxTokens != nil && *c.MaxTokens <= 0 {
+		return fmt.Errorf("max_tokens must be a positive integer")
 	}
 	return nil
 }

@@ -104,6 +104,10 @@ type Trace struct {
 	// "completed", "cancelled", "error", "max_turns".
 	TurnEndReason string
 
+	// ToolStats is the Loop's per-turn tool correction summary when
+	// emitted by turn.end.
+	ToolStats ToolRuntimeStats
+
 	// Tools is the synthesized tool-call timeline. Each ToolCall
 	// combines a tool.request with its later tool.result, in the
 	// order the LLM emitted them. Empty when the agent answered
@@ -143,6 +147,9 @@ type ToolCall struct {
 	// canonicalization, when different from Tool or when trace producers
 	// include it for diagnostics.
 	OriginalTool string
+	// OriginalArgsSummary is a bounded preview of model-emitted arguments
+	// before runtime JSON/schema repair.
+	OriginalArgsSummary string
 	// Canonicalized reports that the runtime changed the tool name before
 	// dispatch, e.g. readFile -> read_file.
 	Canonicalized bool
@@ -162,6 +169,14 @@ type ToolCall struct {
 	// IsErr is true when the tool returned a Go error (vs returning
 	// a non-zero exit code via a successful execution).
 	IsErr bool
+}
+
+type ToolRuntimeStats struct {
+	ToolRequests           int
+	ToolNameCanonicalized  int
+	ToolArgsRepaired       int
+	LoopGuardInterventions int
+	ForcedNoTools          int
 }
 
 // Usage aggregates per-turn token accounting summed across every LLM

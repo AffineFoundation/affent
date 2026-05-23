@@ -66,7 +66,12 @@ func NavigateTool(s *Session) *agent.Tool {
 	}
 }
 
-const navigationLoadTimeout = 30 * time.Second
+const (
+	navigationLoadTimeout       = 30 * time.Second
+	minBrowserWaitTimeoutMS     = 100
+	defaultBrowserWaitTimeoutMS = 10000
+	maxBrowserWaitTimeoutMS     = 60000
+)
 
 func runNavigate(ctx context.Context, s *Session, url, waitUntil string) (string, error) {
 	if s.page == nil {
@@ -178,7 +183,7 @@ func BackTool(s *Session) *agent.Tool {
 // WaitTool returns `browser_wait`. Lets the LLM explicitly wait for a
 // dynamic page condition before taking a snapshot.
 func WaitTool(s *Session) *agent.Tool {
-	schema := json.RawMessage(`{
+	schema := json.RawMessage(fmt.Sprintf(`{
         "type": "object",
         "required": ["for"],
         "properties": {
@@ -193,12 +198,12 @@ func WaitTool(s *Session) *agent.Tool {
             },
             "timeout_ms": {
                 "type": "integer",
-                "minimum": 100,
-                "maximum": 60000,
-                "description": "Max time to wait in milliseconds. Default 10000."
+                "minimum": %d,
+                "maximum": %d,
+                "description": "Max time to wait in milliseconds. Default %d."
             }
         }
-    }`)
+    }`, minBrowserWaitTimeoutMS, maxBrowserWaitTimeoutMS, defaultBrowserWaitTimeoutMS))
 	return &agent.Tool{
 		Name: "browser_wait",
 		Description: "Explicitly wait for a page condition (load event, DOM stable, network idle, or a substring appearing) before taking a snapshot. " +
@@ -216,9 +221,9 @@ func WaitTool(s *Session) *agent.Tool {
 			if args.For == "" {
 				return "", errors.New("'for' is required")
 			}
-			timeout := time.Duration(args.TimeoutMS) * time.Millisecond
-			if timeout <= 0 {
-				timeout = 10 * time.Second
+			timeout, err := resolveBrowserWaitTimeout(args.TimeoutMS)
+			if err != nil {
+				return "", err
 			}
 			if s.page == nil {
 				return "", ErrNoPage
@@ -242,6 +247,16 @@ func WaitTool(s *Session) *agent.Tool {
 			return snap.Format(), nil
 		},
 	}
+}
+
+func resolveBrowserWaitTimeout(timeoutMS int) (time.Duration, error) {
+	if timeoutMS == 0 {
+		return time.Duration(defaultBrowserWaitTimeoutMS) * time.Millisecond, nil
+	}
+	if timeoutMS < minBrowserWaitTimeoutMS || timeoutMS > maxBrowserWaitTimeoutMS {
+		return 0, fmt.Errorf("timeout_ms must be between %d and %d milliseconds", minBrowserWaitTimeoutMS, maxBrowserWaitTimeoutMS)
+	}
+	return time.Duration(timeoutMS) * time.Millisecond, nil
 }
 
 func waitForText(ctx context.Context, s *Session, substr string, timeout time.Duration) error {

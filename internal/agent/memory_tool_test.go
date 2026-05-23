@@ -65,9 +65,14 @@ func TestMemoryTool_DispatchValidation(t *testing.T) {
 	}{
 		{"no action", `{}`, "action is required"},
 		{"add without content", `{"action":"add"}`, "content is required"},
+		{"add with blank content", `{"action":"add","content":"   "}`, "content is required"},
 		{"replace without old_text", `{"action":"replace","content":"x"}`, "old_text and content are required"},
+		{"replace with blank content", `{"action":"replace","old_text":"x","content":"   "}`, "old_text and content are required"},
+		{"replace with blank old_text", `{"action":"replace","old_text":"   ","content":"x"}`, "old_text and content are required"},
 		{"remove without old_text", `{"action":"remove"}`, "old_text is required"},
+		{"remove with blank old_text", `{"action":"remove","old_text":"   "}`, "old_text is required"},
 		{"search without query", `{"action":"search"}`, "query is required"},
+		{"search with blank query", `{"action":"search","query":"   "}`, "query is required"},
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
@@ -78,7 +83,60 @@ func TestMemoryTool_DispatchValidation(t *testing.T) {
 			if !strings.Contains(out, c.wantInMsg) {
 				t.Errorf("response missing %q: %s", c.wantInMsg, out)
 			}
+			if !strings.Contains(out, "Next:") {
+				t.Errorf("validation response should include a corrective Next step: %s", out)
+			}
 		})
+	}
+}
+
+func TestMemoryToolSchemaPublishesSearchLimits(t *testing.T) {
+	tool, _ := newMemoryToolFixture(t)
+	var schema struct {
+		Properties map[string]struct {
+			MinLength int `json:"minLength"`
+			MaxLength int `json:"maxLength"`
+			Default   int `json:"default"`
+			Maximum   int `json:"maximum"`
+		} `json:"properties"`
+	}
+	if err := json.Unmarshal(tool.Schema, &schema); err != nil {
+		t.Fatal(err)
+	}
+	if schema.Properties["query"].MinLength != 1 {
+		t.Fatalf("query minLength = %d, want 1", schema.Properties["query"].MinLength)
+	}
+	if schema.Properties["content"].MinLength != 1 {
+		t.Fatalf("content minLength = %d, want 1", schema.Properties["content"].MinLength)
+	}
+	if schema.Properties["old_text"].MinLength != 1 {
+		t.Fatalf("old_text minLength = %d, want 1", schema.Properties["old_text"].MinLength)
+	}
+	if schema.Properties["query"].MaxLength != memory.MaxSearchQueryBytes {
+		t.Fatalf("query maxLength = %d, want %d", schema.Properties["query"].MaxLength, memory.MaxSearchQueryBytes)
+	}
+	if schema.Properties["top_k"].Maximum != memory.MaxSearchTopK {
+		t.Fatalf("top_k maximum = %d, want %d", schema.Properties["top_k"].Maximum, memory.MaxSearchTopK)
+	}
+	if schema.Properties["top_k"].Default != memory.DefaultSearchTopK {
+		t.Fatalf("top_k default = %d, want %d", schema.Properties["top_k"].Default, memory.DefaultSearchTopK)
+	}
+}
+
+func TestMemoryToolNormalizesSearchArgsBeforeStore(t *testing.T) {
+	store := &captureSearchStore{}
+	tool := memoryTool(store)
+	query := strings.Repeat("界", memory.MaxSearchQueryBytes)
+	_, err := tool.Execute(context.Background(), json.RawMessage(
+		`{"action":"search","query":`+mustJSON(t, query)+`,"top_k":999999}`))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if store.topK != memory.MaxSearchTopK {
+		t.Fatalf("top_k passed to store = %d, want %d", store.topK, memory.MaxSearchTopK)
+	}
+	if len(store.query) > memory.MaxSearchQueryBytes {
+		t.Fatalf("query passed to store is %d bytes, want <= %d", len(store.query), memory.MaxSearchQueryBytes)
 	}
 }
 
@@ -108,6 +166,9 @@ func TestMemoryTool_DispatchUnknownAction(t *testing.T) {
 		if !strings.Contains(out, valid) {
 			t.Errorf("error must list valid action %q: %s", valid, out)
 		}
+	}
+	if !strings.Contains(resp.Message, "Next:") {
+		t.Errorf("unknown action message should include a corrective Next step: %s", resp.Message)
 	}
 }
 
@@ -163,6 +224,9 @@ func TestMemoryTool_DispatchListUnsupported(t *testing.T) {
 	if !strings.Contains(out, "does not support action=list") {
 		t.Errorf("expected unsupported-list message: %s", out)
 	}
+	if !strings.Contains(out, "Next:") || !strings.Contains(out, "action=search") {
+		t.Errorf("unsupported-list message should suggest search fallback: %s", out)
+	}
 }
 
 // noListStore implements MemoryStore but NOT the optional
@@ -182,4 +246,34 @@ func (noListStore) Remove(target memory.MemoryTarget, topic, oldText string) (me
 }
 func (noListStore) Search(target memory.MemoryTarget, topic, query string, topK int) (memory.MemoryResponse, error) {
 	return memory.MemoryResponse{}, nil
+}
+
+type captureSearchStore struct {
+	query string
+	topK  int
+}
+
+func (s *captureSearchStore) Snapshot() string { return "" }
+func (s *captureSearchStore) Add(target memory.MemoryTarget, topic, content string) (memory.MemoryResponse, error) {
+	return memory.MemoryResponse{}, nil
+}
+func (s *captureSearchStore) Replace(target memory.MemoryTarget, topic, oldText, newContent string) (memory.MemoryResponse, error) {
+	return memory.MemoryResponse{}, nil
+}
+func (s *captureSearchStore) Remove(target memory.MemoryTarget, topic, oldText string) (memory.MemoryResponse, error) {
+	return memory.MemoryResponse{}, nil
+}
+func (s *captureSearchStore) Search(target memory.MemoryTarget, topic, query string, topK int) (memory.MemoryResponse, error) {
+	s.query = query
+	s.topK = topK
+	return memory.MemoryResponse{OK: true, Target: target}, nil
+}
+
+func mustJSON(t *testing.T, v string) string {
+	t.Helper()
+	raw, err := json.Marshal(v)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return string(raw)
 }

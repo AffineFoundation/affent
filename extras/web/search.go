@@ -33,9 +33,16 @@ type SearchProvider interface {
 type SearchConfig struct {
 	// Provider is required.
 	Provider SearchProvider
-	// MaxResults caps the per-query result count. Default 8.
+	// MaxResults caps the per-query result count. Default 8. Values
+	// above 20 are clamped to the tool's hard cap so schema and
+	// runtime behavior stay aligned.
 	MaxResults int
 }
+
+const (
+	defaultSearchResults = 8
+	maxSearchResults     = 20
+)
 
 // SearchTool returns an agent.Tool that runs a web search and returns
 // a compact list of {title, url, snippet}. The model decides which URL
@@ -46,17 +53,21 @@ func SearchTool(cfg SearchConfig) (*agent.Tool, error) {
 	}
 	max := cfg.MaxResults
 	if max <= 0 {
-		max = 8
+		max = defaultSearchResults
 	}
+	if max > maxSearchResults {
+		max = maxSearchResults
+	}
+	defaultN := min(defaultSearchResults, max)
 
-	schema := json.RawMessage(`{
+	schema := json.RawMessage(fmt.Sprintf(`{
         "type": "object",
         "required": ["query"],
         "properties": {
             "query": {"type": "string", "description": "Search query (plain English; the tool handles tokenization)."},
-            "num_results": {"type": "integer", "description": "How many results to return (capped). Default 8.", "minimum": 1, "maximum": 20}
+            "num_results": {"type": "integer", "description": "How many results to return. Default %d, max %d.", "minimum": 1, "maximum": %d}
         }
-    }`)
+    }`, defaultN, max, max))
 
 	return &agent.Tool{
 		Name: "web_search",
@@ -78,7 +89,7 @@ func SearchTool(cfg SearchConfig) (*agent.Tool, error) {
 			}
 			n := args.NumResults
 			if n <= 0 {
-				n = max
+				n = defaultN
 			}
 			if n > max {
 				n = max

@@ -66,6 +66,7 @@ func TestToolResult_FullResultBypasses4KiBSummaryCap(t *testing.T) {
 		}
 		// Turn 2 path: model gives final answer.
 		w.Write([]byte("data: {\"choices\":[{\"delta\":{\"role\":\"assistant\",\"content\":\"ok\"},\"finish_reason\":\"stop\"}]}\n\n"))
+		w.Write([]byte("data: [DONE]\n\n"))
 		fl.Flush()
 	}))
 	t.Cleanup(srv.Close)
@@ -92,7 +93,7 @@ func TestToolResult_FullResultBypasses4KiBSummaryCap(t *testing.T) {
 
 	deadline := time.After(10 * time.Second)
 	var sawResult *sse.ToolResultPayload
-	for sawResult == nil {
+	for {
 		select {
 		case ev, ok := <-events:
 			if !ok {
@@ -109,12 +110,14 @@ func TestToolResult_FullResultBypasses4KiBSummaryCap(t *testing.T) {
 				if sawResult == nil {
 					t.Fatal("turn ended without a tool.result event")
 				}
+				goto done
 			}
 		case <-deadline:
-			t.Fatal("timeout waiting for tool.result")
+			t.Fatal("timeout waiting for turn.end")
 		}
 	}
 
+done:
 	if len(sawResult.Result) != payloadLen {
 		t.Fatalf("Result must carry full %d-byte payload, got %d bytes",
 			payloadLen, len(sawResult.Result))
@@ -277,6 +280,9 @@ func TestRunTurn_RepairsToolArgumentsBeforeDispatch(t *testing.T) {
 				if !gotRepair.Canonicalized || !gotRepair.ArgsRepaired {
 					t.Fatalf("expected repair metadata, got %+v", gotRepair)
 				}
+				if !strings.Contains(gotRepair.OriginalArgsSummary, "file_path") {
+					t.Fatalf("expected original args summary, got %+v", gotRepair)
+				}
 				if len(gotRepair.RepairNotes) == 0 {
 					t.Fatalf("expected repair notes, got %+v", gotRepair)
 				}
@@ -436,6 +442,13 @@ func TestRunTurn_LoopGuardForcesNoToolSummaryAfterRepeatedInterventions(t *testi
 				t.Fatal("event channel closed before turn.end")
 			}
 			if ev.Type == sse.TypeTurnEnd {
+				var p sse.TurnEndPayload
+				if err := json.Unmarshal(ev.Data, &p); err != nil {
+					t.Fatalf("decode turn.end: %v", err)
+				}
+				if p.ToolStats == nil || p.ToolStats.LoopGuardInterventions < 2 || p.ToolStats.ForcedNoTools != 1 {
+					t.Fatalf("expected guard stats in turn.end, got %+v", p.ToolStats)
+				}
 				select {
 				case ok := <-noToolsReq:
 					if !ok {

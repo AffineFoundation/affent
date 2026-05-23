@@ -63,7 +63,7 @@ func parseFlagsAndConfig(argv []string) (Config, error) {
 		authToken         = fs.String("auth-token", "", "Optional bearer token gating the server itself (env: AFFENTSERVE_AUTH_TOKEN).")
 		workspaceRoot     = fs.String("workspace-root", "", "Parent directory for per-session workspaces. Empty creates per-session temp dirs.")
 		maxSessions       = fs.Int("max-sessions", 0, "LRU upper bound on in-memory sessions (default 32).")
-		sessionIdleTTL    = fs.String("session-idle-ttl", "", "How long an idle session stays in the pool before GC (default 10m).")
+		sessionIdleTTL    = fs.String("session-idle-ttl", "", "Positive duration for how long an idle session stays in the pool before GC (default 10m).")
 		sessionRetention  = fs.String("session-retention", "", "How long durable session dirs (conv log + memory) live on disk after last activity. Empty disables — dirs live until explicit DELETE. Set to a Go duration like '720h' (30d) to enable background GC.")
 		maxTurnSteps      = fs.Int("max-turn-steps", 0, "Per-turn step cap (assistant↔tool round trips). 0 = agent runtime's default.")
 		perCallTimeout    = fs.String("per-call-timeout", "", "Per-LLM-call timeout as a Go duration string (default 3m). Bump for reasoning models that may think for several minutes per call.")
@@ -79,8 +79,8 @@ func parseFlagsAndConfig(argv []string) (Config, error) {
 		enableSubagent    = fs.Bool("subagent", true, "Register the subagent_run tool — a bounded isolated Loop with read-only inspection tools. Doesn't require --builtins but inherits the shell tool when --builtins is also on.")
 		subagentMaxDepth  = fs.Int("subagent-max-depth", agent.DefaultSubagentMaxDepth, "Maximum recursive subagent depth; 1 disables nested subagents, hard max 4. Env: AFFENTSERVE_SUBAGENT_MAX_DEPTH.")
 		browserCacheDir   = fs.String("browser-cache-dir", "", "Enable an on-disk response cache for browser sessions; empty disables caching.")
-		browserCacheTTL   = fs.String("browser-cache-ttl", "", "Cache TTL ('24h' default; '0s' disables expiry).")
-		browserCacheSweep = fs.String("browser-cache-sweep-interval", "", "How often the cache GC deletes expired files (default = TTL/8, min 5m).")
+		browserCacheTTL   = fs.String("browser-cache-ttl", "", "Cache TTL when --browser-cache-dir is set ('24h' default; '0s' disables expiry).")
+		browserCacheSweep = fs.String("browser-cache-sweep-interval", "", "How often cache GC deletes expired files when --browser-cache-dir is set (default = TTL/8, min 5m; explicit values must be >=5m).")
 		browserNoStealth  = fs.Bool("browser-no-stealth", false, "Disable the webdriver-detection bypass script. Default off (stealth on).")
 		browserAllowAll   = fs.Bool("browser-allow-all-domains", false, "Allow third-party / tracker domains the default list normally blocks.")
 		browserScreenshot = fs.Bool("browser-screenshot", false, "Register the browser_screenshot tool. Off by default — base64 image payloads bloat tool result events; flip on for vision-capable models.")
@@ -137,7 +137,8 @@ func parseFlagsAndConfig(argv []string) (Config, error) {
 	if *workspaceRoot != "" {
 		cfg.WorkspaceRoot = *workspaceRoot
 	}
-	if *maxSessions > 0 {
+	if setFlags["max-sessions"] {
+		cfg.maxSessionsSet = true
 		cfg.MaxSessions = *maxSessions
 	}
 	if *sessionIdleTTL != "" {
@@ -146,7 +147,7 @@ func parseFlagsAndConfig(argv []string) (Config, error) {
 	if *sessionRetention != "" {
 		cfg.SessionRetention = *sessionRetention
 	}
-	if *maxTurnSteps > 0 {
+	if setFlags["max-turn-steps"] {
 		cfg.MaxTurnSteps = *maxTurnSteps
 	}
 	if *perCallTimeout != "" {
@@ -158,10 +159,10 @@ func parseFlagsAndConfig(argv []string) (Config, error) {
 	if *retryBackoff != "" {
 		cfg.RetryBackoff = *retryBackoff
 	}
-	if *compactTrigger > 0 {
+	if setFlags["compact-trigger"] {
 		cfg.CompactTrigger = *compactTrigger
 	}
-	if *compactKeepLast > 0 {
+	if setFlags["compact-keep-last"] {
 		cfg.CompactKeepLast = *compactKeepLast
 	}
 	if setFlags["browser"] {
@@ -184,6 +185,7 @@ func parseFlagsAndConfig(argv []string) (Config, error) {
 		cfg.EnableSubagent = *enableSubagent
 	}
 	if setFlags["subagent-max-depth"] {
+		cfg.subagentMaxDepthSet = true
 		cfg.SubagentMaxDepth = *subagentMaxDepth
 	}
 	if *browserCacheDir != "" {

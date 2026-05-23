@@ -106,6 +106,52 @@ func TestParseFlagsAndConfig_SubagentMaxDepth(t *testing.T) {
 	}
 }
 
+func TestParseFlagsAndConfig_RejectsNonPositiveLimitsFromCLI(t *testing.T) {
+	for _, c := range []struct {
+		name string
+		args []string
+		want string
+	}{
+		{
+			name: "max sessions zero",
+			args: []string{"--base-url", "https://example/v1", "--model", "m", "--max-sessions", "0"},
+			want: "max_sessions",
+		},
+		{
+			name: "max sessions negative",
+			args: []string{"--base-url", "https://example/v1", "--model", "m", "--max-sessions", "-1"},
+			want: "max_sessions",
+		},
+		{
+			name: "subagent depth zero",
+			args: []string{"--base-url", "https://example/v1", "--model", "m", "--subagent-max-depth", "0"},
+			want: "subagent_max_depth",
+		},
+		{
+			name: "max turn steps negative",
+			args: []string{"--base-url", "https://example/v1", "--model", "m", "--max-turn-steps", "-1"},
+			want: "max_turn_steps",
+		},
+		{
+			name: "compact trigger negative",
+			args: []string{"--base-url", "https://example/v1", "--model", "m", "--compact-trigger", "-1"},
+			want: "compact_trigger",
+		},
+		{
+			name: "compact keep last negative",
+			args: []string{"--base-url", "https://example/v1", "--model", "m", "--compact-keep-last", "-1"},
+			want: "compact_keep_last",
+		},
+	} {
+		t.Run(c.name, func(t *testing.T) {
+			_, err := parseFlagsAndConfig(c.args)
+			if err == nil || !strings.Contains(err.Error(), c.want) {
+				t.Fatalf("parseFlagsAndConfig error = %v, want contains %q", err, c.want)
+			}
+		})
+	}
+}
+
 // TestParseFlagsAndConfig_SubagentIsIndependentFromBuiltins pins the
 // new gating: subagent_run registration must be controlled by its
 // own EnableSubagent flag, not coupled to EnableBuiltins. An

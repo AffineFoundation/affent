@@ -69,14 +69,15 @@ type ThinkingDonePayload struct {
 }
 
 type ToolRequestPayload struct {
-	TurnID        string         `json:"turn_id"`
-	CallID        string         `json:"call_id"`
-	Tool          string         `json:"tool"`
-	Args          map[string]any `json:"args"`
-	OriginalTool  string         `json:"original_tool,omitempty"`
-	Canonicalized bool           `json:"canonicalized,omitempty"`
-	ArgsRepaired  bool           `json:"args_repaired,omitempty"`
-	RepairNotes   []string       `json:"repair_notes,omitempty"`
+	TurnID              string         `json:"turn_id"`
+	CallID              string         `json:"call_id"`
+	Tool                string         `json:"tool"`
+	Args                map[string]any `json:"args"`
+	OriginalTool        string         `json:"original_tool,omitempty"`
+	OriginalArgsSummary string         `json:"original_args_summary,omitempty"`
+	Canonicalized       bool           `json:"canonicalized,omitempty"`
+	ArgsRepaired        bool           `json:"args_repaired,omitempty"`
+	RepairNotes         []string       `json:"repair_notes,omitempty"`
 }
 
 type ToolResultPayload struct {
@@ -112,8 +113,17 @@ const (
 )
 
 type TurnEndPayload struct {
-	TurnID string `json:"turn_id"`
-	Reason string `json:"reason"`
+	TurnID    string            `json:"turn_id"`
+	Reason    string            `json:"reason"`
+	ToolStats *ToolRuntimeStats `json:"tool_stats,omitempty"`
+}
+
+type ToolRuntimeStats struct {
+	ToolRequests           int `json:"tool_requests,omitempty"`
+	ToolNameCanonicalized  int `json:"tool_name_canonicalized,omitempty"`
+	ToolArgsRepaired       int `json:"tool_args_repaired,omitempty"`
+	LoopGuardInterventions int `json:"loop_guard_interventions,omitempty"`
+	ForcedNoTools          int `json:"forced_no_tools,omitempty"`
 }
 
 type ErrorPayload struct {

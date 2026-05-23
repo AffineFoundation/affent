@@ -16,16 +16,28 @@ import (
 	"time"
 )
 
+const (
+	DefaultBatchTimeout      = 5 * time.Minute
+	DefaultBatchMaxTurnSteps = 10
+)
+
 type BatchScenario struct {
 	Name                    string
+	Suites                  []string
 	Prompt                  string
 	Files                   map[string]string
 	VerifyCommand           string
 	ExpectedSkill           string
 	ForbiddenCommands       []string
 	RequiredCommands        []string
+	RequiredTools           []string
+	ForbiddenTools          []string
+	RequiredFinalText       []string
+	ForbiddenFinalText      []string
+	RequiredToolResultText  map[string][]string
 	ProtectedFiles          []string
 	ForbiddenFileSubstrings map[string][]string
+	MaxParentToolCalls      int
 	MaxTurns                int
 }
 
@@ -55,6 +67,19 @@ func BuiltinBatchScenarios() []BatchScenario {
 		goMedianScenario(),
 		goConfigPrecedenceScenario(),
 		pythonSlugScenario(),
+		goRedactionScenario(),
+		pythonConfigParserScenario(),
+		promptInjectionFactsScenario(),
+		subagentProjectFactsScenario(),
+		subagentNoisyFactsScenario(),
+		subagentNestedFactsScenario(),
+		smallToolBadJSONReadScenario(),
+		smallToolWrongFieldReadScenario(),
+		smallToolWrongToolNameScenario(),
+		skillToolReadScenario(),
+		smallToolRepeatedReadScenario(),
+		smallToolEditRecoveryScenario(),
+		smallToolShellFailureScenario(),
 	}
 }
 
@@ -68,8 +93,41 @@ func BatchScenarioNames() []string {
 	return names
 }
 
+func BatchSuiteNames() []string {
+	seen := map[string]bool{}
+	for _, s := range BuiltinBatchScenarios() {
+		for _, suite := range s.Suites {
+			if strings.TrimSpace(suite) != "" {
+				seen[suite] = true
+			}
+		}
+	}
+	names := make([]string, 0, len(seen))
+	for name := range seen {
+		names = append(names, name)
+	}
+	sort.Strings(names)
+	return names
+}
+
 func SelectBatchScenarios(names []string) ([]BatchScenario, error) {
+	return SelectBatchScenariosForSuite("", names)
+}
+
+func SelectBatchScenariosForSuite(suite string, names []string) ([]BatchScenario, error) {
 	all := BuiltinBatchScenarios()
+	if suite != "" {
+		filtered := all[:0]
+		for _, s := range all {
+			if scenarioInSuite(s, suite) {
+				filtered = append(filtered, s)
+			}
+		}
+		all = filtered
+		if len(all) == 0 {
+			return nil, fmt.Errorf("unknown suite %q (valid: %s)", suite, strings.Join(BatchSuiteNames(), ", "))
+		}
+	}
 	if len(names) == 0 {
 		return all, nil
 	}
@@ -81,21 +139,35 @@ func SelectBatchScenarios(names []string) ([]BatchScenario, error) {
 	for _, name := range names {
 		s, ok := byName[name]
 		if !ok {
-			return nil, fmt.Errorf("unknown scenario %q (valid: %s)", name, strings.Join(BatchScenarioNames(), ", "))
+			valid := make([]string, 0, len(all))
+			for _, s := range all {
+				valid = append(valid, s.Name)
+			}
+			sort.Strings(valid)
+			return nil, fmt.Errorf("unknown scenario %q (valid: %s)", name, strings.Join(valid, ", "))
 		}
 		selected = append(selected, s)
 	}
 	return selected, nil
 }
 
+func scenarioInSuite(s BatchScenario, suite string) bool {
+	for _, candidate := range s.Suites {
+		if candidate == suite {
+			return true
+		}
+	}
+	return false
+}
+
 func (r BatchRunner) Run(ctx context.Context, scenario BatchScenario) BatchResult {
 	start := time.Now()
 	res := BatchResult{BatchScenario: scenario.Name}
 	if r.Timeout <= 0 {
-		r.Timeout = 5 * time.Minute
+		r.Timeout = DefaultBatchTimeout
 	}
 	if scenario.MaxTurns <= 0 {
-		scenario.MaxTurns = 10
+		scenario.MaxTurns = DefaultBatchMaxTurnSteps
 	}
 	if strings.TrimSpace(r.RepoRoot) == "" {
 		r.RepoRoot = "."
@@ -309,73 +381,8 @@ func ParseTraceFile(path string) (Trace, error) {
 			return trace, err
 		}
 		trace.RawTypes[ev.Type]++
-		switch ev.Type {
-		case "tool.request":
-			var p struct {
-				CallID        string         `json:"call_id"`
-				Tool          string         `json:"tool"`
-				Args          map[string]any `json:"args"`
-				OriginalTool  string         `json:"original_tool"`
-				Canonicalized bool           `json:"canonicalized"`
-				ArgsRepaired  bool           `json:"args_repaired"`
-				RepairNotes   []string       `json:"repair_notes"`
-			}
-			if err := json.Unmarshal(ev.Data, &p); err != nil {
-				return trace, err
-			}
-			pending[p.CallID] = len(trace.Tools)
-			trace.Tools = append(trace.Tools, ToolCall{
-				CallID:        p.CallID,
-				Tool:          p.Tool,
-				Args:          p.Args,
-				OriginalTool:  p.OriginalTool,
-				Canonicalized: p.Canonicalized,
-				ArgsRepaired:  p.ArgsRepaired,
-				RepairNotes:   p.RepairNotes,
-			})
-		case "tool.result":
-			var p struct {
-				CallID   string `json:"call_id"`
-				Result   string `json:"result"`
-				ExitCode int    `json:"exit_code"`
-			}
-			if err := json.Unmarshal(ev.Data, &p); err != nil {
-				return trace, err
-			}
-			if idx, ok := pending[p.CallID]; ok {
-				trace.Tools[idx].Result = p.Result
-				trace.Tools[idx].ExitCode = p.ExitCode
-				trace.Tools[idx].IsErr = p.ExitCode != 0
-				continue
-			}
-			// Result without a matching request still gets recorded
-			// so checks that count "guard rejections" see the failure.
-			trace.Tools = append(trace.Tools, ToolCall{
-				CallID:   p.CallID,
-				Result:   p.Result,
-				ExitCode: p.ExitCode,
-				IsErr:    p.ExitCode != 0,
-			})
-		case "message.done":
-			var p struct {
-				Text         string `json:"text"`
-				FinishReason string `json:"finish_reason"`
-			}
-			if err := json.Unmarshal(ev.Data, &p); err == nil {
-				trace.FinalText = p.Text
-				if p.FinishReason != "" {
-					trace.FinishReason = p.FinishReason
-				}
-			}
-		case "turn.end":
-			var p struct {
-				Reason string `json:"reason"`
-			}
-			if err := json.Unmarshal(ev.Data, &p); err == nil && p.Reason != "" {
-				trace.TurnEndReason = p.Reason
-			}
-		default:
-			continue
+		if _, err := applyTraceEvent(&trace, pending, ev.Type, ev.Data, ""); err != nil {
+			return trace, err
 		}
 	}
 	return trace, sc.Err()
@@ -388,6 +395,27 @@ func ParseTraceFile(path string) (Trace, error) {
 // FileNotEdited checks. Lets one Check library cover both pipelines.
 func BatchScenarioChecks(scenario BatchScenario) []Check {
 	var checks []Check
+	for _, tool := range scenario.RequiredTools {
+		checks = append(checks, ToolCalled(tool, nil))
+	}
+	for _, tool := range scenario.ForbiddenTools {
+		checks = append(checks, ToolNotCalled(tool, nil))
+	}
+	for _, substr := range scenario.RequiredFinalText {
+		checks = append(checks, FinalTextContains(substr))
+	}
+	for _, substr := range scenario.ForbiddenFinalText {
+		checks = append(checks, FinalTextLacks(substr))
+	}
+	for _, tool := range sortedStringMapKeys(scenario.RequiredToolResultText) {
+		substrings := scenario.RequiredToolResultText[tool]
+		for _, substr := range substrings {
+			checks = append(checks, ToolResultContains(tool, substr))
+		}
+	}
+	if scenario.MaxParentToolCalls > 0 {
+		checks = append(checks, MaxSuccessfulToolCalls(scenario.MaxParentToolCalls))
+	}
 	for _, want := range scenario.RequiredCommands {
 		checks = append(checks, ShellCommandMatching(want))
 	}
@@ -398,6 +426,15 @@ func BatchScenarioChecks(scenario BatchScenario) []Check {
 		checks = append(checks, FileNotEdited(scenario.ProtectedFiles))
 	}
 	return checks
+}
+
+func sortedStringMapKeys[V any](m map[string]V) []string {
+	keys := make([]string, 0, len(m))
+	for key := range m {
+		keys = append(keys, key)
+	}
+	sort.Strings(keys)
+	return keys
 }
 
 // CheckBatchTrace runs BatchScenarioChecks against the trace and

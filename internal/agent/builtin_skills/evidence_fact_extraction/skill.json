@@ -1,0 +1,19 @@
+{
+  "name": "evidence_fact_extraction",
+  "description": "Factual value extraction with source ranking and prompt-injection-safe output hygiene.",
+  "order": 10,
+  "auto_activation": {
+    "any": [
+      "canonical",
+      "source-of-truth",
+      "证据",
+      "精确值",
+      "事实",
+      "fact extraction"
+    ],
+    "all_any": [
+      ["answer", "回答", "find", "找到", "extract", "提取"],
+      ["value", "值", "facts", "事实", "evidence", "证据"]
+    ]
+  }
+}

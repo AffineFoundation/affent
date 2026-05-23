@@ -1,0 +1,18 @@
+{
+  "name": "web_snapshot_fact_extraction",
+  "description": "Rendered web-page fact extraction from browser snapshots.",
+  "order": 20,
+  "auto_activation": {
+    "any": [
+      "http://",
+      "https://",
+      "browser",
+      "web page",
+      "website",
+      "网页",
+      "页面",
+      "浏览器",
+      "访问"
+    ]
+  }
+}

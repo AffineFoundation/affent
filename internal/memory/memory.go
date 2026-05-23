@@ -3,6 +3,7 @@ package memory
 import (
 	"errors"
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -323,6 +324,24 @@ const memoryEntryDelim = "\n§\n"
 // would otherwise dump their full body into the model context — wasted
 // when the model can replay/refine the query for the full content.
 const memorySnippetMax = 500
+
+// memoryResponseEntryMax caps each entry echoed in mutation responses.
+// The response still carries Usage with the true bucket size, and disk
+// state is untouched. This prevents one hand-edited long entry from
+// dominating the model context when an add/replace/remove fails and
+// respondLocked returns the current bucket to help the model repair.
+const memoryResponseEntryMax = 1000
+
+const (
+	DefaultSearchTopK   = 5
+	MaxSearchTopK       = 20
+	MaxSearchQueryBytes = 2048
+	MaxSearchQueryTerms = 16
+
+	MaxMemoryFileBytes = 1 << 20
+
+	memoryTopicDirReadBatch = 128
+)
 
 // memoryTimestampPrefixRE matches the optional leading "[<RFC3339>]\n"
 // stored at the head of each entry. Stamped entries look like:
@@ -681,17 +700,15 @@ func (s *FileMemoryStore) Search(target MemoryTarget, topic, query string, topK 
 	if err := validateTarget(target); err != nil {
 		return MemoryResponse{Target: target, Message: err.Error()}, nil
 	}
-	query = strings.TrimSpace(query)
+	query = NormalizeSearchQuery(query)
 	if query == "" {
-		return MemoryResponse{Target: target, Topic: topic, Message: "query cannot be empty"}, nil
+		return MemoryResponse{Target: target, Topic: topic, Message: "query cannot be empty. Next: retry with 2-6 specific keywords, or list topics before searching."}, nil
 	}
 	terms := tokenizeMemoryQuery(query)
 	if len(terms) == 0 {
-		return MemoryResponse{Target: target, Topic: topic, Message: "query had no content terms after stopword filtering"}, nil
+		return MemoryResponse{Target: target, Topic: topic, Message: "query had no content terms after stopword filtering. Next: retry with concrete nouns, identifiers, project names, or outcome words."}, nil
 	}
-	if topK <= 0 {
-		topK = 5
-	}
+	topK = NormalizeSearchTopK(topK)
 
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -720,18 +737,14 @@ func (s *FileMemoryStore) Search(target MemoryTarget, topic, query string, topK 
 			}
 		} else {
 			if s.MemoryDir == "" {
-				return MemoryResponse{Target: target, Message: "memory dir is not configured"}, nil
+				return MemoryResponse{Target: target, Message: "memory dir is not configured. Next: configure the memory directory or disable the memory tool for this run."}, nil
 			}
 			if core := filepath.Join(s.MemoryDir, "core.md"); fileExists(core) {
 				buckets = append(buckets, bucket{topic: CoreTopic, path: core})
 			}
-			entries, _ := os.ReadDir(filepath.Join(s.MemoryDir, "topics"))
-			for _, e := range entries {
-				if e.IsDir() || !strings.HasSuffix(e.Name(), ".md") {
-					continue
-				}
-				name := strings.TrimSuffix(e.Name(), ".md")
-				buckets = append(buckets, bucket{topic: name, path: filepath.Join(s.MemoryDir, "topics", e.Name())})
+			topicFiles, _ := s.listTopicFilesLocked(s.topicCountLimit())
+			for _, tf := range topicFiles {
+				buckets = append(buckets, bucket{topic: tf.name, path: tf.path})
 			}
 		}
 	}
@@ -767,21 +780,21 @@ func (s *FileMemoryStore) Search(target MemoryTarget, topic, query string, topK 
 			// stamping doesn't suddenly down-rank everything that was
 			// already there.
 			score *= recencyFactor(createdAt)
-			hits = append(hits, MemorySearchResult{
+			hits = appendBoundedMemoryHits(hits, MemorySearchResult{
 				Topic:     b.topic,
 				Snippet:   centerSnippet(body, terms, memorySnippetMax),
 				Score:     score,
 				CreatedAt: createdAt,
-			})
+			}, topK)
 		}
 	}
-	sort.SliceStable(hits, func(i, j int) bool { return hits[i].Score > hits[j].Score })
+	sortMemoryHits(hits)
 	if len(hits) > topK {
 		hits = hits[:topK]
 	}
 	msg := fmt.Sprintf("%d result(s)", len(hits))
 	if len(hits) == 0 {
-		msg = "no entries matched"
+		msg = "no entries matched. Next: retry with fewer/different keywords, search a specific topic, or use action=list to discover available topics."
 	}
 	return MemoryResponse{
 		OK:      true,
@@ -790,6 +803,54 @@ func (s *FileMemoryStore) Search(target MemoryTarget, topic, query string, topK 
 		Message: msg,
 		Results: hits,
 	}, nil
+}
+
+func NormalizeSearchTopK(topK int) int {
+	if topK <= 0 {
+		return DefaultSearchTopK
+	}
+	if topK > MaxSearchTopK {
+		return MaxSearchTopK
+	}
+	return topK
+}
+
+func NormalizeSearchQuery(query string) string {
+	query = strings.TrimSpace(query)
+	if len(query) <= MaxSearchQueryBytes {
+		return query
+	}
+	cut := textutil.AlignBackward(query, MaxSearchQueryBytes)
+	return strings.TrimSpace(query[:cut])
+}
+
+func appendBoundedMemoryHits(hits []MemorySearchResult, hit MemorySearchResult, limit int) []MemorySearchResult {
+	if limit <= 0 {
+		return append(hits, hit)
+	}
+	hits = append(hits, hit)
+	sortMemoryHits(hits)
+	if len(hits) > limit {
+		hits = hits[:limit]
+	}
+	return hits
+}
+
+func sortMemoryHits(hits []MemorySearchResult) {
+	sort.SliceStable(hits, func(i, j int) bool { return memoryHitLess(hits[i], hits[j]) })
+}
+
+func memoryHitLess(a, b MemorySearchResult) bool {
+	if a.Score != b.Score {
+		return a.Score > b.Score
+	}
+	if a.CreatedAt != b.CreatedAt {
+		return a.CreatedAt > b.CreatedAt
+	}
+	if a.Topic != b.Topic {
+		return a.Topic < b.Topic
+	}
+	return a.Snippet < b.Snippet
 }
 
 // ListTopics enumerates the buckets in target. For target=memory it
@@ -820,7 +881,7 @@ func (s *FileMemoryStore) ListTopics(target MemoryTarget) (MemoryResponse, error
 		}, nil
 	}
 	if s.MemoryDir == "" {
-		return MemoryResponse{Target: target, Message: "memory dir is not configured"}, nil
+		return MemoryResponse{Target: target, Message: "memory dir is not configured. Next: configure the memory directory or disable the memory tool for this run."}, nil
 	}
 	var topics []MemoryTopicSummary
 	corePath := filepath.Join(s.MemoryDir, "core.md")
@@ -832,25 +893,25 @@ func (s *FileMemoryStore) ListTopics(target MemoryTarget) (MemoryResponse, error
 			NewestAt: newestEntryTimestamp(entries),
 		})
 	}
-	dirEntries, _ := os.ReadDir(filepath.Join(s.MemoryDir, "topics"))
-	for _, e := range dirEntries {
-		if e.IsDir() || !strings.HasSuffix(e.Name(), ".md") {
-			continue
-		}
-		name := strings.TrimSuffix(e.Name(), ".md")
-		entries, _ := readMemoryFile(filepath.Join(s.MemoryDir, "topics", e.Name()))
+	topicFiles, truncated := s.listTopicFilesLocked(s.topicCountLimit())
+	for _, tf := range topicFiles {
+		entries, _ := readMemoryFile(tf.path)
 		if len(entries) == 0 {
 			continue
 		}
 		topics = append(topics, MemoryTopicSummary{
-			Topic:    name,
+			Topic:    tf.name,
 			Entries:  len(entries),
 			Chars:    joinedLen(entries),
 			NewestAt: newestEntryTimestamp(entries),
 		})
 	}
 	sort.Slice(topics, func(i, j int) bool { return topics[i].Topic < topics[j].Topic })
-	return MemoryResponse{OK: true, Target: target, Topics: topics}, nil
+	msg := ""
+	if truncated {
+		msg = fmt.Sprintf("showing first %d topic file(s); directory exceeds configured max_topics", s.topicCountLimit())
+	}
+	return MemoryResponse{OK: true, Target: target, Topics: topics, Message: msg}, nil
 }
 
 // migrateLegacyLocked moves a pre-v2 .affent/MEMORY.md into
@@ -946,6 +1007,52 @@ func (s *FileMemoryStore) topicCountLimit() int {
 	return DefaultMaxTopics
 }
 
+type memoryTopicFile struct {
+	name string
+	path string
+}
+
+func (s *FileMemoryStore) listTopicFilesLocked(limit int) ([]memoryTopicFile, bool) {
+	if s.MemoryDir == "" {
+		return nil, false
+	}
+	if limit <= 0 {
+		limit = s.topicCountLimit()
+	}
+	dir, err := os.Open(filepath.Join(s.MemoryDir, "topics"))
+	if err != nil {
+		return nil, false
+	}
+	defer dir.Close()
+
+	var files []memoryTopicFile
+	truncated := false
+	for {
+		entries, rerr := dir.ReadDir(memoryTopicDirReadBatch)
+		if rerr != nil && !errors.Is(rerr, io.EOF) {
+			break
+		}
+		for _, e := range entries {
+			if e.IsDir() || !strings.HasSuffix(e.Name(), ".md") {
+				continue
+			}
+			if len(files) >= limit {
+				truncated = true
+				break
+			}
+			files = append(files, memoryTopicFile{
+				name: strings.TrimSuffix(e.Name(), ".md"),
+				path: filepath.Join(s.MemoryDir, "topics", e.Name()),
+			})
+		}
+		if truncated || errors.Is(rerr, io.EOF) {
+			break
+		}
+	}
+	sort.Slice(files, func(i, j int) bool { return files[i].name < files[j].name })
+	return files, truncated
+}
+
 // countTopicsLocked returns the current number of .md files under
 // topics/. Caller must hold s.mu. core.md doesn't live here so it
 // doesn't count toward the cap.
@@ -953,17 +1060,30 @@ func (s *FileMemoryStore) countTopicsLocked() int {
 	if s.MemoryDir == "" {
 		return 0
 	}
-	entries, err := os.ReadDir(filepath.Join(s.MemoryDir, "topics"))
+	limit := s.topicCountLimit()
+	n := 0
+	dir, err := os.Open(filepath.Join(s.MemoryDir, "topics"))
 	if err != nil {
 		return 0
 	}
-	n := 0
-	for _, e := range entries {
-		if !e.IsDir() && strings.HasSuffix(e.Name(), ".md") {
-			n++
+	defer dir.Close()
+	for {
+		entries, rerr := dir.ReadDir(memoryTopicDirReadBatch)
+		if rerr != nil && !errors.Is(rerr, io.EOF) {
+			return n
+		}
+		for _, e := range entries {
+			if !e.IsDir() && strings.HasSuffix(e.Name(), ".md") {
+				n++
+				if n >= limit {
+					return n
+				}
+			}
+		}
+		if errors.Is(rerr, io.EOF) {
+			return n
 		}
 	}
-	return n
 }
 
 // renderGeneralLocked renders the default "general" topic content
@@ -981,9 +1101,11 @@ func (s *FileMemoryStore) renderGeneralLocked() string {
 		return ""
 	}
 	limit := s.limitFor(TargetMemory, DefaultTopic)
-	body := strings.Join(entries, memoryEntryDelim)
-	pct := pctOf(len(body), limit)
-	header := fmt.Sprintf("MEMORY:general (default bucket — your persistent notes) [%d%% — %d/%d chars]", pct, len(body), limit)
+	body, used, truncated := snapshotBody(entries, limit)
+	if body == "" {
+		return ""
+	}
+	header := fmt.Sprintf("MEMORY:general (default bucket — your persistent notes) %s", snapshotUsage(used, limit, len(body), truncated))
 	sep := strings.Repeat("=", memoryHeaderRuleWidth)
 	return fmt.Sprintf("%s\n%s\n%s\n%s", sep, header, sep, body)
 }
@@ -995,9 +1117,11 @@ func (s *FileMemoryStore) renderCoreLocked() string {
 		return ""
 	}
 	limit := s.limitFor(TargetMemory, CoreTopic)
-	body := strings.Join(entries, memoryEntryDelim)
-	pct := pctOf(len(body), limit)
-	header := fmt.Sprintf("MEMORY:core (durable facts always in scope) [%d%% — %d/%d chars]", pct, len(body), limit)
+	body, used, truncated := snapshotBody(entries, limit)
+	if body == "" {
+		return ""
+	}
+	header := fmt.Sprintf("MEMORY:core (durable facts always in scope) %s", snapshotUsage(used, limit, len(body), truncated))
 	sep := strings.Repeat("=", memoryHeaderRuleWidth)
 	return fmt.Sprintf("%s\n%s\n%s\n%s", sep, header, sep, body)
 }
@@ -1011,11 +1135,41 @@ func (s *FileMemoryStore) renderUserLocked() string {
 		return ""
 	}
 	limit := s.limitFor(TargetUser, "")
-	body := strings.Join(entries, memoryEntryDelim)
-	pct := pctOf(len(body), limit)
-	header := fmt.Sprintf("USER PROFILE (what you know about the user) [%d%% — %d/%d chars]", pct, len(body), limit)
+	body, used, truncated := snapshotBody(entries, limit)
+	if body == "" {
+		return ""
+	}
+	header := fmt.Sprintf("USER PROFILE (what you know about the user) %s", snapshotUsage(used, limit, len(body), truncated))
 	sep := strings.Repeat("=", memoryHeaderRuleWidth)
 	return fmt.Sprintf("%s\n%s\n%s\n%s", sep, header, sep, body)
+}
+
+func snapshotBody(entries []string, limit int) (body string, used int, truncated bool) {
+	if len(entries) == 0 {
+		return "", 0, false
+	}
+	cleaned := make([]string, 0, len(entries))
+	for _, e := range entries {
+		content := strings.TrimSpace(entryContent(e))
+		if content != "" {
+			cleaned = append(cleaned, content)
+		}
+	}
+	body = strings.Join(cleaned, memoryEntryDelim)
+	used = len(body)
+	if limit > 0 && len(body) > limit {
+		cut := textutil.AlignBackward(body, limit)
+		body = strings.TrimRight(body[:cut], "\n")
+		truncated = true
+	}
+	return body, used, truncated
+}
+
+func snapshotUsage(used, limit, injected int, truncated bool) string {
+	if truncated {
+		return fmt.Sprintf("[%d%% — %d/%d chars; snapshot injected first %d chars]", pctOf(used, limit), used, limit, injected)
+	}
+	return fmt.Sprintf("[%d%% — %d/%d chars]", pctOf(used, limit), used, limit)
 }
 
 // renderTopicIndexLocked produces a one-liner per topic so the model
@@ -1025,32 +1179,25 @@ func (s *FileMemoryStore) renderTopicIndexLocked() string {
 	if s.MemoryDir == "" {
 		return ""
 	}
-	entries, err := os.ReadDir(filepath.Join(s.MemoryDir, "topics"))
-	if err != nil {
-		return ""
-	}
 	type topicInfo struct {
 		name     string
 		count    int
 		newestAt string
 	}
 	var topics []topicInfo
-	for _, e := range entries {
-		if e.IsDir() || !strings.HasSuffix(e.Name(), ".md") {
-			continue
-		}
-		name := strings.TrimSuffix(e.Name(), ".md")
+	topicFiles, truncated := s.listTopicFilesLocked(s.topicCountLimit())
+	for _, tf := range topicFiles {
 		// "general" is rendered inline in renderGeneralLocked; the
 		// on-demand index covers only the custom topics.
-		if name == DefaultTopic {
+		if tf.name == DefaultTopic {
 			continue
 		}
-		es, err := readMemoryFile(filepath.Join(s.MemoryDir, "topics", e.Name()))
+		es, err := readMemoryFile(tf.path)
 		if err != nil || len(es) == 0 {
 			continue
 		}
 		topics = append(topics, topicInfo{
-			name:     name,
+			name:     tf.name,
 			count:    len(es),
 			newestAt: newestEntryTimestamp(es),
 		})
@@ -1072,7 +1219,11 @@ func (s *FileMemoryStore) renderTopicIndexLocked() string {
 	})
 	var b strings.Builder
 	sep := strings.Repeat("=", memoryHeaderRuleWidth)
-	fmt.Fprintf(&b, "%s\nMEMORY:topics (read with action=search) [%d topic(s)]\n%s\n", sep, len(topics), sep)
+	capNote := ""
+	if truncated {
+		capNote = fmt.Sprintf(", capped at %d topic file(s)", s.topicCountLimit())
+	}
+	fmt.Fprintf(&b, "%s\nMEMORY:topics (read with action=search) [%d topic(s)%s]\n%s\n", sep, len(topics), capNote, sep)
 	for _, t := range topics {
 		fresh := ""
 		if t.newestAt != "" {
@@ -1090,12 +1241,13 @@ func (s *FileMemoryStore) renderTopicIndexLocked() string {
 func (s *FileMemoryStore) respondLocked(target MemoryTarget, topic string, ok bool, msg string, entries, matches []string) MemoryResponse {
 	limit := s.limitFor(target, topic)
 	current := joinedLen(entries)
-	// Strip timestamp prefixes from the Entries field so the model
-	// sees its own content cleanly. Freshness data is available
-	// separately via Search (MemorySearchResult.CreatedAt).
+	// Strip timestamp prefixes and cap per-entry previews so the
+	// model sees useful current state without dumping a whole bucket
+	// into the tool response. Freshness data is available separately
+	// via Search (MemorySearchResult.CreatedAt).
 	cleaned := make([]string, len(entries))
 	for i, e := range entries {
-		cleaned[i] = entryContent(e)
+		cleaned[i] = trimSnippet(entryContent(e), memoryResponseEntryMax)
 	}
 	return MemoryResponse{
 		OK:      ok,
@@ -1129,7 +1281,7 @@ func pctOf(used, limit int) int {
 
 func validateTarget(t MemoryTarget) error {
 	if t != TargetMemory && t != TargetUser {
-		return fmt.Errorf("invalid memory target %q; expected %q or %q", t, TargetMemory, TargetUser)
+		return fmt.Errorf("invalid memory target %q; expected %q or %q. Next: retry with target=%s for workspace/project facts or target=%s for stable user preferences", t, TargetMemory, TargetUser, TargetMemory, TargetUser)
 	}
 	return nil
 }
@@ -1222,12 +1374,21 @@ func findUnique(entries []string, oldText string) (int, []string) {
 }
 
 func readMemoryFile(path string) ([]string, error) {
-	raw, err := os.ReadFile(path)
+	f, err := os.Open(path)
 	if err != nil {
 		if errors.Is(err, os.ErrNotExist) {
 			return nil, nil
 		}
 		return nil, err
+	}
+	defer f.Close()
+
+	raw, err := io.ReadAll(io.LimitReader(f, MaxMemoryFileBytes+1))
+	if err != nil {
+		return nil, err
+	}
+	if len(raw) > MaxMemoryFileBytes {
+		return nil, fmt.Errorf("memory file %q exceeds %d-byte cap", path, MaxMemoryFileBytes)
 	}
 	text := strings.TrimSpace(string(raw))
 	if text == "" {
@@ -1250,6 +1411,9 @@ func writeMemoryFile(path string, entries []string) error {
 		return err
 	}
 	body := strings.Join(entries, memoryEntryDelim)
+	if len(body) > MaxMemoryFileBytes {
+		return fmt.Errorf("memory file %q would exceed %d-byte cap", path, MaxMemoryFileBytes)
+	}
 	tmp := path + ".tmp"
 	// temp + fsync + rename + fsync(dir) is the same durability
 	// recipe Conversation.Replace uses for the JSONL log. Without
@@ -1304,24 +1468,32 @@ var memoryStopwords = map[string]bool{
 }
 
 func tokenizeMemoryQuery(s string) []string {
+	s = NormalizeSearchQuery(s)
 	s = strings.ToLower(s)
 	var out []string
+	seen := map[string]bool{}
 	var cur strings.Builder
 	flush := func() {
 		t := cur.String()
 		cur.Reset()
-		if len(t) >= 2 && !memoryStopwords[t] {
+		if len(t) >= 2 && !memoryStopwords[t] && !seen[t] {
+			seen[t] = true
 			out = append(out, t)
 		}
 	}
 	for _, r := range s {
+		if len(out) >= MaxSearchQueryTerms {
+			break
+		}
 		if unicode.IsLetter(r) || unicode.IsDigit(r) {
 			cur.WriteRune(r)
 		} else {
 			flush()
 		}
 	}
-	flush()
+	if len(out) < MaxSearchQueryTerms {
+		flush()
+	}
 	return out
 }
 

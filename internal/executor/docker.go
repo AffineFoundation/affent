@@ -9,6 +9,7 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
+	"time"
 	"unicode/utf8"
 )
 
@@ -142,6 +143,16 @@ func (d *DockerExecExecutor) Exec(ctx context.Context, cmd []string, opts ExecOp
 // a raw `cat`/`head` exit code dump.
 var ErrNotFoundInContainer = errors.New("no such file or directory in container")
 
+const (
+	defaultDockerReadFileBytes = 64 * 1024
+	maxDockerReadFileBytes     = 4 * 1024 * 1024
+
+	dockerFileOpStatusCap     = 64 * 1024
+	dockerFileOpStatOutputCap = 1024
+)
+
+var dockerFileOpTimeout = 30 * time.Second
+
 // ReadFile cats the file out of the container, capped at maxBytes.
 // Returns ErrNotFoundInContainer when the path is missing so callers
 // can distinguish that from permission or other shell errors.
@@ -150,7 +161,10 @@ func (d *DockerExecExecutor) ReadFile(ctx context.Context, path string, maxBytes
 		return "", errors.New("path is required")
 	}
 	if maxBytes <= 0 {
-		maxBytes = 64 * 1024
+		maxBytes = defaultDockerReadFileBytes
+	}
+	if maxBytes > maxDockerReadFileBytes {
+		maxBytes = maxDockerReadFileBytes
 	}
 	// Pre-check existence so a "no such file" never gets confused with
 	// a `head` failure on a real file (permission, EIO, etc.). The
@@ -162,7 +176,10 @@ func (d *DockerExecExecutor) ReadFile(ctx context.Context, path string, maxBytes
 	}
 	// Read maxBytes+1 so we can detect truncation without reading the whole file.
 	cmd := []string{"sh", "-c", "head -c " + strconv.Itoa(maxBytes+1) + " " + shellQuote(path)}
-	res, err := d.Exec(ctx, cmd, ExecOptions{})
+	res, err := d.Exec(ctx, cmd, ExecOptions{
+		MaxOutputBytes: maxBytes + 1,
+		Timeout:        dockerFileOpTimeout,
+	})
 	if err != nil {
 		return "", err
 	}
@@ -195,7 +212,10 @@ func (d *DockerExecExecutor) ReadFile(ctx context.Context, path string, maxBytes
 
 // pathExists runs `test -e` inside the container.
 func (d *DockerExecExecutor) pathExists(ctx context.Context, path string) (bool, error) {
-	res, err := d.Exec(ctx, []string{"sh", "-c", "test -e " + shellQuote(path)}, ExecOptions{})
+	res, err := d.Exec(ctx, []string{"sh", "-c", "test -e " + shellQuote(path)}, ExecOptions{
+		Timeout:        dockerFileOpTimeout,
+		MaxOutputBytes: dockerFileOpStatOutputCap,
+	})
 	if err != nil {
 		return false, err
 	}
@@ -217,11 +237,13 @@ func (d *DockerExecExecutor) WriteFile(ctx context.Context, path, content string
 		return errors.New("path is required")
 	}
 	parent := filepath.Dir(path)
-	// Single bash invocation: mkdir parent, then base64 -d into the target.
+	// Single shell invocation: mkdir parent, then base64 -d into the target.
 	script := fmt.Sprintf("mkdir -p %s && base64 -d > %s", shellQuote(parent), shellQuote(path))
 	enc := base64.StdEncoding.EncodeToString([]byte(content))
 	res, err := d.Exec(ctx, []string{"sh", "-c", script}, ExecOptions{
-		Stdin: strings.NewReader(enc),
+		Stdin:          strings.NewReader(enc),
+		Timeout:        dockerFileOpTimeout,
+		MaxOutputBytes: dockerFileOpStatusCap,
 	})
 	if err != nil {
 		return err
@@ -284,17 +306,22 @@ func (d *DockerExecExecutor) ListFiles(ctx context.Context, path string, maxEntr
 	// . and ..). For size: GNU `stat -c %s` works on Linux containers;
 	// BSD `stat -f %z` is tried as a fallback for the rare cases the
 	// container's stat is the BSD flavour. NUL-separated rows +
-	// tab-separated fields keep filenames with whitespace / newlines
-	// parseable. Works against busybox sh + ash + bash + dash.
+	// tab-separated fields keep ordinary whitespace parseable. Works
+	// against busybox sh + ash + bash + dash.
 	script := fmt.Sprintf(
-		`cd %s && ls -A1 | while IFS= read -r f; do `+
+		`cd %s && i=0; ls -A1 | while IFS= read -r f; do `+
+			`i=$((i+1)); [ "$i" -gt %d ] && break; `+
 			`if [ -d "$f" ]; then kind=dir; else kind=file; fi; `+
 			`size=$(stat -c %%s "$f" 2>/dev/null || stat -f %%z "$f" 2>/dev/null || echo 0); `+
 			`printf '%%s\t%%s\t%%s\0' "$kind" "$size" "$f"; `+
 			`done`,
 		shellQuote(path),
+		maxEntries,
 	)
-	res, err := d.Exec(ctx, []string{"sh", "-c", script}, ExecOptions{})
+	res, err := d.Exec(ctx, []string{"sh", "-c", script}, ExecOptions{
+		MaxOutputBytes: DefaultExecOutputCap,
+		Timeout:        dockerFileOpTimeout,
+	})
 	if err != nil {
 		return nil, err
 	}
@@ -323,19 +350,24 @@ func (d *DockerExecExecutor) ListFiles(ctx context.Context, path string, maxEntr
 	return entries, nil
 }
 
-// readFileFull reads the entire file out of the container with no
-// in-container truncation. Used by EditFile, which must round-trip
-// the whole body unmodified before writing back — capping here would
-// silently chop the file on rewrite, corrupting anything past the
-// cap. We raise the per-stream Exec cap to 64 MiB so realistic
-// source / config / log files round-trip; any file beyond that is
-// rejected with a clear error so EditFile bails before writing a
-// truncated version back to disk.
-const readFileFullCap = 64 * 1024 * 1024
+// maxDockerEditFileBytes caps DockerExecExecutor.EditFile's
+// read-modify-write path. Keep this aligned with the agent built-in
+// edit_file local cap: exact replacement requires materializing the
+// whole file, so large files should be inspected in chunks or modified
+// by a targeted shell command inside the container.
+const maxDockerEditFileBytes = maxDockerReadFileBytes
 
 func (d *DockerExecExecutor) readFileFull(ctx context.Context, path string) (string, error) {
+	size, err := d.fileSize(ctx, path)
+	if err != nil {
+		return "", err
+	}
+	if size > maxDockerEditFileBytes {
+		return "", fmt.Errorf("read %s: file is %d bytes; edit_file supports files up to %d bytes (inspect chunks with read_file or shell, then apply a targeted command)", path, size, maxDockerEditFileBytes)
+	}
 	res, err := d.Exec(ctx, []string{"sh", "-c", "cat " + shellQuote(path)}, ExecOptions{
-		MaxOutputBytes: readFileFullCap,
+		MaxOutputBytes: maxDockerEditFileBytes,
+		Timeout:        dockerFileOpTimeout,
 	})
 	if err != nil {
 		return "", err
@@ -349,9 +381,28 @@ func (d *DockerExecExecutor) readFileFull(ctx context.Context, path string) (str
 	// silently rewrite the file with the truncated content + banner
 	// text appended.
 	if strings.Contains(res.Stdout, truncationMarker) {
-		return "", fmt.Errorf("read %s: file exceeds %d-byte read-all cap; edit not possible in-memory (split the file or operate via shell)", path, readFileFullCap)
+		return "", fmt.Errorf("read %s: file exceeds %d-byte read-all cap; edit not possible in-memory (split the file or operate via shell)", path, maxDockerEditFileBytes)
 	}
 	return res.Stdout, nil
+}
+
+func (d *DockerExecExecutor) fileSize(ctx context.Context, path string) (int64, error) {
+	script := fmt.Sprintf("stat -c %%s %s 2>/dev/null || stat -f %%z %s 2>/dev/null", shellQuote(path), shellQuote(path))
+	res, err := d.Exec(ctx, []string{"sh", "-c", script}, ExecOptions{
+		MaxOutputBytes: 1024,
+		Timeout:        dockerFileOpTimeout,
+	})
+	if err != nil {
+		return 0, err
+	}
+	if res.ExitCode != 0 {
+		return 0, fmt.Errorf("stat %s: exit %d: %s", path, res.ExitCode, strings.TrimSpace(res.Stderr))
+	}
+	size, err := strconv.ParseInt(strings.TrimSpace(res.Stdout), 10, 64)
+	if err != nil {
+		return 0, fmt.Errorf("stat %s: parse size %q: %w", path, strings.TrimSpace(res.Stdout), err)
+	}
+	return size, nil
 }
 
 // shellQuote single-quotes a string for safe insertion into a bash -lc

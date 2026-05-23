@@ -48,21 +48,26 @@ func memoryTool(store memory.MemoryStore) *Tool {
 			},
 			"content": map[string]any{
 				"type":        "string",
+				"minLength":   1,
 				"description": "Entry text for add/replace. Keep compact and durable.",
 			},
 			"old_text": map[string]any{
 				"type":        "string",
+				"minLength":   1,
 				"description": "Unique substring identifying the entry to replace/remove.",
 			},
 			"query": map[string]any{
 				"type":        "string",
+				"minLength":   1,
+				"maxLength":   memory.MaxSearchQueryBytes,
 				"description": "Search query.",
 			},
 			"top_k": map[string]any{
 				"type":        "integer",
-				"description": "Search result count. Default 5, max 20.",
+				"description": fmt.Sprintf("Search result count. Default %d, max %d.", memory.DefaultSearchTopK, memory.MaxSearchTopK),
+				"default":     memory.DefaultSearchTopK,
 				"minimum":     1,
-				"maximum":     20,
+				"maximum":     memory.MaxSearchTopK,
 			},
 		},
 	})
@@ -95,34 +100,38 @@ func memoryTool(store memory.MemoryStore) *Tool {
 			if p.Target == "" {
 				p.Target = string(memory.TargetMemory)
 			}
+			p.Content = strings.TrimSpace(p.Content)
+			p.OldText = strings.TrimSpace(p.OldText)
 			target := memory.MemoryTarget(p.Target)
 
 			var resp memory.MemoryResponse
 			var err error
 			switch p.Action {
 			case "":
-				resp = memory.MemoryResponse{Target: target, Topic: p.Topic, Message: "action is required"}
+				resp = memory.MemoryResponse{Target: target, Topic: p.Topic, Message: "action is required. Next: retry with action=list to discover topics, action=search with query to recall, or action=add with content to save a durable fact."}
 			case "add":
 				if p.Content == "" {
-					resp = memory.MemoryResponse{Target: target, Topic: p.Topic, Message: "content is required for action=add"}
+					resp = memory.MemoryResponse{Target: target, Topic: p.Topic, Message: "content is required for action=add. Next: retry with compact durable content, target=memory for project facts or target=user for stable user preferences."}
 					break
 				}
 				resp, err = store.Add(target, p.Topic, p.Content)
 			case "replace":
 				if p.OldText == "" || p.Content == "" {
-					resp = memory.MemoryResponse{Target: target, Topic: p.Topic, Message: "old_text and content are required for action=replace"}
+					resp = memory.MemoryResponse{Target: target, Topic: p.Topic, Message: "old_text and content are required for action=replace. Next: search/list first, then retry with a unique old_text substring and the full replacement content."}
 					break
 				}
 				resp, err = store.Replace(target, p.Topic, p.OldText, p.Content)
 			case "remove":
 				if p.OldText == "" {
-					resp = memory.MemoryResponse{Target: target, Topic: p.Topic, Message: "old_text is required for action=remove"}
+					resp = memory.MemoryResponse{Target: target, Topic: p.Topic, Message: "old_text is required for action=remove. Next: search/list first, then retry with a unique old_text substring from the entry to remove."}
 					break
 				}
 				resp, err = store.Remove(target, p.Topic, p.OldText)
 			case "search":
+				p.Query = memory.NormalizeSearchQuery(p.Query)
+				p.TopK = memory.NormalizeSearchTopK(p.TopK)
 				if p.Query == "" {
-					resp = memory.MemoryResponse{Target: target, Topic: p.Topic, Message: "query is required for action=search"}
+					resp = memory.MemoryResponse{Target: target, Topic: p.Topic, Message: "query is required for action=search. Next: retry with 2-6 specific keywords, or use action=list to discover available topics first."}
 					break
 				}
 				resp, err = store.Search(target, p.Topic, p.Query, p.TopK)
@@ -135,10 +144,10 @@ func memoryTool(store memory.MemoryStore) *Tool {
 					// A custom MemoryStore may not implement the
 					// optional list extension.
 					// Surface a sane explanation rather than panic.
-					resp = memory.MemoryResponse{Target: target, Message: "this MemoryStore does not support action=list"}
+					resp = memory.MemoryResponse{Target: target, Message: "this MemoryStore does not support action=list. Next: use action=search with a specific query instead."}
 				}
 			default:
-				resp = memory.MemoryResponse{Target: target, Topic: p.Topic, Message: fmt.Sprintf("unknown action %q (expected one of: %s)", p.Action, strings.Join(memoryActions, ", "))}
+				resp = memory.MemoryResponse{Target: target, Topic: p.Topic, Message: fmt.Sprintf("unknown action %q (expected one of: %s). Next: retry with one valid action: add, replace, remove, search, or list.", p.Action, strings.Join(memoryActions, ", "))}
 			}
 			if err != nil {
 				return "", err

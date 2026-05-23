@@ -421,3 +421,25 @@ func TestPreviewN_UTF8Safe(t *testing.T) {
 		}
 	}
 }
+
+func TestLoopToolResultContextCapsByTool(t *testing.T) {
+	loop := &Loop{}
+	cases := map[string]int{
+		"read_file":      12 * 1024,
+		"shell":          6 * 1024,
+		"memory":         4 * 1024,
+		"session_search": 4 * 1024,
+		"list_files":     4 * 1024,
+		"edit_file":      2 * 1024,
+		"unknown":        MaxToolResultBytesInContext,
+	}
+	for tool, want := range cases {
+		if got := loop.toolResultMaxBytesInContextFor(tool); got != want {
+			t.Fatalf("%s cap = %d, want %d", tool, got, want)
+		}
+	}
+	loop.ToolResultMaxBytesInContext = 123
+	if got := loop.toolResultMaxBytesInContextFor("read_file"); got != 123 {
+		t.Fatalf("explicit cap should win, got %d", got)
+	}
+}

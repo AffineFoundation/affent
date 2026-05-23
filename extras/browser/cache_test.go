@@ -2,6 +2,7 @@ package browser
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"net/http"
 	"os"
@@ -98,6 +99,166 @@ func TestFileResponseCache_DoesNotCacheErrorResponses(t *testing.T) {
 		if ok {
 			t.Errorf("status %d should not be cached", code)
 		}
+	}
+}
+
+func TestFileResponseCache_SkipsOversizedBodies(t *testing.T) {
+	c, err := NewFileResponseCache(t.TempDir(), 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	body := make([]byte, maxCachedResponseBodyBytes+1)
+	if err := c.Put(context.Background(), "https://example.com/huge", &CachedResponse{
+		StatusCode: 200,
+		Body:       body,
+	}); err != nil {
+		t.Fatalf("Put oversized body should be a silent cache skip: %v", err)
+	}
+	_, ok, err := c.Get(context.Background(), "https://example.com/huge")
+	if err != nil {
+		t.Fatalf("Get oversized skipped body: %v", err)
+	}
+	if ok {
+		t.Fatalf("oversized body must not be cached")
+	}
+}
+
+func TestFileResponseCache_PutResultReportsStoredAndSkipped(t *testing.T) {
+	c, err := NewFileResponseCache(t.TempDir(), 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	stored, err := c.PutResult(context.Background(), "https://example.com/ok", &CachedResponse{
+		StatusCode: 200,
+		Body:       []byte("<html>ok</html>"),
+	})
+	if err != nil || !stored {
+		t.Fatalf("PutResult ok stored=%t err=%v, want stored", stored, err)
+	}
+	cases := []struct {
+		name  string
+		url   string
+		entry *CachedResponse
+	}{
+		{
+			name: "error status",
+			url:  "https://example.com/not-found",
+			entry: &CachedResponse{
+				StatusCode: 404,
+				Body:       []byte("not found"),
+			},
+		},
+		{
+			name: "challenge body",
+			url:  "https://example.com/challenge",
+			entry: &CachedResponse{
+				StatusCode: 200,
+				Body:       []byte("<html><title>Just a moment...</title></html>"),
+			},
+		},
+		{
+			name: "oversized body",
+			url:  "https://example.com/huge",
+			entry: &CachedResponse{
+				StatusCode: 200,
+				Body:       make([]byte, maxCachedResponseBodyBytes+1),
+			},
+		},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			stored, err := c.PutResult(context.Background(), tc.url, tc.entry)
+			if err != nil {
+				t.Fatalf("PutResult skipped response returned error: %v", err)
+			}
+			if stored {
+				t.Fatalf("PutResult stored skipped response")
+			}
+		})
+	}
+}
+
+func TestFileResponseCache_HonorsCanceledContext(t *testing.T) {
+	dir := t.TempDir()
+	c, err := NewFileResponseCache(dir, 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+
+	_, ok, err := c.Get(ctx, "https://example.com/cancelled")
+	if !errors.Is(err, context.Canceled) || ok {
+		t.Fatalf("Get canceled ok=%t err=%v, want context.Canceled miss", ok, err)
+	}
+	stored, err := c.PutResult(ctx, "https://example.com/cancelled", &CachedResponse{
+		StatusCode: 200,
+		Body:       []byte("body"),
+	})
+	if !errors.Is(err, context.Canceled) || stored {
+		t.Fatalf("PutResult canceled stored=%t err=%v, want context.Canceled without store", stored, err)
+	}
+	if err := c.Put(ctx, "https://example.com/cancelled-put", &CachedResponse{
+		StatusCode: 200,
+		Body:       []byte("body"),
+	}); !errors.Is(err, context.Canceled) {
+		t.Fatalf("Put canceled err=%v, want context.Canceled", err)
+	}
+	matches, _ := filepath.Glob(filepath.Join(dir, "*"))
+	if len(matches) != 0 {
+		t.Fatalf("canceled cache writes must not create files: %v", matches)
+	}
+}
+
+func TestFileResponseCache_GetSkipsOversizedBodyFile(t *testing.T) {
+	dir := t.TempDir()
+	c, err := NewFileResponseCache(dir, 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	url := "https://example.com/grew-after-write"
+	if err := c.Put(context.Background(), url, &CachedResponse{
+		StatusCode: 200,
+		Body:       []byte("small"),
+	}); err != nil {
+		t.Fatalf("Put: %v", err)
+	}
+	_, bodyPath := c.paths(url)
+	if err := os.Truncate(bodyPath, int64(maxCachedResponseBodyBytes+1)); err != nil {
+		t.Fatalf("inflate body file: %v", err)
+	}
+	_, ok, err := c.Get(context.Background(), url)
+	if err != nil {
+		t.Fatalf("Get oversized body file: %v", err)
+	}
+	if ok {
+		t.Fatal("oversized on-disk body must be treated as a cache miss")
+	}
+}
+
+func TestFileResponseCache_GetSkipsOversizedMetaFile(t *testing.T) {
+	dir := t.TempDir()
+	c, err := NewFileResponseCache(dir, 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	url := "https://example.com/oversized-meta"
+	if err := c.Put(context.Background(), url, &CachedResponse{
+		StatusCode: 200,
+		Body:       []byte("small"),
+	}); err != nil {
+		t.Fatalf("Put: %v", err)
+	}
+	metaPath, _ := c.paths(url)
+	if err := os.Truncate(metaPath, int64(maxCachedResponseMetaBytes+1)); err != nil {
+		t.Fatalf("inflate meta file: %v", err)
+	}
+	_, ok, err := c.Get(context.Background(), url)
+	if err != nil {
+		t.Fatalf("Get oversized meta file: %v", err)
+	}
+	if ok {
+		t.Fatal("oversized on-disk meta must be treated as a cache miss")
 	}
 }
 
@@ -220,6 +381,42 @@ func TestFileResponseCache_Sweep_NoTTLIsNoOp(t *testing.T) {
 	}
 	if deleted != 0 {
 		t.Errorf("Sweep with ttl=0 must be a no-op, got deleted=%d", deleted)
+	}
+}
+
+func TestFileResponseCache_Sweep_DropsOversizedMeta(t *testing.T) {
+	dir := t.TempDir()
+	c, err := NewFileResponseCache(dir, time.Second)
+	if err != nil {
+		t.Fatal(err)
+	}
+	url := "https://example.com/oversized-meta-sweep"
+	if err := c.Put(context.Background(), url, &CachedResponse{
+		StatusCode: 200,
+		Body:       []byte("body"),
+	}); err != nil {
+		t.Fatalf("Put: %v", err)
+	}
+	metaPath, bodyPath := c.paths(url)
+	if err := os.Truncate(metaPath, int64(maxCachedResponseMetaBytes+1)); err != nil {
+		t.Fatalf("inflate meta file: %v", err)
+	}
+	old := time.Now().Add(-time.Hour)
+	if err := os.Chtimes(metaPath, old, old); err != nil {
+		t.Fatalf("age meta file: %v", err)
+	}
+
+	deleted, err := c.Sweep(context.Background())
+	if err != nil {
+		t.Fatalf("Sweep: %v", err)
+	}
+	if deleted != 1 {
+		t.Fatalf("deleted = %d, want 1", deleted)
+	}
+	for _, path := range []string{metaPath, bodyPath} {
+		if _, err := os.Stat(path); !os.IsNotExist(err) {
+			t.Fatalf("%s still exists or stat failed unexpectedly: %v", path, err)
+		}
 	}
 }
 

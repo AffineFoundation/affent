@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
-	"strings"
 
 	"github.com/affinefoundation/affent/internal/sessionsearch"
 )
@@ -25,15 +24,21 @@ func sessionSearchTool(sessionsDir, currentSessionID string) *Tool {
 		"properties": map[string]any{
 			"query": map[string]any{
 				"type":        "string",
+				"minLength":   1,
+				"maxLength":   sessionsearch.MaxQueryBytes,
 				"description": "Keywords or phrase.",
 			},
 			"top_k": map[string]any{
 				"type":        "integer",
-				"description": "Result count; default 5.",
+				"minimum":     1,
+				"maximum":     sessionsearch.MaxTopK,
+				"description": "Result count; default 5, max 20.",
 			},
 			"max_per_session": map[string]any{
 				"type":        "integer",
-				"description": "Hits per session; default 3.",
+				"minimum":     1,
+				"maximum":     sessionsearch.MaxPerSession,
+				"description": "Hits per session; default 3, max 5.",
 			},
 		},
 	})
@@ -53,16 +58,11 @@ func sessionSearchTool(sessionsDir, currentSessionID string) *Tool {
 			if err := json.Unmarshal(args, &p); err != nil {
 				return "", fmt.Errorf("decode args: %w", err)
 			}
-			p.Query = strings.TrimSpace(p.Query)
+			p.Query = sessionsearch.NormalizeQuery(p.Query)
 			if p.Query == "" {
 				return marshalSessionSearchResp(SessionSearchResponse{Message: "query is required"}), nil
 			}
-			if p.TopK <= 0 {
-				p.TopK = 5
-			}
-			if p.MaxPerSession <= 0 {
-				p.MaxPerSession = 3
-			}
+			p.TopK, p.MaxPerSession = sessionsearch.NormalizeLimits(p.TopK, p.MaxPerSession)
 			if sessionsDir == "" {
 				return marshalSessionSearchResp(SessionSearchResponse{Query: p.Query, Message: "session_search is not configured (no sessions directory)"}), nil
 			}
@@ -70,10 +70,15 @@ func sessionSearchTool(sessionsDir, currentSessionID string) *Tool {
 			if err != nil {
 				return "", err
 			}
+			message := ""
+			if len(hits) == 0 {
+				message = "no results. Next: retry with fewer or different keywords, include outcome words like passed/final/decision, or search for a related session id."
+			}
 			return marshalSessionSearchResp(SessionSearchResponse{
 				Query:   p.Query,
 				Total:   len(hits),
 				Results: hits,
+				Message: message,
 			}), nil
 		},
 	}

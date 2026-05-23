@@ -103,6 +103,38 @@ func ToolRequestRepaired(toolName string) Check {
 	}
 }
 
+func ToolStatsAtLeast(field string, min int) Check {
+	return Check{
+		Name: fmt.Sprintf("tool_stats_at_least:%s:%d", field, min),
+		Eval: func(t Trace) CheckResult {
+			got, ok := toolStatsField(t.ToolStats, field)
+			if !ok {
+				return CheckResult{Pass: false, Detail: fmt.Sprintf("unknown tool stats field %q", field)}
+			}
+			if got >= min {
+				return CheckResult{Pass: true, Detail: fmt.Sprintf("%s=%d", field, got)}
+			}
+			return CheckResult{Pass: false, Detail: fmt.Sprintf("%s=%d, want >= %d", field, got, min)}
+		},
+	}
+}
+
+var toolStatsAccessors = map[string]func(ToolRuntimeStats) int{
+	"tool_requests":            func(s ToolRuntimeStats) int { return s.ToolRequests },
+	"tool_name_canonicalized":  func(s ToolRuntimeStats) int { return s.ToolNameCanonicalized },
+	"tool_args_repaired":       func(s ToolRuntimeStats) int { return s.ToolArgsRepaired },
+	"loop_guard_interventions": func(s ToolRuntimeStats) int { return s.LoopGuardInterventions },
+	"forced_no_tools":          func(s ToolRuntimeStats) int { return s.ForcedNoTools },
+}
+
+func toolStatsField(stats ToolRuntimeStats, field string) (int, bool) {
+	accessor, ok := toolStatsAccessors[field]
+	if !ok {
+		return 0, false
+	}
+	return accessor(stats), true
+}
+
 // ToolCalledBefore passes when at least one `earlier` call happens
 // before the first `later` call, AND a `later` call was made.
 //
@@ -248,6 +280,36 @@ func MaxToolCalls(n int) Check {
 	}
 }
 
+// MaxSuccessfulToolCalls passes when the run made at most n tool
+// invocations that actually completed successfully. Guard-rejected
+// attempts still matter for other checks and telemetry, but they do
+// not represent successful parent-side evidence gathering. This is
+// useful for subagent isolation evals: a first-tool policy rejection
+// should not be counted as parent context pollution.
+func MaxSuccessfulToolCalls(n int) Check {
+	return Check{
+		Name: fmt.Sprintf("max_successful_tool_calls:%d", n),
+		Eval: func(t Trace) CheckResult {
+			if n < 0 {
+				return CheckResult{Pass: true}
+			}
+			var names []string
+			for _, c := range t.Tools {
+				if c.ExitCode == 0 && !c.IsErr {
+					names = append(names, c.Tool)
+				}
+			}
+			if len(names) <= n {
+				return CheckResult{Pass: true}
+			}
+			return CheckResult{
+				Pass:   false,
+				Detail: fmt.Sprintf("expected at most %d successful tool calls, observed %d (%s)", n, len(names), strings.Join(names, ", ")),
+			}
+		},
+	}
+}
+
 // ShellCommandMatching passes when at least one shell tool call's
 // `command` argument matches the given pattern. Pattern is a Go
 // regexp; on regex compile failure it falls back to plain substring
@@ -358,14 +420,16 @@ func FileNotEdited(paths []string) Check {
 // substring in the tool result; new guards that surface a different
 // substring must be added here to keep ShellCommandLacksUnguarded
 // honest.
+var guardRejectionMarkers = []string{
+	"masks a test/build exit code",
+	"unbounded filesystem scan",
+}
+
 func guardRejected(c ToolCall) bool {
 	if c.ExitCode == 0 {
 		return false
 	}
-	for _, marker := range []string{
-		"masks a test/build exit code",
-		"unbounded filesystem scan",
-	} {
+	for _, marker := range guardRejectionMarkers {
 		if strings.Contains(c.Result, marker) {
 			return true
 		}

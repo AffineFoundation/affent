@@ -22,6 +22,25 @@ import (
 // than blocking the event dispatch loop.
 const observerBodyFetchConcurrency = 16
 
+func shouldFetchResponseBodyForCache(encodedDataLength float64) bool {
+	return encodedDataLength <= 0 || encodedDataLength <= maxCachedResponseBodyBytes
+}
+
+type responseCachePutResult interface {
+	PutResult(ctx context.Context, url string, entry *CachedResponse) (stored bool, err error)
+}
+
+func putResponseCache(ctx context.Context, cache ResponseCache, url string, entry *CachedResponse) (bool, error) {
+	if cache == nil {
+		return false, nil
+	}
+	if c, ok := cache.(responseCachePutResult); ok {
+		return c.PutResult(ctx, url, entry)
+	}
+	err := cache.Put(ctx, url, entry)
+	return err == nil, err
+}
+
 // startCacheObserver subscribes to the page's Network domain events
 // and writes successful responses into the configured ResponseCache.
 // Runs in a background goroutine until the page is closed.
@@ -31,7 +50,7 @@ const observerBodyFetchConcurrency = 16
 // fingerprint, tripping Cloudflare), cache population now happens
 // out-of-band:
 //
-//	NetworkResponseReceived → buffer URL + status + headers + MIME
+//	NetworkResponseReceived → buffer URL + status + headers
 //	NetworkLoadingFinished  → call Network.getResponseBody, fold into
 //	                          cache via cache.Put
 //
@@ -54,7 +73,6 @@ func startCacheObserver(page *rod.Page, cache ResponseCache, stats *InterceptSta
 		url        string
 		statusCode int
 		headers    http.Header
-		mimeType   string
 	}
 	var pendingMap sync.Map
 	sem := make(chan struct{}, observerBodyFetchConcurrency)
@@ -91,7 +109,6 @@ func startCacheObserver(page *rod.Page, cache ResponseCache, stats *InterceptSta
 				url:        e.Response.URL,
 				statusCode: status,
 				headers:    hdrs,
-				mimeType:   e.Response.MIMEType,
 			})
 		},
 		func(e *proto.NetworkLoadingFinished) {
@@ -102,6 +119,9 @@ func startCacheObserver(page *rod.Page, cache ResponseCache, stats *InterceptSta
 			}
 			p := raw.(pending)
 			reqID := e.RequestID
+			if !shouldFetchResponseBodyForCache(e.EncodedDataLength) {
+				return
+			}
 			// Best-effort acquire a semaphore slot. If we're already
 			// at the concurrency cap, drop this body fetch — better
 			// to skip a cache write than to back-pressure the CDP
@@ -119,13 +139,17 @@ func startCacheObserver(page *rod.Page, cache ResponseCache, stats *InterceptSta
 				if err != nil {
 					return
 				}
+				if len(body) > maxCachedResponseBodyBytes {
+					return
+				}
 				entry := &CachedResponse{
 					URL:        p.url,
 					StatusCode: p.statusCode,
 					Headers:    p.headers,
 					Body:       body,
 				}
-				if err := cache.Put(context.Background(), p.url, entry); err == nil {
+				stored, err := putResponseCache(context.Background(), cache, p.url, entry)
+				if err == nil && stored && stats != nil {
 					stats.CacheWrite.Add(1)
 				}
 			}()

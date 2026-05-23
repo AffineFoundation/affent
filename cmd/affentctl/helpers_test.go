@@ -383,8 +383,8 @@ func TestResolveSessionID(t *testing.T) {
 	})
 }
 
-// TestBuildExecutor pins the --executor flag's three accepted
-// shapes: empty / "local" → LocalExecutor; "docker:<cid>" →
+// TestBuildExecutor pins the post-sandbox --executor shapes:
+// empty / "local" → LocalExecutor; "docker:<cid>" →
 // DockerExecExecutor; anything else (including bare "docker:")
 // fails so a typo doesn't silently fall back to LocalExecutor on
 // a host where the operator deliberately wanted container-only
@@ -413,10 +413,12 @@ func TestBuildExecutor(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		// We can't construct a DockerExecExecutor in this test
-		// without a running daemon — just check it isn't a Local.
-		if _, isLocal := got.(*executor.LocalExecutor); isLocal {
-			t.Errorf("'docker:abc123' must NOT produce LocalExecutor; got %T", got)
+		dockerExec, ok := got.(*executor.DockerExecExecutor)
+		if !ok {
+			t.Fatalf("'docker:abc123' should produce DockerExecExecutor; got %T", got)
+		}
+		if dockerExec.DefaultCwd != "/tmp" {
+			t.Errorf("DockerExecExecutor.DefaultCwd = %q, want /tmp", dockerExec.DefaultCwd)
 		}
 	})
 	t.Run("bare docker: errors", func(t *testing.T) {
@@ -425,10 +427,16 @@ func TestBuildExecutor(t *testing.T) {
 			t.Errorf("'docker:' must error mentioning container id; got %v", err)
 		}
 	})
+	t.Run("invalid docker container name errors", func(t *testing.T) {
+		_, err := buildExecutor("docker:bad/name", "sess", "/tmp")
+		if err == nil || !strings.Contains(err.Error(), "--executor docker may contain only") {
+			t.Errorf("invalid docker executor should error before Docker use; got %v", err)
+		}
+	})
 	t.Run("unknown spec errors", func(t *testing.T) {
 		_, err := buildExecutor("kata:foo", "sess", "/tmp")
-		if err == nil || !strings.Contains(err.Error(), "unknown") {
-			t.Errorf("unknown spec should error with 'unknown'; got %v", err)
+		if err == nil || !strings.Contains(err.Error(), "unknown") || !strings.Contains(err.Error(), "sandbox") {
+			t.Errorf("unknown spec should error with valid executor values; got %v", err)
 		}
 	})
 }

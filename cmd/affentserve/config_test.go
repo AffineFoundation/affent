@@ -1,6 +1,7 @@
 package main
 
 import (
+	"math"
 	"os"
 	"path/filepath"
 	"strings"
@@ -102,6 +103,92 @@ func TestConfig_Resolve_AppliesDefaults(t *testing.T) {
 	}
 }
 
+func TestConfig_Validate_RejectsExplicitNonPositiveMaxSessions(t *testing.T) {
+	for _, raw := range []string{`0`, `-1`} {
+		t.Run(raw, func(t *testing.T) {
+			dir := t.TempDir()
+			path := filepath.Join(dir, "cfg.json")
+			if err := os.WriteFile(path, []byte(`{
+				"base_url": "https://example/v1",
+				"model": "demo",
+				"max_sessions": `+raw+`
+			}`), 0o600); err != nil {
+				t.Fatal(err)
+			}
+			cfg, err := LoadConfig(path)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if err := cfg.Resolve(); err != nil {
+				t.Fatal(err)
+			}
+			err = cfg.Validate()
+			if err == nil || !strings.Contains(err.Error(), "max_sessions") {
+				t.Fatalf("Validate error = %v, want max_sessions", err)
+			}
+		})
+	}
+}
+
+func TestConfig_Validate_RejectsExplicitNonPositiveSubagentMaxDepth(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "cfg.json")
+	if err := os.WriteFile(path, []byte(`{
+		"base_url": "https://example/v1",
+		"model": "demo",
+		"subagent_max_depth": 0
+	}`), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	cfg, err := LoadConfig(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := cfg.Resolve(); err != nil {
+		t.Fatal(err)
+	}
+	err = cfg.Validate()
+	if err == nil || !strings.Contains(err.Error(), "subagent_max_depth") {
+		t.Fatalf("Validate error = %v, want subagent_max_depth", err)
+	}
+}
+
+func TestConfig_Validate_RejectsNegativeTurnAndCompactLimits(t *testing.T) {
+	for _, c := range []struct {
+		name string
+		edit func(*Config)
+		want string
+	}{
+		{
+			name: "max turn steps",
+			edit: func(cfg *Config) { cfg.MaxTurnSteps = -1 },
+			want: "max_turn_steps",
+		},
+		{
+			name: "compact trigger",
+			edit: func(cfg *Config) { cfg.CompactTrigger = -1 },
+			want: "compact_trigger",
+		},
+		{
+			name: "compact keep last",
+			edit: func(cfg *Config) { cfg.CompactKeepLast = -1 },
+			want: "compact_keep_last",
+		},
+	} {
+		t.Run(c.name, func(t *testing.T) {
+			cfg := Config{BaseURL: "https://example/v1", Model: "demo"}
+			if err := cfg.Resolve(); err != nil {
+				t.Fatal(err)
+			}
+			c.edit(&cfg)
+			err := cfg.Validate()
+			if err == nil || !strings.Contains(err.Error(), c.want) {
+				t.Fatalf("Validate error = %v, want contains %q", err, c.want)
+			}
+		})
+	}
+}
+
 func TestConfig_Resolve_PreservesExplicitSubagentAndMemoryFalse(t *testing.T) {
 	dir := t.TempDir()
 	path := filepath.Join(dir, "cfg.json")
@@ -164,6 +251,27 @@ func TestConfig_Validate_RequiresModel(t *testing.T) {
 	err := cfg.Validate()
 	if err == nil || !strings.Contains(err.Error(), "model") {
 		t.Errorf("expected model validation error, got %v", err)
+	}
+}
+
+func TestConfig_Validate_RequiresAPIKeyForDefaultOpenAIEndpoint(t *testing.T) {
+	cfg := Config{BaseURL: agent.DefaultBaseURL + "/", Model: "gpt-4o-mini"}
+	if err := cfg.Resolve(); err != nil {
+		t.Fatal(err)
+	}
+	err := cfg.Validate()
+	if err == nil || !strings.Contains(err.Error(), "api_key") || !strings.Contains(err.Error(), agent.DefaultBaseURL) {
+		t.Fatalf("expected api_key validation error for default endpoint, got %v", err)
+	}
+}
+
+func TestConfig_Validate_AllowsKeylessCustomEndpoint(t *testing.T) {
+	cfg := Config{BaseURL: "http://127.0.0.1:11434/v1", Model: "local-model"}
+	if err := cfg.Resolve(); err != nil {
+		t.Fatal(err)
+	}
+	if err := cfg.Validate(); err != nil {
+		t.Fatalf("custom keyless endpoint should be allowed: %v", err)
 	}
 }
 
@@ -255,6 +363,40 @@ func TestConfig_Validate_RejectsBadPerCallTimeout(t *testing.T) {
 	}
 }
 
+func TestConfig_Validate_RejectsBadSampling(t *testing.T) {
+	tempHigh := 2.1
+	tempNaN := math.NaN()
+	topHigh := 1.1
+	topInf := math.Inf(1)
+	zeroTokens := 0
+	negTokens := -1
+	cases := []struct {
+		name string
+		edit func(*Config)
+		want string
+	}{
+		{name: "temperature high", edit: func(c *Config) { c.Temperature = &tempHigh }, want: "temperature must be between 0 and 2"},
+		{name: "temperature NaN", edit: func(c *Config) { c.Temperature = &tempNaN }, want: "temperature must be between 0 and 2"},
+		{name: "top_p high", edit: func(c *Config) { c.TopP = &topHigh }, want: "top_p must be between 0 and 1"},
+		{name: "top_p inf", edit: func(c *Config) { c.TopP = &topInf }, want: "top_p must be between 0 and 1"},
+		{name: "max_tokens zero", edit: func(c *Config) { c.MaxTokens = &zeroTokens }, want: "max_tokens must be a positive integer"},
+		{name: "max_tokens negative", edit: func(c *Config) { c.MaxTokens = &negTokens }, want: "max_tokens must be a positive integer"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			cfg := Config{BaseURL: "https://example/v1", Model: "m"}
+			if err := cfg.Resolve(); err != nil {
+				t.Fatal(err)
+			}
+			tc.edit(&cfg)
+			err := cfg.Validate()
+			if err == nil || !strings.Contains(err.Error(), tc.want) {
+				t.Fatalf("Validate error = %v, want contains %q", err, tc.want)
+			}
+		})
+	}
+}
+
 // TestConfig_Retention_HappyPath pins the parser: an explicit duration
 // returns the parsed Duration; an empty value returns 0 (= disabled).
 func TestConfig_Retention_HappyPath(t *testing.T) {
@@ -282,10 +424,12 @@ func TestConfig_Retention_HappyPath(t *testing.T) {
 // not silent — an operator who writes "30d" (Go doesn't support d)
 // should see an error, not have retention silently disabled.
 func TestConfig_Retention_RejectsBadDuration(t *testing.T) {
-	cfg := Config{SessionRetention: "30d"}
-	_, err := cfg.Retention()
-	if err == nil {
-		t.Errorf("expected error for unparseable duration; got nil")
+	for _, in := range []string{"30d", "0s", "-1h"} {
+		cfg := Config{SessionRetention: in}
+		_, err := cfg.Retention()
+		if err == nil {
+			t.Errorf("Retention(%q) should error", in)
+		}
 	}
 }
 
@@ -304,10 +448,12 @@ func TestConfig_Resolve_PullsRetentionEnvFallback(t *testing.T) {
 }
 
 func TestConfig_IdleTTL_RejectsBadDuration(t *testing.T) {
-	cfg := Config{BaseURL: "https://example/v1", SessionIdleTTL: "not-a-duration"}
-	_, err := cfg.IdleTTL()
-	if err == nil {
-		t.Errorf("expected error on bad duration")
+	for _, in := range []string{"not-a-duration", "0s", "-1s"} {
+		cfg := Config{BaseURL: "https://example/v1", SessionIdleTTL: in}
+		_, err := cfg.IdleTTL()
+		if err == nil {
+			t.Errorf("IdleTTL(%q) should error", in)
+		}
 	}
 }
 
@@ -319,5 +465,109 @@ func TestConfig_IdleTTL_HappyPath(t *testing.T) {
 	}
 	if d != 5*time.Minute {
 		t.Errorf("IdleTTL = %s", d)
+	}
+}
+
+func TestConfig_BrowserCacheDurations(t *testing.T) {
+	t.Run("defaults", func(t *testing.T) {
+		cfg := Config{}
+		ttl, err := cfg.BrowserCacheTTLDuration()
+		if err != nil {
+			t.Fatal(err)
+		}
+		if ttl != defaultBrowserCacheTTL {
+			t.Fatalf("BrowserCacheTTLDuration default = %s, want %s", ttl, defaultBrowserCacheTTL)
+		}
+		sweep, err := cfg.BrowserCacheSweepIntervalDuration(ttl)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if sweep != 3*time.Hour {
+			t.Fatalf("BrowserCacheSweepIntervalDuration default = %s, want 3h", sweep)
+		}
+	})
+
+	t.Run("zero ttl disables expiry", func(t *testing.T) {
+		cfg := Config{BrowserCacheTTL: "0s"}
+		ttl, err := cfg.BrowserCacheTTLDuration()
+		if err != nil {
+			t.Fatal(err)
+		}
+		if ttl != 0 {
+			t.Fatalf("BrowserCacheTTLDuration zero = %s, want 0", ttl)
+		}
+		sweep, err := cfg.BrowserCacheSweepIntervalDuration(ttl)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if sweep != 0 {
+			t.Fatalf("BrowserCacheSweepIntervalDuration disabled = %s, want 0", sweep)
+		}
+	})
+
+	t.Run("rejects bad values", func(t *testing.T) {
+		cases := []struct {
+			name string
+			cfg  Config
+			want string
+		}{
+			{name: "bad ttl", cfg: Config{BrowserCacheTTL: "nope"}, want: "browser_cache_ttl"},
+			{name: "negative ttl", cfg: Config{BrowserCacheTTL: "-1s"}, want: "must be zero or positive"},
+			{name: "bad sweep", cfg: Config{BrowserCacheSweepInterval: "nope"}, want: "browser_cache_sweep_interval"},
+			{name: "zero sweep", cfg: Config{BrowserCacheSweepInterval: "0s"}, want: "at least"},
+			{name: "short sweep", cfg: Config{BrowserCacheSweepInterval: "1m"}, want: "at least"},
+			{name: "sweep with no expiry", cfg: Config{BrowserCacheTTL: "0s", BrowserCacheSweepInterval: "10m"}, want: "positive browser_cache_ttl"},
+		}
+		for _, tc := range cases {
+			t.Run(tc.name, func(t *testing.T) {
+				ttl, err := tc.cfg.BrowserCacheTTLDuration()
+				if err == nil {
+					_, err = tc.cfg.BrowserCacheSweepIntervalDuration(ttl)
+				}
+				if err == nil || !strings.Contains(err.Error(), tc.want) {
+					t.Fatalf("error = %v, want contains %q", err, tc.want)
+				}
+			})
+		}
+	})
+}
+
+func TestConfig_Validate_RejectsUnusedBrowserCacheDurations(t *testing.T) {
+	cases := []struct {
+		name string
+		cfg  Config
+		want string
+	}{
+		{
+			name: "ttl without cache dir",
+			cfg:  Config{BaseURL: "https://example/v1", Model: "m", BrowserCacheTTL: "1h"},
+			want: "browser_cache_ttl requires browser_cache_dir",
+		},
+		{
+			name: "sweep without cache dir",
+			cfg:  Config{BaseURL: "https://example/v1", Model: "m", BrowserCacheSweepInterval: "10m"},
+			want: "browser_cache_sweep_interval requires browser_cache_dir",
+		},
+		{
+			name: "invalid sweep with cache dir",
+			cfg: Config{
+				BaseURL:                   "https://example/v1",
+				Model:                     "m",
+				BrowserCacheDir:           t.TempDir(),
+				BrowserCacheSweepInterval: "1m",
+			},
+			want: "at least",
+		},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			if err := tc.cfg.Resolve(); err != nil {
+				t.Fatal(err)
+			}
+			err := tc.cfg.Validate()
+			if err == nil || !strings.Contains(err.Error(), tc.want) {
+				t.Fatalf("Validate error = %v, want contains %q", err, tc.want)
+			}
+		})
 	}
 }

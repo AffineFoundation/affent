@@ -1,0 +1,22 @@
+{
+  "name": "coding_repair_workflow",
+  "description": "Code repair workflow for failing tests, builds, and implementation tasks.",
+  "order": 30,
+  "auto_activation": {
+    "any": [
+      "failing test",
+      "test fails",
+      "go test",
+      "pytest",
+      "npm test",
+      "测试失败",
+      "编译失败",
+      "修复代码",
+      "修复这个代码"
+    ],
+    "all_any": [
+      ["fix", "implement", "refactor", "compile", "修复", "实现", "重构", "编译"],
+      ["code", "test", "bug", "build", "repo", "project", "代码", "测试", "编译", "项目", "仓库"]
+    ]
+  }
+}

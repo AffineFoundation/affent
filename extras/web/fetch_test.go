@@ -124,6 +124,15 @@ func (s stubProvider) Search(_ context.Context, _ string, _ int) ([]SearchResult
 	return s.results, nil
 }
 
+type recordingSearchProvider struct {
+	gotN int
+}
+
+func (p *recordingSearchProvider) Search(_ context.Context, _ string, n int) ([]SearchResult, error) {
+	p.gotN = n
+	return []SearchResult{{Title: "Only", URL: "https://example.com", Snippet: "ok"}}, nil
+}
+
 func TestSearchTool_FormatsResults(t *testing.T) {
 	tool, err := SearchTool(SearchConfig{
 		Provider: stubProvider{results: []SearchResult{
@@ -143,6 +152,70 @@ func TestSearchTool_FormatsResults(t *testing.T) {
 		if !strings.Contains(out, want) {
 			t.Errorf("output missing %q:\n%s", want, out)
 		}
+	}
+}
+
+func TestSearchTool_NumResultsMatchesAdvertisedCap(t *testing.T) {
+	cases := []struct {
+		name          string
+		cfgMax        int
+		args          string
+		wantN         int
+		wantSchemaMax string
+	}{
+		{
+			name:          "default cap",
+			cfgMax:        0,
+			args:          `{"query":"anything","num_results":20}`,
+			wantN:         defaultSearchResults,
+			wantSchemaMax: `"maximum": 8`,
+		},
+		{
+			name:          "custom lower cap",
+			cfgMax:        3,
+			args:          `{"query":"anything","num_results":20}`,
+			wantN:         3,
+			wantSchemaMax: `"maximum": 3`,
+		},
+		{
+			name:          "custom cap above hard maximum",
+			cfgMax:        100,
+			args:          `{"query":"anything","num_results":100}`,
+			wantN:         maxSearchResults,
+			wantSchemaMax: `"maximum": 20`,
+		},
+		{
+			name:          "missing argument uses effective default",
+			cfgMax:        20,
+			args:          `{"query":"anything"}`,
+			wantN:         defaultSearchResults,
+			wantSchemaMax: `"maximum": 20`,
+		},
+		{
+			name:          "default follows lower custom cap",
+			cfgMax:        5,
+			args:          `{"query":"anything"}`,
+			wantN:         5,
+			wantSchemaMax: `"maximum": 5`,
+		},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			provider := &recordingSearchProvider{}
+			tool, err := SearchTool(SearchConfig{Provider: provider, MaxResults: c.cfgMax})
+			if err != nil {
+				t.Fatalf("SearchTool: %v", err)
+			}
+			if !strings.Contains(string(tool.Schema), c.wantSchemaMax) {
+				t.Fatalf("schema %s missing %s", tool.Schema, c.wantSchemaMax)
+			}
+			if _, err := tool.Execute(context.Background(), json.RawMessage(c.args)); err != nil {
+				t.Fatalf("Execute: %v", err)
+			}
+			if provider.gotN != c.wantN {
+				t.Fatalf("provider n = %d, want %d", provider.gotN, c.wantN)
+			}
+		})
 	}
 }
 

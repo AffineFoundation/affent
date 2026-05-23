@@ -55,11 +55,51 @@ stream.
 
 ## Quick Start
 
-Build the CLI and run a one-shot task:
+Build the CLI in a memory-limited Docker container:
+
+```bash
+make affentctl
+```
+
+Common make shortcuts wrap the same Docker/runtime commands:
+
+```bash
+make affentctl-local
+make sandbox-start
+make image-run IMAGE_COMMAND='affentctl --help'
+make image-serve
+make test-container TEST_PACKAGES=./internal/agent
+make test-container TEST_DIR=cmd/affentserve TEST_PACKAGES=./...
+```
+
+`make affentctl` and `make test-container` run Go inside Docker with a `1g`
+memory limit by default and keep Go build/module caches under `.tmp/`. Their Go
+runtime limits are derived from the container cgroup limits, so changing
+`CONTAINER_MEMORY` or `CONTAINER_CPUS` does not require a second matching Go
+knob. Use `make affentctl-local` only when you explicitly want the host Go
+toolchain. Set `TEST_DIR` for nested modules such as `cmd/affentserve` or
+`extras/web`. The other targets use `affentctl` so the same default persistent
+workspaces, image tags, and resource limits apply.
+
+The equivalent host build, when you intentionally want to bypass Docker, is:
 
 ```bash
 go build -o ./bin/affentctl ./cmd/affentctl
+```
 
+Check local setup without calling a model:
+
+```bash
+./bin/affentctl doctor \
+  --workspace ./workspace \
+  --base-url https://api.openai.com/v1 \
+  --api-key "$OPENAI_API_KEY" \
+  --model gpt-4o-mini
+```
+
+Run a single prompt:
+
+```bash
 ./bin/affentctl run \
   --workspace ./workspace \
   --base-url https://api.openai.com/v1 \
@@ -83,6 +123,135 @@ Resume the latest session in a workspace:
 ```bash
 ./bin/affentctl chat --workspace ./workspace --continue
 ```
+
+Start a persistent, memory-limited Docker tool container:
+
+```bash
+./bin/affentctl sandbox start
+```
+
+By default this creates/reuses a container named `affent-sandbox`, limits it to
+`1g` memory, runs the project-owned
+`affinefoundation/affent-sandbox:latest` image, and mounts a durable workspace under
+`$XDG_DATA_HOME/affent/sandbox/workspace` (or
+`~/.local/share/affent/sandbox/workspace`) at the same absolute path inside the
+container. If neither `XDG_DATA_HOME` nor a usable home directory is available
+(common when running as an arbitrary UID in a container), Affent falls back to
+`./affent/sandbox/workspace`. That same path stores affentctl sessions and
+memory on the host, and is also the shell/file workspace inside the container.
+
+The sandbox runs as your current host UID/GID by default, so files written
+through shell and file tools remain editable on the host. Its `HOME`, Go cache,
+npm cache, and pip cache also live under the durable workspace. For Go workloads,
+`GOMEMLIMIT` and `GOMAXPROCS` are derived from the Docker memory and CPU limits so
+test/build commands are less likely to exhaust the container.
+
+The default sandbox image is defined in `docker/sandbox.Dockerfile` and includes
+the tools Affent expects for normal coding-agent work: git/ssh, curl/wget, jq,
+ripgrep/fd, file/tree/procps, build-essential/make/pkg-config, Python 3, Node.js
+npm, Go 1.24, sqlite, archive tools, rsync, and patch/diff utilities. When you
+run `sandbox start` from a source checkout, Affent automatically builds this
+image if it is not already present locally. To rebuild or pin the image yourself:
+
+```bash
+./bin/affentctl sandbox build
+./bin/affentctl sandbox start --replace
+```
+
+`sandbox build` uses `docker/sandbox.Dockerfile`, tags
+`affinefoundation/affent-sandbox:latest`, and applies a `1g` Docker build memory
+limit by default. When run from a source checkout subdirectory, Affent resolves
+the default Dockerfile and build context back to the checkout root. Use
+`--image`, `--dockerfile`, `--context`, or `--memory` when you need an explicit
+local or internal build. Docker memory limits below `128m` are rejected because
+they are not useful for Affent tool/runtime containers. Use
+`sandbox start --user ""` only when you
+intentionally want the image default user instead of host UID/GID.
+
+Use `--image your-registry/affent-sandbox:tag --replace` when you publish an
+internal image with extra language runtimes or company tooling.
+
+Build a full Affent runtime image when you want the Affent binaries and the
+standard toolchain in one container:
+
+```bash
+./bin/affentctl image build --image affinefoundation/affent:local
+```
+
+That image includes `affentctl`, `affentserve`, `affenteval`, and the same
+packages listed in `docker/tool-packages.txt` that the sandbox image installs.
+`image build` uses `docker/affent.Dockerfile`, applies a `1g` Docker build
+memory limit by default, and tags `affinefoundation/affent:latest` unless you set
+`--image`. Its entrypoint derives `GOMEMLIMIT` and `GOMAXPROCS` from the
+container's cgroup limits unless you set those env vars yourself. Run it through
+the same CLI so memory/process limits and the persistent `/workspace` mount are
+applied by default:
+
+```bash
+AFFENTCTL_BASE_URL=https://api.openai.com/v1 \
+AFFENTCTL_API_KEY="$OPENAI_API_KEY" \
+AFFENTCTL_MODEL=gpt-4o-mini \
+./bin/affentctl image run --image affinefoundation/affent:local -- \
+  affentctl run --executor local --prompt "Inspect the workspace."
+```
+
+`image run` defaults to `1g` memory, `2` CPUs, `512` PIDs, and
+`$XDG_DATA_HOME/affent/runtime/workspace` (or
+`~/.local/share/affent/runtime/workspace`) mounted at `/workspace`; with no
+usable home directory, it falls back to `./affent/runtime/workspace`. When run
+from a source checkout with the default runtime image tag, it builds the image
+first if it is missing locally, using the same `1g` build memory limit. It
+forwards portable model, auth, sampling, and feature-toggle env vars such as
+`AFFENTCTL_BASE_URL`, `AFFENTSERVE_MODEL`, and `TAVILY_API_KEY` when they are
+set. Host path or executor env vars such as `AFFENTCTL_WORKSPACE`,
+`AFFENTCTL_CONFIG`, `AFFENTCTL_MCP_CONFIG`, `AFFENTCTL_EXECUTOR`,
+`AFFENTSERVE_WORKSPACE_ROOT`, and `AFFENTSERVE_MEMORY_ROOT` are not
+auto-forwarded because their host values usually do not exist inside the
+container; pass container paths explicitly with `--env KEY=VALUE` when needed.
+The wrapper timeout defaults to `30m`; use `--timeout 0s` only for an
+intentionally unbounded run. Add `--env KEY=VALUE` or `--publish 7777:7777` for
+explicit runtime needs. Resource limits, image names, container names, users,
+env vars, and published ports are validated before Affent creates workspace
+directories or calls Docker; Docker memory limits must be at least `128m`, and
+`--pids-limit` must be at least `64`.
+
+`make image-serve` is the shortest production-image smoke path for the HTTP
+service. It runs the runtime image through `affentctl image run`, publishes
+`127.0.0.1:7777:7777` by default, listens on `0.0.0.0:7777` inside the
+container, and stores server session workspaces under the persistent
+`/workspace/sessions` mount. It also sets `--timeout 0s` so the wrapper does not
+stop the service after the one-shot command default. Override `SERVE_PUBLISH`,
+`SERVE_LISTEN`, `SERVE_WORKSPACE_ROOT`, `IMAGE_RUN_ARGS`, or `SERVE_ARGS` only
+when that value is intentionally different for your deployment; use
+`SERVE_PUBLISH=7777:7777` only when you intentionally want Docker to bind on all
+host interfaces.
+
+For repeatable local use or evals:
+
+```bash
+./bin/affentctl run \
+  --executor sandbox \
+  --base-url https://api.openai.com/v1 \
+  --api-key "$OPENAI_API_KEY" \
+  --model gpt-4o-mini \
+  --prompt "Inspect the workspace and report what files exist."
+```
+
+`--executor sandbox` starts or reuses the same default sandbox automatically. If
+you prefer shell exports for a whole terminal or eval script, use
+`eval "$(./bin/affentctl sandbox start --print-env)"`.
+
+Inspect or stop the sandbox:
+
+```bash
+./bin/affentctl sandbox status
+./bin/affentctl sandbox stop
+./bin/affentctl sandbox stop --remove
+```
+
+If you change the sandbox image, workspace, or resource limits for an existing
+container name, add `--replace` so the container is recreated with the new
+settings.
 
 Build the HTTP server:
 
@@ -129,9 +298,12 @@ The most commonly used variables are:
 AFFENTCTL_BASE_URL
 AFFENTCTL_API_KEY
 AFFENTCTL_MODEL
+AFFENTCTL_WORKSPACE
 AFFENTCTL_CONFIG
 AFFENTCTL_MCP_CONFIG
 AFFENTCTL_EXECUTOR
+AFFENTCTL_SUBAGENT
+AFFENTCTL_SUBAGENT_MAX_DEPTH
 ```
 
 Common server variables:
@@ -143,11 +315,31 @@ AFFENTSERVE_MODEL
 AFFENTSERVE_AUTH_TOKEN
 AFFENTSERVE_WORKSPACE_ROOT
 AFFENTSERVE_MEMORY_ROOT
+AFFENTSERVE_MEMORY
+AFFENTSERVE_SUBAGENT
+AFFENTSERVE_SUBAGENT_MAX_DEPTH
 AFFENTSERVE_SESSION_RETENTION
 AFFENTSERVE_TEMPERATURE
 AFFENTSERVE_TOP_P
 AFFENTSERVE_MAX_TOKENS
 TAVILY_API_KEY
+```
+
+`affentctl --config` accepts JSON using the same names as the CLI flags, with
+nested objects for grouped settings. For persistent memory, set explicit caps
+when you expect many topic buckets so disk state stays bounded:
+
+```json
+{
+  "workspace": "./workspace",
+  "memory": {
+    "enabled": true,
+    "dir": ".affent/memory",
+    "max_chars": "2200,1375",
+    "topic_max_chars": 4400,
+    "max_topics": 32
+  }
+}
 ```
 
 ## State And Memory
@@ -177,6 +369,12 @@ chosen by the runtime configuration rather than assumed globally.
 File tools are scoped to the configured workspace. Shell execution goes through
 an executor boundary. Production deployments should run tools inside a real
 sandbox such as a container, VM, or remote execution environment.
+
+For local CLI use, `--executor sandbox` is the built-in Docker path. It starts
+or reuses a long-lived container with default memory/process limits. The
+explicit `affentctl sandbox start` command is available when you want to start
+the container ahead of time, inspect/stop it, or print `AFFENTCTL_EXECUTOR` /
+`AFFENTCTL_WORKSPACE` exports for a whole shell session.
 
 MCP servers can be registered over stdio or streamable HTTP. Their tools are
 namespaced by default and become part of the same registry as Affent's built-in
@@ -261,6 +459,9 @@ codes, kept tests unchanged, and ran a final verification.
 
 ```bash
 go run ./cmd/affenteval --list
+go run ./cmd/affenteval --list-suites
+go run ./cmd/affenteval --list --suite small-model-tools
+go run ./cmd/affenteval --suite small-model-tools --temperature 0
 go run ./cmd/affenteval --scenario coding-python-slug --temperature 0
 ```
 

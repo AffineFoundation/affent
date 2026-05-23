@@ -3,7 +3,9 @@ package executor
 import (
 	"context"
 	"errors"
+	"os"
 	"os/exec"
+	"path/filepath"
 	"strings"
 	"testing"
 	"time"
@@ -109,6 +111,20 @@ func TestDockerExecFileOps_Roundtrip(t *testing.T) {
 	if _, err := d.EditFile(ctx, "/work/notes/x.txt", "a", "A", false); err == nil {
 		t.Error("expected non-unique edit without replace_all to fail")
 	}
+	// Edit refuses large files before streaming them back to the host
+	// process. Use a sparse file so the test exercises size handling
+	// without consuming container or host memory.
+	res, err := d.Exec(ctx, []string{"sh", "-c", "dd if=/dev/zero of=/work/notes/huge.txt bs=1 count=0 seek=4194305"}, ExecOptions{})
+	if err != nil {
+		t.Fatalf("create sparse large file: %v", err)
+	}
+	if res.ExitCode != 0 {
+		t.Fatalf("create sparse large file exit=%d stderr=%s", res.ExitCode, res.Stderr)
+	}
+	if _, err := d.EditFile(ctx, "/work/notes/huge.txt", "x", "y", false); err == nil ||
+		!strings.Contains(err.Error(), "supports files up to") {
+		t.Fatalf("expected oversized edit refusal, got %v", err)
+	}
 
 	// List the directory.
 	entries, err := d.ListFiles(ctx, "/work/notes", 50)
@@ -125,6 +141,13 @@ func TestDockerExecFileOps_Roundtrip(t *testing.T) {
 	if !found {
 		t.Errorf("listFiles missed x.txt; entries=%+v", entries)
 	}
+	limited, err := d.ListFiles(ctx, "/work/notes", 1)
+	if err != nil {
+		t.Fatalf("list limited: %v", err)
+	}
+	if len(limited) != 1 {
+		t.Fatalf("limited list len = %d, want 1; entries=%+v", len(limited), limited)
+	}
 
 	// Truncation behavior.
 	short, err := d.ReadFile(ctx, "/work/notes/x.txt", 5)
@@ -133,6 +156,23 @@ func TestDockerExecFileOps_Roundtrip(t *testing.T) {
 	}
 	if !strings.HasSuffix(short, "[truncated; 5-byte cap]") {
 		t.Errorf("truncated read missing suffix: %q", short)
+	}
+	res, err = d.Exec(ctx, []string{"sh", "-c", "yes x | head -c 4194305 > /work/notes/large.txt"}, ExecOptions{})
+	if err != nil {
+		t.Fatalf("create large text file: %v", err)
+	}
+	if res.ExitCode != 0 {
+		t.Fatalf("create large text file exit=%d stderr=%s", res.ExitCode, res.Stderr)
+	}
+	large, err := d.ReadFile(ctx, "/work/notes/large.txt", 1<<30)
+	if err != nil {
+		t.Fatalf("read large text file: %v", err)
+	}
+	if !strings.Contains(large, "[truncated; 4194304-byte cap]") {
+		t.Fatalf("large read missing hard-cap truncation marker; tail=%q", large[max(0, len(large)-200):])
+	}
+	if strings.Contains(large, truncationMarker) {
+		t.Fatalf("large read leaked executor stream-cap marker; tail=%q", large[max(0, len(large)-200):])
 	}
 }
 
@@ -157,5 +197,30 @@ func TestDockerExecFileOps_NotFound(t *testing.T) {
 		t.Fatal("ListFiles on missing dir must error")
 	} else if !errors.Is(err, ErrNotFoundInContainer) {
 		t.Fatalf("ListFiles error should wrap ErrNotFoundInContainer, got %v", err)
+	}
+}
+
+func TestDockerExecFileOpsHaveDefaultTimeout(t *testing.T) {
+	prev := dockerFileOpTimeout
+	dockerFileOpTimeout = 50 * time.Millisecond
+	t.Cleanup(func() {
+		dockerFileOpTimeout = prev
+	})
+
+	dir := t.TempDir()
+	dockerPath := filepath.Join(dir, "docker")
+	if err := os.WriteFile(dockerPath, []byte("#!/bin/sh\nwhile :; do :; done\n"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+
+	d := NewDockerExecExecutor("test", "fake-container")
+	d.DockerBinary = dockerPath
+	start := time.Now()
+	_, err := d.ReadFile(context.Background(), "/slow.txt", 1024)
+	if err == nil || !strings.Contains(err.Error(), "deadline exceeded") {
+		t.Fatalf("ReadFile error = %v, want deadline exceeded", err)
+	}
+	if elapsed := time.Since(start); elapsed > time.Second {
+		t.Fatalf("ReadFile took %s; file-op timeout did not bound docker exec", elapsed)
 	}
 }
