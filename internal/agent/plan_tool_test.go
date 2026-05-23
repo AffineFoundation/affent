@@ -53,7 +53,7 @@ func TestPlanToolSetUpdateViewPersists(t *testing.T) {
 
 func TestPlanToolViewNormalizesPersistedPlanState(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "plan.json")
-	if err := os.WriteFile(path, []byte(`{"version":1,"steps":[{"text":"  Ship  ","status":" IN_PROGRESS ","evidence":[" file ","file"," test "]},{"text":" ship ","status":"pending"},{"text":"Finish"}]}`), 0o644); err != nil {
+	if err := os.WriteFile(path, []byte(`{"version":1,"steps":[{"text":"  Ship  ","status":" IN_PROGRESS ","evidence":[" file ","file"," test "]},{"text":" ship ","status":"pending"},{"text":"Finish","status":"in_progress"}]}`), 0o644); err != nil {
 		t.Fatal(err)
 	}
 	out, err := planTool(path).Execute(context.Background(), json.RawMessage(`{"action":"view"}`))

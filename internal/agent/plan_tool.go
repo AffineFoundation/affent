@@ -255,14 +255,14 @@ func normalizePersistedPlanSteps(steps []planStep) ([]planStep, error) {
 		}
 		if n.Status == "in_progress" {
 			inProgress++
+			if inProgress > 1 {
+				n.Status = "pending"
+			}
 		}
 		out = append(out, n)
 	}
 	if len(out) > maxPlanSteps {
 		return nil, fmt.Errorf("plan supports at most %d steps\nNext: clear the plan and set a concise replacement", maxPlanSteps)
-	}
-	if inProgress > 1 {
-		return nil, errors.New("only one plan step may be in_progress\nNext: clear the plan and set a concise replacement")
 	}
 	return out, nil
 }
