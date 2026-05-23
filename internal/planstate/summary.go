@@ -10,6 +10,8 @@ const (
 	LabelMissing = "-"
 	LabelEmpty   = "plan:empty"
 	LabelError   = "plan:error"
+
+	maxCurrentStepBytes = 240
 )
 
 type Summary struct {
@@ -18,11 +20,13 @@ type Summary struct {
 	CompletedSteps int    `json:"completed_steps"`
 	Active         bool   `json:"active"`
 	Blocked        bool   `json:"blocked"`
+	CurrentStep    string `json:"current_step,omitempty"`
 	Error          bool   `json:"error"`
 }
 
 type summaryState struct {
 	Steps []struct {
+		Text   string `json:"text"`
 		Status string `json:"status"`
 	} `json:"steps"`
 }
@@ -36,14 +40,22 @@ func SummarizeJSON(raw json.RawMessage) (Summary, error) {
 		return Summary{Label: LabelEmpty}, nil
 	}
 	out := Summary{TotalSteps: len(st.Steps)}
+	currentPriority := 0
 	for _, step := range st.Steps {
-		switch strings.TrimSpace(step.Status) {
+		status := strings.TrimSpace(step.Status)
+		switch status {
 		case "completed":
 			out.CompletedSteps++
 		case "in_progress":
 			out.Active = true
 		case "blocked":
 			out.Blocked = true
+		}
+		if priority := currentStepPriority(status); priority > currentPriority {
+			if text := compactCurrentStep(step.Text); text != "" {
+				currentPriority = priority
+				out.CurrentStep = text
+			}
 		}
 	}
 	out.Label = fmt.Sprintf("plan:%d/%d", out.CompletedSteps, out.TotalSteps)
@@ -54,6 +66,34 @@ func SummarizeJSON(raw json.RawMessage) (Summary, error) {
 		out.Label += ":blocked"
 	}
 	return out, nil
+}
+
+func currentStepPriority(status string) int {
+	switch status {
+	case "in_progress":
+		return 3
+	case "blocked":
+		return 2
+	case "completed":
+		return 0
+	default:
+		return 1
+	}
+}
+
+func compactCurrentStep(text string) string {
+	text = strings.TrimSpace(strings.ReplaceAll(text, "\n", " "))
+	if len(text) <= maxCurrentStepBytes {
+		return text
+	}
+	end := 0
+	for i := range text {
+		if i > maxCurrentStepBytes {
+			break
+		}
+		end = i
+	}
+	return strings.TrimSpace(text[:end])
 }
 
 func ErrorSummary() Summary {
