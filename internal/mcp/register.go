@@ -40,61 +40,51 @@ func registerServer(ctx context.Context, reg *agent.Registry, spec ServerSpec, l
 	if err != nil {
 		return nil, nil, err
 	}
+
+	// On any failure after Start, close the client and unregister any
+	// tools that were already added. The defer fires on every early
+	// return; on success we set ok=true to skip cleanup.
+	var names []string
+	ok := false
+	defer func() {
+		if !ok {
+			_ = c.Close()
+			for _, n := range names {
+				reg.Remove(n)
+			}
+		}
+	}()
+
 	tools, err := c.ListTools(ctx)
 	if err != nil {
-		_ = c.Close()
 		return nil, nil, fmt.Errorf("list tools on %s: %w", spec.Name, err)
 	}
 	tools, err = filterServerTools(spec, tools)
 	if err != nil {
-		_ = c.Close()
 		return nil, nil, err
 	}
 	if len(tools) == 0 {
-		_ = c.Close()
 		return nil, nil, fmt.Errorf("mcp server %s exposes no usable tools after allow_tools/deny_tools filtering", spec.Name)
 	}
-	names := make([]string, 0, len(tools))
+	names = make([]string, 0, len(tools))
 	for _, t := range tools {
 		if strings.TrimSpace(t.Name) == "" {
-			_ = c.Close()
-			for _, n := range names {
-				reg.Remove(n)
-			}
 			return nil, nil, fmt.Errorf("mcp server %s returned a tool with an empty name", spec.Name)
 		}
 		affentName := advertisedToolName(spec, t.Name)
 		if err := validateAdvertisedToolName(affentName); err != nil {
-			_ = c.Close()
-			for _, n := range names {
-				reg.Remove(n)
-			}
 			return nil, nil, fmt.Errorf("mcp tool %s/%s: %w", spec.Name, t.Name, err)
 		}
 		if prior, ok := owners[affentName]; ok {
-			_ = c.Close()
-			for _, n := range names {
-				reg.Remove(n)
-			}
 			return nil, nil, fmt.Errorf("mcp tool name collision: %q registered by both %q and %q", affentName, prior, spec.Name)
 		}
-		if _, ok := reg.Get(affentName); ok {
-			_ = c.Close()
-			for _, n := range names {
-				reg.Remove(n)
-			}
+		if _, exists := reg.Get(affentName); exists {
 			return nil, nil, fmt.Errorf("mcp tool name collision: %q from server %q is already registered", affentName, spec.Name)
 		}
 		schema, err := normalizedInputSchema(spec.Name, t.Name, t.InputSchema)
 		if err != nil {
-			_ = c.Close()
-			for _, n := range names {
-				reg.Remove(n)
-			}
 			return nil, nil, err
 		}
-		// Capture loop-iteration vars so the closure points at this
-		// specific tool, not the last one.
 		toolName := t.Name
 		desc := normalizeToolDescription(t.Description)
 		if desc == "" {
@@ -110,10 +100,6 @@ func registerServer(ctx context.Context, reg *agent.Registry, spec ServerSpec, l
 					return "", err
 				}
 				if res.IsError {
-					// Surface as plain error text so the model can read
-					// it and adjust. Loop's "Error:" prefix detection in
-					// dispatch wraps non-error strings; we want this to
-					// look like a tool error, so prepend explicitly.
 					return "", fmt.Errorf("%s", res.Text)
 				}
 				return res.Text, nil
@@ -124,6 +110,8 @@ func registerServer(ctx context.Context, reg *agent.Registry, spec ServerSpec, l
 			owners[affentName] = spec.Name
 		}
 	}
+
+	ok = true
 	log.Info().
 		Str("mcp", spec.Name).
 		Int("tools", len(tools)).
