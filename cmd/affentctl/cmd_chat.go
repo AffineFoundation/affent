@@ -49,6 +49,7 @@ Slash commands inside the REPL:
   /help       show commands
   /sid        print current session id
   /plan       print current session plan, if any
+  /plan clear remove current session plan
   /usage      running token totals for this session (input/output/total)
   /exit       quit (Ctrl+D also works)
   /cancel     interrupt a background turn (e.g. a cron-fired one). To
@@ -299,6 +300,7 @@ func handleSlash(line string, b *loopBundle) (bool, int) {
   /help        show this
   /sid         print current session id
   /plan        print current session plan, if any
+  /plan clear  remove current session plan
   /usage       running token totals (input/output) for this session
   /cancel      interrupt a background (cron-fired) turn; use Ctrl+C
                to cancel a turn you typed from this prompt
@@ -309,6 +311,9 @@ func handleSlash(line string, b *loopBundle) (bool, int) {
 		return true, 0
 	case "/plan":
 		printCurrentSessionPlan(b)
+		return true, 0
+	case "/plan clear":
+		clearCurrentSessionPlan(b)
 		return true, 0
 	case "/usage":
 		fmt.Fprintf(os.Stderr, "session %s — %d turn(s), input=%d output=%d total=%d tokens\n",
@@ -335,6 +340,20 @@ func printCurrentSessionPlan(b *loopBundle) {
 		return
 	}
 	fmt.Fprintln(os.Stderr, formatSessionPlanForChat(b.sessionID, plan))
+}
+
+func clearCurrentSessionPlan(b *loopBundle) {
+	convDir := filepath.Join(b.workspace, ".affentctl")
+	removed, err := clearLocalSessionPlan(convDir, b.sessionID)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "clear plan: %v\n", err)
+		return
+	}
+	if !removed {
+		fmt.Fprintf(os.Stderr, "no active plan for session %s\n", b.sessionID)
+		return
+	}
+	fmt.Fprintf(os.Stderr, "cleared plan for session %s\n", b.sessionID)
 }
 
 type chatPlanState struct {

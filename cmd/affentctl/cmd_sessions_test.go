@@ -85,6 +85,42 @@ func TestReadLocalSessionPlan_RejectsSymlinkPlan(t *testing.T) {
 	}
 }
 
+func TestClearLocalSessionPlan_RemovesOnlySafePlanFiles(t *testing.T) {
+	convDir := t.TempDir()
+	if removed, err := clearLocalSessionPlan(convDir, "missing"); err != nil || removed {
+		t.Fatalf("missing clear = removed:%v err:%v, want false/nil", removed, err)
+	}
+	if _, err := clearLocalSessionPlan(convDir, "../escape"); err == nil || !strings.Contains(err.Error(), "invalid session id") {
+		t.Fatalf("unsafe id error = %v, want invalid session id", err)
+	}
+
+	path := localSessionPlanPath(convDir, "safe")
+	if err := os.WriteFile(path, []byte(`{"version":1}`), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	removed, err := clearLocalSessionPlan(convDir, "safe")
+	if err != nil || !removed {
+		t.Fatalf("safe clear = removed:%v err:%v, want true/nil", removed, err)
+	}
+	if _, err := os.Lstat(path); !os.IsNotExist(err) {
+		t.Fatalf("safe plan should be removed, err=%v", err)
+	}
+
+	outside := filepath.Join(t.TempDir(), "outside-plan.json")
+	if err := os.WriteFile(outside, []byte(`{"version":1}`), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink(outside, localSessionPlanPath(convDir, "linked")); err != nil {
+		t.Skipf("symlink unavailable: %v", err)
+	}
+	if _, err := clearLocalSessionPlan(convDir, "linked"); err == nil || !strings.Contains(err.Error(), "symlink") {
+		t.Fatalf("linked clear error = %v, want symlink rejection", err)
+	}
+	if _, err := os.Lstat(outside); err != nil {
+		t.Fatalf("outside plan should remain: %v", err)
+	}
+}
+
 func TestSessionsCmd_PrintsPlanAndMarksListingProgress(t *testing.T) {
 	workspace := t.TempDir()
 	convDir := filepath.Join(workspace, ".affentctl")

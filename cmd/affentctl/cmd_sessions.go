@@ -181,6 +181,37 @@ func readLocalSessionPlan(convDir, sessionID string) (json.RawMessage, bool, err
 	return json.RawMessage(raw), true, nil
 }
 
+func clearLocalSessionPlan(convDir, sessionID string) (bool, error) {
+	sessionID = strings.TrimSpace(sessionID)
+	if sessionID == "" {
+		return false, errors.New("session id is required")
+	}
+	if strings.ContainsAny(sessionID, `/\`) || sessionID == "." || sessionID == ".." {
+		return false, fmt.Errorf("invalid session id %q", sessionID)
+	}
+	path := localSessionPlanPath(convDir, sessionID)
+	info, err := os.Lstat(path)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return false, nil
+		}
+		return false, err
+	}
+	if info.IsDir() {
+		return false, errors.New("plan path is a directory")
+	}
+	if info.Mode()&os.ModeSymlink != 0 {
+		return false, errors.New("plan path must not be a symlink")
+	}
+	if err := os.Remove(path); err != nil {
+		if os.IsNotExist(err) {
+			return false, nil
+		}
+		return false, err
+	}
+	return true, nil
+}
+
 func localSessionPlanPath(convDir, sessionID string) string {
 	return filepath.Join(convDir, sessionID+".plan.json")
 }

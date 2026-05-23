@@ -372,6 +372,41 @@ func TestHandleSlashPlanReportsMissingPlan(t *testing.T) {
 	}
 }
 
+func TestHandleSlashPlanClearRemovesCurrentSessionPlan(t *testing.T) {
+	workspace := t.TempDir()
+	convDir := filepath.Join(workspace, ".affentctl")
+	if err := os.MkdirAll(convDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	path := localSessionPlanPath(convDir, "sess_clear_plan")
+	if err := os.WriteFile(path, []byte(`{"version":1,"steps":[{"text":"stale"}]}`+"\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	r, w, _ := os.Pipe()
+	orig := os.Stderr
+	os.Stderr = w
+	defer func() { os.Stderr = orig }()
+
+	b := &loopBundle{
+		loop:      &agent.Loop{},
+		sessionID: "sess_clear_plan",
+		workspace: workspace,
+	}
+	cont, exit := handleSlash("/plan clear", b)
+	if !cont || exit != 0 {
+		t.Errorf("/plan clear should keep REPL alive with exit=0; got (%v, %d)", cont, exit)
+	}
+	_ = w.Close()
+	out, _ := io.ReadAll(r)
+	if got := string(out); !strings.Contains(got, "cleared plan for session sess_clear_plan") {
+		t.Fatalf("/plan clear output = %s", got)
+	}
+	if _, err := os.Stat(path); !os.IsNotExist(err) {
+		t.Fatalf("plan file err = %v, want removed", err)
+	}
+}
+
 func TestFormatSessionPlanForChatFallsBackToRawJSON(t *testing.T) {
 	raw := json.RawMessage(`{"version":2,"items":[{"title":"future schema"}]}`)
 	got := formatSessionPlanForChat("sess_future", raw)
@@ -382,7 +417,7 @@ func TestFormatSessionPlanForChatFallsBackToRawJSON(t *testing.T) {
 
 // TestHandleSlash pins the REPL slash-command dispatcher. /exit and
 // its aliases must return (continue=false, exit=0); /help / /sid /
-// /plan / /cancel / unknown must keep the REPL alive. Casing and trailing
+// /plan / /plan clear / /cancel / unknown must keep the REPL alive. Casing and trailing
 // whitespace must be tolerated (operators often type "  /Exit "
 // without thinking). A regression that breaks any of these
 // strands the user in a session they can't quit cleanly.
@@ -402,10 +437,11 @@ func TestHandleSlash(t *testing.T) {
 		{"/h", true, 0},
 		{"/?", true, 0},
 		{"/sid", true, 0},
-		{"/plan", true, 0},   // current persisted plan, if any
-		{"/cancel", true, 0}, // Loop with nil cancelFn → Cancel is a no-op
-		{"/usage", true, 0},  // running totals; reads loopBundle counters
-		{"/bogus", true, 0},  // unknown still keeps REPL alive
+		{"/plan", true, 0},       // current persisted plan, if any
+		{"/plan clear", true, 0}, // remove current persisted plan, if any
+		{"/cancel", true, 0},     // Loop with nil cancelFn → Cancel is a no-op
+		{"/usage", true, 0},      // running totals; reads loopBundle counters
+		{"/bogus", true, 0},      // unknown still keeps REPL alive
 	}
 	for _, c := range cases {
 		t.Run(c.in, func(t *testing.T) {
