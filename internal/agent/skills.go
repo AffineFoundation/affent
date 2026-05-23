@@ -5,9 +5,12 @@ import (
 	"encoding/json"
 	"fmt"
 	"io/fs"
+	"os"
 	"path"
+	"path/filepath"
 	"sort"
 	"strings"
+	"sync"
 )
 
 //go:embed builtin_skills/*/SKILL.md builtin_skills/*/skill.json
@@ -98,6 +101,16 @@ type SkillAutoActivation struct {
 	AllAny [][]string `json:"all_any,omitempty"`
 }
 
+const (
+	maxRuntimeSkillNameBytes        = 128
+	maxRuntimeSkillDescriptionBytes = 512
+	maxRuntimeSkillBodyBytes        = 64 * 1024
+	maxRuntimeSkills                = 128
+	maxRuntimeSkillTriggers         = 20
+	maxRuntimeSkillTriggerBytes     = 128
+	maxRuntimeSkillManifestBytes    = maxRuntimeSkillDescriptionBytes + maxRuntimeSkillTriggerBytes*maxRuntimeSkillTriggers + 1024
+)
+
 func (a SkillAutoActivation) hasRules() bool {
 	return len(a.Any) > 0 || len(a.AllAny) > 0
 }
@@ -121,6 +134,7 @@ func (a SkillAutoActivation) matches(lowerUserText string) bool {
 // registration order so multiple active skills compose deterministically
 // (matters for prompt-shape stability across reproducible eval runs).
 type SkillRegistry struct {
+	mu     sync.RWMutex
 	skills []Skill
 }
 
@@ -141,7 +155,32 @@ func (r *SkillRegistry) Register(s Skill) {
 		// keep going. The router is best-effort prompt enrichment.
 		return
 	}
+	r.mu.Lock()
+	defer r.mu.Unlock()
 	r.skills = append(r.skills, s)
+}
+
+// Upsert validates and installs a skill by name. It is used for runtime
+// skill installation where repeated installs should update the active body
+// instead of registering duplicate catalog entries.
+func (r *SkillRegistry) Upsert(s Skill) error {
+	if r == nil {
+		return fmt.Errorf("skill registry is nil")
+	}
+	normalized, err := normalizeRuntimeSkill(s)
+	if err != nil {
+		return err
+	}
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	for i, existing := range r.skills {
+		if existing.Name == normalized.Name {
+			r.skills[i] = normalized
+			return nil
+		}
+	}
+	r.skills = append(r.skills, normalized)
+	return nil
 }
 
 // Lookup returns a registered skill by exact name.
@@ -149,6 +188,8 @@ func (r *SkillRegistry) Lookup(name string) (Skill, bool) {
 	if r == nil {
 		return Skill{}, false
 	}
+	r.mu.RLock()
+	defer r.mu.RUnlock()
 	for _, s := range r.skills {
 		if s.Name == name {
 			return s, true
@@ -164,6 +205,8 @@ func (r *SkillRegistry) Catalog() []SkillCatalogEntry {
 	if r == nil {
 		return nil
 	}
+	r.mu.RLock()
+	defer r.mu.RUnlock()
 	out := make([]SkillCatalogEntry, 0, len(r.skills))
 	for _, s := range r.skills {
 		out = append(out, SkillCatalogEntry{
@@ -179,12 +222,18 @@ func (r *SkillRegistry) Catalog() []SkillCatalogEntry {
 // registry. Returns the empty string when no skill activates so the
 // Loop can use `if got != "" { … inject … }` without an extra check.
 func (r *SkillRegistry) Provide(userText string) string {
-	if r == nil || len(r.skills) == 0 {
+	if r == nil {
+		return ""
+	}
+	r.mu.RLock()
+	skills := append([]Skill(nil), r.skills...)
+	r.mu.RUnlock()
+	if len(skills) == 0 {
 		return ""
 	}
 	lower := strings.ToLower(userText)
 	var blocks []string
-	for _, s := range r.skills {
+	for _, s := range skills {
 		if s.activates(lower) {
 			blocks = append(blocks, s.Body)
 		}
@@ -198,6 +247,8 @@ func (r *SkillRegistry) Names() []string {
 	if r == nil {
 		return nil
 	}
+	r.mu.RLock()
+	defer r.mu.RUnlock()
 	out := make([]string, 0, len(r.skills))
 	for _, s := range r.skills {
 		out = append(out, s.Name)
@@ -221,6 +272,12 @@ type builtinSkillManifest struct {
 	Description    string              `json:"description"`
 	Order          int                 `json:"order,omitempty"`
 	AutoActivation SkillAutoActivation `json:"auto_activation"`
+}
+
+type runtimeSkillManifest struct {
+	Name           string              `json:"name"`
+	Description    string              `json:"description,omitempty"`
+	AutoActivation SkillAutoActivation `json:"auto_activation,omitempty"`
 }
 
 func mustBuiltinSkill(name string) Skill {
@@ -340,6 +397,216 @@ func DefaultSkillRegistry() *SkillRegistry {
 		r.Register(skill)
 	}
 	return r
+}
+
+// RuntimeSkillRegistry returns the default built-in registry plus any skills
+// installed under skillDir. The directory is optional; callers pass an empty
+// path when they want built-ins only.
+func RuntimeSkillRegistry(skillDir string) (*SkillRegistry, error) {
+	r := DefaultSkillRegistry()
+	if strings.TrimSpace(skillDir) == "" {
+		return r, nil
+	}
+	skills, err := LoadSkillDir(skillDir)
+	if err != nil {
+		return nil, err
+	}
+	for _, skill := range skills {
+		if err := r.Upsert(skill); err != nil {
+			return nil, err
+		}
+	}
+	return r, nil
+}
+
+// DefaultWorkspaceSkillDir is the per-workspace runtime skill install path.
+func DefaultWorkspaceSkillDir(workspace string) string {
+	workspace = strings.TrimSpace(workspace)
+	if workspace == "" {
+		return ""
+	}
+	return filepath.Join(workspace, ".affent", "skills")
+}
+
+func LoadSkillDir(root string) ([]Skill, error) {
+	root = strings.TrimSpace(root)
+	if root == "" {
+		return nil, nil
+	}
+	entries, err := os.ReadDir(root)
+	if os.IsNotExist(err) {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, fmt.Errorf("list skills %s: %w", root, err)
+	}
+	var out []Skill
+	for _, entry := range entries {
+		if !entry.IsDir() {
+			continue
+		}
+		if len(out) >= maxRuntimeSkills {
+			return nil, fmt.Errorf("runtime skill directory %s has more than %d skills", root, maxRuntimeSkills)
+		}
+		skill, err := loadRuntimeSkill(filepath.Join(root, entry.Name()))
+		if err != nil {
+			return nil, err
+		}
+		out = append(out, skill)
+	}
+	sort.SliceStable(out, func(i, j int) bool { return out[i].Name < out[j].Name })
+	return out, nil
+}
+
+func InstallRuntimeSkill(root string, skill Skill) (Skill, error) {
+	root = strings.TrimSpace(root)
+	if root == "" {
+		return Skill{}, fmt.Errorf("runtime skill directory is not configured")
+	}
+	normalized, err := normalizeRuntimeSkill(skill)
+	if err != nil {
+		return Skill{}, err
+	}
+	dir := filepath.Join(root, normalized.Name)
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		return Skill{}, fmt.Errorf("create skill directory: %w", err)
+	}
+	normalized.Source = "file://" + filepath.ToSlash(filepath.Join(dir, "SKILL.md"))
+	manifest := runtimeSkillManifest{
+		Name:           normalized.Name,
+		Description:    normalized.Description,
+		AutoActivation: normalized.AutoActivation,
+	}
+	raw, err := json.MarshalIndent(manifest, "", "  ")
+	if err != nil {
+		return Skill{}, err
+	}
+	if err := os.WriteFile(filepath.Join(dir, "skill.json"), append(raw, '\n'), 0o644); err != nil {
+		return Skill{}, fmt.Errorf("write skill manifest: %w", err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, "SKILL.md"), []byte(normalized.Body+"\n"), 0o644); err != nil {
+		return Skill{}, fmt.Errorf("write skill body: %w", err)
+	}
+	return normalized, nil
+}
+
+func loadRuntimeSkill(dir string) (Skill, error) {
+	manifestPath := filepath.Join(dir, "skill.json")
+	manifestRaw, err := readRuntimeSkillFile(manifestPath, maxRuntimeSkillManifestBytes)
+	if err != nil {
+		return Skill{}, fmt.Errorf("load skill manifest %s: %w", dir, err)
+	}
+	var manifest runtimeSkillManifest
+	if err := json.Unmarshal(manifestRaw, &manifest); err != nil {
+		return Skill{}, fmt.Errorf("parse skill manifest %s: %w", dir, err)
+	}
+	body, err := readRuntimeSkillFile(filepath.Join(dir, "SKILL.md"), maxRuntimeSkillBodyBytes)
+	if err != nil {
+		return Skill{}, fmt.Errorf("load skill body %s: %w", dir, err)
+	}
+	skill := Skill{
+		Name:           manifest.Name,
+		Description:    manifest.Description,
+		Source:         "file://" + filepath.ToSlash(filepath.Join(dir, "SKILL.md")),
+		Body:           string(body),
+		AutoActivation: manifest.AutoActivation,
+	}
+	return normalizeRuntimeSkill(skill)
+}
+
+func readRuntimeSkillFile(path string, maxBytes int) ([]byte, error) {
+	st, err := os.Stat(path)
+	if err != nil {
+		return nil, err
+	}
+	if st.IsDir() {
+		return nil, fmt.Errorf("%s is a directory", path)
+	}
+	if st.Size() > int64(maxBytes) {
+		return nil, fmt.Errorf("%s is %d bytes; max %d", path, st.Size(), maxBytes)
+	}
+	raw, err := os.ReadFile(path)
+	if err != nil {
+		return nil, err
+	}
+	if len(raw) > maxBytes {
+		return nil, fmt.Errorf("%s is %d bytes; max %d", path, len(raw), maxBytes)
+	}
+	return raw, nil
+}
+
+func normalizeRuntimeSkill(s Skill) (Skill, error) {
+	s.Name = strings.TrimSpace(s.Name)
+	s.Description = strings.TrimSpace(s.Description)
+	s.Body = strings.TrimSpace(s.Body)
+	if s.Name == "" {
+		return Skill{}, fmt.Errorf("skill name is required")
+	}
+	if len(s.Name) > maxRuntimeSkillNameBytes {
+		return Skill{}, fmt.Errorf("skill name is %d bytes; max %d", len(s.Name), maxRuntimeSkillNameBytes)
+	}
+	if !validRuntimeSkillName(s.Name) {
+		return Skill{}, fmt.Errorf("skill name %q may contain only ASCII letters, digits, '_' or '-'", s.Name)
+	}
+	if len(s.Description) > maxRuntimeSkillDescriptionBytes {
+		return Skill{}, fmt.Errorf("skill description is %d bytes; max %d", len(s.Description), maxRuntimeSkillDescriptionBytes)
+	}
+	if s.Body == "" {
+		return Skill{}, fmt.Errorf("skill body is required")
+	}
+	if len(s.Body) > maxRuntimeSkillBodyBytes {
+		return Skill{}, fmt.Errorf("skill body is %d bytes; max %d", len(s.Body), maxRuntimeSkillBodyBytes)
+	}
+	if err := validateSkillAutoActivation(s.AutoActivation); err != nil {
+		return Skill{}, err
+	}
+	return s, nil
+}
+
+func validateSkillAutoActivation(a SkillAutoActivation) error {
+	if len(a.Any) > maxRuntimeSkillTriggers {
+		return fmt.Errorf("skill auto_activation.any has %d entries; max %d", len(a.Any), maxRuntimeSkillTriggers)
+	}
+	for _, trigger := range a.Any {
+		if err := validateRuntimeSkillTrigger(trigger); err != nil {
+			return err
+		}
+	}
+	if len(a.AllAny) > maxRuntimeSkillTriggers {
+		return fmt.Errorf("skill auto_activation.all_any has %d groups; max %d", len(a.AllAny), maxRuntimeSkillTriggers)
+	}
+	for _, group := range a.AllAny {
+		if len(group) > maxRuntimeSkillTriggers {
+			return fmt.Errorf("skill auto_activation.all_any group has %d entries; max %d", len(group), maxRuntimeSkillTriggers)
+		}
+		for _, trigger := range group {
+			if err := validateRuntimeSkillTrigger(trigger); err != nil {
+				return err
+			}
+		}
+	}
+	return nil
+}
+
+func validateRuntimeSkillTrigger(trigger string) error {
+	trigger = strings.TrimSpace(trigger)
+	if trigger == "" {
+		return fmt.Errorf("skill auto-activation trigger must not be empty")
+	}
+	if len(trigger) > maxRuntimeSkillTriggerBytes {
+		return fmt.Errorf("skill auto-activation trigger is %d bytes; max %d", len(trigger), maxRuntimeSkillTriggerBytes)
+	}
+	return nil
+}
+
+func validRuntimeSkillName(name string) bool {
+	for _, r := range name {
+		if r == '_' || r == '-' || ('A' <= r && r <= 'Z') || ('a' <= r && r <= 'z') || ('0' <= r && r <= '9') {
+			continue
+		}
+		return false
+	}
+	return true
 }
 
 // builtinSkillProviderRegistry is the package-level default backing

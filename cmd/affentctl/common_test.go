@@ -1,6 +1,8 @@
 package main
 
 import (
+	"context"
+	"encoding/json"
 	"flag"
 	"io"
 	"os"
@@ -585,6 +587,53 @@ func TestSetupLoop_SubagentDisabledDoesNotRegisterToolOrPolicies(t *testing.T) {
 	msgs := b.loop.Conv.Snapshot()
 	if len(msgs) == 0 || strings.Contains(msgs[0].Content, "Subagent delegation:") {
 		t.Fatal("system prompt should not include subagent guidance when disabled")
+	}
+}
+
+func TestSetupLoop_RuntimeSkillInstallUpdatesActiveProvider(t *testing.T) {
+	var cf commonFlags
+	fs := flag.NewFlagSet("test", flag.ContinueOnError)
+	cf.bind(fs)
+	workspace := t.TempDir()
+	if err := fs.Parse([]string{
+		"--workspace", workspace,
+		"--model", "fake-model",
+		"--base-url", "http://127.0.0.1:1/v1",
+		"--subagent=false",
+		"--quiet",
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if err := applyConfig(&cf, fs); err != nil {
+		t.Fatal(err)
+	}
+	b, code := setupLoop(cf)
+	if code != 0 {
+		t.Fatalf("setupLoop code=%d", code)
+	}
+	defer b.close()
+	tool, ok := b.loop.Tools.Get("skill")
+	if !ok {
+		t.Fatal("skill tool missing")
+	}
+	body := "AFFENT ACTIVE SKILL: runtime_demo\nUse the runtime demo workflow."
+	args, err := json.Marshal(map[string]any{
+		"action":   "install",
+		"name":     "runtime_demo",
+		"body":     body,
+		"triggers": []string{"runtime demo"},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := tool.Execute(context.Background(), args); err != nil {
+		t.Fatalf("skill install: %v", err)
+	}
+	if got := b.loop.SkillProvider("please use runtime demo"); !strings.Contains(got, body) {
+		t.Fatalf("installed skill should be active without setupLoop restart, got %q", got)
+	}
+	if _, err := os.Stat(filepath.Join(workspace, ".affent", "skills", "runtime_demo", "SKILL.md")); err != nil {
+		t.Fatalf("installed skill was not persisted: %v", err)
 	}
 }
 

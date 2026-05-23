@@ -578,7 +578,7 @@ func TestBuiltinToolSchemasRejectUnknownArguments(t *testing.T) {
 		name string
 		tool *Tool
 	}{
-		{name: "skill", tool: skillTool(DefaultSkillRegistry())},
+		{name: "skill", tool: skillTool(DefaultSkillRegistry(), "")},
 		{name: "shell", tool: shellTool(BuiltinDeps{Executor: &recordingExec{}})},
 		{name: "read_file", tool: readFileTool(BuiltinDeps{HostWorkspaceDir: t.TempDir()})},
 		{name: "write_file", tool: writeFileTool(BuiltinDeps{HostWorkspaceDir: t.TempDir()})},
@@ -1340,7 +1340,7 @@ func TestBuiltinFileOpsDoesNotRequireHostWorkspace(t *testing.T) {
 }
 
 func TestSkillToolListsAndReadsEmbeddedSkills(t *testing.T) {
-	tool := skillTool(DefaultSkillRegistry())
+	tool := skillTool(DefaultSkillRegistry(), "")
 	ctx := context.Background()
 	list, err := tool.Execute(ctx, json.RawMessage(`{"action":"list"}`))
 	if err != nil {
@@ -1363,8 +1363,58 @@ func TestSkillToolListsAndReadsEmbeddedSkills(t *testing.T) {
 	}
 }
 
+func TestSkillToolInstallsRuntimeSkillWithoutRestart(t *testing.T) {
+	dir := t.TempDir()
+	reg := &SkillRegistry{}
+	tool := skillTool(reg, dir)
+	body := "AFFENT ACTIVE SKILL: runtime_demo\nUse the runtime demo workflow."
+	args, err := json.Marshal(map[string]any{
+		"action":      "install",
+		"name":        "runtime_demo",
+		"description": "Runtime demo workflow.",
+		"body":        body,
+		"triggers":    []string{"runtime demo"},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	out, err := tool.Execute(context.Background(), args)
+	if err != nil {
+		t.Fatalf("skill install: %v", err)
+	}
+	if !strings.Contains(out, `installed skill "runtime_demo"`) || !strings.Contains(out, body) {
+		t.Fatalf("install output should expose body for immediate use:\n%s", out)
+	}
+	if got := reg.Provide("please use runtime demo now"); !strings.Contains(got, body) {
+		t.Fatalf("installed skill should activate without restart, got %q", got)
+	}
+	read, err := tool.Execute(context.Background(), json.RawMessage(`{"action":"read","name":"runtime_demo"}`))
+	if err != nil {
+		t.Fatalf("skill read installed: %v", err)
+	}
+	if !strings.Contains(read, body) {
+		t.Fatalf("read installed skill = %q", read)
+	}
+
+	reloaded, err := RuntimeSkillRegistry(dir)
+	if err != nil {
+		t.Fatalf("reload runtime registry: %v", err)
+	}
+	if got := reloaded.Provide("runtime demo task"); !strings.Contains(got, body) {
+		t.Fatalf("persisted skill should load on next session, got %q", got)
+	}
+}
+
+func TestSkillToolInstallRequiresConfiguredDirectory(t *testing.T) {
+	tool := skillTool(&SkillRegistry{}, "")
+	_, err := tool.Execute(context.Background(), json.RawMessage(`{"action":"install","name":"demo","body":"AFFENT ACTIVE SKILL: demo"}`))
+	if err == nil || !strings.Contains(err.Error(), "install is not configured") || !strings.Contains(err.Error(), "Next:") {
+		t.Fatalf("install without dir error = %v", err)
+	}
+}
+
 func TestSkillToolPublishesAndRejectsBlankRequiredStrings(t *testing.T) {
-	tool := skillTool(DefaultSkillRegistry())
+	tool := skillTool(DefaultSkillRegistry(), "")
 	var schema struct {
 		Properties map[string]struct {
 			MinLength int `json:"minLength"`

@@ -306,12 +306,22 @@ func (p *SessionPool) buildSession(id string) (*Session, error) {
 		memStore = fms
 	}
 	var localExec *executor.LocalExecutor
+	var skillReg *agent.SkillRegistry
 	if p.cfg.EnableBuiltins {
 		localExec = executor.NewLocalExecutor(id, workspace)
+		skillDir := agent.DefaultWorkspaceSkillDir(workspace)
+		var skillErr error
+		skillReg, skillErr = agent.RuntimeSkillRegistry(skillDir)
+		if skillErr != nil {
+			_ = os.RemoveAll(workspace)
+			return nil, fmt.Errorf("skills: %w", skillErr)
+		}
 		agent.RegisterBuiltins(reg, agent.BuiltinDeps{
 			Executor:         localExec,
 			HostWorkspaceDir: workspace,
 			Memory:           memStore,
+			SkillRegistry:    skillReg,
+			SkillDir:         skillDir,
 		})
 	} else if memStore != nil {
 		// Memory tool without the shell/file builtins — common for
@@ -410,6 +420,9 @@ func (p *SessionPool) buildSession(id string) (*Session, error) {
 		// memory block is just omitted from the system prompt and
 		// the tool isn't registered above anyway.
 		Memory: memStore,
+	}
+	if skillReg != nil {
+		loop.SkillProvider = skillReg.Provide
 	}
 	if p.cfg.EnableSubagent {
 		loop.FirstToolPolicy = agent.SubagentFirstToolPolicy()
