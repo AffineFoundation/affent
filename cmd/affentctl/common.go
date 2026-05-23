@@ -159,10 +159,10 @@ func (c *commonFlags) bind(fs *flag.FlagSet) {
 	fs.StringVar(&c.executor, "executor", "local", "shell-tool backend: 'local' (host; no isolation), 'sandbox' (auto-start affentctl's memory-limited Docker sandbox), or 'docker:<container_id>' (exec into an existing container). (env: AFFENTCTL_EXECUTOR)")
 	fs.BoolVar(&c.subagentEnabled, "subagent", true, "register subagent_run for bounded read-only delegation; set false to force a single-loop agent (env: AFFENTCTL_SUBAGENT)")
 	fs.IntVar(&c.subagentMaxDepth, "subagent-max-depth", agent.DefaultSubagentMaxDepth, "maximum recursive subagent depth; 1 disables nested subagents, hard max 4 (env: AFFENTCTL_SUBAGENT_MAX_DEPTH)")
-	fs.StringVar(&c.temperature, "temperature", "", "sampling temperature forwarded to upstream LLM (omit → provider default; set 0 for deterministic eval decoding)")
-	fs.StringVar(&c.topP, "top-p", "", "top-p (nucleus) sampling forwarded to upstream (omit → provider default)")
-	fs.StringVar(&c.maxTokens, "max-tokens", "", "max output tokens forwarded to upstream (omit → provider default)")
-	fs.StringVar(&c.seed, "seed", "", "deterministic-sampling seed forwarded to upstream (omit → provider default)")
+	fs.StringVar(&c.temperature, "temperature", "", "sampling temperature forwarded to upstream LLM (omit → provider default; set 0 for deterministic eval decoding; env: AFFENTCTL_TEMPERATURE)")
+	fs.StringVar(&c.topP, "top-p", "", "top-p (nucleus) sampling forwarded to upstream (omit → provider default; env: AFFENTCTL_TOP_P)")
+	fs.StringVar(&c.maxTokens, "max-tokens", "", "max output tokens forwarded to upstream (omit → provider default; env: AFFENTCTL_MAX_TOKENS)")
+	fs.StringVar(&c.seed, "seed", "", "deterministic-sampling seed forwarded to upstream (omit → provider default; env: AFFENTCTL_SEED)")
 }
 
 // parseSampling converts the string-shaped CLI/file values into a
@@ -260,6 +260,10 @@ var flagEnvSources = map[string]string{
 	"executor":           "AFFENTCTL_EXECUTOR",
 	"subagent":           "AFFENTCTL_SUBAGENT",
 	"subagent-max-depth": "AFFENTCTL_SUBAGENT_MAX_DEPTH",
+	"temperature":        "AFFENTCTL_TEMPERATURE",
+	"top-p":              "AFFENTCTL_TOP_P",
+	"max-tokens":         "AFFENTCTL_MAX_TOKENS",
+	"seed":               "AFFENTCTL_SEED",
 }
 
 type fileConfig struct {
@@ -546,6 +550,10 @@ func applyEnvConfig(c *commonFlags, fs *flag.FlagSet) error {
 	setString("model", "AFFENTCTL_MODEL", &c.model)
 	setString("mcp-config", "AFFENTCTL_MCP_CONFIG", &c.mcpConfigPath)
 	setString("executor", "AFFENTCTL_EXECUTOR", &c.executor)
+	setString("temperature", "AFFENTCTL_TEMPERATURE", &c.temperature)
+	setString("top-p", "AFFENTCTL_TOP_P", &c.topP)
+	setString("max-tokens", "AFFENTCTL_MAX_TOKENS", &c.maxTokens)
+	setString("seed", "AFFENTCTL_SEED", &c.seed)
 	if err := setBoolStrict("subagent", "AFFENTCTL_SUBAGENT", &c.subagentEnabled); err != nil {
 		return err
 	}

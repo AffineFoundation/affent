@@ -167,10 +167,14 @@ func TestApplyConfigMergesAndCLIOverrides(t *testing.T) {
 func TestEnvVarBeatsConfigFile(t *testing.T) {
 	dir := t.TempDir()
 	cfgPath := filepath.Join(dir, "c.json")
-	if err := os.WriteFile(cfgPath, []byte(`{"model":"from-config","base_url":"http://from-config"}`), 0o644); err != nil {
+	if err := os.WriteFile(cfgPath, []byte(`{"model":"from-config","base_url":"http://from-config","temperature":"0.7","top_p":"0.8","max_tokens":"256","seed":"99"}`), 0o644); err != nil {
 		t.Fatal(err)
 	}
 	t.Setenv("AFFENTCTL_MODEL", "from-env")
+	t.Setenv("AFFENTCTL_TEMPERATURE", "0")
+	t.Setenv("AFFENTCTL_TOP_P", "0.95")
+	t.Setenv("AFFENTCTL_MAX_TOKENS", "512")
+	t.Setenv("AFFENTCTL_SEED", "42")
 	// base_url is NOT set in env — config should still fill that in.
 	t.Setenv("AFFENTCTL_BASE_URL", "")
 	os.Unsetenv("AFFENTCTL_BASE_URL")
@@ -189,6 +193,9 @@ func TestEnvVarBeatsConfigFile(t *testing.T) {
 	}
 	if cf.baseURL != "http://from-config" {
 		t.Errorf("config should fill in base-url when env is unset; got %q", cf.baseURL)
+	}
+	if cf.temperature != "0" || cf.topP != "0.95" || cf.maxTokens != "512" || cf.seed != "42" {
+		t.Errorf("sampling env should win over config; got temperature=%q top_p=%q max_tokens=%q seed=%q", cf.temperature, cf.topP, cf.maxTokens, cf.seed)
 	}
 }
 
@@ -606,6 +613,10 @@ func TestNoEnvVarLeaksIntoFlagDefaults(t *testing.T) {
 		"AFFENTCTL_MCP_CONFIG":         "/sentinel-mcp-XYZ123",
 		"AFFENTCTL_EXECUTOR":           "docker:sentinel-XYZ123",
 		"AFFENTCTL_SUBAGENT_MAX_DEPTH": "99",
+		"AFFENTCTL_TEMPERATURE":        "sentinel-temperature-XYZ123",
+		"AFFENTCTL_TOP_P":              "sentinel-top-p-XYZ123",
+		"AFFENTCTL_MAX_TOKENS":         "sentinel-max-tokens-XYZ123",
+		"AFFENTCTL_SEED":               "sentinel-seed-XYZ123",
 	}
 	for k, v := range planted {
 		t.Setenv(k, v)

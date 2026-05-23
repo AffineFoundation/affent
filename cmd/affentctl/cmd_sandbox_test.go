@@ -599,6 +599,9 @@ func TestRuntimeForwardEnvIncludesPortableCLIAndServeConfig(t *testing.T) {
 	for _, name := range []string{
 		"AFFENTCTL_SUBAGENT",
 		"AFFENTCTL_SUBAGENT_MAX_DEPTH",
+		"AFFENTCTL_TEMPERATURE",
+		"AFFENTCTL_TOP_P",
+		"AFFENTCTL_MAX_TOKENS",
 		"AFFENTSERVE_MEMORY",
 		"AFFENTSERVE_SUBAGENT",
 		"AFFENTSERVE_SUBAGENT_MAX_DEPTH",
