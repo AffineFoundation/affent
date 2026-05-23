@@ -315,3 +315,14 @@ func TestSnippetUTF8Safety(t *testing.T) {
 		t.Fatalf("truncated snippet is not valid UTF-8: %q", out)
 	}
 }
+
+func TestSnippetAroundUsesWholeTokenHit(t *testing.T) {
+	content := "ongoing " + strings.Repeat("filler ", 180) + "go final"
+	snip := SnippetAround(content, Tokenize("go"))
+	if strings.Contains(snip, "ongoing") {
+		t.Fatalf("snippet centered on substring-only hit: %q", snip)
+	}
+	if !strings.Contains(snip, "go final") {
+		t.Fatalf("snippet should include whole-token hit: %q", snip)
+	}
+}

@@ -318,15 +318,7 @@ const snippetLen = 900
 // SnippetAround returns a UTF-8-safe substring of content centered on
 // the first term hit.
 func SnippetAround(content string, terms []string) string {
-	lower := strings.ToLower(content)
-	hitIdx := -1
-	for _, t := range terms {
-		if i := strings.Index(lower, t); i >= 0 {
-			if hitIdx < 0 || i < hitIdx {
-				hitIdx = i
-			}
-		}
-	}
+	hitIdx := firstTermTokenIndex(content, terms)
 	if hitIdx < 0 {
 		return TruncateSnippet(content, snippetLen)
 	}
@@ -353,6 +345,39 @@ func SnippetAround(content string, terms []string) string {
 		suffix = "..."
 	}
 	return prefix + content[start:end] + suffix
+}
+
+func firstTermTokenIndex(content string, terms []string) int {
+	want := make(map[string]bool, len(terms))
+	for _, term := range terms {
+		if term != "" {
+			want[term] = true
+		}
+	}
+	tokenStart := -1
+	var cur strings.Builder
+	flush := func() int {
+		t := strings.ToLower(cur.String())
+		cur.Reset()
+		if tokenStart >= 0 && want[t] {
+			return tokenStart
+		}
+		tokenStart = -1
+		return -1
+	}
+	for i, r := range content {
+		if unicode.IsLetter(r) || unicode.IsDigit(r) {
+			if tokenStart < 0 {
+				tokenStart = i
+			}
+			cur.WriteRune(r)
+			continue
+		}
+		if hit := flush(); hit >= 0 {
+			return hit
+		}
+	}
+	return flush()
 }
 
 func TruncateSnippet(s string, n int) string {
