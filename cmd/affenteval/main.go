@@ -38,6 +38,7 @@ func run(args []string) int {
 		apiKey         = fs.String("api-key", "", "API key (env: AFFENTCTL_API_KEY)")
 		model          = fs.String("model", "", "model id (env: AFFENTCTL_MODEL)")
 		temperature    = fs.String("temperature", "0", "sampling temperature forwarded to affentctl")
+		executor       = fs.String("executor", "local", "affentctl tool executor for scenario runs: local, sandbox, or docker:<container>")
 		timeout        = fs.Duration("timeout", 5*time.Minute, "per-scenario timeout")
 		jsonl          = fs.Bool("jsonl", false, "emit machine-readable JSONL records instead of text")
 		keepWorkspaces = fs.Bool("keep-workspaces", false, "keep passing scenario workspaces; failing scenario workspaces are always kept")
@@ -84,7 +85,7 @@ success and trace-level process quality.`)
 		fmt.Fprintf(os.Stderr, "scenario: %v\n", err)
 		return 64
 	}
-	if err := validateRunConfig(*temperature, *timeout); err != nil {
+	if err := validateRunConfig(*temperature, *timeout, *executor, len(scenarios)); err != nil {
 		fmt.Fprintf(os.Stderr, "config: %v\n", err)
 		return 64
 	}
@@ -95,6 +96,7 @@ success and trace-level process quality.`)
 		APIKey:                   *apiKey,
 		Model:                    *model,
 		Temperature:              *temperature,
+		Executor:                 *executor,
 		Timeout:                  *timeout,
 		CleanupPassingWorkspaces: !*keepWorkspaces,
 	}
@@ -286,9 +288,12 @@ func printBatchResult(w io.Writer, res agenteval.BatchResult) {
 	}
 }
 
-func validateRunConfig(temperature string, timeout time.Duration) error {
+func validateRunConfig(temperature string, timeout time.Duration, executor string, scenarioCount int) error {
 	if timeout <= 0 {
 		return fmt.Errorf("--timeout must be a positive duration")
+	}
+	if err := validateEvalExecutor(executor, scenarioCount); err != nil {
+		return err
 	}
 	if strings.TrimSpace(temperature) == "" {
 		return nil
@@ -302,6 +307,30 @@ func validateRunConfig(temperature string, timeout time.Duration) error {
 		return fmt.Errorf("--%s", err.Error())
 	}
 	return nil
+}
+
+func validateEvalExecutor(executor string, scenarioCount int) error {
+	executor = strings.TrimSpace(executor)
+	switch {
+	case executor == "", executor == "local":
+		return nil
+	case executor == "sandbox":
+		if scenarioCount != 1 {
+			return fmt.Errorf("--executor sandbox is only supported for one selected scenario because affentctl auto-starts a fixed-name sandbox for that scenario workspace; use --scenario for one run, or pre-start a sandbox over --work-root and pass --executor docker:<container>")
+		}
+		return nil
+	case strings.HasPrefix(executor, "docker:"):
+		name := strings.TrimSpace(strings.TrimPrefix(executor, "docker:"))
+		if name == "" {
+			return fmt.Errorf("--executor docker: requires a container name")
+		}
+		if strings.ContainsAny(name, " \t\r\n") {
+			return fmt.Errorf("--executor docker:<container> must not contain whitespace")
+		}
+		return nil
+	default:
+		return fmt.Errorf("unknown --executor %q (valid: local, sandbox, docker:<container>)", executor)
+	}
 }
 
 func splitCSV(s string) []string {

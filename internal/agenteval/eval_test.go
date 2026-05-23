@@ -242,3 +242,29 @@ func TestBatchRunnerRunVerifierHonorsContext(t *testing.T) {
 		t.Fatalf("verifier ignored context timeout; elapsed=%s err=%v", elapsed, err)
 	}
 }
+
+func TestBatchRunnerAffentctlRunArgsForwardsExecutor(t *testing.T) {
+	args := (BatchRunner{
+		BaseURL:     "https://llm.example/v1",
+		Model:       "model-a",
+		APIKey:      "secret",
+		Temperature: "0",
+		Executor:    "docker:affent-eval",
+	}).affentctlRunArgs("/tmp/ws", "/tmp/ws/trace.jsonl", BatchScenario{
+		Prompt:   "fix it",
+		MaxTurns: 3,
+	})
+	joined := strings.Join(args, "\x00")
+	for _, want := range []string{
+		"--executor\x00docker:affent-eval",
+		"--workspace\x00/tmp/ws",
+		"--trace\x00/tmp/ws/trace.jsonl",
+		"--max-turns\x003",
+		"--temperature\x000",
+		"--api-key\x00secret",
+	} {
+		if !strings.Contains(joined, want) {
+			t.Fatalf("args missing %q:\n%q", want, args)
+		}
+	}
+}

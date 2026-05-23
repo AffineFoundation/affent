@@ -48,6 +48,7 @@ type BatchRunner struct {
 	APIKey                   string
 	Model                    string
 	Temperature              string
+	Executor                 string
 	GoBin                    string
 	Timeout                  time.Duration
 	CleanupPassingWorkspaces bool
@@ -277,22 +278,7 @@ func (r BatchRunner) runAffentctl(ctx context.Context, repoRoot, workspace, trac
 	if goBin == "" {
 		goBin = findGo(repoRoot)
 	}
-	args := []string{
-		"run", "./cmd/affentctl", "run",
-		"--workspace", workspace,
-		"--base-url", r.BaseURL,
-		"--model", r.Model,
-		"--max-turns", fmt.Sprint(scenario.MaxTurns),
-		"--trace", tracePath,
-		"--trace-skip-deltas",
-		"--prompt", scenario.Prompt,
-	}
-	if r.APIKey != "" {
-		args = append(args, "--api-key", r.APIKey)
-	}
-	if r.Temperature != "" {
-		args = append(args, "--temperature", r.Temperature)
-	}
+	args := r.affentctlRunArgs(workspace, tracePath, scenario)
 	cmd := exec.CommandContext(ctx, goBin, args...)
 	cmd.Dir = repoRoot
 	cmd.Env = append(os.Environ(), "PATH="+evalPath(repoRoot))
@@ -309,6 +295,31 @@ func (r BatchRunner) runAffentctl(ctx context.Context, repoRoot, workspace, trac
 		}
 	}
 	return stdout.String(), stderr.String(), exitCode, err
+}
+
+func (r BatchRunner) affentctlRunArgs(workspace, tracePath string, scenario BatchScenario) []string {
+	executor := strings.TrimSpace(r.Executor)
+	if executor == "" {
+		executor = "local"
+	}
+	args := []string{
+		"run", "./cmd/affentctl", "run",
+		"--workspace", workspace,
+		"--executor", executor,
+		"--base-url", r.BaseURL,
+		"--model", r.Model,
+		"--max-turns", fmt.Sprint(scenario.MaxTurns),
+		"--trace", tracePath,
+		"--trace-skip-deltas",
+		"--prompt", scenario.Prompt,
+	}
+	if r.APIKey != "" {
+		args = append(args, "--api-key", r.APIKey)
+	}
+	if r.Temperature != "" {
+		args = append(args, "--temperature", r.Temperature)
+	}
+	return args
 }
 
 func (r BatchRunner) runVerifier(ctx context.Context, workspace, repoRoot, command string) (string, error) {

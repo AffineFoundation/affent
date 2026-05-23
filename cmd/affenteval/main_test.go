@@ -95,6 +95,21 @@ func TestRunRejectsInvalidConfigBeforeScenarios(t *testing.T) {
 			args: []string{"--temperature=warm"},
 			want: "--temperature",
 		},
+		{
+			name: "unknown executor",
+			args: []string{"--executor=remote"},
+			want: "unknown --executor",
+		},
+		{
+			name: "empty docker executor",
+			args: []string{"--executor=docker:"},
+			want: "requires a container name",
+		},
+		{
+			name: "sandbox suite rejected",
+			args: []string{"--executor=sandbox", "--suite=small-model-tools"},
+			want: "--executor sandbox is only supported for one selected scenario",
+		},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {

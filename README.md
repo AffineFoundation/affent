@@ -480,6 +480,7 @@ go run ./cmd/affenteval --list --suite small-model-tools
 go run ./cmd/affenteval --suite small-model-tools --temperature 0
 go run ./cmd/affenteval --scenario coding-python-slug --temperature 0
 go run ./cmd/affenteval --suite small-model-tools --jsonl > eval.jsonl
+go run ./cmd/affenteval --scenario coding-python-slug --executor sandbox
 ```
 
 The runner is intentionally small and scenario-driven. It is meant to turn
@@ -492,6 +493,17 @@ per run plus a final `summary` record with the same metrics. Passing scenario
 workspaces are removed by default to avoid filling the machine during repeated
 evals; failing workspaces are kept for debugging. Pass `--keep-workspaces` when
 you need every workspace and trace left on disk.
+
+`--executor` is forwarded to the `affentctl run` process under test. It
+defaults to `local`. Use `--executor sandbox` for one selected scenario when you
+want Affent to auto-start its default memory-limited sandbox. For suites,
+pre-start one sandbox mounted over the eval work root and pass it explicitly so
+every scenario workspace lives under the same container mount:
+
+```bash
+./bin/affentctl sandbox start --name affent-eval-sandbox --workspace /tmp/affent-eval --replace
+go run ./cmd/affenteval --work-root /tmp/affent-eval --suite small-model-tools --executor docker:affent-eval-sandbox
+```
 
 ## Events And Observability
 
