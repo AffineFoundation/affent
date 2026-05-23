@@ -240,6 +240,23 @@ Files inspected:
 			}
 		}
 	})
+	t.Run("markdown header level resumes audit section", func(t *testing.T) {
+		report := `Conclusion:
+- accepted: 03:00-04:30 UTC
+
+Rejected candidates:
+- incident.md claimed window 06:00 UTC
+
+### Commands run:
+- rg "accepted" docs`
+		got := sanitizeSubagentReportForParent(report)
+		if strings.Contains(got, "06:00") {
+			t.Fatalf("sanitized report leaked rejected value:\n%s", got)
+		}
+		if !strings.Contains(got, "### Commands run:") || !strings.Contains(got, "rg \"accepted\" docs") {
+			t.Fatalf("sanitized report should preserve audit section after rejected details:\n%s", got)
+		}
+	})
 	t.Run("files inspected content summaries", func(t *testing.T) {
 		report := `## Files Inspected:
 | File | Content Summary |

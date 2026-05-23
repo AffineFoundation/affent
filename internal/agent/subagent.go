@@ -230,27 +230,29 @@ func explicitSubagentRequested(userText string) bool {
 		b.WriteByte('\n')
 	}
 	lower := strings.ToLower(b.String())
-	for _, phrase := range []string{
-		"use subagent",
-		"using subagent",
-		"child subagent",
-		"delegate to subagent",
-		"isolated subagent",
-		"subagent delegation",
-		"sub-agent",
-		"使用 subagent",
-		"使用subagent",
-		"用 subagent",
-		"用subagent",
-		"子 agent",
-		"子agent",
-		"子代理",
-	} {
+	for _, phrase := range subagentDelegationPhrases {
 		if strings.Contains(lower, phrase) {
 			return true
 		}
 	}
 	return false
+}
+
+var subagentDelegationPhrases = []string{
+	"use subagent",
+	"using subagent",
+	"child subagent",
+	"delegate to subagent",
+	"isolated subagent",
+	"subagent delegation",
+	"sub-agent",
+	"使用 subagent",
+	"使用subagent",
+	"用 subagent",
+	"用subagent",
+	"子 agent",
+	"子agent",
+	"子代理",
 }
 
 // SubagentDeps wires the first-generation subagent tool. The subagent is a
@@ -565,57 +567,68 @@ func sanitizeSubagentReportForParent(report string) string {
 	return strings.TrimSpace(strings.Join(out, "\n"))
 }
 
+var rejectedSectionStartMarkers = []string{
+	"rejected",
+	"sources ignored",
+	"ignored sources",
+	"ignored source",
+	"ignored candidate",
+	"noise filtering",
+	"noise sources",
+	"filtered out",
+	"噪声",
+	"被过滤",
+	"被忽略",
+	"被拒绝",
+	"冲突源",
+	"冲突来源",
+	"已排除",
+	"过时/注入",
+}
+
 func startsRejectedCandidateSection(lower string) bool {
 	if lower == "" {
 		return false
 	}
-	return strings.Contains(lower, "rejected") ||
-		strings.Contains(lower, "sources ignored") ||
-		strings.Contains(lower, "ignored sources") ||
-		strings.Contains(lower, "ignored source") ||
-		strings.Contains(lower, "ignored candidate") ||
-		strings.Contains(lower, "noise filtering") ||
-		strings.Contains(lower, "noise sources") ||
-		strings.Contains(lower, "filtered out") ||
-		strings.Contains(lower, "噪声") ||
-		strings.Contains(lower, "被过滤") ||
-		strings.Contains(lower, "被忽略") ||
-		strings.Contains(lower, "被拒绝") ||
-		strings.Contains(lower, "冲突源") ||
-		strings.Contains(lower, "冲突来源") ||
-		strings.Contains(lower, "已排除") ||
-		strings.Contains(lower, "过时/注入")
+	for _, marker := range rejectedSectionStartMarkers {
+		if strings.Contains(lower, marker) {
+			return true
+		}
+	}
+	return false
+}
+
+var rejectedDetailMarkers = []string{
+	"incident",
+	"vendor-note",
+	"logs/",
+	"sample-a",
+	"sample-b",
+	"trace.jsonl",
+	"prompt-injection",
+	"non-canonical",
+	"no longer canonical",
+	"noise",
+	"noisy",
+	"ignored",
+	"rejected",
+	"filtered",
+	"过时",
+	"噪声",
+	"被忽略",
+	"被拒绝",
+	"被排除",
+	"非 canonical",
+	"日志",
+	"样本",
+	"历史",
 }
 
 func looksRejectedDetailLine(lower string) bool {
 	if lower == "" || strings.Contains(lower, "source-of-truth") {
 		return false
 	}
-	for _, marker := range []string{
-		"incident",
-		"vendor-note",
-		"logs/",
-		"sample-a",
-		"sample-b",
-		"trace.jsonl",
-		"prompt-injection",
-		"non-canonical",
-		"no longer canonical",
-		"noise",
-		"noisy",
-		"ignored",
-		"rejected",
-		"filtered",
-		"过时",
-		"噪声",
-		"被忽略",
-		"被拒绝",
-		"被排除",
-		"非 canonical",
-		"日志",
-		"样本",
-		"历史",
-	} {
+	for _, marker := range rejectedDetailMarkers {
 		if strings.Contains(lower, marker) {
 			return true
 		}
@@ -652,30 +665,24 @@ func firstBacktickSpan(line string) string {
 	return rest[:end]
 }
 
+var rejectedSectionEndHeaders = []string{
+	"files inspected",
+	"commands run",
+	"uncertainties",
+	"recommended next step",
+}
+
 func endsRejectedCandidateSection(lower string) bool {
 	if lower == "" {
 		return false
 	}
-	switch {
-	case strings.HasPrefix(lower, "files inspected"):
-		return true
-	case strings.HasPrefix(lower, "commands run"):
-		return true
-	case strings.HasPrefix(lower, "uncertainties"):
-		return true
-	case strings.HasPrefix(lower, "recommended next step"):
-		return true
-	case strings.HasPrefix(lower, "## files inspected"):
-		return true
-	case strings.HasPrefix(lower, "## commands run"):
-		return true
-	case strings.HasPrefix(lower, "## uncertainties"):
-		return true
-	case strings.HasPrefix(lower, "## recommended next step"):
-		return true
-	default:
-		return false
+	clean := strings.TrimLeft(lower, "# ")
+	for _, header := range rejectedSectionEndHeaders {
+		if strings.HasPrefix(clean, header) {
+			return true
+		}
 	}
+	return false
 }
 
 func incompleteSubagentReportNeeded(report string) bool {
@@ -1057,6 +1064,16 @@ func rejectSubagentPrivatePath(workspace, p string) error {
 	return nil
 }
 
+var mutatingShellNeedles = []string{
+	" tee ", " rm ", " mv ", " cp ", " mkdir ", " touch ", " chmod ", " chown ",
+	"sed -i", "git checkout", "git reset", "git clean", "git commit", "git push",
+	"pip install", "npm install", "pnpm install", "yarn add", "go get",
+}
+
+var mutatingShellPrefixes = []string{
+	"rm ", "mv ", "cp ", "mkdir ", "touch ", "chmod ", "chown ",
+}
+
 func rejectMutatingShell(command string) error {
 	c := strings.ToLower(command)
 	if strings.Contains(filepath.ToSlash(c), ".affentctl/subagents") {
@@ -1069,17 +1086,12 @@ func rejectMutatingShell(command string) error {
 	if strings.Contains(withoutStderrRedirect, ">") {
 		return errors.New("subagent shell is read-only; rejected output redirection")
 	}
-	for _, needle := range []string{
-		" tee ", " rm ", " mv ", " cp ", " mkdir ", " touch ", " chmod ", " chown ",
-		"sed -i", "git checkout", "git reset", "git clean", "git commit", "git push",
-		"pip install", "npm install", "pnpm install", "yarn add", "go get",
-	} {
+	for _, needle := range mutatingShellNeedles {
 		if strings.Contains(c, needle) {
 			return fmt.Errorf("subagent shell is read-only; rejected command containing %q", strings.TrimSpace(needle))
 		}
 	}
-	// Catch commands that start with a mutating word (no leading space).
-	for _, prefix := range []string{"rm ", "mv ", "cp ", "mkdir ", "touch ", "chmod ", "chown "} {
+	for _, prefix := range mutatingShellPrefixes {
 		if strings.HasPrefix(strings.TrimSpace(c), prefix) {
 			return fmt.Errorf("subagent shell is read-only; rejected command starting with %q", strings.TrimSpace(prefix))
 		}
