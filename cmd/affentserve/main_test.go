@@ -1,10 +1,13 @@
 package main
 
 import (
+	"bytes"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/rs/zerolog"
 )
 
 // TestParseFlagsAndConfig_CLIBoolCanOverrideFileTrue pins the
@@ -177,6 +180,41 @@ func TestParseFlagsAndConfig_MemoryRootFromCLI(t *testing.T) {
 	}
 	if cfg.MemoryRoot != "/cli-state" {
 		t.Fatalf("--memory-root should override AFFENTSERVE_MEMORY_ROOT, got %q", cfg.MemoryRoot)
+	}
+}
+
+func TestLogServeStartupIncludesDurablePathsWithoutSecrets(t *testing.T) {
+	var buf bytes.Buffer
+	cfg := Config{
+		Listen:         "127.0.0.1:7777",
+		BaseURL:        "https://example/v1",
+		APIKey:         "sk-secret-should-not-log",
+		Model:          "demo",
+		AuthToken:      "bearer-secret-should-not-log",
+		WorkspaceRoot:  "/workspace/sessions",
+		MemoryRoot:     "/workspace/session-state",
+		MaxSessions:    8,
+		SessionIdleTTL: "5m",
+		EnableBuiltins: true,
+		EnableMemory:   true,
+	}
+	logServeStartup(zerolog.New(&buf), cfg, cfg.MemoryRoot)
+	logLine := buf.String()
+	for _, want := range []string{
+		`"workspace_root":"/workspace/sessions"`,
+		`"memory_root":"/workspace/session-state"`,
+		`"session_state_root":"/workspace/session-state"`,
+		`"auth":"on"`,
+		`"builtins":true`,
+	} {
+		if !strings.Contains(logLine, want) {
+			t.Fatalf("startup log missing %s:\n%s", want, logLine)
+		}
+	}
+	for _, secret := range []string{"sk-secret-should-not-log", "bearer-secret-should-not-log"} {
+		if strings.Contains(logLine, secret) {
+			t.Fatalf("startup log leaked secret %q:\n%s", secret, logLine)
+		}
 	}
 }
 

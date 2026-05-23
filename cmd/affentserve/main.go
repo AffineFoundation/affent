@@ -298,33 +298,7 @@ func run(cfg Config, logger zerolog.Logger) error {
 		IdleTimeout: 120 * time.Second,
 	}
 
-	// Boot summary: one structured log line so operators dropping a
-	// fresh container can see at a glance which feature flags are on
-	// without grep'ing the original docker run / k8s spec. Secrets
-	// (api_key, auth_token) are deliberately NOT included — the auth
-	// status is summarized as "on" / "off" instead.
-	auth := "off"
-	if cfg.AuthToken != "" {
-		auth = "on"
-	}
-	logger.Info().
-		Str("listen", cfg.Listen).
-		Str("model", cfg.Model).
-		Str("base_url", cfg.BaseURL).
-		Str("auth", auth).
-		Bool("builtins", cfg.EnableBuiltins).
-		Bool("subagent", cfg.EnableSubagent).
-		Int("subagent_max_depth", cfg.SubagentMaxDepth).
-		Bool("focused_tasks", cfg.EnableFocusedTasks).
-		Bool("memory", cfg.EnableMemory).
-		Bool("browser", cfg.EnableBrowser).
-		Bool("web", cfg.EnableWeb).
-		Bool("web_search", cfg.EnableWebSearch).
-		Int("max_sessions", cfg.MaxSessions).
-		Str("session_idle_ttl", cfg.SessionIdleTTL).
-		Str("session_retention", cfg.SessionRetention).
-		Str("per_call_timeout", cfg.PerCallTimeout).
-		Msg("affentserve starting")
+	logServeStartup(logger, cfg, pool.sessionRootPath())
 	errCh := make(chan error, 1)
 	go func() {
 		if err := srv.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
@@ -361,4 +335,36 @@ func run(cfg Config, logger zerolog.Logger) error {
 		return fmt.Errorf("graceful shutdown: %w", err)
 	}
 	return nil
+}
+
+// logServeStartup emits one structured line so operators dropping a fresh
+// container can see at a glance which feature flags and durable paths are in
+// use. Secrets (api_key, auth_token) are deliberately NOT included — auth is
+// summarized as on/off instead.
+func logServeStartup(logger zerolog.Logger, cfg Config, sessionStateRoot string) {
+	auth := "off"
+	if cfg.AuthToken != "" {
+		auth = "on"
+	}
+	logger.Info().
+		Str("listen", cfg.Listen).
+		Str("model", cfg.Model).
+		Str("base_url", cfg.BaseURL).
+		Str("auth", auth).
+		Str("workspace_root", cfg.WorkspaceRoot).
+		Str("memory_root", cfg.MemoryRoot).
+		Str("session_state_root", sessionStateRoot).
+		Bool("builtins", cfg.EnableBuiltins).
+		Bool("subagent", cfg.EnableSubagent).
+		Int("subagent_max_depth", cfg.SubagentMaxDepth).
+		Bool("focused_tasks", cfg.EnableFocusedTasks).
+		Bool("memory", cfg.EnableMemory).
+		Bool("browser", cfg.EnableBrowser).
+		Bool("web", cfg.EnableWeb).
+		Bool("web_search", cfg.EnableWebSearch).
+		Int("max_sessions", cfg.MaxSessions).
+		Str("session_idle_ttl", cfg.SessionIdleTTL).
+		Str("session_retention", cfg.SessionRetention).
+		Str("per_call_timeout", cfg.PerCallTimeout).
+		Msg("affentserve starting")
 }
