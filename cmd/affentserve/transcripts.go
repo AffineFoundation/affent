@@ -185,6 +185,9 @@ func cleanTranscriptRequestPath(sessionID, raw string) (string, error) {
 
 func resolveSessionTranscriptPath(sessionDir, sessionID, rel string) (string, error) {
 	full := filepath.Join(sessionDir, filepath.FromSlash(rel))
+	if err := rejectSymlinkUnderDir(sessionDir, filepath.FromSlash(rel)); err != nil {
+		return "", err
+	}
 	fullAbs, err := filepath.Abs(full)
 	if err != nil {
 		return "", err

@@ -9,6 +9,7 @@ import (
 	"path/filepath"
 	"sort"
 	"strconv"
+	"strings"
 	"time"
 
 	agent "github.com/affinefoundation/affent/internal/agent"
@@ -561,6 +562,31 @@ func durableReadDir(dir string) ([]os.DirEntry, error) {
 		return nil, errors.New("durable path must not be a symlink")
 	}
 	return os.ReadDir(dir)
+}
+
+func rejectSymlinkUnderDir(root, rel string) error {
+	clean := filepath.Clean(rel)
+	if clean == "." || strings.HasPrefix(clean, ".."+string(filepath.Separator)) || filepath.IsAbs(clean) {
+		return errors.New("path escapes root")
+	}
+	cur := root
+	for _, part := range strings.Split(clean, string(filepath.Separator)) {
+		if part == "" || part == "." {
+			continue
+		}
+		cur = filepath.Join(cur, part)
+		info, err := os.Lstat(cur)
+		if err != nil {
+			if errors.Is(err, os.ErrNotExist) {
+				return nil
+			}
+			return err
+		}
+		if info.Mode()&os.ModeSymlink != 0 {
+			return errors.New("durable path must not contain symlinks")
+		}
+	}
+	return nil
 }
 
 func durableDirEntryIsSymlink(ent os.DirEntry) bool {

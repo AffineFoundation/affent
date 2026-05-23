@@ -117,6 +117,24 @@ func TestHandleSessionArtifacts_ListSkipsSymlinks(t *testing.T) {
 	}
 }
 
+func TestHandleSessionArtifacts_MissingArtifactReturns404(t *testing.T) {
+	memRoot := t.TempDir()
+	pool := artifactTestPool(t, memRoot)
+	sessionID := "artifact-missing"
+	root := filepath.Join(memRoot, sessionID, filepath.FromSlash(artifactPathPrefix))
+	if err := os.MkdirAll(root, 0o755); err != nil {
+		t.Fatal(err)
+	}
+
+	rel := path.Join(artifactPathPrefix, "missing.txt")
+	r := httptest.NewRequest(http.MethodGet, "/v1/sessions/"+sessionID+"/artifacts/"+rel, nil)
+	w := httptest.NewRecorder()
+	handleSessionArtifacts(pool, sessionID, "/"+rel, w, r)
+	if got := w.Result().StatusCode; got != http.StatusNotFound {
+		t.Fatalf("status = %d, want 404: %s", got, w.Body.String())
+	}
+}
+
 func TestHandleSessionArtifacts_RejectsTraversalAndSymlinkEscape(t *testing.T) {
 	memRoot := t.TempDir()
 	pool := artifactTestPool(t, memRoot)
@@ -150,6 +168,30 @@ func TestHandleSessionArtifacts_RejectsTraversalAndSymlinkEscape(t *testing.T) {
 				t.Fatalf("status = %d, want 400: %s", got, w.Body.String())
 			}
 		})
+	}
+}
+
+func TestHandleSessionArtifacts_RejectsSymlinkInsideArtifactRoot(t *testing.T) {
+	memRoot := t.TempDir()
+	pool := artifactTestPool(t, memRoot)
+	sessionID := "artifact-link-inside"
+	root := filepath.Join(memRoot, sessionID, filepath.FromSlash(artifactPathPrefix))
+	if err := os.MkdirAll(root, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(root, "real.txt"), []byte("real"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink(filepath.Join(root, "real.txt"), filepath.Join(root, "alias.txt")); err != nil {
+		t.Skipf("symlink not available: %v", err)
+	}
+
+	rel := path.Join(artifactPathPrefix, "alias.txt")
+	r := httptest.NewRequest(http.MethodGet, "/v1/sessions/"+sessionID+"/artifacts/"+rel, nil)
+	w := httptest.NewRecorder()
+	handleSessionArtifacts(pool, sessionID, "/"+rel, w, r)
+	if got := w.Result().StatusCode; got != http.StatusBadRequest {
+		t.Fatalf("status = %d, want 400: %s", got, w.Body.String())
 	}
 }
 

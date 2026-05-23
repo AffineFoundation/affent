@@ -139,6 +139,42 @@ func TestHandleSessionTranscripts_RejectsSymlinkEscape(t *testing.T) {
 	}
 }
 
+func TestHandleSessionTranscripts_RejectsSymlinkInsideTranscriptRoot(t *testing.T) {
+	pool := newTestPool(t, 4, "5m")
+	root := filepath.Join(pool.sessionDirPath("safe"), "focused-tasks", "safe")
+	if err := os.MkdirAll(root, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(root, "real.jsonl"), []byte("real\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink(filepath.Join(root, "real.jsonl"), filepath.Join(root, "alias.jsonl")); err != nil {
+		t.Skipf("symlink unavailable: %v", err)
+	}
+
+	r := httptest.NewRequest(http.MethodGet, "/v1/sessions/safe/transcripts/focused-tasks/safe/alias.jsonl", nil)
+	w := httptest.NewRecorder()
+	handleSessionRoutes(pool).ServeHTTP(w, r)
+	if got := w.Result().StatusCode; got != http.StatusBadRequest {
+		t.Fatalf("status = %d, want 400; body=%s", got, w.Body.String())
+	}
+}
+
+func TestHandleSessionTranscripts_MissingTranscriptReturns404(t *testing.T) {
+	pool := newTestPool(t, 4, "5m")
+	root := filepath.Join(pool.sessionDirPath("safe"), "focused-tasks", "safe")
+	if err := os.MkdirAll(root, 0o755); err != nil {
+		t.Fatal(err)
+	}
+
+	r := httptest.NewRequest(http.MethodGet, "/v1/sessions/safe/transcripts/focused-tasks/safe/missing.jsonl", nil)
+	w := httptest.NewRecorder()
+	handleSessionRoutes(pool).ServeHTTP(w, r)
+	if got := w.Result().StatusCode; got != http.StatusNotFound {
+		t.Fatalf("status = %d, want 404; body=%s", got, w.Body.String())
+	}
+}
+
 func TestHandleSessionTranscripts_MissingSession(t *testing.T) {
 	pool := newTestPool(t, 4, "5m")
 	r := httptest.NewRequest(http.MethodGet, "/v1/sessions/missing/transcripts", nil)

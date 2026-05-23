@@ -168,6 +168,9 @@ func cleanArtifactRequestPath(raw string) (string, error) {
 func resolveSessionArtifactPath(sessionDir, rel string) (string, error) {
 	root := filepath.Join(sessionDir, filepath.FromSlash(artifactPathPrefix))
 	full := filepath.Join(sessionDir, filepath.FromSlash(rel))
+	if err := rejectSymlinkUnderDir(sessionDir, filepath.FromSlash(rel)); err != nil {
+		return "", err
+	}
 	rootAbs, err := filepath.Abs(root)
 	if err != nil {
 		return "", err
