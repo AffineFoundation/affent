@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"os"
 	"os/signal"
+	"path/filepath"
 	"strings"
 	"syscall"
 	"time"
@@ -135,7 +136,7 @@ func prepareRunExecutePlan(b *loopBundle, prompt string) (string, error) {
 	if b == nil || strings.TrimSpace(b.workspace) == "" || strings.TrimSpace(b.sessionID) == "" {
 		return "", fmt.Errorf("session plan is not available")
 	}
-	summary := currentSessionPlanSummary(b)
+	summary := runSessionPlanSummary(b)
 	switch {
 	case summary.Error:
 		return "", fmt.Errorf("session %q has an unreadable plan; inspect or clear it with affentctl sessions --plan/--clear-plan", b.sessionID)
@@ -154,6 +155,14 @@ func prepareRunExecutePlan(b *loopBundle, prompt string) (string, error) {
 		prompt = "Proceed with the active persisted plan."
 	}
 	return runExecutePlanPrompt(prompt, summary.Label), nil
+}
+
+func runSessionPlanSummary(b *loopBundle) planstate.Summary {
+	if b == nil {
+		return planstate.ErrorSummary()
+	}
+	convDir := filepath.Join(b.workspace, ".affentctl")
+	return localSessionPlanSummary(convDir, b.sessionID)
 }
 
 func runExecutePlanPrompt(request, label string) string {
