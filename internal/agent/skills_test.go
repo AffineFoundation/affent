@@ -550,8 +550,17 @@ func TestUserConfirmedRuntimeSkillProposalHandlesNoProblem(t *testing.T) {
 	if !userTextConfirmsRuntimeSkillProposal("no problem, install proposal_id=0123456789abcdef", proposalID) {
 		t.Fatal("no problem with install should count as confirmation")
 	}
+	if !userTextConfirmsRuntimeSkillProposal("sure, proposal_id=0123456789abcdef", proposalID) {
+		t.Fatal("sure with proposal id should count as confirmation")
+	}
+	if !userTextConfirmsRuntimeSkillProposal("sounds good, proposal_id=0123456789abcdef", proposalID) {
+		t.Fatal("sounds good with proposal id should count as confirmation")
+	}
 	if userTextConfirmsRuntimeSkillProposal("no problem, do not install proposal_id=0123456789abcdef", proposalID) {
 		t.Fatal("explicit rejection must override no problem")
+	}
+	if userTextConfirmsRuntimeSkillProposal("not sure, proposal_id=0123456789abcdef", proposalID) {
+		t.Fatal("not sure should not confirm proposal")
 	}
 	if userTextConfirmsRuntimeSkillProposal("no, proposal_id=0123456789abcdef", proposalID) {
 		t.Fatal("plain no should not confirm proposal")

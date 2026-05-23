@@ -640,7 +640,7 @@ func userTextConfirmsRuntimeSkillProposal(text, proposalID string) bool {
 		return false
 	}
 	for _, phrase := range []string{
-		"do not", "don't", "dont", "not install", "cancel", "reject", "no ",
+		"do not", "don't", "dont", "not install", "not sure", "cancel", "reject", "no ",
 		"不要", "别", "不安装", "取消", "拒绝", "不同意",
 	} {
 		if strings.Contains(lower, phrase) {
@@ -651,7 +651,7 @@ func userTextConfirmsRuntimeSkillProposal(text, proposalID string) bool {
 		}
 	}
 	for _, phrase := range []string{
-		"confirm", "confirmed", "approve", "approved", "install", "yes", "ok", "okay", "go ahead", "proceed", "no problem", "no worries",
+		"confirm", "confirmed", "approve", "approved", "install", "yes", "ok", "okay", "sure", "sounds good", "go ahead", "proceed", "no problem", "no worries",
 		"确认", "同意", "批准", "安装", "可以", "继续", "没问题",
 	} {
 		if strings.Contains(lower, phrase) {
