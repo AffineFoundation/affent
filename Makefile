@@ -16,6 +16,8 @@ SERVE_ARGS ?=
 SERVE_LISTEN ?= 0.0.0.0:7777
 SERVE_PUBLISH ?= 127.0.0.1:7777:7777
 SERVE_HEALTH_URL ?= http://127.0.0.1:7777/healthz
+SERVE_HEALTH_ATTEMPTS ?= 30
+SERVE_HEALTH_INTERVAL ?= 1
 SERVE_CONTAINER_NAME ?= affent-serve
 SERVE_WORKSPACE_ROOT ?= /workspace/sessions
 SERVE_MEMORY_ROOT ?= /workspace/session-state
@@ -41,7 +43,7 @@ if test "$$label" != "true"; then \
 fi
 endef
 
-.PHONY: affentctl affentctl-local doctor sandbox-start sandbox-status sandbox-stop image-build image-run image-serve image-serve-status image-serve-health image-serve-logs image-serve-stop image-serve-restart eval-container test-container
+.PHONY: affentctl affentctl-local doctor sandbox-start sandbox-status sandbox-stop image-build image-run image-serve image-serve-status image-serve-health image-serve-health-wait image-serve-logs image-serve-stop image-serve-restart eval-container test-container
 
 affentctl:
 	mkdir -p "$(dir $(AFFENTCTL))" .tmp/go-build .tmp/go-mod
@@ -94,6 +96,20 @@ image-serve-status:
 image-serve-health:
 	@$(call require_affent_runtime_container,image-serve-health)
 	curl -fsS "$(SERVE_HEALTH_URL)"
+
+image-serve-health-wait:
+	@$(call require_affent_runtime_container,image-serve-health-wait); \
+	attempt=1; \
+	while test "$$attempt" -le "$(SERVE_HEALTH_ATTEMPTS)"; do \
+		if curl -fsS "$(SERVE_HEALTH_URL)"; then \
+			exit 0; \
+		fi; \
+		echo "health check failed ($$attempt/$(SERVE_HEALTH_ATTEMPTS)); retrying in $(SERVE_HEALTH_INTERVAL)s" >&2; \
+		attempt=$$((attempt + 1)); \
+		sleep "$(SERVE_HEALTH_INTERVAL)"; \
+	done; \
+	echo "health check failed after $(SERVE_HEALTH_ATTEMPTS) attempts: $(SERVE_HEALTH_URL)" >&2; \
+	exit 1
 
 image-serve-logs:
 	@$(call require_affent_runtime_container,image-serve-logs)
