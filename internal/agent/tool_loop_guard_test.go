@@ -3,6 +3,7 @@ package agent
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"strings"
 	"testing"
 )
@@ -106,5 +107,47 @@ func TestRegistryDispatch_CanonicalizesToolNameAliases(t *testing.T) {
 	}
 	if !called {
 		t.Fatal("canonicalized tool was not executed")
+	}
+}
+
+func TestRegistryDispatch_SchemaLessToolErrorGetsNextStep(t *testing.T) {
+	reg := NewRegistry()
+	reg.Add(&Tool{
+		Name: "remote_tool",
+		Execute: func(ctx context.Context, args json.RawMessage) (string, error) {
+			return "", errors.New("remote failed")
+		},
+	})
+
+	out, isErr := reg.dispatch(context.Background(), "remote_tool", json.RawMessage(`{"q":"x"}`))
+	if !isErr {
+		t.Fatal("tool failure should be an error")
+	}
+	if !strings.Contains(out, "Error: remote failed") {
+		t.Fatalf("expected tool error, got %q", out)
+	}
+	if !strings.Contains(out, "Next:") || !strings.Contains(out, "do not repeat the same failing call unchanged") {
+		t.Fatalf("schema-less tool error should include recovery guidance, got %q", out)
+	}
+}
+
+func TestRegistryDispatch_SchemaLessToolErrorKeepsExistingNextStep(t *testing.T) {
+	reg := NewRegistry()
+	reg.Add(&Tool{
+		Name: "remote_tool",
+		Execute: func(ctx context.Context, args json.RawMessage) (string, error) {
+			return "", errors.New("bad input\nNext: retry with a query")
+		},
+	})
+
+	out, isErr := reg.dispatch(context.Background(), "remote_tool", json.RawMessage(`{}`))
+	if !isErr {
+		t.Fatal("tool failure should be an error")
+	}
+	if got := strings.Count(out, "Next:"); got != 1 {
+		t.Fatalf("expected one Next step, got %d in %q", got, out)
+	}
+	if strings.Contains(out, "do not repeat the same failing call unchanged") {
+		t.Fatalf("existing Next step should not get fallback guidance, got %q", out)
 	}
 }

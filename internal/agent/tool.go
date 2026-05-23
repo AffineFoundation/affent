@@ -186,13 +186,28 @@ func (r *Registry) dispatch(ctx context.Context, name string, args json.RawMessa
 	}()
 	res, err := t.Execute(ctx, args)
 	if err != nil {
-		help := toolErrorHelp(t, args)
+		help := toolDispatchErrorHelp(t, args, err, res)
 		if res != "" {
 			return fmt.Sprintf("Error: %s\n%s%s", err, res, help), true
 		}
 		return fmt.Sprintf("Error: %s%s", err, help), true
 	}
 	return res, false
+}
+
+func toolDispatchErrorHelp(t *Tool, args json.RawMessage, err error, res string) string {
+	help := toolErrorHelp(t, args)
+	if help != "" || toolErrorAlreadyGuided(err, res) {
+		return help
+	}
+	return "\nNext: read the error, change the arguments or choose a different tool; do not repeat the same failing call unchanged."
+}
+
+func toolErrorAlreadyGuided(err error, res string) bool {
+	if err != nil && strings.Contains(err.Error(), "Next:") {
+		return true
+	}
+	return strings.Contains(res, "Next:")
 }
 
 func levenshtein(a, b string) int {
