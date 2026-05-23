@@ -932,10 +932,16 @@ func (p *SessionPool) sweepRetentionOnce() {
 	}
 }
 
-// Shutdown closes every session and stops the GC goroutine. Safe to
-// call multiple times. Marks the pool as shutting-down before
-// snapshotting sessions so any concurrent GetOrCreate fails fast with
-// ErrShuttingDown instead of creating sessions that nobody will close.
+// Shutdown closes every live in-memory session and stops the GC
+// goroutines. Safe to call multiple times. It deliberately preserves
+// durable session dirs (conversation log + memory + runtime skills):
+// process shutdown and container restart must not behave like an
+// explicit user DELETE. Durable state is removed only through Delete
+// or the retention sweeper.
+//
+// Marks the pool as shutting-down before snapshotting sessions so any
+// concurrent GetOrCreate fails fast with ErrShuttingDown instead of
+// creating sessions that nobody will close.
 // IsShuttingDown reports whether Shutdown has begun. Used by /healthz
 // so a fronting load balancer can drain new traffic the moment a
 // graceful shutdown starts, before in-flight sessions finish closing.
@@ -978,9 +984,10 @@ func (p *SessionPool) Shutdown() {
 		// requests at a dying server during that window.
 		p.mu.Lock()
 		p.shuttingDown = true
-		ids := make([]string, 0, len(p.sessions))
-		for id := range p.sessions {
-			ids = append(ids, id)
+		sessions := make(map[string]*Session, len(p.sessions))
+		for id, s := range p.sessions {
+			sessions[id] = s
+			delete(p.sessions, id)
 		}
 		p.mu.Unlock()
 
@@ -992,12 +999,14 @@ func (p *SessionPool) Shutdown() {
 		}
 
 		var wg sync.WaitGroup
-		for _, id := range ids {
+		for id, s := range sessions {
 			wg.Add(1)
-			go func(id string) {
+			go func(id string, s *Session) {
 				defer wg.Done()
-				p.Delete(id)
-			}(id)
+				if err := s.Close(); err != nil {
+					p.logger.Warn().Err(err).Str("session_id", id).Msg("session close")
+				}
+			}(id, s)
 		}
 		wg.Wait()
 	})

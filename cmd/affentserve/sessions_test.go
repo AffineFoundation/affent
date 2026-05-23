@@ -343,6 +343,53 @@ func TestSessionPool_ConversationLogIsDurable(t *testing.T) {
 	}
 }
 
+func TestSessionPool_ShutdownPreservesDurableState(t *testing.T) {
+	memRoot := t.TempDir()
+	cfg := Config{
+		Listen:         "127.0.0.1:0",
+		MaxSessions:    4,
+		SessionIdleTTL: "5m",
+		WorkspaceRoot:  t.TempDir(),
+		MemoryRoot:     memRoot,
+		BaseURL:        "http://127.0.0.1:0",
+		APIKey:         "test",
+		Model:          "fake",
+	}
+	pool, err := NewSessionPool(cfg, zerolog.New(io.Discard))
+	if err != nil {
+		t.Fatalf("NewSessionPool first: %v", err)
+	}
+	s1, err := pool.GetOrCreate("shutdown-durable")
+	if err != nil {
+		t.Fatalf("GetOrCreate first: %v", err)
+	}
+	if err := s1.conv.Append(agent.ChatMessage{Role: "user", Content: "survives graceful shutdown"}); err != nil {
+		t.Fatalf("Append: %v", err)
+	}
+
+	pool.Shutdown()
+	convPath := filepath.Join(memRoot, "shutdown-durable", "conversation.jsonl")
+	if _, err := os.Stat(convPath); err != nil {
+		t.Fatalf("Shutdown must preserve durable conversation log: %v", err)
+	}
+
+	pool2, err := NewSessionPool(cfg, zerolog.New(io.Discard))
+	if err != nil {
+		t.Fatalf("NewSessionPool second: %v", err)
+	}
+	t.Cleanup(pool2.Shutdown)
+	s2, err := pool2.GetOrCreate("shutdown-durable")
+	if err != nil {
+		t.Fatalf("GetOrCreate second: %v", err)
+	}
+	for _, m := range s2.conv.Snapshot() {
+		if strings.Contains(m.Content, "survives graceful shutdown") {
+			return
+		}
+	}
+	t.Fatalf("conversation log must reload after graceful shutdown; got %+v", s2.conv.Snapshot())
+}
+
 func TestSessionPool_RuntimeSkillsAreDurable(t *testing.T) {
 	memRoot := t.TempDir()
 	cfg := Config{
