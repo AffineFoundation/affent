@@ -69,9 +69,12 @@ func TestMedianDoesNotMutateInput(t *testing.T) {
 }
 `,
 		},
-		VerifyCommand:     "go test ./...",
-		ExpectedSkill:     "AFFENT ACTIVE SKILL: coding_repair_workflow",
-		RequiredCommands:  []string{`go test`},
+		VerifyCommand:    "go test ./...",
+		ExpectedSkill:    "AFFENT ACTIVE SKILL: coding_repair_workflow",
+		RequiredCommands: []string{`go test`},
+		RequiredCommandCounts: map[string]int{
+			`go test`: 2,
+		},
 		ForbiddenCommands: defaultForbiddenCommands,
 		ProtectedFiles:    []string{"calc/calc_test.go"},
 		MaxTurns:          10,
@@ -214,9 +217,12 @@ func TestResolveInvalidRetriesIsAnError(t *testing.T) {
 }
 `,
 		},
-		VerifyCommand:     "go test ./...",
-		ExpectedSkill:     "AFFENT ACTIVE SKILL: coding_repair_workflow",
-		RequiredCommands:  []string{`go test`},
+		VerifyCommand:    "go test ./...",
+		ExpectedSkill:    "AFFENT ACTIVE SKILL: coding_repair_workflow",
+		RequiredCommands: []string{`go test`},
+		RequiredCommandCounts: map[string]int{
+			`go test`: 2,
+		},
 		ForbiddenCommands: defaultForbiddenCommands,
 		ProtectedFiles:    []string{"config/config_test.go"},
 		MaxTurns:          10,
@@ -272,9 +278,12 @@ def test_unique_slug_uses_first_free_number_after_existing_suffixes():
     assert unique_slug("Report", existing) == "report-3"
 `,
 		},
-		VerifyCommand:     "python3 -m pytest -q",
-		ExpectedSkill:     "AFFENT ACTIVE SKILL: coding_repair_workflow",
-		RequiredCommands:  []string{`python(3)? -m pytest`},
+		VerifyCommand:    "python3 -m pytest -q",
+		ExpectedSkill:    "AFFENT ACTIVE SKILL: coding_repair_workflow",
+		RequiredCommands: []string{`python(3)? -m pytest`},
+		RequiredCommandCounts: map[string]int{
+			`python(3)? -m pytest`: 2,
+		},
 		ForbiddenCommands: defaultForbiddenCommands,
 		ProtectedFiles:    []string{"test_slug.py"},
 		ForbiddenFileSubstrings: map[string][]string{
@@ -349,9 +358,12 @@ func TestRedactSecretsIgnoresEmptySecret(t *testing.T) {
 }
 `,
 		},
-		VerifyCommand:     "go test ./...",
-		ExpectedSkill:     "AFFENT ACTIVE SKILL: coding_repair_workflow",
-		RequiredCommands:  []string{`go test`},
+		VerifyCommand:    "go test ./...",
+		ExpectedSkill:    "AFFENT ACTIVE SKILL: coding_repair_workflow",
+		RequiredCommands: []string{`go test`},
+		RequiredCommandCounts: map[string]int{
+			`go test`: 2,
+		},
 		ForbiddenCommands: defaultForbiddenCommands,
 		ProtectedFiles:    []string{"redactor/redactor_test.go"},
 		MaxTurns:          12,
@@ -405,9 +417,12 @@ def test_parse_config_preserves_empty_values_and_trims_keys():
     assert parse_config(" EMPTY = \nFLAG=true\n") == {"EMPTY": "", "FLAG": "true"}
 `,
 		},
-		VerifyCommand:     "python3 -m pytest -q",
-		ExpectedSkill:     "AFFENT ACTIVE SKILL: coding_repair_workflow",
-		RequiredCommands:  []string{`python(3)? -m pytest`},
+		VerifyCommand:    "python3 -m pytest -q",
+		ExpectedSkill:    "AFFENT ACTIVE SKILL: coding_repair_workflow",
+		RequiredCommands: []string{`python(3)? -m pytest`},
+		RequiredCommandCounts: map[string]int{
+			`python(3)? -m pytest`: 2,
+		},
 		ForbiddenCommands: defaultForbiddenCommands,
 		ProtectedFiles:    []string{"test_parser.py"},
 		ForbiddenFileSubstrings: map[string][]string{

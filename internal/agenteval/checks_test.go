@@ -633,6 +633,39 @@ func TestShellCommandMatching(t *testing.T) {
 	})
 }
 
+func TestShellCommandMatchingAtLeast(t *testing.T) {
+	trace := Trace{Tools: []ToolCall{
+		{Tool: "shell", Args: map[string]any{"command": "python3 -m pytest tests/"}},
+		{Tool: "read_file", Args: map[string]any{"path": "README.md"}},
+		{Tool: "shell", Args: map[string]any{"command": "python -m pytest -q"}},
+		{Tool: "shell", Args: map[string]any{"command": "go test ./..."}},
+	}}
+	t.Run("regex count", func(t *testing.T) {
+		if res := ShellCommandMatchingAtLeast(`python(3)? -m pytest`, 2).Eval(trace); !res.Pass {
+			t.Fatalf("expected two pytest matches: %+v", res)
+		}
+	})
+	t.Run("fails under minimum", func(t *testing.T) {
+		res := ShellCommandMatchingAtLeast(`go test`, 2).Eval(trace)
+		if res.Pass {
+			t.Fatal("expected one go test match below min=2 to fail")
+		}
+		if !strings.Contains(res.Detail, "observed 1") {
+			t.Fatalf("detail should include observed count: %s", res.Detail)
+		}
+	})
+	t.Run("substring fallback", func(t *testing.T) {
+		if res := ShellCommandMatchingAtLeast("go test ./...", 1).Eval(trace); !res.Pass {
+			t.Fatalf("substring fallback should pass: %+v", res)
+		}
+	})
+	t.Run("non-positive minimum passes", func(t *testing.T) {
+		if res := ShellCommandMatchingAtLeast(`missing`, 0).Eval(trace); !res.Pass {
+			t.Fatalf("non-positive min should pass: %+v", res)
+		}
+	})
+}
+
 func TestShellCommandLacksUnguarded(t *testing.T) {
 	t.Run("fails on unguarded forbidden", func(t *testing.T) {
 		trace := Trace{Tools: []ToolCall{

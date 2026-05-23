@@ -488,6 +488,41 @@ func ShellCommandMatching(pattern string) Check {
 	}
 }
 
+func ShellCommandMatchingAtLeast(pattern string, min int) Check {
+	re, reErr := regexp.Compile(pattern)
+	return Check{
+		Name: fmt.Sprintf("shell_command_matching_at_least:%s:%d", previewSubstr(pattern, 48), min),
+		Eval: func(t Trace) CheckResult {
+			if min <= 0 {
+				return CheckResult{Pass: true}
+			}
+			var observed []string
+			matches := 0
+			for _, c := range t.Tools {
+				cmd, ok := c.Args["command"].(string)
+				if !ok || cmd == "" {
+					continue
+				}
+				observed = append(observed, cmd)
+				if reErr == nil {
+					if re.MatchString(cmd) {
+						matches++
+					}
+				} else if strings.Contains(cmd, pattern) {
+					matches++
+				}
+			}
+			if matches >= min {
+				return CheckResult{Pass: true, Detail: fmt.Sprintf("matched %d command(s)", matches)}
+			}
+			return CheckResult{
+				Pass:   false,
+				Detail: fmt.Sprintf("expected at least %d command match(es) %q, observed %d; commands=%v", min, pattern, matches, observed),
+			}
+		},
+	}
+}
+
 // ShellCommandLacksUnguarded is ShellCommandLacks with one important
 // twist: commands that the runtime's shell guard already rejected
 // (exit code != 0 plus a guard-shaped error message) DO NOT count as

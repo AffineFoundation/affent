@@ -35,6 +35,7 @@ type BatchScenario struct {
 	ExpectedSkill                string
 	ForbiddenCommands            []string
 	RequiredCommands             []string
+	RequiredCommandCounts        map[string]int
 	RequiredTools                []string
 	ForbiddenTools               []string
 	RequiredFinalText            []string
@@ -501,6 +502,9 @@ func BatchScenarioChecks(scenario BatchScenario) []Check {
 	}
 	for _, want := range scenario.RequiredCommands {
 		checks = append(checks, ShellCommandMatching(want))
+	}
+	for _, pattern := range sortedStringMapKeys(scenario.RequiredCommandCounts) {
+		checks = append(checks, ShellCommandMatchingAtLeast(pattern, scenario.RequiredCommandCounts[pattern]))
 	}
 	for _, forbidden := range scenario.ForbiddenCommands {
 		checks = append(checks, ShellCommandLacksUnguarded(forbidden))

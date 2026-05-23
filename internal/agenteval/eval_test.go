@@ -173,7 +173,10 @@ func TestBatchScenarioChecks_UsesSharedCheckLibrary(t *testing.T) {
 		MaxSuccessfulToolCallsByTool: map[string]int{
 			"read_file": 1,
 		},
-		RequiredCommands:  []string{`go test`, `gofmt`},
+		RequiredCommands: []string{`go test`, `gofmt`},
+		RequiredCommandCounts: map[string]int{
+			`go test`: 2,
+		},
 		ForbiddenCommands: []string{"| head", "|| true"},
 		ProtectedFiles:    []string{"main_test.go", "doc_test.go"},
 	}
@@ -192,6 +195,7 @@ func TestBatchScenarioChecks_UsesSharedCheckLibrary(t *testing.T) {
 		"max_successful_tool_calls:read_file:1",
 		"shell_command_matching:go test",
 		"shell_command_matching:gofmt",
+		"shell_command_matching_at_least:go test:2",
 		"shell_command_lacks_unguarded:| head",
 		"shell_command_lacks_unguarded:|| true",
 		"file_not_edited:",
@@ -252,6 +256,34 @@ func TestSelectBatchScenariosForSuite(t *testing.T) {
 	}
 	if len(one) != 1 || one[0].Name != "small-tools-wrong-field-read" {
 		t.Fatalf("filtered suite result = %+v", one)
+	}
+}
+
+func TestRepairScenariosRequireRepeatedVerification(t *testing.T) {
+	want := map[string]map[string]int{
+		"coding-go-median":            {`go test`: 2},
+		"coding-go-config-precedence": {`go test`: 2},
+		"coding-python-slug":          {`python(3)? -m pytest`: 2},
+		"coding-go-redaction-overlap": {`go test`: 2},
+		"coding-python-config-parser": {`python(3)? -m pytest`: 2},
+	}
+	seen := map[string]bool{}
+	for _, scenario := range BuiltinBatchScenarios() {
+		counts, ok := want[scenario.Name]
+		if !ok {
+			continue
+		}
+		seen[scenario.Name] = true
+		for pattern, min := range counts {
+			if scenario.RequiredCommandCounts[pattern] != min {
+				t.Fatalf("%s RequiredCommandCounts[%q] = %d, want %d; all counts=%#v", scenario.Name, pattern, scenario.RequiredCommandCounts[pattern], min, scenario.RequiredCommandCounts)
+			}
+		}
+	}
+	for name := range want {
+		if !seen[name] {
+			t.Fatalf("missing repair scenario %s", name)
+		}
 	}
 }
 
