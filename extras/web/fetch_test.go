@@ -426,6 +426,22 @@ func TestSearchTool_EmptyQuery(t *testing.T) {
 	if !strings.Contains(string(tool.Schema), `"minLength": 1`) {
 		t.Fatalf("schema should publish query minLength: %s", tool.Schema)
 	}
+	if !strings.Contains(string(tool.Schema), `"maxLength": 2048`) {
+		t.Fatalf("schema should publish query maxLength: %s", tool.Schema)
+	}
+}
+
+func TestSearchTool_QueryMaxLength(t *testing.T) {
+	tool, _ := SearchTool(SearchConfig{Provider: stubProvider{results: []SearchResult{{Title: "ok"}}}})
+	query := strings.Repeat("x", maxSearchQueryBytes)
+	if _, err := tool.Execute(context.Background(), json.RawMessage(`{"query":"`+query+`"}`)); err != nil {
+		t.Fatalf("max-size query should pass: %v", err)
+	}
+	query += "x"
+	_, err := tool.Execute(context.Background(), json.RawMessage(`{"query":"`+query+`"}`))
+	if err == nil || !strings.Contains(err.Error(), "web_search supports queries up to") {
+		t.Fatalf("expected oversized query error, got %v", err)
+	}
 }
 
 // failingProvider always returns an error, so SearchTool construction

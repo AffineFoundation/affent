@@ -42,6 +42,7 @@ type SearchConfig struct {
 const (
 	defaultSearchResults = 8
 	maxSearchResults     = 20
+	maxSearchQueryBytes  = 2048
 )
 
 // SearchTool returns an agent.Tool that runs a web search and returns
@@ -64,10 +65,10 @@ func SearchTool(cfg SearchConfig) (*agent.Tool, error) {
         "type": "object",
         "required": ["query"],
         "properties": {
-            "query": {"type": "string", "minLength": 1, "description": "Search query (plain English; the tool handles tokenization)."},
+            "query": {"type": "string", "minLength": 1, "maxLength": %d, "description": "Search query (plain English; the tool handles tokenization)."},
             "num_results": {"type": "integer", "description": "How many results to return. Default %d, max %d.", "minimum": 1, "maximum": %d}
         }
-    }`, defaultN, max, max))
+    }`, maxSearchQueryBytes, defaultN, max, max))
 
 	return &agent.Tool{
 		Name: "web_search",
@@ -86,6 +87,9 @@ func SearchTool(cfg SearchConfig) (*agent.Tool, error) {
 			query := strings.TrimSpace(args.Query)
 			if query == "" {
 				return "", errors.New("query is required")
+			}
+			if len(query) > maxSearchQueryBytes {
+				return "", fmt.Errorf("query is %d bytes; web_search supports queries up to %d bytes", len(query), maxSearchQueryBytes)
 			}
 			n := args.NumResults
 			if n <= 0 {
