@@ -69,6 +69,7 @@ type sessionSummary struct {
 }
 
 type sessionCapabilities struct {
+	EvalMode          bool `json:"eval_mode"`
 	Builtins          bool `json:"builtins"`
 	SkillInstall      bool `json:"skill_install"`
 	Plan              bool `json:"plan"`
@@ -435,6 +436,7 @@ func summarizeActiveCapabilities(s *Session, cfg Config) sessionCapabilities {
 	}
 	focusedRegistered := hasTool(agent.FocusedTaskToolName)
 	caps := sessionCapabilities{
+		EvalMode: cfg.EvalMode,
 		Builtins: hasTool("shell") &&
 			hasTool("read_file") &&
 			hasTool("write_file") &&
