@@ -94,6 +94,8 @@ diagnostics.
 - `args_repaired`: optional true when the runtime repaired arguments.
 - `repair_notes`: optional short diagnostics for canonicalization or argument
   repair.
+- `delegation`: optional metadata when the tool call delegates work to a
+  bounded child runtime.
 
 ### `tool.result`
 
@@ -111,6 +113,15 @@ diagnostics.
   In `affentserve`, this path is resolved under the durable session state root
   and exposed via `GET /v1/sessions/{id}/artifacts/{result_artifact_path}` so
   artifacts survive session workspace eviction and container restart.
+- `delegation`: optional metadata mirroring the matching `tool.request` so
+  result-only consumers can classify delegated work without joining events.
+
+`delegation` fields:
+
+- `kind`: stable delegation surface. Known values are `focused_task` and
+  `subagent`.
+- `task_type`: optional focused task type when `kind` is `focused_task`.
+- `mode`: optional subagent mode when `kind` is `subagent`.
 
 ### `usage`
 

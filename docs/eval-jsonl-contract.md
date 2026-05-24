@@ -48,6 +48,15 @@ Scenario records describe one eval case:
 - `tool_results_truncated`: count of event-capped tool results.
 - `tool_results_omitted_bytes`: omitted result bytes across tool events.
 - `tool_result_artifacts`: count of tool result artifact references.
+- `focused_task_calls`: optional number of delegated `run_task` calls.
+- `focused_task_by_type`: optional map of focused task `task_type` to call
+  count.
+- `focused_task_errors`: optional count of focused task calls whose runtime
+  tool exit code was non-zero.
+- `subagent_calls`: optional number of delegated `subagent_run` calls.
+- `subagent_by_mode`: optional map of subagent `mode` to call count.
+- `subagent_errors`: optional count of subagent calls whose runtime tool exit
+  code was non-zero.
 - `verifier_command`: verifier shell command, when configured.
 - `verifier_ran`: whether a verifier command ran.
 - `verifier_ok`: whether the verifier exited successfully.
@@ -80,6 +89,10 @@ Summary records aggregate all scenario records from the same process:
 - Truncation totals: `tool_args_truncated`, `tool_args_omitted_bytes`,
   `tool_results_truncated`, `tool_results_omitted_bytes`,
   `tool_result_artifacts`.
+- Delegation totals: `focused_task_calls`, `focused_task_by_type`,
+  `focused_task_errors`, `subagent_calls`, `subagent_by_mode`,
+  `subagent_errors`. These fields are omitted when no delegated tool calls were
+  observed.
 - Verifier totals: `verifier_runs`, `verifier_passed`, `verifier_failed`,
   `verifier_output_truncated`, `verifier_output_omitted_bytes`.
 - Trace versions: `trace_schema_versions`.
