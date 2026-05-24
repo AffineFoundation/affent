@@ -186,6 +186,11 @@ func TestPrintBatchResultIncludesTraceMetrics(t *testing.T) {
 			SubagentCalls:     1,
 			SubagentByMode:    map[string]int{"review": 1},
 		},
+		Plan: agenteval.PlanStats{
+			Calls:    3,
+			ByAction: map[string]int{"set": 1, "update": 2},
+			Errors:   1,
+		},
 		Usage: agenteval.Usage{InputTokens: 100, OutputTokens: 25},
 	})
 	got := out.String()
@@ -193,7 +198,7 @@ func TestPrintBatchResultIncludesTraceMetrics(t *testing.T) {
 		"PASS sample (1.234s)",
 		"workspace: /tmp/ws (removed)",
 		"trace: /tmp/ws/trace.jsonl",
-		"metrics: tools=3 errors=2 repaired=1 canonicalized=1 loop_guard=2 forced_no_tools=1 tool_ms=45 tokens=100/25 trunc=args:1,results:1,artifacts:1 omitted=512/4096 delegation=focused_tasks:2,subagents:1 focused_task_by_type=explore:1,verify:1 subagent_by_mode=review:1 end=completed",
+		"metrics: tools=3 errors=2 repaired=1 canonicalized=1 loop_guard=2 forced_no_tools=1 tool_ms=45 tokens=100/25 trunc=args:1,results:1,artifacts:1 omitted=512/4096 delegation=focused_tasks:2,subagents:1 focused_task_by_type=explore:1,verify:1 subagent_by_mode=review:1 plan=calls:3,errors:1 plan_by_action=set:1,update:2 end=completed",
 		`verifier: pass exit=0 duration=80ms output=1200 truncated omitted=176 cap=1024 command="go test ./..."`,
 	} {
 		if !strings.Contains(got, want) {
@@ -226,6 +231,10 @@ func TestBatchSummaryAggregatesRuntimeMetrics(t *testing.T) {
 			ArgsTruncated:    1,
 			ArgsOmittedBytes: 128,
 		},
+		Plan: agenteval.PlanStats{
+			Calls:    1,
+			ByAction: map[string]int{"set": 1},
+		},
 		Verifier: agenteval.VerifierResult{Ran: true, OK: true, ExitCode: 0, OutputBytes: 64, OutputCapBytes: 1024},
 		Usage:    agenteval.Usage{InputTokens: 20, OutputTokens: 5},
 	})
@@ -256,6 +265,11 @@ func TestBatchSummaryAggregatesRuntimeMetrics(t *testing.T) {
 			ResultsOmittedBytes: 2048,
 			ResultArtifacts:     1,
 		},
+		Plan: agenteval.PlanStats{
+			Calls:    2,
+			ByAction: map[string]int{"update": 2},
+			Errors:   1,
+		},
 		Verifier: agenteval.VerifierResult{
 			Ran:                true,
 			OK:                 false,
@@ -277,6 +291,9 @@ func TestBatchSummaryAggregatesRuntimeMetrics(t *testing.T) {
 	if !strings.Contains(out.String(), "repair_kinds=alias_rename:2,tool_name:1,type_coercion:2") {
 		t.Fatalf("summary output missing repair kind rollup:\n%s", out.String())
 	}
+	if !strings.Contains(out.String(), "plan=calls:3,errors:1 plan_by_action=set:1,update:2") {
+		t.Fatalf("summary output missing plan rollup:\n%s", out.String())
+	}
 	if summary.TraceSchemaVersions[1] != 2 {
 		t.Fatalf("TraceSchemaVersions = %#v, want version 1 count 2", summary.TraceSchemaVersions)
 	}
@@ -286,6 +303,12 @@ func TestBatchSummaryAggregatesRuntimeMetrics(t *testing.T) {
 	wantRepairKinds := map[string]int{"tool_name": 1, "alias_rename": 2, "type_coercion": 2}
 	if !reflect.DeepEqual(summary.ToolRepairByKind, wantRepairKinds) {
 		t.Fatalf("ToolRepairByKind = %#v, want %#v", summary.ToolRepairByKind, wantRepairKinds)
+	}
+	if summary.PlanCalls != 3 || summary.PlanErrors != 1 {
+		t.Fatalf("plan counts = calls:%d errors:%d, want 3/1", summary.PlanCalls, summary.PlanErrors)
+	}
+	if !reflect.DeepEqual(summary.PlanByAction, map[string]int{"set": 1, "update": 2}) {
+		t.Fatalf("PlanByAction = %#v", summary.PlanByAction)
 	}
 }
 
@@ -319,6 +342,11 @@ func TestPrintBatchResultJSONL(t *testing.T) {
 		Repair: agenteval.ToolRepairStats{
 			Notes:  3,
 			ByKind: map[string]int{"alias_rename": 2, "type_coercion": 1},
+		},
+		Plan: agenteval.PlanStats{
+			Calls:    2,
+			ByAction: map[string]int{"set": 1, "update": 1},
+			Errors:   1,
 		},
 		Verifier: agenteval.VerifierResult{
 			Command:            "go test ./...",
@@ -377,6 +405,8 @@ func TestPrintBatchResultJSONL(t *testing.T) {
 		"input_tokens":                  float64(200),
 		"output_tokens":                 float64(50),
 		"workspace_removed":             true,
+		"plan_calls":                    float64(2),
+		"plan_errors":                   float64(1),
 	} {
 		if got[key] != want {
 			t.Fatalf("%s = %v, want %v\njson=%s", key, got[key], want, out.String())
@@ -394,6 +424,13 @@ func TestPrintBatchResultJSONL(t *testing.T) {
 	}
 	if repairKinds["alias_rename"] != float64(2) || repairKinds["type_coercion"] != float64(1) {
 		t.Fatalf("tool_repair_by_kind = %#v", repairKinds)
+	}
+	planByAction, ok := got["plan_by_action"].(map[string]any)
+	if !ok {
+		t.Fatalf("plan_by_action missing or wrong type: %#v\njson=%s", got["plan_by_action"], out.String())
+	}
+	if planByAction["set"] != float64(1) || planByAction["update"] != float64(1) {
+		t.Fatalf("plan_by_action = %#v", planByAction)
 	}
 }
 
@@ -579,6 +616,29 @@ func TestPrintBatchResultJSONL_OmitsDelegationForNonDelegating(t *testing.T) {
 	}
 }
 
+func TestPrintBatchResultJSONL_OmitsPlanForNoPlanCalls(t *testing.T) {
+	var out bytes.Buffer
+	printBatchResultJSONL(&out, testEvalJSONLMetadata(), agenteval.BatchResult{
+		BatchScenario:      "plain",
+		Workspace:          "/tmp/ws",
+		TracePath:          "/tmp/ws/trace.jsonl",
+		OK:                 true,
+		Duration:           1 * time.Second,
+		TraceSchemaVersion: 1,
+		TurnEndReason:      "completed",
+	})
+	got := out.String()
+	for _, field := range []string{
+		`"plan_calls"`,
+		`"plan_by_action"`,
+		`"plan_errors"`,
+	} {
+		if strings.Contains(got, field) {
+			t.Errorf("no-plan scenario record must not include %s\n%s", field, got)
+		}
+	}
+}
+
 func TestPrintBatchSummaryJSONL(t *testing.T) {
 	var out bytes.Buffer
 	printBatchSummaryJSONL(&out, testEvalJSONLMetadata(), batchSummary{
@@ -615,6 +675,9 @@ func TestPrintBatchSummaryJSONL(t *testing.T) {
 		EndUnknown:                 0,
 		FailureKinds:               map[string]int{"missing_command": 1, "turn_end": 1},
 		RemovedWorkspaces:          1,
+		PlanCalls:                  3,
+		PlanByAction:               map[string]int{"set": 1, "update": 2},
+		PlanErrors:                 1,
 	})
 
 	var got map[string]any
@@ -661,6 +724,8 @@ func TestPrintBatchSummaryJSONL(t *testing.T) {
 		"end_unknown":                   float64(0),
 		"removed_workspaces":            float64(1),
 		"cleanup_errors":                float64(0),
+		"plan_calls":                    float64(3),
+		"plan_errors":                   float64(1),
 	} {
 		if got[key] != want {
 			t.Fatalf("%s = %v, want %v\njson=%s", key, got[key], want, out.String())
@@ -686,6 +751,13 @@ func TestPrintBatchSummaryJSONL(t *testing.T) {
 	}
 	if repairKinds["tool_name"] != float64(2) || repairKinds["malformed_json"] != float64(1) || repairKinds["type_coercion"] != float64(1) {
 		t.Fatalf("tool_repair_by_kind = %#v", repairKinds)
+	}
+	planByAction, ok := got["plan_by_action"].(map[string]any)
+	if !ok {
+		t.Fatalf("plan_by_action missing or wrong type: %#v\njson=%s", got["plan_by_action"], out.String())
+	}
+	if planByAction["set"] != float64(1) || planByAction["update"] != float64(2) {
+		t.Fatalf("plan_by_action = %#v", planByAction)
 	}
 }
 

@@ -177,6 +177,12 @@ type batchSummary struct {
 	SubagentCalls     int
 	SubagentByMode    map[string]int
 	SubagentErrors    int
+
+	// Plan aggregates persisted-plan tool usage across scenarios.
+	// Zero-valued when no scenario used the plan tool.
+	PlanCalls    int
+	PlanByAction map[string]int
+	PlanErrors   int
 }
 
 func (s *batchSummary) add(res agenteval.BatchResult) {
@@ -265,6 +271,15 @@ func (s *batchSummary) add(res agenteval.BatchResult) {
 		}
 		s.SubagentByMode[k] += v
 	}
+	p := res.Plan
+	s.PlanCalls += p.Calls
+	s.PlanErrors += p.Errors
+	for k, v := range p.ByAction {
+		if s.PlanByAction == nil {
+			s.PlanByAction = map[string]int{}
+		}
+		s.PlanByAction[k] += v
+	}
 	for _, failure := range res.Failures {
 		if s.FailureKinds == nil {
 			s.FailureKinds = map[string]int{}
@@ -311,6 +326,7 @@ func printBatchSummary(w io.Writer, s batchSummary) {
 		fmt.Fprintf(w, " repair_kinds=%s", formatStringIntCounts(s.ToolRepairByKind))
 	}
 	printDelegationRollup(w, s.FocusedTaskCalls, s.FocusedTaskByType, s.SubagentCalls, s.SubagentByMode)
+	printPlanRollup(w, s.PlanCalls, s.PlanByAction, s.PlanErrors)
 	fmt.Fprintln(w)
 }
 
@@ -324,6 +340,16 @@ func printDelegationRollup(w io.Writer, focusedTaskCalls int, focusedTaskByType 
 	}
 	if len(subagentByMode) > 0 {
 		fmt.Fprintf(w, " subagent_by_mode=%s", formatStringIntCounts(subagentByMode))
+	}
+}
+
+func printPlanRollup(w io.Writer, calls int, byAction map[string]int, errors int) {
+	if calls == 0 {
+		return
+	}
+	fmt.Fprintf(w, " plan=calls:%d,errors:%d", calls, errors)
+	if len(byAction) > 0 {
+		fmt.Fprintf(w, " plan_by_action=%s", formatStringIntCounts(byAction))
 	}
 }
 
@@ -434,6 +460,12 @@ type batchResultRecord struct {
 	SubagentCalls     int            `json:"subagent_calls,omitempty"`
 	SubagentByMode    map[string]int `json:"subagent_by_mode,omitempty"`
 	SubagentErrors    int            `json:"subagent_errors,omitempty"`
+
+	// Per-scenario plan-tool breakdown. Fields are omitted from the
+	// JSONL when the scenario did not call the plan tool.
+	PlanCalls    int            `json:"plan_calls,omitempty"`
+	PlanByAction map[string]int `json:"plan_by_action,omitempty"`
+	PlanErrors   int            `json:"plan_errors,omitempty"`
 }
 
 type batchSummaryRecord struct {
@@ -483,6 +515,11 @@ type batchSummaryRecord struct {
 	SubagentCalls     int            `json:"subagent_calls,omitempty"`
 	SubagentByMode    map[string]int `json:"subagent_by_mode,omitempty"`
 	SubagentErrors    int            `json:"subagent_errors,omitempty"`
+
+	// Per-batch plan-tool aggregates. Omitted when no scenario used plan.
+	PlanCalls    int            `json:"plan_calls,omitempty"`
+	PlanByAction map[string]int `json:"plan_by_action,omitempty"`
+	PlanErrors   int            `json:"plan_errors,omitempty"`
 }
 
 func printBatchResultJSONL(w io.Writer, meta evalJSONLMetadata, res agenteval.BatchResult) {
@@ -531,6 +568,9 @@ func printBatchResultJSONL(w io.Writer, meta evalJSONLMetadata, res agenteval.Ba
 		SubagentCalls:              res.Delegation.SubagentCalls,
 		SubagentByMode:             res.Delegation.SubagentByMode,
 		SubagentErrors:             res.Delegation.SubagentErrors,
+		PlanCalls:                  res.Plan.Calls,
+		PlanByAction:               cloneStringIntMap(res.Plan.ByAction),
+		PlanErrors:                 res.Plan.Errors,
 	})
 }
 
@@ -578,6 +618,9 @@ func printBatchSummaryJSONL(w io.Writer, meta evalJSONLMetadata, s batchSummary)
 		SubagentCalls:              s.SubagentCalls,
 		SubagentByMode:             cloneStringIntMap(s.SubagentByMode),
 		SubagentErrors:             s.SubagentErrors,
+		PlanCalls:                  s.PlanCalls,
+		PlanByAction:               cloneStringIntMap(s.PlanByAction),
+		PlanErrors:                 s.PlanErrors,
 	})
 }
 
@@ -673,6 +716,7 @@ func printBatchResult(w io.Writer, res agenteval.BatchResult) {
 		fmt.Fprintf(w, " repair_kinds=%s", formatStringIntCounts(res.Repair.ByKind))
 	}
 	printDelegationRollup(w, res.Delegation.FocusedTaskCalls, res.Delegation.FocusedTaskByType, res.Delegation.SubagentCalls, res.Delegation.SubagentByMode)
+	printPlanRollup(w, res.Plan.Calls, res.Plan.ByAction, res.Plan.Errors)
 	if res.TurnEndReason != "" {
 		fmt.Fprintf(w, " end=%s", res.TurnEndReason)
 	}

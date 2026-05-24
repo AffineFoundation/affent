@@ -57,6 +57,11 @@ Scenario records describe one eval case:
 - `subagent_by_mode`: optional map of subagent `mode` to call count.
 - `subagent_errors`: optional count of subagent calls whose runtime tool exit
   code was non-zero.
+- `plan_calls`: optional number of persisted-plan tool calls.
+- `plan_by_action`: optional map of plan action (`view`, `set`, `update`,
+  `clear`, or `unknown`) to call count.
+- `plan_errors`: optional count of plan tool calls whose runtime tool exit code
+  was non-zero.
 - `verifier_command`: verifier shell command, when configured.
 - `verifier_ran`: whether a verifier command ran.
 - `verifier_ok`: whether the verifier exited successfully.
@@ -93,6 +98,8 @@ Summary records aggregate all scenario records from the same process:
   `focused_task_errors`, `subagent_calls`, `subagent_by_mode`,
   `subagent_errors`. These fields are omitted when no delegated tool calls were
   observed.
+- Plan totals: `plan_calls`, `plan_by_action`, `plan_errors`. These fields are
+  omitted when no plan tool calls were observed.
 - Verifier totals: `verifier_runs`, `verifier_passed`, `verifier_failed`,
   `verifier_output_truncated`, `verifier_output_omitted_bytes`.
 - Trace versions: `trace_schema_versions`.
