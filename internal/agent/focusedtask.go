@@ -199,26 +199,96 @@ func (d FocusedTaskDeps) resolveProfileRegistry() *FocusedTaskProfileRegistry {
 	return d.ProfileRegistry
 }
 
+// FocusedTaskAvailabilityProbe is the capability matrix the
+// focused-task availability rules read. It mirrors the presence of
+// FocusedTaskDeps fields without requiring concrete implementations,
+// so diagnostic surfaces (affentctl doctor, affentserve startup
+// logging) can ask "which task_type values would the model see
+// today?" without allocating an LLM client, an executor, or a memory
+// store.
+//
+// The probe is the single source of truth: FocusedTaskDeps converts
+// itself into a probe via Probe() and bottoms out in the same
+// ProfileAvailable logic, so live-wiring and diagnostic-wiring can
+// never drift on which capabilities count for which profile.
+type FocusedTaskAvailabilityProbe struct {
+	HasLLM       bool
+	HasWorkspace bool
+	HasExecutor  bool
+	HasMemory    bool
+	HasSessions  bool
+	HasWeb       bool
+	HasBrowser   bool
+}
+
+// ProfileAvailable reports whether at least one capability the
+// profile declares can be satisfied by this probe. The single source
+// of truth for "is profile P usable under capability set X?" —
+// FocusedTaskDeps.profileAvailable delegates here.
+func (p FocusedTaskAvailabilityProbe) ProfileAvailable(profile FocusedTaskProfile) bool {
+	pol := profile.Tools
+	return (pol.AllowReadFile && p.HasWorkspace) ||
+		(pol.AllowListFiles && p.HasWorkspace) ||
+		(pol.AllowReadOnlyShell && p.HasExecutor) ||
+		(pol.AllowMemory && p.HasMemory) ||
+		(pol.AllowSessionSearch && p.HasSessions) ||
+		(pol.AllowWeb && p.HasWeb) ||
+		(pol.AllowBrowser && p.HasBrowser)
+}
+
+// AvailableKinds returns the FocusedTaskKind values that would be
+// exposed to the model under this probe. reg nil falls back to the
+// package's default profile registry (the only realistic deployment
+// surface today). Returns nil when LLM or workspace is missing — the
+// same RegisterFocusedTasks early-return guards.
+func (p FocusedTaskAvailabilityProbe) AvailableKinds(reg *FocusedTaskProfileRegistry) []FocusedTaskKind {
+	if !p.HasLLM || !p.HasWorkspace {
+		return nil
+	}
+	if reg == nil || len(reg.profiles) == 0 {
+		reg = defaultFocusedTaskProfileRegistry
+	}
+	var out []FocusedTaskKind
+	for _, profile := range reg.profiles {
+		if p.ProfileAvailable(profile) {
+			out = append(out, profile.Kind)
+		}
+	}
+	return out
+}
+
+// Probe converts the deps into a capability matrix. Boolean per
+// field instead of pointer-vs-nil so diagnostic callers can construct
+// the same probe by inspecting their own configuration without
+// having to invent stub LLM / executor / memory values.
+func (d FocusedTaskDeps) Probe() FocusedTaskAvailabilityProbe {
+	return FocusedTaskAvailabilityProbe{
+		HasLLM:       d.LLM != nil,
+		HasWorkspace: d.HostWorkspaceDir != "",
+		HasExecutor:  d.Executor != nil,
+		HasMemory:    d.Memory != nil,
+		HasSessions:  d.SessionsDir != "",
+		HasWeb:       d.RegisterWebTools != nil,
+		HasBrowser:   d.RegisterBrowserTools != nil,
+	}
+}
+
 // profileAvailable returns true iff at least one capability the
 // profile declares can be satisfied by the current deps. A profile
 // that declares no capabilities is unavailable — a focused task with
-// zero tools cannot do useful work.
+// zero tools cannot do useful work. Bottoms out in
+// FocusedTaskAvailabilityProbe.ProfileAvailable so live wiring and
+// diagnostic probes apply identical rules.
 func (d FocusedTaskDeps) profileAvailable(p FocusedTaskProfile) bool {
-	pol := p.Tools
-	return (pol.AllowReadFile && d.HostWorkspaceDir != "") ||
-		(pol.AllowListFiles && d.HostWorkspaceDir != "") ||
-		(pol.AllowReadOnlyShell && d.Executor != nil) ||
-		(pol.AllowMemory && d.Memory != nil) ||
-		(pol.AllowSessionSearch && d.SessionsDir != "") ||
-		(pol.AllowWeb && d.RegisterWebTools != nil) ||
-		(pol.AllowBrowser && d.RegisterBrowserTools != nil)
+	return d.Probe().ProfileAvailable(p)
 }
 
 func (d FocusedTaskDeps) availableProfiles() []FocusedTaskProfile {
 	reg := d.resolveProfileRegistry()
+	probe := d.Probe()
 	var out []FocusedTaskProfile
 	for _, p := range reg.profiles {
-		if d.profileAvailable(p) {
+		if probe.ProfileAvailable(p) {
 			out = append(out, p)
 		}
 	}

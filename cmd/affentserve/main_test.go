@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"os"
 	"path/filepath"
+	"reflect"
 	"strings"
 	"testing"
 
@@ -247,6 +248,103 @@ func TestLogServeStartupIncludesDurablePathsWithoutSecrets(t *testing.T) {
 		if strings.Contains(logLine, secret) {
 			t.Fatalf("startup log leaked secret %q:\n%s", secret, logLine)
 		}
+	}
+}
+
+// TestFocusedTaskProfilesForLog_MatchesProbeRules pins the cfg →
+// profile-list translation in one place so changes to the probe
+// rules show up as test failures here (and in doctor's parallel
+// tests) instead of silently diverging between the CLI diagnostic
+// and the server boot log.
+func TestFocusedTaskProfilesForLog_MatchesProbeRules(t *testing.T) {
+	cases := []struct {
+		name string
+		cfg  Config
+		want []string
+	}{
+		{
+			name: "disabled returns nil",
+			cfg:  Config{EnableFocusedTasks: false, EnableBuiltins: true, EnableMemory: true, EnableWeb: true},
+			want: nil,
+		},
+		{
+			name: "default server wiring (no web) exposes 4 profiles",
+			cfg:  Config{EnableFocusedTasks: true, EnableBuiltins: true, EnableMemory: true},
+			want: []string{"recall", "explore", "verify", "review"},
+		},
+		{
+			name: "with web exposes research too",
+			cfg:  Config{EnableFocusedTasks: true, EnableBuiltins: true, EnableMemory: true, EnableWeb: true},
+			want: []string{"recall", "explore", "research", "verify", "review"},
+		},
+		{
+			name: "no memory and no builtins still has session-backed recall + file-tool-backed others",
+			cfg:  Config{EnableFocusedTasks: true},
+			// Probe: HasLLM, HasWorkspace, HasSessions all true; HasMemory=false,
+			// HasExecutor=false, HasWeb=false. Recall stays available via sessions;
+			// explore/verify/review via read_file+list_files; research filtered out.
+			want: []string{"recall", "explore", "verify", "review"},
+		},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			got := focusedTaskProfilesForLog(c.cfg)
+			if !reflect.DeepEqual(got, c.want) {
+				t.Fatalf("got %+v\nwant %+v", got, c.want)
+			}
+		})
+	}
+}
+
+// TestLogServeStartup_IncludesFocusedTaskProfiles pins the wire shape
+// of the startup log: a "focused_task_profiles" JSON array appears
+// when the feature is on, with the actual profile list. zerolog's
+// JSON encoder writes Strs as a JSON array, so the array form is
+// what trace/log consumers will see.
+func TestLogServeStartup_IncludesFocusedTaskProfiles(t *testing.T) {
+	var buf bytes.Buffer
+	cfg := Config{
+		Listen:             "127.0.0.1:7777",
+		BaseURL:            "https://example/v1",
+		Model:              "demo",
+		MaxSessions:        8,
+		SessionIdleTTL:     "5m",
+		EnableBuiltins:     true,
+		EnableMemory:       true,
+		EnableFocusedTasks: true,
+	}
+	logServeStartup(zerolog.New(&buf), cfg, cfg.MemoryRoot)
+	line := buf.String()
+	if !strings.Contains(line, `"focused_task_profiles":["recall","explore","verify","review"]`) {
+		t.Fatalf("startup log missing focused_task_profiles array:\n%s", line)
+	}
+}
+
+// TestLogServeStartup_OmitsFocusedTaskProfilesWhenDisabled pins the
+// omitempty-like behavior: with focused tasks disabled, the field is
+// emitted as an empty array (zerolog renders nil slice as []), which
+// signals "feature off" without lying about which profiles would be
+// available. We assert the explicit empty form rather than asserting
+// absence, because zerolog Strs always emits the key.
+func TestLogServeStartup_OmitsFocusedTaskProfilesWhenDisabled(t *testing.T) {
+	var buf bytes.Buffer
+	cfg := Config{
+		Listen:             "127.0.0.1:7777",
+		BaseURL:            "https://example/v1",
+		Model:              "demo",
+		MaxSessions:        8,
+		SessionIdleTTL:     "5m",
+		EnableBuiltins:     true,
+		EnableMemory:       true,
+		EnableFocusedTasks: false,
+	}
+	logServeStartup(zerolog.New(&buf), cfg, cfg.MemoryRoot)
+	line := buf.String()
+	if !strings.Contains(line, `"focused_tasks":false`) {
+		t.Fatalf("expected focused_tasks=false:\n%s", line)
+	}
+	if !strings.Contains(line, `"focused_task_profiles":[]`) {
+		t.Fatalf("expected empty focused_task_profiles array when feature is off:\n%s", line)
 	}
 }
 

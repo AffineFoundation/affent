@@ -180,6 +180,92 @@ func TestDoctorCmdReportsReadyLocalConfig(t *testing.T) {
 	}
 }
 
+// TestDoctorCapabilitySummary_FocusedTaskProfiles_Default pins the
+// per-profile breakdown doctor exposes under affentctl's default
+// configuration. The breakdown matters because the model only sees
+// task_types whose deps are wired — without this report an operator
+// can't tell which task_type values their deployment actually accepts
+// (and would have to guess from the schema enum in trace events).
+//
+// Under default affentctl wiring: workspace + sessions + memory are
+// always present, no web registrar → research is the one profile
+// always filtered out.
+func TestDoctorCapabilitySummary_FocusedTaskProfiles_Default(t *testing.T) {
+	got := doctorCapabilitySummary(commonFlags{
+		memoryEnabled:       true,
+		projectContext:      true,
+		subagentEnabled:     true,
+		subagentMaxDepth:    2,
+		focusedTasksEnabled: true,
+		executor:            "local",
+	})
+	want := "focused_task_profiles=recall,explore,verify,review"
+	if !strings.Contains(got, want) {
+		t.Fatalf("doctor capability summary missing %q:\n%s", want, got)
+	}
+	// And explicitly NOT research — that's the contract this whole
+	// reporting line exists to surface for the operator.
+	if strings.Contains(got, "research") {
+		t.Fatalf("research must be filtered out without a web registrar:\n%s", got)
+	}
+}
+
+// TestDoctorCapabilitySummary_FocusedTaskProfiles_OffWhenDisabled
+// pins the "off" / "none" sentinels so an operator can tell at a
+// glance between "feature disabled" and "feature enabled but every
+// profile filtered out by deps" — those are different ops conditions
+// and both should be greppable.
+func TestDoctorCapabilitySummary_FocusedTaskProfiles_OffWhenDisabled(t *testing.T) {
+	got := doctorCapabilitySummary(commonFlags{
+		memoryEnabled:       true,
+		projectContext:      true,
+		subagentEnabled:     true,
+		focusedTasksEnabled: false, // explicitly off
+		executor:            "local",
+	})
+	if !strings.Contains(got, "focused_tasks=false") {
+		t.Fatalf("expected focused_tasks=false marker:\n%s", got)
+	}
+	if !strings.Contains(got, "focused_task_profiles=off") {
+		t.Fatalf("expected focused_task_profiles=off sentinel for disabled feature:\n%s", got)
+	}
+}
+
+// TestDoctorCapabilitySummary_FocusedTaskProfiles_MemoryOnlyForcesOff
+// pins the memory-only interaction: memory-only mode strips every
+// non-memory tool, so even if focusedTasksEnabled=true upstream the
+// reported state must be off. This mirrors applyConfig's coercion of
+// focusedTasksEnabled to false under memoryOnly.
+func TestDoctorCapabilitySummary_FocusedTaskProfiles_MemoryOnlyForcesOff(t *testing.T) {
+	got := doctorCapabilitySummary(commonFlags{
+		memoryEnabled:       true,
+		memoryOnly:          true,
+		focusedTasksEnabled: true, // would be coerced to false by applyConfig
+		executor:            "sandbox",
+	})
+	if !strings.Contains(got, "focused_tasks=false") || !strings.Contains(got, "focused_task_profiles=off") {
+		t.Fatalf("memory-only must report focused_tasks=false and profiles=off:\n%s", got)
+	}
+}
+
+// TestDoctorCapabilitySummary_FocusedTaskProfiles_NoMemoryStillExposesRecall
+// pins graceful degradation: without the memory tool, recall is still
+// available because session_search satisfies recall's "any declared
+// capability" rule. This is the behavior contract — if a future
+// refactor strict-ifies the matrix, this test catches it.
+func TestDoctorCapabilitySummary_FocusedTaskProfiles_NoMemoryStillExposesRecall(t *testing.T) {
+	got := doctorCapabilitySummary(commonFlags{
+		memoryEnabled:       false,
+		projectContext:      true,
+		focusedTasksEnabled: true,
+		executor:            "local",
+	})
+	want := "focused_task_profiles=recall,explore,verify,review"
+	if !strings.Contains(got, want) {
+		t.Fatalf("recall should remain available via session_search even without memory; got:\n%s", got)
+	}
+}
+
 func TestDoctorCapabilitySummaryMemoryOnlyMatchesRegisteredTools(t *testing.T) {
 	got := doctorCapabilitySummary(commonFlags{
 		memoryEnabled:       true,

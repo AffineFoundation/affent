@@ -9,6 +9,7 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"reflect"
 	"strings"
 	"testing"
 
@@ -49,6 +50,13 @@ func TestHandleSessionCreate_ExplicitIDAndDetail(t *testing.T) {
 		Subagent:         true,
 		SubagentMaxDepth: 3,
 		FocusedTasks:     true,
+		FocusedTaskProfiles: []string{
+			"recall",
+			"explore",
+			"research",
+			"verify",
+			"review",
+		},
 	})
 
 	r = httptest.NewRequest(http.MethodPost, "/v1/sessions", bytes.NewBufferString(`{"session_id":"client-one"}`))
@@ -525,6 +533,72 @@ func TestSessionCapabilitiesReflectActualRegisteredTools(t *testing.T) {
 	}
 }
 
+// TestSessionCapabilities_IncludesFocusedTaskProfiles pins the
+// per-session API contract: when run_task is registered, the response
+// must enumerate the actual task_type values the model can request.
+// Without this, an API client (WebUI, eval driver, custom dashboard)
+// has to either parse the run_task tool schema themselves OR call
+// affentctl doctor — both worse than reading a typed list off the
+// session detail response.
+func TestSessionCapabilities_IncludesFocusedTaskProfiles(t *testing.T) {
+	pool := newTestPool(t, 4, "5m")
+	pool.cfg.EnableBuiltins = true
+	pool.cfg.EnableMemory = true
+	pool.cfg.EnableFocusedTasks = true
+	// EnableWeb stays false: research must be filtered out of the
+	// reported profile list.
+	s, err := pool.GetOrCreate("with-focused-tasks")
+	if err != nil {
+		t.Fatal(err)
+	}
+	caps := summarizeActiveCapabilities(s, pool.cfg)
+	if !caps.FocusedTasks {
+		t.Fatal("focused tasks should be registered")
+	}
+	want := []string{"recall", "explore", "verify", "review"}
+	if !reflect.DeepEqual(caps.FocusedTaskProfiles, want) {
+		t.Fatalf("FocusedTaskProfiles = %+v, want %+v", caps.FocusedTaskProfiles, want)
+	}
+	// Defensive: research must NOT appear when EnableWeb is off; if it
+	// did, the model would see a task_type it can't fulfill.
+	for _, k := range caps.FocusedTaskProfiles {
+		if k == "research" {
+			t.Errorf("research must be filtered out without --web: %+v", caps.FocusedTaskProfiles)
+		}
+	}
+}
+
+// TestSessionCapabilities_OmitsFocusedTaskProfilesWhenDisabled pins
+// the absent-when-off contract via omitempty. The JSON wire form
+// should not carry an empty array misleading clients into thinking
+// the server is wired for focused tasks but configured to expose
+// nothing.
+func TestSessionCapabilities_OmitsFocusedTaskProfilesWhenDisabled(t *testing.T) {
+	pool := newTestPool(t, 4, "5m")
+	pool.cfg.EnableBuiltins = true
+	pool.cfg.EnableMemory = true
+	pool.cfg.EnableFocusedTasks = false
+	s, err := pool.GetOrCreate("no-focused-tasks")
+	if err != nil {
+		t.Fatal(err)
+	}
+	caps := summarizeActiveCapabilities(s, pool.cfg)
+	if caps.FocusedTasks {
+		t.Fatal("FocusedTasks must be false when feature disabled")
+	}
+	if caps.FocusedTaskProfiles != nil {
+		t.Errorf("FocusedTaskProfiles must be nil (omitempty) when feature disabled: %+v", caps.FocusedTaskProfiles)
+	}
+	// Wire-level check: marshaled JSON must NOT contain the key.
+	raw, err := json.Marshal(caps)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if strings.Contains(string(raw), `"focused_task_profiles"`) {
+		t.Errorf("wire form should omit focused_task_profiles entirely when feature disabled:\n%s", raw)
+	}
+}
+
 func TestHandleSessionDetail_RejectsUnsafeID(t *testing.T) {
 	pool := newTestPool(t, 4, "5m")
 	r := httptest.NewRequest(http.MethodGet, "/v1/sessions/..", nil)
@@ -594,7 +668,10 @@ func assertSessionCapabilities(t *testing.T, got *sessionCapabilities, want sess
 	if got == nil {
 		t.Fatalf("capabilities = nil, want %+v", want)
 	}
-	if *got != want {
+	// Compare struct-wise; the slice field disqualifies `==`, so we
+	// reflect.DeepEqual here. This keeps focused_task_profiles exact
+	// while preserving the older scalar-field comparisons.
+	if !reflect.DeepEqual(*got, want) {
 		t.Fatalf("capabilities = %+v, want %+v", *got, want)
 	}
 }

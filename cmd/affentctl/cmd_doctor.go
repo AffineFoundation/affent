@@ -191,8 +191,37 @@ func doctorCapabilitySummary(c commonFlags) string {
 	if c.memoryOnly {
 		memoryTool = true
 	}
+	profiles := "off"
+	if focusedTasksEnabled {
+		// Build a probe from what affentctl actually wires: workspace +
+		// LLM are always present at run time, executor + memory +
+		// session_search follow the builtins/memory flags. affentctl
+		// does NOT wire a web registrar today, so research drops out
+		// of the schema — the model never sees a task_type it can't
+		// fulfill. Doctor reflects that filter so the operator can
+		// confirm the deployed surface matches their intent.
+		probe := agent.FocusedTaskAvailabilityProbe{
+			HasLLM:       true,
+			HasWorkspace: true,
+			HasExecutor:  builtins,
+			HasMemory:    memoryTool,
+			HasSessions:  sessionSearch,
+			// HasWeb / HasBrowser stay false: affentctl has no path
+			// that registers web or browser tools for focused tasks.
+		}
+		kinds := probe.AvailableKinds(nil)
+		if len(kinds) == 0 {
+			profiles = "none"
+		} else {
+			parts := make([]string, len(kinds))
+			for i, k := range kinds {
+				parts[i] = string(k)
+			}
+			profiles = strings.Join(parts, ",")
+		}
+	}
 	return fmt.Sprintf(
-		"shell_file=%t skill_install=%t memory=%t memory_only=%t session_search=%t project_context=%t mcp=%t subagent=%t subagent_max_depth=%d focused_tasks=%t executor=%s",
+		"shell_file=%t skill_install=%t memory=%t memory_only=%t session_search=%t project_context=%t mcp=%t subagent=%t subagent_max_depth=%d focused_tasks=%t focused_task_profiles=%s executor=%s",
 		builtins,
 		skillInstall,
 		memoryTool,
@@ -203,6 +232,7 @@ func doctorCapabilitySummary(c commonFlags) string {
 		subagentEnabled,
 		c.subagentMaxDepth,
 		focusedTasksEnabled,
+		profiles,
 		doctorCapabilityExecutor(c.executor),
 	)
 }

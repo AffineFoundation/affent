@@ -71,6 +71,12 @@ type sessionCapabilities struct {
 	Subagent          bool `json:"subagent"`
 	SubagentMaxDepth  int  `json:"subagent_max_depth"`
 	FocusedTasks      bool `json:"focused_tasks"`
+	// FocusedTaskProfiles enumerates the run_task task_type values the
+	// model can actually request under this session's wiring. Omitted
+	// when focused tasks are disabled or no profile's deps are
+	// satisfied; lets clients build a typed task_type picker without
+	// having to parse the run_task tool's JSON schema themselves.
+	FocusedTaskProfiles []string `json:"focused_task_profiles,omitempty"`
 }
 
 type sessionListOptions struct {
@@ -381,7 +387,8 @@ func summarizeActiveCapabilities(s *Session, cfg Config) sessionCapabilities {
 		_, ok := s.registry.Get(name)
 		return ok
 	}
-	return sessionCapabilities{
+	focusedRegistered := hasTool(agent.FocusedTaskToolName)
+	caps := sessionCapabilities{
 		Builtins: hasTool("shell") &&
 			hasTool("read_file") &&
 			hasTool("write_file") &&
@@ -397,8 +404,16 @@ func summarizeActiveCapabilities(s *Session, cfg Config) sessionCapabilities {
 		WebSearch:         hasTool("web_search"),
 		Subagent:          hasTool(agent.SubagentToolName),
 		SubagentMaxDepth:  cfg.SubagentMaxDepth,
-		FocusedTasks:      hasTool(agent.FocusedTaskToolName),
+		FocusedTasks:      focusedRegistered,
 	}
+	// Surface the available focused-task profiles whenever the tool
+	// itself is registered. Computed via the same probe doctor uses
+	// so the CLI diagnostic and the server API agree for matching
+	// configurations.
+	if focusedRegistered {
+		caps.FocusedTaskProfiles = focusedTaskProfilesForLog(cfg)
+	}
+	return caps
 }
 
 func summarizeDurableSession(pool *SessionPool, id string) (sessionSummary, bool, error) {

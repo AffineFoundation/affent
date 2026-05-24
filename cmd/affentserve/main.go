@@ -358,6 +358,7 @@ func logServeStartup(logger zerolog.Logger, cfg Config, sessionStateRoot string)
 		Bool("subagent", cfg.EnableSubagent).
 		Int("subagent_max_depth", cfg.SubagentMaxDepth).
 		Bool("focused_tasks", cfg.EnableFocusedTasks).
+		Strs("focused_task_profiles", focusedTaskProfilesForLog(cfg)).
 		Bool("memory", cfg.EnableMemory).
 		Bool("browser", cfg.EnableBrowser).
 		Bool("web", cfg.EnableWeb).
@@ -367,4 +368,38 @@ func logServeStartup(logger zerolog.Logger, cfg Config, sessionStateRoot string)
 		Str("session_retention", cfg.SessionRetention).
 		Str("per_call_timeout", cfg.PerCallTimeout).
 		Msg("affentserve starting")
+}
+
+// focusedTaskProfilesForLog returns the focused-task profile kinds
+// (recall, explore, ...) that run_task will expose to clients of this
+// server, computed from cfg via FocusedTaskAvailabilityProbe. Empty
+// slice when focused tasks are disabled or when no profile's deps are
+// satisfied. The result agrees with affentctl doctor's
+// focused_task_profiles=… field for the equivalent flags, so operators
+// see the same answer from the CLI diagnostic and the server boot log.
+func focusedTaskProfilesForLog(cfg Config) []string {
+	if !cfg.EnableFocusedTasks {
+		return nil
+	}
+	probe := agent.FocusedTaskAvailabilityProbe{
+		HasLLM:       true, // cfg.Model is required at Validate; live LLMs are constructed per session
+		HasWorkspace: true, // every session gets a workspace
+		HasExecutor:  cfg.EnableBuiltins,
+		HasMemory:    cfg.EnableMemory,
+		HasSessions:  true, // every session has a session dir for transcripts/conv
+		HasWeb:       cfg.EnableWeb,
+		// HasBrowser stays false: affentserve does not currently wire a
+		// browser registrar onto focused-task children, so no built-in
+		// profile needs it. If a deployment customizes this, the hook
+		// is documented on FocusedTaskDeps.
+	}
+	kinds := probe.AvailableKinds(nil)
+	if len(kinds) == 0 {
+		return nil
+	}
+	out := make([]string, len(kinds))
+	for i, k := range kinds {
+		out[i] = string(k)
+	}
+	return out
 }

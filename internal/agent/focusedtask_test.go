@@ -70,6 +70,78 @@ func TestDefaultFocusedTaskProfileRegistry_FiveKindsInOrder(t *testing.T) {
 	}
 }
 
+// TestFocusedTaskAvailabilityProbe_IsSingleSourceOfTruth pins that
+// FocusedTaskDeps and FocusedTaskAvailabilityProbe produce identical
+// availability verdicts. Without this, the diagnostic path (doctor)
+// could drift from the live wiring path on subtle capability rules,
+// and an operator would see "research is available" in doctor when
+// the runtime would actually reject it (or vice versa).
+func TestFocusedTaskAvailabilityProbe_IsSingleSourceOfTruth(t *testing.T) {
+	deps := FocusedTaskDeps{
+		LLM:              dummyLLM(t),
+		HostWorkspaceDir: t.TempDir(),
+		Memory:           stubMemoryStore{},
+		SessionsDir:      t.TempDir(),
+		// no executor, no web — exercises a partial-deps shape
+	}
+	probe := deps.Probe()
+	for _, profile := range DefaultFocusedTaskProfileRegistry().Profiles() {
+		live := deps.profileAvailable(profile)
+		viaProbe := probe.ProfileAvailable(profile)
+		if live != viaProbe {
+			t.Errorf("profile %q: deps=%v probe=%v — must agree", profile.Kind, live, viaProbe)
+		}
+	}
+}
+
+// TestFocusedTaskAvailabilityProbe_AvailableKinds_DefaultRegistry
+// pins the diagnostic API: passing nil for the registry must fall
+// back to the package default, and the LLM/workspace gates must
+// match RegisterFocusedTasks's early-return rules so doctor never
+// reports profiles the live wiring would reject.
+func TestFocusedTaskAvailabilityProbe_AvailableKinds_DefaultRegistry(t *testing.T) {
+	cases := []struct {
+		name  string
+		probe FocusedTaskAvailabilityProbe
+		want  []FocusedTaskKind
+	}{
+		{
+			name:  "no LLM returns nil",
+			probe: FocusedTaskAvailabilityProbe{HasWorkspace: true, HasExecutor: true, HasMemory: true, HasSessions: true},
+			want:  nil,
+		},
+		{
+			name:  "no workspace returns nil",
+			probe: FocusedTaskAvailabilityProbe{HasLLM: true, HasExecutor: true, HasMemory: true},
+			want:  nil,
+		},
+		{
+			name:  "workspace + LLM only exposes file-backed profiles",
+			probe: FocusedTaskAvailabilityProbe{HasLLM: true, HasWorkspace: true},
+			// recall is filtered (no memory, no sessions). research filtered (no web).
+			want: []FocusedTaskKind{FocusedTaskExplore, FocusedTaskVerify, FocusedTaskReview},
+		},
+		{
+			name:  "default affentctl-style wiring exposes 4 profiles",
+			probe: FocusedTaskAvailabilityProbe{HasLLM: true, HasWorkspace: true, HasExecutor: true, HasMemory: true, HasSessions: true},
+			want:  []FocusedTaskKind{FocusedTaskRecall, FocusedTaskExplore, FocusedTaskVerify, FocusedTaskReview},
+		},
+		{
+			name:  "with web registrar research becomes available",
+			probe: FocusedTaskAvailabilityProbe{HasLLM: true, HasWorkspace: true, HasExecutor: true, HasMemory: true, HasSessions: true, HasWeb: true},
+			want:  []FocusedTaskKind{FocusedTaskRecall, FocusedTaskExplore, FocusedTaskResearch, FocusedTaskVerify, FocusedTaskReview},
+		},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			got := c.probe.AvailableKinds(nil)
+			if !reflect.DeepEqual(got, c.want) {
+				t.Fatalf("got %+v\nwant %+v", got, c.want)
+			}
+		})
+	}
+}
+
 func TestProfileAvailable_RequiresAtLeastOneDeclaredDep(t *testing.T) {
 	baseDeps := FocusedTaskDeps{LLM: dummyLLM(t), HostWorkspaceDir: t.TempDir()}
 
