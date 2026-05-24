@@ -295,6 +295,23 @@ func FocusedTaskCalledAtLeast(taskType string, min int) Check {
 	}
 }
 
+func SubagentCalledAtLeast(mode string, min int) Check {
+	return Check{
+		Name: fmt.Sprintf("subagent_called_at_least:%s:%d", mode, min),
+		Eval: func(t Trace) CheckResult {
+			stats := t.DelegationStats()
+			got := stats.SubagentByMode[mode]
+			if got >= min {
+				return CheckResult{Pass: true, Detail: fmt.Sprintf("%s=%d", mode, got)}
+			}
+			return CheckResult{
+				Pass:   false,
+				Detail: fmt.Sprintf("%s=%d, want >= %d; subagents=%v", mode, got, min, stats.SubagentByMode),
+			}
+		},
+	}
+}
+
 var toolStatsAccessors = map[string]func(ToolRuntimeStats) int64{
 	"tool_requests":            func(s ToolRuntimeStats) int64 { return int64(s.ToolRequests) },
 	"tool_name_canonicalized":  func(s ToolRuntimeStats) int64 { return int64(s.ToolNameCanonicalized) },

@@ -246,6 +246,9 @@ func TestBatchScenarioChecks_UsesSharedCheckLibrary(t *testing.T) {
 		RequiredFocusedTaskCounts: map[string]int{
 			"explore": 1,
 		},
+		RequiredSubagentModeCounts: map[string]int{
+			"review": 1,
+		},
 		MaxSuccessfulToolCallsByTool: map[string]int{
 			"read_file": 1,
 		},
@@ -276,6 +279,7 @@ func TestBatchScenarioChecks_UsesSharedCheckLibrary(t *testing.T) {
 		"tool_called_before:read_file->edit_file",
 		"tool_called_at_least:plan:2",
 		"focused_task_called_at_least:explore:1",
+		"subagent_called_at_least:review:1",
 		"max_successful_tool_calls:read_file:1",
 		"shell_command_matching:go test",
 		"shell_command_matching:gofmt",
@@ -382,6 +386,19 @@ func TestFocusedTaskScenarioRequiresExploreTask(t *testing.T) {
 		return
 	}
 	t.Fatal("builtin scenarios missing focused-task-project-facts")
+}
+
+func TestSubagentScenarioRequiresExploreMode(t *testing.T) {
+	for _, scenario := range BuiltinBatchScenarios() {
+		if scenario.Name != "subagent-project-facts" {
+			continue
+		}
+		if scenario.RequiredSubagentModeCounts["explore"] != 1 {
+			t.Fatalf("subagent-project-facts RequiredSubagentModeCounts = %#v, want explore=1", scenario.RequiredSubagentModeCounts)
+		}
+		return
+	}
+	t.Fatal("builtin scenarios missing subagent-project-facts")
 }
 
 func TestRepairScenariosRequireRepeatedVerification(t *testing.T) {

@@ -571,7 +571,10 @@ const DefaultRequestTimeoutMS = 1500
 const DefaultRetryBudget = 3
 `,
 		},
-		RequiredTools:      []string{"subagent_run"},
+		RequiredTools: []string{"subagent_run"},
+		RequiredSubagentModeCounts: map[string]int{
+			"explore": 1,
+		},
 		ForbiddenTools:     []string{"edit_file", "write_file"},
 		RequiredFinalText:  []string{"1500", "3", "docs/runtime.md", "internal/config/defaults.go"},
 		MaxParentToolCalls: 1,

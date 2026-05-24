@@ -389,6 +389,25 @@ func TestFocusedTaskCalledAtLeast(t *testing.T) {
 	}
 }
 
+func TestSubagentCalledAtLeast(t *testing.T) {
+	trace := Trace{Tools: []ToolCall{
+		{CallID: "c1", Tool: "subagent_run", Delegation: &sse.DelegationMeta{Kind: "subagent", Mode: "explore"}},
+		{CallID: "c2", Tool: "subagent_run", Delegation: &sse.DelegationMeta{Kind: "subagent", Mode: "review"}},
+		{CallID: "c3", Tool: "subagent_run", Delegation: &sse.DelegationMeta{Kind: "subagent", Mode: "review"}},
+		{CallID: "c4", Tool: "run_task", Delegation: &sse.DelegationMeta{Kind: "focused_task", TaskType: "review"}},
+	}}
+	if res := SubagentCalledAtLeast("review", 2).Eval(trace); !res.Pass {
+		t.Fatalf("expected subagent review>=2 check to pass: %+v", res)
+	}
+	res := SubagentCalledAtLeast("test", 1).Eval(trace)
+	if res.Pass {
+		t.Fatal("expected missing subagent test check to fail")
+	}
+	if !strings.Contains(res.Detail, "test=0") || !strings.Contains(res.Detail, "review") {
+		t.Fatalf("failure detail should include requested and observed subagent modes: %s", res.Detail)
+	}
+}
+
 func TestToolCalledBefore(t *testing.T) {
 	t.Run("passes when earlier precedes later", func(t *testing.T) {
 		trace := Trace{
