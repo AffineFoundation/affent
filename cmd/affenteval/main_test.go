@@ -183,8 +183,10 @@ func TestPrintBatchResultIncludesTraceMetrics(t *testing.T) {
 		Delegation: agenteval.DelegationStats{
 			FocusedTaskCalls:  2,
 			FocusedTaskByType: map[string]int{"explore": 1, "verify": 1},
+			FocusedTaskErrors: 1,
 			SubagentCalls:     1,
 			SubagentByMode:    map[string]int{"review": 1},
+			SubagentErrors:    1,
 		},
 		Plan: agenteval.PlanStats{
 			Calls:    3,
@@ -198,7 +200,7 @@ func TestPrintBatchResultIncludesTraceMetrics(t *testing.T) {
 		"PASS sample (1.234s)",
 		"workspace: /tmp/ws (removed)",
 		"trace: /tmp/ws/trace.jsonl",
-		"metrics: tools=3 errors=2 repaired=1 canonicalized=1 loop_guard=2 forced_no_tools=1 tool_ms=45 tokens=100/25 trunc=args:1,results:1,artifacts:1 omitted=512/4096 delegation=focused_tasks:2,subagents:1 focused_task_by_type=explore:1,verify:1 subagent_by_mode=review:1 plan=calls:3,errors:1 plan_by_action=set:1,update:2 end=completed",
+		"metrics: tools=3 errors=2 repaired=1 canonicalized=1 loop_guard=2 forced_no_tools=1 tool_ms=45 tokens=100/25 trunc=args:1,results:1,artifacts:1 omitted=512/4096 delegation=focused_tasks:2,subagents:1 delegation_errors=focused_tasks:1,subagents:1 focused_task_by_type=explore:1,verify:1 subagent_by_mode=review:1 plan=calls:3,errors:1 plan_by_action=set:1,update:2 end=completed",
 		`verifier: pass exit=0 duration=80ms output=1200 truncated omitted=176 cap=1024 command="go test ./..."`,
 	} {
 		if !strings.Contains(got, want) {
@@ -543,6 +545,7 @@ func TestBatchSummaryAggregatesDelegationAcrossScenarios(t *testing.T) {
 		Delegation: agenteval.DelegationStats{
 			FocusedTaskCalls:  2,
 			FocusedTaskByType: map[string]int{"recall": 2},
+			FocusedTaskErrors: 1,
 		},
 	})
 	summary.add(agenteval.BatchResult{
@@ -555,6 +558,7 @@ func TestBatchSummaryAggregatesDelegationAcrossScenarios(t *testing.T) {
 			FocusedTaskByType: map[string]int{"recall": 1, "explore": 1},
 			SubagentCalls:     1,
 			SubagentByMode:    map[string]int{"review": 1},
+			SubagentErrors:    1,
 		},
 	})
 
@@ -566,6 +570,9 @@ func TestBatchSummaryAggregatesDelegationAcrossScenarios(t *testing.T) {
 	}
 	if summary.SubagentCalls != 1 || summary.SubagentByMode["review"] != 1 {
 		t.Errorf("subagent aggregates = %d, %#v", summary.SubagentCalls, summary.SubagentByMode)
+	}
+	if summary.FocusedTaskErrors != 1 || summary.SubagentErrors != 1 {
+		t.Errorf("delegation error aggregates = focused:%d subagent:%d, want 1/1", summary.FocusedTaskErrors, summary.SubagentErrors)
 	}
 
 	// Wire-format check: consumers expect one merged object per batch.
@@ -587,6 +594,7 @@ func TestBatchSummaryAggregatesDelegationAcrossScenarios(t *testing.T) {
 	printBatchSummary(&textOut, summary)
 	for _, want := range []string{
 		"delegation=focused_tasks:4,subagents:1",
+		"delegation_errors=focused_tasks:1,subagents:1",
 		"focused_task_by_type=explore:1,recall:3",
 		"subagent_by_mode=review:1",
 	} {

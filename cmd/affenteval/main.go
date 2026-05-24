@@ -334,7 +334,7 @@ func printBatchSummary(w io.Writer, s batchSummary) {
 	if len(s.ToolRepairByKind) > 0 {
 		fmt.Fprintf(w, " repair_kinds=%s", formatStringIntCounts(s.ToolRepairByKind))
 	}
-	printDelegationRollup(w, s.FocusedTaskCalls, s.FocusedTaskByType, s.SubagentCalls, s.SubagentByMode)
+	printDelegationRollup(w, s.FocusedTaskCalls, s.FocusedTaskByType, s.FocusedTaskErrors, s.SubagentCalls, s.SubagentByMode, s.SubagentErrors)
 	printPlanRollup(w, s.PlanCalls, s.PlanByAction, s.PlanErrors)
 	fmt.Fprintln(w)
 }
@@ -347,11 +347,14 @@ func hasBatchRepairStats(s batchSummary) bool {
 		len(s.ToolRepairByKind) > 0
 }
 
-func printDelegationRollup(w io.Writer, focusedTaskCalls int, focusedTaskByType map[string]int, subagentCalls int, subagentByMode map[string]int) {
+func printDelegationRollup(w io.Writer, focusedTaskCalls int, focusedTaskByType map[string]int, focusedTaskErrors int, subagentCalls int, subagentByMode map[string]int, subagentErrors int) {
 	if focusedTaskCalls == 0 && subagentCalls == 0 {
 		return
 	}
 	fmt.Fprintf(w, " delegation=focused_tasks:%d,subagents:%d", focusedTaskCalls, subagentCalls)
+	if focusedTaskErrors > 0 || subagentErrors > 0 {
+		fmt.Fprintf(w, " delegation_errors=focused_tasks:%d,subagents:%d", focusedTaskErrors, subagentErrors)
+	}
 	if len(focusedTaskByType) > 0 {
 		fmt.Fprintf(w, " focused_task_by_type=%s", formatStringIntCounts(focusedTaskByType))
 	}
@@ -747,7 +750,7 @@ func printBatchResult(w io.Writer, res agenteval.BatchResult) {
 	if len(res.Repair.ByKind) > 0 {
 		fmt.Fprintf(w, " repair_kinds=%s", formatStringIntCounts(res.Repair.ByKind))
 	}
-	printDelegationRollup(w, res.Delegation.FocusedTaskCalls, res.Delegation.FocusedTaskByType, res.Delegation.SubagentCalls, res.Delegation.SubagentByMode)
+	printDelegationRollup(w, res.Delegation.FocusedTaskCalls, res.Delegation.FocusedTaskByType, res.Delegation.FocusedTaskErrors, res.Delegation.SubagentCalls, res.Delegation.SubagentByMode, res.Delegation.SubagentErrors)
 	printPlanRollup(w, res.Plan.Calls, res.Plan.ByAction, res.Plan.Errors)
 	if res.TurnEndReason != "" {
 		fmt.Fprintf(w, " end=%s", res.TurnEndReason)
