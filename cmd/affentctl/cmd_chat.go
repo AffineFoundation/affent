@@ -272,7 +272,11 @@ func drainInteractive(ctx context.Context, loop interface{ Cancel() }, events <-
 			case sse.TypeError:
 				var p sse.ErrorPayload
 				_ = json.Unmarshal(ev.Data, &p)
-				fmt.Fprintln(os.Stderr, dim(fmt.Sprintf("  [error] %s: %s", p.Code, p.Message)))
+				label := p.Code
+				if p.FailureKind != "" {
+					label = fmt.Sprintf("%s, failure=%s", label, p.FailureKind)
+				}
+				fmt.Fprintln(os.Stderr, dim(fmt.Sprintf("  [error] %s: %s", label, p.Message)))
 			case sse.TypeUsage:
 				var p sse.UsagePayload
 				_ = json.Unmarshal(ev.Data, &p)

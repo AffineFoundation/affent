@@ -1535,6 +1535,7 @@ func (l *Loop) runStep(ctx context.Context, turnID string, toolDefs []ToolDef) (
 			return final, "", nil
 		}
 		err = l.annotateLLMCallError(code, err, timeout)
+		failureKind := llmErrorFailureKind(err)
 
 		// Reactive compaction: upstream rejected the request because the
 		// conversation outgrew the context window. Compact aggressively
@@ -1547,6 +1548,7 @@ func (l *Loop) runStep(ctx context.Context, turnID string, toolDefs []ToolDef) (
 					TurnID:      turnID,
 					Code:        code,
 					Message:     "context overflow; compacted and retrying: " + err.Error(),
+					FailureKind: failureKind,
 					Recoverable: true,
 				})
 				continue
@@ -1571,6 +1573,7 @@ func (l *Loop) runStep(ctx context.Context, turnID string, toolDefs []ToolDef) (
 			TurnID:      turnID,
 			Code:        code,
 			Message:     err.Error(),
+			FailureKind: failureKind,
 			Recoverable: retryable,
 		})
 		if !retryable {
@@ -1700,6 +1703,21 @@ func (l *Loop) annotateLLMCallError(stage string, err error, timeout time.Durati
 		)
 	}
 	return fmt.Errorf("LLM %s failed (model=%q endpoint=%q): %w", stage, model, endpoint, err)
+}
+
+func llmErrorFailureKind(err error) string {
+	switch {
+	case err == nil:
+		return ""
+	case errors.Is(err, context.DeadlineExceeded), errors.Is(err, errStreamIdleTimeout):
+		return "llm_timeout"
+	case errors.Is(err, errStreamEndedWithoutFinish):
+		return "llm_incomplete_stream"
+	case IsContextOverflow(err):
+		return "context_overflow"
+	default:
+		return ""
+	}
 }
 
 func (l *Loop) llmDiagnostics() (model string, endpoint string) {

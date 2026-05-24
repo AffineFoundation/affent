@@ -217,5 +217,6 @@ type ErrorPayload struct {
 	TurnID      string `json:"turn_id"`
 	Code        string `json:"code"`
 	Message     string `json:"message"`
+	FailureKind string `json:"failure_kind,omitempty"`
 	Recoverable bool   `json:"recoverable"`
 }

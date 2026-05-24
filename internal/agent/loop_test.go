@@ -5,6 +5,8 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"net/http"
+	"net/http/httptest"
 	"os"
 	"path/filepath"
 	"strings"
@@ -399,6 +401,78 @@ func TestAnnotateLLMCallErrorAddsActionableContext(t *testing.T) {
 	for _, want := range []string{"incomplete SSE stream", "finish_reason", "sglang/vLLM", "reverse-proxy reset", "OOM kill"} {
 		if !strings.Contains(finishErr.Error(), want) {
 			t.Fatalf("finish diagnostic missing %q:\n%s", want, finishErr.Error())
+		}
+	}
+}
+
+func TestLLMErrorFailureKind(t *testing.T) {
+	loop := &Loop{LLM: NewLLMClient("https://llm.example/v1", "", "reasoning-model")}
+	cases := []struct {
+		name string
+		err  error
+		want string
+	}{
+		{name: "deadline", err: loop.annotateLLMCallError("llm_stream", context.DeadlineExceeded, time.Minute), want: "llm_timeout"},
+		{name: "idle", err: loop.annotateLLMCallError("llm_stream", &RetryableError{Err: streamIdleTimeoutError(time.Second)}, time.Minute), want: "llm_timeout"},
+		{name: "incomplete", err: loop.annotateLLMCallError("llm_stream", &RetryableError{Err: errStreamEndedWithoutFinish}, time.Minute), want: "llm_incomplete_stream"},
+		{name: "context overflow", err: loop.annotateLLMCallError("llm_request", errors.New("maximum context length is 4096 tokens"), time.Minute), want: "context_overflow"},
+		{name: "other", err: loop.annotateLLMCallError("llm_request", errors.New("bad gateway"), time.Minute), want: ""},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			if got := llmErrorFailureKind(c.err); got != c.want {
+				t.Fatalf("llmErrorFailureKind() = %q, want %q for %v", got, c.want, c.err)
+			}
+		})
+	}
+}
+
+func TestRunTurnPublishesLLMErrorFailureKind(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "text/event-stream")
+		w.WriteHeader(http.StatusOK)
+		fl := w.(http.Flusher)
+		_, _ = w.Write([]byte(`data: {"choices":[{"delta":{"role":"assistant"},"finish_reason":null}]}` + "\n\n"))
+		fl.Flush()
+	}))
+	t.Cleanup(srv.Close)
+
+	events := make(chan sse.Event, 16)
+	loop := &Loop{
+		LLM:                 NewLLMClient(srv.URL, "", "fake-model"),
+		Conv:                newTestConv(t),
+		Events:              events,
+		MaxTurnSteps:        1,
+		MaxTransientRetries: -1,
+		PerCallTimeout:      time.Second,
+	}
+	if err := loop.EnsureSystemPrompt("base"); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := loop.SendUser(context.Background(), "go"); err != nil {
+		t.Fatal(err)
+	}
+
+	deadline := time.After(5 * time.Second)
+	for {
+		select {
+		case ev := <-events:
+			if ev.Type != sse.TypeError {
+				continue
+			}
+			var p sse.ErrorPayload
+			if err := json.Unmarshal(ev.Data, &p); err != nil {
+				t.Fatalf("decode error payload: %v", err)
+			}
+			if p.FailureKind != "llm_incomplete_stream" {
+				t.Fatalf("FailureKind = %q, want llm_incomplete_stream; payload=%+v", p.FailureKind, p)
+			}
+			if p.Code != "llm_stream" || p.Recoverable {
+				t.Fatalf("unexpected error payload: %+v", p)
+			}
+			return
+		case <-deadline:
+			t.Fatal("timeout waiting for error event")
 		}
 	}
 }

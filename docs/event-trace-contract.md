@@ -119,9 +119,10 @@ diagnostics.
   and a later runtime guard classification are both present.
   For web tools, known values include `invalid_args`, `blocked`, `not_found`,
   `rate_limited`, `server_error`, `http_error`, `private_network_blocked`,
-  `timeout`, `network_error`, `empty_response`, `non_text`, `no_results`, and
-  `search_error`. Browser inspection tools may also emit `stale_ref` when a
-  previously visible element ref no longer matches the current page, or
+  `timeout`, `network_error`, `empty_response`, `dynamic_shell`, `non_text`,
+  `no_results`, and `search_error`. Browser inspection tools may also emit
+  `stale_ref` when a previously visible element ref no longer matches the
+  current page, or
   `not_interactable` when the element exists but is hidden, disabled, or
   covered. Runtime loop guards may emit `loop_guard_repeated_call`,
   `loop_guard_repeated_failed_input`, `loop_guard_repeated_failures`,
@@ -182,8 +183,8 @@ diagnostics.
   `Failure: kind=blocked` in their result or error text; the runtime aggregates
   those kinds here. Known web kinds include `invalid_args`, `blocked`,
   `not_found`, `rate_limited`, `server_error`, `http_error`,
-  `private_network_blocked`, `timeout`, `network_error`, `empty_response`, and
-  `non_text`, `no_results`, `search_error`, `stale_ref`, and
+  `private_network_blocked`, `timeout`, `network_error`, `empty_response`,
+  `dynamic_shell`, `non_text`, `no_results`, `search_error`, `stale_ref`, and
   `not_interactable`. Known runtime policy kinds include
   `tool_policy_first_tool`, `tool_policy_repeat`, and `tool_policy_active`.
 - `tool_errors`
@@ -196,6 +197,9 @@ diagnostics.
 - `turn_id`: runtime turn id.
 - `code`: machine-readable error code.
 - `message`: human-readable error.
+- `failure_kind`: optional primary machine-readable failure class for runtime
+  errors, for example `llm_timeout`, `llm_incomplete_stream`, or
+  `context_overflow`.
 - `recoverable`: whether the turn can continue.
 
 ## Compatibility Rules

@@ -148,6 +148,9 @@ func applyTraceEvent(t *Trace, pending map[string]int, typ string, data json.Raw
 		var p sse.ErrorPayload
 		if err := json.Unmarshal(data, &p); err == nil && p.Message != "" {
 			t.LoopErrors = append(t.LoopErrors, p.Message)
+			if p.FailureKind != "" {
+				t.LoopErrorKinds = append(t.LoopErrorKinds, p.FailureKind)
+			}
 		}
 	}
 	return false, nil

@@ -475,6 +475,8 @@ func failureKindHint(kind string) string {
 		return "upstream LLM streaming stalled past the per-call timeout; inspect provider queue/TTFT/chunk gaps or raise the runtime/eval timeout for slow reasoning models"
 	case "llm_incomplete_stream":
 		return "upstream closed the SSE stream before finish_reason; inspect model server, proxy, KV-cache, crash, or OOM logs rather than treating this as a verifier failure"
+	case "context_overflow":
+		return "upstream rejected the request because the prompt/context window was too large; compaction, shorter history, or smaller tool context is needed"
 	default:
 		return ""
 	}
@@ -984,6 +986,8 @@ func failureKind(failure string) string {
 		return "llm_timeout"
 	case isLLMIncompleteStreamFailure(lower):
 		return "llm_incomplete_stream"
+	case isContextOverflowFailure(lower):
+		return "context_overflow"
 	case strings.HasPrefix(lower, "affentctl run failed:"):
 		return "affentctl_run"
 	case strings.HasPrefix(lower, "verify command failed:"):
@@ -1037,6 +1041,25 @@ func isLLMIncompleteStreamFailure(lower string) bool {
 		strings.Contains(lower, "stream ended without finish") ||
 		(strings.Contains(lower, "finish_reason") &&
 			strings.Contains(lower, "closed the connection"))
+}
+
+func isContextOverflowFailure(lower string) bool {
+	for _, needle := range []string{
+		"context overflow",
+		"context length",
+		"context window",
+		"maximum context",
+		"context_length_exceeded",
+		"prompt is too long",
+		"input is too long",
+		"too many tokens",
+		"request too large",
+	} {
+		if strings.Contains(lower, needle) {
+			return true
+		}
+	}
+	return false
 }
 
 func validateRunConfig(temperature, topP, maxTokens, seed string, timeout time.Duration, executor string, scenarioCount int, workRoot string, workRootSet bool, verifierOutputCap int) error {

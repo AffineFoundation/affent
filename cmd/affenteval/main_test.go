@@ -592,6 +592,7 @@ func TestPrintBatchResultIncludesLLMFailureHints(t *testing.T) {
 		Failures: []string{
 			`affentctl run failed: exit=1 err=LLM llm_stream timed out after 4m0s while waiting for chat completion (max-call-timeout/per-call-timeout=4m0s): context deadline exceeded`,
 			`affentctl run failed: exit=1 err=stream ended without finish`,
+			`affentctl run failed: exit=1 err=LLM llm_request failed (model="qwen" endpoint="https://llm.example/v1/chat/completions"): maximum context length is 4096 tokens`,
 		},
 	}
 
@@ -602,6 +603,8 @@ func TestPrintBatchResultIncludesLLMFailureHints(t *testing.T) {
 		"upstream LLM streaming stalled",
 		"hint[llm_incomplete_stream]",
 		"before finish_reason",
+		"hint[context_overflow]",
+		"context window",
 	} {
 		if !strings.Contains(text.String(), want) {
 			t.Fatalf("text result missing %q:\n%s", want, text.String())
@@ -619,7 +622,8 @@ func TestPrintBatchResultIncludesLLMFailureHints(t *testing.T) {
 		t.Fatalf("failure_hints missing or wrong type: %#v\njson=%s", got["failure_hints"], jsonl.String())
 	}
 	if !strings.Contains(fmt.Sprint(hints["llm_timeout"]), "per-call timeout") ||
-		!strings.Contains(fmt.Sprint(hints["llm_incomplete_stream"]), "SSE stream") {
+		!strings.Contains(fmt.Sprint(hints["llm_incomplete_stream"]), "SSE stream") ||
+		!strings.Contains(fmt.Sprint(hints["context_overflow"]), "context window") {
 		t.Fatalf("failure_hints = %#v", hints)
 	}
 }
@@ -991,6 +995,7 @@ func TestFailureKindsForResult(t *testing.T) {
 		`affentctl run failed: exit=1 err=LLM llm_stream timed out after 4m0s while waiting for chat completion (model="qwen" endpoint="https://llm.example/v1/chat/completions" max-call-timeout/per-call-timeout=4m0s): context deadline exceeded`,
 		`affentctl run failed: exit=1 err=LLM llm_stream stream idle timeout (model="qwen" endpoint="https://llm.example/v1/chat/completions" stream-idle-timeout=1m0s max-call-timeout/per-call-timeout=4m0s): stream idle timeout`,
 		`affentctl run failed: exit=1 err=LLM llm_stream ended with an incomplete SSE stream (model="qwen" endpoint="https://llm.example/v1/chat/completions"). HTTP streaming started, but the upstream closed the connection before sending any terminal finish_reason chunk: stream ended without finish`,
+		`affentctl run failed: exit=1 err=LLM llm_request failed (model="qwen" endpoint="https://llm.example/v1/chat/completions"): prompt is too long`,
 	})
 	if got["turn_end"] != 1 ||
 		got["missing_command"] != 2 ||
@@ -999,7 +1004,8 @@ func TestFailureKindsForResult(t *testing.T) {
 		got["missing_subagent"] != 1 ||
 		got["skill_install_guard"] != 1 ||
 		got["llm_timeout"] != 2 ||
-		got["llm_incomplete_stream"] != 1 {
+		got["llm_incomplete_stream"] != 1 ||
+		got["context_overflow"] != 1 {
 		t.Fatalf("failureKindsForResult = %#v", got)
 	}
 }

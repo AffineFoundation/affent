@@ -301,6 +301,13 @@ they block a model call before the underlying tool runs. Per-turn stats expose
 `failure_kinds`, so eval runs and UIs can distinguish a useful recovery path
 from a run that simply accumulated failed retrievals or policy violations.
 
+Runtime LLM errors use the same idea on `error.failure_kind` when the loop can
+classify them. Known values include `llm_timeout` for per-call or stream-idle
+timeouts, `llm_incomplete_stream` when upstream closes SSE before
+`finish_reason`, and `context_overflow` when the provider rejects an oversized
+prompt/context window. The human `message` remains detailed; the structured
+kind is for eval grouping, WebUI badges, and operator alerts.
+
 `affent_session_id` pins follow-up turns. Pass it back through
 `X-Affent-Session-Id`, `affent_session_id`, or `session_id`.
 

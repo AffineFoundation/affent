@@ -128,6 +128,10 @@ type Trace struct {
 	// etc.). A non-empty list with TurnEndReason="completed" is
 	// fine; non-empty with TurnEndReason="error" is the kill signal.
 	LoopErrors []string
+	// LoopErrorKinds is the machine-readable primary failure class from
+	// error events when the runtime can classify it, such as llm_timeout,
+	// llm_incomplete_stream, or context_overflow.
+	LoopErrorKinds []string
 
 	// RawTypes counts every event type the run produced, by name
 	// (e.g. {"tool.request": 5, "message.delta": 1300}). Populated
