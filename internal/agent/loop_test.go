@@ -84,17 +84,35 @@ func TestWithMemorySystemGuidance_AppendsOnce(t *testing.T) {
 
 func TestWithExternalResearchSystemGuidance_AppendsOnce(t *testing.T) {
 	base := "be helpful"
-	once := WithExternalResearchSystemGuidance(base)
+	surface := externalResearchToolSurface{WebSearch: true, WebFetch: true, Browser: true}
+	once := WithExternalResearchSystemGuidance(base, surface)
 	for _, want := range []string{"External research:", "web_search", "authoritative", "browser_navigate", "social posts", "dates/freshness"} {
 		if !strings.Contains(once, want) {
 			t.Fatalf("external research guidance missing %q:\n%s", want, once)
 		}
 	}
-	if twice := WithExternalResearchSystemGuidance(once); twice != once {
+	if twice := WithExternalResearchSystemGuidance(once, surface); twice != once {
 		t.Fatal("external research guidance should be idempotent")
 	}
-	if got := WithExternalResearchSystemGuidance(""); !strings.Contains(got, DefaultSystemPrompt) || !strings.Contains(got, "External research:") {
+	if got := WithExternalResearchSystemGuidance("", surface); !strings.Contains(got, DefaultSystemPrompt) || !strings.Contains(got, "External research:") {
 		t.Fatalf("empty prompt should fall back to default + external research guidance:\n%s", got)
+	}
+
+	browserOnly := WithExternalResearchSystemGuidance("be helpful", externalResearchToolSurface{Browser: true})
+	for _, forbidden := range []string{"web_search", "web_fetch"} {
+		if strings.Contains(browserOnly, forbidden) {
+			t.Fatalf("browser-only guidance should not mention unavailable %q:\n%s", forbidden, browserOnly)
+		}
+	}
+	for _, want := range []string{"browser_navigate", "browser_snapshot", "unavailable discovery tools"} {
+		if !strings.Contains(browserOnly, want) {
+			t.Fatalf("browser-only guidance missing %q:\n%s", want, browserOnly)
+		}
+	}
+
+	webOnly := WithExternalResearchSystemGuidance("be helpful", externalResearchToolSurface{WebSearch: true, WebFetch: true})
+	if strings.Contains(webOnly, "browser_navigate") || strings.Contains(webOnly, "browser_snapshot") {
+		t.Fatalf("web-only guidance should not mention browser tools:\n%s", webOnly)
 	}
 }
 
@@ -164,6 +182,11 @@ func TestRegistrySystemPromptComposition(t *testing.T) {
 	emptyPrompt = WithRegistrySystemGuidance("", reg)
 	if !strings.Contains(emptyPrompt, "limited-tool runtime") || !strings.Contains(emptyPrompt, "External research:") {
 		t.Fatalf("empty browser prompt should compose limited base + external research guidance:\n%s", emptyPrompt)
+	}
+	for _, forbidden := range []string{"web_search", "web_fetch"} {
+		if strings.Contains(emptyPrompt, forbidden) {
+			t.Fatalf("browser-only registry prompt should not mention unavailable %q:\n%s", forbidden, emptyPrompt)
+		}
 	}
 }
 

@@ -340,21 +340,49 @@ func WithMemorySystemGuidance(prompt string) string {
 	return prompt + "\n\n" + MemorySystemGuidance
 }
 
-const ExternalResearchSystemGuidance = `External research:
-- For current or unfamiliar public facts, use web_search for discovery, then read the most authoritative pages with web_fetch or browser tools before answering. Prefer official docs, source repositories, block explorers, filings, API docs, and primary project sites over summaries.
-- For dynamic or rendered sites, use browser_navigate/browser_snapshot when available instead of shell/curl scraping. If a page or API requires credentials, say so and corroborate with reputable public alternatives.
-- For market, metrics, or trend questions, collect a current source-of-record plus at least one independent corroborating source. Keep social posts, forum comments, and influencer takes separate from verified facts, and label them as sentiment or claims.
-- Include concrete dates/freshness for time-sensitive facts. When sources disagree, state the conflict and prefer the source with the clearest provenance.
-- Avoid search loops: start with 1-2 targeted searches, refine once if needed, then answer with cited evidence or say what could not be verified.`
+const externalResearchSystemGuidanceMarker = "External research:"
 
-func WithExternalResearchSystemGuidance(prompt string) string {
+type externalResearchToolSurface struct {
+	WebSearch bool
+	WebFetch  bool
+	Browser   bool
+}
+
+func externalResearchSystemGuidance(surface externalResearchToolSurface) string {
+	var b strings.Builder
+	b.WriteString(externalResearchSystemGuidanceMarker)
+	if surface.WebSearch && (surface.WebFetch || surface.Browser) {
+		b.WriteString("\n- For current or unfamiliar public facts, use web_search for discovery, then read the most authoritative sources before answering.")
+	} else if surface.WebSearch {
+		b.WriteString("\n- For current or unfamiliar public facts, use web_search to discover and compare source snippets; say when full-page reading is unavailable.")
+	} else if surface.WebFetch || surface.Browser {
+		b.WriteString("\n- For current or unfamiliar public facts, inspect the smallest set of relevant public sources available through the registered tools; do not pretend unavailable discovery tools are available.")
+	}
+	if surface.WebFetch && surface.Browser {
+		b.WriteString("\n- Use web_fetch for direct authoritative pages and APIs. Use browser_navigate/browser_snapshot for dynamic or rendered sites instead of shell/curl scraping.")
+	} else if surface.WebFetch {
+		b.WriteString("\n- Use web_fetch to read authoritative pages and APIs. Prefer official docs, source repositories, block explorers, filings, API docs, and primary project sites over summaries.")
+	} else if surface.Browser {
+		b.WriteString("\n- Use browser_navigate/browser_snapshot for page inspection. Prefer official pages, source repositories, block explorers, filings, API docs, and primary project sites over summaries.")
+	}
+	b.WriteString("\n- For market, metrics, or trend questions, collect a current source-of-record plus at least one independent corroborating source when the available tools make that possible. Keep social posts, forum comments, and influencer takes separate from verified facts, and label them as sentiment or claims.")
+	b.WriteString("\n- Include concrete dates/freshness for time-sensitive facts. When sources disagree, state the conflict and prefer the source with the clearest provenance.")
+	if surface.WebSearch {
+		b.WriteString("\n- Avoid search loops: start with 1-2 targeted searches, refine once if needed, then answer with cited evidence or say what could not be verified.")
+	} else {
+		b.WriteString("\n- Avoid inspection loops: after reading the likely source pages available to you, answer with cited evidence or say what could not be verified.")
+	}
+	return b.String()
+}
+
+func WithExternalResearchSystemGuidance(prompt string, surface externalResearchToolSurface) string {
 	if strings.TrimSpace(prompt) == "" {
 		prompt = DefaultSystemPrompt
 	}
-	if strings.Contains(prompt, "External research:") {
+	if strings.Contains(prompt, externalResearchSystemGuidanceMarker) {
 		return prompt
 	}
-	return prompt + "\n\n" + ExternalResearchSystemGuidance
+	return prompt + "\n\n" + externalResearchSystemGuidance(surface)
 }
 
 // LimitedToolSystemPrompt is the default for sessions that do not expose the
@@ -447,8 +475,8 @@ func WithRegistrySystemGuidance(prompt string, reg *Registry) string {
 	if hasRegisteredTool(reg, SessionSearchToolName) {
 		prompt = WithSessionSearchSystemGuidance(prompt)
 	}
-	if hasExternalResearchTools(reg) {
-		prompt = WithExternalResearchSystemGuidance(prompt)
+	if surface, ok := externalResearchSurfaceForRegistry(reg); ok {
+		prompt = WithExternalResearchSystemGuidance(prompt, surface)
 	}
 	if hasRegisteredTool(reg, SubagentToolName) {
 		prompt = WithSubagentSystemGuidance(prompt)
@@ -462,11 +490,13 @@ func WithRegistrySystemGuidance(prompt string, reg *Registry) string {
 	return prompt
 }
 
-func hasExternalResearchTools(reg *Registry) bool {
-	return hasRegisteredTool(reg, "web_fetch") ||
-		hasRegisteredTool(reg, "web_search") ||
-		hasRegisteredTool(reg, "browser_navigate") ||
-		hasRegisteredTool(reg, "browser_snapshot")
+func externalResearchSurfaceForRegistry(reg *Registry) (externalResearchToolSurface, bool) {
+	surface := externalResearchToolSurface{
+		WebSearch: hasRegisteredTool(reg, "web_search"),
+		WebFetch:  hasRegisteredTool(reg, "web_fetch"),
+		Browser:   hasRegisteredTool(reg, "browser_navigate") || hasRegisteredTool(reg, "browser_snapshot"),
+	}
+	return surface, surface.WebSearch || surface.WebFetch || surface.Browser
 }
 
 func hasRegisteredTool(reg *Registry, name string) bool {
