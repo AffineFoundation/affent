@@ -353,6 +353,7 @@ func externalResearchSystemGuidance(surface externalResearchToolSurface) string 
 	b.WriteString(externalResearchSystemGuidanceMarker)
 	if surface.WebSearch && (surface.WebFetch || surface.Browser) {
 		b.WriteString("\n- For current or unfamiliar public facts, use web_search for discovery, then read the most authoritative sources before answering.")
+		b.WriteString("\n- Do not open every search result. Pick the smallest set of high-value official, primary, metrics, or corroborating sources; use social/forum snippets only as weak sentiment when page reading is blocked or unavailable.")
 	} else if surface.WebSearch {
 		b.WriteString("\n- For current or unfamiliar public facts, use web_search to discover and compare source snippets; say when full-page reading is unavailable.")
 	} else if surface.WebFetch || surface.Browser {
