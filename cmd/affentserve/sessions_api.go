@@ -1,6 +1,8 @@
 package main
 
 import (
+	"bufio"
+	"bytes"
 	"encoding/json"
 	"errors"
 	"io"
@@ -16,10 +18,12 @@ import (
 )
 
 const (
-	defaultSessionListLimit   = 100
-	maxSessionListLimit       = 1000
-	sessionReadDirBatch       = 128
-	maxSessionCreateBodyBytes = 4096
+	defaultSessionListLimit    = 100
+	maxSessionListLimit        = 1000
+	sessionReadDirBatch        = 128
+	maxSessionCreateBodyBytes  = 4096
+	maxSessionTaskSummaryChars = 160
+	maxSessionSummaryLineBytes = 1024 * 1024
 )
 
 type sessionListResponse struct {
@@ -41,21 +45,22 @@ type sessionCreateResponse struct {
 }
 
 type sessionSummary struct {
-	ID               string                `json:"id"`
-	Active           bool                  `json:"active"`
-	Durable          bool                  `json:"durable"`
-	CreatedAt        string                `json:"created_at,omitempty"`
-	LastUsedAt       string                `json:"last_used_at,omitempty"`
-	Capabilities     *sessionCapabilities  `json:"capabilities,omitempty"`
-	HasConversation  bool                  `json:"has_conversation"`
-	HasEvents        bool                  `json:"has_events"`
-	HasPlan          bool                  `json:"has_plan"`
-	PlanSummary      *sessionPlanSummary   `json:"plan_summary,omitempty"`
-	HasArtifacts     bool                  `json:"has_artifacts"`
-	HasMemory        bool                  `json:"has_memory"`
-	HasRuntimeSkills bool                  `json:"has_runtime_skills"`
-	Usage            *UsageSnapshot        `json:"usage,omitempty"`
-	Browser          *BrowserStatsSnapshot `json:"browser,omitempty"`
+	ID                string                `json:"id"`
+	Active            bool                  `json:"active"`
+	Durable           bool                  `json:"durable"`
+	CreatedAt         string                `json:"created_at,omitempty"`
+	LastUsedAt        string                `json:"last_used_at,omitempty"`
+	Capabilities      *sessionCapabilities  `json:"capabilities,omitempty"`
+	HasConversation   bool                  `json:"has_conversation"`
+	LatestUserMessage string                `json:"latest_user_message,omitempty"`
+	HasEvents         bool                  `json:"has_events"`
+	HasPlan           bool                  `json:"has_plan"`
+	PlanSummary       *sessionPlanSummary   `json:"plan_summary,omitempty"`
+	HasArtifacts      bool                  `json:"has_artifacts"`
+	HasMemory         bool                  `json:"has_memory"`
+	HasRuntimeSkills  bool                  `json:"has_runtime_skills"`
+	Usage             *UsageSnapshot        `json:"usage,omitempty"`
+	Browser           *BrowserStatsSnapshot `json:"browser,omitempty"`
 }
 
 type sessionCapabilities struct {
@@ -372,13 +377,14 @@ func summarizeActiveSession(s *Session, cfg Config) sessionSummary {
 	browser := s.BrowserStatsSnapshot()
 	caps := summarizeActiveCapabilities(s, cfg)
 	return sessionSummary{
-		ID:           s.ID,
-		Active:       true,
-		CreatedAt:    formatTime(createdAt),
-		LastUsedAt:   formatTime(lastUsedAt),
-		Capabilities: &caps,
-		Usage:        &usage,
-		Browser:      &browser,
+		ID:                s.ID,
+		Active:            true,
+		CreatedAt:         formatTime(createdAt),
+		LastUsedAt:        formatTime(lastUsedAt),
+		LatestUserMessage: latestUserMessageFromMessages(s.conv.Snapshot()),
+		Capabilities:      &caps,
+		Usage:             &usage,
+		Browser:           &browser,
 	}
 }
 
@@ -453,6 +459,12 @@ func summarizeDurableSession(pool *SessionPool, id string) (sessionSummary, bool
 	if exists && convMod.After(newest) {
 		newest = convMod
 	}
+	if exists {
+		summary.LatestUserMessage, err = latestUserMessageFromConversationFile(filepath.Join(dir, "conversation.jsonl"))
+		if err != nil {
+			return sessionSummary{}, false, err
+		}
+	}
 	var eventMod time.Time
 	if exists, eventMod, err = durableRegularFileModTime(filepath.Join(dir, "events.jsonl")); err != nil {
 		return sessionSummary{}, false, err
@@ -501,6 +513,9 @@ func mergeSessionSummaries(a, b sessionSummary) sessionSummary {
 	a.Active = a.Active || b.Active
 	a.Durable = a.Durable || b.Durable
 	a.HasConversation = a.HasConversation || b.HasConversation
+	if a.LatestUserMessage == "" && b.LatestUserMessage != "" {
+		a.LatestUserMessage = b.LatestUserMessage
+	}
 	a.HasEvents = a.HasEvents || b.HasEvents
 	a.HasPlan = a.HasPlan || b.HasPlan
 	if b.PlanSummary != nil {
@@ -537,6 +552,96 @@ func durableSessionDirInfo(path string) (os.FileInfo, bool, error) {
 		return nil, false, nil
 	}
 	return fi, true, nil
+}
+
+func latestUserMessageFromConversationFile(path string) (string, error) {
+	f, err := os.Open(path)
+	if err != nil {
+		if errors.Is(err, os.ErrNotExist) {
+			return "", nil
+		}
+		return "", err
+	}
+	defer f.Close()
+
+	var latest string
+	r := bufio.NewReaderSize(f, 64*1024)
+	for {
+		line, tooLong, err := readSessionSummaryLine(r, maxSessionSummaryLineBytes)
+		if errors.Is(err, io.EOF) {
+			break
+		}
+		if err != nil {
+			return "", err
+		}
+		if tooLong {
+			continue
+		}
+		var msg agent.ChatMessage
+		if err := json.Unmarshal(line, &msg); err != nil {
+			continue
+		}
+		if msg.Role != "user" {
+			continue
+		}
+		if summary := summarizeLatestUserMessage(msg.Content); summary != "" {
+			latest = summary
+		}
+	}
+	return latest, nil
+}
+
+func readSessionSummaryLine(r *bufio.Reader, maxBytes int) ([]byte, bool, error) {
+	var line []byte
+	tooLong := false
+	for {
+		frag, err := r.ReadSlice('\n')
+		if len(frag) > 0 && !tooLong {
+			if len(line)+len(frag) > maxBytes {
+				line = nil
+				tooLong = true
+			} else {
+				line = append(line, frag...)
+			}
+		}
+		switch {
+		case err == nil:
+			return bytes.TrimRight(line, "\r\n"), tooLong, nil
+		case errors.Is(err, bufio.ErrBufferFull):
+			continue
+		case errors.Is(err, io.EOF):
+			if len(line) == 0 && !tooLong {
+				return nil, false, io.EOF
+			}
+			return bytes.TrimRight(line, "\r\n"), tooLong, nil
+		default:
+			return nil, false, err
+		}
+	}
+}
+
+func latestUserMessageFromMessages(messages []agent.ChatMessage) string {
+	for i := len(messages) - 1; i >= 0; i-- {
+		if messages[i].Role != "user" {
+			continue
+		}
+		if summary := summarizeLatestUserMessage(messages[i].Content); summary != "" {
+			return summary
+		}
+	}
+	return ""
+}
+
+func summarizeLatestUserMessage(text string) string {
+	singleLine := strings.Join(strings.Fields(text), " ")
+	runes := []rune(singleLine)
+	if len(runes) <= maxSessionTaskSummaryChars {
+		return singleLine
+	}
+	if maxSessionTaskSummaryChars <= 3 {
+		return string(runes[:maxSessionTaskSummaryChars])
+	}
+	return string(runes[:maxSessionTaskSummaryChars-3]) + "..."
 }
 
 func durableRegularFileModTime(path string) (bool, time.Time, error) {

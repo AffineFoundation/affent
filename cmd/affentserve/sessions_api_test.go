@@ -12,6 +12,7 @@ import (
 	"reflect"
 	"strings"
 	"testing"
+	"unicode/utf8"
 
 	agent "github.com/affinefoundation/affent/internal/agent"
 	"github.com/rs/zerolog"
@@ -111,10 +112,22 @@ func TestHandleSessionCreate_RejectsInvalidID(t *testing.T) {
 
 func TestHandleSessionList_MergesActiveAndDurableSessions(t *testing.T) {
 	pool := newTestPool(t, 8, "5m")
-	if _, err := pool.GetOrCreate("active"); err != nil {
+	active, err := pool.GetOrCreate("active")
+	if err != nil {
 		t.Fatalf("GetOrCreate active: %v", err)
 	}
+	if err := active.conv.Append(agent.ChatMessage{Role: "user", Content: "inspect the webui session list"}); err != nil {
+		t.Fatalf("append active conversation: %v", err)
+	}
 	createDurableSessionDir(t, pool, "archived")
+	if err := os.WriteFile(filepath.Join(pool.sessionDirPath("archived"), "conversation.jsonl"), []byte(
+		`{"role":"system","content":"test"}`+"\n"+
+			`{"role":"user","content":"old task"}`+"\n"+
+			`{"role":"assistant","content":"done"}`+"\n"+
+			`{"role":"user","content":"resume archived work"}`+"\n",
+	), 0o644); err != nil {
+		t.Fatalf("write archived conversation: %v", err)
+	}
 
 	r := httptest.NewRequest(http.MethodGet, "/v1/sessions", nil)
 	w := httptest.NewRecorder()
@@ -132,8 +145,70 @@ func TestHandleSessionList_MergesActiveAndDurableSessions(t *testing.T) {
 	if resp.Sessions[0].ID != "active" || !resp.Sessions[0].Active || !resp.Sessions[0].Durable {
 		t.Fatalf("first session = %+v, want active durable active", resp.Sessions[0])
 	}
+	if resp.Sessions[0].LatestUserMessage != "inspect the webui session list" {
+		t.Fatalf("active latest user = %q", resp.Sessions[0].LatestUserMessage)
+	}
 	if resp.Sessions[1].ID != "archived" || resp.Sessions[1].Active || !resp.Sessions[1].Durable {
 		t.Fatalf("second session = %+v, want durable-only archived", resp.Sessions[1])
+	}
+	if resp.Sessions[1].LatestUserMessage != "resume archived work" {
+		t.Fatalf("archived latest user = %q", resp.Sessions[1].LatestUserMessage)
+	}
+}
+
+func TestMergeSessionSummariesKeepsActiveLatestUserMessage(t *testing.T) {
+	got := mergeSessionSummaries(
+		sessionSummary{
+			ID:                "active",
+			Active:            true,
+			LatestUserMessage: "new in-memory task",
+		},
+		sessionSummary{
+			ID:                "active",
+			Durable:           true,
+			LatestUserMessage: "older durable task",
+		},
+	)
+	if got.LatestUserMessage != "new in-memory task" {
+		t.Fatalf("latest_user_message = %q, want active in-memory value", got.LatestUserMessage)
+	}
+	if !got.Active || !got.Durable {
+		t.Fatalf("merged active/durable flags = %+v", got)
+	}
+}
+
+func TestLatestUserMessageFromConversationFileSkipsOversizedLines(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "conversation.jsonl")
+	hugeUser := `{"role":"user","content":"` + strings.Repeat("x", maxSessionSummaryLineBytes+1024) + `"}` + "\n"
+	body := hugeUser +
+		`{"role":"assistant","content":"ignored"}` + "\n" +
+		`{"role":"user","content":"final resumable task"}` + "\n"
+	if err := os.WriteFile(path, []byte(body), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	got, err := latestUserMessageFromConversationFile(path)
+	if err != nil {
+		t.Fatalf("latestUserMessageFromConversationFile: %v", err)
+	}
+	if got != "final resumable task" {
+		t.Fatalf("latest user = %q, want final resumable task", got)
+	}
+}
+
+func TestSummarizeLatestUserMessageCollapsesWhitespaceAndTruncatesRunes(t *testing.T) {
+	got := summarizeLatestUserMessage("  第一行\n\t第二行  " + strings.Repeat("界", maxSessionTaskSummaryChars))
+	if strings.ContainsAny(got, "\n\t") {
+		t.Fatalf("summary should be single-line, got %q", got)
+	}
+	if !strings.HasSuffix(got, "...") {
+		t.Fatalf("summary should be truncated with ellipsis, got %q", got)
+	}
+	if !strings.Contains(got, "第一行 第二行") {
+		t.Fatalf("summary lost leading content: %q", got)
+	}
+	if !utf8.ValidString(got) {
+		t.Fatalf("summary must remain valid UTF-8 text: %q", got)
 	}
 }
 
