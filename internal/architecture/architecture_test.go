@@ -79,6 +79,9 @@ var allowedDeps = map[string]map[string]bool{
 	// --- exec ---
 	"internal/executor": {},
 
+	// --- plan state (leaf) ---
+	"internal/planstate": {},
+
 	// --- trace persistence ---
 	// eventlog is the canonical JSONL recorder for sse.Events. It
 	// lives between sse (the wire shape) and agent / cmd consumers, so
