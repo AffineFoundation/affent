@@ -144,6 +144,36 @@ func TestHTTPWireRejectsOversizedJSONResponse(t *testing.T) {
 	}
 }
 
+func TestHTTPWireSSESkipsOversizedLineAndKeepsDraining(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "text/event-stream")
+		_, _ = io.WriteString(w, "data: "+strings.Repeat("x", maxHTTPSSELineBytes+1)+"\n\n")
+		_, _ = io.WriteString(w, `data: {"jsonrpc":"2.0","id":1,"result":{"ok":true}}`+"\n\n")
+	}))
+	t.Cleanup(srv.Close)
+
+	wire, err := newHTTPWire(context.Background(), ServerSpec{
+		Name: "sse-large-line",
+		URL:  srv.URL,
+	}, zerolog.Nop())
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer wire.close()
+
+	if err := wire.sendRequest(context.Background(), []byte(`{"jsonrpc":"2.0","id":1,"method":"ping"}`)); err != nil {
+		t.Fatal(err)
+	}
+	select {
+	case got := <-wire.replies():
+		if !strings.Contains(string(got), `"ok":true`) {
+			t.Fatalf("SSE frame = %s, want ok result after oversized line", got)
+		}
+	case <-time.After(time.Second):
+		t.Fatal("timed out waiting for valid SSE frame after oversized line")
+	}
+}
+
 func TestStartWire_RejectsBothCommandAndURL(t *testing.T) {
 	_, err := startWire(context.Background(), ServerSpec{
 		Name:    "bad",

@@ -13,6 +13,7 @@ import (
 	"sync/atomic"
 	"time"
 
+	"github.com/affinefoundation/affent/internal/jsonl"
 	"github.com/rs/zerolog"
 )
 
@@ -40,7 +41,10 @@ type httpWire struct {
 	log zerolog.Logger
 }
 
-const maxHTTPJSONResponseBytes = 4 * 1024 * 1024
+const (
+	maxHTTPJSONResponseBytes = 4 * 1024 * 1024
+	maxHTTPSSELineBytes      = maxHTTPJSONResponseBytes
+)
 
 func newHTTPWire(_ context.Context, spec ServerSpec, log zerolog.Logger) (wire, error) {
 	if spec.URL == "" {
@@ -186,10 +190,21 @@ func readHTTPBodyCapped(r io.Reader, limit int64) ([]byte, error) {
 func (w *httpWire) drainSSE(resp *http.Response) {
 	defer w.wg.Done()
 	defer resp.Body.Close()
-	sc := bufio.NewScanner(resp.Body)
-	sc.Buffer(make([]byte, 0, 64*1024), 4*1024*1024)
-	for sc.Scan() {
-		line := sc.Bytes()
+	r := bufio.NewReaderSize(resp.Body, 64*1024)
+	for {
+		line, overLimit, err := jsonl.ReadBoundedLine(r, maxHTTPSSELineBytes)
+		if errors.Is(err, io.EOF) {
+			return
+		}
+		if err != nil {
+			w.log.Debug().Err(err).Msg("mcp http SSE")
+			return
+		}
+		if overLimit {
+			w.log.Debug().Int("limit_bytes", maxHTTPSSELineBytes).Msg("mcp http SSE line too large")
+			continue
+		}
+		line = bytes.TrimRight(line, "\r\n")
 		if len(line) == 0 {
 			continue
 		}
@@ -205,9 +220,6 @@ func (w *httpWire) drainSSE(resp *http.Response) {
 		cp := make([]byte, len(payload))
 		copy(cp, payload)
 		w.emit(cp)
-	}
-	if err := sc.Err(); err != nil {
-		w.log.Debug().Err(err).Msg("mcp http SSE")
 	}
 }
 
