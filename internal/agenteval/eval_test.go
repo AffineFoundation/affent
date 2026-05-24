@@ -304,6 +304,9 @@ func TestBatchScenarioChecks_UsesSharedCheckLibrary(t *testing.T) {
 			"subagent_run": {"report"},
 			"skill":        {"AFFENT ACTIVE SKILL"},
 		},
+		RequiredToolArgContains: []ToolArgContainsRequirement{
+			{Tool: "web_search", Arg: "query", Substring: "Bittensor", Min: 2},
+		},
 		RequiredTruncatedResults: []string{"shell"},
 		RequiredResultArtifacts:  []string{"shell"},
 		RequiredToolOrder: []ToolOrderRequirement{
@@ -348,6 +351,7 @@ func TestBatchScenarioChecks_UsesSharedCheckLibrary(t *testing.T) {
 		"final_text_contains:done",
 		"tool_result_contains:skill:AFFENT ACTIVE SKILL",
 		"tool_result_contains:subagent_run:report",
+		"tool_arg_contains_at_least:web_search:query:Bittensor:2",
 		"tool_result_truncated:shell",
 		"tool_result_artifact:shell",
 		"tool_called_before:read_file->edit_file",
@@ -374,6 +378,20 @@ func TestBatchScenarioChecks_UsesSharedCheckLibrary(t *testing.T) {
 		if !strings.HasPrefix(checks[i].Name, want) {
 			t.Errorf("check[%d].Name = %q, want prefix %q", i, checks[i].Name, want)
 		}
+	}
+}
+
+func TestBatchScenarioChecks_ToolArgContainsDefaultsToOne(t *testing.T) {
+	checks := BatchScenarioChecks(BatchScenario{
+		RequiredToolArgContains: []ToolArgContainsRequirement{
+			{Tool: "web_search", Arg: "query", Substring: "subnet 88"},
+		},
+	})
+	if len(checks) != 2 {
+		t.Fatalf("checks count = %d, want turn-end + arg check: %+v", len(checks), checks)
+	}
+	if !strings.HasPrefix(checks[1].Name, "tool_arg_contains_at_least:web_search:query:subnet 88:1") {
+		t.Fatalf("default min check name = %q", checks[1].Name)
 	}
 }
 

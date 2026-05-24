@@ -37,6 +37,15 @@ type CommandToolOrderRequirement struct {
 	Tool    string
 }
 
+type ToolArgContainsRequirement struct {
+	Tool      string
+	Arg       string
+	Substring string
+	// Min is the required number of matching tool calls. Values <=0 default
+	// to one so scenarios do not need to spell out the common case.
+	Min int
+}
+
 type BatchScenario struct {
 	Name                          string
 	Suites                        []string
@@ -60,6 +69,7 @@ type BatchScenario struct {
 	RequiredFinalText             []string
 	ForbiddenFinalText            []string
 	RequiredToolResultText        map[string][]string
+	RequiredToolArgContains       []ToolArgContainsRequirement
 	RequiredTruncatedResults      []string
 	RequiredResultArtifacts       []string
 	RequiredToolOrder             []ToolOrderRequirement
@@ -695,6 +705,13 @@ func BatchScenarioChecks(scenario BatchScenario) []Check {
 		for _, substr := range substrings {
 			checks = append(checks, ToolResultContains(tool, substr))
 		}
+	}
+	for _, req := range scenario.RequiredToolArgContains {
+		min := req.Min
+		if min <= 0 {
+			min = 1
+		}
+		checks = append(checks, ToolArgContainsAtLeast(req.Tool, req.Arg, req.Substring, min))
 	}
 	for _, tool := range scenario.RequiredTruncatedResults {
 		checks = append(checks, ToolResultTruncated(tool))
