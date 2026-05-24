@@ -8,6 +8,7 @@ import (
 
 	"github.com/affinefoundation/affent/internal/sse"
 	"github.com/affinefoundation/affent/internal/textutil"
+	"github.com/affinefoundation/affent/internal/toolrepair"
 )
 
 func previewN(s string, n int) string {
@@ -103,6 +104,8 @@ func toolRuntimeStatsPtr(stats sse.ToolRuntimeStats) *sse.ToolRuntimeStats {
 	if stats.ToolRequests == 0 &&
 		stats.ToolNameCanonicalized == 0 &&
 		stats.ToolArgsRepaired == 0 &&
+		stats.ToolRepairNotes == 0 &&
+		len(stats.ToolRepairByKind) == 0 &&
 		stats.ToolErrors == 0 &&
 		stats.ToolDurationMS == 0 &&
 		stats.LoopGuardInterventions == 0 &&
@@ -110,6 +113,23 @@ func toolRuntimeStatsPtr(stats sse.ToolRuntimeStats) *sse.ToolRuntimeStats {
 		return nil
 	}
 	return &stats
+}
+
+func recordToolRepairNotes(stats *sse.ToolRuntimeStats, notes []string) {
+	if stats == nil {
+		return
+	}
+	for _, note := range notes {
+		kind := toolrepair.Kind(note)
+		if kind == "" {
+			continue
+		}
+		stats.ToolRepairNotes++
+		if stats.ToolRepairByKind == nil {
+			stats.ToolRepairByKind = map[string]int{}
+		}
+		stats.ToolRepairByKind[kind]++
+	}
 }
 
 func toolResultEventPayload(callID string, exitCode int, result string) sse.ToolResultPayload {

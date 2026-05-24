@@ -620,6 +620,7 @@ func (l *Loop) runTurn(ctx context.Context, turnID, userText string, opts TurnOp
 			if argsRepaired {
 				toolStats.ToolArgsRepaired++
 			}
+			recordToolRepairNotes(&toolStats, repairNotes)
 			originalArgsSummary := ""
 			if canonicalChanged || argsRepaired || argsRepairErr != nil {
 				originalArgsSummary = summarizeOriginalToolArgs(tc.Function.Arguments)

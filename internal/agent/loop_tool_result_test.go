@@ -455,6 +455,10 @@ func TestRunTurn_RepairsToolArgumentsBeforeDispatch(t *testing.T) {
 				gotRepair = p
 			}
 			if ev.Type == sse.TypeTurnEnd {
+				var end sse.TurnEndPayload
+				if err := json.Unmarshal(ev.Data, &end); err != nil {
+					t.Fatalf("decode turn.end: %v", err)
+				}
 				if gotTool != "read_file" {
 					t.Fatalf("tool request name = %q, want canonical read_file", gotTool)
 				}
@@ -478,6 +482,17 @@ func TestRunTurn_RepairsToolArgumentsBeforeDispatch(t *testing.T) {
 				}
 				if gotRepair.ArgsCapBytes != maxToolRequestArgsEventBytes {
 					t.Fatalf("ArgsCapBytes = %d, want %d", gotRepair.ArgsCapBytes, maxToolRequestArgsEventBytes)
+				}
+				if end.ToolStats == nil {
+					t.Fatal("expected turn.end tool_stats")
+				}
+				if end.ToolStats.ToolRepairNotes != len(gotRepair.RepairNotes) {
+					t.Fatalf("ToolRepairNotes = %d, want %d", end.ToolStats.ToolRepairNotes, len(gotRepair.RepairNotes))
+				}
+				if end.ToolStats.ToolRepairByKind["tool_name"] != 1 ||
+					end.ToolStats.ToolRepairByKind["alias_rename"] == 0 ||
+					end.ToolStats.ToolRepairByKind["type_coercion"] == 0 {
+					t.Fatalf("ToolRepairByKind = %+v", end.ToolStats.ToolRepairByKind)
 				}
 				if gotArgs != `{"max_bytes":128,"path":"README.md"}` {
 					t.Fatalf("tool saw args %s, want repaired compact json", gotArgs)

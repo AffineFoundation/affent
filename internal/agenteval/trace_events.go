@@ -121,6 +121,8 @@ func applyTraceEvent(t *Trace, pending map[string]int, typ string, data json.Raw
 					ToolRequests:           p.ToolStats.ToolRequests,
 					ToolNameCanonicalized:  p.ToolStats.ToolNameCanonicalized,
 					ToolArgsRepaired:       p.ToolStats.ToolArgsRepaired,
+					ToolRepairNotes:        p.ToolStats.ToolRepairNotes,
+					ToolRepairByKind:       p.ToolStats.ToolRepairByKind,
 					ToolErrors:             p.ToolStats.ToolErrors,
 					ToolDurationMS:         p.ToolStats.ToolDurationMS,
 					LoopGuardInterventions: p.ToolStats.LoopGuardInterventions,

@@ -2,11 +2,11 @@ package agenteval
 
 import (
 	"context"
-	"strings"
 
 	"github.com/affinefoundation/affent/internal/agent"
 	"github.com/affinefoundation/affent/internal/executor"
 	"github.com/affinefoundation/affent/internal/sse"
+	"github.com/affinefoundation/affent/internal/toolrepair"
 )
 
 // Scenario describes one bounded evaluation task. Scenarios are
@@ -214,6 +214,8 @@ type ToolRuntimeStats struct {
 	ToolRequests           int
 	ToolNameCanonicalized  int
 	ToolArgsRepaired       int
+	ToolRepairNotes        int
+	ToolRepairByKind       map[string]int
 	ToolErrors             int
 	ToolDurationMS         int64
 	LoopGuardInterventions int
@@ -251,7 +253,7 @@ func (t Trace) RepairStats() ToolRepairStats {
 		s.Calls++
 		seenNote := false
 		for _, note := range c.RepairNotes {
-			kind := repairNoteKind(note)
+			kind := toolrepair.Kind(note)
 			if kind == "" {
 				continue
 			}
@@ -278,32 +280,6 @@ func (s *ToolRepairStats) addKind(kind string) {
 		s.ByKind = map[string]int{}
 	}
 	s.ByKind[kind]++
-}
-
-func repairNoteKind(note string) string {
-	note = strings.TrimSpace(strings.ToLower(note))
-	switch {
-	case note == "":
-		return ""
-	case strings.Contains(note, "canonicalized tool"):
-		return "tool_name"
-	case strings.Contains(note, "malformed json"):
-		return "malformed_json"
-	case strings.HasPrefix(note, "unwrapped field "):
-		return "wrapper_unwrap"
-	case strings.HasPrefix(note, "wrapped arguments as ") ||
-		strings.HasPrefix(note, "wrapped object arguments as "):
-		return "scalar_wrap"
-	case strings.HasPrefix(note, "renamed field ") ||
-		strings.HasPrefix(note, "filled required field "):
-		return "alias_rename"
-	case strings.HasPrefix(note, "coerced field "):
-		return "type_coercion"
-	case strings.HasPrefix(note, "dropped unknown field "):
-		return "unknown_field_drop"
-	default:
-		return "other"
-	}
 }
 
 // Usage aggregates per-turn token accounting summed across every LLM

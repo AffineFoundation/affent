@@ -179,9 +179,11 @@ type TurnEndPayload struct {
 }
 
 type ToolRuntimeStats struct {
-	ToolRequests          int `json:"tool_requests,omitempty"`
-	ToolNameCanonicalized int `json:"tool_name_canonicalized,omitempty"`
-	ToolArgsRepaired      int `json:"tool_args_repaired,omitempty"`
+	ToolRequests          int            `json:"tool_requests,omitempty"`
+	ToolNameCanonicalized int            `json:"tool_name_canonicalized,omitempty"`
+	ToolArgsRepaired      int            `json:"tool_args_repaired,omitempty"`
+	ToolRepairNotes       int            `json:"tool_repair_notes,omitempty"`
+	ToolRepairByKind      map[string]int `json:"tool_repair_by_kind,omitempty"`
 	// ToolErrors counts tool results emitted with exit_code != 0,
 	// including guard rejections and skipped calls.
 	ToolErrors int `json:"tool_errors,omitempty"`
