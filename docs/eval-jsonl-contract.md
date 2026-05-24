@@ -62,6 +62,8 @@ Scenario records describe one eval case:
   structured `Failure: kind=...` result text. Web tool failures use this field
   to distinguish blocked pages, empty responses, non-text responses, timeouts,
   argument errors, and HTTP/network classes.
+- `tool_failure_hints`: optional map of structured tool failure kind to a short
+  operator hint explaining likely cause and next diagnostic action.
 - `loop_guard_interventions`: runtime loop guard intervention count.
 - `forced_no_tools`: count of forced no-tool follow-up requests after repeated
   loop guard interventions.
@@ -132,6 +134,8 @@ Summary records aggregate all scenario records from the same process:
 - Turn end totals: `end_completed`, `end_max_turns`, `end_errors`,
   `end_cancelled`, `end_unknown`.
 - Failure totals: `failure_kinds`.
+- Tool failure totals and diagnostics: `tool_failure_by_kind`,
+  `tool_failure_hints`.
 - Cleanup totals: `removed_workspaces`, `cleanup_errors`.
 
 ## Compatibility

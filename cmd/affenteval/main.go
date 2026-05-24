@@ -360,6 +360,7 @@ func printBatchSummary(w io.Writer, s batchSummary) {
 	printPlanRollup(w, s.PlanCalls, s.PlanByAction, s.PlanErrors)
 	fmt.Fprintln(w)
 	printFailureHintLines(w, s.FailureKinds, "")
+	printToolFailureHintLines(w, s.ToolFailureByKind, "")
 }
 
 func hasBatchRepairStats(s batchSummary) bool {
@@ -415,6 +416,21 @@ func printFailureHintLines(w io.Writer, counts map[string]int, indent string) {
 	}
 }
 
+func printToolFailureHintLines(w io.Writer, counts map[string]int, indent string) {
+	hints := toolFailureHintsForKinds(counts)
+	if len(hints) == 0 {
+		return
+	}
+	keys := make([]string, 0, len(hints))
+	for key := range hints {
+		keys = append(keys, key)
+	}
+	sort.Strings(keys)
+	for _, key := range keys {
+		fmt.Fprintf(w, "%stool_failure_hint[%s]: %s\n", indent, key, hints[key])
+	}
+}
+
 func failureHintsForKinds(counts map[string]int) failureHintMap {
 	if len(counts) == 0 {
 		return nil
@@ -434,12 +450,58 @@ func failureHintsForKinds(counts map[string]int) failureHintMap {
 	return out
 }
 
+func toolFailureHintsForKinds(counts map[string]int) failureHintMap {
+	if len(counts) == 0 {
+		return nil
+	}
+	out := make(failureHintMap)
+	for kind, count := range counts {
+		if count <= 0 {
+			continue
+		}
+		if hint := toolFailureKindHint(kind); hint != "" {
+			out[kind] = hint
+		}
+	}
+	if len(out) == 0 {
+		return nil
+	}
+	return out
+}
+
 func failureKindHint(kind string) string {
 	switch kind {
 	case "llm_timeout":
 		return "upstream LLM streaming stalled past the per-call timeout; inspect provider queue/TTFT/chunk gaps or raise the runtime/eval timeout for slow reasoning models"
 	case "llm_incomplete_stream":
 		return "upstream closed the SSE stream before finish_reason; inspect model server, proxy, KV-cache, crash, or OOM logs rather than treating this as a verifier failure"
+	default:
+		return ""
+	}
+}
+
+func toolFailureKindHint(kind string) string {
+	switch kind {
+	case "blocked":
+		return "direct web_fetch was refused by the source; use a canonical/alternate source, browser tools when available, or mark the source as unverified"
+	case "empty_response":
+		return "web_fetch received an empty successful response; do not treat it as evidence, switch source or use a rendered/API/text endpoint"
+	case "non_text":
+		return "web_fetch received non-readable content; fetch an HTML/API/text variant or use browser/screenshot tooling when configured"
+	case "timeout":
+		return "tool request timed out; retry once only if the source is important, then switch source or report the gap"
+	case "rate_limited":
+		return "the source rate-limited requests; avoid repeated retries and use cached snippets or another authoritative source"
+	case "server_error":
+		return "the source returned a server-side failure; retry later once or use another authoritative mirror/source"
+	case "not_found":
+		return "the URL is stale or gone; rediscover the canonical URL before retrying"
+	case "private_network_blocked":
+		return "SSRF guard blocked a private or local network URL; use public sources or explicitly configure trusted local access"
+	case "invalid_args":
+		return "the model called a tool with invalid arguments; inspect tool repair and prompt pressure if this is frequent"
+	case "http_error", "network_error":
+		return "web_fetch hit a transport or HTTP failure; inspect status/detail in the tool result and switch sources if it repeats"
 	default:
 		return ""
 	}
@@ -557,6 +619,7 @@ type batchResultRecord struct {
 	Failures                   []string       `json:"failures,omitempty"`
 	FailureKinds               map[string]int `json:"failure_kinds,omitempty"`
 	FailureHints               failureHintMap `json:"failure_hints,omitempty"`
+	ToolFailureHints           failureHintMap `json:"tool_failure_hints,omitempty"`
 
 	// Per-scenario delegation breakdown. Fields are omitted from the
 	// JSONL when the scenario used no delegation tools, so older
@@ -615,6 +678,7 @@ type batchSummaryRecord struct {
 	EndUnknown                 int            `json:"end_unknown"`
 	FailureKinds               map[string]int `json:"failure_kinds,omitempty"`
 	FailureHints               failureHintMap `json:"failure_hints,omitempty"`
+	ToolFailureHints           failureHintMap `json:"tool_failure_hints,omitempty"`
 	RemovedWorkspaces          int            `json:"removed_workspaces"`
 	CleanupErrors              int            `json:"cleanup_errors"`
 
@@ -680,6 +744,7 @@ func printBatchResultJSONL(w io.Writer, meta evalJSONLMetadata, res agenteval.Ba
 		Failures:                   res.Failures,
 		FailureKinds:               failureKinds,
 		FailureHints:               failureHintsForKinds(failureKinds),
+		ToolFailureHints:           toolFailureHintsForKinds(res.ToolStats.ToolFailureByKind),
 		FocusedTaskCalls:           res.Delegation.FocusedTaskCalls,
 		FocusedTaskByType:          res.Delegation.FocusedTaskByType,
 		FocusedTaskErrors:          res.Delegation.FocusedTaskErrors,
@@ -733,6 +798,7 @@ func printBatchSummaryJSONL(w io.Writer, meta evalJSONLMetadata, s batchSummary)
 		EndUnknown:                 s.EndUnknown,
 		FailureKinds:               cloneFailureKinds(s.FailureKinds),
 		FailureHints:               failureHintsForKinds(s.FailureKinds),
+		ToolFailureHints:           toolFailureHintsForKinds(s.ToolFailureByKind),
 		RemovedWorkspaces:          s.RemovedWorkspaces,
 		CleanupErrors:              s.CleanupErrors,
 		FocusedTaskCalls:           s.FocusedTaskCalls,
@@ -873,6 +939,7 @@ func printBatchResult(w io.Writer, res agenteval.BatchResult) {
 		fmt.Fprintf(w, "  - %s\n", failure)
 	}
 	printFailureHintLines(w, failureKindsForResult(res.Failures), "  ")
+	printToolFailureHintLines(w, res.ToolStats.ToolFailureByKind, "  ")
 }
 
 func hasToolTruncation(stats agenteval.ToolTruncationStats) bool {

@@ -229,6 +229,8 @@ func TestPrintBatchResultIncludesTraceMetrics(t *testing.T) {
 		"trace: /tmp/ws/trace.jsonl",
 		"metrics: tools=3 errors=2 repaired=1 canonicalized=1 loop_guard=2 forced_no_tools=1 tool_ms=45 tokens=100/25 trunc=args:1,results:1,artifacts:1 omitted=512/4096 tool_failure_kinds=invalid_args:1 delegation=focused_tasks:2,subagents:1 delegation_errors=focused_tasks:1,subagents:1 focused_task_by_type=explore:1,verify:1 subagent_by_mode=review:1 plan=calls:3,errors:1 plan_by_action=set:1,update:2 end=completed",
 		`verifier: pass exit=0 duration=80ms output=1200 truncated omitted=176 cap=1024 command="go test ./..."`,
+		"tool_failure_hint[invalid_args]",
+		"invalid arguments",
 	} {
 		if !strings.Contains(got, want) {
 			t.Fatalf("output missing %q:\n%s", want, got)
@@ -351,6 +353,9 @@ func TestBatchSummaryAggregatesRuntimeMetrics(t *testing.T) {
 	if !strings.Contains(out.String(), "tool_failure_kinds=invalid_args:1,timeout:2") {
 		t.Fatalf("summary output missing tool failure kind rollup:\n%s", out.String())
 	}
+	if !strings.Contains(out.String(), "tool_failure_hint[invalid_args]") || !strings.Contains(out.String(), "tool_failure_hint[timeout]") {
+		t.Fatalf("summary output missing tool failure hints:\n%s", out.String())
+	}
 	if !strings.Contains(out.String(), "repair_calls=5,ok=4,failed=1") {
 		t.Fatalf("summary output missing repair outcome rollup:\n%s", out.String())
 	}
@@ -418,6 +423,7 @@ func TestPrintBatchResultJSONL(t *testing.T) {
 			ToolArgsRepaired:       2,
 			ToolNameCanonicalized:  1,
 			ToolErrors:             1,
+			ToolFailureByKind:      map[string]int{"blocked": 1},
 			ToolDurationMS:         75,
 			LoopGuardInterventions: 3,
 			ForcedNoTools:          1,
@@ -516,6 +522,14 @@ func TestPrintBatchResultJSONL(t *testing.T) {
 	}
 	if _, ok := got["failure_kinds"]; ok {
 		t.Fatalf("passing result should omit failure_kinds, got %#v", got["failure_kinds"])
+	}
+	toolFailureKinds, ok := got["tool_failure_by_kind"].(map[string]any)
+	if !ok || toolFailureKinds["blocked"] != float64(1) {
+		t.Fatalf("tool_failure_by_kind = %#v\njson=%s", got["tool_failure_by_kind"], out.String())
+	}
+	toolFailureHints, ok := got["tool_failure_hints"].(map[string]any)
+	if !ok || !strings.Contains(fmt.Sprint(toolFailureHints["blocked"]), "direct web_fetch") {
+		t.Fatalf("tool_failure_hints = %#v\njson=%s", got["tool_failure_hints"], out.String())
 	}
 	repairKinds, ok := got["tool_repair_by_kind"].(map[string]any)
 	if !ok {
@@ -800,6 +814,7 @@ func TestPrintBatchSummaryJSONL(t *testing.T) {
 		ToolRepairFailed:           1,
 		ToolRepairNotes:            4,
 		ToolRepairByKind:           map[string]int{"tool_name": 2, "malformed_json": 1, "type_coercion": 1},
+		ToolFailureByKind:          map[string]int{"blocked": 1},
 		LoopGuardInterventions:     3,
 		ForcedNoTools:              1,
 		ToolDurationMS:             120,
@@ -905,6 +920,14 @@ func TestPrintBatchSummaryJSONL(t *testing.T) {
 	}
 	if repairKinds["tool_name"] != float64(2) || repairKinds["malformed_json"] != float64(1) || repairKinds["type_coercion"] != float64(1) {
 		t.Fatalf("tool_repair_by_kind = %#v", repairKinds)
+	}
+	toolFailureKinds, ok := got["tool_failure_by_kind"].(map[string]any)
+	if !ok || toolFailureKinds["blocked"] != float64(1) {
+		t.Fatalf("tool_failure_by_kind = %#v\njson=%s", got["tool_failure_by_kind"], out.String())
+	}
+	toolFailureHints, ok := got["tool_failure_hints"].(map[string]any)
+	if !ok || !strings.Contains(fmt.Sprint(toolFailureHints["blocked"]), "direct web_fetch") {
+		t.Fatalf("tool_failure_hints = %#v\njson=%s", got["tool_failure_hints"], out.String())
 	}
 	planByAction, ok := got["plan_by_action"].(map[string]any)
 	if !ok {
