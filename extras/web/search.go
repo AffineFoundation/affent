@@ -164,7 +164,7 @@ func formatResults(results []SearchResult, limit int) string {
 	}
 	b.WriteString("Next: choose the 1-3 most authoritative/current result URLs, prefer official or primary sources, and read them with an available page-reading tool before answering. If no full-page reading tool is available, compare snippets and say that full-page verification was unavailable.")
 	if hasDirectReaderWarning {
-		b.WriteString(" Do not spend direct page-reading calls on URLs marked with Direct-reader warning; use their snippets only as weak discovery, sentiment, or claim evidence unless a rendering-capable tool is available.")
+		b.WriteString(" Do not spend direct page-reading calls on URLs marked with Direct-reader warning; use their snippets only as weak discovery, sentiment, or claim evidence unless a readable canonical source is available.")
 	}
 	return strings.TrimSpace(b.String())
 }
@@ -193,7 +193,7 @@ func directFetchCaution(rawURL string) string {
 		return "this is often a redirect or short-link wrapper; prefer the final canonical URL from an authoritative source before reading it."
 	}
 	if websource.IsKnownDirectReaderTrapHost(host) {
-		return "do not use direct page fetch on this URL; this host usually blocks direct readers. Use the snippet only as weak sentiment/claim evidence, find a mirrored/source URL, or use a rendering-capable tool if available."
+		return "do not use direct page fetch on this URL; this host usually blocks direct readers. Use the snippet only as weak sentiment/claim evidence, find a mirrored/source URL, or mark this source as blocked/unverified."
 	}
 	if websource.IsSocialOrDiscussionHost(host) {
 		return "social/discussion pages often block direct readers or require JavaScript; use them as sentiment/claim evidence only unless a readable page source is returned."
@@ -242,7 +242,7 @@ func recoverableSearchError(err error) error {
 		return err
 	}
 	lower := strings.ToLower(err.Error())
-	next := "retry once with fewer/different keywords or a more distinctive entity; if search remains unavailable, use known official URLs with available page-reading/rendering tools or say what could not be verified."
+	next := "retry once with fewer/different keywords or a more distinctive entity; if search remains unavailable, use known official URLs with available reading tools or say what could not be verified."
 	switch {
 	case errors.Is(err, context.DeadlineExceeded) || strings.Contains(lower, "timeout") || strings.Contains(lower, "deadline exceeded"):
 		next = "search provider timed out; retry once with a shorter query, then use known official URLs or answer with clearly marked gaps."

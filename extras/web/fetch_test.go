@@ -767,7 +767,7 @@ func TestSearchTool_AnnotatesDirectFetchRiskyResults(t *testing.T) {
 			t.Fatalf("risky result output missing %q:\n%s", want, out)
 		}
 	}
-	for _, forbidden := range []string{"browser_navigate", "browser_snapshot", "browser tools", "web_fetch"} {
+	for _, forbidden := range []string{"browser_navigate", "browser_snapshot", "browser tools", "web_fetch", "rendering"} {
 		if strings.Contains(out, forbidden) {
 			t.Fatalf("direct-fetch cautions should not mention unavailable %q directly:\n%s", forbidden, out)
 		}
@@ -987,7 +987,7 @@ func TestSearchTool_ProviderErrorIncludesNext(t *testing.T) {
 			t.Fatalf("provider error missing %q: %v", want, err)
 		}
 	}
-	for _, forbidden := range []string{"web_fetch", "browser"} {
+	for _, forbidden := range []string{"web_fetch", "browser", "rendering"} {
 		if strings.Contains(err.Error(), forbidden) {
 			t.Fatalf("provider error should not mention unavailable %q directly: %v", forbidden, err)
 		}
