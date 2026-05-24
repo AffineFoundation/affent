@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"net/url"
 	"os"
 	"strings"
 	"time"
@@ -144,14 +145,77 @@ func formatResults(results []SearchResult, limit int) string {
 		}
 		snippet = truncateSearchField(snippet, maxSearchSnippetBytes)
 		displayed++
-		fmt.Fprintf(&b, "%d. %s\n   %s\n   %s\n\n",
+		fmt.Fprintf(&b, "%d. %s\n   %s\n   %s",
 			displayed, title, url, snippet)
+		if note := directFetchCaution(url); note != "" {
+			fmt.Fprintf(&b, "\n   Direct-fetch caution: %s", note)
+		}
+		b.WriteString("\n\n")
 	}
 	if displayed == 0 {
 		return "(no usable results: search provider returned no URLs)\nFailure: kind=no_results\nNext: retry web_search with more distinctive keywords or official domain names, or use another available source URL if already known."
 	}
 	b.WriteString("Next: choose the 1-3 most authoritative/current result URLs, prefer official or primary sources, and read them with an available page-reading tool before answering. If no full-page reading tool is available, compare snippets and say that full-page verification was unavailable.")
 	return strings.TrimSpace(b.String())
+}
+
+func directFetchCaution(rawURL string) string {
+	u, err := url.Parse(strings.TrimSpace(rawURL))
+	if err != nil || u.Host == "" {
+		return ""
+	}
+	host := strings.TrimPrefix(strings.ToLower(u.Hostname()), "www.")
+	path := strings.ToLower(u.EscapedPath())
+	if isSearchResultHost(host, path) {
+		return "open the target/source URL, not the search-results page; search snippets are discovery evidence only."
+	}
+	if isRedirectorHost(host) {
+		return "this is often a redirect or short-link wrapper; prefer the final canonical URL from an authoritative source before reading it."
+	}
+	if isSocialOrDiscussionHost(host) {
+		return "social/discussion pages often block direct readers or require JavaScript; use them as sentiment/claim evidence only unless a readable page source is returned."
+	}
+	return ""
+}
+
+func isSearchResultHost(host, path string) bool {
+	switch host {
+	case "google.com", "bing.com", "duckduckgo.com", "search.brave.com", "search.yahoo.com", "yahoo.com", "baidu.com", "yandex.com":
+		return path == "" || path == "/" || strings.HasPrefix(path, "/search") || strings.HasPrefix(path, "/html") || strings.HasPrefix(path, "/s")
+	default:
+		return false
+	}
+}
+
+func isRedirectorHost(host string) bool {
+	switch host {
+	case "t.co", "bit.ly", "tinyurl.com", "goo.gl", "lnkd.in", "l.facebook.com", "out.reddit.com":
+		return true
+	default:
+		return false
+	}
+}
+
+func isSocialOrDiscussionHost(host string) bool {
+	for _, suffix := range []string{
+		"x.com",
+		"twitter.com",
+		"facebook.com",
+		"instagram.com",
+		"linkedin.com",
+		"tiktok.com",
+		"threads.net",
+		"reddit.com",
+		"medium.com",
+		"discord.com",
+		"t.me",
+		"telegram.me",
+	} {
+		if host == suffix || strings.HasSuffix(host, "."+suffix) {
+			return true
+		}
+	}
+	return false
 }
 
 func truncateSearchField(s string, maxBytes int) string {

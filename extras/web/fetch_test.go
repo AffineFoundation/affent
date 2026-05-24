@@ -584,6 +584,74 @@ func TestSearchTool_FormatsResults(t *testing.T) {
 	if strings.Contains(out, "web_fetch") {
 		t.Fatalf("generic search result guidance should not mention unavailable tools directly:\n%s", out)
 	}
+	if strings.Contains(out, "Direct-fetch caution") {
+		t.Fatalf("ordinary result should not get a direct-fetch caution:\n%s", out)
+	}
+}
+
+func TestSearchTool_AnnotatesDirectFetchRiskyResults(t *testing.T) {
+	tool, err := SearchTool(SearchConfig{
+		Provider: stubProvider{results: []SearchResult{
+			{Title: "Search page", URL: "https://www.google.com/search?q=affine+bittensor", Snippet: "search result page"},
+			{Title: "Social post", URL: "https://x.com/example/status/123", Snippet: "community reaction"},
+			{Title: "Short link", URL: "https://t.co/abc", Snippet: "redirect"},
+		}},
+	})
+	if err != nil {
+		t.Fatalf("SearchTool: %v", err)
+	}
+	args, _ := json.Marshal(map[string]any{"query": "anything"})
+	out, err := tool.Execute(context.Background(), args)
+	if err != nil {
+		t.Fatalf("Execute: %v", err)
+	}
+	for _, want := range []string{
+		"Direct-fetch caution: open the target/source URL",
+		"search snippets are discovery evidence only",
+		"social/discussion pages often block direct readers or require JavaScript",
+		"sentiment/claim evidence only",
+		"redirect or short-link wrapper",
+		"canonical URL",
+	} {
+		if !strings.Contains(out, want) {
+			t.Fatalf("risky result output missing %q:\n%s", want, out)
+		}
+	}
+	for _, forbidden := range []string{"browser_navigate", "browser_snapshot", "browser tools", "web_fetch"} {
+		if strings.Contains(out, forbidden) {
+			t.Fatalf("direct-fetch cautions should not mention unavailable %q directly:\n%s", forbidden, out)
+		}
+	}
+}
+
+func TestDirectFetchCautionClassifiesGenericHosts(t *testing.T) {
+	cases := []struct {
+		name string
+		url  string
+		want string
+	}{
+		{name: "google search", url: "https://google.com/search?q=agent", want: "search-results page"},
+		{name: "duckduckgo html", url: "https://duckduckgo.com/html?q=agent", want: "search-results page"},
+		{name: "x status", url: "https://x.com/affine/status/1", want: "social/discussion"},
+		{name: "reddit", url: "https://old.reddit.com/r/test/comments/1/x", want: "social/discussion"},
+		{name: "short link", url: "https://t.co/abc", want: "short-link"},
+		{name: "ordinary", url: "https://example.com/report", want: ""},
+		{name: "invalid", url: "://bad", want: ""},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			got := directFetchCaution(c.url)
+			if c.want == "" {
+				if got != "" {
+					t.Fatalf("directFetchCaution() = %q, want empty", got)
+				}
+				return
+			}
+			if !strings.Contains(got, c.want) {
+				t.Fatalf("directFetchCaution() = %q, want substring %q", got, c.want)
+			}
+		})
+	}
 }
 
 func TestSearchTool_FormatsPartialResults(t *testing.T) {

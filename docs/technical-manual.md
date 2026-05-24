@@ -271,6 +271,13 @@ source, use browser tools when they are registered, rely on search snippets only
 as weak sentiment when full-page reading is unavailable, or answer with the gap
 clearly marked as unverified.
 
+`web_search` may annotate individual results with `Direct-fetch caution` when a
+URL is likely to waste turns in direct HTTP fetches, such as search-result
+pages, social/discussion pages, or short-link redirectors. These annotations
+are source-selection hints, not hard failures: the agent should prefer the
+target/canonical URL, an official API or text endpoint, or treat the snippet as
+weak sentiment/claim evidence when no readable page source is available.
+
 Repeated failed `web_fetch` calls are guarded more aggressively than general
 tool failures. Repeated no-evidence `web_search` results also count as failures
 for loop-guard purposes. After repeated no-evidence retrieval, the guard tells
