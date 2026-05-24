@@ -255,8 +255,9 @@ func doctorCapabilityExecutor(executor string) string {
 func doctorBoundarySummary(c commonFlags) string {
 	ab := agent.DefaultRuntimeBoundaries()
 	mb := mcp.DefaultRuntimeBoundaries()
+	mem := memory.DefaultRuntimeBoundaries()
 	return fmt.Sprintf(
-		"prompt_input=%s system_prompt=%s config=%s max_turns=%d call_timeout=%s llm_request=%s llm_error_body=%s stream_content=%s stream_reasoning=%s stream_tool_args=%s stream_tool_calls=%d stream_scanner=%s tool_args_event=%s tool_arg_string=%s tool_result_context=%s tool_result_event=%s tool_result_preview=%s repairable_tool_args=%s project_context=%s mcp_result=%s mcp_http_json=%s mcp_http_sse_line=%s mcp_stdio_frame=%s jsonl_record=%s",
+		"prompt_input=%s system_prompt=%s config=%s max_turns=%d call_timeout=%s llm_request=%s llm_error_body=%s stream_content=%s stream_reasoning=%s stream_tool_args=%s stream_tool_calls=%d stream_scanner=%s tool_args_event=%s tool_arg_string=%s tool_result_context=%s tool_result_event=%s tool_result_preview=%s repairable_tool_args=%s project_context=%s mcp_result=%s mcp_http_json=%s mcp_http_sse_line=%s mcp_stdio_frame=%s jsonl_record=%s memory_file=%s memory_search_query=%s memory_search_terms=%d memory_search_snippet=%d memory_response_entry=%d",
 		formatBytes(maxPromptInputBytes),
 		formatBytes(maxPromptInputBytes),
 		formatBytes(maxConfigInputBytes),
@@ -281,6 +282,11 @@ func doctorBoundarySummary(c commonFlags) string {
 		formatBytes(mb.HTTPSSELineBytes),
 		formatBytes(mb.StdioFrameBytes),
 		formatBytes(jsonl.DefaultMaxRecordBytes),
+		formatBytes(mem.FileBytes),
+		formatBytes(mem.SearchQueryBytes),
+		mem.SearchQueryTerms,
+		mem.SearchSnippet,
+		mem.ResponseEntry,
 	)
 }
 

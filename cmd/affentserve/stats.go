@@ -9,6 +9,7 @@ import (
 	"github.com/affinefoundation/affent/internal/agent"
 	"github.com/affinefoundation/affent/internal/jsonl"
 	"github.com/affinefoundation/affent/internal/mcp"
+	"github.com/affinefoundation/affent/internal/memory"
 )
 
 // statsResponse summarizes server + per-session activity at one
@@ -53,6 +54,11 @@ type statsBoundaries struct {
 	MCPHTTPSSELine       int    `json:"mcp_http_sse_line_bytes"`
 	MCPStdioFrame        int    `json:"mcp_stdio_frame_bytes"`
 	JSONLRecordBytes     int    `json:"jsonl_record_bytes"`
+	MemoryFileBytes      int    `json:"memory_file_bytes"`
+	MemorySearchQuery    int    `json:"memory_search_query_bytes"`
+	MemorySearchTerms    int    `json:"memory_search_terms"`
+	MemorySearchSnippet  int    `json:"memory_search_snippet_chars"`
+	MemoryResponseEntry  int    `json:"memory_response_entry_chars"`
 }
 
 type sessionStatsResponse struct {
@@ -137,6 +143,7 @@ func handleStats(cfg Config, pool *SessionPool) http.HandlerFunc {
 func statsBoundarySnapshot(cfg Config) statsBoundaries {
 	ab := agent.DefaultRuntimeBoundaries()
 	mb := mcp.DefaultRuntimeBoundaries()
+	mem := memory.DefaultRuntimeBoundaries()
 	maxTurnSteps := cfg.MaxTurnSteps
 	if maxTurnSteps <= 0 {
 		maxTurnSteps = agent.DefaultMaxTurnSteps
@@ -167,5 +174,10 @@ func statsBoundarySnapshot(cfg Config) statsBoundaries {
 		MCPHTTPSSELine:       mb.HTTPSSELineBytes,
 		MCPStdioFrame:        mb.StdioFrameBytes,
 		JSONLRecordBytes:     jsonl.DefaultMaxRecordBytes,
+		MemoryFileBytes:      mem.FileBytes,
+		MemorySearchQuery:    mem.SearchQueryBytes,
+		MemorySearchTerms:    mem.SearchQueryTerms,
+		MemorySearchSnippet:  mem.SearchSnippet,
+		MemoryResponseEntry:  mem.ResponseEntry,
 	}
 }

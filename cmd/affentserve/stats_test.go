@@ -68,6 +68,10 @@ func TestHandleStats_EmptyPool(t *testing.T) {
 	if resp.Boundaries.JSONLRecordBytes <= 0 {
 		t.Fatalf("Boundaries.JSONLRecordBytes = %d, want positive", resp.Boundaries.JSONLRecordBytes)
 	}
+	if resp.Boundaries.MemoryFileBytes <= 0 || resp.Boundaries.MemorySearchQuery <= 0 || resp.Boundaries.MemorySearchTerms <= 0 ||
+		resp.Boundaries.MemorySearchSnippet <= 0 || resp.Boundaries.MemoryResponseEntry <= 0 {
+		t.Fatalf("memory boundaries must be positive: %+v", resp.Boundaries)
+	}
 	if resp.ServerTime == "" {
 		t.Fatal("ServerTime must be populated")
 	}

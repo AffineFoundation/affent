@@ -316,6 +316,11 @@ func TestDoctorBoundarySummaryUsesConfiguredTurnLimits(t *testing.T) {
 		"mcp_http_sse_line=4MiB",
 		"mcp_stdio_frame=4MiB",
 		"jsonl_record=4MiB",
+		"memory_file=1MiB",
+		"memory_search_query=2KiB",
+		"memory_search_terms=16",
+		"memory_search_snippet=500",
+		"memory_response_entry=1000",
 	} {
 		if !strings.Contains(got, want) {
 			t.Fatalf("boundary summary missing %q:\n%s", want, got)
