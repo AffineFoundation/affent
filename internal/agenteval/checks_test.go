@@ -86,6 +86,32 @@ func TestToolCalledAtLeast(t *testing.T) {
 	}
 }
 
+func TestToolArgContainsAtLeast(t *testing.T) {
+	trace := Trace{
+		Tools: []ToolCall{
+			{CallID: "s1", Tool: "web_search", Args: map[string]any{"query": "Vega Bittensor subnet 88 trend"}},
+			{CallID: "s2", Tool: "web_search", Args: map[string]any{"query": "Vega Bittensor subnet 88 official domain"}},
+			{CallID: "f1", Tool: "web_fetch", Args: map[string]any{"url": "https://official.example/vega"}},
+		},
+	}
+	if res := ToolArgContainsAtLeast("web_search", "query", "Bittensor", 2).Eval(trace); !res.Pass {
+		t.Fatalf("expected Bittensor in both search queries: %+v", res)
+	}
+	res := ToolArgContainsAtLeast("web_search", "query", "subnet 88", 3).Eval(trace)
+	if res.Pass {
+		t.Fatal("expected subnet count check to fail")
+	}
+	for _, want := range []string{"at least 3", "web_search", "query", "subnet 88", "s1", "s2"} {
+		if !strings.Contains(res.Detail, want) {
+			t.Fatalf("failure detail missing %q: %s", want, res.Detail)
+		}
+	}
+	missing := ToolArgContainsAtLeast("web_fetch", "query", "anything", 1).Eval(trace)
+	if missing.Pass || !strings.Contains(missing.Detail, "<missing>") {
+		t.Fatalf("missing arg should fail with diagnostic, got %+v", missing)
+	}
+}
+
 func TestToolCalledAtMost(t *testing.T) {
 	trace := Trace{
 		Tools: []ToolCall{

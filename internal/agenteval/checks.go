@@ -57,6 +57,46 @@ func ToolCalledAtLeast(toolName string, min int) Check {
 	}
 }
 
+// ToolArgContainsAtLeast passes when at least min calls to toolName have an
+// argument field whose string representation contains substr. It gives
+// disambiguator-preservation evals a named, diagnostic check instead of hiding
+// the requirement inside an anonymous ToolCalled matcher.
+func ToolArgContainsAtLeast(toolName, argName, substr string, min int) Check {
+	return Check{
+		Name: fmt.Sprintf("tool_arg_contains_at_least:%s:%s:%s:%d", toolName, argName, previewSubstr(substr, 24), min),
+		Eval: func(t Trace) CheckResult {
+			count := 0
+			var callIDs []string
+			var observed []string
+			for _, c := range t.Tools {
+				if c.Tool != toolName {
+					continue
+				}
+				value, ok := c.Args[argName]
+				if !ok {
+					observed = append(observed, fmt.Sprintf("%s=<missing>", c.CallID))
+					continue
+				}
+				text := fmt.Sprint(value)
+				if len(observed) < 3 {
+					observed = append(observed, fmt.Sprintf("%s=%q", c.CallID, previewSubstr(text, 80)))
+				}
+				if strings.Contains(text, substr) {
+					count++
+					callIDs = append(callIDs, c.CallID)
+				}
+			}
+			if count >= min {
+				return CheckResult{Pass: true, Detail: fmt.Sprintf("%s.%s contains %q in %d call(s): %v", toolName, argName, substr, count, callIDs)}
+			}
+			return CheckResult{
+				Pass:   false,
+				Detail: fmt.Sprintf("expected at least %d %q call(s) with arg %q containing %q, got %d; observed=%v", min, toolName, argName, substr, count, observed),
+			}
+		},
+	}
+}
+
 func ToolCalledAtMost(toolName string, max int) Check {
 	return ToolCalledAtMostMatching(toolName, max, nil)
 }

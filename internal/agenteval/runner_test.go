@@ -2052,6 +2052,8 @@ func TestRunner_EndToEnd_ExternalResearchSearchRecovery(t *testing.T) {
 			TurnEndedCleanly(),
 			ToolCalled("web_search", broadSearch),
 			ToolCalled("web_search", refinedSearch),
+			ToolArgContainsAtLeast("web_search", "query", "Bittensor", 2),
+			ToolArgContainsAtLeast("web_search", "query", "subnet 88", 2),
 			ToolCalledAtMostMatching("web_search", 1, broadSearch),
 			ToolFailureKindAtLeast("no_results", 1),
 			ToolResultContains("web_search", "Failure: kind=no_results"),
