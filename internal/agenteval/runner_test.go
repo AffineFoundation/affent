@@ -1354,8 +1354,8 @@ Body:
 // TestRunner_EndToEnd_ExternalResearchFlow pins the generic research shape
 // behind real user requests like "analyze recent trend for X" without baking in
 // any specific project, subnet, site, or token. The agent first discovers
-// sources, then reads primary/metrics/social sources, then separates verified
-// facts from sentiment in the final answer.
+// sources, then reads primary/metrics pages while using direct-reader-warning
+// social snippets as weak sentiment evidence instead of fetching them.
 func TestRunner_EndToEnd_ExternalResearchFlow(t *testing.T) {
 	webSearch := agent.Tool{
 		Name:        "web_search",
@@ -1373,7 +1373,7 @@ func TestRunner_EndToEnd_ExternalResearchFlow(t *testing.T) {
 			return `[
   {"title":"Nimbus Protocol official docs","url":"https://official.example/nimbus/about","snippet":"Primary source describing Nimbus Protocol as a decentralized compute subnet."},
   {"title":"Nimbus Protocol market metrics","url":"https://metrics.example/nimbus","snippet":"Current price, market cap, volume, and 24h change."},
-  {"title":"Recent community discussion","url":"https://social.example/search/nimbus","snippet":"Recent positive and critical community posts."}
+  {"title":"Recent community discussion","url":"https://social.example/search/nimbus","snippet":"Direct-reader warning: do not direct-fetch this social result. Recent positive and critical community posts."}
 ]`, nil
 		},
 	}
@@ -1400,8 +1400,6 @@ func TestRunner_EndToEnd_ExternalResearchFlow(t *testing.T) {
 				return "Official docs, updated 2026-05-20: Nimbus Protocol is a decentralized compute subnet for model-routing workloads.", nil
 			case "https://metrics.example/nimbus":
 				return "Metrics snapshot as of 2026-05-24T12:00:00Z: price $17.78, market cap $56.7M, 24h change +7.2%, 24h volume $2.36M.", nil
-			case "https://social.example/search/nimbus":
-				return "Community posts from 2026-05-23 to 2026-05-24: supporters cite rising volume and integrations; critics question sustainability and liquidity depth.", nil
 			default:
 				return "", fmt.Errorf("unexpected test URL %q", p.URL)
 			}
@@ -1414,12 +1412,12 @@ func TestRunner_EndToEnd_ExternalResearchFlow(t *testing.T) {
 		`[DONE]`,
 	}
 	turn2 := []string{
-		`{"choices":[{"delta":{"role":"assistant","tool_calls":[{"index":0,"id":"f1","type":"function","function":{"name":"web_fetch","arguments":"{\"url\":\"https://official.example/nimbus/about\"}"}},{"index":1,"id":"f2","type":"function","function":{"name":"web_fetch","arguments":"{\"url\":\"https://metrics.example/nimbus\"}"}},{"index":2,"id":"f3","type":"function","function":{"name":"web_fetch","arguments":"{\"url\":\"https://social.example/search/nimbus\"}"}}]},"finish_reason":null}]}`,
+		`{"choices":[{"delta":{"role":"assistant","tool_calls":[{"index":0,"id":"f1","type":"function","function":{"name":"web_fetch","arguments":"{\"url\":\"https://official.example/nimbus/about\"}"}},{"index":1,"id":"f2","type":"function","function":{"name":"web_fetch","arguments":"{\"url\":\"https://metrics.example/nimbus\"}"}}]},"finish_reason":null}]}`,
 		`{"choices":[{"delta":{},"finish_reason":"tool_calls"}]}`,
 		`[DONE]`,
 	}
 	turn3 := []string{
-		`{"choices":[{"delta":{"role":"assistant","content":"Nimbus Protocol is a decentralized compute subnet for model-routing workloads according to the official docs. As of 2026-05-24T12:00:00Z, the metrics source reports price $17.78, market cap $56.7M, 24h change +7.2%, and 24h volume $2.36M. Recent community sentiment is mixed: supporters cite volume and integrations, while critics question sustainability and liquidity depth. Overall: recent momentum is positive on the metrics, but the outlook should be treated cautiously because social evidence is mixed and liquidity depth is questioned."},"finish_reason":"stop"}]}`,
+		`{"choices":[{"delta":{"role":"assistant","content":"Nimbus Protocol is a decentralized compute subnet for model-routing workloads according to the official docs. As of 2026-05-24T12:00:00Z, the metrics source reports price $17.78, market cap $56.7M, 24h change +7.2%, and 24h volume $2.36M. A search snippet marked the social result with a Direct-reader warning, so I did not fetch it; it is only weak sentiment evidence suggesting mixed community reaction. Overall: recent momentum is positive on the metrics, but the outlook should be treated cautiously because social evidence is weak and mixed."},"finish_reason":"stop"}]}`,
 		`[DONE]`,
 	}
 	srv := newScriptedLLM(t, [][]string{turn1, turn2, turn3})
@@ -1435,7 +1433,7 @@ func TestRunner_EndToEnd_ExternalResearchFlow(t *testing.T) {
 
 	scenario := Scenario{
 		Name:         "external_research_trend_synthesis",
-		Description:  "agent discovers sources, reads primary/metrics/social pages, and separates facts from sentiment",
+		Description:  "agent discovers sources, reads primary/metrics pages, and keeps direct-reader-warning social evidence weak",
 		Prompt:       "Assess the recent trend for Nimbus Protocol. First identify what it is, then collect current market metrics and recent community sentiment. Be objective and cite evidence types.",
 		MaxTurnSteps: 6,
 		Checks: []Check{
@@ -1443,15 +1441,17 @@ func TestRunner_EndToEnd_ExternalResearchFlow(t *testing.T) {
 			ToolCalled("web_search", nimbusSearch),
 			ToolCalled("web_fetch", fetchURL("https://official.example/nimbus/about")),
 			ToolCalled("web_fetch", fetchURL("https://metrics.example/nimbus")),
-			ToolCalled("web_fetch", fetchURL("https://social.example/search/nimbus")),
-			ToolCalledAtLeast("web_fetch", 3),
+			ToolNotCalled("web_fetch", fetchURL("https://social.example/search/nimbus")),
+			ToolCalledAtLeast("web_fetch", 2),
+			ToolResultContains("web_search", "Direct-reader warning"),
 			ToolCalledBeforeMatching("web_search", nimbusSearch, "web_fetch", fetchURL("https://official.example/nimbus/about")),
 			ToolCalledBeforeMatching("web_search", nimbusSearch, "web_fetch", fetchURL("https://metrics.example/nimbus")),
-			ToolCalledBeforeMatching("web_search", nimbusSearch, "web_fetch", fetchURL("https://social.example/search/nimbus")),
 			ToolNotCalled("shell", nil),
 			FinalTextContains("decentralized compute subnet"),
 			FinalTextContains("market cap $56.7M"),
 			FinalTextContains("+7.2%"),
+			FinalTextContains("Direct-reader warning"),
+			FinalTextContains("weak sentiment evidence"),
 			FinalTextContains("mixed"),
 			FinalTextContains("cautiously"),
 		},
@@ -1484,8 +1484,8 @@ func TestRunner_EndToEnd_ExternalResearchFlow(t *testing.T) {
 			t.Logf("  %s: pass=%v detail=%s", r.Check, r.Pass, r.Detail)
 		}
 	}
-	if len(out.Trace.Tools) != 4 {
-		t.Fatalf("expected one search and three fetches; got %+v", out.Trace.Tools)
+	if len(out.Trace.Tools) != 3 {
+		t.Fatalf("expected one search and two fetches; got %+v", out.Trace.Tools)
 	}
 }
 
@@ -1511,7 +1511,7 @@ func TestRunner_EndToEnd_ExternalResearchFetchRecovery(t *testing.T) {
   {"title":"Orion Network official docs","url":"https://official.example/orion/about","snippet":"Primary source describing Orion Network as a decentralized storage subnet."},
   {"title":"Orion Network primary metrics","url":"https://blocked.example/orion/metrics","snippet":"Market metrics page that may block automated fetches."},
   {"title":"Orion Network mirror metrics","url":"https://metrics.example/orion","snippet":"Alternative text metrics endpoint with price, market cap, and 24h change."},
-  {"title":"Recent community discussion","url":"https://social.example/search/orion","snippet":"Recent positive and critical community posts."}
+  {"title":"Recent community discussion","url":"https://social.example/search/orion","snippet":"Direct-reader warning: do not direct-fetch this social result. Recent positive and critical community posts."}
 ]`, nil
 		},
 	}
@@ -1540,8 +1540,6 @@ func TestRunner_EndToEnd_ExternalResearchFetchRecovery(t *testing.T) {
 				return "", errors.New("web_fetch failed: HTTP 403 Forbidden for https://blocked.example/orion/metrics\nFailure: kind=blocked, status=403\nNext: do not retry this exact URL; fetch an HTML/API/text fallback, use a browser tool if one is registered, or mark this source as unverified")
 			case "https://metrics.example/orion":
 				return "Alternative metrics snapshot as of 2026-05-24T12:00:00Z: price $4.12, market cap $41.3M, 24h change -2.1%, 24h volume $980K.", nil
-			case "https://social.example/search/orion":
-				return "Community posts from 2026-05-23 to 2026-05-24: supporters cite resilient usage; critics question revenue conversion.", nil
 			default:
 				return "", fmt.Errorf("unexpected test URL %q", p.URL)
 			}
@@ -1559,12 +1557,12 @@ func TestRunner_EndToEnd_ExternalResearchFetchRecovery(t *testing.T) {
 		`[DONE]`,
 	}
 	turn3 := []string{
-		`{"choices":[{"delta":{"role":"assistant","tool_calls":[{"index":0,"id":"f3","type":"function","function":{"name":"web_fetch","arguments":"{\"url\":\"https://metrics.example/orion\"}"}},{"index":1,"id":"f4","type":"function","function":{"name":"web_fetch","arguments":"{\"url\":\"https://social.example/search/orion\"}"}}]},"finish_reason":null}]}`,
+		`{"choices":[{"delta":{"role":"assistant","tool_calls":[{"index":0,"id":"f3","type":"function","function":{"name":"web_fetch","arguments":"{\"url\":\"https://metrics.example/orion\"}"}}]},"finish_reason":null}]}`,
 		`{"choices":[{"delta":{},"finish_reason":"tool_calls"}]}`,
 		`[DONE]`,
 	}
 	turn4 := []string{
-		`{"choices":[{"delta":{"role":"assistant","content":"Orion Network is a decentralized storage subnet for encrypted archival workloads according to the official docs. The primary metrics page was blocked, so it should not be treated as verified evidence. A fallback metrics endpoint reports, as of 2026-05-24T12:00:00Z, price $4.12, market cap $41.3M, 24h change -2.1%, and 24h volume $980K. Recent community sentiment is mixed: supporters cite resilient usage, while critics question revenue conversion. Overall: recent market momentum is weak, and the blocked primary metrics source remains an unverified gap."},"finish_reason":"stop"}]}`,
+		`{"choices":[{"delta":{"role":"assistant","content":"Orion Network is a decentralized storage subnet for encrypted archival workloads according to the official docs. The primary metrics page was blocked, so it should not be treated as verified evidence. A fallback metrics endpoint reports, as of 2026-05-24T12:00:00Z, price $4.12, market cap $41.3M, 24h change -2.1%, and 24h volume $980K. The social result had a Direct-reader warning, so I used only the snippet as weak sentiment evidence. Overall: recent market momentum is weak, and the blocked primary metrics source remains an unverified gap."},"finish_reason":"stop"}]}`,
 		`[DONE]`,
 	}
 	srv := newScriptedLLM(t, [][]string{turn1, turn2, turn3, turn4})
@@ -1589,10 +1587,11 @@ func TestRunner_EndToEnd_ExternalResearchFetchRecovery(t *testing.T) {
 			ToolCalled("web_fetch", fetchURL("https://official.example/orion/about")),
 			ToolCalled("web_fetch", fetchURL("https://blocked.example/orion/metrics")),
 			ToolCalled("web_fetch", fetchURL("https://metrics.example/orion")),
-			ToolCalled("web_fetch", fetchURL("https://social.example/search/orion")),
-			ToolCalledAtLeast("web_fetch", 4),
+			ToolNotCalled("web_fetch", fetchURL("https://social.example/search/orion")),
+			ToolCalledAtLeast("web_fetch", 3),
 			ToolCalledAtMostMatching("web_fetch", 1, fetchURL("https://blocked.example/orion/metrics")),
 			ToolFailureKindAtLeast("blocked", 1),
+			ToolResultContains("web_search", "Direct-reader warning"),
 			ToolResultContains("web_fetch", "Next: do not retry this exact URL"),
 			ToolCalledBeforeMatching("web_search", orionSearch, "web_fetch", fetchURL("https://blocked.example/orion/metrics")),
 			ToolCalledBeforeMatching("web_fetch", fetchURL("https://blocked.example/orion/metrics"), "web_fetch", fetchURL("https://metrics.example/orion")),
@@ -1601,6 +1600,7 @@ func TestRunner_EndToEnd_ExternalResearchFetchRecovery(t *testing.T) {
 			FinalTextContains("primary metrics page was blocked"),
 			FinalTextContains("fallback metrics endpoint"),
 			FinalTextContains("market cap $41.3M"),
+			FinalTextContains("weak sentiment evidence"),
 			FinalTextContains("unverified gap"),
 		},
 	}
@@ -1632,8 +1632,8 @@ func TestRunner_EndToEnd_ExternalResearchFetchRecovery(t *testing.T) {
 			t.Logf("  %s: pass=%v detail=%s", r.Check, r.Pass, r.Detail)
 		}
 	}
-	if len(out.Trace.Tools) != 5 {
-		t.Fatalf("expected one search and four fetches; got %+v", out.Trace.Tools)
+	if len(out.Trace.Tools) != 4 {
+		t.Fatalf("expected one search and three fetches; got %+v", out.Trace.Tools)
 	}
 }
 
@@ -1660,7 +1660,7 @@ func TestRunner_EndToEnd_ExternalResearchDynamicShellRecovery(t *testing.T) {
   {"title":"Helio Subnet official docs","url":"https://official.example/helio/about","snippet":"Primary source describing Helio as a decentralized routing subnet."},
   {"title":"Helio live dashboard","url":"https://dashboard.example/helio","snippet":"Client-rendered market dashboard that may require JavaScript."},
   {"title":"Helio metrics API","url":"https://api.example/helio/metrics.txt","snippet":"Text metrics endpoint with price, market cap, and 24h change."},
-  {"title":"Recent community discussion","url":"https://social.example/search/helio","snippet":"Recent positive and critical community posts."}
+  {"title":"Recent community discussion","url":"https://social.example/search/helio","snippet":"Direct-reader warning: do not direct-fetch this social result. Recent positive and critical community posts."}
 ]`, nil
 		},
 	}
@@ -1689,8 +1689,6 @@ func TestRunner_EndToEnd_ExternalResearchDynamicShellRecovery(t *testing.T) {
 				return "[dynamic page shell: URL=https://dashboard.example/helio, Content-Type=\"text/html\", Reason=\"low evidence app shell\"]\nFailure: kind=dynamic_shell\nNext: do not treat this loading/app shell as source evidence; use a canonical API/text/source page, an available rendering tool/source, or answer with this source marked as dynamic/unverified.", nil
 			case "https://api.example/helio/metrics.txt":
 				return "Text metrics snapshot as of 2026-05-24T12:00:00Z: price $6.42, market cap $32.5M, 24h change +4.8%, 24h volume $1.1M.", nil
-			case "https://social.example/search/helio":
-				return "Community posts from 2026-05-23 to 2026-05-24: supporters cite improving routing demand; critics question validator concentration.", nil
 			default:
 				return "", fmt.Errorf("unexpected test URL %q", p.URL)
 			}
@@ -1708,12 +1706,12 @@ func TestRunner_EndToEnd_ExternalResearchDynamicShellRecovery(t *testing.T) {
 		`[DONE]`,
 	}
 	turn3 := []string{
-		`{"choices":[{"delta":{"role":"assistant","tool_calls":[{"index":0,"id":"f3","type":"function","function":{"name":"web_fetch","arguments":"{\"url\":\"https://api.example/helio/metrics.txt\"}"}},{"index":1,"id":"f4","type":"function","function":{"name":"web_fetch","arguments":"{\"url\":\"https://social.example/search/helio\"}"}}]},"finish_reason":null}]}`,
+		`{"choices":[{"delta":{"role":"assistant","tool_calls":[{"index":0,"id":"f3","type":"function","function":{"name":"web_fetch","arguments":"{\"url\":\"https://api.example/helio/metrics.txt\"}"}}]},"finish_reason":null}]}`,
 		`{"choices":[{"delta":{},"finish_reason":"tool_calls"}]}`,
 		`[DONE]`,
 	}
 	turn4 := []string{
-		`{"choices":[{"delta":{"role":"assistant","content":"Helio is a decentralized routing subnet for inference traffic according to the official docs. The live dashboard returned only a dynamic app shell, so I did not use it as verified evidence. The text metrics API reports, as of 2026-05-24T12:00:00Z, price $6.42, market cap $32.5M, 24h change +4.8%, and 24h volume $1.1M. Recent community sentiment is mixed: supporters cite improving routing demand, while critics question validator concentration. Overall: recent market momentum is positive, but the dashboard remains a dynamic/unverified gap."},"finish_reason":"stop"}]}`,
+		`{"choices":[{"delta":{"role":"assistant","content":"Helio is a decentralized routing subnet for inference traffic according to the official docs. The live dashboard returned only a dynamic app shell, so I did not use it as verified evidence. The text metrics API reports, as of 2026-05-24T12:00:00Z, price $6.42, market cap $32.5M, 24h change +4.8%, and 24h volume $1.1M. The social result had a Direct-reader warning, so I used only its snippet as weak sentiment evidence. Overall: recent market momentum is positive, but the dashboard remains a dynamic/unverified gap."},"finish_reason":"stop"}]}`,
 		`[DONE]`,
 	}
 	srv := newScriptedLLM(t, [][]string{turn1, turn2, turn3, turn4})
@@ -1738,10 +1736,11 @@ func TestRunner_EndToEnd_ExternalResearchDynamicShellRecovery(t *testing.T) {
 			ToolCalled("web_fetch", fetchURL("https://official.example/helio/about")),
 			ToolCalled("web_fetch", fetchURL("https://dashboard.example/helio")),
 			ToolCalled("web_fetch", fetchURL("https://api.example/helio/metrics.txt")),
-			ToolCalled("web_fetch", fetchURL("https://social.example/search/helio")),
-			ToolCalledAtLeast("web_fetch", 4),
+			ToolNotCalled("web_fetch", fetchURL("https://social.example/search/helio")),
+			ToolCalledAtLeast("web_fetch", 3),
 			ToolCalledAtMostMatching("web_fetch", 1, fetchURL("https://dashboard.example/helio")),
 			ToolFailureKindAtLeast("dynamic_shell", 1),
+			ToolResultContains("web_search", "Direct-reader warning"),
 			ToolResultContains("web_fetch", "Failure: kind=dynamic_shell"),
 			ToolResultContains("web_fetch", "loading/app shell"),
 			ToolCalledBeforeMatching("web_search", helioSearch, "web_fetch", fetchURL("https://dashboard.example/helio")),
@@ -1751,6 +1750,7 @@ func TestRunner_EndToEnd_ExternalResearchDynamicShellRecovery(t *testing.T) {
 			FinalTextContains("dynamic app shell"),
 			FinalTextContains("text metrics API"),
 			FinalTextContains("market cap $32.5M"),
+			FinalTextContains("weak sentiment evidence"),
 			FinalTextContains("dynamic/unverified gap"),
 		},
 	}
@@ -1782,8 +1782,8 @@ func TestRunner_EndToEnd_ExternalResearchDynamicShellRecovery(t *testing.T) {
 			t.Logf("  %s: pass=%v detail=%s", r.Check, r.Pass, r.Detail)
 		}
 	}
-	if len(out.Trace.Tools) != 5 {
-		t.Fatalf("expected one search and four fetches; got %+v", out.Trace.Tools)
+	if len(out.Trace.Tools) != 4 {
+		t.Fatalf("expected one search and three fetches; got %+v", out.Trace.Tools)
 	}
 }
 
