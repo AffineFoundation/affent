@@ -496,6 +496,10 @@ func toolFailureKindHint(kind string) string {
 		return "the source returned a server-side failure; retry later once or use another authoritative mirror/source"
 	case "not_found":
 		return "the URL is stale or gone; rediscover the canonical URL before retrying"
+	case "no_results":
+		return "web_search returned no usable evidence; refine with distinctive entities or official domains, then switch source or report the gap"
+	case "search_error":
+		return "the configured web_search backend failed; inspect provider credentials/limits/logs and avoid treating search as available evidence"
 	case "private_network_blocked":
 		return "SSRF guard blocked a private or local network URL; use public sources or explicitly configure trusted local access"
 	case "invalid_args":

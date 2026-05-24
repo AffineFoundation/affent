@@ -584,6 +584,9 @@ func TestSearchTool_NoUsableResultsIncludesNext(t *testing.T) {
 			t.Fatalf("no-usable-result output missing %q:\n%s", want, out)
 		}
 	}
+	if !strings.Contains(out, "Failure: kind=no_results") {
+		t.Fatalf("no-usable-result output should expose failure kind:\n%s", out)
+	}
 }
 
 func TestSearchTool_TruncatesLargeResultFields(t *testing.T) {
@@ -659,7 +662,7 @@ func TestSearchTool_NoResultsIncludesNext(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Execute: %v", err)
 	}
-	for _, want := range []string{"(no results)", "Next:", "different keywords", "official domain"} {
+	for _, want := range []string{"(no results)", "Failure: kind=no_results", "Next:", "different keywords", "official domain"} {
 		if !strings.Contains(out, want) {
 			t.Fatalf("no-result output missing %q:\n%s", want, out)
 		}
@@ -675,7 +678,7 @@ func TestSearchTool_ProviderErrorIncludesNext(t *testing.T) {
 	if err == nil {
 		t.Fatal("expected provider error")
 	}
-	for _, want := range []string{"intentional test failure", "Next:", "fewer/different keywords"} {
+	for _, want := range []string{"intentional test failure", "Failure: kind=search_error", "Next:", "fewer/different keywords"} {
 		if !strings.Contains(err.Error(), want) {
 			t.Fatalf("provider error missing %q: %v", want, err)
 		}
@@ -684,6 +687,28 @@ func TestSearchTool_ProviderErrorIncludesNext(t *testing.T) {
 		if strings.Contains(err.Error(), forbidden) {
 			t.Fatalf("provider error should not mention unavailable %q directly: %v", forbidden, err)
 		}
+	}
+}
+
+func TestSearchFailureKindClassifiesCommonFailures(t *testing.T) {
+	cases := []struct {
+		name string
+		err  error
+		want string
+	}{
+		{name: "timeout", err: context.DeadlineExceeded, want: "timeout"},
+		{name: "rate limited", err: errors.New("provider returned 429 rate limit"), want: "rate_limited"},
+		{name: "blocked", err: errors.New("http 403 forbidden"), want: "blocked"},
+		{name: "server", err: errors.New("http 502 bad gateway"), want: "server_error"},
+		{name: "http", err: errors.New("http protocol error"), want: "http_error"},
+		{name: "generic", err: errors.New("boom"), want: "search_error"},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			if got := searchFailureKind(c.err); got != c.want {
+				t.Fatalf("searchFailureKind() = %q, want %q", got, c.want)
+			}
+		})
 	}
 }
 

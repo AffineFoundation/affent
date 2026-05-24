@@ -115,7 +115,7 @@ func SearchTool(cfg SearchConfig) (*agent.Tool, error) {
 
 func formatResults(results []SearchResult, limit int) string {
 	if len(results) == 0 {
-		return "(no results)\nNext: retry web_search with fewer or different keywords, include distinctive entities or official domain names, or use another available source URL if already known."
+		return "(no results)\nFailure: kind=no_results\nNext: retry web_search with fewer or different keywords, include distinctive entities or official domain names, or use another available source URL if already known."
 	}
 	if limit <= 0 || limit > maxSearchResults {
 		limit = maxSearchResults
@@ -148,7 +148,7 @@ func formatResults(results []SearchResult, limit int) string {
 			displayed, title, url, snippet)
 	}
 	if displayed == 0 {
-		return "(no usable results: search provider returned no URLs)\nNext: retry web_search with more distinctive keywords or official domain names, or use another available source URL if already known."
+		return "(no usable results: search provider returned no URLs)\nFailure: kind=no_results\nNext: retry web_search with more distinctive keywords or official domain names, or use another available source URL if already known."
 	}
 	b.WriteString("Next: choose the 1-3 most authoritative/current result URLs, prefer official or primary sources, and read them with an available page-reading tool before answering. If no full-page reading tool is available, compare snippets and say that full-page verification was unavailable.")
 	return strings.TrimSpace(b.String())
@@ -181,7 +181,37 @@ func recoverableSearchError(err error) error {
 	case strings.Contains(lower, "tavily") && (strings.Contains(lower, "decode") || strings.Contains(lower, "http")):
 		next = "search backend failed; retry once with a simpler query or switch to known official URLs/search snippets already available."
 	}
-	return fmt.Errorf("%w\nNext: %s", err, next)
+	return fmt.Errorf("%w\nFailure: kind=%s\nNext: %s", err, searchFailureKind(err), next)
+}
+
+func searchFailureKind(err error) string {
+	lower := ""
+	if err != nil {
+		lower = strings.ToLower(err.Error())
+	}
+	switch {
+	case errors.Is(err, context.DeadlineExceeded) || strings.Contains(lower, "timeout") || strings.Contains(lower, "deadline exceeded"):
+		return "timeout"
+	case strings.Contains(lower, "429") || strings.Contains(lower, "rate limit"):
+		return "rate_limited"
+	case strings.Contains(lower, "401") || strings.Contains(lower, "403") || strings.Contains(lower, "unauthorized") || strings.Contains(lower, "forbidden"):
+		return "blocked"
+	case containsAny(lower, "http 500", "http 502", "http 503", "http 504", "status 500", "status 502", "status 503", "status 504", "status=500", "status=502", "status=503", "status=504"):
+		return "server_error"
+	case strings.Contains(lower, "http"):
+		return "http_error"
+	default:
+		return "search_error"
+	}
+}
+
+func containsAny(s string, needles ...string) bool {
+	for _, needle := range needles {
+		if strings.Contains(s, needle) {
+			return true
+		}
+	}
+	return false
 }
 
 // ---- Tavily provider --------------------------------------------------

@@ -156,6 +156,8 @@ func TestToolOutcomeCountsNoEvidenceWebFetchAsFailure(t *testing.T) {
 		{name: "web fetch empty", tool: "web_fetch", result: "[empty response: URL=https://example]", want: false},
 		{name: "web fetch non text", tool: "web_fetch", result: "  [non-text response: URL=https://example]  ", want: false},
 		{name: "web fetch hard error", tool: "web_fetch", result: "Error: http 403", isErr: true, want: false},
+		{name: "web search no results", tool: "web_search", result: "(no results)\nFailure: kind=no_results", want: false},
+		{name: "web search hits", tool: "web_search", result: "1. Result\n   https://example.com\n   snippet", want: true},
 		{name: "other tool literal text", tool: "shell", result: "[empty response: not a web_fetch marker]", want: true},
 	}
 
@@ -178,6 +180,23 @@ func TestToolLoopGuard_WebFetchNoEvidenceResultsFailFast(t *testing.T) {
 	got := g.recordOutcome("web_fetch", ok)
 	if !strings.Contains(got, "failed 2 consecutive times") {
 		t.Fatalf("second no-evidence web_fetch result should warn, got %q", got)
+	}
+}
+
+func TestToolLoopGuard_WebSearchNoEvidenceUsesSearchGuidance(t *testing.T) {
+	g := newToolLoopGuard()
+	for i := 0; i < toolFailureWarnThreshold-1; i++ {
+		ok := toolOutcomeCountsAsSuccess("web_search", "(no results)\nFailure: kind=no_results", false)
+		if got := g.recordOutcome("web_search", ok); got != "" {
+			t.Fatalf("web_search no-results failure %d should not warn yet: %q", i+1, got)
+		}
+	}
+	ok := toolOutcomeCountsAsSuccess("web_search", "(no usable results: search provider returned no URLs)\nFailure: kind=no_results", false)
+	got := g.recordOutcome("web_search", ok)
+	for _, want := range []string{"web_search", "failed 3 consecutive times", "Failure kind", "distinctive entities", "known source URLs"} {
+		if !strings.Contains(got, want) {
+			t.Fatalf("web_search warning missing %q: %q", want, got)
+		}
 	}
 }
 

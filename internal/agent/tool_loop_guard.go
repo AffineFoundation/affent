@@ -127,14 +127,15 @@ func toolOutcomeCountsAsSuccess(tool, result string, isErr bool) bool {
 	if isErr {
 		return false
 	}
-	if tool != "web_fetch" {
-		return true
-	}
-	return !isNoEvidenceWebFetchResult(result)
+	return !isNoEvidenceResult(tool, result)
 }
 
 func isNoEvidenceWebFetchResult(result string) bool {
 	return toolfailure.IsNoEvidenceWebFetchResult(result)
+}
+
+func isNoEvidenceResult(tool, result string) bool {
+	return toolfailure.IsNoEvidenceResult(tool, result)
 }
 
 func toolFailureWarnThresholdFor(tool string) int {
@@ -154,6 +155,9 @@ func toolFailureHaltThresholdFor(tool string) int {
 func toolFailureWarnMessage(tool string, threshold int) string {
 	if tool == "web_fetch" {
 		return fmt.Sprintf("loop_guard: tool %q has failed %d consecutive times this turn. Read the latest Failure kind and Next guidance before fetching more URLs.\nNext: stop opening search results one by one; switch to a different source type, use another available inspection tool, or answer with clearly marked gaps.", tool, threshold)
+	}
+	if tool == "web_search" {
+		return fmt.Sprintf("loop_guard: tool %q has failed %d consecutive times this turn. Read the latest Failure kind and Next guidance before searching again.\nNext: stop repeating broad searches; use more distinctive entities or official domains, switch to known source URLs, or answer with clearly marked gaps.", tool, threshold)
 	}
 	return fmt.Sprintf("loop_guard: tool %q has failed %d consecutive times this turn. Read the latest error before retrying.\nNext: change the arguments, verify prerequisites with another tool, or stop using %q if the same error persists.", tool, threshold, tool)
 }

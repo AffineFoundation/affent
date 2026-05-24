@@ -30,16 +30,33 @@ func Kind(output string) string {
 }
 
 func KindForResult(tool, result string, failed bool) string {
-	if !failed && !(tool == "web_fetch" && IsNoEvidenceWebFetchResult(result)) {
+	if !failed && !IsNoEvidenceResult(tool, result) {
 		return ""
 	}
 	return Kind(result)
+}
+
+func IsNoEvidenceResult(tool, result string) bool {
+	switch tool {
+	case "web_fetch":
+		return IsNoEvidenceWebFetchResult(result)
+	case "web_search":
+		return IsNoEvidenceWebSearchResult(result)
+	default:
+		return false
+	}
 }
 
 func IsNoEvidenceWebFetchResult(result string) bool {
 	result = strings.TrimSpace(result)
 	return strings.HasPrefix(result, "[empty response:") ||
 		strings.HasPrefix(result, "[non-text response:")
+}
+
+func IsNoEvidenceWebSearchResult(result string) bool {
+	result = strings.TrimSpace(result)
+	return strings.HasPrefix(result, "(no results)") ||
+		strings.HasPrefix(result, "(no usable results:")
 }
 
 func validKind(kind string) bool {

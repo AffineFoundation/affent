@@ -240,12 +240,14 @@ curl -sS http://127.0.0.1:7777/v1/chat/completions \
   | jq '{content: .choices[0].message.content, session_id: .affent_session_id}'
 ```
 
-## Web Fetch Diagnostics
+## Web Retrieval Diagnostics
 
-`web_fetch` is a direct HTTP reader, not a full browser. Some public sites
-return anti-bot pages, empty bodies, binary assets, or HTTP errors to direct
-fetches even when they work in a browser. The tool surfaces those cases as
-structured failures so the agent can switch source instead of burning turns:
+`web_fetch` is a direct HTTP reader, not a full browser, and `web_search`
+depends on the configured search backend. Some public sites return anti-bot
+pages, empty bodies, binary assets, or HTTP errors to direct fetches even when
+they work in a browser; search backends can also time out, rate-limit, or
+return no usable URLs. The tools surface those cases as structured failures so
+the agent can switch source instead of burning turns:
 
 - `Failure: kind=blocked`: the source refused direct fetch, commonly HTTP 401
   or 403.
@@ -255,6 +257,10 @@ structured failures so the agent can switch source instead of burning turns:
   another body that is not readable page evidence.
 - `Failure: kind=timeout`, `network_error`, `rate_limited`, `server_error`,
   `not_found`, or `http_error`: transport or HTTP-class failures.
+- `Failure: kind=no_results`: `web_search` returned no results or no usable
+  result URLs.
+- `Failure: kind=search_error`: the configured search backend failed in a way
+  that does not fit a narrower network or HTTP class.
 - `Failure: kind=invalid_args`: the model called the tool with missing or
   unsupported arguments.
 
@@ -265,11 +271,12 @@ as weak sentiment when full-page reading is unavailable, or answer with the gap
 clearly marked as unverified.
 
 Repeated failed `web_fetch` calls are guarded more aggressively than general
-tool failures. After repeated no-evidence fetches, the loop guard tells the
-model to stop opening search results one by one and change strategy. Per-turn
-stats expose `tool_failure_by_kind`, and each `tool.result` can expose
-`failure_kind`, so eval runs and UIs can distinguish a useful recovery path
-from a run that simply accumulated failed fetches.
+tool failures. Repeated no-evidence `web_search` results also count as failures
+for loop-guard purposes. After repeated no-evidence retrieval, the guard tells
+the model to stop opening/searching result lists one by one and change
+strategy. Per-turn stats expose `tool_failure_by_kind`, and each `tool.result`
+can expose `failure_kind`, so eval runs and UIs can distinguish a useful
+recovery path from a run that simply accumulated failed retrievals.
 
 `affent_session_id` pins follow-up turns. Pass it back through
 `X-Affent-Session-Id`, `affent_session_id`, or `session_id`.

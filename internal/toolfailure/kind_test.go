@@ -31,7 +31,33 @@ func TestKindForResult(t *testing.T) {
 	if got := KindForResult("web_fetch", "[empty response: URL=https://example]\nFailure: kind=empty_response", false); got != "empty_response" {
 		t.Fatalf("no-evidence kind = %q, want empty_response", got)
 	}
+	if got := KindForResult("web_search", "(no results)\nFailure: kind=no_results", false); got != "no_results" {
+		t.Fatalf("no-results kind = %q, want no_results", got)
+	}
 	if got := KindForResult("read_file", "Failure: kind=blocked", false); got != "" {
 		t.Fatalf("successful read_file content kind = %q, want empty", got)
+	}
+}
+
+func TestIsNoEvidenceResult(t *testing.T) {
+	cases := []struct {
+		name   string
+		tool   string
+		result string
+		want   bool
+	}{
+		{name: "fetch empty", tool: "web_fetch", result: "[empty response: URL=https://example]", want: true},
+		{name: "fetch non text", tool: "web_fetch", result: "[non-text response: URL=https://example]", want: true},
+		{name: "search none", tool: "web_search", result: "(no results)\nFailure: kind=no_results", want: true},
+		{name: "search unusable", tool: "web_search", result: "(no usable results: search provider returned no URLs)\nFailure: kind=no_results", want: true},
+		{name: "search hits", tool: "web_search", result: "1. Result\n   https://example.com\n   snippet", want: false},
+		{name: "other", tool: "shell", result: "(no results)\nFailure: kind=no_results", want: false},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			if got := IsNoEvidenceResult(c.tool, c.result); got != c.want {
+				t.Fatalf("IsNoEvidenceResult() = %t, want %t", got, c.want)
+			}
+		})
 	}
 }
