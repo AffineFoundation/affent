@@ -99,6 +99,9 @@ diagnostics.
 
 ### `tool.result`
 
+- `turn_id`: runtime turn id. New runtime events include it so result-only
+  consumers can filter by turn without joining against `tool.request`; older
+  traces may omit it.
 - `call_id`: model tool call id.
 - `exit_code`: tool exit code. Non-zero means the call failed.
 - `duration_ms`: optional measured implementation time for dispatched tools.

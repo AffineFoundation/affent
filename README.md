@@ -696,11 +696,12 @@ Trace JSONL files start with a `trace.meta` record carrying
 `schema_version=1`; see [docs/event-trace-contract.md](docs/event-trace-contract.md)
 for the stable event envelope, payload fields, and compatibility rules.
 
-`tool.result` keeps `result` bounded for event transport and includes
-`result_truncated`, `result_bytes`, `result_omitted_bytes`, and
-`result_cap_bytes` so UIs and evals can detect event-level truncation without
-parsing the human-readable marker appended to oversized results. When a runtime
-workspace is configured, truncated tool results also include
+`tool.result` carries `turn_id` for per-turn filtering, keeps `result` bounded
+for event transport, and includes `result_truncated`, `result_bytes`,
+`result_omitted_bytes`, and `result_cap_bytes` so UIs and evals can detect
+event-level truncation without parsing the human-readable marker appended to
+oversized results. When a runtime workspace is configured, truncated tool
+results also include
 `result_artifact_path`, a workspace-relative path to the complete output.
 For `affentserve`, tool-result artifacts are stored under the durable session
 state root and can be listed with `GET /v1/sessions/{id}/artifacts` or read in

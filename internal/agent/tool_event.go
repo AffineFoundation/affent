@@ -126,8 +126,22 @@ func toolResultEventPayload(callID string, exitCode int, result string) sse.Tool
 	}
 }
 
+func toolResultEventPayloadForTurn(turnID, callID string, exitCode int, result string) sse.ToolResultPayload {
+	payload := toolResultEventPayload(callID, exitCode, result)
+	payload.TurnID = turnID
+	return payload
+}
+
 func toolResultEventPayloadWithDuration(callID string, exitCode int, result string, duration time.Duration) sse.ToolResultPayload {
 	payload := toolResultEventPayload(callID, exitCode, result)
+	if duration >= time.Millisecond {
+		payload.DurationMS = duration.Milliseconds()
+	}
+	return payload
+}
+
+func toolResultEventPayloadWithDurationForTurn(turnID, callID string, exitCode int, result string, duration time.Duration) sse.ToolResultPayload {
+	payload := toolResultEventPayloadForTurn(turnID, callID, exitCode, result)
 	if duration >= time.Millisecond {
 		payload.DurationMS = duration.Milliseconds()
 	}

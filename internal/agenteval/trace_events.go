@@ -40,6 +40,7 @@ func applyTraceEvent(t *Trace, pending map[string]int, typ string, data json.Raw
 		}
 		pending[p.CallID] = len(t.Tools)
 		t.Tools = append(t.Tools, ToolCall{
+			TurnID:              p.TurnID,
 			CallID:              p.CallID,
 			Tool:                p.Tool,
 			Args:                p.Args,
@@ -59,7 +60,13 @@ func applyTraceEvent(t *Trace, pending map[string]int, typ string, data json.Raw
 		if err := json.Unmarshal(data, &p); err != nil {
 			return false, err
 		}
+		if !traceEventMatchesTurn(p.TurnID, turnID) {
+			return false, nil
+		}
 		if idx, ok := pending[p.CallID]; ok {
+			if t.Tools[idx].TurnID == "" {
+				t.Tools[idx].TurnID = p.TurnID
+			}
 			t.Tools[idx].Result = p.Result
 			t.Tools[idx].ResultTruncated = p.ResultTruncated
 			t.Tools[idx].ResultBytes = p.ResultBytes
@@ -80,6 +87,7 @@ func applyTraceEvent(t *Trace, pending map[string]int, typ string, data json.Raw
 			return false, nil
 		}
 		t.Tools = append(t.Tools, ToolCall{
+			TurnID:             p.TurnID,
 			CallID:             p.CallID,
 			Result:             p.Result,
 			ResultTruncated:    p.ResultTruncated,

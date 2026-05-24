@@ -123,6 +123,7 @@ type ToolRequestPayload struct {
 }
 
 type ToolResultPayload struct {
+	TurnID   string `json:"turn_id,omitempty"`
 	CallID   string `json:"call_id"`
 	ExitCode int    `json:"exit_code"`
 	// DurationMS is present only for tool implementations that were

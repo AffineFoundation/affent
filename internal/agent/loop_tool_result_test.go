@@ -93,7 +93,8 @@ func TestToolResult_ResultBypasses4KiBSummaryCap(t *testing.T) {
 	if err := loop.EnsureSystemPrompt("base"); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := loop.SendUser(context.Background(), "go"); err != nil {
+	turnID, err := loop.SendUser(context.Background(), "go")
+	if err != nil {
 		t.Fatal(err)
 	}
 
@@ -124,6 +125,9 @@ func TestToolResult_ResultBypasses4KiBSummaryCap(t *testing.T) {
 	}
 
 done:
+	if sawResult.TurnID != turnID {
+		t.Fatalf("tool.result turn_id = %q, want %q", sawResult.TurnID, turnID)
+	}
 	if len(sawResult.Result) != payloadLen {
 		t.Fatalf("Result must carry full %d-byte payload, got %d bytes",
 			payloadLen, len(sawResult.Result))

@@ -649,7 +649,7 @@ func (l *Loop) runTurn(ctx context.Context, turnID, userText string, opts TurnOp
 			})
 			if argsRepairErr != nil {
 				result := fmt.Sprintf("tool_arg_repair: %v", argsRepairErr)
-				l.publishAndAppendToolResultWithDelegation(callID, toolName, result, true, 0, delegation)
+				l.publishAndAppendToolResultWithDelegation(turnID, callID, toolName, result, true, 0, delegation)
 				toolCallsUsed++
 				toolStats.ToolErrors++
 				continue
@@ -662,7 +662,7 @@ func (l *Loop) runTurn(ctx context.Context, turnID, userText string, opts TurnOp
 				if result == "" {
 					result = fmt.Sprintf("first_tool_policy: call %s before other tools.", firstToolPolicy.ToolName)
 				}
-				rejectionPayload := toolResultEventPayload(callID, 1, result)
+				rejectionPayload := toolResultEventPayloadForTurn(turnID, callID, 1, result)
 				rejectionPayload.Delegation = delegation
 				l.publish(sse.TypeToolResult, rejectionPayload)
 				if err := l.Conv.Append(ChatMessage{
@@ -681,7 +681,7 @@ func (l *Loop) runTurn(ctx context.Context, turnID, userText string, opts TurnOp
 				firstToolSatisfied = true
 			}
 			if result, ok := postToolRepeatRejection(postToolPolicies, toolName); ok {
-				rejectionPayload := toolResultEventPayload(callID, 1, result)
+				rejectionPayload := toolResultEventPayloadForTurn(turnID, callID, 1, result)
 				rejectionPayload.Delegation = delegation
 				l.publish(sse.TypeToolResult, rejectionPayload)
 				if err := l.Conv.Append(ChatMessage{
@@ -697,7 +697,7 @@ func (l *Loop) runTurn(ctx context.Context, turnID, userText string, opts TurnOp
 				continue
 			}
 			if result, ok := postToolActiveRejection(postToolPolicies, toolName); ok {
-				rejectionPayload := toolResultEventPayload(callID, 1, result)
+				rejectionPayload := toolResultEventPayloadForTurn(turnID, callID, 1, result)
 				rejectionPayload.Delegation = delegation
 				l.publish(sse.TypeToolResult, rejectionPayload)
 				if err := l.Conv.Append(ChatMessage{
@@ -713,7 +713,7 @@ func (l *Loop) runTurn(ctx context.Context, turnID, userText string, opts TurnOp
 				continue
 			}
 			if result := loopGuard.recordAttempt(toolName, args); result != "" {
-				l.publishAndAppendToolResultWithDelegation(callID, toolName, result, true, 0, delegation)
+				l.publishAndAppendToolResultWithDelegation(turnID, callID, toolName, result, true, 0, delegation)
 				toolCallsUsed++
 				toolStats.ToolErrors++
 				guardInterventions++
@@ -729,7 +729,7 @@ func (l *Loop) runTurn(ctx context.Context, turnID, userText string, opts TurnOp
 			toolStart := time.Now()
 			tools := l.toolsForTurn(opts)
 			if tools == nil {
-				l.publishAndAppendToolResultWithDelegation(callID, toolName, "tool registry is not configured", true, 0, delegation)
+				l.publishAndAppendToolResultWithDelegation(turnID, callID, toolName, "tool registry is not configured", true, 0, delegation)
 				toolCallsUsed++
 				toolStats.ToolErrors++
 				continue
@@ -753,7 +753,7 @@ func (l *Loop) runTurn(ctx context.Context, turnID, userText string, opts TurnOp
 					forceNoToolsNext = true
 				}
 			}
-			l.publishAndAppendToolResultWithDelegation(callID, toolName, result, isErr, toolDuration, delegation)
+			l.publishAndAppendToolResultWithDelegation(turnID, callID, toolName, result, isErr, toolDuration, delegation)
 			toolCallsUsed++
 			for _, state := range postToolPolicies {
 				if toolName != state.policy.ToolName {
@@ -930,8 +930,8 @@ func (p *PostToolPolicy) blocks(toolName string) bool {
 	return false
 }
 
-func (l *Loop) publishAndAppendToolResult(callID, name, result string, isErr bool, duration time.Duration) {
-	l.publishAndAppendToolResultWithDelegation(callID, name, result, isErr, duration, nil)
+func (l *Loop) publishAndAppendToolResult(turnID, callID, name, result string, isErr bool, duration time.Duration) {
+	l.publishAndAppendToolResultWithDelegation(turnID, callID, name, result, isErr, duration, nil)
 }
 
 // publishAndAppendToolResultWithDelegation is the same as
@@ -939,12 +939,12 @@ func (l *Loop) publishAndAppendToolResult(callID, name, result string, isErr boo
 // emitted tool.result event so trace consumers can classify the
 // result without joining on call_id. nil delegation degrades to the
 // original behavior.
-func (l *Loop) publishAndAppendToolResultWithDelegation(callID, name, result string, isErr bool, duration time.Duration, delegation *sse.DelegationMeta) {
+func (l *Loop) publishAndAppendToolResultWithDelegation(turnID, callID, name, result string, isErr bool, duration time.Duration, delegation *sse.DelegationMeta) {
 	exit := 0
 	if isErr {
 		exit = 1
 	}
-	payload := toolResultEventPayloadWithDuration(callID, exit, result, duration)
+	payload := toolResultEventPayloadWithDurationForTurn(turnID, callID, exit, result, duration)
 	l.attachToolResultArtifact(&payload, callID, result)
 	if delegation != nil {
 		payload.Delegation = delegation
@@ -1038,7 +1038,7 @@ func (l *Loop) appendSkippedToolResults(turnID string, calls []ToolCall, content
 			ArgsOmittedBytes: argsView.OmittedBytes,
 			Delegation:       delegation,
 		})
-		skippedResultPayload := toolResultEventPayload(callID, 1, content)
+		skippedResultPayload := toolResultEventPayloadForTurn(turnID, callID, 1, content)
 		skippedResultPayload.Delegation = delegation
 		l.publish(sse.TypeToolResult, skippedResultPayload)
 		if appendErr := l.Conv.Append(ChatMessage{

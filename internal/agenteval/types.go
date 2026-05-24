@@ -140,6 +140,9 @@ type Trace struct {
 // ToolCall is what Checks like ToolCalled / ToolCalledBefore inspect
 // — so the field shape matters for the check library.
 type ToolCall struct {
+	// TurnID is the turn that emitted the tool.request or tool.result
+	// event. Older traces may leave it empty.
+	TurnID string
 	// CallID is the upstream tool_call id. Lets a Check correlate a
 	// specific request with its result when the agent issued
 	// duplicates (e.g. retried after a transient error).
