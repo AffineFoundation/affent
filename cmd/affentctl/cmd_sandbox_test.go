@@ -69,6 +69,34 @@ func TestDefaultRuntimeImageIsProjectOwned(t *testing.T) {
 	}
 }
 
+func TestDockerignoreKeepsRuntimeBuildContextSmall(t *testing.T) {
+	_, contextDir, ok, err := findRuntimeBuildSource()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !ok {
+		t.Fatal("test requires source checkout with runtime Dockerfile")
+	}
+	raw, err := os.ReadFile(filepath.Join(contextDir, ".dockerignore"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	body := string(raw)
+	for _, want := range []string{
+		".git/",
+		".tmp/",
+		".affentctl/",
+		"**/node_modules/",
+		"**/test-results/",
+		"*.jsonl",
+		".env.*",
+	} {
+		if !strings.Contains(body, want) {
+			t.Fatalf(".dockerignore missing %q:\n%s", want, body)
+		}
+	}
+}
+
 func TestSandboxDockerfileGoVersionCoversWorkspaceModules(t *testing.T) {
 	dockerfile, contextDir, ok, err := findSandboxBuildSource()
 	if err != nil {
