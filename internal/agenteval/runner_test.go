@@ -1787,6 +1787,176 @@ func TestRunner_EndToEnd_ExternalResearchDynamicShellRecovery(t *testing.T) {
 	}
 }
 
+// TestRunner_EndToEnd_ExternalResearchDynamicHostGuard pins the runtime side
+// of dynamic-shell recovery: if a model keeps trying dashboard/page routes on
+// the same host after two dynamic shells, the loop guard blocks more page-route
+// fetches while still allowing a likely API/text/export fallback on that host.
+func TestRunner_EndToEnd_ExternalResearchDynamicHostGuard(t *testing.T) {
+	var dynamicDispatches atomic.Int32
+	var guardedPageDispatches atomic.Int32
+	var apiDispatches atomic.Int32
+	webSearch := agent.Tool{
+		Name:        "web_search",
+		Description: "Test-only search stand-in: returns repeated dashboard routes and an API fallback.",
+		Schema: json.RawMessage(`{
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["query"],
+            "properties": {
+                "query": {"type": "string"},
+                "num_results": {"type": "integer"}
+            }
+        }`),
+		Execute: func(ctx context.Context, args json.RawMessage) (string, error) {
+			return `[
+  {"title":"Helio official docs","url":"https://official.example/helio/about","snippet":"Primary source describing Helio."},
+  {"title":"Helio dashboard","url":"https://metrics.example/helio","snippet":"Client-rendered live dashboard."},
+  {"title":"Helio validators dashboard","url":"https://metrics.example/helio/validators","snippet":"Another JavaScript dashboard route."},
+  {"title":"Helio metrics API","url":"https://metrics.example/api/helio/metrics.json","snippet":"Text/API metrics endpoint with current market data."}
+]`, nil
+		},
+	}
+	webFetch := agent.Tool{
+		Name:        "web_fetch",
+		Description: "Test-only fetch stand-in: records dashboard dispatches so host guard behavior is observable.",
+		Schema: json.RawMessage(`{
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["url"],
+            "properties": {
+                "url": {"type": "string"}
+            }
+        }`),
+		Execute: func(ctx context.Context, args json.RawMessage) (string, error) {
+			var p struct {
+				URL string `json:"url"`
+			}
+			if err := json.Unmarshal(args, &p); err != nil {
+				return "", err
+			}
+			switch p.URL {
+			case "https://official.example/helio/about":
+				return "Official docs, updated 2026-05-21: Helio is a decentralized routing subnet for inference traffic.", nil
+			case "https://metrics.example/helio", "https://metrics.example/helio/validators":
+				dynamicDispatches.Add(1)
+				return "[dynamic page shell: URL=" + p.URL + ", Content-Type=\"text/html\", Reason=\"client-rendered app shell\"]\nFailure: kind=dynamic_shell\nNext: do not treat this loading/app shell as source evidence; use a canonical API/text/source page.", nil
+			case "https://metrics.example/helio/emissions":
+				guardedPageDispatches.Add(1)
+				return "this page route should have been blocked before dispatch", nil
+			case "https://metrics.example/api/helio/metrics.json":
+				apiDispatches.Add(1)
+				return `{"as_of":"2026-05-24T12:00:00Z","price_usd":6.42,"market_cap_usd":"32.5M","change_24h":"+4.8%"}`, nil
+			default:
+				return "", fmt.Errorf("unexpected test URL %q", p.URL)
+			}
+		},
+	}
+
+	turn1 := []string{
+		`{"choices":[{"delta":{"role":"assistant","tool_calls":[{"index":0,"id":"s1","type":"function","function":{"name":"web_search","arguments":"{\"query\":\"Helio Subnet recent trend market metrics\",\"num_results\":5}"}}]},"finish_reason":null}]}`,
+		`{"choices":[{"delta":{},"finish_reason":"tool_calls"}]}`,
+		`[DONE]`,
+	}
+	turn2 := []string{
+		`{"choices":[{"delta":{"role":"assistant","tool_calls":[{"index":0,"id":"f1","type":"function","function":{"name":"web_fetch","arguments":"{\"url\":\"https://official.example/helio/about\"}"}},{"index":1,"id":"f2","type":"function","function":{"name":"web_fetch","arguments":"{\"url\":\"https://metrics.example/helio\"}"}}]},"finish_reason":null}]}`,
+		`{"choices":[{"delta":{},"finish_reason":"tool_calls"}]}`,
+		`[DONE]`,
+	}
+	turn3 := []string{
+		`{"choices":[{"delta":{"role":"assistant","tool_calls":[{"index":0,"id":"f3","type":"function","function":{"name":"web_fetch","arguments":"{\"url\":\"https://metrics.example/helio/validators\"}"}}]},"finish_reason":null}]}`,
+		`{"choices":[{"delta":{},"finish_reason":"tool_calls"}]}`,
+		`[DONE]`,
+	}
+	turn4 := []string{
+		`{"choices":[{"delta":{"role":"assistant","tool_calls":[{"index":0,"id":"f4","type":"function","function":{"name":"web_fetch","arguments":"{\"url\":\"https://metrics.example/helio/emissions\"}"}}]},"finish_reason":null}]}`,
+		`{"choices":[{"delta":{},"finish_reason":"tool_calls"}]}`,
+		`[DONE]`,
+	}
+	turn5 := []string{
+		`{"choices":[{"delta":{"role":"assistant","tool_calls":[{"index":0,"id":"f5","type":"function","function":{"name":"web_fetch","arguments":"{\"url\":\"https://metrics.example/api/helio/metrics.json\"}"}}]},"finish_reason":null}]}`,
+		`{"choices":[{"delta":{},"finish_reason":"tool_calls"}]}`,
+		`[DONE]`,
+	}
+	turn6 := []string{
+		`{"choices":[{"delta":{"role":"assistant","content":"Helio is a decentralized routing subnet for inference traffic according to the official docs. Two metrics dashboard routes returned dynamic app shells and a third dashboard route was blocked by the loop guard, so dashboard evidence remains unverified. The API metrics endpoint reports, as of 2026-05-24T12:00:00Z, price $6.42, market cap $32.5M, and 24h change +4.8%."},"finish_reason":"stop"}]}`,
+		`[DONE]`,
+	}
+	srv := newScriptedLLM(t, [][]string{turn1, turn2, turn3, turn4, turn5, turn6})
+	helioSearch := func(args map[string]any) bool {
+		q, _ := args["query"].(string)
+		return strings.Contains(q, "Helio Subnet")
+	}
+	fetchURL := func(url string) func(map[string]any) bool {
+		return func(args map[string]any) bool {
+			return args["url"] == url
+		}
+	}
+
+	scenario := Scenario{
+		Name:         "external_research_dynamic_host_guard",
+		Description:  "runtime blocks repeated dynamic dashboard routes while allowing API fallback",
+		Prompt:       "Assess current Helio Subnet market metrics. If dashboard page routes return dynamic app shells, do not keep trying page routes; switch to an API/text/export endpoint and mark dashboard evidence as unverified.",
+		MaxTurnSteps: 8,
+		Checks: []Check{
+			TurnEndedCleanly(),
+			ToolCalled("web_search", helioSearch),
+			ToolCalled("web_fetch", fetchURL("https://metrics.example/helio")),
+			ToolCalled("web_fetch", fetchURL("https://metrics.example/helio/validators")),
+			ToolCalled("web_fetch", fetchURL("https://metrics.example/helio/emissions")),
+			ToolCalled("web_fetch", fetchURL("https://metrics.example/api/helio/metrics.json")),
+			ToolFailureKindAtLeast("dynamic_shell", 2),
+			ToolFailureKindAtLeast("loop_guard_repeated_failed_input", 1),
+			ToolResultContains("web_fetch", "blocked web_fetch to host"),
+			ToolResultContains("web_fetch", "Failure kind=dynamic_shell"),
+			ToolCalledBeforeMatching("web_fetch", fetchURL("https://metrics.example/helio/emissions"), "web_fetch", fetchURL("https://metrics.example/api/helio/metrics.json")),
+			FinalTextContains("third dashboard route was blocked by the loop guard"),
+			FinalTextContains("API metrics endpoint"),
+			FinalTextContains("market cap $32.5M"),
+			FinalTextContains("unverified"),
+		},
+	}
+
+	runner := &Runner{
+		LLM:            agent.NewLLMClient(srv.URL, "", "fake-model"),
+		MaxTurnSteps:   8,
+		PerCallTimeout: 5 * time.Second,
+		RunTimeout:     20 * time.Second,
+		Log:            zerolog.Nop(),
+		BuildRegistry: func(ctx context.Context, workspaceDir string, exec executor.Executor) (*agent.Registry, error) {
+			_ = ctx
+			_ = workspaceDir
+			_ = exec
+			reg := agent.NewRegistry()
+			reg.Add(&webSearch)
+			reg.Add(&webFetch)
+			return reg, nil
+		},
+	}
+
+	out, err := runner.Run(context.Background(), scenario)
+	if err != nil {
+		t.Fatalf("Runner.Run: %v", err)
+	}
+	if !out.Pass {
+		t.Errorf("expected all checks to pass; failed: %v", out.FailedChecks())
+		for _, r := range out.Results {
+			t.Logf("  %s: pass=%v detail=%s", r.Check, r.Pass, r.Detail)
+		}
+	}
+	if got := dynamicDispatches.Load(); got != 2 {
+		t.Fatalf("dashboard routes should dispatch exactly twice before host guard, got %d", got)
+	}
+	if got := guardedPageDispatches.Load(); got != 0 {
+		t.Fatalf("third dashboard route should be guard-blocked before dispatch, got %d dispatches", got)
+	}
+	if got := apiDispatches.Load(); got != 1 {
+		t.Fatalf("API fallback should remain dispatchable after dynamic host guard, got %d", got)
+	}
+	if len(out.Trace.Tools) != 6 {
+		t.Fatalf("expected one search and five fetch trace entries; got %+v", out.Trace.Tools)
+	}
+}
+
 // TestRunner_EndToEnd_ExternalResearchRepeatedFailedInputGuard pins the
 // runtime side of web recovery: even if the model ignores web_fetch's Next
 // guidance and repeats the same blocked URL, the loop guard blocks the repeat

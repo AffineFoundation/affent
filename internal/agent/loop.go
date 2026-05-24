@@ -945,13 +945,15 @@ func (l *Loop) runTurn(ctx context.Context, turnID, userText string, opts TurnOp
 				recordToolRepairOutcome(&toolStats, repairedToolCall, true)
 				toolStats.ToolErrors++
 				recordToolFailureKind(&toolStats, result, true)
-				guardInterventions++
 				toolStats.LoopGuardInterventions++
-				if guardInterventions >= 2 {
-					if !forceNoToolsNext {
-						toolStats.ForcedNoTools++
+				if loopGuardResultForcesNoTools(result) {
+					guardInterventions++
+					if guardInterventions >= 2 {
+						if !forceNoToolsNext {
+							toolStats.ForcedNoTools++
+						}
+						forceNoToolsNext = true
 					}
-					forceNoToolsNext = true
 				}
 				continue
 			}
@@ -975,13 +977,15 @@ func (l *Loop) runTurn(ctx context.Context, turnID, userText string, opts TurnOp
 					result = guardResult
 				}
 				isErr = true
-				guardInterventions++
 				toolStats.LoopGuardInterventions++
-				if guardInterventions >= 2 {
-					if !forceNoToolsNext {
-						toolStats.ForcedNoTools++
+				if loopGuardResultForcesNoTools(guardResult) {
+					guardInterventions++
+					if guardInterventions >= 2 {
+						if !forceNoToolsNext {
+							toolStats.ForcedNoTools++
+						}
+						forceNoToolsNext = true
 					}
-					forceNoToolsNext = true
 				}
 			}
 			l.publishAndAppendToolResultWithDelegation(turnID, callID, toolName, result, isErr, toolDuration, delegation)
@@ -1135,6 +1139,18 @@ func withToolPolicyFailureKind(result, kind string) string {
 		return result
 	}
 	return result + "\nFailure: kind=" + kind
+}
+
+func loopGuardResultForcesNoTools(result string) bool {
+	for _, kind := range toolfailure.Kinds(result) {
+		if !strings.HasPrefix(kind, "loop_guard_") {
+			continue
+		}
+		if kind != loopGuardRepeatedFailuresKind {
+			return true
+		}
+	}
+	return false
 }
 
 func (p *PostToolPolicy) shouldActivate(result string, isErr bool) bool {
