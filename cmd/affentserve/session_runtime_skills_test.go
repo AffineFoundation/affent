@@ -53,6 +53,15 @@ func TestDurableRuntimeSkillNamesIgnoresPendingAndSymlinks(t *testing.T) {
 	if err := os.MkdirAll(filepath.Join(root, "half_skill"), 0o755); err != nil {
 		t.Fatal(err)
 	}
+	if err := os.WriteFile(filepath.Join(root, "half_skill", "SKILL.md"), []byte("AFFENT ACTIVE SKILL: half"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.MkdirAll(filepath.Join(root, "manifest_only"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(root, "manifest_only", "skill.json"), []byte(`{"name":"manifest_only"}`), 0o644); err != nil {
+		t.Fatal(err)
+	}
 	outside := t.TempDir()
 	if err := os.WriteFile(filepath.Join(outside, "SKILL.md"), []byte("AFFENT ACTIVE SKILL: outside"), 0o644); err != nil {
 		t.Fatal(err)

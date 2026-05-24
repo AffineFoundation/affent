@@ -697,7 +697,7 @@ func durableRuntimeSkillNames(dir string) []string {
 			if ent.Type()&os.ModeSymlink != 0 || !ent.IsDir() || strings.HasPrefix(ent.Name(), ".") {
 				continue
 			}
-			if exists, _, err := durableRegularFileModTime(filepath.Join(dir, ent.Name(), "SKILL.md")); err != nil || !exists {
+			if !durableRuntimeSkillDirComplete(filepath.Join(dir, ent.Name())) {
 				continue
 			}
 			names = append(names, ent.Name())
@@ -711,6 +711,16 @@ func durableRuntimeSkillNames(dir string) []string {
 	}
 	sort.Strings(names)
 	return names
+}
+
+func durableRuntimeSkillDirComplete(dir string) bool {
+	for _, name := range []string{"skill.json", "SKILL.md"} {
+		exists, _, err := durableRegularFileModTime(filepath.Join(dir, name))
+		if err != nil || !exists {
+			return false
+		}
+	}
+	return true
 }
 
 func mergeStringLists(a, b []string) []string {
