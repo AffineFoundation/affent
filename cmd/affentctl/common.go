@@ -729,6 +729,9 @@ type runtimeCapabilities struct {
 	Plan                 bool
 	SessionSearch        bool
 	ProjectContext       bool
+	WebFetch             bool
+	WebSearch            bool
+	Browser              bool
 	Subagent             bool
 	FocusedTasks         bool
 }

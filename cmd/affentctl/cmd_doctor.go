@@ -213,7 +213,7 @@ func doctorCapabilitySummary(c commonFlags) string {
 		}
 	}
 	return fmt.Sprintf(
-		"shell_file=%t skill_install=%t memory=%t memory_only=%t eval_mode=%t session_search=%t project_context=%t mcp=%t subagent=%t subagent_max_depth=%d focused_tasks=%t focused_task_profiles=%s executor=%s",
+		"shell_file=%t skill_install=%t memory=%t memory_only=%t eval_mode=%t session_search=%t project_context=%t web_fetch=%t web_search=%t browser=%t mcp=%t subagent=%t subagent_max_depth=%d focused_tasks=%t focused_task_profiles=%s executor=%s",
 		caps.Builtins,
 		caps.Skill,
 		caps.Memory,
@@ -221,6 +221,9 @@ func doctorCapabilitySummary(c commonFlags) string {
 		c.evalMode,
 		caps.SessionSearch,
 		caps.ProjectContext,
+		caps.WebFetch,
+		caps.WebSearch,
+		caps.Browser,
 		caps.MCP,
 		caps.Subagent,
 		c.subagentMaxDepth,
