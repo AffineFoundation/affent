@@ -51,6 +51,7 @@ func waitInteractable(ctx context.Context, el *rod.Element, ref int) error {
 func ClickTool(s *Session) *agent.Tool {
 	schema := json.RawMessage(`{
         "type": "object",
+        "additionalProperties": false,
         "required": ["ref"],
         "properties": {
             "ref": {
@@ -70,8 +71,8 @@ func ClickTool(s *Session) *agent.Tool {
 			var args struct {
 				Ref int `json:"ref"`
 			}
-			if err := json.Unmarshal(raw, &args); err != nil {
-				return "", fmt.Errorf("decode args: %w", err)
+			if err := decodeBrowserToolArgs(raw, &args, "retry browser_click with only the documented field: ref"); err != nil {
+				return "", err
 			}
 			if args.Ref <= 0 {
 				return "", browserRefRequiredError("browser_click")
@@ -111,6 +112,7 @@ func ClickTool(s *Session) *agent.Tool {
 func TypeTool(s *Session) *agent.Tool {
 	schema := json.RawMessage(fmt.Sprintf(`{
         "type": "object",
+        "additionalProperties": false,
         "required": ["ref", "text"],
         "properties": {
             "ref": {
@@ -140,8 +142,8 @@ func TypeTool(s *Session) *agent.Tool {
 				Text   string `json:"text"`
 				Submit bool   `json:"submit"`
 			}
-			if err := json.Unmarshal(raw, &args); err != nil {
-				return "", fmt.Errorf("decode args: %w", err)
+			if err := decodeBrowserToolArgs(raw, &args, "retry browser_type with only documented fields: ref, text, and submit"); err != nil {
+				return "", err
 			}
 			if args.Ref <= 0 {
 				return "", browserRefRequiredError("browser_type")
@@ -197,6 +199,7 @@ func TypeTool(s *Session) *agent.Tool {
 func ScrollTool(s *Session) *agent.Tool {
 	schema := json.RawMessage(fmt.Sprintf(`{
         "type": "object",
+        "additionalProperties": false,
         "required": ["direction"],
         "properties": {
             "direction": {
@@ -223,8 +226,8 @@ func ScrollTool(s *Session) *agent.Tool {
 				Direction string `json:"direction"`
 				Amount    int    `json:"amount"`
 			}
-			if err := json.Unmarshal(raw, &args); err != nil {
-				return "", fmt.Errorf("decode args: %w", err)
+			if err := decodeBrowserToolArgs(raw, &args, "retry browser_scroll with only documented fields: direction and amount"); err != nil {
+				return "", err
 			}
 			args.Direction = strings.TrimSpace(args.Direction)
 			amount := args.Amount

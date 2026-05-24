@@ -55,14 +55,18 @@ func resolveSavePath(workspaceDir, savePath string) (string, error) {
 // the current page; the model uses this after dynamic content changes
 // (e.g. an XHR finished after the last navigation).
 func SnapshotTool(s *Session) *agent.Tool {
-	schema := json.RawMessage(`{"type":"object","properties":{}}`)
+	schema := json.RawMessage(`{"type":"object","additionalProperties":false,"properties":{}}`)
 	return &agent.Tool{
 		Name: "browser_snapshot",
 		Description: "Re-read the current page and return a fresh snapshot: text content " +
 			"plus interactive elements with current ref ids. Use whenever the page may " +
 			"have changed since the last action (XHR completion, modal open, etc.).",
 		Schema: schema,
-		Execute: func(ctx context.Context, _ json.RawMessage) (string, error) {
+		Execute: func(ctx context.Context, raw json.RawMessage) (string, error) {
+			var args struct{}
+			if err := decodeBrowserToolArgs(raw, &args, "retry browser_snapshot with an empty JSON object"); err != nil {
+				return "", err
+			}
 			if s.page == nil {
 				return "", ErrNoPage
 			}
@@ -100,6 +104,7 @@ const (
 func ScreenshotTool(s *Session) *agent.Tool {
 	schema := json.RawMessage(fmt.Sprintf(`{
         "type": "object",
+        "additionalProperties": false,
         "properties": {
             "full_page": {
                 "type": "boolean",
@@ -126,10 +131,8 @@ func ScreenshotTool(s *Session) *agent.Tool {
 				FullPage bool    `json:"full_page"`
 				SavePath *string `json:"save_path"`
 			}
-			if len(raw) > 0 {
-				if err := json.Unmarshal(raw, &args); err != nil {
-					return "", fmt.Errorf("decode args: %w", err)
-				}
+			if err := decodeBrowserToolArgs(raw, &args, "retry browser_screenshot with only documented fields: full_page and save_path"); err != nil {
+				return "", err
 			}
 			var savePath string
 			if args.SavePath != nil {

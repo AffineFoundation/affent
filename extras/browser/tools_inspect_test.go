@@ -65,12 +65,15 @@ func TestResolveSavePath_SandboxesScreenshotWrites(t *testing.T) {
 
 func TestScreenshotToolValidatesArgsBeforePageCheck(t *testing.T) {
 	tool := ScreenshotTool(&Session{})
+	if !strings.Contains(string(tool.Schema), `"additionalProperties": false`) {
+		t.Fatalf("schema should reject unknown args: %s", tool.Schema)
+	}
 	if !strings.Contains(string(tool.Schema), `"maxLength": 4096`) {
 		t.Fatalf("schema should publish save_path maxLength: %s", tool.Schema)
 	}
 
 	_, err := tool.Execute(context.Background(), json.RawMessage(`{"save_path":`))
-	if err == nil || !strings.Contains(err.Error(), "decode args") {
+	if err == nil || !strings.Contains(err.Error(), "decode args") || !strings.Contains(err.Error(), "Next:") {
 		t.Fatalf("invalid JSON error = %v, want decode args", err)
 	}
 
@@ -89,5 +92,10 @@ func TestScreenshotToolValidatesArgsBeforePageCheck(t *testing.T) {
 	}
 	if !strings.Contains(err.Error(), "Next:") {
 		t.Fatalf("oversized save_path error should include Next step, got %v", err)
+	}
+
+	_, err = tool.Execute(context.Background(), json.RawMessage(`{"save_path":"shot.png","url":"https://example.com"}`))
+	if err == nil || !strings.Contains(err.Error(), "unknown field") || !strings.Contains(err.Error(), "url") || !strings.Contains(err.Error(), "Next:") {
+		t.Fatalf("unknown arg error = %v, want Next guidance", err)
 	}
 }

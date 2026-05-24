@@ -6,6 +6,8 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	agent "github.com/affinefoundation/affent/internal/agent"
 )
 
 func TestResolveBrowserWaitTimeout(t *testing.T) {
@@ -43,6 +45,9 @@ func TestResolveBrowserWaitTimeout(t *testing.T) {
 
 func TestNavigateToolRejectsBlankURLAndPublishesMinLength(t *testing.T) {
 	tool := NavigateTool(&Session{})
+	if !strings.Contains(string(tool.Schema), `"additionalProperties": false`) {
+		t.Fatalf("schema should reject unknown args: %s", tool.Schema)
+	}
 	if !strings.Contains(string(tool.Schema), `"minLength": 1`) {
 		t.Fatalf("schema should publish url minLength: %s", tool.Schema)
 	}
@@ -71,10 +76,17 @@ func TestNavigateToolRejectsBlankURLAndPublishesMinLength(t *testing.T) {
 	if err == nil || !strings.Contains(err.Error(), "url must start with") || !strings.Contains(err.Error(), "Next:") {
 		t.Fatalf("scheme error = %v, want Next guidance", err)
 	}
+	_, err = tool.Execute(context.Background(), json.RawMessage(`{"url":"https://example.com","query":"ignored"}`))
+	if err == nil || !strings.Contains(err.Error(), "unknown field") || !strings.Contains(err.Error(), "query") || !strings.Contains(err.Error(), "Next:") {
+		t.Fatalf("unknown arg error = %v, want Next guidance", err)
+	}
 }
 
 func TestWaitToolRejectsBlankRequiredTextAndPublishesMinLength(t *testing.T) {
 	tool := WaitTool(&Session{})
+	if !strings.Contains(string(tool.Schema), `"additionalProperties": false`) {
+		t.Fatalf("schema should reject unknown args: %s", tool.Schema)
+	}
 	if count := strings.Count(string(tool.Schema), `"minLength": 1`); count < 2 {
 		t.Fatalf("schema should publish minLength for for/value fields: %s", tool.Schema)
 	}
@@ -110,10 +122,17 @@ func TestWaitToolRejectsBlankRequiredTextAndPublishesMinLength(t *testing.T) {
 	if err == nil || !strings.Contains(err.Error(), "timeout_ms must be between") || !strings.Contains(err.Error(), "Next:") {
 		t.Fatalf("invalid timeout error = %v, want Next guidance", err)
 	}
+	_, err = tool.Execute(context.Background(), json.RawMessage(`{"for":"load","url":"https://example.com"}`))
+	if err == nil || !strings.Contains(err.Error(), "unknown field") || !strings.Contains(err.Error(), "url") || !strings.Contains(err.Error(), "Next:") {
+		t.Fatalf("unknown arg error = %v, want Next guidance", err)
+	}
 }
 
 func TestScrollToolRejectsBlankDirectionBeforePageCheck(t *testing.T) {
 	tool := ScrollTool(&Session{})
+	if !strings.Contains(string(tool.Schema), `"additionalProperties": false`) {
+		t.Fatalf("schema should reject unknown args: %s", tool.Schema)
+	}
 	if !strings.Contains(string(tool.Schema), `"minLength": 1`) {
 		t.Fatalf("schema should publish direction minLength: %s", tool.Schema)
 	}
@@ -144,10 +163,17 @@ func TestScrollToolRejectsBlankDirectionBeforePageCheck(t *testing.T) {
 	if !strings.Contains(err.Error(), "Next:") {
 		t.Fatalf("oversized amount error should include Next step, got %v", err)
 	}
+	_, err = tool.Execute(context.Background(), json.RawMessage(`{"direction":"down","ref":1}`))
+	if err == nil || !strings.Contains(err.Error(), "unknown field") || !strings.Contains(err.Error(), "ref") || !strings.Contains(err.Error(), "Next:") {
+		t.Fatalf("unknown arg error = %v, want Next guidance", err)
+	}
 }
 
 func TestTypeToolRejectsOversizedTextBeforePageCheck(t *testing.T) {
 	tool := TypeTool(&Session{})
+	if !strings.Contains(string(tool.Schema), `"additionalProperties": false`) {
+		t.Fatalf("schema should reject unknown args: %s", tool.Schema)
+	}
 	if !strings.Contains(string(tool.Schema), `"maxLength": 4096`) {
 		t.Fatalf("schema should publish text maxLength: %s", tool.Schema)
 	}
@@ -163,12 +189,39 @@ func TestTypeToolRejectsOversizedTextBeforePageCheck(t *testing.T) {
 	if !strings.Contains(err.Error(), "Next:") {
 		t.Fatalf("oversized text error should include Next step, got %v", err)
 	}
+	_, err = tool.Execute(context.Background(), json.RawMessage(`{"ref":1,"text":"hi","url":"https://example.com"}`))
+	if err == nil || !strings.Contains(err.Error(), "unknown field") || !strings.Contains(err.Error(), "url") || !strings.Contains(err.Error(), "Next:") {
+		t.Fatalf("unknown arg error = %v, want Next guidance", err)
+	}
 }
 
 func TestClickToolRejectsInvalidRefBeforePageCheck(t *testing.T) {
 	tool := ClickTool(&Session{})
+	if !strings.Contains(string(tool.Schema), `"additionalProperties": false`) {
+		t.Fatalf("schema should reject unknown args: %s", tool.Schema)
+	}
 	_, err := tool.Execute(context.Background(), json.RawMessage(`{"ref":0}`))
 	if err == nil || !strings.Contains(err.Error(), "ref must be a positive integer") || !strings.Contains(err.Error(), "Next:") {
 		t.Fatalf("invalid ref error = %v, want Next guidance", err)
+	}
+	_, err = tool.Execute(context.Background(), json.RawMessage(`{"ref":1,"text":"ignored"}`))
+	if err == nil || !strings.Contains(err.Error(), "unknown field") || !strings.Contains(err.Error(), "text") || !strings.Contains(err.Error(), "Next:") {
+		t.Fatalf("unknown arg error = %v, want Next guidance", err)
+	}
+}
+
+func TestNoArgBrowserToolsRejectUnknownArgs(t *testing.T) {
+	for _, tool := range []*agent.Tool{
+		BackTool(&Session{}),
+		SnapshotTool(&Session{}),
+	} {
+		if !strings.Contains(string(tool.Schema), `"additionalProperties":false`) &&
+			!strings.Contains(string(tool.Schema), `"additionalProperties": false`) {
+			t.Fatalf("%s schema should reject unknown args: %s", tool.Name, tool.Schema)
+		}
+		_, err := tool.Execute(context.Background(), json.RawMessage(`{"ref":1}`))
+		if err == nil || !strings.Contains(err.Error(), "unknown field") || !strings.Contains(err.Error(), "ref") || !strings.Contains(err.Error(), "Next:") {
+			t.Fatalf("%s unknown arg error = %v, want Next guidance", tool.Name, err)
+		}
 	}
 }

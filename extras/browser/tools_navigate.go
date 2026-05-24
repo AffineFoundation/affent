@@ -32,6 +32,7 @@ const (
 func NavigateTool(s *Session) *agent.Tool {
 	schema := json.RawMessage(fmt.Sprintf(`{
         "type": "object",
+        "additionalProperties": false,
         "required": ["url"],
         "properties": {
             "url": {
@@ -60,8 +61,8 @@ func NavigateTool(s *Session) *agent.Tool {
 				URL       string `json:"url"`
 				WaitUntil string `json:"wait_until"`
 			}
-			if err := json.Unmarshal(raw, &args); err != nil {
-				return "", fmt.Errorf("decode args: %w", err)
+			if err := decodeBrowserToolArgs(raw, &args, "retry browser_navigate with only documented fields: url and wait_until"); err != nil {
+				return "", err
 			}
 			args.URL = strings.TrimSpace(args.URL)
 			if args.URL == "" {
@@ -169,12 +170,16 @@ func waitDOMContentLoaded(ctx context.Context, page *rod.Page, timeout time.Dura
 // BackTool returns the `browser_back` tool — navigates one entry back
 // in history and returns the new page snapshot.
 func BackTool(s *Session) *agent.Tool {
-	schema := json.RawMessage(`{"type":"object","properties":{}}`)
+	schema := json.RawMessage(`{"type":"object","additionalProperties":false,"properties":{}}`)
 	return &agent.Tool{
 		Name:        "browser_back",
 		Description: "Navigate one step back in the browser history. Returns the resulting page snapshot. No-op if there is no prior history entry.",
 		Schema:      schema,
-		Execute: func(ctx context.Context, _ json.RawMessage) (string, error) {
+		Execute: func(ctx context.Context, raw json.RawMessage) (string, error) {
+			var args struct{}
+			if err := decodeBrowserToolArgs(raw, &args, "retry browser_back with an empty JSON object"); err != nil {
+				return "", err
+			}
 			if s.page == nil {
 				return "", ErrNoPage
 			}
@@ -197,6 +202,7 @@ func BackTool(s *Session) *agent.Tool {
 func WaitTool(s *Session) *agent.Tool {
 	schema := json.RawMessage(fmt.Sprintf(`{
         "type": "object",
+        "additionalProperties": false,
         "required": ["for"],
         "properties": {
             "for": {
@@ -231,8 +237,8 @@ func WaitTool(s *Session) *agent.Tool {
 				Value     string `json:"value"`
 				TimeoutMS int    `json:"timeout_ms"`
 			}
-			if err := json.Unmarshal(raw, &args); err != nil {
-				return "", fmt.Errorf("decode args: %w", err)
+			if err := decodeBrowserToolArgs(raw, &args, "retry browser_wait with only documented fields: for, value, and timeout_ms"); err != nil {
+				return "", err
 			}
 			args.For = strings.TrimSpace(args.For)
 			args.Value = strings.TrimSpace(args.Value)
