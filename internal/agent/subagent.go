@@ -983,6 +983,8 @@ Rules:
 - If using shell, keep it read-only: tests, grep, find, ls, git diff/status/show, language checkers, and similar inspection commands.
 - If subagent_run is available inside this subagent, use it only for one clearly separable noisy subtask. Do not create agent chains for simple reads or when you can answer from current evidence.
 - If you cannot verify something, say so explicitly.
+- In the Uncertainties section, write "- none" when there are no residual
+  gaps. Do not leave the section blank.
 
 Final answer format:
 Conclusion:

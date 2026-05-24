@@ -578,6 +578,15 @@ func TestSubagentSystemPromptIncludesWebExtractionGuidance(t *testing.T) {
 	}
 }
 
+func TestSubagentSystemPromptRequiresExplicitEmptyUncertainties(t *testing.T) {
+	got := subagentSystemPrompt("explore")
+	for _, want := range []string{"Uncertainties section", "\"- none\"", "Do not leave the section blank"} {
+		if !strings.Contains(got, want) {
+			t.Fatalf("subagent prompt missing %q:\n%s", want, got)
+		}
+	}
+}
+
 func TestSubagentToolDescriptionMentionsCallerProvidedBrowserTools(t *testing.T) {
 	tool := subagentTool(SubagentDeps{
 		LLM:              NewLLMClient("http://x", "", "m"),
