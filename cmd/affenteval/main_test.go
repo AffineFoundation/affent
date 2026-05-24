@@ -916,13 +916,17 @@ func TestFailureKindsForResult(t *testing.T) {
 		`verify=0, want >= 1; focused_tasks=map[explore:1]`,
 		`test=0, want >= 1; subagents=map[review:1]`,
 		`expected "skill" result to contain "direct install cannot use a remote source URL"; tools=skill`,
+		`affentctl run failed: exit=1 err=LLM llm_stream timed out after 4m0s while waiting for chat completion (model="qwen" endpoint="https://llm.example/v1/chat/completions" max-call-timeout/per-call-timeout=4m0s): context deadline exceeded`,
+		`affentctl run failed: exit=1 err=LLM llm_stream ended with an incomplete SSE stream (model="qwen" endpoint="https://llm.example/v1/chat/completions"). HTTP streaming started, but the upstream closed the connection before sending any terminal finish_reason chunk: stream ended without finish`,
 	})
 	if got["turn_end"] != 1 ||
 		got["missing_command"] != 2 ||
 		got["delegation_error"] != 1 ||
 		got["missing_focused_task"] != 1 ||
 		got["missing_subagent"] != 1 ||
-		got["skill_install_guard"] != 1 {
+		got["skill_install_guard"] != 1 ||
+		got["llm_timeout"] != 1 ||
+		got["llm_incomplete_stream"] != 1 {
 		t.Fatalf("failureKindsForResult = %#v", got)
 	}
 }
@@ -961,6 +965,10 @@ func TestFailureKind(t *testing.T) {
 		{`found forbidden "write_file" call (call_id=c1 args=map[])`, "forbidden_tool"},
 		{`expected "skill" result to contain "direct install cannot use a remote source URL"; tools=skill`, "skill_install_guard"},
 		{`expected "shell" result to contain "ok"; tools=shell`, "tool_result_missing"},
+		{`affentctl run failed: exit=1 err=LLM llm_stream timed out after 4m0s while waiting for chat completion (max-call-timeout/per-call-timeout=4m0s): context deadline exceeded`, "llm_timeout"},
+		{`affentctl run failed: exit=1 err=context deadline exceeded while waiting for chat completion`, "llm_timeout"},
+		{`affentctl run failed: exit=1 err=LLM llm_stream ended with an incomplete SSE stream before finish_reason`, "llm_incomplete_stream"},
+		{`affentctl run failed: exit=1 err=stream ended without finish`, "llm_incomplete_stream"},
 		{`something else`, "other"},
 	}
 	for _, tc := range cases {

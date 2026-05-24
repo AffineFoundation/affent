@@ -816,6 +816,10 @@ func failureKind(failure string) string {
 	failure = strings.TrimSpace(failure)
 	lower := strings.ToLower(failure)
 	switch {
+	case isLLMTimeoutFailure(lower):
+		return "llm_timeout"
+	case isLLMIncompleteStreamFailure(lower):
+		return "llm_incomplete_stream"
 	case strings.HasPrefix(lower, "affentctl run failed:"):
 		return "affentctl_run"
 	case strings.HasPrefix(lower, "verify command failed:"):
@@ -853,6 +857,21 @@ func failureKind(failure string) string {
 	default:
 		return "other"
 	}
+}
+
+func isLLMTimeoutFailure(lower string) bool {
+	return (strings.Contains(lower, "llm ") && strings.Contains(lower, "timed out")) ||
+		(strings.Contains(lower, "context deadline exceeded") &&
+			(strings.Contains(lower, "max-call-timeout") ||
+				strings.Contains(lower, "per-call-timeout") ||
+				strings.Contains(lower, "waiting for chat completion")))
+}
+
+func isLLMIncompleteStreamFailure(lower string) bool {
+	return strings.Contains(lower, "incomplete sse stream") ||
+		strings.Contains(lower, "stream ended without finish") ||
+		(strings.Contains(lower, "finish_reason") &&
+			strings.Contains(lower, "closed the connection"))
 }
 
 func validateRunConfig(temperature, topP, maxTokens, seed string, timeout time.Duration, executor string, scenarioCount int, workRoot string, workRootSet bool, verifierOutputCap int) error {
