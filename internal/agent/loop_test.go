@@ -372,6 +372,16 @@ func TestAnnotateLLMCallErrorAddsActionableContext(t *testing.T) {
 		}
 	}
 
+	idleErr := loop.annotateLLMCallError("llm_stream", &RetryableError{Err: streamIdleTimeoutError(30 * time.Second)}, 4*time.Minute)
+	if !errors.Is(idleErr, errStreamIdleTimeout) || !isTransient(idleErr) {
+		t.Fatalf("annotated idle timeout must preserve retryable/sentinel classification: %v", idleErr)
+	}
+	for _, want := range []string{"stream idle timeout", "stream-idle-timeout", "before finish_reason", "proxy buffering", "max-call-timeout/per-call-timeout=4m0s"} {
+		if !strings.Contains(idleErr.Error(), want) {
+			t.Fatalf("idle timeout diagnostic missing %q:\n%s", want, idleErr.Error())
+		}
+	}
+
 	finishErr := loop.annotateLLMCallError("llm_stream", &RetryableError{Err: errStreamEndedWithoutFinish}, 4*time.Minute)
 	if !errors.Is(finishErr, errStreamEndedWithoutFinish) || !isTransient(finishErr) {
 		t.Fatalf("annotated finish error must preserve retryable/sentinel classification: %v", finishErr)

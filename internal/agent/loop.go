@@ -1654,6 +1654,13 @@ func (l *Loop) annotateLLMCallError(stage string, err error, timeout time.Durati
 			stage, timeout, model, endpoint, timeout, StreamIdleTimeout, StreamPostFinishTimeout, err,
 		)
 	}
+	if errors.Is(err, errStreamIdleTimeout) {
+		return fmt.Errorf(
+			"LLM %s stream idle timeout (model=%q endpoint=%q stream-idle-timeout=%s max-call-timeout/per-call-timeout=%s). "+
+				"HTTP streaming started, but no SSE chunk arrived within the idle watchdog before finish_reason. Common causes: upstream generation paused between chunks, scheduler/KV-cache stalls, proxy buffering, or a worker that stopped producing tokens without closing cleanly: %w",
+			stage, model, endpoint, StreamIdleTimeout, timeout, err,
+		)
+	}
 	if errors.Is(err, errStreamEndedWithoutFinish) {
 		return fmt.Errorf(
 			"LLM %s ended with an incomplete SSE stream (model=%q endpoint=%q). HTTP streaming started, but the upstream closed the connection before sending any terminal finish_reason chunk. "+

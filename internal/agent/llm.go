@@ -15,6 +15,7 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"sync/atomic"
 	"time"
 
 	"github.com/google/uuid"
@@ -60,6 +61,7 @@ var retryableHTTPStatuses = map[int]bool{
 }
 
 var errStreamEndedWithoutFinish = errors.New("stream ended without finish")
+var errStreamIdleTimeout = errors.New("stream idle timeout")
 
 func isRetryableStatus(code int) bool {
 	if retryableHTTPStatuses[code] {
@@ -481,7 +483,11 @@ func consumeStream(ctx context.Context, body io.ReadCloser, out chan<- StreamEve
 	// upstream (notably GLM tool_calls through chutes) can't park us
 	// here for the full callCtx wall-clock budget.
 	idleTimeout := StreamIdleTimeout
-	watchdog := time.AfterFunc(idleTimeout, func() { _ = body.Close() })
+	var watchdogFired atomic.Bool
+	watchdog := time.AfterFunc(idleTimeout, func() {
+		watchdogFired.Store(true)
+		_ = body.Close()
+	})
 	defer watchdog.Stop()
 
 	// Accumulator for the final assistant message. ToolCalls is grown as
@@ -645,6 +651,10 @@ func consumeStream(ctx context.Context, body io.ReadCloser, out chan<- StreamEve
 		// That's not a failure — we have the full assistant message
 		// already. Fall through to assemble + emit Finish.
 		if !finishSeen {
+			if watchdogFired.Load() {
+				emit(StreamEvent{Err: &RetryableError{Err: streamIdleTimeoutError(StreamIdleTimeout)}})
+				return
+			}
 			// Genuine mid-stream failure (TCP reset, server hung up,
 			// idle stall before any finish chunk). Mark retryable so
 			// the loop can take another shot.
@@ -653,6 +663,10 @@ func consumeStream(ctx context.Context, body io.ReadCloser, out chan<- StreamEve
 		}
 	}
 	if !finishSeen {
+		if watchdogFired.Load() {
+			emit(StreamEvent{Err: &RetryableError{Err: streamIdleTimeoutError(StreamIdleTimeout)}})
+			return
+		}
 		emit(StreamEvent{Err: &RetryableError{Err: errStreamEndedWithoutFinish}})
 		return
 	}
@@ -678,4 +692,8 @@ func consumeStream(ctx context.Context, body io.ReadCloser, out chan<- StreamEve
 		OutputTokens: outputTokens,
 		Final:        final,
 	}})
+}
+
+func streamIdleTimeoutError(timeout time.Duration) error {
+	return fmt.Errorf("stream idle timeout after %s before finish_reason; no SSE chunk arrived within StreamIdleTimeout: %w", timeout, errStreamIdleTimeout)
 }

@@ -108,11 +108,16 @@ func TestConsumeStream_IdleStallNoFinish(t *testing.T) {
 	if !errors.As(sawErr, &re) {
 		t.Fatalf("error not flagged retryable: %v", sawErr)
 	}
+	if !errors.Is(sawErr, errStreamIdleTimeout) {
+		t.Fatalf("error should preserve stream idle timeout sentinel: %v", sawErr)
+	}
+	for _, want := range []string{"stream idle timeout", "before finish_reason", "StreamIdleTimeout"} {
+		if !strings.Contains(sawErr.Error(), want) {
+			t.Fatalf("idle timeout error missing %q:\n%s", want, sawErr.Error())
+		}
+	}
 	if elapsed > 2*time.Second {
 		t.Fatalf("idle watchdog didn't fire fast enough: elapsed=%v", elapsed)
-	}
-	if !strings.Contains(sawErr.Error(), "stream read") {
-		t.Logf("informational: error message = %q", sawErr.Error())
 	}
 }
 

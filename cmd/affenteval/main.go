@@ -915,6 +915,7 @@ func failureKind(failure string) string {
 
 func isLLMTimeoutFailure(lower string) bool {
 	return (strings.Contains(lower, "llm ") && strings.Contains(lower, "timed out")) ||
+		strings.Contains(lower, "stream idle timeout") ||
 		(strings.Contains(lower, "context deadline exceeded") &&
 			(strings.Contains(lower, "max-call-timeout") ||
 				strings.Contains(lower, "per-call-timeout") ||
