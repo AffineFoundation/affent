@@ -86,9 +86,10 @@ workspaces, image tags, and resource limits apply.
 runtime image if needed, starts `affentserve` in a named Docker container,
 mounts the persistent runtime workspace, waits for `/healthz`, and uses the
 default `1g` memory / `2` CPU / `512` PID limits. If an existing container was
-created with a different persistent workspace or different limits, Affent
-refuses to silently reuse it; run `make image-serve-restart` to recreate the
-container with the requested workspace and limits and wait for `/healthz`.
+created with a different persistent workspace, port publishing, or resource
+limits, Affent refuses to silently reuse it; run `make image-serve-restart` to
+recreate the container with the requested workspace and limits and wait for
+`/healthz`.
 
 `make eval-container` builds the full Affent runtime image, runs the checkout's
 `cmd/affenteval` inside it with the same Docker memory/CPU defaults, mounts the

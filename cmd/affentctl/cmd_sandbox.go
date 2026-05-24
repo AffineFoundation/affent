@@ -46,6 +46,7 @@ const (
 	runtimeLabelCPUs      = "affent.runtime.cpus"
 	runtimeLabelPIDsLimit = "affent.runtime.pids_limit"
 	runtimeLabelUser      = "affent.runtime.user"
+	runtimeLabelPublish   = "affent.runtime.publish"
 )
 
 var (
@@ -671,6 +672,7 @@ func runRuntimeImage(opts runtimeRunOptions, runner commandRunner) error {
 		"--label", runtimeLabelCPUs+"="+opts.CPUs,
 		"--label", runtimeLabelPIDsLimit+"="+opts.PIDsLimit,
 		"--label", runtimeLabelUser+"="+opts.User,
+		"--label", runtimeLabelPublish+"="+strings.Join(publishValues, ","),
 		"-v", opts.Workspace+":/workspace",
 		"-w", "/workspace",
 	)

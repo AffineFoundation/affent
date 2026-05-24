@@ -115,6 +115,12 @@ image-serve-up:
 			echo "run make image-serve-restart to recreate it with the requested limits" >&2; \
 			exit 2; \
 		fi; \
+		actual_publish=$$(docker inspect "$(SERVE_CONTAINER_NAME)" --format '{{index .Config.Labels "affent.runtime.publish"}}' 2>/dev/null); \
+		if test "$$actual_publish" != "$(SERVE_PUBLISH)" ; then \
+			echo "container $(SERVE_CONTAINER_NAME) was created with publish=$$actual_publish, but requested publish=$(SERVE_PUBLISH)" >&2; \
+			echo "run make image-serve-restart to recreate it with the requested port publishing" >&2; \
+			exit 2; \
+		fi; \
 		running=$$(docker inspect "$(SERVE_CONTAINER_NAME)" --format '{{.State.Running}}' 2>/dev/null); \
 		if test "$$running" = "true"; then \
 			echo "container $(SERVE_CONTAINER_NAME) already running; waiting for health"; \
@@ -130,7 +136,7 @@ image-serve-up:
 image-serve-status:
 	@$(call require_affent_runtime_container,image-serve-status); \
 	docker inspect "$(SERVE_CONTAINER_NAME)" \
-		--format 'name={{.Name}} state={{.State.Status}} image={{.Config.Image}} workspace={{index .Config.Labels "affent.runtime.workspace"}} memory={{index .Config.Labels "affent.runtime.memory"}} cpus={{index .Config.Labels "affent.runtime.cpus"}} pids_limit={{index .Config.Labels "affent.runtime.pids_limit"}} host_memory_bytes={{.HostConfig.Memory}} host_nano_cpus={{.HostConfig.NanoCpus}} host_pids_limit={{.HostConfig.PidsLimit}}'; \
+		--format 'name={{.Name}} state={{.State.Status}} image={{.Config.Image}} workspace={{index .Config.Labels "affent.runtime.workspace"}} publish={{index .Config.Labels "affent.runtime.publish"}} memory={{index .Config.Labels "affent.runtime.memory"}} cpus={{index .Config.Labels "affent.runtime.cpus"}} pids_limit={{index .Config.Labels "affent.runtime.pids_limit"}} host_memory_bytes={{.HostConfig.Memory}} host_nano_cpus={{.HostConfig.NanoCpus}} host_pids_limit={{.HostConfig.PidsLimit}}'; \
 	ports=$$(docker port "$(SERVE_CONTAINER_NAME)" 2>/dev/null || true); \
 	if test -n "$$ports"; then printf 'ports:\n%s\n' "$$ports"; else echo "ports: none"; fi
 
