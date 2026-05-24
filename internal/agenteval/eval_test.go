@@ -149,6 +149,41 @@ func TestParseTraceFileReadsToolRequestsAndFinalText(t *testing.T) {
 	}
 }
 
+func TestParseTraceFileDerivesToolFailureExamples(t *testing.T) {
+	dir := t.TempDir()
+	tracePath := filepath.Join(dir, "trace.jsonl")
+	body := strings.Join([]string{
+		`{"type":"trace.meta","data":{"schema_version":1}}`,
+		`{"type":"tool.request","data":{"call_id":"fetch1","tool":"web_fetch","args":{"url":"https://dashboard.example/helio","timeout":10}}}`,
+		`{"type":"tool.result","data":{"call_id":"fetch1","result":"[dynamic page shell: URL=https://dashboard.example/helio]\nFailure: kind=dynamic_shell\nNext: use a text/API/source page.","exit_code":0}}`,
+		`{"type":"tool.request","data":{"call_id":"search1","tool":"web_search","args":{"query":"rare subnet official metrics"}}}`,
+		`{"type":"tool.result","data":{"call_id":"search1","result":"(no results)\nFailure: kind=no_results\nNext: retry with official domains.","exit_code":0}}`,
+		`{"type":"turn.end","data":{"reason":"completed"}}`,
+	}, "\n") + "\n"
+	if err := os.WriteFile(tracePath, []byte(body), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	trace, err := ParseTraceFile(tracePath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	examples := trace.ToolFailureExamples(1)
+	dynamic := examples["dynamic_shell"]
+	if len(dynamic) != 1 {
+		t.Fatalf("dynamic_shell examples = %#v", dynamic)
+	}
+	if dynamic[0].Tool != "web_fetch" ||
+		!strings.Contains(dynamic[0].ArgsSummary, "dashboard.example") ||
+		!strings.Contains(dynamic[0].ResultSummary, "dynamic page shell") ||
+		!strings.Contains(dynamic[0].ResultSummary, "Next:") {
+		t.Fatalf("dynamic_shell example missing replayed diagnostics: %#v", dynamic[0])
+	}
+	search := examples["no_results"]
+	if len(search) != 1 || search[0].Tool != "web_search" || !strings.Contains(search[0].ArgsSummary, "rare subnet") {
+		t.Fatalf("no_results example missing replayed query context: %#v", search)
+	}
+}
+
 func TestParseTraceFileRejectsOversizedLineWithLineNumber(t *testing.T) {
 	tracePath := filepath.Join(t.TempDir(), "trace.jsonl")
 	body := `{"type":"trace.meta","data":{"schema_version":1}}` + "\n" +
