@@ -18,6 +18,10 @@ Shared metadata fields:
 - `temperature`: sampling temperature passed to `affentctl`.
 - `runtime_eval_mode`: optional boolean, present when the eval runner passed
   `affentctl run --eval-mode`.
+- `runtime_memory`: optional boolean, present when the eval runner explicitly
+  opted memory back into the runtime with `--runtime-memory`.
+- `runtime_mcp`: optional boolean, present when the eval runner passed a runtime
+  MCP config. The config path itself is not written to JSONL.
 - `timeout_ms`: per-scenario timeout in milliseconds.
 
 ## Scenario Record

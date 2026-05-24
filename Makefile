@@ -14,7 +14,10 @@ EVAL_WORK_ROOT ?= /workspace/.tmp/eval
 EVAL_DOCKER_ARGS ?=
 EVAL_RUNTIME_EVAL_MODE ?= false
 EVAL_RUNTIME_EVAL_MODE_ARGS = $(if $(filter true yes 1,$(EVAL_RUNTIME_EVAL_MODE)),--runtime-eval-mode,)
-EVAL_MEMORY ?=
+EVAL_RUNTIME_MEMORY ?= false
+EVAL_RUNTIME_MEMORY_ARGS = $(if $(filter true yes 1,$(EVAL_RUNTIME_MEMORY)),--runtime-memory,)
+EVAL_RUNTIME_MCP_CONFIG ?=
+EVAL_RUNTIME_MCP_CONFIG_ARGS = $(if $(strip $(EVAL_RUNTIME_MCP_CONFIG)),--runtime-mcp-config "$(EVAL_RUNTIME_MCP_CONFIG)",)
 SERVE_EVAL_CONTAINER_NAME ?= affent-eval-serve
 SERVE_EVAL_WORKSPACE ?= $(CURDIR)/.tmp/eval-serve
 SERVE_EVAL_PUBLISH ?= 127.0.0.1:7777:7777
@@ -279,8 +282,6 @@ eval-container: affentctl
 		-e AFFENTCTL_API_KEY \
 		-e AFFENTCTL_MODEL \
 		-e AFFENTCTL_EVAL_MODE \
-		$(if $(EVAL_MEMORY),-e AFFENTCTL_MEMORY="$(EVAL_MEMORY)",-e AFFENTCTL_MEMORY) \
-		-e AFFENTCTL_MEMORY_ONLY \
 		-e AFFENTCTL_MEMORY_MAX_CHARS \
 		-e AFFENTCTL_MEMORY_TOPIC_MAX_CHARS \
 		-e AFFENTCTL_MEMORY_MAX_TOPICS \
@@ -295,10 +296,9 @@ eval-container: affentctl
 		-w /workspace \
 		$(EVAL_DOCKER_ARGS) \
 		"$(EVAL_IMAGE)" \
-		go run ./cmd/affenteval --repo-root /workspace --work-root "$(EVAL_WORK_ROOT)" --executor local $(EVAL_RUNTIME_EVAL_MODE_ARGS) $(EVAL_ARGS)
+		go run ./cmd/affenteval --repo-root /workspace --work-root "$(EVAL_WORK_ROOT)" --executor local $(EVAL_RUNTIME_EVAL_MODE_ARGS) $(EVAL_RUNTIME_MEMORY_ARGS) $(EVAL_RUNTIME_MCP_CONFIG_ARGS) $(EVAL_ARGS)
 
 eval-agent-container: EVAL_RUNTIME_EVAL_MODE=true
-eval-agent-container: EVAL_MEMORY=false
 eval-agent-container: eval-container
 
 eval-serve-container:

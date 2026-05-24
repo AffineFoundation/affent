@@ -364,15 +364,15 @@ func TestMakeImageServeEnablesBuiltinsInsideRuntimeContainer(t *testing.T) {
 	}
 }
 
-func TestReadmeDocumentsImageServeSessionPersistence(t *testing.T) {
+func TestTechnicalManualDocumentsImageServeSessionPersistence(t *testing.T) {
 	_, contextDir, ok, err := findSandboxBuildSource()
 	if err != nil {
 		t.Fatal(err)
 	}
 	if !ok {
-		t.Fatal("test requires source checkout with README")
+		t.Fatal("test requires source checkout with technical manual")
 	}
-	raw, err := os.ReadFile(filepath.Join(contextDir, "README.md"))
+	raw, err := os.ReadFile(filepath.Join(contextDir, "docs", "technical-manual.md"))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -389,7 +389,7 @@ func TestReadmeDocumentsImageServeSessionPersistence(t *testing.T) {
 		"still listed",
 	} {
 		if !strings.Contains(body, want) {
-			t.Fatalf("README session persistence docs missing %q", want)
+			t.Fatalf("technical manual session persistence docs missing %q", want)
 		}
 	}
 }
@@ -412,8 +412,8 @@ func TestMakeOneClickContainerTargetsUseSharedLimits(t *testing.T) {
 		"CONTAINER_CPUS ?= 2",
 		"CONTAINER_PIDS ?= 512",
 		"EVAL_RUNTIME_EVAL_MODE ?= false",
-		"EVAL_MEMORY ?=",
-		"eval-agent-container: EVAL_MEMORY=false",
+		"EVAL_RUNTIME_MEMORY ?= false",
+		"EVAL_RUNTIME_MCP_CONFIG ?=",
 		"eval-agent-container: eval-container",
 		"eval-serve-container:",
 		"eval-serve-browser-container: SERVE_EVAL_PERMISSIONS=browser",
@@ -461,9 +461,8 @@ func TestMakeOneClickContainerTargetsUseSharedLimits(t *testing.T) {
 			`--cpus "$(CONTAINER_CPUS)"`,
 			`--pids-limit "$(CONTAINER_PIDS)"`,
 			`-e AFFENTCTL_EVAL_MODE`,
-			`$(if $(EVAL_MEMORY),-e AFFENTCTL_MEMORY="$(EVAL_MEMORY)",-e AFFENTCTL_MEMORY)`,
 			`-e AFFENTEVAL_PROVIDER_LABEL`,
-			`$(EVAL_RUNTIME_EVAL_MODE_ARGS) $(EVAL_ARGS)`,
+			`$(EVAL_RUNTIME_EVAL_MODE_ARGS) $(EVAL_RUNTIME_MEMORY_ARGS) $(EVAL_RUNTIME_MCP_CONFIG_ARGS) $(EVAL_ARGS)`,
 		},
 		"eval-agent-container": {
 			`eval-agent-container: EVAL_RUNTIME_EVAL_MODE=true`,

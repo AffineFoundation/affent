@@ -199,6 +199,14 @@ environment variables, and intentionally does not forward host-path variables
 such as `AFFENTCTL_WORKSPACE` or `AFFENTSERVE_WORKSPACE_ROOT` unless passed
 explicitly with `--env`.
 
+`make image-serve-up` and `make image-serve-restart` run `affentserve` in the
+runtime image with durable session state under `/workspace/session-state`. That
+path lives inside `IMAGE_WORKSPACE`, so the server preserves conversation history as long as `IMAGE_WORKSPACE` is the same host path. Deleting a session with
+`DELETE /v1/sessions/{id}` intentionally removes that durable state.
+
+Use `make image-serve-smoke` for a local persistence check; it creates a
+session, restarts the runtime, and verifies the durable session is still listed.
+
 ## HTTP Server
 
 Build the server:
@@ -430,13 +438,16 @@ Run through Docker:
 ```bash
 make eval-container EVAL_ARGS='--suite small-model-tools --temperature 0'
 make eval-agent-container EVAL_ARGS='--scenario coding-python-slug --temperature 0'
+make eval-agent-container EVAL_RUNTIME_MEMORY=true EVAL_ARGS='--scenario your-memory-scenario --temperature 0'
+make eval-agent-container EVAL_RUNTIME_MCP_CONFIG=/path/to/mcp.json EVAL_ARGS='--scenario your-mcp-scenario --temperature 0'
 ```
 
 Use runtime eval mode when Affent itself is the benchmark agent and the model
 should not receive extra product affordances. In eval mode, dynamic workflow
 features such as skills, runtime skill install, subagents, focused tasks, MCP,
 project context, session search, and memory are disabled by default; shell/file
-tools remain available when built-ins are available.
+tools remain available when built-ins are available. Opt memory or MCP back in
+only for suites that explicitly measure those capabilities.
 
 For external OpenAI-compatible eval harnesses, run `affentserve` in eval mode:
 
