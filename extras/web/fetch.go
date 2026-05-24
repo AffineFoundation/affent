@@ -387,9 +387,9 @@ func dynamicShellLinkScore(text, rawURL string) int {
 			score += 2
 		}
 	}
-	for _, needle := range []string{"login", "signin", "sign-in", "auth", "account", "portfolio", "swap", "stake", "claim"} {
+	for _, needle := range []string{"login", "signin", "sign-in", "auth", "account", "portfolio", "swap", "stake", "claim", "api key", "api-key", "apikey", "keys", "billing", "pricing", "upgrade"} {
 		if strings.Contains(lower, needle) {
-			score--
+			score -= 2
 		}
 	}
 	return score

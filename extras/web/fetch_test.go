@@ -399,7 +399,7 @@ func TestFetchTool_LargeClientRenderedShellReportsNoEvidence(t *testing.T) {
 	largeState := strings.Repeat(`<script>self.__next_f.push(["",{"bootstrap":"`+strings.Repeat("x", 1024)+`"}])</script>`, 600)
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "text/html; charset=utf-8")
-		w.Write([]byte(`<!doctype html><html><head>` + scripts + `</head><body><div id="__next"><nav>Home <a href="/docs">Documentation</a> <a href="/api/subnets/21.json">API</a> <a href="/portfolio">Portfolio</a> Validators Subnets</nav><main></main></div>` + largeState + `</body></html>`))
+		w.Write([]byte(`<!doctype html><html><head>` + scripts + `</head><body><div id="__next"><nav>Home <a href="/docs">Documentation</a> <a href="/api/subnets/21.json">API</a> <a href="/pro/api-keys">API Keys</a> <a href="/portfolio">Portfolio</a> Validators Subnets</nav><main></main></div>` + largeState + `</body></html>`))
 	}))
 	defer srv.Close()
 
@@ -409,7 +409,7 @@ func TestFetchTool_LargeClientRenderedShellReportsNoEvidence(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Execute: %v", err)
 	}
-	for _, want := range []string{"dynamic page shell", "Failure: kind=dynamic_shell", "large client-rendered app shell", "Discovery preview (not source evidence): Home Documentation API Portfolio Validators Subnets", "Discovery links (not source evidence)", "/api/subnets/21.json", "/docs"} {
+	for _, want := range []string{"dynamic page shell", "Failure: kind=dynamic_shell", "large client-rendered app shell", "Discovery preview (not source evidence): Home Documentation API API Keys Portfolio Validators Subnets", "Discovery links (not source evidence)", "/api/subnets/21.json", "/docs"} {
 		if !strings.Contains(out, want) {
 			t.Fatalf("large app shell output missing %q:\n%s", want, out)
 		}
@@ -419,6 +419,9 @@ func TestFetchTool_LargeClientRenderedShellReportsNoEvidence(t *testing.T) {
 	}
 	if strings.Contains(out, "- Portfolio") {
 		t.Fatalf("low-value account/portfolio shell link should not be suggested:\n%s", out)
+	}
+	if strings.Contains(out, "- API Keys") || strings.Contains(out, "/pro/api-keys") {
+		t.Fatalf("API key/account-management shell link should not be suggested:\n%s", out)
 	}
 	if strings.Contains(out, "bootstrap") || strings.Contains(out, strings.Repeat("x", 80)) {
 		t.Fatalf("dynamic shell preview should not leak script payload:\n%s", out)
