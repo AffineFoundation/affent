@@ -299,6 +299,9 @@ func TestMakeImageServeEnablesBuiltinsInsideRuntimeContainer(t *testing.T) {
 		`docker port "$(SERVE_CONTAINER_NAME)"`,
 		`ports: none`,
 		`curl -fsS "$(SERVE_HEALTH_URL)"`,
+		`serve_eval_mode={{index .Config.Labels "affent.runtime.serve.eval_mode"}}`,
+		`serve_browser={{index .Config.Labels "affent.runtime.serve.browser"}}`,
+		`serve_web_search={{index .Config.Labels "affent.runtime.serve.web_search"}}`,
 		`health check failed ($$attempt/$(SERVE_HEALTH_ATTEMPTS))`,
 		`docker logs --tail 100 "$(SERVE_CONTAINER_NAME)"`,
 		`affent.runtime.memory`,
@@ -954,6 +957,10 @@ func TestRunRuntimeImageLabelsAffentServeRuntimePaths(t *testing.T) {
 			"--listen=0.0.0.0:7777",
 			"--workspace-root", "/workspace/sessions",
 			"--memory-root", "/workspace/session-state",
+			"--builtins",
+			"--eval-mode",
+			"--browser=true",
+			"--web-search=false",
 			"--api-key", "secret-value",
 		},
 	}
@@ -965,6 +972,10 @@ func TestRunRuntimeImageLabelsAffentServeRuntimePaths(t *testing.T) {
 		"--label", runtimeLabelServeListen + "=0.0.0.0:7777",
 		"--label", runtimeLabelServeWorkspaceRoot + "=/workspace/sessions",
 		"--label", runtimeLabelServeMemoryRoot + "=/workspace/session-state",
+		"--label", runtimeLabelServeBuiltins + "=true",
+		"--label", runtimeLabelServeEvalMode + "=true",
+		"--label", runtimeLabelServeBrowser + "=true",
+		"--label", runtimeLabelServeWebSearch + "=false",
 	} {
 		if !contains(args, want) {
 			t.Fatalf("docker run args missing %q:\n%v", want, args)
@@ -973,7 +984,11 @@ func TestRunRuntimeImageLabelsAffentServeRuntimePaths(t *testing.T) {
 	for i, arg := range args {
 		if strings.HasPrefix(arg, runtimeLabelServeListen+"=") ||
 			strings.HasPrefix(arg, runtimeLabelServeWorkspaceRoot+"=") ||
-			strings.HasPrefix(arg, runtimeLabelServeMemoryRoot+"=") {
+			strings.HasPrefix(arg, runtimeLabelServeMemoryRoot+"=") ||
+			strings.HasPrefix(arg, runtimeLabelServeBuiltins+"=") ||
+			strings.HasPrefix(arg, runtimeLabelServeEvalMode+"=") ||
+			strings.HasPrefix(arg, runtimeLabelServeBrowser+"=") ||
+			strings.HasPrefix(arg, runtimeLabelServeWebSearch+"=") {
 			if i == 0 || args[i-1] != "--label" {
 				t.Fatalf("service label %q should be passed as value after --label:\n%v", arg, args)
 			}
@@ -988,6 +1003,9 @@ func TestRuntimeServeCommandLabelsIgnoresUnknownFlagsWithoutSkippingKnownOnes(t 
 	got := runtimeServeCommandLabels([]string{
 		"affentserve",
 		"--builtins",
+		"--eval-mode",
+		"--browser=true",
+		"--memory=false",
 		"--workspace-root", "/workspace/sessions",
 		"--unknown-flag",
 		"--memory-root=/workspace/session-state",
@@ -999,6 +1017,10 @@ func TestRuntimeServeCommandLabelsIgnoresUnknownFlagsWithoutSkippingKnownOnes(t 
 		runtimeLabelServeListen + "=0.0.0.0:7777",
 		runtimeLabelServeWorkspaceRoot + "=/workspace/sessions",
 		runtimeLabelServeMemoryRoot + "=/workspace/session-state",
+		runtimeLabelServeBuiltins + "=true",
+		runtimeLabelServeEvalMode + "=true",
+		runtimeLabelServeBrowser + "=true",
+		runtimeLabelServeMemory + "=false",
 	} {
 		if !strings.Contains(joined, want) {
 			t.Fatalf("runtimeServeCommandLabels missing %q:\n%v", want, got)

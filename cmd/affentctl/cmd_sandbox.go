@@ -50,6 +50,15 @@ const (
 	runtimeLabelServeListen        = "affent.runtime.serve.listen"
 	runtimeLabelServeWorkspaceRoot = "affent.runtime.serve.workspace_root"
 	runtimeLabelServeMemoryRoot    = "affent.runtime.serve.memory_root"
+	runtimeLabelServeBuiltins      = "affent.runtime.serve.builtins"
+	runtimeLabelServeEvalMode      = "affent.runtime.serve.eval_mode"
+	runtimeLabelServeMemory        = "affent.runtime.serve.memory"
+	runtimeLabelServeBrowser       = "affent.runtime.serve.browser"
+	runtimeLabelServeScreenshot    = "affent.runtime.serve.browser_screenshot"
+	runtimeLabelServeWeb           = "affent.runtime.serve.web"
+	runtimeLabelServeWebSearch     = "affent.runtime.serve.web_search"
+	runtimeLabelServeSubagent      = "affent.runtime.serve.subagent"
+	runtimeLabelServeFocusedTasks  = "affent.runtime.serve.focused_tasks"
 )
 
 var (
@@ -718,6 +727,10 @@ func runtimeServeCommandLabels(command []string) []string {
 			setRuntimeServeLabelValue(values, name, value)
 			continue
 		}
+		if label, ok := runtimeServeBoolLabelFlag(arg); ok {
+			values[label] = "true"
+			continue
+		}
 		if !runtimeServeLabelFlag(arg) || i+1 >= len(command) {
 			continue
 		}
@@ -728,7 +741,20 @@ func runtimeServeCommandLabels(command []string) []string {
 		i++
 	}
 	labels := make([]string, 0, len(values))
-	for _, key := range []string{runtimeLabelServeListen, runtimeLabelServeWorkspaceRoot, runtimeLabelServeMemoryRoot} {
+	for _, key := range []string{
+		runtimeLabelServeListen,
+		runtimeLabelServeWorkspaceRoot,
+		runtimeLabelServeMemoryRoot,
+		runtimeLabelServeBuiltins,
+		runtimeLabelServeEvalMode,
+		runtimeLabelServeMemory,
+		runtimeLabelServeBrowser,
+		runtimeLabelServeScreenshot,
+		runtimeLabelServeWeb,
+		runtimeLabelServeWebSearch,
+		runtimeLabelServeSubagent,
+		runtimeLabelServeFocusedTasks,
+	} {
 		if value := strings.TrimSpace(values[key]); value != "" {
 			labels = append(labels, key+"="+value)
 		}
@@ -745,6 +771,31 @@ func runtimeServeLabelFlag(name string) bool {
 	}
 }
 
+func runtimeServeBoolLabelFlag(name string) (string, bool) {
+	switch name {
+	case "--builtins":
+		return runtimeLabelServeBuiltins, true
+	case "--eval-mode":
+		return runtimeLabelServeEvalMode, true
+	case "--memory":
+		return runtimeLabelServeMemory, true
+	case "--browser":
+		return runtimeLabelServeBrowser, true
+	case "--browser-screenshot":
+		return runtimeLabelServeScreenshot, true
+	case "--web":
+		return runtimeLabelServeWeb, true
+	case "--web-search":
+		return runtimeLabelServeWebSearch, true
+	case "--subagent":
+		return runtimeLabelServeSubagent, true
+	case "--focused-tasks":
+		return runtimeLabelServeFocusedTasks, true
+	default:
+		return "", false
+	}
+}
+
 func setRuntimeServeLabelValue(values map[string]string, name, value string) {
 	switch name {
 	case "--listen":
@@ -753,6 +804,24 @@ func setRuntimeServeLabelValue(values map[string]string, name, value string) {
 		values[runtimeLabelServeWorkspaceRoot] = value
 	case "--memory-root":
 		values[runtimeLabelServeMemoryRoot] = value
+	case "--builtins":
+		values[runtimeLabelServeBuiltins] = value
+	case "--eval-mode":
+		values[runtimeLabelServeEvalMode] = value
+	case "--memory":
+		values[runtimeLabelServeMemory] = value
+	case "--browser":
+		values[runtimeLabelServeBrowser] = value
+	case "--browser-screenshot":
+		values[runtimeLabelServeScreenshot] = value
+	case "--web":
+		values[runtimeLabelServeWeb] = value
+	case "--web-search":
+		values[runtimeLabelServeWebSearch] = value
+	case "--subagent":
+		values[runtimeLabelServeSubagent] = value
+	case "--focused-tasks":
+		values[runtimeLabelServeFocusedTasks] = value
 	}
 }
 
