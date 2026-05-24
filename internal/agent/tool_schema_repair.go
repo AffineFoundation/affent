@@ -24,6 +24,9 @@ type toolSchemaProperty struct {
 	MinLength int   `json:"minLength"`
 	MaxLength int   `json:"maxLength"`
 	Default   any   `json:"default"`
+	Items     *struct {
+		Type any `json:"type"`
+	} `json:"items"`
 }
 
 func repairToolArgsWithSchema(args json.RawMessage, schema json.RawMessage) (json.RawMessage, bool, []string) {
@@ -527,6 +530,13 @@ func coerceSchemaValue(v any, prop toolSchemaProperty) (any, bool) {
 					return false, true
 				}
 			}
+		case "array":
+			if x, ok := v.(string); ok {
+				item := strings.TrimSpace(x)
+				if item != "" && schemaArrayCanAcceptScalarItem(prop) {
+					return []any{item}, true
+				}
+			}
 		case "string":
 			switch x := v.(type) {
 			case float64:
@@ -543,6 +553,22 @@ func coerceSchemaValue(v any, prop toolSchemaProperty) (any, bool) {
 		}
 	}
 	return v, false
+}
+
+func schemaArrayCanAcceptScalarItem(prop toolSchemaProperty) bool {
+	if prop.Items == nil {
+		return true
+	}
+	itemTypes := schemaPropertyTypes(toolSchemaProperty{Type: prop.Items.Type})
+	if len(itemTypes) == 0 {
+		return true
+	}
+	for _, typ := range itemTypes {
+		if typ == "string" {
+			return true
+		}
+	}
+	return false
 }
 
 func parseIntegerString(s string) (int, bool) {

@@ -1036,6 +1036,57 @@ func TestRepairToolArgsWithSchema_DoesNotCoerceOtherNumbersToBoolean(t *testing.
 	}
 }
 
+func TestRepairToolArgsWithSchema_WrapsStringAsSingleItemArray(t *testing.T) {
+	schema := json.RawMessage(`{
+		"type":"object",
+		"properties":{
+			"evidence":{"type":"array","items":{"type":"string"}}
+		}
+	}`)
+	got, repaired, notes := repairToolArgsWithSchema(json.RawMessage(`{"evidence":"go test ./internal/agent"}`), schema)
+	if !repaired {
+		t.Fatal("expected string array repair")
+	}
+	if string(got) != `{"evidence":["go test ./internal/agent"]}` {
+		t.Fatalf("got %s, want single-item array; notes=%v", got, notes)
+	}
+	if len(notes) == 0 || !strings.Contains(notes[0], "coerced field evidence to array") {
+		t.Fatalf("missing array repair note: %v", notes)
+	}
+}
+
+func TestRepairToolArgsWithSchema_DoesNotWrapBlankStringAsArray(t *testing.T) {
+	schema := json.RawMessage(`{
+		"type":"object",
+		"properties":{
+			"triggers":{"type":"array","items":{"type":"string"}}
+		}
+	}`)
+	got, repaired, notes := repairToolArgsWithSchema(json.RawMessage(`{"triggers":"   "}`), schema)
+	if repaired {
+		t.Fatalf("blank string should not become array; got %s notes=%v", got, notes)
+	}
+	if string(got) != `{"triggers":"   "}` {
+		t.Fatalf("got %s, want original blank string", got)
+	}
+}
+
+func TestRepairToolArgsWithSchema_DoesNotWrapStringForNonStringArray(t *testing.T) {
+	schema := json.RawMessage(`{
+		"type":"object",
+		"properties":{
+			"values":{"type":"array","items":{"type":"integer"}}
+		}
+	}`)
+	got, repaired, notes := repairToolArgsWithSchema(json.RawMessage(`{"values":"10"}`), schema)
+	if repaired {
+		t.Fatalf("string should not become integer array; got %s notes=%v", got, notes)
+	}
+	if string(got) != `{"values":"10"}` {
+		t.Fatalf("got %s, want original string", got)
+	}
+}
+
 func TestRepairToolArgsWithSchema_DoesNotCoerceFractionalStringToInteger(t *testing.T) {
 	schema := json.RawMessage(`{
 		"type":"object",
