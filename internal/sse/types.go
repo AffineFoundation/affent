@@ -126,6 +126,10 @@ type ToolResultPayload struct {
 	TurnID   string `json:"turn_id,omitempty"`
 	CallID   string `json:"call_id"`
 	ExitCode int    `json:"exit_code"`
+	// FailureKind is a machine-readable classification extracted from
+	// structured tool output lines such as "Failure: kind=blocked".
+	// Empty means the tool did not publish a structured failure kind.
+	FailureKind string `json:"failure_kind,omitempty"`
 	// DurationMS is present only for tool implementations that were
 	// actually dispatched. Guard rejections and skipped calls omit it.
 	DurationMS int64 `json:"duration_ms,omitempty"`

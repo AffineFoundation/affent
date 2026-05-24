@@ -73,6 +73,7 @@ func applyTraceEvent(t *Trace, pending map[string]int, typ string, data json.Raw
 			t.Tools[idx].ResultOmittedBytes = p.ResultOmittedBytes
 			t.Tools[idx].ResultCapBytes = p.ResultCapBytes
 			t.Tools[idx].ResultArtifactPath = p.ResultArtifactPath
+			t.Tools[idx].FailureKind = p.FailureKind
 			t.Tools[idx].ExitCode = p.ExitCode
 			t.Tools[idx].DurationMS = p.DurationMS
 			t.Tools[idx].IsErr = p.ExitCode != 0
@@ -95,6 +96,7 @@ func applyTraceEvent(t *Trace, pending map[string]int, typ string, data json.Raw
 			ResultOmittedBytes: p.ResultOmittedBytes,
 			ResultCapBytes:     p.ResultCapBytes,
 			ResultArtifactPath: p.ResultArtifactPath,
+			FailureKind:        p.FailureKind,
 			ExitCode:           p.ExitCode,
 			DurationMS:         p.DurationMS,
 			IsErr:              p.ExitCode != 0,

@@ -267,8 +267,9 @@ clearly marked as unverified.
 Repeated failed `web_fetch` calls are guarded more aggressively than general
 tool failures. After repeated no-evidence fetches, the loop guard tells the
 model to stop opening search results one by one and change strategy. Per-turn
-stats expose `tool_failure_by_kind`, so eval runs can distinguish a useful
-recovery path from a run that simply accumulated failed fetches.
+stats expose `tool_failure_by_kind`, and each `tool.result` can expose
+`failure_kind`, so eval runs and UIs can distinguish a useful recovery path
+from a run that simply accumulated failed fetches.
 
 `affent_session_id` pins follow-up turns. Pass it back through
 `X-Affent-Session-Id`, `affent_session_id`, or `session_id`.

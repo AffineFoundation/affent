@@ -112,6 +112,11 @@ diagnostics.
   traces may omit it.
 - `call_id`: model tool call id.
 - `exit_code`: tool exit code. Non-zero means the call failed.
+- `failure_kind`: optional machine-readable failure class extracted from a
+  structured `Failure: kind=...` line in the tool output. For web tools, known
+  values include `invalid_args`, `blocked`, `not_found`, `rate_limited`,
+  `server_error`, `http_error`, `private_network_blocked`, `timeout`,
+  `network_error`, `empty_response`, and `non_text`.
 - `duration_ms`: optional measured implementation time for dispatched tools.
 - `result_summary`: short UI preview, not parse-safe.
 - `result`: event-capped tool output.

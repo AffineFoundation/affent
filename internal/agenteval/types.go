@@ -193,6 +193,9 @@ type ToolCall struct {
 	// tool result when the event payload was truncated and the runtime
 	// persisted an artifact.
 	ResultArtifactPath string
+	// FailureKind is the machine-readable structured failure kind from
+	// tool.result, when the tool surfaced one.
+	FailureKind string
 	// ExitCode is the tool's reported exit code. -1 marks abnormal
 	// exits (timeout, killed). Non-zero is a failure even if the
 	// tool returned without a Go error.

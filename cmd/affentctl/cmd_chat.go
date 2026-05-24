@@ -263,6 +263,9 @@ func drainInteractive(ctx context.Context, loop interface{ Cancel() }, events <-
 				if p.ExitCode != 0 {
 					marker = fmt.Sprintf("exit %d", p.ExitCode)
 				}
+				if p.FailureKind != "" {
+					marker = fmt.Sprintf("%s, failure=%s", marker, p.FailureKind)
+				}
 				fmt.Fprintln(os.Stderr, dim(fmt.Sprintf("  [tool] -> %s, %d bytes", marker, len(p.ResultSummary))))
 			case sse.TypeError:
 				var p sse.ErrorPayload

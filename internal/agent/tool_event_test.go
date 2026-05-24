@@ -42,3 +42,15 @@ func TestRecordToolFailureKind(t *testing.T) {
 		t.Fatalf("ToolFailureByKind = %+v", stats.ToolFailureByKind)
 	}
 }
+
+func TestToolFailureKindForOutcome(t *testing.T) {
+	if got := toolFailureKindForOutcome("web_fetch", "fetch failed\nFailure: kind=blocked, status=403\nNext: use another source", true); got != "blocked" {
+		t.Fatalf("hard failure kind = %q, want blocked", got)
+	}
+	if got := toolFailureKindForOutcome("web_fetch", "[empty response: URL=https://example]\nFailure: kind=empty_response", false); got != "empty_response" {
+		t.Fatalf("no-evidence failure kind = %q, want empty_response", got)
+	}
+	if got := toolFailureKindForOutcome("read_file", "Failure: kind=blocked", false); got != "" {
+		t.Fatalf("successful read_file content should not set FailureKind, got %q", got)
+	}
+}
