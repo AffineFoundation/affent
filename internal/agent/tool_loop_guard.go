@@ -12,6 +12,8 @@ const (
 	identicalToolCallBlockThreshold = 3
 	toolFailureWarnThreshold        = 3
 	toolFailureHaltThreshold        = 8
+	webFetchFailureWarnThreshold    = 2
+	webFetchFailureHaltThreshold    = 4
 )
 
 // perTurnCallCaps maps tool names to maximum total calls per parent turn,
@@ -62,7 +64,7 @@ func (g *toolLoopGuard) recordAttempt(tool string, args json.RawMessage) string 
 		return ""
 	}
 	if g.haltedTools[tool] {
-		return fmt.Sprintf("loop_guard: tool %q has already failed %d consecutive times this turn. Stop retrying it and choose a different approach.\nNext: use a different tool, change the evidence source, or answer from the evidence already gathered.", tool, toolFailureHaltThreshold)
+		return fmt.Sprintf("loop_guard: tool %q has already failed %d consecutive times this turn. Stop retrying it and choose a different approach.\nNext: use a different tool, change the evidence source, or answer from the evidence already gathered.", tool, toolFailureHaltThresholdFor(tool))
 	}
 	// Per-turn-call cap is checked BEFORE the args-hash logic so a
 	// model that varies arguments across N+1 delegation attempts still
@@ -106,15 +108,38 @@ func (g *toolLoopGuard) recordOutcome(tool string, ok bool) string {
 		return ""
 	}
 	g.failureCounts[tool]++
+	warnThreshold := toolFailureWarnThresholdFor(tool)
+	haltThreshold := toolFailureHaltThresholdFor(tool)
 	switch g.failureCounts[tool] {
-	case toolFailureWarnThreshold:
-		return fmt.Sprintf("loop_guard: tool %q has failed %d consecutive times this turn. Read the latest error before retrying.\nNext: change the arguments, verify prerequisites with another tool, or stop using %q if the same error persists.", tool, toolFailureWarnThreshold, tool)
-	case toolFailureHaltThreshold:
+	case warnThreshold:
+		return toolFailureWarnMessage(tool, warnThreshold)
+	case haltThreshold:
 		g.haltedTools[tool] = true
-		return fmt.Sprintf("loop_guard: tool %q has failed %d consecutive times this turn. Stop retrying it and choose a different approach.\nNext: use a different tool, change the evidence source, or answer from the evidence already gathered.", tool, toolFailureHaltThreshold)
+		return fmt.Sprintf("loop_guard: tool %q has failed %d consecutive times this turn. Stop retrying it and choose a different approach.\nNext: use a different tool, change the evidence source, or answer from the evidence already gathered.", tool, haltThreshold)
 	default:
 		return ""
 	}
+}
+
+func toolFailureWarnThresholdFor(tool string) int {
+	if tool == "web_fetch" {
+		return webFetchFailureWarnThreshold
+	}
+	return toolFailureWarnThreshold
+}
+
+func toolFailureHaltThresholdFor(tool string) int {
+	if tool == "web_fetch" {
+		return webFetchFailureHaltThreshold
+	}
+	return toolFailureHaltThreshold
+}
+
+func toolFailureWarnMessage(tool string, threshold int) string {
+	if tool == "web_fetch" {
+		return fmt.Sprintf("loop_guard: tool %q has failed %d consecutive times this turn. Read the latest Failure kind and Next guidance before fetching more URLs.\nNext: stop opening search results one by one; switch to a different source type, use another available inspection tool, or answer with clearly marked gaps.", tool, threshold)
+	}
+	return fmt.Sprintf("loop_guard: tool %q has failed %d consecutive times this turn. Read the latest error before retrying.\nNext: change the arguments, verify prerequisites with another tool, or stop using %q if the same error persists.", tool, threshold, tool)
 }
 
 func hashCanonicalToolArgs(tool string, args json.RawMessage) uint64 {

@@ -104,6 +104,46 @@ func TestToolLoopGuard_TracksConsecutiveFailures(t *testing.T) {
 	}
 }
 
+func TestToolLoopGuard_WebFetchFailsFast(t *testing.T) {
+	g := newToolLoopGuard()
+	if got := g.recordOutcome("web_fetch", false); got != "" {
+		t.Fatalf("first web_fetch failure should not warn yet: %q", got)
+	}
+	got := g.recordOutcome("web_fetch", false)
+	if !strings.Contains(got, "failed 2 consecutive times") {
+		t.Fatalf("second web_fetch failure should warn early, got %q", got)
+	}
+	for _, want := range []string{"Failure kind", "Next:", "stop opening search results one by one"} {
+		if !strings.Contains(got, want) {
+			t.Fatalf("web_fetch warning missing %q: %q", want, got)
+		}
+	}
+	if got := g.recordOutcome("web_fetch", false); got != "" {
+		t.Fatalf("third web_fetch failure should wait for halt threshold, got %q", got)
+	}
+	got = g.recordOutcome("web_fetch", false)
+	if !strings.Contains(got, "failed 4 consecutive times") {
+		t.Fatalf("fourth web_fetch failure should halt, got %q", got)
+	}
+	got = g.recordAttempt("web_fetch", json.RawMessage(`{"url":"https://example.com/other"}`))
+	if !strings.Contains(got, "already failed 4 consecutive times") {
+		t.Fatalf("halted web_fetch should block subsequent attempts with web threshold, got %q", got)
+	}
+}
+
+func TestToolLoopGuard_WebFetchSuccessResetsFailureCount(t *testing.T) {
+	g := newToolLoopGuard()
+	if got := g.recordOutcome("web_fetch", false); got != "" {
+		t.Fatalf("first web_fetch failure should not warn yet: %q", got)
+	}
+	if got := g.recordOutcome("web_fetch", true); got != "" {
+		t.Fatalf("web_fetch success should reset silently, got %q", got)
+	}
+	if got := g.recordOutcome("web_fetch", false); got != "" {
+		t.Fatalf("post-success web_fetch failure should start a fresh count, got %q", got)
+	}
+}
+
 // TestToolLoopGuard_PerTurnCallCapForRunTask pins the
 // over-delegation mitigation: a model can keep varying run_task's
 // arguments (different task_type / objective / max_turns each call)
