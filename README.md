@@ -720,6 +720,9 @@ run plus a final `summary` record with the same metrics. Passing scenario
 workspaces are removed by default to avoid filling the machine during repeated
 evals; failing workspaces are kept for debugging. Pass `--keep-workspaces` when
 you need every workspace and trace left on disk.
+The `small-model-tools` suite includes runtime guard checks such as
+`skill-remote-install-guard`, which verifies that direct remote skill installs
+are blocked and routed through the proposal/confirmation flow.
 
 Eval JSONL records include `schema_version=1` plus run metadata such as suite,
 model, optional `provider_label`, executor, temperature, and timeout so stored
