@@ -40,6 +40,11 @@ const (
 // replay persisted events after that cursor, then continue with live
 // events.
 func handleSessionEvents(pool *SessionPool, sessionID string, w http.ResponseWriter, r *http.Request) {
+	lastEventID, replay, err := parseLastEventID(r.Header.Get("Last-Event-ID"))
+	if err != nil {
+		writeJSONErrorTyped(w, http.StatusBadRequest, "invalid Last-Event-ID", err, "bad_request")
+		return
+	}
 	sess, err := sessionForEvents(pool, sessionID)
 	if err != nil {
 		if errors.Is(err, ErrSessionNotFound) {
@@ -47,11 +52,6 @@ func handleSessionEvents(pool *SessionPool, sessionID string, w http.ResponseWri
 			return
 		}
 		writeJSONErrorTyped(w, http.StatusBadRequest, "invalid session id", err, "bad_request")
-		return
-	}
-	lastEventID, replay, err := parseLastEventID(r.Header.Get("Last-Event-ID"))
-	if err != nil {
-		writeJSONErrorTyped(w, http.StatusBadRequest, "invalid Last-Event-ID", err, "bad_request")
 		return
 	}
 	flusher, ok := w.(http.Flusher)

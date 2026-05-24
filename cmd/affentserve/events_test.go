@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -101,6 +102,24 @@ func TestHandleSessionEvents_ReopensDurableSessionAndReplaysAfterLastEventID(t *
 	}
 	if _, err := pool2.Get("sse-restart"); err != nil {
 		t.Fatalf("durable session should be active after SSE reconnect: %v", err)
+	}
+}
+
+func TestHandleSessionEvents_RejectsBadLastEventIDBeforeReopeningDurableSession(t *testing.T) {
+	memRoot := t.TempDir()
+	pool := newPoolWithMemoryRoot(t, memRoot)
+	createDurableSessionDir(t, pool, "bad-cursor")
+
+	r := httptest.NewRequest(http.MethodGet, "/v1/sessions/bad-cursor/events", nil)
+	r.Header.Set("Last-Event-ID", "not-a-cursor")
+	w := httptest.NewRecorder()
+	handleSessionEvents(pool, "bad-cursor", w, r)
+
+	if got := w.Result().StatusCode; got != http.StatusBadRequest {
+		t.Fatalf("status = %d, want 400: %s", got, w.Body.String())
+	}
+	if _, err := pool.Get("bad-cursor"); !errors.Is(err, ErrSessionNotFound) {
+		t.Fatalf("bad Last-Event-ID must not reopen durable session, got err=%v", err)
 	}
 }
 
