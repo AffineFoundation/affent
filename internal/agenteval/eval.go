@@ -52,6 +52,7 @@ type BatchScenario struct {
 	RequiredCommandAfterTool     []CommandToolOrderRequirement
 	RequiredTools                []string
 	ForbiddenTools               []string
+	RequiredFocusedTaskCounts    map[string]int
 	RequiredFinalText            []string
 	ForbiddenFinalText           []string
 	RequiredToolResultText       map[string][]string
@@ -642,6 +643,9 @@ func BatchScenarioChecks(scenario BatchScenario) []Check {
 	}
 	for _, tool := range sortedStringMapKeys(scenario.RequiredToolCounts) {
 		checks = append(checks, ToolCalledAtLeast(tool, scenario.RequiredToolCounts[tool]))
+	}
+	for _, taskType := range sortedStringMapKeys(scenario.RequiredFocusedTaskCounts) {
+		checks = append(checks, FocusedTaskCalledAtLeast(taskType, scenario.RequiredFocusedTaskCounts[taskType]))
 	}
 	if scenario.MaxParentToolCalls > 0 {
 		checks = append(checks, MaxSuccessfulToolCalls(scenario.MaxParentToolCalls))

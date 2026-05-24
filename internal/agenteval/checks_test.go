@@ -5,6 +5,8 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/affinefoundation/affent/internal/sse"
 )
 
 // Each check below is exercised with a hand-built Trace fixture so the
@@ -366,6 +368,25 @@ func TestToolRepairKindAtLeast(t *testing.T) {
 			t.Fatalf("expected request-note repair kind check to pass: %+v", res)
 		}
 	})
+}
+
+func TestFocusedTaskCalledAtLeast(t *testing.T) {
+	trace := Trace{Tools: []ToolCall{
+		{CallID: "c1", Tool: "run_task", Delegation: &sse.DelegationMeta{Kind: "focused_task", TaskType: "explore"}},
+		{CallID: "c2", Tool: "run_task", Delegation: &sse.DelegationMeta{Kind: "focused_task", TaskType: "explore"}},
+		{CallID: "c3", Tool: "run_task", Delegation: &sse.DelegationMeta{Kind: "focused_task", TaskType: "recall"}},
+		{CallID: "c4", Tool: "subagent_run", Delegation: &sse.DelegationMeta{Kind: "subagent", Mode: "review"}},
+	}}
+	if res := FocusedTaskCalledAtLeast("explore", 2).Eval(trace); !res.Pass {
+		t.Fatalf("expected focused explore>=2 check to pass: %+v", res)
+	}
+	res := FocusedTaskCalledAtLeast("verify", 1).Eval(trace)
+	if res.Pass {
+		t.Fatal("expected missing focused verify check to fail")
+	}
+	if !strings.Contains(res.Detail, "verify=0") || !strings.Contains(res.Detail, "explore") {
+		t.Fatalf("failure detail should include requested and observed task types: %s", res.Detail)
+	}
 }
 
 func TestToolCalledBefore(t *testing.T) {

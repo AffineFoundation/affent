@@ -243,6 +243,9 @@ func TestBatchScenarioChecks_UsesSharedCheckLibrary(t *testing.T) {
 		RequiredToolCounts: map[string]int{
 			"plan": 2,
 		},
+		RequiredFocusedTaskCounts: map[string]int{
+			"explore": 1,
+		},
 		MaxSuccessfulToolCallsByTool: map[string]int{
 			"read_file": 1,
 		},
@@ -272,6 +275,7 @@ func TestBatchScenarioChecks_UsesSharedCheckLibrary(t *testing.T) {
 		"tool_result_artifact:shell",
 		"tool_called_before:read_file->edit_file",
 		"tool_called_at_least:plan:2",
+		"focused_task_called_at_least:explore:1",
 		"max_successful_tool_calls:read_file:1",
 		"shell_command_matching:go test",
 		"shell_command_matching:gofmt",
@@ -365,6 +369,19 @@ func TestSelectBatchScenariosForSuite(t *testing.T) {
 	if len(one) != 1 || one[0].Name != "small-tools-wrong-field-read" {
 		t.Fatalf("filtered suite result = %+v", one)
 	}
+}
+
+func TestFocusedTaskScenarioRequiresExploreTask(t *testing.T) {
+	for _, scenario := range BuiltinBatchScenarios() {
+		if scenario.Name != "focused-task-project-facts" {
+			continue
+		}
+		if scenario.RequiredFocusedTaskCounts["explore"] != 1 {
+			t.Fatalf("focused-task-project-facts RequiredFocusedTaskCounts = %#v, want explore=1", scenario.RequiredFocusedTaskCounts)
+		}
+		return
+	}
+	t.Fatal("builtin scenarios missing focused-task-project-facts")
 }
 
 func TestRepairScenariosRequireRepeatedVerification(t *testing.T) {
