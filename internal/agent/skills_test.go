@@ -721,6 +721,15 @@ func TestUserConfirmedRuntimeSkillProposalHandlesNoProblem(t *testing.T) {
 	if userTextConfirmsRuntimeSkillProposal("不可以，proposal_id=0123456789abcdef", proposalID) {
 		t.Fatal("Chinese rejection should not confirm proposal")
 	}
+	if userTextConfirmsRuntimeSkillProposal("不需要安装 proposal_id=0123456789abcdef", proposalID) {
+		t.Fatal("Chinese no-need rejection should not confirm proposal")
+	}
+	if userTextConfirmsRuntimeSkillProposal("不用安装 proposal_id=0123456789abcdef", proposalID) {
+		t.Fatal("Chinese don't-need rejection should not confirm proposal")
+	}
+	if userTextConfirmsRuntimeSkillProposal("无需安装 proposal_id=0123456789abcdef", proposalID) {
+		t.Fatal("Chinese no-need variant should not confirm proposal")
+	}
 }
 
 func TestLoopAppendUserMessageInjectsActiveSkillBeforeUser(t *testing.T) {
