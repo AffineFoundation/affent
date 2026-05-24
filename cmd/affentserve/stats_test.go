@@ -302,15 +302,16 @@ func TestSession_ToolStatsSnapshot_AccumulatesFromTurnEnd(t *testing.T) {
 			TurnID: "t2",
 			Reason: sse.TurnEndMaxTurns,
 			ToolStats: &sse.ToolRuntimeStats{
-				ToolRequests:     1,
-				ToolArgsRepaired: 1,
-				ToolRepairCalls:  1,
-				ToolRepairFailed: 1,
-				ToolRepairNotes:  1,
-				ToolRepairByKind: map[string]int{"alias_rename": 1},
-				ToolErrors:       1,
-				ToolDurationMS:   7,
-				ForcedNoTools:    1,
+				ToolRequests:      1,
+				ToolArgsRepaired:  1,
+				ToolRepairCalls:   1,
+				ToolRepairFailed:  1,
+				ToolRepairNotes:   1,
+				ToolRepairByKind:  map[string]int{"alias_rename": 1},
+				ToolFailureByKind: map[string]int{"invalid_args": 1},
+				ToolErrors:        1,
+				ToolDurationMS:    7,
+				ForcedNoTools:     1,
 			},
 		},
 	} {
@@ -333,6 +334,7 @@ func TestSession_ToolStatsSnapshot_AccumulatesFromTurnEnd(t *testing.T) {
 			got.ToolRepairNotes == 4 &&
 			got.ToolRepairByKind["tool_name"] == 1 &&
 			got.ToolRepairByKind["alias_rename"] == 3 &&
+			got.ToolFailureByKind["invalid_args"] == 1 &&
 			got.ToolErrors == 1 &&
 			got.ToolDurationMS == 22 &&
 			got.LoopGuardInterventions == 1 &&
@@ -363,12 +365,18 @@ func TestSession_ToolStatsSnapshot_AccumulatesFromTurnEnd(t *testing.T) {
 	if resp.Sessions[0].Tools.ToolRepairByKind["alias_rename"] != 3 || resp.Aggregate.Tools.ToolRepairByKind["tool_name"] != 1 {
 		t.Fatalf("stats repair kinds = session:%+v aggregate:%+v", resp.Sessions[0].Tools.ToolRepairByKind, resp.Aggregate.Tools.ToolRepairByKind)
 	}
+	if resp.Sessions[0].Tools.ToolFailureByKind["invalid_args"] != 1 || resp.Aggregate.Tools.ToolFailureByKind["invalid_args"] != 1 {
+		t.Fatalf("stats failure kinds = session:%+v aggregate:%+v", resp.Sessions[0].Tools.ToolFailureByKind, resp.Aggregate.Tools.ToolFailureByKind)
+	}
 	summary := summarizeActiveSession(s, pool.cfg)
 	if summary.Tools == nil || summary.Tools.ToolRepairCalls != 2 || summary.Tools.ToolErrors != 1 {
 		t.Fatalf("active session summary tools = %+v", summary.Tools)
 	}
 	if summary.Tools.ToolRepairByKind["alias_rename"] != 3 {
 		t.Fatalf("active session summary repair kinds = %+v", summary.Tools.ToolRepairByKind)
+	}
+	if summary.Tools.ToolFailureByKind["invalid_args"] != 1 {
+		t.Fatalf("active session summary failure kinds = %+v", summary.Tools.ToolFailureByKind)
 	}
 }
 

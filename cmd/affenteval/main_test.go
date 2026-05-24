@@ -184,6 +184,7 @@ func TestPrintBatchResultIncludesTraceMetrics(t *testing.T) {
 			ToolArgsRepaired:       1,
 			ToolNameCanonicalized:  1,
 			ToolErrors:             2,
+			ToolFailureByKind:      map[string]int{"invalid_args": 1},
 			ToolDurationMS:         45,
 			LoopGuardInterventions: 2,
 			ForcedNoTools:          1,
@@ -226,7 +227,7 @@ func TestPrintBatchResultIncludesTraceMetrics(t *testing.T) {
 		"PASS sample (1.234s)",
 		"workspace: /tmp/ws (removed)",
 		"trace: /tmp/ws/trace.jsonl",
-		"metrics: tools=3 errors=2 repaired=1 canonicalized=1 loop_guard=2 forced_no_tools=1 tool_ms=45 tokens=100/25 trunc=args:1,results:1,artifacts:1 omitted=512/4096 delegation=focused_tasks:2,subagents:1 delegation_errors=focused_tasks:1,subagents:1 focused_task_by_type=explore:1,verify:1 subagent_by_mode=review:1 plan=calls:3,errors:1 plan_by_action=set:1,update:2 end=completed",
+		"metrics: tools=3 errors=2 repaired=1 canonicalized=1 loop_guard=2 forced_no_tools=1 tool_ms=45 tokens=100/25 trunc=args:1,results:1,artifacts:1 omitted=512/4096 tool_failure_kinds=invalid_args:1 delegation=focused_tasks:2,subagents:1 delegation_errors=focused_tasks:1,subagents:1 focused_task_by_type=explore:1,verify:1 subagent_by_mode=review:1 plan=calls:3,errors:1 plan_by_action=set:1,update:2 end=completed",
 		`verifier: pass exit=0 duration=80ms output=1200 truncated omitted=176 cap=1024 command="go test ./..."`,
 	} {
 		if !strings.Contains(got, want) {
@@ -304,6 +305,7 @@ func TestBatchSummaryAggregatesRuntimeMetrics(t *testing.T) {
 			ToolArgsRepaired:       2,
 			ToolNameCanonicalized:  1,
 			ToolErrors:             1,
+			ToolFailureByKind:      map[string]int{"invalid_args": 1, "timeout": 2},
 			ToolDurationMS:         40,
 			LoopGuardInterventions: 2,
 			ForcedNoTools:          1,
@@ -346,6 +348,9 @@ func TestBatchSummaryAggregatesRuntimeMetrics(t *testing.T) {
 	if !strings.Contains(out.String(), "repair_kinds=alias_rename:2,tool_name:1,type_coercion:2") {
 		t.Fatalf("summary output missing repair kind rollup:\n%s", out.String())
 	}
+	if !strings.Contains(out.String(), "tool_failure_kinds=invalid_args:1,timeout:2") {
+		t.Fatalf("summary output missing tool failure kind rollup:\n%s", out.String())
+	}
 	if !strings.Contains(out.String(), "repair_calls=5,ok=4,failed=1") {
 		t.Fatalf("summary output missing repair outcome rollup:\n%s", out.String())
 	}
@@ -364,6 +369,9 @@ func TestBatchSummaryAggregatesRuntimeMetrics(t *testing.T) {
 	wantRepairKinds := map[string]int{"tool_name": 1, "alias_rename": 2, "type_coercion": 2}
 	if !reflect.DeepEqual(summary.ToolRepairByKind, wantRepairKinds) {
 		t.Fatalf("ToolRepairByKind = %#v, want %#v", summary.ToolRepairByKind, wantRepairKinds)
+	}
+	if !reflect.DeepEqual(summary.ToolFailureByKind, map[string]int{"invalid_args": 1, "timeout": 2}) {
+		t.Fatalf("ToolFailureByKind = %#v", summary.ToolFailureByKind)
 	}
 	if summary.PlanCalls != 3 || summary.PlanErrors != 1 {
 		t.Fatalf("plan counts = calls:%d errors:%d, want 3/1", summary.PlanCalls, summary.PlanErrors)

@@ -219,6 +219,7 @@ type ToolRuntimeStats struct {
 	ToolRepairFailed       int
 	ToolRepairNotes        int
 	ToolRepairByKind       map[string]int
+	ToolFailureByKind      map[string]int
 	ToolErrors             int
 	ToolDurationMS         int64
 	LoopGuardInterventions int

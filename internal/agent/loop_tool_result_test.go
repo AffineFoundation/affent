@@ -800,9 +800,9 @@ func TestRunTurn_WebFetchNoEvidenceResultsTripLoopGuard(t *testing.T) {
 		Execute: func(ctx context.Context, args json.RawMessage) (string, error) {
 			switch atomic.AddInt32(&fetched, 1) {
 			case 1:
-				return "[empty response: URL=https://example.com/empty]\nNext: use another source.", nil
+				return "[empty response: URL=https://example.com/empty]\nFailure: kind=empty_response\nNext: use another source.", nil
 			default:
-				return "[non-text response: URL=https://example.com/image]\nNext: fetch a text version.", nil
+				return "[non-text response: URL=https://example.com/image]\nFailure: kind=non_text\nNext: fetch a text version.", nil
 			}
 		},
 	})
@@ -852,6 +852,9 @@ func TestRunTurn_WebFetchNoEvidenceResultsTripLoopGuard(t *testing.T) {
 				}
 				if p.ToolStats == nil || p.ToolStats.LoopGuardInterventions != 1 || p.ToolStats.ToolErrors != 1 {
 					t.Fatalf("expected one guard intervention/error in turn.end, got %+v", p.ToolStats)
+				}
+				if p.ToolStats.ToolFailureByKind["empty_response"] != 1 || p.ToolStats.ToolFailureByKind["non_text"] != 1 {
+					t.Fatalf("expected no-evidence failure kinds in turn.end, got %+v", p.ToolStats.ToolFailureByKind)
 				}
 				if got := atomic.LoadInt32(&fetched); got != 2 {
 					t.Fatalf("expected two dispatched web_fetch calls, got %d", got)

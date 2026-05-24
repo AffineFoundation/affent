@@ -109,6 +109,7 @@ func toolRuntimeStatsPtr(stats sse.ToolRuntimeStats) *sse.ToolRuntimeStats {
 		stats.ToolRepairFailed == 0 &&
 		stats.ToolRepairNotes == 0 &&
 		len(stats.ToolRepairByKind) == 0 &&
+		len(stats.ToolFailureByKind) == 0 &&
 		stats.ToolErrors == 0 &&
 		stats.ToolDurationMS == 0 &&
 		stats.LoopGuardInterventions == 0 &&
@@ -116,6 +117,54 @@ func toolRuntimeStatsPtr(stats sse.ToolRuntimeStats) *sse.ToolRuntimeStats {
 		return nil
 	}
 	return &stats
+}
+
+func recordToolFailureKind(stats *sse.ToolRuntimeStats, result string, failed bool) {
+	if stats == nil || !failed {
+		return
+	}
+	kind := toolFailureKind(result)
+	if kind == "" {
+		return
+	}
+	if stats.ToolFailureByKind == nil {
+		stats.ToolFailureByKind = map[string]int{}
+	}
+	stats.ToolFailureByKind[kind]++
+}
+
+func toolFailureKind(result string) string {
+	for _, line := range strings.Split(result, "\n") {
+		line = strings.TrimSpace(line)
+		if !strings.HasPrefix(line, "Failure:") {
+			continue
+		}
+		rest := strings.TrimSpace(strings.TrimPrefix(line, "Failure:"))
+		for _, part := range strings.Split(rest, ",") {
+			part = strings.TrimSpace(part)
+			if !strings.HasPrefix(part, "kind=") {
+				continue
+			}
+			kind := strings.TrimSpace(strings.TrimPrefix(part, "kind="))
+			if validToolFailureKind(kind) {
+				return kind
+			}
+		}
+	}
+	return ""
+}
+
+func validToolFailureKind(kind string) bool {
+	if kind == "" {
+		return false
+	}
+	for _, r := range kind {
+		if (r >= 'a' && r <= 'z') || (r >= '0' && r <= '9') || r == '_' || r == '-' {
+			continue
+		}
+		return false
+	}
+	return true
 }
 
 func recordToolRepairNotes(stats *sse.ToolRuntimeStats, notes []string) {

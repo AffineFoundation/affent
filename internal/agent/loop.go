@@ -946,7 +946,8 @@ func (l *Loop) runTurn(ctx context.Context, turnID, userText string, opts TurnOp
 			result, isErr := tools.dispatch(ctx, toolName, args)
 			toolDuration := time.Since(toolStart)
 			toolStats.ToolDurationMS += toolDuration.Milliseconds()
-			if guardResult := loopGuard.recordOutcome(toolName, toolOutcomeCountsAsSuccess(toolName, result, isErr)); guardResult != "" {
+			outcomeOK := toolOutcomeCountsAsSuccess(toolName, result, isErr)
+			if guardResult := loopGuard.recordOutcome(toolName, outcomeOK); guardResult != "" {
 				if result != "" {
 					result += "\n\n" + guardResult
 				} else {
@@ -977,6 +978,7 @@ func (l *Loop) runTurn(ctx context.Context, turnID, userText string, opts TurnOp
 			if isErr {
 				toolStats.ToolErrors++
 			}
+			recordToolFailureKind(&toolStats, result, !outcomeOK)
 		}
 		if toolBudgetExhausted {
 			if l.finalNoToolsOnMaxTurnsForTurn(opts) {

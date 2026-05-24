@@ -157,6 +157,7 @@ type batchSummary struct {
 	ToolRepairFailed           int
 	ToolRepairNotes            int
 	ToolRepairByKind           map[string]int
+	ToolFailureByKind          map[string]int
 	LoopGuardInterventions     int
 	ForcedNoTools              int
 	ToolDurationMS             int64
@@ -221,6 +222,12 @@ func (s *batchSummary) add(res agenteval.BatchResult) {
 			s.ToolRepairByKind = map[string]int{}
 		}
 		s.ToolRepairByKind[k] += v
+	}
+	for k, v := range res.ToolStats.ToolFailureByKind {
+		if s.ToolFailureByKind == nil {
+			s.ToolFailureByKind = map[string]int{}
+		}
+		s.ToolFailureByKind[k] += v
 	}
 	s.LoopGuardInterventions += res.ToolStats.LoopGuardInterventions
 	s.ForcedNoTools += res.ToolStats.ForcedNoTools
@@ -345,6 +352,9 @@ func printBatchSummary(w io.Writer, s batchSummary) {
 	}
 	if len(s.ToolRepairByKind) > 0 {
 		fmt.Fprintf(w, " repair_kinds=%s", formatStringIntCounts(s.ToolRepairByKind))
+	}
+	if len(s.ToolFailureByKind) > 0 {
+		fmt.Fprintf(w, " tool_failure_kinds=%s", formatStringIntCounts(s.ToolFailureByKind))
 	}
 	printDelegationRollup(w, s.FocusedTaskCalls, s.FocusedTaskByType, s.FocusedTaskErrors, s.SubagentCalls, s.SubagentByMode, s.SubagentErrors)
 	printPlanRollup(w, s.PlanCalls, s.PlanByAction, s.PlanErrors)
@@ -522,6 +532,7 @@ type batchResultRecord struct {
 	ToolRepairFailed           int            `json:"tool_repair_failed,omitempty"`
 	ToolRepairNotes            int            `json:"tool_repair_notes,omitempty"`
 	ToolRepairByKind           map[string]int `json:"tool_repair_by_kind,omitempty"`
+	ToolFailureByKind          map[string]int `json:"tool_failure_by_kind,omitempty"`
 	LoopGuardInterventions     int            `json:"loop_guard_interventions"`
 	ForcedNoTools              int            `json:"forced_no_tools"`
 	ToolDurationMS             int64          `json:"tool_duration_ms"`
@@ -580,6 +591,7 @@ type batchSummaryRecord struct {
 	ToolRepairFailed           int            `json:"tool_repair_failed,omitempty"`
 	ToolRepairNotes            int            `json:"tool_repair_notes,omitempty"`
 	ToolRepairByKind           map[string]int `json:"tool_repair_by_kind,omitempty"`
+	ToolFailureByKind          map[string]int `json:"tool_failure_by_kind,omitempty"`
 	LoopGuardInterventions     int            `json:"loop_guard_interventions"`
 	ForcedNoTools              int            `json:"forced_no_tools"`
 	ToolDurationMS             int64          `json:"tool_duration_ms"`
@@ -643,6 +655,7 @@ func printBatchResultJSONL(w io.Writer, meta evalJSONLMetadata, res agenteval.Ba
 		ToolRepairFailed:           res.Repair.FailedCalls,
 		ToolRepairNotes:            res.Repair.Notes,
 		ToolRepairByKind:           cloneStringIntMap(res.Repair.ByKind),
+		ToolFailureByKind:          cloneStringIntMap(res.ToolStats.ToolFailureByKind),
 		LoopGuardInterventions:     res.ToolStats.LoopGuardInterventions,
 		ForcedNoTools:              res.ToolStats.ForcedNoTools,
 		ToolDurationMS:             res.ToolStats.ToolDurationMS,
@@ -696,6 +709,7 @@ func printBatchSummaryJSONL(w io.Writer, meta evalJSONLMetadata, s batchSummary)
 		ToolRepairFailed:           s.ToolRepairFailed,
 		ToolRepairNotes:            s.ToolRepairNotes,
 		ToolRepairByKind:           cloneStringIntMap(s.ToolRepairByKind),
+		ToolFailureByKind:          cloneStringIntMap(s.ToolFailureByKind),
 		LoopGuardInterventions:     s.LoopGuardInterventions,
 		ForcedNoTools:              s.ForcedNoTools,
 		ToolDurationMS:             s.ToolDurationMS,
@@ -826,6 +840,9 @@ func printBatchResult(w io.Writer, res agenteval.BatchResult) {
 	}
 	if len(res.Repair.ByKind) > 0 {
 		fmt.Fprintf(w, " repair_kinds=%s", formatStringIntCounts(res.Repair.ByKind))
+	}
+	if len(res.ToolStats.ToolFailureByKind) > 0 {
+		fmt.Fprintf(w, " tool_failure_kinds=%s", formatStringIntCounts(res.ToolStats.ToolFailureByKind))
 	}
 	printDelegationRollup(w, res.Delegation.FocusedTaskCalls, res.Delegation.FocusedTaskByType, res.Delegation.FocusedTaskErrors, res.Delegation.SubagentCalls, res.Delegation.SubagentByMode, res.Delegation.SubagentErrors)
 	printPlanRollup(w, res.Plan.Calls, res.Plan.ByAction, res.Plan.Errors)

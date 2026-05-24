@@ -69,6 +69,7 @@ type Session struct {
 	forcedNoTools          atomic.Int64
 	toolRepairMu           sync.Mutex
 	toolRepairByKind       map[string]int64
+	toolFailureByKind      map[string]int64
 
 	// fan-out
 	subsMu  sync.Mutex
@@ -1255,6 +1256,7 @@ type ToolStatsSnapshot struct {
 	ToolRepairFailed       int64            `json:"tool_repair_failed"`
 	ToolRepairNotes        int64            `json:"tool_repair_notes"`
 	ToolRepairByKind       map[string]int64 `json:"tool_repair_by_kind,omitempty"`
+	ToolFailureByKind      map[string]int64 `json:"tool_failure_by_kind,omitempty"`
 	ToolErrors             int64            `json:"tool_errors"`
 	ToolDurationMS         int64            `json:"tool_duration_ms"`
 	LoopGuardInterventions int64            `json:"loop_guard_interventions"`
@@ -1267,6 +1269,7 @@ func (s *Session) ToolStatsSnapshot() ToolStatsSnapshot {
 	}
 	s.toolRepairMu.Lock()
 	repairByKind := cloneStringInt64Map(s.toolRepairByKind)
+	failureByKind := cloneStringInt64Map(s.toolFailureByKind)
 	s.toolRepairMu.Unlock()
 	return ToolStatsSnapshot{
 		ToolRequests:           s.toolRequests.Load(),
@@ -1277,6 +1280,7 @@ func (s *Session) ToolStatsSnapshot() ToolStatsSnapshot {
 		ToolRepairFailed:       s.toolRepairFailed.Load(),
 		ToolRepairNotes:        s.toolRepairNotes.Load(),
 		ToolRepairByKind:       repairByKind,
+		ToolFailureByKind:      failureByKind,
 		ToolErrors:             s.toolErrors.Load(),
 		ToolDurationMS:         s.toolDurationMS.Load(),
 		LoopGuardInterventions: s.loopGuardInterventions.Load(),
@@ -1331,6 +1335,9 @@ func (s *Session) addToolStats(stats sse.ToolRuntimeStats) {
 	if len(stats.ToolRepairByKind) > 0 {
 		s.addToolRepairKinds(stats.ToolRepairByKind)
 	}
+	if len(stats.ToolFailureByKind) > 0 {
+		s.addToolFailureKinds(stats.ToolFailureByKind)
+	}
 }
 
 func (s *Session) addToolRepairKinds(counts map[string]int) {
@@ -1342,6 +1349,19 @@ func (s *Session) addToolRepairKinds(counts map[string]int) {
 	for kind, count := range counts {
 		if count > 0 {
 			s.toolRepairByKind[kind] += int64(count)
+		}
+	}
+}
+
+func (s *Session) addToolFailureKinds(counts map[string]int) {
+	s.toolRepairMu.Lock()
+	defer s.toolRepairMu.Unlock()
+	if s.toolFailureByKind == nil {
+		s.toolFailureByKind = make(map[string]int64, len(counts))
+	}
+	for kind, count := range counts {
+		if count > 0 {
+			s.toolFailureByKind[kind] += int64(count)
 		}
 	}
 }
