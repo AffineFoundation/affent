@@ -313,6 +313,9 @@ func TestFocusedTaskTool_ArgValidation(t *testing.T) {
 			if !strings.Contains(err.Error(), c.wantSub) {
 				t.Fatalf("error %q does not contain %q", err.Error(), c.wantSub)
 			}
+			if !strings.Contains(err.Error(), "Next:") {
+				t.Fatalf("error %q should include Next recovery guidance", err.Error())
+			}
 		})
 	}
 }

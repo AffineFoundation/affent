@@ -338,14 +338,14 @@ func focusedTaskTool(deps FocusedTaskDeps, available []FocusedTaskProfile) *Tool
 		Execute: func(ctx context.Context, args json.RawMessage) (string, error) {
 			p, err := decodeFocusedTaskArgs(args)
 			if err != nil {
-				return "", fmt.Errorf("decode args: %w", err)
+				return "", fmt.Errorf("decode args: %w\nNext: retry run_task with only documented fields: task_type, objective, and max_turns", err)
 			}
 			p.TaskType = strings.TrimSpace(p.TaskType)
 			if p.TaskType == "" {
-				return "", fmt.Errorf("task_type is required (valid: %s)", joinKinds(available))
+				return "", fmt.Errorf("task_type is required (valid: %s). Next: retry with one listed task_type", joinKinds(available))
 			}
 			if len(p.TaskType) > maxFocusedTaskTypeBytes {
-				return "", fmt.Errorf("task_type is %d bytes; supports up to %d bytes", len(p.TaskType), maxFocusedTaskTypeBytes)
+				return "", fmt.Errorf("task_type is %d bytes; supports up to %d bytes\nNext: retry with one listed task_type", len(p.TaskType), maxFocusedTaskTypeBytes)
 			}
 			profile, ok := byKind[FocusedTaskKind(p.TaskType)]
 			if !ok {
@@ -361,7 +361,7 @@ func focusedTaskTool(deps FocusedTaskDeps, available []FocusedTaskProfile) *Tool
 				return "", errors.New("objective is required. Next: retry with a single concrete bounded objective for the focused task")
 			}
 			if len(p.Objective) > maxFocusedTaskObjectiveBytes {
-				return "", fmt.Errorf("objective is %d bytes; supports up to %d bytes", len(p.Objective), maxFocusedTaskObjectiveBytes)
+				return "", fmt.Errorf("objective is %d bytes; supports up to %d bytes\nNext: retry with one narrower concrete objective and let the child inspect details through its tools", len(p.Objective), maxFocusedTaskObjectiveBytes)
 			}
 			if p.MaxTurns <= 0 {
 				if profile.DefaultMaxTurns > 0 {
