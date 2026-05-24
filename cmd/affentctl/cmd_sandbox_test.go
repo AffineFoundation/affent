@@ -292,6 +292,33 @@ func TestMakeImageServeEnablesBuiltinsInsideRuntimeContainer(t *testing.T) {
 	}
 }
 
+func TestReadmeDocumentsImageServeSessionPersistence(t *testing.T) {
+	_, contextDir, ok, err := findSandboxBuildSource()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !ok {
+		t.Fatal("test requires source checkout with README")
+	}
+	raw, err := os.ReadFile(filepath.Join(contextDir, "README.md"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	body := string(raw)
+	for _, want := range []string{
+		"`make image-serve-up` and `make image-serve-restart`",
+		"`/workspace/session-state`",
+		"`IMAGE_WORKSPACE`",
+		"preserves conversation history as long as `IMAGE_WORKSPACE` is the same host",
+		"`DELETE /v1/sessions/{id}`",
+		"intentionally removes that durable state",
+	} {
+		if !strings.Contains(body, want) {
+			t.Fatalf("README session persistence docs missing %q", want)
+		}
+	}
+}
+
 func TestMakeOneClickContainerTargetsUseSharedLimits(t *testing.T) {
 	_, contextDir, ok, err := findSandboxBuildSource()
 	if err != nil {

@@ -407,6 +407,13 @@ replayed, or inspected. `affentctl` stores logs under the workspace by default.
 `conversation.jsonl`, `events.jsonl`, `plan.json`, runtime-installed skills,
 and memory files all survive container restarts when that root is backed by a
 host volume.
+The `make image-serve-up` and `make image-serve-restart` targets keep that root
+at `/workspace/session-state` inside the container by default, with `/workspace`
+mounted from `IMAGE_WORKSPACE`. Recreating or restarting the container therefore
+preserves conversation history as long as `IMAGE_WORKSPACE` is the same host
+path. Changing `IMAGE_WORKSPACE` or `SERVE_MEMORY_ROOT` intentionally points the
+server at a different session-state tree; `image-serve-up` refuses to reuse an
+old container in that case so the mismatch is visible.
 Clients resume by sending the same `X-Affent-Session-Id` header or
 `affent_session_id` / `session_id` request field. `DELETE /v1/sessions/{id}`
 intentionally removes that durable state.
