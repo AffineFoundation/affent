@@ -188,6 +188,63 @@ func TestToolLoopGuard_AllowsOneTransientWebFetchRetry(t *testing.T) {
 	}
 }
 
+func TestToolLoopGuard_BlocksRepeatedFailedWebFetchHost(t *testing.T) {
+	g := newToolLoopGuard()
+	first := json.RawMessage(`{"url":"https://www.x.com/example/status/1"}`)
+	second := json.RawMessage(`{"url":"https://x.com/example/status/2"}`)
+	third := json.RawMessage(`{"url":"https://x.com/example/status/3"}`)
+	if got := g.recordAttempt("web_fetch", first); got != "" {
+		t.Fatalf("first host fetch should pass guard: %q", got)
+	}
+	if guard, ok := g.recordToolResult("web_fetch", first, "http 403\nFailure: kind=blocked, status=403\nNext: use another source", true); guard != "" || ok {
+		t.Fatalf("first blocked host fetch should only record failure; guard=%q ok=%v", guard, ok)
+	}
+	if got := g.recordAttempt("web_fetch", second); got != "" {
+		t.Fatalf("second distinct URL on same host should pass once: %q", got)
+	}
+	if _, ok := g.recordToolResult("web_fetch", second, "http 403\nFailure: kind=blocked, status=403\nNext: use another source", true); ok {
+		t.Fatal("second blocked host fetch should count as failure")
+	}
+	got := g.recordAttempt("web_fetch", third)
+	for _, want := range []string{"blocked web_fetch to host", "x.com", "previous URL failures", "Failure kind=blocked", "stop trying more URLs from this host", "blocked/unverified", "Failure: kind=loop_guard_repeated_failed_input"} {
+		if !strings.Contains(got, want) {
+			t.Fatalf("host failure guard missing %q: %q", want, got)
+		}
+	}
+	if got := g.recordAttempt("web_fetch", json.RawMessage(`{"url":"https://taostats.io/subnets/120"}`)); got != "" {
+		t.Fatalf("different host should remain available: %q", got)
+	}
+}
+
+func TestToolLoopGuard_DoesNotHostBlockPageScopedFetchFailures(t *testing.T) {
+	g := newToolLoopGuard()
+	for i := 0; i < 3; i++ {
+		args := json.RawMessage(`{"url":"https://docs.example/missing-` + fmt.Sprintf("%d", i) + `"}`)
+		if got := g.recordAttempt("web_fetch", args); got != "" {
+			t.Fatalf("not_found on same host should not trigger host guard at attempt %d: %q", i+1, got)
+		}
+		g.recordToolResult("web_fetch", args, "http 404\nFailure: kind=not_found, status=404\nNext: use discovery", true)
+	}
+}
+
+func TestToolLoopGuard_FetchHostSuccessClearsHostFailure(t *testing.T) {
+	g := newToolLoopGuard()
+	first := json.RawMessage(`{"url":"https://blocked.example/a"}`)
+	second := json.RawMessage(`{"url":"https://blocked.example/b"}`)
+	third := json.RawMessage(`{"url":"https://blocked.example/c"}`)
+	if got := g.recordAttempt("web_fetch", first); got != "" {
+		t.Fatalf("first host fetch should pass: %q", got)
+	}
+	g.recordToolResult("web_fetch", first, "http 403\nFailure: kind=blocked, status=403\nNext: use another source", true)
+	if got := g.recordAttempt("web_fetch", second); got != "" {
+		t.Fatalf("second host fetch should pass: %q", got)
+	}
+	g.recordToolResult("web_fetch", second, "readable evidence", false)
+	if got := g.recordAttempt("web_fetch", third); got != "" {
+		t.Fatalf("success on host should clear previous host failure: %q", got)
+	}
+}
+
 func TestToolLoopGuard_BlocksRepeatedFailedWebSearchQuery(t *testing.T) {
 	g := newToolLoopGuard()
 	args := json.RawMessage(`{"query":"Vega recent trend market metrics sentiment","num_results":5}`)

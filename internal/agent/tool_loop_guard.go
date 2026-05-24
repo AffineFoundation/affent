@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"hash/fnv"
+	"net/url"
 	"path"
 	"strings"
 
@@ -49,6 +50,7 @@ type toolLoopGuard struct {
 	failureCounts map[string]int
 	haltedTools   map[string]bool
 	failedCalls   map[toolCallKey]toolCallFailure
+	failedHosts   map[string]toolCallFailure
 	// perToolCounts tracks total per-turn call counts for tools that
 	// appear in perTurnCallCaps. Entries are created lazily so most
 	// turns pay no allocation for this layer.
@@ -101,6 +103,11 @@ func (g *toolLoopGuard) recordAttempt(tool string, args json.RawMessage) string 
 	key := toolCallKey{name: tool, hash: hashCanonicalToolArgs(tool, args)}
 	if failure := g.failedCalls[key]; shouldBlockRepeatedFailedCall(tool, failure) {
 		return repeatedFailedCallMessage(tool, failure)
+	}
+	if host := canonicalFetchHost(tool, args); host != "" {
+		if failure := g.failedHosts[host]; shouldBlockFailedFetchHost(failure) {
+			return repeatedFailedFetchHostMessage(host, failure)
+		}
 	}
 	g.callCounts[key]++
 	if g.callCounts[key] >= identicalToolCallBlockThreshold {
@@ -171,6 +178,9 @@ func (g *toolLoopGuard) recordArgumentOutcome(tool string, args json.RawMessage,
 	key := toolCallKey{name: tool, hash: hashCanonicalToolArgs(tool, args)}
 	if ok {
 		delete(g.failedCalls, key)
+		if host := canonicalFetchHost(tool, args); host != "" && g.failedHosts != nil {
+			delete(g.failedHosts, host)
+		}
 		return
 	}
 	failure := g.failedCalls[key]
@@ -179,6 +189,18 @@ func (g *toolLoopGuard) recordArgumentOutcome(tool string, args json.RawMessage,
 		failure.kind = kind
 	}
 	g.failedCalls[key] = failure
+
+	if host := canonicalFetchHost(tool, args); host != "" {
+		if g.failedHosts == nil {
+			g.failedHosts = map[string]toolCallFailure{}
+		}
+		hostFailure := g.failedHosts[host]
+		hostFailure.count++
+		if failure.kind != "" {
+			hostFailure.kind = failure.kind
+		}
+		g.failedHosts[host] = hostFailure
+	}
 }
 
 func tracksFailedArguments(tool string) bool {
@@ -213,6 +235,34 @@ func shouldBlockRepeatedFailedFetch(failure toolCallFailure) bool {
 	}
 }
 
+func shouldBlockFailedFetchHost(failure toolCallFailure) bool {
+	switch failure.kind {
+	case "blocked", "rate_limited", "private_network_blocked":
+		return failure.count >= 2
+	default:
+		return false
+	}
+}
+
+func canonicalFetchHost(tool string, args json.RawMessage) string {
+	if tool != "web_fetch" {
+		return ""
+	}
+	var p struct {
+		URL string `json:"url"`
+	}
+	if err := json.Unmarshal(args, &p); err != nil {
+		return ""
+	}
+	u, err := url.Parse(strings.TrimSpace(p.URL))
+	if err != nil {
+		return ""
+	}
+	host := strings.ToLower(u.Hostname())
+	host = strings.TrimPrefix(host, "www.")
+	return host
+}
+
 func repeatedFailedCallMessage(tool string, failure toolCallFailure) string {
 	kind := failure.kind
 	if kind == "" {
@@ -235,6 +285,17 @@ func repeatedFailedCallMessage(tool string, failure toolCallFailure) string {
 			loopGuardRepeatedFailedInputKind,
 		)
 	}
+}
+
+func repeatedFailedFetchHostMessage(host string, failure toolCallFailure) string {
+	kind := failure.kind
+	if kind == "" {
+		kind = "unknown"
+	}
+	return withLoopGuardFailureKind(
+		fmt.Sprintf("loop_guard: blocked web_fetch to host %q after %d previous URL failures from that host with Failure kind=%s.\nNext: stop trying more URLs from this host in this turn; switch to a canonical/API/text source, use another available inspection tool, or answer with this host marked as blocked/unverified.", host, failure.count, kind),
+		loopGuardRepeatedFailedInputKind,
+	)
 }
 
 func toolOutcomeCountsAsSuccess(tool, result string, isErr bool) bool {
