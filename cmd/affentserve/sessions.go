@@ -497,10 +497,10 @@ func (p *SessionPool) buildSession(id string) (*Session, error) {
 		Memory: memStore,
 	}
 	if workflowToolsEnabled(p.cfg) {
-		loop.SkillProvider = agent.BuiltinSkillProvider
+		loop.SkillProvider = agent.SkillProviderForTools(nil, reg)
 	}
 	if skillReg != nil {
-		loop.SkillProvider = skillReg.Provide
+		loop.SkillProvider = agent.SkillProviderForTools(skillReg, reg)
 	}
 	if planPath != "" {
 		loop.SkillProvider = agent.WithActivePlanSkillProvider(planPath, loop.SkillProvider)

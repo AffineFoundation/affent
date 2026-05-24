@@ -410,6 +410,9 @@ Optional capabilities:
 
 Runtime skill installs use a proposal/confirmation path for remote candidates.
 Direct install is reserved for an exact skill body the user already supplied.
+Skill manifests can declare `required_tools`; those skills stay installed and
+visible in the catalog, but Affent only auto-injects them when the current
+runtime actually registered the required tools.
 
 Focused tasks and subagents return structured reports to the parent session
 without injecting their full intermediate work into the parent conversation.

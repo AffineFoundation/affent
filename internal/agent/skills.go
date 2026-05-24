@@ -65,6 +65,10 @@ type Skill struct {
 	// for automatic injection. It keeps built-in skill routing data
 	// near the skill file instead of scattering it through Go code.
 	AutoActivation SkillAutoActivation
+	// RequiredTools lists concrete tool names that must be registered before
+	// this skill may be injected. It prevents skills from steering small
+	// models toward unavailable surfaces such as browser_* in affentctl.
+	RequiredTools []string
 	// Triggers are substrings of the lowercased user text that fire
 	// this skill. Ignored when Match is non-nil.
 	Triggers []string
@@ -104,17 +108,19 @@ type SkillAutoActivation struct {
 }
 
 const (
-	maxRuntimeSkillNameBytes        = 128
-	maxRuntimeSkillDescriptionBytes = 512
-	maxRuntimeSkillBodyBytes        = 64 * 1024
-	maxRuntimeSkillSourceBytes      = 2 * 1024
-	maxRuntimeSkills                = 128
-	runtimeSkillDirReadBatch        = 64
-	maxRuntimeSkillTriggers         = 20
-	maxRuntimeSkillTriggerBytes     = 128
-	maxRuntimeSkillManifestBytes    = maxRuntimeSkillDescriptionBytes + maxRuntimeSkillSourceBytes + maxRuntimeSkillTriggerBytes*maxRuntimeSkillTriggers + 1024
-	maxRuntimeSkillProposalBytes    = maxRuntimeSkillBodyBytes + maxRuntimeSkillManifestBytes + maxRuntimeSkillSourceBytes + 4096
-	runtimeSkillProposalIDBytes     = 16
+	maxRuntimeSkillNameBytes         = 128
+	maxRuntimeSkillDescriptionBytes  = 512
+	maxRuntimeSkillBodyBytes         = 64 * 1024
+	maxRuntimeSkillSourceBytes       = 2 * 1024
+	maxRuntimeSkills                 = 128
+	runtimeSkillDirReadBatch         = 64
+	maxRuntimeSkillTriggers          = 20
+	maxRuntimeSkillTriggerBytes      = 128
+	maxRuntimeSkillRequiredTools     = 20
+	maxRuntimeSkillRequiredToolBytes = 128
+	maxRuntimeSkillManifestBytes     = 9 * 1024
+	maxRuntimeSkillProposalBytes     = maxRuntimeSkillBodyBytes + maxRuntimeSkillManifestBytes + maxRuntimeSkillSourceBytes + 4096
+	runtimeSkillProposalIDBytes      = 16
 )
 
 func (a SkillAutoActivation) hasRules() bool {
@@ -148,6 +154,7 @@ type SkillCatalogEntry struct {
 	Name           string               `json:"name"`
 	Description    string               `json:"description,omitempty"`
 	Source         string               `json:"source,omitempty"`
+	RequiredTools  []string             `json:"required_tools,omitempty"`
 	Triggers       []string             `json:"triggers,omitempty"`
 	AutoActivation *SkillAutoActivation `json:"auto_activation,omitempty"`
 }
@@ -218,9 +225,10 @@ func (r *SkillRegistry) Catalog() []SkillCatalogEntry {
 	out := make([]SkillCatalogEntry, 0, len(r.skills))
 	for _, s := range r.skills {
 		entry := SkillCatalogEntry{
-			Name:        s.Name,
-			Description: s.Description,
-			Source:      s.Source,
+			Name:          s.Name,
+			Description:   s.Description,
+			Source:        s.Source,
+			RequiredTools: append([]string(nil), s.RequiredTools...),
 		}
 		if len(s.Triggers) > 0 {
 			entry.Triggers = append([]string(nil), s.Triggers...)
@@ -238,6 +246,14 @@ func (r *SkillRegistry) Catalog() []SkillCatalogEntry {
 // registry. Returns the empty string when no skill activates so the
 // Loop can use `if got != "" { … inject … }` without an extra check.
 func (r *SkillRegistry) Provide(userText string) string {
+	return r.ProvideForTools(userText, nil)
+}
+
+// ProvideForTools returns matching skills that are compatible with the
+// currently registered tool surface. A nil tools registry means "no filter",
+// preserving the standalone BuiltinSkillProvider behavior used by tests and
+// embedders that already know the runtime surface.
+func (r *SkillRegistry) ProvideForTools(userText string, tools *Registry) string {
 	if r == nil {
 		return ""
 	}
@@ -250,11 +266,23 @@ func (r *SkillRegistry) Provide(userText string) string {
 	lower := strings.ToLower(userText)
 	var blocks []string
 	for _, s := range skills {
-		if s.activates(lower) {
+		if s.activates(lower) && s.requiredToolsAvailable(tools) {
 			blocks = append(blocks, s.Body)
 		}
 	}
 	return strings.Join(blocks, "\n\n")
+}
+
+func (s Skill) requiredToolsAvailable(tools *Registry) bool {
+	if len(s.RequiredTools) == 0 || tools == nil {
+		return true
+	}
+	for _, name := range s.RequiredTools {
+		if _, ok := tools.Get(name); !ok {
+			return false
+		}
+	}
+	return true
 }
 
 // Names returns the registered skill names in order. Lets operators
@@ -288,6 +316,7 @@ type builtinSkillManifest struct {
 	Description    string              `json:"description"`
 	Order          int                 `json:"order,omitempty"`
 	AutoActivation SkillAutoActivation `json:"auto_activation"`
+	RequiredTools  []string            `json:"required_tools,omitempty"`
 }
 
 type runtimeSkillManifest struct {
@@ -295,6 +324,7 @@ type runtimeSkillManifest struct {
 	Description    string              `json:"description,omitempty"`
 	Source         string              `json:"source,omitempty"`
 	AutoActivation SkillAutoActivation `json:"auto_activation,omitempty"`
+	RequiredTools  []string            `json:"required_tools,omitempty"`
 }
 
 type RuntimeSkillProposal struct {
@@ -304,6 +334,7 @@ type RuntimeSkillProposal struct {
 	Source         string              `json:"source,omitempty"`
 	Body           string              `json:"body"`
 	AutoActivation SkillAutoActivation `json:"auto_activation,omitempty"`
+	RequiredTools  []string            `json:"required_tools,omitempty"`
 }
 
 func mustBuiltinSkill(name string) Skill {
@@ -385,6 +416,7 @@ func loadBuiltinSkill(fsys fs.FS, dir string) (Skill, int, error) {
 		Source:         "embed:internal/agent/" + path.Join(base, "SKILL.md"),
 		Body:           strings.TrimSpace(string(body)),
 		AutoActivation: manifest.AutoActivation,
+		RequiredTools:  append([]string(nil), manifest.RequiredTools...),
 	}, builtinSkillOrder(manifest), nil
 }
 
@@ -566,6 +598,7 @@ func InstallRuntimeSkill(root string, skill Skill) (Skill, error) {
 		Description:    normalized.Description,
 		Source:         normalized.Source,
 		AutoActivation: normalized.AutoActivation,
+		RequiredTools:  normalized.RequiredTools,
 	}
 	raw, err := json.MarshalIndent(manifest, "", "  ")
 	if err != nil {
@@ -643,6 +676,7 @@ func ProposeRuntimeSkill(root string, skill Skill) (RuntimeSkillProposal, error)
 		Source:         normalized.Source,
 		Body:           normalized.Body,
 		AutoActivation: normalized.AutoActivation,
+		RequiredTools:  normalized.RequiredTools,
 	}
 	dir := filepath.Join(root, ".pending")
 	if err := os.MkdirAll(dir, 0o755); err != nil {
@@ -698,6 +732,7 @@ func ConfirmRuntimeSkillProposal(root, id string) (Skill, error) {
 		Source:         proposal.Source,
 		Body:           proposal.Body,
 		AutoActivation: proposal.AutoActivation,
+		RequiredTools:  proposal.RequiredTools,
 	})
 	if err != nil {
 		return Skill{}, err
@@ -773,6 +808,7 @@ func loadRuntimeSkill(dir string) (Skill, error) {
 		Source:         strings.TrimSpace(manifest.Source),
 		Body:           string(body),
 		AutoActivation: manifest.AutoActivation,
+		RequiredTools:  append([]string(nil), manifest.RequiredTools...),
 	}
 	if skill.Source == "" {
 		skill.Source = runtimeSkillBodySource(dir)
@@ -936,7 +972,41 @@ func normalizeRuntimeSkill(s Skill) (Skill, error) {
 	if err := validateSkillAutoActivation(s.AutoActivation); err != nil {
 		return Skill{}, err
 	}
+	requiredTools, err := normalizeSkillRequiredTools(s.RequiredTools)
+	if err != nil {
+		return Skill{}, err
+	}
+	s.RequiredTools = requiredTools
 	return s, nil
+}
+
+func normalizeSkillRequiredTools(in []string) ([]string, error) {
+	if len(in) > maxRuntimeSkillRequiredTools {
+		return nil, fmt.Errorf("skill required_tools has %d entries; max %d", len(in), maxRuntimeSkillRequiredTools)
+	}
+	if len(in) == 0 {
+		return nil, nil
+	}
+	out := make([]string, 0, len(in))
+	seen := map[string]bool{}
+	for _, raw := range in {
+		name := strings.TrimSpace(raw)
+		if name == "" {
+			return nil, fmt.Errorf("skill required tool must not be empty")
+		}
+		if len(name) > maxRuntimeSkillRequiredToolBytes {
+			return nil, fmt.Errorf("skill required tool %q is %d bytes; max %d", name, len(name), maxRuntimeSkillRequiredToolBytes)
+		}
+		if !validRuntimeSkillName(name) {
+			return nil, fmt.Errorf("skill required tool %q may contain only ASCII letters, digits, '_' or '-'", name)
+		}
+		if seen[name] {
+			continue
+		}
+		seen[name] = true
+		out = append(out, name)
+	}
+	return out, nil
 }
 
 func validateRuntimeSkillSource(source string) error {
@@ -1013,6 +1083,10 @@ func runtimeSkillProposalID(skill Skill) string {
 			_, _ = h.Write([]byte(trigger))
 		}
 	}
+	for _, name := range skill.RequiredTools {
+		_, _ = h.Write([]byte{0})
+		_, _ = h.Write([]byte(name))
+	}
 	sum := h.Sum(nil)
 	return fmt.Sprintf("%x", sum[:8])
 }
@@ -1047,4 +1121,17 @@ var builtinSkillProviderRegistry = DefaultSkillRegistry()
 // touching this file.
 func BuiltinSkillProvider(userText string) string {
 	return builtinSkillProviderRegistry.Provide(userText)
+}
+
+// SkillProviderForTools returns a provider that only injects skills whose
+// required tools are present in the current registry. This is the production
+// path for agent runtimes; BuiltinSkillProvider remains a surface-agnostic
+// helper for embedders and unit tests.
+func SkillProviderForTools(skills *SkillRegistry, tools *Registry) SkillProvider {
+	if skills == nil {
+		skills = builtinSkillProviderRegistry
+	}
+	return func(userText string) string {
+		return skills.ProvideForTools(userText, tools)
+	}
 }

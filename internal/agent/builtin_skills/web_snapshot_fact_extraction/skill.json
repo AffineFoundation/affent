@@ -2,6 +2,9 @@
   "name": "web_snapshot_fact_extraction",
   "description": "Rendered web-page fact extraction from browser snapshots.",
   "order": 20,
+  "required_tools": [
+    "browser_navigate"
+  ],
   "auto_activation": {
     "any": [
       "http://",

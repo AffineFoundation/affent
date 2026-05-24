@@ -996,10 +996,10 @@ func setupLoop(c commonFlags) (*loopBundle, int) {
 		ProjectContextDir:            projectContextDir,
 	}
 	if caps.BuiltinSkillProvider {
-		loop.SkillProvider = agent.BuiltinSkillProvider
+		loop.SkillProvider = agent.SkillProviderForTools(nil, tools)
 	}
 	if skillReg != nil {
-		loop.SkillProvider = skillReg.Provide
+		loop.SkillProvider = agent.SkillProviderForTools(skillReg, tools)
 	}
 	if planPath != "" {
 		loop.SkillProvider = agent.WithActivePlanSkillProvider(planPath, loop.SkillProvider)

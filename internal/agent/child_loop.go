@@ -99,7 +99,7 @@ func runChildLoop(ctx context.Context, spec childRunSpec) childRunResult {
 		FinalNoToolsOnMaxTurns:      true,
 		Memory:                      spec.Memory,
 		ProjectContextDir:           spec.ProjectContextDir,
-		SkillProvider:               BuiltinSkillProvider,
+		SkillProvider:               SkillProviderForTools(nil, spec.Tools),
 		FirstToolPolicy:             spec.FirstToolPolicy,
 		PostToolPolicy:              spec.PostToolPolicy,
 	}

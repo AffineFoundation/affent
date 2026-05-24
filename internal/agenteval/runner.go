@@ -212,7 +212,7 @@ func defaultBuildRuntime(workspaceDir string, exec executor.Executor, conv *agen
 			return agent.UserConfirmedRuntimeSkillProposal(conv, proposalID)
 		},
 	})
-	return runnerRuntime{Registry: reg, SkillProvider: skillReg.Provide}, nil
+	return runnerRuntime{Registry: reg, SkillProvider: agent.SkillProviderForTools(skillReg, reg)}, nil
 }
 
 func defaultBuildRegistry(_ context.Context, workspaceDir string, exec executor.Executor) (*agent.Registry, error) {

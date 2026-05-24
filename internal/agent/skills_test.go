@@ -589,6 +589,26 @@ func TestBuiltinSkillProvider_NoDomainSpecificTriggers(t *testing.T) {
 	}
 }
 
+func TestSkillProviderForToolsFiltersUnavailableRequiredTools(t *testing.T) {
+	skills := DefaultSkillRegistry()
+	withoutBrowser := NewRegistry()
+	if got := SkillProviderForTools(skills, withoutBrowser)("访问 https://example.com 并读取页面标题"); got != "" {
+		t.Fatalf("browser skill must not activate without browser tools:\n%s", got)
+	}
+
+	withBrowser := NewRegistry()
+	withBrowser.Add(&Tool{Name: "browser_navigate"})
+	got := SkillProviderForTools(skills, withBrowser)("访问 https://example.com 并读取页面标题")
+	if !strings.Contains(got, "web_snapshot_fact_extraction") {
+		t.Fatalf("browser skill should activate when its required tool exists:\n%s", got)
+	}
+
+	got = SkillProviderForTools(skills, withoutBrowser)("这个 Go 项目的测试失败，请修复代码并运行 go test")
+	if !strings.Contains(got, "coding_repair_workflow") {
+		t.Fatalf("non-browser skill should still activate without browser tools:\n%s", got)
+	}
+}
+
 // TestSkillRegistry_CustomSkillExtensionPoint pins the data-driven
 // router contract: adding a brand-new skill should be a Skill struct
 // literal + one Register call, with no router code changes. This

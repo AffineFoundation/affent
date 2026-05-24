@@ -882,6 +882,41 @@ func TestSetupLoop_MemoryPromptGuidanceFollowsCapability(t *testing.T) {
 	})
 }
 
+func TestSetupLoop_SkillProviderFiltersUnavailableToolSkills(t *testing.T) {
+	var cf commonFlags
+	fs := flag.NewFlagSet("test", flag.ContinueOnError)
+	cf.bind(fs)
+	if err := fs.Parse([]string{
+		"--workspace", t.TempDir(),
+		"--model", "fake-model",
+		"--base-url", "http://127.0.0.1:1/v1",
+		"--subagent=false",
+		"--focused-tasks=false",
+		"--quiet",
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if err := applyConfig(&cf, fs); err != nil {
+		t.Fatal(err)
+	}
+	b, code := setupLoop(cf)
+	if code != 0 {
+		t.Fatalf("setupLoop code=%d", code)
+	}
+	defer b.close()
+	if b.loop.SkillProvider == nil {
+		t.Fatal("default runtime should install a skill provider")
+	}
+	got := b.loop.SkillProvider("请通过浏览器访问 https://example.com 并提取信息")
+	if strings.Contains(got, "web_snapshot_fact_extraction") || strings.Contains(got, "browser_navigate") {
+		t.Fatalf("affentctl without browser tools must not inject browser skill:\n%s", got)
+	}
+	got = b.loop.SkillProvider("这个 Go 项目的测试失败，请修复代码并运行 go test")
+	if !strings.Contains(got, "coding_repair_workflow") {
+		t.Fatalf("tool filtering should not disable unrelated coding skills:\n%s", got)
+	}
+}
+
 func TestSetupLoop_RuntimeSkillInstallUpdatesActiveProvider(t *testing.T) {
 	var cf commonFlags
 	fs := flag.NewFlagSet("test", flag.ContinueOnError)
