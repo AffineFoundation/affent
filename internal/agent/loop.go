@@ -486,7 +486,8 @@ func WithRegistrySystemGuidance(prompt string, reg *Registry) string {
 		prompt = WithSubagentSystemGuidance(prompt, browserAvailable)
 	}
 	if hasRegisteredTool(reg, FocusedTaskToolName) {
-		prompt = WithFocusedTaskSystemGuidance(prompt)
+		tool, _ := reg.Get(FocusedTaskToolName)
+		prompt = withFocusedTaskSystemGuidanceForTool(prompt, tool)
 	}
 	if hasRegisteredTool(reg, PlanToolName) {
 		prompt = WithPlanSystemGuidance(prompt)
@@ -1289,7 +1290,7 @@ func (l *Loop) consumeAndPersist(ctx context.Context, turnID string, stream <-ch
 		// The provider closed the stream without ever sending a
 		// finish_reason chunk. Treat as transient — usually a chutes /
 		// vllm proxy hiccup that resolves on retry.
-		return nil, sawText, &RetryableError{Err: fmt.Errorf("stream ended without finish")}
+		return nil, sawText, &RetryableError{Err: errStreamEndedWithoutFinish}
 	}
 	if finish.Final.ReasoningContent != "" {
 		// Mirror message.end for reasoning: a single event carrying the
@@ -1489,6 +1490,7 @@ func (l *Loop) runStep(ctx context.Context, turnID string, toolDefs []ToolDef) (
 		if err == nil {
 			return final, "", nil
 		}
+		err = l.annotateLLMCallError(code, err, timeout)
 
 		// Reactive compaction: upstream rejected the request because the
 		// conversation outgrew the context window. Compact aggressively
@@ -1622,6 +1624,46 @@ func (l *Loop) transientBackoff() time.Duration {
 		return l.TransientBackoff
 	}
 	return DefaultTransientBackoff
+}
+
+func (l *Loop) annotateLLMCallError(stage string, err error, timeout time.Duration) error {
+	if err == nil {
+		return nil
+	}
+	if stage == "" {
+		stage = "llm_call"
+	}
+	model, endpoint := l.llmDiagnostics()
+	if errors.Is(err, context.DeadlineExceeded) {
+		return fmt.Errorf(
+			"LLM %s timed out after %s while waiting for chat completion (model=%q endpoint=%q max-call-timeout/per-call-timeout=%s stream-idle-timeout=%s stream-post-finish-timeout=%s). "+
+				"No complete model response arrived before the per-call wall-clock budget. Common causes: first-token latency from prefill or scheduler queueing exceeded the budget, a reasoning model paused too long between chunks, or the upstream kept the HTTP stream open without useful tokens: %w",
+			stage, timeout, model, endpoint, timeout, StreamIdleTimeout, StreamPostFinishTimeout, err,
+		)
+	}
+	if errors.Is(err, errStreamEndedWithoutFinish) {
+		return fmt.Errorf(
+			"LLM %s ended with an incomplete SSE stream (model=%q endpoint=%q). HTTP streaming started, but the upstream closed the connection before sending any terminal finish_reason chunk. "+
+				"This is usually an upstream/proxy abort such as an sglang/vLLM worker crash, KV-cache preemption, reverse-proxy reset, or OOM kill; retry is only safe before visible assistant text was emitted: %w",
+			stage, model, endpoint, err,
+		)
+	}
+	return fmt.Errorf("LLM %s failed (model=%q endpoint=%q): %w", stage, model, endpoint, err)
+}
+
+func (l *Loop) llmDiagnostics() (model string, endpoint string) {
+	if l == nil || l.LLM == nil {
+		return "unknown", "unknown"
+	}
+	model = l.LLM.Model
+	if model == "" {
+		model = "unknown"
+	}
+	base := strings.TrimRight(l.LLM.BaseURL, "/")
+	if base == "" {
+		base = DefaultBaseURL
+	}
+	return model, base + "/chat/completions"
 }
 
 // isTransient classifies an error from a single LLM call as worth

@@ -7,6 +7,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"math"
@@ -57,6 +58,8 @@ var retryableHTTPStatuses = map[int]bool{
 	408: true, // Request Timeout
 	429: true, // Too Many Requests
 }
+
+var errStreamEndedWithoutFinish = errors.New("stream ended without finish")
 
 func isRetryableStatus(code int) bool {
 	if retryableHTTPStatuses[code] {
@@ -648,6 +651,10 @@ func consumeStream(ctx context.Context, body io.ReadCloser, out chan<- StreamEve
 			emit(StreamEvent{Err: &RetryableError{Err: fmt.Errorf("stream read: %w", err)}})
 			return
 		}
+	}
+	if !finishSeen {
+		emit(StreamEvent{Err: &RetryableError{Err: errStreamEndedWithoutFinish}})
+		return
 	}
 
 	// Assemble final tool calls in ascending index order so downstream

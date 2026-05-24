@@ -3,11 +3,13 @@ package agent
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 	"unicode/utf8"
 
 	"github.com/affinefoundation/affent/internal/memory"
@@ -170,6 +172,16 @@ func TestRegistrySystemPromptComposition(t *testing.T) {
 	}
 
 	reg = NewRegistry()
+	reg.Add(&Tool{Name: FocusedTaskToolName, Schema: focusedTaskToolSchema([]FocusedTaskProfile{exploreProfile(), verifyProfile()})})
+	prompt = WithRegistrySystemGuidance("", reg)
+	if !strings.Contains(prompt, "Focused tasks (run_task):") {
+		t.Fatalf("focused-task registry prompt missing guidance:\n%s", prompt)
+	}
+	if strings.Contains(prompt, "Trigger research") || strings.Contains(prompt, "research external facts") {
+		t.Fatalf("focused-task registry prompt should not mention filtered research:\n%s", prompt)
+	}
+
+	reg = NewRegistry()
 	reg.Add(&Tool{Name: MemoryToolName})
 	reg.Add(&Tool{Name: "read_file"})
 	if got := BaseSystemPromptForRegistry(reg); got != LimitedToolSystemPrompt {
@@ -195,6 +207,30 @@ func TestRegistrySystemPromptComposition(t *testing.T) {
 	for _, forbidden := range []string{"web_search", "web_fetch"} {
 		if strings.Contains(emptyPrompt, forbidden) {
 			t.Fatalf("browser-only registry prompt should not mention unavailable %q:\n%s", forbidden, emptyPrompt)
+		}
+	}
+}
+
+func TestAnnotateLLMCallErrorAddsActionableContext(t *testing.T) {
+	loop := &Loop{LLM: NewLLMClient("https://llm.example/v1", "", "reasoning-model")}
+
+	timeoutErr := loop.annotateLLMCallError("llm_stream", context.DeadlineExceeded, 4*time.Minute)
+	if !errors.Is(timeoutErr, context.DeadlineExceeded) || !isTransient(timeoutErr) {
+		t.Fatalf("annotated timeout must preserve deadline/transient classification: %v", timeoutErr)
+	}
+	for _, want := range []string{"LLM llm_stream timed out", "reasoning-model", "https://llm.example/v1/chat/completions", "max-call-timeout/per-call-timeout=4m0s", "stream-idle-timeout", "first-token latency", "reasoning model"} {
+		if !strings.Contains(timeoutErr.Error(), want) {
+			t.Fatalf("timeout diagnostic missing %q:\n%s", want, timeoutErr.Error())
+		}
+	}
+
+	finishErr := loop.annotateLLMCallError("llm_stream", &RetryableError{Err: errStreamEndedWithoutFinish}, 4*time.Minute)
+	if !errors.Is(finishErr, errStreamEndedWithoutFinish) || !isTransient(finishErr) {
+		t.Fatalf("annotated finish error must preserve retryable/sentinel classification: %v", finishErr)
+	}
+	for _, want := range []string{"incomplete SSE stream", "finish_reason", "sglang/vLLM", "reverse-proxy reset", "OOM kill"} {
+		if !strings.Contains(finishErr.Error(), want) {
+			t.Fatalf("finish diagnostic missing %q:\n%s", want, finishErr.Error())
 		}
 	}
 }

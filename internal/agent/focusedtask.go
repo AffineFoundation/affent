@@ -510,7 +510,29 @@ func buildFocusedTaskRegistry(ctx context.Context, deps FocusedTaskDeps, profile
 
 func focusedTaskToolDescription(available []FocusedTaskProfile) string {
 	var b strings.Builder
-	b.WriteString("Run a bounded isolated focused task and return only a structured result to this conversation. Use this when you need to recall prior context, explore the workspace, research external facts, verify a claim, or review a change — and you want to avoid pulling the child's full search/inspection process into this turn's context. ")
+	hasResearch := false
+	var useCases []string
+	for _, p := range available {
+		switch p.Kind {
+		case FocusedTaskRecall:
+			useCases = append(useCases, "recall prior context")
+		case FocusedTaskExplore:
+			useCases = append(useCases, "explore the workspace")
+		case FocusedTaskResearch:
+			useCases = append(useCases, "research external facts")
+			hasResearch = true
+		case FocusedTaskVerify:
+			useCases = append(useCases, "verify a claim")
+		case FocusedTaskReview:
+			useCases = append(useCases, "review a change")
+		}
+	}
+	if len(useCases) == 0 {
+		useCases = append(useCases, "run an available focused task")
+	}
+	b.WriteString("Run a bounded isolated focused task and return only a structured result to this conversation. Use this when you need to ")
+	b.WriteString(strings.Join(useCases, ", "))
+	b.WriteString(" — and you want to avoid pulling the child's full inspection process into this turn's context. ")
 	b.WriteString("Supported task_type values: ")
 	for i, p := range available {
 		if i > 0 {
@@ -520,7 +542,13 @@ func focusedTaskToolDescription(available []FocusedTaskProfile) string {
 		b.WriteString(" — ")
 		b.WriteString(p.Description)
 	}
-	b.WriteString(". The child has its own bounded tool set (read-only for recall/explore/verify/review; web for research) and returns one JSON object with task_type, ok, summary, findings, not_found, warnings, suggested_next. After this tool returns, answer from its summary/findings; do not re-fetch sources the child already cited unless its result is incomplete or contradictory. The child cannot recursively delegate.")
+	b.WriteString(". The child has its own bounded tool set")
+	if hasResearch {
+		b.WriteString(" (read-only for recall/explore/verify/review; registered web tools for research)")
+	} else {
+		b.WriteString(" (read-only for recall/explore/verify/review)")
+	}
+	b.WriteString(" and returns one JSON object with task_type, ok, summary, findings, not_found, warnings, suggested_next. After this tool returns, answer from its summary/findings; do not re-fetch sources the child already cited unless its result is incomplete or contradictory. The child cannot recursively delegate.")
 	return b.String()
 }
 
@@ -562,32 +590,93 @@ func joinKinds(profiles []FocusedTaskProfile) string {
 	return strings.Join(parts, ", ")
 }
 
-// FocusedTaskSystemGuidance is the parent-side prompt fragment that
-// tells the main agent when and how to use run_task. Mirrors the
-// pattern set by SubagentSystemGuidance so the two delegation surfaces
-// teach their behavior in the same place in the system prompt.
-const FocusedTaskSystemGuidance = `Focused tasks (run_task):
-- The run_task tool runs a bounded isolated focused task (recall, explore, research, verify, review) and returns only a structured result. Use it when you need recall/explore/research/verify/review work that would otherwise pollute this turn's context with intermediate reads, searches, or web hits.
-- Trigger recall when the user references prior context ("before", "last time", "you remember") or when the task obviously depends on stored memory or session history you don't have inline.
-- Trigger explore when you don't already know which files implement the change and you'd otherwise list directories or read many files just to orient.
-- Trigger research when the task needs current/external facts and you have no other authoritative source.
-- Trigger verify when you are about to assert a strong claim (a test passes, a file has shape X) and have not yet checked it in this conversation.
-- Trigger review when you have just completed a non-trivial change and the user wants risk surfaced, or when you want an independent risk pass before answering.
-- Each call must carry a concrete objective (a question or assignment, not "look around"). Pass max_turns only when you have a reason to override the default.
-- After run_task returns, answer from its summary + findings. Do not re-fetch the same sources, repeat the same shell commands, or open the same files unless the result is incomplete (warnings present, parse failure, or ok=false).
-- Do not call run_task for tasks better answered by a single direct tool call. One read_file is cheaper than a focused task that wraps one read_file.`
+// focusedTaskSystemGuidanceMarker anchors the parent-side prompt fragment that
+// tells the main agent when and how to use the actually registered run_task
+// profiles.
+const focusedTaskSystemGuidanceMarker = "Focused tasks (run_task):"
 
 // WithFocusedTaskSystemGuidance returns prompt with the focused-task
 // guidance appended exactly once. Idempotent — calling it twice is a
 // no-op the second time.
-func WithFocusedTaskSystemGuidance(prompt string) string {
+func WithFocusedTaskSystemGuidance(prompt string, kinds ...FocusedTaskKind) string {
 	if strings.TrimSpace(prompt) == "" {
 		prompt = DefaultSystemPrompt
 	}
-	if strings.Contains(prompt, "Focused tasks (run_task):") {
+	if strings.Contains(prompt, focusedTaskSystemGuidanceMarker) {
 		return prompt
 	}
-	return prompt + "\n\n" + FocusedTaskSystemGuidance
+	return prompt + "\n\n" + focusedTaskSystemGuidance(kinds)
+}
+
+func withFocusedTaskSystemGuidanceForTool(prompt string, tool *Tool) string {
+	return WithFocusedTaskSystemGuidance(prompt, focusedTaskKindsFromTool(tool)...)
+}
+
+func focusedTaskSystemGuidance(kinds []FocusedTaskKind) string {
+	if len(kinds) == 0 {
+		kinds = []FocusedTaskKind{FocusedTaskRecall, FocusedTaskExplore, FocusedTaskResearch, FocusedTaskVerify, FocusedTaskReview}
+	}
+	available := map[FocusedTaskKind]bool{}
+	var names []string
+	for _, kind := range kinds {
+		if kind == "" || available[kind] {
+			continue
+		}
+		available[kind] = true
+		names = append(names, string(kind))
+	}
+	if len(names) == 0 {
+		names = []string{"available focused tasks"}
+	}
+	var b strings.Builder
+	b.WriteString(focusedTaskSystemGuidanceMarker)
+	b.WriteString("\n- The run_task tool runs a bounded isolated focused task (")
+	b.WriteString(strings.Join(names, ", "))
+	b.WriteString(") and returns only a structured result. Use it when that work would otherwise pollute this turn's context with intermediate reads, searches, checks, or lookups.")
+	if available[FocusedTaskRecall] {
+		b.WriteString("\n- Trigger recall when the user references prior context (\"before\", \"last time\", \"you remember\") or when the task obviously depends on stored memory or session history you don't have inline.")
+	}
+	if available[FocusedTaskExplore] {
+		b.WriteString("\n- Trigger explore when you don't already know which files implement the change and you'd otherwise list directories or read many files just to orient.")
+	}
+	if available[FocusedTaskResearch] {
+		b.WriteString("\n- Trigger research when the task needs current/external facts and you have no other authoritative source.")
+	}
+	if available[FocusedTaskVerify] {
+		b.WriteString("\n- Trigger verify when you are about to assert a strong claim (a test passes, a file has shape X) and have not yet checked it in this conversation.")
+	}
+	if available[FocusedTaskReview] {
+		b.WriteString("\n- Trigger review when you have just completed a non-trivial change and the user wants risk surfaced, or when you want an independent risk pass before answering.")
+	}
+	b.WriteString("\n- Each call must carry a concrete objective (a question or assignment, not \"look around\"). Pass max_turns only when you have a reason to override the default.")
+	b.WriteString("\n- After run_task returns, answer from its summary + findings. Do not re-fetch the same sources, repeat the same shell commands, or open the same files unless the result is incomplete (warnings present, parse failure, or ok=false).")
+	b.WriteString("\n- Do not call run_task for tasks better answered by a single direct tool call. One read_file is cheaper than a focused task that wraps one read_file.")
+	return b.String()
+}
+
+func focusedTaskKindsFromTool(tool *Tool) []FocusedTaskKind {
+	if tool == nil || len(tool.Schema) == 0 {
+		return nil
+	}
+	var schema struct {
+		Properties map[string]struct {
+			Enum []string `json:"enum"`
+		} `json:"properties"`
+	}
+	if err := json.Unmarshal(tool.Schema, &schema); err != nil {
+		return nil
+	}
+	taskType, ok := schema.Properties["task_type"]
+	if !ok {
+		return nil
+	}
+	kinds := make([]FocusedTaskKind, 0, len(taskType.Enum))
+	for _, raw := range taskType.Enum {
+		if raw = strings.TrimSpace(raw); raw != "" {
+			kinds = append(kinds, FocusedTaskKind(raw))
+		}
+	}
+	return kinds
 }
 
 func FocusedTaskFirstToolPolicy() *FirstToolPolicy {

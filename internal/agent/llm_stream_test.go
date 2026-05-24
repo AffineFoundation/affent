@@ -116,6 +116,48 @@ func TestConsumeStream_IdleStallNoFinish(t *testing.T) {
 	}
 }
 
+func TestConsumeStream_CleanCloseWithoutFinishReasonIsRetryable(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "text/event-stream")
+		w.WriteHeader(200)
+		fl := w.(http.Flusher)
+		w.Write([]byte(`data: {"choices":[{"delta":{"role":"assistant","content":"partial"},"finish_reason":null}]}` + "\n\n"))
+		fl.Flush()
+		w.Write([]byte("data: [DONE]\n\n"))
+		fl.Flush()
+	}))
+	t.Cleanup(srv.Close)
+
+	c := NewLLMClient(srv.URL, "", "fake")
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	stream, err := c.Chat(ctx, []ChatMessage{{Role: "user", Content: "hi"}}, nil)
+	if err != nil {
+		t.Fatalf("Chat: %v", err)
+	}
+	var sawErr error
+	var sawFinish bool
+	for ev := range stream {
+		if ev.Err != nil {
+			sawErr = ev.Err
+		}
+		if ev.Finish != nil {
+			sawFinish = true
+		}
+	}
+	if sawFinish {
+		t.Fatal("stream without finish_reason must not emit Finish")
+	}
+	if !errors.Is(sawErr, errStreamEndedWithoutFinish) {
+		t.Fatalf("expected stream-ended sentinel, got %v", sawErr)
+	}
+	var re *RetryableError
+	if !errors.As(sawErr, &re) {
+		t.Fatalf("error not flagged retryable: %v", sawErr)
+	}
+}
+
 // TestConsumeStream_ParallelToolCalls covers the OpenAI-style streaming
 // shape where the model issues two parallel tool calls and their
 // argument fragments arrive interleaved. The model-supplied `index`

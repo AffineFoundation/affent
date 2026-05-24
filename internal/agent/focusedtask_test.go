@@ -277,6 +277,9 @@ func TestRegisterFocusedTasks_RegistersWhenAtLeastOneProfileAvailable(t *testing
 	if !strings.Contains(string(tool.Schema), `"recall"`) || strings.Contains(string(tool.Schema), `"research"`) {
 		t.Fatalf("schema enum does not match available kinds:\n%s", string(tool.Schema))
 	}
+	if strings.Contains(tool.Description, "research external facts") || strings.Contains(tool.Description, "web tools for research") {
+		t.Fatalf("tool description should not mention unavailable research:\n%s", tool.Description)
+	}
 }
 
 func TestFocusedTaskTool_ArgValidation(t *testing.T) {
@@ -427,6 +430,16 @@ func TestWithFocusedTaskSystemGuidance_AppendsOnce(t *testing.T) {
 	}
 	if WithFocusedTaskSystemGuidance("") == "" {
 		t.Fatal("empty input should fall back to default + guidance")
+	}
+
+	limited := WithFocusedTaskSystemGuidance(base, FocusedTaskExplore, FocusedTaskVerify)
+	if strings.Contains(limited, "Trigger research") || strings.Contains(limited, "research external facts") {
+		t.Fatalf("limited focused-task guidance should not mention unavailable research:\n%s", limited)
+	}
+	for _, want := range []string{"Trigger explore", "Trigger verify"} {
+		if !strings.Contains(limited, want) {
+			t.Fatalf("limited focused-task guidance missing %q:\n%s", want, limited)
+		}
 	}
 }
 
