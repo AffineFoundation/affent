@@ -714,22 +714,18 @@ func runtimeServeCommandLabels(command []string) []string {
 	for i := 1; i < len(command); i++ {
 		arg := command[i]
 		name, value, ok := strings.Cut(arg, "=")
-		if !ok {
-			if i+1 >= len(command) {
-				continue
-			}
-			name = arg
-			value = command[i+1]
-			i++
+		if ok {
+			setRuntimeServeLabelValue(values, name, value)
+			continue
 		}
-		switch name {
-		case "--listen":
-			values[runtimeLabelServeListen] = value
-		case "--workspace-root":
-			values[runtimeLabelServeWorkspaceRoot] = value
-		case "--memory-root":
-			values[runtimeLabelServeMemoryRoot] = value
+		if !runtimeServeLabelFlag(arg) || i+1 >= len(command) {
+			continue
 		}
+		if strings.HasPrefix(command[i+1], "--") {
+			continue
+		}
+		setRuntimeServeLabelValue(values, arg, command[i+1])
+		i++
 	}
 	labels := make([]string, 0, len(values))
 	for _, key := range []string{runtimeLabelServeListen, runtimeLabelServeWorkspaceRoot, runtimeLabelServeMemoryRoot} {
@@ -738,6 +734,26 @@ func runtimeServeCommandLabels(command []string) []string {
 		}
 	}
 	return labels
+}
+
+func runtimeServeLabelFlag(name string) bool {
+	switch name {
+	case "--listen", "--workspace-root", "--memory-root":
+		return true
+	default:
+		return false
+	}
+}
+
+func setRuntimeServeLabelValue(values map[string]string, name, value string) {
+	switch name {
+	case "--listen":
+		values[runtimeLabelServeListen] = value
+	case "--workspace-root":
+		values[runtimeLabelServeWorkspaceRoot] = value
+	case "--memory-root":
+		values[runtimeLabelServeMemoryRoot] = value
+	}
 }
 
 func validateRuntimeCommand(command []string) error {

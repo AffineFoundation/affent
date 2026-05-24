@@ -854,6 +854,31 @@ func TestRunRuntimeImageLabelsAffentServeRuntimePaths(t *testing.T) {
 	}
 }
 
+func TestRuntimeServeCommandLabelsIgnoresUnknownFlagsWithoutSkippingKnownOnes(t *testing.T) {
+	got := runtimeServeCommandLabels([]string{
+		"affentserve",
+		"--builtins",
+		"--workspace-root", "/workspace/sessions",
+		"--unknown-flag",
+		"--memory-root=/workspace/session-state",
+		"--api-key", "secret-value",
+		"--listen", "0.0.0.0:7777",
+	})
+	joined := strings.Join(got, "\n")
+	for _, want := range []string{
+		runtimeLabelServeListen + "=0.0.0.0:7777",
+		runtimeLabelServeWorkspaceRoot + "=/workspace/sessions",
+		runtimeLabelServeMemoryRoot + "=/workspace/session-state",
+	} {
+		if !strings.Contains(joined, want) {
+			t.Fatalf("runtimeServeCommandLabels missing %q:\n%v", want, got)
+		}
+	}
+	if strings.Contains(joined, "secret-value") {
+		t.Fatalf("secret should not be included in service labels: %v", got)
+	}
+}
+
 func TestRuntimeForwardEnvIncludesPortableCLIAndServeConfig(t *testing.T) {
 	for _, name := range runtimeForwardEnvNames() {
 		t.Setenv(name, "host-"+name)
