@@ -282,13 +282,14 @@ func ToolFailureKindAtLeast(kind string, min int) Check {
 	return Check{
 		Name: fmt.Sprintf("tool_failure_kind_at_least:%s:%d", kind, min),
 		Eval: func(t Trace) CheckResult {
-			got := t.ToolStats.ToolFailureByKind[kind]
+			counts := t.ToolFailureKindCounts()
+			got := counts[kind]
 			if got >= min {
 				return CheckResult{Pass: true, Detail: fmt.Sprintf("%s=%d", kind, got)}
 			}
 			return CheckResult{
 				Pass:   false,
-				Detail: fmt.Sprintf("%s=%d, want >= %d; failure_kinds=%v", kind, got, min, t.ToolStats.ToolFailureByKind),
+				Detail: fmt.Sprintf("%s=%d, want >= %d; failure_kinds=%v", kind, got, min, counts),
 			}
 		},
 	}

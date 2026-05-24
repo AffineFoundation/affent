@@ -301,6 +301,7 @@ func (r BatchRunner) Run(ctx context.Context, scenario BatchScenario) BatchResul
 		res.TurnEndReason = trace.TurnEndReason
 		res.ToolCalls = len(trace.Tools)
 		res.ToolStats = trace.ToolStats
+		res.ToolStats.ToolFailureByKind = trace.ToolFailureKindCounts()
 		res.ToolTruncation = SummarizeToolTruncation(trace)
 		res.Usage = trace.Usage
 		res.Delegation = trace.DelegationStats()

@@ -282,6 +282,23 @@ func (t Trace) RepairStats() ToolRepairStats {
 	return stats
 }
 
+func (t Trace) ToolFailureKindCounts() map[string]int {
+	if len(t.ToolStats.ToolFailureByKind) > 0 {
+		return cloneStringIntMap(t.ToolStats.ToolFailureByKind)
+	}
+	var out map[string]int
+	for _, c := range t.Tools {
+		if c.FailureKind == "" {
+			continue
+		}
+		if out == nil {
+			out = map[string]int{}
+		}
+		out[c.FailureKind]++
+	}
+	return out
+}
+
 func (s ToolRuntimeStats) hasRepairStats() bool {
 	return s.ToolRepairCalls > 0 ||
 		s.ToolRepairSucceeded > 0 ||

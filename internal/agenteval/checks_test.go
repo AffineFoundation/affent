@@ -371,19 +371,35 @@ func TestToolRepairKindAtLeast(t *testing.T) {
 }
 
 func TestToolFailureKindAtLeast(t *testing.T) {
-	trace := Trace{ToolStats: ToolRuntimeStats{
-		ToolFailureByKind: map[string]int{"invalid_args": 2, "timeout": 1},
-	}}
-	if res := ToolFailureKindAtLeast("invalid_args", 2).Eval(trace); !res.Pass {
-		t.Fatalf("expected invalid_args failure kind check to pass: %+v", res)
-	}
-	res := ToolFailureKindAtLeast("empty_response", 1).Eval(trace)
-	if res.Pass {
-		t.Fatal("expected missing failure kind to fail")
-	}
-	if !strings.Contains(res.Detail, "empty_response=0") || !strings.Contains(res.Detail, "invalid_args") {
-		t.Fatalf("failure detail should include requested and observed failure kinds: %s", res.Detail)
-	}
+	t.Run("uses turn end stats", func(t *testing.T) {
+		trace := Trace{ToolStats: ToolRuntimeStats{
+			ToolFailureByKind: map[string]int{"invalid_args": 2, "timeout": 1},
+		}}
+		if res := ToolFailureKindAtLeast("invalid_args", 2).Eval(trace); !res.Pass {
+			t.Fatalf("expected invalid_args failure kind check to pass: %+v", res)
+		}
+		res := ToolFailureKindAtLeast("empty_response", 1).Eval(trace)
+		if res.Pass {
+			t.Fatal("expected missing failure kind to fail")
+		}
+		if !strings.Contains(res.Detail, "empty_response=0") || !strings.Contains(res.Detail, "invalid_args") {
+			t.Fatalf("failure detail should include requested and observed failure kinds: %s", res.Detail)
+		}
+	})
+
+	t.Run("falls back to tool result failure_kind", func(t *testing.T) {
+		trace := Trace{Tools: []ToolCall{
+			{CallID: "c1", Tool: "web_fetch", ExitCode: 1, FailureKind: "blocked"},
+			{CallID: "c2", Tool: "web_fetch", ExitCode: 0, FailureKind: "empty_response"},
+			{CallID: "c3", Tool: "read_file", ExitCode: 0},
+		}}
+		if res := ToolFailureKindAtLeast("blocked", 1).Eval(trace); !res.Pass {
+			t.Fatalf("expected blocked fallback check to pass: %+v", res)
+		}
+		if res := ToolFailureKindAtLeast("empty_response", 1).Eval(trace); !res.Pass {
+			t.Fatalf("expected empty_response fallback check to pass: %+v", res)
+		}
+	})
 }
 
 func TestFocusedTaskCalledAtLeast(t *testing.T) {
