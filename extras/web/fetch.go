@@ -231,7 +231,35 @@ func recoverableFetchError(requestURL, finalURL string, status int, err error) e
 	case errors.Is(err, context.DeadlineExceeded) || strings.Contains(lower, "timeout") || strings.Contains(lower, "deadline exceeded"):
 		next = "network timeout; retry once with the same canonical URL, then switch to another available source or discovery tool if it fails again"
 	}
-	return fmt.Errorf("%w\nURL: %s%s\nNext: %s", err, requestURL, redirectedURLSuffix(requestURL, finalURL), next)
+	return fmt.Errorf("%w\nFailure: %s\nURL: %s%s\nNext: %s", err, fetchFailureLabel(status, err), requestURL, redirectedURLSuffix(requestURL, finalURL), next)
+}
+
+func fetchFailureLabel(status int, err error) string {
+	kind := "network_error"
+	lower := ""
+	if err != nil {
+		lower = strings.ToLower(err.Error())
+	}
+	switch {
+	case status == http.StatusUnauthorized || status == http.StatusForbidden:
+		kind = "blocked"
+	case status == http.StatusNotFound || status == http.StatusGone:
+		kind = "not_found"
+	case status == http.StatusTooManyRequests:
+		kind = "rate_limited"
+	case status >= 500 && status <= 599:
+		kind = "server_error"
+	case status > 0:
+		kind = "http_error"
+	case strings.Contains(lower, "ssrf-guard"):
+		kind = "private_network_blocked"
+	case errors.Is(err, context.DeadlineExceeded) || strings.Contains(lower, "timeout") || strings.Contains(lower, "deadline exceeded"):
+		kind = "timeout"
+	}
+	if status > 0 {
+		return fmt.Sprintf("kind=%s, status=%d", kind, status)
+	}
+	return fmt.Sprintf("kind=%s", kind)
 }
 
 func renderBody(body []byte, contentType, finalURL string) string {

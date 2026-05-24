@@ -343,7 +343,7 @@ func TestFetchTool_HTTPError(t *testing.T) {
 	if err == nil || !strings.Contains(err.Error(), "http 403") {
 		t.Errorf("expected 403 surface, got %v", err)
 	}
-	for _, want := range []string{"URL: " + srv.URL, "Next:", "blocked URL", "another available source"} {
+	for _, want := range []string{"Failure: kind=blocked, status=403", "URL: " + srv.URL, "Next:", "blocked URL", "another available source"} {
 		if err == nil || !strings.Contains(err.Error(), want) {
 			t.Fatalf("403 error missing %q guidance: %v", want, err)
 		}
@@ -372,10 +372,34 @@ func TestFetchTool_HTTPErrorReportsRedirectFinalURL(t *testing.T) {
 	if err == nil {
 		t.Fatal("expected redirected HTTP error")
 	}
-	for _, want := range []string{"URL: " + srv.URL + "/old", "Final URL: " + srv.URL + "/new", "blocked after redirect", "Next:"} {
+	for _, want := range []string{"Failure: kind=blocked, status=403", "URL: " + srv.URL + "/old", "Final URL: " + srv.URL + "/new", "blocked after redirect", "Next:"} {
 		if !strings.Contains(err.Error(), want) {
 			t.Fatalf("redirected error missing %q: %v", want, err)
 		}
+	}
+}
+
+func TestFetchFailureLabelClassifiesCommonFailures(t *testing.T) {
+	cases := []struct {
+		name   string
+		status int
+		err    error
+		want   string
+	}{
+		{name: "not found", status: http.StatusNotFound, err: errors.New("missing"), want: "kind=not_found, status=404"},
+		{name: "rate limited", status: http.StatusTooManyRequests, err: errors.New("slow down"), want: "kind=rate_limited, status=429"},
+		{name: "server error", status: http.StatusBadGateway, err: errors.New("upstream"), want: "kind=server_error, status=502"},
+		{name: "timeout", err: context.DeadlineExceeded, want: "kind=timeout"},
+		{name: "private network", err: errors.New("ssrf-guard: private address"), want: "kind=private_network_blocked"},
+		{name: "network error", err: errors.New("dial tcp: no route"), want: "kind=network_error"},
+	}
+
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			if got := fetchFailureLabel(c.status, c.err); got != c.want {
+				t.Fatalf("fetchFailureLabel() = %q, want %q", got, c.want)
+			}
+		})
 	}
 }
 
