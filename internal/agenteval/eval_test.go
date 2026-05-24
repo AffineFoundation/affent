@@ -131,6 +131,34 @@ func TestParseTraceFileReadsToolRequestsAndFinalText(t *testing.T) {
 	}
 }
 
+func TestParseTraceFileRejectsOversizedLineWithLineNumber(t *testing.T) {
+	tracePath := filepath.Join(t.TempDir(), "trace.jsonl")
+	body := `{"type":"trace.meta","data":{"schema_version":1}}` + "\n" +
+		`{"type":"message.done","data":{"text":"` + strings.Repeat("x", maxTraceLineBytes+1) + `"}}` + "\n"
+	if err := os.WriteFile(tracePath, []byte(body), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	_, err := ParseTraceFile(tracePath)
+	if err == nil || !strings.Contains(err.Error(), "line 2") || !strings.Contains(err.Error(), "exceeds max JSONL record size") {
+		t.Fatalf("ParseTraceFile err = %v, want oversized line 2 error", err)
+	}
+}
+
+func TestParseTraceFileReportsInvalidJSONLineNumber(t *testing.T) {
+	tracePath := filepath.Join(t.TempDir(), "trace.jsonl")
+	body := `{"type":"trace.meta","data":{"schema_version":1}}` + "\n" +
+		`{bad json` + "\n"
+	if err := os.WriteFile(tracePath, []byte(body), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	_, err := ParseTraceFile(tracePath)
+	if err == nil || !strings.Contains(err.Error(), "line 2") {
+		t.Fatalf("ParseTraceFile err = %v, want invalid JSON line 2 error", err)
+	}
+}
+
 func TestParseTraceFileRejectsUnsupportedSchemaVersion(t *testing.T) {
 	tracePath := filepath.Join(t.TempDir(), "trace.jsonl")
 	body := `{"type":"trace.meta","data":{"schema_version":999}}` + "\n"

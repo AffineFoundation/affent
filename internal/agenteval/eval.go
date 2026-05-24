@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"io/fs"
 	"os"
 	"os/exec"
@@ -15,12 +16,15 @@ import (
 	"strings"
 	"sync"
 	"time"
+
+	"github.com/affinefoundation/affent/internal/jsonl"
 )
 
 const (
 	DefaultBatchTimeout           = 5 * time.Minute
 	DefaultBatchMaxTurnSteps      = 10
 	DefaultVerifierOutputCapBytes = 1 * 1024 * 1024
+	maxTraceLineBytes             = 4 * 1024 * 1024
 )
 
 type ToolOrderRequirement struct {
@@ -573,22 +577,33 @@ func ParseTraceFile(path string) (Trace, error) {
 	defer f.Close()
 	trace := Trace{RawTypes: map[string]int{}}
 	pending := map[string]int{}
-	sc := bufio.NewScanner(f)
-	sc.Buffer(make([]byte, 0, 64*1024), 4*1024*1024)
-	for sc.Scan() {
+	r := bufio.NewReaderSize(f, 64*1024)
+	lineNo := 0
+	for {
+		line, overLimit, err := jsonl.ReadBoundedLine(r, maxTraceLineBytes)
+		if errors.Is(err, io.EOF) {
+			break
+		}
+		if err != nil {
+			return trace, err
+		}
+		lineNo++
+		if overLimit {
+			return trace, fmt.Errorf("trace %s line %d exceeds max JSONL record size %d bytes", path, lineNo, maxTraceLineBytes)
+		}
 		var ev struct {
 			Type string          `json:"type"`
 			Data json.RawMessage `json:"data"`
 		}
-		if err := json.Unmarshal(sc.Bytes(), &ev); err != nil {
-			return trace, err
+		if err := json.Unmarshal(line, &ev); err != nil {
+			return trace, fmt.Errorf("trace %s line %d: %w", path, lineNo, err)
 		}
 		trace.RawTypes[ev.Type]++
 		if _, err := applyTraceEvent(&trace, pending, ev.Type, ev.Data, ""); err != nil {
-			return trace, err
+			return trace, fmt.Errorf("trace %s line %d: %w", path, lineNo, err)
 		}
 	}
-	return trace, sc.Err()
+	return trace, nil
 }
 
 // BatchScenarioChecks returns the Check slice derived from the
