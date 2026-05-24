@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/affinefoundation/affent/internal/agent"
+	"github.com/affinefoundation/affent/internal/jsonl"
 	"github.com/affinefoundation/affent/internal/mcp"
 )
 
@@ -51,6 +52,7 @@ type statsBoundaries struct {
 	MCPHTTPJSONResponse  int    `json:"mcp_http_json_response_bytes"`
 	MCPHTTPSSELine       int    `json:"mcp_http_sse_line_bytes"`
 	MCPStdioFrame        int    `json:"mcp_stdio_frame_bytes"`
+	JSONLRecordBytes     int    `json:"jsonl_record_bytes"`
 }
 
 type sessionStatsResponse struct {
@@ -164,5 +166,6 @@ func statsBoundarySnapshot(cfg Config) statsBoundaries {
 		MCPHTTPJSONResponse:  mb.HTTPJSONResponseBytes,
 		MCPHTTPSSELine:       mb.HTTPSSELineBytes,
 		MCPStdioFrame:        mb.StdioFrameBytes,
+		JSONLRecordBytes:     jsonl.DefaultMaxRecordBytes,
 	}
 }

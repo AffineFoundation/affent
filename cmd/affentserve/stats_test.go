@@ -65,6 +65,9 @@ func TestHandleStats_EmptyPool(t *testing.T) {
 	if resp.Boundaries.MCPHTTPJSONResponse <= 0 || resp.Boundaries.MCPHTTPSSELine <= 0 || resp.Boundaries.MCPStdioFrame <= 0 {
 		t.Fatalf("MCP transport boundaries must be positive: %+v", resp.Boundaries)
 	}
+	if resp.Boundaries.JSONLRecordBytes <= 0 {
+		t.Fatalf("Boundaries.JSONLRecordBytes = %d, want positive", resp.Boundaries.JSONLRecordBytes)
+	}
 	if resp.ServerTime == "" {
 		t.Fatal("ServerTime must be populated")
 	}
