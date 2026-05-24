@@ -281,21 +281,44 @@ func TestParseFlagsAndConfig_NetworkToolsFromEnv(t *testing.T) {
 }
 
 func TestParseFlagsAndConfig_EvalModeAllowsEnvironmentPermissionEnv(t *testing.T) {
-	t.Setenv("AFFENTSERVE_BROWSER", "true")
-	cfg, err := parseFlagsAndConfig([]string{
-		"--base-url", "https://example/v1",
-		"--model", "demo",
-		"--eval-mode",
+	t.Run("browser", func(t *testing.T) {
+		t.Setenv("AFFENTSERVE_BROWSER", "true")
+		cfg, err := parseFlagsAndConfig([]string{
+			"--base-url", "https://example/v1",
+			"--model", "demo",
+			"--eval-mode",
+		})
+		if err != nil {
+			t.Fatalf("parseFlagsAndConfig: %v", err)
+		}
+		if !cfg.EnableBrowser {
+			t.Fatal("AFFENTSERVE_BROWSER=true should opt browser into eval mode")
+		}
+		if cfg.EnableWeb || cfg.EnableMemory || cfg.EnableSubagent || cfg.EnableFocusedTasks {
+			t.Fatalf("browser env opt-in should not enable unrelated eval capabilities: %+v", cfg)
+		}
 	})
-	if err != nil {
-		t.Fatalf("parseFlagsAndConfig: %v", err)
-	}
-	if !cfg.EnableBrowser {
-		t.Fatal("AFFENTSERVE_BROWSER=true should opt browser into eval mode")
-	}
-	if cfg.EnableWeb || cfg.EnableMemory || cfg.EnableSubagent || cfg.EnableFocusedTasks {
-		t.Fatalf("browser env opt-in should not enable unrelated eval capabilities: %+v", cfg)
-	}
+
+	t.Run("web fetch only", func(t *testing.T) {
+		t.Setenv("AFFENTSERVE_WEB", "true")
+		cfg, err := parseFlagsAndConfig([]string{
+			"--base-url", "https://example/v1",
+			"--model", "demo",
+			"--eval-mode",
+		})
+		if err != nil {
+			t.Fatalf("parseFlagsAndConfig: %v", err)
+		}
+		if !cfg.EnableWeb {
+			t.Fatal("AFFENTSERVE_WEB=true should opt web_fetch into eval mode")
+		}
+		if cfg.EnableWebSearch {
+			t.Fatalf("AFFENTSERVE_WEB=true must not imply web_search in eval mode: %+v", cfg)
+		}
+		if cfg.EnableBrowser || cfg.EnableMemory || cfg.EnableSubagent || cfg.EnableFocusedTasks {
+			t.Fatalf("web fetch env opt-in should not enable unrelated eval capabilities: %+v", cfg)
+		}
+	})
 }
 
 func TestParseFlagsAndConfig_MemoryRootFromCLI(t *testing.T) {
