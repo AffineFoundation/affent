@@ -74,7 +74,7 @@ type FocusedTaskToolPolicy struct {
 	AllowMemory        bool // read-only memory; gated on Memory store
 	AllowSessionSearch bool // gated on SessionsDir
 	AllowWeb           bool // gated on RegisterWebTools
-	AllowBrowser       bool // gated on RegisterBrowserTools; off by default for every built-in profile
+	AllowBrowser       bool // gated on RegisterBrowserTools
 }
 
 func (p FocusedTaskToolPolicy) anyAllowed() bool {
@@ -186,10 +186,9 @@ type FocusedTaskDeps struct {
 	// filtered out of the schema entirely.
 	RegisterWebTools func(ctx context.Context, reg *Registry) (cleanup func(), err error)
 
-	// RegisterBrowserTools is the same for browser_* tools. No built-in
-	// profile sets AllowBrowser by default — deployments that want
-	// research-with-browser must construct a custom profile registry.
-	// The hook exists here for forward compatibility.
+	// RegisterBrowserTools is the same for browser_* tools. The built-in
+	// research profile can use this as a rendered-page fallback or as
+	// the sole external lookup surface in browser-only deployments.
 	RegisterBrowserTools func(ctx context.Context, reg *Registry) (cleanup func(), err error)
 }
 
@@ -544,7 +543,7 @@ func focusedTaskToolDescription(available []FocusedTaskProfile) string {
 	}
 	b.WriteString(". The child has its own bounded tool set")
 	if hasResearch {
-		b.WriteString(" (read-only for recall/explore/verify/review; registered web tools for research)")
+		b.WriteString(" (read-only for recall/explore/verify/review; registered external lookup tools for research)")
 	} else {
 		b.WriteString(" (read-only for recall/explore/verify/review)")
 	}
@@ -826,15 +825,17 @@ func exploreProfile() FocusedTaskProfile {
 func researchProfile() FocusedTaskProfile {
 	return FocusedTaskProfile{
 		Kind:            FocusedTaskResearch,
-		Description:     "look up external facts with registered web tools and return cited results.",
+		Description:     "look up external facts with registered web or browser tools and return cited results.",
 		DefaultMaxTurns: 6,
 		Tools: FocusedTaskToolPolicy{
-			AllowWeb: true,
+			AllowWeb:     true,
+			AllowBrowser: true,
 		},
 		SystemPromptHints: `research hints:
 - Each finding's "source" must be the URL (or document path) you read. No source means do not surface the finding; demote it to a warning.
 - For date-sensitive facts, include the date or freshness in "evidence" (e.g., "as of 2025-11 release notes at <url>").
-- For current or unfamiliar public topics, use the registered web tools to discover and read the most authoritative sources available. Prefer official docs, source repositories, block explorers, filings, API docs, and primary project sites over summaries.
+- For current or unfamiliar public topics, use the registered external lookup tools to discover and read the most authoritative sources available. Prefer official docs, source repositories, block explorers, filings, API docs, and primary project sites over summaries.
+- Use browser tools when they are registered and a page is rendered, blocked for plain fetch, or needs interaction. For browser-based reading, navigate first and cite the page URL from the snapshot/navigate result.
 - For market, metrics, or trend questions, collect a current source-of-record plus at least one independent corroborating source. Keep social posts, forum comments, and influencer takes separate from verified facts, and label them as sentiment or claims.
 - When sources disagree, pick the most authoritative for "findings" and record the conflict in "warnings".
 - If you cannot find an authoritative source with the registered tools, emit a not_found entry rather than guessing.`,

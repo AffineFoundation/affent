@@ -119,7 +119,7 @@ func TestFocusedTaskAvailabilityProbe_AvailableKinds_DefaultRegistry(t *testing.
 		{
 			name:  "workspace + LLM only exposes file-backed profiles",
 			probe: FocusedTaskAvailabilityProbe{HasLLM: true, HasWorkspace: true},
-			// recall is filtered (no memory, no sessions). research filtered (no web).
+			// recall is filtered (no memory, no sessions). research filtered (no web/browser).
 			want: []FocusedTaskKind{FocusedTaskExplore, FocusedTaskVerify, FocusedTaskReview},
 		},
 		{
@@ -130,6 +130,11 @@ func TestFocusedTaskAvailabilityProbe_AvailableKinds_DefaultRegistry(t *testing.
 		{
 			name:  "with web registrar research becomes available",
 			probe: FocusedTaskAvailabilityProbe{HasLLM: true, HasWorkspace: true, HasExecutor: true, HasMemory: true, HasSessions: true, HasWeb: true},
+			want:  []FocusedTaskKind{FocusedTaskRecall, FocusedTaskExplore, FocusedTaskResearch, FocusedTaskVerify, FocusedTaskReview},
+		},
+		{
+			name:  "with browser registrar research becomes available",
+			probe: FocusedTaskAvailabilityProbe{HasLLM: true, HasWorkspace: true, HasExecutor: true, HasMemory: true, HasSessions: true, HasBrowser: true},
 			want:  []FocusedTaskKind{FocusedTaskRecall, FocusedTaskExplore, FocusedTaskResearch, FocusedTaskVerify, FocusedTaskReview},
 		},
 	}
@@ -184,9 +189,9 @@ func TestProfileAvailable_RequiresAtLeastOneDeclaredDep(t *testing.T) {
 			want: true,
 		},
 		{
-			name:    "research needs web registrar",
+			name:    "research needs external registrar",
 			profile: researchProfile(),
-			mutate:  func(d *FocusedTaskDeps) { /* no web */ },
+			mutate:  func(d *FocusedTaskDeps) { /* no web/browser */ },
 			want:    false,
 		},
 		{
@@ -194,6 +199,14 @@ func TestProfileAvailable_RequiresAtLeastOneDeclaredDep(t *testing.T) {
 			profile: researchProfile(),
 			mutate: func(d *FocusedTaskDeps) {
 				d.RegisterWebTools = noopRegistrar
+			},
+			want: true,
+		},
+		{
+			name:    "research ok with browser registrar",
+			profile: researchProfile(),
+			mutate: func(d *FocusedTaskDeps) {
+				d.RegisterBrowserTools = noopRegistrar
 			},
 			want: true,
 		},
@@ -273,11 +286,11 @@ func TestRegisterFocusedTasks_RegistersWhenAtLeastOneProfileAvailable(t *testing
 		t.Fatal("run_task should be registered")
 	}
 	// Schema enum must reflect only available kinds. Research is
-	// filtered out because no web registrar is present.
+	// filtered out because no external lookup registrar is present.
 	if !strings.Contains(string(tool.Schema), `"recall"`) || strings.Contains(string(tool.Schema), `"research"`) {
 		t.Fatalf("schema enum does not match available kinds:\n%s", string(tool.Schema))
 	}
-	if strings.Contains(tool.Description, "research external facts") || strings.Contains(tool.Description, "web tools for research") {
+	if strings.Contains(tool.Description, "research external facts") || strings.Contains(tool.Description, "external lookup tools for research") {
 		t.Fatalf("tool description should not mention unavailable research:\n%s", tool.Description)
 	}
 }
@@ -445,7 +458,7 @@ func TestWithFocusedTaskSystemGuidance_AppendsOnce(t *testing.T) {
 
 func TestResearchProfileGuidesGeneralExternalResearch(t *testing.T) {
 	profile := researchProfile()
-	for _, want := range []string{"registered web tools", "authoritative sources", "market, metrics, or trend questions", "social posts", "independent corroborating source"} {
+	for _, want := range []string{"registered external lookup tools", "browser tools", "authoritative sources", "market, metrics, or trend questions", "social posts", "independent corroborating source"} {
 		if !strings.Contains(profile.SystemPromptHints, want) {
 			t.Fatalf("research profile guidance missing %q:\n%s", want, profile.SystemPromptHints)
 		}
@@ -454,6 +467,39 @@ func TestResearchProfileGuidesGeneralExternalResearch(t *testing.T) {
 		if strings.Contains(profile.SystemPromptHints, forbidden) {
 			t.Fatalf("research profile guidance should stay generic, found %q:\n%s", forbidden, profile.SystemPromptHints)
 		}
+	}
+}
+
+func TestResearchProfileCanUseBrowserOnlySurface(t *testing.T) {
+	deps := FocusedTaskDeps{
+		LLM:              dummyLLM(t),
+		HostWorkspaceDir: t.TempDir(),
+		RegisterBrowserTools: func(ctx context.Context, reg *Registry) (func(), error) {
+			reg.Add(&Tool{Name: "browser_navigate"})
+			reg.Add(&Tool{Name: "browser_snapshot"})
+			return nil, nil
+		},
+	}
+	profile := researchProfile()
+	reg, cleanup, err := buildFocusedTaskRegistry(context.Background(), deps, profile)
+	if err != nil {
+		t.Fatalf("build registry: %v", err)
+	}
+	t.Cleanup(cleanup)
+	if _, ok := reg.Get("browser_navigate"); !ok {
+		t.Fatal("browser-only research registry should include browser_navigate")
+	}
+	if _, ok := reg.Get("web_fetch"); ok {
+		t.Fatal("browser-only research registry should not imply web_fetch")
+	}
+	prompt := focusedTaskSystemPromptFor(profile, reg)
+	for _, want := range []string{"External research:", "browser_navigate", "browser_snapshot", "registered external lookup tools"} {
+		if !strings.Contains(prompt, want) {
+			t.Fatalf("browser-only research prompt missing %q:\n%s", want, prompt)
+		}
+	}
+	if strings.Contains(prompt, "Use web_fetch") {
+		t.Fatalf("browser-only research prompt should not mention unavailable web_fetch:\n%s", prompt)
 	}
 }
 

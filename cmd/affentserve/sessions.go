@@ -290,6 +290,22 @@ func (p *SessionPool) focusedTaskWebRegistrar() func(context.Context, *agent.Reg
 	}
 }
 
+func (p *SessionPool) focusedTaskBrowserRegistrar(workspace string) func(context.Context, *agent.Registry) (func(), error) {
+	if !p.cfg.EnableBrowser {
+		return nil
+	}
+	return func(ctx context.Context, reg *agent.Registry) (func(), error) {
+		bs, err := p.newBrowserSession(workspace)
+		if err != nil {
+			return nil, err
+		}
+		// Focused research children need text/rendered-page inspection, not
+		// screenshot files. Keep the child surface browser-only and read-mostly.
+		affentbrowser.RegisterAll(reg, bs, affentbrowser.Options{})
+		return func() { _ = bs.Close() }, nil
+	}
+}
+
 // buildSession constructs all per-session affent state. Errors here
 // propagate to the chat-completions caller and abort the request.
 func (p *SessionPool) buildSession(id string) (*Session, error) {
@@ -443,10 +459,11 @@ func (p *SessionPool) buildSession(id string) (*Session, error) {
 			Memory:           memStore,
 			TranscriptDir:    filepath.Join(sessionDir, "focused-tasks", id),
 			Log:              p.logger.With().Str("session_id", id).Logger(),
-			// Research profile needs web tools; we wire the registrar
-			// only when the deployment has opted into web globally, so
-			// availableProfiles() drops research cleanly when it's not.
-			RegisterWebTools: p.focusedTaskWebRegistrar(),
+			// Research profile needs external lookup tools; these hooks
+			// are nil unless the deployment has opted into web/browser, so
+			// availableProfiles() drops research cleanly when neither is on.
+			RegisterWebTools:     p.focusedTaskWebRegistrar(),
+			RegisterBrowserTools: p.focusedTaskBrowserRegistrar(workspace),
 		})
 	}
 
