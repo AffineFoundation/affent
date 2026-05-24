@@ -308,6 +308,17 @@ func TestReadOnlyShellToolRejectsMutatingCommands(t *testing.T) {
 	if !strings.Contains(err.Error(), "read-only") {
 		t.Fatalf("unexpected error: %v", err)
 	}
+	if !strings.Contains(err.Error(), "Next:") {
+		t.Fatalf("read-only rejection should guide recovery: %v", err)
+	}
+
+	_, err = tool.Execute(context.Background(), json.RawMessage(`{"command":"python script.py > out.txt"}`))
+	if err == nil {
+		t.Fatal("expected redirected shell command to be rejected")
+	}
+	if !strings.Contains(err.Error(), "output redirection") || !strings.Contains(err.Error(), "Next:") {
+		t.Fatalf("redirection rejection should guide recovery: %v", err)
+	}
 
 	_, err = tool.Execute(context.Background(), json.RawMessage(`{"command":"python -m pytest ./...", "cwd":"`+filepath.ToSlash(ws)+`"}`))
 	if err != nil {
@@ -330,11 +341,17 @@ func TestSubagentFileToolsRejectTranscriptPaths(t *testing.T) {
 	if !strings.Contains(err.Error(), "private audit") {
 		t.Fatalf("unexpected error: %v", err)
 	}
+	if !strings.Contains(err.Error(), "Next:") || !strings.Contains(err.Error(), "session_search") {
+		t.Fatalf("private transcript rejection should guide recovery: %v", err)
+	}
 
 	list := subagentListFilesTool(BuiltinDeps{HostWorkspaceDir: ws})
 	_, err = list.Execute(context.Background(), json.RawMessage(`{"path":".affentctl/subagents"}`))
 	if err == nil {
 		t.Fatal("expected list_files to reject subagent transcript root")
+	}
+	if !strings.Contains(err.Error(), "Next:") || !strings.Contains(err.Error(), "session_search") {
+		t.Fatalf("private transcript list rejection should guide recovery: %v", err)
 	}
 
 	shell := readOnlyShellTool(BuiltinDeps{
@@ -344,6 +361,9 @@ func TestSubagentFileToolsRejectTranscriptPaths(t *testing.T) {
 	_, err = shell.Execute(context.Background(), json.RawMessage(`{"command":"cat .affentctl/subagents/parent/child.jsonl"}`))
 	if err == nil {
 		t.Fatal("expected shell to reject subagent transcript path")
+	}
+	if !strings.Contains(err.Error(), "Next:") || !strings.Contains(err.Error(), "session_search") {
+		t.Fatalf("private transcript shell rejection should guide recovery: %v", err)
 	}
 }
 
@@ -418,6 +438,9 @@ func TestReadOnlyMemoryToolRejectsWrites(t *testing.T) {
 	}
 	if !strings.Contains(err.Error(), "read-only") {
 		t.Fatalf("unexpected error: %v", err)
+	}
+	if !strings.Contains(err.Error(), "Next:") || !strings.Contains(err.Error(), "action=search") {
+		t.Fatalf("read-only memory rejection should guide recovery: %v", err)
 	}
 }
 

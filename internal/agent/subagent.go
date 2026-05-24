@@ -1073,9 +1073,13 @@ func rejectSubagentPrivatePath(workspace, p string) error {
 	rel = filepath.Clean(rel)
 	privateRoot := filepath.Join(".affentctl", "subagents")
 	if rel == privateRoot || strings.HasPrefix(rel, privateRoot+string(filepath.Separator)) {
-		return fmt.Errorf("subagent transcripts are private audit records; use the subagent report or session_search instead")
+		return subagentPrivateTranscriptError()
 	}
 	return nil
+}
+
+func subagentPrivateTranscriptError() error {
+	return errors.New("subagent transcripts are private audit records; use the subagent report or session_search instead\nNext: answer from the child report already returned to the parent, or search past sessions with session_search; do not read .affentctl/subagents directly")
 }
 
 var mutatingShellNeedles = []string{
@@ -1093,23 +1097,23 @@ var mutatingShellPrefixes = []string{
 func rejectMutatingShell(command string) error {
 	c := strings.ToLower(command)
 	if strings.Contains(filepath.ToSlash(c), ".affentctl/subagents") {
-		return errors.New("subagent transcripts are private audit records; use the subagent report or session_search instead")
+		return subagentPrivateTranscriptError()
 	}
 	withoutStderrRedirect := strings.ReplaceAll(c, "2>&1", "")
 	for _, harmless := range harmlessStderrRedirects {
 		withoutStderrRedirect = strings.ReplaceAll(withoutStderrRedirect, harmless, "")
 	}
 	if strings.Contains(withoutStderrRedirect, ">") {
-		return errors.New("subagent shell is read-only; rejected output redirection")
+		return errors.New("subagent shell is read-only; rejected output redirection\nNext: run an inspection command without redirection, or use read_file/list_files for workspace evidence")
 	}
 	for _, needle := range mutatingShellNeedles {
 		if strings.Contains(c, needle) {
-			return fmt.Errorf("subagent shell is read-only; rejected command containing %q", strings.TrimSpace(needle))
+			return fmt.Errorf("subagent shell is read-only; rejected command containing %q\nNext: inspect existing files or command output only; leave edits, installs, and filesystem mutations to the parent agent if needed", strings.TrimSpace(needle))
 		}
 	}
 	for _, prefix := range mutatingShellPrefixes {
 		if strings.HasPrefix(strings.TrimSpace(c), prefix) {
-			return fmt.Errorf("subagent shell is read-only; rejected command starting with %q", strings.TrimSpace(prefix))
+			return fmt.Errorf("subagent shell is read-only; rejected command starting with %q\nNext: inspect existing files or command output only; leave edits, installs, and filesystem mutations to the parent agent if needed", strings.TrimSpace(prefix))
 		}
 	}
 	return nil
@@ -1129,7 +1133,7 @@ func readOnlyMemoryTool(store memory.MemoryStore) *Tool {
 			action = memoryActionSearch
 		}
 		if action != memoryActionSearch && action != memoryActionList {
-			return "", fmt.Errorf("subagent memory is read-only; rejected action %q", action)
+			return "", fmt.Errorf("subagent memory is read-only; rejected action %q\nNext: retry memory with action=search and query, or action=list; ask the parent agent to save or modify memory if needed", action)
 		}
 		return inner(ctx, args)
 	}
