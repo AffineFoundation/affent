@@ -1514,7 +1514,9 @@ func TestSkillToolProposesThenConfirmsRuntimeSkillInstall(t *testing.T) {
 	if err != nil {
 		t.Fatalf("skill confirm_install: %v", err)
 	}
-	if !strings.Contains(confirmed, `installed skill "reviewed_demo"`) || !strings.Contains(confirmed, body) {
+	if !strings.Contains(confirmed, `installed skill "reviewed_demo"`) ||
+		!strings.Contains(confirmed, `source=https://github.com/example/skills/reviewed_demo`) ||
+		!strings.Contains(confirmed, body) {
 		t.Fatalf("confirm output should install and expose body:\n%s", confirmed)
 	}
 	if got := reg.Provide("please use reviewed demo"); !strings.Contains(got, body) {

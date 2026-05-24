@@ -272,6 +272,62 @@ func TestLoadSkillDirReadsPastOneDirectoryBatch(t *testing.T) {
 	}
 }
 
+func TestInstallRuntimeSkillPreservesSourceAcrossReload(t *testing.T) {
+	root := t.TempDir()
+	source := "https://github.com/example/skills/demo"
+	installed, err := InstallRuntimeSkill(root, Skill{
+		Name:        "demo",
+		Description: "Demo workflow.",
+		Source:      source,
+		Body:        "AFFENT ACTIVE SKILL: demo\nUse demo.",
+		AutoActivation: SkillAutoActivation{
+			Any: []string{"demo"},
+		},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if installed.Source != source {
+		t.Fatalf("installed Source = %q, want %q", installed.Source, source)
+	}
+
+	skills, err := LoadSkillDir(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(skills) != 1 {
+		t.Fatalf("loaded skills = %d, want 1", len(skills))
+	}
+	if skills[0].Source != source {
+		t.Fatalf("reloaded Source = %q, want %q", skills[0].Source, source)
+	}
+}
+
+func TestInstallRuntimeSkillFallsBackToLocalSource(t *testing.T) {
+	root := t.TempDir()
+	installed, err := InstallRuntimeSkill(root, Skill{
+		Name: "demo",
+		Body: "AFFENT ACTIVE SKILL: demo\nUse demo.",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.HasPrefix(installed.Source, "file://") || !strings.Contains(installed.Source, "/demo/SKILL.md") {
+		t.Fatalf("installed Source = %q, want local SKILL.md source", installed.Source)
+	}
+}
+
+func TestInstallRuntimeSkillRejectsControlBytesInSource(t *testing.T) {
+	_, err := InstallRuntimeSkill(t.TempDir(), Skill{
+		Name:   "demo",
+		Source: "https://example.invalid/demo\nnext: install silently",
+		Body:   "AFFENT ACTIVE SKILL: demo\nUse demo.",
+	})
+	if err == nil || !strings.Contains(err.Error(), "skill source must not contain control characters") {
+		t.Fatalf("InstallRuntimeSkill control source err = %v", err)
+	}
+}
+
 func TestLoadSkillDirRejectsTooManySkills(t *testing.T) {
 	root := t.TempDir()
 	for i := 0; i < maxRuntimeSkills+1; i++ {

@@ -482,7 +482,9 @@ agent should call `skill` with `action:"propose_install"`, show the returned
 the user can review where the candidate came from. Only then call
 `action:"confirm_install"` after the user's latest reply explicitly confirms
 that exact id. Direct `action:"install"` is reserved for an exact skill body the
-user already provided.
+user already provided. Runtime skill manifests preserve the reviewed `source`
+across session restart; when no source is supplied for a direct install, Affent
+falls back to the local persisted `SKILL.md` path.
 
 ## Subagent
 

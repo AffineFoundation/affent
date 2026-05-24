@@ -112,7 +112,7 @@ const (
 	runtimeSkillDirReadBatch        = 64
 	maxRuntimeSkillTriggers         = 20
 	maxRuntimeSkillTriggerBytes     = 128
-	maxRuntimeSkillManifestBytes    = maxRuntimeSkillDescriptionBytes + maxRuntimeSkillTriggerBytes*maxRuntimeSkillTriggers + 1024
+	maxRuntimeSkillManifestBytes    = maxRuntimeSkillDescriptionBytes + maxRuntimeSkillSourceBytes + maxRuntimeSkillTriggerBytes*maxRuntimeSkillTriggers + 1024
 	maxRuntimeSkillProposalBytes    = maxRuntimeSkillBodyBytes + maxRuntimeSkillManifestBytes + maxRuntimeSkillSourceBytes + 4096
 )
 
@@ -282,6 +282,7 @@ type builtinSkillManifest struct {
 type runtimeSkillManifest struct {
 	Name           string              `json:"name"`
 	Description    string              `json:"description,omitempty"`
+	Source         string              `json:"source,omitempty"`
 	AutoActivation SkillAutoActivation `json:"auto_activation,omitempty"`
 }
 
@@ -507,7 +508,9 @@ func InstallRuntimeSkill(root string, skill Skill) (Skill, error) {
 	if err := rejectRuntimeSkillDirSymlink(dir); err != nil {
 		return Skill{}, err
 	}
-	normalized.Source = "file://" + filepath.ToSlash(filepath.Join(dir, "SKILL.md"))
+	if normalized.Source == "" {
+		normalized.Source = runtimeSkillBodySource(dir)
+	}
 	manifestPath := filepath.Join(dir, "skill.json")
 	bodyPath := filepath.Join(dir, "SKILL.md")
 	if err := rejectRuntimeSkillFileTarget(manifestPath); err != nil {
@@ -519,6 +522,7 @@ func InstallRuntimeSkill(root string, skill Skill) (Skill, error) {
 	manifest := runtimeSkillManifest{
 		Name:           normalized.Name,
 		Description:    normalized.Description,
+		Source:         normalized.Source,
 		AutoActivation: normalized.AutoActivation,
 	}
 	raw, err := json.MarshalIndent(manifest, "", "  ")
@@ -681,11 +685,18 @@ func loadRuntimeSkill(dir string) (Skill, error) {
 	skill := Skill{
 		Name:           manifest.Name,
 		Description:    manifest.Description,
-		Source:         "file://" + filepath.ToSlash(filepath.Join(dir, "SKILL.md")),
+		Source:         strings.TrimSpace(manifest.Source),
 		Body:           string(body),
 		AutoActivation: manifest.AutoActivation,
 	}
+	if skill.Source == "" {
+		skill.Source = runtimeSkillBodySource(dir)
+	}
 	return normalizeRuntimeSkill(skill)
+}
+
+func runtimeSkillBodySource(dir string) string {
+	return "file://" + filepath.ToSlash(filepath.Join(dir, "SKILL.md"))
 }
 
 func readRuntimeSkillFile(path string, maxBytes int) ([]byte, error) {
@@ -828,6 +839,9 @@ func normalizeRuntimeSkill(s Skill) (Skill, error) {
 	if len(s.Source) > maxRuntimeSkillSourceBytes {
 		return Skill{}, fmt.Errorf("skill source is %d bytes; max %d", len(s.Source), maxRuntimeSkillSourceBytes)
 	}
+	if err := validateRuntimeSkillSource(s.Source); err != nil {
+		return Skill{}, err
+	}
 	if s.Body == "" {
 		return Skill{}, fmt.Errorf("skill body is required")
 	}
@@ -838,6 +852,15 @@ func normalizeRuntimeSkill(s Skill) (Skill, error) {
 		return Skill{}, err
 	}
 	return s, nil
+}
+
+func validateRuntimeSkillSource(source string) error {
+	for _, r := range source {
+		if r < 0x20 || r == 0x7f {
+			return fmt.Errorf("skill source must not contain control characters")
+		}
+	}
+	return nil
 }
 
 func validateSkillAutoActivation(a SkillAutoActivation) error {
