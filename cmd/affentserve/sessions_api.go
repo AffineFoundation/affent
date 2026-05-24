@@ -64,6 +64,7 @@ type sessionSummary struct {
 	HasRuntimeSkills  bool                  `json:"has_runtime_skills"`
 	RuntimeSkillNames []string              `json:"runtime_skill_names,omitempty"`
 	Usage             *UsageSnapshot        `json:"usage,omitempty"`
+	Tools             *ToolStatsSnapshot    `json:"tools,omitempty"`
 	Browser           *BrowserStatsSnapshot `json:"browser,omitempty"`
 }
 
@@ -411,6 +412,7 @@ func summarizeActiveSession(s *Session, cfg Config) sessionSummary {
 	createdAt, lastUsedAt := s.createdAt, s.lastUsed
 	s.mu.Unlock()
 	usage := s.UsageSnapshot()
+	tools := s.ToolStatsSnapshot()
 	browser := s.BrowserStatsSnapshot()
 	caps := summarizeActiveCapabilities(s, cfg)
 	return sessionSummary{
@@ -421,6 +423,7 @@ func summarizeActiveSession(s *Session, cfg Config) sessionSummary {
 		LatestUserMessage: latestUserMessageFromMessages(s.conv.Snapshot()),
 		Capabilities:      &caps,
 		Usage:             &usage,
+		Tools:             &tools,
 		Browser:           &browser,
 	}
 }
@@ -569,6 +572,9 @@ func mergeSessionSummaries(a, b sessionSummary) sessionSummary {
 	a.LastUsedAt = newerFormattedTime(a.LastUsedAt, b.LastUsedAt)
 	if b.Usage != nil {
 		a.Usage = b.Usage
+	}
+	if b.Tools != nil {
+		a.Tools = b.Tools
 	}
 	if b.Browser != nil {
 		a.Browser = b.Browser

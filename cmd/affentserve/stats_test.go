@@ -348,6 +348,10 @@ func TestSession_ToolStatsSnapshot_AccumulatesFromTurnEnd(t *testing.T) {
 	if resp.Sessions[0].Tools.ToolRepairFailed != 1 || resp.Aggregate.Tools.ToolRepairSucceeded != 1 {
 		t.Fatalf("stats tool snapshots = session:%+v aggregate:%+v", resp.Sessions[0].Tools, resp.Aggregate.Tools)
 	}
+	summary := summarizeActiveSession(s, pool.cfg)
+	if summary.Tools == nil || summary.Tools.ToolRepairCalls != 2 || summary.Tools.ToolErrors != 1 {
+		t.Fatalf("active session summary tools = %+v", summary.Tools)
+	}
 }
 
 func TestSession_BrowserStatsSnapshot_ZeroWhenNoBrowser(t *testing.T) {

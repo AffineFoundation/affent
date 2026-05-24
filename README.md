@@ -778,13 +778,13 @@ Native session endpoints:
   `has_conversation`, a bounded `latest_user_message` preview from the tail of
   `conversation.jsonl`, `has_events`, `has_plan`, `has_artifacts`, `has_memory`,
   `has_runtime_skills`, and `runtime_skill_names`; active summaries also
-  include the actual registered capabilities (`builtins`, `skill_install`,
-  `plan`, `memory`, `session_search`, `subagent`, `focused_tasks`, web/browser
-  flags).
+  include active usage, browser, and tool runtime counters plus the actual
+  registered capabilities (`builtins`, `skill_install`, `plan`, `memory`,
+  `session_search`, `subagent`, `focused_tasks`, web/browser flags).
 - `POST /v1/sessions` creates or reopens a session and returns the same active
   capability summary.
 - `GET /v1/sessions/{id}` returns session status and, when active, capability
-  summary.
+  and runtime counter summaries.
 - `GET /v1/sessions/{id}/events` streams SSE events; reconnect with
   `Last-Event-ID` to replay missed persisted events before live events.
 - `GET /v1/sessions/{id}/history?after=-1&limit=100` pages persisted events.
