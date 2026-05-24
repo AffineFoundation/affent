@@ -680,8 +680,8 @@ func TestSessionCapabilities_IncludesFocusedTaskProfiles(t *testing.T) {
 	pool.cfg.EnableBuiltins = true
 	pool.cfg.EnableMemory = true
 	pool.cfg.EnableFocusedTasks = true
-	// EnableWeb stays false: research must be filtered out of the
-	// reported profile list.
+	// EnableWeb and EnableBrowser stay false: research must be filtered
+	// out of the reported profile list.
 	s, err := pool.GetOrCreate("with-focused-tasks")
 	if err != nil {
 		t.Fatal(err)
@@ -694,11 +694,12 @@ func TestSessionCapabilities_IncludesFocusedTaskProfiles(t *testing.T) {
 	if !reflect.DeepEqual(caps.FocusedTaskProfiles, want) {
 		t.Fatalf("FocusedTaskProfiles = %+v, want %+v", caps.FocusedTaskProfiles, want)
 	}
-	// Defensive: research must NOT appear when EnableWeb is off; if it
-	// did, the model would see a task_type it can't fulfill.
+	// Defensive: research must NOT appear when both external lookup
+	// surfaces are off; if it did, the model would see a task_type it
+	// can't fulfill.
 	for _, k := range caps.FocusedTaskProfiles {
 		if k == "research" {
-			t.Errorf("research must be filtered out without --web: %+v", caps.FocusedTaskProfiles)
+			t.Errorf("research must be filtered out without --web/--browser: %+v", caps.FocusedTaskProfiles)
 		}
 	}
 }

@@ -366,9 +366,10 @@ func TestFocusedTaskProfilesForLog_MatchesProbeRules(t *testing.T) {
 		{
 			name: "no memory and no builtins still has session-backed recall + file-tool-backed others",
 			cfg:  Config{EnableFocusedTasks: true},
-			// Probe: HasLLM, HasWorkspace, HasSessions all true; HasMemory=false,
-			// HasExecutor=false, HasWeb=false. Recall stays available via sessions;
-			// explore/verify/review via read_file+list_files; research filtered out.
+			// Probe: HasLLM, HasWorkspace, HasSessions all true;
+			// HasMemory/HasExecutor/HasWeb/HasBrowser are false. Recall
+			// stays available via sessions; explore/verify/review via
+			// read_file+list_files; research is filtered out.
 			want: []string{"recall", "explore", "verify", "review"},
 		},
 	}
