@@ -144,6 +144,43 @@ func TestToolLoopGuard_WebFetchSuccessResetsFailureCount(t *testing.T) {
 	}
 }
 
+func TestToolOutcomeCountsNoEvidenceWebFetchAsFailure(t *testing.T) {
+	cases := []struct {
+		name   string
+		tool   string
+		result string
+		isErr  bool
+		want   bool
+	}{
+		{name: "web fetch text", tool: "web_fetch", result: "readable page text", want: true},
+		{name: "web fetch empty", tool: "web_fetch", result: "[empty response: URL=https://example]", want: false},
+		{name: "web fetch non text", tool: "web_fetch", result: "  [non-text response: URL=https://example]  ", want: false},
+		{name: "web fetch hard error", tool: "web_fetch", result: "Error: http 403", isErr: true, want: false},
+		{name: "other tool literal text", tool: "shell", result: "[empty response: not a web_fetch marker]", want: true},
+	}
+
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			if got := toolOutcomeCountsAsSuccess(c.tool, c.result, c.isErr); got != c.want {
+				t.Fatalf("toolOutcomeCountsAsSuccess() = %t, want %t", got, c.want)
+			}
+		})
+	}
+}
+
+func TestToolLoopGuard_WebFetchNoEvidenceResultsFailFast(t *testing.T) {
+	g := newToolLoopGuard()
+	ok := toolOutcomeCountsAsSuccess("web_fetch", "[empty response: URL=https://example/a]", false)
+	if got := g.recordOutcome("web_fetch", ok); got != "" {
+		t.Fatalf("first no-evidence web_fetch result should not warn yet: %q", got)
+	}
+	ok = toolOutcomeCountsAsSuccess("web_fetch", "[non-text response: URL=https://example/b]", false)
+	got := g.recordOutcome("web_fetch", ok)
+	if !strings.Contains(got, "failed 2 consecutive times") {
+		t.Fatalf("second no-evidence web_fetch result should warn, got %q", got)
+	}
+}
+
 // TestToolLoopGuard_PerTurnCallCapForRunTask pins the
 // over-delegation mitigation: a model can keep varying run_task's
 // arguments (different task_type / objective / max_turns each call)

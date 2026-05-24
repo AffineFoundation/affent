@@ -121,6 +121,22 @@ func (g *toolLoopGuard) recordOutcome(tool string, ok bool) string {
 	}
 }
 
+func toolOutcomeCountsAsSuccess(tool, result string, isErr bool) bool {
+	if isErr {
+		return false
+	}
+	if tool != "web_fetch" {
+		return true
+	}
+	return !isNoEvidenceWebFetchResult(result)
+}
+
+func isNoEvidenceWebFetchResult(result string) bool {
+	result = strings.TrimSpace(result)
+	return strings.HasPrefix(result, "[empty response:") ||
+		strings.HasPrefix(result, "[non-text response:")
+}
+
 func toolFailureWarnThresholdFor(tool string) int {
 	if tool == "web_fetch" {
 		return webFetchFailureWarnThreshold
