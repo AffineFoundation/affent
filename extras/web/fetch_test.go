@@ -228,6 +228,9 @@ func TestFetchTool_EmptyBodyReportsRecoverableResult(t *testing.T) {
 					t.Fatalf("empty response missing %q guidance:\n%s", want, out)
 				}
 			}
+			if strings.Contains(out, "browser") {
+				t.Fatalf("empty response guidance should not mention unavailable browser tools directly:\n%s", out)
+			}
 		})
 	}
 }
@@ -251,6 +254,9 @@ func TestFetchTool_NonText(t *testing.T) {
 		if !strings.Contains(out, want) {
 			t.Fatalf("non-text response missing %q guidance:\n%s", want, out)
 		}
+	}
+	if strings.Contains(out, "browser") {
+		t.Fatalf("non-text response guidance should not mention unavailable browser tools directly:\n%s", out)
 	}
 }
 
@@ -310,6 +316,9 @@ func TestFetchTool_URLMaxLength(t *testing.T) {
 	if err == nil || !strings.Contains(err.Error(), "web_fetch supports URLs up to") || !strings.Contains(err.Error(), "Next:") {
 		t.Fatalf("expected oversized URL error, got %v", err)
 	}
+	if strings.Contains(err.Error(), "web_search") {
+		t.Fatalf("oversized URL guidance should not mention unavailable search tools directly: %v", err)
+	}
 }
 
 func TestFetchToolRejectsUnknownArgs(t *testing.T) {
@@ -338,6 +347,9 @@ func TestFetchTool_HTTPError(t *testing.T) {
 		if err == nil || !strings.Contains(err.Error(), want) {
 			t.Fatalf("403 error missing %q guidance: %v", want, err)
 		}
+	}
+	if strings.Contains(err.Error(), "browser") {
+		t.Fatalf("403 guidance should not mention unavailable browser tools directly: %v", err)
 	}
 }
 
@@ -578,6 +590,11 @@ func TestSearchTool_ProviderErrorIncludesNext(t *testing.T) {
 	for _, want := range []string{"intentional test failure", "Next:", "fewer/different keywords"} {
 		if !strings.Contains(err.Error(), want) {
 			t.Fatalf("provider error missing %q: %v", want, err)
+		}
+	}
+	for _, forbidden := range []string{"web_fetch", "browser"} {
+		if strings.Contains(err.Error(), forbidden) {
+			t.Fatalf("provider error should not mention unavailable %q directly: %v", forbidden, err)
 		}
 	}
 }

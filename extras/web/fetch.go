@@ -102,7 +102,7 @@ func FetchTool(cfg FetchConfig) *agent.Tool {
 				return "", errors.New("url is required\nNext: retry web_fetch with a fully-qualified http:// or https:// URL")
 			}
 			if len(args.URL) > maxFetchURLBytes {
-				return "", fmt.Errorf("url is %d bytes; web_fetch supports URLs up to %d bytes\nNext: retry web_fetch with the canonical page URL, or use web_search to find a shorter result URL", len(args.URL), maxFetchURLBytes)
+				return "", fmt.Errorf("url is %d bytes; web_fetch supports URLs up to %d bytes\nNext: retry web_fetch with the canonical page URL, or use an available discovery tool/source to find a shorter result URL", len(args.URL), maxFetchURLBytes)
 			}
 			if !strings.HasPrefix(args.URL, "http://") && !strings.HasPrefix(args.URL, "https://") {
 				return "", fmt.Errorf("url must start with http:// or https:// (got %q)\nNext: retry web_fetch with the full URL including the http:// or https:// scheme", args.URL)
@@ -208,7 +208,7 @@ func fetch(ctx context.Context, cfg FetchConfig, requestURL string) (string, err
 }
 
 func emptyFetchResult(finalURL, contentType string) string {
-	return fmt.Sprintf("[empty response: URL=%s, Content-Type=%q]\nNext: do not treat this as page evidence; use another available source, fetch a text/API/HTML version, use a browser tool if one is registered for rendered pages, or answer with this source marked as empty/unverified.", finalURL, contentType)
+	return fmt.Sprintf("[empty response: URL=%s, Content-Type=%q]\nNext: do not treat this as page evidence; use another available source, fetch a text/API/HTML version, use an available rendering tool/source for rendered pages, or answer with this source marked as empty/unverified.", finalURL, contentType)
 }
 
 func recoverableFetchError(requestURL, finalURL string, status int, err error) error {
@@ -219,9 +219,9 @@ func recoverableFetchError(requestURL, finalURL string, status int, err error) e
 	lower := strings.ToLower(err.Error())
 	switch {
 	case status == http.StatusUnauthorized || status == http.StatusForbidden:
-		next = "do not keep retrying this blocked URL; use another available source, a canonical public URL from search results, or a browser tool if one is registered for rendered/blocked pages"
+		next = "do not keep retrying this blocked URL; use another available source, a canonical public URL from discovery results, or an available rendering tool/source for rendered or blocked pages"
 	case status == http.StatusNotFound || status == http.StatusGone:
-		next = "use search results or the site's navigation to find the current canonical URL, then retry web_fetch with that URL"
+		next = "use available discovery results or the site's navigation to find the current canonical URL, then retry web_fetch with that URL"
 	case status == http.StatusTooManyRequests:
 		next = "do not hammer this host; use cached/search-result snippets or another authoritative source, and retry later only if needed"
 	case status >= 500 && status <= 599:
@@ -277,7 +277,7 @@ func renderBody(body []byte, contentType, finalURL string) string {
 	case isReadableTextMediaType(mediaType):
 		return string(body)
 	default:
-		return fmt.Sprintf("[non-text response: URL=%s, Content-Type=%q, %d bytes]\nNext: do not treat this as readable page evidence; fetch an HTML/API/text version, use a browser tool if one is registered, or choose another authoritative source.", finalURL, contentType, len(body))
+		return fmt.Sprintf("[non-text response: URL=%s, Content-Type=%q, %d bytes]\nNext: do not treat this as readable page evidence; fetch an HTML/API/text version, use an available rendering tool/source, or choose another authoritative source.", finalURL, contentType, len(body))
 	}
 }
 

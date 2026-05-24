@@ -145,7 +145,7 @@ func recoverableSearchError(err error) error {
 		return err
 	}
 	lower := strings.ToLower(err.Error())
-	next := "retry once with fewer/different keywords or a more distinctive entity; if search remains unavailable, use known official URLs with web_fetch/browser or say what could not be verified."
+	next := "retry once with fewer/different keywords or a more distinctive entity; if search remains unavailable, use known official URLs with available page-reading/rendering tools or say what could not be verified."
 	switch {
 	case errors.Is(err, context.DeadlineExceeded) || strings.Contains(lower, "timeout") || strings.Contains(lower, "deadline exceeded"):
 		next = "search provider timed out; retry once with a shorter query, then use known official URLs or answer with clearly marked gaps."
