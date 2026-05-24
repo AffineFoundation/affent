@@ -430,6 +430,28 @@ func TestNoDelegationErrors(t *testing.T) {
 	}
 }
 
+func TestNoPlanErrors(t *testing.T) {
+	okTrace := Trace{Tools: []ToolCall{
+		{CallID: "c1", Tool: "plan", Args: map[string]any{"action": "set"}},
+		{CallID: "c2", Tool: "plan", Args: map[string]any{"action": "update"}},
+	}}
+	if res := NoPlanErrors().Eval(okTrace); !res.Pass {
+		t.Fatalf("expected clean plan trace to pass: %+v", res)
+	}
+
+	failedTrace := Trace{Tools: []ToolCall{
+		{CallID: "c1", Tool: "plan", Args: map[string]any{"action": "set"}},
+		{CallID: "c2", Tool: "plan", Args: map[string]any{"action": "update"}, ExitCode: 1, IsErr: true},
+	}}
+	res := NoPlanErrors().Eval(failedTrace)
+	if res.Pass {
+		t.Fatal("expected plan errors check to fail")
+	}
+	if !strings.Contains(res.Detail, "plan_errors=1") {
+		t.Fatalf("failure detail should include plan error count: %s", res.Detail)
+	}
+}
+
 func TestToolCalledBefore(t *testing.T) {
 	t.Run("passes when earlier precedes later", func(t *testing.T) {
 		trace := Trace{

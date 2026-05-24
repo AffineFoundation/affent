@@ -766,6 +766,7 @@ func TestAddUniqueDoesNotMutateInputWhenAppending(t *testing.T) {
 		RequiredToolOrder: []ToolOrderRequirement{
 			{Earlier: "plan", Later: "edit_file"},
 		},
+		RequireNoPlanErrors: true,
 		RequiredCommandBeforeTool: []CommandToolOrderRequirement{
 			{Command: `go test`, Tool: "edit_file"},
 		},

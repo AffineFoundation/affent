@@ -250,6 +250,7 @@ func TestBatchScenarioChecks_UsesSharedCheckLibrary(t *testing.T) {
 			"review": 1,
 		},
 		RequireNoDelegationErrors: true,
+		RequireNoPlanErrors:       true,
 		MaxSuccessfulToolCallsByTool: map[string]int{
 			"read_file": 1,
 		},
@@ -282,6 +283,7 @@ func TestBatchScenarioChecks_UsesSharedCheckLibrary(t *testing.T) {
 		"focused_task_called_at_least:explore:1",
 		"subagent_called_at_least:review:1",
 		"no_delegation_errors",
+		"no_plan_errors",
 		"max_successful_tool_calls:read_file:1",
 		"shell_command_matching:go test",
 		"shell_command_matching:gofmt",
@@ -344,6 +346,9 @@ func TestSelectBatchScenariosForSuite(t *testing.T) {
 			}
 			if len(scenario.RequiredToolOrder) != 1 || scenario.RequiredToolOrder[0] != (ToolOrderRequirement{Earlier: "plan", Later: "edit_file"}) {
 				t.Fatalf("plan-coding-repair order = %#v, want plan before edit_file", scenario.RequiredToolOrder)
+			}
+			if !scenario.RequireNoPlanErrors {
+				t.Fatal("plan-coding-repair should require clean plan usage")
 			}
 		}
 		if scenario.Name == "plan-not-for-simple-read" {

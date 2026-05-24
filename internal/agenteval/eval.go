@@ -55,6 +55,7 @@ type BatchScenario struct {
 	RequiredFocusedTaskCounts    map[string]int
 	RequiredSubagentModeCounts   map[string]int
 	RequireNoDelegationErrors    bool
+	RequireNoPlanErrors          bool
 	RequiredFinalText            []string
 	ForbiddenFinalText           []string
 	RequiredToolResultText       map[string][]string
@@ -654,6 +655,9 @@ func BatchScenarioChecks(scenario BatchScenario) []Check {
 	}
 	if scenario.RequireNoDelegationErrors {
 		checks = append(checks, NoDelegationErrors())
+	}
+	if scenario.RequireNoPlanErrors {
+		checks = append(checks, NoPlanErrors())
 	}
 	if scenario.MaxParentToolCalls > 0 {
 		checks = append(checks, MaxSuccessfulToolCalls(scenario.MaxParentToolCalls))

@@ -331,6 +331,19 @@ func NoDelegationErrors() Check {
 	}
 }
 
+func NoPlanErrors() Check {
+	return Check{
+		Name: "no_plan_errors",
+		Eval: func(t Trace) CheckResult {
+			stats := t.PlanStats()
+			if stats.Errors == 0 {
+				return CheckResult{Pass: true, Detail: fmt.Sprintf("plan_errors=%d", stats.Errors)}
+			}
+			return CheckResult{Pass: false, Detail: fmt.Sprintf("plan_errors=%d", stats.Errors)}
+		},
+	}
+}
+
 var toolStatsAccessors = map[string]func(ToolRuntimeStats) int64{
 	"tool_requests":            func(s ToolRuntimeStats) int64 { return int64(s.ToolRequests) },
 	"tool_name_canonicalized":  func(s ToolRuntimeStats) int64 { return int64(s.ToolNameCanonicalized) },
