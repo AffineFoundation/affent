@@ -15,6 +15,10 @@ EVAL_DOCKER_ARGS ?=
 EVAL_RUNTIME_EVAL_MODE ?= false
 EVAL_RUNTIME_EVAL_MODE_ARGS = $(if $(filter true yes 1,$(EVAL_RUNTIME_EVAL_MODE)),--runtime-eval-mode,)
 EVAL_MEMORY ?=
+SERVE_EVAL_CONTAINER_NAME ?= affent-eval-serve
+SERVE_EVAL_WORKSPACE ?= $(CURDIR)/.tmp/eval-serve
+SERVE_EVAL_PUBLISH ?= 127.0.0.1:7777:7777
+SERVE_EVAL_PERMISSIONS ?=
 SERVE_ARGS ?=
 SERVE_BASE_URL ?= $(or $(AFFENTSERVE_BASE_URL),$(AFFENTCTL_BASE_URL))
 SERVE_API_KEY ?= $(or $(AFFENTSERVE_API_KEY),$(AFFENTCTL_API_KEY))
@@ -65,7 +69,7 @@ if test "$$label" != "true"; then \
 fi
 endef
 
-.PHONY: affentctl affentctl-local doctor sandbox-start sandbox-status sandbox-stop image-build image-run image-serve image-serve-up image-serve-status image-serve-health image-serve-health-wait image-serve-logs image-serve-stop image-serve-restart image-serve-smoke eval-container eval-agent-container test-container
+.PHONY: affentctl affentctl-local doctor sandbox-start sandbox-status sandbox-stop image-build image-run image-serve image-serve-up image-serve-status image-serve-health image-serve-health-wait image-serve-logs image-serve-stop image-serve-restart image-serve-smoke eval-container eval-agent-container eval-serve-container eval-serve-browser-container test-container
 
 affentctl:
 	mkdir -p "$(dir $(AFFENTCTL))" .tmp/go-build .tmp/go-mod
@@ -296,6 +300,33 @@ eval-container: affentctl
 eval-agent-container: EVAL_RUNTIME_EVAL_MODE=true
 eval-agent-container: EVAL_MEMORY=false
 eval-agent-container: eval-container
+
+eval-serve-container:
+	@set -eu; \
+	args="--eval-mode"; \
+	for permission in $(SERVE_EVAL_PERMISSIONS); do \
+		case "$$permission" in \
+			none) ;; \
+			browser) args="$$args --browser=true" ;; \
+			browser-screenshot) args="$$args --browser=true --browser-screenshot=true" ;; \
+			web) args="$$args --web=true" ;; \
+			web-search) args="$$args --web=true --web-search=true" ;; \
+			memory) args="$$args --memory=true" ;; \
+			*) echo "unknown SERVE_EVAL_PERMISSIONS entry: $$permission (valid: none browser browser-screenshot web web-search memory)" >&2; exit 2 ;; \
+		esac; \
+	done; \
+	if test -n "$(SERVE_ARGS)"; then args="$$args $(SERVE_ARGS)"; fi; \
+	$(MAKE) image-serve-restart \
+		SERVE_CONTAINER_NAME="$(SERVE_EVAL_CONTAINER_NAME)" \
+		IMAGE_WORKSPACE="$(SERVE_EVAL_WORKSPACE)" \
+		SERVE_PUBLISH="$(SERVE_EVAL_PUBLISH)" \
+		SERVE_ARGS="$$args" \
+		CONTAINER_MEMORY="$(CONTAINER_MEMORY)" \
+		CONTAINER_CPUS="$(CONTAINER_CPUS)" \
+		CONTAINER_PIDS="$(CONTAINER_PIDS)"
+
+eval-serve-browser-container: SERVE_EVAL_PERMISSIONS=browser
+eval-serve-browser-container: eval-serve-container
 
 test-container:
 	mkdir -p .tmp/go-build .tmp/go-mod

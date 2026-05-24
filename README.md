@@ -70,6 +70,7 @@ make image-run IMAGE_COMMAND='affentctl --help'
 make image-serve-up
 make image-serve-smoke
 make eval-container EVAL_ARGS='--list'
+make eval-serve-browser-container
 make test-container TEST_PACKAGES=./internal/agent
 make test-container TEST_DIR=cmd/affentserve TEST_PACKAGES=./...
 ```
@@ -113,6 +114,14 @@ agent posture: it passes `--runtime-eval-mode` and explicitly sets
 `AFFENTCTL_MEMORY=false` inside the container. That is also the runtime eval
 default, but keeping it visible makes the benchmark surface obvious. Override
 with `EVAL_MEMORY=true` when you are evaluating memory behavior.
+
+`make eval-serve-container` is the API-server equivalent for external eval
+harnesses. It recreates an `affentserve` container in `--eval-mode` with the
+same default Docker memory/CPU/PID limits and a persistent `.tmp/eval-serve`
+workspace. The only eval-specific selector is `SERVE_EVAL_PERMISSIONS`, a
+space-separated list of environment permissions to opt back in: `browser`,
+`browser-screenshot`, `web`, `web-search`, or `memory`. Use
+`make eval-serve-browser-container` for browser-only evals such as LiveWeb.
 
 The equivalent host build, when you intentionally want to bypass Docker, is:
 
@@ -755,6 +764,12 @@ For the same posture inside Docker, `make eval-agent-container` wraps
 It keeps the same default memory/CPU/PID Docker limits and persistent
 `/workspace/.tmp/eval` work root. Set `EVAL_MEMORY=true` or export
 `AFFENTCTL_MEMORY_ONLY=true` for memory-specific evals.
+
+For OpenAI-compatible external harnesses that drive `affentserve`, use
+`make eval-serve-container` for a strict API agent or
+`make eval-serve-browser-container` for browser-only evals. To opt in a small
+set of other environment permissions, pass `SERVE_EVAL_PERMISSIONS`, for
+example `SERVE_EVAL_PERMISSIONS='web-search memory'`.
 
 Eval JSONL records include `schema_version=1` plus run metadata such as suite,
 model, optional `provider_label`, executor, temperature, and timeout so stored

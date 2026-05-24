@@ -263,6 +263,10 @@ func TestMakeImageServeEnablesBuiltinsInsideRuntimeContainer(t *testing.T) {
 		"SMOKE_API_KEY ?= test",
 		"SMOKE_MODEL ?= fake",
 		"SMOKE_SESSION_ID ?= smoke-persist",
+		"SERVE_EVAL_CONTAINER_NAME ?= affent-eval-serve",
+		"SERVE_EVAL_WORKSPACE ?= $(CURDIR)/.tmp/eval-serve",
+		"SERVE_EVAL_PUBLISH ?= 127.0.0.1:7777:7777",
+		"SERVE_EVAL_PERMISSIONS ?=",
 		"SERVE_PUBLISH_PARTS := $(subst :, ,$(SERVE_PUBLISH))",
 		"SERVE_PUBLISH_WORDS := $(words $(SERVE_PUBLISH_PARTS))",
 		"SERVE_HEALTH_HOST := $(if $(filter 3,$(SERVE_PUBLISH_WORDS)),$(word 1,$(SERVE_PUBLISH_PARTS)),127.0.0.1)",
@@ -281,6 +285,9 @@ func TestMakeImageServeEnablesBuiltinsInsideRuntimeContainer(t *testing.T) {
 		"image-serve-stop:",
 		"image-serve-restart:",
 		"image-serve-smoke:",
+		"eval-serve-container:",
+		"eval-serve-browser-container: SERVE_EVAL_PERMISSIONS=browser",
+		"eval-serve-browser-container: eval-serve-container",
 		"define require_affent_runtime_container",
 		`SERVE_CONTAINER_NAME is required`,
 		`make image-serve-up SERVE_CONTAINER_NAME=affent-serve`,
@@ -336,6 +343,17 @@ func TestMakeImageServeEnablesBuiltinsInsideRuntimeContainer(t *testing.T) {
 		`$(if $(SERVE_MODEL),--model "$(SERVE_MODEL)")`,
 		`--detach --rm=false --publish "$(SERVE_PUBLISH)"`,
 		"affentserve --listen \"$(SERVE_LISTEN)\" $(if $(SERVE_BASE_URL),--base-url \"$(SERVE_BASE_URL)\") $(if $(SERVE_API_KEY),--api-key \"$(SERVE_API_KEY)\") $(if $(SERVE_MODEL),--model \"$(SERVE_MODEL)\") --workspace-root \"$(SERVE_WORKSPACE_ROOT)\" --memory-root \"$(SERVE_MEMORY_ROOT)\" --builtins $(SERVE_ARGS)",
+		`args="--eval-mode"`,
+		`browser) args="$$args --browser=true"`,
+		`browser-screenshot) args="$$args --browser=true --browser-screenshot=true"`,
+		`web-search) args="$$args --web=true --web-search=true"`,
+		`memory) args="$$args --memory=true"`,
+		`unknown SERVE_EVAL_PERMISSIONS entry`,
+		`$(MAKE) image-serve-restart`,
+		`SERVE_CONTAINER_NAME="$(SERVE_EVAL_CONTAINER_NAME)"`,
+		`IMAGE_WORKSPACE="$(SERVE_EVAL_WORKSPACE)"`,
+		`SERVE_PUBLISH="$(SERVE_EVAL_PUBLISH)"`,
+		`SERVE_ARGS="$$args"`,
 	} {
 		if !strings.Contains(body, want) {
 			t.Fatalf("Makefile image-serve target missing %q", want)
@@ -394,6 +412,9 @@ func TestMakeOneClickContainerTargetsUseSharedLimits(t *testing.T) {
 		"EVAL_MEMORY ?=",
 		"eval-agent-container: EVAL_MEMORY=false",
 		"eval-agent-container: eval-container",
+		"eval-serve-container:",
+		"eval-serve-browser-container: SERVE_EVAL_PERMISSIONS=browser",
+		"eval-serve-browser-container: eval-serve-container",
 	} {
 		if !strings.Contains(body, want) {
 			t.Fatalf("Makefile one-click container targets missing %q", want)
@@ -443,6 +464,15 @@ func TestMakeOneClickContainerTargetsUseSharedLimits(t *testing.T) {
 		},
 		"eval-agent-container": {
 			`eval-agent-container: EVAL_RUNTIME_EVAL_MODE=true`,
+		},
+		"eval-serve-container": {
+			`args="--eval-mode"`,
+			`browser) args="$$args --browser=true"`,
+			`web-search) args="$$args --web=true --web-search=true"`,
+			`$(MAKE) image-serve-restart`,
+			`CONTAINER_MEMORY="$(CONTAINER_MEMORY)"`,
+			`CONTAINER_CPUS="$(CONTAINER_CPUS)"`,
+			`CONTAINER_PIDS="$(CONTAINER_PIDS)"`,
 		},
 		"test-container": {
 			`--memory "$(CONTAINER_MEMORY)"`,
