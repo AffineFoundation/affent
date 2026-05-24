@@ -78,6 +78,8 @@ type BatchRunner struct {
 	Temperature              string
 	Executor                 string
 	RuntimeEvalMode          bool
+	RuntimeMemory            bool
+	RuntimeMCPConfig         string
 	GoBin                    string
 	Timeout                  time.Duration
 	VerifierOutputCapBytes   int
@@ -382,6 +384,12 @@ func (r BatchRunner) affentctlRunArgs(workspace, tracePath string, scenario Batc
 	}
 	if r.RuntimeEvalMode {
 		args = append(args, "--eval-mode")
+	}
+	if r.RuntimeMemory {
+		args = append(args, "--memory=true")
+	}
+	if strings.TrimSpace(r.RuntimeMCPConfig) != "" {
+		args = append(args, "--mcp-config", r.RuntimeMCPConfig)
 	}
 	return args
 }

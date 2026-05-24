@@ -46,6 +46,8 @@ func run(args []string) int {
 		temperature       = fs.String("temperature", "0", "sampling temperature forwarded to affentctl")
 		executor          = fs.String("executor", "local", "affentctl tool executor for scenario runs: local, sandbox, or docker:<container>")
 		runtimeEvalMode   = fs.Bool("runtime-eval-mode", false, "pass affentctl --eval-mode to keep only the basic benchmark tool surface during scenario runs")
+		runtimeMemory     = fs.Bool("runtime-memory", false, "pass affentctl --memory=true during scenario runs; useful with --runtime-eval-mode for memory-only opt-in")
+		runtimeMCPConfig  = fs.String("runtime-mcp-config", "", "pass affentctl --mcp-config PATH during scenario runs; useful with --runtime-eval-mode to opt into MCP only")
 		timeout           = fs.Duration("timeout", 5*time.Minute, "per-scenario timeout")
 		verifierOutputCap = fs.Int("verifier-output-cap", agenteval.DefaultVerifierOutputCapBytes, "maximum verifier output bytes buffered per scenario")
 		jsonl             = fs.Bool("jsonl", false, "emit machine-readable JSONL records instead of text")
@@ -106,11 +108,13 @@ success and trace-level process quality.`)
 		Temperature:              *temperature,
 		Executor:                 *executor,
 		RuntimeEvalMode:          *runtimeEvalMode,
+		RuntimeMemory:            *runtimeMemory,
+		RuntimeMCPConfig:         *runtimeMCPConfig,
 		Timeout:                  *timeout,
 		VerifierOutputCapBytes:   *verifierOutputCap,
 		CleanupPassingWorkspaces: !*keepWorkspaces,
 	}
-	jsonlMeta := evalJSONLMetadataFromConfig(*suite, *model, *providerLabel, *executor, *temperature, *runtimeEvalMode, *timeout)
+	jsonlMeta := evalJSONLMetadataFromConfig(*suite, *model, *providerLabel, *executor, *temperature, *runtimeEvalMode, *runtimeMemory, *runtimeMCPConfig, *timeout)
 	ctx := context.Background()
 	var summary batchSummary
 	for _, scenario := range scenarios {
@@ -403,10 +407,12 @@ type evalJSONLMetadata struct {
 	Executor        string `json:"executor"`
 	Temperature     string `json:"temperature,omitempty"`
 	RuntimeEvalMode bool   `json:"runtime_eval_mode,omitempty"`
+	RuntimeMemory   bool   `json:"runtime_memory,omitempty"`
+	RuntimeMCP      bool   `json:"runtime_mcp,omitempty"`
 	TimeoutMS       int64  `json:"timeout_ms"`
 }
 
-func evalJSONLMetadataFromConfig(suite, model, providerLabel, executor, temperature string, runtimeEvalMode bool, timeout time.Duration) evalJSONLMetadata {
+func evalJSONLMetadataFromConfig(suite, model, providerLabel, executor, temperature string, runtimeEvalMode, runtimeMemory bool, runtimeMCPConfig string, timeout time.Duration) evalJSONLMetadata {
 	model = strings.TrimSpace(model)
 	if model == "" {
 		model = strings.TrimSpace(os.Getenv("AFFENTCTL_MODEL"))
@@ -423,6 +429,8 @@ func evalJSONLMetadataFromConfig(suite, model, providerLabel, executor, temperat
 		Executor:        normalizedEvalExecutor(executor),
 		Temperature:     strings.TrimSpace(temperature),
 		RuntimeEvalMode: runtimeEvalMode,
+		RuntimeMemory:   runtimeMemory,
+		RuntimeMCP:      strings.TrimSpace(runtimeMCPConfig) != "",
 		TimeoutMS:       timeout.Milliseconds(),
 	}
 }
