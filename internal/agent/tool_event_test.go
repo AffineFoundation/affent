@@ -50,6 +50,9 @@ func TestToolFailureKindForOutcome(t *testing.T) {
 	if got := toolFailureKindForOutcome("web_fetch", "[empty response: URL=https://example]\nFailure: kind=empty_response", false); got != "empty_response" {
 		t.Fatalf("no-evidence failure kind = %q, want empty_response", got)
 	}
+	if got := toolFailureKindForOutcome("web_search", "(no results)\nFailure: kind=no_results", false); got != "no_results" {
+		t.Fatalf("no-results failure kind = %q, want no_results", got)
+	}
 	if got := toolFailureKindForOutcome("read_file", "Failure: kind=blocked", false); got != "" {
 		t.Fatalf("successful read_file content should not set FailureKind, got %q", got)
 	}

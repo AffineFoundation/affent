@@ -392,7 +392,8 @@ func TestToolFailureKindAtLeast(t *testing.T) {
 		trace := Trace{Tools: []ToolCall{
 			{CallID: "c1", Tool: "web_fetch", ExitCode: 1, FailureKind: "blocked"},
 			{CallID: "c2", Tool: "web_fetch", ExitCode: 0, FailureKind: "empty_response"},
-			{CallID: "c3", Tool: "read_file", ExitCode: 0},
+			{CallID: "c3", Tool: "web_search", ExitCode: 0, FailureKind: "no_results"},
+			{CallID: "c4", Tool: "read_file", ExitCode: 0},
 		}}
 		if res := ToolFailureKindAtLeast("blocked", 1).Eval(trace); !res.Pass {
 			t.Fatalf("expected blocked fallback check to pass: %+v", res)
@@ -400,19 +401,26 @@ func TestToolFailureKindAtLeast(t *testing.T) {
 		if res := ToolFailureKindAtLeast("empty_response", 1).Eval(trace); !res.Pass {
 			t.Fatalf("expected empty_response fallback check to pass: %+v", res)
 		}
+		if res := ToolFailureKindAtLeast("no_results", 1).Eval(trace); !res.Pass {
+			t.Fatalf("expected no_results fallback check to pass: %+v", res)
+		}
 	})
 
 	t.Run("falls back to structured tool result text", func(t *testing.T) {
 		trace := Trace{Tools: []ToolCall{
 			{CallID: "c1", Tool: "web_fetch", ExitCode: 1, Result: "Error\nFailure: kind=blocked\nNext: use another source"},
 			{CallID: "c2", Tool: "web_fetch", ExitCode: 0, Result: "[empty response: URL=https://example]\nFailure: kind=empty_response"},
-			{CallID: "c3", Tool: "read_file", ExitCode: 0, Result: "Failure: kind=not_a_tool_failure"},
+			{CallID: "c3", Tool: "web_search", ExitCode: 0, Result: "(no results)\nFailure: kind=no_results"},
+			{CallID: "c4", Tool: "read_file", ExitCode: 0, Result: "Failure: kind=not_a_tool_failure"},
 		}}
 		if res := ToolFailureKindAtLeast("blocked", 1).Eval(trace); !res.Pass {
 			t.Fatalf("expected text fallback blocked check to pass: %+v", res)
 		}
 		if res := ToolFailureKindAtLeast("empty_response", 1).Eval(trace); !res.Pass {
 			t.Fatalf("expected text fallback empty_response check to pass: %+v", res)
+		}
+		if res := ToolFailureKindAtLeast("no_results", 1).Eval(trace); !res.Pass {
+			t.Fatalf("expected text fallback no_results check to pass: %+v", res)
 		}
 		if res := ToolFailureKindAtLeast("not_a_tool_failure", 1).Eval(trace); res.Pass {
 			t.Fatalf("successful read_file text must not count as failure kind: %+v", res)
@@ -423,16 +431,16 @@ func TestToolFailureKindAtLeast(t *testing.T) {
 func TestApplyTraceEventDerivesToolResultFailureKind(t *testing.T) {
 	trace := Trace{}
 	pending := map[string]int{}
-	req := json.RawMessage(`{"call_id":"c1","tool":"web_fetch","args":{"url":"https://example"}}`)
+	req := json.RawMessage(`{"call_id":"c1","tool":"web_search","args":{"query":"rare topic"}}`)
 	if _, err := applyTraceEvent(&trace, pending, sse.TypeToolRequest, req, ""); err != nil {
 		t.Fatal(err)
 	}
-	res := json.RawMessage(`{"call_id":"c1","result":"[empty response: URL=https://example]\nFailure: kind=empty_response","exit_code":0}`)
+	res := json.RawMessage(`{"call_id":"c1","result":"(no results)\nFailure: kind=no_results","exit_code":0}`)
 	if _, err := applyTraceEvent(&trace, pending, sse.TypeToolResult, res, ""); err != nil {
 		t.Fatal(err)
 	}
-	if len(trace.Tools) != 1 || trace.Tools[0].FailureKind != "empty_response" {
-		t.Fatalf("derived FailureKind = %+v, want empty_response", trace.Tools)
+	if len(trace.Tools) != 1 || trace.Tools[0].FailureKind != "no_results" {
+		t.Fatalf("derived FailureKind = %+v, want no_results", trace.Tools)
 	}
 }
 

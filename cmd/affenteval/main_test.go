@@ -1004,6 +1004,22 @@ func TestFailureKindsForResult(t *testing.T) {
 	}
 }
 
+func TestToolFailureKindHintIncludesWebSearchRecovery(t *testing.T) {
+	for _, c := range []struct {
+		kind string
+		want string
+	}{
+		{kind: "no_results", want: "refine with distinctive entities"},
+		{kind: "search_error", want: "web_search backend failed"},
+	} {
+		t.Run(c.kind, func(t *testing.T) {
+			if got := toolFailureKindHint(c.kind); !strings.Contains(got, c.want) {
+				t.Fatalf("toolFailureKindHint(%q) = %q, want contains %q", c.kind, got, c.want)
+			}
+		})
+	}
+}
+
 func testEvalJSONLMetadata() evalJSONLMetadata {
 	return evalJSONLMetadata{
 		SchemaVersion: evalJSONLSchemaVersion,
