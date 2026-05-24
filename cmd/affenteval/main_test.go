@@ -180,6 +180,12 @@ func TestPrintBatchResultIncludesTraceMetrics(t *testing.T) {
 			OutputOmittedBytes: 176,
 			OutputCapBytes:     1024,
 		},
+		Delegation: agenteval.DelegationStats{
+			FocusedTaskCalls:  2,
+			FocusedTaskByType: map[string]int{"explore": 1, "verify": 1},
+			SubagentCalls:     1,
+			SubagentByMode:    map[string]int{"review": 1},
+		},
 		Usage: agenteval.Usage{InputTokens: 100, OutputTokens: 25},
 	})
 	got := out.String()
@@ -187,7 +193,7 @@ func TestPrintBatchResultIncludesTraceMetrics(t *testing.T) {
 		"PASS sample (1.234s)",
 		"workspace: /tmp/ws (removed)",
 		"trace: /tmp/ws/trace.jsonl",
-		"metrics: tools=3 errors=2 repaired=1 canonicalized=1 loop_guard=2 forced_no_tools=1 tool_ms=45 tokens=100/25 trunc=args:1,results:1,artifacts:1 omitted=512/4096 end=completed",
+		"metrics: tools=3 errors=2 repaired=1 canonicalized=1 loop_guard=2 forced_no_tools=1 tool_ms=45 tokens=100/25 trunc=args:1,results:1,artifacts:1 omitted=512/4096 delegation=focused_tasks:2,subagents:1 focused_task_by_type=explore:1,verify:1 subagent_by_mode=review:1 end=completed",
 		`verifier: pass exit=0 duration=80ms output=1200 truncated omitted=176 cap=1024 command="go test ./..."`,
 	} {
 		if !strings.Contains(got, want) {

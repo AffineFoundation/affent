@@ -310,16 +310,21 @@ func printBatchSummary(w io.Writer, s batchSummary) {
 	if len(s.ToolRepairByKind) > 0 {
 		fmt.Fprintf(w, " repair_kinds=%s", formatStringIntCounts(s.ToolRepairByKind))
 	}
-	if s.FocusedTaskCalls > 0 || s.SubagentCalls > 0 {
-		fmt.Fprintf(w, " delegation=focused_tasks:%d,subagents:%d", s.FocusedTaskCalls, s.SubagentCalls)
-		if len(s.FocusedTaskByType) > 0 {
-			fmt.Fprintf(w, " focused_task_by_type=%s", formatStringIntCounts(s.FocusedTaskByType))
-		}
-		if len(s.SubagentByMode) > 0 {
-			fmt.Fprintf(w, " subagent_by_mode=%s", formatStringIntCounts(s.SubagentByMode))
-		}
-	}
+	printDelegationRollup(w, s.FocusedTaskCalls, s.FocusedTaskByType, s.SubagentCalls, s.SubagentByMode)
 	fmt.Fprintln(w)
+}
+
+func printDelegationRollup(w io.Writer, focusedTaskCalls int, focusedTaskByType map[string]int, subagentCalls int, subagentByMode map[string]int) {
+	if focusedTaskCalls == 0 && subagentCalls == 0 {
+		return
+	}
+	fmt.Fprintf(w, " delegation=focused_tasks:%d,subagents:%d", focusedTaskCalls, subagentCalls)
+	if len(focusedTaskByType) > 0 {
+		fmt.Fprintf(w, " focused_task_by_type=%s", formatStringIntCounts(focusedTaskByType))
+	}
+	if len(subagentByMode) > 0 {
+		fmt.Fprintf(w, " subagent_by_mode=%s", formatStringIntCounts(subagentByMode))
+	}
 }
 
 func formatFailureKinds(counts map[string]int) string {
@@ -667,6 +672,7 @@ func printBatchResult(w io.Writer, res agenteval.BatchResult) {
 	if len(res.Repair.ByKind) > 0 {
 		fmt.Fprintf(w, " repair_kinds=%s", formatStringIntCounts(res.Repair.ByKind))
 	}
+	printDelegationRollup(w, res.Delegation.FocusedTaskCalls, res.Delegation.FocusedTaskByType, res.Delegation.SubagentCalls, res.Delegation.SubagentByMode)
 	if res.TurnEndReason != "" {
 		fmt.Fprintf(w, " end=%s", res.TurnEndReason)
 	}
