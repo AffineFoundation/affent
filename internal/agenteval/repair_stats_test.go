@@ -81,6 +81,18 @@ func TestTrace_RepairStats_EmptyTraceKeepsMapsNil(t *testing.T) {
 	}
 }
 
+func TestToolRepairStats_HasAnyIncludesPartialRuntimeFields(t *testing.T) {
+	for _, got := range []ToolRepairStats{
+		{SucceededCalls: 1},
+		{FailedCalls: 1},
+		{ByKind: map[string]int{"alias_rename": 1}},
+	} {
+		if !got.HasAny() {
+			t.Fatalf("HasAny() = false for partial stats %+v", got)
+		}
+	}
+}
+
 func TestTrace_RepairStats_PrefersTurnEndToolStats(t *testing.T) {
 	tr := Trace{
 		ToolStats: ToolRuntimeStats{

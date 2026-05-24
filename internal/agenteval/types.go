@@ -247,7 +247,11 @@ type ToolRepairStats struct {
 }
 
 func (s ToolRepairStats) HasAny() bool {
-	return s.Calls > 0 || s.Notes > 0
+	return s.Calls > 0 ||
+		s.SucceededCalls > 0 ||
+		s.FailedCalls > 0 ||
+		s.Notes > 0 ||
+		len(s.ByKind) > 0
 }
 
 func (t Trace) RepairStats() ToolRepairStats {
