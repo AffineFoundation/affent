@@ -386,18 +386,18 @@ func subagentTool(deps SubagentDeps) *Tool {
 				MaxTurns int    `json:"max_turns"`
 			}](args)
 			if err != nil {
-				return "", fmt.Errorf("decode args: %w", err)
+				return "", fmt.Errorf("decode args: %w\nNext: retry subagent_run with only documented fields: task, mode, and max_turns", err)
 			}
 			p.Task = strings.TrimSpace(p.Task)
 			if p.Task == "" {
 				return "", errors.New("task is required. Next: retry with one concrete bounded investigation or review task for the isolated subagent")
 			}
 			if len(p.Task) > maxSubagentTaskBytes {
-				return "", fmt.Errorf("task is %d bytes; subagent_run supports tasks up to %d bytes", len(p.Task), maxSubagentTaskBytes)
+				return "", fmt.Errorf("task is %d bytes; subagent_run supports tasks up to %d bytes\nNext: retry with one narrower concrete objective and put bulky context in files or let the child inspect it", len(p.Task), maxSubagentTaskBytes)
 			}
 			p.Mode = strings.TrimSpace(p.Mode)
 			if len(p.Mode) > maxSubagentModeBytes {
-				return "", fmt.Errorf("mode is %d bytes; subagent_run supports modes up to %d bytes", len(p.Mode), maxSubagentModeBytes)
+				return "", fmt.Errorf("mode is %d bytes; subagent_run supports modes up to %d bytes\nNext: omit mode to use the default or retry with one listed mode from the schema", len(p.Mode), maxSubagentModeBytes)
 			}
 			if p.Mode == "" {
 				p.Mode = reg.Default()

@@ -847,6 +847,9 @@ func TestSubagentTool_InputValidation(t *testing.T) {
 		if err == nil || !strings.Contains(err.Error(), `unknown field "temperature"`) {
 			t.Errorf("unknown field must be rejected; got err=%v", err)
 		}
+		if err == nil || !strings.Contains(err.Error(), "Next:") {
+			t.Errorf("unknown field error should include Next step; got err=%v", err)
+		}
 	})
 
 	t.Run("oversized task is rejected", func(t *testing.T) {
@@ -855,6 +858,9 @@ func TestSubagentTool_InputValidation(t *testing.T) {
 		if err == nil || !strings.Contains(err.Error(), "subagent_run supports tasks up to") {
 			t.Errorf("oversized task must be rejected; got err=%v", err)
 		}
+		if err == nil || !strings.Contains(err.Error(), "Next:") {
+			t.Errorf("oversized task error should include Next step; got err=%v", err)
+		}
 	})
 
 	t.Run("oversized mode is rejected", func(t *testing.T) {
@@ -862,6 +868,9 @@ func TestSubagentTool_InputValidation(t *testing.T) {
 		_, err := tool.Execute(context.Background(), json.RawMessage(`{"task":"x","mode":"`+mode+`"}`))
 		if err == nil || !strings.Contains(err.Error(), "subagent_run supports modes up to") {
 			t.Errorf("oversized mode must be rejected; got err=%v", err)
+		}
+		if err == nil || !strings.Contains(err.Error(), "Next:") {
+			t.Errorf("oversized mode error should include Next step; got err=%v", err)
 		}
 	})
 
