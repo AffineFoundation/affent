@@ -952,8 +952,8 @@ func (l *Loop) runTurn(ctx context.Context, turnID, userText string, opts TurnOp
 			result, isErr := tools.dispatch(ctx, toolName, args)
 			toolDuration := time.Since(toolStart)
 			toolStats.ToolDurationMS += toolDuration.Milliseconds()
-			outcomeOK := toolOutcomeCountsAsSuccess(toolName, result, isErr)
-			if guardResult := loopGuard.recordOutcome(toolName, outcomeOK); guardResult != "" {
+			guardResult, outcomeOK := loopGuard.recordToolResult(toolName, args, result, isErr)
+			if guardResult != "" {
 				if result != "" {
 					result += "\n\n" + guardResult
 				} else {

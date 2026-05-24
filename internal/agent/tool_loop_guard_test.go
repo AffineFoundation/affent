@@ -144,6 +144,71 @@ func TestToolLoopGuard_WebFetchSuccessResetsFailureCount(t *testing.T) {
 	}
 }
 
+func TestToolLoopGuard_BlocksRepeatedFailedWebFetchURL(t *testing.T) {
+	g := newToolLoopGuard()
+	args := json.RawMessage(`{"url":"https://blocked.example/metrics"}`)
+	if got := g.recordAttempt("web_fetch", args); got != "" {
+		t.Fatalf("first fetch attempt should pass guard: %q", got)
+	}
+	guard, ok := g.recordToolResult("web_fetch", args, "http 403\nFailure: kind=blocked, status=403\nNext: use another source", true)
+	if guard != "" || ok {
+		t.Fatalf("first blocked fetch should record failure without immediate guard message; guard=%q ok=%v", guard, ok)
+	}
+	got := g.recordAttempt("web_fetch", args)
+	for _, want := range []string{"blocked repeated failed call", "web_fetch", "same effective URL", "kind=blocked", "do not retry the same failing URL"} {
+		if !strings.Contains(got, want) {
+			t.Fatalf("repeated blocked fetch guard missing %q: %q", want, got)
+		}
+	}
+	if got := g.recordAttempt("web_fetch", json.RawMessage(`{"url":"https://metrics.example/fallback"}`)); got != "" {
+		t.Fatalf("different fetch URL should remain available after one blocked URL: %q", got)
+	}
+}
+
+func TestToolLoopGuard_AllowsOneTransientWebFetchRetry(t *testing.T) {
+	g := newToolLoopGuard()
+	args := json.RawMessage(`{"url":"https://slow.example/metrics"}`)
+	if got := g.recordAttempt("web_fetch", args); got != "" {
+		t.Fatalf("first fetch attempt should pass guard: %q", got)
+	}
+	if guard, ok := g.recordToolResult("web_fetch", args, "deadline exceeded\nFailure: kind=timeout\nNext: retry once with the same canonical URL", true); guard != "" || ok {
+		t.Fatalf("first timeout should record failure without guard; guard=%q ok=%v", guard, ok)
+	}
+	if got := g.recordAttempt("web_fetch", args); got != "" {
+		t.Fatalf("one transient retry should be allowed, got %q", got)
+	}
+	if guard, ok := g.recordToolResult("web_fetch", args, "deadline exceeded again\nFailure: kind=timeout\nNext: switch source", true); guard == "" || ok {
+		t.Fatalf("second consecutive web_fetch failure should still trigger tool-level warning; guard=%q ok=%v", guard, ok)
+	}
+	got := g.recordAttempt("web_fetch", args)
+	for _, want := range []string{"blocked repeated failed call", "kind=timeout", "same effective URL"} {
+		if !strings.Contains(got, want) {
+			t.Fatalf("third timeout attempt guard missing %q: %q", want, got)
+		}
+	}
+}
+
+func TestToolLoopGuard_BlocksRepeatedFailedWebSearchQuery(t *testing.T) {
+	g := newToolLoopGuard()
+	args := json.RawMessage(`{"query":"Vega recent trend market metrics sentiment","num_results":5}`)
+	if got := g.recordAttempt("web_search", args); got != "" {
+		t.Fatalf("first search attempt should pass guard: %q", got)
+	}
+	guard, ok := g.recordToolResult("web_search", args, "(no results)\nFailure: kind=no_results\nNext: use distinctive entities", false)
+	if guard != "" || ok {
+		t.Fatalf("first no-results search should record failure without immediate guard; guard=%q ok=%v", guard, ok)
+	}
+	got := g.recordAttempt("web_search", args)
+	for _, want := range []string{"blocked repeated failed call", "web_search", "same effective query", "kind=no_results", "distinctive entities"} {
+		if !strings.Contains(got, want) {
+			t.Fatalf("repeated no-results search guard missing %q: %q", want, got)
+		}
+	}
+	if got := g.recordAttempt("web_search", json.RawMessage(`{"query":"Vega subnet 88 official domain metrics","num_results":5}`)); got != "" {
+		t.Fatalf("refined search query should remain available: %q", got)
+	}
+}
+
 func TestToolOutcomeCountsNoEvidenceWebFetchAsFailure(t *testing.T) {
 	cases := []struct {
 		name   string

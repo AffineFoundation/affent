@@ -42,6 +42,7 @@ type toolLoopGuard struct {
 	callCounts    map[toolCallKey]int
 	failureCounts map[string]int
 	haltedTools   map[string]bool
+	failedCalls   map[toolCallKey]toolCallFailure
 	// perToolCounts tracks total per-turn call counts for tools that
 	// appear in perTurnCallCaps. Entries are created lazily so most
 	// turns pay no allocation for this layer.
@@ -53,11 +54,17 @@ type toolCallKey struct {
 	hash uint64
 }
 
+type toolCallFailure struct {
+	count int
+	kind  string
+}
+
 func newToolLoopGuard() *toolLoopGuard {
 	return &toolLoopGuard{
 		callCounts:    map[toolCallKey]int{},
 		failureCounts: map[string]int{},
 		haltedTools:   map[string]bool{},
+		failedCalls:   map[toolCallKey]toolCallFailure{},
 	}
 }
 
@@ -83,6 +90,9 @@ func (g *toolLoopGuard) recordAttempt(tool string, args json.RawMessage) string 
 		g.perToolCounts[tool]++
 	}
 	key := toolCallKey{name: tool, hash: hashCanonicalToolArgs(tool, args)}
+	if failure := g.failedCalls[key]; shouldBlockRepeatedFailedCall(tool, failure) {
+		return repeatedFailedCallMessage(tool, failure)
+	}
 	g.callCounts[key]++
 	if g.callCounts[key] >= identicalToolCallBlockThreshold {
 		return fmt.Sprintf("loop_guard: blocked repeated call to %q with the same effective arguments after %d attempts this turn.\nNext: change the arguments, use a different tool, or answer from the evidence already gathered.", tool, g.callCounts[key])
@@ -120,6 +130,77 @@ func (g *toolLoopGuard) recordOutcome(tool string, ok bool) string {
 		return fmt.Sprintf("loop_guard: tool %q has failed %d consecutive times this turn. Stop retrying it and choose a different approach.\nNext: use a different tool, change the evidence source, or answer from the evidence already gathered.", tool, haltThreshold)
 	default:
 		return ""
+	}
+}
+
+func (g *toolLoopGuard) recordToolResult(tool string, args json.RawMessage, result string, isErr bool) (string, bool) {
+	outcomeOK := toolOutcomeCountsAsSuccess(tool, result, isErr)
+	guardResult := g.recordOutcome(tool, outcomeOK)
+	g.recordArgumentOutcome(tool, args, result, outcomeOK)
+	return guardResult, outcomeOK
+}
+
+func (g *toolLoopGuard) recordArgumentOutcome(tool string, args json.RawMessage, result string, ok bool) {
+	if g == nil || !tracksFailedArguments(tool) {
+		return
+	}
+	key := toolCallKey{name: tool, hash: hashCanonicalToolArgs(tool, args)}
+	if ok {
+		delete(g.failedCalls, key)
+		return
+	}
+	failure := g.failedCalls[key]
+	failure.count++
+	if kind := toolFailureKindForOutcome(tool, result, true); kind != "" {
+		failure.kind = kind
+	}
+	g.failedCalls[key] = failure
+}
+
+func tracksFailedArguments(tool string) bool {
+	switch tool {
+	case "web_fetch", "web_search":
+		return true
+	default:
+		return false
+	}
+}
+
+func shouldBlockRepeatedFailedCall(tool string, failure toolCallFailure) bool {
+	if failure.count <= 0 {
+		return false
+	}
+	switch tool {
+	case "web_fetch":
+		return shouldBlockRepeatedFailedFetch(failure)
+	case "web_search":
+		return true
+	default:
+		return false
+	}
+}
+
+func shouldBlockRepeatedFailedFetch(failure toolCallFailure) bool {
+	switch failure.kind {
+	case "timeout", "network_error", "server_error":
+		return failure.count >= 2
+	default:
+		return true
+	}
+}
+
+func repeatedFailedCallMessage(tool string, failure toolCallFailure) string {
+	kind := failure.kind
+	if kind == "" {
+		kind = "unknown"
+	}
+	switch tool {
+	case "web_fetch":
+		return fmt.Sprintf("loop_guard: blocked repeated failed call to %q with the same effective URL after previous Failure kind=%s.\nNext: do not retry the same failing URL; choose a different source, use another available inspection tool, or answer with clearly marked gaps.", tool, kind)
+	case "web_search":
+		return fmt.Sprintf("loop_guard: blocked repeated failed call to %q with the same effective query after previous Failure kind=%s.\nNext: change the query with more distinctive entities, official domains, tickers, subnet ids, or source terms; use known source URLs if available, or answer with clearly marked gaps.", tool, kind)
+	default:
+		return fmt.Sprintf("loop_guard: blocked repeated failed call to %q with the same effective arguments after previous Failure kind=%s.\nNext: change the arguments, use a different tool, or answer from the evidence already gathered.", tool, kind)
 	}
 }
 
