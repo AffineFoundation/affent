@@ -97,6 +97,13 @@ func TestRegistrySystemPromptComposition(t *testing.T) {
 			t.Fatalf("memory-only registry prompt should not include %q:\n%s", forbidden, prompt)
 		}
 	}
+	emptyPrompt := WithRegistrySystemGuidance("", reg)
+	if !strings.Contains(emptyPrompt, "only tool is 'memory'") || !strings.Contains(emptyPrompt, "Memory retrieval:") {
+		t.Fatalf("empty prompt should compose memory-only base + guidance:\n%s", emptyPrompt)
+	}
+	if strings.Contains(emptyPrompt, "'shell' tool") || strings.Contains(emptyPrompt, "read_file") {
+		t.Fatalf("empty memory-only prompt should not fall back to default workspace prompt:\n%s", emptyPrompt)
+	}
 
 	reg.Add(&Tool{Name: PlanToolName})
 	reg.Add(&Tool{Name: SubagentToolName})
@@ -120,6 +127,16 @@ func TestRegistrySystemPromptComposition(t *testing.T) {
 	reg.Add(&Tool{Name: "read_file"})
 	if got := BaseSystemPromptForRegistry(reg); got != LimitedToolSystemPrompt {
 		t.Fatal("memory plus partial file tools must not use the memory-only prompt")
+	}
+
+	reg = NewRegistry()
+	reg.Add(&Tool{Name: SessionSearchToolName})
+	emptyPrompt = WithRegistrySystemGuidance("", reg)
+	if !strings.Contains(emptyPrompt, "limited-tool runtime") || !strings.Contains(emptyPrompt, "Session history retrieval:") {
+		t.Fatalf("empty session-search prompt should compose limited base + guidance:\n%s", emptyPrompt)
+	}
+	if strings.Contains(emptyPrompt, "'shell' tool") || strings.Contains(emptyPrompt, "read_file") {
+		t.Fatalf("empty session-search prompt should not fall back to default workspace prompt:\n%s", emptyPrompt)
 	}
 }
 

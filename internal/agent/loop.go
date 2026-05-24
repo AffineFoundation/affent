@@ -421,6 +421,9 @@ func WithRegistrySystemGuidance(prompt string, reg *Registry) string {
 	if reg == nil {
 		return prompt
 	}
+	if strings.TrimSpace(prompt) == "" {
+		prompt = BaseSystemPromptForRegistry(reg)
+	}
 	if hasRegisteredTool(reg, "memory") {
 		prompt = WithMemorySystemGuidance(prompt)
 	}
