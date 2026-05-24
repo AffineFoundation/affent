@@ -230,6 +230,22 @@ func TestParseFlagsAndConfig_EvalModeDisablesNonBasicSurfaces(t *testing.T) {
 	if !cfg.EnableWeb || !cfg.EnableWebSearch {
 		t.Fatal("--eval-mode --web=true --web-search=true should opt web_search back in")
 	}
+
+	cfg, err = parseFlagsAndConfig([]string{
+		"--base-url", "https://example/v1",
+		"--model", "demo",
+		"--eval-mode",
+		"--web=true",
+	})
+	if err != nil {
+		t.Fatalf("parseFlagsAndConfig explicit web fetch: %v", err)
+	}
+	if !cfg.EnableWeb {
+		t.Fatal("--eval-mode --web=true should opt web_fetch back in")
+	}
+	if cfg.EnableWebSearch {
+		t.Fatalf("--eval-mode --web=true must not imply web_search: %+v", cfg)
+	}
 }
 
 func TestParseFlagsAndConfig_NetworkToolsFromEnv(t *testing.T) {

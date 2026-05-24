@@ -283,6 +283,17 @@ func TestResolveServeRuntimeCapabilitiesEvalMode(t *testing.T) {
 		t.Fatalf("explicit web search should be available in eval mode: %+v", caps)
 	}
 
+	webFetchOnly := base
+	webFetchOnly.enableWebSet = true
+	webFetchOnly.enableWebSearchSet = false
+	caps = resolveServeRuntimeCapabilities(webFetchOnly)
+	if !caps.Web {
+		t.Fatalf("explicit web should be available in eval mode: %+v", caps)
+	}
+	if caps.WebSearch {
+		t.Fatalf("eval-mode web opt-in must not imply web_search: %+v", caps)
+	}
+
 	memory := base
 	memory.enableMemorySet = true
 	caps = resolveServeRuntimeCapabilities(memory)

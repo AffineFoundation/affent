@@ -1275,6 +1275,28 @@ func TestSessionPool_EvalModeRegistersOnlyBasicTools(t *testing.T) {
 	if s.loop.SkillProvider != nil {
 		t.Fatal("eval mode should disable active skill/provider injection")
 	}
+	pool.cfg.EnableWeb = true
+	pool.cfg.enableWebSet = true
+	pool.cfg.EnableWebSearch = false
+	pool.cfg.enableWebSearchSet = false
+	sWithWebFetch, err := pool.buildSession("eval-basic-web-fetch")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = sWithWebFetch.Close() }()
+	if _, ok := sWithWebFetch.registry.Get("web_fetch"); !ok {
+		t.Fatal("explicit web should register web_fetch in eval mode")
+	}
+	if _, ok := sWithWebFetch.registry.Get("web_search"); ok {
+		t.Fatal("explicit web without web_search should not register web_search in eval mode")
+	}
+	webMsgs := sWithWebFetch.conv.Snapshot()
+	if len(webMsgs) == 0 || !strings.Contains(webMsgs[0].Content, "External research:") {
+		t.Fatalf("explicit-web eval prompt should include external research guidance: %+v", webMsgs)
+	}
+	if strings.Contains(webMsgs[0].Content, "web_search") {
+		t.Fatalf("fetch-only eval prompt should not mention unavailable web_search:\n%s", webMsgs[0].Content)
+	}
 	if got := agent.BuiltinSkillProvider("请通过浏览器访问 https://example.com 并提取信息"); got == "" {
 		t.Fatal("test prompt should trigger the built-in skill provider outside eval mode")
 	}
