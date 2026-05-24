@@ -74,7 +74,11 @@ func NavigateTool(s *Session) *agent.Tool {
 			if !strings.HasPrefix(args.URL, "http://") && !strings.HasPrefix(args.URL, "https://") {
 				return "", fmt.Errorf("url must start with http:// or https:// (got %q)\nNext: retry browser_navigate with the full URL including the http:// or https:// scheme", args.URL)
 			}
-			return runNavigate(ctx, s, args.URL, args.WaitUntil)
+			waitUntil, err := normalizeBrowserLoadWait(args.WaitUntil, "wait_until")
+			if err != nil {
+				return "", err
+			}
+			return runNavigate(ctx, s, args.URL, waitUntil)
 		},
 	}
 }
@@ -112,8 +116,9 @@ func runNavigate(ctx context.Context, s *Session, url, waitUntil string) (string
 }
 
 func waitForLoad(ctx context.Context, s *Session, waitUntil string, timeout time.Duration) error {
-	if waitUntil == "" {
-		waitUntil = "load"
+	waitUntil, err := normalizeBrowserLoadWait(waitUntil, "wait_until")
+	if err != nil {
+		return err
 	}
 	innerCtx, cancel := context.WithTimeout(ctx, timeout)
 	defer cancel()
@@ -134,8 +139,20 @@ func waitForLoad(ctx context.Context, s *Session, waitUntil string, timeout time
 		return waitDOMContentLoaded(innerCtx, page, timeout)
 	case "networkidle":
 		return page.WaitIdle(timeout)
+	}
+	return nil
+}
+
+func normalizeBrowserLoadWait(waitUntil, argName string) (string, error) {
+	waitUntil = strings.TrimSpace(waitUntil)
+	if waitUntil == "" {
+		return "load", nil
+	}
+	switch waitUntil {
+	case "load", "domcontentloaded", "networkidle":
+		return waitUntil, nil
 	default:
-		return fmt.Errorf("unknown wait_until %q", waitUntil)
+		return "", fmt.Errorf("%s %q is not supported\nNext: retry with one of load, domcontentloaded, or networkidle", argName, waitUntil)
 	}
 }
 
@@ -245,11 +262,15 @@ func WaitTool(s *Session) *agent.Tool {
 			if args.For == "" {
 				return "", errors.New("'for' is required. Next: retry with one of load, domcontentloaded, networkidle, or text")
 			}
+			waitFor, err := normalizeBrowserWaitFor(args.For)
+			if err != nil {
+				return "", err
+			}
 			timeout, err := resolveBrowserWaitTimeout(args.TimeoutMS)
 			if err != nil {
 				return "", fmt.Errorf("%w\nNext: omit timeout_ms to use the default, or retry with a value between %d and %d", err, minBrowserWaitTimeoutMS, maxBrowserWaitTimeoutMS)
 			}
-			if args.For == "text" {
+			if waitFor == "text" {
 				if args.Value == "" {
 					return "", errors.New("'value' is required when 'for'='text'. Next: retry with the exact short substring you expect to appear")
 				}
@@ -260,12 +281,12 @@ func WaitTool(s *Session) *agent.Tool {
 			if s.page == nil {
 				return "", ErrNoPage
 			}
-			if args.For == "text" {
+			if waitFor == "text" {
 				if err := waitForText(ctx, s, args.Value, timeout); err != nil {
 					return "", err
 				}
 			} else {
-				if err := waitForLoad(ctx, s, args.For, timeout); err != nil {
+				if err := waitForLoad(ctx, s, waitFor, timeout); err != nil {
 					return "", err
 				}
 			}
@@ -276,6 +297,20 @@ func WaitTool(s *Session) *agent.Tool {
 			return snap.Format(), nil
 		},
 	}
+}
+
+func normalizeBrowserWaitFor(waitFor string) (string, error) {
+	waitFor = strings.TrimSpace(waitFor)
+	switch waitFor {
+	case "load", "domcontentloaded", "networkidle", "text":
+		return waitFor, nil
+	default:
+		return "", fmt.Errorf("'for' value %q is not supported\nNext: retry browser_wait with for=load, for=domcontentloaded, for=networkidle, or for=text", waitFor)
+	}
+}
+
+func browserWaitTextTimeoutError(timeout time.Duration, substr string) error {
+	return fmt.Errorf("timed out after %s waiting for text %q\nNext: call browser_snapshot to inspect current text, retry with a shorter visible substring, or continue if the page already contains enough evidence", timeout, substr)
 }
 
 func resolveBrowserWaitTimeout(timeoutMS int) (time.Duration, error) {
@@ -296,7 +331,7 @@ func waitForText(ctx context.Context, s *Session, substr string, timeout time.Du
 			return ctx.Err()
 		}
 		if time.Now().After(deadline) {
-			return fmt.Errorf("timed out after %s waiting for text %q", timeout, substr)
+			return browserWaitTextTimeoutError(timeout, substr)
 		}
 		// Eval'd as JS so the page's runtime checks; cheaper than
 		// shipping the body to Go on every poll.

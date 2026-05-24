@@ -76,6 +76,10 @@ func TestNavigateToolRejectsBlankURLAndPublishesMinLength(t *testing.T) {
 	if err == nil || !strings.Contains(err.Error(), "url must start with") || !strings.Contains(err.Error(), "Next:") {
 		t.Fatalf("scheme error = %v, want Next guidance", err)
 	}
+	_, err = tool.Execute(context.Background(), json.RawMessage(`{"url":"https://example.com","wait_until":"paint"}`))
+	if err == nil || !strings.Contains(err.Error(), `wait_until "paint" is not supported`) || !strings.Contains(err.Error(), "Next:") {
+		t.Fatalf("invalid wait_until error = %v, want Next guidance before navigation", err)
+	}
 	_, err = tool.Execute(context.Background(), json.RawMessage(`{"url":"https://example.com","query":"ignored"}`))
 	if err == nil || !strings.Contains(err.Error(), "unknown field") || !strings.Contains(err.Error(), "query") || !strings.Contains(err.Error(), "Next:") {
 		t.Fatalf("unknown arg error = %v, want Next guidance", err)
@@ -103,6 +107,10 @@ func TestWaitToolRejectsBlankRequiredTextAndPublishesMinLength(t *testing.T) {
 	if !strings.Contains(err.Error(), "Next:") {
 		t.Fatalf("blank for error should include Next step, got %v", err)
 	}
+	_, err = tool.Execute(context.Background(), json.RawMessage(`{"for":"paint"}`))
+	if err == nil || !strings.Contains(err.Error(), `'for' value "paint" is not supported`) || !strings.Contains(err.Error(), "Next:") {
+		t.Fatalf("unknown for error = %v, want Next guidance before page check", err)
+	}
 	_, err = tool.Execute(context.Background(), json.RawMessage(`{"for":"text","value":"   "}`))
 	if err == nil || !strings.Contains(err.Error(), "'value' is required") {
 		t.Fatalf("blank text value error = %v, want value is required", err)
@@ -125,6 +133,15 @@ func TestWaitToolRejectsBlankRequiredTextAndPublishesMinLength(t *testing.T) {
 	_, err = tool.Execute(context.Background(), json.RawMessage(`{"for":"load","url":"https://example.com"}`))
 	if err == nil || !strings.Contains(err.Error(), "unknown field") || !strings.Contains(err.Error(), "url") || !strings.Contains(err.Error(), "Next:") {
 		t.Fatalf("unknown arg error = %v, want Next guidance", err)
+	}
+}
+
+func TestBrowserWaitTextTimeoutErrorHasRecoveryHint(t *testing.T) {
+	err := browserWaitTextTimeoutError(time.Second, "Done")
+	for _, want := range []string{"timed out", "Next:", "browser_snapshot", "shorter visible substring"} {
+		if !strings.Contains(err.Error(), want) {
+			t.Fatalf("timeout guidance missing %q: %v", want, err)
+		}
 	}
 }
 
