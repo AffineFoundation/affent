@@ -229,7 +229,7 @@ func ToolRequestRepaired(toolName string) Check {
 		Name: "tool_request_repaired:" + toolName,
 		Eval: func(t Trace) CheckResult {
 			for _, c := range t.Tools {
-				if c.Tool == toolName && (c.Canonicalized || c.ArgsRepaired) {
+				if c.Tool == toolName && toolCallRepaired(c) {
 					return CheckResult{Pass: true, Detail: fmt.Sprintf("matched call_id=%s notes=%v", c.CallID, c.RepairNotes)}
 				}
 			}
@@ -239,6 +239,10 @@ func ToolRequestRepaired(toolName string) Check {
 			}
 		},
 	}
+}
+
+func toolCallRepaired(c ToolCall) bool {
+	return c.Canonicalized || c.ArgsRepaired || len(c.RepairNotes) > 0
 }
 
 func ToolStatsAtLeast(field string, min int) Check {

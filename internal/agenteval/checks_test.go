@@ -290,11 +290,15 @@ func TestToolResultArtifactChecksSizeAndSymlinkEscape(t *testing.T) {
 func TestToolRequestRepaired(t *testing.T) {
 	trace := Trace{Tools: []ToolCall{
 		{CallID: "c1", Tool: "read_file", ArgsRepaired: true, RepairNotes: []string{"renamed field file_path to path"}},
+		{CallID: "c2", Tool: "shell", RepairNotes: []string{"coerced field timeout_sec to integer"}},
 	}}
 	if res := ToolRequestRepaired("read_file").Eval(trace); !res.Pass {
 		t.Fatalf("expected repaired request to pass: %+v", res)
 	}
-	res := ToolRequestRepaired("shell").Eval(trace)
+	if res := ToolRequestRepaired("shell").Eval(trace); !res.Pass {
+		t.Fatalf("expected repair notes alone to count as repaired request: %+v", res)
+	}
+	res := ToolRequestRepaired("write_file").Eval(trace)
 	if res.Pass {
 		t.Fatal("expected missing repaired request to fail")
 	}
