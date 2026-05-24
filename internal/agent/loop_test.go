@@ -120,6 +120,88 @@ func TestWithExternalResearchSystemGuidance_AppendsOnce(t *testing.T) {
 	}
 }
 
+func TestExternalResearchGuidanceMatchesToolSurface(t *testing.T) {
+	cases := []struct {
+		name      string
+		surface   externalResearchToolSurface
+		want      []string
+		forbidden []string
+	}{
+		{
+			name:    "search fetch browser",
+			surface: externalResearchToolSurface{WebSearch: true, WebFetch: true, Browser: true},
+			want: []string{
+				"web_search for discovery",
+				"Use web_fetch",
+				"browser_navigate/browser_snapshot",
+				"from search results",
+			},
+		},
+		{
+			name:    "search fetch only",
+			surface: externalResearchToolSurface{WebSearch: true, WebFetch: true},
+			want: []string{
+				"web_search for discovery",
+				"Use web_fetch",
+				"from search results",
+			},
+			forbidden: []string{"browser_navigate", "browser_snapshot", "browser tools"},
+		},
+		{
+			name:    "fetch only",
+			surface: externalResearchToolSurface{WebFetch: true},
+			want: []string{
+				"Use web_fetch",
+				"try another known public URL",
+			},
+			forbidden: []string{"web_search", "search results", "browser_navigate", "browser_snapshot", "browser tools"},
+		},
+		{
+			name:    "fetch browser",
+			surface: externalResearchToolSurface{WebFetch: true, Browser: true},
+			want: []string{
+				"Use web_fetch",
+				"browser_navigate/browser_snapshot for rendered pages",
+				"try another known public URL",
+			},
+			forbidden: []string{"web_search", "search results", "browser tools"},
+		},
+		{
+			name:    "browser only",
+			surface: externalResearchToolSurface{Browser: true},
+			want: []string{
+				"browser_navigate/browser_snapshot for page inspection",
+				"unavailable discovery tools",
+			},
+			forbidden: []string{"web_search", "web_fetch"},
+		},
+		{
+			name:    "search only",
+			surface: externalResearchToolSurface{WebSearch: true},
+			want: []string{
+				"web_search to discover and compare source snippets",
+				"full-page reading is unavailable",
+			},
+			forbidden: []string{"web_fetch", "browser_navigate", "browser_snapshot", "browser tools"},
+		},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			got := WithExternalResearchSystemGuidance("be helpful", c.surface)
+			for _, want := range c.want {
+				if !strings.Contains(got, want) {
+					t.Fatalf("guidance missing %q:\n%s", want, got)
+				}
+			}
+			for _, forbidden := range c.forbidden {
+				if strings.Contains(got, forbidden) {
+					t.Fatalf("guidance should not mention unavailable %q:\n%s", forbidden, got)
+				}
+			}
+		})
+	}
+}
+
 func TestRegistrySystemPromptComposition(t *testing.T) {
 	reg := NewRegistry()
 	reg.Add(&Tool{Name: MemoryToolName})
