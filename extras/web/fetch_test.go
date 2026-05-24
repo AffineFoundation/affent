@@ -260,6 +260,54 @@ func TestFetchTool_NonText(t *testing.T) {
 	}
 }
 
+func TestFetchTool_BotChallengePageReportsBlockedNoEvidence(t *testing.T) {
+	cases := []struct {
+		name string
+		body string
+		want string
+	}{
+		{
+			name: "duckduckgo challenge",
+			body: `<html><body><p>Unfortunately, bots use DuckDuckGo too.</p><p>Please complete the following challenge to confirm this search was made by a human.</p></body></html>`,
+			want: "anti-bot challenge",
+		},
+		{
+			name: "search challenge",
+			body: `<html><body>If you're having trouble accessing Google Search, please click here.</body></html>`,
+			want: "search challenge page",
+		},
+		{
+			name: "cookie challenge",
+			body: `<html><body>Enable JavaScript and cookies to continue</body></html>`,
+			want: "javascript/cookie challenge",
+		},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				w.Header().Set("Content-Type", "text/html; charset=utf-8")
+				w.Write([]byte(c.body))
+			}))
+			defer srv.Close()
+
+			tool := FetchTool(FetchConfig{AllowPrivateNetwork: true})
+			args, _ := json.Marshal(map[string]string{"url": srv.URL})
+			out, err := tool.Execute(context.Background(), args)
+			if err != nil {
+				t.Fatalf("Execute: %v", err)
+			}
+			for _, want := range []string{"blocked response", "Failure: kind=blocked", "Next:", "challenge/error page", "blocked/unverified", c.want} {
+				if !strings.Contains(out, want) {
+					t.Fatalf("blocked challenge output missing %q:\n%s", want, out)
+				}
+			}
+			if strings.Contains(out, "DuckDuckGo too") || strings.Contains(out, "Google Search") {
+				t.Fatalf("challenge body should not be treated as source evidence:\n%s", out)
+			}
+		})
+	}
+}
+
 func TestFetchTool_RequiresURL(t *testing.T) {
 	tool := FetchTool(FetchConfig{AllowPrivateNetwork: true})
 	_, err := tool.Execute(context.Background(), json.RawMessage(`{}`))

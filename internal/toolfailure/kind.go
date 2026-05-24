@@ -72,6 +72,7 @@ func IsNoEvidenceResult(tool, result string) bool {
 func IsNoEvidenceWebFetchResult(result string) bool {
 	result = strings.TrimSpace(result)
 	return strings.HasPrefix(result, "[empty response:") ||
+		strings.HasPrefix(result, "[blocked response:") ||
 		strings.HasPrefix(result, "[non-text response:")
 }
 

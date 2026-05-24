@@ -190,6 +190,12 @@ func fetch(ctx context.Context, cfg FetchConfig, requestURL string) (string, err
 		return emptyFetchResult(finalURL, ct), nil
 	}
 	out := renderBody(body, ct, finalURL)
+	if strings.TrimSpace(out) == "" {
+		return emptyFetchResult(finalURL, ct), nil
+	}
+	if reason := blockedPageReason(out, finalURL); reason != "" {
+		return blockedFetchResult(finalURL, ct, reason), nil
+	}
 
 	if len(out) > cfg.MaxResultChars {
 		// Snap back to a UTF-8 rune boundary so accented Latin, CJK,
@@ -209,6 +215,10 @@ func fetch(ctx context.Context, cfg FetchConfig, requestURL string) (string, err
 
 func emptyFetchResult(finalURL, contentType string) string {
 	return fmt.Sprintf("[empty response: URL=%s, Content-Type=%q]\nFailure: kind=empty_response\nNext: do not treat this as page evidence; use another available source, fetch a text/API/HTML version, use an available rendering tool/source for rendered pages, or answer with this source marked as empty/unverified.", finalURL, contentType)
+}
+
+func blockedFetchResult(finalURL, contentType, reason string) string {
+	return fmt.Sprintf("[blocked response: URL=%s, Content-Type=%q, Reason=%q]\nFailure: kind=blocked\nNext: do not treat this challenge/error page as source evidence; use an available search result snippet only as weak evidence, switch to a canonical API/text/source page, use an available rendering tool/source, or mark this source as blocked/unverified.", finalURL, contentType, reason)
 }
 
 func recoverableFetchError(requestURL, finalURL string, status int, err error) error {
@@ -400,6 +410,34 @@ func redirectedURLSuffix(requestURL, finalURL string) string {
 		return ""
 	}
 	return "\nFinal URL: " + finalURL
+}
+
+func blockedPageReason(markdown, finalURL string) string {
+	lower := strings.ToLower(markdown)
+	markers := []struct {
+		needle string
+		reason string
+	}{
+		{"unfortunately, bots use duckduckgo too", "anti-bot challenge"},
+		{"please complete the following challenge to confirm", "anti-bot challenge"},
+		{"our systems have detected unusual traffic", "anti-bot challenge"},
+		{"if you're having trouble accessing google search", "search challenge page"},
+		{"enable javascript and cookies to continue", "javascript/cookie challenge"},
+		{"checking if the site connection is secure", "javascript/cookie challenge"},
+		{"attention required! | cloudflare", "cloudflare challenge"},
+	}
+	for _, marker := range markers {
+		if strings.Contains(lower, marker.needle) {
+			return marker.reason
+		}
+	}
+	host := strings.ToLower(domainOf(finalURL))
+	if (strings.Contains(host, "://x.com") || strings.Contains(host, "://twitter.com")) &&
+		strings.Contains(lower, "something went wrong") &&
+		strings.Contains(lower, "privacy related extensions") {
+		return "social site error page"
+	}
+	return ""
 }
 
 // newGuardedClient builds an http.Client whose Transport refuses to

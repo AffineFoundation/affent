@@ -219,6 +219,7 @@ func TestToolOutcomeCountsNoEvidenceWebFetchAsFailure(t *testing.T) {
 	}{
 		{name: "web fetch text", tool: "web_fetch", result: "readable page text", want: true},
 		{name: "web fetch empty", tool: "web_fetch", result: "[empty response: URL=https://example]", want: false},
+		{name: "web fetch blocked challenge", tool: "web_fetch", result: "[blocked response: URL=https://example]\nFailure: kind=blocked", want: false},
 		{name: "web fetch non text", tool: "web_fetch", result: "  [non-text response: URL=https://example]  ", want: false},
 		{name: "web fetch hard error", tool: "web_fetch", result: "Error: http 403", isErr: true, want: false},
 		{name: "web search no results", tool: "web_search", result: "(no results)\nFailure: kind=no_results", want: false},

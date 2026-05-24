@@ -250,7 +250,8 @@ return no usable URLs. The tools surface those cases as structured failures so
 the agent can switch source instead of burning turns:
 
 - `Failure: kind=blocked`: the source refused direct fetch, commonly HTTP 401
-  or 403.
+  or 403, or returned a successful HTTP response that is only an anti-bot,
+  cookie/JavaScript, search-challenge, or social-site error page.
 - `Failure: kind=empty_response`: the source returned a successful HTTP
   response with no readable body.
 - `Failure: kind=non_text`: the source returned an image, PDF, archive, or

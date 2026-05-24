@@ -360,7 +360,7 @@ func externalResearchSystemGuidance(surface externalResearchToolSurface) string 
 		b.WriteString("\n- For current or unfamiliar public facts, inspect the smallest set of relevant public sources available through the registered tools; do not pretend unavailable discovery tools are available.")
 	}
 	if surface.WebFetch && surface.Browser {
-		b.WriteString("\n- Use web_fetch for direct authoritative pages and APIs. Use browser_navigate/browser_snapshot for dynamic or rendered sites instead of shell/curl scraping.")
+		b.WriteString("\n- Use web_fetch for direct authoritative pages, raw docs, repositories, APIs, and text endpoints. Use browser_navigate/browser_snapshot for dynamic dashboards, search-result pages, social pages, or pages likely to return bot/challenge shells to direct fetch.")
 	} else if surface.WebFetch {
 		b.WriteString("\n- Use web_fetch to read authoritative pages and APIs. Prefer official docs, source repositories, block explorers, filings, API docs, and primary project sites over summaries.")
 	} else if surface.Browser {
