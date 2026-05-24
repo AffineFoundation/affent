@@ -184,11 +184,14 @@ func TestBuildFocusedTaskResult_PropagatesRuntimeError(t *testing.T) {
 func TestSanitizeFindings_DropsEmptyClaimsAndTruncatesEvidence(t *testing.T) {
 	long := strings.Repeat("e", maxFocusedTaskFindingEvidenceBytes+200)
 	in := []FocusedTaskFinding{
-		{Claim: "ok", Evidence: long},
+		{Claim: "ok", Evidence: long, Source: "file:1"},
 		{Claim: "  ", Evidence: "should drop"},
-		{Claim: "two"},
+		{Claim: "two", Source: "memory:topic"},
 	}
-	out := sanitizeFindings(in)
+	out, warnings := sanitizeFindings(in)
+	if len(warnings) != 0 {
+		t.Fatalf("unexpected warnings: %+v", warnings)
+	}
 	if len(out) != 2 {
 		t.Fatalf("expected 2 findings (empty-claim dropped), got %d: %+v", len(out), out)
 	}
@@ -201,9 +204,12 @@ func TestSanitizeFindings_DropsEmptyClaimsAndTruncatesEvidence(t *testing.T) {
 func TestSanitizeFindings_CapsCount(t *testing.T) {
 	in := make([]FocusedTaskFinding, maxFocusedTaskFindings+5)
 	for i := range in {
-		in[i] = FocusedTaskFinding{Claim: "c"}
+		in[i] = FocusedTaskFinding{Claim: "c", Source: "src"}
 	}
-	out := sanitizeFindings(in)
+	out, warnings := sanitizeFindings(in)
+	if len(warnings) != 0 {
+		t.Fatalf("unexpected warnings: %+v", warnings)
+	}
 	if len(out) != maxFocusedTaskFindings {
 		t.Fatalf("expected cap to %d, got %d", maxFocusedTaskFindings, len(out))
 	}
@@ -292,7 +298,10 @@ func TestSanitizeFindings_StripsControlBytesFromEvidence(t *testing.T) {
 			Source:   "config/\x00leak.env:42",
 		},
 	}
-	out := sanitizeFindings(in)
+	out, warnings := sanitizeFindings(in)
+	if len(warnings) != 0 {
+		t.Fatalf("unexpected warnings: %+v", warnings)
+	}
 	if len(out) != 1 {
 		t.Fatalf("expected one finding, got %d", len(out))
 	}
@@ -309,6 +318,20 @@ func TestSanitizeFindings_StripsControlBytesFromEvidence(t *testing.T) {
 	// readability and for the parent to cite by line.
 	if !strings.Contains(out[0].Evidence, "\n") {
 		t.Errorf("evidence newline was stripped: %q", out[0].Evidence)
+	}
+}
+
+func TestSanitizeFindings_DowngradesMissingSourceToWarning(t *testing.T) {
+	in := []FocusedTaskFinding{
+		{Claim: "sourced", Evidence: "line", Source: "session:one"},
+		{Claim: "unsupported", Evidence: "looks plausible"},
+	}
+	out, warnings := sanitizeFindings(in)
+	if len(out) != 1 || out[0].Claim != "sourced" {
+		t.Fatalf("source-less finding should be omitted, got findings=%+v", out)
+	}
+	if len(warnings) != 1 || !strings.Contains(warnings[0], "omitted finding without source: unsupported") {
+		t.Fatalf("missing-source warning = %+v", warnings)
 	}
 }
 

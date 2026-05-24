@@ -257,9 +257,10 @@ func buildFocusedTaskResult(profile FocusedTaskProfile, objective, childID strin
 		result.OK = result.OK && *parsed.OK
 	}
 	result.Summary = sanitizeUntrustedText(previewN(strings.TrimSpace(parsed.Summary), maxFocusedTaskSummaryBytes))
-	result.Findings = sanitizeFindings(parsed.Findings)
+	var findingWarnings []string
+	result.Findings, findingWarnings = sanitizeFindings(parsed.Findings)
 	result.NotFound = trimAndCapStringList(parsed.NotFound)
-	result.Warnings = trimAndCapStringList(parsed.Warnings)
+	result.Warnings = trimAndCapStringList(append(parsed.Warnings, findingWarnings...))
 	result.SuggestedNext = trimAndCapStringList(parsed.SuggestedNext)
 	if len(res.LoopErrors) > 0 {
 		result.LoopErrors = trimAndCapStringList(res.LoopErrors)
@@ -267,31 +268,37 @@ func buildFocusedTaskResult(profile FocusedTaskProfile, objective, childID strin
 	return result
 }
 
-func sanitizeFindings(in []FocusedTaskFinding) []FocusedTaskFinding {
+func sanitizeFindings(in []FocusedTaskFinding) ([]FocusedTaskFinding, []string) {
 	if len(in) == 0 {
-		return nil
+		return nil, nil
 	}
 	if len(in) > maxFocusedTaskFindings {
 		in = in[:maxFocusedTaskFindings]
 	}
 	out := make([]FocusedTaskFinding, 0, len(in))
+	var warnings []string
 	for _, f := range in {
 		claim := sanitizeUntrustedText(strings.TrimSpace(f.Claim))
 		if claim == "" {
 			continue
 		}
+		source := sanitizeUntrustedText(strings.TrimSpace(f.Source))
+		if source == "" {
+			warnings = append(warnings, "omitted finding without source: "+previewN(claim, 160))
+			continue
+		}
 		out = append(out, FocusedTaskFinding{
 			Claim:      claim,
 			Evidence:   sanitizeUntrustedText(previewN(strings.TrimSpace(f.Evidence), maxFocusedTaskFindingEvidenceBytes)),
-			Source:     sanitizeUntrustedText(strings.TrimSpace(f.Source)),
+			Source:     source,
 			Severity:   normalizeSeverity(f.Severity),
 			Confidence: normalizeConfidence(f.Confidence),
 		})
 	}
 	if len(out) == 0 {
-		return nil
+		out = nil
 	}
-	return out
+	return out, trimAndCapStringList(warnings)
 }
 
 func trimAndCapStringList(in []string) []string {
