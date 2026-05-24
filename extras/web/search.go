@@ -11,6 +11,7 @@ import (
 	"os"
 	"strings"
 	"time"
+	"unicode/utf8"
 
 	agent "github.com/affinefoundation/affent/internal/agent"
 )
@@ -40,9 +41,11 @@ type SearchConfig struct {
 }
 
 const (
-	defaultSearchResults = 8
-	maxSearchResults     = 20
-	maxSearchQueryBytes  = 2048
+	defaultSearchResults  = 8
+	maxSearchResults      = 20
+	maxSearchQueryBytes   = 2048
+	maxSearchTitleBytes   = 300
+	maxSearchSnippetBytes = 1000
 )
 
 // SearchTool returns an agent.Tool that runs a web search and returns
@@ -121,14 +124,19 @@ func formatResults(results []SearchResult) string {
 		if url == "" {
 			continue
 		}
+		if len(url) > maxFetchURLBytes {
+			continue
+		}
 		title := strings.TrimSpace(r.Title)
 		if title == "" {
 			title = url
 		}
+		title = truncateSearchField(title, maxSearchTitleBytes)
 		snippet := strings.TrimSpace(r.Snippet)
 		if snippet == "" {
 			snippet = "(snippet unavailable)"
 		}
+		snippet = truncateSearchField(snippet, maxSearchSnippetBytes)
 		displayed++
 		fmt.Fprintf(&b, "%d. %s\n   %s\n   %s\n\n",
 			displayed, title, url, snippet)
@@ -138,6 +146,17 @@ func formatResults(results []SearchResult) string {
 	}
 	b.WriteString("Next: choose the 1-3 most authoritative/current result URLs, prefer official or primary sources, and read them with an available page-reading tool before answering. If no full-page reading tool is available, compare snippets and say that full-page verification was unavailable.")
 	return strings.TrimSpace(b.String())
+}
+
+func truncateSearchField(s string, maxBytes int) string {
+	if maxBytes <= 0 || len(s) <= maxBytes {
+		return s
+	}
+	cut := maxBytes
+	for cut > 0 && !utf8.RuneStart(s[cut]) {
+		cut--
+	}
+	return s[:cut] + "...(truncated)"
 }
 
 func recoverableSearchError(err error) error {

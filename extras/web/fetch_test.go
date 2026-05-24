@@ -561,6 +561,39 @@ func TestSearchTool_NoUsableResultsIncludesNext(t *testing.T) {
 	}
 }
 
+func TestSearchTool_TruncatesLargeResultFields(t *testing.T) {
+	longTitle := strings.Repeat("你", 200) + "TAIL"
+	longSnippet := strings.Repeat("界", 500) + "TAIL"
+	tooLongURL := "https://example.com/" + strings.Repeat("x", maxFetchURLBytes)
+	tool, err := SearchTool(SearchConfig{
+		Provider: stubProvider{results: []SearchResult{
+			{Title: "Too long URL", URL: tooLongURL, Snippet: "should be skipped"},
+			{Title: longTitle, URL: "https://example.com/ok", Snippet: longSnippet},
+		}},
+	})
+	if err != nil {
+		t.Fatalf("SearchTool: %v", err)
+	}
+	args, _ := json.Marshal(map[string]any{"query": "anything"})
+	out, err := tool.Execute(context.Background(), args)
+	if err != nil {
+		t.Fatalf("Execute: %v", err)
+	}
+	if strings.Contains(out, "should be skipped") || strings.Contains(out, tooLongURL) || strings.Contains(out, "2.") {
+		t.Fatalf("oversized URL result should not be shown:\n%s", out)
+	}
+	if strings.Contains(out, "TAIL") {
+		t.Fatalf("long title/snippet tail should be truncated:\n%s", out)
+	}
+	if got := strings.Count(out, "...(truncated)"); got != 2 {
+		t.Fatalf("expected title and snippet truncation markers, got %d:\n%s", got, out)
+	}
+	prefix := strings.SplitN(out, "Next:", 2)[0]
+	if strings.ContainsRune(prefix, '�') {
+		t.Fatalf("search result truncation produced invalid UTF-8 replacement:\n%s", out)
+	}
+}
+
 func TestSearchTool_NoResultsIncludesNext(t *testing.T) {
 	tool, err := SearchTool(SearchConfig{Provider: stubProvider{}})
 	if err != nil {
