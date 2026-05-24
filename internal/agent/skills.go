@@ -475,7 +475,15 @@ func LoadSkillDir(root string) ([]Skill, error) {
 			if len(out) >= maxRuntimeSkills {
 				return nil, fmt.Errorf("runtime skill directory %s has more than %d skills", root, maxRuntimeSkills)
 			}
-			skill, err := loadRuntimeSkill(filepath.Join(root, entry.Name()))
+			skillDir := filepath.Join(root, entry.Name())
+			complete, err := runtimeSkillDirHasRequiredFiles(skillDir)
+			if err != nil {
+				return nil, err
+			}
+			if !complete {
+				continue
+			}
+			skill, err := loadRuntimeSkill(skillDir)
 			if err != nil {
 				return nil, err
 			}
@@ -487,6 +495,23 @@ func LoadSkillDir(root string) ([]Skill, error) {
 	}
 	sort.SliceStable(out, func(i, j int) bool { return out[i].Name < out[j].Name })
 	return out, nil
+}
+
+func runtimeSkillDirHasRequiredFiles(dir string) (bool, error) {
+	for _, name := range []string{"skill.json", "SKILL.md"} {
+		path := filepath.Join(dir, name)
+		info, err := os.Lstat(path)
+		if os.IsNotExist(err) {
+			return false, nil
+		}
+		if err != nil {
+			return false, err
+		}
+		if info.Mode()&os.ModeSymlink != 0 || info.IsDir() {
+			return true, nil
+		}
+	}
+	return true, nil
 }
 
 func InstallRuntimeSkill(root string, skill Skill) (Skill, error) {

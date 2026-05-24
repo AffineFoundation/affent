@@ -251,6 +251,36 @@ func TestLoadSkillDirRejectsSymlinkBodyFile(t *testing.T) {
 	}
 }
 
+func TestLoadSkillDirSkipsIncompleteVisibleSkillDirs(t *testing.T) {
+	root := t.TempDir()
+	if _, err := InstallRuntimeSkill(root, Skill{
+		Name: "demo",
+		Body: "AFFENT ACTIVE SKILL: demo\nUse demo.",
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.MkdirAll(filepath.Join(root, "body_only"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(root, "body_only", "SKILL.md"), []byte("AFFENT ACTIVE SKILL: body_only"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.MkdirAll(filepath.Join(root, "manifest_only"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(root, "manifest_only", "skill.json"), []byte(`{"name":"manifest_only"}`), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	skills, err := LoadSkillDir(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(skills) != 1 || skills[0].Name != "demo" {
+		t.Fatalf("loaded skills = %+v, want only demo", skills)
+	}
+}
+
 func TestLoadSkillDirReadsPastOneDirectoryBatch(t *testing.T) {
 	root := t.TempDir()
 	for i := 0; i < runtimeSkillDirReadBatch+2; i++ {
