@@ -28,7 +28,7 @@ const sseKeepAliveInterval = 25 * time.Second
 const (
 	defaultHistoryLimit = 100
 	maxHistoryLimit     = 500
-	maxHistoryLineBytes = 4 * 1024 * 1024
+	maxHistoryLineBytes = jsonl.DefaultMaxRecordBytes
 )
 
 // handleSessionEvents tails the session's affent event stream and

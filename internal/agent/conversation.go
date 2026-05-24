@@ -15,7 +15,7 @@ import (
 	"github.com/affinefoundation/affent/internal/jsonl"
 )
 
-const maxConversationLineBytes = 4 * 1024 * 1024
+const maxConversationLineBytes = jsonl.DefaultMaxRecordBytes
 
 // Conversation is the in-memory + on-disk record of one session's messages.
 // Persistence is JSONL on the host (under the user's home volume), one

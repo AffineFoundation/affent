@@ -47,7 +47,7 @@ const (
 	MaxQueryTerms        = 16
 
 	sessionDirReadBatch    = 128
-	maxSessionLogLineBytes = 4 * 1024 * 1024
+	maxSessionLogLineBytes = jsonl.DefaultMaxRecordBytes
 )
 
 func Search(ctx context.Context, sessionsDir, currentSessionID, query string, topK, maxPerSession int) ([]Hit, error) {

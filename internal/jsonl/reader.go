@@ -6,6 +6,8 @@ import (
 	"io"
 )
 
+const DefaultMaxRecordBytes = 4 * 1024 * 1024
+
 // ReadBoundedLine reads one JSONL physical line without allowing a single
 // malformed record to grow memory past maxBytes. When the line exceeds maxBytes,
 // it discards through the next newline and returns overLimit=true.

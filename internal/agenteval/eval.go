@@ -24,7 +24,7 @@ const (
 	DefaultBatchTimeout           = 5 * time.Minute
 	DefaultBatchMaxTurnSteps      = 10
 	DefaultVerifierOutputCapBytes = 1 * 1024 * 1024
-	maxTraceLineBytes             = 4 * 1024 * 1024
+	maxTraceLineBytes             = jsonl.DefaultMaxRecordBytes
 )
 
 type ToolOrderRequirement struct {

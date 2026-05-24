@@ -19,7 +19,7 @@ import (
 
 const (
 	maxLocalSessionPlanBytes    = planstate.MaxFileBytes
-	maxLocalSessionLogLineBytes = 4 * 1024 * 1024
+	maxLocalSessionLogLineBytes = jsonl.DefaultMaxRecordBytes
 	localSessionDirReadBatch    = 128
 )
 
