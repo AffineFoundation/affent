@@ -99,13 +99,13 @@ func FetchTool(cfg FetchConfig) *agent.Tool {
 			}
 			args.URL = strings.TrimSpace(args.URL)
 			if args.URL == "" {
-				return "", errors.New("url is required\nNext: retry web_fetch with a fully-qualified http:// or https:// URL")
+				return "", errors.New("url is required\nFailure: kind=invalid_args\nNext: retry web_fetch with a fully-qualified http:// or https:// URL")
 			}
 			if len(args.URL) > maxFetchURLBytes {
-				return "", fmt.Errorf("url is %d bytes; web_fetch supports URLs up to %d bytes\nNext: retry web_fetch with the canonical page URL, or use an available discovery tool/source to find a shorter result URL", len(args.URL), maxFetchURLBytes)
+				return "", fmt.Errorf("url is %d bytes; web_fetch supports URLs up to %d bytes\nFailure: kind=invalid_args\nNext: retry web_fetch with the canonical page URL, or use an available discovery tool/source to find a shorter result URL", len(args.URL), maxFetchURLBytes)
 			}
 			if !strings.HasPrefix(args.URL, "http://") && !strings.HasPrefix(args.URL, "https://") {
-				return "", fmt.Errorf("url must start with http:// or https:// (got %q)\nNext: retry web_fetch with the full URL including the http:// or https:// scheme", args.URL)
+				return "", fmt.Errorf("url must start with http:// or https:// (got %q)\nFailure: kind=invalid_args\nNext: retry web_fetch with the full URL including the http:// or https:// scheme", args.URL)
 			}
 			return fetch(ctx, cfg, args.URL)
 		},
@@ -116,11 +116,11 @@ func decodeWebToolArgs(raw json.RawMessage, dst any, next string) error {
 	dec := json.NewDecoder(bytes.NewReader(raw))
 	dec.DisallowUnknownFields()
 	if err := dec.Decode(dst); err != nil {
-		return fmt.Errorf("decode args: %w\nNext: %s", err, next)
+		return fmt.Errorf("decode args: %w\nFailure: kind=invalid_args\nNext: %s", err, next)
 	}
 	var extra struct{}
 	if err := dec.Decode(&extra); err != io.EOF {
-		return fmt.Errorf("decode args: multiple JSON values\nNext: %s", next)
+		return fmt.Errorf("decode args: multiple JSON values\nFailure: kind=invalid_args\nNext: %s", next)
 	}
 	return nil
 }

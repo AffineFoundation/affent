@@ -263,15 +263,15 @@ func TestFetchTool_NonText(t *testing.T) {
 func TestFetchTool_RequiresURL(t *testing.T) {
 	tool := FetchTool(FetchConfig{AllowPrivateNetwork: true})
 	_, err := tool.Execute(context.Background(), json.RawMessage(`{}`))
-	if err == nil || !strings.Contains(err.Error(), "url is required") || !strings.Contains(err.Error(), "Next:") {
+	if err == nil || !strings.Contains(err.Error(), "url is required") || !strings.Contains(err.Error(), "Failure: kind=invalid_args") || !strings.Contains(err.Error(), "Next:") {
 		t.Errorf("expected url-required error, got %v", err)
 	}
 	_, err = tool.Execute(context.Background(), json.RawMessage(`{"url":"   "}`))
-	if err == nil || !strings.Contains(err.Error(), "url is required") || !strings.Contains(err.Error(), "Next:") {
+	if err == nil || !strings.Contains(err.Error(), "url is required") || !strings.Contains(err.Error(), "Failure: kind=invalid_args") || !strings.Contains(err.Error(), "Next:") {
 		t.Errorf("expected blank-url required error, got %v", err)
 	}
 	_, err = tool.Execute(context.Background(), json.RawMessage(`{"url":"ftp://x"}`))
-	if err == nil || !strings.Contains(err.Error(), "http://") || !strings.Contains(err.Error(), "Next:") {
+	if err == nil || !strings.Contains(err.Error(), "http://") || !strings.Contains(err.Error(), "Failure: kind=invalid_args") || !strings.Contains(err.Error(), "Next:") {
 		t.Errorf("expected scheme guard error, got %v", err)
 	}
 }
@@ -313,7 +313,7 @@ func TestFetchTool_URLMaxLength(t *testing.T) {
 
 	url += "x"
 	_, err := tool.Execute(context.Background(), json.RawMessage(`{"url":"`+url+`"}`))
-	if err == nil || !strings.Contains(err.Error(), "web_fetch supports URLs up to") || !strings.Contains(err.Error(), "Next:") {
+	if err == nil || !strings.Contains(err.Error(), "web_fetch supports URLs up to") || !strings.Contains(err.Error(), "Failure: kind=invalid_args") || !strings.Contains(err.Error(), "Next:") {
 		t.Fatalf("expected oversized URL error, got %v", err)
 	}
 	if strings.Contains(err.Error(), "web_search") {
@@ -327,6 +327,7 @@ func TestFetchToolRejectsUnknownArgs(t *testing.T) {
 	if err == nil ||
 		!strings.Contains(err.Error(), "unknown field") ||
 		!strings.Contains(err.Error(), "query") ||
+		!strings.Contains(err.Error(), "Failure: kind=invalid_args") ||
 		!strings.Contains(err.Error(), "Next:") {
 		t.Fatalf("unknown arg error = %v", err)
 	}
@@ -771,12 +772,13 @@ func TestSearchToolRejectsUnknownArgs(t *testing.T) {
 	if err == nil ||
 		!strings.Contains(err.Error(), "unknown field") ||
 		!strings.Contains(err.Error(), "url") ||
+		!strings.Contains(err.Error(), "Failure: kind=invalid_args") ||
 		!strings.Contains(err.Error(), "Next:") {
 		t.Fatalf("unknown arg error = %v", err)
 	}
 
 	_, err = tool.Execute(context.Background(), json.RawMessage(`{"query":"`+strings.Repeat("x", maxSearchQueryBytes+1)+`"}`))
-	if err == nil || !strings.Contains(err.Error(), "web_search supports queries up to") || !strings.Contains(err.Error(), "Next:") {
+	if err == nil || !strings.Contains(err.Error(), "web_search supports queries up to") || !strings.Contains(err.Error(), "Failure: kind=invalid_args") || !strings.Contains(err.Error(), "Next:") {
 		t.Fatalf("oversized query error = %v", err)
 	}
 }
@@ -908,14 +910,14 @@ func TestIsBlockedIP(t *testing.T) {
 func TestSearchTool_EmptyQuery(t *testing.T) {
 	tool, _ := SearchTool(SearchConfig{Provider: stubProvider{}})
 	_, err := tool.Execute(context.Background(), json.RawMessage(`{"query":""}`))
-	if err == nil || !strings.Contains(err.Error(), "query is required") {
+	if err == nil || !strings.Contains(err.Error(), "query is required") || !strings.Contains(err.Error(), "Failure: kind=invalid_args") {
 		t.Errorf("expected query-required error, got %v", err)
 	}
 	if err == nil || !strings.Contains(err.Error(), "Next:") {
 		t.Errorf("query-required error should include corrective Next step, got %v", err)
 	}
 	_, err = tool.Execute(context.Background(), json.RawMessage(`{"query":"   "}`))
-	if err == nil || !strings.Contains(err.Error(), "query is required") {
+	if err == nil || !strings.Contains(err.Error(), "query is required") || !strings.Contains(err.Error(), "Failure: kind=invalid_args") {
 		t.Errorf("expected blank-query required error, got %v", err)
 	}
 	if err == nil || !strings.Contains(err.Error(), "Next:") {
