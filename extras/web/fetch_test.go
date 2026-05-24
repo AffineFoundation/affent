@@ -501,6 +501,54 @@ func TestSearchTool_FormatsResults(t *testing.T) {
 	}
 }
 
+func TestSearchTool_FormatsPartialResults(t *testing.T) {
+	tool, err := SearchTool(SearchConfig{
+		Provider: stubProvider{results: []SearchResult{
+			{Title: "No URL", Snippet: "should be skipped"},
+			{URL: "https://example.com/title-fallback"},
+			{Title: "Has title", URL: "https://example.com/no-snippet"},
+		}},
+	})
+	if err != nil {
+		t.Fatalf("SearchTool: %v", err)
+	}
+	args, _ := json.Marshal(map[string]any{"query": "anything"})
+	out, err := tool.Execute(context.Background(), args)
+	if err != nil {
+		t.Fatalf("Execute: %v", err)
+	}
+	for _, want := range []string{"1. https://example.com/title-fallback", "(snippet unavailable)", "2. Has title", "https://example.com/no-snippet"} {
+		if !strings.Contains(out, want) {
+			t.Fatalf("partial result output missing %q:\n%s", want, out)
+		}
+	}
+	if strings.Contains(out, "should be skipped") || strings.Contains(out, "3.") {
+		t.Fatalf("result without URL should not be shown:\n%s", out)
+	}
+}
+
+func TestSearchTool_NoUsableResultsIncludesNext(t *testing.T) {
+	tool, err := SearchTool(SearchConfig{
+		Provider: stubProvider{results: []SearchResult{
+			{Title: "No URL", Snippet: "not usable"},
+			{Title: "Also no URL"},
+		}},
+	})
+	if err != nil {
+		t.Fatalf("SearchTool: %v", err)
+	}
+	args, _ := json.Marshal(map[string]any{"query": "anything"})
+	out, err := tool.Execute(context.Background(), args)
+	if err != nil {
+		t.Fatalf("Execute: %v", err)
+	}
+	for _, want := range []string{"no usable results", "no URLs", "Next:", "official domain"} {
+		if !strings.Contains(out, want) {
+			t.Fatalf("no-usable-result output missing %q:\n%s", want, out)
+		}
+	}
+}
+
 func TestSearchTool_NoResultsIncludesNext(t *testing.T) {
 	tool, err := SearchTool(SearchConfig{Provider: stubProvider{}})
 	if err != nil {

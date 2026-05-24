@@ -115,9 +115,26 @@ func formatResults(results []SearchResult) string {
 		return "(no results)\nNext: retry web_search with fewer or different keywords, include distinctive entities or official domain names, or use another available source URL if already known."
 	}
 	var b strings.Builder
-	for i, r := range results {
+	displayed := 0
+	for _, r := range results {
+		url := strings.TrimSpace(r.URL)
+		if url == "" {
+			continue
+		}
+		title := strings.TrimSpace(r.Title)
+		if title == "" {
+			title = url
+		}
+		snippet := strings.TrimSpace(r.Snippet)
+		if snippet == "" {
+			snippet = "(snippet unavailable)"
+		}
+		displayed++
 		fmt.Fprintf(&b, "%d. %s\n   %s\n   %s\n\n",
-			i+1, r.Title, r.URL, strings.TrimSpace(r.Snippet))
+			displayed, title, url, snippet)
+	}
+	if displayed == 0 {
+		return "(no usable results: search provider returned no URLs)\nNext: retry web_search with more distinctive keywords or official domain names, or use another available source URL if already known."
 	}
 	b.WriteString("Next: choose the 1-3 most authoritative/current result URLs, prefer official or primary sources, and read them with an available page-reading tool before answering. If no full-page reading tool is available, compare snippets and say that full-page verification was unavailable.")
 	return strings.TrimSpace(b.String())
