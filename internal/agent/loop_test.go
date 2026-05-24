@@ -113,8 +113,10 @@ func TestWithExternalResearchSystemGuidance_AppendsOnce(t *testing.T) {
 	}
 
 	webOnly := WithExternalResearchSystemGuidance("be helpful", externalResearchToolSurface{WebSearch: true, WebFetch: true})
-	if strings.Contains(webOnly, "browser_navigate") || strings.Contains(webOnly, "browser_snapshot") {
-		t.Fatalf("web-only guidance should not mention browser tools:\n%s", webOnly)
+	for _, forbidden := range []string{"browser_navigate", "browser_snapshot", "browser tools"} {
+		if strings.Contains(webOnly, forbidden) {
+			t.Fatalf("web-only guidance should not mention unavailable %q:\n%s", forbidden, webOnly)
+		}
 	}
 }
 

@@ -458,12 +458,12 @@ func TestWithFocusedTaskSystemGuidance_AppendsOnce(t *testing.T) {
 
 func TestResearchProfileGuidesGeneralExternalResearch(t *testing.T) {
 	profile := researchProfile()
-	for _, want := range []string{"registered external lookup tools", "browser tools", "authoritative sources", "market, metrics, or trend questions", "social posts", "independent corroborating source"} {
+	for _, want := range []string{"registered external lookup tools", "authoritative sources", "market, metrics, or trend questions", "social posts", "independent corroborating source"} {
 		if !strings.Contains(profile.SystemPromptHints, want) {
 			t.Fatalf("research profile guidance missing %q:\n%s", want, profile.SystemPromptHints)
 		}
 	}
-	for _, forbidden := range []string{"Affine", "TaoStats", "Bittensor", "web_search", "web_fetch"} {
+	for _, forbidden := range []string{"Affine", "TaoStats", "Bittensor", "web_search", "web_fetch", "browser tools"} {
 		if strings.Contains(profile.SystemPromptHints, forbidden) {
 			t.Fatalf("research profile guidance should stay generic, found %q:\n%s", forbidden, profile.SystemPromptHints)
 		}
@@ -498,8 +498,10 @@ func TestResearchProfileCanUseBrowserOnlySurface(t *testing.T) {
 			t.Fatalf("browser-only research prompt missing %q:\n%s", want, prompt)
 		}
 	}
-	if strings.Contains(prompt, "Use web_fetch") {
-		t.Fatalf("browser-only research prompt should not mention unavailable web_fetch:\n%s", prompt)
+	for _, forbidden := range []string{"web_search", "web_fetch"} {
+		if strings.Contains(prompt, forbidden) {
+			t.Fatalf("browser-only research prompt should not mention unavailable %q:\n%s", forbidden, prompt)
+		}
 	}
 }
 
@@ -650,7 +652,7 @@ func TestRunFocusedTask_ResearchUsesWebToolThenEmitsJSON(t *testing.T) {
 	if !strings.Contains(prompt, "If web_fetch fails") || !strings.Contains(prompt, "Do not keep retrying the same failing URL") {
 		t.Fatalf("fetch-only research prompt should guide recovery from failed fetches:\n%s", prompt)
 	}
-	for _, forbidden := range []string{"web_search", "browser_navigate", "browser_snapshot"} {
+	for _, forbidden := range []string{"web_search", "browser_navigate", "browser_snapshot", "browser tools"} {
 		if strings.Contains(prompt, forbidden) {
 			t.Fatalf("fetch-only research prompt should not mention unavailable %q:\n%s", forbidden, prompt)
 		}

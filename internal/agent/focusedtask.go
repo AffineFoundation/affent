@@ -835,7 +835,6 @@ func researchProfile() FocusedTaskProfile {
 - Each finding's "source" must be the URL (or document path) you read. No source means do not surface the finding; demote it to a warning.
 - For date-sensitive facts, include the date or freshness in "evidence" (e.g., "as of 2025-11 release notes at <url>").
 - For current or unfamiliar public topics, use the registered external lookup tools to discover and read the most authoritative sources available. Prefer official docs, source repositories, block explorers, filings, API docs, and primary project sites over summaries.
-- Use browser tools when they are registered and a page is rendered, blocked for plain fetch, or needs interaction. For browser-based reading, navigate first and cite the page URL from the snapshot/navigate result.
 - For market, metrics, or trend questions, collect a current source-of-record plus at least one independent corroborating source. Keep social posts, forum comments, and influencer takes separate from verified facts, and label them as sentiment or claims.
 - When sources disagree, pick the most authoritative for "findings" and record the conflict in "warnings".
 - If you cannot find an authoritative source with the registered tools, emit a not_found entry rather than guessing.`,
