@@ -33,6 +33,7 @@ func browserRefRequiredError(tool string) error {
 func browserNotInteractableError(ref int, err error) error {
 	return fmt.Errorf(
 		"ref %d not interactable (hidden, disabled, or covered by another element): %w\n"+
+			"Failure: kind=not_interactable\n"+
 			"Next: call browser_snapshot to inspect the current page; if needed scroll, close the covering element, or choose a different visible ref",
 		ref,
 		err,

@@ -1012,6 +1012,7 @@ func TestToolFailureKindHintIncludesWebSearchRecovery(t *testing.T) {
 		{kind: "no_results", want: "refine with distinctive entities"},
 		{kind: "search_error", want: "web_search backend failed"},
 		{kind: "stale_ref", want: "browser_snapshot"},
+		{kind: "not_interactable", want: "hidden, disabled, or covered"},
 	} {
 		t.Run(c.kind, func(t *testing.T) {
 			if got := toolFailureKindHint(c.kind); !strings.Contains(got, c.want) {

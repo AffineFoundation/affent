@@ -118,7 +118,9 @@ diagnostics.
   `server_error`, `http_error`, `private_network_blocked`, `timeout`,
   `network_error`, `empty_response`, `non_text`, `no_results`, and
   `search_error`. Browser inspection tools may also emit `stale_ref` when a
-  previously visible element ref no longer matches the current page.
+  previously visible element ref no longer matches the current page, or
+  `not_interactable` when the element exists but is hidden, disabled, or
+  covered.
 - `duration_ms`: optional measured implementation time for dispatched tools.
 - `result_summary`: short UI preview, not parse-safe.
 - `result`: event-capped tool output.
@@ -174,7 +176,8 @@ diagnostics.
   those kinds here. Known web kinds include `invalid_args`, `blocked`,
   `not_found`, `rate_limited`, `server_error`, `http_error`,
   `private_network_blocked`, `timeout`, `network_error`, `empty_response`, and
-  `non_text`, `no_results`, `search_error`, and `stale_ref`.
+  `non_text`, `no_results`, `search_error`, `stale_ref`, and
+  `not_interactable`.
 - `tool_errors`
 - `tool_duration_ms`
 - `loop_guard_interventions`

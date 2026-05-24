@@ -13,6 +13,7 @@ func TestBrowserNotInteractableError_Message(t *testing.T) {
 		"ref 7",
 		"not interactable",
 		"covered",
+		"Failure: kind=not_interactable",
 		"Next:",
 		"browser_snapshot",
 		"scroll",

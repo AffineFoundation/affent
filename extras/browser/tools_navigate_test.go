@@ -161,7 +161,7 @@ func TestWaitToolRejectsBlankRequiredTextAndPublishesMinLength(t *testing.T) {
 
 func TestBrowserWaitTextTimeoutErrorHasRecoveryHint(t *testing.T) {
 	err := browserWaitTextTimeoutError(time.Second, "Done")
-	for _, want := range []string{"timed out", "Next:", "browser_snapshot", "shorter visible substring"} {
+	for _, want := range []string{"timed out", "Failure: kind=timeout", "Next:", "browser_snapshot", "shorter visible substring"} {
 		if !strings.Contains(err.Error(), want) {
 			t.Fatalf("timeout guidance missing %q: %v", want, err)
 		}

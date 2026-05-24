@@ -309,7 +309,7 @@ func normalizeBrowserWaitFor(waitFor string) (string, error) {
 }
 
 func browserWaitTextTimeoutError(timeout time.Duration, substr string) error {
-	return fmt.Errorf("timed out after %s waiting for text %q\nNext: call browser_snapshot to inspect current text, retry with a shorter visible substring, or continue if the page already contains enough evidence", timeout, substr)
+	return fmt.Errorf("timed out after %s waiting for text %q\nFailure: kind=timeout\nNext: call browser_snapshot to inspect current text, retry with a shorter visible substring, or continue if the page already contains enough evidence", timeout, substr)
 }
 
 func resolveBrowserWaitTimeout(timeoutMS int) (time.Duration, error) {

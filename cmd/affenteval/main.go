@@ -502,6 +502,8 @@ func toolFailureKindHint(kind string) string {
 		return "the configured web_search backend failed; inspect provider credentials/limits/logs and avoid treating search as available evidence"
 	case "stale_ref":
 		return "a browser ref no longer matched the current page; call browser_snapshot and retry with a fresh visible ref instead of repeating the old one"
+	case "not_interactable":
+		return "a browser ref was present but hidden, disabled, or covered; inspect with browser_snapshot, scroll or close the covering element, then retry a visible ref"
 	case "private_network_blocked":
 		return "SSRF guard blocked a private or local network URL; use public sources or explicitly configure trusted local access"
 	case "invalid_args":
