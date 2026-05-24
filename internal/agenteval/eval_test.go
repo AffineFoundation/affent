@@ -246,6 +246,9 @@ func TestBatchScenarioChecks_UsesSharedCheckLibrary(t *testing.T) {
 		RequiredToolCounts: map[string]int{
 			"plan": 2,
 		},
+		RequiredToolFailureKindCounts: map[string]int{
+			"invalid_args": 1,
+		},
 		RequiredFocusedTaskCounts: map[string]int{
 			"explore": 1,
 		},
@@ -283,6 +286,7 @@ func TestBatchScenarioChecks_UsesSharedCheckLibrary(t *testing.T) {
 		"tool_result_artifact:shell",
 		"tool_called_before:read_file->edit_file",
 		"tool_called_at_least:plan:2",
+		"tool_failure_kind_at_least:invalid_args:1",
 		"focused_task_called_at_least:explore:1",
 		"subagent_called_at_least:review:1",
 		"no_delegation_errors",

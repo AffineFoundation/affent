@@ -38,35 +38,36 @@ type CommandToolOrderRequirement struct {
 }
 
 type BatchScenario struct {
-	Name                         string
-	Suites                       []string
-	Prompt                       string
-	Files                        map[string]string
-	VerifyCommand                string
-	ExpectedSkill                string
-	ForbiddenCommands            []string
-	RequiredCommands             []string
-	RequiredCommandCounts        map[string]int
-	RequiredToolCounts           map[string]int
-	RequiredCommandBeforeTool    []CommandToolOrderRequirement
-	RequiredCommandAfterTool     []CommandToolOrderRequirement
-	RequiredTools                []string
-	ForbiddenTools               []string
-	RequiredFocusedTaskCounts    map[string]int
-	RequiredSubagentModeCounts   map[string]int
-	RequireNoDelegationErrors    bool
-	RequireNoPlanErrors          bool
-	RequiredFinalText            []string
-	ForbiddenFinalText           []string
-	RequiredToolResultText       map[string][]string
-	RequiredTruncatedResults     []string
-	RequiredResultArtifacts      []string
-	RequiredToolOrder            []ToolOrderRequirement
-	ProtectedFiles               []string
-	ForbiddenFileSubstrings      map[string][]string
-	MaxParentToolCalls           int
-	MaxSuccessfulToolCallsByTool map[string]int
-	MaxTurns                     int
+	Name                          string
+	Suites                        []string
+	Prompt                        string
+	Files                         map[string]string
+	VerifyCommand                 string
+	ExpectedSkill                 string
+	ForbiddenCommands             []string
+	RequiredCommands              []string
+	RequiredCommandCounts         map[string]int
+	RequiredToolCounts            map[string]int
+	RequiredToolFailureKindCounts map[string]int
+	RequiredCommandBeforeTool     []CommandToolOrderRequirement
+	RequiredCommandAfterTool      []CommandToolOrderRequirement
+	RequiredTools                 []string
+	ForbiddenTools                []string
+	RequiredFocusedTaskCounts     map[string]int
+	RequiredSubagentModeCounts    map[string]int
+	RequireNoDelegationErrors     bool
+	RequireNoPlanErrors           bool
+	RequiredFinalText             []string
+	ForbiddenFinalText            []string
+	RequiredToolResultText        map[string][]string
+	RequiredTruncatedResults      []string
+	RequiredResultArtifacts       []string
+	RequiredToolOrder             []ToolOrderRequirement
+	ProtectedFiles                []string
+	ForbiddenFileSubstrings       map[string][]string
+	MaxParentToolCalls            int
+	MaxSuccessfulToolCallsByTool  map[string]int
+	MaxTurns                      int
 }
 
 type BatchRunner struct {
@@ -669,6 +670,9 @@ func BatchScenarioChecks(scenario BatchScenario) []Check {
 	}
 	for _, tool := range sortedStringMapKeys(scenario.RequiredToolCounts) {
 		checks = append(checks, ToolCalledAtLeast(tool, scenario.RequiredToolCounts[tool]))
+	}
+	for _, kind := range sortedStringMapKeys(scenario.RequiredToolFailureKindCounts) {
+		checks = append(checks, ToolFailureKindAtLeast(kind, scenario.RequiredToolFailureKindCounts[kind]))
 	}
 	for _, taskType := range sortedStringMapKeys(scenario.RequiredFocusedTaskCounts) {
 		checks = append(checks, FocusedTaskCalledAtLeast(taskType, scenario.RequiredFocusedTaskCounts[taskType]))
