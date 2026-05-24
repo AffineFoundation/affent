@@ -92,7 +92,7 @@ func TestRegistrySystemPromptComposition(t *testing.T) {
 	if !strings.Contains(prompt, "Memory retrieval:") {
 		t.Fatalf("memory registry prompt missing memory guidance:\n%s", prompt)
 	}
-	for _, forbidden := range []string{"'shell' tool", "read_file", "Subagent delegation:", "Focused tasks (run_task):", "Affent plan tool guidance:"} {
+	for _, forbidden := range []string{"'shell' tool", "read_file", "Session history retrieval:", "Subagent delegation:", "Focused tasks (run_task):", "Affent plan tool guidance:"} {
 		if strings.Contains(prompt, forbidden) {
 			t.Fatalf("memory-only registry prompt should not include %q:\n%s", forbidden, prompt)
 		}
@@ -101,14 +101,18 @@ func TestRegistrySystemPromptComposition(t *testing.T) {
 	reg.Add(&Tool{Name: PlanToolName})
 	reg.Add(&Tool{Name: SubagentToolName})
 	reg.Add(&Tool{Name: FocusedTaskToolName})
+	reg.Add(&Tool{Name: SessionSearchToolName})
 	prompt = WithRegistrySystemGuidance(BaseSystemPromptForRegistry(reg), reg)
-	for _, want := range []string{"Memory retrieval:", "Subagent delegation:", "Focused tasks (run_task):", "Affent plan tool guidance:"} {
+	for _, want := range []string{"Memory retrieval:", "Session history retrieval:", "Subagent delegation:", "Focused tasks (run_task):", "Affent plan tool guidance:"} {
 		if !strings.Contains(prompt, want) {
 			t.Fatalf("registry prompt missing %q:\n%s", want, prompt)
 		}
 	}
 	if strings.Count(WithRegistrySystemGuidance(prompt, reg), "Memory retrieval:") != 1 {
 		t.Fatal("registry guidance should be idempotent")
+	}
+	if strings.Count(WithRegistrySystemGuidance(prompt, reg), "Session history retrieval:") != 1 {
+		t.Fatal("session search guidance should be idempotent")
 	}
 
 	reg = NewRegistry()
@@ -267,7 +271,7 @@ func TestEnsureSystemPrompt_EmptyConv_WithMemory(t *testing.T) {
 
 func TestEnsureSystemPrompt_ResumedConv_RewritesCurrentRuntimePrompt(t *testing.T) {
 	conv := newTestConv(t)
-	if err := conv.Append(ChatMessage{Role: "system", Content: "old prompt\n\nSubagent delegation:\nstale guidance\n\nPlan tool:\nstale plan guidance"}); err != nil {
+	if err := conv.Append(ChatMessage{Role: "system", Content: "old prompt\n\nSubagent delegation:\nstale guidance\n\nAffent plan tool guidance:\nstale plan guidance"}); err != nil {
 		t.Fatal(err)
 	}
 	if err := conv.Append(ChatMessage{Role: "user", Content: "hi"}); err != nil {
@@ -284,7 +288,7 @@ func TestEnsureSystemPrompt_ResumedConv_RewritesCurrentRuntimePrompt(t *testing.
 	if msgs[0].Content != "new prompt without disabled feature guidance" {
 		t.Fatalf("resumed conv must rewrite system msg to current runtime prompt, got %q", msgs[0].Content)
 	}
-	if strings.Contains(msgs[0].Content, "Subagent delegation:") || strings.Contains(msgs[0].Content, "Plan tool:") {
+	if strings.Contains(msgs[0].Content, "Subagent delegation:") || strings.Contains(msgs[0].Content, "Affent plan tool guidance:") {
 		t.Fatalf("disabled feature guidance leaked after prompt rewrite:\n%s", msgs[0].Content)
 	}
 	if msgs[1].Role != "user" || msgs[1].Content != "hi" {

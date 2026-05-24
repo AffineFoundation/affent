@@ -424,6 +424,9 @@ func WithRegistrySystemGuidance(prompt string, reg *Registry) string {
 	if hasRegisteredTool(reg, "memory") {
 		prompt = WithMemorySystemGuidance(prompt)
 	}
+	if hasRegisteredTool(reg, SessionSearchToolName) {
+		prompt = WithSessionSearchSystemGuidance(prompt)
+	}
 	if hasRegisteredTool(reg, SubagentToolName) {
 		prompt = WithSubagentSystemGuidance(prompt)
 	}

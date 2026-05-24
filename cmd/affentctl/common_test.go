@@ -781,7 +781,7 @@ func TestSetupLoop_EvalModeOmitsSkillsDelegationAndSkillProvider(t *testing.T) {
 	if len(msgs) == 0 {
 		t.Fatal("system prompt missing")
 	}
-	for _, forbidden := range []string{"Subagent delegation:", "Focused tasks (run_task):", "Plan tool:", "Memory retrieval:"} {
+	for _, forbidden := range []string{"Subagent delegation:", "Focused tasks (run_task):", "Affent plan tool guidance:", "Memory retrieval:", "Session history retrieval:"} {
 		if strings.Contains(msgs[0].Content, forbidden) {
 			t.Fatalf("eval-mode system prompt should not include %q guidance:\n%s", forbidden, msgs[0].Content)
 		}
@@ -815,6 +815,9 @@ func TestSetupLoop_MemoryPromptGuidanceFollowsCapability(t *testing.T) {
 		if len(msgs) == 0 || !strings.Contains(msgs[0].Content, "Memory retrieval:") {
 			t.Fatalf("memory-enabled prompt should include memory retrieval guidance: %+v", msgs)
 		}
+		if !strings.Contains(msgs[0].Content, "Session history retrieval:") {
+			t.Fatalf("default prompt should include session history guidance when session_search is registered: %+v", msgs)
+		}
 	})
 
 	t.Run("eval mode omits unless explicitly enabled", func(t *testing.T) {
@@ -844,6 +847,9 @@ func TestSetupLoop_MemoryPromptGuidanceFollowsCapability(t *testing.T) {
 		}
 		if strings.Contains(msgs[0].Content, "Memory retrieval:") {
 			t.Fatalf("eval prompt should not include memory guidance when memory is disabled:\n%s", msgs[0].Content)
+		}
+		if strings.Contains(msgs[0].Content, "Session history retrieval:") {
+			t.Fatalf("eval prompt should not include session history guidance when session_search is disabled:\n%s", msgs[0].Content)
 		}
 	})
 

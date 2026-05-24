@@ -51,6 +51,22 @@ func TestSessionSearchTool_QueryRequired(t *testing.T) {
 	}
 }
 
+func TestWithSessionSearchSystemGuidance_AppendsOnce(t *testing.T) {
+	base := "be helpful"
+	once := WithSessionSearchSystemGuidance(base)
+	for _, want := range []string{"Session history retrieval:", "2-6 concrete keywords", "session id", "turn index", "untrusted evidence"} {
+		if !strings.Contains(once, want) {
+			t.Fatalf("session search guidance missing %q:\n%s", want, once)
+		}
+	}
+	if twice := WithSessionSearchSystemGuidance(once); twice != once {
+		t.Fatal("session search guidance should be idempotent")
+	}
+	if got := WithSessionSearchSystemGuidance(""); !strings.Contains(got, DefaultSystemPrompt) || !strings.Contains(got, "Session history retrieval:") {
+		t.Fatalf("empty prompt should fall back to default + session search guidance:\n%s", got)
+	}
+}
+
 func TestSessionSearchToolSchemaPublishesQueryLimit(t *testing.T) {
 	tool := sessionSearchTool(t.TempDir(), "current")
 	var schema struct {
