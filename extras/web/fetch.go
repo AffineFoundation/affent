@@ -10,6 +10,7 @@ import (
 	"net"
 	"net/http"
 	"net/url"
+	"sort"
 	"strings"
 	"syscall"
 	"time"
@@ -21,6 +22,7 @@ import (
 	agent "github.com/affinefoundation/affent/internal/agent"
 	"github.com/affinefoundation/affent/internal/websource"
 	readability "github.com/go-shiori/go-readability"
+	"golang.org/x/net/html"
 )
 
 // FetchConfig tunes WebFetchTool. Zero values pick sane defaults.
@@ -59,14 +61,17 @@ type FetchConfig struct {
 }
 
 const (
-	maxFetchURLBytes            = 4096
-	defaultMaxBytes             = 2 * 1024 * 1024
-	maxFetchBytes               = 8 * 1024 * 1024
-	defaultMaxResultChars       = 8000
-	maxFetchResultChars         = 64 * 1024
-	maxDynamicShellPreviewChars = 600
-	defaultUserAgent            = "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0 Safari/537.36 AffentWebFetch/0.1"
-	defaultAcceptHeader         = "text/html,application/xhtml+xml,application/json;q=0.95,application/ld+json;q=0.95,application/*+json;q=0.9,application/xml;q=0.9,application/rss+xml;q=0.9,application/atom+xml;q=0.9,application/*+xml;q=0.85,application/x-ndjson;q=0.85,text/plain;q=0.8,application/yaml;q=0.75,application/x-yaml;q=0.75,*/*;q=0.5"
+	maxFetchURLBytes             = 4096
+	defaultMaxBytes              = 2 * 1024 * 1024
+	maxFetchBytes                = 8 * 1024 * 1024
+	defaultMaxResultChars        = 8000
+	maxFetchResultChars          = 64 * 1024
+	maxDynamicShellPreviewChars  = 600
+	maxDynamicShellLinkScanBytes = 512 * 1024
+	maxDynamicShellLinks         = 5
+	maxDynamicShellLinkText      = 80
+	defaultUserAgent             = "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0 Safari/537.36 AffentWebFetch/0.1"
+	defaultAcceptHeader          = "text/html,application/xhtml+xml,application/json;q=0.95,application/ld+json;q=0.95,application/*+json;q=0.9,application/xml;q=0.9,application/rss+xml;q=0.9,application/atom+xml;q=0.9,application/*+xml;q=0.85,application/x-ndjson;q=0.85,text/plain;q=0.8,application/yaml;q=0.75,application/x-yaml;q=0.75,*/*;q=0.5"
 )
 
 // FetchTool returns an agent.Tool that fetches a URL and returns its
@@ -205,7 +210,7 @@ func fetch(ctx context.Context, cfg FetchConfig, requestURL string) (string, err
 		return blockedFetchResult(finalURL, ct, reason), nil
 	}
 	if reason := dynamicPageShellReason(body, ct, out); reason != "" {
-		return dynamicPageShellResult(finalURL, ct, reason, dynamicShellDiscoveryPreview(out)), nil
+		return dynamicPageShellResult(finalURL, ct, reason, dynamicShellDiscoveryPreview(out), dynamicShellDiscoveryLinks(body, finalURL)), nil
 	}
 
 	if len(out) > cfg.MaxResultChars {
@@ -232,13 +237,30 @@ func blockedFetchResult(finalURL, contentType, reason string) string {
 	return fmt.Sprintf("[blocked response: URL=%s, Content-Type=%q, Reason=%q]\nFailure: kind=blocked\nNext: do not treat this challenge/error page as source evidence; use an available search result snippet only as weak evidence, switch to a canonical API/text/source page, use an available rendering tool/source, or mark this source as blocked/unverified.", finalURL, contentType, reason)
 }
 
-func dynamicPageShellResult(finalURL, contentType, reason, preview string) string {
+type dynamicShellLink struct {
+	Text  string
+	URL   string
+	score int
+	order int
+}
+
+func dynamicPageShellResult(finalURL, contentType, reason, preview string, links []dynamicShellLink) string {
 	var b strings.Builder
 	fmt.Fprintf(&b, "[dynamic page shell: URL=%s, Content-Type=%q, Reason=%q]", finalURL, contentType, reason)
 	if preview != "" {
 		fmt.Fprintf(&b, "\nDiscovery preview (not source evidence): %s", preview)
 	}
-	b.WriteString("\nFailure: kind=dynamic_shell\nNext: do not treat this loading/app shell as source evidence; use the discovery preview only to choose a canonical API/text/source page, an available rendering tool/source, or answer with this source marked as dynamic/unverified.")
+	if len(links) > 0 {
+		b.WriteString("\nDiscovery links (not source evidence):")
+		for _, link := range links {
+			if link.Text != "" {
+				fmt.Fprintf(&b, "\n- %s — %s", link.Text, link.URL)
+			} else {
+				fmt.Fprintf(&b, "\n- %s", link.URL)
+			}
+		}
+	}
+	b.WriteString("\nFailure: kind=dynamic_shell\nNext: do not treat this loading/app shell as source evidence; use the discovery preview/links only to choose a canonical API/text/source page, an available rendering tool/source, or answer with this source marked as dynamic/unverified.")
 	return b.String()
 }
 
@@ -259,6 +281,126 @@ func dynamicShellDiscoveryPreview(markdown string) string {
 		text = text[:cut] + "...(truncated)"
 	}
 	return text
+}
+
+func dynamicShellDiscoveryLinks(body []byte, baseURL string) []dynamicShellLink {
+	base, err := url.Parse(baseURL)
+	if err != nil {
+		return nil
+	}
+	if len(body) > maxDynamicShellLinkScanBytes {
+		body = body[:maxDynamicShellLinkScanBytes]
+	}
+	z := html.NewTokenizer(bytes.NewReader(body))
+	seen := map[string]bool{}
+	var links []dynamicShellLink
+	var current *dynamicShellLink
+	depth := 0
+	order := 0
+	for {
+		tt := z.Next()
+		switch tt {
+		case html.ErrorToken:
+			if len(links) == 0 {
+				return nil
+			}
+			sort.SliceStable(links, func(i, j int) bool {
+				if links[i].score != links[j].score {
+					return links[i].score > links[j].score
+				}
+				return links[i].order < links[j].order
+			})
+			if len(links) > maxDynamicShellLinks {
+				links = links[:maxDynamicShellLinks]
+			}
+			return links
+		case html.StartTagToken:
+			token := z.Token()
+			if token.Data == "a" {
+				if link, ok := dynamicShellLinkFromToken(token, base, order); ok && !seen[link.URL] {
+					current = &link
+					depth = 1
+				} else {
+					current = nil
+				}
+			} else if current != nil {
+				depth++
+			}
+		case html.EndTagToken:
+			token := z.Token()
+			if current == nil {
+				continue
+			}
+			if token.Data == "a" {
+				current.Text = truncateDiscoveryLinkText(current.Text)
+				if current.score = dynamicShellLinkScore(current.Text, current.URL); current.score > 0 {
+					seen[current.URL] = true
+					current.order = order
+					links = append(links, *current)
+					order++
+				}
+				current = nil
+				depth = 0
+			} else if depth > 0 {
+				depth--
+			}
+		case html.TextToken:
+			if current != nil && len(current.Text) < maxDynamicShellLinkText {
+				current.Text = strings.TrimSpace(current.Text + " " + string(z.Text()))
+			}
+		}
+	}
+}
+
+func dynamicShellLinkFromToken(token html.Token, base *url.URL, order int) (dynamicShellLink, bool) {
+	var href string
+	for _, attr := range token.Attr {
+		if strings.EqualFold(attr.Key, "href") {
+			href = strings.TrimSpace(attr.Val)
+			break
+		}
+	}
+	if href == "" || strings.HasPrefix(href, "#") {
+		return dynamicShellLink{}, false
+	}
+	u, err := url.Parse(href)
+	if err != nil {
+		return dynamicShellLink{}, false
+	}
+	if u.Scheme != "" && u.Scheme != "http" && u.Scheme != "https" {
+		return dynamicShellLink{}, false
+	}
+	u = base.ResolveReference(u)
+	u.Fragment = ""
+	return dynamicShellLink{URL: u.String(), order: order}, true
+}
+
+func dynamicShellLinkScore(text, rawURL string) int {
+	lower := strings.ToLower(text + " " + rawURL)
+	score := 0
+	for _, needle := range []string{"api", "docs", "documentation", "developer", "developers", "export", "download", "raw", "data", "dataset", "csv", "json", "rss", "feed", "github"} {
+		if strings.Contains(lower, needle) {
+			score += 2
+		}
+	}
+	for _, needle := range []string{"login", "signin", "sign-in", "auth", "account", "portfolio", "swap", "stake", "claim"} {
+		if strings.Contains(lower, needle) {
+			score--
+		}
+	}
+	return score
+}
+
+func truncateDiscoveryLinkText(text string) string {
+	text = strings.Join(strings.Fields(text), " ")
+	if len(text) <= maxDynamicShellLinkText {
+		return text
+	}
+	cut := maxDynamicShellLinkText
+	for cut > 0 && !utf8.RuneStart(text[cut]) {
+		cut--
+	}
+	return strings.TrimSpace(text[:cut]) + "...(truncated)"
 }
 
 func directFetchPreflightResult(rawURL string) string {

@@ -256,10 +256,11 @@ the agent can switch source instead of burning turns:
   response with no readable body.
 - `Failure: kind=dynamic_shell`: the source returned a successful HTML response
   that looks like a client-rendered loading/app shell rather than source
-  evidence. The result may include a bounded `Discovery preview (not source
-  evidence)` line from visible shell text; use it only to choose a canonical
-  API/text/export endpoint or rendering tool, not as verified page evidence.
-  If no better source is available, mark the source as dynamic/unverified.
+  evidence. The result may include bounded `Discovery preview (not source
+  evidence)` text and a few high-signal `Discovery links (not source evidence)`
+  extracted from visible shell navigation; use them only to choose a canonical
+  API/text/export endpoint or rendering tool, not as verified page evidence. If
+  no better source is available, mark the source as dynamic/unverified.
 - `Failure: kind=non_text`: the source returned an image, PDF, archive, or
   another body that is not readable page evidence.
 - `Failure: kind=timeout`, `network_error`, `rate_limited`, `server_error`,
