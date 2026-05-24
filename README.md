@@ -67,7 +67,7 @@ Common make shortcuts wrap the same Docker/runtime commands:
 make affentctl-local
 make sandbox-start
 make image-run IMAGE_COMMAND='affentctl --help'
-make image-serve
+make image-serve-up
 make eval-container EVAL_ARGS='--list'
 make test-container TEST_PACKAGES=./internal/agent
 make test-container TEST_DIR=cmd/affentserve TEST_PACKAGES=./...
@@ -81,6 +81,13 @@ knob. Use `make affentctl-local` only when you explicitly want the host Go
 toolchain. Set `TEST_DIR` for nested modules such as `cmd/affentserve` or
 `extras/web`. The other targets use `affentctl` so the same default persistent
 workspaces, image tags, and resource limits apply.
+
+`make image-serve-up` is the one-command local server path: it builds the
+runtime image if needed, starts `affentserve` in a named Docker container,
+mounts the persistent runtime workspace, waits for `/healthz`, and uses the
+default `1g` memory / `2` CPU / `512` PID limits. If an existing container was
+created with different limits, Affent refuses to silently reuse it; run
+`make image-serve-restart` to recreate the container with the requested limits.
 
 `make eval-container` builds the full Affent runtime image, runs the checkout's
 `cmd/affenteval` inside it with the same Docker memory/CPU defaults, mounts the

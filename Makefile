@@ -100,6 +100,14 @@ image-serve-up:
 			echo "container $(SERVE_CONTAINER_NAME) is not an Affent runtime container" >&2; \
 			exit 2; \
 		fi; \
+		actual_memory=$$(docker inspect "$(SERVE_CONTAINER_NAME)" --format '{{index .Config.Labels "affent.runtime.memory"}}' 2>/dev/null); \
+		actual_cpus=$$(docker inspect "$(SERVE_CONTAINER_NAME)" --format '{{index .Config.Labels "affent.runtime.cpus"}}' 2>/dev/null); \
+		actual_pids=$$(docker inspect "$(SERVE_CONTAINER_NAME)" --format '{{index .Config.Labels "affent.runtime.pids_limit"}}' 2>/dev/null); \
+		if test "$$actual_memory" != "$(CONTAINER_MEMORY)" || test "$$actual_cpus" != "$(CONTAINER_CPUS)" || test "$$actual_pids" != "$(CONTAINER_PIDS)"; then \
+			echo "container $(SERVE_CONTAINER_NAME) was created with memory=$$actual_memory cpus=$$actual_cpus pids_limit=$$actual_pids, but requested memory=$(CONTAINER_MEMORY) cpus=$(CONTAINER_CPUS) pids_limit=$(CONTAINER_PIDS)" >&2; \
+			echo "run make image-serve-restart to recreate it with the requested limits" >&2; \
+			exit 2; \
+		fi; \
 		running=$$(docker inspect "$(SERVE_CONTAINER_NAME)" --format '{{.State.Running}}' 2>/dev/null); \
 		if test "$$running" = "true"; then \
 			echo "container $(SERVE_CONTAINER_NAME) already running; waiting for health"; \
