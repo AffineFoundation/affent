@@ -779,7 +779,8 @@ Native session endpoints:
 - `GET /v1/sessions/{id}/transcripts` lists durable child-loop transcripts
   from `run_task` and `subagent_run`.
 - `GET /v1/sessions/{id}/transcripts/{path}` reads a bounded transcript chunk.
-- `GET /v1/sessions/{id}/artifacts` lists durable tool-result artifacts.
+- `GET /v1/sessions/{id}/artifacts?limit=100&after=<artifact_path>` lists
+  durable tool-result artifacts with cursor pagination.
 - `GET /v1/sessions/{id}/artifacts/{path}` reads a bounded artifact chunk.
 - `POST /v1/sessions/{id}/messages` starts an async user turn and returns the
   `turn_id`; consume output through events or history. The request body is

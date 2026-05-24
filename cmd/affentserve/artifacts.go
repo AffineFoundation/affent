@@ -10,6 +10,7 @@ import (
 	"os"
 	"path"
 	"path/filepath"
+	"sort"
 	"strconv"
 	"strings"
 	"time"
@@ -19,6 +20,9 @@ import (
 
 const (
 	artifactPathPrefix       = ".affent/artifacts/tool-results"
+	defaultArtifactListLimit = 100
+	maxArtifactListLimit     = 1000
+	artifactReadDirBatch     = 128
 	defaultArtifactReadLimit = 64 * 1024
 	maxArtifactReadLimit     = 1024 * 1024
 )
@@ -26,6 +30,8 @@ const (
 type artifactListResponse struct {
 	SessionID string         `json:"session_id"`
 	Artifacts []artifactInfo `json:"artifacts"`
+	NextAfter string         `json:"next_after,omitempty"`
+	HasMore   bool           `json:"has_more"`
 }
 
 type artifactInfo struct {
@@ -45,13 +51,13 @@ func handleSessionArtifacts(pool *SessionPool, sessionID, artifactPath string, w
 	}
 	sessionDir := pool.sessionDirPath(sessionID)
 	if strings.Trim(artifactPath, "/") == "" {
-		handleSessionArtifactList(sessionDir, sessionID, w)
+		handleSessionArtifactList(sessionDir, sessionID, w, r)
 		return
 	}
 	handleSessionArtifactRead(sessionDir, artifactPath, w, r)
 }
 
-func handleSessionArtifactList(sessionDir, sessionID string, w http.ResponseWriter) {
+func handleSessionArtifactList(sessionDir, sessionID string, w http.ResponseWriter, r *http.Request) {
 	if _, found, err := durableSessionDirInfo(sessionDir); err != nil {
 		writeJSONError(w, http.StatusInternalServerError, "stat session", err)
 		return
@@ -59,8 +65,13 @@ func handleSessionArtifactList(sessionDir, sessionID string, w http.ResponseWrit
 		writeJSONError(w, http.StatusNotFound, "session not found", os.ErrNotExist)
 		return
 	}
+	after, limit, err := parseArtifactListQuery(r)
+	if err != nil {
+		writeJSONErrorTyped(w, http.StatusBadRequest, "invalid artifact query", err, "bad_request")
+		return
+	}
 	root := filepath.Join(sessionDir, filepath.FromSlash(artifactPathPrefix))
-	entries, err := durableReadDir(root)
+	names, hasMore, err := listArtifactNames(root, after, limit)
 	if err != nil {
 		if errors.Is(err, os.ErrNotExist) {
 			w.Header().Set("Content-Type", "application/json")
@@ -70,23 +81,122 @@ func handleSessionArtifactList(sessionDir, sessionID string, w http.ResponseWrit
 		writeJSONError(w, http.StatusInternalServerError, "read artifacts", err)
 		return
 	}
-	out := artifactListResponse{SessionID: sessionID, Artifacts: []artifactInfo{}}
-	for _, ent := range entries {
-		if ent.IsDir() || durableDirEntryIsSymlink(ent) {
-			continue
-		}
-		info, err := ent.Info()
+	out := artifactListResponse{SessionID: sessionID, Artifacts: []artifactInfo{}, HasMore: hasMore}
+	for _, name := range names {
+		full := filepath.Join(root, name)
+		info, err := os.Lstat(full)
 		if err != nil {
 			continue
 		}
+		if info.IsDir() || info.Mode()&os.ModeSymlink != 0 {
+			continue
+		}
+		rel := path.Join(artifactPathPrefix, name)
 		out.Artifacts = append(out.Artifacts, artifactInfo{
-			Path:    path.Join(artifactPathPrefix, ent.Name()),
+			Path:    rel,
 			Size:    info.Size(),
 			ModTime: info.ModTime().UTC().Format(time.RFC3339),
 		})
 	}
+	if len(out.Artifacts) > 0 && out.HasMore {
+		out.NextAfter = out.Artifacts[len(out.Artifacts)-1].Path
+	}
 	w.Header().Set("Content-Type", "application/json")
 	_ = json.NewEncoder(w).Encode(out)
+}
+
+func parseArtifactListQuery(r *http.Request) (after string, limit int, err error) {
+	limit = defaultArtifactListLimit
+	q := r.URL.Query()
+	if raw := q.Get("after"); raw != "" {
+		after, err = cleanArtifactRequestPath(raw)
+		if err != nil {
+			return "", 0, err
+		}
+	}
+	if raw := q.Get("limit"); raw != "" {
+		n, err := strconv.Atoi(raw)
+		if err != nil {
+			return "", 0, err
+		}
+		if n <= 0 {
+			return "", 0, errors.New("limit must be positive")
+		}
+		if n > maxArtifactListLimit {
+			n = maxArtifactListLimit
+		}
+		limit = n
+	}
+	return after, limit, nil
+}
+
+func listArtifactNames(root, after string, limit int) ([]string, bool, error) {
+	info, err := os.Lstat(root)
+	if err != nil {
+		return nil, false, err
+	}
+	if !info.IsDir() {
+		return nil, false, errors.New("durable path is not a directory")
+	}
+	if info.Mode()&os.ModeSymlink != 0 {
+		return nil, false, errors.New("durable path must not be a symlink")
+	}
+	dir, err := os.Open(root)
+	if err != nil {
+		return nil, false, err
+	}
+	defer dir.Close()
+	candidates := map[string]struct{}{}
+	for {
+		entries, err := dir.ReadDir(artifactReadDirBatch)
+		if err != nil && !errors.Is(err, io.EOF) {
+			return nil, false, err
+		}
+		for _, ent := range entries {
+			if ent.IsDir() || durableDirEntryIsSymlink(ent) {
+				continue
+			}
+			rel := path.Join(artifactPathPrefix, ent.Name())
+			if rel <= after {
+				continue
+			}
+			addArtifactNameCandidate(candidates, ent.Name(), limit+1)
+		}
+		if errors.Is(err, io.EOF) {
+			break
+		}
+	}
+	names := sortedArtifactNameCandidates(candidates)
+	hasMore := len(names) > limit
+	if hasMore {
+		names = names[:limit]
+	}
+	return names, hasMore, nil
+}
+
+func addArtifactNameCandidate(candidates map[string]struct{}, name string, cap int) {
+	if cap <= 0 {
+		return
+	}
+	candidates[name] = struct{}{}
+	for len(candidates) > cap {
+		var highest string
+		for name := range candidates {
+			if highest == "" || name > highest {
+				highest = name
+			}
+		}
+		delete(candidates, highest)
+	}
+}
+
+func sortedArtifactNameCandidates(candidates map[string]struct{}) []string {
+	names := make([]string, 0, len(candidates))
+	for name := range candidates {
+		names = append(names, name)
+	}
+	sort.Strings(names)
+	return names
 }
 
 func handleSessionArtifactRead(sessionDir, rawPath string, w http.ResponseWriter, r *http.Request) {

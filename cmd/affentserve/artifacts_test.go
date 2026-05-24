@@ -2,11 +2,14 @@ package main
 
 import (
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
 	"os"
 	"path"
 	"path/filepath"
+	"reflect"
 	"strings"
 	"testing"
 )
@@ -68,6 +71,9 @@ func TestHandleSessionArtifacts_ListAndReadChunks(t *testing.T) {
 	if len(list.Artifacts) != 1 || list.Artifacts[0].Path != artifactRel || list.Artifacts[0].Size != 16 {
 		t.Fatalf("artifact list = %+v", list.Artifacts)
 	}
+	if list.HasMore || list.NextAfter != "" {
+		t.Fatalf("single artifact list cursor = has_more:%v next:%q, want false/empty", list.HasMore, list.NextAfter)
+	}
 
 	r = httptest.NewRequest(http.MethodGet, "/v1/sessions/"+sessionID+"/artifacts/"+artifactRel+"?offset=4&limit=6", nil)
 	w = httptest.NewRecorder()
@@ -80,6 +86,71 @@ func TestHandleSessionArtifacts_ListAndReadChunks(t *testing.T) {
 	}
 	if got := w.Result().Header.Get("X-Affent-Artifact-Path"); got != artifactRel {
 		t.Fatalf("artifact path header = %q, want %q", got, artifactRel)
+	}
+}
+
+func TestHandleSessionArtifacts_ListPaginatesByArtifactPath(t *testing.T) {
+	memRoot := t.TempDir()
+	pool := artifactTestPool(t, memRoot)
+	sessionID := "artifact-page"
+	root := filepath.Join(memRoot, sessionID, filepath.FromSlash(artifactPathPrefix))
+	if err := os.MkdirAll(root, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	for _, name := range []string{"000003-c.txt", "000001-a.txt", "000002-b.txt"} {
+		if err := os.WriteFile(filepath.Join(root, name), []byte(name), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	r := httptest.NewRequest(http.MethodGet, "/v1/sessions/"+sessionID+"/artifacts?limit=2", nil)
+	w := httptest.NewRecorder()
+	handleSessionArtifacts(pool, sessionID, "", w, r)
+	var page1 artifactListResponse
+	if err := json.Unmarshal(w.Body.Bytes(), &page1); err != nil {
+		t.Fatalf("decode page1: %v body=%s", err, w.Body.String())
+	}
+	wantPage1 := []string{
+		path.Join(artifactPathPrefix, "000001-a.txt"),
+		path.Join(artifactPathPrefix, "000002-b.txt"),
+	}
+	if got := artifactPaths(page1.Artifacts); !reflect.DeepEqual(got, wantPage1) {
+		t.Fatalf("page1 artifacts = %v, want %v", got, wantPage1)
+	}
+	if !page1.HasMore || page1.NextAfter != wantPage1[1] {
+		t.Fatalf("page1 cursor = has_more:%v next:%q, want true/%q", page1.HasMore, page1.NextAfter, wantPage1[1])
+	}
+
+	r = httptest.NewRequest(http.MethodGet, fmt.Sprintf("/v1/sessions/%s/artifacts?limit=2&after=%s", sessionID, url.QueryEscape(page1.NextAfter)), nil)
+	w = httptest.NewRecorder()
+	handleSessionArtifacts(pool, sessionID, "", w, r)
+	var page2 artifactListResponse
+	if err := json.Unmarshal(w.Body.Bytes(), &page2); err != nil {
+		t.Fatalf("decode page2: %v body=%s", err, w.Body.String())
+	}
+	wantPage2 := []string{path.Join(artifactPathPrefix, "000003-c.txt")}
+	if got := artifactPaths(page2.Artifacts); !reflect.DeepEqual(got, wantPage2) {
+		t.Fatalf("page2 artifacts = %v, want %v", got, wantPage2)
+	}
+	if page2.HasMore || page2.NextAfter != "" {
+		t.Fatalf("page2 cursor = has_more:%v next:%q, want false/empty", page2.HasMore, page2.NextAfter)
+	}
+}
+
+func TestHandleSessionArtifacts_ListRejectsBadCursor(t *testing.T) {
+	memRoot := t.TempDir()
+	pool := artifactTestPool(t, memRoot)
+	sessionID := "artifact-bad-cursor"
+	root := filepath.Join(memRoot, sessionID, filepath.FromSlash(artifactPathPrefix))
+	if err := os.MkdirAll(root, 0o755); err != nil {
+		t.Fatal(err)
+	}
+
+	r := httptest.NewRequest(http.MethodGet, "/v1/sessions/"+sessionID+"/artifacts?after=../outside", nil)
+	w := httptest.NewRecorder()
+	handleSessionArtifacts(pool, sessionID, "", w, r)
+	if got := w.Result().StatusCode; got != http.StatusBadRequest {
+		t.Fatalf("status = %d, want 400: %s", got, w.Body.String())
 	}
 }
 
@@ -193,6 +264,14 @@ func TestHandleSessionArtifacts_RejectsSymlinkInsideArtifactRoot(t *testing.T) {
 	if got := w.Result().StatusCode; got != http.StatusBadRequest {
 		t.Fatalf("status = %d, want 400: %s", got, w.Body.String())
 	}
+}
+
+func artifactPaths(in []artifactInfo) []string {
+	out := make([]string, len(in))
+	for i, a := range in {
+		out[i] = a.Path
+	}
+	return out
 }
 
 func artifactTestPool(t *testing.T, memRoot string) *SessionPool {
