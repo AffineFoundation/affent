@@ -138,9 +138,34 @@ func TestSubagentPostPolicyDoesNotActivateForOpenGaps(t *testing.T) {
 }
 
 func TestSubagentReportHasOpenGapsAllowsExplicitNone(t *testing.T) {
-	report := "Conclusion:\nDone.\n\nUncertainties:\n- None.\n\nEvidence:\n- verified source."
-	if subagentReportHasOpenGaps(report) {
-		t.Fatalf("explicitly empty uncertainties should not mark report incomplete:\n%s", report)
+	if item, ok := inlineReportSectionItem("Warnings：无", "warnings"); !ok || item != "无" {
+		t.Fatalf("full-width inline section parse = %q, %t; want 无, true", item, ok)
+	}
+	if !reportSectionItemMeansNone("无") {
+		t.Fatal("Chinese explicit-none marker should be treated as empty")
+	}
+	reports := []string{
+		"Conclusion:\nDone.\n\nUncertainties:\n- None.\n\nEvidence:\n- verified source.",
+		"Conclusion:\nDone.\n\nUncertainties: none\nEvidence:\n- verified source.",
+		"Conclusion:\nDone.\n\nWarnings：无\nEvidence:\n- verified source.",
+	}
+	for _, report := range reports {
+		if subagentReportHasOpenGaps(report) {
+			t.Fatalf("explicitly empty uncertainties should not mark report incomplete:\n%s", report)
+		}
+	}
+}
+
+func TestSubagentReportHasOpenGapsDetectsInlineSectionGap(t *testing.T) {
+	reports := []string{
+		"Conclusion:\nSome facts gathered.\n\nUncertainties: metrics were not verified.",
+		"Conclusion:\nSome facts gathered.\n\nWarnings: source is stale.",
+		"Conclusion:\nSome facts gathered.\n\nLimitations：only one source was reachable.",
+	}
+	for _, report := range reports {
+		if !subagentReportHasOpenGaps(report) {
+			t.Fatalf("inline section gap should mark report incomplete:\n%s", report)
+		}
 	}
 }
 

@@ -9,6 +9,7 @@ import (
 	"path/filepath"
 	"strings"
 	"time"
+	"unicode/utf8"
 
 	"github.com/affinefoundation/affent/internal/executor"
 	"github.com/affinefoundation/affent/internal/memory"
@@ -261,6 +262,16 @@ func reportSectionHasMeaningfulItems(report, section string) bool {
 	inSection := false
 	for _, line := range lines {
 		trimmed := strings.TrimSpace(line)
+		if item, ok := inlineReportSectionItem(trimmed, section); ok {
+			if item == "" {
+				inSection = true
+				continue
+			}
+			if reportSectionItemMeansNone(item) {
+				return false
+			}
+			return true
+		}
 		lower := strings.ToLower(strings.Trim(trimmed, "#:* "))
 		if lower == section {
 			inSection = true
@@ -282,6 +293,23 @@ func reportSectionHasMeaningfulItems(report, section string) bool {
 		return true
 	}
 	return false
+}
+
+func inlineReportSectionItem(line, section string) (string, bool) {
+	trimmed := strings.TrimSpace(strings.TrimLeft(line, "#* "))
+	if trimmed == "" {
+		return "", false
+	}
+	idx := strings.IndexAny(trimmed, ":：")
+	if idx < 0 {
+		return "", false
+	}
+	name := strings.ToLower(strings.TrimSpace(strings.Trim(trimmed[:idx], "* ")))
+	if name != section {
+		return "", false
+	}
+	_, sepBytes := utf8.DecodeRuneInString(trimmed[idx:])
+	return strings.TrimSpace(strings.TrimLeft(trimmed[idx+sepBytes:], "-*0123456789.、) \t")), true
 }
 
 func reportSectionItemMeansNone(item string) bool {
