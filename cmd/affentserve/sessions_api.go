@@ -513,12 +513,12 @@ func summarizeDurableSession(pool *SessionPool, id string) (sessionSummary, bool
 	if exists, planMod, err = durableRegularFileModTime(filepath.Join(dir, "plan.json")); err != nil {
 		return sessionSummary{}, false, err
 	}
-	summary.HasPlan = exists
-	if exists && planMod.After(newest) {
-		newest = planMod
-	}
 	if exists {
 		summary.PlanSummary = summarizeSessionPlanFile(pool, id)
+		summary.HasPlan = summary.PlanSummary != nil
+	}
+	if summary.HasPlan && planMod.After(newest) {
+		newest = planMod
 	}
 	summary.HasArtifacts = dirHasAnyEntry(filepath.Join(dir, filepath.FromSlash(artifactPathPrefix)))
 	summary.RuntimeSkillNames = durableRuntimeSkillNames(agent.DefaultWorkspaceSkillDir(dir))
