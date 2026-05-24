@@ -540,11 +540,11 @@ func TestFocusedTaskPolicies(t *testing.T) {
 }
 
 // TestRunFocusedTask_ResearchUsesWebToolThenEmitsJSON exercises the
-// research profile end-to-end. Research is the only built-in profile
-// whose tool whitelist (AllowWeb) is satisfied by an EXTERNAL deps
-// hook rather than by an internal Affent registrar -- without this
-// test the RegisterWebTools wiring is a code path that has never
-// actually been driven by a focused-task run.
+// research profile end-to-end. Research is the built-in profile whose
+// external lookup tools are satisfied by caller-provided deps hooks rather
+// than by an internal Affent registrar -- without this test the
+// RegisterWebTools wiring is a code path that has never actually been
+// driven by a focused-task run.
 //
 // What this pins:
 //   - RegisterWebTools is called exactly once per run_task invocation;
@@ -650,8 +650,10 @@ func TestRunFocusedTask_ResearchUsesWebToolThenEmitsJSON(t *testing.T) {
 	if !strings.Contains(prompt, "If web_fetch fails") || !strings.Contains(prompt, "Do not keep retrying the same failing URL") {
 		t.Fatalf("fetch-only research prompt should guide recovery from failed fetches:\n%s", prompt)
 	}
-	if strings.Contains(prompt, "web_search") {
-		t.Fatalf("fetch-only research prompt should not mention unavailable web_search:\n%s", prompt)
+	for _, forbidden := range []string{"web_search", "browser_navigate", "browser_snapshot"} {
+		if strings.Contains(prompt, forbidden) {
+			t.Fatalf("fetch-only research prompt should not mention unavailable %q:\n%s", forbidden, prompt)
+		}
 	}
 }
 
