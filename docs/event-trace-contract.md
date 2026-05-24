@@ -29,12 +29,18 @@ under the session state root.
 response), not `Event.id`; loop event ids are process-local and may repeat after
 server restart.
 
+`GET /v1/sessions/{id}/events` uses that same durable JSONL line number as the
+SSE `id:` value. A client that reconnects with `Last-Event-ID: <cursor>` first
+receives persisted records after that cursor, then continues with live events.
+
 ## Event Envelope
 
 Every event record has:
 
-- `id`: monotonic runtime event id. `trace.meta` uses `0` because it is a file
-  header, not a loop event.
+- `id`: monotonic event id. In `affentctl` traces this is the runtime loop id.
+  In `affentserve` session logs and native session SSE it is the durable JSONL
+  line cursor so reconnect and replay use the same ordering key. `trace.meta`
+  uses `0` because it is a file header, not a loop event.
 - `type`: event type string.
 - `data`: type-specific JSON object.
 

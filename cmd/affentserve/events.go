@@ -9,6 +9,7 @@ import (
 	"os"
 	"path/filepath"
 	"strconv"
+	"strings"
 	"time"
 
 	agent "github.com/affinefoundation/affent/internal/agent"
@@ -34,15 +35,19 @@ const (
 // extractors, debuggers) that want richer signals than OpenAI's delta
 // protocol carries.
 //
-// The handler subscribes after the session is fetched, so it captures
-// every event from now until the connection drops or the session is
-// closed. There is no per-session ring buffer in v1 — late
-// subscribers miss historical events. (Add Last-Event-ID replay when
-// a real client needs it.)
+// Event IDs on this endpoint are durable events.jsonl line cursors.
+// Clients may reconnect with Last-Event-ID and the handler will first
+// replay persisted events after that cursor, then continue with live
+// events.
 func handleSessionEvents(pool *SessionPool, sessionID string, w http.ResponseWriter, r *http.Request) {
 	sess, err := pool.Get(sessionID)
 	if err != nil {
 		writeJSONError(w, http.StatusNotFound, "session not found", err)
+		return
+	}
+	lastEventID, replay, err := parseLastEventID(r.Header.Get("Last-Event-ID"))
+	if err != nil {
+		writeJSONErrorTyped(w, http.StatusBadRequest, "invalid Last-Event-ID", err, "bad_request")
 		return
 	}
 	flusher, ok := w.(http.Flusher)
@@ -61,6 +66,14 @@ func handleSessionEvents(pool *SessionPool, sessionID string, w http.ResponseWri
 	// Initial flush so curl / fetch unblocks waiting for headers.
 	flusher.Flush()
 
+	replayedThrough := lastEventID
+	if replay {
+		replayedThrough, err = replaySessionEvents(w, flusher, pool.sessionDirPath(sessionID), lastEventID)
+		if err != nil {
+			return
+		}
+	}
+
 	keepAlive := time.NewTicker(sseKeepAliveInterval)
 	defer keepAlive.Stop()
 
@@ -78,6 +91,9 @@ func handleSessionEvents(pool *SessionPool, sessionID string, w http.ResponseWri
 			if !ok {
 				return
 			}
+			if replay && ev.ID <= replayedThrough {
+				continue
+			}
 			if err := writeSSE(w, flusher, ev); err != nil {
 				// Client disconnected (broken pipe, RST). Detecting
 				// this via write failure is faster than waiting for
@@ -92,6 +108,40 @@ func handleSessionEvents(pool *SessionPool, sessionID string, w http.ResponseWri
 	}
 }
 
+func parseLastEventID(raw string) (int64, bool, error) {
+	raw = strings.TrimSpace(raw)
+	if raw == "" {
+		return -1, false, nil
+	}
+	n, err := strconv.ParseInt(raw, 10, 64)
+	if err != nil {
+		return 0, false, err
+	}
+	if n < -1 {
+		return 0, false, errors.New("Last-Event-ID must be -1 or greater")
+	}
+	return n, true, nil
+}
+
+func replaySessionEvents(w http.ResponseWriter, flusher http.Flusher, sessionDir string, after int64) (int64, error) {
+	cursor := after
+	for {
+		page, err := readSessionHistoryPage(sessionDir, cursor, maxHistoryLimit)
+		if err != nil {
+			return cursor, err
+		}
+		for _, rec := range page.Records {
+			if err := writeSSEWithID(w, flusher, rec.Event, rec.Cursor); err != nil {
+				return cursor, err
+			}
+			cursor = rec.Cursor
+		}
+		if !page.HasMore {
+			return cursor, nil
+		}
+	}
+}
+
 func writeSSE(w http.ResponseWriter, flusher http.Flusher, ev sse.Event) error {
 	out := ev.Encode()
 	if _, err := w.Write(out); err != nil {
@@ -101,6 +151,11 @@ func writeSSE(w http.ResponseWriter, flusher http.Flusher, ev sse.Event) error {
 	return nil
 }
 
+func writeSSEWithID(w http.ResponseWriter, flusher http.Flusher, ev sse.Event, id int64) error {
+	ev.ID = id
+	return writeSSE(w, flusher, ev)
+}
+
 type sessionHistoryResponse struct {
 	SessionID           string      `json:"session_id"`
 	Events              []sse.Event `json:"events"`
@@ -108,6 +163,19 @@ type sessionHistoryResponse struct {
 	HasMore             bool        `json:"has_more"`
 	TraceSchemaVersion  int         `json:"trace_schema_version,omitempty"`
 	TraceSchemaDetected bool        `json:"trace_schema_detected"`
+}
+
+type sessionHistoryRecord struct {
+	Cursor int64
+	Event  sse.Event
+}
+
+type sessionHistoryPage struct {
+	Records             []sessionHistoryRecord
+	NextAfter           int64
+	HasMore             bool
+	TraceSchemaVersion  int
+	TraceSchemaDetected bool
 }
 
 // handleSessionHistory replays persisted session events from
@@ -173,26 +241,44 @@ func parseHistoryQuery(r *http.Request) (after int64, limit int, err error) {
 }
 
 func readSessionHistory(sessionDir, sessionID string, after int64, limit int) (sessionHistoryResponse, error) {
+	page, err := readSessionHistoryPage(sessionDir, after, limit)
+	if err != nil {
+		return sessionHistoryResponse{}, err
+	}
+	resp := sessionHistoryResponse{
+		SessionID:           sessionID,
+		Events:              make([]sse.Event, 0, len(page.Records)),
+		NextAfter:           page.NextAfter,
+		HasMore:             page.HasMore,
+		TraceSchemaVersion:  page.TraceSchemaVersion,
+		TraceSchemaDetected: page.TraceSchemaDetected,
+	}
+	for _, rec := range page.Records {
+		resp.Events = append(resp.Events, rec.Event)
+	}
+	return resp, nil
+}
+
+func readSessionHistoryPage(sessionDir string, after int64, limit int) (sessionHistoryPage, error) {
 	path := filepath.Join(sessionDir, "events.jsonl")
 	info, err := os.Lstat(path)
 	if err != nil {
-		return sessionHistoryResponse{}, err
+		return sessionHistoryPage{}, err
 	}
 	if info.IsDir() {
-		return sessionHistoryResponse{}, fmt.Errorf("events path is a directory")
+		return sessionHistoryPage{}, fmt.Errorf("events path is a directory")
 	}
 	if info.Mode()&os.ModeSymlink != 0 {
-		return sessionHistoryResponse{}, fmt.Errorf("events path must not be a symlink")
+		return sessionHistoryPage{}, fmt.Errorf("events path must not be a symlink")
 	}
 	f, err := os.Open(path)
 	if err != nil {
-		return sessionHistoryResponse{}, err
+		return sessionHistoryPage{}, err
 	}
 	defer f.Close()
 
-	resp := sessionHistoryResponse{
-		SessionID: sessionID,
-		Events:    []sse.Event{},
+	page := sessionHistoryPage{
+		Records:   []sessionHistoryRecord{},
 		NextAfter: after,
 	}
 	sc := bufio.NewScanner(f)
@@ -207,24 +293,24 @@ func readSessionHistory(sessionDir, sessionID string, after int64, limit int) (s
 		if ev.Type == sse.TypeTraceMeta {
 			var meta sse.TraceMetaPayload
 			if err := json.Unmarshal(ev.Data, &meta); err == nil {
-				resp.TraceSchemaVersion = meta.SchemaVersion
-				resp.TraceSchemaDetected = true
+				page.TraceSchemaVersion = meta.SchemaVersion
+				page.TraceSchemaDetected = true
 			}
 		}
 		if lineNo <= after {
 			continue
 		}
-		if len(resp.Events) >= limit {
-			resp.HasMore = true
+		if len(page.Records) >= limit {
+			page.HasMore = true
 			break
 		}
-		resp.Events = append(resp.Events, ev)
-		resp.NextAfter = lineNo
+		page.Records = append(page.Records, sessionHistoryRecord{Cursor: lineNo, Event: ev})
+		page.NextAfter = lineNo
 	}
 	if err := sc.Err(); err != nil {
-		return sessionHistoryResponse{}, err
+		return sessionHistoryPage{}, err
 	}
-	return resp, nil
+	return page, nil
 }
 
 // handleSessionDelete closes a session immediately. Returns 204 even

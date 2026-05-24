@@ -7,12 +7,10 @@ import (
 )
 
 // Event is the canonical SSE payload. ID is a monotonically increasing
-// sequence number scoped to a single Loop — it shows up in the wire
-// format's `id:` line so clients can detect gaps, dedupe on reconnect,
-// and feed it back in `Last-Event-ID` if a future server-side replay
-// path lands. Today no ring buffer stores events, so a reconnect just
-// resumes the live stream from the next event; any missed events are
-// gone.
+// sequence number. agent.Loop initially assigns a per-loop sequence;
+// durable servers may replace it with their persisted stream cursor
+// before writing or serving the event so clients can reconnect with
+// Last-Event-ID.
 type Event struct {
 	ID   int64           `json:"id"`
 	Type string          `json:"type"`

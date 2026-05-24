@@ -222,12 +222,83 @@ func TestHandleSessionHistory_ReplaysDurableEventsByLineCursor(t *testing.T) {
 	if len(page2.Events) != 1 || page2.Events[0].Type != sse.TypeTurnStart || page2.NextAfter != 2 || page2.HasMore {
 		t.Fatalf("page2 = %+v", page2)
 	}
+	if page2.Events[0].ID != 2 {
+		t.Fatalf("page2 event id = %d, want durable line cursor 2", page2.Events[0].ID)
+	}
 	var payload sse.TurnStartPayload
 	if err := json.Unmarshal(page2.Events[0].Data, &payload); err != nil {
 		t.Fatal(err)
 	}
 	if payload.TurnID != "turn-two" {
 		t.Fatalf("page2 turn_id = %q, want turn-two", payload.TurnID)
+	}
+}
+
+func TestReplaySessionEventsUsesDurableLineCursorIDs(t *testing.T) {
+	memRoot := t.TempDir()
+	pool := newPoolWithMemoryRoot(t, memRoot)
+	s, err := pool.GetOrCreate("event-replay")
+	if err != nil {
+		t.Fatal(err)
+	}
+	tracePath := filepath.Join(memRoot, "event-replay", "events.jsonl")
+	for _, turnID := range []string{"turn-one", "turn-two"} {
+		ev, err := sse.NewEvent(sse.TypeTurnStart, sse.TurnStartPayload{TurnID: turnID})
+		if err != nil {
+			t.Fatal(err)
+		}
+		ev.ID = 1
+		s.events <- ev
+	}
+	waitForFileSubstring(t, tracePath, `"turn_id":"turn-two"`)
+
+	rec := httptest.NewRecorder()
+	spy := &flushSpyRecorder{ResponseRecorder: rec}
+	next, err := replaySessionEvents(spy, spy, pool.sessionDirPath("event-replay"), 1)
+	if err != nil {
+		t.Fatal(err)
+	}
+	body := rec.Body.String()
+	if next != 2 {
+		t.Fatalf("replay next cursor = %d, want 2", next)
+	}
+	if !strings.Contains(body, "id: 2") || !strings.Contains(body, `"turn_id":"turn-two"`) {
+		t.Fatalf("replay should include second event with durable id 2:\n%s", body)
+	}
+	if strings.Contains(body, `"turn_id":"turn-one"`) || strings.Contains(body, "id: 1") {
+		t.Fatalf("replay after cursor 1 should skip earlier events:\n%s", body)
+	}
+}
+
+func TestParseLastEventID(t *testing.T) {
+	for _, tc := range []struct {
+		name       string
+		raw        string
+		wantID     int64
+		wantReplay bool
+		wantErr    bool
+	}{
+		{name: "empty", raw: "", wantID: -1},
+		{name: "cursor", raw: " 2 ", wantID: 2, wantReplay: true},
+		{name: "negative one", raw: "-1", wantID: -1, wantReplay: true},
+		{name: "bad", raw: "nope", wantErr: true},
+		{name: "too negative", raw: "-2", wantErr: true},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			gotID, gotReplay, err := parseLastEventID(tc.raw)
+			if tc.wantErr {
+				if err == nil {
+					t.Fatal("expected error")
+				}
+				return
+			}
+			if err != nil {
+				t.Fatal(err)
+			}
+			if gotID != tc.wantID || gotReplay != tc.wantReplay {
+				t.Fatalf("parseLastEventID(%q) = (%d,%v), want (%d,%v)", tc.raw, gotID, gotReplay, tc.wantID, tc.wantReplay)
+			}
+		})
 	}
 }
 

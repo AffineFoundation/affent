@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bufio"
 	"context"
 	"encoding/json"
 	"errors"
@@ -32,17 +33,18 @@ type Session struct {
 
 	mu sync.Mutex
 
-	loop      *agent.Loop
-	conv      *agent.Conversation
-	llm       *agent.LLMClient
-	registry  *agent.Registry
-	events    chan sse.Event
-	browser   *affentbrowser.Session
-	workspace string
-	createdAt time.Time
-	lastUsed  time.Time
-	trace     *eventlog.Recorder
-	traceFile *os.File
+	loop          *agent.Loop
+	conv          *agent.Conversation
+	llm           *agent.LLMClient
+	registry      *agent.Registry
+	events        chan sse.Event
+	browser       *affentbrowser.Session
+	workspace     string
+	createdAt     time.Time
+	lastUsed      time.Time
+	trace         *eventlog.Recorder
+	traceFile     *os.File
+	nextEventLine int64
 
 	// Per-session lifetime token counters, accumulated in fanout as
 	// sse.TypeUsage events flow through. Atomic so the /v1/stats
@@ -549,7 +551,7 @@ func (p *SessionPool) buildSession(id string) (*Session, error) {
 		}
 		return nil, fmt.Errorf("system prompt: %w", err)
 	}
-	trace, traceFile, err := openSessionEventLog(sessionDir)
+	trace, traceFile, nextEventLine, err := openSessionEventLog(sessionDir)
 	if err != nil {
 		_ = os.RemoveAll(workspace)
 		if browser != nil {
@@ -559,45 +561,70 @@ func (p *SessionPool) buildSession(id string) (*Session, error) {
 	}
 
 	s := &Session{
-		ID:         id,
-		loop:       loop,
-		conv:       conv,
-		llm:        llm,
-		registry:   reg,
-		events:     events,
-		browser:    browser,
-		workspace:  workspace,
-		createdAt:  time.Now(),
-		lastUsed:   time.Now(),
-		trace:      trace,
-		traceFile:  traceFile,
-		subs:       map[int]chan sse.Event{},
-		closedCh:   make(chan struct{}),
-		fanoutDone: make(chan struct{}),
+		ID:            id,
+		loop:          loop,
+		conv:          conv,
+		llm:           llm,
+		registry:      reg,
+		events:        events,
+		browser:       browser,
+		workspace:     workspace,
+		createdAt:     time.Now(),
+		lastUsed:      time.Now(),
+		trace:         trace,
+		traceFile:     traceFile,
+		nextEventLine: nextEventLine,
+		subs:          map[int]chan sse.Event{},
+		closedCh:      make(chan struct{}),
+		fanoutDone:    make(chan struct{}),
 	}
 	go s.fanout()
 	return s, nil
 }
 
-func openSessionEventLog(sessionDir string) (*eventlog.Recorder, *os.File, error) {
+func openSessionEventLog(sessionDir string) (*eventlog.Recorder, *os.File, int64, error) {
 	path := filepath.Join(sessionDir, "events.jsonl")
 	f, err := os.OpenFile(path, os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0o644)
 	if err != nil {
-		return nil, nil, err
+		return nil, nil, 0, err
 	}
 	info, err := f.Stat()
 	if err != nil {
 		_ = f.Close()
-		return nil, nil, err
+		return nil, nil, 0, err
 	}
 	rec := eventlog.NewRecorder(f, eventlog.Options{})
 	if info.Size() == 0 {
 		if err := rec.WriteMeta(); err != nil {
 			_ = f.Close()
-			return nil, nil, err
+			return nil, nil, 0, err
 		}
+		return rec, f, 1, nil
 	}
-	return rec, f, nil
+	nextLine, err := countJSONLLines(path)
+	if err != nil {
+		_ = f.Close()
+		return nil, nil, 0, err
+	}
+	return rec, f, nextLine, nil
+}
+
+func countJSONLLines(path string) (int64, error) {
+	f, err := os.Open(path)
+	if err != nil {
+		return 0, err
+	}
+	defer f.Close()
+	sc := bufio.NewScanner(f)
+	sc.Buffer(make([]byte, 0, 64*1024), 4*1024*1024)
+	var lines int64
+	for sc.Scan() {
+		lines++
+	}
+	if err := sc.Err(); err != nil {
+		return 0, err
+	}
+	return lines, nil
 }
 
 func (p *SessionPool) allocWorkspace(id string) (string, error) {
@@ -731,6 +758,8 @@ func (s *Session) fanout() {
 			if !ok {
 				return
 			}
+			ev.ID = s.nextEventLine
+			s.nextEventLine++
 			if s.trace != nil {
 				if err := s.trace.Write(ev); err != nil {
 					s.loop.Log.Warn().Err(err).Str("session_id", s.ID).Msg("event log write")

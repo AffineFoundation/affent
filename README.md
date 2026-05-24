@@ -429,6 +429,9 @@ Use `GET /v1/sessions/{id}/history?after=-1&limit=100` to page through the
 persisted event log. The `after` cursor is a JSONL line number (`next_after`
 from the previous response), not an event id, so replay remains correct across
 server restarts where runtime event ids can start over.
+The live `GET /v1/sessions/{id}/events` stream uses the same durable line
+cursor for its SSE `id:` field; reconnect with `Last-Event-ID` to replay
+persisted events after that cursor before continuing with live events.
 Use `GET /v1/sessions/{id}/plan` to read the persisted `plan.json` snapshot
 without reopening an inactive session.
 
@@ -764,7 +767,8 @@ Native session endpoints:
   capability summary.
 - `GET /v1/sessions/{id}` returns session status and, when active, capability
   summary.
-- `GET /v1/sessions/{id}/events` streams live SSE events.
+- `GET /v1/sessions/{id}/events` streams SSE events; reconnect with
+  `Last-Event-ID` to replay missed persisted events before live events.
 - `GET /v1/sessions/{id}/history?after=-1&limit=100` pages persisted events.
 - `GET /v1/sessions/{id}/plan` returns the persisted plan snapshot without
   reopening an inactive session.
