@@ -312,6 +312,39 @@ func TestSearchTool_FormatsResults(t *testing.T) {
 	}
 }
 
+func TestSearchTool_NoResultsIncludesNext(t *testing.T) {
+	tool, err := SearchTool(SearchConfig{Provider: stubProvider{}})
+	if err != nil {
+		t.Fatalf("SearchTool: %v", err)
+	}
+	args, _ := json.Marshal(map[string]any{"query": "narrow unknown thing"})
+	out, err := tool.Execute(context.Background(), args)
+	if err != nil {
+		t.Fatalf("Execute: %v", err)
+	}
+	for _, want := range []string{"(no results)", "Next:", "different keywords", "official domain"} {
+		if !strings.Contains(out, want) {
+			t.Fatalf("no-result output missing %q:\n%s", want, out)
+		}
+	}
+}
+
+func TestSearchTool_ProviderErrorIncludesNext(t *testing.T) {
+	tool, err := SearchTool(SearchConfig{Provider: failingProvider{}})
+	if err != nil {
+		t.Fatalf("SearchTool: %v", err)
+	}
+	_, err = tool.Execute(context.Background(), json.RawMessage(`{"query":"affine bittensor subnet"}`))
+	if err == nil {
+		t.Fatal("expected provider error")
+	}
+	for _, want := range []string{"intentional test failure", "Next:", "fewer/different keywords"} {
+		if !strings.Contains(err.Error(), want) {
+			t.Fatalf("provider error missing %q: %v", want, err)
+		}
+	}
+}
+
 func TestSearchTool_NumResultsMatchesAdvertisedCap(t *testing.T) {
 	cases := []struct {
 		name          string

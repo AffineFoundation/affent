@@ -102,7 +102,7 @@ func SearchTool(cfg SearchConfig) (*agent.Tool, error) {
 
 			results, err := cfg.Provider.Search(ctx, query, n)
 			if err != nil {
-				return "", err
+				return "", recoverableSearchError(err)
 			}
 			return formatResults(results), nil
 		},
@@ -111,7 +111,7 @@ func SearchTool(cfg SearchConfig) (*agent.Tool, error) {
 
 func formatResults(results []SearchResult) string {
 	if len(results) == 0 {
-		return "(no results)"
+		return "(no results)\nNext: retry web_search with fewer or different keywords, include distinctive entities or official domain names, or use another available source URL if already known."
 	}
 	var b strings.Builder
 	for i, r := range results {
@@ -119,6 +119,25 @@ func formatResults(results []SearchResult) string {
 			i+1, r.Title, r.URL, strings.TrimSpace(r.Snippet))
 	}
 	return strings.TrimSpace(b.String())
+}
+
+func recoverableSearchError(err error) error {
+	if err == nil || strings.Contains(err.Error(), "\nNext:") {
+		return err
+	}
+	lower := strings.ToLower(err.Error())
+	next := "retry once with fewer/different keywords or a more distinctive entity; if search remains unavailable, use known official URLs with web_fetch/browser or say what could not be verified."
+	switch {
+	case errors.Is(err, context.DeadlineExceeded) || strings.Contains(lower, "timeout") || strings.Contains(lower, "deadline exceeded"):
+		next = "search provider timed out; retry once with a shorter query, then use known official URLs or answer with clearly marked gaps."
+	case strings.Contains(lower, "429") || strings.Contains(lower, "rate limit"):
+		next = "search provider is rate-limited; do not retry repeatedly. Use already returned sources, known official URLs, or answer with clearly marked gaps."
+	case strings.Contains(lower, "401") || strings.Contains(lower, "403") || strings.Contains(lower, "unauthorized") || strings.Contains(lower, "forbidden"):
+		next = "search provider credentials/access failed; do not retry the same search. Use known official URLs or say search is unavailable."
+	case strings.Contains(lower, "tavily") && (strings.Contains(lower, "decode") || strings.Contains(lower, "http")):
+		next = "search backend failed; retry once with a simpler query or switch to known official URLs/search snippets already available."
+	}
+	return fmt.Errorf("%w\nNext: %s", err, next)
 }
 
 // ---- Tavily provider --------------------------------------------------
