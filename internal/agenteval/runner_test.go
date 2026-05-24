@@ -1533,7 +1533,7 @@ func TestRunner_EndToEnd_ExternalResearchFetchRecovery(t *testing.T) {
 			case "https://official.example/orion/about":
 				return "Official docs, updated 2026-05-20: Orion Network is a decentralized storage subnet for encrypted archival workloads.", nil
 			case "https://blocked.example/orion/metrics":
-				return "web_fetch failed: HTTP 403 Forbidden for https://blocked.example/orion/metrics\nNext: do not retry this exact URL; fetch an HTML/API/text fallback, use a browser tool if one is registered, or mark this source as unverified.", nil
+				return "", errors.New("web_fetch failed: HTTP 403 Forbidden for https://blocked.example/orion/metrics\nFailure: kind=blocked, status=403\nNext: do not retry this exact URL; fetch an HTML/API/text fallback, use a browser tool if one is registered, or mark this source as unverified")
 			case "https://metrics.example/orion":
 				return "Alternative metrics snapshot as of 2026-05-24T12:00:00Z: price $4.12, market cap $41.3M, 24h change -2.1%, 24h volume $980K.", nil
 			case "https://social.example/search/orion":
@@ -1587,6 +1587,7 @@ func TestRunner_EndToEnd_ExternalResearchFetchRecovery(t *testing.T) {
 			ToolCalled("web_fetch", fetchURL("https://metrics.example/orion")),
 			ToolCalled("web_fetch", fetchURL("https://social.example/search/orion")),
 			ToolCalledAtLeast("web_fetch", 4),
+			ToolFailureKindAtLeast("blocked", 1),
 			ToolResultContains("web_fetch", "Next: do not retry this exact URL"),
 			ToolCalledBeforeMatching("web_search", orionSearch, "web_fetch", fetchURL("https://blocked.example/orion/metrics")),
 			ToolCalledBeforeMatching("web_fetch", fetchURL("https://blocked.example/orion/metrics"), "web_fetch", fetchURL("https://metrics.example/orion")),
