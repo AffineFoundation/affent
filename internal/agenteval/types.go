@@ -214,6 +214,9 @@ type ToolRuntimeStats struct {
 	ToolRequests           int
 	ToolNameCanonicalized  int
 	ToolArgsRepaired       int
+	ToolRepairCalls        int
+	ToolRepairSucceeded    int
+	ToolRepairFailed       int
 	ToolRepairNotes        int
 	ToolRepairByKind       map[string]int
 	ToolErrors             int

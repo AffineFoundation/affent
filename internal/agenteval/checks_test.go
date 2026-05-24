@@ -301,12 +301,26 @@ func TestToolRequestRepaired(t *testing.T) {
 }
 
 func TestToolStatsAtLeast(t *testing.T) {
-	trace := Trace{ToolStats: ToolRuntimeStats{ToolArgsRepaired: 2, ToolRepairNotes: 3, ToolErrors: 1, ToolDurationMS: 25}}
+	trace := Trace{ToolStats: ToolRuntimeStats{
+		ToolArgsRepaired:    2,
+		ToolRepairCalls:     2,
+		ToolRepairSucceeded: 1,
+		ToolRepairFailed:    1,
+		ToolRepairNotes:     3,
+		ToolErrors:          1,
+		ToolDurationMS:      25,
+	}}
 	if res := ToolStatsAtLeast("tool_args_repaired", 2).Eval(trace); !res.Pass {
 		t.Fatalf("expected stats check to pass: %+v", res)
 	}
 	if res := ToolStatsAtLeast("tool_repair_notes", 3).Eval(trace); !res.Pass {
 		t.Fatalf("expected tool_repair_notes stats check to pass: %+v", res)
+	}
+	if res := ToolStatsAtLeast("tool_repair_succeeded", 1).Eval(trace); !res.Pass {
+		t.Fatalf("expected tool_repair_succeeded stats check to pass: %+v", res)
+	}
+	if res := ToolStatsAtLeast("tool_repair_failed", 1).Eval(trace); !res.Pass {
+		t.Fatalf("expected tool_repair_failed stats check to pass: %+v", res)
 	}
 	if res := ToolStatsAtLeast("tool_errors", 1).Eval(trace); !res.Pass {
 		t.Fatalf("expected tool_errors stats check to pass: %+v", res)

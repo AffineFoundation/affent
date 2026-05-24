@@ -621,6 +621,7 @@ func (l *Loop) runTurn(ctx context.Context, turnID, userText string, opts TurnOp
 				toolStats.ToolArgsRepaired++
 			}
 			recordToolRepairNotes(&toolStats, repairNotes)
+			repairedToolCall := canonicalChanged || argsRepaired || len(repairNotes) > 0
 			originalArgsSummary := ""
 			if canonicalChanged || argsRepaired || argsRepairErr != nil {
 				originalArgsSummary = summarizeOriginalToolArgs(tc.Function.Arguments)
@@ -652,6 +653,7 @@ func (l *Loop) runTurn(ctx context.Context, turnID, userText string, opts TurnOp
 				result := fmt.Sprintf("tool_arg_repair: %v", argsRepairErr)
 				l.publishAndAppendToolResultWithDelegation(turnID, callID, toolName, result, true, 0, delegation)
 				toolCallsUsed++
+				recordToolRepairOutcome(&toolStats, repairedToolCall, true)
 				toolStats.ToolErrors++
 				continue
 			}
@@ -675,6 +677,7 @@ func (l *Loop) runTurn(ctx context.Context, turnID, userText string, opts TurnOp
 					l.Log.Error().Err(err).Str("call_id", callID).Msg("conv append tool guard result")
 				}
 				toolCallsUsed++
+				recordToolRepairOutcome(&toolStats, repairedToolCall, true)
 				toolStats.ToolErrors++
 				continue
 			}
@@ -694,6 +697,7 @@ func (l *Loop) runTurn(ctx context.Context, turnID, userText string, opts TurnOp
 					l.Log.Error().Err(err).Str("call_id", callID).Msg("conv append post-tool repeat guard result")
 				}
 				toolCallsUsed++
+				recordToolRepairOutcome(&toolStats, repairedToolCall, true)
 				toolStats.ToolErrors++
 				continue
 			}
@@ -710,12 +714,14 @@ func (l *Loop) runTurn(ctx context.Context, turnID, userText string, opts TurnOp
 					l.Log.Error().Err(err).Str("call_id", callID).Msg("conv append post-tool guard result")
 				}
 				toolCallsUsed++
+				recordToolRepairOutcome(&toolStats, repairedToolCall, true)
 				toolStats.ToolErrors++
 				continue
 			}
 			if result := loopGuard.recordAttempt(toolName, args); result != "" {
 				l.publishAndAppendToolResultWithDelegation(turnID, callID, toolName, result, true, 0, delegation)
 				toolCallsUsed++
+				recordToolRepairOutcome(&toolStats, repairedToolCall, true)
 				toolStats.ToolErrors++
 				guardInterventions++
 				toolStats.LoopGuardInterventions++
@@ -732,6 +738,7 @@ func (l *Loop) runTurn(ctx context.Context, turnID, userText string, opts TurnOp
 			if tools == nil {
 				l.publishAndAppendToolResultWithDelegation(turnID, callID, toolName, "tool registry is not configured", true, 0, delegation)
 				toolCallsUsed++
+				recordToolRepairOutcome(&toolStats, repairedToolCall, true)
 				toolStats.ToolErrors++
 				continue
 			}
@@ -756,6 +763,7 @@ func (l *Loop) runTurn(ctx context.Context, turnID, userText string, opts TurnOp
 			}
 			l.publishAndAppendToolResultWithDelegation(turnID, callID, toolName, result, isErr, toolDuration, delegation)
 			toolCallsUsed++
+			recordToolRepairOutcome(&toolStats, repairedToolCall, isErr)
 			for _, state := range postToolPolicies {
 				if toolName != state.policy.ToolName {
 					continue

@@ -104,6 +104,9 @@ func toolRuntimeStatsPtr(stats sse.ToolRuntimeStats) *sse.ToolRuntimeStats {
 	if stats.ToolRequests == 0 &&
 		stats.ToolNameCanonicalized == 0 &&
 		stats.ToolArgsRepaired == 0 &&
+		stats.ToolRepairCalls == 0 &&
+		stats.ToolRepairSucceeded == 0 &&
+		stats.ToolRepairFailed == 0 &&
 		stats.ToolRepairNotes == 0 &&
 		len(stats.ToolRepairByKind) == 0 &&
 		stats.ToolErrors == 0 &&
@@ -130,6 +133,18 @@ func recordToolRepairNotes(stats *sse.ToolRuntimeStats, notes []string) {
 		}
 		stats.ToolRepairByKind[kind]++
 	}
+}
+
+func recordToolRepairOutcome(stats *sse.ToolRuntimeStats, repaired bool, isErr bool) {
+	if stats == nil || !repaired {
+		return
+	}
+	stats.ToolRepairCalls++
+	if isErr {
+		stats.ToolRepairFailed++
+		return
+	}
+	stats.ToolRepairSucceeded++
 }
 
 func toolResultEventPayload(callID string, exitCode int, result string) sse.ToolResultPayload {

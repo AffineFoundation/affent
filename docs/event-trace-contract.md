@@ -151,6 +151,12 @@ diagnostics.
 - `tool_requests`
 - `tool_name_canonicalized`
 - `tool_args_repaired`
+- `tool_repair_calls`: count of tool calls that were repaired or
+  canonicalized.
+- `tool_repair_succeeded`: repaired/canonicalized calls whose final
+  `tool.result.exit_code` was `0`.
+- `tool_repair_failed`: repaired/canonicalized calls whose final
+  `tool.result.exit_code` was non-zero.
 - `tool_repair_notes`: total repair diagnostics emitted on `tool.request`.
 - `tool_repair_by_kind`: object keyed by repair kind (`tool_name`,
   `malformed_json`, `wrapper_unwrap`, `scalar_wrap`, `alias_rename`,

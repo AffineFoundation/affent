@@ -486,6 +486,9 @@ func TestRunTurn_RepairsToolArgumentsBeforeDispatch(t *testing.T) {
 				if end.ToolStats == nil {
 					t.Fatal("expected turn.end tool_stats")
 				}
+				if end.ToolStats.ToolRepairCalls != 1 || end.ToolStats.ToolRepairSucceeded != 1 || end.ToolStats.ToolRepairFailed != 0 {
+					t.Fatalf("repair outcomes = calls:%d ok:%d failed:%d, want 1/1/0", end.ToolStats.ToolRepairCalls, end.ToolStats.ToolRepairSucceeded, end.ToolStats.ToolRepairFailed)
+				}
 				if end.ToolStats.ToolRepairNotes != len(gotRepair.RepairNotes) {
 					t.Fatalf("ToolRepairNotes = %d, want %d", end.ToolStats.ToolRepairNotes, len(gotRepair.RepairNotes))
 				}
