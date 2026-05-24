@@ -1525,6 +1525,23 @@ func TestSkillToolProposesThenConfirmsRuntimeSkillInstall(t *testing.T) {
 	}
 }
 
+func TestSkillToolProposeInstallRequiresSource(t *testing.T) {
+	tool := skillTool(&SkillRegistry{}, t.TempDir(), func(string) bool { return true })
+	body := "AFFENT ACTIVE SKILL: no_source\nUse only after review."
+	args, err := json.Marshal(map[string]any{
+		"action": "propose_install",
+		"name":   "no_source",
+		"body":   body,
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, err = tool.Execute(context.Background(), args)
+	if err == nil || !strings.Contains(err.Error(), "source is required when action=propose_install") || !strings.Contains(err.Error(), "Next:") {
+		t.Fatalf("propose_install without source error = %v", err)
+	}
+}
+
 func extractProposalID(out string) string {
 	for _, field := range strings.Fields(out) {
 		if strings.HasPrefix(field, "proposal_id=") {

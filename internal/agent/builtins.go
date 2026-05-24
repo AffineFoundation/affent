@@ -224,10 +224,14 @@ func skillTool(reg *SkillRegistry, skillDir string, confirmInstall SkillInstallC
 				if name == "" {
 					return "", errors.New("name is required when action=propose_install\nNext: retry with a short skill name using ASCII letters, digits, '_' or '-'")
 				}
+				source := strings.TrimSpace(p.Source)
+				if source == "" {
+					return "", errors.New("source is required when action=propose_install\nNext: retry with the GitHub URL, documentation URL, local path, or other provenance the user should review before confirmation")
+				}
 				skill := Skill{
 					Name:        name,
 					Description: p.Description,
-					Source:      p.Source,
+					Source:      source,
 					Body:        p.Body,
 					AutoActivation: SkillAutoActivation{
 						Any: p.Triggers,
