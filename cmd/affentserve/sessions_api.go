@@ -18,12 +18,13 @@ import (
 )
 
 const (
-	defaultSessionListLimit    = 100
-	maxSessionListLimit        = 1000
-	sessionReadDirBatch        = 128
-	maxSessionCreateBodyBytes  = 4096
-	maxSessionTaskSummaryChars = 160
-	maxSessionSummaryLineBytes = 1024 * 1024
+	defaultSessionListLimit     = 100
+	maxSessionListLimit         = 1000
+	sessionReadDirBatch         = 128
+	maxSessionCreateBodyBytes   = 4096
+	maxSessionTaskSummaryChars  = 160
+	maxSessionSummaryLineBytes  = 1024 * 1024
+	maxSessionRuntimeSkillNames = 128
 )
 
 type sessionListResponse struct {
@@ -59,6 +60,7 @@ type sessionSummary struct {
 	HasArtifacts      bool                  `json:"has_artifacts"`
 	HasMemory         bool                  `json:"has_memory"`
 	HasRuntimeSkills  bool                  `json:"has_runtime_skills"`
+	RuntimeSkillNames []string              `json:"runtime_skill_names,omitempty"`
 	Usage             *UsageSnapshot        `json:"usage,omitempty"`
 	Browser           *BrowserStatsSnapshot `json:"browser,omitempty"`
 }
@@ -485,7 +487,8 @@ func summarizeDurableSession(pool *SessionPool, id string) (sessionSummary, bool
 		summary.PlanSummary = summarizeSessionPlanFile(pool, id)
 	}
 	summary.HasArtifacts = dirHasAnyEntry(filepath.Join(dir, filepath.FromSlash(artifactPathPrefix)))
-	summary.HasRuntimeSkills = dirHasAnyEntry(agent.DefaultWorkspaceSkillDir(dir))
+	summary.RuntimeSkillNames = durableRuntimeSkillNames(agent.DefaultWorkspaceSkillDir(dir))
+	summary.HasRuntimeSkills = len(summary.RuntimeSkillNames) > 0
 	summary.HasMemory = durableMemoryExists(dir)
 	if summary.HasArtifacts {
 		_, _ = mergeStat(filepath.Join(dir, filepath.FromSlash(artifactPathPrefix)))
@@ -524,6 +527,7 @@ func mergeSessionSummaries(a, b sessionSummary) sessionSummary {
 	a.HasArtifacts = a.HasArtifacts || b.HasArtifacts
 	a.HasMemory = a.HasMemory || b.HasMemory
 	a.HasRuntimeSkills = a.HasRuntimeSkills || b.HasRuntimeSkills
+	a.RuntimeSkillNames = mergeStringLists(a.RuntimeSkillNames, b.RuntimeSkillNames)
 	if a.CreatedAt == "" {
 		a.CreatedAt = b.CreatedAt
 	}
@@ -670,6 +674,70 @@ func durableMemoryExists(sessionDir string) bool {
 		}
 	}
 	return false
+}
+
+func durableRuntimeSkillNames(dir string) []string {
+	info, err := os.Lstat(dir)
+	if err != nil || !info.IsDir() || info.Mode()&os.ModeSymlink != 0 {
+		return nil
+	}
+	f, err := os.Open(dir)
+	if err != nil {
+		return nil
+	}
+	defer f.Close()
+
+	var names []string
+	for len(names) < maxSessionRuntimeSkillNames {
+		entries, err := f.ReadDir(sessionReadDirBatch)
+		for _, ent := range entries {
+			if len(names) >= maxSessionRuntimeSkillNames {
+				break
+			}
+			if ent.Type()&os.ModeSymlink != 0 || !ent.IsDir() || strings.HasPrefix(ent.Name(), ".") {
+				continue
+			}
+			if exists, _, err := durableRegularFileModTime(filepath.Join(dir, ent.Name(), "SKILL.md")); err != nil || !exists {
+				continue
+			}
+			names = append(names, ent.Name())
+		}
+		if errors.Is(err, io.EOF) {
+			break
+		}
+		if err != nil {
+			break
+		}
+	}
+	sort.Strings(names)
+	return names
+}
+
+func mergeStringLists(a, b []string) []string {
+	if len(a) == 0 {
+		return append([]string(nil), b...)
+	}
+	if len(b) == 0 {
+		return a
+	}
+	seen := make(map[string]bool, len(a)+len(b))
+	out := make([]string, 0, len(a)+len(b))
+	for _, v := range a {
+		if seen[v] {
+			continue
+		}
+		seen[v] = true
+		out = append(out, v)
+	}
+	for _, v := range b {
+		if seen[v] {
+			continue
+		}
+		seen[v] = true
+		out = append(out, v)
+	}
+	sort.Strings(out)
+	return out
 }
 
 func durableStatePathExists(path string) bool {
