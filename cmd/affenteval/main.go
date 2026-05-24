@@ -235,14 +235,14 @@ func (s *batchSummary) add(res agenteval.BatchResult) {
 		}
 		s.ToolFailureByKind[k] += v
 	}
-	mergeToolFailureExamples(s, res.ToolFailureExamples, batchSummaryExamplesPerKind)
+	mergeExampleMap(&s.ToolFailureExamples, res.ToolFailureExamples, batchSummaryExamplesPerKind)
 	for k, v := range res.RuntimeErrorByKind {
 		if s.RuntimeErrorByKind == nil {
 			s.RuntimeErrorByKind = map[string]int{}
 		}
 		s.RuntimeErrorByKind[k] += v
 	}
-	mergeRuntimeErrorExamples(s, res.RuntimeErrorExamples, batchSummaryExamplesPerKind)
+	mergeExampleMap(&s.RuntimeErrorExamples, res.RuntimeErrorExamples, batchSummaryExamplesPerKind)
 	s.LoopGuardInterventions += res.ToolStats.LoopGuardInterventions
 	s.ForcedNoTools += res.ToolStats.ForcedNoTools
 	s.ToolDurationMS += res.ToolStats.ToolDurationMS
@@ -383,36 +383,19 @@ func printBatchSummary(w io.Writer, s batchSummary) {
 	printRuntimeErrorExampleLines(w, s.RuntimeErrorExamples, "")
 }
 
-func mergeToolFailureExamples(s *batchSummary, examples map[string][]agenteval.ToolFailureExample, maxPerKind int) {
-	if s == nil || maxPerKind <= 0 {
+func mergeExampleMap[T any](dst *map[string][]T, src map[string][]T, maxPerKind int) {
+	if dst == nil || maxPerKind <= 0 {
 		return
 	}
-	for kind, values := range examples {
+	for kind, values := range src {
 		for _, ex := range values {
-			if len(s.ToolFailureExamples[kind]) >= maxPerKind {
+			if len((*dst)[kind]) >= maxPerKind {
 				break
 			}
-			if s.ToolFailureExamples == nil {
-				s.ToolFailureExamples = map[string][]agenteval.ToolFailureExample{}
+			if *dst == nil {
+				*dst = map[string][]T{}
 			}
-			s.ToolFailureExamples[kind] = append(s.ToolFailureExamples[kind], ex)
-		}
-	}
-}
-
-func mergeRuntimeErrorExamples(s *batchSummary, examples map[string][]agenteval.RuntimeErrorExample, maxPerKind int) {
-	if s == nil || maxPerKind <= 0 {
-		return
-	}
-	for kind, values := range examples {
-		for _, ex := range values {
-			if len(s.RuntimeErrorExamples[kind]) >= maxPerKind {
-				break
-			}
-			if s.RuntimeErrorExamples == nil {
-				s.RuntimeErrorExamples = map[string][]agenteval.RuntimeErrorExample{}
-			}
-			s.RuntimeErrorExamples[kind] = append(s.RuntimeErrorExamples[kind], ex)
+			(*dst)[kind] = append((*dst)[kind], ex)
 		}
 	}
 }
@@ -966,32 +949,23 @@ func cloneStringIntMap(in map[string]int) map[string]int {
 }
 
 func cloneToolFailureExamples(in map[string][]agenteval.ToolFailureExample) map[string][]agenteval.ToolFailureExample {
-	if len(in) == 0 {
-		return nil
-	}
-	out := make(map[string][]agenteval.ToolFailureExample, len(in))
-	for kind, examples := range in {
-		if len(examples) == 0 {
-			continue
-		}
-		out[kind] = append([]agenteval.ToolFailureExample(nil), examples...)
-	}
-	if len(out) == 0 {
-		return nil
-	}
-	return out
+	return cloneExampleMap(in)
 }
 
 func cloneRuntimeErrorExamples(in map[string][]agenteval.RuntimeErrorExample) map[string][]agenteval.RuntimeErrorExample {
+	return cloneExampleMap(in)
+}
+
+func cloneExampleMap[T any](in map[string][]T) map[string][]T {
 	if len(in) == 0 {
 		return nil
 	}
-	out := make(map[string][]agenteval.RuntimeErrorExample, len(in))
+	out := make(map[string][]T, len(in))
 	for kind, examples := range in {
 		if len(examples) == 0 {
 			continue
 		}
-		out[kind] = append([]agenteval.RuntimeErrorExample(nil), examples...)
+		out[kind] = append([]T(nil), examples...)
 	}
 	if len(out) == 0 {
 		return nil
