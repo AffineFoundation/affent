@@ -121,6 +121,14 @@ image-serve-up:
 			echo "run make image-serve-restart to recreate it with the requested port publishing" >&2; \
 			exit 2; \
 		fi; \
+		actual_listen=$$(docker inspect "$(SERVE_CONTAINER_NAME)" --format '{{index .Config.Labels "affent.runtime.serve.listen"}}' 2>/dev/null); \
+		actual_serve_workspace_root=$$(docker inspect "$(SERVE_CONTAINER_NAME)" --format '{{index .Config.Labels "affent.runtime.serve.workspace_root"}}' 2>/dev/null); \
+		actual_serve_memory_root=$$(docker inspect "$(SERVE_CONTAINER_NAME)" --format '{{index .Config.Labels "affent.runtime.serve.memory_root"}}' 2>/dev/null); \
+		if test "$$actual_listen" != "$(SERVE_LISTEN)" || test "$$actual_serve_workspace_root" != "$(SERVE_WORKSPACE_ROOT)" || test "$$actual_serve_memory_root" != "$(SERVE_MEMORY_ROOT)" ; then \
+			echo "container $(SERVE_CONTAINER_NAME) was created with listen=$$actual_listen workspace_root=$$actual_serve_workspace_root memory_root=$$actual_serve_memory_root, but requested listen=$(SERVE_LISTEN) workspace_root=$(SERVE_WORKSPACE_ROOT) memory_root=$(SERVE_MEMORY_ROOT)" >&2; \
+			echo "run make image-serve-restart to recreate it with the requested affentserve paths" >&2; \
+			exit 2; \
+		fi; \
 		running=$$(docker inspect "$(SERVE_CONTAINER_NAME)" --format '{{.State.Running}}' 2>/dev/null); \
 		if test "$$running" = "true"; then \
 			echo "container $(SERVE_CONTAINER_NAME) already running; waiting for health"; \
@@ -136,7 +144,7 @@ image-serve-up:
 image-serve-status:
 	@$(call require_affent_runtime_container,image-serve-status); \
 	docker inspect "$(SERVE_CONTAINER_NAME)" \
-		--format 'name={{.Name}} state={{.State.Status}} image={{.Config.Image}} workspace={{index .Config.Labels "affent.runtime.workspace"}} publish={{index .Config.Labels "affent.runtime.publish"}} memory={{index .Config.Labels "affent.runtime.memory"}} cpus={{index .Config.Labels "affent.runtime.cpus"}} pids_limit={{index .Config.Labels "affent.runtime.pids_limit"}} host_memory_bytes={{.HostConfig.Memory}} host_nano_cpus={{.HostConfig.NanoCpus}} host_pids_limit={{.HostConfig.PidsLimit}}'; \
+		--format 'name={{.Name}} state={{.State.Status}} image={{.Config.Image}} workspace={{index .Config.Labels "affent.runtime.workspace"}} publish={{index .Config.Labels "affent.runtime.publish"}} serve_listen={{index .Config.Labels "affent.runtime.serve.listen"}} serve_workspace_root={{index .Config.Labels "affent.runtime.serve.workspace_root"}} serve_memory_root={{index .Config.Labels "affent.runtime.serve.memory_root"}} memory={{index .Config.Labels "affent.runtime.memory"}} cpus={{index .Config.Labels "affent.runtime.cpus"}} pids_limit={{index .Config.Labels "affent.runtime.pids_limit"}} host_memory_bytes={{.HostConfig.Memory}} host_nano_cpus={{.HostConfig.NanoCpus}} host_pids_limit={{.HostConfig.PidsLimit}}'; \
 	ports=$$(docker port "$(SERVE_CONTAINER_NAME)" 2>/dev/null || true); \
 	if test -n "$$ports"; then printf 'ports:\n%s\n' "$$ports"; else echo "ports: none"; fi
 

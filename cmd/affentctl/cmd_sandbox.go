@@ -39,14 +39,17 @@ const (
 	sandboxLabelPIDsLimit = "affent.sandbox.pids_limit"
 	sandboxLabelUser      = "affent.sandbox.user"
 
-	runtimeLabelManaged   = "affent.runtime"
-	runtimeLabelImage     = "affent.runtime.image"
-	runtimeLabelWorkspace = "affent.runtime.workspace"
-	runtimeLabelMemory    = "affent.runtime.memory"
-	runtimeLabelCPUs      = "affent.runtime.cpus"
-	runtimeLabelPIDsLimit = "affent.runtime.pids_limit"
-	runtimeLabelUser      = "affent.runtime.user"
-	runtimeLabelPublish   = "affent.runtime.publish"
+	runtimeLabelManaged            = "affent.runtime"
+	runtimeLabelImage              = "affent.runtime.image"
+	runtimeLabelWorkspace          = "affent.runtime.workspace"
+	runtimeLabelMemory             = "affent.runtime.memory"
+	runtimeLabelCPUs               = "affent.runtime.cpus"
+	runtimeLabelPIDsLimit          = "affent.runtime.pids_limit"
+	runtimeLabelUser               = "affent.runtime.user"
+	runtimeLabelPublish            = "affent.runtime.publish"
+	runtimeLabelServeListen        = "affent.runtime.serve.listen"
+	runtimeLabelServeWorkspaceRoot = "affent.runtime.serve.workspace_root"
+	runtimeLabelServeMemoryRoot    = "affent.runtime.serve.memory_root"
 )
 
 var (
@@ -676,6 +679,9 @@ func runRuntimeImage(opts runtimeRunOptions, runner commandRunner) error {
 		"-v", opts.Workspace+":/workspace",
 		"-w", "/workspace",
 	)
+	for _, label := range runtimeServeCommandLabels(opts.Command) {
+		runArgs = append(runArgs, "--label", label)
+	}
 	if opts.Detach {
 		runArgs = append(runArgs, "--detach")
 	} else {
@@ -698,6 +704,40 @@ func runRuntimeImage(opts runtimeRunOptions, runner commandRunner) error {
 	runArgs = append(runArgs, opts.Command...)
 	_, err = runner.Run("docker", runArgs...)
 	return err
+}
+
+func runtimeServeCommandLabels(command []string) []string {
+	if len(command) == 0 || filepath.Base(command[0]) != "affentserve" {
+		return nil
+	}
+	values := map[string]string{}
+	for i := 1; i < len(command); i++ {
+		arg := command[i]
+		name, value, ok := strings.Cut(arg, "=")
+		if !ok {
+			if i+1 >= len(command) {
+				continue
+			}
+			name = arg
+			value = command[i+1]
+			i++
+		}
+		switch name {
+		case "--listen":
+			values[runtimeLabelServeListen] = value
+		case "--workspace-root":
+			values[runtimeLabelServeWorkspaceRoot] = value
+		case "--memory-root":
+			values[runtimeLabelServeMemoryRoot] = value
+		}
+	}
+	labels := make([]string, 0, len(values))
+	for _, key := range []string{runtimeLabelServeListen, runtimeLabelServeWorkspaceRoot, runtimeLabelServeMemoryRoot} {
+		if value := strings.TrimSpace(values[key]); value != "" {
+			labels = append(labels, key+"="+value)
+		}
+	}
+	return labels
 }
 
 func validateRuntimeCommand(command []string) error {

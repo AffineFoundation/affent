@@ -271,6 +271,11 @@ func TestMakeImageServeEnablesBuiltinsInsideRuntimeContainer(t *testing.T) {
 		`actual_publish=$$(docker inspect "$(SERVE_CONTAINER_NAME)" --format '{{index .Config.Labels "affent.runtime.publish"}}'`,
 		`was created with publish=$$actual_publish, but requested publish=$(SERVE_PUBLISH)`,
 		`run make image-serve-restart to recreate it with the requested port publishing`,
+		`actual_listen=$$(docker inspect "$(SERVE_CONTAINER_NAME)" --format '{{index .Config.Labels "affent.runtime.serve.listen"}}'`,
+		`actual_serve_workspace_root=$$(docker inspect "$(SERVE_CONTAINER_NAME)" --format '{{index .Config.Labels "affent.runtime.serve.workspace_root"}}'`,
+		`actual_serve_memory_root=$$(docker inspect "$(SERVE_CONTAINER_NAME)" --format '{{index .Config.Labels "affent.runtime.serve.memory_root"}}'`,
+		`was created with listen=$$actual_listen workspace_root=$$actual_serve_workspace_root memory_root=$$actual_serve_memory_root`,
+		`run make image-serve-restart to recreate it with the requested affentserve paths`,
 		`docker start "$(SERVE_CONTAINER_NAME)"`,
 		`$(MAKE) image-serve`,
 		`$(MAKE) image-serve-health-wait`,
@@ -802,6 +807,50 @@ func TestRunRuntimeImageDetachRunsInBackground(t *testing.T) {
 	}
 	if !contains(args, "--name") || !contains(args, "affent-serve") {
 		t.Fatalf("detached service should keep a stable container name:\n%v", args)
+	}
+}
+
+func TestRunRuntimeImageLabelsAffentServeRuntimePaths(t *testing.T) {
+	workspace := filepath.Join(t.TempDir(), "runtime")
+	runner := &fakeCommandRunner{}
+	opts := runtimeRunOptions{
+		Image:     "example/affent:local",
+		Workspace: workspace,
+		Memory:    "768m",
+		CPUs:      "1.5",
+		PIDsLimit: "256",
+		Command: []string{
+			"affentserve",
+			"--listen=0.0.0.0:7777",
+			"--workspace-root", "/workspace/sessions",
+			"--memory-root", "/workspace/session-state",
+			"--api-key", "secret-value",
+		},
+	}
+	if err := runRuntimeImage(opts, runner); err != nil {
+		t.Fatalf("runRuntimeImage: %v", err)
+	}
+	args := runner.calls[0].args
+	for _, want := range []string{
+		"--label", runtimeLabelServeListen + "=0.0.0.0:7777",
+		"--label", runtimeLabelServeWorkspaceRoot + "=/workspace/sessions",
+		"--label", runtimeLabelServeMemoryRoot + "=/workspace/session-state",
+	} {
+		if !contains(args, want) {
+			t.Fatalf("docker run args missing %q:\n%v", want, args)
+		}
+	}
+	for i, arg := range args {
+		if strings.HasPrefix(arg, runtimeLabelServeListen+"=") ||
+			strings.HasPrefix(arg, runtimeLabelServeWorkspaceRoot+"=") ||
+			strings.HasPrefix(arg, runtimeLabelServeMemoryRoot+"=") {
+			if i == 0 || args[i-1] != "--label" {
+				t.Fatalf("service label %q should be passed as value after --label:\n%v", arg, args)
+			}
+		}
+		if strings.Contains(arg, "secret-value") && strings.HasPrefix(arg, "affent.runtime.") {
+			t.Fatalf("secret must not be written into runtime labels: %q", arg)
+		}
 	}
 }
 
