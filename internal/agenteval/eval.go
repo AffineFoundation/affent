@@ -91,24 +91,25 @@ type BatchRunner struct {
 }
 
 type BatchResult struct {
-	BatchScenario       string
-	Workspace           string
-	TracePath           string
-	OK                  bool
-	Failures            []string
-	Duration            time.Duration
-	FinalText           string
-	TraceSchemaVersion  int
-	TurnEndReason       string
-	ToolCalls           int
-	ToolStats           ToolRuntimeStats
-	RuntimeErrorByKind  map[string]int
-	ToolFailureExamples map[string][]ToolFailureExample
-	ToolTruncation      ToolTruncationStats
-	Usage               Usage
-	Verifier            VerifierResult
-	WorkspaceRemoved    bool
-	CleanupError        string
+	BatchScenario        string
+	Workspace            string
+	TracePath            string
+	OK                   bool
+	Failures             []string
+	Duration             time.Duration
+	FinalText            string
+	TraceSchemaVersion   int
+	TurnEndReason        string
+	ToolCalls            int
+	ToolStats            ToolRuntimeStats
+	RuntimeErrorByKind   map[string]int
+	RuntimeErrorExamples map[string][]RuntimeErrorExample
+	ToolFailureExamples  map[string][]ToolFailureExample
+	ToolTruncation       ToolTruncationStats
+	Usage                Usage
+	Verifier             VerifierResult
+	WorkspaceRemoved     bool
+	CleanupError         string
 	// Delegation aggregates focused-task / subagent calls observed
 	// in the trace. Zero-value when the scenario used no delegation
 	// tool; HasAny() reports whether the block is worth surfacing.
@@ -305,6 +306,7 @@ func (r BatchRunner) Run(ctx context.Context, scenario BatchScenario) BatchResul
 		res.ToolStats = trace.ToolStats
 		res.ToolStats.ToolFailureByKind = trace.ToolFailureKindCounts()
 		res.RuntimeErrorByKind = trace.LoopErrorKindCounts()
+		res.RuntimeErrorExamples = trace.RuntimeErrorExamples(2)
 		res.ToolFailureExamples = trace.ToolFailureExamples(2)
 		res.ToolTruncation = SummarizeToolTruncation(trace)
 		res.Usage = trace.Usage

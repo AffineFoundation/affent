@@ -150,6 +150,10 @@ func applyTraceEvent(t *Trace, pending map[string]int, typ string, data json.Raw
 			t.LoopErrors = append(t.LoopErrors, p.Message)
 			if p.FailureKind != "" {
 				t.LoopErrorKinds = append(t.LoopErrorKinds, p.FailureKind)
+				t.RuntimeErrors = append(t.RuntimeErrors, RuntimeErrorExample{
+					Kind:    p.FailureKind,
+					Message: p.Message,
+				})
 			}
 		}
 	}

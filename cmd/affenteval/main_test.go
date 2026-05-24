@@ -195,6 +195,11 @@ func TestPrintBatchResultIncludesTraceMetrics(t *testing.T) {
 			},
 		},
 		RuntimeErrorByKind: map[string]int{"llm_timeout": 1},
+		RuntimeErrorExamples: map[string][]agenteval.RuntimeErrorExample{
+			"llm_timeout": {
+				{Kind: "llm_timeout", Message: "LLM llm_stream timed out after 4m0s while waiting for chat completion (max-call-timeout/per-call-timeout=4m0s): context deadline exceeded"},
+			},
+		},
 		ToolTruncation: agenteval.ToolTruncationStats{
 			ArgsTruncated:       1,
 			ArgsOmittedBytes:    512,
@@ -239,6 +244,7 @@ func TestPrintBatchResultIncludesTraceMetrics(t *testing.T) {
 		"invalid arguments",
 		`tool_failure_example[invalid_args]: tool=web_fetch args=url="https://example.com" exit=1 result=url is required | Next: retry with a full URL`,
 		"hint[llm_timeout]",
+		"runtime_error_example[llm_timeout]: LLM llm_stream timed out after 4m0s",
 	} {
 		if !strings.Contains(got, want) {
 			t.Fatalf("output missing %q:\n%s", want, got)
@@ -452,6 +458,11 @@ func TestPrintBatchResultJSONL(t *testing.T) {
 			},
 		},
 		RuntimeErrorByKind: map[string]int{"llm_incomplete_stream": 1},
+		RuntimeErrorExamples: map[string][]agenteval.RuntimeErrorExample{
+			"llm_incomplete_stream": {
+				{Kind: "llm_incomplete_stream", Message: "LLM llm_stream ended with an incomplete SSE stream before finish_reason"},
+			},
+		},
 		ToolTruncation: agenteval.ToolTruncationStats{
 			ArgsTruncated:       2,
 			ArgsOmittedBytes:    1024,
@@ -577,6 +588,18 @@ func TestPrintBatchResultJSONL(t *testing.T) {
 	runtimeErrorHints, ok := got["runtime_error_hints"].(map[string]any)
 	if !ok || !strings.Contains(fmt.Sprint(runtimeErrorHints["llm_incomplete_stream"]), "SSE stream") {
 		t.Fatalf("runtime_error_hints = %#v\njson=%s", got["runtime_error_hints"], out.String())
+	}
+	runtimeErrorExamples, ok := got["runtime_error_examples"].(map[string]any)
+	if !ok {
+		t.Fatalf("runtime_error_examples missing or wrong type: %#v\njson=%s", got["runtime_error_examples"], out.String())
+	}
+	incompleteExamples, ok := runtimeErrorExamples["llm_incomplete_stream"].([]any)
+	if !ok || len(incompleteExamples) != 1 {
+		t.Fatalf("llm_incomplete_stream runtime_error_examples = %#v\njson=%s", runtimeErrorExamples["llm_incomplete_stream"], out.String())
+	}
+	incompleteExample, ok := incompleteExamples[0].(map[string]any)
+	if !ok || !strings.Contains(fmt.Sprint(incompleteExample["message"]), "incomplete SSE stream") {
+		t.Fatalf("llm_incomplete_stream runtime_error_example = %#v\njson=%s", incompleteExamples[0], out.String())
 	}
 	repairKinds, ok := got["tool_repair_by_kind"].(map[string]any)
 	if !ok {

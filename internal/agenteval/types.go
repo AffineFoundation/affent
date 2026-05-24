@@ -135,6 +135,10 @@ type Trace struct {
 	// error events when the runtime can classify it, such as llm_timeout,
 	// llm_incomplete_stream, or context_overflow.
 	LoopErrorKinds []string
+	// RuntimeErrors preserves classified error events with their message so
+	// eval reports can show examples without asking operators to open the
+	// full trace.
+	RuntimeErrors []RuntimeErrorExample
 
 	// RawTypes counts every event type the run produced, by name
 	// (e.g. {"tool.request": 5, "message.delta": 1300}). Populated
@@ -267,6 +271,11 @@ type ToolFailureExample struct {
 	ArgsSummary   string `json:"args_summary,omitempty"`
 	ResultSummary string `json:"result_summary,omitempty"`
 	ExitCode      int    `json:"exit_code"`
+}
+
+type RuntimeErrorExample struct {
+	Kind    string `json:"kind"`
+	Message string `json:"message"`
 }
 
 func (s ToolRepairStats) HasAny() bool {
@@ -420,6 +429,29 @@ func (t Trace) LoopErrorKindCounts() map[string]int {
 			continue
 		}
 		out[kind]++
+	}
+	if len(out) == 0 {
+		return nil
+	}
+	return out
+}
+
+func (t Trace) RuntimeErrorExamples(maxPerKind int) map[string][]RuntimeErrorExample {
+	if maxPerKind <= 0 {
+		return nil
+	}
+	out := map[string][]RuntimeErrorExample{}
+	for _, ex := range t.RuntimeErrors {
+		if ex.Kind == "" || strings.TrimSpace(ex.Message) == "" {
+			continue
+		}
+		if len(out[ex.Kind]) >= maxPerKind {
+			continue
+		}
+		out[ex.Kind] = append(out[ex.Kind], RuntimeErrorExample{
+			Kind:    ex.Kind,
+			Message: compactOneLine(ex.Message, 320),
+		})
 	}
 	if len(out) == 0 {
 		return nil

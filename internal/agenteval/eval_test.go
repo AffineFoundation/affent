@@ -120,6 +120,9 @@ func TestParseTraceFileReadsToolRequestsAndFinalText(t *testing.T) {
 	if got := trace.LoopErrorKindCounts(); got["llm_timeout"] != 1 {
 		t.Fatalf("LoopErrorKindCounts = %+v", got)
 	}
+	if examples := trace.RuntimeErrorExamples(1); len(examples["llm_timeout"]) != 1 || !strings.Contains(examples["llm_timeout"][0].Message, "transient stream warning") {
+		t.Fatalf("RuntimeErrorExamples = %+v", examples)
+	}
 	if trace.FinalText != "Conclusion: green" {
 		t.Fatalf("FinalText = %q", trace.FinalText)
 	}
