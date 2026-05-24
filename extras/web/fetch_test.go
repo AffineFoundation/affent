@@ -409,10 +409,16 @@ func TestFetchTool_LargeClientRenderedShellReportsNoEvidence(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Execute: %v", err)
 	}
-	for _, want := range []string{"dynamic page shell", "Failure: kind=dynamic_shell", "large client-rendered app shell"} {
+	for _, want := range []string{"dynamic page shell", "Failure: kind=dynamic_shell", "large client-rendered app shell", "Discovery preview (not source evidence)", "Documentation API Validators Subnets"} {
 		if !strings.Contains(out, want) {
 			t.Fatalf("large app shell output missing %q:\n%s", want, out)
 		}
+	}
+	if strings.Contains(out, "bootstrap") || strings.Contains(out, strings.Repeat("x", 80)) {
+		t.Fatalf("dynamic shell preview should not leak script payload:\n%s", out)
+	}
+	if len(out) > 1200 {
+		t.Fatalf("dynamic shell no-evidence result should stay compact, len=%d:\n%s", len(out), out)
 	}
 }
 

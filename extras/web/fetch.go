@@ -59,13 +59,14 @@ type FetchConfig struct {
 }
 
 const (
-	maxFetchURLBytes      = 4096
-	defaultMaxBytes       = 2 * 1024 * 1024
-	maxFetchBytes         = 8 * 1024 * 1024
-	defaultMaxResultChars = 8000
-	maxFetchResultChars   = 64 * 1024
-	defaultUserAgent      = "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0 Safari/537.36 AffentWebFetch/0.1"
-	defaultAcceptHeader   = "text/html,application/xhtml+xml,application/json;q=0.95,application/ld+json;q=0.95,application/*+json;q=0.9,application/xml;q=0.9,application/rss+xml;q=0.9,application/atom+xml;q=0.9,application/*+xml;q=0.85,application/x-ndjson;q=0.85,text/plain;q=0.8,application/yaml;q=0.75,application/x-yaml;q=0.75,*/*;q=0.5"
+	maxFetchURLBytes            = 4096
+	defaultMaxBytes             = 2 * 1024 * 1024
+	maxFetchBytes               = 8 * 1024 * 1024
+	defaultMaxResultChars       = 8000
+	maxFetchResultChars         = 64 * 1024
+	maxDynamicShellPreviewChars = 600
+	defaultUserAgent            = "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0 Safari/537.36 AffentWebFetch/0.1"
+	defaultAcceptHeader         = "text/html,application/xhtml+xml,application/json;q=0.95,application/ld+json;q=0.95,application/*+json;q=0.9,application/xml;q=0.9,application/rss+xml;q=0.9,application/atom+xml;q=0.9,application/*+xml;q=0.85,application/x-ndjson;q=0.85,text/plain;q=0.8,application/yaml;q=0.75,application/x-yaml;q=0.75,*/*;q=0.5"
 )
 
 // FetchTool returns an agent.Tool that fetches a URL and returns its
@@ -204,7 +205,7 @@ func fetch(ctx context.Context, cfg FetchConfig, requestURL string) (string, err
 		return blockedFetchResult(finalURL, ct, reason), nil
 	}
 	if reason := dynamicPageShellReason(body, ct, out); reason != "" {
-		return dynamicPageShellResult(finalURL, ct, reason), nil
+		return dynamicPageShellResult(finalURL, ct, reason, dynamicShellDiscoveryPreview(out)), nil
 	}
 
 	if len(out) > cfg.MaxResultChars {
@@ -231,8 +232,33 @@ func blockedFetchResult(finalURL, contentType, reason string) string {
 	return fmt.Sprintf("[blocked response: URL=%s, Content-Type=%q, Reason=%q]\nFailure: kind=blocked\nNext: do not treat this challenge/error page as source evidence; use an available search result snippet only as weak evidence, switch to a canonical API/text/source page, use an available rendering tool/source, or mark this source as blocked/unverified.", finalURL, contentType, reason)
 }
 
-func dynamicPageShellResult(finalURL, contentType, reason string) string {
-	return fmt.Sprintf("[dynamic page shell: URL=%s, Content-Type=%q, Reason=%q]\nFailure: kind=dynamic_shell\nNext: do not treat this loading/app shell as source evidence; use a canonical API/text/source page, an available rendering tool/source, or answer with this source marked as dynamic/unverified.", finalURL, contentType, reason)
+func dynamicPageShellResult(finalURL, contentType, reason, preview string) string {
+	var b strings.Builder
+	fmt.Fprintf(&b, "[dynamic page shell: URL=%s, Content-Type=%q, Reason=%q]", finalURL, contentType, reason)
+	if preview != "" {
+		fmt.Fprintf(&b, "\nDiscovery preview (not source evidence): %s", preview)
+	}
+	b.WriteString("\nFailure: kind=dynamic_shell\nNext: do not treat this loading/app shell as source evidence; use the discovery preview only to choose a canonical API/text/source page, an available rendering tool/source, or answer with this source marked as dynamic/unverified.")
+	return b.String()
+}
+
+func dynamicShellDiscoveryPreview(markdown string) string {
+	text := strings.Join(strings.Fields(markdown), " ")
+	if text == "" {
+		return ""
+	}
+	lower := strings.ToLower(text)
+	if len(text) <= 80 && containsAny(lower, "loading", "loading...", "enable javascript", "please enable javascript") {
+		return ""
+	}
+	if len(text) > maxDynamicShellPreviewChars {
+		cut := maxDynamicShellPreviewChars
+		for cut > 0 && !utf8.RuneStart(text[cut]) {
+			cut--
+		}
+		text = text[:cut] + "...(truncated)"
+	}
+	return text
 }
 
 func directFetchPreflightResult(rawURL string) string {
