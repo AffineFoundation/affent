@@ -305,7 +305,12 @@ for loop-guard purposes. After repeated no-evidence retrieval, the guard tells
 the model to stop opening/searching result lists one by one and change
 strategy. If the model repeats the same failed URL or search query, the guard
 blocks that exact input and emits
-`Failure: kind=loop_guard_repeated_failed_input`. For site-level failures such
+`Failure: kind=loop_guard_repeated_failed_input`. If a `web_search` result
+marks a URL with `Direct-reader warning`, the guard also blocks `web_fetch` to
+that same URL for the current turn and emits
+`Failure: kind=loop_guard_direct_reader_warning`; this saves a tool call and
+pushes the model toward snippets as weak evidence or toward canonical
+API/text/source URLs. For site-level failures such
 as `blocked`, `rate_limited`, or `private_network_blocked`, repeated failures
 from different URLs on the same host also block more fetches to that host for
 the current turn, because trying another social/search/challenge URL usually

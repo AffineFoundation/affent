@@ -284,6 +284,48 @@ func TestToolLoopGuard_BlocksRepeatedFailedWebSearchQuery(t *testing.T) {
 	}
 }
 
+func TestToolLoopGuard_BlocksWebFetchMarkedBySearchWarning(t *testing.T) {
+	g := newToolLoopGuard()
+	searchArgs := json.RawMessage(`{"query":"Nimbus recent trend market metrics sentiment","num_results":5}`)
+	searchResult := `1. Nimbus official docs
+   https://official.example/nimbus/about
+   Primary docs.
+
+2. Recent social discussion
+   https://x.com/example/status/123
+   Community reaction.
+   Direct-reader warning: do not use direct page fetch on this URL.
+
+3. Live dashboard
+   https://metrics.example/app/nimbus
+   Client-rendered market dashboard.
+   Direct-reader caution: result appears to be a dynamic or JavaScript-rendered page.
+
+Next: choose the 1-3 most authoritative/current result URLs.`
+	if guard, ok := g.recordToolResult("web_search", searchArgs, searchResult, false); guard != "" || !ok {
+		t.Fatalf("successful search result should record warnings without failing; guard=%q ok=%v", guard, ok)
+	}
+	if got := g.recordAttempt("web_fetch", json.RawMessage(`{"url":"https://official.example/nimbus/about"}`)); got != "" {
+		t.Fatalf("ordinary search result URL should remain fetchable: %q", got)
+	}
+	got := g.recordAttempt("web_fetch", json.RawMessage(`{"url":"https://www.x.com/example/status/123#ignored"}`))
+	for _, want := range []string{"Direct-reader warning", "web_search marked that URL", "weak discovery/sentiment evidence", "canonical API/text/source URL", "Failure: kind=loop_guard_direct_reader_warning"} {
+		if !strings.Contains(got, want) {
+			t.Fatalf("direct-reader warning guard missing %q: %q", want, got)
+		}
+	}
+	if got := g.recordAttempt("web_fetch", json.RawMessage(`{"url":"https://metrics.example/app/nimbus"}`)); got != "" {
+		t.Fatalf("caution-only URL should not be hard-blocked: %q", got)
+	}
+}
+
+func TestCanonicalWebURLNormalizesHostAndPreservesPort(t *testing.T) {
+	got := canonicalWebURL(`"https://www.Example.com:8443/path?q=1#frag"`)
+	if got != "https://example.com:8443/path?q=1" {
+		t.Fatalf("canonicalWebURL() = %q", got)
+	}
+}
+
 func TestToolOutcomeCountsNoEvidenceWebFetchAsFailure(t *testing.T) {
 	cases := []struct {
 		name   string

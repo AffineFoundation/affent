@@ -1170,6 +1170,7 @@ func TestToolFailureKindHintIncludesWebSearchRecovery(t *testing.T) {
 		{kind: "stale_ref", want: "browser_snapshot"},
 		{kind: "not_interactable", want: "hidden, disabled, or covered"},
 		{kind: "loop_guard_repeated_failed_input", want: "same failed URL/query"},
+		{kind: "loop_guard_direct_reader_warning", want: "direct-reader trap"},
 		{kind: "loop_guard_repeated_call", want: "repeated identical tool arguments"},
 		{kind: "tool_policy_first_tool", want: "required first tool"},
 		{kind: "tool_policy_repeat", want: "prior result"},

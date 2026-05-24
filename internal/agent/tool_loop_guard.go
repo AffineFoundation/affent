@@ -24,6 +24,9 @@ const (
 	loopGuardRepeatedCallKind        = "loop_guard_repeated_call"
 	loopGuardRepeatedFailuresKind    = "loop_guard_repeated_failures"
 	loopGuardRepeatedFailedInputKind = "loop_guard_repeated_failed_input"
+	loopGuardDirectReaderWarningKind = "loop_guard_direct_reader_warning"
+
+	maxDirectReaderWarningURLs = 64
 )
 
 // perTurnCallCaps maps tool names to maximum total calls per parent turn,
@@ -55,7 +58,8 @@ type toolLoopGuard struct {
 	// perToolCounts tracks total per-turn call counts for tools that
 	// appear in perTurnCallCaps. Entries are created lazily so most
 	// turns pay no allocation for this layer.
-	perToolCounts map[string]int
+	perToolCounts           map[string]int
+	directReaderWarningURLs map[string]bool
 }
 
 type toolCallKey struct {
@@ -109,6 +113,9 @@ func (g *toolLoopGuard) recordAttempt(tool string, args json.RawMessage) string 
 		if failure := g.failedHosts[host]; shouldBlockFailedFetchHost(host, failure) {
 			return repeatedFailedFetchHostMessage(host, failure)
 		}
+	}
+	if u := canonicalFetchURL(tool, args); u != "" && g.directReaderWarningURLs[u] {
+		return directReaderWarningFetchMessage(u)
 	}
 	g.callCounts[key]++
 	if g.callCounts[key] >= identicalToolCallBlockThreshold {
@@ -168,8 +175,32 @@ func (g *toolLoopGuard) recordOutcome(tool string, ok bool) string {
 func (g *toolLoopGuard) recordToolResult(tool string, args json.RawMessage, result string, isErr bool) (string, bool) {
 	outcomeOK := toolOutcomeCountsAsSuccess(tool, result, isErr)
 	guardResult := g.recordOutcome(tool, outcomeOK)
+	g.recordDirectReaderWarnings(tool, result)
 	g.recordArgumentOutcome(tool, args, result, outcomeOK)
 	return guardResult, outcomeOK
+}
+
+func (g *toolLoopGuard) recordDirectReaderWarnings(tool, result string) {
+	if g == nil || tool != "web_search" || !strings.Contains(result, "Direct-reader warning") {
+		return
+	}
+	currentURL := ""
+	for _, line := range strings.Split(result, "\n") {
+		line = strings.TrimSpace(line)
+		if u := canonicalWebURLFromLine(line); u != "" {
+			currentURL = u
+			continue
+		}
+		if strings.Contains(line, "Direct-reader warning") && currentURL != "" {
+			if g.directReaderWarningURLs == nil {
+				g.directReaderWarningURLs = map[string]bool{}
+			}
+			if len(g.directReaderWarningURLs) >= maxDirectReaderWarningURLs {
+				return
+			}
+			g.directReaderWarningURLs[currentURL] = true
+		}
+	}
 }
 
 func (g *toolLoopGuard) recordArgumentOutcome(tool string, args json.RawMessage, result string, ok bool) {
@@ -266,6 +297,48 @@ func canonicalFetchHost(tool string, args json.RawMessage) string {
 	return websource.NormalizeHost(u.Hostname())
 }
 
+func canonicalFetchURL(tool string, args json.RawMessage) string {
+	if tool != "web_fetch" {
+		return ""
+	}
+	var p struct {
+		URL string `json:"url"`
+	}
+	if err := json.Unmarshal(args, &p); err != nil {
+		return ""
+	}
+	return canonicalWebURL(p.URL)
+}
+
+func canonicalWebURLFromLine(line string) string {
+	for _, field := range strings.Fields(strings.TrimSpace(line)) {
+		if u := canonicalWebURL(field); u != "" {
+			return u
+		}
+	}
+	return ""
+}
+
+func canonicalWebURL(raw string) string {
+	raw = strings.Trim(strings.TrimSpace(raw), `"'<>),.;`)
+	u, err := url.Parse(raw)
+	if err != nil || u.Scheme == "" || u.Host == "" {
+		return ""
+	}
+	scheme := strings.ToLower(u.Scheme)
+	if scheme != "http" && scheme != "https" {
+		return ""
+	}
+	port := u.Port()
+	u.Scheme = scheme
+	u.Host = websource.NormalizeHost(u.Hostname())
+	if port != "" {
+		u.Host += ":" + port
+	}
+	u.Fragment = ""
+	return u.String()
+}
+
 func repeatedFailedCallMessage(tool string, failure toolCallFailure) string {
 	kind := failure.kind
 	if kind == "" {
@@ -288,6 +361,13 @@ func repeatedFailedCallMessage(tool string, failure toolCallFailure) string {
 			loopGuardRepeatedFailedInputKind,
 		)
 	}
+}
+
+func directReaderWarningFetchMessage(rawURL string) string {
+	return withLoopGuardFailureKind(
+		fmt.Sprintf("loop_guard: blocked web_fetch to %q because web_search marked that URL with Direct-reader warning in this turn.\nNext: do not spend direct page-reading calls on that URL; use the search snippet only as weak discovery/sentiment evidence, choose a canonical API/text/source URL, use a rendering-capable tool if available, or answer with this source marked unverified.", rawURL),
+		loopGuardDirectReaderWarningKind,
+	)
 }
 
 func repeatedFailedFetchHostMessage(host string, failure toolCallFailure) string {
