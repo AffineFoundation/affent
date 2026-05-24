@@ -140,6 +140,8 @@ type batchSummary struct {
 	ToolErrors                 int
 	ToolRepaired               int
 	ToolNameCanonicalized      int
+	ToolRepairNotes            int
+	ToolRepairByKind           map[string]int
 	LoopGuardInterventions     int
 	ForcedNoTools              int
 	ToolDurationMS             int64
@@ -189,6 +191,13 @@ func (s *batchSummary) add(res agenteval.BatchResult) {
 	s.ToolErrors += res.ToolStats.ToolErrors
 	s.ToolRepaired += res.ToolStats.ToolArgsRepaired
 	s.ToolNameCanonicalized += res.ToolStats.ToolNameCanonicalized
+	s.ToolRepairNotes += res.Repair.Notes
+	for k, v := range res.Repair.ByKind {
+		if s.ToolRepairByKind == nil {
+			s.ToolRepairByKind = map[string]int{}
+		}
+		s.ToolRepairByKind[k] += v
+	}
 	s.LoopGuardInterventions += res.ToolStats.LoopGuardInterventions
 	s.ForcedNoTools += res.ToolStats.ForcedNoTools
 	s.ToolDurationMS += res.ToolStats.ToolDurationMS
@@ -301,6 +310,10 @@ func printBatchSummary(w io.Writer, s batchSummary) {
 }
 
 func formatFailureKinds(counts map[string]int) string {
+	return formatStringIntCounts(counts)
+}
+
+func formatStringIntCounts(counts map[string]int) string {
 	if len(counts) == 0 {
 		return "none"
 	}
@@ -368,6 +381,8 @@ type batchResultRecord struct {
 	ToolErrors                 int            `json:"tool_errors"`
 	ToolRepaired               int            `json:"tool_repaired"`
 	ToolNameCanonicalized      int            `json:"tool_name_canonicalized"`
+	ToolRepairNotes            int            `json:"tool_repair_notes,omitempty"`
+	ToolRepairByKind           map[string]int `json:"tool_repair_by_kind,omitempty"`
 	LoopGuardInterventions     int            `json:"loop_guard_interventions"`
 	ForcedNoTools              int            `json:"forced_no_tools"`
 	ToolDurationMS             int64          `json:"tool_duration_ms"`
@@ -414,6 +429,8 @@ type batchSummaryRecord struct {
 	ToolErrors                 int            `json:"tool_errors"`
 	ToolRepaired               int            `json:"tool_repaired"`
 	ToolNameCanonicalized      int            `json:"tool_name_canonicalized"`
+	ToolRepairNotes            int            `json:"tool_repair_notes,omitempty"`
+	ToolRepairByKind           map[string]int `json:"tool_repair_by_kind,omitempty"`
 	LoopGuardInterventions     int            `json:"loop_guard_interventions"`
 	ForcedNoTools              int            `json:"forced_no_tools"`
 	ToolDurationMS             int64          `json:"tool_duration_ms"`
@@ -465,6 +482,8 @@ func printBatchResultJSONL(w io.Writer, meta evalJSONLMetadata, res agenteval.Ba
 		ToolErrors:                 res.ToolStats.ToolErrors,
 		ToolRepaired:               res.ToolStats.ToolArgsRepaired,
 		ToolNameCanonicalized:      res.ToolStats.ToolNameCanonicalized,
+		ToolRepairNotes:            res.Repair.Notes,
+		ToolRepairByKind:           cloneStringIntMap(res.Repair.ByKind),
 		LoopGuardInterventions:     res.ToolStats.LoopGuardInterventions,
 		ForcedNoTools:              res.ToolStats.ForcedNoTools,
 		ToolDurationMS:             res.ToolStats.ToolDurationMS,
@@ -509,6 +528,8 @@ func printBatchSummaryJSONL(w io.Writer, meta evalJSONLMetadata, s batchSummary)
 		ToolErrors:                 s.ToolErrors,
 		ToolRepaired:               s.ToolRepaired,
 		ToolNameCanonicalized:      s.ToolNameCanonicalized,
+		ToolRepairNotes:            s.ToolRepairNotes,
+		ToolRepairByKind:           cloneStringIntMap(s.ToolRepairByKind),
 		LoopGuardInterventions:     s.LoopGuardInterventions,
 		ForcedNoTools:              s.ForcedNoTools,
 		ToolDurationMS:             s.ToolDurationMS,
@@ -629,6 +650,9 @@ func printBatchResult(w io.Writer, res agenteval.BatchResult) {
 			res.ToolTruncation.ArgsOmittedBytes,
 			res.ToolTruncation.ResultsOmittedBytes,
 		)
+	}
+	if len(res.Repair.ByKind) > 0 {
+		fmt.Fprintf(w, " repair_kinds=%s", formatStringIntCounts(res.Repair.ByKind))
 	}
 	if res.TurnEndReason != "" {
 		fmt.Fprintf(w, " end=%s", res.TurnEndReason)

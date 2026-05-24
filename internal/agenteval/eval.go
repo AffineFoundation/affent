@@ -96,6 +96,10 @@ type BatchResult struct {
 	// in the trace. Zero-value when the scenario used no delegation
 	// tool; HasAny() reports whether the block is worth surfacing.
 	Delegation DelegationStats
+	// Repair aggregates tool-call recovery kinds from tool.request
+	// repair_notes. Zero-value when no tool repair/canonicalization
+	// occurred.
+	Repair ToolRepairStats
 }
 
 type VerifierResult struct {
@@ -281,6 +285,7 @@ func (r BatchRunner) Run(ctx context.Context, scenario BatchScenario) BatchResul
 		res.ToolTruncation = SummarizeToolTruncation(trace)
 		res.Usage = trace.Usage
 		res.Delegation = trace.DelegationStats()
+		res.Repair = trace.RepairStats()
 		res.Failures = append(res.Failures, CheckBatchTrace(trace, scenario)...)
 	}
 	if scenario.ExpectedSkill != "" {

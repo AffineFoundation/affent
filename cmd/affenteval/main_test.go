@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"io"
 	"os"
+	"reflect"
 	"strings"
 	"testing"
 	"time"
@@ -211,6 +212,10 @@ func TestBatchSummaryAggregatesRuntimeMetrics(t *testing.T) {
 			ToolDurationMS:         10,
 			LoopGuardInterventions: 1,
 		},
+		Repair: agenteval.ToolRepairStats{
+			Notes:  2,
+			ByKind: map[string]int{"tool_name": 1, "alias_rename": 1},
+		},
 		ToolTruncation: agenteval.ToolTruncationStats{
 			ArgsTruncated:    1,
 			ArgsOmittedBytes: 128,
@@ -235,6 +240,10 @@ func TestBatchSummaryAggregatesRuntimeMetrics(t *testing.T) {
 			ToolDurationMS:         40,
 			LoopGuardInterventions: 2,
 			ForcedNoTools:          1,
+		},
+		Repair: agenteval.ToolRepairStats{
+			Notes:  3,
+			ByKind: map[string]int{"alias_rename": 1, "type_coercion": 2},
 		},
 		ToolTruncation: agenteval.ToolTruncationStats{
 			ResultsTruncated:    2,
@@ -261,6 +270,13 @@ func TestBatchSummaryAggregatesRuntimeMetrics(t *testing.T) {
 	}
 	if summary.TraceSchemaVersions[1] != 2 {
 		t.Fatalf("TraceSchemaVersions = %#v, want version 1 count 2", summary.TraceSchemaVersions)
+	}
+	if summary.ToolRepairNotes != 5 {
+		t.Fatalf("ToolRepairNotes = %d, want 5", summary.ToolRepairNotes)
+	}
+	wantRepairKinds := map[string]int{"tool_name": 1, "alias_rename": 2, "type_coercion": 2}
+	if !reflect.DeepEqual(summary.ToolRepairByKind, wantRepairKinds) {
+		t.Fatalf("ToolRepairByKind = %#v, want %#v", summary.ToolRepairByKind, wantRepairKinds)
 	}
 }
 
@@ -290,6 +306,10 @@ func TestPrintBatchResultJSONL(t *testing.T) {
 			ResultsTruncated:    1,
 			ResultsOmittedBytes: 8192,
 			ResultArtifacts:     1,
+		},
+		Repair: agenteval.ToolRepairStats{
+			Notes:  3,
+			ByKind: map[string]int{"alias_rename": 2, "type_coercion": 1},
 		},
 		Verifier: agenteval.VerifierResult{
 			Command:            "go test ./...",
@@ -327,6 +347,7 @@ func TestPrintBatchResultJSONL(t *testing.T) {
 		"tool_errors":                   float64(1),
 		"tool_repaired":                 float64(2),
 		"tool_name_canonicalized":       float64(1),
+		"tool_repair_notes":             float64(3),
 		"loop_guard_interventions":      float64(3),
 		"forced_no_tools":               float64(1),
 		"tool_duration_ms":              float64(75),
@@ -357,6 +378,13 @@ func TestPrintBatchResultJSONL(t *testing.T) {
 	}
 	if _, ok := got["failure_kinds"]; ok {
 		t.Fatalf("passing result should omit failure_kinds, got %#v", got["failure_kinds"])
+	}
+	repairKinds, ok := got["tool_repair_by_kind"].(map[string]any)
+	if !ok {
+		t.Fatalf("tool_repair_by_kind missing or wrong type: %#v\njson=%s", got["tool_repair_by_kind"], out.String())
+	}
+	if repairKinds["alias_rename"] != float64(2) || repairKinds["type_coercion"] != float64(1) {
+		t.Fatalf("tool_repair_by_kind = %#v", repairKinds)
 	}
 }
 
@@ -541,6 +569,8 @@ func TestPrintBatchSummaryJSONL(t *testing.T) {
 		ToolErrors:                 1,
 		ToolRepaired:               3,
 		ToolNameCanonicalized:      2,
+		ToolRepairNotes:            4,
+		ToolRepairByKind:           map[string]int{"tool_name": 2, "malformed_json": 1, "type_coercion": 1},
 		LoopGuardInterventions:     3,
 		ForcedNoTools:              1,
 		ToolDurationMS:             120,
@@ -587,6 +617,7 @@ func TestPrintBatchSummaryJSONL(t *testing.T) {
 		"tool_errors":                   float64(1),
 		"tool_repaired":                 float64(3),
 		"tool_name_canonicalized":       float64(2),
+		"tool_repair_notes":             float64(4),
 		"loop_guard_interventions":      float64(3),
 		"forced_no_tools":               float64(1),
 		"tool_duration_ms":              float64(120),
@@ -627,6 +658,13 @@ func TestPrintBatchSummaryJSONL(t *testing.T) {
 	}
 	if traceSchemaVersions["1"] != float64(2) {
 		t.Fatalf("trace_schema_versions = %#v", traceSchemaVersions)
+	}
+	repairKinds, ok := got["tool_repair_by_kind"].(map[string]any)
+	if !ok {
+		t.Fatalf("tool_repair_by_kind missing or wrong type: %#v\njson=%s", got["tool_repair_by_kind"], out.String())
+	}
+	if repairKinds["tool_name"] != float64(2) || repairKinds["malformed_json"] != float64(1) || repairKinds["type_coercion"] != float64(1) {
+		t.Fatalf("tool_repair_by_kind = %#v", repairKinds)
 	}
 }
 

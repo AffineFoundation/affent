@@ -2,6 +2,7 @@ package agenteval
 
 import (
 	"context"
+	"strings"
 
 	"github.com/affinefoundation/affent/internal/agent"
 	"github.com/affinefoundation/affent/internal/executor"
@@ -222,6 +223,84 @@ type ToolTruncationStats struct {
 	ResultsTruncated    int
 	ResultsOmittedBytes int
 	ResultArtifacts     int
+}
+
+// ToolRepairStats classifies runtime tool-call recovery work by the
+// human-readable repair notes already emitted on tool.request events.
+// A single tool call can contribute to multiple kinds (for example,
+// wrapper_unwrap + type_coercion), so Notes can be greater than Calls.
+type ToolRepairStats struct {
+	Calls  int
+	Notes  int
+	ByKind map[string]int
+}
+
+func (s ToolRepairStats) HasAny() bool {
+	return s.Calls > 0 || s.Notes > 0
+}
+
+func (t Trace) RepairStats() ToolRepairStats {
+	var s ToolRepairStats
+	for _, c := range t.Tools {
+		if !c.Canonicalized && !c.ArgsRepaired && len(c.RepairNotes) == 0 {
+			continue
+		}
+		s.Calls++
+		seenNote := false
+		for _, note := range c.RepairNotes {
+			kind := repairNoteKind(note)
+			if kind == "" {
+				continue
+			}
+			seenNote = true
+			s.Notes++
+			if s.ByKind == nil {
+				s.ByKind = map[string]int{}
+			}
+			s.ByKind[kind]++
+		}
+		if !seenNote && c.Canonicalized {
+			s.addKind("tool_name")
+		}
+		if !seenNote && c.ArgsRepaired {
+			s.addKind("malformed_json")
+		}
+	}
+	return s
+}
+
+func (s *ToolRepairStats) addKind(kind string) {
+	s.Notes++
+	if s.ByKind == nil {
+		s.ByKind = map[string]int{}
+	}
+	s.ByKind[kind]++
+}
+
+func repairNoteKind(note string) string {
+	note = strings.TrimSpace(strings.ToLower(note))
+	switch {
+	case note == "":
+		return ""
+	case strings.Contains(note, "canonicalized tool"):
+		return "tool_name"
+	case strings.Contains(note, "malformed json"):
+		return "malformed_json"
+	case strings.HasPrefix(note, "unwrapped field "):
+		return "wrapper_unwrap"
+	case strings.HasPrefix(note, "wrapped arguments as ") ||
+		strings.HasPrefix(note, "wrapped object arguments as "):
+		return "scalar_wrap"
+	case strings.HasPrefix(note, "renamed field ") ||
+		strings.HasPrefix(note, "filled required field "):
+		return "alias_rename"
+	case strings.HasPrefix(note, "coerced field "):
+		return "type_coercion"
+	case strings.HasPrefix(note, "dropped unknown field "):
+		return "unknown_field_drop"
+	default:
+		return "other"
+	}
 }
 
 // Usage aggregates per-turn token accounting summed across every LLM
