@@ -259,16 +259,11 @@ func drainInteractive(ctx context.Context, loop interface{ Cancel() }, events <-
 			case sse.TypeToolResult:
 				var p sse.ToolResultPayload
 				_ = json.Unmarshal(ev.Data, &p)
-				marker := "ok"
-				if p.ExitCode != 0 {
-					marker = fmt.Sprintf("exit %d", p.ExitCode)
-				}
-				if len(p.FailureKinds) > 0 {
-					marker = fmt.Sprintf("%s, failure=%s", marker, strings.Join(p.FailureKinds, "+"))
-				} else if p.FailureKind != "" {
-					marker = fmt.Sprintf("%s, failure=%s", marker, p.FailureKind)
-				}
+				marker := toolResultStatusLabel(p)
 				fmt.Fprintln(os.Stderr, dim(fmt.Sprintf("  [tool] -> %s, %d bytes", marker, len(p.ResultSummary))))
+				for _, line := range toolResultFailureDetails(p) {
+					fmt.Fprintln(os.Stderr, dim("  [tool]    "+line))
+				}
 			case sse.TypeError:
 				var p sse.ErrorPayload
 				_ = json.Unmarshal(ev.Data, &p)
@@ -316,6 +311,52 @@ func summarizeArgs(args map[string]any) string {
 		s = trimUTF8(s, 77) + "..."
 	}
 	return s
+}
+
+func toolResultStatusLabel(p sse.ToolResultPayload) string {
+	marker := "ok"
+	if p.ExitCode != 0 {
+		marker = fmt.Sprintf("exit %d", p.ExitCode)
+	} else if p.FailureKind != "" || len(p.FailureKinds) > 0 {
+		marker = "no evidence"
+	}
+	if len(p.FailureKinds) > 0 {
+		return fmt.Sprintf("%s, failure=%s", marker, strings.Join(p.FailureKinds, "+"))
+	}
+	if p.FailureKind != "" {
+		return fmt.Sprintf("%s, failure=%s", marker, p.FailureKind)
+	}
+	return marker
+}
+
+func toolResultFailureDetails(p sse.ToolResultPayload) []string {
+	if p.ExitCode == 0 && p.FailureKind == "" && len(p.FailureKinds) == 0 {
+		return nil
+	}
+	summary := strings.TrimSpace(p.ResultSummary)
+	if summary == "" {
+		return nil
+	}
+	var out []string
+	for _, raw := range strings.Split(summary, "\n") {
+		line := strings.TrimSpace(raw)
+		if line == "" || strings.HasPrefix(line, "Failure: kind=") {
+			continue
+		}
+		out = append(out, compactToolResultDetailLine(line))
+		if strings.HasPrefix(line, "Next:") || len(out) >= 2 {
+			break
+		}
+	}
+	return out
+}
+
+func compactToolResultDetailLine(line string) string {
+	const max = 180
+	if len(line) <= max {
+		return line
+	}
+	return trimUTF8(line, max-3) + "..."
 }
 
 // handleSlash returns (continueLoop, exitCode). When continueLoop is
