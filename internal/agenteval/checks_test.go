@@ -1,6 +1,7 @@
 package agenteval
 
 import (
+	"encoding/json"
 	"os"
 	"path/filepath"
 	"strings"
@@ -417,6 +418,22 @@ func TestToolFailureKindAtLeast(t *testing.T) {
 			t.Fatalf("successful read_file text must not count as failure kind: %+v", res)
 		}
 	})
+}
+
+func TestApplyTraceEventDerivesToolResultFailureKind(t *testing.T) {
+	trace := Trace{}
+	pending := map[string]int{}
+	req := json.RawMessage(`{"call_id":"c1","tool":"web_fetch","args":{"url":"https://example"}}`)
+	if _, err := applyTraceEvent(&trace, pending, sse.TypeToolRequest, req, ""); err != nil {
+		t.Fatal(err)
+	}
+	res := json.RawMessage(`{"call_id":"c1","result":"[empty response: URL=https://example]\nFailure: kind=empty_response","exit_code":0}`)
+	if _, err := applyTraceEvent(&trace, pending, sse.TypeToolResult, res, ""); err != nil {
+		t.Fatal(err)
+	}
+	if len(trace.Tools) != 1 || trace.Tools[0].FailureKind != "empty_response" {
+		t.Fatalf("derived FailureKind = %+v, want empty_response", trace.Tools)
+	}
 }
 
 func TestFocusedTaskCalledAtLeast(t *testing.T) {

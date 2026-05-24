@@ -57,9 +57,11 @@ Scenario records describe one eval case:
   New traces prefer the authoritative `turn.end.tool_stats` repair summary;
   older traces fall back to classifying `tool.request.repair_notes`.
 - `tool_failure_by_kind`: optional map of structured tool failure kind to
-  count, copied from `turn.end.tool_stats`. Web tool failures use this field to
-  distinguish blocked pages, empty responses, non-text responses, timeouts,
-  argument errors, and HTTP/network classes without parsing free-form text.
+  count. New traces prefer `turn.end.tool_stats`; replay of older or partial
+  traces may derive counts from per-call `tool.result.failure_kind` or
+  structured `Failure: kind=...` result text. Web tool failures use this field
+  to distinguish blocked pages, empty responses, non-text responses, timeouts,
+  argument errors, and HTTP/network classes.
 - `loop_guard_interventions`: runtime loop guard intervention count.
 - `forced_no_tools`: count of forced no-tool follow-up requests after repeated
   loop guard interventions.
