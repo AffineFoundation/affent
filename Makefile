@@ -29,6 +29,18 @@ SERVE_CONTAINER_NAME ?= affent-serve
 SERVE_WORKSPACE_ROOT ?= /workspace/sessions
 SERVE_MEMORY_ROOT ?= /workspace/session-state
 DOCTOR_ARGS ?=
+SMOKE_CONTAINER_NAME ?= affent-serve-smoke
+SMOKE_WORKSPACE ?= $(CURDIR)/.tmp/image-serve-smoke
+SMOKE_PUBLISH ?= 127.0.0.1:7787:7777
+SMOKE_PUBLISH_PARTS := $(subst :, ,$(SMOKE_PUBLISH))
+SMOKE_PUBLISH_WORDS := $(words $(SMOKE_PUBLISH_PARTS))
+SMOKE_HOST := $(if $(filter 3,$(SMOKE_PUBLISH_WORDS)),$(word 1,$(SMOKE_PUBLISH_PARTS)),127.0.0.1)
+SMOKE_PORT := $(if $(filter 3,$(SMOKE_PUBLISH_WORDS)),$(word 2,$(SMOKE_PUBLISH_PARTS)),$(word 1,$(SMOKE_PUBLISH_PARTS)))
+SMOKE_URL ?= http://$(SMOKE_HOST):$(SMOKE_PORT)
+SMOKE_BASE_URL ?= http://127.0.0.1:9
+SMOKE_API_KEY ?= test
+SMOKE_MODEL ?= fake
+SMOKE_SESSION_ID ?= smoke-persist
 
 CONTAINER_GO_IMAGE ?= golang:1.24-bookworm
 CONTAINER_MEMORY ?= 1g
@@ -50,7 +62,7 @@ if test "$$label" != "true"; then \
 fi
 endef
 
-.PHONY: affentctl affentctl-local doctor sandbox-start sandbox-status sandbox-stop image-build image-run image-serve image-serve-up image-serve-status image-serve-health image-serve-health-wait image-serve-logs image-serve-stop image-serve-restart eval-container test-container
+.PHONY: affentctl affentctl-local doctor sandbox-start sandbox-status sandbox-stop image-build image-run image-serve image-serve-up image-serve-status image-serve-health image-serve-health-wait image-serve-logs image-serve-stop image-serve-restart image-serve-smoke eval-container test-container
 
 affentctl:
 	mkdir -p "$(dir $(AFFENTCTL))" .tmp/go-build .tmp/go-mod
@@ -193,6 +205,53 @@ image-serve-restart:
 	fi
 	$(MAKE) image-serve
 	$(MAKE) image-serve-health-wait
+
+image-serve-smoke:
+	@set -eu; \
+	if test -z "$(SMOKE_CONTAINER_NAME)"; then \
+		echo "SMOKE_CONTAINER_NAME is required" >&2; \
+		exit 2; \
+	fi; \
+	if test -z "$(SMOKE_WORKSPACE)" || test "$(SMOKE_WORKSPACE)" = "/"; then \
+		echo "SMOKE_WORKSPACE must be a non-root path" >&2; \
+		exit 2; \
+	fi; \
+	docker rm -f "$(SMOKE_CONTAINER_NAME)" >/dev/null 2>&1 || true; \
+	mkdir -p "$(SMOKE_WORKSPACE)"; \
+	cleanup() { docker rm -f "$(SMOKE_CONTAINER_NAME)" >/dev/null 2>&1 || true; }; \
+	trap cleanup EXIT; \
+	$(MAKE) image-serve-up \
+		SERVE_CONTAINER_NAME="$(SMOKE_CONTAINER_NAME)" \
+		IMAGE_WORKSPACE="$(SMOKE_WORKSPACE)" \
+		SERVE_PUBLISH="$(SMOKE_PUBLISH)" \
+		SERVE_BASE_URL="$(SMOKE_BASE_URL)" \
+		SERVE_API_KEY="$(SMOKE_API_KEY)" \
+		SERVE_MODEL="$(SMOKE_MODEL)" \
+		CONTAINER_MEMORY="$(CONTAINER_MEMORY)" \
+		CONTAINER_CPUS="$(CONTAINER_CPUS)" \
+		CONTAINER_PIDS="$(CONTAINER_PIDS)"; \
+	curl -fsS "$(SMOKE_URL)/healthz" >/dev/null; \
+	curl -fsS -X POST "$(SMOKE_URL)/v1/sessions" \
+		-H 'Content-Type: application/json' \
+		--data '{"session_id":"$(SMOKE_SESSION_ID)"}' | grep -q '"durable":true'; \
+	test -f "$(SMOKE_WORKSPACE)/session-state/$(SMOKE_SESSION_ID)/conversation.jsonl"; \
+	docker stop "$(SMOKE_CONTAINER_NAME)" >/dev/null; \
+	$(MAKE) image-serve-up \
+		SERVE_CONTAINER_NAME="$(SMOKE_CONTAINER_NAME)" \
+		IMAGE_WORKSPACE="$(SMOKE_WORKSPACE)" \
+		SERVE_PUBLISH="$(SMOKE_PUBLISH)" \
+		SERVE_BASE_URL="$(SMOKE_BASE_URL)" \
+		SERVE_API_KEY="$(SMOKE_API_KEY)" \
+		SERVE_MODEL="$(SMOKE_MODEL)" \
+		CONTAINER_MEMORY="$(CONTAINER_MEMORY)" \
+		CONTAINER_CPUS="$(CONTAINER_CPUS)" \
+		CONTAINER_PIDS="$(CONTAINER_PIDS)"; \
+	detail=$$(curl -fsS "$(SMOKE_URL)/v1/sessions/$(SMOKE_SESSION_ID)"); \
+	echo "$$detail" | grep -q '"durable":true'; \
+	echo "$$detail" | grep -q '"active":false'; \
+	memory_label=$$(docker inspect "$(SMOKE_CONTAINER_NAME)" --format '{{index .Config.Labels "affent.runtime.memory"}}'); \
+	test "$$memory_label" = "$(CONTAINER_MEMORY)"; \
+	echo "image-serve-smoke ok: $(SMOKE_URL) session=$(SMOKE_SESSION_ID) memory=$(CONTAINER_MEMORY)"
 
 eval-container: affentctl
 	"$(AFFENTCTL)" image build --image "$(EVAL_IMAGE)" --memory "$(CONTAINER_MEMORY)" $(IMAGE_BUILD_ARGS)

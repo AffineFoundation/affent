@@ -68,6 +68,7 @@ make affentctl-local
 make sandbox-start
 make image-run IMAGE_COMMAND='affentctl --help'
 make image-serve-up
+make image-serve-smoke
 make eval-container EVAL_ARGS='--list'
 make test-container TEST_PACKAGES=./internal/agent
 make test-container TEST_DIR=cmd/affentserve TEST_PACKAGES=./...
@@ -93,6 +94,14 @@ workspace, port publishing, affentserve workspace/memory root, listen address,
 or resource limits, Affent refuses to silently reuse it; run
 `make image-serve-restart` to recreate the container with the requested
 workspace and limits and wait for `/healthz`.
+
+`make image-serve-smoke` is the repeatable production-image smoke test. It uses
+its own `affent-serve-smoke` container and `.tmp/image-serve-smoke` persistent
+workspace by default, starts the server, creates a session, stops and restarts
+the same container through `image-serve-up`, verifies the durable session is
+still listed, checks the memory label, and removes the smoke container. It does
+not call a model; override `SMOKE_PUBLISH` or `SMOKE_URL` only when the default
+`127.0.0.1:7787:7777` port mapping is unavailable.
 
 `make eval-container` builds the full Affent runtime image, runs the checkout's
 `cmd/affenteval` inside it with the same Docker memory/CPU defaults, mounts the
