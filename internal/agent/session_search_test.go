@@ -142,6 +142,9 @@ func TestSessionSearchTool_BadArgs(t *testing.T) {
 	if err == nil {
 		t.Error("expected decode error for malformed JSON args")
 	}
+	if err == nil || !strings.Contains(err.Error(), "Next:") || !strings.Contains(err.Error(), "query") {
+		t.Fatalf("decode error should include corrective fields: %v", err)
+	}
 }
 
 func TestSessionSearchToolRejectsUnknownArgs(t *testing.T) {
@@ -149,6 +152,24 @@ func TestSessionSearchToolRejectsUnknownArgs(t *testing.T) {
 	_, err := tool.Execute(context.Background(), json.RawMessage(`{"query":"deploy","session_id":"past"}`))
 	if err == nil || !strings.Contains(err.Error(), `unknown field "session_id"`) {
 		t.Fatalf("error = %v, want unknown field", err)
+	}
+	for _, want := range []string{"Next:", "query", "top_k", "max_per_session", "Do not pass session_id"} {
+		if !strings.Contains(err.Error(), want) {
+			t.Fatalf("error missing %q:\n%s", want, err.Error())
+		}
+	}
+}
+
+func TestSessionSearchToolDecodeTypeErrorNamesValidFields(t *testing.T) {
+	tool := sessionSearchTool(t.TempDir(), "current")
+	_, err := tool.Execute(context.Background(), json.RawMessage(`{"query":"deploy","top_k":"many"}`))
+	if err == nil {
+		t.Fatal("expected decode error")
+	}
+	for _, want := range []string{"decode args", "Next:", "query", "top_k", "max_per_session"} {
+		if !strings.Contains(err.Error(), want) {
+			t.Fatalf("error missing %q:\n%s", want, err.Error())
+		}
 	}
 }
 
