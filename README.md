@@ -85,11 +85,14 @@ workspaces, image tags, and resource limits apply.
 `make image-serve-up` is the one-command local server path: it builds the
 runtime image if needed, starts `affentserve` in a named Docker container,
 mounts the persistent runtime workspace, waits for `/healthz`, and uses the
-default `1g` memory / `2` CPU / `512` PID limits. If an existing container was
-created with a different persistent workspace, port publishing, affentserve
-workspace/memory root, listen address, or resource limits, Affent refuses to
-silently reuse it; run `make image-serve-restart` to recreate the container
-with the requested workspace and limits and wait for `/healthz`.
+default `1g` memory / `2` CPU / `512` PID limits. The default health URL follows
+common explicit `SERVE_PUBLISH` mappings such as `7777:7777` and
+`127.0.0.1:8888:7777`; set `SERVE_HEALTH_URL` for random or nonstandard Docker
+publish specs. If an existing container was created with a different persistent
+workspace, port publishing, affentserve workspace/memory root, listen address,
+or resource limits, Affent refuses to silently reuse it; run
+`make image-serve-restart` to recreate the container with the requested
+workspace and limits and wait for `/healthz`.
 
 `make eval-container` builds the full Affent runtime image, runs the checkout's
 `cmd/affenteval` inside it with the same Docker memory/CPU defaults, mounts the
@@ -272,10 +275,10 @@ HTTP service can use shell/file tools; pass `SERVE_ARGS='--builtins=false'` when
 you intentionally want a read-only/tool-light service. It also sets
 `--timeout 0s` so the wrapper does not stop the service after the one-shot
 command default. Override `SERVE_PUBLISH`, `SERVE_LISTEN`,
-`SERVE_WORKSPACE_ROOT`, `SERVE_MEMORY_ROOT`, `IMAGE_RUN_ARGS`, or `SERVE_ARGS`
-only when that value is intentionally different for your deployment; use
-`SERVE_PUBLISH=7777:7777` only when you intentionally want Docker to bind on all
-host interfaces.
+`SERVE_HEALTH_URL`, `SERVE_WORKSPACE_ROOT`, `SERVE_MEMORY_ROOT`,
+`IMAGE_RUN_ARGS`, or `SERVE_ARGS` only when that value is intentionally
+different for your deployment; use `SERVE_PUBLISH=7777:7777` only when you
+intentionally want Docker to bind on all host interfaces.
 
 For repeatable local use or evals:
 
