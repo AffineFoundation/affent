@@ -108,18 +108,24 @@ func SearchTool(cfg SearchConfig) (*agent.Tool, error) {
 			if err != nil {
 				return "", recoverableSearchError(err)
 			}
-			return formatResults(results), nil
+			return formatResults(results, n), nil
 		},
 	}, nil
 }
 
-func formatResults(results []SearchResult) string {
+func formatResults(results []SearchResult, limit int) string {
 	if len(results) == 0 {
 		return "(no results)\nNext: retry web_search with fewer or different keywords, include distinctive entities or official domain names, or use another available source URL if already known."
+	}
+	if limit <= 0 || limit > maxSearchResults {
+		limit = maxSearchResults
 	}
 	var b strings.Builder
 	displayed := 0
 	for _, r := range results {
+		if displayed >= limit {
+			break
+		}
 		url := strings.TrimSpace(r.URL)
 		if url == "" {
 			continue

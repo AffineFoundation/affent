@@ -594,6 +594,36 @@ func TestSearchTool_TruncatesLargeResultFields(t *testing.T) {
 	}
 }
 
+func TestSearchTool_CapsFormattedResults(t *testing.T) {
+	results := make([]SearchResult, 0, 12)
+	for i := 1; i <= 12; i++ {
+		results = append(results, SearchResult{
+			Title:   fmt.Sprintf("Result %02d", i),
+			URL:     fmt.Sprintf("https://example.com/%02d", i),
+			Snippet: "ok",
+		})
+	}
+	tool, err := SearchTool(SearchConfig{Provider: stubProvider{results: results}, MaxResults: 3})
+	if err != nil {
+		t.Fatalf("SearchTool: %v", err)
+	}
+	args, _ := json.Marshal(map[string]any{"query": "anything", "num_results": 3})
+	out, err := tool.Execute(context.Background(), args)
+	if err != nil {
+		t.Fatalf("Execute: %v", err)
+	}
+	for _, want := range []string{"1. Result 01", "2. Result 02", "3. Result 03"} {
+		if !strings.Contains(out, want) {
+			t.Fatalf("capped output missing %q:\n%s", want, out)
+		}
+	}
+	for _, forbidden := range []string{"4. Result 04", "Result 12"} {
+		if strings.Contains(out, forbidden) {
+			t.Fatalf("provider-returned extra result should not be formatted (%q):\n%s", forbidden, out)
+		}
+	}
+}
+
 func TestSearchTool_NoResultsIncludesNext(t *testing.T) {
 	tool, err := SearchTool(SearchConfig{Provider: stubProvider{}})
 	if err != nil {
