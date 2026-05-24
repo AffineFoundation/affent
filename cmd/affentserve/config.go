@@ -132,9 +132,9 @@ type Config struct {
 
 	// EvalMode freezes sessions to a strict single-loop benchmark
 	// surface. It disables skills, browser/web tools, subagent,
-	// focused tasks, and other dynamic workflow injection while
-	// leaving memory and shell/file builtins under their explicit
-	// toggles.
+	// focused tasks, other dynamic workflow injection, and memory by
+	// default. Memory and shell/file builtins remain available when
+	// explicitly enabled.
 	EvalMode bool `json:"eval_mode"`
 
 	// SystemPrompt overrides agent.DefaultSystemPrompt. Empty falls
@@ -336,6 +336,9 @@ func (c *Config) Resolve() error {
 				return fmt.Errorf("%s=%q: %w", e.env, v, err)
 			}
 			*e.dest = b
+			if e.env == "AFFENTSERVE_MEMORY" {
+				c.enableMemorySet = true
+			}
 		}
 	}
 	if v := os.Getenv("AFFENTSERVE_SUBAGENT_MAX_DEPTH"); v != "" {
@@ -384,6 +387,9 @@ func (c *Config) ApplyEvalMode() {
 	c.BrowserCacheSweepInterval = ""
 	c.BrowserNoStealth = false
 	c.BrowserAllowAllDomains = false
+	if !c.enableMemorySet {
+		c.EnableMemory = false
+	}
 	c.EnableWeb = false
 	c.EnableWebSearch = false
 	c.EnableSubagent = false

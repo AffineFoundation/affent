@@ -78,13 +78,15 @@ type commonFlags struct {
 	// evalMode freezes the runtime to a strict single-loop benchmark
 	// surface. It disables non-basic surfaces (skills, plan,
 	// session_search, subagent, focused tasks, MCP, project context)
-	// while leaving memory controlled by --memory / --memory-only.
+	// and memory by default. Memory can be enabled explicitly with
+	// --memory=true; MCP can be enabled explicitly with --mcp-config.
 	evalMode bool
 
 	// memoryEnabled composes the MEMORY.md / USER.md snapshot into
 	// the system prompt at session start and registers the `memory`
 	// tool.
-	memoryEnabled bool
+	memoryEnabled  bool
+	memoryExplicit bool
 	// memoryOnly registers only the `memory` tool (no shell, files,
 	// MCP) and disables project-context injection. Implies memoryEnabled.
 	memoryOnly           bool
@@ -154,7 +156,7 @@ func (c *commonFlags) bind(fs *flag.FlagSet) {
 	fs.BoolVar(&c.traceSkipDeltas, "trace-skip-deltas", false, "skip thinking/message deltas in trace (smaller trace, no token-level replay; final text still in message.end)")
 	fs.StringVar(&c.systemPromptPath, "system-prompt", "", "override system prompt; '-' or file path or literal")
 	fs.BoolVar(&c.quiet, "quiet", false, "suppress stderr progress")
-	fs.BoolVar(&c.evalMode, "eval-mode", false, "strict benchmark mode: keep basic shell/file tools, disable skills, plan, session_search, subagent, focused tasks, MCP, and project context; memory remains controlled by --memory / --memory-only (env: AFFENTCTL_EVAL_MODE)")
+	fs.BoolVar(&c.evalMode, "eval-mode", false, "strict benchmark mode: keep basic shell/file tools, disable skills, plan, session_search, subagent, focused tasks, project context, and memory by default; use --memory=true or --mcp-config to opt those surfaces in (env: AFFENTCTL_EVAL_MODE)")
 	fs.BoolVar(&c.memoryEnabled, "memory", true, "enable persistent memory: inject MEMORY.md / USER.md snapshot into the system prompt and register the memory tool (env: AFFENTCTL_MEMORY)")
 	fs.BoolVar(&c.memoryOnly, "memory-only", false, "register only the memory tool (no shell/file/MCP) and disable project context; for memory benchmarks. Implies --memory (env: AFFENTCTL_MEMORY_ONLY)")
 	fs.StringVar(&c.memoryWorkspaceStore, "memory-workspace-store", "", "(legacy) path to a pre-v2 single-file MEMORY.md; if set, migration moves it into the v2 topic layout on first access. Prefer --memory-dir for new setups.")
@@ -369,18 +371,14 @@ func applyConfig(c *commonFlags, fs *flag.FlagSet) error {
 	if c.executor == "sandbox" && c.workspace == "./affent-workspace" && !flagWasSet(fs, "workspace") && os.Getenv("AFFENTCTL_WORKSPACE") == "" {
 		c.workspace = defaultSandboxWorkspace()
 	}
+	c.memoryExplicit = c.memoryExplicit || flagWasSet(fs, "memory") || os.Getenv("AFFENTCTL_MEMORY") != ""
 	// memory-only is the isolation mode: register only the memory
 	// tool and inject no other content sources into the system prompt.
 	// It implies --memory=true and forces --project-context=false
 	// regardless of how either was set.
-	if c.evalMode {
-		c.projectContext = false
-		c.mcpConfigPath = ""
-		c.subagentEnabled = false
-		c.focusedTasksEnabled = false
-	}
 	if c.memoryOnly {
 		c.memoryEnabled = true
+		c.memoryExplicit = true
 		c.projectContext = false
 		c.subagentEnabled = false
 		// Focused tasks need a workspace tool surface (read_file,
@@ -510,6 +508,9 @@ func loadConfigFile(c *commonFlags, fs *flag.FlagSet) error {
 	setBool("quiet", &c.quiet, cfg.Quiet)
 	setBool("eval-mode", &c.evalMode, cfg.EvalMode)
 	if cfg.Memory != nil {
+		if cfg.Memory.Enabled != nil {
+			c.memoryExplicit = true
+		}
 		setBool("memory", &c.memoryEnabled, cfg.Memory.Enabled)
 		setBool("memory-only", &c.memoryOnly, cfg.Memory.Only)
 		setString("memory-workspace-store", &c.memoryWorkspaceStore, cfg.Memory.WorkspaceStore)
@@ -719,6 +720,48 @@ type loopBundle struct {
 	mcpClients []*mcp.Client
 }
 
+type runtimeCapabilities struct {
+	Builtins             bool
+	Memory               bool
+	MCP                  bool
+	Skill                bool
+	BuiltinSkillProvider bool
+	Plan                 bool
+	SessionSearch        bool
+	ProjectContext       bool
+	Subagent             bool
+	FocusedTasks         bool
+}
+
+func resolveRuntimeCapabilities(c commonFlags) runtimeCapabilities {
+	if c.memoryOnly {
+		return runtimeCapabilities{Memory: true}
+	}
+	caps := runtimeCapabilities{
+		Builtins:             true,
+		Memory:               c.memoryEnabled,
+		MCP:                  strings.TrimSpace(c.mcpConfigPath) != "",
+		Skill:                true,
+		BuiltinSkillProvider: true,
+		Plan:                 true,
+		SessionSearch:        true,
+		ProjectContext:       c.projectContext,
+		Subagent:             c.subagentEnabled,
+		FocusedTasks:         c.focusedTasksEnabled,
+	}
+	if c.evalMode {
+		caps.Memory = c.memoryExplicit && c.memoryEnabled
+		caps.Skill = false
+		caps.BuiltinSkillProvider = false
+		caps.Plan = false
+		caps.SessionSearch = false
+		caps.ProjectContext = false
+		caps.Subagent = false
+		caps.FocusedTasks = false
+	}
+	return caps
+}
+
 func (b *loopBundle) close() {
 	for _, c := range b.mcpClients {
 		_ = c.Close()
@@ -744,6 +787,7 @@ func setupLoop(c commonFlags) (*loopBundle, int) {
 		log.Error().Err(err).Msg("llm config")
 		return nil, exitUsage
 	}
+	caps := resolveRuntimeCapabilities(c)
 
 	workspace, err := filepath.Abs(c.workspace)
 	if err != nil {
@@ -798,7 +842,9 @@ func setupLoop(c commonFlags) (*loopBundle, int) {
 		return nil, exitUsage
 	}
 
-	memStore, code := setupMemoryStore(c, workspace, log)
+	memoryConfig := c
+	memoryConfig.memoryEnabled = caps.Memory
+	memStore, code := setupMemoryStore(memoryConfig, workspace, log)
 	if code != 0 {
 		return nil, code
 	}
@@ -808,7 +854,7 @@ func setupLoop(c commonFlags) (*loopBundle, int) {
 	var skillReg *agent.SkillRegistry
 	var conv *agent.Conversation
 	planPath := ""
-	if c.memoryOnly {
+	if !caps.Builtins {
 		if memStore == nil {
 			log.Error().Msg("--memory-only requires a usable memory store; check --memory-workspace-store / --memory-user-store")
 			return nil, exitRuntime
@@ -828,7 +874,7 @@ func setupLoop(c commonFlags) (*loopBundle, int) {
 			return nil, exitUsage
 		}
 		skillDir := ""
-		if !c.evalMode {
+		if caps.Skill {
 			skillDir = agent.DefaultWorkspaceSkillDir(workspace)
 			var skillErr error
 			skillReg, skillErr = agent.RuntimeSkillRegistry(skillDir)
@@ -837,11 +883,11 @@ func setupLoop(c commonFlags) (*loopBundle, int) {
 				return nil, exitRuntime
 			}
 		}
-		if !c.evalMode {
+		if caps.Plan {
 			planPath = filepath.Join(convDir, sid+".plan.json")
 		}
 		sessionsDir := convDir
-		if c.evalMode {
+		if !caps.SessionSearch {
 			sessionsDir = ""
 		}
 		agent.RegisterBuiltins(tools, agent.BuiltinDeps{
@@ -856,14 +902,18 @@ func setupLoop(c commonFlags) (*loopBundle, int) {
 			SkillInstallConfirmer: func(proposalID string) bool {
 				return agent.UserConfirmedRuntimeSkillProposal(conv, proposalID)
 			},
-			DisableSkill: c.evalMode,
+			DisableSkill: !caps.Skill,
 		})
-		if !c.evalMode {
+		if caps.Plan {
 			systemPrompt = agent.WithPlanSystemGuidance(systemPrompt)
 		}
 	}
 
-	mcpClients, err := startMCP(c.mcpConfigPath, tools, log)
+	mcpConfigPath := ""
+	if caps.MCP {
+		mcpConfigPath = c.mcpConfigPath
+	}
+	mcpClients, err := startMCP(mcpConfigPath, tools, log)
 	if err != nil {
 		log.Error().Err(err).Msg("mcp setup")
 		return nil, exitRuntime
@@ -888,10 +938,10 @@ func setupLoop(c commonFlags) (*loopBundle, int) {
 		llm.Sampling = sampling
 	}
 	projectContextDir := ""
-	if c.projectContext {
+	if caps.ProjectContext {
 		projectContextDir = workspace
 	}
-	if !c.memoryOnly && c.subagentEnabled {
+	if caps.Subagent {
 		agent.RegisterSubagent(tools, agent.SubagentDeps{
 			LLM:               llm,
 			Executor:          execBackend,
@@ -907,7 +957,7 @@ func setupLoop(c commonFlags) (*loopBundle, int) {
 		})
 		systemPrompt = agent.WithSubagentSystemGuidance(systemPrompt)
 	}
-	if !c.memoryOnly && c.focusedTasksEnabled {
+	if caps.FocusedTasks {
 		// RegisterFocusedTasks itself filters out profiles whose deps
 		// aren't satisfied — e.g., `research` is dropped because
 		// affentctl doesn't wire a web registrar by default. If every
@@ -951,7 +1001,7 @@ func setupLoop(c commonFlags) (*loopBundle, int) {
 		Memory:                       memStore,
 		ProjectContextDir:            projectContextDir,
 	}
-	if !c.evalMode {
+	if caps.BuiltinSkillProvider {
 		loop.SkillProvider = agent.BuiltinSkillProvider
 	}
 	if skillReg != nil {
@@ -960,11 +1010,11 @@ func setupLoop(c commonFlags) (*loopBundle, int) {
 	if planPath != "" {
 		loop.SkillProvider = agent.WithActivePlanSkillProvider(planPath, loop.SkillProvider)
 	}
-	if !c.memoryOnly && c.subagentEnabled {
+	if caps.Subagent {
 		loop.FirstToolPolicy = agent.SubagentFirstToolPolicy()
 		loop.PostToolPolicy = agent.SubagentPostToolPolicy()
 	}
-	if !c.memoryOnly && c.focusedTasksEnabled {
+	if caps.FocusedTasks {
 		if _, ok := tools.Get(agent.FocusedTaskToolName); ok {
 			loop.FirstToolPolicies = append(loop.FirstToolPolicies, agent.FocusedTaskFirstToolPolicy())
 			loop.PostToolPolicies = append(loop.PostToolPolicies, agent.FocusedTaskPostToolPolicy())

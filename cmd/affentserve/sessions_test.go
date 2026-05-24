@@ -1167,7 +1167,6 @@ func TestSessionPool_EvalModeRegistersOnlyBasicTools(t *testing.T) {
 		Model:              "fake",
 		EvalMode:           true,
 		EnableBuiltins:     true,
-		EnableMemory:       true,
 		EnableSubagent:     true,
 		EnableFocusedTasks: true,
 		EnableWeb:          true,
@@ -1183,15 +1182,25 @@ func TestSessionPool_EvalModeRegistersOnlyBasicTools(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	for _, name := range []string{"shell", "read_file", "write_file", "edit_file", "list_files", "memory"} {
+	for _, name := range []string{"shell", "read_file", "write_file", "edit_file", "list_files"} {
 		if _, ok := s.registry.Get(name); !ok {
 			t.Fatalf("%s should remain registered in eval mode", name)
 		}
 	}
-	for _, name := range []string{"skill", agent.PlanToolName, "session_search", agent.SubagentToolName, agent.FocusedTaskToolName, "web_fetch", "browser_open"} {
+	for _, name := range []string{"skill", "memory", agent.PlanToolName, "session_search", agent.SubagentToolName, agent.FocusedTaskToolName, "web_fetch", "browser_open"} {
 		if _, ok := s.registry.Get(name); ok {
 			t.Fatalf("%s should not be registered in eval mode", name)
 		}
+	}
+	pool.cfg.EnableMemory = true
+	pool.cfg.enableMemorySet = true
+	sWithMemory, err := pool.buildSession("eval-basic-memory")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = sWithMemory.Close() }()
+	if _, ok := sWithMemory.registry.Get("memory"); !ok {
+		t.Fatal("explicit memory should be registered in eval mode")
 	}
 	if s.loop.SkillProvider != nil {
 		t.Fatal("eval mode should disable active skill/provider injection")

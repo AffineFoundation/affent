@@ -109,10 +109,10 @@ checkout at `/workspace`, stores scenario workspaces under `/workspace/.tmp/eval
 and keeps runtime HOME/caches under `/workspace/.tmp/eval-container`. It
 defaults to `EVAL_ARGS='--list'` so it does not call a model unless you request
 scenarios explicitly. Use `make eval-agent-container` for the strict benchmark
-agent posture: it passes `--runtime-eval-mode` and defaults
-`AFFENTCTL_MEMORY=false` inside the container so the model sees only the basic
-shell/file tool surface. Override with `EVAL_MEMORY=true` when you are
-evaluating memory behavior.
+agent posture: it passes `--runtime-eval-mode` and explicitly sets
+`AFFENTCTL_MEMORY=false` inside the container. That is also the runtime eval
+default, but keeping it visible makes the benchmark surface obvious. Override
+with `EVAL_MEMORY=true` when you are evaluating memory behavior.
 
 The equivalent host build, when you intentionally want to bypass Docker, is:
 
@@ -735,11 +735,14 @@ Use runtime eval mode when Affent itself is the benchmark agent and the model
 should solve tasks with only the basic tool surface. `affentctl run
 --eval-mode` disables skills, runtime skill install/reload, subagent,
 focused-task delegation, MCP, project-context injection, session_search, and
-the plan tool; shell/file tools remain available when builtins are available,
-and memory remains explicit through `--memory=false` or `--memory-only`.
+the plan tool; shell/file tools remain available when builtins are available.
+It also disables memory by default; add `--memory=true` for memory-aware evals
+and `--mcp-config <path>` for MCP-aware evals. `--memory-only` remains a
+specialized pure-memory benchmark mode rather than the default eval posture.
 `affentserve --eval-mode` applies the same posture for API sessions and also
-disables browser/web tools. `affenteval --runtime-eval-mode` passes the flag to
-the `affentctl run` process under test and records `runtime_eval_mode` in JSONL
+disables browser/web tools; add `--memory=true` there as well when the eval
+needs memory. `affenteval --runtime-eval-mode` passes the flag to the
+`affentctl run` process under test and records `runtime_eval_mode` in JSONL
 metadata.
 
 For the same posture inside Docker, `make eval-agent-container` wraps

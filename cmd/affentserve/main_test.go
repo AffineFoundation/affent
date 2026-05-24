@@ -188,8 +188,21 @@ func TestParseFlagsAndConfig_EvalModeDisablesNonBasicSurfaces(t *testing.T) {
 	if !cfg.EvalMode || !cfg.EnableBuiltins {
 		t.Fatalf("eval mode should preserve explicit basic builtins: eval=%t builtins=%t", cfg.EvalMode, cfg.EnableBuiltins)
 	}
-	if cfg.EnableBrowser || cfg.BrowserScreenshot || cfg.EnableWeb || cfg.EnableWebSearch || cfg.EnableSubagent || cfg.EnableFocusedTasks {
+	if cfg.EnableMemory || cfg.EnableBrowser || cfg.BrowserScreenshot || cfg.EnableWeb || cfg.EnableWebSearch || cfg.EnableSubagent || cfg.EnableFocusedTasks {
 		t.Fatalf("eval mode should disable non-basic surfaces: %+v", cfg)
+	}
+
+	cfg, err = parseFlagsAndConfig([]string{
+		"--base-url", "https://example/v1",
+		"--model", "demo",
+		"--eval-mode",
+		"--memory=true",
+	})
+	if err != nil {
+		t.Fatalf("parseFlagsAndConfig explicit memory: %v", err)
+	}
+	if !cfg.EnableMemory {
+		t.Fatal("--eval-mode --memory=true should opt memory back in")
 	}
 }
 

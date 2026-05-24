@@ -573,7 +573,7 @@ func TestMemoryOnlyEnvStillAppliesIsolationMode(t *testing.T) {
 
 func TestEvalModeEnvAppliesStrictToolSurface(t *testing.T) {
 	t.Setenv("AFFENTCTL_EVAL_MODE", "true")
-	t.Setenv("AFFENTCTL_MCP_CONFIG", "/tmp/ignored-mcp.json")
+	t.Setenv("AFFENTCTL_MCP_CONFIG", "/tmp/eval-mcp.json")
 	t.Setenv("AFFENTCTL_PROJECT_CONTEXT", "true")
 	t.Setenv("AFFENTCTL_SUBAGENT", "true")
 	t.Setenv("AFFENTCTL_FOCUSED_TASKS", "true")
@@ -586,11 +586,34 @@ func TestEvalModeEnvAppliesStrictToolSurface(t *testing.T) {
 	if !cf.evalMode {
 		t.Fatal("AFFENTCTL_EVAL_MODE=true should enable eval mode")
 	}
-	if cf.mcpConfigPath != "" || cf.projectContext || cf.subagentEnabled || cf.focusedTasksEnabled {
-		t.Fatalf("eval mode should isolate dynamic surfaces: mcp=%q project_context=%t subagent=%t focused_tasks=%t", cf.mcpConfigPath, cf.projectContext, cf.subagentEnabled, cf.focusedTasksEnabled)
+	caps := resolveRuntimeCapabilities(cf)
+	if !caps.Builtins || !caps.MCP {
+		t.Fatalf("eval mode should keep basic tools and allow explicit MCP config, caps=%+v", caps)
 	}
-	if !cf.memoryEnabled || cf.memoryOnly {
-		t.Fatalf("eval mode should not imply memory-only or disable memory: memory=%t memory_only=%t", cf.memoryEnabled, cf.memoryOnly)
+	if caps.Memory || caps.Skill || caps.Plan || caps.SessionSearch || caps.ProjectContext || caps.Subagent || caps.FocusedTasks {
+		t.Fatalf("eval mode should default to the minimal benchmark surface, caps=%+v", caps)
+	}
+	if cf.memoryOnly {
+		t.Fatalf("eval mode should not imply memory-only: memory_only=%t", cf.memoryOnly)
+	}
+}
+
+func TestEvalModeAllowsExplicitMemory(t *testing.T) {
+	var cf commonFlags
+	fs := flag.NewFlagSet("test", flag.ContinueOnError)
+	cf.bind(fs)
+	if err := fs.Parse([]string{"--eval-mode", "--memory=true"}); err != nil {
+		t.Fatal(err)
+	}
+	if err := applyConfig(&cf, fs); err != nil {
+		t.Fatal(err)
+	}
+	caps := resolveRuntimeCapabilities(cf)
+	if !caps.Memory {
+		t.Fatalf("--eval-mode --memory=true should enable memory, caps=%+v", caps)
+	}
+	if caps.Skill || caps.Plan || caps.SessionSearch || caps.Subagent || caps.FocusedTasks {
+		t.Fatalf("explicit memory must not re-enable non-basic eval surfaces, caps=%+v", caps)
 	}
 }
 
@@ -735,7 +758,7 @@ func TestSetupLoop_EvalModeOmitsSkillsDelegationAndSkillProvider(t *testing.T) {
 		t.Fatalf("setupLoop code=%d", code)
 	}
 	defer b.close()
-	for _, name := range []string{"skill", "session_search", agent.PlanToolName, "subagent_run", agent.FocusedTaskToolName} {
+	for _, name := range []string{"skill", "memory", "session_search", agent.PlanToolName, "subagent_run", agent.FocusedTaskToolName} {
 		if _, ok := b.loop.Tools.Get(name); ok {
 			t.Fatalf("%s should not be registered in eval mode", name)
 		}

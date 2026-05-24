@@ -71,6 +71,7 @@ func diagnoseAffentctl(c commonFlags, runner commandRunner) []doctorFinding {
 	add := func(status, subject, msg string) {
 		out = append(out, doctorFinding{Status: status, Subject: subject, Message: msg})
 	}
+	caps := resolveRuntimeCapabilities(c)
 
 	workspace, err := filepath.Abs(strings.TrimSpace(c.workspace))
 	if err != nil {
@@ -115,7 +116,7 @@ func diagnoseAffentctl(c commonFlags, runner commandRunner) []doctorFinding {
 		add(status, "trace", msg)
 	}
 
-	if c.memoryEnabled {
+	if caps.Memory {
 		if summary, err := doctorMemorySummary(c, workspace); err != nil {
 			add("error", "memory", err.Error())
 		} else {
@@ -124,7 +125,7 @@ func diagnoseAffentctl(c commonFlags, runner commandRunner) []doctorFinding {
 	} else {
 		add("ok", "memory", "disabled")
 	}
-	if c.subagentEnabled {
+	if caps.Subagent {
 		add("ok", "subagent", fmt.Sprintf("enabled max_depth=%d", c.subagentMaxDepth))
 	} else {
 		add("ok", "subagent", "disabled")
@@ -153,7 +154,7 @@ func diagnoseAffentctl(c commonFlags, runner commandRunner) []doctorFinding {
 			}
 		}
 	}
-	if c.mcpConfigPath == "" {
+	if !caps.MCP {
 		add("ok", "mcp", "disabled")
 	} else if summary, err := doctorMCPConfig(c.mcpConfigPath); err != nil {
 		add("error", "mcp", err.Error())
@@ -181,20 +182,9 @@ func diagnoseAffentctl(c commonFlags, runner commandRunner) []doctorFinding {
 }
 
 func doctorCapabilitySummary(c commonFlags) string {
-	builtins := !c.memoryOnly
-	evalMode := c.evalMode
-	mcpEnabled := builtins && !evalMode && strings.TrimSpace(c.mcpConfigPath) != ""
-	subagentEnabled := builtins && !evalMode && c.subagentEnabled
-	focusedTasksEnabled := builtins && !evalMode && c.focusedTasksEnabled
-	skillInstall := builtins && !evalMode
-	sessionSearch := builtins && !evalMode
-	projectContext := builtins && !evalMode && c.projectContext
-	memoryTool := c.memoryEnabled
-	if c.memoryOnly {
-		memoryTool = true
-	}
+	caps := resolveRuntimeCapabilities(c)
 	profiles := "off"
-	if focusedTasksEnabled {
+	if caps.FocusedTasks {
 		// Build a probe from what affentctl actually wires: workspace +
 		// LLM are always present at run time, executor + memory +
 		// session_search follow the builtins/memory flags. affentctl
@@ -205,9 +195,9 @@ func doctorCapabilitySummary(c commonFlags) string {
 		probe := agent.FocusedTaskAvailabilityProbe{
 			HasLLM:       true,
 			HasWorkspace: true,
-			HasExecutor:  builtins,
-			HasMemory:    memoryTool,
-			HasSessions:  sessionSearch,
+			HasExecutor:  caps.Builtins,
+			HasMemory:    caps.Memory,
+			HasSessions:  caps.SessionSearch,
 			// HasWeb / HasBrowser stay false: affentctl has no path
 			// that registers web or browser tools for focused tasks.
 		}
@@ -224,17 +214,17 @@ func doctorCapabilitySummary(c commonFlags) string {
 	}
 	return fmt.Sprintf(
 		"shell_file=%t skill_install=%t memory=%t memory_only=%t eval_mode=%t session_search=%t project_context=%t mcp=%t subagent=%t subagent_max_depth=%d focused_tasks=%t focused_task_profiles=%s executor=%s",
-		builtins,
-		skillInstall,
-		memoryTool,
+		caps.Builtins,
+		caps.Skill,
+		caps.Memory,
 		c.memoryOnly,
-		evalMode,
-		sessionSearch,
-		projectContext,
-		mcpEnabled,
-		subagentEnabled,
+		c.evalMode,
+		caps.SessionSearch,
+		caps.ProjectContext,
+		caps.MCP,
+		caps.Subagent,
 		c.subagentMaxDepth,
-		focusedTasksEnabled,
+		caps.FocusedTasks,
 		profiles,
 		doctorCapabilityExecutor(c.executor),
 	)
