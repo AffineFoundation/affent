@@ -1637,6 +1637,158 @@ func TestRunner_EndToEnd_ExternalResearchFetchRecovery(t *testing.T) {
 	}
 }
 
+// TestRunner_EndToEnd_ExternalResearchRepeatedFailedInputGuard pins the
+// runtime side of web recovery: even if the model ignores web_fetch's Next
+// guidance and repeats the same blocked URL, the loop guard blocks the repeat
+// before dispatch and surfaces a machine-readable failure kind the eval stack
+// can diagnose.
+func TestRunner_EndToEnd_ExternalResearchRepeatedFailedInputGuard(t *testing.T) {
+	var blockedDispatches atomic.Int32
+	var fallbackDispatches atomic.Int32
+	webSearch := agent.Tool{
+		Name:        "web_search",
+		Description: "Test-only search stand-in: returns blocked and fallback metric candidates.",
+		Schema: json.RawMessage(`{
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["query"],
+            "properties": {
+                "query": {"type": "string"},
+                "num_results": {"type": "integer"}
+            }
+        }`),
+		Execute: func(ctx context.Context, args json.RawMessage) (string, error) {
+			return `[
+  {"title":"Lyra Network primary metrics","url":"https://blocked.example/lyra/metrics","snippet":"Primary metrics page that blocks direct fetches."},
+  {"title":"Lyra Network fallback metrics","url":"https://metrics.example/lyra","snippet":"Alternative text metrics endpoint with current market data."}
+]`, nil
+		},
+	}
+	webFetch := agent.Tool{
+		Name:        "web_fetch",
+		Description: "Test-only fetch stand-in: records dispatches so guard-blocked repeats are observable.",
+		Schema: json.RawMessage(`{
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["url"],
+            "properties": {
+                "url": {"type": "string"}
+            }
+        }`),
+		Execute: func(ctx context.Context, args json.RawMessage) (string, error) {
+			var p struct {
+				URL string `json:"url"`
+			}
+			if err := json.Unmarshal(args, &p); err != nil {
+				return "", err
+			}
+			switch p.URL {
+			case "https://blocked.example/lyra/metrics":
+				blockedDispatches.Add(1)
+				return "", errors.New("web_fetch failed: HTTP 403 Forbidden for https://blocked.example/lyra/metrics\nFailure: kind=blocked, status=403\nNext: do not retry this exact URL; fetch an HTML/API/text fallback or mark this source as unverified")
+			case "https://metrics.example/lyra":
+				fallbackDispatches.Add(1)
+				return "Fallback metrics snapshot as of 2026-05-24T12:00:00Z: price $8.10, market cap $19.4M, 24h change +0.9%.", nil
+			default:
+				return "", fmt.Errorf("unexpected test URL %q", p.URL)
+			}
+		},
+	}
+
+	turn1 := []string{
+		`{"choices":[{"delta":{"role":"assistant","tool_calls":[{"index":0,"id":"s1","type":"function","function":{"name":"web_search","arguments":"{\"query\":\"Lyra Network market metrics\",\"num_results\":5}"}}]},"finish_reason":null}]}`,
+		`{"choices":[{"delta":{},"finish_reason":"tool_calls"}]}`,
+		`[DONE]`,
+	}
+	turn2 := []string{
+		`{"choices":[{"delta":{"role":"assistant","tool_calls":[{"index":0,"id":"f1","type":"function","function":{"name":"web_fetch","arguments":"{\"url\":\"https://blocked.example/lyra/metrics\"}"}}]},"finish_reason":null}]}`,
+		`{"choices":[{"delta":{},"finish_reason":"tool_calls"}]}`,
+		`[DONE]`,
+	}
+	turn3 := []string{
+		`{"choices":[{"delta":{"role":"assistant","tool_calls":[{"index":0,"id":"f2","type":"function","function":{"name":"web_fetch","arguments":"{\"url\":\"https://blocked.example/lyra/metrics\"}"}}]},"finish_reason":null}]}`,
+		`{"choices":[{"delta":{},"finish_reason":"tool_calls"}]}`,
+		`[DONE]`,
+	}
+	turn4 := []string{
+		`{"choices":[{"delta":{"role":"assistant","tool_calls":[{"index":0,"id":"f3","type":"function","function":{"name":"web_fetch","arguments":"{\"url\":\"https://metrics.example/lyra\"}"}}]},"finish_reason":null}]}`,
+		`{"choices":[{"delta":{},"finish_reason":"tool_calls"}]}`,
+		`[DONE]`,
+	}
+	turn5 := []string{
+		`{"choices":[{"delta":{"role":"assistant","content":"The primary Lyra metrics URL was blocked and a repeat was rejected by the loop guard, so it is not verified evidence. I used the fallback metrics endpoint instead: as of 2026-05-24T12:00:00Z it reports price $8.10, market cap $19.4M, and 24h change +0.9%. The answer should keep the blocked primary source as an unverified gap."},"finish_reason":"stop"}]}`,
+		`[DONE]`,
+	}
+	srv := newScriptedLLM(t, [][]string{turn1, turn2, turn3, turn4, turn5})
+	lyraSearch := func(args map[string]any) bool {
+		q, _ := args["query"].(string)
+		return strings.Contains(q, "Lyra Network")
+	}
+	fetchURL := func(url string) func(map[string]any) bool {
+		return func(args map[string]any) bool {
+			return args["url"] == url
+		}
+	}
+
+	scenario := Scenario{
+		Name:         "external_research_repeated_failed_input_guard",
+		Description:  "runtime blocks repeated failed web_fetch input and the model can still switch source",
+		Prompt:       "Assess current Lyra Network market metrics. If a fetch is blocked, do not reuse that evidence; switch to an alternate source and mark gaps.",
+		MaxTurnSteps: 8,
+		Checks: []Check{
+			TurnEndedCleanly(),
+			ToolCalled("web_search", lyraSearch),
+			ToolCalled("web_fetch", fetchURL("https://blocked.example/lyra/metrics")),
+			ToolCalled("web_fetch", fetchURL("https://metrics.example/lyra")),
+			ToolCalledAtLeast("web_fetch", 3),
+			ToolFailureKindAtLeast("blocked", 1),
+			ToolFailureKindAtLeast("loop_guard_repeated_failed_input", 1),
+			ToolResultContains("web_fetch", "same effective URL"),
+			ToolCalledBeforeMatching("web_fetch", fetchURL("https://blocked.example/lyra/metrics"), "web_fetch", fetchURL("https://metrics.example/lyra")),
+			FinalTextContains("repeat was rejected by the loop guard"),
+			FinalTextContains("market cap $19.4M"),
+			FinalTextContains("unverified gap"),
+		},
+	}
+
+	runner := &Runner{
+		LLM:            agent.NewLLMClient(srv.URL, "", "fake-model"),
+		MaxTurnSteps:   8,
+		PerCallTimeout: 5 * time.Second,
+		RunTimeout:     20 * time.Second,
+		Log:            zerolog.Nop(),
+		BuildRegistry: func(ctx context.Context, workspaceDir string, exec executor.Executor) (*agent.Registry, error) {
+			_ = ctx
+			_ = workspaceDir
+			_ = exec
+			reg := agent.NewRegistry()
+			reg.Add(&webSearch)
+			reg.Add(&webFetch)
+			return reg, nil
+		},
+	}
+
+	out, err := runner.Run(context.Background(), scenario)
+	if err != nil {
+		t.Fatalf("Runner.Run: %v", err)
+	}
+	if !out.Pass {
+		t.Errorf("expected all checks to pass; failed: %v", out.FailedChecks())
+		for _, r := range out.Results {
+			t.Logf("  %s: pass=%v detail=%s", r.Check, r.Pass, r.Detail)
+		}
+	}
+	if got := blockedDispatches.Load(); got != 1 {
+		t.Fatalf("blocked URL should dispatch exactly once; repeated attempt must be guard-blocked, got %d", got)
+	}
+	if got := fallbackDispatches.Load(); got != 1 {
+		t.Fatalf("fallback URL should dispatch exactly once, got %d", got)
+	}
+	if len(out.Trace.Tools) != 4 {
+		t.Fatalf("expected one search and three fetch trace entries; got %+v", out.Trace.Tools)
+	}
+}
+
 // TestRunner_EndToEnd_ExternalResearchSearchRecovery pins the discovery-side
 // recovery path: a no-results search is not evidence, and the model should
 // refine once with more distinctive entities / source terms before fetching.
