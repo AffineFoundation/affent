@@ -409,6 +409,47 @@ func TestSessionPool_ShutdownPreservesDurableState(t *testing.T) {
 	t.Fatalf("conversation log must reload after graceful shutdown; got %+v", s2.conv.Snapshot())
 }
 
+func TestSessionPool_ReopensConversationWithOversizedLine(t *testing.T) {
+	memRoot := t.TempDir()
+	cfg := Config{
+		Listen:         "127.0.0.1:0",
+		MaxSessions:    4,
+		SessionIdleTTL: "5m",
+		WorkspaceRoot:  t.TempDir(),
+		MemoryRoot:     memRoot,
+		BaseURL:        "http://127.0.0.1:0",
+		APIKey:         "test",
+		Model:          "fake",
+	}
+	sessionID := "oversized-conversation"
+	sessionDir := filepath.Join(memRoot, sessionID)
+	if err := os.MkdirAll(sessionDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	body := strings.Join([]string{
+		`{"role":"user","content":"before oversized line"}`,
+		`{"role":"assistant","content":"` + strings.Repeat("x", 4*1024*1024+1) + `"}`,
+		`{"role":"assistant","content":"after oversized line"}`,
+	}, "\n") + "\n"
+	if err := os.WriteFile(filepath.Join(sessionDir, "conversation.jsonl"), []byte(body), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	pool, err := NewSessionPool(cfg, zerolog.New(io.Discard))
+	if err != nil {
+		t.Fatalf("NewSessionPool: %v", err)
+	}
+	t.Cleanup(pool.Shutdown)
+	s, err := pool.GetOrCreate(sessionID)
+	if err != nil {
+		t.Fatalf("GetOrCreate must skip oversized conversation line while loading: %v", err)
+	}
+	msgs := s.conv.Snapshot()
+	if len(msgs) != 2 || msgs[0].Content != "before oversized line" || msgs[1].Content != "after oversized line" {
+		t.Fatalf("conversation snapshot after reopen = %+v, want before/after messages only", msgs)
+	}
+}
+
 func TestSessionPool_EventLogIsDurable(t *testing.T) {
 	memRoot := t.TempDir()
 	cfg := Config{

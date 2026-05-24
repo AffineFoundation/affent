@@ -5,12 +5,17 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"log"
 	"os"
 	"path/filepath"
 	"strings"
 	"sync"
+
+	"github.com/affinefoundation/affent/internal/jsonl"
 )
+
+const maxConversationLineBytes = 4 * 1024 * 1024
 
 // Conversation is the in-memory + on-disk record of one session's messages.
 // Persistence is JSONL on the host (under the user's home volume), one
@@ -125,13 +130,23 @@ func (c *Conversation) load() error {
 		return err
 	}
 	defer f.Close()
-	sc := bufio.NewScanner(f)
-	sc.Buffer(make([]byte, 0, 64*1024), 4*1024*1024)
+	reader := bufio.NewReaderSize(f, 64*1024)
 	lineNo := 0
-	for sc.Scan() {
+	for {
+		line, overLimit, err := jsonl.ReadBoundedLine(reader, maxConversationLineBytes)
+		if errors.Is(err, io.EOF) {
+			break
+		}
+		if err != nil {
+			return err
+		}
 		lineNo++
+		if overLimit {
+			log.Printf("affent: conversation %s line %d: skipping oversized JSONL record above %d bytes", c.path, lineNo, maxConversationLineBytes)
+			continue
+		}
 		var m ChatMessage
-		if err := json.Unmarshal(sc.Bytes(), &m); err != nil {
+		if err := json.Unmarshal(line, &m); err != nil {
 			// Surface — but don't fail — so an operator notices the
 			// corruption before the next Replace() compacts the file
 			// and quietly drops the bad line forever. Embedders that
@@ -140,9 +155,6 @@ func (c *Conversation) load() error {
 			continue
 		}
 		c.messages = append(c.messages, m)
-	}
-	if err := sc.Err(); err != nil {
-		return err
 	}
 	// Post-load repair: if the previous process crashed mid-turn we
 	// may have an assistant.tool_calls on disk with no matching tool

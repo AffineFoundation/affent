@@ -101,6 +101,44 @@ func TestOpenConversationAt_CorruptedLineIsLogged(t *testing.T) {
 	}
 }
 
+func TestOpenConversationAt_OversizedLineIsSkipped(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "sess.jsonl")
+	body := strings.Join([]string{
+		`{"role":"user","content":"before oversized line"}`,
+		`{"role":"assistant","content":"` + strings.Repeat("x", maxConversationLineBytes+1) + `"}`,
+		`{"role":"assistant","content":"after oversized line"}`,
+	}, "\n") + "\n"
+	if err := os.WriteFile(path, []byte(body), 0o644); err != nil {
+		t.Fatalf("write fixture: %v", err)
+	}
+
+	var buf bytes.Buffer
+	prev := log.Writer()
+	prevFlags := log.Flags()
+	log.SetOutput(&buf)
+	log.SetFlags(0)
+	t.Cleanup(func() {
+		log.SetOutput(prev)
+		log.SetFlags(prevFlags)
+	})
+
+	c, err := OpenConversationAt(path)
+	if err != nil {
+		t.Fatalf("open: %v", err)
+	}
+	msgs := c.Snapshot()
+	if got, want := len(msgs), 2; got != want {
+		t.Fatalf("loaded %d messages, want %d with only oversized line skipped", got, want)
+	}
+	if msgs[0].Content != "before oversized line" || msgs[1].Content != "after oversized line" {
+		t.Fatalf("messages out of order or wrong content: %+v", msgs)
+	}
+	if !strings.Contains(buf.String(), "line 2") || !strings.Contains(buf.String(), "oversized") {
+		t.Fatalf("expected oversized log mentioning line 2; got %q", buf.String())
+	}
+}
+
 // TestConversationAppend_NoGhostMessageOnDiskFailure pins the
 // persist-then-remember ordering. Pre-fix, Append wrote to the
 // in-memory slice BEFORE attempting the disk write, so a failed

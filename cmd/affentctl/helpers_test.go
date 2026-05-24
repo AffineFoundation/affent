@@ -57,6 +57,27 @@ func TestScanLog_MissingFileReturnsZero(t *testing.T) {
 	}
 }
 
+func TestScanLog_SkipsOversizedLine(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "session.jsonl")
+	lines := []string{
+		`{"role":"system","content":"be helpful"}`,
+		`{"role":"assistant","content":"` + strings.Repeat("x", maxLocalSessionLogLineBytes+1) + `"}`,
+		`{"role":"user","content":"visible after oversized line"}`,
+	}
+	if err := os.WriteFile(path, []byte(strings.Join(lines, "\n")+"\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	count, preview := scanLog(path)
+	if count != 3 {
+		t.Errorf("count = %d, want physical line count 3", count)
+	}
+	if !strings.Contains(preview, "visible after oversized line") {
+		t.Errorf("preview = %q, want user message after oversized line", preview)
+	}
+}
+
 // TestOneLine_TrimAndTruncate pins three behaviors of the preview
 // formatter: newlines collapse to spaces (so multi-line user input
 // stays on one tabular row), trailing whitespace stripped, max-

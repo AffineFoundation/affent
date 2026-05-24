@@ -13,12 +13,14 @@ import (
 	"strings"
 	"time"
 
+	"github.com/affinefoundation/affent/internal/jsonl"
 	"github.com/affinefoundation/affent/internal/planstate"
 )
 
 const (
-	maxLocalSessionPlanBytes = planstate.MaxFileBytes
-	localSessionDirReadBatch = 128
+	maxLocalSessionPlanBytes    = planstate.MaxFileBytes
+	maxLocalSessionLogLineBytes = 4 * 1024 * 1024
+	localSessionDirReadBatch    = 128
 )
 
 type sessionListRow struct {
@@ -217,20 +219,29 @@ func scanLog(path string) (int, string) {
 		return 0, ""
 	}
 	defer f.Close()
-	sc := bufio.NewScanner(f)
-	sc.Buffer(make([]byte, 0, 64*1024), 4*1024*1024)
+	reader := bufio.NewReaderSize(f, 64*1024)
 	var preview string
 	count := 0
-	for sc.Scan() {
+	for {
+		line, overLimit, err := jsonl.ReadBoundedLine(reader, maxLocalSessionLogLineBytes)
+		if errors.Is(err, io.EOF) {
+			break
+		}
+		if err != nil {
+			return count, preview
+		}
 		count++
 		if preview != "" {
+			continue
+		}
+		if overLimit {
 			continue
 		}
 		var m struct {
 			Role    string `json:"role"`
 			Content string `json:"content"`
 		}
-		if err := json.Unmarshal(sc.Bytes(), &m); err != nil {
+		if err := json.Unmarshal(line, &m); err != nil {
 			continue
 		}
 		if m.Role == "user" {
