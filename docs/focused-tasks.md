@@ -205,6 +205,11 @@ If the child emits non-JSON text, Affent wraps the text in a structured fallback
 result and adds a warning so the parent can still consume it with an explicit
 downgrade signal.
 
+Parent-side post-task policy treats `warnings` as an open-gap signal and allows
+small verification after `run_task`. A definitive `not_found` entry is still a
+valid task result, so it does not by itself reopen broad parent-side
+exploration.
+
 ## Context Isolation
 
 Focused Tasks isolate intermediate work from the parent conversation:

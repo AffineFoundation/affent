@@ -723,7 +723,7 @@ func FocusedTaskPostToolPolicy() *PostToolPolicy {
 }
 
 func focusedTaskResultHasOpenGaps(resp FocusedTaskResult) bool {
-	return len(resp.Warnings) > 0 || len(resp.NotFound) > 0
+	return len(resp.Warnings) > 0
 }
 
 func explicitFocusedTaskRequested(userText string) bool {

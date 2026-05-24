@@ -548,6 +548,18 @@ func TestFocusedTaskPolicies(t *testing.T) {
 	if FocusedTaskPostToolPolicy().shouldActivate(string(warnResult), false) {
 		t.Fatal("focused-task results with warnings should allow parent-side verification")
 	}
+	notFoundResult, err := json.Marshal(FocusedTaskResult{
+		TaskType: FocusedTaskRecall,
+		OK:       true,
+		Summary:  "no prior context found",
+		NotFound: []string{"no relevant prior session context"},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !FocusedTaskPostToolPolicy().shouldActivate(string(notFoundResult), false) {
+		t.Fatal("definitive not_found focused-task results should still block duplicate parent-side exploration")
+	}
 	if FocusedTaskPostToolPolicy().shouldActivate(string(okResult), true) {
 		t.Fatal("tool errors should not activate focused-task post policy")
 	}
