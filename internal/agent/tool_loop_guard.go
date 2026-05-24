@@ -371,7 +371,7 @@ func repeatedFailedCallMessage(tool string, failure toolCallFailure) string {
 
 func directReaderWarningFetchMessage(rawURL string) string {
 	return withLoopGuardFailureKind(
-		fmt.Sprintf("loop_guard: blocked web_fetch to %q because web_search marked that URL with Direct-reader warning in this turn.\nNext: do not spend direct page-reading calls on that URL; use the search snippet only as weak discovery/sentiment evidence, choose a canonical API/text/source URL, use a rendering-capable tool if available, or answer with this source marked unverified.", rawURL),
+		fmt.Sprintf("loop_guard: blocked web_fetch to %q because web_search marked that URL with Direct-reader warning in this turn.\nNext: do not spend direct page-reading calls on that URL; use the search snippet only as weak discovery/sentiment evidence, choose a canonical API/text/source URL, or answer with this source marked unverified.", rawURL),
 		loopGuardDirectReaderWarningKind,
 	)
 }

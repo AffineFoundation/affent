@@ -1537,7 +1537,7 @@ func TestRunner_EndToEnd_ExternalResearchFetchRecovery(t *testing.T) {
 			case "https://official.example/orion/about":
 				return "Official docs, updated 2026-05-20: Orion Network is a decentralized storage subnet for encrypted archival workloads.", nil
 			case "https://blocked.example/orion/metrics":
-				return "", errors.New("web_fetch failed: HTTP 403 Forbidden for https://blocked.example/orion/metrics\nFailure: kind=blocked, status=403\nNext: do not retry this exact URL; fetch an HTML/API/text fallback, use a browser tool if one is registered, or mark this source as unverified")
+				return "", errors.New("web_fetch failed: HTTP 403 Forbidden for https://blocked.example/orion/metrics\nFailure: kind=blocked, status=403\nNext: do not retry this exact URL; fetch an HTML/API/text fallback, use another available source, or mark this source as unverified")
 			case "https://metrics.example/orion":
 				return "Alternative metrics snapshot as of 2026-05-24T12:00:00Z: price $4.12, market cap $41.3M, 24h change -2.1%, 24h volume $980K.", nil
 			default:
@@ -1686,7 +1686,7 @@ func TestRunner_EndToEnd_ExternalResearchDynamicShellRecovery(t *testing.T) {
 			case "https://official.example/helio/about":
 				return "Official docs, updated 2026-05-21: Helio is a decentralized routing subnet for inference traffic.", nil
 			case "https://dashboard.example/helio":
-				return "[dynamic page shell: URL=https://dashboard.example/helio, Content-Type=\"text/html\", Reason=\"low evidence app shell\"]\nFailure: kind=dynamic_shell\nNext: do not treat this loading/app shell as source evidence; use a canonical API/text/source page, an available rendering tool/source, or answer with this source marked as dynamic/unverified.", nil
+				return "[dynamic page shell: URL=https://dashboard.example/helio, Content-Type=\"text/html\", Reason=\"low evidence app shell\"]\nFailure: kind=dynamic_shell\nNext: do not treat this loading/app shell as source evidence; use a canonical API/text/source page, another available source, or answer with this source marked as dynamic/unverified.", nil
 			case "https://api.example/helio/metrics.txt":
 				return "Text metrics snapshot as of 2026-05-24T12:00:00Z: price $6.42, market cap $32.5M, 24h change +4.8%, 24h volume $1.1M.", nil
 			default:

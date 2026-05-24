@@ -339,6 +339,11 @@ Next: choose the 1-3 most authoritative/current result URLs.`
 			t.Fatalf("direct-reader warning guard missing %q: %q", want, got)
 		}
 	}
+	for _, forbidden := range []string{"browser", "rendering"} {
+		if strings.Contains(got, forbidden) {
+			t.Fatalf("direct-reader warning guard should not mention unavailable %q capability: %q", forbidden, got)
+		}
+	}
 	if got := g.recordAttempt("web_fetch", json.RawMessage(`{"url":"https://metrics.example/app/nimbus"}`)); got != "" {
 		t.Fatalf("caution-only URL should not be hard-blocked: %q", got)
 	}
