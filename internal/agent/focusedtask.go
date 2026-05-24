@@ -697,7 +697,7 @@ func FocusedTaskPostToolPolicy() *PostToolPolicy {
 			if json.Unmarshal([]byte(result), &resp) != nil {
 				return false
 			}
-			return resp.OK
+			return resp.OK && !focusedTaskResultHasOpenGaps(resp)
 		},
 		BlockedAfterToolResult: []string{FocusedTaskToolName},
 		AfterToolResultReject:  "post_tool_policy: run_task already ran this turn; use its structured result instead of spawning another focused task.",
@@ -720,6 +720,10 @@ func FocusedTaskPostToolPolicy() *PostToolPolicy {
 		},
 		Rejection: "post_tool_policy: run_task already returned a successful structured result; answer from its summary/findings instead of repeating parent-side exploration.",
 	}
+}
+
+func focusedTaskResultHasOpenGaps(resp FocusedTaskResult) bool {
+	return len(resp.Warnings) > 0 || len(resp.NotFound) > 0
 }
 
 func explicitFocusedTaskRequested(userText string) bool {

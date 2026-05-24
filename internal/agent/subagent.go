@@ -193,7 +193,7 @@ func SubagentPostToolPolicy() *PostToolPolicy {
 			if json.Unmarshal([]byte(result), &resp) != nil {
 				return false
 			}
-			return resp.OK
+			return resp.OK && !subagentReportHasOpenGaps(resp.Report)
 		},
 		BlockedAfterToolResult: []string{SubagentToolName},
 		AfterToolResultReject:  "post_tool_policy: subagent_run already ran this turn; use its report as a focused evidence index and verify only the smallest missing facts instead of spawning another child.",
@@ -221,6 +221,77 @@ func NestedSubagentPostToolPolicy() *PostToolPolicy {
 		ToolName:               SubagentToolName,
 		BlockedAfterToolResult: []string{SubagentToolName},
 		AfterToolResultReject:  "post_tool_policy: a nested subagent already ran in this child turn; use its report and finish the remaining local evidence work instead of spawning another child.",
+	}
+}
+
+func subagentReportHasOpenGaps(report string) bool {
+	lower := strings.ToLower(strings.TrimSpace(report))
+	if lower == "" {
+		return true
+	}
+	for _, marker := range []string{
+		"incomplete",
+		"partial",
+		"could not",
+		"couldn't",
+		"unable to",
+		"did not complete",
+		"not complete",
+		"not found",
+		"not yet",
+		"failed to",
+		"未能",
+		"无法",
+		"未获取",
+		"未找到",
+		"未确定",
+		"不完整",
+		"需要进一步",
+	} {
+		if strings.Contains(lower, marker) {
+			return true
+		}
+	}
+	return reportSectionHasMeaningfulItems(report, "uncertainties") ||
+		reportSectionHasMeaningfulItems(report, "uncertainty") ||
+		reportSectionHasMeaningfulItems(report, "warnings") ||
+		reportSectionHasMeaningfulItems(report, "limitations")
+}
+
+func reportSectionHasMeaningfulItems(report, section string) bool {
+	lines := strings.Split(report, "\n")
+	inSection := false
+	for _, line := range lines {
+		trimmed := strings.TrimSpace(line)
+		lower := strings.ToLower(strings.Trim(trimmed, "#:* "))
+		if lower == section {
+			inSection = true
+			continue
+		}
+		if !inSection {
+			continue
+		}
+		if trimmed == "" {
+			continue
+		}
+		if strings.HasPrefix(trimmed, "#") || strings.HasSuffix(trimmed, ":") {
+			break
+		}
+		item := strings.TrimSpace(strings.TrimLeft(trimmed, "-*0123456789.、) \t"))
+		if item == "" || reportSectionItemMeansNone(item) {
+			continue
+		}
+		return true
+	}
+	return false
+}
+
+func reportSectionItemMeansNone(item string) bool {
+	switch strings.ToLower(strings.TrimSpace(item)) {
+	case "none", "none.", "n/a", "na", "no", "no.", "no known uncertainties", "no known uncertainties.", "无", "无。", "无明显不确定性", "无明显不确定性。", "没有", "没有。":
+		return true
+	default:
+		return false
 	}
 }
 
@@ -500,6 +571,7 @@ func runSubagent(ctx context.Context, deps SubagentDeps, mode SubagentMode, task
 		report = incompleteSubagentReport(res.TurnEndReason, res.ToolCalls)
 	}
 	report = sanitizeSubagentReportForParent(report)
+	ok := res.Err == nil && res.TurnEndReason == sse.TurnEndCompleted && !subagentReportHasOpenGaps(report)
 
 	resp := subagentResponse{
 		// Report is FIRST so when the parent Loop's
@@ -508,7 +580,7 @@ func runSubagent(ctx context.Context, deps SubagentDeps, mode SubagentMode, task
 		// if tool_calls / metadata tail off. Order matters because
 		// Go's encoding/json preserves struct-field declaration order.
 		Report:         report,
-		OK:             res.Err == nil && res.TurnEndReason == sse.TurnEndCompleted,
+		OK:             ok,
 		TurnEndReason:  res.TurnEndReason,
 		Mode:           mode.Name,
 		ChildSessionID: childID,

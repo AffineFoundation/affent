@@ -536,6 +536,18 @@ func TestFocusedTaskPolicies(t *testing.T) {
 	if FocusedTaskPostToolPolicy().shouldActivate(string(badResult), false) {
 		t.Fatal("partial focused-task result should not block parent-side verification")
 	}
+	warnResult, err := json.Marshal(FocusedTaskResult{
+		TaskType: FocusedTaskExplore,
+		OK:       true,
+		Summary:  "found some facts",
+		Warnings: []string{"some requested fields were not verified"},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if FocusedTaskPostToolPolicy().shouldActivate(string(warnResult), false) {
+		t.Fatal("focused-task results with warnings should allow parent-side verification")
+	}
 	if FocusedTaskPostToolPolicy().shouldActivate(string(okResult), true) {
 		t.Fatal("tool errors should not activate focused-task post policy")
 	}

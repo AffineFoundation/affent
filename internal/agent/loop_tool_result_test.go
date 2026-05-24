@@ -1604,6 +1604,99 @@ func TestRunTurn_SubagentPostPolicyGuardsDuplicateExploration(t *testing.T) {
 	}
 }
 
+func TestRunTurn_SubagentPostPolicyAllowsVerificationForOpenGaps(t *testing.T) {
+	var calls int32
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "text/event-stream")
+		w.WriteHeader(http.StatusOK)
+		fl, _ := w.(http.Flusher)
+		switch atomic.AddInt32(&calls, 1) {
+		case 1:
+			_, _ = w.Write([]byte(`data: {"choices":[{"delta":{"role":"assistant","tool_calls":[{"index":0,"id":"c1","type":"function","function":{"name":"subagent_run","arguments":"{\"task\":\"collect metrics\"}"}}]},"finish_reason":"tool_calls"}]}` + "\n\n"))
+			_, _ = w.Write([]byte("data: [DONE]\n\n"))
+		case 2:
+			_, _ = w.Write([]byte(`data: {"choices":[{"delta":{"role":"assistant","tool_calls":[{"index":0,"id":"c2","type":"function","function":{"name":"read_file","arguments":"{\"path\":\"metrics.txt\"}"}}]},"finish_reason":"tool_calls"}]}` + "\n\n"))
+			_, _ = w.Write([]byte("data: [DONE]\n\n"))
+		default:
+			_, _ = w.Write([]byte(`data: {"choices":[{"delta":{"role":"assistant","content":"verified missing metric"},"finish_reason":"stop"}]}` + "\n\n"))
+			_, _ = w.Write([]byte("data: [DONE]\n\n"))
+		}
+		if fl != nil {
+			fl.Flush()
+		}
+	}))
+	t.Cleanup(srv.Close)
+
+	var readCalls int32
+	reg := NewRegistry()
+	reg.Add(&Tool{
+		Name:        "subagent_run",
+		Description: "test subagent",
+		Schema:      json.RawMessage(`{"type":"object","properties":{}}`),
+		Execute: func(context.Context, json.RawMessage) (string, error) {
+			return `{"report":"Conclusion:\nFound partial evidence.\n\nUncertainties:\n- metrics.txt still needs verification.","ok":true,"turn_end_reason":"completed"}`, nil
+		},
+	})
+	reg.Add(&Tool{
+		Name:        "read_file",
+		Description: "test read",
+		Schema:      json.RawMessage(`{"type":"object","properties":{}}`),
+		Execute: func(context.Context, json.RawMessage) (string, error) {
+			atomic.AddInt32(&readCalls, 1)
+			return "verified metric", nil
+		},
+	})
+
+	conv, err := OpenConversationAt(filepath.Join(t.TempDir(), "sess.jsonl"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	events := make(chan sse.Event, 256)
+	loop := &Loop{
+		LLM: NewLLMClient(srv.URL, "", "fake-model"), Tools: reg, Conv: conv, Events: events,
+		MaxTurnSteps: 4, PerCallTimeout: 5 * time.Second,
+		PostToolPolicy: SubagentPostToolPolicy(),
+	}
+	if err := loop.EnsureSystemPrompt("base"); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := loop.SendUser(context.Background(), "use subagent then verify any gaps"); err != nil {
+		t.Fatal(err)
+	}
+
+	deadline := time.After(10 * time.Second)
+	var sawPolicyGuard bool
+	for {
+		select {
+		case ev, ok := <-events:
+			if !ok {
+				t.Fatal("event channel closed before turn.end")
+			}
+			if ev.Type == sse.TypeToolResult {
+				var p sse.ToolResultPayload
+				if err := json.Unmarshal(ev.Data, &p); err != nil {
+					t.Fatalf("decode tool.result: %v", err)
+				}
+				if strings.Contains(p.Result, "post_tool_policy") {
+					sawPolicyGuard = true
+				}
+			}
+			if ev.Type != sse.TypeTurnEnd {
+				continue
+			}
+			if sawPolicyGuard {
+				t.Fatal("open-gap subagent report should not block parent-side verification")
+			}
+			if got := atomic.LoadInt32(&readCalls); got != 1 {
+				t.Fatalf("read_file should execute for focused verification; got %d calls", got)
+			}
+			return
+		case <-deadline:
+			t.Fatal("timeout waiting for turn.end")
+		}
+	}
+}
+
 func TestRunTurn_SubagentPostPolicyGuardsRepeatedSubagentAfterFailure(t *testing.T) {
 	var calls int32
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {

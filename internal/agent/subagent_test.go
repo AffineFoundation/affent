@@ -123,6 +123,27 @@ func TestSubagentPostPolicyDoesNotActivateForPartialMaxTurnsReport(t *testing.T)
 	}
 }
 
+func TestSubagentPostPolicyDoesNotActivateForOpenGaps(t *testing.T) {
+	resp := subagentResponse{
+		Report: "Conclusion:\nFound partial evidence.\n\nUncertainties:\n- Affine netuid was not determined.\n- Metrics were not verified.",
+		OK:     true,
+	}
+	raw, err := json.Marshal(resp)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if SubagentPostToolPolicy().shouldActivate(string(raw), false) {
+		t.Fatal("successful-but-incomplete subagent reports should allow parent-side verification")
+	}
+}
+
+func TestSubagentReportHasOpenGapsAllowsExplicitNone(t *testing.T) {
+	report := "Conclusion:\nDone.\n\nUncertainties:\n- None.\n\nEvidence:\n- verified source."
+	if subagentReportHasOpenGaps(report) {
+		t.Fatalf("explicitly empty uncertainties should not mark report incomplete:\n%s", report)
+	}
+}
+
 func TestSubagentPostPolicyBlocksParentBrowserAfterSuccessfulReport(t *testing.T) {
 	resp := subagentResponse{
 		Report:        "Conclusion:\nThe child gathered the page facts.\nEvidence:\n- browser snapshot",
