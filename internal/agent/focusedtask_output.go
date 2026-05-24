@@ -258,7 +258,7 @@ func buildFocusedTaskResult(profile FocusedTaskProfile, objective, childID strin
 	}
 	result.Summary = sanitizeUntrustedText(previewN(strings.TrimSpace(parsed.Summary), maxFocusedTaskSummaryBytes))
 	var findingWarnings []string
-	result.Findings, findingWarnings = sanitizeFindings(parsed.Findings)
+	result.Findings, findingWarnings = sanitizeFindings(profile.Kind, parsed.Findings)
 	result.NotFound = trimAndCapStringList(parsed.NotFound)
 	result.Warnings = trimAndCapStringList(append(parsed.Warnings, findingWarnings...))
 	result.SuggestedNext = trimAndCapStringList(parsed.SuggestedNext)
@@ -268,7 +268,7 @@ func buildFocusedTaskResult(profile FocusedTaskProfile, objective, childID strin
 	return result
 }
 
-func sanitizeFindings(in []FocusedTaskFinding) ([]FocusedTaskFinding, []string) {
+func sanitizeFindings(kind FocusedTaskKind, in []FocusedTaskFinding) ([]FocusedTaskFinding, []string) {
 	if len(in) == 0 {
 		return nil, nil
 	}
@@ -292,11 +292,16 @@ func sanitizeFindings(in []FocusedTaskFinding) ([]FocusedTaskFinding, []string) 
 			warnings = append(warnings, "omitted finding without evidence: "+previewN(claim, 160))
 			continue
 		}
+		severity := normalizeSeverity(f.Severity)
+		if kind == FocusedTaskReview && !validFocusedTaskSeverity(severity) {
+			warnings = append(warnings, "omitted review finding without valid severity: "+previewN(claim, 160))
+			continue
+		}
 		out = append(out, FocusedTaskFinding{
 			Claim:      claim,
 			Evidence:   evidence,
 			Source:     source,
-			Severity:   normalizeSeverity(f.Severity),
+			Severity:   severity,
 			Confidence: normalizeConfidence(f.Confidence),
 		})
 	}
@@ -304,6 +309,15 @@ func sanitizeFindings(in []FocusedTaskFinding) ([]FocusedTaskFinding, []string) 
 		out = nil
 	}
 	return out, trimAndCapStringList(warnings)
+}
+
+func validFocusedTaskSeverity(severity string) bool {
+	switch severity {
+	case "low", "medium", "high":
+		return true
+	default:
+		return false
+	}
 }
 
 func trimAndCapStringList(in []string) []string {
