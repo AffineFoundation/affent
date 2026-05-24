@@ -100,6 +100,13 @@ image-serve-up:
 			echo "container $(SERVE_CONTAINER_NAME) is not an Affent runtime container" >&2; \
 			exit 2; \
 		fi; \
+		expected_workspace="$(abspath $(IMAGE_WORKSPACE))"; \
+		actual_workspace=$$(docker inspect "$(SERVE_CONTAINER_NAME)" --format '{{index .Config.Labels "affent.runtime.workspace"}}' 2>/dev/null); \
+		if test "$$actual_workspace" != "$$expected_workspace"; then \
+			echo "container $(SERVE_CONTAINER_NAME) was created with workspace=$$actual_workspace, but requested workspace=$$expected_workspace" >&2; \
+			echo "run make image-serve-restart to recreate it with the requested persistent workspace" >&2; \
+			exit 2; \
+		fi; \
 		actual_memory=$$(docker inspect "$(SERVE_CONTAINER_NAME)" --format '{{index .Config.Labels "affent.runtime.memory"}}' 2>/dev/null); \
 		actual_cpus=$$(docker inspect "$(SERVE_CONTAINER_NAME)" --format '{{index .Config.Labels "affent.runtime.cpus"}}' 2>/dev/null); \
 		actual_pids=$$(docker inspect "$(SERVE_CONTAINER_NAME)" --format '{{index .Config.Labels "affent.runtime.pids_limit"}}' 2>/dev/null); \
