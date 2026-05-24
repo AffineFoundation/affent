@@ -90,6 +90,14 @@ func TestHandleStats_EmptyPool(t *testing.T) {
 		resp.Boundaries.SubagentConfiguredMaxDepth <= 0 || resp.Boundaries.SubagentHardMaxDepth <= 0 {
 		t.Fatalf("subagent boundaries must be positive: %+v", resp.Boundaries)
 	}
+	if resp.Boundaries.SkillActionBytes <= 0 || resp.Boundaries.SkillNameBytes <= 0 ||
+		resp.Boundaries.SkillDescriptionBytes <= 0 || resp.Boundaries.SkillBodyBytes <= 0 ||
+		resp.Boundaries.SkillSourceBytes <= 0 || resp.Boundaries.SkillTriggers <= 0 ||
+		resp.Boundaries.SkillTriggerBytes <= 0 || resp.Boundaries.RuntimeSkills <= 0 ||
+		resp.Boundaries.RuntimeSkillDirReadBatch <= 0 || resp.Boundaries.RuntimeSkillManifestBytes <= 0 ||
+		resp.Boundaries.RuntimeSkillProposalBytes <= 0 || resp.Boundaries.RuntimeSkillProposalID <= 0 {
+		t.Fatalf("runtime skill boundaries must be positive: %+v", resp.Boundaries)
+	}
 	if resp.Boundaries.MemoryFileBytes <= 0 || resp.Boundaries.MemorySearchQuery <= 0 || resp.Boundaries.MemorySearchTerms <= 0 ||
 		resp.Boundaries.MemorySearchSnippet <= 0 || resp.Boundaries.MemoryResponseEntry <= 0 {
 		t.Fatalf("memory boundaries must be positive: %+v", resp.Boundaries)
@@ -128,6 +136,9 @@ func TestStatsBoundarySnapshotUsesConfiguredTurnLimits(t *testing.T) {
 	}
 	if got.SubagentConfiguredMaxDepth != 3 {
 		t.Fatalf("SubagentConfiguredMaxDepth = %d, want 3", got.SubagentConfiguredMaxDepth)
+	}
+	if got.SkillBodyBytes != agent.DefaultRuntimeBoundaries().SkillBodyBytes {
+		t.Fatalf("SkillBodyBytes = %d, want %d", got.SkillBodyBytes, agent.DefaultRuntimeBoundaries().SkillBodyBytes)
 	}
 }
 

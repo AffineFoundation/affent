@@ -117,6 +117,46 @@ func TestDefaultSkillRegistryLoadsEmbeddedManifestCatalog(t *testing.T) {
 	}
 }
 
+func TestDefaultRuntimeBoundariesIncludesRuntimeSkillCaps(t *testing.T) {
+	got := DefaultRuntimeBoundaries()
+	if got.SkillActionBytes != maxSkillActionBytes {
+		t.Fatalf("SkillActionBytes = %d, want %d", got.SkillActionBytes, maxSkillActionBytes)
+	}
+	if got.SkillNameBytes != maxSkillNameBytes {
+		t.Fatalf("SkillNameBytes = %d, want %d", got.SkillNameBytes, maxSkillNameBytes)
+	}
+	if got.SkillDescriptionBytes != maxRuntimeSkillDescriptionBytes {
+		t.Fatalf("SkillDescriptionBytes = %d, want %d", got.SkillDescriptionBytes, maxRuntimeSkillDescriptionBytes)
+	}
+	if got.SkillBodyBytes != maxRuntimeSkillBodyBytes {
+		t.Fatalf("SkillBodyBytes = %d, want %d", got.SkillBodyBytes, maxRuntimeSkillBodyBytes)
+	}
+	if got.SkillSourceBytes != maxRuntimeSkillSourceBytes {
+		t.Fatalf("SkillSourceBytes = %d, want %d", got.SkillSourceBytes, maxRuntimeSkillSourceBytes)
+	}
+	if got.SkillTriggers != maxRuntimeSkillTriggers {
+		t.Fatalf("SkillTriggers = %d, want %d", got.SkillTriggers, maxRuntimeSkillTriggers)
+	}
+	if got.SkillTriggerBytes != maxRuntimeSkillTriggerBytes {
+		t.Fatalf("SkillTriggerBytes = %d, want %d", got.SkillTriggerBytes, maxRuntimeSkillTriggerBytes)
+	}
+	if got.RuntimeSkills != maxRuntimeSkills {
+		t.Fatalf("RuntimeSkills = %d, want %d", got.RuntimeSkills, maxRuntimeSkills)
+	}
+	if got.RuntimeSkillDirReadBatch != runtimeSkillDirReadBatch {
+		t.Fatalf("RuntimeSkillDirReadBatch = %d, want %d", got.RuntimeSkillDirReadBatch, runtimeSkillDirReadBatch)
+	}
+	if got.RuntimeSkillManifestBytes != maxRuntimeSkillManifestBytes {
+		t.Fatalf("RuntimeSkillManifestBytes = %d, want %d", got.RuntimeSkillManifestBytes, maxRuntimeSkillManifestBytes)
+	}
+	if got.RuntimeSkillProposalBytes != maxRuntimeSkillProposalBytes {
+		t.Fatalf("RuntimeSkillProposalBytes = %d, want %d", got.RuntimeSkillProposalBytes, maxRuntimeSkillProposalBytes)
+	}
+	if got.RuntimeSkillProposalIDBytes != len(runtimeSkillProposalID(Skill{Name: "demo", Body: "AFFENT ACTIVE SKILL: demo"})) {
+		t.Fatalf("RuntimeSkillProposalIDBytes = %d", got.RuntimeSkillProposalIDBytes)
+	}
+}
+
 func TestBuiltinSkillProvider_SkillInstallWorkflowTriggers(t *testing.T) {
 	got := BuiltinSkillProvider("我想安装一个能帮我做 Go 代码审查的 skill，可以从 github 找")
 	for _, want := range []string{

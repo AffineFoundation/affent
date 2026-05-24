@@ -125,8 +125,8 @@ allowlist/denylist can be checked before a model sees the tools.
 `doctor` also prints the active runtime boundary caps, including prompt/config
 input limits, LLM request and stream accumulator caps, tool request/result event
 caps, tool result context cap, loop guard thresholds, plan state/active-plan
-caps, focused-task budget/output caps, subagent input/budget/depth caps, JSONL
-record cap, MCP result cap, and memory file/search/response caps. Its capability line
+caps, focused-task budget/output caps, subagent input/budget/depth caps, runtime
+skill install/input caps, JSONL record cap, MCP result cap, and memory file/search/response caps. Its capability line
 summarizes the tool surface the resolved config will expose, including
 shell/file tools, skill install, memory, session search, MCP, subagent,
 focused tasks, project context, and executor class.
@@ -517,6 +517,9 @@ that exact id. Direct `action:"install"` is reserved for an exact skill body the
 user already provided. Runtime skill manifests preserve the reviewed `source`
 across session restart; when no source is supplied for a direct install, Affent
 falls back to the local persisted `SKILL.md` path.
+Runtime skill installs are bounded: body 64 KiB, source 2 KiB, description
+512 bytes, up to 20 triggers of 128 bytes each, and at most 128 installed
+runtime skills are loaded from a skill directory.
 
 ## Subagent
 
@@ -807,8 +810,9 @@ stats, aggregate token/browser counters, `workspace_root`, `memory_root`,
 clients can verify the durable state path, see effective turn/tool caps, and
 stop sending new work during graceful drain.
 The boundary snapshot includes loop guard thresholds, plan state/active-plan,
-focused-task budget/output, subagent input/budget/depth, JSONL record, MCP
-result, MCP transport, and memory file/search/response caps.
+focused-task budget/output, subagent input/budget/depth, runtime skill
+install/input, JSONL record, MCP result, MCP transport, and memory
+file/search/response caps.
 
 ## Security Model
 

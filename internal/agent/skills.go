@@ -114,6 +114,7 @@ const (
 	maxRuntimeSkillTriggerBytes     = 128
 	maxRuntimeSkillManifestBytes    = maxRuntimeSkillDescriptionBytes + maxRuntimeSkillSourceBytes + maxRuntimeSkillTriggerBytes*maxRuntimeSkillTriggers + 1024
 	maxRuntimeSkillProposalBytes    = maxRuntimeSkillBodyBytes + maxRuntimeSkillManifestBytes + maxRuntimeSkillSourceBytes + 4096
+	runtimeSkillProposalIDBytes     = 16
 )
 
 func (a SkillAutoActivation) hasRules() bool {
@@ -1017,7 +1018,7 @@ func runtimeSkillProposalID(skill Skill) string {
 }
 
 func validRuntimeSkillProposalID(id string) bool {
-	if len(id) != 16 {
+	if len(id) != runtimeSkillProposalIDBytes {
 		return false
 	}
 	for _, r := range id {

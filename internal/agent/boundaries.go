@@ -50,6 +50,18 @@ type RuntimeBoundaries struct {
 	SubagentToolResultBytes         int
 	SubagentDefaultDepth            int
 	SubagentHardMaxDepth            int
+	SkillActionBytes                int
+	SkillNameBytes                  int
+	SkillDescriptionBytes           int
+	SkillBodyBytes                  int
+	SkillSourceBytes                int
+	SkillTriggers                   int
+	SkillTriggerBytes               int
+	RuntimeSkills                   int
+	RuntimeSkillDirReadBatch        int
+	RuntimeSkillManifestBytes       int
+	RuntimeSkillProposalBytes       int
+	RuntimeSkillProposalIDBytes     int
 }
 
 func DefaultRuntimeBoundaries() RuntimeBoundaries {
@@ -100,5 +112,17 @@ func DefaultRuntimeBoundaries() RuntimeBoundaries {
 		SubagentToolResultBytes:         subagentToolResultBytes,
 		SubagentDefaultDepth:            DefaultSubagentMaxDepth,
 		SubagentHardMaxDepth:            MaxSubagentDepth,
+		SkillActionBytes:                maxSkillActionBytes,
+		SkillNameBytes:                  maxSkillNameBytes,
+		SkillDescriptionBytes:           maxRuntimeSkillDescriptionBytes,
+		SkillBodyBytes:                  maxRuntimeSkillBodyBytes,
+		SkillSourceBytes:                maxRuntimeSkillSourceBytes,
+		SkillTriggers:                   maxRuntimeSkillTriggers,
+		SkillTriggerBytes:               maxRuntimeSkillTriggerBytes,
+		RuntimeSkills:                   maxRuntimeSkills,
+		RuntimeSkillDirReadBatch:        runtimeSkillDirReadBatch,
+		RuntimeSkillManifestBytes:       maxRuntimeSkillManifestBytes,
+		RuntimeSkillProposalBytes:       maxRuntimeSkillProposalBytes,
+		RuntimeSkillProposalIDBytes:     runtimeSkillProposalIDBytes,
 	}
 }

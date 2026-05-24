@@ -1639,6 +1639,9 @@ func TestSkillToolPublishesAndRejectsBlankRequiredStrings(t *testing.T) {
 	if schema.Properties["name"].MaxLength != maxSkillNameBytes {
 		t.Fatalf("name maxLength = %d, want %d", schema.Properties["name"].MaxLength, maxSkillNameBytes)
 	}
+	if schema.Properties["proposal_id"].MaxLength != runtimeSkillProposalIDBytes {
+		t.Fatalf("proposal_id maxLength = %d, want %d", schema.Properties["proposal_id"].MaxLength, runtimeSkillProposalIDBytes)
+	}
 	if _, err := tool.Execute(context.Background(), json.RawMessage(`{"action":"   "}`)); err == nil || !strings.Contains(err.Error(), "action is required") || !strings.Contains(err.Error(), "Next:") {
 		t.Fatalf("blank action error = %v, want action is required", err)
 	}

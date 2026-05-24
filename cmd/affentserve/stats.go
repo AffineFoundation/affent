@@ -82,6 +82,18 @@ type statsBoundaries struct {
 	SubagentDefaultDepth       int    `json:"subagent_default_depth"`
 	SubagentConfiguredMaxDepth int    `json:"subagent_configured_max_depth"`
 	SubagentHardMaxDepth       int    `json:"subagent_hard_max_depth"`
+	SkillActionBytes           int    `json:"skill_action_bytes"`
+	SkillNameBytes             int    `json:"skill_name_bytes"`
+	SkillDescriptionBytes      int    `json:"skill_description_bytes"`
+	SkillBodyBytes             int    `json:"skill_body_bytes"`
+	SkillSourceBytes           int    `json:"skill_source_bytes"`
+	SkillTriggers              int    `json:"skill_triggers"`
+	SkillTriggerBytes          int    `json:"skill_trigger_bytes"`
+	RuntimeSkills              int    `json:"runtime_skills"`
+	RuntimeSkillDirReadBatch   int    `json:"runtime_skill_dir_read_batch"`
+	RuntimeSkillManifestBytes  int    `json:"runtime_skill_manifest_bytes"`
+	RuntimeSkillProposalBytes  int    `json:"runtime_skill_proposal_bytes"`
+	RuntimeSkillProposalID     int    `json:"runtime_skill_proposal_id_bytes"`
 	MCPToolResultBytes         int    `json:"mcp_tool_result_bytes"`
 	MCPHTTPJSONResponse        int    `json:"mcp_http_json_response_bytes"`
 	MCPHTTPSSELine             int    `json:"mcp_http_sse_line_bytes"`
@@ -241,6 +253,18 @@ func statsBoundarySnapshot(cfg Config) statsBoundaries {
 		SubagentDefaultDepth:       ab.SubagentDefaultDepth,
 		SubagentConfiguredMaxDepth: subagentMaxDepth,
 		SubagentHardMaxDepth:       ab.SubagentHardMaxDepth,
+		SkillActionBytes:           ab.SkillActionBytes,
+		SkillNameBytes:             ab.SkillNameBytes,
+		SkillDescriptionBytes:      ab.SkillDescriptionBytes,
+		SkillBodyBytes:             ab.SkillBodyBytes,
+		SkillSourceBytes:           ab.SkillSourceBytes,
+		SkillTriggers:              ab.SkillTriggers,
+		SkillTriggerBytes:          ab.SkillTriggerBytes,
+		RuntimeSkills:              ab.RuntimeSkills,
+		RuntimeSkillDirReadBatch:   ab.RuntimeSkillDirReadBatch,
+		RuntimeSkillManifestBytes:  ab.RuntimeSkillManifestBytes,
+		RuntimeSkillProposalBytes:  ab.RuntimeSkillProposalBytes,
+		RuntimeSkillProposalID:     ab.RuntimeSkillProposalIDBytes,
 		MCPToolResultBytes:         mb.ToolResultBytes,
 		MCPHTTPJSONResponse:        mb.HTTPJSONResponseBytes,
 		MCPHTTPSSELine:             mb.HTTPSSELineBytes,

@@ -175,9 +175,9 @@ func skillTool(reg *SkillRegistry, skillDir string, confirmInstall SkillInstallC
             "body": {"type": "string", "maxLength": %d, "description": "Full SKILL.md body for install."},
             "triggers": {"type": "array", "maxItems": %d, "items": {"type": "string", "minLength": 1, "maxLength": %d}, "description": "Optional phrases that auto-activate this skill on future turns."},
             "source": {"type": "string", "maxLength": %d, "description": "Candidate source URL or path for propose_install/install provenance."},
-            "proposal_id": {"type": "string", "minLength": 16, "maxLength": 16, "description": "Pending proposal id returned by propose_install, required for confirm_install."}
+            "proposal_id": {"type": "string", "minLength": %d, "maxLength": %d, "description": "Pending proposal id returned by propose_install, required for confirm_install."}
         }
-    }`, maxSkillActionBytes, maxSkillNameBytes, maxRuntimeSkillDescriptionBytes, maxRuntimeSkillBodyBytes, maxRuntimeSkillTriggers, maxRuntimeSkillTriggerBytes, maxRuntimeSkillSourceBytes))
+    }`, maxSkillActionBytes, maxSkillNameBytes, maxRuntimeSkillDescriptionBytes, maxRuntimeSkillBodyBytes, maxRuntimeSkillTriggers, maxRuntimeSkillTriggerBytes, maxRuntimeSkillSourceBytes, runtimeSkillProposalIDBytes, runtimeSkillProposalIDBytes))
 	return &Tool{
 		Name:        "skill",
 		Description: "List, read, or install reusable operational skills. Installed skills are prompt/workflow documents, persisted under the workspace, and become available without restarting. For remote or searched candidates, first retrieve and review the exact SKILL.md body with available web/shell/file tools, then use propose_install with source and body, and confirm_install only after the user confirms that proposal_id. Use install only when the user explicitly provides an exact skill body to install.",
