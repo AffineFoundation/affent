@@ -324,6 +324,39 @@ timeouts, `llm_incomplete_stream` when upstream closes SSE before
 prompt/context window. The human `message` remains detailed; the structured
 kind is for eval grouping, WebUI badges, and operator alerts.
 
+## Subagent Delegation Diagnostics
+
+`subagent_run` is a lower-level isolated child runtime for broad exploration,
+review, and other noisy read-only work. The child returns a compact report plus
+metadata, not its full transcript. The parent should normally answer from that
+report and avoid repeating the same file reads, commands, or browser steps.
+
+Post-tool policy distinguishes a complete evidence report from a partial
+verification index:
+
+- `ok=false` means the child did not complete cleanly, or the runtime detected
+  explicit open gaps in the report. The parent may do a small verification pass
+  over the missing facts, but should not spawn another broad child for the same
+  work.
+- `ok=true` with no open-gap section means the report is considered sufficient
+  for the parent to answer. Duplicate parent-side exploration tools are blocked
+  with `tool_policy_active`.
+- A repeated `subagent_run` in the same turn is blocked with
+  `tool_policy_repeat`; the parent should use the first report as an evidence
+  index instead.
+
+Open gaps are detected conservatively from explicit report sections such as
+`Uncertainties`, `Warnings`, `Limitations`, `Open questions`, or `Gaps`
+(singular and plural forms are accepted, including inline forms like
+`Warnings: source is stale`). Empty markers such as `none`, `N/A`, or
+`no known uncertainties` keep the report complete. Definitive absence claims
+like "No issues found" or "No matching prior session context was found" are not
+open gaps by themselves.
+
+Subagent prompts require an `Uncertainties` section and ask the child to write
+`- none` when there are no residual gaps. This keeps smaller models from
+leaving blank sections that are hard for the parent to interpret.
+
 `affent_session_id` pins follow-up turns. Pass it back through
 `X-Affent-Session-Id`, `affent_session_id`, or `session_id`.
 
