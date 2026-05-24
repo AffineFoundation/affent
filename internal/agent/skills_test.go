@@ -562,8 +562,17 @@ func TestUserConfirmedRuntimeSkillProposalHandlesNoProblem(t *testing.T) {
 	if userTextConfirmsRuntimeSkillProposal("not sure, proposal_id=0123456789abcdef", proposalID) {
 		t.Fatal("not sure should not confirm proposal")
 	}
+	if userTextConfirmsRuntimeSkillProposal("not ok, proposal_id=0123456789abcdef", proposalID) {
+		t.Fatal("not ok should not confirm proposal")
+	}
+	if userTextConfirmsRuntimeSkillProposal("not approved, proposal_id=0123456789abcdef", proposalID) {
+		t.Fatal("not approved should not confirm proposal")
+	}
 	if userTextConfirmsRuntimeSkillProposal("no, proposal_id=0123456789abcdef", proposalID) {
 		t.Fatal("plain no should not confirm proposal")
+	}
+	if userTextConfirmsRuntimeSkillProposal("不可以，proposal_id=0123456789abcdef", proposalID) {
+		t.Fatal("Chinese rejection should not confirm proposal")
 	}
 }
 
