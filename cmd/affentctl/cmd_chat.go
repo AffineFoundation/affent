@@ -294,9 +294,9 @@ func summarizeArgs(args map[string]any) string {
 	if len(args) == 0 {
 		return "{}"
 	}
-	// Show one-line preview of the most informative key. shell.command
-	// and read_file.path are the typical cases; fall back to JSON.
-	for _, k := range []string{"command", "path", "name", "id"} {
+	// Show one-line preview of the most informative key for common
+	// tool families; fall back to JSON when there is no obvious handle.
+	for _, k := range []string{"command", "path", "url", "query", "name", "id"} {
 		if v, ok := args[k]; ok {
 			s := fmt.Sprint(v)
 			if len(s) > 80 {

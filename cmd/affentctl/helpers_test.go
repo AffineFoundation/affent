@@ -261,9 +261,9 @@ func TestWriteTraceMeta(t *testing.T) {
 }
 
 // TestSummarizeArgs_PrefersInformativeKeys pins the chat REPL's
-// per-tool preview formatter. command / path / name / id are
+// per-tool preview formatter. command / path / url / query / name / id are
 // surfaced before generic JSON because they're the most-revealing
-// piece of context for shell / read_file / write_file / etc.
+// piece of context for shell / file / web / memory tools.
 func TestSummarizeArgs_PrefersInformativeKeys(t *testing.T) {
 	cases := []struct {
 		name string
@@ -273,6 +273,8 @@ func TestSummarizeArgs_PrefersInformativeKeys(t *testing.T) {
 		{"empty → {}", nil, "{}"},
 		{"command wins", map[string]any{"command": "ls -la", "cwd": "/tmp"}, `command="ls -la"`},
 		{"path wins when no command", map[string]any{"path": "/etc/hosts"}, `path="/etc/hosts"`},
+		{"url wins before generic JSON", map[string]any{"url": "https://example.com/page", "timeout": 10}, `url="https://example.com/page"`},
+		{"query wins before name", map[string]any{"query": "affine bittensor taostats", "name": "ignored"}, `query="affine bittensor taostats"`},
 		{"name wins next", map[string]any{"name": "myfunc"}, `name="myfunc"`},
 		{"id wins last", map[string]any{"id": "abc123"}, `id="abc123"`},
 	}
