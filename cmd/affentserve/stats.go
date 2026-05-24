@@ -12,15 +12,18 @@ import (
 // passes who want a quick "is the browser cache actually helping?"
 // signal without standing up Prometheus.
 type statsResponse struct {
-	Listen          string                 `json:"listen"`
-	Model           string                 `json:"model"`
-	MaxSessions     int                    `json:"max_sessions"`
-	ActiveSessions  int                    `json:"active_sessions"`
-	ShuttingDown    bool                   `json:"shutting_down"`
-	BrowserCacheDir string                 `json:"browser_cache_dir,omitempty"`
-	ServerTime      string                 `json:"server_time"`
-	Sessions        []sessionStatsResponse `json:"sessions"`
-	Aggregate       aggregateStats         `json:"aggregate"`
+	Listen           string                 `json:"listen"`
+	Model            string                 `json:"model"`
+	MaxSessions      int                    `json:"max_sessions"`
+	ActiveSessions   int                    `json:"active_sessions"`
+	ShuttingDown     bool                   `json:"shutting_down"`
+	WorkspaceRoot    string                 `json:"workspace_root,omitempty"`
+	MemoryRoot       string                 `json:"memory_root,omitempty"`
+	SessionStateRoot string                 `json:"session_state_root"`
+	BrowserCacheDir  string                 `json:"browser_cache_dir,omitempty"`
+	ServerTime       string                 `json:"server_time"`
+	Sessions         []sessionStatsResponse `json:"sessions"`
+	Aggregate        aggregateStats         `json:"aggregate"`
 }
 
 type sessionStatsResponse struct {
@@ -83,15 +86,18 @@ func handleStats(cfg Config, pool *SessionPool) http.HandlerFunc {
 		}
 
 		resp := statsResponse{
-			Listen:          cfg.Listen,
-			Model:           cfg.Model,
-			MaxSessions:     cfg.MaxSessions,
-			ActiveSessions:  len(sess),
-			ShuttingDown:    pool.IsShuttingDown(),
-			BrowserCacheDir: cfg.BrowserCacheDir,
-			ServerTime:      time.Now().UTC().Format(time.RFC3339),
-			Sessions:        sess,
-			Aggregate:       agg,
+			Listen:           cfg.Listen,
+			Model:            cfg.Model,
+			MaxSessions:      cfg.MaxSessions,
+			ActiveSessions:   len(sess),
+			ShuttingDown:     pool.IsShuttingDown(),
+			WorkspaceRoot:    cfg.WorkspaceRoot,
+			MemoryRoot:       cfg.MemoryRoot,
+			SessionStateRoot: pool.sessionRootPath(),
+			BrowserCacheDir:  cfg.BrowserCacheDir,
+			ServerTime:       time.Now().UTC().Format(time.RFC3339),
+			Sessions:         sess,
+			Aggregate:        agg,
 		}
 		w.Header().Set("Content-Type", "application/json")
 		_ = json.NewEncoder(w).Encode(resp)

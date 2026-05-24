@@ -40,6 +40,15 @@ func TestHandleStats_EmptyPool(t *testing.T) {
 	if resp.MaxSessions != pool.cfg.MaxSessions {
 		t.Fatalf("MaxSessions = %d, want %d", resp.MaxSessions, pool.cfg.MaxSessions)
 	}
+	if resp.WorkspaceRoot != pool.cfg.WorkspaceRoot {
+		t.Fatalf("WorkspaceRoot = %q, want %q", resp.WorkspaceRoot, pool.cfg.WorkspaceRoot)
+	}
+	if resp.MemoryRoot != pool.cfg.MemoryRoot {
+		t.Fatalf("MemoryRoot = %q, want %q", resp.MemoryRoot, pool.cfg.MemoryRoot)
+	}
+	if resp.SessionStateRoot != pool.sessionRootPath() {
+		t.Fatalf("SessionStateRoot = %q, want %q", resp.SessionStateRoot, pool.sessionRootPath())
+	}
 	if resp.ServerTime == "" {
 		t.Fatal("ServerTime must be populated")
 	}

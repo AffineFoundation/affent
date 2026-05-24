@@ -793,8 +793,9 @@ Native session endpoints:
 - `DELETE /v1/sessions/{id}` closes and purges the session.
 
 `GET /v1/stats` returns the active session count, per-session usage/browser
-stats, aggregate token/browser counters, and `shutting_down` so authorized
-clients can stop sending new work during graceful drain.
+stats, aggregate token/browser counters, `workspace_root`, `memory_root`,
+`session_state_root`, and `shutting_down` so authorized clients can verify the
+durable state path and stop sending new work during graceful drain.
 
 ## Security Model
 
