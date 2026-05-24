@@ -884,12 +884,14 @@ func TestFailureKindsForResult(t *testing.T) {
 		`focused_task_errors=1 subagent_errors=0`,
 		`verify=0, want >= 1; focused_tasks=map[explore:1]`,
 		`test=0, want >= 1; subagents=map[review:1]`,
+		`expected "skill" result to contain "direct install cannot use a remote source URL"; tools=skill`,
 	})
 	if got["turn_end"] != 1 ||
 		got["missing_command"] != 2 ||
 		got["delegation_error"] != 1 ||
 		got["missing_focused_task"] != 1 ||
-		got["missing_subagent"] != 1 {
+		got["missing_subagent"] != 1 ||
+		got["skill_install_guard"] != 1 {
 		t.Fatalf("failureKindsForResult = %#v", got)
 	}
 }
@@ -923,6 +925,7 @@ func TestFailureKind(t *testing.T) {
 		{`final text leaked 1 forbidden substring(s): [ignore me]`, "final_text_forbidden"},
 		{`expected at least one "read_file" invocation, got 0 tool calls`, "missing_tool"},
 		{`found forbidden "write_file" call (call_id=c1 args=map[])`, "forbidden_tool"},
+		{`expected "skill" result to contain "direct install cannot use a remote source URL"; tools=skill`, "skill_install_guard"},
 		{`expected "shell" result to contain "ok"; tools=shell`, "tool_result_missing"},
 		{`something else`, "other"},
 	}

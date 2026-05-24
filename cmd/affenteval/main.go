@@ -816,6 +816,8 @@ func failureKind(failure string) string {
 		return "missing_tool"
 	case strings.Contains(lower, "found forbidden") && strings.Contains(lower, "call"):
 		return "forbidden_tool"
+	case strings.Contains(lower, "direct install cannot use a remote source url"):
+		return "skill_install_guard"
 	case strings.Contains(lower, "result to contain"):
 		return "tool_result_missing"
 	case strings.Contains(lower, "focused_task_errors=") || strings.Contains(lower, "subagent_errors="):
