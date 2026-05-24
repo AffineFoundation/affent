@@ -207,6 +207,28 @@ func TestPrintBatchResultIncludesTraceMetrics(t *testing.T) {
 	}
 }
 
+func TestPrintBatchResultIncludesRepairOutcomesWithoutKinds(t *testing.T) {
+	var out bytes.Buffer
+	printBatchResult(&out, agenteval.BatchResult{
+		BatchScenario: "repair-outcome-only",
+		Workspace:     "/tmp/ws",
+		TracePath:     "/tmp/ws/trace.jsonl",
+		Duration:      10 * time.Millisecond,
+		Repair: agenteval.ToolRepairStats{
+			Calls:          2,
+			SucceededCalls: 1,
+			FailedCalls:    1,
+		},
+	})
+	got := out.String()
+	if !strings.Contains(got, "repair_calls=2,ok=1,failed=1") {
+		t.Fatalf("output missing repair outcome-only stats:\n%s", got)
+	}
+	if strings.Contains(got, "repair_kinds=") {
+		t.Fatalf("output should omit empty repair kinds:\n%s", got)
+	}
+}
+
 func TestBatchSummaryAggregatesRuntimeMetrics(t *testing.T) {
 	var summary batchSummary
 	summary.add(agenteval.BatchResult{
@@ -320,6 +342,27 @@ func TestBatchSummaryAggregatesRuntimeMetrics(t *testing.T) {
 	}
 	if !reflect.DeepEqual(summary.PlanByAction, map[string]int{"set": 1, "update": 2}) {
 		t.Fatalf("PlanByAction = %#v", summary.PlanByAction)
+	}
+}
+
+func TestPrintBatchSummaryIncludesRepairOutcomesWithoutKinds(t *testing.T) {
+	var summary batchSummary
+	summary.add(agenteval.BatchResult{
+		Repair: agenteval.ToolRepairStats{
+			Calls:          2,
+			SucceededCalls: 1,
+			FailedCalls:    1,
+		},
+	})
+
+	var out bytes.Buffer
+	printBatchSummary(&out, summary)
+	got := out.String()
+	if !strings.Contains(got, "repair_calls=2,ok=1,failed=1") {
+		t.Fatalf("summary missing repair outcome-only stats:\n%s", got)
+	}
+	if strings.Contains(got, "repair_kinds=") {
+		t.Fatalf("summary should omit empty repair kinds:\n%s", got)
 	}
 }
 

@@ -328,13 +328,23 @@ func printBatchSummary(w io.Writer, s batchSummary) {
 		s.RemovedWorkspaces,
 		s.CleanupErrors,
 	)
-	if len(s.ToolRepairByKind) > 0 {
+	if hasBatchRepairStats(s) {
 		fmt.Fprintf(w, " repair_calls=%d,ok=%d,failed=%d", s.ToolRepairCalls, s.ToolRepairSucceeded, s.ToolRepairFailed)
+	}
+	if len(s.ToolRepairByKind) > 0 {
 		fmt.Fprintf(w, " repair_kinds=%s", formatStringIntCounts(s.ToolRepairByKind))
 	}
 	printDelegationRollup(w, s.FocusedTaskCalls, s.FocusedTaskByType, s.SubagentCalls, s.SubagentByMode)
 	printPlanRollup(w, s.PlanCalls, s.PlanByAction, s.PlanErrors)
 	fmt.Fprintln(w)
+}
+
+func hasBatchRepairStats(s batchSummary) bool {
+	return s.ToolRepairCalls > 0 ||
+		s.ToolRepairSucceeded > 0 ||
+		s.ToolRepairFailed > 0 ||
+		s.ToolRepairNotes > 0 ||
+		len(s.ToolRepairByKind) > 0
 }
 
 func printDelegationRollup(w io.Writer, focusedTaskCalls int, focusedTaskByType map[string]int, subagentCalls int, subagentByMode map[string]int) {
@@ -731,8 +741,10 @@ func printBatchResult(w io.Writer, res agenteval.BatchResult) {
 			res.ToolTruncation.ResultsOmittedBytes,
 		)
 	}
-	if len(res.Repair.ByKind) > 0 {
+	if res.Repair.HasAny() {
 		fmt.Fprintf(w, " repair_calls=%d,ok=%d,failed=%d", res.Repair.Calls, res.Repair.SucceededCalls, res.Repair.FailedCalls)
+	}
+	if len(res.Repair.ByKind) > 0 {
 		fmt.Fprintf(w, " repair_kinds=%s", formatStringIntCounts(res.Repair.ByKind))
 	}
 	printDelegationRollup(w, res.Delegation.FocusedTaskCalls, res.Delegation.FocusedTaskByType, res.Delegation.SubagentCalls, res.Delegation.SubagentByMode)
