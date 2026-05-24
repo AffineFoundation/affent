@@ -98,7 +98,7 @@ func TestMemoryToolRejectsUnknownAndUnusedArgs(t *testing.T) {
 		if err == nil || !strings.Contains(err.Error(), `unknown field "url"`) {
 			t.Fatalf("unknown field error = %v", err)
 		}
-		for _, want := range []string{"Next:", "action", "query", "top_k"} {
+		for _, want := range []string{"Failure: kind=invalid_args", "Next:", "action", "query", "top_k"} {
 			if !strings.Contains(err.Error(), want) {
 				t.Fatalf("unknown field error missing %q:\n%s", want, err.Error())
 			}
@@ -109,7 +109,7 @@ func TestMemoryToolRejectsUnknownAndUnusedArgs(t *testing.T) {
 		if err == nil || !strings.Contains(err.Error(), "single JSON object") {
 			t.Fatalf("multiple json values error = %v", err)
 		}
-		if !strings.Contains(err.Error(), "Next:") || !strings.Contains(err.Error(), "action=search") {
+		if !strings.Contains(err.Error(), "Failure: kind=invalid_args") || !strings.Contains(err.Error(), "Next:") || !strings.Contains(err.Error(), "action=search") {
 			t.Fatalf("multiple json values error should guide recovery: %v", err)
 		}
 	})
@@ -118,7 +118,7 @@ func TestMemoryToolRejectsUnknownAndUnusedArgs(t *testing.T) {
 		if err == nil {
 			t.Fatal("expected type error")
 		}
-		for _, want := range []string{"decode args", "Next:", "query", "top_k"} {
+		for _, want := range []string{"decode args", "Failure: kind=invalid_args", "Next:", "query", "top_k"} {
 			if !strings.Contains(err.Error(), want) {
 				t.Fatalf("type error missing %q:\n%s", want, err.Error())
 			}

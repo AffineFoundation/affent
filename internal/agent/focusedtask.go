@@ -337,7 +337,7 @@ func focusedTaskTool(deps FocusedTaskDeps, available []FocusedTaskProfile) *Tool
 		Execute: func(ctx context.Context, args json.RawMessage) (string, error) {
 			p, err := decodeFocusedTaskArgs(args)
 			if err != nil {
-				return "", fmt.Errorf("decode args: %w\nNext: retry run_task with only documented fields: task_type, objective, and max_turns", err)
+				return "", fmt.Errorf("decode args: %w\nFailure: kind=invalid_args\nNext: retry run_task with only documented fields: task_type, objective, and max_turns", err)
 			}
 			p.TaskType = strings.TrimSpace(p.TaskType)
 			if p.TaskType == "" {

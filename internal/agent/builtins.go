@@ -353,9 +353,9 @@ func formatSkillDecodeArgsError(err error) error {
 	}
 	msg := err.Error()
 	if strings.Contains(msg, "unknown field") {
-		return fmt.Errorf("decode args: %w\nNext: retry skill with only documented fields: action, name, description, body, triggers, required_tools, source, proposal_id. Put external URLs or local provenance in source, not url; include the exact reviewed SKILL.md text in body before propose_install", err)
+		return fmt.Errorf("decode args: %w\nFailure: kind=invalid_args\nNext: retry skill with only documented fields: action, name, description, body, triggers, required_tools, source, proposal_id. Put external URLs or local provenance in source, not url; include the exact reviewed SKILL.md text in body before propose_install", err)
 	}
-	return fmt.Errorf("decode args: %w\nNext: retry skill with a single JSON object matching the skill tool schema. For remote candidates, use source for the URL/path and body for the reviewed SKILL.md text", err)
+	return fmt.Errorf("decode args: %w\nFailure: kind=invalid_args\nNext: retry skill with a single JSON object matching the skill tool schema. For remote candidates, use source for the URL/path and body for the reviewed SKILL.md text", err)
 }
 
 func decodeBuiltinToolArgs[T any](tool string, args json.RawMessage, fields string, guidance string) (T, error) {
@@ -363,7 +363,7 @@ func decodeBuiltinToolArgs[T any](tool string, args json.RawMessage, fields stri
 	if err == nil {
 		return p, nil
 	}
-	return p, fmt.Errorf("decode args for %s: %w\nNext: retry %s with a single JSON object using only documented fields: %s. %s", tool, err, tool, fields, guidance)
+	return p, fmt.Errorf("decode args for %s: %w\nFailure: kind=invalid_args\nNext: retry %s with a single JSON object using only documented fields: %s. %s", tool, err, tool, fields, guidance)
 }
 
 func decodeSkillToolArgs(args json.RawMessage) (skillToolArgs, map[string]bool, error) {

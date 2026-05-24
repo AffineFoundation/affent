@@ -153,7 +153,7 @@ func TestSessionSearchToolRejectsUnknownArgs(t *testing.T) {
 	if err == nil || !strings.Contains(err.Error(), `unknown field "session_id"`) {
 		t.Fatalf("error = %v, want unknown field", err)
 	}
-	for _, want := range []string{"Next:", "query", "top_k", "max_per_session", "Do not pass session_id"} {
+	for _, want := range []string{"Failure: kind=invalid_args", "Next:", "query", "top_k", "max_per_session", "Do not pass session_id"} {
 		if !strings.Contains(err.Error(), want) {
 			t.Fatalf("error missing %q:\n%s", want, err.Error())
 		}
@@ -166,7 +166,7 @@ func TestSessionSearchToolDecodeTypeErrorNamesValidFields(t *testing.T) {
 	if err == nil {
 		t.Fatal("expected decode error")
 	}
-	for _, want := range []string{"decode args", "Next:", "query", "top_k", "max_per_session"} {
+	for _, want := range []string{"decode args", "Failure: kind=invalid_args", "Next:", "query", "top_k", "max_per_session"} {
 		if !strings.Contains(err.Error(), want) {
 			t.Fatalf("error missing %q:\n%s", want, err.Error())
 		}

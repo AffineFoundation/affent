@@ -420,7 +420,7 @@ func TestSubagentWrappedToolsDecodeTypeErrorsNameValidFields(t *testing.T) {
 			if err == nil {
 				t.Fatal("expected decode error")
 			}
-			for _, want := range []string{"decode args", "Next:", tc.wantField} {
+			for _, want := range []string{"decode args", "Failure: kind=invalid_args", "Next:", tc.wantField} {
 				if !strings.Contains(err.Error(), want) {
 					t.Fatalf("error missing %q:\n%s", want, err.Error())
 				}

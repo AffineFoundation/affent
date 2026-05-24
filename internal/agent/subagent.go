@@ -392,7 +392,7 @@ func subagentTool(deps SubagentDeps) *Tool {
 				MaxTurns int    `json:"max_turns"`
 			}](args)
 			if err != nil {
-				return "", fmt.Errorf("decode args: %w\nNext: retry subagent_run with only documented fields: task, mode, and max_turns", err)
+				return "", fmt.Errorf("decode args: %w\nFailure: kind=invalid_args\nNext: retry subagent_run with only documented fields: task, mode, and max_turns", err)
 			}
 			p.Task = strings.TrimSpace(p.Task)
 			if p.Task == "" {
@@ -1144,5 +1144,5 @@ func formatReadOnlyMemoryDecodeArgsError(err error) error {
 	if err == nil {
 		return nil
 	}
-	return fmt.Errorf("decode args for memory: %w\nNext: retry memory with a single JSON object using only documented fields: action, target, topic, query, top_k. In a subagent, memory is read-only: use action=search with query or action=list; do not pass content or old_text.", err)
+	return fmt.Errorf("decode args for memory: %w\nFailure: kind=invalid_args\nNext: retry memory with a single JSON object using only documented fields: action, target, topic, query, top_k. In a subagent, memory is read-only: use action=search with query or action=list; do not pass content or old_text.", err)
 }

@@ -217,7 +217,7 @@ func formatMemoryDecodeArgsError(err error) error {
 	if err == nil {
 		return nil
 	}
-	return fmt.Errorf("decode args for memory: %w\nNext: retry memory with a single JSON object using only documented fields: action, target, topic, content, old_text, query, top_k. Use action=search with query to recall, action=list to discover topics, or action=add/replace/remove with compact durable text.", err)
+	return fmt.Errorf("decode args for memory: %w\nFailure: kind=invalid_args\nNext: retry memory with a single JSON object using only documented fields: action, target, topic, content, old_text, query, top_k. Use action=search with query to recall, action=list to discover topics, or action=add/replace/remove with compact durable text.", err)
 }
 
 func decodeMemoryToolArgs(args json.RawMessage) (memoryToolArgs, map[string]bool, error) {

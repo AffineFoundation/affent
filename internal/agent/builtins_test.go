@@ -647,11 +647,10 @@ func TestBuiltinToolsRejectUnknownArgumentsAtRuntime(t *testing.T) {
 			if !strings.Contains(err.Error(), "unknown field") {
 				t.Fatalf("error = %v, want unknown field", err)
 			}
-			if !strings.Contains(err.Error(), "Next:") {
-				t.Fatalf("error = %v, want recovery guidance", err)
-			}
-			if !strings.Contains(err.Error(), c.wantField) {
-				t.Fatalf("error = %v, want documented field %q", err, c.wantField)
+			for _, want := range []string{"Failure: kind=invalid_args", "Next:", c.wantField} {
+				if !strings.Contains(err.Error(), want) {
+					t.Fatalf("error missing %q:\n%s", want, err.Error())
+				}
 			}
 		})
 	}
@@ -675,7 +674,7 @@ func TestBuiltinToolDecodeTypeErrorsNameValidFields(t *testing.T) {
 			if err == nil {
 				t.Fatal("expected decode error")
 			}
-			for _, want := range []string{"decode args", "Next:", c.wantField} {
+			for _, want := range []string{"decode args", "Failure: kind=invalid_args", "Next:", c.wantField} {
 				if !strings.Contains(err.Error(), want) {
 					t.Fatalf("error missing %q:\n%s", want, err.Error())
 				}
