@@ -368,9 +368,10 @@ func TestFetchTool_HTTPErrorReportsRedirectFinalURL(t *testing.T) {
 }
 
 func TestFetchTool_DefaultHeadersLookBrowserCompatible(t *testing.T) {
-	var ua, acceptLanguage string
+	var ua, accept, acceptLanguage string
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		ua = r.Header.Get("User-Agent")
+		accept = r.Header.Get("Accept")
 		acceptLanguage = r.Header.Get("Accept-Language")
 		w.Header().Set("Content-Type", "text/plain")
 		w.Write([]byte("ok"))
@@ -385,6 +386,11 @@ func TestFetchTool_DefaultHeadersLookBrowserCompatible(t *testing.T) {
 	for _, want := range []string{"Mozilla/5.0", "Chrome/", "AffentWebFetch"} {
 		if !strings.Contains(ua, want) {
 			t.Fatalf("User-Agent missing %q: %q", want, ua)
+		}
+	}
+	for _, want := range []string{"text/html", "application/json", "application/ld+json", "application/*+json", "application/rss+xml", "application/atom+xml", "application/x-ndjson", "text/plain"} {
+		if !strings.Contains(accept, want) {
+			t.Fatalf("Accept missing %q: %q", want, accept)
 		}
 	}
 	if !strings.Contains(acceptLanguage, "en-US") {

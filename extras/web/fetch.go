@@ -64,6 +64,7 @@ const (
 	defaultMaxResultChars = 8000
 	maxFetchResultChars   = 64 * 1024
 	defaultUserAgent      = "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0 Safari/537.36 AffentWebFetch/0.1"
+	defaultAcceptHeader   = "text/html,application/xhtml+xml,application/json;q=0.95,application/ld+json;q=0.95,application/*+json;q=0.9,application/xml;q=0.9,application/rss+xml;q=0.9,application/atom+xml;q=0.9,application/*+xml;q=0.85,application/x-ndjson;q=0.85,text/plain;q=0.8,application/yaml;q=0.75,application/x-yaml;q=0.75,*/*;q=0.5"
 )
 
 // FetchTool returns an agent.Tool that fetches a URL and returns its
@@ -150,9 +151,9 @@ func fetch(ctx context.Context, cfg FetchConfig, requestURL string) (string, err
 		return "", err
 	}
 	req.Header.Set("User-Agent", cfg.UserAgent)
-	// Hint we want text-ish content. Servers that honor q= ranking will
-	// prefer HTML over JSON when both are available.
-	req.Header.Set("Accept", "text/html,application/xhtml+xml,application/xml;q=0.9,text/plain;q=0.8,*/*;q=0.5")
+	// Hint we want text-ish content, including structured formats that
+	// web_fetch can return directly for API, feed, and metrics sources.
+	req.Header.Set("Accept", defaultAcceptHeader)
 	req.Header.Set("Accept-Language", "en-US,en;q=0.8")
 
 	resp, err := cfg.HTTP.Do(req)
