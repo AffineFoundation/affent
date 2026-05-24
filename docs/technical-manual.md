@@ -439,7 +439,7 @@ Run through Docker:
 make eval-container EVAL_ARGS='--suite small-model-tools --temperature 0'
 make eval-agent-container EVAL_ARGS='--scenario coding-python-slug --temperature 0'
 make eval-agent-container EVAL_RUNTIME_MEMORY=true EVAL_ARGS='--scenario your-memory-scenario --temperature 0'
-make eval-agent-container EVAL_RUNTIME_MCP_CONFIG=/path/to/mcp.json EVAL_ARGS='--scenario your-mcp-scenario --temperature 0'
+make eval-agent-container EVAL_RUNTIME_MCP_CONFIG=/workspace/config/mcp.json EVAL_ARGS='--scenario your-mcp-scenario --temperature 0'
 ```
 
 Use runtime eval mode when Affent itself is the benchmark agent and the model
@@ -447,7 +447,11 @@ should not receive extra product affordances. In eval mode, dynamic workflow
 features such as skills, runtime skill install, subagents, focused tasks, MCP,
 project context, session search, and memory are disabled by default; shell/file
 tools remain available when built-ins are available. Opt memory or MCP back in
-only for suites that explicitly measure those capabilities.
+only for suites that explicitly measure those capabilities. The eval container
+does not forward host `AFFENTCTL_EVAL_MODE`, `AFFENTCTL_SUBAGENT`,
+`AFFENTCTL_FOCUSED_TASKS`, or `AFFENTCTL_PROJECT_CONTEXT`; use the
+`EVAL_RUNTIME_*` knobs above, or pass deliberate extra environment through
+`EVAL_DOCKER_ARGS`.
 
 For external OpenAI-compatible eval harnesses, run `affentserve` in eval mode:
 

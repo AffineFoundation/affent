@@ -460,7 +460,6 @@ func TestMakeOneClickContainerTargetsUseSharedLimits(t *testing.T) {
 			`--memory-swap "$(CONTAINER_MEMORY)"`,
 			`--cpus "$(CONTAINER_CPUS)"`,
 			`--pids-limit "$(CONTAINER_PIDS)"`,
-			`-e AFFENTCTL_EVAL_MODE`,
 			`-e AFFENTEVAL_PROVIDER_LABEL`,
 			`$(EVAL_RUNTIME_EVAL_MODE_ARGS) $(EVAL_RUNTIME_MEMORY_ARGS) $(EVAL_RUNTIME_MCP_CONFIG_ARGS) $(EVAL_ARGS)`,
 		},
