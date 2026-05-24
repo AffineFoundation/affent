@@ -82,6 +82,22 @@ func TestWithMemorySystemGuidance_AppendsOnce(t *testing.T) {
 	}
 }
 
+func TestWithExternalResearchSystemGuidance_AppendsOnce(t *testing.T) {
+	base := "be helpful"
+	once := WithExternalResearchSystemGuidance(base)
+	for _, want := range []string{"External research:", "web_search", "authoritative", "browser_navigate", "social posts", "dates/freshness"} {
+		if !strings.Contains(once, want) {
+			t.Fatalf("external research guidance missing %q:\n%s", want, once)
+		}
+	}
+	if twice := WithExternalResearchSystemGuidance(once); twice != once {
+		t.Fatal("external research guidance should be idempotent")
+	}
+	if got := WithExternalResearchSystemGuidance(""); !strings.Contains(got, DefaultSystemPrompt) || !strings.Contains(got, "External research:") {
+		t.Fatalf("empty prompt should fall back to default + external research guidance:\n%s", got)
+	}
+}
+
 func TestRegistrySystemPromptComposition(t *testing.T) {
 	reg := NewRegistry()
 	reg.Add(&Tool{Name: MemoryToolName})
@@ -92,7 +108,7 @@ func TestRegistrySystemPromptComposition(t *testing.T) {
 	if !strings.Contains(prompt, "Memory retrieval:") {
 		t.Fatalf("memory registry prompt missing memory guidance:\n%s", prompt)
 	}
-	for _, forbidden := range []string{"'shell' tool", "read_file", "Session history retrieval:", "Subagent delegation:", "Focused tasks (run_task):", "Affent plan tool guidance:"} {
+	for _, forbidden := range []string{"'shell' tool", "read_file", "Session history retrieval:", "External research:", "Subagent delegation:", "Focused tasks (run_task):", "Affent plan tool guidance:"} {
 		if strings.Contains(prompt, forbidden) {
 			t.Fatalf("memory-only registry prompt should not include %q:\n%s", forbidden, prompt)
 		}
@@ -109,8 +125,9 @@ func TestRegistrySystemPromptComposition(t *testing.T) {
 	reg.Add(&Tool{Name: SubagentToolName})
 	reg.Add(&Tool{Name: FocusedTaskToolName})
 	reg.Add(&Tool{Name: SessionSearchToolName})
+	reg.Add(&Tool{Name: "web_search"})
 	prompt = WithRegistrySystemGuidance(BaseSystemPromptForRegistry(reg), reg)
-	for _, want := range []string{"Memory retrieval:", "Session history retrieval:", "Subagent delegation:", "Focused tasks (run_task):", "Affent plan tool guidance:"} {
+	for _, want := range []string{"Memory retrieval:", "Session history retrieval:", "External research:", "Subagent delegation:", "Focused tasks (run_task):", "Affent plan tool guidance:"} {
 		if !strings.Contains(prompt, want) {
 			t.Fatalf("registry prompt missing %q:\n%s", want, prompt)
 		}
@@ -120,6 +137,9 @@ func TestRegistrySystemPromptComposition(t *testing.T) {
 	}
 	if strings.Count(WithRegistrySystemGuidance(prompt, reg), "Session history retrieval:") != 1 {
 		t.Fatal("session search guidance should be idempotent")
+	}
+	if strings.Count(WithRegistrySystemGuidance(prompt, reg), "External research:") != 1 {
+		t.Fatal("external research guidance should be idempotent")
 	}
 
 	reg = NewRegistry()
@@ -137,6 +157,13 @@ func TestRegistrySystemPromptComposition(t *testing.T) {
 	}
 	if strings.Contains(emptyPrompt, "'shell' tool") || strings.Contains(emptyPrompt, "read_file") {
 		t.Fatalf("empty session-search prompt should not fall back to default workspace prompt:\n%s", emptyPrompt)
+	}
+
+	reg = NewRegistry()
+	reg.Add(&Tool{Name: "browser_navigate"})
+	emptyPrompt = WithRegistrySystemGuidance("", reg)
+	if !strings.Contains(emptyPrompt, "limited-tool runtime") || !strings.Contains(emptyPrompt, "External research:") {
+		t.Fatalf("empty browser prompt should compose limited base + external research guidance:\n%s", emptyPrompt)
 	}
 }
 

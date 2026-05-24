@@ -430,6 +430,20 @@ func TestWithFocusedTaskSystemGuidance_AppendsOnce(t *testing.T) {
 	}
 }
 
+func TestResearchProfileGuidesGeneralExternalResearch(t *testing.T) {
+	profile := researchProfile()
+	for _, want := range []string{"web_search for discovery", "authoritative pages", "market, metrics, or trend questions", "social posts", "independent corroborating source"} {
+		if !strings.Contains(profile.SystemPromptHints, want) {
+			t.Fatalf("research profile guidance missing %q:\n%s", want, profile.SystemPromptHints)
+		}
+	}
+	for _, forbidden := range []string{"Affine", "TaoStats", "Bittensor"} {
+		if strings.Contains(profile.SystemPromptHints, forbidden) {
+			t.Fatalf("research profile guidance should stay generic, found %q:\n%s", forbidden, profile.SystemPromptHints)
+		}
+	}
+}
+
 func TestFocusedTaskPolicies(t *testing.T) {
 	if !explicitFocusedTaskRequested("please use run_task first to inspect docs") {
 		t.Fatal("explicit run_task request should trigger focused-task first-tool policy")

@@ -340,6 +340,23 @@ func WithMemorySystemGuidance(prompt string) string {
 	return prompt + "\n\n" + MemorySystemGuidance
 }
 
+const ExternalResearchSystemGuidance = `External research:
+- For current or unfamiliar public facts, use web_search for discovery, then read the most authoritative pages with web_fetch or browser tools before answering. Prefer official docs, source repositories, block explorers, filings, API docs, and primary project sites over summaries.
+- For dynamic or rendered sites, use browser_navigate/browser_snapshot when available instead of shell/curl scraping. If a page or API requires credentials, say so and corroborate with reputable public alternatives.
+- For market, metrics, or trend questions, collect a current source-of-record plus at least one independent corroborating source. Keep social posts, forum comments, and influencer takes separate from verified facts, and label them as sentiment or claims.
+- Include concrete dates/freshness for time-sensitive facts. When sources disagree, state the conflict and prefer the source with the clearest provenance.
+- Avoid search loops: start with 1-2 targeted searches, refine once if needed, then answer with cited evidence or say what could not be verified.`
+
+func WithExternalResearchSystemGuidance(prompt string) string {
+	if strings.TrimSpace(prompt) == "" {
+		prompt = DefaultSystemPrompt
+	}
+	if strings.Contains(prompt, "External research:") {
+		return prompt
+	}
+	return prompt + "\n\n" + ExternalResearchSystemGuidance
+}
+
 // LimitedToolSystemPrompt is the default for sessions that do not expose the
 // shell/file builtins. It keeps the safety and evidence posture without naming
 // unavailable workspace tools.
@@ -430,6 +447,9 @@ func WithRegistrySystemGuidance(prompt string, reg *Registry) string {
 	if hasRegisteredTool(reg, SessionSearchToolName) {
 		prompt = WithSessionSearchSystemGuidance(prompt)
 	}
+	if hasExternalResearchTools(reg) {
+		prompt = WithExternalResearchSystemGuidance(prompt)
+	}
 	if hasRegisteredTool(reg, SubagentToolName) {
 		prompt = WithSubagentSystemGuidance(prompt)
 	}
@@ -440,6 +460,13 @@ func WithRegistrySystemGuidance(prompt string, reg *Registry) string {
 		prompt = WithPlanSystemGuidance(prompt)
 	}
 	return prompt
+}
+
+func hasExternalResearchTools(reg *Registry) bool {
+	return hasRegisteredTool(reg, "web_fetch") ||
+		hasRegisteredTool(reg, "web_search") ||
+		hasRegisteredTool(reg, "browser_navigate") ||
+		hasRegisteredTool(reg, "browser_snapshot")
 }
 
 func hasRegisteredTool(reg *Registry, name string) bool {
