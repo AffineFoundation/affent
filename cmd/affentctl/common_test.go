@@ -438,6 +438,24 @@ func TestTypedEnvConfigRejectsInvalidValues(t *testing.T) {
 			val:  "deep",
 			want: "AFFENTCTL_SUBAGENT_MAX_DEPTH=\"deep\"",
 		},
+		{
+			name: "memory bool",
+			env:  "AFFENTCTL_MEMORY",
+			val:  "sometimes",
+			want: "AFFENTCTL_MEMORY=\"sometimes\"",
+		},
+		{
+			name: "max turns int",
+			env:  "AFFENTCTL_MAX_TURNS",
+			val:  "many",
+			want: "AFFENTCTL_MAX_TURNS=\"many\"",
+		},
+		{
+			name: "call timeout duration",
+			env:  "AFFENTCTL_MAX_CALL_TIMEOUT",
+			val:  "soon",
+			want: "AFFENTCTL_MAX_CALL_TIMEOUT=\"soon\"",
+		},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -467,6 +485,83 @@ func TestTypedEnvConfigInvalidValueIgnoredWhenCLIOverrides(t *testing.T) {
 	}
 	if !cf.subagentEnabled || cf.subagentMaxDepth != 1 {
 		t.Fatalf("CLI override not honored: subagent=%t depth=%d", cf.subagentEnabled, cf.subagentMaxDepth)
+	}
+}
+
+func TestPortableEnvConfigOverridesConfig(t *testing.T) {
+	dir := t.TempDir()
+	cfgPath := filepath.Join(dir, "affent.json")
+	if err := os.WriteFile(cfgPath, []byte(`{
+		"max_turns": 7,
+		"max_call_timeout": "11s",
+		"retry_transient": 2,
+		"retry_backoff": "3s",
+		"memory": {
+			"enabled": true,
+			"only": false,
+			"max_chars": "100,200",
+			"topic_max_chars": 300,
+			"max_topics": 4
+		},
+		"project_context": true,
+		"compact": {
+			"trigger": 120,
+			"keep_last": 8
+		}
+	}`), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("AFFENTCTL_MAX_TURNS", "9")
+	t.Setenv("AFFENTCTL_MAX_CALL_TIMEOUT", "13s")
+	t.Setenv("AFFENTCTL_RETRY_TRANSIENT", "5")
+	t.Setenv("AFFENTCTL_RETRY_BACKOFF", "7s")
+	t.Setenv("AFFENTCTL_MEMORY", "false")
+	t.Setenv("AFFENTCTL_MEMORY_MAX_CHARS", "2200,1375")
+	t.Setenv("AFFENTCTL_MEMORY_TOPIC_MAX_CHARS", "4400")
+	t.Setenv("AFFENTCTL_MEMORY_MAX_TOPICS", "32")
+	t.Setenv("AFFENTCTL_PROJECT_CONTEXT", "false")
+	t.Setenv("AFFENTCTL_COMPACT_TRIGGER", "240")
+	t.Setenv("AFFENTCTL_COMPACT_KEEP_LAST", "10")
+
+	var cf commonFlags
+	fs := flag.NewFlagSet("test", flag.ContinueOnError)
+	cf.bind(fs)
+	if err := fs.Parse([]string{"--config", cfgPath}); err != nil {
+		t.Fatal(err)
+	}
+	if err := applyConfig(&cf, fs); err != nil {
+		t.Fatal(err)
+	}
+	if cf.maxTurns != 9 || cf.callTimeout != 13*time.Second ||
+		cf.retryTransient != 5 || cf.retryBackoff != 7*time.Second {
+		t.Fatalf("runtime env not applied: maxTurns=%d callTimeout=%s retryTransient=%d retryBackoff=%s", cf.maxTurns, cf.callTimeout, cf.retryTransient, cf.retryBackoff)
+	}
+	if cf.memoryEnabled || cf.memoryMaxChars != "2200,1375" ||
+		cf.memoryTopicMaxChars != 4400 || cf.memoryMaxTopics != 32 {
+		t.Fatalf("memory env not applied: enabled=%t maxChars=%q topic=%d topics=%d", cf.memoryEnabled, cf.memoryMaxChars, cf.memoryTopicMaxChars, cf.memoryMaxTopics)
+	}
+	if cf.projectContext {
+		t.Fatal("project context env should disable project context")
+	}
+	if cf.compactTrigger != 240 || cf.compactKeepLast != 10 {
+		t.Fatalf("compact env not applied: trigger=%d keep_last=%d", cf.compactTrigger, cf.compactKeepLast)
+	}
+}
+
+func TestMemoryOnlyEnvStillAppliesIsolationMode(t *testing.T) {
+	t.Setenv("AFFENTCTL_MEMORY_ONLY", "true")
+	t.Setenv("AFFENTCTL_PROJECT_CONTEXT", "true")
+	var cf commonFlags
+	fs := flag.NewFlagSet("test", flag.ContinueOnError)
+	cf.bind(fs)
+	if err := applyConfig(&cf, fs); err != nil {
+		t.Fatal(err)
+	}
+	if !cf.memoryEnabled || !cf.memoryOnly {
+		t.Fatalf("memory-only env should enable memory-only, got memory=%t only=%t", cf.memoryEnabled, cf.memoryOnly)
+	}
+	if cf.projectContext || cf.subagentEnabled || cf.focusedTasksEnabled {
+		t.Fatalf("memory-only env should isolate runtime: project_context=%t subagent=%t focused_tasks=%t", cf.projectContext, cf.subagentEnabled, cf.focusedTasksEnabled)
 	}
 }
 

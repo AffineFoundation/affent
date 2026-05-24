@@ -141,28 +141,28 @@ func (c *commonFlags) bind(fs *flag.FlagSet) {
 	fs.StringVar(&c.baseURL, "base-url", "", "OpenAI-compat endpoint (env: AFFENTCTL_BASE_URL)")
 	fs.StringVar(&c.apiKey, "api-key", "", "API key (env: AFFENTCTL_API_KEY)")
 	fs.StringVar(&c.model, "model", "", "model id (env: AFFENTCTL_MODEL)")
-	fs.IntVar(&c.maxTurns, "max-turns", 10, "max tool-call rounds per user message")
-	fs.DurationVar(&c.callTimeout, "max-call-timeout", agent.DefaultPerCallTimeout, "per-LLM-call timeout")
-	fs.IntVar(&c.retryTransient, "retry-transient", agent.DefaultTransientRetries, "retry attempts on transient LLM errors (5xx/429/408/net/EOF/timeout); 0 disables")
-	fs.DurationVar(&c.retryBackoff, "retry-backoff", agent.DefaultTransientBackoff, "initial backoff between retries; doubles each attempt")
+	fs.IntVar(&c.maxTurns, "max-turns", 10, "max tool-call rounds per user message (env: AFFENTCTL_MAX_TURNS)")
+	fs.DurationVar(&c.callTimeout, "max-call-timeout", agent.DefaultPerCallTimeout, "per-LLM-call timeout (env: AFFENTCTL_MAX_CALL_TIMEOUT)")
+	fs.IntVar(&c.retryTransient, "retry-transient", agent.DefaultTransientRetries, "retry attempts on transient LLM errors (5xx/429/408/net/EOF/timeout); 0 disables (env: AFFENTCTL_RETRY_TRANSIENT)")
+	fs.DurationVar(&c.retryBackoff, "retry-backoff", agent.DefaultTransientBackoff, "initial backoff between retries; doubles each attempt (env: AFFENTCTL_RETRY_BACKOFF)")
 	fs.StringVar(&c.tracePath, "trace", "", "JSONL trace path; '-' for stdout, '' for stderr")
 	fs.BoolVar(&c.traceSkipDeltas, "trace-skip-deltas", false, "skip thinking/message deltas in trace (smaller trace, no token-level replay; final text still in message.end)")
 	fs.StringVar(&c.systemPromptPath, "system-prompt", "", "override system prompt; '-' or file path or literal")
 	fs.BoolVar(&c.quiet, "quiet", false, "suppress stderr progress")
-	fs.BoolVar(&c.memoryEnabled, "memory", true, "enable persistent memory: inject MEMORY.md / USER.md snapshot into the system prompt and register the memory tool")
-	fs.BoolVar(&c.memoryOnly, "memory-only", false, "register only the memory tool (no shell/file/MCP) and disable project context; for memory benchmarks. Implies --memory")
+	fs.BoolVar(&c.memoryEnabled, "memory", true, "enable persistent memory: inject MEMORY.md / USER.md snapshot into the system prompt and register the memory tool (env: AFFENTCTL_MEMORY)")
+	fs.BoolVar(&c.memoryOnly, "memory-only", false, "register only the memory tool (no shell/file/MCP) and disable project context; for memory benchmarks. Implies --memory (env: AFFENTCTL_MEMORY_ONLY)")
 	fs.StringVar(&c.memoryWorkspaceStore, "memory-workspace-store", "", "(legacy) path to a pre-v2 single-file MEMORY.md; if set, migration moves it into the v2 topic layout on first access. Prefer --memory-dir for new setups.")
 	fs.StringVar(&c.memoryDir, "memory-dir", "", "path to the v2 memory dir (core.md + topics/*.md); default <workspace>/.affent/memory")
 	fs.StringVar(&c.memoryUserStore, "memory-user-store", "", "path to USER.md; default $XDG_CONFIG_HOME/affent/USER.md (cross-workspace)")
-	fs.StringVar(&c.memoryMaxChars, "memory-max-chars", "", "char limits as CORE,USER (default 2200,1375). Per-topic cap → --memory-topic-max-chars.")
-	fs.IntVar(&c.memoryTopicMaxChars, "memory-topic-max-chars", 0, "per-topic char cap; 0 → DefaultTopicCharLimit (4400). Each custom topic (auth, deploy, ...) is bounded independently; total memory grows by topic count.")
-	fs.IntVar(&c.memoryMaxTopics, "memory-max-topics", 0, "distinct-topic count cap; 0 → DefaultMaxTopics (32). Pass a large number (e.g. 1000) to effectively disable for memory benchmarks that legitimately want many named scratchpads.")
-	fs.BoolVar(&c.projectContext, "project-context", true, "auto-load AGENTS.md / CONVENTIONS.md / .cursorrules / .clinerules / CLAUDE.md / GEMINI.md from --workspace into the system prompt")
+	fs.StringVar(&c.memoryMaxChars, "memory-max-chars", "", "char limits as CORE,USER (default 2200,1375). Per-topic cap → --memory-topic-max-chars. (env: AFFENTCTL_MEMORY_MAX_CHARS)")
+	fs.IntVar(&c.memoryTopicMaxChars, "memory-topic-max-chars", 0, "per-topic char cap; 0 → DefaultTopicCharLimit (4400). Each custom topic (auth, deploy, ...) is bounded independently; total memory grows by topic count. (env: AFFENTCTL_MEMORY_TOPIC_MAX_CHARS)")
+	fs.IntVar(&c.memoryMaxTopics, "memory-max-topics", 0, "distinct-topic count cap; 0 → DefaultMaxTopics (32). Pass a large number (e.g. 1000) to effectively disable for memory benchmarks that legitimately want many named scratchpads. (env: AFFENTCTL_MEMORY_MAX_TOPICS)")
+	fs.BoolVar(&c.projectContext, "project-context", true, "auto-load AGENTS.md / CONVENTIONS.md / .cursorrules / .clinerules / CLAUDE.md / GEMINI.md from --workspace into the system prompt (env: AFFENTCTL_PROJECT_CONTEXT)")
 	fs.StringVar(&c.sessionID, "session-id", "", "resume the named session (under --workspace/.affentctl/)")
 	fs.BoolVar(&c.continueLast, "continue", false, "resume the most recent session under --workspace")
 	fs.StringVar(&c.mcpConfigPath, "mcp-config", "", "path to MCP server config JSON ({\"servers\":[{...}]}) (env: AFFENTCTL_MCP_CONFIG)")
-	fs.IntVar(&c.compactTrigger, "compact-trigger", 240, "compact conversation when message count exceeds this. 0 / negative → fall back to agent runtime's default (240). Reactive compaction (on context-overflow errors) is unaffected.")
-	fs.IntVar(&c.compactKeepLast, "compact-keep-last", 10, "messages preserved verbatim at the tail of the conversation when compacting")
+	fs.IntVar(&c.compactTrigger, "compact-trigger", 240, "compact conversation when message count exceeds this. 0 / negative → fall back to agent runtime's default (240). Reactive compaction (on context-overflow errors) is unaffected. (env: AFFENTCTL_COMPACT_TRIGGER)")
+	fs.IntVar(&c.compactKeepLast, "compact-keep-last", 10, "messages preserved verbatim at the tail of the conversation when compacting (env: AFFENTCTL_COMPACT_KEEP_LAST)")
 	fs.StringVar(&c.executor, "executor", "local", "shell-tool backend: 'local' (host; no isolation), 'sandbox' (auto-start affentctl's memory-limited Docker sandbox), or 'docker:<container_id>' (exec into an existing container). (env: AFFENTCTL_EXECUTOR)")
 	fs.BoolVar(&c.subagentEnabled, "subagent", true, "register subagent_run for bounded read-only delegation; set false to force a single-loop agent (env: AFFENTCTL_SUBAGENT)")
 	fs.IntVar(&c.subagentMaxDepth, "subagent-max-depth", agent.DefaultSubagentMaxDepth, "maximum recursive subagent depth; 1 disables nested subagents, hard max 4 (env: AFFENTCTL_SUBAGENT_MAX_DEPTH)")
@@ -273,6 +273,30 @@ var flagEnvSources = map[string]string{
 	"top-p":              "AFFENTCTL_TOP_P",
 	"max-tokens":         "AFFENTCTL_MAX_TOKENS",
 	"seed":               "AFFENTCTL_SEED",
+}
+
+func configPrecedenceEnvSources() map[string]string {
+	out := make(map[string]string, len(flagEnvSources)+12)
+	for name, env := range flagEnvSources {
+		out[name] = env
+	}
+	for name, env := range map[string]string{
+		"max-turns":              "AFFENTCTL_MAX_TURNS",
+		"max-call-timeout":       "AFFENTCTL_MAX_CALL_TIMEOUT",
+		"retry-transient":        "AFFENTCTL_RETRY_TRANSIENT",
+		"retry-backoff":          "AFFENTCTL_RETRY_BACKOFF",
+		"memory":                 "AFFENTCTL_MEMORY",
+		"memory-only":            "AFFENTCTL_MEMORY_ONLY",
+		"memory-max-chars":       "AFFENTCTL_MEMORY_MAX_CHARS",
+		"memory-topic-max-chars": "AFFENTCTL_MEMORY_TOPIC_MAX_CHARS",
+		"memory-max-topics":      "AFFENTCTL_MEMORY_MAX_TOPICS",
+		"project-context":        "AFFENTCTL_PROJECT_CONTEXT",
+		"compact-trigger":        "AFFENTCTL_COMPACT_TRIGGER",
+		"compact-keep-last":      "AFFENTCTL_COMPACT_KEEP_LAST",
+	} {
+		out[name] = env
+	}
+	return out
 }
 
 type fileConfig struct {
@@ -420,7 +444,7 @@ func loadConfigFile(c *commonFlags, fs *flag.FlagSet) error {
 	// config can only fill in things env didn't reach.
 	setByCLIOrEnv := map[string]bool{}
 	fs.Visit(func(f *flag.Flag) { setByCLIOrEnv[f.Name] = true })
-	for name, env := range flagEnvSources {
+	for name, env := range configPrecedenceEnvSources() {
 		if os.Getenv(env) != "" {
 			setByCLIOrEnv[name] = true
 		}
@@ -574,10 +598,20 @@ func applyEnvConfig(c *commonFlags, fs *flag.FlagSet) error {
 	setString("top-p", "AFFENTCTL_TOP_P", &c.topP)
 	setString("max-tokens", "AFFENTCTL_MAX_TOKENS", &c.maxTokens)
 	setString("seed", "AFFENTCTL_SEED", &c.seed)
+	setString("memory-max-chars", "AFFENTCTL_MEMORY_MAX_CHARS", &c.memoryMaxChars)
 	if err := setBoolStrict("subagent", "AFFENTCTL_SUBAGENT", &c.subagentEnabled); err != nil {
 		return err
 	}
 	if err := setBoolStrict("focused-tasks", "AFFENTCTL_FOCUSED_TASKS", &c.focusedTasksEnabled); err != nil {
+		return err
+	}
+	if err := setBoolStrict("memory", "AFFENTCTL_MEMORY", &c.memoryEnabled); err != nil {
+		return err
+	}
+	if err := setBoolStrict("memory-only", "AFFENTCTL_MEMORY_ONLY", &c.memoryOnly); err != nil {
+		return err
+	}
+	if err := setBoolStrict("project-context", "AFFENTCTL_PROJECT_CONTEXT", &c.projectContext); err != nil {
 		return err
 	}
 	setString("workspace", "AFFENTCTL_WORKSPACE", &c.workspace)
@@ -597,6 +631,45 @@ func applyEnvConfig(c *commonFlags, fs *flag.FlagSet) error {
 		return nil
 	}
 	if err := setInt("subagent-max-depth", "AFFENTCTL_SUBAGENT_MAX_DEPTH", &c.subagentMaxDepth); err != nil {
+		return err
+	}
+	if err := setInt("max-turns", "AFFENTCTL_MAX_TURNS", &c.maxTurns); err != nil {
+		return err
+	}
+	if err := setInt("retry-transient", "AFFENTCTL_RETRY_TRANSIENT", &c.retryTransient); err != nil {
+		return err
+	}
+	if err := setInt("memory-topic-max-chars", "AFFENTCTL_MEMORY_TOPIC_MAX_CHARS", &c.memoryTopicMaxChars); err != nil {
+		return err
+	}
+	if err := setInt("memory-max-topics", "AFFENTCTL_MEMORY_MAX_TOPICS", &c.memoryMaxTopics); err != nil {
+		return err
+	}
+	if err := setInt("compact-trigger", "AFFENTCTL_COMPACT_TRIGGER", &c.compactTrigger); err != nil {
+		return err
+	}
+	if err := setInt("compact-keep-last", "AFFENTCTL_COMPACT_KEEP_LAST", &c.compactKeepLast); err != nil {
+		return err
+	}
+	setDuration := func(name, env string, dst *time.Duration) error {
+		if setByCLI[name] {
+			return nil
+		}
+		v := os.Getenv(env)
+		if v == "" {
+			return nil
+		}
+		parsed, err := time.ParseDuration(v)
+		if err != nil {
+			return fmt.Errorf("%s=%q: %w", env, v, err)
+		}
+		*dst = parsed
+		return nil
+	}
+	if err := setDuration("max-call-timeout", "AFFENTCTL_MAX_CALL_TIMEOUT", &c.callTimeout); err != nil {
+		return err
+	}
+	if err := setDuration("retry-backoff", "AFFENTCTL_RETRY_BACKOFF", &c.retryBackoff); err != nil {
 		return err
 	}
 	return nil

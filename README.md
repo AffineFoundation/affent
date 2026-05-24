@@ -253,9 +253,10 @@ first if it is missing locally, using the same `1g` build memory limit. It
 sets `GOMEMLIMIT` to 75% of the Docker memory limit and `GOMAXPROCS` from the
 Docker CPU limit, so Go-based tools inside the runtime image respect the same
 resource envelope by default. The command also forwards portable model, auth,
-sampling, and feature-toggle env vars such as
-`AFFENTCTL_BASE_URL`, `AFFENTSERVE_MODEL`, `AFFENTSERVE_BUILTINS`, and
-`TAVILY_API_KEY` when they are set. Host path or executor env vars such as
+sampling, retry/compaction, memory-cap, and feature-toggle env vars such as
+`AFFENTCTL_BASE_URL`, `AFFENTCTL_MEMORY_MAX_TOPICS`, `AFFENTSERVE_MODEL`,
+`AFFENTSERVE_BUILTINS`, and `TAVILY_API_KEY` when they are set. Host path or
+executor env vars such as
 `AFFENTCTL_WORKSPACE`,
 `AFFENTCTL_CONFIG`, `AFFENTCTL_MCP_CONFIG`, `AFFENTCTL_EXECUTOR`,
 `AFFENTSERVE_WORKSPACE_ROOT`, and `AFFENTSERVE_MEMORY_ROOT` are not
