@@ -45,6 +45,11 @@ func handleSessionEvents(pool *SessionPool, sessionID string, w http.ResponseWri
 		writeJSONErrorTyped(w, http.StatusBadRequest, "invalid Last-Event-ID", err, "bad_request")
 		return
 	}
+	flusher, ok := w.(http.Flusher)
+	if !ok {
+		writeJSONError(w, http.StatusInternalServerError, "streaming unsupported", nil)
+		return
+	}
 	sess, err := sessionForEvents(pool, sessionID)
 	if err != nil {
 		if errors.Is(err, ErrSessionNotFound) {
@@ -52,11 +57,6 @@ func handleSessionEvents(pool *SessionPool, sessionID string, w http.ResponseWri
 			return
 		}
 		writeJSONErrorTyped(w, http.StatusBadRequest, "invalid session id", err, "bad_request")
-		return
-	}
-	flusher, ok := w.(http.Flusher)
-	if !ok {
-		writeJSONError(w, http.StatusInternalServerError, "streaming unsupported", nil)
 		return
 	}
 	w.Header().Set("Content-Type", "text/event-stream")

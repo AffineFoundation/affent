@@ -152,6 +152,24 @@ func TestHandleSessionEvents_RejectsNonStreamingWriter(t *testing.T) {
 	}
 }
 
+func TestHandleSessionEvents_RejectsNonStreamingWriterBeforeReopeningDurableSession(t *testing.T) {
+	memRoot := t.TempDir()
+	pool := newPoolWithMemoryRoot(t, memRoot)
+	createDurableSessionDir(t, pool, "nonstream-durable")
+
+	r := httptest.NewRequest(http.MethodGet, "/v1/sessions/nonstream-durable/events", nil)
+	w := &noFlusherWriter{ResponseWriter: httptest.NewRecorder()}
+	handleSessionEvents(pool, "nonstream-durable", w, r)
+
+	rec := w.ResponseWriter.(*httptest.ResponseRecorder)
+	if got := rec.Result().StatusCode; got != http.StatusInternalServerError {
+		t.Fatalf("status = %d, want 500: %s", got, rec.Body.String())
+	}
+	if _, err := pool.Get("nonstream-durable"); !errors.Is(err, ErrSessionNotFound) {
+		t.Fatalf("non-streaming request must not reopen durable session, got err=%v", err)
+	}
+}
+
 // noFlusherWriter wraps a recorder but does NOT implement
 // http.Flusher, simulating a middleware that broke the streaming
 // contract.
