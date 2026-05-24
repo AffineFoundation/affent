@@ -621,11 +621,14 @@ func seekSessionSummaryTail(f *os.File) error {
 	if n == 1 && prev[0] == '\n' {
 		return nil
 	}
-	var b [1]byte
+	buf := make([]byte, 64*1024)
 	for {
-		n, err := f.Read(b[:])
-		if n == 1 && b[0] == '\n' {
-			return nil
+		n, err := f.Read(buf)
+		if n > 0 {
+			if idx := bytes.IndexByte(buf[:n], '\n'); idx >= 0 {
+				_, seekErr := f.Seek(int64(idx-n+1), io.SeekCurrent)
+				return seekErr
+			}
 		}
 		if errors.Is(err, io.EOF) {
 			return nil
