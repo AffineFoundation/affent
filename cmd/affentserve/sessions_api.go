@@ -15,6 +15,7 @@ import (
 	"time"
 
 	agent "github.com/affinefoundation/affent/internal/agent"
+	"github.com/affinefoundation/affent/internal/jsonl"
 )
 
 const (
@@ -608,7 +609,7 @@ func latestUserMessageFromConversationFile(path string) (string, error) {
 	var latest string
 	r := bufio.NewReaderSize(f, 64*1024)
 	for {
-		line, tooLong, err := readSessionSummaryLine(r, maxSessionSummaryLineBytes)
+		line, tooLong, err := jsonl.ReadBoundedLine(r, maxSessionSummaryLineBytes)
 		if errors.Is(err, io.EOF) {
 			break
 		}
@@ -618,6 +619,7 @@ func latestUserMessageFromConversationFile(path string) (string, error) {
 		if tooLong {
 			continue
 		}
+		line = bytes.TrimRight(line, "\r\n")
 		var msg agent.ChatMessage
 		if err := json.Unmarshal(line, &msg); err != nil {
 			continue
@@ -668,35 +670,6 @@ func seekSessionSummaryTail(f *os.File) error {
 		}
 		if err != nil {
 			return err
-		}
-	}
-}
-
-func readSessionSummaryLine(r *bufio.Reader, maxBytes int) ([]byte, bool, error) {
-	var line []byte
-	tooLong := false
-	for {
-		frag, err := r.ReadSlice('\n')
-		if len(frag) > 0 && !tooLong {
-			if len(line)+len(frag) > maxBytes {
-				line = nil
-				tooLong = true
-			} else {
-				line = append(line, frag...)
-			}
-		}
-		switch {
-		case err == nil:
-			return bytes.TrimRight(line, "\r\n"), tooLong, nil
-		case errors.Is(err, bufio.ErrBufferFull):
-			continue
-		case errors.Is(err, io.EOF):
-			if len(line) == 0 && !tooLong {
-				return nil, false, io.EOF
-			}
-			return bytes.TrimRight(line, "\r\n"), tooLong, nil
-		default:
-			return nil, false, err
 		}
 	}
 }
