@@ -194,6 +194,28 @@ func TestToolResult_ResultCapsEventPayload(t *testing.T) {
 	}
 }
 
+func TestToolResultEventPayloadExtractsFailureKinds(t *testing.T) {
+	result := "blocked\nFailure: kind=blocked, status=403\n\nloop_guard\nFailure: kind=loop_guard_repeated_failures"
+	got := toolResultEventPayload("c1", 1, result)
+	if got.FailureKind != "blocked" {
+		t.Fatalf("FailureKind = %q, want blocked", got.FailureKind)
+	}
+	want := []string{"blocked", "loop_guard_repeated_failures"}
+	if len(got.FailureKinds) != len(want) {
+		t.Fatalf("FailureKinds = %#v, want %#v", got.FailureKinds, want)
+	}
+	for i := range want {
+		if got.FailureKinds[i] != want[i] {
+			t.Fatalf("FailureKinds = %#v, want %#v", got.FailureKinds, want)
+		}
+	}
+
+	success := toolResultEventPayload("c2", 0, result)
+	if success.FailureKind != "" || len(success.FailureKinds) != 0 {
+		t.Fatalf("successful generic payload should not extract failure kinds: %+v", success)
+	}
+}
+
 func TestToolResultArtifactStoresFullTruncatedPayload(t *testing.T) {
 	payload := strings.Repeat("X", MaxToolResultBytesInEvent+4096)
 	got := toolResultEventPayload("c/../bad\nid", 0, payload)

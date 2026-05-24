@@ -171,7 +171,7 @@ func recordToolRepairOutcome(stats *sse.ToolRuntimeStats, repaired bool, isErr b
 
 func toolResultEventPayload(callID string, exitCode int, result string) sse.ToolResultPayload {
 	cappedResult, truncated, omitted := truncateForEventWithStats(result, MaxToolResultBytesInEvent)
-	return sse.ToolResultPayload{
+	payload := sse.ToolResultPayload{
 		CallID:             callID,
 		ExitCode:           exitCode,
 		ResultSummary:      previewN(result, MaxToolResultPreviewInEvent),
@@ -181,6 +181,11 @@ func toolResultEventPayload(callID string, exitCode int, result string) sse.Tool
 		ResultOmittedBytes: omitted,
 		ResultCapBytes:     MaxToolResultBytesInEvent,
 	}
+	if exitCode != 0 {
+		payload.FailureKind = toolfailure.Kind(result)
+		payload.FailureKinds = toolfailure.Kinds(result)
+	}
+	return payload
 }
 
 func toolFailureKindForOutcome(tool, result string, isErr bool) string {
