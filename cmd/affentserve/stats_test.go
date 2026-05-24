@@ -68,6 +68,10 @@ func TestHandleStats_EmptyPool(t *testing.T) {
 	if resp.Boundaries.JSONLRecordBytes <= 0 {
 		t.Fatalf("Boundaries.JSONLRecordBytes = %d, want positive", resp.Boundaries.JSONLRecordBytes)
 	}
+	if resp.Boundaries.LoopGuardIdenticalCalls <= 0 || resp.Boundaries.LoopGuardFailureWarn <= 0 ||
+		resp.Boundaries.LoopGuardFailureHalt <= 0 || resp.Boundaries.PlanPerTurnCalls <= 0 {
+		t.Fatalf("loop guard boundaries must be positive: %+v", resp.Boundaries)
+	}
 	if resp.Boundaries.PlanSteps <= 0 || resp.Boundaries.PlanStepTextBytes <= 0 || resp.Boundaries.PlanNoteBytes <= 0 ||
 		resp.Boundaries.PlanEvidenceRefs <= 0 || resp.Boundaries.PlanEvidenceRefBytes <= 0 || resp.Boundaries.PlanStateBytes <= 0 ||
 		resp.Boundaries.ActivePlanStepBytes <= 0 || resp.Boundaries.ActivePlanNoteBytes <= 0 ||
@@ -105,6 +109,9 @@ func TestStatsBoundarySnapshotUsesConfiguredTurnLimits(t *testing.T) {
 	}
 	if got.PlanStateBytes != agent.DefaultRuntimeBoundaries().PlanStateBytes {
 		t.Fatalf("PlanStateBytes = %d, want %d", got.PlanStateBytes, agent.DefaultRuntimeBoundaries().PlanStateBytes)
+	}
+	if got.LoopGuardFailureHalt != agent.DefaultRuntimeBoundaries().LoopGuardFailureHalt {
+		t.Fatalf("LoopGuardFailureHalt = %d, want %d", got.LoopGuardFailureHalt, agent.DefaultRuntimeBoundaries().LoopGuardFailureHalt)
 	}
 	if got.FocusedTaskToolResult != agent.DefaultRuntimeBoundaries().FocusedTaskToolResultBytes {
 		t.Fatalf("FocusedTaskToolResult = %d, want %d", got.FocusedTaskToolResult, agent.DefaultRuntimeBoundaries().FocusedTaskToolResultBytes)

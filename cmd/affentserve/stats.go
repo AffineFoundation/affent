@@ -49,6 +49,10 @@ type statsBoundaries struct {
 	ToolResultPreview          int    `json:"tool_result_preview_bytes"`
 	RepairableToolArg          int    `json:"repairable_tool_arg_bytes"`
 	ProjectContextBytes        int    `json:"project_context_bytes"`
+	LoopGuardIdenticalCalls    int    `json:"loop_guard_identical_calls"`
+	LoopGuardFailureWarn       int    `json:"loop_guard_failure_warn"`
+	LoopGuardFailureHalt       int    `json:"loop_guard_failure_halt"`
+	PlanPerTurnCalls           int    `json:"plan_per_turn_calls"`
 	PlanSteps                  int    `json:"plan_steps"`
 	PlanStepTextBytes          int    `json:"plan_step_text_bytes"`
 	PlanNoteBytes              int    `json:"plan_note_bytes"`
@@ -190,6 +194,10 @@ func statsBoundarySnapshot(cfg Config) statsBoundaries {
 		ToolResultPreview:          ab.ToolResultPreviewBytes,
 		RepairableToolArg:          ab.RepairableToolArgBytes,
 		ProjectContextBytes:        ab.ProjectContextBytes,
+		LoopGuardIdenticalCalls:    ab.LoopGuardIdenticalCalls,
+		LoopGuardFailureWarn:       ab.LoopGuardFailureWarn,
+		LoopGuardFailureHalt:       ab.LoopGuardFailureHalt,
+		PlanPerTurnCalls:           ab.PlanPerTurnCalls,
 		PlanSteps:                  ab.PlanSteps,
 		PlanStepTextBytes:          ab.PlanStepTextBytes,
 		PlanNoteBytes:              ab.PlanNoteBytes,

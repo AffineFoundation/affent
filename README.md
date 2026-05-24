@@ -124,9 +124,9 @@ names, namespace mode, and filtered tool reasons so a workflow-specific
 allowlist/denylist can be checked before a model sees the tools.
 `doctor` also prints the active runtime boundary caps, including prompt/config
 input limits, LLM request and stream accumulator caps, tool request/result event
-caps, tool result context cap, plan state/active-plan caps, focused-task
-budget/output caps, JSONL record cap, MCP result cap, and memory
-file/search/response caps. Its capability line
+caps, tool result context cap, loop guard thresholds, plan state/active-plan
+caps, focused-task budget/output caps, JSONL record cap, MCP result cap, and
+memory file/search/response caps. Its capability line
 summarizes the tool surface the resolved config will expose, including
 shell/file tools, skill install, memory, session search, MCP, subagent,
 focused tasks, project context, and executor class.
@@ -804,8 +804,8 @@ stats, aggregate token/browser counters, `workspace_root`, `memory_root`,
 `session_state_root`, runtime `boundaries`, and `shutting_down` so authorized
 clients can verify the durable state path, see effective turn/tool caps, and
 stop sending new work during graceful drain.
-The boundary snapshot includes plan state/active-plan, focused-task
-budget/output, JSONL record, MCP result, MCP transport, and memory
+The boundary snapshot includes loop guard thresholds, plan state/active-plan,
+focused-task budget/output, JSONL record, MCP result, MCP transport, and memory
 file/search/response caps.
 
 ## Security Model

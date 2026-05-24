@@ -18,6 +18,10 @@ type RuntimeBoundaries struct {
 	ToolResultEventBytes            int
 	RepairableToolArgBytes          int
 	ProjectContextBytes             int
+	LoopGuardIdenticalCalls         int
+	LoopGuardFailureWarn            int
+	LoopGuardFailureHalt            int
+	PlanPerTurnCalls                int
 	PlanSteps                       int
 	PlanStepTextBytes               int
 	PlanNoteBytes                   int
@@ -57,6 +61,10 @@ func DefaultRuntimeBoundaries() RuntimeBoundaries {
 		ToolResultEventBytes:            MaxToolResultBytesInEvent,
 		RepairableToolArgBytes:          maxRepairableToolArgBytes,
 		ProjectContextBytes:             MaxProjectContextBytes,
+		LoopGuardIdenticalCalls:         identicalToolCallBlockThreshold,
+		LoopGuardFailureWarn:            toolFailureWarnThreshold,
+		LoopGuardFailureHalt:            toolFailureHaltThreshold,
+		PlanPerTurnCalls:                perTurnCallCaps[PlanToolName],
 		PlanSteps:                       maxPlanSteps,
 		PlanStepTextBytes:               maxPlanStepTextBytes,
 		PlanNoteBytes:                   maxPlanNoteBytes,
