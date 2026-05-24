@@ -88,7 +88,7 @@ func TestWithExternalResearchSystemGuidance_AppendsOnce(t *testing.T) {
 	base := "be helpful"
 	surface := externalResearchToolSurface{WebSearch: true, WebFetch: true, Browser: true}
 	once := WithExternalResearchSystemGuidance(base, surface)
-	for _, want := range []string{"External research:", "web_search", "authoritative", "browser_navigate", "social posts", "dates/freshness"} {
+	for _, want := range []string{"External research:", "web_search", "authoritative", "browser_navigate", "social posts", "dates/freshness", "If web_fetch fails", "Do not keep retrying the same failing URL"} {
 		if !strings.Contains(once, want) {
 			t.Fatalf("external research guidance missing %q:\n%s", want, once)
 		}

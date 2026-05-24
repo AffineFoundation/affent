@@ -601,6 +601,9 @@ func TestRunFocusedTask_ResearchUsesWebToolThenEmitsJSON(t *testing.T) {
 	if !strings.Contains(prompt, "Use web_fetch to read authoritative pages and APIs") {
 		t.Fatalf("fetch-only research prompt should guide web_fetch:\n%s", prompt)
 	}
+	if !strings.Contains(prompt, "If web_fetch fails") || !strings.Contains(prompt, "Do not keep retrying the same failing URL") {
+		t.Fatalf("fetch-only research prompt should guide recovery from failed fetches:\n%s", prompt)
+	}
 	if strings.Contains(prompt, "web_search") {
 		t.Fatalf("fetch-only research prompt should not mention unavailable web_search:\n%s", prompt)
 	}

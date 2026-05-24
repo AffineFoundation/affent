@@ -365,6 +365,9 @@ func externalResearchSystemGuidance(surface externalResearchToolSurface) string 
 	} else if surface.Browser {
 		b.WriteString("\n- Use browser_navigate/browser_snapshot for page inspection. Prefer official pages, source repositories, block explorers, filings, API docs, and primary project sites over summaries.")
 	}
+	if surface.WebFetch {
+		b.WriteString("\n- If web_fetch fails with a blocked page, HTTP error, timeout, or non-text response, follow the tool's Next guidance. Do not keep retrying the same failing URL; switch to a canonical/alternate source from search results, use browser tools when registered for rendered pages, or answer with clearly marked unverified gaps.")
+	}
 	b.WriteString("\n- For market, metrics, or trend questions, collect a current source-of-record plus at least one independent corroborating source when the available tools make that possible. Keep social posts, forum comments, and influencer takes separate from verified facts, and label them as sentiment or claims.")
 	b.WriteString("\n- Include concrete dates/freshness for time-sensitive facts. When sources disagree, state the conflict and prefer the source with the clearest provenance.")
 	if surface.WebSearch {
