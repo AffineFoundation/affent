@@ -1485,6 +1485,152 @@ func TestRunner_EndToEnd_ExternalResearchFlow(t *testing.T) {
 	}
 }
 
+// TestRunner_EndToEnd_ExternalResearchFetchRecovery pins the failure path for
+// public web research: a blocked fetch result must be treated as recoverable,
+// and the model should switch to another source instead of repeating the same
+// failing URL or presenting the blocked page as evidence.
+func TestRunner_EndToEnd_ExternalResearchFetchRecovery(t *testing.T) {
+	webSearch := agent.Tool{
+		Name:        "web_search",
+		Description: "Test-only search stand-in: returns primary and fallback source candidates.",
+		Schema: json.RawMessage(`{
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["query"],
+            "properties": {
+                "query": {"type": "string"},
+                "num_results": {"type": "integer"}
+            }
+        }`),
+		Execute: func(ctx context.Context, args json.RawMessage) (string, error) {
+			return `[
+  {"title":"Orion Network official docs","url":"https://official.example/orion/about","snippet":"Primary source describing Orion Network as a decentralized storage subnet."},
+  {"title":"Orion Network primary metrics","url":"https://blocked.example/orion/metrics","snippet":"Market metrics page that may block automated fetches."},
+  {"title":"Orion Network mirror metrics","url":"https://metrics.example/orion","snippet":"Alternative text metrics endpoint with price, market cap, and 24h change."},
+  {"title":"Recent community discussion","url":"https://social.example/search/orion","snippet":"Recent positive and critical community posts."}
+]`, nil
+		},
+	}
+	webFetch := agent.Tool{
+		Name:        "web_fetch",
+		Description: "Test-only fetch stand-in: returns deterministic page text and one recoverable failure.",
+		Schema: json.RawMessage(`{
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["url"],
+            "properties": {
+                "url": {"type": "string"}
+            }
+        }`),
+		Execute: func(ctx context.Context, args json.RawMessage) (string, error) {
+			var p struct {
+				URL string `json:"url"`
+			}
+			if err := json.Unmarshal(args, &p); err != nil {
+				return "", err
+			}
+			switch p.URL {
+			case "https://official.example/orion/about":
+				return "Official docs, updated 2026-05-20: Orion Network is a decentralized storage subnet for encrypted archival workloads.", nil
+			case "https://blocked.example/orion/metrics":
+				return "web_fetch failed: HTTP 403 Forbidden for https://blocked.example/orion/metrics\nNext: do not retry this exact URL; fetch an HTML/API/text fallback, use a browser tool if one is registered, or mark this source as unverified.", nil
+			case "https://metrics.example/orion":
+				return "Alternative metrics snapshot as of 2026-05-24T12:00:00Z: price $4.12, market cap $41.3M, 24h change -2.1%, 24h volume $980K.", nil
+			case "https://social.example/search/orion":
+				return "Community posts from 2026-05-23 to 2026-05-24: supporters cite resilient usage; critics question revenue conversion.", nil
+			default:
+				return "", fmt.Errorf("unexpected test URL %q", p.URL)
+			}
+		},
+	}
+
+	turn1 := []string{
+		`{"choices":[{"delta":{"role":"assistant","tool_calls":[{"index":0,"id":"s1","type":"function","function":{"name":"web_search","arguments":"{\"query\":\"Orion Network recent trend market metrics sentiment\",\"num_results\":5}"}}]},"finish_reason":null}]}`,
+		`{"choices":[{"delta":{},"finish_reason":"tool_calls"}]}`,
+		`[DONE]`,
+	}
+	turn2 := []string{
+		`{"choices":[{"delta":{"role":"assistant","tool_calls":[{"index":0,"id":"f1","type":"function","function":{"name":"web_fetch","arguments":"{\"url\":\"https://official.example/orion/about\"}"}},{"index":1,"id":"f2","type":"function","function":{"name":"web_fetch","arguments":"{\"url\":\"https://blocked.example/orion/metrics\"}"}}]},"finish_reason":null}]}`,
+		`{"choices":[{"delta":{},"finish_reason":"tool_calls"}]}`,
+		`[DONE]`,
+	}
+	turn3 := []string{
+		`{"choices":[{"delta":{"role":"assistant","tool_calls":[{"index":0,"id":"f3","type":"function","function":{"name":"web_fetch","arguments":"{\"url\":\"https://metrics.example/orion\"}"}},{"index":1,"id":"f4","type":"function","function":{"name":"web_fetch","arguments":"{\"url\":\"https://social.example/search/orion\"}"}}]},"finish_reason":null}]}`,
+		`{"choices":[{"delta":{},"finish_reason":"tool_calls"}]}`,
+		`[DONE]`,
+	}
+	turn4 := []string{
+		`{"choices":[{"delta":{"role":"assistant","content":"Orion Network is a decentralized storage subnet for encrypted archival workloads according to the official docs. The primary metrics page was blocked, so it should not be treated as verified evidence. A fallback metrics endpoint reports, as of 2026-05-24T12:00:00Z, price $4.12, market cap $41.3M, 24h change -2.1%, and 24h volume $980K. Recent community sentiment is mixed: supporters cite resilient usage, while critics question revenue conversion. Overall: recent market momentum is weak, and the blocked primary metrics source remains an unverified gap."},"finish_reason":"stop"}]}`,
+		`[DONE]`,
+	}
+	srv := newScriptedLLM(t, [][]string{turn1, turn2, turn3, turn4})
+	orionSearch := func(args map[string]any) bool {
+		q, _ := args["query"].(string)
+		return strings.Contains(q, "Orion Network")
+	}
+	fetchURL := func(url string) func(map[string]any) bool {
+		return func(args map[string]any) bool {
+			return args["url"] == url
+		}
+	}
+
+	scenario := Scenario{
+		Name:         "external_research_fetch_recovery",
+		Description:  "agent follows web_fetch recovery guidance, switches to a fallback source, and marks blocked evidence as unverified",
+		Prompt:       "Assess the recent trend for Orion Network. First identify what it is, then collect current market metrics and recent community sentiment. If a web fetch is blocked, follow the tool's recovery guidance and separate verified facts from unverified gaps.",
+		MaxTurnSteps: 8,
+		Checks: []Check{
+			TurnEndedCleanly(),
+			ToolCalled("web_search", orionSearch),
+			ToolCalled("web_fetch", fetchURL("https://official.example/orion/about")),
+			ToolCalled("web_fetch", fetchURL("https://blocked.example/orion/metrics")),
+			ToolCalled("web_fetch", fetchURL("https://metrics.example/orion")),
+			ToolCalled("web_fetch", fetchURL("https://social.example/search/orion")),
+			ToolCalledAtLeast("web_fetch", 4),
+			ToolResultContains("web_fetch", "Next: do not retry this exact URL"),
+			ToolCalledBeforeMatching("web_search", orionSearch, "web_fetch", fetchURL("https://blocked.example/orion/metrics")),
+			ToolCalledBeforeMatching("web_fetch", fetchURL("https://blocked.example/orion/metrics"), "web_fetch", fetchURL("https://metrics.example/orion")),
+			ToolNotCalled("shell", nil),
+			FinalTextContains("decentralized storage subnet"),
+			FinalTextContains("primary metrics page was blocked"),
+			FinalTextContains("fallback metrics endpoint"),
+			FinalTextContains("market cap $41.3M"),
+			FinalTextContains("unverified gap"),
+		},
+	}
+
+	runner := &Runner{
+		LLM:            agent.NewLLMClient(srv.URL, "", "fake-model"),
+		MaxTurnSteps:   8,
+		PerCallTimeout: 5 * time.Second,
+		RunTimeout:     20 * time.Second,
+		Log:            zerolog.Nop(),
+		BuildRegistry: func(ctx context.Context, workspaceDir string, exec executor.Executor) (*agent.Registry, error) {
+			_ = ctx
+			_ = workspaceDir
+			_ = exec
+			reg := agent.NewRegistry()
+			reg.Add(&webSearch)
+			reg.Add(&webFetch)
+			return reg, nil
+		},
+	}
+
+	out, err := runner.Run(context.Background(), scenario)
+	if err != nil {
+		t.Fatalf("Runner.Run: %v", err)
+	}
+	if !out.Pass {
+		t.Errorf("expected all checks to pass; failed: %v", out.FailedChecks())
+		for _, r := range out.Results {
+			t.Logf("  %s: pass=%v detail=%s", r.Check, r.Pass, r.Detail)
+		}
+	}
+	if len(out.Trace.Tools) != 5 {
+		t.Fatalf("expected one search and four fetches; got %+v", out.Trace.Tools)
+	}
+}
+
 // TestRunner_RequiresLLM pins the early-validation: Runner without an
 // LLM client returns a clear error instead of nil-deref'ing inside
 // EnsureSystemPrompt / SendUser.
