@@ -1787,6 +1787,148 @@ func TestRunner_EndToEnd_ExternalResearchDynamicShellRecovery(t *testing.T) {
 	}
 }
 
+// TestRunner_EndToEnd_ExternalResearchDynamicShellDiscoveryLinks pins the
+// recovery path where search finds only a dynamic dashboard, and the usable
+// API/text source is surfaced later by web_fetch's discovery links. The agent
+// must treat the shell as non-evidence, follow the discovery link, and cite the
+// API result rather than the shell preview.
+func TestRunner_EndToEnd_ExternalResearchDynamicShellDiscoveryLinks(t *testing.T) {
+	webSearch := agent.Tool{
+		Name:        "web_search",
+		Description: "Test-only search stand-in: returns docs plus a dynamic dashboard, but no metrics API result.",
+		Schema: json.RawMessage(`{
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["query"],
+            "properties": {
+                "query": {"type": "string"},
+                "num_results": {"type": "integer"}
+            }
+        }`),
+		Execute: func(ctx context.Context, args json.RawMessage) (string, error) {
+			return `[
+  {"title":"Vela Subnet official docs","url":"https://official.example/vela/about","snippet":"Primary source describing Vela as a decentralized routing subnet."},
+  {"title":"Vela market dashboard","url":"https://dashboard.example/vela","snippet":"Client-rendered dashboard. Metrics may require JavaScript."}
+]`, nil
+		},
+	}
+	webFetch := agent.Tool{
+		Name:        "web_fetch",
+		Description: "Test-only fetch stand-in: dynamic shell exposes a discovery link to the metrics API.",
+		Schema: json.RawMessage(`{
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["url"],
+            "properties": {
+                "url": {"type": "string"}
+            }
+        }`),
+		Execute: func(ctx context.Context, args json.RawMessage) (string, error) {
+			var p struct {
+				URL string `json:"url"`
+			}
+			if err := json.Unmarshal(args, &p); err != nil {
+				return "", err
+			}
+			switch p.URL {
+			case "https://official.example/vela/about":
+				return "Official docs, updated 2026-05-20: Vela is a decentralized routing subnet for inference traffic.", nil
+			case "https://dashboard.example/vela":
+				return "[dynamic page shell: URL=https://dashboard.example/vela, Content-Type=\"text/html\", Reason=\"client-rendered app shell\"]\nDiscovery preview (not source evidence): Home Documentation API API Keys Portfolio Validators Subnets\nDiscovery links (not source evidence):\n- API — https://dashboard.example/api/vela/metrics.json\n- Documentation — https://docs.example/vela\nFailure: kind=dynamic_shell\nNext: do not treat this loading/app shell as source evidence; use the discovery preview/links only to choose a canonical API/text/source page.", nil
+			case "https://dashboard.example/api/vela/metrics.json":
+				return `{"as_of":"2026-05-24T12:00:00Z","price_usd":9.25,"market_cap_usd":"44.0M","change_24h":"+3.1%"}`, nil
+			default:
+				return "", fmt.Errorf("unexpected test URL %q", p.URL)
+			}
+		},
+	}
+
+	turn1 := []string{
+		`{"choices":[{"delta":{"role":"assistant","tool_calls":[{"index":0,"id":"s1","type":"function","function":{"name":"web_search","arguments":"{\"query\":\"Vela Subnet recent trend market metrics\",\"num_results\":5}"}}]},"finish_reason":null}]}`,
+		`{"choices":[{"delta":{},"finish_reason":"tool_calls"}]}`,
+		`[DONE]`,
+	}
+	turn2 := []string{
+		`{"choices":[{"delta":{"role":"assistant","tool_calls":[{"index":0,"id":"f1","type":"function","function":{"name":"web_fetch","arguments":"{\"url\":\"https://official.example/vela/about\"}"}},{"index":1,"id":"f2","type":"function","function":{"name":"web_fetch","arguments":"{\"url\":\"https://dashboard.example/vela\"}"}}]},"finish_reason":null}]}`,
+		`{"choices":[{"delta":{},"finish_reason":"tool_calls"}]}`,
+		`[DONE]`,
+	}
+	turn3 := []string{
+		`{"choices":[{"delta":{"role":"assistant","tool_calls":[{"index":0,"id":"f3","type":"function","function":{"name":"web_fetch","arguments":"{\"url\":\"https://dashboard.example/api/vela/metrics.json\"}"}}]},"finish_reason":null}]}`,
+		`{"choices":[{"delta":{},"finish_reason":"tool_calls"}]}`,
+		`[DONE]`,
+	}
+	turn4 := []string{
+		`{"choices":[{"delta":{"role":"assistant","content":"Vela is a decentralized routing subnet for inference traffic according to the official docs. The dashboard fetch returned only a dynamic app shell, so I did not use the shell preview as verified evidence. I followed its discovery link to the metrics API, which reports as of 2026-05-24T12:00:00Z: price $9.25, market cap $44.0M, and 24h change +3.1%. Dashboard evidence remains dynamic/unverified."},"finish_reason":"stop"}]}`,
+		`[DONE]`,
+	}
+	srv := newScriptedLLM(t, [][]string{turn1, turn2, turn3, turn4})
+	velaSearch := func(args map[string]any) bool {
+		q, _ := args["query"].(string)
+		return strings.Contains(q, "Vela Subnet")
+	}
+	fetchURL := func(url string) func(map[string]any) bool {
+		return func(args map[string]any) bool {
+			return args["url"] == url
+		}
+	}
+
+	scenario := Scenario{
+		Name:         "external_research_dynamic_shell_discovery_links",
+		Description:  "agent follows a web_fetch dynamic-shell discovery link to a metrics API not present in search results",
+		Prompt:       "Assess current Vela Subnet market metrics. If a fetched dashboard is a dynamic shell, use any discovery links only to find a text/API/source endpoint; do not use the shell preview as evidence.",
+		MaxTurnSteps: 8,
+		Checks: []Check{
+			TurnEndedCleanly(),
+			ToolCalled("web_search", velaSearch),
+			ToolCalled("web_fetch", fetchURL("https://official.example/vela/about")),
+			ToolCalled("web_fetch", fetchURL("https://dashboard.example/vela")),
+			ToolCalled("web_fetch", fetchURL("https://dashboard.example/api/vela/metrics.json")),
+			ToolCalledBeforeMatching("web_fetch", fetchURL("https://dashboard.example/vela"), "web_fetch", fetchURL("https://dashboard.example/api/vela/metrics.json")),
+			ToolFailureKindAtLeast("dynamic_shell", 1),
+			ToolResultContains("web_fetch", "Discovery links (not source evidence)"),
+			ToolResultContains("web_fetch", "https://dashboard.example/api/vela/metrics.json"),
+			ToolNotCalled("web_fetch", fetchURL("https://dashboard.example/pro/api-keys")),
+			FinalTextContains("did not use the shell preview as verified evidence"),
+			FinalTextContains("followed its discovery link"),
+			FinalTextContains("metrics API"),
+			FinalTextContains("market cap $44.0M"),
+			FinalTextContains("dynamic/unverified"),
+		},
+	}
+
+	runner := &Runner{
+		LLM:            agent.NewLLMClient(srv.URL, "", "fake-model"),
+		MaxTurnSteps:   8,
+		PerCallTimeout: 5 * time.Second,
+		RunTimeout:     20 * time.Second,
+		Log:            zerolog.Nop(),
+		BuildRegistry: func(ctx context.Context, workspaceDir string, exec executor.Executor) (*agent.Registry, error) {
+			_ = ctx
+			_ = workspaceDir
+			_ = exec
+			reg := agent.NewRegistry()
+			reg.Add(&webSearch)
+			reg.Add(&webFetch)
+			return reg, nil
+		},
+	}
+
+	out, err := runner.Run(context.Background(), scenario)
+	if err != nil {
+		t.Fatalf("Runner.Run: %v", err)
+	}
+	if !out.Pass {
+		t.Errorf("expected all checks to pass; failed: %v", out.FailedChecks())
+		for _, r := range out.Results {
+			t.Logf("  %s: pass=%v detail=%s", r.Check, r.Pass, r.Detail)
+		}
+	}
+	if len(out.Trace.Tools) != 4 {
+		t.Fatalf("expected one search and three fetches; got %+v", out.Trace.Tools)
+	}
+}
+
 // TestRunner_EndToEnd_ExternalResearchDynamicHostGuard pins the runtime side
 // of dynamic-shell recovery: if a model keeps trying dashboard/page routes on
 // the same host after two dynamic shells, the loop guard blocks more page-route
