@@ -720,6 +720,36 @@ func TestPrintBatchResultIncludesLLMFailureHints(t *testing.T) {
 	}
 }
 
+func TestBatchSummaryFailureExamplesAreBounded(t *testing.T) {
+	var summary batchSummary
+	for i := 1; i <= 3; i++ {
+		summary.add(agenteval.BatchResult{
+			ToolFailureExamples: map[string][]agenteval.ToolFailureExample{
+				"timeout": {
+					{Kind: "timeout", Tool: "web_fetch", ArgsSummary: fmt.Sprintf(`url="https://slow.example/%d"`, i), ExitCode: 1},
+				},
+			},
+			RuntimeErrorExamples: map[string][]agenteval.RuntimeErrorExample{
+				"llm_timeout": {
+					{Kind: "llm_timeout", Message: fmt.Sprintf("timeout example %d", i)},
+				},
+			},
+		})
+	}
+	if got := summary.ToolFailureExamples["timeout"]; len(got) != batchSummaryExamplesPerKind {
+		t.Fatalf("ToolFailureExamples cap = %d, want %d: %#v", len(got), batchSummaryExamplesPerKind, got)
+	}
+	if strings.Contains(summary.ToolFailureExamples["timeout"][1].ArgsSummary, "/3") {
+		t.Fatalf("tool failure examples should keep earliest bounded samples: %#v", summary.ToolFailureExamples["timeout"])
+	}
+	if got := summary.RuntimeErrorExamples["llm_timeout"]; len(got) != batchSummaryExamplesPerKind {
+		t.Fatalf("RuntimeErrorExamples cap = %d, want %d: %#v", len(got), batchSummaryExamplesPerKind, got)
+	}
+	if strings.Contains(summary.RuntimeErrorExamples["llm_timeout"][1].Message, "3") {
+		t.Fatalf("runtime error examples should keep earliest bounded samples: %#v", summary.RuntimeErrorExamples["llm_timeout"])
+	}
+}
+
 // TestBatchSummaryAggregatesDelegationAcrossScenarios pins the
 // batch-level aggregation for delegation usage.
 func TestBatchSummaryAggregatesDelegationAcrossScenarios(t *testing.T) {
