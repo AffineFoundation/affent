@@ -164,6 +164,9 @@ func fetch(ctx context.Context, cfg FetchConfig, requestURL string) (string, err
 	if resp.Request != nil && resp.Request.URL != nil {
 		finalURL = resp.Request.URL.String()
 	}
+	if finalURL == "" {
+		finalURL = requestURL
+	}
 
 	if resp.StatusCode/100 != 2 {
 		// Read a little so the error is informative.
@@ -182,6 +185,9 @@ func fetch(ctx context.Context, cfg FetchConfig, requestURL string) (string, err
 	}
 
 	ct := resp.Header.Get("Content-Type")
+	if len(bytes.TrimSpace(body)) == 0 {
+		return emptyFetchResult(finalURL, ct), nil
+	}
 	out := renderBody(body, ct, finalURL)
 
 	if len(out) > cfg.MaxResultChars {
@@ -198,6 +204,10 @@ func fetch(ctx context.Context, cfg FetchConfig, requestURL string) (string, err
 		out = strings.TrimSpace(out) + "\n\n...(response body truncated)"
 	}
 	return out, nil
+}
+
+func emptyFetchResult(finalURL, contentType string) string {
+	return fmt.Sprintf("[empty response: URL=%s, Content-Type=%q]\nNext: do not treat this as page evidence; use another available source, fetch a text/API/HTML version, use a browser tool if one is registered for rendered pages, or answer with this source marked as empty/unverified.", finalURL, contentType)
 }
 
 func recoverableFetchError(requestURL, finalURL string, status int, err error) error {

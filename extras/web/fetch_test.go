@@ -137,6 +137,38 @@ func TestFetchTool_SniffsMislabelledReadableBody(t *testing.T) {
 	}
 }
 
+func TestFetchTool_EmptyBodyReportsRecoverableResult(t *testing.T) {
+	cases := []struct {
+		name string
+		body string
+	}{
+		{name: "empty", body: ""},
+		{name: "whitespace", body: " \n\t "},
+	}
+
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				w.Header().Set("Content-Type", "text/html; charset=utf-8")
+				w.Write([]byte(c.body))
+			}))
+			defer srv.Close()
+
+			tool := FetchTool(FetchConfig{AllowPrivateNetwork: true})
+			args, _ := json.Marshal(map[string]string{"url": srv.URL})
+			out, err := tool.Execute(context.Background(), args)
+			if err != nil {
+				t.Fatalf("Execute: %v", err)
+			}
+			for _, want := range []string{"empty response", "URL=" + srv.URL, "Next:", "empty/unverified"} {
+				if !strings.Contains(out, want) {
+					t.Fatalf("empty response missing %q guidance:\n%s", want, out)
+				}
+			}
+		})
+	}
+}
+
 func TestFetchTool_NonText(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "image/png")
