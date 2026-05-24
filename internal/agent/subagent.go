@@ -999,13 +999,13 @@ func readOnlyShellTool(deps BuiltinDeps) *Tool {
 	t.Description = "Run a guarded read-only shell command for inspection only. Allowed use: tests, grep/rg/find/ls, git status/diff/show, language checkers, and similar commands. Do not modify files or install packages."
 	inner := t.Execute
 	t.Execute = func(ctx context.Context, args json.RawMessage) (string, error) {
-		p, err := decodeStrictToolArgs[struct {
+		p, err := decodeBuiltinToolArgs[struct {
 			Command    string `json:"command"`
 			Cwd        string `json:"cwd"`
 			TimeoutSec int    `json:"timeout_sec"`
-		}](args)
+		}]("shell", args, "command, cwd, timeout_sec", "command must be a non-empty read-only inspection command; cwd and timeout_sec are optional.")
 		if err != nil {
-			return "", fmt.Errorf("decode args: %w", err)
+			return "", err
 		}
 		if err := rejectMutatingShell(p.Command); err != nil {
 			return "", err
@@ -1019,12 +1019,12 @@ func subagentReadFileTool(deps BuiltinDeps) *Tool {
 	t := readFileTool(deps)
 	inner := t.Execute
 	t.Execute = func(ctx context.Context, args json.RawMessage) (string, error) {
-		p, err := decodeStrictToolArgs[struct {
+		p, err := decodeBuiltinToolArgs[struct {
 			Path     string `json:"path"`
 			MaxBytes int    `json:"max_bytes"`
-		}](args)
+		}]("read_file", args, "path, max_bytes", "path must name one workspace text file outside private subagent transcript storage; max_bytes is optional.")
 		if err != nil {
-			return "", fmt.Errorf("decode args: %w", err)
+			return "", err
 		}
 		if err := rejectSubagentPrivatePath(deps.HostWorkspaceDir, p.Path); err != nil {
 			return "", err
@@ -1038,12 +1038,12 @@ func subagentListFilesTool(deps BuiltinDeps) *Tool {
 	t := listFilesTool(deps)
 	inner := t.Execute
 	t.Execute = func(ctx context.Context, args json.RawMessage) (string, error) {
-		p, err := decodeStrictToolArgs[struct {
+		p, err := decodeBuiltinToolArgs[struct {
 			Path       string `json:"path"`
 			MaxEntries int    `json:"max_entries"`
-		}](args)
+		}]("list_files", args, "path, max_entries", "path defaults to the workspace root when omitted and must stay outside private subagent transcript storage; max_entries is optional.")
 		if err != nil {
-			return "", fmt.Errorf("decode args: %w", err)
+			return "", err
 		}
 		if err := rejectSubagentPrivatePath(deps.HostWorkspaceDir, p.Path); err != nil {
 			return "", err
@@ -1122,7 +1122,7 @@ func readOnlyMemoryTool(store memory.MemoryStore) *Tool {
 	t.Execute = func(ctx context.Context, args json.RawMessage) (string, error) {
 		p, err := decodeStrictToolArgs[memoryToolArgs](args)
 		if err != nil {
-			return "", fmt.Errorf("decode args: %w", err)
+			return "", formatReadOnlyMemoryDecodeArgsError(err)
 		}
 		action := strings.TrimSpace(p.Action)
 		if action == "" {
@@ -1134,4 +1134,11 @@ func readOnlyMemoryTool(store memory.MemoryStore) *Tool {
 		return inner(ctx, args)
 	}
 	return t
+}
+
+func formatReadOnlyMemoryDecodeArgsError(err error) error {
+	if err == nil {
+		return nil
+	}
+	return fmt.Errorf("decode args for memory: %w\nNext: retry memory with a single JSON object using only documented fields: action, target, topic, query, top_k. In a subagent, memory is read-only: use action=search with query or action=list; do not pass content or old_text.", err)
 }

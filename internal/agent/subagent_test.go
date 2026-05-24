@@ -354,20 +354,56 @@ func TestSubagentWrappedToolsRejectUnknownArguments(t *testing.T) {
 	}
 	store := newTestStore(t)
 	cases := []struct {
-		name string
-		tool *Tool
-		args json.RawMessage
+		name      string
+		tool      *Tool
+		args      json.RawMessage
+		wantField string
 	}{
-		{name: "read_file", tool: subagentReadFileTool(BuiltinDeps{HostWorkspaceDir: ws}), args: json.RawMessage(`{"path":"note.txt","unused":true}`)},
-		{name: "list_files", tool: subagentListFilesTool(BuiltinDeps{HostWorkspaceDir: ws}), args: json.RawMessage(`{"path":".","recursive":true}`)},
-		{name: "shell", tool: readOnlyShellTool(BuiltinDeps{Executor: nilExecutor{}, HostWorkspaceDir: ws}), args: json.RawMessage(`{"command":"pwd","write":false}`)},
-		{name: "memory", tool: readOnlyMemoryTool(store), args: json.RawMessage(`{"action":"search","query":"hello","unused":true}`)},
+		{name: "read_file", tool: subagentReadFileTool(BuiltinDeps{HostWorkspaceDir: ws}), args: json.RawMessage(`{"path":"note.txt","unused":true}`), wantField: "max_bytes"},
+		{name: "list_files", tool: subagentListFilesTool(BuiltinDeps{HostWorkspaceDir: ws}), args: json.RawMessage(`{"path":".","recursive":true}`), wantField: "max_entries"},
+		{name: "shell", tool: readOnlyShellTool(BuiltinDeps{Executor: nilExecutor{}, HostWorkspaceDir: ws}), args: json.RawMessage(`{"command":"pwd","write":false}`), wantField: "timeout_sec"},
+		{name: "memory", tool: readOnlyMemoryTool(store), args: json.RawMessage(`{"action":"search","query":"hello","unused":true}`), wantField: "query"},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
 			_, err := tc.tool.Execute(context.Background(), tc.args)
 			if err == nil || !strings.Contains(err.Error(), "unknown field") {
 				t.Fatalf("error = %v, want unknown field", err)
+			}
+			if !strings.Contains(err.Error(), "Next:") {
+				t.Fatalf("error = %v, want recovery guidance", err)
+			}
+			if !strings.Contains(err.Error(), tc.wantField) {
+				t.Fatalf("error = %v, want documented field %q", err, tc.wantField)
+			}
+		})
+	}
+}
+
+func TestSubagentWrappedToolsDecodeTypeErrorsNameValidFields(t *testing.T) {
+	ws := t.TempDir()
+	store := newTestStore(t)
+	cases := []struct {
+		name      string
+		tool      *Tool
+		args      json.RawMessage
+		wantField string
+	}{
+		{name: "read_file", tool: subagentReadFileTool(BuiltinDeps{HostWorkspaceDir: ws}), args: json.RawMessage(`{"path":"note.txt","max_bytes":"many"}`), wantField: "max_bytes"},
+		{name: "list_files", tool: subagentListFilesTool(BuiltinDeps{HostWorkspaceDir: ws}), args: json.RawMessage(`{"path":".","max_entries":"many"}`), wantField: "max_entries"},
+		{name: "shell", tool: readOnlyShellTool(BuiltinDeps{Executor: nilExecutor{}, HostWorkspaceDir: ws}), args: json.RawMessage(`{"command":"pwd","timeout_sec":"soon"}`), wantField: "timeout_sec"},
+		{name: "memory", tool: readOnlyMemoryTool(store), args: json.RawMessage(`{"action":"search","query":"hello","top_k":"many"}`), wantField: "top_k"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			_, err := tc.tool.Execute(context.Background(), tc.args)
+			if err == nil {
+				t.Fatal("expected decode error")
+			}
+			for _, want := range []string{"decode args", "Next:", tc.wantField} {
+				if !strings.Contains(err.Error(), want) {
+					t.Fatalf("error missing %q:\n%s", want, err.Error())
+				}
 			}
 		})
 	}
