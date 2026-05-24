@@ -68,6 +68,12 @@ Scenario records describe one eval case:
   as repeated failed URL/query inputs.
 - `tool_failure_hints`: optional map of structured tool failure kind to a short
   operator hint explaining likely cause and next diagnostic action.
+- `tool_failure_examples`: optional per-scenario map of failure kind to bounded
+  sample tool failures. Each sample includes the tool name, a compact
+  `args_summary` such as `url="..."` or `query="..."`, the exit code, and a
+  compact `result_summary` containing the failure reason and `Next:` guidance
+  when the trace carried it. This is diagnostic context for operators; counts
+  in `tool_failure_by_kind` remain the aggregation source of truth.
 - `runtime_error_by_kind`: optional map of structured `error.failure_kind`
   counts, such as `llm_timeout`, `llm_incomplete_stream`, or
   `context_overflow`. This is separate from `failure_kinds` so recoverable LLM
@@ -146,7 +152,7 @@ Summary records aggregate all scenario records from the same process:
   `end_cancelled`, `end_unknown`.
 - Failure totals: `failure_kinds`.
 - Tool failure totals and diagnostics: `tool_failure_by_kind`,
-  `tool_failure_hints`.
+  `tool_failure_hints`, `tool_failure_examples` on scenario records.
 - Cleanup totals: `removed_workspaces`, `cleanup_errors`.
 
 ## Compatibility

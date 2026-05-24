@@ -517,6 +517,39 @@ func TestApplyTraceEventReadsToolResultFailureKinds(t *testing.T) {
 	}
 }
 
+func TestTraceToolFailureExamples(t *testing.T) {
+	trace := Trace{Tools: []ToolCall{
+		{
+			Tool:         "web_fetch",
+			Args:         map[string]any{"url": "https://dashboard.example/helio", "timeout": 10},
+			Result:       "[dynamic page shell: URL=https://dashboard.example/helio]\nFailure: kind=dynamic_shell\nNext: use a text/API/source page.",
+			FailureKinds: []string{"dynamic_shell"},
+			ExitCode:     0,
+		},
+		{
+			Tool:     "web_search",
+			Args:     map[string]any{"query": "rare subnet official metrics"},
+			Result:   "(no results)\nFailure: kind=no_results\nNext: retry with official domains.",
+			ExitCode: 0,
+		},
+	}}
+	examples := trace.ToolFailureExamples(1)
+	dynamic := examples["dynamic_shell"]
+	if len(dynamic) != 1 {
+		t.Fatalf("dynamic_shell examples = %#v", dynamic)
+	}
+	if dynamic[0].Tool != "web_fetch" || !strings.Contains(dynamic[0].ArgsSummary, "dashboard.example") {
+		t.Fatalf("dynamic_shell example lost tool/URL context: %#v", dynamic[0])
+	}
+	if !strings.Contains(dynamic[0].ResultSummary, "dynamic page shell") || !strings.Contains(dynamic[0].ResultSummary, "Next:") {
+		t.Fatalf("dynamic_shell result summary missing reason/Next: %#v", dynamic[0])
+	}
+	search := examples["no_results"]
+	if len(search) != 1 || !strings.Contains(search[0].ArgsSummary, "rare subnet") {
+		t.Fatalf("no_results example missing query context: %#v", search)
+	}
+}
+
 func TestFocusedTaskCalledAtLeast(t *testing.T) {
 	trace := Trace{Tools: []ToolCall{
 		{CallID: "c1", Tool: "run_task", Delegation: &sse.DelegationMeta{Kind: "focused_task", TaskType: "explore"}},

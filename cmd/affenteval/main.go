@@ -442,6 +442,30 @@ func printToolFailureHintLines(w io.Writer, counts map[string]int, indent string
 	}
 }
 
+func printToolFailureExampleLines(w io.Writer, examples map[string][]agenteval.ToolFailureExample, indent string) {
+	if len(examples) == 0 {
+		return
+	}
+	kinds := make([]string, 0, len(examples))
+	for kind := range examples {
+		kinds = append(kinds, kind)
+	}
+	sort.Strings(kinds)
+	for _, kind := range kinds {
+		for _, ex := range examples[kind] {
+			fmt.Fprintf(w, "%stool_failure_example[%s]: tool=%s", indent, kind, ex.Tool)
+			if ex.ArgsSummary != "" {
+				fmt.Fprintf(w, " args=%s", ex.ArgsSummary)
+			}
+			fmt.Fprintf(w, " exit=%d", ex.ExitCode)
+			if ex.ResultSummary != "" {
+				fmt.Fprintf(w, " result=%s", ex.ResultSummary)
+			}
+			fmt.Fprintln(w)
+		}
+	}
+}
+
 func failureHintsForKinds(counts map[string]int) failureHintMap {
 	if len(counts) == 0 {
 		return nil
@@ -616,51 +640,52 @@ func normalizedEvalExecutor(executor string) string {
 
 type batchResultRecord struct {
 	evalJSONLMetadata
-	Type                       string         `json:"type"`
-	Scenario                   string         `json:"scenario"`
-	OK                         bool           `json:"ok"`
-	DurationMS                 int64          `json:"duration_ms"`
-	Workspace                  string         `json:"workspace"`
-	TracePath                  string         `json:"trace_path"`
-	TraceSchemaVersion         int            `json:"trace_schema_version,omitempty"`
-	TurnEndReason              string         `json:"turn_end_reason,omitempty"`
-	ToolCalls                  int            `json:"tool_calls"`
-	ToolErrors                 int            `json:"tool_errors"`
-	ToolRepaired               int            `json:"tool_repaired"`
-	ToolNameCanonicalized      int            `json:"tool_name_canonicalized"`
-	ToolRepairCalls            int            `json:"tool_repair_calls,omitempty"`
-	ToolRepairSucceeded        int            `json:"tool_repair_succeeded,omitempty"`
-	ToolRepairFailed           int            `json:"tool_repair_failed,omitempty"`
-	ToolRepairNotes            int            `json:"tool_repair_notes,omitempty"`
-	ToolRepairByKind           map[string]int `json:"tool_repair_by_kind,omitempty"`
-	ToolFailureByKind          map[string]int `json:"tool_failure_by_kind,omitempty"`
-	RuntimeErrorByKind         map[string]int `json:"runtime_error_by_kind,omitempty"`
-	LoopGuardInterventions     int            `json:"loop_guard_interventions"`
-	ForcedNoTools              int            `json:"forced_no_tools"`
-	ToolDurationMS             int64          `json:"tool_duration_ms"`
-	ToolArgsTruncated          int            `json:"tool_args_truncated"`
-	ToolArgsOmittedBytes       int            `json:"tool_args_omitted_bytes"`
-	ToolResultsTruncated       int            `json:"tool_results_truncated"`
-	ToolResultsOmittedBytes    int            `json:"tool_results_omitted_bytes"`
-	ToolResultArtifacts        int            `json:"tool_result_artifacts"`
-	VerifierCommand            string         `json:"verifier_command,omitempty"`
-	VerifierRan                bool           `json:"verifier_ran"`
-	VerifierOK                 bool           `json:"verifier_ok"`
-	VerifierExitCode           int            `json:"verifier_exit_code"`
-	VerifierDurationMS         int64          `json:"verifier_duration_ms"`
-	VerifierOutputBytes        int            `json:"verifier_output_bytes"`
-	VerifierOutputTruncated    bool           `json:"verifier_output_truncated"`
-	VerifierOutputOmittedBytes int            `json:"verifier_output_omitted_bytes"`
-	VerifierOutputCapBytes     int            `json:"verifier_output_cap_bytes"`
-	InputTokens                int            `json:"input_tokens"`
-	OutputTokens               int            `json:"output_tokens"`
-	WorkspaceRemoved           bool           `json:"workspace_removed,omitempty"`
-	CleanupError               string         `json:"cleanup_error,omitempty"`
-	Failures                   []string       `json:"failures,omitempty"`
-	FailureKinds               map[string]int `json:"failure_kinds,omitempty"`
-	FailureHints               failureHintMap `json:"failure_hints,omitempty"`
-	ToolFailureHints           failureHintMap `json:"tool_failure_hints,omitempty"`
-	RuntimeErrorHints          failureHintMap `json:"runtime_error_hints,omitempty"`
+	Type                       string                                    `json:"type"`
+	Scenario                   string                                    `json:"scenario"`
+	OK                         bool                                      `json:"ok"`
+	DurationMS                 int64                                     `json:"duration_ms"`
+	Workspace                  string                                    `json:"workspace"`
+	TracePath                  string                                    `json:"trace_path"`
+	TraceSchemaVersion         int                                       `json:"trace_schema_version,omitempty"`
+	TurnEndReason              string                                    `json:"turn_end_reason,omitempty"`
+	ToolCalls                  int                                       `json:"tool_calls"`
+	ToolErrors                 int                                       `json:"tool_errors"`
+	ToolRepaired               int                                       `json:"tool_repaired"`
+	ToolNameCanonicalized      int                                       `json:"tool_name_canonicalized"`
+	ToolRepairCalls            int                                       `json:"tool_repair_calls,omitempty"`
+	ToolRepairSucceeded        int                                       `json:"tool_repair_succeeded,omitempty"`
+	ToolRepairFailed           int                                       `json:"tool_repair_failed,omitempty"`
+	ToolRepairNotes            int                                       `json:"tool_repair_notes,omitempty"`
+	ToolRepairByKind           map[string]int                            `json:"tool_repair_by_kind,omitempty"`
+	ToolFailureByKind          map[string]int                            `json:"tool_failure_by_kind,omitempty"`
+	ToolFailureExamples        map[string][]agenteval.ToolFailureExample `json:"tool_failure_examples,omitempty"`
+	RuntimeErrorByKind         map[string]int                            `json:"runtime_error_by_kind,omitempty"`
+	LoopGuardInterventions     int                                       `json:"loop_guard_interventions"`
+	ForcedNoTools              int                                       `json:"forced_no_tools"`
+	ToolDurationMS             int64                                     `json:"tool_duration_ms"`
+	ToolArgsTruncated          int                                       `json:"tool_args_truncated"`
+	ToolArgsOmittedBytes       int                                       `json:"tool_args_omitted_bytes"`
+	ToolResultsTruncated       int                                       `json:"tool_results_truncated"`
+	ToolResultsOmittedBytes    int                                       `json:"tool_results_omitted_bytes"`
+	ToolResultArtifacts        int                                       `json:"tool_result_artifacts"`
+	VerifierCommand            string                                    `json:"verifier_command,omitempty"`
+	VerifierRan                bool                                      `json:"verifier_ran"`
+	VerifierOK                 bool                                      `json:"verifier_ok"`
+	VerifierExitCode           int                                       `json:"verifier_exit_code"`
+	VerifierDurationMS         int64                                     `json:"verifier_duration_ms"`
+	VerifierOutputBytes        int                                       `json:"verifier_output_bytes"`
+	VerifierOutputTruncated    bool                                      `json:"verifier_output_truncated"`
+	VerifierOutputOmittedBytes int                                       `json:"verifier_output_omitted_bytes"`
+	VerifierOutputCapBytes     int                                       `json:"verifier_output_cap_bytes"`
+	InputTokens                int                                       `json:"input_tokens"`
+	OutputTokens               int                                       `json:"output_tokens"`
+	WorkspaceRemoved           bool                                      `json:"workspace_removed,omitempty"`
+	CleanupError               string                                    `json:"cleanup_error,omitempty"`
+	Failures                   []string                                  `json:"failures,omitempty"`
+	FailureKinds               map[string]int                            `json:"failure_kinds,omitempty"`
+	FailureHints               failureHintMap                            `json:"failure_hints,omitempty"`
+	ToolFailureHints           failureHintMap                            `json:"tool_failure_hints,omitempty"`
+	RuntimeErrorHints          failureHintMap                            `json:"runtime_error_hints,omitempty"`
 
 	// Per-scenario delegation breakdown. Fields are omitted from the
 	// JSONL when the scenario used no delegation tools, so older
@@ -763,6 +788,7 @@ func printBatchResultJSONL(w io.Writer, meta evalJSONLMetadata, res agenteval.Ba
 		ToolRepairNotes:            res.Repair.Notes,
 		ToolRepairByKind:           cloneStringIntMap(res.Repair.ByKind),
 		ToolFailureByKind:          cloneStringIntMap(res.ToolStats.ToolFailureByKind),
+		ToolFailureExamples:        cloneToolFailureExamples(res.ToolFailureExamples),
 		RuntimeErrorByKind:         cloneStringIntMap(res.RuntimeErrorByKind),
 		LoopGuardInterventions:     res.ToolStats.LoopGuardInterventions,
 		ForcedNoTools:              res.ToolStats.ForcedNoTools,
@@ -870,6 +896,23 @@ func cloneStringIntMap(in map[string]int) map[string]int {
 	out := make(map[string]int, len(in))
 	for k, v := range in {
 		out[k] = v
+	}
+	return out
+}
+
+func cloneToolFailureExamples(in map[string][]agenteval.ToolFailureExample) map[string][]agenteval.ToolFailureExample {
+	if len(in) == 0 {
+		return nil
+	}
+	out := make(map[string][]agenteval.ToolFailureExample, len(in))
+	for kind, examples := range in {
+		if len(examples) == 0 {
+			continue
+		}
+		out[kind] = append([]agenteval.ToolFailureExample(nil), examples...)
+	}
+	if len(out) == 0 {
+		return nil
 	}
 	return out
 }
@@ -990,6 +1033,7 @@ func printBatchResult(w io.Writer, res agenteval.BatchResult) {
 	}
 	printFailureHintLines(w, failureKindsForResult(res.Failures), "  ")
 	printToolFailureHintLines(w, res.ToolStats.ToolFailureByKind, "  ")
+	printToolFailureExampleLines(w, res.ToolFailureExamples, "  ")
 	printFailureHintLines(w, res.RuntimeErrorByKind, "  ")
 }
 

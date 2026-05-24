@@ -189,6 +189,11 @@ func TestPrintBatchResultIncludesTraceMetrics(t *testing.T) {
 			LoopGuardInterventions: 2,
 			ForcedNoTools:          1,
 		},
+		ToolFailureExamples: map[string][]agenteval.ToolFailureExample{
+			"invalid_args": {
+				{Kind: "invalid_args", Tool: "web_fetch", ArgsSummary: `url="https://example.com"`, ResultSummary: "url is required | Next: retry with a full URL", ExitCode: 1},
+			},
+		},
 		RuntimeErrorByKind: map[string]int{"llm_timeout": 1},
 		ToolTruncation: agenteval.ToolTruncationStats{
 			ArgsTruncated:       1,
@@ -232,6 +237,7 @@ func TestPrintBatchResultIncludesTraceMetrics(t *testing.T) {
 		`verifier: pass exit=0 duration=80ms output=1200 truncated omitted=176 cap=1024 command="go test ./..."`,
 		"tool_failure_hint[invalid_args]",
 		"invalid arguments",
+		`tool_failure_example[invalid_args]: tool=web_fetch args=url="https://example.com" exit=1 result=url is required | Next: retry with a full URL`,
 		"hint[llm_timeout]",
 	} {
 		if !strings.Contains(got, want) {
@@ -440,6 +446,11 @@ func TestPrintBatchResultJSONL(t *testing.T) {
 			LoopGuardInterventions: 3,
 			ForcedNoTools:          1,
 		},
+		ToolFailureExamples: map[string][]agenteval.ToolFailureExample{
+			"blocked": {
+				{Kind: "blocked", Tool: "web_fetch", ArgsSummary: `url="https://blocked.example/metrics"`, ResultSummary: "HTTP 403 | Next: use another source", ExitCode: 1},
+			},
+		},
 		RuntimeErrorByKind: map[string]int{"llm_incomplete_stream": 1},
 		ToolTruncation: agenteval.ToolTruncationStats{
 			ArgsTruncated:       2,
@@ -543,6 +554,21 @@ func TestPrintBatchResultJSONL(t *testing.T) {
 	toolFailureHints, ok := got["tool_failure_hints"].(map[string]any)
 	if !ok || !strings.Contains(fmt.Sprint(toolFailureHints["blocked"]), "direct web_fetch") {
 		t.Fatalf("tool_failure_hints = %#v\njson=%s", got["tool_failure_hints"], out.String())
+	}
+	toolFailureExamples, ok := got["tool_failure_examples"].(map[string]any)
+	if !ok {
+		t.Fatalf("tool_failure_examples missing or wrong type: %#v\njson=%s", got["tool_failure_examples"], out.String())
+	}
+	blockedExamples, ok := toolFailureExamples["blocked"].([]any)
+	if !ok || len(blockedExamples) != 1 {
+		t.Fatalf("blocked tool_failure_examples = %#v\njson=%s", toolFailureExamples["blocked"], out.String())
+	}
+	blockedExample, ok := blockedExamples[0].(map[string]any)
+	if !ok ||
+		blockedExample["tool"] != "web_fetch" ||
+		!strings.Contains(fmt.Sprint(blockedExample["args_summary"]), "blocked.example") ||
+		!strings.Contains(fmt.Sprint(blockedExample["result_summary"]), "Next:") {
+		t.Fatalf("blocked tool_failure_example = %#v\njson=%s", blockedExamples[0], out.String())
 	}
 	runtimeErrorKinds, ok := got["runtime_error_by_kind"].(map[string]any)
 	if !ok || runtimeErrorKinds["llm_incomplete_stream"] != float64(1) {

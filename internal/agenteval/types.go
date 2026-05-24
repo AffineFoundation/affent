@@ -2,6 +2,9 @@ package agenteval
 
 import (
 	"context"
+	"encoding/json"
+	"fmt"
+	"strings"
 
 	"github.com/affinefoundation/affent/internal/agent"
 	"github.com/affinefoundation/affent/internal/executor"
@@ -258,6 +261,14 @@ type ToolRepairStats struct {
 	ByKind         map[string]int
 }
 
+type ToolFailureExample struct {
+	Kind          string `json:"kind"`
+	Tool          string `json:"tool"`
+	ArgsSummary   string `json:"args_summary,omitempty"`
+	ResultSummary string `json:"result_summary,omitempty"`
+	ExitCode      int    `json:"exit_code"`
+}
+
 func (s ToolRepairStats) HasAny() bool {
 	return s.Calls > 0 ||
 		s.SucceededCalls > 0 ||
@@ -296,20 +307,7 @@ func (t Trace) ToolFailureKindCounts() map[string]int {
 	}
 	var out map[string]int
 	for _, c := range t.Tools {
-		kinds := []string{}
-		if c.FailureKind != "" {
-			kinds = append(kinds, c.FailureKind)
-		}
-		for _, kind := range c.FailureKinds {
-			if !containsString(kinds, kind) {
-				kinds = append(kinds, kind)
-			}
-		}
-		for _, kind := range toolfailure.KindsForResult(c.Tool, c.Result, c.ExitCode != 0) {
-			if !containsString(kinds, kind) {
-				kinds = append(kinds, kind)
-			}
-		}
+		kinds := toolFailureKindsForCall(c)
 		if len(kinds) == 0 {
 			continue
 		}
@@ -321,6 +319,95 @@ func (t Trace) ToolFailureKindCounts() map[string]int {
 		}
 	}
 	return out
+}
+
+func (t Trace) ToolFailureExamples(maxPerKind int) map[string][]ToolFailureExample {
+	if maxPerKind <= 0 {
+		return nil
+	}
+	out := map[string][]ToolFailureExample{}
+	for _, c := range t.Tools {
+		for _, kind := range toolFailureKindsForCall(c) {
+			if len(out[kind]) >= maxPerKind {
+				continue
+			}
+			out[kind] = append(out[kind], ToolFailureExample{
+				Kind:          kind,
+				Tool:          c.Tool,
+				ArgsSummary:   summarizeToolCallArgs(c.Args),
+				ResultSummary: summarizeToolFailureResult(c.Result),
+				ExitCode:      c.ExitCode,
+			})
+		}
+	}
+	if len(out) == 0 {
+		return nil
+	}
+	return out
+}
+
+func toolFailureKindsForCall(c ToolCall) []string {
+	var kinds []string
+	if c.FailureKind != "" {
+		kinds = append(kinds, c.FailureKind)
+	}
+	for _, kind := range c.FailureKinds {
+		if !containsString(kinds, kind) {
+			kinds = append(kinds, kind)
+		}
+	}
+	for _, kind := range toolfailure.KindsForResult(c.Tool, c.Result, c.ExitCode != 0) {
+		if !containsString(kinds, kind) {
+			kinds = append(kinds, kind)
+		}
+	}
+	return kinds
+}
+
+func summarizeToolCallArgs(args map[string]any) string {
+	if len(args) == 0 {
+		return ""
+	}
+	for _, key := range []string{"command", "path", "url", "query", "name", "id"} {
+		if value, ok := args[key]; ok {
+			return compactOneLine(fmt.Sprintf("%s=%q", key, fmt.Sprint(value)), 180)
+		}
+	}
+	raw, err := json.Marshal(args)
+	if err != nil {
+		return ""
+	}
+	return compactOneLine(string(raw), 180)
+}
+
+func summarizeToolFailureResult(result string) string {
+	var parts []string
+	for _, raw := range strings.Split(result, "\n") {
+		line := strings.TrimSpace(raw)
+		if line == "" || strings.HasPrefix(line, "Failure: kind=") {
+			continue
+		}
+		parts = append(parts, line)
+		if strings.HasPrefix(line, "Next:") || len(parts) >= 2 {
+			break
+		}
+	}
+	return compactOneLine(strings.Join(parts, " | "), 260)
+}
+
+func compactOneLine(s string, max int) string {
+	s = strings.Join(strings.Fields(s), " ")
+	if max <= 0 || len(s) <= max {
+		return s
+	}
+	runes := []rune(s)
+	if len(runes) <= max {
+		return s
+	}
+	if max <= 3 {
+		return string(runes[:max])
+	}
+	return string(runes[:max-3]) + "..."
 }
 
 func (t Trace) LoopErrorKindCounts() map[string]int {
