@@ -90,7 +90,7 @@ func TestWithExternalResearchSystemGuidance_AppendsOnce(t *testing.T) {
 	base := "be helpful"
 	surface := externalResearchToolSurface{WebSearch: true, WebFetch: true, Browser: true}
 	once := WithExternalResearchSystemGuidance(base, surface)
-	for _, want := range []string{"External research:", "web_search", "authoritative", "Do not open every search result", "weak sentiment", "browser_navigate", "dynamic dashboards", "bot/challenge", "social posts", "dates/freshness", "If web_fetch fails", "Do not keep retrying the same failing URL", "If web_search returns no results", "distinctive entities", "stale_ref", "fresh visible ref"} {
+	for _, want := range []string{"External research:", "web_search", "authoritative", "Do not open every search result", "weak sentiment", "browser_navigate", "dynamic dashboards", "bot/challenge", "social posts", "dates/freshness", "If web_fetch fails", "Do not keep retrying the same failing URL", "If web_search returns no results", "distinctive entities", "stale_ref", "fresh visible ref", "Preserve user-provided disambiguators", "network/subnet id"} {
 		if !strings.Contains(once, want) {
 			t.Fatalf("external research guidance missing %q:\n%s", want, once)
 		}
@@ -135,6 +135,7 @@ func TestExternalResearchGuidanceMatchesToolSurface(t *testing.T) {
 			want: []string{
 				"web_search for discovery",
 				"Do not open every search result",
+				"Preserve user-provided disambiguators",
 				"Use web_fetch",
 				"browser_navigate/browser_snapshot",
 				"dynamic dashboards",
@@ -150,6 +151,7 @@ func TestExternalResearchGuidanceMatchesToolSurface(t *testing.T) {
 			want: []string{
 				"web_search for discovery",
 				"Do not open every search result",
+				"Preserve user-provided disambiguators",
 				"Use web_fetch",
 				"from search results",
 				"If web_search returns no results",
@@ -161,6 +163,7 @@ func TestExternalResearchGuidanceMatchesToolSurface(t *testing.T) {
 			surface: externalResearchToolSurface{WebFetch: true},
 			want: []string{
 				"Use web_fetch",
+				"Preserve user-provided disambiguators",
 				"try another known public URL",
 			},
 			forbidden: []string{"web_search", "search results", "browser_navigate", "browser_snapshot", "browser tools"},
@@ -171,6 +174,7 @@ func TestExternalResearchGuidanceMatchesToolSurface(t *testing.T) {
 			want: []string{
 				"Use web_fetch",
 				"browser_navigate/browser_snapshot for rendered pages",
+				"Preserve user-provided disambiguators",
 				"try another known public URL",
 				"stale_ref",
 			},
@@ -182,6 +186,7 @@ func TestExternalResearchGuidanceMatchesToolSurface(t *testing.T) {
 			want: []string{
 				"browser_navigate/browser_snapshot for page inspection",
 				"unavailable discovery tools",
+				"Preserve user-provided disambiguators",
 				"stale_ref",
 			},
 			forbidden: []string{"web_search", "web_fetch"},
@@ -192,6 +197,7 @@ func TestExternalResearchGuidanceMatchesToolSurface(t *testing.T) {
 			want: []string{
 				"web_search to discover and compare source snippets",
 				"full-page reading is unavailable",
+				"Preserve user-provided disambiguators",
 				"If web_search returns no results",
 			},
 			forbidden: []string{"web_fetch", "browser_navigate", "browser_snapshot", "browser tools"},

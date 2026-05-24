@@ -392,6 +392,7 @@ func externalResearchSystemGuidance(surface externalResearchToolSurface) string 
 	if surface.Browser {
 		b.WriteString("\n- If a browser action fails with stale_ref, not_interactable, or timeout, follow the tool's Next guidance: refresh browser_snapshot, scroll or close obvious blockers, choose a fresh visible ref, or continue from current evidence; do not repeat the same stale ref.")
 	}
+	b.WriteString("\n- Preserve user-provided disambiguators when discovering sources and evaluating evidence: ecosystem or parent project, ticker, network/subnet id, official domain, version, geography, and date range. If a short name is ambiguous, resolve the entity before collecting metrics or sentiment.")
 	b.WriteString("\n- For market, metrics, or trend questions, collect a current source-of-record plus at least one independent corroborating source when the available tools make that possible. Keep social posts, forum comments, and influencer takes separate from verified facts, and label them as sentiment or claims.")
 	b.WriteString("\n- Include concrete dates/freshness for time-sensitive facts. When sources disagree, state the conflict and prefer the source with the clearest provenance.")
 	if surface.WebSearch {

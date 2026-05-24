@@ -1160,6 +1160,11 @@ func TestSearchTool_EmptyQuery(t *testing.T) {
 	if !strings.Contains(string(tool.Schema), `"maxLength": 2048`) {
 		t.Fatalf("schema should publish query maxLength: %s", tool.Schema)
 	}
+	for _, want := range []string{"disambiguators", "ecosystem", "network/subnet id"} {
+		if !strings.Contains(string(tool.Schema), want) {
+			t.Fatalf("schema should guide precise research queries with %q: %s", want, tool.Schema)
+		}
+	}
 }
 
 func TestSearchTool_QueryMaxLength(t *testing.T) {
@@ -1170,7 +1175,7 @@ func TestSearchTool_QueryMaxLength(t *testing.T) {
 	}
 	query += "x"
 	_, err := tool.Execute(context.Background(), json.RawMessage(`{"query":"`+query+`"}`))
-	if err == nil || !strings.Contains(err.Error(), "web_search supports queries up to") {
+	if err == nil || !strings.Contains(err.Error(), "web_search supports queries up to") || !strings.Contains(err.Error(), "network/subnet id") {
 		t.Fatalf("expected oversized query error, got %v", err)
 	}
 }

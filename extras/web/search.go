@@ -71,7 +71,7 @@ func SearchTool(cfg SearchConfig) (*agent.Tool, error) {
         "additionalProperties": false,
         "required": ["query"],
         "properties": {
-            "query": {"type": "string", "minLength": 1, "maxLength": %d, "description": "Search query (plain English; the tool handles tokenization)."},
+            "query": {"type": "string", "minLength": 1, "maxLength": %d, "description": "Search query. Include user-provided disambiguators such as ecosystem, parent project, ticker, network/subnet id, official domain, version, geography, or date range when they matter."},
             "num_results": {"type": "integer", "description": "How many results to return. Default %d, max %d.", "minimum": 1, "maximum": %d, "default": %d}
         }
     }`, maxSearchQueryBytes, defaultN, max, max, defaultN))
@@ -93,10 +93,10 @@ func SearchTool(cfg SearchConfig) (*agent.Tool, error) {
 			}
 			query := strings.TrimSpace(args.Query)
 			if query == "" {
-				return "", errors.New("query is required\nFailure: kind=invalid_args\nNext: retry with 2-6 specific keywords, named entities, error text, or the URL/topic you need to discover")
+				return "", errors.New("query is required\nFailure: kind=invalid_args\nNext: retry with 2-6 specific keywords, named entities, and any user-provided disambiguators such as ecosystem, ticker, network/subnet id, official domain, or date range")
 			}
 			if len(query) > maxSearchQueryBytes {
-				return "", fmt.Errorf("query is %d bytes; web_search supports queries up to %d bytes\nFailure: kind=invalid_args\nNext: retry with 2-6 specific keywords, named entities, error text, or the shortest precise topic", len(query), maxSearchQueryBytes)
+				return "", fmt.Errorf("query is %d bytes; web_search supports queries up to %d bytes\nFailure: kind=invalid_args\nNext: retry with 2-6 specific keywords, named entities, and the shortest useful disambiguators such as ecosystem, ticker, network/subnet id, official domain, or date range", len(query), maxSearchQueryBytes)
 			}
 			n := args.NumResults
 			if n <= 0 {
@@ -117,7 +117,7 @@ func SearchTool(cfg SearchConfig) (*agent.Tool, error) {
 
 func formatResults(results []SearchResult, limit int) string {
 	if len(results) == 0 {
-		return "(no results)\nFailure: kind=no_results\nNext: retry web_search with fewer or different keywords, include distinctive entities or official domain names, or use another available source URL if already known."
+		return "(no results)\nFailure: kind=no_results\nNext: retry web_search with fewer or different keywords, preserve user-provided disambiguators such as ecosystem, ticker, network/subnet id, official domain, or date range, or use another available source URL if already known."
 	}
 	if limit <= 0 || limit > maxSearchResults {
 		limit = maxSearchResults
@@ -154,7 +154,7 @@ func formatResults(results []SearchResult, limit int) string {
 		b.WriteString("\n\n")
 	}
 	if displayed == 0 {
-		return "(no usable results: search provider returned no URLs)\nFailure: kind=no_results\nNext: retry web_search with more distinctive keywords or official domain names, or use another available source URL if already known."
+		return "(no usable results: search provider returned no URLs)\nFailure: kind=no_results\nNext: retry web_search with more distinctive keywords and user-provided disambiguators such as ecosystem, ticker, network/subnet id, official domain, or date range, or use another available source URL if already known."
 	}
 	b.WriteString("Next: choose the 1-3 most authoritative/current result URLs, prefer official or primary sources, and read them with an available page-reading tool before answering. If no full-page reading tool is available, compare snippets and say that full-page verification was unavailable.")
 	return strings.TrimSpace(b.String())
