@@ -754,6 +754,116 @@ func TestRunTurn_LoopGuardForcesNoToolSummaryAfterRepeatedInterventions(t *testi
 	}
 }
 
+func TestRunTurn_WebFetchNoEvidenceResultsTripLoopGuard(t *testing.T) {
+	var reqs int32
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "text/event-stream")
+		w.WriteHeader(200)
+		fl := w.(http.Flusher)
+		switch atomic.AddInt32(&reqs, 1) {
+		case 1:
+			for _, l := range []string{
+				`data: {"choices":[{"delta":{"role":"assistant","tool_calls":[{"index":0,"id":"fetch1","type":"function","function":{"name":"web_fetch","arguments":"{\"url\":\"https://example.com/empty\"}"}}]},"finish_reason":null}]}`,
+				`data: {"choices":[{"delta":{},"finish_reason":"tool_calls"}]}`,
+				`data: [DONE]`,
+			} {
+				w.Write([]byte(l + "\n\n"))
+				fl.Flush()
+			}
+		case 2:
+			for _, l := range []string{
+				`data: {"choices":[{"delta":{"role":"assistant","tool_calls":[{"index":0,"id":"fetch2","type":"function","function":{"name":"web_fetch","arguments":"{\"url\":\"https://example.com/image\"}"}}]},"finish_reason":null}]}`,
+				`data: {"choices":[{"delta":{},"finish_reason":"tool_calls"}]}`,
+				`data: [DONE]`,
+			} {
+				w.Write([]byte(l + "\n\n"))
+				fl.Flush()
+			}
+		default:
+			w.Write([]byte("data: {\"choices\":[{\"delta\":{\"role\":\"assistant\",\"content\":\"done\"},\"finish_reason\":\"stop\"}]}\n\n"))
+			w.Write([]byte("data: [DONE]\n\n"))
+			fl.Flush()
+		}
+	}))
+	t.Cleanup(srv.Close)
+
+	conv, err := OpenConversationAt(filepath.Join(t.TempDir(), "sess.jsonl"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	var fetched int32
+	reg := NewRegistry()
+	reg.Add(&Tool{
+		Name:        "web_fetch",
+		Description: "test web_fetch",
+		Schema:      json.RawMessage(`{"type":"object","properties":{"url":{"type":"string"}}}`),
+		Execute: func(ctx context.Context, args json.RawMessage) (string, error) {
+			switch atomic.AddInt32(&fetched, 1) {
+			case 1:
+				return "[empty response: URL=https://example.com/empty]\nNext: use another source.", nil
+			default:
+				return "[non-text response: URL=https://example.com/image]\nNext: fetch a text version.", nil
+			}
+		},
+	})
+
+	events := make(chan sse.Event, 256)
+	loop := &Loop{
+		LLM: NewLLMClient(srv.URL, "", "fake-model"), Tools: reg, Conv: conv, Events: events,
+		MaxTurnSteps: 5, PerCallTimeout: 5 * time.Second,
+	}
+	if err := loop.EnsureSystemPrompt("base"); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := loop.SendUser(context.Background(), "go"); err != nil {
+		t.Fatal(err)
+	}
+
+	deadline := time.After(10 * time.Second)
+	sawNoEvidenceGuard := false
+	for {
+		select {
+		case ev, ok := <-events:
+			if !ok {
+				t.Fatal("event channel closed before turn.end")
+			}
+			switch ev.Type {
+			case sse.TypeToolResult:
+				var p sse.ToolResultPayload
+				if err := json.Unmarshal(ev.Data, &p); err != nil {
+					t.Fatalf("decode tool.result: %v", err)
+				}
+				if strings.Contains(p.Result, "loop_guard: tool \"web_fetch\" has failed 2 consecutive times") {
+					sawNoEvidenceGuard = true
+					if p.ExitCode == 0 {
+						t.Fatalf("guarded no-evidence web_fetch result should be an error event: %+v", p)
+					}
+					if !strings.Contains(p.Result, "stop opening search results one by one") {
+						t.Fatalf("web_fetch guard should include recovery guidance, got %q", p.Result)
+					}
+				}
+			case sse.TypeTurnEnd:
+				var p sse.TurnEndPayload
+				if err := json.Unmarshal(ev.Data, &p); err != nil {
+					t.Fatalf("decode turn.end: %v", err)
+				}
+				if !sawNoEvidenceGuard {
+					t.Fatal("expected no-evidence web_fetch loop guard result")
+				}
+				if p.ToolStats == nil || p.ToolStats.LoopGuardInterventions != 1 || p.ToolStats.ToolErrors != 1 {
+					t.Fatalf("expected one guard intervention/error in turn.end, got %+v", p.ToolStats)
+				}
+				if got := atomic.LoadInt32(&fetched); got != 2 {
+					t.Fatalf("expected two dispatched web_fetch calls, got %d", got)
+				}
+				return
+			}
+		case <-deadline:
+			t.Fatal("timeout waiting for turn.end")
+		}
+	}
+}
+
 // readReqBody reads the request body without consuming r.Body for the
 // real handler. Returns "" on error (not under test here).
 func readReqBody(r *http.Request) (string, error) {
