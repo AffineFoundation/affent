@@ -93,6 +93,9 @@ func TestStaleRefError_Message(t *testing.T) {
 	if !strings.Contains(msg, "browser_snapshot") {
 		t.Errorf("error message should hint at the recovery action, got %q", msg)
 	}
+	if !strings.Contains(msg, "Failure: kind=stale_ref") {
+		t.Errorf("error message should expose stale_ref failure kind, got %q", msg)
+	}
 	if !strings.Contains(msg, "Next:") {
 		t.Errorf("error message should include a Next step, got %q", msg)
 	}

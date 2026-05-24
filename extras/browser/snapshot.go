@@ -248,6 +248,7 @@ type StaleRefError struct {
 func (e *StaleRefError) Error() string {
 	return fmt.Sprintf(
 		"ref %d not found on page (most likely the page changed since the last browser_snapshot)\n"+
+			"Failure: kind=stale_ref\n"+
 			"Next: call browser_snapshot, inspect the current refs, then retry with a fresh ref",
 		e.Ref,
 	)

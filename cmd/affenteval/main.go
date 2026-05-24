@@ -500,6 +500,8 @@ func toolFailureKindHint(kind string) string {
 		return "web_search returned no usable evidence; refine with distinctive entities or official domains, then switch source or report the gap"
 	case "search_error":
 		return "the configured web_search backend failed; inspect provider credentials/limits/logs and avoid treating search as available evidence"
+	case "stale_ref":
+		return "a browser ref no longer matched the current page; call browser_snapshot and retry with a fresh visible ref instead of repeating the old one"
 	case "private_network_blocked":
 		return "SSRF guard blocked a private or local network URL; use public sources or explicitly configure trusted local access"
 	case "invalid_args":

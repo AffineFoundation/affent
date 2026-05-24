@@ -61,7 +61,8 @@ Scenario records describe one eval case:
   traces may derive counts from per-call `tool.result.failure_kind` or
   structured `Failure: kind=...` result text. Web tool failures use this field
   to distinguish blocked pages, empty responses, non-text responses, timeouts,
-  search no-results, argument errors, and HTTP/network classes.
+  search no-results, stale browser refs, argument errors, and HTTP/network
+  classes.
 - `tool_failure_hints`: optional map of structured tool failure kind to a short
   operator hint explaining likely cause and next diagnostic action.
 - `loop_guard_interventions`: runtime loop guard intervention count.
