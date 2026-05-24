@@ -128,6 +128,8 @@ caps, tool result context cap, and MCP result cap. Its capability line
 summarizes the tool surface the resolved config will expose, including
 shell/file tools, skill install, memory, session search, MCP, subagent,
 focused tasks, project context, and executor class.
+MCP transport caps for JSON responses, HTTP SSE lines, and stdio frames are
+shown there as fixed runtime boundaries, not user-tunable knobs.
 
 Run a single prompt:
 
@@ -799,6 +801,7 @@ stats, aggregate token/browser counters, `workspace_root`, `memory_root`,
 `session_state_root`, runtime `boundaries`, and `shutting_down` so authorized
 clients can verify the durable state path, see effective turn/tool caps, and
 stop sending new work during graceful drain.
+The boundary snapshot includes MCP result and transport caps.
 
 ## Security Model
 
