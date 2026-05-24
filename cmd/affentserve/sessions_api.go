@@ -274,6 +274,7 @@ func listSessionSummaries(pool *SessionPool, opts sessionListOptions) ([]session
 	}
 	defer dir.Close()
 
+	durableIDs := map[string]struct{}{}
 	for {
 		entries, err := dir.ReadDir(sessionReadDirBatch)
 		if err != nil && !errors.Is(err, io.EOF) {
@@ -290,20 +291,52 @@ func listSessionSummaries(pool *SessionPool, opts sessionListOptions) ([]session
 			if _, ok := candidates[id]; ok {
 				continue
 			}
-			summary, found, err := summarizeSession(pool, id, nil)
-			if err != nil {
-				continue
-			}
-			if found {
-				addSessionCandidate(candidates, summary, opts.Limit+1)
-			}
+			addSessionIDCandidate(durableIDs, id, opts.Limit+1)
 		}
 		if errors.Is(err, io.EOF) {
 			break
 		}
 	}
 
+	for _, id := range sortedSessionIDCandidates(durableIDs, opts.Limit+1) {
+		summary, found, err := summarizeSession(pool, id, nil)
+		if err != nil {
+			continue
+		}
+		if found {
+			addSessionCandidate(candidates, summary, opts.Limit+1)
+		}
+	}
+
 	return sortedSessionCandidates(candidates, opts.Limit), len(candidates) > opts.Limit, nil
+}
+
+func addSessionIDCandidate(candidates map[string]struct{}, id string, cap int) {
+	if cap <= 0 {
+		return
+	}
+	candidates[id] = struct{}{}
+	for len(candidates) > cap {
+		var highest string
+		for id := range candidates {
+			if highest == "" || id > highest {
+				highest = id
+			}
+		}
+		delete(candidates, highest)
+	}
+}
+
+func sortedSessionIDCandidates(candidates map[string]struct{}, limit int) []string {
+	ids := make([]string, 0, len(candidates))
+	for id := range candidates {
+		ids = append(ids, id)
+	}
+	sort.Strings(ids)
+	if len(ids) > limit {
+		ids = ids[:limit]
+	}
+	return ids
 }
 
 func addSessionCandidate(candidates map[string]sessionSummary, summary sessionSummary, cap int) {
