@@ -1939,6 +1939,166 @@ func TestRunner_EndToEnd_ExternalResearchRepeatedFailedInputGuard(t *testing.T) 
 	}
 }
 
+// TestRunner_EndToEnd_ExternalResearchDirectReaderWarningGuard pins the
+// runtime side of search-result warnings: if a model ignores a
+// Direct-reader warning and tries to fetch that URL anyway, the loop guard
+// blocks the dispatch, emits a structured failure kind, and the model can
+// continue with canonical sources.
+func TestRunner_EndToEnd_ExternalResearchDirectReaderWarningGuard(t *testing.T) {
+	var socialDispatches atomic.Int32
+	var canonicalDispatches atomic.Int32
+	webSearch := agent.Tool{
+		Name:        "web_search",
+		Description: "Test-only search stand-in: returns canonical sources and one direct-reader warning.",
+		Schema: json.RawMessage(`{
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["query"],
+            "properties": {
+                "query": {"type": "string"},
+                "num_results": {"type": "integer"}
+            }
+        }`),
+		Execute: func(ctx context.Context, args json.RawMessage) (string, error) {
+			return `1. Mira Network official docs
+   https://official.example/mira/about
+   Primary source describing Mira Network.
+
+2. Mira Network metrics API
+   https://metrics.example/mira
+   Text metrics endpoint with current market data.
+
+3. Recent social discussion
+   https://x.com/example/status/777
+   Community reaction.
+   Direct-reader warning: do not use direct page fetch on this URL; use snippet only as weak sentiment evidence.
+
+Next: choose authoritative sources and do not spend direct page-reading calls on URLs marked with Direct-reader warning.`, nil
+		},
+	}
+	webFetch := agent.Tool{
+		Name:        "web_fetch",
+		Description: "Test-only fetch stand-in: records whether warned URLs dispatch.",
+		Schema: json.RawMessage(`{
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["url"],
+            "properties": {
+                "url": {"type": "string"}
+            }
+        }`),
+		Execute: func(ctx context.Context, args json.RawMessage) (string, error) {
+			var p struct {
+				URL string `json:"url"`
+			}
+			if err := json.Unmarshal(args, &p); err != nil {
+				return "", err
+			}
+			switch p.URL {
+			case "https://x.com/example/status/777":
+				socialDispatches.Add(1)
+				return "social page should have been blocked before dispatch", nil
+			case "https://official.example/mira/about":
+				canonicalDispatches.Add(1)
+				return "Official docs, updated 2026-05-23: Mira Network is a decentralized indexing subnet for retrieval workloads.", nil
+			case "https://metrics.example/mira":
+				canonicalDispatches.Add(1)
+				return "Metrics snapshot as of 2026-05-24T12:00:00Z: price $3.30, market cap $18.2M, 24h change +2.6%.", nil
+			default:
+				return "", fmt.Errorf("unexpected test URL %q", p.URL)
+			}
+		},
+	}
+
+	turn1 := []string{
+		`{"choices":[{"delta":{"role":"assistant","tool_calls":[{"index":0,"id":"s1","type":"function","function":{"name":"web_search","arguments":"{\"query\":\"Mira Network recent trend market metrics sentiment\",\"num_results\":5}"}}]},"finish_reason":null}]}`,
+		`{"choices":[{"delta":{},"finish_reason":"tool_calls"}]}`,
+		`[DONE]`,
+	}
+	turn2 := []string{
+		`{"choices":[{"delta":{"role":"assistant","tool_calls":[{"index":0,"id":"f1","type":"function","function":{"name":"web_fetch","arguments":"{\"url\":\"https://x.com/example/status/777\"}"}}]},"finish_reason":null}]}`,
+		`{"choices":[{"delta":{},"finish_reason":"tool_calls"}]}`,
+		`[DONE]`,
+	}
+	turn3 := []string{
+		`{"choices":[{"delta":{"role":"assistant","tool_calls":[{"index":0,"id":"f2","type":"function","function":{"name":"web_fetch","arguments":"{\"url\":\"https://official.example/mira/about\"}"}},{"index":1,"id":"f3","type":"function","function":{"name":"web_fetch","arguments":"{\"url\":\"https://metrics.example/mira\"}"}}]},"finish_reason":null}]}`,
+		`{"choices":[{"delta":{},"finish_reason":"tool_calls"}]}`,
+		`[DONE]`,
+	}
+	turn4 := []string{
+		`{"choices":[{"delta":{"role":"assistant","content":"Mira Network is a decentralized indexing subnet for retrieval workloads according to the official docs. The social URL was blocked by the Direct-reader warning guard, so I used its snippet only as weak sentiment evidence and did not treat it as page evidence. The metrics endpoint reports, as of 2026-05-24T12:00:00Z, price $3.30, market cap $18.2M, and 24h change +2.6%. Overall, recent market momentum is positive but social evidence remains weak."},"finish_reason":"stop"}]}`,
+		`[DONE]`,
+	}
+	srv := newScriptedLLM(t, [][]string{turn1, turn2, turn3, turn4})
+	miraSearch := func(args map[string]any) bool {
+		q, _ := args["query"].(string)
+		return strings.Contains(q, "Mira Network")
+	}
+	fetchURL := func(url string) func(map[string]any) bool {
+		return func(args map[string]any) bool {
+			return args["url"] == url
+		}
+	}
+
+	scenario := Scenario{
+		Name:         "external_research_direct_reader_warning_guard",
+		Description:  "runtime blocks web_fetch to a search result marked Direct-reader warning and allows canonical fallback sources",
+		Prompt:       "Assess the recent trend for Mira Network. First identify what it is, then collect current market metrics and recent community sentiment.",
+		MaxTurnSteps: 8,
+		Checks: []Check{
+			TurnEndedCleanly(),
+			ToolCalled("web_search", miraSearch),
+			ToolCalled("web_fetch", fetchURL("https://x.com/example/status/777")),
+			ToolCalled("web_fetch", fetchURL("https://official.example/mira/about")),
+			ToolCalled("web_fetch", fetchURL("https://metrics.example/mira")),
+			ToolFailureKindAtLeast("loop_guard_direct_reader_warning", 1),
+			ToolResultContains("web_fetch", "web_search marked that URL with Direct-reader warning"),
+			ToolCalledBeforeMatching("web_fetch", fetchURL("https://x.com/example/status/777"), "web_fetch", fetchURL("https://official.example/mira/about")),
+			ToolNotCalled("shell", nil),
+			FinalTextContains("Direct-reader warning guard"),
+			FinalTextContains("weak sentiment evidence"),
+			FinalTextContains("market cap $18.2M"),
+		},
+	}
+
+	runner := &Runner{
+		LLM:            agent.NewLLMClient(srv.URL, "", "fake-model"),
+		MaxTurnSteps:   8,
+		PerCallTimeout: 5 * time.Second,
+		RunTimeout:     20 * time.Second,
+		Log:            zerolog.Nop(),
+		BuildRegistry: func(ctx context.Context, workspaceDir string, exec executor.Executor) (*agent.Registry, error) {
+			_ = ctx
+			_ = workspaceDir
+			_ = exec
+			reg := agent.NewRegistry()
+			reg.Add(&webSearch)
+			reg.Add(&webFetch)
+			return reg, nil
+		},
+	}
+
+	out, err := runner.Run(context.Background(), scenario)
+	if err != nil {
+		t.Fatalf("Runner.Run: %v", err)
+	}
+	if !out.Pass {
+		t.Errorf("expected all checks to pass; failed: %v", out.FailedChecks())
+		for _, r := range out.Results {
+			t.Logf("  %s: pass=%v detail=%s", r.Check, r.Pass, r.Detail)
+		}
+	}
+	if got := socialDispatches.Load(); got != 0 {
+		t.Fatalf("direct-reader warning URL must be guard-blocked before dispatch, got %d dispatches", got)
+	}
+	if got := canonicalDispatches.Load(); got != 2 {
+		t.Fatalf("canonical sources should dispatch exactly twice, got %d", got)
+	}
+	if len(out.Trace.Tools) != 4 {
+		t.Fatalf("expected one search and three fetch trace entries; got %+v", out.Trace.Tools)
+	}
+}
+
 // TestRunner_EndToEnd_ExternalResearchSearchRecovery pins the discovery-side
 // recovery path: a no-results search is not evidence, and the model should
 // preserve user-provided disambiguators while refining with source terms
