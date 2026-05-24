@@ -246,8 +246,8 @@ func TestFetchTool_EmptyBodyReportsRecoverableResult(t *testing.T) {
 					t.Fatalf("empty response missing %q guidance:\n%s", want, out)
 				}
 			}
-			if strings.Contains(out, "browser") {
-				t.Fatalf("empty response guidance should not mention unavailable browser tools directly:\n%s", out)
+			if strings.Contains(out, "browser") || strings.Contains(out, "rendering") {
+				t.Fatalf("empty response guidance should not mention unavailable rendering/browser tools:\n%s", out)
 			}
 		})
 	}
@@ -273,8 +273,8 @@ func TestFetchTool_NonText(t *testing.T) {
 			t.Fatalf("non-text response missing %q guidance:\n%s", want, out)
 		}
 	}
-	if strings.Contains(out, "browser") {
-		t.Fatalf("non-text response guidance should not mention unavailable browser tools directly:\n%s", out)
+	if strings.Contains(out, "browser") || strings.Contains(out, "rendering") {
+		t.Fatalf("non-text response guidance should not mention unavailable rendering/browser tools:\n%s", out)
 	}
 }
 
@@ -389,8 +389,8 @@ func TestFetchTool_DynamicAppShellReportsNoEvidence(t *testing.T) {
 			t.Fatalf("dynamic shell output missing %q:\n%s", want, out)
 		}
 	}
-	if strings.Contains(out, "browser") {
-		t.Fatalf("dynamic shell guidance should not mention unavailable browser tools directly:\n%s", out)
+	if strings.Contains(out, "browser") || strings.Contains(out, "rendering") {
+		t.Fatalf("dynamic shell guidance should not mention unavailable rendering/browser tools:\n%s", out)
 	}
 }
 
@@ -542,8 +542,8 @@ func TestFetchTool_HTTPError(t *testing.T) {
 			t.Fatalf("403 error missing %q guidance: %v", want, err)
 		}
 	}
-	if strings.Contains(err.Error(), "browser") {
-		t.Fatalf("403 guidance should not mention unavailable browser tools directly: %v", err)
+	if strings.Contains(err.Error(), "browser") || strings.Contains(err.Error(), "rendering") {
+		t.Fatalf("403 guidance should not mention unavailable rendering/browser tools: %v", err)
 	}
 }
 

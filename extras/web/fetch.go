@@ -233,11 +233,11 @@ func fetch(ctx context.Context, cfg FetchConfig, requestURL string) (string, err
 }
 
 func emptyFetchResult(finalURL, contentType string) string {
-	return fmt.Sprintf("[empty response: URL=%s, Content-Type=%q]\nFailure: kind=empty_response\nNext: do not treat this as page evidence; use another available source, fetch a text/API/HTML version, use an available rendering tool/source for rendered pages, or answer with this source marked as empty/unverified.", finalURL, contentType)
+	return fmt.Sprintf("[empty response: URL=%s, Content-Type=%q]\nFailure: kind=empty_response\nNext: do not treat this as page evidence; use another available source, fetch a text/API/HTML version, or answer with this source marked as empty/unverified.", finalURL, contentType)
 }
 
 func blockedFetchResult(finalURL, contentType, reason string) string {
-	return fmt.Sprintf("[blocked response: URL=%s, Content-Type=%q, Reason=%q]\nFailure: kind=blocked\nNext: do not treat this challenge/error page as source evidence; use an available search result snippet only as weak evidence, switch to a canonical API/text/source page, use an available rendering tool/source, or mark this source as blocked/unverified.", finalURL, contentType, reason)
+	return fmt.Sprintf("[blocked response: URL=%s, Content-Type=%q, Reason=%q]\nFailure: kind=blocked\nNext: do not treat this challenge/error page as source evidence; use an available search result snippet only as weak evidence, switch to a canonical API/text/source page, or mark this source as blocked/unverified.", finalURL, contentType, reason)
 }
 
 type dynamicShellLink struct {
@@ -263,7 +263,7 @@ func dynamicPageShellResult(finalURL, contentType, reason, preview string, links
 			}
 		}
 	}
-	b.WriteString("\nFailure: kind=dynamic_shell\nNext: do not treat this loading/app shell as source evidence; use the discovery preview/links only to choose a canonical API/text/source page, an available rendering tool/source, or answer with this source marked as dynamic/unverified.")
+	b.WriteString("\nFailure: kind=dynamic_shell\nNext: do not treat this loading/app shell as source evidence; use the discovery preview/links only to choose a canonical API/text/source page, or answer with this source marked as dynamic/unverified.")
 	return b.String()
 }
 
@@ -425,18 +425,18 @@ func directFetchPreflightResult(rawURL string) string {
 }
 
 func skippedDirectFetchResult(finalURL, reason string) string {
-	return fmt.Sprintf("[blocked response: URL=%s, Content-Type=%q, Reason=%q]\nFailure: kind=blocked\nNext: do not spend direct fetch calls on this page in this turn; use the search result target URL instead of a search-results page, use search snippets only as weak discovery/sentiment evidence, switch to an official API/text/source page, use an available rendering source, or mark this source as blocked/unverified.", finalURL, "", reason)
+	return fmt.Sprintf("[blocked response: URL=%s, Content-Type=%q, Reason=%q]\nFailure: kind=blocked\nNext: do not spend direct fetch calls on this page in this turn; use the search result target URL instead of a search-results page, use search snippets only as weak discovery/sentiment evidence, switch to an official API/text/source page, or mark this source as blocked/unverified.", finalURL, "", reason)
 }
 
 func recoverableFetchError(requestURL, finalURL string, status int, err error) error {
 	if err == nil || strings.Contains(err.Error(), "\nNext:") {
 		return err
 	}
-	next := "retry only if the URL or transient network condition changed; otherwise use another available discovery/rendering tool, an alternate official URL, or answer with what could be verified"
+	next := "retry only if the URL or transient network condition changed; otherwise use another available source, an alternate official URL, or answer with what could be verified"
 	lower := strings.ToLower(err.Error())
 	switch {
 	case status == http.StatusUnauthorized || status == http.StatusForbidden:
-		next = "do not keep retrying this blocked URL; use another available source, a canonical public URL from discovery results, or an available rendering tool/source for rendered or blocked pages"
+		next = "do not keep retrying this blocked URL; use another available source, a canonical public URL from discovery results, or mark this source as blocked/unverified"
 	case status == http.StatusNotFound || status == http.StatusGone:
 		next = "use available discovery results or the site's navigation to find the current canonical URL, then retry web_fetch with that URL"
 	case status == http.StatusTooManyRequests:
@@ -522,7 +522,7 @@ func renderBody(body []byte, contentType, finalURL string) string {
 	case isReadableTextMediaType(mediaType):
 		return string(body)
 	default:
-		return fmt.Sprintf("[non-text response: URL=%s, Content-Type=%q, %d bytes]\nFailure: kind=non_text\nNext: do not treat this as readable page evidence; fetch an HTML/API/text version, use an available rendering tool/source, or choose another authoritative source.", finalURL, contentType, len(body))
+		return fmt.Sprintf("[non-text response: URL=%s, Content-Type=%q, %d bytes]\nFailure: kind=non_text\nNext: do not treat this as readable page evidence; fetch an HTML/API/text version, or choose another authoritative source.", finalURL, contentType, len(body))
 	}
 }
 
