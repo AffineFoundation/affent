@@ -3,6 +3,9 @@
 Affent is organized around product entry points rather than a public Go SDK.
 The supported external surfaces are `affentctl`, `affentserve`, configuration,
 state directories, and the OpenAI-compatible HTTP shape exposed by the server.
+In other words, Affent is not currently presented as an embeddable library API:
+`internal/agent.Loop` is an implementation boundary used by the product entry
+points, not a stable integration contract for downstream Go programs.
 
 ## Runtime Boundary
 
