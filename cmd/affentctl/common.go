@@ -848,6 +848,9 @@ func setupLoop(c commonFlags) (*loopBundle, int) {
 	if code != 0 {
 		return nil, code
 	}
+	if caps.Memory {
+		systemPrompt = agent.WithMemorySystemGuidance(systemPrompt)
+	}
 
 	tools := agent.NewRegistry()
 	var execBackend executor.Executor

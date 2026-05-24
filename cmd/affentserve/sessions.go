@@ -542,6 +542,9 @@ func (p *SessionPool) buildSession(id string) (*Session, error) {
 	if systemPrompt == "" {
 		systemPrompt = agent.BaseSystemPromptForSurface(systemPromptSurfaceForRegistry(reg))
 	}
+	if _, ok := reg.Get("memory"); ok {
+		systemPrompt = agent.WithMemorySystemGuidance(systemPrompt)
+	}
 	if p.cfg.EnableSubagent {
 		// Tell the model when to delegate. Without this hint the model
 		// sees subagent_run in its tool list but defaults to direct

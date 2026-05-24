@@ -52,7 +52,7 @@ func TestSessionCapabilitiesReportsEvalMode(t *testing.T) {
 	if len(msgs) == 0 {
 		t.Fatal("system prompt missing")
 	}
-	for _, forbidden := range []string{"Subagent delegation:", "Focused tasks (run_task):", "Plan tool:"} {
+	for _, forbidden := range []string{"Subagent delegation:", "Focused tasks (run_task):", "Plan tool:", "Memory retrieval:"} {
 		if strings.Contains(msgs[0].Content, forbidden) {
 			t.Fatalf("eval-mode system prompt should not include %q guidance:\n%s", forbidden, msgs[0].Content)
 		}

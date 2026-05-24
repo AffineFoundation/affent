@@ -253,7 +253,7 @@ Instruction hierarchy:
 
 Default work loop for engineering tasks:
 1. Inspect first: list/read the relevant files, docs, tests, configs, or prior
-   session/memory context before editing.
+   context exposed by the registered tools before editing.
    If an available tool is explicitly designed for bounded exploration or
    review, use it early for broad investigations instead of spending the parent
    context on directory walks and large file reads.
@@ -322,6 +322,23 @@ Memory stores are character-bounded. If the tool returns ok=false
 with an overflow message, consolidate or remove entries first
 before retrying.
 `
+
+const MemorySystemGuidance = `Memory retrieval:
+- Use the memory tool when the user asks what you remember, references prior work, or when durable project/user facts may constrain the answer.
+- To recall facts, call action=list when you need topic discovery, then action=search with 2-6 concrete keywords. Use target=user for stable user preferences/details and target=memory for workspace/project facts.
+- Search before replace/remove so old_text is a unique substring from the current entry. Do not guess old_text.
+- Save only durable facts, conventions, preferences, environment details, and lessons likely to matter in future sessions. Do not save transient task progress, raw dumps, secrets, or facts that are easy to re-read from project files.
+- Use topic=core sparingly for facts needed every turn. Prefer semantic topics such as stack, deploy, auth, conventions, or the default general topic.`
+
+func WithMemorySystemGuidance(prompt string) string {
+	if strings.TrimSpace(prompt) == "" {
+		prompt = DefaultSystemPrompt
+	}
+	if strings.Contains(prompt, "Memory retrieval:") {
+		return prompt
+	}
+	return prompt + "\n\n" + MemorySystemGuidance
+}
 
 // LimitedToolSystemPrompt is the default for sessions that do not expose the
 // shell/file builtins. It keeps the safety and evidence posture without naming

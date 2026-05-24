@@ -1173,6 +1173,9 @@ func TestSessionPool_NoBuiltinsUsesCapabilityMatchedSystemPrompt(t *testing.T) {
 	if !strings.Contains(prompt, "only tool is 'memory'") {
 		t.Fatalf("memory-only session should use memory-only prompt:\n%s", prompt)
 	}
+	if !strings.Contains(prompt, "Memory retrieval:") {
+		t.Fatalf("memory-only session should include memory retrieval guidance:\n%s", prompt)
+	}
 	for _, forbidden := range []string{"'shell' tool", "read_file", "write_file", "edit_file", "list_files"} {
 		if strings.Contains(prompt, forbidden) {
 			t.Fatalf("memory-only prompt should not mention unavailable %q:\n%s", forbidden, prompt)
@@ -1197,6 +1200,9 @@ func TestSessionPool_ToolLightMixedSurfaceUsesLimitedPrompt(t *testing.T) {
 	prompt := msgs[0].Content
 	if !strings.Contains(prompt, "limited-tool runtime") {
 		t.Fatalf("mixed non-builtin session should use limited-tool prompt:\n%s", prompt)
+	}
+	if !strings.Contains(prompt, "Memory retrieval:") {
+		t.Fatalf("memory-enabled limited prompt should include memory retrieval guidance:\n%s", prompt)
 	}
 	for _, forbidden := range []string{"'shell' tool", "read_file", "write_file", "edit_file", "list_files"} {
 		if strings.Contains(prompt, forbidden) {
@@ -1251,6 +1257,10 @@ func TestSessionPool_EvalModeRegistersOnlyBasicTools(t *testing.T) {
 	if _, ok := sWithMemory.registry.Get("memory"); !ok {
 		t.Fatal("explicit memory should be registered in eval mode")
 	}
+	memoryMsgs := sWithMemory.conv.Snapshot()
+	if len(memoryMsgs) == 0 || !strings.Contains(memoryMsgs[0].Content, "Memory retrieval:") {
+		t.Fatalf("explicit-memory eval prompt should include memory guidance: %+v", memoryMsgs)
+	}
 	if s.loop.SkillProvider != nil {
 		t.Fatal("eval mode should disable active skill/provider injection")
 	}
@@ -1261,7 +1271,7 @@ func TestSessionPool_EvalModeRegistersOnlyBasicTools(t *testing.T) {
 	if len(msgs) == 0 {
 		t.Fatal("system prompt missing")
 	}
-	for _, forbidden := range []string{"Subagent delegation:", "Focused tasks (run_task):", "Plan tool:"} {
+	for _, forbidden := range []string{"Subagent delegation:", "Focused tasks (run_task):", "Plan tool:", "Memory retrieval:"} {
 		if strings.Contains(msgs[0].Content, forbidden) {
 			t.Fatalf("eval-mode system prompt should not include %q guidance:\n%s", forbidden, msgs[0].Content)
 		}

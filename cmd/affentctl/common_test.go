@@ -781,11 +781,99 @@ func TestSetupLoop_EvalModeOmitsSkillsDelegationAndSkillProvider(t *testing.T) {
 	if len(msgs) == 0 {
 		t.Fatal("system prompt missing")
 	}
-	for _, forbidden := range []string{"Subagent delegation:", "Focused tasks (run_task):", "Plan tool:"} {
+	for _, forbidden := range []string{"Subagent delegation:", "Focused tasks (run_task):", "Plan tool:", "Memory retrieval:"} {
 		if strings.Contains(msgs[0].Content, forbidden) {
 			t.Fatalf("eval-mode system prompt should not include %q guidance:\n%s", forbidden, msgs[0].Content)
 		}
 	}
+}
+
+func TestSetupLoop_MemoryPromptGuidanceFollowsCapability(t *testing.T) {
+	t.Run("enabled by default", func(t *testing.T) {
+		var cf commonFlags
+		fs := flag.NewFlagSet("test", flag.ContinueOnError)
+		cf.bind(fs)
+		if err := fs.Parse([]string{
+			"--workspace", t.TempDir(),
+			"--model", "fake-model",
+			"--base-url", "http://127.0.0.1:1/v1",
+			"--subagent=false",
+			"--focused-tasks=false",
+			"--quiet",
+		}); err != nil {
+			t.Fatal(err)
+		}
+		if err := applyConfig(&cf, fs); err != nil {
+			t.Fatal(err)
+		}
+		b, code := setupLoop(cf)
+		if code != 0 {
+			t.Fatalf("setupLoop code=%d", code)
+		}
+		defer b.close()
+		msgs := b.loop.Conv.Snapshot()
+		if len(msgs) == 0 || !strings.Contains(msgs[0].Content, "Memory retrieval:") {
+			t.Fatalf("memory-enabled prompt should include memory retrieval guidance: %+v", msgs)
+		}
+	})
+
+	t.Run("eval mode omits unless explicitly enabled", func(t *testing.T) {
+		var cf commonFlags
+		fs := flag.NewFlagSet("test", flag.ContinueOnError)
+		cf.bind(fs)
+		if err := fs.Parse([]string{
+			"--workspace", t.TempDir(),
+			"--model", "fake-model",
+			"--base-url", "http://127.0.0.1:1/v1",
+			"--eval-mode",
+			"--quiet",
+		}); err != nil {
+			t.Fatal(err)
+		}
+		if err := applyConfig(&cf, fs); err != nil {
+			t.Fatal(err)
+		}
+		b, code := setupLoop(cf)
+		if code != 0 {
+			t.Fatalf("setupLoop code=%d", code)
+		}
+		defer b.close()
+		msgs := b.loop.Conv.Snapshot()
+		if len(msgs) == 0 {
+			t.Fatal("system prompt missing")
+		}
+		if strings.Contains(msgs[0].Content, "Memory retrieval:") {
+			t.Fatalf("eval prompt should not include memory guidance when memory is disabled:\n%s", msgs[0].Content)
+		}
+	})
+
+	t.Run("eval mode includes explicit memory", func(t *testing.T) {
+		var cf commonFlags
+		fs := flag.NewFlagSet("test", flag.ContinueOnError)
+		cf.bind(fs)
+		if err := fs.Parse([]string{
+			"--workspace", t.TempDir(),
+			"--model", "fake-model",
+			"--base-url", "http://127.0.0.1:1/v1",
+			"--eval-mode",
+			"--memory=true",
+			"--quiet",
+		}); err != nil {
+			t.Fatal(err)
+		}
+		if err := applyConfig(&cf, fs); err != nil {
+			t.Fatal(err)
+		}
+		b, code := setupLoop(cf)
+		if code != 0 {
+			t.Fatalf("setupLoop code=%d", code)
+		}
+		defer b.close()
+		msgs := b.loop.Conv.Snapshot()
+		if len(msgs) == 0 || !strings.Contains(msgs[0].Content, "Memory retrieval:") {
+			t.Fatalf("explicit memory eval prompt should include memory guidance: %+v", msgs)
+		}
+	})
 }
 
 func TestSetupLoop_RuntimeSkillInstallUpdatesActiveProvider(t *testing.T) {

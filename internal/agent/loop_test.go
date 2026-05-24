@@ -66,6 +66,22 @@ func TestBaseSystemPromptForSurface(t *testing.T) {
 	}
 }
 
+func TestWithMemorySystemGuidance_AppendsOnce(t *testing.T) {
+	base := "be helpful"
+	once := WithMemorySystemGuidance(base)
+	for _, want := range []string{"Memory retrieval:", "action=list", "action=search", "target=user", "target=memory", "topic=core"} {
+		if !strings.Contains(once, want) {
+			t.Fatalf("memory guidance missing %q:\n%s", want, once)
+		}
+	}
+	if twice := WithMemorySystemGuidance(once); twice != once {
+		t.Fatal("memory guidance should be idempotent")
+	}
+	if got := WithMemorySystemGuidance(""); !strings.Contains(got, DefaultSystemPrompt) || !strings.Contains(got, "Memory retrieval:") {
+		t.Fatalf("empty prompt should fall back to default + memory guidance:\n%s", got)
+	}
+}
+
 func TestLoopTurnOptionsOverrideToolSurfaceAndPolicies(t *testing.T) {
 	baseTools := NewRegistry()
 	baseTools.Add(&Tool{Name: "shell"})
