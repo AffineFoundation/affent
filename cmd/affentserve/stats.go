@@ -198,6 +198,14 @@ func addToolStatsSnapshot(dst *ToolStatsSnapshot, src ToolStatsSnapshot) {
 	dst.ToolRepairSucceeded += src.ToolRepairSucceeded
 	dst.ToolRepairFailed += src.ToolRepairFailed
 	dst.ToolRepairNotes += src.ToolRepairNotes
+	if len(src.ToolRepairByKind) > 0 {
+		if dst.ToolRepairByKind == nil {
+			dst.ToolRepairByKind = make(map[string]int64, len(src.ToolRepairByKind))
+		}
+		for kind, count := range src.ToolRepairByKind {
+			dst.ToolRepairByKind[kind] += count
+		}
+	}
 	dst.ToolErrors += src.ToolErrors
 	dst.ToolDurationMS += src.ToolDurationMS
 	dst.LoopGuardInterventions += src.LoopGuardInterventions

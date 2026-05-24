@@ -284,6 +284,7 @@ func TestSession_ToolStatsSnapshot_AccumulatesFromTurnEnd(t *testing.T) {
 				ToolRepairCalls:        1,
 				ToolRepairSucceeded:    1,
 				ToolRepairNotes:        3,
+				ToolRepairByKind:       map[string]int{"tool_name": 1, "alias_rename": 2},
 				ToolErrors:             0,
 				ToolDurationMS:         15,
 				LoopGuardInterventions: 1,
@@ -298,6 +299,7 @@ func TestSession_ToolStatsSnapshot_AccumulatesFromTurnEnd(t *testing.T) {
 				ToolRepairCalls:  1,
 				ToolRepairFailed: 1,
 				ToolRepairNotes:  1,
+				ToolRepairByKind: map[string]int{"alias_rename": 1},
 				ToolErrors:       1,
 				ToolDurationMS:   7,
 				ForcedNoTools:    1,
@@ -321,6 +323,8 @@ func TestSession_ToolStatsSnapshot_AccumulatesFromTurnEnd(t *testing.T) {
 			got.ToolRepairSucceeded == 1 &&
 			got.ToolRepairFailed == 1 &&
 			got.ToolRepairNotes == 4 &&
+			got.ToolRepairByKind["tool_name"] == 1 &&
+			got.ToolRepairByKind["alias_rename"] == 3 &&
 			got.ToolErrors == 1 &&
 			got.ToolDurationMS == 22 &&
 			got.LoopGuardInterventions == 1 &&
@@ -348,9 +352,15 @@ func TestSession_ToolStatsSnapshot_AccumulatesFromTurnEnd(t *testing.T) {
 	if resp.Sessions[0].Tools.ToolRepairFailed != 1 || resp.Aggregate.Tools.ToolRepairSucceeded != 1 {
 		t.Fatalf("stats tool snapshots = session:%+v aggregate:%+v", resp.Sessions[0].Tools, resp.Aggregate.Tools)
 	}
+	if resp.Sessions[0].Tools.ToolRepairByKind["alias_rename"] != 3 || resp.Aggregate.Tools.ToolRepairByKind["tool_name"] != 1 {
+		t.Fatalf("stats repair kinds = session:%+v aggregate:%+v", resp.Sessions[0].Tools.ToolRepairByKind, resp.Aggregate.Tools.ToolRepairByKind)
+	}
 	summary := summarizeActiveSession(s, pool.cfg)
 	if summary.Tools == nil || summary.Tools.ToolRepairCalls != 2 || summary.Tools.ToolErrors != 1 {
 		t.Fatalf("active session summary tools = %+v", summary.Tools)
+	}
+	if summary.Tools.ToolRepairByKind["alias_rename"] != 3 {
+		t.Fatalf("active session summary repair kinds = %+v", summary.Tools.ToolRepairByKind)
 	}
 }
 

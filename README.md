@@ -778,9 +778,10 @@ Native session endpoints:
   `has_conversation`, a bounded `latest_user_message` preview from the tail of
   `conversation.jsonl`, `has_events`, `has_plan`, `has_artifacts`, `has_memory`,
   `has_runtime_skills`, and `runtime_skill_names`; active summaries also
-  include active usage, browser, and tool runtime counters plus the actual
-  registered capabilities (`builtins`, `skill_install`, `plan`, `memory`,
-  `session_search`, `subagent`, `focused_tasks`, web/browser flags).
+  include active usage, browser, and tool runtime counters (including repair
+  outcomes and kind distribution) plus the actual registered capabilities
+  (`builtins`, `skill_install`, `plan`, `memory`, `session_search`, `subagent`,
+  `focused_tasks`, web/browser flags).
 - `POST /v1/sessions` creates or reopens a session and returns the same active
   capability summary.
 - `GET /v1/sessions/{id}` returns session status and, when active, capability
@@ -814,8 +815,8 @@ Native session endpoints:
 stats, per-session tool runtime counters, aggregate token/browser/tool counters,
 `workspace_root`, `memory_root`, `session_state_root`, runtime `boundaries`, and
 `shutting_down` so authorized clients can verify the durable state path, see
-effective turn/tool caps and repair outcomes, and stop sending new work during
-graceful drain.
+effective turn/tool caps, repair outcomes, and repair kind distribution, and
+stop sending new work during graceful drain.
 The boundary snapshot includes loop guard thresholds, plan state/active-plan,
 focused-task budget/output, subagent input/budget/depth, runtime skill
 install/input, JSONL record, MCP result, MCP transport, and memory

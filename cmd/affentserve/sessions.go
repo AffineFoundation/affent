@@ -67,6 +67,8 @@ type Session struct {
 	toolDurationMS         atomic.Int64
 	loopGuardInterventions atomic.Int64
 	forcedNoTools          atomic.Int64
+	toolRepairMu           sync.Mutex
+	toolRepairByKind       map[string]int64
 
 	// fan-out
 	subsMu  sync.Mutex
@@ -1232,23 +1234,27 @@ func (s *Session) UsageSnapshot() UsageSnapshot {
 // turn.end.tool_stats. The values are advisory, cheap polling counters for
 // operators and WebUI surfaces; the event log remains the source of truth.
 type ToolStatsSnapshot struct {
-	ToolRequests           int64 `json:"tool_requests"`
-	ToolNameCanonicalized  int64 `json:"tool_name_canonicalized"`
-	ToolArgsRepaired       int64 `json:"tool_args_repaired"`
-	ToolRepairCalls        int64 `json:"tool_repair_calls"`
-	ToolRepairSucceeded    int64 `json:"tool_repair_succeeded"`
-	ToolRepairFailed       int64 `json:"tool_repair_failed"`
-	ToolRepairNotes        int64 `json:"tool_repair_notes"`
-	ToolErrors             int64 `json:"tool_errors"`
-	ToolDurationMS         int64 `json:"tool_duration_ms"`
-	LoopGuardInterventions int64 `json:"loop_guard_interventions"`
-	ForcedNoTools          int64 `json:"forced_no_tools"`
+	ToolRequests           int64            `json:"tool_requests"`
+	ToolNameCanonicalized  int64            `json:"tool_name_canonicalized"`
+	ToolArgsRepaired       int64            `json:"tool_args_repaired"`
+	ToolRepairCalls        int64            `json:"tool_repair_calls"`
+	ToolRepairSucceeded    int64            `json:"tool_repair_succeeded"`
+	ToolRepairFailed       int64            `json:"tool_repair_failed"`
+	ToolRepairNotes        int64            `json:"tool_repair_notes"`
+	ToolRepairByKind       map[string]int64 `json:"tool_repair_by_kind,omitempty"`
+	ToolErrors             int64            `json:"tool_errors"`
+	ToolDurationMS         int64            `json:"tool_duration_ms"`
+	LoopGuardInterventions int64            `json:"loop_guard_interventions"`
+	ForcedNoTools          int64            `json:"forced_no_tools"`
 }
 
 func (s *Session) ToolStatsSnapshot() ToolStatsSnapshot {
 	if s == nil {
 		return ToolStatsSnapshot{}
 	}
+	s.toolRepairMu.Lock()
+	repairByKind := cloneStringInt64Map(s.toolRepairByKind)
+	s.toolRepairMu.Unlock()
 	return ToolStatsSnapshot{
 		ToolRequests:           s.toolRequests.Load(),
 		ToolNameCanonicalized:  s.toolNameCanonicalized.Load(),
@@ -1257,6 +1263,7 @@ func (s *Session) ToolStatsSnapshot() ToolStatsSnapshot {
 		ToolRepairSucceeded:    s.toolRepairSucceeded.Load(),
 		ToolRepairFailed:       s.toolRepairFailed.Load(),
 		ToolRepairNotes:        s.toolRepairNotes.Load(),
+		ToolRepairByKind:       repairByKind,
 		ToolErrors:             s.toolErrors.Load(),
 		ToolDurationMS:         s.toolDurationMS.Load(),
 		LoopGuardInterventions: s.loopGuardInterventions.Load(),
@@ -1308,6 +1315,33 @@ func (s *Session) addToolStats(stats sse.ToolRuntimeStats) {
 	s.toolDurationMS.Add(stats.ToolDurationMS)
 	s.loopGuardInterventions.Add(int64(stats.LoopGuardInterventions))
 	s.forcedNoTools.Add(int64(stats.ForcedNoTools))
+	if len(stats.ToolRepairByKind) > 0 {
+		s.addToolRepairKinds(stats.ToolRepairByKind)
+	}
+}
+
+func (s *Session) addToolRepairKinds(counts map[string]int) {
+	s.toolRepairMu.Lock()
+	defer s.toolRepairMu.Unlock()
+	if s.toolRepairByKind == nil {
+		s.toolRepairByKind = make(map[string]int64, len(counts))
+	}
+	for kind, count := range counts {
+		if count > 0 {
+			s.toolRepairByKind[kind] += int64(count)
+		}
+	}
+}
+
+func cloneStringInt64Map(in map[string]int64) map[string]int64 {
+	if len(in) == 0 {
+		return nil
+	}
+	out := make(map[string]int64, len(in))
+	for k, v := range in {
+		out[k] = v
+	}
+	return out
 }
 
 // Workspace exposes the session's on-disk directory for tests that
