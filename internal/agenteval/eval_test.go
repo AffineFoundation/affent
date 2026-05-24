@@ -315,6 +315,7 @@ func TestSelectBatchScenariosForSuite(t *testing.T) {
 	foundOversized := false
 	foundRepeatedRead := false
 	foundEditRecovery := false
+	foundSkillInstallGuard := false
 	foundPlanRepair := false
 	foundPlanSkip := false
 	for _, scenario := range scenarios {
@@ -334,6 +335,18 @@ func TestSelectBatchScenariosForSuite(t *testing.T) {
 			foundEditRecovery = true
 			if len(scenario.RequiredToolOrder) != 1 || scenario.RequiredToolOrder[0] != (ToolOrderRequirement{Earlier: "read_file", Later: "edit_file"}) {
 				t.Fatalf("small-tools-edit-recovery order = %#v, want read_file before edit_file", scenario.RequiredToolOrder)
+			}
+		}
+		if scenario.Name == "skill-remote-install-guard" {
+			foundSkillInstallGuard = true
+			if !stringSliceContains(scenario.RequiredTools, "skill") {
+				t.Fatalf("skill-remote-install-guard RequiredTools = %#v, want skill", scenario.RequiredTools)
+			}
+			required := strings.Join(scenario.RequiredToolResultText["skill"], "\n")
+			for _, want := range []string{"direct install cannot use a remote source URL", "action=propose_install", "proposal_id"} {
+				if !strings.Contains(required, want) {
+					t.Fatalf("skill-remote-install-guard RequiredToolResultText = %#v, want %q", scenario.RequiredToolResultText, want)
+				}
 			}
 		}
 		if scenario.Name == "plan-coding-repair" {
@@ -366,6 +379,9 @@ func TestSelectBatchScenariosForSuite(t *testing.T) {
 	}
 	if !foundEditRecovery {
 		t.Fatalf("small-model-tools suite missing small-tools-edit-recovery")
+	}
+	if !foundSkillInstallGuard {
+		t.Fatalf("small-model-tools suite missing skill-remote-install-guard")
 	}
 	if !foundPlanRepair {
 		t.Fatalf("small-model-tools suite missing plan-coding-repair")

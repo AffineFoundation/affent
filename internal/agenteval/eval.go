@@ -141,6 +141,7 @@ func BuiltinBatchScenarios() []BatchScenario {
 		smallToolWrongFieldReadScenario(),
 		smallToolWrongToolNameScenario(),
 		skillToolReadScenario(),
+		skillRemoteInstallGuardScenario(),
 		planCodingRepairScenario(),
 		planNotForSimpleReadScenario(),
 		smallToolRepeatedReadScenario(),
