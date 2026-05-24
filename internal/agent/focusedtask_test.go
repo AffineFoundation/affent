@@ -432,12 +432,12 @@ func TestWithFocusedTaskSystemGuidance_AppendsOnce(t *testing.T) {
 
 func TestResearchProfileGuidesGeneralExternalResearch(t *testing.T) {
 	profile := researchProfile()
-	for _, want := range []string{"web_search for discovery", "authoritative pages", "market, metrics, or trend questions", "social posts", "independent corroborating source"} {
+	for _, want := range []string{"registered web tools", "authoritative sources", "market, metrics, or trend questions", "social posts", "independent corroborating source"} {
 		if !strings.Contains(profile.SystemPromptHints, want) {
 			t.Fatalf("research profile guidance missing %q:\n%s", want, profile.SystemPromptHints)
 		}
 	}
-	for _, forbidden := range []string{"Affine", "TaoStats", "Bittensor"} {
+	for _, forbidden := range []string{"Affine", "TaoStats", "Bittensor", "web_search", "web_fetch"} {
 		if strings.Contains(profile.SystemPromptHints, forbidden) {
 			t.Fatalf("research profile guidance should stay generic, found %q:\n%s", forbidden, profile.SystemPromptHints)
 		}
@@ -538,10 +538,11 @@ func TestRunFocusedTask_ResearchUsesWebToolThenEmitsJSON(t *testing.T) {
 	}))
 	t.Cleanup(srv.Close)
 
+	transcriptDir := t.TempDir()
 	raw, err := runFocusedTask(context.Background(), FocusedTaskDeps{
 		LLM:              NewLLMClient(srv.URL, "", "fake"),
 		HostWorkspaceDir: t.TempDir(),
-		TranscriptDir:    t.TempDir(),
+		TranscriptDir:    transcriptDir,
 		Log:              zerolog.Nop(),
 		PerCallTimeout:   5 * time.Second,
 		RegisterWebTools: webRegistrar,
@@ -579,6 +580,37 @@ func TestRunFocusedTask_ResearchUsesWebToolThenEmitsJSON(t *testing.T) {
 	if !sawFetch {
 		t.Errorf("tool_calls metadata missing web_fetch entry: %+v", got.ToolCalls)
 	}
+
+	prompt := focusedTaskTranscriptText(t, transcriptDir)
+	if !strings.Contains(prompt, "External research:") {
+		t.Fatalf("research child prompt should include external research guidance:\n%s", prompt)
+	}
+	if !strings.Contains(prompt, "Use web_fetch to read authoritative pages and APIs") {
+		t.Fatalf("fetch-only research prompt should guide web_fetch:\n%s", prompt)
+	}
+	if strings.Contains(prompt, "web_search") {
+		t.Fatalf("fetch-only research prompt should not mention unavailable web_search:\n%s", prompt)
+	}
+}
+
+func focusedTaskTranscriptText(t *testing.T, transcriptDir string) string {
+	t.Helper()
+	entries, err := os.ReadDir(transcriptDir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, e := range entries {
+		if !strings.HasPrefix(e.Name(), "focused_") || !strings.HasSuffix(e.Name(), ".jsonl") {
+			continue
+		}
+		raw, err := os.ReadFile(filepath.Join(transcriptDir, e.Name()))
+		if err != nil {
+			t.Fatal(err)
+		}
+		return string(raw)
+	}
+	t.Fatalf("no focused_ transcript found in %s; entries=%v", transcriptDir, entries)
+	return ""
 }
 
 // TestRunFocusedTask_ResearchUnavailableWithoutWebRegistrar pins the

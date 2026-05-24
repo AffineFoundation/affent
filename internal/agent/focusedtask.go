@@ -425,7 +425,7 @@ func runFocusedTask(ctx context.Context, deps FocusedTaskDeps, profile FocusedTa
 		Memory:                      deps.Memory,
 		ProjectContextDir:           deps.ProjectContextDir,
 		Log:                         deps.Log.With().Str("focused_task_type", string(profile.Kind)).Logger(),
-		SystemPrompt:                focusedTaskSystemPromptFor(profile),
+		SystemPrompt:                focusedTaskSystemPromptFor(profile, reg),
 		UserPrompt:                  focusedTaskUserPrompt(profile, objective, deps.HostWorkspaceDir, maxTurns),
 	}
 
@@ -737,7 +737,7 @@ func exploreProfile() FocusedTaskProfile {
 func researchProfile() FocusedTaskProfile {
 	return FocusedTaskProfile{
 		Kind:            FocusedTaskResearch,
-		Description:     "look up external facts via web_fetch/web_search and return cited results.",
+		Description:     "look up external facts with registered web tools and return cited results.",
 		DefaultMaxTurns: 6,
 		Tools: FocusedTaskToolPolicy{
 			AllowWeb: true,
@@ -745,10 +745,10 @@ func researchProfile() FocusedTaskProfile {
 		SystemPromptHints: `research hints:
 - Each finding's "source" must be the URL (or document path) you read. No source means do not surface the finding; demote it to a warning.
 - For date-sensitive facts, include the date or freshness in "evidence" (e.g., "as of 2025-11 release notes at <url>").
-- For current or unfamiliar public topics, use web_search for discovery, then read the most authoritative pages with web_fetch before answering. Prefer official docs, source repositories, block explorers, filings, API docs, and primary project sites over summaries.
+- For current or unfamiliar public topics, use the registered web tools to discover and read the most authoritative sources available. Prefer official docs, source repositories, block explorers, filings, API docs, and primary project sites over summaries.
 - For market, metrics, or trend questions, collect a current source-of-record plus at least one independent corroborating source. Keep social posts, forum comments, and influencer takes separate from verified facts, and label them as sentiment or claims.
 - When sources disagree, pick the most authoritative for "findings" and record the conflict in "warnings".
-- Do not chain more than ~2 web_search calls. Refine the query inside one call where possible; if you still cannot find an authoritative source, emit a not_found entry rather than guessing.`,
+- If you cannot find an authoritative source with the registered tools, emit a not_found entry rather than guessing.`,
 	}
 }
 
@@ -799,7 +799,7 @@ func reviewProfile() FocusedTaskProfile {
 // The base block is identical across kinds (so safety/output rules are
 // uniform); per-kind hints append behavior-shaping guidance the model
 // can use to bias its strategy.
-func focusedTaskSystemPromptFor(p FocusedTaskProfile) string {
+func focusedTaskSystemPromptFor(p FocusedTaskProfile, reg *Registry) string {
 	kind := string(p.Kind)
 	if kind == "" {
 		kind = "focused"
@@ -834,7 +834,7 @@ Output format (REQUIRED):
 	if hints := strings.TrimSpace(p.SystemPromptHints); hints != "" {
 		base += "\n\n" + hints
 	}
-	return base
+	return WithRegistrySystemGuidance(base, reg)
 }
 
 func focusedTaskUserPrompt(p FocusedTaskProfile, objective, workspace string, maxTurns int) string {
