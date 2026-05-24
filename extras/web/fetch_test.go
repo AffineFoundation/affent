@@ -66,6 +66,24 @@ func TestFetchTool_HTML(t *testing.T) {
 	}
 }
 
+func TestFetchToolDescriptionSteersAwayFromDirectReaderTraps(t *testing.T) {
+	tool := FetchTool(FetchConfig{AllowPrivateNetwork: true})
+	for _, want := range []string{
+		"Best for official",
+		"raw",
+		"API",
+		"avoid search/result lists",
+		"social pages",
+		"short links",
+		"dynamic dashboards",
+		"canonical API/text/source URL",
+	} {
+		if !strings.Contains(tool.Description, want) {
+			t.Fatalf("web_fetch description missing %q:\n%s", want, tool.Description)
+		}
+	}
+}
+
 func TestFetchTool_PlainText(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "text/plain")

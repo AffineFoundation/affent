@@ -275,6 +275,13 @@ source, use browser tools when they are registered, rely on search snippets only
 as weak sentiment when full-page reading is unavailable, or answer with the gap
 clearly marked as unverified.
 
+The `web_fetch` tool description and external-research prompt intentionally
+steer the model toward official/raw/API/text URLs and away from direct-reading
+result-list pages, social pages, short links, dynamic dashboards, and likely
+bot/challenge shells. Those sources can still be useful for discovery or
+sentiment, but they should not consume repeated direct-fetch attempts when a
+canonical source is available.
+
 `web_search` may annotate individual results with `Direct-fetch caution` when a
 URL is likely to waste turns in direct HTTP fetches, such as search-result
 pages, social/discussion pages, or short-link redirectors. These annotations

@@ -153,6 +153,7 @@ func TestExternalResearchGuidanceMatchesToolSurface(t *testing.T) {
 				"Do not open every search result",
 				"Preserve user-provided disambiguators",
 				"Use web_fetch",
+				"Avoid using web_fetch on result-list pages",
 				"from search results",
 				"If web_search returns no results",
 			},
@@ -164,9 +165,10 @@ func TestExternalResearchGuidanceMatchesToolSurface(t *testing.T) {
 			want: []string{
 				"Use web_fetch",
 				"Preserve user-provided disambiguators",
+				"Avoid using web_fetch on result-list pages",
 				"try another known public URL",
 			},
-			forbidden: []string{"web_search", "search results", "browser_navigate", "browser_snapshot", "browser tools"},
+			forbidden: []string{"web_search", "browser_navigate", "browser_snapshot", "browser tools"},
 		},
 		{
 			name:    "fetch browser",

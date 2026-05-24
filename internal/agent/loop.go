@@ -369,7 +369,8 @@ func externalResearchSystemGuidance(surface externalResearchToolSurface) string 
 	if surface.WebFetch && surface.Browser {
 		b.WriteString("\n- Use web_fetch for direct authoritative pages, raw docs, repositories, APIs, and text endpoints. Use browser_navigate/browser_snapshot for dynamic dashboards, search-result pages, social pages, or pages likely to return bot/challenge shells to direct fetch.")
 	} else if surface.WebFetch {
-		b.WriteString("\n- Use web_fetch to read authoritative pages and APIs. Prefer official docs, source repositories, block explorers, filings, API docs, and primary project sites over summaries.")
+		b.WriteString("\n- Use web_fetch to read authoritative pages, raw docs, repositories, APIs, and text endpoints. Prefer official docs, source repositories, block explorers, filings, API docs, and primary project sites over summaries.")
+		b.WriteString("\n- Avoid using web_fetch on result-list pages, social/forum pages, short links, dynamic dashboards, or pages likely to return bot/challenge shells when a canonical API/text/source URL is available.")
 	} else if surface.Browser {
 		b.WriteString("\n- Use browser_navigate/browser_snapshot for page inspection. Prefer official pages, source repositories, block explorers, filings, API docs, and primary project sites over summaries.")
 	}

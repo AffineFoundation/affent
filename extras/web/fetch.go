@@ -89,7 +89,10 @@ func FetchTool(cfg FetchConfig) *agent.Tool {
 		Description: "Fetch a URL and return its text content. HTML is " +
 			"converted to compact markdown; text/plain, application/json, " +
 			"and similar text types are returned as-is. Output is capped " +
-			"and truncated with a marker. Redirects are followed.",
+			"and truncated with a marker. Redirects are followed. Best for " +
+			"official, raw, API, repository, or text pages; avoid search/result " +
+			"lists, social pages, short links, and dynamic dashboards when a " +
+			"canonical API/text/source URL is available.",
 		Schema: schema,
 		Execute: func(ctx context.Context, raw json.RawMessage) (string, error) {
 			var args struct {
