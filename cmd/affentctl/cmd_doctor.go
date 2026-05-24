@@ -100,7 +100,7 @@ func diagnoseAffentctl(c commonFlags, runner commandRunner) []doctorFinding {
 		add("ok", "api-key", "set")
 	}
 
-	if _, err := parseSampling(c.temperature, c.topP, c.maxTokens); err != nil {
+	if _, err := parseSampling(c.temperature, c.topP, c.maxTokens, c.seed); err != nil {
 		add("error", "sampling", err.Error())
 	} else {
 		add("ok", "sampling", "valid")
