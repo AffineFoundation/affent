@@ -499,6 +499,8 @@ func dynamicPageShellReason(body []byte, contentType, markdown string) string {
 		return "client-rendered app shell with no readable text"
 	case len(text) <= 900 && containsAny(text, "loading", "loading...", "enable javascript", "please enable javascript"):
 		return "client-rendered loading/javascript shell"
+	case len(body) >= 512*1024 && len(text) <= 6000 && strings.Count(htmlLower, "<script") >= 30:
+		return "large client-rendered app shell with little readable text"
 	case len(text) <= 400 && strings.Count(htmlLower, "<script") >= 8:
 		return "client-rendered app shell with little readable text"
 	default:

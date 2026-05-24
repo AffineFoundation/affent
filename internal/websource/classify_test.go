@@ -59,3 +59,27 @@ func TestHostClasses(t *testing.T) {
 		})
 	}
 }
+
+func TestIsLikelyTextOrAPIPath(t *testing.T) {
+	cases := []struct {
+		path string
+		want bool
+	}{
+		{path: "/", want: false},
+		{path: "/subnets/21", want: false},
+		{path: "/api/subnets/21", want: true},
+		{path: "/v1/subnets/21", want: true},
+		{path: "/graphql", want: true},
+		{path: "/exports/subnets.csv", want: true},
+		{path: "/metrics.json", want: true},
+		{path: "/docs/readme.md", want: true},
+		{path: "/image.png", want: false},
+	}
+	for _, c := range cases {
+		t.Run(c.path, func(t *testing.T) {
+			if got := IsLikelyTextOrAPIPath(c.path); got != c.want {
+				t.Fatalf("IsLikelyTextOrAPIPath(%q) = %v, want %v", c.path, got, c.want)
+			}
+		})
+	}
+}

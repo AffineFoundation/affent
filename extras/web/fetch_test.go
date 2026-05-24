@@ -394,6 +394,28 @@ func TestFetchTool_DynamicAppShellReportsNoEvidence(t *testing.T) {
 	}
 }
 
+func TestFetchTool_LargeClientRenderedShellReportsNoEvidence(t *testing.T) {
+	scripts := strings.Repeat(`<script src="/_next/static/chunks/app.js"></script>`, 40)
+	largeState := strings.Repeat(`<script>self.__next_f.push(["",{"bootstrap":"`+strings.Repeat("x", 1024)+`"}])</script>`, 600)
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "text/html; charset=utf-8")
+		w.Write([]byte(`<!doctype html><html><head>` + scripts + `</head><body><div id="__next"><nav>Home Documentation API Validators Subnets</nav><main></main></div>` + largeState + `</body></html>`))
+	}))
+	defer srv.Close()
+
+	tool := FetchTool(FetchConfig{AllowPrivateNetwork: true, MaxBytes: 2 * 1024 * 1024})
+	args, _ := json.Marshal(map[string]string{"url": srv.URL + "/subnets/21"})
+	out, err := tool.Execute(context.Background(), args)
+	if err != nil {
+		t.Fatalf("Execute: %v", err)
+	}
+	for _, want := range []string{"dynamic page shell", "Failure: kind=dynamic_shell", "large client-rendered app shell"} {
+		if !strings.Contains(out, want) {
+			t.Fatalf("large app shell output missing %q:\n%s", want, out)
+		}
+	}
+}
+
 func TestFetchTool_DoesNotClassifyContentfulClientRenderedPage(t *testing.T) {
 	content := strings.Repeat("This report has audited market metrics, subnet history, price notes, and clear dated evidence. ", 20)
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {

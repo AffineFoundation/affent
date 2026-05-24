@@ -67,6 +67,58 @@ func IsKnownDirectReaderTrapHost(host string) bool {
 	})
 }
 
+// IsLikelyTextOrAPIPath reports whether a URL path names an endpoint that is
+// plausibly useful after ordinary dashboard/page routes on the same host
+// returned only a dynamic shell. It is intentionally path-only: callers still
+// need normal URL/security checks before fetching.
+func IsLikelyTextOrAPIPath(path string) bool {
+	path = strings.ToLower(strings.TrimSpace(path))
+	if path == "" || path == "/" {
+		return false
+	}
+	for _, prefix := range []string{
+		"/api/",
+		"/apis/",
+		"/graphql",
+		"/rpc/",
+		"/v1/",
+		"/v2/",
+		"/v3/",
+		"/data/",
+		"/datasets/",
+		"/download/",
+		"/downloads/",
+		"/export/",
+		"/exports/",
+		"/raw/",
+		"/static/",
+		"/.well-known/",
+	} {
+		if strings.HasPrefix(path, prefix) {
+			return true
+		}
+	}
+	for _, suffix := range []string{
+		".json",
+		".jsonl",
+		".ndjson",
+		".csv",
+		".tsv",
+		".txt",
+		".md",
+		".xml",
+		".rss",
+		".atom",
+		".yaml",
+		".yml",
+	} {
+		if strings.HasSuffix(path, suffix) {
+			return true
+		}
+	}
+	return false
+}
+
 func hasHostSuffix(host string, suffixes []string) bool {
 	for _, suffix := range suffixes {
 		if host == suffix || strings.HasSuffix(host, "."+suffix) {

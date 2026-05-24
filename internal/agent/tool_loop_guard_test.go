@@ -245,6 +245,31 @@ func TestToolLoopGuard_DoesNotHostBlockPageScopedFetchFailures(t *testing.T) {
 	}
 }
 
+func TestToolLoopGuard_BlocksRepeatedDynamicShellHostPages(t *testing.T) {
+	g := newToolLoopGuard()
+	first := json.RawMessage(`{"url":"https://metrics.example/app/subnet/21"}`)
+	second := json.RawMessage(`{"url":"https://metrics.example/subnets/21"}`)
+	third := json.RawMessage(`{"url":"https://www.metrics.example/validators"}`)
+	api := json.RawMessage(`{"url":"https://metrics.example/api/subnets/21.json"}`)
+	for _, args := range []json.RawMessage{first, second} {
+		if got := g.recordAttempt("web_fetch", args); got != "" {
+			t.Fatalf("dynamic shell fetch should pass before threshold: %q", got)
+		}
+		if _, ok := g.recordToolResult("web_fetch", args, "[dynamic page shell: URL=https://metrics.example]\nFailure: kind=dynamic_shell\nNext: use a canonical API/text/source page", false); ok {
+			t.Fatal("dynamic shell result should count as no-evidence failure")
+		}
+	}
+	got := g.recordAttempt("web_fetch", third)
+	for _, want := range []string{"blocked web_fetch to host", "metrics.example", "Failure kind=dynamic_shell", "switch to a canonical/API/text source"} {
+		if !strings.Contains(got, want) {
+			t.Fatalf("dynamic host guard missing %q: %q", want, got)
+		}
+	}
+	if got := g.recordAttempt("web_fetch", api); got != "" {
+		t.Fatalf("API/text fallback on dynamic host should remain fetchable: %q", got)
+	}
+}
+
 func TestToolLoopGuard_FetchHostSuccessClearsHostFailure(t *testing.T) {
 	g := newToolLoopGuard()
 	first := json.RawMessage(`{"url":"https://blocked.example/a"}`)

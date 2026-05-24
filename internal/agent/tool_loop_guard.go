@@ -109,8 +109,8 @@ func (g *toolLoopGuard) recordAttempt(tool string, args json.RawMessage) string 
 	if failure := g.failedCalls[key]; shouldBlockRepeatedFailedCall(tool, failure) {
 		return repeatedFailedCallMessage(tool, failure)
 	}
-	if host := canonicalFetchHost(tool, args); host != "" {
-		if failure := g.failedHosts[host]; shouldBlockFailedFetchHost(host, failure) {
+	if host, path := canonicalFetchHostPath(tool, args); host != "" {
+		if failure := g.failedHosts[host]; shouldBlockFailedFetchHost(host, path, failure) {
 			return repeatedFailedFetchHostMessage(host, failure)
 		}
 	}
@@ -267,7 +267,7 @@ func shouldBlockRepeatedFailedFetch(failure toolCallFailure) bool {
 	}
 }
 
-func shouldBlockFailedFetchHost(host string, failure toolCallFailure) bool {
+func shouldBlockFailedFetchHost(host, fetchPath string, failure toolCallFailure) bool {
 	switch failure.kind {
 	case "blocked", "rate_limited", "private_network_blocked":
 		threshold := 2
@@ -275,26 +275,33 @@ func shouldBlockFailedFetchHost(host string, failure toolCallFailure) bool {
 			threshold = 1
 		}
 		return failure.count >= threshold
+	case "dynamic_shell":
+		return failure.count >= 2 && !websource.IsLikelyTextOrAPIPath(fetchPath)
 	default:
 		return false
 	}
 }
 
 func canonicalFetchHost(tool string, args json.RawMessage) string {
+	host, _ := canonicalFetchHostPath(tool, args)
+	return host
+}
+
+func canonicalFetchHostPath(tool string, args json.RawMessage) (string, string) {
 	if tool != "web_fetch" {
-		return ""
+		return "", ""
 	}
 	var p struct {
 		URL string `json:"url"`
 	}
 	if err := json.Unmarshal(args, &p); err != nil {
-		return ""
+		return "", ""
 	}
 	u, err := url.Parse(strings.TrimSpace(p.URL))
 	if err != nil {
-		return ""
+		return "", ""
 	}
-	return websource.NormalizeHost(u.Hostname())
+	return websource.NormalizeHost(u.Hostname()), u.EscapedPath()
 }
 
 func canonicalFetchURL(tool string, args json.RawMessage) string {

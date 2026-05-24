@@ -841,7 +841,7 @@ func researchProfile() FocusedTaskProfile {
 - For current or unfamiliar public topics, use the registered external lookup tools to discover and read the most authoritative sources available. Prefer official docs, source repositories, block explorers, filings, API docs, and primary project sites over summaries.
 - If a lookup result marks a URL with a Direct-reader warning, do not spend direct page-reading calls on that URL; treat the snippet as weak discovery/sentiment or choose a canonical source URL instead.
 - Preserve user-provided disambiguators when discovering sources and evaluating evidence: ecosystem or parent project, ticker, network/subnet id, official domain, version, geography, and date range. If a short name is ambiguous, resolve the entity before collecting metrics or sentiment.
-- For market, metrics, or trend questions, collect a current source-of-record plus at least one independent corroborating source. Keep social posts, forum comments, and influencer takes separate from verified facts, and label them as sentiment or claims.
+- For market, metrics, or trend questions, collect a current source-of-record plus at least one independent corroborating source. Prefer official API/text/export endpoints for metrics over dashboard routes that require JavaScript. Keep social posts, forum comments, and influencer takes separate from verified facts, and label them as sentiment or claims.
 - When sources disagree, pick the most authoritative for "findings" and record the conflict in "warnings".
 - If you cannot find an authoritative source with the registered tools, emit a not_found entry rather than guessing.`,
 	}
