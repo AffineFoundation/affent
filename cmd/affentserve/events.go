@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -26,6 +27,7 @@ const sseKeepAliveInterval = 25 * time.Second
 const (
 	defaultHistoryLimit = 100
 	maxHistoryLimit     = 500
+	maxHistoryLineBytes = 4 * 1024 * 1024
 )
 
 // handleSessionEvents tails the session's affent event stream and
@@ -307,13 +309,22 @@ func readSessionHistoryPage(sessionDir string, after int64, limit int) (sessionH
 		Records:   []sessionHistoryRecord{},
 		NextAfter: after,
 	}
-	sc := bufio.NewScanner(f)
-	sc.Buffer(make([]byte, 0, 64*1024), 4*1024*1024)
+	reader := bufio.NewReaderSize(f, 64*1024)
 	lineNo := int64(-1)
-	for sc.Scan() {
+	for {
+		line, overLimit, err := readBoundedJSONLLine(reader, maxHistoryLineBytes)
+		if errors.Is(err, io.EOF) {
+			break
+		}
+		if err != nil {
+			return sessionHistoryPage{}, err
+		}
 		lineNo++
+		if overLimit {
+			continue
+		}
 		var ev sse.Event
-		if err := json.Unmarshal(sc.Bytes(), &ev); err != nil {
+		if err := json.Unmarshal(line, &ev); err != nil {
 			continue
 		}
 		if ev.Type == sse.TypeTraceMeta {
@@ -334,10 +345,39 @@ func readSessionHistoryPage(sessionDir string, after int64, limit int) (sessionH
 		page.Records = append(page.Records, sessionHistoryRecord{Cursor: lineNo, Event: ev})
 		page.NextAfter = lineNo
 	}
-	if err := sc.Err(); err != nil {
-		return sessionHistoryPage{}, err
-	}
 	return page, nil
+}
+
+func readBoundedJSONLLine(r *bufio.Reader, maxBytes int) ([]byte, bool, error) {
+	if maxBytes <= 0 {
+		return nil, false, errors.New("max line bytes must be positive")
+	}
+	var line []byte
+	overLimit := false
+	for {
+		frag, err := r.ReadSlice('\n')
+		if len(frag) > 0 && !overLimit {
+			if len(line)+len(frag) > maxBytes {
+				line = nil
+				overLimit = true
+			} else {
+				line = append(line, frag...)
+			}
+		}
+		switch {
+		case err == nil:
+			return line, overLimit, nil
+		case errors.Is(err, bufio.ErrBufferFull):
+			continue
+		case errors.Is(err, io.EOF):
+			if len(frag) == 0 && len(line) == 0 && !overLimit {
+				return nil, false, io.EOF
+			}
+			return line, overLimit, nil
+		default:
+			return nil, overLimit, err
+		}
+	}
 }
 
 // handleSessionDelete closes a session immediately. Returns 204 even

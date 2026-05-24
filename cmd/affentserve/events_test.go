@@ -394,6 +394,37 @@ func TestHandleSessionHistoryNormalizesLegacyEventIDsToLineCursor(t *testing.T) 
 	}
 }
 
+func TestHandleSessionHistorySkipsOversizedJSONLLine(t *testing.T) {
+	dir := t.TempDir()
+	body := strings.Join([]string{
+		`{"id":1,"type":"trace.meta","data":{"schema_version":1}}`,
+		strings.Repeat("x", maxHistoryLineBytes+1),
+		`{"id":2,"type":"turn.start","data":{"turn_id":"after-large-line"}}`,
+		"",
+	}, "\n")
+	if err := os.WriteFile(filepath.Join(dir, "events.jsonl"), []byte(body), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	resp, err := readSessionHistory(dir, "oversized-line", -1, 10)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(resp.Events) != 2 {
+		t.Fatalf("events = %+v, want trace meta and event after oversized line", resp.Events)
+	}
+	if resp.Events[0].ID != 0 || resp.Events[1].ID != 2 || resp.NextAfter != 2 {
+		t.Fatalf("history cursors = ids %d/%d next_after=%d, want 0/2/2", resp.Events[0].ID, resp.Events[1].ID, resp.NextAfter)
+	}
+	var payload sse.TurnStartPayload
+	if err := json.Unmarshal(resp.Events[1].Data, &payload); err != nil {
+		t.Fatal(err)
+	}
+	if payload.TurnID != "after-large-line" {
+		t.Fatalf("turn_id = %q, want after-large-line", payload.TurnID)
+	}
+}
+
 func TestParseLastEventID(t *testing.T) {
 	for _, tc := range []struct {
 		name       string
