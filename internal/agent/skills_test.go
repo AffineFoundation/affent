@@ -328,6 +328,64 @@ func TestInstallRuntimeSkillRejectsControlBytesInSource(t *testing.T) {
 	}
 }
 
+func TestInstallRuntimeSkillReplacesExistingSkill(t *testing.T) {
+	root := t.TempDir()
+	if _, err := InstallRuntimeSkill(root, Skill{
+		Name:   "demo",
+		Source: "https://example.invalid/old",
+		Body:   "AFFENT ACTIVE SKILL: demo\nUse old demo.",
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := InstallRuntimeSkill(root, Skill{
+		Name:   "demo",
+		Source: "https://example.invalid/new",
+		Body:   "AFFENT ACTIVE SKILL: demo\nUse new demo.",
+	}); err != nil {
+		t.Fatal(err)
+	}
+
+	skills, err := LoadSkillDir(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(skills) != 1 {
+		t.Fatalf("loaded skills = %d, want 1", len(skills))
+	}
+	if skills[0].Source != "https://example.invalid/new" || !strings.Contains(skills[0].Body, "new demo") {
+		t.Fatalf("loaded skill after replace = %+v", skills[0])
+	}
+	if _, err := os.Lstat(filepath.Join(root, ".install-demo.old")); !os.IsNotExist(err) {
+		t.Fatalf("backup directory should be removed after successful replace, err=%v", err)
+	}
+}
+
+func TestLoadSkillDirIgnoresInterruptedRuntimeSkillInstalls(t *testing.T) {
+	root := t.TempDir()
+	if _, err := InstallRuntimeSkill(root, Skill{
+		Name: "demo",
+		Body: "AFFENT ACTIVE SKILL: demo\nUse demo.",
+	}); err != nil {
+		t.Fatal(err)
+	}
+	for _, dir := range []string{".install-demo.tmp", ".install-demo.old"} {
+		if err := os.MkdirAll(filepath.Join(root, dir), 0o755); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(filepath.Join(root, dir, "skill.json"), []byte(`{"name":"broken"}`), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+
+	skills, err := LoadSkillDir(root)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(skills) != 1 || skills[0].Name != "demo" {
+		t.Fatalf("loaded skills = %+v, want only demo", skills)
+	}
+}
+
 func TestLoadSkillDirRejectsTooManySkills(t *testing.T) {
 	root := t.TempDir()
 	for i := 0; i < maxRuntimeSkills+1; i++ {

@@ -502,10 +502,7 @@ func InstallRuntimeSkill(root string, skill Skill) (Skill, error) {
 		return Skill{}, err
 	}
 	dir := filepath.Join(root, normalized.Name)
-	if err := os.MkdirAll(dir, 0o755); err != nil {
-		return Skill{}, fmt.Errorf("create skill directory: %w", err)
-	}
-	if err := rejectRuntimeSkillDirSymlink(dir); err != nil {
+	if err := rejectRuntimeSkillDirSymlinkIfExists(dir); err != nil {
 		return Skill{}, err
 	}
 	if normalized.Source == "" {
@@ -519,6 +516,15 @@ func InstallRuntimeSkill(root string, skill Skill) (Skill, error) {
 	if err := rejectRuntimeSkillFileTarget(bodyPath); err != nil {
 		return Skill{}, err
 	}
+	stageDir := filepath.Join(root, ".install-"+normalized.Name+".tmp")
+	backupDir := filepath.Join(root, ".install-"+normalized.Name+".old")
+	if err := resetRuntimeSkillStagingDir(stageDir); err != nil {
+		return Skill{}, fmt.Errorf("reset skill staging directory: %w", err)
+	}
+	defer os.RemoveAll(stageDir)
+	if err := os.MkdirAll(stageDir, 0o755); err != nil {
+		return Skill{}, fmt.Errorf("create skill staging directory: %w", err)
+	}
 	manifest := runtimeSkillManifest{
 		Name:           normalized.Name,
 		Description:    normalized.Description,
@@ -529,13 +535,56 @@ func InstallRuntimeSkill(root string, skill Skill) (Skill, error) {
 	if err != nil {
 		return Skill{}, err
 	}
-	if err := writeRuntimeSkillFile(manifestPath, append(raw, '\n')); err != nil {
-		return Skill{}, fmt.Errorf("write skill manifest: %w", err)
-	}
-	if err := writeRuntimeSkillFile(bodyPath, []byte(normalized.Body+"\n")); err != nil {
+	if err := writeRuntimeSkillFile(filepath.Join(stageDir, "SKILL.md"), []byte(normalized.Body+"\n")); err != nil {
 		return Skill{}, fmt.Errorf("write skill body: %w", err)
 	}
+	if err := writeRuntimeSkillFile(filepath.Join(stageDir, "skill.json"), append(raw, '\n')); err != nil {
+		return Skill{}, fmt.Errorf("write skill manifest: %w", err)
+	}
+	if err := publishRuntimeSkillDir(dir, stageDir, backupDir); err != nil {
+		return Skill{}, err
+	}
 	return normalized, nil
+}
+
+func resetRuntimeSkillStagingDir(dir string) error {
+	if err := rejectRuntimeSkillDirSymlinkIfExists(dir); err != nil {
+		if info, statErr := os.Lstat(dir); statErr == nil && info.Mode()&os.ModeSymlink != 0 {
+			return os.Remove(dir)
+		}
+		return err
+	}
+	return os.RemoveAll(dir)
+}
+
+func publishRuntimeSkillDir(finalDir, stageDir, backupDir string) error {
+	if err := rejectRuntimeSkillDirSymlinkIfExists(finalDir); err != nil {
+		return err
+	}
+	if err := resetRuntimeSkillStagingDir(backupDir); err != nil {
+		return fmt.Errorf("reset skill backup directory: %w", err)
+	}
+	hadFinal := false
+	if _, err := os.Lstat(finalDir); err == nil {
+		hadFinal = true
+		if err := os.Rename(finalDir, backupDir); err != nil {
+			return fmt.Errorf("replace skill directory: %w", err)
+		}
+	} else if !os.IsNotExist(err) {
+		return err
+	}
+	if err := os.Rename(stageDir, finalDir); err != nil {
+		if hadFinal {
+			_ = os.Rename(backupDir, finalDir)
+		}
+		return fmt.Errorf("publish skill directory: %w", err)
+	}
+	_ = os.RemoveAll(backupDir)
+	if d, err := os.Open(filepath.Dir(finalDir)); err == nil {
+		_ = d.Sync()
+		_ = d.Close()
+	}
+	return nil
 }
 
 func ProposeRuntimeSkill(root string, skill Skill) (RuntimeSkillProposal, error) {
