@@ -282,6 +282,13 @@ are source-selection hints, not hard failures: the agent should prefer the
 target/canonical URL, an official API or text endpoint, or treat the snippet as
 weak sentiment/claim evidence when no readable page source is available.
 
+`web_fetch` also preflights a small high-confidence set of direct-reader traps,
+including search-result pages and major social sites that routinely reject
+plain HTTP readers, and returns a structured `blocked` no-evidence result
+without dispatching the network request. This keeps current-research tasks from
+spending multiple turns on sources that are useful for discovery or sentiment
+but are not reliable direct page evidence.
+
 Repeated failed `web_fetch` calls are guarded more aggressively than general
 tool failures. Repeated no-evidence `web_search` results also count as failures
 for loop-guard purposes. After repeated no-evidence retrieval, the guard tells
@@ -292,8 +299,10 @@ blocks that exact input and emits
 as `blocked`, `rate_limited`, or `private_network_blocked`, repeated failures
 from different URLs on the same host also block more fetches to that host for
 the current turn, because trying another social/search/challenge URL usually
-wastes context rather than adding evidence. Generic identical call repeats
-emit `loop_guard_repeated_call`, and per-turn workflow caps emit
+wastes context rather than adding evidence. Known direct-reader trap hosts are
+blocked after the first structured failure from that host; other blocked hosts
+still get one distinct-URL retry before host-level blocking. Generic identical
+call repeats emit `loop_guard_repeated_call`, and per-turn workflow caps emit
 `loop_guard_call_cap`. First-tool and post-tool workflow policies emit
 `tool_policy_first_tool`, `tool_policy_repeat`, or `tool_policy_active` when
 they block a model call before the underlying tool runs. Per-turn stats expose

@@ -218,6 +218,23 @@ func isSocialOrDiscussionHost(host string) bool {
 	return false
 }
 
+func isKnownBlockedDirectFetchHost(host string) bool {
+	for _, suffix := range []string{
+		"x.com",
+		"twitter.com",
+		"facebook.com",
+		"instagram.com",
+		"linkedin.com",
+		"tiktok.com",
+		"threads.net",
+	} {
+		if host == suffix || strings.HasSuffix(host, "."+suffix) {
+			return true
+		}
+	}
+	return false
+}
+
 func truncateSearchField(s string, maxBytes int) string {
 	if maxBytes <= 0 || len(s) <= maxBytes {
 		return s

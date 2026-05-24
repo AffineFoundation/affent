@@ -107,6 +107,9 @@ func FetchTool(cfg FetchConfig) *agent.Tool {
 			if !strings.HasPrefix(args.URL, "http://") && !strings.HasPrefix(args.URL, "https://") {
 				return "", fmt.Errorf("url must start with http:// or https:// (got %q)\nFailure: kind=invalid_args\nNext: retry web_fetch with the full URL including the http:// or https:// scheme", args.URL)
 			}
+			if out := directFetchPreflightResult(args.URL); out != "" {
+				return out, nil
+			}
 			return fetch(ctx, cfg, args.URL)
 		},
 	}
@@ -226,6 +229,27 @@ func blockedFetchResult(finalURL, contentType, reason string) string {
 
 func dynamicPageShellResult(finalURL, contentType, reason string) string {
 	return fmt.Sprintf("[dynamic page shell: URL=%s, Content-Type=%q, Reason=%q]\nFailure: kind=dynamic_shell\nNext: do not treat this loading/app shell as source evidence; use a canonical API/text/source page, an available rendering tool/source, or answer with this source marked as dynamic/unverified.", finalURL, contentType, reason)
+}
+
+func directFetchPreflightResult(rawURL string) string {
+	u, err := url.Parse(strings.TrimSpace(rawURL))
+	if err != nil || u.Scheme == "" || u.Host == "" {
+		return ""
+	}
+	host := strings.TrimPrefix(strings.ToLower(u.Hostname()), "www.")
+	path := strings.ToLower(u.EscapedPath())
+	switch {
+	case isSearchResultHost(host, path):
+		return skippedDirectFetchResult(rawURL, "search-results page")
+	case isKnownBlockedDirectFetchHost(host):
+		return skippedDirectFetchResult(rawURL, "site usually blocks direct HTTP readers")
+	default:
+		return ""
+	}
+}
+
+func skippedDirectFetchResult(finalURL, reason string) string {
+	return fmt.Sprintf("[blocked response: URL=%s, Content-Type=%q, Reason=%q]\nFailure: kind=blocked\nNext: do not spend direct fetch calls on this page in this turn; use the search result target URL instead of a search-results page, use search snippets only as weak discovery/sentiment evidence, switch to an official API/text/source page, use an available rendering source, or mark this source as blocked/unverified.", finalURL, "", reason)
 }
 
 func recoverableFetchError(requestURL, finalURL string, status int, err error) error {

@@ -308,6 +308,50 @@ func TestFetchTool_BotChallengePageReportsBlockedNoEvidence(t *testing.T) {
 	}
 }
 
+func TestFetchTool_SkipsKnownDirectFetchTrapsBeforeHTTP(t *testing.T) {
+	cases := []struct {
+		name string
+		url  string
+		want string
+	}{
+		{name: "search results page", url: "https://www.google.com/search?q=affine+bittensor", want: "search-results page"},
+		{name: "x status", url: "https://x.com/affine/status/123", want: "site usually blocks direct HTTP readers"},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			called := false
+			tool := FetchTool(FetchConfig{
+				HTTP: &http.Client{Transport: roundTripFunc(func(req *http.Request) (*http.Response, error) {
+					called = true
+					return &http.Response{
+						StatusCode: 200,
+						Status:     "200 OK",
+						Header:     http.Header{"Content-Type": []string{"text/plain"}},
+						Body:       io.NopCloser(strings.NewReader("should not fetch")),
+						Request:    req,
+					}, nil
+				})},
+			})
+			args, _ := json.Marshal(map[string]string{"url": c.url})
+			out, err := tool.Execute(context.Background(), args)
+			if err != nil {
+				t.Fatalf("Execute: %v", err)
+			}
+			if called {
+				t.Fatal("known direct-fetch trap should be classified before HTTP dispatch")
+			}
+			for _, want := range []string{"blocked response", "Failure: kind=blocked", "Next:", "blocked/unverified", c.want} {
+				if !strings.Contains(out, want) {
+					t.Fatalf("preflight no-evidence output missing %q:\n%s", want, out)
+				}
+			}
+			if strings.Contains(out, "should not fetch") {
+				t.Fatalf("HTTP body leaked into preflight result:\n%s", out)
+			}
+		})
+	}
+}
+
 func TestFetchTool_DynamicAppShellReportsNoEvidence(t *testing.T) {
 	scripts := strings.Repeat(`<script src="/_next/static/chunks/app.js"></script>`, 10)
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {

@@ -105,7 +105,7 @@ func (g *toolLoopGuard) recordAttempt(tool string, args json.RawMessage) string 
 		return repeatedFailedCallMessage(tool, failure)
 	}
 	if host := canonicalFetchHost(tool, args); host != "" {
-		if failure := g.failedHosts[host]; shouldBlockFailedFetchHost(failure) {
+		if failure := g.failedHosts[host]; shouldBlockFailedFetchHost(host, failure) {
 			return repeatedFailedFetchHostMessage(host, failure)
 		}
 	}
@@ -235,13 +235,34 @@ func shouldBlockRepeatedFailedFetch(failure toolCallFailure) bool {
 	}
 }
 
-func shouldBlockFailedFetchHost(failure toolCallFailure) bool {
+func shouldBlockFailedFetchHost(host string, failure toolCallFailure) bool {
 	switch failure.kind {
 	case "blocked", "rate_limited", "private_network_blocked":
-		return failure.count >= 2
+		threshold := 2
+		if isKnownDirectFetchTrapHost(host) {
+			threshold = 1
+		}
+		return failure.count >= threshold
 	default:
 		return false
 	}
+}
+
+func isKnownDirectFetchTrapHost(host string) bool {
+	for _, suffix := range []string{
+		"x.com",
+		"twitter.com",
+		"facebook.com",
+		"instagram.com",
+		"linkedin.com",
+		"tiktok.com",
+		"threads.net",
+	} {
+		if host == suffix || strings.HasSuffix(host, "."+suffix) {
+			return true
+		}
+	}
+	return false
 }
 
 func canonicalFetchHost(tool string, args json.RawMessage) string {

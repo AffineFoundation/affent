@@ -190,9 +190,9 @@ func TestToolLoopGuard_AllowsOneTransientWebFetchRetry(t *testing.T) {
 
 func TestToolLoopGuard_BlocksRepeatedFailedWebFetchHost(t *testing.T) {
 	g := newToolLoopGuard()
-	first := json.RawMessage(`{"url":"https://www.x.com/example/status/1"}`)
-	second := json.RawMessage(`{"url":"https://x.com/example/status/2"}`)
-	third := json.RawMessage(`{"url":"https://x.com/example/status/3"}`)
+	first := json.RawMessage(`{"url":"https://www.blocked.example/example/status/1"}`)
+	second := json.RawMessage(`{"url":"https://blocked.example/example/status/2"}`)
+	third := json.RawMessage(`{"url":"https://blocked.example/example/status/3"}`)
 	if got := g.recordAttempt("web_fetch", first); got != "" {
 		t.Fatalf("first host fetch should pass guard: %q", got)
 	}
@@ -206,13 +206,31 @@ func TestToolLoopGuard_BlocksRepeatedFailedWebFetchHost(t *testing.T) {
 		t.Fatal("second blocked host fetch should count as failure")
 	}
 	got := g.recordAttempt("web_fetch", third)
-	for _, want := range []string{"blocked web_fetch to host", "x.com", "previous URL failures", "Failure kind=blocked", "stop trying more URLs from this host", "blocked/unverified", "Failure: kind=loop_guard_repeated_failed_input"} {
+	for _, want := range []string{"blocked web_fetch to host", "blocked.example", "previous URL failures", "Failure kind=blocked", "stop trying more URLs from this host", "blocked/unverified", "Failure: kind=loop_guard_repeated_failed_input"} {
 		if !strings.Contains(got, want) {
 			t.Fatalf("host failure guard missing %q: %q", want, got)
 		}
 	}
 	if got := g.recordAttempt("web_fetch", json.RawMessage(`{"url":"https://taostats.io/subnets/120"}`)); got != "" {
 		t.Fatalf("different host should remain available: %q", got)
+	}
+}
+
+func TestToolLoopGuard_BlocksKnownDirectFetchTrapHostAfterOneFailure(t *testing.T) {
+	g := newToolLoopGuard()
+	first := json.RawMessage(`{"url":"https://www.x.com/example/status/1"}`)
+	second := json.RawMessage(`{"url":"https://x.com/example/status/2"}`)
+	if got := g.recordAttempt("web_fetch", first); got != "" {
+		t.Fatalf("first host fetch should pass guard: %q", got)
+	}
+	if guard, ok := g.recordToolResult("web_fetch", first, "[blocked response: URL=https://www.x.com/example/status/1, Content-Type=\"\", Reason=\"site usually blocks direct HTTP readers\"]\nFailure: kind=blocked\nNext: use snippets", false); guard != "" || ok {
+		t.Fatalf("first blocked no-evidence result should record failure; guard=%q ok=%v", guard, ok)
+	}
+	got := g.recordAttempt("web_fetch", second)
+	for _, want := range []string{"blocked web_fetch to host", "x.com", "previous URL failures", "Failure kind=blocked", "stop trying more URLs from this host"} {
+		if !strings.Contains(got, want) {
+			t.Fatalf("known trap host guard missing %q: %q", want, got)
+		}
 	}
 }
 
