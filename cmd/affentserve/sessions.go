@@ -539,6 +539,9 @@ func (p *SessionPool) buildSession(id string) (*Session, error) {
 		KeepLast:    keepLast,
 	}
 	systemPrompt := p.cfg.SystemPrompt
+	if systemPrompt == "" {
+		systemPrompt = agent.BaseSystemPromptForSurface(systemPromptSurfaceForRegistry(reg))
+	}
 	if p.cfg.EnableSubagent {
 		// Tell the model when to delegate. Without this hint the model
 		// sees subagent_run in its tool list but defaults to direct
@@ -635,6 +638,31 @@ func openSessionEventLog(sessionDir string) (*eventlog.Recorder, *os.File, int64
 		return nil, nil, 0, err
 	}
 	return rec, f, nextLine, nil
+}
+
+func systemPromptSurfaceForRegistry(reg *agent.Registry) agent.SystemPromptSurface {
+	if reg == nil {
+		return agent.SystemPromptSurface{}
+	}
+	_, hasShell := reg.Get("shell")
+	_, hasRead := reg.Get("read_file")
+	_, hasList := reg.Get("list_files")
+	_, hasMemory := reg.Get("memory")
+	builtins := hasShell && hasRead && hasList
+	otherTools := false
+	for _, def := range reg.Defs() {
+		switch def.Function.Name {
+		case "shell", "read_file", "write_file", "edit_file", "list_files", "memory":
+			continue
+		default:
+			otherTools = true
+		}
+	}
+	return agent.SystemPromptSurface{
+		Builtins:   builtins,
+		Memory:     hasMemory,
+		OtherTools: otherTools,
+	}
 }
 
 func countJSONLLines(path string) (int64, error) {

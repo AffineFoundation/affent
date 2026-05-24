@@ -811,7 +811,7 @@ func setupLoop(c commonFlags) (*loopBundle, int) {
 		return nil, exitRuntime
 	}
 
-	systemPrompt, code := resolveSystemPrompt(c, workspace)
+	systemPrompt, code := resolveSystemPrompt(c, workspace, caps)
 	if code != 0 {
 		log.Error().Msg("system-prompt")
 		return nil, code
@@ -1045,18 +1045,19 @@ func setupLoop(c commonFlags) (*loopBundle, int) {
 	}, 0
 }
 
-func resolveSystemPrompt(c commonFlags, workspace string) (string, int) {
-	systemPrompt := agent.DefaultSystemPrompt
-	if c.memoryOnly {
-		systemPrompt = agent.MemoryOnlySystemPrompt
-	}
+func resolveSystemPrompt(c commonFlags, workspace string, caps runtimeCapabilities) (string, int) {
+	systemPrompt := agent.BaseSystemPromptForSurface(agent.SystemPromptSurface{
+		Builtins:   caps.Builtins,
+		Memory:     caps.Memory,
+		OtherTools: caps.MCP || caps.Subagent || caps.FocusedTasks || caps.Plan || caps.SessionSearch || caps.Skill,
+	})
 	if c.systemPromptPath != "" {
 		raw, err := readMaybeStdin(c.systemPromptPath)
 		if err != nil {
 			return "", exitRuntime
 		}
 		systemPrompt = raw
-	} else if !c.memoryOnly && workspace != "/workspace" {
+	} else if caps.Builtins && workspace != "/workspace" {
 		systemPrompt += "\n\nYour workspace directory is \"" + workspace +
 			"\". Use this exact path (or a relative path inside it) with the file tools."
 	}

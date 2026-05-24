@@ -1156,6 +1156,55 @@ func TestSessionPool_FocusedTasksCanBeDisabled(t *testing.T) {
 	}
 }
 
+func TestSessionPool_NoBuiltinsUsesCapabilityMatchedSystemPrompt(t *testing.T) {
+	pool := newTestPool(t, 4, "5m")
+	pool.cfg.EnableBuiltins = false
+	pool.cfg.EnableMemory = true
+
+	s, err := pool.GetOrCreate("memory-only-prompt")
+	if err != nil {
+		t.Fatal(err)
+	}
+	msgs := s.conv.Snapshot()
+	if len(msgs) == 0 {
+		t.Fatal("system prompt missing")
+	}
+	prompt := msgs[0].Content
+	if !strings.Contains(prompt, "only tool is 'memory'") {
+		t.Fatalf("memory-only session should use memory-only prompt:\n%s", prompt)
+	}
+	for _, forbidden := range []string{"'shell' tool", "read_file", "write_file", "edit_file", "list_files"} {
+		if strings.Contains(prompt, forbidden) {
+			t.Fatalf("memory-only prompt should not mention unavailable %q:\n%s", forbidden, prompt)
+		}
+	}
+}
+
+func TestSessionPool_ToolLightMixedSurfaceUsesLimitedPrompt(t *testing.T) {
+	pool := newTestPool(t, 4, "5m")
+	pool.cfg.EnableBuiltins = false
+	pool.cfg.EnableMemory = true
+	pool.cfg.EnableWeb = true
+
+	s, err := pool.GetOrCreate("tool-light-prompt")
+	if err != nil {
+		t.Fatal(err)
+	}
+	msgs := s.conv.Snapshot()
+	if len(msgs) == 0 {
+		t.Fatal("system prompt missing")
+	}
+	prompt := msgs[0].Content
+	if !strings.Contains(prompt, "limited-tool runtime") {
+		t.Fatalf("mixed non-builtin session should use limited-tool prompt:\n%s", prompt)
+	}
+	for _, forbidden := range []string{"'shell' tool", "read_file", "write_file", "edit_file", "list_files"} {
+		if strings.Contains(prompt, forbidden) {
+			t.Fatalf("limited prompt should not mention unavailable %q:\n%s", forbidden, prompt)
+		}
+	}
+}
+
 func TestSessionPool_EvalModeRegistersOnlyBasicTools(t *testing.T) {
 	cfg := Config{
 		Listen:             "127.0.0.1:0",

@@ -50,6 +50,22 @@ func TestDefaultSystemPromptReflectsRuntimeBudgets(t *testing.T) {
 	}
 }
 
+func TestBaseSystemPromptForSurface(t *testing.T) {
+	if got := BaseSystemPromptForSurface(SystemPromptSurface{Builtins: true}); got != DefaultSystemPrompt {
+		t.Fatal("builtins surface should use default workspace prompt")
+	}
+	if got := BaseSystemPromptForSurface(SystemPromptSurface{Memory: true}); got != MemoryOnlySystemPrompt {
+		t.Fatal("memory-only surface should use memory-only prompt")
+	}
+	got := BaseSystemPromptForSurface(SystemPromptSurface{Memory: true, OtherTools: true})
+	if got != LimitedToolSystemPrompt {
+		t.Fatal("mixed non-builtin surface should use limited-tool prompt")
+	}
+	if got := BaseSystemPromptForSurface(SystemPromptSurface{}); got != LimitedToolSystemPrompt {
+		t.Fatal("empty tool surface should use limited-tool prompt")
+	}
+}
+
 func TestLoopTurnOptionsOverrideToolSurfaceAndPolicies(t *testing.T) {
 	baseTools := NewRegistry()
 	baseTools.Add(&Tool{Name: "shell"})
