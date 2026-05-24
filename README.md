@@ -794,8 +794,9 @@ Native session endpoints:
 
 `GET /v1/stats` returns the active session count, per-session usage/browser
 stats, aggregate token/browser counters, `workspace_root`, `memory_root`,
-`session_state_root`, and `shutting_down` so authorized clients can verify the
-durable state path and stop sending new work during graceful drain.
+`session_state_root`, runtime `boundaries`, and `shutting_down` so authorized
+clients can verify the durable state path, see effective turn/tool caps, and
+stop sending new work during graceful drain.
 
 ## Security Model
 

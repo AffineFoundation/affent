@@ -7,6 +7,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/affinefoundation/affent/internal/agent"
 	"github.com/affinefoundation/affent/internal/sse"
 )
 
@@ -49,8 +50,36 @@ func TestHandleStats_EmptyPool(t *testing.T) {
 	if resp.SessionStateRoot != pool.sessionRootPath() {
 		t.Fatalf("SessionStateRoot = %q, want %q", resp.SessionStateRoot, pool.sessionRootPath())
 	}
+	if resp.Boundaries.MaxTurnSteps != agent.DefaultMaxTurnSteps {
+		t.Fatalf("Boundaries.MaxTurnSteps = %d, want default %d", resp.Boundaries.MaxTurnSteps, agent.DefaultMaxTurnSteps)
+	}
+	if resp.Boundaries.PerCallTimeout != agent.DefaultPerCallTimeout.String() {
+		t.Fatalf("Boundaries.PerCallTimeout = %q, want %q", resp.Boundaries.PerCallTimeout, agent.DefaultPerCallTimeout.String())
+	}
+	if resp.Boundaries.ToolResultEvent != agent.DefaultRuntimeBoundaries().ToolResultEventBytes {
+		t.Fatalf("Boundaries.ToolResultEvent = %d, want %d", resp.Boundaries.ToolResultEvent, agent.DefaultRuntimeBoundaries().ToolResultEventBytes)
+	}
+	if resp.Boundaries.MCPToolResultBytes <= 0 {
+		t.Fatalf("Boundaries.MCPToolResultBytes = %d, want positive", resp.Boundaries.MCPToolResultBytes)
+	}
 	if resp.ServerTime == "" {
 		t.Fatal("ServerTime must be populated")
+	}
+}
+
+func TestStatsBoundarySnapshotUsesConfiguredTurnLimits(t *testing.T) {
+	got := statsBoundarySnapshot(Config{
+		MaxTurnSteps:   7,
+		PerCallTimeout: "9s",
+	})
+	if got.MaxTurnSteps != 7 {
+		t.Fatalf("MaxTurnSteps = %d, want 7", got.MaxTurnSteps)
+	}
+	if got.PerCallTimeout != "9s" {
+		t.Fatalf("PerCallTimeout = %q, want 9s", got.PerCallTimeout)
+	}
+	if got.StreamReasoningBytes != agent.DefaultRuntimeBoundaries().StreamReasoningBytes {
+		t.Fatalf("StreamReasoningBytes = %d, want %d", got.StreamReasoningBytes, agent.DefaultRuntimeBoundaries().StreamReasoningBytes)
 	}
 }
 

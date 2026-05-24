@@ -5,6 +5,9 @@ import (
 	"net/http"
 	"sort"
 	"time"
+
+	"github.com/affinefoundation/affent/internal/agent"
+	"github.com/affinefoundation/affent/internal/mcp"
 )
 
 // statsResponse summarizes server + per-session activity at one
@@ -24,6 +27,27 @@ type statsResponse struct {
 	ServerTime       string                 `json:"server_time"`
 	Sessions         []sessionStatsResponse `json:"sessions"`
 	Aggregate        aggregateStats         `json:"aggregate"`
+	Boundaries       statsBoundaries        `json:"boundaries"`
+}
+
+type statsBoundaries struct {
+	MaxTurnSteps         int    `json:"max_turn_steps"`
+	PerCallTimeout       string `json:"per_call_timeout"`
+	LLMRequestBodyBytes  int    `json:"llm_request_body_bytes"`
+	LLMErrorBodyBytes    int    `json:"llm_error_body_bytes"`
+	StreamContentBytes   int    `json:"stream_content_bytes"`
+	StreamReasoningBytes int    `json:"stream_reasoning_bytes"`
+	StreamToolArgBytes   int    `json:"stream_tool_arg_bytes"`
+	StreamToolCalls      int    `json:"stream_tool_calls"`
+	StreamScannerBytes   int    `json:"stream_scanner_bytes"`
+	ToolRequestArgsEvent int    `json:"tool_request_args_event_bytes"`
+	ToolRequestArgString int    `json:"tool_request_arg_string_bytes"`
+	ToolResultContext    int    `json:"tool_result_context_bytes"`
+	ToolResultEvent      int    `json:"tool_result_event_bytes"`
+	ToolResultPreview    int    `json:"tool_result_preview_bytes"`
+	RepairableToolArg    int    `json:"repairable_tool_arg_bytes"`
+	ProjectContextBytes  int    `json:"project_context_bytes"`
+	MCPToolResultBytes   int    `json:"mcp_tool_result_bytes"`
 }
 
 type sessionStatsResponse struct {
@@ -98,8 +122,41 @@ func handleStats(cfg Config, pool *SessionPool) http.HandlerFunc {
 			ServerTime:       time.Now().UTC().Format(time.RFC3339),
 			Sessions:         sess,
 			Aggregate:        agg,
+			Boundaries:       statsBoundarySnapshot(cfg),
 		}
 		w.Header().Set("Content-Type", "application/json")
 		_ = json.NewEncoder(w).Encode(resp)
+	}
+}
+
+func statsBoundarySnapshot(cfg Config) statsBoundaries {
+	ab := agent.DefaultRuntimeBoundaries()
+	mb := mcp.DefaultRuntimeBoundaries()
+	maxTurnSteps := cfg.MaxTurnSteps
+	if maxTurnSteps <= 0 {
+		maxTurnSteps = agent.DefaultMaxTurnSteps
+	}
+	perCallTimeout := agent.DefaultPerCallTimeout
+	if d, err := cfg.PerCallTimeoutDuration(); err == nil && d > 0 {
+		perCallTimeout = d
+	}
+	return statsBoundaries{
+		MaxTurnSteps:         maxTurnSteps,
+		PerCallTimeout:       perCallTimeout.String(),
+		LLMRequestBodyBytes:  ab.LLMRequestBodyBytes,
+		LLMErrorBodyBytes:    ab.LLMErrorBodyBytes,
+		StreamContentBytes:   ab.StreamContentBytes,
+		StreamReasoningBytes: ab.StreamReasoningBytes,
+		StreamToolArgBytes:   ab.StreamToolArgBytes,
+		StreamToolCalls:      ab.StreamToolCalls,
+		StreamScannerBytes:   ab.StreamScannerBytes,
+		ToolRequestArgsEvent: ab.ToolRequestArgsEvent,
+		ToolRequestArgString: ab.ToolRequestArgString,
+		ToolResultContext:    ab.ToolResultContextBytes,
+		ToolResultEvent:      ab.ToolResultEventBytes,
+		ToolResultPreview:    ab.ToolResultPreviewBytes,
+		RepairableToolArg:    ab.RepairableToolArgBytes,
+		ProjectContextBytes:  ab.ProjectContextBytes,
+		MCPToolResultBytes:   mb.ToolResultBytes,
 	}
 }
