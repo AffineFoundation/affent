@@ -18,6 +18,7 @@ func TestTrace_RepairStats_ClassifiesRepairNotes(t *testing.T) {
 				"unwrapped field arguments",
 				"renamed field file_path to path",
 				"coerced field max_bytes to integer",
+				"coerced field evidence to array",
 				"dropped unknown field extra",
 			},
 		},
@@ -46,14 +47,14 @@ func TestTrace_RepairStats_ClassifiesRepairNotes(t *testing.T) {
 	if got.Calls != 5 {
 		t.Fatalf("Calls = %d, want 5", got.Calls)
 	}
-	if got.Notes != 9 {
-		t.Fatalf("Notes = %d, want 9; by_kind=%#v", got.Notes, got.ByKind)
+	if got.Notes != 10 {
+		t.Fatalf("Notes = %d, want 10; by_kind=%#v", got.Notes, got.ByKind)
 	}
 	want := map[string]int{
 		"tool_name":          2,
 		"wrapper_unwrap":     1,
 		"alias_rename":       1,
-		"type_coercion":      1,
+		"type_coercion":      2,
 		"unknown_field_drop": 1,
 		"malformed_json":     2,
 		"scalar_wrap":        1,
