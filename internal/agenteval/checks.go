@@ -278,6 +278,22 @@ func ToolRepairKindAtLeast(kind string, min int) Check {
 	}
 }
 
+func ToolFailureKindAtLeast(kind string, min int) Check {
+	return Check{
+		Name: fmt.Sprintf("tool_failure_kind_at_least:%s:%d", kind, min),
+		Eval: func(t Trace) CheckResult {
+			got := t.ToolStats.ToolFailureByKind[kind]
+			if got >= min {
+				return CheckResult{Pass: true, Detail: fmt.Sprintf("%s=%d", kind, got)}
+			}
+			return CheckResult{
+				Pass:   false,
+				Detail: fmt.Sprintf("%s=%d, want >= %d; failure_kinds=%v", kind, got, min, t.ToolStats.ToolFailureByKind),
+			}
+		},
+	}
+}
+
 func FocusedTaskCalledAtLeast(taskType string, min int) Check {
 	return Check{
 		Name: fmt.Sprintf("focused_task_called_at_least:%s:%d", taskType, min),

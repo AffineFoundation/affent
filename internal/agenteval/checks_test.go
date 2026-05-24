@@ -370,6 +370,22 @@ func TestToolRepairKindAtLeast(t *testing.T) {
 	})
 }
 
+func TestToolFailureKindAtLeast(t *testing.T) {
+	trace := Trace{ToolStats: ToolRuntimeStats{
+		ToolFailureByKind: map[string]int{"invalid_args": 2, "timeout": 1},
+	}}
+	if res := ToolFailureKindAtLeast("invalid_args", 2).Eval(trace); !res.Pass {
+		t.Fatalf("expected invalid_args failure kind check to pass: %+v", res)
+	}
+	res := ToolFailureKindAtLeast("empty_response", 1).Eval(trace)
+	if res.Pass {
+		t.Fatal("expected missing failure kind to fail")
+	}
+	if !strings.Contains(res.Detail, "empty_response=0") || !strings.Contains(res.Detail, "invalid_args") {
+		t.Fatalf("failure detail should include requested and observed failure kinds: %s", res.Detail)
+	}
+}
+
 func TestFocusedTaskCalledAtLeast(t *testing.T) {
 	trace := Trace{Tools: []ToolCall{
 		{CallID: "c1", Tool: "run_task", Delegation: &sse.DelegationMeta{Kind: "focused_task", TaskType: "explore"}},
