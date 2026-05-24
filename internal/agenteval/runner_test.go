@@ -1941,7 +1941,8 @@ func TestRunner_EndToEnd_ExternalResearchRepeatedFailedInputGuard(t *testing.T) 
 
 // TestRunner_EndToEnd_ExternalResearchSearchRecovery pins the discovery-side
 // recovery path: a no-results search is not evidence, and the model should
-// refine once with more distinctive entities / source terms before fetching.
+// preserve user-provided disambiguators while refining with source terms
+// before fetching.
 func TestRunner_EndToEnd_ExternalResearchSearchRecovery(t *testing.T) {
 	webSearch := agent.Tool{
 		Name:        "web_search",
@@ -1962,13 +1963,15 @@ func TestRunner_EndToEnd_ExternalResearchSearchRecovery(t *testing.T) {
 			if err := json.Unmarshal(args, &p); err != nil {
 				return "", err
 			}
-			if strings.Contains(p.Query, "official domain") || strings.Contains(p.Query, "subnet 88") {
+			if strings.Contains(p.Query, "Bittensor") &&
+				strings.Contains(p.Query, "subnet 88") &&
+				strings.Contains(p.Query, "official domain") {
 				return `[
   {"title":"Vega Subnet official docs","url":"https://official.example/vega/about","snippet":"Primary source describing Vega as a decentralized inference subnet."},
   {"title":"Vega Subnet metrics","url":"https://metrics.example/vega","snippet":"Current subnet price, market cap, and 24h change."}
 ]`, nil
 			}
-			return "(no results)\nFailure: kind=no_results\nNext: retry web_search with fewer or different keywords, include distinctive entities or official domain names, or use another available source URL if already known.", nil
+			return "(no results)\nFailure: kind=no_results\nNext: retry web_search with fewer or different keywords, preserve user-provided disambiguators such as ecosystem, ticker, network/subnet id, official domain, or date range, or use another available source URL if already known.", nil
 		},
 	}
 	webFetch := agent.Tool{
@@ -2001,12 +2004,12 @@ func TestRunner_EndToEnd_ExternalResearchSearchRecovery(t *testing.T) {
 	}
 
 	turn1 := []string{
-		`{"choices":[{"delta":{"role":"assistant","tool_calls":[{"index":0,"id":"s1","type":"function","function":{"name":"web_search","arguments":"{\"query\":\"Vega recent trend market metrics sentiment\",\"num_results\":5}"}}]},"finish_reason":null}]}`,
+		`{"choices":[{"delta":{"role":"assistant","tool_calls":[{"index":0,"id":"s1","type":"function","function":{"name":"web_search","arguments":"{\"query\":\"Vega Bittensor subnet 88 recent trend market metrics sentiment\",\"num_results\":5}"}}]},"finish_reason":null}]}`,
 		`{"choices":[{"delta":{},"finish_reason":"tool_calls"}]}`,
 		`[DONE]`,
 	}
 	turn2 := []string{
-		`{"choices":[{"delta":{"role":"assistant","tool_calls":[{"index":0,"id":"s2","type":"function","function":{"name":"web_search","arguments":"{\"query\":\"Vega subnet 88 official domain metrics\",\"num_results\":5}"}}]},"finish_reason":null}]}`,
+		`{"choices":[{"delta":{"role":"assistant","tool_calls":[{"index":0,"id":"s2","type":"function","function":{"name":"web_search","arguments":"{\"query\":\"Vega Bittensor subnet 88 official domain metrics\",\"num_results\":5}"}}]},"finish_reason":null}]}`,
 		`{"choices":[{"delta":{},"finish_reason":"tool_calls"}]}`,
 		`[DONE]`,
 	}
@@ -2016,17 +2019,23 @@ func TestRunner_EndToEnd_ExternalResearchSearchRecovery(t *testing.T) {
 		`[DONE]`,
 	}
 	turn4 := []string{
-		`{"choices":[{"delta":{"role":"assistant","content":"The initial broad search returned no usable results, so I treated it as an evidence gap and refined the query with the subnet id and official-domain terms. The official docs say Vega is a decentralized inference subnet for low-latency model serving. The metrics source reports, as of 2026-05-24T12:00:00Z, price $2.40, market cap $24.8M, and 24h change +1.4%. Overall, the current market move is mildly positive, but sentiment remains unverified because no readable social source was found."},"finish_reason":"stop"}]}`,
+		`{"choices":[{"delta":{"role":"assistant","content":"The initial broad search preserved the Bittensor subnet 88 disambiguator but returned no usable results, so I treated it as an evidence gap and refined the query with official-domain terms. The official docs say Vega is a decentralized inference subnet for low-latency model serving. The metrics source reports, as of 2026-05-24T12:00:00Z, price $2.40, market cap $24.8M, and 24h change +1.4%. Overall, the current market move is mildly positive, but sentiment remains unverified because no readable social source was found."},"finish_reason":"stop"}]}`,
 		`[DONE]`,
 	}
 	srv := newScriptedLLM(t, [][]string{turn1, turn2, turn3, turn4})
 	broadSearch := func(args map[string]any) bool {
 		q, _ := args["query"].(string)
-		return strings.Contains(q, "Vega recent trend")
+		return strings.Contains(q, "Vega") &&
+			strings.Contains(q, "Bittensor") &&
+			strings.Contains(q, "subnet 88") &&
+			strings.Contains(q, "recent trend")
 	}
 	refinedSearch := func(args map[string]any) bool {
 		q, _ := args["query"].(string)
-		return strings.Contains(q, "subnet 88") && strings.Contains(q, "official domain")
+		return strings.Contains(q, "Vega") &&
+			strings.Contains(q, "Bittensor") &&
+			strings.Contains(q, "subnet 88") &&
+			strings.Contains(q, "official domain")
 	}
 	fetchURL := func(url string) func(map[string]any) bool {
 		return func(args map[string]any) bool {
@@ -2036,8 +2045,8 @@ func TestRunner_EndToEnd_ExternalResearchSearchRecovery(t *testing.T) {
 
 	scenario := Scenario{
 		Name:         "external_research_search_recovery",
-		Description:  "agent treats no-results search as non-evidence, refines once, then fetches source candidates",
-		Prompt:       "Assess the recent trend for Vega. First identify what it is, then collect current market metrics. If search returns no results, refine once with distinctive identifiers or official-source terms and clearly mark any remaining gaps.",
+		Description:  "agent treats no-results search as non-evidence, preserves disambiguators, refines once, then fetches source candidates",
+		Prompt:       "Vega is a Bittensor subnet 88. Assess its recent trend. First identify what it is, then collect current market metrics. If search returns no results, refine once while preserving the Bittensor/subnet 88 disambiguator and clearly mark any remaining gaps.",
 		MaxTurnSteps: 8,
 		Checks: []Check{
 			TurnEndedCleanly(),
@@ -2051,7 +2060,7 @@ func TestRunner_EndToEnd_ExternalResearchSearchRecovery(t *testing.T) {
 			ToolCalled("web_fetch", fetchURL("https://official.example/vega/about")),
 			ToolCalled("web_fetch", fetchURL("https://metrics.example/vega")),
 			ToolNotCalled("shell", nil),
-			FinalTextContains("initial broad search returned no usable results"),
+			FinalTextContains("Bittensor subnet 88 disambiguator"),
 			FinalTextContains("decentralized inference subnet"),
 			FinalTextContains("market cap $24.8M"),
 			FinalTextContains("sentiment remains unverified"),
