@@ -68,8 +68,10 @@ Scenario records describe one eval case:
   as repeated failed URL/query inputs.
 - `tool_failure_hints`: optional map of structured tool failure kind to a short
   operator hint explaining likely cause and next diagnostic action.
-- `tool_failure_examples`: optional per-scenario map of failure kind to bounded
-  sample tool failures. Each sample includes the tool name, a compact
+- `tool_failure_examples`: optional map of failure kind to bounded sample tool
+  failures. Scenario records derive samples from that scenario; summary
+  records carry a small cross-scenario sample per kind. Each sample includes
+  the tool name, a compact
   `args_summary` such as `url="..."` or `query="..."`, the exit code, and a
   compact `result_summary` containing the failure reason and `Next:` guidance
   when the trace carried it. This is diagnostic context for operators; counts
@@ -81,10 +83,11 @@ Scenario records describe one eval case:
   into a scenario assertion failure.
 - `runtime_error_hints`: optional map of runtime error kind to a short
   operator hint explaining likely cause and next diagnostic action.
-- `runtime_error_examples`: optional per-scenario map of runtime error kind to
-  bounded message samples. These preserve the specific timeout, endpoint, or
-  incomplete-stream detail from `error` events without requiring operators to
-  inspect the full trace.
+- `runtime_error_examples`: optional map of runtime error kind to bounded
+  message samples. Scenario records derive samples from that scenario; summary
+  records carry a small cross-scenario sample per kind. These preserve the
+  specific timeout, endpoint, or incomplete-stream detail from `error` events
+  without requiring operators to inspect the full trace.
 - `loop_guard_interventions`: runtime loop guard intervention count.
 - `forced_no_tools`: count of forced no-tool follow-up requests after repeated
   loop guard interventions.
@@ -156,9 +159,9 @@ Summary records aggregate all scenario records from the same process:
   `end_cancelled`, `end_unknown`.
 - Failure totals: `failure_kinds`.
 - Tool failure totals and diagnostics: `tool_failure_by_kind`,
-  `tool_failure_hints`, `tool_failure_examples` on scenario records.
+  `tool_failure_hints`, `tool_failure_examples`.
 - Runtime error totals and diagnostics: `runtime_error_by_kind`,
-  `runtime_error_hints`, `runtime_error_examples` on scenario records.
+  `runtime_error_hints`, `runtime_error_examples`.
 - Cleanup totals: `removed_workspaces`, `cleanup_errors`.
 
 ## Compatibility

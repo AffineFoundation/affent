@@ -19,7 +19,10 @@ import (
 	"github.com/affinefoundation/affent/internal/sse"
 )
 
-const evalJSONLSchemaVersion = 1
+const (
+	evalJSONLSchemaVersion      = 1
+	batchSummaryExamplesPerKind = 2
+)
 
 func main() {
 	if err := loadDotEnv(); err != nil {
@@ -158,7 +161,9 @@ type batchSummary struct {
 	ToolRepairNotes            int
 	ToolRepairByKind           map[string]int
 	ToolFailureByKind          map[string]int
+	ToolFailureExamples        map[string][]agenteval.ToolFailureExample
 	RuntimeErrorByKind         map[string]int
+	RuntimeErrorExamples       map[string][]agenteval.RuntimeErrorExample
 	LoopGuardInterventions     int
 	ForcedNoTools              int
 	ToolDurationMS             int64
@@ -230,12 +235,14 @@ func (s *batchSummary) add(res agenteval.BatchResult) {
 		}
 		s.ToolFailureByKind[k] += v
 	}
+	mergeToolFailureExamples(s, res.ToolFailureExamples, batchSummaryExamplesPerKind)
 	for k, v := range res.RuntimeErrorByKind {
 		if s.RuntimeErrorByKind == nil {
 			s.RuntimeErrorByKind = map[string]int{}
 		}
 		s.RuntimeErrorByKind[k] += v
 	}
+	mergeRuntimeErrorExamples(s, res.RuntimeErrorExamples, batchSummaryExamplesPerKind)
 	s.LoopGuardInterventions += res.ToolStats.LoopGuardInterventions
 	s.ForcedNoTools += res.ToolStats.ForcedNoTools
 	s.ToolDurationMS += res.ToolStats.ToolDurationMS
@@ -371,7 +378,43 @@ func printBatchSummary(w io.Writer, s batchSummary) {
 	fmt.Fprintln(w)
 	printFailureHintLines(w, s.FailureKinds, "")
 	printToolFailureHintLines(w, s.ToolFailureByKind, "")
+	printToolFailureExampleLines(w, s.ToolFailureExamples, "")
 	printFailureHintLines(w, s.RuntimeErrorByKind, "")
+	printRuntimeErrorExampleLines(w, s.RuntimeErrorExamples, "")
+}
+
+func mergeToolFailureExamples(s *batchSummary, examples map[string][]agenteval.ToolFailureExample, maxPerKind int) {
+	if s == nil || maxPerKind <= 0 {
+		return
+	}
+	for kind, values := range examples {
+		for _, ex := range values {
+			if len(s.ToolFailureExamples[kind]) >= maxPerKind {
+				break
+			}
+			if s.ToolFailureExamples == nil {
+				s.ToolFailureExamples = map[string][]agenteval.ToolFailureExample{}
+			}
+			s.ToolFailureExamples[kind] = append(s.ToolFailureExamples[kind], ex)
+		}
+	}
+}
+
+func mergeRuntimeErrorExamples(s *batchSummary, examples map[string][]agenteval.RuntimeErrorExample, maxPerKind int) {
+	if s == nil || maxPerKind <= 0 {
+		return
+	}
+	for kind, values := range examples {
+		for _, ex := range values {
+			if len(s.RuntimeErrorExamples[kind]) >= maxPerKind {
+				break
+			}
+			if s.RuntimeErrorExamples == nil {
+				s.RuntimeErrorExamples = map[string][]agenteval.RuntimeErrorExample{}
+			}
+			s.RuntimeErrorExamples[kind] = append(s.RuntimeErrorExamples[kind], ex)
+		}
+	}
 }
 
 func hasBatchRepairStats(s batchSummary) bool {
@@ -723,49 +766,51 @@ type batchResultRecord struct {
 
 type batchSummaryRecord struct {
 	evalJSONLMetadata
-	Type                       string         `json:"type"`
-	Scenarios                  int            `json:"scenarios"`
-	Passed                     int            `json:"passed"`
-	Failed                     int            `json:"failed"`
-	DurationMS                 int64          `json:"duration_ms"`
-	ToolCalls                  int            `json:"tool_calls"`
-	ToolErrors                 int            `json:"tool_errors"`
-	ToolRepaired               int            `json:"tool_repaired"`
-	ToolNameCanonicalized      int            `json:"tool_name_canonicalized"`
-	ToolRepairCalls            int            `json:"tool_repair_calls,omitempty"`
-	ToolRepairSucceeded        int            `json:"tool_repair_succeeded,omitempty"`
-	ToolRepairFailed           int            `json:"tool_repair_failed,omitempty"`
-	ToolRepairNotes            int            `json:"tool_repair_notes,omitempty"`
-	ToolRepairByKind           map[string]int `json:"tool_repair_by_kind,omitempty"`
-	ToolFailureByKind          map[string]int `json:"tool_failure_by_kind,omitempty"`
-	RuntimeErrorByKind         map[string]int `json:"runtime_error_by_kind,omitempty"`
-	LoopGuardInterventions     int            `json:"loop_guard_interventions"`
-	ForcedNoTools              int            `json:"forced_no_tools"`
-	ToolDurationMS             int64          `json:"tool_duration_ms"`
-	ToolArgsTruncated          int            `json:"tool_args_truncated"`
-	ToolArgsOmittedBytes       int            `json:"tool_args_omitted_bytes"`
-	ToolResultsTruncated       int            `json:"tool_results_truncated"`
-	ToolResultsOmittedBytes    int            `json:"tool_results_omitted_bytes"`
-	ToolResultArtifacts        int            `json:"tool_result_artifacts"`
-	VerifierRuns               int            `json:"verifier_runs"`
-	VerifierPassed             int            `json:"verifier_passed"`
-	VerifierFailed             int            `json:"verifier_failed"`
-	VerifierOutputTruncated    int            `json:"verifier_output_truncated"`
-	VerifierOutputOmittedBytes int            `json:"verifier_output_omitted_bytes"`
-	TraceSchemaVersions        map[int]int    `json:"trace_schema_versions,omitempty"`
-	InputTokens                int            `json:"input_tokens"`
-	OutputTokens               int            `json:"output_tokens"`
-	EndCompleted               int            `json:"end_completed"`
-	EndMaxTurns                int            `json:"end_max_turns"`
-	EndErrors                  int            `json:"end_errors"`
-	EndCancelled               int            `json:"end_cancelled"`
-	EndUnknown                 int            `json:"end_unknown"`
-	FailureKinds               map[string]int `json:"failure_kinds,omitempty"`
-	FailureHints               failureHintMap `json:"failure_hints,omitempty"`
-	ToolFailureHints           failureHintMap `json:"tool_failure_hints,omitempty"`
-	RuntimeErrorHints          failureHintMap `json:"runtime_error_hints,omitempty"`
-	RemovedWorkspaces          int            `json:"removed_workspaces"`
-	CleanupErrors              int            `json:"cleanup_errors"`
+	Type                       string                                     `json:"type"`
+	Scenarios                  int                                        `json:"scenarios"`
+	Passed                     int                                        `json:"passed"`
+	Failed                     int                                        `json:"failed"`
+	DurationMS                 int64                                      `json:"duration_ms"`
+	ToolCalls                  int                                        `json:"tool_calls"`
+	ToolErrors                 int                                        `json:"tool_errors"`
+	ToolRepaired               int                                        `json:"tool_repaired"`
+	ToolNameCanonicalized      int                                        `json:"tool_name_canonicalized"`
+	ToolRepairCalls            int                                        `json:"tool_repair_calls,omitempty"`
+	ToolRepairSucceeded        int                                        `json:"tool_repair_succeeded,omitempty"`
+	ToolRepairFailed           int                                        `json:"tool_repair_failed,omitempty"`
+	ToolRepairNotes            int                                        `json:"tool_repair_notes,omitempty"`
+	ToolRepairByKind           map[string]int                             `json:"tool_repair_by_kind,omitempty"`
+	ToolFailureByKind          map[string]int                             `json:"tool_failure_by_kind,omitempty"`
+	ToolFailureExamples        map[string][]agenteval.ToolFailureExample  `json:"tool_failure_examples,omitempty"`
+	RuntimeErrorByKind         map[string]int                             `json:"runtime_error_by_kind,omitempty"`
+	RuntimeErrorExamples       map[string][]agenteval.RuntimeErrorExample `json:"runtime_error_examples,omitempty"`
+	LoopGuardInterventions     int                                        `json:"loop_guard_interventions"`
+	ForcedNoTools              int                                        `json:"forced_no_tools"`
+	ToolDurationMS             int64                                      `json:"tool_duration_ms"`
+	ToolArgsTruncated          int                                        `json:"tool_args_truncated"`
+	ToolArgsOmittedBytes       int                                        `json:"tool_args_omitted_bytes"`
+	ToolResultsTruncated       int                                        `json:"tool_results_truncated"`
+	ToolResultsOmittedBytes    int                                        `json:"tool_results_omitted_bytes"`
+	ToolResultArtifacts        int                                        `json:"tool_result_artifacts"`
+	VerifierRuns               int                                        `json:"verifier_runs"`
+	VerifierPassed             int                                        `json:"verifier_passed"`
+	VerifierFailed             int                                        `json:"verifier_failed"`
+	VerifierOutputTruncated    int                                        `json:"verifier_output_truncated"`
+	VerifierOutputOmittedBytes int                                        `json:"verifier_output_omitted_bytes"`
+	TraceSchemaVersions        map[int]int                                `json:"trace_schema_versions,omitempty"`
+	InputTokens                int                                        `json:"input_tokens"`
+	OutputTokens               int                                        `json:"output_tokens"`
+	EndCompleted               int                                        `json:"end_completed"`
+	EndMaxTurns                int                                        `json:"end_max_turns"`
+	EndErrors                  int                                        `json:"end_errors"`
+	EndCancelled               int                                        `json:"end_cancelled"`
+	EndUnknown                 int                                        `json:"end_unknown"`
+	FailureKinds               map[string]int                             `json:"failure_kinds,omitempty"`
+	FailureHints               failureHintMap                             `json:"failure_hints,omitempty"`
+	ToolFailureHints           failureHintMap                             `json:"tool_failure_hints,omitempty"`
+	RuntimeErrorHints          failureHintMap                             `json:"runtime_error_hints,omitempty"`
+	RemovedWorkspaces          int                                        `json:"removed_workspaces"`
+	CleanupErrors              int                                        `json:"cleanup_errors"`
 
 	// Per-batch delegation aggregates. Same omitempty discipline as
 	// the per-scenario record so a batch with zero delegation usage
@@ -864,7 +909,9 @@ func printBatchSummaryJSONL(w io.Writer, meta evalJSONLMetadata, s batchSummary)
 		ToolRepairNotes:            s.ToolRepairNotes,
 		ToolRepairByKind:           cloneStringIntMap(s.ToolRepairByKind),
 		ToolFailureByKind:          cloneStringIntMap(s.ToolFailureByKind),
+		ToolFailureExamples:        cloneToolFailureExamples(s.ToolFailureExamples),
 		RuntimeErrorByKind:         cloneStringIntMap(s.RuntimeErrorByKind),
+		RuntimeErrorExamples:       cloneRuntimeErrorExamples(s.RuntimeErrorExamples),
 		LoopGuardInterventions:     s.LoopGuardInterventions,
 		ForcedNoTools:              s.ForcedNoTools,
 		ToolDurationMS:             s.ToolDurationMS,

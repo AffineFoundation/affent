@@ -326,7 +326,17 @@ func TestBatchSummaryAggregatesRuntimeMetrics(t *testing.T) {
 			LoopGuardInterventions: 2,
 			ForcedNoTools:          1,
 		},
+		ToolFailureExamples: map[string][]agenteval.ToolFailureExample{
+			"timeout": {
+				{Kind: "timeout", Tool: "web_fetch", ArgsSummary: `url="https://slow.example"`, ResultSummary: "timed out | Next: switch source", ExitCode: 1},
+			},
+		},
 		RuntimeErrorByKind: map[string]int{"llm_timeout": 2, "context_overflow": 1},
+		RuntimeErrorExamples: map[string][]agenteval.RuntimeErrorExample{
+			"llm_timeout": {
+				{Kind: "llm_timeout", Message: "LLM llm_stream timed out after 4m0s (endpoint=https://llm.example/v1/chat/completions)"},
+			},
+		},
 		Repair: agenteval.ToolRepairStats{
 			Calls:          3,
 			SucceededCalls: 2,
@@ -377,6 +387,12 @@ func TestBatchSummaryAggregatesRuntimeMetrics(t *testing.T) {
 	if !strings.Contains(out.String(), "hint[context_overflow]") || !strings.Contains(out.String(), "hint[llm_timeout]") {
 		t.Fatalf("summary output missing runtime error hints:\n%s", out.String())
 	}
+	if !strings.Contains(out.String(), `tool_failure_example[timeout]: tool=web_fetch args=url="https://slow.example"`) {
+		t.Fatalf("summary output missing tool failure example:\n%s", out.String())
+	}
+	if !strings.Contains(out.String(), "runtime_error_example[llm_timeout]: LLM llm_stream timed out after 4m0s") {
+		t.Fatalf("summary output missing runtime error example:\n%s", out.String())
+	}
 	if !strings.Contains(out.String(), "repair_calls=5,ok=4,failed=1") {
 		t.Fatalf("summary output missing repair outcome rollup:\n%s", out.String())
 	}
@@ -401,6 +417,12 @@ func TestBatchSummaryAggregatesRuntimeMetrics(t *testing.T) {
 	}
 	if !reflect.DeepEqual(summary.RuntimeErrorByKind, map[string]int{"llm_timeout": 2, "context_overflow": 1}) {
 		t.Fatalf("RuntimeErrorByKind = %#v", summary.RuntimeErrorByKind)
+	}
+	if got := summary.ToolFailureExamples["timeout"]; len(got) != 1 || got[0].Tool != "web_fetch" {
+		t.Fatalf("ToolFailureExamples[timeout] = %#v", got)
+	}
+	if got := summary.RuntimeErrorExamples["llm_timeout"]; len(got) != 1 || !strings.Contains(got[0].Message, "llm_stream timed out") {
+		t.Fatalf("RuntimeErrorExamples[llm_timeout] = %#v", got)
 	}
 	if summary.PlanCalls != 3 || summary.PlanErrors != 1 {
 		t.Fatalf("plan counts = calls:%d errors:%d, want 3/1", summary.PlanCalls, summary.PlanErrors)
@@ -875,21 +897,31 @@ func TestPrintBatchResultJSONL_OmitsPlanForNoPlanCalls(t *testing.T) {
 func TestPrintBatchSummaryJSONL(t *testing.T) {
 	var out bytes.Buffer
 	printBatchSummaryJSONL(&out, testEvalJSONLMetadata(), batchSummary{
-		Total:                      2,
-		Passed:                     1,
-		Failed:                     1,
-		Duration:                   2500 * time.Millisecond,
-		ToolCalls:                  5,
-		ToolErrors:                 1,
-		ToolRepaired:               3,
-		ToolNameCanonicalized:      2,
-		ToolRepairCalls:            4,
-		ToolRepairSucceeded:        3,
-		ToolRepairFailed:           1,
-		ToolRepairNotes:            4,
-		ToolRepairByKind:           map[string]int{"tool_name": 2, "malformed_json": 1, "type_coercion": 1},
-		ToolFailureByKind:          map[string]int{"blocked": 1},
-		RuntimeErrorByKind:         map[string]int{"llm_timeout": 1},
+		Total:                 2,
+		Passed:                1,
+		Failed:                1,
+		Duration:              2500 * time.Millisecond,
+		ToolCalls:             5,
+		ToolErrors:            1,
+		ToolRepaired:          3,
+		ToolNameCanonicalized: 2,
+		ToolRepairCalls:       4,
+		ToolRepairSucceeded:   3,
+		ToolRepairFailed:      1,
+		ToolRepairNotes:       4,
+		ToolRepairByKind:      map[string]int{"tool_name": 2, "malformed_json": 1, "type_coercion": 1},
+		ToolFailureByKind:     map[string]int{"blocked": 1},
+		ToolFailureExamples: map[string][]agenteval.ToolFailureExample{
+			"blocked": {
+				{Kind: "blocked", Tool: "web_fetch", ArgsSummary: `url="https://blocked.example"`, ResultSummary: "blocked | Next: use another source", ExitCode: 1},
+			},
+		},
+		RuntimeErrorByKind: map[string]int{"llm_timeout": 1},
+		RuntimeErrorExamples: map[string][]agenteval.RuntimeErrorExample{
+			"llm_timeout": {
+				{Kind: "llm_timeout", Message: "LLM llm_stream timed out after 4m0s"},
+			},
+		},
 		LoopGuardInterventions:     3,
 		ForcedNoTools:              1,
 		ToolDurationMS:             120,
@@ -1004,6 +1036,10 @@ func TestPrintBatchSummaryJSONL(t *testing.T) {
 	if !ok || !strings.Contains(fmt.Sprint(toolFailureHints["blocked"]), "direct web_fetch") {
 		t.Fatalf("tool_failure_hints = %#v\njson=%s", got["tool_failure_hints"], out.String())
 	}
+	toolFailureExamples, ok := got["tool_failure_examples"].(map[string]any)
+	if !ok || !strings.Contains(fmt.Sprint(toolFailureExamples["blocked"]), "blocked.example") {
+		t.Fatalf("tool_failure_examples = %#v\njson=%s", got["tool_failure_examples"], out.String())
+	}
 	runtimeErrorKinds, ok := got["runtime_error_by_kind"].(map[string]any)
 	if !ok || runtimeErrorKinds["llm_timeout"] != float64(1) {
 		t.Fatalf("runtime_error_by_kind = %#v\njson=%s", got["runtime_error_by_kind"], out.String())
@@ -1011,6 +1047,10 @@ func TestPrintBatchSummaryJSONL(t *testing.T) {
 	runtimeErrorHints, ok := got["runtime_error_hints"].(map[string]any)
 	if !ok || !strings.Contains(fmt.Sprint(runtimeErrorHints["llm_timeout"]), "per-call timeout") {
 		t.Fatalf("runtime_error_hints = %#v\njson=%s", got["runtime_error_hints"], out.String())
+	}
+	runtimeErrorExamples, ok := got["runtime_error_examples"].(map[string]any)
+	if !ok || !strings.Contains(fmt.Sprint(runtimeErrorExamples["llm_timeout"]), "timed out") {
+		t.Fatalf("runtime_error_examples = %#v\njson=%s", got["runtime_error_examples"], out.String())
 	}
 	planByAction, ok := got["plan_by_action"].(map[string]any)
 	if !ok {
