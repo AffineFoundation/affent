@@ -336,6 +336,34 @@ func TestToolStatsAtLeast(t *testing.T) {
 	}
 }
 
+func TestToolRepairKindAtLeast(t *testing.T) {
+	t.Run("uses runtime repair stats", func(t *testing.T) {
+		trace := Trace{ToolStats: ToolRuntimeStats{
+			ToolRepairNotes:  3,
+			ToolRepairByKind: map[string]int{"enum_normalization": 2, "alias_rename": 1},
+		}}
+		if res := ToolRepairKindAtLeast("enum_normalization", 2).Eval(trace); !res.Pass {
+			t.Fatalf("expected enum_normalization repair kind check to pass: %+v", res)
+		}
+		res := ToolRepairKindAtLeast("type_coercion", 1).Eval(trace)
+		if res.Pass {
+			t.Fatal("expected missing repair kind to fail")
+		}
+		if !strings.Contains(res.Detail, "type_coercion=0") || !strings.Contains(res.Detail, "enum_normalization") {
+			t.Fatalf("failure detail should include requested and observed repair kinds: %s", res.Detail)
+		}
+	})
+
+	t.Run("falls back to request repair notes", func(t *testing.T) {
+		trace := Trace{Tools: []ToolCall{
+			{CallID: "c1", Tool: "shell", ArgsRepaired: true, RepairNotes: []string{"coerced field limit to integer"}},
+		}}
+		if res := ToolRepairKindAtLeast("type_coercion", 1).Eval(trace); !res.Pass {
+			t.Fatalf("expected request-note repair kind check to pass: %+v", res)
+		}
+	})
+}
+
 func TestToolCalledBefore(t *testing.T) {
 	t.Run("passes when earlier precedes later", func(t *testing.T) {
 		trace := Trace{

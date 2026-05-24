@@ -257,6 +257,23 @@ func ToolStatsAtLeast(field string, min int) Check {
 	}
 }
 
+func ToolRepairKindAtLeast(kind string, min int) Check {
+	return Check{
+		Name: fmt.Sprintf("tool_repair_kind_at_least:%s:%d", kind, min),
+		Eval: func(t Trace) CheckResult {
+			stats := t.RepairStats()
+			got := stats.ByKind[kind]
+			if got >= min {
+				return CheckResult{Pass: true, Detail: fmt.Sprintf("%s=%d", kind, got)}
+			}
+			return CheckResult{
+				Pass:   false,
+				Detail: fmt.Sprintf("%s=%d, want >= %d; repair_kinds=%v", kind, got, min, stats.ByKind),
+			}
+		},
+	}
+}
+
 var toolStatsAccessors = map[string]func(ToolRuntimeStats) int64{
 	"tool_requests":            func(s ToolRuntimeStats) int64 { return int64(s.ToolRequests) },
 	"tool_name_canonicalized":  func(s ToolRuntimeStats) int64 { return int64(s.ToolNameCanonicalized) },
