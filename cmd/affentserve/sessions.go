@@ -56,6 +56,18 @@ type Session struct {
 	outputTokens atomic.Int64
 	turns        atomic.Int64
 
+	toolRequests           atomic.Int64
+	toolNameCanonicalized  atomic.Int64
+	toolArgsRepaired       atomic.Int64
+	toolRepairCalls        atomic.Int64
+	toolRepairSucceeded    atomic.Int64
+	toolRepairFailed       atomic.Int64
+	toolRepairNotes        atomic.Int64
+	toolErrors             atomic.Int64
+	toolDurationMS         atomic.Int64
+	loopGuardInterventions atomic.Int64
+	forcedNoTools          atomic.Int64
+
 	// fan-out
 	subsMu  sync.Mutex
 	subs    map[int]chan sse.Event
@@ -1216,6 +1228,42 @@ func (s *Session) UsageSnapshot() UsageSnapshot {
 	}
 }
 
+// ToolStatsSnapshot returns per-session runtime tool counters accumulated from
+// turn.end.tool_stats. The values are advisory, cheap polling counters for
+// operators and WebUI surfaces; the event log remains the source of truth.
+type ToolStatsSnapshot struct {
+	ToolRequests           int64 `json:"tool_requests"`
+	ToolNameCanonicalized  int64 `json:"tool_name_canonicalized"`
+	ToolArgsRepaired       int64 `json:"tool_args_repaired"`
+	ToolRepairCalls        int64 `json:"tool_repair_calls"`
+	ToolRepairSucceeded    int64 `json:"tool_repair_succeeded"`
+	ToolRepairFailed       int64 `json:"tool_repair_failed"`
+	ToolRepairNotes        int64 `json:"tool_repair_notes"`
+	ToolErrors             int64 `json:"tool_errors"`
+	ToolDurationMS         int64 `json:"tool_duration_ms"`
+	LoopGuardInterventions int64 `json:"loop_guard_interventions"`
+	ForcedNoTools          int64 `json:"forced_no_tools"`
+}
+
+func (s *Session) ToolStatsSnapshot() ToolStatsSnapshot {
+	if s == nil {
+		return ToolStatsSnapshot{}
+	}
+	return ToolStatsSnapshot{
+		ToolRequests:           s.toolRequests.Load(),
+		ToolNameCanonicalized:  s.toolNameCanonicalized.Load(),
+		ToolArgsRepaired:       s.toolArgsRepaired.Load(),
+		ToolRepairCalls:        s.toolRepairCalls.Load(),
+		ToolRepairSucceeded:    s.toolRepairSucceeded.Load(),
+		ToolRepairFailed:       s.toolRepairFailed.Load(),
+		ToolRepairNotes:        s.toolRepairNotes.Load(),
+		ToolErrors:             s.toolErrors.Load(),
+		ToolDurationMS:         s.toolDurationMS.Load(),
+		LoopGuardInterventions: s.loopGuardInterventions.Load(),
+		ForcedNoTools:          s.forcedNoTools.Load(),
+	}
+}
+
 // observeForStats updates per-session counters from events flowing
 // through fanout. Called once per event, before subscribers receive
 // it, so the counters reflect everything the Loop emitted regardless
@@ -1240,7 +1288,26 @@ func (s *Session) observeForStats(ev sse.Event) {
 		// usually want to know how many turns the session has gone
 		// through, completed or not.
 		s.turns.Add(1)
+		var p sse.TurnEndPayload
+		if err := json.Unmarshal(ev.Data, &p); err != nil || p.ToolStats == nil {
+			return
+		}
+		s.addToolStats(*p.ToolStats)
 	}
+}
+
+func (s *Session) addToolStats(stats sse.ToolRuntimeStats) {
+	s.toolRequests.Add(int64(stats.ToolRequests))
+	s.toolNameCanonicalized.Add(int64(stats.ToolNameCanonicalized))
+	s.toolArgsRepaired.Add(int64(stats.ToolArgsRepaired))
+	s.toolRepairCalls.Add(int64(stats.ToolRepairCalls))
+	s.toolRepairSucceeded.Add(int64(stats.ToolRepairSucceeded))
+	s.toolRepairFailed.Add(int64(stats.ToolRepairFailed))
+	s.toolRepairNotes.Add(int64(stats.ToolRepairNotes))
+	s.toolErrors.Add(int64(stats.ToolErrors))
+	s.toolDurationMS.Add(stats.ToolDurationMS)
+	s.loopGuardInterventions.Add(int64(stats.LoopGuardInterventions))
+	s.forcedNoTools.Add(int64(stats.ForcedNoTools))
 }
 
 // Workspace exposes the session's on-disk directory for tests that

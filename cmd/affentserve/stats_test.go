@@ -266,6 +266,90 @@ func TestSession_UsageSnapshot_AccumulatesFromEvents(t *testing.T) {
 	}
 }
 
+func TestSession_ToolStatsSnapshot_AccumulatesFromTurnEnd(t *testing.T) {
+	pool := newTestPool(t, 4, "5m")
+	s, err := pool.GetOrCreate("tool-stats-test")
+	if err != nil {
+		t.Fatalf("GetOrCreate: %v", err)
+	}
+
+	for _, p := range []sse.TurnEndPayload{
+		{
+			TurnID: "t1",
+			Reason: sse.TurnEndCompleted,
+			ToolStats: &sse.ToolRuntimeStats{
+				ToolRequests:           2,
+				ToolNameCanonicalized:  1,
+				ToolArgsRepaired:       1,
+				ToolRepairCalls:        1,
+				ToolRepairSucceeded:    1,
+				ToolRepairNotes:        3,
+				ToolErrors:             0,
+				ToolDurationMS:         15,
+				LoopGuardInterventions: 1,
+			},
+		},
+		{
+			TurnID: "t2",
+			Reason: sse.TurnEndMaxTurns,
+			ToolStats: &sse.ToolRuntimeStats{
+				ToolRequests:     1,
+				ToolArgsRepaired: 1,
+				ToolRepairCalls:  1,
+				ToolRepairFailed: 1,
+				ToolRepairNotes:  1,
+				ToolErrors:       1,
+				ToolDurationMS:   7,
+				ForcedNoTools:    1,
+			},
+		},
+	} {
+		ev, err := sse.NewEvent(sse.TypeTurnEnd, p)
+		if err != nil {
+			t.Fatal(err)
+		}
+		s.events <- ev
+	}
+
+	deadline := time.Now().Add(2 * time.Second)
+	for {
+		got := s.ToolStatsSnapshot()
+		if got.ToolRequests == 3 &&
+			got.ToolNameCanonicalized == 1 &&
+			got.ToolArgsRepaired == 2 &&
+			got.ToolRepairCalls == 2 &&
+			got.ToolRepairSucceeded == 1 &&
+			got.ToolRepairFailed == 1 &&
+			got.ToolRepairNotes == 4 &&
+			got.ToolErrors == 1 &&
+			got.ToolDurationMS == 22 &&
+			got.LoopGuardInterventions == 1 &&
+			got.ForcedNoTools == 1 {
+			break
+		}
+		if time.Now().After(deadline) {
+			t.Fatalf("ToolStatsSnapshot never reached expected totals: got %+v", got)
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+
+	h := handleStats(pool.cfg, pool)
+	r := httptest.NewRequest("GET", "/v1/stats", nil)
+	w := httptest.NewRecorder()
+	h.ServeHTTP(w, r)
+
+	var resp statsResponse
+	if err := json.Unmarshal(w.Body.Bytes(), &resp); err != nil {
+		t.Fatalf("decode stats: %v body=%s", err, w.Body.String())
+	}
+	if len(resp.Sessions) != 1 {
+		t.Fatalf("sessions = %d, want 1", len(resp.Sessions))
+	}
+	if resp.Sessions[0].Tools.ToolRepairFailed != 1 || resp.Aggregate.Tools.ToolRepairSucceeded != 1 {
+		t.Fatalf("stats tool snapshots = session:%+v aggregate:%+v", resp.Sessions[0].Tools, resp.Aggregate.Tools)
+	}
+}
+
 func TestSession_BrowserStatsSnapshot_ZeroWhenNoBrowser(t *testing.T) {
 	pool := newTestPool(t, 4, "5m")
 	s, err := pool.GetOrCreate("no-browser")

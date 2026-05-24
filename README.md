@@ -811,10 +811,11 @@ Native session endpoints:
 - `DELETE /v1/sessions/{id}` closes and purges the session.
 
 `GET /v1/stats` returns the active session count, per-session usage/browser
-stats, aggregate token/browser counters, `workspace_root`, `memory_root`,
-`session_state_root`, runtime `boundaries`, and `shutting_down` so authorized
-clients can verify the durable state path, see effective turn/tool caps, and
-stop sending new work during graceful drain.
+stats, per-session tool runtime counters, aggregate token/browser/tool counters,
+`workspace_root`, `memory_root`, `session_state_root`, runtime `boundaries`, and
+`shutting_down` so authorized clients can verify the durable state path, see
+effective turn/tool caps and repair outcomes, and stop sending new work during
+graceful drain.
 The boundary snapshot includes loop guard thresholds, plan state/active-plan,
 focused-task budget/output, subagent input/budget/depth, runtime skill
 install/input, JSONL record, MCP result, MCP transport, and memory
