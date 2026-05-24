@@ -52,6 +52,8 @@ type statsBoundaries struct {
 	LoopGuardIdenticalCalls    int    `json:"loop_guard_identical_calls"`
 	LoopGuardFailureWarn       int    `json:"loop_guard_failure_warn"`
 	LoopGuardFailureHalt       int    `json:"loop_guard_failure_halt"`
+	LoopGuardWebFetchWarn      int    `json:"loop_guard_web_fetch_failure_warn"`
+	LoopGuardWebFetchHalt      int    `json:"loop_guard_web_fetch_failure_halt"`
 	PlanPerTurnCalls           int    `json:"plan_per_turn_calls"`
 	PlanSteps                  int    `json:"plan_steps"`
 	PlanStepTextBytes          int    `json:"plan_step_text_bytes"`
@@ -252,6 +254,8 @@ func statsBoundarySnapshot(cfg Config) statsBoundaries {
 		LoopGuardIdenticalCalls:    ab.LoopGuardIdenticalCalls,
 		LoopGuardFailureWarn:       ab.LoopGuardFailureWarn,
 		LoopGuardFailureHalt:       ab.LoopGuardFailureHalt,
+		LoopGuardWebFetchWarn:      ab.LoopGuardWebFetchFailureWarn,
+		LoopGuardWebFetchHalt:      ab.LoopGuardWebFetchFailureHalt,
 		PlanPerTurnCalls:           ab.PlanPerTurnCalls,
 		PlanSteps:                  ab.PlanSteps,
 		PlanStepTextBytes:          ab.PlanStepTextBytes,

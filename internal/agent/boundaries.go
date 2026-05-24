@@ -21,6 +21,8 @@ type RuntimeBoundaries struct {
 	LoopGuardIdenticalCalls         int
 	LoopGuardFailureWarn            int
 	LoopGuardFailureHalt            int
+	LoopGuardWebFetchFailureWarn    int
+	LoopGuardWebFetchFailureHalt    int
 	PlanPerTurnCalls                int
 	PlanSteps                       int
 	PlanStepTextBytes               int
@@ -85,6 +87,8 @@ func DefaultRuntimeBoundaries() RuntimeBoundaries {
 		LoopGuardIdenticalCalls:         identicalToolCallBlockThreshold,
 		LoopGuardFailureWarn:            toolFailureWarnThreshold,
 		LoopGuardFailureHalt:            toolFailureHaltThreshold,
+		LoopGuardWebFetchFailureWarn:    webFetchFailureWarnThreshold,
+		LoopGuardWebFetchFailureHalt:    webFetchFailureHaltThreshold,
 		PlanPerTurnCalls:                perTurnCallCaps[PlanToolName],
 		PlanSteps:                       maxPlanSteps,
 		PlanStepTextBytes:               maxPlanStepTextBytes,
