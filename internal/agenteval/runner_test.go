@@ -1347,6 +1347,142 @@ Body:
 	}
 }
 
+// TestRunner_EndToEnd_ExternalResearchFlow pins the generic research shape
+// behind real user requests like "analyze recent trend for X" without baking in
+// any specific project, subnet, site, or token. The agent first discovers
+// sources, then reads primary/metrics/social sources, then separates verified
+// facts from sentiment in the final answer.
+func TestRunner_EndToEnd_ExternalResearchFlow(t *testing.T) {
+	webSearch := agent.Tool{
+		Name:        "web_search",
+		Description: "Test-only search stand-in: returns deterministic source candidates.",
+		Schema: json.RawMessage(`{
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["query"],
+            "properties": {
+                "query": {"type": "string"},
+                "num_results": {"type": "integer"}
+            }
+        }`),
+		Execute: func(ctx context.Context, args json.RawMessage) (string, error) {
+			return `[
+  {"title":"Nimbus Protocol official docs","url":"https://official.example/nimbus/about","snippet":"Primary source describing Nimbus Protocol as a decentralized compute subnet."},
+  {"title":"Nimbus Protocol market metrics","url":"https://metrics.example/nimbus","snippet":"Current price, market cap, volume, and 24h change."},
+  {"title":"Recent community discussion","url":"https://social.example/search/nimbus","snippet":"Recent positive and critical community posts."}
+]`, nil
+		},
+	}
+	webFetch := agent.Tool{
+		Name:        "web_fetch",
+		Description: "Test-only fetch stand-in: returns deterministic page text.",
+		Schema: json.RawMessage(`{
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["url"],
+            "properties": {
+                "url": {"type": "string"}
+            }
+        }`),
+		Execute: func(ctx context.Context, args json.RawMessage) (string, error) {
+			var p struct {
+				URL string `json:"url"`
+			}
+			if err := json.Unmarshal(args, &p); err != nil {
+				return "", err
+			}
+			switch p.URL {
+			case "https://official.example/nimbus/about":
+				return "Official docs, updated 2026-05-20: Nimbus Protocol is a decentralized compute subnet for model-routing workloads.", nil
+			case "https://metrics.example/nimbus":
+				return "Metrics snapshot as of 2026-05-24T12:00:00Z: price $17.78, market cap $56.7M, 24h change +7.2%, 24h volume $2.36M.", nil
+			case "https://social.example/search/nimbus":
+				return "Community posts from 2026-05-23 to 2026-05-24: supporters cite rising volume and integrations; critics question sustainability and liquidity depth.", nil
+			default:
+				return "", fmt.Errorf("unexpected test URL %q", p.URL)
+			}
+		},
+	}
+
+	turn1 := []string{
+		`{"choices":[{"delta":{"role":"assistant","tool_calls":[{"index":0,"id":"s1","type":"function","function":{"name":"web_search","arguments":"{\"query\":\"Nimbus Protocol recent trend market metrics sentiment\",\"num_results\":5}"}}]},"finish_reason":null}]}`,
+		`{"choices":[{"delta":{},"finish_reason":"tool_calls"}]}`,
+		`[DONE]`,
+	}
+	turn2 := []string{
+		`{"choices":[{"delta":{"role":"assistant","tool_calls":[{"index":0,"id":"f1","type":"function","function":{"name":"web_fetch","arguments":"{\"url\":\"https://official.example/nimbus/about\"}"}},{"index":1,"id":"f2","type":"function","function":{"name":"web_fetch","arguments":"{\"url\":\"https://metrics.example/nimbus\"}"}},{"index":2,"id":"f3","type":"function","function":{"name":"web_fetch","arguments":"{\"url\":\"https://social.example/search/nimbus\"}"}}]},"finish_reason":null}]}`,
+		`{"choices":[{"delta":{},"finish_reason":"tool_calls"}]}`,
+		`[DONE]`,
+	}
+	turn3 := []string{
+		`{"choices":[{"delta":{"role":"assistant","content":"Nimbus Protocol is a decentralized compute subnet for model-routing workloads according to the official docs. As of 2026-05-24T12:00:00Z, the metrics source reports price $17.78, market cap $56.7M, 24h change +7.2%, and 24h volume $2.36M. Recent community sentiment is mixed: supporters cite volume and integrations, while critics question sustainability and liquidity depth. Overall: recent momentum is positive on the metrics, but the outlook should be treated cautiously because social evidence is mixed and liquidity depth is questioned."},"finish_reason":"stop"}]}`,
+		`[DONE]`,
+	}
+	srv := newScriptedLLM(t, [][]string{turn1, turn2, turn3})
+
+	scenario := Scenario{
+		Name:         "external_research_trend_synthesis",
+		Description:  "agent discovers sources, reads primary/metrics/social pages, and separates facts from sentiment",
+		Prompt:       "Assess the recent trend for Nimbus Protocol. First identify what it is, then collect current market metrics and recent community sentiment. Be objective and cite evidence types.",
+		MaxTurnSteps: 6,
+		Checks: []Check{
+			TurnEndedCleanly(),
+			ToolCalled("web_search", func(args map[string]any) bool {
+				q, _ := args["query"].(string)
+				return strings.Contains(q, "Nimbus Protocol")
+			}),
+			ToolCalled("web_fetch", func(args map[string]any) bool {
+				return args["url"] == "https://official.example/nimbus/about"
+			}),
+			ToolCalled("web_fetch", func(args map[string]any) bool {
+				return args["url"] == "https://metrics.example/nimbus"
+			}),
+			ToolCalled("web_fetch", func(args map[string]any) bool {
+				return args["url"] == "https://social.example/search/nimbus"
+			}),
+			ToolCalledAtLeast("web_fetch", 3),
+			ToolCalledBefore("web_search", "web_fetch"),
+			ToolNotCalled("shell", nil),
+			FinalTextContains("decentralized compute subnet"),
+			FinalTextContains("market cap $56.7M"),
+			FinalTextContains("+7.2%"),
+			FinalTextContains("mixed"),
+			FinalTextContains("cautiously"),
+		},
+	}
+
+	runner := &Runner{
+		LLM:            agent.NewLLMClient(srv.URL, "", "fake-model"),
+		MaxTurnSteps:   6,
+		PerCallTimeout: 5 * time.Second,
+		RunTimeout:     20 * time.Second,
+		Log:            zerolog.Nop(),
+		BuildRegistry: func(ctx context.Context, workspaceDir string, exec executor.Executor) (*agent.Registry, error) {
+			_ = ctx
+			_ = workspaceDir
+			_ = exec
+			reg := agent.NewRegistry()
+			reg.Add(&webSearch)
+			reg.Add(&webFetch)
+			return reg, nil
+		},
+	}
+
+	out, err := runner.Run(context.Background(), scenario)
+	if err != nil {
+		t.Fatalf("Runner.Run: %v", err)
+	}
+	if !out.Pass {
+		t.Errorf("expected all checks to pass; failed: %v", out.FailedChecks())
+		for _, r := range out.Results {
+			t.Logf("  %s: pass=%v detail=%s", r.Check, r.Pass, r.Detail)
+		}
+	}
+	if len(out.Trace.Tools) != 4 {
+		t.Fatalf("expected one search and three fetches; got %+v", out.Trace.Tools)
+	}
+}
+
 // TestRunner_RequiresLLM pins the early-validation: Runner without an
 // LLM client returns a clear error instead of nil-deref'ing inside
 // EnsureSystemPrompt / SendUser.
