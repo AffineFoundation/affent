@@ -122,6 +122,26 @@ func TestHandleSessionMessage_PlanOnlyRequiresPlanToolWithoutCreatingSession(t *
 	}
 }
 
+func TestHandleSessionMessage_ExecutePlanRequiresPlanToolBeforeReadingPlan(t *testing.T) {
+	pool := newTestPool(t, 4, "5m")
+
+	r := httptest.NewRequest(http.MethodPost, "/v1/sessions/no-plan-tool/messages", strings.NewReader(`{"mode":"execute_plan"}`))
+	w := httptest.NewRecorder()
+	handleSessionRoutes(pool).ServeHTTP(w, r)
+	if got := w.Result().StatusCode; got != http.StatusConflict {
+		t.Fatalf("status = %d, want 409; body=%s", got, w.Body.String())
+	}
+	if !strings.Contains(w.Body.String(), "mode_unavailable") || !strings.Contains(w.Body.String(), "plan tool is not available") {
+		t.Fatalf("body should explain missing plan tool: %s", w.Body.String())
+	}
+	if strings.Contains(w.Body.String(), "no persisted plan") {
+		t.Fatalf("mode-unavailable response should not inspect plan state first: %s", w.Body.String())
+	}
+	if activeSessionByID(pool, "no-plan-tool") != nil {
+		t.Fatal("execute-plan rejection must not create a session")
+	}
+}
+
 func TestHandleSessionMessage_ExecutePlanRequiresExistingRunnablePlan(t *testing.T) {
 	pool := newTestPool(t, 4, "5m")
 	pool.cfg.EnableBuiltins = true

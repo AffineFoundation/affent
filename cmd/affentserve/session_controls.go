@@ -63,6 +63,10 @@ func handleSessionMessage(pool *SessionPool, sessionID string, w http.ResponseWr
 		writeJSONErrorTyped(w, http.StatusBadRequest, "content is required", nil, "bad_request")
 		return
 	}
+	if sessionMessageModeRequiresPlanTool(mode) && !pool.cfg.EnableBuiltins {
+		writeJSONErrorTyped(w, http.StatusConflict, "session mode unavailable", errors.New("plan tool is not available"), "mode_unavailable")
+		return
+	}
 	if mode == sessionMessageModeExecutePlan {
 		content, err = prepareSessionExecutePlan(pool, sessionID, content)
 		if err != nil {
@@ -71,10 +75,6 @@ func handleSessionMessage(pool *SessionPool, sessionID string, w http.ResponseWr
 		}
 	} else if mode == sessionMessageModePlanOnly {
 		content = agent.PlanOnlyUserPrompt(content)
-	}
-	if sessionMessageModeRequiresPlanTool(mode) && !pool.cfg.EnableBuiltins {
-		writeJSONErrorTyped(w, http.StatusConflict, "session mode unavailable", errors.New("plan tool is not available"), "mode_unavailable")
-		return
 	}
 	sess, err := pool.GetOrCreate(sessionID)
 	if err != nil {
