@@ -297,12 +297,17 @@ func sanitizeFindings(kind FocusedTaskKind, in []FocusedTaskFinding) ([]FocusedT
 			warnings = append(warnings, "omitted review finding without valid severity: "+previewN(claim, 160))
 			continue
 		}
+		confidence := normalizeConfidence(f.Confidence)
+		if kind == FocusedTaskRecall && !validFocusedTaskConfidence(confidence) {
+			warnings = append(warnings, "omitted recall finding without valid confidence: "+previewN(claim, 160))
+			continue
+		}
 		out = append(out, FocusedTaskFinding{
 			Claim:      claim,
 			Evidence:   evidence,
 			Source:     source,
 			Severity:   severity,
-			Confidence: normalizeConfidence(f.Confidence),
+			Confidence: confidence,
 		})
 	}
 	if len(out) == 0 {
@@ -313,6 +318,15 @@ func sanitizeFindings(kind FocusedTaskKind, in []FocusedTaskFinding) ([]FocusedT
 
 func validFocusedTaskSeverity(severity string) bool {
 	switch severity {
+	case "low", "medium", "high":
+		return true
+	default:
+		return false
+	}
+}
+
+func validFocusedTaskConfidence(confidence string) bool {
+	switch confidence {
 	case "low", "medium", "high":
 		return true
 	default:

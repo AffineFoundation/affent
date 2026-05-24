@@ -88,7 +88,7 @@ func TestExtractBalancedJSONObject_HandlesEscapedQuotes(t *testing.T) {
 func TestBuildFocusedTaskResult_HappyPath(t *testing.T) {
 	profile := recallProfile()
 	res := childRunResult{
-		Report:        `{"task_type":"recall","ok":true,"summary":"two facts","findings":[{"claim":"c1","evidence":"e1","source":"sess:1","confidence":"high"},{"claim":"c2","evidence":"e2","source":"mem:topic"}],"warnings":["partial"],"suggested_next":["read X"]}`,
+		Report:        `{"task_type":"recall","ok":true,"summary":"two facts","findings":[{"claim":"c1","evidence":"e1","source":"sess:1","confidence":"high"},{"claim":"c2","evidence":"e2","source":"mem:topic","confidence":"medium"}],"warnings":["partial"],"suggested_next":["read X"]}`,
 		TurnEndReason: sse.TurnEndCompleted,
 		Usage:         subagentUsage{InputTokens: 100, OutputTokens: 50},
 	}
@@ -188,7 +188,7 @@ func TestSanitizeFindings_DropsEmptyClaimsAndTruncatesEvidence(t *testing.T) {
 		{Claim: "  ", Evidence: "should drop"},
 		{Claim: "two", Evidence: "brief", Source: "memory:topic"},
 	}
-	out, warnings := sanitizeFindings(FocusedTaskRecall, in)
+	out, warnings := sanitizeFindings(FocusedTaskExplore, in)
 	if len(warnings) != 0 {
 		t.Fatalf("unexpected warnings: %+v", warnings)
 	}
@@ -206,7 +206,7 @@ func TestSanitizeFindings_CapsCount(t *testing.T) {
 	for i := range in {
 		in[i] = FocusedTaskFinding{Claim: "c", Evidence: "e", Source: "src"}
 	}
-	out, warnings := sanitizeFindings(FocusedTaskRecall, in)
+	out, warnings := sanitizeFindings(FocusedTaskExplore, in)
 	if len(warnings) != 0 {
 		t.Fatalf("unexpected warnings: %+v", warnings)
 	}
@@ -326,7 +326,7 @@ func TestSanitizeFindings_DowngradesMissingSourceToWarning(t *testing.T) {
 		{Claim: "sourced", Evidence: "line", Source: "session:one"},
 		{Claim: "unsupported", Evidence: "looks plausible"},
 	}
-	out, warnings := sanitizeFindings(FocusedTaskRecall, in)
+	out, warnings := sanitizeFindings(FocusedTaskExplore, in)
 	if len(out) != 1 || out[0].Claim != "sourced" {
 		t.Fatalf("source-less finding should be omitted, got findings=%+v", out)
 	}
@@ -340,7 +340,7 @@ func TestSanitizeFindings_DowngradesMissingEvidenceToWarning(t *testing.T) {
 		{Claim: "supported", Evidence: "quoted user preference", Source: "memory:prefs"},
 		{Claim: "no evidence", Source: "session:two"},
 	}
-	out, warnings := sanitizeFindings(FocusedTaskRecall, in)
+	out, warnings := sanitizeFindings(FocusedTaskExplore, in)
 	if len(out) != 1 || out[0].Claim != "supported" {
 		t.Fatalf("evidence-less finding should be omitted, got findings=%+v", out)
 	}
@@ -363,6 +363,23 @@ func TestSanitizeFindings_ReviewRequiresSeverity(t *testing.T) {
 		!strings.Contains(warnings[0], "omitted review finding without valid severity: summary without severity") ||
 		!strings.Contains(warnings[1], "omitted review finding without valid severity: invalid severity") {
 		t.Fatalf("review severity warnings = %+v", warnings)
+	}
+}
+
+func TestSanitizeFindings_RecallRequiresConfidence(t *testing.T) {
+	in := []FocusedTaskFinding{
+		{Claim: "remembered preference", Evidence: "user said concise", Source: "memory:prefs", Confidence: "h"},
+		{Claim: "missing confidence", Evidence: "session snippet", Source: "session:two"},
+		{Claim: "invalid confidence", Evidence: "weak snippet", Source: "session:three", Confidence: "certain"},
+	}
+	out, warnings := sanitizeFindings(FocusedTaskRecall, in)
+	if len(out) != 1 || out[0].Claim != "remembered preference" || out[0].Confidence != "high" {
+		t.Fatalf("recall should keep only confident findings, got findings=%+v", out)
+	}
+	if len(warnings) != 2 ||
+		!strings.Contains(warnings[0], "omitted recall finding without valid confidence: missing confidence") ||
+		!strings.Contains(warnings[1], "omitted recall finding without valid confidence: invalid confidence") {
+		t.Fatalf("recall confidence warnings = %+v", warnings)
 	}
 }
 
