@@ -57,6 +57,40 @@ func ToolCalledAtLeast(toolName string, min int) Check {
 	}
 }
 
+func ToolCalledAtMost(toolName string, max int) Check {
+	return ToolCalledAtMostMatching(toolName, max, nil)
+}
+
+// ToolCalledAtMostMatching passes when at most max calls to toolName match
+// argMatcher. It is useful for recovery evals where a single failed attempt is
+// acceptable, but repeating the same broken URL/ref/query is not.
+func ToolCalledAtMostMatching(toolName string, max int, argMatcher func(args map[string]any) bool) Check {
+	return Check{
+		Name: fmt.Sprintf("tool_called_at_most:%s:%d", toolName, max),
+		Eval: func(t Trace) CheckResult {
+			count := 0
+			var callIDs []string
+			for _, c := range t.Tools {
+				if c.Tool != toolName {
+					continue
+				}
+				if argMatcher != nil && !argMatcher(c.Args) {
+					continue
+				}
+				count++
+				callIDs = append(callIDs, c.CallID)
+			}
+			if count <= max {
+				return CheckResult{Pass: true, Detail: fmt.Sprintf("%s calls=%d", toolName, count)}
+			}
+			return CheckResult{
+				Pass:   false,
+				Detail: fmt.Sprintf("expected at most %d matching %q invocation(s), got %d call_ids=%v", max, toolName, count, callIDs),
+			}
+		},
+	}
+}
+
 // ToolNotCalled passes when the agent never invoked the named tool.
 // Used to pin "the agent must not edit tests" / "the agent must not
 // run broad shell scans".

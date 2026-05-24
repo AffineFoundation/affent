@@ -86,6 +86,37 @@ func TestToolCalledAtLeast(t *testing.T) {
 	}
 }
 
+func TestToolCalledAtMost(t *testing.T) {
+	trace := Trace{
+		Tools: []ToolCall{
+			{CallID: "a", Tool: "web_fetch", Args: map[string]any{"url": "https://blocked.example/a"}},
+			{CallID: "b", Tool: "web_fetch", Args: map[string]any{"url": "https://ok.example/a"}},
+			{CallID: "c", Tool: "web_fetch", Args: map[string]any{"url": "https://blocked.example/a"}},
+		},
+	}
+
+	if res := ToolCalledAtMost("web_search", 0).Eval(trace); !res.Pass {
+		t.Fatalf("expected missing web_search to satisfy at-most 0: %+v", res)
+	}
+	res := ToolCalledAtMost("web_fetch", 2).Eval(trace)
+	if res.Pass {
+		t.Fatal("expected web_fetch at-most 2 to fail")
+	}
+	if !strings.Contains(res.Detail, "at most 2") || !strings.Contains(res.Detail, "a") || !strings.Contains(res.Detail, "c") {
+		t.Fatalf("failure detail should explain count and matching call ids: %s", res.Detail)
+	}
+
+	blockedURL := func(args map[string]any) bool {
+		return args["url"] == "https://blocked.example/a"
+	}
+	if res := ToolCalledAtMostMatching("web_fetch", 1, blockedURL).Eval(trace); res.Pass {
+		t.Fatal("expected repeated blocked URL to fail at-most 1")
+	}
+	if res := ToolCalledAtMostMatching("web_fetch", 2, blockedURL).Eval(trace); !res.Pass {
+		t.Fatalf("expected repeated blocked URL to satisfy at-most 2: %+v", res)
+	}
+}
+
 func TestToolNotCalled(t *testing.T) {
 	trace := Trace{
 		Tools: []ToolCall{
