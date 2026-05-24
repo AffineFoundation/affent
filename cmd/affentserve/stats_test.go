@@ -74,6 +74,12 @@ func TestHandleStats_EmptyPool(t *testing.T) {
 		resp.Boundaries.ActivePlanEvidenceRefs <= 0 || resp.Boundaries.ActivePlanEvidenceRefBytes <= 0 {
 		t.Fatalf("plan boundaries must be positive: %+v", resp.Boundaries)
 	}
+	if resp.Boundaries.FocusedTaskDefaultTurns <= 0 || resp.Boundaries.FocusedTaskMaxTurns <= 0 || resp.Boundaries.FocusedTaskPerTurnCalls <= 0 ||
+		resp.Boundaries.FocusedTaskTypeBytes <= 0 || resp.Boundaries.FocusedTaskObjectiveBytes <= 0 || resp.Boundaries.FocusedTaskToolResult <= 0 ||
+		resp.Boundaries.FocusedTaskSummaryBytes <= 0 || resp.Boundaries.FocusedTaskFindingEvidence <= 0 ||
+		resp.Boundaries.FocusedTaskFindings <= 0 || resp.Boundaries.FocusedTaskListEntries <= 0 || resp.Boundaries.FocusedTaskToolCalls <= 0 {
+		t.Fatalf("focused task boundaries must be positive: %+v", resp.Boundaries)
+	}
 	if resp.Boundaries.MemoryFileBytes <= 0 || resp.Boundaries.MemorySearchQuery <= 0 || resp.Boundaries.MemorySearchTerms <= 0 ||
 		resp.Boundaries.MemorySearchSnippet <= 0 || resp.Boundaries.MemoryResponseEntry <= 0 {
 		t.Fatalf("memory boundaries must be positive: %+v", resp.Boundaries)
@@ -99,6 +105,9 @@ func TestStatsBoundarySnapshotUsesConfiguredTurnLimits(t *testing.T) {
 	}
 	if got.PlanStateBytes != agent.DefaultRuntimeBoundaries().PlanStateBytes {
 		t.Fatalf("PlanStateBytes = %d, want %d", got.PlanStateBytes, agent.DefaultRuntimeBoundaries().PlanStateBytes)
+	}
+	if got.FocusedTaskToolResult != agent.DefaultRuntimeBoundaries().FocusedTaskToolResultBytes {
+		t.Fatalf("FocusedTaskToolResult = %d, want %d", got.FocusedTaskToolResult, agent.DefaultRuntimeBoundaries().FocusedTaskToolResultBytes)
 	}
 }
 

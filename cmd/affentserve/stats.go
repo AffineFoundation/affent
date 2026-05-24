@@ -59,6 +59,17 @@ type statsBoundaries struct {
 	ActivePlanNoteBytes        int    `json:"active_plan_note_bytes"`
 	ActivePlanEvidenceRefs     int    `json:"active_plan_evidence_refs"`
 	ActivePlanEvidenceRefBytes int    `json:"active_plan_evidence_ref_bytes"`
+	FocusedTaskDefaultTurns    int    `json:"focused_task_default_turns"`
+	FocusedTaskMaxTurns        int    `json:"focused_task_max_turns"`
+	FocusedTaskPerTurnCalls    int    `json:"focused_task_per_turn_calls"`
+	FocusedTaskTypeBytes       int    `json:"focused_task_type_bytes"`
+	FocusedTaskObjectiveBytes  int    `json:"focused_task_objective_bytes"`
+	FocusedTaskToolResult      int    `json:"focused_task_tool_result_bytes"`
+	FocusedTaskSummaryBytes    int    `json:"focused_task_summary_bytes"`
+	FocusedTaskFindingEvidence int    `json:"focused_task_finding_evidence_bytes"`
+	FocusedTaskFindings        int    `json:"focused_task_findings"`
+	FocusedTaskListEntries     int    `json:"focused_task_list_entries"`
+	FocusedTaskToolCalls       int    `json:"focused_task_tool_calls"`
 	MCPToolResultBytes         int    `json:"mcp_tool_result_bytes"`
 	MCPHTTPJSONResponse        int    `json:"mcp_http_json_response_bytes"`
 	MCPHTTPSSELine             int    `json:"mcp_http_sse_line_bytes"`
@@ -189,6 +200,17 @@ func statsBoundarySnapshot(cfg Config) statsBoundaries {
 		ActivePlanNoteBytes:        ab.ActivePlanNoteBytes,
 		ActivePlanEvidenceRefs:     ab.ActivePlanEvidenceRefs,
 		ActivePlanEvidenceRefBytes: ab.ActivePlanEvidenceRef,
+		FocusedTaskDefaultTurns:    ab.FocusedTaskDefaultTurns,
+		FocusedTaskMaxTurns:        ab.FocusedTaskMaxTurns,
+		FocusedTaskPerTurnCalls:    ab.FocusedTaskPerTurnCalls,
+		FocusedTaskTypeBytes:       ab.FocusedTaskTypeBytes,
+		FocusedTaskObjectiveBytes:  ab.FocusedTaskObjectiveBytes,
+		FocusedTaskToolResult:      ab.FocusedTaskToolResultBytes,
+		FocusedTaskSummaryBytes:    ab.FocusedTaskSummaryBytes,
+		FocusedTaskFindingEvidence: ab.FocusedTaskFindingEvidenceBytes,
+		FocusedTaskFindings:        ab.FocusedTaskFindings,
+		FocusedTaskListEntries:     ab.FocusedTaskListEntries,
+		FocusedTaskToolCalls:       ab.FocusedTaskToolCalls,
 		MCPToolResultBytes:         mb.ToolResultBytes,
 		MCPHTTPJSONResponse:        mb.HTTPJSONResponseBytes,
 		MCPHTTPSSELine:             mb.HTTPSSELineBytes,
