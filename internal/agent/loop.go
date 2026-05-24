@@ -374,7 +374,7 @@ func externalResearchSystemGuidance(surface externalResearchToolSurface) string 
 		b.WriteString("\n- Use browser_navigate/browser_snapshot for page inspection. Prefer official pages, source repositories, block explorers, filings, API docs, and primary project sites over summaries.")
 	}
 	if surface.WebFetch {
-		b.WriteString("\n- If web_fetch fails with a blocked page, HTTP error, timeout, or non-text response, follow the tool's Next guidance. Do not keep retrying the same failing URL; ")
+		b.WriteString("\n- If web_fetch fails with a blocked page, dynamic app shell, HTTP error, timeout, or non-text response, follow the tool's Next guidance. Do not keep retrying the same failing URL; ")
 		switch {
 		case surface.WebSearch && surface.Browser:
 			b.WriteString("switch to a canonical/alternate source from search results, use browser_navigate/browser_snapshot for rendered pages, or answer with clearly marked unverified gaps.")

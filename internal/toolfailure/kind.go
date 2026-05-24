@@ -73,6 +73,7 @@ func IsNoEvidenceWebFetchResult(result string) bool {
 	result = strings.TrimSpace(result)
 	return strings.HasPrefix(result, "[empty response:") ||
 		strings.HasPrefix(result, "[blocked response:") ||
+		strings.HasPrefix(result, "[dynamic page shell:") ||
 		strings.HasPrefix(result, "[non-text response:")
 }
 

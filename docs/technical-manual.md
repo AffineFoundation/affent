@@ -254,6 +254,10 @@ the agent can switch source instead of burning turns:
   cookie/JavaScript, search-challenge, or social-site error page.
 - `Failure: kind=empty_response`: the source returned a successful HTTP
   response with no readable body.
+- `Failure: kind=dynamic_shell`: the source returned a successful HTML response
+  that looks like a client-rendered loading/app shell rather than source
+  evidence. Use a canonical API/text endpoint, rendering tool, or mark the
+  source as dynamic/unverified.
 - `Failure: kind=non_text`: the source returned an image, PDF, archive, or
   another body that is not readable page evidence.
 - `Failure: kind=timeout`, `network_error`, `rate_limited`, `server_error`,

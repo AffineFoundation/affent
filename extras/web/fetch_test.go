@@ -308,6 +308,52 @@ func TestFetchTool_BotChallengePageReportsBlockedNoEvidence(t *testing.T) {
 	}
 }
 
+func TestFetchTool_DynamicAppShellReportsNoEvidence(t *testing.T) {
+	scripts := strings.Repeat(`<script src="/_next/static/chunks/app.js"></script>`, 10)
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "text/html; charset=utf-8")
+		w.Write([]byte(`<!doctype html><html><head>` + scripts + `</head><body><div id="__next"><main>Loading...</main></div></body></html>`))
+	}))
+	defer srv.Close()
+
+	tool := FetchTool(FetchConfig{AllowPrivateNetwork: true})
+	args, _ := json.Marshal(map[string]string{"url": srv.URL})
+	out, err := tool.Execute(context.Background(), args)
+	if err != nil {
+		t.Fatalf("Execute: %v", err)
+	}
+	for _, want := range []string{"dynamic page shell", "Failure: kind=dynamic_shell", "Next:", "loading/app shell", "dynamic/unverified"} {
+		if !strings.Contains(out, want) {
+			t.Fatalf("dynamic shell output missing %q:\n%s", want, out)
+		}
+	}
+	if strings.Contains(out, "browser") {
+		t.Fatalf("dynamic shell guidance should not mention unavailable browser tools directly:\n%s", out)
+	}
+}
+
+func TestFetchTool_DoesNotClassifyContentfulClientRenderedPage(t *testing.T) {
+	content := strings.Repeat("This report has audited market metrics, subnet history, price notes, and clear dated evidence. ", 20)
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "text/html; charset=utf-8")
+		w.Write([]byte(`<!doctype html><html><head><script src="/_next/static/chunks/app.js"></script></head><body><main><h1>Current report</h1><p>` + content + `</p></main></body></html>`))
+	}))
+	defer srv.Close()
+
+	tool := FetchTool(FetchConfig{AllowPrivateNetwork: true})
+	args, _ := json.Marshal(map[string]string{"url": srv.URL})
+	out, err := tool.Execute(context.Background(), args)
+	if err != nil {
+		t.Fatalf("Execute: %v", err)
+	}
+	if strings.Contains(out, "dynamic page shell") || strings.Contains(out, "Failure: kind=dynamic_shell") {
+		t.Fatalf("contentful page should remain readable evidence:\n%s", out)
+	}
+	if !strings.Contains(out, "Current report") || !strings.Contains(out, "audited market metrics") {
+		t.Fatalf("contentful page output missing expected evidence:\n%s", out)
+	}
+}
+
 func TestFetchTool_RequiresURL(t *testing.T) {
 	tool := FetchTool(FetchConfig{AllowPrivateNetwork: true})
 	_, err := tool.Execute(context.Background(), json.RawMessage(`{}`))

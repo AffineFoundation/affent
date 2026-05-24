@@ -488,6 +488,8 @@ func toolFailureKindHint(kind string) string {
 		return "web_fetch received an empty successful response; do not treat it as evidence, switch source or use a rendered/API/text endpoint"
 	case "non_text":
 		return "web_fetch received non-readable content; fetch an HTML/API/text variant or use browser/screenshot tooling when configured"
+	case "dynamic_shell":
+		return "web_fetch received a client-rendered loading/app shell rather than source evidence; use a canonical API/text endpoint or rendered page tooling when configured"
 	case "timeout":
 		return "tool request timed out; retry once only if the source is important, then switch source or report the gap"
 	case "rate_limited":

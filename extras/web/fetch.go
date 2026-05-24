@@ -196,6 +196,9 @@ func fetch(ctx context.Context, cfg FetchConfig, requestURL string) (string, err
 	if reason := blockedPageReason(out, finalURL); reason != "" {
 		return blockedFetchResult(finalURL, ct, reason), nil
 	}
+	if reason := dynamicPageShellReason(body, ct, out); reason != "" {
+		return dynamicPageShellResult(finalURL, ct, reason), nil
+	}
 
 	if len(out) > cfg.MaxResultChars {
 		// Snap back to a UTF-8 rune boundary so accented Latin, CJK,
@@ -219,6 +222,10 @@ func emptyFetchResult(finalURL, contentType string) string {
 
 func blockedFetchResult(finalURL, contentType, reason string) string {
 	return fmt.Sprintf("[blocked response: URL=%s, Content-Type=%q, Reason=%q]\nFailure: kind=blocked\nNext: do not treat this challenge/error page as source evidence; use an available search result snippet only as weak evidence, switch to a canonical API/text/source page, use an available rendering tool/source, or mark this source as blocked/unverified.", finalURL, contentType, reason)
+}
+
+func dynamicPageShellResult(finalURL, contentType, reason string) string {
+	return fmt.Sprintf("[dynamic page shell: URL=%s, Content-Type=%q, Reason=%q]\nFailure: kind=dynamic_shell\nNext: do not treat this loading/app shell as source evidence; use a canonical API/text/source page, an available rendering tool/source, or answer with this source marked as dynamic/unverified.", finalURL, contentType, reason)
 }
 
 func recoverableFetchError(requestURL, finalURL string, status int, err error) error {
@@ -438,6 +445,51 @@ func blockedPageReason(markdown, finalURL string) string {
 		return "social site error page"
 	}
 	return ""
+}
+
+func dynamicPageShellReason(body []byte, contentType, markdown string) string {
+	mediaType := contentMediaType(contentType)
+	if mediaType != "text/html" && mediaType != "application/xhtml+xml" {
+		if !shouldSniffBody(mediaType) || !looksLikeHTML(body) {
+			return ""
+		}
+	}
+
+	sample := body
+	const htmlSampleLimit = 256 * 1024
+	if len(sample) > htmlSampleLimit {
+		sample = sample[:htmlSampleLimit]
+	}
+	htmlLower := strings.ToLower(string(sample))
+	if !hasClientRenderedAppMarker(htmlLower) {
+		return ""
+	}
+
+	text := strings.ToLower(strings.Join(strings.Fields(markdown), " "))
+	switch {
+	case text == "":
+		return "client-rendered app shell with no readable text"
+	case len(text) <= 900 && containsAny(text, "loading", "loading...", "enable javascript", "please enable javascript"):
+		return "client-rendered loading/javascript shell"
+	case len(text) <= 400 && strings.Count(htmlLower, "<script") >= 8:
+		return "client-rendered app shell with little readable text"
+	default:
+		return ""
+	}
+}
+
+func hasClientRenderedAppMarker(htmlLower string) bool {
+	return containsAny(htmlLower,
+		"/_next/static/",
+		"__next",
+		"data-nextjs",
+		"window.__nuxt__",
+		"data-server-rendered=\"true\"",
+		"id=\"root\"",
+		"id=\"app\"",
+		"vite/client",
+		"webpackchunk",
+	)
 }
 
 // newGuardedClient builds an http.Client whose Transport refuses to
