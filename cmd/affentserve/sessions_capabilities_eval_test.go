@@ -22,8 +22,6 @@ func TestSessionCapabilitiesReportsEvalMode(t *testing.T) {
 		EnableBuiltins:     true,
 		EnableSubagent:     true,
 		EnableFocusedTasks: true,
-		EnableBrowser:      true,
-		enableBrowserSet:   true,
 	}
 	pool, err := NewSessionPool(cfg, zerolog.New(io.Discard))
 	if err != nil {
@@ -31,7 +29,7 @@ func TestSessionCapabilitiesReportsEvalMode(t *testing.T) {
 	}
 	t.Cleanup(pool.Shutdown)
 
-	s, err := pool.GetOrCreate("eval-browser")
+	s, err := pool.GetOrCreate("eval-basic")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -39,8 +37,8 @@ func TestSessionCapabilitiesReportsEvalMode(t *testing.T) {
 	if !caps.EvalMode {
 		t.Fatal("active session capabilities should report eval_mode=true")
 	}
-	if !caps.Builtins || !caps.Browser {
-		t.Fatalf("explicit eval permissions should still be reported, got %+v", caps)
+	if !caps.Builtins || caps.Browser {
+		t.Fatalf("strict eval mode should report basic tools without browser, got %+v", caps)
 	}
 	if caps.SkillInstall || caps.Plan || caps.Subagent || caps.FocusedTasks {
 		t.Fatalf("eval mode should report workflow tools disabled, got %+v", caps)
@@ -56,5 +54,17 @@ func TestSessionCapabilitiesReportsEvalMode(t *testing.T) {
 		if strings.Contains(msgs[0].Content, forbidden) {
 			t.Fatalf("eval-mode system prompt should not include %q guidance:\n%s", forbidden, msgs[0].Content)
 		}
+	}
+
+	reg := agent.NewRegistry()
+	for _, name := range []string{"shell", "read_file", "write_file", "edit_file", "list_files", "browser_navigate"} {
+		reg.Add(&agent.Tool{Name: name})
+	}
+	explicit := summarizeActiveCapabilities(&Session{registry: reg}, Config{EvalMode: true})
+	if !explicit.EvalMode || !explicit.Builtins || !explicit.Browser {
+		t.Fatalf("capabilities should report explicitly registered eval permissions, got %+v", explicit)
+	}
+	if explicit.SkillInstall || explicit.Plan || explicit.Subagent || explicit.FocusedTasks {
+		t.Fatalf("synthetic browser-only eval surface should not report workflow tools, got %+v", explicit)
 	}
 }
