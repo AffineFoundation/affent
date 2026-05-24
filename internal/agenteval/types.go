@@ -289,17 +289,31 @@ func (t Trace) ToolFailureKindCounts() map[string]int {
 	}
 	var out map[string]int
 	for _, c := range t.Tools {
-		kind := c.FailureKind
-		if kind == "" {
-			kind = toolfailure.KindForResult(c.Tool, c.Result, c.ExitCode != 0)
+		kinds := []string{}
+		if c.FailureKind != "" {
+			kinds = append(kinds, c.FailureKind)
 		}
-		if kind == "" {
+		for _, kind := range toolfailure.KindsForResult(c.Tool, c.Result, c.ExitCode != 0) {
+			already := false
+			for _, existing := range kinds {
+				if existing == kind {
+					already = true
+					break
+				}
+			}
+			if !already {
+				kinds = append(kinds, kind)
+			}
+		}
+		if len(kinds) == 0 {
 			continue
 		}
 		if out == nil {
 			out = map[string]int{}
 		}
-		out[kind]++
+		for _, kind := range kinds {
+			out[kind]++
+		}
 	}
 	return out
 }

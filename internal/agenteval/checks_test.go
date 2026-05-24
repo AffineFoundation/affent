@@ -457,6 +457,23 @@ func TestToolFailureKindAtLeast(t *testing.T) {
 			t.Fatalf("successful read_file text must not count as failure kind: %+v", res)
 		}
 	})
+
+	t.Run("falls back to multiple structured tool result kinds", func(t *testing.T) {
+		trace := Trace{Tools: []ToolCall{
+			{
+				CallID:   "c1",
+				Tool:     "web_fetch",
+				ExitCode: 1,
+				Result:   "Error\nFailure: kind=blocked\n\nloop_guard\nFailure: kind=loop_guard_repeated_failures",
+			},
+		}}
+		if res := ToolFailureKindAtLeast("blocked", 1).Eval(trace); !res.Pass {
+			t.Fatalf("expected blocked text fallback check to pass: %+v", res)
+		}
+		if res := ToolFailureKindAtLeast("loop_guard_repeated_failures", 1).Eval(trace); !res.Pass {
+			t.Fatalf("expected loop guard text fallback check to pass: %+v", res)
+		}
+	})
 }
 
 func TestApplyTraceEventDerivesToolResultFailureKind(t *testing.T) {

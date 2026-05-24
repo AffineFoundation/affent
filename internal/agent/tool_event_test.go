@@ -41,6 +41,11 @@ func TestRecordToolFailureKind(t *testing.T) {
 	if stats.ToolFailureByKind["invalid_args"] != 2 || stats.ToolFailureByKind["timeout"] != 1 {
 		t.Fatalf("ToolFailureByKind = %+v", stats.ToolFailureByKind)
 	}
+
+	recordToolFailureKind(&stats, "Failure: kind=blocked, status=403\nFailure: kind=loop_guard_repeated_failures", true)
+	if stats.ToolFailureByKind["blocked"] != 1 || stats.ToolFailureByKind["loop_guard_repeated_failures"] != 1 {
+		t.Fatalf("combined ToolFailureByKind = %+v", stats.ToolFailureByKind)
+	}
 }
 
 func TestToolFailureKindForOutcome(t *testing.T) {

@@ -124,14 +124,16 @@ func recordToolFailureKind(stats *sse.ToolRuntimeStats, result string, failed bo
 	if stats == nil || !failed {
 		return
 	}
-	kind := toolfailure.Kind(result)
-	if kind == "" {
+	kinds := toolfailure.Kinds(result)
+	if len(kinds) == 0 {
 		return
 	}
 	if stats.ToolFailureByKind == nil {
 		stats.ToolFailureByKind = map[string]int{}
 	}
-	stats.ToolFailureByKind[kind]++
+	for _, kind := range kinds {
+		stats.ToolFailureByKind[kind]++
+	}
 }
 
 func toolFailureKind(result string) string {

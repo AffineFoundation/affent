@@ -24,6 +24,19 @@ func TestKind(t *testing.T) {
 	}
 }
 
+func TestKinds(t *testing.T) {
+	got := Kinds("fetch failed\nFailure: kind=blocked, status=403\n\nloop_guard: stop\nFailure: kind=loop_guard_repeated_failures\nFailure: kind=blocked")
+	want := []string{"blocked", "loop_guard_repeated_failures"}
+	if len(got) != len(want) {
+		t.Fatalf("Kinds() = %#v, want %#v", got, want)
+	}
+	for i := range want {
+		if got[i] != want[i] {
+			t.Fatalf("Kinds() = %#v, want %#v", got, want)
+		}
+	}
+}
+
 func TestKindForResult(t *testing.T) {
 	if got := KindForResult("web_fetch", "Failure: kind=blocked", true); got != "blocked" {
 		t.Fatalf("hard failure kind = %q, want blocked", got)
@@ -36,6 +49,17 @@ func TestKindForResult(t *testing.T) {
 	}
 	if got := KindForResult("read_file", "Failure: kind=blocked", false); got != "" {
 		t.Fatalf("successful read_file content kind = %q, want empty", got)
+	}
+
+	got := KindsForResult("web_fetch", "[empty response: URL=https://example]\nFailure: kind=empty_response\n\nloop_guard\nFailure: kind=loop_guard_repeated_failures", false)
+	want := []string{"empty_response", "loop_guard_repeated_failures"}
+	if len(got) != len(want) {
+		t.Fatalf("KindsForResult() = %#v, want %#v", got, want)
+	}
+	for i := range want {
+		if got[i] != want[i] {
+			t.Fatalf("KindsForResult() = %#v, want %#v", got, want)
+		}
 	}
 }
 
