@@ -68,6 +68,13 @@ Scenario records describe one eval case:
   as repeated failed URL/query inputs.
 - `tool_failure_hints`: optional map of structured tool failure kind to a short
   operator hint explaining likely cause and next diagnostic action.
+- `runtime_error_by_kind`: optional map of structured `error.failure_kind`
+  counts, such as `llm_timeout`, `llm_incomplete_stream`, or
+  `context_overflow`. This is separate from `failure_kinds` so recoverable LLM
+  retry errors can be tracked without turning an otherwise passing scenario
+  into a scenario assertion failure.
+- `runtime_error_hints`: optional map of runtime error kind to a short
+  operator hint explaining likely cause and next diagnostic action.
 - `loop_guard_interventions`: runtime loop guard intervention count.
 - `forced_no_tools`: count of forced no-tool follow-up requests after repeated
   loop guard interventions.

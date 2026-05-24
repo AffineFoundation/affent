@@ -117,6 +117,9 @@ func TestParseTraceFileReadsToolRequestsAndFinalText(t *testing.T) {
 	if len(trace.LoopErrorKinds) != 1 || trace.LoopErrorKinds[0] != "llm_timeout" {
 		t.Fatalf("LoopErrorKinds = %+v", trace.LoopErrorKinds)
 	}
+	if got := trace.LoopErrorKindCounts(); got["llm_timeout"] != 1 {
+		t.Fatalf("LoopErrorKindCounts = %+v", got)
+	}
 	if trace.FinalText != "Conclusion: green" {
 		t.Fatalf("FinalText = %q", trace.FinalText)
 	}

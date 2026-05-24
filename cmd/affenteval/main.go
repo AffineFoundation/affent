@@ -158,6 +158,7 @@ type batchSummary struct {
 	ToolRepairNotes            int
 	ToolRepairByKind           map[string]int
 	ToolFailureByKind          map[string]int
+	RuntimeErrorByKind         map[string]int
 	LoopGuardInterventions     int
 	ForcedNoTools              int
 	ToolDurationMS             int64
@@ -228,6 +229,12 @@ func (s *batchSummary) add(res agenteval.BatchResult) {
 			s.ToolFailureByKind = map[string]int{}
 		}
 		s.ToolFailureByKind[k] += v
+	}
+	for k, v := range res.RuntimeErrorByKind {
+		if s.RuntimeErrorByKind == nil {
+			s.RuntimeErrorByKind = map[string]int{}
+		}
+		s.RuntimeErrorByKind[k] += v
 	}
 	s.LoopGuardInterventions += res.ToolStats.LoopGuardInterventions
 	s.ForcedNoTools += res.ToolStats.ForcedNoTools
@@ -356,11 +363,15 @@ func printBatchSummary(w io.Writer, s batchSummary) {
 	if len(s.ToolFailureByKind) > 0 {
 		fmt.Fprintf(w, " tool_failure_kinds=%s", formatStringIntCounts(s.ToolFailureByKind))
 	}
+	if len(s.RuntimeErrorByKind) > 0 {
+		fmt.Fprintf(w, " runtime_error_kinds=%s", formatStringIntCounts(s.RuntimeErrorByKind))
+	}
 	printDelegationRollup(w, s.FocusedTaskCalls, s.FocusedTaskByType, s.FocusedTaskErrors, s.SubagentCalls, s.SubagentByMode, s.SubagentErrors)
 	printPlanRollup(w, s.PlanCalls, s.PlanByAction, s.PlanErrors)
 	fmt.Fprintln(w)
 	printFailureHintLines(w, s.FailureKinds, "")
 	printToolFailureHintLines(w, s.ToolFailureByKind, "")
+	printFailureHintLines(w, s.RuntimeErrorByKind, "")
 }
 
 func hasBatchRepairStats(s batchSummary) bool {
@@ -623,6 +634,7 @@ type batchResultRecord struct {
 	ToolRepairNotes            int            `json:"tool_repair_notes,omitempty"`
 	ToolRepairByKind           map[string]int `json:"tool_repair_by_kind,omitempty"`
 	ToolFailureByKind          map[string]int `json:"tool_failure_by_kind,omitempty"`
+	RuntimeErrorByKind         map[string]int `json:"runtime_error_by_kind,omitempty"`
 	LoopGuardInterventions     int            `json:"loop_guard_interventions"`
 	ForcedNoTools              int            `json:"forced_no_tools"`
 	ToolDurationMS             int64          `json:"tool_duration_ms"`
@@ -648,6 +660,7 @@ type batchResultRecord struct {
 	FailureKinds               map[string]int `json:"failure_kinds,omitempty"`
 	FailureHints               failureHintMap `json:"failure_hints,omitempty"`
 	ToolFailureHints           failureHintMap `json:"tool_failure_hints,omitempty"`
+	RuntimeErrorHints          failureHintMap `json:"runtime_error_hints,omitempty"`
 
 	// Per-scenario delegation breakdown. Fields are omitted from the
 	// JSONL when the scenario used no delegation tools, so older
@@ -683,6 +696,7 @@ type batchSummaryRecord struct {
 	ToolRepairNotes            int            `json:"tool_repair_notes,omitempty"`
 	ToolRepairByKind           map[string]int `json:"tool_repair_by_kind,omitempty"`
 	ToolFailureByKind          map[string]int `json:"tool_failure_by_kind,omitempty"`
+	RuntimeErrorByKind         map[string]int `json:"runtime_error_by_kind,omitempty"`
 	LoopGuardInterventions     int            `json:"loop_guard_interventions"`
 	ForcedNoTools              int            `json:"forced_no_tools"`
 	ToolDurationMS             int64          `json:"tool_duration_ms"`
@@ -707,6 +721,7 @@ type batchSummaryRecord struct {
 	FailureKinds               map[string]int `json:"failure_kinds,omitempty"`
 	FailureHints               failureHintMap `json:"failure_hints,omitempty"`
 	ToolFailureHints           failureHintMap `json:"tool_failure_hints,omitempty"`
+	RuntimeErrorHints          failureHintMap `json:"runtime_error_hints,omitempty"`
 	RemovedWorkspaces          int            `json:"removed_workspaces"`
 	CleanupErrors              int            `json:"cleanup_errors"`
 
@@ -748,6 +763,7 @@ func printBatchResultJSONL(w io.Writer, meta evalJSONLMetadata, res agenteval.Ba
 		ToolRepairNotes:            res.Repair.Notes,
 		ToolRepairByKind:           cloneStringIntMap(res.Repair.ByKind),
 		ToolFailureByKind:          cloneStringIntMap(res.ToolStats.ToolFailureByKind),
+		RuntimeErrorByKind:         cloneStringIntMap(res.RuntimeErrorByKind),
 		LoopGuardInterventions:     res.ToolStats.LoopGuardInterventions,
 		ForcedNoTools:              res.ToolStats.ForcedNoTools,
 		ToolDurationMS:             res.ToolStats.ToolDurationMS,
@@ -773,6 +789,7 @@ func printBatchResultJSONL(w io.Writer, meta evalJSONLMetadata, res agenteval.Ba
 		FailureKinds:               failureKinds,
 		FailureHints:               failureHintsForKinds(failureKinds),
 		ToolFailureHints:           toolFailureHintsForKinds(res.ToolStats.ToolFailureByKind),
+		RuntimeErrorHints:          failureHintsForKinds(res.RuntimeErrorByKind),
 		FocusedTaskCalls:           res.Delegation.FocusedTaskCalls,
 		FocusedTaskByType:          res.Delegation.FocusedTaskByType,
 		FocusedTaskErrors:          res.Delegation.FocusedTaskErrors,
@@ -803,6 +820,7 @@ func printBatchSummaryJSONL(w io.Writer, meta evalJSONLMetadata, s batchSummary)
 		ToolRepairNotes:            s.ToolRepairNotes,
 		ToolRepairByKind:           cloneStringIntMap(s.ToolRepairByKind),
 		ToolFailureByKind:          cloneStringIntMap(s.ToolFailureByKind),
+		RuntimeErrorByKind:         cloneStringIntMap(s.RuntimeErrorByKind),
 		LoopGuardInterventions:     s.LoopGuardInterventions,
 		ForcedNoTools:              s.ForcedNoTools,
 		ToolDurationMS:             s.ToolDurationMS,
@@ -827,6 +845,7 @@ func printBatchSummaryJSONL(w io.Writer, meta evalJSONLMetadata, s batchSummary)
 		FailureKinds:               cloneFailureKinds(s.FailureKinds),
 		FailureHints:               failureHintsForKinds(s.FailureKinds),
 		ToolFailureHints:           toolFailureHintsForKinds(s.ToolFailureByKind),
+		RuntimeErrorHints:          failureHintsForKinds(s.RuntimeErrorByKind),
 		RemovedWorkspaces:          s.RemovedWorkspaces,
 		CleanupErrors:              s.CleanupErrors,
 		FocusedTaskCalls:           s.FocusedTaskCalls,
@@ -938,6 +957,9 @@ func printBatchResult(w io.Writer, res agenteval.BatchResult) {
 	if len(res.ToolStats.ToolFailureByKind) > 0 {
 		fmt.Fprintf(w, " tool_failure_kinds=%s", formatStringIntCounts(res.ToolStats.ToolFailureByKind))
 	}
+	if len(res.RuntimeErrorByKind) > 0 {
+		fmt.Fprintf(w, " runtime_error_kinds=%s", formatStringIntCounts(res.RuntimeErrorByKind))
+	}
 	printDelegationRollup(w, res.Delegation.FocusedTaskCalls, res.Delegation.FocusedTaskByType, res.Delegation.FocusedTaskErrors, res.Delegation.SubagentCalls, res.Delegation.SubagentByMode, res.Delegation.SubagentErrors)
 	printPlanRollup(w, res.Plan.Calls, res.Plan.ByAction, res.Plan.Errors)
 	if res.TurnEndReason != "" {
@@ -968,6 +990,7 @@ func printBatchResult(w io.Writer, res agenteval.BatchResult) {
 	}
 	printFailureHintLines(w, failureKindsForResult(res.Failures), "  ")
 	printToolFailureHintLines(w, res.ToolStats.ToolFailureByKind, "  ")
+	printFailureHintLines(w, res.RuntimeErrorByKind, "  ")
 }
 
 func hasToolTruncation(stats agenteval.ToolTruncationStats) bool {

@@ -323,6 +323,23 @@ func (t Trace) ToolFailureKindCounts() map[string]int {
 	return out
 }
 
+func (t Trace) LoopErrorKindCounts() map[string]int {
+	if len(t.LoopErrorKinds) == 0 {
+		return nil
+	}
+	out := make(map[string]int, len(t.LoopErrorKinds))
+	for _, kind := range t.LoopErrorKinds {
+		if kind == "" {
+			continue
+		}
+		out[kind]++
+	}
+	if len(out) == 0 {
+		return nil
+	}
+	return out
+}
+
 func containsString(values []string, value string) bool {
 	for _, candidate := range values {
 		if candidate == value {

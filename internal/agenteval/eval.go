@@ -102,6 +102,7 @@ type BatchResult struct {
 	TurnEndReason      string
 	ToolCalls          int
 	ToolStats          ToolRuntimeStats
+	RuntimeErrorByKind map[string]int
 	ToolTruncation     ToolTruncationStats
 	Usage              Usage
 	Verifier           VerifierResult
@@ -302,6 +303,7 @@ func (r BatchRunner) Run(ctx context.Context, scenario BatchScenario) BatchResul
 		res.ToolCalls = len(trace.Tools)
 		res.ToolStats = trace.ToolStats
 		res.ToolStats.ToolFailureByKind = trace.ToolFailureKindCounts()
+		res.RuntimeErrorByKind = trace.LoopErrorKindCounts()
 		res.ToolTruncation = SummarizeToolTruncation(trace)
 		res.Usage = trace.Usage
 		res.Delegation = trace.DelegationStats()

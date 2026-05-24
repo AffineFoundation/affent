@@ -189,6 +189,7 @@ func TestPrintBatchResultIncludesTraceMetrics(t *testing.T) {
 			LoopGuardInterventions: 2,
 			ForcedNoTools:          1,
 		},
+		RuntimeErrorByKind: map[string]int{"llm_timeout": 1},
 		ToolTruncation: agenteval.ToolTruncationStats{
 			ArgsTruncated:       1,
 			ArgsOmittedBytes:    512,
@@ -227,10 +228,11 @@ func TestPrintBatchResultIncludesTraceMetrics(t *testing.T) {
 		"PASS sample (1.234s)",
 		"workspace: /tmp/ws (removed)",
 		"trace: /tmp/ws/trace.jsonl",
-		"metrics: tools=3 errors=2 repaired=1 canonicalized=1 loop_guard=2 forced_no_tools=1 tool_ms=45 tokens=100/25 trunc=args:1,results:1,artifacts:1 omitted=512/4096 tool_failure_kinds=invalid_args:1 delegation=focused_tasks:2,subagents:1 delegation_errors=focused_tasks:1,subagents:1 focused_task_by_type=explore:1,verify:1 subagent_by_mode=review:1 plan=calls:3,errors:1 plan_by_action=set:1,update:2 end=completed",
+		"metrics: tools=3 errors=2 repaired=1 canonicalized=1 loop_guard=2 forced_no_tools=1 tool_ms=45 tokens=100/25 trunc=args:1,results:1,artifacts:1 omitted=512/4096 tool_failure_kinds=invalid_args:1 runtime_error_kinds=llm_timeout:1 delegation=focused_tasks:2,subagents:1 delegation_errors=focused_tasks:1,subagents:1 focused_task_by_type=explore:1,verify:1 subagent_by_mode=review:1 plan=calls:3,errors:1 plan_by_action=set:1,update:2 end=completed",
 		`verifier: pass exit=0 duration=80ms output=1200 truncated omitted=176 cap=1024 command="go test ./..."`,
 		"tool_failure_hint[invalid_args]",
 		"invalid arguments",
+		"hint[llm_timeout]",
 	} {
 		if !strings.Contains(got, want) {
 			t.Fatalf("output missing %q:\n%s", want, got)
@@ -312,6 +314,7 @@ func TestBatchSummaryAggregatesRuntimeMetrics(t *testing.T) {
 			LoopGuardInterventions: 2,
 			ForcedNoTools:          1,
 		},
+		RuntimeErrorByKind: map[string]int{"llm_timeout": 2, "context_overflow": 1},
 		Repair: agenteval.ToolRepairStats{
 			Calls:          3,
 			SucceededCalls: 2,
@@ -353,8 +356,14 @@ func TestBatchSummaryAggregatesRuntimeMetrics(t *testing.T) {
 	if !strings.Contains(out.String(), "tool_failure_kinds=invalid_args:1,timeout:2") {
 		t.Fatalf("summary output missing tool failure kind rollup:\n%s", out.String())
 	}
+	if !strings.Contains(out.String(), "runtime_error_kinds=context_overflow:1,llm_timeout:2") {
+		t.Fatalf("summary output missing runtime error kind rollup:\n%s", out.String())
+	}
 	if !strings.Contains(out.String(), "tool_failure_hint[invalid_args]") || !strings.Contains(out.String(), "tool_failure_hint[timeout]") {
 		t.Fatalf("summary output missing tool failure hints:\n%s", out.String())
+	}
+	if !strings.Contains(out.String(), "hint[context_overflow]") || !strings.Contains(out.String(), "hint[llm_timeout]") {
+		t.Fatalf("summary output missing runtime error hints:\n%s", out.String())
 	}
 	if !strings.Contains(out.String(), "repair_calls=5,ok=4,failed=1") {
 		t.Fatalf("summary output missing repair outcome rollup:\n%s", out.String())
@@ -377,6 +386,9 @@ func TestBatchSummaryAggregatesRuntimeMetrics(t *testing.T) {
 	}
 	if !reflect.DeepEqual(summary.ToolFailureByKind, map[string]int{"invalid_args": 1, "timeout": 2}) {
 		t.Fatalf("ToolFailureByKind = %#v", summary.ToolFailureByKind)
+	}
+	if !reflect.DeepEqual(summary.RuntimeErrorByKind, map[string]int{"llm_timeout": 2, "context_overflow": 1}) {
+		t.Fatalf("RuntimeErrorByKind = %#v", summary.RuntimeErrorByKind)
 	}
 	if summary.PlanCalls != 3 || summary.PlanErrors != 1 {
 		t.Fatalf("plan counts = calls:%d errors:%d, want 3/1", summary.PlanCalls, summary.PlanErrors)
@@ -428,6 +440,7 @@ func TestPrintBatchResultJSONL(t *testing.T) {
 			LoopGuardInterventions: 3,
 			ForcedNoTools:          1,
 		},
+		RuntimeErrorByKind: map[string]int{"llm_incomplete_stream": 1},
 		ToolTruncation: agenteval.ToolTruncationStats{
 			ArgsTruncated:       2,
 			ArgsOmittedBytes:    1024,
@@ -530,6 +543,14 @@ func TestPrintBatchResultJSONL(t *testing.T) {
 	toolFailureHints, ok := got["tool_failure_hints"].(map[string]any)
 	if !ok || !strings.Contains(fmt.Sprint(toolFailureHints["blocked"]), "direct web_fetch") {
 		t.Fatalf("tool_failure_hints = %#v\njson=%s", got["tool_failure_hints"], out.String())
+	}
+	runtimeErrorKinds, ok := got["runtime_error_by_kind"].(map[string]any)
+	if !ok || runtimeErrorKinds["llm_incomplete_stream"] != float64(1) {
+		t.Fatalf("runtime_error_by_kind = %#v\njson=%s", got["runtime_error_by_kind"], out.String())
+	}
+	runtimeErrorHints, ok := got["runtime_error_hints"].(map[string]any)
+	if !ok || !strings.Contains(fmt.Sprint(runtimeErrorHints["llm_incomplete_stream"]), "SSE stream") {
+		t.Fatalf("runtime_error_hints = %#v\njson=%s", got["runtime_error_hints"], out.String())
 	}
 	repairKinds, ok := got["tool_repair_by_kind"].(map[string]any)
 	if !ok {
@@ -819,6 +840,7 @@ func TestPrintBatchSummaryJSONL(t *testing.T) {
 		ToolRepairNotes:            4,
 		ToolRepairByKind:           map[string]int{"tool_name": 2, "malformed_json": 1, "type_coercion": 1},
 		ToolFailureByKind:          map[string]int{"blocked": 1},
+		RuntimeErrorByKind:         map[string]int{"llm_timeout": 1},
 		LoopGuardInterventions:     3,
 		ForcedNoTools:              1,
 		ToolDurationMS:             120,
@@ -932,6 +954,14 @@ func TestPrintBatchSummaryJSONL(t *testing.T) {
 	toolFailureHints, ok := got["tool_failure_hints"].(map[string]any)
 	if !ok || !strings.Contains(fmt.Sprint(toolFailureHints["blocked"]), "direct web_fetch") {
 		t.Fatalf("tool_failure_hints = %#v\njson=%s", got["tool_failure_hints"], out.String())
+	}
+	runtimeErrorKinds, ok := got["runtime_error_by_kind"].(map[string]any)
+	if !ok || runtimeErrorKinds["llm_timeout"] != float64(1) {
+		t.Fatalf("runtime_error_by_kind = %#v\njson=%s", got["runtime_error_by_kind"], out.String())
+	}
+	runtimeErrorHints, ok := got["runtime_error_hints"].(map[string]any)
+	if !ok || !strings.Contains(fmt.Sprint(runtimeErrorHints["llm_timeout"]), "per-call timeout") {
+		t.Fatalf("runtime_error_hints = %#v\njson=%s", got["runtime_error_hints"], out.String())
 	}
 	planByAction, ok := got["plan_by_action"].(map[string]any)
 	if !ok {
