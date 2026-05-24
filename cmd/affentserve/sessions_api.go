@@ -24,6 +24,7 @@ const (
 	maxSessionCreateBodyBytes   = 4096
 	maxSessionTaskSummaryChars  = 160
 	maxSessionSummaryLineBytes  = 1024 * 1024
+	maxSessionSummaryTailBytes  = 2 * 1024 * 1024
 	maxSessionRuntimeSkillNames = 128
 )
 
@@ -567,6 +568,9 @@ func latestUserMessageFromConversationFile(path string) (string, error) {
 		return "", err
 	}
 	defer f.Close()
+	if err := seekSessionSummaryTail(f); err != nil {
+		return "", err
+	}
 
 	var latest string
 	r := bufio.NewReaderSize(f, 64*1024)
@@ -593,6 +597,43 @@ func latestUserMessageFromConversationFile(path string) (string, error) {
 		}
 	}
 	return latest, nil
+}
+
+func seekSessionSummaryTail(f *os.File) error {
+	info, err := f.Stat()
+	if err != nil {
+		return err
+	}
+	size := info.Size()
+	if size <= maxSessionSummaryTailBytes {
+		_, err := f.Seek(0, io.SeekStart)
+		return err
+	}
+	start := size - maxSessionSummaryTailBytes
+	if _, err := f.Seek(start-1, io.SeekStart); err != nil {
+		return err
+	}
+	var prev [1]byte
+	n, err := f.Read(prev[:])
+	if err != nil {
+		return err
+	}
+	if n == 1 && prev[0] == '\n' {
+		return nil
+	}
+	var b [1]byte
+	for {
+		n, err := f.Read(b[:])
+		if n == 1 && b[0] == '\n' {
+			return nil
+		}
+		if errors.Is(err, io.EOF) {
+			return nil
+		}
+		if err != nil {
+			return err
+		}
+	}
 }
 
 func readSessionSummaryLine(r *bufio.Reader, maxBytes int) ([]byte, bool, error) {

@@ -196,6 +196,41 @@ func TestLatestUserMessageFromConversationFileSkipsOversizedLines(t *testing.T) 
 	}
 }
 
+func TestLatestUserMessageFromConversationFileReadsBoundedTail(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "conversation.jsonl")
+	body := `{"role":"user","content":"old task outside tail"}` + "\n" +
+		`{"role":"assistant","content":"` + strings.Repeat("x", maxSessionSummaryTailBytes+1024) + `"}` + "\n" +
+		`{"role":"user","content":"recent task in tail"}` + "\n"
+	if err := os.WriteFile(path, []byte(body), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	got, err := latestUserMessageFromConversationFile(path)
+	if err != nil {
+		t.Fatalf("latestUserMessageFromConversationFile: %v", err)
+	}
+	if got != "recent task in tail" {
+		t.Fatalf("latest user = %q, want recent task in tail", got)
+	}
+}
+
+func TestLatestUserMessageFromConversationFileDoesNotScanWholeHugeLog(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "conversation.jsonl")
+	body := `{"role":"user","content":"old task outside bounded tail"}` + "\n" +
+		`{"role":"assistant","content":"` + strings.Repeat("x", maxSessionSummaryTailBytes+1024) + `"}` + "\n"
+	if err := os.WriteFile(path, []byte(body), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	got, err := latestUserMessageFromConversationFile(path)
+	if err != nil {
+		t.Fatalf("latestUserMessageFromConversationFile: %v", err)
+	}
+	if got != "" {
+		t.Fatalf("latest user = %q, want empty because only old user is outside bounded tail", got)
+	}
+}
+
 func TestSummarizeLatestUserMessageCollapsesWhitespaceAndTruncatesRunes(t *testing.T) {
 	got := summarizeLatestUserMessage("  第一行\n\t第二行  " + strings.Repeat("界", maxSessionTaskSummaryChars))
 	if strings.ContainsAny(got, "\n\t") {
