@@ -196,24 +196,30 @@ func TestEnsureSystemPrompt_EmptyConv_WithMemory(t *testing.T) {
 	}
 }
 
-func TestEnsureSystemPrompt_ResumedConv_NoMemory_Untouched(t *testing.T) {
+func TestEnsureSystemPrompt_ResumedConv_RewritesCurrentRuntimePrompt(t *testing.T) {
 	conv := newTestConv(t)
-	if err := conv.Append(ChatMessage{Role: "system", Content: "original prompt"}); err != nil {
+	if err := conv.Append(ChatMessage{Role: "system", Content: "old prompt\n\nSubagent delegation:\nstale guidance\n\nPlan tool:\nstale plan guidance"}); err != nil {
 		t.Fatal(err)
 	}
 	if err := conv.Append(ChatMessage{Role: "user", Content: "hi"}); err != nil {
 		t.Fatal(err)
 	}
 	l := &Loop{Conv: conv}
-	if err := l.EnsureSystemPrompt("new prompt that should NOT be applied"); err != nil {
+	if err := l.EnsureSystemPrompt("new prompt without disabled feature guidance"); err != nil {
 		t.Fatal(err)
 	}
 	msgs := conv.Snapshot()
 	if len(msgs) != 2 {
 		t.Fatalf("resumed conv must not gain a message, got %d", len(msgs))
 	}
-	if msgs[0].Content != "original prompt" {
-		t.Fatalf("resumed conv without memory must preserve system msg, got %q", msgs[0].Content)
+	if msgs[0].Content != "new prompt without disabled feature guidance" {
+		t.Fatalf("resumed conv must rewrite system msg to current runtime prompt, got %q", msgs[0].Content)
+	}
+	if strings.Contains(msgs[0].Content, "Subagent delegation:") || strings.Contains(msgs[0].Content, "Plan tool:") {
+		t.Fatalf("disabled feature guidance leaked after prompt rewrite:\n%s", msgs[0].Content)
+	}
+	if msgs[1].Role != "user" || msgs[1].Content != "hi" {
+		t.Fatalf("user message must survive rewrite, got %+v", msgs[1])
 	}
 }
 

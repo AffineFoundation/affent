@@ -336,9 +336,10 @@ before retrying.
 // Empty conversation: the composed message is appended.
 //
 // Resumed conversation whose first message is a system message:
-// rewritten with the new composition when ProjectContextDir or
-// Memory is set. Without either, resumed conversations are left
-// untouched.
+// rewritten with the new composition whenever it differs. This keeps
+// persisted sessions aligned with the current runtime tool surface; for
+// example, disabling subagent/plan/focused-task features must also remove
+// their guidance from an older system message.
 //
 // An empty `prompt` falls back to DefaultSystemPrompt.
 func (l *Loop) EnsureSystemPrompt(prompt string) error {
@@ -360,9 +361,6 @@ func (l *Loop) EnsureSystemPrompt(prompt string) error {
 	snapshot := l.Conv.Snapshot()
 	if len(snapshot) == 0 {
 		return l.Conv.Append(ChatMessage{Role: "system", Content: combined})
-	}
-	if l.Memory == nil && l.ProjectContextDir == "" {
-		return nil
 	}
 	if snapshot[0].Role != "system" {
 		return nil
