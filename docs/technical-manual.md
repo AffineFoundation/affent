@@ -274,9 +274,13 @@ Repeated failed `web_fetch` calls are guarded more aggressively than general
 tool failures. Repeated no-evidence `web_search` results also count as failures
 for loop-guard purposes. After repeated no-evidence retrieval, the guard tells
 the model to stop opening/searching result lists one by one and change
-strategy. Per-turn stats expose `tool_failure_by_kind`, and each `tool.result`
-can expose `failure_kind`, so eval runs and UIs can distinguish a useful
-recovery path from a run that simply accumulated failed retrievals.
+strategy. If the model repeats the same failed URL or search query, the guard
+blocks that exact input and emits
+`Failure: kind=loop_guard_repeated_failed_input`; generic identical call
+repeats emit `loop_guard_repeated_call`, and per-turn workflow caps emit
+`loop_guard_call_cap`. Per-turn stats expose `tool_failure_by_kind`, and each
+`tool.result` can expose `failure_kind`, so eval runs and UIs can distinguish
+a useful recovery path from a run that simply accumulated failed retrievals.
 
 `affent_session_id` pins follow-up turns. Pass it back through
 `X-Affent-Session-Id`, `affent_session_id`, or `session_id`.

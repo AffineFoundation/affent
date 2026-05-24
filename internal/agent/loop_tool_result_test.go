@@ -646,11 +646,21 @@ func TestRunTurn_BlocksExactRepeatedToolCalls(t *testing.T) {
 				}
 				if strings.Contains(p.Result, "loop_guard: blocked repeated call") {
 					sawGuard = true
+					if p.FailureKind != "loop_guard_repeated_call" {
+						t.Fatalf("loop guard result FailureKind = %q, want loop_guard_repeated_call", p.FailureKind)
+					}
 				}
 			}
 			if ev.Type == sse.TypeTurnEnd {
+				var p sse.TurnEndPayload
+				if err := json.Unmarshal(ev.Data, &p); err != nil {
+					t.Fatalf("decode turn.end: %v", err)
+				}
 				if !sawGuard {
 					t.Fatal("expected loop guard tool result")
+				}
+				if p.ToolStats == nil || p.ToolStats.ToolFailureByKind["loop_guard_repeated_call"] != 1 {
+					t.Fatalf("expected loop guard failure kind in turn.end stats, got %+v", p.ToolStats)
 				}
 				if got := atomic.LoadInt32(&executed); got != 2 {
 					t.Fatalf("tool should execute twice before third repeat is blocked, got %d", got)

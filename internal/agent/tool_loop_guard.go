@@ -16,6 +16,12 @@ const (
 	toolFailureHaltThreshold        = 8
 	webFetchFailureWarnThreshold    = 2
 	webFetchFailureHaltThreshold    = 4
+
+	loopGuardCallCapKind             = "loop_guard_call_cap"
+	loopGuardHaltedToolKind          = "loop_guard_halted_tool"
+	loopGuardRepeatedCallKind        = "loop_guard_repeated_call"
+	loopGuardRepeatedFailuresKind    = "loop_guard_repeated_failures"
+	loopGuardRepeatedFailedInputKind = "loop_guard_repeated_failed_input"
 )
 
 // perTurnCallCaps maps tool names to maximum total calls per parent turn,
@@ -73,7 +79,10 @@ func (g *toolLoopGuard) recordAttempt(tool string, args json.RawMessage) string 
 		return ""
 	}
 	if g.haltedTools[tool] {
-		return fmt.Sprintf("loop_guard: tool %q has already failed %d consecutive times this turn. Stop retrying it and choose a different approach.\nNext: use a different tool, change the evidence source, or answer from the evidence already gathered.", tool, toolFailureHaltThresholdFor(tool))
+		return withLoopGuardFailureKind(
+			fmt.Sprintf("loop_guard: tool %q has already failed %d consecutive times this turn. Stop retrying it and choose a different approach.\nNext: use a different tool, change the evidence source, or answer from the evidence already gathered.", tool, toolFailureHaltThresholdFor(tool)),
+			loopGuardHaltedToolKind,
+		)
 	}
 	// Per-turn-call cap is checked BEFORE the args-hash logic so a
 	// model that varies arguments across N+1 delegation attempts still
@@ -95,7 +104,10 @@ func (g *toolLoopGuard) recordAttempt(tool string, args json.RawMessage) string 
 	}
 	g.callCounts[key]++
 	if g.callCounts[key] >= identicalToolCallBlockThreshold {
-		return fmt.Sprintf("loop_guard: blocked repeated call to %q with the same effective arguments after %d attempts this turn.\nNext: change the arguments, use a different tool, or answer from the evidence already gathered.", tool, g.callCounts[key])
+		return withLoopGuardFailureKind(
+			fmt.Sprintf("loop_guard: blocked repeated call to %q with the same effective arguments after %d attempts this turn.\nNext: change the arguments, use a different tool, or answer from the evidence already gathered.", tool, g.callCounts[key]),
+			loopGuardRepeatedCallKind,
+		)
 	}
 	return ""
 }
@@ -103,11 +115,20 @@ func (g *toolLoopGuard) recordAttempt(tool string, args json.RawMessage) string 
 func perTurnCapMessage(tool string, cap int) string {
 	switch tool {
 	case FocusedTaskToolName:
-		return fmt.Sprintf("loop_guard: tool %q exceeded the per-turn delegation cap of %d calls. Each focused task is itself a bounded child Loop with its own budget; spawning more in one turn burns parent context without progress.\nNext: answer from the focused-task results you already have, or issue a single broader objective instead of multiple narrow ones.", tool, cap)
+		return withLoopGuardFailureKind(
+			fmt.Sprintf("loop_guard: tool %q exceeded the per-turn delegation cap of %d calls. Each focused task is itself a bounded child Loop with its own budget; spawning more in one turn burns parent context without progress.\nNext: answer from the focused-task results you already have, or issue a single broader objective instead of multiple narrow ones.", tool, cap),
+			loopGuardCallCapKind,
+		)
 	case PlanToolName:
-		return fmt.Sprintf("loop_guard: tool %q exceeded the per-turn planning cap of %d calls. Planning should summarize state, not become the task.\nNext: continue from the current plan state, execute the next concrete step, or give the user the best current result.", tool, cap)
+		return withLoopGuardFailureKind(
+			fmt.Sprintf("loop_guard: tool %q exceeded the per-turn planning cap of %d calls. Planning should summarize state, not become the task.\nNext: continue from the current plan state, execute the next concrete step, or give the user the best current result.", tool, cap),
+			loopGuardCallCapKind,
+		)
 	default:
-		return fmt.Sprintf("loop_guard: tool %q exceeded the per-turn cap of %d calls.\nNext: stop repeating this tool and continue from the evidence already gathered.", tool, cap)
+		return withLoopGuardFailureKind(
+			fmt.Sprintf("loop_guard: tool %q exceeded the per-turn cap of %d calls.\nNext: stop repeating this tool and continue from the evidence already gathered.", tool, cap),
+			loopGuardCallCapKind,
+		)
 	}
 }
 
@@ -127,7 +148,10 @@ func (g *toolLoopGuard) recordOutcome(tool string, ok bool) string {
 		return toolFailureWarnMessage(tool, warnThreshold)
 	case haltThreshold:
 		g.haltedTools[tool] = true
-		return fmt.Sprintf("loop_guard: tool %q has failed %d consecutive times this turn. Stop retrying it and choose a different approach.\nNext: use a different tool, change the evidence source, or answer from the evidence already gathered.", tool, haltThreshold)
+		return withLoopGuardFailureKind(
+			fmt.Sprintf("loop_guard: tool %q has failed %d consecutive times this turn. Stop retrying it and choose a different approach.\nNext: use a different tool, change the evidence source, or answer from the evidence already gathered.", tool, haltThreshold),
+			loopGuardHaltedToolKind,
+		)
 	default:
 		return ""
 	}
@@ -196,11 +220,20 @@ func repeatedFailedCallMessage(tool string, failure toolCallFailure) string {
 	}
 	switch tool {
 	case "web_fetch":
-		return fmt.Sprintf("loop_guard: blocked repeated failed call to %q with the same effective URL after previous Failure kind=%s.\nNext: do not retry the same failing URL; choose a different source, use another available inspection tool, or answer with clearly marked gaps.", tool, kind)
+		return withLoopGuardFailureKind(
+			fmt.Sprintf("loop_guard: blocked repeated failed call to %q with the same effective URL after previous Failure kind=%s.\nNext: do not retry the same failing URL; choose a different source, use another available inspection tool, or answer with clearly marked gaps.", tool, kind),
+			loopGuardRepeatedFailedInputKind,
+		)
 	case "web_search":
-		return fmt.Sprintf("loop_guard: blocked repeated failed call to %q with the same effective query after previous Failure kind=%s.\nNext: change the query with more distinctive entities, official domains, tickers, subnet ids, or source terms; use known source URLs if available, or answer with clearly marked gaps.", tool, kind)
+		return withLoopGuardFailureKind(
+			fmt.Sprintf("loop_guard: blocked repeated failed call to %q with the same effective query after previous Failure kind=%s.\nNext: change the query with more distinctive entities, official domains, tickers, subnet ids, or source terms; use known source URLs if available, or answer with clearly marked gaps.", tool, kind),
+			loopGuardRepeatedFailedInputKind,
+		)
 	default:
-		return fmt.Sprintf("loop_guard: blocked repeated failed call to %q with the same effective arguments after previous Failure kind=%s.\nNext: change the arguments, use a different tool, or answer from the evidence already gathered.", tool, kind)
+		return withLoopGuardFailureKind(
+			fmt.Sprintf("loop_guard: blocked repeated failed call to %q with the same effective arguments after previous Failure kind=%s.\nNext: change the arguments, use a different tool, or answer from the evidence already gathered.", tool, kind),
+			loopGuardRepeatedFailedInputKind,
+		)
 	}
 }
 
@@ -235,12 +268,25 @@ func toolFailureHaltThresholdFor(tool string) int {
 
 func toolFailureWarnMessage(tool string, threshold int) string {
 	if tool == "web_fetch" {
-		return fmt.Sprintf("loop_guard: tool %q has failed %d consecutive times this turn. Read the latest Failure kind and Next guidance before fetching more URLs.\nNext: stop opening search results one by one; switch to a different source type, use another available inspection tool, or answer with clearly marked gaps.", tool, threshold)
+		return withLoopGuardFailureKind(
+			fmt.Sprintf("loop_guard: tool %q has failed %d consecutive times this turn. Read the latest Failure kind and Next guidance before fetching more URLs.\nNext: stop opening search results one by one; switch to a different source type, use another available inspection tool, or answer with clearly marked gaps.", tool, threshold),
+			loopGuardRepeatedFailuresKind,
+		)
 	}
 	if tool == "web_search" {
-		return fmt.Sprintf("loop_guard: tool %q has failed %d consecutive times this turn. Read the latest Failure kind and Next guidance before searching again.\nNext: stop repeating broad searches; use more distinctive entities or official domains, switch to known source URLs, or answer with clearly marked gaps.", tool, threshold)
+		return withLoopGuardFailureKind(
+			fmt.Sprintf("loop_guard: tool %q has failed %d consecutive times this turn. Read the latest Failure kind and Next guidance before searching again.\nNext: stop repeating broad searches; use more distinctive entities or official domains, switch to known source URLs, or answer with clearly marked gaps.", tool, threshold),
+			loopGuardRepeatedFailuresKind,
+		)
 	}
-	return fmt.Sprintf("loop_guard: tool %q has failed %d consecutive times this turn. Read the latest error before retrying.\nNext: change the arguments, verify prerequisites with another tool, or stop using %q if the same error persists.", tool, threshold, tool)
+	return withLoopGuardFailureKind(
+		fmt.Sprintf("loop_guard: tool %q has failed %d consecutive times this turn. Read the latest error before retrying.\nNext: change the arguments, verify prerequisites with another tool, or stop using %q if the same error persists.", tool, threshold, tool),
+		loopGuardRepeatedFailuresKind,
+	)
+}
+
+func withLoopGuardFailureKind(message, kind string) string {
+	return message + "\nFailure: kind=" + kind
 }
 
 func hashCanonicalToolArgs(tool string, args json.RawMessage) uint64 {

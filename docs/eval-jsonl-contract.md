@@ -62,7 +62,8 @@ Scenario records describe one eval case:
   structured `Failure: kind=...` result text. Web tool failures use this field
   to distinguish blocked pages, empty responses, non-text responses, timeouts,
   search no-results, stale or non-interactable browser refs, argument errors,
-  and HTTP/network classes.
+  HTTP/network classes, and loop-guard rejections such as repeated failed
+  URL/query inputs.
 - `tool_failure_hints`: optional map of structured tool failure kind to a short
   operator hint explaining likely cause and next diagnostic action.
 - `loop_guard_interventions`: runtime loop guard intervention count.

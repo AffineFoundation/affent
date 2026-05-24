@@ -22,7 +22,7 @@ func TestToolLoopGuard_BlocksExactRepeatedCalls(t *testing.T) {
 	if !strings.Contains(got, "blocked repeated call") {
 		t.Fatalf("third attempt should be blocked, got %q", got)
 	}
-	if !strings.Contains(got, "Next:") || !strings.Contains(got, "change the arguments") {
+	if !strings.Contains(got, "Next:") || !strings.Contains(got, "change the arguments") || !strings.Contains(got, "Failure: kind=loop_guard_repeated_call") {
 		t.Fatalf("repeat guard should include corrective Next step, got %q", got)
 	}
 	if got := g.recordAttempt("read_file", json.RawMessage(`{"path":"b.txt"}`)); got != "" {
@@ -83,7 +83,7 @@ func TestToolLoopGuard_TracksConsecutiveFailures(t *testing.T) {
 	}
 	if got := g.recordOutcome("shell", false); !strings.Contains(got, "failed 3 consecutive times") {
 		t.Fatalf("expected warning, got %q", got)
-	} else if !strings.Contains(got, "Next:") || !strings.Contains(got, "verify prerequisites") {
+	} else if !strings.Contains(got, "Next:") || !strings.Contains(got, "verify prerequisites") || !strings.Contains(got, "Failure: kind=loop_guard_repeated_failures") {
 		t.Fatalf("failure warning should include corrective Next step, got %q", got)
 	}
 	if got := g.recordOutcome("shell", true); got != "" {
@@ -94,12 +94,12 @@ func TestToolLoopGuard_TracksConsecutiveFailures(t *testing.T) {
 	}
 	if got := g.recordOutcome("shell", false); !strings.Contains(got, "failed 8 consecutive times") {
 		t.Fatalf("expected halt message, got %q", got)
-	} else if !strings.Contains(got, "Next:") || !strings.Contains(got, "different tool") {
+	} else if !strings.Contains(got, "Next:") || !strings.Contains(got, "different tool") || !strings.Contains(got, "Failure: kind=loop_guard_halted_tool") {
 		t.Fatalf("halt message should include corrective Next step, got %q", got)
 	}
 	if got := g.recordAttempt("shell", json.RawMessage(`{}`)); !strings.Contains(got, "already failed 8 consecutive times") {
 		t.Fatalf("halted tool should be blocked, got %q", got)
-	} else if !strings.Contains(got, "Next:") || !strings.Contains(got, "evidence already gathered") {
+	} else if !strings.Contains(got, "Next:") || !strings.Contains(got, "evidence already gathered") || !strings.Contains(got, "Failure: kind=loop_guard_halted_tool") {
 		t.Fatalf("halted-tool block should include corrective Next step, got %q", got)
 	}
 }
@@ -113,7 +113,7 @@ func TestToolLoopGuard_WebFetchFailsFast(t *testing.T) {
 	if !strings.Contains(got, "failed 2 consecutive times") {
 		t.Fatalf("second web_fetch failure should warn early, got %q", got)
 	}
-	for _, want := range []string{"Failure kind", "Next:", "stop opening search results one by one"} {
+	for _, want := range []string{"Failure kind", "Next:", "stop opening search results one by one", "Failure: kind=loop_guard_repeated_failures"} {
 		if !strings.Contains(got, want) {
 			t.Fatalf("web_fetch warning missing %q: %q", want, got)
 		}
@@ -155,7 +155,7 @@ func TestToolLoopGuard_BlocksRepeatedFailedWebFetchURL(t *testing.T) {
 		t.Fatalf("first blocked fetch should record failure without immediate guard message; guard=%q ok=%v", guard, ok)
 	}
 	got := g.recordAttempt("web_fetch", args)
-	for _, want := range []string{"blocked repeated failed call", "web_fetch", "same effective URL", "kind=blocked", "do not retry the same failing URL"} {
+	for _, want := range []string{"blocked repeated failed call", "web_fetch", "same effective URL", "kind=blocked", "do not retry the same failing URL", "Failure: kind=loop_guard_repeated_failed_input"} {
 		if !strings.Contains(got, want) {
 			t.Fatalf("repeated blocked fetch guard missing %q: %q", want, got)
 		}
@@ -181,7 +181,7 @@ func TestToolLoopGuard_AllowsOneTransientWebFetchRetry(t *testing.T) {
 		t.Fatalf("second consecutive web_fetch failure should still trigger tool-level warning; guard=%q ok=%v", guard, ok)
 	}
 	got := g.recordAttempt("web_fetch", args)
-	for _, want := range []string{"blocked repeated failed call", "kind=timeout", "same effective URL"} {
+	for _, want := range []string{"blocked repeated failed call", "kind=timeout", "same effective URL", "Failure: kind=loop_guard_repeated_failed_input"} {
 		if !strings.Contains(got, want) {
 			t.Fatalf("third timeout attempt guard missing %q: %q", want, got)
 		}
@@ -199,7 +199,7 @@ func TestToolLoopGuard_BlocksRepeatedFailedWebSearchQuery(t *testing.T) {
 		t.Fatalf("first no-results search should record failure without immediate guard; guard=%q ok=%v", guard, ok)
 	}
 	got := g.recordAttempt("web_search", args)
-	for _, want := range []string{"blocked repeated failed call", "web_search", "same effective query", "kind=no_results", "distinctive entities"} {
+	for _, want := range []string{"blocked repeated failed call", "web_search", "same effective query", "kind=no_results", "distinctive entities", "Failure: kind=loop_guard_repeated_failed_input"} {
 		if !strings.Contains(got, want) {
 			t.Fatalf("repeated no-results search guard missing %q: %q", want, got)
 		}
@@ -258,7 +258,7 @@ func TestToolLoopGuard_WebSearchNoEvidenceUsesSearchGuidance(t *testing.T) {
 	}
 	ok := toolOutcomeCountsAsSuccess("web_search", "(no usable results: search provider returned no URLs)\nFailure: kind=no_results", false)
 	got := g.recordOutcome("web_search", ok)
-	for _, want := range []string{"web_search", "failed 3 consecutive times", "Failure kind", "distinctive entities", "known source URLs"} {
+	for _, want := range []string{"web_search", "failed 3 consecutive times", "Failure kind", "distinctive entities", "known source URLs", "Failure: kind=loop_guard_repeated_failures"} {
 		if !strings.Contains(got, want) {
 			t.Fatalf("web_search warning missing %q: %q", want, got)
 		}
@@ -295,7 +295,7 @@ func TestToolLoopGuard_PerTurnCallCapForRunTask(t *testing.T) {
 	if !strings.Contains(got, "per-turn delegation cap") {
 		t.Errorf("rejection should name the cap concept, got %q", got)
 	}
-	if !strings.Contains(got, "Next:") {
+	if !strings.Contains(got, "Next:") || !strings.Contains(got, "Failure: kind=loop_guard_call_cap") {
 		t.Errorf("rejection should include a corrective Next step the model can act on, got %q", got)
 	}
 }

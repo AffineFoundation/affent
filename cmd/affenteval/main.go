@@ -508,6 +508,16 @@ func toolFailureKindHint(kind string) string {
 		return "SSRF guard blocked a private or local network URL; use public sources or explicitly configure trusted local access"
 	case "invalid_args":
 		return "the model called a tool with invalid arguments; inspect tool repair and prompt pressure if this is frequent"
+	case "loop_guard_repeated_failed_input":
+		return "loop guard blocked a repeat of the same failed URL/query; change the source/query instead of retrying the identical input"
+	case "loop_guard_repeated_call":
+		return "loop guard blocked repeated identical tool arguments; change arguments, use another tool, or answer from gathered evidence"
+	case "loop_guard_repeated_failures":
+		return "loop guard saw consecutive tool failures; read the latest Failure/Next guidance and switch approach before retrying"
+	case "loop_guard_halted_tool":
+		return "loop guard halted a tool after repeated failures this turn; stop using that tool and continue with another source or the verified evidence"
+	case "loop_guard_call_cap":
+		return "loop guard blocked an excessive number of workflow-tool calls in one turn; continue from current plan/delegation results"
 	case "http_error", "network_error":
 		return "web_fetch hit a transport or HTTP failure; inspect status/detail in the tool result and switch sources if it repeats"
 	default:

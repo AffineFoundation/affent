@@ -120,7 +120,9 @@ diagnostics.
   `search_error`. Browser inspection tools may also emit `stale_ref` when a
   previously visible element ref no longer matches the current page, or
   `not_interactable` when the element exists but is hidden, disabled, or
-  covered.
+  covered. Runtime loop guards may emit `loop_guard_repeated_call`,
+  `loop_guard_repeated_failed_input`, `loop_guard_repeated_failures`,
+  `loop_guard_halted_tool`, or `loop_guard_call_cap`.
 - `duration_ms`: optional measured implementation time for dispatched tools.
 - `result_summary`: short UI preview, not parse-safe.
 - `result`: event-capped tool output.

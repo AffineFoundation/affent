@@ -573,6 +573,7 @@ func TestRunner_EndToEnd_LoopGuardBlocksIdenticalRepeats(t *testing.T) {
 			// when it blocks a repeat. If the mechanism is removed or
 			// silently changed, this check fires.
 			ToolResultContains("read_file", "loop_guard"),
+			ToolFailureKindAtLeast("loop_guard_repeated_call", 1),
 		},
 	}
 
@@ -610,6 +611,9 @@ func TestRunner_EndToEnd_LoopGuardBlocksIdenticalRepeats(t *testing.T) {
 	}
 	if !strings.Contains(third.Result, "loop_guard: blocked repeated call") {
 		t.Errorf("3rd call must carry the exact guard message so trace consumers can grep for it; got %q", third.Result)
+	}
+	if third.FailureKind != "loop_guard_repeated_call" {
+		t.Errorf("3rd call FailureKind = %q, want loop_guard_repeated_call", third.FailureKind)
 	}
 }
 

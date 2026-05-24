@@ -930,6 +930,7 @@ func (l *Loop) runTurn(ctx context.Context, turnID, userText string, opts TurnOp
 				toolCallsUsed++
 				recordToolRepairOutcome(&toolStats, repairedToolCall, true)
 				toolStats.ToolErrors++
+				recordToolFailureKind(&toolStats, result, true)
 				guardInterventions++
 				toolStats.LoopGuardInterventions++
 				if guardInterventions >= 2 {
