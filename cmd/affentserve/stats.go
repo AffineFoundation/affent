@@ -89,6 +89,8 @@ type statsBoundaries struct {
 	SkillSourceBytes           int    `json:"skill_source_bytes"`
 	SkillTriggers              int    `json:"skill_triggers"`
 	SkillTriggerBytes          int    `json:"skill_trigger_bytes"`
+	SkillRequiredTools         int    `json:"skill_required_tools"`
+	SkillRequiredToolBytes     int    `json:"skill_required_tool_bytes"`
 	RuntimeSkills              int    `json:"runtime_skills"`
 	RuntimeSkillDirReadBatch   int    `json:"runtime_skill_dir_read_batch"`
 	RuntimeSkillManifestBytes  int    `json:"runtime_skill_manifest_bytes"`
@@ -287,6 +289,8 @@ func statsBoundarySnapshot(cfg Config) statsBoundaries {
 		SkillSourceBytes:           ab.SkillSourceBytes,
 		SkillTriggers:              ab.SkillTriggers,
 		SkillTriggerBytes:          ab.SkillTriggerBytes,
+		SkillRequiredTools:         ab.SkillRequiredTools,
+		SkillRequiredToolBytes:     ab.SkillRequiredToolBytes,
 		RuntimeSkills:              ab.RuntimeSkills,
 		RuntimeSkillDirReadBatch:   ab.RuntimeSkillDirReadBatch,
 		RuntimeSkillManifestBytes:  ab.RuntimeSkillManifestBytes,

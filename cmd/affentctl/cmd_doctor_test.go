@@ -383,6 +383,8 @@ func TestDoctorBoundarySummaryUsesConfiguredTurnLimits(t *testing.T) {
 		"skill_source=2KiB",
 		"skill_triggers=20",
 		"skill_trigger=128B",
+		"skill_required_tools=20",
+		"skill_required_tool=128B",
 		"runtime_skills=128",
 		"runtime_skill_dir_read_batch=64",
 		"runtime_skill_manifest=9KiB",

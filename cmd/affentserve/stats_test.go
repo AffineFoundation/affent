@@ -93,7 +93,8 @@ func TestHandleStats_EmptyPool(t *testing.T) {
 	if resp.Boundaries.SkillActionBytes <= 0 || resp.Boundaries.SkillNameBytes <= 0 ||
 		resp.Boundaries.SkillDescriptionBytes <= 0 || resp.Boundaries.SkillBodyBytes <= 0 ||
 		resp.Boundaries.SkillSourceBytes <= 0 || resp.Boundaries.SkillTriggers <= 0 ||
-		resp.Boundaries.SkillTriggerBytes <= 0 || resp.Boundaries.RuntimeSkills <= 0 ||
+		resp.Boundaries.SkillTriggerBytes <= 0 || resp.Boundaries.SkillRequiredTools <= 0 ||
+		resp.Boundaries.SkillRequiredToolBytes <= 0 || resp.Boundaries.RuntimeSkills <= 0 ||
 		resp.Boundaries.RuntimeSkillDirReadBatch <= 0 || resp.Boundaries.RuntimeSkillManifestBytes <= 0 ||
 		resp.Boundaries.RuntimeSkillProposalBytes <= 0 || resp.Boundaries.RuntimeSkillProposalID <= 0 {
 		t.Fatalf("runtime skill boundaries must be positive: %+v", resp.Boundaries)

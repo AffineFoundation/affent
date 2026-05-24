@@ -140,6 +140,12 @@ func TestDefaultRuntimeBoundariesIncludesRuntimeSkillCaps(t *testing.T) {
 	if got.SkillTriggerBytes != maxRuntimeSkillTriggerBytes {
 		t.Fatalf("SkillTriggerBytes = %d, want %d", got.SkillTriggerBytes, maxRuntimeSkillTriggerBytes)
 	}
+	if got.SkillRequiredTools != maxRuntimeSkillRequiredTools {
+		t.Fatalf("SkillRequiredTools = %d, want %d", got.SkillRequiredTools, maxRuntimeSkillRequiredTools)
+	}
+	if got.SkillRequiredToolBytes != maxRuntimeSkillRequiredToolBytes {
+		t.Fatalf("SkillRequiredToolBytes = %d, want %d", got.SkillRequiredToolBytes, maxRuntimeSkillRequiredToolBytes)
+	}
 	if got.RuntimeSkills != maxRuntimeSkills {
 		t.Fatalf("RuntimeSkills = %d, want %d", got.RuntimeSkills, maxRuntimeSkills)
 	}
@@ -598,6 +604,11 @@ func TestSkillProviderForToolsFiltersUnavailableRequiredTools(t *testing.T) {
 
 	withBrowser := NewRegistry()
 	withBrowser.Add(&Tool{Name: "browser_navigate"})
+	if got := SkillProviderForTools(skills, withBrowser)("访问 https://example.com 并读取页面标题"); got != "" {
+		t.Fatalf("browser skill must not activate with a partial browser surface:\n%s", got)
+	}
+	withBrowser.Add(&Tool{Name: "browser_wait"})
+	withBrowser.Add(&Tool{Name: "browser_snapshot"})
 	got := SkillProviderForTools(skills, withBrowser)("访问 https://example.com 并读取页面标题")
 	if !strings.Contains(got, "web_snapshot_fact_extraction") {
 		t.Fatalf("browser skill should activate when its required tool exists:\n%s", got)

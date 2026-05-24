@@ -57,6 +57,8 @@ type RuntimeBoundaries struct {
 	SkillSourceBytes                int
 	SkillTriggers                   int
 	SkillTriggerBytes               int
+	SkillRequiredTools              int
+	SkillRequiredToolBytes          int
 	RuntimeSkills                   int
 	RuntimeSkillDirReadBatch        int
 	RuntimeSkillManifestBytes       int
@@ -119,6 +121,8 @@ func DefaultRuntimeBoundaries() RuntimeBoundaries {
 		SkillSourceBytes:                maxRuntimeSkillSourceBytes,
 		SkillTriggers:                   maxRuntimeSkillTriggers,
 		SkillTriggerBytes:               maxRuntimeSkillTriggerBytes,
+		SkillRequiredTools:              maxRuntimeSkillRequiredTools,
+		SkillRequiredToolBytes:          maxRuntimeSkillRequiredToolBytes,
 		RuntimeSkills:                   maxRuntimeSkills,
 		RuntimeSkillDirReadBatch:        runtimeSkillDirReadBatch,
 		RuntimeSkillManifestBytes:       maxRuntimeSkillManifestBytes,

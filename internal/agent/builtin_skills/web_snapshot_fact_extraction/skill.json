@@ -3,7 +3,9 @@
   "description": "Rendered web-page fact extraction from browser snapshots.",
   "order": 20,
   "required_tools": [
-    "browser_navigate"
+    "browser_navigate",
+    "browser_wait",
+    "browser_snapshot"
   ],
   "auto_activation": {
     "any": [
