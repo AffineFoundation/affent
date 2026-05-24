@@ -174,7 +174,7 @@ func skillTool(reg *SkillRegistry, skillDir string, confirmInstall SkillInstallC
             "description": {"type": "string", "maxLength": %d, "description": "One-line skill catalog description for install."},
             "body": {"type": "string", "maxLength": %d, "description": "Full SKILL.md body for install."},
             "triggers": {"type": "array", "maxItems": %d, "items": {"type": "string", "minLength": 1, "maxLength": %d}, "description": "Optional phrases that auto-activate this skill on future turns."},
-            "source": {"type": "string", "maxLength": %d, "description": "Candidate source URL or path for propose_install/install provenance."},
+            "source": {"type": "string", "maxLength": %d, "description": "Candidate source URL/path for propose_install; for direct install, use only non-remote user-provided provenance."},
             "proposal_id": {"type": "string", "minLength": %d, "maxLength": %d, "description": "Pending proposal id returned by propose_install, required for confirm_install."}
         }
     }`, maxSkillActionBytes, maxSkillNameBytes, maxRuntimeSkillDescriptionBytes, maxRuntimeSkillBodyBytes, maxRuntimeSkillTriggers, maxRuntimeSkillTriggerBytes, maxRuntimeSkillSourceBytes, runtimeSkillProposalIDBytes, runtimeSkillProposalIDBytes))
@@ -280,6 +280,9 @@ func skillTool(reg *SkillRegistry, skillDir string, confirmInstall SkillInstallC
 				if strings.TrimSpace(p.Body) == "" {
 					return "", errors.New("body is required when action=install\nNext: use install only for an exact user-provided skill body; for remote or searched candidates, retrieve the body, call propose_install, and wait for user confirmation")
 				}
+				if sourceRequiresSkillProposal(p.Source) {
+					return "", errors.New("direct install cannot use a remote source URL\nNext: for GitHub, raw URL, or searched remote skill candidates, first retrieve and review the exact SKILL.md body, call skill with action=propose_install, then install only after the user confirms the proposal_id")
+				}
 				skill := Skill{
 					Name:        name,
 					Description: p.Description,
@@ -302,6 +305,28 @@ func skillTool(reg *SkillRegistry, skillDir string, confirmInstall SkillInstallC
 			}
 		},
 	}
+}
+
+func sourceRequiresSkillProposal(source string) bool {
+	source = strings.ToLower(strings.TrimSpace(source))
+	if source == "" {
+		return false
+	}
+	for _, prefix := range []string{
+		"http://",
+		"https://",
+		"git://",
+		"ssh://",
+		"git@",
+		"github.com/",
+		"raw.githubusercontent.com/",
+		"www.",
+	} {
+		if strings.HasPrefix(source, prefix) {
+			return true
+		}
+	}
+	return false
 }
 
 func formatSkillDecodeArgsError(err error) error {

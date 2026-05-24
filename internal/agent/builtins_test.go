@@ -1600,6 +1600,50 @@ func TestSkillToolProposeInstallRequiresReviewedBody(t *testing.T) {
 	}
 }
 
+func TestSkillToolDirectInstallRejectsRemoteSource(t *testing.T) {
+	tool := skillTool(&SkillRegistry{}, t.TempDir(), nil)
+	args, err := json.Marshal(map[string]any{
+		"action": "install",
+		"name":   "remote_demo",
+		"source": "https://github.com/example/skills/remote_demo/SKILL.md",
+		"body":   "AFFENT ACTIVE SKILL: remote_demo\nUse only after review.",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, err = tool.Execute(context.Background(), args)
+	if err == nil ||
+		!strings.Contains(err.Error(), "direct install cannot use a remote source URL") ||
+		!strings.Contains(err.Error(), "action=propose_install") ||
+		!strings.Contains(err.Error(), "proposal_id") {
+		t.Fatalf("direct install with remote source error = %v", err)
+	}
+}
+
+func TestSkillToolDirectInstallAllowsUserProvidedSource(t *testing.T) {
+	dir := t.TempDir()
+	reg := &SkillRegistry{}
+	tool := skillTool(reg, dir, nil)
+	args, err := json.Marshal(map[string]any{
+		"action": "install",
+		"name":   "pasted_demo",
+		"source": "user-pasted body in current chat",
+		"body":   "AFFENT ACTIVE SKILL: pasted_demo\nUse the pasted demo workflow.",
+		"triggers": []string{
+			"pasted demo",
+		},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := tool.Execute(context.Background(), args); err != nil {
+		t.Fatalf("direct install with user-provided source should pass: %v", err)
+	}
+	if got := reg.Provide("pasted demo"); !strings.Contains(got, "AFFENT ACTIVE SKILL: pasted_demo") {
+		t.Fatalf("installed user-provided skill should activate, got %q", got)
+	}
+}
+
 func extractProposalID(out string) string {
 	for _, field := range strings.Fields(out) {
 		if strings.HasPrefix(field, "proposal_id=") {
