@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io/fs"
 	"log"
 	"os"
 	"path/filepath"
@@ -734,6 +735,32 @@ func TestListFilesToolLocalDirectoryCapsEntries(t *testing.T) {
 		t.Fatalf("expected truncation marker, got:\n%s", out)
 	}
 }
+
+func TestListFileCandidatesKeepSmallestNames(t *testing.T) {
+	candidates := listFileEntryHeap{}
+	for _, name := range []string{"z.txt", "m.txt", "a.txt", "b.txt", "y.txt"} {
+		keepListFileCandidate(&candidates, 3, fakeDirEntry{name: name})
+	}
+
+	entries := sortedListFileCandidates(candidates)
+	var got []string
+	for _, entry := range entries {
+		got = append(got, entry.Name())
+	}
+	want := []string{"a.txt", "b.txt", "m.txt"}
+	if strings.Join(got, ",") != strings.Join(want, ",") {
+		t.Fatalf("kept entries = %v, want %v", got, want)
+	}
+}
+
+type fakeDirEntry struct {
+	name string
+}
+
+func (e fakeDirEntry) Name() string               { return e.name }
+func (e fakeDirEntry) IsDir() bool                { return false }
+func (e fakeDirEntry) Type() fs.FileMode          { return 0 }
+func (e fakeDirEntry) Info() (fs.FileInfo, error) { return nil, nil }
 
 func TestListFilesToolEmptyLocalDirectory(t *testing.T) {
 	tool := listFilesTool(BuiltinDeps{HostWorkspaceDir: t.TempDir()})

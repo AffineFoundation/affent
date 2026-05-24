@@ -2,6 +2,7 @@ package agent
 
 import (
 	"bytes"
+	"container/heap"
 	"context"
 	"encoding/json"
 	"errors"
@@ -961,6 +962,7 @@ func editFileTool(deps BuiltinDeps) *Tool {
 const (
 	defaultListFilesEntries = 200
 	MaxListFilesEntries     = 1000
+	listFilesReadDirBatch   = 128
 )
 
 func listFilesTool(deps BuiltinDeps) *Tool {
@@ -1028,11 +1030,10 @@ func listFilesTool(deps BuiltinDeps) *Tool {
 				return "", recoverableFileToolError("list_files", p.Path, err)
 			}
 			defer f.Close()
-			entries, err := f.ReadDir(p.MaxEntries + 1)
-			if err != nil && !errors.Is(err, io.EOF) {
+			entries, err := readSortedListFileEntries(f, p.MaxEntries+1)
+			if err != nil {
 				return "", err
 			}
-			sort.Slice(entries, func(i, j int) bool { return entries[i].Name() < entries[j].Name() })
 			var b strings.Builder
 			for i, e := range entries {
 				if i >= p.MaxEntries {
@@ -1056,4 +1057,70 @@ func listFilesTool(deps BuiltinDeps) *Tool {
 			return b.String(), nil
 		},
 	}
+}
+
+func readSortedListFileEntries(f *os.File, limit int) ([]os.DirEntry, error) {
+	if limit <= 0 {
+		return nil, nil
+	}
+	candidates := make(listFileEntryHeap, 0, limit)
+	for {
+		entries, err := f.ReadDir(listFilesReadDirBatch)
+		for _, entry := range entries {
+			keepListFileCandidate(&candidates, limit, entry)
+		}
+		if errors.Is(err, io.EOF) {
+			break
+		}
+		if err != nil {
+			return nil, err
+		}
+	}
+	return sortedListFileCandidates(candidates), nil
+}
+
+func keepListFileCandidate(candidates *listFileEntryHeap, limit int, entry os.DirEntry) {
+	if limit <= 0 {
+		return
+	}
+	if candidates.Len() < limit {
+		heap.Push(candidates, entry)
+		return
+	}
+	if candidates.Len() == 0 || entry.Name() >= (*candidates)[0].Name() {
+		return
+	}
+	(*candidates)[0] = entry
+	heap.Fix(candidates, 0)
+}
+
+func sortedListFileCandidates(candidates listFileEntryHeap) []os.DirEntry {
+	entries := make([]os.DirEntry, 0, len(candidates))
+	for _, entry := range candidates {
+		entries = append(entries, entry)
+	}
+	sort.Slice(entries, func(i, j int) bool { return entries[i].Name() < entries[j].Name() })
+	return entries
+}
+
+type listFileEntryHeap []os.DirEntry
+
+func (h listFileEntryHeap) Len() int { return len(h) }
+
+func (h listFileEntryHeap) Less(i, j int) bool {
+	return h[i].Name() > h[j].Name()
+}
+
+func (h listFileEntryHeap) Swap(i, j int) { h[i], h[j] = h[j], h[i] }
+
+func (h *listFileEntryHeap) Push(x any) {
+	*h = append(*h, x.(os.DirEntry))
+}
+
+func (h *listFileEntryHeap) Pop() any {
+	old := *h
+	n := len(old)
+	entry := old[n-1]
+	*h = old[:n-1]
+	return entry
 }
