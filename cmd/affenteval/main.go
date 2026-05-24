@@ -349,6 +349,7 @@ func printBatchSummary(w io.Writer, s batchSummary) {
 	printDelegationRollup(w, s.FocusedTaskCalls, s.FocusedTaskByType, s.FocusedTaskErrors, s.SubagentCalls, s.SubagentByMode, s.SubagentErrors)
 	printPlanRollup(w, s.PlanCalls, s.PlanByAction, s.PlanErrors)
 	fmt.Fprintln(w)
+	printFailureHintLines(w, s.FailureKinds, "")
 }
 
 func hasBatchRepairStats(s batchSummary) bool {
@@ -388,6 +389,53 @@ func printPlanRollup(w io.Writer, calls int, byAction map[string]int, errors int
 func formatFailureKinds(counts map[string]int) string {
 	return formatStringIntCounts(counts)
 }
+
+func printFailureHintLines(w io.Writer, counts map[string]int, indent string) {
+	hints := failureHintsForKinds(counts)
+	if len(hints) == 0 {
+		return
+	}
+	keys := make([]string, 0, len(hints))
+	for key := range hints {
+		keys = append(keys, key)
+	}
+	sort.Strings(keys)
+	for _, key := range keys {
+		fmt.Fprintf(w, "%shint[%s]: %s\n", indent, key, hints[key])
+	}
+}
+
+func failureHintsForKinds(counts map[string]int) failureHintMap {
+	if len(counts) == 0 {
+		return nil
+	}
+	out := make(failureHintMap)
+	for kind, count := range counts {
+		if count <= 0 {
+			continue
+		}
+		if hint := failureKindHint(kind); hint != "" {
+			out[kind] = hint
+		}
+	}
+	if len(out) == 0 {
+		return nil
+	}
+	return out
+}
+
+func failureKindHint(kind string) string {
+	switch kind {
+	case "llm_timeout":
+		return "upstream LLM streaming stalled past the per-call timeout; inspect provider queue/TTFT/chunk gaps or raise the runtime/eval timeout for slow reasoning models"
+	case "llm_incomplete_stream":
+		return "upstream closed the SSE stream before finish_reason; inspect model server, proxy, KV-cache, crash, or OOM logs rather than treating this as a verifier failure"
+	default:
+		return ""
+	}
+}
+
+type failureHintMap map[string]string
 
 func formatStringIntCounts(counts map[string]int) string {
 	if len(counts) == 0 {
@@ -497,6 +545,7 @@ type batchResultRecord struct {
 	CleanupError               string         `json:"cleanup_error,omitempty"`
 	Failures                   []string       `json:"failures,omitempty"`
 	FailureKinds               map[string]int `json:"failure_kinds,omitempty"`
+	FailureHints               failureHintMap `json:"failure_hints,omitempty"`
 
 	// Per-scenario delegation breakdown. Fields are omitted from the
 	// JSONL when the scenario used no delegation tools, so older
@@ -553,6 +602,7 @@ type batchSummaryRecord struct {
 	EndCancelled               int            `json:"end_cancelled"`
 	EndUnknown                 int            `json:"end_unknown"`
 	FailureKinds               map[string]int `json:"failure_kinds,omitempty"`
+	FailureHints               failureHintMap `json:"failure_hints,omitempty"`
 	RemovedWorkspaces          int            `json:"removed_workspaces"`
 	CleanupErrors              int            `json:"cleanup_errors"`
 
@@ -573,6 +623,7 @@ type batchSummaryRecord struct {
 }
 
 func printBatchResultJSONL(w io.Writer, meta evalJSONLMetadata, res agenteval.BatchResult) {
+	failureKinds := failureKindsForResult(res.Failures)
 	writeJSONLine(w, batchResultRecord{
 		evalJSONLMetadata:          meta,
 		Type:                       "scenario",
@@ -614,7 +665,8 @@ func printBatchResultJSONL(w io.Writer, meta evalJSONLMetadata, res agenteval.Ba
 		WorkspaceRemoved:           res.WorkspaceRemoved,
 		CleanupError:               res.CleanupError,
 		Failures:                   res.Failures,
-		FailureKinds:               failureKindsForResult(res.Failures),
+		FailureKinds:               failureKinds,
+		FailureHints:               failureHintsForKinds(failureKinds),
 		FocusedTaskCalls:           res.Delegation.FocusedTaskCalls,
 		FocusedTaskByType:          res.Delegation.FocusedTaskByType,
 		FocusedTaskErrors:          res.Delegation.FocusedTaskErrors,
@@ -666,6 +718,7 @@ func printBatchSummaryJSONL(w io.Writer, meta evalJSONLMetadata, s batchSummary)
 		EndCancelled:               s.EndCancelled,
 		EndUnknown:                 s.EndUnknown,
 		FailureKinds:               cloneFailureKinds(s.FailureKinds),
+		FailureHints:               failureHintsForKinds(s.FailureKinds),
 		RemovedWorkspaces:          s.RemovedWorkspaces,
 		CleanupErrors:              s.CleanupErrors,
 		FocusedTaskCalls:           s.FocusedTaskCalls,
@@ -802,6 +855,7 @@ func printBatchResult(w io.Writer, res agenteval.BatchResult) {
 	for _, failure := range res.Failures {
 		fmt.Fprintf(w, "  - %s\n", failure)
 	}
+	printFailureHintLines(w, failureKindsForResult(res.Failures), "  ")
 }
 
 func hasToolTruncation(stats agenteval.ToolTruncationStats) bool {

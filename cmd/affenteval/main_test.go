@@ -3,6 +3,7 @@ package main
 import (
 	"bytes"
 	"encoding/json"
+	"fmt"
 	"io"
 	"os"
 	"reflect"
@@ -558,6 +559,46 @@ func TestPrintBatchResultJSONLIncludesFailureKinds(t *testing.T) {
 	}
 	if got["trace_schema_version"] != float64(1) {
 		t.Fatalf("trace_schema_version = %#v, want 1", got["trace_schema_version"])
+	}
+}
+
+func TestPrintBatchResultIncludesLLMFailureHints(t *testing.T) {
+	res := agenteval.BatchResult{
+		BatchScenario: "llm-failing",
+		Workspace:     "/tmp/ws",
+		TracePath:     "/tmp/ws/trace.jsonl",
+		Failures: []string{
+			`affentctl run failed: exit=1 err=LLM llm_stream timed out after 4m0s while waiting for chat completion (max-call-timeout/per-call-timeout=4m0s): context deadline exceeded`,
+			`affentctl run failed: exit=1 err=stream ended without finish`,
+		},
+	}
+
+	var text bytes.Buffer
+	printBatchResult(&text, res)
+	for _, want := range []string{
+		"hint[llm_timeout]",
+		"upstream LLM streaming stalled",
+		"hint[llm_incomplete_stream]",
+		"before finish_reason",
+	} {
+		if !strings.Contains(text.String(), want) {
+			t.Fatalf("text result missing %q:\n%s", want, text.String())
+		}
+	}
+
+	var jsonl bytes.Buffer
+	printBatchResultJSONL(&jsonl, testEvalJSONLMetadata(), res)
+	var got map[string]any
+	if err := json.Unmarshal(jsonl.Bytes(), &got); err != nil {
+		t.Fatalf("jsonl result did not decode: %v\n%s", err, jsonl.String())
+	}
+	hints, ok := got["failure_hints"].(map[string]any)
+	if !ok {
+		t.Fatalf("failure_hints missing or wrong type: %#v\njson=%s", got["failure_hints"], jsonl.String())
+	}
+	if !strings.Contains(fmt.Sprint(hints["llm_timeout"]), "per-call timeout") ||
+		!strings.Contains(fmt.Sprint(hints["llm_incomplete_stream"]), "SSE stream") {
+		t.Fatalf("failure_hints = %#v", hints)
 	}
 }
 
