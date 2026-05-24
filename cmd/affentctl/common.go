@@ -956,7 +956,7 @@ func setupLoop(c commonFlags) (*loopBundle, int) {
 	if caps.FocusedTasks {
 		// RegisterFocusedTasks itself filters out profiles whose deps
 		// aren't satisfied — e.g., `research` is dropped because
-		// affentctl doesn't wire a web registrar by default. If every
+		// affentctl doesn't wire web/browser registrars by default. If every
 		// profile gets filtered out, the function is a no-op and the
 		// system-prompt fragment is still appended so the model knows
 		// run_task isn't available; we sniff registration to keep the

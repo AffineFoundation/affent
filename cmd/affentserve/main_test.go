@@ -359,6 +359,11 @@ func TestFocusedTaskProfilesForLog_MatchesProbeRules(t *testing.T) {
 			want: []string{"recall", "explore", "research", "verify", "review"},
 		},
 		{
+			name: "with browser exposes research too",
+			cfg:  Config{EnableFocusedTasks: true, EnableBuiltins: true, EnableMemory: true, EnableBrowser: true},
+			want: []string{"recall", "explore", "research", "verify", "review"},
+		},
+		{
 			name: "no memory and no builtins still has session-backed recall + file-tool-backed others",
 			cfg:  Config{EnableFocusedTasks: true},
 			// Probe: HasLLM, HasWorkspace, HasSessions all true; HasMemory=false,

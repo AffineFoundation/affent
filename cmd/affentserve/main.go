@@ -399,10 +399,7 @@ func focusedTaskProfilesForLog(cfg Config) []string {
 		HasMemory:    cfg.EnableMemory,
 		HasSessions:  true, // every session has a session dir for transcripts/conv
 		HasWeb:       cfg.EnableWeb,
-		// HasBrowser stays false: affentserve does not currently wire a
-		// browser registrar onto focused-task children, so no built-in
-		// profile needs it. If a deployment customizes this, the hook
-		// is documented on FocusedTaskDeps.
+		HasBrowser:   cfg.EnableBrowser,
 	}
 	kinds := probe.AvailableKinds(nil)
 	if len(kinds) == 0 {

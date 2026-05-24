@@ -703,6 +703,21 @@ func TestSessionCapabilities_IncludesFocusedTaskProfiles(t *testing.T) {
 	}
 }
 
+func TestSessionCapabilities_IncludesFocusedResearchWithBrowserOnly(t *testing.T) {
+	reg := agent.NewRegistry()
+	reg.Add(&agent.Tool{Name: agent.FocusedTaskToolName})
+	reg.Add(&agent.Tool{Name: "browser_navigate"})
+	caps := summarizeActiveCapabilities(&Session{registry: reg}, Config{
+		EnableFocusedTasks: true,
+		EnableBrowser:      true,
+		EnableWeb:          false,
+	})
+	want := []string{"recall", "explore", "research", "verify", "review"}
+	if !reflect.DeepEqual(caps.FocusedTaskProfiles, want) {
+		t.Fatalf("FocusedTaskProfiles = %+v, want %+v", caps.FocusedTaskProfiles, want)
+	}
+}
+
 // TestSessionCapabilities_OmitsFocusedTaskProfilesWhenDisabled pins
 // the absent-when-off contract via omitempty. The JSON wire form
 // should not carry an empty array misleading clients into thinking
