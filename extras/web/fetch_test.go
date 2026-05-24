@@ -491,10 +491,13 @@ func TestSearchTool_FormatsResults(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Execute: %v", err)
 	}
-	for _, want := range []string{"1. First", "https://example.com/a", "snippet A", "2. Second"} {
+	for _, want := range []string{"1. First", "https://example.com/a", "snippet A", "2. Second", "Next:", "authoritative/current result URLs", "full-page verification was unavailable"} {
 		if !strings.Contains(out, want) {
 			t.Errorf("output missing %q:\n%s", want, out)
 		}
+	}
+	if strings.Contains(out, "web_fetch") {
+		t.Fatalf("generic search result guidance should not mention unavailable tools directly:\n%s", out)
 	}
 }
 

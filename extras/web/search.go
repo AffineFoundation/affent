@@ -74,8 +74,9 @@ func SearchTool(cfg SearchConfig) (*agent.Tool, error) {
 	return &agent.Tool{
 		Name: "web_search",
 		Description: "Run a web search and return ranked results as " +
-			"{title, url, snippet}. Use to discover URLs; follow up with " +
-			"web_fetch to read the page content.",
+			"{title, url, snippet}. Use to discover candidate sources; " +
+			"read authoritative result URLs with an available page-reading " +
+			"tool before relying on them when full-page reading is available.",
 		Schema: schema,
 		Execute: func(ctx context.Context, raw json.RawMessage) (string, error) {
 			var args struct {
@@ -118,6 +119,7 @@ func formatResults(results []SearchResult) string {
 		fmt.Fprintf(&b, "%d. %s\n   %s\n   %s\n\n",
 			i+1, r.Title, r.URL, strings.TrimSpace(r.Snippet))
 	}
+	b.WriteString("Next: choose the 1-3 most authoritative/current result URLs, prefer official or primary sources, and read them with an available page-reading tool before answering. If no full-page reading tool is available, compare snippets and say that full-page verification was unavailable.")
 	return strings.TrimSpace(b.String())
 }
 
