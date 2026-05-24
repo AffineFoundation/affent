@@ -422,12 +422,23 @@ func TestSubagentUserPromptIncludesToolBudget(t *testing.T) {
 }
 
 func TestSubagentSystemPromptIncludesWebExtractionGuidance(t *testing.T) {
-	got := subagentSystemPrompt("explore")
+	defaultPrompt := subagentSystemPrompt("explore")
+	for _, forbidden := range []string{"browser_navigate", "browser_snapshot", "Rendered web extraction:"} {
+		if strings.Contains(defaultPrompt, forbidden) {
+			t.Fatalf("default subagent prompt should not mention unavailable browser tool %q:\n%s", forbidden, defaultPrompt)
+		}
+	}
+
+	reg := NewRegistry()
+	reg.Add(&Tool{Name: "browser_navigate"})
+	reg.Add(&Tool{Name: "browser_snapshot"})
+	got := subagentSystemPromptFor(SubagentMode{Name: "explore"}, reg)
 	for _, want := range []string{
-		"use the browser tools instead of shell/curl/python scraping",
-		"call browser_navigate first",
+		"Use browser tools instead of shell/curl/python scraping",
+		"Call browser_navigate first",
 		"answer directly from the returned snapshot",
 		"Do not click through tabs",
+		"External research:",
 	} {
 		if !strings.Contains(got, want) {
 			t.Fatalf("subagent web guidance missing %q:\n%s", want, got)

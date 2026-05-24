@@ -479,7 +479,7 @@ func runSubagent(ctx context.Context, deps SubagentDeps, mode SubagentMode, task
 		Memory:                      deps.Memory,
 		ProjectContextDir:           deps.ProjectContextDir,
 		Log:                         deps.Log,
-		SystemPrompt:                subagentSystemPromptFor(mode),
+		SystemPrompt:                subagentSystemPromptFor(mode, reg),
 		UserPrompt:                  subagentUserPrompt(mode.Name, task, deps.HostWorkspaceDir, maxTurns, childDepth, deps.resolvedMaxDepth()),
 	}
 	if deps.childMayDelegate() {
@@ -857,7 +857,7 @@ func subagentSystemPrompt(modeName string) string {
 // SubagentMode.SystemPromptHints, appended at the end so the base
 // safety/output rules can't be overridden by a hint that contradicts
 // them.
-func subagentSystemPromptFor(mode SubagentMode) string {
+func subagentSystemPromptFor(mode SubagentMode, regs ...*Registry) string {
 	label := mode.Name
 	if label == "" {
 		label = "investigation"
@@ -867,8 +867,6 @@ func subagentSystemPromptFor(mode SubagentMode) string {
 Rules:
 - Return evidence, not broad plans.
 - Use only the tools needed to answer the assigned task.
-- If browser_* tools are available and the task involves rendered web pages, use the browser tools instead of shell/curl/python scraping.
-- For rendered web extraction: call browser_navigate first (use wait_until=networkidle for SPAs), then answer directly from the returned snapshot when it contains the requested facts. Call browser_wait/browser_snapshot at most once or twice when specific requested text is missing. Do not click through tabs, paginate, or broaden into a site-wide audit unless the task explicitly asks for that.
 - Prefer direct inspection of likely files over repository-wide search. Avoid broad find/grep sweeps when the task already names files, symbols, or modules.
 - Stop once you have enough evidence for a useful answer. Do not spend the whole budget just to make the review exhaustive.
 - If a tool result says a tool or turn budget was reached, immediately produce the final report from the evidence already gathered.
@@ -897,6 +895,18 @@ Recommended next step:
 	if strings.TrimSpace(mode.SystemPromptHints) != "" {
 		base += "\n\n" + mode.SystemPromptHints
 	}
+	var reg *Registry
+	if len(regs) > 0 {
+		reg = regs[0]
+	}
+	if surface, ok := externalResearchSurfaceForRegistry(reg); ok && surface.Browser {
+		base += `
+
+Rendered web extraction:
+- Use browser tools instead of shell/curl/python scraping.
+- Call browser_navigate first (use wait_until=networkidle for SPAs), then answer directly from the returned snapshot when it contains the requested facts. Call browser_wait/browser_snapshot at most once or twice when specific requested text is missing. Do not click through tabs, paginate, or broaden into a site-wide audit unless the task explicitly asks for that.`
+	}
+	base = WithRegistrySystemGuidance(base, reg)
 	return base
 }
 
