@@ -214,17 +214,25 @@ func TestScoreFileKeepsBestHitsWithinLimitWhileScanning(t *testing.T) {
 	}
 }
 
-func TestScoreFileReportsScannerErrors(t *testing.T) {
+func TestScoreFileSkipsOversizedLines(t *testing.T) {
 	dir := t.TempDir()
 	path := filepath.Join(dir, "bad.jsonl")
 	raw := `{"role":"user","content":"needle before scanner error"}` + "\n" +
-		`{"role":"user","content":"` + strings.Repeat("x", 4*1024*1024+1) + `"}` + "\n"
+		`{"role":"user","content":"` + strings.Repeat("x", maxSessionLogLineBytes+1) + `"}` + "\n" +
+		`{"role":"assistant","content":"needle after oversized line"}` + "\n"
 	if err := os.WriteFile(path, []byte(raw), 0o644); err != nil {
 		t.Fatal(err)
 	}
 
-	if hits, err := scoreFile(context.Background(), path, "bad", []string{"needle"}, 3, ""); err == nil {
-		t.Fatalf("scoreFile should report scanner error, got hits %+v", hits)
+	hits, err := scoreFile(context.Background(), path, "bad", []string{"needle"}, 3, "")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(hits) != 2 {
+		t.Fatalf("scoreFile should skip only the oversized line, got %+v", hits)
+	}
+	if hits[0].TurnIdx != 1 || hits[1].TurnIdx != 3 {
+		t.Fatalf("turn indexes = %d/%d, want physical JSONL lines 1/3", hits[0].TurnIdx, hits[1].TurnIdx)
 	}
 }
 

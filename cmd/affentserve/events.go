@@ -14,6 +14,7 @@ import (
 	"time"
 
 	agent "github.com/affinefoundation/affent/internal/agent"
+	"github.com/affinefoundation/affent/internal/jsonl"
 	"github.com/affinefoundation/affent/internal/sse"
 )
 
@@ -312,7 +313,7 @@ func readSessionHistoryPage(sessionDir string, after int64, limit int) (sessionH
 	reader := bufio.NewReaderSize(f, 64*1024)
 	lineNo := int64(-1)
 	for {
-		line, overLimit, err := readBoundedJSONLLine(reader, maxHistoryLineBytes)
+		line, overLimit, err := jsonl.ReadBoundedLine(reader, maxHistoryLineBytes)
 		if errors.Is(err, io.EOF) {
 			break
 		}
@@ -346,38 +347,6 @@ func readSessionHistoryPage(sessionDir string, after int64, limit int) (sessionH
 		page.NextAfter = lineNo
 	}
 	return page, nil
-}
-
-func readBoundedJSONLLine(r *bufio.Reader, maxBytes int) ([]byte, bool, error) {
-	if maxBytes <= 0 {
-		return nil, false, errors.New("max line bytes must be positive")
-	}
-	var line []byte
-	overLimit := false
-	for {
-		frag, err := r.ReadSlice('\n')
-		if len(frag) > 0 && !overLimit {
-			if len(line)+len(frag) > maxBytes {
-				line = nil
-				overLimit = true
-			} else {
-				line = append(line, frag...)
-			}
-		}
-		switch {
-		case err == nil:
-			return line, overLimit, nil
-		case errors.Is(err, bufio.ErrBufferFull):
-			continue
-		case errors.Is(err, io.EOF):
-			if len(frag) == 0 && len(line) == 0 && !overLimit {
-				return nil, false, io.EOF
-			}
-			return line, overLimit, nil
-		default:
-			return nil, overLimit, err
-		}
-	}
 }
 
 // handleSessionDelete closes a session immediately. Returns 204 even

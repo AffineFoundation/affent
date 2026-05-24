@@ -13,6 +13,7 @@ import (
 	"time"
 	"unicode"
 
+	"github.com/affinefoundation/affent/internal/jsonl"
 	"github.com/affinefoundation/affent/internal/textutil"
 )
 
@@ -45,7 +46,8 @@ const (
 	MaxQueryBytes        = 2048
 	MaxQueryTerms        = 16
 
-	sessionDirReadBatch = 128
+	sessionDirReadBatch    = 128
+	maxSessionLogLineBytes = 4 * 1024 * 1024
 )
 
 func Search(ctx context.Context, sessionsDir, currentSessionID, query string, topK, maxPerSession int) ([]Hit, error) {
@@ -141,20 +143,29 @@ func scoreFile(ctx context.Context, path, sid string, terms []string, maxPerSess
 		return nil, err
 	}
 	defer f.Close()
-	sc := bufio.NewScanner(f)
-	sc.Buffer(make([]byte, 0, 64*1024), 4*1024*1024)
+	reader := bufio.NewReaderSize(f, 64*1024)
 	var fileHits []Hit
 	turn := 0
-	for sc.Scan() {
+	for {
+		line, overLimit, err := jsonl.ReadBoundedLine(reader, maxSessionLogLineBytes)
+		if errors.Is(err, io.EOF) {
+			break
+		}
+		if err != nil {
+			return nil, err
+		}
 		if err := ctx.Err(); err != nil {
 			return nil, err
 		}
 		turn++
+		if overLimit {
+			continue
+		}
 		var m struct {
 			Role    string `json:"role"`
 			Content string `json:"content"`
 		}
-		if err := json.Unmarshal(sc.Bytes(), &m); err != nil {
+		if err := json.Unmarshal(line, &m); err != nil {
 			continue
 		}
 		if m.Role != "user" && m.Role != "assistant" {
@@ -176,9 +187,6 @@ func scoreFile(ctx context.Context, path, sid string, terms []string, maxPerSess
 			Score:     score,
 			ModTime:   mtime,
 		}, maxPerSession)
-	}
-	if err := sc.Err(); err != nil {
-		return nil, err
 	}
 	sortHits(fileHits)
 	if maxPerSession > 0 && len(fileHits) > maxPerSession {

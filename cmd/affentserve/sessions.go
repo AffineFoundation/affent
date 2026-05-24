@@ -18,6 +18,7 @@ import (
 	agent "github.com/affinefoundation/affent/internal/agent"
 	"github.com/affinefoundation/affent/internal/eventlog"
 	"github.com/affinefoundation/affent/internal/executor"
+	"github.com/affinefoundation/affent/internal/jsonl"
 	"github.com/affinefoundation/affent/internal/memory"
 	"github.com/affinefoundation/affent/internal/sse"
 	"github.com/google/uuid"
@@ -618,7 +619,7 @@ func countJSONLLines(path string) (int64, error) {
 	reader := bufio.NewReaderSize(f, 64*1024)
 	var lines int64
 	for {
-		_, _, err := readBoundedJSONLLine(reader, maxHistoryLineBytes)
+		_, _, err := jsonl.ReadBoundedLine(reader, maxHistoryLineBytes)
 		if errors.Is(err, io.EOF) {
 			break
 		}
