@@ -615,14 +615,17 @@ func countJSONLLines(path string) (int64, error) {
 		return 0, err
 	}
 	defer f.Close()
-	sc := bufio.NewScanner(f)
-	sc.Buffer(make([]byte, 0, 64*1024), 4*1024*1024)
+	reader := bufio.NewReaderSize(f, 64*1024)
 	var lines int64
-	for sc.Scan() {
+	for {
+		_, _, err := readBoundedJSONLLine(reader, maxHistoryLineBytes)
+		if errors.Is(err, io.EOF) {
+			break
+		}
+		if err != nil {
+			return 0, err
+		}
 		lines++
-	}
-	if err := sc.Err(); err != nil {
-		return 0, err
 	}
 	return lines, nil
 }

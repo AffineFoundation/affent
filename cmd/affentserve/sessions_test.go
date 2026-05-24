@@ -477,6 +477,58 @@ func TestSessionPool_EventLogIsDurable(t *testing.T) {
 	}
 }
 
+func TestSessionPool_EventLogReopensWithOversizedLine(t *testing.T) {
+	memRoot := t.TempDir()
+	cfg := Config{
+		Listen:         "127.0.0.1:0",
+		MaxSessions:    4,
+		SessionIdleTTL: "5m",
+		WorkspaceRoot:  t.TempDir(),
+		MemoryRoot:     memRoot,
+		BaseURL:        "http://127.0.0.1:0",
+		APIKey:         "test",
+		Model:          "fake",
+	}
+	sessionID := "trace-large-line"
+	sessionDir := filepath.Join(memRoot, sessionID)
+	if err := os.MkdirAll(sessionDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	tracePath := filepath.Join(sessionDir, "events.jsonl")
+	body := strings.Join([]string{
+		fmt.Sprintf(`{"id":0,"type":"trace.meta","data":{"schema_version":%d}}`, sse.TraceSchemaVersion),
+		strings.Repeat("x", maxHistoryLineBytes+1),
+		"",
+	}, "\n")
+	if err := os.WriteFile(tracePath, []byte(body), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	pool, err := NewSessionPool(cfg, zerolog.New(io.Discard))
+	if err != nil {
+		t.Fatalf("NewSessionPool: %v", err)
+	}
+	t.Cleanup(pool.Shutdown)
+	s, err := pool.GetOrCreate(sessionID)
+	if err != nil {
+		t.Fatalf("GetOrCreate must skip oversized event log line while counting cursors: %v", err)
+	}
+	ev, err := sse.NewEvent(sse.TypeUsage, sse.UsagePayload{TurnID: "after-large-line", InputTokens: 1})
+	if err != nil {
+		t.Fatal(err)
+	}
+	s.events <- ev
+	waitForFileSubstring(t, tracePath, `"turn_id":"after-large-line"`)
+
+	resp, err := readSessionHistory(sessionDir, sessionID, -1, 10)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(resp.Events) != 2 || resp.Events[0].ID != 0 || resp.Events[1].ID != 2 {
+		t.Fatalf("history after reopen = %+v, want trace meta at 0 and appended event at 2", resp.Events)
+	}
+}
+
 func waitForFileSubstring(t *testing.T, path, want string) {
 	t.Helper()
 	deadline := time.Now().Add(2 * time.Second)
