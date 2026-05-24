@@ -280,6 +280,7 @@ func TestMakeImageServeEnablesBuiltinsInsideRuntimeContainer(t *testing.T) {
 		`$(MAKE) image-serve`,
 		`$(MAKE) image-serve-health-wait`,
 		`$(if $(SERVE_CONTAINER_NAME),--name "$(SERVE_CONTAINER_NAME)")`,
+		`--timeout 0s --detach --rm=false --publish "$(SERVE_PUBLISH)"`,
 		`$(if $(SERVE_BASE_URL),--base-url "$(SERVE_BASE_URL)")`,
 		`$(if $(SERVE_API_KEY),--api-key "$(SERVE_API_KEY)")`,
 		`$(if $(SERVE_MODEL),--model "$(SERVE_MODEL)")`,
@@ -358,7 +359,7 @@ func TestMakeOneClickContainerTargetsUseSharedLimits(t *testing.T) {
 			`image run --workspace "$(IMAGE_WORKSPACE)" --memory "$(CONTAINER_MEMORY)" --cpus "$(CONTAINER_CPUS)" --pids-limit "$(CONTAINER_PIDS)" $(IMAGE_RUN_ARGS)`,
 		},
 		"image-serve": {
-			`image run --workspace "$(IMAGE_WORKSPACE)" --memory "$(CONTAINER_MEMORY)" --cpus "$(CONTAINER_CPUS)" --pids-limit "$(CONTAINER_PIDS)" $(if $(SERVE_CONTAINER_NAME),--name "$(SERVE_CONTAINER_NAME)") --detach --rm=false`,
+			`image run --workspace "$(IMAGE_WORKSPACE)" --memory "$(CONTAINER_MEMORY)" --cpus "$(CONTAINER_CPUS)" --pids-limit "$(CONTAINER_PIDS)" $(if $(SERVE_CONTAINER_NAME),--name "$(SERVE_CONTAINER_NAME)") --timeout 0s --detach --rm=false`,
 		},
 		"image-serve-restart": {
 			`$(MAKE) image-serve`,
