@@ -729,10 +729,12 @@ Native session endpoints:
 
 - `GET /v1/sessions?limit=100&after=<session_id>` lists sessions from the
   in-memory pool plus durable session directories. Durable summaries include
-  `has_conversation`, `has_events`, `has_plan`, `has_artifacts`, `has_memory`,
-  `has_runtime_skills`, and `runtime_skill_names`; active summaries also include
-  the actual registered capabilities (`builtins`, `skill_install`, `plan`,
-  `memory`, `session_search`, `subagent`, `focused_tasks`, web/browser flags).
+  `has_conversation`, a bounded `latest_user_message` preview from the tail of
+  `conversation.jsonl`, `has_events`, `has_plan`, `has_artifacts`, `has_memory`,
+  `has_runtime_skills`, and `runtime_skill_names`; active summaries also
+  include the actual registered capabilities (`builtins`, `skill_install`,
+  `plan`, `memory`, `session_search`, `subagent`, `focused_tasks`, web/browser
+  flags).
 - `POST /v1/sessions` creates or reopens a session and returns the same active
   capability summary.
 - `GET /v1/sessions/{id}` returns session status and, when active, capability
