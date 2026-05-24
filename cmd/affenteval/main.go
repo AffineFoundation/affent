@@ -274,7 +274,7 @@ func (s *batchSummary) add(res agenteval.BatchResult) {
 }
 
 func printBatchSummary(w io.Writer, s batchSummary) {
-	fmt.Fprintf(w, "SUMMARY scenarios=%d passed=%d failed=%d duration=%s tools=%d errors=%d repaired=%d canonicalized=%d loop_guard=%d forced_no_tools=%d tool_ms=%d trunc=args:%d,results:%d,artifacts:%d omitted=%d/%d verifier=run:%d,passed:%d,failed:%d,truncated:%d,omitted:%d tokens=%d/%d ends=completed:%d,max_turns:%d,error:%d,cancelled:%d,unknown:%d failure_kinds=%s removed_workspaces=%d cleanup_errors=%d\n",
+	fmt.Fprintf(w, "SUMMARY scenarios=%d passed=%d failed=%d duration=%s tools=%d errors=%d repaired=%d canonicalized=%d loop_guard=%d forced_no_tools=%d tool_ms=%d trunc=args:%d,results:%d,artifacts:%d omitted=%d/%d verifier=run:%d,passed:%d,failed:%d,truncated:%d,omitted:%d tokens=%d/%d ends=completed:%d,max_turns:%d,error:%d,cancelled:%d,unknown:%d failure_kinds=%s removed_workspaces=%d cleanup_errors=%d",
 		s.Total,
 		s.Passed,
 		s.Failed,
@@ -307,6 +307,19 @@ func printBatchSummary(w io.Writer, s batchSummary) {
 		s.RemovedWorkspaces,
 		s.CleanupErrors,
 	)
+	if len(s.ToolRepairByKind) > 0 {
+		fmt.Fprintf(w, " repair_kinds=%s", formatStringIntCounts(s.ToolRepairByKind))
+	}
+	if s.FocusedTaskCalls > 0 || s.SubagentCalls > 0 {
+		fmt.Fprintf(w, " delegation=focused_tasks:%d,subagents:%d", s.FocusedTaskCalls, s.SubagentCalls)
+		if len(s.FocusedTaskByType) > 0 {
+			fmt.Fprintf(w, " focused_task_by_type=%s", formatStringIntCounts(s.FocusedTaskByType))
+		}
+		if len(s.SubagentByMode) > 0 {
+			fmt.Fprintf(w, " subagent_by_mode=%s", formatStringIntCounts(s.SubagentByMode))
+		}
+	}
+	fmt.Fprintln(w)
 }
 
 func formatFailureKinds(counts map[string]int) string {

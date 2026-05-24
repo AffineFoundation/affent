@@ -268,6 +268,9 @@ func TestBatchSummaryAggregatesRuntimeMetrics(t *testing.T) {
 	if !strings.Contains(out.String(), want) {
 		t.Fatalf("summary output missing %q:\n%s", want, out.String())
 	}
+	if !strings.Contains(out.String(), "repair_kinds=alias_rename:2,tool_name:1,type_coercion:2") {
+		t.Fatalf("summary output missing repair kind rollup:\n%s", out.String())
+	}
 	if summary.TraceSchemaVersions[1] != 2 {
 		t.Fatalf("TraceSchemaVersions = %#v, want version 1 count 2", summary.TraceSchemaVersions)
 	}
@@ -475,6 +478,18 @@ func TestBatchSummaryAggregatesDelegationAcrossScenarios(t *testing.T) {
 	byType, ok := got["focused_task_by_type"].(map[string]any)
 	if !ok || byType["recall"] != float64(3) || byType["explore"] != float64(1) {
 		t.Errorf("summary.focused_task_by_type = %#v", byType)
+	}
+
+	var textOut bytes.Buffer
+	printBatchSummary(&textOut, summary)
+	for _, want := range []string{
+		"delegation=focused_tasks:4,subagents:1",
+		"focused_task_by_type=explore:1,recall:3",
+		"subagent_by_mode=review:1",
+	} {
+		if !strings.Contains(textOut.String(), want) {
+			t.Fatalf("summary text missing %q:\n%s", want, textOut.String())
+		}
 	}
 }
 
