@@ -739,6 +739,12 @@ func summarizeToolSchema(schema json.RawMessage) ([]string, []string) {
 
 func schemaFieldSummary(name string, prop toolSchemaProperty) string {
 	var parts []string
+	if typ := schemaTypeSummary(prop); typ != "" {
+		parts = append(parts, "type="+typ)
+	}
+	if itemTyp := schemaArrayItemTypeSummary(prop); itemTyp != "" {
+		parts = append(parts, "items="+itemTyp)
+	}
 	if enum := stringEnumSummary(prop.Enum); enum != "" {
 		parts = append(parts, "enum="+enum)
 	}
@@ -761,6 +767,25 @@ func schemaFieldSummary(name string, prop toolSchemaProperty) string {
 		return name
 	}
 	return name + " (" + strings.Join(parts, ", ") + ")"
+}
+
+func schemaTypeSummary(prop toolSchemaProperty) string {
+	types := schemaPropertyTypes(prop)
+	if len(types) == 0 {
+		return ""
+	}
+	return strings.Join(types, "|")
+}
+
+func schemaArrayItemTypeSummary(prop toolSchemaProperty) string {
+	if prop.Items == nil || !schemaPropertyIncludesType(prop, "array") {
+		return ""
+	}
+	types := schemaPropertyTypes(toolSchemaProperty{Type: prop.Items.Type})
+	if len(types) == 0 {
+		return ""
+	}
+	return strings.Join(types, "|")
 }
 
 func stringEnumSummary(values []any) string {

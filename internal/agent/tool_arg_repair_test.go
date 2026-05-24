@@ -1157,10 +1157,24 @@ func TestToolErrorHelpUsesSchema(t *testing.T) {
 		Schema: json.RawMessage(`{"type":"object","required":["path"],"properties":{"path":{"type":"string"},"max_bytes":{"type":"integer"}}}`),
 	}
 	got := toolErrorHelp(tl, json.RawMessage(`{}`))
-	for _, want := range []string{"Expected:", "required path", "Allowed:", `"path":"relative/path.txt"`, "Received: {}", "Next:"} {
+	for _, want := range []string{"Expected:", "required path", "Allowed:", "path (type=string)", "max_bytes (type=integer)", `"path":"relative/path.txt"`, "Received: {}", "Next:"} {
 		if !strings.Contains(got, want) {
 			t.Fatalf("tool error help missing %q:\n%s", want, got)
 		}
+	}
+}
+
+func TestToolErrorHelpShowsArrayItemType(t *testing.T) {
+	tl := &Tool{
+		Name:   "plan",
+		Schema: json.RawMessage(`{"type":"object","properties":{"evidence":{"type":"array","items":{"type":"string"}}}}`),
+	}
+	got := toolErrorHelp(tl, json.RawMessage(`{"evidence":"go test"}`))
+	if !strings.Contains(got, "evidence (type=array, items=string)") {
+		t.Fatalf("array item type missing:\n%s", got)
+	}
+	if !strings.Contains(got, "Received:") || !strings.Contains(got, `"evidence":"go test"`) {
+		t.Fatalf("received args missing:\n%s", got)
 	}
 }
 
@@ -1180,10 +1194,10 @@ func TestToolErrorHelpSurfacesSchemaConstraints(t *testing.T) {
 	}
 	got := toolErrorHelp(tl, json.RawMessage(`{"action":"delete","max_entries":100}`))
 	for _, want := range []string{
-		"action (enum=list|read)",
-		"max_entries (min=1, max=20, default=5)",
-		"query (minLength=1, maxLength=64)",
-		"replace_all (default=false)",
+		"action (type=string, enum=list|read)",
+		"max_entries (type=integer, min=1, max=20, default=5)",
+		"query (type=string, minLength=1, maxLength=64)",
+		"replace_all (type=boolean, default=false)",
 	} {
 		if !strings.Contains(got, want) {
 			t.Fatalf("tool error help missing %q:\n%s", want, got)
