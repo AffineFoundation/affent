@@ -187,7 +187,7 @@ func (g *toolLoopGuard) recordDirectReaderWarnings(tool, result string) {
 	currentURL := ""
 	for _, line := range strings.Split(result, "\n") {
 		line = strings.TrimSpace(line)
-		if u := canonicalWebURLFromLine(line); u != "" {
+		if u := canonicalWebURLFromStandaloneLine(line); u != "" {
 			currentURL = u
 			continue
 		}
@@ -310,13 +310,12 @@ func canonicalFetchURL(tool string, args json.RawMessage) string {
 	return canonicalWebURL(p.URL)
 }
 
-func canonicalWebURLFromLine(line string) string {
-	for _, field := range strings.Fields(strings.TrimSpace(line)) {
-		if u := canonicalWebURL(field); u != "" {
-			return u
-		}
+func canonicalWebURLFromStandaloneLine(line string) string {
+	fields := strings.Fields(strings.TrimSpace(line))
+	if len(fields) != 1 {
+		return ""
 	}
-	return ""
+	return canonicalWebURL(fields[0])
 }
 
 func canonicalWebURL(raw string) string {

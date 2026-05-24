@@ -319,6 +319,27 @@ Next: choose the 1-3 most authoritative/current result URLs.`
 	}
 }
 
+func TestToolLoopGuard_SearchWarningIgnoresURLsInsideSnippets(t *testing.T) {
+	g := newToolLoopGuard()
+	searchArgs := json.RawMessage(`{"query":"Nimbus recent trend","num_results":5}`)
+	searchResult := `1. Recent social discussion
+   https://x.com/example/status/123
+   Snippet mentions a mirror at https://mirror.example/nimbus but the result URL above is the warned URL.
+   Direct-reader warning: do not use direct page fetch on this URL.
+
+Next: use snippets only as weak sentiment evidence.`
+	if guard, ok := g.recordToolResult("web_search", searchArgs, searchResult, false); guard != "" || !ok {
+		t.Fatalf("successful search result should record warnings without failing; guard=%q ok=%v", guard, ok)
+	}
+	got := g.recordAttempt("web_fetch", json.RawMessage(`{"url":"https://x.com/example/status/123"}`))
+	if !strings.Contains(got, "loop_guard_direct_reader_warning") {
+		t.Fatalf("warned result URL should be blocked, got %q", got)
+	}
+	if got := g.recordAttempt("web_fetch", json.RawMessage(`{"url":"https://mirror.example/nimbus"}`)); got != "" {
+		t.Fatalf("snippet-only URL should not inherit the warning, got %q", got)
+	}
+}
+
 func TestCanonicalWebURLNormalizesHostAndPreservesPort(t *testing.T) {
 	got := canonicalWebURL(`"https://www.Example.com:8443/path?q=1#frag"`)
 	if got != "https://example.com:8443/path?q=1" {
