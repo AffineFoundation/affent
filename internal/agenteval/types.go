@@ -6,6 +6,7 @@ import (
 	"github.com/affinefoundation/affent/internal/agent"
 	"github.com/affinefoundation/affent/internal/executor"
 	"github.com/affinefoundation/affent/internal/sse"
+	"github.com/affinefoundation/affent/internal/toolfailure"
 	"github.com/affinefoundation/affent/internal/toolrepair"
 )
 
@@ -288,13 +289,17 @@ func (t Trace) ToolFailureKindCounts() map[string]int {
 	}
 	var out map[string]int
 	for _, c := range t.Tools {
-		if c.FailureKind == "" {
+		kind := c.FailureKind
+		if kind == "" {
+			kind = toolfailure.KindForResult(c.Tool, c.Result, c.ExitCode != 0)
+		}
+		if kind == "" {
 			continue
 		}
 		if out == nil {
 			out = map[string]int{}
 		}
-		out[c.FailureKind]++
+		out[kind]++
 	}
 	return out
 }

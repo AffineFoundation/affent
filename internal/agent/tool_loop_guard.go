@@ -6,6 +6,8 @@ import (
 	"hash/fnv"
 	"path"
 	"strings"
+
+	"github.com/affinefoundation/affent/internal/toolfailure"
 )
 
 const (
@@ -132,9 +134,7 @@ func toolOutcomeCountsAsSuccess(tool, result string, isErr bool) bool {
 }
 
 func isNoEvidenceWebFetchResult(result string) bool {
-	result = strings.TrimSpace(result)
-	return strings.HasPrefix(result, "[empty response:") ||
-		strings.HasPrefix(result, "[non-text response:")
+	return toolfailure.IsNoEvidenceWebFetchResult(result)
 }
 
 func toolFailureWarnThresholdFor(tool string) int {

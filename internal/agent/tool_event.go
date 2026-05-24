@@ -8,6 +8,7 @@ import (
 
 	"github.com/affinefoundation/affent/internal/sse"
 	"github.com/affinefoundation/affent/internal/textutil"
+	"github.com/affinefoundation/affent/internal/toolfailure"
 	"github.com/affinefoundation/affent/internal/toolrepair"
 )
 
@@ -123,7 +124,7 @@ func recordToolFailureKind(stats *sse.ToolRuntimeStats, result string, failed bo
 	if stats == nil || !failed {
 		return
 	}
-	kind := toolFailureKind(result)
+	kind := toolfailure.Kind(result)
 	if kind == "" {
 		return
 	}
@@ -134,37 +135,7 @@ func recordToolFailureKind(stats *sse.ToolRuntimeStats, result string, failed bo
 }
 
 func toolFailureKind(result string) string {
-	for _, line := range strings.Split(result, "\n") {
-		line = strings.TrimSpace(line)
-		if !strings.HasPrefix(line, "Failure:") {
-			continue
-		}
-		rest := strings.TrimSpace(strings.TrimPrefix(line, "Failure:"))
-		for _, part := range strings.Split(rest, ",") {
-			part = strings.TrimSpace(part)
-			if !strings.HasPrefix(part, "kind=") {
-				continue
-			}
-			kind := strings.TrimSpace(strings.TrimPrefix(part, "kind="))
-			if validToolFailureKind(kind) {
-				return kind
-			}
-		}
-	}
-	return ""
-}
-
-func validToolFailureKind(kind string) bool {
-	if kind == "" {
-		return false
-	}
-	for _, r := range kind {
-		if (r >= 'a' && r <= 'z') || (r >= '0' && r <= '9') || r == '_' || r == '-' {
-			continue
-		}
-		return false
-	}
-	return true
+	return toolfailure.Kind(result)
 }
 
 func recordToolRepairNotes(stats *sse.ToolRuntimeStats, notes []string) {
@@ -211,10 +182,7 @@ func toolResultEventPayload(callID string, exitCode int, result string) sse.Tool
 }
 
 func toolFailureKindForOutcome(tool, result string, isErr bool) string {
-	if toolOutcomeCountsAsSuccess(tool, result, isErr) {
-		return ""
-	}
-	return toolFailureKind(result)
+	return toolfailure.KindForResult(tool, result, isErr)
 }
 
 func toolResultEventPayloadForTurn(turnID, callID string, exitCode int, result string) sse.ToolResultPayload {
