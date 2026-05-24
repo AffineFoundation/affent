@@ -208,7 +208,7 @@ func fetch(ctx context.Context, cfg FetchConfig, requestURL string) (string, err
 }
 
 func emptyFetchResult(finalURL, contentType string) string {
-	return fmt.Sprintf("[empty response: URL=%s, Content-Type=%q]\nNext: do not treat this as page evidence; use another available source, fetch a text/API/HTML version, use an available rendering tool/source for rendered pages, or answer with this source marked as empty/unverified.", finalURL, contentType)
+	return fmt.Sprintf("[empty response: URL=%s, Content-Type=%q]\nFailure: kind=empty_response\nNext: do not treat this as page evidence; use another available source, fetch a text/API/HTML version, use an available rendering tool/source for rendered pages, or answer with this source marked as empty/unverified.", finalURL, contentType)
 }
 
 func recoverableFetchError(requestURL, finalURL string, status int, err error) error {
@@ -305,7 +305,7 @@ func renderBody(body []byte, contentType, finalURL string) string {
 	case isReadableTextMediaType(mediaType):
 		return string(body)
 	default:
-		return fmt.Sprintf("[non-text response: URL=%s, Content-Type=%q, %d bytes]\nNext: do not treat this as readable page evidence; fetch an HTML/API/text version, use an available rendering tool/source, or choose another authoritative source.", finalURL, contentType, len(body))
+		return fmt.Sprintf("[non-text response: URL=%s, Content-Type=%q, %d bytes]\nFailure: kind=non_text\nNext: do not treat this as readable page evidence; fetch an HTML/API/text version, use an available rendering tool/source, or choose another authoritative source.", finalURL, contentType, len(body))
 	}
 }
 

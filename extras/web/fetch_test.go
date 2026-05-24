@@ -223,7 +223,7 @@ func TestFetchTool_EmptyBodyReportsRecoverableResult(t *testing.T) {
 			if err != nil {
 				t.Fatalf("Execute: %v", err)
 			}
-			for _, want := range []string{"empty response", "URL=" + srv.URL, "Next:", "empty/unverified"} {
+			for _, want := range []string{"empty response", "Failure: kind=empty_response", "URL=" + srv.URL, "Next:", "empty/unverified"} {
 				if !strings.Contains(out, want) {
 					t.Fatalf("empty response missing %q guidance:\n%s", want, out)
 				}
@@ -250,7 +250,7 @@ func TestFetchTool_NonText(t *testing.T) {
 	if !strings.Contains(out, "non-text response") {
 		t.Errorf("expected non-text placeholder, got %q", out)
 	}
-	for _, want := range []string{"URL=" + srv.URL, "Next:", "do not treat this as readable page evidence", "HTML/API/text version"} {
+	for _, want := range []string{"URL=" + srv.URL, "Failure: kind=non_text", "Next:", "do not treat this as readable page evidence", "HTML/API/text version"} {
 		if !strings.Contains(out, want) {
 			t.Fatalf("non-text response missing %q guidance:\n%s", want, out)
 		}
