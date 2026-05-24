@@ -224,7 +224,7 @@ func TestRunner_CustomMemoryOnlyRegistryUsesMatchingPrompt(t *testing.T) {
 		if !foundSystem {
 			t.Fatalf("LLM request missing system prompt: %+v", req.Messages)
 		}
-		if len(req.Tools) != 1 || req.Tools[0].Function.Name != "memory" {
+		if len(req.Tools) != 1 || req.Tools[0].Function.Name != agent.MemoryToolName {
 			t.Fatalf("memory-only custom registry should advertise only memory tool; tools=%+v", req.Tools)
 		}
 	case <-time.After(2 * time.Second):

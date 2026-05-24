@@ -111,7 +111,7 @@ func TestRegisterBuiltins_DisableSkillOmitsSkillToolOnly(t *testing.T) {
 		HostWorkspaceDir: t.TempDir(),
 		DisableSkill:     true,
 	})
-	if _, ok := r.Get("skill"); ok {
+	if _, ok := r.Get(SkillToolName); ok {
 		t.Fatal("skill tool should be omitted when DisableSkill is true")
 	}
 	for _, name := range []string{"shell", "read_file", "write_file", "edit_file", "list_files"} {
@@ -595,7 +595,7 @@ func TestBuiltinToolSchemasRejectUnknownArguments(t *testing.T) {
 		name string
 		tool *Tool
 	}{
-		{name: "skill", tool: skillTool(DefaultSkillRegistry(), "", nil)},
+		{name: SkillToolName, tool: skillTool(DefaultSkillRegistry(), "", nil)},
 		{name: "shell", tool: shellTool(BuiltinDeps{Executor: &recordingExec{}})},
 		{name: "read_file", tool: readFileTool(BuiltinDeps{HostWorkspaceDir: t.TempDir()})},
 		{name: "write_file", tool: writeFileTool(BuiltinDeps{HostWorkspaceDir: t.TempDir()})},

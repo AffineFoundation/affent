@@ -758,7 +758,7 @@ func TestSetupLoop_EvalModeOmitsSkillsDelegationAndSkillProvider(t *testing.T) {
 		t.Fatalf("setupLoop code=%d", code)
 	}
 	defer b.close()
-	for _, name := range []string{"skill", "memory", "session_search", agent.PlanToolName, "subagent_run", agent.FocusedTaskToolName} {
+	for _, name := range []string{agent.SkillToolName, agent.MemoryToolName, agent.SessionSearchToolName, agent.PlanToolName, agent.SubagentToolName, agent.FocusedTaskToolName} {
 		if _, ok := b.loop.Tools.Get(name); ok {
 			t.Fatalf("%s should not be registered in eval mode", name)
 		}
@@ -904,7 +904,7 @@ func TestSetupLoop_RuntimeSkillInstallUpdatesActiveProvider(t *testing.T) {
 		t.Fatalf("setupLoop code=%d", code)
 	}
 	defer b.close()
-	tool, ok := b.loop.Tools.Get("skill")
+	tool, ok := b.loop.Tools.Get(agent.SkillToolName)
 	if !ok {
 		t.Fatal("skill tool missing")
 	}

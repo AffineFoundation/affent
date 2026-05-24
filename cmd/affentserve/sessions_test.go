@@ -612,7 +612,7 @@ func TestSessionPool_RuntimeSkillsAreDurable(t *testing.T) {
 	if err != nil {
 		t.Fatalf("GetOrCreate first: %v", err)
 	}
-	tool, ok := s1.loop.Tools.Get("skill")
+	tool, ok := s1.loop.Tools.Get(agent.SkillToolName)
 	if !ok {
 		t.Fatal("skill tool missing")
 	}
@@ -1242,7 +1242,7 @@ func TestSessionPool_EvalModeRegistersOnlyBasicTools(t *testing.T) {
 			t.Fatalf("%s should remain registered in eval mode", name)
 		}
 	}
-	for _, name := range []string{"skill", "memory", agent.PlanToolName, "session_search", agent.SubagentToolName, agent.FocusedTaskToolName, "web_fetch", "browser_open"} {
+	for _, name := range []string{agent.SkillToolName, agent.MemoryToolName, agent.PlanToolName, agent.SessionSearchToolName, agent.SubagentToolName, agent.FocusedTaskToolName, "web_fetch", "browser_open"} {
 		if _, ok := s.registry.Get(name); ok {
 			t.Fatalf("%s should not be registered in eval mode", name)
 		}
@@ -1254,7 +1254,7 @@ func TestSessionPool_EvalModeRegistersOnlyBasicTools(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer func() { _ = sWithMemory.Close() }()
-	if _, ok := sWithMemory.registry.Get("memory"); !ok {
+	if _, ok := sWithMemory.registry.Get(agent.MemoryToolName); !ok {
 		t.Fatal("explicit memory should be registered in eval mode")
 	}
 	memoryMsgs := sWithMemory.conv.Snapshot()

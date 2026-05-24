@@ -401,14 +401,14 @@ func SystemPromptSurfaceForRegistry(reg *Registry) SystemPromptSurface {
 		hasRegisteredTool(reg, "list_files")
 	otherTools := false
 	for _, def := range reg.Defs() {
-		if def.Function.Name == "memory" {
+		if def.Function.Name == MemoryToolName {
 			continue
 		}
 		otherTools = true
 	}
 	return SystemPromptSurface{
 		Builtins:   builtins,
-		Memory:     hasRegisteredTool(reg, "memory"),
+		Memory:     hasRegisteredTool(reg, MemoryToolName),
 		OtherTools: otherTools,
 	}
 }
@@ -424,7 +424,7 @@ func WithRegistrySystemGuidance(prompt string, reg *Registry) string {
 	if strings.TrimSpace(prompt) == "" {
 		prompt = BaseSystemPromptForRegistry(reg)
 	}
-	if hasRegisteredTool(reg, "memory") {
+	if hasRegisteredTool(reg, MemoryToolName) {
 		prompt = WithMemorySystemGuidance(prompt)
 	}
 	if hasRegisteredTool(reg, SessionSearchToolName) {
@@ -1369,13 +1369,13 @@ func (l *Loop) toolResultMaxBytesInContext() int {
 // get a smaller one. Unlisted tools fall back to
 // MaxToolResultBytesInContext.
 var defaultToolResultLimits = map[string]int{
-	"read_file":      12 * 1024,
-	"shell":          6 * 1024,
-	"memory":         4 * 1024,
-	"session_search": 4 * 1024,
-	"list_files":     4 * 1024,
-	"write_file":     2 * 1024,
-	"edit_file":      2 * 1024,
+	"read_file":           12 * 1024,
+	"shell":               6 * 1024,
+	MemoryToolName:        4 * 1024,
+	SessionSearchToolName: 4 * 1024,
+	"list_files":          4 * 1024,
+	"write_file":          2 * 1024,
+	"edit_file":           2 * 1024,
 }
 
 func (l *Loop) toolResultMaxBytesInContextFor(toolName string) int {

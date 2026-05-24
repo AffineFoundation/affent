@@ -84,7 +84,7 @@ func TestWithMemorySystemGuidance_AppendsOnce(t *testing.T) {
 
 func TestRegistrySystemPromptComposition(t *testing.T) {
 	reg := NewRegistry()
-	reg.Add(&Tool{Name: "memory"})
+	reg.Add(&Tool{Name: MemoryToolName})
 	if got := BaseSystemPromptForRegistry(reg); got != MemoryOnlySystemPrompt {
 		t.Fatal("memory-only registry should use memory-only base prompt")
 	}
@@ -123,7 +123,7 @@ func TestRegistrySystemPromptComposition(t *testing.T) {
 	}
 
 	reg = NewRegistry()
-	reg.Add(&Tool{Name: "memory"})
+	reg.Add(&Tool{Name: MemoryToolName})
 	reg.Add(&Tool{Name: "read_file"})
 	if got := BaseSystemPromptForRegistry(reg); got != LimitedToolSystemPrompt {
 		t.Fatal("memory plus partial file tools must not use the memory-only prompt")
@@ -578,13 +578,13 @@ func TestPreviewN_UTF8Safe(t *testing.T) {
 func TestLoopToolResultContextCapsByTool(t *testing.T) {
 	loop := &Loop{}
 	cases := map[string]int{
-		"read_file":      12 * 1024,
-		"shell":          6 * 1024,
-		"memory":         4 * 1024,
-		"session_search": 4 * 1024,
-		"list_files":     4 * 1024,
-		"edit_file":      2 * 1024,
-		"unknown":        MaxToolResultBytesInContext,
+		"read_file":           12 * 1024,
+		"shell":               6 * 1024,
+		MemoryToolName:        4 * 1024,
+		SessionSearchToolName: 4 * 1024,
+		"list_files":          4 * 1024,
+		"edit_file":           2 * 1024,
+		"unknown":             MaxToolResultBytesInContext,
 	}
 	for tool, want := range cases {
 		if got := loop.toolResultMaxBytesInContextFor(tool); got != want {

@@ -14,6 +14,8 @@ import (
 )
 
 const (
+	// MemoryToolName is the registry name for the durable memory tool.
+	MemoryToolName      = "memory"
 	memoryActionAdd     = "add"
 	memoryActionReplace = "replace"
 	memoryActionRemove  = "remove"
@@ -117,7 +119,7 @@ func memoryTool(store memory.MemoryStore) *Tool {
 		panic(fmt.Sprintf("memory tool schema marshal: %v", err))
 	}
 	return &Tool{
-		Name:        "memory",
+		Name:        MemoryToolName,
 		Description: "Save or recall durable facts across sessions. Use target=user for stable user preferences/details; target=memory topic=core only for facts needed every turn; named topics for project/domain facts. Actions: add, replace, remove, search, list. Do not save transient task progress, raw dumps, or facts easily re-read from files.",
 		Schema:      json.RawMessage(schema),
 		Execute: func(ctx context.Context, args json.RawMessage) (string, error) {

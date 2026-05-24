@@ -167,6 +167,9 @@ type skillToolArgs struct {
 	ProposalID  string   `json:"proposal_id"`
 }
 
+// SkillToolName is the registry name for the runtime skill catalog/install tool.
+const SkillToolName = "skill"
+
 func skillTool(reg *SkillRegistry, skillDir string, confirmInstall SkillInstallConfirmer) *Tool {
 	if reg == nil {
 		reg = builtinSkillProviderRegistry
@@ -186,7 +189,7 @@ func skillTool(reg *SkillRegistry, skillDir string, confirmInstall SkillInstallC
         }
     }`, maxSkillActionBytes, maxSkillNameBytes, maxRuntimeSkillDescriptionBytes, maxRuntimeSkillBodyBytes, maxRuntimeSkillTriggers, maxRuntimeSkillTriggerBytes, maxRuntimeSkillSourceBytes, runtimeSkillProposalIDBytes, runtimeSkillProposalIDBytes))
 	return &Tool{
-		Name:        "skill",
+		Name:        SkillToolName,
 		Description: "List, read, or install reusable operational skills. Installed skills are prompt/workflow documents, persisted under the workspace, and become available without restarting. For remote or searched candidates, first retrieve and review the exact SKILL.md body with available web/shell/file tools, then use propose_install with source and body, and confirm_install only after the user confirms that proposal_id. Use install only when the user explicitly provides an exact skill body to install.",
 		Schema:      schema,
 		Execute: func(ctx context.Context, args json.RawMessage) (string, error) {
