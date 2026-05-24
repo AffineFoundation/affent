@@ -144,6 +144,19 @@ func TestSubagentReportHasOpenGapsAllowsExplicitNone(t *testing.T) {
 	}
 }
 
+func TestSubagentReportHasOpenGapsAllowsDefinitiveAbsence(t *testing.T) {
+	reports := []string{
+		"Conclusion:\nNo issues found.\n\nEvidence:\n- Reviewed the requested diff.",
+		"Conclusion:\n未发现风险。\n\nEvidence:\n- 已检查指定文件。",
+		"Conclusion:\nNo matching prior session context was found.\n\nEvidence:\n- Searched session history for the requested terms.",
+	}
+	for _, report := range reports {
+		if subagentReportHasOpenGaps(report) {
+			t.Fatalf("definitive absence should not mark report incomplete:\n%s", report)
+		}
+	}
+}
+
 func TestSubagentPostPolicyBlocksParentBrowserAfterSuccessfulReport(t *testing.T) {
 	resp := subagentResponse{
 		Report:        "Conclusion:\nThe child gathered the page facts.\nEvidence:\n- browser snapshot",
