@@ -77,7 +77,7 @@ func parseFlagsAndConfig(argv []string) (Config, error) {
 		enableWebSearch    = fs.Bool("web-search", false, "Register web_search alongside web_fetch (requires TAVILY_API_KEY by default). Env: AFFENTSERVE_WEB_SEARCH.")
 		enableMemory       = fs.Bool("memory", true, "Register agent runtime's memory tool.")
 		enableBuiltins     = fs.Bool("builtins", false, "Register shell + file builtins (LocalExecutor). DANGEROUS on a shared host — only enable in a sandboxed environment. Env: AFFENTSERVE_BUILTINS.")
-		evalMode           = fs.Bool("eval-mode", false, "Strict benchmark mode: disable skills, browser/web tools, subagent, focused tasks, dynamic workflow injection, and memory by default; use --memory=true to opt memory in. Env: AFFENTSERVE_EVAL_MODE.")
+		evalMode           = fs.Bool("eval-mode", false, "Strict benchmark mode: disable skills, plan, subagent, focused tasks, dynamic workflow injection, memory, and environment tools by default; opt into needed env permissions with --browser=true, --web=true, or --memory=true. Env: AFFENTSERVE_EVAL_MODE.")
 		enableSubagent     = fs.Bool("subagent", true, "Register the subagent_run tool — a bounded isolated Loop with read-only inspection tools. Doesn't require --builtins but inherits the shell tool when --builtins is also on.")
 		subagentMaxDepth   = fs.Int("subagent-max-depth", agent.DefaultSubagentMaxDepth, "Maximum recursive subagent depth; 1 disables nested subagents, hard max 4. Env: AFFENTSERVE_SUBAGENT_MAX_DEPTH.")
 		enableFocusedTasks = fs.Bool("focused-tasks", true, "Register the run_task tool — bounded focused tasks (recall/explore/research/verify/review) with a per-kind tool whitelist and structured JSON output. Independent of --subagent. Env: AFFENTSERVE_FOCUSED_TASKS.")
@@ -172,12 +172,15 @@ func parseFlagsAndConfig(argv []string) (Config, error) {
 		cfg.CompactKeepLast = *compactKeepLast
 	}
 	if setFlags["browser"] {
+		cfg.enableBrowserSet = true
 		cfg.EnableBrowser = *enableBrowser
 	}
 	if setFlags["web"] {
+		cfg.enableWebSet = true
 		cfg.EnableWeb = *enableWeb
 	}
 	if setFlags["web-search"] {
+		cfg.enableWebSearchSet = true
 		cfg.EnableWebSearch = *enableWebSearch
 	}
 	if setFlags["memory"] {
@@ -218,6 +221,7 @@ func parseFlagsAndConfig(argv []string) (Config, error) {
 		cfg.BrowserAllowAllDomains = *browserAllowAll
 	}
 	if setFlags["browser-screenshot"] {
+		cfg.browserScreenshotSet = true
 		cfg.BrowserScreenshot = *browserScreenshot
 	}
 	if *systemPrompt != "" {
@@ -249,10 +253,10 @@ func parseFlagsAndConfig(argv []string) (Config, error) {
 		cfg.MaxTokens = &n
 	}
 
-	cfg.ApplyEvalMode()
 	if err := cfg.Validate(); err != nil {
 		return cfg, err
 	}
+	cfg.ApplyEvalMode()
 	return cfg, nil
 }
 

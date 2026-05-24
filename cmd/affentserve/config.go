@@ -110,13 +110,16 @@ type Config struct {
 	// EnableBrowser registers the extras/browser tool family on each
 	// new session. Disabled by default since it adds a Chromium
 	// runtime dependency.
-	EnableBrowser bool `json:"enable_browser"`
+	EnableBrowser    bool `json:"enable_browser"`
+	enableBrowserSet bool
 
 	// EnableWeb registers extras/web's web_fetch (and optionally
 	// web_search). Disabled by default to keep the Tavily key
 	// requirement opt-in.
-	EnableWeb       bool `json:"enable_web"`
-	EnableWebSearch bool `json:"enable_web_search"`
+	EnableWeb          bool `json:"enable_web"`
+	enableWebSet       bool
+	EnableWebSearch    bool `json:"enable_web_search"`
+	enableWebSearchSet bool
 
 	// EnableMemory exposes agent runtime's `memory` tool.
 	EnableMemory    bool `json:"enable_memory"`
@@ -133,8 +136,9 @@ type Config struct {
 	// EvalMode freezes sessions to a strict single-loop benchmark
 	// surface. It disables skills, browser/web tools, subagent,
 	// focused tasks, other dynamic workflow injection, and memory by
-	// default. Memory and shell/file builtins remain available when
-	// explicitly enabled.
+	// default. Shell/file builtins remain available when enabled; memory
+	// and environment permissions such as browser/web can be opted back
+	// in only when explicitly configured.
 	EvalMode bool `json:"eval_mode"`
 
 	// SystemPrompt overrides agent.DefaultSystemPrompt. Empty falls
@@ -198,7 +202,8 @@ type Config struct {
 	// (qwen-vl, gpt-4o, claude-3.x) flip this on to let the agent see
 	// the rendered page; the tool's save_path option keeps base64 out
 	// of the result for callers that only want a PNG on disk.
-	BrowserScreenshot bool `json:"browser_screenshot"`
+	BrowserScreenshot    bool `json:"browser_screenshot"`
+	browserScreenshotSet bool
 
 	// Sampling knobs forwarded to the upstream LLM on every chat
 	// completion. Pointers so "unset" (nil) differs from "explicitly 0"
@@ -238,6 +243,10 @@ func LoadConfig(path string) (Config, error) {
 	}
 	var raw struct {
 		MaxSessions        *int  `json:"max_sessions"`
+		EnableBrowser      *bool `json:"enable_browser"`
+		BrowserScreenshot  *bool `json:"browser_screenshot"`
+		EnableWeb          *bool `json:"enable_web"`
+		EnableWebSearch    *bool `json:"enable_web_search"`
 		EnableMemory       *bool `json:"enable_memory"`
 		EnableSubagent     *bool `json:"enable_subagent"`
 		SubagentMaxDepth   *int  `json:"subagent_max_depth"`
@@ -247,6 +256,10 @@ func LoadConfig(path string) (Config, error) {
 		return cfg, fmt.Errorf("parse config %s: %w", path, err)
 	}
 	cfg.maxSessionsSet = raw.MaxSessions != nil
+	cfg.enableBrowserSet = raw.EnableBrowser != nil
+	cfg.browserScreenshotSet = raw.BrowserScreenshot != nil
+	cfg.enableWebSet = raw.EnableWeb != nil
+	cfg.enableWebSearchSet = raw.EnableWebSearch != nil
 	cfg.enableMemorySet = raw.EnableMemory != nil
 	cfg.enableSubagentSet = raw.EnableSubagent != nil
 	cfg.subagentMaxDepthSet = raw.SubagentMaxDepth != nil
@@ -336,7 +349,16 @@ func (c *Config) Resolve() error {
 				return fmt.Errorf("%s=%q: %w", e.env, v, err)
 			}
 			*e.dest = b
-			if e.env == "AFFENTSERVE_MEMORY" {
+			switch e.env {
+			case "AFFENTSERVE_BROWSER":
+				c.enableBrowserSet = true
+			case "AFFENTSERVE_BROWSER_SCREENSHOT":
+				c.browserScreenshotSet = true
+			case "AFFENTSERVE_WEB":
+				c.enableWebSet = true
+			case "AFFENTSERVE_WEB_SEARCH":
+				c.enableWebSearchSet = true
+			case "AFFENTSERVE_MEMORY":
 				c.enableMemorySet = true
 			}
 		}
@@ -376,24 +398,77 @@ func (c *Config) Resolve() error {
 	return nil
 }
 
+type serveRuntimeCapabilities struct {
+	Builtins          bool
+	Memory            bool
+	Browser           bool
+	BrowserScreenshot bool
+	Web               bool
+	WebSearch         bool
+	Subagent          bool
+	FocusedTasks      bool
+	WorkflowTools     bool
+}
+
+func resolveServeRuntimeCapabilities(c Config) serveRuntimeCapabilities {
+	caps := serveRuntimeCapabilities{
+		Builtins:          c.EnableBuiltins,
+		Memory:            c.EnableMemory,
+		Browser:           c.EnableBrowser,
+		BrowserScreenshot: c.EnableBrowser && c.BrowserScreenshot,
+		Web:               c.EnableWeb,
+		WebSearch:         c.EnableWeb && c.EnableWebSearch,
+		Subagent:          c.EnableSubagent,
+		FocusedTasks:      c.EnableFocusedTasks,
+		WorkflowTools:     true,
+	}
+	if !c.EvalMode {
+		return caps
+	}
+	// Eval mode starts from a strict single-loop surface. Operators may
+	// explicitly opt into environment permissions that an eval suite
+	// actually needs, such as LiveWeb's browser access, without enabling
+	// workflow accelerators like skills, plan, subagents, or focused tasks.
+	caps.Memory = c.enableMemorySet && c.EnableMemory
+	caps.Browser = c.enableBrowserSet && c.EnableBrowser
+	caps.BrowserScreenshot = caps.Browser && c.browserScreenshotSet && c.BrowserScreenshot
+	caps.Web = c.enableWebSet && c.EnableWeb
+	caps.WebSearch = caps.Web && c.enableWebSearchSet && c.EnableWebSearch
+	caps.Subagent = false
+	caps.FocusedTasks = false
+	caps.WorkflowTools = false
+	return caps
+}
+
+func (c Config) EffectiveRuntimeConfig() Config {
+	if !c.EvalMode {
+		return c
+	}
+	caps := resolveServeRuntimeCapabilities(c)
+	c.EnableBuiltins = caps.Builtins
+	c.EnableMemory = caps.Memory
+	c.EnableBrowser = caps.Browser
+	c.BrowserScreenshot = caps.BrowserScreenshot
+	c.EnableWeb = caps.Web
+	c.EnableWebSearch = caps.WebSearch
+	c.EnableSubagent = caps.Subagent
+	c.EnableFocusedTasks = caps.FocusedTasks
+	if !caps.Browser {
+		c.BrowserScreenshot = false
+		c.BrowserCacheDir = ""
+		c.BrowserCacheTTL = ""
+		c.BrowserCacheSweepInterval = ""
+		c.BrowserNoStealth = false
+		c.BrowserAllowAllDomains = false
+	}
+	return c
+}
+
 func (c *Config) ApplyEvalMode() {
-	if c == nil || !c.EvalMode {
+	if c == nil {
 		return
 	}
-	c.EnableBrowser = false
-	c.BrowserScreenshot = false
-	c.BrowserCacheDir = ""
-	c.BrowserCacheTTL = ""
-	c.BrowserCacheSweepInterval = ""
-	c.BrowserNoStealth = false
-	c.BrowserAllowAllDomains = false
-	if !c.enableMemorySet {
-		c.EnableMemory = false
-	}
-	c.EnableWeb = false
-	c.EnableWebSearch = false
-	c.EnableSubagent = false
-	c.EnableFocusedTasks = false
+	*c = c.EffectiveRuntimeConfig()
 }
 
 // IdleTTL parses SessionIdleTTL into a duration with the documented
@@ -518,7 +593,6 @@ func (c Config) RetryBackoffDuration() (time.Duration, error) {
 // applied by Resolve() before this is meaningful — callers should
 // always Resolve() then Validate().
 func (c Config) Validate() error {
-	c.ApplyEvalMode()
 	if c.BaseURL == "" {
 		return errors.New("base_url is required (use --base-url or AFFENTSERVE_BASE_URL)")
 	}
@@ -544,7 +618,8 @@ func (c Config) Validate() error {
 	if c.CompactKeepLast < 0 {
 		return fmt.Errorf("compact_keep_last must be zero or a positive integer")
 	}
-	if c.EnableWebSearch && !c.EnableWeb {
+	caps := resolveServeRuntimeCapabilities(c)
+	if c.EnableWebSearch && !caps.Web {
 		return errors.New("enable_web_search requires enable_web")
 	}
 	if _, err := c.IdleTTL(); err != nil {
@@ -556,7 +631,7 @@ func (c Config) Validate() error {
 	if _, err := c.RetryBackoffDuration(); err != nil {
 		return err
 	}
-	if !c.EnableBrowser {
+	if !caps.Browser {
 		if c.BrowserCacheDir != "" {
 			return errors.New("browser_cache_dir requires enable_browser")
 		}

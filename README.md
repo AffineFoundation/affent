@@ -740,8 +740,13 @@ It also disables memory by default; add `--memory=true` for memory-aware evals
 and `--mcp-config <path>` for MCP-aware evals. `--memory-only` remains a
 specialized pure-memory benchmark mode rather than the default eval posture.
 `affentserve --eval-mode` applies the same posture for API sessions and also
-disables browser/web tools; add `--memory=true` there as well when the eval
-needs memory. `affenteval --runtime-eval-mode` passes the flag to the
+disables browser/web tools by default. Add only the environment permission the
+eval suite actually needs, for example `--browser=true` for LiveWeb-style
+browser-only tasks, `--browser=true --browser-screenshot=true` when a vision
+model needs PNG screenshots, `--web=true --web-search=true` for fetch/search
+evals, or
+`--memory=true` for memory-aware evals. `affenteval --runtime-eval-mode` passes
+the flag to the
 `affentctl run` process under test and records `runtime_eval_mode` in JSONL
 metadata.
 

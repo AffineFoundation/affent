@@ -238,7 +238,111 @@ func TestConfig_Resolve_PreservesExplicitSubagentAndMemoryFalse(t *testing.T) {
 	}
 }
 
-func TestConfig_ValidateEvalModeIgnoresDisabledNetworkDeps(t *testing.T) {
+func TestResolveServeRuntimeCapabilitiesEvalMode(t *testing.T) {
+	base := Config{
+		EvalMode:           true,
+		EnableBuiltins:     true,
+		EnableMemory:       true,
+		EnableBrowser:      true,
+		BrowserScreenshot:  true,
+		EnableWeb:          true,
+		EnableWebSearch:    true,
+		EnableSubagent:     true,
+		EnableFocusedTasks: true,
+	}
+	caps := resolveServeRuntimeCapabilities(base)
+	if !caps.Builtins {
+		t.Fatal("eval mode should preserve enabled builtins")
+	}
+	if caps.Memory || caps.Browser || caps.BrowserScreenshot || caps.Web || caps.WebSearch || caps.Subagent || caps.FocusedTasks || caps.WorkflowTools {
+		t.Fatalf("implicit eval capabilities should stay off: %+v", caps)
+	}
+
+	browserOnly := base
+	browserOnly.enableBrowserSet = true
+	caps = resolveServeRuntimeCapabilities(browserOnly)
+	if !caps.Browser {
+		t.Fatal("explicit browser should be available in eval mode")
+	}
+	if caps.BrowserScreenshot || caps.Web || caps.Memory || caps.Subagent || caps.FocusedTasks || caps.WorkflowTools {
+		t.Fatalf("browser-only eval should not enable unrelated capabilities: %+v", caps)
+	}
+
+	withScreenshot := browserOnly
+	withScreenshot.browserScreenshotSet = true
+	caps = resolveServeRuntimeCapabilities(withScreenshot)
+	if !caps.Browser || !caps.BrowserScreenshot {
+		t.Fatalf("explicit browser screenshot should require and follow browser capability: %+v", caps)
+	}
+
+	webSearch := base
+	webSearch.enableWebSet = true
+	webSearch.enableWebSearchSet = true
+	caps = resolveServeRuntimeCapabilities(webSearch)
+	if !caps.Web || !caps.WebSearch {
+		t.Fatalf("explicit web search should be available in eval mode: %+v", caps)
+	}
+
+	memory := base
+	memory.enableMemorySet = true
+	caps = resolveServeRuntimeCapabilities(memory)
+	if !caps.Memory {
+		t.Fatal("explicit memory should be available in eval mode")
+	}
+}
+
+func TestConfig_ValidateEvalModeRejectsUnusedEnvironmentOptions(t *testing.T) {
+	cases := []struct {
+		name string
+		edit func(*Config)
+		want string
+	}{
+		{
+			name: "web search without web",
+			edit: func(c *Config) {
+				c.EnableWebSearch = true
+				c.enableWebSearchSet = true
+			},
+			want: "enable_web_search requires enable_web",
+		},
+		{
+			name: "browser screenshot without browser",
+			edit: func(c *Config) {
+				c.BrowserScreenshot = true
+				c.browserScreenshotSet = true
+			},
+			want: "browser_screenshot requires enable_browser",
+		},
+		{
+			name: "browser cache without browser",
+			edit: func(c *Config) {
+				c.BrowserCacheDir = filepath.Join(t.TempDir(), "cache")
+			},
+			want: "browser_cache_dir requires enable_browser",
+		},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			cfg := Config{
+				BaseURL:          "https://example/v1",
+				Model:            "demo",
+				MaxSessions:      1,
+				SessionIdleTTL:   "5m",
+				PerCallTimeout:   "3m",
+				RetryBackoff:     "4s",
+				SubagentMaxDepth: agent.DefaultSubagentMaxDepth,
+				EvalMode:         true,
+			}
+			tc.edit(&cfg)
+			err := cfg.Validate()
+			if err == nil || !strings.Contains(err.Error(), tc.want) {
+				t.Fatalf("Validate error = %v, want contains %q", err, tc.want)
+			}
+		})
+	}
+}
+
+func TestConfig_ValidateEvalModeAllowsExplicitBrowserOnly(t *testing.T) {
 	cfg := Config{
 		BaseURL:                   "https://example/v1",
 		Model:                     "demo",
@@ -248,8 +352,10 @@ func TestConfig_ValidateEvalModeIgnoresDisabledNetworkDeps(t *testing.T) {
 		RetryBackoff:              "4s",
 		SubagentMaxDepth:          agent.DefaultSubagentMaxDepth,
 		EvalMode:                  true,
-		EnableWebSearch:           true,
+		EnableBrowser:             true,
+		enableBrowserSet:          true,
 		BrowserScreenshot:         true,
+		browserScreenshotSet:      true,
 		BrowserCacheDir:           filepath.Join(t.TempDir(), "cache"),
 		BrowserCacheTTL:           "1h",
 		BrowserCacheSweepInterval: "5m",
@@ -257,7 +363,7 @@ func TestConfig_ValidateEvalModeIgnoresDisabledNetworkDeps(t *testing.T) {
 		BrowserAllowAllDomains:    true,
 	}
 	if err := cfg.Validate(); err != nil {
-		t.Fatalf("eval mode should disable non-basic surfaces before validation, got %v", err)
+		t.Fatalf("explicit browser eval config should validate: %v", err)
 	}
 }
 

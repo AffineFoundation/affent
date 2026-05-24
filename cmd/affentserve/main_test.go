@@ -170,10 +170,6 @@ func TestParseFlagsAndConfig_BuiltinsFromEnv(t *testing.T) {
 }
 
 func TestParseFlagsAndConfig_EvalModeDisablesNonBasicSurfaces(t *testing.T) {
-	t.Setenv("AFFENTSERVE_BROWSER", "true")
-	t.Setenv("AFFENTSERVE_BROWSER_SCREENSHOT", "true")
-	t.Setenv("AFFENTSERVE_WEB", "true")
-	t.Setenv("AFFENTSERVE_WEB_SEARCH", "true")
 	t.Setenv("AFFENTSERVE_SUBAGENT", "true")
 	t.Setenv("AFFENTSERVE_FOCUSED_TASKS", "true")
 	cfg, err := parseFlagsAndConfig([]string{
@@ -203,6 +199,36 @@ func TestParseFlagsAndConfig_EvalModeDisablesNonBasicSurfaces(t *testing.T) {
 	}
 	if !cfg.EnableMemory {
 		t.Fatal("--eval-mode --memory=true should opt memory back in")
+	}
+
+	cfg, err = parseFlagsAndConfig([]string{
+		"--base-url", "https://example/v1",
+		"--model", "demo",
+		"--eval-mode",
+		"--browser=true",
+	})
+	if err != nil {
+		t.Fatalf("parseFlagsAndConfig explicit browser: %v", err)
+	}
+	if !cfg.EnableBrowser {
+		t.Fatal("--eval-mode --browser=true should opt browser back in for browser-only evals")
+	}
+	if cfg.EnableWeb || cfg.EnableMemory || cfg.EnableSubagent || cfg.EnableFocusedTasks {
+		t.Fatalf("browser-only eval should not enable unrelated capabilities: %+v", cfg)
+	}
+
+	cfg, err = parseFlagsAndConfig([]string{
+		"--base-url", "https://example/v1",
+		"--model", "demo",
+		"--eval-mode",
+		"--web=true",
+		"--web-search=true",
+	})
+	if err != nil {
+		t.Fatalf("parseFlagsAndConfig explicit web search: %v", err)
+	}
+	if !cfg.EnableWeb || !cfg.EnableWebSearch {
+		t.Fatal("--eval-mode --web=true --web-search=true should opt web_search back in")
 	}
 }
 
@@ -235,6 +261,24 @@ func TestParseFlagsAndConfig_NetworkToolsFromEnv(t *testing.T) {
 	}
 	if cfg.EnableBrowser || cfg.BrowserScreenshot || cfg.EnableWeb || cfg.EnableWebSearch {
 		t.Fatalf("CLI false flags should override network tool envs: %+v", cfg)
+	}
+}
+
+func TestParseFlagsAndConfig_EvalModeAllowsEnvironmentPermissionEnv(t *testing.T) {
+	t.Setenv("AFFENTSERVE_BROWSER", "true")
+	cfg, err := parseFlagsAndConfig([]string{
+		"--base-url", "https://example/v1",
+		"--model", "demo",
+		"--eval-mode",
+	})
+	if err != nil {
+		t.Fatalf("parseFlagsAndConfig: %v", err)
+	}
+	if !cfg.EnableBrowser {
+		t.Fatal("AFFENTSERVE_BROWSER=true should opt browser into eval mode")
+	}
+	if cfg.EnableWeb || cfg.EnableMemory || cfg.EnableSubagent || cfg.EnableFocusedTasks {
+		t.Fatalf("browser env opt-in should not enable unrelated eval capabilities: %+v", cfg)
 	}
 }
 
