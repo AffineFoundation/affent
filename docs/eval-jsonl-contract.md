@@ -90,7 +90,10 @@ Scenario records describe one eval case:
   without requiring operators to inspect the full trace.
 - `loop_guard_interventions`: runtime loop guard intervention count.
 - `forced_no_tools`: count of forced no-tool follow-up requests after repeated
-  loop guard interventions.
+  blocking loop guard interventions. Soft warnings such as
+  `loop_guard_repeated_failures` still count under `loop_guard_interventions`
+  but do not by themselves force a no-tool follow-up, so API/text fallback
+  tools can still run after a recoverable web failure pattern.
 - `tool_duration_ms`: total runtime tool dispatch duration.
 - `tool_args_truncated`: count of event-capped tool requests.
 - `tool_args_omitted_bytes`: omitted request bytes across tool events.

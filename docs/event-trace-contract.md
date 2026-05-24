@@ -191,7 +191,9 @@ diagnostics.
 - `tool_errors`
 - `tool_duration_ms`
 - `loop_guard_interventions`
-- `forced_no_tools`
+- `forced_no_tools`: forced no-tool follow-ups after repeated blocking guard
+  interventions. Soft guard warnings such as `loop_guard_repeated_failures`
+  are counted as interventions but do not by themselves force tools off.
 
 ### `error`
 

@@ -594,7 +594,7 @@ func toolFailureKindHint(kind string) string {
 	case "loop_guard_repeated_call":
 		return "loop guard blocked repeated identical tool arguments; change arguments, use another tool, or answer from gathered evidence"
 	case "loop_guard_repeated_failures":
-		return "loop guard saw consecutive tool failures; read the latest Failure/Next guidance and switch approach before retrying"
+		return "loop guard saw consecutive tool failures; this is a soft warning, so read the latest Failure/Next guidance, switch source or approach, and continue with useful fallback tools"
 	case "loop_guard_halted_tool":
 		return "loop guard halted a tool after repeated failures this turn; stop using that tool and continue with another source or the verified evidence"
 	case "loop_guard_call_cap":

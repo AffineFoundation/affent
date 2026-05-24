@@ -40,6 +40,42 @@ func containsString(values []string, want string) bool {
 	return false
 }
 
+func TestLoopGuardResultForcesNoTools(t *testing.T) {
+	cases := []struct {
+		name string
+		in   string
+		want bool
+	}{
+		{
+			name: "soft repeated failures warning",
+			in:   "loop_guard: tool failed twice\nFailure: kind=loop_guard_repeated_failures",
+			want: false,
+		},
+		{
+			name: "blocked repeated failed input",
+			in:   "loop_guard: blocked repeated failed call\nFailure: kind=loop_guard_repeated_failed_input",
+			want: true,
+		},
+		{
+			name: "combined original failure and soft warning",
+			in:   "blocked\nFailure: kind=blocked\n\nloop_guard: warning\nFailure: kind=loop_guard_repeated_failures",
+			want: false,
+		},
+		{
+			name: "combined soft warning and hard guard",
+			in:   "warning\nFailure: kind=loop_guard_repeated_failures\n\nblocked\nFailure: kind=loop_guard_repeated_call",
+			want: true,
+		},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			if got := loopGuardResultForcesNoTools(c.in); got != c.want {
+				t.Fatalf("loopGuardResultForcesNoTools() = %v, want %v", got, c.want)
+			}
+		})
+	}
+}
+
 // TestToolResult_ResultBypasses4KiBSummaryCap verifies the trace
 // fidelity contract for ordinary structured results: ResultSummary is
 // capped for UI display, but Result still carries the complete payload
