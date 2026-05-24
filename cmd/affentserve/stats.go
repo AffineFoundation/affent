@@ -48,6 +48,9 @@ type statsBoundaries struct {
 	RepairableToolArg    int    `json:"repairable_tool_arg_bytes"`
 	ProjectContextBytes  int    `json:"project_context_bytes"`
 	MCPToolResultBytes   int    `json:"mcp_tool_result_bytes"`
+	MCPHTTPJSONResponse  int    `json:"mcp_http_json_response_bytes"`
+	MCPHTTPSSELine       int    `json:"mcp_http_sse_line_bytes"`
+	MCPStdioFrame        int    `json:"mcp_stdio_frame_bytes"`
 }
 
 type sessionStatsResponse struct {
@@ -158,5 +161,8 @@ func statsBoundarySnapshot(cfg Config) statsBoundaries {
 		RepairableToolArg:    ab.RepairableToolArgBytes,
 		ProjectContextBytes:  ab.ProjectContextBytes,
 		MCPToolResultBytes:   mb.ToolResultBytes,
+		MCPHTTPJSONResponse:  mb.HTTPJSONResponseBytes,
+		MCPHTTPSSELine:       mb.HTTPSSELineBytes,
+		MCPStdioFrame:        mb.StdioFrameBytes,
 	}
 }

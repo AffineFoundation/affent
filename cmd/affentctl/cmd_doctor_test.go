@@ -312,6 +312,9 @@ func TestDoctorBoundarySummaryUsesConfiguredTurnLimits(t *testing.T) {
 		"tool_result_preview=4KiB",
 		"repairable_tool_args=1MiB",
 		"project_context=32KiB",
+		"mcp_http_json=4MiB",
+		"mcp_http_sse_line=4MiB",
+		"mcp_stdio_frame=4MiB",
 	} {
 		if !strings.Contains(got, want) {
 			t.Fatalf("boundary summary missing %q:\n%s", want, got)

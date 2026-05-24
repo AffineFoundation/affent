@@ -1,11 +1,17 @@
 package mcp
 
 type RuntimeBoundaries struct {
-	ToolResultBytes int
+	ToolResultBytes       int
+	HTTPJSONResponseBytes int
+	HTTPSSELineBytes      int
+	StdioFrameBytes       int
 }
 
 func DefaultRuntimeBoundaries() RuntimeBoundaries {
 	return RuntimeBoundaries{
-		ToolResultBytes: maxMCPToolResultBytes,
+		ToolResultBytes:       maxMCPToolResultBytes,
+		HTTPJSONResponseBytes: maxHTTPJSONResponseBytes,
+		HTTPSSELineBytes:      maxHTTPSSELineBytes,
+		StdioFrameBytes:       maxStdioJSONFrameBytes,
 	}
 }
