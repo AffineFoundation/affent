@@ -84,6 +84,12 @@ func TestHandleStats_EmptyPool(t *testing.T) {
 		resp.Boundaries.FocusedTaskFindings <= 0 || resp.Boundaries.FocusedTaskListEntries <= 0 || resp.Boundaries.FocusedTaskToolCalls <= 0 {
 		t.Fatalf("focused task boundaries must be positive: %+v", resp.Boundaries)
 	}
+	if resp.Boundaries.SubagentDefaultTurns <= 0 || resp.Boundaries.SubagentMaxTurns <= 0 ||
+		resp.Boundaries.SubagentTaskBytes <= 0 || resp.Boundaries.SubagentModeBytes <= 0 ||
+		resp.Boundaries.SubagentToolResult <= 0 || resp.Boundaries.SubagentDefaultDepth <= 0 ||
+		resp.Boundaries.SubagentConfiguredMaxDepth <= 0 || resp.Boundaries.SubagentHardMaxDepth <= 0 {
+		t.Fatalf("subagent boundaries must be positive: %+v", resp.Boundaries)
+	}
 	if resp.Boundaries.MemoryFileBytes <= 0 || resp.Boundaries.MemorySearchQuery <= 0 || resp.Boundaries.MemorySearchTerms <= 0 ||
 		resp.Boundaries.MemorySearchSnippet <= 0 || resp.Boundaries.MemoryResponseEntry <= 0 {
 		t.Fatalf("memory boundaries must be positive: %+v", resp.Boundaries)
@@ -95,8 +101,9 @@ func TestHandleStats_EmptyPool(t *testing.T) {
 
 func TestStatsBoundarySnapshotUsesConfiguredTurnLimits(t *testing.T) {
 	got := statsBoundarySnapshot(Config{
-		MaxTurnSteps:   7,
-		PerCallTimeout: "9s",
+		MaxTurnSteps:     7,
+		PerCallTimeout:   "9s",
+		SubagentMaxDepth: 3,
 	})
 	if got.MaxTurnSteps != 7 {
 		t.Fatalf("MaxTurnSteps = %d, want 7", got.MaxTurnSteps)
@@ -115,6 +122,12 @@ func TestStatsBoundarySnapshotUsesConfiguredTurnLimits(t *testing.T) {
 	}
 	if got.FocusedTaskToolResult != agent.DefaultRuntimeBoundaries().FocusedTaskToolResultBytes {
 		t.Fatalf("FocusedTaskToolResult = %d, want %d", got.FocusedTaskToolResult, agent.DefaultRuntimeBoundaries().FocusedTaskToolResultBytes)
+	}
+	if got.SubagentToolResult != agent.DefaultRuntimeBoundaries().SubagentToolResultBytes {
+		t.Fatalf("SubagentToolResult = %d, want %d", got.SubagentToolResult, agent.DefaultRuntimeBoundaries().SubagentToolResultBytes)
+	}
+	if got.SubagentConfiguredMaxDepth != 3 {
+		t.Fatalf("SubagentConfiguredMaxDepth = %d, want 3", got.SubagentConfiguredMaxDepth)
 	}
 }
 

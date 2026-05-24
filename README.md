@@ -125,8 +125,8 @@ allowlist/denylist can be checked before a model sees the tools.
 `doctor` also prints the active runtime boundary caps, including prompt/config
 input limits, LLM request and stream accumulator caps, tool request/result event
 caps, tool result context cap, loop guard thresholds, plan state/active-plan
-caps, focused-task budget/output caps, JSONL record cap, MCP result cap, and
-memory file/search/response caps. Its capability line
+caps, focused-task budget/output caps, subagent input/budget/depth caps, JSONL
+record cap, MCP result cap, and memory file/search/response caps. Its capability line
 summarizes the tool surface the resolved config will expose, including
 shell/file tools, skill install, memory, session search, MCP, subagent,
 focused tasks, project context, and executor class.
@@ -568,6 +568,8 @@ Registration:
 Pass `mode` (`explore`, `review`, `test`, or `research`) and `task` to
 invoke; `max_turns` defaults to 6 with a hard cap of 12.
 `subagent_max_depth` defaults to 2 and is hard-capped at 4.
+`subagent_run` also caps each task at 8 KiB, mode strings at 64 bytes,
+and child tool results fed back into the child context at 4 KiB.
 
 ## Focused Tasks
 
@@ -805,8 +807,8 @@ stats, aggregate token/browser counters, `workspace_root`, `memory_root`,
 clients can verify the durable state path, see effective turn/tool caps, and
 stop sending new work during graceful drain.
 The boundary snapshot includes loop guard thresholds, plan state/active-plan,
-focused-task budget/output, JSONL record, MCP result, MCP transport, and memory
-file/search/response caps.
+focused-task budget/output, subagent input/budget/depth, JSONL record, MCP
+result, MCP transport, and memory file/search/response caps.
 
 ## Security Model
 

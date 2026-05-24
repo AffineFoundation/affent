@@ -74,6 +74,14 @@ type statsBoundaries struct {
 	FocusedTaskFindings        int    `json:"focused_task_findings"`
 	FocusedTaskListEntries     int    `json:"focused_task_list_entries"`
 	FocusedTaskToolCalls       int    `json:"focused_task_tool_calls"`
+	SubagentDefaultTurns       int    `json:"subagent_default_turns"`
+	SubagentMaxTurns           int    `json:"subagent_max_turns"`
+	SubagentTaskBytes          int    `json:"subagent_task_bytes"`
+	SubagentModeBytes          int    `json:"subagent_mode_bytes"`
+	SubagentToolResult         int    `json:"subagent_tool_result_bytes"`
+	SubagentDefaultDepth       int    `json:"subagent_default_depth"`
+	SubagentConfiguredMaxDepth int    `json:"subagent_configured_max_depth"`
+	SubagentHardMaxDepth       int    `json:"subagent_hard_max_depth"`
 	MCPToolResultBytes         int    `json:"mcp_tool_result_bytes"`
 	MCPHTTPJSONResponse        int    `json:"mcp_http_json_response_bytes"`
 	MCPHTTPSSELine             int    `json:"mcp_http_sse_line_bytes"`
@@ -177,6 +185,12 @@ func statsBoundarySnapshot(cfg Config) statsBoundaries {
 	if d, err := cfg.PerCallTimeoutDuration(); err == nil && d > 0 {
 		perCallTimeout = d
 	}
+	subagentMaxDepth := cfg.SubagentMaxDepth
+	if subagentMaxDepth <= 0 {
+		subagentMaxDepth = agent.DefaultSubagentMaxDepth
+	} else if subagentMaxDepth > agent.MaxSubagentDepth {
+		subagentMaxDepth = agent.MaxSubagentDepth
+	}
 	return statsBoundaries{
 		MaxTurnSteps:               maxTurnSteps,
 		PerCallTimeout:             perCallTimeout.String(),
@@ -219,6 +233,14 @@ func statsBoundarySnapshot(cfg Config) statsBoundaries {
 		FocusedTaskFindings:        ab.FocusedTaskFindings,
 		FocusedTaskListEntries:     ab.FocusedTaskListEntries,
 		FocusedTaskToolCalls:       ab.FocusedTaskToolCalls,
+		SubagentDefaultTurns:       ab.SubagentDefaultTurns,
+		SubagentMaxTurns:           ab.SubagentMaxTurns,
+		SubagentTaskBytes:          ab.SubagentTaskBytes,
+		SubagentModeBytes:          ab.SubagentModeBytes,
+		SubagentToolResult:         ab.SubagentToolResultBytes,
+		SubagentDefaultDepth:       ab.SubagentDefaultDepth,
+		SubagentConfiguredMaxDepth: subagentMaxDepth,
+		SubagentHardMaxDepth:       ab.SubagentHardMaxDepth,
 		MCPToolResultBytes:         mb.ToolResultBytes,
 		MCPHTTPJSONResponse:        mb.HTTPJSONResponseBytes,
 		MCPHTTPSSELine:             mb.HTTPSSELineBytes,

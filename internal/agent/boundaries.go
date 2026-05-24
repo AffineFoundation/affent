@@ -43,6 +43,13 @@ type RuntimeBoundaries struct {
 	FocusedTaskFindings             int
 	FocusedTaskListEntries          int
 	FocusedTaskToolCalls            int
+	SubagentDefaultTurns            int
+	SubagentMaxTurns                int
+	SubagentTaskBytes               int
+	SubagentModeBytes               int
+	SubagentToolResultBytes         int
+	SubagentDefaultDepth            int
+	SubagentHardMaxDepth            int
 }
 
 func DefaultRuntimeBoundaries() RuntimeBoundaries {
@@ -86,5 +93,12 @@ func DefaultRuntimeBoundaries() RuntimeBoundaries {
 		FocusedTaskFindings:             maxFocusedTaskFindings,
 		FocusedTaskListEntries:          maxFocusedTaskListEntries,
 		FocusedTaskToolCalls:            maxFocusedTaskToolCalls,
+		SubagentDefaultTurns:            defaultSubagentMaxTurns,
+		SubagentMaxTurns:                maxSubagentMaxTurns,
+		SubagentTaskBytes:               maxSubagentTaskBytes,
+		SubagentModeBytes:               maxSubagentModeBytes,
+		SubagentToolResultBytes:         subagentToolResultBytes,
+		SubagentDefaultDepth:            DefaultSubagentMaxDepth,
+		SubagentHardMaxDepth:            MaxSubagentDepth,
 	}
 }

@@ -481,6 +481,31 @@ func TestSubagentToolDescriptionMentionsCallerProvidedBrowserTools(t *testing.T)
 	}
 }
 
+func TestDefaultRuntimeBoundariesIncludesSubagentCaps(t *testing.T) {
+	got := DefaultRuntimeBoundaries()
+	if got.SubagentDefaultTurns != defaultSubagentMaxTurns {
+		t.Fatalf("SubagentDefaultTurns = %d, want %d", got.SubagentDefaultTurns, defaultSubagentMaxTurns)
+	}
+	if got.SubagentMaxTurns != maxSubagentMaxTurns {
+		t.Fatalf("SubagentMaxTurns = %d, want %d", got.SubagentMaxTurns, maxSubagentMaxTurns)
+	}
+	if got.SubagentTaskBytes != maxSubagentTaskBytes {
+		t.Fatalf("SubagentTaskBytes = %d, want %d", got.SubagentTaskBytes, maxSubagentTaskBytes)
+	}
+	if got.SubagentModeBytes != maxSubagentModeBytes {
+		t.Fatalf("SubagentModeBytes = %d, want %d", got.SubagentModeBytes, maxSubagentModeBytes)
+	}
+	if got.SubagentToolResultBytes != subagentToolResultBytes {
+		t.Fatalf("SubagentToolResultBytes = %d, want %d", got.SubagentToolResultBytes, subagentToolResultBytes)
+	}
+	if got.SubagentDefaultDepth != DefaultSubagentMaxDepth {
+		t.Fatalf("SubagentDefaultDepth = %d, want %d", got.SubagentDefaultDepth, DefaultSubagentMaxDepth)
+	}
+	if got.SubagentHardMaxDepth != MaxSubagentDepth {
+		t.Fatalf("SubagentHardMaxDepth = %d, want %d", got.SubagentHardMaxDepth, MaxSubagentDepth)
+	}
+}
+
 // TestBuildSubagentRegistry_HasNoWriteAndBoundedNestedSubagent pins the
 // two load-bearing invariants of the subagent design:
 //
