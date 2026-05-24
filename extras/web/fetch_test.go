@@ -83,6 +83,69 @@ func TestFetchTool_PlainText(t *testing.T) {
 	}
 }
 
+func TestFetchTool_StructuredTextMediaTypes(t *testing.T) {
+	cases := []struct {
+		name        string
+		contentType string
+		body        string
+		want        string
+	}{
+		{
+			name:        "json ld",
+			contentType: "application/ld+json; charset=utf-8",
+			body:        `{"name":"Affine subnet","metric":"market cap"}`,
+			want:        `"Affine subnet"`,
+		},
+		{
+			name:        "vendor json",
+			contentType: "application/vnd.api+json",
+			body:        `{"data":{"id":"taostats"}}`,
+			want:        `"taostats"`,
+		},
+		{
+			name:        "rss xml",
+			contentType: "application/rss+xml",
+			body:        `<rss><channel><title>Recent updates</title></channel></rss>`,
+			want:        "Recent updates",
+		},
+		{
+			name:        "atom xml",
+			contentType: "application/atom+xml",
+			body:        `<feed><title>Network news</title></feed>`,
+			want:        "Network news",
+		},
+		{
+			name:        "ndjson",
+			contentType: "application/x-ndjson",
+			body:        `{"price":1.23}` + "\n" + `{"volume":456}`,
+			want:        `"volume":456`,
+		},
+	}
+
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				w.Header().Set("Content-Type", c.contentType)
+				w.Write([]byte(c.body))
+			}))
+			defer srv.Close()
+
+			tool := FetchTool(FetchConfig{AllowPrivateNetwork: true})
+			args, _ := json.Marshal(map[string]string{"url": srv.URL})
+			out, err := tool.Execute(context.Background(), args)
+			if err != nil {
+				t.Fatalf("Execute: %v", err)
+			}
+			if !strings.Contains(out, c.want) {
+				t.Fatalf("output missing %q:\n%s", c.want, out)
+			}
+			if strings.Contains(out, "non-text response") {
+				t.Fatalf("structured text should not be treated as non-text:\n%s", out)
+			}
+		})
+	}
+}
+
 func TestFetchTool_SniffsMislabelledReadableBody(t *testing.T) {
 	cases := []struct {
 		name        string

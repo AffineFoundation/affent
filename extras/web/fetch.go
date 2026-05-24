@@ -234,21 +234,17 @@ func recoverableFetchError(requestURL, finalURL string, status int, err error) e
 }
 
 func renderBody(body []byte, contentType, finalURL string) string {
-	ct := strings.ToLower(strings.TrimSpace(contentType))
-	mediaType := ct
-	if i := strings.IndexByte(mediaType, ';'); i >= 0 {
-		mediaType = strings.TrimSpace(mediaType[:i])
-	}
+	mediaType := contentMediaType(contentType)
 	if shouldSniffBody(mediaType) {
 		switch sniffReadableBody(body) {
 		case "html":
-			ct = "text/html"
+			mediaType = "text/html"
 		case "text":
-			ct = "text/plain"
+			mediaType = "text/plain"
 		}
 	}
 	switch {
-	case strings.HasPrefix(ct, "text/html"), strings.HasPrefix(ct, "application/xhtml+xml"):
+	case mediaType == "text/html", mediaType == "application/xhtml+xml":
 		// Standard reader pipeline: Readability extracts the article's
 		// main content (drops nav/header/footer/sidebar/ads), then
 		// html-to-markdown converts the cleaned HTML. Both libraries
@@ -277,15 +273,37 @@ func renderBody(body []byte, contentType, finalURL string) string {
 			return htmlText
 		}
 		return md
-	case strings.HasPrefix(ct, "text/"),
-		strings.HasPrefix(ct, "application/json"),
-		strings.HasPrefix(ct, "application/xml"),
-		strings.HasPrefix(ct, "application/javascript"),
-		strings.HasPrefix(ct, "application/yaml"):
+	case isReadableTextMediaType(mediaType):
 		return string(body)
 	default:
 		return fmt.Sprintf("[non-text response: URL=%s, Content-Type=%q, %d bytes]\nNext: do not treat this as readable page evidence; fetch an HTML/API/text version, use a browser tool if one is registered, or choose another authoritative source.", finalURL, contentType, len(body))
 	}
+}
+
+func contentMediaType(contentType string) string {
+	mediaType := strings.ToLower(strings.TrimSpace(contentType))
+	if i := strings.IndexByte(mediaType, ';'); i >= 0 {
+		mediaType = strings.TrimSpace(mediaType[:i])
+	}
+	return mediaType
+}
+
+func isReadableTextMediaType(mediaType string) bool {
+	if strings.HasPrefix(mediaType, "text/") {
+		return true
+	}
+	switch mediaType {
+	case "application/json",
+		"application/xml",
+		"application/javascript",
+		"application/x-javascript",
+		"application/x-ndjson",
+		"application/yaml",
+		"application/x-yaml":
+		return true
+	}
+	return strings.HasPrefix(mediaType, "application/") &&
+		(strings.HasSuffix(mediaType, "+json") || strings.HasSuffix(mediaType, "+xml"))
 }
 
 func shouldSniffBody(mediaType string) bool {
