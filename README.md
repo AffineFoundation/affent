@@ -431,7 +431,9 @@ from the previous response), not an event id, so replay remains correct across
 server restarts where runtime event ids can start over.
 The live `GET /v1/sessions/{id}/events` stream uses the same durable line
 cursor for its SSE `id:` field; reconnect with `Last-Event-ID` to replay
-persisted events after that cursor before continuing with live events.
+persisted events after that cursor before continuing with live events. If the
+server restarted and the session exists only on disk, the events endpoint
+reopens that durable session before replaying.
 Use `GET /v1/sessions/{id}/plan` to read the persisted `plan.json` snapshot
 without reopening an inactive session.
 

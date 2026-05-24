@@ -40,9 +40,13 @@ const (
 // replay persisted events after that cursor, then continue with live
 // events.
 func handleSessionEvents(pool *SessionPool, sessionID string, w http.ResponseWriter, r *http.Request) {
-	sess, err := pool.Get(sessionID)
+	sess, err := sessionForEvents(pool, sessionID)
 	if err != nil {
-		writeJSONError(w, http.StatusNotFound, "session not found", err)
+		if errors.Is(err, ErrSessionNotFound) {
+			writeJSONError(w, http.StatusNotFound, "session not found", err)
+			return
+		}
+		writeJSONErrorTyped(w, http.StatusBadRequest, "invalid session id", err, "bad_request")
 		return
 	}
 	lastEventID, replay, err := parseLastEventID(r.Header.Get("Last-Event-ID"))
@@ -106,6 +110,28 @@ func handleSessionEvents(pool *SessionPool, sessionID string, w http.ResponseWri
 			}
 		}
 	}
+}
+
+func sessionForEvents(pool *SessionPool, sessionID string) (*Session, error) {
+	if pool == nil {
+		return nil, ErrSessionNotFound
+	}
+	if err := agent.ValidateSessionID(sessionID); err != nil {
+		return nil, err
+	}
+	sess, err := pool.Get(sessionID)
+	if err == nil {
+		return sess, nil
+	}
+	if !errors.Is(err, ErrSessionNotFound) {
+		return nil, err
+	}
+	if _, found, err := durableSessionDirInfo(pool.sessionDirPath(sessionID)); err != nil {
+		return nil, err
+	} else if !found {
+		return nil, ErrSessionNotFound
+	}
+	return pool.GetOrCreate(sessionID)
 }
 
 func parseLastEventID(raw string) (int64, bool, error) {

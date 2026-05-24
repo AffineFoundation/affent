@@ -32,6 +32,8 @@ server restart.
 `GET /v1/sessions/{id}/events` uses that same durable JSONL line number as the
 SSE `id:` value. A client that reconnects with `Last-Event-ID: <cursor>` first
 receives persisted records after that cursor, then continues with live events.
+For `affentserve`, the SSE endpoint may reopen an inactive durable session so
+the same reconnect contract works after a server or container restart.
 
 ## Event Envelope
 

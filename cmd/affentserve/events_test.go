@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"encoding/json"
 	"io"
 	"net/http"
@@ -9,6 +10,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/affinefoundation/affent/internal/sse"
 	"github.com/rs/zerolog"
@@ -37,6 +39,68 @@ func TestHandleSessionEvents_UnknownSessionReturns404(t *testing.T) {
 	body := w.Body.String()
 	if !strings.Contains(body, "session not found") {
 		t.Errorf("error body missing 'session not found': %s", body)
+	}
+}
+
+func TestHandleSessionEvents_ReopensDurableSessionAndReplaysAfterLastEventID(t *testing.T) {
+	memRoot := t.TempDir()
+	cfg := Config{
+		Listen:         "127.0.0.1:0",
+		MaxSessions:    4,
+		SessionIdleTTL: "5m",
+		WorkspaceRoot:  t.TempDir(),
+		MemoryRoot:     memRoot,
+		BaseURL:        "http://127.0.0.1:0",
+		APIKey:         "test",
+		Model:          "fake",
+	}
+	pool1, err := NewSessionPool(cfg, zerologDiscard())
+	if err != nil {
+		t.Fatal(err)
+	}
+	s, err := pool1.GetOrCreate("sse-restart")
+	if err != nil {
+		t.Fatal(err)
+	}
+	tracePath := filepath.Join(memRoot, "sse-restart", "events.jsonl")
+	for _, turnID := range []string{"turn-one", "turn-two"} {
+		ev, err := sse.NewEvent(sse.TypeTurnStart, sse.TurnStartPayload{TurnID: turnID})
+		if err != nil {
+			t.Fatal(err)
+		}
+		s.events <- ev
+	}
+	waitForFileSubstring(t, tracePath, `"turn_id":"turn-two"`)
+	pool1.Shutdown()
+
+	pool2, err := NewSessionPool(cfg, zerologDiscard())
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(pool2.Shutdown)
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	r := httptest.NewRequest(http.MethodGet, "/v1/sessions/sse-restart/events", nil).WithContext(ctx)
+	r.Header.Set("Last-Event-ID", "1")
+	w := httptest.NewRecorder()
+	done := make(chan struct{})
+	go func() {
+		handleSessionEvents(pool2, "sse-restart", w, r)
+		close(done)
+	}()
+	waitForRecorderSubstring(t, w, `"turn_id":"turn-two"`)
+	cancel()
+	select {
+	case <-done:
+	case <-time.After(2 * time.Second):
+		t.Fatal("events handler did not exit after request cancellation")
+	}
+	body := w.Body.String()
+	if !strings.Contains(body, "id: 2") || strings.Contains(body, `"turn_id":"turn-one"`) {
+		t.Fatalf("SSE replay body should contain only events after Last-Event-ID 1:\n%s", body)
+	}
+	if _, err := pool2.Get("sse-restart"); err != nil {
+		t.Fatalf("durable session should be active after SSE reconnect: %v", err)
 	}
 }
 
@@ -417,6 +481,20 @@ func TestHandleSessionHistoryRejectsSymlinkLog(t *testing.T) {
 
 func zerologDiscard() zerolog.Logger {
 	return zerolog.New(io.Discard)
+}
+
+func waitForRecorderSubstring(t *testing.T, w *httptest.ResponseRecorder, want string) {
+	t.Helper()
+	deadline := time.Now().Add(2 * time.Second)
+	for {
+		if strings.Contains(w.Body.String(), want) {
+			return
+		}
+		if time.Now().After(deadline) {
+			t.Fatalf("timed out waiting for %q in recorder body:\n%s", want, w.Body.String())
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
 }
 
 // errorWriter implements http.ResponseWriter + http.Flusher but
