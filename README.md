@@ -512,6 +512,103 @@ Pass `mode` (`explore`, `review`, `test`, or `research`) and `task` to
 invoke; `max_turns` defaults to 6 with a hard cap of 12.
 `subagent_max_depth` defaults to 2 and is hard-capped at 4.
 
+## Focused Tasks
+
+The `run_task` tool is the productized delegation surface. Where
+`subagent_run` is the lower-level "give me an isolated child Loop"
+primitive, `run_task` constrains the call to one of five well-defined
+task types, gives each a dedicated system prompt and tool whitelist,
+and requires the child to return a single structured JSON object that
+the parent agent can act on without re-reading the child's transcript.
+
+Task types (`task_type` field, schema enum):
+
+- `recall` — search durable memory and prior sessions for facts that
+  constrain the current task. Read-only memory + session_search.
+- `explore` — locate files / symbols / modules in the current
+  workspace and form a small map. read_file + list_files + read-only
+  shell + session_search.
+- `research` — look up external facts via web_fetch / web_search and
+  return cited results. Web tools only (no workspace access).
+- `verify` — verify a specific claim with the smallest necessary
+  check. Same tools as explore but the prompt forbids speculation and
+  requires pass/fail evidence.
+- `review` — review a named change/file/claim for risks, missing
+  tests, and unhandled edge cases. Each finding carries an explicit
+  severity.
+
+Each call must pass `task_type` and `objective`. `max_turns` is
+optional and defaults to the profile's recommended budget (4–6);
+hard-capped at 12.
+
+Structured output (always returned to the parent, even on partial
+failure):
+
+```json
+{
+  "task_type":      "recall",
+  "ok":             true,
+  "summary":        "found 1 relevant prior decision",
+  "findings":       [
+    {
+      "claim":      "user prefers terse responses",
+      "evidence":   "don't summarize at the end",
+      "source":     "session:abc123",
+      "confidence": "high"
+    }
+  ],
+  "not_found":      [],
+  "warnings":       [],
+  "suggested_next": [],
+  "objective":      "find user response-format preferences",
+  "child_session_id": "focused_…",
+  "turn_end_reason": "completed"
+}
+```
+
+Design contract enforced in code (`internal/agent/focusedtask.go` +
+tests):
+
+- Per-profile tool whitelist. The child registry contains only the
+  capabilities the profile declares AND the deps satisfy.
+- No `write_file` / `edit_file` / `run_task` / `subagent_run` in any
+  focused-task child. Children cannot recursively delegate.
+- JSON-preferred + text-fallback parser: if the child emits anything
+  that isn't a parseable JSON object, the runtime wraps the raw
+  output in `summary` and adds `structured_output_parse_failed` to
+  `warnings` so the parent agent can still consume the result with
+  an explicit downgrade signal.
+- Per-turn cap of 3 `run_task` calls per parent turn (loop guard). A
+  4th call is rejected with an over-delegation message.
+- Evidence is sanitized byte-by-byte for C0 control characters and
+  ANSI escapes before the parent agent sees it, so a child that read
+  a malicious file can't hijack the trace UI or downstream string
+  handling.
+- Field ordering in the response JSON keeps `task_type` / `ok` /
+  `summary` / `findings` at the front, so the parent Loop's 8 KiB
+  per-tool-result truncation never clips the load-bearing content.
+- Each tool.request / tool.result trace event for `run_task` carries
+  a `delegation: {kind:"focused_task", task_type:…}` block, so trace
+  UIs and eval pipelines can filter or group without parsing tool
+  args.
+
+Registration:
+
+- `affentctl`: focused tasks on by default. Disable with
+  `--focused-tasks=false`, `AFFENTCTL_FOCUSED_TASKS=false`, or
+  `"focused_tasks": false` / `"enable_focused_tasks": false` in the
+  config file. Independent of `--subagent` — disabling one does not
+  disable the other.
+- `affentserve`: focused tasks on by default. Disable with
+  `--focused-tasks=false`, `AFFENTSERVE_FOCUSED_TASKS=false`, or
+  `"enable_focused_tasks": false`. The `research` profile is filtered
+  out of the schema enum when `--web` is off, so models never see a
+  task_type they can't fulfill.
+
+The full design and implementation notes — task-type selection guidance,
+prompt contracts, output schema details, eval strategy, open design questions —
+are in [docs/focused-tasks.md](docs/focused-tasks.md).
+
 ## Evaluation
 
 Affent includes an internal evaluation runner for real agent scenarios. It
