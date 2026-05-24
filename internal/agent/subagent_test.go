@@ -393,18 +393,32 @@ func TestWithSubagentSystemGuidance(t *testing.T) {
 	if !strings.Contains(got, "Subagent delegation:") {
 		t.Fatal("guidance missing from default prompt")
 	}
+	for _, forbidden := range []string{
+		"Subagent browser delegation:",
+		"current-page visible information",
+		"Split cross-tab or multi-page audits",
+	} {
+		if strings.Contains(got, forbidden) {
+			t.Fatalf("default subagent guidance should not mention browser-only detail %q:\n%s", forbidden, got)
+		}
+	}
 	if strings.Count(WithSubagentSystemGuidance(got), "Subagent delegation:") != 1 {
 		t.Fatal("guidance should not be appended twice")
 	}
+	withBrowser := WithSubagentSystemGuidance("", true)
 	for _, want := range []string{
+		"Subagent browser delegation:",
 		"delegate a narrow page/snapshot objective",
 		"current-page visible information",
 		"not to click tabs",
 		"Split cross-tab or multi-page audits",
 	} {
-		if !strings.Contains(got, want) {
-			t.Fatalf("subagent guidance missing web delegation constraint %q:\n%s", want, got)
+		if !strings.Contains(withBrowser, want) {
+			t.Fatalf("subagent guidance missing browser delegation constraint %q:\n%s", want, withBrowser)
 		}
+	}
+	if strings.Count(WithSubagentSystemGuidance(withBrowser, true), "Subagent browser delegation:") != 1 {
+		t.Fatal("browser guidance should not be appended twice")
 	}
 }
 

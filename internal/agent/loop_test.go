@@ -159,6 +159,15 @@ func TestRegistrySystemPromptComposition(t *testing.T) {
 	if strings.Count(WithRegistrySystemGuidance(prompt, reg), "External research:") != 1 {
 		t.Fatal("external research guidance should be idempotent")
 	}
+	if strings.Contains(prompt, "Subagent browser delegation:") {
+		t.Fatalf("registry prompt without browser tools should not include browser-specific subagent guidance:\n%s", prompt)
+	}
+
+	reg.Add(&Tool{Name: "browser_navigate"})
+	prompt = WithRegistrySystemGuidance(BaseSystemPromptForRegistry(reg), reg)
+	if !strings.Contains(prompt, "Subagent browser delegation:") {
+		t.Fatalf("registry prompt with subagent and browser should include browser delegation guidance:\n%s", prompt)
+	}
 
 	reg = NewRegistry()
 	reg.Add(&Tool{Name: MemoryToolName})

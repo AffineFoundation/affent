@@ -479,7 +479,11 @@ func WithRegistrySystemGuidance(prompt string, reg *Registry) string {
 		prompt = WithExternalResearchSystemGuidance(prompt, surface)
 	}
 	if hasRegisteredTool(reg, SubagentToolName) {
-		prompt = WithSubagentSystemGuidance(prompt)
+		browserAvailable := false
+		if surface, ok := externalResearchSurfaceForRegistry(reg); ok {
+			browserAvailable = surface.Browser
+		}
+		prompt = WithSubagentSystemGuidance(prompt, browserAvailable)
 	}
 	if hasRegisteredTool(reg, FocusedTaskToolName) {
 		prompt = WithFocusedTaskSystemGuidance(prompt)

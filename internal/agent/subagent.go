@@ -153,19 +153,25 @@ const SubagentSystemGuidance = `Subagent delegation:
 - The subagent_run tool is available by default, but use it only for these triggers: the user explicitly asks for a subagent/delegation, asks for isolated review, asks for broad exploration, or asks to avoid main-context pollution.
 - When one of those triggers is present, call subagent_run as the first tool.
 - Do not spend parent context listing directories or reading large files just to prepare that delegation. Put likely paths, uncertainty, and the concrete question in the subagent task; the child can inspect them in its isolated context.
-- For rendered web pages, delegate a narrow page/snapshot objective. If the user asks for current-page visible information, say that explicitly in the subagent task and tell the child not to click tabs or broaden across the site. Split cross-tab or multi-page audits into separate bounded requests instead of asking for "all information" in one child run.
 - Subagents may delegate one more bounded subtask when the tool schema exposes subagent_run. Use that only for clearly separable noisy work; each layer must return a compressed evidence report, not a transcript.
 - After subagent_run returns, answer from its report. Only do a small parent-side verification pass when the report is incomplete, contradictory, or the user asked you to implement a change.
 - If subagent_run returns ok:false, treat its report as a partial index of attempted work, not as conclusive evidence. Verify the smallest missing facts before making claims.`
 
-func WithSubagentSystemGuidance(prompt string) string {
+const SubagentBrowserDelegationGuidance = `Subagent browser delegation:
+- For rendered web pages, delegate a narrow page/snapshot objective. If the user asks for current-page visible information, say that explicitly in the subagent task and tell the child not to click tabs or broaden across the site.
+- Split cross-tab or multi-page audits into separate bounded requests instead of asking for "all information" in one child run.`
+
+func WithSubagentSystemGuidance(prompt string, browserAvailable ...bool) string {
 	if strings.TrimSpace(prompt) == "" {
 		prompt = DefaultSystemPrompt
 	}
-	if strings.Contains(prompt, "Subagent delegation:") {
-		return prompt
+	if !strings.Contains(prompt, "Subagent delegation:") {
+		prompt += "\n\n" + SubagentSystemGuidance
 	}
-	return prompt + "\n\n" + SubagentSystemGuidance
+	if len(browserAvailable) > 0 && browserAvailable[0] && !strings.Contains(prompt, "Subagent browser delegation:") {
+		prompt += "\n\n" + SubagentBrowserDelegationGuidance
+	}
+	return prompt
 }
 
 func SubagentFirstToolPolicy() *FirstToolPolicy {
