@@ -81,6 +81,57 @@ func TestTrace_RepairStats_EmptyTraceKeepsMapsNil(t *testing.T) {
 	}
 }
 
+func TestTrace_RepairStats_PrefersTurnEndToolStats(t *testing.T) {
+	tr := Trace{
+		ToolStats: ToolRuntimeStats{
+			ToolRepairCalls:     2,
+			ToolRepairSucceeded: 1,
+			ToolRepairFailed:    1,
+			ToolRepairNotes:     4,
+			ToolRepairByKind:    map[string]int{"alias_rename": 3, "type_coercion": 1},
+		},
+		Tools: []ToolCall{
+			{
+				Tool:          "read_file",
+				Canonicalized: true,
+				RepairNotes:   []string{"canonicalized tool readFile to read_file"},
+			},
+		},
+	}
+	got := tr.RepairStats()
+	if got.Calls != 2 || got.SucceededCalls != 1 || got.FailedCalls != 1 || got.Notes != 4 {
+		t.Fatalf("RepairStats = %+v, want runtime turn stats", got)
+	}
+	want := map[string]int{"alias_rename": 3, "type_coercion": 1}
+	if !reflect.DeepEqual(got.ByKind, want) {
+		t.Fatalf("ByKind = %#v, want %#v", got.ByKind, want)
+	}
+	got.ByKind["alias_rename"] = 99
+	if tr.ToolStats.ToolRepairByKind["alias_rename"] != 3 {
+		t.Fatalf("RepairStats must not expose trace ToolRepairByKind map: %#v", tr.ToolStats.ToolRepairByKind)
+	}
+}
+
+func TestTrace_RepairStats_UsesRequestOutcomesWhenTurnStatsOnlyHaveKinds(t *testing.T) {
+	tr := Trace{
+		ToolStats: ToolRuntimeStats{
+			ToolRepairNotes:  2,
+			ToolRepairByKind: map[string]int{"alias_rename": 2},
+		},
+		Tools: []ToolCall{
+			{Tool: "read_file", ArgsRepaired: true, ExitCode: 0},
+			{Tool: "shell", ArgsRepaired: true, ExitCode: 1},
+		},
+	}
+	got := tr.RepairStats()
+	if got.Calls != 2 || got.SucceededCalls != 1 || got.FailedCalls != 1 {
+		t.Fatalf("repair outcomes = calls:%d ok:%d failed:%d, want request-derived 2/1/1", got.Calls, got.SucceededCalls, got.FailedCalls)
+	}
+	if got.Notes != 2 || got.ByKind["alias_rename"] != 2 {
+		t.Fatalf("repair notes/kinds = %+v, want runtime turn stats", got)
+	}
+}
+
 func TestParseTraceFile_ComputesRepairStatsFromRequestNotes(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "trace.jsonl")
 	body := `{"type":"trace.meta","data":{"schema_version":1}}` + "\n" +

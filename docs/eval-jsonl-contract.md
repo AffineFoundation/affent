@@ -45,6 +45,8 @@ Scenario records describe one eval case:
   keys include `tool_name`, `malformed_json`, `wrapper_unwrap`,
   `scalar_wrap`, `alias_rename`, `type_coercion`, `unknown_field_drop`, and
   `other`.
+  New traces prefer the authoritative `turn.end.tool_stats` repair summary;
+  older traces fall back to classifying `tool.request.repair_notes`.
 - `loop_guard_interventions`: runtime loop guard intervention count.
 - `forced_no_tools`: count of forced no-tool follow-up requests after repeated
   loop guard interventions.

@@ -233,8 +233,9 @@ type ToolTruncationStats struct {
 	ResultArtifacts     int
 }
 
-// ToolRepairStats classifies runtime tool-call recovery work by the
-// human-readable repair notes already emitted on tool.request events.
+// ToolRepairStats classifies runtime tool-call recovery work. New traces carry
+// authoritative turn-level repair stats on turn.end; older traces fall back to
+// the human-readable repair notes already emitted on tool.request events.
 // A single tool call can contribute to multiple kinds (for example,
 // wrapper_unwrap + type_coercion), so Notes can be greater than Calls.
 type ToolRepairStats struct {
@@ -250,6 +251,38 @@ func (s ToolRepairStats) HasAny() bool {
 }
 
 func (t Trace) RepairStats() ToolRepairStats {
+	stats := t.repairStatsFromRequests()
+	if !t.ToolStats.hasRepairStats() {
+		return stats
+	}
+	if t.ToolStats.ToolRepairCalls > 0 ||
+		t.ToolStats.ToolRepairSucceeded > 0 ||
+		t.ToolStats.ToolRepairFailed > 0 {
+		stats.Calls = t.ToolStats.ToolRepairCalls
+		stats.SucceededCalls = t.ToolStats.ToolRepairSucceeded
+		stats.FailedCalls = t.ToolStats.ToolRepairFailed
+	}
+	if t.ToolStats.ToolRepairNotes > 0 || len(t.ToolStats.ToolRepairByKind) > 0 {
+		stats.Notes = t.ToolStats.ToolRepairNotes
+		stats.ByKind = cloneStringIntMap(t.ToolStats.ToolRepairByKind)
+		if stats.Notes == 0 {
+			for _, count := range stats.ByKind {
+				stats.Notes += count
+			}
+		}
+	}
+	return stats
+}
+
+func (s ToolRuntimeStats) hasRepairStats() bool {
+	return s.ToolRepairCalls > 0 ||
+		s.ToolRepairSucceeded > 0 ||
+		s.ToolRepairFailed > 0 ||
+		s.ToolRepairNotes > 0 ||
+		len(s.ToolRepairByKind) > 0
+}
+
+func (t Trace) repairStatsFromRequests() ToolRepairStats {
 	var s ToolRepairStats
 	for _, c := range t.Tools {
 		if !c.Canonicalized && !c.ArgsRepaired && len(c.RepairNotes) == 0 {
@@ -290,6 +323,17 @@ func (s *ToolRepairStats) addKind(kind string) {
 		s.ByKind = map[string]int{}
 	}
 	s.ByKind[kind]++
+}
+
+func cloneStringIntMap(in map[string]int) map[string]int {
+	if len(in) == 0 {
+		return nil
+	}
+	out := make(map[string]int, len(in))
+	for k, v := range in {
+		out[k] = v
+	}
+	return out
 }
 
 // Usage aggregates per-turn token accounting summed across every LLM
