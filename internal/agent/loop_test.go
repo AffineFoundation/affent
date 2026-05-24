@@ -202,6 +202,70 @@ func TestExternalResearchGuidanceMatchesToolSurface(t *testing.T) {
 	}
 }
 
+func TestExternalResearchSurfaceForRegistry(t *testing.T) {
+	cases := []struct {
+		name   string
+		tools  []string
+		want   externalResearchToolSurface
+		wantOK bool
+	}{
+		{
+			name: "empty",
+		},
+		{
+			name:  "unrelated",
+			tools: []string{"shell"},
+		},
+		{
+			name:   "web search",
+			tools:  []string{"web_search"},
+			want:   externalResearchToolSurface{WebSearch: true},
+			wantOK: true,
+		},
+		{
+			name:   "web fetch",
+			tools:  []string{"web_fetch"},
+			want:   externalResearchToolSurface{WebFetch: true},
+			wantOK: true,
+		},
+		{
+			name:   "browser navigate",
+			tools:  []string{"browser_navigate"},
+			want:   externalResearchToolSurface{Browser: true},
+			wantOK: true,
+		},
+		{
+			name:   "browser snapshot",
+			tools:  []string{"browser_snapshot"},
+			want:   externalResearchToolSurface{Browser: true},
+			wantOK: true,
+		},
+		{
+			name:   "all",
+			tools:  []string{"web_search", "web_fetch", "browser_navigate", "browser_snapshot"},
+			want:   externalResearchToolSurface{WebSearch: true, WebFetch: true, Browser: true},
+			wantOK: true,
+		},
+	}
+
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			reg := NewRegistry()
+			for _, name := range c.tools {
+				reg.Add(&Tool{Name: name})
+			}
+
+			got, ok := externalResearchSurfaceForRegistry(reg)
+			if ok != c.wantOK {
+				t.Fatalf("ok = %v, want %v", ok, c.wantOK)
+			}
+			if got != c.want {
+				t.Fatalf("surface = %+v, want %+v", got, c.want)
+			}
+		})
+	}
+}
+
 func TestRegistrySystemPromptComposition(t *testing.T) {
 	reg := NewRegistry()
 	reg.Add(&Tool{Name: MemoryToolName})
