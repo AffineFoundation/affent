@@ -637,6 +637,7 @@ func latestUserMessageFromMessages(messages []agent.ChatMessage) string {
 }
 
 func summarizeLatestUserMessage(text string) string {
+	text = unwrapSessionSummaryUserPrompt(text)
 	singleLine := strings.Join(strings.Fields(text), " ")
 	runes := []rune(singleLine)
 	if len(runes) <= maxSessionTaskSummaryChars {
@@ -646,6 +647,21 @@ func summarizeLatestUserMessage(text string) string {
 		return string(runes[:maxSessionTaskSummaryChars])
 	}
 	return string(runes[:maxSessionTaskSummaryChars-3]) + "..."
+}
+
+func unwrapSessionSummaryUserPrompt(text string) string {
+	for _, marker := range []string{
+		"\nOriginal user request:\n",
+		"\nUser confirmation/request:\n",
+	} {
+		if _, tail, ok := strings.Cut(text, marker); ok {
+			tail = strings.TrimSpace(tail)
+			if tail != "" {
+				return tail
+			}
+		}
+	}
+	return text
 }
 
 func durableRegularFileModTime(path string) (bool, time.Time, error) {

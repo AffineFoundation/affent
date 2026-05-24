@@ -212,6 +212,31 @@ func TestSummarizeLatestUserMessageCollapsesWhitespaceAndTruncatesRunes(t *testi
 	}
 }
 
+func TestSummarizeLatestUserMessageUnwrapsPlanModePrompts(t *testing.T) {
+	for _, tc := range []struct {
+		name string
+		in   string
+		want string
+	}{
+		{
+			name: "plan only",
+			in:   agent.PlanOnlyUserPrompt("draft the migration plan"),
+			want: "draft the migration plan",
+		},
+		{
+			name: "execute plan",
+			in:   sessionExecutePlanPrompt("ship the next step", "plan:1/2:active"),
+			want: "ship the next step",
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := summarizeLatestUserMessage(tc.in); got != tc.want {
+				t.Fatalf("summary = %q, want %q", got, tc.want)
+			}
+		})
+	}
+}
+
 func TestHandleSessionList_PaginatesBySessionID(t *testing.T) {
 	memRoot := t.TempDir()
 	pool := newPoolWithMemoryRoot(t, memRoot)
