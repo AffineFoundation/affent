@@ -418,6 +418,77 @@ func TestHandleSlashPlanReportsMissingPlan(t *testing.T) {
 	}
 }
 
+func TestChatPlanSlashDraftCreatesPlanOnlyTurn(t *testing.T) {
+	b := &loopBundle{loop: &agent.Loop{Tools: testPlanRegistry(t)}}
+	prompt, opts, ok, err := chatPlanSlashTurn("/plan draft migrate storage safely", b)
+	if err != nil {
+		t.Fatalf("chatPlanSlashTurn: %v", err)
+	}
+	if !ok {
+		t.Fatal("/plan draft should start a constrained turn")
+	}
+	if !strings.Contains(prompt, "Plan-only mode is enabled.") || !strings.Contains(prompt, "migrate storage safely") {
+		t.Fatalf("prompt = %q, want plan-only request", prompt)
+	}
+	if opts.FirstToolPolicy == nil || opts.FirstToolPolicy.ToolName != agent.PlanToolName ||
+		opts.MaxToolCalls != runPlanOnlyMaxToolCalls || !opts.FinalNoToolsOnMaxTurns {
+		t.Fatalf("turn options = %+v, want bounded plan-only turn", opts)
+	}
+	defs := opts.Tools.Defs()
+	if len(defs) != 1 || defs[0].Function.Name != agent.PlanToolName {
+		t.Fatalf("plan draft tools = %+v, want only plan", defs)
+	}
+}
+
+func TestChatPlanSlashDraftRequiresRequest(t *testing.T) {
+	_, _, ok, err := chatPlanSlashTurn("/plan draft", &loopBundle{loop: &agent.Loop{Tools: testPlanRegistry(t)}})
+	if err == nil || !strings.Contains(err.Error(), "requires a request") || ok {
+		t.Fatalf("/plan draft error = %v ok=%t, want request error", err, ok)
+	}
+}
+
+func TestChatPlanSlashExecuteUsesPersistedPlan(t *testing.T) {
+	workspace := t.TempDir()
+	convDir := filepath.Join(workspace, ".affentctl")
+	if err := os.MkdirAll(convDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(localSessionPlanPath(convDir, "sess_exec_plan"), []byte(`{"version":1,"steps":[{"text":"inspect","status":"completed"},{"text":"ship","status":"pending"}]}`+"\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	b := &loopBundle{
+		loop:      &agent.Loop{Tools: testPlanRegistry(t)},
+		sessionID: "sess_exec_plan",
+		workspace: workspace,
+	}
+	prompt, opts, ok, err := chatPlanSlashTurn("/plan execute continue carefully", b)
+	if err != nil {
+		t.Fatalf("chatPlanSlashTurn: %v", err)
+	}
+	if !ok {
+		t.Fatal("/plan execute should start an execution turn")
+	}
+	if !strings.Contains(prompt, "Execute-plan mode is enabled.") ||
+		!strings.Contains(prompt, "plan:1/2") ||
+		!strings.Contains(prompt, "continue carefully") {
+		t.Fatalf("execute prompt = %q", prompt)
+	}
+	if opts.Tools != nil || opts.FirstToolPolicy != nil || opts.MaxToolCalls != 0 {
+		t.Fatalf("execute-plan options = %+v, want normal tool surface", opts)
+	}
+}
+
+func TestChatPlanSlashIgnoresViewAndClearCommands(t *testing.T) {
+	for _, line := range []string{"/plan", "/plan clear", "/plan unknown"} {
+		t.Run(line, func(t *testing.T) {
+			_, _, ok, err := chatPlanSlashTurn(line, &loopBundle{loop: &agent.Loop{Tools: testPlanRegistry(t)}})
+			if err != nil || ok {
+				t.Fatalf("chatPlanSlashTurn(%q) = ok %t err %v, want generic slash handling", line, ok, err)
+			}
+		})
+	}
+}
+
 func TestHandleSlashPlanClearRemovesCurrentSessionPlan(t *testing.T) {
 	workspace := t.TempDir()
 	convDir := filepath.Join(workspace, ".affentctl")

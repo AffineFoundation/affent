@@ -50,6 +50,10 @@ Slash commands inside the REPL:
   /help       show commands
   /sid        print current session id
   /plan       print current session plan, if any
+  /plan draft <request>
+              create/update a plan without executing other tools
+  /plan execute [request]
+              execute the confirmed active plan in this session
   /plan clear remove current session plan
   /usage      running token totals for this session (input/output/total)
   /exit       quit (Ctrl+D also works)
@@ -125,12 +129,24 @@ Slash commands inside the REPL:
 			continue
 		}
 
+		turnText := line
+		turnOpts := agent.TurnOptions{}
 		if strings.HasPrefix(line, "/") {
-			cont, exit := handleSlash(line, b)
-			if !cont {
-				return exit
+			prompt, opts, ok, err := chatPlanSlashTurn(line, b)
+			if err != nil {
+				fmt.Fprintf(os.Stderr, "%v\n", err)
+				continue
 			}
-			continue
+			if ok {
+				turnText = prompt
+				turnOpts = opts
+			} else {
+				cont, exit := handleSlash(line, b)
+				if !cont {
+					return exit
+				}
+				continue
+			}
 		}
 
 		// Per-turn cancellation context: Ctrl+C only kills the active
@@ -138,7 +154,7 @@ Slash commands inside the REPL:
 		turnCtx, cancelTurn := signal.NotifyContext(ctx, syscall.SIGINT)
 
 		planBefore := currentSessionPlanSummary(b)
-		turnID, err := b.loop.SendUser(turnCtx, line)
+		turnID, err := b.loop.SendUserWithOptions(turnCtx, turnText, turnOpts)
 		if err != nil {
 			cancelTurn()
 			if errors.Is(err, agent.ErrTurnInFlight) {
@@ -304,6 +320,10 @@ func handleSlash(line string, b *loopBundle) (bool, int) {
   /help        show this
   /sid         print current session id
   /plan        print current session plan, if any
+  /plan draft <request>
+               create/update a plan without executing other tools
+  /plan execute [request]
+               execute the confirmed active plan in this session
   /plan clear  remove current session plan
   /usage       running token totals (input/output) for this session
   /cancel      interrupt a background (cron-fired) turn; use Ctrl+C
@@ -329,6 +349,55 @@ func handleSlash(line string, b *loopBundle) (bool, int) {
 	default:
 		fmt.Fprintf(os.Stderr, "unknown command: %s\n", line)
 		return true, 0
+	}
+}
+
+func chatPlanSlashTurn(line string, b *loopBundle) (string, agent.TurnOptions, bool, error) {
+	sub, arg, ok := parsePlanSlash(line)
+	if !ok {
+		return "", agent.TurnOptions{}, false, nil
+	}
+	switch sub {
+	case "draft":
+		if arg == "" {
+			return "", agent.TurnOptions{}, false, fmt.Errorf("/plan draft requires a request")
+		}
+		if b == nil || b.loop == nil {
+			return "", agent.TurnOptions{}, false, fmt.Errorf("agent loop is not initialized")
+		}
+		opts, err := planOnlyTurnOptions(b.loop.Tools, runPlanOnlyMaxToolCalls)
+		if err != nil {
+			return "", agent.TurnOptions{}, false, err
+		}
+		return agent.PlanOnlyUserPrompt(arg), opts, true, nil
+	case "execute":
+		prompt, err := prepareRunExecutePlan(b, arg)
+		if err != nil {
+			return "", agent.TurnOptions{}, false, err
+		}
+		return prompt, agent.TurnOptions{}, true, nil
+	default:
+		return "", agent.TurnOptions{}, false, nil
+	}
+}
+
+func parsePlanSlash(line string) (subcommand, arg string, ok bool) {
+	trimmed := strings.TrimSpace(line)
+	if len(trimmed) < len("/plan") || !strings.EqualFold(trimmed[:len("/plan")], "/plan") {
+		return "", "", false
+	}
+	rest := strings.TrimSpace(trimmed[len("/plan"):])
+	if rest == "" {
+		return "", "", false
+	}
+	sub, arg, _ := strings.Cut(rest, " ")
+	sub = strings.ToLower(strings.TrimSpace(sub))
+	arg = strings.TrimSpace(arg)
+	switch sub {
+	case "draft", "execute":
+		return sub, arg, true
+	default:
+		return "", "", false
 	}
 }
 

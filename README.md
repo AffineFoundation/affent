@@ -166,6 +166,11 @@ Start an interactive session:
   --model gpt-4o-mini
 ```
 
+Inside `affentctl chat`, use `/plan draft <request>` to create or update a
+persisted plan without exposing shell/file/web tools for that turn, then use
+`/plan execute [request]` in the same session after confirmation. `/plan`
+shows the current persisted plan and `/plan clear` removes it.
+
 Resume the latest session in a workspace:
 
 ```bash

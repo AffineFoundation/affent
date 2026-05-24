@@ -56,6 +56,31 @@ func TestEnableRunPlanOnlyRequiresPlanTool(t *testing.T) {
 	}
 }
 
+func TestPlanOnlyTurnOptionsNarrowsToolSurface(t *testing.T) {
+	reg := testPlanRegistry(t)
+	reg.Add(&agent.Tool{
+		Name: "shell",
+		Execute: func(context.Context, json.RawMessage) (string, error) {
+			t.Fatal("plan-only turn options must not keep shell")
+			return "", nil
+		},
+	})
+	opts, err := planOnlyTurnOptions(reg, 2)
+	if err != nil {
+		t.Fatalf("planOnlyTurnOptions: %v", err)
+	}
+	if opts.FirstToolPolicy == nil || opts.FirstToolPolicy.ToolName != agent.PlanToolName {
+		t.Fatalf("first tool policy = %+v, want plan", opts.FirstToolPolicy)
+	}
+	if opts.MaxToolCalls != 2 || !opts.FinalNoToolsOnMaxTurns {
+		t.Fatalf("options = %+v, want bounded plan-only turn", opts)
+	}
+	defs := opts.Tools.Defs()
+	if len(defs) != 1 || defs[0].Function.Name != agent.PlanToolName {
+		t.Fatalf("plan-only defs = %+v, want only plan", defs)
+	}
+}
+
 func TestValidateRunModeFlags(t *testing.T) {
 	for _, tc := range []struct {
 		name        string
@@ -96,7 +121,7 @@ func TestPrepareRunExecutePlanUsesPersistedUnfinishedPlan(t *testing.T) {
 	if err := os.WriteFile(localSessionPlanPath(convDir, "planned"), []byte(`{"version":1,"steps":[{"text":"inspect","status":"completed"},{"text":"ship","status":"pending"}]}`+"\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	b := &loopBundle{workspace: workspace, sessionID: "planned"}
+	b := &loopBundle{loop: &agent.Loop{Tools: testPlanRegistry(t)}, workspace: workspace, sessionID: "planned"}
 
 	got, err := prepareRunExecutePlan(b, "")
 	if err != nil {
@@ -138,11 +163,26 @@ func TestPrepareRunExecutePlanRejectsNonExecutablePlans(t *testing.T) {
 				}
 			}
 
-			_, err := prepareRunExecutePlan(&loopBundle{workspace: workspace, sessionID: "planned"}, "continue")
+			_, err := prepareRunExecutePlan(&loopBundle{loop: &agent.Loop{Tools: testPlanRegistry(t)}, workspace: workspace, sessionID: "planned"}, "continue")
 			if err == nil || !strings.Contains(err.Error(), tc.want) {
 				t.Fatalf("prepareRunExecutePlan error = %v, want %q", err, tc.want)
 			}
 		})
+	}
+}
+
+func TestPrepareRunExecutePlanRequiresPlanTool(t *testing.T) {
+	workspace := t.TempDir()
+	convDir := filepath.Join(workspace, ".affentctl")
+	if err := os.MkdirAll(convDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(localSessionPlanPath(convDir, "planned"), []byte(`{"version":1,"steps":[{"text":"ship","status":"pending"}]}`+"\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	_, err := prepareRunExecutePlan(&loopBundle{loop: &agent.Loop{Tools: agent.NewRegistry()}, workspace: workspace, sessionID: "planned"}, "")
+	if err == nil || !strings.Contains(err.Error(), "plan tool is not available") {
+		t.Fatalf("prepareRunExecutePlan error = %v, want missing plan tool", err)
 	}
 }
 
@@ -168,6 +208,18 @@ func TestRunPlanOnlyNextStepLinePrintsExecutablePlanCommand(t *testing.T) {
 			t.Fatalf("next-step line missing %q:\n%s", want, got)
 		}
 	}
+}
+
+func testPlanRegistry(t *testing.T) *agent.Registry {
+	t.Helper()
+	reg := agent.NewRegistry()
+	reg.Add(&agent.Tool{
+		Name: agent.PlanToolName,
+		Execute: func(context.Context, json.RawMessage) (string, error) {
+			return "{}", nil
+		},
+	})
+	return reg
 }
 
 func TestRunPlanOnlyNextStepLineSkipsNonExecutablePlans(t *testing.T) {

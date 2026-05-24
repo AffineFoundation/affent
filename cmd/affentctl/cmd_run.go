@@ -124,17 +124,33 @@ func enableRunPlanOnly(b *loopBundle) error {
 	if b == nil || b.loop == nil || b.loop.Tools == nil {
 		return fmt.Errorf("agent loop is not initialized")
 	}
-	if _, ok := b.loop.Tools.Get(agent.PlanToolName); !ok {
-		return fmt.Errorf("plan tool is not available")
+	opts, err := planOnlyTurnOptions(b.loop.Tools, runPlanOnlyMaxToolCalls)
+	if err != nil {
+		return err
 	}
-	planTool, _ := b.loop.Tools.Get(agent.PlanToolName)
+	b.loop.Tools = opts.Tools
+	b.loop.FirstToolPolicy = opts.FirstToolPolicy
+	b.loop.MaxToolCalls = opts.MaxToolCalls
+	b.loop.FinalNoToolsOnMaxTurns = opts.FinalNoToolsOnMaxTurns
+	return nil
+}
+
+func planOnlyTurnOptions(reg *agent.Registry, maxToolCalls int) (agent.TurnOptions, error) {
+	if reg == nil {
+		return agent.TurnOptions{}, fmt.Errorf("plan tool is not available")
+	}
+	planTool, ok := reg.Get(agent.PlanToolName)
+	if !ok {
+		return agent.TurnOptions{}, fmt.Errorf("plan tool is not available")
+	}
 	planOnlyTools := agent.NewRegistry()
 	planOnlyTools.Add(planTool)
-	b.loop.Tools = planOnlyTools
-	b.loop.FirstToolPolicy = agent.PlanFirstToolPolicy()
-	b.loop.MaxToolCalls = runPlanOnlyMaxToolCalls
-	b.loop.FinalNoToolsOnMaxTurns = true
-	return nil
+	return agent.TurnOptions{
+		Tools:                  planOnlyTools,
+		FirstToolPolicy:        agent.PlanFirstToolPolicy(),
+		MaxToolCalls:           maxToolCalls,
+		FinalNoToolsOnMaxTurns: true,
+	}, nil
 }
 
 func validateRunModeFlags(c commonFlags, planOnly, executePlan bool) error {
@@ -150,6 +166,9 @@ func validateRunModeFlags(c commonFlags, planOnly, executePlan bool) error {
 func prepareRunExecutePlan(b *loopBundle, prompt string) (string, error) {
 	if b == nil || strings.TrimSpace(b.workspace) == "" || strings.TrimSpace(b.sessionID) == "" {
 		return "", fmt.Errorf("session plan is not available")
+	}
+	if !loopHasPlanTool(b) {
+		return "", fmt.Errorf("plan tool is not available")
 	}
 	summary := runSessionPlanSummary(b)
 	switch {
@@ -170,6 +189,14 @@ func prepareRunExecutePlan(b *loopBundle, prompt string) (string, error) {
 		prompt = "Proceed with the active persisted plan."
 	}
 	return runExecutePlanPrompt(prompt, summary.Label), nil
+}
+
+func loopHasPlanTool(b *loopBundle) bool {
+	if b == nil || b.loop == nil || b.loop.Tools == nil {
+		return false
+	}
+	_, ok := b.loop.Tools.Get(agent.PlanToolName)
+	return ok
 }
 
 func runSessionPlanSummary(b *loopBundle) planstate.Summary {
