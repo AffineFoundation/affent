@@ -197,6 +197,9 @@ type ToolCall struct {
 	// FailureKind is the machine-readable structured failure kind from
 	// tool.result, when the tool surfaced one.
 	FailureKind string
+	// FailureKinds carries all structured failure kinds from tool.result.
+	// FailureKind is retained as the first/primary value for older consumers.
+	FailureKinds []string
 	// ExitCode is the tool's reported exit code. -1 marks abnormal
 	// exits (timeout, killed). Non-zero is a failure even if the
 	// tool returned without a Go error.
@@ -293,15 +296,13 @@ func (t Trace) ToolFailureKindCounts() map[string]int {
 		if c.FailureKind != "" {
 			kinds = append(kinds, c.FailureKind)
 		}
-		for _, kind := range toolfailure.KindsForResult(c.Tool, c.Result, c.ExitCode != 0) {
-			already := false
-			for _, existing := range kinds {
-				if existing == kind {
-					already = true
-					break
-				}
+		for _, kind := range c.FailureKinds {
+			if !containsString(kinds, kind) {
+				kinds = append(kinds, kind)
 			}
-			if !already {
+		}
+		for _, kind := range toolfailure.KindsForResult(c.Tool, c.Result, c.ExitCode != 0) {
+			if !containsString(kinds, kind) {
 				kinds = append(kinds, kind)
 			}
 		}
@@ -316,6 +317,15 @@ func (t Trace) ToolFailureKindCounts() map[string]int {
 		}
 	}
 	return out
+}
+
+func containsString(values []string, value string) bool {
+	for _, candidate := range values {
+		if candidate == value {
+			return true
+		}
+	}
+	return false
 }
 
 func (s ToolRuntimeStats) hasRepairStats() bool {

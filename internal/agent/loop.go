@@ -1165,6 +1165,7 @@ func (l *Loop) publishAndAppendToolResultWithDelegation(turnID, callID, name, re
 	}
 	payload := toolResultEventPayloadWithDurationForTurn(turnID, callID, exit, result, duration)
 	payload.FailureKind = toolFailureKindForOutcome(name, result, isErr)
+	payload.FailureKinds = toolFailureKindsForOutcome(name, result, isErr)
 	l.attachToolResultArtifact(&payload, callID, result)
 	if delegation != nil {
 		payload.Delegation = delegation

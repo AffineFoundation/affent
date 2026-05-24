@@ -649,6 +649,9 @@ func TestRunTurn_BlocksExactRepeatedToolCalls(t *testing.T) {
 					if p.FailureKind != "loop_guard_repeated_call" {
 						t.Fatalf("loop guard result FailureKind = %q, want loop_guard_repeated_call", p.FailureKind)
 					}
+					if len(p.FailureKinds) != 1 || p.FailureKinds[0] != "loop_guard_repeated_call" {
+						t.Fatalf("loop guard result FailureKinds = %#v, want loop_guard_repeated_call", p.FailureKinds)
+					}
 				}
 			}
 			if ev.Type == sse.TypeTurnEnd {
@@ -850,6 +853,13 @@ func TestRunTurn_WebFetchNoEvidenceResultsTripLoopGuard(t *testing.T) {
 					}
 					if !strings.Contains(p.Result, "stop opening search results one by one") {
 						t.Fatalf("web_fetch guard should include recovery guidance, got %q", p.Result)
+					}
+					wantKinds := map[string]bool{"non_text": true, "loop_guard_repeated_failures": true}
+					for _, kind := range p.FailureKinds {
+						delete(wantKinds, kind)
+					}
+					if len(wantKinds) != 0 {
+						t.Fatalf("guarded no-evidence web_fetch FailureKinds missing %#v in %#v", wantKinds, p.FailureKinds)
 					}
 				}
 			case sse.TypeTurnEnd:

@@ -58,14 +58,14 @@ Scenario records describe one eval case:
   older traces fall back to classifying `tool.request.repair_notes`.
 - `tool_failure_by_kind`: optional map of structured tool failure kind to
   count. New traces prefer `turn.end.tool_stats`; replay of older or partial
-  traces may derive counts from per-call `tool.result.failure_kind` or
-  structured `Failure: kind=...` result text. A single tool result may
-  contribute multiple kinds when the original tool failure and a later runtime
-  guard are both present. Web tool failures use this field to distinguish
-  blocked pages, empty responses, non-text responses, timeouts, search
-  no-results, stale or non-interactable browser refs, argument errors,
-  HTTP/network classes, and loop-guard rejections such as repeated failed
-  URL/query inputs.
+  traces may derive counts from per-call `tool.result.failure_kinds`,
+  `tool.result.failure_kind`, or structured `Failure: kind=...` result text. A
+  single tool result may contribute multiple kinds when the original tool
+  failure and a later runtime guard are both present. Web tool failures use
+  this field to distinguish blocked pages, empty responses, non-text
+  responses, timeouts, search no-results, stale or non-interactable browser
+  refs, argument errors, HTTP/network classes, and loop-guard rejections such
+  as repeated failed URL/query inputs.
 - `tool_failure_hints`: optional map of structured tool failure kind to a short
   operator hint explaining likely cause and next diagnostic action.
 - `loop_guard_interventions`: runtime loop guard intervention count.

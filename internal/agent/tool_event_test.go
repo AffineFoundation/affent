@@ -62,3 +62,16 @@ func TestToolFailureKindForOutcome(t *testing.T) {
 		t.Fatalf("successful read_file content should not set FailureKind, got %q", got)
 	}
 }
+
+func TestToolFailureKindsForOutcome(t *testing.T) {
+	got := toolFailureKindsForOutcome("web_fetch", "fetch failed\nFailure: kind=blocked\n\nloop_guard\nFailure: kind=loop_guard_repeated_failed_input", true)
+	want := []string{"blocked", "loop_guard_repeated_failed_input"}
+	if len(got) != len(want) {
+		t.Fatalf("toolFailureKindsForOutcome() = %#v, want %#v", got, want)
+	}
+	for i := range want {
+		if got[i] != want[i] {
+			t.Fatalf("toolFailureKindsForOutcome() = %#v, want %#v", got, want)
+		}
+	}
+}

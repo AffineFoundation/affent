@@ -130,6 +130,10 @@ type ToolResultPayload struct {
 	// structured tool output lines such as "Failure: kind=blocked".
 	// Empty means the tool did not publish a structured failure kind.
 	FailureKind string `json:"failure_kind,omitempty"`
+	// FailureKinds carries every structured failure kind present on the result.
+	// It is a superset of FailureKind for results that combine an underlying
+	// tool failure with a runtime guard classification.
+	FailureKinds []string `json:"failure_kinds,omitempty"`
 	// DurationMS is present only for tool implementations that were
 	// actually dispatched. Guard rejections and skipped calls omit it.
 	DurationMS int64 `json:"duration_ms,omitempty"`

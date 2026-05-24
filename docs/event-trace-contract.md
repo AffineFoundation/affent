@@ -112,11 +112,14 @@ diagnostics.
   traces may omit it.
 - `call_id`: model tool call id.
 - `exit_code`: tool exit code. Non-zero means the call failed.
-- `failure_kind`: optional machine-readable failure class extracted from a
-  structured `Failure: kind=...` line in the tool output. For web tools, known
-  values include `invalid_args`, `blocked`, `not_found`, `rate_limited`,
-  `server_error`, `http_error`, `private_network_blocked`, `timeout`,
-  `network_error`, `empty_response`, `non_text`, `no_results`, and
+- `failure_kind`: optional primary machine-readable failure class extracted
+  from a structured `Failure: kind=...` line in the tool output.
+- `failure_kinds`: optional ordered list of every structured failure class on
+  the result. It is a superset of `failure_kind` when the original tool failure
+  and a later runtime guard classification are both present.
+  For web tools, known values include `invalid_args`, `blocked`, `not_found`,
+  `rate_limited`, `server_error`, `http_error`, `private_network_blocked`,
+  `timeout`, `network_error`, `empty_response`, `non_text`, `no_results`, and
   `search_error`. Browser inspection tools may also emit `stale_ref` when a
   previously visible element ref no longer matches the current page, or
   `not_interactable` when the element exists but is hidden, disabled, or

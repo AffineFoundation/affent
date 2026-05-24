@@ -490,6 +490,31 @@ func TestApplyTraceEventDerivesToolResultFailureKind(t *testing.T) {
 	if len(trace.Tools) != 1 || trace.Tools[0].FailureKind != "no_results" {
 		t.Fatalf("derived FailureKind = %+v, want no_results", trace.Tools)
 	}
+	if len(trace.Tools[0].FailureKinds) != 1 || trace.Tools[0].FailureKinds[0] != "no_results" {
+		t.Fatalf("derived FailureKinds = %+v, want no_results", trace.Tools[0].FailureKinds)
+	}
+}
+
+func TestApplyTraceEventReadsToolResultFailureKinds(t *testing.T) {
+	trace := Trace{}
+	pending := map[string]int{}
+	req := json.RawMessage(`{"call_id":"c1","tool":"web_fetch","args":{"url":"https://blocked.example"}}`)
+	if _, err := applyTraceEvent(&trace, pending, sse.TypeToolRequest, req, ""); err != nil {
+		t.Fatal(err)
+	}
+	res := json.RawMessage(`{"call_id":"c1","result":"blocked\nFailure: kind=blocked\nFailure: kind=loop_guard_repeated_failed_input","exit_code":1,"failure_kind":"blocked","failure_kinds":["blocked","loop_guard_repeated_failed_input"]}`)
+	if _, err := applyTraceEvent(&trace, pending, sse.TypeToolResult, res, ""); err != nil {
+		t.Fatal(err)
+	}
+	if len(trace.Tools) != 1 {
+		t.Fatalf("tools = %+v", trace.Tools)
+	}
+	if trace.Tools[0].FailureKind != "blocked" {
+		t.Fatalf("FailureKind = %q, want blocked", trace.Tools[0].FailureKind)
+	}
+	if got := trace.ToolFailureKindCounts(); got["blocked"] != 1 || got["loop_guard_repeated_failed_input"] != 1 {
+		t.Fatalf("ToolFailureKindCounts = %+v", got)
+	}
 }
 
 func TestFocusedTaskCalledAtLeast(t *testing.T) {

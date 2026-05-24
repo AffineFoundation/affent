@@ -187,6 +187,10 @@ func toolFailureKindForOutcome(tool, result string, isErr bool) string {
 	return toolfailure.KindForResult(tool, result, isErr)
 }
 
+func toolFailureKindsForOutcome(tool, result string, isErr bool) []string {
+	return toolfailure.KindsForResult(tool, result, isErr)
+}
+
 func toolResultEventPayloadForTurn(turnID, callID string, exitCode int, result string) sse.ToolResultPayload {
 	payload := toolResultEventPayload(callID, exitCode, result)
 	payload.TurnID = turnID

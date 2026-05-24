@@ -65,10 +65,8 @@ func applyTraceEvent(t *Trace, pending map[string]int, typ string, data json.Raw
 			return false, nil
 		}
 		if idx, ok := pending[p.CallID]; ok {
-			failureKind := p.FailureKind
-			if failureKind == "" {
-				failureKind = toolfailure.KindForResult(t.Tools[idx].Tool, p.Result, p.ExitCode != 0)
-			}
+			failureKinds := toolResultFailureKinds(t.Tools[idx].Tool, p)
+			failureKind := firstString(failureKinds)
 			if t.Tools[idx].TurnID == "" {
 				t.Tools[idx].TurnID = p.TurnID
 			}
@@ -79,6 +77,7 @@ func applyTraceEvent(t *Trace, pending map[string]int, typ string, data json.Raw
 			t.Tools[idx].ResultCapBytes = p.ResultCapBytes
 			t.Tools[idx].ResultArtifactPath = p.ResultArtifactPath
 			t.Tools[idx].FailureKind = failureKind
+			t.Tools[idx].FailureKinds = failureKinds
 			t.Tools[idx].ExitCode = p.ExitCode
 			t.Tools[idx].DurationMS = p.DurationMS
 			t.Tools[idx].IsErr = p.ExitCode != 0
@@ -92,10 +91,8 @@ func applyTraceEvent(t *Trace, pending map[string]int, typ string, data json.Raw
 			}
 			return false, nil
 		}
-		failureKind := p.FailureKind
-		if failureKind == "" {
-			failureKind = toolfailure.KindForResult("", p.Result, p.ExitCode != 0)
-		}
+		failureKinds := toolResultFailureKinds("", p)
+		failureKind := firstString(failureKinds)
 		t.Tools = append(t.Tools, ToolCall{
 			TurnID:             p.TurnID,
 			CallID:             p.CallID,
@@ -106,6 +103,7 @@ func applyTraceEvent(t *Trace, pending map[string]int, typ string, data json.Raw
 			ResultCapBytes:     p.ResultCapBytes,
 			ResultArtifactPath: p.ResultArtifactPath,
 			FailureKind:        failureKind,
+			FailureKinds:       failureKinds,
 			ExitCode:           p.ExitCode,
 			DurationMS:         p.DurationMS,
 			IsErr:              p.ExitCode != 0,
@@ -153,6 +151,31 @@ func applyTraceEvent(t *Trace, pending map[string]int, typ string, data json.Raw
 		}
 	}
 	return false, nil
+}
+
+func toolResultFailureKinds(tool string, p sse.ToolResultPayload) []string {
+	var kinds []string
+	if p.FailureKind != "" {
+		kinds = append(kinds, p.FailureKind)
+	}
+	for _, kind := range p.FailureKinds {
+		if !containsString(kinds, kind) {
+			kinds = append(kinds, kind)
+		}
+	}
+	for _, kind := range toolfailure.KindsForResult(tool, p.Result, p.ExitCode != 0) {
+		if !containsString(kinds, kind) {
+			kinds = append(kinds, kind)
+		}
+	}
+	return kinds
+}
+
+func firstString(values []string) string {
+	if len(values) == 0 {
+		return ""
+	}
+	return values[0]
 }
 
 func traceEventMatchesTurn(eventTurnID, wantTurnID string) bool {

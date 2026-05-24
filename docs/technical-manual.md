@@ -279,8 +279,9 @@ blocks that exact input and emits
 `Failure: kind=loop_guard_repeated_failed_input`; generic identical call
 repeats emit `loop_guard_repeated_call`, and per-turn workflow caps emit
 `loop_guard_call_cap`. Per-turn stats expose `tool_failure_by_kind`, and each
-`tool.result` can expose `failure_kind`, so eval runs and UIs can distinguish
-a useful recovery path from a run that simply accumulated failed retrievals.
+`tool.result` can expose `failure_kind` plus `failure_kinds`, so eval runs and
+UIs can distinguish a useful recovery path from a run that simply accumulated
+failed retrievals.
 
 `affent_session_id` pins follow-up turns. Pass it back through
 `X-Affent-Session-Id`, `affent_session_id`, or `session_id`.
