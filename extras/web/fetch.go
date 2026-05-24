@@ -73,6 +73,7 @@ func FetchTool(cfg FetchConfig) *agent.Tool {
 	cfg = normalizeFetchConfig(cfg)
 	schema := json.RawMessage(fmt.Sprintf(`{
         "type": "object",
+        "additionalProperties": false,
         "required": ["url"],
         "properties": {
             "url": {"type": "string", "minLength": 1, "maxLength": %d, "description": "The fully-qualified URL to fetch (http:// or https://)."}
@@ -90,8 +91,8 @@ func FetchTool(cfg FetchConfig) *agent.Tool {
 			var args struct {
 				URL string `json:"url"`
 			}
-			if err := json.Unmarshal(raw, &args); err != nil {
-				return "", fmt.Errorf("decode args: %w", err)
+			if err := decodeWebToolArgs(raw, &args, "retry web_fetch with only the documented field: url"); err != nil {
+				return "", err
 			}
 			args.URL = strings.TrimSpace(args.URL)
 			if args.URL == "" {
@@ -106,6 +107,19 @@ func FetchTool(cfg FetchConfig) *agent.Tool {
 			return fetch(ctx, cfg, args.URL)
 		},
 	}
+}
+
+func decodeWebToolArgs(raw json.RawMessage, dst any, next string) error {
+	dec := json.NewDecoder(bytes.NewReader(raw))
+	dec.DisallowUnknownFields()
+	if err := dec.Decode(dst); err != nil {
+		return fmt.Errorf("decode args: %w\nNext: %s", err, next)
+	}
+	var extra struct{}
+	if err := dec.Decode(&extra); err != io.EOF {
+		return fmt.Errorf("decode args: multiple JSON values\nNext: %s", next)
+	}
+	return nil
 }
 
 func normalizeFetchConfig(cfg FetchConfig) FetchConfig {

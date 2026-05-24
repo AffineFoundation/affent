@@ -118,6 +118,9 @@ func TestFetchTool_RequiresURL(t *testing.T) {
 
 func TestFetchToolSchemaPublishesURLMinLength(t *testing.T) {
 	tool := FetchTool(FetchConfig{AllowPrivateNetwork: true})
+	if !strings.Contains(string(tool.Schema), `"additionalProperties": false`) {
+		t.Fatalf("schema should reject unknown args: %s", tool.Schema)
+	}
 	if !strings.Contains(string(tool.Schema), `"minLength": 1`) {
 		t.Fatalf("schema should publish url minLength: %s", tool.Schema)
 	}
@@ -152,6 +155,17 @@ func TestFetchTool_URLMaxLength(t *testing.T) {
 	_, err := tool.Execute(context.Background(), json.RawMessage(`{"url":"`+url+`"}`))
 	if err == nil || !strings.Contains(err.Error(), "web_fetch supports URLs up to") || !strings.Contains(err.Error(), "Next:") {
 		t.Fatalf("expected oversized URL error, got %v", err)
+	}
+}
+
+func TestFetchToolRejectsUnknownArgs(t *testing.T) {
+	tool := FetchTool(FetchConfig{AllowPrivateNetwork: true})
+	_, err := tool.Execute(context.Background(), json.RawMessage(`{"url":"https://example.com","query":"ignored"}`))
+	if err == nil ||
+		!strings.Contains(err.Error(), "unknown field") ||
+		!strings.Contains(err.Error(), "query") ||
+		!strings.Contains(err.Error(), "Next:") {
+		t.Fatalf("unknown arg error = %v", err)
 	}
 }
 
@@ -328,6 +342,9 @@ func TestSearchTool_NumResultsMatchesAdvertisedCap(t *testing.T) {
 			if !strings.Contains(string(tool.Schema), c.wantSchemaMax) {
 				t.Fatalf("schema %s missing %s", tool.Schema, c.wantSchemaMax)
 			}
+			if !strings.Contains(string(tool.Schema), `"additionalProperties": false`) {
+				t.Fatalf("schema should reject unknown args: %s", tool.Schema)
+			}
 			if !strings.Contains(string(tool.Schema), fmt.Sprintf(`"default": %d`, c.wantDefault)) {
 				t.Fatalf("schema %s missing default %d", tool.Schema, c.wantDefault)
 			}
@@ -338,6 +355,25 @@ func TestSearchTool_NumResultsMatchesAdvertisedCap(t *testing.T) {
 				t.Fatalf("provider n = %d, want %d", provider.gotN, c.wantN)
 			}
 		})
+	}
+}
+
+func TestSearchToolRejectsUnknownArgs(t *testing.T) {
+	tool, err := SearchTool(SearchConfig{Provider: stubProvider{}})
+	if err != nil {
+		t.Fatalf("SearchTool: %v", err)
+	}
+	_, err = tool.Execute(context.Background(), json.RawMessage(`{"query":"affent","url":"https://example.com"}`))
+	if err == nil ||
+		!strings.Contains(err.Error(), "unknown field") ||
+		!strings.Contains(err.Error(), "url") ||
+		!strings.Contains(err.Error(), "Next:") {
+		t.Fatalf("unknown arg error = %v", err)
+	}
+
+	_, err = tool.Execute(context.Background(), json.RawMessage(`{"query":"`+strings.Repeat("x", maxSearchQueryBytes+1)+`"}`))
+	if err == nil || !strings.Contains(err.Error(), "web_search supports queries up to") || !strings.Contains(err.Error(), "Next:") {
+		t.Fatalf("oversized query error = %v", err)
 	}
 }
 

@@ -63,6 +63,7 @@ func SearchTool(cfg SearchConfig) (*agent.Tool, error) {
 
 	schema := json.RawMessage(fmt.Sprintf(`{
         "type": "object",
+        "additionalProperties": false,
         "required": ["query"],
         "properties": {
             "query": {"type": "string", "minLength": 1, "maxLength": %d, "description": "Search query (plain English; the tool handles tokenization)."},
@@ -81,15 +82,15 @@ func SearchTool(cfg SearchConfig) (*agent.Tool, error) {
 				Query      string `json:"query"`
 				NumResults int    `json:"num_results"`
 			}
-			if err := json.Unmarshal(raw, &args); err != nil {
-				return "", fmt.Errorf("decode args: %w", err)
+			if err := decodeWebToolArgs(raw, &args, "retry web_search with only documented fields: query and num_results"); err != nil {
+				return "", err
 			}
 			query := strings.TrimSpace(args.Query)
 			if query == "" {
 				return "", errors.New("query is required. Next: retry with 2-6 specific keywords, named entities, error text, or the URL/topic you need to discover")
 			}
 			if len(query) > maxSearchQueryBytes {
-				return "", fmt.Errorf("query is %d bytes; web_search supports queries up to %d bytes", len(query), maxSearchQueryBytes)
+				return "", fmt.Errorf("query is %d bytes; web_search supports queries up to %d bytes\nNext: retry with 2-6 specific keywords, named entities, error text, or the shortest precise topic", len(query), maxSearchQueryBytes)
 			}
 			n := args.NumResults
 			if n <= 0 {
