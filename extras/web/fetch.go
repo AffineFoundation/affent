@@ -13,6 +13,7 @@ import (
 	"strings"
 	"syscall"
 	"time"
+	"unicode"
 	"unicode/utf8"
 
 	htmltomarkdown "github.com/JohannesKaufmann/html-to-markdown/v2"
@@ -224,6 +225,18 @@ func recoverableFetchError(requestURL, finalURL string, status int, err error) e
 
 func renderBody(body []byte, contentType, finalURL string) string {
 	ct := strings.ToLower(strings.TrimSpace(contentType))
+	mediaType := ct
+	if i := strings.IndexByte(mediaType, ';'); i >= 0 {
+		mediaType = strings.TrimSpace(mediaType[:i])
+	}
+	if shouldSniffBody(mediaType) {
+		switch sniffReadableBody(body) {
+		case "html":
+			ct = "text/html"
+		case "text":
+			ct = "text/plain"
+		}
+	}
 	switch {
 	case strings.HasPrefix(ct, "text/html"), strings.HasPrefix(ct, "application/xhtml+xml"):
 		// Standard reader pipeline: Readability extracts the article's
@@ -263,6 +276,66 @@ func renderBody(body []byte, contentType, finalURL string) string {
 	default:
 		return fmt.Sprintf("[non-text response: URL=%s, Content-Type=%q, %d bytes]\nNext: do not treat this as readable page evidence; fetch an HTML/API/text version, use a browser tool if one is registered, or choose another authoritative source.", finalURL, contentType, len(body))
 	}
+}
+
+func shouldSniffBody(mediaType string) bool {
+	switch mediaType {
+	case "", "application/octet-stream", "binary/octet-stream":
+		return true
+	default:
+		return false
+	}
+}
+
+func sniffReadableBody(body []byte) string {
+	if looksLikeHTML(body) {
+		return "html"
+	}
+	if looksLikeText(body) {
+		return "text"
+	}
+	return ""
+}
+
+func looksLikeHTML(body []byte) bool {
+	const sampleLimit = 4096
+	sample := body
+	if len(sample) > sampleLimit {
+		sample = sample[:sampleLimit]
+	}
+	s := strings.TrimLeftFunc(string(bytes.TrimPrefix(sample, []byte{0xEF, 0xBB, 0xBF})), unicode.IsSpace)
+	s = strings.ToLower(s)
+	return strings.HasPrefix(s, "<!doctype html") ||
+		strings.HasPrefix(s, "<html") ||
+		strings.HasPrefix(s, "<head") ||
+		strings.HasPrefix(s, "<body")
+}
+
+func looksLikeText(body []byte) bool {
+	if len(body) == 0 {
+		return false
+	}
+	const sampleLimit = 1024
+	sample := body
+	if len(sample) > sampleLimit {
+		cut := sampleLimit
+		for cut > 0 && !utf8.RuneStart(sample[cut]) {
+			cut--
+		}
+		sample = sample[:cut]
+	}
+	if len(sample) == 0 || !utf8.Valid(sample) {
+		return false
+	}
+	for _, r := range string(sample) {
+		if r == '\uFFFD' {
+			return false
+		}
+		if unicode.IsControl(r) && r != '\n' && r != '\r' && r != '\t' {
+			return false
+		}
+	}
+	return true
 }
 
 func redirectedURLSuffix(requestURL, finalURL string) string {

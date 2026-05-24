@@ -83,6 +83,60 @@ func TestFetchTool_PlainText(t *testing.T) {
 	}
 }
 
+func TestFetchTool_SniffsMislabelledReadableBody(t *testing.T) {
+	cases := []struct {
+		name        string
+		body        []byte
+		want        string
+		wantNo      string
+		contentType string
+	}{
+		{
+			name:        "octet stream html",
+			contentType: "application/octet-stream",
+			body:        []byte(`<!doctype html><html><body><h1>Current stats</h1><p>Market cap is visible.</p></body></html>`),
+			want:        "Current stats",
+			wantNo:      "non-text response",
+		},
+		{
+			name:        "octet stream text",
+			contentType: "application/octet-stream",
+			body:        []byte("plain metrics: price $1.23"),
+			want:        "plain metrics: price $1.23",
+			wantNo:      "non-text response",
+		},
+		{
+			name:        "octet stream binary",
+			contentType: "application/octet-stream",
+			body:        []byte{0x89, 'P', 'N', 'G', 0, 1, 2, 3},
+			want:        "non-text response",
+		},
+	}
+
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				w.Header().Set("Content-Type", c.contentType)
+				w.Write(c.body)
+			}))
+			defer srv.Close()
+
+			tool := FetchTool(FetchConfig{AllowPrivateNetwork: true})
+			args, _ := json.Marshal(map[string]string{"url": srv.URL})
+			out, err := tool.Execute(context.Background(), args)
+			if err != nil {
+				t.Fatalf("Execute: %v", err)
+			}
+			if !strings.Contains(out, c.want) {
+				t.Fatalf("output missing %q:\n%s", c.want, out)
+			}
+			if c.wantNo != "" && strings.Contains(out, c.wantNo) {
+				t.Fatalf("output should not contain %q:\n%s", c.wantNo, out)
+			}
+		})
+	}
+}
+
 func TestFetchTool_NonText(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "image/png")
