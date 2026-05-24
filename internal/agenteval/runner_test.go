@@ -1419,6 +1419,15 @@ func TestRunner_EndToEnd_ExternalResearchFlow(t *testing.T) {
 		`[DONE]`,
 	}
 	srv := newScriptedLLM(t, [][]string{turn1, turn2, turn3})
+	nimbusSearch := func(args map[string]any) bool {
+		q, _ := args["query"].(string)
+		return strings.Contains(q, "Nimbus Protocol")
+	}
+	fetchURL := func(url string) func(map[string]any) bool {
+		return func(args map[string]any) bool {
+			return args["url"] == url
+		}
+	}
 
 	scenario := Scenario{
 		Name:         "external_research_trend_synthesis",
@@ -1427,21 +1436,14 @@ func TestRunner_EndToEnd_ExternalResearchFlow(t *testing.T) {
 		MaxTurnSteps: 6,
 		Checks: []Check{
 			TurnEndedCleanly(),
-			ToolCalled("web_search", func(args map[string]any) bool {
-				q, _ := args["query"].(string)
-				return strings.Contains(q, "Nimbus Protocol")
-			}),
-			ToolCalled("web_fetch", func(args map[string]any) bool {
-				return args["url"] == "https://official.example/nimbus/about"
-			}),
-			ToolCalled("web_fetch", func(args map[string]any) bool {
-				return args["url"] == "https://metrics.example/nimbus"
-			}),
-			ToolCalled("web_fetch", func(args map[string]any) bool {
-				return args["url"] == "https://social.example/search/nimbus"
-			}),
+			ToolCalled("web_search", nimbusSearch),
+			ToolCalled("web_fetch", fetchURL("https://official.example/nimbus/about")),
+			ToolCalled("web_fetch", fetchURL("https://metrics.example/nimbus")),
+			ToolCalled("web_fetch", fetchURL("https://social.example/search/nimbus")),
 			ToolCalledAtLeast("web_fetch", 3),
-			ToolCalledBefore("web_search", "web_fetch"),
+			ToolCalledBeforeMatching("web_search", nimbusSearch, "web_fetch", fetchURL("https://official.example/nimbus/about")),
+			ToolCalledBeforeMatching("web_search", nimbusSearch, "web_fetch", fetchURL("https://metrics.example/nimbus")),
+			ToolCalledBeforeMatching("web_search", nimbusSearch, "web_fetch", fetchURL("https://social.example/search/nimbus")),
 			ToolNotCalled("shell", nil),
 			FinalTextContains("decentralized compute subnet"),
 			FinalTextContains("market cap $56.7M"),

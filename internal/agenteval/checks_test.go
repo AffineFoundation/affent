@@ -501,6 +501,46 @@ func TestToolCalledBefore(t *testing.T) {
 	})
 }
 
+func TestToolCalledBeforeMatching(t *testing.T) {
+	searchArgs := func(args map[string]any) bool {
+		q, _ := args["query"].(string)
+		return strings.Contains(q, "Nimbus")
+	}
+	metricsURL := func(args map[string]any) bool {
+		return args["url"] == "https://metrics.example/nimbus"
+	}
+
+	t.Run("passes when matching earlier precedes matching later", func(t *testing.T) {
+		trace := Trace{
+			Tools: []ToolCall{
+				{Tool: "web_fetch", Args: map[string]any{"url": "https://unrelated.example"}},
+				{Tool: "web_search", Args: map[string]any{"query": "Nimbus Protocol metrics"}},
+				{Tool: "web_fetch", Args: map[string]any{"url": "https://metrics.example/nimbus"}},
+			},
+		}
+		res := ToolCalledBeforeMatching("web_search", searchArgs, "web_fetch", metricsURL).Eval(trace)
+		if !res.Pass {
+			t.Fatalf("expected pass; got %+v", res)
+		}
+	})
+
+	t.Run("fails when only nonmatching earlier precedes later", func(t *testing.T) {
+		trace := Trace{
+			Tools: []ToolCall{
+				{Tool: "web_search", Args: map[string]any{"query": "other project metrics"}},
+				{Tool: "web_fetch", Args: map[string]any{"url": "https://metrics.example/nimbus"}},
+			},
+		}
+		res := ToolCalledBeforeMatching("web_search", searchArgs, "web_fetch", metricsURL).Eval(trace)
+		if res.Pass {
+			t.Fatal("expected failure for nonmatching earlier call")
+		}
+		if !strings.Contains(res.Detail, "matching") {
+			t.Fatalf("failure detail should mention matching calls: %s", res.Detail)
+		}
+	})
+}
+
 func TestFinalTextContains(t *testing.T) {
 	trace := Trace{FinalText: "Conclusion:\nAll tests pass.\nEvidence: ran go test ./..."}
 

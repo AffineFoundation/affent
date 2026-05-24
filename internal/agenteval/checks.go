@@ -374,28 +374,36 @@ func toolStatsField(stats ToolRuntimeStats, field string) (int64, bool) {
 // either means it edited without reproducing (likely wrong) or
 // it never edited at all.
 func ToolCalledBefore(earlier, later string) Check {
+	return ToolCalledBeforeMatching(earlier, nil, later, nil)
+}
+
+// ToolCalledBeforeMatching is the argument-aware form of ToolCalledBefore.
+// It lets evals say "search for this entity before fetching this source" or
+// "read this file before editing that file" instead of relying only on tool
+// names. Nil matchers accept any call for that tool.
+func ToolCalledBeforeMatching(earlier string, earlierMatcher func(args map[string]any) bool, later string, laterMatcher func(args map[string]any) bool) Check {
 	return Check{
 		Name: "tool_called_before:" + earlier + "->" + later,
 		Eval: func(t Trace) CheckResult {
 			firstEarlier := -1
 			firstLater := -1
 			for i, c := range t.Tools {
-				if c.Tool == earlier && firstEarlier == -1 {
+				if c.Tool == earlier && firstEarlier == -1 && (earlierMatcher == nil || earlierMatcher(c.Args)) {
 					firstEarlier = i
 				}
-				if c.Tool == later && firstLater == -1 {
+				if c.Tool == later && firstLater == -1 && (laterMatcher == nil || laterMatcher(c.Args)) {
 					firstLater = i
 				}
 			}
 			switch {
 			case firstLater == -1:
-				return CheckResult{Pass: false, Detail: fmt.Sprintf("never observed a %q call", later)}
+				return CheckResult{Pass: false, Detail: fmt.Sprintf("never observed a matching %q call", later)}
 			case firstEarlier == -1:
-				return CheckResult{Pass: false, Detail: fmt.Sprintf("never observed a %q call before any %q", earlier, later)}
+				return CheckResult{Pass: false, Detail: fmt.Sprintf("never observed a matching %q call before matching %q", earlier, later)}
 			case firstEarlier >= firstLater:
 				return CheckResult{
 					Pass:   false,
-					Detail: fmt.Sprintf("expected %q before %q; first %q at step %d, first %q at step %d", earlier, later, earlier, firstEarlier, later, firstLater),
+					Detail: fmt.Sprintf("expected matching %q before matching %q; first %q at step %d, first %q at step %d", earlier, later, earlier, firstEarlier, later, firstLater),
 				}
 			default:
 				return CheckResult{Pass: true}
