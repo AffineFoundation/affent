@@ -529,9 +529,11 @@ non-empty `source` URL/path/provenance string plus the exact reviewed
 will be installed. Only then call
 `action:"confirm_install"` after the user's latest reply explicitly confirms
 that exact id. Direct `action:"install"` is reserved for an exact skill body the
-user already provided. Runtime skill manifests preserve the reviewed `source`
-across session restart; when no source is supplied for a direct install, Affent
-falls back to the local persisted `SKILL.md` path.
+user already provided; the tool rejects direct installs whose `source` is a
+remote URL or GitHub-style location and tells the agent to use
+`propose_install` instead. Runtime skill manifests preserve the reviewed
+`source` across session restart; when no source is supplied for a direct
+install, Affent falls back to the local persisted `SKILL.md` path.
 Runtime skill installs are bounded: body 64 KiB, source 2 KiB, description
 512 bytes, up to 20 triggers of 128 bytes each, and at most 128 installed
 runtime skills are loaded from a skill directory.
