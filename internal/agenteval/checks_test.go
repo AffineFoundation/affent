@@ -408,6 +408,28 @@ func TestSubagentCalledAtLeast(t *testing.T) {
 	}
 }
 
+func TestNoDelegationErrors(t *testing.T) {
+	okTrace := Trace{Tools: []ToolCall{
+		{CallID: "c1", Tool: "run_task", Delegation: &sse.DelegationMeta{Kind: "focused_task", TaskType: "explore"}},
+		{CallID: "c2", Tool: "subagent_run", Delegation: &sse.DelegationMeta{Kind: "subagent", Mode: "review"}},
+	}}
+	if res := NoDelegationErrors().Eval(okTrace); !res.Pass {
+		t.Fatalf("expected clean delegation trace to pass: %+v", res)
+	}
+
+	failedTrace := Trace{Tools: []ToolCall{
+		{CallID: "c1", Tool: "run_task", ExitCode: 1, IsErr: true, Delegation: &sse.DelegationMeta{Kind: "focused_task", TaskType: "explore"}},
+		{CallID: "c2", Tool: "subagent_run", ExitCode: 1, Delegation: &sse.DelegationMeta{Kind: "subagent", Mode: "review"}},
+	}}
+	res := NoDelegationErrors().Eval(failedTrace)
+	if res.Pass {
+		t.Fatal("expected delegation errors check to fail")
+	}
+	if !strings.Contains(res.Detail, "focused_task_errors=1") || !strings.Contains(res.Detail, "subagent_errors=1") {
+		t.Fatalf("failure detail should include both error counts: %s", res.Detail)
+	}
+}
+
 func TestToolCalledBefore(t *testing.T) {
 	t.Run("passes when earlier precedes later", func(t *testing.T) {
 		trace := Trace{

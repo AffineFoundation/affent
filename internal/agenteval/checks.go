@@ -312,6 +312,25 @@ func SubagentCalledAtLeast(mode string, min int) Check {
 	}
 }
 
+func NoDelegationErrors() Check {
+	return Check{
+		Name: "no_delegation_errors",
+		Eval: func(t Trace) CheckResult {
+			stats := t.DelegationStats()
+			if stats.FocusedTaskErrors == 0 && stats.SubagentErrors == 0 {
+				return CheckResult{
+					Pass:   true,
+					Detail: fmt.Sprintf("focused_task_errors=%d subagent_errors=%d", stats.FocusedTaskErrors, stats.SubagentErrors),
+				}
+			}
+			return CheckResult{
+				Pass:   false,
+				Detail: fmt.Sprintf("focused_task_errors=%d subagent_errors=%d", stats.FocusedTaskErrors, stats.SubagentErrors),
+			}
+		},
+	}
+}
+
 var toolStatsAccessors = map[string]func(ToolRuntimeStats) int64{
 	"tool_requests":            func(s ToolRuntimeStats) int64 { return int64(s.ToolRequests) },
 	"tool_name_canonicalized":  func(s ToolRuntimeStats) int64 { return int64(s.ToolNameCanonicalized) },
