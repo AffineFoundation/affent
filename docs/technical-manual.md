@@ -279,10 +279,12 @@ strategy. If the model repeats the same failed URL or search query, the guard
 blocks that exact input and emits
 `Failure: kind=loop_guard_repeated_failed_input`; generic identical call
 repeats emit `loop_guard_repeated_call`, and per-turn workflow caps emit
-`loop_guard_call_cap`. Per-turn stats expose `tool_failure_by_kind`, and each
-`tool.result` can expose `failure_kind` plus `failure_kinds`, so eval runs and
-UIs can distinguish a useful recovery path from a run that simply accumulated
-failed retrievals.
+`loop_guard_call_cap`. First-tool and post-tool workflow policies emit
+`tool_policy_first_tool`, `tool_policy_repeat`, or `tool_policy_active` when
+they block a model call before the underlying tool runs. Per-turn stats expose
+`tool_failure_by_kind`, and each `tool.result` can expose `failure_kind` plus
+`failure_kinds`, so eval runs and UIs can distinguish a useful recovery path
+from a run that simply accumulated failed retrievals or policy violations.
 
 `affent_session_id` pins follow-up turns. Pass it back through
 `X-Affent-Session-Id`, `affent_session_id`, or `session_id`.

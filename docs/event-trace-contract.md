@@ -125,7 +125,9 @@ diagnostics.
   `not_interactable` when the element exists but is hidden, disabled, or
   covered. Runtime loop guards may emit `loop_guard_repeated_call`,
   `loop_guard_repeated_failed_input`, `loop_guard_repeated_failures`,
-  `loop_guard_halted_tool`, or `loop_guard_call_cap`.
+  `loop_guard_halted_tool`, or `loop_guard_call_cap`. Runtime workflow
+  policies may emit `tool_policy_first_tool`, `tool_policy_repeat`, or
+  `tool_policy_active`.
 - `duration_ms`: optional measured implementation time for dispatched tools.
 - `result_summary`: short UI preview, not parse-safe.
 - `result`: event-capped tool output.
@@ -182,7 +184,8 @@ diagnostics.
   `not_found`, `rate_limited`, `server_error`, `http_error`,
   `private_network_blocked`, `timeout`, `network_error`, `empty_response`, and
   `non_text`, `no_results`, `search_error`, `stale_ref`, and
-  `not_interactable`.
+  `not_interactable`. Known runtime policy kinds include
+  `tool_policy_first_tool`, `tool_policy_repeat`, and `tool_policy_active`.
 - `tool_errors`
 - `tool_duration_ms`
 - `loop_guard_interventions`

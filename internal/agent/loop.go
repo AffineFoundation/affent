@@ -16,6 +16,7 @@ import (
 
 	"github.com/affinefoundation/affent/internal/memory"
 	"github.com/affinefoundation/affent/internal/sse"
+	"github.com/affinefoundation/affent/internal/toolfailure"
 	"github.com/google/uuid"
 	"github.com/rs/zerolog"
 )
@@ -221,6 +222,12 @@ type PostToolPolicy struct {
 	BlockedTools []string
 	Rejection    string
 }
+
+const (
+	toolPolicyFirstToolKind = "tool_policy_first_tool"
+	toolPolicyRepeatKind    = "tool_policy_repeat"
+	toolPolicyActiveKind    = "tool_policy_active"
+)
 
 // DefaultSystemPrompt is fed once at session start. It is deliberately
 // operational: smaller models do better when the loop shape and
@@ -872,6 +879,7 @@ func (l *Loop) runTurn(ctx context.Context, turnID, userText string, opts TurnOp
 				if result == "" {
 					result = fmt.Sprintf("first_tool_policy: call %s before other tools.", firstToolPolicy.ToolName)
 				}
+				result = withToolPolicyFailureKind(result, toolPolicyFirstToolKind)
 				rejectionPayload := toolResultEventPayloadForTurn(turnID, callID, 1, result)
 				rejectionPayload.Delegation = delegation
 				l.publish(sse.TypeToolResult, rejectionPayload)
@@ -886,6 +894,7 @@ func (l *Loop) runTurn(ctx context.Context, turnID, userText string, opts TurnOp
 				toolCallsUsed++
 				recordToolRepairOutcome(&toolStats, repairedToolCall, true)
 				toolStats.ToolErrors++
+				recordToolFailureKind(&toolStats, result, true)
 				continue
 			}
 			if firstToolPolicy != nil && toolName == firstToolPolicy.ToolName {
@@ -906,6 +915,7 @@ func (l *Loop) runTurn(ctx context.Context, turnID, userText string, opts TurnOp
 				toolCallsUsed++
 				recordToolRepairOutcome(&toolStats, repairedToolCall, true)
 				toolStats.ToolErrors++
+				recordToolFailureKind(&toolStats, result, true)
 				continue
 			}
 			if result, ok := postToolActiveRejection(postToolPolicies, toolName); ok {
@@ -923,6 +933,7 @@ func (l *Loop) runTurn(ctx context.Context, turnID, userText string, opts TurnOp
 				toolCallsUsed++
 				recordToolRepairOutcome(&toolStats, repairedToolCall, true)
 				toolStats.ToolErrors++
+				recordToolFailureKind(&toolStats, result, true)
 				continue
 			}
 			if result := loopGuard.recordAttempt(toolName, args); result != "" {
@@ -1095,7 +1106,7 @@ func postToolRepeatRejection(states []*activePostToolPolicyState, toolName strin
 		if result == "" {
 			result = fmt.Sprintf("post_tool_policy: %s already ran this turn; do not call %s again.", p.ToolName, toolName)
 		}
-		return result, true
+		return withToolPolicyFailureKind(result, toolPolicyRepeatKind), true
 	}
 	return "", false
 }
@@ -1110,9 +1121,17 @@ func postToolActiveRejection(states []*activePostToolPolicyState, toolName strin
 		if result == "" {
 			result = fmt.Sprintf("post_tool_policy: answer from the prior %s result instead of calling %s.", p.ToolName, toolName)
 		}
-		return result, true
+		return withToolPolicyFailureKind(result, toolPolicyActiveKind), true
 	}
 	return "", false
+}
+
+func withToolPolicyFailureKind(result, kind string) string {
+	result = strings.TrimSpace(result)
+	if result == "" || toolfailure.Kind(result) != "" {
+		return result
+	}
+	return result + "\nFailure: kind=" + kind
 }
 
 func (p *PostToolPolicy) shouldActivate(result string, isErr bool) bool {

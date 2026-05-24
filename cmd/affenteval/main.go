@@ -518,6 +518,12 @@ func toolFailureKindHint(kind string) string {
 		return "loop guard halted a tool after repeated failures this turn; stop using that tool and continue with another source or the verified evidence"
 	case "loop_guard_call_cap":
 		return "loop guard blocked an excessive number of workflow-tool calls in one turn; continue from current plan/delegation results"
+	case "tool_policy_first_tool":
+		return "runtime policy blocked an early tool because a required first tool was skipped; call the required planner/delegation tool first"
+	case "tool_policy_repeat":
+		return "runtime policy blocked a repeated workflow/delegation tool call; use the prior result instead of spawning another child"
+	case "tool_policy_active":
+		return "runtime policy blocked parent-side exploration after a successful workflow result; answer from the prior structured evidence"
 	case "http_error", "network_error":
 		return "web_fetch hit a transport or HTTP failure; inspect status/detail in the tool result and switch sources if it repeats"
 	default:

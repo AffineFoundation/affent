@@ -31,6 +31,15 @@ func fakeBigResultTool(payload string) *Tool {
 	}
 }
 
+func containsString(values []string, want string) bool {
+	for _, value := range values {
+		if value == want {
+			return true
+		}
+	}
+	return false
+}
+
 // TestToolResult_ResultBypasses4KiBSummaryCap verifies the trace
 // fidelity contract for ordinary structured results: ResultSummary is
 // capped for UI display, but Result still carries the complete payload
@@ -1414,6 +1423,7 @@ func TestRunTurn_SubagentFirstPolicyGuardsParentExploration(t *testing.T) {
 
 	deadline := time.After(10 * time.Second)
 	var sawGuard bool
+	var sawGuardKind bool
 	for {
 		select {
 		case ev, ok := <-events:
@@ -1427,6 +1437,13 @@ func TestRunTurn_SubagentFirstPolicyGuardsParentExploration(t *testing.T) {
 				}
 				if strings.Contains(p.Result, "first_tool_policy") {
 					sawGuard = true
+					if p.FailureKind != toolPolicyFirstToolKind {
+						t.Fatalf("first-tool policy failure_kind = %q, want %q", p.FailureKind, toolPolicyFirstToolKind)
+					}
+					if !containsString(p.FailureKinds, toolPolicyFirstToolKind) {
+						t.Fatalf("first-tool policy failure_kinds missing %q: %#v", toolPolicyFirstToolKind, p.FailureKinds)
+					}
+					sawGuardKind = true
 				}
 			}
 			if ev.Type != sse.TypeTurnEnd {
@@ -1441,6 +1458,12 @@ func TestRunTurn_SubagentFirstPolicyGuardsParentExploration(t *testing.T) {
 			}
 			if !sawGuard {
 				t.Fatal("expected parent exploration tool to be guarded before subagent_run")
+			}
+			if !sawGuardKind {
+				t.Fatal("expected first-tool policy guard to expose a structured failure kind")
+			}
+			if p.ToolStats == nil || p.ToolStats.ToolFailureByKind[toolPolicyFirstToolKind] != 1 {
+				t.Fatalf("turn stats missing first-tool policy failure kind: %+v", p.ToolStats)
 			}
 			if got := atomic.LoadInt32(&listCalls); got != 0 {
 				t.Fatalf("list_files should not execute before subagent_run; got %d calls", got)
@@ -1529,6 +1552,7 @@ func TestRunTurn_SubagentPostPolicyGuardsDuplicateExploration(t *testing.T) {
 
 	deadline := time.After(10 * time.Second)
 	var sawGuard bool
+	var sawGuardKind bool
 	for {
 		select {
 		case ev, ok := <-events:
@@ -1542,6 +1566,13 @@ func TestRunTurn_SubagentPostPolicyGuardsDuplicateExploration(t *testing.T) {
 				}
 				if strings.Contains(p.Result, "post_tool_policy") {
 					sawGuard = true
+					if p.FailureKind != toolPolicyActiveKind {
+						t.Fatalf("post-tool active policy failure_kind = %q, want %q", p.FailureKind, toolPolicyActiveKind)
+					}
+					if !containsString(p.FailureKinds, toolPolicyActiveKind) {
+						t.Fatalf("post-tool active policy failure_kinds missing %q: %#v", toolPolicyActiveKind, p.FailureKinds)
+					}
+					sawGuardKind = true
 				}
 			}
 			if ev.Type != sse.TypeTurnEnd {
@@ -1556,6 +1587,12 @@ func TestRunTurn_SubagentPostPolicyGuardsDuplicateExploration(t *testing.T) {
 			}
 			if !sawGuard {
 				t.Fatal("expected duplicate parent exploration to be guarded after subagent_run")
+			}
+			if !sawGuardKind {
+				t.Fatal("expected post-tool active policy guard to expose a structured failure kind")
+			}
+			if p.ToolStats == nil || p.ToolStats.ToolFailureByKind[toolPolicyActiveKind] != 1 {
+				t.Fatalf("turn stats missing post-tool active policy failure kind: %+v", p.ToolStats)
 			}
 			if got := atomic.LoadInt32(&readCalls); got != 0 {
 				t.Fatalf("read_file should not execute after successful subagent_run; got %d calls", got)
@@ -1618,6 +1655,7 @@ func TestRunTurn_SubagentPostPolicyGuardsRepeatedSubagentAfterFailure(t *testing
 
 	deadline := time.After(10 * time.Second)
 	var sawRepeatGuard bool
+	var sawRepeatKind bool
 	for {
 		select {
 		case ev, ok := <-events:
@@ -1631,6 +1669,13 @@ func TestRunTurn_SubagentPostPolicyGuardsRepeatedSubagentAfterFailure(t *testing
 				}
 				if strings.Contains(p.Result, "already ran this turn") {
 					sawRepeatGuard = true
+					if p.FailureKind != toolPolicyRepeatKind {
+						t.Fatalf("post-tool repeat policy failure_kind = %q, want %q", p.FailureKind, toolPolicyRepeatKind)
+					}
+					if !containsString(p.FailureKinds, toolPolicyRepeatKind) {
+						t.Fatalf("post-tool repeat policy failure_kinds missing %q: %#v", toolPolicyRepeatKind, p.FailureKinds)
+					}
+					sawRepeatKind = true
 				}
 			}
 			if ev.Type != sse.TypeTurnEnd {
@@ -1638,6 +1683,16 @@ func TestRunTurn_SubagentPostPolicyGuardsRepeatedSubagentAfterFailure(t *testing
 			}
 			if !sawRepeatGuard {
 				t.Fatal("expected repeated subagent_run to be guarded after first result")
+			}
+			if !sawRepeatKind {
+				t.Fatal("expected post-tool repeat policy guard to expose a structured failure kind")
+			}
+			var p sse.TurnEndPayload
+			if err := json.Unmarshal(ev.Data, &p); err != nil {
+				t.Fatalf("decode turn.end: %v", err)
+			}
+			if p.ToolStats == nil || p.ToolStats.ToolFailureByKind[toolPolicyRepeatKind] != 1 {
+				t.Fatalf("turn stats missing post-tool repeat policy failure kind: %+v", p.ToolStats)
 			}
 			if got := atomic.LoadInt32(&subagentCalls); got != 1 {
 				t.Fatalf("subagent_run should execute once; got %d", got)
