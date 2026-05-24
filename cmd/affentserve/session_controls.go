@@ -10,12 +10,23 @@ import (
 	"strings"
 
 	agent "github.com/affinefoundation/affent/internal/agent"
+	"github.com/affinefoundation/affent/internal/planstate"
 )
 
-const maxSessionMessageBodyBytes = 4 * 1024 * 1024
+const (
+	maxSessionMessageBodyBytes  = 4 * 1024 * 1024
+	sessionPlanOnlyMaxToolCalls = 2
+)
+
+const (
+	sessionMessageModeNormal      = "normal"
+	sessionMessageModePlanOnly    = "plan_only"
+	sessionMessageModeExecutePlan = "execute_plan"
+)
 
 type sessionMessageRequest struct {
 	Content string `json:"content"`
+	Mode    string `json:"mode,omitempty"`
 }
 
 type sessionMessageResponse struct {
@@ -43,8 +54,26 @@ func handleSessionMessage(pool *SessionPool, sessionID string, w http.ResponseWr
 		return
 	}
 	content := strings.TrimSpace(req.Content)
-	if content == "" {
+	mode, err := normalizeSessionMessageMode(req.Mode)
+	if err != nil {
+		writeJSONErrorTyped(w, http.StatusBadRequest, "invalid session message request", err, "bad_request")
+		return
+	}
+	if content == "" && mode != sessionMessageModeExecutePlan {
 		writeJSONErrorTyped(w, http.StatusBadRequest, "content is required", nil, "bad_request")
+		return
+	}
+	if mode == sessionMessageModeExecutePlan {
+		content, err = prepareSessionExecutePlan(pool, sessionID, content)
+		if err != nil {
+			writeJSONErrorTyped(w, http.StatusBadRequest, "execute plan", err, "bad_request")
+			return
+		}
+	} else if mode == sessionMessageModePlanOnly {
+		content = agent.PlanOnlyUserPrompt(content)
+	}
+	if sessionMessageModeRequiresPlanTool(mode) && !pool.cfg.EnableBuiltins {
+		writeJSONErrorTyped(w, http.StatusConflict, "session mode unavailable", errors.New("plan tool is not available"), "mode_unavailable")
 		return
 	}
 	sess, err := pool.GetOrCreate(sessionID)
@@ -57,7 +86,12 @@ func handleSessionMessage(pool *SessionPool, sessionID string, w http.ResponseWr
 		writeJSONError(w, http.StatusInternalServerError, "create session", err)
 		return
 	}
-	turnID, err := sess.SendUser(r.Context(), content)
+	opts, err := sessionMessageTurnOptions(sess, mode)
+	if err != nil {
+		writeJSONErrorTyped(w, http.StatusConflict, "session mode unavailable", err, "mode_unavailable")
+		return
+	}
+	turnID, err := sess.SendUserWithOptions(r.Context(), content, opts)
 	if err != nil {
 		switch {
 		case errors.Is(err, agent.ErrTurnInFlight):
@@ -121,4 +155,76 @@ func decodeSessionMessageRequest(w http.ResponseWriter, r *http.Request) (sessio
 		return req, errors.New("request body must contain a single JSON object")
 	}
 	return req, nil
+}
+
+func normalizeSessionMessageMode(raw string) (string, error) {
+	mode := strings.ToLower(strings.TrimSpace(raw))
+	switch mode {
+	case "", sessionMessageModeNormal:
+		return sessionMessageModeNormal, nil
+	case sessionMessageModePlanOnly, sessionMessageModeExecutePlan:
+		return mode, nil
+	default:
+		return "", fmt.Errorf("mode must be one of %q, %q, or %q", sessionMessageModeNormal, sessionMessageModePlanOnly, sessionMessageModeExecutePlan)
+	}
+}
+
+func sessionMessageTurnOptions(sess *Session, mode string) (agent.TurnOptions, error) {
+	if !sessionMessageModeRequiresPlanTool(mode) {
+		return agent.TurnOptions{}, nil
+	}
+	if sess == nil || sess.registry == nil {
+		return agent.TurnOptions{}, errors.New("plan tool is not available")
+	}
+	planTool, ok := sess.registry.Get(agent.PlanToolName)
+	if !ok {
+		return agent.TurnOptions{}, errors.New("plan tool is not available")
+	}
+	if mode != sessionMessageModePlanOnly {
+		return agent.TurnOptions{}, nil
+	}
+	tools := agent.NewRegistry()
+	tools.Add(planTool)
+	return agent.TurnOptions{
+		Tools:                  tools,
+		FirstToolPolicy:        agent.PlanFirstToolPolicy(),
+		MaxToolCalls:           sessionPlanOnlyMaxToolCalls,
+		FinalNoToolsOnMaxTurns: true,
+	}, nil
+}
+
+func sessionMessageModeRequiresPlanTool(mode string) bool {
+	return mode == sessionMessageModePlanOnly || mode == sessionMessageModeExecutePlan
+}
+
+func prepareSessionExecutePlan(pool *SessionPool, sessionID, request string) (string, error) {
+	summary := summarizeSessionPlanFile(pool, sessionID)
+	switch {
+	case summary == nil:
+		return "", fmt.Errorf("session %q has no persisted plan; create one with mode=%q first", sessionID, sessionMessageModePlanOnly)
+	case summary.Error:
+		return "", fmt.Errorf("session %q has an unreadable plan; inspect or clear it with the session plan API", sessionID)
+	case summary.Label == planstate.LabelEmpty:
+		return "", fmt.Errorf("session %q has an empty plan; create a concrete plan with mode=%q first", sessionID, sessionMessageModePlanOnly)
+	case summary.Done:
+		return "", fmt.Errorf("session %q plan is already done; clear it or create a new plan", sessionID)
+	case summary.Blocked:
+		return "", fmt.Errorf("session %q plan is blocked at step %d; resolve the blocker before executing", sessionID, summary.CurrentStepIndex)
+	case summary.TotalSteps == 0:
+		return "", fmt.Errorf("session %q has no executable plan steps", sessionID)
+	}
+	request = strings.TrimSpace(request)
+	if request == "" {
+		request = "Proceed with the active persisted plan."
+	}
+	return sessionExecutePlanPrompt(request, summary.Label), nil
+}
+
+func sessionExecutePlanPrompt(request, label string) string {
+	return `Execute-plan mode is enabled.
+
+The user has confirmed execution of this session's persisted task plan (` + strings.TrimSpace(label) + `). Continue from AFFENT ACTIVE PLAN, execute the next concrete step, update the plan as progress changes, and do not restart planning unless the persisted plan is stale or impossible to execute.
+
+User confirmation/request:
+` + strings.TrimSpace(request)
 }

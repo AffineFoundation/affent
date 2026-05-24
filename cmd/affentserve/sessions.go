@@ -1111,9 +1111,16 @@ func (p *SessionPool) Get(id string) (*Session, error) {
 // message, and signal the caller when the turn ends. Returns the
 // turn id assigned by agent.
 func (s *Session) SendUser(ctx context.Context, text string) (string, error) {
+	return s.SendUserWithOptions(ctx, text, agent.TurnOptions{})
+}
+
+// SendUserWithOptions starts one turn with per-turn Loop overrides. Used by
+// product modes that need a narrower tool surface without permanently
+// changing the session's capabilities.
+func (s *Session) SendUserWithOptions(ctx context.Context, text string, opts agent.TurnOptions) (string, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	return s.loop.SendUser(ctx, text)
+	return s.loop.SendUserWithOptions(ctx, text, opts)
 }
 
 // CancelTurn signals the in-flight turn (if any) to abort. Used by

@@ -50,6 +50,49 @@ func TestDefaultSystemPromptReflectsRuntimeBudgets(t *testing.T) {
 	}
 }
 
+func TestLoopTurnOptionsOverrideToolSurfaceAndPolicies(t *testing.T) {
+	baseTools := NewRegistry()
+	baseTools.Add(&Tool{Name: "shell"})
+	baseTools.Add(&Tool{Name: PlanToolName})
+	planOnlyTools := NewRegistry()
+	planOnlyTools.Add(&Tool{Name: PlanToolName})
+
+	loop := &Loop{
+		Tools:                  baseTools,
+		FirstToolPolicy:        &FirstToolPolicy{ToolName: "shell"},
+		MaxToolCalls:           8,
+		FinalNoToolsOnMaxTurns: false,
+	}
+	opts := TurnOptions{
+		Tools:                  planOnlyTools,
+		FirstToolPolicy:        PlanFirstToolPolicy(),
+		MaxToolCalls:           2,
+		FinalNoToolsOnMaxTurns: true,
+	}
+
+	defs := loop.toolDefs(opts)
+	if len(defs) != 1 || defs[0].Function.Name != PlanToolName {
+		t.Fatalf("turn tool defs = %+v, want only plan", defs)
+	}
+	if got := loop.activeFirstToolPolicy("draft a plan", opts); got == nil || got.ToolName != PlanToolName {
+		t.Fatalf("turn first-tool policy = %+v, want plan", got)
+	}
+	if got := loop.maxToolCallsForTurn(opts); got != 2 {
+		t.Fatalf("turn max tool calls = %d, want 2", got)
+	}
+	if !loop.finalNoToolsOnMaxTurnsForTurn(opts) {
+		t.Fatal("turn should request final no-tool answer on max turns")
+	}
+
+	baseDefs := loop.toolDefs(TurnOptions{})
+	if len(baseDefs) != 2 {
+		t.Fatalf("base tool defs changed = %+v, want original two tools", baseDefs)
+	}
+	if got := loop.activeFirstToolPolicy("draft a plan", TurnOptions{}); got == nil || got.ToolName != "shell" {
+		t.Fatalf("base first-tool policy changed = %+v, want shell", got)
+	}
+}
+
 func TestEnsureSystemPrompt_EmptyConv_NoMemory(t *testing.T) {
 	conv := newTestConv(t)
 	l := &Loop{Conv: conv}

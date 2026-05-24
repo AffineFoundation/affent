@@ -183,6 +183,22 @@ type Loop struct {
 	FinalNoToolsOnMaxTurns bool
 }
 
+// TurnOptions scopes runtime controls to one SendUser call. Empty options
+// preserve the Loop's configured behavior.
+type TurnOptions struct {
+	// Tools replaces the Loop registry for this turn only.
+	Tools *Registry
+	// FirstToolPolicy replaces the Loop's configured first-tool policy for
+	// this turn only.
+	FirstToolPolicy *FirstToolPolicy
+	// MaxToolCalls caps total tool calls for this turn only. Zero keeps the
+	// Loop default.
+	MaxToolCalls int
+	// FinalNoToolsOnMaxTurns asks for one final no-tool answer after this
+	// turn's tool budget is exhausted.
+	FinalNoToolsOnMaxTurns bool
+}
+
 type FirstToolPolicy struct {
 	ToolName  string
 	Trigger   func(userText string) bool
@@ -370,6 +386,13 @@ func (l *Loop) EnsureSystemPrompt(prompt string) error {
 // on a detached context so it can outlive a transient HTTP disconnect;
 // callers wanting to cancel a running turn use Loop.Cancel().
 func (l *Loop) SendUser(ctx context.Context, text string) (string, error) {
+	return l.SendUserWithOptions(ctx, text, TurnOptions{})
+}
+
+// SendUserWithOptions is SendUser with per-turn overrides. It is intended for
+// product modes such as plan-only where the session should temporarily expose
+// a narrower tool surface without mutating the long-lived Loop.
+func (l *Loop) SendUserWithOptions(ctx context.Context, text string, opts TurnOptions) (string, error) {
 	if err := ctx.Err(); err != nil {
 		return "", err
 	}
@@ -395,7 +418,7 @@ func (l *Loop) SendUser(ctx context.Context, text string) (string, error) {
 			l.takeTurn()
 			cancel()
 		}()
-		l.runTurn(turnCtx, turnID, text)
+		l.runTurn(turnCtx, turnID, text, opts)
 	}()
 	return turnID, nil
 }
@@ -440,7 +463,7 @@ func (l *Loop) takeTurn() {
 // the last allowed tool round it still gives the model one final chance to
 // answer from the returned evidence; if that call asks for more tools, those
 // calls are recorded as skipped placeholders and the turn ends as max_turns.
-func (l *Loop) runTurn(ctx context.Context, turnID, userText string) {
+func (l *Loop) runTurn(ctx context.Context, turnID, userText string, opts TurnOptions) {
 	steps := l.MaxTurnSteps
 	if steps <= 0 {
 		steps = DefaultMaxTurnSteps
@@ -453,9 +476,9 @@ func (l *Loop) runTurn(ctx context.Context, turnID, userText string) {
 
 	totalIn, totalOut := 0, 0
 	endReason := sse.TurnEndCompleted
-	firstToolPolicy := l.activeFirstToolPolicy(userText)
+	firstToolPolicy := l.activeFirstToolPolicy(userText, opts)
 	firstToolSatisfied := firstToolPolicy == nil
-	postToolPolicies := l.activePostToolPolicies()
+	postToolPolicies := l.activePostToolPolicies(opts)
 	loopGuard := newToolLoopGuard()
 	// finishedNaturally tracks whether the for-loop exited because the
 	// model returned an assistant message without tool_calls (the
@@ -477,7 +500,7 @@ func (l *Loop) runTurn(ctx context.Context, turnID, userText string) {
 			break
 		}
 
-		toolDefs := l.toolDefs()
+		toolDefs := l.toolDefs(opts)
 		if forceNoToolsNext {
 			toolDefs = nil
 		}
@@ -507,7 +530,7 @@ func (l *Loop) runTurn(ctx context.Context, turnID, userText string) {
 			skipped := l.appendSkippedToolResults(turnID, final.Final.ToolCalls, "(max_turns reached before this tool ran)")
 			toolStats.ToolRequests += skipped
 			toolStats.ToolErrors += skipped
-			if l.FinalNoToolsOnMaxTurns {
+			if l.finalNoToolsOnMaxTurnsForTurn(opts) {
 				final, reason, err := l.runStep(ctx, turnID, nil)
 				if err != nil {
 					endReason = reason
@@ -532,7 +555,7 @@ func (l *Loop) runTurn(ctx context.Context, turnID, userText string) {
 		// Execute every tool call in order, append each result to
 		// conversation, then loop back to ask the model for the next step.
 		for i, tc := range final.Final.ToolCalls {
-			if l.MaxToolCalls > 0 && toolCallsUsed >= l.MaxToolCalls {
+			if maxToolCalls := l.maxToolCallsForTurn(opts); maxToolCalls > 0 && toolCallsUsed >= maxToolCalls {
 				skipped := l.appendSkippedToolResults(turnID, final.Final.ToolCalls[i:], "(tool call budget reached before this tool ran)")
 				toolStats.ToolRequests += skipped
 				toolStats.ToolErrors += skipped
@@ -571,15 +594,15 @@ func (l *Loop) runTurn(ctx context.Context, turnID, userText string) {
 			toolName := tc.Function.Name
 			canonicalChanged := false
 			var repairNotes []string
-			if l.Tools != nil {
-				if canonical, ok, changed := l.Tools.canonicalName(toolName); ok {
+			if tools := l.toolsForTurn(opts); tools != nil {
+				if canonical, ok, changed := tools.canonicalName(toolName); ok {
 					originalTool := toolName
 					toolName = canonical
 					canonicalChanged = changed
 					if canonicalChanged {
 						repairNotes = append(repairNotes, fmt.Sprintf("canonicalized tool %s to %s", originalTool, toolName))
 					}
-					if t, _ := l.Tools.Get(toolName); t != nil {
+					if t, _ := tools.Get(toolName); t != nil {
 						var schemaRepaired bool
 						var schemaNotes []string
 						args, schemaRepaired, schemaNotes = repairToolArgsWithSchema(args, t.Schema)
@@ -692,7 +715,14 @@ func (l *Loop) runTurn(ctx context.Context, turnID, userText string) {
 				continue
 			}
 			toolStart := time.Now()
-			result, isErr := l.Tools.dispatch(ctx, toolName, args)
+			tools := l.toolsForTurn(opts)
+			if tools == nil {
+				l.publishAndAppendToolResult(callID, toolName, "tool registry is not configured", true, 0)
+				toolCallsUsed++
+				toolStats.ToolErrors++
+				continue
+			}
+			result, isErr := tools.dispatch(ctx, toolName, args)
 			toolDuration := time.Since(toolStart)
 			toolStats.ToolDurationMS += toolDuration.Milliseconds()
 			if guardResult := loopGuard.recordOutcome(toolName, !isErr); guardResult != "" {
@@ -727,7 +757,7 @@ func (l *Loop) runTurn(ctx context.Context, turnID, userText string) {
 			}
 		}
 		if toolBudgetExhausted {
-			if l.FinalNoToolsOnMaxTurns {
+			if l.finalNoToolsOnMaxTurnsForTurn(opts) {
 				final, reason, err := l.runStep(ctx, turnID, nil)
 				if err != nil {
 					endReason = reason
@@ -758,15 +788,16 @@ func (l *Loop) runTurn(ctx context.Context, turnID, userText string) {
 	l.publish(sse.TypeTurnEnd, sse.TurnEndPayload{TurnID: turnID, Reason: endReason, ToolStats: toolRuntimeStatsPtr(toolStats)})
 }
 
-func (l *Loop) activeFirstToolPolicy(userText string) *FirstToolPolicy {
-	if l.Tools == nil {
+func (l *Loop) activeFirstToolPolicy(userText string, opts TurnOptions) *FirstToolPolicy {
+	tools := l.toolsForTurn(opts)
+	if tools == nil {
 		return nil
 	}
-	for _, p := range l.configuredFirstToolPolicies() {
+	for _, p := range l.configuredFirstToolPolicies(opts) {
 		if p == nil || p.ToolName == "" {
 			continue
 		}
-		if _, ok := l.Tools.Get(p.ToolName); !ok {
+		if _, ok := tools.Get(p.ToolName); !ok {
 			continue
 		}
 		if p.Trigger != nil && !p.Trigger(userText) {
@@ -777,7 +808,10 @@ func (l *Loop) activeFirstToolPolicy(userText string) *FirstToolPolicy {
 	return nil
 }
 
-func (l *Loop) configuredFirstToolPolicies() []*FirstToolPolicy {
+func (l *Loop) configuredFirstToolPolicies(opts TurnOptions) []*FirstToolPolicy {
+	if opts.FirstToolPolicy != nil {
+		return []*FirstToolPolicy{opts.FirstToolPolicy}
+	}
 	out := make([]*FirstToolPolicy, 0, 1+len(l.FirstToolPolicies))
 	if l.FirstToolPolicy != nil {
 		out = append(out, l.FirstToolPolicy)
@@ -792,8 +826,12 @@ type activePostToolPolicyState struct {
 	active bool
 }
 
-func (l *Loop) activePostToolPolicies() []*activePostToolPolicyState {
-	if l.Tools == nil {
+func (l *Loop) activePostToolPolicies(opts TurnOptions) []*activePostToolPolicyState {
+	tools := l.toolsForTurn(opts)
+	if tools == nil {
+		return nil
+	}
+	if opts.Tools != nil {
 		return nil
 	}
 	policies := make([]*PostToolPolicy, 0, 1+len(l.PostToolPolicies))
@@ -807,7 +845,7 @@ func (l *Loop) activePostToolPolicies() []*activePostToolPolicyState {
 		if p == nil || p.ToolName == "" || seen[p.ToolName] {
 			continue
 		}
-		if _, ok := l.Tools.Get(p.ToolName); !ok {
+		if _, ok := tools.Get(p.ToolName); !ok {
 			continue
 		}
 		seen[p.ToolName] = true
@@ -1125,11 +1163,30 @@ var ErrTurnInFlight = errors.New("turn already in flight")
 // the assistant message from deltas may see the earlier fragment as
 // stale; the persisted ChatMessage only reflects the successful
 // attempt.
-func (l *Loop) toolDefs() []ToolDef {
-	if l.Tools == nil {
+func (l *Loop) toolDefs(opts TurnOptions) []ToolDef {
+	tools := l.toolsForTurn(opts)
+	if tools == nil {
 		return nil
 	}
-	return l.Tools.Defs()
+	return tools.Defs()
+}
+
+func (l *Loop) toolsForTurn(opts TurnOptions) *Registry {
+	if opts.Tools != nil {
+		return opts.Tools
+	}
+	return l.Tools
+}
+
+func (l *Loop) maxToolCallsForTurn(opts TurnOptions) int {
+	if opts.MaxToolCalls > 0 {
+		return opts.MaxToolCalls
+	}
+	return l.MaxToolCalls
+}
+
+func (l *Loop) finalNoToolsOnMaxTurnsForTurn(opts TurnOptions) bool {
+	return l.FinalNoToolsOnMaxTurns || opts.FinalNoToolsOnMaxTurns
 }
 
 func (l *Loop) toolResultMaxBytesInContext() int {

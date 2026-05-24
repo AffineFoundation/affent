@@ -4,8 +4,12 @@ import (
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/affinefoundation/affent/internal/agent"
 )
 
 func TestHandleSessionMessage_StartsTurn(t *testing.T) {
@@ -49,6 +53,7 @@ func TestHandleSessionMessage_RejectsInvalidBody(t *testing.T) {
 		wants []string
 	}{
 		{"empty content", `{"content":"   "}`, []string{"content is required"}},
+		{"bad mode", `{"content":"hello","mode":"fast"}`, []string{"mode must be one of", "plan_only", "execute_plan"}},
 		{"unknown field", `{"content":"hello","role":"user"}`, []string{"unknown field", "role"}},
 		{"multiple objects", `{"content":"hello"} {"content":"again"}`, []string{"single JSON object"}},
 	}
@@ -66,6 +71,96 @@ func TestHandleSessionMessage_RejectsInvalidBody(t *testing.T) {
 				}
 			}
 		})
+	}
+}
+
+func TestHandleSessionMessage_PlanOnlyStartsConstrainedTurn(t *testing.T) {
+	pool := newTestPool(t, 4, "5m")
+	pool.cfg.EnableBuiltins = true
+
+	r := httptest.NewRequest(http.MethodPost, "/v1/sessions/plan-only/messages", strings.NewReader(`{"mode":"plan_only","content":"draft the migration"}`))
+	w := httptest.NewRecorder()
+	handleSessionRoutes(pool).ServeHTTP(w, r)
+	if got := w.Result().StatusCode; got != http.StatusAccepted {
+		t.Fatalf("status = %d, want 202; body=%s", got, w.Body.String())
+	}
+	s := activeSessionByID(pool, "plan-only")
+	if s == nil {
+		t.Fatal("plan-only message should create an active session")
+	}
+	msgs := s.conv.Snapshot()
+	if len(msgs) == 0 || !strings.Contains(msgs[len(msgs)-1].Content, "Plan-only mode is enabled.") || !strings.Contains(msgs[len(msgs)-1].Content, "draft the migration") {
+		t.Fatalf("last conversation message should be wrapped plan-only prompt, got %+v", msgs)
+	}
+	opts, err := sessionMessageTurnOptions(s, sessionMessageModePlanOnly)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defs := opts.Tools.Defs()
+	if len(defs) != 1 || defs[0].Function.Name != agent.PlanToolName {
+		t.Fatalf("plan-only tool defs = %+v, want only plan", defs)
+	}
+	if opts.FirstToolPolicy == nil || opts.FirstToolPolicy.ToolName != agent.PlanToolName || opts.MaxToolCalls != sessionPlanOnlyMaxToolCalls || !opts.FinalNoToolsOnMaxTurns {
+		t.Fatalf("plan-only options = %+v, want plan policy + tight budget", opts)
+	}
+}
+
+func TestHandleSessionMessage_PlanOnlyRequiresPlanToolWithoutCreatingSession(t *testing.T) {
+	pool := newTestPool(t, 4, "5m")
+
+	r := httptest.NewRequest(http.MethodPost, "/v1/sessions/no-plan-tool/messages", strings.NewReader(`{"mode":"plan_only","content":"draft plan"}`))
+	w := httptest.NewRecorder()
+	handleSessionRoutes(pool).ServeHTTP(w, r)
+	if got := w.Result().StatusCode; got != http.StatusConflict {
+		t.Fatalf("status = %d, want 409; body=%s", got, w.Body.String())
+	}
+	if !strings.Contains(w.Body.String(), "mode_unavailable") || !strings.Contains(w.Body.String(), "plan tool is not available") {
+		t.Fatalf("body should explain missing plan tool: %s", w.Body.String())
+	}
+	if activeSessionByID(pool, "no-plan-tool") != nil {
+		t.Fatal("plan-only rejection must not create a session")
+	}
+}
+
+func TestHandleSessionMessage_ExecutePlanRequiresExistingRunnablePlan(t *testing.T) {
+	pool := newTestPool(t, 4, "5m")
+	pool.cfg.EnableBuiltins = true
+
+	r := httptest.NewRequest(http.MethodPost, "/v1/sessions/missing-plan/messages", strings.NewReader(`{"mode":"execute_plan"}`))
+	w := httptest.NewRecorder()
+	handleSessionRoutes(pool).ServeHTTP(w, r)
+	if got := w.Result().StatusCode; got != http.StatusBadRequest {
+		t.Fatalf("status = %d, want 400; body=%s", got, w.Body.String())
+	}
+	if !strings.Contains(w.Body.String(), "no persisted plan") {
+		t.Fatalf("body should explain missing plan: %s", w.Body.String())
+	}
+	if activeSessionByID(pool, "missing-plan") != nil {
+		t.Fatal("execute-plan rejection must not create a session")
+	}
+}
+
+func TestHandleSessionMessage_ExecutePlanStartsConfirmedPlanTurn(t *testing.T) {
+	pool := newTestPool(t, 4, "5m")
+	pool.cfg.EnableBuiltins = true
+	createDurableSessionDir(t, pool, "execute-plan")
+	if err := os.WriteFile(filepath.Join(pool.sessionDirPath("execute-plan"), "plan.json"), []byte(`{"version":1,"steps":[{"text":"implement backend plan mode","status":"in_progress"}]}`+"\n"), 0o644); err != nil {
+		t.Fatalf("write plan: %v", err)
+	}
+
+	r := httptest.NewRequest(http.MethodPost, "/v1/sessions/execute-plan/messages", strings.NewReader(`{"mode":"execute_plan"}`))
+	w := httptest.NewRecorder()
+	handleSessionRoutes(pool).ServeHTTP(w, r)
+	if got := w.Result().StatusCode; got != http.StatusAccepted {
+		t.Fatalf("status = %d, want 202; body=%s", got, w.Body.String())
+	}
+	s := activeSessionByID(pool, "execute-plan")
+	if s == nil {
+		t.Fatal("execute-plan should reopen the durable session")
+	}
+	msgs := s.conv.Snapshot()
+	if len(msgs) == 0 || !strings.Contains(msgs[len(msgs)-1].Content, "Execute-plan mode is enabled.") || !strings.Contains(msgs[len(msgs)-1].Content, "plan:0/1:active") {
+		t.Fatalf("last conversation message should be execute-plan prompt, got %+v", msgs)
 	}
 }
 
