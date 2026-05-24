@@ -361,6 +361,7 @@ func externalResearchSystemGuidance(surface externalResearchToolSurface) string 
 	if surface.WebSearch && (surface.WebFetch || surface.Browser) {
 		b.WriteString("\n- For current or unfamiliar public facts, use web_search for discovery, then read the most authoritative sources before answering.")
 		b.WriteString("\n- Do not open every search result. Pick the smallest set of high-value official, primary, metrics, or corroborating sources; use social/forum snippets only as weak sentiment when page reading is blocked or unavailable.")
+		b.WriteString("\n- If a search result includes a Direct-reader warning, do not spend direct page-reading calls on that URL; treat the snippet as weak discovery/sentiment or choose a canonical source URL instead.")
 	} else if surface.WebSearch {
 		b.WriteString("\n- For current or unfamiliar public facts, use web_search to discover and compare source snippets; say when full-page reading is unavailable.")
 	} else if surface.WebFetch || surface.Browser {
@@ -370,7 +371,7 @@ func externalResearchSystemGuidance(surface externalResearchToolSurface) string 
 		b.WriteString("\n- Use web_fetch for direct authoritative pages, raw docs, repositories, APIs, and text endpoints. Use browser_navigate/browser_snapshot for dynamic dashboards, search-result pages, social pages, or pages likely to return bot/challenge shells to direct fetch.")
 	} else if surface.WebFetch {
 		b.WriteString("\n- Use web_fetch to read authoritative pages, raw docs, repositories, APIs, and text endpoints. Prefer official docs, source repositories, block explorers, filings, API docs, and primary project sites over summaries.")
-		b.WriteString("\n- Avoid using web_fetch on result-list pages, social/forum pages, short links, dynamic dashboards, or pages likely to return bot/challenge shells when a canonical API/text/source URL is available.")
+		b.WriteString("\n- Avoid using web_fetch on result-list pages, social/forum pages, short links, dynamic dashboards, or pages likely to return bot/challenge shells when a canonical API/text/source URL is available. Do not call web_fetch just to test a URL already marked as a direct-reader warning.")
 	} else if surface.Browser {
 		b.WriteString("\n- Use browser_navigate/browser_snapshot for page inspection. Prefer official pages, source repositories, block explorers, filings, API docs, and primary project sites over summaries.")
 	}

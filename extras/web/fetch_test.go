@@ -692,8 +692,8 @@ func TestSearchTool_FormatsResults(t *testing.T) {
 	if strings.Contains(out, "web_fetch") {
 		t.Fatalf("generic search result guidance should not mention unavailable tools directly:\n%s", out)
 	}
-	if strings.Contains(out, "Direct-fetch caution") {
-		t.Fatalf("ordinary result should not get a direct-fetch caution:\n%s", out)
+	if strings.Contains(out, "Direct-reader caution") || strings.Contains(out, "Direct-reader warning") {
+		t.Fatalf("ordinary result should not get a direct-reader note:\n%s", out)
 	}
 }
 
@@ -714,12 +714,14 @@ func TestSearchTool_AnnotatesDirectFetchRiskyResults(t *testing.T) {
 		t.Fatalf("Execute: %v", err)
 	}
 	for _, want := range []string{
-		"Direct-fetch caution: open the target/source URL",
+		"Direct-reader warning: open the target/source URL",
 		"search snippets are discovery evidence only",
-		"social/discussion pages often block direct readers or require JavaScript",
-		"sentiment/claim evidence only",
-		"redirect or short-link wrapper",
+		"Direct-reader warning: do not use direct page fetch on this URL",
+		"usually blocks direct readers",
+		"sentiment/claim evidence",
+		"Direct-reader caution: this is often a redirect or short-link wrapper",
 		"canonical URL",
+		"Do not spend direct page-reading calls on URLs marked with Direct-reader warning",
 	} {
 		if !strings.Contains(out, want) {
 			t.Fatalf("risky result output missing %q:\n%s", want, out)
@@ -740,7 +742,7 @@ func TestDirectFetchCautionClassifiesGenericHosts(t *testing.T) {
 	}{
 		{name: "google search", url: "https://google.com/search?q=agent", want: "search-results page"},
 		{name: "duckduckgo html", url: "https://duckduckgo.com/html?q=agent", want: "search-results page"},
-		{name: "x status", url: "https://x.com/affine/status/1", want: "social/discussion"},
+		{name: "x status", url: "https://x.com/affine/status/1", want: "do not use direct page fetch"},
 		{name: "reddit", url: "https://old.reddit.com/r/test/comments/1/x", want: "social/discussion"},
 		{name: "short link", url: "https://t.co/abc", want: "short-link"},
 		{name: "ordinary", url: "https://example.com/report", want: ""},

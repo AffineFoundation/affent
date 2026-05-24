@@ -124,6 +124,7 @@ func formatResults(results []SearchResult, limit int) string {
 	}
 	var b strings.Builder
 	displayed := 0
+	hasDirectReaderWarning := false
 	for _, r := range results {
 		if displayed >= limit {
 			break
@@ -149,7 +150,12 @@ func formatResults(results []SearchResult, limit int) string {
 		fmt.Fprintf(&b, "%d. %s\n   %s\n   %s",
 			displayed, title, url, snippet)
 		if note := directFetchCaution(url); note != "" {
-			fmt.Fprintf(&b, "\n   Direct-fetch caution: %s", note)
+			label := "Direct-reader caution"
+			if directFetchShouldSkip(url) {
+				label = "Direct-reader warning"
+				hasDirectReaderWarning = true
+			}
+			fmt.Fprintf(&b, "\n   %s: %s", label, note)
 		}
 		b.WriteString("\n\n")
 	}
@@ -157,7 +163,20 @@ func formatResults(results []SearchResult, limit int) string {
 		return "(no usable results: search provider returned no URLs)\nFailure: kind=no_results\nNext: retry web_search with more distinctive keywords and user-provided disambiguators such as ecosystem, ticker, network/subnet id, official domain, or date range, or use another available source URL if already known."
 	}
 	b.WriteString("Next: choose the 1-3 most authoritative/current result URLs, prefer official or primary sources, and read them with an available page-reading tool before answering. If no full-page reading tool is available, compare snippets and say that full-page verification was unavailable.")
+	if hasDirectReaderWarning {
+		b.WriteString(" Do not spend direct page-reading calls on URLs marked with Direct-reader warning; use their snippets only as weak discovery, sentiment, or claim evidence unless a rendering-capable tool is available.")
+	}
 	return strings.TrimSpace(b.String())
+}
+
+func directFetchShouldSkip(rawURL string) bool {
+	u, err := url.Parse(strings.TrimSpace(rawURL))
+	if err != nil || u.Host == "" {
+		return false
+	}
+	host := websource.NormalizeHost(u.Hostname())
+	path := strings.ToLower(u.EscapedPath())
+	return websource.IsSearchResultPage(host, path) || websource.IsKnownDirectReaderTrapHost(host)
 }
 
 func directFetchCaution(rawURL string) string {
@@ -172,6 +191,9 @@ func directFetchCaution(rawURL string) string {
 	}
 	if websource.IsRedirectorHost(host) {
 		return "this is often a redirect or short-link wrapper; prefer the final canonical URL from an authoritative source before reading it."
+	}
+	if websource.IsKnownDirectReaderTrapHost(host) {
+		return "do not use direct page fetch on this URL; this host usually blocks direct readers. Use the snippet only as weak sentiment/claim evidence, find a mirrored/source URL, or use a rendering-capable tool if available."
 	}
 	if websource.IsSocialOrDiscussionHost(host) {
 		return "social/discussion pages often block direct readers or require JavaScript; use them as sentiment/claim evidence only unless a readable page source is returned."

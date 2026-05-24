@@ -282,10 +282,11 @@ bot/challenge shells. Those sources can still be useful for discovery or
 sentiment, but they should not consume repeated direct-fetch attempts when a
 canonical source is available.
 
-`web_search` may annotate individual results with `Direct-fetch caution` when a
-URL is likely to waste turns in direct HTTP fetches, such as search-result
-pages, social/discussion pages, or short-link redirectors. These annotations
-are source-selection hints, not hard failures: the agent should prefer the
+`web_search` may annotate individual results with `Direct-reader caution` or
+`Direct-reader warning` when a URL is likely to waste turns in direct HTTP
+fetches, such as search-result pages, social/discussion pages, or short-link
+redirectors. A warning is stronger than a caution: the agent should not spend a
+direct page-reading call on that URL in the current turn. It should prefer the
 target/canonical URL, an official API or text endpoint, or treat the snippet as
 weak sentiment/claim evidence when no readable page source is available.
 
