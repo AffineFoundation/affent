@@ -257,7 +257,7 @@ func renderBody(body []byte, contentType, finalURL string) string {
 		strings.HasPrefix(ct, "application/yaml"):
 		return string(body)
 	default:
-		return fmt.Sprintf("[non-text response: Content-Type=%q, %d bytes]", contentType, len(body))
+		return fmt.Sprintf("[non-text response: Content-Type=%q, %d bytes]\nNext: do not treat this as readable page evidence; fetch an HTML/API/text version, use a browser tool if one is registered, or choose another authoritative source.", contentType, len(body))
 	}
 }
 

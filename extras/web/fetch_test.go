@@ -98,6 +98,11 @@ func TestFetchTool_NonText(t *testing.T) {
 	if !strings.Contains(out, "non-text response") {
 		t.Errorf("expected non-text placeholder, got %q", out)
 	}
+	for _, want := range []string{"Next:", "do not treat this as readable page evidence", "HTML/API/text version"} {
+		if !strings.Contains(out, want) {
+			t.Fatalf("non-text response missing %q guidance:\n%s", want, out)
+		}
+	}
 }
 
 func TestFetchTool_RequiresURL(t *testing.T) {
