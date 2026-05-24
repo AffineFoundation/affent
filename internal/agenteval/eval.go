@@ -92,6 +92,10 @@ type BatchResult struct {
 	Verifier           VerifierResult
 	WorkspaceRemoved   bool
 	CleanupError       string
+	// Delegation aggregates focused-task / subagent calls observed
+	// in the trace. Zero-value when the scenario used no delegation
+	// tool; HasAny() reports whether the block is worth surfacing.
+	Delegation DelegationStats
 }
 
 type VerifierResult struct {
@@ -276,6 +280,7 @@ func (r BatchRunner) Run(ctx context.Context, scenario BatchScenario) BatchResul
 		res.ToolStats = trace.ToolStats
 		res.ToolTruncation = SummarizeToolTruncation(trace)
 		res.Usage = trace.Usage
+		res.Delegation = trace.DelegationStats()
 		res.Failures = append(res.Failures, CheckBatchTrace(trace, scenario)...)
 	}
 	if scenario.ExpectedSkill != "" {

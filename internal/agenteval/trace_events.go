@@ -52,6 +52,7 @@ func applyTraceEvent(t *Trace, pending map[string]int, typ string, data json.Raw
 			Canonicalized:       p.Canonicalized,
 			ArgsRepaired:        p.ArgsRepaired,
 			RepairNotes:         p.RepairNotes,
+			Delegation:          p.Delegation,
 		})
 	case sse.TypeToolResult:
 		var p sse.ToolResultPayload
@@ -68,6 +69,14 @@ func applyTraceEvent(t *Trace, pending map[string]int, typ string, data json.Raw
 			t.Tools[idx].ExitCode = p.ExitCode
 			t.Tools[idx].DurationMS = p.DurationMS
 			t.Tools[idx].IsErr = p.ExitCode != 0
+			// If a stream-cut or replay split the request/result events,
+			// the result might carry delegation while the request didn't
+			// (or vice versa). Prefer whichever side has it; the runtime
+			// publishes the same DelegationMeta on both, so this is a
+			// stale-data fix-up, not a divergence.
+			if t.Tools[idx].Delegation == nil && p.Delegation != nil {
+				t.Tools[idx].Delegation = p.Delegation
+			}
 			return false, nil
 		}
 		t.Tools = append(t.Tools, ToolCall{
@@ -81,6 +90,7 @@ func applyTraceEvent(t *Trace, pending map[string]int, typ string, data json.Raw
 			ExitCode:           p.ExitCode,
 			DurationMS:         p.DurationMS,
 			IsErr:              p.ExitCode != 0,
+			Delegation:         p.Delegation,
 		})
 	case sse.TypeUsage:
 		var p sse.UsagePayload

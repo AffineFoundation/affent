@@ -397,6 +397,139 @@ func TestPrintBatchResultJSONLIncludesFailureKinds(t *testing.T) {
 	}
 }
 
+// TestBatchSummaryAggregatesDelegationAcrossScenarios pins the
+// batch-level aggregation for delegation usage.
+func TestBatchSummaryAggregatesDelegationAcrossScenarios(t *testing.T) {
+	var summary batchSummary
+	summary.add(agenteval.BatchResult{
+		OK:                 true,
+		Duration:           100 * time.Millisecond,
+		TraceSchemaVersion: 1,
+		TurnEndReason:      "completed",
+		Delegation: agenteval.DelegationStats{
+			FocusedTaskCalls:  2,
+			FocusedTaskByType: map[string]int{"recall": 2},
+		},
+	})
+	summary.add(agenteval.BatchResult{
+		OK:                 true,
+		Duration:           150 * time.Millisecond,
+		TraceSchemaVersion: 1,
+		TurnEndReason:      "completed",
+		Delegation: agenteval.DelegationStats{
+			FocusedTaskCalls:  2,
+			FocusedTaskByType: map[string]int{"recall": 1, "explore": 1},
+			SubagentCalls:     1,
+			SubagentByMode:    map[string]int{"review": 1},
+		},
+	})
+
+	if summary.FocusedTaskCalls != 4 {
+		t.Errorf("FocusedTaskCalls = %d, want 4", summary.FocusedTaskCalls)
+	}
+	if summary.FocusedTaskByType["recall"] != 3 || summary.FocusedTaskByType["explore"] != 1 {
+		t.Errorf("merged FocusedTaskByType = %#v", summary.FocusedTaskByType)
+	}
+	if summary.SubagentCalls != 1 || summary.SubagentByMode["review"] != 1 {
+		t.Errorf("subagent aggregates = %d, %#v", summary.SubagentCalls, summary.SubagentByMode)
+	}
+
+	// Wire-format check: consumers expect one merged object per batch.
+	var out bytes.Buffer
+	printBatchSummaryJSONL(&out, testEvalJSONLMetadata(), summary)
+	var got map[string]any
+	if err := json.Unmarshal(out.Bytes(), &got); err != nil {
+		t.Fatalf("decode summary: %v\n%s", err, out.String())
+	}
+	if got["focused_task_calls"] != float64(4) {
+		t.Errorf("summary.focused_task_calls = %#v, want 4", got["focused_task_calls"])
+	}
+	byType, ok := got["focused_task_by_type"].(map[string]any)
+	if !ok || byType["recall"] != float64(3) || byType["explore"] != float64(1) {
+		t.Errorf("summary.focused_task_by_type = %#v", byType)
+	}
+}
+
+// TestPrintBatchResultJSONL_IncludesDelegation pins the per-scenario
+// delegation breakdown in the JSONL record.
+func TestPrintBatchResultJSONL_IncludesDelegation(t *testing.T) {
+	var out bytes.Buffer
+	printBatchResultJSONL(&out, testEvalJSONLMetadata(), agenteval.BatchResult{
+		BatchScenario:      "delegating",
+		Workspace:          "/tmp/ws",
+		TracePath:          "/tmp/ws/trace.jsonl",
+		OK:                 true,
+		Duration:           1 * time.Second,
+		TraceSchemaVersion: 1,
+		TurnEndReason:      "completed",
+		ToolCalls:          4,
+		Delegation: agenteval.DelegationStats{
+			FocusedTaskCalls:  3,
+			FocusedTaskByType: map[string]int{"recall": 2, "explore": 1},
+			FocusedTaskErrors: 1,
+			SubagentCalls:     1,
+			SubagentByMode:    map[string]int{"test": 1},
+		},
+	})
+
+	var got map[string]any
+	if err := json.Unmarshal(out.Bytes(), &got); err != nil {
+		t.Fatalf("decode: %v\n%s", err, out.String())
+	}
+	if got["focused_task_calls"] != float64(3) {
+		t.Errorf("focused_task_calls = %#v, want 3", got["focused_task_calls"])
+	}
+	if got["focused_task_errors"] != float64(1) {
+		t.Errorf("focused_task_errors = %#v, want 1", got["focused_task_errors"])
+	}
+	byType, ok := got["focused_task_by_type"].(map[string]any)
+	if !ok {
+		t.Fatalf("focused_task_by_type missing or wrong type: %#v", got["focused_task_by_type"])
+	}
+	if byType["recall"] != float64(2) || byType["explore"] != float64(1) {
+		t.Errorf("focused_task_by_type = %#v", byType)
+	}
+	if got["subagent_calls"] != float64(1) {
+		t.Errorf("subagent_calls = %#v, want 1", got["subagent_calls"])
+	}
+	byMode, ok := got["subagent_by_mode"].(map[string]any)
+	if !ok || byMode["test"] != float64(1) {
+		t.Errorf("subagent_by_mode = %#v", byMode)
+	}
+}
+
+// TestPrintBatchResultJSONL_OmitsDelegationForNonDelegating ensures
+// scenarios that used no delegation tool produce a clean JSONL record
+// without any focused_task_* / subagent_* fields. omitempty on every
+// added field; if a regression flips one to a non-empty default, this
+// test catches it.
+func TestPrintBatchResultJSONL_OmitsDelegationForNonDelegating(t *testing.T) {
+	var out bytes.Buffer
+	printBatchResultJSONL(&out, testEvalJSONLMetadata(), agenteval.BatchResult{
+		BatchScenario:      "plain",
+		Workspace:          "/tmp/ws",
+		TracePath:          "/tmp/ws/trace.jsonl",
+		OK:                 true,
+		Duration:           1 * time.Second,
+		TraceSchemaVersion: 1,
+		TurnEndReason:      "completed",
+		// no Delegation
+	})
+	got := out.String()
+	for _, field := range []string{
+		`"focused_task_calls"`,
+		`"focused_task_by_type"`,
+		`"focused_task_errors"`,
+		`"subagent_calls"`,
+		`"subagent_by_mode"`,
+		`"subagent_errors"`,
+	} {
+		if bytes.Contains([]byte(got), []byte(field)) {
+			t.Errorf("delegation-free scenario record must not include %s\n%s", field, got)
+		}
+	}
+}
+
 func TestPrintBatchSummaryJSONL(t *testing.T) {
 	var out bytes.Buffer
 	printBatchSummaryJSONL(&out, testEvalJSONLMetadata(), batchSummary{

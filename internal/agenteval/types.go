@@ -5,6 +5,7 @@ import (
 
 	"github.com/affinefoundation/affent/internal/agent"
 	"github.com/affinefoundation/affent/internal/executor"
+	"github.com/affinefoundation/affent/internal/sse"
 )
 
 // Scenario describes one bounded evaluation task. Scenarios are
@@ -198,6 +199,11 @@ type ToolCall struct {
 	// IsErr is true when the tool returned a Go error (vs returning
 	// a non-zero exit code via a successful execution).
 	IsErr bool
+	// Delegation, when set, classifies the call as a bounded child-Loop
+	// delegation (focused_task or subagent) and carries the small
+	// metadata block trace consumers most often filter on. Nil for
+	// non-delegation tools.
+	Delegation *sse.DelegationMeta
 }
 
 type ToolRuntimeStats struct {
@@ -223,6 +229,81 @@ type ToolTruncationStats struct {
 type Usage struct {
 	InputTokens  int
 	OutputTokens int
+}
+
+// DelegationStats is a per-kind breakdown of delegation tool calls
+// observed in a Trace. It is computed from the Tools timeline by
+// Trace.DelegationStats(); the per-kind sub-map keys (task_type for
+// focused_task, mode for subagent) come straight from the
+// sse.DelegationMeta the runtime stamped on each tool event.
+//
+// Empty when the run had no delegation calls; absent fields when a
+// kind wasn't used.
+type DelegationStats struct {
+	// FocusedTaskCalls is the total number of run_task tool calls.
+	FocusedTaskCalls int
+	// FocusedTaskByType breaks the total down by task_type
+	// (recall / explore / research / verify / review). Keys with zero
+	// counts are not included.
+	FocusedTaskByType map[string]int
+	// FocusedTaskErrors counts run_task calls whose ExitCode != 0.
+	// This includes loop-guard rejections (cap-exceeded) and child
+	// runtime errors; it does NOT include semantic "ok=false" inside
+	// the result JSON because that's a model judgment, not a runtime
+	// failure.
+	FocusedTaskErrors int
+	// SubagentCalls is the total number of subagent_run tool calls.
+	SubagentCalls int
+	// SubagentByMode breaks the subagent total down by mode
+	// (explore / review / test / research). Keys with zero counts
+	// are not included.
+	SubagentByMode map[string]int
+	// SubagentErrors counts subagent_run calls whose ExitCode != 0.
+	SubagentErrors int
+}
+
+// HasAny reports whether any delegation calls were observed. Helps
+// summary writers decide whether to include the DelegationStats block
+// at all (most scenarios won't use any delegation tool).
+func (d DelegationStats) HasAny() bool {
+	return d.FocusedTaskCalls > 0 || d.SubagentCalls > 0
+}
+
+// DelegationStats walks the Tools timeline and aggregates per-kind
+// counts. Costs O(len(Tools)) and allocates only when a delegation
+// was actually observed; cheap to call on every scenario summary.
+func (t Trace) DelegationStats() DelegationStats {
+	var s DelegationStats
+	for _, c := range t.Tools {
+		if c.Delegation == nil {
+			continue
+		}
+		switch c.Delegation.Kind {
+		case agent.DelegationKindFocusedTask:
+			s.FocusedTaskCalls++
+			if c.IsErr || c.ExitCode != 0 {
+				s.FocusedTaskErrors++
+			}
+			if tt := c.Delegation.TaskType; tt != "" {
+				if s.FocusedTaskByType == nil {
+					s.FocusedTaskByType = map[string]int{}
+				}
+				s.FocusedTaskByType[tt]++
+			}
+		case agent.DelegationKindSubagent:
+			s.SubagentCalls++
+			if c.IsErr || c.ExitCode != 0 {
+				s.SubagentErrors++
+			}
+			if m := c.Delegation.Mode; m != "" {
+				if s.SubagentByMode == nil {
+					s.SubagentByMode = map[string]int{}
+				}
+				s.SubagentByMode[m]++
+			}
+		}
+	}
+	return s
 }
 
 // Outcome is the result of running one scenario through its checks.

@@ -16,6 +16,7 @@ import (
 
 	"github.com/affinefoundation/affent/internal/executor"
 	"github.com/affinefoundation/affent/internal/memory"
+	"github.com/affinefoundation/affent/internal/sse"
 	"github.com/rs/zerolog"
 )
 
@@ -1208,4 +1209,282 @@ func (stubMemoryStore) Search(_ memory.MemoryTarget, _, _ string, _ int) (memory
 func strconvQuote(s string) string {
 	b, _ := json.Marshal(s)
 	return string(b)
+}
+
+// TestExtractDelegationMeta_KnownToolsAndUnknown pins the classifier
+// contract. Future maintainers should add another case here when they
+// register a new delegation surface (and only when -- this guards
+// against accidentally classifying a non-delegation tool, which would
+// confuse trace UIs into rendering it under the delegation timeline).
+func TestExtractDelegationMeta_KnownToolsAndUnknown(t *testing.T) {
+	cases := []struct {
+		name   string
+		tool   string
+		args   string
+		want   *sse.DelegationMeta
+		wantOK bool
+	}{
+		{
+			name:   "run_task explore",
+			tool:   FocusedTaskToolName,
+			args:   `{"task_type":"explore","objective":"x"}`,
+			want:   &sse.DelegationMeta{Kind: DelegationKindFocusedTask, TaskType: "explore"},
+			wantOK: true,
+		},
+		{
+			name:   "run_task missing task_type still classified as focused_task",
+			tool:   FocusedTaskToolName,
+			args:   `{"objective":"x"}`,
+			want:   &sse.DelegationMeta{Kind: DelegationKindFocusedTask, TaskType: ""},
+			wantOK: true,
+		},
+		{
+			name:   "run_task with malformed json gives empty fields but still classified",
+			tool:   FocusedTaskToolName,
+			args:   `{"task_type":`, // truncated
+			want:   &sse.DelegationMeta{Kind: DelegationKindFocusedTask, TaskType: ""},
+			wantOK: true,
+		},
+		{
+			name:   "subagent_run with mode",
+			tool:   SubagentToolName,
+			args:   `{"mode":"review","task":"y"}`,
+			want:   &sse.DelegationMeta{Kind: DelegationKindSubagent, Mode: "review"},
+			wantOK: true,
+		},
+		{
+			name:   "read_file is not a delegation",
+			tool:   "read_file",
+			args:   `{"path":"a.go"}`,
+			want:   nil,
+			wantOK: false,
+		},
+		{
+			name:   "empty tool name returns nil",
+			tool:   "",
+			args:   `{}`,
+			want:   nil,
+			wantOK: false,
+		},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			got, ok := ExtractDelegationMeta(c.tool, json.RawMessage(c.args))
+			if ok != c.wantOK {
+				t.Fatalf("ok = %v, want %v", ok, c.wantOK)
+			}
+			if !reflect.DeepEqual(got, c.want) {
+				t.Fatalf("got %+v, want %+v", got, c.want)
+			}
+		})
+	}
+}
+
+// TestRunFocusedTask_TraceEventsCarryDelegationMeta is the load-bearing
+// integration test for this layer: a real parent Loop dispatches
+// run_task; we subscribe to the event stream and confirm that BOTH
+// the request and result events carry sse.DelegationMeta with the
+// right kind/task_type, populated from the actual tool args (not from
+// the publisher pre-computing the wrong thing). Without this assert
+// the metadata could be silently absent in production without anything
+// failing -- the model still gets its result, the parent still
+// returns; only the trace consumers would notice and they're not in
+// the test loop.
+func TestRunFocusedTask_TraceEventsCarryDelegationMeta(t *testing.T) {
+	ws := t.TempDir()
+	if err := os.WriteFile(filepath.Join(ws, "a.txt"), []byte("hello"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	// Two-step LLM: first response calls run_task with task_type=explore.
+	// We don't care about the child's internal LLM call here (run_task
+	// happens to drive its own httptest server in other tests); for
+	// this test we just need the PARENT to dispatch run_task once.
+	parentStep := 0
+	parentSrv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "text/event-stream")
+		w.WriteHeader(http.StatusOK)
+		parentStep++
+		switch parentStep {
+		case 1:
+			_, _ = w.Write([]byte(`data: {"choices":[{"delta":{"role":"assistant","tool_calls":[{"index":0,"id":"c1","type":"function","function":{"name":"run_task","arguments":"{\"task_type\":\"explore\",\"objective\":\"locate a.txt\"}"}}]},"finish_reason":"tool_calls"}]}` + "\n\n"))
+		default:
+			_, _ = w.Write([]byte("data: {\"choices\":[{\"delta\":{\"role\":\"assistant\",\"content\":\"answered from run_task result.\"},\"finish_reason\":\"stop\"}]}\n\n"))
+		}
+		_, _ = w.Write([]byte("data: [DONE]\n\n"))
+	}))
+	t.Cleanup(parentSrv.Close)
+
+	// The child LLM that run_task spins up. One shot: emit JSON directly.
+	childSrv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "text/event-stream")
+		w.WriteHeader(http.StatusOK)
+		body := `{"task_type":"explore","ok":true,"summary":"found a.txt","findings":[{"claim":"a.txt exists","evidence":"workspace listing","source":"a.txt"}]}`
+		_, _ = w.Write([]byte("data: {\"choices\":[{\"delta\":{\"role\":\"assistant\",\"content\":" + strconvQuote(body) + "},\"finish_reason\":\"stop\"}]}\n\n"))
+		_, _ = w.Write([]byte("data: [DONE]\n\n"))
+	}))
+	t.Cleanup(childSrv.Close)
+
+	parentLLM := NewLLMClient(parentSrv.URL, "", "fake")
+	childLLM := NewLLMClient(childSrv.URL, "", "fake")
+
+	reg := NewRegistry()
+	RegisterFocusedTasks(reg, FocusedTaskDeps{
+		LLM:              childLLM,
+		HostWorkspaceDir: ws,
+		Memory:           stubMemoryStore{},
+		SessionsDir:      t.TempDir(),
+		TranscriptDir:    t.TempDir(),
+		Log:              zerolog.Nop(),
+		PerCallTimeout:   5 * time.Second,
+	})
+
+	conv, err := OpenConversationAt(filepath.Join(t.TempDir(), "parent.jsonl"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	events := make(chan sse.Event, 64)
+	loop := &Loop{
+		LLM:            parentLLM,
+		Tools:          reg,
+		Conv:           conv,
+		Events:         events,
+		Log:            zerolog.Nop(),
+		MaxTurnSteps:   3,
+		MaxToolCalls:   3,
+		PerCallTimeout: 5 * time.Second,
+	}
+	if err := loop.EnsureSystemPrompt("test"); err != nil {
+		t.Fatal(err)
+	}
+	turnID, err := loop.SendUser(context.Background(), "go")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	var sawRequest, sawResult bool
+	for ev := range events {
+		switch ev.Type {
+		case sse.TypeToolRequest:
+			var p sse.ToolRequestPayload
+			if err := json.Unmarshal(ev.Data, &p); err != nil {
+				t.Fatalf("decode tool.request: %v", err)
+			}
+			if p.Tool != FocusedTaskToolName {
+				continue
+			}
+			if p.Delegation == nil {
+				t.Fatal("tool.request for run_task must carry Delegation")
+			}
+			if p.Delegation.Kind != DelegationKindFocusedTask {
+				t.Errorf("Delegation.Kind = %q, want %q", p.Delegation.Kind, DelegationKindFocusedTask)
+			}
+			if p.Delegation.TaskType != "explore" {
+				t.Errorf("Delegation.TaskType = %q, want explore (must reflect the actual args, not a static default)", p.Delegation.TaskType)
+			}
+			sawRequest = true
+		case sse.TypeToolResult:
+			var p sse.ToolResultPayload
+			if err := json.Unmarshal(ev.Data, &p); err != nil {
+				t.Fatalf("decode tool.result: %v", err)
+			}
+			// We only care about run_task's result event. CallID matches
+			// the parent's c1 we set in the mock.
+			if p.CallID != "c1" {
+				continue
+			}
+			if p.Delegation == nil {
+				t.Fatal("tool.result for run_task must carry Delegation (mirror of the request, so out-of-order consumers don't need to join)")
+			}
+			if p.Delegation.Kind != DelegationKindFocusedTask || p.Delegation.TaskType != "explore" {
+				t.Errorf("result delegation mismatch: %+v", p.Delegation)
+			}
+			sawResult = true
+		case sse.TypeTurnEnd:
+			var p sse.TurnEndPayload
+			_ = json.Unmarshal(ev.Data, &p)
+			if p.TurnID == "" || p.TurnID == turnID {
+				goto Done
+			}
+		}
+	}
+Done:
+	if !sawRequest {
+		t.Fatal("never observed a tool.request event for run_task")
+	}
+	if !sawResult {
+		t.Fatal("never observed a tool.result event for run_task")
+	}
+}
+
+// TestRunFocusedTask_CancellationContract pins three things at once
+// because they form a single contract the parent agent depends on:
+//  1. A parent context cancelled mid-flight propagates: the call
+//     returns a non-nil error (the parent's cancellation reason).
+//  2. The returned string is still a parseable JSON envelope. The
+//     contract for run_task's tool result is "always return a
+//     FocusedTaskResult to the parent" -- even when the run was
+//     cut short, the parent should be able to json.Unmarshal the
+//     payload and read ok/turn_end_reason/error/objective.
+//  3. The parsed result reflects the failure honestly: ok=false,
+//     Error carries the cancellation reason, the objective and
+//     child_session_id round-trip. This is what lets a model that
+//     sees a cancelled focused task understand WHAT it asked for
+//     and that it didn't get an answer, instead of seeing a bare
+//     error string with no context.
+//
+// Cancellation is the highest-stakes failure mode for delegation
+// because it can happen at any point in the child Loop (mid-stream,
+// before any tool call, after partial tool output). The whole point
+// of the structured response is to give the parent something stable
+// to read no matter where the child died.
+func TestRunFocusedTask_CancellationContract(t *testing.T) {
+	block := make(chan struct{})
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		<-block
+	}))
+	t.Cleanup(func() {
+		close(block)
+		srv.Close()
+	})
+
+	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Millisecond)
+	defer cancel()
+
+	out, err := runFocusedTask(ctx, FocusedTaskDeps{
+		LLM:              NewLLMClient(srv.URL, "", "fake"),
+		HostWorkspaceDir: t.TempDir(),
+		Memory:           stubMemoryStore{},
+		SessionsDir:      t.TempDir(),
+		TranscriptDir:    t.TempDir(),
+		Log:              zerolog.Nop(),
+		PerCallTimeout:   5 * time.Second,
+	}, recallProfile(), "what does the user prefer?", 2)
+
+	if err == nil {
+		t.Fatal("cancelled run_task must return a non-nil error")
+	}
+
+	// The structured envelope must still parse cleanly even though
+	// the child never produced its final message. The parent agent
+	// reads this even on failure.
+	var got FocusedTaskResult
+	if jerr := json.Unmarshal([]byte(out), &got); jerr != nil {
+		t.Fatalf("cancelled result must still be parseable JSON, got jerr=%v\nraw=%s", jerr, out)
+	}
+	if got.OK {
+		t.Errorf("cancelled run_task must have ok=false, got %+v", got)
+	}
+	if got.TaskType != FocusedTaskRecall {
+		t.Errorf("task_type must reflect what was requested, got %q", got.TaskType)
+	}
+	if got.Objective != "what does the user prefer?" {
+		t.Errorf("objective must echo back even on cancellation: %q", got.Objective)
+	}
+	if got.ChildSessionID == "" || !strings.HasPrefix(got.ChildSessionID, "focused_") {
+		t.Errorf("child_session_id must be set even on cancellation: %q", got.ChildSessionID)
+	}
+	if got.Error == "" {
+		t.Errorf("Error field should carry the cancellation reason for the parent to render, got empty")
+	}
 }

@@ -12,6 +12,7 @@ import (
 
 	"github.com/affinefoundation/affent/internal/executor"
 	"github.com/affinefoundation/affent/internal/memory"
+	"github.com/affinefoundation/affent/internal/sse"
 	"github.com/google/uuid"
 	"github.com/rs/zerolog"
 )
@@ -837,4 +838,51 @@ Output format (REQUIRED):
 func focusedTaskUserPrompt(p FocusedTaskProfile, objective, workspace string, maxTurns int) string {
 	return fmt.Sprintf("Task type: %s\nWorkspace: %s\nTool budget: at most %d tool calls. Stop early when the objective is answered.\nObjective:\n%s",
 		string(p.Kind), workspace, maxTurns, objective)
+}
+
+// Stable Kind values for sse.DelegationMeta. Exported so trace
+// consumers (eval pipelines, WebUI) can compare against named
+// constants instead of stringly-typed checks.
+const (
+	DelegationKindFocusedTask = "focused_task"
+	DelegationKindSubagent    = "subagent"
+)
+
+// ExtractDelegationMeta classifies a tool call as a bounded child-Loop
+// delegation and pulls out the small metadata trace consumers most
+// often filter on. It is the single place that knows which tool names
+// are delegations; the loop's generic dispatch publish site calls
+// this once and stamps the returned value on both the tool.request and
+// tool.result events.
+//
+// Returns (nil, false) for tools that aren't delegations. Malformed
+// args do not propagate — the helper treats unparseable args as
+// "metadata not extractable" rather than returning an error, so a
+// model that emits invalid JSON still gets its request published
+// (the dispatcher will surface the parse error to the model
+// separately).
+func ExtractDelegationMeta(toolName string, args json.RawMessage) (*sse.DelegationMeta, bool) {
+	switch toolName {
+	case FocusedTaskToolName:
+		var p struct {
+			TaskType string `json:"task_type"`
+		}
+		_ = json.Unmarshal(args, &p)
+		taskType := strings.TrimSpace(p.TaskType)
+		return &sse.DelegationMeta{
+			Kind:     DelegationKindFocusedTask,
+			TaskType: taskType,
+		}, true
+	case SubagentToolName:
+		var p struct {
+			Mode string `json:"mode"`
+		}
+		_ = json.Unmarshal(args, &p)
+		mode := strings.TrimSpace(p.Mode)
+		return &sse.DelegationMeta{
+			Kind: DelegationKindSubagent,
+			Mode: mode,
+		}, true
+	}
+	return nil, false
 }

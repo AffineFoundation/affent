@@ -626,6 +626,11 @@ func (l *Loop) runTurn(ctx context.Context, turnID, userText string, opts TurnOp
 			}
 			toolStats.ToolRequests++
 			argsView := toolRequestArgsEventView(args)
+			// Classify delegations once per dispatch and stamp the result
+			// on both the request and the eventual result event. Keeps
+			// trace consumers (WebUI, eval) from re-parsing tool-specific
+			// argument schemas to filter by task_type / mode.
+			delegation, _ := ExtractDelegationMeta(toolName, args)
 			l.publish(sse.TypeToolRequest, sse.ToolRequestPayload{
 				TurnID:              turnID,
 				CallID:              callID,
@@ -640,10 +645,11 @@ func (l *Loop) runTurn(ctx context.Context, turnID, userText string, opts TurnOp
 				Canonicalized:       canonicalChanged,
 				ArgsRepaired:        argsRepaired,
 				RepairNotes:         repairNotes,
+				Delegation:          delegation,
 			})
 			if argsRepairErr != nil {
 				result := fmt.Sprintf("tool_arg_repair: %v", argsRepairErr)
-				l.publishAndAppendToolResult(callID, toolName, result, true, 0)
+				l.publishAndAppendToolResultWithDelegation(callID, toolName, result, true, 0, delegation)
 				toolCallsUsed++
 				toolStats.ToolErrors++
 				continue
@@ -656,7 +662,9 @@ func (l *Loop) runTurn(ctx context.Context, turnID, userText string, opts TurnOp
 				if result == "" {
 					result = fmt.Sprintf("first_tool_policy: call %s before other tools.", firstToolPolicy.ToolName)
 				}
-				l.publish(sse.TypeToolResult, toolResultEventPayload(callID, 1, result))
+				rejectionPayload := toolResultEventPayload(callID, 1, result)
+				rejectionPayload.Delegation = delegation
+				l.publish(sse.TypeToolResult, rejectionPayload)
 				if err := l.Conv.Append(ChatMessage{
 					Role:       "tool",
 					Content:    result,
@@ -673,7 +681,9 @@ func (l *Loop) runTurn(ctx context.Context, turnID, userText string, opts TurnOp
 				firstToolSatisfied = true
 			}
 			if result, ok := postToolRepeatRejection(postToolPolicies, toolName); ok {
-				l.publish(sse.TypeToolResult, toolResultEventPayload(callID, 1, result))
+				rejectionPayload := toolResultEventPayload(callID, 1, result)
+				rejectionPayload.Delegation = delegation
+				l.publish(sse.TypeToolResult, rejectionPayload)
 				if err := l.Conv.Append(ChatMessage{
 					Role:       "tool",
 					Content:    result,
@@ -687,7 +697,9 @@ func (l *Loop) runTurn(ctx context.Context, turnID, userText string, opts TurnOp
 				continue
 			}
 			if result, ok := postToolActiveRejection(postToolPolicies, toolName); ok {
-				l.publish(sse.TypeToolResult, toolResultEventPayload(callID, 1, result))
+				rejectionPayload := toolResultEventPayload(callID, 1, result)
+				rejectionPayload.Delegation = delegation
+				l.publish(sse.TypeToolResult, rejectionPayload)
 				if err := l.Conv.Append(ChatMessage{
 					Role:       "tool",
 					Content:    result,
@@ -701,7 +713,7 @@ func (l *Loop) runTurn(ctx context.Context, turnID, userText string, opts TurnOp
 				continue
 			}
 			if result := loopGuard.recordAttempt(toolName, args); result != "" {
-				l.publishAndAppendToolResult(callID, toolName, result, true, 0)
+				l.publishAndAppendToolResultWithDelegation(callID, toolName, result, true, 0, delegation)
 				toolCallsUsed++
 				toolStats.ToolErrors++
 				guardInterventions++
@@ -717,7 +729,7 @@ func (l *Loop) runTurn(ctx context.Context, turnID, userText string, opts TurnOp
 			toolStart := time.Now()
 			tools := l.toolsForTurn(opts)
 			if tools == nil {
-				l.publishAndAppendToolResult(callID, toolName, "tool registry is not configured", true, 0)
+				l.publishAndAppendToolResultWithDelegation(callID, toolName, "tool registry is not configured", true, 0, delegation)
 				toolCallsUsed++
 				toolStats.ToolErrors++
 				continue
@@ -741,7 +753,7 @@ func (l *Loop) runTurn(ctx context.Context, turnID, userText string, opts TurnOp
 					forceNoToolsNext = true
 				}
 			}
-			l.publishAndAppendToolResult(callID, toolName, result, isErr, toolDuration)
+			l.publishAndAppendToolResultWithDelegation(callID, toolName, result, isErr, toolDuration, delegation)
 			toolCallsUsed++
 			for _, state := range postToolPolicies {
 				if toolName != state.policy.ToolName {
@@ -919,12 +931,24 @@ func (p *PostToolPolicy) blocks(toolName string) bool {
 }
 
 func (l *Loop) publishAndAppendToolResult(callID, name, result string, isErr bool, duration time.Duration) {
+	l.publishAndAppendToolResultWithDelegation(callID, name, result, isErr, duration, nil)
+}
+
+// publishAndAppendToolResultWithDelegation is the same as
+// publishAndAppendToolResult but stamps a sse.DelegationMeta on the
+// emitted tool.result event so trace consumers can classify the
+// result without joining on call_id. nil delegation degrades to the
+// original behavior.
+func (l *Loop) publishAndAppendToolResultWithDelegation(callID, name, result string, isErr bool, duration time.Duration, delegation *sse.DelegationMeta) {
 	exit := 0
 	if isErr {
 		exit = 1
 	}
 	payload := toolResultEventPayloadWithDuration(callID, exit, result, duration)
 	l.attachToolResultArtifact(&payload, callID, result)
+	if delegation != nil {
+		payload.Delegation = delegation
+	}
 	l.publish(sse.TypeToolResult, payload)
 	if err := l.Conv.Append(ChatMessage{
 		Role:       "tool",
@@ -997,6 +1021,12 @@ func (l *Loop) appendSkippedToolResults(turnID string, calls []ToolCall, content
 		callID := skipped.ID
 		name := skipped.Function.Name
 		argsView := toolRequestArgsEventView(json.RawMessage(`{}`))
+		// Even though the call never dispatched, the original args carry
+		// the delegation classification a trace UI needs to render
+		// "focused task was canceled because the parent turn ran out
+		// of budget". Extract from the raw skipped args; ExtractDelegationMeta
+		// tolerates malformed JSON by returning (nil, false).
+		delegation, _ := ExtractDelegationMeta(name, json.RawMessage(skipped.Function.Arguments))
 		l.publish(sse.TypeToolRequest, sse.ToolRequestPayload{
 			TurnID:           turnID,
 			CallID:           callID,
@@ -1006,8 +1036,11 @@ func (l *Loop) appendSkippedToolResults(turnID string, calls []ToolCall, content
 			ArgsCapBytes:     argsView.CapBytes,
 			ArgsTruncated:    argsView.Truncated,
 			ArgsOmittedBytes: argsView.OmittedBytes,
+			Delegation:       delegation,
 		})
-		l.publish(sse.TypeToolResult, toolResultEventPayload(callID, 1, content))
+		skippedResultPayload := toolResultEventPayload(callID, 1, content)
+		skippedResultPayload.Delegation = delegation
+		l.publish(sse.TypeToolResult, skippedResultPayload)
 		if appendErr := l.Conv.Append(ChatMessage{
 			Role:       "tool",
 			Content:    content,

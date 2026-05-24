@@ -75,6 +75,28 @@ type ThinkingDonePayload struct {
 	Text   string `json:"text"`
 }
 
+// DelegationMeta classifies a tool call as a bounded child-Loop
+// delegation (focused task, subagent) and carries the small set of
+// fields a trace UI or eval pipeline most often wants to filter on.
+// Surfaced as a side-channel on Tool{Request,Result}Payload so
+// consumers do not need to parse tool-specific argument or result
+// schemas to ask "which delegation kind was this?".
+//
+// Kind values are stable: "focused_task" or "subagent". Add new kinds
+// as new delegation surfaces appear; do not reuse existing values for
+// different semantics.
+type DelegationMeta struct {
+	// Kind is the delegation surface ("focused_task" or "subagent").
+	// Always set when DelegationMeta is non-nil.
+	Kind string `json:"kind"`
+	// TaskType is set when Kind == "focused_task" — the run_task tool's
+	// task_type argument (recall, explore, research, verify, review).
+	TaskType string `json:"task_type,omitempty"`
+	// Mode is set when Kind == "subagent" — the subagent_run tool's
+	// mode argument (explore, review, test, research, ...).
+	Mode string `json:"mode,omitempty"`
+}
+
 type ToolRequestPayload struct {
 	TurnID string `json:"turn_id"`
 	CallID string `json:"call_id"`
@@ -95,6 +117,9 @@ type ToolRequestPayload struct {
 	Canonicalized       bool     `json:"canonicalized,omitempty"`
 	ArgsRepaired        bool     `json:"args_repaired,omitempty"`
 	RepairNotes         []string `json:"repair_notes,omitempty"`
+	// Delegation, when set, classifies this tool call as a bounded
+	// child-Loop delegation. Nil for normal tools.
+	Delegation *DelegationMeta `json:"delegation,omitempty"`
 }
 
 type ToolResultPayload struct {
@@ -121,6 +146,11 @@ type ToolResultPayload struct {
 	// tool output when ResultTruncated is true and the loop has artifact
 	// persistence configured. Empty means no full artifact is available.
 	ResultArtifactPath string `json:"result_artifact_path,omitempty"`
+	// Delegation mirrors the value on the matching ToolRequestPayload so
+	// trace consumers that subscribe mid-stream (or render events out
+	// of order) can classify a result without having to JOIN by CallID
+	// against the earlier request event.
+	Delegation *DelegationMeta `json:"delegation,omitempty"`
 }
 
 type UsagePayload struct {

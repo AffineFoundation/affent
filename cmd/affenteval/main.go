@@ -164,6 +164,17 @@ type batchSummary struct {
 	FailureKinds               map[string]int
 	RemovedWorkspaces          int
 	CleanupErrors              int
+
+	// Delegation aggregates focused-task / subagent usage across all
+	// scenarios in the batch. Zero-valued when no scenario used a
+	// delegation tool — the JSONL emitter omits empty sub-maps so a
+	// batch with no delegation activity produces a clean record.
+	FocusedTaskCalls  int
+	FocusedTaskByType map[string]int
+	FocusedTaskErrors int
+	SubagentCalls     int
+	SubagentByMode    map[string]int
+	SubagentErrors    int
 }
 
 func (s *batchSummary) add(res agenteval.BatchResult) {
@@ -223,6 +234,27 @@ func (s *batchSummary) add(res agenteval.BatchResult) {
 	}
 	if res.CleanupError != "" {
 		s.CleanupErrors++
+	}
+	// Roll up delegation usage. Per-kind sub-maps are merged
+	// key-by-key so a model that used recall in three scenarios and
+	// explore in one produces {"recall":3,"explore":1} in the batch
+	// summary, with the same shape per-scenario records carry.
+	d := res.Delegation
+	s.FocusedTaskCalls += d.FocusedTaskCalls
+	s.FocusedTaskErrors += d.FocusedTaskErrors
+	for k, v := range d.FocusedTaskByType {
+		if s.FocusedTaskByType == nil {
+			s.FocusedTaskByType = map[string]int{}
+		}
+		s.FocusedTaskByType[k] += v
+	}
+	s.SubagentCalls += d.SubagentCalls
+	s.SubagentErrors += d.SubagentErrors
+	for k, v := range d.SubagentByMode {
+		if s.SubagentByMode == nil {
+			s.SubagentByMode = map[string]int{}
+		}
+		s.SubagentByMode[k] += v
 	}
 	for _, failure := range res.Failures {
 		if s.FailureKinds == nil {
@@ -359,6 +391,16 @@ type batchResultRecord struct {
 	CleanupError               string         `json:"cleanup_error,omitempty"`
 	Failures                   []string       `json:"failures,omitempty"`
 	FailureKinds               map[string]int `json:"failure_kinds,omitempty"`
+
+	// Per-scenario delegation breakdown. Fields are omitted from the
+	// JSONL when the scenario used no delegation tools, so older
+	// records and delegation-free runs stay compact and noise-free.
+	FocusedTaskCalls  int            `json:"focused_task_calls,omitempty"`
+	FocusedTaskByType map[string]int `json:"focused_task_by_type,omitempty"`
+	FocusedTaskErrors int            `json:"focused_task_errors,omitempty"`
+	SubagentCalls     int            `json:"subagent_calls,omitempty"`
+	SubagentByMode    map[string]int `json:"subagent_by_mode,omitempty"`
+	SubagentErrors    int            `json:"subagent_errors,omitempty"`
 }
 
 type batchSummaryRecord struct {
@@ -396,6 +438,16 @@ type batchSummaryRecord struct {
 	FailureKinds               map[string]int `json:"failure_kinds,omitempty"`
 	RemovedWorkspaces          int            `json:"removed_workspaces"`
 	CleanupErrors              int            `json:"cleanup_errors"`
+
+	// Per-batch delegation aggregates. Same omitempty discipline as
+	// the per-scenario record so a batch with zero delegation usage
+	// emits a record without any focused_task_* / subagent_* fields.
+	FocusedTaskCalls  int            `json:"focused_task_calls,omitempty"`
+	FocusedTaskByType map[string]int `json:"focused_task_by_type,omitempty"`
+	FocusedTaskErrors int            `json:"focused_task_errors,omitempty"`
+	SubagentCalls     int            `json:"subagent_calls,omitempty"`
+	SubagentByMode    map[string]int `json:"subagent_by_mode,omitempty"`
+	SubagentErrors    int            `json:"subagent_errors,omitempty"`
 }
 
 func printBatchResultJSONL(w io.Writer, meta evalJSONLMetadata, res agenteval.BatchResult) {
@@ -436,6 +488,12 @@ func printBatchResultJSONL(w io.Writer, meta evalJSONLMetadata, res agenteval.Ba
 		CleanupError:               res.CleanupError,
 		Failures:                   res.Failures,
 		FailureKinds:               failureKindsForResult(res.Failures),
+		FocusedTaskCalls:           res.Delegation.FocusedTaskCalls,
+		FocusedTaskByType:          res.Delegation.FocusedTaskByType,
+		FocusedTaskErrors:          res.Delegation.FocusedTaskErrors,
+		SubagentCalls:              res.Delegation.SubagentCalls,
+		SubagentByMode:             res.Delegation.SubagentByMode,
+		SubagentErrors:             res.Delegation.SubagentErrors,
 	})
 }
 
@@ -475,7 +533,27 @@ func printBatchSummaryJSONL(w io.Writer, meta evalJSONLMetadata, s batchSummary)
 		FailureKinds:               cloneFailureKinds(s.FailureKinds),
 		RemovedWorkspaces:          s.RemovedWorkspaces,
 		CleanupErrors:              s.CleanupErrors,
+		FocusedTaskCalls:           s.FocusedTaskCalls,
+		FocusedTaskByType:          cloneStringIntMap(s.FocusedTaskByType),
+		FocusedTaskErrors:          s.FocusedTaskErrors,
+		SubagentCalls:              s.SubagentCalls,
+		SubagentByMode:             cloneStringIntMap(s.SubagentByMode),
+		SubagentErrors:             s.SubagentErrors,
 	})
+}
+
+// cloneStringIntMap returns a copy of in or nil if in is empty. Used
+// by the JSONL emitter to avoid sharing internal counters with
+// serialized records and to keep empty maps off the wire.
+func cloneStringIntMap(in map[string]int) map[string]int {
+	if len(in) == 0 {
+		return nil
+	}
+	out := make(map[string]int, len(in))
+	for k, v := range in {
+		out[k] = v
+	}
+	return out
 }
 
 func cloneFailureKinds(in map[string]int) map[string]int {
