@@ -358,6 +358,14 @@ func formatSkillDecodeArgsError(err error) error {
 	return fmt.Errorf("decode args: %w\nNext: retry skill with a single JSON object matching the skill tool schema. For remote candidates, use source for the URL/path and body for the reviewed SKILL.md text", err)
 }
 
+func decodeBuiltinToolArgs[T any](tool string, args json.RawMessage, fields string, guidance string) (T, error) {
+	p, err := decodeStrictToolArgs[T](args)
+	if err == nil {
+		return p, nil
+	}
+	return p, fmt.Errorf("decode args for %s: %w\nNext: retry %s with a single JSON object using only documented fields: %s. %s", tool, err, tool, fields, guidance)
+}
+
 func decodeSkillToolArgs(args json.RawMessage) (skillToolArgs, map[string]bool, error) {
 	p, err := decodeStrictToolArgs[skillToolArgs](args)
 	if err != nil {
@@ -466,13 +474,13 @@ func shellTool(deps BuiltinDeps) *Tool {
 		Description: "Run one Linux shell command for tests/builds/git/rg/python/node/package checks. Output includes stdout, stderr, and [exit N]. Large stdout/stderr streams are capped; redirect huge logs to files and inspect chunks. Do not mask verification exits with | head, | tail, || true, or echo $?. Prefer read_file/list_files for ordinary workspace reads.",
 		Schema:      schema,
 		Execute: func(ctx context.Context, args json.RawMessage) (string, error) {
-			p, err := decodeStrictToolArgs[struct {
+			p, err := decodeBuiltinToolArgs[struct {
 				Command    string `json:"command"`
 				Cwd        string `json:"cwd"`
 				TimeoutSec int    `json:"timeout_sec"`
-			}](args)
+			}]("shell", args, "command, cwd, timeout_sec", "command must be a non-empty shell command; cwd and timeout_sec are optional.")
 			if err != nil {
-				return "", fmt.Errorf("decode args: %w", err)
+				return "", err
 			}
 			if strings.TrimSpace(p.Command) == "" {
 				return "", errors.New("command is required\nNext: retry shell with one concrete command, or use read_file/list_files for ordinary workspace inspection")
@@ -752,10 +760,10 @@ func readFileTool(deps BuiltinDeps) *Tool {
 		Description: "Read one text file from the workspace. Use before editing. For huge files, inspect targeted chunks with shell grep/sed/head/tail.",
 		Schema:      schema,
 		Execute: func(ctx context.Context, args json.RawMessage) (string, error) {
-			p, err := decodeStrictToolArgs[struct {
+			p, err := decodeBuiltinToolArgs[struct {
 				Path     string `json:"path"`
 				MaxBytes int    `json:"max_bytes"`
-			}](args)
+			}]("read_file", args, "path, max_bytes", "path must name one workspace text file; max_bytes is optional and capped by the runtime.")
 			if err != nil {
 				return "", err
 			}
@@ -917,10 +925,10 @@ func writeFileTool(deps BuiltinDeps) *Tool {
 		Description: fmt.Sprintf("Create or overwrite one workspace file, up to %d bytes. Prefer edit_file for small changes to existing files; use shell to generate large artifacts inside the workspace.", MaxWriteFileBytes),
 		Schema:      schema,
 		Execute: func(ctx context.Context, args json.RawMessage) (string, error) {
-			p, err := decodeStrictToolArgs[struct {
+			p, err := decodeBuiltinToolArgs[struct {
 				Path    string `json:"path"`
 				Content string `json:"content"`
-			}](args)
+			}]("write_file", args, "path, content", "path must be a workspace path and content must be the complete file body.")
 			if err != nil {
 				return "", err
 			}
@@ -972,12 +980,12 @@ func editFileTool(deps BuiltinDeps) *Tool {
 		Description: "Exact find-and-replace in one workspace file. Use after read_file; old must match exactly and uniquely unless replace_all=true.",
 		Schema:      schema,
 		Execute: func(ctx context.Context, args json.RawMessage) (string, error) {
-			p, err := decodeStrictToolArgs[struct {
+			p, err := decodeBuiltinToolArgs[struct {
 				Path       string `json:"path"`
 				Old        string `json:"old"`
 				New        string `json:"new"`
 				ReplaceAll bool   `json:"replace_all"`
-			}](args)
+			}]("edit_file", args, "path, old, new, replace_all", "call read_file first, then pass an exact old string and the replacement new string; replace_all is optional.")
 			if err != nil {
 				return "", err
 			}
@@ -1057,10 +1065,10 @@ func listFilesTool(deps BuiltinDeps) *Tool {
 		Description: "List one workspace directory. Use for orientation; use shell find/ls/rg for deep or filtered searches.",
 		Schema:      schema,
 		Execute: func(ctx context.Context, args json.RawMessage) (string, error) {
-			p, err := decodeStrictToolArgs[struct {
+			p, err := decodeBuiltinToolArgs[struct {
 				Path       string `json:"path"`
 				MaxEntries int    `json:"max_entries"`
-			}](args)
+			}]("list_files", args, "path, max_entries", "path defaults to the workspace root when omitted; max_entries is optional and capped by the runtime.")
 			if err != nil {
 				return "", err
 			}

@@ -626,16 +626,17 @@ func TestBuiltinToolsRejectUnknownArgumentsAtRuntime(t *testing.T) {
 		t.Fatal(err)
 	}
 	cases := []struct {
-		name string
-		tool *Tool
-		args json.RawMessage
+		name      string
+		tool      *Tool
+		args      json.RawMessage
+		wantField string
 	}{
-		{name: "shell", tool: shellTool(BuiltinDeps{Executor: &recordingExec{}}), args: json.RawMessage(`{"command":"pwd","unused":true}`)},
-		{name: "read_file", tool: readFileTool(BuiltinDeps{HostWorkspaceDir: tmp}), args: json.RawMessage(`{"path":"note.txt","unused":true}`)},
-		{name: "write_file", tool: writeFileTool(BuiltinDeps{HostWorkspaceDir: tmp}), args: json.RawMessage(`{"path":"out.txt","content":"x","mode":"0644"}`)},
-		{name: "edit_file", tool: editFileTool(BuiltinDeps{HostWorkspaceDir: tmp}), args: json.RawMessage(`{"path":"note.txt","old":"hello","new":"hi","dry_run":true}`)},
-		{name: "list_files", tool: listFilesTool(BuiltinDeps{HostWorkspaceDir: tmp}), args: json.RawMessage(`{"path":".","recursive":true}`)},
-		{name: "plan", tool: planTool(filepath.Join(tmp, "plan.json")), args: json.RawMessage(`{"action":"view","session_id":"x"}`)},
+		{name: "shell", tool: shellTool(BuiltinDeps{Executor: &recordingExec{}}), args: json.RawMessage(`{"command":"pwd","unused":true}`), wantField: "timeout_sec"},
+		{name: "read_file", tool: readFileTool(BuiltinDeps{HostWorkspaceDir: tmp}), args: json.RawMessage(`{"path":"note.txt","unused":true}`), wantField: "max_bytes"},
+		{name: "write_file", tool: writeFileTool(BuiltinDeps{HostWorkspaceDir: tmp}), args: json.RawMessage(`{"path":"out.txt","content":"x","mode":"0644"}`), wantField: "content"},
+		{name: "edit_file", tool: editFileTool(BuiltinDeps{HostWorkspaceDir: tmp}), args: json.RawMessage(`{"path":"note.txt","old":"hello","new":"hi","dry_run":true}`), wantField: "replace_all"},
+		{name: "list_files", tool: listFilesTool(BuiltinDeps{HostWorkspaceDir: tmp}), args: json.RawMessage(`{"path":".","recursive":true}`), wantField: "max_entries"},
+		{name: "plan", tool: planTool(filepath.Join(tmp, "plan.json")), args: json.RawMessage(`{"action":"view","session_id":"x"}`), wantField: "steps"},
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
@@ -645,6 +646,39 @@ func TestBuiltinToolsRejectUnknownArgumentsAtRuntime(t *testing.T) {
 			}
 			if !strings.Contains(err.Error(), "unknown field") {
 				t.Fatalf("error = %v, want unknown field", err)
+			}
+			if !strings.Contains(err.Error(), "Next:") {
+				t.Fatalf("error = %v, want recovery guidance", err)
+			}
+			if !strings.Contains(err.Error(), c.wantField) {
+				t.Fatalf("error = %v, want documented field %q", err, c.wantField)
+			}
+		})
+	}
+}
+
+func TestBuiltinToolDecodeTypeErrorsNameValidFields(t *testing.T) {
+	tmp := t.TempDir()
+	cases := []struct {
+		name      string
+		tool      *Tool
+		args      json.RawMessage
+		wantField string
+	}{
+		{name: "shell", tool: shellTool(BuiltinDeps{Executor: &recordingExec{}}), args: json.RawMessage(`{"command":"pwd","timeout_sec":"soon"}`), wantField: "timeout_sec"},
+		{name: "read_file", tool: readFileTool(BuiltinDeps{HostWorkspaceDir: tmp}), args: json.RawMessage(`{"path":"note.txt","max_bytes":"many"}`), wantField: "max_bytes"},
+		{name: "list_files", tool: listFilesTool(BuiltinDeps{HostWorkspaceDir: tmp}), args: json.RawMessage(`{"path":".","max_entries":"many"}`), wantField: "max_entries"},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			_, err := c.tool.Execute(context.Background(), c.args)
+			if err == nil {
+				t.Fatal("expected decode error")
+			}
+			for _, want := range []string{"decode args", "Next:", c.wantField} {
+				if !strings.Contains(err.Error(), want) {
+					t.Fatalf("error missing %q:\n%s", want, err.Error())
+				}
 			}
 		})
 	}

@@ -83,7 +83,7 @@ func planTool(path string) *Tool {
 			}
 			p, present, err := decodePlanToolArgs(args)
 			if err != nil {
-				return "", fmt.Errorf("decode args: %w", err)
+				return "", fmt.Errorf("decode args for plan: %w\nNext: retry plan with a single JSON object using only documented fields: action, steps, index, status, text, evidence, note. action must be view, set, update, or clear.", err)
 			}
 			action := normalizePlanAction(p.Action)
 			if action == "" {
