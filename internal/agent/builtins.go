@@ -352,7 +352,7 @@ func skillInstallSuccessMessage(installed Skill) string {
 	if len(installed.AutoActivation.Any) > 0 {
 		triggerSummary = strings.Join(installed.AutoActivation.Any, ", ")
 	}
-	return fmt.Sprintf("installed skill %q source=%s triggers=%s\n\n%s", installed.Name, installed.Source, triggerSummary, strings.TrimSpace(installed.Body))
+	return fmt.Sprintf("installed skill %q active_now=true source=%s triggers=%s\n\n%s", installed.Name, installed.Source, triggerSummary, strings.TrimSpace(installed.Body))
 }
 
 // RegisterMemoryOnly registers just the `memory` tool. This is useful

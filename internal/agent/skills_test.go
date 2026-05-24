@@ -585,6 +585,9 @@ func TestSkillRegistry_CustomSkillExtensionPoint(t *testing.T) {
 		if len(catalog) != 1 || catalog[0].Name != "test_skill" || catalog[0].Description != "test description" || catalog[0].Source != "test://skill" {
 			t.Fatalf("Catalog() = %+v", catalog)
 		}
+		if len(catalog[0].Triggers) != 1 || catalog[0].Triggers[0] != "sentinel-trigger-xyz" {
+			t.Fatalf("Catalog triggers = %+v, want sentinel trigger", catalog[0].Triggers)
+		}
 	})
 	t.Run("Lookup returns skill body", func(t *testing.T) {
 		s, ok := reg.Lookup("test_skill")

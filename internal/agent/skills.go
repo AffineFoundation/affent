@@ -144,9 +144,11 @@ type SkillRegistry struct {
 }
 
 type SkillCatalogEntry struct {
-	Name        string `json:"name"`
-	Description string `json:"description,omitempty"`
-	Source      string `json:"source,omitempty"`
+	Name           string               `json:"name"`
+	Description    string               `json:"description,omitempty"`
+	Source         string               `json:"source,omitempty"`
+	Triggers       []string             `json:"triggers,omitempty"`
+	AutoActivation *SkillAutoActivation `json:"auto_activation,omitempty"`
 }
 
 // Register appends a skill. Operators wiring a custom registry call
@@ -214,11 +216,19 @@ func (r *SkillRegistry) Catalog() []SkillCatalogEntry {
 	defer r.mu.RUnlock()
 	out := make([]SkillCatalogEntry, 0, len(r.skills))
 	for _, s := range r.skills {
-		out = append(out, SkillCatalogEntry{
+		entry := SkillCatalogEntry{
 			Name:        s.Name,
 			Description: s.Description,
 			Source:      s.Source,
-		})
+		}
+		if len(s.Triggers) > 0 {
+			entry.Triggers = append([]string(nil), s.Triggers...)
+		}
+		if s.AutoActivation.hasRules() {
+			auto := s.AutoActivation
+			entry.AutoActivation = &auto
+		}
+		out = append(out, entry)
 	}
 	return out
 }

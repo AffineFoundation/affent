@@ -476,10 +476,13 @@ silently overwriting a tool.
 Runtime skills are installed through the `skill` tool into the durable
 session/workspace skill directory. The installed body is also upserted into the
 active in-memory registry, so matching future turns can use it without
-restarting `affentctl` or `affentserve`. For searched or remote candidates, the
-agent should call `skill` with `action:"propose_install"`, show the returned
-`proposal_id`, and include a non-empty `source` URL/path/provenance string so
-the user can review where the candidate came from. Only then call
+restarting `affentctl` or `affentserve`. `skill action:"list"` returns catalog
+metadata plus activation rules, not skill bodies, so the agent can inspect when
+installed skills will fire without dumping every workflow into context. For
+searched or remote candidates, the agent should call `skill` with
+`action:"propose_install"`, show the returned `proposal_id`, and include a
+non-empty `source` URL/path/provenance string so the user can review where the
+candidate came from. Only then call
 `action:"confirm_install"` after the user's latest reply explicitly confirms
 that exact id. Direct `action:"install"` is reserved for an exact skill body the
 user already provided. Runtime skill manifests preserve the reviewed `source`
