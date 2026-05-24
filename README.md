@@ -128,6 +128,18 @@ Run a single prompt:
   --prompt "Inspect this workspace and summarize the project."
 ```
 
+For work that needs review before execution, create a persistent plan first and
+resume the same session after confirmation:
+
+```bash
+./bin/affentctl run --workspace ./workspace --session-id migration-1 \
+  --model gpt-4o-mini --plan-only \
+  --prompt "Plan the config migration."
+
+./bin/affentctl run --workspace ./workspace --session-id migration-1 \
+  --model gpt-4o-mini --execute-plan
+```
+
 Start an interactive session:
 
 ```bash
@@ -726,7 +738,12 @@ Native session endpoints:
 - `GET /v1/sessions/{id}/artifacts` lists durable tool-result artifacts.
 - `GET /v1/sessions/{id}/artifacts/{path}` reads a bounded artifact chunk.
 - `POST /v1/sessions/{id}/messages` starts an async user turn and returns the
-  `turn_id`; consume output through events or history.
+  `turn_id`; consume output through events or history. The request body is
+  `{"content":"..."}` by default. Pass `{"mode":"plan_only","content":"..."}`
+  to create or update the persisted plan while exposing only the `plan` tool
+  for that turn. Pass `{"mode":"execute_plan","content":"optional note"}` to
+  execute an existing unfinished, unblocked plan after user confirmation; this
+  mode may omit `content`.
 - `POST /v1/sessions/{id}/cancel` asks an active session to stop its current
   turn.
 - `DELETE /v1/sessions/{id}` closes and purges the session.
