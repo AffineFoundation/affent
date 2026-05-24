@@ -283,7 +283,7 @@ func reportSectionHasMeaningfulItems(report, section string) bool {
 		if trimmed == "" {
 			continue
 		}
-		if strings.HasPrefix(trimmed, "#") || strings.HasSuffix(trimmed, ":") {
+		if reportSectionBoundary(trimmed) {
 			break
 		}
 		item := strings.TrimSpace(strings.TrimLeft(trimmed, "-*0123456789.、) \t"))
@@ -293,6 +293,20 @@ func reportSectionHasMeaningfulItems(report, section string) bool {
 		return true
 	}
 	return false
+}
+
+func reportSectionBoundary(line string) bool {
+	trimmed := strings.TrimSpace(strings.Trim(line, "* "))
+	if trimmed == "" {
+		return false
+	}
+	if strings.HasPrefix(trimmed, "#") {
+		return true
+	}
+	if strings.HasPrefix(trimmed, "-") || strings.HasPrefix(trimmed, "*") {
+		return false
+	}
+	return strings.HasSuffix(trimmed, ":") || strings.HasSuffix(trimmed, "：")
 }
 
 func inlineReportSectionItem(line, section string) (string, bool) {

@@ -148,6 +148,7 @@ func TestSubagentReportHasOpenGapsAllowsExplicitNone(t *testing.T) {
 		"Conclusion:\nDone.\n\nUncertainties:\n- None.\n\nEvidence:\n- verified source.",
 		"Conclusion:\nDone.\n\nUncertainties: none\nEvidence:\n- verified source.",
 		"Conclusion:\nDone.\n\nWarnings：无\nEvidence:\n- verified source.",
+		"Conclusion:\nDone.\n\nWarnings：\nEvidence：\n- verified source.",
 	}
 	for _, report := range reports {
 		if subagentReportHasOpenGaps(report) {
