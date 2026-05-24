@@ -251,10 +251,24 @@ func subagentReportHasOpenGaps(report string) bool {
 			return true
 		}
 	}
-	return reportSectionHasMeaningfulItems(report, "uncertainties") ||
-		reportSectionHasMeaningfulItems(report, "uncertainty") ||
-		reportSectionHasMeaningfulItems(report, "warnings") ||
-		reportSectionHasMeaningfulItems(report, "limitations")
+	for _, section := range subagentOpenGapSections {
+		if reportSectionHasMeaningfulItems(report, section) {
+			return true
+		}
+	}
+	return false
+}
+
+var subagentOpenGapSections = []string{
+	"uncertainties",
+	"uncertainty",
+	"warnings",
+	"warning",
+	"limitations",
+	"limitation",
+	"open questions",
+	"gaps",
+	"gap",
 }
 
 func reportSectionHasMeaningfulItems(report, section string) bool {

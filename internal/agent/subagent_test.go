@@ -161,7 +161,11 @@ func TestSubagentReportHasOpenGapsDetectsInlineSectionGap(t *testing.T) {
 	reports := []string{
 		"Conclusion:\nSome facts gathered.\n\nUncertainties: metrics were not verified.",
 		"Conclusion:\nSome facts gathered.\n\nWarnings: source is stale.",
+		"Conclusion:\nSome facts gathered.\n\nWarning: source is stale.",
 		"Conclusion:\nSome facts gathered.\n\nLimitations：only one source was reachable.",
+		"Conclusion:\nSome facts gathered.\n\nLimitation: only one source was reachable.",
+		"Conclusion:\nSome facts gathered.\n\nOpen questions:\n- whether the metrics source is current.",
+		"Conclusion:\nSome facts gathered.\n\nGaps: social sentiment was not verified.",
 	}
 	for _, report := range reports {
 		if !subagentReportHasOpenGaps(report) {
