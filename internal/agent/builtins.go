@@ -180,12 +180,12 @@ func skillTool(reg *SkillRegistry, skillDir string, confirmInstall SkillInstallC
     }`, maxSkillActionBytes, maxSkillNameBytes, maxRuntimeSkillDescriptionBytes, maxRuntimeSkillBodyBytes, maxRuntimeSkillTriggers, maxRuntimeSkillTriggerBytes, maxRuntimeSkillSourceBytes))
 	return &Tool{
 		Name:        "skill",
-		Description: "List, read, or install reusable operational skills. Installed skills are prompt/workflow documents, persisted under the workspace, and become available without restarting. Use install only when the user explicitly provides an exact skill body to install, or after you have shown a proposal for a remote/searched candidate and the user explicitly confirms that specific candidate.",
+		Description: "List, read, or install reusable operational skills. Installed skills are prompt/workflow documents, persisted under the workspace, and become available without restarting. For remote or searched candidates, first retrieve and review the exact SKILL.md body with available web/shell/file tools, then use propose_install with source and body, and confirm_install only after the user confirms that proposal_id. Use install only when the user explicitly provides an exact skill body to install.",
 		Schema:      schema,
 		Execute: func(ctx context.Context, args json.RawMessage) (string, error) {
 			p, present, err := decodeSkillToolArgs(args)
 			if err != nil {
-				return "", fmt.Errorf("decode args: %w", err)
+				return "", formatSkillDecodeArgsError(err)
 			}
 			action := strings.ToLower(strings.TrimSpace(p.Action))
 			if action == "" {
@@ -228,6 +228,9 @@ func skillTool(reg *SkillRegistry, skillDir string, confirmInstall SkillInstallC
 				source := strings.TrimSpace(p.Source)
 				if source == "" {
 					return "", errors.New("source is required when action=propose_install\nNext: retry with the GitHub URL, documentation URL, local path, or other provenance the user should review before confirmation")
+				}
+				if strings.TrimSpace(p.Body) == "" {
+					return "", errors.New("body is required when action=propose_install\nNext: first retrieve and review the exact SKILL.md body from source with available web_fetch, shell, file, browser, or MCP retrieval tools; if retrieval is unavailable, ask the user to paste the skill body")
 				}
 				skill := Skill{
 					Name:        name,
@@ -274,6 +277,9 @@ func skillTool(reg *SkillRegistry, skillDir string, confirmInstall SkillInstallC
 				if name == "" {
 					return "", errors.New("name is required when action=install\nNext: retry with a short skill name using ASCII letters, digits, '_' or '-'")
 				}
+				if strings.TrimSpace(p.Body) == "" {
+					return "", errors.New("body is required when action=install\nNext: use install only for an exact user-provided skill body; for remote or searched candidates, retrieve the body, call propose_install, and wait for user confirmation")
+				}
 				skill := Skill{
 					Name:        name,
 					Description: p.Description,
@@ -296,6 +302,17 @@ func skillTool(reg *SkillRegistry, skillDir string, confirmInstall SkillInstallC
 			}
 		},
 	}
+}
+
+func formatSkillDecodeArgsError(err error) error {
+	if err == nil {
+		return nil
+	}
+	msg := err.Error()
+	if strings.Contains(msg, "unknown field") {
+		return fmt.Errorf("decode args: %w\nNext: retry skill with only documented fields: action, name, description, body, triggers, source, proposal_id. Put external URLs or local provenance in source, not url; include the exact reviewed SKILL.md text in body before propose_install", err)
+	}
+	return fmt.Errorf("decode args: %w\nNext: retry skill with a single JSON object matching the skill tool schema. For remote candidates, use source for the URL/path and body for the reviewed SKILL.md text", err)
 }
 
 func decodeSkillToolArgs(args json.RawMessage) (skillToolArgs, map[string]bool, error) {

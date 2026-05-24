@@ -1581,6 +1581,25 @@ func TestSkillToolProposeInstallRequiresSource(t *testing.T) {
 	}
 }
 
+func TestSkillToolProposeInstallRequiresReviewedBody(t *testing.T) {
+	tool := skillTool(&SkillRegistry{}, t.TempDir(), func(string) bool { return true })
+	args, err := json.Marshal(map[string]any{
+		"action": "propose_install",
+		"name":   "missing_body",
+		"source": "https://github.com/example/skills/missing_body",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, err = tool.Execute(context.Background(), args)
+	if err == nil ||
+		!strings.Contains(err.Error(), "body is required when action=propose_install") ||
+		!strings.Contains(err.Error(), "exact SKILL.md body") ||
+		!strings.Contains(err.Error(), "ask the user to paste") {
+		t.Fatalf("propose_install without reviewed body error = %v", err)
+	}
+}
+
 func extractProposalID(out string) string {
 	for _, field := range strings.Fields(out) {
 		if strings.HasPrefix(field, "proposal_id=") {
@@ -1649,7 +1668,7 @@ func TestSkillToolRejectsUnknownAndUnusedArgs(t *testing.T) {
 		{
 			name: "unknown field",
 			args: `{"action":"list","url":"https://example.com/skill"}`,
-			want: `unknown field "url"`,
+			want: `Put external URLs or local provenance in source, not url`,
 		},
 		{
 			name: "list ignores name",

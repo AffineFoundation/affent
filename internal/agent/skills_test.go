@@ -122,6 +122,8 @@ func TestBuiltinSkillProvider_SkillInstallWorkflowTriggers(t *testing.T) {
 	for _, want := range []string{
 		"AFFENT ACTIVE SKILL: skill_install_workflow",
 		"Do not install from a source you have not read",
+		"look for the relevant `SKILL.md`",
+		"ask the user to paste the exact skill body",
 		"Ask for explicit user confirmation",
 		"Do not install in the same response",
 		"skill action=propose_install",

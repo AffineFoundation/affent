@@ -508,8 +508,9 @@ metadata plus activation rules, not skill bodies, so the agent can inspect when
 installed skills will fire without dumping every workflow into context. For
 searched or remote candidates, the agent should call `skill` with
 `action:"propose_install"`, show the returned `proposal_id`, and include a
-non-empty `source` URL/path/provenance string so the user can review where the
-candidate came from. Only then call
+non-empty `source` URL/path/provenance string plus the exact reviewed
+`SKILL.md` body so the user can review where the candidate came from and what
+will be installed. Only then call
 `action:"confirm_install"` after the user's latest reply explicitly confirms
 that exact id. Direct `action:"install"` is reserved for an exact skill body the
 user already provided. Runtime skill manifests preserve the reviewed `source`
