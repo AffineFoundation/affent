@@ -711,6 +711,9 @@ func skillRemoteInstallGuardScenario() BatchScenario {
 		},
 		RequiredTools:  []string{"skill"},
 		ForbiddenTools: []string{"read_file", "write_file", "edit_file", "shell", "subagent_run"},
+		RequiredToolArgContains: []ToolArgContainsRequirement{
+			{Tool: "skill", Arg: "source", Substring: "https://github.com/example/skills/remote_guard_demo/SKILL.md"},
+		},
 		RequiredToolResultText: map[string][]string{
 			"skill": {
 				"direct install cannot use a remote source URL",

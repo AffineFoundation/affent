@@ -433,6 +433,10 @@ func TestSelectBatchScenariosForSuite(t *testing.T) {
 			if !stringSliceContains(scenario.RequiredTools, "skill") {
 				t.Fatalf("skill-remote-install-guard RequiredTools = %#v, want skill", scenario.RequiredTools)
 			}
+			if len(scenario.RequiredToolArgContains) != 1 ||
+				scenario.RequiredToolArgContains[0] != (ToolArgContainsRequirement{Tool: "skill", Arg: "source", Substring: "https://github.com/example/skills/remote_guard_demo/SKILL.md"}) {
+				t.Fatalf("skill-remote-install-guard RequiredToolArgContains = %#v", scenario.RequiredToolArgContains)
+			}
 			required := strings.Join(scenario.RequiredToolResultText["skill"], "\n")
 			for _, want := range []string{"direct install cannot use a remote source URL", "action=propose_install", "proposal_id"} {
 				if !strings.Contains(required, want) {
