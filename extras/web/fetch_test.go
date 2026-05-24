@@ -774,6 +774,46 @@ func TestSearchTool_AnnotatesDirectFetchRiskyResults(t *testing.T) {
 	}
 }
 
+func TestSearchTool_SurfacesReadableURLsMentionedInSnippets(t *testing.T) {
+	tool, err := SearchTool(SearchConfig{
+		Provider: stubProvider{results: []SearchResult{
+			{
+				Title:   "Taostats Documentation",
+				URL:     "https://docs.taostats.io/",
+				Snippet: "For AI agents, visit https://docs.taostats.io/llms.txt. API example: https://api.taostats.io/api/subnet/latest/v1. Account setup is at https://taostats.io/pro/api-keys.",
+			},
+			{
+				Title:   "Markdown docs",
+				URL:     "https://docs.example/guide",
+				Snippet: "Canonical markdown page: https://docs.example/guide.md. Duplicate: https://docs.example/guide.md#intro.",
+			},
+		}},
+	})
+	if err != nil {
+		t.Fatalf("SearchTool: %v", err)
+	}
+	args, _ := json.Marshal(map[string]any{"query": "taostats llms api"})
+	out, err := tool.Execute(context.Background(), args)
+	if err != nil {
+		t.Fatalf("Execute: %v", err)
+	}
+	for _, want := range []string{
+		"Source hint: snippet mentions readable endpoint https://docs.taostats.io/llms.txt",
+		"Source hint: snippet mentions readable endpoint https://api.taostats.io/api/subnet/latest/v1",
+		"Source hint: snippet mentions readable endpoint https://docs.example/guide.md",
+	} {
+		if !strings.Contains(out, want) {
+			t.Fatalf("search output missing source hint %q:\n%s", want, out)
+		}
+	}
+	if strings.Contains(out, "Source hint: snippet mentions readable endpoint https://taostats.io/pro/api-keys") {
+		t.Fatalf("account-management URL should not be promoted as a readable source hint:\n%s", out)
+	}
+	if strings.Count(out, "Source hint: snippet mentions readable endpoint https://docs.example/guide.md") != 1 {
+		t.Fatalf("duplicate source hint should be canonicalized once:\n%s", out)
+	}
+}
+
 func TestDirectFetchCautionClassifiesGenericHosts(t *testing.T) {
 	cases := []struct {
 		name string

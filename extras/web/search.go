@@ -10,6 +10,7 @@ import (
 	"net/http"
 	"net/url"
 	"os"
+	"regexp"
 	"strings"
 	"time"
 	"unicode/utf8"
@@ -48,7 +49,10 @@ const (
 	maxSearchQueryBytes   = 2048
 	maxSearchTitleBytes   = 300
 	maxSearchSnippetBytes = 1000
+	maxSearchSourceHints  = 3
 )
+
+var searchSnippetURLPattern = regexp.MustCompile(`https?://[^\s<>"'()\[\]{}]+`)
 
 // SearchTool returns an agent.Tool that runs a web search and returns
 // a compact list of {title, url, snippet}. The model decides which URL
@@ -157,6 +161,9 @@ func formatResults(results []SearchResult, limit int) string {
 			}
 			fmt.Fprintf(&b, "\n   %s: %s", label, note)
 		}
+		for _, hint := range sourceHintsFromSearchResult(r, url) {
+			fmt.Fprintf(&b, "\n   Source hint: snippet mentions readable endpoint %s", hint)
+		}
 		b.WriteString("\n\n")
 	}
 	if displayed == 0 {
@@ -167,6 +174,63 @@ func formatResults(results []SearchResult, limit int) string {
 		b.WriteString(" Do not spend direct page-reading calls on URLs marked with Direct-reader warning; use their snippets only as weak discovery, sentiment, or claim evidence unless a readable canonical source is available.")
 	}
 	return strings.TrimSpace(b.String())
+}
+
+func sourceHintsFromSearchResult(r SearchResult, resultURL string) []string {
+	seen := map[string]bool{}
+	if normalized := canonicalSearchHintURL(resultURL); normalized != "" {
+		seen[normalized] = true
+	}
+	text := r.Title + " " + r.Snippet
+	matches := searchSnippetURLPattern.FindAllString(text, -1)
+	if len(matches) == 0 {
+		return nil
+	}
+	hints := make([]string, 0, min(len(matches), maxSearchSourceHints))
+	for _, raw := range matches {
+		raw = strings.TrimRight(raw, ".,;:!?")
+		normalized := canonicalSearchHintURL(raw)
+		if normalized == "" || seen[normalized] {
+			continue
+		}
+		if !isReadableSourceHintURL(raw) {
+			continue
+		}
+		seen[normalized] = true
+		hints = append(hints, raw)
+		if len(hints) >= maxSearchSourceHints {
+			break
+		}
+	}
+	return hints
+}
+
+func canonicalSearchHintURL(raw string) string {
+	u, err := url.Parse(strings.TrimSpace(raw))
+	if err != nil || u.Scheme == "" || u.Host == "" {
+		return ""
+	}
+	scheme := strings.ToLower(u.Scheme)
+	if scheme != "http" && scheme != "https" {
+		return ""
+	}
+	port := u.Port()
+	u.Scheme = scheme
+	u.Host = websource.NormalizeHost(u.Hostname())
+	if port != "" {
+		u.Host += ":" + port
+	}
+	u.Fragment = ""
+	return u.String()
+}
+
+func isReadableSourceHintURL(raw string) bool {
+	u, err := url.Parse(strings.TrimSpace(raw))
+	if err != nil || u.Host == "" {
+		return false
+	}
+	path := strings.ToLower(u.EscapedPath())
+	return websource.IsLikelyTextOrAPIPath(path)
 }
 
 func directFetchShouldSkip(rawURL string) bool {
