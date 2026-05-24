@@ -10,6 +10,7 @@ import (
 	"net"
 	"net/http"
 	"net/url"
+	"regexp"
 	"sort"
 	"strings"
 	"syscall"
@@ -24,6 +25,8 @@ import (
 	readability "github.com/go-shiori/go-readability"
 	"golang.org/x/net/html"
 )
+
+var markdownLinkForPreviewPattern = regexp.MustCompile(`!?\[([^\]\n]{1,120})\]\([^)\n]{1,512}\)`)
 
 // FetchConfig tunes WebFetchTool. Zero values pick sane defaults.
 type FetchConfig struct {
@@ -269,6 +272,7 @@ func dynamicShellDiscoveryPreview(markdown string) string {
 	if text == "" {
 		return ""
 	}
+	text = markdownLinkForPreviewPattern.ReplaceAllString(text, "$1")
 	lower := strings.ToLower(text)
 	if len(text) <= 80 && containsAny(lower, "loading", "loading...", "enable javascript", "please enable javascript") {
 		return ""

@@ -409,10 +409,13 @@ func TestFetchTool_LargeClientRenderedShellReportsNoEvidence(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Execute: %v", err)
 	}
-	for _, want := range []string{"dynamic page shell", "Failure: kind=dynamic_shell", "large client-rendered app shell", "Discovery preview (not source evidence)", "[Documentation]", "[API]", "[Portfolio]", "Discovery links (not source evidence)", "/api/subnets/21.json", "/docs"} {
+	for _, want := range []string{"dynamic page shell", "Failure: kind=dynamic_shell", "large client-rendered app shell", "Discovery preview (not source evidence): Home Documentation API Portfolio Validators Subnets", "Discovery links (not source evidence)", "/api/subnets/21.json", "/docs"} {
 		if !strings.Contains(out, want) {
 			t.Fatalf("large app shell output missing %q:\n%s", want, out)
 		}
+	}
+	if strings.Contains(out, "[Portfolio]") || strings.Contains(out, "](http") {
+		t.Fatalf("dynamic shell preview should strip markdown link targets:\n%s", out)
 	}
 	if strings.Contains(out, "- Portfolio") {
 		t.Fatalf("low-value account/portfolio shell link should not be suggested:\n%s", out)
