@@ -33,6 +33,12 @@ Scenario records describe one eval case:
 - `tool_errors`: runtime tool error count.
 - `tool_repaired`: runtime tool argument repair count.
 - `tool_name_canonicalized`: runtime tool name canonicalization count.
+- `tool_repair_calls`: count of tool calls that were repaired or
+  canonicalized.
+- `tool_repair_succeeded`: repaired/canonicalized tool calls with
+  `exit_code == 0`.
+- `tool_repair_failed`: repaired/canonicalized tool calls with
+  `exit_code != 0`.
 - `tool_repair_notes`: count of classified runtime repair diagnostics emitted
   on `tool.request` events. Omitted when no repair diagnostics were observed.
 - `tool_repair_by_kind`: optional map of repair diagnostic kind to count. Known
@@ -89,7 +95,8 @@ Summary records aggregate all scenario records from the same process:
 
 - `scenarios`, `passed`, `failed`, `duration_ms`.
 - Tool totals: `tool_calls`, `tool_errors`, `tool_repaired`,
-  `tool_name_canonicalized`, `tool_repair_notes`, `tool_repair_by_kind`,
+  `tool_name_canonicalized`, `tool_repair_calls`, `tool_repair_succeeded`,
+  `tool_repair_failed`, `tool_repair_notes`, `tool_repair_by_kind`,
   `loop_guard_interventions`, `forced_no_tools`, `tool_duration_ms`.
 - Truncation totals: `tool_args_truncated`, `tool_args_omitted_bytes`,
   `tool_results_truncated`, `tool_results_omitted_bytes`,

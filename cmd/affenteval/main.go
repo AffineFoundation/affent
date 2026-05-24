@@ -140,6 +140,9 @@ type batchSummary struct {
 	ToolErrors                 int
 	ToolRepaired               int
 	ToolNameCanonicalized      int
+	ToolRepairCalls            int
+	ToolRepairSucceeded        int
+	ToolRepairFailed           int
 	ToolRepairNotes            int
 	ToolRepairByKind           map[string]int
 	LoopGuardInterventions     int
@@ -197,6 +200,9 @@ func (s *batchSummary) add(res agenteval.BatchResult) {
 	s.ToolErrors += res.ToolStats.ToolErrors
 	s.ToolRepaired += res.ToolStats.ToolArgsRepaired
 	s.ToolNameCanonicalized += res.ToolStats.ToolNameCanonicalized
+	s.ToolRepairCalls += res.Repair.Calls
+	s.ToolRepairSucceeded += res.Repair.SucceededCalls
+	s.ToolRepairFailed += res.Repair.FailedCalls
 	s.ToolRepairNotes += res.Repair.Notes
 	for k, v := range res.Repair.ByKind {
 		if s.ToolRepairByKind == nil {
@@ -323,6 +329,7 @@ func printBatchSummary(w io.Writer, s batchSummary) {
 		s.CleanupErrors,
 	)
 	if len(s.ToolRepairByKind) > 0 {
+		fmt.Fprintf(w, " repair_calls=%d,ok=%d,failed=%d", s.ToolRepairCalls, s.ToolRepairSucceeded, s.ToolRepairFailed)
 		fmt.Fprintf(w, " repair_kinds=%s", formatStringIntCounts(s.ToolRepairByKind))
 	}
 	printDelegationRollup(w, s.FocusedTaskCalls, s.FocusedTaskByType, s.SubagentCalls, s.SubagentByMode)
@@ -425,6 +432,9 @@ type batchResultRecord struct {
 	ToolErrors                 int            `json:"tool_errors"`
 	ToolRepaired               int            `json:"tool_repaired"`
 	ToolNameCanonicalized      int            `json:"tool_name_canonicalized"`
+	ToolRepairCalls            int            `json:"tool_repair_calls,omitempty"`
+	ToolRepairSucceeded        int            `json:"tool_repair_succeeded,omitempty"`
+	ToolRepairFailed           int            `json:"tool_repair_failed,omitempty"`
 	ToolRepairNotes            int            `json:"tool_repair_notes,omitempty"`
 	ToolRepairByKind           map[string]int `json:"tool_repair_by_kind,omitempty"`
 	LoopGuardInterventions     int            `json:"loop_guard_interventions"`
@@ -479,6 +489,9 @@ type batchSummaryRecord struct {
 	ToolErrors                 int            `json:"tool_errors"`
 	ToolRepaired               int            `json:"tool_repaired"`
 	ToolNameCanonicalized      int            `json:"tool_name_canonicalized"`
+	ToolRepairCalls            int            `json:"tool_repair_calls,omitempty"`
+	ToolRepairSucceeded        int            `json:"tool_repair_succeeded,omitempty"`
+	ToolRepairFailed           int            `json:"tool_repair_failed,omitempty"`
 	ToolRepairNotes            int            `json:"tool_repair_notes,omitempty"`
 	ToolRepairByKind           map[string]int `json:"tool_repair_by_kind,omitempty"`
 	LoopGuardInterventions     int            `json:"loop_guard_interventions"`
@@ -537,6 +550,9 @@ func printBatchResultJSONL(w io.Writer, meta evalJSONLMetadata, res agenteval.Ba
 		ToolErrors:                 res.ToolStats.ToolErrors,
 		ToolRepaired:               res.ToolStats.ToolArgsRepaired,
 		ToolNameCanonicalized:      res.ToolStats.ToolNameCanonicalized,
+		ToolRepairCalls:            res.Repair.Calls,
+		ToolRepairSucceeded:        res.Repair.SucceededCalls,
+		ToolRepairFailed:           res.Repair.FailedCalls,
 		ToolRepairNotes:            res.Repair.Notes,
 		ToolRepairByKind:           cloneStringIntMap(res.Repair.ByKind),
 		LoopGuardInterventions:     res.ToolStats.LoopGuardInterventions,
@@ -586,6 +602,9 @@ func printBatchSummaryJSONL(w io.Writer, meta evalJSONLMetadata, s batchSummary)
 		ToolErrors:                 s.ToolErrors,
 		ToolRepaired:               s.ToolRepaired,
 		ToolNameCanonicalized:      s.ToolNameCanonicalized,
+		ToolRepairCalls:            s.ToolRepairCalls,
+		ToolRepairSucceeded:        s.ToolRepairSucceeded,
+		ToolRepairFailed:           s.ToolRepairFailed,
 		ToolRepairNotes:            s.ToolRepairNotes,
 		ToolRepairByKind:           cloneStringIntMap(s.ToolRepairByKind),
 		LoopGuardInterventions:     s.LoopGuardInterventions,
@@ -713,6 +732,7 @@ func printBatchResult(w io.Writer, res agenteval.BatchResult) {
 		)
 	}
 	if len(res.Repair.ByKind) > 0 {
+		fmt.Fprintf(w, " repair_calls=%d,ok=%d,failed=%d", res.Repair.Calls, res.Repair.SucceededCalls, res.Repair.FailedCalls)
 		fmt.Fprintf(w, " repair_kinds=%s", formatStringIntCounts(res.Repair.ByKind))
 	}
 	printDelegationRollup(w, res.Delegation.FocusedTaskCalls, res.Delegation.FocusedTaskByType, res.Delegation.SubagentCalls, res.Delegation.SubagentByMode)

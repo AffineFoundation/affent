@@ -224,8 +224,10 @@ func TestBatchSummaryAggregatesRuntimeMetrics(t *testing.T) {
 			LoopGuardInterventions: 1,
 		},
 		Repair: agenteval.ToolRepairStats{
-			Notes:  2,
-			ByKind: map[string]int{"tool_name": 1, "alias_rename": 1},
+			Calls:          2,
+			SucceededCalls: 2,
+			Notes:          2,
+			ByKind:         map[string]int{"tool_name": 1, "alias_rename": 1},
 		},
 		ToolTruncation: agenteval.ToolTruncationStats{
 			ArgsTruncated:    1,
@@ -257,8 +259,11 @@ func TestBatchSummaryAggregatesRuntimeMetrics(t *testing.T) {
 			ForcedNoTools:          1,
 		},
 		Repair: agenteval.ToolRepairStats{
-			Notes:  3,
-			ByKind: map[string]int{"alias_rename": 1, "type_coercion": 2},
+			Calls:          3,
+			SucceededCalls: 2,
+			FailedCalls:    1,
+			Notes:          3,
+			ByKind:         map[string]int{"alias_rename": 1, "type_coercion": 2},
 		},
 		ToolTruncation: agenteval.ToolTruncationStats{
 			ResultsTruncated:    2,
@@ -291,6 +296,9 @@ func TestBatchSummaryAggregatesRuntimeMetrics(t *testing.T) {
 	if !strings.Contains(out.String(), "repair_kinds=alias_rename:2,tool_name:1,type_coercion:2") {
 		t.Fatalf("summary output missing repair kind rollup:\n%s", out.String())
 	}
+	if !strings.Contains(out.String(), "repair_calls=5,ok=4,failed=1") {
+		t.Fatalf("summary output missing repair outcome rollup:\n%s", out.String())
+	}
 	if !strings.Contains(out.String(), "plan=calls:3,errors:1 plan_by_action=set:1,update:2") {
 		t.Fatalf("summary output missing plan rollup:\n%s", out.String())
 	}
@@ -299,6 +307,9 @@ func TestBatchSummaryAggregatesRuntimeMetrics(t *testing.T) {
 	}
 	if summary.ToolRepairNotes != 5 {
 		t.Fatalf("ToolRepairNotes = %d, want 5", summary.ToolRepairNotes)
+	}
+	if summary.ToolRepairCalls != 5 || summary.ToolRepairSucceeded != 4 || summary.ToolRepairFailed != 1 {
+		t.Fatalf("repair outcomes = calls:%d ok:%d failed:%d, want 5/4/1", summary.ToolRepairCalls, summary.ToolRepairSucceeded, summary.ToolRepairFailed)
 	}
 	wantRepairKinds := map[string]int{"tool_name": 1, "alias_rename": 2, "type_coercion": 2}
 	if !reflect.DeepEqual(summary.ToolRepairByKind, wantRepairKinds) {
@@ -340,8 +351,11 @@ func TestPrintBatchResultJSONL(t *testing.T) {
 			ResultArtifacts:     1,
 		},
 		Repair: agenteval.ToolRepairStats{
-			Notes:  3,
-			ByKind: map[string]int{"alias_rename": 2, "type_coercion": 1},
+			Calls:          2,
+			SucceededCalls: 1,
+			FailedCalls:    1,
+			Notes:          3,
+			ByKind:         map[string]int{"alias_rename": 2, "type_coercion": 1},
 		},
 		Plan: agenteval.PlanStats{
 			Calls:    2,
@@ -384,6 +398,9 @@ func TestPrintBatchResultJSONL(t *testing.T) {
 		"tool_errors":                   float64(1),
 		"tool_repaired":                 float64(2),
 		"tool_name_canonicalized":       float64(1),
+		"tool_repair_calls":             float64(2),
+		"tool_repair_succeeded":         float64(1),
+		"tool_repair_failed":            float64(1),
 		"tool_repair_notes":             float64(3),
 		"loop_guard_interventions":      float64(3),
 		"forced_no_tools":               float64(1),
@@ -650,6 +667,9 @@ func TestPrintBatchSummaryJSONL(t *testing.T) {
 		ToolErrors:                 1,
 		ToolRepaired:               3,
 		ToolNameCanonicalized:      2,
+		ToolRepairCalls:            4,
+		ToolRepairSucceeded:        3,
+		ToolRepairFailed:           1,
 		ToolRepairNotes:            4,
 		ToolRepairByKind:           map[string]int{"tool_name": 2, "malformed_json": 1, "type_coercion": 1},
 		LoopGuardInterventions:     3,
@@ -701,6 +721,9 @@ func TestPrintBatchSummaryJSONL(t *testing.T) {
 		"tool_errors":                   float64(1),
 		"tool_repaired":                 float64(3),
 		"tool_name_canonicalized":       float64(2),
+		"tool_repair_calls":             float64(4),
+		"tool_repair_succeeded":         float64(3),
+		"tool_repair_failed":            float64(1),
 		"tool_repair_notes":             float64(4),
 		"loop_guard_interventions":      float64(3),
 		"forced_no_tools":               float64(1),

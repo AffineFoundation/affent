@@ -26,6 +26,7 @@ func TestTrace_RepairStats_ClassifiesRepairNotes(t *testing.T) {
 			Tool:         "shell",
 			ArgsRepaired: true,
 			RepairNotes:  []string{"repaired malformed JSON arguments"},
+			ExitCode:     1,
 		},
 		{
 			Tool:         "memory",
@@ -46,6 +47,9 @@ func TestTrace_RepairStats_ClassifiesRepairNotes(t *testing.T) {
 	got := tr.RepairStats()
 	if got.Calls != 5 {
 		t.Fatalf("Calls = %d, want 5", got.Calls)
+	}
+	if got.SucceededCalls != 4 || got.FailedCalls != 1 {
+		t.Fatalf("repair outcomes = ok:%d failed:%d, want 4/1", got.SucceededCalls, got.FailedCalls)
 	}
 	if got.Notes != 10 {
 		t.Fatalf("Notes = %d, want 10; by_kind=%#v", got.Notes, got.ByKind)

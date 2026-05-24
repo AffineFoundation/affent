@@ -235,9 +235,11 @@ type ToolTruncationStats struct {
 // A single tool call can contribute to multiple kinds (for example,
 // wrapper_unwrap + type_coercion), so Notes can be greater than Calls.
 type ToolRepairStats struct {
-	Calls  int
-	Notes  int
-	ByKind map[string]int
+	Calls          int
+	SucceededCalls int
+	FailedCalls    int
+	Notes          int
+	ByKind         map[string]int
 }
 
 func (s ToolRepairStats) HasAny() bool {
@@ -251,6 +253,11 @@ func (t Trace) RepairStats() ToolRepairStats {
 			continue
 		}
 		s.Calls++
+		if c.ExitCode == 0 {
+			s.SucceededCalls++
+		} else {
+			s.FailedCalls++
+		}
 		seenNote := false
 		for _, note := range c.RepairNotes {
 			kind := toolrepair.Kind(note)
