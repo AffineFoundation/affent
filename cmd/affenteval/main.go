@@ -818,6 +818,12 @@ func failureKind(failure string) string {
 		return "forbidden_tool"
 	case strings.Contains(lower, "result to contain"):
 		return "tool_result_missing"
+	case strings.Contains(lower, "focused_task_errors=") || strings.Contains(lower, "subagent_errors="):
+		return "delegation_error"
+	case strings.Contains(lower, "focused_tasks="):
+		return "missing_focused_task"
+	case strings.Contains(lower, "subagents="):
+		return "missing_subagent"
 	default:
 		return "other"
 	}

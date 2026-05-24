@@ -881,8 +881,15 @@ func TestFailureKindsForResult(t *testing.T) {
 		`turn ended with reason "max_turns" (expected completed)`,
 		`missing required command match "go test"; commands=[]`,
 		`missing required command match "pytest"; commands=[]`,
+		`focused_task_errors=1 subagent_errors=0`,
+		`verify=0, want >= 1; focused_tasks=map[explore:1]`,
+		`test=0, want >= 1; subagents=map[review:1]`,
 	})
-	if got["turn_end"] != 1 || got["missing_command"] != 2 {
+	if got["turn_end"] != 1 ||
+		got["missing_command"] != 2 ||
+		got["delegation_error"] != 1 ||
+		got["missing_focused_task"] != 1 ||
+		got["missing_subagent"] != 1 {
 		t.Fatalf("failureKindsForResult = %#v", got)
 	}
 }
