@@ -1084,13 +1084,10 @@ func hasToolTruncation(stats agenteval.ToolTruncationStats) bool {
 func failureKind(failure string) string {
 	failure = strings.TrimSpace(failure)
 	lower := strings.ToLower(failure)
+	if kind := agenteval.RuntimeErrorKind(failure); kind != "" {
+		return kind
+	}
 	switch {
-	case isLLMTimeoutFailure(lower):
-		return "llm_timeout"
-	case isLLMIncompleteStreamFailure(lower):
-		return "llm_incomplete_stream"
-	case isContextOverflowFailure(lower):
-		return "context_overflow"
 	case strings.HasPrefix(lower, "affentctl run failed:"):
 		return "affentctl_run"
 	case strings.HasPrefix(lower, "verify command failed:"):
@@ -1128,41 +1125,6 @@ func failureKind(failure string) string {
 	default:
 		return "other"
 	}
-}
-
-func isLLMTimeoutFailure(lower string) bool {
-	return (strings.Contains(lower, "llm ") && strings.Contains(lower, "timed out")) ||
-		strings.Contains(lower, "stream idle timeout") ||
-		(strings.Contains(lower, "context deadline exceeded") &&
-			(strings.Contains(lower, "max-call-timeout") ||
-				strings.Contains(lower, "per-call-timeout") ||
-				strings.Contains(lower, "waiting for chat completion")))
-}
-
-func isLLMIncompleteStreamFailure(lower string) bool {
-	return strings.Contains(lower, "incomplete sse stream") ||
-		strings.Contains(lower, "stream ended without finish") ||
-		(strings.Contains(lower, "finish_reason") &&
-			strings.Contains(lower, "closed the connection"))
-}
-
-func isContextOverflowFailure(lower string) bool {
-	for _, needle := range []string{
-		"context overflow",
-		"context length",
-		"context window",
-		"maximum context",
-		"context_length_exceeded",
-		"prompt is too long",
-		"input is too long",
-		"too many tokens",
-		"request too large",
-	} {
-		if strings.Contains(lower, needle) {
-			return true
-		}
-	}
-	return false
 }
 
 func validateRunConfig(temperature, topP, maxTokens, seed string, timeout time.Duration, executor string, scenarioCount int, workRoot string, workRootSet bool, verifierOutputCap int) error {

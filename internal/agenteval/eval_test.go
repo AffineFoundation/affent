@@ -187,6 +187,25 @@ func TestParseTraceFileDerivesToolFailureExamples(t *testing.T) {
 	}
 }
 
+func TestMergeRuntimeDiagnosticsFromFailures(t *testing.T) {
+	res := BatchResult{Failures: []string{
+		`affentctl run failed: exit=1 err=LLM llm_stream timed out after 4m0s while waiting for chat completion (model="qwen" endpoint="https://llm.example/v1/chat/completions" max-call-timeout/per-call-timeout=4m0s): context deadline exceeded`,
+		`affentctl run failed: exit=1 err=stream ended without finish`,
+	}}
+	mergeRuntimeDiagnosticsFromFailures(&res, 1)
+	if res.RuntimeErrorByKind["llm_timeout"] != 1 || res.RuntimeErrorByKind["llm_incomplete_stream"] != 1 {
+		t.Fatalf("RuntimeErrorByKind = %#v", res.RuntimeErrorByKind)
+	}
+	timeout := res.RuntimeErrorExamples["llm_timeout"]
+	if len(timeout) != 1 || !strings.Contains(timeout[0].Message, "max-call-timeout") || !strings.Contains(timeout[0].Message, "llm.example") {
+		t.Fatalf("llm_timeout RuntimeErrorExamples = %#v", timeout)
+	}
+	incomplete := res.RuntimeErrorExamples["llm_incomplete_stream"]
+	if len(incomplete) != 1 || !strings.Contains(incomplete[0].Message, "stream ended without finish") {
+		t.Fatalf("llm_incomplete_stream RuntimeErrorExamples = %#v", incomplete)
+	}
+}
+
 func TestParseTraceFileRejectsOversizedLineWithLineNumber(t *testing.T) {
 	tracePath := filepath.Join(t.TempDir(), "trace.jsonl")
 	body := `{"type":"trace.meta","data":{"schema_version":1}}` + "\n" +

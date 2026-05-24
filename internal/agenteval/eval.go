@@ -320,10 +320,40 @@ func (r BatchRunner) Run(ctx context.Context, scenario BatchScenario) BatchResul
 			res.Failures = append(res.Failures, err.Error())
 		}
 	}
+	mergeRuntimeDiagnosticsFromFailures(&res, 2)
 	res.Duration = time.Since(start)
 	res.OK = len(res.Failures) == 0
 	r.cleanupPassingWorkspace(&res, workspace)
 	return res
+}
+
+func mergeRuntimeDiagnosticsFromFailures(res *BatchResult, maxExamplesPerKind int) {
+	if res == nil {
+		return
+	}
+	counts, examples := RuntimeErrorDiagnosticsFromFailures(res.Failures, maxExamplesPerKind)
+	for kind, count := range counts {
+		if count <= 0 {
+			continue
+		}
+		if res.RuntimeErrorByKind == nil {
+			res.RuntimeErrorByKind = map[string]int{}
+		}
+		if res.RuntimeErrorByKind[kind] == 0 {
+			res.RuntimeErrorByKind[kind] = count
+		}
+	}
+	for kind, newExamples := range examples {
+		if len(newExamples) == 0 {
+			continue
+		}
+		if res.RuntimeErrorExamples == nil {
+			res.RuntimeErrorExamples = map[string][]RuntimeErrorExample{}
+		}
+		if len(res.RuntimeErrorExamples[kind]) == 0 {
+			res.RuntimeErrorExamples[kind] = append([]RuntimeErrorExample(nil), newExamples...)
+		}
+	}
 }
 
 func (r BatchRunner) cleanupPassingWorkspace(res *BatchResult, workspace string) {
