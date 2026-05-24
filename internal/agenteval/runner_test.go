@@ -1637,6 +1637,156 @@ func TestRunner_EndToEnd_ExternalResearchFetchRecovery(t *testing.T) {
 	}
 }
 
+// TestRunner_EndToEnd_ExternalResearchDynamicShellRecovery pins the common
+// public-web failure mode behind app dashboards and social/search pages:
+// direct fetch returns a readable-but-useless client shell. The shell must be
+// treated as non-evidence, surfaced as dynamic_shell, and followed by a
+// canonical text/API fallback when one is available.
+func TestRunner_EndToEnd_ExternalResearchDynamicShellRecovery(t *testing.T) {
+	webSearch := agent.Tool{
+		Name:        "web_search",
+		Description: "Test-only search stand-in: returns a dynamic dashboard and text fallback.",
+		Schema: json.RawMessage(`{
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["query"],
+            "properties": {
+                "query": {"type": "string"},
+                "num_results": {"type": "integer"}
+            }
+        }`),
+		Execute: func(ctx context.Context, args json.RawMessage) (string, error) {
+			return `[
+  {"title":"Helio Subnet official docs","url":"https://official.example/helio/about","snippet":"Primary source describing Helio as a decentralized routing subnet."},
+  {"title":"Helio live dashboard","url":"https://dashboard.example/helio","snippet":"Client-rendered market dashboard that may require JavaScript."},
+  {"title":"Helio metrics API","url":"https://api.example/helio/metrics.txt","snippet":"Text metrics endpoint with price, market cap, and 24h change."},
+  {"title":"Recent community discussion","url":"https://social.example/search/helio","snippet":"Recent positive and critical community posts."}
+]`, nil
+		},
+	}
+	webFetch := agent.Tool{
+		Name:        "web_fetch",
+		Description: "Test-only fetch stand-in: returns one dynamic shell and deterministic fallbacks.",
+		Schema: json.RawMessage(`{
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["url"],
+            "properties": {
+                "url": {"type": "string"}
+            }
+        }`),
+		Execute: func(ctx context.Context, args json.RawMessage) (string, error) {
+			var p struct {
+				URL string `json:"url"`
+			}
+			if err := json.Unmarshal(args, &p); err != nil {
+				return "", err
+			}
+			switch p.URL {
+			case "https://official.example/helio/about":
+				return "Official docs, updated 2026-05-21: Helio is a decentralized routing subnet for inference traffic.", nil
+			case "https://dashboard.example/helio":
+				return "[dynamic page shell: URL=https://dashboard.example/helio, Content-Type=\"text/html\", Reason=\"low evidence app shell\"]\nFailure: kind=dynamic_shell\nNext: do not treat this loading/app shell as source evidence; use a canonical API/text/source page, an available rendering tool/source, or answer with this source marked as dynamic/unverified.", nil
+			case "https://api.example/helio/metrics.txt":
+				return "Text metrics snapshot as of 2026-05-24T12:00:00Z: price $6.42, market cap $32.5M, 24h change +4.8%, 24h volume $1.1M.", nil
+			case "https://social.example/search/helio":
+				return "Community posts from 2026-05-23 to 2026-05-24: supporters cite improving routing demand; critics question validator concentration.", nil
+			default:
+				return "", fmt.Errorf("unexpected test URL %q", p.URL)
+			}
+		},
+	}
+
+	turn1 := []string{
+		`{"choices":[{"delta":{"role":"assistant","tool_calls":[{"index":0,"id":"s1","type":"function","function":{"name":"web_search","arguments":"{\"query\":\"Helio Subnet recent trend market metrics sentiment\",\"num_results\":5}"}}]},"finish_reason":null}]}`,
+		`{"choices":[{"delta":{},"finish_reason":"tool_calls"}]}`,
+		`[DONE]`,
+	}
+	turn2 := []string{
+		`{"choices":[{"delta":{"role":"assistant","tool_calls":[{"index":0,"id":"f1","type":"function","function":{"name":"web_fetch","arguments":"{\"url\":\"https://official.example/helio/about\"}"}},{"index":1,"id":"f2","type":"function","function":{"name":"web_fetch","arguments":"{\"url\":\"https://dashboard.example/helio\"}"}}]},"finish_reason":null}]}`,
+		`{"choices":[{"delta":{},"finish_reason":"tool_calls"}]}`,
+		`[DONE]`,
+	}
+	turn3 := []string{
+		`{"choices":[{"delta":{"role":"assistant","tool_calls":[{"index":0,"id":"f3","type":"function","function":{"name":"web_fetch","arguments":"{\"url\":\"https://api.example/helio/metrics.txt\"}"}},{"index":1,"id":"f4","type":"function","function":{"name":"web_fetch","arguments":"{\"url\":\"https://social.example/search/helio\"}"}}]},"finish_reason":null}]}`,
+		`{"choices":[{"delta":{},"finish_reason":"tool_calls"}]}`,
+		`[DONE]`,
+	}
+	turn4 := []string{
+		`{"choices":[{"delta":{"role":"assistant","content":"Helio is a decentralized routing subnet for inference traffic according to the official docs. The live dashboard returned only a dynamic app shell, so I did not use it as verified evidence. The text metrics API reports, as of 2026-05-24T12:00:00Z, price $6.42, market cap $32.5M, 24h change +4.8%, and 24h volume $1.1M. Recent community sentiment is mixed: supporters cite improving routing demand, while critics question validator concentration. Overall: recent market momentum is positive, but the dashboard remains a dynamic/unverified gap."},"finish_reason":"stop"}]}`,
+		`[DONE]`,
+	}
+	srv := newScriptedLLM(t, [][]string{turn1, turn2, turn3, turn4})
+	helioSearch := func(args map[string]any) bool {
+		q, _ := args["query"].(string)
+		return strings.Contains(q, "Helio Subnet")
+	}
+	fetchURL := func(url string) func(map[string]any) bool {
+		return func(args map[string]any) bool {
+			return args["url"] == url
+		}
+	}
+
+	scenario := Scenario{
+		Name:         "external_research_dynamic_shell_recovery",
+		Description:  "agent treats a client-rendered shell as non-evidence and switches to a text/API source",
+		Prompt:       "Assess the recent trend for Helio Subnet. First identify what it is, then collect current market metrics and recent community sentiment. If a fetched page is a dynamic app shell, do not use it as evidence; switch to a text/API/source fallback and mark the gap.",
+		MaxTurnSteps: 8,
+		Checks: []Check{
+			TurnEndedCleanly(),
+			ToolCalled("web_search", helioSearch),
+			ToolCalled("web_fetch", fetchURL("https://official.example/helio/about")),
+			ToolCalled("web_fetch", fetchURL("https://dashboard.example/helio")),
+			ToolCalled("web_fetch", fetchURL("https://api.example/helio/metrics.txt")),
+			ToolCalled("web_fetch", fetchURL("https://social.example/search/helio")),
+			ToolCalledAtLeast("web_fetch", 4),
+			ToolCalledAtMostMatching("web_fetch", 1, fetchURL("https://dashboard.example/helio")),
+			ToolFailureKindAtLeast("dynamic_shell", 1),
+			ToolResultContains("web_fetch", "Failure: kind=dynamic_shell"),
+			ToolResultContains("web_fetch", "loading/app shell"),
+			ToolCalledBeforeMatching("web_search", helioSearch, "web_fetch", fetchURL("https://dashboard.example/helio")),
+			ToolCalledBeforeMatching("web_fetch", fetchURL("https://dashboard.example/helio"), "web_fetch", fetchURL("https://api.example/helio/metrics.txt")),
+			ToolNotCalled("shell", nil),
+			FinalTextContains("decentralized routing subnet"),
+			FinalTextContains("dynamic app shell"),
+			FinalTextContains("text metrics API"),
+			FinalTextContains("market cap $32.5M"),
+			FinalTextContains("dynamic/unverified gap"),
+		},
+	}
+
+	runner := &Runner{
+		LLM:            agent.NewLLMClient(srv.URL, "", "fake-model"),
+		MaxTurnSteps:   8,
+		PerCallTimeout: 5 * time.Second,
+		RunTimeout:     20 * time.Second,
+		Log:            zerolog.Nop(),
+		BuildRegistry: func(ctx context.Context, workspaceDir string, exec executor.Executor) (*agent.Registry, error) {
+			_ = ctx
+			_ = workspaceDir
+			_ = exec
+			reg := agent.NewRegistry()
+			reg.Add(&webSearch)
+			reg.Add(&webFetch)
+			return reg, nil
+		},
+	}
+
+	out, err := runner.Run(context.Background(), scenario)
+	if err != nil {
+		t.Fatalf("Runner.Run: %v", err)
+	}
+	if !out.Pass {
+		t.Errorf("expected all checks to pass; failed: %v", out.FailedChecks())
+		for _, r := range out.Results {
+			t.Logf("  %s: pass=%v detail=%s", r.Check, r.Pass, r.Detail)
+		}
+	}
+	if len(out.Trace.Tools) != 5 {
+		t.Fatalf("expected one search and four fetches; got %+v", out.Trace.Tools)
+	}
+}
+
 // TestRunner_EndToEnd_ExternalResearchRepeatedFailedInputGuard pins the
 // runtime side of web recovery: even if the model ignores web_fetch's Next
 // guidance and repeats the same blocked URL, the loop guard blocks the repeat
