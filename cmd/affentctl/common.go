@@ -90,6 +90,14 @@ type commonFlags struct {
 	//   "local"            — run on the host (default; current behavior)
 	//   "docker:<cid>"     — run inside the named container via `docker exec`
 	executor string
+
+	// Sampling knobs forwarded to the upstream OpenAI-compat chat
+	// completion. -1 means "leave unset" — the upstream picks its own
+	// default. Mostly useful for training-data generation where the
+	// caller wants N samples of the same prompt to actually diverge.
+	temperature float64
+	topP        float64
+	seed        int64
 }
 
 func (c *commonFlags) bind(fs *flag.FlagSet) {
@@ -121,6 +129,9 @@ func (c *commonFlags) bind(fs *flag.FlagSet) {
 	fs.IntVar(&c.compactTrigger, "compact-trigger", 240, "compact conversation when message count exceeds this. 0 / negative → fall back to agent runtime's default (240). Reactive compaction (on context-overflow errors) is unaffected.")
 	fs.IntVar(&c.compactKeepLast, "compact-keep-last", 10, "messages preserved verbatim at the tail of the conversation when compacting")
 	fs.StringVar(&c.executor, "executor", envOr("AFFENTCTL_EXECUTOR", "local"), "shell-tool backend: 'local' (host; no isolation), or 'docker:<container_id>' (exec into an already-running container, e.g. 'docker:abc123def'; file tools also route through docker so they see the container's filesystem). Caller manages container lifecycle.")
+	fs.Float64Var(&c.temperature, "temperature", -1, "sampling temperature for the upstream chat completion; <0 leaves the field unset and the upstream picks its default")
+	fs.Float64Var(&c.topP, "top-p", -1, "nucleus sampling cutoff for the upstream chat completion; <0 leaves unset")
+	fs.Int64Var(&c.seed, "seed", -1, "deterministic-sampling seed for the upstream chat completion; <0 leaves unset")
 }
 
 func envOr(key, fallback string) string {
@@ -489,6 +500,18 @@ func setupLoop(c commonFlags) (*loopBundle, int) {
 
 	events := make(chan sse.Event, 64)
 	llm := agent.NewLLMClient(c.baseURL, c.apiKey, c.model)
+	if c.temperature >= 0 {
+		t := c.temperature
+		llm.Temperature = &t
+	}
+	if c.topP >= 0 {
+		p := c.topP
+		llm.TopP = &p
+	}
+	if c.seed >= 0 {
+		s := c.seed
+		llm.Seed = &s
+	}
 	projectContextDir := ""
 	if c.projectContext {
 		projectContextDir = workspace

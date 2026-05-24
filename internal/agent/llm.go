@@ -114,6 +114,14 @@ type LLMClient struct {
 	APIKey  string
 	Model   string
 	HTTP    *http.Client
+
+	// Sampling knobs. nil pointers mean "let the upstream pick its
+	// default" — preserves the original zero-config behavior. Set them
+	// to control how diverse the rollouts are (training data wants
+	// non-trivial reward variance across N samples of the same task).
+	Temperature *float64
+	TopP        *float64
+	Seed        *int64
 }
 
 func NewLLMClient(baseURL, apiKey, model string) *LLMClient {
@@ -262,6 +270,11 @@ type chatRequest struct {
 	Stream   bool          `json:"stream"`
 	// Stream usage in the final SSE chunk (OpenAI-compat extension).
 	StreamOptions *streamOptions `json:"stream_options,omitempty"`
+	// Optional sampling knobs — pointer types so we can omit them
+	// entirely when the caller has not set them.
+	Temperature *float64 `json:"temperature,omitempty"`
+	TopP        *float64 `json:"top_p,omitempty"`
+	Seed        *int64   `json:"seed,omitempty"`
 }
 
 type streamOptions struct {
@@ -311,6 +324,9 @@ func (c *LLMClient) Chat(ctx context.Context, msgs []ChatMessage, tools []ToolDe
 		Tools:         tools,
 		Stream:        true,
 		StreamOptions: &streamOptions{IncludeUsage: true},
+		Temperature:   c.Temperature,
+		TopP:          c.TopP,
+		Seed:          c.Seed,
 	})
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, c.BaseURL+"/chat/completions", bytes.NewReader(body))
 	if err != nil {
