@@ -325,6 +325,10 @@ func TestMakeOneClickContainerTargetsUseSharedLimits(t *testing.T) {
 		"image-serve": {
 			`image run --workspace "$(IMAGE_WORKSPACE)" --memory "$(CONTAINER_MEMORY)" --cpus "$(CONTAINER_CPUS)" --pids-limit "$(CONTAINER_PIDS)" $(if $(SERVE_CONTAINER_NAME),--name "$(SERVE_CONTAINER_NAME)") --detach --rm=false`,
 		},
+		"image-serve-restart": {
+			`$(MAKE) image-serve`,
+			`$(MAKE) image-serve-health-wait`,
+		},
 		"eval-container": {
 			`image build --image "$(EVAL_IMAGE)" --memory "$(CONTAINER_MEMORY)"`,
 			`--memory "$(CONTAINER_MEMORY)"`,

@@ -174,6 +174,7 @@ image-serve-restart:
 		docker rm -f "$(SERVE_CONTAINER_NAME)"; \
 	fi
 	$(MAKE) image-serve
+	$(MAKE) image-serve-health-wait
 
 eval-container: affentctl
 	"$(AFFENTCTL)" image build --image "$(EVAL_IMAGE)" --memory "$(CONTAINER_MEMORY)" $(IMAGE_BUILD_ARGS)
