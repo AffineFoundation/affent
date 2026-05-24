@@ -703,6 +703,7 @@ func TestSearchTool_AnnotatesDirectFetchRiskyResults(t *testing.T) {
 			{Title: "Search page", URL: "https://www.google.com/search?q=affine+bittensor", Snippet: "search result page"},
 			{Title: "Social post", URL: "https://x.com/example/status/123", Snippet: "community reaction"},
 			{Title: "Short link", URL: "https://t.co/abc", Snippet: "redirect"},
+			{Title: "Live dashboard", URL: "https://metrics.example/app/affine", Snippet: "Client-rendered market dashboard that requires JavaScript."},
 		}},
 	})
 	if err != nil {
@@ -721,6 +722,8 @@ func TestSearchTool_AnnotatesDirectFetchRiskyResults(t *testing.T) {
 		"sentiment/claim evidence",
 		"Direct-reader caution: this is often a redirect or short-link wrapper",
 		"canonical URL",
+		"Direct-reader caution: result appears to be a dynamic or JavaScript-rendered page",
+		"official API/text/source URL",
 		"Do not spend direct page-reading calls on URLs marked with Direct-reader warning",
 	} {
 		if !strings.Contains(out, want) {
@@ -759,6 +762,44 @@ func TestDirectFetchCautionClassifiesGenericHosts(t *testing.T) {
 			}
 			if !strings.Contains(got, c.want) {
 				t.Fatalf("directFetchCaution() = %q, want substring %q", got, c.want)
+			}
+		})
+	}
+}
+
+func TestDirectFetchCautionForResultFlagsDynamicPages(t *testing.T) {
+	cases := []struct {
+		name string
+		in   SearchResult
+		want string
+	}{
+		{
+			name: "live dashboard title",
+			in:   SearchResult{Title: "Live dashboard", URL: "https://metrics.example/asset", Snippet: "current market metrics"},
+			want: "dynamic or JavaScript-rendered page",
+		},
+		{
+			name: "requires javascript snippet",
+			in:   SearchResult{Title: "Market metrics", URL: "https://metrics.example/asset", Snippet: "This dashboard requires JavaScript to render"},
+			want: "official API/text/source URL",
+		},
+		{
+			name: "ordinary",
+			in:   SearchResult{Title: "Release notes", URL: "https://docs.example/releases", Snippet: "plain docs"},
+			want: "",
+		},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			got := directFetchCautionForResult(c.in)
+			if c.want == "" {
+				if got != "" {
+					t.Fatalf("directFetchCautionForResult() = %q, want empty", got)
+				}
+				return
+			}
+			if !strings.Contains(got, c.want) {
+				t.Fatalf("directFetchCautionForResult() = %q, want substring %q", got, c.want)
 			}
 		})
 	}

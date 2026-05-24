@@ -284,11 +284,13 @@ canonical source is available.
 
 `web_search` may annotate individual results with `Direct-reader caution` or
 `Direct-reader warning` when a URL is likely to waste turns in direct HTTP
-fetches, such as search-result pages, social/discussion pages, or short-link
-redirectors. A warning is stronger than a caution: the agent should not spend a
-direct page-reading call on that URL in the current turn. It should prefer the
-target/canonical URL, an official API or text endpoint, or treat the snippet as
-weak sentiment/claim evidence when no readable page source is available.
+fetches, such as search-result pages, social/discussion pages, short-link
+redirectors, or result titles/snippets that clearly describe a live dashboard,
+client-rendered page, or JavaScript-required app. A warning is stronger than a
+caution: the agent should not spend a direct page-reading call on that URL in
+the current turn. It should prefer the target/canonical URL, an official API or
+text endpoint, or treat the snippet as weak sentiment/claim evidence when no
+readable page source is available.
 
 `web_fetch` also preflights a small high-confidence set of direct-reader traps,
 including search-result pages and major social sites that routinely reject

@@ -149,7 +149,7 @@ func formatResults(results []SearchResult, limit int) string {
 		displayed++
 		fmt.Fprintf(&b, "%d. %s\n   %s\n   %s",
 			displayed, title, url, snippet)
-		if note := directFetchCaution(url); note != "" {
+		if note := directFetchCautionForResult(r); note != "" {
 			label := "Direct-reader caution"
 			if directFetchShouldSkip(url) {
 				label = "Direct-reader warning"
@@ -199,6 +199,31 @@ func directFetchCaution(rawURL string) string {
 		return "social/discussion pages often block direct readers or require JavaScript; use them as sentiment/claim evidence only unless a readable page source is returned."
 	}
 	return ""
+}
+
+func directFetchCautionForResult(r SearchResult) string {
+	if note := directFetchCaution(r.URL); note != "" {
+		return note
+	}
+	if dynamicResultReason(r) != "" {
+		return "result appears to be a dynamic or JavaScript-rendered page; prefer an official API/text/source URL before spending a direct page-reading call."
+	}
+	return ""
+}
+
+func dynamicResultReason(r SearchResult) string {
+	text := strings.ToLower(r.Title + " " + r.Snippet + " " + r.URL)
+	switch {
+	case strings.Contains(text, "requires javascript"),
+		strings.Contains(text, "enable javascript"),
+		strings.Contains(text, "client-rendered"),
+		strings.Contains(text, "dynamic dashboard"),
+		strings.Contains(text, "live dashboard"),
+		strings.Contains(text, "app shell"):
+		return "explicit dynamic page wording"
+	default:
+		return ""
+	}
 }
 
 func truncateSearchField(s string, maxBytes int) string {
