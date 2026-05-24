@@ -4,7 +4,6 @@ import (
 	"context"
 	"encoding/base64"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -139,10 +138,10 @@ func ScreenshotTool(s *Session) *agent.Tool {
 				savePath = strings.TrimSpace(*args.SavePath)
 			}
 			if len(savePath) > maxScreenshotSavePathBytes {
-				return "", fmt.Errorf("save_path is %d bytes; browser_screenshot supports save_path up to %d bytes\nNext: retry with a shorter workspace-relative PNG path, for example screenshots/page.png", len(savePath), maxScreenshotSavePathBytes)
+				return "", browserInvalidArgs(fmt.Sprintf("save_path is %d bytes; browser_screenshot supports save_path up to %d bytes", len(savePath), maxScreenshotSavePathBytes), "retry with a shorter workspace-relative PNG path, for example screenshots/page.png")
 			}
 			if args.SavePath != nil && savePath == "" {
-				return "", errors.New("save_path must not be blank when provided\nNext: omit save_path for inline output, or retry with a workspace-relative PNG path")
+				return "", browserInvalidArgs("save_path must not be blank when provided", "omit save_path for inline output, or retry with a workspace-relative PNG path")
 			}
 			if s.page == nil {
 				return "", ErrNoPage

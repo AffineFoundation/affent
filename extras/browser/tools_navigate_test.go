@@ -10,6 +10,18 @@ import (
 	agent "github.com/affinefoundation/affent/internal/agent"
 )
 
+func requireInvalidArgs(t *testing.T, err error) {
+	t.Helper()
+	if err == nil {
+		t.Fatal("expected error")
+	}
+	for _, want := range []string{"Failure: kind=invalid_args", "Next:"} {
+		if !strings.Contains(err.Error(), want) {
+			t.Fatalf("error missing %q: %v", want, err)
+		}
+	}
+}
+
 func TestResolveBrowserWaitTimeout(t *testing.T) {
 	cases := []struct {
 		name    string
@@ -64,6 +76,7 @@ func TestNavigateToolRejectsBlankURLAndPublishesMinLength(t *testing.T) {
 	if !strings.Contains(err.Error(), "Next:") {
 		t.Fatalf("blank URL error should include Next step, got %v", err)
 	}
+	requireInvalidArgs(t, err)
 	longURL := "https://example.com/" + strings.Repeat("x", maxBrowserURLBytes-len("https://example.com/")+1)
 	_, err = tool.Execute(context.Background(), json.RawMessage(`{"url":"`+longURL+`"}`))
 	if err == nil || !strings.Contains(err.Error(), "browser_navigate supports URLs up to") {
@@ -72,18 +85,22 @@ func TestNavigateToolRejectsBlankURLAndPublishesMinLength(t *testing.T) {
 	if !strings.Contains(err.Error(), "Next:") {
 		t.Fatalf("oversized URL error should include Next step, got %v", err)
 	}
+	requireInvalidArgs(t, err)
 	_, err = tool.Execute(context.Background(), json.RawMessage(`{"url":"example.com"}`))
 	if err == nil || !strings.Contains(err.Error(), "url must start with") || !strings.Contains(err.Error(), "Next:") {
 		t.Fatalf("scheme error = %v, want Next guidance", err)
 	}
+	requireInvalidArgs(t, err)
 	_, err = tool.Execute(context.Background(), json.RawMessage(`{"url":"https://example.com","wait_until":"paint"}`))
 	if err == nil || !strings.Contains(err.Error(), `wait_until "paint" is not supported`) || !strings.Contains(err.Error(), "Next:") {
 		t.Fatalf("invalid wait_until error = %v, want Next guidance before navigation", err)
 	}
+	requireInvalidArgs(t, err)
 	_, err = tool.Execute(context.Background(), json.RawMessage(`{"url":"https://example.com","query":"ignored"}`))
 	if err == nil || !strings.Contains(err.Error(), "unknown field") || !strings.Contains(err.Error(), "query") || !strings.Contains(err.Error(), "Next:") {
 		t.Fatalf("unknown arg error = %v, want Next guidance", err)
 	}
+	requireInvalidArgs(t, err)
 }
 
 func TestWaitToolRejectsBlankRequiredTextAndPublishesMinLength(t *testing.T) {
@@ -107,10 +124,12 @@ func TestWaitToolRejectsBlankRequiredTextAndPublishesMinLength(t *testing.T) {
 	if !strings.Contains(err.Error(), "Next:") {
 		t.Fatalf("blank for error should include Next step, got %v", err)
 	}
+	requireInvalidArgs(t, err)
 	_, err = tool.Execute(context.Background(), json.RawMessage(`{"for":"paint"}`))
 	if err == nil || !strings.Contains(err.Error(), `'for' value "paint" is not supported`) || !strings.Contains(err.Error(), "Next:") {
 		t.Fatalf("unknown for error = %v, want Next guidance before page check", err)
 	}
+	requireInvalidArgs(t, err)
 	_, err = tool.Execute(context.Background(), json.RawMessage(`{"for":"text","value":"   "}`))
 	if err == nil || !strings.Contains(err.Error(), "'value' is required") {
 		t.Fatalf("blank text value error = %v, want value is required", err)
@@ -118,6 +137,7 @@ func TestWaitToolRejectsBlankRequiredTextAndPublishesMinLength(t *testing.T) {
 	if !strings.Contains(err.Error(), "Next:") {
 		t.Fatalf("blank text value error should include Next step, got %v", err)
 	}
+	requireInvalidArgs(t, err)
 	longValue := strings.Repeat("x", maxBrowserWaitTextBytes+1)
 	_, err = tool.Execute(context.Background(), json.RawMessage(`{"for":"text","value":"`+longValue+`"}`))
 	if err == nil || !strings.Contains(err.Error(), "browser_wait text supports values up to") {
@@ -126,14 +146,17 @@ func TestWaitToolRejectsBlankRequiredTextAndPublishesMinLength(t *testing.T) {
 	if !strings.Contains(err.Error(), "Next:") {
 		t.Fatalf("oversized text value error should include Next step, got %v", err)
 	}
+	requireInvalidArgs(t, err)
 	_, err = tool.Execute(context.Background(), json.RawMessage(`{"for":"load","timeout_ms":1}`))
 	if err == nil || !strings.Contains(err.Error(), "timeout_ms must be between") || !strings.Contains(err.Error(), "Next:") {
 		t.Fatalf("invalid timeout error = %v, want Next guidance", err)
 	}
+	requireInvalidArgs(t, err)
 	_, err = tool.Execute(context.Background(), json.RawMessage(`{"for":"load","url":"https://example.com"}`))
 	if err == nil || !strings.Contains(err.Error(), "unknown field") || !strings.Contains(err.Error(), "url") || !strings.Contains(err.Error(), "Next:") {
 		t.Fatalf("unknown arg error = %v, want Next guidance", err)
 	}
+	requireInvalidArgs(t, err)
 }
 
 func TestBrowserWaitTextTimeoutErrorHasRecoveryHint(t *testing.T) {
@@ -166,6 +189,7 @@ func TestScrollToolRejectsBlankDirectionBeforePageCheck(t *testing.T) {
 	if !strings.Contains(err.Error(), "Next:") {
 		t.Fatalf("blank direction error should include Next step, got %v", err)
 	}
+	requireInvalidArgs(t, err)
 	_, err = tool.Execute(context.Background(), json.RawMessage(`{"direction":"sideways"}`))
 	if err == nil || !strings.Contains(err.Error(), `unknown direction "sideways"`) {
 		t.Fatalf("unknown direction error = %v, want unknown direction", err)
@@ -173,6 +197,7 @@ func TestScrollToolRejectsBlankDirectionBeforePageCheck(t *testing.T) {
 	if !strings.Contains(err.Error(), "Next:") {
 		t.Fatalf("unknown direction error should include Next step, got %v", err)
 	}
+	requireInvalidArgs(t, err)
 	_, err = tool.Execute(context.Background(), json.RawMessage(`{"direction":"down","amount":5001}`))
 	if err == nil || !strings.Contains(err.Error(), "amount must be between 1 and 5000") {
 		t.Fatalf("oversized amount error = %v, want amount maximum", err)
@@ -180,10 +205,12 @@ func TestScrollToolRejectsBlankDirectionBeforePageCheck(t *testing.T) {
 	if !strings.Contains(err.Error(), "Next:") {
 		t.Fatalf("oversized amount error should include Next step, got %v", err)
 	}
+	requireInvalidArgs(t, err)
 	_, err = tool.Execute(context.Background(), json.RawMessage(`{"direction":"down","ref":1}`))
 	if err == nil || !strings.Contains(err.Error(), "unknown field") || !strings.Contains(err.Error(), "ref") || !strings.Contains(err.Error(), "Next:") {
 		t.Fatalf("unknown arg error = %v, want Next guidance", err)
 	}
+	requireInvalidArgs(t, err)
 }
 
 func TestTypeToolRejectsOversizedTextBeforePageCheck(t *testing.T) {
@@ -198,6 +225,7 @@ func TestTypeToolRejectsOversizedTextBeforePageCheck(t *testing.T) {
 	if err == nil || !strings.Contains(err.Error(), "ref must be a positive integer") || !strings.Contains(err.Error(), "Next:") {
 		t.Fatalf("invalid ref error = %v, want Next guidance", err)
 	}
+	requireInvalidArgs(t, err)
 	text := strings.Repeat("x", maxBrowserTypeTextBytes+1)
 	_, err = tool.Execute(context.Background(), json.RawMessage(`{"ref":1,"text":"`+text+`"}`))
 	if err == nil || !strings.Contains(err.Error(), "browser_type supports text up to") {
@@ -206,10 +234,12 @@ func TestTypeToolRejectsOversizedTextBeforePageCheck(t *testing.T) {
 	if !strings.Contains(err.Error(), "Next:") {
 		t.Fatalf("oversized text error should include Next step, got %v", err)
 	}
+	requireInvalidArgs(t, err)
 	_, err = tool.Execute(context.Background(), json.RawMessage(`{"ref":1,"text":"hi","url":"https://example.com"}`))
 	if err == nil || !strings.Contains(err.Error(), "unknown field") || !strings.Contains(err.Error(), "url") || !strings.Contains(err.Error(), "Next:") {
 		t.Fatalf("unknown arg error = %v, want Next guidance", err)
 	}
+	requireInvalidArgs(t, err)
 }
 
 func TestClickToolRejectsInvalidRefBeforePageCheck(t *testing.T) {
@@ -221,10 +251,12 @@ func TestClickToolRejectsInvalidRefBeforePageCheck(t *testing.T) {
 	if err == nil || !strings.Contains(err.Error(), "ref must be a positive integer") || !strings.Contains(err.Error(), "Next:") {
 		t.Fatalf("invalid ref error = %v, want Next guidance", err)
 	}
+	requireInvalidArgs(t, err)
 	_, err = tool.Execute(context.Background(), json.RawMessage(`{"ref":1,"text":"ignored"}`))
 	if err == nil || !strings.Contains(err.Error(), "unknown field") || !strings.Contains(err.Error(), "text") || !strings.Contains(err.Error(), "Next:") {
 		t.Fatalf("unknown arg error = %v, want Next guidance", err)
 	}
+	requireInvalidArgs(t, err)
 }
 
 func TestNoArgBrowserToolsRejectUnknownArgs(t *testing.T) {
@@ -240,5 +272,6 @@ func TestNoArgBrowserToolsRejectUnknownArgs(t *testing.T) {
 		if err == nil || !strings.Contains(err.Error(), "unknown field") || !strings.Contains(err.Error(), "ref") || !strings.Contains(err.Error(), "Next:") {
 			t.Fatalf("%s unknown arg error = %v, want Next guidance", tool.Name, err)
 		}
+		requireInvalidArgs(t, err)
 	}
 }

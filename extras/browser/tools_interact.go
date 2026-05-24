@@ -3,7 +3,6 @@ package browser
 import (
 	"context"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"strings"
 	"time"
@@ -28,7 +27,7 @@ const (
 )
 
 func browserRefRequiredError(tool string) error {
-	return fmt.Errorf("ref must be a positive integer\nNext: call browser_snapshot to get current ref ids, then retry %s with one of those refs", tool)
+	return browserInvalidArgs("ref must be a positive integer", fmt.Sprintf("call browser_snapshot to get current ref ids, then retry %s with one of those refs", tool))
 }
 
 func browserNotInteractableError(ref int, err error) error {
@@ -158,7 +157,7 @@ func TypeTool(s *Session) *agent.Tool {
 				return "", browserRefRequiredError("browser_type")
 			}
 			if len(args.Text) > maxBrowserTypeTextBytes {
-				return "", fmt.Errorf("text is %d bytes; browser_type supports text up to %d bytes\nNext: retry browser_type with shorter text, or paste large content through a file/shell workflow instead", len(args.Text), maxBrowserTypeTextBytes)
+				return "", browserInvalidArgs(fmt.Sprintf("text is %d bytes; browser_type supports text up to %d bytes", len(args.Text), maxBrowserTypeTextBytes), "retry browser_type with shorter text, or paste large content through a file/shell workflow instead")
 			}
 			if s.page == nil {
 				return "", ErrNoPage
@@ -244,7 +243,7 @@ func ScrollTool(s *Session) *agent.Tool {
 				amount = defaultBrowserScrollAmount
 			}
 			if amount > maxBrowserScrollAmount {
-				return "", fmt.Errorf("amount must be between 1 and %d CSS pixels\nNext: omit amount to use the default, use page_down/page_up, or retry with a smaller amount", maxBrowserScrollAmount)
+				return "", browserInvalidArgs(fmt.Sprintf("amount must be between 1 and %d CSS pixels", maxBrowserScrollAmount), "omit amount to use the default, use page_down/page_up, or retry with a smaller amount")
 			}
 			var js string
 			switch args.Direction {
@@ -261,9 +260,9 @@ func ScrollTool(s *Session) *agent.Tool {
 			case "bottom":
 				js = "() => window.scrollTo(0, document.body.scrollHeight)"
 			case "":
-				return "", errors.New("'direction' is required. Next: retry with one of up, down, page_up, page_down, top, or bottom")
+				return "", browserInvalidArgs("'direction' is required", "retry with one of up, down, page_up, page_down, top, or bottom")
 			default:
-				return "", fmt.Errorf("unknown direction %q. Next: retry with one of up, down, page_up, page_down, top, or bottom", args.Direction)
+				return "", browserInvalidArgs(fmt.Sprintf("unknown direction %q", args.Direction), "retry with one of up, down, page_up, page_down, top, or bottom")
 			}
 			if s.page == nil {
 				return "", ErrNoPage

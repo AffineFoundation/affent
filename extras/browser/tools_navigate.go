@@ -3,7 +3,6 @@ package browser
 import (
 	"context"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"strings"
 	"time"
@@ -66,13 +65,13 @@ func NavigateTool(s *Session) *agent.Tool {
 			}
 			args.URL = strings.TrimSpace(args.URL)
 			if args.URL == "" {
-				return "", errors.New("url is required\nNext: retry browser_navigate with a fully-qualified http:// or https:// URL")
+				return "", browserInvalidArgs("url is required", "retry browser_navigate with a fully-qualified http:// or https:// URL")
 			}
 			if len(args.URL) > maxBrowserURLBytes {
-				return "", fmt.Errorf("url is %d bytes; browser_navigate supports URLs up to %d bytes\nNext: retry browser_navigate with the canonical page URL, or use web_search to find a shorter result URL", len(args.URL), maxBrowserURLBytes)
+				return "", browserInvalidArgs(fmt.Sprintf("url is %d bytes; browser_navigate supports URLs up to %d bytes", len(args.URL), maxBrowserURLBytes), "retry browser_navigate with the canonical page URL, or use an available discovery tool/source to find a shorter result URL")
 			}
 			if !strings.HasPrefix(args.URL, "http://") && !strings.HasPrefix(args.URL, "https://") {
-				return "", fmt.Errorf("url must start with http:// or https:// (got %q)\nNext: retry browser_navigate with the full URL including the http:// or https:// scheme", args.URL)
+				return "", browserInvalidArgs(fmt.Sprintf("url must start with http:// or https:// (got %q)", args.URL), "retry browser_navigate with the full URL including the http:// or https:// scheme")
 			}
 			waitUntil, err := normalizeBrowserLoadWait(args.WaitUntil, "wait_until")
 			if err != nil {
@@ -152,7 +151,7 @@ func normalizeBrowserLoadWait(waitUntil, argName string) (string, error) {
 	case "load", "domcontentloaded", "networkidle":
 		return waitUntil, nil
 	default:
-		return "", fmt.Errorf("%s %q is not supported\nNext: retry with one of load, domcontentloaded, or networkidle", argName, waitUntil)
+		return "", browserInvalidArgs(fmt.Sprintf("%s %q is not supported", argName, waitUntil), "retry with one of load, domcontentloaded, or networkidle")
 	}
 }
 
@@ -260,7 +259,7 @@ func WaitTool(s *Session) *agent.Tool {
 			args.For = strings.TrimSpace(args.For)
 			args.Value = strings.TrimSpace(args.Value)
 			if args.For == "" {
-				return "", errors.New("'for' is required. Next: retry with one of load, domcontentloaded, networkidle, or text")
+				return "", browserInvalidArgs("'for' is required", "retry with one of load, domcontentloaded, networkidle, or text")
 			}
 			waitFor, err := normalizeBrowserWaitFor(args.For)
 			if err != nil {
@@ -268,14 +267,14 @@ func WaitTool(s *Session) *agent.Tool {
 			}
 			timeout, err := resolveBrowserWaitTimeout(args.TimeoutMS)
 			if err != nil {
-				return "", fmt.Errorf("%w\nNext: omit timeout_ms to use the default, or retry with a value between %d and %d", err, minBrowserWaitTimeoutMS, maxBrowserWaitTimeoutMS)
+				return "", browserInvalidArgsWrap(err, fmt.Sprintf("omit timeout_ms to use the default, or retry with a value between %d and %d", minBrowserWaitTimeoutMS, maxBrowserWaitTimeoutMS))
 			}
 			if waitFor == "text" {
 				if args.Value == "" {
-					return "", errors.New("'value' is required when 'for'='text'. Next: retry with the exact short substring you expect to appear")
+					return "", browserInvalidArgs("'value' is required when 'for'='text'", "retry with the exact short substring you expect to appear")
 				}
 				if len(args.Value) > maxBrowserWaitTextBytes {
-					return "", fmt.Errorf("'value' is %d bytes; browser_wait text supports values up to %d bytes\nNext: retry browser_wait with a shorter exact substring that appears on the page", len(args.Value), maxBrowserWaitTextBytes)
+					return "", browserInvalidArgs(fmt.Sprintf("'value' is %d bytes; browser_wait text supports values up to %d bytes", len(args.Value), maxBrowserWaitTextBytes), "retry browser_wait with a shorter exact substring that appears on the page")
 				}
 			}
 			if s.page == nil {
@@ -305,7 +304,7 @@ func normalizeBrowserWaitFor(waitFor string) (string, error) {
 	case "load", "domcontentloaded", "networkidle", "text":
 		return waitFor, nil
 	default:
-		return "", fmt.Errorf("'for' value %q is not supported\nNext: retry browser_wait with for=load, for=domcontentloaded, for=networkidle, or for=text", waitFor)
+		return "", browserInvalidArgs(fmt.Sprintf("'for' value %q is not supported", waitFor), "retry browser_wait with for=load, for=domcontentloaded, for=networkidle, or for=text")
 	}
 }
 

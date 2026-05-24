@@ -76,6 +76,7 @@ func TestScreenshotToolValidatesArgsBeforePageCheck(t *testing.T) {
 	if err == nil || !strings.Contains(err.Error(), "decode args") || !strings.Contains(err.Error(), "Next:") {
 		t.Fatalf("invalid JSON error = %v, want decode args", err)
 	}
+	requireInvalidArgs(t, err)
 
 	_, err = tool.Execute(context.Background(), json.RawMessage(`{"save_path":"   "}`))
 	if err == nil || !strings.Contains(err.Error(), "save_path must not be blank") {
@@ -84,6 +85,7 @@ func TestScreenshotToolValidatesArgsBeforePageCheck(t *testing.T) {
 	if !strings.Contains(err.Error(), "Next:") {
 		t.Fatalf("blank save_path error should include Next step, got %v", err)
 	}
+	requireInvalidArgs(t, err)
 
 	longPath := strings.Repeat("x", maxScreenshotSavePathBytes+1)
 	_, err = tool.Execute(context.Background(), json.RawMessage(`{"save_path":"`+longPath+`"}`))
@@ -93,9 +95,11 @@ func TestScreenshotToolValidatesArgsBeforePageCheck(t *testing.T) {
 	if !strings.Contains(err.Error(), "Next:") {
 		t.Fatalf("oversized save_path error should include Next step, got %v", err)
 	}
+	requireInvalidArgs(t, err)
 
 	_, err = tool.Execute(context.Background(), json.RawMessage(`{"save_path":"shot.png","url":"https://example.com"}`))
 	if err == nil || !strings.Contains(err.Error(), "unknown field") || !strings.Contains(err.Error(), "url") || !strings.Contains(err.Error(), "Next:") {
 		t.Fatalf("unknown arg error = %v, want Next guidance", err)
 	}
+	requireInvalidArgs(t, err)
 }
