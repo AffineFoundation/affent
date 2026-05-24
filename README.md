@@ -776,8 +776,9 @@ Native session endpoints:
   reopening an inactive session.
 - `GET /v1/sessions/{id}/tools` lists the active session's actual tool
   catalog, including JSON schemas.
-- `GET /v1/sessions/{id}/transcripts` lists durable child-loop transcripts
-  from `run_task` and `subagent_run`.
+- `GET /v1/sessions/{id}/transcripts?limit=100&after=<transcript_path>` lists
+  durable child-loop transcripts from `run_task` and `subagent_run` with cursor
+  pagination.
 - `GET /v1/sessions/{id}/transcripts/{path}` reads a bounded transcript chunk.
 - `GET /v1/sessions/{id}/artifacts?limit=100&after=<artifact_path>` lists
   durable tool-result artifacts with cursor pagination.

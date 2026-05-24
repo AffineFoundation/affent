@@ -10,7 +10,6 @@ import (
 	"os"
 	"path"
 	"path/filepath"
-	"sort"
 	"strconv"
 	"strings"
 	"time"
@@ -19,6 +18,9 @@ import (
 )
 
 const (
+	defaultTranscriptListLimit = 100
+	maxTranscriptListLimit     = 1000
+	transcriptReadDirBatch     = 128
 	defaultTranscriptReadLimit = 64 * 1024
 	maxTranscriptReadLimit     = 1024 * 1024
 )
@@ -26,6 +28,8 @@ const (
 type transcriptListResponse struct {
 	SessionID   string           `json:"session_id"`
 	Transcripts []transcriptInfo `json:"transcripts"`
+	NextAfter   string           `json:"next_after,omitempty"`
+	HasMore     bool             `json:"has_more"`
 }
 
 type transcriptInfo struct {
@@ -47,13 +51,13 @@ func handleSessionTranscripts(pool *SessionPool, sessionID, transcriptPath strin
 	}
 	sessionDir := pool.sessionDirPath(sessionID)
 	if strings.Trim(transcriptPath, "/") == "" {
-		handleSessionTranscriptList(sessionDir, sessionID, w)
+		handleSessionTranscriptList(sessionDir, sessionID, w, r)
 		return
 	}
 	handleSessionTranscriptRead(sessionDir, sessionID, transcriptPath, w, r)
 }
 
-func handleSessionTranscriptList(sessionDir, sessionID string, w http.ResponseWriter) {
+func handleSessionTranscriptList(sessionDir, sessionID string, w http.ResponseWriter, r *http.Request) {
 	if _, found, err := durableSessionDirInfo(sessionDir); err != nil {
 		writeJSONError(w, http.StatusInternalServerError, "stat session", err)
 		return
@@ -61,40 +65,130 @@ func handleSessionTranscriptList(sessionDir, sessionID string, w http.ResponseWr
 		writeJSONError(w, http.StatusNotFound, "session not found", os.ErrNotExist)
 		return
 	}
-	out := transcriptListResponse{SessionID: sessionID, Transcripts: []transcriptInfo{}}
+	after, limit, err := parseTranscriptListQuery(sessionID, r)
+	if err != nil {
+		writeJSONErrorTyped(w, http.StatusBadRequest, "invalid transcript query", err, "bad_request")
+		return
+	}
+	paths, hasMore, err := listTranscriptPaths(sessionDir, sessionID, after, limit)
+	if err != nil {
+		writeJSONError(w, http.StatusInternalServerError, "read transcripts", err)
+		return
+	}
+	out := transcriptListResponse{SessionID: sessionID, Transcripts: []transcriptInfo{}, HasMore: hasMore}
+	for _, rel := range paths {
+		full := filepath.Join(sessionDir, filepath.FromSlash(rel))
+		info, err := os.Lstat(full)
+		if err != nil {
+			continue
+		}
+		if info.IsDir() || info.Mode()&os.ModeSymlink != 0 {
+			continue
+		}
+		kind, childID, ok := transcriptInfoFromPath(sessionID, rel)
+		if !ok {
+			continue
+		}
+		out.Transcripts = append(out.Transcripts, transcriptInfo{
+			Kind:    kind,
+			ChildID: childID,
+			Path:    rel,
+			Size:    info.Size(),
+			ModTime: info.ModTime().UTC().Format(time.RFC3339),
+		})
+	}
+	if len(out.Transcripts) > 0 && out.HasMore {
+		out.NextAfter = out.Transcripts[len(out.Transcripts)-1].Path
+	}
+	w.Header().Set("Content-Type", "application/json")
+	_ = json.NewEncoder(w).Encode(out)
+}
+
+func parseTranscriptListQuery(sessionID string, r *http.Request) (after string, limit int, err error) {
+	limit = defaultTranscriptListLimit
+	q := r.URL.Query()
+	if raw := q.Get("after"); raw != "" {
+		after, err = cleanTranscriptRequestPath(sessionID, raw)
+		if err != nil {
+			return "", 0, err
+		}
+	}
+	if raw := q.Get("limit"); raw != "" {
+		n, err := strconv.Atoi(raw)
+		if err != nil {
+			return "", 0, err
+		}
+		if n <= 0 {
+			return "", 0, errors.New("limit must be positive")
+		}
+		if n > maxTranscriptListLimit {
+			n = maxTranscriptListLimit
+		}
+		limit = n
+	}
+	return after, limit, nil
+}
+
+func listTranscriptPaths(sessionDir, sessionID, after string, limit int) ([]string, bool, error) {
+	candidates := map[string]struct{}{}
 	for _, root := range transcriptRoots(sessionID) {
-		dir := filepath.Join(sessionDir, filepath.FromSlash(root.rel))
-		entries, err := durableReadDir(dir)
+		dirPath := filepath.Join(sessionDir, filepath.FromSlash(root.rel))
+		info, err := os.Lstat(dirPath)
 		if err != nil {
 			if errors.Is(err, os.ErrNotExist) {
 				continue
 			}
-			writeJSONError(w, http.StatusInternalServerError, "read transcripts", err)
-			return
+			return nil, false, err
 		}
-		for _, ent := range entries {
-			if ent.IsDir() || durableDirEntryIsSymlink(ent) || !strings.HasSuffix(ent.Name(), ".jsonl") {
-				continue
+		if !info.IsDir() {
+			return nil, false, errors.New("durable path is not a directory")
+		}
+		if info.Mode()&os.ModeSymlink != 0 {
+			return nil, false, errors.New("durable path must not be a symlink")
+		}
+		dir, err := os.Open(dirPath)
+		if err != nil {
+			return nil, false, err
+		}
+		for {
+			entries, err := dir.ReadDir(transcriptReadDirBatch)
+			if err != nil && !errors.Is(err, io.EOF) {
+				_ = dir.Close()
+				return nil, false, err
 			}
-			info, err := ent.Info()
-			if err != nil {
-				continue
+			for _, ent := range entries {
+				if ent.IsDir() || durableDirEntryIsSymlink(ent) || !strings.HasSuffix(ent.Name(), ".jsonl") {
+					continue
+				}
+				rel := path.Join(root.rel, ent.Name())
+				if rel <= after {
+					continue
+				}
+				addBoundedStringCandidate(candidates, rel, limit+1)
 			}
-			childID := strings.TrimSuffix(ent.Name(), ".jsonl")
-			out.Transcripts = append(out.Transcripts, transcriptInfo{
-				Kind:    root.kind,
-				ChildID: childID,
-				Path:    path.Join(root.rel, ent.Name()),
-				Size:    info.Size(),
-				ModTime: info.ModTime().UTC().Format(time.RFC3339),
-			})
+			if errors.Is(err, io.EOF) {
+				break
+			}
+		}
+		if err := dir.Close(); err != nil {
+			return nil, false, err
 		}
 	}
-	sort.Slice(out.Transcripts, func(i, j int) bool {
-		return out.Transcripts[i].Path < out.Transcripts[j].Path
-	})
-	w.Header().Set("Content-Type", "application/json")
-	_ = json.NewEncoder(w).Encode(out)
+	paths := sortedStringCandidates(candidates)
+	hasMore := len(paths) > limit
+	if hasMore {
+		paths = paths[:limit]
+	}
+	return paths, hasMore, nil
+}
+
+func transcriptInfoFromPath(sessionID, rel string) (kind string, childID string, ok bool) {
+	for _, root := range transcriptRoots(sessionID) {
+		if strings.HasPrefix(rel, root.rel+"/") && path.Dir(rel) == root.rel {
+			return root.kind, strings.TrimSuffix(path.Base(rel), ".jsonl"), true
+		}
+	}
+	return "", "", false
 }
 
 func handleSessionTranscriptRead(sessionDir, sessionID, rawPath string, w http.ResponseWriter, r *http.Request) {

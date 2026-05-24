@@ -2,10 +2,13 @@ package main
 
 import (
 	"encoding/json"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
 	"os"
 	"path/filepath"
+	"reflect"
 	"strings"
 	"testing"
 )
@@ -31,6 +34,9 @@ func TestHandleSessionTranscripts_ListsFocusedAndSubagentTranscripts(t *testing.
 	if len(resp.Transcripts) != 2 {
 		t.Fatalf("transcripts = %+v, want 2", resp.Transcripts)
 	}
+	if resp.HasMore || resp.NextAfter != "" {
+		t.Fatalf("single transcript list cursor = has_more:%v next:%q, want false/empty", resp.HasMore, resp.NextAfter)
+	}
 	got := map[string]transcriptInfo{}
 	for _, tr := range resp.Transcripts {
 		got[tr.Path] = tr
@@ -42,6 +48,64 @@ func TestHandleSessionTranscripts_ListsFocusedAndSubagentTranscripts(t *testing.
 	subagentPath := "subagents/traceable/subagent_one.jsonl"
 	if got[subagentPath].Kind != "subagent" || got[subagentPath].ChildID != "subagent_one" {
 		t.Fatalf("subagent transcript info = %+v", got[subagentPath])
+	}
+}
+
+func TestHandleSessionTranscripts_ListPaginatesByTranscriptPath(t *testing.T) {
+	pool := newTestPool(t, 4, "5m")
+	writeTranscriptFixture(t, pool, "traceable-page", "subagents", "subagent_two", "subagent 2\n")
+	writeTranscriptFixture(t, pool, "traceable-page", "focused-tasks", "focused_one", "focused 1\n")
+	writeTranscriptFixture(t, pool, "traceable-page", "subagents", "subagent_one", "subagent 1\n")
+
+	r := httptest.NewRequest(http.MethodGet, "/v1/sessions/traceable-page/transcripts?limit=2", nil)
+	w := httptest.NewRecorder()
+	handleSessionRoutes(pool).ServeHTTP(w, r)
+	if got := w.Result().StatusCode; got != http.StatusOK {
+		t.Fatalf("page1 status = %d, want 200; body=%s", got, w.Body.String())
+	}
+	var page1 transcriptListResponse
+	if err := json.Unmarshal(w.Body.Bytes(), &page1); err != nil {
+		t.Fatalf("decode page1: %v body=%s", err, w.Body.String())
+	}
+	wantPage1 := []string{
+		"focused-tasks/traceable-page/focused_one.jsonl",
+		"subagents/traceable-page/subagent_one.jsonl",
+	}
+	if got := transcriptPaths(page1.Transcripts); !reflect.DeepEqual(got, wantPage1) {
+		t.Fatalf("page1 transcripts = %v, want %v", got, wantPage1)
+	}
+	if !page1.HasMore || page1.NextAfter != wantPage1[1] {
+		t.Fatalf("page1 cursor = has_more:%v next:%q, want true/%q", page1.HasMore, page1.NextAfter, wantPage1[1])
+	}
+
+	r = httptest.NewRequest(http.MethodGet, fmt.Sprintf("/v1/sessions/traceable-page/transcripts?limit=2&after=%s", url.QueryEscape(page1.NextAfter)), nil)
+	w = httptest.NewRecorder()
+	handleSessionRoutes(pool).ServeHTTP(w, r)
+	if got := w.Result().StatusCode; got != http.StatusOK {
+		t.Fatalf("page2 status = %d, want 200; body=%s", got, w.Body.String())
+	}
+	var page2 transcriptListResponse
+	if err := json.Unmarshal(w.Body.Bytes(), &page2); err != nil {
+		t.Fatalf("decode page2: %v body=%s", err, w.Body.String())
+	}
+	wantPage2 := []string{"subagents/traceable-page/subagent_two.jsonl"}
+	if got := transcriptPaths(page2.Transcripts); !reflect.DeepEqual(got, wantPage2) {
+		t.Fatalf("page2 transcripts = %v, want %v", got, wantPage2)
+	}
+	if page2.HasMore || page2.NextAfter != "" {
+		t.Fatalf("page2 cursor = has_more:%v next:%q, want false/empty", page2.HasMore, page2.NextAfter)
+	}
+}
+
+func TestHandleSessionTranscripts_ListRejectsBadCursor(t *testing.T) {
+	pool := newTestPool(t, 4, "5m")
+	writeTranscriptFixture(t, pool, "traceable-bad-cursor", "focused-tasks", "focused_one", "focused\n")
+
+	r := httptest.NewRequest(http.MethodGet, "/v1/sessions/traceable-bad-cursor/transcripts?after=../conversation.jsonl", nil)
+	w := httptest.NewRecorder()
+	handleSessionRoutes(pool).ServeHTTP(w, r)
+	if got := w.Result().StatusCode; got != http.StatusBadRequest {
+		t.Fatalf("status = %d, want 400; body=%s", got, w.Body.String())
 	}
 }
 
@@ -183,6 +247,14 @@ func TestHandleSessionTranscripts_MissingSession(t *testing.T) {
 	if got := w.Result().StatusCode; got != http.StatusNotFound {
 		t.Fatalf("status = %d, want 404; body=%s", got, w.Body.String())
 	}
+}
+
+func transcriptPaths(in []transcriptInfo) []string {
+	out := make([]string, len(in))
+	for i, tr := range in {
+		out[i] = tr.Path
+	}
+	return out
 }
 
 func writeTranscriptFixture(t *testing.T, pool *SessionPool, sessionID, kindDir, childID, body string) {

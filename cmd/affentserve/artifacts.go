@@ -10,7 +10,6 @@ import (
 	"os"
 	"path"
 	"path/filepath"
-	"sort"
 	"strconv"
 	"strings"
 	"time"
@@ -160,43 +159,18 @@ func listArtifactNames(root, after string, limit int) ([]string, bool, error) {
 			if rel <= after {
 				continue
 			}
-			addArtifactNameCandidate(candidates, ent.Name(), limit+1)
+			addBoundedStringCandidate(candidates, ent.Name(), limit+1)
 		}
 		if errors.Is(err, io.EOF) {
 			break
 		}
 	}
-	names := sortedArtifactNameCandidates(candidates)
+	names := sortedStringCandidates(candidates)
 	hasMore := len(names) > limit
 	if hasMore {
 		names = names[:limit]
 	}
 	return names, hasMore, nil
-}
-
-func addArtifactNameCandidate(candidates map[string]struct{}, name string, cap int) {
-	if cap <= 0 {
-		return
-	}
-	candidates[name] = struct{}{}
-	for len(candidates) > cap {
-		var highest string
-		for name := range candidates {
-			if highest == "" || name > highest {
-				highest = name
-			}
-		}
-		delete(candidates, highest)
-	}
-}
-
-func sortedArtifactNameCandidates(candidates map[string]struct{}) []string {
-	names := make([]string, 0, len(candidates))
-	for name := range candidates {
-		names = append(names, name)
-	}
-	sort.Strings(names)
-	return names
 }
 
 func handleSessionArtifactRead(sessionDir, rawPath string, w http.ResponseWriter, r *http.Request) {
