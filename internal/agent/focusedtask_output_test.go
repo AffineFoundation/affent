@@ -88,7 +88,7 @@ func TestExtractBalancedJSONObject_HandlesEscapedQuotes(t *testing.T) {
 func TestBuildFocusedTaskResult_HappyPath(t *testing.T) {
 	profile := recallProfile()
 	res := childRunResult{
-		Report:        `{"task_type":"recall","ok":true,"summary":"two facts","findings":[{"claim":"c1","evidence":"e1","source":"sess:1","confidence":"high"},{"claim":"c2","source":"mem:topic"}],"warnings":["partial"],"suggested_next":["read X"]}`,
+		Report:        `{"task_type":"recall","ok":true,"summary":"two facts","findings":[{"claim":"c1","evidence":"e1","source":"sess:1","confidence":"high"},{"claim":"c2","evidence":"e2","source":"mem:topic"}],"warnings":["partial"],"suggested_next":["read X"]}`,
 		TurnEndReason: sse.TurnEndCompleted,
 		Usage:         subagentUsage{InputTokens: 100, OutputTokens: 50},
 	}
@@ -103,8 +103,8 @@ func TestBuildFocusedTaskResult_HappyPath(t *testing.T) {
 	if len(result.Findings) != 2 || result.Findings[0].Confidence != "high" {
 		t.Fatalf("findings not preserved: %+v", result.Findings)
 	}
-	if result.Findings[1].Evidence != "" {
-		t.Fatalf("missing evidence should remain empty, got %q", result.Findings[1].Evidence)
+	if result.Findings[1].Evidence != "e2" {
+		t.Fatalf("evidence not preserved: %+v", result.Findings)
 	}
 	if result.Objective != "find prefs" {
 		t.Fatalf("objective not propagated: %q", result.Objective)
@@ -186,7 +186,7 @@ func TestSanitizeFindings_DropsEmptyClaimsAndTruncatesEvidence(t *testing.T) {
 	in := []FocusedTaskFinding{
 		{Claim: "ok", Evidence: long, Source: "file:1"},
 		{Claim: "  ", Evidence: "should drop"},
-		{Claim: "two", Source: "memory:topic"},
+		{Claim: "two", Evidence: "brief", Source: "memory:topic"},
 	}
 	out, warnings := sanitizeFindings(in)
 	if len(warnings) != 0 {
@@ -204,7 +204,7 @@ func TestSanitizeFindings_DropsEmptyClaimsAndTruncatesEvidence(t *testing.T) {
 func TestSanitizeFindings_CapsCount(t *testing.T) {
 	in := make([]FocusedTaskFinding, maxFocusedTaskFindings+5)
 	for i := range in {
-		in[i] = FocusedTaskFinding{Claim: "c", Source: "src"}
+		in[i] = FocusedTaskFinding{Claim: "c", Evidence: "e", Source: "src"}
 	}
 	out, warnings := sanitizeFindings(in)
 	if len(warnings) != 0 {
@@ -332,6 +332,20 @@ func TestSanitizeFindings_DowngradesMissingSourceToWarning(t *testing.T) {
 	}
 	if len(warnings) != 1 || !strings.Contains(warnings[0], "omitted finding without source: unsupported") {
 		t.Fatalf("missing-source warning = %+v", warnings)
+	}
+}
+
+func TestSanitizeFindings_DowngradesMissingEvidenceToWarning(t *testing.T) {
+	in := []FocusedTaskFinding{
+		{Claim: "supported", Evidence: "quoted user preference", Source: "memory:prefs"},
+		{Claim: "no evidence", Source: "session:two"},
+	}
+	out, warnings := sanitizeFindings(in)
+	if len(out) != 1 || out[0].Claim != "supported" {
+		t.Fatalf("evidence-less finding should be omitted, got findings=%+v", out)
+	}
+	if len(warnings) != 1 || !strings.Contains(warnings[0], "omitted finding without evidence: no evidence") {
+		t.Fatalf("missing-evidence warning = %+v", warnings)
 	}
 }
 

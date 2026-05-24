@@ -287,9 +287,14 @@ func sanitizeFindings(in []FocusedTaskFinding) ([]FocusedTaskFinding, []string) 
 			warnings = append(warnings, "omitted finding without source: "+previewN(claim, 160))
 			continue
 		}
+		evidence := sanitizeUntrustedText(previewN(strings.TrimSpace(f.Evidence), maxFocusedTaskFindingEvidenceBytes))
+		if evidence == "" {
+			warnings = append(warnings, "omitted finding without evidence: "+previewN(claim, 160))
+			continue
+		}
 		out = append(out, FocusedTaskFinding{
 			Claim:      claim,
-			Evidence:   sanitizeUntrustedText(previewN(strings.TrimSpace(f.Evidence), maxFocusedTaskFindingEvidenceBytes)),
+			Evidence:   evidence,
 			Source:     source,
 			Severity:   normalizeSeverity(f.Severity),
 			Confidence: normalizeConfidence(f.Confidence),
