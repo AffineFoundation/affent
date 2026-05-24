@@ -701,6 +701,7 @@ func TestRunner_EndToEnd_ToolArgRepairFixesMalformedJSON(t *testing.T) {
 			// mechanism — passes when ArgsRepaired || Canonicalized
 			// is true for any call matching the tool name.
 			ToolRequestRepaired("read_file"),
+			ToolRepairKindAtLeast("malformed_json", 1),
 			FinalTextContains("hello agent"),
 		},
 	}
@@ -780,6 +781,7 @@ func TestRunner_EndToEnd_ToolSchemaCoercionFixesScalarType(t *testing.T) {
 			TurnEndedCleanly(),
 			ToolCalled("shell", nil),
 			ToolRequestRepaired("shell"),
+			ToolRepairKindAtLeast("type_coercion", 1),
 			FinalTextContains("agent"),
 		},
 	}
