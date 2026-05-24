@@ -31,6 +31,15 @@ func browserRefRequiredError(tool string) error {
 	return fmt.Errorf("ref must be a positive integer\nNext: call browser_snapshot to get current ref ids, then retry %s with one of those refs", tool)
 }
 
+func browserNotInteractableError(ref int, err error) error {
+	return fmt.Errorf(
+		"ref %d not interactable (hidden, disabled, or covered by another element): %w\n"+
+			"Next: call browser_snapshot to inspect the current page; if needed scroll, close the covering element, or choose a different visible ref",
+		ref,
+		err,
+	)
+}
+
 // waitInteractable wraps rod.Element.WaitInteractable with our bounded
 // timeout and a friendlier error string. Returns a helpful message
 // when the element is hidden / covered so the LLM can act (close the
@@ -39,7 +48,7 @@ func waitInteractable(ctx context.Context, el *rod.Element, ref int) error {
 	innerCtx, cancel := context.WithTimeout(ctx, interactableTimeout)
 	defer cancel()
 	if _, err := el.Context(innerCtx).WaitInteractable(); err != nil {
-		return fmt.Errorf("ref %d not interactable (hidden, disabled, or covered by another element): %w", ref, err)
+		return browserNotInteractableError(ref, err)
 	}
 	return nil
 }
