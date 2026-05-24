@@ -56,6 +56,10 @@ Scenario records describe one eval case:
   `unknown_field_drop`, and `other`.
   New traces prefer the authoritative `turn.end.tool_stats` repair summary;
   older traces fall back to classifying `tool.request.repair_notes`.
+- `tool_failure_by_kind`: optional map of structured tool failure kind to
+  count, copied from `turn.end.tool_stats`. Web tool failures use this field to
+  distinguish blocked pages, empty responses, non-text responses, timeouts,
+  argument errors, and HTTP/network classes without parsing free-form text.
 - `loop_guard_interventions`: runtime loop guard intervention count.
 - `forced_no_tools`: count of forced no-tool follow-up requests after repeated
   loop guard interventions.
@@ -108,7 +112,8 @@ Summary records aggregate all scenario records from the same process:
 - Tool totals: `tool_calls`, `tool_errors`, `tool_repaired`,
   `tool_name_canonicalized`, `tool_repair_calls`, `tool_repair_succeeded`,
   `tool_repair_failed`, `tool_repair_notes`, `tool_repair_by_kind`,
-  `loop_guard_interventions`, `forced_no_tools`, `tool_duration_ms`.
+  `tool_failure_by_kind`, `loop_guard_interventions`, `forced_no_tools`,
+  `tool_duration_ms`.
 - Truncation totals: `tool_args_truncated`, `tool_args_omitted_bytes`,
   `tool_results_truncated`, `tool_results_omitted_bytes`,
   `tool_result_artifacts`.

@@ -161,6 +161,13 @@ diagnostics.
 - `tool_repair_by_kind`: object keyed by repair kind (`tool_name`,
   `malformed_json`, `wrapper_unwrap`, `scalar_wrap`, `alias_rename`,
   `enum_normalization`, `type_coercion`, `unknown_field_drop`, or `other`).
+- `tool_failure_by_kind`: object keyed by structured tool failure kind. Tools
+  that can explain recoverable failures should include a line like
+  `Failure: kind=blocked` in their result or error text; the runtime aggregates
+  those kinds here. Known web kinds include `invalid_args`, `blocked`,
+  `not_found`, `rate_limited`, `server_error`, `http_error`,
+  `private_network_blocked`, `timeout`, `network_error`, `empty_response`, and
+  `non_text`.
 - `tool_errors`
 - `tool_duration_ms`
 - `loop_guard_interventions`

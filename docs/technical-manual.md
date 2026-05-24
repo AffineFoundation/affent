@@ -240,6 +240,36 @@ curl -sS http://127.0.0.1:7777/v1/chat/completions \
   | jq '{content: .choices[0].message.content, session_id: .affent_session_id}'
 ```
 
+## Web Fetch Diagnostics
+
+`web_fetch` is a direct HTTP reader, not a full browser. Some public sites
+return anti-bot pages, empty bodies, binary assets, or HTTP errors to direct
+fetches even when they work in a browser. The tool surfaces those cases as
+structured failures so the agent can switch source instead of burning turns:
+
+- `Failure: kind=blocked`: the source refused direct fetch, commonly HTTP 401
+  or 403.
+- `Failure: kind=empty_response`: the source returned a successful HTTP
+  response with no readable body.
+- `Failure: kind=non_text`: the source returned an image, PDF, archive, or
+  another body that is not readable page evidence.
+- `Failure: kind=timeout`, `network_error`, `rate_limited`, `server_error`,
+  `not_found`, or `http_error`: transport or HTTP-class failures.
+- `Failure: kind=invalid_args`: the model called the tool with missing or
+  unsupported arguments.
+
+Every structured web failure also includes a `Next:` line. The runtime prompt
+instructs the agent to follow that guidance: use a canonical or alternate
+source, use browser tools when they are registered, rely on search snippets only
+as weak sentiment when full-page reading is unavailable, or answer with the gap
+clearly marked as unverified.
+
+Repeated failed `web_fetch` calls are guarded more aggressively than general
+tool failures. After repeated no-evidence fetches, the loop guard tells the
+model to stop opening search results one by one and change strategy. Per-turn
+stats expose `tool_failure_by_kind`, so eval runs can distinguish a useful
+recovery path from a run that simply accumulated failed fetches.
+
 `affent_session_id` pins follow-up turns. Pass it back through
 `X-Affent-Session-Id`, `affent_session_id`, or `session_id`.
 
