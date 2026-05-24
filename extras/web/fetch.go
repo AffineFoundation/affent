@@ -143,8 +143,8 @@ func normalizeFetchConfig(cfg FetchConfig) FetchConfig {
 	return cfg
 }
 
-func fetch(ctx context.Context, cfg FetchConfig, url string) (string, error) {
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
+func fetch(ctx context.Context, cfg FetchConfig, requestURL string) (string, error) {
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, requestURL, nil)
 	if err != nil {
 		return "", err
 	}
@@ -156,20 +156,24 @@ func fetch(ctx context.Context, cfg FetchConfig, url string) (string, error) {
 
 	resp, err := cfg.HTTP.Do(req)
 	if err != nil {
-		return "", recoverableFetchError(0, fmt.Errorf("http get: %w", err))
+		return "", recoverableFetchError(requestURL, "", 0, fmt.Errorf("http get: %w", err))
 	}
 	defer resp.Body.Close()
+	finalURL := ""
+	if resp.Request != nil && resp.Request.URL != nil {
+		finalURL = resp.Request.URL.String()
+	}
 
 	if resp.StatusCode/100 != 2 {
 		// Read a little so the error is informative.
 		preview, _ := io.ReadAll(io.LimitReader(resp.Body, 512))
-		return "", recoverableFetchError(resp.StatusCode, fmt.Errorf("http %d %s: %s",
+		return "", recoverableFetchError(requestURL, finalURL, resp.StatusCode, fmt.Errorf("http %d %s: %s",
 			resp.StatusCode, resp.Status, strings.TrimSpace(string(preview))))
 	}
 
 	body, err := io.ReadAll(io.LimitReader(resp.Body, cfg.MaxBytes+1))
 	if err != nil {
-		return "", recoverableFetchError(0, fmt.Errorf("read body: %w", err))
+		return "", recoverableFetchError(requestURL, finalURL, 0, fmt.Errorf("read body: %w", err))
 	}
 	bodyTruncated := int64(len(body)) > cfg.MaxBytes
 	if bodyTruncated {
@@ -177,7 +181,7 @@ func fetch(ctx context.Context, cfg FetchConfig, url string) (string, error) {
 	}
 
 	ct := resp.Header.Get("Content-Type")
-	out := renderBody(body, ct, resp.Request.URL.String())
+	out := renderBody(body, ct, finalURL)
 
 	if len(out) > cfg.MaxResultChars {
 		// Snap back to a UTF-8 rune boundary so accented Latin, CJK,
@@ -195,7 +199,7 @@ func fetch(ctx context.Context, cfg FetchConfig, url string) (string, error) {
 	return out, nil
 }
 
-func recoverableFetchError(status int, err error) error {
+func recoverableFetchError(requestURL, finalURL string, status int, err error) error {
 	if err == nil || strings.Contains(err.Error(), "\nNext:") {
 		return err
 	}
@@ -215,7 +219,7 @@ func recoverableFetchError(status int, err error) error {
 	case errors.Is(err, context.DeadlineExceeded) || strings.Contains(lower, "timeout") || strings.Contains(lower, "deadline exceeded"):
 		next = "network timeout; retry once with the same canonical URL, then switch to another available source or discovery tool if it fails again"
 	}
-	return fmt.Errorf("%w\nNext: %s", err, next)
+	return fmt.Errorf("%w\nURL: %s%s\nNext: %s", err, requestURL, redirectedURLSuffix(requestURL, finalURL), next)
 }
 
 func renderBody(body []byte, contentType, finalURL string) string {
@@ -257,8 +261,15 @@ func renderBody(body []byte, contentType, finalURL string) string {
 		strings.HasPrefix(ct, "application/yaml"):
 		return string(body)
 	default:
-		return fmt.Sprintf("[non-text response: Content-Type=%q, %d bytes]\nNext: do not treat this as readable page evidence; fetch an HTML/API/text version, use a browser tool if one is registered, or choose another authoritative source.", contentType, len(body))
+		return fmt.Sprintf("[non-text response: URL=%s, Content-Type=%q, %d bytes]\nNext: do not treat this as readable page evidence; fetch an HTML/API/text version, use a browser tool if one is registered, or choose another authoritative source.", finalURL, contentType, len(body))
 	}
+}
+
+func redirectedURLSuffix(requestURL, finalURL string) string {
+	if finalURL == "" || finalURL == requestURL {
+		return ""
+	}
+	return "\nFinal URL: " + finalURL
 }
 
 // newGuardedClient builds an http.Client whose Transport refuses to

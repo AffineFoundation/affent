@@ -98,7 +98,7 @@ func TestFetchTool_NonText(t *testing.T) {
 	if !strings.Contains(out, "non-text response") {
 		t.Errorf("expected non-text placeholder, got %q", out)
 	}
-	for _, want := range []string{"Next:", "do not treat this as readable page evidence", "HTML/API/text version"} {
+	for _, want := range []string{"URL=" + srv.URL, "Next:", "do not treat this as readable page evidence", "HTML/API/text version"} {
 		if !strings.Contains(out, want) {
 			t.Fatalf("non-text response missing %q guidance:\n%s", want, out)
 		}
@@ -185,9 +185,35 @@ func TestFetchTool_HTTPError(t *testing.T) {
 	if err == nil || !strings.Contains(err.Error(), "http 403") {
 		t.Errorf("expected 403 surface, got %v", err)
 	}
-	for _, want := range []string{"Next:", "blocked URL", "another available source"} {
+	for _, want := range []string{"URL: " + srv.URL, "Next:", "blocked URL", "another available source"} {
 		if err == nil || !strings.Contains(err.Error(), want) {
 			t.Fatalf("403 error missing %q guidance: %v", want, err)
+		}
+	}
+}
+
+func TestFetchTool_HTTPErrorReportsRedirectFinalURL(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/old":
+			http.Redirect(w, r, "/new", http.StatusFound)
+		case "/new":
+			http.Error(w, "blocked after redirect", http.StatusForbidden)
+		default:
+			http.NotFound(w, r)
+		}
+	}))
+	defer srv.Close()
+
+	tool := FetchTool(FetchConfig{AllowPrivateNetwork: true})
+	args, _ := json.Marshal(map[string]string{"url": srv.URL + "/old"})
+	_, err := tool.Execute(context.Background(), args)
+	if err == nil {
+		t.Fatal("expected redirected HTTP error")
+	}
+	for _, want := range []string{"URL: " + srv.URL + "/old", "Final URL: " + srv.URL + "/new", "blocked after redirect", "Next:"} {
+		if !strings.Contains(err.Error(), want) {
+			t.Fatalf("redirected error missing %q: %v", want, err)
 		}
 	}
 }
