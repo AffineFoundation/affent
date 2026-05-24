@@ -163,9 +163,12 @@ func TestBuiltinSkillProvider_SkillInstallWorkflowTriggers(t *testing.T) {
 		"AFFENT ACTIVE SKILL: skill_install_workflow",
 		"Do not install from a source you have not read",
 		"look for the relevant `SKILL.md`",
+		"raw GitHub files",
 		"ask the user to paste the exact skill body",
 		"Ask for explicit user confirmation",
 		"Do not install in the same response",
+		"active in the current session without restarting",
+		"persisted for future sessions",
 		"skill action=propose_install",
 		"skill action=confirm_install",
 	} {
