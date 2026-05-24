@@ -267,6 +267,55 @@ func TestRegistryDispatch_CanonicalizesToolNameAliases(t *testing.T) {
 	}
 }
 
+func TestRegistryDispatch_CanonicalizesCommonWeakModelToolNames(t *testing.T) {
+	cases := []struct {
+		registered string
+		called     string
+	}{
+		{registered: "read_file", called: "read_file_tool"},
+		{registered: "read_file", called: "file_read"},
+		{registered: "shell", called: "run_command"},
+		{registered: "list_files", called: "list_dir"},
+		{registered: "subagent_run", called: "subagent"},
+		{registered: "run_task", called: "focused_task"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.registered+"/"+tc.called, func(t *testing.T) {
+			reg := NewRegistry()
+			called := false
+			reg.Add(&Tool{
+				Name:   tc.registered,
+				Schema: json.RawMessage(`{"type":"object","properties":{"path":{"type":"string"}}}`),
+				Execute: func(ctx context.Context, args json.RawMessage) (string, error) {
+					called = true
+					return string(args), nil
+				},
+			})
+			out, isErr := reg.dispatch(context.Background(), tc.called, json.RawMessage(`{"path":"README.md"}`))
+			if isErr {
+				t.Fatalf("canonicalized call should succeed: %s", out)
+			}
+			if !called {
+				t.Fatal("canonicalized tool was not executed")
+			}
+		})
+	}
+}
+
+func TestRegistryDispatch_CommonAliasSuggestions(t *testing.T) {
+	reg := NewRegistry()
+	reg.Add(&Tool{Name: "read_file", Execute: func(ctx context.Context, args json.RawMessage) (string, error) {
+		return "", nil
+	}})
+	out, isErr := reg.dispatch(context.Background(), "opnfile", json.RawMessage(`{}`))
+	if !isErr {
+		t.Fatal("unknown tool should be an error")
+	}
+	if !strings.Contains(out, `Did you mean: read_file?`) {
+		t.Fatalf("expected read_file suggestion for common alias, got %q", out)
+	}
+}
+
 func TestRegistryDispatch_SchemaLessToolErrorGetsNextStep(t *testing.T) {
 	reg := NewRegistry()
 	reg.Add(&Tool{

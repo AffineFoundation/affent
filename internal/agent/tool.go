@@ -85,13 +85,13 @@ func (r *Registry) canonicalName(name string) (string, bool, bool) {
 	if _, ok := r.tools[name]; ok {
 		return name, true, false
 	}
-	want := normalizeToolIdentifier(name)
-	if want == "" {
+	want := toolIdentifierKeys(name)
+	if len(want) == 0 {
 		return name, false, false
 	}
 	canonical := ""
 	for _, toolName := range r.order {
-		if normalizeToolIdentifier(toolName) != want {
+		if !toolIdentifierSetsOverlap(want, canonicalToolIdentifierKeys(toolName)) {
 			continue
 		}
 		if canonical != "" {
@@ -124,10 +124,18 @@ func (r *Registry) suggestions(name string, limit int) []string {
 		rank     int
 	}
 	candidates := make([]candidate, 0, len(r.order))
+	wantKeys := toolIdentifierKeys(name)
 	lowerName := strings.ToLower(name)
 	for rank, toolName := range r.order {
 		lowerTool := strings.ToLower(toolName)
 		distance := levenshtein(lowerName, lowerTool)
+		if len(wantKeys) > 0 {
+			for key := range canonicalToolIdentifierKeys(toolName) {
+				for want := range wantKeys {
+					distance = min(distance, levenshtein(want, key))
+				}
+			}
+		}
 		if strings.Contains(lowerTool, lowerName) || strings.Contains(lowerName, lowerTool) {
 			distance = 0
 		}
@@ -251,4 +259,63 @@ func normalizeToolIdentifier(s string) string {
 		}
 	}
 	return b.String()
+}
+
+func toolIdentifierKeys(s string) map[string]bool {
+	base := normalizeToolIdentifier(s)
+	if base == "" {
+		return nil
+	}
+	out := map[string]bool{base: true}
+	for _, suffix := range []string{"tool", "function", "fn"} {
+		if strings.HasSuffix(base, suffix) && len(base) > len(suffix) {
+			out[strings.TrimSuffix(base, suffix)] = true
+		}
+	}
+	for _, prefix := range []string{"tool", "function", "fn"} {
+		if strings.HasPrefix(base, prefix) && len(base) > len(prefix) {
+			out[strings.TrimPrefix(base, prefix)] = true
+		}
+	}
+	return out
+}
+
+func canonicalToolIdentifierKeys(toolName string) map[string]bool {
+	out := toolIdentifierKeys(toolName)
+	if len(out) == 0 {
+		return nil
+	}
+	base := normalizeToolIdentifier(toolName)
+	for _, alias := range commonToolNameAliases[base] {
+		for key := range toolIdentifierKeys(alias) {
+			out[key] = true
+		}
+	}
+	return out
+}
+
+func toolIdentifierSetsOverlap(a, b map[string]bool) bool {
+	if len(a) == 0 || len(b) == 0 {
+		return false
+	}
+	if len(a) > len(b) {
+		a, b = b, a
+	}
+	for key := range a {
+		if b[key] {
+			return true
+		}
+	}
+	return false
+}
+
+var commonToolNameAliases = map[string][]string{
+	"editfile":      {"file_edit", "modify_file", "patch_file", "replace_file"},
+	"listfiles":     {"list_dir", "list_directory", "directory_list", "ls"},
+	"readfile":      {"file_read", "open_file", "view_file"},
+	"runtask":       {"focused_task", "focused_task_run", "task_run"},
+	"sessionsearch": {"search_sessions", "session_lookup"},
+	"shell":         {"run_command", "exec_command", "execute_command", "terminal"},
+	"subagentrun":   {"subagent", "run_subagent"},
+	"writefile":     {"file_write", "create_file", "save_file"},
 }
