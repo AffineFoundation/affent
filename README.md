@@ -792,6 +792,10 @@ Native session endpoints:
   turn.
 - `DELETE /v1/sessions/{id}` closes and purges the session.
 
+`GET /v1/stats` returns the active session count, per-session usage/browser
+stats, aggregate token/browser counters, and `shutting_down` so authorized
+clients can stop sending new work during graceful drain.
+
 ## Security Model
 
 Affent is an agent runtime, not a security sandbox.

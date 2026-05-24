@@ -31,6 +31,9 @@ func TestHandleStats_EmptyPool(t *testing.T) {
 	if resp.ActiveSessions != 0 {
 		t.Fatalf("ActiveSessions = %d, want 0", resp.ActiveSessions)
 	}
+	if resp.ShuttingDown {
+		t.Fatal("ShuttingDown = true, want false for fresh pool")
+	}
 	if len(resp.Sessions) != 0 {
 		t.Fatalf("Sessions = %d entries, want 0", len(resp.Sessions))
 	}
@@ -39,6 +42,27 @@ func TestHandleStats_EmptyPool(t *testing.T) {
 	}
 	if resp.ServerTime == "" {
 		t.Fatal("ServerTime must be populated")
+	}
+}
+
+func TestHandleStats_ReportsShuttingDown(t *testing.T) {
+	pool := newTestPool(t, 4, "5m")
+	pool.SignalShutdown()
+	h := handleStats(pool.cfg, pool)
+
+	r := httptest.NewRequest("GET", "/v1/stats", nil)
+	w := httptest.NewRecorder()
+	h.ServeHTTP(w, r)
+
+	if got := w.Result().StatusCode; got != 200 {
+		t.Fatalf("status = %d, want 200", got)
+	}
+	var resp statsResponse
+	if err := json.Unmarshal(w.Body.Bytes(), &resp); err != nil {
+		t.Fatalf("decode: %v body=%s", err, w.Body.String())
+	}
+	if !resp.ShuttingDown {
+		t.Fatalf("ShuttingDown = false, want true: %+v", resp)
 	}
 }
 

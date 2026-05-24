@@ -16,6 +16,7 @@ type statsResponse struct {
 	Model           string                 `json:"model"`
 	MaxSessions     int                    `json:"max_sessions"`
 	ActiveSessions  int                    `json:"active_sessions"`
+	ShuttingDown    bool                   `json:"shutting_down"`
 	BrowserCacheDir string                 `json:"browser_cache_dir,omitempty"`
 	ServerTime      string                 `json:"server_time"`
 	Sessions        []sessionStatsResponse `json:"sessions"`
@@ -86,6 +87,7 @@ func handleStats(cfg Config, pool *SessionPool) http.HandlerFunc {
 			Model:           cfg.Model,
 			MaxSessions:     cfg.MaxSessions,
 			ActiveSessions:  len(sess),
+			ShuttingDown:    pool.IsShuttingDown(),
 			BrowserCacheDir: cfg.BrowserCacheDir,
 			ServerTime:      time.Now().UTC().Format(time.RFC3339),
 			Sessions:        sess,
