@@ -738,6 +738,9 @@ func TestSetupLoop_SubagentDisabledDoesNotRegisterToolOrPolicies(t *testing.T) {
 }
 
 func TestSetupLoop_EvalModeOmitsSkillsDelegationAndSkillProvider(t *testing.T) {
+	t.Setenv("AFFENTCTL_PROJECT_CONTEXT", "true")
+	t.Setenv("AFFENTCTL_SUBAGENT", "true")
+	t.Setenv("AFFENTCTL_FOCUSED_TASKS", "true")
 	var cf commonFlags
 	fs := flag.NewFlagSet("test", flag.ContinueOnError)
 	cf.bind(fs)
@@ -774,6 +777,9 @@ func TestSetupLoop_EvalModeOmitsSkillsDelegationAndSkillProvider(t *testing.T) {
 	if b.loop.SkillProvider != nil {
 		t.Fatal("eval mode should disable built-in skill/provider injection")
 	}
+	if b.loop.ProjectContextDir != "" {
+		t.Fatalf("eval mode should disable project context even when env enables it, got %q", b.loop.ProjectContextDir)
+	}
 	if got := agent.BuiltinSkillProvider("请通过浏览器访问 https://example.com 并提取信息"); got == "" {
 		t.Fatal("test prompt should trigger the built-in skill provider outside eval mode")
 	}
@@ -781,7 +787,7 @@ func TestSetupLoop_EvalModeOmitsSkillsDelegationAndSkillProvider(t *testing.T) {
 	if len(msgs) == 0 {
 		t.Fatal("system prompt missing")
 	}
-	for _, forbidden := range []string{"Subagent delegation:", "Focused tasks (run_task):", "Affent plan tool guidance:", "Memory retrieval:", "Session history retrieval:"} {
+	for _, forbidden := range []string{"Subagent delegation:", "Subagent browser delegation:", "Focused tasks (run_task):", "Affent plan tool guidance:", "Memory retrieval:", "Session history retrieval:", "Project context:", "run_task", "subagent_run"} {
 		if strings.Contains(msgs[0].Content, forbidden) {
 			t.Fatalf("eval-mode system prompt should not include %q guidance:\n%s", forbidden, msgs[0].Content)
 		}
