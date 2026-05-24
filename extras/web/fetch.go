@@ -19,6 +19,7 @@ import (
 	htmltomarkdown "github.com/JohannesKaufmann/html-to-markdown/v2"
 	"github.com/JohannesKaufmann/html-to-markdown/v2/converter"
 	agent "github.com/affinefoundation/affent/internal/agent"
+	"github.com/affinefoundation/affent/internal/websource"
 	readability "github.com/go-shiori/go-readability"
 )
 
@@ -236,12 +237,12 @@ func directFetchPreflightResult(rawURL string) string {
 	if err != nil || u.Scheme == "" || u.Host == "" {
 		return ""
 	}
-	host := strings.TrimPrefix(strings.ToLower(u.Hostname()), "www.")
+	host := websource.NormalizeHost(u.Hostname())
 	path := strings.ToLower(u.EscapedPath())
 	switch {
-	case isSearchResultHost(host, path):
+	case websource.IsSearchResultPage(host, path):
 		return skippedDirectFetchResult(rawURL, "search-results page")
-	case isKnownBlockedDirectFetchHost(host):
+	case websource.IsKnownDirectReaderTrapHost(host):
 		return skippedDirectFetchResult(rawURL, "site usually blocks direct HTTP readers")
 	default:
 		return ""

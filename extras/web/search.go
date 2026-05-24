@@ -15,6 +15,7 @@ import (
 	"unicode/utf8"
 
 	agent "github.com/affinefoundation/affent/internal/agent"
+	"github.com/affinefoundation/affent/internal/websource"
 )
 
 // SearchResult is one hit returned by SearchProvider.
@@ -164,75 +165,18 @@ func directFetchCaution(rawURL string) string {
 	if err != nil || u.Host == "" {
 		return ""
 	}
-	host := strings.TrimPrefix(strings.ToLower(u.Hostname()), "www.")
+	host := websource.NormalizeHost(u.Hostname())
 	path := strings.ToLower(u.EscapedPath())
-	if isSearchResultHost(host, path) {
+	if websource.IsSearchResultPage(host, path) {
 		return "open the target/source URL, not the search-results page; search snippets are discovery evidence only."
 	}
-	if isRedirectorHost(host) {
+	if websource.IsRedirectorHost(host) {
 		return "this is often a redirect or short-link wrapper; prefer the final canonical URL from an authoritative source before reading it."
 	}
-	if isSocialOrDiscussionHost(host) {
+	if websource.IsSocialOrDiscussionHost(host) {
 		return "social/discussion pages often block direct readers or require JavaScript; use them as sentiment/claim evidence only unless a readable page source is returned."
 	}
 	return ""
-}
-
-func isSearchResultHost(host, path string) bool {
-	switch host {
-	case "google.com", "bing.com", "duckduckgo.com", "search.brave.com", "search.yahoo.com", "yahoo.com", "baidu.com", "yandex.com":
-		return path == "" || path == "/" || strings.HasPrefix(path, "/search") || strings.HasPrefix(path, "/html") || strings.HasPrefix(path, "/s")
-	default:
-		return false
-	}
-}
-
-func isRedirectorHost(host string) bool {
-	switch host {
-	case "t.co", "bit.ly", "tinyurl.com", "goo.gl", "lnkd.in", "l.facebook.com", "out.reddit.com":
-		return true
-	default:
-		return false
-	}
-}
-
-func isSocialOrDiscussionHost(host string) bool {
-	for _, suffix := range []string{
-		"x.com",
-		"twitter.com",
-		"facebook.com",
-		"instagram.com",
-		"linkedin.com",
-		"tiktok.com",
-		"threads.net",
-		"reddit.com",
-		"medium.com",
-		"discord.com",
-		"t.me",
-		"telegram.me",
-	} {
-		if host == suffix || strings.HasSuffix(host, "."+suffix) {
-			return true
-		}
-	}
-	return false
-}
-
-func isKnownBlockedDirectFetchHost(host string) bool {
-	for _, suffix := range []string{
-		"x.com",
-		"twitter.com",
-		"facebook.com",
-		"instagram.com",
-		"linkedin.com",
-		"tiktok.com",
-		"threads.net",
-	} {
-		if host == suffix || strings.HasSuffix(host, "."+suffix) {
-			return true
-		}
-	}
-	return false
 }
 
 func truncateSearchField(s string, maxBytes int) string {

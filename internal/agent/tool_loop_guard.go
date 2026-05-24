@@ -9,6 +9,7 @@ import (
 	"strings"
 
 	"github.com/affinefoundation/affent/internal/toolfailure"
+	"github.com/affinefoundation/affent/internal/websource"
 )
 
 const (
@@ -239,30 +240,13 @@ func shouldBlockFailedFetchHost(host string, failure toolCallFailure) bool {
 	switch failure.kind {
 	case "blocked", "rate_limited", "private_network_blocked":
 		threshold := 2
-		if isKnownDirectFetchTrapHost(host) {
+		if websource.IsKnownDirectReaderTrapHost(host) {
 			threshold = 1
 		}
 		return failure.count >= threshold
 	default:
 		return false
 	}
-}
-
-func isKnownDirectFetchTrapHost(host string) bool {
-	for _, suffix := range []string{
-		"x.com",
-		"twitter.com",
-		"facebook.com",
-		"instagram.com",
-		"linkedin.com",
-		"tiktok.com",
-		"threads.net",
-	} {
-		if host == suffix || strings.HasSuffix(host, "."+suffix) {
-			return true
-		}
-	}
-	return false
 }
 
 func canonicalFetchHost(tool string, args json.RawMessage) string {
@@ -279,9 +263,7 @@ func canonicalFetchHost(tool string, args json.RawMessage) string {
 	if err != nil {
 		return ""
 	}
-	host := strings.ToLower(u.Hostname())
-	host = strings.TrimPrefix(host, "www.")
-	return host
+	return websource.NormalizeHost(u.Hostname())
 }
 
 func repeatedFailedCallMessage(tool string, failure toolCallFailure) string {
