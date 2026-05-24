@@ -390,6 +390,60 @@ func BaseSystemPromptForSurface(s SystemPromptSurface) string {
 	return LimitedToolSystemPrompt
 }
 
+func SystemPromptSurfaceForRegistry(reg *Registry) SystemPromptSurface {
+	if reg == nil {
+		return SystemPromptSurface{}
+	}
+	builtins := hasRegisteredTool(reg, "shell") &&
+		hasRegisteredTool(reg, "read_file") &&
+		hasRegisteredTool(reg, "write_file") &&
+		hasRegisteredTool(reg, "edit_file") &&
+		hasRegisteredTool(reg, "list_files")
+	otherTools := false
+	for _, def := range reg.Defs() {
+		if def.Function.Name == "memory" {
+			continue
+		}
+		otherTools = true
+	}
+	return SystemPromptSurface{
+		Builtins:   builtins,
+		Memory:     hasRegisteredTool(reg, "memory"),
+		OtherTools: otherTools,
+	}
+}
+
+func BaseSystemPromptForRegistry(reg *Registry) string {
+	return BaseSystemPromptForSurface(SystemPromptSurfaceForRegistry(reg))
+}
+
+func WithRegistrySystemGuidance(prompt string, reg *Registry) string {
+	if reg == nil {
+		return prompt
+	}
+	if hasRegisteredTool(reg, "memory") {
+		prompt = WithMemorySystemGuidance(prompt)
+	}
+	if hasRegisteredTool(reg, SubagentToolName) {
+		prompt = WithSubagentSystemGuidance(prompt)
+	}
+	if hasRegisteredTool(reg, FocusedTaskToolName) {
+		prompt = WithFocusedTaskSystemGuidance(prompt)
+	}
+	if hasRegisteredTool(reg, PlanToolName) {
+		prompt = WithPlanSystemGuidance(prompt)
+	}
+	return prompt
+}
+
+func hasRegisteredTool(reg *Registry, name string) bool {
+	if reg == nil {
+		return false
+	}
+	_, ok := reg.Get(name)
+	return ok
+}
+
 // EnsureSystemPrompt seeds the conversation's system message. Call
 // once per session before SendUser.
 //

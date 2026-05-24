@@ -82,6 +82,43 @@ func TestWithMemorySystemGuidance_AppendsOnce(t *testing.T) {
 	}
 }
 
+func TestRegistrySystemPromptComposition(t *testing.T) {
+	reg := NewRegistry()
+	reg.Add(&Tool{Name: "memory"})
+	if got := BaseSystemPromptForRegistry(reg); got != MemoryOnlySystemPrompt {
+		t.Fatal("memory-only registry should use memory-only base prompt")
+	}
+	prompt := WithRegistrySystemGuidance(BaseSystemPromptForRegistry(reg), reg)
+	if !strings.Contains(prompt, "Memory retrieval:") {
+		t.Fatalf("memory registry prompt missing memory guidance:\n%s", prompt)
+	}
+	for _, forbidden := range []string{"'shell' tool", "read_file", "Subagent delegation:", "Focused tasks (run_task):", "Affent plan tool guidance:"} {
+		if strings.Contains(prompt, forbidden) {
+			t.Fatalf("memory-only registry prompt should not include %q:\n%s", forbidden, prompt)
+		}
+	}
+
+	reg.Add(&Tool{Name: PlanToolName})
+	reg.Add(&Tool{Name: SubagentToolName})
+	reg.Add(&Tool{Name: FocusedTaskToolName})
+	prompt = WithRegistrySystemGuidance(BaseSystemPromptForRegistry(reg), reg)
+	for _, want := range []string{"Memory retrieval:", "Subagent delegation:", "Focused tasks (run_task):", "Affent plan tool guidance:"} {
+		if !strings.Contains(prompt, want) {
+			t.Fatalf("registry prompt missing %q:\n%s", want, prompt)
+		}
+	}
+	if strings.Count(WithRegistrySystemGuidance(prompt, reg), "Memory retrieval:") != 1 {
+		t.Fatal("registry guidance should be idempotent")
+	}
+
+	reg = NewRegistry()
+	reg.Add(&Tool{Name: "memory"})
+	reg.Add(&Tool{Name: "read_file"})
+	if got := BaseSystemPromptForRegistry(reg); got != LimitedToolSystemPrompt {
+		t.Fatal("memory plus partial file tools must not use the memory-only prompt")
+	}
+}
+
 func TestLoopTurnOptionsOverrideToolSurfaceAndPolicies(t *testing.T) {
 	baseTools := NewRegistry()
 	baseTools.Add(&Tool{Name: "shell"})

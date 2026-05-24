@@ -848,9 +848,6 @@ func setupLoop(c commonFlags) (*loopBundle, int) {
 	if code != 0 {
 		return nil, code
 	}
-	if caps.Memory {
-		systemPrompt = agent.WithMemorySystemGuidance(systemPrompt)
-	}
 
 	tools := agent.NewRegistry()
 	var execBackend executor.Executor
@@ -907,9 +904,6 @@ func setupLoop(c commonFlags) (*loopBundle, int) {
 			},
 			DisableSkill: !caps.Skill,
 		})
-		if caps.Plan {
-			systemPrompt = agent.WithPlanSystemGuidance(systemPrompt)
-		}
 	}
 
 	mcpConfigPath := ""
@@ -958,7 +952,6 @@ func setupLoop(c commonFlags) (*loopBundle, int) {
 			PerCallTimeout:    c.callTimeout,
 			MaxDepth:          c.subagentMaxDepth,
 		})
-		systemPrompt = agent.WithSubagentSystemGuidance(systemPrompt)
 	}
 	if caps.FocusedTasks {
 		// RegisterFocusedTasks itself filters out profiles whose deps
@@ -980,10 +973,8 @@ func setupLoop(c commonFlags) (*loopBundle, int) {
 			Log:               log,
 			PerCallTimeout:    c.callTimeout,
 		})
-		if _, ok := tools.Get(agent.FocusedTaskToolName); ok {
-			systemPrompt = agent.WithFocusedTaskSystemGuidance(systemPrompt)
-		}
 	}
+	systemPrompt = agent.WithRegistrySystemGuidance(systemPrompt, tools)
 	loop := &agent.Loop{
 		LLM:                 llm,
 		Tools:               tools,

@@ -540,32 +540,9 @@ func (p *SessionPool) buildSession(id string) (*Session, error) {
 	}
 	systemPrompt := p.cfg.SystemPrompt
 	if systemPrompt == "" {
-		systemPrompt = agent.BaseSystemPromptForSurface(systemPromptSurfaceForRegistry(reg))
+		systemPrompt = agent.BaseSystemPromptForRegistry(reg)
 	}
-	if _, ok := reg.Get("memory"); ok {
-		systemPrompt = agent.WithMemorySystemGuidance(systemPrompt)
-	}
-	if p.cfg.EnableSubagent {
-		// Tell the model when to delegate. Without this hint the model
-		// sees subagent_run in its tool list but defaults to direct
-		// read_file / list_files in the parent context — the very
-		// pollution this feature exists to avoid. Idempotent on the
-		// guidance marker so a custom prompt that already inlines it
-		// won't get duplicated.
-		systemPrompt = agent.WithSubagentSystemGuidance(systemPrompt)
-	}
-	if p.cfg.EnableFocusedTasks {
-		// Only append focused-task guidance if at least one profile
-		// actually got registered (the deps-driven filter may have
-		// dropped every profile — see RegisterFocusedTasks). Keeps the
-		// prompt aligned with the visible tool surface.
-		if _, ok := reg.Get(agent.FocusedTaskToolName); ok {
-			systemPrompt = agent.WithFocusedTaskSystemGuidance(systemPrompt)
-		}
-	}
-	if _, ok := reg.Get(agent.PlanToolName); ok {
-		systemPrompt = agent.WithPlanSystemGuidance(systemPrompt)
-	}
+	systemPrompt = agent.WithRegistrySystemGuidance(systemPrompt, reg)
 	if p.cfg.EnableBuiltins {
 		// affentserve's per-session workspace is a freshly-allocated
 		// temp dir, not /workspace. DefaultSystemPrompt's "save under
@@ -641,31 +618,6 @@ func openSessionEventLog(sessionDir string) (*eventlog.Recorder, *os.File, int64
 		return nil, nil, 0, err
 	}
 	return rec, f, nextLine, nil
-}
-
-func systemPromptSurfaceForRegistry(reg *agent.Registry) agent.SystemPromptSurface {
-	if reg == nil {
-		return agent.SystemPromptSurface{}
-	}
-	_, hasShell := reg.Get("shell")
-	_, hasRead := reg.Get("read_file")
-	_, hasList := reg.Get("list_files")
-	_, hasMemory := reg.Get("memory")
-	builtins := hasShell && hasRead && hasList
-	otherTools := false
-	for _, def := range reg.Defs() {
-		switch def.Function.Name {
-		case "shell", "read_file", "write_file", "edit_file", "list_files", "memory":
-			continue
-		default:
-			otherTools = true
-		}
-	}
-	return agent.SystemPromptSurface{
-		Builtins:   builtins,
-		Memory:     hasMemory,
-		OtherTools: otherTools,
-	}
 }
 
 func countJSONLLines(path string) (int64, error) {

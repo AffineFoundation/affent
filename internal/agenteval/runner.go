@@ -156,12 +156,8 @@ func (r *Runner) Run(ctx context.Context, s Scenario) (Outcome, error) {
 		ToolResultArtifactPathPrefix: ".affent/artifacts/tool-results",
 		SkillProvider:                skillProvider,
 	}
-	systemPrompt := ""
-	if reg != nil {
-		if _, ok := reg.Get(agent.PlanToolName); ok {
-			systemPrompt = agent.WithPlanSystemGuidance(systemPrompt)
-		}
-	}
+	systemPrompt := agent.BaseSystemPromptForRegistry(reg)
+	systemPrompt = agent.WithRegistrySystemGuidance(systemPrompt, reg)
 	if err := loop.EnsureSystemPrompt(systemPrompt); err != nil {
 		return Outcome{}, fmt.Errorf("system prompt: %w", err)
 	}

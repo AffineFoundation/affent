@@ -17,6 +17,7 @@ import (
 
 	"github.com/affinefoundation/affent/internal/agent"
 	"github.com/affinefoundation/affent/internal/executor"
+	"github.com/affinefoundation/affent/internal/memory"
 	"github.com/rs/zerolog"
 )
 
@@ -135,6 +136,99 @@ func TestRunner_EndToEnd_OneToolCall(t *testing.T) {
 	}
 	if got := out.Trace.RawTypes["tool.request"]; got != 1 {
 		t.Errorf("RawTypes[tool.request] = %d, want 1", got)
+	}
+}
+
+func TestRunner_CustomMemoryOnlyRegistryUsesMatchingPrompt(t *testing.T) {
+	type capturedRequest struct {
+		Messages []struct {
+			Role    string `json:"role"`
+			Content string `json:"content"`
+		} `json:"messages"`
+		Tools []struct {
+			Function struct {
+				Name string `json:"name"`
+			} `json:"function"`
+		} `json:"tools"`
+	}
+	requests := make(chan capturedRequest, 1)
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		raw, err := io.ReadAll(r.Body)
+		if err != nil {
+			t.Errorf("read request body: %v", err)
+		}
+		var req capturedRequest
+		if err := json.Unmarshal(raw, &req); err != nil {
+			t.Errorf("decode request body: %v", err)
+		}
+		select {
+		case requests <- req:
+		default:
+		}
+		w.Header().Set("Content-Type", "text/event-stream")
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte("data: " + `{"choices":[{"delta":{"role":"assistant","content":"done"},"finish_reason":"stop"}]}` + "\n\n"))
+		_, _ = w.Write([]byte("data: [DONE]\n\n"))
+	}))
+	t.Cleanup(srv.Close)
+
+	runner := &Runner{
+		LLM:            agent.NewLLMClient(srv.URL, "", "fake-model"),
+		MaxTurnSteps:   2,
+		PerCallTimeout: 5 * time.Second,
+		RunTimeout:     10 * time.Second,
+		Log:            zerolog.Nop(),
+		BuildRegistry: func(ctx context.Context, workspaceDir string, exec executor.Executor) (*agent.Registry, error) {
+			_ = ctx
+			_ = exec
+			reg := agent.NewRegistry()
+			agent.RegisterMemoryOnly(reg, memory.NewFileMemoryStore(workspaceDir))
+			return reg, nil
+		},
+	}
+	out, err := runner.Run(context.Background(), Scenario{
+		Name:         "memory_only_prompt",
+		Description:  "memory-only custom eval runtime should not advertise shell/file tools",
+		Prompt:       "what do you remember?",
+		MaxTurnSteps: 2,
+		Checks: []Check{
+			TurnEndedCleanly(),
+			FinalTextContains("done"),
+		},
+	})
+	if err != nil {
+		t.Fatalf("Runner.Run: %v", err)
+	}
+	if !out.Pass {
+		t.Fatalf("expected all checks to pass; failed: %v", out.FailedChecks())
+	}
+	select {
+	case req := <-requests:
+		foundSystem := false
+		for _, msg := range req.Messages {
+			if msg.Role != "system" {
+				continue
+			}
+			foundSystem = true
+			for _, want := range []string{"only tool is 'memory'", "Memory retrieval:", "action=search"} {
+				if !strings.Contains(msg.Content, want) {
+					t.Fatalf("memory-only system prompt missing %q:\n%s", want, msg.Content)
+				}
+			}
+			for _, forbidden := range []string{"'shell' tool", "read_file", "write_file", "edit_file", "list_files"} {
+				if strings.Contains(msg.Content, forbidden) {
+					t.Fatalf("memory-only system prompt should not include %q:\n%s", forbidden, msg.Content)
+				}
+			}
+		}
+		if !foundSystem {
+			t.Fatalf("LLM request missing system prompt: %+v", req.Messages)
+		}
+		if len(req.Tools) != 1 || req.Tools[0].Function.Name != "memory" {
+			t.Fatalf("memory-only custom registry should advertise only memory tool; tools=%+v", req.Tools)
+		}
+	case <-time.After(2 * time.Second):
+		t.Fatal("LLM request was not captured")
 	}
 }
 
