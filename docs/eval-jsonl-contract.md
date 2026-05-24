@@ -16,6 +16,9 @@ Shared metadata fields:
 - `executor`: eval executor label, such as `local`, `sandbox`, or
   `docker:<container>`.
 - `temperature`: sampling temperature passed to `affentctl`.
+- `top_p`: optional top-p sampling value passed to `affentctl`.
+- `max_tokens`: optional max output token limit passed to `affentctl`.
+- `seed`: optional deterministic-sampling seed passed to `affentctl`.
 - `runtime_eval_mode`: optional boolean, present when the eval runner passed
   `affentctl run --eval-mode`.
 - `runtime_memory`: optional boolean, present when the eval runner explicitly

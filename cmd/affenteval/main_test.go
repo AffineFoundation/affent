@@ -98,6 +98,31 @@ func TestRunRejectsInvalidConfigBeforeScenarios(t *testing.T) {
 			want: "--temperature",
 		},
 		{
+			name: "top-p too high",
+			args: []string{"--top-p=1.1"},
+			want: "--top-p must be between 0 and 1",
+		},
+		{
+			name: "top-p not number",
+			args: []string{"--top-p=wide"},
+			want: "--top-p",
+		},
+		{
+			name: "max-tokens zero",
+			args: []string{"--max-tokens=0"},
+			want: "--max-tokens must be a positive integer",
+		},
+		{
+			name: "max-tokens not number",
+			args: []string{"--max-tokens=many"},
+			want: "--max-tokens",
+		},
+		{
+			name: "seed not number",
+			args: []string{"--seed=random"},
+			want: "--seed",
+		},
+		{
 			name: "unknown executor",
 			args: []string{"--executor=remote"},
 			want: "unknown --executor",
@@ -433,6 +458,9 @@ func TestPrintBatchResultJSONL(t *testing.T) {
 		"provider_label":                "eval-provider",
 		"executor":                      "docker:affent-eval",
 		"temperature":                   "0.2",
+		"top_p":                         "0.9",
+		"max_tokens":                    "512",
+		"seed":                          "42",
 		"timeout_ms":                    float64(300000),
 		"scenario":                      "sample",
 		"ok":                            true,
@@ -763,6 +791,9 @@ func TestPrintBatchSummaryJSONL(t *testing.T) {
 		"provider_label":                "eval-provider",
 		"executor":                      "docker:affent-eval",
 		"temperature":                   "0.2",
+		"top_p":                         "0.9",
+		"max_tokens":                    "512",
+		"seed":                          "42",
 		"timeout_ms":                    float64(300000),
 		"scenarios":                     float64(2),
 		"passed":                        float64(1),
@@ -853,7 +884,7 @@ func TestCloneTraceSchemaVersions(t *testing.T) {
 func TestEvalJSONLMetadataFromConfig(t *testing.T) {
 	t.Setenv("AFFENTCTL_MODEL", "env-model")
 	t.Setenv("AFFENTEVAL_PROVIDER_LABEL", "env-provider")
-	meta := evalJSONLMetadataFromConfig("small-model-tools", "", "", "", "0", false, false, "", 5*time.Minute)
+	meta := evalJSONLMetadataFromConfig("small-model-tools", "", "", "", "0", "", "", "", false, false, "", 5*time.Minute)
 	if meta.SchemaVersion != evalJSONLSchemaVersion {
 		t.Fatalf("SchemaVersion = %d, want %d", meta.SchemaVersion, evalJSONLSchemaVersion)
 	}
@@ -867,8 +898,8 @@ func TestEvalJSONLMetadataFromConfig(t *testing.T) {
 		t.Fatalf("metadata = %+v", meta)
 	}
 
-	meta = evalJSONLMetadataFromConfig(" custom ", " flag-model ", " flag-provider ", " sandbox ", " 0.4 ", true, true, " /tmp/mcp.json ", time.Second)
-	if meta.Model != "flag-model" || meta.ProviderLabel != "flag-provider" || meta.Executor != "sandbox" || meta.Temperature != "0.4" || meta.Suite != "custom" || !meta.RuntimeEvalMode || !meta.RuntimeMemory || !meta.RuntimeMCP || meta.TimeoutMS != 1000 {
+	meta = evalJSONLMetadataFromConfig(" custom ", " flag-model ", " flag-provider ", " sandbox ", " 0.4 ", " 0.9 ", " 512 ", " 42 ", true, true, " /tmp/mcp.json ", time.Second)
+	if meta.Model != "flag-model" || meta.ProviderLabel != "flag-provider" || meta.Executor != "sandbox" || meta.Temperature != "0.4" || meta.TopP != "0.9" || meta.MaxTokens != "512" || meta.Seed != "42" || meta.Suite != "custom" || !meta.RuntimeEvalMode || !meta.RuntimeMemory || !meta.RuntimeMCP || meta.TimeoutMS != 1000 {
 		t.Fatalf("flag metadata not normalized: %+v", meta)
 	}
 }
@@ -904,6 +935,9 @@ func testEvalJSONLMetadata() evalJSONLMetadata {
 		ProviderLabel: "eval-provider",
 		Executor:      "docker:affent-eval",
 		Temperature:   "0.2",
+		TopP:          "0.9",
+		MaxTokens:     "512",
+		Seed:          "42",
 		TimeoutMS:     int64(300000),
 	}
 }

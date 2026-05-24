@@ -76,6 +76,9 @@ type BatchRunner struct {
 	APIKey                   string
 	Model                    string
 	Temperature              string
+	TopP                     string
+	MaxTokens                string
+	Seed                     string
 	Executor                 string
 	RuntimeEvalMode          bool
 	RuntimeMemory            bool
@@ -379,19 +382,26 @@ func (r BatchRunner) affentctlRunArgs(workspace, tracePath string, scenario Batc
 	if r.APIKey != "" {
 		args = append(args, "--api-key", r.APIKey)
 	}
-	if r.Temperature != "" {
-		args = append(args, "--temperature", r.Temperature)
-	}
+	args = appendStringFlag(args, "--temperature", r.Temperature)
+	args = appendStringFlag(args, "--top-p", r.TopP)
+	args = appendStringFlag(args, "--max-tokens", r.MaxTokens)
+	args = appendStringFlag(args, "--seed", r.Seed)
 	if r.RuntimeEvalMode {
 		args = append(args, "--eval-mode")
 	}
 	if r.RuntimeMemory {
 		args = append(args, "--memory=true")
 	}
-	if strings.TrimSpace(r.RuntimeMCPConfig) != "" {
-		args = append(args, "--mcp-config", r.RuntimeMCPConfig)
-	}
+	args = appendStringFlag(args, "--mcp-config", r.RuntimeMCPConfig)
 	return args
+}
+
+func appendStringFlag(args []string, flagName, value string) []string {
+	value = strings.TrimSpace(value)
+	if value == "" {
+		return args
+	}
+	return append(args, flagName, value)
 }
 
 type verifierRun struct {

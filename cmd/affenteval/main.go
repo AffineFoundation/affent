@@ -44,6 +44,9 @@ func run(args []string) int {
 		model             = fs.String("model", "", "model id (env: AFFENTCTL_MODEL)")
 		providerLabel     = fs.String("provider-label", "", "provider label written to JSONL for comparisons (env: AFFENTEVAL_PROVIDER_LABEL)")
 		temperature       = fs.String("temperature", "0", "sampling temperature forwarded to affentctl")
+		topP              = fs.String("top-p", "", "top-p sampling forwarded to affentctl; empty keeps provider default")
+		maxTokens         = fs.String("max-tokens", "", "max output tokens forwarded to affentctl; empty keeps provider default")
+		seed              = fs.String("seed", "", "deterministic-sampling seed forwarded to affentctl; empty keeps provider default")
 		executor          = fs.String("executor", "local", "affentctl tool executor for scenario runs: local, sandbox, or docker:<container>")
 		runtimeEvalMode   = fs.Bool("runtime-eval-mode", false, "pass affentctl --eval-mode to keep only the basic benchmark tool surface during scenario runs")
 		runtimeMemory     = fs.Bool("runtime-memory", false, "pass affentctl --memory=true during scenario runs; useful with --runtime-eval-mode for memory-only opt-in")
@@ -95,7 +98,7 @@ success and trace-level process quality.`)
 		fmt.Fprintf(os.Stderr, "scenario: %v\n", err)
 		return 64
 	}
-	if err := validateRunConfig(*temperature, *timeout, *executor, len(scenarios), *workRoot, flagWasSet(fs, "work-root"), *verifierOutputCap); err != nil {
+	if err := validateRunConfig(*temperature, *topP, *maxTokens, *seed, *timeout, *executor, len(scenarios), *workRoot, flagWasSet(fs, "work-root"), *verifierOutputCap); err != nil {
 		fmt.Fprintf(os.Stderr, "config: %v\n", err)
 		return 64
 	}
@@ -106,6 +109,9 @@ success and trace-level process quality.`)
 		APIKey:                   *apiKey,
 		Model:                    *model,
 		Temperature:              *temperature,
+		TopP:                     *topP,
+		MaxTokens:                *maxTokens,
+		Seed:                     *seed,
 		Executor:                 *executor,
 		RuntimeEvalMode:          *runtimeEvalMode,
 		RuntimeMemory:            *runtimeMemory,
@@ -114,7 +120,7 @@ success and trace-level process quality.`)
 		VerifierOutputCapBytes:   *verifierOutputCap,
 		CleanupPassingWorkspaces: !*keepWorkspaces,
 	}
-	jsonlMeta := evalJSONLMetadataFromConfig(*suite, *model, *providerLabel, *executor, *temperature, *runtimeEvalMode, *runtimeMemory, *runtimeMCPConfig, *timeout)
+	jsonlMeta := evalJSONLMetadataFromConfig(*suite, *model, *providerLabel, *executor, *temperature, *topP, *maxTokens, *seed, *runtimeEvalMode, *runtimeMemory, *runtimeMCPConfig, *timeout)
 	ctx := context.Background()
 	var summary batchSummary
 	for _, scenario := range scenarios {
@@ -406,13 +412,16 @@ type evalJSONLMetadata struct {
 	ProviderLabel   string `json:"provider_label,omitempty"`
 	Executor        string `json:"executor"`
 	Temperature     string `json:"temperature,omitempty"`
+	TopP            string `json:"top_p,omitempty"`
+	MaxTokens       string `json:"max_tokens,omitempty"`
+	Seed            string `json:"seed,omitempty"`
 	RuntimeEvalMode bool   `json:"runtime_eval_mode,omitempty"`
 	RuntimeMemory   bool   `json:"runtime_memory,omitempty"`
 	RuntimeMCP      bool   `json:"runtime_mcp,omitempty"`
 	TimeoutMS       int64  `json:"timeout_ms"`
 }
 
-func evalJSONLMetadataFromConfig(suite, model, providerLabel, executor, temperature string, runtimeEvalMode, runtimeMemory bool, runtimeMCPConfig string, timeout time.Duration) evalJSONLMetadata {
+func evalJSONLMetadataFromConfig(suite, model, providerLabel, executor, temperature, topP, maxTokens, seed string, runtimeEvalMode, runtimeMemory bool, runtimeMCPConfig string, timeout time.Duration) evalJSONLMetadata {
 	model = strings.TrimSpace(model)
 	if model == "" {
 		model = strings.TrimSpace(os.Getenv("AFFENTCTL_MODEL"))
@@ -428,6 +437,9 @@ func evalJSONLMetadataFromConfig(suite, model, providerLabel, executor, temperat
 		ProviderLabel:   providerLabel,
 		Executor:        normalizedEvalExecutor(executor),
 		Temperature:     strings.TrimSpace(temperature),
+		TopP:            strings.TrimSpace(topP),
+		MaxTokens:       strings.TrimSpace(maxTokens),
+		Seed:            strings.TrimSpace(seed),
 		RuntimeEvalMode: runtimeEvalMode,
 		RuntimeMemory:   runtimeMemory,
 		RuntimeMCP:      strings.TrimSpace(runtimeMCPConfig) != "",
@@ -843,7 +855,7 @@ func failureKind(failure string) string {
 	}
 }
 
-func validateRunConfig(temperature string, timeout time.Duration, executor string, scenarioCount int, workRoot string, workRootSet bool, verifierOutputCap int) error {
+func validateRunConfig(temperature, topP, maxTokens, seed string, timeout time.Duration, executor string, scenarioCount int, workRoot string, workRootSet bool, verifierOutputCap int) error {
 	if timeout <= 0 {
 		return fmt.Errorf("--timeout must be a positive duration")
 	}
@@ -853,18 +865,61 @@ func validateRunConfig(temperature string, timeout time.Duration, executor strin
 	if err := validateEvalExecutor(executor, scenarioCount, workRoot, workRootSet); err != nil {
 		return err
 	}
-	if strings.TrimSpace(temperature) == "" {
-		return nil
-	}
-	t, err := strconv.ParseFloat(temperature, 64)
+	sampling, err := parseEvalSampling(temperature, topP, maxTokens, seed)
 	if err != nil {
-		return fmt.Errorf("--temperature: %w", err)
+		return err
 	}
-	sampling := agent.SamplingDefaults{Temperature: &t}
 	if err := sampling.Validate(); err != nil {
-		return fmt.Errorf("--%s", err.Error())
+		return evalSamplingFlagError(err)
 	}
 	return nil
+}
+
+func parseEvalSampling(temperature, topP, maxTokens, seed string) (agent.SamplingDefaults, error) {
+	var sampling agent.SamplingDefaults
+	if strings.TrimSpace(temperature) != "" {
+		t, err := strconv.ParseFloat(strings.TrimSpace(temperature), 64)
+		if err != nil {
+			return sampling, fmt.Errorf("--temperature: %w", err)
+		}
+		sampling.Temperature = &t
+	}
+	if strings.TrimSpace(topP) != "" {
+		t, err := strconv.ParseFloat(strings.TrimSpace(topP), 64)
+		if err != nil {
+			return sampling, fmt.Errorf("--top-p: %w", err)
+		}
+		sampling.TopP = &t
+	}
+	if strings.TrimSpace(maxTokens) != "" {
+		n, err := strconv.Atoi(strings.TrimSpace(maxTokens))
+		if err != nil {
+			return sampling, fmt.Errorf("--max-tokens: %w", err)
+		}
+		sampling.MaxTokens = &n
+	}
+	if strings.TrimSpace(seed) != "" {
+		n, err := strconv.ParseInt(strings.TrimSpace(seed), 10, 64)
+		if err != nil {
+			return sampling, fmt.Errorf("--seed: %w", err)
+		}
+		sampling.Seed = &n
+	}
+	return sampling, nil
+}
+
+func evalSamplingFlagError(err error) error {
+	msg := err.Error()
+	switch {
+	case strings.HasPrefix(msg, "temperature "):
+		return fmt.Errorf("--temperature %s", strings.TrimPrefix(msg, "temperature "))
+	case strings.HasPrefix(msg, "top_p "):
+		return fmt.Errorf("--top-p %s", strings.TrimPrefix(msg, "top_p "))
+	case strings.HasPrefix(msg, "max_tokens "):
+		return fmt.Errorf("--max-tokens %s", strings.TrimPrefix(msg, "max_tokens "))
+	default:
+		return fmt.Errorf("--sampling: %w", err)
+	}
 }
 
 func validateEvalExecutor(executor string, scenarioCount int, workRoot string, workRootSet bool) error {

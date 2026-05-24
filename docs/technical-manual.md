@@ -442,6 +442,13 @@ make eval-agent-container EVAL_RUNTIME_MEMORY=true EVAL_ARGS='--scenario your-me
 make eval-agent-container EVAL_RUNTIME_MCP_CONFIG=/workspace/config/mcp.json EVAL_ARGS='--scenario your-mcp-scenario --temperature 0'
 ```
 
+Use explicit `affenteval` sampling flags such as `--temperature`, `--top-p`,
+`--max-tokens`, and `--seed` for reproducible runs. The eval container does not
+forward host `AFFENTCTL_TEMPERATURE`, `AFFENTCTL_TOP_P`,
+`AFFENTCTL_MAX_TOKENS`, or `AFFENTCTL_SEED`; pass those values through
+`EVAL_ARGS` so they are also recorded in JSONL metadata. Use
+`EVAL_DOCKER_ARGS` only for deliberate extra container environment.
+
 Use runtime eval mode when Affent itself is the benchmark agent and the model
 should not receive extra product affordances. In eval mode, dynamic workflow
 features such as skills, runtime skill install, subagents, focused tasks, MCP,
@@ -450,8 +457,7 @@ tools remain available when built-ins are available. Opt memory or MCP back in
 only for suites that explicitly measure those capabilities. The eval container
 does not forward host `AFFENTCTL_EVAL_MODE`, `AFFENTCTL_SUBAGENT`,
 `AFFENTCTL_FOCUSED_TASKS`, or `AFFENTCTL_PROJECT_CONTEXT`; use the
-`EVAL_RUNTIME_*` knobs above, or pass deliberate extra environment through
-`EVAL_DOCKER_ARGS`.
+`EVAL_RUNTIME_*` knobs above.
 
 For external OpenAI-compatible eval harnesses, run `affentserve` in eval mode:
 

@@ -489,6 +489,16 @@ func TestMakeOneClickContainerTargetsUseSharedLimits(t *testing.T) {
 			}
 		}
 	}
+	for _, unwanted := range []string{
+		`-e AFFENTCTL_TEMPERATURE`,
+		`-e AFFENTCTL_TOP_P`,
+		`-e AFFENTCTL_MAX_TOKENS`,
+		`-e AFFENTCTL_SEED`,
+	} {
+		if strings.Contains(body, unwanted) {
+			t.Fatalf("eval container should require explicit affenteval sampling flags, found %q", unwanted)
+		}
+	}
 }
 
 func makefileTargetBlock(t *testing.T, body, target string) string {
@@ -1079,6 +1089,7 @@ func TestRuntimeForwardEnvIncludesPortableCLIAndServeConfig(t *testing.T) {
 		"AFFENTCTL_TEMPERATURE",
 		"AFFENTCTL_TOP_P",
 		"AFFENTCTL_MAX_TOKENS",
+		"AFFENTCTL_SEED",
 		"AFFENTSERVE_BROWSER",
 		"AFFENTSERVE_BROWSER_SCREENSHOT",
 		"AFFENTSERVE_WEB",
