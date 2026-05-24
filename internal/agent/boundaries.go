@@ -18,6 +18,16 @@ type RuntimeBoundaries struct {
 	ToolResultEventBytes   int
 	RepairableToolArgBytes int
 	ProjectContextBytes    int
+	PlanSteps              int
+	PlanStepTextBytes      int
+	PlanNoteBytes          int
+	PlanEvidenceRefs       int
+	PlanEvidenceRefBytes   int
+	PlanStateBytes         int
+	ActivePlanStepBytes    int
+	ActivePlanNoteBytes    int
+	ActivePlanEvidenceRefs int
+	ActivePlanEvidenceRef  int
 }
 
 func DefaultRuntimeBoundaries() RuntimeBoundaries {
@@ -36,5 +46,15 @@ func DefaultRuntimeBoundaries() RuntimeBoundaries {
 		ToolResultEventBytes:   MaxToolResultBytesInEvent,
 		RepairableToolArgBytes: maxRepairableToolArgBytes,
 		ProjectContextBytes:    MaxProjectContextBytes,
+		PlanSteps:              maxPlanSteps,
+		PlanStepTextBytes:      maxPlanStepTextBytes,
+		PlanNoteBytes:          maxPlanNoteBytes,
+		PlanEvidenceRefs:       maxPlanEvidence,
+		PlanEvidenceRefBytes:   maxPlanEvidenceBytes,
+		PlanStateBytes:         maxPlanStateBytes,
+		ActivePlanStepBytes:    maxActivePlanStepTextBytes,
+		ActivePlanNoteBytes:    maxActivePlanNoteBytes,
+		ActivePlanEvidenceRefs: maxActivePlanEvidenceRefs,
+		ActivePlanEvidenceRef:  maxActivePlanEvidenceRefBytes,
 	}
 }

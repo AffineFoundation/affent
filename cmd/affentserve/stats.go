@@ -33,32 +33,42 @@ type statsResponse struct {
 }
 
 type statsBoundaries struct {
-	MaxTurnSteps         int    `json:"max_turn_steps"`
-	PerCallTimeout       string `json:"per_call_timeout"`
-	LLMRequestBodyBytes  int    `json:"llm_request_body_bytes"`
-	LLMErrorBodyBytes    int    `json:"llm_error_body_bytes"`
-	StreamContentBytes   int    `json:"stream_content_bytes"`
-	StreamReasoningBytes int    `json:"stream_reasoning_bytes"`
-	StreamToolArgBytes   int    `json:"stream_tool_arg_bytes"`
-	StreamToolCalls      int    `json:"stream_tool_calls"`
-	StreamScannerBytes   int    `json:"stream_scanner_bytes"`
-	ToolRequestArgsEvent int    `json:"tool_request_args_event_bytes"`
-	ToolRequestArgString int    `json:"tool_request_arg_string_bytes"`
-	ToolResultContext    int    `json:"tool_result_context_bytes"`
-	ToolResultEvent      int    `json:"tool_result_event_bytes"`
-	ToolResultPreview    int    `json:"tool_result_preview_bytes"`
-	RepairableToolArg    int    `json:"repairable_tool_arg_bytes"`
-	ProjectContextBytes  int    `json:"project_context_bytes"`
-	MCPToolResultBytes   int    `json:"mcp_tool_result_bytes"`
-	MCPHTTPJSONResponse  int    `json:"mcp_http_json_response_bytes"`
-	MCPHTTPSSELine       int    `json:"mcp_http_sse_line_bytes"`
-	MCPStdioFrame        int    `json:"mcp_stdio_frame_bytes"`
-	JSONLRecordBytes     int    `json:"jsonl_record_bytes"`
-	MemoryFileBytes      int    `json:"memory_file_bytes"`
-	MemorySearchQuery    int    `json:"memory_search_query_bytes"`
-	MemorySearchTerms    int    `json:"memory_search_terms"`
-	MemorySearchSnippet  int    `json:"memory_search_snippet_chars"`
-	MemoryResponseEntry  int    `json:"memory_response_entry_chars"`
+	MaxTurnSteps               int    `json:"max_turn_steps"`
+	PerCallTimeout             string `json:"per_call_timeout"`
+	LLMRequestBodyBytes        int    `json:"llm_request_body_bytes"`
+	LLMErrorBodyBytes          int    `json:"llm_error_body_bytes"`
+	StreamContentBytes         int    `json:"stream_content_bytes"`
+	StreamReasoningBytes       int    `json:"stream_reasoning_bytes"`
+	StreamToolArgBytes         int    `json:"stream_tool_arg_bytes"`
+	StreamToolCalls            int    `json:"stream_tool_calls"`
+	StreamScannerBytes         int    `json:"stream_scanner_bytes"`
+	ToolRequestArgsEvent       int    `json:"tool_request_args_event_bytes"`
+	ToolRequestArgString       int    `json:"tool_request_arg_string_bytes"`
+	ToolResultContext          int    `json:"tool_result_context_bytes"`
+	ToolResultEvent            int    `json:"tool_result_event_bytes"`
+	ToolResultPreview          int    `json:"tool_result_preview_bytes"`
+	RepairableToolArg          int    `json:"repairable_tool_arg_bytes"`
+	ProjectContextBytes        int    `json:"project_context_bytes"`
+	PlanSteps                  int    `json:"plan_steps"`
+	PlanStepTextBytes          int    `json:"plan_step_text_bytes"`
+	PlanNoteBytes              int    `json:"plan_note_bytes"`
+	PlanEvidenceRefs           int    `json:"plan_evidence_refs"`
+	PlanEvidenceRefBytes       int    `json:"plan_evidence_ref_bytes"`
+	PlanStateBytes             int    `json:"plan_state_bytes"`
+	ActivePlanStepBytes        int    `json:"active_plan_step_bytes"`
+	ActivePlanNoteBytes        int    `json:"active_plan_note_bytes"`
+	ActivePlanEvidenceRefs     int    `json:"active_plan_evidence_refs"`
+	ActivePlanEvidenceRefBytes int    `json:"active_plan_evidence_ref_bytes"`
+	MCPToolResultBytes         int    `json:"mcp_tool_result_bytes"`
+	MCPHTTPJSONResponse        int    `json:"mcp_http_json_response_bytes"`
+	MCPHTTPSSELine             int    `json:"mcp_http_sse_line_bytes"`
+	MCPStdioFrame              int    `json:"mcp_stdio_frame_bytes"`
+	JSONLRecordBytes           int    `json:"jsonl_record_bytes"`
+	MemoryFileBytes            int    `json:"memory_file_bytes"`
+	MemorySearchQuery          int    `json:"memory_search_query_bytes"`
+	MemorySearchTerms          int    `json:"memory_search_terms"`
+	MemorySearchSnippet        int    `json:"memory_search_snippet_chars"`
+	MemoryResponseEntry        int    `json:"memory_response_entry_chars"`
 }
 
 type sessionStatsResponse struct {
@@ -153,31 +163,41 @@ func statsBoundarySnapshot(cfg Config) statsBoundaries {
 		perCallTimeout = d
 	}
 	return statsBoundaries{
-		MaxTurnSteps:         maxTurnSteps,
-		PerCallTimeout:       perCallTimeout.String(),
-		LLMRequestBodyBytes:  ab.LLMRequestBodyBytes,
-		LLMErrorBodyBytes:    ab.LLMErrorBodyBytes,
-		StreamContentBytes:   ab.StreamContentBytes,
-		StreamReasoningBytes: ab.StreamReasoningBytes,
-		StreamToolArgBytes:   ab.StreamToolArgBytes,
-		StreamToolCalls:      ab.StreamToolCalls,
-		StreamScannerBytes:   ab.StreamScannerBytes,
-		ToolRequestArgsEvent: ab.ToolRequestArgsEvent,
-		ToolRequestArgString: ab.ToolRequestArgString,
-		ToolResultContext:    ab.ToolResultContextBytes,
-		ToolResultEvent:      ab.ToolResultEventBytes,
-		ToolResultPreview:    ab.ToolResultPreviewBytes,
-		RepairableToolArg:    ab.RepairableToolArgBytes,
-		ProjectContextBytes:  ab.ProjectContextBytes,
-		MCPToolResultBytes:   mb.ToolResultBytes,
-		MCPHTTPJSONResponse:  mb.HTTPJSONResponseBytes,
-		MCPHTTPSSELine:       mb.HTTPSSELineBytes,
-		MCPStdioFrame:        mb.StdioFrameBytes,
-		JSONLRecordBytes:     jsonl.DefaultMaxRecordBytes,
-		MemoryFileBytes:      mem.FileBytes,
-		MemorySearchQuery:    mem.SearchQueryBytes,
-		MemorySearchTerms:    mem.SearchQueryTerms,
-		MemorySearchSnippet:  mem.SearchSnippet,
-		MemoryResponseEntry:  mem.ResponseEntry,
+		MaxTurnSteps:               maxTurnSteps,
+		PerCallTimeout:             perCallTimeout.String(),
+		LLMRequestBodyBytes:        ab.LLMRequestBodyBytes,
+		LLMErrorBodyBytes:          ab.LLMErrorBodyBytes,
+		StreamContentBytes:         ab.StreamContentBytes,
+		StreamReasoningBytes:       ab.StreamReasoningBytes,
+		StreamToolArgBytes:         ab.StreamToolArgBytes,
+		StreamToolCalls:            ab.StreamToolCalls,
+		StreamScannerBytes:         ab.StreamScannerBytes,
+		ToolRequestArgsEvent:       ab.ToolRequestArgsEvent,
+		ToolRequestArgString:       ab.ToolRequestArgString,
+		ToolResultContext:          ab.ToolResultContextBytes,
+		ToolResultEvent:            ab.ToolResultEventBytes,
+		ToolResultPreview:          ab.ToolResultPreviewBytes,
+		RepairableToolArg:          ab.RepairableToolArgBytes,
+		ProjectContextBytes:        ab.ProjectContextBytes,
+		PlanSteps:                  ab.PlanSteps,
+		PlanStepTextBytes:          ab.PlanStepTextBytes,
+		PlanNoteBytes:              ab.PlanNoteBytes,
+		PlanEvidenceRefs:           ab.PlanEvidenceRefs,
+		PlanEvidenceRefBytes:       ab.PlanEvidenceRefBytes,
+		PlanStateBytes:             ab.PlanStateBytes,
+		ActivePlanStepBytes:        ab.ActivePlanStepBytes,
+		ActivePlanNoteBytes:        ab.ActivePlanNoteBytes,
+		ActivePlanEvidenceRefs:     ab.ActivePlanEvidenceRefs,
+		ActivePlanEvidenceRefBytes: ab.ActivePlanEvidenceRef,
+		MCPToolResultBytes:         mb.ToolResultBytes,
+		MCPHTTPJSONResponse:        mb.HTTPJSONResponseBytes,
+		MCPHTTPSSELine:             mb.HTTPSSELineBytes,
+		MCPStdioFrame:              mb.StdioFrameBytes,
+		JSONLRecordBytes:           jsonl.DefaultMaxRecordBytes,
+		MemoryFileBytes:            mem.FileBytes,
+		MemorySearchQuery:          mem.SearchQueryBytes,
+		MemorySearchTerms:          mem.SearchQueryTerms,
+		MemorySearchSnippet:        mem.SearchSnippet,
+		MemoryResponseEntry:        mem.ResponseEntry,
 	}
 }
