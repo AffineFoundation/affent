@@ -84,10 +84,14 @@ func repairToolArgsWithSchema(args json.RawMessage, schema json.RawMessage) (jso
 			out[key] = value
 			continue
 		}
-		coerced, didCoerce := coerceSchemaValue(value, prop)
+		coerced, didCoerce, coerceKind := coerceSchemaValueWithKind(value, prop)
 		if didCoerce {
 			changed = true
-			notes = append(notes, fmt.Sprintf("coerced field %s to %s", target, strings.Join(schemaPropertyTypes(prop), "|")))
+			if coerceKind == "enum" {
+				notes = append(notes, fmt.Sprintf("normalized enum field %s", target))
+			} else {
+				notes = append(notes, fmt.Sprintf("coerced field %s to %s", target, strings.Join(schemaPropertyTypes(prop), "|")))
+			}
 		}
 		out[target] = coerced
 		used[target] = true
@@ -479,14 +483,19 @@ func shouldDropUnknownSchemaField(s toolSchema) bool {
 }
 
 func coerceSchemaValue(v any, prop toolSchemaProperty) (any, bool) {
+	coerced, ok, _ := coerceSchemaValueWithKind(v, prop)
+	return coerced, ok
+}
+
+func coerceSchemaValueWithKind(v any, prop toolSchemaProperty) (any, bool, string) {
 	if coerced, ok := coerceEnumValue(v, prop); ok {
 		if schemaValueWithinBounds(coerced, prop) {
-			return coerced, true
+			return coerced, true, "enum"
 		}
 	}
 	types := schemaPropertyTypes(prop)
 	if schemaValueMatchesTypes(v, types) {
-		return v, false
+		return v, false, ""
 	}
 	for _, typ := range types {
 		switch typ {
@@ -495,14 +504,14 @@ func coerceSchemaValue(v any, prop toolSchemaProperty) (any, bool) {
 			case string:
 				if n, ok := parseIntegerString(x); ok {
 					if schemaValueWithinBounds(n, prop) {
-						return n, true
+						return n, true, "type"
 					}
 				}
 			case float64:
 				if isIntegralFloat64(x) {
 					n := int(x)
 					if schemaValueWithinBounds(n, prop) {
-						return n, true
+						return n, true, "type"
 					}
 				}
 			}
@@ -511,7 +520,7 @@ func coerceSchemaValue(v any, prop toolSchemaProperty) (any, bool) {
 			case string:
 				if n, ok := parseNumberString(x); ok {
 					if schemaValueWithinBounds(n, prop) {
-						return n, true
+						return n, true, "type"
 					}
 				}
 			}
@@ -520,21 +529,21 @@ func coerceSchemaValue(v any, prop toolSchemaProperty) (any, bool) {
 			case string:
 				b, err := strconv.ParseBool(strings.TrimSpace(x))
 				if err == nil {
-					return b, true
+					return b, true, "type"
 				}
 			case float64:
 				if x == 1 {
-					return true, true
+					return true, true, "type"
 				}
 				if x == 0 {
-					return false, true
+					return false, true, "type"
 				}
 			}
 		case "array":
 			if x, ok := v.(string); ok {
 				item := strings.TrimSpace(x)
 				if item != "" && schemaArrayCanAcceptScalarItem(prop) {
-					return []any{item}, true
+					return []any{item}, true, "type"
 				}
 			}
 		case "string":
@@ -542,17 +551,17 @@ func coerceSchemaValue(v any, prop toolSchemaProperty) (any, bool) {
 			case float64:
 				s := strconv.FormatFloat(x, 'f', -1, 64)
 				if schemaValueWithinBounds(s, prop) {
-					return s, true
+					return s, true, "type"
 				}
 			case bool:
 				s := strconv.FormatBool(x)
 				if schemaValueWithinBounds(s, prop) {
-					return s, true
+					return s, true, "type"
 				}
 			}
 		}
 	}
-	return v, false
+	return v, false, ""
 }
 
 func schemaArrayCanAcceptScalarItem(prop toolSchemaProperty) bool {

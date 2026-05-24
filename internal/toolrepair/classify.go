@@ -20,6 +20,8 @@ func Kind(note string) string {
 	case strings.HasPrefix(note, "renamed field ") ||
 		strings.HasPrefix(note, "filled required field "):
 		return "alias_rename"
+	case strings.HasPrefix(note, "normalized enum field "):
+		return "enum_normalization"
 	case strings.HasPrefix(note, "coerced field "):
 		return "type_coercion"
 	case strings.HasPrefix(note, "dropped unknown field "):

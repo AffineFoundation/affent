@@ -15,6 +15,7 @@ func TestKind(t *testing.T) {
 		{"wrapped object arguments as query", "scalar_wrap"},
 		{"renamed field file_path to path", "alias_rename"},
 		{"filled required field path from alias file", "alias_rename"},
+		{"normalized enum field action", "enum_normalization"},
 		{"coerced field max_bytes from string to integer", "type_coercion"},
 		{"dropped unknown field foo", "unknown_field_drop"},
 		{"some new repair note", "other"},

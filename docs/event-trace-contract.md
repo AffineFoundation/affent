@@ -160,7 +160,7 @@ diagnostics.
 - `tool_repair_notes`: total repair diagnostics emitted on `tool.request`.
 - `tool_repair_by_kind`: object keyed by repair kind (`tool_name`,
   `malformed_json`, `wrapper_unwrap`, `scalar_wrap`, `alias_rename`,
-  `type_coercion`, `unknown_field_drop`, or `other`).
+  `enum_normalization`, `type_coercion`, `unknown_field_drop`, or `other`).
 - `tool_errors`
 - `tool_duration_ms`
 - `loop_guard_interventions`

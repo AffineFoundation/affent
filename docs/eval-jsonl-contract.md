@@ -43,8 +43,8 @@ Scenario records describe one eval case:
   on `tool.request` events. Omitted when no repair diagnostics were observed.
 - `tool_repair_by_kind`: optional map of repair diagnostic kind to count. Known
   keys include `tool_name`, `malformed_json`, `wrapper_unwrap`,
-  `scalar_wrap`, `alias_rename`, `type_coercion`, `unknown_field_drop`, and
-  `other`.
+  `scalar_wrap`, `alias_rename`, `enum_normalization`, `type_coercion`,
+  `unknown_field_drop`, and `other`.
   New traces prefer the authoritative `turn.end.tool_stats` repair summary;
   older traces fall back to classifying `tool.request.repair_notes`.
 - `loop_guard_interventions`: runtime loop guard intervention count.

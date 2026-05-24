@@ -17,6 +17,7 @@ func TestTrace_RepairStats_ClassifiesRepairNotes(t *testing.T) {
 				"canonicalized tool readFile to read_file",
 				"unwrapped field arguments",
 				"renamed field file_path to path",
+				"normalized enum field action",
 				"coerced field max_bytes to integer",
 				"coerced field evidence to array",
 				"dropped unknown field extra",
@@ -51,13 +52,14 @@ func TestTrace_RepairStats_ClassifiesRepairNotes(t *testing.T) {
 	if got.SucceededCalls != 4 || got.FailedCalls != 1 {
 		t.Fatalf("repair outcomes = ok:%d failed:%d, want 4/1", got.SucceededCalls, got.FailedCalls)
 	}
-	if got.Notes != 10 {
-		t.Fatalf("Notes = %d, want 10; by_kind=%#v", got.Notes, got.ByKind)
+	if got.Notes != 11 {
+		t.Fatalf("Notes = %d, want 11; by_kind=%#v", got.Notes, got.ByKind)
 	}
 	want := map[string]int{
 		"tool_name":          2,
 		"wrapper_unwrap":     1,
 		"alias_rename":       1,
+		"enum_normalization": 1,
 		"type_coercion":      2,
 		"unknown_field_drop": 1,
 		"malformed_json":     2,

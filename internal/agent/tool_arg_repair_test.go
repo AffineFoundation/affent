@@ -2,6 +2,8 @@ package agent
 
 import (
 	"encoding/json"
+	"reflect"
+	"sort"
 	"strings"
 	"testing"
 )
@@ -830,6 +832,10 @@ func TestRepairToolArgsWithSchema_NormalizesStringEnums(t *testing.T) {
 	}
 	if string(got) != `{"action":"read","mode":"review"}` {
 		t.Fatalf("got %s, want normalized enums; notes=%v", got, notes)
+	}
+	sort.Strings(notes)
+	if !reflect.DeepEqual(notes, []string{"normalized enum field action", "normalized enum field mode"}) {
+		t.Fatalf("notes = %v, want enum normalization notes", notes)
 	}
 }
 
