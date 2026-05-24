@@ -379,6 +379,9 @@ func externalResearchSystemGuidance(surface externalResearchToolSurface) string 
 			b.WriteString("try another known public URL, or answer with clearly marked unverified gaps.")
 		}
 	}
+	if surface.WebSearch {
+		b.WriteString("\n- If web_search returns no results or a provider failure, follow the tool's Next guidance: refine once with distinctive entities, official domains, tickers, subnet ids, or exact error/source terms; then use known URLs or answer with clearly marked gaps.")
+	}
 	b.WriteString("\n- For market, metrics, or trend questions, collect a current source-of-record plus at least one independent corroborating source when the available tools make that possible. Keep social posts, forum comments, and influencer takes separate from verified facts, and label them as sentiment or claims.")
 	b.WriteString("\n- Include concrete dates/freshness for time-sensitive facts. When sources disagree, state the conflict and prefer the source with the clearest provenance.")
 	if surface.WebSearch {

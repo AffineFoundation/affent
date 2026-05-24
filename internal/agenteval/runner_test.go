@@ -1632,6 +1632,156 @@ func TestRunner_EndToEnd_ExternalResearchFetchRecovery(t *testing.T) {
 	}
 }
 
+// TestRunner_EndToEnd_ExternalResearchSearchRecovery pins the discovery-side
+// recovery path: a no-results search is not evidence, and the model should
+// refine once with more distinctive entities / source terms before fetching.
+func TestRunner_EndToEnd_ExternalResearchSearchRecovery(t *testing.T) {
+	webSearch := agent.Tool{
+		Name:        "web_search",
+		Description: "Test-only search stand-in: first broad query returns no evidence; refined query returns source candidates.",
+		Schema: json.RawMessage(`{
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["query"],
+            "properties": {
+                "query": {"type": "string"},
+                "num_results": {"type": "integer"}
+            }
+        }`),
+		Execute: func(ctx context.Context, args json.RawMessage) (string, error) {
+			var p struct {
+				Query string `json:"query"`
+			}
+			if err := json.Unmarshal(args, &p); err != nil {
+				return "", err
+			}
+			if strings.Contains(p.Query, "official domain") || strings.Contains(p.Query, "subnet 88") {
+				return `[
+  {"title":"Vega Subnet official docs","url":"https://official.example/vega/about","snippet":"Primary source describing Vega as a decentralized inference subnet."},
+  {"title":"Vega Subnet metrics","url":"https://metrics.example/vega","snippet":"Current subnet price, market cap, and 24h change."}
+]`, nil
+			}
+			return "(no results)\nFailure: kind=no_results\nNext: retry web_search with fewer or different keywords, include distinctive entities or official domain names, or use another available source URL if already known.", nil
+		},
+	}
+	webFetch := agent.Tool{
+		Name:        "web_fetch",
+		Description: "Test-only fetch stand-in: returns deterministic page text.",
+		Schema: json.RawMessage(`{
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["url"],
+            "properties": {
+                "url": {"type": "string"}
+            }
+        }`),
+		Execute: func(ctx context.Context, args json.RawMessage) (string, error) {
+			var p struct {
+				URL string `json:"url"`
+			}
+			if err := json.Unmarshal(args, &p); err != nil {
+				return "", err
+			}
+			switch p.URL {
+			case "https://official.example/vega/about":
+				return "Official docs, updated 2026-05-22: Vega is a decentralized inference subnet for low-latency model serving.", nil
+			case "https://metrics.example/vega":
+				return "Metrics snapshot as of 2026-05-24T12:00:00Z: price $2.40, market cap $24.8M, 24h change +1.4%.", nil
+			default:
+				return "", fmt.Errorf("unexpected test URL %q", p.URL)
+			}
+		},
+	}
+
+	turn1 := []string{
+		`{"choices":[{"delta":{"role":"assistant","tool_calls":[{"index":0,"id":"s1","type":"function","function":{"name":"web_search","arguments":"{\"query\":\"Vega recent trend market metrics sentiment\",\"num_results\":5}"}}]},"finish_reason":null}]}`,
+		`{"choices":[{"delta":{},"finish_reason":"tool_calls"}]}`,
+		`[DONE]`,
+	}
+	turn2 := []string{
+		`{"choices":[{"delta":{"role":"assistant","tool_calls":[{"index":0,"id":"s2","type":"function","function":{"name":"web_search","arguments":"{\"query\":\"Vega subnet 88 official domain metrics\",\"num_results\":5}"}}]},"finish_reason":null}]}`,
+		`{"choices":[{"delta":{},"finish_reason":"tool_calls"}]}`,
+		`[DONE]`,
+	}
+	turn3 := []string{
+		`{"choices":[{"delta":{"role":"assistant","tool_calls":[{"index":0,"id":"f1","type":"function","function":{"name":"web_fetch","arguments":"{\"url\":\"https://official.example/vega/about\"}"}},{"index":1,"id":"f2","type":"function","function":{"name":"web_fetch","arguments":"{\"url\":\"https://metrics.example/vega\"}"}}]},"finish_reason":null}]}`,
+		`{"choices":[{"delta":{},"finish_reason":"tool_calls"}]}`,
+		`[DONE]`,
+	}
+	turn4 := []string{
+		`{"choices":[{"delta":{"role":"assistant","content":"The initial broad search returned no usable results, so I treated it as an evidence gap and refined the query with the subnet id and official-domain terms. The official docs say Vega is a decentralized inference subnet for low-latency model serving. The metrics source reports, as of 2026-05-24T12:00:00Z, price $2.40, market cap $24.8M, and 24h change +1.4%. Overall, the current market move is mildly positive, but sentiment remains unverified because no readable social source was found."},"finish_reason":"stop"}]}`,
+		`[DONE]`,
+	}
+	srv := newScriptedLLM(t, [][]string{turn1, turn2, turn3, turn4})
+	broadSearch := func(args map[string]any) bool {
+		q, _ := args["query"].(string)
+		return strings.Contains(q, "Vega recent trend")
+	}
+	refinedSearch := func(args map[string]any) bool {
+		q, _ := args["query"].(string)
+		return strings.Contains(q, "subnet 88") && strings.Contains(q, "official domain")
+	}
+	fetchURL := func(url string) func(map[string]any) bool {
+		return func(args map[string]any) bool {
+			return args["url"] == url
+		}
+	}
+
+	scenario := Scenario{
+		Name:         "external_research_search_recovery",
+		Description:  "agent treats no-results search as non-evidence, refines once, then fetches source candidates",
+		Prompt:       "Assess the recent trend for Vega. First identify what it is, then collect current market metrics. If search returns no results, refine once with distinctive identifiers or official-source terms and clearly mark any remaining gaps.",
+		MaxTurnSteps: 8,
+		Checks: []Check{
+			TurnEndedCleanly(),
+			ToolCalled("web_search", broadSearch),
+			ToolCalled("web_search", refinedSearch),
+			ToolFailureKindAtLeast("no_results", 1),
+			ToolResultContains("web_search", "Failure: kind=no_results"),
+			ToolCalledBeforeMatching("web_search", broadSearch, "web_search", refinedSearch),
+			ToolCalledBeforeMatching("web_search", refinedSearch, "web_fetch", fetchURL("https://official.example/vega/about")),
+			ToolCalled("web_fetch", fetchURL("https://official.example/vega/about")),
+			ToolCalled("web_fetch", fetchURL("https://metrics.example/vega")),
+			ToolNotCalled("shell", nil),
+			FinalTextContains("initial broad search returned no usable results"),
+			FinalTextContains("decentralized inference subnet"),
+			FinalTextContains("market cap $24.8M"),
+			FinalTextContains("sentiment remains unverified"),
+		},
+	}
+
+	runner := &Runner{
+		LLM:            agent.NewLLMClient(srv.URL, "", "fake-model"),
+		MaxTurnSteps:   8,
+		PerCallTimeout: 5 * time.Second,
+		RunTimeout:     20 * time.Second,
+		Log:            zerolog.Nop(),
+		BuildRegistry: func(ctx context.Context, workspaceDir string, exec executor.Executor) (*agent.Registry, error) {
+			_ = ctx
+			_ = workspaceDir
+			_ = exec
+			reg := agent.NewRegistry()
+			reg.Add(&webSearch)
+			reg.Add(&webFetch)
+			return reg, nil
+		},
+	}
+
+	out, err := runner.Run(context.Background(), scenario)
+	if err != nil {
+		t.Fatalf("Runner.Run: %v", err)
+	}
+	if !out.Pass {
+		t.Errorf("expected all checks to pass; failed: %v", out.FailedChecks())
+		for _, r := range out.Results {
+			t.Logf("  %s: pass=%v detail=%s", r.Check, r.Pass, r.Detail)
+		}
+	}
+	if len(out.Trace.Tools) != 4 {
+		t.Fatalf("expected two searches and two fetches; got %+v", out.Trace.Tools)
+	}
+}
+
 // TestRunner_RequiresLLM pins the early-validation: Runner without an
 // LLM client returns a clear error instead of nil-deref'ing inside
 // EnsureSystemPrompt / SendUser.
