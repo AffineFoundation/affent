@@ -36,6 +36,22 @@ func TestReadFileBoundsPlanSize(t *testing.T) {
 	}
 }
 
+func TestReadFileTreatsBlankPlanAsMissing(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "plan.json")
+	if err := os.WriteFile(path, []byte(" \n\t "), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	raw, found, err := ReadFile(path)
+	if err != nil || found || raw != nil {
+		t.Fatalf("ReadFile blank = raw %q found %v err %v, want missing", raw, found, err)
+	}
+	summary, found := SummarizeFile(path)
+	if found || summary.Label != LabelMissing {
+		t.Fatalf("SummarizeFile blank = %+v found=%v, want missing", summary, found)
+	}
+}
+
 func TestReadFileRejectsSymlink(t *testing.T) {
 	dir := t.TempDir()
 	target := filepath.Join(dir, "target.json")

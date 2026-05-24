@@ -77,6 +77,21 @@ func TestPlanToolViewNormalizesPersistedPlanState(t *testing.T) {
 	}
 }
 
+func TestPlanToolTreatsBlankPlanFileAsNoActivePlan(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "plan.json")
+	if err := os.WriteFile(path, []byte(" \n\t "), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	out, err := planTool(path).Execute(context.Background(), json.RawMessage(`{"action":"view"}`))
+	if err != nil {
+		t.Fatalf("view blank plan: %v", err)
+	}
+	if !strings.Contains(out, "no active plan") {
+		t.Fatalf("blank plan output = %s, want no active plan", out)
+	}
+}
+
 func TestPlanToolClearRemovesPersistedPlan(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "plan.json")
 	tool := planTool(path)

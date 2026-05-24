@@ -43,7 +43,7 @@ func ReadFile(path string) (json.RawMessage, bool, error) {
 	}
 	raw = bytes.TrimSpace(raw)
 	if len(raw) == 0 {
-		return nil, false, errors.New("plan file is empty")
+		return nil, false, nil
 	}
 	if !json.Valid(raw) {
 		return nil, false, errors.New("plan file is not valid JSON")

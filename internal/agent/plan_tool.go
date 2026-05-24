@@ -421,6 +421,10 @@ func readPlanState(path string) (planState, error) {
 	if len(raw) > maxPlanStateBytes {
 		return planState{}, fmt.Errorf("plan file exceeds %d bytes\nNext: clear the plan and set a concise replacement", maxPlanStateBytes)
 	}
+	raw = []byte(strings.TrimSpace(string(raw)))
+	if len(raw) == 0 {
+		return newPlanState(nil, ""), nil
+	}
 	var st planState
 	if err := json.Unmarshal(raw, &st); err != nil {
 		return planState{}, fmt.Errorf("read plan state: %w", err)
