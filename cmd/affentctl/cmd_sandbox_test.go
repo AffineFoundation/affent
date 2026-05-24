@@ -390,6 +390,10 @@ func TestMakeOneClickContainerTargetsUseSharedLimits(t *testing.T) {
 		"CONTAINER_MEMORY ?= 1g",
 		"CONTAINER_CPUS ?= 2",
 		"CONTAINER_PIDS ?= 512",
+		"EVAL_RUNTIME_EVAL_MODE ?= false",
+		"EVAL_MEMORY ?=",
+		"eval-agent-container: EVAL_MEMORY=false",
+		"eval-agent-container: eval-container",
 	} {
 		if !strings.Contains(body, want) {
 			t.Fatalf("Makefile one-click container targets missing %q", want)
@@ -432,6 +436,13 @@ func TestMakeOneClickContainerTargetsUseSharedLimits(t *testing.T) {
 			`--memory-swap "$(CONTAINER_MEMORY)"`,
 			`--cpus "$(CONTAINER_CPUS)"`,
 			`--pids-limit "$(CONTAINER_PIDS)"`,
+			`-e AFFENTCTL_EVAL_MODE`,
+			`$(if $(EVAL_MEMORY),-e AFFENTCTL_MEMORY="$(EVAL_MEMORY)",-e AFFENTCTL_MEMORY)`,
+			`-e AFFENTEVAL_PROVIDER_LABEL`,
+			`$(EVAL_RUNTIME_EVAL_MODE_ARGS) $(EVAL_ARGS)`,
+		},
+		"eval-agent-container": {
+			`eval-agent-container: EVAL_RUNTIME_EVAL_MODE=true`,
 		},
 		"test-container": {
 			`--memory "$(CONTAINER_MEMORY)"`,

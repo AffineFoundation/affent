@@ -108,7 +108,11 @@ not call a model; override `SMOKE_PUBLISH` or `SMOKE_URL` only when the default
 checkout at `/workspace`, stores scenario workspaces under `/workspace/.tmp/eval`,
 and keeps runtime HOME/caches under `/workspace/.tmp/eval-container`. It
 defaults to `EVAL_ARGS='--list'` so it does not call a model unless you request
-scenarios explicitly.
+scenarios explicitly. Use `make eval-agent-container` for the strict benchmark
+agent posture: it passes `--runtime-eval-mode` and defaults
+`AFFENTCTL_MEMORY=false` inside the container so the model sees only the basic
+shell/file tool surface. Override with `EVAL_MEMORY=true` when you are
+evaluating memory behavior.
 
 The equivalent host build, when you intentionally want to bypass Docker, is:
 
@@ -708,6 +712,7 @@ go run ./cmd/affenteval --suite small-model-tools --jsonl > eval.jsonl
 go run ./cmd/affenteval --scenario coding-python-slug --executor sandbox
 go run ./cmd/affenteval --scenario coding-python-slug --runtime-eval-mode
 make eval-container EVAL_ARGS='--suite small-model-tools --temperature 0'
+make eval-agent-container EVAL_ARGS='--scenario coding-python-slug --temperature 0'
 ```
 
 The runner is intentionally small and scenario-driven. It is meant to turn
@@ -736,6 +741,12 @@ and memory remains explicit through `--memory=false` or `--memory-only`.
 disables browser/web tools. `affenteval --runtime-eval-mode` passes the flag to
 the `affentctl run` process under test and records `runtime_eval_mode` in JSONL
 metadata.
+
+For the same posture inside Docker, `make eval-agent-container` wraps
+`make eval-container` with `EVAL_RUNTIME_EVAL_MODE=true` and `EVAL_MEMORY=false`.
+It keeps the same default memory/CPU/PID Docker limits and persistent
+`/workspace/.tmp/eval` work root. Set `EVAL_MEMORY=true` or export
+`AFFENTCTL_MEMORY_ONLY=true` for memory-specific evals.
 
 Eval JSONL records include `schema_version=1` plus run metadata such as suite,
 model, optional `provider_label`, executor, temperature, and timeout so stored

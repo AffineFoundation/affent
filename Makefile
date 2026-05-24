@@ -12,6 +12,9 @@ EVAL_IMAGE ?= affinefoundation/affent:latest
 EVAL_ARGS ?= --list
 EVAL_WORK_ROOT ?= /workspace/.tmp/eval
 EVAL_DOCKER_ARGS ?=
+EVAL_RUNTIME_EVAL_MODE ?= false
+EVAL_RUNTIME_EVAL_MODE_ARGS = $(if $(filter true yes 1,$(EVAL_RUNTIME_EVAL_MODE)),--runtime-eval-mode,)
+EVAL_MEMORY ?=
 SERVE_ARGS ?=
 SERVE_BASE_URL ?= $(or $(AFFENTSERVE_BASE_URL),$(AFFENTCTL_BASE_URL))
 SERVE_API_KEY ?= $(or $(AFFENTSERVE_API_KEY),$(AFFENTCTL_API_KEY))
@@ -62,7 +65,7 @@ if test "$$label" != "true"; then \
 fi
 endef
 
-.PHONY: affentctl affentctl-local doctor sandbox-start sandbox-status sandbox-stop image-build image-run image-serve image-serve-up image-serve-status image-serve-health image-serve-health-wait image-serve-logs image-serve-stop image-serve-restart image-serve-smoke eval-container test-container
+.PHONY: affentctl affentctl-local doctor sandbox-start sandbox-status sandbox-stop image-build image-run image-serve image-serve-up image-serve-status image-serve-health image-serve-health-wait image-serve-logs image-serve-stop image-serve-restart image-serve-smoke eval-container eval-agent-container test-container
 
 affentctl:
 	mkdir -p "$(dir $(AFFENTCTL))" .tmp/go-build .tmp/go-mod
@@ -271,14 +274,28 @@ eval-container: affentctl
 		-e AFFENTCTL_BASE_URL \
 		-e AFFENTCTL_API_KEY \
 		-e AFFENTCTL_MODEL \
+		-e AFFENTCTL_EVAL_MODE \
+		$(if $(EVAL_MEMORY),-e AFFENTCTL_MEMORY="$(EVAL_MEMORY)",-e AFFENTCTL_MEMORY) \
+		-e AFFENTCTL_MEMORY_ONLY \
+		-e AFFENTCTL_MEMORY_MAX_CHARS \
+		-e AFFENTCTL_MEMORY_TOPIC_MAX_CHARS \
+		-e AFFENTCTL_MEMORY_MAX_TOPICS \
+		-e AFFENTCTL_PROJECT_CONTEXT \
+		-e AFFENTCTL_SUBAGENT \
+		-e AFFENTCTL_FOCUSED_TASKS \
 		-e AFFENTCTL_TEMPERATURE \
 		-e AFFENTCTL_TOP_P \
 		-e AFFENTCTL_MAX_TOKENS \
+		-e AFFENTEVAL_PROVIDER_LABEL \
 		-v "$(CURDIR):/workspace" \
 		-w /workspace \
 		$(EVAL_DOCKER_ARGS) \
 		"$(EVAL_IMAGE)" \
-		go run ./cmd/affenteval --repo-root /workspace --work-root "$(EVAL_WORK_ROOT)" --executor local $(EVAL_ARGS)
+		go run ./cmd/affenteval --repo-root /workspace --work-root "$(EVAL_WORK_ROOT)" --executor local $(EVAL_RUNTIME_EVAL_MODE_ARGS) $(EVAL_ARGS)
+
+eval-agent-container: EVAL_RUNTIME_EVAL_MODE=true
+eval-agent-container: EVAL_MEMORY=false
+eval-agent-container: eval-container
 
 test-container:
 	mkdir -p .tmp/go-build .tmp/go-mod
