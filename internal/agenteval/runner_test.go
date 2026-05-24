@@ -829,6 +829,72 @@ func TestRunner_EndToEnd_ToolSchemaCoercionFixesScalarType(t *testing.T) {
 	}
 }
 
+// TestRunner_EndToEnd_ToolSchemaRepairNormalizesEnums pins enum
+// normalization through the full eval runner. Small models often emit
+// schema enum values with extra whitespace or different casing; the
+// runtime should repair unambiguous values before dispatch and expose
+// the repair kind in trace-derived eval checks.
+func TestRunner_EndToEnd_ToolSchemaRepairNormalizesEnums(t *testing.T) {
+	turn1 := []string{
+		`{"choices":[{"delta":{"role":"assistant","tool_calls":[{"index":0,"id":"p1","type":"function","function":{"name":"plan","arguments":""}}]},"finish_reason":null}]}`,
+		`{"choices":[{"delta":{"tool_calls":[{"index":0,"function":{"arguments":"{\"action\":\" SET \",\"steps\":[{\"text\":\"inspect workspace\",\"status\":\" IN_PROGRESS \"}]}"}}]},"finish_reason":null}]}`,
+		`{"choices":[{"delta":{},"finish_reason":"tool_calls"}]}`,
+		`[DONE]`,
+	}
+	turn2 := []string{
+		`{"choices":[{"delta":{"role":"assistant","content":"Planned the inspection step."},"finish_reason":"stop"}]}`,
+		`[DONE]`,
+	}
+	srv := newScriptedLLM(t, [][]string{turn1, turn2})
+
+	scenario := Scenario{
+		Name:         "tool_schema_enum_normalization",
+		Description:  "runtime normalizes whitespace/case variants of schema enum values before dispatch",
+		Prompt:       "create a brief plan",
+		MaxTurnSteps: 4,
+		Checks: []Check{
+			TurnEndedCleanly(),
+			ToolCalled("plan", nil),
+			ToolRequestRepaired("plan"),
+			ToolRepairKindAtLeast("enum_normalization", 1),
+			ToolResultContains("plan", "plan set"),
+			FinalTextContains("Planned"),
+		},
+	}
+
+	runner := &Runner{
+		LLM:            agent.NewLLMClient(srv.URL, "", "fake-model"),
+		MaxTurnSteps:   4,
+		PerCallTimeout: 5 * time.Second,
+		RunTimeout:     15 * time.Second,
+		Log:            zerolog.Nop(),
+	}
+
+	out, err := runner.Run(context.Background(), scenario)
+	if err != nil {
+		t.Fatalf("Runner.Run: %v", err)
+	}
+	if !out.Pass {
+		t.Errorf("expected all checks to pass; failed: %v", out.FailedChecks())
+		for _, r := range out.Results {
+			t.Logf("  %s: pass=%v detail=%s", r.Check, r.Pass, r.Detail)
+		}
+	}
+	if len(out.Trace.Tools) != 1 {
+		t.Fatalf("expected exactly one plan call; got %d", len(out.Trace.Tools))
+	}
+	tc := out.Trace.Tools[0]
+	if !tc.ArgsRepaired {
+		t.Fatalf("ArgsRepaired must be true after enum normalization; args=%v notes=%v", tc.Args, tc.RepairNotes)
+	}
+	if got, _ := tc.Args["action"].(string); got != "set" {
+		t.Fatalf("normalized action = %q, want set; args=%v notes=%v", got, tc.Args, tc.RepairNotes)
+	}
+	if tc.IsErr {
+		t.Fatalf("normalized plan call should dispatch successfully; result=%q", tc.Result)
+	}
+}
+
 // TestRunner_EndToEnd_SubagentDepthBudgetBlocksNestedDelegation pins
 // the runtime's recursive-delegation cap end-to-end through the eval
 // harness. With MaxDepth=1, buildSubagentRegistry must NOT register
