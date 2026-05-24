@@ -42,9 +42,10 @@ type FetchConfig struct {
 	// Default 8000. Values above the hard cap are clamped. Truncated
 	// output gets a "...(truncated)" marker.
 	MaxResultChars int
-	// UserAgent is sent on every request. Defaults to a generic
-	// "affent-webfetch/0.1" — override if a target server requires
-	// something specific.
+	// UserAgent is sent on every request. Defaults to a browser-shaped
+	// UA because many public sites reject library/bot-looking clients
+	// even for ordinary article/doc pages. Override if a deployment
+	// needs a stricter identity string.
 	UserAgent string
 	// AllowPrivateNetwork disables the default SSRF guard. Off by
 	// default — a model that decides to fetch http://127.0.0.1:7777
@@ -61,7 +62,7 @@ const (
 	maxFetchBytes         = 8 * 1024 * 1024
 	defaultMaxResultChars = 8000
 	maxFetchResultChars   = 64 * 1024
-	defaultUserAgent      = "affent-webfetch/0.1 (+https://github.com/AffineFoundation/affent)"
+	defaultUserAgent      = "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0 Safari/537.36 AffentWebFetch/0.1"
 )
 
 // FetchTool returns an agent.Tool that fetches a URL and returns its
@@ -151,23 +152,24 @@ func fetch(ctx context.Context, cfg FetchConfig, url string) (string, error) {
 	// Hint we want text-ish content. Servers that honor q= ranking will
 	// prefer HTML over JSON when both are available.
 	req.Header.Set("Accept", "text/html,application/xhtml+xml,application/xml;q=0.9,text/plain;q=0.8,*/*;q=0.5")
+	req.Header.Set("Accept-Language", "en-US,en;q=0.8")
 
 	resp, err := cfg.HTTP.Do(req)
 	if err != nil {
-		return "", fmt.Errorf("http get: %w", err)
+		return "", recoverableFetchError(0, fmt.Errorf("http get: %w", err))
 	}
 	defer resp.Body.Close()
 
 	if resp.StatusCode/100 != 2 {
 		// Read a little so the error is informative.
 		preview, _ := io.ReadAll(io.LimitReader(resp.Body, 512))
-		return "", fmt.Errorf("http %d %s: %s",
-			resp.StatusCode, resp.Status, strings.TrimSpace(string(preview)))
+		return "", recoverableFetchError(resp.StatusCode, fmt.Errorf("http %d %s: %s",
+			resp.StatusCode, resp.Status, strings.TrimSpace(string(preview))))
 	}
 
 	body, err := io.ReadAll(io.LimitReader(resp.Body, cfg.MaxBytes+1))
 	if err != nil {
-		return "", fmt.Errorf("read body: %w", err)
+		return "", recoverableFetchError(0, fmt.Errorf("read body: %w", err))
 	}
 	bodyTruncated := int64(len(body)) > cfg.MaxBytes
 	if bodyTruncated {
@@ -191,6 +193,29 @@ func fetch(ctx context.Context, cfg FetchConfig, url string) (string, error) {
 		out = strings.TrimSpace(out) + "\n\n...(response body truncated)"
 	}
 	return out, nil
+}
+
+func recoverableFetchError(status int, err error) error {
+	if err == nil || strings.Contains(err.Error(), "\nNext:") {
+		return err
+	}
+	next := "retry only if the URL or transient network condition changed; otherwise use another available discovery/rendering tool, an alternate official URL, or answer with what could be verified"
+	lower := strings.ToLower(err.Error())
+	switch {
+	case status == http.StatusUnauthorized || status == http.StatusForbidden:
+		next = "do not keep retrying this blocked URL; use another available source, a canonical public URL from search results, or a browser tool if one is registered for rendered/blocked pages"
+	case status == http.StatusNotFound || status == http.StatusGone:
+		next = "use search results or the site's navigation to find the current canonical URL, then retry web_fetch with that URL"
+	case status == http.StatusTooManyRequests:
+		next = "do not hammer this host; use cached/search-result snippets or another authoritative source, and retry later only if needed"
+	case status >= 500 && status <= 599:
+		next = "server-side failure; retry once later or use another authoritative mirror/source instead of repeating the same failing URL"
+	case strings.Contains(lower, "ssrf-guard"):
+		next = "do not fetch private, loopback, link-local, or internal network URLs; use public sources or ask the operator to enable private-network fetch only for trusted local development"
+	case errors.Is(err, context.DeadlineExceeded) || strings.Contains(lower, "timeout") || strings.Contains(lower, "deadline exceeded"):
+		next = "network timeout; retry once with the same canonical URL, then switch to another available source or discovery tool if it fails again"
+	}
+	return fmt.Errorf("%w\nNext: %s", err, next)
 }
 
 func renderBody(body []byte, contentType, finalURL string) string {

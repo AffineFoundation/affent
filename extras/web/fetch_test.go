@@ -180,6 +180,36 @@ func TestFetchTool_HTTPError(t *testing.T) {
 	if err == nil || !strings.Contains(err.Error(), "http 403") {
 		t.Errorf("expected 403 surface, got %v", err)
 	}
+	for _, want := range []string{"Next:", "blocked URL", "another available source"} {
+		if err == nil || !strings.Contains(err.Error(), want) {
+			t.Fatalf("403 error missing %q guidance: %v", want, err)
+		}
+	}
+}
+
+func TestFetchTool_DefaultHeadersLookBrowserCompatible(t *testing.T) {
+	var ua, acceptLanguage string
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		ua = r.Header.Get("User-Agent")
+		acceptLanguage = r.Header.Get("Accept-Language")
+		w.Header().Set("Content-Type", "text/plain")
+		w.Write([]byte("ok"))
+	}))
+	defer srv.Close()
+
+	tool := FetchTool(FetchConfig{AllowPrivateNetwork: true})
+	args, _ := json.Marshal(map[string]string{"url": srv.URL})
+	if _, err := tool.Execute(context.Background(), args); err != nil {
+		t.Fatalf("Execute: %v", err)
+	}
+	for _, want := range []string{"Mozilla/5.0", "Chrome/", "AffentWebFetch"} {
+		if !strings.Contains(ua, want) {
+			t.Fatalf("User-Agent missing %q: %q", want, ua)
+		}
+	}
+	if !strings.Contains(acceptLanguage, "en-US") {
+		t.Fatalf("Accept-Language = %q, want en-US hint", acceptLanguage)
+	}
 }
 
 func TestFetchTool_BodyCapReportsTruncation(t *testing.T) {
@@ -426,6 +456,9 @@ func TestFetchTool_SSRFGuardBlocksLoopback(t *testing.T) {
 	}
 	if !strings.Contains(err.Error(), "ssrf-guard") {
 		t.Errorf("error must mention ssrf-guard so operators can grep; got %v", err)
+	}
+	if !strings.Contains(err.Error(), "Next:") || !strings.Contains(err.Error(), "private") {
+		t.Errorf("SSRF rejection should include recovery guidance, got %v", err)
 	}
 }
 
