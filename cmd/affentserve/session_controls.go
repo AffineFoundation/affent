@@ -176,21 +176,13 @@ func sessionMessageTurnOptions(sess *Session, mode string) (agent.TurnOptions, e
 	if sess == nil || sess.registry == nil {
 		return agent.TurnOptions{}, errors.New("plan tool is not available")
 	}
-	planTool, ok := sess.registry.Get(agent.PlanToolName)
-	if !ok {
-		return agent.TurnOptions{}, errors.New("plan tool is not available")
-	}
 	if mode != sessionMessageModePlanOnly {
+		if _, ok := sess.registry.Get(agent.PlanToolName); !ok {
+			return agent.TurnOptions{}, errors.New("plan tool is not available")
+		}
 		return agent.TurnOptions{}, nil
 	}
-	tools := agent.NewRegistry()
-	tools.Add(planTool)
-	return agent.TurnOptions{
-		Tools:                  tools,
-		FirstToolPolicy:        agent.PlanFirstToolPolicy(),
-		MaxToolCalls:           sessionPlanOnlyMaxToolCalls,
-		FinalNoToolsOnMaxTurns: true,
-	}, nil
+	return agent.PlanOnlyTurnOptions(sess.registry, sessionPlanOnlyMaxToolCalls)
 }
 
 func sessionMessageModeRequiresPlanTool(mode string) bool {

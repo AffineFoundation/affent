@@ -557,6 +557,30 @@ func PlanFirstToolPolicy() *FirstToolPolicy {
 	}
 }
 
+// PlanOnlyTurnOptions narrows one turn to the plan tool and a small explicit
+// tool-call budget. It is shared by CLI and server modes so plan-only behavior
+// does not drift between entrypoints.
+func PlanOnlyTurnOptions(reg *Registry, maxToolCalls int) (TurnOptions, error) {
+	if maxToolCalls <= 0 {
+		return TurnOptions{}, errors.New("plan-only max tool calls must be positive")
+	}
+	if reg == nil {
+		return TurnOptions{}, errors.New("plan tool is not available")
+	}
+	planTool, ok := reg.Get(PlanToolName)
+	if !ok {
+		return TurnOptions{}, errors.New("plan tool is not available")
+	}
+	planOnlyTools := NewRegistry()
+	planOnlyTools.Add(planTool)
+	return TurnOptions{
+		Tools:                  planOnlyTools,
+		FirstToolPolicy:        PlanFirstToolPolicy(),
+		MaxToolCalls:           maxToolCalls,
+		FinalNoToolsOnMaxTurns: true,
+	}, nil
+}
+
 func PlanOnlyUserPrompt(request string) string {
 	request = strings.TrimSpace(request)
 	if request == "" {

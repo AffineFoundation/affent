@@ -65,9 +65,9 @@ func TestPlanOnlyTurnOptionsNarrowsToolSurface(t *testing.T) {
 			return "", nil
 		},
 	})
-	opts, err := planOnlyTurnOptions(reg, 2)
+	opts, err := agent.PlanOnlyTurnOptions(reg, 2)
 	if err != nil {
-		t.Fatalf("planOnlyTurnOptions: %v", err)
+		t.Fatalf("PlanOnlyTurnOptions: %v", err)
 	}
 	if opts.FirstToolPolicy == nil || opts.FirstToolPolicy.ToolName != agent.PlanToolName {
 		t.Fatalf("first tool policy = %+v, want plan", opts.FirstToolPolicy)

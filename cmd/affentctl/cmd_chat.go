@@ -365,7 +365,7 @@ func chatPlanSlashTurn(line string, b *loopBundle) (string, agent.TurnOptions, b
 		if b == nil || b.loop == nil {
 			return "", agent.TurnOptions{}, false, fmt.Errorf("agent loop is not initialized")
 		}
-		opts, err := planOnlyTurnOptions(b.loop.Tools, runPlanOnlyMaxToolCalls)
+		opts, err := agent.PlanOnlyTurnOptions(b.loop.Tools, runPlanOnlyMaxToolCalls)
 		if err != nil {
 			return "", agent.TurnOptions{}, false, err
 		}

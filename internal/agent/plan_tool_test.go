@@ -387,6 +387,49 @@ func TestPlanFirstToolPolicyAlwaysRequiresPlan(t *testing.T) {
 	}
 }
 
+func TestPlanOnlyTurnOptionsNarrowsToolSurface(t *testing.T) {
+	reg := NewRegistry()
+	reg.Add(&Tool{Name: PlanToolName})
+	reg.Add(&Tool{Name: "shell"})
+	opts, err := PlanOnlyTurnOptions(reg, 2)
+	if err != nil {
+		t.Fatalf("PlanOnlyTurnOptions: %v", err)
+	}
+	if opts.FirstToolPolicy == nil || opts.FirstToolPolicy.ToolName != PlanToolName {
+		t.Fatalf("first tool policy = %+v, want plan", opts.FirstToolPolicy)
+	}
+	if opts.MaxToolCalls != 2 || !opts.FinalNoToolsOnMaxTurns {
+		t.Fatalf("options = %+v, want bounded plan-only turn", opts)
+	}
+	defs := opts.Tools.Defs()
+	if len(defs) != 1 || defs[0].Function.Name != PlanToolName {
+		t.Fatalf("plan-only defs = %+v, want only plan", defs)
+	}
+	if _, ok := opts.Tools.Get("shell"); ok {
+		t.Fatal("plan-only options must not keep non-plan tools")
+	}
+}
+
+func TestPlanOnlyTurnOptionsRequiresPlanTool(t *testing.T) {
+	for _, reg := range []*Registry{nil, NewRegistry()} {
+		_, err := PlanOnlyTurnOptions(reg, 2)
+		if err == nil || !strings.Contains(err.Error(), "plan tool is not available") {
+			t.Fatalf("PlanOnlyTurnOptions error = %v, want missing plan tool", err)
+		}
+	}
+}
+
+func TestPlanOnlyTurnOptionsRequiresPositiveBudget(t *testing.T) {
+	reg := NewRegistry()
+	reg.Add(&Tool{Name: PlanToolName})
+	for _, maxToolCalls := range []int{0, -1} {
+		_, err := PlanOnlyTurnOptions(reg, maxToolCalls)
+		if err == nil || !strings.Contains(err.Error(), "must be positive") {
+			t.Fatalf("PlanOnlyTurnOptions(%d) error = %v, want positive budget error", maxToolCalls, err)
+		}
+	}
+}
+
 func TestPlanOnlyUserPromptPreservesRequestAndForbidsExecution(t *testing.T) {
 	got := PlanOnlyUserPrompt("  fix the failing tests  ")
 	for _, want := range []string{

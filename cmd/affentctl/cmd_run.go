@@ -124,7 +124,7 @@ func enableRunPlanOnly(b *loopBundle) error {
 	if b == nil || b.loop == nil || b.loop.Tools == nil {
 		return fmt.Errorf("agent loop is not initialized")
 	}
-	opts, err := planOnlyTurnOptions(b.loop.Tools, runPlanOnlyMaxToolCalls)
+	opts, err := agent.PlanOnlyTurnOptions(b.loop.Tools, runPlanOnlyMaxToolCalls)
 	if err != nil {
 		return err
 	}
@@ -133,24 +133,6 @@ func enableRunPlanOnly(b *loopBundle) error {
 	b.loop.MaxToolCalls = opts.MaxToolCalls
 	b.loop.FinalNoToolsOnMaxTurns = opts.FinalNoToolsOnMaxTurns
 	return nil
-}
-
-func planOnlyTurnOptions(reg *agent.Registry, maxToolCalls int) (agent.TurnOptions, error) {
-	if reg == nil {
-		return agent.TurnOptions{}, fmt.Errorf("plan tool is not available")
-	}
-	planTool, ok := reg.Get(agent.PlanToolName)
-	if !ok {
-		return agent.TurnOptions{}, fmt.Errorf("plan tool is not available")
-	}
-	planOnlyTools := agent.NewRegistry()
-	planOnlyTools.Add(planTool)
-	return agent.TurnOptions{
-		Tools:                  planOnlyTools,
-		FirstToolPolicy:        agent.PlanFirstToolPolicy(),
-		MaxToolCalls:           maxToolCalls,
-		FinalNoToolsOnMaxTurns: true,
-	}, nil
 }
 
 func validateRunModeFlags(c commonFlags, planOnly, executePlan bool) error {
