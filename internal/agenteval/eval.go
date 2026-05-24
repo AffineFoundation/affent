@@ -77,6 +77,7 @@ type BatchRunner struct {
 	Model                    string
 	Temperature              string
 	Executor                 string
+	RuntimeEvalMode          bool
 	GoBin                    string
 	Timeout                  time.Duration
 	VerifierOutputCapBytes   int
@@ -378,6 +379,9 @@ func (r BatchRunner) affentctlRunArgs(workspace, tracePath string, scenario Batc
 	}
 	if r.Temperature != "" {
 		args = append(args, "--temperature", r.Temperature)
+	}
+	if r.RuntimeEvalMode {
+		args = append(args, "--eval-mode")
 	}
 	return args
 }

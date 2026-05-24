@@ -296,6 +296,38 @@ func TestDoctorCapabilitySummaryMemoryOnlyMatchesRegisteredTools(t *testing.T) {
 	}
 }
 
+func TestDoctorCapabilitySummaryEvalModeMatchesStrictSurface(t *testing.T) {
+	got := doctorCapabilitySummary(commonFlags{
+		evalMode:            true,
+		memoryEnabled:       true,
+		projectContext:      true,
+		mcpConfigPath:       "/tmp/mcp.json",
+		subagentEnabled:     true,
+		subagentMaxDepth:    4,
+		focusedTasksEnabled: true,
+		executor:            "local",
+	})
+	for _, want := range []string{
+		"shell_file=true",
+		"skill_install=false",
+		"memory=true",
+		"memory_only=false",
+		"eval_mode=true",
+		"session_search=false",
+		"project_context=false",
+		"mcp=false",
+		"subagent=false",
+		"subagent_max_depth=4",
+		"focused_tasks=false",
+		"focused_task_profiles=off",
+		"executor=local",
+	} {
+		if !strings.Contains(got, want) {
+			t.Fatalf("capability summary missing %q:\n%s", want, got)
+		}
+	}
+}
+
 func TestDoctorBoundarySummaryUsesConfiguredTurnLimits(t *testing.T) {
 	got := doctorBoundarySummary(commonFlags{
 		maxTurns:    7,

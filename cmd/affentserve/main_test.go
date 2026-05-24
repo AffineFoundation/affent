@@ -169,6 +169,30 @@ func TestParseFlagsAndConfig_BuiltinsFromEnv(t *testing.T) {
 	}
 }
 
+func TestParseFlagsAndConfig_EvalModeDisablesNonBasicSurfaces(t *testing.T) {
+	t.Setenv("AFFENTSERVE_BROWSER", "true")
+	t.Setenv("AFFENTSERVE_BROWSER_SCREENSHOT", "true")
+	t.Setenv("AFFENTSERVE_WEB", "true")
+	t.Setenv("AFFENTSERVE_WEB_SEARCH", "true")
+	t.Setenv("AFFENTSERVE_SUBAGENT", "true")
+	t.Setenv("AFFENTSERVE_FOCUSED_TASKS", "true")
+	cfg, err := parseFlagsAndConfig([]string{
+		"--base-url", "https://example/v1",
+		"--model", "demo",
+		"--builtins",
+		"--eval-mode",
+	})
+	if err != nil {
+		t.Fatalf("parseFlagsAndConfig: %v", err)
+	}
+	if !cfg.EvalMode || !cfg.EnableBuiltins {
+		t.Fatalf("eval mode should preserve explicit basic builtins: eval=%t builtins=%t", cfg.EvalMode, cfg.EnableBuiltins)
+	}
+	if cfg.EnableBrowser || cfg.BrowserScreenshot || cfg.EnableWeb || cfg.EnableWebSearch || cfg.EnableSubagent || cfg.EnableFocusedTasks {
+		t.Fatalf("eval mode should disable non-basic surfaces: %+v", cfg)
+	}
+}
+
 func TestParseFlagsAndConfig_NetworkToolsFromEnv(t *testing.T) {
 	t.Setenv("AFFENTSERVE_BROWSER", "true")
 	t.Setenv("AFFENTSERVE_BROWSER_SCREENSHOT", "true")

@@ -77,6 +77,7 @@ func parseFlagsAndConfig(argv []string) (Config, error) {
 		enableWebSearch    = fs.Bool("web-search", false, "Register web_search alongside web_fetch (requires TAVILY_API_KEY by default). Env: AFFENTSERVE_WEB_SEARCH.")
 		enableMemory       = fs.Bool("memory", true, "Register agent runtime's memory tool.")
 		enableBuiltins     = fs.Bool("builtins", false, "Register shell + file builtins (LocalExecutor). DANGEROUS on a shared host — only enable in a sandboxed environment. Env: AFFENTSERVE_BUILTINS.")
+		evalMode           = fs.Bool("eval-mode", false, "Strict benchmark mode: disable skills, browser/web tools, subagent, focused tasks, and dynamic workflow injection. Env: AFFENTSERVE_EVAL_MODE.")
 		enableSubagent     = fs.Bool("subagent", true, "Register the subagent_run tool — a bounded isolated Loop with read-only inspection tools. Doesn't require --builtins but inherits the shell tool when --builtins is also on.")
 		subagentMaxDepth   = fs.Int("subagent-max-depth", agent.DefaultSubagentMaxDepth, "Maximum recursive subagent depth; 1 disables nested subagents, hard max 4. Env: AFFENTSERVE_SUBAGENT_MAX_DEPTH.")
 		enableFocusedTasks = fs.Bool("focused-tasks", true, "Register the run_task tool — bounded focused tasks (recall/explore/research/verify/review) with a per-kind tool whitelist and structured JSON output. Independent of --subagent. Env: AFFENTSERVE_FOCUSED_TASKS.")
@@ -185,6 +186,9 @@ func parseFlagsAndConfig(argv []string) (Config, error) {
 	if setFlags["builtins"] {
 		cfg.EnableBuiltins = *enableBuiltins
 	}
+	if setFlags["eval-mode"] {
+		cfg.EvalMode = *evalMode
+	}
 	if setFlags["subagent"] {
 		cfg.enableSubagentSet = true
 		cfg.EnableSubagent = *enableSubagent
@@ -244,6 +248,7 @@ func parseFlagsAndConfig(argv []string) (Config, error) {
 		cfg.MaxTokens = &n
 	}
 
+	cfg.ApplyEvalMode()
 	if err := cfg.Validate(); err != nil {
 		return cfg, err
 	}
@@ -355,6 +360,7 @@ func logServeStartup(logger zerolog.Logger, cfg Config, sessionStateRoot string)
 		Str("memory_root", cfg.MemoryRoot).
 		Str("session_state_root", sessionStateRoot).
 		Bool("builtins", cfg.EnableBuiltins).
+		Bool("eval_mode", cfg.EvalMode).
 		Bool("subagent", cfg.EnableSubagent).
 		Int("subagent_max_depth", cfg.SubagentMaxDepth).
 		Bool("focused_tasks", cfg.EnableFocusedTasks).

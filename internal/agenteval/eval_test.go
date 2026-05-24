@@ -550,11 +550,12 @@ func TestBatchRunnerRunVerifierHonorsContext(t *testing.T) {
 
 func TestBatchRunnerAffentctlRunArgsForwardsExecutor(t *testing.T) {
 	args := (BatchRunner{
-		BaseURL:     "https://llm.example/v1",
-		Model:       "model-a",
-		APIKey:      "secret",
-		Temperature: "0",
-		Executor:    "docker:affent-eval",
+		BaseURL:         "https://llm.example/v1",
+		Model:           "model-a",
+		APIKey:          "secret",
+		Temperature:     "0",
+		Executor:        "docker:affent-eval",
+		RuntimeEvalMode: true,
 	}).affentctlRunArgs("/tmp/ws", "/tmp/ws/trace.jsonl", BatchScenario{
 		Prompt:   "fix it",
 		MaxTurns: 3,
@@ -567,6 +568,7 @@ func TestBatchRunnerAffentctlRunArgsForwardsExecutor(t *testing.T) {
 		"--max-turns\x003",
 		"--temperature\x000",
 		"--api-key\x00secret",
+		"--eval-mode",
 	} {
 		if !strings.Contains(joined, want) {
 			t.Fatalf("args missing %q:\n%q", want, args)

@@ -105,6 +105,22 @@ func TestSafeWorkspacePath_RejectsSymlinkEscape(t *testing.T) {
 	}
 }
 
+func TestRegisterBuiltins_DisableSkillOmitsSkillToolOnly(t *testing.T) {
+	r := NewRegistry()
+	RegisterBuiltins(r, BuiltinDeps{
+		HostWorkspaceDir: t.TempDir(),
+		DisableSkill:     true,
+	})
+	if _, ok := r.Get("skill"); ok {
+		t.Fatal("skill tool should be omitted when DisableSkill is true")
+	}
+	for _, name := range []string{"shell", "read_file", "write_file", "edit_file", "list_files"} {
+		if _, ok := r.Get(name); !ok {
+			t.Fatalf("%s should still be registered when only skill is disabled", name)
+		}
+	}
+}
+
 // TestSafeWorkspacePath_AllowsInWorkspaceSymlink confirms the fix
 // doesn't over-block: a symlink that points to a path STILL INSIDE
 // the workspace must work (common pattern: `ln -s ../shared a/link`).

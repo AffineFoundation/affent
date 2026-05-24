@@ -269,7 +269,8 @@ Docker CPU limit, so Go-based tools inside the runtime image respect the same
 resource envelope by default. The command also forwards portable model, auth,
 sampling, retry/compaction, memory-cap, and feature-toggle env vars such as
 `AFFENTCTL_BASE_URL`, `AFFENTCTL_MEMORY_MAX_TOPICS`, `AFFENTSERVE_MODEL`,
-`AFFENTSERVE_BUILTINS`, and `TAVILY_API_KEY` when they are set. Host path or
+`AFFENTCTL_EVAL_MODE`, `AFFENTSERVE_BUILTINS`, `AFFENTSERVE_EVAL_MODE`, and
+`TAVILY_API_KEY` when they are set. Host path or
 executor env vars such as
 `AFFENTCTL_WORKSPACE`,
 `AFFENTCTL_CONFIG`, `AFFENTCTL_MCP_CONFIG`, `AFFENTCTL_EXECUTOR`,
@@ -705,6 +706,7 @@ go run ./cmd/affenteval --suite small-model-tools --temperature 0
 go run ./cmd/affenteval --scenario coding-python-slug --temperature 0
 go run ./cmd/affenteval --suite small-model-tools --jsonl > eval.jsonl
 go run ./cmd/affenteval --scenario coding-python-slug --executor sandbox
+go run ./cmd/affenteval --scenario coding-python-slug --runtime-eval-mode
 make eval-container EVAL_ARGS='--suite small-model-tools --temperature 0'
 ```
 
@@ -723,6 +725,17 @@ you need every workspace and trace left on disk.
 The `small-model-tools` suite includes runtime guard checks such as
 `skill-remote-install-guard`, which verifies that direct remote skill installs
 are blocked and routed through the proposal/confirmation flow.
+
+Use runtime eval mode when Affent itself is the benchmark agent and the model
+should solve tasks with only the basic tool surface. `affentctl run
+--eval-mode` disables skills, runtime skill install/reload, subagent,
+focused-task delegation, MCP, project-context injection, session_search, and
+the plan tool; shell/file tools remain available when builtins are available,
+and memory remains explicit through `--memory=false` or `--memory-only`.
+`affentserve --eval-mode` applies the same posture for API sessions and also
+disables browser/web tools. `affenteval --runtime-eval-mode` passes the flag to
+the `affentctl run` process under test and records `runtime_eval_mode` in JSONL
+metadata.
 
 Eval JSONL records include `schema_version=1` plus run metadata such as suite,
 model, optional `provider_label`, executor, temperature, and timeout so stored

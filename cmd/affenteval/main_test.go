@@ -853,7 +853,7 @@ func TestCloneTraceSchemaVersions(t *testing.T) {
 func TestEvalJSONLMetadataFromConfig(t *testing.T) {
 	t.Setenv("AFFENTCTL_MODEL", "env-model")
 	t.Setenv("AFFENTEVAL_PROVIDER_LABEL", "env-provider")
-	meta := evalJSONLMetadataFromConfig("small-model-tools", "", "", "", "0", 5*time.Minute)
+	meta := evalJSONLMetadataFromConfig("small-model-tools", "", "", "", "0", false, 5*time.Minute)
 	if meta.SchemaVersion != evalJSONLSchemaVersion {
 		t.Fatalf("SchemaVersion = %d, want %d", meta.SchemaVersion, evalJSONLSchemaVersion)
 	}
@@ -867,8 +867,8 @@ func TestEvalJSONLMetadataFromConfig(t *testing.T) {
 		t.Fatalf("metadata = %+v", meta)
 	}
 
-	meta = evalJSONLMetadataFromConfig(" custom ", " flag-model ", " flag-provider ", " sandbox ", " 0.4 ", time.Second)
-	if meta.Model != "flag-model" || meta.ProviderLabel != "flag-provider" || meta.Executor != "sandbox" || meta.Temperature != "0.4" || meta.Suite != "custom" || meta.TimeoutMS != 1000 {
+	meta = evalJSONLMetadataFromConfig(" custom ", " flag-model ", " flag-provider ", " sandbox ", " 0.4 ", true, time.Second)
+	if meta.Model != "flag-model" || meta.ProviderLabel != "flag-provider" || meta.Executor != "sandbox" || meta.Temperature != "0.4" || meta.Suite != "custom" || !meta.RuntimeEvalMode || meta.TimeoutMS != 1000 {
 		t.Fatalf("flag metadata not normalized: %+v", meta)
 	}
 }

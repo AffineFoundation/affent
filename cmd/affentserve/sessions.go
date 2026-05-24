@@ -121,6 +121,7 @@ var ErrShuttingDown = errors.New("session pool is shutting down")
 
 // NewSessionPool constructs a pool with the idle-GC goroutine running.
 func NewSessionPool(cfg Config, logger zerolog.Logger) (*SessionPool, error) {
+	cfg.ApplyEvalMode()
 	ttl, err := cfg.IdleTTL()
 	if err != nil {
 		return nil, err
@@ -355,14 +356,19 @@ func (p *SessionPool) buildSession(id string) (*Session, error) {
 	planPath := ""
 	if p.cfg.EnableBuiltins {
 		localExec = executor.NewLocalExecutor(id, workspace)
-		skillDir := agent.DefaultWorkspaceSkillDir(sessionDir)
-		var skillErr error
-		skillReg, skillErr = agent.RuntimeSkillRegistry(skillDir)
-		if skillErr != nil {
-			_ = os.RemoveAll(workspace)
-			return nil, fmt.Errorf("skills: %w", skillErr)
+		skillDir := ""
+		if !p.cfg.EvalMode {
+			skillDir = agent.DefaultWorkspaceSkillDir(sessionDir)
+			var skillErr error
+			skillReg, skillErr = agent.RuntimeSkillRegistry(skillDir)
+			if skillErr != nil {
+				_ = os.RemoveAll(workspace)
+				return nil, fmt.Errorf("skills: %w", skillErr)
+			}
 		}
-		planPath = filepath.Join(sessionDir, "plan.json")
+		if !p.cfg.EvalMode {
+			planPath = filepath.Join(sessionDir, "plan.json")
+		}
 		agent.RegisterBuiltins(reg, agent.BuiltinDeps{
 			Executor:         localExec,
 			HostWorkspaceDir: workspace,
@@ -373,6 +379,7 @@ func (p *SessionPool) buildSession(id string) (*Session, error) {
 			SkillInstallConfirmer: func(proposalID string) bool {
 				return agent.UserConfirmedRuntimeSkillProposal(conv, proposalID)
 			},
+			DisableSkill: p.cfg.EvalMode,
 		})
 	} else if memStore != nil {
 		// Memory tool without the shell/file builtins — common for
@@ -382,7 +389,7 @@ func (p *SessionPool) buildSession(id string) (*Session, error) {
 	}
 
 	var browser *affentbrowser.Session
-	if p.cfg.EnableBrowser {
+	if p.cfg.EnableBrowser && !p.cfg.EvalMode {
 		bs, err := p.newBrowserSession(workspace)
 		if err != nil {
 			_ = os.RemoveAll(workspace)
@@ -393,7 +400,7 @@ func (p *SessionPool) buildSession(id string) (*Session, error) {
 		})
 		browser = bs
 	}
-	if p.cfg.EnableWeb {
+	if p.cfg.EnableWeb && !p.cfg.EvalMode {
 		if p.cfg.EnableWebSearch {
 			if err := affentweb.RegisterAll(reg, affentweb.Options{}); err != nil {
 				p.logger.Warn().Err(err).Msg("web_search not available; registering web_fetch only")
@@ -411,7 +418,7 @@ func (p *SessionPool) buildSession(id string) (*Session, error) {
 	if p.cfg.EnableBuiltins {
 		childExec = localExec
 	}
-	if p.cfg.EnableSubagent {
+	if p.cfg.EnableSubagent && !p.cfg.EvalMode {
 		agent.RegisterSubagent(reg, agent.SubagentDeps{
 			LLM:                llm,
 			Executor:           childExec,
@@ -424,7 +431,7 @@ func (p *SessionPool) buildSession(id string) (*Session, error) {
 			MaxDepth:           p.cfg.SubagentMaxDepth,
 		})
 	}
-	if p.cfg.EnableFocusedTasks {
+	if p.cfg.EnableFocusedTasks && !p.cfg.EvalMode {
 		agent.RegisterFocusedTasks(reg, agent.FocusedTaskDeps{
 			LLM:              llm,
 			Executor:         childExec,
@@ -480,11 +487,13 @@ func (p *SessionPool) buildSession(id string) (*Session, error) {
 			"tool-results",
 		),
 		ToolResultArtifactPathPrefix: ".affent/artifacts/tool-results",
-		SkillProvider:                agent.BuiltinSkillProvider,
 		// Snapshot source for EnsureSystemPrompt — when nil, the
 		// memory block is just omitted from the system prompt and
 		// the tool isn't registered above anyway.
 		Memory: memStore,
+	}
+	if !p.cfg.EvalMode {
+		loop.SkillProvider = agent.BuiltinSkillProvider
 	}
 	if skillReg != nil {
 		loop.SkillProvider = skillReg.Provide
@@ -492,11 +501,11 @@ func (p *SessionPool) buildSession(id string) (*Session, error) {
 	if planPath != "" {
 		loop.SkillProvider = agent.WithActivePlanSkillProvider(planPath, loop.SkillProvider)
 	}
-	if p.cfg.EnableSubagent {
+	if p.cfg.EnableSubagent && !p.cfg.EvalMode {
 		loop.FirstToolPolicy = agent.SubagentFirstToolPolicy()
 		loop.PostToolPolicy = agent.SubagentPostToolPolicy()
 	}
-	if p.cfg.EnableFocusedTasks {
+	if p.cfg.EnableFocusedTasks && !p.cfg.EvalMode {
 		if _, ok := reg.Get(agent.FocusedTaskToolName); ok {
 			loop.FirstToolPolicies = append(loop.FirstToolPolicies, agent.FocusedTaskFirstToolPolicy())
 			loop.PostToolPolicies = append(loop.PostToolPolicies, agent.FocusedTaskPostToolPolicy())
@@ -526,7 +535,7 @@ func (p *SessionPool) buildSession(id string) (*Session, error) {
 		KeepLast:    keepLast,
 	}
 	systemPrompt := p.cfg.SystemPrompt
-	if p.cfg.EnableSubagent {
+	if p.cfg.EnableSubagent && !p.cfg.EvalMode {
 		// Tell the model when to delegate. Without this hint the model
 		// sees subagent_run in its tool list but defaults to direct
 		// read_file / list_files in the parent context — the very
@@ -535,7 +544,7 @@ func (p *SessionPool) buildSession(id string) (*Session, error) {
 		// won't get duplicated.
 		systemPrompt = agent.WithSubagentSystemGuidance(systemPrompt)
 	}
-	if p.cfg.EnableFocusedTasks {
+	if p.cfg.EnableFocusedTasks && !p.cfg.EvalMode {
 		// Only append focused-task guidance if at least one profile
 		// actually got registered (the deps-driven filter may have
 		// dropped every profile — see RegisterFocusedTasks). Keeps the

@@ -433,6 +433,12 @@ func TestTypedEnvConfigRejectsInvalidValues(t *testing.T) {
 			want: "AFFENTCTL_SUBAGENT=\"sometimes\"",
 		},
 		{
+			name: "eval mode bool",
+			env:  "AFFENTCTL_EVAL_MODE",
+			val:  "sometimes",
+			want: "AFFENTCTL_EVAL_MODE=\"sometimes\"",
+		},
+		{
 			name: "subagent max depth int",
 			env:  "AFFENTCTL_SUBAGENT_MAX_DEPTH",
 			val:  "deep",
@@ -565,6 +571,29 @@ func TestMemoryOnlyEnvStillAppliesIsolationMode(t *testing.T) {
 	}
 }
 
+func TestEvalModeEnvAppliesStrictToolSurface(t *testing.T) {
+	t.Setenv("AFFENTCTL_EVAL_MODE", "true")
+	t.Setenv("AFFENTCTL_MCP_CONFIG", "/tmp/ignored-mcp.json")
+	t.Setenv("AFFENTCTL_PROJECT_CONTEXT", "true")
+	t.Setenv("AFFENTCTL_SUBAGENT", "true")
+	t.Setenv("AFFENTCTL_FOCUSED_TASKS", "true")
+	var cf commonFlags
+	fs := flag.NewFlagSet("test", flag.ContinueOnError)
+	cf.bind(fs)
+	if err := applyConfig(&cf, fs); err != nil {
+		t.Fatal(err)
+	}
+	if !cf.evalMode {
+		t.Fatal("AFFENTCTL_EVAL_MODE=true should enable eval mode")
+	}
+	if cf.mcpConfigPath != "" || cf.projectContext || cf.subagentEnabled || cf.focusedTasksEnabled {
+		t.Fatalf("eval mode should isolate dynamic surfaces: mcp=%q project_context=%t subagent=%t focused_tasks=%t", cf.mcpConfigPath, cf.projectContext, cf.subagentEnabled, cf.focusedTasksEnabled)
+	}
+	if !cf.memoryEnabled || cf.memoryOnly {
+		t.Fatalf("eval mode should not imply memory-only or disable memory: memory=%t memory_only=%t", cf.memoryEnabled, cf.memoryOnly)
+	}
+}
+
 func TestMemoryDefaultsOnAndCanBeDisabled(t *testing.T) {
 	var cf commonFlags
 	fs := flag.NewFlagSet("test", flag.ContinueOnError)
@@ -682,6 +711,57 @@ func TestSetupLoop_SubagentDisabledDoesNotRegisterToolOrPolicies(t *testing.T) {
 	msgs := b.loop.Conv.Snapshot()
 	if len(msgs) == 0 || strings.Contains(msgs[0].Content, "Subagent delegation:") {
 		t.Fatal("system prompt should not include subagent guidance when disabled")
+	}
+}
+
+func TestSetupLoop_EvalModeOmitsSkillsDelegationAndSkillProvider(t *testing.T) {
+	var cf commonFlags
+	fs := flag.NewFlagSet("test", flag.ContinueOnError)
+	cf.bind(fs)
+	if err := fs.Parse([]string{
+		"--workspace", t.TempDir(),
+		"--model", "fake-model",
+		"--base-url", "http://127.0.0.1:1/v1",
+		"--eval-mode",
+		"--quiet",
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if err := applyConfig(&cf, fs); err != nil {
+		t.Fatal(err)
+	}
+	b, code := setupLoop(cf)
+	if code != 0 {
+		t.Fatalf("setupLoop code=%d", code)
+	}
+	defer b.close()
+	for _, name := range []string{"skill", "session_search", agent.PlanToolName, "subagent_run", agent.FocusedTaskToolName} {
+		if _, ok := b.loop.Tools.Get(name); ok {
+			t.Fatalf("%s should not be registered in eval mode", name)
+		}
+	}
+	for _, name := range []string{"shell", "read_file"} {
+		if _, ok := b.loop.Tools.Get(name); !ok {
+			t.Fatalf("%s should remain available in eval mode", name)
+		}
+	}
+	if b.loop.FirstToolPolicy != nil || b.loop.PostToolPolicy != nil || len(b.loop.FirstToolPolicies) != 0 || len(b.loop.PostToolPolicies) != 0 {
+		t.Fatal("delegation tool policies should not be installed in eval mode")
+	}
+	if b.loop.SkillProvider != nil {
+		t.Fatal("eval mode should disable built-in skill/provider injection")
+	}
+	if got := agent.BuiltinSkillProvider("请通过浏览器访问 https://example.com 并提取信息"); got == "" {
+		t.Fatal("test prompt should trigger the built-in skill provider outside eval mode")
+	}
+	msgs := b.loop.Conv.Snapshot()
+	if len(msgs) == 0 {
+		t.Fatal("system prompt missing")
+	}
+	for _, forbidden := range []string{"Subagent delegation:", "Focused tasks (run_task):"} {
+		if strings.Contains(msgs[0].Content, forbidden) {
+			t.Fatalf("eval-mode system prompt should not include %q guidance:\n%s", forbidden, msgs[0].Content)
+		}
 	}
 }
 
@@ -811,6 +891,7 @@ func TestNoEnvVarLeaksIntoFlagDefaults(t *testing.T) {
 		"AFFENTCTL_MODEL":              "sentinel-model-XYZ123",
 		"AFFENTCTL_MCP_CONFIG":         "/sentinel-mcp-XYZ123",
 		"AFFENTCTL_EXECUTOR":           "docker:sentinel-XYZ123",
+		"AFFENTCTL_EVAL_MODE":          "sentinel-eval-mode-XYZ123",
 		"AFFENTCTL_SUBAGENT_MAX_DEPTH": "99",
 		"AFFENTCTL_TEMPERATURE":        "sentinel-temperature-XYZ123",
 		"AFFENTCTL_TOP_P":              "sentinel-top-p-XYZ123",
@@ -839,6 +920,8 @@ func TestNoEnvVarLeaksIntoFlagDefaults(t *testing.T) {
 			want = "local"
 		} else if name == "workspace" {
 			want = "./affent-workspace"
+		} else if name == "eval-mode" {
+			want = "false"
 		} else if name == "subagent" {
 			want = "true"
 		} else if name == "subagent-max-depth" {

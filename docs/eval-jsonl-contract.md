@@ -16,6 +16,8 @@ Shared metadata fields:
 - `executor`: eval executor label, such as `local`, `sandbox`, or
   `docker:<container>`.
 - `temperature`: sampling temperature passed to `affentctl`.
+- `runtime_eval_mode`: optional boolean, present when the eval runner passed
+  `affentctl run --eval-mode`.
 - `timeout_ms`: per-scenario timeout in milliseconds.
 
 ## Scenario Record

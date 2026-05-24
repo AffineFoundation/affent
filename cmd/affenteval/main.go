@@ -45,6 +45,7 @@ func run(args []string) int {
 		providerLabel     = fs.String("provider-label", "", "provider label written to JSONL for comparisons (env: AFFENTEVAL_PROVIDER_LABEL)")
 		temperature       = fs.String("temperature", "0", "sampling temperature forwarded to affentctl")
 		executor          = fs.String("executor", "local", "affentctl tool executor for scenario runs: local, sandbox, or docker:<container>")
+		runtimeEvalMode   = fs.Bool("runtime-eval-mode", false, "pass affentctl --eval-mode to keep only the basic benchmark tool surface during scenario runs")
 		timeout           = fs.Duration("timeout", 5*time.Minute, "per-scenario timeout")
 		verifierOutputCap = fs.Int("verifier-output-cap", agenteval.DefaultVerifierOutputCapBytes, "maximum verifier output bytes buffered per scenario")
 		jsonl             = fs.Bool("jsonl", false, "emit machine-readable JSONL records instead of text")
@@ -104,11 +105,12 @@ success and trace-level process quality.`)
 		Model:                    *model,
 		Temperature:              *temperature,
 		Executor:                 *executor,
+		RuntimeEvalMode:          *runtimeEvalMode,
 		Timeout:                  *timeout,
 		VerifierOutputCapBytes:   *verifierOutputCap,
 		CleanupPassingWorkspaces: !*keepWorkspaces,
 	}
-	jsonlMeta := evalJSONLMetadataFromConfig(*suite, *model, *providerLabel, *executor, *temperature, *timeout)
+	jsonlMeta := evalJSONLMetadataFromConfig(*suite, *model, *providerLabel, *executor, *temperature, *runtimeEvalMode, *timeout)
 	ctx := context.Background()
 	var summary batchSummary
 	for _, scenario := range scenarios {
@@ -394,16 +396,17 @@ func formatStringIntCounts(counts map[string]int) string {
 }
 
 type evalJSONLMetadata struct {
-	SchemaVersion int    `json:"schema_version"`
-	Suite         string `json:"suite,omitempty"`
-	Model         string `json:"model,omitempty"`
-	ProviderLabel string `json:"provider_label,omitempty"`
-	Executor      string `json:"executor"`
-	Temperature   string `json:"temperature,omitempty"`
-	TimeoutMS     int64  `json:"timeout_ms"`
+	SchemaVersion   int    `json:"schema_version"`
+	Suite           string `json:"suite,omitempty"`
+	Model           string `json:"model,omitempty"`
+	ProviderLabel   string `json:"provider_label,omitempty"`
+	Executor        string `json:"executor"`
+	Temperature     string `json:"temperature,omitempty"`
+	RuntimeEvalMode bool   `json:"runtime_eval_mode,omitempty"`
+	TimeoutMS       int64  `json:"timeout_ms"`
 }
 
-func evalJSONLMetadataFromConfig(suite, model, providerLabel, executor, temperature string, timeout time.Duration) evalJSONLMetadata {
+func evalJSONLMetadataFromConfig(suite, model, providerLabel, executor, temperature string, runtimeEvalMode bool, timeout time.Duration) evalJSONLMetadata {
 	model = strings.TrimSpace(model)
 	if model == "" {
 		model = strings.TrimSpace(os.Getenv("AFFENTCTL_MODEL"))
@@ -413,13 +416,14 @@ func evalJSONLMetadataFromConfig(suite, model, providerLabel, executor, temperat
 		providerLabel = strings.TrimSpace(os.Getenv("AFFENTEVAL_PROVIDER_LABEL"))
 	}
 	return evalJSONLMetadata{
-		SchemaVersion: evalJSONLSchemaVersion,
-		Suite:         strings.TrimSpace(suite),
-		Model:         model,
-		ProviderLabel: providerLabel,
-		Executor:      normalizedEvalExecutor(executor),
-		Temperature:   strings.TrimSpace(temperature),
-		TimeoutMS:     timeout.Milliseconds(),
+		SchemaVersion:   evalJSONLSchemaVersion,
+		Suite:           strings.TrimSpace(suite),
+		Model:           model,
+		ProviderLabel:   providerLabel,
+		Executor:        normalizedEvalExecutor(executor),
+		Temperature:     strings.TrimSpace(temperature),
+		RuntimeEvalMode: runtimeEvalMode,
+		TimeoutMS:       timeout.Milliseconds(),
 	}
 }
 

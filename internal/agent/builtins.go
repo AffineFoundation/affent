@@ -85,6 +85,10 @@ type BuiltinDeps struct {
 	// pending proposal id, usually by inspecting the latest user message
 	// in the conversation.
 	SkillInstallConfirmer SkillInstallConfirmer
+	// DisableSkill omits the skill tool entirely. Use this for strict
+	// benchmark/eval runtimes where reusable workflow injection and
+	// runtime installation must not affect the tool surface.
+	DisableSkill bool
 }
 
 // defaultShell is the portable fallback when BuiltinDeps.Shell is unset.
@@ -106,8 +110,9 @@ const (
 )
 
 // RegisterBuiltins registers shell + file tools on the registry, the
-// `memory` tool when deps.Memory is non-nil, and the `session_search`
-// tool when deps.SessionsDir is non-empty.
+// `skill` tool unless disabled, the `memory` tool when deps.Memory is
+// non-nil, and the `session_search` tool when deps.SessionsDir is
+// non-empty.
 func RegisterBuiltins(r *Registry, deps BuiltinDeps) {
 	skills := deps.SkillRegistry
 	skillDir := deps.SkillDir
@@ -117,7 +122,9 @@ func RegisterBuiltins(r *Registry, deps BuiltinDeps) {
 		skillDir = ""
 		skillConfirmer = nil
 	}
-	r.Add(skillTool(skills, skillDir, skillConfirmer))
+	if !deps.DisableSkill {
+		r.Add(skillTool(skills, skillDir, skillConfirmer))
+	}
 	r.Add(shellTool(deps))
 	r.Add(readFileTool(deps))
 	r.Add(writeFileTool(deps))

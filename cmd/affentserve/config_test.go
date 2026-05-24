@@ -238,6 +238,29 @@ func TestConfig_Resolve_PreservesExplicitSubagentAndMemoryFalse(t *testing.T) {
 	}
 }
 
+func TestConfig_ValidateEvalModeIgnoresDisabledNetworkDeps(t *testing.T) {
+	cfg := Config{
+		BaseURL:                   "https://example/v1",
+		Model:                     "demo",
+		MaxSessions:               1,
+		SessionIdleTTL:            "5m",
+		PerCallTimeout:            "3m",
+		RetryBackoff:              "4s",
+		SubagentMaxDepth:          agent.DefaultSubagentMaxDepth,
+		EvalMode:                  true,
+		EnableWebSearch:           true,
+		BrowserScreenshot:         true,
+		BrowserCacheDir:           filepath.Join(t.TempDir(), "cache"),
+		BrowserCacheTTL:           "1h",
+		BrowserCacheSweepInterval: "5m",
+		BrowserNoStealth:          true,
+		BrowserAllowAllDomains:    true,
+	}
+	if err := cfg.Validate(); err != nil {
+		t.Fatalf("eval mode should disable non-basic surfaces before validation, got %v", err)
+	}
+}
+
 func TestConfig_Resolve_PullsEnvFallback(t *testing.T) {
 	t.Setenv("AFFENTSERVE_BASE_URL", "")
 	t.Setenv("AFFENTSERVE_API_KEY", "from-env")

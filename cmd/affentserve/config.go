@@ -130,6 +130,13 @@ type Config struct {
 	// isolation, run affentserve itself inside a sandbox.
 	EnableBuiltins bool `json:"enable_builtins"`
 
+	// EvalMode freezes sessions to a strict single-loop benchmark
+	// surface. It disables skills, browser/web tools, subagent,
+	// focused tasks, and other dynamic workflow injection while
+	// leaving memory and shell/file builtins under their explicit
+	// toggles.
+	EvalMode bool `json:"eval_mode"`
+
 	// SystemPrompt overrides agent.DefaultSystemPrompt. Empty falls
 	// through to agent runtime's builtin.
 	SystemPrompt string `json:"system_prompt"`
@@ -319,6 +326,7 @@ func (c *Config) Resolve() error {
 		{"AFFENTSERVE_WEB_SEARCH", &c.EnableWebSearch},
 		{"AFFENTSERVE_MEMORY", &c.EnableMemory},
 		{"AFFENTSERVE_BUILTINS", &c.EnableBuiltins},
+		{"AFFENTSERVE_EVAL_MODE", &c.EvalMode},
 		{"AFFENTSERVE_SUBAGENT", &c.EnableSubagent},
 		{"AFFENTSERVE_FOCUSED_TASKS", &c.EnableFocusedTasks},
 	} {
@@ -363,6 +371,23 @@ func (c *Config) Resolve() error {
 		c.MaxTokens = &n
 	}
 	return nil
+}
+
+func (c *Config) ApplyEvalMode() {
+	if c == nil || !c.EvalMode {
+		return
+	}
+	c.EnableBrowser = false
+	c.BrowserScreenshot = false
+	c.BrowserCacheDir = ""
+	c.BrowserCacheTTL = ""
+	c.BrowserCacheSweepInterval = ""
+	c.BrowserNoStealth = false
+	c.BrowserAllowAllDomains = false
+	c.EnableWeb = false
+	c.EnableWebSearch = false
+	c.EnableSubagent = false
+	c.EnableFocusedTasks = false
 }
 
 // IdleTTL parses SessionIdleTTL into a duration with the documented
@@ -487,6 +512,7 @@ func (c Config) RetryBackoffDuration() (time.Duration, error) {
 // applied by Resolve() before this is meaningful — callers should
 // always Resolve() then Validate().
 func (c Config) Validate() error {
+	c.ApplyEvalMode()
 	if c.BaseURL == "" {
 		return errors.New("base_url is required (use --base-url or AFFENTSERVE_BASE_URL)")
 	}

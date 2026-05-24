@@ -1000,6 +1000,7 @@ func TestRuntimeForwardEnvIncludesPortableCLIAndServeConfig(t *testing.T) {
 	}
 	for _, name := range []string{
 		"AFFENTCTL_SUBAGENT",
+		"AFFENTCTL_EVAL_MODE",
 		"AFFENTCTL_SUBAGENT_MAX_DEPTH",
 		"AFFENTCTL_FOCUSED_TASKS",
 		"AFFENTCTL_MAX_TURNS",
@@ -1023,6 +1024,7 @@ func TestRuntimeForwardEnvIncludesPortableCLIAndServeConfig(t *testing.T) {
 		"AFFENTSERVE_WEB_SEARCH",
 		"AFFENTSERVE_MEMORY",
 		"AFFENTSERVE_BUILTINS",
+		"AFFENTSERVE_EVAL_MODE",
 		"AFFENTSERVE_SUBAGENT",
 		"AFFENTSERVE_SUBAGENT_MAX_DEPTH",
 		"AFFENTSERVE_FOCUSED_TASKS",

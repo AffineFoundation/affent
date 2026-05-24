@@ -182,12 +182,13 @@ func diagnoseAffentctl(c commonFlags, runner commandRunner) []doctorFinding {
 
 func doctorCapabilitySummary(c commonFlags) string {
 	builtins := !c.memoryOnly
-	mcpEnabled := builtins && strings.TrimSpace(c.mcpConfigPath) != ""
-	subagentEnabled := builtins && c.subagentEnabled
-	focusedTasksEnabled := builtins && c.focusedTasksEnabled
-	skillInstall := builtins
-	sessionSearch := builtins
-	projectContext := builtins && c.projectContext
+	evalMode := c.evalMode
+	mcpEnabled := builtins && !evalMode && strings.TrimSpace(c.mcpConfigPath) != ""
+	subagentEnabled := builtins && !evalMode && c.subagentEnabled
+	focusedTasksEnabled := builtins && !evalMode && c.focusedTasksEnabled
+	skillInstall := builtins && !evalMode
+	sessionSearch := builtins && !evalMode
+	projectContext := builtins && !evalMode && c.projectContext
 	memoryTool := c.memoryEnabled
 	if c.memoryOnly {
 		memoryTool = true
@@ -222,11 +223,12 @@ func doctorCapabilitySummary(c commonFlags) string {
 		}
 	}
 	return fmt.Sprintf(
-		"shell_file=%t skill_install=%t memory=%t memory_only=%t session_search=%t project_context=%t mcp=%t subagent=%t subagent_max_depth=%d focused_tasks=%t focused_task_profiles=%s executor=%s",
+		"shell_file=%t skill_install=%t memory=%t memory_only=%t eval_mode=%t session_search=%t project_context=%t mcp=%t subagent=%t subagent_max_depth=%d focused_tasks=%t focused_task_profiles=%s executor=%s",
 		builtins,
 		skillInstall,
 		memoryTool,
 		c.memoryOnly,
+		evalMode,
 		sessionSearch,
 		projectContext,
 		mcpEnabled,

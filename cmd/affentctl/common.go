@@ -75,6 +75,11 @@ type commonFlags struct {
 	traceSkipDeltas  bool
 	systemPromptPath string
 	quiet            bool
+	// evalMode freezes the runtime to a strict single-loop benchmark
+	// surface. It disables non-basic surfaces (skills, plan,
+	// session_search, subagent, focused tasks, MCP, project context)
+	// while leaving memory controlled by --memory / --memory-only.
+	evalMode bool
 
 	// memoryEnabled composes the MEMORY.md / USER.md snapshot into
 	// the system prompt at session start and registers the `memory`
@@ -149,6 +154,7 @@ func (c *commonFlags) bind(fs *flag.FlagSet) {
 	fs.BoolVar(&c.traceSkipDeltas, "trace-skip-deltas", false, "skip thinking/message deltas in trace (smaller trace, no token-level replay; final text still in message.end)")
 	fs.StringVar(&c.systemPromptPath, "system-prompt", "", "override system prompt; '-' or file path or literal")
 	fs.BoolVar(&c.quiet, "quiet", false, "suppress stderr progress")
+	fs.BoolVar(&c.evalMode, "eval-mode", false, "strict benchmark mode: keep basic shell/file tools, disable skills, plan, session_search, subagent, focused tasks, MCP, and project context; memory remains controlled by --memory / --memory-only (env: AFFENTCTL_EVAL_MODE)")
 	fs.BoolVar(&c.memoryEnabled, "memory", true, "enable persistent memory: inject MEMORY.md / USER.md snapshot into the system prompt and register the memory tool (env: AFFENTCTL_MEMORY)")
 	fs.BoolVar(&c.memoryOnly, "memory-only", false, "register only the memory tool (no shell/file/MCP) and disable project context; for memory benchmarks. Implies --memory (env: AFFENTCTL_MEMORY_ONLY)")
 	fs.StringVar(&c.memoryWorkspaceStore, "memory-workspace-store", "", "(legacy) path to a pre-v2 single-file MEMORY.md; if set, migration moves it into the v2 topic layout on first access. Prefer --memory-dir for new setups.")
@@ -266,6 +272,7 @@ var flagEnvSources = map[string]string{
 	"model":              "AFFENTCTL_MODEL",
 	"mcp-config":         "AFFENTCTL_MCP_CONFIG",
 	"executor":           "AFFENTCTL_EXECUTOR",
+	"eval-mode":          "AFFENTCTL_EVAL_MODE",
 	"subagent":           "AFFENTCTL_SUBAGENT",
 	"subagent-max-depth": "AFFENTCTL_SUBAGENT_MAX_DEPTH",
 	"focused-tasks":      "AFFENTCTL_FOCUSED_TASKS",
@@ -312,6 +319,7 @@ type fileConfig struct {
 	TraceSkipDeltas *bool   `json:"trace_skip_deltas"`
 	SystemPrompt    *string `json:"system_prompt"`
 	Quiet           *bool   `json:"quiet"`
+	EvalMode        *bool   `json:"eval_mode"`
 	Memory          *struct {
 		Enabled        *bool   `json:"enabled"`
 		Only           *bool   `json:"only"`
@@ -365,6 +373,12 @@ func applyConfig(c *commonFlags, fs *flag.FlagSet) error {
 	// tool and inject no other content sources into the system prompt.
 	// It implies --memory=true and forces --project-context=false
 	// regardless of how either was set.
+	if c.evalMode {
+		c.projectContext = false
+		c.mcpConfigPath = ""
+		c.subagentEnabled = false
+		c.focusedTasksEnabled = false
+	}
 	if c.memoryOnly {
 		c.memoryEnabled = true
 		c.projectContext = false
@@ -494,6 +508,7 @@ func loadConfigFile(c *commonFlags, fs *flag.FlagSet) error {
 	setBool("trace-skip-deltas", &c.traceSkipDeltas, cfg.TraceSkipDeltas)
 	setString("system-prompt", &c.systemPromptPath, cfg.SystemPrompt)
 	setBool("quiet", &c.quiet, cfg.Quiet)
+	setBool("eval-mode", &c.evalMode, cfg.EvalMode)
 	if cfg.Memory != nil {
 		setBool("memory", &c.memoryEnabled, cfg.Memory.Enabled)
 		setBool("memory-only", &c.memoryOnly, cfg.Memory.Only)
@@ -603,6 +618,9 @@ func applyEnvConfig(c *commonFlags, fs *flag.FlagSet) error {
 		return err
 	}
 	if err := setBoolStrict("focused-tasks", "AFFENTCTL_FOCUSED_TASKS", &c.focusedTasksEnabled); err != nil {
+		return err
+	}
+	if err := setBoolStrict("eval-mode", "AFFENTCTL_EVAL_MODE", &c.evalMode); err != nil {
 		return err
 	}
 	if err := setBoolStrict("memory", "AFFENTCTL_MEMORY", &c.memoryEnabled); err != nil {
@@ -809,19 +827,28 @@ func setupLoop(c commonFlags) (*loopBundle, int) {
 			log.Error().Err(execErr).Msg("executor")
 			return nil, exitUsage
 		}
-		skillDir := agent.DefaultWorkspaceSkillDir(workspace)
-		var skillErr error
-		skillReg, skillErr = agent.RuntimeSkillRegistry(skillDir)
-		if skillErr != nil {
-			log.Error().Err(skillErr).Msg("skills")
-			return nil, exitRuntime
+		skillDir := ""
+		if !c.evalMode {
+			skillDir = agent.DefaultWorkspaceSkillDir(workspace)
+			var skillErr error
+			skillReg, skillErr = agent.RuntimeSkillRegistry(skillDir)
+			if skillErr != nil {
+				log.Error().Err(skillErr).Msg("skills")
+				return nil, exitRuntime
+			}
 		}
-		planPath = filepath.Join(convDir, sid+".plan.json")
+		if !c.evalMode {
+			planPath = filepath.Join(convDir, sid+".plan.json")
+		}
+		sessionsDir := convDir
+		if c.evalMode {
+			sessionsDir = ""
+		}
 		agent.RegisterBuiltins(tools, agent.BuiltinDeps{
 			Executor:         execBackend,
 			HostWorkspaceDir: workspace,
 			Memory:           memStore,
-			SessionsDir:      convDir,
+			SessionsDir:      sessionsDir,
 			SessionID:        sid,
 			PlanPath:         planPath,
 			SkillRegistry:    skillReg,
@@ -829,8 +856,11 @@ func setupLoop(c commonFlags) (*loopBundle, int) {
 			SkillInstallConfirmer: func(proposalID string) bool {
 				return agent.UserConfirmedRuntimeSkillProposal(conv, proposalID)
 			},
+			DisableSkill: c.evalMode,
 		})
-		systemPrompt = agent.WithPlanSystemGuidance(systemPrompt)
+		if !c.evalMode {
+			systemPrompt = agent.WithPlanSystemGuidance(systemPrompt)
+		}
 	}
 
 	mcpClients, err := startMCP(c.mcpConfigPath, tools, log)
@@ -920,7 +950,9 @@ func setupLoop(c commonFlags) (*loopBundle, int) {
 		ToolResultArtifactPathPrefix: ".affent/artifacts/tool-results",
 		Memory:                       memStore,
 		ProjectContextDir:            projectContextDir,
-		SkillProvider:                agent.BuiltinSkillProvider,
+	}
+	if !c.evalMode {
+		loop.SkillProvider = agent.BuiltinSkillProvider
 	}
 	if skillReg != nil {
 		loop.SkillProvider = skillReg.Provide
