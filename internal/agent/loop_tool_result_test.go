@@ -867,6 +867,94 @@ func TestRunTurn_WebFetchNoEvidenceResultsTripLoopGuard(t *testing.T) {
 	}
 }
 
+func TestRunTurn_BrowserInvalidArgsFailureKindPropagates(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "text/event-stream")
+		w.WriteHeader(200)
+		fl := w.(http.Flusher)
+		body, _ := readReqBody(r)
+		if !strings.Contains(body, `"role":"tool"`) {
+			for _, l := range []string{
+				`data: {"choices":[{"delta":{"role":"assistant","tool_calls":[{"index":0,"id":"b1","type":"function","function":{"name":"browser_navigate","arguments":"{\"url\":\"example.com\"}"}}]},"finish_reason":null}]}`,
+				`data: {"choices":[{"delta":{},"finish_reason":"tool_calls"}]}`,
+				`data: [DONE]`,
+			} {
+				w.Write([]byte(l + "\n\n"))
+				fl.Flush()
+			}
+			return
+		}
+		w.Write([]byte("data: {\"choices\":[{\"delta\":{\"role\":\"assistant\",\"content\":\"reported invalid browser args\"},\"finish_reason\":\"stop\"}]}\n\n"))
+		w.Write([]byte("data: [DONE]\n\n"))
+		fl.Flush()
+	}))
+	t.Cleanup(srv.Close)
+
+	conv, err := OpenConversationAt(filepath.Join(t.TempDir(), "sess.jsonl"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	reg := NewRegistry()
+	reg.Add(&Tool{
+		Name:        "browser_navigate",
+		Description: "test browser_navigate",
+		Schema:      json.RawMessage(`{"type":"object","properties":{"url":{"type":"string"}}}`),
+		Execute: func(ctx context.Context, args json.RawMessage) (string, error) {
+			return "", errors.New("url must start with http:// or https:// (got \"example.com\")\nFailure: kind=invalid_args\nNext: retry browser_navigate with the full URL including the http:// or https:// scheme")
+		},
+	})
+
+	events := make(chan sse.Event, 128)
+	loop := &Loop{
+		LLM: NewLLMClient(srv.URL, "", "fake-model"), Tools: reg, Conv: conv, Events: events,
+		MaxTurnSteps: 4, PerCallTimeout: 5 * time.Second,
+	}
+	if err := loop.EnsureSystemPrompt("base"); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := loop.SendUser(context.Background(), "open example"); err != nil {
+		t.Fatal(err)
+	}
+
+	deadline := time.After(10 * time.Second)
+	sawResult := false
+	for {
+		select {
+		case ev, ok := <-events:
+			if !ok {
+				t.Fatal("event channel closed before turn.end")
+			}
+			switch ev.Type {
+			case sse.TypeToolResult:
+				var p sse.ToolResultPayload
+				if err := json.Unmarshal(ev.Data, &p); err != nil {
+					t.Fatalf("decode tool.result: %v", err)
+				}
+				if p.CallID == "b1" {
+					sawResult = true
+					if p.FailureKind != "invalid_args" || p.ExitCode == 0 {
+						t.Fatalf("browser invalid args tool.result = %+v, want failure_kind invalid_args and nonzero exit", p)
+					}
+				}
+			case sse.TypeTurnEnd:
+				if !sawResult {
+					t.Fatal("expected browser_navigate tool.result before turn.end")
+				}
+				var p sse.TurnEndPayload
+				if err := json.Unmarshal(ev.Data, &p); err != nil {
+					t.Fatalf("decode turn.end: %v", err)
+				}
+				if p.ToolStats == nil || p.ToolStats.ToolFailureByKind["invalid_args"] != 1 {
+					t.Fatalf("turn.end missing invalid_args failure count: %+v", p.ToolStats)
+				}
+				return
+			}
+		case <-deadline:
+			t.Fatal("timeout waiting for turn.end")
+		}
+	}
+}
+
 // readReqBody reads the request body without consuming r.Body for the
 // real handler. Returns "" on error (not under test here).
 func readReqBody(r *http.Request) (string, error) {
