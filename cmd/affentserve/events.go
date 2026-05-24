@@ -330,6 +330,7 @@ func readSessionHistoryPage(sessionDir string, after int64, limit int) (sessionH
 			page.HasMore = true
 			break
 		}
+		ev.ID = lineNo
 		page.Records = append(page.Records, sessionHistoryRecord{Cursor: lineNo, Event: ev})
 		page.NextAfter = lineNo
 	}

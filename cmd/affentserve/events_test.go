@@ -334,6 +334,29 @@ func TestReplaySessionEventsUsesDurableLineCursorIDs(t *testing.T) {
 	}
 }
 
+func TestHandleSessionHistoryNormalizesLegacyEventIDsToLineCursor(t *testing.T) {
+	dir := t.TempDir()
+	body := strings.Join([]string{
+		`{"id":99,"type":"trace.meta","data":{"schema_version":1}}`,
+		`{"id":99,"type":"turn.start","data":{"turn_id":"legacy-turn"}}`,
+		"",
+	}, "\n")
+	if err := os.WriteFile(filepath.Join(dir, "events.jsonl"), []byte(body), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	resp, err := readSessionHistory(dir, "legacy-session", -1, 10)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(resp.Events) != 2 {
+		t.Fatalf("events = %+v, want 2", resp.Events)
+	}
+	if resp.Events[0].ID != 0 || resp.Events[1].ID != 1 || resp.NextAfter != 1 {
+		t.Fatalf("history should expose durable line cursor ids, got ids %d/%d next_after=%d", resp.Events[0].ID, resp.Events[1].ID, resp.NextAfter)
+	}
+}
+
 func TestParseLastEventID(t *testing.T) {
 	for _, tc := range []struct {
 		name       string
