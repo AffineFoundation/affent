@@ -1092,9 +1092,11 @@ describe("Timeline", () => {
     expect(digest.textContent?.replace(/\s+/g, " ").trim()).toContain("Handoff · Ran 1 action; message 2 continued the task. · 1 step · 1 action");
     expect(digest.textContent?.replace(/\s+/g, " ").trim()).not.toContain("HandoffRan");
     expect(digest).not.toHaveTextContent("This message reached the action limit");
+    expect(screen.queryByTestId("work-thread")).toBeNull();
   });
 
-  it("labels generic tool detail counts as calls instead of actions", () => {
+  it("keeps historical handoff tool details hidden until search asks for them", async () => {
+    const user = userEvent.setup();
     renderTimeline([
       { id: 0, type: "turn.start", data: { turn_id: "t1" } },
       {
@@ -1112,6 +1114,10 @@ describe("Timeline", () => {
       { id: 5, type: "turn.end", data: { turn_id: "t1", reason: "max_turns", tool_stats: { tool_requests: 2, tool_duration_ms: 7 } } },
       ...messageOnlyTurn.map((event) => ({ ...event, id: event.id + 100 })),
     ]);
+
+    expect(screen.queryByTestId("work-thread")).toBeNull();
+    await openTimelineTools(user);
+    await user.type(screen.getByTestId("timeline-search"), "memory");
 
     const toolDetails = screen.getByRole("button", { name: /Tool details/ });
     expect(toolDetails).toHaveAccessibleName("Tool details · continued in message 2 · 2 calls · 7ms");

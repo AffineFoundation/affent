@@ -295,6 +295,7 @@ export function Timeline({
                     isLatest={isLatestTurn}
                     showHeader={session.turns.length > 1}
                     showBoundary={false}
+                    forceWorkDetails={filterMode !== "all" && filterMode !== "messages"}
                     onOpenArtifact={onOpenArtifact}
                     onUseAsDraft={onUseAsDraft}
                   />

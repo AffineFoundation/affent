@@ -577,6 +577,10 @@ test("workflow timeline renders with inline drill-down", async ({ page }, testIn
     fullPage: true,
   });
 
+  await page.getByTestId("turn-navigator").getByRole("button", { name: "Find" }).click();
+  await page.getByText("Filter results").click();
+  await page.getByRole("button", { name: "With actions" }).click();
+  await expect(page.getByTestId("work-thread").first()).toBeVisible();
   await page.getByRole("button", { name: /Tool details/ }).first().click();
   const executionTree = page.getByTestId("execution-tree");
   await expect(executionTree.getByRole("button", { name: /Find the WebUI trace requirements/ }).first()).toHaveAttribute("aria-expanded", "false");

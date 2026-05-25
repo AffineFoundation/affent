@@ -26,6 +26,7 @@ export function TurnCard({
   isLatest = true,
   showHeader = false,
   showBoundary = true,
+  forceWorkDetails = false,
   onOpenArtifact,
   onUseAsDraft,
 }: {
@@ -38,6 +39,7 @@ export function TurnCard({
   isLatest?: boolean;
   showHeader?: boolean;
   showBoundary?: boolean;
+  forceWorkDetails?: boolean;
   onOpenArtifact?: (path: string) => void;
   onUseAsDraft?: UseAsDraft;
 }) {
@@ -51,6 +53,13 @@ export function TurnCard({
   const fallbackAnswer = buildFallbackAnswer(turn, { continuedAfterLimit });
   const boundary = buildTurnBoundaryView({ turn, turnNumber, artifactCount: artifacts.length, continuedAfterLimit });
   const headerMeta = boundary.meta.filter((item) => item !== workSummary.actionLabel);
+  const workSearchMatch = workSearchMatches(turn, relatedEvents, searchQuery);
+  const showWorkDetails = shouldShowWorkDetails(turn, {
+    isLatest,
+    continuedAfterLimit,
+    searchMatch: workSearchMatch,
+    force: forceWorkDetails,
+  });
   const activityShowsReasoning = activity?.items.some((item) => item.kind === "reasoning") ?? false;
   const showReasoningDisclosure = shouldShowReasoningDisclosure(turn, {
     activityShowsReasoning,
@@ -144,12 +153,13 @@ export function TurnCard({
           {showReasoningDisclosure ? (
             <ReasoningDisclosure turn={turn} searchQuery={searchQuery} />
           ) : null}
-          {turn.toolCalls.length > 0 ? (
+          {showWorkDetails ? (
             <WorkDetails
               turn={turn}
               summary={workSummary}
               events={relatedEvents}
               searchQuery={searchQuery}
+              searchMatch={workSearchMatch}
               sessionId={sessionId}
               onOpenArtifact={onOpenArtifact}
               onUseAsDraft={onUseAsDraft}
@@ -174,6 +184,20 @@ function shouldShowReasoningDisclosure(
   if (turn.thinkingStreaming || turn.status === "running") return true;
   const query = opts.searchQuery?.trim().toLowerCase();
   if (query && thinking.toLowerCase().includes(query)) return true;
+  return opts.isLatest;
+}
+
+function shouldShowWorkDetails(
+  turn: TurnState,
+  opts: { isLatest: boolean; continuedAfterLimit?: boolean; searchMatch?: boolean; force?: boolean },
+): boolean {
+  if (turn.toolCalls.length === 0) return false;
+  if (opts.searchMatch) return true;
+  if (opts.force) return true;
+  if (turn.status === "running") return true;
+  if (turn.status === "error" || turn.error) return true;
+  if (latestFailedTool(turn) && !turn.assistantText.trim()) return true;
+  if (opts.continuedAfterLimit) return false;
   return opts.isLatest;
 }
 
@@ -677,6 +701,7 @@ function WorkDetails({
   summary,
   events,
   searchQuery,
+  searchMatch,
   sessionId,
   onOpenArtifact,
   onUseAsDraft,
@@ -687,13 +712,14 @@ function WorkDetails({
   summary: TurnWorkSummary;
   events: readonly NormalizedEvent[];
   searchQuery?: string;
+  searchMatch?: boolean;
   sessionId?: string;
   onOpenArtifact?: (path: string) => void;
   onUseAsDraft?: UseAsDraft;
   continuedAfterLimit?: boolean;
   continuedIntoTurnNumber?: number;
 }) {
-  const autoOpen = shouldAutoOpenWorkDetails(workSearchMatches(turn, events, searchQuery));
+  const autoOpen = shouldAutoOpenWorkDetails(Boolean(searchMatch));
   const heading = workThreadHeading(turn, { continuedAfterLimit, continuedIntoTurnNumber });
   const displaySummary = workSummaryDisplay(heading, summary);
   const label = workThreadLabel(heading, displaySummary);
