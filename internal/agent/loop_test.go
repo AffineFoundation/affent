@@ -420,7 +420,7 @@ func TestAnnotateLLMCallErrorAddsActionableContext(t *testing.T) {
 	if !errors.Is(timeoutErr, context.DeadlineExceeded) || !isTransient(timeoutErr) {
 		t.Fatalf("annotated timeout must preserve deadline/transient classification: %v", timeoutErr)
 	}
-	for _, want := range []string{"LLM llm_stream timed out", "reasoning-model", "https://llm.example/v1/chat/completions", "max-call-timeout/per-call-timeout=4m0s", "stream-idle-timeout", "first-token latency", "reasoning model"} {
+	for _, want := range []string{"LLM llm_stream timed out", "reasoning-model", "https://llm.example/v1/chat/completions", "max-call-timeout/per-call-timeout=4m0s", "stream-idle-timeout", "first-token latency", "reasoning model", "Next:", "TTFT", "inter-chunk gaps"} {
 		if !strings.Contains(timeoutErr.Error(), want) {
 			t.Fatalf("timeout diagnostic missing %q:\n%s", want, timeoutErr.Error())
 		}
@@ -430,7 +430,7 @@ func TestAnnotateLLMCallErrorAddsActionableContext(t *testing.T) {
 	if !errors.Is(idleErr, errStreamIdleTimeout) || !isTransient(idleErr) {
 		t.Fatalf("annotated idle timeout must preserve retryable/sentinel classification: %v", idleErr)
 	}
-	for _, want := range []string{"stream idle timeout", "stream-idle-timeout", "before finish_reason", "proxy buffering", "max-call-timeout/per-call-timeout=4m0s"} {
+	for _, want := range []string{"stream idle timeout", "stream-idle-timeout", "before finish_reason", "proxy buffering", "max-call-timeout/per-call-timeout=4m0s", "Next:", "worker health"} {
 		if !strings.Contains(idleErr.Error(), want) {
 			t.Fatalf("idle timeout diagnostic missing %q:\n%s", want, idleErr.Error())
 		}
@@ -440,7 +440,7 @@ func TestAnnotateLLMCallErrorAddsActionableContext(t *testing.T) {
 	if !errors.Is(finishErr, errStreamEndedWithoutFinish) || !isTransient(finishErr) {
 		t.Fatalf("annotated finish error must preserve retryable/sentinel classification: %v", finishErr)
 	}
-	for _, want := range []string{"incomplete SSE stream", "finish_reason", "sglang/vLLM", "reverse-proxy reset", "OOM kill"} {
+	for _, want := range []string{"incomplete SSE stream", "finish_reason", "sglang/vLLM", "reverse-proxy reset", "OOM kill", "Next:", "upstream incomplete-stream error", "model server/proxy logs"} {
 		if !strings.Contains(finishErr.Error(), want) {
 			t.Fatalf("finish diagnostic missing %q:\n%s", want, finishErr.Error())
 		}

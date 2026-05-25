@@ -1740,21 +1740,24 @@ func (l *Loop) annotateLLMCallError(stage string, err error, timeout time.Durati
 	if errors.Is(err, context.DeadlineExceeded) {
 		return fmt.Errorf(
 			"LLM %s timed out after %s while waiting for chat completion (model=%q endpoint=%q max-call-timeout/per-call-timeout=%s stream-idle-timeout=%s stream-post-finish-timeout=%s). "+
-				"No complete model response arrived before the per-call wall-clock budget. Common causes: first-token latency from prefill or scheduler queueing exceeded the budget, a reasoning model paused too long between chunks, or the upstream kept the HTTP stream open without useful tokens: %w",
+				"No complete model response arrived before the per-call wall-clock budget. Common causes: first-token latency from prefill or scheduler queueing exceeded the budget, a reasoning model paused too long between chunks, or the upstream kept the HTTP stream open without useful tokens. "+
+				"Next: for evals or slow reasoning models, raise max-call-timeout/per-call-timeout, reduce prompt/tool-result size, or inspect upstream TTFT and inter-chunk gaps; if chunks arrive just under stream-idle-timeout, tune the upstream scheduler rather than retrying blindly: %w",
 			stage, timeout, model, endpoint, timeout, StreamIdleTimeout, StreamPostFinishTimeout, err,
 		)
 	}
 	if errors.Is(err, errStreamIdleTimeout) {
 		return fmt.Errorf(
 			"LLM %s stream idle timeout (model=%q endpoint=%q stream-idle-timeout=%s max-call-timeout/per-call-timeout=%s). "+
-				"HTTP streaming started, but no SSE chunk arrived within the idle watchdog before finish_reason. Common causes: upstream generation paused between chunks, scheduler/KV-cache stalls, proxy buffering, or a worker that stopped producing tokens without closing cleanly: %w",
+				"HTTP streaming started, but no SSE chunk arrived within the idle watchdog before finish_reason. Common causes: upstream generation paused between chunks, scheduler/KV-cache stalls, proxy buffering, or a worker that stopped producing tokens without closing cleanly. "+
+				"Next: retry only if no visible assistant text was emitted; otherwise inspect upstream chunk timing, proxy buffering/read timeouts, and worker health before increasing stream-idle-timeout: %w",
 			stage, model, endpoint, StreamIdleTimeout, timeout, err,
 		)
 	}
 	if errors.Is(err, errStreamEndedWithoutFinish) {
 		return fmt.Errorf(
 			"LLM %s ended with an incomplete SSE stream (model=%q endpoint=%q). HTTP streaming started, but the upstream closed the connection before sending any terminal finish_reason chunk. "+
-				"This is usually an upstream/proxy abort such as an sglang/vLLM worker crash, KV-cache preemption, reverse-proxy reset, or OOM kill; retry is only safe before visible assistant text was emitted: %w",
+				"This is usually an upstream/proxy abort such as an sglang/vLLM worker crash, KV-cache preemption, reverse-proxy reset, or OOM kill. "+
+				"Next: treat this as an upstream incomplete-stream error, not a tool failure; retry is only safe before visible assistant text was emitted, and repeated eval failures should be debugged in model server/proxy logs for worker crash, abort, reset, or OOM evidence: %w",
 			stage, model, endpoint, err,
 		)
 	}
