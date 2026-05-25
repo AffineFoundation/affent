@@ -30,17 +30,17 @@ describe("buildRuntimeCapabilityView", () => {
 
     expect(view).toMatchObject({
       headline: "Research ready",
-      detail: "External research tools are available for live tasks.",
+      detail: "Current web information can be gathered in this chat.",
       tone: "ready",
       research: "ready",
     });
     expect(view?.chips).toEqual([
-      { label: "Web search", tone: "ready" },
-      { label: "Browser", tone: "ready" },
-      { label: "Subagents depth 2", tone: "ready" },
-      { label: "4 focused tasks", tone: "ready" },
-      { label: "Files + shell", tone: "ready" },
-      { label: "Memory", tone: "ready" },
+      { label: "Can search web", tone: "ready" },
+      { label: "Can open pages", tone: "ready" },
+      { label: "Can delegate 2 levels", tone: "ready" },
+      { label: "4 task helpers", tone: "ready" },
+      { label: "Can use files", tone: "ready" },
+      { label: "Memory available", tone: "ready" },
     ]);
   });
 
@@ -62,14 +62,14 @@ describe("buildRuntimeCapabilityView", () => {
       focused_task_profiles: ["recall", "explore"],
     });
 
-    expect(view?.headline).toBe("Local runtime");
+    expect(view?.headline).toBe("Local work only");
     expect(view?.research).toBe("off");
-    expect(view?.detail).toContain("Web search and browser are off");
+    expect(view?.detail).toContain("cannot gather current web information");
     expect(view?.chips).toEqual(expect.arrayContaining([
-      { label: "Web search off", tone: "warning" },
-      { label: "Browser off", tone: "warning" },
-      { label: "Subagents depth 2", tone: "ready" },
-      { label: "2 focused tasks", tone: "ready" },
+      { label: "No live search", tone: "warning" },
+      { label: "No browser", tone: "warning" },
+      { label: "Can delegate 2 levels", tone: "ready" },
+      { label: "2 task helpers", tone: "ready" },
     ]));
   });
 });

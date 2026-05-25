@@ -240,7 +240,8 @@ test("composer warns before live research tasks when web tools are off", async (
 
   await page.goto("/");
 
-  await expect(page.getByTestId("runtime-capabilities")).toContainText("Local runtime");
+  await expect(page.getByTestId("runtime-capabilities")).toContainText("Local work only");
+  await expect(page.getByTestId("runtime-capabilities")).toContainText("No live search");
   await page.getByPlaceholder("Message Affent...").fill("Analyze Affine recent market trends and Twitter reaction");
   await expect(page.getByTestId("composer-task-hint")).toContainText("Research tools off");
   await expect(page.getByTestId("composer-task-hint")).toContainText("enable web search or browser");

@@ -258,6 +258,7 @@ body {
   gap: 7px;
   min-width: 0;
   margin: 0 0 10px;
+  overflow: hidden;
   border: 1px solid rgba(217, 224, 232, 0.8);
   border-radius: var(--radius);
   background: rgba(255, 255, 255, 0.74);
@@ -266,9 +267,12 @@ body {
 
 .runtime-status-bar summary {
   display: grid;
-  grid-template-columns: auto auto minmax(0, 1fr);
+  grid-template-columns: auto auto minmax(0, 1fr) auto;
   gap: 8px;
   align-items: center;
+  min-width: 0;
+  max-width: 100%;
+  width: 100%;
   min-height: 34px;
   padding: 0 12px;
   cursor: pointer;
@@ -286,6 +290,8 @@ body {
   border-right: 1.5px solid currentColor;
   border-bottom: 1.5px solid currentColor;
   color: var(--text-faint);
+  grid-column: 4;
+  grid-row: 1;
   transform: rotate(45deg);
   transition: transform var(--motion-fast) ease;
 }
@@ -295,6 +301,7 @@ body {
 }
 
 .runtime-status-kicker {
+  grid-column: 1;
   color: var(--text-faint);
   font-size: 11px;
   font-weight: 750;
@@ -522,6 +529,8 @@ body {
 }
 
 .runtime-capability-title {
+  grid-column: 2;
+  min-width: 0;
   flex: 0 0 auto;
   color: var(--text);
   font-size: 12.5px;
@@ -537,6 +546,7 @@ body {
 }
 
 .runtime-capability-detail {
+  grid-column: 3;
   min-width: 120px;
   overflow: hidden;
   color: var(--text-faint);
@@ -551,6 +561,8 @@ body {
   justify-content: flex-start;
   gap: 5px;
   min-width: 0;
+  max-width: 100%;
+  width: 100%;
   overflow-x: auto;
   padding: 0 12px 10px;
   scrollbar-width: thin;
@@ -582,6 +594,14 @@ body {
 .runtime-capability-chips span[data-tone="unknown"] {
   border-color: rgba(100, 116, 139, 0.18);
   background: rgba(248, 250, 252, 0.9);
+  color: var(--text-muted);
+}
+
+.runtime-status-bar[data-tone="warning"] .runtime-capability-title {
+  color: var(--c-warn);
+}
+
+.runtime-status-bar[data-tone="unknown"] .runtime-capability-title {
   color: var(--text-muted);
 }
 
@@ -5474,10 +5494,14 @@ pre.code {
     left: 0;
   }
   .runtime-status-bar summary {
-    grid-template-columns: auto minmax(0, 1fr) 12px;
+    grid-template-columns: auto minmax(0, 1fr) auto;
     gap: 5px 8px;
   }
+  .runtime-status-bar summary::after {
+    grid-column: 3;
+  }
   .runtime-status-bar .runtime-capability-title {
+    grid-column: 2;
     min-width: 0;
     overflow: hidden;
     text-overflow: ellipsis;

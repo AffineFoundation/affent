@@ -594,7 +594,7 @@ function RuntimeStatusBar({ view }: { view: RuntimeCapabilityView }) {
   return (
     <details className="runtime-status-bar" data-tone={view.tone} data-testid="runtime-capabilities">
       <summary>
-        <span className="runtime-status-kicker">Runtime</span>
+        <span className="runtime-status-kicker">Chat setup</span>
         <span className="runtime-capability-title">{view.headline}</span>
         <span className="runtime-capability-detail">{view.detail}</span>
       </summary>

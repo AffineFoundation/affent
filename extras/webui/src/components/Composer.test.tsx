@@ -390,7 +390,7 @@ describe("Composer", () => {
 
 function runtime(research: RuntimeCapabilityView["research"]): RuntimeCapabilityView {
   return {
-    headline: "Local runtime",
+    headline: "Local work only",
     detail: "Web search and browser are off",
     tone: research === "ready" ? "ready" : research === "unknown" ? "unknown" : "warning",
     research,

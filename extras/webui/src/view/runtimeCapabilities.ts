@@ -25,31 +25,31 @@ export function buildRuntimeCapabilityView(caps?: SessionCapabilities, opts: { s
   const externalPartial = caps.web || caps.browser_screenshot;
   const chips: RuntimeCapabilityChip[] = [
     caps.web_search
-      ? { label: "Web search", tone: "ready" }
-      : { label: "Web search off", tone: "warning" },
+      ? { label: "Can search web", tone: "ready" }
+      : { label: "No live search", tone: "warning" },
     caps.browser
-      ? { label: "Browser", tone: "ready" }
-      : { label: "Browser off", tone: externalReady ? "muted" : "warning" },
+      ? { label: "Can open pages", tone: "ready" }
+      : { label: "No browser", tone: externalReady ? "muted" : "warning" },
     caps.subagent
-      ? { label: `Subagents depth ${caps.subagent_max_depth || 1}`, tone: "ready" }
-      : { label: "Subagents off", tone: "muted" },
+      ? { label: splitWorkLabel(caps.subagent_max_depth), tone: "ready" }
+      : { label: "Single worker", tone: "muted" },
     caps.focused_tasks
       ? { label: focusedTaskLabel(caps.focused_task_profiles), tone: "ready" }
-      : { label: "Focused tasks off", tone: "muted" },
+      : { label: "No task helpers", tone: "muted" },
     caps.builtins
-      ? { label: "Files + shell", tone: "ready" }
-      : { label: "Files off", tone: "muted" },
+      ? { label: "Can use files", tone: "ready" }
+      : { label: "Files unavailable", tone: "muted" },
     caps.memory
-      ? { label: "Memory", tone: "ready" }
-      : { label: "Memory off", tone: "muted" },
+      ? { label: "Memory available", tone: "ready" }
+      : { label: "No memory", tone: "muted" },
   ];
 
-  if (caps.eval_mode) chips.unshift({ label: "Eval mode", tone: "warning" });
+  if (caps.eval_mode) chips.unshift({ label: "Evaluation run", tone: "warning" });
 
   if (externalReady) {
     return {
       headline: "Research ready",
-      detail: "External research tools are available for live tasks.",
+      detail: "Current web information can be gathered in this chat.",
       tone: "ready",
       research: "ready",
       chips,
@@ -58,8 +58,8 @@ export function buildRuntimeCapabilityView(caps?: SessionCapabilities, opts: { s
 
   if (externalPartial) {
     return {
-      headline: "Limited research",
-      detail: "Some web tools are available, but live search or browsing is not fully enabled.",
+      headline: "Research limited",
+      detail: "Some web access exists, but live search or page browsing is unavailable.",
       tone: "warning",
       research: "limited",
       chips,
@@ -67,16 +67,20 @@ export function buildRuntimeCapabilityView(caps?: SessionCapabilities, opts: { s
   }
 
   return {
-    headline: "Local runtime",
-    detail: "Web search and browser are off; research tasks may need runtime configuration.",
+    headline: "Local work only",
+    detail: "This chat can work locally, but cannot gather current web information.",
     tone: "warning",
     research: "off",
     chips,
   };
 }
 
+function splitWorkLabel(depth = 1): string {
+  return depth > 1 ? `Can delegate ${depth} levels` : "Can delegate";
+}
+
 function focusedTaskLabel(profiles?: readonly string[]): string {
   const count = profiles?.length ?? 0;
-  if (count === 0) return "Focused tasks";
-  return `${count} focused tasks`;
+  if (count === 0) return "Task helpers";
+  return `${count} task helpers`;
 }

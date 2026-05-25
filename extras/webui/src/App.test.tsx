@@ -226,12 +226,13 @@ describe("App", () => {
     render(<App />);
 
     const runtime = await screen.findByTestId("runtime-capabilities");
-    expect(runtime).toHaveTextContent("Local runtime");
-    expect(runtime).toHaveTextContent("Web search and browser are off");
-    expect(runtime).toHaveTextContent("Web search off");
-    expect(runtime).toHaveTextContent("Browser off");
-    expect(runtime).toHaveTextContent("Subagents depth 2");
-    expect(runtime).toHaveTextContent("4 focused tasks");
+    expect(runtime).toHaveTextContent("Chat setup");
+    expect(runtime).toHaveTextContent("Local work only");
+    expect(runtime).toHaveTextContent("cannot gather current web information");
+    expect(runtime).toHaveTextContent("No live search");
+    expect(runtime).toHaveTextContent("No browser");
+    expect(runtime).toHaveTextContent("Can delegate 2 levels");
+    expect(runtime).toHaveTextContent("4 task helpers");
     const input = screen.getByPlaceholderText("Message Affent...");
     expect(input).toBeVisible();
     await userEvent.type(input, "Analyze Affine recent market trends and Twitter reaction");
