@@ -13,6 +13,13 @@ const (
 	maxEmbeddedDataSnippetChars = 700
 )
 
+type embeddedDataCandidate struct {
+	start        int
+	end          int
+	score        int
+	structuredID bool
+}
+
 func embeddedDataSnippets(body []byte, finalURL string) []string {
 	terms := embeddedDataTerms(finalURL)
 	if len(terms) == 0 || len(body) == 0 {
@@ -23,12 +30,7 @@ func embeddedDataSnippets(body []byte, finalURL string) []string {
 		return nil
 	}
 	lower := strings.ToLower(source)
-	type candidate struct {
-		start int
-		end   int
-		score int
-	}
-	var candidates []candidate
+	var candidates []embeddedDataCandidate
 	seen := map[int]bool{}
 	addCandidate := func(idx, boost int) {
 		start, end := embeddedDataSnippetBounds(source, idx)
@@ -41,18 +43,23 @@ func embeddedDataSnippets(body []byte, finalURL string) []string {
 			return
 		}
 		seen[start] = true
-		candidates = append(candidates, candidate{start: start, end: end, score: score})
+		candidates = append(candidates, embeddedDataCandidate{
+			start:        start,
+			end:          end,
+			score:        score,
+			structuredID: embeddedDataSnippetHasStructuredID(snippet, terms),
+		})
 	}
-	for _, needle := range embeddedDataStructuredNeedles(terms) {
+	for _, structured := range embeddedDataStructuredNeedles(terms) {
 		searchFrom := 0
 		for {
-			pos := strings.Index(lower[searchFrom:], needle)
+			pos := strings.Index(lower[searchFrom:], structured.needle)
 			if pos < 0 {
 				break
 			}
 			idx := searchFrom + pos
-			searchFrom = idx + len(needle)
-			addCandidate(idx, 12)
+			searchFrom = idx + len(structured.needle)
+			addCandidate(idx, structured.boost)
 		}
 	}
 	for _, term := range prioritizeEmbeddedDataTerms(terms) {
@@ -81,6 +88,15 @@ func embeddedDataSnippets(body []byte, finalURL string) []string {
 	if len(candidates) == 0 {
 		return nil
 	}
+	if hasStructuredIDCandidate(candidates) {
+		filtered := candidates[:0]
+		for _, c := range candidates {
+			if c.structuredID {
+				filtered = append(filtered, c)
+			}
+		}
+		candidates = filtered
+	}
 	sort.SliceStable(candidates, func(i, j int) bool {
 		if candidates[i].score != candidates[j].score {
 			return candidates[i].score > candidates[j].score
@@ -101,28 +117,52 @@ func embeddedDataSnippets(body []byte, finalURL string) []string {
 	return out
 }
 
-func embeddedDataStructuredNeedles(terms []string) []string {
+type embeddedDataStructuredNeedle struct {
+	needle string
+	boost  int
+}
+
+func hasStructuredIDCandidate(candidates []embeddedDataCandidate) bool {
+	for _, c := range candidates {
+		if c.structuredID {
+			return true
+		}
+	}
+	return false
+}
+
+func embeddedDataStructuredNeedles(terms []string) []embeddedDataStructuredNeedle {
 	seen := map[string]bool{}
-	var out []string
-	add := func(needle string) {
+	var out []embeddedDataStructuredNeedle
+	add := func(needle string, boost int) {
 		needle = strings.ToLower(strings.TrimSpace(needle))
 		if needle == "" || seen[needle] {
 			return
 		}
 		seen[needle] = true
-		out = append(out, needle)
+		out = append(out, embeddedDataStructuredNeedle{needle: needle, boost: boost})
 	}
 	for _, term := range terms {
 		if !isMostlyDigits(term) {
 			continue
 		}
 		for _, field := range []string{"netuid", "subnet_id", "subnetid", "id"} {
-			add(`"` + field + `":` + term)
-			add(`"` + field + `": ` + term)
+			add(`"`+field+`":`+term, 20)
+			add(`"`+field+`": `+term, 20)
 		}
-		add("sn" + term)
+		add("sn"+term, 4)
 	}
 	return out
+}
+
+func embeddedDataSnippetHasStructuredID(snippet string, terms []string) bool {
+	lower := strings.ToLower(snippet)
+	for _, needle := range embeddedDataStructuredNeedles(terms) {
+		if needle.boost >= 20 && strings.Contains(lower, needle.needle) {
+			return true
+		}
+	}
+	return false
 }
 
 func embeddedDataTerms(finalURL string) []string {

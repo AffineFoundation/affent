@@ -25,6 +25,8 @@ func TestFetchTool_LiveTaoStatsSubnetEmbeddedData(t *testing.T) {
 		"Embedded data preview (page source evidence",
 		`"netuid":120`,
 		"Affine",
+		`"market_cap"`,
+		`"github_repo"`,
 	} {
 		if !strings.Contains(out, want) {
 			t.Fatalf("live TaoStats output missing %q:\n%s", want, out)
