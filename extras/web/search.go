@@ -371,7 +371,8 @@ type TavilyProvider struct {
 // environment. AFFENT_WEB_SEARCH_PROVIDER accepts "tavily", "google", or
 // "auto" (default). Auto keeps the historical Tavily behavior when
 // TAVILY_API_KEY is present, otherwise uses Google when its credentials are
-// configured.
+// configured. Google accepts GOOGLE_CSE_API_KEY/GOOGLE_CSE_ID, plus common
+// aliases such as GOOGLE_API_KEY and GOOGLE_SEARCH_ENGINE_ID.
 func NewDefaultSearchProvider() (SearchProvider, error) {
 	provider := strings.ToLower(strings.TrimSpace(os.Getenv("AFFENT_WEB_SEARCH_PROVIDER")))
 	if provider == "" {
@@ -385,7 +386,7 @@ func NewDefaultSearchProvider() (SearchProvider, error) {
 		if googleSearchCredentialsConfigured() {
 			return NewGoogleProvider()
 		}
-		return nil, errors.New("search backend is not configured; set TAVILY_API_KEY for Tavily, or set AFFENT_WEB_SEARCH_PROVIDER=google with GOOGLE_CSE_API_KEY and GOOGLE_CSE_ID")
+		return nil, errors.New("search backend is not configured; set TAVILY_API_KEY for Tavily, or set AFFENT_WEB_SEARCH_PROVIDER=google with GOOGLE_CSE_API_KEY/GOOGLE_API_KEY and GOOGLE_CSE_ID/GOOGLE_SEARCH_ENGINE_ID")
 	case "tavily":
 		return NewTavilyProvider()
 	case "google":
@@ -484,10 +485,10 @@ type GoogleProvider struct {
 }
 
 func NewGoogleProvider() (*GoogleProvider, error) {
-	key := firstEnv("GOOGLE_CSE_API_KEY", "GOOGLE_CUSTOM_SEARCH_API_KEY")
-	cx := firstEnv("GOOGLE_CSE_ID", "GOOGLE_CUSTOM_SEARCH_ENGINE_ID", "GOOGLE_CSE_CX", "GOOGLE_CUSTOM_SEARCH_CX")
+	key := googleSearchAPIKeyFromEnv()
+	cx := googleSearchEngineIDFromEnv()
 	if key == "" || cx == "" {
-		return nil, errors.New("Google search requires GOOGLE_CSE_API_KEY and GOOGLE_CSE_ID (or GOOGLE_CUSTOM_SEARCH_API_KEY and GOOGLE_CUSTOM_SEARCH_ENGINE_ID)")
+		return nil, errors.New("Google search requires GOOGLE_CSE_API_KEY or GOOGLE_API_KEY, plus GOOGLE_CSE_ID or GOOGLE_SEARCH_ENGINE_ID")
 	}
 	return &GoogleProvider{
 		APIKey:   key,
@@ -498,8 +499,15 @@ func NewGoogleProvider() (*GoogleProvider, error) {
 }
 
 func googleSearchCredentialsConfigured() bool {
-	return firstEnv("GOOGLE_CSE_API_KEY", "GOOGLE_CUSTOM_SEARCH_API_KEY") != "" &&
-		firstEnv("GOOGLE_CSE_ID", "GOOGLE_CUSTOM_SEARCH_ENGINE_ID", "GOOGLE_CSE_CX", "GOOGLE_CUSTOM_SEARCH_CX") != ""
+	return googleSearchAPIKeyFromEnv() != "" && googleSearchEngineIDFromEnv() != ""
+}
+
+func googleSearchAPIKeyFromEnv() string {
+	return firstEnv("GOOGLE_CSE_API_KEY", "GOOGLE_CUSTOM_SEARCH_API_KEY", "GOOGLE_API_KEY")
+}
+
+func googleSearchEngineIDFromEnv() string {
+	return firstEnv("GOOGLE_CSE_ID", "GOOGLE_CUSTOM_SEARCH_ENGINE_ID", "GOOGLE_SEARCH_ENGINE_ID", "GOOGLE_CSE_CX", "GOOGLE_CUSTOM_SEARCH_CX")
 }
 
 func firstEnv(names ...string) string {

@@ -263,8 +263,9 @@ curl -sS http://127.0.0.1:7777/v1/chat/completions \
 `web_fetch` starts as a direct HTTP reader, and `web_search` depends on the
 configured search backend. `AFFENT_WEB_SEARCH_PROVIDER` accepts `auto`,
 `tavily`, or `google`. `auto` preserves the historical Tavily default when
-`TAVILY_API_KEY` is present, otherwise uses Google when
-`GOOGLE_CSE_API_KEY` and `GOOGLE_CSE_ID` are configured. The Google backend
+`TAVILY_API_KEY` is present, otherwise uses Google when an API key
+(`GOOGLE_CSE_API_KEY` or `GOOGLE_API_KEY`) and a search engine ID
+(`GOOGLE_CSE_ID` or `GOOGLE_SEARCH_ENGINE_ID`) are configured. The Google backend
 uses the official Programmable Search JSON API instead of scraping
 `google.com/search`, because automated browser sessions from datacenter IPs
 often receive anti-abuse challenge pages. When `web_search` is explicitly
@@ -554,7 +555,9 @@ AFFENTSERVE_MAX_TOKENS
 AFFENT_WEB_SEARCH_PROVIDER
 TAVILY_API_KEY
 GOOGLE_CSE_API_KEY
+GOOGLE_API_KEY
 GOOGLE_CSE_ID
+GOOGLE_SEARCH_ENGINE_ID
 ```
 
 Example CLI config:

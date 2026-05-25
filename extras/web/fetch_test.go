@@ -1384,8 +1384,8 @@ func TestSearchTool_ProviderErrorIncludesNext(t *testing.T) {
 func TestNewDefaultSearchProviderSelectsGoogle(t *testing.T) {
 	t.Setenv("AFFENT_WEB_SEARCH_PROVIDER", "google")
 	t.Setenv("TAVILY_API_KEY", "")
-	t.Setenv("GOOGLE_CSE_API_KEY", "google-key")
-	t.Setenv("GOOGLE_CSE_ID", "google-cx")
+	t.Setenv("GOOGLE_API_KEY", "google-key")
+	t.Setenv("GOOGLE_SEARCH_ENGINE_ID", "google-cx")
 
 	got, err := NewDefaultSearchProvider()
 	if err != nil {
@@ -1403,8 +1403,8 @@ func TestNewDefaultSearchProviderSelectsGoogle(t *testing.T) {
 func TestNewDefaultSearchProviderAutoPrefersExistingTavilyDefault(t *testing.T) {
 	t.Setenv("AFFENT_WEB_SEARCH_PROVIDER", "")
 	t.Setenv("TAVILY_API_KEY", "tavily-key")
-	t.Setenv("GOOGLE_CSE_API_KEY", "google-key")
-	t.Setenv("GOOGLE_CSE_ID", "google-cx")
+	t.Setenv("GOOGLE_API_KEY", "google-key")
+	t.Setenv("GOOGLE_SEARCH_ENGINE_ID", "google-cx")
 
 	got, err := NewDefaultSearchProvider()
 	if err != nil {

@@ -1389,7 +1389,9 @@ func TestSessionPool_WebSearchFailsFastWithoutBackend(t *testing.T) {
 	t.Setenv("AFFENT_WEB_SEARCH_PROVIDER", "")
 	t.Setenv("TAVILY_API_KEY", "")
 	t.Setenv("GOOGLE_CSE_API_KEY", "")
+	t.Setenv("GOOGLE_API_KEY", "")
 	t.Setenv("GOOGLE_CSE_ID", "")
+	t.Setenv("GOOGLE_SEARCH_ENGINE_ID", "")
 	cfg := Config{
 		Listen:          "127.0.0.1:0",
 		MaxSessions:     4,

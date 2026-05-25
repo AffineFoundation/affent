@@ -795,7 +795,9 @@ func TestConfig_ValidateWebSearchRequiresBackendKey(t *testing.T) {
 	t.Setenv("AFFENT_WEB_SEARCH_PROVIDER", "")
 	t.Setenv("TAVILY_API_KEY", "")
 	t.Setenv("GOOGLE_CSE_API_KEY", "")
+	t.Setenv("GOOGLE_API_KEY", "")
 	t.Setenv("GOOGLE_CSE_ID", "")
+	t.Setenv("GOOGLE_SEARCH_ENGINE_ID", "")
 	cfg := Config{
 		BaseURL:         "https://example/v1",
 		Model:           "m",
@@ -819,8 +821,8 @@ func TestConfig_ValidateWebSearchRequiresBackendKey(t *testing.T) {
 func TestConfig_ValidateWebSearchAcceptsGoogleBackend(t *testing.T) {
 	t.Setenv("AFFENT_WEB_SEARCH_PROVIDER", "google")
 	t.Setenv("TAVILY_API_KEY", "")
-	t.Setenv("GOOGLE_CSE_API_KEY", "google-key")
-	t.Setenv("GOOGLE_CSE_ID", "google-cx")
+	t.Setenv("GOOGLE_API_KEY", "google-key")
+	t.Setenv("GOOGLE_SEARCH_ENGINE_ID", "google-cx")
 	cfg := Config{
 		BaseURL:         "https://example/v1",
 		Model:           "m",
