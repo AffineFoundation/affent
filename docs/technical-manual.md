@@ -245,6 +245,10 @@ Or start the production-style image path:
 make image-serve-up
 ```
 
+`make image-serve-status` prints the container labels, resource limits, port
+mapping, and live `/healthz` JSON so stale images and port mistakes are visible
+without inspecting Docker manually.
+
 Test the chat endpoint:
 
 ```bash
