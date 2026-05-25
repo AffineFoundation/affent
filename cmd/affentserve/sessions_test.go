@@ -38,6 +38,17 @@ func newTestPool(t *testing.T, maxSessions int, idleTTL string) *SessionPool {
 	return pool
 }
 
+func TestSessionPoolLoopRequestsFinalNoToolAnswerOnMaxTurns(t *testing.T) {
+	pool := newTestPool(t, 4, "5m")
+	s, err := pool.GetOrCreate("max-turn-summary")
+	if err != nil {
+		t.Fatalf("GetOrCreate: %v", err)
+	}
+	if !s.loop.FinalNoToolsOnMaxTurns {
+		t.Fatal("affentserve sessions should request a final no-tool answer when max turns are exhausted")
+	}
+}
+
 func TestSessionPool_GetOrCreate_FailsAfterShutdown(t *testing.T) {
 	pool := newTestPool(t, 4, "5m")
 	pool.Shutdown()

@@ -538,15 +538,16 @@ func (p *SessionPool) buildSession(id string) (*Session, error) {
 
 	events := make(chan sse.Event, 1024)
 	loop := &agent.Loop{
-		LLM:                 llm,
-		Tools:               reg,
-		Conv:                conv,
-		Events:              events,
-		Log:                 p.logger.With().Str("session_id", id).Logger(),
-		MaxTurnSteps:        p.cfg.MaxTurnSteps,
-		PerCallTimeout:      perCallTimeout,
-		MaxTransientRetries: p.cfg.MaxTransientRetries,
-		TransientBackoff:    retryBackoff,
+		LLM:                    llm,
+		Tools:                  reg,
+		Conv:                   conv,
+		Events:                 events,
+		Log:                    p.logger.With().Str("session_id", id).Logger(),
+		MaxTurnSteps:           p.cfg.MaxTurnSteps,
+		FinalNoToolsOnMaxTurns: true,
+		PerCallTimeout:         perCallTimeout,
+		MaxTransientRetries:    p.cfg.MaxTransientRetries,
+		TransientBackoff:       retryBackoff,
 		ToolResultArtifactDir: filepath.Join(
 			sessionDir,
 			".affent",

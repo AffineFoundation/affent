@@ -980,15 +980,16 @@ func setupLoop(c commonFlags) (*loopBundle, int) {
 	systemPrompt = agent.WithRegistrySystemGuidance(systemPrompt, tools)
 	systemPrompt = agent.WithRuntimeContextSystemGuidance(systemPrompt, time.Now())
 	loop := &agent.Loop{
-		LLM:                 llm,
-		Tools:               tools,
-		Conv:                conv,
-		Events:              events,
-		Log:                 log,
-		MaxTurnSteps:        c.maxTurns,
-		PerCallTimeout:      c.callTimeout,
-		MaxTransientRetries: c.retryTransient,
-		TransientBackoff:    c.retryBackoff,
+		LLM:                    llm,
+		Tools:                  tools,
+		Conv:                   conv,
+		Events:                 events,
+		Log:                    log,
+		MaxTurnSteps:           c.maxTurns,
+		FinalNoToolsOnMaxTurns: true,
+		PerCallTimeout:         c.callTimeout,
+		MaxTransientRetries:    c.retryTransient,
+		TransientBackoff:       c.retryBackoff,
 		ToolResultArtifactDir: filepath.Join(
 			workspace,
 			".affent",

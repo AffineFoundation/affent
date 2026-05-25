@@ -731,6 +731,9 @@ func TestSetupLoop_SubagentDisabledDoesNotRegisterToolOrPolicies(t *testing.T) {
 	if b.loop.FirstToolPolicy != nil || b.loop.PostToolPolicy != nil {
 		t.Fatal("subagent policies should not be installed when --subagent=false")
 	}
+	if !b.loop.FinalNoToolsOnMaxTurns {
+		t.Fatal("setupLoop should request a final no-tool answer when max turns are exhausted")
+	}
 	msgs := b.loop.Conv.Snapshot()
 	if len(msgs) == 0 || strings.Contains(msgs[0].Content, "Subagent delegation:") {
 		t.Fatal("system prompt should not include subagent guidance when disabled")
