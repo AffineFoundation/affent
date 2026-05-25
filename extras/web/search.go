@@ -263,6 +263,9 @@ func directFetchCaution(rawURL string) string {
 	if websource.IsSocialOrDiscussionHost(host) {
 		return "social/discussion pages often block direct readers or require JavaScript; use them as sentiment/claim evidence only unless a readable page source is returned."
 	}
+	if websource.IsLikelyCollectionPage(path) {
+		return "this looks like a broad collection/listing page; prefer a specific detail page, official API/text/export endpoint, docs page, or source repository before spending a direct page-reading call."
+	}
 	return ""
 }
 

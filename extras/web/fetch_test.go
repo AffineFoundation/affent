@@ -862,9 +862,12 @@ func TestDirectFetchCautionClassifiesGenericHosts(t *testing.T) {
 	}{
 		{name: "google search", url: "https://google.com/search?q=agent", want: "search-results page"},
 		{name: "duckduckgo html", url: "https://duckduckgo.com/html?q=agent", want: "search-results page"},
+		{name: "site search", url: "https://search.bittensor.com/search?q=affine", want: "search-results page"},
+		{name: "coingecko", url: "https://coingecko.com/en/coins", want: "usually blocks direct readers"},
 		{name: "x status", url: "https://x.com/affine/status/1", want: "do not use direct page fetch"},
 		{name: "reddit", url: "https://old.reddit.com/r/test/comments/1/x", want: "social/discussion"},
 		{name: "short link", url: "https://t.co/abc", want: "short-link"},
+		{name: "collection page", url: "https://bittensor.com/subnets", want: "broad collection/listing page"},
 		{name: "ordinary", url: "https://example.com/report", want: ""},
 		{name: "invalid", url: "://bad", want: ""},
 	}

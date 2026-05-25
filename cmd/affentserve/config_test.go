@@ -376,6 +376,16 @@ func TestConfig_ValidateEvalModeAllowsExplicitBrowserOnly(t *testing.T) {
 	if err := cfg.Validate(); err != nil {
 		t.Fatalf("explicit browser eval config should validate: %v", err)
 	}
+	effective := cfg.EffectiveRuntimeConfig()
+	if !effective.EvalMode || !effective.EnableBrowser || !effective.BrowserScreenshot {
+		t.Fatalf("browser-only eval should preserve explicit browser permissions: %+v", effective)
+	}
+	if effective.EnableMemory || effective.EnableWeb || effective.EnableWebSearch || effective.EnableSubagent || effective.EnableFocusedTasks {
+		t.Fatalf("browser-only eval should not enable unrelated capabilities: %+v", effective)
+	}
+	if effective.BrowserCacheDir == "" || effective.BrowserCacheTTL != "1h" || effective.BrowserCacheSweepInterval != "5m" {
+		t.Fatalf("browser-only eval should preserve explicit browser cache config: %+v", effective)
+	}
 }
 
 func TestConfig_Resolve_PullsEnvFallback(t *testing.T) {

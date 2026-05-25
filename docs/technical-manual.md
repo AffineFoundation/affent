@@ -307,11 +307,15 @@ themselves. They are meant to help small models choose the text/API URL to read
 instead of spending turns on a JavaScript dashboard route.
 
 `web_fetch` also preflights a small high-confidence set of direct-reader traps,
-including search-result pages and major social sites that routinely reject
-plain HTTP readers, and returns a structured `blocked` no-evidence result
-without dispatching the network request. This keeps current-research tasks from
-spending multiple turns on sources that are useful for discovery or sentiment
-but are not reliable direct page evidence.
+including search-result pages, site-local `/search` routes, major social sites,
+and market pages that routinely reject plain HTTP readers, and returns a
+structured `blocked` no-evidence result without dispatching the network request.
+This keeps current-research tasks from spending multiple turns on sources that
+are useful for discovery or sentiment but are not reliable direct page evidence.
+Broad collection routes such as `/coins` or `/subnets` are annotated as weak
+direct-reader targets; they may still be readable, but a specific detail page,
+API/text/export endpoint, docs page, or source repository is usually better
+evidence.
 
 Repeated failed `web_fetch` calls are guarded more aggressively than general
 tool failures. Repeated no-evidence `web_search` results also count as failures
@@ -624,7 +628,10 @@ make eval-serve-browser-container
 ```
 
 Use `SERVE_EVAL_PERMISSIONS` to opt specific environment capabilities back in,
-for example `SERVE_EVAL_PERMISSIONS='web-search memory'`.
+for example `SERVE_EVAL_PERMISSIONS='browser'` for LiveWeb-style rendered-page
+tasks, or `SERVE_EVAL_PERMISSIONS='web web-search memory'` for direct HTTP
+retrieval plus memory. Keep this list narrow: enabling `web-search` implies
+`web`, while browser-only evals should not need web/search permissions.
 
 The JSONL output contract is documented in
 [eval-jsonl-contract.md](eval-jsonl-contract.md). Runtime traces are documented

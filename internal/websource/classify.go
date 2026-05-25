@@ -13,6 +13,9 @@ func NormalizeHost(host string) string {
 func IsSearchResultPage(host, path string) bool {
 	host = NormalizeHost(host)
 	path = strings.ToLower(strings.TrimSpace(path))
+	if path == "/search" || strings.HasPrefix(path, "/search/") {
+		return true
+	}
 	switch host {
 	case "google.com", "bing.com", "duckduckgo.com", "search.brave.com", "search.yahoo.com", "yahoo.com", "baidu.com", "yandex.com":
 		return path == "" || path == "/" || strings.HasPrefix(path, "/search") || strings.HasPrefix(path, "/html") || strings.HasPrefix(path, "/s")
@@ -57,6 +60,8 @@ func IsSocialOrDiscussionHost(host string) bool {
 // after one structured failure.
 func IsKnownDirectReaderTrapHost(host string) bool {
 	return hasHostSuffix(NormalizeHost(host), []string{
+		"coingecko.com",
+		"coinmarketcap.com",
 		"x.com",
 		"twitter.com",
 		"facebook.com",
@@ -65,6 +70,21 @@ func IsKnownDirectReaderTrapHost(host string) bool {
 		"tiktok.com",
 		"threads.net",
 	})
+}
+
+// IsLikelyCollectionPage reports broad index/listing routes that are often
+// weak direct-reader targets for research tasks. A specific detail page,
+// API/text/export endpoint, docs page, or source repository is usually a
+// better follow-up URL.
+func IsLikelyCollectionPage(path string) bool {
+	path = strings.ToLower(strings.TrimSpace(path))
+	path = strings.TrimSuffix(path, "/")
+	switch path {
+	case "/coins", "/en/coins", "/markets", "/tokens", "/projects", "/subnets", "/validators":
+		return true
+	default:
+		return false
+	}
 }
 
 // IsLikelyTextOrAPIPath reports whether a URL path names an endpoint that is
