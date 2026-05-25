@@ -109,17 +109,46 @@ func ClickTool(s *Session) *agent.Tool {
 			if s.page == nil {
 				return "", ErrNoPage
 			}
-			clickCtx, cancel := context.WithTimeout(nonNilContext(ctx), browserClickTimeout)
-			defer cancel()
-			out, err := runClick(clickCtx, s, args.Ref)
-			if err != nil {
-				if errors.Is(clickCtx.Err(), context.DeadlineExceeded) || errors.Is(err, context.DeadlineExceeded) {
-					return "", browserClickTimeoutError(args.Ref, browserClickTimeout, err)
-				}
-				return "", err
-			}
-			return out, nil
+			return executeClickWithTimeout(ctx, s, args.Ref, browserClickTimeout, runClick)
 		},
+	}
+}
+
+type clickRunner func(context.Context, *Session, int) (string, error)
+
+type clickResult struct {
+	out string
+	err error
+}
+
+func executeClickWithTimeout(ctx context.Context, s *Session, ref int, timeout time.Duration, run clickRunner) (string, error) {
+	parent := nonNilContext(ctx)
+	clickCtx, cancel := context.WithCancel(parent)
+	defer cancel()
+	done := make(chan clickResult, 1)
+	go func() {
+		out, err := run(clickCtx, s, ref)
+		done <- clickResult{out: out, err: err}
+	}()
+
+	timer := time.NewTimer(timeout)
+	defer timer.Stop()
+
+	select {
+	case result := <-done:
+		if result.err != nil {
+			if errors.Is(clickCtx.Err(), context.DeadlineExceeded) || errors.Is(result.err, context.DeadlineExceeded) {
+				return "", browserClickTimeoutError(ref, timeout, result.err)
+			}
+			return "", result.err
+		}
+		return result.out, nil
+	case <-timer.C:
+		cancel()
+		return "", browserClickTimeoutError(ref, timeout, context.DeadlineExceeded)
+	case <-parent.Done():
+		cancel()
+		return "", browserClickTimeoutError(ref, timeout, parent.Err())
 	}
 }
 

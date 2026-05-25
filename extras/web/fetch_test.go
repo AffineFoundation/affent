@@ -112,8 +112,41 @@ func TestFetchTool_PlainText(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Execute: %v", err)
 	}
-	if out != "just some plain text" {
-		t.Errorf("expected plain text passthrough, got %q", out)
+	for _, want := range []string{
+		"SourceAccess: fetched_url=" + srv.URL,
+		"linked_urls_in_content=discovered_unverified_until_fetched",
+		"just some plain text",
+	} {
+		if !strings.Contains(out, want) {
+			t.Errorf("plain text output missing %q\n%s", want, out)
+		}
+	}
+}
+
+func TestFetchTool_SourceAccessHeaderMarksLinkedURLsAsUnverified(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "text/html; charset=utf-8")
+		w.Write([]byte(`<html><body><main><p>Install from <a href="https://github.com/AffineFoundation/affine">official repo</a>.</p></main></body></html>`))
+	}))
+	defer srv.Close()
+
+	tool := FetchTool(FetchConfig{AllowPrivateNetwork: true})
+	args, _ := json.Marshal(map[string]string{"url": srv.URL})
+	out, err := tool.Execute(context.Background(), args)
+	if err != nil {
+		t.Fatalf("Execute: %v", err)
+	}
+	for _, want := range []string{
+		"SourceAccess: fetched_url=" + srv.URL,
+		"linked_urls_in_content=discovered_unverified_until_fetched",
+		"https://github.com/AffineFoundation/affine",
+	} {
+		if !strings.Contains(out, want) {
+			t.Fatalf("source access output missing %q:\n%s", want, out)
+		}
+	}
+	if strings.Contains(out, "fetched_url=https://github.com/AffineFoundation/affine") {
+		t.Fatalf("linked URL must not be reported as fetched source evidence:\n%s", out)
 	}
 }
 

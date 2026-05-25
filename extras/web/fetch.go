@@ -264,10 +264,25 @@ func fetch(ctx context.Context, cfg FetchConfig, requestURL string) (string, err
 	}
 
 	out = truncateFetchResult(out, cfg.MaxResultChars)
+	out = addSourceAccessHeader(requestURL, finalURL, out)
 	if bodyTruncated {
 		out = strings.TrimSpace(out) + "\n\n...(response body truncated)"
 	}
 	return out, nil
+}
+
+func addSourceAccessHeader(requestURL, finalURL, out string) string {
+	if finalURL == "" {
+		finalURL = requestURL
+	}
+	var b strings.Builder
+	fmt.Fprintf(&b, "SourceAccess: fetched_url=%s", finalURL)
+	if requestURL != "" && requestURL != finalURL {
+		fmt.Fprintf(&b, "; requested_url=%s", requestURL)
+	}
+	b.WriteString("; linked_urls_in_content=discovered_unverified_until_fetched\n")
+	b.WriteString(strings.TrimSpace(out))
+	return b.String()
 }
 
 func truncateFetchResult(out string, maxChars int) string {
@@ -510,7 +525,7 @@ func renderedFallbackResult(ctx context.Context, cfg FetchConfig, requestURL str
 	if fallbackBlock := blockedPageReason(out, reason.FinalURL); fallbackBlock != "" {
 		return "", fmt.Errorf("rendered fallback returned blocked/challenge page: %s", fallbackBlock)
 	}
-	prefix := fmt.Sprintf("[rendered browser fallback succeeded: URL=%s, DirectFetchReason=%q", reason.FinalURL, reason.Kind)
+	prefix := fmt.Sprintf("SourceAccess: fetched_url=%s; mode=rendered_browser_fallback; linked_urls_in_content=discovered_unverified_until_fetched\n[rendered browser fallback succeeded: URL=%s, DirectFetchReason=%q", reason.FinalURL, reason.FinalURL, reason.Kind)
 	if reason.Status > 0 {
 		prefix += fmt.Sprintf(", DirectFetchStatus=%d", reason.Status)
 	}
@@ -518,7 +533,7 @@ func renderedFallbackResult(ctx context.Context, cfg FetchConfig, requestURL str
 		prefix += fmt.Sprintf(", DirectFetchDetail=%q", reason.Detail)
 	}
 	prefix += "]\n"
-	return truncateFetchResult(prefix+out, cfg.MaxResultChars), nil
+	return prefix + truncateFetchResult(out, cfg.MaxResultChars), nil
 }
 
 func validateRenderedFallbackURL(ctx context.Context, cfg FetchConfig, rawURL string) error {

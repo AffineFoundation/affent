@@ -277,6 +277,30 @@ func TestBrowserClickTimeoutErrorHasRecoveryHint(t *testing.T) {
 	}
 }
 
+func TestExecuteClickWithTimeoutHardBoundsUncooperativeRunner(t *testing.T) {
+	release := make(chan struct{})
+	defer close(release)
+	started := make(chan struct{})
+	timeout := 10 * time.Millisecond
+	start := time.Now()
+
+	_, err := executeClickWithTimeout(context.Background(), &Session{}, 21, timeout, func(ctx context.Context, _ *Session, _ int) (string, error) {
+		close(started)
+		<-ctx.Done()
+		<-release
+		return "", ctx.Err()
+	})
+	elapsed := time.Since(start)
+	<-started
+
+	if err == nil || !strings.Contains(err.Error(), "browser_click ref 21 timed out") || !strings.Contains(err.Error(), "Failure: kind=timeout") {
+		t.Fatalf("hard click timeout error = %v", err)
+	}
+	if elapsed > 500*time.Millisecond {
+		t.Fatalf("hard click timeout returned too slowly: %s", elapsed)
+	}
+}
+
 func TestNoArgBrowserToolsRejectUnknownArgs(t *testing.T) {
 	for _, tool := range []*agent.Tool{
 		BackTool(&Session{}),
