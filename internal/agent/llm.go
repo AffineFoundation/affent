@@ -324,10 +324,11 @@ type ToolDef struct {
 }
 
 type chatRequest struct {
-	Model    string        `json:"model"`
-	Messages []wireMessage `json:"messages"`
-	Tools    []ToolDef     `json:"tools,omitempty"`
-	Stream   bool          `json:"stream"`
+	Model      string        `json:"model"`
+	Messages   []wireMessage `json:"messages"`
+	Tools      []ToolDef     `json:"tools,omitempty"`
+	ToolChoice string        `json:"tool_choice,omitempty"`
+	Stream     bool          `json:"stream"`
 	// Stream usage in the final SSE chunk (OpenAI-compat extension).
 	StreamOptions *streamOptions `json:"stream_options,omitempty"`
 	// Sampling knobs forwarded from LLMClient.Sampling when non-nil.
@@ -395,6 +396,9 @@ func (c *LLMClient) Chat(ctx context.Context, msgs []ChatMessage, tools []ToolDe
 		TopP:          c.Sampling.TopP,
 		MaxTokens:     c.Sampling.MaxTokens,
 		Seed:          c.Sampling.Seed,
+	}
+	if len(tools) == 0 {
+		reqBody.ToolChoice = "none"
 	}
 	body, err := json.Marshal(reqBody)
 	if err != nil {

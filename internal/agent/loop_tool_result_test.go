@@ -1305,6 +1305,8 @@ func TestRunTurn_AllowsFinalAnswerAfterLastToolRound(t *testing.T) {
 func TestRunTurn_FinalNoToolsOnMaxTurnsForcesSummary(t *testing.T) {
 	var calls int32
 	var finalRequestHadTools atomic.Bool
+	var finalRequestHadToolChoiceNone atomic.Bool
+	var finalRequestHadMaxTurnsPrompt atomic.Bool
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		body, _ := readReqBody(r)
 		w.Header().Set("Content-Type", "text/event-stream")
@@ -1323,6 +1325,8 @@ func TestRunTurn_FinalNoToolsOnMaxTurnsForcesSummary(t *testing.T) {
 			}
 		default:
 			finalRequestHadTools.Store(strings.Contains(body, `"tools"`))
+			finalRequestHadToolChoiceNone.Store(strings.Contains(body, `"tool_choice":"none"`))
+			finalRequestHadMaxTurnsPrompt.Store(strings.Contains(body, "The tool-step budget for this turn is exhausted."))
 			w.Write([]byte("data: {\"choices\":[{\"delta\":{\"role\":\"assistant\",\"content\":\"partial summary from evidence\"},\"finish_reason\":\"stop\"}]}\n\n"))
 			w.Write([]byte("data: [DONE]\n\n"))
 			fl.Flush()
@@ -1378,6 +1382,12 @@ func TestRunTurn_FinalNoToolsOnMaxTurnsForcesSummary(t *testing.T) {
 				}
 				if finalRequestHadTools.Load() {
 					t.Fatal("final max-turns recovery request must not include tools")
+				}
+				if !finalRequestHadToolChoiceNone.Load() {
+					t.Fatal("final max-turns recovery request must force tool_choice=none")
+				}
+				if !finalRequestHadMaxTurnsPrompt.Load() {
+					t.Fatal("final max-turns recovery request must include explicit no-tool summary prompt")
 				}
 				return
 			}

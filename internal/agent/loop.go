@@ -822,7 +822,7 @@ func (l *Loop) runTurn(ctx context.Context, turnID, userText string, opts TurnOp
 			toolStats.ToolRequests += skipped
 			toolStats.ToolErrors += skipped
 			if l.finalNoToolsOnMaxTurnsForTurn(opts) {
-				final, reason, err := l.runStep(ctx, turnID, nil)
+				final, reason, err := l.runFinalNoToolsStep(ctx, turnID, maxTurnsFinalPrompt)
 				if err != nil {
 					endReason = reason
 					break
@@ -1103,7 +1103,7 @@ func (l *Loop) runTurn(ctx context.Context, turnID, userText string, opts TurnOp
 		}
 		if toolBudgetExhausted {
 			if l.finalNoToolsOnMaxTurnsForTurn(opts) {
-				final, reason, err := l.runStep(ctx, turnID, nil)
+				final, reason, err := l.runFinalNoToolsStep(ctx, turnID, toolBudgetFinalPrompt)
 				if err != nil {
 					endReason = reason
 					break
@@ -1615,8 +1615,20 @@ const lengthRecoveryPrompt = `The previous assistant response was cut off while 
 Do not call tools. Produce the final answer now from the existing tool results. Keep it concise, separate verified facts from gaps, and avoid process narration such as "I will continue" or "let me search".`
 
 func (l *Loop) runLengthRecoveryStep(ctx context.Context, turnID string) (*FinishInfo, string, error) {
-	if err := l.Conv.Append(ChatMessage{Role: "user", Content: lengthRecoveryPrompt}); err != nil {
-		l.Log.Error().Err(err).Str("turn_id", turnID).Msg("conv append length recovery prompt")
+	return l.runFinalNoToolsStep(ctx, turnID, lengthRecoveryPrompt)
+}
+
+const maxTurnsFinalPrompt = `The tool-step budget for this turn is exhausted.
+
+Do not call tools. Produce the final answer now from the existing tool results. Keep it concise, separate verified facts from gaps, and list any important sources that were unavailable or blocked.`
+
+const toolBudgetFinalPrompt = `The tool-call budget for this turn is exhausted.
+
+Do not call tools. Produce the final answer now from the existing tool results. Keep it concise, separate verified facts from gaps, and list any important sources that were unavailable or blocked.`
+
+func (l *Loop) runFinalNoToolsStep(ctx context.Context, turnID, prompt string) (*FinishInfo, string, error) {
+	if err := l.Conv.Append(ChatMessage{Role: "user", Content: prompt}); err != nil {
+		l.Log.Error().Err(err).Str("turn_id", turnID).Msg("conv append final no-tools prompt")
 		return nil, sse.TurnEndError, err
 	}
 	return l.runStep(ctx, turnID, nil)
