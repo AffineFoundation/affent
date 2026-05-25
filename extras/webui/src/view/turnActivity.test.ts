@@ -69,6 +69,17 @@ describe("buildTurnActivity", () => {
           { label: "MCP", value: "webui trace" },
           { label: "Read", value: "docs/focused-tasks.md" },
         ],
+        action: {
+          label: "Use evidence",
+          draft: [
+            "Use this evidence in the next step:",
+            "- Listed docs",
+            "- Read docs/webui-product-design.md",
+            "- MCP webui trace",
+            "- Read docs/focused-tasks.md",
+          ].join("\n"),
+          source: "evidence",
+        },
       },
       {
         id: "next",
@@ -237,6 +248,11 @@ describe("buildTurnActivity", () => {
       id: "evidence",
       label: "Evidence",
       evidence: [{ label: "Fetched", value: "https://www.affine.io/", displayValue: "affine.io" }],
+      action: {
+        label: "Use evidence",
+        draft: "Use this evidence in the next step:\n- Fetched affine.io",
+        source: "evidence",
+      },
     });
   });
 
@@ -500,6 +516,11 @@ describe("buildTurnActivity", () => {
       id: "evidence",
       label: "Evidence",
       evidence: [{ label: "Fetched", value: "https://www.affine.io/", displayValue: "affine.io" }],
+      action: {
+        label: "Use evidence",
+        draft: "Use this evidence in the next step:\n- Fetched affine.io",
+        source: "evidence",
+      },
     });
     expect(activity?.brief.rows).toContainEqual({
       id: "handled",

@@ -65,7 +65,7 @@ export interface TurnActivityBrief {
 
 export type TurnActivityBriefRow =
   | { id: string; label: string; value: string; tone?: TurnActivityTone; action?: TurnActivityBriefAction }
-  | { id: string; label: string; evidence: TurnActivityEvidence[]; tone?: TurnActivityTone };
+  | { id: string; label: string; evidence: TurnActivityEvidence[]; tone?: TurnActivityTone; action?: TurnActivityBriefAction };
 
 export interface TurnActivityBriefAction {
   label: string;
@@ -179,7 +179,18 @@ function buildBrief(
   }
 
   const evidence = collectBriefEvidence(nodes);
-  if (evidence.length > 0) rows.push({ id: "evidence", label: "Evidence", evidence });
+  if (evidence.length > 0) {
+    rows.push({
+      id: "evidence",
+      label: "Evidence",
+      evidence,
+      action: {
+        label: "Use evidence",
+        draft: evidenceDraft(evidence),
+        source: "evidence",
+      },
+    });
+  }
 
   const handled = handledIssueBrief(turn);
   if (handled) rows.push(handled);
@@ -651,6 +662,17 @@ function uniqueEvidence(items: readonly TurnActivityEvidence[]): TurnActivityEvi
 function evidenceKey(item: TurnActivityEvidence): string {
   if (item.label === "Fetched") return `${item.label}:${canonicalUrlKey(item.value)}`;
   return `${item.label}:${item.value.trim()}`;
+}
+
+function evidenceDraft(evidence: readonly TurnActivityEvidence[]): string {
+  return [
+    "Use this evidence in the next step:",
+    ...evidence.map((item) => `- ${evidenceDraftValue(item)}`),
+  ].join("\n");
+}
+
+function evidenceDraftValue(item: TurnActivityEvidence): string {
+  return `${item.label} ${item.displayValue || item.value}`;
 }
 
 function canonicalUrlKey(value: string): string {

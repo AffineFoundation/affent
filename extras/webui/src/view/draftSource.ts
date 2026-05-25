@@ -4,6 +4,7 @@ export type DraftSource =
   | "artifact_match"
   | "artifact_text"
   | "continuation"
+  | "evidence"
   | "error"
   | "guidance_receipt"
   | "previous_message"
@@ -22,6 +23,7 @@ const draftSourceLabels: Record<DraftSource, string> = {
   artifact_match: "Using matched file lines",
   artifact_text: "Using file text",
   continuation: "Requesting final answer",
+  evidence: "Using evidence",
   error: "Continuing after error",
   guidance_receipt: "Editing sent note",
   previous_message: "Editing previous message",
@@ -38,6 +40,7 @@ const draftMergeModes: Record<DraftSource, DraftMergeMode> = {
   artifact_match: "append",
   artifact_text: "append",
   continuation: "append",
+  evidence: "append",
   error: "append",
   guidance_receipt: "replace",
   previous_message: "replace",

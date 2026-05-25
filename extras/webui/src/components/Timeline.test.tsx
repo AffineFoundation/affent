@@ -757,6 +757,26 @@ describe("Timeline", () => {
     );
   });
 
+  it("turns processed evidence into an editable follow-up", async () => {
+    const user = userEvent.setup();
+    const onUseAsDraft = vi.fn();
+    renderTimeline(completedSubagentTree, undefined, undefined, onUseAsDraft);
+
+    await user.click(screen.getByRole("button", { name: /What Affent did/ }));
+    await user.click(within(screen.getByTestId("agent-activity-brief")).getByRole("button", { name: "Use evidence" }));
+
+    expect(onUseAsDraft).toHaveBeenCalledWith(
+      [
+        "Use this evidence in the next step:",
+        "- Listed docs",
+        "- Read docs/webui-product-design.md",
+        "- MCP webui trace",
+        "- Read docs/focused-tasks.md",
+      ].join("\n"),
+      "evidence",
+    );
+  });
+
   it("turns a specific activity node next step into an editable message", async () => {
     const user = userEvent.setup();
     const onUseAsDraft = vi.fn();

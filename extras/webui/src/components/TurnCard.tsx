@@ -416,9 +416,20 @@ function ActivityBriefRow({
     <div className="agent-activity-brief-row" data-kind={row.id} data-tone={row.tone}>
       <span className="agent-activity-brief-label">{row.label}</span>
       {"evidence" in row ? (
-        <span className="agent-activity-brief-evidence">
-          <EvidenceChipList items={row.evidence} searchQuery={searchQuery} />
-        </span>
+        <>
+          <span className="agent-activity-brief-evidence">
+            <EvidenceChipList items={row.evidence} searchQuery={searchQuery} />
+          </span>
+          {row.action && onUseAsDraft ? (
+            <button
+              type="button"
+              className="agent-activity-brief-action"
+              onClick={() => onUseAsDraft(row.action?.draft ?? "", row.action?.source)}
+            >
+              {row.action.label}
+            </button>
+          ) : null}
+        </>
       ) : (
         <>
           <strong>
