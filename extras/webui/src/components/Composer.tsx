@@ -299,7 +299,7 @@ function composerStatusLabel({
   hasContent: boolean;
 }): string {
   if (dragActive) return "Adding context";
-  if (busy) return hasContent ? "Ready to add note" : "Working on this";
+  if (busy) return hasContent ? "Ready to guide this run" : "Affent is working";
   if (draftContext) return draftContext.mode === "append" ? "Follow-up with context" : "Draft ready";
   if (!hasSession) return hasContent ? "Ready to start" : "New task";
   if (resumeSession) return hasContent ? "Ready to resume" : "Resume chat";
@@ -321,7 +321,7 @@ function primaryActionLabel({
   draftContext?: DraftContext;
   taskHintActive: boolean;
 }): string {
-  if (busy) return hasContent ? "Add note" : "Working";
+  if (busy) return hasContent ? "Send guidance" : "Working";
   if (taskHintActive && !draftContext) {
     if (resumeSession) return "Resume anyway";
     return hasSession ? "Send anyway" : "Start anyway";
@@ -348,7 +348,7 @@ function composerMetaLabel({
   hasSession: boolean;
   resumeSession: boolean;
 }): string | undefined {
-  if (busy) return contentText ? "Add a note to the current run" : "Affent is working";
+  if (busy) return contentText ? "Sends to the current run, not a new chat" : "Type to guide the current run";
   if (draftContext) return draftContext.label;
   if (!contentText) {
     if (resumeSession) return "Type a message to continue this chat";

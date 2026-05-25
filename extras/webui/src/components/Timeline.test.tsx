@@ -219,51 +219,51 @@ describe("Timeline", () => {
     );
   });
 
-  it("shows pending live note as intervention instead of a new task", async () => {
+  it("shows pending live guidance as intervention instead of a new task", async () => {
     const user = userEvent.setup();
     const writeText = vi.fn().mockResolvedValue(undefined);
     Object.defineProperty(navigator, "clipboard", { configurable: true, value: { writeText } });
     const session = reduceRawEvents(runningSubagent);
-    render(<Timeline session={session} pendingMessage={{ text: "Note for current work: check tests first", kind: "guidance" }} />);
+    render(<Timeline session={session} pendingMessage={{ text: "Guidance for current run: check tests first", kind: "guidance" }} />);
 
     expect(screen.getByTestId("pending-turn")).toHaveAttribute("data-kind", "guidance");
-    expect(screen.getByTestId("pending-turn")).toHaveTextContent("Note");
-    expect(screen.getByTestId("pending-turn")).toHaveTextContent("Live note");
+    expect(screen.getByTestId("pending-turn")).toHaveTextContent("Guidance");
+    expect(screen.getByTestId("pending-turn")).toHaveTextContent("Live guidance");
     expect(screen.getByTestId("pending-turn")).toHaveTextContent("Sending");
-    expect(screen.getByLabelText("Note for current run")).toHaveTextContent("check tests first");
-    expect(screen.getByTestId("pending-turn")).toHaveTextContent("Adding your note to the current run.");
+    expect(screen.getByLabelText("Guidance for current run")).toHaveTextContent("check tests first");
+    expect(screen.getByTestId("pending-turn")).toHaveTextContent("Applying your guidance to the current run.");
     expect(screen.getByTestId("pending-turn")).not.toHaveTextContent("Preparing the first update.");
 
-    await user.click(within(screen.getByTestId("pending-turn")).getByRole("button", { name: "Copy note" }));
+    await user.click(within(screen.getByTestId("pending-turn")).getByRole("button", { name: "Copy guidance" }));
 
-    expect(writeText).toHaveBeenCalledWith("Note for current work: check tests first");
+    expect(writeText).toHaveBeenCalledWith("Guidance for current run: check tests first");
   });
 
-  it("keeps submitted live note visible as an editable receipt", async () => {
+  it("keeps submitted live guidance visible as an editable receipt", async () => {
     const user = userEvent.setup();
     const onUseAsDraft = vi.fn();
     const session = reduceRawEvents(runningSubagent);
     render(
       <Timeline
         session={session}
-        guidanceReceipts={[{ id: 1, text: "Note for current work: check tests first" }]}
+        guidanceReceipts={[{ id: 1, text: "Guidance for current run: check tests first" }]}
         onUseAsDraft={onUseAsDraft}
       />,
     );
 
-    expect(screen.getByTestId("guidance-receipt")).toHaveTextContent("Note sent");
+    expect(screen.getByTestId("guidance-receipt")).toHaveTextContent("Guidance sent");
     expect(screen.getByTestId("guidance-receipt")).toHaveTextContent("check tests first");
-    expect(screen.getByTestId("guidance-receipt")).toHaveTextContent("Added to the current run.");
+    expect(screen.getByTestId("guidance-receipt")).toHaveTextContent("Affent will use this in the current run.");
     expect(screen.queryByTestId("pending-turn")).toBeNull();
 
     const writeText = vi.fn().mockResolvedValue(undefined);
     Object.defineProperty(navigator, "clipboard", { configurable: true, value: { writeText } });
-    await user.click(within(screen.getByTestId("guidance-receipt")).getByRole("button", { name: "Copy note" }));
-    expect(writeText).toHaveBeenCalledWith("Note for current work: check tests first");
+    await user.click(within(screen.getByTestId("guidance-receipt")).getByRole("button", { name: "Copy guidance" }));
+    expect(writeText).toHaveBeenCalledWith("Guidance for current run: check tests first");
 
-    await user.click(screen.getByRole("button", { name: "Edit note" }));
+    await user.click(screen.getByRole("button", { name: "Edit guidance" }));
 
-    expect(onUseAsDraft).toHaveBeenCalledWith("Note for current work: check tests first", "guidance_receipt");
+    expect(onUseAsDraft).toHaveBeenCalledWith("Guidance for current run: check tests first", "guidance_receipt");
   });
 
   it("keeps speaker names out of message bubble chrome", () => {
@@ -289,7 +289,7 @@ describe("Timeline", () => {
     expect(screen.getByTestId("agent-activity-digest")).toHaveTextContent("Now");
     expect(screen.getByTestId("agent-activity-digest")).toHaveTextContent("Inspect docs for WebUI trace requirements");
     expect(screen.getByTestId("agent-activity-brief")).not.toHaveTextContent("Current focus");
-    expect(screen.getByTestId("agent-activity-brief")).toHaveTextContent("You can still add a note");
+    expect(screen.getByTestId("agent-activity-brief")).toHaveTextContent("You can still guide this run");
     expect(screen.getByTestId("agent-activity-tree")).toHaveTextContent("Delegate");
     expect(screen.getByTestId("agent-activity-tree")).toHaveTextContent("Inspect docs for WebUI trace requirements");
     expect(screen.getByTestId("agent-activity-tree")).toHaveTextContent("running");
@@ -330,14 +330,14 @@ describe("Timeline", () => {
     expect(toggle).toHaveAttribute("aria-expanded", "true");
   });
 
-  it("turns a live activity brief into a note", async () => {
+  it("turns a live activity brief into guidance", async () => {
     const user = userEvent.setup();
     const onUseAsDraft = vi.fn();
     renderTimeline(runningSubagent, undefined, undefined, onUseAsDraft);
 
-    await user.click(within(screen.getByTestId("agent-activity-brief")).getByRole("button", { name: "Add note" }));
+    await user.click(within(screen.getByTestId("agent-activity-brief")).getByRole("button", { name: "Guide run" }));
 
-    expect(onUseAsDraft).toHaveBeenCalledWith("Note for current work: ", "tool_guidance");
+    expect(onUseAsDraft).toHaveBeenCalledWith("Guidance for current run: ", "tool_guidance");
   });
 
   it("keeps single-message chats free of message counters", () => {

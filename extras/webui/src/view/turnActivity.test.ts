@@ -144,11 +144,11 @@ describe("buildTurnActivity", () => {
       {
         id: "next",
         label: "Next",
-        value: "You can still add a note while this work is running.",
+        value: "You can still guide this run while it is working.",
         tone: "running",
         action: {
-          label: "Add note",
-          draft: "Note for current work: ",
+          label: "Guide run",
+          draft: "Guidance for current run: ",
           source: "tool_guidance",
         },
       },

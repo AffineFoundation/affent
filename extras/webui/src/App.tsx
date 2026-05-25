@@ -603,7 +603,7 @@ function chatContextLabel({
 
 function chatContextPrimary(overview: SessionOverview): string {
   if (overview.stateLabel === "Sending") return overview.headline;
-  if (overview.stateLabel === "Sending note") return overview.detail;
+  if (overview.stateLabel === "Sending guidance") return overview.detail;
   if (overview.detail) return overview.detail;
   return overview.headline;
 }

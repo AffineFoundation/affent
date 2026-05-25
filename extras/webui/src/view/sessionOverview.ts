@@ -57,8 +57,8 @@ export function buildSessionOverview({
   if (guidance && latestTurn?.status === "running") {
     return {
       headline: task ?? "Live turn",
-      detail: "Adding your note to the current run.",
-      stateLabel: "Sending note",
+      detail: "Applying your guidance to the current run.",
+      stateLabel: "Sending guidance",
       tone: "running",
       active: true,
       metrics: buildMetrics(session, latestTurn, latestActivity),

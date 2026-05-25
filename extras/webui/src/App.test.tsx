@@ -635,7 +635,7 @@ describe("App", () => {
     expect(screen.getByPlaceholderText("Message Affent...")).toHaveFocus();
   });
 
-  it("moves live activity note into the busy composer", async () => {
+  it("moves live activity guidance into the busy composer", async () => {
     const user = userEvent.setup();
     const fetchImpl = vi.fn(async (input: RequestInfo | URL) => {
       const url = String(input);
@@ -655,15 +655,15 @@ describe("App", () => {
 
     render(<App />);
 
-    await user.click(await screen.findByRole("button", { name: "Add note" }));
+    await user.click(await screen.findByRole("button", { name: "Guide run" }));
 
-    expect(screen.getByPlaceholderText("Message Affent...")).toHaveValue("Note for current work:");
+    expect(screen.getByPlaceholderText("Message Affent...")).toHaveValue("Guidance for current run:");
     expect(screen.getByTestId("composer-context")).toHaveTextContent("Using suggested next step");
-    expect(within(screen.getByTestId("composer")).getByRole("button", { name: "Add note" })).toBeEnabled();
+    expect(within(screen.getByTestId("composer")).getByRole("button", { name: "Send guidance" })).toBeEnabled();
     expect(screen.getByPlaceholderText("Message Affent...")).toHaveFocus();
   });
 
-  it("labels in-flight live note separately from a new task", async () => {
+  it("labels in-flight live guidance separately from a new task", async () => {
     const user = userEvent.setup();
     const sent = deferred<Response>();
     const fetchImpl = vi.fn(async (input: RequestInfo | URL) => {
@@ -685,28 +685,28 @@ describe("App", () => {
 
     render(<App />);
 
-    await user.click(await screen.findByRole("button", { name: "Add note" }));
+    await user.click(await screen.findByRole("button", { name: "Guide run" }));
     await user.type(screen.getByPlaceholderText("Message Affent..."), "check tests first");
-    await user.click(within(screen.getByTestId("composer")).getByRole("button", { name: "Add note" }));
+    await user.click(within(screen.getByTestId("composer")).getByRole("button", { name: "Send guidance" }));
 
     expect(screen.getByTestId("pending-turn")).toHaveAttribute("data-kind", "guidance");
-    expect(screen.getByTestId("pending-turn")).toHaveTextContent("Note");
-    expect(screen.getByTestId("chat-context-bar")).toHaveTextContent("Sending note");
-    expect(screen.getByTestId("chat-context-bar")).toHaveTextContent("Adding your note");
+    expect(screen.getByTestId("pending-turn")).toHaveTextContent("Guidance");
+    expect(screen.getByTestId("chat-context-bar")).toHaveTextContent("Sending guidance");
+    expect(screen.getByTestId("chat-context-bar")).toHaveTextContent("Applying your guidance");
     expect(screen.getByTestId("chat-context-bar")).toHaveTextContent("Task:");
-    expect(screen.getByTestId("pending-turn")).toHaveTextContent("Adding your note to the current run.");
+    expect(screen.getByTestId("pending-turn")).toHaveTextContent("Applying your guidance to the current run.");
     expect(screen.getByTestId("pending-turn")).not.toHaveTextContent("Preparing the first update.");
 
     sent.resolve(jsonResponse({ session_id: "s1", turn_id: "t1" }));
     await waitFor(() => expect(screen.queryByTestId("pending-turn")).toBeNull());
-    expect(screen.getByTestId("guidance-receipt")).toHaveTextContent("Note sent");
+    expect(screen.getByTestId("guidance-receipt")).toHaveTextContent("Guidance sent");
     expect(screen.getByTestId("guidance-receipt")).toHaveTextContent("check tests first");
-    expect(screen.getByTestId("guidance-receipt")).toHaveTextContent("Added to the current run.");
+    expect(screen.getByTestId("guidance-receipt")).toHaveTextContent("Affent will use this in the current run.");
 
-    await user.click(screen.getByRole("button", { name: "Edit note" }));
+    await user.click(screen.getByRole("button", { name: "Edit guidance" }));
 
-    expect(screen.getByPlaceholderText("Message Affent...")).toHaveValue("Note for current work:check tests first");
-    expect(screen.getByTestId("composer-context")).toHaveTextContent("Editing sent note");
+    expect(screen.getByPlaceholderText("Message Affent...")).toHaveValue("Guidance for current run:check tests first");
+    expect(screen.getByTestId("composer-context")).toHaveTextContent("Editing sent guidance");
   });
 
   it("moves an expanded tool result into the composer draft", async () => {

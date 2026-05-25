@@ -23,7 +23,7 @@ const draftSourceLabels: Record<DraftSource, string> = {
   continuation: "Requesting final answer",
   evidence: "Using evidence",
   error: "Continuing after error",
-  guidance_receipt: "Editing sent note",
+  guidance_receipt: "Editing sent guidance",
   previous_message: "Editing previous message",
   result: "Continuing from output",
   starter: "Starting from draft",

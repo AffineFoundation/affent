@@ -111,13 +111,13 @@ describe("Composer", () => {
     render(<Composer disabled={false} busy hasSession onSubmit={vi.fn()} onCancel={vi.fn()} />);
 
     expect(screen.getByTestId("composer")).toHaveAttribute("data-busy", "true");
-    expect(screen.getByTestId("composer-intent")).toHaveTextContent("Working on this");
     expect(screen.getByTestId("composer-intent")).toHaveTextContent("Affent is working");
+    expect(screen.getByTestId("composer-intent")).toHaveTextContent("Type to guide the current run");
     expect(screen.getByRole("button", { name: "Stop" })).toBeVisible();
     expect(screen.getByRole("button", { name: "Working" })).toBeDisabled();
   });
 
-  it("lets the user add a note while a turn is running", async () => {
+  it("lets the user send guidance while a turn is running", async () => {
     const user = userEvent.setup();
     const onSubmit = vi.fn().mockResolvedValue(undefined);
     render(<Composer disabled={false} busy hasSession onSubmit={onSubmit} onCancel={vi.fn()} />);
@@ -125,12 +125,12 @@ describe("Composer", () => {
     const input = screen.getByPlaceholderText("Message Affent...");
     await user.type(input, "focus on the webui first");
 
-    expect(screen.getByTestId("composer-intent")).toHaveTextContent("Ready to add note");
-    expect(screen.getByTestId("composer-intent")).toHaveTextContent("Add a note to the current run");
+    expect(screen.getByTestId("composer-intent")).toHaveTextContent("Ready to guide this run");
+    expect(screen.getByTestId("composer-intent")).toHaveTextContent("Sends to the current run, not a new chat");
     expect(screen.getByRole("button", { name: "Stop" })).toBeVisible();
-    expect(screen.getByRole("button", { name: "Add note" })).toBeEnabled();
+    expect(screen.getByRole("button", { name: "Send guidance" })).toBeEnabled();
 
-    await user.click(screen.getByRole("button", { name: "Add note" }));
+    await user.click(screen.getByRole("button", { name: "Send guidance" }));
 
     expect(onSubmit).toHaveBeenCalledWith("focus on the webui first");
     expect(input).toHaveValue("");
@@ -196,27 +196,27 @@ describe("Composer", () => {
     expect(screen.getByRole("button", { name: "Start anyway" })).toBeEnabled();
   });
 
-  it("loads a suggested note while a turn is running", () => {
+  it("loads suggested guidance while a turn is running", () => {
     render(
       <Composer
         disabled={false}
         busy
         hasSession
-        draft={{ id: 1, content: "Note for current work:", source: "tool_guidance" }}
+        draft={{ id: 1, content: "Guidance for current run:", source: "tool_guidance" }}
         onSubmit={vi.fn()}
         onCancel={vi.fn()}
       />,
     );
 
     const input = screen.getByPlaceholderText("Message Affent...");
-    expect(input).toHaveValue("Note for current work:");
+    expect(input).toHaveValue("Guidance for current run:");
     expect(input).toHaveFocus();
-    expect(screen.getByTestId("composer-intent")).toHaveTextContent("Ready to add note");
+    expect(screen.getByTestId("composer-intent")).toHaveTextContent("Ready to guide this run");
     expect(screen.getByTestId("composer-context")).toHaveTextContent("Using suggested next step");
-    expect(screen.getByRole("button", { name: "Add note" })).toBeEnabled();
+    expect(screen.getByRole("button", { name: "Send guidance" })).toBeEnabled();
   });
 
-  it("replaces current text when editing a sent note receipt", async () => {
+  it("replaces current text when editing sent guidance", async () => {
     const user = userEvent.setup();
     const { rerender } = render(<Composer disabled={false} busy hasSession onSubmit={vi.fn()} onCancel={vi.fn()} />);
     const input = screen.getByPlaceholderText("Message Affent...");
@@ -227,16 +227,16 @@ describe("Composer", () => {
         disabled={false}
         busy
         hasSession
-        draft={{ id: 1, content: "Note for current work: check tests first", source: "guidance_receipt" }}
+        draft={{ id: 1, content: "Guidance for current run: check tests first", source: "guidance_receipt" }}
         onSubmit={vi.fn()}
         onCancel={vi.fn()}
       />,
     );
 
-    expect(input).toHaveValue("Note for current work: check tests first");
-    expect(screen.getByTestId("composer-context")).toHaveTextContent("Editing sent note");
+    expect(input).toHaveValue("Guidance for current run: check tests first");
+    expect(screen.getByTestId("composer-context")).toHaveTextContent("Editing sent guidance");
     expect(screen.getByTestId("composer-context")).toHaveTextContent("Replaced");
-    expect(screen.getByRole("button", { name: "Add note" })).toBeEnabled();
+    expect(screen.getByRole("button", { name: "Send guidance" })).toBeEnabled();
   });
 
   it("uses read-only copy when the current surface cannot accept input", () => {

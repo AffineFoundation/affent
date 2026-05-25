@@ -453,8 +453,6 @@ test("running work reads like an Affent chat update before drill-down", async ({
     await page.getByRole("button", { name: "Switch chats" }).click();
   }
   const runningSessionRow = page.getByTestId("session-list").getByRole("button", { name: /use a subagent to inspect docs/ });
-  await expect(runningSessionRow.locator(".session-preview")).toBeHidden();
-  await runningSessionRow.hover();
   await expect(runningSessionRow.locator(".session-preview")).toBeVisible();
   await expect(runningSessionRow.locator(".session-preview")).toContainText("Now ·");
   await expect(runningSessionRow.locator(".session-preview")).toContainText("Inspect docs for WebUI trace requirements");
@@ -477,11 +475,11 @@ test("running work reads like an Affent chat update before drill-down", async ({
   await expect(page.getByTestId("session-strip")).toHaveCount(0);
   await expect(page.getByRole("button", { name: "Working" })).toBeDisabled();
   await page.getByPlaceholder("Message Affent...").fill("prioritize the product flow");
-  await expect(page.getByTestId("composer-intent")).toContainText("Ready to add note");
-  await expect(page.getByTestId("composer-intent")).toContainText("Add a note to the current run");
-  const composerAddNote = page.getByTestId("composer").getByRole("button", { name: "Add note" });
-  await expect(composerAddNote).toBeEnabled();
-  await composerAddNote.click();
+  await expect(page.getByTestId("composer-intent")).toContainText("Ready to guide this run");
+  await expect(page.getByTestId("composer-intent")).toContainText("Sends to the current run, not a new chat");
+  const composerSendGuidance = page.getByTestId("composer").getByRole("button", { name: "Send guidance" });
+  await expect(composerSendGuidance).toBeEnabled();
+  await composerSendGuidance.click();
   expect(guidanceRequests).toEqual(["prioritize the product flow"]);
   await expect(page.getByPlaceholder("Message Affent...")).toHaveValue("");
   await page.screenshot({
