@@ -110,6 +110,30 @@ func TestFormatSnapshotResultAllowsNormalPages(t *testing.T) {
 	}
 }
 
+func TestFormatSnapshotResultMarksSearchPagesAsDiscoveryOnly(t *testing.T) {
+	out, err := formatSnapshotResult(&Snapshot{
+		SnapshotID: 3,
+		URL:        "https://duckduckgo.com/?q=affine+bittensor+SN120",
+		Title:      "affine bittensor SN120 at DuckDuckGo",
+		TextBlocks: []TextBlock{{Type: "a", Text: "Affine SN120 official page"}},
+	})
+	if err != nil {
+		t.Fatalf("search page should not be blocked: %v", err)
+	}
+	for _, want := range []string{
+		"SourceAccess: browser_rendered_url=https://duckduckgo.com/?q=affine+bittensor+SN120",
+		"page_text_below=search_results_discovery_only",
+		"result_links_and_snippets=unverified_until_opened",
+	} {
+		if !strings.Contains(out, want) {
+			t.Fatalf("search snapshot missing discovery-only marker %q:\n%s", want, out)
+		}
+	}
+	if strings.Contains(out, "page_text_below=verified_page_evidence") {
+		t.Fatalf("search result page must not be marked as ordinary verified page evidence:\n%s", out)
+	}
+}
+
 func TestFormat_InteractiveBeforePageText(t *testing.T) {
 	snap := &Snapshot{
 		SnapshotID: 1,

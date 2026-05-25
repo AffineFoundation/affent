@@ -4,8 +4,10 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"net/url"
 	"strings"
 
+	"github.com/affinefoundation/affent/internal/websource"
 	"github.com/go-rod/rod"
 )
 
@@ -320,7 +322,18 @@ func formatSnapshotResult(snap *Snapshot) (string, error) {
 
 func browserSourceAccessLine(rawURL string, snapshotID int64) string {
 	u := strings.NewReplacer("\r", " ", "\n", " ").Replace(strings.TrimSpace(rawURL))
+	if browserURLIsSearchResultPage(u) {
+		return fmt.Sprintf("SourceAccess: browser_rendered_url=%s; snapshot_id=%d; page_text_below=search_results_discovery_only; result_links_and_snippets=unverified_until_opened\n", u, snapshotID)
+	}
 	return fmt.Sprintf("SourceAccess: browser_rendered_url=%s; snapshot_id=%d; page_text_below=verified_page_evidence; links_in_snapshot=discovered_unverified_until_opened\n", u, snapshotID)
+}
+
+func browserURLIsSearchResultPage(rawURL string) bool {
+	parsed, err := url.Parse(strings.TrimSpace(rawURL))
+	if err != nil || parsed.Host == "" {
+		return false
+	}
+	return websource.IsSearchResultPage(parsed.Hostname(), strings.ToLower(parsed.EscapedPath()))
 }
 
 func blockedSnapshotReason(snap *Snapshot) string {
