@@ -1251,6 +1251,39 @@ func TestSessionPool_ToolLightMixedSurfaceUsesLimitedPrompt(t *testing.T) {
 	}
 }
 
+func TestSessionPool_SubagentRegistersExternalResearchPolicy(t *testing.T) {
+	cfg := Config{
+		Listen:         "127.0.0.1:0",
+		MaxSessions:    4,
+		SessionIdleTTL: "5m",
+		WorkspaceRoot:  t.TempDir(),
+		BaseURL:        "http://127.0.0.1:0",
+		APIKey:         "test",
+		Model:          "fake",
+		EnableSubagent: true,
+	}
+	pool, err := NewSessionPool(cfg, zerolog.New(io.Discard))
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(pool.Shutdown)
+
+	s, err := pool.GetOrCreate("subagent-policy")
+	if err != nil {
+		t.Fatal(err)
+	}
+	found := false
+	for _, policy := range s.loop.ToolCallPolicies {
+		if policy != nil && policy.ToolName == agent.SubagentToolName {
+			found = true
+			break
+		}
+	}
+	if !found {
+		t.Fatalf("subagent sessions should install a direct-research tool-call policy: %+v", s.loop.ToolCallPolicies)
+	}
+}
+
 func TestSessionPool_EvalModeRegistersOnlyBasicTools(t *testing.T) {
 	cfg := Config{
 		Listen:             "127.0.0.1:0",

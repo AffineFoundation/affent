@@ -574,6 +574,7 @@ func (p *SessionPool) buildSession(id string) (*Session, error) {
 	if p.cfg.EnableSubagent {
 		loop.FirstToolPolicy = agent.SubagentFirstToolPolicy()
 		loop.PostToolPolicy = agent.SubagentPostToolPolicy()
+		loop.ToolCallPolicies = append(loop.ToolCallPolicies, agent.SubagentExternalResearchPolicy())
 	}
 	if p.cfg.EnableFocusedTasks {
 		if _, ok := reg.Get(agent.FocusedTaskToolName); ok {

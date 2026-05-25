@@ -220,6 +220,18 @@ func SubagentPostToolPolicy() *PostToolPolicy {
 	}
 }
 
+func SubagentExternalResearchPolicy() *ToolCallPolicy {
+	return &ToolCallPolicy{
+		ToolName: SubagentToolName,
+		Reject: func(ctx ToolCallPolicyContext) (string, bool) {
+			if explicitSubagentRequested(ctx.UserText) || !ordinaryExternalResearchRequested(ctx.UserText) {
+				return "", false
+			}
+			return "tool_call_policy: subagent_run is too expensive for ordinary external/web research when the user did not explicitly request delegation. Use the parent web_fetch/browser/search tools directly, gather the smallest useful set of sources, and answer with verified facts plus clearly marked gaps.\nNext: continue in the parent turn with direct web/browser tools; do not spawn a subagent for this request.", true
+		},
+	}
+}
+
 func NestedSubagentPostToolPolicy() *PostToolPolicy {
 	return &PostToolPolicy{
 		ToolName:               SubagentToolName,
@@ -389,6 +401,101 @@ var subagentDelegationPhrases = []string{
 	"子 agent",
 	"子agent",
 	"子代理",
+}
+
+func ordinaryExternalResearchRequested(userText string) bool {
+	lower := strings.ToLower(userText)
+	if subagentContainsAny(lower, localWorkIndicators) {
+		return false
+	}
+	return subagentContainsAny(lower, externalResearchIndicators)
+}
+
+func subagentContainsAny(s string, needles []string) bool {
+	for _, needle := range needles {
+		if strings.Contains(s, needle) {
+			return true
+		}
+	}
+	return false
+}
+
+var externalResearchIndicators = []string{
+	"web",
+	"website",
+	"url",
+	"http://",
+	"https://",
+	"browser",
+	"browse",
+	"search",
+	"google",
+	"x.com",
+	"twitter",
+	"tweet",
+	"social",
+	"forum",
+	"news",
+	"latest",
+	"recent",
+	"current",
+	"today",
+	"price",
+	"market",
+	"metrics",
+	"trend",
+	"sentiment",
+	"sources",
+	"public information",
+	"online",
+	"网页",
+	"网站",
+	"网址",
+	"浏览",
+	"访问",
+	"检索",
+	"搜索",
+	"查找",
+	"公开信息",
+	"最新",
+	"最近",
+	"当前",
+	"今天",
+	"价格",
+	"币价",
+	"市值",
+	"市场",
+	"指标",
+	"趋势",
+	"推特",
+	"推文",
+	"社交",
+	"评价",
+	"舆情",
+	"来源",
+}
+
+var localWorkIndicators = []string{
+	"workspace",
+	"worktree",
+	"repository",
+	"repo",
+	"codebase",
+	"source tree",
+	"file",
+	"directory",
+	"diff",
+	"commit",
+	"test failure",
+	"代码",
+	"代码库",
+	"仓库",
+	"工作区",
+	"文件",
+	"目录",
+	"差异",
+	"提交",
+	"测试失败",
 }
 
 // SubagentDeps wires the first-generation subagent tool. The subagent is a

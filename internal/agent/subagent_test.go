@@ -212,6 +212,37 @@ func TestSubagentPostPolicyBlocksParentBrowserAfterSuccessfulReport(t *testing.T
 	}
 }
 
+func TestSubagentExternalResearchPolicyRejectsUndeclaredDelegation(t *testing.T) {
+	policy := SubagentExternalResearchPolicy()
+
+	result, reject := policy.Reject(ToolCallPolicyContext{
+		UserText: "请实际检索和访问网站，收集 Affine 最近的币价、市值、Twitter 评价和来源 URL。",
+		ToolName: SubagentToolName,
+	})
+	if !reject {
+		t.Fatal("ordinary external research should reject undeclared subagent delegation")
+	}
+	for _, want := range []string{"ordinary external/web research", "parent web_fetch/browser/search tools", "Next:"} {
+		if !strings.Contains(result, want) {
+			t.Fatalf("policy rejection missing %q:\n%s", want, result)
+		}
+	}
+
+	if _, reject := policy.Reject(ToolCallPolicyContext{
+		UserText: "请用 subagent 隔离检索这个网站。",
+		ToolName: SubagentToolName,
+	}); reject {
+		t.Fatal("explicit subagent request should bypass direct-research rejection")
+	}
+
+	if _, reject := policy.Reject(ToolCallPolicyContext{
+		UserText: "review the current repo diff and recent test failure",
+		ToolName: SubagentToolName,
+	}); reject {
+		t.Fatal("local code/repo work should not be classified as ordinary external research")
+	}
+}
+
 func TestNestedSubagentPostPolicyOnlyBlocksMoreNestedSubagents(t *testing.T) {
 	policy := NestedSubagentPostToolPolicy()
 	if !policy.blocksAfterToolResult(SubagentToolName) {

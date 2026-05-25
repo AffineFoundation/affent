@@ -1603,6 +1603,100 @@ func TestRunTurn_MaxToolCallsForcesNoToolSummary(t *testing.T) {
 	}
 }
 
+func TestRunTurn_SubagentExternalResearchPolicyRejectsDirectCall(t *testing.T) {
+	var calls int32
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "text/event-stream")
+		w.WriteHeader(200)
+		fl := w.(http.Flusher)
+		if atomic.AddInt32(&calls, 1) == 1 {
+			lines := []string{
+				`data: {"choices":[{"delta":{"role":"assistant","tool_calls":[{"index":0,"id":"c1","type":"function","function":{"name":"subagent_run","arguments":"{\"task\":\"collect latest web sources\"}"}}]},"finish_reason":null}]}`,
+				`data: {"choices":[{"delta":{},"finish_reason":"tool_calls"}]}`,
+				`data: [DONE]`,
+			}
+			for _, l := range lines {
+				w.Write([]byte(l + "\n\n"))
+				fl.Flush()
+			}
+			return
+		}
+		w.Write([]byte("data: {\"choices\":[{\"delta\":{\"role\":\"assistant\",\"content\":\"use direct tools next\"},\"finish_reason\":\"stop\"}]}\n\n"))
+		w.Write([]byte("data: [DONE]\n\n"))
+		fl.Flush()
+	}))
+	t.Cleanup(srv.Close)
+
+	conv, err := OpenConversationAt(filepath.Join(t.TempDir(), "sess.jsonl"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	var subagentCalls int32
+	reg := NewRegistry()
+	reg.Add(&Tool{
+		Name:        SubagentToolName,
+		Description: "test subagent",
+		Schema:      json.RawMessage(`{"type":"object","properties":{"task":{"type":"string"}}}`),
+		Execute: func(ctx context.Context, args json.RawMessage) (string, error) {
+			atomic.AddInt32(&subagentCalls, 1)
+			return `{"ok":true,"report":"should not run"}`, nil
+		},
+	})
+	events := make(chan sse.Event, 256)
+	loop := &Loop{
+		LLM: NewLLMClient(srv.URL, "", "fake-model"), Tools: reg, Conv: conv, Events: events,
+		MaxTurnSteps: 4, PerCallTimeout: 5 * time.Second,
+		ToolCallPolicies: []*ToolCallPolicy{SubagentExternalResearchPolicy()},
+	}
+	if err := loop.EnsureSystemPrompt("base"); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := loop.SendUser(context.Background(), "请检索网站，收集最近价格、市值和 Twitter 评价"); err != nil {
+		t.Fatal(err)
+	}
+
+	deadline := time.After(10 * time.Second)
+	sawPolicyRejection := false
+	for {
+		select {
+		case ev, ok := <-events:
+			if !ok {
+				t.Fatal("event channel closed before turn.end")
+			}
+			switch ev.Type {
+			case sse.TypeToolResult:
+				var p sse.ToolResultPayload
+				if err := json.Unmarshal(ev.Data, &p); err != nil {
+					t.Fatalf("decode tool.result: %v", err)
+				}
+				if p.FailureKind == toolPolicyRejectedKind {
+					sawPolicyRejection = true
+					if !strings.Contains(p.Result, "parent web_fetch/browser/search tools") {
+						t.Fatalf("policy rejection should give direct-tool recovery guidance:\n%s", p.Result)
+					}
+				}
+			case sse.TypeTurnEnd:
+				if !sawPolicyRejection {
+					t.Fatal("expected subagent direct-research policy rejection")
+				}
+				if got := atomic.LoadInt32(&subagentCalls); got != 0 {
+					t.Fatalf("subagent_run should be rejected before dispatch, got %d calls", got)
+				}
+				var p sse.TurnEndPayload
+				if err := json.Unmarshal(ev.Data, &p); err != nil {
+					t.Fatalf("decode turn.end: %v", err)
+				}
+				if p.ToolStats == nil || p.ToolStats.ToolErrors != 1 || p.ToolStats.ToolFailureByKind[toolPolicyRejectedKind] != 1 {
+					t.Fatalf("turn stats should record policy rejection, got %+v", p.ToolStats)
+				}
+				return
+			}
+		case <-deadline:
+			t.Fatal("timeout waiting for turn.end")
+		}
+	}
+}
+
 func TestRunTurn_SubagentFirstPolicyGuardsParentExploration(t *testing.T) {
 	var calls int32
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {

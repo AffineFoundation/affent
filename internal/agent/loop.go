@@ -181,6 +181,12 @@ type Loop struct {
 	// honored first for compatibility.
 	PostToolPolicies []*PostToolPolicy
 
+	// ToolCallPolicies can reject an otherwise valid tool call before it
+	// dispatches. Keep these feature-owned and evidence-shaped; the loop
+	// only provides a generic hook so expensive tools can steer small
+	// models back to cheaper direct tools without hard-coding tool names.
+	ToolCallPolicies []*ToolCallPolicy
+
 	// SkillProvider optionally injects a short, task-relevant system
 	// skill before each user message. Unlike project context, this is
 	// selected per turn from the actual request so small models get a
@@ -233,10 +239,23 @@ type PostToolPolicy struct {
 	Rejection    string
 }
 
+type ToolCallPolicy struct {
+	ToolName string
+	Reject   func(ToolCallPolicyContext) (string, bool)
+}
+
+type ToolCallPolicyContext struct {
+	UserText      string
+	ToolName      string
+	Args          json.RawMessage
+	ToolCallsUsed int
+}
+
 const (
 	toolPolicyFirstToolKind = "tool_policy_first_tool"
 	toolPolicyRepeatKind    = "tool_policy_repeat"
 	toolPolicyActiveKind    = "tool_policy_active"
+	toolPolicyRejectedKind  = "tool_policy_rejected"
 )
 
 // DefaultSystemPrompt is fed once at session start. It is deliberately
@@ -995,6 +1014,24 @@ func (l *Loop) runTurn(ctx context.Context, turnID, userText string, opts TurnOp
 				recordToolFailureKind(&toolStats, result, true)
 				continue
 			}
+			if result, ok := l.toolCallPolicyRejection(userText, toolName, args, toolCallsUsed); ok {
+				rejectionPayload := toolResultEventPayloadForTurn(turnID, callID, 1, result)
+				rejectionPayload.Delegation = delegation
+				l.publish(sse.TypeToolResult, rejectionPayload)
+				if err := l.Conv.Append(ChatMessage{
+					Role:       "tool",
+					Content:    result,
+					ToolCallID: callID,
+					Name:       toolName,
+				}); err != nil {
+					l.Log.Error().Err(err).Str("call_id", callID).Msg("conv append tool-call policy result")
+				}
+				toolCallsUsed++
+				recordToolRepairOutcome(&toolStats, repairedToolCall, true)
+				toolStats.ToolErrors++
+				recordToolFailureKind(&toolStats, result, true)
+				continue
+			}
 			if result := loopGuard.recordAttempt(toolName, args); result != "" {
 				omitted := l.publishAndAppendToolResultWithContext(turnID, callID, toolName, result, true, 0, delegation, toolContextBudget)
 				recordToolContextOmission(&toolStats, omitted)
@@ -1188,6 +1225,29 @@ func postToolActiveRejection(states []*activePostToolPolicyState, toolName strin
 			result = fmt.Sprintf("post_tool_policy: answer from the prior %s result instead of calling %s.", p.ToolName, toolName)
 		}
 		return withToolPolicyFailureKind(result, toolPolicyActiveKind), true
+	}
+	return "", false
+}
+
+func (l *Loop) toolCallPolicyRejection(userText, toolName string, args json.RawMessage, toolCallsUsed int) (string, bool) {
+	for _, p := range l.ToolCallPolicies {
+		if p == nil || p.ToolName == "" || p.ToolName != toolName || p.Reject == nil {
+			continue
+		}
+		result, reject := p.Reject(ToolCallPolicyContext{
+			UserText:      userText,
+			ToolName:      toolName,
+			Args:          args,
+			ToolCallsUsed: toolCallsUsed,
+		})
+		if !reject {
+			continue
+		}
+		result = strings.TrimSpace(result)
+		if result == "" {
+			result = fmt.Sprintf("tool_call_policy: call to %s was rejected for this turn.", toolName)
+		}
+		return withToolPolicyFailureKind(result, toolPolicyRejectedKind), true
 	}
 	return "", false
 }
