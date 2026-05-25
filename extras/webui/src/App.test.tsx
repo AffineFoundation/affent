@@ -86,14 +86,17 @@ describe("App", () => {
     expect(context).toHaveTextContent("list the files");
     expect(context).toHaveTextContent("Result ready");
     expect(context).toHaveTextContent("README.md main.go");
-    expect(context).toHaveTextContent("Actions 1");
-    expect(context).toHaveTextContent("Tokens 138");
+    const details = screen.getByTestId("chat-context-details");
+    expect(details).not.toHaveAttribute("open");
+    expect(chatContextMetric(details, "Actions 1")).not.toBeVisible();
     const contextText = context.textContent?.replace(/\s+/g, " ").trim();
     expect(contextText).toContain("Result ready · README.md main.go");
     expect(contextText).toContain("Task: list the files");
-    expect(contextText).toContain("Actions 1 · Tokens 138");
-    expect(contextText).not.toContain("Actions 1Tokens 138");
-    expect(context).toHaveAccessibleName("Result ready · README.md main.go · Task: list the files · Actions 1 · Tokens 138");
+    expect(context).toHaveAccessibleName("Result ready · README.md main.go · Task: list the files");
+    await user.click(screen.getByText("Run details"));
+    expect(details).toHaveAttribute("open");
+    expect(chatContextMetric(details, "Actions 1")).toBeVisible();
+    expect(chatContextMetric(details, "Tokens 138")).toBeVisible();
     expect(context.querySelector(".chat-context-primary")).toHaveTextContent("README.md main.go");
     expect(context.querySelector(".chat-context-topic")).toHaveTextContent("Task:");
     expect(context.querySelector(".chat-context-topic")?.textContent).toContain("Task: list the files");
@@ -911,6 +914,10 @@ function jsonResponse(body: unknown, status = 200): Response {
     status,
     headers: { "Content-Type": "application/json" },
   });
+}
+
+function chatContextMetric(root: HTMLElement, text: string): HTMLElement {
+  return within(root).getByText((_, element) => element?.textContent === text);
 }
 
 function eventStreamResponse(body: string): Response {

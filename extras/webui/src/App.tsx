@@ -570,19 +570,23 @@ function ChatContextBar({ overview }: { overview: SessionOverview }) {
           </>
         ) : null}
       </span>
-      {overview.metrics.length > 0 ? (
-        <span className="chat-context-metrics" aria-label="Current chat metrics">
-          {overview.metrics.map((metric) => (
-            <span key={`${metric.label}-${metric.value}`} className="chat-context-metric-wrap">
-              <span className="chat-context-separator" aria-hidden="true"> · </span>
-              <span className="chat-context-metric" data-tone={metric.tone}>
-                {metric.label} {metric.value}
-              </span>
-            </span>
-          ))}
-        </span>
-      ) : null}
+      {overview.metrics.length > 0 ? <ChatContextDetails metrics={overview.metrics} /> : null}
     </div>
+  );
+}
+
+function ChatContextDetails({ metrics }: { metrics: SessionOverview["metrics"] }) {
+  return (
+    <details className="chat-context-details" data-testid="chat-context-details">
+      <summary>Run details</summary>
+      <div className="chat-context-metrics" aria-label="Current chat metrics">
+        {metrics.map((metric) => (
+          <span key={`${metric.label}-${metric.value}`} className="chat-context-metric" data-tone={metric.tone}>
+            {metric.label} {metric.value}
+          </span>
+        ))}
+      </div>
+    </details>
   );
 }
 
@@ -599,7 +603,6 @@ function chatContextLabel({
 }): string {
   const parts = [overview.stateLabel, primary];
   if (secondary && secondary !== primary) parts.push(`${secondaryLabel}: ${secondary}`);
-  parts.push(...overview.metrics.map((metric) => `${metric.label} ${metric.value}`));
   return parts.filter(Boolean).join(" · ");
 }
 

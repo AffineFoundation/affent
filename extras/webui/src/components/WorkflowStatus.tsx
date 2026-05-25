@@ -13,18 +13,27 @@ export function WorkflowStatus({
           <h2>{overview.headline}</h2>
           <p>{overview.detail}</p>
         </div>
-        <div className="workflow-state" aria-label="Current progress">
-          <span className="state-pill" data-tone={overview.tone}>
-            {overview.stateLabel}
-          </span>
-          {overview.metrics.map((metric) => (
-            <span key={metric.label} data-tone={metric.tone}>
-              <b>{metric.value}</b> {formatMetricLabel(metric.label, metric.value)}
-            </span>
-          ))}
-        </div>
+        <span className="state-pill" data-tone={overview.tone}>
+          {overview.stateLabel}
+        </span>
+        {overview.metrics.length > 0 ? <WorkflowDetails metrics={overview.metrics} /> : null}
       </div>
     </section>
+  );
+}
+
+function WorkflowDetails({ metrics }: { metrics: SessionOverview["metrics"] }) {
+  return (
+    <details className="workflow-details" data-testid="workflow-details">
+      <summary>Run details</summary>
+      <div className="workflow-metrics" aria-label="Run details">
+        {metrics.map((metric) => (
+          <span key={metric.label} data-tone={metric.tone}>
+            <b>{metric.value}</b> {formatMetricLabel(metric.label, metric.value)}
+          </span>
+        ))}
+      </div>
+    </details>
   );
 }
 

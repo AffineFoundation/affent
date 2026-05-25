@@ -385,19 +385,67 @@ body {
   white-space: nowrap;
 }
 
-.chat-context-metrics {
-  display: flex;
-  flex-wrap: wrap;
-  justify-content: flex-end;
-  gap: 5px;
+.chat-context-details {
+  position: relative;
+  justify-self: end;
   min-width: 0;
+  color: var(--text-faint);
+  font-size: 11.5px;
 }
 
-.chat-context-metric-wrap {
+.chat-context-details summary {
   display: inline-flex;
   align-items: center;
   gap: 5px;
-  min-width: 0;
+  min-height: 26px;
+  border: 1px solid transparent;
+  border-radius: 999px;
+  padding: 2px 8px;
+  color: var(--text-muted);
+  cursor: pointer;
+  white-space: nowrap;
+  transition: color 140ms ease, background 140ms ease, border-color 140ms ease;
+}
+
+.chat-context-details summary::-webkit-details-marker {
+  display: none;
+}
+
+.chat-context-details summary::after {
+  content: "";
+  width: 5px;
+  height: 5px;
+  border-right: 1.5px solid currentColor;
+  border-bottom: 1.5px solid currentColor;
+  transform: rotate(45deg) translateY(-1px);
+  transition: transform 140ms ease;
+}
+
+.chat-context-details[open] summary {
+  background: var(--bg-raised);
+  border-color: var(--border);
+  color: var(--text);
+}
+
+.chat-context-details[open] summary::after {
+  transform: rotate(225deg) translateY(-1px);
+}
+
+.chat-context-metrics {
+  position: absolute;
+  right: 0;
+  top: calc(100% + 6px);
+  z-index: 20;
+  display: grid;
+  gap: 6px;
+  min-width: 178px;
+  max-width: min(260px, calc(100vw - 32px));
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: rgba(255, 255, 255, 0.96);
+  box-shadow: var(--shadow-menu);
+  padding: 8px;
+  animation: detail-reveal 140ms var(--ease-snap);
 }
 
 .chat-context-separator {
@@ -409,11 +457,8 @@ body {
 }
 
 .chat-context-metric {
-  border: 1px solid var(--border);
-  border-radius: 999px;
-  background: rgba(255, 255, 255, 0.68);
+  display: block;
   color: var(--text-muted);
-  padding: 1px 7px;
   font-size: 11.5px;
   font-weight: 650;
   white-space: nowrap;
@@ -594,7 +639,7 @@ body {
 .workflow-line {
   position: relative;
   display: grid;
-  grid-template-columns: 10px minmax(160px, 1fr) auto;
+  grid-template-columns: 10px minmax(160px, 1fr) auto auto;
   gap: 10px;
   align-items: center;
   min-width: 0;
@@ -628,45 +673,20 @@ body {
   white-space: nowrap;
 }
 
-.workflow-state {
-  display: flex;
-  flex-wrap: wrap;
-  justify-content: flex-end;
-  gap: 4px 9px;
-  margin: 0;
-  padding: 0;
-  color: var(--text-faint);
-  font-size: 11.5px;
-  white-space: nowrap;
-}
-
-.workflow-state span {
-  display: inline-flex;
-  gap: 4px;
-  align-items: baseline;
-}
-
-.workflow-state span[data-tone="error"] {
-  color: var(--c-error);
-}
-
-.workflow-state span[data-tone="warning"] {
-  color: var(--c-warn);
-}
-
-.workflow-state b {
-  color: var(--text);
-  font-weight: 650;
-  font-variant-numeric: tabular-nums;
-}
-
 .state-pill {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  justify-self: end;
   border: 1px solid rgba(20, 184, 166, 0.22);
   border-radius: 999px;
   background: rgba(255, 255, 255, 0.72);
   color: var(--text);
   padding: 2px 8px;
+  min-height: 24px;
   font-weight: 650;
+  font-size: 11.5px;
+  white-space: nowrap;
 }
 
 .state-pill[data-tone="error"] {
@@ -679,6 +699,98 @@ body {
   border-color: rgba(245, 158, 11, 0.28);
   background: rgba(255, 251, 235, 0.72);
   color: var(--c-warn);
+}
+
+.state-pill[data-tone="running"] {
+  border-color: rgba(37, 99, 235, 0.22);
+  background: rgba(239, 246, 255, 0.78);
+  color: var(--c-info);
+}
+
+.workflow-details {
+  position: relative;
+  justify-self: end;
+  min-width: 0;
+  color: var(--text-faint);
+  font-size: 11.5px;
+}
+
+.workflow-details summary {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  min-height: 24px;
+  border: 1px solid transparent;
+  border-radius: 999px;
+  padding: 2px 8px;
+  color: var(--text-muted);
+  cursor: pointer;
+  white-space: nowrap;
+  transition: color 140ms ease, background 140ms ease, border-color 140ms ease;
+}
+
+.workflow-details summary::-webkit-details-marker {
+  display: none;
+}
+
+.workflow-details summary::after {
+  content: "";
+  width: 5px;
+  height: 5px;
+  border-right: 1.5px solid currentColor;
+  border-bottom: 1.5px solid currentColor;
+  transform: rotate(45deg) translateY(-1px);
+  transition: transform 140ms ease;
+}
+
+.workflow-details[open] summary {
+  background: var(--bg-raised);
+  border-color: var(--border);
+  color: var(--text);
+}
+
+.workflow-details[open] summary::after {
+  transform: rotate(225deg) translateY(-1px);
+}
+
+.workflow-metrics {
+  position: absolute;
+  right: 0;
+  top: calc(100% + 6px);
+  z-index: 20;
+  display: grid;
+  gap: 6px;
+  min-width: 178px;
+  max-width: min(260px, calc(100vw - 32px));
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: rgba(255, 255, 255, 0.96);
+  box-shadow: var(--shadow-menu);
+  padding: 8px;
+  animation: detail-reveal 140ms var(--ease-snap);
+}
+
+.workflow-metrics span {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  align-items: baseline;
+  color: var(--text-muted);
+  white-space: nowrap;
+}
+
+.workflow-metrics span[data-tone="error"] {
+  color: var(--c-error);
+}
+
+.workflow-metrics span[data-tone="warning"] {
+  color: var(--c-warn);
+}
+
+.workflow-metrics b {
+  color: var(--text);
+  font-weight: 650;
+  font-variant-numeric: tabular-nums;
 }
 
 /* ---- Session navigator ---- */
@@ -5457,15 +5569,13 @@ pre.code {
     gap: 7px 8px;
     align-items: start;
   }
-  .chat-context-metrics {
+  .chat-context-details {
     grid-column: 2 / -1;
-    justify-content: flex-start;
-    overflow-x: auto;
-    padding-bottom: 1px;
-    scrollbar-width: none;
+    justify-self: start;
   }
-  .chat-context-metrics::-webkit-scrollbar {
-    display: none;
+  .chat-context-metrics {
+    right: auto;
+    left: 0;
   }
   .runtime-status-bar summary {
     grid-template-columns: auto minmax(0, 1fr) 12px;
@@ -5532,15 +5642,14 @@ pre.code {
   .workflow-title p {
     display: none;
   }
-  .workflow-state {
+  .state-pill,
+  .workflow-details {
     grid-column: 2 / -1;
-    justify-content: flex-start;
-    overflow-x: auto;
-    padding-bottom: 1px;
-    scrollbar-width: none;
+    justify-self: start;
   }
-  .workflow-state::-webkit-scrollbar {
-    display: none;
+  .workflow-metrics {
+    right: auto;
+    left: 0;
   }
   .timeline-toolbox {
     grid-template-columns: minmax(0, 1fr);
