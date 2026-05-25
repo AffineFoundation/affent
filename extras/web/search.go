@@ -258,10 +258,10 @@ func directFetchCaution(rawURL string) string {
 		return "this is often a redirect or short-link wrapper; prefer the final canonical URL from an authoritative source before reading it."
 	}
 	if websource.IsKnownDirectReaderTrapHost(host) {
-		return "do not use direct page fetch on this URL; this host usually blocks direct readers. Use the snippet only as weak sentiment/claim evidence, find a mirrored/source URL, or mark this source as blocked/unverified."
+		return "do not open this URL as source evidence unless a readable page is already available; this host usually blocks page readers or shows login/challenge pages. Use the snippet only as weak sentiment/claim evidence, find a mirrored/source URL, or mark this source as blocked/unverified."
 	}
 	if websource.IsSocialOrDiscussionHost(host) {
-		return "social/discussion pages often block direct readers or require JavaScript; use them as sentiment/claim evidence only unless a readable page source is returned."
+		return "social/discussion pages often block page readers, require JavaScript, or require login; use them as sentiment/claim evidence only unless a readable page source is returned."
 	}
 	if websource.IsLikelyCollectionPage(path) {
 		return "this looks like a broad collection/listing page; prefer a specific detail page, official API/text/export endpoint, docs page, or source repository before spending a direct page-reading call."
