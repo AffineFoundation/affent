@@ -1285,6 +1285,102 @@ func TestRunTurn_FinalNoToolsOnMaxTurnsForcesSummary(t *testing.T) {
 	}
 }
 
+func TestRunTurn_LengthAfterToolsForcesNoToolSummary(t *testing.T) {
+	var calls int32
+	var recoveryRequestHadTools atomic.Bool
+	var recoveryRequestHadPrompt atomic.Bool
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		body, _ := readReqBody(r)
+		w.Header().Set("Content-Type", "text/event-stream")
+		w.WriteHeader(200)
+		fl := w.(http.Flusher)
+		switch atomic.AddInt32(&calls, 1) {
+		case 1:
+			lines := []string{
+				`data: {"choices":[{"delta":{"role":"assistant","tool_calls":[{"index":0,"id":"c1","type":"function","function":{"name":"big","arguments":"{}"}}]},"finish_reason":null}]}`,
+				`data: {"choices":[{"delta":{},"finish_reason":"tool_calls"}]}`,
+				`data: [DONE]`,
+			}
+			for _, l := range lines {
+				w.Write([]byte(l + "\n\n"))
+				fl.Flush()
+			}
+		case 2:
+			w.Write([]byte(`data: {"choices":[{"delta":{"role":"assistant","content":"I will keep searching instead of answering."},"finish_reason":"length"}]}` + "\n\n"))
+			w.Write([]byte("data: [DONE]\n\n"))
+			fl.Flush()
+		default:
+			recoveryRequestHadTools.Store(strings.Contains(body, `"tools"`))
+			recoveryRequestHadPrompt.Store(strings.Contains(body, "The previous assistant response was cut off"))
+			w.Write([]byte(`data: {"choices":[{"delta":{"role":"assistant","content":"final concise answer from evidence"},"finish_reason":"stop"}]}` + "\n\n"))
+			w.Write([]byte("data: [DONE]\n\n"))
+			fl.Flush()
+		}
+	}))
+	t.Cleanup(srv.Close)
+
+	conv, err := OpenConversationAt(filepath.Join(t.TempDir(), "sess.jsonl"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	reg := NewRegistry()
+	reg.Add(fakeBigResultTool("evidence"))
+
+	events := make(chan sse.Event, 256)
+	loop := &Loop{
+		LLM: NewLLMClient(srv.URL, "", "fake-model"), Tools: reg, Conv: conv, Events: events,
+		MaxTurnSteps: 4, PerCallTimeout: 5 * time.Second,
+	}
+	if err := loop.EnsureSystemPrompt("base"); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := loop.SendUser(context.Background(), "go"); err != nil {
+		t.Fatal(err)
+	}
+
+	deadline := time.After(10 * time.Second)
+	var finalText string
+	for {
+		select {
+		case ev, ok := <-events:
+			if !ok {
+				t.Fatal("event channel closed before turn.end")
+			}
+			switch ev.Type {
+			case sse.TypeMessageDone:
+				var p sse.MessageDonePayload
+				if err := json.Unmarshal(ev.Data, &p); err != nil {
+					t.Fatalf("decode message.done: %v", err)
+				}
+				finalText = p.Text
+			case sse.TypeTurnEnd:
+				var p sse.TurnEndPayload
+				if err := json.Unmarshal(ev.Data, &p); err != nil {
+					t.Fatalf("decode turn.end: %v", err)
+				}
+				if p.Reason != sse.TurnEndCompleted {
+					t.Fatalf("expected completed after length recovery, got %q", p.Reason)
+				}
+				if finalText != "final concise answer from evidence" {
+					t.Fatalf("final answer missing after length recovery: %q", finalText)
+				}
+				if recoveryRequestHadTools.Load() {
+					t.Fatal("length recovery request must not include tools")
+				}
+				if !recoveryRequestHadPrompt.Load() {
+					t.Fatal("length recovery request should include the recovery prompt")
+				}
+				if got := atomic.LoadInt32(&calls); got != 3 {
+					t.Fatalf("LLM calls = %d, want 3", got)
+				}
+				return
+			}
+		case <-deadline:
+			t.Fatal("timeout waiting for turn.end")
+		}
+	}
+}
+
 func TestRunTurn_MaxToolCallsForcesNoToolSummary(t *testing.T) {
 	var calls int32
 	var secondToolRan int32

@@ -193,6 +193,33 @@ func TestBufferChatCompletion_PrefersModelFinishReason(t *testing.T) {
 	}
 }
 
+func TestBufferChatCompletion_ReturnsTerminalAnswerOnly(t *testing.T) {
+	ch := make(chan sse.Event, 16)
+	turnID := "turn-test"
+	pushMessageDelta(ch, turnID, "I will keep searching.")
+	pushMessageDone(ch, turnID, "I will keep searching.", "tool_calls")
+	pushMessageDelta(ch, turnID, "final answer")
+	pushMessageDone(ch, turnID, "final answer", "stop")
+	pushTurnEnd(ch, turnID, sse.TurnEndCompleted)
+
+	pool := newTestPool(t, 4, "5m")
+	sess, _ := pool.GetOrCreate("buf-terminal")
+	out, err := bufferChatCompletion(context.Background(), sess, turnID, ch)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if out.Content != "final answer" {
+		t.Fatalf("Content = %q, want terminal answer only", out.Content)
+	}
+}
+
+func pushMessageDelta(ch chan sse.Event, turnID, delta string) {
+	ev, _ := sse.NewEvent(sse.TypeMessageDelta, sse.MessageDeltaPayload{
+		TurnID: turnID, Delta: delta,
+	})
+	ch <- ev
+}
+
 func pushMessageDone(ch chan sse.Event, turnID, text, finish string) {
 	ev, _ := sse.NewEvent(sse.TypeMessageDone, sse.MessageDonePayload{
 		TurnID: turnID, Text: text, FinishReason: finish,

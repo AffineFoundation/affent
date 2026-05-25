@@ -259,7 +259,17 @@ func bufferChatCompletion(ctx context.Context, sess *Session, turnID string, ch 
 				// is the one that carries the terminal reason.
 				var p sse.MessageDonePayload
 				if err := json.Unmarshal(ev.Data, &p); err == nil {
-					if p.FinishReason != "" && p.FinishReason != "tool_calls" {
+					if p.FinishReason == "tool_calls" {
+						out.Content = ""
+						continue
+					}
+					if p.Text != "" {
+						// Non-streaming OpenAI responses should expose the
+						// terminal assistant answer, not concatenate every
+						// progress note a model emitted before tool calls.
+						out.Content = p.Text
+					}
+					if p.FinishReason != "" {
 						out.FinishReason = p.FinishReason
 					}
 				}

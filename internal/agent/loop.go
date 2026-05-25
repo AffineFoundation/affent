@@ -756,6 +756,27 @@ func (l *Loop) runTurn(ctx context.Context, turnID, userText string, opts TurnOp
 		totalOut += final.OutputTokens
 
 		if len(final.Final.ToolCalls) == 0 {
+			if final.Reason == "length" && toolCallsUsed > 0 {
+				recovered, reason, err := l.runLengthRecoveryStep(ctx, turnID)
+				if err != nil {
+					endReason = reason
+					break
+				}
+				if recovered != nil {
+					totalIn += recovered.InputTokens
+					totalOut += recovered.OutputTokens
+					if len(recovered.Final.ToolCalls) == 0 {
+						toolStats.ForcedNoTools++
+						finishedNaturally = true
+						break
+					}
+					skipped := l.appendSkippedToolResults(turnID, recovered.Final.ToolCalls, "(previous answer was truncated; final no-tool answer requested)")
+					toolStats.ToolRequests += skipped
+					toolStats.ToolErrors += skipped
+				}
+				endReason = sse.TurnEndMaxTurns
+				break
+			}
 			finishedNaturally = true
 			break
 		}
@@ -1506,6 +1527,18 @@ func (l *Loop) maxToolCallsForTurn(opts TurnOptions) int {
 
 func (l *Loop) finalNoToolsOnMaxTurnsForTurn(opts TurnOptions) bool {
 	return l.FinalNoToolsOnMaxTurns || opts.FinalNoToolsOnMaxTurns
+}
+
+const lengthRecoveryPrompt = `The previous assistant response was cut off while summarizing evidence gathered in this turn.
+
+Do not call tools. Produce the final answer now from the existing tool results. Keep it concise, separate verified facts from gaps, and avoid process narration such as "I will continue" or "let me search".`
+
+func (l *Loop) runLengthRecoveryStep(ctx context.Context, turnID string) (*FinishInfo, string, error) {
+	if err := l.Conv.Append(ChatMessage{Role: "user", Content: lengthRecoveryPrompt}); err != nil {
+		l.Log.Error().Err(err).Str("turn_id", turnID).Msg("conv append length recovery prompt")
+		return nil, sse.TurnEndError, err
+	}
+	return l.runStep(ctx, turnID, nil)
 }
 
 func (l *Loop) toolResultMaxBytesInContext() int {
