@@ -17,7 +17,7 @@ describe("turnNavigator view model", () => {
     ]);
 
     expect(view.countLabel).toBe("2 messages");
-    expect(view.summary).toBe("2 done · 1 action");
+    expect(view.summary).toBe("Latest · summarize findings");
     expect(view.items.map((item) => item.current)).toEqual([false, true]);
     expect(view.items[0].summary).toBe("inspect repo");
     expect(view.items[0].activityLabel).toBe("Action summary");
@@ -34,7 +34,7 @@ describe("turnNavigator view model", () => {
       { turn: turn({ id: "t2", userText: "older imported turn" }), turnNumber: 2 },
     ]);
 
-    expect(view.summary).toBe("1 working");
+    expect(view.summary).toBe("Working · current work");
     expect(view.items.map((item) => item.current)).toEqual([true, false]);
     expect(view.current?.turnNumber).toBe(1);
     expect(view.items[0].statusLabel).toBe("Working");
@@ -50,7 +50,7 @@ describe("turnNavigator view model", () => {
     );
 
     expect(view.countLabel).toBe("2 messages");
-    expect(view.summary).toBe("1 sending");
+    expect(view.summary).toBe("Sending · explain main.go");
     expect(view.items.map((item) => item.current)).toEqual([false, true]);
     expect(view.current).toMatchObject({
       id: "__pending__",
@@ -109,7 +109,7 @@ describe("turnNavigator view model", () => {
       },
     ]);
 
-    expect(view.summary).toBe("1 done · 1 tool issue · 2 actions");
+    expect(view.summary).toBe("Answer · I found enough information to answer.");
     expect(view.current?.statusLabel).toBe("Done");
     expect(view.current?.statusTone).toBe("completed");
   });
@@ -126,7 +126,7 @@ describe("turnNavigator view model", () => {
       },
     ]);
 
-    expect(view.summary).toBe("1 issue · 1 action");
+    expect(view.summary).toBe("Needs attention · List files: Failed");
     expect(view.current?.statusTone).toBe("error");
   });
 
@@ -152,7 +152,7 @@ describe("turnNavigator view model", () => {
       },
     ]);
 
-    expect(view.summary).toBe("1 done · 1 continued · 2 actions");
+    expect(view.summary).toBe("Answer · Final report.");
     expect(view.items[0].statusLabel).toBe("Continued");
     expect(view.items[0].statusTone).toBe("muted");
     expect(view.items[0].activityLabel).toBe("Handoff");
@@ -181,7 +181,7 @@ describe("turnNavigator view model", () => {
       },
     ]);
 
-    expect(view.summary).toBe("1 done · 1 continued · 1 tool issue · 3 actions");
+    expect(view.summary).toBe("Answer · Final report.");
   });
 
   it("summarizes cumulative token use across conversation steps", () => {
@@ -204,7 +204,7 @@ describe("turnNavigator view model", () => {
       },
     ]);
 
-    expect(view.summary).toBe("2 done · 3.6k tokens");
+    expect(view.summary).toBe("Latest · finish the report");
   });
 
   it("uses the assistant answer as the map digest when no action summary exists", () => {

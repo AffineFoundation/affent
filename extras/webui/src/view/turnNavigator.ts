@@ -45,11 +45,13 @@ export function buildTurnNavigatorView(items: readonly TurnNavSourceItem[], pend
     const summary = turnSummary(turn);
     const activity = buildTurnActivity(turn, { continuedAfterLimit, continuedIntoTurnNumber });
     const answerDigest = answerDigestForTurn(turn, summary);
-    const activitySummary = activity?.digest.summary && activity.digest.summary !== summary
-      ? summarize(activity.digest.summary, 74)
-      : answerDigest?.summary;
-    const activityLabel = activitySummary ? activity?.digest.label ?? answerDigest?.label : undefined;
-    const activityTone = activity?.digest.tone ?? answerDigest?.tone;
+    const activityDigest = activity?.digest.summary && activity.digest.summary !== summary
+      ? { label: activity.digest.label, summary: summarize(activity.digest.summary, 74), tone: activity.digest.tone }
+      : undefined;
+    const digest = preferAnswerDigest(activityDigest, answerDigest);
+    const activitySummary = digest?.summary;
+    const activityLabel = digest?.label;
+    const activityTone = digest?.tone;
     const current = turn.id === currentId;
     const actionCount = turn.toolCalls.length;
     const activitySuffix = activitySummary && activityLabel ? ` — ${activityLabel}: ${activitySummary}` : "";
@@ -94,10 +96,11 @@ export function buildTurnNavigatorView(items: readonly TurnNavSourceItem[], pend
     });
   }
 
+  const current = viewItems.find((item) => item.current);
   return {
     countLabel: `${viewItems.length} ${pluralize("message", viewItems.length)}`,
-    summary: turnNavSummary(items, Boolean(pending)),
-    current: viewItems.find((item) => item.current),
+    summary: turnNavSummary(current),
+    current,
     items: viewItems,
   };
 }
@@ -107,27 +110,31 @@ function currentTurnId(items: readonly TurnNavSourceItem[]): string | undefined 
   return running?.turn.id ?? items.at(-1)?.turn.id;
 }
 
-function turnNavSummary(items: readonly TurnNavSourceItem[], pending: boolean): string {
-  const running = items.filter(({ turn }) => turn.status === "running").length;
-  const unresolved = items.filter(({ turn }, index) => turnNeedsAttention(turn, { continuedAfterLimit: turnContinuedAfterLimit(items, index) })).length;
-  const continued = items.filter((_, index) => turnContinuedAfterLimit(items, index)).length;
-  const toolIssues = items.reduce((sum, { turn }, index) => (
-    sum + settledToolIssueCount(turn, { continuedAfterLimit: turnContinuedAfterLimit(items, index) })
-  ), 0);
-  const completed = items.filter(({ turn }) => turn.status === "completed").length;
-  const actions = items.reduce((sum, { turn }) => sum + turn.toolCalls.length, 0);
-  const tokens = items.reduce((sum, { turn }) => sum + turnTokenCount(turn), 0);
-  const parts: string[] = [];
+function turnNavSummary(current: TurnNavViewItem | undefined): string {
+  if (!current) return "No messages yet";
+  const focus = current.pending ? current.summary : current.activitySummary || current.summary;
+  const label = current.pending
+    ? "Sending"
+    : current.statusTone === "running"
+      ? "Working"
+      : current.statusTone === "error" || current.statusTone === "max_turns"
+        ? "Needs attention"
+        : current.activityLabel ?? "Latest";
+  return `${label} · ${summarize(focus, 74)}`;
+}
 
-  if (pending) parts.push("1 sending");
-  else if (running > 0) parts.push(`${running} working`);
-  else if (unresolved > 0) parts.push(`${unresolved} ${pluralize("issue", unresolved)}`);
-  else parts.push(`${completed} done`);
-  if (continued > 0) parts.push(`${continued} continued`);
-  if (toolIssues > 0) parts.push(`${toolIssues} tool ${pluralize("issue", toolIssues)}`);
-  if (actions > 0) parts.push(`${actions} ${pluralize("action", actions)}`);
-  if (tokens > 0) parts.push(`${formatCount(tokens)} tokens`);
-  return parts.join(" · ");
+function preferAnswerDigest(
+  activity: { label: string; summary: string; tone: string } | undefined,
+  answer: { label: string; summary: string; tone: string } | undefined,
+): { label: string; summary: string; tone: string } | undefined {
+  if (!activity) return answer;
+  if (answer && (activity.label === "Process" || isMechanicalActivitySummary(activity.summary))) return answer;
+  return activity;
+}
+
+function isMechanicalActivitySummary(summary: string): boolean {
+  return /^(\d+ )?actions? completed(?:;|\.|$)/i.test(summary) ||
+    summary === "No action details.";
 }
 
 function turnSummary(turn: TurnState): string {
@@ -177,27 +184,10 @@ function turnNeedsAttention(turn: TurnState, opts: { continuedAfterLimit?: boole
   return turn.toolCalls.some((call) => call.status === "error");
 }
 
-function settledToolIssueCount(turn: TurnState, opts: { continuedAfterLimit?: boolean } = {}): number {
-  if (turnNeedsAttention(turn, opts)) return 0;
-  if (turn.status !== "completed" || !turn.assistantText.trim()) return 0;
-  return turn.toolCalls.filter((call) => call.status === "error").length;
-}
-
-function turnTokenCount(turn: TurnState): number {
-  if (!turn.usage) return 0;
-  return turn.usage.inputTokens + turn.usage.outputTokens;
-}
-
 function turnContinuedAfterLimit(items: readonly TurnNavSourceItem[], index: number): boolean {
   return items[index]?.turn.status === "max_turns" && index < items.length - 1;
 }
 
 function pluralize(label: string, count: number): string {
   return count === 1 ? label : `${label}s`;
-}
-
-function formatCount(value: number): string {
-  if (value < 1000) return String(value);
-  if (value < 10_000) return `${(value / 1000).toFixed(1)}k`;
-  return `${Math.round(value / 1000)}k`;
 }

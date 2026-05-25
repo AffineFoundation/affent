@@ -593,7 +593,7 @@ test("workflow timeline renders with inline drill-down", async ({ page }, testIn
   await expect(page.getByTestId("turn-card")).toHaveCount(2);
   await expect(page.getByTestId("conversation-map")).toContainText("show a large artifact");
   await expect(page.getByTestId("conversation-map")).toContainText("Messages");
-  await expect(page.getByTestId("conversation-map")).toContainText("2 messages · 2 done · 3 actions");
+  await expect(page.getByTestId("conversation-map")).toContainText("2 messages · Action summary · large result preview");
   await expect(page.getByTestId("turn-nav-glance")).toContainText("delegate docs inspection");
   await expect(page.getByTestId("turn-nav-glance")).toContainText("WebUI must render trace details as expandable runtime structure.");
   await expect(page.getByTestId("conversation-map")).toContainText("Current · Done");

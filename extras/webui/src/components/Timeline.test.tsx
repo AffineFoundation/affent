@@ -75,7 +75,7 @@ describe("Timeline", () => {
     const nav = screen.getByTestId("turn-navigator");
     expect(within(nav).getByText("Messages")).toBeInTheDocument();
     expect(within(nav).getByRole("button", { name: "Search" })).toHaveAttribute("aria-pressed", "false");
-    expect(within(nav).getByText("2 messages · 2 done · 1 action · 138 tokens")).toBeInTheDocument();
+    expect(within(nav).getByText("2 messages · Answer · no tool needed")).toBeInTheDocument();
     expect(within(nav).queryByTestId("turn-nav-current")).toBeNull();
     expect(within(nav).getByTestId("turn-nav-progress")).toBeInTheDocument();
     expect(within(nav).getByTestId("turn-nav-glance")).toBeInTheDocument();
