@@ -465,7 +465,32 @@ describe("Timeline", () => {
 
     await user.click(screen.getByRole("button", { name: "Retry from here" }));
 
-    expect(onUseAsDraft).toHaveBeenCalledWith("Retry from this reply: There are two files.", "retry_reply");
+    expect(onUseAsDraft).toHaveBeenCalledWith("Retry from this reply:\n\nThere are two files.", "retry_reply");
+  });
+
+  it("keeps markdown structure when retrying an assistant reply", async () => {
+    const user = userEvent.setup();
+    const onUseAsDraft = vi.fn();
+    renderTimeline([
+      { id: 0, type: "turn.start", data: { turn_id: "t1" } },
+      { id: 1, type: "user.message", data: { turn_id: "t1", text: "show the summary" } },
+      {
+        id: 2,
+        type: "message.done",
+        data: {
+          turn_id: "t1",
+          text: "# Summary\n\n- alpha\n- beta\n\n```ts\nconst value = 1;\n```",
+        },
+      },
+      { id: 3, type: "turn.end", data: { turn_id: "t1", reason: "completed" } },
+    ], "s1", undefined, onUseAsDraft);
+
+    await user.click(screen.getByRole("button", { name: "Retry from here" }));
+
+    expect(onUseAsDraft).toHaveBeenCalledWith(
+      "Retry from this reply:\n\n# Summary\n\n- alpha\n- beta\n\n```ts\nconst value = 1;\n```",
+      "retry_reply",
+    );
   });
 
   it("reuses a previous user message as an editable draft", async () => {
@@ -556,7 +581,10 @@ describe("Timeline", () => {
 
     await user.click(screen.getByRole("button", { name: "Retry from here" }));
 
-    expect(onUseAsDraft).toHaveBeenCalledWith("Retry from this reply: Action output was truncated line 1 line 2 …(truncated) Full output is available below.", "retry_reply");
+    expect(onUseAsDraft).toHaveBeenCalledWith(
+      "Retry from this reply:\n\nAction output was truncated\nline 1\nline 2\n…(truncated)\nFull output is available below.",
+      "retry_reply",
+    );
   });
 
   it("shows original versus executed args for repaired tool calls", async () => {

@@ -368,13 +368,13 @@ describe("Composer", () => {
       <Composer
         disabled={false}
         busy={false}
-        draft={{ id: 1, content: "Retry from this reply: There are two files.", source: "retry_reply" }}
+        draft={{ id: 1, content: "Retry from this reply:\n\nThere are two files.", source: "retry_reply" }}
         onSubmit={vi.fn()}
         onCancel={vi.fn()}
       />,
     );
 
-    expect(screen.getByPlaceholderText("Message Affent...")).toHaveValue("Retry from this reply: There are two files.");
+    expect(screen.getByPlaceholderText("Message Affent...")).toHaveValue("Retry from this reply:\n\nThere are two files.");
     expect(screen.getByTestId("composer-intent")).toHaveTextContent("Retry ready");
     expect(screen.getByTestId("composer-context")).toHaveTextContent("Retrying from reply");
     expect(screen.getByRole("button", { name: "Retry" })).toBeEnabled();

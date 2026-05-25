@@ -1093,7 +1093,7 @@ describe("App", () => {
     await user.click(await screen.findByRole("button", { name: "Retry from here" }));
 
     expect(screen.getByPlaceholderText("Message Affent...")).toHaveValue(
-      "Retry from this reply: There are two files.",
+      "Retry from this reply:\n\nThere are two files.",
     );
     expect(screen.getByTestId("composer-context")).toHaveTextContent("Retrying from reply");
     expect(screen.getByRole("button", { name: "Retry" })).toBeEnabled();

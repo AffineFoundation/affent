@@ -726,11 +726,12 @@ function fallbackDraft(answer: FallbackAnswer): string {
 }
 
 function retryReplyDraft(text: string): string {
-  return `Retry from this reply: ${summarize(text, 160)}`;
+  const reply = text.trim();
+  return reply ? `Retry from this reply:\n\n${reply}` : "Retry from this reply:";
 }
 
 function retryFallbackDraft(answer: FallbackAnswer): string {
-  return `Retry from this reply: ${summarize(fallbackAnswerText(answer), 160)}`;
+  return `Retry from this reply:\n\n${fallbackAnswerText(answer).trim()}`;
 }
 
 function buildFallbackAnswer(turn: TurnState, opts: { continuedAfterLimit?: boolean } = {}): FallbackAnswer | undefined {
