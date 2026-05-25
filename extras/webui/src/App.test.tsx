@@ -551,7 +551,10 @@ describe("App", () => {
       const activity = screen.getAllByTestId("agent-activity");
       expect(activity.some((node) => node.textContent?.includes("Fetch example.com/bittensor"))).toBe(true);
     });
-    expect(screen.getByTestId("chat-context-bar")).toHaveTextContent("Bittensor");
+    expect(screen.getByTestId("chat-context-bar").querySelector(".chat-context-primary")).toHaveTextContent(
+      "Fetch example.com/bittensor",
+    );
+    expect(screen.getByTestId("chat-context-bar").querySelector(".chat-context-topic")).toBeNull();
     expect(fetchImpl).toHaveBeenCalledWith("/v1/sessions/saved-1/history?after=-1&limit=500", expect.anything());
     expect(historyCalls).toBeGreaterThanOrEqual(2);
   });
@@ -819,6 +822,9 @@ describe("App", () => {
 
     render(<App />);
 
+    const context = await screen.findByTestId("chat-context-bar");
+    expect(context).toHaveTextContent("Working");
+    expect(context.querySelector(".chat-context-topic")).toBeNull();
     await user.click(await screen.findByRole("button", { name: "Guide run" }));
     await user.type(screen.getByPlaceholderText("Message Affent..."), "check tests first");
     await user.click(within(screen.getByTestId("composer")).getByRole("button", { name: "Send guidance" }));

@@ -624,7 +624,7 @@ interface ChatContextDisplay {
 
 function chatContextDisplay(overview: SessionOverview): ChatContextDisplay {
   const primary = chatContextPrimary(overview);
-  if (overview.tone === "success") {
+  if (overview.tone === "success" || (overview.tone === "running" && overview.stateLabel !== "Sending" && overview.stateLabel !== "Sending guidance")) {
     return {
       primary,
       secondary: undefined,
