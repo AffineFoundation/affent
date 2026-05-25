@@ -616,15 +616,25 @@ function compactContextText(text: string, limit: number): string {
 
 function RuntimeStatusBar({ view }: { view: RuntimeCapabilityView }) {
   return (
-    <details className="runtime-status-bar" data-tone={view.tone} data-testid="runtime-capabilities">
+    <details
+      className="runtime-status-bar"
+      data-tone={view.tone}
+      data-testid="runtime-capabilities"
+      aria-label={`${view.headline}. ${view.detail}`}
+    >
       <summary>
-        <span className="runtime-status-kicker">Chat setup</span>
+        <span className="runtime-status-kicker">Abilities</span>
         <span className="runtime-capability-title">{view.headline}</span>
-        <span className="runtime-capability-detail">{view.detail}</span>
+        <span className="runtime-capability-detail">
+          <span className="runtime-capability-separator" aria-hidden="true">·</span>
+          {view.detail}
+        </span>
       </summary>
       <div className="runtime-capability-chips">
         {view.chips.map((chip) => (
-          <span key={chip.label} data-tone={chip.tone}>
+          <span key={`${chip.group}:${chip.label}`} data-tone={chip.tone}>
+            <b>{chip.group}</b>
+            {" "}
             {chip.label}
           </span>
         ))}

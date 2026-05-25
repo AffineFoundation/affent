@@ -240,8 +240,9 @@ test("composer warns before current-web tasks when web access is unavailable", a
 
   await page.goto("/");
 
-  await expect(page.getByTestId("runtime-capabilities")).toContainText("Local work only");
-  await expect(page.getByTestId("runtime-capabilities")).toContainText("Research: off");
+  await expect(page.getByTestId("runtime-capabilities")).toContainText("Local project work");
+  await expect(page.getByTestId("runtime-capabilities")).toContainText("Research off");
+  await expect(page.getByTestId("runtime-capabilities")).toContainText("Workers subagents depth 2 + 2 focused tasks");
   await page.getByPlaceholder("Message Affent...").fill("Analyze Affine recent market trends and Twitter reaction");
   await expect(page.getByTestId("composer-task-hint")).toContainText("Current web info unavailable");
   await expect(page.getByTestId("composer-task-hint")).toContainText("results may be incomplete");

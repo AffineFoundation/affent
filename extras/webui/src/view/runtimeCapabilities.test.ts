@@ -29,16 +29,16 @@ describe("buildRuntimeCapabilityView", () => {
     });
 
     expect(view).toMatchObject({
-      headline: "Research ready",
-      detail: "Live search and page browsing are available for current information.",
+      headline: "Ready for web research",
+      detail: "This chat can search the web or open pages while answering.",
       tone: "ready",
       research: "ready",
     });
     expect(view?.chips).toEqual([
-      { label: "Research: search + browser", tone: "ready" },
-      { label: "Files ready", tone: "ready" },
-      { label: "Delegation: 2 levels + 4 helpers", tone: "ready" },
-      { label: "Memory on", tone: "ready" },
+      { group: "Research", label: "search + browser", tone: "ready" },
+      { group: "Project tools", label: "files + shell", tone: "ready" },
+      { group: "Workers", label: "subagents depth 2 + 4 focused tasks", tone: "ready" },
+      { group: "Memory", label: "enabled", tone: "ready" },
     ]);
   });
 
@@ -60,14 +60,14 @@ describe("buildRuntimeCapabilityView", () => {
       focused_task_profiles: ["recall", "explore"],
     });
 
-    expect(view?.headline).toBe("Local work only");
+    expect(view?.headline).toBe("Local project work");
     expect(view?.research).toBe("off");
     expect(view?.detail).toContain("cannot gather current web information");
     expect(view?.chips).toEqual(expect.arrayContaining([
-      { label: "Research: off", tone: "warning" },
-      { label: "Files unavailable", tone: "muted" },
-      { label: "Delegation: 2 levels + 2 helpers", tone: "ready" },
-      { label: "Memory on", tone: "ready" },
+      { group: "Research", label: "off", tone: "warning" },
+      { group: "Project tools", label: "unavailable", tone: "muted" },
+      { group: "Workers", label: "subagents depth 2 + 2 focused tasks", tone: "ready" },
+      { group: "Memory", label: "enabled", tone: "ready" },
     ]));
   });
 
@@ -89,16 +89,16 @@ describe("buildRuntimeCapabilityView", () => {
     });
 
     expect(view).toMatchObject({
-      headline: "Research limited",
-      detail: "Some web tools are available, but live search or page browsing is missing.",
+      headline: "Research tools limited",
+      detail: "Some web access exists, but live search or page browsing is incomplete.",
       tone: "warning",
       research: "limited",
     });
     expect(view?.chips).toEqual([
-      { label: "Research: limited", tone: "warning" },
-      { label: "Files ready", tone: "ready" },
-      { label: "Single worker", tone: "muted" },
-      { label: "Memory off", tone: "muted" },
+      { group: "Research", label: "limited", tone: "warning" },
+      { group: "Project tools", label: "files + shell", tone: "ready" },
+      { group: "Workers", label: "single agent", tone: "muted" },
+      { group: "Memory", label: "off", tone: "muted" },
     ]);
   });
 });

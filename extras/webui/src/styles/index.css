@@ -547,12 +547,20 @@ body {
 
 .runtime-capability-detail {
   grid-column: 3;
+  display: inline-flex;
+  gap: 7px;
+  align-items: baseline;
   min-width: 120px;
   overflow: hidden;
   color: var(--text-faint);
   font-size: 12px;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.runtime-capability-separator {
+  color: var(--text-faint);
+  font-weight: 750;
 }
 
 .runtime-capability-chips {
@@ -570,6 +578,9 @@ body {
 
 .runtime-capability-chips span {
   flex: 0 0 auto;
+  display: inline-flex;
+  gap: 5px;
+  align-items: baseline;
   border: 1px solid rgba(217, 224, 232, 0.82);
   border-radius: 999px;
   padding: 1px 7px;
@@ -577,6 +588,14 @@ body {
   color: var(--text-muted);
   font-size: 11.5px;
   font-weight: 650;
+}
+
+.runtime-capability-chips b {
+  color: var(--text-faint);
+  font-size: 10.5px;
+  font-weight: 750;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
 }
 
 .runtime-capability-chips span[data-tone="ready"] {
@@ -5490,6 +5509,9 @@ pre.code {
     flex: 1 1 180px;
     min-width: 0;
     white-space: normal;
+  }
+  .runtime-capability-separator {
+    display: none;
   }
   .runtime-capability-chips {
     flex: 1 0 100%;
