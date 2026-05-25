@@ -791,7 +791,7 @@ func TestConfig_Validate_RejectsUnusedFeatureSubOptions(t *testing.T) {
 	}
 }
 
-func TestConfig_ValidateWebSearchRequiresBackendKey(t *testing.T) {
+func TestConfig_ValidateWebSearchAllowsHTMLFallbackWithoutKeys(t *testing.T) {
 	t.Setenv("AFFENT_WEB_SEARCH_PROVIDER", "")
 	t.Setenv("TAVILY_API_KEY", "")
 	t.Setenv("GOOGLE_CSE_API_KEY", "")
@@ -807,14 +807,8 @@ func TestConfig_ValidateWebSearchRequiresBackendKey(t *testing.T) {
 	if err := cfg.Resolve(); err != nil {
 		t.Fatal(err)
 	}
-	err := cfg.Validate()
-	if err == nil || !strings.Contains(err.Error(), "enable_web_search requires a search backend") {
-		t.Fatalf("Validate error = %v, want missing search backend", err)
-	}
-
-	t.Setenv("TAVILY_API_KEY", "test-key")
 	if err := cfg.Validate(); err != nil {
-		t.Fatalf("Validate with Tavily key: %v", err)
+		t.Fatalf("Validate without API keys should fall back to HTML search: %v", err)
 	}
 }
 

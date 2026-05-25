@@ -717,10 +717,7 @@ func validateSearchBackendEnv() error {
 	}
 	switch provider {
 	case "auto":
-		if configuredSearchBackendName() != "unconfigured" {
-			return nil
-		}
-		return errors.New("enable_web_search requires a search backend: set TAVILY_API_KEY, or set AFFENT_WEB_SEARCH_PROVIDER=google with GOOGLE_CSE_API_KEY/GOOGLE_API_KEY and GOOGLE_CSE_ID/GOOGLE_SEARCH_ENGINE_ID")
+		return nil
 	case "tavily":
 		if tavilySearchConfigured() {
 			return nil
@@ -745,7 +742,7 @@ func configuredSearchBackendName() string {
 		if googleSearchConfigured() {
 			return "google"
 		}
-		return "unconfigured"
+		return "html"
 	case "tavily", "google":
 		return provider
 	default:

@@ -474,8 +474,9 @@ Operational endpoints:
 - `GET /v1/stats` - authenticated runtime stats, including build metadata,
   session/tool/browser counters, runtime turn-end/error counters, and
   configured runtime boundaries. When `web_search` is enabled,
-  `web_search_backend` reports the non-secret active backend name (`tavily` or
-  `google`). `runtime.turn_end_by_reason.max_turns`
+  `web_search_backend` reports the non-secret active backend name
+  (`tavily`, `google`, or `html` for the default public-search-page
+  fallback chain). `runtime.turn_end_by_reason.max_turns`
   indicates the agent exhausted its per-turn action budget before a final
   answer; `runtime.runtime_error_by_kind` tracks non-tool failures such as
   `llm_timeout` and `llm_incomplete_stream`.

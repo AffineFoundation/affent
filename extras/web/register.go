@@ -47,7 +47,10 @@ import agent "github.com/affinefoundation/affent/internal/agent"
 type Options struct {
 	Fetch FetchConfig
 	// SearchProvider overrides the env-selected default provider when set.
-	// Leave nil to use AFFENT_WEB_SEARCH_PROVIDER (auto/tavily/google).
+	// Leave nil to use the ordered default chain selected by
+	// AFFENT_WEB_SEARCH_PROVIDER (auto/tavily/google), which falls
+	// back to public search pages when no API-backed backend is
+	// configured.
 	SearchProvider SearchProvider
 	// MaxSearchResults caps the per-query result count. Default 8.
 	MaxSearchResults int
@@ -63,9 +66,9 @@ func RegisterFetch(reg *agent.Registry, cfg FetchConfig) {
 }
 
 // RegisterAll adds web_fetch and (unless SkipSearch is true) web_search
-// to reg. Returns an error if web_search is requested but no provider
-// is available — the caller can recover by setting SkipSearch and
-// calling RegisterFetch directly.
+// to reg. The default search provider selection is centralized so the
+// caller gets a single, predictable provider chain instead of ad hoc
+// fallback logic at each call site.
 //
 // On failure, every tool this call added is removed from reg before
 // returning so the caller doesn't end up with a half-registered
@@ -77,7 +80,7 @@ func RegisterAll(reg *agent.Registry, opts Options) error {
 	}
 	provider := opts.SearchProvider
 	if provider == nil {
-		p, err := NewDefaultSearchProvider()
+		p, err := NewDefaultSearchProviderWithFallback(opts.Fetch.RenderedFallback)
 		if err != nil {
 			reg.Remove("web_fetch")
 			return err

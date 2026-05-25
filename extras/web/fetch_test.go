@@ -1415,6 +1415,21 @@ func TestNewDefaultSearchProviderAutoPrefersExistingTavilyDefault(t *testing.T) 
 	}
 }
 
+func TestNewDefaultSearchProviderAutoFallsBackToHTML(t *testing.T) {
+	t.Setenv("AFFENT_WEB_SEARCH_PROVIDER", "")
+	t.Setenv("TAVILY_API_KEY", "")
+	t.Setenv("GOOGLE_API_KEY", "")
+	t.Setenv("GOOGLE_SEARCH_ENGINE_ID", "")
+
+	got, err := NewDefaultSearchProvider()
+	if err != nil {
+		t.Fatalf("NewDefaultSearchProvider: %v", err)
+	}
+	if _, ok := got.(*htmlSearchProvider); !ok {
+		t.Fatalf("provider = %T, want *htmlSearchProvider", got)
+	}
+}
+
 func TestNewDefaultSearchProviderRejectsUnknownProvider(t *testing.T) {
 	t.Setenv("AFFENT_WEB_SEARCH_PROVIDER", "google-html")
 
@@ -1456,6 +1471,90 @@ func TestGoogleProviderSearch(t *testing.T) {
 	}
 	if len(got) != 2 || got[0].Title != "Affine subnet" || got[0].URL != "https://taostats.io/subnets/120" || got[0].Snippet != "Subnet 120 metrics" {
 		t.Fatalf("results = %#v", got)
+	}
+}
+
+func TestHTMLSearchProviderParsesBingStyleHTML(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "text/html; charset=utf-8")
+		_, _ = w.Write([]byte(`<!doctype html><html><body>
+<ol>
+  <li class="b_algo">
+    <h2><a href="/subnets/120">Affine subnet</a></h2>
+    <div class="b_caption"><p>Subnet 120 metrics</p></div>
+  </li>
+  <li class="b_algo">
+    <h2><a href="https://docs.example/affine">Affine docs</a></h2>
+    <div class="b_caption"><p>Docs and overview</p></div>
+  </li>
+</ol>
+</body></html>`))
+	}))
+	defer srv.Close()
+
+	p := &htmlSearchProvider{
+		HTTP: srv.Client(),
+		engines: []searchEngineConfig{
+			{
+				Name:      "bing",
+				URL:       func(string) string { return srv.URL + "/search?q=Affine" },
+				ParseHTML: parseBingSearchResults,
+			},
+		},
+	}
+	got, err := p.Search(context.Background(), "Affine subnet", 2)
+	if err != nil {
+		t.Fatalf("Search: %v", err)
+	}
+	if len(got) != 2 {
+		t.Fatalf("results len = %d, want 2: %#v", len(got), got)
+	}
+	if got[0].Title != "Affine subnet" || got[0].URL != srv.URL+"/subnets/120" || got[0].Snippet != "Subnet 120 metrics" {
+		t.Fatalf("first result = %#v", got[0])
+	}
+	if got[1].Title != "Affine docs" || got[1].URL != "https://docs.example/affine" || got[1].Snippet != "Docs and overview" {
+		t.Fatalf("second result = %#v", got[1])
+	}
+}
+
+func TestHTMLSearchProviderUsesRenderedFallback(t *testing.T) {
+	var gotURL string
+	var gotReason FetchFallbackReason
+	p := &htmlSearchProvider{
+		HTTP: &http.Client{Transport: roundTripFunc(func(req *http.Request) (*http.Response, error) {
+			gotURL = req.URL.String()
+			return &http.Response{
+				StatusCode: http.StatusForbidden,
+				Status:     "403 Forbidden",
+				Header:     http.Header{"Content-Type": []string{"text/html; charset=utf-8"}},
+				Body:       io.NopCloser(strings.NewReader("<html><body>blocked</body></html>")),
+				Request:    req,
+			}, nil
+		})},
+		RenderedFallback: func(_ context.Context, requestURL string, reason FetchFallbackReason) (string, error) {
+			gotReason = reason
+			if requestURL == "" {
+				t.Fatal("fallback should receive a request URL")
+			}
+			return "SourceAccess: browser_rendered_url=" + requestURL + "; snapshot_id=1; page_text_below=search_results_discovery_only\nURL: " + requestURL + "\nTITLE: search\nINTERACTIVE ELEMENTS:\n[1] link \"Affine subnet\" → https://taostats.io/subnets/120\n[2] link \"Affine docs\" → https://docs.example/affine\nPAGE TEXT:\np: Affine subnet | Subnet 120 metrics | Docs and overview\n", nil
+		},
+		engines: []searchEngineConfig{
+			{
+				Name:      "bing",
+				URL:       func(string) string { return "https://www.bing.com/search?q=Affine" },
+				ParseHTML: parseBingSearchResults,
+			},
+		},
+	}
+	got, err := p.Search(context.Background(), "Affine subnet", 2)
+	if err != nil {
+		t.Fatalf("Search: %v", err)
+	}
+	if gotURL == "" || gotReason.Kind != "search_results_page" || !strings.Contains(gotReason.Detail, "bing") {
+		t.Fatalf("fallback reason not populated: url=%q reason=%+v", gotURL, gotReason)
+	}
+	if len(got) != 2 || got[0].URL != "https://taostats.io/subnets/120" || got[1].URL != "https://docs.example/affine" {
+		t.Fatalf("rendered fallback results = %#v", got)
 	}
 }
 

@@ -17,6 +17,7 @@ import (
 
 	agent "github.com/affinefoundation/affent/internal/agent"
 	"github.com/affinefoundation/affent/internal/websource"
+	"golang.org/x/net/html"
 )
 
 // SearchResult is one hit returned by SearchProvider.
@@ -374,6 +375,14 @@ type TavilyProvider struct {
 // configured. Google accepts GOOGLE_CSE_API_KEY/GOOGLE_CSE_ID, plus common
 // aliases such as GOOGLE_API_KEY and GOOGLE_SEARCH_ENGINE_ID.
 func NewDefaultSearchProvider() (SearchProvider, error) {
+	return NewDefaultSearchProviderWithFallback(nil)
+}
+
+// NewDefaultSearchProviderWithFallback wires the configured search backend
+// from environment, falling back to direct public search pages when no
+// API-backed provider is configured. A rendered fallback can be supplied to
+// recover from challenge pages or JavaScript-heavy search shells.
+func NewDefaultSearchProviderWithFallback(renderedFallback RenderedFallbackFunc) (SearchProvider, error) {
 	provider := strings.ToLower(strings.TrimSpace(os.Getenv("AFFENT_WEB_SEARCH_PROVIDER")))
 	if provider == "" {
 		provider = "auto"
@@ -386,7 +395,7 @@ func NewDefaultSearchProvider() (SearchProvider, error) {
 		if googleSearchCredentialsConfigured() {
 			return NewGoogleProvider()
 		}
-		return nil, errors.New("search backend is not configured; set TAVILY_API_KEY for Tavily, or set AFFENT_WEB_SEARCH_PROVIDER=google with GOOGLE_CSE_API_KEY/GOOGLE_API_KEY and GOOGLE_CSE_ID/GOOGLE_SEARCH_ENGINE_ID")
+		return NewHTMLSearchProvider(renderedFallback)
 	case "tavily":
 		return NewTavilyProvider()
 	case "google":
@@ -572,4 +581,448 @@ func (p *GoogleProvider) Search(ctx context.Context, query string, n int) ([]Sea
 		})
 	}
 	return hits, nil
+}
+
+// ---- HTML search provider ----------------------------------------------
+
+type htmlSearchProvider struct {
+	HTTP             *http.Client
+	RenderedFallback RenderedFallbackFunc
+	engines          []searchEngineConfig
+}
+
+type searchEngineConfig struct {
+	Name      string
+	URL       func(string) string
+	ParseHTML func([]byte, string, int) []SearchResult
+}
+
+// NewHTMLSearchProvider wires a browser-friendly search backend that uses
+// ordinary public search-result pages. It requires no API keys. If a rendered
+// fallback is configured, blocked or JS-heavy pages are retried through the
+// caller's browser and parsed from the rendered snapshot text.
+func NewHTMLSearchProvider(renderedFallback RenderedFallbackFunc) (SearchProvider, error) {
+	return &htmlSearchProvider{
+		HTTP:             &http.Client{Timeout: 30 * time.Second},
+		RenderedFallback: renderedFallback,
+		engines:          defaultHTMLSearchEngines(),
+	}, nil
+}
+
+func defaultHTMLSearchEngines() []searchEngineConfig {
+	return []searchEngineConfig{
+		{
+			Name: "bing",
+			URL: func(query string) string {
+				return "https://www.bing.com/search?q=" + url.QueryEscape(query)
+			},
+			ParseHTML: parseBingSearchResults,
+		},
+		{
+			Name: "duckduckgo",
+			URL: func(query string) string {
+				return "https://duckduckgo.com/html/?q=" + url.QueryEscape(query)
+			},
+			ParseHTML: parseDuckDuckGoSearchResults,
+		},
+	}
+}
+
+func (p *htmlSearchProvider) Search(ctx context.Context, query string, n int) ([]SearchResult, error) {
+	if p == nil {
+		return nil, errors.New("html search provider is nil")
+	}
+	if n <= 0 {
+		n = defaultSearchResults
+	}
+	if n > maxSearchResults {
+		n = maxSearchResults
+	}
+	hits := make([]SearchResult, 0, n)
+	seen := map[string]bool{}
+	var lastErr error
+	for _, engine := range p.engines {
+		if len(hits) >= n {
+			break
+		}
+		results, err := p.searchEngine(ctx, engine, query, n-len(hits))
+		if err != nil {
+			lastErr = err
+			continue
+		}
+		for _, r := range results {
+			url := strings.TrimSpace(r.URL)
+			if url == "" || seen[url] {
+				continue
+			}
+			seen[url] = true
+			hits = append(hits, r)
+			if len(hits) >= n {
+				break
+			}
+		}
+	}
+	if len(hits) == 0 {
+		if lastErr != nil {
+			return nil, lastErr
+		}
+		return nil, errors.New("html search returned no usable results")
+	}
+	return hits, nil
+}
+
+func (p *htmlSearchProvider) searchEngine(ctx context.Context, engine searchEngineConfig, query string, limit int) ([]SearchResult, error) {
+	searchURL := engine.URL(query)
+	body, finalURL, err := p.fetch(ctx, searchURL)
+	if err == nil {
+		if results := engine.ParseHTML(body, finalURL, limit); len(results) > 0 {
+			return results, nil
+		}
+		if rendered := p.renderedSearchResults(ctx, searchURL, engine.Name); len(rendered) > 0 {
+			return rendered, nil
+		}
+		return nil, fmt.Errorf("%s search returned no usable results", engine.Name)
+	}
+	if rendered := p.renderedSearchResults(ctx, searchURL, engine.Name); len(rendered) > 0 {
+		return rendered, nil
+	}
+	return nil, err
+}
+
+func (p *htmlSearchProvider) fetch(ctx context.Context, rawURL string) ([]byte, string, error) {
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, rawURL, nil)
+	if err != nil {
+		return nil, "", err
+	}
+	req.Header.Set("User-Agent", defaultUserAgent)
+	req.Header.Set("Accept", "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.5")
+	req.Header.Set("Accept-Language", "en-US,en;q=0.8")
+
+	hc := p.HTTP
+	if hc == nil {
+		hc = http.DefaultClient
+	}
+	resp, err := hc.Do(req)
+	if err != nil {
+		return nil, "", err
+	}
+	defer resp.Body.Close()
+	finalURL := rawURL
+	if resp.Request != nil && resp.Request.URL != nil {
+		finalURL = resp.Request.URL.String()
+	}
+	body, readErr := io.ReadAll(io.LimitReader(resp.Body, 1<<20))
+	if readErr != nil {
+		return nil, finalURL, readErr
+	}
+	if resp.StatusCode/100 != 2 {
+		return nil, finalURL, fmt.Errorf("search engine http %d: %s", resp.StatusCode, strings.TrimSpace(string(body)))
+	}
+	return body, finalURL, nil
+}
+
+func (p *htmlSearchProvider) renderedSearchResults(ctx context.Context, requestURL, engineName string) []SearchResult {
+	if p.RenderedFallback == nil {
+		return nil
+	}
+	rendered, err := p.RenderedFallback(ctx, requestURL, FetchFallbackReason{
+		Kind:     "search_results_page",
+		Detail:   engineName + " search results page",
+		FinalURL: requestURL,
+	})
+	if err != nil {
+		return nil
+	}
+	return parseSearchResultsFromRenderedSnapshot(rendered, requestURL)
+}
+
+func parseBingSearchResults(body []byte, baseURL string, limit int) []SearchResult {
+	doc, err := html.Parse(bytes.NewReader(body))
+	if err != nil {
+		return nil
+	}
+	containers := findNodes(doc, func(n *html.Node) bool {
+		return n.Type == html.ElementNode && n.Data == "li" && hasClass(n, "b_algo")
+	}, limit*2)
+	return extractSearchResultsFromContainers(containers, baseURL, limit, func(container *html.Node) string {
+		return firstTextByClass(container, []string{"b_caption", "b_snippet"}, []string{"p", "div"})
+	})
+}
+
+func parseDuckDuckGoSearchResults(body []byte, baseURL string, limit int) []SearchResult {
+	doc, err := html.Parse(bytes.NewReader(body))
+	if err != nil {
+		return nil
+	}
+	containers := findNodes(doc, func(n *html.Node) bool {
+		if n.Type != html.ElementNode {
+			return false
+		}
+		if n.Data == "article" && attrHasValue(n, "data-testid", "result") {
+			return true
+		}
+		return hasClass(n, "result") || hasClass(n, "results_links")
+	}, limit*2)
+	return extractSearchResultsFromContainers(containers, baseURL, limit, func(container *html.Node) string {
+		if s := firstTextByClass(container, []string{"result__snippet", "result__a", "snippet"}, []string{"p", "div", "span"}); s != "" {
+			return s
+		}
+		return firstTextByClass(container, nil, []string{"p", "div", "span"})
+	})
+}
+
+func extractSearchResultsFromContainers(containers []*html.Node, baseURL string, limit int, snippetFn func(*html.Node) string) []SearchResult {
+	results := make([]SearchResult, 0, min(limit, len(containers)))
+	for _, container := range containers {
+		if len(results) >= limit {
+			break
+		}
+		titleNode := firstAnchorDescendant(container)
+		if titleNode == nil {
+			continue
+		}
+		title := strings.TrimSpace(textContent(titleNode))
+		href := strings.TrimSpace(attrValue(titleNode, "href"))
+		if href == "" {
+			continue
+		}
+		u, err := url.Parse(href)
+		if err != nil {
+			continue
+		}
+		if u.Scheme == "" {
+			base, err := url.Parse(baseURL)
+			if err != nil {
+				continue
+			}
+			u = base.ResolveReference(u)
+		}
+		u.Fragment = ""
+		snippet := strings.TrimSpace(snippetFn(container))
+		if title == "" {
+			title = u.String()
+		}
+		if snippet == "" {
+			snippet = "(snippet unavailable)"
+		}
+		results = append(results, SearchResult{
+			Title:   title,
+			URL:     u.String(),
+			Snippet: snippet,
+		})
+	}
+	return results
+}
+
+func parseSearchResultsFromRenderedSnapshot(rendered, baseURL string) []SearchResult {
+	lines := strings.Split(rendered, "\n")
+	results := make([]SearchResult, 0, defaultSearchResults)
+	seen := map[string]bool{}
+	inInteractive := false
+	var pageText []string
+	for _, raw := range lines {
+		line := strings.TrimSpace(raw)
+		switch {
+		case line == "INTERACTIVE ELEMENTS:":
+			inInteractive = true
+		case line == "PAGE TEXT:":
+			inInteractive = false
+		case inInteractive:
+			title, href, ok := parseRenderedSearchLinkLine(line)
+			if !ok {
+				continue
+			}
+			u, err := url.Parse(href)
+			if err != nil {
+				continue
+			}
+			if u.Scheme == "" {
+				base, err := url.Parse(baseURL)
+				if err != nil {
+					continue
+				}
+				u = base.ResolveReference(u)
+			}
+			u.Fragment = ""
+			finalURL := u.String()
+			if seen[finalURL] {
+				continue
+			}
+			seen[finalURL] = true
+			if title == "" {
+				title = finalURL
+			}
+			results = append(results, SearchResult{
+				Title:   title,
+				URL:     finalURL,
+				Snippet: "(browser-rendered search result)",
+			})
+			if len(results) >= defaultSearchResults {
+				break
+			}
+		case strings.HasPrefix(line, "PAGE TEXT:"):
+			continue
+		default:
+			if inInteractive {
+				continue
+			}
+			if line != "" {
+				pageText = append(pageText, line)
+			}
+		}
+	}
+	if len(results) == 0 && len(pageText) > 0 {
+		_ = pageText
+	}
+	return results
+}
+
+func parseRenderedSearchLinkLine(line string) (title, href string, ok bool) {
+	line = strings.TrimSpace(line)
+	if !strings.HasPrefix(line, "[") {
+		return "", "", false
+	}
+	// Format emitted by browser snapshot:
+	// [1] link "Title" → https://example.com
+	parts := strings.SplitN(line, "→", 2)
+	if len(parts) != 2 {
+		return "", "", false
+	}
+	left := strings.TrimSpace(parts[0])
+	right := strings.TrimSpace(parts[1])
+	if right == "" {
+		return "", "", false
+	}
+	q1 := strings.Index(left, `"`)
+	q2 := strings.LastIndex(left, `"`)
+	if q1 >= 0 && q2 > q1 {
+		title = left[q1+1 : q2]
+	}
+	return title, right, true
+}
+
+func findNodes(root *html.Node, match func(*html.Node) bool, limit int) []*html.Node {
+	if root == nil || limit <= 0 {
+		return nil
+	}
+	var out []*html.Node
+	var walk func(*html.Node)
+	walk = func(n *html.Node) {
+		if n == nil || len(out) >= limit {
+			return
+		}
+		if match(n) {
+			out = append(out, n)
+			if len(out) >= limit {
+				return
+			}
+		}
+		for c := n.FirstChild; c != nil; c = c.NextSibling {
+			walk(c)
+			if len(out) >= limit {
+				return
+			}
+		}
+	}
+	walk(root)
+	return out
+}
+
+func firstAnchorDescendant(root *html.Node) *html.Node {
+	return firstDescendant(root, func(n *html.Node) bool {
+		return n.Type == html.ElementNode && n.Data == "a" && attrValue(n, "href") != ""
+	})
+}
+
+func firstTextByClass(root *html.Node, classes []string, tags []string) string {
+	if root == nil {
+		return ""
+	}
+	if len(classes) > 0 {
+		if n := firstDescendant(root, func(n *html.Node) bool {
+			if n.Type != html.ElementNode {
+				return false
+			}
+			for _, class := range classes {
+				if hasClass(n, class) {
+					return true
+				}
+			}
+			return false
+		}); n != nil {
+			if s := strings.TrimSpace(textContent(n)); s != "" {
+				return s
+			}
+		}
+	}
+	if len(tags) == 0 {
+		tags = []string{"p", "div", "span"}
+	}
+	for _, tag := range tags {
+		if n := firstDescendant(root, func(n *html.Node) bool {
+			return n.Type == html.ElementNode && n.Data == tag
+		}); n != nil {
+			if s := strings.TrimSpace(textContent(n)); s != "" {
+				return s
+			}
+		}
+	}
+	return ""
+}
+
+func firstDescendant(root *html.Node, match func(*html.Node) bool) *html.Node {
+	if root == nil {
+		return nil
+	}
+	for c := root.FirstChild; c != nil; c = c.NextSibling {
+		if match(c) {
+			return c
+		}
+		if found := firstDescendant(c, match); found != nil {
+			return found
+		}
+	}
+	return nil
+}
+
+func textContent(n *html.Node) string {
+	if n == nil {
+		return ""
+	}
+	var b strings.Builder
+	var walk func(*html.Node)
+	walk = func(cur *html.Node) {
+		if cur == nil {
+			return
+		}
+		if cur.Type == html.TextNode {
+			b.WriteString(cur.Data)
+			b.WriteByte(' ')
+		}
+		for c := cur.FirstChild; c != nil; c = c.NextSibling {
+			walk(c)
+		}
+	}
+	walk(n)
+	return strings.Join(strings.Fields(b.String()), " ")
+}
+
+func hasClass(n *html.Node, want string) bool {
+	return strings.Contains(" "+attrValue(n, "class")+" ", " "+want+" ")
+}
+
+func attrHasValue(n *html.Node, key, want string) bool {
+	return strings.EqualFold(attrValue(n, key), want)
+}
+
+func attrValue(n *html.Node, key string) string {
+	if n == nil {
+		return ""
+	}
+	for _, attr := range n.Attr {
+		if strings.EqualFold(attr.Key, key) {
+			return attr.Val
+		}
+	}
+	return ""
 }

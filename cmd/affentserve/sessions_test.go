@@ -1385,7 +1385,7 @@ func TestSessionPool_EvalModeRegistersOnlyBasicTools(t *testing.T) {
 	}
 }
 
-func TestSessionPool_WebSearchFailsFastWithoutBackend(t *testing.T) {
+func TestSessionPool_WebSearchFallsBackToHTMLWithoutBackend(t *testing.T) {
 	t.Setenv("AFFENT_WEB_SEARCH_PROVIDER", "")
 	t.Setenv("TAVILY_API_KEY", "")
 	t.Setenv("GOOGLE_CSE_API_KEY", "")
@@ -1409,9 +1409,18 @@ func TestSessionPool_WebSearchFailsFastWithoutBackend(t *testing.T) {
 	}
 	t.Cleanup(pool.Shutdown)
 
-	_, err = pool.GetOrCreate("web-search-no-backend")
-	if err == nil || !strings.Contains(err.Error(), "web_search") || !strings.Contains(err.Error(), "search backend") {
-		t.Fatalf("GetOrCreate error = %v, want missing web_search backend", err)
+	s, err := pool.GetOrCreate("web-search-no-backend")
+	if err != nil {
+		t.Fatal(err)
+	}
+	caps := summarizeActiveCapabilities(s, cfg)
+	if caps.WebSearchBackend != "html" {
+		t.Fatalf("WebSearchBackend = %q, want html fallback", caps.WebSearchBackend)
+	}
+	for _, name := range []string{"web_fetch", "web_search"} {
+		if _, ok := s.registry.Get(name); !ok {
+			t.Fatalf("%s should be registered with the HTML search fallback", name)
+		}
 	}
 }
 
