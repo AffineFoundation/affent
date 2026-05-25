@@ -21,6 +21,7 @@ import (
 	htmltomarkdown "github.com/JohannesKaufmann/html-to-markdown/v2"
 	"github.com/JohannesKaufmann/html-to-markdown/v2/converter"
 	agent "github.com/affinefoundation/affent/internal/agent"
+	"github.com/affinefoundation/affent/internal/netguard"
 	"github.com/affinefoundation/affent/internal/websource"
 	readability "github.com/go-shiori/go-readability"
 	"golang.org/x/net/html"
@@ -908,15 +909,7 @@ func newGuardedClient(allowPrivate bool) *http.Client {
 // cover the rest of the families that a model has no business
 // reaching through a fetch tool.
 func isBlockedIP(ip net.IP) bool {
-	if ip.IsPrivate() || ip.IsLoopback() || ip.IsLinkLocalUnicast() || ip.IsUnspecified() || ip.IsMulticast() {
-		return true
-	}
-	// 255.255.255.255 — not covered by any Is* method but obviously
-	// not a real fetch target.
-	if v4 := ip.To4(); v4 != nil && v4[0] == 255 && v4[1] == 255 && v4[2] == 255 && v4[3] == 255 {
-		return true
-	}
-	return false
+	return netguard.IsBlockedIP(ip)
 }
 
 // domainOf extracts "scheme://host" from a URL, used to resolve

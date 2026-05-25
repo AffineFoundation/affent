@@ -1,10 +1,16 @@
 package browser
 
 import (
+	"context"
+	"fmt"
+	"net"
 	"net/url"
 	"strings"
+	"sync"
 	"sync/atomic"
+	"time"
 
+	"github.com/affinefoundation/affent/internal/netguard"
 	"github.com/go-rod/rod"
 	"github.com/go-rod/rod/lib/proto"
 )
@@ -94,6 +100,13 @@ type InterceptConfig struct {
 	// only the BlockedDomains values active. Use when you specifically
 	// want to capture all third-party traffic (debugging).
 	AllowAllDomains bool
+
+	// AllowPrivateNetwork disables the default private-network guard.
+	// Keep false for model-driven public browsing: Chromium requests to
+	// loopback, RFC1918, link-local, cloud metadata, unspecified, or
+	// multicast addresses are blocked before network dispatch. Set true
+	// only for trusted local browser testing.
+	AllowPrivateNetwork bool
 
 	// Cache, when non-nil, intercepts network responses and serves
 	// from disk when a fresh cache entry exists. New responses are
@@ -240,7 +253,77 @@ type InterceptStats struct {
 	// the intercept stage didn't find a fresh entry). Useful for
 	// operators checking whether the new Chromium-native fetch path
 	// is actually keeping the cache populated.
-	CacheWrite atomic.Int64
+	CacheWrite            atomic.Int64
+	BlockedPrivateNetwork atomic.Int64
+}
+
+type privateNetworkGuard struct {
+	allow bool
+	mu    sync.Mutex
+	cache map[string]error
+}
+
+func newPrivateNetworkGuard(allow bool) *privateNetworkGuard {
+	return &privateNetworkGuard{allow: allow, cache: map[string]error{}}
+}
+
+func (g *privateNetworkGuard) blockReason(parent context.Context, rawURL string) error {
+	if g == nil || g.allow {
+		return nil
+	}
+	u, err := url.Parse(rawURL)
+	if err != nil || u.Scheme == "" || u.Host == "" {
+		return nil
+	}
+	switch strings.ToLower(u.Scheme) {
+	case "http", "https":
+	default:
+		return nil
+	}
+	host := u.Hostname()
+	if host == "" {
+		return fmt.Errorf("private-network guard: URL has no hostname")
+	}
+	key := strings.ToLower(host)
+	g.mu.Lock()
+	if cached, ok := g.cache[key]; ok {
+		g.mu.Unlock()
+		return cached
+	}
+	g.mu.Unlock()
+
+	reason := g.resolveBlockReason(parent, host)
+	g.mu.Lock()
+	g.cache[key] = reason
+	g.mu.Unlock()
+	return reason
+}
+
+func (g *privateNetworkGuard) resolveBlockReason(parent context.Context, host string) error {
+	if strings.EqualFold(host, "localhost") {
+		return fmt.Errorf("private-network guard: refusing localhost")
+	}
+	if ip := net.ParseIP(host); ip != nil {
+		if netguard.IsBlockedIP(ip) {
+			return fmt.Errorf("private-network guard: refusing %s", ip)
+		}
+		return nil
+	}
+	ctx, cancel := context.WithTimeout(parent, 2*time.Second)
+	defer cancel()
+	ips, err := net.DefaultResolver.LookupIPAddr(ctx, host)
+	if err != nil {
+		return fmt.Errorf("private-network guard: resolve %q: %w", host, err)
+	}
+	if len(ips) == 0 {
+		return fmt.Errorf("private-network guard: %q resolved no addresses", host)
+	}
+	for _, addr := range ips {
+		if netguard.IsBlockedIP(addr.IP) {
+			return fmt.Errorf("private-network guard: refusing %s resolved from %q", addr.IP, host)
+		}
+	}
+	return nil
 }
 
 // installInterceptor wires a rod HijackRouter onto the page that
@@ -260,6 +343,7 @@ func installInterceptor(page *rod.Page, cfg InterceptConfig, stats *InterceptSta
 	for _, t := range cfg.BlockedResourceTypes {
 		blockedSet[strings.ToLower(t)] = true
 	}
+	privateGuard := newPrivateNetworkGuard(cfg.AllowPrivateNetwork)
 
 	err := router.Add("*", proto.NetworkResourceType(""), func(h *rod.Hijack) {
 		req := h.Request
@@ -274,6 +358,11 @@ func installInterceptor(page *rod.Page, cfg InterceptConfig, stats *InterceptSta
 			}
 		} else if blockedSet[rt] {
 			stats.BlockedByType.Add(1)
+			h.Response.Fail(proto.NetworkErrorReasonBlockedByClient)
+			return
+		}
+		if err := privateGuard.blockReason(req.Req().Context(), url); err != nil {
+			stats.BlockedPrivateNetwork.Add(1)
 			h.Response.Fail(proto.NetworkErrorReasonBlockedByClient)
 			return
 		}

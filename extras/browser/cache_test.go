@@ -612,6 +612,36 @@ func TestInterceptConfig_ExplicitBlockedTypesWins(t *testing.T) {
 	}
 }
 
+func TestPrivateNetworkGuardBlocksInternalBrowserRequests(t *testing.T) {
+	guard := newPrivateNetworkGuard(false)
+	cases := []string{
+		"http://127.0.0.1:7777/",
+		"http://localhost:7777/",
+		"http://10.0.0.5/admin",
+		"http://169.254.169.254/latest/meta-data/",
+		"http://[::1]:8080/",
+	}
+	for _, raw := range cases {
+		if err := guard.blockReason(context.Background(), raw); err == nil {
+			t.Fatalf("blockReason(%q) = nil, want private-network block", raw)
+		}
+	}
+}
+
+func TestPrivateNetworkGuardAllowsPublicAndExplicitOptIn(t *testing.T) {
+	guard := newPrivateNetworkGuard(false)
+	if err := guard.blockReason(context.Background(), "https://1.1.1.1/dns-query"); err != nil {
+		t.Fatalf("public IP should pass private-network guard: %v", err)
+	}
+	if err := guard.blockReason(context.Background(), "data:text/html,ok"); err != nil {
+		t.Fatalf("non-network browser URL should pass private-network guard: %v", err)
+	}
+	optIn := newPrivateNetworkGuard(true)
+	if err := optIn.blockReason(context.Background(), "http://127.0.0.1:7777/"); err != nil {
+		t.Fatalf("explicit private-network opt-in should pass: %v", err)
+	}
+}
+
 func TestURLMatchesBlockedDomain(t *testing.T) {
 	patterns := []string{
 		"doubleclick.net",

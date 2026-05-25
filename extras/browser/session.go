@@ -64,10 +64,11 @@ type SessionConfig struct {
 	// behavior can opt out.
 	DisableLaunchAntiDetect bool
 
-	// Intercept governs request blocking (resource types + domain
-	// list) and optional response caching. Zero value applies the
-	// documented defaults: block image/font/media + a starter
-	// tracker domain list, no cache.
+	// Intercept governs request blocking (private networks, resource
+	// types, domain list) and optional response caching. Zero value
+	// applies the documented defaults: block private/internal network
+	// destinations, block image/font/media + a starter tracker domain
+	// list, no cache.
 	Intercept InterceptConfig
 
 	// WorkspaceDir, when non-empty, restricts file-writing browser

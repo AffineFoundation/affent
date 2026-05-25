@@ -664,6 +664,10 @@ Affent is an agent runtime, not a complete security boundary.
 - Shell tools run through an executor boundary.
 - Docker sandbox mode is useful for local isolation but is not a hardened
   multi-tenant sandbox by itself.
+- Web and browser tools refuse private/internal network targets by default,
+  including loopback, RFC1918, link-local, and cloud-metadata addresses. Enable
+  private network access only for trusted local development or isolated test
+  environments.
 - Browser, web, MCP, memory, skills, and built-in tools should be enabled only
   when the deployment needs them.
 - Gate `affentserve` with `--auth-token` or an upstream proxy unless it is on a
