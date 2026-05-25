@@ -153,6 +153,11 @@ func TestBrowserFindResultDecodesDOMShape(t *testing.T) {
 
 func TestBrowserFindToolRejectsInvalidArgsBeforePageCheck(t *testing.T) {
 	tool := FindTool(&Session{})
+	for _, want := range []string{"FDV", "volume", "metric dashboards", "missing field labels", "entity name"} {
+		if !strings.Contains(tool.Description, want) {
+			t.Fatalf("description missing %q:\n%s", want, tool.Description)
+		}
+	}
 	if !strings.Contains(string(tool.Schema), `"additionalProperties": false`) {
 		t.Fatalf("schema should reject unknown args: %s", tool.Schema)
 	}

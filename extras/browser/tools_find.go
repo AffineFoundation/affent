@@ -46,7 +46,7 @@ func FindTool(s *Session) *agent.Tool {
     }`, maxBrowserFindQueryBytes, maxBrowserFindLimit, defaultBrowserFindLimit))
 	return &agent.Tool{
 		Name:        "browser_find",
-		Description: "Search the current rendered page for text and return compact matching snippets plus link refs. Use before repeated scrolling when looking for specific facts such as price, market cap, docs links, dates, or names.",
+		Description: "Search the current rendered page for text and return compact matching snippets plus link refs. Use before repeated scrolling when looking for specific facts such as price, market cap, FDV, volume, docs links, dates, or names. On metric dashboards, search for missing field labels rather than repeating only the entity name.",
 		Schema:      schema,
 		Execute: func(ctx context.Context, raw json.RawMessage) (string, error) {
 			var args struct {
