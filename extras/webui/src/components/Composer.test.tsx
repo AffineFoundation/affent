@@ -115,7 +115,7 @@ describe("Composer", () => {
     expect(input).toHaveValue("");
   });
 
-  it("warns in the composer when a live research task needs disabled web tools", async () => {
+  it("warns in the composer when a current-web task cannot use live sources", async () => {
     const user = userEvent.setup();
     render(
       <Composer
@@ -130,8 +130,8 @@ describe("Composer", () => {
     await user.type(screen.getByPlaceholderText("Message Affent..."), "Analyze recent market trends for Affine");
 
     expect(screen.getByTestId("composer-task-hint")).toHaveAttribute("data-tone", "warning");
-    expect(screen.getByTestId("composer-task-hint")).toHaveTextContent("Research tools off");
-    expect(screen.getByTestId("composer-task-hint")).toHaveTextContent("enable web search or browser");
+    expect(screen.getByTestId("composer-task-hint")).toHaveTextContent("Current web info unavailable");
+    expect(screen.getByTestId("composer-task-hint")).toHaveTextContent("results may be incomplete");
   });
 
   it("loads suggested guidance while a turn is running", () => {

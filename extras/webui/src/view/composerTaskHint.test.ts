@@ -5,16 +5,16 @@ import type { RuntimeCapabilityView } from "./runtimeCapabilities";
 describe("buildComposerTaskHint", () => {
   it("warns when a current research task is typed into a local runtime", () => {
     expect(buildComposerTaskHint("Analyze Affine recent market trends and Twitter reaction", runtime("off"))).toEqual({
-      label: "Research tools off",
-      detail: "This asks for current external information; enable web search or browser for reliable results.",
+      label: "Current web info unavailable",
+      detail: "This request needs live sources; results may be incomplete until search or page access is enabled.",
       tone: "warning",
     });
   });
 
   it("surfaces unknown research capability for saved chats", () => {
     expect(buildComposerTaskHint("分析 affine 最近的发展趋势和币价", runtime("unknown"))).toEqual({
-      label: "Research tools unknown",
-      detail: "Send the message to refresh this chat's tool status before relying on live research.",
+      label: "Web access unknown",
+      detail: "Send once to refresh this chat's web access before relying on current information.",
       tone: "unknown",
     });
   });

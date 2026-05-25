@@ -236,8 +236,8 @@ describe("App", () => {
     const input = screen.getByPlaceholderText("Message Affent...");
     expect(input).toBeVisible();
     await userEvent.type(input, "Analyze Affine recent market trends and Twitter reaction");
-    expect(screen.getByTestId("composer-task-hint")).toHaveTextContent("Research tools off");
-    expect(screen.getByTestId("composer-task-hint")).toHaveTextContent("enable web search or browser");
+    expect(screen.getByTestId("composer-task-hint")).toHaveTextContent("Current web info unavailable");
+    expect(screen.getByTestId("composer-task-hint")).toHaveTextContent("results may be incomplete");
     expect(screen.queryByTestId("chat-context-bar")).toBeNull();
   });
 

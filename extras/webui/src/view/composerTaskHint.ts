@@ -49,24 +49,24 @@ export function buildComposerTaskHint(text: string, runtime?: RuntimeCapabilityV
 
   if (runtime.research === "off") {
     return {
-      label: "Research tools off",
-      detail: "This asks for current external information; enable web search or browser for reliable results.",
+      label: "Current web info unavailable",
+      detail: "This request needs live sources; results may be incomplete until search or page access is enabled.",
       tone: "warning",
     };
   }
 
   if (runtime.research === "limited") {
     return {
-      label: "Research limited",
-      detail: "Some web tools are available, but live search or browsing is not fully enabled.",
+      label: "Current web access limited",
+      detail: "This may need current sources; search or page browsing is only partially available.",
       tone: "warning",
     };
   }
 
   if (runtime.research === "unknown") {
     return {
-      label: "Research tools unknown",
-      detail: "Send the message to refresh this chat's tool status before relying on live research.",
+      label: "Web access unknown",
+      detail: "Send once to refresh this chat's web access before relying on current information.",
       tone: "unknown",
     };
   }

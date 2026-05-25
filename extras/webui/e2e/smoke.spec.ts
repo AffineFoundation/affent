@@ -182,7 +182,7 @@ test("offline preview keeps creation controls read-only while the API is unreach
   }
 });
 
-test("composer warns before live research tasks when web tools are off", async ({ page }) => {
+test("composer warns before current-web tasks when web access is unavailable", async ({ page }) => {
   await page.route("**/v1/sessions?limit=100", async (route) => {
     await route.fulfill({
       contentType: "application/json",
@@ -243,8 +243,8 @@ test("composer warns before live research tasks when web tools are off", async (
   await expect(page.getByTestId("runtime-capabilities")).toContainText("Local work only");
   await expect(page.getByTestId("runtime-capabilities")).toContainText("No live search");
   await page.getByPlaceholder("Message Affent...").fill("Analyze Affine recent market trends and Twitter reaction");
-  await expect(page.getByTestId("composer-task-hint")).toContainText("Research tools off");
-  await expect(page.getByTestId("composer-task-hint")).toContainText("enable web search or browser");
+  await expect(page.getByTestId("composer-task-hint")).toContainText("Current web info unavailable");
+  await expect(page.getByTestId("composer-task-hint")).toContainText("results may be incomplete");
 });
 
 test("streaming answers show a live writing state", async ({ page }, testInfo) => {

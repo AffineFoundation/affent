@@ -58,7 +58,7 @@ export function buildRuntimeCapabilityView(caps?: SessionCapabilities, opts: { s
 
   if (externalPartial) {
     return {
-      headline: "Research limited",
+      headline: "Current web access limited",
       detail: "Some web access exists, but live search or page browsing is unavailable.",
       tone: "warning",
       research: "limited",
