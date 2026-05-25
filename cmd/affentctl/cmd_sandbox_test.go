@@ -220,9 +220,13 @@ func TestAffentDockerfilePackagesRuntimeBinaries(t *testing.T) {
 		"COPY docker/go-cgroup-env.sh /tmp/affent-go-cgroup-env",
 		"COPY --from=webui /src/extras/webui/dist ./cmd/affentserve/webui/dist",
 		". /tmp/affent-go-cgroup-env",
+		"ARG AFFENT_BUILD_REVISION=unknown",
+		"ARG AFFENT_BUILD_DATE=unknown",
 		"go build -trimpath -ldflags=\"-s -w\" -o /out/affentctl ./cmd/affentctl",
 		"go build -trimpath -ldflags=\"-s -w\" -o /out/affenteval ./cmd/affenteval",
-		"go build -tags webui -trimpath -ldflags=\"-s -w\" -o /out/affentserve .",
+		"go build -tags webui -trimpath -ldflags=\"-s -w -X main.buildRevision=${AFFENT_BUILD_REVISION} -X main.buildDate=${AFFENT_BUILD_DATE}\" -o /out/affentserve .",
+		"LABEL org.opencontainers.image.revision=\"${AFFENT_BUILD_REVISION}\"",
+		"LABEL org.opencontainers.image.created=\"${AFFENT_BUILD_DATE}\"",
 		"COPY --from=build /out/affentctl /usr/local/bin/affentctl",
 		"COPY --from=build /out/affenteval /usr/local/bin/affenteval",
 		"COPY --from=build /out/affentserve /usr/local/bin/affentserve",
@@ -257,6 +261,9 @@ func TestMakeImageServeEnablesBuiltinsInsideRuntimeContainer(t *testing.T) {
 	body := string(raw)
 	for _, want := range []string{
 		"IMAGE_WORKSPACE ?= $(CURDIR)/.tmp/runtime-workspace",
+		"IMAGE_BUILD_REVISION ?= $(shell git rev-parse --short=12 HEAD 2>/dev/null || echo unknown)",
+		"IMAGE_BUILD_DATE ?= $(shell date -u +%Y-%m-%dT%H:%M:%SZ)",
+		"IMAGE_BUILD_ARGS ?= --build-arg AFFENT_BUILD_REVISION=\"$(IMAGE_BUILD_REVISION)\" --build-arg AFFENT_BUILD_DATE=\"$(IMAGE_BUILD_DATE)\"",
 		"SERVE_CONTAINER_NAME ?= affent-serve",
 		"SERVE_BASE_URL ?= $(or $(AFFENTSERVE_BASE_URL),$(AFFENTCTL_BASE_URL))",
 		"SERVE_API_KEY ?= $(or $(AFFENTSERVE_API_KEY),$(AFFENTCTL_API_KEY))",
@@ -748,6 +755,7 @@ func TestBuildDockerImageUsesProjectDockerfileAndMemoryLimit(t *testing.T) {
 		Context:    ".",
 		Memory:     "768m",
 		NoCache:    true,
+		BuildArgs:  []string{"FOO=bar"},
 	}
 	if err := buildDockerImage(opts, runner); err != nil {
 		t.Fatalf("buildDockerImage: %v", err)
@@ -760,6 +768,7 @@ func TestBuildDockerImageUsesProjectDockerfileAndMemoryLimit(t *testing.T) {
 			"-f", dockerfile,
 			"-t", "example/affent-sandbox:test",
 			"--no-cache",
+			"--build-arg", "FOO=bar",
 			contextDir,
 		}},
 	}
@@ -870,7 +879,7 @@ func TestImageBuildCmdUsesRuntimeDockerfileAndMemoryLimit(t *testing.T) {
 	}
 	runner := &fakeCommandRunner{}
 	var stdout, stderr strings.Builder
-	code := imageBuildCmd([]string{"--image", "example/affent:test", "--memory", "768m", "--no-cache"}, runner, &stdout, &stderr)
+	code := imageBuildCmd([]string{"--image", "example/affent:test", "--memory", "768m", "--no-cache", "--build-arg", "AFFENT_BUILD_REVISION=abc123"}, runner, &stdout, &stderr)
 	if code != 0 {
 		t.Fatalf("exit = %d stderr=%s", code, stderr.String())
 	}
@@ -882,6 +891,7 @@ func TestImageBuildCmdUsesRuntimeDockerfileAndMemoryLimit(t *testing.T) {
 			"-f", dockerfile,
 			"-t", "example/affent:test",
 			"--no-cache",
+			"--build-arg", "AFFENT_BUILD_REVISION=abc123",
 			contextDir,
 		}},
 	}

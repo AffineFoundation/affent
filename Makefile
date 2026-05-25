@@ -4,7 +4,9 @@ AFFENTCTL ?= ./bin/affentctl
 SANDBOX_START_ARGS ?=
 SANDBOX_STATUS_ARGS ?=
 SANDBOX_STOP_ARGS ?=
-IMAGE_BUILD_ARGS ?=
+IMAGE_BUILD_REVISION ?= $(shell git rev-parse --short=12 HEAD 2>/dev/null || echo unknown)
+IMAGE_BUILD_DATE ?= $(shell date -u +%Y-%m-%dT%H:%M:%SZ)
+IMAGE_BUILD_ARGS ?= --build-arg AFFENT_BUILD_REVISION="$(IMAGE_BUILD_REVISION)" --build-arg AFFENT_BUILD_DATE="$(IMAGE_BUILD_DATE)"
 IMAGE_RUN_ARGS ?=
 IMAGE_COMMAND ?= affentctl --help
 IMAGE_WORKSPACE ?= $(CURDIR)/.tmp/runtime-workspace

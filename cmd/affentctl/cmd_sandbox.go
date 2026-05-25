@@ -208,6 +208,7 @@ type dockerBuildOptions struct {
 	Context    string
 	Memory     string
 	NoCache    bool
+	BuildArgs  []string
 }
 
 func sandboxBuildCmd(args []string, runner commandRunner, stdout, stderr io.Writer) int {
@@ -219,6 +220,8 @@ func sandboxBuildCmd(args []string, runner commandRunner, stdout, stderr io.Writ
 	fs.StringVar(&opts.Context, "context", opts.Context, "Docker build context path")
 	fs.StringVar(&opts.Memory, "memory", opts.Memory, "Docker build memory limit")
 	fs.BoolVar(&opts.NoCache, "no-cache", false, "build without using Docker layer cache")
+	buildArgs := stringListFlag(opts.BuildArgs)
+	fs.Var(&buildArgs, "build-arg", "Docker build argument (KEY or KEY=VALUE); may be repeated")
 	fs.Usage = func() {
 		fmt.Fprintln(stderr, `usage: affentctl sandbox build [flags]
 
@@ -234,6 +237,7 @@ likely to make the host unusable.`)
 	opts.Dockerfile = strings.TrimSpace(opts.Dockerfile)
 	opts.Context = strings.TrimSpace(opts.Context)
 	opts.Memory = strings.TrimSpace(opts.Memory)
+	opts.BuildArgs = buildArgs
 	if err := buildDockerImage(opts, runner); err != nil {
 		fmt.Fprintf(stderr, "sandbox build: %v\n", err)
 		return exitRuntime
@@ -251,6 +255,8 @@ func imageBuildCmd(args []string, runner commandRunner, stdout, stderr io.Writer
 	fs.StringVar(&opts.Context, "context", opts.Context, "Docker build context path")
 	fs.StringVar(&opts.Memory, "memory", opts.Memory, "Docker build memory limit")
 	fs.BoolVar(&opts.NoCache, "no-cache", false, "build without using Docker layer cache")
+	buildArgs := stringListFlag(opts.BuildArgs)
+	fs.Var(&buildArgs, "build-arg", "Docker build argument (KEY or KEY=VALUE); may be repeated")
 	fs.Usage = func() {
 		fmt.Fprintln(stderr, `usage: affentctl image build [flags]
 
@@ -266,6 +272,7 @@ is memory-limited by default.`)
 	opts.Dockerfile = strings.TrimSpace(opts.Dockerfile)
 	opts.Context = strings.TrimSpace(opts.Context)
 	opts.Memory = strings.TrimSpace(opts.Memory)
+	opts.BuildArgs = buildArgs
 	if err := buildDockerImage(opts, runner); err != nil {
 		fmt.Fprintf(stderr, "image build: %v\n", err)
 		return exitRuntime
@@ -525,6 +532,12 @@ func buildDockerImage(opts dockerBuildOptions, runner commandRunner) error {
 	opts.Dockerfile = strings.TrimSpace(opts.Dockerfile)
 	opts.Context = strings.TrimSpace(opts.Context)
 	opts.Memory = strings.TrimSpace(opts.Memory)
+	for i := range opts.BuildArgs {
+		opts.BuildArgs[i] = strings.TrimSpace(opts.BuildArgs[i])
+		if opts.BuildArgs[i] == "" {
+			return errors.New("--build-arg values must not be empty")
+		}
+	}
 	if opts.Image == "" {
 		return errors.New("--image is required")
 	}
@@ -555,6 +568,9 @@ func buildDockerImage(opts dockerBuildOptions, runner commandRunner) error {
 	}
 	if opts.NoCache {
 		buildArgs = append(buildArgs, "--no-cache")
+	}
+	for _, buildArg := range opts.BuildArgs {
+		buildArgs = append(buildArgs, "--build-arg", buildArg)
 	}
 	buildArgs = append(buildArgs, opts.Context)
 	_, err := runner.Run("docker", buildArgs...)

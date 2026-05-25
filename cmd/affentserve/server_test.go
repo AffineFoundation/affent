@@ -1,6 +1,7 @@
 package main
 
 import (
+	"encoding/json"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -166,6 +167,12 @@ func TestHandleSessionRoutes_RejectsUnknownSub(t *testing.T) {
 }
 
 func TestHealth_ReturnsOK(t *testing.T) {
+	prevRevision, prevDate := buildRevision, buildDate
+	buildRevision, buildDate = "test-rev", "2026-05-25T10:00:00Z"
+	t.Cleanup(func() {
+		buildRevision, buildDate = prevRevision, prevDate
+	})
+
 	pool := newTestPool(t, 4, "5m")
 	r := httptest.NewRequest("GET", "/healthz", nil)
 	w := httptest.NewRecorder()
@@ -173,6 +180,13 @@ func TestHealth_ReturnsOK(t *testing.T) {
 	body := w.Body.String()
 	if !strings.Contains(body, `"status":"ok"`) {
 		t.Errorf("body = %q", body)
+	}
+	var resp healthResponse
+	if err := json.Unmarshal(w.Body.Bytes(), &resp); err != nil {
+		t.Fatalf("health response JSON: %v", err)
+	}
+	if resp.Revision != "test-rev" || resp.Date != "2026-05-25T10:00:00Z" {
+		t.Fatalf("build info = %+v, want test revision/date", resp.buildInfo)
 	}
 }
 
@@ -192,5 +206,8 @@ func TestHealth_ReturnsShuttingDown(t *testing.T) {
 	}
 	if body := w.Body.String(); !strings.Contains(body, `"status":"shutting_down"`) {
 		t.Errorf("body = %q, expected shutting_down", body)
+	}
+	if !strings.Contains(w.Body.String(), `"build_revision":`) {
+		t.Errorf("body = %q, expected build info", w.Body.String())
 	}
 }

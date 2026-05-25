@@ -357,6 +357,8 @@ func logServeStartup(logger zerolog.Logger, cfg Config, sessionStateRoot string)
 		auth = "on"
 	}
 	logger.Info().
+		Str("build_revision", buildRevision).
+		Str("build_date", buildDate).
 		Str("listen", cfg.Listen).
 		Str("model", cfg.Model).
 		Str("base_url", cfg.BaseURL).

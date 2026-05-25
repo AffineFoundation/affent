@@ -14,6 +14,8 @@ RUN npm run build
 FROM golang:1.24-bookworm AS build
 
 WORKDIR /src
+ARG AFFENT_BUILD_REVISION=unknown
+ARG AFFENT_BUILD_DATE=unknown
 
 COPY go.mod go.sum ./
 RUN --mount=type=cache,target=/go/pkg/mod \
@@ -40,13 +42,17 @@ RUN --mount=type=cache,target=/go/pkg/mod \
     && CGO_ENABLED=0 go build -trimpath -ldflags="-s -w" -o /out/affentctl ./cmd/affentctl \
     && CGO_ENABLED=0 go build -trimpath -ldflags="-s -w" -o /out/affenteval ./cmd/affenteval \
     && cd cmd/affentserve \
-    && CGO_ENABLED=0 go build -tags webui -trimpath -ldflags="-s -w" -o /out/affentserve .
+    && CGO_ENABLED=0 go build -tags webui -trimpath -ldflags="-s -w -X main.buildRevision=${AFFENT_BUILD_REVISION} -X main.buildDate=${AFFENT_BUILD_DATE}" -o /out/affentserve .
 
 FROM golang:1.24-bookworm
 
+ARG AFFENT_BUILD_REVISION=unknown
+ARG AFFENT_BUILD_DATE=unknown
 LABEL org.opencontainers.image.title="Affent"
 LABEL org.opencontainers.image.description="Affent runtime image with affentctl, affentserve, affenteval, and the standard tool sandbox packages."
 LABEL org.opencontainers.image.source="https://github.com/affinefoundation/affent"
+LABEL org.opencontainers.image.revision="${AFFENT_BUILD_REVISION}"
+LABEL org.opencontainers.image.created="${AFFENT_BUILD_DATE}"
 
 ENV DEBIAN_FRONTEND=noninteractive
 ENV PATH=/usr/local/go/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin

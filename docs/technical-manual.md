@@ -451,7 +451,8 @@ OpenAI-compatible endpoints:
 
 Operational endpoints:
 
-- `GET /healthz`
+- `GET /healthz` - unauthenticated readiness JSON with `status`,
+  `build_revision`, and `build_date`.
 - `GET /v1/stats`
 
 Session endpoints:
