@@ -493,7 +493,7 @@ func WithRuntimeContextSystemGuidance(prompt string, now time.Time) string {
 // LimitedToolSystemPrompt is the default for sessions that do not expose the
 // shell/file builtins. It keeps the safety and evidence posture without naming
 // unavailable workspace tools.
-const LimitedToolSystemPrompt = `You are the user's agent in a limited-tool runtime.
+var LimitedToolSystemPrompt = fmt.Sprintf(`You are the user's agent in a limited-tool runtime.
 Use only the tools that are actually available in this session; do not assume
 shell, file-system, web, browser, memory, MCP, planning, skill, subagent, or
 focused-task access unless the corresponding tool is present.
@@ -515,7 +515,14 @@ Work loop:
    call unchanged.
 4. Do not claim a command, file read, browser action, or memory lookup happened
    unless you actually observed that tool result.
-5. Be concise. Execute the user's task rather than explaining the runtime.
+5. Keep tool use bounded. Each turn caps at ~%d tool calls; after %d calls,
+   lean toward answering from verified evidence instead of broadening the
+   search. Past %d calls, stop unless one specific missing fact is essential.
+6. If browser tools are available, prefer browser_find and the current snapshot
+   over repeated scrolling or clicking. After a click/scroll/wait timeout or a
+   not-interactable error on a dynamic page, retry only if the page changed;
+   otherwise use a canonical URL, another source, or answer with a marked gap.
+7. Be concise. Execute the user's task rather than explaining the runtime.
 
 Do not claim specific model/runtime capabilities such as context-window size,
 browsing, memory, file access, or tool availability unless they are stated in
@@ -528,7 +535,7 @@ result. Do not rewrite, normalize, or reconstruct identifiers from memory.
 Match the user's language for the final answer and ordinary assistant messages
 unless the user explicitly asks for a different language. If the user writes in
 Chinese, answer in Chinese.
-`
+`, DefaultMaxTurnSteps, DefaultMaxTurnSteps/2, DefaultMaxTurnSteps*4/5)
 
 // SystemPromptSurface describes the broad runtime surface before feature-
 // specific guidance (plan, subagent, focused tasks) is appended.

@@ -68,6 +68,21 @@ func TestBaseSystemPromptsMatchUserLanguage(t *testing.T) {
 	}
 }
 
+func TestLimitedToolSystemPromptReflectsToolBudget(t *testing.T) {
+	for _, want := range []string{
+		fmt.Sprintf("~%d tool calls", DefaultMaxTurnSteps),
+		fmt.Sprintf("after %d calls", DefaultMaxTurnSteps/2),
+		fmt.Sprintf("Past %d calls", DefaultMaxTurnSteps*4/5),
+		"prefer browser_find",
+		"not-interactable error",
+		"answer with a marked gap",
+	} {
+		if !strings.Contains(LimitedToolSystemPrompt, want) {
+			t.Fatalf("LimitedToolSystemPrompt missing %q:\n%s", want, LimitedToolSystemPrompt)
+		}
+	}
+}
+
 func TestBaseSystemPromptsAvoidCapabilityOverclaims(t *testing.T) {
 	for name, prompt := range map[string]string{
 		"default":     DefaultSystemPrompt,
