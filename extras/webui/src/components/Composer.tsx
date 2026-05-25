@@ -177,8 +177,6 @@ export function Composer({
         ? "Send edited"
         : draftContext
           ? "Send follow-up"
-          : resumeSession
-            ? "Resume"
           : "Send";
 
   if (disabled) {
@@ -305,7 +303,7 @@ function composerStatusLabel({
   if (busy) return hasContent ? "Ready to intervene" : "Working on this turn";
   if (draftContext) return draftContext.mode === "append" ? "Follow-up with context" : "Draft ready";
   if (!hasSession) return hasContent ? "Ready to start" : "New task";
-  if (resumeSession) return hasContent ? "Ready to resume" : "Resume chat";
+  if (resumeSession) return hasContent ? "Ready to send" : "Follow-up";
   return hasContent ? "Ready to send" : "Follow-up";
 }
 
@@ -327,7 +325,7 @@ function composerMetaLabel({
   if (busy) return contentText ? "Send guidance into the live turn" : "Live session";
   if (draftContext) return draftContext.label;
   if (!contentText) {
-    if (resumeSession) return "Send a follow-up to continue this saved chat";
+    if (resumeSession) return "Type a message to continue this chat";
     return hasSession ? "Continue the conversation" : undefined;
   }
   const charCount = contentText.length;

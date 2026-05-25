@@ -53,16 +53,16 @@ describe("Composer", () => {
 
     const input = screen.getByPlaceholderText("Message Affent...");
     expect(screen.getByTestId("composer")).toHaveAttribute("data-resume-idle", "true");
-    expect(screen.getByTestId("composer-intent")).toHaveTextContent("Resume chat");
-    expect(screen.getByTestId("composer-intent")).toHaveTextContent("continue this saved chat");
-    expect(screen.getByRole("button", { name: "Resume" })).toBeDisabled();
+    expect(screen.getByTestId("composer-intent")).toHaveTextContent("Follow-up");
+    expect(screen.getByTestId("composer-intent")).toHaveTextContent("continue this chat");
+    expect(screen.getByRole("button", { name: "Send" })).toBeDisabled();
 
     await user.type(input, "continue with the next concrete step");
 
     expect(screen.getByTestId("composer")).toHaveAttribute("data-resume-idle", "false");
-    expect(screen.getByTestId("composer-intent")).toHaveTextContent("Ready to resume");
-    expect(screen.getByRole("button", { name: "Resume" })).toBeEnabled();
-    await user.click(screen.getByRole("button", { name: "Resume" }));
+    expect(screen.getByTestId("composer-intent")).toHaveTextContent("Ready to send");
+    expect(screen.getByRole("button", { name: "Send" })).toBeEnabled();
+    await user.click(screen.getByRole("button", { name: "Send" }));
     expect(onSubmit).toHaveBeenCalledWith("continue with the next concrete step");
   });
 

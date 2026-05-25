@@ -21,7 +21,7 @@ const draftSourceLabels: Record<DraftSource, string> = {
   artifact: "File added to message",
   artifact_match: "Using matched file lines",
   artifact_text: "Using file text",
-  continuation: "Continuing stopped task",
+  continuation: "Requesting final answer",
   error: "Continuing after error",
   guidance_receipt: "Editing sent guidance",
   previous_message: "Editing previous message",

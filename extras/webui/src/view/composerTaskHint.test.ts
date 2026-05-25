@@ -14,7 +14,7 @@ describe("buildComposerTaskHint", () => {
   it("surfaces unknown research capability for saved chats", () => {
     expect(buildComposerTaskHint("分析 affine 最近的发展趋势和币价", runtime("unknown"))).toEqual({
       label: "Research tools unknown",
-      detail: "This saved chat has no active capability snapshot; resume it before relying on live research.",
+      detail: "Send the message to refresh this chat's tool status before relying on live research.",
       tone: "unknown",
     });
   });

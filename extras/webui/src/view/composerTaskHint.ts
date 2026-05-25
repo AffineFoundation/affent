@@ -66,7 +66,7 @@ export function buildComposerTaskHint(text: string, runtime?: RuntimeCapabilityV
   if (runtime.research === "unknown") {
     return {
       label: "Research tools unknown",
-      detail: "This saved chat has no active capability snapshot; resume it before relying on live research.",
+      detail: "Send the message to refresh this chat's tool status before relying on live research.",
       tone: "unknown",
     };
   }

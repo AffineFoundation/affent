@@ -99,8 +99,9 @@ describe("App", () => {
     expect(context.querySelector(".chat-context-title")).toHaveTextContent("list the files");
     expect(screen.queryByTestId("runtime-capabilities")).toBeNull();
     expect(await screen.findByTestId("msg-assistant")).toHaveTextContent("There are two files.");
-    expect(screen.getByTestId("composer-intent")).toHaveTextContent("Resume chat");
-    expect(screen.getByRole("button", { name: "Resume" })).toBeDisabled();
+    expect(screen.getByTestId("composer-intent")).toHaveTextContent("Follow-up");
+    expect(screen.getByTestId("composer-intent")).toHaveTextContent("continue this chat");
+    expect(screen.getByRole("button", { name: "Send" })).toBeDisabled();
     expect(screen.queryByTestId("session-strip")).toBeNull();
     expect(fetchImpl).not.toHaveBeenCalledWith("/v1/sessions/s1/events", expect.anything());
   });
@@ -408,7 +409,7 @@ describe("App", () => {
 
     const input = screen.getByPlaceholderText("Message Affent...");
     await user.type(input, "explain Bittensor");
-    await user.click(screen.getByRole("button", { name: "Resume" }));
+    await user.click(screen.getByRole("button", { name: "Send" }));
 
     expect(await within(screen.getByTestId("timeline")).findByText("Bittensor is a decentralized AI network.")).toBeVisible();
     await waitFor(() => expect(fetchImpl).toHaveBeenCalledWith("/v1/sessions/saved-1/events", expect.anything()));
@@ -794,7 +795,7 @@ describe("App", () => {
     expect(screen.getByPlaceholderText("Message Affent...")).toHaveValue(
       "Do not call more tools. Based only on the evidence already gathered in this chat, produce the final answer.",
     );
-    expect(screen.getByTestId("composer-context")).toHaveTextContent("Continuing stopped task");
+    expect(screen.getByTestId("composer-context")).toHaveTextContent("Requesting final answer");
   });
 
   it("moves a chat artifact into the composer draft", async () => {
