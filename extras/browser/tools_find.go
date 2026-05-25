@@ -178,6 +178,34 @@ func browserFindJS(query string, limit int) string {
     }
     return clean(out);
   }
+  function visibleText(el) {
+    if (!el) return '';
+    const parts = [];
+    for (const node of el.childNodes) {
+      if (node.nodeType === 3) {
+        const text = clean(node.textContent);
+        if (text) parts.push(text);
+        continue;
+      }
+      if (node.nodeType !== 1) continue;
+      const child = node;
+      if (!isVisible(child)) continue;
+      const text = visibleText(child);
+      if (text) parts.push(text);
+    }
+    return clean(parts.join(' '));
+  }
+  function contextualText(el, fallback) {
+    let best = clean(fallback);
+    for (let cur = el, depth = 0; cur && cur !== document.body && depth < 4; cur = cur.parentElement, depth++) {
+      const full = visibleText(cur);
+      if (!full || !norm(full).includes(needle)) continue;
+      if (full.length <= 600 && full.length > best.length) {
+        best = full;
+      }
+    }
+    return best;
+  }
   function around(text) {
     text = clean(text);
     const lower = text.toLowerCase();
@@ -227,13 +255,14 @@ func browserFindJS(query string, limit int) string {
   const remaining = () => maxResults - interactive.length - textBlocks.length;
   const addText = (el, type, text) => {
     if (remaining() <= 0) return;
-    if (!text || !norm(text).includes(needle)) return;
-    textBlocks.push({ type, text: around(text) });
+    const context = contextualText(el, text);
+    if (!context || !norm(context).includes(needle)) return;
+    textBlocks.push({ type, text: around(context) });
   };
   const namedBlocks = 'h1,h2,h3,h4,h5,h6,p,li,td,blockquote,pre';
   document.querySelectorAll(namedBlocks).forEach(el => {
     if (remaining() <= 0 || !isVisible(el)) return;
-    addText(el, el.tagName.toLowerCase(), clean(el.textContent));
+    addText(el, el.tagName.toLowerCase(), visibleText(el));
   });
   const candidates = ['div', 'span', 'section', 'article'];
   document.querySelectorAll(candidates.join(',')).forEach(el => {

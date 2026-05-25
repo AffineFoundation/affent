@@ -136,7 +136,7 @@ func TestSession_FindToolSearchesRenderedPage(t *testing.T) {
 		body.WriteString(strconv.Itoa(i))
 		body.WriteString(`</p>`)
 	}
-	body.WriteString(`<p>Market cap is $55.4M and liquidity is $44.8M.</p><a href="/market">Market details</a></body></html>`)
+	body.WriteString(`<div class="metric-row"><span>Market cap</span><span>$55.4M</span><span>Liquidity $44.8M</span></div><a href="/market">Market details</a></body></html>`)
 	if _, err := runNavigate(ctx, sess, dataURL(body.String()), ""); err != nil {
 		t.Fatalf("runNavigate: %v", err)
 	}
@@ -144,7 +144,7 @@ func TestSession_FindToolSearchesRenderedPage(t *testing.T) {
 	if err != nil {
 		t.Fatalf("browser_find: %v", err)
 	}
-	for _, want := range []string{`QUERY: "market"`, `[interactive ref=`, `Market details`, `[text p] Market cap is $55.4M`} {
+	for _, want := range []string{`QUERY: "market"`, `[interactive ref=`, `Market details`, `[text span] Market cap $55.4M Liquidity $44.8M`} {
 		if !strings.Contains(out, want) {
 			t.Fatalf("browser_find output missing %q:\n%s", want, out)
 		}
