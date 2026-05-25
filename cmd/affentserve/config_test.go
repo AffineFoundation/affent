@@ -790,3 +790,25 @@ func TestConfig_Validate_RejectsUnusedFeatureSubOptions(t *testing.T) {
 		})
 	}
 }
+
+func TestConfig_ValidateWebSearchRequiresBackendKey(t *testing.T) {
+	t.Setenv("TAVILY_API_KEY", "")
+	cfg := Config{
+		BaseURL:         "https://example/v1",
+		Model:           "m",
+		EnableWeb:       true,
+		EnableWebSearch: true,
+	}
+	if err := cfg.Resolve(); err != nil {
+		t.Fatal(err)
+	}
+	err := cfg.Validate()
+	if err == nil || !strings.Contains(err.Error(), "enable_web_search requires TAVILY_API_KEY") {
+		t.Fatalf("Validate error = %v, want missing Tavily key", err)
+	}
+
+	t.Setenv("TAVILY_API_KEY", "test-key")
+	if err := cfg.Validate(); err != nil {
+		t.Fatalf("Validate with Tavily key: %v", err)
+	}
+}

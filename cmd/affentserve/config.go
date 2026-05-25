@@ -647,6 +647,9 @@ func (c Config) Validate() error {
 	if c.EnableWebSearch && !caps.Web {
 		return errors.New("enable_web_search requires enable_web")
 	}
+	if caps.WebSearch && strings.TrimSpace(os.Getenv("TAVILY_API_KEY")) == "" {
+		return errors.New("enable_web_search requires TAVILY_API_KEY; set TAVILY_API_KEY or disable web search with --web-search=false for fetch-only web access")
+	}
 	if _, err := c.IdleTTL(); err != nil {
 		return err
 	}

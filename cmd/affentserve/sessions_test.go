@@ -1385,6 +1385,61 @@ func TestSessionPool_EvalModeRegistersOnlyBasicTools(t *testing.T) {
 	}
 }
 
+func TestSessionPool_WebSearchFailsFastWithoutBackend(t *testing.T) {
+	t.Setenv("TAVILY_API_KEY", "")
+	cfg := Config{
+		Listen:          "127.0.0.1:0",
+		MaxSessions:     4,
+		SessionIdleTTL:  "5m",
+		WorkspaceRoot:   t.TempDir(),
+		BaseURL:         "http://127.0.0.1:0",
+		APIKey:          "test",
+		Model:           "fake",
+		EnableWeb:       true,
+		EnableWebSearch: true,
+	}
+	pool, err := NewSessionPool(cfg, zerolog.New(io.Discard))
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(pool.Shutdown)
+
+	_, err = pool.GetOrCreate("web-search-no-backend")
+	if err == nil || !strings.Contains(err.Error(), "web_search") || !strings.Contains(err.Error(), "TAVILY_API_KEY") {
+		t.Fatalf("GetOrCreate error = %v, want missing web_search backend", err)
+	}
+}
+
+func TestSessionPool_WebSearchRegistersWhenBackendConfigured(t *testing.T) {
+	t.Setenv("TAVILY_API_KEY", "test-key")
+	cfg := Config{
+		Listen:          "127.0.0.1:0",
+		MaxSessions:     4,
+		SessionIdleTTL:  "5m",
+		WorkspaceRoot:   t.TempDir(),
+		BaseURL:         "http://127.0.0.1:0",
+		APIKey:          "test",
+		Model:           "fake",
+		EnableWeb:       true,
+		EnableWebSearch: true,
+	}
+	pool, err := NewSessionPool(cfg, zerolog.New(io.Discard))
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(pool.Shutdown)
+
+	s, err := pool.GetOrCreate("web-search-backend")
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, name := range []string{"web_fetch", "web_search"} {
+		if _, ok := s.registry.Get(name); !ok {
+			t.Fatalf("%s should be registered when web_search backend is configured", name)
+		}
+	}
+}
+
 func TestSessionPool_SkillProviderInjectsActivePlan(t *testing.T) {
 	pool := newTestPool(t, 4, "5m")
 	pool.cfg.EnableBuiltins = true

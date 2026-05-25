@@ -172,6 +172,7 @@ func TestParseFlagsAndConfig_BuiltinsFromEnv(t *testing.T) {
 func TestParseFlagsAndConfig_EvalModeDisablesNonBasicSurfaces(t *testing.T) {
 	t.Setenv("AFFENTSERVE_SUBAGENT", "true")
 	t.Setenv("AFFENTSERVE_FOCUSED_TASKS", "true")
+	t.Setenv("TAVILY_API_KEY", "test-key")
 	cfg, err := parseFlagsAndConfig([]string{
 		"--base-url", "https://example/v1",
 		"--model", "demo",
@@ -253,6 +254,7 @@ func TestParseFlagsAndConfig_NetworkToolsFromEnv(t *testing.T) {
 	t.Setenv("AFFENTSERVE_BROWSER_SCREENSHOT", "true")
 	t.Setenv("AFFENTSERVE_WEB", "true")
 	t.Setenv("AFFENTSERVE_WEB_SEARCH", "true")
+	t.Setenv("TAVILY_API_KEY", "test-key")
 	cfg, err := parseFlagsAndConfig([]string{
 		"--base-url", "https://example/v1",
 		"--model", "demo",

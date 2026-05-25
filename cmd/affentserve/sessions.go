@@ -290,8 +290,7 @@ func (p *SessionPool) focusedTaskWebRegistrar() func(context.Context, *agent.Reg
 	return func(ctx context.Context, reg *agent.Registry) (func(), error) {
 		if p.cfg.EnableWebSearch {
 			if err := affentweb.RegisterAll(reg, affentweb.Options{}); err != nil {
-				p.logger.Warn().Err(err).Msg("focused task web_search not available; registering web_fetch only")
-				affentweb.RegisterFetch(reg, affentweb.FetchConfig{})
+				return nil, fmt.Errorf("focused task web_search: %w", err)
 			}
 		} else {
 			affentweb.RegisterFetch(reg, affentweb.FetchConfig{})
@@ -471,8 +470,11 @@ func (p *SessionPool) buildSession(id string) (*Session, error) {
 		fetchCfg := p.webFetchConfig(browser)
 		if p.cfg.EnableWebSearch {
 			if err := affentweb.RegisterAll(reg, affentweb.Options{Fetch: fetchCfg}); err != nil {
-				p.logger.Warn().Err(err).Msg("web_search not available; registering web_fetch only")
-				affentweb.RegisterFetch(reg, fetchCfg)
+				if browser != nil {
+					_ = browser.Close()
+				}
+				_ = os.RemoveAll(workspace)
+				return nil, fmt.Errorf("web_search: %w", err)
 			}
 		} else {
 			affentweb.RegisterFetch(reg, fetchCfg)
