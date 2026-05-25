@@ -116,6 +116,9 @@ func TestWithExternalResearchSystemGuidance_AppendsOnce(t *testing.T) {
 	if !strings.Contains(browserOnly, "public search result pages") || !strings.Contains(browserOnly, "bot challenge") {
 		t.Fatalf("browser-only guidance should explain browser-based discovery:\n%s", browserOnly)
 	}
+	if !strings.Contains(browserOnly, "Do not guess URL paths") || !strings.Contains(browserOnly, "subnet numbers") {
+		t.Fatalf("browser-only guidance should discourage guessed routes and ids:\n%s", browserOnly)
+	}
 
 	webOnly := WithExternalResearchSystemGuidance("be helpful", externalResearchToolSurface{WebSearch: true, WebFetch: true})
 	for _, forbidden := range []string{"browser_navigate", "browser_snapshot", "browser tools"} {
@@ -202,6 +205,7 @@ func TestExternalResearchGuidanceMatchesToolSurface(t *testing.T) {
 				"browser_navigate/browser_snapshot for rendered pages",
 				"Preserve user-provided disambiguators",
 				"try another known public URL",
+				"Do not guess URL paths",
 				"stale_ref",
 			},
 			forbidden: []string{"web_search", "search results", "browser tools"},

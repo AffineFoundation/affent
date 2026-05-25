@@ -379,7 +379,7 @@ func externalResearchSystemGuidance(surface externalResearchToolSurface) string 
 		b.WriteString("\n- Use browser_navigate/browser_snapshot for page inspection. Prefer official pages, source repositories, block explorers, filings, API docs, and primary project sites over summaries.")
 	}
 	if surface.Browser && !surface.WebSearch {
-		b.WriteString("\n- When discovery is needed but no dedicated search tool is available, use browser_navigate on public search result pages or site search pages, then follow result links deliberately. Prefer simpler result pages and alternate engines if one returns a bot challenge; do not treat a challenge page as evidence.")
+		b.WriteString("\n- When discovery is needed but no dedicated search tool is available, use browser_navigate on public search result pages or site search pages, then follow result links deliberately. Do not guess URL paths, ids, subnet numbers, or app routes unless a source/result shows them. Prefer simpler result pages and alternate engines if one returns a bot challenge; do not treat a challenge page as evidence.")
 	}
 	if surface.BrowserFind {
 		b.WriteString("\n- Use browser_find on the current page for targeted labels or metrics before repeated scrolling; it returns compact snippets and refs for visible matches.")
