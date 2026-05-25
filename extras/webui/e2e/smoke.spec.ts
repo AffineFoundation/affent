@@ -710,6 +710,8 @@ test("workflow timeline renders with inline drill-down", async ({ page }, testIn
   await expect(page.getByTestId("artifact-viewer")).toContainText("1 match");
   await expect(page.getByTestId("artifact-match-list")).toContainText("Line 1");
   await expect(page.getByTestId("artifact-match-list")).toContainText("MCP_search");
+  await page.getByTestId("artifact-match-list").getByRole("button", { name: "Copy matches" }).click();
+  await expect(page.getByTestId("artifact-match-list").getByRole("button", { name: "Copied" })).toBeVisible();
   await page.getByTestId("artifact-match-list").getByRole("button", { name: "Use matches" }).click();
   await expect(page.getByTestId("composer-context")).toContainText("Using matched file lines");
   await expect(page.getByPlaceholder("Message Affent...")).toHaveValue(/Use these matched file lines in the next step:\nFile: \.affent\/artifacts/);

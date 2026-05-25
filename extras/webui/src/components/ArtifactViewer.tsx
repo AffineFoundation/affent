@@ -109,6 +109,7 @@ export function ArtifactViewer({
                 <span>Match context</span>
                 <span className="artifact-match-tools">
                   {stats && stats.matchCount > matchPreviews.length ? <small>first {matchPreviews.length}</small> : null}
+                  <CopyButton label="Copy matches" value={artifactMatchesText(artifact.chunk.path, artifact.query, matchPreviews)} />
                   {onUseAsDraft ? (
                     <button
                       type="button"
@@ -185,6 +186,14 @@ function artifactMatchesDraft(path: string, query: string, matches: Array<{ line
     `File: ${path}`,
     `Query: ${query.trim()}`,
     "Matches:",
+    ...matches.map((match) => `Line ${match.lineNumber}: ${match.text}`),
+  ].join("\n");
+}
+
+function artifactMatchesText(path: string, query: string, matches: Array<{ lineNumber: number; text: string }>): string {
+  return [
+    `File: ${path}`,
+    `Query: ${query.trim()}`,
     ...matches.map((match) => `Line ${match.lineNumber}: ${match.text}`),
   ].join("\n");
 }

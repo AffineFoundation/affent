@@ -6,6 +6,8 @@ import { ArtifactViewer } from "./ArtifactViewer";
 describe("ArtifactViewer", () => {
   it("renders a loaded chunk with byte metadata and search highlights", async () => {
     const user = userEvent.setup();
+    const writeText = vi.fn().mockResolvedValue(undefined);
+    Object.defineProperty(navigator, "clipboard", { configurable: true, value: { writeText } });
     const onSearch = vi.fn();
     const onLoadMore = vi.fn();
     const onUseAsDraft = vi.fn();
@@ -40,6 +42,14 @@ describe("ArtifactViewer", () => {
     expect(screen.getByTestId("artifact-match-list")).toHaveTextContent("Line 1");
     expect(screen.getByTestId("artifact-match-list")).toHaveTextContent("hay needle stack");
     expect(screen.getAllByText("needle").every((node) => node.tagName.toLowerCase() === "mark")).toBe(true);
+    await user.click(screen.getByRole("button", { name: "Copy matches" }));
+    expect(writeText).toHaveBeenCalledWith(
+      [
+        "File: .affent/artifacts/tool-results/000001-c1.txt",
+        "Query: needle",
+        "Line 1: hay needle stack",
+      ].join("\n"),
+    );
     await user.click(screen.getByRole("button", { name: "Use matches" }));
     expect(onUseAsDraft).toHaveBeenCalledWith(
       [
