@@ -36,8 +36,10 @@ const (
 // memory, session_search) have no cap because the model may legitimately
 // need many calls in a single turn. The capped exceptions are stateful
 // workflow tools where repeated calls usually indicate drift: run_task
-// is a whole bounded child Loop, and plan is a compact task-state tool
-// that should be updated sparingly rather than churned.
+// is a whole bounded child Loop, plan is a compact task-state tool
+// that should be updated sparingly rather than churned, and external
+// research/browser tools are costly enough that a single turn should
+// converge instead of probing indefinitely.
 //
 // subagent_run is uncapped because it already has depth/recursion guards
 // and is the lower-level developer surface; if usage patterns warrant a
@@ -49,6 +51,15 @@ const (
 var perTurnCallCaps = map[string]int{
 	FocusedTaskToolName: 3,
 	PlanToolName:        6,
+	"web_search":        4,
+	"web_fetch":         8,
+	"browser_navigate":  8,
+	"browser_snapshot":  4,
+	"browser_find":      8,
+	"browser_click":     5,
+	"browser_scroll":    5,
+	"browser_type":      5,
+	"browser_wait":      4,
 }
 
 type toolLoopGuard struct {
@@ -141,7 +152,18 @@ func perTurnCapMessage(tool string, cap int) string {
 			fmt.Sprintf("loop_guard: tool %q exceeded the per-turn planning cap of %d calls. Planning should summarize state, not become the task.\nNext: continue from the current plan state, execute the next concrete step, or give the user the best current result.", tool, cap),
 			loopGuardCallCapKind,
 		)
+	case "web_search", "web_fetch":
+		return withLoopGuardFailureKind(
+			fmt.Sprintf("loop_guard: tool %q exceeded the per-turn external-research cap of %d calls. More broad fetching/searching is likely to burn context without improving the answer.\nNext: answer from the verified sources already gathered, or state the remaining gaps clearly instead of trying another URL/query.", tool, cap),
+			loopGuardCallCapKind,
+		)
 	default:
+		if isBrowserTool(tool) {
+			return withLoopGuardFailureKind(
+				fmt.Sprintf("loop_guard: tool %q exceeded the per-turn browser cap of %d calls. Repeated browser actions on dynamic/search pages usually add navigation noise after this point.\nNext: answer from the verified visible evidence already gathered, use only the strongest SourceAccess results, and mark unavailable metrics as gaps.", tool, cap),
+				loopGuardCallCapKind,
+			)
+		}
 		return withLoopGuardFailureKind(
 			fmt.Sprintf("loop_guard: tool %q exceeded the per-turn cap of %d calls.\nNext: stop repeating this tool and continue from the evidence already gathered.", tool, cap),
 			loopGuardCallCapKind,
@@ -427,6 +449,15 @@ func toolFailureHaltThresholdFor(tool string) int {
 func isBrowserInteractionTool(tool string) bool {
 	switch tool {
 	case "browser_click", "browser_scroll", "browser_type", "browser_wait":
+		return true
+	default:
+		return false
+	}
+}
+
+func isBrowserTool(tool string) bool {
+	switch tool {
+	case "browser_navigate", "browser_snapshot", "browser_find", "browser_click", "browser_scroll", "browser_type", "browser_wait", "browser_screenshot":
 		return true
 	default:
 		return false

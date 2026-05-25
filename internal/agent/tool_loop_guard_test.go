@@ -547,6 +547,37 @@ func TestToolLoopGuard_PerTurnCallCapForPlan(t *testing.T) {
 	}
 }
 
+func TestToolLoopGuard_PerTurnCallCapForExternalResearchTools(t *testing.T) {
+	cases := []struct {
+		tool string
+		cap  int
+		want string
+	}{
+		{tool: "web_fetch", cap: perTurnCallCaps["web_fetch"], want: "external-research cap"},
+		{tool: "web_search", cap: perTurnCallCaps["web_search"], want: "external-research cap"},
+		{tool: "browser_navigate", cap: perTurnCallCaps["browser_navigate"], want: "browser cap"},
+		{tool: "browser_snapshot", cap: perTurnCallCaps["browser_snapshot"], want: "browser cap"},
+		{tool: "browser_find", cap: perTurnCallCaps["browser_find"], want: "browser cap"},
+	}
+	for _, c := range cases {
+		t.Run(c.tool, func(t *testing.T) {
+			g := newToolLoopGuard()
+			for i := 0; i < c.cap; i++ {
+				args := json.RawMessage(`{"url":"https://example.com/page-` + fmt.Sprintf("%d", i) + `","query":"q-` + fmt.Sprintf("%d", i) + `"}`)
+				if got := g.recordAttempt(c.tool, args); got != "" {
+					t.Fatalf("call %d should be allowed, got %q", i+1, got)
+				}
+			}
+			got := g.recordAttempt(c.tool, json.RawMessage(`{"url":"https://example.com/over","query":"over"}`))
+			for _, want := range []string{c.want, "Next:", "verified", "Failure: kind=loop_guard_call_cap"} {
+				if !strings.Contains(got, want) {
+					t.Fatalf("%s cap message missing %q: %q", c.tool, want, got)
+				}
+			}
+		})
+	}
+}
+
 // TestToolLoopGuard_PerTurnCapDoesNotAffectOtherTools guards against a
 // regression where the cap mechanism leaks across tool names. read_file
 // gets called many times per turn legitimately; capping it would break
