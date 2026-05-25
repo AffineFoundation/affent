@@ -222,11 +222,33 @@ function summarizeSessionTitle(text: string): string {
     .split(/[,，]/)
     .map((part) => part.trim())
     .find((part) => part && !/^(请|请你|帮我|麻烦|please\b|can you\b|could you\b|continue\b|继续)/i.test(part)) ?? primaryClause;
-  const normalized = beforeInstruction
-    .replace(/^(请你?|麻烦你?|帮我|please\s+|can you\s+|could you\s+)/i, "")
-    .replace(/^(收集|检索|查询|介绍|分析|总结|梳理)\s*/i, "")
-    .trim();
+  const normalized = trimTopicSuffix(stripTopicPrefix(beforeInstruction));
   return summarize(normalized || cleaned, 42);
+}
+
+function stripTopicPrefix(text: string): string {
+  let value = text.trim();
+  let changed = true;
+  while (changed) {
+    const next = value
+      .replace(/^(请你?|麻烦你?|帮我|帮忙|please\s+|can you\s+|could you\s+)/i, "")
+      .replace(/^(真实地?|实际地?|完整地?|详细地?|认真地?)\s*/i, "")
+      .replace(/^(收集|检索|查询|查找|搜索|调研|研究|介绍|分析|总结|梳理|说明|整理|获取|输出|生成|review|research|inspect|summarize|analyze|explain)\s*/i, "")
+      .replace(/^(the|a|an)\s+/i, "")
+      .replace(/^关于\s*/, "")
+      .trim();
+    changed = next !== value;
+    value = next;
+  }
+  return value;
+}
+
+function trimTopicSuffix(text: string): string {
+  return text
+    .replace(/(?:的)?(?:相关)?(?:信息|资料|内容|数据)(?:并.*|，.*|,.*|$)/, "")
+    .replace(/(?:并)?(?:向我)?(?:介绍|说明|分析|总结|输出|生成).*/, "")
+    .replace(/(?:是什么|是啥|是什麼)\s*$/, "")
+    .trim();
 }
 
 function buildRowMeta(id: string, title: string, updated: string, empty = false): string[] {

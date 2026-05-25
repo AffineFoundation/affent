@@ -19,7 +19,7 @@ describe("sessionList view model", () => {
     ]);
 
     expect(rows[0]).toMatchObject({
-      title: "review the webui timeline",
+      title: "webui timeline",
       meta: ["workspac...123456", "2026-05-23 18:30 UTC"],
       status: "Live",
       tone: "running",
@@ -28,6 +28,7 @@ describe("sessionList view model", () => {
     });
     expect(rows[0].metrics).toEqual(["3 messages"]);
     expect(rows[0].searchText).toContain("workspace-session-abcdef123456");
+    expect(rows[0].searchText).toContain("review the webui timeline");
     expect(rows[0].searchText).not.toContain("tokens");
   });
 
@@ -114,6 +115,24 @@ describe("sessionList view model", () => {
       status: "Saved",
     });
     expect(rows[0].searchText).toContain("请继续同一个任务");
+  });
+
+  it("turns long instruction-style tasks into topic-like titles", () => {
+    const rows = buildSessionRows([
+      session({
+        id: "affine-research",
+        durable: true,
+        latest_user_message: "真实收集 Affine（Bittensor 子网）的相关信息并向我介绍",
+      }),
+      session({
+        id: "webui-review",
+        durable: true,
+        latest_user_message: "please review the WebUI session list behavior",
+      }),
+    ]);
+
+    expect(rows.find((row) => row.id === "affine-research")?.title).toBe("Affine（Bittensor 子网）");
+    expect(rows.find((row) => row.id === "webui-review")?.title).toBe("WebUI session list behavior");
   });
 
   it("uses the selected timeline state when the API summary lacks recent task context", () => {
@@ -278,7 +297,7 @@ describe("sessionList view model", () => {
     );
 
     expect(rows[0]).toMatchObject({
-      title: "research affine",
+      title: "affine",
       status: "Done",
       tone: "saved",
       metrics: ["2 messages", "1 action", "1 continued"],

@@ -38,7 +38,8 @@ describe("SessionList", () => {
       }),
     ]);
 
-    const row = screen.getByRole("button", { name: /review the WebUI session list behavior/ });
+    const row = screen.getByRole("button", { name: /WebUI session list behavior/ });
+    expect(row).not.toHaveTextContent("review the WebUI");
     expect(row).toHaveTextContent("workspac...123456");
     expect(row).toHaveTextContent("2026-05-23 18:30 UTC");
   });
@@ -241,9 +242,10 @@ describe("SessionList", () => {
       />,
     );
 
-    const row = screen.getByRole("button", { name: /research affine/ });
+    const row = screen.getByRole("button", { name: /affine/ });
     expect(row).toHaveAttribute("data-tone", "saved");
     expect(row).toHaveTextContent("Done");
+    expect(row).not.toHaveTextContent("research affine");
     expect(row).not.toHaveTextContent("1 tool issue");
   });
 
