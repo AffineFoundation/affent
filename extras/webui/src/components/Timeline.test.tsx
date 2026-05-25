@@ -458,6 +458,16 @@ describe("Timeline", () => {
     expect(onUseAsDraft).toHaveBeenCalledWith("Continue from this answer: There are two files.", "answer");
   });
 
+  it("turns an assistant answer into a retry draft", async () => {
+    const user = userEvent.setup();
+    const onUseAsDraft = vi.fn();
+    renderTimeline(completedTurn, "s1", undefined, onUseAsDraft);
+
+    await user.click(screen.getByRole("button", { name: "Retry from here" }));
+
+    expect(onUseAsDraft).toHaveBeenCalledWith("Retry from this reply: There are two files.", "retry_reply");
+  });
+
   it("reuses a previous user message as an editable draft", async () => {
     const user = userEvent.setup();
     const onUseAsDraft = vi.fn();
@@ -537,6 +547,16 @@ describe("Timeline", () => {
       "Continue from this output: line 1 line 2 …(truncated) Full output is available below.",
       "result",
     );
+  });
+
+  it("turns fallback output into a retry draft", async () => {
+    const user = userEvent.setup();
+    const onUseAsDraft = vi.fn();
+    renderTimeline(resultTruncated, "s1", undefined, onUseAsDraft);
+
+    await user.click(screen.getByRole("button", { name: "Retry from here" }));
+
+    expect(onUseAsDraft).toHaveBeenCalledWith("Retry from this reply: Action output was truncated line 1 line 2 …(truncated) Full output is available below.", "retry_reply");
   });
 
   it("shows original versus executed args for repaired tool calls", async () => {

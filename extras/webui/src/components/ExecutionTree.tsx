@@ -358,7 +358,7 @@ function NodeDetails({
         <DetailSection title="Run summary">
           {node.objective ? <DetailLine label="goal" value={node.objective} searchQuery={searchQuery} /> : null}
           <DetailLine label="action type" value={node.label} searchQuery={searchQuery} />
-          {node.childSessionId ? <DetailLine label="subtask record" value={node.childSessionId} mono /> : null}
+          {node.childSessionId ? <DetailLine label="child session" value={node.childSessionId} mono /> : null}
           {node.turnEndReason ? <DetailLine label="finished" value={node.turnEndReason} /> : null}
           {node.mcpServer ? <DetailLine label="external server" value={node.mcpServer} mono /> : null}
           {node.mcpTool ? <DetailLine label="external action" value={node.mcpTool} mono /> : null}

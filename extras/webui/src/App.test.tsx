@@ -104,8 +104,8 @@ describe("App", () => {
     expect(context.querySelector(".chat-context-topic")?.textContent).toContain("Task: list the files");
     expect(context.querySelector(".chat-context-title")).toHaveTextContent("list the files");
     const runtime = await screen.findByTestId("runtime-capabilities");
-    expect(runtime).toHaveTextContent("Runtime unknown");
-    expect(runtime).toHaveTextContent("This saved chat has no capability snapshot yet.");
+    expect(runtime).toHaveTextContent("Capability snapshot unknown");
+    expect(runtime).toHaveTextContent("This saved chat has not loaded a capability snapshot yet.");
     expect(await screen.findByTestId("msg-assistant")).toHaveTextContent("There are two files.");
     expect(screen.getByTestId("composer-intent")).toHaveTextContent("Resume chat");
     expect(screen.getByTestId("composer-intent")).toHaveTextContent("continue this chat");
@@ -269,17 +269,17 @@ describe("App", () => {
     const runtime = await screen.findByTestId("runtime-capabilities");
     expect(runtime).toHaveTextContent("This chat");
     expect(runtime).toHaveTextContent("Chat-only mode");
-    expect(runtime).toHaveTextContent("local project tools may be unavailable");
-    expect(runtime).toHaveTextContent("Web");
-    expect(runtime).toHaveTextContent("Not available");
+    expect(runtime).toHaveTextContent("Files, commands, and live sources are unavailable here.");
+    expect(runtime).toHaveTextContent("Research");
+    expect(runtime).toHaveTextContent("No live sources");
     expect(runtime).toHaveTextContent("Current outside information may be incomplete.");
-    expect(runtime).toHaveTextContent("Project");
+    expect(runtime).toHaveTextContent("Files");
     expect(runtime).toHaveTextContent("Unavailable");
-    expect(runtime).toHaveTextContent("Agents");
-    expect(runtime).toHaveTextContent("Subtasks available");
+    expect(runtime).toHaveTextContent("Subtasks");
+    expect(runtime).toHaveTextContent("Nested work");
     expect(runtime).toHaveTextContent("Can delegate focused work (2 levels, 4 focused task types).");
     expect(runtime).toHaveTextContent("Context");
-    expect(runtime).toHaveTextContent("Memory");
+    expect(runtime).toHaveTextContent("Saved memory");
     expect(runtime).toHaveTextContent("Can use saved memory.");
     const input = screen.getByPlaceholderText("Message Affent...");
     expect(input).toBeVisible();
@@ -1068,6 +1068,35 @@ describe("App", () => {
     );
     expect(screen.getByTestId("composer-context")).toHaveTextContent("Continuing from answer");
     expect(screen.getByPlaceholderText("Message Affent...")).toHaveFocus();
+  });
+
+  it("moves an assistant answer into a retry draft", async () => {
+    const user = userEvent.setup();
+    const fetchImpl = vi.fn(async (input: RequestInfo | URL) => {
+      const url = String(input);
+      if (url === "/v1/sessions?limit=100") {
+        return jsonResponse({
+          sessions: [{ id: "s1", active: true, durable: true, has_conversation: true, has_events: true, has_artifacts: false, has_memory: false, has_runtime_skills: false }],
+          has_more: false,
+        });
+      }
+      if (url === "/v1/sessions/s1/history?after=-1&limit=500") {
+        return jsonResponse({ session_id: "s1", events: completedTurn, next_after: 11, has_more: false, trace_schema_detected: false });
+      }
+      if (url === "/v1/sessions/s1/events") return eventStreamResponse("");
+      return jsonResponse({ error: { message: `unexpected ${url}` } }, 404);
+    });
+    vi.stubGlobal("fetch", fetchImpl);
+
+    render(<App />);
+
+    await user.click(await screen.findByRole("button", { name: "Retry from here" }));
+
+    expect(screen.getByPlaceholderText("Message Affent...")).toHaveValue(
+      "Retry from this reply: There are two files.",
+    );
+    expect(screen.getByTestId("composer-context")).toHaveTextContent("Retrying from reply");
+    expect(screen.getByRole("button", { name: "Retry" })).toBeEnabled();
   });
 
   it("moves a previous user message into the composer draft", async () => {

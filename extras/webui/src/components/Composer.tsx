@@ -306,7 +306,10 @@ function composerStatusLabel({
   if (dragActive) return "Adding context";
   if (cancelling) return "Stopping run";
   if (busy) return hasContent ? "Guidance ready" : "Live run";
-  if (draftContext) return draftContext.mode === "append" ? "Follow-up with context" : "Draft ready";
+  if (draftContext) {
+    if (draftContext.source === "retry_reply") return "Retry ready";
+    return draftContext.mode === "append" ? "Follow-up with context" : "Draft ready";
+  }
   if (!hasSession) return hasContent ? "Ready to start" : "New task";
   if (resumeSession) return hasContent ? "Ready to resume" : "Resume chat";
   return hasContent ? "Ready to send" : "Follow-up";
@@ -332,6 +335,7 @@ function primaryActionLabel({
   }
   if (!hasSession) return "Start";
   if (resumeSession && !draftContext) return "Resume";
+  if (draftContext?.source === "retry_reply") return "Retry";
   if (draftContext?.source === "previous_message") return "Send edited";
   if (draftContext) return "Send follow-up";
   return "Send";

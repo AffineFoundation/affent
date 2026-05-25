@@ -4,7 +4,7 @@ export function RunDetails({
   metrics,
   className,
   testId,
-  ariaLabel = "Work metrics",
+  ariaLabel = "Activity metrics",
   summaryLabel = "Metrics",
   valueFirst = false,
   inlineLimit = 3,

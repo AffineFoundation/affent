@@ -135,6 +135,7 @@ export function TurnCard({
               streaming={turn.messageStreaming}
               searchQuery={searchQuery}
               onContinue={onUseAsDraft}
+              onRetry={onUseAsDraft}
             />
           ) : null}
           {turn.status === "running" && !turn.assistantText ? (
@@ -702,9 +703,14 @@ function FallbackAnswerBubble({
       <div className="message-actions">
         <CopyButton label="Copy output" value={value} className="message-action" />
         {onUseAsDraft ? (
-          <button type="button" className="message-action" onClick={() => onUseAsDraft(fallbackDraft(answer), "result")}>
-            Ask follow-up
-          </button>
+          <>
+            <button type="button" className="message-action" onClick={() => onUseAsDraft(fallbackDraft(answer), "result")}>
+              Ask follow-up
+            </button>
+            <button type="button" className="message-action" onClick={() => onUseAsDraft(retryFallbackDraft(answer), "retry_reply")}>
+              Retry from here
+            </button>
+          </>
         ) : null}
       </div>
     </div>
@@ -717,6 +723,14 @@ function fallbackAnswerText(answer: FallbackAnswer): string {
 
 function fallbackDraft(answer: FallbackAnswer): string {
   return `Continue from this output: ${summarize(answer.text, 160)}`;
+}
+
+function retryReplyDraft(text: string): string {
+  return `Retry from this reply: ${summarize(text, 160)}`;
+}
+
+function retryFallbackDraft(answer: FallbackAnswer): string {
+  return `Retry from this reply: ${summarize(fallbackAnswerText(answer), 160)}`;
 }
 
 function buildFallbackAnswer(turn: TurnState, opts: { continuedAfterLimit?: boolean } = {}): FallbackAnswer | undefined {
@@ -1128,6 +1142,7 @@ function MessageStep({
   streaming,
   searchQuery,
   onContinue,
+  onRetry,
   onReuse,
 }: {
   label: string;
@@ -1136,6 +1151,7 @@ function MessageStep({
   streaming?: boolean;
   searchQuery?: string;
   onContinue?: UseAsDraft;
+  onRetry?: UseAsDraft;
   onReuse?: UseAsDraft;
 }) {
   return (
@@ -1177,6 +1193,11 @@ function MessageStep({
           {onContinue && !streaming ? (
             <button type="button" className="message-action" onClick={() => onContinue(answerDraft(text), "answer")}>
               Ask follow-up
+            </button>
+          ) : null}
+          {onRetry && !streaming ? (
+            <button type="button" className="message-action" onClick={() => onRetry(retryReplyDraft(text), "retry_reply")}>
+              Retry from here
             </button>
           ) : null}
         </div>

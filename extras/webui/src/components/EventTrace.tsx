@@ -159,7 +159,7 @@ function renderDeltaGroup(item: Extract<EventTraceItem, { kind: "deltaGroup" }>)
         </div>
         <pre className="code delta-preview">{item.text || "(empty delta stream)"}</pre>
         <details className="nested-raw event-group-raw">
-          <summary>{item.events.length} source entries</summary>
+          <summary>{item.events.length} history entries</summary>
           <pre className="code">{JSON.stringify(item.events.map((event) => event.raw), null, 2)}</pre>
         </details>
       </div>

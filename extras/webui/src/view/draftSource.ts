@@ -10,6 +10,7 @@ export type DraftSource =
   | "recent_chat"
   | "result"
   | "starter"
+  | "retry_reply"
   | "tool_guidance"
   | "tool_result"
   | "retry";
@@ -29,6 +30,7 @@ const draftSourceLabels: Record<DraftSource, string> = {
   recent_chat: "Starting from recent chat",
   result: "Continuing from output",
   starter: "Starting from draft",
+  retry_reply: "Retrying from reply",
   tool_guidance: "Using suggested next step",
   tool_result: "Using action output",
   retry: "Retrying failed action",
@@ -46,6 +48,7 @@ const draftMergeModes: Record<DraftSource, DraftMergeMode> = {
   recent_chat: "replace",
   result: "append",
   starter: "replace",
+  retry_reply: "replace",
   tool_guidance: "append",
   tool_result: "append",
   retry: "append",
