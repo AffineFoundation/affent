@@ -181,13 +181,15 @@ func TestPrintBatchResultIncludesTraceMetrics(t *testing.T) {
 		ToolCalls:        3,
 		WorkspaceRemoved: true,
 		ToolStats: agenteval.ToolRuntimeStats{
-			ToolArgsRepaired:       1,
-			ToolNameCanonicalized:  1,
-			ToolErrors:             2,
-			ToolFailureByKind:      map[string]int{"invalid_args": 1},
-			ToolDurationMS:         45,
-			LoopGuardInterventions: 2,
-			ForcedNoTools:          1,
+			ToolArgsRepaired:        1,
+			ToolNameCanonicalized:   1,
+			ToolErrors:              2,
+			ToolFailureByKind:       map[string]int{"invalid_args": 1},
+			ToolDurationMS:          45,
+			LoopGuardInterventions:  2,
+			ForcedNoTools:           1,
+			ToolContextTruncated:    3,
+			ToolContextOmittedBytes: 9216,
 		},
 		ToolFailureExamples: map[string][]agenteval.ToolFailureExample{
 			"invalid_args": {
@@ -238,7 +240,7 @@ func TestPrintBatchResultIncludesTraceMetrics(t *testing.T) {
 		"PASS sample (1.234s)",
 		"workspace: /tmp/ws (removed)",
 		"trace: /tmp/ws/trace.jsonl",
-		"metrics: tools=3 errors=2 repaired=1 canonicalized=1 loop_guard=2 forced_no_tools=1 tool_ms=45 tokens=100/25 trunc=args:1,results:1,artifacts:1 omitted=512/4096 tool_failure_kinds=invalid_args:1 runtime_error_kinds=llm_timeout:1 delegation=focused_tasks:2,subagents:1 delegation_errors=focused_tasks:1,subagents:1 focused_task_by_type=explore:1,verify:1 subagent_by_mode=review:1 plan=calls:3,errors:1 plan_by_action=set:1,update:2 end=completed",
+		"metrics: tools=3 errors=2 repaired=1 canonicalized=1 loop_guard=2 forced_no_tools=1 tool_ms=45 tokens=100/25 trunc=args:1,results:1,artifacts:1 omitted=512/4096 ctx_trunc=3,omitted=9216 tool_failure_kinds=invalid_args:1 runtime_error_kinds=llm_timeout:1 delegation=focused_tasks:2,subagents:1 delegation_errors=focused_tasks:1,subagents:1 focused_task_by_type=explore:1,verify:1 subagent_by_mode=review:1 plan=calls:3,errors:1 plan_by_action=set:1,update:2 end=completed",
 		`verifier: pass exit=0 duration=80ms output=1200 truncated omitted=176 cap=1024 command="go test ./..."`,
 		"tool_failure_hint[invalid_args]",
 		"invalid arguments",
@@ -284,11 +286,13 @@ func TestBatchSummaryAggregatesRuntimeMetrics(t *testing.T) {
 		TraceSchemaVersion: 1,
 		TurnEndReason:      "completed",
 		ToolStats: agenteval.ToolRuntimeStats{
-			ToolArgsRepaired:       1,
-			ToolNameCanonicalized:  1,
-			ToolErrors:             0,
-			ToolDurationMS:         10,
-			LoopGuardInterventions: 1,
+			ToolArgsRepaired:        1,
+			ToolNameCanonicalized:   1,
+			ToolErrors:              0,
+			ToolDurationMS:          10,
+			LoopGuardInterventions:  1,
+			ToolContextTruncated:    1,
+			ToolContextOmittedBytes: 1024,
 		},
 		Repair: agenteval.ToolRepairStats{
 			Calls:          2,
@@ -318,13 +322,15 @@ func TestBatchSummaryAggregatesRuntimeMetrics(t *testing.T) {
 			`missing required command match "go test"; commands=[]`,
 		},
 		ToolStats: agenteval.ToolRuntimeStats{
-			ToolArgsRepaired:       2,
-			ToolNameCanonicalized:  1,
-			ToolErrors:             1,
-			ToolFailureByKind:      map[string]int{"invalid_args": 1, "timeout": 2},
-			ToolDurationMS:         40,
-			LoopGuardInterventions: 2,
-			ForcedNoTools:          1,
+			ToolArgsRepaired:        2,
+			ToolNameCanonicalized:   1,
+			ToolErrors:              1,
+			ToolFailureByKind:       map[string]int{"invalid_args": 1, "timeout": 2},
+			ToolDurationMS:          40,
+			LoopGuardInterventions:  2,
+			ForcedNoTools:           1,
+			ToolContextTruncated:    2,
+			ToolContextOmittedBytes: 4096,
 		},
 		ToolFailureExamples: map[string][]agenteval.ToolFailureExample{
 			"timeout": {
@@ -371,6 +377,9 @@ func TestBatchSummaryAggregatesRuntimeMetrics(t *testing.T) {
 	want := "SUMMARY scenarios=2 passed=1 failed=1 duration=350ms tools=5 errors=1 repaired=3 canonicalized=2 loop_guard=3 forced_no_tools=1 tool_ms=50 trunc=args:1,results:2,artifacts:1 omitted=128/2048 verifier=run:2,passed:1,failed:1,truncated:1,omitted:2048 tokens=90/20 ends=completed:1,max_turns:1,error:0,cancelled:0,unknown:0 failure_kinds=missing_command:1,turn_end:1 removed_workspaces=1 cleanup_errors=0"
 	if !strings.Contains(out.String(), want) {
 		t.Fatalf("summary output missing %q:\n%s", want, out.String())
+	}
+	if !strings.Contains(out.String(), "ctx_trunc=3,omitted=5120") {
+		t.Fatalf("summary output missing context truncation rollup:\n%s", out.String())
 	}
 	if !strings.Contains(out.String(), "repair_kinds=alias_rename:2,tool_name:1,type_coercion:2") {
 		t.Fatalf("summary output missing repair kind rollup:\n%s", out.String())

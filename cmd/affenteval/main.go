@@ -377,6 +377,9 @@ func printBatchSummary(w io.Writer, s batchSummary) {
 	if len(s.RuntimeErrorByKind) > 0 {
 		fmt.Fprintf(w, " runtime_error_kinds=%s", formatStringIntCounts(s.RuntimeErrorByKind))
 	}
+	if hasBatchToolContextTruncation(s) {
+		fmt.Fprintf(w, " ctx_trunc=%d,omitted=%d", s.ToolContextTruncated, s.ToolContextOmittedBytes)
+	}
 	printDelegationRollup(w, s.FocusedTaskCalls, s.FocusedTaskByType, s.FocusedTaskErrors, s.SubagentCalls, s.SubagentByMode, s.SubagentErrors)
 	printPlanRollup(w, s.PlanCalls, s.PlanByAction, s.PlanErrors)
 	fmt.Fprintln(w)
@@ -410,6 +413,10 @@ func hasBatchRepairStats(s batchSummary) bool {
 		s.ToolRepairFailed > 0 ||
 		s.ToolRepairNotes > 0 ||
 		len(s.ToolRepairByKind) > 0
+}
+
+func hasBatchToolContextTruncation(s batchSummary) bool {
+	return s.ToolContextTruncated > 0 || s.ToolContextOmittedBytes > 0
 }
 
 func printDelegationRollup(w io.Writer, focusedTaskCalls int, focusedTaskByType map[string]int, focusedTaskErrors int, subagentCalls int, subagentByMode map[string]int, subagentErrors int) {
@@ -1061,6 +1068,9 @@ func printBatchResult(w io.Writer, res agenteval.BatchResult) {
 			res.ToolTruncation.ResultsOmittedBytes,
 		)
 	}
+	if hasToolContextTruncation(res.ToolStats) {
+		fmt.Fprintf(w, " ctx_trunc=%d,omitted=%d", res.ToolStats.ToolContextTruncated, res.ToolStats.ToolContextOmittedBytes)
+	}
 	if res.Repair.HasAny() {
 		fmt.Fprintf(w, " repair_calls=%d,ok=%d,failed=%d", res.Repair.Calls, res.Repair.SucceededCalls, res.Repair.FailedCalls)
 	}
@@ -1114,6 +1124,10 @@ func hasToolTruncation(stats agenteval.ToolTruncationStats) bool {
 		stats.ResultsTruncated > 0 ||
 		stats.ResultsOmittedBytes > 0 ||
 		stats.ResultArtifacts > 0
+}
+
+func hasToolContextTruncation(stats agenteval.ToolRuntimeStats) bool {
+	return stats.ToolContextTruncated > 0 || stats.ToolContextOmittedBytes > 0
 }
 
 func failureKind(failure string) string {
