@@ -4,19 +4,21 @@ export function RunDetails({
   metrics,
   className,
   testId,
-  ariaLabel = "Run details",
+  ariaLabel = "Work metrics",
+  summaryLabel = "Metrics",
   valueFirst = false,
 }: {
   metrics: readonly SessionOverviewMetric[];
   className: string;
   testId: string;
   ariaLabel?: string;
+  summaryLabel?: string;
   valueFirst?: boolean;
 }) {
   if (metrics.length === 0) return null;
   return (
     <details className={className} data-testid={testId}>
-      <summary>Run details</summary>
+      <summary aria-label={ariaLabel}>{summaryLabel}</summary>
       <div className="run-detail-metrics" aria-label={ariaLabel}>
         {metrics.map((metric) => (
           <span key={`${metric.label}-${metric.value}`} data-tone={metric.tone}>

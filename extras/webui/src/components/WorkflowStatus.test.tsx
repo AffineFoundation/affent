@@ -8,7 +8,7 @@ import { buildSessionOverview } from "../view/sessionOverview";
 import { WorkflowStatus } from "./WorkflowStatus";
 
 describe("WorkflowStatus", () => {
-  it("summarizes the latest completed chat while folding technical metrics", async () => {
+  it("summarizes the latest completed chat while folding metrics behind a plain label", async () => {
     const user = userEvent.setup();
     const session = reduceRawEvents(completedTurn);
     render(<WorkflowStatus overview={buildSessionOverview({
@@ -24,7 +24,10 @@ describe("WorkflowStatus", () => {
     expect(details).not.toHaveAttribute("open");
     expect(metric(details, "1 action")).not.toBeVisible();
 
-    await user.click(screen.getByText("Run details"));
+    expect(screen.getByText("Metrics")).toBeInTheDocument();
+    expect(screen.queryByText("Run details")).toBeNull();
+
+    await user.click(screen.getByText("Metrics"));
 
     expect(details).toHaveAttribute("open");
     expect(metric(details, "1 action")).toBeVisible();

@@ -93,7 +93,7 @@ describe("App", () => {
     expect(contextText).toContain("Result ready · README.md main.go");
     expect(contextText).toContain("Task: list the files");
     expect(context).toHaveAccessibleName("Result ready · README.md main.go · Task: list the files");
-    await user.click(screen.getByText("Run details"));
+    await user.click(screen.getByText("Metrics"));
     expect(details).toHaveAttribute("open");
     expect(chatContextMetric(details, "Actions 1")).toBeVisible();
     expect(chatContextMetric(details, "Tokens 138")).toBeVisible();
