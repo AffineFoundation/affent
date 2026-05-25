@@ -403,6 +403,52 @@ func TestSession_ToolStatsSnapshot_AccumulatesFromTurnEnd(t *testing.T) {
 	}
 }
 
+func TestSession_ToolStatsSnapshot_CountsNoEvidenceWebResults(t *testing.T) {
+	pool := newTestPool(t, 4, "5m")
+	s, err := pool.GetOrCreate("no-evidence-web")
+	if err != nil {
+		t.Fatalf("GetOrCreate: %v", err)
+	}
+
+	ev, err := sse.NewEvent(sse.TypeTurnEnd, sse.TurnEndPayload{
+		TurnID: "t1",
+		Reason: sse.TurnEndCompleted,
+		ToolStats: &sse.ToolRuntimeStats{
+			ToolRequests:      1,
+			ToolFailureByKind: map[string]int{"dynamic_shell": 1},
+		},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	s.events <- ev
+
+	deadline := time.Now().Add(2 * time.Second)
+	for {
+		got := s.ToolStatsSnapshot()
+		if got.ToolFailureByKind["dynamic_shell"] == 1 {
+			break
+		}
+		if time.Now().After(deadline) {
+			t.Fatalf("ToolStatsSnapshot never counted dynamic_shell: %+v", got)
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+
+	h := handleStats(pool.cfg, pool)
+	r := httptest.NewRequest("GET", "/v1/stats", nil)
+	w := httptest.NewRecorder()
+	h.ServeHTTP(w, r)
+
+	var resp statsResponse
+	if err := json.Unmarshal(w.Body.Bytes(), &resp); err != nil {
+		t.Fatalf("decode stats: %v body=%s", err, w.Body.String())
+	}
+	if resp.Aggregate.Tools.ToolFailureByKind["dynamic_shell"] != 1 {
+		t.Fatalf("aggregate failure kinds = %+v, want dynamic_shell=1", resp.Aggregate.Tools.ToolFailureByKind)
+	}
+}
+
 func TestSession_BrowserStatsSnapshot_ZeroWhenNoBrowser(t *testing.T) {
 	pool := newTestPool(t, 4, "5m")
 	s, err := pool.GetOrCreate("no-browser")

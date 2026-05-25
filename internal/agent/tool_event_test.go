@@ -30,21 +30,26 @@ func TestToolFailureKind(t *testing.T) {
 
 func TestRecordToolFailureKind(t *testing.T) {
 	var stats sse.ToolRuntimeStats
-	recordToolFailureKind(&stats, "Failure: kind=invalid_args", false)
+	recordToolFailureKind(&stats, "read_file", "Failure: kind=invalid_args", false)
 	if len(stats.ToolFailureByKind) != 0 {
 		t.Fatalf("successful outcome should not record failure kind: %+v", stats.ToolFailureByKind)
 	}
 
-	recordToolFailureKind(&stats, "Failure: kind=invalid_args", true)
-	recordToolFailureKind(&stats, "Failure: kind=invalid_args", true)
-	recordToolFailureKind(&stats, "Failure: kind=timeout", true)
+	recordToolFailureKind(&stats, "read_file", "Failure: kind=invalid_args", true)
+	recordToolFailureKind(&stats, "read_file", "Failure: kind=invalid_args", true)
+	recordToolFailureKind(&stats, "read_file", "Failure: kind=timeout", true)
 	if stats.ToolFailureByKind["invalid_args"] != 2 || stats.ToolFailureByKind["timeout"] != 1 {
 		t.Fatalf("ToolFailureByKind = %+v", stats.ToolFailureByKind)
 	}
 
-	recordToolFailureKind(&stats, "Failure: kind=blocked, status=403\nFailure: kind=loop_guard_repeated_failures", true)
+	recordToolFailureKind(&stats, "web_fetch", "Failure: kind=blocked, status=403\nFailure: kind=loop_guard_repeated_failures", true)
 	if stats.ToolFailureByKind["blocked"] != 1 || stats.ToolFailureByKind["loop_guard_repeated_failures"] != 1 {
 		t.Fatalf("combined ToolFailureByKind = %+v", stats.ToolFailureByKind)
+	}
+
+	recordToolFailureKind(&stats, "web_fetch", "[dynamic page shell: URL=https://example]\nFailure: kind=dynamic_shell", false)
+	if stats.ToolFailureByKind["dynamic_shell"] != 1 {
+		t.Fatalf("no-evidence web_fetch should count failure kind: %+v", stats.ToolFailureByKind)
 	}
 }
 

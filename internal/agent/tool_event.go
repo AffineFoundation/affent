@@ -130,11 +130,11 @@ func recordToolContextOmission(stats *sse.ToolRuntimeStats, omitted int) {
 	stats.ToolContextOmittedBytes += omitted
 }
 
-func recordToolFailureKind(stats *sse.ToolRuntimeStats, result string, failed bool) {
-	if stats == nil || !failed {
+func recordToolFailureKind(stats *sse.ToolRuntimeStats, tool, result string, failed bool) {
+	if stats == nil {
 		return
 	}
-	kinds := toolfailure.Kinds(result)
+	kinds := toolfailure.KindsForResult(tool, result, failed)
 	if len(kinds) == 0 {
 		return
 	}

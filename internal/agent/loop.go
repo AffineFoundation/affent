@@ -1101,7 +1101,7 @@ func (l *Loop) runTurn(ctx context.Context, turnID, userText string, opts TurnOp
 				toolCallsUsed++
 				recordToolRepairOutcome(&toolStats, repairedToolCall, true)
 				toolStats.ToolErrors++
-				recordToolFailureKind(&toolStats, result, true)
+				recordToolFailureKind(&toolStats, toolName, result, true)
 				continue
 			}
 			if firstToolPolicy != nil && toolName == firstToolPolicy.ToolName {
@@ -1122,7 +1122,7 @@ func (l *Loop) runTurn(ctx context.Context, turnID, userText string, opts TurnOp
 				toolCallsUsed++
 				recordToolRepairOutcome(&toolStats, repairedToolCall, true)
 				toolStats.ToolErrors++
-				recordToolFailureKind(&toolStats, result, true)
+				recordToolFailureKind(&toolStats, toolName, result, true)
 				continue
 			}
 			if result, ok := postToolActiveRejection(postToolPolicies, toolName); ok {
@@ -1140,7 +1140,7 @@ func (l *Loop) runTurn(ctx context.Context, turnID, userText string, opts TurnOp
 				toolCallsUsed++
 				recordToolRepairOutcome(&toolStats, repairedToolCall, true)
 				toolStats.ToolErrors++
-				recordToolFailureKind(&toolStats, result, true)
+				recordToolFailureKind(&toolStats, toolName, result, true)
 				continue
 			}
 			if result, ok := l.toolCallPolicyRejection(userText, toolName, args, toolCallsUsed); ok {
@@ -1158,7 +1158,7 @@ func (l *Loop) runTurn(ctx context.Context, turnID, userText string, opts TurnOp
 				toolCallsUsed++
 				recordToolRepairOutcome(&toolStats, repairedToolCall, true)
 				toolStats.ToolErrors++
-				recordToolFailureKind(&toolStats, result, true)
+				recordToolFailureKind(&toolStats, toolName, result, true)
 				continue
 			}
 			if result := loopGuard.recordAttempt(toolName, args); result != "" {
@@ -1167,7 +1167,7 @@ func (l *Loop) runTurn(ctx context.Context, turnID, userText string, opts TurnOp
 				toolCallsUsed++
 				recordToolRepairOutcome(&toolStats, repairedToolCall, true)
 				toolStats.ToolErrors++
-				recordToolFailureKind(&toolStats, result, true)
+				recordToolFailureKind(&toolStats, toolName, result, true)
 				toolStats.LoopGuardInterventions++
 				if loopGuardResultForcesNoTools(result) {
 					guardInterventions++
@@ -1228,7 +1228,7 @@ func (l *Loop) runTurn(ctx context.Context, turnID, userText string, opts TurnOp
 			if isErr {
 				toolStats.ToolErrors++
 			}
-			recordToolFailureKind(&toolStats, result, !outcomeOK)
+			recordToolFailureKind(&toolStats, toolName, result, !outcomeOK)
 		}
 		if toolBudgetExhausted {
 			if l.finalNoToolsOnMaxTurnsForTurn(opts) {
