@@ -285,6 +285,13 @@ image-serve-smoke:
 	curl -fsS -X POST "$(SMOKE_URL)/v1/sessions" \
 		-H 'Content-Type: application/json' \
 		--data '{"session_id":"$(SMOKE_SESSION_ID)"}' | grep -q '"durable":true'; \
+	tools=$$(curl -fsS "$(SMOKE_URL)/v1/sessions/$(SMOKE_SESSION_ID)/tools"); \
+	echo "$$tools" | grep -q '"browser_navigate"'; \
+	echo "$$tools" | grep -q '"web_fetch"'; \
+	if echo "$$tools" | grep -q '"web_search"'; then \
+		echo "image-serve-smoke expected web_search to stay disabled by default" >&2; \
+		exit 1; \
+	fi; \
 	test -f "$(SMOKE_WORKSPACE)/session-state/$(SMOKE_SESSION_ID)/conversation.jsonl"; \
 	docker stop "$(SMOKE_CONTAINER_NAME)" >/dev/null; \
 	$(MAKE) image-serve-up \
@@ -301,8 +308,16 @@ image-serve-smoke:
 	echo "$$detail" | grep -q '"durable":true'; \
 	echo "$$detail" | grep -q '"active":false'; \
 	memory_label=$$(docker inspect "$(SMOKE_CONTAINER_NAME)" --format '{{index .Config.Labels "affent.runtime.memory"}}'); \
+	browser_label=$$(docker inspect "$(SMOKE_CONTAINER_NAME)" --format '{{index .Config.Labels "affent.runtime.serve.browser"}}'); \
+	web_label=$$(docker inspect "$(SMOKE_CONTAINER_NAME)" --format '{{index .Config.Labels "affent.runtime.serve.web"}}'); \
+	web_search_label=$$(docker inspect "$(SMOKE_CONTAINER_NAME)" --format '{{index .Config.Labels "affent.runtime.serve.web_search"}}'); \
+	browser_cache_label=$$(docker inspect "$(SMOKE_CONTAINER_NAME)" --format '{{index .Config.Labels "affent.runtime.serve.browser_cache_dir"}}'); \
 	test "$$memory_label" = "$(CONTAINER_MEMORY)"; \
-	echo "image-serve-smoke ok: $(SMOKE_URL) session=$(SMOKE_SESSION_ID) memory=$(CONTAINER_MEMORY)"
+	test "$$browser_label" = "true"; \
+	test "$$web_label" = "true"; \
+	test "$$web_search_label" = "false"; \
+	test "$$browser_cache_label" = "/workspace/browser-cache"; \
+	echo "image-serve-smoke ok: $(SMOKE_URL) session=$(SMOKE_SESSION_ID) memory=$(CONTAINER_MEMORY) browser=$$browser_label web=$$web_label cache=$$browser_cache_label"
 
 eval-container: affentctl
 	"$(AFFENTCTL)" image build --image "$(EVAL_IMAGE)" --memory "$(CONTAINER_MEMORY)" $(IMAGE_BUILD_ARGS)

@@ -215,7 +215,8 @@ under the same workspace. Deleting a session with
 `DELETE /v1/sessions/{id}` intentionally removes that durable state.
 
 Use `make image-serve-smoke` for a local persistence check; it creates a
-session, restarts the runtime, and verifies the durable session is still listed.
+session, verifies the default browser/web tool catalog, restarts the runtime,
+and verifies the durable session is still listed.
 
 ## HTTP Server
 
