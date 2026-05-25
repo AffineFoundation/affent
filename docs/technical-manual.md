@@ -248,9 +248,12 @@ configured search backend. When a runtime also enables `extras/browser`,
 fallback: direct-reader trap hosts, anti-bot/challenge responses, and
 client-rendered app shells are retried through the browser and returned as
 rendered snapshot text. Runtimes without browser support keep the lightweight
-HTTP-only behavior. Search backends can still time out, rate-limit, or return no
-usable URLs. The tools surface those cases as structured failures so the agent
-can switch source instead of burning turns:
+HTTP-only behavior. Browser fallback preserves `web_fetch`'s default private
+network protection: loopback, RFC1918, link-local, cloud-metadata, and other
+internal addresses are refused unless `AllowPrivateNetwork` is explicitly set
+for trusted local development. Search backends can still time out, rate-limit,
+or return no usable URLs. The tools surface those cases as structured failures
+so the agent can switch source instead of burning turns:
 
 - `Failure: kind=blocked`: the source refused direct fetch, commonly HTTP 401
   or 403, or returned a successful HTTP response that is only an anti-bot,

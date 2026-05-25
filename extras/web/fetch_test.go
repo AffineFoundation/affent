@@ -438,6 +438,56 @@ func TestFetchTool_RejectsRenderedFallbackChallengePage(t *testing.T) {
 	}
 }
 
+func TestFetchTool_RenderedFallbackDoesNotBypassSSRFPreflight(t *testing.T) {
+	called := false
+	tool := FetchTool(FetchConfig{
+		RenderedFallback: func(_ context.Context, requestURL string, reason FetchFallbackReason) (string, error) {
+			called = true
+			return "URL: " + requestURL + "\nPAGE TEXT:\np: local admin panel\n", nil
+		},
+	})
+	args, _ := json.Marshal(map[string]string{"url": "http://127.0.0.1/search?q=secrets"})
+	out, err := tool.Execute(context.Background(), args)
+	if err != nil {
+		t.Fatalf("Execute: %v", err)
+	}
+	if called {
+		t.Fatal("rendered fallback must not be called for private-network URLs unless explicitly allowed")
+	}
+	for _, want := range []string{"blocked response", "Failure: kind=blocked", "search-results page"} {
+		if !strings.Contains(out, want) {
+			t.Fatalf("private preflight result missing %q:\n%s", want, out)
+		}
+	}
+	if strings.Contains(out, "local admin panel") || strings.Contains(out, "rendered browser fallback") {
+		t.Fatalf("private rendered content leaked through fallback:\n%s", out)
+	}
+}
+
+func TestFetchTool_RenderedFallbackPrivateNetworkOptIn(t *testing.T) {
+	called := false
+	tool := FetchTool(FetchConfig{
+		AllowPrivateNetwork: true,
+		RenderedFallback: func(_ context.Context, requestURL string, reason FetchFallbackReason) (string, error) {
+			called = true
+			return "URL: " + requestURL + "\nPAGE TEXT:\np: trusted local rendered page\n", nil
+		},
+	})
+	args, _ := json.Marshal(map[string]string{"url": "http://127.0.0.1/search?q=local"})
+	out, err := tool.Execute(context.Background(), args)
+	if err != nil {
+		t.Fatalf("Execute: %v", err)
+	}
+	if !called {
+		t.Fatal("explicit private-network opt-in should allow rendered fallback")
+	}
+	for _, want := range []string{"rendered browser fallback", "trusted local rendered page"} {
+		if !strings.Contains(out, want) {
+			t.Fatalf("private opt-in fallback output missing %q:\n%s", want, out)
+		}
+	}
+}
+
 func TestFetchTool_DynamicAppShellReportsNoEvidence(t *testing.T) {
 	scripts := strings.Repeat(`<script src="/_next/static/chunks/app.js"></script>`, 10)
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {

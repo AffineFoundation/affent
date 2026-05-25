@@ -490,6 +490,9 @@ func renderedFallbackResult(ctx context.Context, cfg FetchConfig, requestURL str
 	if reason.FinalURL == "" {
 		reason.FinalURL = requestURL
 	}
+	if err := validateRenderedFallbackURL(ctx, cfg, reason.FinalURL); err != nil {
+		return "", err
+	}
 	out, err := cfg.RenderedFallback(ctx, requestURL, reason)
 	if err != nil {
 		return "", err
@@ -510,6 +513,47 @@ func renderedFallbackResult(ctx context.Context, cfg FetchConfig, requestURL str
 	}
 	prefix += "]\n"
 	return truncateFetchResult(prefix+out, cfg.MaxResultChars), nil
+}
+
+func validateRenderedFallbackURL(ctx context.Context, cfg FetchConfig, rawURL string) error {
+	if cfg.AllowPrivateNetwork {
+		return nil
+	}
+	u, err := url.Parse(strings.TrimSpace(rawURL))
+	if err != nil || u.Scheme == "" || u.Host == "" {
+		return fmt.Errorf("rendered fallback URL is not fully qualified")
+	}
+	switch strings.ToLower(u.Scheme) {
+	case "http", "https":
+	default:
+		return fmt.Errorf("rendered fallback URL scheme %q is not supported", u.Scheme)
+	}
+	host := u.Hostname()
+	if host == "" {
+		return fmt.Errorf("rendered fallback URL has no hostname")
+	}
+	if strings.EqualFold(host, "localhost") {
+		return fmt.Errorf("ssrf-guard: refusing rendered fallback to localhost")
+	}
+	if ip := net.ParseIP(host); ip != nil {
+		if isBlockedIP(ip) {
+			return fmt.Errorf("ssrf-guard: refusing rendered fallback to %s (private / loopback / link-local / unspecified / multicast)", ip)
+		}
+		return nil
+	}
+	ips, err := net.DefaultResolver.LookupIPAddr(ctx, host)
+	if err != nil {
+		return fmt.Errorf("ssrf-guard: resolve rendered fallback host %q: %w", host, err)
+	}
+	if len(ips) == 0 {
+		return fmt.Errorf("ssrf-guard: rendered fallback host %q resolved no addresses", host)
+	}
+	for _, addr := range ips {
+		if isBlockedIP(addr.IP) {
+			return fmt.Errorf("ssrf-guard: refusing rendered fallback to %s resolved from %q (private / loopback / link-local / unspecified / multicast)", addr.IP, host)
+		}
+	}
+	return nil
 }
 
 func shouldUseRenderedFallback(reason FetchFallbackReason) bool {
