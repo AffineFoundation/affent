@@ -197,7 +197,7 @@ func sourceHintsFromSearchResult(r SearchResult, resultURL string) []string {
 			continue
 		}
 		seen[normalized] = true
-		hints = append(hints, raw)
+		hints = append(hints, normalized)
 		if len(hints) >= maxSearchSourceHints {
 			break
 		}

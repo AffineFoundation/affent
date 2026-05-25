@@ -785,7 +785,7 @@ func TestSearchTool_SurfacesReadableURLsMentionedInSnippets(t *testing.T) {
 			{
 				Title:   "Markdown docs",
 				URL:     "https://docs.example/guide",
-				Snippet: "Canonical markdown page: https://docs.example/guide.md. Duplicate: https://docs.example/guide.md#intro.",
+				Snippet: "Canonical markdown page: HTTPS://WWW.DOCS.EXAMPLE/guide.md#intro. Duplicate: https://docs.example/guide.md#details.",
 			},
 		}},
 	})
