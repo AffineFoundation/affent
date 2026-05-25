@@ -169,15 +169,13 @@ export function Composer({
   const taskHint = buildComposerTaskHint(contentText, runtimeCapabilities);
   const compactResume = resumeSession && !busy && !hasContent && !draftContext && !taskHint;
   const placeholder = "Message Affent...";
-  const primaryLabel = busy
-    ? hasContent ? "Add note" : "Working"
-    : !hasSession
-      ? "Start"
-      : draftContext?.source === "previous_message"
-        ? "Send edited"
-        : draftContext
-          ? "Send follow-up"
-          : "Send";
+  const primaryLabel = primaryActionLabel({
+    busy,
+    hasContent,
+    hasSession,
+    draftContext,
+    taskHintActive: Boolean(taskHint),
+  });
 
   if (disabled) {
     return (
@@ -305,6 +303,27 @@ function composerStatusLabel({
   if (!hasSession) return hasContent ? "Ready to start" : "New task";
   if (resumeSession) return hasContent ? "Ready to send" : "Follow-up";
   return hasContent ? "Ready to send" : "Follow-up";
+}
+
+function primaryActionLabel({
+  busy,
+  hasContent,
+  hasSession,
+  draftContext,
+  taskHintActive,
+}: {
+  busy: boolean;
+  hasContent: boolean;
+  hasSession: boolean;
+  draftContext?: DraftContext;
+  taskHintActive: boolean;
+}): string {
+  if (busy) return hasContent ? "Add note" : "Working";
+  if (taskHintActive && !draftContext) return hasSession ? "Send anyway" : "Start anyway";
+  if (!hasSession) return "Start";
+  if (draftContext?.source === "previous_message") return "Send edited";
+  if (draftContext) return "Send follow-up";
+  return "Send";
 }
 
 function composerMetaLabel({

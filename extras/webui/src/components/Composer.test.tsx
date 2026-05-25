@@ -132,6 +132,7 @@ describe("Composer", () => {
     expect(screen.getByTestId("composer-task-hint")).toHaveAttribute("data-tone", "warning");
     expect(screen.getByTestId("composer-task-hint")).toHaveTextContent("Current web info unavailable");
     expect(screen.getByTestId("composer-task-hint")).toHaveTextContent("results may be incomplete");
+    expect(screen.getByRole("button", { name: "Send anyway" })).toBeEnabled();
   });
 
   it("warns before sending an external information-gathering task with limited web access", async () => {
@@ -151,6 +152,7 @@ describe("Composer", () => {
     expect(screen.getByTestId("composer-task-hint")).toHaveAttribute("data-tone", "warning");
     expect(screen.getByTestId("composer-task-hint")).toHaveTextContent("Current web access limited");
     expect(screen.getByTestId("composer-task-hint")).toHaveTextContent("search or page browsing is only partially available");
+    expect(screen.getByRole("button", { name: "Send anyway" })).toBeEnabled();
   });
 
   it("warns before the first research task when capability details are not loaded yet", async () => {
@@ -170,6 +172,7 @@ describe("Composer", () => {
     expect(screen.getByTestId("composer-task-hint")).toHaveAttribute("data-tone", "unknown");
     expect(screen.getByTestId("composer-task-hint")).toHaveTextContent("Web access unknown");
     expect(screen.getByTestId("composer-task-hint")).toHaveTextContent("has not reported web access yet");
+    expect(screen.getByRole("button", { name: "Start anyway" })).toBeEnabled();
   });
 
   it("loads a suggested note while a turn is running", () => {
