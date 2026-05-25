@@ -88,7 +88,6 @@ describe("App", () => {
     await user.click(screen.getByRole("button", { name: /Open latest chat/ }));
 
     const context = await screen.findByTestId("chat-context-bar");
-    expect(context).toHaveTextContent("list the files");
     expect(context).toHaveTextContent("Result ready");
     expect(context).toHaveTextContent("README.md main.go");
     const details = screen.getByTestId("chat-context-details");
@@ -96,13 +95,11 @@ describe("App", () => {
     expect(chatContextMetric(details, "Tokens 138")).toBeVisible();
     const contextText = context.textContent?.replace(/\s+/g, " ").trim();
     expect(contextText).toContain("Result ready · README.md main.go");
-    expect(contextText).toContain("Task: list the files");
-    expect(context).toHaveAccessibleName("Result ready · README.md main.go · Task: list the files");
+    expect(contextText).not.toContain("Task: list the files");
+    expect(context).toHaveAccessibleName("Result ready · README.md main.go");
     expect(screen.queryByText("Metrics")).toBeNull();
     expect(context.querySelector(".chat-context-primary")).toHaveTextContent("README.md main.go");
-    expect(context.querySelector(".chat-context-topic")).toHaveTextContent("Task:");
-    expect(context.querySelector(".chat-context-topic")?.textContent).toContain("Task: list the files");
-    expect(context.querySelector(".chat-context-title")).toHaveTextContent("list the files");
+    expect(context.querySelector(".chat-context-topic")).toBeNull();
     const runtime = await screen.findByTestId("runtime-capabilities");
     expect(runtime).toHaveTextContent("Capability snapshot unknown");
     expect(runtime).toHaveTextContent("This saved chat has not loaded a capability snapshot yet.");
@@ -390,7 +387,8 @@ describe("App", () => {
 
     render(<App />);
 
-    expect(await screen.findByTestId("chat-context-bar")).toHaveTextContent("list the files");
+    expect(await screen.findByTestId("chat-context-bar")).toHaveTextContent("Result ready");
+    expect(screen.getByTestId("chat-context-bar")).toHaveTextContent("README.md main.go");
     const input = screen.getByPlaceholderText("Message Affent...");
     await user.type(input, "explain main.go");
     await user.click(screen.getByRole("button", { name: "Send" }));

@@ -252,6 +252,7 @@ export function App() {
         const history = await loadHistory(liveSessionId, ac.signal);
         if (ac.signal.aborted) return;
         if (!selectedSessionActive) return;
+        if (sendFailedRef.current || sendInFlightRef.current) return;
         streamClosedRef.current = false;
         streamSessionIdRef.current = liveSessionId;
         setStatus((current) => ({ ...current, state: "live", label: "Live" }));
@@ -623,6 +624,13 @@ interface ChatContextDisplay {
 
 function chatContextDisplay(overview: SessionOverview): ChatContextDisplay {
   const primary = chatContextPrimary(overview);
+  if (overview.tone === "success") {
+    return {
+      primary,
+      secondary: undefined,
+      secondaryLabel: "Task",
+    };
+  }
   const secondary = primary === overview.detail ? overview.headline : overview.detail;
   return {
     primary,
