@@ -155,7 +155,7 @@ image-serve-up:
 			echo "run make image-serve-restart to recreate it with the requested affentserve paths" >&2; \
 			exit 2; \
 		fi; \
-		expected_serve_builtins=true; expected_serve_eval_mode=; expected_serve_memory=; expected_serve_browser=; expected_serve_browser_screenshot=; expected_serve_web=; expected_serve_web_search=; expected_serve_subagent=; expected_serve_focused_tasks=; \
+		expected_serve_builtins=true; expected_serve_eval_mode="$(AFFENTSERVE_EVAL_MODE)"; expected_serve_memory="$(AFFENTSERVE_MEMORY)"; expected_serve_browser="$(AFFENTSERVE_BROWSER)"; expected_serve_browser_screenshot="$(AFFENTSERVE_BROWSER_SCREENSHOT)"; expected_serve_web="$(AFFENTSERVE_WEB)"; expected_serve_web_search="$(AFFENTSERVE_WEB_SEARCH)"; expected_serve_subagent="$(AFFENTSERVE_SUBAGENT)"; expected_serve_focused_tasks="$(AFFENTSERVE_FOCUSED_TASKS)"; \
 		for arg in --builtins $(SERVE_ARGS); do \
 			case "$$arg" in \
 				--builtins) expected_serve_builtins=true ;; --builtins=*) expected_serve_builtins=$${arg#--builtins=} ;; \

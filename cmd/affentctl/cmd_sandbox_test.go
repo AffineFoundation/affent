@@ -333,7 +333,8 @@ func TestMakeImageServeEnablesBuiltinsInsideRuntimeContainer(t *testing.T) {
 		`was created with listen=$$actual_listen workspace_root=$$actual_serve_workspace_root memory_root=$$actual_serve_memory_root`,
 		`run make image-serve-restart to recreate it with the requested affentserve paths`,
 		`expected_serve_builtins=true`,
-		`expected_serve_eval_mode=`,
+		`expected_serve_eval_mode="$(AFFENTSERVE_EVAL_MODE)"`,
+		`expected_serve_browser="$(AFFENTSERVE_BROWSER)"`,
 		`--eval-mode) expected_serve_eval_mode=true`,
 		`--browser=*) expected_serve_browser=$${arg#--browser=}`,
 		`actual_serve_eval_mode=$$(docker inspect "$(SERVE_CONTAINER_NAME)" --format '{{index .Config.Labels "affent.runtime.serve.eval_mode"}}'`,
@@ -1107,6 +1108,37 @@ func TestRuntimeServeCommandLabelsIgnoresUnknownFlagsWithoutSkippingKnownOnes(t 
 	}
 	if strings.Contains(joined, "secret-value") {
 		t.Fatalf("secret should not be included in service labels: %v", got)
+	}
+}
+
+func TestRuntimeServeLabelsIncludeNonSecretServeEnv(t *testing.T) {
+	got := runtimeServeLabels([]string{
+		"affentserve",
+		"--browser=false",
+		"--workspace-root", "/workspace/sessions",
+		"--api-key", "command-secret",
+	}, []string{
+		"AFFENTSERVE_EVAL_MODE=true",
+		"AFFENTSERVE_BROWSER=true",
+		"AFFENTSERVE_WEB=true",
+		"AFFENTSERVE_API_KEY=env-secret",
+		"AFFENTSERVE_AUTH_TOKEN=env-token",
+	})
+	joined := strings.Join(got, "\n")
+	for _, want := range []string{
+		runtimeLabelServeWorkspaceRoot + "=/workspace/sessions",
+		runtimeLabelServeEvalMode + "=true",
+		runtimeLabelServeBrowser + "=false",
+		runtimeLabelServeWeb + "=true",
+	} {
+		if !strings.Contains(joined, want) {
+			t.Fatalf("runtimeServeLabels missing %q:\n%v", want, got)
+		}
+	}
+	for _, forbidden := range []string{"env-secret", "env-token", "command-secret"} {
+		if strings.Contains(joined, forbidden) {
+			t.Fatalf("runtimeServeLabels must not include secret %q:\n%v", forbidden, got)
+		}
 	}
 }
 

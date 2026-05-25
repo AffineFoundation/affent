@@ -688,7 +688,7 @@ func runRuntimeImage(opts runtimeRunOptions, runner commandRunner) error {
 		"-v", opts.Workspace+":/workspace",
 		"-w", "/workspace",
 	)
-	for _, label := range runtimeServeCommandLabels(opts.Command) {
+	for _, label := range runtimeServeLabels(opts.Command, envs) {
 		runArgs = append(runArgs, "--label", label)
 	}
 	if opts.Detach {
@@ -716,10 +716,21 @@ func runRuntimeImage(opts runtimeRunOptions, runner commandRunner) error {
 }
 
 func runtimeServeCommandLabels(command []string) []string {
+	return runtimeServeLabels(command, nil)
+}
+
+func runtimeServeLabels(command []string, envs []string) []string {
 	if len(command) == 0 || filepath.Base(command[0]) != "affentserve" {
 		return nil
 	}
 	values := map[string]string{}
+	for _, env := range envs {
+		name, value, ok := strings.Cut(env, "=")
+		if !ok {
+			continue
+		}
+		setRuntimeServeEnvLabelValue(values, name, value)
+	}
 	for i := 1; i < len(command); i++ {
 		arg := command[i]
 		name, value, ok := strings.Cut(arg, "=")
@@ -760,6 +771,29 @@ func runtimeServeCommandLabels(command []string) []string {
 		}
 	}
 	return labels
+}
+
+func setRuntimeServeEnvLabelValue(values map[string]string, name, value string) {
+	switch name {
+	case "AFFENTSERVE_BUILTINS":
+		values[runtimeLabelServeBuiltins] = value
+	case "AFFENTSERVE_EVAL_MODE":
+		values[runtimeLabelServeEvalMode] = value
+	case "AFFENTSERVE_MEMORY":
+		values[runtimeLabelServeMemory] = value
+	case "AFFENTSERVE_BROWSER":
+		values[runtimeLabelServeBrowser] = value
+	case "AFFENTSERVE_BROWSER_SCREENSHOT":
+		values[runtimeLabelServeScreenshot] = value
+	case "AFFENTSERVE_WEB":
+		values[runtimeLabelServeWeb] = value
+	case "AFFENTSERVE_WEB_SEARCH":
+		values[runtimeLabelServeWebSearch] = value
+	case "AFFENTSERVE_SUBAGENT":
+		values[runtimeLabelServeSubagent] = value
+	case "AFFENTSERVE_FOCUSED_TASKS":
+		values[runtimeLabelServeFocusedTasks] = value
+	}
 }
 
 func runtimeServeLabelFlag(name string) bool {
