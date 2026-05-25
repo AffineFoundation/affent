@@ -271,7 +271,8 @@ func truncateToolResultForContext(toolName, result string, max int) string {
 }
 
 type toolResultContextBudget struct {
-	remaining int
+	remaining       int
+	browserPageURLs map[string]int
 }
 
 func newToolResultContextBudget(max int) *toolResultContextBudget {
@@ -290,6 +291,9 @@ func (b *toolResultContextBudget) truncateToolResult(toolName, result string, pe
 	}
 	if b == nil {
 		return truncateToolResultForContext(toolName, result, perToolMax), toolResultContextOmittedBytes(result, perToolMax)
+	}
+	if repeatedBrowserPage := b.recordBrowserPageResult(toolName, result); repeatedBrowserPage {
+		return b.truncateRepeatedBrowserPageResult(toolName, result, perToolMax)
 	}
 	if b.remaining <= 0 {
 		return toolResultContextBudgetExhaustedResult(toolName, result)
@@ -316,6 +320,68 @@ func (b *toolResultContextBudget) truncateToolResult(toolName, result string, pe
 	return result[:cut] + marker, omitted
 }
 
+func (b *toolResultContextBudget) recordBrowserPageResult(toolName, result string) bool {
+	if b == nil || !isBrowserPageSnapshotTool(toolName) {
+		return false
+	}
+	u := toolResultBrowserURL(result)
+	if u == "" {
+		return false
+	}
+	if b.browserPageURLs == nil {
+		b.browserPageURLs = map[string]int{}
+	}
+	seen := b.browserPageURLs[u]
+	b.browserPageURLs[u] = seen + 1
+	return seen > 0
+}
+
+func (b *toolResultContextBudget) truncateRepeatedBrowserPageResult(toolName, result string, perToolMax int) (string, int) {
+	if b == nil || b.remaining <= 0 {
+		return toolResultContextBudgetExhaustedResult(toolName, result)
+	}
+	headMax := min(perToolMax, 768)
+	headMax = min(headMax, b.remaining)
+	head := toolResultContextEvidenceHead(result, headMax)
+	if head == "" || len(result) <= len(head) {
+		b.remaining -= min(len(result), b.remaining)
+		return result, 0
+	}
+	b.remaining -= len(head)
+	omitted := len(result) - len(head)
+	return head + "\n\n" + repeatedBrowserPageContextMarker(toolName, omitted), omitted
+}
+
+func isBrowserPageSnapshotTool(toolName string) bool {
+	switch toolName {
+	case "browser_navigate", "browser_snapshot", "browser_scroll", "browser_wait", "browser_click", "browser_type":
+		return true
+	default:
+		return false
+	}
+}
+
+func toolResultBrowserURL(result string) string {
+	for _, line := range strings.Split(result, "\n") {
+		line = strings.TrimSpace(line)
+		if strings.HasPrefix(line, "SourceAccess:") {
+			for _, field := range strings.Split(line, ";") {
+				field = strings.TrimSpace(field)
+				if strings.HasPrefix(field, "SourceAccess:") {
+					field = strings.TrimSpace(strings.TrimPrefix(field, "SourceAccess:"))
+				}
+				if strings.HasPrefix(field, "browser_rendered_url=") {
+					return strings.TrimSpace(strings.TrimPrefix(field, "browser_rendered_url="))
+				}
+			}
+		}
+		if strings.HasPrefix(line, "URL: ") {
+			return strings.TrimSpace(strings.TrimPrefix(line, "URL: "))
+		}
+	}
+	return ""
+}
+
 func toolResultContextBudgetExhaustedResult(toolName, result string) (string, int) {
 	head := toolResultContextEvidenceHead(result, 512)
 	if head == "" {
@@ -338,6 +404,13 @@ func toolResultContextEvidenceHead(result string, maxBytes int) string {
 	}
 	cut := textutil.AlignBackward(result, min(len(result), maxBytes))
 	return strings.TrimSpace(result[:cut])
+}
+
+func repeatedBrowserPageContextMarker(toolName string, omitted int) string {
+	return fmt.Sprintf(
+		"[... %d bytes omitted from repeated %s output for a browser page already read this turn. Use the earlier snapshot, browser_find for targeted text, navigate to a different source URL, or answer from verified evidence already collected.]",
+		omitted, toolName,
+	)
 }
 
 func toolResultContextOmittedBytes(result string, max int) int {

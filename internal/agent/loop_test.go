@@ -1020,6 +1020,31 @@ func TestToolResultContextBudgetExhaustionPreservesEvidenceHead(t *testing.T) {
 	}
 }
 
+func TestToolResultContextBudgetCompactsRepeatedBrowserPageReads(t *testing.T) {
+	budget := newToolResultContextBudget(16 * 1024)
+	payload := "SourceAccess: browser_rendered_url=https://example.com/report; snapshot_id=4; page_text_below=verified_page_evidence; links_in_snapshot=discovered_unverified_until_opened\nURL: https://example.com/report\nTITLE: Report\nSNAPSHOT_ID: 4\n\nPAGE TEXT:\np: useful evidence\n" + strings.Repeat("first ", 1000)
+	first, omitted := budget.truncateToolResult("browser_navigate", payload, 4*1024)
+	if omitted <= 0 || !strings.Contains(first, "first first") {
+		t.Fatalf("first browser read should use normal per-tool truncation, omitted=%d:\n%s", omitted, first)
+	}
+
+	repeatedPayload := "SourceAccess: browser_rendered_url=https://example.com/report; snapshot_id=5; page_text_below=verified_page_evidence; links_in_snapshot=discovered_unverified_until_opened\nURL: https://example.com/report\nTITLE: Report\nSNAPSHOT_ID: 5\n\nPAGE TEXT:\np: useful evidence again\n" + strings.Repeat("repeat ", 1000)
+	second, omitted := budget.truncateToolResult("browser_snapshot", repeatedPayload, 4*1024)
+	for _, want := range []string{
+		"SourceAccess: browser_rendered_url=https://example.com/report",
+		"URL: https://example.com/report",
+		"browser page already read this turn",
+		"browser_find for targeted text",
+	} {
+		if !strings.Contains(second, want) {
+			t.Fatalf("repeated browser read missing %q:\n%s", want, second)
+		}
+	}
+	if omitted <= 0 || strings.Contains(second, strings.Repeat("repeat ", 200)) {
+		t.Fatalf("repeated browser read should be compacted, omitted=%d:\n%s", omitted, second)
+	}
+}
+
 func TestTruncateToolResultForContextGuidanceByTool(t *testing.T) {
 	payload := strings.Repeat("x", 256)
 
