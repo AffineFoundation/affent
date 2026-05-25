@@ -149,6 +149,54 @@ func TestToolLoopGuard_WebFetchSuccessResetsFailureCount(t *testing.T) {
 	}
 }
 
+func TestToolLoopGuard_BrowserInteractionFailsFast(t *testing.T) {
+	g := newToolLoopGuard()
+	if got := g.recordOutcome("browser_click", false); got != "" {
+		t.Fatalf("first browser_click failure should not warn yet: %q", got)
+	}
+	got := g.recordOutcome("browser_click", false)
+	for _, want := range []string{
+		"browser interaction tool",
+		"failed 2 consecutive times",
+		"Dynamic pages",
+		"browser_find/browser_snapshot",
+		"canonical URL",
+		"marked gap",
+		"Failure: kind=loop_guard_repeated_failures",
+	} {
+		if !strings.Contains(got, want) {
+			t.Fatalf("browser interaction warning missing %q: %q", want, got)
+		}
+	}
+	if got := g.recordOutcome("browser_click", false); got != "" {
+		t.Fatalf("third browser_click failure should wait for halt threshold, got %q", got)
+	}
+	if got := g.recordOutcome("browser_click", false); got != "" {
+		t.Fatalf("fourth browser_click failure should wait for halt threshold, got %q", got)
+	}
+	got = g.recordOutcome("browser_click", false)
+	if !strings.Contains(got, "failed 5 consecutive times") || !strings.Contains(got, "Failure: kind=loop_guard_halted_tool") {
+		t.Fatalf("fifth browser_click failure should halt, got %q", got)
+	}
+	got = g.recordAttempt("browser_click", json.RawMessage(`{"ref":99}`))
+	if !strings.Contains(got, "already failed 5 consecutive times") {
+		t.Fatalf("halted browser_click should block subsequent attempts with browser threshold, got %q", got)
+	}
+}
+
+func TestToolLoopGuard_BrowserInteractionSuccessResetsFailureCount(t *testing.T) {
+	g := newToolLoopGuard()
+	if got := g.recordOutcome("browser_scroll", false); got != "" {
+		t.Fatalf("first browser_scroll failure should not warn yet: %q", got)
+	}
+	if got := g.recordOutcome("browser_scroll", true); got != "" {
+		t.Fatalf("browser_scroll success should reset silently, got %q", got)
+	}
+	if got := g.recordOutcome("browser_scroll", false); got != "" {
+		t.Fatalf("post-success browser_scroll failure should start a fresh count, got %q", got)
+	}
+}
+
 func TestToolLoopGuard_BlocksRepeatedFailedWebFetchURL(t *testing.T) {
 	g := newToolLoopGuard()
 	args := json.RawMessage(`{"url":"https://blocked.example/metrics"}`)

@@ -18,6 +18,8 @@ const (
 	toolFailureHaltThreshold        = 8
 	webFetchFailureWarnThreshold    = 2
 	webFetchFailureHaltThreshold    = 8
+	browserInteractionWarnThreshold = 2
+	browserInteractionHaltThreshold = 5
 
 	loopGuardCallCapKind             = "loop_guard_call_cap"
 	loopGuardHaltedToolKind          = "loop_guard_halted_tool"
@@ -406,6 +408,9 @@ func toolFailureWarnThresholdFor(tool string) int {
 	if tool == "web_fetch" {
 		return webFetchFailureWarnThreshold
 	}
+	if isBrowserInteractionTool(tool) {
+		return browserInteractionWarnThreshold
+	}
 	return toolFailureWarnThreshold
 }
 
@@ -413,7 +418,19 @@ func toolFailureHaltThresholdFor(tool string) int {
 	if tool == "web_fetch" {
 		return webFetchFailureHaltThreshold
 	}
+	if isBrowserInteractionTool(tool) {
+		return browserInteractionHaltThreshold
+	}
 	return toolFailureHaltThreshold
+}
+
+func isBrowserInteractionTool(tool string) bool {
+	switch tool {
+	case "browser_click", "browser_scroll", "browser_type", "browser_wait":
+		return true
+	default:
+		return false
+	}
 }
 
 func toolFailureWarnMessage(tool string, threshold int) string {
@@ -426,6 +443,12 @@ func toolFailureWarnMessage(tool string, threshold int) string {
 	if tool == "web_search" {
 		return withLoopGuardFailureKind(
 			fmt.Sprintf("loop_guard: tool %q has failed %d consecutive times this turn. Read the latest Failure kind and Next guidance before searching again.\nNext: stop repeating broad searches; use more distinctive entities or official domains, switch to known source URLs, or answer with clearly marked gaps.", tool, threshold),
+			loopGuardRepeatedFailuresKind,
+		)
+	}
+	if isBrowserInteractionTool(tool) {
+		return withLoopGuardFailureKind(
+			fmt.Sprintf("loop_guard: browser interaction tool %q has failed %d consecutive times this turn. Dynamic pages often hide, cover, or delay controls, and more clicking/scrolling usually burns context without new evidence.\nNext: stop interacting with the same page unless it visibly changed; use browser_find/browser_snapshot once for targeted text, navigate directly to a canonical URL, switch sources, or answer with a marked gap.", tool, threshold),
 			loopGuardRepeatedFailuresKind,
 		)
 	}
