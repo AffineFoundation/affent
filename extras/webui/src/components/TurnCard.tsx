@@ -185,10 +185,10 @@ function shouldShowReasoningDisclosure(
 ): boolean {
   const thinking = turn.thinkingText.trim();
   if (!thinking || opts.activityShowsReasoning) return false;
-  if (turn.thinkingStreaming || turn.status === "running") return true;
+  if (turn.thinkingStreaming || turn.status === "running" || turn.status === "error" || turn.error) return true;
   const query = opts.searchQuery?.trim().toLowerCase();
   if (query && thinking.toLowerCase().includes(query)) return true;
-  return opts.isLatest;
+  return false;
 }
 
 function shouldShowWorkDetails(
@@ -206,7 +206,7 @@ function shouldShowWorkDetails(
 }
 
 function ReasoningDisclosure({ turn, searchQuery }: { turn: TurnState; searchQuery?: string }) {
-  const autoOpen = turn.thinkingStreaming;
+  const autoOpen = turn.thinkingStreaming || turn.status === "running" || turn.status === "error" || Boolean(searchQuery?.trim());
   const userTouched = useRef(false);
   const [open, setOpen] = useState(autoOpen);
 

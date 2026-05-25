@@ -365,19 +365,23 @@ describe("Timeline", () => {
     expect(runningAnswer).not.toHaveTextContent("summarize the repo");
   });
 
-  it("keeps completed reasoning available as one folded readable record", async () => {
+  it("hides completed reasoning until a search surfaces it", async () => {
     const user = userEvent.setup();
-    renderTimeline(completedTurn);
+    renderTimeline([...completedTurn, ...messageOnlyTurn]);
 
-    expect(screen.getByRole("button", { name: /Thinking/ })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /Thinking/ })).toBeNull();
     expect(screen.queryByText("Technical trace")).toBeNull();
     expect(screen.getByTestId("agent-activity")).not.toHaveTextContent("I should list files.");
     expect(screen.queryByText(/\d+ events/)).not.toBeInTheDocument();
     expect(screen.queryByTestId("event-trace")).toBeNull();
 
-    await user.click(screen.getByRole("button", { name: /Thinking/ }));
+    await openTimelineTools(user);
+    await user.type(screen.getByTestId("timeline-search"), "I should list files");
 
-    expect(screen.getAllByText("I should list files.").length).toBeGreaterThan(0);
+    const thinking = screen.getByRole("button", { name: /Thinking/ });
+    expect(thinking).toBeInTheDocument();
+    expect(thinking).toHaveAttribute("aria-expanded", "true");
+    expect(thinking.parentElement?.textContent).toContain("I should list files");
   });
 
   it("keeps historical completed reasoning out of the main scan path", () => {
