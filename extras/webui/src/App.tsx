@@ -63,7 +63,6 @@ export function App() {
   const streamClosedRef = useRef(false);
   const nextGuidanceReceiptId = useRef(0);
   const conversationScrollRef = useRef<HTMLDivElement | null>(null);
-  const totalTokens = session.totalUsage.inputTokens + session.totalUsage.outputTokens;
   const demoActive = status.state === "demo";
   const selectedSession = useMemo(
     () => sessions.find((candidate) => candidate.id === selectedSessionId),
@@ -85,7 +84,6 @@ export function App() {
     }),
     [pendingMessage, session, selectedSessionId, workflow],
   );
-  const showRuntimeDetails = status.state === "error";
   const showWorkflowStatus = overview.tone === "error" || overview.tone === "warning";
   const showSessionNav = !demoActive && sessions.length > 0;
   const compactNav = demoActive || !showSessionNav;
@@ -510,24 +508,6 @@ export function App() {
                 onOpenLatestChat={latestChatShortcut ? () => resetSessionSurface(latestChatShortcut.id) : undefined}
                 initialHistoryFocus={selectedSessionId && !selectedSessionActive ? "answer" : "latest"}
               />
-              {showRuntimeDetails ? (
-                <details className="runtime-details" data-testid="session-strip">
-                  <summary>
-                    Session details
-                    <span>{session.status}</span>
-                  </summary>
-                  <div>
-                    {selectedSessionId ? <span>session {selectedSessionId}</span> : <span>session pending</span>}
-                    <span>
-                      messages <strong>{session.turns.length}</strong>
-                    </span>
-                    <span>
-                      tokens <strong>{totalTokens}</strong>
-                    </span>
-                    {status.detail ? <span>{status.detail}</span> : null}
-                  </div>
-                </details>
-              ) : null}
             </div>
             <Composer
               disabled={demoActive}

@@ -461,6 +461,8 @@ describe("App", () => {
     expect(input).toHaveValue("retry-worthy task");
     expect(input).toHaveFocus();
     expect(screen.queryByTestId("pending-turn")).toBeNull();
+    expect(screen.queryByTestId("session-strip")).toBeNull();
+    expect(screen.queryByText("Session details")).toBeNull();
   });
 
   it("focuses the composer after creating a new chat", async () => {
