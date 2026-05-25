@@ -213,6 +213,13 @@ image-serve-health-wait:
 		if curl -fsS "$(SERVE_HEALTH_URL)"; then \
 			exit 0; \
 		fi; \
+		state=$$(docker inspect "$(SERVE_CONTAINER_NAME)" --format '{{.State.Status}}' 2>/dev/null || true); \
+		if test "$$state" != "running"; then \
+			echo "container $(SERVE_CONTAINER_NAME) is $$state while waiting for health: $(SERVE_HEALTH_URL)" >&2; \
+			echo "last container logs:" >&2; \
+			docker logs --tail 100 "$(SERVE_CONTAINER_NAME)" >&2 || true; \
+			exit 1; \
+		fi; \
 		echo "health check failed ($$attempt/$(SERVE_HEALTH_ATTEMPTS)); retrying in $(SERVE_HEALTH_INTERVAL)s" >&2; \
 		attempt=$$((attempt + 1)); \
 		sleep "$(SERVE_HEALTH_INTERVAL)"; \

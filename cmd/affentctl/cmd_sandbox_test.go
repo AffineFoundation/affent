@@ -460,6 +460,11 @@ func TestMakeOneClickContainerTargetsUseSharedLimits(t *testing.T) {
 			`$(MAKE) image-serve`,
 			`$(MAKE) image-serve-health-wait`,
 		},
+		"image-serve-health-wait": {
+			`state=$$(docker inspect "$(SERVE_CONTAINER_NAME)" --format '{{.State.Status}}'`,
+			`container $(SERVE_CONTAINER_NAME) is $$state while waiting for health`,
+			`docker logs --tail 100 "$(SERVE_CONTAINER_NAME)"`,
+		},
 		"image-serve-smoke": {
 			`SERVE_CONTAINER_NAME="$(SMOKE_CONTAINER_NAME)"`,
 			`IMAGE_WORKSPACE="$(SMOKE_WORKSPACE)"`,
