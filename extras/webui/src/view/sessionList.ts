@@ -10,6 +10,7 @@ export type SessionRowTone = "running" | "saved" | "muted" | "error" | "warning"
 export interface SessionRowView {
   id: string;
   title: string;
+  detail?: string;
   meta: string[];
   status: string;
   tone: SessionRowTone;
@@ -26,12 +27,14 @@ export function buildSessionRows(sessions: readonly SessionSummary[]): SessionRo
     const metrics = usageMetrics(session);
     const titleSource = session.topic_user_message || session.latest_user_message;
     const title = titleSource ? summarizeSessionTitle(titleSource) : fallbackSessionTitle(session);
+    const detail = summarizeSessionDetail(session, title);
     const updated = session.last_used_at ?? session.created_at ? formatTimestamp(session.last_used_at ?? session.created_at) : noMessagesYet;
-    const searchText = [session.id, title, session.topic_user_message, session.latest_user_message, status, updated, ...metrics, ...chips].join(" ").toLowerCase();
+    const searchText = [session.id, title, detail, session.topic_user_message, session.latest_user_message, status, updated, ...metrics, ...chips].join(" ").toLowerCase();
 
     return {
       id: session.id,
       title,
+      detail,
       meta: buildRowMeta(session.id, updated, {
         empty: !titleSource && !session.has_conversation && !session.has_events,
         includeId: !titleSource,
@@ -82,17 +85,19 @@ export function filterSessionRows(
 function mergeCurrentSession(row: SessionRowView, session: SessionState): SessionRowView {
   const latestTurn = session.turns.at(-1);
   const title = currentSessionTitle(row, session);
+  const detail = currentSessionDetail(session, title);
   const hasTopicTitle = Boolean(conversationTopicFromTurns(session.turns));
   const metrics = currentSessionMetrics(session);
   const chips = mergeChips(row.chips, currentSessionChips(session));
   const status = currentSessionStatus(session, row.status);
   const userSearchText = session.turns.map((turn) => turn.userText).join(" ");
-  const searchText = [row.id, title, status, userSearchText, ...metrics, ...chips].join(" ").toLowerCase();
+  const searchText = [row.id, title, detail, status, userSearchText, ...metrics, ...chips].join(" ").toLowerCase();
   const updated = latestTurn?.userText && row.updated === noMessagesYet ? "" : row.updated;
 
   return {
     ...row,
     title,
+    detail,
     meta: buildRowMeta(row.id, updated, { includeId: !hasTopicTitle }),
     status,
     tone: currentSessionTone(session, row.tone),
@@ -106,6 +111,13 @@ function mergeCurrentSession(row: SessionRowView, session: SessionState): Sessio
 function currentSessionTitle(row: SessionRowView, session: SessionState): string {
   const topic = conversationTopicFromTurns(session.turns);
   return topic ? summarizeSessionTitle(topic) : row.title;
+}
+
+function currentSessionDetail(session: SessionState, title: string): string | undefined {
+  const topic = conversationTopicFromTurns(session.turns);
+  const latest = [...session.turns].reverse().find((turn) => Boolean(turn.userText?.trim()))?.userText;
+  if (!topic || !latest || latest === topic) return undefined;
+  return summarizeLatestRequestDetail(latest, title);
 }
 
 function currentSessionStatus(session: SessionState, fallback: string): string {
@@ -212,6 +224,39 @@ function fallbackSessionTitle(session: SessionSummary): string {
   if (session.active) return hasWork ? "Live chat" : "New live chat";
   if (session.durable) return hasWork ? "Saved chat" : "New chat";
   return hasWork ? "Recent chat" : "New chat";
+}
+
+function summarizeSessionDetail(session: SessionSummary, title: string): string | undefined {
+  if (!session.topic_user_message || !session.latest_user_message) return undefined;
+  if (session.topic_user_message === session.latest_user_message) return undefined;
+  return summarizeLatestRequestDetail(session.latest_user_message, title);
+}
+
+function summarizeLatestRequestDetail(text: string, title: string): string | undefined {
+  const cleaned = stripContinuationPrefix(text.replace(/\s+/g, " ").trim());
+  if (!cleaned) return undefined;
+  if (summarizeSessionTitle(cleaned) === title) return undefined;
+  const summary = summarize(cleaned, 48);
+  if (summary === title) return undefined;
+  return `Latest · ${summary}`;
+}
+
+function stripContinuationPrefix(text: string): string {
+  let value = text.trim();
+  let changed = true;
+  while (changed) {
+    const next = value
+      .replace(/^(请继续|继续|接着)(?:同一个任务|这个任务|当前任务)?[。,.，、\s]*/i, "")
+      .replace(/^同一个任务[。,.，、\s]*/i, "")
+      .replace(/^(please\s+)?(?:continue|resume)(?:\s+(?:the\s+)?(?:same\s+)?(?:task|work|chat))?[。,.，、\s]*/i, "")
+      .replace(/^this (?:task|work|chat) from where (?:it|we) stopped[:：]?\s*/i, "")
+      .replace(/^from where (?:it|we) stopped[:：]?\s*/i, "")
+      .replace(/^based on (?:the )?(?:existing|previous|collected) /i, "based on ")
+      .trim();
+    changed = next !== value;
+    value = next;
+  }
+  return value;
 }
 
 function summarizeSessionTitle(text: string): string {

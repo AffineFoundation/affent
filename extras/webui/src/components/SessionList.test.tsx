@@ -58,6 +58,7 @@ describe("SessionList", () => {
 
     const row = screen.getByRole("button", { name: /Affine（Bittensor 子网）/ });
     expect(row).toHaveTextContent("Affine（Bittensor 子网）");
+    expect(row).toHaveTextContent("Latest · 基于已有证据输出报告");
     expect(row).not.toHaveTextContent("请继续同一个任务");
     expect(row).not.toHaveTextContent("Saved");
   });
@@ -194,6 +195,7 @@ describe("SessionList", () => {
 
     const row = screen.getByRole("button", { name: /Affine（Bittensor 子网）/ });
     expect(row).toHaveTextContent("Affine（Bittensor 子网）");
+    expect(row).toHaveTextContent("Latest · 基于已有证据输出报告");
     expect(row).not.toHaveTextContent("请继续同一个任务");
   });
 

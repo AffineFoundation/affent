@@ -111,10 +111,12 @@ describe("sessionList view model", () => {
 
     expect(rows[0]).toMatchObject({
       title: "Affine（Bittensor 子网）",
+      detail: "Latest · 基于已有证据输出报告",
       meta: ["May 24 17:37 UTC"],
       status: "Saved",
     });
     expect(rows[0].searchText).toContain("请继续同一个任务");
+    expect(rows[0].searchText).toContain("基于已有证据输出报告");
   });
 
   it("turns long instruction-style tasks into topic-like titles", () => {
@@ -151,6 +153,23 @@ describe("sessionList view model", () => {
 
     expect(rows.find((row) => row.id === "bittensor-question")?.title).toBe("Bittensor");
     expect(rows.find((row) => row.id === "english-subnet")?.title).toBe("Affine (Bittensor subnet)");
+  });
+
+  it("does not repeat the topic when a continuation prompt embeds the original task", () => {
+    const rows = buildSessionRows([
+      session({
+        id: "affine-repeat",
+        durable: true,
+        topic_user_message: "真实收集 Affine（Bittensor 子网）的相关信息并向我介绍",
+        latest_user_message: "continue this task from where it stopped: 请真实收集 Affine（Bittensor 子网）的相关信息并向我介绍",
+      }),
+    ]);
+
+    expect(rows[0]).toMatchObject({
+      title: "Affine（Bittensor 子网）",
+      detail: undefined,
+    });
+    expect(rows[0].searchText).toContain("continue this task from where it stopped");
   });
 
   it("uses the selected timeline state when the API summary lacks recent task context", () => {
@@ -418,6 +437,7 @@ describe("sessionList view model", () => {
 
     expect(rows[0]).toMatchObject({
       title: "Affine（Bittensor 子网）",
+      detail: "Latest · 基于已有证据输出报告",
       status: "Done",
       tone: "saved",
       metrics: ["2 messages", "1 continued"],

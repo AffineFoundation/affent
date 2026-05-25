@@ -163,6 +163,7 @@ export function SessionList({
                   </span>
                   {shouldShowRowStatus(row.status) ? <span className="session-state">{row.status}</span> : null}
                 </span>
+                {row.detail ? <span className="session-detail">{row.detail}</span> : null}
                 <span className="session-meta">
                   {row.meta.map((part) => (
                     <span key={part}>{part}</span>
