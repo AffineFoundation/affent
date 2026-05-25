@@ -22,11 +22,11 @@ describe("buildTurnWorkSummary", () => {
     expect(summary.actionLabel).toBe("List files: .");
   });
 
-  it("shows completed tool failures as handled attempts when a final answer exists", () => {
+  it("shows completed tool failures as tool issues when a final answer exists", () => {
     const summary = buildTurnWorkSummary(reduceRawEvents(toolError).turns[0]);
 
-    expect(summary.items).toContainEqual({ label: "1 handled", tone: "warning" });
-    expect(summary.headlineItems).toEqual([{ label: "1 handled", tone: "warning" }]);
+    expect(summary.items).toContainEqual({ label: "1 tool issue", tone: "warning" });
+    expect(summary.headlineItems).toEqual([{ label: "1 tool issue", tone: "warning" }]);
   });
 
   it("hides failed attempt chips after a later message continues the work", () => {

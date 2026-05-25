@@ -124,7 +124,7 @@ function turnNavSummary(items: readonly TurnNavSourceItem[], pending: boolean): 
   else if (unresolved > 0) parts.push(`${unresolved} need attention`);
   else parts.push(`${completed} done`);
   if (continued > 0) parts.push(`${continued} continued`);
-  if (toolIssues > 0) parts.push(`${toolIssues} handled`);
+  if (toolIssues > 0) parts.push(`${toolIssues} tool ${pluralize("issue", toolIssues)}`);
   if (actions > 0) parts.push(`${actions} ${pluralize("action", actions)}`);
   if (tokens > 0) parts.push(`${formatCount(tokens)} tokens`);
   return parts.join(" · ");

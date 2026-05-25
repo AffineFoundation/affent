@@ -173,7 +173,7 @@ describe("buildSessionOverview", () => {
     expect(overview.stateLabel).toBe("Result ready");
     expect(overview.tone).toBe("success");
     expect(overview.metrics).toEqual([
-      { label: "Handled", value: "1", tone: "warning" },
+      { label: "Tool issue", value: "1", tone: "warning" },
       { label: "Task actions", value: "1" },
       { label: "Turn tokens", value: "1.2k" },
       { label: "Chat tokens", value: "1.7k" },
@@ -265,7 +265,7 @@ describe("buildSessionOverview", () => {
     });
 
     expect(overview.metrics).toEqual(expect.arrayContaining([
-      { label: "Handled", value: "1", tone: "warning" },
+      { label: "Tool issue", value: "1", tone: "warning" },
       { label: "Task actions", value: "2" },
       { label: "Task evidence", value: "1" },
     ]));
@@ -312,7 +312,7 @@ describe("buildSessionOverview", () => {
     expect(overview.detail).toBe("Affine（Bittensor Subnet 120）调研报告: Affine 是 SN120。");
   });
 
-  it("labels completed tool failures as handled work in the header metrics", () => {
+  it("labels completed tool failures as tool issues in the header metrics", () => {
     const session = reduceRawEvents([
       { id: 1, type: "turn.start", data: { turn_id: "t1" } },
       { id: 2, type: "user.message", data: { turn_id: "t1", text: "research affine" } },
@@ -356,12 +356,12 @@ describe("buildSessionOverview", () => {
     });
 
     expect(overview.metrics).toEqual(expect.arrayContaining([
-      { label: "Handled", value: "1", tone: "warning" },
+      { label: "Tool issue", value: "1", tone: "warning" },
       { label: "Actions", value: "1", tone: undefined },
     ]));
     expect(overview.detail).toBe("I still found enough to answer.");
     expect(overview.metrics).not.toEqual(expect.arrayContaining([
-      expect.objectContaining({ label: "Tool issue" }),
+      expect.objectContaining({ label: "Issue" }),
     ]));
   });
 

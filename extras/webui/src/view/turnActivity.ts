@@ -432,7 +432,7 @@ function completedActionSummary(turn: TurnState): string {
   const actionLabel = `${count} ${pluralize("action", count)}`;
   if (count === 0) return "No action details.";
   if (failed > 0 && turn.status === "completed" && turn.assistantText.trim()) {
-    return `${actionLabel} completed; handled ${failed} ${pluralize("issue", failed)}.`;
+    return `${actionLabel} completed; worked around ${failed} ${pluralize("issue", failed)}.`;
   }
   if (failed > 0) return `${failed} of ${actionLabel} need attention.`;
   return `${capitalize(actionLabel)} completed.`;
@@ -442,11 +442,11 @@ function completedWithRecoveredWorkSummary(turn: TurnState, nodes: readonly Turn
   const failed = turn.toolCalls.filter((call) => call.status === "error").length;
   const handledLabel = `${failed} ${pluralize("issue", failed)}`;
   if (hasDelegatedWork(nodes)) {
-    return `Collected evidence through delegated work; handled ${handledLabel}.`;
+    return `Collected evidence through delegated work; worked around ${handledLabel}.`;
   }
   const count = turn.toolCalls.length;
-  if (count > 1) return `Checked ${count} ${pluralize("action", count)}; handled ${handledLabel}.`;
-  return `Answered after handling ${handledLabel}.`;
+  if (count > 1) return `Checked ${count} ${pluralize("action", count)}; worked around ${handledLabel}.`;
+  return `Answered after working around ${handledLabel}.`;
 }
 
 function isIssueNode(node: TurnActivityNode): boolean {
@@ -586,7 +586,7 @@ function handledIssueBrief(turn: TurnState): TurnActivityBriefRow | undefined {
   const suffix = names.length > 0 ? `: ${names.join(", ")}` : "";
   return {
     id: "handled",
-    label: "Handled",
+    label: "Tool issues",
     value: `${failed.length} ${pluralize("tool issue", failed.length)} worked around${suffix}.`,
     tone: "warning",
   };

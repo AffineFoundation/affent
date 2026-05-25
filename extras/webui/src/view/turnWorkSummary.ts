@@ -38,7 +38,7 @@ export function buildTurnWorkSummaryWithOptions(
   const constraintDeviations = detectConstraintDeviations(turn);
 
   if (constraintDeviations.length > 0) items.push({ label: constraintDeviations.length === 1 ? "constraint" : `${constraintDeviations.length} constraints`, tone: "warning" });
-  if (failed && !opts.continuedAfterLimit) items.push({ label: `${failed} ${finalAnswerReady ? "handled" : "failed"}`, tone: finalAnswerReady ? "warning" : "error" });
+  if (failed && !opts.continuedAfterLimit) items.push({ label: finalAnswerReady ? toolIssueLabel(failed) : `${failed} failed`, tone: finalAnswerReady ? "warning" : "error" });
   if (running) items.push({ label: `${running} running`, tone: "running" });
   if (repaired) items.push({ label: `${repaired} repaired`, tone: "warning" });
   if (truncated) items.push({ label: `${truncated} truncated`, tone: "info" });
@@ -65,6 +65,10 @@ function sumDurations(calls: readonly ToolCallState[]): number | undefined {
     found = true;
   }
   return found ? total : undefined;
+}
+
+function toolIssueLabel(count: number): string {
+  return `${count} tool issue${count === 1 ? "" : "s"}`;
 }
 
 function actionSummary(calls: readonly ToolCallState[]): string {

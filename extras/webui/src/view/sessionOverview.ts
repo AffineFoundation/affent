@@ -132,7 +132,7 @@ function buildMetrics(session: SessionState, latestTurn?: TurnState, latestActiv
   const currentIssueCount = latestTurn ? currentTurnIssueCount(latestTurn) : 0;
   if (currentIssueCount > 0) metrics.push({ label: currentIssueCount === 1 ? "Issue" : "Issues", value: String(currentIssueCount), tone: "error" });
   const settledIssues = latestTurn ? settledToolIssueCount(latestTurn) : 0;
-  if (settledIssues > 0) metrics.push({ label: "Handled", value: String(settledIssues), tone: "warning" });
+  if (settledIssues > 0) metrics.push({ label: settledIssues === 1 ? "Tool issue" : "Tool issues", value: String(settledIssues), tone: "warning" });
   if (latestTurn?.toolCalls.length) {
     const failed = latestTurn.toolCalls.some((call) => call.status === "error");
     metrics.push({ label: "Actions", value: String(latestTurn.toolCalls.length), tone: currentIssueCount > 0 && failed ? "error" : undefined });
@@ -142,7 +142,7 @@ function buildMetrics(session: SessionState, latestTurn?: TurnState, latestActiv
   const threadMetrics = latestTurn ? buildThreadMetrics(session, latestTurn) : undefined;
   if (threadMetrics) {
     if (threadMetrics.handledIssues > 0 && settledIssues === 0) {
-      metrics.push({ label: "Handled", value: String(threadMetrics.handledIssues), tone: "warning" });
+      metrics.push({ label: threadMetrics.handledIssues === 1 ? "Tool issue" : "Tool issues", value: String(threadMetrics.handledIssues), tone: "warning" });
     }
     metrics.push({ label: "Task actions", value: String(threadMetrics.actions) });
     if (threadMetrics.evidence > 0) metrics.push({ label: "Task evidence", value: String(threadMetrics.evidence) });

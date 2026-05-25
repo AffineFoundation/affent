@@ -244,7 +244,7 @@ describe("SessionList", () => {
     const row = screen.getByRole("button", { name: /research affine/ });
     expect(row).toHaveAttribute("data-tone", "saved");
     expect(row).toHaveTextContent("Done");
-    expect(row).toHaveTextContent("1 handled");
+    expect(row).toHaveTextContent("1 tool issue");
   });
 
   it("filters and searches sessions without leaving the sidebar", async () => {

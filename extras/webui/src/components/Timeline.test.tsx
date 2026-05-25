@@ -449,8 +449,8 @@ describe("Timeline", () => {
     expect(card).toHaveAttribute("data-status", "error");
     expect(within(card).getByText(/exit 2/)).toBeInTheDocument();
     expect(screen.getByTestId("work-thread")).toHaveTextContent("Tool details");
-    expect(screen.getByTestId("work-thread")).toHaveTextContent("1 call · 1 handled");
-    expect(screen.getByTestId("work-summary")).not.toHaveTextContent("1 handled");
+    expect(screen.getByTestId("work-thread")).toHaveTextContent("1 call · 1 tool issue");
+    expect(screen.getByTestId("work-summary")).not.toHaveTextContent("1 tool issue");
     expect(screen.getByTestId("work-summary")).toHaveTextContent("make");
   });
 

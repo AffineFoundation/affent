@@ -93,7 +93,7 @@ describe("turnNavigator view model", () => {
     );
   });
 
-  it("reports completed tool failures as handled work instead of attention", () => {
+  it("reports completed tool failures as tool issues instead of attention", () => {
     const view = buildTurnNavigatorView([
       {
         turn: turn({
@@ -109,7 +109,7 @@ describe("turnNavigator view model", () => {
       },
     ]);
 
-    expect(view.summary).toBe("1 done · 1 handled · 2 actions");
+    expect(view.summary).toBe("1 done · 1 tool issue · 2 actions");
     expect(view.current?.statusLabel).toBe("Done");
     expect(view.current?.statusTone).toBe("completed");
   });
@@ -181,7 +181,7 @@ describe("turnNavigator view model", () => {
       },
     ]);
 
-    expect(view.summary).toBe("1 done · 1 continued · 1 handled · 3 actions");
+    expect(view.summary).toBe("1 done · 1 continued · 1 tool issue · 3 actions");
   });
 
   it("summarizes cumulative token use across conversation steps", () => {

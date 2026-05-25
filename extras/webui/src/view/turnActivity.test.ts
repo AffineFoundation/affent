@@ -179,7 +179,7 @@ describe("buildTurnActivity", () => {
     const activity = buildTurnActivity(turn);
 
     expect(activity?.digest.label).toBe("Process");
-    expect(activity?.digest.summary).toBe("Answered after handling 1 issue.");
+    expect(activity?.digest.summary).toBe("Answered after working around 1 issue.");
     expect(activity?.digest.tone).toBe("warning");
   });
 
@@ -434,18 +434,18 @@ describe("buildTurnActivity", () => {
 
     expect(activity?.digest).toMatchObject({
       label: "Process",
-      summary: "Answered after handling 1 issue.",
+      summary: "Answered after working around 1 issue.",
       tone: "warning",
     });
     expect(activity?.brief.rows).toContainEqual({
       id: "focus",
       label: "Result",
-      value: "Answered after handling 1 issue.",
+      value: "Answered after working around 1 issue.",
       tone: "warning",
     });
     expect(activity?.brief.rows).toContainEqual({
       id: "handled",
-      label: "Handled",
+      label: "Tool issues",
       value: "1 tool issue worked around: affine bittensor.",
       tone: "warning",
     });
@@ -528,7 +528,7 @@ describe("buildTurnActivity", () => {
     });
     expect(activity?.brief.rows).toContainEqual({
       id: "handled",
-      label: "Handled",
+      label: "Tool issues",
       value: "1 tool issue worked around: affine.invalid/missing.",
       tone: "warning",
     });

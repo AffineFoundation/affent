@@ -135,7 +135,7 @@ function currentSessionMetrics(session: SessionState): string[] {
   if (currentIssueCount > 0) metrics.push(`${currentIssueCount} issue${currentIssueCount === 1 ? "" : "s"}`);
   if (continuedCount > 0) metrics.push(`${continuedCount} continued`);
   if (priorIssueCount > 0) metrics.push(`${priorIssueCount} prior issue${priorIssueCount === 1 ? "" : "s"}`);
-  if (toolIssueCount > 0) metrics.push(`${toolIssueCount} handled`);
+  if (toolIssueCount > 0) metrics.push(`${toolIssueCount} tool issue${toolIssueCount === 1 ? "" : "s"}`);
   return metrics;
 }
 

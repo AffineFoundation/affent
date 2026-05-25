@@ -135,7 +135,7 @@ describe("sessionList view model", () => {
     expect(rows[0].searchText).toContain("list the files");
   });
 
-  it("keeps handled tool failures as handled work instead of an error row", () => {
+  it("keeps answered tool failures as tool issues instead of an error row", () => {
     const rows = mergeCurrentSessionRow(
       buildSessionRows([session({ id: "s1", durable: true, has_events: true })]),
       "s1",
@@ -180,7 +180,7 @@ describe("sessionList view model", () => {
     expect(rows[0]).toMatchObject({
       status: "Done",
       tone: "saved",
-      metrics: ["1 message", "1 action", "1 handled"],
+      metrics: ["1 message", "1 action", "1 tool issue"],
     });
   });
 
@@ -286,7 +286,7 @@ describe("sessionList view model", () => {
     expect(rows[0].searchText).toContain("continue and summarize");
   });
 
-  it("keeps continued attempts separate from handled tool failures in the session row", () => {
+  it("keeps continued attempts separate from answered tool issues in the session row", () => {
     const rows = mergeCurrentSessionRow(
       buildSessionRows([session({ id: "s1", durable: true, has_events: true })]),
       "s1",
@@ -361,7 +361,7 @@ describe("sessionList view model", () => {
       ]),
     );
 
-    expect(rows[0].metrics).toEqual(["2 messages", "2 actions", "1 continued", "1 handled"]);
+    expect(rows[0].metrics).toEqual(["2 messages", "2 actions", "1 continued", "1 tool issue"]);
   });
 
   it("keeps a Chinese continuation from replacing the original session topic", () => {

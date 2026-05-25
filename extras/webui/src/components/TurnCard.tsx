@@ -838,7 +838,7 @@ function completedWorkDetail(turn: TurnState): string | undefined {
   if (count === 0) return undefined;
   const failed = turn.toolCalls.filter((call) => call.status === "error").length;
   const calls = `${count} ${count === 1 ? "call" : "calls"}`;
-  if (failed && turn.assistantText.trim()) return `${calls} · ${failed} handled`;
+  if (failed && turn.assistantText.trim()) return `${calls} · ${failed} tool issue${failed === 1 ? "" : "s"}`;
   if (failed) return `${failed} failed of ${calls}`;
   return `${count} completed ${count === 1 ? "call" : "calls"}`;
 }
