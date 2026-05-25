@@ -71,7 +71,15 @@ const liveResearchPhrases = [
 ] as const;
 
 export function buildComposerTaskHint(text: string, runtime?: RuntimeCapabilityView): ComposerTaskHint | undefined {
-  if (!runtime || !looksLikeLiveResearch(text)) return undefined;
+  if (!looksLikeLiveResearch(text)) return undefined;
+
+  if (!runtime) {
+    return {
+      label: "Web access unknown",
+      detail: "This request may need live sources, but this chat has not reported web access yet.",
+      tone: "unknown",
+    };
+  }
 
   if (runtime.research === "off") {
     return {

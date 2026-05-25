@@ -153,6 +153,25 @@ describe("Composer", () => {
     expect(screen.getByTestId("composer-task-hint")).toHaveTextContent("search or page browsing is only partially available");
   });
 
+  it("warns before the first research task when capability details are not loaded yet", async () => {
+    const user = userEvent.setup();
+    render(
+      <Composer
+        disabled={false}
+        busy={false}
+        hasSession={false}
+        onSubmit={vi.fn()}
+        onCancel={vi.fn()}
+      />,
+    );
+
+    await user.type(screen.getByPlaceholderText("Message Affent..."), "check latest market news");
+
+    expect(screen.getByTestId("composer-task-hint")).toHaveAttribute("data-tone", "unknown");
+    expect(screen.getByTestId("composer-task-hint")).toHaveTextContent("Web access unknown");
+    expect(screen.getByTestId("composer-task-hint")).toHaveTextContent("has not reported web access yet");
+  });
+
   it("loads a suggested note while a turn is running", () => {
     render(
       <Composer
