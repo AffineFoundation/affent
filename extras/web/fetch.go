@@ -510,12 +510,12 @@ func renderedFallbackResult(ctx context.Context, cfg FetchConfig, requestURL str
 	if fallbackBlock := blockedPageReason(out, reason.FinalURL); fallbackBlock != "" {
 		return "", fmt.Errorf("rendered fallback returned blocked/challenge page: %s", fallbackBlock)
 	}
-	prefix := fmt.Sprintf("[rendered browser fallback: URL=%s, Reason=%q", reason.FinalURL, reason.Kind)
+	prefix := fmt.Sprintf("[rendered browser fallback succeeded: URL=%s, DirectFetchReason=%q", reason.FinalURL, reason.Kind)
 	if reason.Status > 0 {
-		prefix += fmt.Sprintf(", Status=%d", reason.Status)
+		prefix += fmt.Sprintf(", DirectFetchStatus=%d", reason.Status)
 	}
 	if reason.Detail != "" {
-		prefix += fmt.Sprintf(", Detail=%q", reason.Detail)
+		prefix += fmt.Sprintf(", DirectFetchDetail=%q", reason.Detail)
 	}
 	prefix += "]\n"
 	return truncateFetchResult(prefix+out, cfg.MaxResultChars), nil

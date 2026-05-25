@@ -401,7 +401,7 @@ func TestFetchTool_UsesRenderedFallbackForKnownDirectFetchTraps(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Execute: %v", err)
 	}
-	for _, want := range []string{"rendered browser fallback", "Reason=\"direct_reader_trap\"", "TITLE: rendered page", "rendered content visible"} {
+	for _, want := range []string{"rendered browser fallback", "DirectFetchReason=\"direct_reader_trap\"", "TITLE: rendered page", "rendered content visible"} {
 		if !strings.Contains(out, want) {
 			t.Fatalf("rendered fallback output missing %q:\n%s", want, out)
 		}
@@ -414,6 +414,39 @@ func TestFetchTool_UsesRenderedFallbackForKnownDirectFetchTraps(t *testing.T) {
 	}
 	if strings.Contains(out, "Failure: kind=blocked") {
 		t.Fatalf("successful rendered fallback should not be counted as blocked:\n%s", out)
+	}
+}
+
+func TestFetchTool_RenderedFallbackLabelsDirectFetchFailureAsRecovered(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusForbidden)
+		w.Write([]byte("blocked by direct reader protection"))
+	}))
+	defer srv.Close()
+
+	tool := FetchTool(FetchConfig{
+		AllowPrivateNetwork: true,
+		RenderedFallback: func(_ context.Context, requestURL string, reason FetchFallbackReason) (string, error) {
+			if reason.Kind != "blocked" || reason.Status != http.StatusForbidden {
+				t.Fatalf("fallback reason = %+v, want blocked 403", reason)
+			}
+			return "URL: " + requestURL + "\nTITLE: browser-rendered page\n\nPAGE TEXT:\np: real page content after browser challenge\n", nil
+		},
+	})
+	args, _ := json.Marshal(map[string]string{"url": srv.URL})
+	out, err := tool.Execute(context.Background(), args)
+	if err != nil {
+		t.Fatalf("Execute: %v", err)
+	}
+	for _, want := range []string{"rendered browser fallback succeeded", "DirectFetchReason=\"blocked\"", "DirectFetchStatus=403", "browser-rendered page", "real page content"} {
+		if !strings.Contains(out, want) {
+			t.Fatalf("recovered fallback output missing %q:\n%s", want, out)
+		}
+	}
+	for _, forbidden := range []string{"Failure: kind=blocked", ", Reason=\"blocked\"", ", Status=403"} {
+		if strings.Contains(out, forbidden) {
+			t.Fatalf("recovered fallback output should not look like a blocked tool result (%q):\n%s", forbidden, out)
+		}
 	}
 }
 
@@ -533,7 +566,7 @@ func TestFetchTool_UsesRenderedFallbackForDynamicShell(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Execute: %v", err)
 	}
-	for _, want := range []string{"rendered browser fallback", "Reason=\"dynamic_shell\"", "hydrated app", "market cap and current stats"} {
+	for _, want := range []string{"rendered browser fallback", "DirectFetchReason=\"dynamic_shell\"", "hydrated app", "market cap and current stats"} {
 		if !strings.Contains(out, want) {
 			t.Fatalf("dynamic rendered fallback output missing %q:\n%s", want, out)
 		}
@@ -566,7 +599,7 @@ func TestFetchTool_UsesRenderedFallbackForEmptyHTML(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Execute: %v", err)
 	}
-	for _, want := range []string{"rendered browser fallback", "Reason=\"empty_response\"", "rendered empty page", "content appeared after browser rendering"} {
+	for _, want := range []string{"rendered browser fallback", "DirectFetchReason=\"empty_response\"", "rendered empty page", "content appeared after browser rendering"} {
 		if !strings.Contains(out, want) {
 			t.Fatalf("empty rendered fallback output missing %q:\n%s", want, out)
 		}
