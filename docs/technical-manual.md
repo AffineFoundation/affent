@@ -239,6 +239,10 @@ AFFENTSERVE_MODEL=gpt-4o-mini \
 ./bin/affentserve --listen 127.0.0.1:7777
 ```
 
+DashScope-compatible deployments may set `DASHSCOPE_API_KEY` instead of
+`AFFENTSERVE_API_KEY`; the runtime accepts both, with `AFFENTSERVE_API_KEY`
+remaining the canonical name.
+
 Or start the production-style image path:
 
 ```bash

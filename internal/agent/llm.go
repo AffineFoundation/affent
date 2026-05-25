@@ -434,6 +434,12 @@ func (c *LLMClient) Chat(ctx context.Context, msgs []ChatMessage, tools []ToolDe
 		retryAfter := parseRetryAfter(resp.Header.Get("Retry-After"))
 		resp.Body.Close()
 		base := fmt.Errorf("chat http %d: %s", resp.StatusCode, errBody)
+		if resp.StatusCode == http.StatusUnauthorized || resp.StatusCode == http.StatusForbidden {
+			base = fmt.Errorf(
+				"chat auth failed (status=%d endpoint=%s model=%s): %w\nNext: verify the API key is valid for this endpoint, and that the model name exists on the upstream provider",
+				resp.StatusCode, c.BaseURL+"/chat/completions", c.Model, base,
+			)
+		}
 		if isRetryableStatus(resp.StatusCode) {
 			return nil, &RetryableError{Err: base, Status: resp.StatusCode, RetryAfter: retryAfter}
 		}

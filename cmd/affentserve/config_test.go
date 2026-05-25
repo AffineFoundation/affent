@@ -122,6 +122,18 @@ func TestConfig_Resolve_AppliesDefaults(t *testing.T) {
 	}
 }
 
+func TestConfig_Resolve_AcceptsDashScopeApiKeyAlias(t *testing.T) {
+	t.Setenv("AFFENTSERVE_API_KEY", "")
+	t.Setenv("DASHSCOPE_API_KEY", "dashscope-key")
+	cfg := Config{BaseURL: "https://dashscope.aliyuncs.com/compatible-mode/v1"}
+	if err := cfg.Resolve(); err != nil {
+		t.Fatalf("Resolve: %v", err)
+	}
+	if cfg.APIKey != "dashscope-key" {
+		t.Fatalf("APIKey = %q, want dashscope-key", cfg.APIKey)
+	}
+}
+
 func TestConfig_Validate_RejectsExplicitNonPositiveMaxSessions(t *testing.T) {
 	for _, raw := range []string{`0`, `-1`} {
 		t.Run(raw, func(t *testing.T) {

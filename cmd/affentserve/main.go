@@ -58,7 +58,7 @@ func parseFlagsAndConfig(argv []string) (Config, error) {
 		configPath         = fs.String("config", "", "Path to JSON config file (CLI flags override).")
 		listen             = fs.String("listen", "", "Address to listen on (default 127.0.0.1:7777).")
 		baseURL            = fs.String("base-url", "", "Upstream OpenAI-compatible chat completions URL (env: AFFENTSERVE_BASE_URL).")
-		apiKey             = fs.String("api-key", "", "API key for --base-url (env: AFFENTSERVE_API_KEY).")
+		apiKey             = fs.String("api-key", "", "API key for --base-url (env: AFFENTSERVE_API_KEY, DASHSCOPE_API_KEY).")
 		model              = fs.String("model", "", "Default model id reported by /v1/models and used when a request omits 'model' (env: AFFENTSERVE_MODEL).")
 		authToken          = fs.String("auth-token", "", "Optional bearer token gating the server itself (env: AFFENTSERVE_AUTH_TOKEN).")
 		workspaceRoot      = fs.String("workspace-root", "", "Parent directory for per-session workspaces. Empty creates per-session temp dirs.")

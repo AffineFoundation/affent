@@ -314,21 +314,21 @@ func (c *Config) Resolve() error {
 		c.EnableFocusedTasks = true
 	}
 	for _, e := range []struct {
-		env  string
+		envs []string
 		dest *string
 	}{
-		{"AFFENTSERVE_BASE_URL", &c.BaseURL},
-		{"AFFENTSERVE_API_KEY", &c.APIKey},
-		{"AFFENTSERVE_MODEL", &c.Model},
-		{"AFFENTSERVE_AUTH_TOKEN", &c.AuthToken},
-		{"AFFENTSERVE_WORKSPACE_ROOT", &c.WorkspaceRoot},
-		{"AFFENTSERVE_MEMORY_ROOT", &c.MemoryRoot},
-		{"AFFENTSERVE_SESSION_IDLE_TTL", &c.SessionIdleTTL},
-		{"AFFENTSERVE_SESSION_RETENTION", &c.SessionRetention},
-		{"AFFENTSERVE_PER_CALL_TIMEOUT", &c.PerCallTimeout},
-		{"AFFENTSERVE_RETRY_BACKOFF", &c.RetryBackoff},
+		{[]string{"AFFENTSERVE_BASE_URL"}, &c.BaseURL},
+		{[]string{"AFFENTSERVE_API_KEY", "DASHSCOPE_API_KEY"}, &c.APIKey},
+		{[]string{"AFFENTSERVE_MODEL"}, &c.Model},
+		{[]string{"AFFENTSERVE_AUTH_TOKEN"}, &c.AuthToken},
+		{[]string{"AFFENTSERVE_WORKSPACE_ROOT"}, &c.WorkspaceRoot},
+		{[]string{"AFFENTSERVE_MEMORY_ROOT"}, &c.MemoryRoot},
+		{[]string{"AFFENTSERVE_SESSION_IDLE_TTL"}, &c.SessionIdleTTL},
+		{[]string{"AFFENTSERVE_SESSION_RETENTION"}, &c.SessionRetention},
+		{[]string{"AFFENTSERVE_PER_CALL_TIMEOUT"}, &c.PerCallTimeout},
+		{[]string{"AFFENTSERVE_RETRY_BACKOFF"}, &c.RetryBackoff},
 	} {
-		if v := os.Getenv(e.env); v != "" {
+		if v := firstNonEmptyEnv(e.envs...); v != "" {
 			*e.dest = v
 		}
 	}
@@ -622,7 +622,7 @@ func (c Config) Validate() error {
 		return errors.New("base_url is required (use --base-url or AFFENTSERVE_BASE_URL)")
 	}
 	if strings.TrimRight(c.BaseURL, "/") == agent.DefaultBaseURL && strings.TrimSpace(c.APIKey) == "" {
-		return fmt.Errorf("api_key is required when base_url is %s (use --api-key or AFFENTSERVE_API_KEY)", agent.DefaultBaseURL)
+		return fmt.Errorf("api_key is required when base_url is %s (use --api-key, AFFENTSERVE_API_KEY, or DASHSCOPE_API_KEY)", agent.DefaultBaseURL)
 	}
 	if c.Model == "" {
 		// Without a model, the LLMClient sends `"model":""` upstream

@@ -1282,6 +1282,7 @@ func TestRuntimeForwardEnvIncludesPortableCLIAndServeConfig(t *testing.T) {
 		"AFFENTSERVE_MAX_TOKENS",
 		"AFFENT_WEB_SEARCH_PROVIDER",
 		"TAVILY_API_KEY",
+		"DASHSCOPE_API_KEY",
 		"GOOGLE_CSE_API_KEY",
 		"GOOGLE_API_KEY",
 		"GOOGLE_CSE_ID",
