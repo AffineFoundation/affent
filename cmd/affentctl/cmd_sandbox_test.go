@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io/fs"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"reflect"
 	"strconv"
@@ -528,6 +529,64 @@ func makefileTargetBlock(t *testing.T, body, target string) string {
 		}
 	}
 	return rest
+}
+
+func TestMakeEvalServePermissionsExpandToServeArgs(t *testing.T) {
+	_, contextDir, ok, err := findSandboxBuildSource()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !ok {
+		t.Fatal("test requires source checkout with Makefile")
+	}
+	out := runMakeEvalServePermissions(t, contextDir, "web-search memory")
+	for _, want := range []string{
+		"image-serve-restart",
+		"SERVE_ARGS=--eval-mode --web=true --web-search=true --memory=true",
+		"CONTAINER_MEMORY=1g",
+		"CONTAINER_CPUS=2",
+		"CONTAINER_PIDS=512",
+	} {
+		if !strings.Contains(out, want) {
+			t.Fatalf("expanded eval serve args missing %q:\n%s", want, out)
+		}
+	}
+
+	out = runMakeEvalServePermissions(t, contextDir, "browser")
+	for _, want := range []string{
+		"SERVE_ARGS=--eval-mode --browser=true",
+		"IMAGE_WORKSPACE=" + filepath.Join(contextDir, ".tmp", "eval-serve"),
+	} {
+		if !strings.Contains(out, want) {
+			t.Fatalf("expanded browser eval serve args missing %q:\n%s", want, out)
+		}
+	}
+	for _, forbidden := range []string{"--web=true", "--web-search=true", "--memory=true"} {
+		if strings.Contains(out, forbidden) {
+			t.Fatalf("browser-only eval serve args should not include %q:\n%s", forbidden, out)
+		}
+	}
+
+	cmd := exec.Command("make", "-s", "eval-serve-container", "SERVE_EVAL_PERMISSIONS=bad", `MAKE=printf "%s\n"`)
+	cmd.Dir = contextDir
+	raw, err := cmd.CombinedOutput()
+	if err == nil {
+		t.Fatalf("unknown SERVE_EVAL_PERMISSIONS should fail, output:\n%s", raw)
+	}
+	if !strings.Contains(string(raw), "unknown SERVE_EVAL_PERMISSIONS entry: bad") {
+		t.Fatalf("unknown permission error missing useful message:\n%s", raw)
+	}
+}
+
+func runMakeEvalServePermissions(t *testing.T, contextDir, permissions string) string {
+	t.Helper()
+	cmd := exec.Command("make", "-s", "eval-serve-container", "SERVE_EVAL_PERMISSIONS="+permissions, `MAKE=printf "%s\n"`)
+	cmd.Dir = contextDir
+	raw, err := cmd.CombinedOutput()
+	if err != nil {
+		t.Fatalf("make eval-serve-container permissions %q: %v\n%s", permissions, err, raw)
+	}
+	return string(raw)
 }
 
 func TestMakeSandboxStatusAcceptsArgs(t *testing.T) {
