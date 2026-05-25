@@ -6,6 +6,8 @@ import (
 	"net/http/httptest"
 	"strings"
 	"testing"
+
+	agent "github.com/affinefoundation/affent/internal/agent"
 )
 
 func TestHandleSessionTools_ListsActiveSessionRegistry(t *testing.T) {
@@ -42,6 +44,48 @@ func TestHandleSessionTools_ListsActiveSessionRegistry(t *testing.T) {
 			t.Fatalf("tool %s has empty parameters schema", tool.Name)
 		}
 	}
+}
+
+func TestHandleSessionTools_ExposesBrowserFindSchema(t *testing.T) {
+	pool := newTestPool(t, 4, "5m")
+	reg := agent.NewRegistry()
+	reg.Add(&agent.Tool{
+		Name:        "browser_find",
+		Description: "Search the current rendered page for text.",
+		Schema:      json.RawMessage(`{"type":"object","required":["query"],"properties":{"query":{"type":"string","minLength":1}}}`),
+	})
+	pool.mu.Lock()
+	pool.sessions["tools-browser"] = &Session{
+		ID:       "tools-browser",
+		loop:     &agent.Loop{},
+		registry: reg,
+		closedCh: make(chan struct{}),
+	}
+	pool.mu.Unlock()
+
+	r := httptest.NewRequest(http.MethodGet, "/v1/sessions/tools-browser/tools", nil)
+	w := httptest.NewRecorder()
+	handleSessionRoutes(pool).ServeHTTP(w, r)
+	if got := w.Result().StatusCode; got != http.StatusOK {
+		t.Fatalf("status = %d, want 200; body=%s", got, w.Body.String())
+	}
+	var resp sessionToolsResponse
+	if err := json.Unmarshal(w.Body.Bytes(), &resp); err != nil {
+		t.Fatalf("decode: %v body=%s", err, w.Body.String())
+	}
+	if !toolCatalogHas(resp.Tools, "browser_find") {
+		t.Fatalf("tool catalog missing browser_find: %+v", resp.Tools)
+	}
+	for _, tool := range resp.Tools {
+		if tool.Name != "browser_find" {
+			continue
+		}
+		if !strings.Contains(tool.Description, "rendered page") || !strings.Contains(string(tool.Parameters), `"query"`) {
+			t.Fatalf("browser_find catalog entry lost description/schema: %+v", tool)
+		}
+		return
+	}
+	t.Fatal("browser_find disappeared while scanning catalog")
 }
 
 func TestHandleSessionTools_InactiveDurableSessionReturnsConflict(t *testing.T) {
