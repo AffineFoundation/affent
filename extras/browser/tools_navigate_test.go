@@ -168,6 +168,15 @@ func TestBrowserWaitTextTimeoutErrorHasRecoveryHint(t *testing.T) {
 	}
 }
 
+func TestBrowserNavigateTimeoutErrorHasRecoveryHint(t *testing.T) {
+	err := browserNavigateTimeoutError("https://example.com/slow", time.Second, context.DeadlineExceeded)
+	for _, want := range []string{"navigate to https://example.com/slow timed out", "Failure: kind=timeout", "Next:", "wait_until=domcontentloaded", "alternate sources"} {
+		if !strings.Contains(err.Error(), want) {
+			t.Fatalf("timeout guidance missing %q: %v", want, err)
+		}
+	}
+}
+
 func TestScrollToolRejectsBlankDirectionBeforePageCheck(t *testing.T) {
 	tool := ScrollTool(&Session{})
 	if !strings.Contains(string(tool.Schema), `"additionalProperties": false`) {

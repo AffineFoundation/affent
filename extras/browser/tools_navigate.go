@@ -93,8 +93,13 @@ func runNavigate(ctx context.Context, s *Session, url, waitUntil string) (string
 	if s.page == nil {
 		return "", ErrNoPage
 	}
-	page := s.withContext(ctx)
+	navCtx, navCancel := context.WithTimeout(ctx, navigationLoadTimeout)
+	defer navCancel()
+	page := s.withContext(navCtx)
 	if err := page.Navigate(url); err != nil {
+		if navCtx.Err() != nil {
+			return "", browserNavigateTimeoutError(url, navigationLoadTimeout, err)
+		}
 		return "", fmt.Errorf("navigate: %w", err)
 	}
 	if err := waitForLoad(ctx, s, waitUntil, navigationLoadTimeout); err != nil {
@@ -112,6 +117,17 @@ func runNavigate(ctx context.Context, s *Session, url, waitUntil string) (string
 		return "", fmt.Errorf("snapshot: %w", err)
 	}
 	return snap.Format(), nil
+}
+
+func browserNavigateTimeoutError(url string, timeout time.Duration, err error) error {
+	return fmt.Errorf(
+		"navigate to %s timed out after %s before the browser accepted the navigation: %w\n"+
+			"Failure: kind=timeout\n"+
+			"Next: retry once with wait_until=domcontentloaded if the URL is essential; otherwise use browser_navigate on a simpler canonical URL, web_fetch an API/text endpoint, or answer from verified alternate sources",
+		url,
+		timeout,
+		err,
+	)
 }
 
 func waitForLoad(ctx context.Context, s *Session, waitUntil string, timeout time.Duration) error {
