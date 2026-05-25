@@ -46,8 +46,8 @@ import agent "github.com/affinefoundation/affent/internal/agent"
 // Options bundles the optional configuration for RegisterAll.
 type Options struct {
 	Fetch FetchConfig
-	// SearchProvider overrides the default Tavily provider when set.
-	// Leave nil to fall back to TAVILY_API_KEY.
+	// SearchProvider overrides the env-selected default provider when set.
+	// Leave nil to use AFFENT_WEB_SEARCH_PROVIDER (auto/tavily/google).
 	SearchProvider SearchProvider
 	// MaxSearchResults caps the per-query result count. Default 8.
 	MaxSearchResults int
@@ -77,7 +77,7 @@ func RegisterAll(reg *agent.Registry, opts Options) error {
 	}
 	provider := opts.SearchProvider
 	if provider == nil {
-		p, err := NewTavilyProvider()
+		p, err := NewDefaultSearchProvider()
 		if err != nil {
 			reg.Remove("web_fetch")
 			return err

@@ -367,6 +367,34 @@ type TavilyProvider struct {
 	HTTP   *http.Client
 }
 
+// NewDefaultSearchProvider wires the configured search backend from
+// environment. AFFENT_WEB_SEARCH_PROVIDER accepts "tavily", "google", or
+// "auto" (default). Auto keeps the historical Tavily behavior when
+// TAVILY_API_KEY is present, otherwise uses Google when its credentials are
+// configured.
+func NewDefaultSearchProvider() (SearchProvider, error) {
+	provider := strings.ToLower(strings.TrimSpace(os.Getenv("AFFENT_WEB_SEARCH_PROVIDER")))
+	if provider == "" {
+		provider = "auto"
+	}
+	switch provider {
+	case "auto":
+		if strings.TrimSpace(os.Getenv("TAVILY_API_KEY")) != "" {
+			return NewTavilyProvider()
+		}
+		if googleSearchCredentialsConfigured() {
+			return NewGoogleProvider()
+		}
+		return nil, errors.New("search backend is not configured; set TAVILY_API_KEY for Tavily, or set AFFENT_WEB_SEARCH_PROVIDER=google with GOOGLE_CSE_API_KEY and GOOGLE_CSE_ID")
+	case "tavily":
+		return NewTavilyProvider()
+	case "google":
+		return NewGoogleProvider()
+	default:
+		return nil, fmt.Errorf("unsupported AFFENT_WEB_SEARCH_PROVIDER=%q; valid values are auto, tavily, google", provider)
+	}
+}
+
 // NewTavilyProvider wires a Tavily-backed provider. Returns an error
 // if no API key is reachable (explicit or via TAVILY_API_KEY env).
 func NewTavilyProvider() (*TavilyProvider, error) {
@@ -436,6 +464,103 @@ func (p *TavilyProvider) Search(ctx context.Context, query string, n int) ([]Sea
 			Title:   r.Title,
 			URL:     r.URL,
 			Snippet: r.Content,
+		})
+	}
+	return hits, nil
+}
+
+// ---- Google Programmable Search provider ------------------------------
+
+const googleSearchEndpoint = "https://www.googleapis.com/customsearch/v1"
+
+// GoogleProvider hits Google's Programmable Search JSON API. It is the
+// supported Google path for agents; scraping google.com/search from a browser
+// often triggers anti-abuse challenge pages on datacenter IPs.
+type GoogleProvider struct {
+	APIKey   string
+	EngineID string
+	HTTP     *http.Client
+	Endpoint string
+}
+
+func NewGoogleProvider() (*GoogleProvider, error) {
+	key := firstEnv("GOOGLE_CSE_API_KEY", "GOOGLE_CUSTOM_SEARCH_API_KEY")
+	cx := firstEnv("GOOGLE_CSE_ID", "GOOGLE_CUSTOM_SEARCH_ENGINE_ID", "GOOGLE_CSE_CX", "GOOGLE_CUSTOM_SEARCH_CX")
+	if key == "" || cx == "" {
+		return nil, errors.New("Google search requires GOOGLE_CSE_API_KEY and GOOGLE_CSE_ID (or GOOGLE_CUSTOM_SEARCH_API_KEY and GOOGLE_CUSTOM_SEARCH_ENGINE_ID)")
+	}
+	return &GoogleProvider{
+		APIKey:   key,
+		EngineID: cx,
+		HTTP:     &http.Client{Timeout: 30 * time.Second},
+		Endpoint: googleSearchEndpoint,
+	}, nil
+}
+
+func googleSearchCredentialsConfigured() bool {
+	return firstEnv("GOOGLE_CSE_API_KEY", "GOOGLE_CUSTOM_SEARCH_API_KEY") != "" &&
+		firstEnv("GOOGLE_CSE_ID", "GOOGLE_CUSTOM_SEARCH_ENGINE_ID", "GOOGLE_CSE_CX", "GOOGLE_CUSTOM_SEARCH_CX") != ""
+}
+
+func firstEnv(names ...string) string {
+	for _, name := range names {
+		if v := strings.TrimSpace(os.Getenv(name)); v != "" {
+			return v
+		}
+	}
+	return ""
+}
+
+func (p *GoogleProvider) Search(ctx context.Context, query string, n int) ([]SearchResult, error) {
+	endpoint := p.Endpoint
+	if endpoint == "" {
+		endpoint = googleSearchEndpoint
+	}
+	u, err := url.Parse(endpoint)
+	if err != nil {
+		return nil, err
+	}
+	q := u.Query()
+	q.Set("key", p.APIKey)
+	q.Set("cx", p.EngineID)
+	q.Set("q", query)
+	q.Set("num", fmt.Sprint(n))
+	u.RawQuery = q.Encode()
+
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, u.String(), nil)
+	if err != nil {
+		return nil, err
+	}
+	hc := p.HTTP
+	if hc == nil {
+		hc = http.DefaultClient
+	}
+	resp, err := hc.Do(req)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode/100 != 2 {
+		preview, _ := io.ReadAll(io.LimitReader(resp.Body, 512))
+		return nil, fmt.Errorf("google search http %d: %s", resp.StatusCode, preview)
+	}
+
+	var out struct {
+		Items []struct {
+			Title   string `json:"title"`
+			Link    string `json:"link"`
+			Snippet string `json:"snippet"`
+		} `json:"items"`
+	}
+	if err := json.NewDecoder(io.LimitReader(resp.Body, 1<<20)).Decode(&out); err != nil {
+		return nil, fmt.Errorf("google search decode: %w", err)
+	}
+	hits := make([]SearchResult, 0, len(out.Items))
+	for _, item := range out.Items {
+		hits = append(hits, SearchResult{
+			Title:   item.Title,
+			URL:     item.Link,
+			Snippet: item.Snippet,
 		})
 	}
 	return hits, nil

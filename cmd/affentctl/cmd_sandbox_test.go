@@ -1280,7 +1280,14 @@ func TestRuntimeForwardEnvIncludesPortableCLIAndServeConfig(t *testing.T) {
 		"AFFENTSERVE_SESSION_RETENTION",
 		"AFFENTSERVE_TOP_P",
 		"AFFENTSERVE_MAX_TOKENS",
+		"AFFENT_WEB_SEARCH_PROVIDER",
 		"TAVILY_API_KEY",
+		"GOOGLE_CSE_API_KEY",
+		"GOOGLE_CSE_ID",
+		"GOOGLE_CSE_CX",
+		"GOOGLE_CUSTOM_SEARCH_API_KEY",
+		"GOOGLE_CUSTOM_SEARCH_ENGINE_ID",
+		"GOOGLE_CUSTOM_SEARCH_CX",
 	} {
 		if env[name] != "host-"+name {
 			t.Fatalf("%s was not forwarded correctly: %q", name, env[name])

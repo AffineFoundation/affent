@@ -261,10 +261,16 @@ curl -sS http://127.0.0.1:7777/v1/chat/completions \
 ## Web Retrieval Diagnostics
 
 `web_fetch` starts as a direct HTTP reader, and `web_search` depends on the
-configured search backend. The built-in search provider uses `TAVILY_API_KEY`;
-when `web_search` is explicitly enabled without a configured backend,
-`affentserve` fails at startup instead of silently degrading to fetch-only
-mode. When a runtime also enables `extras/browser`,
+configured search backend. `AFFENT_WEB_SEARCH_PROVIDER` accepts `auto`,
+`tavily`, or `google`. `auto` preserves the historical Tavily default when
+`TAVILY_API_KEY` is present, otherwise uses Google when
+`GOOGLE_CSE_API_KEY` and `GOOGLE_CSE_ID` are configured. The Google backend
+uses the official Programmable Search JSON API instead of scraping
+`google.com/search`, because automated browser sessions from datacenter IPs
+often receive anti-abuse challenge pages. When `web_search` is explicitly
+enabled without a configured backend, `affentserve` fails at startup instead of silently degrading to fetch-only
+mode. When a runtime also enables
+`extras/browser`,
 `affentserve` wires the session Chromium instance into `web_fetch` as a rendered
 fallback: direct-reader trap hosts, anti-bot/challenge responses, and
 client-rendered app shells are retried through the browser and returned as
@@ -545,7 +551,10 @@ AFFENTSERVE_SESSION_RETENTION
 AFFENTSERVE_TEMPERATURE
 AFFENTSERVE_TOP_P
 AFFENTSERVE_MAX_TOKENS
+AFFENT_WEB_SEARCH_PROVIDER
 TAVILY_API_KEY
+GOOGLE_CSE_API_KEY
+GOOGLE_CSE_ID
 ```
 
 Example CLI config:
@@ -689,7 +698,8 @@ Use `SERVE_EVAL_PERMISSIONS` to opt specific environment capabilities back in,
 for example `SERVE_EVAL_PERMISSIONS='browser'` for LiveWeb-style rendered-page
 tasks, or `SERVE_EVAL_PERMISSIONS='web web-search memory'` for direct HTTP
 retrieval plus memory. Keep this list narrow: enabling `web-search` implies
-`web` and requires a configured search backend such as `TAVILY_API_KEY`, while
+`web` and requires a configured search backend such as `TAVILY_API_KEY` or
+`AFFENT_WEB_SEARCH_PROVIDER=google` with Google CSE credentials, while
 browser-only evals should not need web/search permissions.
 
 The JSONL output contract is documented in

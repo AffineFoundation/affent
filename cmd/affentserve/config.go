@@ -647,8 +647,10 @@ func (c Config) Validate() error {
 	if c.EnableWebSearch && !caps.Web {
 		return errors.New("enable_web_search requires enable_web")
 	}
-	if caps.WebSearch && strings.TrimSpace(os.Getenv("TAVILY_API_KEY")) == "" {
-		return errors.New("enable_web_search requires TAVILY_API_KEY; set TAVILY_API_KEY or disable web search with --web-search=false for fetch-only web access")
+	if caps.WebSearch {
+		if err := validateSearchBackendEnv(); err != nil {
+			return err
+		}
 	}
 	if _, err := c.IdleTTL(); err != nil {
 		return err
@@ -706,4 +708,42 @@ func (c Config) Validate() error {
 		return err
 	}
 	return nil
+}
+
+func validateSearchBackendEnv() error {
+	provider := strings.ToLower(strings.TrimSpace(os.Getenv("AFFENT_WEB_SEARCH_PROVIDER")))
+	if provider == "" {
+		provider = "auto"
+	}
+	tavily := strings.TrimSpace(os.Getenv("TAVILY_API_KEY")) != ""
+	google := firstNonEmptyEnv("GOOGLE_CSE_API_KEY", "GOOGLE_CUSTOM_SEARCH_API_KEY") != "" &&
+		firstNonEmptyEnv("GOOGLE_CSE_ID", "GOOGLE_CUSTOM_SEARCH_ENGINE_ID", "GOOGLE_CSE_CX", "GOOGLE_CUSTOM_SEARCH_CX") != ""
+	switch provider {
+	case "auto":
+		if tavily || google {
+			return nil
+		}
+		return errors.New("enable_web_search requires a search backend: set TAVILY_API_KEY, or set AFFENT_WEB_SEARCH_PROVIDER=google with GOOGLE_CSE_API_KEY and GOOGLE_CSE_ID")
+	case "tavily":
+		if tavily {
+			return nil
+		}
+		return errors.New("AFFENT_WEB_SEARCH_PROVIDER=tavily requires TAVILY_API_KEY")
+	case "google":
+		if google {
+			return nil
+		}
+		return errors.New("AFFENT_WEB_SEARCH_PROVIDER=google requires GOOGLE_CSE_API_KEY and GOOGLE_CSE_ID (or GOOGLE_CUSTOM_SEARCH_API_KEY and GOOGLE_CUSTOM_SEARCH_ENGINE_ID)")
+	default:
+		return fmt.Errorf("unsupported AFFENT_WEB_SEARCH_PROVIDER=%q; valid values are auto, tavily, google", provider)
+	}
+}
+
+func firstNonEmptyEnv(names ...string) string {
+	for _, name := range names {
+		if v := strings.TrimSpace(os.Getenv(name)); v != "" {
+			return v
+		}
+	}
+	return ""
 }

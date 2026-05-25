@@ -1381,6 +1381,84 @@ func TestSearchTool_ProviderErrorIncludesNext(t *testing.T) {
 	}
 }
 
+func TestNewDefaultSearchProviderSelectsGoogle(t *testing.T) {
+	t.Setenv("AFFENT_WEB_SEARCH_PROVIDER", "google")
+	t.Setenv("TAVILY_API_KEY", "")
+	t.Setenv("GOOGLE_CSE_API_KEY", "google-key")
+	t.Setenv("GOOGLE_CSE_ID", "google-cx")
+
+	got, err := NewDefaultSearchProvider()
+	if err != nil {
+		t.Fatalf("NewDefaultSearchProvider: %v", err)
+	}
+	p, ok := got.(*GoogleProvider)
+	if !ok {
+		t.Fatalf("provider = %T, want *GoogleProvider", got)
+	}
+	if p.APIKey != "google-key" || p.EngineID != "google-cx" {
+		t.Fatalf("google provider credentials = key:%q cx:%q", p.APIKey, p.EngineID)
+	}
+}
+
+func TestNewDefaultSearchProviderAutoPrefersExistingTavilyDefault(t *testing.T) {
+	t.Setenv("AFFENT_WEB_SEARCH_PROVIDER", "")
+	t.Setenv("TAVILY_API_KEY", "tavily-key")
+	t.Setenv("GOOGLE_CSE_API_KEY", "google-key")
+	t.Setenv("GOOGLE_CSE_ID", "google-cx")
+
+	got, err := NewDefaultSearchProvider()
+	if err != nil {
+		t.Fatalf("NewDefaultSearchProvider: %v", err)
+	}
+	if _, ok := got.(*TavilyProvider); !ok {
+		t.Fatalf("provider = %T, want historical Tavily default", got)
+	}
+}
+
+func TestNewDefaultSearchProviderRejectsUnknownProvider(t *testing.T) {
+	t.Setenv("AFFENT_WEB_SEARCH_PROVIDER", "google-html")
+
+	_, err := NewDefaultSearchProvider()
+	if err == nil || !strings.Contains(err.Error(), "AFFENT_WEB_SEARCH_PROVIDER") {
+		t.Fatalf("NewDefaultSearchProvider error = %v, want provider guidance", err)
+	}
+}
+
+func TestGoogleProviderSearch(t *testing.T) {
+	var gotQuery, gotKey, gotCX, gotNum string
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		gotQuery = r.URL.Query().Get("q")
+		gotKey = r.URL.Query().Get("key")
+		gotCX = r.URL.Query().Get("cx")
+		gotNum = r.URL.Query().Get("num")
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = w.Write([]byte(`{
+			"items": [
+				{"title": "Affine subnet", "link": "https://taostats.io/subnets/120", "snippet": "Subnet 120 metrics"},
+				{"title": "CoinGecko affine", "link": "https://www.coingecko.com/en/coins/affine", "snippet": "SN120 price data"}
+			]
+		}`))
+	}))
+	defer srv.Close()
+
+	p := &GoogleProvider{
+		APIKey:   "k",
+		EngineID: "cx",
+		Endpoint: srv.URL,
+		HTTP:     srv.Client(),
+	}
+	got, err := p.Search(context.Background(), "Affine Bittensor subnet 120", 2)
+	if err != nil {
+		t.Fatalf("Search: %v", err)
+	}
+	if gotQuery != "Affine Bittensor subnet 120" || gotKey != "k" || gotCX != "cx" || gotNum != "2" {
+		t.Fatalf("query params = q:%q key:%q cx:%q num:%q", gotQuery, gotKey, gotCX, gotNum)
+	}
+	if len(got) != 2 || got[0].Title != "Affine subnet" || got[0].URL != "https://taostats.io/subnets/120" || got[0].Snippet != "Subnet 120 metrics" {
+		t.Fatalf("results = %#v", got)
+	}
+}
+
 func TestSearchFailureKindClassifiesCommonFailures(t *testing.T) {
 	cases := []struct {
 		name string

@@ -792,7 +792,10 @@ func TestConfig_Validate_RejectsUnusedFeatureSubOptions(t *testing.T) {
 }
 
 func TestConfig_ValidateWebSearchRequiresBackendKey(t *testing.T) {
+	t.Setenv("AFFENT_WEB_SEARCH_PROVIDER", "")
 	t.Setenv("TAVILY_API_KEY", "")
+	t.Setenv("GOOGLE_CSE_API_KEY", "")
+	t.Setenv("GOOGLE_CSE_ID", "")
 	cfg := Config{
 		BaseURL:         "https://example/v1",
 		Model:           "m",
@@ -803,12 +806,31 @@ func TestConfig_ValidateWebSearchRequiresBackendKey(t *testing.T) {
 		t.Fatal(err)
 	}
 	err := cfg.Validate()
-	if err == nil || !strings.Contains(err.Error(), "enable_web_search requires TAVILY_API_KEY") {
-		t.Fatalf("Validate error = %v, want missing Tavily key", err)
+	if err == nil || !strings.Contains(err.Error(), "enable_web_search requires a search backend") {
+		t.Fatalf("Validate error = %v, want missing search backend", err)
 	}
 
 	t.Setenv("TAVILY_API_KEY", "test-key")
 	if err := cfg.Validate(); err != nil {
 		t.Fatalf("Validate with Tavily key: %v", err)
+	}
+}
+
+func TestConfig_ValidateWebSearchAcceptsGoogleBackend(t *testing.T) {
+	t.Setenv("AFFENT_WEB_SEARCH_PROVIDER", "google")
+	t.Setenv("TAVILY_API_KEY", "")
+	t.Setenv("GOOGLE_CSE_API_KEY", "google-key")
+	t.Setenv("GOOGLE_CSE_ID", "google-cx")
+	cfg := Config{
+		BaseURL:         "https://example/v1",
+		Model:           "m",
+		EnableWeb:       true,
+		EnableWebSearch: true,
+	}
+	if err := cfg.Resolve(); err != nil {
+		t.Fatal(err)
+	}
+	if err := cfg.Validate(); err != nil {
+		t.Fatalf("Validate with Google backend: %v", err)
 	}
 }

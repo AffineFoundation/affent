@@ -1386,7 +1386,10 @@ func TestSessionPool_EvalModeRegistersOnlyBasicTools(t *testing.T) {
 }
 
 func TestSessionPool_WebSearchFailsFastWithoutBackend(t *testing.T) {
+	t.Setenv("AFFENT_WEB_SEARCH_PROVIDER", "")
 	t.Setenv("TAVILY_API_KEY", "")
+	t.Setenv("GOOGLE_CSE_API_KEY", "")
+	t.Setenv("GOOGLE_CSE_ID", "")
 	cfg := Config{
 		Listen:          "127.0.0.1:0",
 		MaxSessions:     4,
@@ -1405,7 +1408,7 @@ func TestSessionPool_WebSearchFailsFastWithoutBackend(t *testing.T) {
 	t.Cleanup(pool.Shutdown)
 
 	_, err = pool.GetOrCreate("web-search-no-backend")
-	if err == nil || !strings.Contains(err.Error(), "web_search") || !strings.Contains(err.Error(), "TAVILY_API_KEY") {
+	if err == nil || !strings.Contains(err.Error(), "web_search") || !strings.Contains(err.Error(), "search backend") {
 		t.Fatalf("GetOrCreate error = %v, want missing web_search backend", err)
 	}
 }
