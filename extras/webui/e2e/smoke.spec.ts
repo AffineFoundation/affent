@@ -678,7 +678,8 @@ test("workflow timeline renders with inline drill-down", async ({ page }, testIn
   await executionTree.getByRole("button", { name: /Find the WebUI trace requirements/ }).first().click();
   await expect(page.getByTestId("tool-details")).toBeVisible();
   await expect(page.getByTestId("tool-details").first()).toContainText("Output");
-  await expect(page.getByTestId("tool-details").first()).toContainText("Action details");
+  await expect(page.getByTestId("tool-details").first()).toContainText("Run summary");
+  await expect(page.getByTestId("tool-details").first()).toContainText("tool used");
   await expect(page.getByTestId("tool-details").first()).toContainText("Action record");
   await expect(page.getByTestId("tool-details").first()).toContainText(/input \+ \d+ event records/);
   await expect(page.getByTestId("tool-details").first()).toContainText("request input");

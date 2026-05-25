@@ -455,7 +455,8 @@ describe("Timeline", () => {
     expect(screen.getByTestId("execution-node")).toHaveTextContent("done");
     expect(details).toHaveTextContent("list_files");
     expect(details).toHaveTextContent("Output");
-    expect(details).toHaveTextContent("Action details");
+    expect(details).toHaveTextContent("Run summary");
+    expect(details).toHaveTextContent("tool used");
     expect(details).toHaveTextContent("Action record");
     expect(details).toHaveTextContent(/input \+ \d+ event records/);
     expect(details).toHaveTextContent("request input");

@@ -342,23 +342,14 @@ function NodeDetails({
         </DetailSection>
       ) : null}
       {hasMetadata ? (
-        <DetailSection title="Action details">
-          {node.objective ? <DetailLine label={node.kind === "focused_task" ? "objective" : "task"} value={node.objective} searchQuery={searchQuery} /> : null}
-          <DetailLine label="action" value={node.tool} mono searchQuery={searchQuery} />
-          {node.childSessionId ? <DetailLine label="child session" value={node.childSessionId} mono /> : null}
-          {node.turnEndReason ? <DetailLine label="turn end" value={node.turnEndReason} /> : null}
-          {node.mcpServer ? <DetailLine label="mcp server" value={node.mcpServer} mono /> : null}
-          {node.mcpTool ? <DetailLine label="MCP action" value={node.mcpTool} mono /> : null}
-          {node.metrics.length ? (
-            <div className="node-metrics">
-              {node.metrics.map((metric) => (
-                <span key={`${metric.label}-${metric.value}`}>
-                  {metric.label} <b>{metric.value}</b>
-                </span>
-              ))}
-            </div>
-          ) : null}
-          {node.resultArtifactPath ? <DetailLine label="artifact" value={node.resultArtifactPath} mono /> : null}
+        <DetailSection title="Run summary">
+          {node.objective ? <DetailLine label="goal" value={node.objective} searchQuery={searchQuery} /> : null}
+          <DetailLine label="tool used" value={node.tool} mono searchQuery={searchQuery} />
+          {node.childSessionId ? <DetailLine label="subtask record" value={node.childSessionId} mono /> : null}
+          {node.turnEndReason ? <DetailLine label="finished" value={node.turnEndReason} /> : null}
+          {node.mcpServer ? <DetailLine label="external server" value={node.mcpServer} mono /> : null}
+          {node.mcpTool ? <DetailLine label="external action" value={node.mcpTool} mono /> : null}
+          {node.resultArtifactPath ? <DetailLine label="output file" value={node.resultArtifactPath} mono /> : null}
         </DetailSection>
       ) : null}
       {hasPayload ? (

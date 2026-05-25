@@ -4234,26 +4234,6 @@ a.agent-activity-evidence-chip:focus-visible {
   max-height: 180px;
 }
 
-.node-metrics {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 6px;
-}
-
-.node-metrics span {
-  color: var(--text-muted);
-  font-size: 11.5px;
-  background: var(--bg-sunken);
-  border: 1px solid var(--border);
-  border-radius: 999px;
-  padding: 2px 7px;
-}
-
-.node-metrics b {
-  color: var(--text);
-  font-weight: 650;
-}
-
 .text-block {
   display: grid;
   gap: 5px;
