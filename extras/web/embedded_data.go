@@ -30,28 +30,51 @@ func embeddedDataSnippets(body []byte, finalURL string) []string {
 	}
 	var candidates []candidate
 	seen := map[int]bool{}
-	for _, term := range prioritizeEmbeddedDataTerms(terms) {
+	addCandidate := func(idx, boost int) {
+		start, end := embeddedDataSnippetBounds(source, idx)
+		if seen[start] {
+			return
+		}
+		snippet := source[start:end]
+		score := embeddedDataSnippetScore(snippet, terms) + boost
+		if score <= 0 {
+			return
+		}
+		seen[start] = true
+		candidates = append(candidates, candidate{start: start, end: end, score: score})
+	}
+	for _, needle := range embeddedDataStructuredNeedles(terms) {
 		searchFrom := 0
-		needle := strings.ToLower(term)
-		termCandidates := 0
-		for termCandidates < maxEmbeddedDataSnippets*6 {
+		for {
 			pos := strings.Index(lower[searchFrom:], needle)
 			if pos < 0 {
 				break
 			}
 			idx := searchFrom + pos
 			searchFrom = idx + len(needle)
-			start, end := embeddedDataSnippetBounds(source, idx)
-			if seen[start] {
+			addCandidate(idx, 12)
+		}
+	}
+	for _, term := range prioritizeEmbeddedDataTerms(terms) {
+		searchFrom := 0
+		needle := strings.ToLower(term)
+		termCandidates := 0
+		limit := maxEmbeddedDataSnippets * 6
+		if isMostlyDigits(term) {
+			limit = maxEmbeddedDataSnippets * 64
+		}
+		for termCandidates < limit {
+			pos := strings.Index(lower[searchFrom:], needle)
+			if pos < 0 {
+				break
+			}
+			idx := searchFrom + pos
+			searchFrom = idx + len(needle)
+			before := len(candidates)
+			addCandidate(idx, 0)
+			if len(candidates) == before {
 				continue
 			}
-			snippet := source[start:end]
-			score := embeddedDataSnippetScore(snippet, terms)
-			if score <= 0 {
-				continue
-			}
-			seen[start] = true
-			candidates = append(candidates, candidate{start: start, end: end, score: score})
 			termCandidates++
 		}
 	}
@@ -74,6 +97,30 @@ func embeddedDataSnippets(body []byte, finalURL string) []string {
 		if len(out) >= maxEmbeddedDataSnippets {
 			break
 		}
+	}
+	return out
+}
+
+func embeddedDataStructuredNeedles(terms []string) []string {
+	seen := map[string]bool{}
+	var out []string
+	add := func(needle string) {
+		needle = strings.ToLower(strings.TrimSpace(needle))
+		if needle == "" || seen[needle] {
+			return
+		}
+		seen[needle] = true
+		out = append(out, needle)
+	}
+	for _, term := range terms {
+		if !isMostlyDigits(term) {
+			continue
+		}
+		for _, field := range []string{"netuid", "subnet_id", "subnetid", "id"} {
+			add(`"` + field + `":` + term)
+			add(`"` + field + `": ` + term)
+		}
+		add("sn" + term)
 	}
 	return out
 }

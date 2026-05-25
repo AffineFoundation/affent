@@ -664,6 +664,13 @@ Run nested module tests separately:
 (cd extras/browser && go test ./...)
 ```
 
+Optional live web smoke tests require network access and are guarded by the
+`liveweb` build tag so ordinary unit tests stay deterministic:
+
+```bash
+(cd extras/web && go test -tags liveweb . -run TestFetchTool_LiveTaoStatsSubnetEmbeddedData -count=1)
+```
+
 Run the containerized root suite:
 
 ```bash
