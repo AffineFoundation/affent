@@ -276,7 +276,7 @@ function NodeDetails({
     <div className="node-details" data-testid="tool-details">
       <ActionInspectorSummary node={node} searchQuery={searchQuery} />
       <div className="node-actions" aria-label="Tool actions">
-        <CopyButton label="Copy action record" value={actionRecordText(node, primaryResult)} />
+        <CopyButton label="Copy action details" value={actionRecordText(node, primaryResult)} />
         {node.children.length > 0 ? (
           <CopyButton label="Copy all nested details" value={actionTreeText([node])} />
         ) : null}
@@ -367,7 +367,7 @@ function NodeDetails({
       ) : null}
       {hasPayload ? (
         <DetailSection
-          title="Action record"
+          title="Action details"
           summary={actionRecordSummary(Boolean(node.args), events.length)}
           collapsible
           defaultOpen={!!searchQuery?.trim()}

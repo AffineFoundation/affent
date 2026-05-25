@@ -53,15 +53,15 @@ describe("Timeline", () => {
     expect(screen.getByTestId("agent-activity")).not.toHaveTextContent("Working plan");
     expect(screen.getByTestId("agent-activity")).toHaveTextContent("List current directory");
     expect(screen.queryByTestId("execution-tree")).toBeNull();
-    await user.click(screen.getByRole("button", { name: /Work details/ }));
+    await user.click(screen.getByRole("button", { name: /Action details/ }));
     expect(screen.getByTestId("execution-tree")).toHaveTextContent("List current directory");
-    const toolDetails = screen.getByRole("button", { name: /Work details/ });
-    expect(toolDetails).toHaveTextContent("Work details");
+    const toolDetails = screen.getByRole("button", { name: /Action details/ });
+    expect(toolDetails).toHaveTextContent("Action details");
     expect(toolDetails).toHaveTextContent("1 completed call");
-    expect(toolDetails).toHaveAccessibleName("Work details · 1 completed call · List files: . · 12ms");
+    expect(toolDetails).toHaveAccessibleName("Action details · 1 completed call · List files: . · 12ms");
     const visibleWorkDetails = toolDetails.textContent?.replace(/\s+/g, " ").trim() ?? "";
-    expect(visibleWorkDetails).toContain("Work details 1 completed call");
-    expect(visibleWorkDetails).not.toContain("Work details ·");
+    expect(visibleWorkDetails).toContain("Action details 1 completed call");
+    expect(visibleWorkDetails).not.toContain("Action details ·");
     expect(screen.getByTestId("turn-head")).toHaveTextContent("138 tokens");
     expect(screen.queryByTestId("turn-runtime-meta")).toBeNull();
     expect(screen.queryByText("Technical trace")).toBeNull();
@@ -472,7 +472,7 @@ describe("Timeline", () => {
     const user = userEvent.setup();
     renderTimeline(completedTurn);
     expect(screen.queryByTestId("tool-details")).toBeNull();
-    await user.click(screen.getByRole("button", { name: /Work details/ }));
+    await user.click(screen.getByRole("button", { name: /Action details/ }));
     await user.click(within(screen.getByTestId("execution-tree")).getByRole("button", { name: /List current directory/ }));
     const details = screen.getByTestId("tool-details");
     expect(details).toBeInTheDocument();
@@ -483,7 +483,7 @@ describe("Timeline", () => {
     expect(details).toHaveTextContent("Output");
     expect(details).toHaveTextContent("Run summary");
     expect(details).toHaveTextContent("action type");
-    expect(details).toHaveTextContent("Action record");
+    expect(details).toHaveTextContent("Action details");
     expect(details).toHaveTextContent(/input \+ \d+ history entries/);
     expect(details).toHaveTextContent("request input");
     expect(within(details).getByText("History")).toBeInTheDocument();
@@ -497,11 +497,11 @@ describe("Timeline", () => {
 
   it("shows an exit-code badge for a failed tool", () => {
     renderTimeline(toolError);
-    fireEvent.click(screen.getByRole("button", { name: /Work details/ }));
+    fireEvent.click(screen.getByRole("button", { name: /Action details/ }));
     const card = screen.getByTestId("execution-node");
     expect(card).toHaveAttribute("data-status", "error");
     expect(within(card).getByText(/exit 2/)).toBeInTheDocument();
-    expect(screen.getByTestId("work-thread")).toHaveTextContent("Work details");
+    expect(screen.getByTestId("work-thread")).toHaveTextContent("Action details");
     expect(screen.getByTestId("work-thread")).toHaveTextContent("1 call · 1 tool issue");
     expect(screen.getByTestId("work-summary")).not.toHaveTextContent("1 tool issue");
     expect(screen.getByTestId("work-summary")).toHaveTextContent("make");
@@ -512,7 +512,7 @@ describe("Timeline", () => {
     expect(screen.getByTestId("fallback-answer")).toHaveTextContent("Action output was truncated");
     expect(screen.getByTestId("fallback-answer")).toHaveTextContent("line 1");
     expect(screen.getByTestId("fallback-answer")).toHaveTextContent("Full output is available below.");
-    fireEvent.click(screen.getByRole("button", { name: /Work details/ }));
+    fireEvent.click(screen.getByRole("button", { name: /Action details/ }));
     const card = screen.getByTestId("execution-node");
     expect(within(card).getByText("truncated")).toBeInTheDocument();
     expect(within(card).getByText("artifact")).toBeInTheDocument();
@@ -543,7 +543,7 @@ describe("Timeline", () => {
     const user = userEvent.setup();
     renderTimeline(argsRepaired);
 
-    await user.click(screen.getByRole("button", { name: /Work details/ }));
+    await user.click(screen.getByRole("button", { name: /Action details/ }));
     await user.click(within(screen.getByTestId("execution-tree")).getByRole("button", { name: /main.go/ }));
 
     expect(screen.getByTestId("repair-comparison")).toHaveTextContent("model request");
@@ -579,7 +579,7 @@ describe("Timeline", () => {
     renderTimeline(resultTruncated, "s1");
 
     expect(screen.queryByTestId("tool-details")).toBeNull();
-    await user.click(screen.getByRole("button", { name: /Work details/ }));
+    await user.click(screen.getByRole("button", { name: /Action details/ }));
     await user.click(screen.getByRole("button", { name: "Show important" }));
 
     expect(screen.getByTestId("tool-details")).toHaveTextContent("Open artifact");
@@ -725,7 +725,7 @@ describe("Timeline", () => {
     expect(within(activityTree).getByText("Search")).toBeInTheDocument();
     expect(screen.queryByTestId("execution-tree")).toBeNull();
 
-    await user.click(screen.getByRole("button", { name: /Work details/ }));
+    await user.click(screen.getByRole("button", { name: /Action details/ }));
     const executionTree = screen.getByTestId("execution-tree");
     expect(within(executionTree).getByRole("button", { name: /Find the WebUI trace requirements/ })).toBeInTheDocument();
     expect(within(executionTree).getByRole("button", { name: /Verify trace tree requirements/ })).toBeInTheDocument();
@@ -911,7 +911,7 @@ describe("Timeline", () => {
   it("does not auto-collapse a historical subagent the user opened", async () => {
     const user = userEvent.setup();
     const { rerender } = renderTimeline(completedSubagentTree);
-    await user.click(screen.getByRole("button", { name: /Work details/ }));
+    await user.click(screen.getByRole("button", { name: /Action details/ }));
     const subagent = within(screen.getByTestId("execution-tree")).getByRole("button", { name: /Find the WebUI trace requirements/ });
 
     await user.click(subagent);
@@ -1272,7 +1272,7 @@ describe("Timeline", () => {
     Object.defineProperty(navigator, "clipboard", { configurable: true, value: { writeText } });
     renderTimeline(completedTurn);
 
-    await user.click(screen.getByRole("button", { name: /Work details/ }));
+    await user.click(screen.getByRole("button", { name: /Action details/ }));
     await user.click(within(screen.getByTestId("execution-tree")).getByRole("button", { name: /List current directory/ }));
     await user.click(screen.getByRole("button", { name: "Copy input" }));
 
@@ -1286,9 +1286,9 @@ describe("Timeline", () => {
     Object.defineProperty(navigator, "clipboard", { configurable: true, value: { writeText } });
     renderTimeline(completedTurn);
 
-    await user.click(screen.getByRole("button", { name: /Work details/ }));
+    await user.click(screen.getByRole("button", { name: /Action details/ }));
     await user.click(within(screen.getByTestId("execution-tree")).getByRole("button", { name: /List current directory/ }));
-    await user.click(screen.getByRole("button", { name: "Copy action record" }));
+    await user.click(screen.getByRole("button", { name: "Copy action details" }));
 
     expect(writeText).toHaveBeenCalledWith(expect.stringContaining("Action: List current directory"));
     expect(writeText).toHaveBeenCalledWith(expect.stringContaining("Status: done"));
@@ -1302,7 +1302,7 @@ describe("Timeline", () => {
     Object.defineProperty(navigator, "clipboard", { configurable: true, value: { writeText } });
     renderTimeline(completedSubagentTree);
 
-    await user.click(screen.getByRole("button", { name: /Work details/ }));
+    await user.click(screen.getByRole("button", { name: /Action details/ }));
     fireEvent.click(within(screen.getByTestId("execution-tree-actions")).getByText("Copy"));
     await user.click(within(screen.getByTestId("execution-tree-actions")).getByRole("button", { name: "Copy all details" }));
 
@@ -1328,7 +1328,7 @@ describe("Timeline", () => {
     Object.defineProperty(navigator, "clipboard", { configurable: true, value: { writeText } });
     renderTimeline(toolError);
 
-    await user.click(screen.getByRole("button", { name: /Work details/ }));
+    await user.click(screen.getByRole("button", { name: /Action details/ }));
     await user.click(within(screen.getByTestId("execution-tree-actions")).getByRole("button", { name: "Copy issues" }));
 
     expect(writeText).toHaveBeenCalledTimes(1);
@@ -1347,13 +1347,13 @@ describe("Timeline", () => {
     Object.defineProperty(navigator, "clipboard", { configurable: true, value: { writeText } });
     renderTimeline(completedSubagentTree);
 
-    await user.click(screen.getByRole("button", { name: /Work details/ }));
+    await user.click(screen.getByRole("button", { name: /Action details/ }));
     const executionTree = screen.getByTestId("execution-tree");
     await user.click(within(executionTree).getByRole("button", { name: /Find the WebUI trace requirements/ }));
     await user.click(within(executionTree).getByRole("button", { name: /File action docs\/webui-product-design\.md/ }));
     const details = screen.getAllByTestId("tool-details").at(-1);
     expect(details).toBeDefined();
-    await user.click(within(details as HTMLElement).getByRole("button", { name: "Copy action record" }));
+    await user.click(within(details as HTMLElement).getByRole("button", { name: "Copy action details" }));
 
     expect(writeText).toHaveBeenCalledTimes(1);
     const copied = writeText.mock.calls[0][0] as string;
@@ -1370,7 +1370,7 @@ describe("Timeline", () => {
     const onUseAsDraft = vi.fn();
     renderTimeline(completedTurn, undefined, undefined, onUseAsDraft);
 
-    await user.click(screen.getByRole("button", { name: /Work details/ }));
+    await user.click(screen.getByRole("button", { name: /Action details/ }));
     await user.click(within(screen.getByTestId("execution-tree")).getByRole("button", { name: /List current directory/ }));
     await user.click(screen.getByRole("button", { name: "Use output" }));
 
@@ -1390,7 +1390,7 @@ describe("Timeline", () => {
     const onUseAsDraft = vi.fn();
     renderTimeline(toolError, undefined, undefined, onUseAsDraft);
 
-    await user.click(screen.getByRole("button", { name: /Work details/ }));
+    await user.click(screen.getByRole("button", { name: /Action details/ }));
     expect(screen.getByTestId("node-next-hint")).toHaveTextContent("check the Makefile path");
     await user.click(within(screen.getByTestId("execution-tree")).getByRole("button", { name: /make/ }));
     await user.click(screen.getByRole("button", { name: "Use as message" }));
@@ -1404,7 +1404,7 @@ describe("Timeline", () => {
     const onUseAsDraft = vi.fn();
     renderTimeline(toolError, undefined, undefined, onUseAsDraft);
 
-    await user.click(screen.getByRole("button", { name: /Work details/ }));
+    await user.click(screen.getByRole("button", { name: /Action details/ }));
     await user.click(within(screen.getByTestId("execution-tree")).getByRole("button", { name: /make/ }));
     await user.click(screen.getByRole("button", { name: "Retry action" }));
 
@@ -1511,11 +1511,11 @@ describe("Timeline", () => {
     await openTimelineTools(user);
     await user.type(screen.getByTestId("timeline-search"), "memory");
 
-    const toolDetails = screen.getByRole("button", { name: /Work details/ });
-    expect(toolDetails).toHaveAccessibleName("Work details · continued in message 2 · 2 calls · 7ms");
+    const toolDetails = screen.getByRole("button", { name: /Action details/ });
+    expect(toolDetails).toHaveAccessibleName("Action details · continued in message 2 · 2 calls · 7ms");
     const visibleWorkDetails = toolDetails.textContent?.replace(/\s+/g, " ").trim() ?? "";
-    expect(visibleWorkDetails).toContain("Work details continued in message 2");
-    expect(visibleWorkDetails).not.toContain("Work details ·");
+    expect(visibleWorkDetails).toContain("Action details continued in message 2");
+    expect(visibleWorkDetails).not.toContain("Action details ·");
     expect(toolDetails).not.toHaveTextContent("2 actions");
   });
 
