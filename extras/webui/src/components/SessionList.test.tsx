@@ -144,6 +144,7 @@ describe("SessionList", () => {
 
     const row = screen.getByRole("button", { name: /Affine/ });
     expect(row).toHaveTextContent("Done");
+    expect(row).toHaveAttribute("data-preview", "pinned");
     expect(row).toHaveAccessibleDescription("Issue · DNS failed");
     expect(within(row).getByTestId("session-preview")).toHaveTextContent("Issue · DNS failed");
   });

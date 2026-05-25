@@ -1054,7 +1054,8 @@ body {
 }
 
 .session-row:hover .session-preview,
-.session-row:focus-visible .session-preview {
+.session-row:focus-visible .session-preview,
+.session-row[data-preview="pinned"] .session-preview {
   max-height: 48px;
   opacity: 1;
   transform: translateY(0);

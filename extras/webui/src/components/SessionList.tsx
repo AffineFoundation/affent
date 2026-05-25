@@ -156,6 +156,7 @@ export function SessionList({
                   type="button"
                   className={`session-row${selectedId === row.id ? " is-selected" : ""}`}
                   data-tone={row.tone}
+                  data-preview={shouldPinRowPreview(row.tone) ? "pinned" : "hover"}
                   aria-describedby={previewId}
                   onClick={() => onSelect(row.id)}
                 >
@@ -197,6 +198,10 @@ function dotStatus(tone: string): string {
 
 function shouldShowRowStatus(status: string): boolean {
   return !["Saved", "Ephemeral"].includes(status);
+}
+
+function shouldPinRowPreview(tone: string): boolean {
+  return tone === "running" || tone === "error" || tone === "warning";
 }
 
 function chatListSummary(total: number, running: number): string {
