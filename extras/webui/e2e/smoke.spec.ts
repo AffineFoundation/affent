@@ -563,7 +563,8 @@ test("workflow timeline renders with inline drill-down", async ({ page }, testIn
   });
 
   await expect(page.getByTestId("app-shell")).toBeVisible();
-  await expect(page.getByTestId("session-list")).toContainText("s1");
+  await expect(page.getByTestId("session-list")).toContainText("show a large artifact");
+  await expect(page.getByTestId("session-list")).not.toContainText("s1");
   await expect(page.getByTestId("workspace-shell")).toHaveAttribute("data-session-nav", "visible");
   await expect(page.getByTestId("chat-context-bar")).toContainText("show a large artifact");
   await expect(page.getByTestId("chat-context-bar")).toContainText("large result preview");

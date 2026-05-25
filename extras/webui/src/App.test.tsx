@@ -71,7 +71,8 @@ describe("App", () => {
     await waitFor(() => expect(screen.getByTestId("connection-pill")).toHaveTextContent("Connected"));
     expect(screen.getByTestId("workspace-shell")).toHaveAttribute("data-compact-nav", "false");
     expect(screen.getByTestId("workspace-shell")).toHaveAttribute("data-session-nav", "visible");
-    expect(screen.getByTestId("session-list")).toHaveTextContent("s1");
+    expect(screen.getByTestId("session-list")).toHaveTextContent("saved research task");
+    expect(screen.getByTestId("session-list")).not.toHaveTextContent("s1");
     expect(screen.queryByTestId("chat-context-bar")).toBeNull();
     expect(screen.getByTestId("timeline-empty")).toHaveTextContent("What should we work on?");
     expect(screen.getByTestId("timeline-empty")).toHaveTextContent("saved research task");

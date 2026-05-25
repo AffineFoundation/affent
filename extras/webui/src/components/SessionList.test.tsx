@@ -28,7 +28,7 @@ describe("SessionList", () => {
     expect(row).toHaveTextContent("files");
   });
 
-  it("uses the latest user task as the row title while keeping the id visible", () => {
+  it("uses the latest user task as the row title while keeping the id out of the scan path", () => {
     renderList([
       session({
         id: "workspace-session-abcdef123456",
@@ -40,7 +40,7 @@ describe("SessionList", () => {
 
     const row = screen.getByRole("button", { name: /WebUI session list behavior/ });
     expect(row).not.toHaveTextContent("review the WebUI");
-    expect(row).toHaveTextContent("workspac...123456");
+    expect(row).not.toHaveTextContent("workspac...123456");
     expect(row).toHaveTextContent("2026-05-23 18:30 UTC");
   });
 

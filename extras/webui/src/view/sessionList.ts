@@ -32,7 +32,10 @@ export function buildSessionRows(sessions: readonly SessionSummary[]): SessionRo
     return {
       id: session.id,
       title,
-      meta: buildRowMeta(session.id, title, updated, !titleSource && !session.has_conversation && !session.has_events),
+      meta: buildRowMeta(session.id, updated, {
+        empty: !titleSource && !session.has_conversation && !session.has_events,
+        includeId: !titleSource,
+      }),
       status,
       tone: session.active ? "running" : session.durable ? "saved" : "muted",
       updated,
@@ -79,6 +82,7 @@ export function filterSessionRows(
 function mergeCurrentSession(row: SessionRowView, session: SessionState): SessionRowView {
   const latestTurn = session.turns.at(-1);
   const title = currentSessionTitle(row, session);
+  const hasTopicTitle = Boolean(conversationTopicFromTurns(session.turns));
   const metrics = currentSessionMetrics(session);
   const chips = mergeChips(row.chips, currentSessionChips(session));
   const status = currentSessionStatus(session, row.status);
@@ -89,7 +93,7 @@ function mergeCurrentSession(row: SessionRowView, session: SessionState): Sessio
   return {
     ...row,
     title,
-    meta: buildRowMeta(row.id, title, updated),
+    meta: buildRowMeta(row.id, updated, { includeId: !hasTopicTitle }),
     status,
     tone: currentSessionTone(session, row.tone),
     updated,
@@ -285,12 +289,12 @@ function trimTopicSuffix(text: string): string {
     .trim();
 }
 
-function buildRowMeta(id: string, title: string, updated: string, empty = false): string[] {
+function buildRowMeta(id: string, updated: string, opts: { empty?: boolean; includeId?: boolean } = {}): string[] {
   const meta: string[] = [];
-  if (title !== shortenSessionId(id)) meta.push(shortenSessionId(id));
+  if (opts.includeId) meta.push(shortenSessionId(id));
   if (updated && updated !== noMessagesYet) meta.push(updated);
-  if (empty) meta.push(noMessagesYet);
-  return meta.length ? meta : [noMessagesYet];
+  if (opts.empty) meta.push(noMessagesYet);
+  return meta;
 }
 
 function summarize(text: string, limit: number): string {

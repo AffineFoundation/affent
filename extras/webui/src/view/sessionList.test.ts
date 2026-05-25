@@ -20,7 +20,7 @@ describe("sessionList view model", () => {
 
     expect(rows[0]).toMatchObject({
       title: "WebUI timeline",
-      meta: ["workspac...123456", "2026-05-23 18:30 UTC"],
+      meta: ["2026-05-23 18:30 UTC"],
       status: "Live",
       tone: "running",
       updated: "2026-05-23 18:30 UTC",
@@ -111,7 +111,7 @@ describe("sessionList view model", () => {
 
     expect(rows[0]).toMatchObject({
       title: "Affine（Bittensor 子网）",
-      meta: ["affine-session", "2026-05-24 17:37 UTC"],
+      meta: ["2026-05-24 17:37 UTC"],
       status: "Saved",
     });
     expect(rows[0].searchText).toContain("请继续同一个任务");
@@ -162,7 +162,7 @@ describe("sessionList view model", () => {
 
     expect(rows[0]).toMatchObject({
       title: "list the files",
-      meta: ["s1"],
+      meta: [],
       status: "Done",
       tone: "saved",
       updated: "",
