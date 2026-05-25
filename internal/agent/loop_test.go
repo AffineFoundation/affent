@@ -181,6 +181,11 @@ func TestWithExternalResearchSystemGuidance_AppendsOnce(t *testing.T) {
 	if !strings.Contains(browserOnly, "public search result pages") || !strings.Contains(browserOnly, "bot challenge") {
 		t.Fatalf("browser-only guidance should explain browser-based discovery:\n%s", browserOnly)
 	}
+	for _, want := range []string{"Prefer Bing, DuckDuckGo, or site search over Google", "Google's bot/sorry page"} {
+		if !strings.Contains(browserOnly, want) {
+			t.Fatalf("browser-only guidance should steer away from Google challenge pages, missing %q:\n%s", want, browserOnly)
+		}
+	}
 	if !strings.Contains(browserOnly, "Do not guess URL paths") || !strings.Contains(browserOnly, "subnet numbers") {
 		t.Fatalf("browser-only guidance should discourage guessed routes and ids:\n%s", browserOnly)
 	}
@@ -423,6 +428,7 @@ func TestExternalResearchGuidanceMatchesToolSurface(t *testing.T) {
 				"Preserve user-provided disambiguators",
 				"try another known public URL",
 				"Do not guess URL paths",
+				"Prefer Bing, DuckDuckGo, or site search over Google",
 				"stale_ref",
 			},
 			forbidden: []string{"web_search", "search results", "browser tools"},

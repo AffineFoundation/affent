@@ -429,10 +429,10 @@ func externalResearchSystemGuidance(surface externalResearchToolSurface) string 
 		b.WriteString("\n- Use browser_navigate/browser_snapshot for page inspection. Prefer official pages, source repositories, block explorers, filings, API docs, and primary project sites over summaries.")
 	}
 	if surface.Browser && !surface.WebSearch {
-		b.WriteString("\n- When discovery is needed but no dedicated search tool is available, use browser_navigate on public search result pages or site search pages, then follow result links deliberately. Open 1-3 high-value visible result URLs (official, primary, metrics, docs, or source repositories) before refining the search or trying another engine. Do not guess URL paths, ids, subnet numbers, or app routes unless a source/result shows them. Prefer simpler result pages and alternate engines if one returns a bot challenge; do not treat a challenge page as evidence.")
+		b.WriteString("\n- When discovery is needed but no dedicated search tool is available, use browser_navigate on public search result pages or site search pages, then follow result links deliberately. Prefer Bing, DuckDuckGo, or site search over Google search URLs because automated browser sessions often receive Google's bot/sorry page. Open 1-3 high-value visible result URLs (official, primary, metrics, docs, or source repositories) before refining the search or trying another engine. Do not guess URL paths, ids, subnet numbers, or app routes unless a source/result shows them. Prefer simpler result pages and alternate engines if one returns a bot challenge; do not treat a challenge page as evidence.")
 	}
 	if surface.Browser {
-		b.WriteString("\n- When browser_navigate/browser_snapshot returns a search result page, treat snippets as discovery only and open 1-3 high-value visible result URLs (official, primary, metrics, docs, or source repositories) before refining the search or trying another engine.")
+		b.WriteString("\n- When browser_navigate/browser_snapshot returns a search result page, treat snippets as discovery only and open 1-3 high-value visible result URLs (official, primary, metrics, docs, or source repositories) before refining the search or trying another engine. If Google returns a sorry/challenge page, switch search provider instead of retrying that Google URL.")
 	}
 	if surface.BrowserFind {
 		b.WriteString("\n- Use browser_find on the current page for targeted labels or metrics before repeated scrolling; it returns compact snippets and refs for visible matches.")

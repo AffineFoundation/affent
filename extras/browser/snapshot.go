@@ -316,12 +316,20 @@ func formatSnapshotResultWithRequested(snap *Snapshot, requestedURL string) (str
 	out := snap.Format()
 	if reason := blockedSnapshotReason(snap); reason != "" {
 		return out, fmt.Errorf(
-			"browser page appears blocked by a bot/challenge page (%s)\nFailure: kind=blocked\nNext: do not treat this page as evidence; use a different search provider, a known canonical URL, direct web_fetch/API/text source, or answer with this source marked unavailable",
+			"browser page appears blocked by a bot/challenge page (%s)\nFailure: kind=blocked\nNext: %s",
 			reason,
+			blockedSnapshotNext(reason),
 		)
 	}
 	out = browserSourceAccessLine(snap.URL, snap.SnapshotID, requestedURL) + out
 	return out, nil
+}
+
+func blockedSnapshotNext(reason string) string {
+	if strings.Contains(reason, "google") {
+		return "do not retry this Google search URL; use Bing, DuckDuckGo, site search, a known canonical URL, direct web_fetch/API/text source, or answer with this source marked unavailable. Do not treat this challenge page as evidence"
+	}
+	return "do not treat this page as evidence; use a different search provider, a known canonical URL, direct web_fetch/API/text source, or answer with this source marked unavailable"
 }
 
 func browserSourceAccessLine(rawURL string, snapshotID int64, requestedURL string) string {

@@ -76,6 +76,13 @@ func TestFormatSnapshotResultFlagsBotChallenges(t *testing.T) {
 					t.Fatalf("blocked error missing %q:\n%s", want, err)
 				}
 			}
+			if c.name == "google sorry redirect" {
+				for _, want := range []string{"do not retry this Google search URL", "Bing", "DuckDuckGo"} {
+					if !strings.Contains(err.Error(), want) {
+						t.Fatalf("google blocked error missing %q:\n%s", want, err)
+					}
+				}
+			}
 			if !strings.Contains(out, "URL: "+c.snap.URL) {
 				t.Fatalf("blocked snapshot should still include page evidence for UI/debugging:\n%s", out)
 			}
