@@ -1,6 +1,8 @@
 import type { SessionSummary } from "../api/sessions";
 import type { SessionState } from "../store/sessionState";
 import { conversationTopicFromTurns } from "./continuationPrompt";
+import { summarizeAnswerPreview } from "./textPreview";
+import { buildTurnActivity } from "./turnActivity";
 
 const noMessagesYet = "No messages yet";
 const cnTitleActions = [
@@ -21,6 +23,7 @@ export interface SessionRowView {
   id: string;
   title: string;
   detail?: string;
+  preview?: string;
   meta: string[];
   status: string;
   tone: SessionRowTone;
@@ -41,11 +44,13 @@ export function buildSessionRows(sessions: readonly SessionSummary[]): SessionRo
     const title = providedTitle ?? (titleSource ? summarizeSessionTitle(titleSource) : fallbackSessionTitle(session));
     const titleKind: SessionTitleSource = providedTitle ? "provided" : titleSource ? "topic" : "fallback";
     const detail = summarizeSessionDetail(session, title);
+    const preview = summarizeSessionPreview(session, title, detail);
     const updated = session.last_used_at ?? session.created_at ? formatTimestamp(session.last_used_at ?? session.created_at) : noMessagesYet;
     const searchText = [
       session.id,
       title,
       detail,
+      preview,
       session.title,
       session.summary_title,
       session.generated_title,
@@ -61,6 +66,7 @@ export function buildSessionRows(sessions: readonly SessionSummary[]): SessionRo
       id: session.id,
       title,
       detail,
+      preview,
       meta: buildRowMeta(session.id, updated, {
         empty: !titleSource && !session.has_conversation && !session.has_events,
         includeId: !titleSource,
@@ -113,18 +119,20 @@ function mergeCurrentSession(row: SessionRowView, session: SessionState): Sessio
   const latestTurn = session.turns.at(-1);
   const title = currentSessionTitle(row, session);
   const detail = currentSessionDetail(session, title);
+  const preview = currentSessionPreview(session, title, detail);
   const hasTopicTitle = row.titleSource === "provided" || Boolean(conversationTopicFromTurns(session.turns));
   const metrics = currentSessionMetrics(session);
   const chips = mergeChips(row.chips, currentSessionChips(session));
   const status = currentSessionStatus(session, row.status);
   const userSearchText = session.turns.map((turn) => turn.userText).join(" ");
-  const searchText = [row.id, title, detail, status, userSearchText, ...metrics, ...chips].join(" ").toLowerCase();
+  const searchText = [row.id, title, detail, preview, status, userSearchText, ...metrics, ...chips].join(" ").toLowerCase();
   const updated = latestTurn?.userText && row.updated === noMessagesYet ? "" : row.updated;
 
   return {
     ...row,
     title,
     detail,
+    preview,
     meta: buildRowMeta(row.id, updated, { includeId: !hasTopicTitle }),
     status,
     tone: currentSessionTone(session, row.tone),
@@ -146,6 +154,22 @@ function currentSessionDetail(session: SessionState, title: string): string | un
   const latest = [...session.turns].reverse().find((turn) => Boolean(turn.userText?.trim()))?.userText;
   if (!topic || !latest || latest === topic) return undefined;
   return summarizeLatestRequestDetail(latest, title);
+}
+
+function currentSessionPreview(session: SessionState, title: string, detail?: string): string | undefined {
+  const latestTurn = session.turns.at(-1);
+  if (!latestTurn) return detail;
+  const activity = buildTurnActivity(latestTurn);
+  if (latestTurn.status === "running" && activity?.digest.summary && activity.digest.summary !== "No activity yet.") {
+    return `Now · ${summarize(activity.digest.summary, 96)}`;
+  }
+  if (latestTurn.assistantText.trim()) {
+    return `Answer · ${summarizeAnswerPreview(latestTurn.assistantText, 96)}`;
+  }
+  if (detail) return detail;
+  const userText = latestTurn.userText?.trim();
+  if (userText) return latestRequestPreview(userText, title);
+  return undefined;
 }
 
 function currentSessionStatus(session: SessionState, fallback: string): string {
@@ -291,6 +315,21 @@ function summarizeSessionDetail(session: SessionSummary, title: string): string 
   if (!session.topic_user_message || !session.latest_user_message) return undefined;
   if (session.topic_user_message === session.latest_user_message) return undefined;
   return summarizeLatestRequestDetail(session.latest_user_message, title);
+}
+
+function summarizeSessionPreview(session: SessionSummary, title: string, detail?: string): string | undefined {
+  if (detail) return detail;
+  const source = session.latest_user_message || session.topic_user_message;
+  if (!source) return undefined;
+  return latestRequestPreview(source, title);
+}
+
+function latestRequestPreview(text: string, title: string): string | undefined {
+  const cleaned = stripContinuationPrefix(text.replace(/\s+/g, " ").trim());
+  if (!cleaned) return undefined;
+  const summary = summarizeSessionTitle(cleaned);
+  if (!summary || summary === title) return undefined;
+  return `Recent · ${summarize(summary, 72)}`;
 }
 
 function summarizeLatestRequestDetail(text: string, title: string): string | undefined {

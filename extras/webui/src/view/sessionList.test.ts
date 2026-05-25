@@ -112,6 +112,7 @@ describe("sessionList view model", () => {
     expect(rows[0]).toMatchObject({
       title: "Affine（Bittensor 子网）",
       detail: "Latest · 基于已有证据输出报告",
+      preview: "Latest · 基于已有证据输出报告",
       meta: ["May 24 17:37 UTC"],
       status: "Saved",
     });
@@ -353,6 +354,7 @@ describe("sessionList view model", () => {
 
     expect(rows[0]).toMatchObject({
       title: "list the files",
+      preview: "Answer · There are two files.",
       meta: [],
       status: "Done",
       tone: "saved",
@@ -361,6 +363,7 @@ describe("sessionList view model", () => {
       chips: [],
     });
     expect(rows[0].searchText).toContain("list the files");
+    expect(rows[0].searchText).toContain("there are two files");
   });
 
   it("keeps answered tool failures as tool issues instead of an error row", () => {

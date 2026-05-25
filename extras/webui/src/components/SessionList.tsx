@@ -148,31 +148,40 @@ export function SessionList({
           </div>
         ) : null}
         {!demoActive
-          ? visibleRows.map((row) => (
-              <button
-                key={row.id}
-                type="button"
-                className={`session-row${selectedId === row.id ? " is-selected" : ""}`}
-                data-tone={row.tone}
-                onClick={() => onSelect(row.id)}
-              >
-                <span className="session-row-top">
-                  <span className="pulse-dot" data-status={dotStatus(row.tone)} aria-hidden="true" />
-                  <span className="session-title" title={row.title}>
-                    {row.title}
+          ? visibleRows.map((row) => {
+              const previewId = row.preview ? `session-preview-${row.id}` : undefined;
+              return (
+                <button
+                  key={row.id}
+                  type="button"
+                  className={`session-row${selectedId === row.id ? " is-selected" : ""}`}
+                  data-tone={row.tone}
+                  aria-describedby={previewId}
+                  onClick={() => onSelect(row.id)}
+                >
+                  <span className="session-row-top">
+                    <span className="pulse-dot" data-status={dotStatus(row.tone)} aria-hidden="true" />
+                    <span className="session-title" title={row.title}>
+                      {row.title}
+                    </span>
+                    {shouldShowRowStatus(row.status) ? <span className="session-state">{row.status}</span> : null}
                   </span>
-                  {shouldShowRowStatus(row.status) ? <span className="session-state">{row.status}</span> : null}
-                </span>
-                {row.detail ? <span className="session-detail">{row.detail}</span> : null}
-                {row.meta.length > 0 ? (
-                  <span className="session-meta">
-                    {row.meta.map((part) => (
-                      <span key={part}>{part}</span>
-                    ))}
-                  </span>
-                ) : null}
-              </button>
-            ))
+                  {row.detail ? <span className="session-detail">{row.detail}</span> : null}
+                  {row.preview ? (
+                    <span id={previewId} className="session-preview" data-testid="session-preview">
+                      {row.preview}
+                    </span>
+                  ) : null}
+                  {row.meta.length > 0 ? (
+                    <span className="session-meta">
+                      {row.meta.map((part) => (
+                        <span key={part}>{part}</span>
+                      ))}
+                    </span>
+                  ) : null}
+                </button>
+              );
+            })
           : null}
       </div>
     </aside>

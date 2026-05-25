@@ -449,6 +449,15 @@ test("running work reads like an Affent chat update before drill-down", async ({
 
   await expect(page.getByTestId("running-answer")).toContainText("Working on this");
   await expect(page.getByTestId("running-answer")).toContainText("Inspect docs for WebUI trace requirements");
+  if (testInfo.project.name === "mobile") {
+    await page.getByRole("button", { name: "Switch chats" }).click();
+  }
+  const runningSessionRow = page.getByTestId("session-list").getByRole("button", { name: /use a subagent to inspect docs/ });
+  await expect(runningSessionRow.locator(".session-preview")).toBeHidden();
+  await runningSessionRow.hover();
+  await expect(runningSessionRow.locator(".session-preview")).toBeVisible();
+  await expect(runningSessionRow.locator(".session-preview")).toContainText("Now ·");
+  await expect(runningSessionRow.locator(".session-preview")).toContainText("Inspect docs for WebUI trace requirements");
   await expect(page.getByTestId("workflow-status")).toHaveCount(0);
   await expect(page.getByTestId("turn-boundary")).toHaveCount(0);
   await expect(page.getByRole("button", { name: /Work details/ })).toHaveCount(0);

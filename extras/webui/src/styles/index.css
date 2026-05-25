@@ -1039,6 +1039,27 @@ body {
   white-space: nowrap;
 }
 
+.session-preview {
+  display: block;
+  max-height: 0;
+  min-width: 0;
+  overflow: hidden;
+  color: #0f766e;
+  font-size: 11.5px;
+  font-weight: 650;
+  line-height: 1.35;
+  opacity: 0;
+  transform: translateY(-2px);
+  transition: max-height 180ms var(--ease-snap), opacity 160ms ease, transform 160ms ease;
+}
+
+.session-row:hover .session-preview,
+.session-row:focus-visible .session-preview {
+  max-height: 48px;
+  opacity: 1;
+  transform: translateY(0);
+}
+
 .session-meta,
 .session-empty {
   font-size: 12px;

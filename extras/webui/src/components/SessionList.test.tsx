@@ -61,6 +61,7 @@ describe("SessionList", () => {
     expect(row).toHaveTextContent("Latest · 基于已有证据输出报告");
     expect(row).not.toHaveTextContent("请继续同一个任务");
     expect(row).not.toHaveTextContent("Saved");
+    expect(row).toHaveAccessibleDescription("Latest · 基于已有证据输出报告");
   });
 
   it("shows a generated chat title instead of the first user message", () => {
@@ -220,6 +221,8 @@ describe("SessionList", () => {
 
     const row = screen.getByRole("button", { name: /list the files/ });
     expect(row).toHaveTextContent("Done");
+    expect(row).toHaveAccessibleDescription("Answer · There are two files.");
+    expect(within(row).getByTestId("session-preview")).toHaveTextContent("Answer · There are two files.");
     expect(row).not.toHaveTextContent("1 action");
     expect(row).not.toHaveTextContent("No messages yet");
   });
