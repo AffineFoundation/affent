@@ -2,8 +2,13 @@ import { describe, expect, it } from "vitest";
 import { buildRuntimeCapabilityView } from "./runtimeCapabilities";
 
 describe("buildRuntimeCapabilityView", () => {
-  it("stays hidden for saved sessions without an active capability snapshot", () => {
-    expect(buildRuntimeCapabilityView(undefined, { selectedSessionId: "saved-1" })).toBeUndefined();
+  it("shows an unknown runtime for saved sessions without an active capability snapshot", () => {
+    expect(buildRuntimeCapabilityView(undefined, { selectedSessionId: "saved-1" })).toMatchObject({
+      headline: "Runtime unknown",
+      detail: "This saved chat has no capability snapshot yet.",
+      tone: "unknown",
+      research: "unknown",
+    });
   });
 
   it("stays absent before any real session exists", () => {

@@ -103,7 +103,7 @@ export function App() {
   const compactNav = demoActive || !showSessionNav;
   const showHeaderNewChat = !demoActive && !showSessionNav;
   const showChatContext = !demoActive && (session.turns.length > 0 || !!pendingMessage);
-  const showRuntimeStatus = !demoActive && !!runtimeCapabilities && !showChatContext;
+  const showRuntimeStatus = !demoActive && !!runtimeCapabilities && (!showChatContext || runtimeCapabilities.tone === "unknown");
   const showSurfaceContext = showChatContext || showWorkflowStatus;
   const surfaceBusy = actionBusy || session.status === "running" || !!pendingMessage;
   const surfaceMode = session.turns.length === 0 && !pendingMessage ? "empty" : "conversation";

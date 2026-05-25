@@ -19,8 +19,14 @@ export interface RuntimeCapabilityView {
 
 export function buildRuntimeCapabilityView(caps?: SessionCapabilities, opts: { selectedSessionId?: string } = {}): RuntimeCapabilityView | undefined {
   if (!caps) {
-    void opts;
-    return undefined;
+    if (!opts.selectedSessionId) return undefined;
+    return {
+      headline: "Runtime unknown",
+      detail: "This saved chat has no capability snapshot yet.",
+      tone: "unknown",
+      research: "unknown",
+      chips: unknownChips(),
+    };
   }
 
   const externalReady = caps.web_search || caps.browser;
@@ -116,6 +122,15 @@ function recallChip(caps: SessionCapabilities): RuntimeCapabilityChip {
   if (caps.memory) return { group: "Context", label: "Memory", detail: "Can use saved memory.", tone: "ready" };
   if (caps.session_search) return { group: "Context", label: "Past chats", detail: "Can search previous chats.", tone: "ready" };
   return { group: "Context", label: "No recall", detail: "No memory or past chat search is available.", tone: "muted" };
+}
+
+function unknownChips(): RuntimeCapabilityChip[] {
+  return [
+    { group: "Web", label: "Unknown", detail: "Current research capability is not confirmed yet.", tone: "unknown" },
+    { group: "Project", label: "Unknown", detail: "File and command access is not confirmed yet.", tone: "unknown" },
+    { group: "Agents", label: "Unknown", detail: "Delegation capability is not confirmed yet.", tone: "unknown" },
+    { group: "Context", label: "Unknown", detail: "Memory and chat search are not confirmed yet.", tone: "unknown" },
+  ];
 }
 
 function focusedTaskLabel(profiles?: readonly string[]): string {

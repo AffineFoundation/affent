@@ -103,7 +103,9 @@ describe("App", () => {
     expect(context.querySelector(".chat-context-topic")).toHaveTextContent("Task:");
     expect(context.querySelector(".chat-context-topic")?.textContent).toContain("Task: list the files");
     expect(context.querySelector(".chat-context-title")).toHaveTextContent("list the files");
-    expect(screen.queryByTestId("runtime-capabilities")).toBeNull();
+    const runtime = await screen.findByTestId("runtime-capabilities");
+    expect(runtime).toHaveTextContent("Runtime unknown");
+    expect(runtime).toHaveTextContent("This saved chat has no capability snapshot yet.");
     expect(await screen.findByTestId("msg-assistant")).toHaveTextContent("There are two files.");
     expect(screen.getByTestId("composer-intent")).toHaveTextContent("Resume chat");
     expect(screen.getByTestId("composer-intent")).toHaveTextContent("continue this chat");
