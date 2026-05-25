@@ -62,6 +62,28 @@ func TestBrowserFindDeduplicatesEquivalentTextMatches(t *testing.T) {
 	}
 }
 
+func TestBrowserFindMatchesCompoundQueryByTerms(t *testing.T) {
+	result := &BrowserFindResult{
+		URL: "https://example.test",
+		TextBlocks: []TextBlock{
+			{Type: "div", Text: "SN 120 Rank 125 0.0637 TAO Volume 29.01 TAO"},
+		},
+	}
+	got := formatBrowserFindResults(result, "Market Cap Volume Price TAO Holders", 8)
+	if !strings.Contains(got, "Volume 29.01 TAO") {
+		t.Fatalf("compound query should match by meaningful terms:\n%s", got)
+	}
+}
+
+func TestBrowserFindTimeoutErrorHasRecoveryHint(t *testing.T) {
+	err := browserFindTimeoutError("Market Cap Volume Price TAO Holders", browserFindTimeout, context.DeadlineExceeded)
+	for _, want := range []string{"browser_find", "timed out", "Failure: kind=timeout", "Next:", "shorter visible keyword", "browser_snapshot"} {
+		if !strings.Contains(err.Error(), want) {
+			t.Fatalf("timeout error missing %q:\n%s", want, err.Error())
+		}
+	}
+}
+
 func TestBrowserFindResultDecodesDOMShape(t *testing.T) {
 	var result BrowserFindResult
 	raw := []byte(`{"url":"https://example.test","title":"Example","interactive":[{"ref":2,"role":"link","name":"Market"}],"text_blocks":[{"type":"p","text":"Market cap"}]}`)

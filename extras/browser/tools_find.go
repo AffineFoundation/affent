@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"strings"
+	"time"
 
 	agent "github.com/affinefoundation/affent/internal/agent"
 )
@@ -14,6 +15,7 @@ const (
 	defaultBrowserFindLimit  = 8
 	maxBrowserFindLimit      = 25
 	maxBrowserFindSnippet    = 220
+	browserFindTimeout       = 5 * time.Second
 )
 
 // FindTool returns `browser_find`. It searches the current rendered
@@ -95,12 +97,20 @@ func (s *Session) FindText(ctx context.Context, query string, limit int) (*Brows
 	if s.page == nil {
 		return nil, ErrNoPage
 	}
+	if ctx == nil {
+		ctx = context.Background()
+	}
 	if limit <= 0 {
 		limit = defaultBrowserFindLimit
 	}
-	page := s.withContext(ctx)
+	findCtx, cancel := context.WithTimeout(ctx, browserFindTimeout)
+	defer cancel()
+	page := s.withContext(findCtx)
 	result, err := page.Eval(browserFindJS(query, limit))
 	if err != nil {
+		if findCtx.Err() != nil {
+			return nil, browserFindTimeoutError(query, browserFindTimeout, err)
+		}
 		return nil, fmt.Errorf("eval find js: %w", err)
 	}
 	raw, err := result.Value.MarshalJSON()
@@ -115,6 +125,17 @@ func (s *Session) FindText(ctx context.Context, query string, limit int) (*Brows
 	return &out, nil
 }
 
+func browserFindTimeoutError(query string, timeout time.Duration, err error) error {
+	return fmt.Errorf(
+		"browser_find for %q timed out after %s while scanning the rendered page: %w\n"+
+			"Failure: kind=timeout\n"+
+			"Next: retry browser_find with one shorter visible keyword, call browser_snapshot for a compact page view, or continue from already verified evidence",
+		query,
+		timeout,
+		err,
+	)
+}
+
 func browserFindJS(query string, limit int) string {
 	rawQuery, _ := json.Marshal(query)
 	return fmt.Sprintf(`() => {
@@ -127,6 +148,30 @@ func browserFindJS(query string, limit int) string {
   }
   function norm(s) {
     return clean(s).toLowerCase();
+  }
+  const stopWords = new Set(['and', 'or', 'the', 'a', 'an', 'of', 'for', 'to', 'in', 'on', 'with', 'by', 'from']);
+  function queryTerms(s) {
+    const terms = [];
+    for (const part of norm(s).split(/[^a-z0-9]+/)) {
+      if (part.length < 2 || stopWords.has(part)) continue;
+      if (!terms.includes(part)) terms.push(part);
+      if (terms.length >= 8) break;
+    }
+    return terms;
+  }
+  const needle = norm(query);
+  const terms = queryTerms(query);
+  function matchesQuery(text) {
+    const hay = norm(text);
+    if (!hay) return false;
+    if (needle && hay.includes(needle)) return true;
+    if (terms.length === 0) return false;
+    let hits = 0;
+    for (const term of terms) {
+      if (hay.includes(term)) hits++;
+    }
+    const required = terms.length === 1 ? 1 : (terms.length === 2 ? 2 : 2);
+    return hits >= required;
   }
   function isVisible(el) {
     if (!el || !el.getBoundingClientRect) return false;
@@ -199,7 +244,7 @@ func browserFindJS(query string, limit int) string {
     let best = clean(fallback);
     for (let cur = el, depth = 0; cur && cur !== document.body && depth < 4; cur = cur.parentElement, depth++) {
       const full = visibleText(cur);
-      if (!full || !norm(full).includes(needle)) continue;
+      if (!full || !matchesQuery(full)) continue;
       if (full.length <= 600 && full.length > best.length) {
         best = full;
       }
@@ -209,7 +254,6 @@ func browserFindJS(query string, limit int) string {
   function around(text) {
     text = clean(text);
     const lower = text.toLowerCase();
-    const needle = norm(query);
     const max = 600;
     if (text.length <= max) return text;
     const idx = lower.indexOf(needle);
@@ -220,8 +264,6 @@ func browserFindJS(query string, limit int) string {
     const end = Math.min(text.length, start + max);
     return (start > 0 ? '... ' : '') + text.slice(start, end).trim() + (end < text.length ? ' ...' : '');
   }
-
-  const needle = norm(query);
   const interactive = [];
   const textBlocks = [];
   const seenText = new Set();
@@ -249,15 +291,17 @@ func browserFindJS(query string, limit int) string {
     if (el.tagName === 'INPUT' && (el.type === 'checkbox' || el.type === 'radio')) {
       info.checked = !!el.checked;
     }
-    if (norm([info.role, info.name, info.href || '', info.value || ''].join(' ')).includes(needle)) {
+    if (matchesQuery([info.role, info.name, info.href || '', info.value || ''].join(' '))) {
       interactive.push(info);
     }
   });
   const remaining = () => maxResults - interactive.length - textBlocks.length;
   const addText = (el, type, text) => {
     if (remaining() <= 0) return;
+    const candidate = clean(text);
+    if (!candidate || !matchesQuery(candidate)) return;
     const context = contextualText(el, text);
-    if (!context || !norm(context).includes(needle)) return;
+    if (!context || !matchesQuery(context)) return;
     const snippet = around(context);
     const key = norm(snippet);
     if (!key || seenText.has(key)) return;
@@ -307,8 +351,7 @@ func formatBrowserFindResults(result *BrowserFindResult, query string, limit int
 }
 
 func browserFindMatches(result *BrowserFindResult, query string, limit int) []string {
-	needle := normalizedSnapshotText(query)
-	if needle == "" || limit <= 0 {
+	if normalizedSnapshotText(query) == "" || limit <= 0 {
 		return nil
 	}
 	var out []string
@@ -319,7 +362,7 @@ func browserFindMatches(result *BrowserFindResult, query string, limit int) []st
 	seenText := map[string]struct{}{}
 	for _, el := range result.Interactive {
 		hay := normalizedSnapshotText(strings.Join([]string{el.Role, el.Name, el.Href, el.Value}, " "))
-		if !strings.Contains(hay, needle) {
+		if !browserFindTextMatches(hay, query) {
 			continue
 		}
 		if add(fmt.Sprintf("[interactive ref=%d] %s", el.Ref, formatInteractive(el))) {
@@ -328,7 +371,7 @@ func browserFindMatches(result *BrowserFindResult, query string, limit int) []st
 	}
 	for _, tb := range result.TextBlocks {
 		text := strings.TrimSpace(tb.Text)
-		if text == "" || !strings.Contains(normalizedSnapshotText(text), needle) {
+		if text == "" || !browserFindTextMatches(text, query) {
 			continue
 		}
 		typ := strings.TrimSpace(tb.Type)
@@ -349,6 +392,64 @@ func browserFindMatches(result *BrowserFindResult, query string, limit int) []st
 		}
 	}
 	return out
+}
+
+func browserFindTextMatches(text, query string) bool {
+	hay := normalizedSnapshotText(text)
+	needle := normalizedSnapshotText(query)
+	if hay == "" || needle == "" {
+		return false
+	}
+	if strings.Contains(hay, needle) {
+		return true
+	}
+	terms := browserFindQueryTerms(query)
+	if len(terms) == 0 {
+		return false
+	}
+	hits := 0
+	for _, term := range terms {
+		if strings.Contains(hay, term) {
+			hits++
+		}
+	}
+	required := len(terms)
+	if required > 2 {
+		required = 2
+	}
+	return hits >= required
+}
+
+func browserFindQueryTerms(query string) []string {
+	normalized := normalizedSnapshotText(query)
+	if normalized == "" {
+		return nil
+	}
+	stop := map[string]struct{}{
+		"a": {}, "an": {}, "and": {}, "by": {}, "for": {}, "from": {}, "in": {},
+		"of": {}, "on": {}, "or": {}, "the": {}, "to": {}, "with": {},
+	}
+	seen := map[string]struct{}{}
+	var terms []string
+	for _, part := range strings.FieldsFunc(normalized, func(r rune) bool {
+		return (r < 'a' || r > 'z') && (r < '0' || r > '9')
+	}) {
+		if len(part) < 2 {
+			continue
+		}
+		if _, ok := stop[part]; ok {
+			continue
+		}
+		if _, ok := seen[part]; ok {
+			continue
+		}
+		seen[part] = struct{}{}
+		terms = append(terms, part)
+		if len(terms) >= 8 {
+			break
+		}
+	}
+	return terms
 }
 
 func snippetAround(text, query string, limit int) string {
