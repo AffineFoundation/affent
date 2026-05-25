@@ -227,6 +227,12 @@ func TestSubagentExternalResearchPolicyRejectsUndeclaredDelegation(t *testing.T)
 			t.Fatalf("policy rejection missing %q:\n%s", want, result)
 		}
 	}
+	if _, reject := policy.Reject(ToolCallPolicyContext{
+		UserText: "affine是bittensor的一个子网，请你收集信息向我介绍",
+		ToolName: SubagentToolName,
+	}); !reject {
+		t.Fatal("generic collect-information public research should reject undeclared subagent delegation")
+	}
 
 	if _, reject := policy.Reject(ToolCallPolicyContext{
 		UserText: "请用 subagent 隔离检索这个网站。",

@@ -1651,7 +1651,7 @@ func TestRunTurn_SubagentExternalResearchPolicyRejectsDirectCall(t *testing.T) {
 	if err := loop.EnsureSystemPrompt("base"); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := loop.SendUser(context.Background(), "请检索网站，收集最近价格、市值和 Twitter 评价"); err != nil {
+	if _, err := loop.SendUser(context.Background(), "affine是bittensor的一个子网，请你收集信息向我介绍"); err != nil {
 		t.Fatal(err)
 	}
 
