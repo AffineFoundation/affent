@@ -223,7 +223,41 @@ function summarizeSessionTitle(text: string): string {
     .map((part) => part.trim())
     .find((part) => part && !/^(请|请你|帮我|麻烦|please\b|can you\b|could you\b|continue\b|继续)/i.test(part)) ?? primaryClause;
   const normalized = trimTopicSuffix(stripTopicPrefix(beforeInstruction));
-  return summarize(normalized || cleaned, 42);
+  const topicTitle = summarizeTopicStatement(normalized) ?? prettyTopicName(normalized);
+  return summarize(topicTitle || cleaned, 42);
+}
+
+function summarizeTopicStatement(text: string): string | undefined {
+  const value = text.trim();
+  if (!value) return undefined;
+  const cn = value.match(/^(.{1,40}?)\s*(?:是|为)\s*(.{1,50}?)\s*的\s*(?:一个|一种|一类)?\s*(子网|项目|协议|平台|工具|框架|网络)\s*$/i);
+  if (cn) {
+    return `${prettyTopicName(cn[1])}（${prettyTopicName(cn[2])} ${cn[3]}）`;
+  }
+  const en = value.match(/^(.{1,40}?)\s+(?:is|as)\s+(?:an?\s+)?(.{1,50}?)\s+(subnet|project|protocol|platform|tool|framework|network)\s*$/i);
+  if (en) {
+    return `${prettyTopicName(en[1])} (${prettyTopicName(en[2])} ${en[3].toLowerCase()})`;
+  }
+  return undefined;
+}
+
+function prettyTopicName(text: string): string {
+  let value = text
+    .replace(/^[“"']+|[”"']+$/g, "")
+    .replace(/\s+/g, " ")
+    .trim();
+  if (!value) return "";
+  const replacements: Array<[RegExp, string]> = [
+    [/\baffine\b/gi, "Affine"],
+    [/\bbittensor\b/gi, "Bittensor"],
+    [/\bwebui\b/gi, "WebUI"],
+    [/\bapi\b/gi, "API"],
+    [/\bmcp\b/gi, "MCP"],
+    [/\bllm\b/gi, "LLM"],
+    [/\btao\b/gi, "TAO"],
+  ];
+  for (const [pattern, replacement] of replacements) value = value.replace(pattern, replacement);
+  return value;
 }
 
 function stripTopicPrefix(text: string): string {

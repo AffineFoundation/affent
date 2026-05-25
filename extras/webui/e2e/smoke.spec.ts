@@ -449,7 +449,8 @@ test("running work reads like an Affent chat update before drill-down", async ({
   await expect(page.getByTestId("running-answer")).toContainText("Inspect docs for WebUI trace requirements");
   await expect(page.getByTestId("workflow-status")).toHaveCount(0);
   await expect(page.getByTestId("turn-boundary")).toHaveCount(0);
-  await expect(page.getByRole("button", { name: /Tool details/ })).toHaveAttribute("aria-expanded", "false");
+  await expect(page.getByRole("button", { name: /Tool details/ })).toHaveCount(0);
+  await expect(page.getByTestId("work-thread")).toHaveCount(0);
   await expect(page.getByTestId("agent-activity")).toHaveAttribute("data-open", "true");
   await expect(page.getByTestId("agent-activity-tree")).toContainText("Inspect docs for WebUI trace requirements");
   await expect(page.getByTestId("agent-activity-tree")).toContainText("running");

@@ -194,7 +194,7 @@ function shouldShowWorkDetails(
   if (turn.toolCalls.length === 0) return false;
   if (opts.searchMatch) return true;
   if (opts.force) return true;
-  if (turn.status === "running") return true;
+  if (turn.status === "running") return false;
   if (turn.status === "error" || turn.error) return true;
   if (latestFailedTool(turn) && !turn.assistantText.trim()) return true;
   if (opts.continuedAfterLimit) return false;

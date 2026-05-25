@@ -276,6 +276,18 @@ describe("Timeline", () => {
     expect(screen.getByTestId("agent-activity-tree")).toHaveTextContent("Delegate");
     expect(screen.getByTestId("agent-activity-tree")).toHaveTextContent("Inspect docs for WebUI trace requirements");
     expect(screen.getByTestId("agent-activity-tree")).toHaveTextContent("running");
+    expect(screen.queryByTestId("work-thread")).toBeNull();
+    expect(screen.queryByTestId("execution-tree")).toBeNull();
+  });
+
+  it("keeps running technical details available when filtering for actions", async () => {
+    const user = userEvent.setup();
+    renderTimeline(runningSubagent);
+
+    await openTimelineTools(user);
+    await openTimelineFilters(user);
+    await user.click(screen.getByRole("button", { name: "With actions" }));
+
     expect(screen.getByTestId("work-thread")).toHaveTextContent("Tool details");
     expect(screen.getByTestId("work-thread")).toHaveTextContent("Inspect docs for WebUI trace requirements");
   });
@@ -549,17 +561,16 @@ describe("Timeline", () => {
     expect(screen.queryByTestId("tool-details")).toBeNull();
   });
 
-  it("auto-expands only the currently running subagent", () => {
+  it("auto-expands the currently running subagent activity", () => {
     renderTimeline(runningSubagent);
-    fireEvent.click(screen.getByRole("button", { name: /Tool details/ }));
-    const subagent = screen.getByRole("button", { name: /subagent_run/ });
-    expect(subagent).toHaveAttribute("aria-expanded", "true");
+
+    expect(screen.getByTestId("agent-activity")).toHaveAttribute("data-open", "true");
     expect(screen.getByTestId("agent-activity-tree")).toHaveTextContent("Delegate");
     expect(screen.getByTestId("agent-activity-tree")).toHaveTextContent("Running");
-    expect(screen.getByTestId("execution-now")).toHaveTextContent("Now");
-    expect(screen.getByTestId("execution-now")).toHaveTextContent("Inspect docs for WebUI trace requirements");
-    expect(screen.getAllByTestId("execution-node")[0]).toHaveAttribute("data-active-path", "true");
-    expect(within(screen.getByTestId("tool-details")).getAllByText(/Inspect docs for WebUI trace requirements/).length).toBeGreaterThan(0);
+    expect(screen.getByTestId("agent-activity-tree")).toHaveTextContent("Inspect docs for WebUI trace requirements");
+    expect(screen.getAllByTestId("agent-activity-node")[0]).toHaveAttribute("data-open", "true");
+    expect(screen.getAllByTestId("agent-activity-node")[0]).toHaveAttribute("data-status", "running");
+    expect(screen.queryByTestId("execution-tree")).toBeNull();
   });
 
   it("folds historical failed activity after a later turn completes", () => {

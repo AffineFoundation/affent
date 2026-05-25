@@ -55,8 +55,8 @@ describe("SessionList", () => {
       }),
     ]);
 
-    const row = screen.getByRole("button", { name: /affine 是 Bittensor/ });
-    expect(row).toHaveTextContent("affine 是 Bittensor 的一个子网");
+    const row = screen.getByRole("button", { name: /Affine（Bittensor 子网）/ });
+    expect(row).toHaveTextContent("Affine（Bittensor 子网）");
     expect(row).not.toHaveTextContent("请继续同一个任务");
   });
 
@@ -134,7 +134,7 @@ describe("SessionList", () => {
 
     expect(panel).toHaveAttribute("data-has-selection", "true");
     expect(panel).toHaveAttribute("data-mobile-open", "false");
-    expect(toggle).toHaveTextContent("current affine research");
+    expect(toggle).toHaveTextContent("Affine research");
     expect(toggle).toHaveTextContent("Switch");
 
     await user.click(toggle);
@@ -190,8 +190,8 @@ describe("SessionList", () => {
       />,
     );
 
-    const row = screen.getByRole("button", { name: /affine 是 Bittensor/ });
-    expect(row).toHaveTextContent("affine 是 Bittensor 的一个子网");
+    const row = screen.getByRole("button", { name: /Affine（Bittensor 子网）/ });
+    expect(row).toHaveTextContent("Affine（Bittensor 子网）");
     expect(row).not.toHaveTextContent("请继续同一个任务");
   });
 
@@ -242,7 +242,7 @@ describe("SessionList", () => {
       />,
     );
 
-    const row = screen.getByRole("button", { name: /affine/ });
+    const row = screen.getByRole("button", { name: /Affine/ });
     expect(row).toHaveAttribute("data-tone", "saved");
     expect(row).toHaveTextContent("Done");
     expect(row).not.toHaveTextContent("research affine");

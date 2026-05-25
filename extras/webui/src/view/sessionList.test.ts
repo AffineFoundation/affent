@@ -19,7 +19,7 @@ describe("sessionList view model", () => {
     ]);
 
     expect(rows[0]).toMatchObject({
-      title: "webui timeline",
+      title: "WebUI timeline",
       meta: ["workspac...123456", "2026-05-23 18:30 UTC"],
       status: "Live",
       tone: "running",
@@ -110,7 +110,7 @@ describe("sessionList view model", () => {
     ]);
 
     expect(rows[0]).toMatchObject({
-      title: "affine 是 Bittensor 的一个子网",
+      title: "Affine（Bittensor 子网）",
       meta: ["affine-session", "2026-05-24 17:37 UTC"],
       status: "Saved",
     });
@@ -133,6 +133,24 @@ describe("sessionList view model", () => {
 
     expect(rows.find((row) => row.id === "affine-research")?.title).toBe("Affine（Bittensor 子网）");
     expect(rows.find((row) => row.id === "webui-review")?.title).toBe("WebUI session list behavior");
+  });
+
+  it("summarizes question-style session titles into topics", () => {
+    const rows = buildSessionRows([
+      session({
+        id: "bittensor-question",
+        durable: true,
+        latest_user_message: "bittensor是什么",
+      }),
+      session({
+        id: "english-subnet",
+        durable: true,
+        latest_user_message: "Affine is a Bittensor subnet, collect recent information",
+      }),
+    ]);
+
+    expect(rows.find((row) => row.id === "bittensor-question")?.title).toBe("Bittensor");
+    expect(rows.find((row) => row.id === "english-subnet")?.title).toBe("Affine (Bittensor subnet)");
   });
 
   it("uses the selected timeline state when the API summary lacks recent task context", () => {
@@ -297,7 +315,7 @@ describe("sessionList view model", () => {
     );
 
     expect(rows[0]).toMatchObject({
-      title: "affine",
+      title: "Affine",
       status: "Done",
       tone: "saved",
       metrics: ["2 messages", "1 action", "1 continued"],
@@ -399,7 +417,7 @@ describe("sessionList view model", () => {
     );
 
     expect(rows[0]).toMatchObject({
-      title: "affine 是 Bittensor 的一个子网",
+      title: "Affine（Bittensor 子网）",
       status: "Done",
       tone: "saved",
       metrics: ["2 messages", "1 continued"],
