@@ -630,7 +630,7 @@ func TestRunTurn_ForcesNoToolsAfterRepeatedContextBudgetExhaustion(t *testing.T)
 				continue
 			}
 			if strings.Contains(secondReq, `"tools"`) {
-				t.Fatalf("second request should force a no-tools final answer after repeated context budget exhaustion, body=%s", secondReq)
+				t.Fatalf("second request should force a no-tools final answer after context budget exhaustion, body=%s", secondReq)
 			}
 			if !strings.Contains(secondReq, "per-turn tool-result context budget") {
 				t.Fatalf("second request should include budget-exhausted skipped tool guidance, body=%s", secondReq)
@@ -1493,6 +1493,113 @@ func TestRunTurn_FinalNoToolsOnMaxTurnsForcesSummary(t *testing.T) {
 				}
 				if !finalRequestHadEvidenceDigest.Load() {
 					t.Fatal("final max-turns recovery request must include compact evidence digest")
+				}
+				return
+			}
+		case <-deadline:
+			t.Fatal("timeout waiting for turn.end")
+		}
+	}
+}
+
+func TestRunTurn_FinalNoToolsOnMaxTurnsRecoversWhenModelStillRequestsTool(t *testing.T) {
+	var calls int32
+	var finalRequests atomic.Int32
+	var finalRequestHadTools atomic.Bool
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		body, _ := readReqBody(r)
+		w.Header().Set("Content-Type", "text/event-stream")
+		w.WriteHeader(200)
+		fl := w.(http.Flusher)
+		switch atomic.AddInt32(&calls, 1) {
+		case 1, 2:
+			lines := []string{
+				`data: {"choices":[{"delta":{"role":"assistant","tool_calls":[{"index":0,"id":"c1","type":"function","function":{"name":"big","arguments":"{}"}}]},"finish_reason":null}]}`,
+				`data: {"choices":[{"delta":{},"finish_reason":"tool_calls"}]}`,
+				`data: [DONE]`,
+			}
+			for _, l := range lines {
+				w.Write([]byte(l + "\n\n"))
+				fl.Flush()
+			}
+		case 3:
+			finalRequests.Add(1)
+			finalRequestHadTools.Store(finalRequestHadTools.Load() || strings.Contains(body, `"tools"`))
+			lines := []string{
+				`data: {"choices":[{"delta":{"role":"assistant","tool_calls":[{"index":0,"id":"ignored","type":"function","function":{"name":"big","arguments":"{}"}}]},"finish_reason":null}]}`,
+				`data: {"choices":[{"delta":{},"finish_reason":"tool_calls"}]}`,
+				`data: [DONE]`,
+			}
+			for _, l := range lines {
+				w.Write([]byte(l + "\n\n"))
+				fl.Flush()
+			}
+		default:
+			finalRequests.Add(1)
+			finalRequestHadTools.Store(finalRequestHadTools.Load() || strings.Contains(body, `"tools"`))
+			w.Write([]byte(`data: {"choices":[{"delta":{"role":"assistant","content":"final answer after ignored tool request"},"finish_reason":"stop"}]}` + "\n\n"))
+			w.Write([]byte("data: [DONE]\n\n"))
+			fl.Flush()
+		}
+	}))
+	t.Cleanup(srv.Close)
+
+	conv, err := OpenConversationAt(filepath.Join(t.TempDir(), "sess.jsonl"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	reg := NewRegistry()
+	reg.Add(fakeBigResultTool("SourceAccess: fetched_url=https://example.test/source\nverified evidence"))
+
+	events := make(chan sse.Event, 256)
+	loop := &Loop{
+		LLM: NewLLMClient(srv.URL, "", "fake-model"), Tools: reg, Conv: conv, Events: events,
+		MaxTurnSteps: 1, PerCallTimeout: 5 * time.Second,
+		FinalNoToolsOnMaxTurns: true,
+	}
+	if err := loop.EnsureSystemPrompt("base"); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := loop.SendUser(context.Background(), "go"); err != nil {
+		t.Fatal(err)
+	}
+
+	deadline := time.After(10 * time.Second)
+	var finalText string
+	for {
+		select {
+		case ev, ok := <-events:
+			if !ok {
+				t.Fatal("event channel closed before turn.end")
+			}
+			switch ev.Type {
+			case sse.TypeMessageDone:
+				var p sse.MessageDonePayload
+				if err := json.Unmarshal(ev.Data, &p); err != nil {
+					t.Fatalf("decode message.done: %v", err)
+				}
+				if p.FinishReason != "tool_calls" {
+					finalText = p.Text
+				}
+			case sse.TypeTurnEnd:
+				var p sse.TurnEndPayload
+				if err := json.Unmarshal(ev.Data, &p); err != nil {
+					t.Fatalf("decode turn.end: %v", err)
+				}
+				if p.Reason != sse.TurnEndCompleted {
+					t.Fatalf("expected completed after second final no-tool pass, got %q", p.Reason)
+				}
+				if finalText != "final answer after ignored tool request" {
+					t.Fatalf("final answer missing: %q", finalText)
+				}
+				if finalRequestHadTools.Load() {
+					t.Fatal("final recovery requests must not include tools")
+				}
+				if got := finalRequests.Load(); got != 2 {
+					t.Fatalf("final no-tool requests = %d, want 2", got)
+				}
+				if p.ToolStats == nil || p.ToolStats.ToolErrors == 0 {
+					t.Fatalf("turn.end should include skipped ignored tool request stats: %+v", p.ToolStats)
 				}
 				return
 			}

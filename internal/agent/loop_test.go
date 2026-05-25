@@ -207,6 +207,7 @@ func TestFinalNoToolsPromptsRequireEvidenceRescan(t *testing.T) {
 			"before declaring any field unavailable",
 			"actual fetched_url/browser_rendered_url",
 			"requested_url and discovered links as unverified",
+			"Do not infer project maturity, scale, ranking quality",
 		} {
 			if !strings.Contains(prompt, want) {
 				t.Fatalf("%s final prompt missing %q:\n%s", name, want, prompt)

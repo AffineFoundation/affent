@@ -438,6 +438,7 @@ func externalResearchSystemGuidance(surface externalResearchToolSurface) string 
 		b.WriteString("\n- Use browser_find on the current page for targeted labels or metrics before repeated scrolling; it returns compact snippets and refs for visible matches.")
 		b.WriteString("\n- On dynamic metric/dashboard/detail pages, especially for market, trend, subnet, token, company, or product status questions, call browser_find with field-label queries such as \"price market cap FDV volume supply TVL\", \"24h 7d volume market cap\", \"validators miners stake emission\", or the user's requested labels before scrolling, clicking tabs, or declaring those metrics unavailable. Do not repeat browser_find with only the entity name after the page already identifies the entity; search for missing field labels instead.")
 		b.WriteString("\n- Dashboard text can interleave global header metrics, entity metrics, and labels in one line. Only pair a numeric value with a metric label when the label/value adjacency or embedded data is explicit; otherwise report it as ambiguous or global instead of assigning it to the entity.")
+		b.WriteString("\n- Do not infer project maturity, scale, ranking quality, or market position from a table row number or visible order unless the table's sort column and metric label are explicit. A row such as \"5 NameSN120\" may be an index or current sort order, not evidence of project size or quality.")
 	}
 	if surface.WebFetch {
 		b.WriteString("\n- If web_fetch returns Embedded data preview, treat matching fields as page-source evidence for the requested entity or route; ignore unrelated shell metadata, and prefer a canonical API/text/export source when the embedded data is insufficient or ambiguous.")
@@ -817,15 +818,49 @@ func (l *Loop) runTurn(ctx context.Context, turnID, userText string, opts TurnOp
 	processFinalRecovered := false
 	toolStats := sse.ToolRuntimeStats{}
 	toolContextBudget := newToolResultContextBudget(l.toolResultContextBudgetBytes())
+	runBudgetFinal := func(prompt, skippedReason string) (bool, string, error) {
+		nextPrompt := prompt
+		nextSkippedReason := skippedReason
+		for attempt := 0; attempt < 3; attempt++ {
+			final, reason, err := l.runFinalNoToolsStep(ctx, turnID, nextPrompt)
+			if err != nil {
+				return false, reason, err
+			}
+			if final == nil {
+				return false, "", nil
+			}
+			totalIn += final.InputTokens
+			totalOut += final.OutputTokens
+			if len(final.Final.ToolCalls) == 0 {
+				content := strings.TrimSpace(final.Final.Content)
+				if final.Reason == "length" {
+					nextPrompt = lengthRecoveryPrompt
+					continue
+				}
+				if content == "" {
+					nextPrompt = forceNoToolsFinalPrompt
+					continue
+				}
+				if finalAnswerNeedsEvidenceRecovery(content, toolCallsUsed) {
+					nextPrompt = processNarrationRecoveryPrompt
+					continue
+				}
+				return true, "", nil
+			}
+			skipped := l.appendSkippedToolResults(turnID, final.Final.ToolCalls, nextSkippedReason)
+			toolStats.ToolRequests += skipped
+			toolStats.ToolErrors += skipped
+			nextPrompt = forceNoToolsFinalPrompt
+			nextSkippedReason = "(tools are disabled; final no-tool answer requested)"
+		}
+		return false, "", nil
+	}
 	recordContextOmission := func(omitted int) {
 		recordToolContextOmission(&toolStats, omitted)
 		if omitted <= 0 || toolContextBudget == nil || !toolContextBudget.exhausted() {
 			return
 		}
 		budgetExhaustedOmissions++
-		if budgetExhaustedOmissions < 2 {
-			return
-		}
 		if !forceNoToolsNext {
 			toolStats.ForcedNoTools++
 		}
@@ -905,21 +940,14 @@ func (l *Loop) runTurn(ctx context.Context, turnID, userText string, opts TurnOp
 			toolStats.ToolRequests += skipped
 			toolStats.ToolErrors += skipped
 			if l.finalNoToolsOnMaxTurnsForTurn(opts) {
-				final, reason, err := l.runFinalNoToolsStep(ctx, turnID, forceNoToolsFinalPrompt)
+				done, reason, err := runBudgetFinal(forceNoToolsFinalPrompt, "(tools are disabled; final no-tool answer requested)")
 				if err != nil {
 					endReason = reason
 					break
 				}
-				if final != nil {
-					totalIn += final.InputTokens
-					totalOut += final.OutputTokens
-					if len(final.Final.ToolCalls) == 0 {
-						finishedNaturally = true
-						break
-					}
-					skipped := l.appendSkippedToolResults(turnID, final.Final.ToolCalls, "(tools are disabled; final no-tool answer requested)")
-					toolStats.ToolRequests += skipped
-					toolStats.ToolErrors += skipped
+				if done {
+					finishedNaturally = true
+					break
 				}
 			}
 			endReason = sse.TurnEndMaxTurns
@@ -930,21 +958,14 @@ func (l *Loop) runTurn(ctx context.Context, turnID, userText string, opts TurnOp
 			toolStats.ToolRequests += skipped
 			toolStats.ToolErrors += skipped
 			if l.finalNoToolsOnMaxTurnsForTurn(opts) {
-				final, reason, err := l.runFinalNoToolsStep(ctx, turnID, maxTurnsFinalPrompt)
+				done, reason, err := runBudgetFinal(maxTurnsFinalPrompt, "(max_turns reached; final no-tool answer requested)")
 				if err != nil {
 					endReason = reason
 					break
 				}
-				if final != nil {
-					totalIn += final.InputTokens
-					totalOut += final.OutputTokens
-					if len(final.Final.ToolCalls) == 0 {
-						finishedNaturally = true
-						break
-					}
-					skipped := l.appendSkippedToolResults(turnID, final.Final.ToolCalls, "(max_turns reached; final no-tool answer requested)")
-					toolStats.ToolRequests += skipped
-					toolStats.ToolErrors += skipped
+				if done {
+					finishedNaturally = true
+					break
 				}
 			}
 			endReason = sse.TurnEndMaxTurns
@@ -1211,21 +1232,14 @@ func (l *Loop) runTurn(ctx context.Context, turnID, userText string, opts TurnOp
 		}
 		if toolBudgetExhausted {
 			if l.finalNoToolsOnMaxTurnsForTurn(opts) {
-				final, reason, err := l.runFinalNoToolsStep(ctx, turnID, toolBudgetFinalPrompt)
+				done, reason, err := runBudgetFinal(toolBudgetFinalPrompt, "(tool call budget reached; final no-tool answer requested)")
 				if err != nil {
 					endReason = reason
 					break
 				}
-				if final != nil {
-					totalIn += final.InputTokens
-					totalOut += final.OutputTokens
-					if len(final.Final.ToolCalls) == 0 {
-						finishedNaturally = true
-						break
-					}
-					skipped := l.appendSkippedToolResults(turnID, final.Final.ToolCalls, "(tool call budget reached; final no-tool answer requested)")
-					toolStats.ToolRequests += skipped
-					toolStats.ToolErrors += skipped
+				if done {
+					finishedNaturally = true
+					break
 				}
 			}
 			endReason = sse.TurnEndMaxTurns
@@ -1740,7 +1754,7 @@ func (l *Loop) finalNoToolsOnMaxTurnsForTurn(opts TurnOptions) bool {
 	return l.FinalNoToolsOnMaxTurns || opts.FinalNoToolsOnMaxTurns
 }
 
-const finalEvidenceDiscipline = `Use only existing tool results. Re-scan the latest successful SourceAccess outputs for requested names, ids, prices, counts, dates, and status labels before declaring any field unavailable. Cite actual fetched_url/browser_rendered_url values as accessed sources; treat requested_url and discovered links as unverified unless a tool result actually read them. A browser_find no-match only means the query was absent from the current rendered page text; do not turn it into a whole-site or whole-dataset absence claim. On dashboard rows that mix global metrics, entity metrics, values, and labels, only pair a numeric value with a metric label when the label/value adjacency or embedded data is explicit; otherwise mark it ambiguous or global.`
+const finalEvidenceDiscipline = `Use only existing tool results. Re-scan the latest successful SourceAccess outputs for requested names, ids, prices, counts, dates, and status labels before declaring any field unavailable. Cite actual fetched_url/browser_rendered_url values as accessed sources; treat requested_url and discovered links as unverified unless a tool result actually read them. A browser_find no-match only means the query was absent from the current rendered page text; do not turn it into a whole-site or whole-dataset absence claim. On dashboard rows that mix global metrics, entity metrics, values, and labels, only pair a numeric value with a metric label when the label/value adjacency or embedded data is explicit; otherwise mark it ambiguous or global. Do not infer project maturity, scale, ranking quality, or market position from a table row number or visible order unless the table's sort column and metric label are explicit.`
 
 var lengthRecoveryPrompt = `The previous assistant response was cut off while summarizing evidence gathered in this turn.
 
