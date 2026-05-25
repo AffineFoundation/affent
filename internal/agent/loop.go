@@ -844,6 +844,24 @@ func (l *Loop) runTurn(ctx context.Context, turnID, userText string, opts TurnOp
 			skipped := l.appendSkippedToolResults(turnID, final.Final.ToolCalls, forceNoToolsReason)
 			toolStats.ToolRequests += skipped
 			toolStats.ToolErrors += skipped
+			if l.finalNoToolsOnMaxTurnsForTurn(opts) {
+				final, reason, err := l.runFinalNoToolsStep(ctx, turnID, forceNoToolsFinalPrompt)
+				if err != nil {
+					endReason = reason
+					break
+				}
+				if final != nil {
+					totalIn += final.InputTokens
+					totalOut += final.OutputTokens
+					if len(final.Final.ToolCalls) == 0 {
+						finishedNaturally = true
+						break
+					}
+					skipped := l.appendSkippedToolResults(turnID, final.Final.ToolCalls, "(tools are disabled; final no-tool answer requested)")
+					toolStats.ToolRequests += skipped
+					toolStats.ToolErrors += skipped
+				}
+			}
 			endReason = sse.TurnEndMaxTurns
 			break
 		}
@@ -1655,6 +1673,10 @@ Do not call tools. Produce the final answer now from the existing tool results. 
 const toolBudgetFinalPrompt = `The tool-call budget for this turn is exhausted.
 
 Do not call tools. Produce the final answer now from the existing tool results. Keep it concise, separate verified facts from gaps, and list any important sources that were unavailable or blocked.`
+
+const forceNoToolsFinalPrompt = `Tools are disabled for the rest of this turn, but the previous assistant step still requested another tool.
+
+Do not call tools again. Start the final answer now from the existing tool results. Keep it concise, separate verified facts from gaps, and list any important sources that were unavailable or blocked.`
 
 func (l *Loop) runFinalNoToolsStep(ctx context.Context, turnID, prompt string) (*FinishInfo, string, error) {
 	if err := l.Conv.Append(ChatMessage{Role: "user", Content: prompt}); err != nil {

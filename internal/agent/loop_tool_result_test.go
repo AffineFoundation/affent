@@ -1497,6 +1497,118 @@ func TestRunTurn_FinalNoToolsOnMaxTurnsForcesSummary(t *testing.T) {
 	}
 }
 
+func TestRunTurn_ForceNoToolsStillSummarizesWhenModelRequestsTool(t *testing.T) {
+	var calls int32
+	var firstNoToolsRequestHadTools atomic.Bool
+	var recoveryRequestHadTools atomic.Bool
+	var recoveryRequestHadPrompt atomic.Bool
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		body, _ := readReqBody(r)
+		w.Header().Set("Content-Type", "text/event-stream")
+		w.WriteHeader(200)
+		fl := w.(http.Flusher)
+		switch atomic.AddInt32(&calls, 1) {
+		case 1:
+			lines := []string{
+				`data: {"choices":[{"delta":{"role":"assistant","tool_calls":[{"index":0,"id":"c1","type":"function","function":{"name":"big","arguments":"{}"}},{"index":1,"id":"c2","type":"function","function":{"name":"big","arguments":"{}"}}]},"finish_reason":null}]}`,
+				`data: {"choices":[{"delta":{},"finish_reason":"tool_calls"}]}`,
+				`data: [DONE]`,
+			}
+			for _, l := range lines {
+				w.Write([]byte(l + "\n\n"))
+				fl.Flush()
+			}
+		case 2:
+			firstNoToolsRequestHadTools.Store(strings.Contains(body, `"tools"`))
+			lines := []string{
+				`data: {"choices":[{"delta":{"role":"assistant","tool_calls":[{"index":0,"id":"c3","type":"function","function":{"name":"big","arguments":"{}"}}]},"finish_reason":null}]}`,
+				`data: {"choices":[{"delta":{},"finish_reason":"tool_calls"}]}`,
+				`data: [DONE]`,
+			}
+			for _, l := range lines {
+				w.Write([]byte(l + "\n\n"))
+				fl.Flush()
+			}
+		default:
+			recoveryRequestHadTools.Store(strings.Contains(body, `"tools"`))
+			recoveryRequestHadPrompt.Store(strings.Contains(body, "Tools are disabled for the rest of this turn"))
+			w.Write([]byte(`data: {"choices":[{"delta":{"role":"assistant","content":"final answer from preserved evidence"},"finish_reason":"stop"}]}` + "\n\n"))
+			w.Write([]byte("data: [DONE]\n\n"))
+			fl.Flush()
+		}
+	}))
+	t.Cleanup(srv.Close)
+
+	conv, err := OpenConversationAt(filepath.Join(t.TempDir(), "sess.jsonl"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	reg := NewRegistry()
+	reg.Add(fakeBigResultTool("evidence-head\n" + strings.Repeat("x", 2048)))
+
+	events := make(chan sse.Event, 256)
+	loop := &Loop{
+		LLM: NewLLMClient(srv.URL, "", "fake-model"), Tools: reg, Conv: conv, Events: events,
+		MaxTurnSteps: 4, PerCallTimeout: 5 * time.Second,
+		FinalNoToolsOnMaxTurns:       true,
+		ToolResultContextBudgetBytes: 1,
+	}
+	if err := loop.EnsureSystemPrompt("base"); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := loop.SendUser(context.Background(), "go"); err != nil {
+		t.Fatal(err)
+	}
+
+	deadline := time.After(10 * time.Second)
+	var finalText string
+	for {
+		select {
+		case ev, ok := <-events:
+			if !ok {
+				t.Fatal("event channel closed before turn.end")
+			}
+			switch ev.Type {
+			case sse.TypeMessageDone:
+				var p sse.MessageDonePayload
+				if err := json.Unmarshal(ev.Data, &p); err != nil {
+					t.Fatalf("decode message.done: %v", err)
+				}
+				finalText = p.Text
+			case sse.TypeTurnEnd:
+				var p sse.TurnEndPayload
+				if err := json.Unmarshal(ev.Data, &p); err != nil {
+					t.Fatalf("decode turn.end: %v", err)
+				}
+				if p.Reason != sse.TurnEndCompleted {
+					t.Fatalf("expected completed after forced no-tool recovery, got %q", p.Reason)
+				}
+				if finalText != "final answer from preserved evidence" {
+					t.Fatalf("final answer missing after forced no-tool recovery: %q", finalText)
+				}
+				if firstNoToolsRequestHadTools.Load() {
+					t.Fatal("first forced no-tool request must not include tools")
+				}
+				if recoveryRequestHadTools.Load() {
+					t.Fatal("forced no-tool recovery request must not include tools")
+				}
+				if !recoveryRequestHadPrompt.Load() {
+					t.Fatal("forced no-tool recovery request should explain that tools are disabled")
+				}
+				if p.ToolStats == nil || p.ToolStats.ForcedNoTools == 0 || p.ToolStats.ToolContextTruncated == 0 {
+					t.Fatalf("turn.end should report forced no-tools and context truncation: %+v", p.ToolStats)
+				}
+				if got := atomic.LoadInt32(&calls); got != 3 {
+					t.Fatalf("LLM calls = %d, want 3", got)
+				}
+				return
+			}
+		case <-deadline:
+			t.Fatal("timeout waiting for turn.end")
+		}
+	}
+}
+
 func TestRunTurn_LengthAfterToolsForcesNoToolSummary(t *testing.T) {
 	var calls int32
 	var recoveryRequestHadTools atomic.Bool
