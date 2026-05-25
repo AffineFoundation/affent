@@ -46,6 +46,7 @@ type Session struct {
 	trace         *eventlog.Recorder
 	traceFile     *os.File
 	nextEventLine int64
+	activeTurns   atomic.Int64
 
 	// Per-session lifetime token counters, accumulated in fanout as
 	// sse.TypeUsage events flow through. Atomic so the /v1/stats
@@ -119,6 +120,10 @@ type SessionPool struct {
 
 // ErrShuttingDown is returned by GetOrCreate after Shutdown has begun.
 var ErrShuttingDown = errors.New("session pool is shutting down")
+
+// ErrNoIdleSession is returned when the pool is at capacity but every
+// in-memory session is currently running a turn.
+var ErrNoIdleSession = errors.New("no idle session available for eviction")
 
 func workflowToolsEnabled(cfg Config) bool {
 	return !cfg.EvalMode
@@ -210,13 +215,16 @@ func (p *SessionPool) GetOrCreate(id string) (*Session, error) {
 		var oldestID string
 		var oldestTS time.Time
 		for k, v := range p.sessions {
+			if v.isActiveTurn() {
+				continue
+			}
 			if oldestID == "" || v.lastUsed.Before(oldestTS) {
 				oldestID = k
 				oldestTS = v.lastUsed
 			}
 		}
 		if oldestID == "" {
-			break
+			return nil, ErrNoIdleSession
 		}
 		p.logger.Info().Str("session_id", oldestID).Msg("evicting LRU session")
 		p.evictLocked(oldestID)
@@ -834,7 +842,11 @@ func (s *Session) fanout() {
 					s.loop.Log.Warn().Err(err).Str("session_id", s.ID).Msg("event log write")
 				}
 			}
+			s.touch()
 			s.observeForStats(ev)
+			if ev.Type == sse.TypeTurnEnd {
+				s.endTurn()
+			}
 			s.subsMu.Lock()
 			for _, ch := range s.subs {
 				select {
@@ -975,6 +987,9 @@ func (p *SessionPool) gcOnce() {
 		s.mu.Lock()
 		idleSince := s.lastUsed
 		s.mu.Unlock()
+		if s.isActiveTurn() {
+			continue
+		}
 		if idleSince.Before(cutoff) {
 			stale = append(stale, id)
 		}
@@ -1218,7 +1233,34 @@ func (s *Session) SendUser(ctx context.Context, text string) (string, error) {
 func (s *Session) SendUserWithOptions(ctx context.Context, text string, opts agent.TurnOptions) (string, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	return s.loop.SendUserWithOptions(ctx, text, opts)
+	s.activeTurns.Add(1)
+	s.lastUsed = time.Now()
+	turnID, err := s.loop.SendUserWithOptions(ctx, text, opts)
+	if err != nil {
+		s.activeTurns.Add(-1)
+		return "", err
+	}
+	return turnID, nil
+}
+
+func (s *Session) isActiveTurn() bool {
+	return s != nil && s.activeTurns.Load() > 0
+}
+
+func (s *Session) endTurn() {
+	if s == nil {
+		return
+	}
+	for {
+		n := s.activeTurns.Load()
+		if n <= 0 {
+			return
+		}
+		if s.activeTurns.CompareAndSwap(n, n-1) {
+			s.touch()
+			return
+		}
+	}
 }
 
 // CancelTurn signals the in-flight turn (if any) to abort. Used by

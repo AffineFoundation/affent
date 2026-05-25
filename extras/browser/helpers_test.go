@@ -3,10 +3,34 @@ package browser
 import (
 	"context"
 	"encoding/base64"
+	"os"
+	"path/filepath"
 	"testing"
 
 	"github.com/go-rod/rod/lib/proto"
 )
+
+func TestChromiumBinaryPathPrefersSystemBinary(t *testing.T) {
+	dir := t.TempDir()
+	bin := filepath.Join(dir, "chromium")
+	if err := os.WriteFile(bin, []byte("#!/bin/sh\nexit 0\n"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("PATH", dir)
+
+	if got := chromiumBinaryPath(""); got != bin {
+		t.Fatalf("chromiumBinaryPath() = %q, want %q", got, bin)
+	}
+}
+
+func TestChromiumBinaryPathHonorsOverride(t *testing.T) {
+	t.Setenv("PATH", t.TempDir())
+
+	const want = "/custom/chrome"
+	if got := chromiumBinaryPath(want); got != want {
+		t.Fatalf("chromiumBinaryPath(override) = %q, want %q", got, want)
+	}
+}
 
 type legacyTestCache struct {
 	putCalls int

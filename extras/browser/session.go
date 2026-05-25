@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"os/exec"
 	"sync"
 	"sync/atomic"
 
@@ -140,8 +141,8 @@ func NewSession(cfg SessionConfig) (*Session, error) {
 	s := &Session{cfg: cfg}
 
 	l := launcher.New()
-	if cfg.BinaryPath != "" {
-		l = l.Bin(cfg.BinaryPath)
+	if bin := chromiumBinaryPath(cfg.BinaryPath); bin != "" {
+		l = l.Bin(bin)
 	}
 	l = l.Headless(!cfg.Headed)
 	if cfg.NoSandbox {
@@ -292,6 +293,18 @@ func NewSession(cfg SessionConfig) (*Session, error) {
 	startCacheObserver(page, cfg.Intercept.Cache, &s.interceptStats)
 
 	return s, nil
+}
+
+func chromiumBinaryPath(override string) string {
+	if override != "" {
+		return override
+	}
+	for _, name := range []string{"chromium", "chromium-browser", "google-chrome", "google-chrome-stable"} {
+		if path, err := exec.LookPath(name); err == nil {
+			return path
+		}
+	}
+	return ""
 }
 
 // Close releases the browser, kills Chromium, and removes ephemeral

@@ -143,6 +143,12 @@ Default container limits are `1g` memory, `2` CPUs, and `512` PIDs where the
 target supports all three. Go runtime limits are derived from cgroups so Go
 builds and tests respect the same resource envelope.
 
+The production runtime image installs Chromium in addition to the standard
+shell/file/web tooling. Browser sessions prefer the system Chromium binary on
+`PATH`; if none is present, the underlying browser launcher may download its
+own copy at first use, which is slower and can fail in minimal images that lack
+Chromium shared libraries.
+
 ### Sandbox Executor
 
 Start or reuse the default persistent tool sandbox:
@@ -709,4 +715,4 @@ make test-container TEST_PACKAGES=./...
 ```
 
 Browser smoke tests require a local Chromium binary and are guarded by the
-`browser_smoke` build tag.
+`browser_smoke` build tag. The official runtime image provides that binary.

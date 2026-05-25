@@ -89,6 +89,32 @@ func TestSessionPool_SignalShutdown(t *testing.T) {
 	pool.Shutdown()
 }
 
+func TestSessionPool_GCSkipsActiveTurns(t *testing.T) {
+	pool := newTestPool(t, 4, "5m")
+	s, err := pool.GetOrCreate("busy")
+	if err != nil {
+		t.Fatalf("GetOrCreate: %v", err)
+	}
+	s.mu.Lock()
+	s.lastUsed = time.Now().Add(-time.Hour)
+	s.mu.Unlock()
+	s.activeTurns.Store(1)
+
+	pool.gcOnce()
+	if _, err := pool.Get("busy"); err != nil {
+		t.Fatalf("active turn must not be idle-GC'd: %v", err)
+	}
+
+	s.activeTurns.Store(0)
+	s.mu.Lock()
+	s.lastUsed = time.Now().Add(-time.Hour)
+	s.mu.Unlock()
+	pool.gcOnce()
+	if _, err := pool.Get("busy"); !errors.Is(err, ErrSessionNotFound) {
+		t.Fatalf("inactive stale session should be evicted, got %v", err)
+	}
+}
+
 func TestSessionPool_Shutdown_IsIdempotent(t *testing.T) {
 	pool := newTestPool(t, 4, "5m")
 	pool.Shutdown()
