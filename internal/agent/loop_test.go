@@ -960,13 +960,13 @@ func TestLoopToolResultContextCapsByTool(t *testing.T) {
 		"read_file":           12 * 1024,
 		"shell":               6 * 1024,
 		"web_fetch":           6 * 1024,
-		"browser_navigate":    7 * 1024,
-		"browser_snapshot":    7 * 1024,
+		"browser_navigate":    4 * 1024,
+		"browser_snapshot":    4 * 1024,
 		"browser_find":        3 * 1024,
-		"browser_scroll":      7 * 1024,
-		"browser_wait":        7 * 1024,
-		"browser_click":       7 * 1024,
-		"browser_type":        7 * 1024,
+		"browser_scroll":      4 * 1024,
+		"browser_wait":        4 * 1024,
+		"browser_click":       4 * 1024,
+		"browser_type":        4 * 1024,
 		MemoryToolName:        4 * 1024,
 		SessionSearchToolName: 4 * 1024,
 		"web_search":          4 * 1024,
@@ -983,5 +983,31 @@ func TestLoopToolResultContextCapsByTool(t *testing.T) {
 	loop.ToolResultMaxBytesInContext = 123
 	if got := loop.toolResultMaxBytesInContextFor("read_file"); got != 123 {
 		t.Fatalf("explicit cap should win, got %d", got)
+	}
+}
+
+func TestTruncateToolResultForContextGuidanceByTool(t *testing.T) {
+	payload := strings.Repeat("x", 256)
+
+	browser := truncateToolResultForContext("browser_snapshot", payload, 32)
+	for _, want := range []string{"browser_snapshot", "browser_find", "broad page snapshots"} {
+		if !strings.Contains(browser, want) {
+			t.Fatalf("browser truncation guidance missing %q:\n%s", want, browser)
+		}
+	}
+	if strings.Contains(browser, "grep") || strings.Contains(browser, "head/tail") {
+		t.Fatalf("browser truncation guidance should not suggest shell piping:\n%s", browser)
+	}
+
+	web := truncateToolResultForContext("web_fetch", payload, 32)
+	for _, want := range []string{"web_fetch", "specific API/text/source URL", "verified evidence"} {
+		if !strings.Contains(web, want) {
+			t.Fatalf("web_fetch truncation guidance missing %q:\n%s", want, web)
+		}
+	}
+
+	shell := truncateToolResultForContext("shell", payload, 32)
+	if !strings.Contains(shell, "head/tail/grep/sed") {
+		t.Fatalf("shell truncation should keep command-oriented guidance:\n%s", shell)
 	}
 }

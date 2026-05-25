@@ -249,8 +249,37 @@ func truncateForContext(s string, max int) string {
 		return s
 	}
 	cut := textutil.AlignBackward(s, max)
-	return s[:cut] + fmt.Sprintf(
+	return s[:cut] + defaultContextTruncationMarker(len(s)-cut)
+}
+
+func truncateToolResultForContext(toolName, result string, max int) string {
+	if len(result) <= max {
+		return result
+	}
+	cut := textutil.AlignBackward(result, max)
+	return result[:cut] + toolResultContextTruncationMarker(toolName, len(result)-cut)
+}
+
+func defaultContextTruncationMarker(omitted int) string {
+	return fmt.Sprintf(
 		"\n\n[... %d more bytes truncated. Re-run the command piping through head/tail/grep/sed, or save the output to a file inside the configured workspace and read it in chunks, if you need more.]",
-		len(s)-cut,
+		omitted,
 	)
+}
+
+func toolResultContextTruncationMarker(toolName string, omitted int) string {
+	switch toolName {
+	case "browser_navigate", "browser_snapshot", "browser_scroll", "browser_wait", "browser_click", "browser_type":
+		return fmt.Sprintf(
+			"\n\n[... %d more bytes truncated from %s before model context. Use browser_find for targeted visible text, navigate to a more specific URL/section, or answer from the verified visible evidence instead of repeating broad page snapshots.]",
+			omitted, toolName,
+		)
+	case "web_fetch":
+		return fmt.Sprintf(
+			"\n\n[... %d more bytes truncated from web_fetch before model context. Use a more specific API/text/source URL, fetch a narrower canonical page, or answer with clearly marked gaps from the verified evidence already visible.]",
+			omitted,
+		)
+	default:
+		return defaultContextTruncationMarker(omitted)
+	}
 }

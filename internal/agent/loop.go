@@ -1255,7 +1255,7 @@ func (l *Loop) publishAndAppendToolResultWithDelegation(turnID, callID, name, re
 	l.publish(sse.TypeToolResult, payload)
 	if err := l.Conv.Append(ChatMessage{
 		Role:       "tool",
-		Content:    truncateForContext(result, l.toolResultMaxBytesInContextFor(name)),
+		Content:    truncateToolResultForContext(name, result, l.toolResultMaxBytesInContextFor(name)),
 		ToolCallID: callID,
 		Name:       name,
 	}); err != nil {
@@ -1557,13 +1557,13 @@ var defaultToolResultLimits = map[string]int{
 	"read_file":           12 * 1024,
 	"shell":               6 * 1024,
 	"web_fetch":           6 * 1024,
-	"browser_navigate":    7 * 1024,
-	"browser_snapshot":    7 * 1024,
+	"browser_navigate":    4 * 1024,
+	"browser_snapshot":    4 * 1024,
 	"browser_find":        3 * 1024,
-	"browser_scroll":      7 * 1024,
-	"browser_wait":        7 * 1024,
-	"browser_click":       7 * 1024,
-	"browser_type":        7 * 1024,
+	"browser_scroll":      4 * 1024,
+	"browser_wait":        4 * 1024,
+	"browser_click":       4 * 1024,
+	"browser_type":        4 * 1024,
 	MemoryToolName:        4 * 1024,
 	SessionSearchToolName: 4 * 1024,
 	"web_search":          4 * 1024,
