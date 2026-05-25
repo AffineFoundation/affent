@@ -173,6 +173,7 @@ export function Composer({
     busy,
     hasContent,
     hasSession,
+    resumeSession,
     draftContext,
     taskHintActive: Boolean(taskHint),
   });
@@ -301,7 +302,7 @@ function composerStatusLabel({
   if (busy) return hasContent ? "Ready to add note" : "Working on this";
   if (draftContext) return draftContext.mode === "append" ? "Follow-up with context" : "Draft ready";
   if (!hasSession) return hasContent ? "Ready to start" : "New task";
-  if (resumeSession) return hasContent ? "Ready to send" : "Follow-up";
+  if (resumeSession) return hasContent ? "Ready to resume" : "Resume chat";
   return hasContent ? "Ready to send" : "Follow-up";
 }
 
@@ -309,18 +310,24 @@ function primaryActionLabel({
   busy,
   hasContent,
   hasSession,
+  resumeSession,
   draftContext,
   taskHintActive,
 }: {
   busy: boolean;
   hasContent: boolean;
   hasSession: boolean;
+  resumeSession: boolean;
   draftContext?: DraftContext;
   taskHintActive: boolean;
 }): string {
   if (busy) return hasContent ? "Add note" : "Working";
-  if (taskHintActive && !draftContext) return hasSession ? "Send anyway" : "Start anyway";
+  if (taskHintActive && !draftContext) {
+    if (resumeSession) return "Resume anyway";
+    return hasSession ? "Send anyway" : "Start anyway";
+  }
   if (!hasSession) return "Start";
+  if (resumeSession && !draftContext) return "Resume";
   if (draftContext?.source === "previous_message") return "Send edited";
   if (draftContext) return "Send follow-up";
   return "Send";

@@ -53,17 +53,38 @@ describe("Composer", () => {
 
     const input = screen.getByPlaceholderText("Message Affent...");
     expect(screen.getByTestId("composer")).toHaveAttribute("data-resume-idle", "true");
-    expect(screen.getByTestId("composer-intent")).toHaveTextContent("Follow-up");
+    expect(screen.getByTestId("composer-intent")).toHaveTextContent("Resume chat");
     expect(screen.getByTestId("composer-intent")).toHaveTextContent("continue this chat");
-    expect(screen.getByRole("button", { name: "Send" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "Resume" })).toBeDisabled();
 
     await user.type(input, "continue with the next concrete step");
 
     expect(screen.getByTestId("composer")).toHaveAttribute("data-resume-idle", "false");
-    expect(screen.getByTestId("composer-intent")).toHaveTextContent("Ready to send");
-    expect(screen.getByRole("button", { name: "Send" })).toBeEnabled();
-    await user.click(screen.getByRole("button", { name: "Send" }));
+    expect(screen.getByTestId("composer-intent")).toHaveTextContent("Ready to resume");
+    expect(screen.getByRole("button", { name: "Resume" })).toBeEnabled();
+    await user.click(screen.getByRole("button", { name: "Resume" }));
     expect(onSubmit).toHaveBeenCalledWith("continue with the next concrete step");
+  });
+
+  it("keeps risky saved-chat resumes explicit", async () => {
+    const user = userEvent.setup();
+    render(
+      <Composer
+        disabled={false}
+        busy={false}
+        hasSession
+        resumeSession
+        runtimeCapabilities={runtime("off")}
+        onSubmit={vi.fn()}
+        onCancel={vi.fn()}
+      />,
+    );
+
+    await user.type(screen.getByPlaceholderText("Message Affent..."), "check latest market news");
+
+    expect(screen.getByTestId("composer-intent")).toHaveTextContent("Ready to resume");
+    expect(screen.getByTestId("composer-task-hint")).toHaveTextContent("Current web info unavailable");
+    expect(screen.getByRole("button", { name: "Resume anyway" })).toBeEnabled();
   });
 
   it("loads starter drafts as editable starting tasks", () => {
