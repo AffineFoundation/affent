@@ -84,6 +84,22 @@ func TestFetchToolDescriptionSteersAwayFromDirectReaderTraps(t *testing.T) {
 	}
 }
 
+func TestFetchToolDescriptionMentionsRenderedFallbackOnlyWhenConfigured(t *testing.T) {
+	plain := FetchTool(FetchConfig{AllowPrivateNetwork: true})
+	if strings.Contains(plain.Description, "automatically retried through the session browser") {
+		t.Fatalf("plain web_fetch should not promise browser fallback:\n%s", plain.Description)
+	}
+	withFallback := FetchTool(FetchConfig{
+		AllowPrivateNetwork: true,
+		RenderedFallback: func(context.Context, string, FetchFallbackReason) (string, error) {
+			return "rendered", nil
+		},
+	})
+	if !strings.Contains(withFallback.Description, "automatically retried through the session browser") {
+		t.Fatalf("browser-backed web_fetch should describe rendered fallback:\n%s", withFallback.Description)
+	}
+}
+
 func TestFetchTool_PlainText(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "text/plain")
@@ -370,6 +386,58 @@ func TestFetchTool_SkipsKnownDirectFetchTrapsBeforeHTTP(t *testing.T) {
 	}
 }
 
+func TestFetchTool_UsesRenderedFallbackForKnownDirectFetchTraps(t *testing.T) {
+	var gotURL string
+	var gotReason FetchFallbackReason
+	tool := FetchTool(FetchConfig{
+		RenderedFallback: func(_ context.Context, requestURL string, reason FetchFallbackReason) (string, error) {
+			gotURL = requestURL
+			gotReason = reason
+			return "URL: " + requestURL + "\nTITLE: rendered page\n\nPAGE TEXT:\np: rendered content visible to a browser\n", nil
+		},
+	})
+	args, _ := json.Marshal(map[string]string{"url": "https://x.com/affine/status/123"})
+	out, err := tool.Execute(context.Background(), args)
+	if err != nil {
+		t.Fatalf("Execute: %v", err)
+	}
+	for _, want := range []string{"rendered browser fallback", "Reason=\"direct_reader_trap\"", "TITLE: rendered page", "rendered content visible"} {
+		if !strings.Contains(out, want) {
+			t.Fatalf("rendered fallback output missing %q:\n%s", want, out)
+		}
+	}
+	if gotURL != "https://x.com/affine/status/123" {
+		t.Fatalf("fallback URL = %q", gotURL)
+	}
+	if gotReason.Kind != "direct_reader_trap" || gotReason.Detail == "" {
+		t.Fatalf("fallback reason not populated: %+v", gotReason)
+	}
+	if strings.Contains(out, "Failure: kind=blocked") {
+		t.Fatalf("successful rendered fallback should not be counted as blocked:\n%s", out)
+	}
+}
+
+func TestFetchTool_RejectsRenderedFallbackChallengePage(t *testing.T) {
+	tool := FetchTool(FetchConfig{
+		RenderedFallback: func(_ context.Context, requestURL string, reason FetchFallbackReason) (string, error) {
+			return "URL: " + requestURL + "\nPAGE TEXT:\np: Checking if the site connection is secure\n", nil
+		},
+	})
+	args, _ := json.Marshal(map[string]string{"url": "https://x.com/affine/status/123"})
+	out, err := tool.Execute(context.Background(), args)
+	if err != nil {
+		t.Fatalf("Execute: %v", err)
+	}
+	for _, want := range []string{"blocked response", "Failure: kind=blocked", "site usually blocks direct HTTP readers"} {
+		if !strings.Contains(out, want) {
+			t.Fatalf("challenge fallback should fall back to structured blocked result missing %q:\n%s", want, out)
+		}
+	}
+	if strings.Contains(out, "rendered browser fallback") || strings.Contains(out, "Checking if the site connection is secure") {
+		t.Fatalf("challenge fallback should not be treated as rendered evidence:\n%s", out)
+	}
+}
+
 func TestFetchTool_DynamicAppShellReportsNoEvidence(t *testing.T) {
 	scripts := strings.Repeat(`<script src="/_next/static/chunks/app.js"></script>`, 10)
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -391,6 +459,40 @@ func TestFetchTool_DynamicAppShellReportsNoEvidence(t *testing.T) {
 	}
 	if strings.Contains(out, "browser") || strings.Contains(out, "rendering") {
 		t.Fatalf("dynamic shell guidance should not mention unavailable rendering/browser tools:\n%s", out)
+	}
+}
+
+func TestFetchTool_UsesRenderedFallbackForDynamicShell(t *testing.T) {
+	scripts := strings.Repeat(`<script src="/_next/static/chunks/app.js"></script>`, 10)
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "text/html; charset=utf-8")
+		w.Write([]byte(`<!doctype html><html><head>` + scripts + `</head><body><div id="__next"><main>Loading...</main></div></body></html>`))
+	}))
+	defer srv.Close()
+
+	var gotReason FetchFallbackReason
+	tool := FetchTool(FetchConfig{
+		AllowPrivateNetwork: true,
+		RenderedFallback: func(_ context.Context, requestURL string, reason FetchFallbackReason) (string, error) {
+			gotReason = reason
+			return "URL: " + requestURL + "\nTITLE: hydrated app\n\nPAGE TEXT:\np: market cap and current stats rendered after JavaScript\n", nil
+		},
+	})
+	args, _ := json.Marshal(map[string]string{"url": srv.URL})
+	out, err := tool.Execute(context.Background(), args)
+	if err != nil {
+		t.Fatalf("Execute: %v", err)
+	}
+	for _, want := range []string{"rendered browser fallback", "Reason=\"dynamic_shell\"", "hydrated app", "market cap and current stats"} {
+		if !strings.Contains(out, want) {
+			t.Fatalf("dynamic rendered fallback output missing %q:\n%s", want, out)
+		}
+	}
+	if gotReason.Kind != "dynamic_shell" || gotReason.ContentType == "" || gotReason.FinalURL == "" {
+		t.Fatalf("dynamic fallback reason not populated: %+v", gotReason)
+	}
+	if strings.Contains(out, "Failure: kind=dynamic_shell") {
+		t.Fatalf("successful rendered fallback should not be counted as dynamic shell:\n%s", out)
 	}
 }
 

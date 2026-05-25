@@ -303,7 +303,43 @@ func (p *SessionPool) focusedTaskBrowserRegistrar(workspace string) func(context
 		// Focused research children need text/rendered-page inspection, not
 		// screenshot files. Keep the child surface browser-only and read-mostly.
 		affentbrowser.RegisterAll(reg, bs, affentbrowser.Options{})
+		if p.cfg.EnableWeb {
+			// buildFocusedTaskRegistry registers web before browser. Once the
+			// browser exists, replace web_fetch with an equivalent fetch tool
+			// that can reuse this same child Chromium session for rendered
+			// fallback instead of forcing the model to notice and recover from
+			// direct-reader failures manually.
+			reg.Remove("web_fetch")
+			affentweb.RegisterFetch(reg, p.webFetchConfig(bs))
+		}
 		return func() { _ = bs.Close() }, nil
+	}
+}
+
+func (p *SessionPool) webFetchConfig(browser *affentbrowser.Session) affentweb.FetchConfig {
+	return affentweb.FetchConfig{
+		RenderedFallback: browserRenderedFallback(browser),
+	}
+}
+
+func browserRenderedFallback(browser *affentbrowser.Session) affentweb.RenderedFallbackFunc {
+	if browser == nil {
+		return nil
+	}
+	nav := affentbrowser.NavigateTool(browser)
+	return func(ctx context.Context, requestURL string, reason affentweb.FetchFallbackReason) (string, error) {
+		waitUntil := "networkidle"
+		if reason.Kind == "search_results_page" {
+			waitUntil = "load"
+		}
+		args, err := json.Marshal(map[string]string{
+			"url":        requestURL,
+			"wait_until": waitUntil,
+		})
+		if err != nil {
+			return "", err
+		}
+		return nav.Execute(ctx, args)
 	}
 }
 
@@ -422,13 +458,14 @@ func (p *SessionPool) buildSession(id string) (*Session, error) {
 		browser = bs
 	}
 	if p.cfg.EnableWeb {
+		fetchCfg := p.webFetchConfig(browser)
 		if p.cfg.EnableWebSearch {
-			if err := affentweb.RegisterAll(reg, affentweb.Options{}); err != nil {
+			if err := affentweb.RegisterAll(reg, affentweb.Options{Fetch: fetchCfg}); err != nil {
 				p.logger.Warn().Err(err).Msg("web_search not available; registering web_fetch only")
-				affentweb.RegisterFetch(reg, affentweb.FetchConfig{})
+				affentweb.RegisterFetch(reg, fetchCfg)
 			}
 		} else {
-			affentweb.RegisterFetch(reg, affentweb.FetchConfig{})
+			affentweb.RegisterFetch(reg, fetchCfg)
 		}
 	}
 	// Both subagent and focused-task children inherit shell only when

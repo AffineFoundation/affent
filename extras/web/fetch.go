@@ -61,6 +61,29 @@ type FetchConfig struct {
 	// only for development against local services, or when the agent
 	// is running inside a network namespace that already isolates it.
 	AllowPrivateNetwork bool
+	// RenderedFallback, when set, is called after web_fetch determines
+	// that a URL is probably not readable through direct HTTP but may be
+	// readable in a real browser: anti-bot/challenge responses, direct
+	// reader trap hosts, and client-rendered app shells. This is an
+	// injection point instead of a browser dependency so extras/web
+	// stays lightweight; callers that wire it must preserve their own
+	// browser security policy.
+	RenderedFallback RenderedFallbackFunc
+}
+
+// RenderedFallbackFunc reads requestURL through a caller-provided rendered
+// page backend, usually the same session-scoped Chromium browser exposed as
+// browser_* tools. The reason describes why direct fetch was not enough.
+type RenderedFallbackFunc func(ctx context.Context, requestURL string, reason FetchFallbackReason) (string, error)
+
+// FetchFallbackReason is passed to RenderedFallbackFunc so adapters can log,
+// choose wait strategy, or reject cases they do not want to render.
+type FetchFallbackReason struct {
+	Kind        string
+	Status      int
+	ContentType string
+	Detail      string
+	FinalURL    string
 }
 
 const (
@@ -93,16 +116,21 @@ func FetchTool(cfg FetchConfig) *agent.Tool {
         }
     }`, maxFetchURLBytes))
 
+	description := "Fetch a URL and return its text content. HTML is " +
+		"converted to compact markdown; text/plain, application/json, " +
+		"and similar text types are returned as-is. Output is capped " +
+		"and truncated with a marker. Redirects are followed. Best for " +
+		"official, raw, API, repository, or text pages; avoid search/result " +
+		"lists, social pages, short links, and dynamic dashboards when a " +
+		"canonical API/text/source URL is available."
+	if cfg.RenderedFallback != nil {
+		description += " In browser-enabled runtimes, pages that block direct readers or require JavaScript are automatically retried through the session browser and returned as rendered snapshot text."
+	}
+
 	return &agent.Tool{
-		Name: "web_fetch",
-		Description: "Fetch a URL and return its text content. HTML is " +
-			"converted to compact markdown; text/plain, application/json, " +
-			"and similar text types are returned as-is. Output is capped " +
-			"and truncated with a marker. Redirects are followed. Best for " +
-			"official, raw, API, repository, or text pages; avoid search/result " +
-			"lists, social pages, short links, and dynamic dashboards when a " +
-			"canonical API/text/source URL is available.",
-		Schema: schema,
+		Name:        "web_fetch",
+		Description: description,
+		Schema:      schema,
 		Execute: func(ctx context.Context, raw json.RawMessage) (string, error) {
 			var args struct {
 				URL string `json:"url"`
@@ -120,7 +148,7 @@ func FetchTool(cfg FetchConfig) *agent.Tool {
 			if !strings.HasPrefix(args.URL, "http://") && !strings.HasPrefix(args.URL, "https://") {
 				return "", fmt.Errorf("url must start with http:// or https:// (got %q)\nFailure: kind=invalid_args\nNext: retry web_fetch with the full URL including the http:// or https:// scheme", args.URL)
 			}
-			if out := directFetchPreflightResult(args.URL); out != "" {
+			if out := directFetchPreflightResult(ctx, cfg, args.URL); out != "" {
 				return out, nil
 			}
 			return fetch(ctx, cfg, args.URL)
@@ -188,8 +216,15 @@ func fetch(ctx context.Context, cfg FetchConfig, requestURL string) (string, err
 	if resp.StatusCode/100 != 2 {
 		// Read a little so the error is informative.
 		preview, _ := io.ReadAll(io.LimitReader(resp.Body, 512))
-		return "", recoverableFetchError(requestURL, finalURL, resp.StatusCode, fmt.Errorf("http %d %s: %s",
+		err := recoverableFetchError(requestURL, finalURL, resp.StatusCode, fmt.Errorf("http %d %s: %s",
 			resp.StatusCode, resp.Status, strings.TrimSpace(string(preview))))
+		reason := FetchFallbackReason{Kind: fetchFailureKind(resp.StatusCode, err), Status: resp.StatusCode, ContentType: resp.Header.Get("Content-Type"), Detail: strings.TrimSpace(string(preview)), FinalURL: finalURL}
+		if shouldUseRenderedFallback(reason) {
+			if out, fallbackErr := renderedFallbackResult(ctx, cfg, requestURL, reason); fallbackErr == nil {
+				return out, nil
+			}
+		}
+		return "", err
 	}
 
 	body, err := io.ReadAll(io.LimitReader(resp.Body, cfg.MaxBytes+1))
@@ -210,26 +245,36 @@ func fetch(ctx context.Context, cfg FetchConfig, requestURL string) (string, err
 		return emptyFetchResult(finalURL, ct), nil
 	}
 	if reason := blockedPageReason(out, finalURL); reason != "" {
+		if rendered, err := renderedFallbackResult(ctx, cfg, requestURL, FetchFallbackReason{Kind: "blocked", ContentType: ct, Detail: reason, FinalURL: finalURL}); err == nil {
+			return rendered, nil
+		}
 		return blockedFetchResult(finalURL, ct, reason), nil
 	}
 	if reason := dynamicPageShellReason(body, ct, out); reason != "" {
+		if rendered, err := renderedFallbackResult(ctx, cfg, requestURL, FetchFallbackReason{Kind: "dynamic_shell", ContentType: ct, Detail: reason, FinalURL: finalURL}); err == nil {
+			return rendered, nil
+		}
 		return dynamicPageShellResult(finalURL, ct, reason, dynamicShellDiscoveryPreview(out), dynamicShellDiscoveryLinks(body, finalURL), embeddedDataSnippets(body, finalURL)), nil
 	}
 
-	if len(out) > cfg.MaxResultChars {
-		// Snap back to a UTF-8 rune boundary so accented Latin, CJK,
-		// or emoji content doesn't get cut mid-rune and land in the
-		// model's context as invalid UTF-8.
-		cut := cfg.MaxResultChars
-		for cut > 0 && !utf8.RuneStart(out[cut]) {
-			cut--
-		}
-		out = out[:cut] + "\n\n...(truncated)"
-	}
+	out = truncateFetchResult(out, cfg.MaxResultChars)
 	if bodyTruncated {
 		out = strings.TrimSpace(out) + "\n\n...(response body truncated)"
 	}
 	return out, nil
+}
+
+func truncateFetchResult(out string, maxChars int) string {
+	if maxChars <= 0 || len(out) <= maxChars {
+		return out
+	}
+	// Snap back to a UTF-8 rune boundary so accented Latin, CJK, or emoji
+	// content doesn't get cut mid-rune and land in context as invalid UTF-8.
+	cut := maxChars
+	for cut > 0 && !utf8.RuneStart(out[cut]) {
+		cut--
+	}
+	return out[:cut] + "\n\n...(truncated)"
 }
 
 func emptyFetchResult(finalURL, contentType string) string {
@@ -415,7 +460,7 @@ func truncateDiscoveryLinkText(text string) string {
 	return strings.TrimSpace(text[:cut]) + "...(truncated)"
 }
 
-func directFetchPreflightResult(rawURL string) string {
+func directFetchPreflightResult(ctx context.Context, cfg FetchConfig, rawURL string) string {
 	u, err := url.Parse(strings.TrimSpace(rawURL))
 	if err != nil || u.Scheme == "" || u.Host == "" {
 		return ""
@@ -424,11 +469,55 @@ func directFetchPreflightResult(rawURL string) string {
 	path := strings.ToLower(u.EscapedPath())
 	switch {
 	case websource.IsSearchResultPage(host, path):
+		if out, err := renderedFallbackResult(ctx, cfg, rawURL, FetchFallbackReason{Kind: "search_results_page", Detail: "search-results page", FinalURL: rawURL}); err == nil {
+			return out
+		}
 		return skippedDirectFetchResult(rawURL, "search-results page")
 	case websource.IsKnownDirectReaderTrapHost(host):
+		if out, err := renderedFallbackResult(ctx, cfg, rawURL, FetchFallbackReason{Kind: "direct_reader_trap", Detail: "site usually blocks direct HTTP readers", FinalURL: rawURL}); err == nil {
+			return out
+		}
 		return skippedDirectFetchResult(rawURL, "site usually blocks direct HTTP readers")
 	default:
 		return ""
+	}
+}
+
+func renderedFallbackResult(ctx context.Context, cfg FetchConfig, requestURL string, reason FetchFallbackReason) (string, error) {
+	if cfg.RenderedFallback == nil {
+		return "", errors.New("rendered fallback is not configured")
+	}
+	if reason.FinalURL == "" {
+		reason.FinalURL = requestURL
+	}
+	out, err := cfg.RenderedFallback(ctx, requestURL, reason)
+	if err != nil {
+		return "", err
+	}
+	out = strings.TrimSpace(out)
+	if out == "" {
+		return "", errors.New("rendered fallback returned empty content")
+	}
+	if fallbackBlock := blockedPageReason(out, reason.FinalURL); fallbackBlock != "" {
+		return "", fmt.Errorf("rendered fallback returned blocked/challenge page: %s", fallbackBlock)
+	}
+	prefix := fmt.Sprintf("[rendered browser fallback: URL=%s, Reason=%q", reason.FinalURL, reason.Kind)
+	if reason.Status > 0 {
+		prefix += fmt.Sprintf(", Status=%d", reason.Status)
+	}
+	if reason.Detail != "" {
+		prefix += fmt.Sprintf(", Detail=%q", reason.Detail)
+	}
+	prefix += "]\n"
+	return truncateFetchResult(prefix+out, cfg.MaxResultChars), nil
+}
+
+func shouldUseRenderedFallback(reason FetchFallbackReason) bool {
+	switch reason.Kind {
+	case "blocked", "rate_limited", "dynamic_shell", "direct_reader_trap", "search_results_page":
+		return true
+	default:
+		return false
 	}
 }
 
@@ -460,6 +549,14 @@ func recoverableFetchError(requestURL, finalURL string, status int, err error) e
 }
 
 func fetchFailureLabel(status int, err error) string {
+	kind := fetchFailureKind(status, err)
+	if status > 0 {
+		return fmt.Sprintf("kind=%s, status=%d", kind, status)
+	}
+	return fmt.Sprintf("kind=%s", kind)
+}
+
+func fetchFailureKind(status int, err error) string {
 	kind := "network_error"
 	lower := ""
 	if err != nil {
@@ -481,10 +578,7 @@ func fetchFailureLabel(status int, err error) string {
 	case errors.Is(err, context.DeadlineExceeded) || strings.Contains(lower, "timeout") || strings.Contains(lower, "deadline exceeded"):
 		kind = "timeout"
 	}
-	if status > 0 {
-		return fmt.Sprintf("kind=%s, status=%d", kind, status)
-	}
-	return fmt.Sprintf("kind=%s", kind)
+	return kind
 }
 
 func renderBody(body []byte, contentType, finalURL string) string {

@@ -242,12 +242,15 @@ curl -sS http://127.0.0.1:7777/v1/chat/completions \
 
 ## Web Retrieval Diagnostics
 
-`web_fetch` is a direct HTTP reader, not a full browser, and `web_search`
-depends on the configured search backend. Some public sites return anti-bot
-pages, empty bodies, binary assets, or HTTP errors to direct fetches even when
-they work in a browser; search backends can also time out, rate-limit, or
-return no usable URLs. The tools surface those cases as structured failures so
-the agent can switch source instead of burning turns:
+`web_fetch` starts as a direct HTTP reader, and `web_search` depends on the
+configured search backend. When a runtime also enables `extras/browser`,
+`affentserve` wires the session Chromium instance into `web_fetch` as a rendered
+fallback: direct-reader trap hosts, anti-bot/challenge responses, and
+client-rendered app shells are retried through the browser and returned as
+rendered snapshot text. Runtimes without browser support keep the lightweight
+HTTP-only behavior. Search backends can still time out, rate-limit, or return no
+usable URLs. The tools surface those cases as structured failures so the agent
+can switch source instead of burning turns:
 
 - `Failure: kind=blocked`: the source refused direct fetch, commonly HTTP 401
   or 403, or returned a successful HTTP response that is only an anti-bot,
@@ -308,11 +311,13 @@ instead of spending turns on a JavaScript dashboard route.
 
 `web_fetch` also preflights a small high-confidence set of direct-reader traps,
 including search-result pages, site-local `/search` routes, major social sites,
-and market pages that routinely reject plain HTTP readers, and returns a
-structured `blocked` no-evidence result without dispatching the network request.
-This keeps current-research tasks from spending multiple turns on sources that
-are useful for discovery or sentiment but are not reliable direct page evidence.
-Broad collection routes such as `/coins` or `/subnets` are annotated as weak
+and market pages that routinely reject plain HTTP readers. With a rendered
+fallback configured, those URLs are sent directly to the session browser instead
+of wasting an HTTP attempt. Without a rendered fallback, `web_fetch` returns a
+structured `blocked` no-evidence result before network dispatch. This keeps
+current-research tasks from spending multiple turns on sources that are useful
+for discovery or sentiment but are not reliable direct page evidence. Broad
+collection routes such as `/coins` or `/subnets` are annotated as weak
 direct-reader targets; they may still be readable, but a specific detail page,
 API/text/export endpoint, docs page, or source repository is usually better
 evidence.
