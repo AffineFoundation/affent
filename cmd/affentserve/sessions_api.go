@@ -74,19 +74,20 @@ type sessionSummary struct {
 }
 
 type sessionCapabilities struct {
-	EvalMode          bool `json:"eval_mode"`
-	Builtins          bool `json:"builtins"`
-	SkillInstall      bool `json:"skill_install"`
-	Plan              bool `json:"plan"`
-	Memory            bool `json:"memory"`
-	SessionSearch     bool `json:"session_search"`
-	Browser           bool `json:"browser"`
-	BrowserScreenshot bool `json:"browser_screenshot"`
-	Web               bool `json:"web"`
-	WebSearch         bool `json:"web_search"`
-	Subagent          bool `json:"subagent"`
-	SubagentMaxDepth  int  `json:"subagent_max_depth"`
-	FocusedTasks      bool `json:"focused_tasks"`
+	EvalMode          bool   `json:"eval_mode"`
+	Builtins          bool   `json:"builtins"`
+	SkillInstall      bool   `json:"skill_install"`
+	Plan              bool   `json:"plan"`
+	Memory            bool   `json:"memory"`
+	SessionSearch     bool   `json:"session_search"`
+	Browser           bool   `json:"browser"`
+	BrowserScreenshot bool   `json:"browser_screenshot"`
+	Web               bool   `json:"web"`
+	WebSearch         bool   `json:"web_search"`
+	WebSearchBackend  string `json:"web_search_backend,omitempty"`
+	Subagent          bool   `json:"subagent"`
+	SubagentMaxDepth  int    `json:"subagent_max_depth"`
+	FocusedTasks      bool   `json:"focused_tasks"`
 	// FocusedTaskProfiles enumerates the run_task task_type values the
 	// model can actually request under this session's wiring. Omitted
 	// when focused tasks are disabled or no profile's deps are
@@ -447,6 +448,7 @@ func summarizeActiveCapabilities(s *Session, cfg Config) sessionCapabilities {
 		return ok
 	}
 	focusedRegistered := hasTool(agent.FocusedTaskToolName)
+	webSearch := hasTool("web_search")
 	caps := sessionCapabilities{
 		EvalMode: cfg.EvalMode,
 		Builtins: hasTool("shell") &&
@@ -461,10 +463,13 @@ func summarizeActiveCapabilities(s *Session, cfg Config) sessionCapabilities {
 		Browser:           hasTool("browser_navigate") || hasTool("browser_snapshot") || hasTool("browser_find"),
 		BrowserScreenshot: hasTool("browser_screenshot"),
 		Web:               hasTool("web_fetch"),
-		WebSearch:         hasTool("web_search"),
+		WebSearch:         webSearch,
 		Subagent:          hasTool(agent.SubagentToolName),
 		SubagentMaxDepth:  cfg.SubagentMaxDepth,
 		FocusedTasks:      focusedRegistered,
+	}
+	if webSearch {
+		caps.WebSearchBackend = configuredSearchBackendName()
 	}
 	// Surface the available focused-task profiles whenever the tool
 	// itself is registered. Computed via the same probe doctor uses

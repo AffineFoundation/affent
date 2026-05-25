@@ -186,6 +186,28 @@ func TestHandleStats_ReportsShuttingDown(t *testing.T) {
 	}
 }
 
+func TestHandleStats_ReportsWebSearchBackend(t *testing.T) {
+	t.Setenv("AFFENT_WEB_SEARCH_PROVIDER", "google")
+	t.Setenv("GOOGLE_API_KEY", "google-key")
+	t.Setenv("GOOGLE_SEARCH_ENGINE_ID", "google-cx")
+	pool := newTestPool(t, 4, "5m")
+	pool.cfg.EnableWeb = true
+	pool.cfg.EnableWebSearch = true
+	h := handleStats(pool.cfg, pool)
+
+	r := httptest.NewRequest("GET", "/v1/stats", nil)
+	w := httptest.NewRecorder()
+	h.ServeHTTP(w, r)
+
+	var resp statsResponse
+	if err := json.Unmarshal(w.Body.Bytes(), &resp); err != nil {
+		t.Fatalf("decode: %v body=%s", err, w.Body.String())
+	}
+	if resp.WebSearchBackend != "google" {
+		t.Fatalf("WebSearchBackend = %q, want google", resp.WebSearchBackend)
+	}
+}
+
 func TestHandleStats_ListsSessionsSorted(t *testing.T) {
 	pool := newTestPool(t, 8, "5m")
 	for _, id := range []string{"charlie", "alpha", "bravo"} {

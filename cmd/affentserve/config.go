@@ -711,31 +711,58 @@ func (c Config) Validate() error {
 }
 
 func validateSearchBackendEnv() error {
-	provider := strings.ToLower(strings.TrimSpace(os.Getenv("AFFENT_WEB_SEARCH_PROVIDER")))
+	provider := configuredSearchProvider()
 	if provider == "" {
 		provider = "auto"
 	}
-	tavily := strings.TrimSpace(os.Getenv("TAVILY_API_KEY")) != ""
-	google := googleSearchAPIKeyConfigured() && googleSearchEngineIDConfigured()
 	switch provider {
 	case "auto":
-		if tavily || google {
+		if configuredSearchBackendName() != "unconfigured" {
 			return nil
 		}
 		return errors.New("enable_web_search requires a search backend: set TAVILY_API_KEY, or set AFFENT_WEB_SEARCH_PROVIDER=google with GOOGLE_CSE_API_KEY/GOOGLE_API_KEY and GOOGLE_CSE_ID/GOOGLE_SEARCH_ENGINE_ID")
 	case "tavily":
-		if tavily {
+		if tavilySearchConfigured() {
 			return nil
 		}
 		return errors.New("AFFENT_WEB_SEARCH_PROVIDER=tavily requires TAVILY_API_KEY")
 	case "google":
-		if google {
+		if googleSearchConfigured() {
 			return nil
 		}
 		return errors.New("AFFENT_WEB_SEARCH_PROVIDER=google requires GOOGLE_CSE_API_KEY or GOOGLE_API_KEY, plus GOOGLE_CSE_ID or GOOGLE_SEARCH_ENGINE_ID")
 	default:
 		return fmt.Errorf("unsupported AFFENT_WEB_SEARCH_PROVIDER=%q; valid values are auto, tavily, google", provider)
 	}
+}
+
+func configuredSearchBackendName() string {
+	switch provider := configuredSearchProvider(); provider {
+	case "", "auto":
+		if tavilySearchConfigured() {
+			return "tavily"
+		}
+		if googleSearchConfigured() {
+			return "google"
+		}
+		return "unconfigured"
+	case "tavily", "google":
+		return provider
+	default:
+		return "invalid"
+	}
+}
+
+func configuredSearchProvider() string {
+	return strings.ToLower(strings.TrimSpace(os.Getenv("AFFENT_WEB_SEARCH_PROVIDER")))
+}
+
+func tavilySearchConfigured() bool {
+	return strings.TrimSpace(os.Getenv("TAVILY_API_KEY")) != ""
+}
+
+func googleSearchConfigured() bool {
+	return googleSearchAPIKeyConfigured() && googleSearchEngineIDConfigured()
 }
 
 func googleSearchAPIKeyConfigured() bool {

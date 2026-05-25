@@ -780,6 +780,23 @@ func TestSessionCapabilitiesReflectActualRegisteredTools(t *testing.T) {
 	}
 }
 
+func TestSessionCapabilitiesReportsWebSearchBackend(t *testing.T) {
+	t.Setenv("AFFENT_WEB_SEARCH_PROVIDER", "google")
+	t.Setenv("GOOGLE_API_KEY", "google-key")
+	t.Setenv("GOOGLE_SEARCH_ENGINE_ID", "google-cx")
+	pool := newTestPool(t, 4, "5m")
+	pool.cfg.EnableWeb = true
+	pool.cfg.EnableWebSearch = true
+	s, err := pool.GetOrCreate("web-search-google")
+	if err != nil {
+		t.Fatal(err)
+	}
+	caps := summarizeActiveCapabilities(s, pool.cfg)
+	if !caps.WebSearch || caps.WebSearchBackend != "google" {
+		t.Fatalf("capabilities should report google web_search backend: %+v", caps)
+	}
+}
+
 // TestSessionCapabilities_IncludesFocusedTaskProfiles pins the
 // per-session API contract: when run_task is registered, the response
 // must enumerate the actual task_type values the model can request.

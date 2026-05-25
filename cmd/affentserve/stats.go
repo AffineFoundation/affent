@@ -27,6 +27,7 @@ type statsResponse struct {
 	MemoryRoot       string                 `json:"memory_root,omitempty"`
 	SessionStateRoot string                 `json:"session_state_root"`
 	BrowserCacheDir  string                 `json:"browser_cache_dir,omitempty"`
+	WebSearchBackend string                 `json:"web_search_backend,omitempty"`
 	ServerTime       string                 `json:"server_time"`
 	Sessions         []sessionStatsResponse `json:"sessions"`
 	Aggregate        aggregateStats         `json:"aggregate"`
@@ -192,6 +193,7 @@ func handleStats(cfg Config, pool *SessionPool) http.HandlerFunc {
 			MemoryRoot:       cfg.MemoryRoot,
 			SessionStateRoot: pool.sessionRootPath(),
 			BrowserCacheDir:  cfg.BrowserCacheDir,
+			WebSearchBackend: statsWebSearchBackend(cfg),
 			ServerTime:       time.Now().UTC().Format(time.RFC3339),
 			Sessions:         sess,
 			Aggregate:        agg,
@@ -200,6 +202,13 @@ func handleStats(cfg Config, pool *SessionPool) http.HandlerFunc {
 		w.Header().Set("Content-Type", "application/json")
 		_ = json.NewEncoder(w).Encode(resp)
 	}
+}
+
+func statsWebSearchBackend(cfg Config) string {
+	if !resolveServeRuntimeCapabilities(cfg).WebSearch {
+		return ""
+	}
+	return configuredSearchBackendName()
 }
 
 func addToolStatsSnapshot(dst *ToolStatsSnapshot, src ToolStatsSnapshot) {
