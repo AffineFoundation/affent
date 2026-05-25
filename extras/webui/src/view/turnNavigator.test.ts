@@ -126,7 +126,7 @@ describe("turnNavigator view model", () => {
       },
     ]);
 
-    expect(view.summary).toBe("1 to review · 1 action");
+    expect(view.summary).toBe("1 issue · 1 action");
     expect(view.current?.statusTone).toBe("error");
   });
 

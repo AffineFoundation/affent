@@ -1,14 +1,14 @@
 import { useEffect, useMemo, useRef, useState, type CSSProperties, type RefObject } from "react";
 import type { SessionState } from "../store/sessionState";
 import type { UseAsDraft } from "../view/draftSource";
-import { hasReviewContext } from "../view/reviewContext";
+import { hasIssueContext } from "../view/issueContext";
 import { countMatchingTurns, countTurnsByMode, turnMatchesFilter, type TimelineFilterMode } from "../view/timelineFilter";
 import { TurnCard } from "./TurnCard";
 import { TurnNavigator } from "./TurnNavigator";
 
 const filterModes: { mode: TimelineFilterMode; label: string }[] = [
   { mode: "all", label: "All" },
-  { mode: "errors", label: "Needs review" },
+  { mode: "errors", label: "Issues" },
   { mode: "tools", label: "Agent work" },
   { mode: "messages", label: "Chat text" },
   { mode: "artifacts", label: "Files" },
@@ -74,10 +74,10 @@ export function Timeline({
     [session.turns, visibleTurns],
   );
   const pendingFollowUp = pendingMessage?.kind === "task" && session.turns.length > 0 ? pendingMessage.text : undefined;
-  const conversationMapAvailable = Boolean(session.turns.length > 1 || pendingFollowUp || hasReviewContext(session));
+  const conversationMapAvailable = Boolean(session.turns.length > 1 || pendingFollowUp || hasIssueContext(session));
   const showConversationMap = conversationMapAvailable && (visibleTurnNav.length > 0 || filtered);
   const compactConversationMap = session.status === "running" && visibleTurnNav.length === 1 && !filtered;
-  const canFindInChat = showConversationMap || hasReviewContext(session);
+  const canFindInChat = showConversationMap || hasIssueContext(session);
   const matchingTurns = useMemo(
     () => countMatchingTurns(session.turns, session.events, filter),
     [filter, session.events, session.turns],

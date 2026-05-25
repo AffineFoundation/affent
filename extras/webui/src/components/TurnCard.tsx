@@ -1064,7 +1064,7 @@ function ErrorBlock({ error, onUseAsDraft }: { error: TurnError; onUseAsDraft?: 
   const summary = summarizeUserError(error.code, error.message);
   const guidance = error.recoverable
     ? "You can continue from the message box below; the trace stays attached to this chat."
-    : "Keep this chat for trace review, then start a new chat if the runtime cannot continue.";
+    : "Keep this chat for details, then start a new chat if the runtime cannot continue.";
   const diagnostic = errorDiagnosticText(error);
 
   return (

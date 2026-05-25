@@ -394,7 +394,7 @@ describe("Timeline", () => {
     expect(within(answer).queryByRole("status")).toBeNull();
   });
 
-  it("hides chat review controls for a simple one-message answer", () => {
+  it("hides issue controls for a simple one-message answer", () => {
     renderTimeline(completedTurn);
 
     expect(screen.queryByTestId("timeline-toolbar")).toBeNull();
@@ -619,7 +619,7 @@ describe("Timeline", () => {
     const activity = screen.getByTestId("agent-activity");
     expect(activity).toHaveAttribute("data-open", "false");
     expect(activity).toHaveTextContent("Continued");
-    expect(activity).not.toHaveTextContent("Needs review");
+    expect(activity).not.toHaveTextContent("Issues");
     expect(screen.getByRole("button", { name: /Agent activity/ })).toHaveAttribute("aria-expanded", "false");
     expect(screen.queryByTestId("agent-activity-brief")).toBeNull();
     expect(screen.queryByTestId("fallback-answer")).toBeNull();
@@ -775,7 +775,7 @@ describe("Timeline", () => {
     expect(screen.getByRole("button", { name: "All" })).toHaveTextContent("3");
     expect(screen.getByRole("button", { name: "Files" })).toHaveTextContent("1");
     expect(screen.getByRole("button", { name: "Auto-fixed" })).toHaveTextContent("1");
-    expect(screen.getByRole("button", { name: "Needs review" })).toHaveTextContent("0");
+    expect(screen.getByRole("button", { name: "Issues" })).toHaveTextContent("0");
 
     await user.click(screen.getByRole("button", { name: "Files" }));
     expect(screen.getByTestId("timeline-match-count")).toHaveTextContent("1/3 messages");

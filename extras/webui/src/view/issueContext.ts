@@ -1,6 +1,6 @@
 import type { SessionState } from "../store/sessionState";
 
-export function hasReviewContext(session: SessionState): boolean {
+export function hasIssueContext(session: SessionState): boolean {
   if (session.turns.length > 1 || session.unknownEventCount > 0) return true;
   return session.turns.some((turn) => {
     if (turn.status === "error" || turn.status === "max_turns" || turn.error) return true;
