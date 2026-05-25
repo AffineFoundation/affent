@@ -1295,7 +1295,7 @@ func TestRunTurn_MaxToolCallsForcesNoToolSummary(t *testing.T) {
 		fl := w.(http.Flusher)
 		if atomic.AddInt32(&calls, 1) == 1 {
 			lines := []string{
-				`data: {"choices":[{"delta":{"role":"assistant","tool_calls":[{"index":0,"id":"c1","type":"function","function":{"name":"first","arguments":"{}"}},{"index":1,"id":"c2","type":"function","function":{"name":"second","arguments":"{}"}}]},"finish_reason":null}]}`,
+				`data: {"choices":[{"delta":{"role":"assistant","tool_calls":[{"index":0,"id":"c1","type":"function","function":{"name":"first","arguments":"{}"}},{"index":1,"id":"c2","type":"function","function":{"name":"second","arguments":"{\"url\":\"https://example.com/skipped\",\"reason\":\"budget\"}"}}]},"finish_reason":null}]}`,
 				`data: {"choices":[{"delta":{},"finish_reason":"tool_calls"}]}`,
 				`data: [DONE]`,
 			}
@@ -1342,6 +1342,7 @@ func TestRunTurn_MaxToolCallsForcesNoToolSummary(t *testing.T) {
 
 	deadline := time.After(10 * time.Second)
 	var sawSkipped bool
+	var sawSkippedArgs bool
 	for {
 		select {
 		case ev, ok := <-events:
@@ -1357,6 +1358,24 @@ func TestRunTurn_MaxToolCallsForcesNoToolSummary(t *testing.T) {
 					sawSkipped = true
 				}
 			}
+			if ev.Type == sse.TypeToolRequest {
+				var p sse.ToolRequestPayload
+				if err := json.Unmarshal(ev.Data, &p); err != nil {
+					t.Fatalf("decode tool.request: %v", err)
+				}
+				if p.CallID == "c2" {
+					if got, _ := p.Args["url"].(string); got != "https://example.com/skipped" {
+						t.Fatalf("skipped tool args url = %q, want original URL", got)
+					}
+					if got, _ := p.Args["reason"].(string); got != "budget" {
+						t.Fatalf("skipped tool args reason = %q, want budget", got)
+					}
+					if p.ArgsBytes == 0 {
+						t.Fatal("skipped tool args bytes should report original arg size")
+					}
+					sawSkippedArgs = true
+				}
+			}
 			if ev.Type != sse.TypeTurnEnd {
 				continue
 			}
@@ -1369,6 +1388,9 @@ func TestRunTurn_MaxToolCallsForcesNoToolSummary(t *testing.T) {
 			}
 			if !sawSkipped {
 				t.Fatal("expected skipped tool result for capped second tool")
+			}
+			if !sawSkippedArgs {
+				t.Fatal("expected skipped tool request to retain original args")
 			}
 			if p.ToolStats == nil || p.ToolStats.ToolRequests != 2 || p.ToolStats.ToolErrors != 1 {
 				t.Fatalf("expected one successful request and one skipped error, got %+v", p.ToolStats)

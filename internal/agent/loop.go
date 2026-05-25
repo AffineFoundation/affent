@@ -1302,7 +1302,11 @@ func (l *Loop) appendSkippedToolResults(turnID string, calls []ToolCall, content
 	for _, skipped := range calls {
 		callID := skipped.ID
 		name := skipped.Function.Name
-		argsView := toolRequestArgsEventView(json.RawMessage(`{}`))
+		rawArgs := strings.TrimSpace(skipped.Function.Arguments)
+		if rawArgs == "" {
+			rawArgs = "{}"
+		}
+		argsView := toolRequestArgsEventView(json.RawMessage(rawArgs))
 		// Even though the call never dispatched, the original args carry
 		// the delegation classification a trace UI needs to render
 		// "focused task was canceled because the parent turn ran out
