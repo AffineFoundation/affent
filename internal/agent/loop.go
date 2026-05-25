@@ -457,7 +457,8 @@ func externalResearchSystemGuidance(surface externalResearchToolSurface) string 
 	b.WriteString("\n- Preserve user-provided disambiguators when discovering sources and evaluating evidence: ecosystem or parent project, ticker, network/subnet id, official domain, version, geography, and date range. If a short name is ambiguous, resolve the entity before collecting metrics or sentiment.")
 	b.WriteString("\n- When the user states a relationship such as \"X is a Y project/subnet/protocol\", treat the parent ecosystem as the search scope. A same-name standalone product outside that scope is disambiguation evidence only; do not use it as the main answer or as disproof until you have searched the asserted parent ecosystem directly.")
 	b.WriteString("\n- Do not conclude that a named entity does not exist only because it is absent from one visible list, first page, or broad search. For short-name entities, try one targeted refinement with the parent ecosystem plus known ids/synonyms, site search/filter controls, or a canonical index/API before reporting not found.")
-	b.WriteString("\n- If you report source access status, mark a URL as successfully accessed only when a tool actually read that URL and returned usable content. Links discovered on result pages or another page but not opened are discovered/unverified, not successful sources.")
+	b.WriteString("\n- If you report source access status, mark a URL as successfully accessed only when a tool actually read that URL and returned usable content. Use the actual fetched_url/browser_rendered_url from SourceAccess as the accessed URL; requested_url only records what you asked for before redirects or route changes. Links discovered on result pages or another page but not opened are discovered/unverified, not successful sources.")
+	b.WriteString("\n- Before the final answer, re-scan the latest successful SourceAccess outputs for requested names, ids, prices, counts, dates, and status labels. Do not say a field was unavailable if a successful tool result's PAGE TEXT or extracted content already contains that field; instead report the value with that source.")
 	b.WriteString("\n- For market, metrics, or trend questions, collect a current source-of-record plus at least one independent corroborating source when the available tools make that possible. Prefer official API/text/export endpoints for metrics over dashboard routes that require JavaScript. Keep social posts, forum comments, and influencer takes separate from verified facts, and label them as sentiment or claims.")
 	b.WriteString("\n- Include concrete dates/freshness for time-sensitive facts. When sources disagree, state the conflict and prefer the source with the clearest provenance.")
 	if surface.WebSearch {
@@ -1688,25 +1689,27 @@ func (l *Loop) finalNoToolsOnMaxTurnsForTurn(opts TurnOptions) bool {
 	return l.FinalNoToolsOnMaxTurns || opts.FinalNoToolsOnMaxTurns
 }
 
-const lengthRecoveryPrompt = `The previous assistant response was cut off while summarizing evidence gathered in this turn.
+const finalEvidenceDiscipline = `Use only existing tool results. Re-scan the latest successful SourceAccess outputs for requested names, ids, prices, counts, dates, and status labels before declaring any field unavailable. Cite actual fetched_url/browser_rendered_url values as accessed sources; treat requested_url and discovered links as unverified unless a tool result actually read them.`
 
-Do not call tools. Produce the final answer now from the existing tool results. Keep it concise, separate verified facts from gaps, and avoid process narration such as "I will continue" or "let me search".`
+var lengthRecoveryPrompt = `The previous assistant response was cut off while summarizing evidence gathered in this turn.
+
+Do not call tools. ` + finalEvidenceDiscipline + ` Keep it concise, separate verified facts from gaps, and avoid process narration such as "I will continue" or "let me search".`
 
 func (l *Loop) runLengthRecoveryStep(ctx context.Context, turnID string) (*FinishInfo, string, error) {
 	return l.runFinalNoToolsStep(ctx, turnID, lengthRecoveryPrompt)
 }
 
-const maxTurnsFinalPrompt = `The tool-step budget for this turn is exhausted.
+var maxTurnsFinalPrompt = `The tool-step budget for this turn is exhausted.
 
-Do not call tools. Produce the final answer now from the existing tool results. Keep it concise, separate verified facts from gaps, and list any important sources that were unavailable or blocked.`
+Do not call tools. ` + finalEvidenceDiscipline + ` Produce the final answer now. Keep it concise, separate verified facts from gaps, and list any important sources that were unavailable or blocked.`
 
-const toolBudgetFinalPrompt = `The tool-call budget for this turn is exhausted.
+var toolBudgetFinalPrompt = `The tool-call budget for this turn is exhausted.
 
-Do not call tools. Produce the final answer now from the existing tool results. Keep it concise, separate verified facts from gaps, and list any important sources that were unavailable or blocked.`
+Do not call tools. ` + finalEvidenceDiscipline + ` Produce the final answer now. Keep it concise, separate verified facts from gaps, and list any important sources that were unavailable or blocked.`
 
-const forceNoToolsFinalPrompt = `Tools are disabled for the rest of this turn, but the previous assistant step still requested another tool.
+var forceNoToolsFinalPrompt = `Tools are disabled for the rest of this turn, but the previous assistant step still requested another tool.
 
-Do not call tools again. Start the final answer now from the existing tool results. Keep it concise, separate verified facts from gaps, and list any important sources that were unavailable or blocked.`
+Do not call tools again. ` + finalEvidenceDiscipline + ` Start the final answer now. Keep it concise, separate verified facts from gaps, and list any important sources that were unavailable or blocked.`
 
 func (l *Loop) runFinalNoToolsStep(ctx context.Context, turnID, prompt string) (*FinishInfo, string, error) {
 	if err := l.Conv.Append(ChatMessage{Role: "user", Content: prompt}); err != nil {

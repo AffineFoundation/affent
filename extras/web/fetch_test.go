@@ -612,6 +612,31 @@ func TestFetchTool_UsesRenderedFallbackForDynamicShell(t *testing.T) {
 	}
 }
 
+func TestRenderedFallbackSourceAccessRecordsRequestedURL(t *testing.T) {
+	out, err := renderedFallbackResult(context.Background(), FetchConfig{
+		AllowPrivateNetwork: true,
+		RenderedFallback: func(_ context.Context, requestURL string, reason FetchFallbackReason) (string, error) {
+			return "URL: " + reason.FinalURL + "\nTITLE: final page\n\nPAGE TEXT:\np: rendered evidence from " + requestURL + "\n", nil
+		},
+	}, "https://example.com/start", FetchFallbackReason{
+		Kind:     "dynamic_shell",
+		FinalURL: "https://example.com/final",
+	})
+	if err != nil {
+		t.Fatalf("renderedFallbackResult: %v", err)
+	}
+	for _, want := range []string{
+		"SourceAccess: fetched_url=https://example.com/final",
+		"requested_url=https://example.com/start",
+		"mode=rendered_browser_fallback",
+		"rendered evidence from https://example.com/start",
+	} {
+		if !strings.Contains(out, want) {
+			t.Fatalf("rendered fallback output missing %q:\n%s", want, out)
+		}
+	}
+}
+
 func TestFetchTool_UsesRenderedFallbackForEmptyHTML(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "text/html; charset=utf-8")

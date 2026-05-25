@@ -309,6 +309,10 @@ func (snap *Snapshot) Format() string {
 }
 
 func formatSnapshotResult(snap *Snapshot) (string, error) {
+	return formatSnapshotResultWithRequested(snap, "")
+}
+
+func formatSnapshotResultWithRequested(snap *Snapshot, requestedURL string) (string, error) {
 	out := snap.Format()
 	if reason := blockedSnapshotReason(snap); reason != "" {
 		return out, fmt.Errorf(
@@ -316,16 +320,21 @@ func formatSnapshotResult(snap *Snapshot) (string, error) {
 			reason,
 		)
 	}
-	out = browserSourceAccessLine(snap.URL, snap.SnapshotID) + out
+	out = browserSourceAccessLine(snap.URL, snap.SnapshotID, requestedURL) + out
 	return out, nil
 }
 
-func browserSourceAccessLine(rawURL string, snapshotID int64) string {
+func browserSourceAccessLine(rawURL string, snapshotID int64, requestedURL string) string {
 	u := strings.NewReplacer("\r", " ", "\n", " ").Replace(strings.TrimSpace(rawURL))
-	if browserURLIsSearchResultPage(u) {
-		return fmt.Sprintf("SourceAccess: browser_rendered_url=%s; snapshot_id=%d; page_text_below=search_results_discovery_only; result_links_and_snippets=unverified_until_opened\n", u, snapshotID)
+	requested := strings.NewReplacer("\r", " ", "\n", " ").Replace(strings.TrimSpace(requestedURL))
+	requestedSuffix := ""
+	if requested != "" && requested != u {
+		requestedSuffix = "; requested_url=" + requested
 	}
-	return fmt.Sprintf("SourceAccess: browser_rendered_url=%s; snapshot_id=%d; page_text_below=verified_page_evidence; links_in_snapshot=discovered_unverified_until_opened\n", u, snapshotID)
+	if browserURLIsSearchResultPage(u) {
+		return fmt.Sprintf("SourceAccess: browser_rendered_url=%s%s; snapshot_id=%d; page_text_below=search_results_discovery_only; result_links_and_snippets=unverified_until_opened\n", u, requestedSuffix, snapshotID)
+	}
+	return fmt.Sprintf("SourceAccess: browser_rendered_url=%s%s; snapshot_id=%d; page_text_below=verified_page_evidence; links_in_snapshot=discovered_unverified_until_opened\n", u, requestedSuffix, snapshotID)
 }
 
 func browserURLIsSearchResultPage(rawURL string) bool {

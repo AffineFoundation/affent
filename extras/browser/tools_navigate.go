@@ -110,7 +110,7 @@ func runNavigate(ctx context.Context, s *Session, url, waitUntil string) (string
 		if snapErr != nil {
 			return "", fmt.Errorf("post-navigate snapshot: %w (wait error: %v)", snapErr, err)
 		}
-		formatted, blockErr := formatSnapshotResult(snap)
+		formatted, blockErr := formatSnapshotResultWithRequested(snap, url)
 		formatted = fmt.Sprintf("(navigation wait timed out: %v)\n\n%s", err, formatted)
 		return formatted, blockErr
 	}
@@ -118,7 +118,7 @@ func runNavigate(ctx context.Context, s *Session, url, waitUntil string) (string
 	if err != nil {
 		return "", fmt.Errorf("snapshot: %w", err)
 	}
-	return formatSnapshotResult(snap)
+	return formatSnapshotResultWithRequested(snap, url)
 }
 
 func browserNavigateTimeoutError(url string, timeout time.Duration, err error) error {

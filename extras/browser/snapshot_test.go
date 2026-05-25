@@ -110,6 +110,28 @@ func TestFormatSnapshotResultAllowsNormalPages(t *testing.T) {
 	}
 }
 
+func TestFormatSnapshotResultRecordsRequestedURLWhenRedirected(t *testing.T) {
+	out, err := formatSnapshotResultWithRequested(&Snapshot{
+		SnapshotID: 4,
+		URL:        "https://example.com/final",
+		Title:      "Final",
+		TextBlocks: []TextBlock{{Type: "p", Text: "Rendered final route"}},
+	}, "https://example.com/start")
+	if err != nil {
+		t.Fatalf("redirected page should not be blocked: %v", err)
+	}
+	for _, want := range []string{
+		"SourceAccess: browser_rendered_url=https://example.com/final",
+		"requested_url=https://example.com/start",
+		"page_text_below=verified_page_evidence",
+		"Rendered final route",
+	} {
+		if !strings.Contains(out, want) {
+			t.Fatalf("redirected snapshot missing %q:\n%s", want, out)
+		}
+	}
+}
+
 func TestFormatSnapshotResultMarksSearchPagesAsDiscoveryOnly(t *testing.T) {
 	out, err := formatSnapshotResult(&Snapshot{
 		SnapshotID: 3,
