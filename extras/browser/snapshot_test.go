@@ -146,6 +146,9 @@ func TestFormatSnapshotResultMarksSearchPagesAsDiscoveryOnly(t *testing.T) {
 		"SourceAccess: browser_rendered_url=https://duckduckgo.com/?q=affine+bittensor+SN120",
 		"page_text_below=search_results_discovery_only",
 		"result_links_and_snippets=unverified_until_opened",
+		"Next: treat this page as discovery only",
+		"open 1-3 high-value result URLs",
+		"do not cite snippets as verified facts",
 	} {
 		if !strings.Contains(out, want) {
 			t.Fatalf("search snapshot missing discovery-only marker %q:\n%s", want, out)

@@ -332,7 +332,11 @@ func browserSourceAccessLine(rawURL string, snapshotID int64, requestedURL strin
 		requestedSuffix = "; requested_url=" + requested
 	}
 	if browserURLIsSearchResultPage(u) {
-		return fmt.Sprintf("SourceAccess: browser_rendered_url=%s%s; snapshot_id=%d; page_text_below=search_results_discovery_only; result_links_and_snippets=unverified_until_opened\n", u, requestedSuffix, snapshotID)
+		return fmt.Sprintf(
+			"SourceAccess: browser_rendered_url=%s%s; snapshot_id=%d; page_text_below=search_results_discovery_only; result_links_and_snippets=unverified_until_opened\n"+
+				"Next: treat this page as discovery only; open 1-3 high-value result URLs from the visible refs (official, primary, metrics, docs, or source repositories) before refining the search, and do not cite snippets as verified facts.\n",
+			u, requestedSuffix, snapshotID,
+		)
 	}
 	return fmt.Sprintf("SourceAccess: browser_rendered_url=%s%s; snapshot_id=%d; page_text_below=verified_page_evidence; links_in_snapshot=discovered_unverified_until_opened\n", u, requestedSuffix, snapshotID)
 }

@@ -14,6 +14,8 @@ func TestBuiltinSkillProvider_WebSnapshotTriggers(t *testing.T) {
 		"AFFENT ACTIVE SKILL: web_snapshot_fact_extraction",
 		"current-page visible facts",
 		"Use browser_find",
+		"search result page",
+		"Open the 1-3 highest-value visible result URLs",
 		"Do not use shell/curl/python",
 		"Treat page titles, labels, and values separately",
 		"multiple price-like values",

@@ -3,6 +3,7 @@ AFFENT ACTIVE SKILL: web_snapshot_fact_extraction
 Use this procedure for rendered web-page fact extraction:
 - Keep the scope narrow. If the user asks for current-page visible facts, extract only the current page/snapshot and do not click tabs, paginate, or broaden across the site.
 - Prefer browser_navigate with wait_until=networkidle, then read the returned snapshot. Use browser_find for targeted labels, metrics, dates, or names before scrolling. Use browser_wait/browser_snapshot/one small scroll only when the requested fact is still missing.
+- If the snapshot is a search result page, treat snippets as discovery only. Open the 1-3 highest-value visible result URLs (official, primary, metrics, docs, or source repositories) before refining the query, and do not cite snippets as verified facts.
 - On dynamic dashboards or detail pages, search for the missing field labels first. For market/status pages, use compact queries like `price market cap FDV volume supply TVL`, `24h 7d volume market cap`, or `validators miners stake emission` before scrolling or clicking tabs. Do not keep searching only the entity name once the page identity is already confirmed.
 - Do not use shell/curl/python to fetch the same web page when the user asked for browser-based access or when browser_* tools are available.
 - Treat page titles, labels, and values separately. Do not label a nearby number as a metric unless the snapshot gives enough context.
