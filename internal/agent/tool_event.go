@@ -292,7 +292,7 @@ func (b *toolResultContextBudget) truncateToolResult(toolName, result string, pe
 		return truncateToolResultForContext(toolName, result, perToolMax), toolResultContextOmittedBytes(result, perToolMax)
 	}
 	if b.remaining <= 0 {
-		return toolResultContextBudgetExhaustedMarker(toolName, len(result)), len(result)
+		return toolResultContextBudgetExhaustedResult(toolName, result)
 	}
 
 	max := perToolMax
@@ -314,6 +314,30 @@ func (b *toolResultContextBudget) truncateToolResult(toolName, result string, pe
 		marker = toolResultContextBudgetTruncationMarker(toolName, omitted)
 	}
 	return result[:cut] + marker, omitted
+}
+
+func toolResultContextBudgetExhaustedResult(toolName, result string) (string, int) {
+	head := toolResultContextEvidenceHead(result, 512)
+	if head == "" {
+		return toolResultContextBudgetExhaustedMarker(toolName, len(result)), len(result)
+	}
+	omitted := max(0, len(result)-len(head))
+	if omitted == 0 {
+		return head, 0
+	}
+	return head + "\n\n" + toolResultContextBudgetExhaustedMarker(toolName, omitted), omitted
+}
+
+func toolResultContextEvidenceHead(result string, maxBytes int) string {
+	if maxBytes <= 0 {
+		return ""
+	}
+	result = strings.TrimSpace(result)
+	if result == "" {
+		return ""
+	}
+	cut := textutil.AlignBackward(result, min(len(result), maxBytes))
+	return strings.TrimSpace(result[:cut])
 }
 
 func toolResultContextOmittedBytes(result string, max int) int {

@@ -997,6 +997,29 @@ func TestLoopToolResultContextBudgetDefaultAndOverride(t *testing.T) {
 	}
 }
 
+func TestToolResultContextBudgetExhaustionPreservesEvidenceHead(t *testing.T) {
+	budget := newToolResultContextBudget(1)
+	first, omitted := budget.truncateToolResult("browser_navigate", "x", 1024)
+	if first != "x" || omitted != 0 {
+		t.Fatalf("first result = %q omitted=%d, want exact fit", first, omitted)
+	}
+	payload := "SourceAccess: browser_rendered_url=https://example.com/report; snapshot_id=4; page_text_below=verified_page_evidence; links_in_snapshot=discovered_unverified_until_opened\nURL: https://example.com/report\nTITLE: Report\nSNAPSHOT_ID: 4\n\nPAGE TEXT:\np: useful evidence\n" + strings.Repeat("z", 2048)
+	second, omitted := budget.truncateToolResult("browser_navigate", payload, 4096)
+	for _, want := range []string{
+		"SourceAccess: browser_rendered_url=https://example.com/report",
+		"URL: https://example.com/report",
+		"TITLE: Report",
+		"per-turn tool-result context budget",
+	} {
+		if !strings.Contains(second, want) {
+			t.Fatalf("exhausted budget result missing %q:\n%s", want, second)
+		}
+	}
+	if omitted <= 0 || omitted >= len(payload) {
+		t.Fatalf("omitted bytes = %d, want partial head preserved from %d-byte payload", omitted, len(payload))
+	}
+}
+
 func TestTruncateToolResultForContextGuidanceByTool(t *testing.T) {
 	payload := strings.Repeat("x", 256)
 
