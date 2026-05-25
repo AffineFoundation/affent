@@ -6,6 +6,7 @@ import (
 	"context"
 	"os"
 	"os/exec"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -128,12 +129,15 @@ func TestSession_FindToolSearchesRenderedPage(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 
-	const body = `<html><body>
-        <h1>Affine metrics</h1>
-        <p>Market cap is $55.4M and liquidity is $44.8M.</p>
-        <a href="/market">Market details</a>
-    </body></html>`
-	if _, err := runNavigate(ctx, sess, dataURL(body), ""); err != nil {
+	var body strings.Builder
+	body.WriteString(`<html><body><h1>Affine metrics</h1>`)
+	for i := 0; i < 240; i++ {
+		body.WriteString(`<p>filler row `)
+		body.WriteString(strconv.Itoa(i))
+		body.WriteString(`</p>`)
+	}
+	body.WriteString(`<p>Market cap is $55.4M and liquidity is $44.8M.</p><a href="/market">Market details</a></body></html>`)
+	if _, err := runNavigate(ctx, sess, dataURL(body.String()), ""); err != nil {
 		t.Fatalf("runNavigate: %v", err)
 	}
 	out, err := FindTool(sess).Execute(ctx, []byte(`{"query":"market","max_results":3}`))

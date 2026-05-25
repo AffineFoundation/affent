@@ -17,9 +17,10 @@ const (
 )
 
 // FindTool returns `browser_find`. It searches the current rendered
-// page snapshot and returns compact matching snippets, so the agent
-// can look for labels like "market cap" or "price" without repeated
-// scroll/snapshot calls.
+// DOM directly and returns compact matching snippets, so the agent can
+// look for labels like "market cap" or "price" without repeated
+// scroll/snapshot calls. Unlike browser_snapshot, it is not limited by
+// the formatted snapshot's text-block display cap.
 func FindTool(s *Session) *agent.Tool {
 	schema := json.RawMessage(fmt.Sprintf(`{
         "type": "object",
@@ -70,25 +71,194 @@ func FindTool(s *Session) *agent.Tool {
 			if s.page == nil {
 				return "", ErrNoPage
 			}
-			snap, err := s.TakeSnapshot(ctx)
+			result, err := s.FindText(ctx, query, limit)
 			if err != nil {
-				return "", fmt.Errorf("snapshot: %w", err)
+				return "", fmt.Errorf("find: %w", err)
 			}
-			return formatBrowserFindResults(snap, query, limit), nil
+			return formatBrowserFindResults(result, query, limit), nil
 		},
 	}
 }
 
-func formatBrowserFindResults(snap *Snapshot, query string, limit int) string {
-	var b strings.Builder
-	fmt.Fprintf(&b, "URL: %s\n", snap.URL)
-	if snap.Title != "" {
-		fmt.Fprintf(&b, "TITLE: %s\n", snap.Title)
+type BrowserFindResult struct {
+	SnapshotID  int64                `json:"snapshot_id"`
+	URL         string               `json:"url"`
+	Title       string               `json:"title"`
+	Interactive []InteractiveElement `json:"interactive"`
+	TextBlocks  []TextBlock          `json:"text_blocks"`
+}
+
+// FindText searches the rendered DOM and stamps fresh data-affent-ref
+// ids on interactive elements. Those refs remain valid until the next
+// snapshot/find/navigation changes them.
+func (s *Session) FindText(ctx context.Context, query string, limit int) (*BrowserFindResult, error) {
+	if s.page == nil {
+		return nil, ErrNoPage
 	}
-	fmt.Fprintf(&b, "SNAPSHOT_ID: %d\n", snap.SnapshotID)
+	if limit <= 0 {
+		limit = defaultBrowserFindLimit
+	}
+	page := s.withContext(ctx)
+	result, err := page.Eval(browserFindJS(query, limit))
+	if err != nil {
+		return nil, fmt.Errorf("eval find js: %w", err)
+	}
+	raw, err := result.Value.MarshalJSON()
+	if err != nil {
+		return nil, fmt.Errorf("re-marshal find result: %w", err)
+	}
+	var out BrowserFindResult
+	if err := json.Unmarshal(raw, &out); err != nil {
+		return nil, fmt.Errorf("decode find result: %w (raw=%s)", err, string(raw))
+	}
+	out.SnapshotID = s.newSnapshotID()
+	return &out, nil
+}
+
+func browserFindJS(query string, limit int) string {
+	rawQuery, _ := json.Marshal(query)
+	return fmt.Sprintf(`() => {
+  const query = %s;
+  const maxResults = %d;
+  document.querySelectorAll('[data-affent-ref]').forEach(el => el.removeAttribute('data-affent-ref'));
+
+  function clean(s) {
+    return (s || '').toString().trim().replace(/\s+/g, ' ');
+  }
+  function norm(s) {
+    return clean(s).toLowerCase();
+  }
+  function isVisible(el) {
+    if (!el || !el.getBoundingClientRect) return false;
+    const rect = el.getBoundingClientRect();
+    if (rect.width === 0 || rect.height === 0) return false;
+    const cs = getComputedStyle(el);
+    if (cs.visibility === 'hidden' || cs.display === 'none') return false;
+    if (parseFloat(cs.opacity || '1') === 0) return false;
+    return true;
+  }
+  function accessibleName(el) {
+    const ariaLabel = el.getAttribute && el.getAttribute('aria-label');
+    if (ariaLabel) return clean(ariaLabel).slice(0, 200);
+    const ariaLabelledBy = el.getAttribute && el.getAttribute('aria-labelledby');
+    if (ariaLabelledBy) {
+      const ref = document.getElementById(ariaLabelledBy);
+      if (ref) return clean(ref.textContent).slice(0, 200);
+    }
+    const alt = el.getAttribute && el.getAttribute('alt');
+    if (alt) return clean(alt).slice(0, 200);
+    const title = el.getAttribute && el.getAttribute('title');
+    if (title) return clean(title).slice(0, 200);
+    if (el.tagName === 'INPUT' && el.placeholder) return clean(el.placeholder).slice(0, 200);
+    return clean(el.textContent).slice(0, 200);
+  }
+  function roleOf(el) {
+    const explicit = el.getAttribute && el.getAttribute('role');
+    if (explicit) return explicit;
+    const tag = el.tagName.toLowerCase();
+    if (tag === 'a' && el.hasAttribute && el.hasAttribute('href')) return 'link';
+    if (tag === 'button') return 'button';
+    if (tag === 'input') {
+      const t = ((el.type || 'text') + '').toLowerCase();
+      if (t === 'checkbox') return 'checkbox';
+      if (t === 'radio') return 'radio';
+      if (t === 'submit' || t === 'button' || t === 'reset') return 'button';
+      return 'textbox';
+    }
+    if (tag === 'textarea') return 'textbox';
+    if (tag === 'select') return 'combobox';
+    if (tag === 'summary') return 'button';
+    if (el.isContentEditable) return 'textbox';
+    return tag;
+  }
+  function directText(el) {
+    let out = '';
+    for (const node of el.childNodes) {
+      if (node.nodeType === 3) out += node.textContent;
+    }
+    return clean(out);
+  }
+  function around(text) {
+    text = clean(text);
+    const lower = text.toLowerCase();
+    const needle = norm(query);
+    const max = 600;
+    if (text.length <= max) return text;
+    const idx = lower.indexOf(needle);
+    if (idx < 0) return text.slice(0, max);
+    let start = idx - Math.floor((max - needle.length) / 2);
+    if (start < 0) start = 0;
+    if (start + max > text.length) start = Math.max(0, text.length - max);
+    const end = Math.min(text.length, start + max);
+    return (start > 0 ? '... ' : '') + text.slice(start, end).trim() + (end < text.length ? ' ...' : '');
+  }
+
+  const needle = norm(query);
+  const interactive = [];
+  const textBlocks = [];
+  const interactiveSelectors = [
+    'a[href]', 'button', 'summary',
+    'input:not([type=hidden])', 'textarea', 'select',
+    '[role=button]', '[role=link]', '[role=menuitem]', '[role=tab]',
+    '[role=checkbox]', '[role=switch]', '[role=combobox]', '[role=textbox]',
+    '[role=radio]', '[role=option]',
+    '[contenteditable]:not([contenteditable=false])',
+    '[onclick]',
+    '[tabindex]:not([tabindex="-1"])',
+  ].join(',');
+  let nextRef = 0;
+  document.querySelectorAll(interactiveSelectors).forEach(el => {
+    if (!isVisible(el)) return;
+    nextRef++;
+    el.setAttribute('data-affent-ref', String(nextRef));
+    if (interactive.length >= maxResults) return;
+    const info = { ref: nextRef, role: roleOf(el), name: accessibleName(el) };
+    if (el.tagName === 'A' && el.getAttribute('href')) info.href = el.getAttribute('href');
+    if (el.tagName === 'INPUT' || el.tagName === 'TEXTAREA' || el.tagName === 'SELECT') {
+      info.value = ((el.value || '') + '').slice(0, 200);
+    }
+    if (el.tagName === 'INPUT' && (el.type === 'checkbox' || el.type === 'radio')) {
+      info.checked = !!el.checked;
+    }
+    if (norm([info.role, info.name, info.href || '', info.value || ''].join(' ')).includes(needle)) {
+      interactive.push(info);
+    }
+  });
+  const remaining = () => maxResults - interactive.length - textBlocks.length;
+  const addText = (el, type, text) => {
+    if (remaining() <= 0) return;
+    if (!text || !norm(text).includes(needle)) return;
+    textBlocks.push({ type, text: around(text) });
+  };
+  const namedBlocks = 'h1,h2,h3,h4,h5,h6,p,li,td,blockquote,pre';
+  document.querySelectorAll(namedBlocks).forEach(el => {
+    if (remaining() <= 0 || !isVisible(el)) return;
+    addText(el, el.tagName.toLowerCase(), clean(el.textContent));
+  });
+  const candidates = ['div', 'span', 'section', 'article'];
+  document.querySelectorAll(candidates.join(',')).forEach(el => {
+    if (remaining() <= 0 || !isVisible(el)) return;
+    addText(el, el.tagName.toLowerCase(), directText(el));
+  });
+  return {
+    url: location.href,
+    title: document.title,
+    interactive: interactive,
+    text_blocks: textBlocks,
+  };
+}`, string(rawQuery), limit)
+}
+
+func formatBrowserFindResults(result *BrowserFindResult, query string, limit int) string {
+	var b strings.Builder
+	fmt.Fprintf(&b, "URL: %s\n", result.URL)
+	if result.Title != "" {
+		fmt.Fprintf(&b, "TITLE: %s\n", result.Title)
+	}
+	fmt.Fprintf(&b, "SNAPSHOT_ID: %d\n", result.SnapshotID)
 	fmt.Fprintf(&b, "QUERY: %q\n\n", query)
 
-	matches := browserFindMatches(snap, query, limit)
+	matches := browserFindMatches(result, query, limit)
 	if len(matches) == 0 {
 		b.WriteString("MATCHES: none\n")
 		b.WriteString("Next: retry browser_find with a shorter or different visible phrase, call browser_snapshot to inspect current text, scroll once if the desired section is likely off-screen, or continue from existing evidence.\n")
@@ -102,7 +272,7 @@ func formatBrowserFindResults(snap *Snapshot, query string, limit int) string {
 	return b.String()
 }
 
-func browserFindMatches(snap *Snapshot, query string, limit int) []string {
+func browserFindMatches(result *BrowserFindResult, query string, limit int) []string {
 	needle := normalizedSnapshotText(query)
 	if needle == "" || limit <= 0 {
 		return nil
@@ -112,7 +282,7 @@ func browserFindMatches(snap *Snapshot, query string, limit int) []string {
 		out = append(out, line)
 		return len(out) >= limit
 	}
-	for _, el := range snap.Interactive {
+	for _, el := range result.Interactive {
 		hay := normalizedSnapshotText(strings.Join([]string{el.Role, el.Name, el.Href, el.Value}, " "))
 		if !strings.Contains(hay, needle) {
 			continue
@@ -121,7 +291,7 @@ func browserFindMatches(snap *Snapshot, query string, limit int) []string {
 			return out
 		}
 	}
-	for _, tb := range snap.TextBlocks {
+	for _, tb := range result.TextBlocks {
 		text := strings.TrimSpace(tb.Text)
 		if text == "" || !strings.Contains(normalizedSnapshotText(text), needle) {
 			continue

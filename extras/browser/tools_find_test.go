@@ -8,7 +8,7 @@ import (
 )
 
 func TestBrowserFindResultsReturnCompactMatches(t *testing.T) {
-	snap := &Snapshot{
+	result := &BrowserFindResult{
 		SnapshotID: 7,
 		URL:        "https://example.test/asset",
 		Title:      "Asset stats",
@@ -21,7 +21,7 @@ func TestBrowserFindResultsReturnCompactMatches(t *testing.T) {
 			{Type: "p", Text: "The current market cap is $55.4M and liquidity is $44.8M on the main pool."},
 		},
 	}
-	got := formatBrowserFindResults(snap, "market", 4)
+	got := formatBrowserFindResults(result, "market", 4)
 	for _, want := range []string{
 		"URL: https://example.test/asset",
 		"TITLE: Asset stats",
@@ -40,11 +40,28 @@ func TestBrowserFindResultsReturnCompactMatches(t *testing.T) {
 }
 
 func TestBrowserFindNoMatchesHasRecoveryHint(t *testing.T) {
-	out := formatBrowserFindResults(&Snapshot{URL: "https://example.test"}, "volume", 8)
+	out := formatBrowserFindResults(&BrowserFindResult{URL: "https://example.test"}, "volume", 8)
 	for _, want := range []string{"MATCHES: none", "Next:", "browser_snapshot", "scroll once"} {
 		if !strings.Contains(out, want) {
 			t.Fatalf("no-match output missing %q:\n%s", want, out)
 		}
+	}
+}
+
+func TestBrowserFindResultDecodesDOMShape(t *testing.T) {
+	var result BrowserFindResult
+	raw := []byte(`{"url":"https://example.test","title":"Example","interactive":[{"ref":2,"role":"link","name":"Market"}],"text_blocks":[{"type":"p","text":"Market cap"}]}`)
+	if err := json.Unmarshal(raw, &result); err != nil {
+		t.Fatal(err)
+	}
+	if result.URL != "https://example.test" || result.Title != "Example" {
+		t.Fatalf("decoded metadata = %+v", result)
+	}
+	if len(result.Interactive) != 1 || result.Interactive[0].Ref != 2 {
+		t.Fatalf("decoded interactive = %+v", result.Interactive)
+	}
+	if len(result.TextBlocks) != 1 || result.TextBlocks[0].Text != "Market cap" {
+		t.Fatalf("decoded text blocks = %+v", result.TextBlocks)
 	}
 }
 
