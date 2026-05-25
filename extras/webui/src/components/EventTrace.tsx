@@ -8,6 +8,12 @@ export function EventTrace({ events }: { events: readonly NormalizedEvent[] }) {
 
   return (
     <div className="event-trace" data-testid="event-trace">
+      {events.length > 0 ? (
+        <div className="event-trace-actions">
+          <span className="event-trace-count">{events.length} history entries</span>
+          <CopyButton label="Copy history" value={copyHistoryText(events)} className="event-action" />
+        </div>
+      ) : null}
       {model.metadata.length > 0 ? renderMetadata(model.metadata) : null}
       {model.items.map((item) => {
         if (item.kind === "deltaGroup") return renderDeltaGroup(item);
@@ -193,4 +199,8 @@ function schemaVersion(event: NormalizedEvent): number | undefined {
     ? (event.data as { schema_version?: unknown }).schema_version
     : undefined;
   return typeof value === "number" ? value : undefined;
+}
+
+function copyHistoryText(events: readonly NormalizedEvent[]): string {
+  return events.map((event) => JSON.stringify(event.raw)).join("\n");
 }

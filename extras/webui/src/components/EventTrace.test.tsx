@@ -25,6 +25,7 @@ describe("EventTrace", () => {
 
     render(<EventTrace events={events} />);
 
+    expect(screen.getByText("2 history entries")).toBeInTheDocument();
     expect(screen.getByText("History metadata")).toBeInTheDocument();
     expect(screen.getByText("schema v1")).toBeInTheDocument();
     expect(screen.queryByText("History loaded")).not.toBeInTheDocument();
@@ -34,6 +35,8 @@ describe("EventTrace", () => {
     expect(screen.queryByText(/call c1/)).not.toBeInTheDocument();
     expect(screen.queryByText("tool.request")).not.toBeInTheDocument();
 
+    await user.click(screen.getByRole("button", { name: "Copy history" }));
+    expect(writeText).toHaveBeenCalledWith(`${JSON.stringify(events[0].raw)}\n${JSON.stringify(events[1].raw)}`);
     await user.click(screen.getByText("History metadata"));
     expect(screen.getByText("1 entry")).toBeInTheDocument();
     expect(screen.getByText(/"type": "trace.meta"/)).toBeInTheDocument();

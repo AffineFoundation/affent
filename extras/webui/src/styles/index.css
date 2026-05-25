@@ -5567,6 +5567,22 @@ pre.code {
   padding: 10px;
 }
 
+.event-trace-actions {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 0 2px 2px;
+}
+
+.event-trace-count {
+  overflow: hidden;
+  color: var(--text-faint);
+  font-size: 11px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .event-chip {
   border: 1px solid var(--border);
   border-radius: var(--radius-sm);
