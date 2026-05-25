@@ -254,13 +254,13 @@ func fetch(ctx context.Context, cfg FetchConfig, requestURL string) (string, err
 		if rendered, err := renderedFallbackResult(ctx, cfg, requestURL, FetchFallbackReason{Kind: "blocked", ContentType: ct, Detail: reason, FinalURL: finalURL}); err == nil {
 			return rendered, nil
 		}
-		return blockedFetchResult(finalURL, ct, reason), nil
+		return blockedFetchResult(finalURL, ct, reason, renderedFallbackUnavailableNote(cfg)), nil
 	}
 	if reason := dynamicPageShellReason(body, ct, out); reason != "" {
 		if rendered, err := renderedFallbackResult(ctx, cfg, requestURL, FetchFallbackReason{Kind: "dynamic_shell", ContentType: ct, Detail: reason, FinalURL: finalURL}); err == nil {
 			return rendered, nil
 		}
-		return dynamicPageShellResult(finalURL, ct, reason, dynamicShellDiscoveryPreview(out), dynamicShellDiscoveryLinks(body, finalURL), embeddedDataSnippets(body, finalURL)), nil
+		return dynamicPageShellResult(finalURL, ct, reason, dynamicShellDiscoveryPreview(out), dynamicShellDiscoveryLinks(body, finalURL), embeddedDataSnippets(body, finalURL), renderedFallbackUnavailableNote(cfg)), nil
 	}
 
 	out = truncateFetchResult(out, cfg.MaxResultChars)
@@ -302,8 +302,8 @@ func emptyFetchResult(finalURL, contentType string) string {
 	return fmt.Sprintf("[empty response: URL=%s, Content-Type=%q]\nFailure: kind=empty_response\nNext: do not treat this as page evidence; use another available source, fetch a text/API/HTML version, or answer with this source marked as empty/unverified.", finalURL, contentType)
 }
 
-func blockedFetchResult(finalURL, contentType, reason string) string {
-	return fmt.Sprintf("[blocked response: URL=%s, Content-Type=%q, Reason=%q]\nFailure: kind=blocked\nNext: do not treat this challenge/error page as source evidence; use an available search result snippet only as weak evidence, switch to a canonical API/text/source page, or mark this source as blocked/unverified.", finalURL, contentType, reason)
+func blockedFetchResult(finalURL, contentType, reason, fallbackNote string) string {
+	return fmt.Sprintf("[blocked response: URL=%s, Content-Type=%q, Reason=%q]\nFailure: kind=blocked\nNext: do not treat this challenge/error page as source evidence; use an available search result snippet only as weak evidence, switch to a canonical API/text/source page, or mark this source as blocked/unverified.%s", finalURL, contentType, reason, fallbackNote)
 }
 
 type dynamicShellLink struct {
@@ -313,7 +313,7 @@ type dynamicShellLink struct {
 	order int
 }
 
-func dynamicPageShellResult(finalURL, contentType, reason, preview string, links []dynamicShellLink, dataSnippets []string) string {
+func dynamicPageShellResult(finalURL, contentType, reason, preview string, links []dynamicShellLink, dataSnippets []string, fallbackNote string) string {
 	var b strings.Builder
 	fmt.Fprintf(&b, "[dynamic page shell: URL=%s, Content-Type=%q, Reason=%q]", finalURL, contentType, reason)
 	if preview != "" {
@@ -335,9 +335,11 @@ func dynamicPageShellResult(finalURL, contentType, reason, preview string, links
 			fmt.Fprintf(&b, "\n- %s", snippet)
 		}
 		b.WriteString("\nNext: the rendered page shell itself is not evidence; use the embedded data preview only when it directly matches the requested entity/URL, otherwise switch to a canonical API/text/source page or mark rendered-only fields as unverified.")
+		b.WriteString(fallbackNote)
 		return b.String()
 	}
 	b.WriteString("\nFailure: kind=dynamic_shell\nNext: do not treat this loading/app shell as source evidence; use the discovery preview/links only to choose a canonical API/text/source page, or answer with this source marked as dynamic/unverified.")
+	b.WriteString(fallbackNote)
 	return b.String()
 }
 
@@ -493,12 +495,12 @@ func directFetchPreflightResult(ctx context.Context, cfg FetchConfig, rawURL str
 		if out, err := renderedFallbackResult(ctx, cfg, rawURL, FetchFallbackReason{Kind: "search_results_page", Detail: "search-results page", FinalURL: rawURL}); err == nil {
 			return out
 		}
-		return skippedDirectFetchResult(rawURL, "search-results page")
+		return skippedDirectFetchResult(rawURL, "search-results page", renderedFallbackUnavailableNote(cfg))
 	case websource.IsKnownDirectReaderTrapHost(host):
 		if out, err := renderedFallbackResult(ctx, cfg, rawURL, FetchFallbackReason{Kind: "direct_reader_trap", Detail: "site usually blocks direct HTTP readers", FinalURL: rawURL}); err == nil {
 			return out
 		}
-		return skippedDirectFetchResult(rawURL, "site usually blocks direct HTTP readers")
+		return skippedDirectFetchResult(rawURL, "site usually blocks direct HTTP readers", renderedFallbackUnavailableNote(cfg))
 	default:
 		return ""
 	}
@@ -599,8 +601,15 @@ func shouldUseRenderedFallbackForEmpty(status int, contentType string) bool {
 	return mediaType == "" || mediaType == "text/html" || mediaType == "application/xhtml+xml"
 }
 
-func skippedDirectFetchResult(finalURL, reason string) string {
-	return fmt.Sprintf("[blocked response: URL=%s, Content-Type=%q, Reason=%q]\nFailure: kind=blocked\nNext: do not spend direct fetch calls on this page in this turn; use the search result target URL instead of a search-results page, use search snippets only as weak discovery/sentiment evidence, switch to an official API/text/source page, or mark this source as blocked/unverified.", finalURL, "", reason)
+func renderedFallbackUnavailableNote(cfg FetchConfig) string {
+	if cfg.RenderedFallback != nil {
+		return ""
+	}
+	return " Rendered browser fallback is not configured for this web_fetch; start affentserve with browser support enabled, or use browser tools directly if this runtime exposes them."
+}
+
+func skippedDirectFetchResult(finalURL, reason, fallbackNote string) string {
+	return fmt.Sprintf("[blocked response: URL=%s, Content-Type=%q, Reason=%q]\nFailure: kind=blocked\nNext: do not spend direct fetch calls on this page in this turn; use the search result target URL instead of a search-results page, use search snippets only as weak discovery/sentiment evidence, switch to an official API/text/source page, or mark this source as blocked/unverified.%s", finalURL, "", reason, fallbackNote)
 }
 
 func recoverableFetchError(requestURL, finalURL string, status int, err error) error {

@@ -311,6 +311,12 @@ source, use browser tools when they are registered, rely on search snippets only
 as weak sentiment when full-page reading is unavailable, or answer with the gap
 clearly marked as unverified.
 
+When `web_fetch` can reuse the session browser, recovered results include
+`mode=rendered_browser_fallback` and `[rendered browser fallback succeeded: ...]`.
+If a dynamic shell or direct-reader trap says `Rendered browser fallback is not
+configured`, that runtime is using direct HTTP fetch only; start `affentserve`
+with browser support enabled, or use the registered browser tools directly.
+
 The `web_fetch` tool description and external-research prompt intentionally
 steer the model toward official/raw/API/text URLs and away from direct-reading
 result-list pages, social pages, short links, dynamic dashboards, and likely

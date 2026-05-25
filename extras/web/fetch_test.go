@@ -407,7 +407,7 @@ func TestFetchTool_SkipsKnownDirectFetchTrapsBeforeHTTP(t *testing.T) {
 			if called {
 				t.Fatal("known direct-fetch trap should be classified before HTTP dispatch")
 			}
-			for _, want := range []string{"blocked response", "Failure: kind=blocked", "Next:", "blocked/unverified", c.want} {
+			for _, want := range []string{"blocked response", "Failure: kind=blocked", "Next:", "blocked/unverified", c.want, "Rendered browser fallback is not configured"} {
 				if !strings.Contains(out, want) {
 					t.Fatalf("preflight no-evidence output missing %q:\n%s", want, out)
 				}
@@ -568,13 +568,10 @@ func TestFetchTool_DynamicAppShellReportsNoEvidence(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Execute: %v", err)
 	}
-	for _, want := range []string{"dynamic page shell", "Failure: kind=dynamic_shell", "Next:", "loading/app shell", "dynamic/unverified"} {
+	for _, want := range []string{"dynamic page shell", "Failure: kind=dynamic_shell", "Next:", "loading/app shell", "dynamic/unverified", "Rendered browser fallback is not configured"} {
 		if !strings.Contains(out, want) {
 			t.Fatalf("dynamic shell output missing %q:\n%s", want, out)
 		}
-	}
-	if strings.Contains(out, "browser") || strings.Contains(out, "rendering") {
-		t.Fatalf("dynamic shell guidance should not mention unavailable rendering/browser tools:\n%s", out)
 	}
 }
 
