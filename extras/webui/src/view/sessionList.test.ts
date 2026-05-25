@@ -167,6 +167,33 @@ describe("sessionList view model", () => {
     });
   });
 
+  it("skips truncated raw runtime titles before accepting generated summaries", () => {
+    const rows = buildSessionRows([
+      session({
+        id: "truncated-runtime-title",
+        durable: true,
+        title: "请你收集 Affine（Bittensor 子网）的相关信息...",
+        summary_title: "Affine subnet research",
+        latest_user_message: "请你收集 Affine（Bittensor 子网）的相关信息并向我介绍",
+      }),
+      session({
+        id: "raw-runtime-no-summary",
+        durable: true,
+        title: "会话的标题最好是经过总结的，而不是把第一句话...",
+        latest_user_message: "会话的标题最好是经过总结的，而不是把第一句话的输入当做标题",
+      }),
+    ]);
+
+    expect(rows.find((row) => row.id === "truncated-runtime-title")).toMatchObject({
+      title: "Affine subnet research",
+      titleSource: "provided",
+    });
+    expect(rows.find((row) => row.id === "raw-runtime-no-summary")).toMatchObject({
+      title: "会话标题摘要",
+      titleSource: "topic",
+    });
+  });
+
   it("keeps a provided title when merging the selected live timeline", () => {
     const rows = mergeCurrentSessionRow(
       buildSessionRows([

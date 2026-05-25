@@ -47,6 +47,7 @@ export interface TurnActivityView {
   digest: TurnActivityDigest;
   evidenceCount: number;
   evidencePreview: TurnActivityEvidence[];
+  evidenceAction?: TurnActivityBriefAction;
   brief: TurnActivityBrief;
   items: TurnActivityItem[];
   nodes: TurnActivityNode[];
@@ -65,7 +66,7 @@ export interface TurnActivityBrief {
 
 export type TurnActivityBriefRow =
   | { id: string; label: string; value: string; tone?: TurnActivityTone; action?: TurnActivityBriefAction }
-  | { id: string; label: string; evidence: TurnActivityEvidence[]; tone?: TurnActivityTone; action?: TurnActivityBriefAction };
+  | { id: string; label: string; evidence: readonly TurnActivityEvidence[]; tone?: TurnActivityTone; action?: TurnActivityBriefAction };
 
 export interface TurnActivityBriefAction {
   label: string;
@@ -143,7 +144,9 @@ export function buildTurnActivity(turn: TurnState, opts: TurnActivityOptions = {
   const nodes = treeNodes.map((node) => activityNodeFromExecutionNode(turn, node));
 
   const digest = buildDigest(turn, nodes, items, opts);
+  const evidence = collectBriefEvidence(nodes);
   const evidenceCount = countEvidence(nodes);
+  const evidenceAction = evidence.length > 0 ? evidenceBriefAction(evidence) : undefined;
 
   return {
     title: activityTitle(turn, opts),
@@ -152,8 +155,9 @@ export function buildTurnActivity(turn: TurnState, opts: TurnActivityOptions = {
     tone: opts.continuedAfterLimit ? "muted" : activityTone(turn),
     digest,
     evidenceCount,
-    evidencePreview: collectBriefEvidence(nodes).slice(0, 3),
-    brief: buildBrief(turn, nodes, opts, constraintDeviations),
+    evidencePreview: evidence.slice(0, 3),
+    evidenceAction,
+    brief: buildBrief(turn, nodes, opts, constraintDeviations, evidenceAction, evidence),
     items,
     nodes,
   };
@@ -171,6 +175,8 @@ function buildBrief(
   nodes: readonly TurnActivityNode[],
   opts: TurnActivityOptions,
   constraintDeviations = detectConstraintDeviations(turn),
+  evidenceAction?: TurnActivityBriefAction,
+  evidence: readonly TurnActivityEvidence[] = collectBriefEvidence(nodes),
 ): TurnActivityBrief {
   const rows: TurnActivityBriefRow[] = [];
   const goal = turn.userText ? summarize(turn.userText, 120) : undefined;
@@ -178,17 +184,12 @@ function buildBrief(
     rows.push({ id: `constraint:${deviation.id}`, label: "Constraint", value: deviation.detail, tone: "warning" });
   }
 
-  const evidence = collectBriefEvidence(nodes);
   if (evidence.length > 0) {
     rows.push({
       id: "evidence",
       label: "Evidence",
       evidence,
-      action: {
-        label: "Use evidence",
-        draft: evidenceDraft(evidence),
-        source: "evidence",
-      },
+      action: evidenceAction,
     });
   }
 
@@ -669,6 +670,14 @@ function evidenceDraft(evidence: readonly TurnActivityEvidence[]): string {
     "Use this evidence in the next step:",
     ...evidence.map((item) => `- ${evidenceDraftValue(item)}`),
   ].join("\n");
+}
+
+function evidenceBriefAction(evidence: readonly TurnActivityEvidence[]): TurnActivityBriefAction {
+  return {
+    label: "Use evidence",
+    draft: evidenceDraft(evidence),
+    source: "evidence",
+  };
 }
 
 function evidenceDraftValue(item: TurnActivityEvidence): string {

@@ -255,23 +255,36 @@ function fallbackSessionTitle(session: SessionSummary): string {
 }
 
 function providedSessionTitle(session: SessionSummary, titleSource?: string): string | undefined {
-  const title = [session.title, session.summary_title, session.generated_title]
+  const titles = [session.title, session.summary_title, session.generated_title]
     .map((value) => value?.replace(/\s+/g, " ").trim())
-    .find((value): value is string => Boolean(value));
-  if (!title) return undefined;
-  if (titleSource && isRawPromptTitle(title, titleSource)) return undefined;
-  return summarize(title, 58);
+    .filter((value): value is string => Boolean(value));
+  for (const title of titles) {
+    if (titleSource && isRawPromptTitle(title, titleSource)) continue;
+    return summarize(title, 58);
+  }
+  return undefined;
 }
 
 function isRawPromptTitle(title: string, source: string): boolean {
   const normalizedTitle = normalizeComparableTitle(title);
   const normalizedSource = normalizeComparableTitle(source);
-  if (!normalizedTitle || normalizedTitle !== normalizedSource) return false;
-  return summarizeSessionTitle(source) !== title;
+  if (!normalizedTitle || !normalizedSource) return false;
+  const generated = summarizeSessionTitle(source);
+  const normalizedGenerated = normalizeComparableTitle(generated);
+  if (normalizedGenerated === normalizedTitle) return false;
+  if (normalizedTitle === normalizedSource) return true;
+  if (normalizedSource.startsWith(normalizedTitle)) return true;
+  const ellipsisFreeTitle = normalizeComparableTitle(title.replace(/[.。…]+$/g, ""));
+  if (ellipsisFreeTitle && normalizedSource.startsWith(ellipsisFreeTitle)) return true;
+  return looksLikeInstructionPrompt(title) && normalizedGenerated !== normalizedTitle;
 }
 
 function normalizeComparableTitle(text: string): string {
   return text.replace(/\s+/g, " ").trim().toLowerCase();
+}
+
+function looksLikeInstructionPrompt(text: string): boolean {
+  return /(?:请你?|麻烦|帮我|帮忙|而不是|不要|需要|要求|please\b|can you\b|could you\b|instead of|rather than)/i.test(text);
 }
 
 function summarizeSessionDetail(session: SessionSummary, title: string): string | undefined {

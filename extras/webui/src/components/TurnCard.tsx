@@ -306,6 +306,15 @@ function AgentActivity({
           <span className="agent-activity-digest-evidence" data-testid="agent-activity-digest-evidence">
             <span className="agent-activity-text-separator" aria-hidden="true"> · </span>
             <EvidenceChipList items={activity.evidencePreview} searchQuery={searchQuery} />
+            {activity.evidenceAction && onUseAsDraft ? (
+              <button
+                type="button"
+                className="agent-activity-digest-action"
+                onClick={() => onUseAsDraft(activity.evidenceAction?.draft ?? "", activity.evidenceAction?.source)}
+              >
+                {activity.evidenceAction.label}
+              </button>
+            ) : null}
           </span>
         ) : null}
       </div>

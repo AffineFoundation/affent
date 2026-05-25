@@ -58,6 +58,17 @@ describe("buildTurnActivity", () => {
       { label: "Read", value: "docs/webui-product-design.md" },
       { label: "MCP", value: "webui trace" },
     ]);
+    expect(activity?.evidenceAction).toEqual({
+      label: "Use evidence",
+      draft: [
+        "Use this evidence in the next step:",
+        "- Listed docs",
+        "- Read docs/webui-product-design.md",
+        "- MCP webui trace",
+        "- Read docs/focused-tasks.md",
+      ].join("\n"),
+      source: "evidence",
+    });
     expect(activity?.brief.rows).toEqual([
       { id: "goal", label: "Goal", value: "delegate docs inspection" },
       {

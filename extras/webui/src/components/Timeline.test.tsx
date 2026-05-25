@@ -777,6 +777,28 @@ describe("Timeline", () => {
     );
   });
 
+  it("turns folded evidence preview into an editable follow-up without opening activity", async () => {
+    const user = userEvent.setup();
+    const onUseAsDraft = vi.fn();
+    renderTimeline(completedSubagentTree, undefined, undefined, onUseAsDraft);
+
+    expect(screen.getByRole("button", { name: /What Affent did/ })).toHaveAttribute("aria-expanded", "false");
+    await user.click(within(screen.getByTestId("agent-activity-digest-evidence")).getByRole("button", { name: "Use evidence" }));
+
+    expect(screen.getByRole("button", { name: /What Affent did/ })).toHaveAttribute("aria-expanded", "false");
+    expect(screen.queryByTestId("agent-activity-brief")).toBeNull();
+    expect(onUseAsDraft).toHaveBeenCalledWith(
+      [
+        "Use this evidence in the next step:",
+        "- Listed docs",
+        "- Read docs/webui-product-design.md",
+        "- MCP webui trace",
+        "- Read docs/focused-tasks.md",
+      ].join("\n"),
+      "evidence",
+    );
+  });
+
   it("turns a specific activity node next step into an editable message", async () => {
     const user = userEvent.setup();
     const onUseAsDraft = vi.fn();

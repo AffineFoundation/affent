@@ -624,6 +624,19 @@ test("workflow timeline renders with inline drill-down", async ({ page }, testIn
   await expect(page.getByTestId("agent-activity-digest").first()).toContainText("Result");
   await expect(page.getByTestId("agent-activity-digest").first()).toContainText("2 delegated tasks");
   await expect(page.getByTestId("agent-activity-digest").first()).toContainText("4 evidence");
+  await page.getByTestId("agent-activity-digest-evidence").first().getByRole("button", { name: "Use evidence" }).click();
+  await expect(page.getByTestId("composer-context")).toContainText("Using evidence");
+  await expect(page.getByPlaceholder("Message Affent...")).toHaveValue(
+    [
+      "Use this evidence in the next step:",
+      "- Listed docs",
+      "- Read docs/webui-product-design.md",
+      "- MCP webui trace",
+      "- Read docs/focused-tasks.md",
+    ].join("\n"),
+  );
+  await page.getByRole("button", { name: "Remove" }).click();
+  await expect(page.getByPlaceholder("Message Affent...")).toHaveValue("");
   await page.getByTestId("agent-activity").first().getByRole("button", { name: /What Affent did/ }).click();
   await expect(page.getByTestId("agent-activity").first()).toContainText("Read");
   await expect(page.getByTestId("agent-activity").first()).toContainText("docs/webui-product-design.md");
