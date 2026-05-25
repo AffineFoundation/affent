@@ -29,16 +29,16 @@ describe("buildRuntimeCapabilityView", () => {
     });
 
     expect(view).toMatchObject({
-      headline: "Ready for web research",
-      detail: "This chat can search the web or open pages while answering.",
+      headline: "Web research available",
+      detail: "Good for current sources, pages, prices, and news.",
       tone: "ready",
       research: "ready",
     });
     expect(view?.chips).toEqual([
-      { group: "Research", label: "search + browser", tone: "ready" },
-      { group: "Project tools", label: "files + shell", tone: "ready" },
-      { group: "Workers", label: "subagents depth 2 + 4 focused tasks", tone: "ready" },
-      { group: "Memory", label: "enabled", tone: "ready" },
+      { group: "Research", label: "Search and browser", tone: "ready" },
+      { group: "Project", label: "Files and commands", tone: "ready" },
+      { group: "Workers", label: "Can delegate 2 levels + 4 task types", tone: "ready" },
+      { group: "Recall", label: "Memory", tone: "ready" },
     ]);
   });
 
@@ -60,14 +60,14 @@ describe("buildRuntimeCapabilityView", () => {
       focused_task_profiles: ["recall", "explore"],
     });
 
-    expect(view?.headline).toBe("Local project work");
+    expect(view?.headline).toBe("No live web access");
     expect(view?.research).toBe("off");
-    expect(view?.detail).toContain("cannot gather current web information");
+    expect(view?.detail).toContain("current outside information may be incomplete");
     expect(view?.chips).toEqual(expect.arrayContaining([
-      { group: "Research", label: "off", tone: "warning" },
-      { group: "Project tools", label: "unavailable", tone: "muted" },
-      { group: "Workers", label: "subagents depth 2 + 2 focused tasks", tone: "ready" },
-      { group: "Memory", label: "enabled", tone: "ready" },
+      { group: "Research", label: "No live web", tone: "warning" },
+      { group: "Project", label: "No local tools", tone: "muted" },
+      { group: "Workers", label: "Can delegate 2 levels + 2 task types", tone: "ready" },
+      { group: "Recall", label: "Memory", tone: "ready" },
     ]));
   });
 
@@ -89,16 +89,16 @@ describe("buildRuntimeCapabilityView", () => {
     });
 
     expect(view).toMatchObject({
-      headline: "Research tools limited",
-      detail: "Some web access exists, but live search or page browsing is incomplete.",
+      headline: "Limited research access",
+      detail: "Some external fetching is available, but search or browsing may be missing.",
       tone: "warning",
       research: "limited",
     });
     expect(view?.chips).toEqual([
-      { group: "Research", label: "limited", tone: "warning" },
-      { group: "Project tools", label: "files + shell", tone: "ready" },
-      { group: "Workers", label: "single agent", tone: "muted" },
-      { group: "Memory", label: "off", tone: "muted" },
+      { group: "Research", label: "Fetch/screenshots only", tone: "warning" },
+      { group: "Project", label: "Files and commands", tone: "ready" },
+      { group: "Workers", label: "Single agent", tone: "muted" },
+      { group: "Recall", label: "Off", tone: "muted" },
     ]);
   });
 });

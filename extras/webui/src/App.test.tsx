@@ -226,13 +226,13 @@ describe("App", () => {
     render(<App />);
 
     const runtime = await screen.findByTestId("runtime-capabilities");
-    expect(runtime).toHaveTextContent("Abilities");
-    expect(runtime).toHaveTextContent("Local project work");
-    expect(runtime).toHaveTextContent("cannot gather current web information");
-    expect(runtime).toHaveTextContent("Research off");
-    expect(runtime).toHaveTextContent("Project tools unavailable");
-    expect(runtime).toHaveTextContent("Workers subagents depth 2 + 4 focused tasks");
-    expect(runtime).toHaveTextContent("Memory enabled");
+    expect(runtime).toHaveTextContent("Setup");
+    expect(runtime).toHaveTextContent("No live web access");
+    expect(runtime).toHaveTextContent("current outside information may be incomplete");
+    expect(runtime).toHaveTextContent("Research No live web");
+    expect(runtime).toHaveTextContent("Project No local tools");
+    expect(runtime).toHaveTextContent("Workers Can delegate 2 levels + 4 task types");
+    expect(runtime).toHaveTextContent("Recall Memory");
     const input = screen.getByPlaceholderText("Message Affent...");
     expect(input).toBeVisible();
     await userEvent.type(input, "Analyze Affine recent market trends and Twitter reaction");

@@ -623,7 +623,7 @@ function RuntimeStatusBar({ view }: { view: RuntimeCapabilityView }) {
       aria-label={`${view.headline}. ${view.detail}`}
     >
       <summary>
-        <span className="runtime-status-kicker">Abilities</span>
+        <span className="runtime-status-kicker">Setup</span>
         <span className="runtime-capability-title">{view.headline}</span>
         <span className="runtime-capability-detail">
           <span className="runtime-capability-separator" aria-hidden="true">·</span>
