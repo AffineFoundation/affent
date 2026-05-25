@@ -41,17 +41,16 @@ describe("Timeline", () => {
     const user = userEvent.setup();
     renderTimeline(completedTurn);
     expect(screen.getByTestId("msg-assistant")).toHaveTextContent("There are two files.");
-    expect(screen.getByTestId("agent-activity")).toHaveTextContent("Work activity");
+    expect(screen.getByTestId("agent-activity")).toHaveTextContent("What Affent did");
     expect(screen.getByTestId("agent-activity-digest")).toHaveTextContent("Result");
     expect(screen.getByTestId("agent-activity-digest")).toHaveTextContent("README.md main.go");
     expect(screen.getByTestId("agent-activity").textContent?.match(/README\.md main\.go/g)).toHaveLength(1);
     expect(screen.queryByTestId("agent-activity-brief")).toBeNull();
-    expect(screen.getByRole("button", { name: /Work activity/ })).toHaveAttribute("aria-expanded", "false");
-    await user.click(screen.getByRole("button", { name: /Work activity/ }));
+    expect(screen.getByRole("button", { name: /What Affent did/ })).toHaveAttribute("aria-expanded", "false");
+    await user.click(screen.getByRole("button", { name: /What Affent did/ }));
     expect(screen.getByTestId("agent-activity-brief")).toHaveTextContent("Goal");
     expect(screen.getByTestId("agent-activity-brief")).toHaveTextContent("list the files");
-    expect(screen.getByTestId("agent-activity-brief")).toHaveTextContent("Result");
-    expect(screen.getByTestId("agent-activity-brief")).toHaveTextContent("README.md main.go");
+    expect(screen.getByTestId("agent-activity-brief")).not.toHaveTextContent("README.md main.go");
     expect(screen.getByTestId("agent-activity")).not.toHaveTextContent("Working plan");
     expect(screen.getByTestId("agent-activity")).toHaveTextContent("List current directory");
     expect(screen.queryByTestId("execution-tree")).toBeNull();
@@ -268,10 +267,10 @@ describe("Timeline", () => {
     expect(screen.getByTestId("conversation-map")).toHaveAttribute("data-density", "compact");
     expect(screen.queryByTestId("turn-nav-glance")).toBeNull();
     expect(screen.queryByRole("button", { name: "Copy answer" })).toBeNull();
-    expect(screen.getByTestId("agent-activity")).toHaveTextContent("Work activity");
+    expect(screen.getByTestId("agent-activity")).toHaveTextContent("What Affent is doing");
     expect(screen.getByTestId("agent-activity-digest")).toHaveTextContent("Now");
     expect(screen.getByTestId("agent-activity-digest")).toHaveTextContent("Inspect docs for WebUI trace requirements");
-    expect(screen.getByTestId("agent-activity-brief")).toHaveTextContent("Current focus");
+    expect(screen.getByTestId("agent-activity-brief")).not.toHaveTextContent("Current focus");
     expect(screen.getByTestId("agent-activity-brief")).toHaveTextContent("You can still add a note");
     expect(screen.getByTestId("agent-activity-tree")).toHaveTextContent("Delegate");
     expect(screen.getByTestId("agent-activity-tree")).toHaveTextContent("Inspect docs for WebUI trace requirements");
@@ -296,7 +295,7 @@ describe("Timeline", () => {
     const user = userEvent.setup();
     renderTimeline(completedSubagentTree);
 
-    await user.click(screen.getByRole("button", { name: /Work activity/ }));
+    await user.click(screen.getByRole("button", { name: /What Affent did/ }));
 
     const rows = screen.getAllByTestId("agent-activity-node-row");
     expect(rows[0].tagName).toBe("DIV");
@@ -620,7 +619,7 @@ describe("Timeline", () => {
     expect(activity).toHaveAttribute("data-open", "false");
     expect(activity).toHaveTextContent("Continued");
     expect(activity).not.toHaveTextContent("Issues");
-    expect(screen.getByRole("button", { name: /Work activity/ })).toHaveAttribute("aria-expanded", "false");
+    expect(screen.getByRole("button", { name: /Earlier work/ })).toHaveAttribute("aria-expanded", "false");
     expect(screen.queryByTestId("agent-activity-brief")).toBeNull();
     expect(screen.queryByTestId("fallback-answer")).toBeNull();
     expect(screen.queryByTestId("continuation-card")).toBeNull();
@@ -666,7 +665,7 @@ describe("Timeline", () => {
     renderTimeline(events);
 
     expect(screen.getByTestId("agent-activity")).toHaveAttribute("data-open", "true");
-    expect(screen.getByRole("button", { name: /Work activity/ })).toHaveAttribute("aria-expanded", "true");
+    expect(screen.getByRole("button", { name: /Needs attention/ })).toHaveAttribute("aria-expanded", "true");
     expect(screen.getByTestId("agent-activity-brief")).toHaveTextContent("Next");
   });
 
@@ -674,10 +673,10 @@ describe("Timeline", () => {
     const user = userEvent.setup();
     renderTimeline(completedSubagentTree);
 
-    expect(screen.getByRole("button", { name: /Work activity/ })).toHaveAttribute("aria-expanded", "false");
+    expect(screen.getByRole("button", { name: /What Affent did/ })).toHaveAttribute("aria-expanded", "false");
     expect(screen.getByTestId("agent-activity-digest-evidence")).toHaveTextContent("docs/webui-product-design.md");
     expect(screen.getByTestId("agent-activity-digest-evidence")).toHaveTextContent("webui trace");
-    await user.click(screen.getByRole("button", { name: /Work activity/ }));
+    await user.click(screen.getByRole("button", { name: /What Affent did/ }));
     expect(screen.queryByTestId("agent-activity-digest-evidence")).toBeNull();
     const activityTree = screen.getByTestId("agent-activity-tree");
     const activityBrief = screen.getByTestId("agent-activity-brief");
@@ -725,7 +724,7 @@ describe("Timeline", () => {
     const onUseAsDraft = vi.fn();
     renderTimeline(completedSubagentTree, undefined, undefined, onUseAsDraft);
 
-    await user.click(screen.getByRole("button", { name: /Work activity/ }));
+    await user.click(screen.getByRole("button", { name: /What Affent did/ }));
     await user.click(within(screen.getByTestId("agent-activity-brief")).getByRole("button", { name: "Use next step" }));
 
     expect(onUseAsDraft).toHaveBeenCalledWith(

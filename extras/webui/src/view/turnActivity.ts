@@ -146,23 +146,29 @@ export function buildTurnActivity(turn: TurnState, opts: TurnActivityOptions = {
   const evidenceCount = countEvidence(nodes);
 
   return {
-    title: "Work activity",
+    title: activityTitle(turn, opts),
     statusLabel: opts.continuedAfterLimit ? "Continued" : activityStatusLabel(turn),
     live: turn.status === "running",
     tone: opts.continuedAfterLimit ? "muted" : activityTone(turn),
     digest,
     evidenceCount,
     evidencePreview: collectBriefEvidence(nodes).slice(0, 3),
-    brief: buildBrief(turn, nodes, digest, opts, constraintDeviations),
+    brief: buildBrief(turn, nodes, opts, constraintDeviations),
     items,
     nodes,
   };
 }
 
+function activityTitle(turn: TurnState, opts: TurnActivityOptions): string {
+  if (opts.continuedAfterLimit) return "Earlier work";
+  if (turn.status === "running") return "What Affent is doing";
+  if (turn.status === "error" || turn.error || turn.status === "max_turns") return "Needs attention";
+  return "What Affent did";
+}
+
 function buildBrief(
   turn: TurnState,
   nodes: readonly TurnActivityNode[],
-  digest: TurnActivityDigest,
   opts: TurnActivityOptions,
   constraintDeviations = detectConstraintDeviations(turn),
 ): TurnActivityBrief {
@@ -172,7 +178,6 @@ function buildBrief(
   for (const deviation of constraintDeviations) {
     rows.push({ id: `constraint:${deviation.id}`, label: "Constraint", value: deviation.detail, tone: "warning" });
   }
-  rows.push({ id: "focus", label: focusLabel(digest), value: digest.summary, tone: digest.tone });
 
   const evidence = collectBriefEvidence(nodes);
   if (evidence.length > 0) rows.push({ id: "evidence", label: "Evidence", evidence });
@@ -184,12 +189,6 @@ function buildBrief(
   if (next) rows.push({ id: "next", label: "Next", value: next.value, tone: nextTone(turn), action: next.action });
 
   return { rows };
-}
-
-function focusLabel(digest: TurnActivityDigest): string {
-  if (digest.label === "Now") return "Current focus";
-  if (digest.tone === "error") return "Issue";
-  return "Result";
 }
 
 function collectBriefEvidence(nodes: readonly TurnActivityNode[]): TurnActivityEvidence[] {

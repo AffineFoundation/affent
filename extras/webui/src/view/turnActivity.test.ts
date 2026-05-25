@@ -10,7 +10,7 @@ describe("buildTurnActivity", () => {
     const activity = buildTurnActivity(turn);
 
     expect(activity).toMatchObject({
-      title: "Work activity",
+      title: "What Affent did",
       statusLabel: "Done",
       live: false,
       tone: "success",
@@ -23,7 +23,6 @@ describe("buildTurnActivity", () => {
     });
     expect(activity?.brief.rows).toEqual([
       { id: "goal", label: "Goal", value: "list the files" },
-      { id: "focus", label: "Result", value: "README.md main.go", tone: "success" },
     ]);
     expect(activity?.items).toEqual([]);
     expect(activity?.nodes).toEqual([
@@ -63,12 +62,6 @@ describe("buildTurnActivity", () => {
     ]);
     expect(activity?.brief.rows).toEqual([
       { id: "goal", label: "Goal", value: "delegate docs inspection" },
-      {
-        id: "focus",
-        label: "Result",
-        value: "WebUI must render trace details as expandable runtime structure.",
-        tone: "success",
-      },
       {
         id: "evidence",
         label: "Evidence",
@@ -129,12 +122,6 @@ describe("buildTurnActivity", () => {
     expect(activity?.brief.rows).toEqual([
       { id: "goal", label: "Goal", value: "use a subagent to inspect docs" },
       {
-        id: "focus",
-        label: "Current focus",
-        value: "Inspect docs for WebUI trace requirements",
-        tone: "running",
-      },
-      {
         id: "next",
         label: "Next",
         value: "You can still add a note while this work is running.",
@@ -166,12 +153,7 @@ describe("buildTurnActivity", () => {
       summary: "Provider returned an error: The model provider returned HTTP 503.",
       tone: "error",
     });
-    expect(activity?.brief.rows).toContainEqual({
-      id: "focus",
-      label: "Issue",
-      value: "Provider returned an error: The model provider returned HTTP 503.",
-      tone: "error",
-    });
+    expect(activity?.brief.rows).not.toContainEqual(expect.objectContaining({ id: "focus" }));
   });
 
   it("does not turn a completed answer into an issue digest just because one tool failed", () => {
@@ -437,12 +419,7 @@ describe("buildTurnActivity", () => {
       summary: "Answered after working around 1 issue.",
       tone: "warning",
     });
-    expect(activity?.brief.rows).toContainEqual({
-      id: "focus",
-      label: "Result",
-      value: "Answered after working around 1 issue.",
-      tone: "warning",
-    });
+    expect(activity?.brief.rows).not.toContainEqual(expect.objectContaining({ id: "focus" }));
     expect(activity?.brief.rows).toContainEqual({
       id: "handled",
       label: "Tool issues",
