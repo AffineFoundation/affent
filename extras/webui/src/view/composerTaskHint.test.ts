@@ -19,6 +19,19 @@ describe("buildComposerTaskHint", () => {
     });
   });
 
+  it("warns for natural external information-gathering prompts", () => {
+    expect(buildComposerTaskHint("Affine 是 Bittensor 的一个子网，请收集信息向我介绍", runtime("limited"))).toEqual({
+      label: "Current web access limited",
+      detail: "This may need current sources; search or page browsing is only partially available.",
+      tone: "warning",
+    });
+    expect(buildComposerTaskHint("Gather information from official sources and tweets about Affine", runtime("off"))).toEqual({
+      label: "Current web info unavailable",
+      detail: "This request needs live sources; results may be incomplete until search or page access is enabled.",
+      tone: "warning",
+    });
+  });
+
   it("stays quiet for local project work and research-ready runtimes", () => {
     expect(buildComposerTaskHint("recap the project architecture", runtime("off"))).toBeUndefined();
     expect(buildComposerTaskHint("check latest market news", runtime("ready"))).toBeUndefined();

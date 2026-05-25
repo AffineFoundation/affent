@@ -134,6 +134,25 @@ describe("Composer", () => {
     expect(screen.getByTestId("composer-task-hint")).toHaveTextContent("results may be incomplete");
   });
 
+  it("warns before sending an external information-gathering task with limited web access", async () => {
+    const user = userEvent.setup();
+    render(
+      <Composer
+        disabled={false}
+        busy={false}
+        runtimeCapabilities={runtime("limited")}
+        onSubmit={vi.fn()}
+        onCancel={vi.fn()}
+      />,
+    );
+
+    await user.type(screen.getByPlaceholderText("Message Affent..."), "Affine 是 Bittensor 的一个子网，请收集信息向我介绍");
+
+    expect(screen.getByTestId("composer-task-hint")).toHaveAttribute("data-tone", "warning");
+    expect(screen.getByTestId("composer-task-hint")).toHaveTextContent("Current web access limited");
+    expect(screen.getByTestId("composer-task-hint")).toHaveTextContent("search or page browsing is only partially available");
+  });
+
   it("loads a suggested note while a turn is running", () => {
     render(
       <Composer
