@@ -1110,6 +1110,19 @@ describe("Timeline", () => {
     expect(screen.getByRole("button", { name: "Copied" })).toBeInTheDocument();
   });
 
+  it("copies runtime diagnostics with the shared fallback path", async () => {
+    const user = userEvent.setup();
+    const execCommand = vi.fn().mockReturnValue(true);
+    Object.defineProperty(navigator, "clipboard", { configurable: true, value: undefined });
+    Object.defineProperty(document, "execCommand", { configurable: true, value: execCommand });
+    renderTimeline(turnError);
+
+    await user.click(screen.getByRole("button", { name: "Copy diagnostic" }));
+
+    expect(execCommand).toHaveBeenCalledWith("copy");
+    expect(screen.getByRole("button", { name: "Copied" })).toBeInTheDocument();
+  });
+
   it("offers a continuation draft when a turn reaches the action limit", async () => {
     const user = userEvent.setup();
     const onUseAsDraft = vi.fn();

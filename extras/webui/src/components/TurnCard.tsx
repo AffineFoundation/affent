@@ -1061,23 +1061,11 @@ function answerDraft(text: string): string {
 }
 
 function ErrorBlock({ error, onUseAsDraft }: { error: TurnError; onUseAsDraft?: UseAsDraft }) {
-  const [copied, setCopied] = useState(false);
   const summary = summarizeUserError(error.code, error.message);
   const guidance = error.recoverable
     ? "You can continue from the message box below; the trace stays attached to this chat."
     : "Keep this chat for trace review, then start a new chat if the runtime cannot continue.";
-
-  async function copyDiagnostic() {
-    const diagnostic = [
-      "Affent request error",
-      `code: ${error.code}`,
-      `recoverable: ${error.recoverable ? "yes" : "no"}`,
-      `message: ${error.message}`,
-    ].join("\n");
-    if (!navigator.clipboard?.writeText) return;
-    await navigator.clipboard.writeText(diagnostic);
-    setCopied(true);
-  }
+  const diagnostic = errorDiagnosticText(error);
 
   return (
     <div className="error-card" role="alert" data-testid="error-card">
@@ -1100,12 +1088,19 @@ function ErrorBlock({ error, onUseAsDraft }: { error: TurnError; onUseAsDraft?: 
             Continue with this
           </button>
         ) : null}
-        <button type="button" className="node-action" onClick={() => void copyDiagnostic()}>
-          {copied ? "Copied" : "Copy diagnostic"}
-        </button>
+        <CopyButton label="Copy diagnostic" value={diagnostic} />
       </div>
     </div>
   );
+}
+
+function errorDiagnosticText(error: TurnError): string {
+  return [
+    "Affent request error",
+    `code: ${error.code}`,
+    `recoverable: ${error.recoverable ? "yes" : "no"}`,
+    `message: ${error.message}`,
+  ].join("\n");
 }
 
 function humanTurnStatus(status: TurnState["status"], reason?: string, opts: { continuedAfterLimit?: boolean } = {}): string {
