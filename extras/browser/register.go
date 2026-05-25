@@ -15,6 +15,7 @@ type Options struct {
 //   - browser_back
 //   - browser_wait
 //   - browser_snapshot
+//   - browser_find
 //   - browser_click
 //   - browser_type
 //   - browser_scroll
@@ -29,6 +30,7 @@ func RegisterAll(reg *agent.Registry, s *Session, opts Options) {
 	reg.Add(BackTool(s))
 	reg.Add(WaitTool(s))
 	reg.Add(SnapshotTool(s))
+	reg.Add(FindTool(s))
 	reg.Add(ClickTool(s))
 	reg.Add(TypeTool(s))
 	reg.Add(ScrollTool(s))

@@ -205,7 +205,7 @@ func TestSubagentPostPolicyBlocksParentBrowserAfterSuccessfulReport(t *testing.T
 	for _, name := range policy.BlockedTools {
 		blocked[name] = true
 	}
-	for _, name := range []string{"browser_navigate", "browser_snapshot", "browser_wait", "browser_click", "browser_scroll"} {
+	for _, name := range []string{"browser_navigate", "browser_snapshot", "browser_find", "browser_wait", "browser_click", "browser_scroll"} {
 		if !blocked[name] {
 			t.Fatalf("successful subagent report should block parent-side %s repeats; blocked=%v", name, policy.BlockedTools)
 		}
@@ -560,7 +560,7 @@ func TestSubagentUserPromptIncludesToolBudget(t *testing.T) {
 
 func TestSubagentSystemPromptIncludesWebExtractionGuidance(t *testing.T) {
 	defaultPrompt := subagentSystemPrompt("explore")
-	for _, forbidden := range []string{"browser_navigate", "browser_snapshot", "Rendered web extraction:"} {
+	for _, forbidden := range []string{"browser_navigate", "browser_snapshot", "browser_find", "Rendered web extraction:"} {
 		if strings.Contains(defaultPrompt, forbidden) {
 			t.Fatalf("default subagent prompt should not mention unavailable browser tool %q:\n%s", forbidden, defaultPrompt)
 		}
@@ -574,6 +574,7 @@ func TestSubagentSystemPromptIncludesWebExtractionGuidance(t *testing.T) {
 		"Use browser tools instead of shell/curl/python scraping",
 		"Call browser_navigate first",
 		"answer directly from the returned snapshot",
+		"Use browser_find",
 		"Do not click through tabs",
 		"External research:",
 	} {

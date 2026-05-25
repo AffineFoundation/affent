@@ -208,6 +208,7 @@ func SubagentPostToolPolicy() *PostToolPolicy {
 			"browser_back",
 			"browser_wait",
 			"browser_snapshot",
+			"browser_find",
 			"browser_click",
 			"browser_type",
 			"browser_scroll",
@@ -888,7 +889,7 @@ func successfulSubagentResultSummaries(toolCalls []subagentToolCall) []string {
 			continue
 		}
 		switch call.Tool {
-		case "read_file", "list_files", "shell", "browser_snapshot", "browser_navigate":
+		case "read_file", "list_files", "shell", "browser_snapshot", "browser_find", "browser_navigate":
 			item := call.Tool
 			if path, _ := call.Args["path"].(string); path != "" {
 				item += " " + path
@@ -1038,7 +1039,7 @@ Recommended next step:
 
 Rendered web extraction:
 - Use browser tools instead of shell/curl/python scraping.
-- Call browser_navigate first (use wait_until=networkidle for SPAs), then answer directly from the returned snapshot when it contains the requested facts. Call browser_wait/browser_snapshot at most once or twice when specific requested text is missing. Do not click through tabs, paginate, or broaden into a site-wide audit unless the task explicitly asks for that.`
+- Call browser_navigate first (use wait_until=networkidle for SPAs), then answer directly from the returned snapshot when it contains the requested facts. Use browser_find for targeted words or labels before repeated scrolling. Call browser_wait/browser_snapshot at most once or twice when specific requested text is missing. Do not click through tabs, paginate, or broaden into a site-wide audit unless the task explicitly asks for that.`
 	}
 	base = WithRegistrySystemGuidance(base, reg)
 	return base

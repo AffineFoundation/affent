@@ -88,9 +88,9 @@ func TestWithMemorySystemGuidance_AppendsOnce(t *testing.T) {
 
 func TestWithExternalResearchSystemGuidance_AppendsOnce(t *testing.T) {
 	base := "be helpful"
-	surface := externalResearchToolSurface{WebSearch: true, WebFetch: true, Browser: true}
+	surface := externalResearchToolSurface{WebSearch: true, WebFetch: true, Browser: true, BrowserFind: true}
 	once := WithExternalResearchSystemGuidance(base, surface)
-	for _, want := range []string{"External research:", "web_search", "authoritative", "Do not open every search result", "weak sentiment", "Source hint", "llms.txt", "Direct-reader warning", "browser_navigate", "dynamic dashboards", "bot/challenge", "social posts", "dates/freshness", "Embedded data preview", "page-source evidence", "If web_fetch fails", "Do not keep retrying the same failing URL", "If web_search returns no results", "distinctive entities", "stale_ref", "fresh visible ref", "Preserve user-provided disambiguators", "network/subnet id", "API/text/export endpoints"} {
+	for _, want := range []string{"External research:", "web_search", "authoritative", "Do not open every search result", "weak sentiment", "Source hint", "llms.txt", "Direct-reader warning", "browser_navigate", "browser_find", "repeated scrolling", "dynamic dashboards", "bot/challenge", "social posts", "dates/freshness", "Embedded data preview", "page-source evidence", "If web_fetch fails", "Do not keep retrying the same failing URL", "If web_search returns no results", "distinctive entities", "stale_ref", "fresh visible ref", "Preserve user-provided disambiguators", "network/subnet id", "API/text/export endpoints"} {
 		if !strings.Contains(once, want) {
 			t.Fatalf("external research guidance missing %q:\n%s", want, once)
 		}
@@ -285,9 +285,15 @@ func TestExternalResearchSurfaceForRegistry(t *testing.T) {
 			wantOK: true,
 		},
 		{
+			name:   "browser find",
+			tools:  []string{"browser_find"},
+			want:   externalResearchToolSurface{Browser: true, BrowserFind: true},
+			wantOK: true,
+		},
+		{
 			name:   "all",
-			tools:  []string{"web_search", "web_fetch", "browser_navigate", "browser_snapshot"},
-			want:   externalResearchToolSurface{WebSearch: true, WebFetch: true, Browser: true},
+			tools:  []string{"web_search", "web_fetch", "browser_navigate", "browser_snapshot", "browser_find"},
+			want:   externalResearchToolSurface{WebSearch: true, WebFetch: true, Browser: true, BrowserFind: true},
 			wantOK: true,
 		},
 	}
@@ -952,6 +958,7 @@ func TestLoopToolResultContextCapsByTool(t *testing.T) {
 		"web_fetch":           6 * 1024,
 		"browser_navigate":    7 * 1024,
 		"browser_snapshot":    7 * 1024,
+		"browser_find":        3 * 1024,
 		"browser_scroll":      7 * 1024,
 		"browser_wait":        7 * 1024,
 		"browser_click":       7 * 1024,

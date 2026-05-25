@@ -351,9 +351,10 @@ const externalResearchSystemGuidanceMarker = "External research:"
 const runtimeContextSystemGuidanceMarker = "Runtime context:"
 
 type externalResearchToolSurface struct {
-	WebSearch bool
-	WebFetch  bool
-	Browser   bool
+	WebSearch   bool
+	WebFetch    bool
+	Browser     bool
+	BrowserFind bool
 }
 
 func externalResearchSystemGuidance(surface externalResearchToolSurface) string {
@@ -379,6 +380,9 @@ func externalResearchSystemGuidance(surface externalResearchToolSurface) string 
 	}
 	if surface.Browser && !surface.WebSearch {
 		b.WriteString("\n- When discovery is needed but no dedicated search tool is available, use browser_navigate on public search result pages or site search pages, then follow result links deliberately. Prefer simpler result pages and alternate engines if one returns a bot challenge; do not treat a challenge page as evidence.")
+	}
+	if surface.BrowserFind {
+		b.WriteString("\n- Use browser_find on the current page for targeted labels or metrics before repeated scrolling; it returns compact snippets and refs for visible matches.")
 	}
 	if surface.WebFetch {
 		b.WriteString("\n- If web_fetch returns Embedded data preview, treat matching fields as page-source evidence for the requested entity or route; ignore unrelated shell metadata, and prefer a canonical API/text/export source when the embedded data is insufficient or ambiguous.")
@@ -545,9 +549,10 @@ func WithRegistrySystemGuidance(prompt string, reg *Registry) string {
 
 func externalResearchSurfaceForRegistry(reg *Registry) (externalResearchToolSurface, bool) {
 	surface := externalResearchToolSurface{
-		WebSearch: hasRegisteredTool(reg, "web_search"),
-		WebFetch:  hasRegisteredTool(reg, "web_fetch"),
-		Browser:   hasRegisteredTool(reg, "browser_navigate") || hasRegisteredTool(reg, "browser_snapshot"),
+		WebSearch:   hasRegisteredTool(reg, "web_search"),
+		WebFetch:    hasRegisteredTool(reg, "web_fetch"),
+		Browser:     hasRegisteredTool(reg, "browser_navigate") || hasRegisteredTool(reg, "browser_snapshot") || hasRegisteredTool(reg, "browser_find"),
+		BrowserFind: hasRegisteredTool(reg, "browser_find"),
 	}
 	return surface, surface.WebSearch || surface.WebFetch || surface.Browser
 }
@@ -1517,6 +1522,7 @@ var defaultToolResultLimits = map[string]int{
 	"web_fetch":           6 * 1024,
 	"browser_navigate":    7 * 1024,
 	"browser_snapshot":    7 * 1024,
+	"browser_find":        3 * 1024,
 	"browser_scroll":      7 * 1024,
 	"browser_wait":        7 * 1024,
 	"browser_click":       7 * 1024,
