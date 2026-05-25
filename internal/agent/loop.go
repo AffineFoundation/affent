@@ -1511,11 +1511,20 @@ func (l *Loop) toolResultMaxBytesInContext() int {
 var defaultToolResultLimits = map[string]int{
 	"read_file":           12 * 1024,
 	"shell":               6 * 1024,
+	"web_fetch":           6 * 1024,
+	"browser_navigate":    7 * 1024,
+	"browser_snapshot":    7 * 1024,
+	"browser_scroll":      7 * 1024,
+	"browser_wait":        7 * 1024,
+	"browser_click":       7 * 1024,
+	"browser_type":        7 * 1024,
 	MemoryToolName:        4 * 1024,
 	SessionSearchToolName: 4 * 1024,
+	"web_search":          4 * 1024,
 	"list_files":          4 * 1024,
 	"write_file":          2 * 1024,
 	"edit_file":           2 * 1024,
+	"browser_screenshot":  2 * 1024,
 }
 
 func (l *Loop) toolResultMaxBytesInContextFor(toolName string) int {

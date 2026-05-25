@@ -269,6 +269,11 @@ current market, news, or trend answers, the model is instructed to treat that as
 an access date only when a source lacks its own timestamp, and not to invent
 source publication/update dates.
 
+Browser and web tool results also use smaller per-tool context budgets than
+generic tools. Full results remain available in trace events, but only the
+compact prefix is fed back into the next LLM call. This keeps repeated rendered
+page inspections from dominating context on small and medium models.
+
 - `Failure: kind=blocked`: the source refused direct fetch, commonly HTTP 401
   or 403, or returned a successful HTTP response that is only an anti-bot,
   cookie/JavaScript, search-challenge, or social-site error page.

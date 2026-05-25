@@ -152,6 +152,9 @@ func TestFormat_CompactsDashboardLikeSnapshot(t *testing.T) {
 	if textAt < 0 || affineAt > textAt {
 		t.Fatalf("critical table refs should appear before passive dashboard text:\n%s", out)
 	}
+	if affineAt > 7*1024 {
+		t.Fatalf("critical table ref should survive the browser tool context cap; offset=%d", affineAt)
+	}
 	if len(out) > 20*1024 {
 		t.Fatalf("dashboard-like snapshot should stay compact; len=%d", len(out))
 	}
