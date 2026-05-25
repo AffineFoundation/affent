@@ -204,11 +204,20 @@ func (r *Registry) dispatch(ctx context.Context, name string, args json.RawMessa
 }
 
 func toolDispatchErrorHelp(t *Tool, args json.RawMessage, err error, res string) string {
-	help := toolErrorHelp(t, args)
-	if help != "" || toolErrorAlreadyGuided(err, res) {
-		return help
+	if toolErrorIsInvalidArgs(err, res) {
+		return toolErrorHelp(t, args)
+	}
+	if toolErrorAlreadyGuided(err, res) {
+		return ""
 	}
 	return "\nNext: read the error, change the arguments or choose a different tool; do not repeat the same failing call unchanged."
+}
+
+func toolErrorIsInvalidArgs(err error, res string) bool {
+	if err != nil && strings.Contains(err.Error(), "Failure: kind=invalid_args") {
+		return true
+	}
+	return strings.Contains(res, "Failure: kind=invalid_args")
 }
 
 func toolErrorAlreadyGuided(err error, res string) bool {

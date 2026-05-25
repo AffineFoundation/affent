@@ -1190,6 +1190,53 @@ func TestRegistry_dispatch_isErrFromExecuteError(t *testing.T) {
 	}
 }
 
+func TestRegistryDispatchRuntimeErrorsDoNotAppendArgumentSchemaHelp(t *testing.T) {
+	reg := NewRegistry()
+	reg.Add(&Tool{
+		Name:   "web_fetch",
+		Schema: json.RawMessage(`{"type":"object","required":["url"],"properties":{"url":{"type":"string","minLength":1,"maxLength":4096}}}`),
+		Execute: func(context.Context, json.RawMessage) (string, error) {
+			return "", fmt.Errorf("http 404 404 Not Found\nFailure: kind=not_found, status=404\nNext: use available discovery results or the site's navigation to find the current canonical URL")
+		},
+	})
+
+	res, isErr := reg.dispatch(context.Background(), "web_fetch", json.RawMessage(`{"url":"https://raw.githubusercontent.com/opentensor-tech/subnet-template/main/README.md"}`))
+	if !isErr {
+		t.Fatalf("404 should surface as tool error: %q", res)
+	}
+	for _, forbidden := range []string{"Expected:", "Allowed:", "Received:", "fix the arguments"} {
+		if strings.Contains(res, forbidden) {
+			t.Fatalf("runtime 404 must not be misclassified as argument repair (%q present):\n%s", forbidden, res)
+		}
+	}
+	for _, want := range []string{"Failure: kind=not_found", "Next: use available discovery results"} {
+		if !strings.Contains(res, want) {
+			t.Fatalf("runtime guidance missing %q:\n%s", want, res)
+		}
+	}
+}
+
+func TestRegistryDispatchInvalidArgsStillAppendArgumentSchemaHelp(t *testing.T) {
+	reg := NewRegistry()
+	reg.Add(&Tool{
+		Name:   "browser_navigate",
+		Schema: json.RawMessage(`{"type":"object","required":["url"],"properties":{"url":{"type":"string","minLength":1,"maxLength":4096},"wait_until":{"type":"string","enum":["domcontentloaded","load","networkidle"],"default":"load"}}}`),
+		Execute: func(context.Context, json.RawMessage) (string, error) {
+			return "", fmt.Errorf("url is required\nFailure: kind=invalid_args\nNext: retry browser_navigate with a fully-qualified URL")
+		},
+	})
+
+	res, isErr := reg.dispatch(context.Background(), "browser_navigate", json.RawMessage(`{}`))
+	if !isErr {
+		t.Fatalf("invalid args should surface as tool error: %q", res)
+	}
+	for _, want := range []string{"Failure: kind=invalid_args", "Expected:", "required url", "Allowed:", "Received: {}", "fix the arguments"} {
+		if !strings.Contains(res, want) {
+			t.Fatalf("invalid-args guidance missing %q:\n%s", want, res)
+		}
+	}
+}
+
 // TestRegistry_dispatch_RecoversFromToolPanic pins that a panicking
 // tool does NOT crash the dispatch goroutine. Without recover, a
 // third-party tool with a latent nil-deref bug would tear down the
