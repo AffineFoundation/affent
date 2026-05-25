@@ -32,7 +32,7 @@ export function TurnNavigator({
           <span>Messages</span>
           {onOpenFind ? (
             <button type="button" className="turn-nav-find" aria-pressed={findActive} onClick={onOpenFind}>
-              Find
+              Search
             </button>
           ) : null}
         </span>

@@ -283,7 +283,7 @@ describe("App", () => {
     await user.click(screen.getByRole("button", { name: "Start" }));
 
     expect(await screen.findByTestId("pending-turn")).toHaveTextContent("summarize the repo");
-    expect(screen.getByTestId("chat-context-bar")).toHaveTextContent("summarize the repo");
+    expect(screen.getByTestId("chat-context-bar")).toHaveTextContent("repo");
     expect(screen.getByTestId("chat-context-bar")).toHaveTextContent("Sending");
     expect(screen.queryByTestId("workflow-status")).toBeNull();
     messageResponse.resolve(jsonResponse({ session_id: "new-1", turn_id: "t1" }));
@@ -352,7 +352,7 @@ describe("App", () => {
       "#pending-turn",
     );
     const context = screen.getByTestId("chat-context-bar");
-    expect(context).toHaveTextContent("explain main.go");
+    expect(context).toHaveTextContent("main.go");
     expect(context).toHaveTextContent("Sending");
     expect(context).toHaveTextContent("next update");
     expect(context).not.toHaveTextContent("Result ready");

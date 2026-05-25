@@ -22,7 +22,7 @@ describe("buildSessionOverview", () => {
     expect(overview.detail).toContain("create the chat");
   });
 
-  it("shows a submitted task while waiting for the first live event", () => {
+  it("shows a summarized submitted task while waiting for the first live event", () => {
     const session = reduceRawEvents([]);
     const overview = buildSessionOverview({
       session,
@@ -32,12 +32,28 @@ describe("buildSessionOverview", () => {
     });
 
     expect(overview).toMatchObject({
-      headline: "summarize the repository architecture",
+      headline: "repository architecture",
       stateLabel: "Sending",
       tone: "running",
       active: true,
     });
     expect(overview.detail).toContain("Creating a chat");
+  });
+
+  it("does not use a full feedback sentence as the pending chat title", () => {
+    const session = reduceRawEvents([]);
+    const overview = buildSessionOverview({
+      session,
+      workflow: deriveWorkflowStatus(session),
+      hasSelectedSession: false,
+      pendingTask: "会话的标题最好是经过总结的，而不是把第一句话的输入当做标题",
+    });
+
+    expect(overview).toMatchObject({
+      headline: "会话标题摘要",
+      stateLabel: "Sending",
+      tone: "running",
+    });
   });
 
   it("shows a submitted follow-up as the current context even when history exists", () => {
@@ -50,7 +66,7 @@ describe("buildSessionOverview", () => {
     });
 
     expect(overview).toMatchObject({
-      headline: "explain main.go",
+      headline: "main.go",
       stateLabel: "Sending",
       tone: "running",
       active: true,

@@ -9,10 +9,10 @@ import { TurnNavigator } from "./TurnNavigator";
 const filterModes: { mode: TimelineFilterMode; label: string }[] = [
   { mode: "all", label: "All" },
   { mode: "errors", label: "Issues" },
-  { mode: "tools", label: "Agent work" },
-  { mode: "messages", label: "Chat text" },
+  { mode: "tools", label: "Actions" },
+  { mode: "messages", label: "Messages" },
   { mode: "artifacts", label: "Files" },
-  { mode: "truncated", label: "Large output" },
+  { mode: "truncated", label: "Large outputs" },
   { mode: "repaired", label: "Auto-fixed" },
 ];
 
@@ -400,7 +400,7 @@ function TimelineFindPanel({
       onToggle={(event) => onOpenChange(event.currentTarget.open)}
     >
       <summary>
-        <span>{searchText ? `Search "${searchText}"` : "Find in chat"}</span>
+        <span>{searchText ? `Search "${searchText}"` : "Search in chat"}</span>
         {open || filtered ? (
           <span className="timeline-match-count" data-testid="timeline-match-count">
             {matchingTurns}/{turnCount} messages
@@ -410,7 +410,7 @@ function TimelineFindPanel({
       {open ? (
         <div className="timeline-toolbox">
           <label className="timeline-search">
-            <span>Find messages, sources, or output</span>
+            <span>Search messages, sources, or output</span>
             <input
               value={searchQuery}
               onChange={(event) => onSearchChange(event.target.value)}
@@ -424,7 +424,7 @@ function TimelineFindPanel({
             open={filterOpen}
             onToggle={(event) => onFilterOpenChange(event.currentTarget.open)}
           >
-            <summary>Narrow results</summary>
+            <summary>Filters</summary>
             {filterOpen ? (
               <div className="timeline-filter" role="group" aria-label="Conversation filter">
                 {filterModes.map(({ mode, label }) => (

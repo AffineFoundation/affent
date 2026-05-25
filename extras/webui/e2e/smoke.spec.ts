@@ -56,7 +56,7 @@ const streamingAnswer = [
 async function openFindInChat(page: Page) {
   const toolbar = page.getByTestId("timeline-toolbar");
   if ((await toolbar.count()) === 0) {
-    await page.getByTestId("turn-navigator").getByRole("button", { name: "Find" }).click();
+    await page.getByTestId("turn-navigator").getByRole("button", { name: "Search" }).click();
   }
   await expect(toolbar).toBeVisible();
   if ((await toolbar.getAttribute("open")) === null) {
@@ -461,8 +461,8 @@ test("running work reads like an Affent chat update before drill-down", async ({
   const runningBox = await page.getByTestId("running-answer").boundingBox();
   expect(runningBox?.y ?? Number.POSITIVE_INFINITY).toBeLessThan((scrollBox?.y ?? 0) + 220);
   await expect(page.getByTestId("timeline-toolbar")).toHaveCount(0);
-  await expect(page.getByTestId("turn-navigator").getByRole("button", { name: "Find" })).toHaveAttribute("aria-pressed", "false");
-  await expect(page.getByText("Narrow results")).not.toBeVisible();
+  await expect(page.getByTestId("turn-navigator").getByRole("button", { name: "Search" })).toHaveAttribute("aria-pressed", "false");
+  await expect(page.getByText("Filters")).not.toBeVisible();
   await expect(page.getByTestId("timeline-match-count")).toHaveCount(0);
   await expect(page.getByTestId("session-strip")).toHaveCount(0);
   await expect(page.getByRole("button", { name: "Working" })).toBeDisabled();
@@ -606,7 +606,7 @@ test("workflow timeline renders with inline drill-down", async ({ page }, testIn
     "true",
   );
   await expect(page.getByTestId("timeline-toolbar")).toHaveCount(0);
-  await expect(page.getByTestId("turn-navigator").getByRole("button", { name: "Find" })).toHaveAttribute("aria-pressed", "false");
+  await expect(page.getByTestId("turn-navigator").getByRole("button", { name: "Search" })).toHaveAttribute("aria-pressed", "false");
   await expect(page.getByTestId("turn-title").nth(0)).toContainText("delegate docs inspection");
   await expect(page.getByTestId("turn-title").nth(1)).toContainText("show a large artifact");
   await expect(page.getByTestId("turn-boundary")).toHaveCount(0);
@@ -668,9 +668,9 @@ test("workflow timeline renders with inline drill-down", async ({ page }, testIn
     fullPage: true,
   });
 
-  await page.getByTestId("turn-navigator").getByRole("button", { name: "Find" }).click();
-  await page.getByText("Narrow results").click();
-  await page.getByRole("button", { name: "Agent work" }).click();
+  await page.getByTestId("turn-navigator").getByRole("button", { name: "Search" }).click();
+  await page.getByText("Filters").click();
+  await page.getByRole("button", { name: "Actions" }).click();
   await expect(page.getByTestId("work-thread").first()).toBeVisible();
   await page.getByRole("button", { name: /Work details/ }).first().click();
   const executionTree = page.getByTestId("execution-tree");

@@ -45,7 +45,7 @@ export function buildSessionOverview({
 
   if (pending) {
     return {
-      headline: summarize(pending, 90),
+      headline: summarizeSessionTitle(pending),
       detail: pendingTaskDetail({ hasSelectedSession, hasLatestTurn: Boolean(latestTurn) }),
       stateLabel: "Sending",
       tone: "running",

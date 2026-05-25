@@ -21,18 +21,18 @@ function renderTimeline(
 async function openTimelineTools(user: ReturnType<typeof userEvent.setup>) {
   let toolbar = screen.queryByTestId("timeline-toolbar");
   if (!toolbar) {
-    await user.click(screen.getByRole("button", { name: "Find" }));
+    await user.click(screen.getByRole("button", { name: "Search" }));
     toolbar = await screen.findByTestId("timeline-toolbar");
   }
   if (!toolbar.hasAttribute("open")) {
-    await user.click(within(toolbar).getByText("Find in chat"));
+    await user.click(within(toolbar).getByText("Search in chat"));
   }
 }
 
 async function openTimelineFilters(user: ReturnType<typeof userEvent.setup>) {
   const advanced = screen.getByTestId("timeline-advanced-filter");
   if (!advanced.hasAttribute("open")) {
-    await user.click(within(advanced).getByText("Narrow results"));
+    await user.click(within(advanced).getByText("Filters"));
   }
 }
 
@@ -74,7 +74,7 @@ describe("Timeline", () => {
     expect(screen.queryByTestId("timeline-toolbar")).toBeNull();
     const nav = screen.getByTestId("turn-navigator");
     expect(within(nav).getByText("Messages")).toBeInTheDocument();
-    expect(within(nav).getByRole("button", { name: "Find" })).toHaveAttribute("aria-pressed", "false");
+    expect(within(nav).getByRole("button", { name: "Search" })).toHaveAttribute("aria-pressed", "false");
     expect(within(nav).getByText("2 messages · 2 done · 1 action · 138 tokens")).toBeInTheDocument();
     expect(within(nav).queryByTestId("turn-nav-current")).toBeNull();
     expect(within(nav).getByTestId("turn-nav-progress")).toBeInTheDocument();
@@ -286,7 +286,7 @@ describe("Timeline", () => {
 
     await openTimelineTools(user);
     await openTimelineFilters(user);
-    await user.click(screen.getByRole("button", { name: "Agent work" }));
+    await user.click(screen.getByRole("button", { name: "Actions" }));
 
     expect(screen.getByTestId("work-thread")).toHaveTextContent("Work details");
     expect(screen.getByTestId("work-thread")).toHaveTextContent("Inspect docs for WebUI trace requirements");
@@ -755,7 +755,7 @@ describe("Timeline", () => {
     await openTimelineTools(user);
     expect(screen.getByTestId("timeline-match-count")).toHaveTextContent("2/2 messages");
     await openTimelineFilters(user);
-    await user.click(screen.getByRole("button", { name: "Agent work" }));
+    await user.click(screen.getByRole("button", { name: "Actions" }));
 
     expect(screen.getByTestId("timeline-match-count")).toHaveTextContent("1/2 messages");
     expect(within(screen.getByTestId("timeline")).getAllByText("list the files").length).toBeGreaterThan(0);
@@ -786,7 +786,7 @@ describe("Timeline", () => {
     expect(screen.getByTestId("timeline-match-count")).toHaveTextContent("1/3 messages");
     expect(screen.getByTestId("work-summary")).toHaveTextContent("1 repaired");
 
-    await user.click(screen.getByRole("button", { name: "Large output" }));
+    await user.click(screen.getByRole("button", { name: "Large outputs" }));
     expect(screen.getByTestId("timeline-match-count")).toHaveTextContent("1/3 messages");
     expect(screen.getByTestId("work-summary")).toHaveTextContent("1 truncated");
   });
@@ -797,13 +797,13 @@ describe("Timeline", () => {
 
     expect(screen.queryByTestId("execution-tree")).toBeNull();
     expect(screen.queryByTestId("timeline-toolbar")).toBeNull();
-    expect(within(screen.getByTestId("turn-navigator")).getByRole("button", { name: "Find" })).toBeInTheDocument();
+    expect(within(screen.getByTestId("turn-navigator")).getByRole("button", { name: "Search" })).toBeInTheDocument();
     expect(screen.queryByTestId("timeline-match-count")).toBeNull();
-    expect(screen.queryByText("Narrow results")).toBeNull();
+    expect(screen.queryByText("Filters")).toBeNull();
     await openTimelineTools(user);
-    expect(within(screen.getByTestId("turn-navigator")).getByRole("button", { name: "Find" })).toHaveAttribute("aria-pressed", "true");
-    expect(screen.getByText("Find messages, sources, or output")).toBeInTheDocument();
-    expect(screen.getByText("Narrow results")).toBeVisible();
+    expect(within(screen.getByTestId("turn-navigator")).getByRole("button", { name: "Search" })).toHaveAttribute("aria-pressed", "true");
+    expect(screen.getByText("Search messages, sources, or output")).toBeInTheDocument();
+    expect(screen.getByText("Filters")).toBeVisible();
     await user.type(screen.getByTestId("timeline-search"), "MCP_search");
 
     expect(screen.getByTestId("timeline-match-count")).toHaveTextContent("1/1 messages");
