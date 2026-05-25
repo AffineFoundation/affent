@@ -173,6 +173,36 @@ describe("sessionList view model", () => {
     expect(rows.find((row) => row.id === "dashscope-container")?.title).toBe("DashScope full-stack container check");
   });
 
+  it("uses the stated focus as the title instead of the first instruction clause", () => {
+    const rows = buildSessionRows([
+      session({
+        id: "webui-focus",
+        durable: true,
+        latest_user_message: "理解当前项目，重点关注webui的设计",
+      }),
+      session({
+        id: "english-focus",
+        durable: true,
+        latest_user_message: "understand the current project, focus on webui session titles",
+      }),
+    ]);
+
+    expect(rows.find((row) => row.id === "webui-focus")?.title).toBe("WebUI 设计");
+    expect(rows.find((row) => row.id === "english-focus")?.title).toBe("WebUI session titles");
+  });
+
+  it("summarizes title feedback instead of showing the full request as a title", () => {
+    const rows = buildSessionRows([
+      session({
+        id: "title-feedback",
+        durable: true,
+        latest_user_message: "会话的标题最好是经过总结的，而不是把第一句话的输入当做标题",
+      }),
+    ]);
+
+    expect(rows[0].title).toBe("会话标题摘要");
+  });
+
   it("does not repeat the topic when a continuation prompt embeds the original task", () => {
     const rows = buildSessionRows([
       session({

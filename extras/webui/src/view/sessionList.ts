@@ -264,6 +264,8 @@ function summarizeSessionTitle(text: string): string {
   if (!cleaned) return "Saved chat";
   const directReply = summarizeDirectReplyPrompt(cleaned);
   if (directReply) return summarize(directReply, 42);
+  const intentTitle = summarizeIntentTitle(cleaned);
+  if (intentTitle) return summarize(intentTitle, 42);
   const firstLine = cleaned.split(/\n+/)[0] ?? cleaned;
   const primaryClause = firstLine
     .split(/[。.!?；;]+/)
@@ -287,6 +289,37 @@ function summarizeDirectReplyPrompt(text: string): string | undefined {
     .trim();
   if (!topic) return "Reply check";
   return `${capitalizeLeadingAscii(prettyTopicName(topic))} check`;
+}
+
+function summarizeIntentTitle(text: string): string | undefined {
+  const metaTitle = summarizeTitleFeedback(text);
+  if (metaTitle) return metaTitle;
+  const focusTitle = summarizeFocusPhrase(text);
+  if (focusTitle) return focusTitle;
+  return undefined;
+}
+
+function summarizeTitleFeedback(text: string): string | undefined {
+  const namesTitle = /(?:会话|聊天|session|chat).*(?:标题|title)/i.test(text);
+  const asksForSummary = /(?:总结|摘要|归纳|概括|summar|generated?|derived?)/i.test(text);
+  if (namesTitle && asksForSummary) {
+    return /[a-z]/i.test(text) && !/[\u3400-\u9fff]/.test(text) ? "Summarized chat titles" : "会话标题摘要";
+  }
+  return undefined;
+}
+
+function summarizeFocusPhrase(text: string): string | undefined {
+  const patterns = [
+    /(?:重点关注|主要关注|优先关注|关注|围绕|关于|针对)\s*([^。.!?；;，,\n]{2,80})/i,
+    /(?:focus(?:ing)? on|focused on|around|about|regarding)\s+([^。.!?；;，,\n]{2,80})/i,
+  ];
+  for (const pattern of patterns) {
+    const match = text.match(pattern);
+    if (!match) continue;
+    const title = normalizeTitlePhrase(match[1]);
+    if (title) return title;
+  }
+  return undefined;
 }
 
 function capitalizeLeadingAscii(text: string): string {
@@ -349,6 +382,14 @@ function trimTopicSuffix(text: string): string {
     .replace(/(?:并)?(?:向我)?(?:介绍|说明|分析|总结|输出|生成).*/, "")
     .replace(/(?:是什么|是啥|是什麼)\s*$/, "")
     .trim();
+}
+
+function normalizeTitlePhrase(text: string): string {
+  const title = trimTopicSuffix(stripTopicPrefix(text))
+    .replace(/的(?=[\u3400-\u9fffA-Za-z0-9])/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+  return prettyTopicName(title);
 }
 
 function buildRowMeta(id: string, updated: string, opts: { empty?: boolean; includeId?: boolean } = {}): string[] {
