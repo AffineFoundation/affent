@@ -285,6 +285,8 @@ describe("App", () => {
     expect(await screen.findByTestId("pending-turn")).toHaveTextContent("summarize the repo");
     expect(screen.getByTestId("chat-context-bar")).toHaveTextContent("repo");
     expect(screen.getByTestId("chat-context-bar")).toHaveTextContent("Sending");
+    expect(screen.getByTestId("chat-context-bar")).toHaveTextContent("Next:");
+    expect(screen.getByTestId("chat-context-bar")).not.toHaveTextContent("Status:");
     expect(screen.queryByTestId("workflow-status")).toBeNull();
     messageResponse.resolve(jsonResponse({ session_id: "new-1", turn_id: "t1" }));
     await waitFor(() => expect(fetchImpl).toHaveBeenCalledWith("/v1/sessions/new-1/messages", expect.objectContaining({ method: "POST" })));
@@ -354,6 +356,8 @@ describe("App", () => {
     const context = screen.getByTestId("chat-context-bar");
     expect(context).toHaveTextContent("main.go");
     expect(context).toHaveTextContent("Sending");
+    expect(context).toHaveTextContent("Next:");
+    expect(context).not.toHaveTextContent("Status:");
     expect(context).toHaveTextContent("next update");
     expect(context).not.toHaveTextContent("Result ready");
 
@@ -687,8 +691,9 @@ describe("App", () => {
 
     expect(screen.getByTestId("pending-turn")).toHaveAttribute("data-kind", "guidance");
     expect(screen.getByTestId("pending-turn")).toHaveTextContent("Note");
-    expect(screen.getByTestId("chat-context-bar")).toHaveTextContent("Adding note");
-    expect(screen.getByTestId("chat-context-bar")).toHaveTextContent("Your note is being added");
+    expect(screen.getByTestId("chat-context-bar")).toHaveTextContent("Sending note");
+    expect(screen.getByTestId("chat-context-bar")).toHaveTextContent("Adding your note");
+    expect(screen.getByTestId("chat-context-bar")).toHaveTextContent("Task:");
     expect(screen.getByTestId("pending-turn")).toHaveTextContent("Adding your note to the current run.");
     expect(screen.getByTestId("pending-turn")).not.toHaveTextContent("Preparing the first update.");
 

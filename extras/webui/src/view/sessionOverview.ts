@@ -57,8 +57,8 @@ export function buildSessionOverview({
   if (guidance && latestTurn?.status === "running") {
     return {
       headline: task ?? "Live turn",
-      detail: "Your note is being added to the current run.",
-      stateLabel: "Adding note",
+      detail: "Adding your note to the current run.",
+      stateLabel: "Sending note",
       tone: "running",
       active: true,
       metrics: buildMetrics(session, latestTurn, latestActivity),
@@ -99,9 +99,9 @@ export function buildSessionOverview({
 }
 
 function pendingTaskDetail({ hasSelectedSession, hasLatestTurn }: { hasSelectedSession: boolean; hasLatestTurn: boolean }): string {
-  if (!hasSelectedSession) return "Creating a chat. The message will appear here as soon as it starts.";
-  if (hasLatestTurn) return "Follow-up sent. The next update will appear in this chat.";
-  return "Message sent. The first update will appear in this chat.";
+  if (!hasSelectedSession) return "Creating chat; first update will appear here.";
+  if (hasLatestTurn) return "Follow-up sent; next update will appear here.";
+  return "Message sent; first update will appear here.";
 }
 
 function overviewDetail(turn: TurnState, activity: TurnActivityView | undefined, workflow: WorkflowStatus): string {

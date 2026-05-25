@@ -533,24 +533,22 @@ export function App() {
 }
 
 function ChatContextBar({ overview }: { overview: SessionOverview }) {
-  const primary = chatContextPrimary(overview);
-  const secondary = primary === overview.detail ? overview.headline : overview.detail;
-  const secondaryLabel = primary === overview.detail ? "Task" : "Status";
-  const contextLabel = chatContextLabel({ overview, primary, secondary, secondaryLabel });
+  const context = chatContextDisplay(overview);
+  const contextLabel = chatContextLabel({ overview, ...context });
   return (
     <div className="chat-context-bar" data-tone={overview.tone} data-testid="chat-context-bar" aria-label={contextLabel}>
       <span className="chat-context-state">{overview.stateLabel}</span>
       <span className="chat-context-copy">
         <span className="chat-context-separator" aria-hidden="true"> · </span>
-        <strong className="chat-context-primary" title={primary}>
-          {compactContextText(primary, 118)}
+        <strong className="chat-context-primary" title={context.primary}>
+          {compactContextText(context.primary, 118)}
         </strong>
-        {secondary && secondary !== primary ? (
+        {context.secondary && context.secondary !== context.primary ? (
           <>
             {" "}
-            <span className="chat-context-topic" title={secondary}>
-              <b>{secondaryLabel}:</b>{" "}
-              <span className="chat-context-title">{compactContextText(secondary, 112)}</span>
+            <span className="chat-context-topic" title={context.secondary}>
+              <b>{context.secondaryLabel}:</b>{" "}
+              <span className="chat-context-title">{compactContextText(context.secondary, 112)}</span>
             </span>
           </>
         ) : null}
@@ -563,6 +561,28 @@ function ChatContextBar({ overview }: { overview: SessionOverview }) {
       />
     </div>
   );
+}
+
+interface ChatContextDisplay {
+  primary: string;
+  secondary?: string;
+  secondaryLabel: string;
+}
+
+function chatContextDisplay(overview: SessionOverview): ChatContextDisplay {
+  const primary = chatContextPrimary(overview);
+  const secondary = primary === overview.detail ? overview.headline : overview.detail;
+  return {
+    primary,
+    secondary,
+    secondaryLabel: chatContextSecondaryLabel(overview, primary),
+  };
+}
+
+function chatContextSecondaryLabel(overview: SessionOverview, primary: string): string {
+  if (overview.stateLabel === "Sending") return "Next";
+  if (primary === overview.detail) return "Task";
+  return "Context";
 }
 
 function chatContextLabel({
@@ -583,7 +603,7 @@ function chatContextLabel({
 
 function chatContextPrimary(overview: SessionOverview): string {
   if (overview.stateLabel === "Sending") return overview.headline;
-  if (overview.stateLabel === "Adding note") return overview.detail;
+  if (overview.stateLabel === "Sending note") return overview.detail;
   if (overview.detail) return overview.detail;
   return overview.headline;
 }

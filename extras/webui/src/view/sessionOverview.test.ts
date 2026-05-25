@@ -37,7 +37,7 @@ describe("buildSessionOverview", () => {
       tone: "running",
       active: true,
     });
-    expect(overview.detail).toContain("Creating a chat");
+    expect(overview.detail).toContain("Creating chat");
   });
 
   it("does not use a full feedback sentence as the pending chat title", () => {
@@ -86,8 +86,8 @@ describe("buildSessionOverview", () => {
 
     expect(overview).toMatchObject({
       headline: "use a subagent to inspect docs",
-      stateLabel: "Adding note",
-      detail: "Your note is being added to the current run.",
+      stateLabel: "Sending note",
+      detail: "Adding your note to the current run.",
       tone: "running",
       active: true,
     });
