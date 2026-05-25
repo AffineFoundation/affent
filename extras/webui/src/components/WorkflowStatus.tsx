@@ -1,4 +1,5 @@
 import type { SessionOverview } from "../view/sessionOverview";
+import { RunDetails } from "./RunDetails";
 
 export function WorkflowStatus({
   overview,
@@ -16,31 +17,15 @@ export function WorkflowStatus({
         <span className="state-pill" data-tone={overview.tone}>
           {overview.stateLabel}
         </span>
-        {overview.metrics.length > 0 ? <WorkflowDetails metrics={overview.metrics} /> : null}
+        <RunDetails
+          metrics={overview.metrics}
+          className="workflow-details"
+          testId="workflow-details"
+          valueFirst
+        />
       </div>
     </section>
   );
-}
-
-function WorkflowDetails({ metrics }: { metrics: SessionOverview["metrics"] }) {
-  return (
-    <details className="workflow-details" data-testid="workflow-details">
-      <summary>Run details</summary>
-      <div className="workflow-metrics" aria-label="Run details">
-        {metrics.map((metric) => (
-          <span key={metric.label} data-tone={metric.tone}>
-            <b>{metric.value}</b> {formatMetricLabel(metric.label, metric.value)}
-          </span>
-        ))}
-      </div>
-    </details>
-  );
-}
-
-function formatMetricLabel(label: string, value: string): string {
-  const normalized = label.toLowerCase();
-  if (value === "1" && normalized.endsWith("s")) return normalized.slice(0, -1);
-  return normalized;
 }
 
 function dotStatus(overview: SessionOverview): string {

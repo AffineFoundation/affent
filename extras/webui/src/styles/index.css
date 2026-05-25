@@ -385,7 +385,8 @@ body {
   white-space: nowrap;
 }
 
-.chat-context-details {
+.chat-context-details,
+.workflow-details {
   position: relative;
   justify-self: end;
   min-width: 0;
@@ -393,11 +394,12 @@ body {
   font-size: 11.5px;
 }
 
-.chat-context-details summary {
+.chat-context-details summary,
+.workflow-details summary {
   display: inline-flex;
   align-items: center;
   gap: 5px;
-  min-height: 26px;
+  min-height: 24px;
   border: 1px solid transparent;
   border-radius: 999px;
   padding: 2px 8px;
@@ -407,11 +409,13 @@ body {
   transition: color 140ms ease, background 140ms ease, border-color 140ms ease;
 }
 
-.chat-context-details summary::-webkit-details-marker {
+.chat-context-details summary::-webkit-details-marker,
+.workflow-details summary::-webkit-details-marker {
   display: none;
 }
 
-.chat-context-details summary::after {
+.chat-context-details summary::after,
+.workflow-details summary::after {
   content: "";
   width: 5px;
   height: 5px;
@@ -421,17 +425,19 @@ body {
   transition: transform 140ms ease;
 }
 
-.chat-context-details[open] summary {
+.chat-context-details[open] summary,
+.workflow-details[open] summary {
   background: var(--bg-raised);
   border-color: var(--border);
   color: var(--text);
 }
 
-.chat-context-details[open] summary::after {
+.chat-context-details[open] summary::after,
+.workflow-details[open] summary::after {
   transform: rotate(225deg) translateY(-1px);
 }
 
-.chat-context-metrics {
+.run-detail-metrics {
   position: absolute;
   right: 0;
   top: calc(100% + 6px);
@@ -448,20 +454,37 @@ body {
   animation: detail-reveal 140ms var(--ease-snap);
 }
 
+.run-detail-metrics span {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  align-items: baseline;
+  color: var(--text-muted);
+  font-size: 11.5px;
+  font-weight: 650;
+  white-space: nowrap;
+}
+
+.run-detail-metrics span[data-tone="error"] {
+  color: var(--c-error);
+}
+
+.run-detail-metrics span[data-tone="warning"] {
+  color: var(--c-warn);
+}
+
+.run-detail-metrics b {
+  color: var(--text);
+  font-weight: 650;
+  font-variant-numeric: tabular-nums;
+}
+
 .chat-context-separator {
   color: var(--text-faint);
   font-size: 11px;
   font-weight: 700;
   line-height: 1;
   user-select: text;
-}
-
-.chat-context-metric {
-  display: block;
-  color: var(--text-muted);
-  font-size: 11.5px;
-  font-weight: 650;
-  white-space: nowrap;
 }
 
 .chat-context-bar[data-tone="running"] .chat-context-state {
@@ -476,15 +499,13 @@ body {
   color: var(--c-success);
 }
 
-.chat-context-bar[data-tone="warning"] .chat-context-state,
-.chat-context-metric[data-tone="warning"] {
+.chat-context-bar[data-tone="warning"] .chat-context-state {
   border-color: #fde68a;
   background: var(--c-warn-bg);
   color: var(--c-warn);
 }
 
-.chat-context-bar[data-tone="error"] .chat-context-state,
-.chat-context-metric[data-tone="error"] {
+.chat-context-bar[data-tone="error"] .chat-context-state {
   border-color: #fecaca;
   background: var(--c-error-bg);
   color: var(--c-error);
@@ -705,92 +726,6 @@ body {
   border-color: rgba(37, 99, 235, 0.22);
   background: rgba(239, 246, 255, 0.78);
   color: var(--c-info);
-}
-
-.workflow-details {
-  position: relative;
-  justify-self: end;
-  min-width: 0;
-  color: var(--text-faint);
-  font-size: 11.5px;
-}
-
-.workflow-details summary {
-  display: inline-flex;
-  align-items: center;
-  gap: 5px;
-  min-height: 24px;
-  border: 1px solid transparent;
-  border-radius: 999px;
-  padding: 2px 8px;
-  color: var(--text-muted);
-  cursor: pointer;
-  white-space: nowrap;
-  transition: color 140ms ease, background 140ms ease, border-color 140ms ease;
-}
-
-.workflow-details summary::-webkit-details-marker {
-  display: none;
-}
-
-.workflow-details summary::after {
-  content: "";
-  width: 5px;
-  height: 5px;
-  border-right: 1.5px solid currentColor;
-  border-bottom: 1.5px solid currentColor;
-  transform: rotate(45deg) translateY(-1px);
-  transition: transform 140ms ease;
-}
-
-.workflow-details[open] summary {
-  background: var(--bg-raised);
-  border-color: var(--border);
-  color: var(--text);
-}
-
-.workflow-details[open] summary::after {
-  transform: rotate(225deg) translateY(-1px);
-}
-
-.workflow-metrics {
-  position: absolute;
-  right: 0;
-  top: calc(100% + 6px);
-  z-index: 20;
-  display: grid;
-  gap: 6px;
-  min-width: 178px;
-  max-width: min(260px, calc(100vw - 32px));
-  border: 1px solid var(--border);
-  border-radius: var(--radius-sm);
-  background: rgba(255, 255, 255, 0.96);
-  box-shadow: var(--shadow-menu);
-  padding: 8px;
-  animation: detail-reveal 140ms var(--ease-snap);
-}
-
-.workflow-metrics span {
-  display: flex;
-  justify-content: space-between;
-  gap: 12px;
-  align-items: baseline;
-  color: var(--text-muted);
-  white-space: nowrap;
-}
-
-.workflow-metrics span[data-tone="error"] {
-  color: var(--c-error);
-}
-
-.workflow-metrics span[data-tone="warning"] {
-  color: var(--c-warn);
-}
-
-.workflow-metrics b {
-  color: var(--text);
-  font-weight: 650;
-  font-variant-numeric: tabular-nums;
 }
 
 /* ---- Session navigator ---- */
@@ -5573,7 +5508,7 @@ pre.code {
     grid-column: 2 / -1;
     justify-self: start;
   }
-  .chat-context-metrics {
+  .chat-context-details .run-detail-metrics {
     right: auto;
     left: 0;
   }
@@ -5647,7 +5582,7 @@ pre.code {
     grid-column: 2 / -1;
     justify-self: start;
   }
-  .workflow-metrics {
+  .workflow-details .run-detail-metrics {
     right: auto;
     left: 0;
   }

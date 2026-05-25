@@ -17,6 +17,7 @@ import { Composer, type ComposerDraft } from "./components/Composer";
 import { SessionList } from "./components/SessionList";
 import { Timeline, type GuidanceReceiptView, type PendingMessageView } from "./components/Timeline";
 import { WorkflowStatus } from "./components/WorkflowStatus";
+import { RunDetails } from "./components/RunDetails";
 import { completedTurn } from "./fixtures/completedTurn";
 import { applyRawEvent, reduceRawEvents } from "./store/reduce";
 import { initialSessionState, type SessionState } from "./store/sessionState";
@@ -570,23 +571,13 @@ function ChatContextBar({ overview }: { overview: SessionOverview }) {
           </>
         ) : null}
       </span>
-      {overview.metrics.length > 0 ? <ChatContextDetails metrics={overview.metrics} /> : null}
+      <RunDetails
+        metrics={overview.metrics}
+        className="chat-context-details"
+        testId="chat-context-details"
+        ariaLabel="Current chat metrics"
+      />
     </div>
-  );
-}
-
-function ChatContextDetails({ metrics }: { metrics: SessionOverview["metrics"] }) {
-  return (
-    <details className="chat-context-details" data-testid="chat-context-details">
-      <summary>Run details</summary>
-      <div className="chat-context-metrics" aria-label="Current chat metrics">
-        {metrics.map((metric) => (
-          <span key={`${metric.label}-${metric.value}`} className="chat-context-metric" data-tone={metric.tone}>
-            {metric.label} {metric.value}
-          </span>
-        ))}
-      </div>
-    </details>
   );
 }
 
