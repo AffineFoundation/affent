@@ -175,7 +175,10 @@ describe("Timeline", () => {
     );
   });
 
-  it("shows a pending turn immediately after a task is submitted", () => {
+  it("shows a pending turn immediately after a task is submitted", async () => {
+    const user = userEvent.setup();
+    const writeText = vi.fn().mockResolvedValue(undefined);
+    Object.defineProperty(navigator, "clipboard", { configurable: true, value: { writeText } });
     const session = reduceRawEvents([]);
     render(<Timeline session={session} pendingMessage={{ text: "summarize the repo", kind: "task" }} />);
 
@@ -185,6 +188,10 @@ describe("Timeline", () => {
     expect(screen.getByTestId("turn-title")).toHaveTextContent("summarize the repo");
     expect(screen.getByTestId("pending-turn")).toHaveTextContent("Starting");
     expect(screen.getByTestId("pending-turn")).not.toHaveTextContent("events");
+
+    await user.click(within(screen.getByTestId("pending-turn")).getByRole("button", { name: "Copy message" }));
+
+    expect(writeText).toHaveBeenCalledWith("summarize the repo");
   });
 
   it("shows a pending follow-up as the next conversation message", () => {
@@ -212,7 +219,10 @@ describe("Timeline", () => {
     );
   });
 
-  it("shows pending live note as intervention instead of a new task", () => {
+  it("shows pending live note as intervention instead of a new task", async () => {
+    const user = userEvent.setup();
+    const writeText = vi.fn().mockResolvedValue(undefined);
+    Object.defineProperty(navigator, "clipboard", { configurable: true, value: { writeText } });
     const session = reduceRawEvents(runningSubagent);
     render(<Timeline session={session} pendingMessage={{ text: "Note for current work: check tests first", kind: "guidance" }} />);
 
@@ -223,6 +233,10 @@ describe("Timeline", () => {
     expect(screen.getByLabelText("Note for current run")).toHaveTextContent("check tests first");
     expect(screen.getByTestId("pending-turn")).toHaveTextContent("Adding your note to the current run.");
     expect(screen.getByTestId("pending-turn")).not.toHaveTextContent("Preparing the first update.");
+
+    await user.click(within(screen.getByTestId("pending-turn")).getByRole("button", { name: "Copy note" }));
+
+    expect(writeText).toHaveBeenCalledWith("Note for current work: check tests first");
   });
 
   it("keeps submitted live note visible as an editable receipt", async () => {
@@ -241,6 +255,11 @@ describe("Timeline", () => {
     expect(screen.getByTestId("guidance-receipt")).toHaveTextContent("check tests first");
     expect(screen.getByTestId("guidance-receipt")).toHaveTextContent("Added to the current run.");
     expect(screen.queryByTestId("pending-turn")).toBeNull();
+
+    const writeText = vi.fn().mockResolvedValue(undefined);
+    Object.defineProperty(navigator, "clipboard", { configurable: true, value: { writeText } });
+    await user.click(within(screen.getByTestId("guidance-receipt")).getByRole("button", { name: "Copy note" }));
+    expect(writeText).toHaveBeenCalledWith("Note for current work: check tests first");
 
     await user.click(screen.getByRole("button", { name: "Edit note" }));
 

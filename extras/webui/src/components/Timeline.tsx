@@ -5,6 +5,7 @@ import { hasIssueContext } from "../view/issueContext";
 import { countMatchingTurns, countTurnsByMode, turnMatchesFilter, type TimelineFilterMode } from "../view/timelineFilter";
 import { TurnCard } from "./TurnCard";
 import { TurnNavigator } from "./TurnNavigator";
+import { CopyButton } from "./CopyButton";
 
 const filterModes: { mode: TimelineFilterMode; label: string }[] = [
   { mode: "all", label: "All" },
@@ -541,13 +542,14 @@ function GuidanceReceipt({
         <div className="flow-step flow-step-user" role="group" aria-label="Sent note">
           <span className="pending-guidance-label">Note sent</span>
           <div className="flow-text">{receipt.text}</div>
-          {onUseAsDraft ? (
-            <div className="message-actions">
+          <div className="message-actions">
+            <CopyButton label="Copy note" value={receipt.text} className="message-action" />
+            {onUseAsDraft ? (
               <button type="button" className="message-action" onClick={() => onUseAsDraft(receipt.text, "guidance_receipt")}>
                 Edit note
               </button>
-            </div>
-          ) : null}
+            ) : null}
+          </div>
         </div>
         <div className="assistant-cluster">
           <div className="assistant-name">Affent</div>
@@ -593,6 +595,9 @@ function PendingTurn({ message, followUp }: { message: PendingMessageView; follo
         <div className="flow-step flow-step-user" role="group" aria-label={isGuidance ? "Note for current run" : "You message"}>
           {isGuidance ? <span className="pending-guidance-label">Live note</span> : null}
           <div className="flow-text">{text}</div>
+          <div className="message-actions">
+            <CopyButton label={isGuidance ? "Copy note" : "Copy message"} value={text} className="message-action" />
+          </div>
         </div>
         <div className="assistant-cluster">
           <div className="assistant-name">Affent</div>
