@@ -501,7 +501,7 @@ test("workflow timeline renders with inline drill-down", async ({ page }, testIn
   await expect(page.getByTestId("workflow-status")).toHaveCount(0);
   await expect(page.getByTestId("turn-card")).toHaveCount(2);
   await expect(page.getByTestId("conversation-map")).toContainText("show a large artifact");
-  await expect(page.getByTestId("conversation-map")).toContainText("Conversation");
+  await expect(page.getByTestId("conversation-map")).toContainText("Messages");
   await expect(page.getByTestId("conversation-map")).toContainText("2 messages · 2 done · 3 actions");
   await expect(page.getByTestId("turn-nav-glance")).toContainText("delegate docs inspection");
   await expect(page.getByTestId("turn-nav-glance")).toContainText("WebUI must render trace details as expandable runtime structure.");
@@ -532,7 +532,7 @@ test("workflow timeline renders with inline drill-down", async ({ page }, testIn
   await expect(page.getByTestId("agent-activity-digest").first()).toContainText("Result");
   await expect(page.getByTestId("agent-activity-digest").first()).toContainText("2 delegated tasks");
   await expect(page.getByTestId("agent-activity-digest").first()).toContainText("4 evidence");
-  await page.getByTestId("agent-activity").first().getByRole("button", { name: /Work summary/ }).click();
+  await page.getByTestId("agent-activity").first().getByRole("button", { name: /Agent activity/ }).click();
   await expect(page.getByTestId("agent-activity").first()).toContainText("Read");
   await expect(page.getByTestId("agent-activity").first()).toContainText("docs/webui-product-design.md");
   await expect(page.getByTestId("agent-activity").first()).toContainText("392 tokens");
@@ -569,7 +569,7 @@ test("workflow timeline renders with inline drill-down", async ({ page }, testIn
   await expect(page.locator(".raw-disclosure")).toHaveCount(0);
 
   await expect(page.getByTestId("tool-details")).toHaveCount(0);
-  await expect(page.getByTestId("agent-activity").first()).toContainText("Work summary");
+  await expect(page.getByTestId("agent-activity").first()).toContainText("Agent activity");
   await expect(page.getByTestId("agent-activity-tree").first().getByRole("button", { name: /Find the WebUI trace requirements/ })).toHaveAttribute("aria-expanded", "false");
   await expect(page.getByTestId("execution-tree")).toHaveCount(0);
   await page.screenshot({

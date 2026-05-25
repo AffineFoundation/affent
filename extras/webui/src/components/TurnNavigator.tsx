@@ -27,7 +27,7 @@ export function TurnNavigator({
     <nav className="turn-navigator" aria-label="Messages" data-testid="turn-navigator">
       <span className="turn-nav-label">
         <span className="turn-nav-label-row">
-          <span>Conversation</span>
+          <span>Messages</span>
           {onOpenFind ? (
             <button type="button" className="turn-nav-find" aria-pressed={findActive} onClick={onOpenFind}>
               Find
@@ -38,7 +38,7 @@ export function TurnNavigator({
           {view.countLabel} · {view.summary}
         </small>
       </span>
-      <div className="turn-nav-progress" aria-label="Conversation progress" data-testid="turn-nav-progress">
+      <div className="turn-nav-progress" aria-label="Message progress" data-testid="turn-nav-progress">
         {view.items.map((item, index) => {
           return (
             <a
@@ -55,7 +55,7 @@ export function TurnNavigator({
           );
         })}
       </div>
-      <div className="turn-nav-glance" aria-label="Conversation summaries" data-testid="turn-nav-glance">
+      <div className="turn-nav-glance" aria-label="Message summaries" data-testid="turn-nav-glance">
         {view.items.map((item, index) => (
           <a
             key={`${item.id}-glance`}

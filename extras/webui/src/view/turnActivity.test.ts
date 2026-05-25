@@ -10,7 +10,7 @@ describe("buildTurnActivity", () => {
     const activity = buildTurnActivity(turn);
 
     expect(activity).toMatchObject({
-      title: "Work summary",
+      title: "Agent activity",
       statusLabel: "Done",
       live: false,
       tone: "success",
