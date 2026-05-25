@@ -348,6 +348,7 @@ func WithMemorySystemGuidance(prompt string) string {
 }
 
 const externalResearchSystemGuidanceMarker = "External research:"
+const runtimeContextSystemGuidanceMarker = "Runtime context:"
 
 type externalResearchToolSurface struct {
 	WebSearch bool
@@ -415,6 +416,18 @@ func WithExternalResearchSystemGuidance(prompt string, surface externalResearchT
 		return prompt
 	}
 	return prompt + "\n\n" + externalResearchSystemGuidance(surface)
+}
+
+func WithRuntimeContextSystemGuidance(prompt string, now time.Time) string {
+	if strings.TrimSpace(prompt) == "" {
+		prompt = DefaultSystemPrompt
+	}
+	if now.IsZero() {
+		now = time.Now()
+	}
+	return prompt + "\n\n" + runtimeContextSystemGuidanceMarker + "\n" +
+		"- Current UTC date: " + now.UTC().Format(time.DateOnly) + ".\n" +
+		"- For current/latest/market/news facts, use this as the access date only when a source lacks its own timestamp. Do not invent source dates; distinguish source publication/update dates from access date."
 }
 
 // LimitedToolSystemPrompt is the default for sessions that do not expose the

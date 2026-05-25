@@ -264,6 +264,11 @@ context truncation. Search backends can still time out, rate-limit,
 or return no usable URLs. The tools surface those cases as structured failures
 so the agent can switch source instead of burning turns:
 
+The main agent prompt includes the current UTC date as runtime context. For
+current market, news, or trend answers, the model is instructed to treat that as
+an access date only when a source lacks its own timestamp, and not to invent
+source publication/update dates.
+
 - `Failure: kind=blocked`: the source refused direct fetch, commonly HTTP 401
   or 403, or returned a successful HTTP response that is only an anti-bot,
   cookie/JavaScript, search-challenge, or social-site error page.

@@ -978,6 +978,7 @@ func setupLoop(c commonFlags) (*loopBundle, int) {
 		})
 	}
 	systemPrompt = agent.WithRegistrySystemGuidance(systemPrompt, tools)
+	systemPrompt = agent.WithRuntimeContextSystemGuidance(systemPrompt, time.Now())
 	loop := &agent.Loop{
 		LLM:                 llm,
 		Tools:               tools,

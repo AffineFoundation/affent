@@ -606,6 +606,7 @@ func (p *SessionPool) buildSession(id string) (*Session, error) {
 		systemPrompt = agent.BaseSystemPromptForRegistry(reg)
 	}
 	systemPrompt = agent.WithRegistrySystemGuidance(systemPrompt, reg)
+	systemPrompt = agent.WithRuntimeContextSystemGuidance(systemPrompt, time.Now())
 	if p.cfg.EnableBuiltins {
 		// affentserve's per-session workspace is a freshly-allocated
 		// temp dir, not /workspace. DefaultSystemPrompt's "save under

@@ -787,6 +787,9 @@ func TestSetupLoop_EvalModeOmitsSkillsDelegationAndSkillProvider(t *testing.T) {
 	if len(msgs) == 0 {
 		t.Fatal("system prompt missing")
 	}
+	if !strings.Contains(msgs[0].Content, "Runtime context:") || !strings.Contains(msgs[0].Content, "Current UTC date:") {
+		t.Fatalf("setupLoop system prompt should include runtime date context:\n%s", msgs[0].Content)
+	}
 	for _, forbidden := range []string{"Subagent delegation:", "Subagent browser delegation:", "Focused tasks (run_task):", "Affent plan tool guidance:", "Memory retrieval:", "Session history retrieval:", "Project context:", "run_task", "subagent_run"} {
 		if strings.Contains(msgs[0].Content, forbidden) {
 			t.Fatalf("eval-mode system prompt should not include %q guidance:\n%s", forbidden, msgs[0].Content)

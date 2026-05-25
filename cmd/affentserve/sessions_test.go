@@ -1227,6 +1227,9 @@ func TestSessionPool_ToolLightMixedSurfaceUsesLimitedPrompt(t *testing.T) {
 	if !strings.Contains(prompt, "limited-tool runtime") {
 		t.Fatalf("mixed non-builtin session should use limited-tool prompt:\n%s", prompt)
 	}
+	if !strings.Contains(prompt, "Runtime context:") || !strings.Contains(prompt, "Current UTC date:") {
+		t.Fatalf("limited prompt should include runtime date context:\n%s", prompt)
+	}
 	if !strings.Contains(prompt, "Memory retrieval:") {
 		t.Fatalf("memory-enabled limited prompt should include memory retrieval guidance:\n%s", prompt)
 	}

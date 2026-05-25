@@ -122,6 +122,22 @@ func TestWithExternalResearchSystemGuidance_AppendsOnce(t *testing.T) {
 	}
 }
 
+func TestWithRuntimeContextSystemGuidance_IncludesDateAndFreshnessRule(t *testing.T) {
+	now := time.Date(2026, 5, 25, 12, 34, 56, 0, time.FixedZone("test", 8*60*60))
+	got := WithRuntimeContextSystemGuidance("be helpful", now)
+	for _, want := range []string{
+		"Runtime context:",
+		"Current UTC date: 2026-05-25.",
+		"access date",
+		"Do not invent source dates",
+		"distinguish source publication/update dates from access date",
+	} {
+		if !strings.Contains(got, want) {
+			t.Fatalf("runtime context guidance missing %q:\n%s", want, got)
+		}
+	}
+}
+
 func TestExternalResearchGuidanceMatchesToolSurface(t *testing.T) {
 	cases := []struct {
 		name      string
