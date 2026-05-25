@@ -257,7 +257,10 @@ rendered snapshot text. Runtimes without browser support keep the lightweight
 HTTP-only behavior. Browser fallback preserves `web_fetch`'s default private
 network protection: loopback, RFC1918, link-local, cloud-metadata, and other
 internal addresses are refused unless `AllowPrivateNetwork` is explicitly set
-for trusted local development. Search backends can still time out, rate-limit,
+for trusted local development. Browser snapshots are formatted with interactive
+refs before passive page text, compact adjacent short text blocks, and cap long
+dashboard output so small and medium models see the next actionable refs before
+context truncation. Search backends can still time out, rate-limit,
 or return no usable URLs. The tools surface those cases as structured failures
 so the agent can switch source instead of burning turns:
 

@@ -53,6 +53,14 @@ type TextBlock struct {
 	Text string `json:"text"`
 }
 
+const (
+	maxFormattedTextBlocks     = 120
+	maxFormattedInteractive    = 120
+	maxFormattedInteractiveURL = 240
+	maxFormattedValue          = 160
+	maxGroupedTextLine         = 220
+)
+
 // snapshotJS runs in the page's JS realm. It:
 //
 //   - clears prior data-affent-ref attributes (so refs are always
@@ -267,27 +275,110 @@ func (snap *Snapshot) Format() string {
 	fmt.Fprintf(&b, "SNAPSHOT_ID: %d\n", snap.SnapshotID)
 	b.WriteString("\n")
 
+	interactiveNames := map[string]struct{}{}
+	if len(snap.Interactive) > 0 {
+		b.WriteString("INTERACTIVE ELEMENTS:\n")
+		limit := minInt(len(snap.Interactive), maxFormattedInteractive)
+		for _, el := range snap.Interactive[:limit] {
+			if key := normalizedSnapshotText(el.Name); key != "" {
+				interactiveNames[key] = struct{}{}
+			}
+			line := formatInteractive(el)
+			fmt.Fprintf(&b, "[%d] %s\n", el.Ref, line)
+		}
+		if len(snap.Interactive) > limit {
+			fmt.Fprintf(&b, "[... %d interactive elements omitted; use search/filter, scroll, or navigate directly when possible ...]\n", len(snap.Interactive)-limit)
+		}
+		b.WriteString("\n")
+	} else {
+		b.WriteString("(no interactive elements detected)\n\n")
+	}
+
 	if len(snap.TextBlocks) > 0 {
 		b.WriteString("PAGE TEXT:\n")
-		for _, tb := range snap.TextBlocks {
-			fmt.Fprintf(&b, "%s: %s\n", tb.Type, tb.Text)
-		}
+		writeTextBlocks(&b, snap.TextBlocks, interactiveNames)
 		if snap.TruncatedBlocks {
 			b.WriteString("[... text blocks truncated (200-block cap) ...]\n")
 		}
 		b.WriteString("\n")
 	}
 
-	if len(snap.Interactive) > 0 {
-		b.WriteString("INTERACTIVE ELEMENTS:\n")
-		for _, el := range snap.Interactive {
-			line := formatInteractive(el)
-			fmt.Fprintf(&b, "[%d] %s\n", el.Ref, line)
-		}
-	} else {
-		b.WriteString("(no interactive elements detected)\n")
-	}
 	return b.String()
+}
+
+func writeTextBlocks(b *strings.Builder, blocks []TextBlock, skip map[string]struct{}) {
+	written := 0
+	omittedDuplicates := 0
+	omittedLimit := 0
+	var groupType string
+	var group []string
+	groupLen := 0
+
+	flush := func() {
+		if len(group) == 0 {
+			return
+		}
+		fmt.Fprintf(b, "%s: %s\n", groupType, strings.Join(group, " | "))
+		groupType = ""
+		group = nil
+		groupLen = 0
+	}
+
+	for _, tb := range blocks {
+		text := strings.TrimSpace(tb.Text)
+		if text == "" {
+			continue
+		}
+		if _, ok := skip[normalizedSnapshotText(text)]; ok {
+			omittedDuplicates++
+			continue
+		}
+		if written >= maxFormattedTextBlocks {
+			omittedLimit++
+			continue
+		}
+		typ := strings.TrimSpace(tb.Type)
+		if typ == "" {
+			typ = "text"
+		}
+		if shouldGroupTextBlock(typ, text) {
+			nextLen := groupLen + len(text)
+			if len(group) > 0 {
+				nextLen += 3 // " | "
+			}
+			if groupType == typ && nextLen <= maxGroupedTextLine {
+				group = append(group, text)
+				groupLen = nextLen
+				written++
+				continue
+			}
+			flush()
+			groupType = typ
+			group = []string{text}
+			groupLen = len(text)
+			written++
+			continue
+		}
+		flush()
+		fmt.Fprintf(b, "%s: %s\n", typ, text)
+		written++
+	}
+	flush()
+	if omittedDuplicates > 0 {
+		fmt.Fprintf(b, "[... %d text blocks omitted because they duplicate interactive element names ...]\n", omittedDuplicates)
+	}
+	if omittedLimit > 0 {
+		fmt.Fprintf(b, "[... %d text blocks omitted from formatted snapshot (%d-block display cap) ...]\n", omittedLimit, maxFormattedTextBlocks)
+	}
+}
+
+func shouldGroupTextBlock(typ, text string) bool {
+	switch typ {
+	case "p", "li", "td", "div", "span":
+		return len(text) <= 80
+	default:
+		return false
+	}
 }
 
 func formatInteractive(el InteractiveElement) string {
@@ -297,10 +388,10 @@ func formatInteractive(el InteractiveElement) string {
 		parts = append(parts, fmt.Sprintf("%q", el.Name))
 	}
 	if el.Href != "" {
-		parts = append(parts, "→ "+el.Href)
+		parts = append(parts, "→ "+truncateSnapshotField(el.Href, maxFormattedInteractiveURL))
 	}
 	if el.Value != "" {
-		parts = append(parts, fmt.Sprintf("(value: %q)", el.Value))
+		parts = append(parts, fmt.Sprintf("(value: %q)", truncateSnapshotField(el.Value, maxFormattedValue)))
 	}
 	if el.Checked != nil {
 		if *el.Checked {
@@ -310,4 +401,25 @@ func formatInteractive(el InteractiveElement) string {
 		}
 	}
 	return strings.Join(parts, " ")
+}
+
+func normalizedSnapshotText(s string) string {
+	return strings.ToLower(strings.Join(strings.Fields(strings.TrimSpace(s)), " "))
+}
+
+func truncateSnapshotField(s string, limit int) string {
+	if limit <= 0 || len(s) <= limit {
+		return s
+	}
+	if limit <= len("...(truncated)") {
+		return s[:limit]
+	}
+	return strings.TrimSpace(s[:limit-len("...(truncated)")]) + "...(truncated)"
+}
+
+func minInt(a, b int) int {
+	if a < b {
+		return a
+	}
+	return b
 }

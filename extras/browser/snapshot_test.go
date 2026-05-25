@@ -1,6 +1,7 @@
 package browser
 
 import (
+	"fmt"
 	"strings"
 	"testing"
 )
@@ -40,6 +41,122 @@ func TestFormat_BasicShape(t *testing.T) {
 		if !strings.Contains(out, want) {
 			t.Errorf("Format output missing %q\n---\n%s\n---", want, out)
 		}
+	}
+}
+
+func TestFormat_InteractiveBeforePageText(t *testing.T) {
+	snap := &Snapshot{
+		SnapshotID: 1,
+		URL:        "https://example.com/",
+		TextBlocks: []TextBlock{
+			{Type: "p", Text: "later content"},
+		},
+		Interactive: []InteractiveElement{
+			{Ref: 9, Role: "link", Name: "Important action", Href: "/go"},
+		},
+	}
+	out := snap.Format()
+	interactiveAt := strings.Index(out, "INTERACTIVE ELEMENTS:")
+	textAt := strings.Index(out, "PAGE TEXT:")
+	if interactiveAt < 0 || textAt < 0 || interactiveAt > textAt {
+		t.Fatalf("interactive elements should appear before page text so refs survive context truncation:\n%s", out)
+	}
+}
+
+func TestFormat_GroupsShortTextBlocksAndOmitDuplicates(t *testing.T) {
+	snap := &Snapshot{
+		SnapshotID: 1,
+		URL:        "https://example.com/",
+		Interactive: []InteractiveElement{
+			{Ref: 1, Role: "link", Name: "AffineSN120", Href: "/subnets/120"},
+		},
+		TextBlocks: []TextBlock{
+			{Type: "p", Text: "AffineSN120"},
+			{Type: "p", Text: "Price"},
+			{Type: "p", Text: "0.0634"},
+			{Type: "p", Text: "Market Cap"},
+		},
+	}
+	out := snap.Format()
+	if strings.Contains(out, "p: AffineSN120") {
+		t.Fatalf("duplicate interactive text should be omitted:\n%s", out)
+	}
+	if !strings.Contains(out, "p: Price | 0.0634 | Market Cap") {
+		t.Fatalf("short adjacent text blocks should be grouped:\n%s", out)
+	}
+}
+
+func TestFormat_CapsInteractiveElements(t *testing.T) {
+	var interactive []InteractiveElement
+	for i := 1; i <= maxFormattedInteractive+3; i++ {
+		interactive = append(interactive, InteractiveElement{Ref: i, Role: "link", Name: "Item"})
+	}
+	snap := &Snapshot{SnapshotID: 1, URL: "https://example.com/", Interactive: interactive}
+	out := snap.Format()
+	if strings.Contains(out, "[123]") {
+		t.Fatalf("formatted snapshot should cap interactive elements:\n%s", out)
+	}
+	if !strings.Contains(out, "interactive elements omitted") {
+		t.Fatalf("formatted snapshot should report omitted interactive elements:\n%s", out)
+	}
+}
+
+func TestFormatInteractive_TruncatesLongHrefAndValue(t *testing.T) {
+	got := formatInteractive(InteractiveElement{
+		Ref:   1,
+		Role:  "link",
+		Name:  "Long",
+		Href:  "https://example.com/" + strings.Repeat("x", maxFormattedInteractiveURL+20),
+		Value: strings.Repeat("v", maxFormattedValue+20),
+	})
+	if !strings.Contains(got, "...(truncated)") {
+		t.Fatalf("expected long href/value truncation marker, got %q", got)
+	}
+	if len(got) > maxFormattedInteractiveURL+maxFormattedValue+80 {
+		t.Fatalf("formatted interactive line too large: len=%d line=%q", len(got), got)
+	}
+}
+
+func TestFormat_CompactsDashboardLikeSnapshot(t *testing.T) {
+	var text []TextBlock
+	for i := 0; i < 200; i++ {
+		text = append(text, TextBlock{Type: "p", Text: []string{
+			"Subnets", "BittensorTAO", "USD", "Market Cap", "24hr Volume",
+			"Affine", "SN120", "0.0634", "55.5M", "2.14M",
+		}[i%10]})
+	}
+	var interactive []InteractiveElement
+	for i := 1; i <= 150; i++ {
+		name := "Subnet"
+		href := fmt.Sprintf("https://taostats.io/subnets/%d", i)
+		if i == 120 {
+			name = "AffineSN120"
+			href = "https://taostats.io/subnets/120"
+		}
+		interactive = append(interactive, InteractiveElement{Ref: i, Role: "link", Name: name, Href: href})
+	}
+	snap := &Snapshot{
+		SnapshotID:      9,
+		URL:             "https://taostats.io/subnets",
+		Title:           "Subnets · taostats",
+		TextBlocks:      text,
+		Interactive:     interactive,
+		TruncatedBlocks: true,
+	}
+	out := snap.Format()
+	affineAt := strings.Index(out, `[120] link "AffineSN120"`)
+	textAt := strings.Index(out, "PAGE TEXT:")
+	if affineAt < 0 {
+		t.Fatalf("formatted dashboard snapshot should keep Affine ref visible:\n%s", out)
+	}
+	if textAt < 0 || affineAt > textAt {
+		t.Fatalf("critical table refs should appear before passive dashboard text:\n%s", out)
+	}
+	if len(out) > 20*1024 {
+		t.Fatalf("dashboard-like snapshot should stay compact; len=%d", len(out))
+	}
+	if !strings.Contains(out, "interactive elements omitted") {
+		t.Fatalf("large dashboard should report omitted interactive elements:\n%s", out)
 	}
 }
 
