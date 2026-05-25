@@ -54,6 +54,7 @@ const (
 	runtimeLabelServeEvalMode      = "affent.runtime.serve.eval_mode"
 	runtimeLabelServeMemory        = "affent.runtime.serve.memory"
 	runtimeLabelServeBrowser       = "affent.runtime.serve.browser"
+	runtimeLabelServeBrowserCache  = "affent.runtime.serve.browser_cache_dir"
 	runtimeLabelServeScreenshot    = "affent.runtime.serve.browser_screenshot"
 	runtimeLabelServeWeb           = "affent.runtime.serve.web"
 	runtimeLabelServeWebSearch     = "affent.runtime.serve.web_search"
@@ -760,6 +761,7 @@ func runtimeServeLabels(command []string, envs []string) []string {
 		runtimeLabelServeEvalMode,
 		runtimeLabelServeMemory,
 		runtimeLabelServeBrowser,
+		runtimeLabelServeBrowserCache,
 		runtimeLabelServeScreenshot,
 		runtimeLabelServeWeb,
 		runtimeLabelServeWebSearch,
@@ -798,7 +800,7 @@ func setRuntimeServeEnvLabelValue(values map[string]string, name, value string) 
 
 func runtimeServeLabelFlag(name string) bool {
 	switch name {
-	case "--listen", "--workspace-root", "--memory-root":
+	case "--listen", "--workspace-root", "--memory-root", "--browser-cache-dir":
 		return true
 	default:
 		return false
@@ -846,6 +848,8 @@ func setRuntimeServeLabelValue(values map[string]string, name, value string) {
 		values[runtimeLabelServeMemory] = value
 	case "--browser":
 		values[runtimeLabelServeBrowser] = value
+	case "--browser-cache-dir":
+		values[runtimeLabelServeBrowserCache] = value
 	case "--browser-screenshot":
 		values[runtimeLabelServeScreenshot] = value
 	case "--web":

@@ -229,6 +229,7 @@ func TestAffentDockerfilePackagesRuntimeBinaries(t *testing.T) {
 		"COPY docker/go-cgroup-env.sh /usr/local/bin/affent-go-cgroup-env",
 		"COPY docker/affent-entrypoint.sh /usr/local/bin/affent-entrypoint",
 		"ENTRYPOINT [\"affent-entrypoint\"]",
+		"\"--web=true\", \"--browser=true\", \"--web-search=false\", \"--browser-cache-dir=/workspace/browser-cache\"",
 	} {
 		if !strings.Contains(body, want) {
 			t.Fatalf("affent Dockerfile missing %q", want)
@@ -272,6 +273,7 @@ func TestMakeImageServeEnablesBuiltinsInsideRuntimeContainer(t *testing.T) {
 		"SERVE_EVAL_WORKSPACE ?= $(CURDIR)/.tmp/eval-serve",
 		"SERVE_EVAL_PUBLISH ?= 127.0.0.1:7777:7777",
 		"SERVE_EVAL_PERMISSIONS ?=",
+		"SERVE_DEFAULT_ARGS ?= --web=true --browser=true --web-search=false --browser-cache-dir=/workspace/browser-cache",
 		"SERVE_PUBLISH_PARTS := $(subst :, ,$(SERVE_PUBLISH))",
 		"SERVE_PUBLISH_WORDS := $(words $(SERVE_PUBLISH_PARTS))",
 		"SERVE_HEALTH_HOST := $(if $(filter 3,$(SERVE_PUBLISH_WORDS)),$(word 1,$(SERVE_PUBLISH_PARTS)),127.0.0.1)",
@@ -306,6 +308,7 @@ func TestMakeImageServeEnablesBuiltinsInsideRuntimeContainer(t *testing.T) {
 		`curl -fsS "$(SERVE_HEALTH_URL)"`,
 		`serve_eval_mode={{index .Config.Labels "affent.runtime.serve.eval_mode"}}`,
 		`serve_browser={{index .Config.Labels "affent.runtime.serve.browser"}}`,
+		`serve_browser_cache_dir={{index .Config.Labels "affent.runtime.serve.browser_cache_dir"}}`,
 		`serve_web_search={{index .Config.Labels "affent.runtime.serve.web_search"}}`,
 		`health check failed ($$attempt/$(SERVE_HEALTH_ATTEMPTS))`,
 		`docker logs --tail 100 "$(SERVE_CONTAINER_NAME)"`,
@@ -335,9 +338,12 @@ func TestMakeImageServeEnablesBuiltinsInsideRuntimeContainer(t *testing.T) {
 		`expected_serve_builtins=true`,
 		`expected_serve_eval_mode="$(AFFENTSERVE_EVAL_MODE)"`,
 		`expected_serve_browser="$(AFFENTSERVE_BROWSER)"`,
+		`expected_serve_browser_cache_dir=""`,
 		`--eval-mode) expected_serve_eval_mode=true`,
+		`--browser-cache-dir=*) expected_serve_browser_cache_dir=$${arg#--browser-cache-dir=}`,
 		`--browser=*) expected_serve_browser=$${arg#--browser=}`,
 		`actual_serve_eval_mode=$$(docker inspect "$(SERVE_CONTAINER_NAME)" --format '{{index .Config.Labels "affent.runtime.serve.eval_mode"}}'`,
+		`actual_serve_browser_cache_dir=$$(docker inspect "$(SERVE_CONTAINER_NAME)" --format '{{index .Config.Labels "affent.runtime.serve.browser_cache_dir"}}'`,
 		`actual_serve_web_search=$$(docker inspect "$(SERVE_CONTAINER_NAME)" --format '{{index .Config.Labels "affent.runtime.serve.web_search"}}'`,
 		`was created with serve flags builtins=$$actual_serve_builtins eval_mode=$$actual_serve_eval_mode`,
 		`run make image-serve-restart to recreate it with the requested affentserve feature flags`,
@@ -359,7 +365,7 @@ func TestMakeImageServeEnablesBuiltinsInsideRuntimeContainer(t *testing.T) {
 		`$(if $(SERVE_API_KEY),--api-key "$(SERVE_API_KEY)")`,
 		`$(if $(SERVE_MODEL),--model "$(SERVE_MODEL)")`,
 		`--detach --rm=false --publish "$(SERVE_PUBLISH)"`,
-		"affentserve --listen \"$(SERVE_LISTEN)\" $(if $(SERVE_BASE_URL),--base-url \"$(SERVE_BASE_URL)\") $(if $(SERVE_API_KEY),--api-key \"$(SERVE_API_KEY)\") $(if $(SERVE_MODEL),--model \"$(SERVE_MODEL)\") --workspace-root \"$(SERVE_WORKSPACE_ROOT)\" --memory-root \"$(SERVE_MEMORY_ROOT)\" --builtins $(SERVE_ARGS)",
+		"affentserve --listen \"$(SERVE_LISTEN)\" $(if $(SERVE_BASE_URL),--base-url \"$(SERVE_BASE_URL)\") $(if $(SERVE_API_KEY),--api-key \"$(SERVE_API_KEY)\") $(if $(SERVE_MODEL),--model \"$(SERVE_MODEL)\") --workspace-root \"$(SERVE_WORKSPACE_ROOT)\" --memory-root \"$(SERVE_MEMORY_ROOT)\" --builtins $(SERVE_DEFAULT_ARGS) $(SERVE_ARGS)",
 		`args="--eval-mode"`,
 		`browser) args="$$args --browser=true"`,
 		`browser-screenshot) args="$$args --browser=true --browser-screenshot=true"`,
@@ -370,6 +376,7 @@ func TestMakeImageServeEnablesBuiltinsInsideRuntimeContainer(t *testing.T) {
 		`SERVE_CONTAINER_NAME="$(SERVE_EVAL_CONTAINER_NAME)"`,
 		`IMAGE_WORKSPACE="$(SERVE_EVAL_WORKSPACE)"`,
 		`SERVE_PUBLISH="$(SERVE_EVAL_PUBLISH)"`,
+		`SERVE_DEFAULT_ARGS=""`,
 		`SERVE_ARGS="$$args"`,
 	} {
 		if !strings.Contains(body, want) {
@@ -401,6 +408,9 @@ func TestTechnicalManualDocumentsImageServeSessionPersistence(t *testing.T) {
 		"`make image-serve-smoke`",
 		"verifies the durable session is",
 		"still listed",
+		"`/workspace/browser-cache`",
+		"enable direct web fetch, the real browser toolset",
+		"keeping `web_search`",
 		"`web_search` depends on the",
 		"`TAVILY_API_KEY`",
 		"fails at startup instead of silently degrading to fetch-only",
@@ -427,9 +437,10 @@ func TestMakeOneClickContainerTargetsUseSharedLimits(t *testing.T) {
 	}
 	body := string(raw)
 	for _, want := range []string{
-		"CONTAINER_MEMORY ?= 1g",
+		"CONTAINER_MEMORY ?= 2g",
 		"CONTAINER_CPUS ?= 2",
 		"CONTAINER_PIDS ?= 512",
+		"SERVE_DEFAULT_ARGS ?= --web=true --browser=true --web-search=false --browser-cache-dir=/workspace/browser-cache",
 		"EVAL_RUNTIME_EVAL_MODE ?= false",
 		"EVAL_RUNTIME_MEMORY ?= false",
 		"EVAL_RUNTIME_MCP_CONFIG ?=",
@@ -495,6 +506,7 @@ func TestMakeOneClickContainerTargetsUseSharedLimits(t *testing.T) {
 			`browser) args="$$args --browser=true"`,
 			`web-search) args="$$args --web=true --web-search=true"`,
 			`$(MAKE) image-serve-restart`,
+			`SERVE_DEFAULT_ARGS=""`,
 			`CONTAINER_MEMORY="$(CONTAINER_MEMORY)"`,
 			`CONTAINER_CPUS="$(CONTAINER_CPUS)"`,
 			`CONTAINER_PIDS="$(CONTAINER_PIDS)"`,
@@ -562,7 +574,8 @@ func TestMakeEvalServePermissionsExpandToServeArgs(t *testing.T) {
 	for _, want := range []string{
 		"image-serve-restart",
 		"SERVE_ARGS=--eval-mode --web=true --web-search=true --memory=true",
-		"CONTAINER_MEMORY=1g",
+		"SERVE_DEFAULT_ARGS=",
+		"CONTAINER_MEMORY=2g",
 		"CONTAINER_CPUS=2",
 		"CONTAINER_PIDS=512",
 	} {
@@ -1050,6 +1063,7 @@ func TestRunRuntimeImageLabelsAffentServeRuntimePaths(t *testing.T) {
 			"--builtins",
 			"--eval-mode",
 			"--browser=true",
+			"--browser-cache-dir=/workspace/browser-cache",
 			"--web-search=false",
 			"--api-key", "secret-value",
 		},
@@ -1065,6 +1079,7 @@ func TestRunRuntimeImageLabelsAffentServeRuntimePaths(t *testing.T) {
 		"--label", runtimeLabelServeBuiltins + "=true",
 		"--label", runtimeLabelServeEvalMode + "=true",
 		"--label", runtimeLabelServeBrowser + "=true",
+		"--label", runtimeLabelServeBrowserCache + "=/workspace/browser-cache",
 		"--label", runtimeLabelServeWebSearch + "=false",
 	} {
 		if !contains(args, want) {
@@ -1078,6 +1093,7 @@ func TestRunRuntimeImageLabelsAffentServeRuntimePaths(t *testing.T) {
 			strings.HasPrefix(arg, runtimeLabelServeBuiltins+"=") ||
 			strings.HasPrefix(arg, runtimeLabelServeEvalMode+"=") ||
 			strings.HasPrefix(arg, runtimeLabelServeBrowser+"=") ||
+			strings.HasPrefix(arg, runtimeLabelServeBrowserCache+"=") ||
 			strings.HasPrefix(arg, runtimeLabelServeWebSearch+"=") {
 			if i == 0 || args[i-1] != "--label" {
 				t.Fatalf("service label %q should be passed as value after --label:\n%v", arg, args)
@@ -1095,6 +1111,7 @@ func TestRuntimeServeCommandLabelsIgnoresUnknownFlagsWithoutSkippingKnownOnes(t 
 		"--builtins",
 		"--eval-mode",
 		"--browser=true",
+		"--browser-cache-dir", "/workspace/browser-cache",
 		"--memory=false",
 		"--workspace-root", "/workspace/sessions",
 		"--unknown-flag",
@@ -1110,6 +1127,7 @@ func TestRuntimeServeCommandLabelsIgnoresUnknownFlagsWithoutSkippingKnownOnes(t 
 		runtimeLabelServeBuiltins + "=true",
 		runtimeLabelServeEvalMode + "=true",
 		runtimeLabelServeBrowser + "=true",
+		runtimeLabelServeBrowserCache + "=/workspace/browser-cache",
 		runtimeLabelServeMemory + "=false",
 	} {
 		if !strings.Contains(joined, want) {

@@ -22,6 +22,7 @@ SERVE_EVAL_CONTAINER_NAME ?= affent-eval-serve
 SERVE_EVAL_WORKSPACE ?= $(CURDIR)/.tmp/eval-serve
 SERVE_EVAL_PUBLISH ?= 127.0.0.1:7777:7777
 SERVE_EVAL_PERMISSIONS ?=
+SERVE_DEFAULT_ARGS ?= --web=true --browser=true --web-search=false --browser-cache-dir=/workspace/browser-cache
 SERVE_ARGS ?=
 SERVE_BASE_URL ?= $(or $(AFFENTSERVE_BASE_URL),$(AFFENTCTL_BASE_URL))
 SERVE_API_KEY ?= $(or $(AFFENTSERVE_API_KEY),$(AFFENTCTL_API_KEY))
@@ -53,7 +54,7 @@ SMOKE_MODEL ?= fake
 SMOKE_SESSION_ID ?= smoke-persist
 
 CONTAINER_GO_IMAGE ?= golang:1.24-bookworm
-CONTAINER_MEMORY ?= 1g
+CONTAINER_MEMORY ?= 2g
 CONTAINER_CPUS ?= 2
 CONTAINER_PIDS ?= 512
 TEST_DIR ?= .
@@ -113,7 +114,7 @@ image-run: image-build
 	"$(AFFENTCTL)" image run --workspace "$(IMAGE_WORKSPACE)" --memory "$(CONTAINER_MEMORY)" --cpus "$(CONTAINER_CPUS)" --pids-limit "$(CONTAINER_PIDS)" $(IMAGE_RUN_ARGS) -- $(IMAGE_COMMAND)
 
 image-serve: image-build
-	"$(AFFENTCTL)" image run --workspace "$(IMAGE_WORKSPACE)" --memory "$(CONTAINER_MEMORY)" --cpus "$(CONTAINER_CPUS)" --pids-limit "$(CONTAINER_PIDS)" $(if $(SERVE_CONTAINER_NAME),--name "$(SERVE_CONTAINER_NAME)") --timeout 0s --detach --rm=false --publish "$(SERVE_PUBLISH)" $(IMAGE_RUN_ARGS) -- affentserve --listen "$(SERVE_LISTEN)" $(if $(SERVE_BASE_URL),--base-url "$(SERVE_BASE_URL)") $(if $(SERVE_API_KEY),--api-key "$(SERVE_API_KEY)") $(if $(SERVE_MODEL),--model "$(SERVE_MODEL)") --workspace-root "$(SERVE_WORKSPACE_ROOT)" --memory-root "$(SERVE_MEMORY_ROOT)" --builtins $(SERVE_ARGS)
+	"$(AFFENTCTL)" image run --workspace "$(IMAGE_WORKSPACE)" --memory "$(CONTAINER_MEMORY)" --cpus "$(CONTAINER_CPUS)" --pids-limit "$(CONTAINER_PIDS)" $(if $(SERVE_CONTAINER_NAME),--name "$(SERVE_CONTAINER_NAME)") --timeout 0s --detach --rm=false --publish "$(SERVE_PUBLISH)" $(IMAGE_RUN_ARGS) -- affentserve --listen "$(SERVE_LISTEN)" $(if $(SERVE_BASE_URL),--base-url "$(SERVE_BASE_URL)") $(if $(SERVE_API_KEY),--api-key "$(SERVE_API_KEY)") $(if $(SERVE_MODEL),--model "$(SERVE_MODEL)") --workspace-root "$(SERVE_WORKSPACE_ROOT)" --memory-root "$(SERVE_MEMORY_ROOT)" --builtins $(SERVE_DEFAULT_ARGS) $(SERVE_ARGS)
 
 image-serve-up:
 	@if test -z "$(SERVE_CONTAINER_NAME)"; then \
@@ -155,13 +156,17 @@ image-serve-up:
 			echo "run make image-serve-restart to recreate it with the requested affentserve paths" >&2; \
 			exit 2; \
 		fi; \
-		expected_serve_builtins=true; expected_serve_eval_mode="$(AFFENTSERVE_EVAL_MODE)"; expected_serve_memory="$(AFFENTSERVE_MEMORY)"; expected_serve_browser="$(AFFENTSERVE_BROWSER)"; expected_serve_browser_screenshot="$(AFFENTSERVE_BROWSER_SCREENSHOT)"; expected_serve_web="$(AFFENTSERVE_WEB)"; expected_serve_web_search="$(AFFENTSERVE_WEB_SEARCH)"; expected_serve_subagent="$(AFFENTSERVE_SUBAGENT)"; expected_serve_focused_tasks="$(AFFENTSERVE_FOCUSED_TASKS)"; \
-		for arg in --builtins $(SERVE_ARGS); do \
+		expected_serve_builtins=true; expected_serve_eval_mode="$(AFFENTSERVE_EVAL_MODE)"; expected_serve_memory="$(AFFENTSERVE_MEMORY)"; expected_serve_browser="$(AFFENTSERVE_BROWSER)"; expected_serve_browser_screenshot="$(AFFENTSERVE_BROWSER_SCREENSHOT)"; expected_serve_web="$(AFFENTSERVE_WEB)"; expected_serve_web_search="$(AFFENTSERVE_WEB_SEARCH)"; expected_serve_subagent="$(AFFENTSERVE_SUBAGENT)"; expected_serve_focused_tasks="$(AFFENTSERVE_FOCUSED_TASKS)"; expected_serve_browser_cache_dir=""; \
+		set -- --builtins $(SERVE_DEFAULT_ARGS) $(SERVE_ARGS); \
+		while test "$$#" -gt 0; do \
+			arg="$$1"; shift; \
 			case "$$arg" in \
 				--builtins) expected_serve_builtins=true ;; --builtins=*) expected_serve_builtins=$${arg#--builtins=} ;; \
 				--eval-mode) expected_serve_eval_mode=true ;; --eval-mode=*) expected_serve_eval_mode=$${arg#--eval-mode=} ;; \
 				--memory) expected_serve_memory=true ;; --memory=*) expected_serve_memory=$${arg#--memory=} ;; \
 				--browser) expected_serve_browser=true ;; --browser=*) expected_serve_browser=$${arg#--browser=} ;; \
+				--browser-cache-dir) if test "$$#" -gt 0 && ! printf '%s\n' "$$1" | grep -q '^--'; then expected_serve_browser_cache_dir="$$1"; shift; fi ;; \
+				--browser-cache-dir=*) expected_serve_browser_cache_dir=$${arg#--browser-cache-dir=} ;; \
 				--browser-screenshot) expected_serve_browser_screenshot=true ;; --browser-screenshot=*) expected_serve_browser_screenshot=$${arg#--browser-screenshot=} ;; \
 				--web) expected_serve_web=true ;; --web=*) expected_serve_web=$${arg#--web=} ;; \
 				--web-search) expected_serve_web_search=true ;; --web-search=*) expected_serve_web_search=$${arg#--web-search=} ;; \
@@ -173,13 +178,14 @@ image-serve-up:
 		actual_serve_eval_mode=$$(docker inspect "$(SERVE_CONTAINER_NAME)" --format '{{index .Config.Labels "affent.runtime.serve.eval_mode"}}' 2>/dev/null); \
 		actual_serve_memory=$$(docker inspect "$(SERVE_CONTAINER_NAME)" --format '{{index .Config.Labels "affent.runtime.serve.memory"}}' 2>/dev/null); \
 		actual_serve_browser=$$(docker inspect "$(SERVE_CONTAINER_NAME)" --format '{{index .Config.Labels "affent.runtime.serve.browser"}}' 2>/dev/null); \
+		actual_serve_browser_cache_dir=$$(docker inspect "$(SERVE_CONTAINER_NAME)" --format '{{index .Config.Labels "affent.runtime.serve.browser_cache_dir"}}' 2>/dev/null); \
 		actual_serve_browser_screenshot=$$(docker inspect "$(SERVE_CONTAINER_NAME)" --format '{{index .Config.Labels "affent.runtime.serve.browser_screenshot"}}' 2>/dev/null); \
 		actual_serve_web=$$(docker inspect "$(SERVE_CONTAINER_NAME)" --format '{{index .Config.Labels "affent.runtime.serve.web"}}' 2>/dev/null); \
 		actual_serve_web_search=$$(docker inspect "$(SERVE_CONTAINER_NAME)" --format '{{index .Config.Labels "affent.runtime.serve.web_search"}}' 2>/dev/null); \
 		actual_serve_subagent=$$(docker inspect "$(SERVE_CONTAINER_NAME)" --format '{{index .Config.Labels "affent.runtime.serve.subagent"}}' 2>/dev/null); \
 		actual_serve_focused_tasks=$$(docker inspect "$(SERVE_CONTAINER_NAME)" --format '{{index .Config.Labels "affent.runtime.serve.focused_tasks"}}' 2>/dev/null); \
-		if test "$$actual_serve_builtins" != "$$expected_serve_builtins" || test "$$actual_serve_eval_mode" != "$$expected_serve_eval_mode" || test "$$actual_serve_memory" != "$$expected_serve_memory" || test "$$actual_serve_browser" != "$$expected_serve_browser" || test "$$actual_serve_browser_screenshot" != "$$expected_serve_browser_screenshot" || test "$$actual_serve_web" != "$$expected_serve_web" || test "$$actual_serve_web_search" != "$$expected_serve_web_search" || test "$$actual_serve_subagent" != "$$expected_serve_subagent" || test "$$actual_serve_focused_tasks" != "$$expected_serve_focused_tasks"; then \
-			echo "container $(SERVE_CONTAINER_NAME) was created with serve flags builtins=$$actual_serve_builtins eval_mode=$$actual_serve_eval_mode memory=$$actual_serve_memory browser=$$actual_serve_browser browser_screenshot=$$actual_serve_browser_screenshot web=$$actual_serve_web web_search=$$actual_serve_web_search subagent=$$actual_serve_subagent focused_tasks=$$actual_serve_focused_tasks, but requested builtins=$$expected_serve_builtins eval_mode=$$expected_serve_eval_mode memory=$$expected_serve_memory browser=$$expected_serve_browser browser_screenshot=$$expected_serve_browser_screenshot web=$$expected_serve_web web_search=$$expected_serve_web_search subagent=$$expected_serve_subagent focused_tasks=$$expected_serve_focused_tasks" >&2; \
+		if test "$$actual_serve_builtins" != "$$expected_serve_builtins" || test "$$actual_serve_eval_mode" != "$$expected_serve_eval_mode" || test "$$actual_serve_memory" != "$$expected_serve_memory" || test "$$actual_serve_browser" != "$$expected_serve_browser" || test "$$actual_serve_browser_cache_dir" != "$$expected_serve_browser_cache_dir" || test "$$actual_serve_browser_screenshot" != "$$expected_serve_browser_screenshot" || test "$$actual_serve_web" != "$$expected_serve_web" || test "$$actual_serve_web_search" != "$$expected_serve_web_search" || test "$$actual_serve_subagent" != "$$expected_serve_subagent" || test "$$actual_serve_focused_tasks" != "$$expected_serve_focused_tasks"; then \
+			echo "container $(SERVE_CONTAINER_NAME) was created with serve flags builtins=$$actual_serve_builtins eval_mode=$$actual_serve_eval_mode memory=$$actual_serve_memory browser=$$actual_serve_browser browser_cache_dir=$$actual_serve_browser_cache_dir browser_screenshot=$$actual_serve_browser_screenshot web=$$actual_serve_web web_search=$$actual_serve_web_search subagent=$$actual_serve_subagent focused_tasks=$$actual_serve_focused_tasks, but requested builtins=$$expected_serve_builtins eval_mode=$$expected_serve_eval_mode memory=$$expected_serve_memory browser=$$expected_serve_browser browser_cache_dir=$$expected_serve_browser_cache_dir browser_screenshot=$$expected_serve_browser_screenshot web=$$expected_serve_web web_search=$$expected_serve_web_search subagent=$$expected_serve_subagent focused_tasks=$$expected_serve_focused_tasks" >&2; \
 			echo "run make image-serve-restart to recreate it with the requested affentserve feature flags" >&2; \
 			exit 2; \
 		fi; \
@@ -198,7 +204,7 @@ image-serve-up:
 image-serve-status:
 	@$(call require_affent_runtime_container,image-serve-status); \
 	docker inspect "$(SERVE_CONTAINER_NAME)" \
-		--format 'name={{.Name}} state={{.State.Status}} image={{.Config.Image}} workspace={{index .Config.Labels "affent.runtime.workspace"}} publish={{index .Config.Labels "affent.runtime.publish"}} serve_listen={{index .Config.Labels "affent.runtime.serve.listen"}} serve_workspace_root={{index .Config.Labels "affent.runtime.serve.workspace_root"}} serve_memory_root={{index .Config.Labels "affent.runtime.serve.memory_root"}} serve_builtins={{index .Config.Labels "affent.runtime.serve.builtins"}} serve_eval_mode={{index .Config.Labels "affent.runtime.serve.eval_mode"}} serve_memory={{index .Config.Labels "affent.runtime.serve.memory"}} serve_browser={{index .Config.Labels "affent.runtime.serve.browser"}} serve_browser_screenshot={{index .Config.Labels "affent.runtime.serve.browser_screenshot"}} serve_web={{index .Config.Labels "affent.runtime.serve.web"}} serve_web_search={{index .Config.Labels "affent.runtime.serve.web_search"}} serve_subagent={{index .Config.Labels "affent.runtime.serve.subagent"}} serve_focused_tasks={{index .Config.Labels "affent.runtime.serve.focused_tasks"}} memory={{index .Config.Labels "affent.runtime.memory"}} cpus={{index .Config.Labels "affent.runtime.cpus"}} pids_limit={{index .Config.Labels "affent.runtime.pids_limit"}} host_memory_bytes={{.HostConfig.Memory}} host_nano_cpus={{.HostConfig.NanoCpus}} host_pids_limit={{.HostConfig.PidsLimit}}'; \
+		--format 'name={{.Name}} state={{.State.Status}} image={{.Config.Image}} workspace={{index .Config.Labels "affent.runtime.workspace"}} publish={{index .Config.Labels "affent.runtime.publish"}} serve_listen={{index .Config.Labels "affent.runtime.serve.listen"}} serve_workspace_root={{index .Config.Labels "affent.runtime.serve.workspace_root"}} serve_memory_root={{index .Config.Labels "affent.runtime.serve.memory_root"}} serve_builtins={{index .Config.Labels "affent.runtime.serve.builtins"}} serve_eval_mode={{index .Config.Labels "affent.runtime.serve.eval_mode"}} serve_memory={{index .Config.Labels "affent.runtime.serve.memory"}} serve_browser={{index .Config.Labels "affent.runtime.serve.browser"}} serve_browser_cache_dir={{index .Config.Labels "affent.runtime.serve.browser_cache_dir"}} serve_browser_screenshot={{index .Config.Labels "affent.runtime.serve.browser_screenshot"}} serve_web={{index .Config.Labels "affent.runtime.serve.web"}} serve_web_search={{index .Config.Labels "affent.runtime.serve.web_search"}} serve_subagent={{index .Config.Labels "affent.runtime.serve.subagent"}} serve_focused_tasks={{index .Config.Labels "affent.runtime.serve.focused_tasks"}} memory={{index .Config.Labels "affent.runtime.memory"}} cpus={{index .Config.Labels "affent.runtime.cpus"}} pids_limit={{index .Config.Labels "affent.runtime.pids_limit"}} host_memory_bytes={{.HostConfig.Memory}} host_nano_cpus={{.HostConfig.NanoCpus}} host_pids_limit={{.HostConfig.PidsLimit}}'; \
 	ports=$$(docker port "$(SERVE_CONTAINER_NAME)" 2>/dev/null || true); \
 	if test -n "$$ports"; then printf 'ports:\n%s\n' "$$ports"; else echo "ports: none"; fi
 
@@ -348,6 +354,7 @@ eval-serve-container:
 		SERVE_CONTAINER_NAME="$(SERVE_EVAL_CONTAINER_NAME)" \
 		IMAGE_WORKSPACE="$(SERVE_EVAL_WORKSPACE)" \
 		SERVE_PUBLISH="$(SERVE_EVAL_PUBLISH)" \
+		SERVE_DEFAULT_ARGS="" \
 		SERVE_ARGS="$$args" \
 		CONTAINER_MEMORY="$(CONTAINER_MEMORY)" \
 		CONTAINER_CPUS="$(CONTAINER_CPUS)" \

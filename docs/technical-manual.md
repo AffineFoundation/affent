@@ -139,7 +139,7 @@ make test-container TEST_PACKAGES=./internal/agent
 make test-container TEST_DIR=cmd/affentserve TEST_PACKAGES=./...
 ```
 
-Default container limits are `1g` memory, `2` CPUs, and `512` PIDs where the
+Default container limits are `2g` memory, `2` CPUs, and `512` PIDs where the
 target supports all three. Go runtime limits are derived from cgroups so Go
 builds and tests respect the same resource envelope.
 
@@ -206,8 +206,12 @@ such as `AFFENTCTL_WORKSPACE` or `AFFENTSERVE_WORKSPACE_ROOT` unless passed
 explicitly with `--env`.
 
 `make image-serve-up` and `make image-serve-restart` run `affentserve` in the
-runtime image with durable session state under `/workspace/session-state`. That
-path lives inside `IMAGE_WORKSPACE`, so the server preserves conversation history as long as `IMAGE_WORKSPACE` is the same host path. Deleting a session with
+runtime image with durable session state under `/workspace/session-state`. They
+enable direct web fetch, the real browser toolset, and a persistent browser
+cache at `/workspace/browser-cache` by default, while keeping `web_search`
+disabled unless a search backend is explicitly configured. Those paths live
+inside `IMAGE_WORKSPACE`, so the server preserves conversation history as long as `IMAGE_WORKSPACE` is the same host path, and it preserves browser cache data
+under the same workspace. Deleting a session with
 `DELETE /v1/sessions/{id}` intentionally removes that durable state.
 
 Use `make image-serve-smoke` for a local persistence check; it creates a
