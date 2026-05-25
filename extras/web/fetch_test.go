@@ -546,6 +546,69 @@ func TestFetchTool_UsesRenderedFallbackForDynamicShell(t *testing.T) {
 	}
 }
 
+func TestFetchTool_UsesRenderedFallbackForEmptyHTML(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "text/html; charset=utf-8")
+		w.WriteHeader(http.StatusOK)
+	}))
+	defer srv.Close()
+
+	var gotReason FetchFallbackReason
+	tool := FetchTool(FetchConfig{
+		AllowPrivateNetwork: true,
+		RenderedFallback: func(_ context.Context, requestURL string, reason FetchFallbackReason) (string, error) {
+			gotReason = reason
+			return "URL: " + requestURL + "\nTITLE: rendered empty page\n\nPAGE TEXT:\np: content appeared after browser rendering\n", nil
+		},
+	})
+	args, _ := json.Marshal(map[string]string{"url": srv.URL})
+	out, err := tool.Execute(context.Background(), args)
+	if err != nil {
+		t.Fatalf("Execute: %v", err)
+	}
+	for _, want := range []string{"rendered browser fallback", "Reason=\"empty_response\"", "rendered empty page", "content appeared after browser rendering"} {
+		if !strings.Contains(out, want) {
+			t.Fatalf("empty rendered fallback output missing %q:\n%s", want, out)
+		}
+	}
+	if gotReason.Kind != "empty_response" || gotReason.Status != http.StatusOK || gotReason.ContentType == "" || gotReason.FinalURL == "" {
+		t.Fatalf("empty fallback reason not populated: %+v", gotReason)
+	}
+	if strings.Contains(out, "Failure: kind=empty_response") {
+		t.Fatalf("successful rendered fallback should not be counted as empty response:\n%s", out)
+	}
+}
+
+func TestFetchTool_DoesNotRenderFallbackForNoContent(t *testing.T) {
+	called := false
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "text/html; charset=utf-8")
+		w.WriteHeader(http.StatusNoContent)
+	}))
+	defer srv.Close()
+
+	tool := FetchTool(FetchConfig{
+		AllowPrivateNetwork: true,
+		RenderedFallback: func(_ context.Context, requestURL string, reason FetchFallbackReason) (string, error) {
+			called = true
+			return "URL: " + requestURL + "\nPAGE TEXT:\np: should not render\n", nil
+		},
+	})
+	args, _ := json.Marshal(map[string]string{"url": srv.URL})
+	out, err := tool.Execute(context.Background(), args)
+	if err != nil {
+		t.Fatalf("Execute: %v", err)
+	}
+	if called {
+		t.Fatal("204 No Content should not spend a browser fallback")
+	}
+	for _, want := range []string{"empty response", "Failure: kind=empty_response"} {
+		if !strings.Contains(out, want) {
+			t.Fatalf("no-content output missing %q:\n%s", want, out)
+		}
+	}
+}
+
 func TestFetchTool_DynamicAppShellSurfacesRelevantEmbeddedData(t *testing.T) {
 	scripts := strings.Repeat(`<script src="/_next/static/chunks/app.js"></script>`, 10)
 	var older strings.Builder

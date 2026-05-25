@@ -239,6 +239,11 @@ func fetch(ctx context.Context, cfg FetchConfig, requestURL string) (string, err
 
 	ct := resp.Header.Get("Content-Type")
 	if len(bytes.TrimSpace(body)) == 0 {
+		if shouldUseRenderedFallbackForEmpty(resp.StatusCode, ct) {
+			if rendered, err := renderedFallbackResult(ctx, cfg, requestURL, FetchFallbackReason{Kind: "empty_response", Status: resp.StatusCode, ContentType: ct, Detail: "empty successful HTTP response", FinalURL: finalURL}); err == nil {
+				return rendered, nil
+			}
+		}
 		return emptyFetchResult(finalURL, ct), nil
 	}
 	out := renderBody(body, ct, finalURL)
@@ -564,6 +569,15 @@ func shouldUseRenderedFallback(reason FetchFallbackReason) bool {
 	default:
 		return false
 	}
+}
+
+func shouldUseRenderedFallbackForEmpty(status int, contentType string) bool {
+	switch status {
+	case http.StatusNoContent, http.StatusResetContent:
+		return false
+	}
+	mediaType := contentMediaType(contentType)
+	return mediaType == "" || mediaType == "text/html" || mediaType == "application/xhtml+xml"
 }
 
 func skippedDirectFetchResult(finalURL, reason string) string {

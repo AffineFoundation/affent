@@ -62,6 +62,7 @@ func IsKnownDirectReaderTrapHost(host string) bool {
 	return hasHostSuffix(NormalizeHost(host), []string{
 		"coingecko.com",
 		"coinmarketcap.com",
+		"geckoterminal.com",
 		"x.com",
 		"twitter.com",
 		"facebook.com",

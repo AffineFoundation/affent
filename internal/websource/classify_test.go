@@ -19,7 +19,7 @@ func TestIsSearchResultPage(t *testing.T) {
 		{name: "duckduckgo html", host: "duckduckgo.com", path: "/html", want: true},
 		{name: "brave search", host: "search.brave.com", path: "/", want: true},
 		{name: "google source page", host: "google.com", path: "/finance/quote/TAO-USD", want: false},
-		{name: "ordinary", host: "example.com", path: "/search", want: false},
+		{name: "site local search", host: "example.com", path: "/search", want: true},
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
@@ -39,6 +39,7 @@ func TestHostClasses(t *testing.T) {
 		trap       bool
 	}{
 		{name: "short link", host: "t.co", redirector: true},
+		{name: "geckoterminal", host: "www.geckoterminal.com", trap: true},
 		{name: "x", host: "mobile.x.com", social: true, trap: true},
 		{name: "twitter", host: "twitter.com", social: true, trap: true},
 		{name: "reddit", host: "old.reddit.com", social: true},
