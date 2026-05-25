@@ -1,5 +1,16 @@
 # syntax=docker/dockerfile:1.7
 
+FROM node:22-bookworm AS webui
+
+WORKDIR /src/extras/webui
+
+COPY extras/webui/package.json extras/webui/package-lock.json ./
+RUN --mount=type=cache,target=/root/.npm \
+    npm ci
+
+COPY extras/webui ./
+RUN npm run build
+
 FROM golang:1.24-bookworm AS build
 
 WORKDIR /src
@@ -22,13 +33,14 @@ RUN --mount=type=cache,target=/go/pkg/mod \
 
 COPY docker/go-cgroup-env.sh /tmp/affent-go-cgroup-env
 COPY . .
+COPY --from=webui /src/extras/webui/dist ./cmd/affentserve/webui/dist
 RUN --mount=type=cache,target=/go/pkg/mod \
     --mount=type=cache,target=/root/.cache/go-build \
     . /tmp/affent-go-cgroup-env \
     && CGO_ENABLED=0 go build -trimpath -ldflags="-s -w" -o /out/affentctl ./cmd/affentctl \
     && CGO_ENABLED=0 go build -trimpath -ldflags="-s -w" -o /out/affenteval ./cmd/affenteval \
     && cd cmd/affentserve \
-    && CGO_ENABLED=0 go build -trimpath -ldflags="-s -w" -o /out/affentserve .
+    && CGO_ENABLED=0 go build -tags webui -trimpath -ldflags="-s -w" -o /out/affentserve .
 
 FROM golang:1.24-bookworm
 
@@ -61,4 +73,4 @@ WORKDIR /workspace
 EXPOSE 7777
 
 ENTRYPOINT ["affent-entrypoint"]
-CMD ["affentctl", "--help"]
+CMD ["affentserve", "--listen", "0.0.0.0:7777", "--workspace-root", "/workspace/sessions", "--memory-root", "/workspace/session-state", "--builtins=true", "--web=true"]

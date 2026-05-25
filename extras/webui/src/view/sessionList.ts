@@ -1,0 +1,233 @@
+import type { SessionSummary } from "../api/sessions";
+import type { SessionState } from "../store/sessionState";
+import { conversationTopicFromTurns } from "./continuationPrompt";
+
+const noMessagesYet = "No messages yet";
+
+export type SessionListFilter = "all" | "active" | "saved" | "artifacts" | "memory";
+export type SessionRowTone = "running" | "saved" | "muted" | "error" | "warning";
+
+export interface SessionRowView {
+  id: string;
+  title: string;
+  meta: string[];
+  status: string;
+  tone: SessionRowTone;
+  updated: string;
+  metrics: string[];
+  chips: string[];
+  searchText: string;
+}
+
+export function buildSessionRows(sessions: readonly SessionSummary[]): SessionRowView[] {
+  return [...sessions].sort(compareSessionsForChatList).map((session) => {
+    const status = session.active ? "Live" : session.durable ? "Saved" : "Ephemeral";
+    const chips = featureChips(session);
+    const metrics = usageMetrics(session);
+    const titleSource = session.topic_user_message || session.latest_user_message;
+    const title = titleSource ? summarize(titleSource, 58) : fallbackSessionTitle(session);
+    const updated = session.last_used_at ?? session.created_at ? formatTimestamp(session.last_used_at ?? session.created_at) : noMessagesYet;
+    const searchText = [session.id, title, session.topic_user_message, session.latest_user_message, status, updated, ...metrics, ...chips].join(" ").toLowerCase();
+
+    return {
+      id: session.id,
+      title,
+      meta: buildRowMeta(session.id, title, updated, !titleSource && !session.has_conversation && !session.has_events),
+      status,
+      tone: session.active ? "running" : session.durable ? "saved" : "muted",
+      updated,
+      metrics,
+      chips,
+      searchText,
+    };
+  });
+}
+
+function compareSessionsForChatList(a: SessionSummary, b: SessionSummary): number {
+  if (a.active !== b.active) return a.active ? -1 : 1;
+  const aTime = sessionActivityTime(a);
+  const bTime = sessionActivityTime(b);
+  if (aTime !== bTime) return bTime - aTime;
+  return a.id.localeCompare(b.id);
+}
+
+function sessionActivityTime(session: SessionSummary): number {
+  const value = session.last_used_at ?? session.created_at;
+  if (!value) return 0;
+  const time = Date.parse(value);
+  return Number.isFinite(time) ? time : 0;
+}
+
+export function mergeCurrentSessionRow(
+  rows: readonly SessionRowView[],
+  selectedId: string | undefined,
+  session: SessionState | undefined,
+): SessionRowView[] {
+  if (!selectedId || !session || session.turns.length === 0) return [...rows];
+  return rows.map((row) => (row.id === selectedId ? mergeCurrentSession(row, session) : row));
+}
+
+export function filterSessionRows(
+  rows: readonly SessionRowView[],
+  filter: SessionListFilter,
+  query: string,
+): SessionRowView[] {
+  const search = query.trim().toLowerCase();
+  return rows.filter((row) => matchesFilter(row, filter) && (!search || row.searchText.includes(search)));
+}
+
+function mergeCurrentSession(row: SessionRowView, session: SessionState): SessionRowView {
+  const latestTurn = session.turns.at(-1);
+  const title = currentSessionTitle(row, session);
+  const metrics = currentSessionMetrics(session);
+  const chips = mergeChips(row.chips, currentSessionChips(session));
+  const status = currentSessionStatus(session, row.status);
+  const userSearchText = session.turns.map((turn) => turn.userText).join(" ");
+  const searchText = [row.id, title, status, userSearchText, ...metrics, ...chips].join(" ").toLowerCase();
+  const updated = latestTurn?.userText && row.updated === noMessagesYet ? "" : row.updated;
+
+  return {
+    ...row,
+    title,
+    meta: buildRowMeta(row.id, title, updated),
+    status,
+    tone: currentSessionTone(session, row.tone),
+    updated,
+    metrics,
+    chips,
+    searchText,
+  };
+}
+
+function currentSessionTitle(row: SessionRowView, session: SessionState): string {
+  const topic = conversationTopicFromTurns(session.turns);
+  return topic ? summarize(topic, 58) : row.title;
+}
+
+function currentSessionStatus(session: SessionState, fallback: string): string {
+  if (session.status === "running") return "Live";
+  if (session.status === "completed") return "Done";
+  if (session.status === "max_turns") return "Needs continuation";
+  if (session.status === "error") return "Blocked";
+  if (session.status === "cancelled") return "Cancelled";
+  return fallback;
+}
+
+function currentSessionTone(session: SessionState, fallback: SessionRowTone): SessionRowTone {
+  if (session.status === "running") return "running";
+  const latestTurn = session.turns.at(-1);
+  if (latestTurn?.status === "max_turns") return "warning";
+  if (latestTurn && turnNeedsAttention(latestTurn)) return "error";
+  if (session.status === "completed") return "saved";
+  if (session.status === "max_turns") return "warning";
+  return fallback;
+}
+
+function currentSessionMetrics(session: SessionState): string[] {
+  const latestTurn = session.turns.at(-1);
+  const toolCount = session.turns.reduce((sum, turn) => sum + turn.toolCalls.length, 0);
+  const currentIssueCount = latestTurn && turnNeedsAttention(latestTurn) ? 1 : 0;
+  const continuedCount = session.turns.reduce((sum, turn) => sum + (turn !== latestTurn && turn.status === "max_turns" ? 1 : 0), 0);
+  const priorIssueCount = session.turns.reduce((sum, turn) => sum + (turn !== latestTurn && turn.status !== "max_turns" && turnNeedsAttention(turn) ? 1 : 0), 0);
+  const toolIssueCount = session.turns.reduce((sum, turn) => sum + settledToolIssueCount(turn), 0);
+  const metrics = [`${session.turns.length} message${session.turns.length === 1 ? "" : "s"}`];
+  if (toolCount > 0) metrics.push(`${toolCount} action${toolCount === 1 ? "" : "s"}`);
+  if (currentIssueCount > 0) metrics.push(`${currentIssueCount} issue${currentIssueCount === 1 ? "" : "s"}`);
+  if (continuedCount > 0) metrics.push(`${continuedCount} continued`);
+  if (priorIssueCount > 0) metrics.push(`${priorIssueCount} prior issue${priorIssueCount === 1 ? "" : "s"}`);
+  if (toolIssueCount > 0) metrics.push(`${toolIssueCount} handled`);
+  return metrics;
+}
+
+function turnNeedsAttention(turn: SessionState["turns"][number]): boolean {
+  if (turn.status === "error" || turn.error) return true;
+  if (turn.status === "max_turns") return true;
+  if (turn.status === "completed" && turn.assistantText.trim()) return false;
+  return turn.toolCalls.some((call) => call.status === "error");
+}
+
+function settledToolIssueCount(turn: SessionState["turns"][number]): number {
+  if (turnNeedsAttention(turn)) return 0;
+  if (turn.status !== "completed" || !turn.assistantText.trim()) return 0;
+  return turn.toolCalls.filter((call) => call.status === "error").length;
+}
+
+function currentSessionChips(session: SessionState): string[] {
+  const chips: string[] = [];
+  if (session.turns.some((turn) => turn.toolCalls.some((call) => call.resultArtifactPath))) chips.push("files");
+  if (session.unknownEventCount > 0) chips.push("log notes");
+  return chips;
+}
+
+function mergeChips(existing: readonly string[], incoming: readonly string[]): string[] {
+  return Array.from(new Set([...existing, ...incoming]));
+}
+
+export function countSessionsByFilter(rows: readonly SessionRowView[]): Record<SessionListFilter, number> {
+  return {
+    all: rows.length,
+    active: rows.filter((row) => row.status === "Live").length,
+    saved: rows.filter((row) => row.status === "Saved").length,
+    artifacts: rows.filter((row) => row.chips.includes("files") || row.chips.includes("artifacts")).length,
+    memory: rows.filter((row) => row.chips.includes("memory")).length,
+  };
+}
+
+function matchesFilter(row: SessionRowView, filter: SessionListFilter): boolean {
+  if (filter === "all") return true;
+  if (filter === "active") return row.status === "Live";
+  if (filter === "saved") return row.status === "Saved";
+  if (filter === "artifacts") return row.chips.includes("files") || row.chips.includes("artifacts");
+  if (filter === "memory") return row.chips.includes("memory");
+  return true;
+}
+
+function usageMetrics(session: SessionSummary): string[] {
+  const metrics: string[] = [];
+  const turns = session.usage?.turns ?? 0;
+  if (turns > 0) metrics.push(`${turns} message${turns === 1 ? "" : "s"}`);
+  if (session.browser && session.browser.network_fetch > 0) metrics.push(`${session.browser.network_fetch} web`);
+  return metrics;
+}
+
+function featureChips(session: SessionSummary): string[] {
+  const chips: string[] = [];
+  if (session.has_artifacts) chips.push("files");
+  if (session.has_memory) chips.push("memory");
+  if (session.has_runtime_skills) chips.push("skills");
+  return chips;
+}
+
+function shortenSessionId(id: string): string {
+  if (id.length <= 18) return id;
+  return `${id.slice(0, 8)}...${id.slice(-6)}`;
+}
+
+function fallbackSessionTitle(session: SessionSummary): string {
+  const hasWork = session.has_conversation || session.has_events;
+  if (session.active) return hasWork ? "Live chat" : "New live chat";
+  if (session.durable) return hasWork ? "Saved chat" : "New chat";
+  return hasWork ? "Recent chat" : "New chat";
+}
+
+function buildRowMeta(id: string, title: string, updated: string, empty = false): string[] {
+  const meta: string[] = [];
+  if (title !== shortenSessionId(id)) meta.push(shortenSessionId(id));
+  if (updated && updated !== noMessagesYet) meta.push(updated);
+  if (empty) meta.push(noMessagesYet);
+  return meta.length ? meta : [noMessagesYet];
+}
+
+function summarize(text: string, limit: number): string {
+  const singleLine = text.replace(/\s+/g, " ").trim();
+  if (singleLine.length <= limit) return singleLine;
+  return `${singleLine.slice(0, Math.max(0, limit - 1))}...`;
+}
+
+function formatTimestamp(value?: string): string {
+  if (!value) return noMessagesYet;
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return value;
+  const pad = (part: number) => String(part).padStart(2, "0");
+  return `${date.getUTCFullYear()}-${pad(date.getUTCMonth() + 1)}-${pad(date.getUTCDate())} ${pad(date.getUTCHours())}:${pad(date.getUTCMinutes())} UTC`;
+}

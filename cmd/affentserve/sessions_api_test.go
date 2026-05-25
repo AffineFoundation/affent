@@ -148,11 +148,17 @@ func TestHandleSessionList_MergesActiveAndDurableSessions(t *testing.T) {
 	if resp.Sessions[0].LatestUserMessage != "inspect the webui session list" {
 		t.Fatalf("active latest user = %q", resp.Sessions[0].LatestUserMessage)
 	}
+	if resp.Sessions[0].TopicUserMessage != "inspect the webui session list" {
+		t.Fatalf("active topic user = %q", resp.Sessions[0].TopicUserMessage)
+	}
 	if resp.Sessions[1].ID != "archived" || resp.Sessions[1].Active || !resp.Sessions[1].Durable {
 		t.Fatalf("second session = %+v, want durable-only archived", resp.Sessions[1])
 	}
 	if resp.Sessions[1].LatestUserMessage != "resume archived work" {
 		t.Fatalf("archived latest user = %q", resp.Sessions[1].LatestUserMessage)
+	}
+	if resp.Sessions[1].TopicUserMessage != "old task" {
+		t.Fatalf("archived topic user = %q, want old task", resp.Sessions[1].TopicUserMessage)
 	}
 }
 
@@ -162,15 +168,20 @@ func TestMergeSessionSummariesKeepsActiveLatestUserMessage(t *testing.T) {
 			ID:                "active",
 			Active:            true,
 			LatestUserMessage: "new in-memory task",
+			TopicUserMessage:  "stable active topic",
 		},
 		sessionSummary{
 			ID:                "active",
 			Durable:           true,
 			LatestUserMessage: "older durable task",
+			TopicUserMessage:  "older durable topic",
 		},
 	)
 	if got.LatestUserMessage != "new in-memory task" {
 		t.Fatalf("latest_user_message = %q, want active in-memory value", got.LatestUserMessage)
+	}
+	if got.TopicUserMessage != "stable active topic" {
+		t.Fatalf("topic_user_message = %q, want active in-memory value", got.TopicUserMessage)
 	}
 	if !got.Active || !got.Durable {
 		t.Fatalf("merged active/durable flags = %+v", got)
@@ -211,6 +222,44 @@ func TestLatestUserMessageFromConversationFileReadsBoundedTail(t *testing.T) {
 	}
 	if got != "recent task in tail" {
 		t.Fatalf("latest user = %q, want recent task in tail", got)
+	}
+}
+
+func TestUserMessageSummariesFromConversationFileKeepStableTopic(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "conversation.jsonl")
+	body := `{"role":"user","content":"affine 是 Bittensor 的一个子网，请收集信息"}` + "\n" +
+		`{"role":"assistant","content":"需要更多步骤"}` + "\n" +
+		`{"role":"user","content":"请继续同一个任务。基于已有证据输出报告"}` + "\n"
+	if err := os.WriteFile(path, []byte(body), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	latest, topic, err := userMessageSummariesFromConversationFile(path)
+	if err != nil {
+		t.Fatalf("userMessageSummariesFromConversationFile: %v", err)
+	}
+	if latest != "请继续同一个任务。基于已有证据输出报告" {
+		t.Fatalf("latest user = %q, want continuation prompt", latest)
+	}
+	if topic != "affine 是 Bittensor 的一个子网，请收集信息" {
+		t.Fatalf("topic user = %q, want original task", topic)
+	}
+}
+
+func TestUserMessageSummariesFromMessagesKeepStableTopic(t *testing.T) {
+	latest, topic := userMessageSummariesFromMessages([]agent.ChatMessage{
+		{Role: "user", Content: "research affine"},
+		{Role: "assistant", Content: "not enough steps"},
+		{Role: "user", Content: "continue and summarize"},
+		{Role: "assistant", Content: "partial report"},
+		{Role: "user", Content: "不要再调用任何工具。直接基于本 session 前两轮结果输出最终报告。"},
+	})
+
+	if latest != "不要再调用任何工具。直接基于本 session 前两轮结果输出最终报告。" {
+		t.Fatalf("latest user = %q, want finalization prompt", latest)
+	}
+	if topic != "research affine" {
+		t.Fatalf("topic user = %q, want original task", topic)
 	}
 }
 

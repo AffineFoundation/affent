@@ -11,6 +11,7 @@ import (
 // newRouter wires every endpoint affentserve exposes:
 //
 //	GET    /healthz
+//	GET    /                       (embedded WebUI when built with -tags webui)
 //	GET    /v1/models
 //	POST   /v1/chat/completions
 //	GET    /v1/sessions
@@ -45,6 +46,10 @@ func newRouter(cfg Config, pool *SessionPool, logger zerolog.Logger) http.Handle
 	mux.Handle("/v1/sessions", authed(http.HandlerFunc(handleSessionsCollection(pool))))
 	mux.Handle("/v1/sessions/", authed(http.HandlerFunc(handleSessionRoutes(pool))))
 	mux.Handle("/v1/stats", authed(http.HandlerFunc(handleStats(cfg, pool))))
+
+	if web := webUIHandler(); web != nil {
+		mux.Handle("/", logRequests(logger, web))
+	}
 
 	return mux
 }

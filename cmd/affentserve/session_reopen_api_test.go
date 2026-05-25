@@ -40,6 +40,9 @@ func TestHandleSessionCreate_ReopensDurableSessionAfterRestart(t *testing.T) {
 	if resp.Session.LatestUserMessage != "resume my durable task" {
 		t.Fatalf("latest_user_message = %q, want durable conversation summary", resp.Session.LatestUserMessage)
 	}
+	if resp.Session.TopicUserMessage != "resume my durable task" {
+		t.Fatalf("topic_user_message = %q, want durable conversation topic", resp.Session.TopicUserMessage)
+	}
 	if activeSessionByID(pool2, "restart-create") == nil {
 		t.Fatal("POST create must reopen the durable session into the active pool")
 	}

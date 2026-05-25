@@ -1,0 +1,78 @@
+import { describe, expect, it } from "vitest";
+import { argsRepaired, completedSubagentTree, resultTruncated, toolError } from "../fixtures/scenarios";
+import { reduceRawEvents } from "../store/reduce";
+import { buildExecutionTree } from "./executionTree";
+
+describe("buildExecutionTree", () => {
+  it("promotes user-readable task titles while preserving raw tool names", () => {
+    const [subagent, focused] = buildExecutionTree(reduceRawEvents(completedSubagentTree).turns[0]);
+
+    expect(subagent.title).toBe("Find the WebUI trace requirements");
+    expect(subagent.label).toBe("Delegated work");
+    expect(subagent.subtitle).toBe("subagent_run");
+    expect(subagent.preview).toContain("Conclusion: WebUI must render trace details");
+    expect(subagent.children.find((child) => child.tool === "MCP_search")).toMatchObject({
+      label: "MCP action",
+      title: "Search",
+      subtitle: "MCP_search",
+    });
+    expect(subagent.tokenUsage).toEqual({ inputTokens: 310, outputTokens: 82, totalTokens: 392, costUsd: undefined });
+    expect(subagent.metrics).toEqual(expect.arrayContaining([
+      { label: "tokens", value: "392 tokens" },
+      { label: "input", value: "310" },
+      { label: "output", value: "82" },
+    ]));
+    expect(focused.title).toBe("Verify trace tree requirements");
+    expect(focused.label).toBe("Focused work · verify");
+    expect(focused.subtitle).toBe("run_task");
+    expect(focused.preview).toBe("Trace UI needs hierarchical detail for focused tasks and subagents.");
+    expect(focused.tokenUsage).toEqual({ inputTokens: 220, outputTokens: 58, totalTokens: 278, costUsd: undefined });
+  });
+
+  it("summarizes shell work by the command instead of the raw tool name", () => {
+    const [shell] = buildExecutionTree(reduceRawEvents(resultTruncated).turns[0]);
+
+    expect(shell.title).toBe("cat big.log");
+    expect(shell.label).toBe("Command");
+    expect(shell.preview).toBe("line 1 line 2 …(truncated)");
+    expect(shell.subtitle).toBeUndefined();
+    expect(shell.tool).toBe("shell");
+  });
+
+  it("extracts actionable Next guidance from failed tool output", () => {
+    const [shell] = buildExecutionTree(reduceRawEvents(toolError).turns[0]);
+
+    expect(shell.status).toBe("error");
+    expect(shell.nextHint).toBe("check the Makefile path");
+    expect(shell.preview).toBe("make: *** No rule to make target. Stop.");
+  });
+
+  it("preserves repair comparison fields from tool requests", () => {
+    const [tool] = buildExecutionTree(reduceRawEvents(argsRepaired).turns[0]);
+
+    expect(tool.originalTool).toBe("readFile");
+    expect(tool.originalArgsSummary).toBe("{\"filename\":\"main.go\"}");
+    expect(tool.repairNotes).toEqual(["renamed readFile -> read_file", "coerced filename -> path"]);
+    expect(tool.args).toEqual({ path: "main.go" });
+  });
+
+  it("uses a plain title for current-directory file listing", () => {
+    const [listFiles] = buildExecutionTree(reduceRawEvents([
+      { id: 1, type: "turn.start", data: { turn_id: "t1" } },
+      {
+        id: 2,
+        type: "tool.request",
+        data: {
+          turn_id: "t1",
+          call_id: "c1",
+          tool: "list_files",
+          args: { path: "." },
+        },
+      },
+      { id: 3, type: "tool.result", data: { call_id: "c1", exit_code: 0, result: "a", result_summary: "a" } },
+    ]).turns[0]);
+
+    expect(listFiles.title).toBe("List current directory");
+    expect(listFiles.label).toBe("File action");
+  });
+});

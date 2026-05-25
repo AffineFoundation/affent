@@ -213,11 +213,15 @@ func TestAffentDockerfilePackagesRuntimeBinaries(t *testing.T) {
 	}
 	body := string(raw)
 	for _, want := range []string{
+		"FROM node:22-bookworm AS webui",
+		"npm ci",
+		"npm run build",
 		"COPY docker/go-cgroup-env.sh /tmp/affent-go-cgroup-env",
+		"COPY --from=webui /src/extras/webui/dist ./cmd/affentserve/webui/dist",
 		". /tmp/affent-go-cgroup-env",
 		"go build -trimpath -ldflags=\"-s -w\" -o /out/affentctl ./cmd/affentctl",
 		"go build -trimpath -ldflags=\"-s -w\" -o /out/affenteval ./cmd/affenteval",
-		"go build -trimpath -ldflags=\"-s -w\" -o /out/affentserve .",
+		"go build -tags webui -trimpath -ldflags=\"-s -w\" -o /out/affentserve .",
 		"COPY --from=build /out/affentctl /usr/local/bin/affentctl",
 		"COPY --from=build /out/affenteval /usr/local/bin/affenteval",
 		"COPY --from=build /out/affentserve /usr/local/bin/affentserve",

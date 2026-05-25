@@ -56,6 +56,7 @@ type sessionSummary struct {
 	Capabilities      *sessionCapabilities  `json:"capabilities,omitempty"`
 	HasConversation   bool                  `json:"has_conversation"`
 	LatestUserMessage string                `json:"latest_user_message,omitempty"`
+	TopicUserMessage  string                `json:"topic_user_message,omitempty"`
 	HasEvents         bool                  `json:"has_events"`
 	HasPlan           bool                  `json:"has_plan"`
 	PlanSummary       *sessionPlanSummary   `json:"plan_summary,omitempty"`
@@ -412,6 +413,8 @@ func summarizeActiveSession(s *Session, cfg Config) sessionSummary {
 	s.mu.Lock()
 	createdAt, lastUsedAt := s.createdAt, s.lastUsed
 	s.mu.Unlock()
+	messages := s.conv.Snapshot()
+	latestUser, topicUser := userMessageSummariesFromMessages(messages)
 	usage := s.UsageSnapshot()
 	tools := s.ToolStatsSnapshot()
 	browser := s.BrowserStatsSnapshot()
@@ -421,7 +424,8 @@ func summarizeActiveSession(s *Session, cfg Config) sessionSummary {
 		Active:            true,
 		CreatedAt:         formatTime(createdAt),
 		LastUsedAt:        formatTime(lastUsedAt),
-		LatestUserMessage: latestUserMessageFromMessages(s.conv.Snapshot()),
+		LatestUserMessage: latestUser,
+		TopicUserMessage:  topicUser,
 		Capabilities:      &caps,
 		Usage:             &usage,
 		Tools:             &tools,
@@ -502,7 +506,7 @@ func summarizeDurableSession(pool *SessionPool, id string) (sessionSummary, bool
 		newest = convMod
 	}
 	if exists {
-		summary.LatestUserMessage, err = latestUserMessageFromConversationFile(filepath.Join(dir, "conversation.jsonl"))
+		summary.LatestUserMessage, summary.TopicUserMessage, err = userMessageSummariesFromConversationFile(filepath.Join(dir, "conversation.jsonl"))
 		if err != nil {
 			return sessionSummary{}, false, err
 		}
@@ -559,6 +563,9 @@ func mergeSessionSummaries(a, b sessionSummary) sessionSummary {
 	if a.LatestUserMessage == "" && b.LatestUserMessage != "" {
 		a.LatestUserMessage = b.LatestUserMessage
 	}
+	if a.TopicUserMessage == "" && b.TopicUserMessage != "" {
+		a.TopicUserMessage = b.TopicUserMessage
+	}
 	a.HasEvents = a.HasEvents || b.HasEvents
 	a.HasPlan = a.HasPlan || b.HasPlan
 	if b.PlanSummary != nil {
@@ -602,19 +609,25 @@ func durableSessionDirInfo(path string) (os.FileInfo, bool, error) {
 }
 
 func latestUserMessageFromConversationFile(path string) (string, error) {
+	latest, _, err := userMessageSummariesFromConversationFile(path)
+	return latest, err
+}
+
+func userMessageSummariesFromConversationFile(path string) (string, string, error) {
 	f, err := os.Open(path)
 	if err != nil {
 		if errors.Is(err, os.ErrNotExist) {
-			return "", nil
+			return "", "", nil
 		}
-		return "", err
+		return "", "", err
 	}
 	defer f.Close()
 	if err := seekSessionSummaryTail(f); err != nil {
-		return "", err
+		return "", "", err
 	}
 
 	var latest string
+	var topic string
 	r := bufio.NewReaderSize(f, 64*1024)
 	for {
 		line, tooLong, err := jsonl.ReadBoundedLine(r, maxSessionSummaryLineBytes)
@@ -622,7 +635,7 @@ func latestUserMessageFromConversationFile(path string) (string, error) {
 			break
 		}
 		if err != nil {
-			return "", err
+			return "", "", err
 		}
 		if tooLong {
 			continue
@@ -637,9 +650,15 @@ func latestUserMessageFromConversationFile(path string) (string, error) {
 		}
 		if summary := summarizeLatestUserMessage(msg.Content); summary != "" {
 			latest = summary
+			if !isContinuationSessionPrompt(summary) {
+				topic = summary
+			}
 		}
 	}
-	return latest, nil
+	if topic == "" {
+		topic = latest
+	}
+	return latest, topic, nil
 }
 
 func seekSessionSummaryTail(f *os.File) error {
@@ -683,15 +702,30 @@ func seekSessionSummaryTail(f *os.File) error {
 }
 
 func latestUserMessageFromMessages(messages []agent.ChatMessage) string {
-	for i := len(messages) - 1; i >= 0; i-- {
-		if messages[i].Role != "user" {
+	latest, _ := userMessageSummariesFromMessages(messages)
+	return latest
+}
+
+func userMessageSummariesFromMessages(messages []agent.ChatMessage) (string, string) {
+	var latest string
+	var topic string
+	for _, msg := range messages {
+		if msg.Role != "user" {
 			continue
 		}
-		if summary := summarizeLatestUserMessage(messages[i].Content); summary != "" {
-			return summary
+		summary := summarizeLatestUserMessage(msg.Content)
+		if summary == "" {
+			continue
+		}
+		latest = summary
+		if !isContinuationSessionPrompt(summary) {
+			topic = summary
 		}
 	}
-	return ""
+	if topic == "" {
+		topic = latest
+	}
+	return latest, topic
 }
 
 func summarizeLatestUserMessage(text string) string {
@@ -720,6 +754,50 @@ func unwrapSessionSummaryUserPrompt(text string) string {
 		}
 	}
 	return text
+}
+
+func isContinuationSessionPrompt(text string) bool {
+	normalized := strings.ToLower(strings.Join(strings.Fields(text), " "))
+	if normalized == "" {
+		return false
+	}
+	for _, prefix := range []string{
+		"continue",
+		"resume",
+		"please continue",
+		"continue from",
+		"continue after",
+		"continue with",
+		"continue the same",
+		"same task",
+		"use this",
+		"use the already",
+		"based on previous",
+		"based on the previous",
+		"based on already collected",
+		"based on existing",
+		"go on",
+		"pick up",
+		"继续",
+		"请继续",
+		"继续完成",
+		"从这里继续",
+		"接着",
+		"同一个任务",
+		"上一轮",
+		"基于本",
+		"基于已有",
+		"基于前面",
+		"基于上面",
+		"不要再调用",
+		"不要使用工具",
+		"直接基于",
+	} {
+		if strings.HasPrefix(normalized, prefix) {
+			return true
+		}
+	}
+	return false
 }
 
 func durableRegularFileModTime(path string) (bool, time.Time, error) {
