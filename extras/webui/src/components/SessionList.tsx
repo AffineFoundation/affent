@@ -156,7 +156,7 @@ export function SessionList({
                 data-tone={row.tone}
                 onClick={() => onSelect(row.id)}
               >
-                  <span className="session-row-top">
+                <span className="session-row-top">
                   <span className="pulse-dot" data-status={dotStatus(row.tone)} aria-hidden="true" />
                   <span className="session-title" title={row.id}>
                     {row.title}
@@ -166,11 +166,6 @@ export function SessionList({
                 <span className="session-meta">
                   {row.meta.map((part) => (
                     <span key={part}>{part}</span>
-                  ))}
-                </span>
-                <span className="session-metrics">
-                  {row.metrics.map((metric) => (
-                    <span key={metric}>{metric}</span>
                   ))}
                 </span>
                 <span className="session-chips">

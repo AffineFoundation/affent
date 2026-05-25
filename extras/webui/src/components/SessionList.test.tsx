@@ -22,7 +22,7 @@ describe("SessionList", () => {
     const row = screen.getByRole("button", { name: /s1/ });
     expect(row).toHaveTextContent("Live chat");
     expect(row).toHaveTextContent("Live");
-    expect(row).toHaveTextContent("2 messages");
+    expect(row).not.toHaveTextContent("2 messages");
     expect(row).not.toHaveTextContent("tokens");
     expect(row).not.toHaveTextContent("activity");
     expect(row).toHaveTextContent("files");
@@ -55,7 +55,7 @@ describe("SessionList", () => {
     ]);
 
     const row = screen.getByRole("button", { name: /affine 是 Bittensor/ });
-    expect(row).toHaveTextContent("affine 是 Bittensor 的一个子网，请收集信息");
+    expect(row).toHaveTextContent("affine 是 Bittensor 的一个子网");
     expect(row).not.toHaveTextContent("请继续同一个任务");
   });
 
@@ -165,7 +165,7 @@ describe("SessionList", () => {
 
     const row = screen.getByRole("button", { name: /list the files/ });
     expect(row).toHaveTextContent("Done");
-    expect(row).toHaveTextContent("1 action");
+    expect(row).not.toHaveTextContent("1 action");
     expect(row).not.toHaveTextContent("No messages yet");
   });
 
@@ -190,7 +190,7 @@ describe("SessionList", () => {
     );
 
     const row = screen.getByRole("button", { name: /affine 是 Bittensor/ });
-    expect(row).toHaveTextContent("affine 是 Bittensor 的一个子网，请收集信息");
+    expect(row).toHaveTextContent("affine 是 Bittensor 的一个子网");
     expect(row).not.toHaveTextContent("请继续同一个任务");
   });
 
@@ -244,7 +244,7 @@ describe("SessionList", () => {
     const row = screen.getByRole("button", { name: /research affine/ });
     expect(row).toHaveAttribute("data-tone", "saved");
     expect(row).toHaveTextContent("Done");
-    expect(row).toHaveTextContent("1 tool issue");
+    expect(row).not.toHaveTextContent("1 tool issue");
   });
 
   it("filters and searches sessions without leaving the sidebar", async () => {

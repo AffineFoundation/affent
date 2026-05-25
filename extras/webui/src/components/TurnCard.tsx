@@ -1046,6 +1046,7 @@ function MessageStep({
       ) : null}
       {variant === "user" && onReuse ? (
         <div className="message-actions">
+          <CopyButton label="Copy message" value={text} className="message-action" />
           <button type="button" className="message-action" onClick={() => onReuse(text, "previous_message")}>
             Edit prompt
           </button>

@@ -45,6 +45,7 @@ export function Timeline({
 }) {
   const endRef = useRef<HTMLDivElement | null>(null);
   const latestAnswerRef = useRef<HTMLDivElement | null>(null);
+  const latestTurnRef = useRef<HTMLDivElement | null>(null);
   const activityCount = session.events.length + (pendingMessage ? 1 : 0) + guidanceReceipts.length;
   const prevActivityCount = useRef(activityCount);
   const prevSessionId = useRef(sessionId);
@@ -73,7 +74,9 @@ export function Timeline({
     [session.turns, visibleTurns],
   );
   const pendingFollowUp = pendingMessage?.kind === "task" && session.turns.length > 0 ? pendingMessage.text : undefined;
-  const showConversationMap = Boolean(session.turns.length > 1 || pendingFollowUp || hasReviewContext(session)) && visibleTurnNav.length > 0;
+  const conversationMapAvailable = Boolean(session.turns.length > 1 || pendingFollowUp || hasReviewContext(session));
+  const showConversationMap = conversationMapAvailable && (visibleTurnNav.length > 0 || filtered);
+  const compactConversationMap = session.status === "running" && visibleTurnNav.length === 1 && !filtered;
   const canFindInChat = showConversationMap || hasReviewContext(session);
   const matchingTurns = useMemo(
     () => countMatchingTurns(session.turns, session.events, filter),
@@ -92,6 +95,8 @@ export function Timeline({
     userBrowsedHistory.current = false;
     autoFollowPaused.current = false;
     pointerSelecting.current = false;
+    latestAnswerRef.current = null;
+    latestTurnRef.current = null;
     setFollowing(true);
     setNewActivity(false);
     setFilterMode("all");
@@ -139,7 +144,10 @@ export function Timeline({
       if (!hasActiveSelection() && !pointerSelecting.current) frozenSelectionScrollTop.current = undefined;
     };
     const onScroll = () => {
-      if (pointerSelecting.current || hasActiveSelection()) return;
+      if (pointerSelecting.current || hasActiveSelection()) {
+        restoreFrozenSelectionScroll(scrollRoot, frozenSelectionScrollTop.current);
+        return;
+      }
       if (!userBrowsedHistory.current) return;
       const distance = scrollRoot
         ? scrollRoot.scrollHeight - scrollRoot.scrollTop - scrollRoot.clientHeight
@@ -195,7 +203,8 @@ export function Timeline({
     }
     focusAnswerOnNextHistory.current = false;
     if (following && !autoFollowPaused.current && !selectingText) {
-      endRef.current?.scrollIntoView?.({ behavior: "auto", block: "end" });
+      const target = session.status === "running" ? latestTurnRef.current : endRef.current;
+      target?.scrollIntoView?.({ behavior: "auto", block: session.status === "running" ? "start" : "end" });
     } else {
       if (!selectingText) setNewActivity(true);
     }
@@ -266,14 +275,33 @@ export function Timeline({
         </button>
       ) : null}
       {showConversationMap ? (
-        <div className="conversation-map" data-testid="conversation-map">
+        <div className="conversation-map" data-testid="conversation-map" data-density={compactConversationMap ? "compact" : "normal"}>
           <TurnNavigator
             items={visibleTurnNav}
             pendingTask={pendingFollowUp}
             searchQuery={searchQuery}
             findActive={filtered || toolsOpen}
             onOpenFind={canFindInChat ? () => setToolsOpen(true) : undefined}
+            compact={compactConversationMap}
           />
+          {searchAvailable ? (
+            <TimelineFindPanel
+              open={toolsOpen}
+              filtered={filtered}
+              matchingTurns={matchingTurns}
+              turnCount={session.turns.length}
+              searchQuery={searchQuery}
+              searchText={searchText}
+              filterMode={filterMode}
+              filtersOpen={filtersOpen}
+              filterCounts={filterCounts}
+              onOpenChange={setToolsOpen}
+              onSearchChange={setSearchQuery}
+              onFilterOpenChange={setFiltersOpen}
+              onFilterChange={setFilterMode}
+              onReset={resetFilter}
+            />
+          ) : null}
         </div>
       ) : null}
       <div className="timeline" data-testid="timeline">
@@ -282,9 +310,15 @@ export function Timeline({
             {visibleTurns.map((turn) => {
               const turnIndex = session.turns.indexOf(turn);
               const isLatestTurn = turn === session.turns.at(-1);
-              const anchorRef = isLatestTurn && turn.assistantText.trim() ? latestAnswerRef : undefined;
               return (
-                <div key={turn.id} ref={anchorRef} className="timeline-turn-anchor">
+                <div
+                  key={turn.id}
+                  ref={(node) => {
+                    if (isLatestTurn) latestTurnRef.current = node;
+                    if (isLatestTurn) latestAnswerRef.current = turn.assistantText.trim() ? node : null;
+                  }}
+                  className="timeline-turn-anchor"
+                >
                   <TurnCard
                     turn={turn}
                     turnNumber={turnIndex + 1}
@@ -313,74 +347,110 @@ export function Timeline({
             <p>
               {searchText ? `Search "${searchText}"` : activeFilterLabel} did not match this session.
             </p>
-            <button type="button" className="secondary-action" onClick={resetFilter}>
-              Reset filters
-            </button>
+            {!searchAvailable ? (
+              <button type="button" className="secondary-action" onClick={resetFilter}>
+                Reset filters
+              </button>
+            ) : null}
           </div>
         )}
         <div ref={endRef} className="timeline-end" aria-hidden="true" />
       </div>
-      {searchAvailable ? (
-        <details
-          className="timeline-toolbar"
-          data-testid="timeline-toolbar"
-          open={toolsOpen}
-          onToggle={(event) => setToolsOpen(event.currentTarget.open)}
-        >
-          <summary>
-            <span>Find in chat</span>
-            {toolsOpen || filtered ? (
-              <span className="timeline-match-count" data-testid="timeline-match-count">
-                {matchingTurns}/{session.turns.length} messages
-              </span>
-            ) : null}
-          </summary>
-          {toolsOpen ? (
-            <div className="timeline-toolbox">
-              <label className="timeline-search">
-                <span>Search messages and outputs</span>
-                <input
-                  value={searchQuery}
-                  onChange={(event) => setSearchQuery(event.target.value)}
-                  placeholder="Message, source, output"
-                  data-testid="timeline-search"
-                />
-              </label>
-              <details
-                className="timeline-advanced"
-                data-testid="timeline-advanced-filter"
-                open={filtersOpen || filterMode !== "all"}
-                onToggle={(event) => setFiltersOpen(event.currentTarget.open)}
-              >
-                <summary>Filter results</summary>
-                {filtersOpen || filterMode !== "all" ? (
-                  <div className="timeline-filter" role="group" aria-label="Conversation filter">
-                    {filterModes.map(({ mode, label }) => (
-                      <button
-                        key={mode}
-                        type="button"
-                        aria-pressed={filterMode === mode}
-                        onClick={() => setFilterMode(mode)}
-                      >
-                        <span>{label}</span>
-                        <span className="filter-count" aria-hidden="true">
-                          {filterCounts[mode]}
-                        </span>
-                      </button>
-                    ))}
-                  </div>
-                ) : null}
-              </details>
-              {filtered ? (
-                <button type="button" className="timeline-reset" onClick={resetFilter}>
-                  Show all
-                </button>
-              ) : null}
-            </div>
-          ) : null}
-        </details>
-      ) : null}
     </>
+  );
+}
+
+function TimelineFindPanel({
+  open,
+  filtered,
+  matchingTurns,
+  turnCount,
+  searchQuery,
+  searchText,
+  filterMode,
+  filtersOpen,
+  filterCounts,
+  onOpenChange,
+  onSearchChange,
+  onFilterOpenChange,
+  onFilterChange,
+  onReset,
+}: {
+  open: boolean;
+  filtered: boolean;
+  matchingTurns: number;
+  turnCount: number;
+  searchQuery: string;
+  searchText: string;
+  filterMode: TimelineFilterMode;
+  filtersOpen: boolean;
+  filterCounts: Record<TimelineFilterMode, number>;
+  onOpenChange: (open: boolean) => void;
+  onSearchChange: (query: string) => void;
+  onFilterOpenChange: (open: boolean) => void;
+  onFilterChange: (mode: TimelineFilterMode) => void;
+  onReset: () => void;
+}) {
+  const filterOpen = filtersOpen || filterMode !== "all";
+  return (
+    <details
+      className="timeline-toolbar"
+      data-testid="timeline-toolbar"
+      open={open}
+      onToggle={(event) => onOpenChange(event.currentTarget.open)}
+    >
+      <summary>
+        <span>{searchText ? `Search "${searchText}"` : "Find in chat"}</span>
+        {open || filtered ? (
+          <span className="timeline-match-count" data-testid="timeline-match-count">
+            {matchingTurns}/{turnCount} messages
+          </span>
+        ) : null}
+      </summary>
+      {open ? (
+        <div className="timeline-toolbox">
+          <label className="timeline-search">
+            <span>Search messages and outputs</span>
+            <input
+              value={searchQuery}
+              onChange={(event) => onSearchChange(event.target.value)}
+              placeholder="Message, source, output"
+              data-testid="timeline-search"
+            />
+          </label>
+          <details
+            className="timeline-advanced"
+            data-testid="timeline-advanced-filter"
+            open={filterOpen}
+            onToggle={(event) => onFilterOpenChange(event.currentTarget.open)}
+          >
+            <summary>Filter results</summary>
+            {filterOpen ? (
+              <div className="timeline-filter" role="group" aria-label="Conversation filter">
+                {filterModes.map(({ mode, label }) => (
+                  <button
+                    key={mode}
+                    type="button"
+                    aria-pressed={filterMode === mode}
+                    onClick={() => onFilterChange(mode)}
+                  >
+                    <span>{label}</span>
+                    <span className="filter-count" aria-hidden="true">
+                      {filterCounts[mode]}
+                    </span>
+                  </button>
+                ))}
+              </div>
+            ) : null}
+          </details>
+          {filtered ? (
+            <button type="button" className="timeline-reset" onClick={onReset}>
+              Show all
+            </button>
+          ) : null}
+        </div>
+      ) : null}
+    </details>
   );
 }
 

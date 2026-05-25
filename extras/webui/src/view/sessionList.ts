@@ -25,7 +25,7 @@ export function buildSessionRows(sessions: readonly SessionSummary[]): SessionRo
     const chips = featureChips(session);
     const metrics = usageMetrics(session);
     const titleSource = session.topic_user_message || session.latest_user_message;
-    const title = titleSource ? summarize(titleSource, 58) : fallbackSessionTitle(session);
+    const title = titleSource ? summarizeSessionTitle(titleSource) : fallbackSessionTitle(session);
     const updated = session.last_used_at ?? session.created_at ? formatTimestamp(session.last_used_at ?? session.created_at) : noMessagesYet;
     const searchText = [session.id, title, session.topic_user_message, session.latest_user_message, status, updated, ...metrics, ...chips].join(" ").toLowerCase();
 
@@ -101,7 +101,7 @@ function mergeCurrentSession(row: SessionRowView, session: SessionState): Sessio
 
 function currentSessionTitle(row: SessionRowView, session: SessionState): string {
   const topic = conversationTopicFromTurns(session.turns);
-  return topic ? summarize(topic, 58) : row.title;
+  return topic ? summarizeSessionTitle(topic) : row.title;
 }
 
 function currentSessionStatus(session: SessionState, fallback: string): string {
@@ -208,6 +208,25 @@ function fallbackSessionTitle(session: SessionSummary): string {
   if (session.active) return hasWork ? "Live chat" : "New live chat";
   if (session.durable) return hasWork ? "Saved chat" : "New chat";
   return hasWork ? "Recent chat" : "New chat";
+}
+
+function summarizeSessionTitle(text: string): string {
+  const cleaned = text.replace(/\s+/g, " ").trim();
+  if (!cleaned) return "Saved chat";
+  const firstLine = cleaned.split(/\n+/)[0] ?? cleaned;
+  const primaryClause = firstLine
+    .split(/[。.!?；;]+/)
+    .map((part) => part.trim())
+    .find(Boolean) ?? firstLine;
+  const beforeInstruction = primaryClause
+    .split(/[,，]/)
+    .map((part) => part.trim())
+    .find((part) => part && !/^(请|请你|帮我|麻烦|please\b|can you\b|could you\b|continue\b|继续)/i.test(part)) ?? primaryClause;
+  const normalized = beforeInstruction
+    .replace(/^(请你?|麻烦你?|帮我|please\s+|can you\s+|could you\s+)/i, "")
+    .replace(/^(收集|检索|查询|介绍|分析|总结|梳理)\s*/i, "")
+    .trim();
+  return summarize(normalized || cleaned, 42);
 }
 
 function buildRowMeta(id: string, title: string, updated: string, empty = false): string[] {

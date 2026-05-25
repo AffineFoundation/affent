@@ -265,6 +265,8 @@ describe("Timeline", () => {
     expect(runningAnswer).toHaveTextContent("Working on this");
     expect(runningAnswer).toHaveTextContent("Inspect docs for WebUI trace requirements");
     expect(runningAnswer).toHaveTextContent("1 running");
+    expect(screen.getByTestId("conversation-map")).toHaveAttribute("data-density", "compact");
+    expect(screen.queryByTestId("turn-nav-glance")).toBeNull();
     expect(screen.queryByRole("button", { name: "Copy answer" })).toBeNull();
     expect(screen.getByTestId("agent-activity")).toHaveTextContent("Agent activity");
     expect(screen.getByTestId("agent-activity-digest")).toHaveTextContent("Now");
@@ -395,6 +397,18 @@ describe("Timeline", () => {
     await user.click(screen.getByRole("button", { name: "Copy answer" }));
 
     expect(writeText).toHaveBeenCalledWith("There are two files.");
+    expect(screen.getByRole("button", { name: "Copied" })).toBeInTheDocument();
+  });
+
+  it("copies the user's message from the chat bubble", async () => {
+    const user = userEvent.setup();
+    const writeText = vi.fn().mockResolvedValue(undefined);
+    Object.defineProperty(navigator, "clipboard", { configurable: true, value: { writeText } });
+    renderTimeline(completedTurn, "s1", undefined, vi.fn());
+
+    await user.click(screen.getByRole("button", { name: "Copy message" }));
+
+    expect(writeText).toHaveBeenCalledWith("list the files");
     expect(screen.getByRole("button", { name: "Copied" })).toBeInTheDocument();
   });
 
@@ -806,11 +820,16 @@ describe("Timeline", () => {
     await openTimelineTools(user);
     await user.type(screen.getByTestId("timeline-search"), "definitely-not-present");
 
+    expect(within(screen.getByTestId("conversation-map")).getByTestId("timeline-toolbar")).toBeInTheDocument();
+    expect(screen.queryByTestId("turn-navigator")).toBeNull();
+    expect(screen.getByTestId("timeline-search")).toHaveValue("definitely-not-present");
     expect(screen.getByTestId("timeline-filter-empty")).toHaveTextContent("No matching messages");
     expect(screen.getByTestId("timeline-filter-empty")).toHaveTextContent("definitely-not-present");
     expect(screen.getByTestId("timeline-match-count")).toHaveTextContent("0/2 messages");
+    expect(screen.getByRole("button", { name: "Show all" })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Reset filters" })).toBeNull();
 
-    await user.click(screen.getByRole("button", { name: "Reset filters" }));
+    await user.click(screen.getByRole("button", { name: "Show all" }));
     expect(screen.getByTestId("timeline-search")).toHaveValue("");
     expect(screen.getByTestId("timeline-match-count")).toHaveTextContent("2/2 messages");
     expect(screen.queryByTestId("timeline-filter-empty")).toBeNull();
@@ -881,6 +900,15 @@ describe("Timeline", () => {
     expect(scrollIntoView).toHaveBeenCalledWith({ behavior: "auto", block: "end" });
   });
 
+  it("anchors running updates to the current turn instead of the bottom spacer", () => {
+    const { scrollIntoView } = installScrollIntoViewSpy();
+    const { rerender } = render(<ScrollHarness events={runningStarted} />);
+
+    rerender(<ScrollHarness events={runningSubagent} />);
+
+    expect(scrollIntoView).toHaveBeenCalledWith({ behavior: "auto", block: "start" });
+  });
+
   it("opens saved completed history at the latest answer without adding jump chrome", () => {
     const { scrollIntoView } = installScrollIntoViewSpy();
     const { rerender } = render(<ScrollHarness events={[]} initialHistoryFocus="answer" />);
@@ -929,6 +957,10 @@ describe("Timeline", () => {
     });
 
     fireEvent.pointerDown(scrollRoot);
+    scrollRoot.scrollTop = 260;
+    fireEvent.scroll(scrollRoot);
+    expect(scrollRoot.scrollTop).toBe(144);
+
     scrollRoot.scrollTop = 260;
     rerender(<ScrollHarness events={completedTurn} guidanceReceipts={[{ id: 1, text: "check tests first" }]} />);
 

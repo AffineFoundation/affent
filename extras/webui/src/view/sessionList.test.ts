@@ -109,7 +109,7 @@ describe("sessionList view model", () => {
     ]);
 
     expect(rows[0]).toMatchObject({
-      title: "affine 是 Bittensor 的一个子网，请收集信息",
+      title: "affine 是 Bittensor 的一个子网",
       meta: ["affine-session", "2026-05-24 17:37 UTC"],
       status: "Saved",
     });
@@ -380,7 +380,7 @@ describe("sessionList view model", () => {
     );
 
     expect(rows[0]).toMatchObject({
-      title: "affine 是 Bittensor 的一个子网，请收集信息",
+      title: "affine 是 Bittensor 的一个子网",
       status: "Done",
       tone: "saved",
       metrics: ["2 messages", "1 continued"],
