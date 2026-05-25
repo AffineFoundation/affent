@@ -226,13 +226,20 @@ describe("App", () => {
     render(<App />);
 
     const runtime = await screen.findByTestId("runtime-capabilities");
-    expect(runtime).toHaveTextContent("Setup");
-    expect(runtime).toHaveTextContent("No live web access");
+    expect(runtime).toHaveTextContent("Capabilities");
+    expect(runtime).toHaveTextContent("Local project mode");
     expect(runtime).toHaveTextContent("current outside information may be incomplete");
-    expect(runtime).toHaveTextContent("Research No live web");
-    expect(runtime).toHaveTextContent("Project No local tools");
-    expect(runtime).toHaveTextContent("Workers Can delegate 2 levels + 4 task types");
-    expect(runtime).toHaveTextContent("Recall Memory");
+    expect(runtime).toHaveTextContent("Research");
+    expect(runtime).toHaveTextContent("Offline");
+    expect(runtime).toHaveTextContent("No live web tools for current outside information.");
+    expect(runtime).toHaveTextContent("Project");
+    expect(runtime).toHaveTextContent("Read-only");
+    expect(runtime).toHaveTextContent("Workers");
+    expect(runtime).toHaveTextContent("Delegation on");
+    expect(runtime).toHaveTextContent("Can hand off focused work (2 levels, 4 focused task types).");
+    expect(runtime).toHaveTextContent("Recall");
+    expect(runtime).toHaveTextContent("Memory");
+    expect(runtime).toHaveTextContent("Can use saved memory.");
     const input = screen.getByPlaceholderText("Message Affent...");
     expect(input).toBeVisible();
     await userEvent.type(input, "Analyze Affine recent market trends and Twitter reaction");

@@ -623,20 +623,20 @@ function RuntimeStatusBar({ view }: { view: RuntimeCapabilityView }) {
       aria-label={`${view.headline}. ${view.detail}`}
     >
       <summary>
-        <span className="runtime-status-kicker">Setup</span>
+        <span className="runtime-status-kicker">Capabilities</span>
         <span className="runtime-capability-title">{view.headline}</span>
         <span className="runtime-capability-detail">
           <span className="runtime-capability-separator" aria-hidden="true">·</span>
           {view.detail}
         </span>
       </summary>
-      <div className="runtime-capability-chips">
+      <div className="runtime-capability-list">
         {view.chips.map((chip) => (
-          <span key={`${chip.group}:${chip.label}`} data-tone={chip.tone}>
+          <div key={`${chip.group}:${chip.label}`} className="runtime-capability-item" data-tone={chip.tone}>
             <b>{chip.group}</b>
-            {" "}
-            {chip.label}
-          </span>
+            <strong>{chip.label}</strong>
+            <small>{chip.detail}</small>
+          </div>
         ))}
       </div>
     </details>
