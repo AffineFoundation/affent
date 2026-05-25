@@ -31,7 +31,7 @@ func RuntimeErrorDiagnosticsFromFailures(failures []string, maxPerKind int) (map
 		if maxPerKind > 0 && len(examples[kind]) < maxPerKind {
 			examples[kind] = append(examples[kind], RuntimeErrorExample{
 				Kind:    kind,
-				Message: compactOneLine(failure, 320),
+				Message: compactOneLine(actionableRuntimeErrorMessage(kind, failure), 520),
 			})
 		}
 	}
@@ -42,6 +42,29 @@ func RuntimeErrorDiagnosticsFromFailures(failures []string, maxPerKind int) (map
 		examples = nil
 	}
 	return counts, examples
+}
+
+func actionableRuntimeErrorMessage(kind, message string) string {
+	trimmed := strings.TrimSpace(message)
+	lower := strings.ToLower(trimmed)
+	switch kind {
+	case "llm_timeout":
+		if strings.Contains(lower, "first-token latency") ||
+			strings.Contains(lower, "stream idle timeout") ||
+			strings.Contains(lower, "while waiting for chat completion") {
+			return trimmed
+		}
+		return "LLM call timed out (kind=llm_timeout). The per-call wall-clock timeout fired while waiting for the chat completion or next SSE chunk. Common causes: first-token latency from prefill or scheduler queueing, a reasoning model paused too long between chunks, scheduler/KV-cache stalls, proxy buffering, or an upstream that kept the HTTP stream open without useful tokens. Original error: " + trimmed
+	case "llm_incomplete_stream":
+		if strings.Contains(lower, "incomplete sse stream") ||
+			strings.Contains(lower, "terminal finish_reason") ||
+			strings.Contains(lower, "upstream/proxy abort") {
+			return trimmed
+		}
+		return "LLM stream ended without a terminal finish_reason (kind=llm_incomplete_stream). HTTP streaming started, but the upstream closed before sending a final finish_reason chunk. Common causes: sglang/vLLM worker crash, KV-cache preemption or abort, reverse-proxy reset, or OOM kill. Original error: " + trimmed
+	default:
+		return trimmed
+	}
 }
 
 func isLLMTimeoutFailure(lower string) bool {

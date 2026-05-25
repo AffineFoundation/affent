@@ -201,8 +201,38 @@ func TestMergeRuntimeDiagnosticsFromFailures(t *testing.T) {
 		t.Fatalf("llm_timeout RuntimeErrorExamples = %#v", timeout)
 	}
 	incomplete := res.RuntimeErrorExamples["llm_incomplete_stream"]
-	if len(incomplete) != 1 || !strings.Contains(incomplete[0].Message, "stream ended without finish") {
+	if len(incomplete) != 1 ||
+		!strings.Contains(incomplete[0].Message, "terminal finish_reason") ||
+		!strings.Contains(incomplete[0].Message, "OOM kill") ||
+		!strings.Contains(incomplete[0].Message, "Original error:") ||
+		!strings.Contains(incomplete[0].Message, "stream ended without finish") {
 		t.Fatalf("llm_incomplete_stream RuntimeErrorExamples = %#v", incomplete)
+	}
+}
+
+func TestRuntimeErrorDiagnosticsFromFailuresAddsActionableLegacyMessages(t *testing.T) {
+	failures := []string{
+		`affentctl run failed: exit=1 err=context deadline exceeded max-call-timeout/per-call-timeout=4m0s`,
+		`affentctl run failed: exit=1 err=stream ended without finish`,
+	}
+	counts, examples := RuntimeErrorDiagnosticsFromFailures(failures, 2)
+	if counts["llm_timeout"] != 1 || counts["llm_incomplete_stream"] != 1 {
+		t.Fatalf("counts = %#v", counts)
+	}
+	timeout := examples["llm_timeout"]
+	if len(timeout) != 1 ||
+		!strings.Contains(timeout[0].Message, "per-call wall-clock timeout") ||
+		!strings.Contains(timeout[0].Message, "first-token latency") ||
+		!strings.Contains(timeout[0].Message, "Original error:") {
+		t.Fatalf("llm_timeout examples = %#v", timeout)
+	}
+	incomplete := examples["llm_incomplete_stream"]
+	if len(incomplete) != 1 ||
+		!strings.Contains(incomplete[0].Message, "terminal finish_reason") ||
+		!strings.Contains(incomplete[0].Message, "sglang/vLLM") ||
+		!strings.Contains(incomplete[0].Message, "reverse-proxy reset") ||
+		!strings.Contains(incomplete[0].Message, "Original error:") {
+		t.Fatalf("llm_incomplete_stream examples = %#v", incomplete)
 	}
 }
 
