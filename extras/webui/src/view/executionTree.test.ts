@@ -39,6 +39,24 @@ describe("buildExecutionTree", () => {
     expect(shell.tool).toBe("shell");
   });
 
+  it("uses plain titles for simple shell directory listings", () => {
+    const turn = reduceRawEvents([
+      { id: 1, type: "turn.start", data: { turn_id: "t1" } },
+      { id: 2, type: "tool.request", data: { turn_id: "t1", call_id: "c1", tool: "shell", args: { command: "ls" } } },
+      { id: 3, type: "tool.result", data: { call_id: "c1", exit_code: 0, result: "a", result_summary: "a" } },
+      { id: 4, type: "tool.request", data: { turn_id: "t1", call_id: "c2", tool: "shell", args: { command: "ls -la docs/" } } },
+      { id: 5, type: "tool.result", data: { call_id: "c2", exit_code: 0, result: "b", result_summary: "b" } },
+      { id: 6, type: "tool.request", data: { turn_id: "t1", call_id: "c3", tool: "shell", args: { command: "ls docs && pwd" } } },
+      { id: 7, type: "tool.result", data: { call_id: "c3", exit_code: 0, result: "c", result_summary: "c" } },
+    ]).turns[0];
+
+    const [current, docs, compound] = buildExecutionTree(turn);
+
+    expect(current.title).toBe("List current directory");
+    expect(docs.title).toBe("List docs");
+    expect(compound.title).toBe("ls docs && pwd");
+  });
+
   it("extracts actionable Next guidance from failed tool output", () => {
     const [shell] = buildExecutionTree(reduceRawEvents(toolError).turns[0]);
 

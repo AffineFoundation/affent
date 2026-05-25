@@ -236,7 +236,7 @@ function titleFor(kind: ExecutionNodeKind, tool: string, args?: JsonObject, pars
     const mcp = splitMcpTool(tool);
     return mcp ? prettyToolName(mcp.tool) : "MCP action";
   }
-  if (tool === "shell") return readString(args, "command") ?? "Shell command";
+  if (tool === "shell") return shellCommandTitle(readString(args, "command"));
   if (tool === "web_fetch") {
     const url = readString(args, "url");
     return url ? `Fetch ${readableUrl(url)}` : "Fetch web page";
@@ -256,6 +256,25 @@ function titleFor(kind: ExecutionNodeKind, tool: string, args?: JsonObject, pars
   if (tool.startsWith("browser_")) return prettyToolName(tool.replace(/^browser_/, "Browser "));
   if (tool.startsWith("web_")) return prettyToolName(tool);
   return prettyToolName(tool);
+}
+
+function shellCommandTitle(command?: string): string {
+  const value = command?.trim();
+  if (!value) return "Shell command";
+  const listTarget = readableListCommandTarget(value);
+  if (listTarget === ".") return "List current directory";
+  if (listTarget) return `List ${listTarget}`;
+  return value;
+}
+
+function readableListCommandTarget(command: string): string | undefined {
+  if (!/^ls(?:\s|$)/.test(command)) return undefined;
+  if (/[;&|`$<>]/.test(command)) return undefined;
+  const parts = command.split(/\s+/).filter(Boolean).slice(1);
+  const targets = parts.filter((part) => !part.startsWith("-"));
+  if (targets.length === 0) return ".";
+  if (targets.length === 1) return targets[0] === "./" ? "." : targets[0].replace(/\/+$/, "") || ".";
+  return undefined;
 }
 
 function subtitleFor(kind: ExecutionNodeKind, tool: string, args?: JsonObject, parsed?: JsonObject): string | undefined {

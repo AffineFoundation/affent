@@ -21,9 +21,7 @@ describe("buildTurnActivity", () => {
         tone: "success",
       },
     });
-    expect(activity?.brief.rows).toEqual([
-      { id: "goal", label: "Goal", value: "list the files" },
-    ]);
+    expect(activity?.brief.rows).toEqual([]);
     expect(activity?.items).toEqual([]);
     expect(activity?.nodes).toEqual([
       expect.objectContaining({

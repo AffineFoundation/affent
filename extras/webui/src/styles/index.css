@@ -2968,10 +2968,6 @@ mark {
   word-break: break-word;
 }
 
-.agent-activity-brief-row[data-kind="focus"] strong {
-  color: var(--text);
-}
-
 .agent-activity-brief-row[data-tone="running"] strong {
   color: var(--c-running);
 }

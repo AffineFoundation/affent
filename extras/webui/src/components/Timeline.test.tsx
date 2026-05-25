@@ -48,9 +48,8 @@ describe("Timeline", () => {
     expect(screen.queryByTestId("agent-activity-brief")).toBeNull();
     expect(screen.getByRole("button", { name: /What Affent did/ })).toHaveAttribute("aria-expanded", "false");
     await user.click(screen.getByRole("button", { name: /What Affent did/ }));
-    expect(screen.getByTestId("agent-activity-brief")).toHaveTextContent("Goal");
-    expect(screen.getByTestId("agent-activity-brief")).toHaveTextContent("list the files");
-    expect(screen.getByTestId("agent-activity-brief")).not.toHaveTextContent("README.md main.go");
+    expect(screen.queryByTestId("agent-activity-brief")).toBeNull();
+    expect(screen.getByTestId("agent-activity")).not.toHaveTextContent("Goallist the files");
     expect(screen.getByTestId("agent-activity")).not.toHaveTextContent("Working plan");
     expect(screen.getByTestId("agent-activity")).toHaveTextContent("List current directory");
     expect(screen.queryByTestId("execution-tree")).toBeNull();

@@ -174,7 +174,6 @@ function buildBrief(
 ): TurnActivityBrief {
   const rows: TurnActivityBriefRow[] = [];
   const goal = turn.userText ? summarize(turn.userText, 120) : undefined;
-  if (goal) rows.push({ id: "goal", label: "Goal", value: goal });
   for (const deviation of constraintDeviations) {
     rows.push({ id: `constraint:${deviation.id}`, label: "Constraint", value: deviation.detail, tone: "warning" });
   }
@@ -188,7 +187,7 @@ function buildBrief(
   const next = opts.continuedAfterLimit ? undefined : nextBrief(turn, nodes);
   if (next) rows.push({ id: "next", label: "Next", value: next.value, tone: nextTone(turn), action: next.action });
 
-  return { rows };
+  return { rows: goal && rows.length > 0 ? [{ id: "goal", label: "Goal", value: goal }, ...rows] : rows };
 }
 
 function collectBriefEvidence(nodes: readonly TurnActivityNode[]): TurnActivityEvidence[] {
