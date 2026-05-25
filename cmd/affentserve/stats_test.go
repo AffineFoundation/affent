@@ -12,6 +12,12 @@ import (
 )
 
 func TestHandleStats_EmptyPool(t *testing.T) {
+	prevRevision, prevDate := buildRevision, buildDate
+	buildRevision, buildDate = "stats-rev", "2026-05-25T11:00:00Z"
+	t.Cleanup(func() {
+		buildRevision, buildDate = prevRevision, prevDate
+	})
+
 	pool := newTestPool(t, 4, "5m")
 	h := handleStats(pool.cfg, pool)
 
@@ -40,6 +46,9 @@ func TestHandleStats_EmptyPool(t *testing.T) {
 	}
 	if resp.MaxSessions != pool.cfg.MaxSessions {
 		t.Fatalf("MaxSessions = %d, want %d", resp.MaxSessions, pool.cfg.MaxSessions)
+	}
+	if resp.Build.Revision != "stats-rev" || resp.Build.Date != "2026-05-25T11:00:00Z" {
+		t.Fatalf("Build = %+v, want injected revision/date", resp.Build)
 	}
 	if resp.WorkspaceRoot != pool.cfg.WorkspaceRoot {
 		t.Fatalf("WorkspaceRoot = %q, want %q", resp.WorkspaceRoot, pool.cfg.WorkspaceRoot)

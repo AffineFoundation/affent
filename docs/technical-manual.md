@@ -456,7 +456,8 @@ Operational endpoints:
 
 - `GET /healthz` - unauthenticated readiness JSON with `status`,
   `build_revision`, and `build_date`.
-- `GET /v1/stats`
+- `GET /v1/stats` - authenticated runtime stats, including build metadata,
+  session/tool/browser counters, and configured runtime boundaries.
 
 Session endpoints:
 

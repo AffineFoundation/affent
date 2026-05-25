@@ -19,6 +19,7 @@ import (
 type statsResponse struct {
 	Listen           string                 `json:"listen"`
 	Model            string                 `json:"model"`
+	Build            buildInfo              `json:"build"`
 	MaxSessions      int                    `json:"max_sessions"`
 	ActiveSessions   int                    `json:"active_sessions"`
 	ShuttingDown     bool                   `json:"shutting_down"`
@@ -178,6 +179,7 @@ func handleStats(cfg Config, pool *SessionPool) http.HandlerFunc {
 		resp := statsResponse{
 			Listen:           cfg.Listen,
 			Model:            cfg.Model,
+			Build:            currentBuildInfo(),
 			MaxSessions:      cfg.MaxSessions,
 			ActiveSessions:   len(sess),
 			ShuttingDown:     pool.IsShuttingDown(),
