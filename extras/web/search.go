@@ -153,15 +153,16 @@ func formatResults(results []SearchResult, limit int) string {
 		displayed++
 		fmt.Fprintf(&b, "%d. %s\n   %s\n   %s",
 			displayed, title, url, snippet)
+		hints := sourceHintsFromSearchResult(r, url)
 		if note := directFetchCautionForResult(r); note != "" {
 			label := "Direct-reader caution"
-			if directFetchShouldSkip(url) {
+			if directFetchShouldSkip(url) || (dynamicResultReason(r) != "" && len(hints) > 0) {
 				label = "Direct-reader warning"
 				hasDirectReaderWarning = true
 			}
 			fmt.Fprintf(&b, "\n   %s: %s", label, note)
 		}
-		for _, hint := range sourceHintsFromSearchResult(r, url) {
+		for _, hint := range hints {
 			fmt.Fprintf(&b, "\n   Source hint: snippet mentions readable endpoint %s", hint)
 		}
 		b.WriteString("\n\n")

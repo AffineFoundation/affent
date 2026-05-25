@@ -787,6 +787,11 @@ func TestSearchTool_SurfacesReadableURLsMentionedInSnippets(t *testing.T) {
 				URL:     "https://docs.example/guide",
 				Snippet: "Canonical markdown page: HTTPS://WWW.DOCS.EXAMPLE/guide.md#intro. Duplicate: https://docs.example/guide.md#details.",
 			},
+			{
+				Title:   "Live dashboard",
+				URL:     "https://dashboard.example/zenith",
+				Snippet: "Client-rendered market dashboard that requires JavaScript. Use the text endpoint at https://api.example/zenith/metrics.json.",
+			},
 		}},
 	})
 	if err != nil {
@@ -801,6 +806,8 @@ func TestSearchTool_SurfacesReadableURLsMentionedInSnippets(t *testing.T) {
 		"Source hint: snippet mentions readable endpoint https://docs.taostats.io/llms.txt",
 		"Source hint: snippet mentions readable endpoint https://api.taostats.io/api/subnet/latest/v1",
 		"Source hint: snippet mentions readable endpoint https://docs.example/guide.md",
+		"Direct-reader warning: result appears to be a dynamic or JavaScript-rendered page",
+		"Source hint: snippet mentions readable endpoint https://api.example/zenith/metrics.json",
 	} {
 		if !strings.Contains(out, want) {
 			t.Fatalf("search output missing source hint %q:\n%s", want, out)
