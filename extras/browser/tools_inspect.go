@@ -73,7 +73,7 @@ func SnapshotTool(s *Session) *agent.Tool {
 			if err != nil {
 				return "", fmt.Errorf("snapshot: %w", err)
 			}
-			return snap.Format(), nil
+			return formatSnapshotResult(snap)
 		},
 	}
 }

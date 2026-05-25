@@ -146,7 +146,7 @@ func runClick(ctx context.Context, s *Session, ref int) (string, error) {
 	if err != nil {
 		return "", fmt.Errorf("post-click snapshot: %w", err)
 	}
-	return snap.Format(), nil
+	return formatSnapshotResult(snap)
 }
 
 // TypeTool returns `browser_type`. Focuses an element by ref, clears
@@ -231,7 +231,7 @@ func TypeTool(s *Session) *agent.Tool {
 			if err != nil {
 				return "", fmt.Errorf("post-type snapshot: %w", err)
 			}
-			return snap.Format(), nil
+			return formatSnapshotResult(snap)
 		},
 	}
 }
@@ -312,7 +312,7 @@ func ScrollTool(s *Session) *agent.Tool {
 			if err != nil {
 				return "", fmt.Errorf("post-scroll snapshot: %w", err)
 			}
-			return snap.Format(), nil
+			return formatSnapshotResult(snap)
 		},
 	}
 }

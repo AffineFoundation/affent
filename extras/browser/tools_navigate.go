@@ -110,13 +110,15 @@ func runNavigate(ctx context.Context, s *Session, url, waitUntil string) (string
 		if snapErr != nil {
 			return "", fmt.Errorf("post-navigate snapshot: %w (wait error: %v)", snapErr, err)
 		}
-		return fmt.Sprintf("(navigation wait timed out: %v)\n\n%s", err, snap.Format()), nil
+		formatted, blockErr := formatSnapshotResult(snap)
+		formatted = fmt.Sprintf("(navigation wait timed out: %v)\n\n%s", err, formatted)
+		return formatted, blockErr
 	}
 	snap, err := s.TakeSnapshot(ctx)
 	if err != nil {
 		return "", fmt.Errorf("snapshot: %w", err)
 	}
-	return snap.Format(), nil
+	return formatSnapshotResult(snap)
 }
 
 func browserNavigateTimeoutError(url string, timeout time.Duration, err error) error {
@@ -224,7 +226,7 @@ func BackTool(s *Session) *agent.Tool {
 			if err != nil {
 				return "", fmt.Errorf("snapshot: %w", err)
 			}
-			return snap.Format(), nil
+			return formatSnapshotResult(snap)
 		},
 	}
 }
@@ -309,7 +311,7 @@ func WaitTool(s *Session) *agent.Tool {
 			if err != nil {
 				return "", fmt.Errorf("snapshot: %w", err)
 			}
-			return snap.Format(), nil
+			return formatSnapshotResult(snap)
 		},
 	}
 }

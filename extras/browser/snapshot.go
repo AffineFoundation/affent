@@ -306,6 +306,53 @@ func (snap *Snapshot) Format() string {
 	return b.String()
 }
 
+func formatSnapshotResult(snap *Snapshot) (string, error) {
+	out := snap.Format()
+	if reason := blockedSnapshotReason(snap); reason != "" {
+		return out, fmt.Errorf(
+			"browser page appears blocked by a bot/challenge page (%s)\nFailure: kind=blocked\nNext: do not treat this page as evidence; use a different search provider, a known canonical URL, direct web_fetch/API/text source, or answer with this source marked unavailable",
+			reason,
+		)
+	}
+	return out, nil
+}
+
+func blockedSnapshotReason(snap *Snapshot) string {
+	if snap == nil {
+		return ""
+	}
+	url := strings.ToLower(strings.TrimSpace(snap.URL))
+	title := strings.ToLower(strings.TrimSpace(snap.Title))
+	switch {
+	case strings.Contains(url, "://www.google.com/sorry/") || strings.Contains(url, "://google.com/sorry/"):
+		return "google sorry page"
+	case strings.Contains(url, "/cdn-cgi/challenge-platform/"):
+		return "cloudflare challenge platform"
+	case strings.Contains(title, "attention required") && strings.Contains(title, "cloudflare"):
+		return "cloudflare challenge title"
+	case strings.Contains(title, "just a moment"):
+		return "browser challenge title"
+	case strings.Contains(title, "sorry") && strings.Contains(url, "google."):
+		return "google challenge title"
+	}
+	for _, block := range snap.TextBlocks {
+		text := strings.ToLower(block.Text)
+		switch {
+		case strings.Contains(text, "our systems have detected unusual traffic"):
+			return "google unusual-traffic challenge"
+		case strings.Contains(text, "to continue, please type the characters"):
+			return "captcha challenge"
+		case strings.Contains(text, "sorry, you have been blocked"):
+			return "blocked page text"
+		case strings.Contains(text, "checking if the site connection is secure"):
+			return "cloudflare challenge text"
+		case strings.Contains(text, "verify you are human"):
+			return "human verification challenge"
+		}
+	}
+	return ""
+}
+
 func writeTextBlocks(b *strings.Builder, blocks []TextBlock, skip map[string]struct{}) {
 	written := 0
 	omittedDuplicates := 0

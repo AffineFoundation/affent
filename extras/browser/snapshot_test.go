@@ -44,6 +44,60 @@ func TestFormat_BasicShape(t *testing.T) {
 	}
 }
 
+func TestFormatSnapshotResultFlagsBotChallenges(t *testing.T) {
+	cases := []struct {
+		name string
+		snap *Snapshot
+		want string
+	}{
+		{
+			name: "google sorry redirect",
+			snap: &Snapshot{SnapshotID: 1, URL: "https://www.google.com/sorry/index?continue=https://www.google.com/search%3Fq%3Daffine"},
+			want: "google sorry page",
+		},
+		{
+			name: "cloudflare text",
+			snap: &Snapshot{
+				SnapshotID: 1,
+				URL:        "https://example.com/",
+				TextBlocks: []TextBlock{{Type: "h1", Text: "Checking if the site connection is secure"}},
+			},
+			want: "cloudflare challenge text",
+		},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			out, err := formatSnapshotResult(c.snap)
+			if err == nil {
+				t.Fatal("challenge snapshot should return a tool error")
+			}
+			for _, want := range []string{"Failure: kind=blocked", "Next:", c.want} {
+				if !strings.Contains(err.Error(), want) {
+					t.Fatalf("blocked error missing %q:\n%s", want, err)
+				}
+			}
+			if !strings.Contains(out, "URL: "+c.snap.URL) {
+				t.Fatalf("blocked snapshot should still include page evidence for UI/debugging:\n%s", out)
+			}
+		})
+	}
+}
+
+func TestFormatSnapshotResultAllowsNormalPages(t *testing.T) {
+	out, err := formatSnapshotResult(&Snapshot{
+		SnapshotID: 2,
+		URL:        "https://example.com/docs",
+		Title:      "Docs",
+		TextBlocks: []TextBlock{{Type: "p", Text: "Readable evidence"}},
+	})
+	if err != nil {
+		t.Fatalf("normal page should not be blocked: %v", err)
+	}
+	if !strings.Contains(out, "Readable evidence") {
+		t.Fatalf("normal snapshot missing content:\n%s", out)
+	}
+}
+
 func TestFormat_InteractiveBeforePageText(t *testing.T) {
 	snap := &Snapshot{
 		SnapshotID: 1,
