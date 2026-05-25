@@ -3,6 +3,7 @@ package browser
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"strings"
 	"time"
@@ -21,6 +22,7 @@ import (
 // agent needs to surface).
 const (
 	interactableTimeout        = 2 * time.Second
+	browserClickTimeout        = 12 * time.Second
 	maxBrowserTypeTextBytes    = 4096
 	defaultBrowserScrollAmount = 600
 	maxBrowserScrollAmount     = 5000
@@ -38,6 +40,24 @@ func browserNotInteractableError(ref int, err error) error {
 		ref,
 		err,
 	)
+}
+
+func browserClickTimeoutError(ref int, timeout time.Duration, err error) error {
+	return fmt.Errorf(
+		"browser_click ref %d timed out after %s: %w\n"+
+			"Failure: kind=timeout\n"+
+			"Next: call browser_snapshot or browser_find to inspect the current page; retry this click only if the page changed or the target ref is still essential, otherwise navigate directly to a canonical URL or answer from verified evidence",
+		ref,
+		timeout,
+		err,
+	)
+}
+
+func nonNilContext(ctx context.Context) context.Context {
+	if ctx == nil {
+		return context.Background()
+	}
+	return ctx
 }
 
 // waitInteractable wraps rod.Element.WaitInteractable with our bounded
@@ -89,30 +109,44 @@ func ClickTool(s *Session) *agent.Tool {
 			if s.page == nil {
 				return "", ErrNoPage
 			}
-			el, err := s.elementByRef(ctx, args.Ref)
+			clickCtx, cancel := context.WithTimeout(nonNilContext(ctx), browserClickTimeout)
+			defer cancel()
+			out, err := runClick(clickCtx, s, args.Ref)
 			if err != nil {
+				if errors.Is(clickCtx.Err(), context.DeadlineExceeded) || errors.Is(err, context.DeadlineExceeded) {
+					return "", browserClickTimeoutError(args.Ref, browserClickTimeout, err)
+				}
 				return "", err
 			}
-			if err := el.ScrollIntoView(); err != nil {
-				// Non-fatal; click may still work if already in viewport.
-				_ = err
-			}
-			if err := waitInteractable(ctx, el, args.Ref); err != nil {
-				return "", err
-			}
-			if err := el.Click(proto.InputMouseButtonLeft, 1); err != nil {
-				return "", fmt.Errorf("click ref %d: %w", args.Ref, err)
-			}
-			// Briefly wait for any resulting load/navigation. Soft wait —
-			// most clicks don't navigate.
-			_ = waitForLoad(ctx, s, "load", 5*time.Second)
-			snap, err := s.TakeSnapshot(ctx)
-			if err != nil {
-				return "", fmt.Errorf("post-click snapshot: %w", err)
-			}
-			return snap.Format(), nil
+			return out, nil
 		},
 	}
+}
+
+func runClick(ctx context.Context, s *Session, ref int) (string, error) {
+	el, err := s.elementByRef(ctx, ref)
+	if err != nil {
+		return "", err
+	}
+	el = el.Context(ctx)
+	if err := el.ScrollIntoView(); err != nil {
+		// Non-fatal; click may still work if already in viewport.
+		_ = err
+	}
+	if err := waitInteractable(ctx, el, ref); err != nil {
+		return "", err
+	}
+	if err := el.Click(proto.InputMouseButtonLeft, 1); err != nil {
+		return "", fmt.Errorf("click ref %d: %w", ref, err)
+	}
+	// Briefly wait for any resulting load/navigation. Soft wait —
+	// most clicks don't navigate.
+	_ = waitForLoad(ctx, s, "load", 5*time.Second)
+	snap, err := s.TakeSnapshot(ctx)
+	if err != nil {
+		return "", fmt.Errorf("post-click snapshot: %w", err)
+	}
+	return snap.Format(), nil
 }
 
 // TypeTool returns `browser_type`. Focuses an element by ref, clears

@@ -268,6 +268,15 @@ func TestClickToolRejectsInvalidRefBeforePageCheck(t *testing.T) {
 	requireInvalidArgs(t, err)
 }
 
+func TestBrowserClickTimeoutErrorHasRecoveryHint(t *testing.T) {
+	err := browserClickTimeoutError(49, browserClickTimeout, context.DeadlineExceeded)
+	for _, want := range []string{"browser_click ref 49 timed out", "Failure: kind=timeout", "Next:", "browser_snapshot", "browser_find", "canonical URL"} {
+		if !strings.Contains(err.Error(), want) {
+			t.Fatalf("click timeout error missing %q: %v", want, err)
+		}
+	}
+}
+
 func TestNoArgBrowserToolsRejectUnknownArgs(t *testing.T) {
 	for _, tool := range []*agent.Tool{
 		BackTool(&Session{}),

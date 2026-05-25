@@ -115,6 +115,42 @@ func TestSession_ClickStaleRef(t *testing.T) {
 	}
 }
 
+func TestSession_ClickToolUpdatesSnapshot(t *testing.T) {
+	bin := findChromium(t)
+	sess, err := NewSession(SessionConfig{
+		BinaryPath: bin,
+		NoSandbox:  true,
+	})
+	if err != nil {
+		t.Fatalf("NewSession: %v", err)
+	}
+	defer sess.Close()
+
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+
+	const body = `<html><body>
+        <button onclick="document.getElementById('status').textContent='clicked'">Open tab</button>
+        <div id="status">idle</div>
+    </body></html>`
+	out, err := runNavigate(ctx, sess, dataURL(body), "")
+	if err != nil {
+		t.Fatalf("runNavigate: %v", err)
+	}
+	ref := findFirstRef(out, "button")
+	if ref == 0 {
+		t.Fatalf("snapshot didn't expose a button ref:\n%s", out)
+	}
+
+	result, err := ClickTool(sess).Execute(ctx, []byte(`{"ref":`+intStr(ref)+`}`))
+	if err != nil {
+		t.Fatalf("click tool: %v", err)
+	}
+	if !strings.Contains(result, "clicked") {
+		t.Fatalf("post-click snapshot missing updated text:\n%s", result)
+	}
+}
+
 func TestSession_FindToolSearchesRenderedPage(t *testing.T) {
 	bin := findChromium(t)
 	sess, err := NewSession(SessionConfig{
