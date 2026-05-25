@@ -6,7 +6,6 @@ import (
 	"net"
 	"net/url"
 	"strings"
-	"sync"
 	"sync/atomic"
 	"time"
 
@@ -258,13 +257,15 @@ type InterceptStats struct {
 }
 
 type privateNetworkGuard struct {
-	allow bool
-	mu    sync.Mutex
-	cache map[string]error
+	allow        bool
+	lookupIPAddr func(context.Context, string) ([]net.IPAddr, error)
 }
 
 func newPrivateNetworkGuard(allow bool) *privateNetworkGuard {
-	return &privateNetworkGuard{allow: allow, cache: map[string]error{}}
+	return &privateNetworkGuard{
+		allow:        allow,
+		lookupIPAddr: net.DefaultResolver.LookupIPAddr,
+	}
 }
 
 func (g *privateNetworkGuard) blockReason(parent context.Context, rawURL string) error {
@@ -284,19 +285,7 @@ func (g *privateNetworkGuard) blockReason(parent context.Context, rawURL string)
 	if host == "" {
 		return fmt.Errorf("private-network guard: URL has no hostname")
 	}
-	key := strings.ToLower(host)
-	g.mu.Lock()
-	if cached, ok := g.cache[key]; ok {
-		g.mu.Unlock()
-		return cached
-	}
-	g.mu.Unlock()
-
-	reason := g.resolveBlockReason(parent, host)
-	g.mu.Lock()
-	g.cache[key] = reason
-	g.mu.Unlock()
-	return reason
+	return g.resolveBlockReason(parent, host)
 }
 
 func (g *privateNetworkGuard) resolveBlockReason(parent context.Context, host string) error {
@@ -311,7 +300,11 @@ func (g *privateNetworkGuard) resolveBlockReason(parent context.Context, host st
 	}
 	ctx, cancel := context.WithTimeout(parent, 2*time.Second)
 	defer cancel()
-	ips, err := net.DefaultResolver.LookupIPAddr(ctx, host)
+	lookup := g.lookupIPAddr
+	if lookup == nil {
+		lookup = net.DefaultResolver.LookupIPAddr
+	}
+	ips, err := lookup(ctx, host)
 	if err != nil {
 		return fmt.Errorf("private-network guard: resolve %q: %w", host, err)
 	}

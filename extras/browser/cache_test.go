@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"net"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -639,6 +640,28 @@ func TestPrivateNetworkGuardAllowsPublicAndExplicitOptIn(t *testing.T) {
 	optIn := newPrivateNetworkGuard(true)
 	if err := optIn.blockReason(context.Background(), "http://127.0.0.1:7777/"); err != nil {
 		t.Fatalf("explicit private-network opt-in should pass: %v", err)
+	}
+}
+
+func TestPrivateNetworkGuardRechecksDNSOnEachRequest(t *testing.T) {
+	guard := newPrivateNetworkGuard(false)
+	calls := 0
+	guard.lookupIPAddr = func(context.Context, string) ([]net.IPAddr, error) {
+		calls++
+		if calls == 1 {
+			return []net.IPAddr{{IP: net.ParseIP("1.1.1.1")}}, nil
+		}
+		return []net.IPAddr{{IP: net.ParseIP("127.0.0.1")}}, nil
+	}
+
+	if err := guard.blockReason(context.Background(), "https://rebind.example/page"); err != nil {
+		t.Fatalf("first public resolution should pass: %v", err)
+	}
+	if err := guard.blockReason(context.Background(), "https://rebind.example/page"); err == nil {
+		t.Fatal("second private resolution should block; stale public DNS result must not be cached")
+	}
+	if calls != 2 {
+		t.Fatalf("resolver calls = %d, want 2", calls)
 	}
 }
 
