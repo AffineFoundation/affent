@@ -2648,6 +2648,24 @@ mark {
   color: var(--text);
 }
 
+.message-action[data-copy-state="copied"],
+.node-action[data-copy-state="copied"],
+.event-action[data-copy-state="copied"],
+.agent-activity-copy-action[data-copy-state="copied"] {
+  border-color: rgba(15, 138, 75, 0.22);
+  background: var(--c-success-bg);
+  color: var(--c-success);
+}
+
+.message-action[data-copy-state="failed"],
+.node-action[data-copy-state="failed"],
+.event-action[data-copy-state="failed"],
+.agent-activity-copy-action[data-copy-state="failed"] {
+  border-color: #fecaca;
+  background: var(--c-error-bg);
+  color: var(--c-error);
+}
+
 @media (hover: hover) and (pointer: fine) {
   .flow-step .message-actions {
     opacity: 0;
