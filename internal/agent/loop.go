@@ -434,6 +434,7 @@ func externalResearchSystemGuidance(surface externalResearchToolSurface) string 
 	if surface.BrowserFind {
 		b.WriteString("\n- Use browser_find on the current page for targeted labels or metrics before repeated scrolling; it returns compact snippets and refs for visible matches.")
 		b.WriteString("\n- On dynamic metric/dashboard/detail pages, especially for market, trend, subnet, token, company, or product status questions, call browser_find with field-label queries such as \"price market cap FDV volume supply TVL\", \"24h 7d volume market cap\", \"validators miners stake emission\", or the user's requested labels before scrolling, clicking tabs, or declaring those metrics unavailable. Do not repeat browser_find with only the entity name after the page already identifies the entity; search for missing field labels instead.")
+		b.WriteString("\n- Dashboard text can interleave global header metrics, entity metrics, and labels in one line. Only pair a numeric value with a metric label when the label/value adjacency or embedded data is explicit; otherwise report it as ambiguous or global instead of assigning it to the entity.")
 	}
 	if surface.WebFetch {
 		b.WriteString("\n- If web_fetch returns Embedded data preview, treat matching fields as page-source evidence for the requested entity or route; ignore unrelated shell metadata, and prefer a canonical API/text/export source when the embedded data is insufficient or ambiguous.")
@@ -1690,7 +1691,7 @@ func (l *Loop) finalNoToolsOnMaxTurnsForTurn(opts TurnOptions) bool {
 	return l.FinalNoToolsOnMaxTurns || opts.FinalNoToolsOnMaxTurns
 }
 
-const finalEvidenceDiscipline = `Use only existing tool results. Re-scan the latest successful SourceAccess outputs for requested names, ids, prices, counts, dates, and status labels before declaring any field unavailable. Cite actual fetched_url/browser_rendered_url values as accessed sources; treat requested_url and discovered links as unverified unless a tool result actually read them.`
+const finalEvidenceDiscipline = `Use only existing tool results. Re-scan the latest successful SourceAccess outputs for requested names, ids, prices, counts, dates, and status labels before declaring any field unavailable. Cite actual fetched_url/browser_rendered_url values as accessed sources; treat requested_url and discovered links as unverified unless a tool result actually read them. On dashboard rows that mix global metrics, entity metrics, values, and labels, only pair a numeric value with a metric label when the label/value adjacency or embedded data is explicit; otherwise mark it ambiguous or global.`
 
 var lengthRecoveryPrompt = `The previous assistant response was cut off while summarizing evidence gathered in this turn.
 
