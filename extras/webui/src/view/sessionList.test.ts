@@ -155,6 +155,24 @@ describe("sessionList view model", () => {
     expect(rows.find((row) => row.id === "english-subnet")?.title).toBe("Affine (Bittensor subnet)");
   });
 
+  it("summarizes fixed-reply smoke prompts as task checks", () => {
+    const rows = buildSessionRows([
+      session({
+        id: "embedded-webui",
+        durable: true,
+        latest_user_message: "只回复：OK embedded WebUI",
+      }),
+      session({
+        id: "dashscope-container",
+        durable: true,
+        latest_user_message: "reply with: OK DashScope full-stack container",
+      }),
+    ]);
+
+    expect(rows.find((row) => row.id === "embedded-webui")?.title).toBe("Embedded WebUI check");
+    expect(rows.find((row) => row.id === "dashscope-container")?.title).toBe("DashScope full-stack container check");
+  });
+
   it("does not repeat the topic when a continuation prompt embeds the original task", () => {
     const rows = buildSessionRows([
       session({

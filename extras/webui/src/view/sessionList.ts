@@ -262,6 +262,8 @@ function stripContinuationPrefix(text: string): string {
 function summarizeSessionTitle(text: string): string {
   const cleaned = text.replace(/\s+/g, " ").trim();
   if (!cleaned) return "Saved chat";
+  const directReply = summarizeDirectReplyPrompt(cleaned);
+  if (directReply) return summarize(directReply, 42);
   const firstLine = cleaned.split(/\n+/)[0] ?? cleaned;
   const primaryClause = firstLine
     .split(/[。.!?；;]+/)
@@ -274,6 +276,21 @@ function summarizeSessionTitle(text: string): string {
   const normalized = trimTopicSuffix(stripTopicPrefix(beforeInstruction));
   const topicTitle = summarizeTopicStatement(normalized) ?? prettyTopicName(normalized);
   return summarize(topicTitle || cleaned, 42);
+}
+
+function summarizeDirectReplyPrompt(text: string): string | undefined {
+  const fixedReply = text.match(/^(?:只(?:回复|回答)|仅(?:回复|回答)|回复|回答|only\s+reply|reply\s+with|respond\s+with|say)\s*[：:]\s*(.+)$/i);
+  if (!fixedReply) return undefined;
+  const topic = fixedReply[1]
+    .replace(/^(?:ok|okay|done|yes|好的|可以|完成)\b[\s:：-]*/i, "")
+    .replace(/^[“"']+|[”"']+$/g, "")
+    .trim();
+  if (!topic) return "Reply check";
+  return `${capitalizeLeadingAscii(prettyTopicName(topic))} check`;
+}
+
+function capitalizeLeadingAscii(text: string): string {
+  return text.replace(/^[a-z]/, (letter) => letter.toUpperCase());
 }
 
 function summarizeTopicStatement(text: string): string | undefined {
