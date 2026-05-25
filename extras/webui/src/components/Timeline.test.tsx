@@ -484,13 +484,13 @@ describe("Timeline", () => {
     expect(details).toHaveTextContent("Run summary");
     expect(details).toHaveTextContent("action type");
     expect(details).toHaveTextContent("Action record");
-    expect(details).toHaveTextContent(/input \+ \d+ event records/);
+    expect(details).toHaveTextContent(/input \+ \d+ history entries/);
     expect(details).toHaveTextContent("request input");
-    expect(within(details).getByText("Event records")).toBeInTheDocument();
-    expect(within(details).getByText(/\d+ records/)).toBeInTheDocument();
+    expect(within(details).getByText("History")).toBeInTheDocument();
+    expect(within(details).getByText(/\d+ entries/)).toBeInTheDocument();
     expect(within(details).queryByTestId("event-trace")).toBeNull();
 
-    await user.click(within(details).getByText("Event records"));
+    await user.click(within(details).getByText("History"));
 
     expect(within(details).getByTestId("event-trace")).toBeInTheDocument();
   });

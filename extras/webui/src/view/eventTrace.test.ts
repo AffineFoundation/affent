@@ -101,7 +101,7 @@ describe("eventTrace view model", () => {
       if (item.kind === "deltaGroup") return item.label;
       return item.display.label;
     })).toEqual([
-      ["Request record", ["Request 1", "summarize the repo", "completed", "17 tokens"], [1, 2, 4, 5]],
+      ["Request history", ["Request 1", "summarize the repo", "completed", "17 tokens"], [1, 2, 4, 5]],
       "Assistant output",
       "Request finished",
     ]);

@@ -176,7 +176,7 @@ function requestRecordGroup(
   return {
     kind: "eventGroup",
     key,
-    label: "Request record",
+    label: "Request history",
     meta: compact([
       requestLabel(context, turnId),
       streamSummary(readString(userMessage?.data, "text") ?? ""),
@@ -235,7 +235,7 @@ function eventDisplay(event: NormalizedEvent, context: DisplayContext): EventDis
   switch (event.type) {
     case EventType.TraceMeta:
       return {
-        label: "Event log loaded",
+        label: "History loaded",
         meta: [],
         badges: schemaVersion(event) ? [`schema v${schemaVersion(event)}`] : [],
       };

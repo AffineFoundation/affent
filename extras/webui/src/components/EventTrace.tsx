@@ -22,7 +22,7 @@ function renderMetadata(events: readonly NormalizedEvent[]) {
   const schemaVersions = events
     .map((event) => schemaVersion(event))
     .filter((version): version is number => typeof version === "number");
-  const summary = schemaVersions.length > 0 ? `schema v${schemaVersions[schemaVersions.length - 1]}` : `${events.length} records`;
+  const summary = schemaVersions.length > 0 ? `schema v${schemaVersions[schemaVersions.length - 1]}` : `${events.length} ${events.length === 1 ? "entry" : "entries"}`;
 
   return (
     <EventDisclosure
@@ -33,7 +33,7 @@ function renderMetadata(events: readonly NormalizedEvent[]) {
         <>
           <span className="event-id">meta</span>
           <span className="event-copy">
-            <span className="event-kind-label">Log metadata</span>
+            <span className="event-kind-label">History metadata</span>
             <span className="event-meta">{summary}</span>
           </span>
           <span className="event-badges" aria-hidden="true" />
@@ -42,7 +42,7 @@ function renderMetadata(events: readonly NormalizedEvent[]) {
     >
       <div className="event-body">
         <div className="event-actions event-stream-actions">
-          <span className="event-stream-stats">{events.length} records</span>
+          <span className="event-stream-stats">{events.length} {events.length === 1 ? "entry" : "entries"}</span>
           <CopyButton
             label="Copy metadata"
             value={JSON.stringify(events.map((event) => event.raw), null, 2)}

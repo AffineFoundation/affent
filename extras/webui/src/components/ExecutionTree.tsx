@@ -390,8 +390,8 @@ function NodeDetails({
 function actionRecordSummary(hasInput: boolean, eventCount: number): string {
   const parts: string[] = [];
   if (hasInput) parts.push("input");
-  if (eventCount > 0) parts.push(`${eventCount} event ${eventCount === 1 ? "record" : "records"}`);
-  return parts.join(" + ") || "records";
+  if (eventCount > 0) parts.push(`${eventCount} history entr${eventCount === 1 ? "y" : "ies"}`);
+  return parts.join(" + ") || "history";
 }
 
 function ActionInspectorSummary({ node, searchQuery }: { node: ExecutionTreeNode; searchQuery?: string }) {

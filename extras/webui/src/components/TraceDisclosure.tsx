@@ -6,7 +6,7 @@ import { EventTrace } from "./EventTrace";
 export function TraceDisclosure({
   events,
   className,
-  label = "Event records",
+  label = "History",
   children,
 }: {
   events: readonly NormalizedEvent[];
@@ -35,5 +35,5 @@ export function TraceDisclosure({
 }
 
 function recordCountLabel(count: number): string {
-  return `${count} record${count === 1 ? "" : "s"}`;
+  return `${count} entr${count === 1 ? "y" : "ies"}`;
 }

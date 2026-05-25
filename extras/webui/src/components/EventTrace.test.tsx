@@ -25,17 +25,17 @@ describe("EventTrace", () => {
 
     render(<EventTrace events={events} />);
 
-    expect(screen.getByText("Log metadata")).toBeInTheDocument();
+    expect(screen.getByText("History metadata")).toBeInTheDocument();
     expect(screen.getByText("schema v1")).toBeInTheDocument();
-    expect(screen.queryByText("Event log loaded")).not.toBeInTheDocument();
+    expect(screen.queryByText("History loaded")).not.toBeInTheDocument();
     expect(screen.getByText("Started action")).toBeInTheDocument();
     expect(screen.getByText("Request 1 · read_file")).toBeInTheDocument();
     expect(screen.queryByText(/turn t1/)).not.toBeInTheDocument();
     expect(screen.queryByText(/call c1/)).not.toBeInTheDocument();
     expect(screen.queryByText("tool.request")).not.toBeInTheDocument();
 
-    await user.click(screen.getByText("Log metadata"));
-    expect(screen.getByText("1 records")).toBeInTheDocument();
+    await user.click(screen.getByText("History metadata"));
+    expect(screen.getByText("1 entry")).toBeInTheDocument();
     expect(screen.getByText(/"type": "trace.meta"/)).toBeInTheDocument();
     await user.click(screen.getByRole("button", { name: "Copy metadata" }));
     expect(writeText).toHaveBeenCalledWith(JSON.stringify([events[0].raw], null, 2));
@@ -79,14 +79,14 @@ describe("EventTrace", () => {
     render(<EventTrace events={normalizeEvents(raws)} />);
 
     expect(screen.getByText("1-4")).toBeInTheDocument();
-    expect(screen.getByText("Request record")).toBeInTheDocument();
+    expect(screen.getByText("Request history")).toBeInTheDocument();
     expect(screen.getByText("Request 1 · summarize the repo · completed · 17 tokens")).toBeInTheDocument();
     expect(screen.queryByText("Started request")).not.toBeInTheDocument();
     expect(screen.queryByText("User message")).not.toBeInTheDocument();
     expect(screen.queryByText("Token usage")).not.toBeInTheDocument();
     expect(screen.queryByText("Request finished")).not.toBeInTheDocument();
 
-    await user.click(screen.getByText("Request record"));
+    await user.click(screen.getByText("Request history"));
     await user.click(screen.getByRole("button", { name: "Copy events" }));
 
     expect(screen.getByText("4 events")).toBeInTheDocument();
