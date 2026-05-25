@@ -83,9 +83,9 @@ describe("Timeline", () => {
     expect(within(nav).getByTestId("turn-nav-glance")).toHaveTextContent("message only");
     expect(within(nav).getByTestId("turn-nav-glance")).toHaveTextContent("Answer");
     expect(within(nav).getByTestId("turn-nav-glance")).toHaveTextContent("no tool needed");
-    expect(within(nav).getAllByText("Current · Done")).toHaveLength(1);
+    expect(within(nav).getAllByText("Current · Answered")).toHaveLength(1);
     expect(within(nav).getAllByText("message only").length).toBeGreaterThanOrEqual(1);
-    expect(within(nav).getAllByText("Done").length).toBeGreaterThanOrEqual(1);
+    expect(within(nav).getAllByText("Answered").length).toBeGreaterThanOrEqual(1);
     expect(within(nav).queryByText("1 action")).toBeNull();
     expect(within(nav).getByRole("link", { name: /Jump to message 2: message only \(current\)/ })).toHaveAttribute("href", "#turn-2");
     expect(within(nav).getByRole("link", { name: /Jump to message 1: list the files/ })).toHaveAttribute("href", "#turn-1");

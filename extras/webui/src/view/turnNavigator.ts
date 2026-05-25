@@ -65,7 +65,7 @@ export function buildTurnNavigatorView(items: readonly TurnNavSourceItem[], pend
       activitySummary,
       activityTone,
       status: turn.status,
-      statusLabel: statusLabel(turn, { continuedAfterLimit }),
+      statusLabel: statusLabel(turn, { continuedAfterLimit, resultLabel: activityLabel }),
       statusTone: turnStatusTone(turn, { continuedAfterLimit }),
       actionCount,
       current,
@@ -159,11 +159,14 @@ function summarize(text: string, limit: number): string {
   return `${singleLine.slice(0, Math.max(0, limit - 1))}...`;
 }
 
-function statusLabel(turn: TurnState, opts: { continuedAfterLimit?: boolean } = {}): string {
+function statusLabel(turn: TurnState, opts: { continuedAfterLimit?: boolean; resultLabel?: string } = {}): string {
   if (turn.status === "running") return "Working";
-  if (turn.status === "completed") return "Done";
+  if (turn.status === "completed") {
+    if (turn.assistantText.trim()) return "Answered";
+    return opts.resultLabel && opts.resultLabel !== "Answer" ? opts.resultLabel : "No answer";
+  }
   if (turn.status === "max_turns" && opts.continuedAfterLimit) return "Continued";
-  if (turn.status === "max_turns") return "Continue";
+  if (turn.status === "max_turns") return "Needs answer";
   if (turn.status === "error" || turn.error || turn.toolCalls.some((call) => call.status === "error")) return "Issue";
   if (turn.status === "cancelled") return "Stopped";
   return turn.status;

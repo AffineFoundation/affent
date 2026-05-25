@@ -110,8 +110,26 @@ describe("turnNavigator view model", () => {
     ]);
 
     expect(view.summary).toBe("Answer · I found enough information to answer.");
-    expect(view.current?.statusLabel).toBe("Done");
+    expect(view.current?.statusLabel).toBe("Answered");
     expect(view.current?.statusTone).toBe("completed");
+  });
+
+  it("uses result-oriented labels for completed and incomplete messages", () => {
+    const view = buildTurnNavigatorView([
+      { turn: turn({ id: "t1", userText: "answered task", assistantText: "Final answer." }), turnNumber: 1 },
+      {
+        turn: turn({
+          id: "t2",
+          userText: "tool result task",
+          toolCalls: [tool({ resultSummary: "README.md", result: "README.md" })],
+        }),
+        turnNumber: 2,
+      },
+      { turn: turn({ id: "t3", userText: "silent task" }), turnNumber: 3 },
+      { turn: turn({ id: "t4", status: "max_turns", userText: "needs synthesis" }), turnNumber: 4 },
+    ]);
+
+    expect(view.items.map((item) => item.statusLabel)).toEqual(["Answered", "Result", "No answer", "Needs answer"]);
   });
 
   it("keeps attention for failed turns without a final answer", () => {
