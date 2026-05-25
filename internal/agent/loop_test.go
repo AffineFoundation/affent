@@ -988,8 +988,8 @@ func TestLoopToolResultContextCapsByTool(t *testing.T) {
 
 func TestLoopToolResultContextBudgetDefaultAndOverride(t *testing.T) {
 	loop := &Loop{}
-	if got := loop.toolResultContextBudgetBytes(); got != DefaultToolResultContextBudgetBytes {
-		t.Fatalf("default tool context budget = %d, want %d", got, DefaultToolResultContextBudgetBytes)
+	if got := loop.toolResultContextBudgetBytes(); got != 32*1024 {
+		t.Fatalf("default tool context budget = %d, want %d", got, 32*1024)
 	}
 	loop.ToolResultContextBudgetBytes = 321
 	if got := loop.toolResultContextBudgetBytes(); got != 321 {

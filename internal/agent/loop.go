@@ -59,7 +59,7 @@ const MaxToolResultBytesInContext = 8 * 1024
 // bytes appended to model context during one user turn. Per-tool caps stop
 // one oversized result; this turn-level budget stops many medium browser/web
 // results from accumulating into a huge follow-up prompt.
-const DefaultToolResultContextBudgetBytes = 48 * 1024
+const DefaultToolResultContextBudgetBytes = 32 * 1024
 
 // MaxToolResultPreviewInEvent is what we put in the tool.result event
 // payload's result_summary. Bigger than the in-context cap is fine
