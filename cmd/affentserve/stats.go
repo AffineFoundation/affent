@@ -118,19 +118,21 @@ type sessionStatsResponse struct {
 	LastUsedAt string               `json:"last_used_at"`
 	Usage      UsageSnapshot        `json:"usage"`
 	Tools      ToolStatsSnapshot    `json:"tools"`
+	Runtime    RuntimeStatsSnapshot `json:"runtime"`
 	Browser    BrowserStatsSnapshot `json:"browser"`
 }
 
 type aggregateStats struct {
-	BlockedByType   int64             `json:"blocked_by_type"`
-	BlockedByDomain int64             `json:"blocked_by_domain"`
-	CacheHit        int64             `json:"cache_hit"`
-	CacheMiss       int64             `json:"cache_miss"`
-	NetworkFetch    int64             `json:"network_fetch"`
-	InputTokens     int64             `json:"input_tokens"`
-	OutputTokens    int64             `json:"output_tokens"`
-	Turns           int64             `json:"turns"`
-	Tools           ToolStatsSnapshot `json:"tools"`
+	BlockedByType   int64                `json:"blocked_by_type"`
+	BlockedByDomain int64                `json:"blocked_by_domain"`
+	CacheHit        int64                `json:"cache_hit"`
+	CacheMiss       int64                `json:"cache_miss"`
+	NetworkFetch    int64                `json:"network_fetch"`
+	InputTokens     int64                `json:"input_tokens"`
+	OutputTokens    int64                `json:"output_tokens"`
+	Turns           int64                `json:"turns"`
+	Tools           ToolStatsSnapshot    `json:"tools"`
+	Runtime         RuntimeStatsSnapshot `json:"runtime"`
 }
 
 func handleStats(cfg Config, pool *SessionPool) http.HandlerFunc {
@@ -157,12 +159,14 @@ func handleStats(cfg Config, pool *SessionPool) http.HandlerFunc {
 			b := s.BrowserStatsSnapshot()
 			u := s.UsageSnapshot()
 			tools := s.ToolStatsSnapshot()
+			runtime := s.RuntimeStatsSnapshot()
 			sess = append(sess, sessionStatsResponse{
 				ID:         s.ID,
 				CreatedAt:  created.UTC().Format(time.RFC3339),
 				LastUsedAt: lastUsed.UTC().Format(time.RFC3339),
 				Usage:      u,
 				Tools:      tools,
+				Runtime:    runtime,
 				Browser:    b,
 			})
 			agg.BlockedByType += b.BlockedByType
@@ -174,6 +178,7 @@ func handleStats(cfg Config, pool *SessionPool) http.HandlerFunc {
 			agg.OutputTokens += u.OutputTokens
 			agg.Turns += u.Turns
 			addToolStatsSnapshot(&agg.Tools, tools)
+			addRuntimeStatsSnapshot(&agg.Runtime, runtime)
 		}
 
 		resp := statsResponse{
@@ -227,6 +232,26 @@ func addToolStatsSnapshot(dst *ToolStatsSnapshot, src ToolStatsSnapshot) {
 	dst.ForcedNoTools += src.ForcedNoTools
 	dst.ToolContextTruncated += src.ToolContextTruncated
 	dst.ToolContextOmitted += src.ToolContextOmitted
+}
+
+func addRuntimeStatsSnapshot(dst *RuntimeStatsSnapshot, src RuntimeStatsSnapshot) {
+	dst.RuntimeErrors += src.RuntimeErrors
+	if len(src.TurnEndByReason) > 0 {
+		if dst.TurnEndByReason == nil {
+			dst.TurnEndByReason = make(map[string]int64, len(src.TurnEndByReason))
+		}
+		for reason, count := range src.TurnEndByReason {
+			dst.TurnEndByReason[reason] += count
+		}
+	}
+	if len(src.RuntimeErrorByKind) > 0 {
+		if dst.RuntimeErrorByKind == nil {
+			dst.RuntimeErrorByKind = make(map[string]int64, len(src.RuntimeErrorByKind))
+		}
+		for kind, count := range src.RuntimeErrorByKind {
+			dst.RuntimeErrorByKind[kind] += count
+		}
+	}
 }
 
 func statsBoundarySnapshot(cfg Config) statsBoundaries {

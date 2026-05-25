@@ -69,6 +69,7 @@ type sessionSummary struct {
 	RuntimeSkillNames []string              `json:"runtime_skill_names,omitempty"`
 	Usage             *UsageSnapshot        `json:"usage,omitempty"`
 	Tools             *ToolStatsSnapshot    `json:"tools,omitempty"`
+	Runtime           *RuntimeStatsSnapshot `json:"runtime,omitempty"`
 	Browser           *BrowserStatsSnapshot `json:"browser,omitempty"`
 }
 
@@ -420,6 +421,7 @@ func summarizeActiveSession(s *Session, cfg Config) sessionSummary {
 	latestUser, topicUser := userMessageSummariesFromMessages(messages)
 	usage := s.UsageSnapshot()
 	tools := s.ToolStatsSnapshot()
+	runtime := s.RuntimeStatsSnapshot()
 	browser := s.BrowserStatsSnapshot()
 	caps := summarizeActiveCapabilities(s, cfg)
 	summary := sessionSummary{
@@ -432,6 +434,7 @@ func summarizeActiveSession(s *Session, cfg Config) sessionSummary {
 		Capabilities:      &caps,
 		Usage:             &usage,
 		Tools:             &tools,
+		Runtime:           &runtime,
 		Browser:           &browser,
 	}
 	populateSessionSummaryTitle(&summary)

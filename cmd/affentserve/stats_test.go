@@ -449,6 +449,83 @@ func TestSession_ToolStatsSnapshot_CountsNoEvidenceWebResults(t *testing.T) {
 	}
 }
 
+func TestSession_RuntimeStatsSnapshot_AccumulatesTurnReasonsAndErrors(t *testing.T) {
+	pool := newTestPool(t, 4, "5m")
+	s, err := pool.GetOrCreate("runtime-stats-test")
+	if err != nil {
+		t.Fatalf("GetOrCreate: %v", err)
+	}
+
+	events := []sse.Event{}
+	for _, p := range []sse.TurnEndPayload{
+		{TurnID: "t1", Reason: sse.TurnEndMaxTurns},
+		{TurnID: "t2", Reason: sse.TurnEndError},
+		{TurnID: "t3", Reason: sse.TurnEndMaxTurns},
+	} {
+		ev, err := sse.NewEvent(sse.TypeTurnEnd, p)
+		if err != nil {
+			t.Fatal(err)
+		}
+		events = append(events, ev)
+	}
+	for _, p := range []sse.ErrorPayload{
+		{TurnID: "t2", Code: "upstream_error", Message: "context deadline exceeded", FailureKind: "llm_timeout"},
+		{TurnID: "t2", Code: "upstream_error", Message: "stream ended without finish", FailureKind: "llm_incomplete_stream"},
+		{TurnID: "t3", Code: "runtime_error", Message: "unclassified"},
+	} {
+		ev, err := sse.NewEvent(sse.TypeError, p)
+		if err != nil {
+			t.Fatal(err)
+		}
+		events = append(events, ev)
+	}
+	for _, ev := range events {
+		s.events <- ev
+	}
+
+	deadline := time.Now().Add(2 * time.Second)
+	for {
+		got := s.RuntimeStatsSnapshot()
+		if got.TurnEndByReason[sse.TurnEndMaxTurns] == 2 &&
+			got.TurnEndByReason[sse.TurnEndError] == 1 &&
+			got.RuntimeErrors == 3 &&
+			got.RuntimeErrorByKind["llm_timeout"] == 1 &&
+			got.RuntimeErrorByKind["llm_incomplete_stream"] == 1 {
+			break
+		}
+		if time.Now().After(deadline) {
+			t.Fatalf("RuntimeStatsSnapshot never reached expected totals: got %+v", got)
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+
+	h := handleStats(pool.cfg, pool)
+	r := httptest.NewRequest("GET", "/v1/stats", nil)
+	w := httptest.NewRecorder()
+	h.ServeHTTP(w, r)
+
+	var resp statsResponse
+	if err := json.Unmarshal(w.Body.Bytes(), &resp); err != nil {
+		t.Fatalf("decode stats: %v body=%s", err, w.Body.String())
+	}
+	if len(resp.Sessions) != 1 {
+		t.Fatalf("sessions = %d, want 1", len(resp.Sessions))
+	}
+	if resp.Sessions[0].Runtime.TurnEndByReason[sse.TurnEndMaxTurns] != 2 ||
+		resp.Aggregate.Runtime.TurnEndByReason[sse.TurnEndError] != 1 ||
+		resp.Sessions[0].Runtime.RuntimeErrors != 3 ||
+		resp.Aggregate.Runtime.RuntimeErrorByKind["llm_timeout"] != 1 ||
+		resp.Aggregate.Runtime.RuntimeErrorByKind["llm_incomplete_stream"] != 1 {
+		t.Fatalf("runtime stats = session:%+v aggregate:%+v", resp.Sessions[0].Runtime, resp.Aggregate.Runtime)
+	}
+	summary := summarizeActiveSession(s, pool.cfg)
+	if summary.Runtime == nil ||
+		summary.Runtime.TurnEndByReason[sse.TurnEndMaxTurns] != 2 ||
+		summary.Runtime.RuntimeErrorByKind["llm_timeout"] != 1 {
+		t.Fatalf("active session runtime summary = %+v", summary.Runtime)
+	}
+}
+
 func TestSession_BrowserStatsSnapshot_ZeroWhenNoBrowser(t *testing.T) {
 	pool := newTestPool(t, 4, "5m")
 	s, err := pool.GetOrCreate("no-browser")

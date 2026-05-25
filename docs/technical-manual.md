@@ -465,7 +465,11 @@ Operational endpoints:
 - `GET /healthz` - unauthenticated readiness JSON with `status`,
   `build_revision`, and `build_date`.
 - `GET /v1/stats` - authenticated runtime stats, including build metadata,
-  session/tool/browser counters, and configured runtime boundaries.
+  session/tool/browser counters, runtime turn-end/error counters, and
+  configured runtime boundaries. `runtime.turn_end_by_reason.max_turns`
+  indicates the agent exhausted its per-turn action budget before a final
+  answer; `runtime.runtime_error_by_kind` tracks non-tool failures such as
+  `llm_timeout` and `llm_incomplete_stream`.
 
 Session endpoints:
 

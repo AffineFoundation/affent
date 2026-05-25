@@ -73,6 +73,10 @@ type Session struct {
 	toolRepairMu           sync.Mutex
 	toolRepairByKind       map[string]int64
 	toolFailureByKind      map[string]int64
+	runtimeErrors          atomic.Int64
+	runtimeStatsMu         sync.Mutex
+	turnEndByReason        map[string]int64
+	runtimeErrorByKind     map[string]int64
 
 	// fan-out
 	subsMu  sync.Mutex
@@ -1378,6 +1382,31 @@ func (s *Session) ToolStatsSnapshot() ToolStatsSnapshot {
 	}
 }
 
+// RuntimeStatsSnapshot returns non-tool runtime outcomes accumulated from
+// turn.end and error events. This is intentionally separate from ToolStats:
+// a missing final answer can be a turn budget outcome, while LLM stream
+// failures are runtime errors, not browser/web_fetch failures.
+type RuntimeStatsSnapshot struct {
+	TurnEndByReason    map[string]int64 `json:"turn_end_by_reason,omitempty"`
+	RuntimeErrors      int64            `json:"runtime_errors"`
+	RuntimeErrorByKind map[string]int64 `json:"runtime_error_by_kind,omitempty"`
+}
+
+func (s *Session) RuntimeStatsSnapshot() RuntimeStatsSnapshot {
+	if s == nil {
+		return RuntimeStatsSnapshot{}
+	}
+	s.runtimeStatsMu.Lock()
+	turnEndByReason := cloneStringInt64Map(s.turnEndByReason)
+	errorByKind := cloneStringInt64Map(s.runtimeErrorByKind)
+	s.runtimeStatsMu.Unlock()
+	return RuntimeStatsSnapshot{
+		TurnEndByReason:    turnEndByReason,
+		RuntimeErrors:      s.runtimeErrors.Load(),
+		RuntimeErrorByKind: errorByKind,
+	}
+}
+
 // observeForStats updates per-session counters from events flowing
 // through fanout. Called once per event, before subscribers receive
 // it, so the counters reflect everything the Loop emitted regardless
@@ -1397,17 +1426,52 @@ func (s *Session) observeForStats(ev sse.Event) {
 			s.outputTokens.Add(int64(p.OutputTokens))
 		}
 	case sse.TypeTurnEnd:
+		var p sse.TurnEndPayload
+		if err := json.Unmarshal(ev.Data, &p); err != nil {
+			return
+		}
 		// One turn-end per turn (regardless of reason). Count even
 		// max_turns / error / cancelled — operators tracking spend
 		// usually want to know how many turns the session has gone
 		// through, completed or not.
 		s.turns.Add(1)
-		var p sse.TurnEndPayload
-		if err := json.Unmarshal(ev.Data, &p); err != nil || p.ToolStats == nil {
+		s.addTurnEndReason(p.Reason)
+		if p.ToolStats == nil {
 			return
 		}
 		s.addToolStats(*p.ToolStats)
+	case sse.TypeError:
+		var p sse.ErrorPayload
+		if err := json.Unmarshal(ev.Data, &p); err != nil {
+			return
+		}
+		s.addRuntimeError(p.FailureKind)
 	}
+}
+
+func (s *Session) addTurnEndReason(reason string) {
+	if reason == "" {
+		reason = "unknown"
+	}
+	s.runtimeStatsMu.Lock()
+	defer s.runtimeStatsMu.Unlock()
+	if s.turnEndByReason == nil {
+		s.turnEndByReason = map[string]int64{}
+	}
+	s.turnEndByReason[reason]++
+}
+
+func (s *Session) addRuntimeError(kind string) {
+	s.runtimeErrors.Add(1)
+	if kind == "" {
+		return
+	}
+	s.runtimeStatsMu.Lock()
+	defer s.runtimeStatsMu.Unlock()
+	if s.runtimeErrorByKind == nil {
+		s.runtimeErrorByKind = map[string]int64{}
+	}
+	s.runtimeErrorByKind[kind]++
 }
 
 func (s *Session) addToolStats(stats sse.ToolRuntimeStats) {
