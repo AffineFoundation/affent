@@ -155,6 +155,34 @@ image-serve-up:
 			echo "run make image-serve-restart to recreate it with the requested affentserve paths" >&2; \
 			exit 2; \
 		fi; \
+		expected_serve_builtins=true; expected_serve_eval_mode=; expected_serve_memory=; expected_serve_browser=; expected_serve_browser_screenshot=; expected_serve_web=; expected_serve_web_search=; expected_serve_subagent=; expected_serve_focused_tasks=; \
+		for arg in --builtins $(SERVE_ARGS); do \
+			case "$$arg" in \
+				--builtins) expected_serve_builtins=true ;; --builtins=*) expected_serve_builtins=$${arg#--builtins=} ;; \
+				--eval-mode) expected_serve_eval_mode=true ;; --eval-mode=*) expected_serve_eval_mode=$${arg#--eval-mode=} ;; \
+				--memory) expected_serve_memory=true ;; --memory=*) expected_serve_memory=$${arg#--memory=} ;; \
+				--browser) expected_serve_browser=true ;; --browser=*) expected_serve_browser=$${arg#--browser=} ;; \
+				--browser-screenshot) expected_serve_browser_screenshot=true ;; --browser-screenshot=*) expected_serve_browser_screenshot=$${arg#--browser-screenshot=} ;; \
+				--web) expected_serve_web=true ;; --web=*) expected_serve_web=$${arg#--web=} ;; \
+				--web-search) expected_serve_web_search=true ;; --web-search=*) expected_serve_web_search=$${arg#--web-search=} ;; \
+				--subagent) expected_serve_subagent=true ;; --subagent=*) expected_serve_subagent=$${arg#--subagent=} ;; \
+				--focused-tasks) expected_serve_focused_tasks=true ;; --focused-tasks=*) expected_serve_focused_tasks=$${arg#--focused-tasks=} ;; \
+			esac; \
+		done; \
+		actual_serve_builtins=$$(docker inspect "$(SERVE_CONTAINER_NAME)" --format '{{index .Config.Labels "affent.runtime.serve.builtins"}}' 2>/dev/null); \
+		actual_serve_eval_mode=$$(docker inspect "$(SERVE_CONTAINER_NAME)" --format '{{index .Config.Labels "affent.runtime.serve.eval_mode"}}' 2>/dev/null); \
+		actual_serve_memory=$$(docker inspect "$(SERVE_CONTAINER_NAME)" --format '{{index .Config.Labels "affent.runtime.serve.memory"}}' 2>/dev/null); \
+		actual_serve_browser=$$(docker inspect "$(SERVE_CONTAINER_NAME)" --format '{{index .Config.Labels "affent.runtime.serve.browser"}}' 2>/dev/null); \
+		actual_serve_browser_screenshot=$$(docker inspect "$(SERVE_CONTAINER_NAME)" --format '{{index .Config.Labels "affent.runtime.serve.browser_screenshot"}}' 2>/dev/null); \
+		actual_serve_web=$$(docker inspect "$(SERVE_CONTAINER_NAME)" --format '{{index .Config.Labels "affent.runtime.serve.web"}}' 2>/dev/null); \
+		actual_serve_web_search=$$(docker inspect "$(SERVE_CONTAINER_NAME)" --format '{{index .Config.Labels "affent.runtime.serve.web_search"}}' 2>/dev/null); \
+		actual_serve_subagent=$$(docker inspect "$(SERVE_CONTAINER_NAME)" --format '{{index .Config.Labels "affent.runtime.serve.subagent"}}' 2>/dev/null); \
+		actual_serve_focused_tasks=$$(docker inspect "$(SERVE_CONTAINER_NAME)" --format '{{index .Config.Labels "affent.runtime.serve.focused_tasks"}}' 2>/dev/null); \
+		if test "$$actual_serve_builtins" != "$$expected_serve_builtins" || test "$$actual_serve_eval_mode" != "$$expected_serve_eval_mode" || test "$$actual_serve_memory" != "$$expected_serve_memory" || test "$$actual_serve_browser" != "$$expected_serve_browser" || test "$$actual_serve_browser_screenshot" != "$$expected_serve_browser_screenshot" || test "$$actual_serve_web" != "$$expected_serve_web" || test "$$actual_serve_web_search" != "$$expected_serve_web_search" || test "$$actual_serve_subagent" != "$$expected_serve_subagent" || test "$$actual_serve_focused_tasks" != "$$expected_serve_focused_tasks"; then \
+			echo "container $(SERVE_CONTAINER_NAME) was created with serve flags builtins=$$actual_serve_builtins eval_mode=$$actual_serve_eval_mode memory=$$actual_serve_memory browser=$$actual_serve_browser browser_screenshot=$$actual_serve_browser_screenshot web=$$actual_serve_web web_search=$$actual_serve_web_search subagent=$$actual_serve_subagent focused_tasks=$$actual_serve_focused_tasks, but requested builtins=$$expected_serve_builtins eval_mode=$$expected_serve_eval_mode memory=$$expected_serve_memory browser=$$expected_serve_browser browser_screenshot=$$expected_serve_browser_screenshot web=$$expected_serve_web web_search=$$expected_serve_web_search subagent=$$expected_serve_subagent focused_tasks=$$expected_serve_focused_tasks" >&2; \
+			echo "run make image-serve-restart to recreate it with the requested affentserve feature flags" >&2; \
+			exit 2; \
+		fi; \
 		running=$$(docker inspect "$(SERVE_CONTAINER_NAME)" --format '{{.State.Running}}' 2>/dev/null); \
 		if test "$$running" = "true"; then \
 			echo "container $(SERVE_CONTAINER_NAME) already running; waiting for health"; \
