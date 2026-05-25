@@ -146,7 +146,7 @@ export function buildTurnActivity(turn: TurnState, opts: TurnActivityOptions = {
   const evidenceCount = countEvidence(nodes);
 
   return {
-    title: "Agent activity",
+    title: "Work activity",
     statusLabel: opts.continuedAfterLimit ? "Continued" : activityStatusLabel(turn),
     live: turn.status === "running",
     tone: opts.continuedAfterLimit ? "muted" : activityTone(turn),
