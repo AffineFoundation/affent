@@ -314,7 +314,13 @@ func formatSnapshotResult(snap *Snapshot) (string, error) {
 			reason,
 		)
 	}
+	out = browserSourceAccessLine(snap.URL, snap.SnapshotID) + out
 	return out, nil
+}
+
+func browserSourceAccessLine(rawURL string, snapshotID int64) string {
+	u := strings.NewReplacer("\r", " ", "\n", " ").Replace(strings.TrimSpace(rawURL))
+	return fmt.Sprintf("SourceAccess: browser_rendered_url=%s; snapshot_id=%d; page_text_below=verified_page_evidence; links_in_snapshot=discovered_unverified_until_opened\n", u, snapshotID)
 }
 
 func blockedSnapshotReason(snap *Snapshot) string {

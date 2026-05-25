@@ -358,6 +358,7 @@ func formatBrowserFindResult(result *BrowserFindResult, query string, limit int)
 			reason,
 		)
 	}
+	out = browserSourceAccessLine(result.URL, result.SnapshotID) + out
 	return out, nil
 }
 

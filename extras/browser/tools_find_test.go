@@ -68,11 +68,15 @@ func TestBrowserFindChallengePageIsBlocked(t *testing.T) {
 	if !strings.Contains(out, "URL: https://www.google.com/sorry/index") {
 		t.Fatalf("blocked output should retain page metadata:\n%s", out)
 	}
+	if strings.Contains(out, "SourceAccess:") {
+		t.Fatalf("blocked browser_find output must not be marked as verified source evidence:\n%s", out)
+	}
 }
 
 func TestBrowserFindNormalPageIsNotBlocked(t *testing.T) {
 	out, err := formatBrowserFindResult(&BrowserFindResult{
-		URL: "https://example.test",
+		SnapshotID: 9,
+		URL:        "https://example.test",
 		TextBlocks: []TextBlock{
 			{Type: "p", Text: "Affine subnet market cap and emissions"},
 		},
@@ -82,6 +86,15 @@ func TestBrowserFindNormalPageIsNotBlocked(t *testing.T) {
 	}
 	if !strings.Contains(out, "Affine subnet market cap") {
 		t.Fatalf("normal output missing expected match:\n%s", out)
+	}
+	for _, want := range []string{
+		"SourceAccess: browser_rendered_url=https://example.test",
+		"snapshot_id=9",
+		"page_text_below=verified_page_evidence",
+	} {
+		if !strings.Contains(out, want) {
+			t.Fatalf("normal output missing source access marker %q:\n%s", want, out)
+		}
 	}
 }
 

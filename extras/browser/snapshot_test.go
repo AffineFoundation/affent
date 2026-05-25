@@ -79,6 +79,9 @@ func TestFormatSnapshotResultFlagsBotChallenges(t *testing.T) {
 			if !strings.Contains(out, "URL: "+c.snap.URL) {
 				t.Fatalf("blocked snapshot should still include page evidence for UI/debugging:\n%s", out)
 			}
+			if strings.Contains(out, "SourceAccess:") {
+				t.Fatalf("blocked snapshot must not be marked as verified source evidence:\n%s", out)
+			}
 		})
 	}
 }
@@ -95,6 +98,15 @@ func TestFormatSnapshotResultAllowsNormalPages(t *testing.T) {
 	}
 	if !strings.Contains(out, "Readable evidence") {
 		t.Fatalf("normal snapshot missing content:\n%s", out)
+	}
+	for _, want := range []string{
+		"SourceAccess: browser_rendered_url=https://example.com/docs",
+		"page_text_below=verified_page_evidence",
+		"links_in_snapshot=discovered_unverified_until_opened",
+	} {
+		if !strings.Contains(out, want) {
+			t.Fatalf("normal snapshot missing source access marker %q:\n%s", want, out)
+		}
 	}
 }
 
