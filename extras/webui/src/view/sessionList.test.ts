@@ -20,10 +20,10 @@ describe("sessionList view model", () => {
 
     expect(rows[0]).toMatchObject({
       title: "WebUI timeline",
-      meta: ["2026-05-23 18:30 UTC"],
+      meta: ["May 23 18:30 UTC"],
       status: "Live",
       tone: "running",
-      updated: "2026-05-23 18:30 UTC",
+      updated: "May 23 18:30 UTC",
       chips: ["files"],
     });
     expect(rows[0].metrics).toEqual(["3 messages"]);
@@ -87,7 +87,7 @@ describe("sessionList view model", () => {
 
     expect(rows.find((row) => row.id === "saved-session-abcdef123456")).toMatchObject({
       title: "Saved chat",
-      meta: ["saved-se...123456", "2026-05-23 18:30 UTC"],
+      meta: ["saved-se...123456", "May 23 18:30 UTC"],
       status: "Saved",
     });
     expect(rows.find((row) => row.id === "live-session-abcdef123456")).toMatchObject({
@@ -111,7 +111,7 @@ describe("sessionList view model", () => {
 
     expect(rows[0]).toMatchObject({
       title: "Affine（Bittensor 子网）",
-      meta: ["2026-05-24 17:37 UTC"],
+      meta: ["May 24 17:37 UTC"],
       status: "Saved",
     });
     expect(rows[0].searchText).toContain("请继续同一个任务");

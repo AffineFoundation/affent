@@ -41,7 +41,7 @@ describe("SessionList", () => {
     const row = screen.getByRole("button", { name: /WebUI session list behavior/ });
     expect(row).not.toHaveTextContent("review the WebUI");
     expect(row).not.toHaveTextContent("workspac...123456");
-    expect(row).toHaveTextContent("2026-05-23 18:30 UTC");
+    expect(row).toHaveTextContent("May 23 18:30 UTC");
   });
 
   it("uses the stable chat topic when the latest message is only a continuation", () => {
