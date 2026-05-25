@@ -41,6 +41,7 @@ describe("SessionList", () => {
     const row = screen.getByRole("button", { name: /WebUI session list behavior/ });
     expect(row).not.toHaveTextContent("review the WebUI");
     expect(row).not.toHaveTextContent("workspac...123456");
+    expect(row).not.toHaveTextContent("Saved");
     expect(row).toHaveTextContent("May 23 18:30 UTC");
   });
 
@@ -58,6 +59,7 @@ describe("SessionList", () => {
     const row = screen.getByRole("button", { name: /Affine（Bittensor 子网）/ });
     expect(row).toHaveTextContent("Affine（Bittensor 子网）");
     expect(row).not.toHaveTextContent("请继续同一个任务");
+    expect(row).not.toHaveTextContent("Saved");
   });
 
   it("shows the active chat before newer saved chats, then sorts saved chats by recency", () => {

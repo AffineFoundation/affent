@@ -161,7 +161,7 @@ export function SessionList({
                   <span className="session-title" title={row.id}>
                     {row.title}
                   </span>
-                  <span className="session-state">{row.status}</span>
+                  {shouldShowRowStatus(row.status) ? <span className="session-state">{row.status}</span> : null}
                 </span>
                 <span className="session-meta">
                   {row.meta.map((part) => (
@@ -186,4 +186,8 @@ function dotStatus(tone: string): string {
   if (tone === "error") return "error";
   if (tone === "warning") return "max_turns";
   return "completed";
+}
+
+function shouldShowRowStatus(status: string): boolean {
+  return status !== "Saved";
 }
