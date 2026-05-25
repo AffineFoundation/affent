@@ -59,9 +59,10 @@ describe("WorkflowStatus", () => {
     })} />);
 
     expect(screen.getByTestId("workflow-status")).toHaveTextContent("Working");
-    expect(screen.getByTestId("workflow-status")).toHaveTextContent("ls");
+    expect(screen.getByTestId("workflow-status")).toHaveTextContent("List current directory");
     expect(screen.getByTestId("workflow-status")).toHaveTextContent("inspect");
     expect(screen.getByTestId("workflow-status")).not.toHaveTextContent("Using shell");
+    expect(screen.getByTestId("workflow-status")).not.toHaveTextContent("shell");
   });
 });
 

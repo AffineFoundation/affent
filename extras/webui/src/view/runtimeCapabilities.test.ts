@@ -30,17 +30,15 @@ describe("buildRuntimeCapabilityView", () => {
 
     expect(view).toMatchObject({
       headline: "Research ready",
-      detail: "Current web information can be gathered in this chat.",
+      detail: "Live search and page browsing are available for current information.",
       tone: "ready",
       research: "ready",
     });
     expect(view?.chips).toEqual([
-      { label: "Can search web", tone: "ready" },
-      { label: "Can open pages", tone: "ready" },
-      { label: "Can delegate 2 levels", tone: "ready" },
-      { label: "4 task helpers", tone: "ready" },
-      { label: "Can use files", tone: "ready" },
-      { label: "Memory available", tone: "ready" },
+      { label: "Research: search + browser", tone: "ready" },
+      { label: "Files ready", tone: "ready" },
+      { label: "Delegation: 2 levels + 4 helpers", tone: "ready" },
+      { label: "Memory on", tone: "ready" },
     ]);
   });
 
@@ -66,10 +64,41 @@ describe("buildRuntimeCapabilityView", () => {
     expect(view?.research).toBe("off");
     expect(view?.detail).toContain("cannot gather current web information");
     expect(view?.chips).toEqual(expect.arrayContaining([
-      { label: "No live search", tone: "warning" },
-      { label: "No browser", tone: "warning" },
-      { label: "Can delegate 2 levels", tone: "ready" },
-      { label: "2 task helpers", tone: "ready" },
+      { label: "Research: off", tone: "warning" },
+      { label: "Files unavailable", tone: "muted" },
+      { label: "Delegation: 2 levels + 2 helpers", tone: "ready" },
+      { label: "Memory on", tone: "ready" },
     ]));
+  });
+
+  it("groups partial research access into one readable warning", () => {
+    const view = buildRuntimeCapabilityView({
+      eval_mode: false,
+      builtins: true,
+      skill_install: false,
+      plan: false,
+      memory: false,
+      session_search: false,
+      browser: false,
+      browser_screenshot: true,
+      web: true,
+      web_search: false,
+      subagent: false,
+      subagent_max_depth: 1,
+      focused_tasks: false,
+    });
+
+    expect(view).toMatchObject({
+      headline: "Research limited",
+      detail: "Some web tools are available, but live search or page browsing is missing.",
+      tone: "warning",
+      research: "limited",
+    });
+    expect(view?.chips).toEqual([
+      { label: "Research: limited", tone: "warning" },
+      { label: "Files ready", tone: "ready" },
+      { label: "Single worker", tone: "muted" },
+      { label: "Memory off", tone: "muted" },
+    ]);
   });
 });

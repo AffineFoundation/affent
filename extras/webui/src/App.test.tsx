@@ -229,10 +229,10 @@ describe("App", () => {
     expect(runtime).toHaveTextContent("Chat setup");
     expect(runtime).toHaveTextContent("Local work only");
     expect(runtime).toHaveTextContent("cannot gather current web information");
-    expect(runtime).toHaveTextContent("No live search");
-    expect(runtime).toHaveTextContent("No browser");
-    expect(runtime).toHaveTextContent("Can delegate 2 levels");
-    expect(runtime).toHaveTextContent("4 task helpers");
+    expect(runtime).toHaveTextContent("Research: off");
+    expect(runtime).toHaveTextContent("Files unavailable");
+    expect(runtime).toHaveTextContent("Delegation: 2 levels + 4 helpers");
+    expect(runtime).toHaveTextContent("Memory on");
     const input = screen.getByPlaceholderText("Message Affent...");
     expect(input).toBeVisible();
     await userEvent.type(input, "Analyze Affine recent market trends and Twitter reaction");
