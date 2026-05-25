@@ -4,6 +4,7 @@ import type { NormalizedEvent } from "../normalize/normalizeEvent";
 import type { ToolCallState, TurnError, TurnState } from "../store/sessionState";
 import type { UseAsDraft } from "../view/draftSource";
 import { summarizeUserError } from "../view/errorSummary";
+import { buildExecutionTree, searchableExecutionNodeText } from "../view/executionTree";
 import { buildTurnActivity, type TurnActivityBriefRow, type TurnActivityEvidence, type TurnActivityNode, type TurnActivityView } from "../view/turnActivity";
 import { buildTurnBoundaryView } from "../view/turnBoundary";
 import { buildTurnWorkSummaryWithOptions, type TurnWorkSummary, type WorkSummaryItem } from "../view/turnWorkSummary";
@@ -863,6 +864,7 @@ function workSearchMatches(
   const query = normalizeSearch(searchQuery);
   if (!query) return false;
   const chunks = [
+    ...buildExecutionTree(turn).flatMap(searchableExecutionNodeText),
     ...turn.toolCalls.flatMap((call) => [
       call.callId,
       call.tool,

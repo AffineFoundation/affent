@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { completedTurn } from "../fixtures/completedTurn";
-import { argsRepaired, resultTruncated, toolError } from "../fixtures/scenarios";
+import { argsRepaired, completedSubagentTree, resultTruncated, toolError } from "../fixtures/scenarios";
 import { reduceRawEvents } from "../store/reduce";
 import { countMatchingTurns, countTurnsByMode, turnMatchesFilter, type TimelineFilterMode } from "./timelineFilter";
 
@@ -41,6 +41,13 @@ describe("timelineFilter", () => {
       artifacts: 1,
       truncated: 1,
     });
+  });
+
+  it("matches the user-facing execution tree labels, not only raw tool names", () => {
+    const session = reduceRawEvents(completedSubagentTree);
+
+    expect(turnMatchesFilter(session.turns[0], session.events, { mode: "all", query: "External MCP service" })).toBe(true);
+    expect(turnMatchesFilter(session.turns[0], session.events, { mode: "all", query: "Delegated worker" })).toBe(true);
   });
 });
 

@@ -1,5 +1,6 @@
 import type { NormalizedEvent } from "../normalize/normalizeEvent";
 import type { ToolCallState, TurnState } from "../store/sessionState";
+import { buildExecutionTree, searchableExecutionNodeText } from "./executionTree";
 
 export type TimelineFilterMode =
   | "all"
@@ -77,6 +78,7 @@ function searchableTurnText(turn: TurnState, events: readonly NormalizedEvent[])
     turn.finishReason,
     turn.error?.code,
     turn.error?.message,
+    ...buildExecutionTree(turn).flatMap(searchableExecutionNodeText),
     ...turn.toolCalls.flatMap(searchableToolText),
     ...events.filter((event) => eventBelongsToTurn(event, turn)).map((event) => JSON.stringify(event.raw)),
   ];

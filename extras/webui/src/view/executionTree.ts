@@ -104,6 +104,21 @@ export function buildExecutionTree(turn: TurnState): ExecutionTreeNode[] {
   return turn.toolCalls.map((call) => nodeFromToolCall(call, 0, call.callId));
 }
 
+export function searchableExecutionNodeText(node: ExecutionTreeNode): string[] {
+  return [
+    node.label,
+    node.title,
+    node.subtitle,
+    node.preview,
+    node.summary,
+    node.report,
+    node.objective,
+    node.mcpServer,
+    node.mcpTool,
+    ...node.children.flatMap(searchableExecutionNodeText),
+  ].filter((item): item is string => !!item);
+}
+
 function nodeFromToolCall(call: ToolCallState, depth: number, id: string): ExecutionTreeNode {
   const parsed = parseStructuredResult(call.result) ?? parseStructuredResult(call.resultSummary);
   const kind = classifyTool(call.tool, parsed);
@@ -278,12 +293,13 @@ function readableListCommandTarget(command: string): string | undefined {
 }
 
 function subtitleFor(kind: ExecutionNodeKind, tool: string, args?: JsonObject, parsed?: JsonObject): string | undefined {
-  if (kind === "subagent" || kind === "focused_task") return tool;
-  if (kind === "mcp") return tool;
+  if (kind === "subagent") return "Delegated worker";
+  if (kind === "focused_task") return "Focused worker";
+  if (kind === "mcp") return "External MCP service";
   const path = readString(args, "path");
-  if ((tool === "read_file" || tool === "write_file" || tool === "edit_file") && path) return tool;
+  if ((tool === "read_file" || tool === "write_file" || tool === "edit_file") && path) return undefined;
   const objective = readString(parsed, "objective") ?? readString(args, "objective") ?? readString(args, "task");
-  if (objective && objective !== tool) return tool;
+  if (objective && objective !== tool) return labelForTool(tool);
   return undefined;
 }
 

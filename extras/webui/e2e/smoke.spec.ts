@@ -679,7 +679,7 @@ test("workflow timeline renders with inline drill-down", async ({ page }, testIn
   await expect(page.getByTestId("tool-details")).toBeVisible();
   await expect(page.getByTestId("tool-details").first()).toContainText("Output");
   await expect(page.getByTestId("tool-details").first()).toContainText("Run summary");
-  await expect(page.getByTestId("tool-details").first()).toContainText("tool used");
+  await expect(page.getByTestId("tool-details").first()).toContainText("action type");
   await expect(page.getByTestId("tool-details").first()).toContainText("Action record");
   await expect(page.getByTestId("tool-details").first()).toContainText(/input \+ \d+ event records/);
   await expect(page.getByTestId("tool-details").first()).toContainText("request input");
@@ -688,7 +688,7 @@ test("workflow timeline renders with inline drill-down", async ({ page }, testIn
   await expect(page.getByTestId("action-inspector-summary").first()).toContainText("Usage");
   await expect(page.getByTestId("action-inspector-summary").first()).toContainText("392 tokens (310 in / 82 out)");
   await expect(page.getByText("MCP action")).toBeVisible();
-  await expect(page.locator(".node-subtitle", { hasText: "MCP_search" })).toBeVisible();
+  await expect(page.locator(".node-subtitle", { hasText: "External MCP service" })).toBeVisible();
   await expect(page.getByText("subagent_01").first()).toBeVisible();
   await page.getByRole("button", { name: "Copy action record" }).first().click();
   await expect(page.getByTestId("tool-details").first().getByRole("button", { name: "Copied" }).first()).toBeVisible();
@@ -713,9 +713,9 @@ test("workflow timeline renders with inline drill-down", async ({ page }, testIn
   await expect(page.getByTestId("composer-context")).toContainText("Using file text");
   await expect(page.getByPlaceholder("Message Affent...")).toHaveValue(/Use this loaded file text in the next step:\nFile: \.affent\/artifacts/);
   await openFindInChat(page);
-  await page.getByTestId("timeline-search").fill("MCP_search");
+  await page.getByTestId("timeline-search").fill("External MCP service");
   await expect(page.getByTestId("timeline-match-count")).toContainText("1/2 messages");
-  await expect(page.locator(".execution-tree mark", { hasText: "MCP_search" }).first()).toBeVisible();
+  await expect(page.locator(".execution-tree mark", { hasText: "External MCP service" }).first()).toBeVisible();
   const firstToolDetails = page.getByTestId("tool-details").first();
   const toolTraceSummary = firstToolDetails.locator(".nested-raw > summary");
   await expect(toolTraceSummary).toContainText("Event records");

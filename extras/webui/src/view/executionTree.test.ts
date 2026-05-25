@@ -4,17 +4,19 @@ import { reduceRawEvents } from "../store/reduce";
 import { buildExecutionTree } from "./executionTree";
 
 describe("buildExecutionTree", () => {
-  it("promotes user-readable task titles while preserving raw tool names", () => {
+  it("promotes user-readable task titles while retaining raw tool names for search and copy", () => {
     const [subagent, focused] = buildExecutionTree(reduceRawEvents(completedSubagentTree).turns[0]);
 
     expect(subagent.title).toBe("Find the WebUI trace requirements");
     expect(subagent.label).toBe("Delegated work");
-    expect(subagent.subtitle).toBe("subagent_run");
+    expect(subagent.subtitle).toBe("Delegated worker");
+    expect(subagent.tool).toBe("subagent_run");
     expect(subagent.preview).toContain("Conclusion: WebUI must render trace details");
     expect(subagent.children.find((child) => child.tool === "MCP_search")).toMatchObject({
       label: "MCP action",
       title: "Search",
-      subtitle: "MCP_search",
+      subtitle: "External MCP service",
+      tool: "MCP_search",
     });
     expect(subagent.tokenUsage).toEqual({ inputTokens: 310, outputTokens: 82, totalTokens: 392, costUsd: undefined });
     expect(subagent.metrics).toEqual(expect.arrayContaining([
@@ -24,7 +26,8 @@ describe("buildExecutionTree", () => {
     ]));
     expect(focused.title).toBe("Verify trace tree requirements");
     expect(focused.label).toBe("Focused work · verify");
-    expect(focused.subtitle).toBe("run_task");
+    expect(focused.subtitle).toBe("Focused worker");
+    expect(focused.tool).toBe("run_task");
     expect(focused.preview).toBe("Trace UI needs hierarchical detail for focused tasks and subagents.");
     expect(focused.tokenUsage).toEqual({ inputTokens: 220, outputTokens: 58, totalTokens: 278, costUsd: undefined });
   });

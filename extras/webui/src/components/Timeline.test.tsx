@@ -453,10 +453,10 @@ describe("Timeline", () => {
     expect(screen.getByTestId("action-inspector-summary")).toHaveTextContent("File action");
     expect(screen.getByTestId("action-inspector-summary")).toHaveTextContent("Status done");
     expect(screen.getByTestId("execution-node")).toHaveTextContent("done");
-    expect(details).toHaveTextContent("list_files");
+    expect(details).not.toHaveTextContent("list_files");
     expect(details).toHaveTextContent("Output");
     expect(details).toHaveTextContent("Run summary");
-    expect(details).toHaveTextContent("tool used");
+    expect(details).toHaveTextContent("action type");
     expect(details).toHaveTextContent("Action record");
     expect(details).toHaveTextContent(/input \+ \d+ event records/);
     expect(details).toHaveTextContent("request input");
@@ -713,11 +713,12 @@ describe("Timeline", () => {
     await user.click(subagent);
     expect(subagent).toHaveAttribute("aria-expanded", "true");
     expect(within(screen.getAllByTestId("tool-details")[0]).getAllByText(/WebUI must render trace details/).length).toBeGreaterThan(0);
-    expect(within(screen.getAllByTestId("tool-details")[0]).getAllByText("subagent_run").length).toBeGreaterThan(0);
+    expect(within(screen.getAllByTestId("tool-details")[0]).getAllByText("Delegated worker").length).toBeGreaterThan(0);
+    expect(within(screen.getAllByTestId("tool-details")[0]).queryByText("subagent_run")).toBeNull();
     expect(within(screen.getAllByTestId("tool-details")[0]).getByText("Usage")).toBeInTheDocument();
     expect(within(screen.getAllByTestId("tool-details")[0]).getByText("392 tokens (310 in / 82 out)")).toBeInTheDocument();
     expect(screen.getByText("MCP action")).toBeInTheDocument();
-    expect(screen.getByText("MCP_search")).toBeInTheDocument();
+    expect(screen.getAllByText("External MCP service").length).toBeGreaterThan(0);
     expect(screen.getAllByText("subagent_01").length).toBeGreaterThan(0);
   });
 
@@ -805,12 +806,12 @@ describe("Timeline", () => {
     expect(within(screen.getByTestId("turn-navigator")).getByRole("button", { name: "Search" })).toHaveAttribute("aria-pressed", "true");
     expect(screen.getByText("Search messages, sources, or output")).toBeInTheDocument();
     expect(screen.getByText("Filters")).toBeVisible();
-    await user.type(screen.getByTestId("timeline-search"), "MCP_search");
+    await user.type(screen.getByTestId("timeline-search"), "External MCP service");
 
     expect(screen.getByTestId("timeline-match-count")).toHaveTextContent("1/1 messages");
     expect(screen.getByTestId("work-thread")).toHaveAttribute("data-open", "true");
-    expect(screen.getAllByText("MCP_search").length).toBeGreaterThan(0);
-    expect(screen.getAllByText("MCP_search").some((node) => node.tagName.toLowerCase() === "mark")).toBe(true);
+    expect(screen.getAllByText("External MCP service").length).toBeGreaterThan(0);
+    expect(screen.getAllByText("External MCP service").some((node) => node.tagName.toLowerCase() === "mark")).toBe(true);
   });
 
   it("keeps folded work folded when search only matches the chat answer", async () => {

@@ -344,7 +344,7 @@ function NodeDetails({
       {hasMetadata ? (
         <DetailSection title="Run summary">
           {node.objective ? <DetailLine label="goal" value={node.objective} searchQuery={searchQuery} /> : null}
-          <DetailLine label="tool used" value={node.tool} mono searchQuery={searchQuery} />
+          <DetailLine label="action type" value={node.label} searchQuery={searchQuery} />
           {node.childSessionId ? <DetailLine label="subtask record" value={node.childSessionId} mono /> : null}
           {node.turnEndReason ? <DetailLine label="finished" value={node.turnEndReason} /> : null}
           {node.mcpServer ? <DetailLine label="external server" value={node.mcpServer} mono /> : null}
