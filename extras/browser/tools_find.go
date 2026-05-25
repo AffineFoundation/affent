@@ -224,6 +224,7 @@ func browserFindJS(query string, limit int) string {
   const needle = norm(query);
   const interactive = [];
   const textBlocks = [];
+  const seenText = new Set();
   const interactiveSelectors = [
     'a[href]', 'button', 'summary',
     'input:not([type=hidden])', 'textarea', 'select',
@@ -257,7 +258,11 @@ func browserFindJS(query string, limit int) string {
     if (remaining() <= 0) return;
     const context = contextualText(el, text);
     if (!context || !norm(context).includes(needle)) return;
-    textBlocks.push({ type, text: around(context) });
+    const snippet = around(context);
+    const key = norm(snippet);
+    if (!key || seenText.has(key)) return;
+    seenText.add(key);
+    textBlocks.push({ type, text: snippet });
   };
   const namedBlocks = 'h1,h2,h3,h4,h5,h6,p,li,td,blockquote,pre';
   document.querySelectorAll(namedBlocks).forEach(el => {
@@ -311,6 +316,7 @@ func browserFindMatches(result *BrowserFindResult, query string, limit int) []st
 		out = append(out, line)
 		return len(out) >= limit
 	}
+	seenText := map[string]struct{}{}
 	for _, el := range result.Interactive {
 		hay := normalizedSnapshotText(strings.Join([]string{el.Role, el.Name, el.Href, el.Value}, " "))
 		if !strings.Contains(hay, needle) {
@@ -329,7 +335,16 @@ func browserFindMatches(result *BrowserFindResult, query string, limit int) []st
 		if typ == "" {
 			typ = "text"
 		}
-		if add(fmt.Sprintf("[text %s] %s", typ, snippetAround(text, query, maxBrowserFindSnippet))) {
+		snippet := snippetAround(text, query, maxBrowserFindSnippet)
+		key := normalizedSnapshotText(snippet)
+		if key == "" {
+			continue
+		}
+		if _, ok := seenText[key]; ok {
+			continue
+		}
+		seenText[key] = struct{}{}
+		if add(fmt.Sprintf("[text %s] %s", typ, snippet)) {
 			return out
 		}
 	}

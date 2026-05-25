@@ -48,6 +48,20 @@ func TestBrowserFindNoMatchesHasRecoveryHint(t *testing.T) {
 	}
 }
 
+func TestBrowserFindDeduplicatesEquivalentTextMatches(t *testing.T) {
+	result := &BrowserFindResult{
+		URL: "https://example.test",
+		TextBlocks: []TextBlock{
+			{Type: "div", Text: "Market cap $55.4M Liquidity $44.8M"},
+			{Type: "span", Text: "Market cap $55.4M Liquidity $44.8M"},
+		},
+	}
+	got := formatBrowserFindResults(result, "market", 8)
+	if strings.Count(got, "Market cap $55.4M Liquidity $44.8M") != 1 {
+		t.Fatalf("equivalent text matches should be deduplicated:\n%s", got)
+	}
+}
+
 func TestBrowserFindResultDecodesDOMShape(t *testing.T) {
 	var result BrowserFindResult
 	raw := []byte(`{"url":"https://example.test","title":"Example","interactive":[{"ref":2,"role":"link","name":"Market"}],"text_blocks":[{"type":"p","text":"Market cap"}]}`)

@@ -144,7 +144,7 @@ func TestSession_FindToolSearchesRenderedPage(t *testing.T) {
 	if err != nil {
 		t.Fatalf("browser_find: %v", err)
 	}
-	for _, want := range []string{`QUERY: "market"`, `[interactive ref=`, `Market details`, `[text span] Market cap $55.4M Liquidity $44.8M`} {
+	for _, want := range []string{`QUERY: "market"`, `[interactive ref=`, `Market details`, `Market cap $55.4M Liquidity $44.8M`} {
 		if !strings.Contains(out, want) {
 			t.Fatalf("browser_find output missing %q:\n%s", want, out)
 		}
