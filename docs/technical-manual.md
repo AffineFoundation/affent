@@ -349,6 +349,18 @@ timeouts, `llm_incomplete_stream` when upstream closes SSE before
 prompt/context window. The human `message` remains detailed; the structured
 kind is for eval grouping, WebUI badges, and operator alerts.
 
+`llm_timeout` means Affent's per-call wall-clock timeout or stream-idle
+watchdog fired while waiting for `/chat/completions` to produce a usable next
+chunk. Common causes are long first-token latency from prefill or scheduler
+queueing, reasoning models pausing between chunks, KV-cache stalls, proxy
+buffering, or an upstream that keeps HTTP open without useful tokens.
+`llm_incomplete_stream` means HTTP/SSE started but the upstream closed before a
+terminal `finish_reason`; this is usually an upstream/proxy abort such as an
+sglang/vLLM worker crash, KV-cache preemption, reverse-proxy reset, or OOM kill.
+Batch eval summaries also normalize older bare messages such as
+`context deadline exceeded` and `stream ended without finish` into these
+actionable examples when they can be classified.
+
 ## Subagent Delegation Diagnostics
 
 `subagent_run` is a lower-level isolated child runtime for broad exploration,
