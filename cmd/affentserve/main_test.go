@@ -664,6 +664,58 @@ func TestParseFlagsAndConfig_SamplingEnvRejectsMalformed(t *testing.T) {
 	}
 }
 
+func TestParseFlagsAndConfig_RuntimeBoundaryEnv(t *testing.T) {
+	t.Setenv("AFFENTSERVE_BASE_URL", "https://example/v1")
+	t.Setenv("AFFENTSERVE_MODEL", "m")
+	t.Setenv("AFFENTSERVE_MAX_SESSIONS", "7")
+	t.Setenv("AFFENTSERVE_SESSION_IDLE_TTL", "2m")
+	t.Setenv("AFFENTSERVE_MAX_TURN_STEPS", "11")
+	t.Setenv("AFFENTSERVE_PER_CALL_TIMEOUT", "9m")
+	t.Setenv("AFFENTSERVE_MAX_TRANSIENT_RETRIES", "-1")
+	t.Setenv("AFFENTSERVE_RETRY_BACKOFF", "6s")
+	t.Setenv("AFFENTSERVE_COMPACT_TRIGGER", "120")
+	t.Setenv("AFFENTSERVE_COMPACT_KEEP_LAST", "6")
+
+	cfg, err := parseFlagsAndConfig(nil)
+	if err != nil {
+		t.Fatalf("parseFlagsAndConfig: %v", err)
+	}
+	if cfg.MaxSessions != 7 || !cfg.maxSessionsSet {
+		t.Fatalf("MaxSessions = %d set=%t, want 7 true", cfg.MaxSessions, cfg.maxSessionsSet)
+	}
+	if cfg.SessionIdleTTL != "2m" {
+		t.Fatalf("SessionIdleTTL = %q, want 2m", cfg.SessionIdleTTL)
+	}
+	if cfg.MaxTurnSteps != 11 {
+		t.Fatalf("MaxTurnSteps = %d, want 11", cfg.MaxTurnSteps)
+	}
+	if cfg.PerCallTimeout != "9m" {
+		t.Fatalf("PerCallTimeout = %q, want 9m", cfg.PerCallTimeout)
+	}
+	if cfg.MaxTransientRetries != -1 {
+		t.Fatalf("MaxTransientRetries = %d, want -1", cfg.MaxTransientRetries)
+	}
+	if cfg.RetryBackoff != "6s" {
+		t.Fatalf("RetryBackoff = %q, want 6s", cfg.RetryBackoff)
+	}
+	if cfg.CompactTrigger != 120 {
+		t.Fatalf("CompactTrigger = %d, want 120", cfg.CompactTrigger)
+	}
+	if cfg.CompactKeepLast != 6 {
+		t.Fatalf("CompactKeepLast = %d, want 6", cfg.CompactKeepLast)
+	}
+}
+
+func TestParseFlagsAndConfig_RuntimeBoundaryEnvRejectsMalformed(t *testing.T) {
+	t.Setenv("AFFENTSERVE_BASE_URL", "https://example/v1")
+	t.Setenv("AFFENTSERVE_MODEL", "m")
+	t.Setenv("AFFENTSERVE_MAX_TURN_STEPS", "many")
+	_, err := parseFlagsAndConfig(nil)
+	if err == nil || !strings.Contains(err.Error(), "AFFENTSERVE_MAX_TURN_STEPS") {
+		t.Fatalf("malformed AFFENTSERVE_MAX_TURN_STEPS must fail boot; got err=%v", err)
+	}
+}
+
 // TestParseFlagsAndConfig_RetryFlagsReachConfig pins both new retry
 // knobs end-to-end. --max-transient-retries=-1 is the "disable
 // retries" case (some providers handle retries themselves and a

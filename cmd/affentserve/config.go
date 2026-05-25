@@ -323,10 +323,35 @@ func (c *Config) Resolve() error {
 		{"AFFENTSERVE_AUTH_TOKEN", &c.AuthToken},
 		{"AFFENTSERVE_WORKSPACE_ROOT", &c.WorkspaceRoot},
 		{"AFFENTSERVE_MEMORY_ROOT", &c.MemoryRoot},
+		{"AFFENTSERVE_SESSION_IDLE_TTL", &c.SessionIdleTTL},
 		{"AFFENTSERVE_SESSION_RETENTION", &c.SessionRetention},
+		{"AFFENTSERVE_PER_CALL_TIMEOUT", &c.PerCallTimeout},
+		{"AFFENTSERVE_RETRY_BACKOFF", &c.RetryBackoff},
 	} {
 		if v := os.Getenv(e.env); v != "" {
 			*e.dest = v
+		}
+	}
+	for _, e := range []struct {
+		env  string
+		dest *int
+		set  *bool
+	}{
+		{"AFFENTSERVE_MAX_SESSIONS", &c.MaxSessions, &c.maxSessionsSet},
+		{"AFFENTSERVE_MAX_TURN_STEPS", &c.MaxTurnSteps, nil},
+		{"AFFENTSERVE_MAX_TRANSIENT_RETRIES", &c.MaxTransientRetries, nil},
+		{"AFFENTSERVE_COMPACT_TRIGGER", &c.CompactTrigger, nil},
+		{"AFFENTSERVE_COMPACT_KEEP_LAST", &c.CompactKeepLast, nil},
+	} {
+		if v := os.Getenv(e.env); v != "" {
+			n, err := strconv.Atoi(v)
+			if err != nil {
+				return fmt.Errorf("%s=%q: %w", e.env, v, err)
+			}
+			*e.dest = n
+			if e.set != nil {
+				*e.set = true
+			}
 		}
 	}
 	for _, e := range []struct {
