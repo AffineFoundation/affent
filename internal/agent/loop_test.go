@@ -68,6 +68,42 @@ func TestBaseSystemPromptsMatchUserLanguage(t *testing.T) {
 	}
 }
 
+func TestBaseSystemPromptsAvoidCapabilityOverclaims(t *testing.T) {
+	for name, prompt := range map[string]string{
+		"default":     DefaultSystemPrompt,
+		"limited":     LimitedToolSystemPrompt,
+		"memory-only": MemoryOnlySystemPrompt,
+	} {
+		for _, want := range []string{
+			"Do not claim specific model/runtime capabilities",
+			"listed in the available tools",
+			"observed from tool results",
+		} {
+			if !strings.Contains(prompt, want) {
+				t.Fatalf("%s prompt should constrain capability claims; missing %q:\n%s", name, want, prompt)
+			}
+		}
+	}
+}
+
+func TestBaseSystemPromptsRequireExactEvidenceIdentifiers(t *testing.T) {
+	for name, prompt := range map[string]string{
+		"default":     DefaultSystemPrompt,
+		"limited":     LimitedToolSystemPrompt,
+		"memory-only": MemoryOnlySystemPrompt,
+	} {
+		for _, want := range []string{
+			"copy them exactly",
+			"Do not rewrite",
+			"reconstruct identifiers from memory",
+		} {
+			if !strings.Contains(prompt, want) {
+				t.Fatalf("%s prompt should require exact evidence identifiers; missing %q:\n%s", name, want, prompt)
+			}
+		}
+	}
+}
+
 func TestBaseSystemPromptForSurface(t *testing.T) {
 	if got := BaseSystemPromptForSurface(SystemPromptSurface{Builtins: true}); got != DefaultSystemPrompt {
 		t.Fatal("builtins surface should use default workspace prompt")
