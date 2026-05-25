@@ -15,6 +15,7 @@ const enTitleActions = [
 
 export type SessionListFilter = "all" | "active" | "saved" | "artifacts" | "memory";
 export type SessionRowTone = "running" | "saved" | "muted" | "error" | "warning";
+type SessionTitleSource = "provided" | "topic" | "fallback";
 
 export interface SessionRowView {
   id: string;
@@ -27,6 +28,7 @@ export interface SessionRowView {
   metrics: string[];
   chips: string[];
   searchText: string;
+  titleSource: SessionTitleSource;
 }
 
 export function buildSessionRows(sessions: readonly SessionSummary[]): SessionRowView[] {
@@ -34,11 +36,26 @@ export function buildSessionRows(sessions: readonly SessionSummary[]): SessionRo
     const status = session.active ? "Live" : session.durable ? "Saved" : "Ephemeral";
     const chips = featureChips(session);
     const metrics = usageMetrics(session);
+    const providedTitle = providedSessionTitle(session);
     const titleSource = session.topic_user_message || session.latest_user_message;
-    const title = titleSource ? summarizeSessionTitle(titleSource) : fallbackSessionTitle(session);
+    const title = providedTitle ?? (titleSource ? summarizeSessionTitle(titleSource) : fallbackSessionTitle(session));
+    const titleKind: SessionTitleSource = providedTitle ? "provided" : titleSource ? "topic" : "fallback";
     const detail = summarizeSessionDetail(session, title);
     const updated = session.last_used_at ?? session.created_at ? formatTimestamp(session.last_used_at ?? session.created_at) : noMessagesYet;
-    const searchText = [session.id, title, detail, session.topic_user_message, session.latest_user_message, status, updated, ...metrics, ...chips].join(" ").toLowerCase();
+    const searchText = [
+      session.id,
+      title,
+      detail,
+      session.title,
+      session.summary_title,
+      session.generated_title,
+      session.topic_user_message,
+      session.latest_user_message,
+      status,
+      updated,
+      ...metrics,
+      ...chips,
+    ].join(" ").toLowerCase();
 
     return {
       id: session.id,
@@ -54,6 +71,7 @@ export function buildSessionRows(sessions: readonly SessionSummary[]): SessionRo
       metrics,
       chips,
       searchText,
+      titleSource: titleKind,
     };
   });
 }
@@ -95,7 +113,7 @@ function mergeCurrentSession(row: SessionRowView, session: SessionState): Sessio
   const latestTurn = session.turns.at(-1);
   const title = currentSessionTitle(row, session);
   const detail = currentSessionDetail(session, title);
-  const hasTopicTitle = Boolean(conversationTopicFromTurns(session.turns));
+  const hasTopicTitle = row.titleSource === "provided" || Boolean(conversationTopicFromTurns(session.turns));
   const metrics = currentSessionMetrics(session);
   const chips = mergeChips(row.chips, currentSessionChips(session));
   const status = currentSessionStatus(session, row.status);
@@ -118,6 +136,7 @@ function mergeCurrentSession(row: SessionRowView, session: SessionState): Sessio
 }
 
 function currentSessionTitle(row: SessionRowView, session: SessionState): string {
+  if (row.titleSource === "provided") return row.title;
   const topic = conversationTopicFromTurns(session.turns);
   return topic ? summarizeSessionTitle(topic) : row.title;
 }
@@ -233,6 +252,13 @@ function fallbackSessionTitle(session: SessionSummary): string {
   if (session.active) return hasWork ? "Live chat" : "New live chat";
   if (session.durable) return hasWork ? "Saved chat" : "New chat";
   return hasWork ? "Recent chat" : "New chat";
+}
+
+function providedSessionTitle(session: SessionSummary): string | undefined {
+  const title = [session.title, session.summary_title, session.generated_title]
+    .map((value) => value?.replace(/\s+/g, " ").trim())
+    .find((value): value is string => Boolean(value));
+  return title ? summarize(title, 58) : undefined;
 }
 
 function summarizeSessionDetail(session: SessionSummary, title: string): string | undefined {

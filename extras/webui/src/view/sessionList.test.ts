@@ -119,6 +119,46 @@ describe("sessionList view model", () => {
     expect(rows[0].searchText).toContain("基于已有证据输出报告");
   });
 
+  it("prefers a runtime summarized title over the first user message", () => {
+    const rows = buildSessionRows([
+      session({
+        id: "affine-generated-title",
+        durable: true,
+        title: "Affine market research",
+        latest_user_message: "affine 是 Bittensor 的一个子网，请收集信息并向我介绍",
+        last_used_at: "2026-05-24T17:37:00Z",
+      }),
+    ]);
+
+    expect(rows[0]).toMatchObject({
+      title: "Affine market research",
+      titleSource: "provided",
+      meta: ["May 24 17:37 UTC"],
+      status: "Saved",
+    });
+    expect(rows[0].searchText).toContain("affine 是 bittensor");
+    expect(rows[0].searchText).toContain("affine market research");
+  });
+
+  it("keeps a provided title when merging the selected live timeline", () => {
+    const rows = mergeCurrentSessionRow(
+      buildSessionRows([
+        session({
+          id: "s1",
+          durable: true,
+          has_events: true,
+          summary_title: "Repository file listing",
+          latest_user_message: "list the files",
+        }),
+      ]),
+      "s1",
+      reduceRawEvents(completedTurn),
+    );
+
+    expect(rows[0].title).toBe("Repository file listing");
+    expect(rows[0].meta).not.toContain("s1");
+  });
+
   it("turns long instruction-style tasks into topic-like titles", () => {
     const rows = buildSessionRows([
       session({

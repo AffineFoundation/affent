@@ -63,6 +63,23 @@ describe("SessionList", () => {
     expect(row).not.toHaveTextContent("Saved");
   });
 
+  it("shows a generated chat title instead of the first user message", () => {
+    renderList([
+      session({
+        id: "affine-session",
+        durable: true,
+        title: "Affine market research",
+        latest_user_message: "affine 是 Bittensor 的一个子网，请收集信息并向我介绍",
+        last_used_at: "2026-05-24T17:37:00Z",
+      }),
+    ]);
+
+    const row = screen.getByRole("button", { name: /Affine market research/ });
+    expect(row).toHaveTextContent("Affine market research");
+    expect(row).not.toHaveTextContent("affine 是 Bittensor");
+    expect(row).toHaveTextContent("May 24 17:37 UTC");
+  });
+
   it("shows the active chat before newer saved chats, then sorts saved chats by recency", () => {
     renderList([
       session({

@@ -41,6 +41,11 @@ export interface SessionCapabilities {
 
 export interface SessionSummary {
   id: string;
+  /** Human-readable summarized chat title, when the runtime provides one. */
+  title?: string;
+  /** Compatibility for runtimes that name the generated title explicitly. */
+  summary_title?: string;
+  generated_title?: string;
   /** In the live in-memory pool right now. */
   active: boolean;
   /** Has a durable on-disk session dir (resumable). */
