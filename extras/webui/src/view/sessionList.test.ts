@@ -459,8 +459,51 @@ describe("sessionList view model", () => {
     expect(rows[0]).toMatchObject({
       status: "Done",
       tone: "error",
+      preview: "Issue · DNS failed",
       metrics: ["1 message", "1 action", "1 issue"],
     });
+    expect(rows[0].searchText).toContain("dns failed");
+  });
+
+  it("summarizes action-limit chats as needing a final answer", () => {
+    const rows = mergeCurrentSessionRow(
+      buildSessionRows([session({ id: "s1", durable: true, has_events: true })]),
+      "s1",
+      reduceRawEvents([
+        { id: 1, type: "turn.start", data: { turn_id: "t1" } },
+        { id: 2, type: "user.message", data: { turn_id: "t1", text: "research affine" } },
+        { id: 3, type: "turn.end", data: { turn_id: "t1", reason: "max_turns" } },
+      ]),
+    );
+
+    expect(rows[0]).toMatchObject({
+      status: "No final answer",
+      tone: "warning",
+      preview: "Needs final answer · Action limit reached before a final reply.",
+      metrics: ["1 message", "1 issue"],
+    });
+    expect(rows[0].searchText).toContain("needs final answer");
+  });
+
+  it("summarizes provider errors with user-readable issue labels", () => {
+    const rows = mergeCurrentSessionRow(
+      buildSessionRows([session({ id: "s1", durable: true, has_events: true })]),
+      "s1",
+      reduceRawEvents([
+        { id: 1, type: "turn.start", data: { turn_id: "t1" } },
+        { id: 2, type: "user.message", data: { turn_id: "t1", text: "ask provider" } },
+        { id: 3, type: "error", data: { turn_id: "t1", code: "upstream_5xx", message: "provider returned 503", recoverable: false } },
+        { id: 4, type: "turn.end", data: { turn_id: "t1", reason: "error" } },
+      ]),
+    );
+
+    expect(rows[0]).toMatchObject({
+      status: "Blocked",
+      tone: "error",
+      preview: "Issue · Provider returned an error",
+      metrics: ["1 message", "1 issue"],
+    });
+    expect(rows[0].searchText).toContain("provider returned an error");
   });
 
   it("does not let a prior continuation limit color a later completed follow-up as failed", () => {

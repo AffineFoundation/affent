@@ -1,6 +1,7 @@
 import type { SessionSummary } from "../api/sessions";
 import type { SessionState } from "../store/sessionState";
 import { conversationTopicFromTurns } from "./continuationPrompt";
+import { summarizeUserError } from "./errorSummary";
 import { summarizeAnswerPreview } from "./textPreview";
 import { buildTurnActivity } from "./turnActivity";
 
@@ -163,6 +164,8 @@ function currentSessionPreview(session: SessionState, title: string, detail?: st
   if (latestTurn.status === "running" && activity?.digest.summary && activity.digest.summary !== "No activity yet.") {
     return `Now · ${summarize(activity.digest.summary, 96)}`;
   }
+  const issue = currentTurnIssuePreview(latestTurn);
+  if (issue) return issue;
   if (latestTurn.assistantText.trim()) {
     return `Answer · ${summarizeAnswerPreview(latestTurn.assistantText, 96)}`;
   }
@@ -170,6 +173,26 @@ function currentSessionPreview(session: SessionState, title: string, detail?: st
   const userText = latestTurn.userText?.trim();
   if (userText) return latestRequestPreview(userText, title);
   return undefined;
+}
+
+function currentTurnIssuePreview(turn: SessionState["turns"][number]): string | undefined {
+  if (turn.status === "max_turns") {
+    return "Needs final answer · Action limit reached before a final reply.";
+  }
+  if (turn.error) {
+    return `Issue · ${summarizeUserError(turn.error.code, turn.error.message).title}`;
+  }
+  if (turn.status === "error") {
+    return `Issue · ${summarize(firstToolIssue(turn) ?? "Request failed", 96)}`;
+  }
+  if (turn.status === "completed" && turn.assistantText.trim()) return undefined;
+  const failedTool = firstToolIssue(turn);
+  return failedTool ? `Issue · ${summarize(failedTool, 96)}` : undefined;
+}
+
+function firstToolIssue(turn: SessionState["turns"][number]): string | undefined {
+  const call = turn.toolCalls.find((item) => item.status === "error");
+  return call?.resultSummary || call?.result || (call ? `${call.tool} failed` : undefined);
 }
 
 function currentSessionStatus(session: SessionState, fallback: string): string {

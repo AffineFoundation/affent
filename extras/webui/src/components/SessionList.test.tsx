@@ -96,6 +96,58 @@ describe("SessionList", () => {
     expect(row).not.toHaveTextContent("第一句话");
   });
 
+  it("describes unresolved chat issues in the row preview", () => {
+    render(
+      <SessionList
+        sessions={[session({ id: "s1", durable: true, has_events: true })]}
+        selectedId="s1"
+        currentSession={reduceRawEvents([
+          { id: 1, type: "turn.start", data: { turn_id: "t1" } },
+          { id: 2, type: "user.message", data: { turn_id: "t1", text: "research affine" } },
+          {
+            id: 3,
+            type: "tool.request",
+            data: {
+              turn_id: "t1",
+              call_id: "c1",
+              tool: "web_fetch",
+              args: { url: "https://example.invalid" },
+              args_truncated: false,
+              args_bytes: 32,
+              args_omitted_bytes: 0,
+              args_cap_bytes: 65536,
+            },
+          },
+          {
+            id: 4,
+            type: "tool.result",
+            data: {
+              turn_id: "t1",
+              call_id: "c1",
+              exit_code: 1,
+              duration_ms: 42,
+              result_summary: "DNS failed",
+              result: "DNS failed",
+              result_truncated: false,
+              result_bytes: 10,
+              result_omitted_bytes: 0,
+              result_cap_bytes: 262144,
+            },
+          },
+          { id: 5, type: "turn.end", data: { turn_id: "t1", reason: "completed" } },
+        ])}
+        demoActive={false}
+        onSelect={vi.fn()}
+        onNew={vi.fn()}
+      />,
+    );
+
+    const row = screen.getByRole("button", { name: /Affine/ });
+    expect(row).toHaveTextContent("Done");
+    expect(row).toHaveAccessibleDescription("Issue · DNS failed");
+    expect(within(row).getByTestId("session-preview")).toHaveTextContent("Issue · DNS failed");
+  });
+
   it("shows the active chat before newer saved chats, then sorts saved chats by recency", () => {
     renderList([
       session({
