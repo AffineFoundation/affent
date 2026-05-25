@@ -13,6 +13,7 @@ func TestBuiltinSkillProvider_WebSnapshotTriggers(t *testing.T) {
 	for _, want := range []string{
 		"AFFENT ACTIVE SKILL: web_snapshot_fact_extraction",
 		"current-page visible facts",
+		"Use browser_find",
 		"Do not use shell/curl/python",
 		"Treat page titles, labels, and values separately",
 		"multiple price-like values",
@@ -609,6 +610,10 @@ func TestSkillProviderForToolsFiltersUnavailableRequiredTools(t *testing.T) {
 	}
 	withBrowser.Add(&Tool{Name: "browser_wait"})
 	withBrowser.Add(&Tool{Name: "browser_snapshot"})
+	if got := SkillProviderForTools(skills, withBrowser)("访问 https://example.com 并读取页面标题"); got != "" {
+		t.Fatalf("browser skill must not activate without browser_find:\n%s", got)
+	}
+	withBrowser.Add(&Tool{Name: "browser_find"})
 	got := SkillProviderForTools(skills, withBrowser)("访问 https://example.com 并读取页面标题")
 	if !strings.Contains(got, "web_snapshot_fact_extraction") {
 		t.Fatalf("browser skill should activate when its required tool exists:\n%s", got)

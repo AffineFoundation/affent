@@ -5,7 +5,8 @@
   "required_tools": [
     "browser_navigate",
     "browser_wait",
-    "browser_snapshot"
+    "browser_snapshot",
+    "browser_find"
   ],
   "auto_activation": {
     "any": [
