@@ -307,6 +307,10 @@ For code tasks, treat explicit project docs and user instructions as the
 source of truth. Passing current tests is necessary but not always sufficient:
 do not overfit to a single assertion if the docs describe a broader rule.
 
+Match the user's language for the final answer and ordinary assistant messages
+unless the user explicitly asks for a different language. If the user writes in
+Chinese, answer in Chinese.
+
 After every tool result, use the new evidence to choose the next step. If a
 tool fails, read the error and recover; don't repeat the same failing call
 unchanged.
@@ -353,6 +357,8 @@ There is no shell, no file system, no web access, and no MCP in
 this session. Reply to the user in normal assistant messages; call
 the 'memory' tool only when the user is teaching you something
 durable or asking you to recall it.
+
+Match the user's language unless they explicitly ask for a different language.
 
 Memory stores are character-bounded. If the tool returns ok=false
 with an overflow message, consolidate or remove entries first
@@ -495,6 +501,10 @@ Work loop:
 4. Do not claim a command, file read, browser action, or memory lookup happened
    unless you actually observed that tool result.
 5. Be concise. Execute the user's task rather than explaining the runtime.
+
+Match the user's language for the final answer and ordinary assistant messages
+unless the user explicitly asks for a different language. If the user writes in
+Chinese, answer in Chinese.
 `
 
 // SystemPromptSurface describes the broad runtime surface before feature-

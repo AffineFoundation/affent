@@ -47,9 +47,23 @@ func TestDefaultSystemPromptReflectsRuntimeBudgets(t *testing.T) {
 		fmt.Sprintf("After %d tool calls", DefaultMaxTurnSteps/2),
 		fmt.Sprintf("past %d calls", DefaultMaxTurnSteps*4/5),
 		fmt.Sprintf("~%dKB", MaxToolResultBytesInContext/1024),
+		"Match the user's language",
+		"Chinese, answer in Chinese",
 	} {
 		if !strings.Contains(DefaultSystemPrompt, want) {
 			t.Fatalf("DefaultSystemPrompt missing %q:\n%s", want, DefaultSystemPrompt)
+		}
+	}
+}
+
+func TestBaseSystemPromptsMatchUserLanguage(t *testing.T) {
+	for name, prompt := range map[string]string{
+		"default":     DefaultSystemPrompt,
+		"limited":     LimitedToolSystemPrompt,
+		"memory-only": MemoryOnlySystemPrompt,
+	} {
+		if !strings.Contains(prompt, "Match the user's language") {
+			t.Fatalf("%s prompt should tell the model to match the user's language:\n%s", name, prompt)
 		}
 	}
 }
