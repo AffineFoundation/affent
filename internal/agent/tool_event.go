@@ -282,6 +282,10 @@ func newToolResultContextBudget(max int) *toolResultContextBudget {
 	return &toolResultContextBudget{remaining: max}
 }
 
+func (b *toolResultContextBudget) exhausted() bool {
+	return b != nil && b.remaining <= 0
+}
+
 func (b *toolResultContextBudget) truncateToolResult(toolName, result string, perToolMax int) (string, int) {
 	if result == "" {
 		return "", 0

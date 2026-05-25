@@ -764,9 +764,26 @@ func (l *Loop) runTurn(ctx context.Context, turnID, userText string, opts TurnOp
 	toolCallsUsed := 0
 	toolBudgetExhausted := false
 	forceNoToolsNext := false
+	forceNoToolsReason := "(loop_guard requested a final answer; tools disabled for this step)"
 	guardInterventions := 0
+	budgetExhaustedOmissions := 0
 	toolStats := sse.ToolRuntimeStats{}
 	toolContextBudget := newToolResultContextBudget(l.toolResultContextBudgetBytes())
+	recordContextOmission := func(omitted int) {
+		recordToolContextOmission(&toolStats, omitted)
+		if omitted <= 0 || toolContextBudget == nil || !toolContextBudget.exhausted() {
+			return
+		}
+		budgetExhaustedOmissions++
+		if budgetExhaustedOmissions < 2 {
+			return
+		}
+		if !forceNoToolsNext {
+			toolStats.ForcedNoTools++
+		}
+		forceNoToolsNext = true
+		forceNoToolsReason = "(tool result context budget exhausted; final no-tool answer requested)"
+	}
 	for {
 		if ctx.Err() != nil {
 			endReason = sse.TurnEndCancelled
@@ -814,7 +831,7 @@ func (l *Loop) runTurn(ctx context.Context, turnID, userText string, opts TurnOp
 			break
 		}
 		if forceNoToolsNext {
-			skipped := l.appendSkippedToolResults(turnID, final.Final.ToolCalls, "(loop_guard requested a final answer; tools disabled for this step)")
+			skipped := l.appendSkippedToolResults(turnID, final.Final.ToolCalls, forceNoToolsReason)
 			toolStats.ToolRequests += skipped
 			toolStats.ToolErrors += skipped
 			endReason = sse.TurnEndMaxTurns
@@ -946,7 +963,7 @@ func (l *Loop) runTurn(ctx context.Context, turnID, userText string, opts TurnOp
 			if argsRepairErr != nil {
 				result := fmt.Sprintf("tool_arg_repair: %v", argsRepairErr)
 				omitted := l.publishAndAppendToolResultWithContext(turnID, callID, toolName, result, true, 0, delegation, toolContextBudget)
-				recordToolContextOmission(&toolStats, omitted)
+				recordContextOmission(omitted)
 				toolCallsUsed++
 				recordToolRepairOutcome(&toolStats, repairedToolCall, true)
 				toolStats.ToolErrors++
@@ -1037,7 +1054,7 @@ func (l *Loop) runTurn(ctx context.Context, turnID, userText string, opts TurnOp
 			}
 			if result := loopGuard.recordAttempt(toolName, args); result != "" {
 				omitted := l.publishAndAppendToolResultWithContext(turnID, callID, toolName, result, true, 0, delegation, toolContextBudget)
-				recordToolContextOmission(&toolStats, omitted)
+				recordContextOmission(omitted)
 				toolCallsUsed++
 				recordToolRepairOutcome(&toolStats, repairedToolCall, true)
 				toolStats.ToolErrors++
@@ -1058,7 +1075,7 @@ func (l *Loop) runTurn(ctx context.Context, turnID, userText string, opts TurnOp
 			tools := l.toolsForTurn(opts)
 			if tools == nil {
 				omitted := l.publishAndAppendToolResultWithContext(turnID, callID, toolName, "tool registry is not configured", true, 0, delegation, toolContextBudget)
-				recordToolContextOmission(&toolStats, omitted)
+				recordContextOmission(omitted)
 				toolCallsUsed++
 				recordToolRepairOutcome(&toolStats, repairedToolCall, true)
 				toolStats.ToolErrors++
@@ -1087,7 +1104,7 @@ func (l *Loop) runTurn(ctx context.Context, turnID, userText string, opts TurnOp
 				}
 			}
 			omitted := l.publishAndAppendToolResultWithContext(turnID, callID, toolName, result, isErr, toolDuration, delegation, toolContextBudget)
-			recordToolContextOmission(&toolStats, omitted)
+			recordContextOmission(omitted)
 			toolCallsUsed++
 			recordToolRepairOutcome(&toolStats, repairedToolCall, isErr)
 			for _, state := range postToolPolicies {

@@ -552,6 +552,106 @@ func TestRunTurn_ToolContextBudgetCapsAggregateToolResults(t *testing.T) {
 	}
 }
 
+func TestRunTurn_ForcesNoToolsAfterRepeatedContextBudgetExhaustion(t *testing.T) {
+	var calls int32
+	var secondReq string
+	toolPayload := "SourceAccess: browser_rendered_url=https://example.com/large; snapshot_id=1; page_text_below=verified_page_evidence; links_in_snapshot=discovered_unverified_until_opened\nURL: https://example.com/large\nTITLE: Large\nSNAPSHOT_ID: 1\n\nPAGE TEXT:\n" + strings.Repeat("large evidence ", 120)
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		body, _ := readReqBody(r)
+		w.Header().Set("Content-Type", "text/event-stream")
+		w.WriteHeader(200)
+		fl := w.(http.Flusher)
+		if atomic.AddInt32(&calls, 1) == 1 {
+			lines := []string{
+				`data: {"choices":[{"delta":{"role":"assistant","tool_calls":[{"index":0,"id":"c1","type":"function","function":{"name":"browser_navigate","arguments":"{\"url\":\"https://example.com/large\"}"}},{"index":1,"id":"c2","type":"function","function":{"name":"browser_snapshot","arguments":"{}"}}]},"finish_reason":null}]}`,
+				`data: {"choices":[{"delta":{},"finish_reason":"tool_calls"}]}`,
+				`data: [DONE]`,
+			}
+			for _, l := range lines {
+				w.Write([]byte(l + "\n\n"))
+				fl.Flush()
+			}
+			return
+		}
+		secondReq = body
+		w.Write([]byte("data: {\"choices\":[{\"delta\":{\"role\":\"assistant\",\"content\":\"final\"},\"finish_reason\":\"stop\"}]}\n\n"))
+		w.Write([]byte("data: [DONE]\n\n"))
+		fl.Flush()
+	}))
+	t.Cleanup(srv.Close)
+
+	conv, err := OpenConversationAt(filepath.Join(t.TempDir(), "sess.jsonl"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	var dispatches int32
+	reg := NewRegistry()
+	reg.Add(&Tool{
+		Name:        "browser_navigate",
+		Description: "browser navigate",
+		Schema:      json.RawMessage(`{"type":"object","properties":{"url":{"type":"string"}}}`),
+		Execute: func(ctx context.Context, args json.RawMessage) (string, error) {
+			atomic.AddInt32(&dispatches, 1)
+			return toolPayload, nil
+		},
+	})
+	reg.Add(&Tool{
+		Name:        "browser_snapshot",
+		Description: "browser snapshot",
+		Schema:      json.RawMessage(`{"type":"object","properties":{}}`),
+		Execute: func(ctx context.Context, args json.RawMessage) (string, error) {
+			atomic.AddInt32(&dispatches, 1)
+			return strings.Replace(toolPayload, "snapshot_id=1", "snapshot_id=2", 1), nil
+		},
+	})
+	events := make(chan sse.Event, 256)
+	loop := &Loop{
+		LLM: NewLLMClient(srv.URL, "", "fake-model"), Tools: reg, Conv: conv, Events: events,
+		MaxTurnSteps: 6, PerCallTimeout: 5 * time.Second,
+		ToolResultMaxBytesInContext:  1024,
+		ToolResultContextBudgetBytes: 64,
+	}
+	if err := loop.EnsureSystemPrompt("base"); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := loop.SendUser(context.Background(), "go"); err != nil {
+		t.Fatal(err)
+	}
+
+	deadline := time.After(10 * time.Second)
+	for {
+		select {
+		case ev, ok := <-events:
+			if !ok {
+				t.Fatal("event channel closed before turn.end")
+			}
+			if ev.Type != sse.TypeTurnEnd {
+				continue
+			}
+			if strings.Contains(secondReq, `"tools"`) {
+				t.Fatalf("second request should force a no-tools final answer after repeated context budget exhaustion, body=%s", secondReq)
+			}
+			if !strings.Contains(secondReq, "per-turn tool-result context budget") {
+				t.Fatalf("second request should include budget-exhausted skipped tool guidance, body=%s", secondReq)
+			}
+			var p sse.TurnEndPayload
+			if err := json.Unmarshal(ev.Data, &p); err != nil {
+				t.Fatalf("decode turn.end: %v", err)
+			}
+			if p.ToolStats == nil || p.ToolStats.ForcedNoTools != 1 || p.ToolStats.ToolContextTruncated < 2 {
+				t.Fatalf("expected forced no-tools after repeated context truncation, got %+v", p.ToolStats)
+			}
+			if got := atomic.LoadInt32(&dispatches); got != 2 {
+				t.Fatalf("only the first two budget-exhausting tools should run, got %d", got)
+			}
+			return
+		case <-deadline:
+			t.Fatal("timeout waiting for turn.end")
+		}
+	}
+}
+
 func TestRunTurn_RepairsToolArgumentsBeforeDispatch(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		body, _ := readReqBody(r)
