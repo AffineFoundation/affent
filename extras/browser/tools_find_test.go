@@ -48,6 +48,43 @@ func TestBrowserFindNoMatchesHasRecoveryHint(t *testing.T) {
 	}
 }
 
+func TestBrowserFindChallengePageIsBlocked(t *testing.T) {
+	result := &BrowserFindResult{
+		URL:   "https://www.google.com/sorry/index?continue=https://www.google.com/search%3Fq%3Daffine",
+		Title: "Before you continue",
+		TextBlocks: []TextBlock{
+			{Type: "p", Text: "Our systems have detected unusual traffic from your computer network."},
+		},
+	}
+	out, err := formatBrowserFindResult(result, "affine", 8)
+	if err == nil {
+		t.Fatal("expected browser_find challenge page to return a blocked error")
+	}
+	for _, want := range []string{"Failure: kind=blocked", "bot/challenge page", "use a different search provider"} {
+		if !strings.Contains(err.Error(), want) {
+			t.Fatalf("blocked error missing %q:\n%s", want, err.Error())
+		}
+	}
+	if !strings.Contains(out, "URL: https://www.google.com/sorry/index") {
+		t.Fatalf("blocked output should retain page metadata:\n%s", out)
+	}
+}
+
+func TestBrowserFindNormalPageIsNotBlocked(t *testing.T) {
+	out, err := formatBrowserFindResult(&BrowserFindResult{
+		URL: "https://example.test",
+		TextBlocks: []TextBlock{
+			{Type: "p", Text: "Affine subnet market cap and emissions"},
+		},
+	}, "market cap", 8)
+	if err != nil {
+		t.Fatalf("normal page should not be blocked: %v", err)
+	}
+	if !strings.Contains(out, "Affine subnet market cap") {
+		t.Fatalf("normal output missing expected match:\n%s", out)
+	}
+}
+
 func TestBrowserFindDeduplicatesEquivalentTextMatches(t *testing.T) {
 	result := &BrowserFindResult{
 		URL: "https://example.test",

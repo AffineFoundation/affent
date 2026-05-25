@@ -77,7 +77,7 @@ func FindTool(s *Session) *agent.Tool {
 			if err != nil {
 				return "", fmt.Errorf("find: %w", err)
 			}
-			return formatBrowserFindResults(result, query, limit), nil
+			return formatBrowserFindResult(result, query, limit)
 		},
 	}
 }
@@ -348,6 +348,28 @@ func formatBrowserFindResults(result *BrowserFindResult, query string, limit int
 		b.WriteByte('\n')
 	}
 	return b.String()
+}
+
+func formatBrowserFindResult(result *BrowserFindResult, query string, limit int) (string, error) {
+	out := formatBrowserFindResults(result, query, limit)
+	if reason := blockedBrowserFindReason(result); reason != "" {
+		return out, fmt.Errorf(
+			"browser page appears blocked by a bot/challenge page (%s)\nFailure: kind=blocked\nNext: do not treat browser_find matches from this page as evidence; use a different search provider, a known canonical URL, direct web_fetch/API/text source, or answer with this source marked unavailable",
+			reason,
+		)
+	}
+	return out, nil
+}
+
+func blockedBrowserFindReason(result *BrowserFindResult) string {
+	if result == nil {
+		return ""
+	}
+	return blockedSnapshotReason(&Snapshot{
+		URL:        result.URL,
+		Title:      result.Title,
+		TextBlocks: result.TextBlocks,
+	})
 }
 
 func browserFindMatches(result *BrowserFindResult, query string, limit int) []string {
