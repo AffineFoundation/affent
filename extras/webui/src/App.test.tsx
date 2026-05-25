@@ -620,7 +620,7 @@ describe("App", () => {
 
     render(<App />);
 
-    await user.click(await screen.findByRole("button", { name: /Tool details/ }));
+    await user.click(await screen.findByRole("button", { name: /Work details/ }));
     const executionTree = await screen.findByTestId("execution-tree");
     await user.click(within(executionTree).getByRole("button", { name: /make/ }));
     await user.click(screen.getByRole("button", { name: "Use as message" }));
@@ -723,7 +723,7 @@ describe("App", () => {
 
     render(<App />);
 
-    await user.click(await screen.findByRole("button", { name: /Tool details/ }));
+    await user.click(await screen.findByRole("button", { name: /Work details/ }));
     await user.click(screen.getByRole("button", { name: /List current directory/ }));
     await user.click(screen.getByRole("button", { name: "Use output" }));
 
@@ -759,7 +759,7 @@ describe("App", () => {
 
     render(<App />);
 
-    await user.click(await screen.findByRole("button", { name: /Tool details/ }));
+    await user.click(await screen.findByRole("button", { name: /Work details/ }));
     const executionTree = await screen.findByTestId("execution-tree");
     await user.click(within(executionTree).getByRole("button", { name: /make/ }));
     await user.click(screen.getByRole("button", { name: "Retry action" }));

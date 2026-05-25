@@ -814,23 +814,23 @@ function workThreadStatus(turn: TurnState): TurnState["status"] {
 function workThreadHeading(turn: TurnState, opts: { continuedAfterLimit?: boolean; continuedIntoTurnNumber?: number } = {}): { title: string; detail?: string } {
   if (opts.continuedAfterLimit) {
     const detail = opts.continuedIntoTurnNumber ? `continued in message ${opts.continuedIntoTurnNumber}` : "continued later in this chat";
-    return { title: "Tool details", detail };
+    return { title: "Work details", detail };
   }
   const failed = latestFailedTool(turn);
   if ((failed && turn.status !== "completed") || turn.status === "error" || turn.error) {
     const errorSummary = turn.error ? summarizeUserError(turn.error.code, turn.error.message) : undefined;
-    return { title: "Tool details", detail: failed ? `Issue: ${summarize(currentToolFocus(failed), 88)}` : errorSummary?.detail };
+    return { title: "Work details", detail: failed ? `Issue: ${summarize(currentToolFocus(failed), 88)}` : errorSummary?.detail };
   }
   if (turn.status === "running") {
-    return { title: "Tool details", detail: runningAnswerDetail(turn) };
+    return { title: "Work details", detail: runningAnswerDetail(turn) };
   }
   if (turn.status === "max_turns") {
-    return { title: "Tool details", detail: "Action limit reached" };
+    return { title: "Work details", detail: "Action limit reached" };
   }
   if (turn.status === "cancelled") {
-    return { title: "Tool details", detail: "Cancelled before a final answer" };
+    return { title: "Work details", detail: "Cancelled before a final answer" };
   }
-  return { title: "Tool details", detail: completedWorkDetail(turn) };
+  return { title: "Work details", detail: completedWorkDetail(turn) };
 }
 
 function completedWorkDetail(turn: TurnState): string | undefined {

@@ -37,7 +37,7 @@ function boundaryStatus(turn: TurnState, opts: { continuedAfterLimit?: boolean }
   if (turn.status === "running") return "In progress";
   if (turn.status === "max_turns" && opts.continuedAfterLimit) return "Continued";
   if (turn.status === "max_turns") return "No final answer";
-  if (turn.status === "error" || turn.error) return "Needs attention";
+  if (turn.status === "error" || turn.error) return "Needs review";
   if (turn.status === "cancelled") return "Cancelled";
   if (turn.status === "completed") return "Done";
   return turn.endReason ?? turn.status;

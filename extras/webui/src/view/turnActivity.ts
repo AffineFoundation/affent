@@ -299,7 +299,7 @@ function buildDigest(
   const failed = shouldLeadWithFailure(turn) ? findFailedNode(nodes) : undefined;
   if (failed) {
     return {
-      label: "Needs attention",
+      label: "Needs review",
       summary: failed.detail ? `${failed.title}: ${failed.detail}` : failed.title,
       meta: digestMeta(turn, nodes),
       tone: "error",
@@ -434,7 +434,7 @@ function completedActionSummary(turn: TurnState): string {
   if (failed > 0 && turn.status === "completed" && turn.assistantText.trim()) {
     return `${actionLabel} completed; worked around ${failed} ${pluralize("issue", failed)}.`;
   }
-  if (failed > 0) return `${failed} of ${actionLabel} need attention.`;
+  if (failed > 0) return `${failed} of ${actionLabel} need review.`;
   return `${capitalize(actionLabel)} completed.`;
 }
 
@@ -696,7 +696,7 @@ function toneFromStatus(status: ToolCallStatus): TurnActivityTone {
 
 function activityStatusLabel(turn: TurnState): string {
   if (turn.status === "running") return "Live";
-  if (turn.status === "error") return "Needs attention";
+  if (turn.status === "error") return "Needs review";
   if (turn.status === "max_turns") return "Continue";
   if (turn.status === "cancelled") return "Stopped";
   return "Done";

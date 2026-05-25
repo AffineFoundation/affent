@@ -174,7 +174,7 @@ describe("buildTurnActivity", () => {
     });
   });
 
-  it("does not turn a completed answer into a Needs attention digest just because one tool failed", () => {
+  it("does not turn a completed answer into a Needs review digest just because one tool failed", () => {
     const turn = reduceRawEvents(toolError).turns[0];
     const activity = buildTurnActivity(turn);
 

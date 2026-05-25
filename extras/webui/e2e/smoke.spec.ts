@@ -449,7 +449,7 @@ test("running work reads like an Affent chat update before drill-down", async ({
   await expect(page.getByTestId("running-answer")).toContainText("Inspect docs for WebUI trace requirements");
   await expect(page.getByTestId("workflow-status")).toHaveCount(0);
   await expect(page.getByTestId("turn-boundary")).toHaveCount(0);
-  await expect(page.getByRole("button", { name: /Tool details/ })).toHaveCount(0);
+  await expect(page.getByRole("button", { name: /Work details/ })).toHaveCount(0);
   await expect(page.getByTestId("work-thread")).toHaveCount(0);
   await expect(page.getByTestId("agent-activity")).toHaveAttribute("data-open", "true");
   await expect(page.getByTestId("agent-activity-tree")).toContainText("Inspect docs for WebUI trace requirements");
@@ -670,7 +670,7 @@ test("workflow timeline renders with inline drill-down", async ({ page }, testIn
   await page.getByText("Narrow results").click();
   await page.getByRole("button", { name: "Agent work" }).click();
   await expect(page.getByTestId("work-thread").first()).toBeVisible();
-  await page.getByRole("button", { name: /Tool details/ }).first().click();
+  await page.getByRole("button", { name: /Work details/ }).first().click();
   const executionTree = page.getByTestId("execution-tree");
   await expect(executionTree.getByRole("button", { name: /Find the WebUI trace requirements/ }).first()).toHaveAttribute("aria-expanded", "false");
   await executionTree.getByRole("button", { name: /Find the WebUI trace requirements/ }).first().click();

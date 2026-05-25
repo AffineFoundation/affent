@@ -121,7 +121,7 @@ function turnNavSummary(items: readonly TurnNavSourceItem[], pending: boolean): 
 
   if (pending) parts.push("1 sending");
   else if (running > 0) parts.push(`${running} working`);
-  else if (unresolved > 0) parts.push(`${unresolved} need attention`);
+  else if (unresolved > 0) parts.push(`${unresolved} to review`);
   else parts.push(`${completed} done`);
   if (continued > 0) parts.push(`${continued} continued`);
   if (toolIssues > 0) parts.push(`${toolIssues} tool ${pluralize("issue", toolIssues)}`);
@@ -157,7 +157,7 @@ function statusLabel(turn: TurnState, opts: { continuedAfterLimit?: boolean } = 
   if (turn.status === "completed") return "Done";
   if (turn.status === "max_turns" && opts.continuedAfterLimit) return "Continued";
   if (turn.status === "max_turns") return "Continue";
-  if (turn.status === "error" || turn.error || turn.toolCalls.some((call) => call.status === "error")) return "Attention";
+  if (turn.status === "error" || turn.error || turn.toolCalls.some((call) => call.status === "error")) return "Review";
   if (turn.status === "cancelled") return "Stopped";
   return turn.status;
 }
