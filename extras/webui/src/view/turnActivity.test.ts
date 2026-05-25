@@ -15,7 +15,7 @@ describe("buildTurnActivity", () => {
       live: false,
       tone: "success",
       digest: {
-        label: "Action summary",
+        label: "Result",
         summary: "README.md main.go",
         meta: ["1 step", "1 action"],
         tone: "success",

@@ -328,7 +328,7 @@ function buildDigest(
   const conclusion = firstConclusion(nodes, shouldLeadWithFailure(turn));
   if (conclusion) {
     return {
-      label: hasDelegatedWork(nodes) ? "Result" : "Action summary",
+      label: "Result",
       summary: conclusion,
       meta: digestMeta(turn, nodes),
       tone: activityTone(turn),
@@ -337,7 +337,7 @@ function buildDigest(
 
   if (nodes.length > 0) {
     return {
-      label: hasDelegatedWork(nodes) ? "Result" : "Action summary",
+      label: "Result",
       summary: completedActionSummary(turn),
       meta: digestMeta(turn, nodes),
       tone: activityTone(turn),

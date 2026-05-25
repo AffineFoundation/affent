@@ -42,7 +42,7 @@ describe("Timeline", () => {
     renderTimeline(completedTurn);
     expect(screen.getByTestId("msg-assistant")).toHaveTextContent("There are two files.");
     expect(screen.getByTestId("agent-activity")).toHaveTextContent("Work activity");
-    expect(screen.getByTestId("agent-activity-digest")).toHaveTextContent("Action summary");
+    expect(screen.getByTestId("agent-activity-digest")).toHaveTextContent("Result");
     expect(screen.getByTestId("agent-activity-digest")).toHaveTextContent("README.md main.go");
     expect(screen.getByTestId("agent-activity").textContent?.match(/README\.md main\.go/g)).toHaveLength(1);
     expect(screen.queryByTestId("agent-activity-brief")).toBeNull();
@@ -80,7 +80,7 @@ describe("Timeline", () => {
     expect(within(nav).getByTestId("turn-nav-progress")).toBeInTheDocument();
     expect(within(nav).getByTestId("turn-nav-glance")).toBeInTheDocument();
     expect(within(nav).getByTestId("turn-nav-glance")).toHaveTextContent("list the files");
-    expect(within(nav).getByTestId("turn-nav-glance")).toHaveTextContent("Action summary");
+    expect(within(nav).getByTestId("turn-nav-glance")).toHaveTextContent("Result");
     expect(within(nav).getByTestId("turn-nav-glance")).toHaveTextContent("README.md main.go");
     expect(within(nav).getByTestId("turn-nav-glance")).toHaveTextContent("message only");
     expect(within(nav).getByTestId("turn-nav-glance")).toHaveTextContent("Answer");
@@ -92,7 +92,7 @@ describe("Timeline", () => {
     expect(within(nav).getByRole("link", { name: /Jump to message 2: message only \(current\)/ })).toHaveAttribute("href", "#turn-2");
     expect(within(nav).getByRole("link", { name: /Jump to message 1: list the files/ })).toHaveAttribute("href", "#turn-1");
     expect(within(nav).getByRole("link", { name: /Jump to message 2: message only \(current\)/ })).toHaveAttribute("data-current", "true");
-    expect(within(nav).getByRole("link", { name: /Message 1: list the files.*Action summary: README.md main.go/ })).toHaveAttribute("href", "#turn-1");
+    expect(within(nav).getByRole("link", { name: /Message 1: list the files.*Result: README.md main.go/ })).toHaveAttribute("href", "#turn-1");
     expect(within(nav).getByRole("link", { name: /Message 2: message only.*Answer: no tool needed/ })).toHaveAttribute("href", "#turn-2");
     expect(within(nav).getByRole("link", { name: /Message 2: message only.*current/ })).toHaveAttribute("data-current", "true");
     expect(screen.getAllByTestId("turn-title").map((node) => node.textContent)).toEqual([

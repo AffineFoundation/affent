@@ -593,7 +593,7 @@ test("workflow timeline renders with inline drill-down", async ({ page }, testIn
   await expect(page.getByTestId("turn-card")).toHaveCount(2);
   await expect(page.getByTestId("conversation-map")).toContainText("show a large artifact");
   await expect(page.getByTestId("conversation-map")).toContainText("Messages");
-  await expect(page.getByTestId("conversation-map")).toContainText("2 messages · Action summary · large result preview");
+  await expect(page.getByTestId("conversation-map")).toContainText("2 messages · Result · large result preview");
   await expect(page.getByTestId("turn-nav-glance")).toContainText("delegate docs inspection");
   await expect(page.getByTestId("turn-nav-glance")).toContainText("WebUI must render trace details as expandable runtime structure.");
   await expect(page.getByTestId("conversation-map")).toContainText("Current · Done");
@@ -601,7 +601,7 @@ test("workflow timeline renders with inline drill-down", async ({ page }, testIn
   await expect(page.getByTestId("turn-nav-progress")).toBeVisible();
   await expect(page.getByRole("link", { name: /Jump to message 2: show a large artifact \(current\)/ })).toHaveAttribute("href", "#turn-2");
   await expect(page.getByRole("link", { name: /Jump to message 2: show a large artifact \(current\)/ })).toHaveAttribute("data-current", "true");
-  await expect(page.getByRole("link", { name: /Message 2: show a large artifact.*Action summary: large result preview.*current/ })).toHaveAttribute(
+  await expect(page.getByRole("link", { name: /Message 2: show a large artifact.*Result: large result preview.*current/ })).toHaveAttribute(
     "data-current",
     "true",
   );

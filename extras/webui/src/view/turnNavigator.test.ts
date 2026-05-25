@@ -20,7 +20,7 @@ describe("turnNavigator view model", () => {
     expect(view.summary).toBe("Latest · summarize findings");
     expect(view.items.map((item) => item.current)).toEqual([false, true]);
     expect(view.items[0].summary).toBe("inspect repo");
-    expect(view.items[0].activityLabel).toBe("Action summary");
+    expect(view.items[0].activityLabel).toBe("Result");
     expect(view.items[0].activitySummary).toBe("README.md main.go");
     expect(view.current?.turnNumber).toBe(2);
     expect(view.current?.summary).toBe("summarize findings");
