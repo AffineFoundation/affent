@@ -290,7 +290,11 @@ image-serve-smoke:
 		CONTAINER_MEMORY="$(CONTAINER_MEMORY)" \
 		CONTAINER_CPUS="$(CONTAINER_CPUS)" \
 		CONTAINER_PIDS="$(CONTAINER_PIDS)"; \
-	curl -fsS "$(SMOKE_URL)/healthz" >/dev/null; \
+	health=$$(curl -fsS "$(SMOKE_URL)/healthz"); \
+	echo "$$health" | grep -q '"status":"ok"'; \
+	echo "$$health" | grep -q '"build_revision":"$(IMAGE_BUILD_REVISION)"'; \
+	stats=$$(curl -fsS "$(SMOKE_URL)/v1/stats"); \
+	echo "$$stats" | grep -q '"build":{"build_revision":"$(IMAGE_BUILD_REVISION)"'; \
 	curl -fsS -X POST "$(SMOKE_URL)/v1/sessions" \
 		-H 'Content-Type: application/json' \
 		--data '{"session_id":"$(SMOKE_SESSION_ID)"}' | grep -q '"durable":true'; \
@@ -321,12 +325,14 @@ image-serve-smoke:
 	web_label=$$(docker inspect "$(SMOKE_CONTAINER_NAME)" --format '{{index .Config.Labels "affent.runtime.serve.web"}}'); \
 	web_search_label=$$(docker inspect "$(SMOKE_CONTAINER_NAME)" --format '{{index .Config.Labels "affent.runtime.serve.web_search"}}'); \
 	browser_cache_label=$$(docker inspect "$(SMOKE_CONTAINER_NAME)" --format '{{index .Config.Labels "affent.runtime.serve.browser_cache_dir"}}'); \
+	build_revision_label=$$(docker inspect "$(SMOKE_CONTAINER_NAME)" --format '{{index .Config.Labels "org.opencontainers.image.revision"}}'); \
 	test "$$memory_label" = "$(CONTAINER_MEMORY)"; \
 	test "$$browser_label" = "true"; \
 	test "$$web_label" = "true"; \
 	test "$$web_search_label" = "false"; \
 	test "$$browser_cache_label" = "/workspace/browser-cache"; \
-	echo "image-serve-smoke ok: $(SMOKE_URL) session=$(SMOKE_SESSION_ID) memory=$(CONTAINER_MEMORY) browser=$$browser_label web=$$web_label cache=$$browser_cache_label"
+	test "$$build_revision_label" = "$(IMAGE_BUILD_REVISION)"; \
+	echo "image-serve-smoke ok: $(SMOKE_URL) session=$(SMOKE_SESSION_ID) revision=$$build_revision_label memory=$(CONTAINER_MEMORY) browser=$$browser_label web=$$web_label cache=$$browser_cache_label"
 
 eval-container: affentctl
 	"$(AFFENTCTL)" image build --image "$(EVAL_IMAGE)" --memory "$(CONTAINER_MEMORY)" $(IMAGE_BUILD_ARGS)
