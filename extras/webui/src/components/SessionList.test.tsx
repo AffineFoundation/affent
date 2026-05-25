@@ -201,15 +201,15 @@ describe("SessionList", () => {
 
     const tools = screen.getByTestId("session-tools");
     expect(tools).toHaveAttribute("data-expanded", "false");
-    expect(within(tools).getByRole("button", { name: "Find chats" })).toBeInTheDocument();
-    expect(within(tools).getByText("Search and filters")).toBeInTheDocument();
+    expect(within(tools).getByRole("button", { name: "Search chats" })).toBeInTheDocument();
+    expect(within(tools).getByText("Filters")).toBeInTheDocument();
     expect(screen.queryByTestId("session-search")).toBeNull();
     expect(within(tools).queryByText("2/2")).toBeNull();
     expect(within(tools).queryByRole("button", { name: /Saved/ })).toBeNull();
 
-    await user.click(within(tools).getByRole("button", { name: "Find chats" }));
+    await user.click(within(tools).getByRole("button", { name: "Search chats" }));
     expect(tools).toHaveAttribute("data-expanded", "true");
-    expect(within(tools).getByText("Find chats")).toBeInTheDocument();
+    expect(within(tools).getByText("Search chats")).toBeInTheDocument();
     expect(within(tools).getByText("2/2")).toBeInTheDocument();
     expect(within(tools).getByRole("button", { name: /Saved/ })).toBeInTheDocument();
     expect(screen.getByTestId("session-search")).toBeVisible();
@@ -381,7 +381,7 @@ describe("SessionList", () => {
       session({ id: "artifact-three", durable: true, has_artifacts: true }),
     ]);
 
-    await user.click(screen.getByRole("button", { name: "Find chats" }));
+    await user.click(screen.getByRole("button", { name: "Search chats" }));
     await user.click(within(screen.getByRole("group", { name: "Session filter" })).getByRole("button", { name: /Memory/ }));
     expect(screen.getByTestId("session-list")).toHaveTextContent("Memory chat");
     expect(screen.getByTestId("session-list")).not.toHaveTextContent("Files chat");

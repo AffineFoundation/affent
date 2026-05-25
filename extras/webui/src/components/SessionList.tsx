@@ -109,7 +109,7 @@ export function SessionList({
         <div className="session-tools" data-expanded={toolsExpanded ? "true" : "false"} data-testid="session-tools">
           {toolsExpanded ? (
             <label className="session-search">
-              <span>Find chats</span>
+              <span>Search chats</span>
               <input
                 ref={searchInputRef}
                 value={query}
@@ -120,9 +120,9 @@ export function SessionList({
               <small>{visibleRows.length}/{rows.length}</small>
             </label>
           ) : (
-            <button type="button" className="session-find-toggle" aria-label="Find chats" onClick={() => setToolsOpen(true)}>
-              <span>Find chats</span>
-              <small>Search and filters</small>
+            <button type="button" className="session-find-toggle" aria-label="Search chats" onClick={() => setToolsOpen(true)}>
+              <span>Search chats</span>
+              <small>Filters</small>
             </button>
           )}
           {toolsExpanded ? (
