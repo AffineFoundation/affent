@@ -458,7 +458,7 @@ func TestWithFocusedTaskSystemGuidance_AppendsOnce(t *testing.T) {
 
 func TestResearchProfileGuidesGeneralExternalResearch(t *testing.T) {
 	profile := researchProfile()
-	for _, want := range []string{"registered external lookup tools", "authoritative sources", "Direct-reader warning", "Preserve user-provided disambiguators", "network/subnet id", "market, metrics, or trend questions", "social posts", "independent corroborating source", "API/text/export endpoints"} {
+	for _, want := range []string{"registered external lookup tools", "authoritative sources", "Source hint", "llms.txt", "Direct-reader warning", "Preserve user-provided disambiguators", "network/subnet id", "market, metrics, or trend questions", "social posts", "independent corroborating source", "API/text/export endpoints"} {
 		if !strings.Contains(profile.SystemPromptHints, want) {
 			t.Fatalf("research profile guidance missing %q:\n%s", want, profile.SystemPromptHints)
 		}

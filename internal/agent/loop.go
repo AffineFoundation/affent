@@ -361,6 +361,7 @@ func externalResearchSystemGuidance(surface externalResearchToolSurface) string 
 	if surface.WebSearch && (surface.WebFetch || surface.Browser) {
 		b.WriteString("\n- For current or unfamiliar public facts, use web_search for discovery, then read the most authoritative sources before answering.")
 		b.WriteString("\n- Do not open every search result. Pick the smallest set of high-value official, primary, metrics, or corroborating sources; use social/forum snippets only as weak sentiment when page reading is blocked or unavailable.")
+		b.WriteString("\n- If web_search emits Source hint lines for readable endpoints such as llms.txt, markdown docs, APIs, JSON, CSV, or feeds, prefer those direct text/API URLs over dynamic dashboard or app routes.")
 		b.WriteString("\n- If a search result includes a Direct-reader warning, do not spend direct page-reading calls on that URL; treat the snippet as weak discovery/sentiment or choose a canonical source URL instead.")
 	} else if surface.WebSearch {
 		b.WriteString("\n- For current or unfamiliar public facts, use web_search to discover and compare source snippets; say when full-page reading is unavailable.")

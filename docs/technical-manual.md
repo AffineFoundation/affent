@@ -259,7 +259,7 @@ the agent can switch source instead of burning turns:
   evidence. The result may include bounded `Discovery preview (not source
   evidence)` text and a few high-signal `Discovery links (not source evidence)`
   extracted from visible shell navigation; use them only to choose a canonical
-  API/text/export endpoint or rendering tool, not as verified page evidence. If
+  API/text/export endpoint, not as verified page evidence. If
   no better source is available, mark the source as dynamic/unverified.
 - `Failure: kind=non_text`: the source returned an image, PDF, archive, or
   another body that is not readable page evidence.
@@ -294,6 +294,12 @@ caution: the agent should not spend a direct page-reading call on that URL in
 the current turn. It should prefer the target/canonical URL, an official API or
 text endpoint, or treat the snippet as weak sentiment/claim evidence when no
 readable page source is available.
+
+When a search result snippet itself mentions directly readable URLs such as
+`llms.txt`, markdown docs, API endpoints, JSON, CSV, or feeds, `web_search`
+adds `Source hint` lines. These are discovery hints, not evidence by
+themselves. They are meant to help small models choose the text/API URL to read
+instead of spending turns on a JavaScript dashboard route.
 
 `web_fetch` also preflights a small high-confidence set of direct-reader traps,
 including search-result pages and major social sites that routinely reject

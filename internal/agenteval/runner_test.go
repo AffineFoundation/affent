@@ -1489,6 +1489,141 @@ func TestRunner_EndToEnd_ExternalResearchFlow(t *testing.T) {
 	}
 }
 
+func TestRunner_EndToEnd_ExternalResearchSourceHint(t *testing.T) {
+	webSearch := agent.Tool{
+		Name:        "web_search",
+		Description: "Test-only search stand-in: returns a dynamic page plus readable source hints.",
+		Schema: json.RawMessage(`{
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["query"],
+            "properties": {
+                "query": {"type": "string"},
+                "num_results": {"type": "integer"}
+            }
+        }`),
+		Execute: func(ctx context.Context, args json.RawMessage) (string, error) {
+			return `1. Zenith Analytics docs
+   https://docs.example/zenith
+   For AI agents, read https://docs.example/zenith/llms.txt. Metrics endpoint: https://api.example/zenith/metrics.json.
+   Source hint: snippet mentions readable endpoint https://docs.example/zenith/llms.txt
+   Source hint: snippet mentions readable endpoint https://api.example/zenith/metrics.json
+
+2. Zenith live dashboard
+   https://dashboard.example/zenith
+   Client-rendered market dashboard that requires JavaScript.
+   Direct-reader caution: result appears to be a dynamic or JavaScript-rendered page; prefer an official API/text/source URL before spending a direct page-reading call.
+
+Next: choose the 1-3 most authoritative/current result URLs, prefer official or primary sources, and read them with an available page-reading tool before answering.`, nil
+		},
+	}
+	webFetch := agent.Tool{
+		Name:        "web_fetch",
+		Description: "Test-only fetch stand-in: returns deterministic source-hint content.",
+		Schema: json.RawMessage(`{
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["url"],
+            "properties": {
+                "url": {"type": "string"}
+            }
+        }`),
+		Execute: func(ctx context.Context, args json.RawMessage) (string, error) {
+			var p struct {
+				URL string `json:"url"`
+			}
+			if err := json.Unmarshal(args, &p); err != nil {
+				return "", err
+			}
+			switch p.URL {
+			case "https://docs.example/zenith/llms.txt":
+				return "# Zenith Network\n\nUpdated 2026-05-22. Zenith Network is a decentralized analytics subnet for Bittensor.", nil
+			case "https://api.example/zenith/metrics.json":
+				return `{"as_of":"2026-05-24T12:00:00Z","price_usd":2.41,"market_cap_usd":12400000,"change_24h_pct":5.6}`, nil
+			case "https://dashboard.example/zenith":
+				return "[dynamic page shell: URL=https://dashboard.example/zenith, Content-Type=\"text/html\", Reason=\"client-rendered app shell\"]\nFailure: kind=dynamic_shell\nNext: use a canonical API/text/source page.", nil
+			default:
+				return "", fmt.Errorf("unexpected test URL %q", p.URL)
+			}
+		},
+	}
+
+	turn1 := []string{
+		`{"choices":[{"delta":{"role":"assistant","tool_calls":[{"index":0,"id":"s1","type":"function","function":{"name":"web_search","arguments":"{\"query\":\"Zenith Network Bittensor subnet market metrics\",\"num_results\":5}"}}]},"finish_reason":null}]}`,
+		`{"choices":[{"delta":{},"finish_reason":"tool_calls"}]}`,
+		`[DONE]`,
+	}
+	turn2 := []string{
+		`{"choices":[{"delta":{"role":"assistant","tool_calls":[{"index":0,"id":"f1","type":"function","function":{"name":"web_fetch","arguments":"{\"url\":\"https://docs.example/zenith/llms.txt\"}"}},{"index":1,"id":"f2","type":"function","function":{"name":"web_fetch","arguments":"{\"url\":\"https://api.example/zenith/metrics.json\"}"}}]},"finish_reason":null}]}`,
+		`{"choices":[{"delta":{},"finish_reason":"tool_calls"}]}`,
+		`[DONE]`,
+	}
+	turn3 := []string{
+		`{"choices":[{"delta":{"role":"assistant","content":"Zenith Network is a decentralized analytics subnet for Bittensor according to the readable docs index. As of 2026-05-24T12:00:00Z, the API source reports price $2.41, market cap $12.4M, and 24h change +5.6%. I followed the Source hint URLs and did not fetch the dynamic dashboard, so dashboard evidence remains unverified."},"finish_reason":"stop"}]}`,
+		`[DONE]`,
+	}
+	srv := newScriptedLLM(t, [][]string{turn1, turn2, turn3})
+	searchArgs := func(args map[string]any) bool {
+		q, _ := args["query"].(string)
+		return strings.Contains(q, "Zenith Network")
+	}
+	fetchURL := func(url string) func(map[string]any) bool {
+		return func(args map[string]any) bool {
+			return args["url"] == url
+		}
+	}
+
+	scenario := Scenario{
+		Name:         "external_research_source_hint_followup",
+		Description:  "agent follows readable Source hint URLs from search snippets instead of fetching a dynamic dashboard route",
+		Prompt:       "Assess current Zenith Network Bittensor subnet metrics. Use readable source/API hints when search exposes them, and do not treat dashboard shell text as evidence.",
+		MaxTurnSteps: 6,
+		Checks: []Check{
+			TurnEndedCleanly(),
+			ToolCalled("web_search", searchArgs),
+			ToolResultContains("web_search", "Source hint"),
+			ToolCalled("web_fetch", fetchURL("https://docs.example/zenith/llms.txt")),
+			ToolCalled("web_fetch", fetchURL("https://api.example/zenith/metrics.json")),
+			ToolNotCalled("web_fetch", fetchURL("https://dashboard.example/zenith")),
+			ToolCalledBeforeMatching("web_search", searchArgs, "web_fetch", fetchURL("https://docs.example/zenith/llms.txt")),
+			ToolNotCalled("shell", nil),
+			FinalTextContains("decentralized analytics subnet"),
+			FinalTextContains("market cap $12.4M"),
+			FinalTextContains("Source hint"),
+			FinalTextContains("dynamic dashboard"),
+			FinalTextContains("unverified"),
+		},
+	}
+
+	runner := &Runner{
+		LLM:            agent.NewLLMClient(srv.URL, "", "fake-model"),
+		MaxTurnSteps:   6,
+		PerCallTimeout: 5 * time.Second,
+		RunTimeout:     20 * time.Second,
+		Log:            zerolog.Nop(),
+		BuildRegistry: func(ctx context.Context, workspaceDir string, exec executor.Executor) (*agent.Registry, error) {
+			_ = ctx
+			_ = workspaceDir
+			_ = exec
+			reg := agent.NewRegistry()
+			reg.Add(&webSearch)
+			reg.Add(&webFetch)
+			return reg, nil
+		},
+	}
+
+	out, err := runner.Run(context.Background(), scenario)
+	if err != nil {
+		t.Fatalf("Runner.Run: %v", err)
+	}
+	if !out.Pass {
+		t.Errorf("expected all checks to pass; failed: %v", out.FailedChecks())
+		for _, r := range out.Results {
+			t.Logf("  %s: pass=%v detail=%s", r.Check, r.Pass, r.Detail)
+		}
+	}
+}
+
 // TestRunner_EndToEnd_ExternalResearchFetchRecovery pins the failure path for
 // public web research: a blocked fetch result must be treated as recoverable,
 // and the model should switch to another source instead of repeating the same
