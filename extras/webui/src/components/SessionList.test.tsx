@@ -80,6 +80,21 @@ describe("SessionList", () => {
     expect(row).toHaveTextContent("May 24 17:37 UTC");
   });
 
+  it("does not expose a raw prompt when the provided title is unsummarized", () => {
+    renderList([
+      session({
+        id: "raw-title",
+        durable: true,
+        title: "会话的标题最好是经过总结的，而不是把第一句话的输入当做标题",
+        latest_user_message: "会话的标题最好是经过总结的，而不是把第一句话的输入当做标题",
+      }),
+    ]);
+
+    const row = screen.getByRole("button", { name: /会话标题摘要/ });
+    expect(row).toHaveTextContent("会话标题摘要");
+    expect(row).not.toHaveTextContent("第一句话");
+  });
+
   it("shows the active chat before newer saved chats, then sorts saved chats by recency", () => {
     renderList([
       session({

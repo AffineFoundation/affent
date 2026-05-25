@@ -36,8 +36,8 @@ export function buildSessionRows(sessions: readonly SessionSummary[]): SessionRo
     const status = session.active ? "Live" : session.durable ? "Saved" : "Ephemeral";
     const chips = featureChips(session);
     const metrics = usageMetrics(session);
-    const providedTitle = providedSessionTitle(session);
     const titleSource = session.topic_user_message || session.latest_user_message;
+    const providedTitle = providedSessionTitle(session, titleSource);
     const title = providedTitle ?? (titleSource ? summarizeSessionTitle(titleSource) : fallbackSessionTitle(session));
     const titleKind: SessionTitleSource = providedTitle ? "provided" : titleSource ? "topic" : "fallback";
     const detail = summarizeSessionDetail(session, title);
@@ -254,11 +254,24 @@ function fallbackSessionTitle(session: SessionSummary): string {
   return hasWork ? "Recent chat" : "New chat";
 }
 
-function providedSessionTitle(session: SessionSummary): string | undefined {
+function providedSessionTitle(session: SessionSummary, titleSource?: string): string | undefined {
   const title = [session.title, session.summary_title, session.generated_title]
     .map((value) => value?.replace(/\s+/g, " ").trim())
     .find((value): value is string => Boolean(value));
-  return title ? summarize(title, 58) : undefined;
+  if (!title) return undefined;
+  if (titleSource && isRawPromptTitle(title, titleSource)) return undefined;
+  return summarize(title, 58);
+}
+
+function isRawPromptTitle(title: string, source: string): boolean {
+  const normalizedTitle = normalizeComparableTitle(title);
+  const normalizedSource = normalizeComparableTitle(source);
+  if (!normalizedTitle || normalizedTitle !== normalizedSource) return false;
+  return summarizeSessionTitle(source) !== title;
+}
+
+function normalizeComparableTitle(text: string): string {
+  return text.replace(/\s+/g, " ").trim().toLowerCase();
 }
 
 function summarizeSessionDetail(session: SessionSummary, title: string): string | undefined {

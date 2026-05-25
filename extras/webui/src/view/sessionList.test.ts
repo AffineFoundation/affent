@@ -140,6 +140,33 @@ describe("sessionList view model", () => {
     expect(rows[0].searchText).toContain("affine market research");
   });
 
+  it("re-summarizes provided titles that are only the raw first prompt", () => {
+    const rows = buildSessionRows([
+      session({
+        id: "raw-provided-title",
+        durable: true,
+        title: "请你收集 Affine（Bittensor 子网）的相关信息并向我介绍",
+        latest_user_message: "请你收集 Affine（Bittensor 子网）的相关信息并向我介绍",
+        topic_user_message: "请你收集 Affine（Bittensor 子网）的相关信息并向我介绍",
+      }),
+      session({
+        id: "raw-question-title",
+        durable: true,
+        summary_title: "bittensor是什么",
+        latest_user_message: "bittensor是什么",
+      }),
+    ]);
+
+    expect(rows.find((row) => row.id === "raw-provided-title")).toMatchObject({
+      title: "Affine（Bittensor 子网）",
+      titleSource: "topic",
+    });
+    expect(rows.find((row) => row.id === "raw-question-title")).toMatchObject({
+      title: "Bittensor",
+      titleSource: "topic",
+    });
+  });
+
   it("keeps a provided title when merging the selected live timeline", () => {
     const rows = mergeCurrentSessionRow(
       buildSessionRows([

@@ -158,7 +158,7 @@ export function SessionList({
               >
                 <span className="session-row-top">
                   <span className="pulse-dot" data-status={dotStatus(row.tone)} aria-hidden="true" />
-                  <span className="session-title" title={row.id}>
+                  <span className="session-title" title={row.title}>
                     {row.title}
                   </span>
                   {shouldShowRowStatus(row.status) ? <span className="session-state">{row.status}</span> : null}
