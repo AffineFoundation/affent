@@ -195,7 +195,11 @@ type ToolRuntimeStats struct {
 	ToolRepairFailed      int            `json:"tool_repair_failed,omitempty"`
 	ToolRepairNotes       int            `json:"tool_repair_notes,omitempty"`
 	ToolRepairByKind      map[string]int `json:"tool_repair_by_kind,omitempty"`
-	ToolFailureByKind     map[string]int `json:"tool_failure_by_kind,omitempty"`
+	// ToolFailureByKind classifies structured tool failures and
+	// no-evidence web results. Some entries can come from exit_code=0
+	// tool.results, for example web_fetch dynamic_shell or web_search
+	// no_results, so this is not equivalent to ToolErrors.
+	ToolFailureByKind map[string]int `json:"tool_failure_by_kind,omitempty"`
 	// ToolErrors counts tool results emitted with exit_code != 0,
 	// including guard rejections and skipped calls.
 	ToolErrors int `json:"tool_errors,omitempty"`

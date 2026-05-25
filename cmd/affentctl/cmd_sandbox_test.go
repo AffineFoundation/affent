@@ -448,6 +448,9 @@ func TestTechnicalManualDocumentsImageServeSessionPersistence(t *testing.T) {
 		"fails at startup instead of silently degrading to fetch-only",
 		"enabling `web-search` implies",
 		"requires a configured search backend",
+		"Successful-but-no-evidence web results",
+		"contribute to\n`tool_failure_by_kind` even when their `tool.result.exit_code` is `0`",
+		"`tool_errors` remains reserved for non-zero tool exits",
 	} {
 		if !strings.Contains(body, want) {
 			t.Fatalf("technical manual session persistence docs missing %q", want)

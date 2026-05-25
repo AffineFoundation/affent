@@ -39,7 +39,7 @@ Scenario records describe one eval case:
 - `trace_schema_version`: parsed runtime trace schema version, when available.
 - `turn_end_reason`: runtime turn end reason, when available.
 - `tool_calls`: number of tool calls in the trace.
-- `tool_errors`: runtime tool error count.
+- `tool_errors`: runtime tool error count, limited to non-zero tool exits.
 - `tool_repaired`: runtime tool argument repair count.
 - `tool_name_canonicalized`: runtime tool name canonicalization count.
 - `tool_repair_calls`: count of tool calls that were repaired or
@@ -65,7 +65,10 @@ Scenario records describe one eval case:
   this field to distinguish blocked pages, empty responses, non-text
   responses, timeouts, search no-results, stale or non-interactable browser
   refs, argument errors, HTTP/network classes, and loop-guard rejections such
-  as repeated failed URL/query inputs.
+  as repeated failed URL/query inputs. This field can count Web no-evidence
+  results whose `tool.result.exit_code` is `0`; it is the right field for
+  retrieval quality diagnostics, while `tool_errors` is the right field for
+  non-zero tool exits.
 - `tool_failure_hints`: optional map of structured tool failure kind to a short
   operator hint explaining likely cause and next diagnostic action.
 - `tool_failure_examples`: optional map of failure kind to bounded sample tool

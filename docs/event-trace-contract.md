@@ -113,7 +113,10 @@ diagnostics.
 - `call_id`: model tool call id.
 - `exit_code`: tool exit code. Non-zero means the call failed.
 - `failure_kind`: optional primary machine-readable failure class extracted
-  from a structured `Failure: kind=...` line in the tool output.
+  from a structured `Failure: kind=...` line in the tool output. For web
+  tools, this may be present even when `exit_code` is `0` if the call produced
+  no usable evidence, such as a dynamic shell, empty response, non-text body,
+  or search no-results response.
 - `failure_kinds`: optional ordered list of every structured failure class on
   the result. It is a superset of `failure_kind` when the original tool failure
   and a later runtime guard classification are both present.
@@ -182,13 +185,18 @@ diagnostics.
 - `tool_failure_by_kind`: object keyed by structured tool failure kind. Tools
   that can explain recoverable failures should include a line like
   `Failure: kind=blocked` in their result or error text; the runtime aggregates
-  those kinds here. Known web kinds include `invalid_args`, `blocked`,
+  those kinds here. Web no-evidence results can contribute here even when their
+  `tool.result.exit_code` is `0`; use `tool_errors` when you specifically need
+  non-zero tool exits. Known web kinds include `invalid_args`, `blocked`,
   `not_found`, `rate_limited`, `server_error`, `http_error`,
   `private_network_blocked`, `timeout`, `network_error`, `empty_response`,
   `dynamic_shell`, `non_text`, `no_results`, `search_error`, `stale_ref`, and
   `not_interactable`. Known runtime policy kinds include
   `tool_policy_first_tool`, `tool_policy_repeat`, and `tool_policy_active`.
-- `tool_errors`
+- `tool_errors`: count of tool results emitted with non-zero `exit_code`,
+  including guard rejections and skipped calls. This is narrower than
+  `tool_failure_by_kind`; a successful HTTP/browser call that returns no
+  usable evidence can have a failure kind without incrementing `tool_errors`.
 - `tool_duration_ms`
 - `loop_guard_interventions`
 - `forced_no_tools`: forced no-tool follow-ups after repeated blocking guard
