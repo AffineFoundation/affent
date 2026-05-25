@@ -113,7 +113,7 @@ export function ArtifactViewer({
                   {onUseAsDraft ? (
                     <button
                       type="button"
-                      onClick={() => onUseAsDraft(artifactMatchesDraft(artifact.chunk.path, artifact.query, matchPreviews), "artifact_match")}
+                      onClick={() => onUseAsDraft(artifactMatchesDraft(artifact.chunk.path, artifact.query, matchPreviews), "evidence")}
                     >
                       Use matches
                     </button>
@@ -182,7 +182,7 @@ function artifactTextDraft(path: string, text: string): string {
 
 function artifactMatchesDraft(path: string, query: string, matches: Array<{ lineNumber: number; text: string }>): string {
   return [
-    "Use these matched file lines in the next step:",
+    "Use this artifact evidence in the next step:",
     `File: ${path}`,
     `Query: ${query.trim()}`,
     "Matches:",

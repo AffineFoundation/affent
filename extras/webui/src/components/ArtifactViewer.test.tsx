@@ -53,13 +53,13 @@ describe("ArtifactViewer", () => {
     await user.click(screen.getByRole("button", { name: "Use matches" }));
     expect(onUseAsDraft).toHaveBeenCalledWith(
       [
-        "Use these matched file lines in the next step:",
+        "Use this artifact evidence in the next step:",
         "File: .affent/artifacts/tool-results/000001-c1.txt",
         "Query: needle",
         "Matches:",
         "Line 1: hay needle stack",
       ].join("\n"),
-      "artifact_match",
+      "evidence",
     );
     await user.type(screen.getByTestId("artifact-search"), "x");
     expect(onSearch).toHaveBeenCalled();

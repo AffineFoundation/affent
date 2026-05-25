@@ -726,8 +726,8 @@ test("workflow timeline renders with inline drill-down", async ({ page }, testIn
   await page.getByTestId("artifact-match-list").getByRole("button", { name: "Copy matches" }).click();
   await expect(page.getByTestId("artifact-match-list").getByRole("button", { name: "Copied" })).toBeVisible();
   await page.getByTestId("artifact-match-list").getByRole("button", { name: "Use matches" }).click();
-  await expect(page.getByTestId("composer-context")).toContainText("Using matched file lines");
-  await expect(page.getByPlaceholder("Message Affent...")).toHaveValue(/Use these matched file lines in the next step:\nFile: \.affent\/artifacts/);
+  await expect(page.getByTestId("composer-context")).toContainText("Using evidence");
+  await expect(page.getByPlaceholder("Message Affent...")).toHaveValue(/Use this artifact evidence in the next step:\nFile: \.affent\/artifacts/);
   await expect(page.getByTestId("artifact-viewer")).toContainText("100% loaded");
   await page.getByTestId("artifact-viewer").getByRole("button", { name: "Use text" }).click();
   await expect(page.getByTestId("composer-context")).toContainText("Using file text");
