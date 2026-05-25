@@ -249,7 +249,10 @@ curl -sS http://127.0.0.1:7777/v1/chat/completions \
 ## Web Retrieval Diagnostics
 
 `web_fetch` starts as a direct HTTP reader, and `web_search` depends on the
-configured search backend. When a runtime also enables `extras/browser`,
+configured search backend. The built-in search provider uses `TAVILY_API_KEY`;
+when `web_search` is explicitly enabled without a configured backend,
+`affentserve` fails at startup instead of silently degrading to fetch-only
+mode. When a runtime also enables `extras/browser`,
 `affentserve` wires the session Chromium instance into `web_fetch` as a rendered
 fallback: direct-reader trap hosts, anti-bot/challenge responses, and
 client-rendered app shells are retried through the browser and returned as
@@ -658,7 +661,8 @@ Use `SERVE_EVAL_PERMISSIONS` to opt specific environment capabilities back in,
 for example `SERVE_EVAL_PERMISSIONS='browser'` for LiveWeb-style rendered-page
 tasks, or `SERVE_EVAL_PERMISSIONS='web web-search memory'` for direct HTTP
 retrieval plus memory. Keep this list narrow: enabling `web-search` implies
-`web`, while browser-only evals should not need web/search permissions.
+`web` and requires a configured search backend such as `TAVILY_API_KEY`, while
+browser-only evals should not need web/search permissions.
 
 The JSONL output contract is documented in
 [eval-jsonl-contract.md](eval-jsonl-contract.md). Runtime traces are documented

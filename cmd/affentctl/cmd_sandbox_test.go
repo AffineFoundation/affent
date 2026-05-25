@@ -401,6 +401,11 @@ func TestTechnicalManualDocumentsImageServeSessionPersistence(t *testing.T) {
 		"`make image-serve-smoke`",
 		"verifies the durable session is",
 		"still listed",
+		"`web_search` depends on the",
+		"`TAVILY_API_KEY`",
+		"fails at startup instead of silently degrading to fetch-only",
+		"enabling `web-search` implies",
+		"requires a configured search backend",
 	} {
 		if !strings.Contains(body, want) {
 			t.Fatalf("technical manual session persistence docs missing %q", want)
