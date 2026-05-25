@@ -261,7 +261,7 @@ function settledToolIssueCount(turn: SessionState["turns"][number]): number {
 function currentSessionChips(session: SessionState): string[] {
   const chips: string[] = [];
   if (session.turns.some((turn) => turn.toolCalls.some((call) => call.resultArtifactPath))) chips.push("files");
-  if (session.unknownEventCount > 0) chips.push("log notes");
+  if (session.unknownEventCount > 0) chips.push("notes");
   return chips;
 }
 

@@ -1200,7 +1200,7 @@ function answerDraft(text: string): string {
 function ErrorBlock({ error, onUseAsDraft }: { error: TurnError; onUseAsDraft?: UseAsDraft }) {
   const summary = summarizeUserError(error.code, error.message);
   const guidance = error.recoverable
-    ? "You can continue from the message box below; the trace stays attached to this chat."
+    ? "You can continue from the message box below; the details stay attached to this chat."
     : "Keep this chat for details, then start a new chat if the runtime cannot continue.";
   const diagnostic = errorDiagnosticText(error);
 

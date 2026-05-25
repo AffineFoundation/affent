@@ -1432,6 +1432,7 @@ describe("Timeline", () => {
     expect(card).toHaveTextContent("upstream_5xx");
     expect(card).toHaveTextContent("recoverable");
     expect(card).toHaveTextContent("continue from the message box below");
+    expect(card).toHaveTextContent("details stay attached to this chat");
 
     await user.click(screen.getByRole("button", { name: "Continue with this" }));
     expect(onUseAsDraft).toHaveBeenCalledWith("Continue after upstream_5xx: provider returned 503", "error");

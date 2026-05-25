@@ -317,6 +317,21 @@ describe("buildSessionOverview", () => {
     ]));
   });
 
+  it("surfaces unknown events as a lightweight notes metric", () => {
+    const session = reduceRawEvents([
+      { id: 1, type: "turn.start", data: { turn_id: "t1" } },
+      { id: 2, type: "future.event", data: { turn_id: "t1", payload: "kept" } },
+      { id: 3, type: "turn.end", data: { turn_id: "t1", reason: "completed" } },
+    ]);
+    const overview = buildSessionOverview({
+      session,
+      workflow: deriveWorkflowStatus(session),
+      hasSelectedSession: true,
+    });
+
+    expect(overview.metrics).toContainEqual({ label: "Notes", value: "1", tone: "warning" });
+  });
+
   it("uses explicit chat token wording when only aggregate usage is available", () => {
     const session = reduceRawEvents([
       { id: 1, type: "turn.start", data: { turn_id: "t1" } },

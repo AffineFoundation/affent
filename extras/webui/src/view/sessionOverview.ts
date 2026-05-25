@@ -163,7 +163,7 @@ function buildMetrics(session: SessionState, latestTurn?: TurnState, latestActiv
   if (latestTurn?.endReason && latestTurn.endReason !== latestTurn.status) {
     metrics.push({ label: "End", value: latestTurn.endReason, tone: latestTurn.status === "max_turns" ? "warning" : undefined });
   }
-  if (session.unknownEventCount > 0) metrics.push({ label: "Log notes", value: String(session.unknownEventCount), tone: "warning" });
+  if (session.unknownEventCount > 0) metrics.push({ label: "Notes", value: String(session.unknownEventCount), tone: "warning" });
 
   return metrics;
 }

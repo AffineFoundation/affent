@@ -466,6 +466,20 @@ describe("sessionList view model", () => {
     expect(rows[0].searchText).toContain("there are two files");
   });
 
+  it("surfaces unknown events as a notes chip in the chat list", () => {
+    const rows = mergeCurrentSessionRow(
+      buildSessionRows([session({ id: "s1", durable: true, has_events: true })]),
+      "s1",
+      reduceRawEvents([
+        { id: 1, type: "turn.start", data: { turn_id: "t1" } },
+        { id: 2, type: "future.event", data: { turn_id: "t1", payload: "kept" } },
+        { id: 3, type: "turn.end", data: { turn_id: "t1", reason: "completed" } },
+      ]),
+    );
+
+    expect(rows[0].chips).toContain("notes");
+  });
+
   it("keeps answered tool failures as tool issues instead of an error row", () => {
     const rows = mergeCurrentSessionRow(
       buildSessionRows([session({ id: "s1", durable: true, has_events: true })]),
