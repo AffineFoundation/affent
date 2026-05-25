@@ -978,28 +978,6 @@ body {
   color: var(--text-faint);
 }
 
-.session-chips {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 4px;
-}
-
-.session-chips span {
-  border: 1px solid var(--border);
-  border-radius: 999px;
-  background: rgba(255, 255, 255, 0.72);
-  color: var(--text-muted);
-  padding: 1px 6px;
-  font-size: 11px;
-  line-height: 1.45;
-}
-
-.session-chips span {
-  background: var(--accent-soft);
-  border-color: rgba(20, 184, 166, 0.22);
-  color: var(--c-success);
-}
-
 .session-empty {
   display: grid;
   gap: 8px;

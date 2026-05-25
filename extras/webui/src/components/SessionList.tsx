@@ -69,7 +69,7 @@ export function SessionList({
       <div className="panel-head">
         <div>
           <h2>Chats</h2>
-          <span>{demoActive ? "Read-only replay" : `${rows.length} total · ${counts.active} running`}</span>
+          <span>{demoActive ? "Read-only replay" : chatListSummary(rows.length, counts.active)}</span>
         </div>
         {!demoActive ? (
           <button
@@ -93,7 +93,7 @@ export function SessionList({
         >
           <span>
             <b>{selectedRow ? "Current chat" : "Chats"}</b>
-            <small>{selectedRow?.title ?? `${rows.length} saved chats`}</small>
+            <small>{selectedRow?.title ?? chatCountLabel(rows.length)}</small>
           </span>
           <strong>{mobileOpen ? "Hide" : "Switch"}</strong>
         </button>
@@ -164,16 +164,13 @@ export function SessionList({
                   {shouldShowRowStatus(row.status) ? <span className="session-state">{row.status}</span> : null}
                 </span>
                 {row.detail ? <span className="session-detail">{row.detail}</span> : null}
-                <span className="session-meta">
-                  {row.meta.map((part) => (
-                    <span key={part}>{part}</span>
-                  ))}
-                </span>
-                <span className="session-chips">
-                  {row.chips.map((chip) => (
-                    <span key={chip}>{chip}</span>
-                  ))}
-                </span>
+                {row.meta.length > 0 ? (
+                  <span className="session-meta">
+                    {row.meta.map((part) => (
+                      <span key={part}>{part}</span>
+                    ))}
+                  </span>
+                ) : null}
               </button>
             ))
           : null}
@@ -190,5 +187,15 @@ function dotStatus(tone: string): string {
 }
 
 function shouldShowRowStatus(status: string): boolean {
-  return status !== "Saved";
+  return !["Saved", "Ephemeral"].includes(status);
+}
+
+function chatListSummary(total: number, running: number): string {
+  if (total === 0) return "No chats";
+  if (running === 0) return chatCountLabel(total);
+  return `${chatCountLabel(total)} · ${running} running`;
+}
+
+function chatCountLabel(total: number): string {
+  return `${total} chat${total === 1 ? "" : "s"}`;
 }

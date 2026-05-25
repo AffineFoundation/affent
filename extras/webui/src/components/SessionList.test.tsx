@@ -7,7 +7,7 @@ import { reduceRawEvents } from "../store/reduce";
 import { SessionList } from "./SessionList";
 
 describe("SessionList", () => {
-  it("shows useful status and feature context without cost noise", () => {
+  it("shows useful status context without cost or feature noise", () => {
     renderList([
       session({
         id: "s1",
@@ -25,7 +25,7 @@ describe("SessionList", () => {
     expect(row).not.toHaveTextContent("2 messages");
     expect(row).not.toHaveTextContent("tokens");
     expect(row).not.toHaveTextContent("activity");
-    expect(row).toHaveTextContent("files");
+    expect(row).not.toHaveTextContent("files");
   });
 
   it("uses the latest user task as the row title while keeping the id out of the scan path", () => {
@@ -145,6 +145,25 @@ describe("SessionList", () => {
     expect(panel).toHaveAttribute("data-mobile-open", "true");
     expect(toggle).toHaveAccessibleName("Hide chat list");
     expect(toggle).toHaveTextContent("Hide");
+  });
+
+  it("uses plain chat counts instead of internal session metrics", () => {
+    render(
+      <SessionList
+        sessions={[
+          session({ id: "s1", latest_user_message: "current affine research" }),
+          session({ id: "s2", latest_user_message: "older project review" }),
+        ]}
+        selectedId={undefined}
+        demoActive={false}
+        onSelect={vi.fn()}
+        onNew={vi.fn()}
+      />,
+    );
+
+    expect(screen.getAllByText("2 chats")).toHaveLength(2);
+    expect(screen.getByRole("button", { name: "Hide chat list" })).toHaveTextContent("2 chats");
+    expect(screen.queryByText(/messages|actions|issues|continued|ephemeral/i)).toBeNull();
   });
 
   it("does not show chat filters before any chats exist", () => {
