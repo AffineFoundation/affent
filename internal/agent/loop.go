@@ -810,6 +810,7 @@ func (l *Loop) runTurn(ctx context.Context, turnID, userText string, opts TurnOp
 	forceNoToolsReason := "(loop_guard requested a final answer; tools disabled for this step)"
 	guardInterventions := 0
 	budgetExhaustedOmissions := 0
+	processFinalRecovered := false
 	toolStats := sse.ToolRuntimeStats{}
 	toolContextBudget := newToolResultContextBudget(l.toolResultContextBudgetBytes())
 	recordContextOmission := func(omitted int) {
@@ -864,6 +865,28 @@ func (l *Loop) runTurn(ctx context.Context, turnID, userText string, opts TurnOp
 						break
 					}
 					skipped := l.appendSkippedToolResults(turnID, recovered.Final.ToolCalls, "(previous answer was truncated; final no-tool answer requested)")
+					toolStats.ToolRequests += skipped
+					toolStats.ToolErrors += skipped
+				}
+				endReason = sse.TurnEndMaxTurns
+				break
+			}
+			if !processFinalRecovered && finalAnswerNeedsEvidenceRecovery(final.Final.Content, toolCallsUsed) {
+				processFinalRecovered = true
+				recovered, reason, err := l.runFinalNoToolsStep(ctx, turnID, processNarrationRecoveryPrompt)
+				if err != nil {
+					endReason = reason
+					break
+				}
+				if recovered != nil {
+					totalIn += recovered.InputTokens
+					totalOut += recovered.OutputTokens
+					toolStats.ForcedNoTools++
+					if len(recovered.Final.ToolCalls) == 0 {
+						finishedNaturally = true
+						break
+					}
+					skipped := l.appendSkippedToolResults(turnID, recovered.Final.ToolCalls, "(previous response was process narration; final no-tool answer requested)")
 					toolStats.ToolRequests += skipped
 					toolStats.ToolErrors += skipped
 				}
@@ -1353,6 +1376,28 @@ func loopGuardResultForcesNoTools(result string) bool {
 	return false
 }
 
+func finalAnswerNeedsEvidenceRecovery(content string, toolCallsUsed int) bool {
+	if toolCallsUsed <= 0 {
+		return false
+	}
+	content = strings.TrimSpace(content)
+	if content == "" || len([]rune(content)) > 140 {
+		return false
+	}
+	lower := strings.ToLower(content)
+	for _, phrase := range []string{
+		"让我尝试", "让我继续", "我继续", "我会继续", "我来继续",
+		"继续搜索", "继续检索", "继续查找", "更多来源", "换用",
+		"let me", "i will", "i'll", "i need to", "continue searching",
+		"keep searching", "try a different approach",
+	} {
+		if strings.Contains(lower, phrase) {
+			return true
+		}
+	}
+	return false
+}
+
 func (p *PostToolPolicy) shouldActivate(result string, isErr bool) bool {
 	if p == nil {
 		return false
@@ -1696,6 +1741,10 @@ const finalEvidenceDiscipline = `Use only existing tool results. Re-scan the lat
 var lengthRecoveryPrompt = `The previous assistant response was cut off while summarizing evidence gathered in this turn.
 
 Do not call tools. ` + finalEvidenceDiscipline + ` Keep it concise, separate verified facts from gaps, and avoid process narration such as "I will continue" or "let me search".`
+
+var processNarrationRecoveryPrompt = `The previous assistant response after tool use was process narration rather than an answer.
+
+Do not call tools. ` + finalEvidenceDiscipline + ` Produce the best final answer from the evidence already gathered. If the evidence is incomplete, say exactly what was verified and what remains unverified; do not say you will continue searching.`
 
 func (l *Loop) runLengthRecoveryStep(ctx context.Context, turnID string) (*FinishInfo, string, error) {
 	return l.runFinalNoToolsStep(ctx, turnID, lengthRecoveryPrompt)

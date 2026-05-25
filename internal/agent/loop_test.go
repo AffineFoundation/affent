@@ -292,6 +292,21 @@ func TestFinalEvidenceDigestPrioritizesMetricEvidenceOverRecentLowValuePages(t *
 	}
 }
 
+func TestFinalAnswerNeedsEvidenceRecovery(t *testing.T) {
+	if !finalAnswerNeedsEvidenceRecovery("让我尝试多种来源搜索。", 3) {
+		t.Fatal("short process narration after tool use should trigger recovery")
+	}
+	if finalAnswerNeedsEvidenceRecovery("让我尝试多种来源搜索。", 0) {
+		t.Fatal("no-tool answers should not trigger recovery")
+	}
+	if finalAnswerNeedsEvidenceRecovery("已验证：Affine 是 Bittensor 的 SN120，来源是 taostats.io/subnets/120。", 3) {
+		t.Fatal("substantive short answer should not trigger recovery")
+	}
+	if finalAnswerNeedsEvidenceRecovery(strings.Repeat("让我继续搜索。", 40), 3) {
+		t.Fatal("long response should not be treated as the short process-narration recovery case")
+	}
+}
+
 func TestWithRuntimeContextSystemGuidance_IncludesDateAndFreshnessRule(t *testing.T) {
 	now := time.Date(2026, 5, 25, 12, 34, 56, 0, time.FixedZone("test", 8*60*60))
 	got := WithRuntimeContextSystemGuidance("be helpful", now)
