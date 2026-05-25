@@ -461,7 +461,7 @@ test("running work reads like an Affent chat update before drill-down", async ({
   expect(runningBox?.y ?? Number.POSITIVE_INFINITY).toBeLessThan((scrollBox?.y ?? 0) + 220);
   await expect(page.getByTestId("timeline-toolbar")).toHaveCount(0);
   await expect(page.getByTestId("turn-navigator").getByRole("button", { name: "Find" })).toHaveAttribute("aria-pressed", "false");
-  await expect(page.getByText("Filter results")).not.toBeVisible();
+  await expect(page.getByText("Narrow results")).not.toBeVisible();
   await expect(page.getByTestId("timeline-match-count")).toHaveCount(0);
   await expect(page.getByTestId("session-strip")).toHaveCount(0);
   await expect(page.getByRole("button", { name: "Working" })).toBeDisabled();
@@ -667,8 +667,8 @@ test("workflow timeline renders with inline drill-down", async ({ page }, testIn
   });
 
   await page.getByTestId("turn-navigator").getByRole("button", { name: "Find" }).click();
-  await page.getByText("Filter results").click();
-  await page.getByRole("button", { name: "With actions" }).click();
+  await page.getByText("Narrow results").click();
+  await page.getByRole("button", { name: "Agent work" }).click();
   await expect(page.getByTestId("work-thread").first()).toBeVisible();
   await page.getByRole("button", { name: /Tool details/ }).first().click();
   const executionTree = page.getByTestId("execution-tree");

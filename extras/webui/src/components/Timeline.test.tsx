@@ -32,7 +32,7 @@ async function openTimelineTools(user: ReturnType<typeof userEvent.setup>) {
 async function openTimelineFilters(user: ReturnType<typeof userEvent.setup>) {
   const advanced = screen.getByTestId("timeline-advanced-filter");
   if (!advanced.hasAttribute("open")) {
-    await user.click(within(advanced).getByText("Filter results"));
+    await user.click(within(advanced).getByText("Narrow results"));
   }
 }
 
@@ -286,7 +286,7 @@ describe("Timeline", () => {
 
     await openTimelineTools(user);
     await openTimelineFilters(user);
-    await user.click(screen.getByRole("button", { name: "With actions" }));
+    await user.click(screen.getByRole("button", { name: "Agent work" }));
 
     expect(screen.getByTestId("work-thread")).toHaveTextContent("Tool details");
     expect(screen.getByTestId("work-thread")).toHaveTextContent("Inspect docs for WebUI trace requirements");
@@ -755,7 +755,7 @@ describe("Timeline", () => {
     await openTimelineTools(user);
     expect(screen.getByTestId("timeline-match-count")).toHaveTextContent("2/2 messages");
     await openTimelineFilters(user);
-    await user.click(screen.getByRole("button", { name: "With actions" }));
+    await user.click(screen.getByRole("button", { name: "Agent work" }));
 
     expect(screen.getByTestId("timeline-match-count")).toHaveTextContent("1/2 messages");
     expect(within(screen.getByTestId("timeline")).getAllByText("list the files").length).toBeGreaterThan(0);
@@ -774,15 +774,15 @@ describe("Timeline", () => {
     await openTimelineFilters(user);
     expect(screen.getByRole("button", { name: "All" })).toHaveTextContent("3");
     expect(screen.getByRole("button", { name: "Files" })).toHaveTextContent("1");
-    expect(screen.getByRole("button", { name: "Runtime fixes" })).toHaveTextContent("1");
-    expect(screen.getByRole("button", { name: "Needs attention" })).toHaveTextContent("0");
+    expect(screen.getByRole("button", { name: "Auto-fixed" })).toHaveTextContent("1");
+    expect(screen.getByRole("button", { name: "Needs review" })).toHaveTextContent("0");
 
     await user.click(screen.getByRole("button", { name: "Files" }));
     expect(screen.getByTestId("timeline-match-count")).toHaveTextContent("1/3 messages");
     expect(screen.getByRole("button", { name: "Show all" })).toBeInTheDocument();
     expect(screen.getByTestId("turn-artifacts")).toHaveTextContent("cat big.log");
 
-    await user.click(screen.getByRole("button", { name: "Runtime fixes" }));
+    await user.click(screen.getByRole("button", { name: "Auto-fixed" }));
     expect(screen.getByTestId("timeline-match-count")).toHaveTextContent("1/3 messages");
     expect(screen.getByTestId("work-summary")).toHaveTextContent("1 repaired");
 
@@ -799,11 +799,11 @@ describe("Timeline", () => {
     expect(screen.queryByTestId("timeline-toolbar")).toBeNull();
     expect(within(screen.getByTestId("turn-navigator")).getByRole("button", { name: "Find" })).toBeInTheDocument();
     expect(screen.queryByTestId("timeline-match-count")).toBeNull();
-    expect(screen.queryByText("Filter results")).toBeNull();
+    expect(screen.queryByText("Narrow results")).toBeNull();
     await openTimelineTools(user);
     expect(within(screen.getByTestId("turn-navigator")).getByRole("button", { name: "Find" })).toHaveAttribute("aria-pressed", "true");
-    expect(screen.getByText("Search messages and outputs")).toBeInTheDocument();
-    expect(screen.getByText("Filter results")).toBeVisible();
+    expect(screen.getByText("Find messages, sources, or output")).toBeInTheDocument();
+    expect(screen.getByText("Narrow results")).toBeVisible();
     await user.type(screen.getByTestId("timeline-search"), "MCP_search");
 
     expect(screen.getByTestId("timeline-match-count")).toHaveTextContent("1/1 messages");

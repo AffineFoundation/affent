@@ -169,7 +169,7 @@ describe("buildSessionOverview", () => {
       hasSelectedSession: true,
     });
 
-    expect(overview.headline).toBe("research affine");
+    expect(overview.headline).toBe("Affine");
     expect(overview.stateLabel).toBe("Result ready");
     expect(overview.tone).toBe("success");
     expect(overview.metrics).toEqual([
@@ -308,7 +308,7 @@ describe("buildSessionOverview", () => {
       hasSelectedSession: true,
     });
 
-    expect(overview.headline).toBe("真实收集 Affine 的相关信息");
+    expect(overview.headline).toBe("Affine");
     expect(overview.detail).toBe("Affine（Bittensor Subnet 120）调研报告: Affine 是 SN120。");
   });
 

@@ -137,6 +137,18 @@ describe("sessionList view model", () => {
     expect(rows.find((row) => row.id === "webui-review")?.title).toBe("WebUI session list behavior");
   });
 
+  it("keeps dotted filenames intact when summarizing instruction titles", () => {
+    const rows = buildSessionRows([
+      session({
+        id: "main-go",
+        durable: true,
+        latest_user_message: "explain main.go",
+      }),
+    ]);
+
+    expect(rows[0].title).toBe("main.go");
+  });
+
   it("summarizes question-style session titles into topics", () => {
     const rows = buildSessionRows([
       session({

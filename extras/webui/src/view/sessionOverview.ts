@@ -1,6 +1,7 @@
 import type { SessionState, TurnState } from "../store/sessionState";
 import type { WorkflowStatus } from "../store/workflowStatus";
 import { conversationTopicFromTurns } from "./continuationPrompt";
+import { summarizeSessionTitle } from "./sessionList";
 import { buildTurnActivity, type TurnActivityView } from "./turnActivity";
 import { summarizeAnswerPreview, summarizePreview } from "./textPreview";
 
@@ -36,9 +37,9 @@ export function buildSessionOverview({
 }): SessionOverview {
   const latestTurn = session.turns.at(-1);
   const latestActivity = latestTurn ? buildTurnActivity(latestTurn) : undefined;
-  const latestTask = latestTurn?.userText ? summarize(latestTurn.userText, 90) : undefined;
+  const latestTask = latestTurn?.userText ? summarizeSessionTitle(latestTurn.userText) : undefined;
   const topic = conversationTopicFromTurns(session.turns);
-  const task = topic ? summarize(topic, 90) : latestTask;
+  const task = topic ? summarizeSessionTitle(topic) : latestTask;
   const pending = pendingTask?.trim();
   const guidance = pendingGuidance?.trim();
 

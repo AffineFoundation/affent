@@ -259,7 +259,7 @@ function stripContinuationPrefix(text: string): string {
   return value;
 }
 
-function summarizeSessionTitle(text: string): string {
+export function summarizeSessionTitle(text: string): string {
   const cleaned = text.replace(/\s+/g, " ").trim();
   if (!cleaned) return "Saved chat";
   const directReply = summarizeDirectReplyPrompt(cleaned);
@@ -268,7 +268,7 @@ function summarizeSessionTitle(text: string): string {
   if (intentTitle) return summarize(intentTitle, 42);
   const firstLine = cleaned.split(/\n+/)[0] ?? cleaned;
   const primaryClause = firstLine
-    .split(/[。.!?；;]+/)
+    .split(/(?:[。！？；;]+|[.!?]+(?=\s|$))/)
     .map((part) => part.trim())
     .find(Boolean) ?? firstLine;
   const beforeInstruction = primaryClause

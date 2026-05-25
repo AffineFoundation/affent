@@ -8,12 +8,12 @@ import { TurnNavigator } from "./TurnNavigator";
 
 const filterModes: { mode: TimelineFilterMode; label: string }[] = [
   { mode: "all", label: "All" },
-  { mode: "errors", label: "Needs attention" },
-  { mode: "tools", label: "With actions" },
+  { mode: "errors", label: "Needs review" },
+  { mode: "tools", label: "Agent work" },
   { mode: "messages", label: "Chat text" },
   { mode: "artifacts", label: "Files" },
   { mode: "truncated", label: "Large output" },
-  { mode: "repaired", label: "Runtime fixes" },
+  { mode: "repaired", label: "Auto-fixed" },
 ];
 
 // The conversation is the primary product surface. Search and filters stay
@@ -410,7 +410,7 @@ function TimelineFindPanel({
       {open ? (
         <div className="timeline-toolbox">
           <label className="timeline-search">
-            <span>Search messages and outputs</span>
+            <span>Find messages, sources, or output</span>
             <input
               value={searchQuery}
               onChange={(event) => onSearchChange(event.target.value)}
@@ -424,7 +424,7 @@ function TimelineFindPanel({
             open={filterOpen}
             onToggle={(event) => onFilterOpenChange(event.currentTarget.open)}
           >
-            <summary>Filter results</summary>
+            <summary>Narrow results</summary>
             {filterOpen ? (
               <div className="timeline-filter" role="group" aria-label="Conversation filter">
                 {filterModes.map(({ mode, label }) => (
