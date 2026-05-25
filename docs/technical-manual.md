@@ -213,6 +213,9 @@ disabled unless a search backend is explicitly configured. Those paths live
 inside `IMAGE_WORKSPACE`, so the server preserves conversation history as long as `IMAGE_WORKSPACE` is the same host path, and it preserves browser cache data
 under the same workspace. Deleting a session with
 `DELETE /v1/sessions/{id}` intentionally removes that durable state.
+`make image-serve-up` refuses to reuse an existing named container when its
+runtime image revision differs from the current checkout; run
+`make image-serve-restart` to recreate that container after rebuilding.
 
 Use `make image-serve-smoke` for a local persistence check; it creates a
 session, verifies the default browser/web tool catalog, restarts the runtime,

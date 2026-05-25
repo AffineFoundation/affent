@@ -129,6 +129,13 @@ image-serve-up:
 			echo "container $(SERVE_CONTAINER_NAME) is not an Affent runtime container" >&2; \
 			exit 2; \
 		fi; \
+		expected_build_revision="$(IMAGE_BUILD_REVISION)"; \
+		actual_build_revision=$$(docker inspect "$(SERVE_CONTAINER_NAME)" --format '{{index .Config.Labels "org.opencontainers.image.revision"}}' 2>/dev/null); \
+		if test "$$expected_build_revision" != "unknown" && test "$$actual_build_revision" != "$$expected_build_revision"; then \
+			echo "container $(SERVE_CONTAINER_NAME) was created from build_revision=$$actual_build_revision, but current checkout revision is $$expected_build_revision" >&2; \
+			echo "run make image-serve-restart to recreate it with the current runtime image" >&2; \
+			exit 2; \
+		fi; \
 		expected_workspace="$(abspath $(IMAGE_WORKSPACE))"; \
 		actual_workspace=$$(docker inspect "$(SERVE_CONTAINER_NAME)" --format '{{index .Config.Labels "affent.runtime.workspace"}}' 2>/dev/null); \
 		if test "$$actual_workspace" != "$$expected_workspace"; then \
@@ -206,7 +213,7 @@ image-serve-up:
 image-serve-status:
 	@$(call require_affent_runtime_container,image-serve-status); \
 	docker inspect "$(SERVE_CONTAINER_NAME)" \
-		--format 'name={{.Name}} state={{.State.Status}} image={{.Config.Image}} workspace={{index .Config.Labels "affent.runtime.workspace"}} publish={{index .Config.Labels "affent.runtime.publish"}} serve_listen={{index .Config.Labels "affent.runtime.serve.listen"}} serve_workspace_root={{index .Config.Labels "affent.runtime.serve.workspace_root"}} serve_memory_root={{index .Config.Labels "affent.runtime.serve.memory_root"}} serve_builtins={{index .Config.Labels "affent.runtime.serve.builtins"}} serve_eval_mode={{index .Config.Labels "affent.runtime.serve.eval_mode"}} serve_memory={{index .Config.Labels "affent.runtime.serve.memory"}} serve_browser={{index .Config.Labels "affent.runtime.serve.browser"}} serve_browser_cache_dir={{index .Config.Labels "affent.runtime.serve.browser_cache_dir"}} serve_browser_screenshot={{index .Config.Labels "affent.runtime.serve.browser_screenshot"}} serve_web={{index .Config.Labels "affent.runtime.serve.web"}} serve_web_search={{index .Config.Labels "affent.runtime.serve.web_search"}} serve_subagent={{index .Config.Labels "affent.runtime.serve.subagent"}} serve_focused_tasks={{index .Config.Labels "affent.runtime.serve.focused_tasks"}} memory={{index .Config.Labels "affent.runtime.memory"}} cpus={{index .Config.Labels "affent.runtime.cpus"}} pids_limit={{index .Config.Labels "affent.runtime.pids_limit"}} host_memory_bytes={{.HostConfig.Memory}} host_nano_cpus={{.HostConfig.NanoCpus}} host_pids_limit={{.HostConfig.PidsLimit}}'; \
+		--format 'name={{.Name}} state={{.State.Status}} image={{.Config.Image}} build_revision={{index .Config.Labels "org.opencontainers.image.revision"}} build_date={{index .Config.Labels "org.opencontainers.image.created"}} workspace={{index .Config.Labels "affent.runtime.workspace"}} publish={{index .Config.Labels "affent.runtime.publish"}} serve_listen={{index .Config.Labels "affent.runtime.serve.listen"}} serve_workspace_root={{index .Config.Labels "affent.runtime.serve.workspace_root"}} serve_memory_root={{index .Config.Labels "affent.runtime.serve.memory_root"}} serve_builtins={{index .Config.Labels "affent.runtime.serve.builtins"}} serve_eval_mode={{index .Config.Labels "affent.runtime.serve.eval_mode"}} serve_memory={{index .Config.Labels "affent.runtime.serve.memory"}} serve_browser={{index .Config.Labels "affent.runtime.serve.browser"}} serve_browser_cache_dir={{index .Config.Labels "affent.runtime.serve.browser_cache_dir"}} serve_browser_screenshot={{index .Config.Labels "affent.runtime.serve.browser_screenshot"}} serve_web={{index .Config.Labels "affent.runtime.serve.web"}} serve_web_search={{index .Config.Labels "affent.runtime.serve.web_search"}} serve_subagent={{index .Config.Labels "affent.runtime.serve.subagent"}} serve_focused_tasks={{index .Config.Labels "affent.runtime.serve.focused_tasks"}} memory={{index .Config.Labels "affent.runtime.memory"}} cpus={{index .Config.Labels "affent.runtime.cpus"}} pids_limit={{index .Config.Labels "affent.runtime.pids_limit"}} host_memory_bytes={{.HostConfig.Memory}} host_nano_cpus={{.HostConfig.NanoCpus}} host_pids_limit={{.HostConfig.PidsLimit}}'; \
 	ports=$$(docker port "$(SERVE_CONTAINER_NAME)" 2>/dev/null || true); \
 	if test -n "$$ports"; then printf 'ports:\n%s\n' "$$ports"; else echo "ports: none"; fi
 
