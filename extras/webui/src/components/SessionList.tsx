@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import type { SessionSummary } from "../api/sessions";
 import type { SessionState } from "../store/sessionState";
 import {
@@ -21,6 +21,7 @@ export function SessionList({
   sessions,
   selectedId,
   currentSession,
+  pendingTask,
   demoActive,
   onSelect,
   onNew,
@@ -28,6 +29,7 @@ export function SessionList({
   sessions: readonly SessionSummary[];
   selectedId?: string;
   currentSession?: SessionState;
+  pendingTask?: string;
   demoActive: boolean;
   onSelect: (id: string) => void;
   onNew: () => void;
@@ -35,10 +37,11 @@ export function SessionList({
   const [filter, setFilter] = useState<SessionListFilter>("all");
   const [query, setQuery] = useState("");
   const [toolsOpen, setToolsOpen] = useState(false);
-  const [mobileOpen, setMobileOpen] = useState(!selectedId);
+  const [mobileOpen, setMobileOpen] = useState(false);
+  const searchInputRef = useRef<HTMLInputElement | null>(null);
   const rows = useMemo(
-    () => mergeCurrentSessionRow(buildSessionRows(sessions), selectedId, currentSession),
-    [currentSession, selectedId, sessions],
+    () => mergeCurrentSessionRow(buildSessionRows(sessions), selectedId, currentSession, pendingTask),
+    [currentSession, pendingTask, selectedId, sessions],
   );
   const counts = useMemo(() => countSessionsByFilter(rows), [rows]);
   const visibleRows = useMemo(() => filterSessionRows(rows, filter, query), [filter, query, rows]);
@@ -49,8 +52,12 @@ export function SessionList({
   const selectedRow = rows.find((row) => row.id === selectedId);
 
   useEffect(() => {
-    setMobileOpen(!selectedId);
+    setMobileOpen(false);
   }, [selectedId]);
+
+  useEffect(() => {
+    if (toolsExpanded) searchInputRef.current?.focus({ preventScroll: true });
+  }, [toolsExpanded]);
 
   function reset() {
     setFilter("all");
@@ -93,24 +100,31 @@ export function SessionList({
         >
           <span>
             <b>{selectedRow ? "Current chat" : "Chats"}</b>
-            <small>{selectedRow?.title ?? chatCountLabel(rows.length)}</small>
+            <small>{selectedRow ? mobileCurrentChatLabel(selectedRow) : chatCountLabel(rows.length)}</small>
           </span>
           <strong>{mobileOpen ? "Hide" : "Switch"}</strong>
         </button>
       ) : null}
       {showTools ? (
         <div className="session-tools" data-expanded={toolsExpanded ? "true" : "false"} data-testid="session-tools">
-          <label className="session-search">
-            <span>Search chats</span>
-            <input
-              value={query}
-              onChange={(event) => setQuery(event.target.value)}
-              onFocus={() => setToolsOpen(true)}
-              placeholder="Search chats"
-              data-testid="session-search"
-            />
-            {toolsExpanded ? <small>{visibleRows.length}/{rows.length}</small> : null}
-          </label>
+          {toolsExpanded ? (
+            <label className="session-search">
+              <span>Find chats</span>
+              <input
+                ref={searchInputRef}
+                value={query}
+                onChange={(event) => setQuery(event.target.value)}
+                placeholder="Search chats"
+                data-testid="session-search"
+              />
+              <small>{visibleRows.length}/{rows.length}</small>
+            </label>
+          ) : (
+            <button type="button" className="session-find-toggle" aria-label="Find chats" onClick={() => setToolsOpen(true)}>
+              <span>Find chats</span>
+              <small>Search and filters</small>
+            </button>
+          )}
           {toolsExpanded ? (
             <div className="session-filter" role="group" aria-label="Session filter">
               {filters.map(({ mode, label }) => (
@@ -202,6 +216,12 @@ function shouldShowRowStatus(status: string): boolean {
 
 function shouldPinRowPreview(tone: string): boolean {
   return tone === "running" || tone === "error" || tone === "warning";
+}
+
+function mobileCurrentChatLabel(row: { title: string; detail?: string; preview?: string; status: string }): string {
+  if (row.status === "Live" && row.detail?.startsWith("Sending")) return row.detail;
+  if (row.status === "Live" && row.preview?.startsWith("Now")) return row.preview;
+  return row.title;
 }
 
 function chatListSummary(total: number, running: number): string {

@@ -110,6 +110,33 @@ describe("buildSessionOverview", () => {
     ]);
   });
 
+  it("uses the generated session title for loaded chats when the API provides one", () => {
+    const session = reduceRawEvents(completedTurn);
+    const overview = buildSessionOverview({
+      session,
+      workflow: deriveWorkflowStatus(session),
+      hasSelectedSession: true,
+      sessionTitle: "Repository file listing",
+    });
+
+    expect(overview.headline).toBe("Repository file listing");
+    expect(overview.detail).toBe("README.md main.go");
+  });
+
+  it("keeps a newly submitted task ahead of an older generated session title", () => {
+    const session = reduceRawEvents(completedTurn);
+    const overview = buildSessionOverview({
+      session,
+      workflow: deriveWorkflowStatus(session),
+      hasSelectedSession: true,
+      pendingTask: "explain main.go",
+      sessionTitle: "Repository file listing",
+    });
+
+    expect(overview.headline).toBe("main.go");
+    expect(overview.stateLabel).toBe("Sending");
+  });
+
   it("adds evidence and usage metrics for completed delegated work", () => {
     const session = reduceRawEvents(completedSubagentTree);
     const overview = buildSessionOverview({

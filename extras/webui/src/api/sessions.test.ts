@@ -56,6 +56,17 @@ describe("session API helpers", () => {
     expect(events).toEqual([{ id: 1, type: "turn.start", data: { turn_id: "t1" } }]);
   });
 
+  it("passes the replay cursor when streaming session events", async () => {
+    const fetchImpl = mockFetch(async () => new Response(""));
+    const client = new ApiClient({ fetchImpl });
+
+    await streamSessionEvents(client, "s1", { lastEventId: 41, onEvent: vi.fn() });
+
+    const init = fetchImpl.mock.calls[0][1] as RequestInit;
+    const headers = init.headers as Headers;
+    expect(headers.get("Last-Event-ID")).toBe("41");
+  });
+
   it("reads artifact chunks with path and byte metadata", async () => {
     const fetchImpl = mockFetch(async () =>
       new Response("456789", {

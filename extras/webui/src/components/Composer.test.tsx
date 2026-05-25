@@ -83,7 +83,7 @@ describe("Composer", () => {
     await user.type(screen.getByPlaceholderText("Message Affent..."), "check latest market news");
 
     expect(screen.getByTestId("composer-intent")).toHaveTextContent("Ready to resume");
-    expect(screen.getByTestId("composer-task-hint")).toHaveTextContent("Current web info unavailable");
+    expect(screen.getByTestId("composer-task-hint")).toHaveTextContent("Needs current sources");
     expect(screen.getByRole("button", { name: "Resume anyway" })).toBeEnabled();
   });
 
@@ -103,7 +103,7 @@ describe("Composer", () => {
     expect(screen.getByTestId("composer-intent")).toHaveTextContent("Draft ready");
     expect(screen.getByTestId("composer-intent")).toHaveTextContent("Starting from draft");
     expect(screen.getByTestId("composer-context")).toHaveTextContent("Starting from draft");
-    expect(screen.getByTestId("composer-context")).toHaveTextContent("Replaced");
+    expect(screen.getByTestId("composer-context")).not.toHaveTextContent("Replaced");
     expect(screen.getByRole("button", { name: "Start" })).toBeEnabled();
   });
 
@@ -111,10 +111,29 @@ describe("Composer", () => {
     render(<Composer disabled={false} busy hasSession onSubmit={vi.fn()} onCancel={vi.fn()} />);
 
     expect(screen.getByTestId("composer")).toHaveAttribute("data-busy", "true");
-    expect(screen.getByTestId("composer-intent")).toHaveTextContent("Affent is working");
-    expect(screen.getByTestId("composer-intent")).toHaveTextContent("Type to guide the current run");
+    expect(screen.getByTestId("composer")).toHaveAttribute("data-cancelling", "false");
+    expect(screen.getByTestId("composer-intent")).toHaveTextContent("Live run");
+    expect(screen.getByTestId("composer-intent")).toHaveTextContent("Type guidance while Affent works");
     expect(screen.getByRole("button", { name: "Stop" })).toBeVisible();
-    expect(screen.getByRole("button", { name: "Working" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "Send guidance" })).toBeDisabled();
+  });
+
+  it("shows a stopping state after cancel is requested", async () => {
+    const user = userEvent.setup();
+    const onSubmit = vi.fn().mockResolvedValue(undefined);
+    render(<Composer disabled={false} busy cancelling hasSession onSubmit={onSubmit} onCancel={vi.fn()} />);
+
+    await user.type(screen.getByPlaceholderText("Message Affent..."), "one more instruction");
+
+    expect(screen.getByTestId("composer")).toHaveAttribute("data-cancelling", "true");
+    expect(screen.getByTestId("composer-intent")).toHaveTextContent("Stopping run");
+    expect(screen.getByTestId("composer-intent")).toHaveTextContent("Waiting for Affent to stop safely");
+    expect(screen.getByRole("button", { name: "Stopping" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "Send guidance" })).toBeDisabled();
+
+    await user.click(screen.getByRole("button", { name: "Send guidance" }));
+
+    expect(onSubmit).not.toHaveBeenCalled();
   });
 
   it("lets the user send guidance while a turn is running", async () => {
@@ -125,8 +144,8 @@ describe("Composer", () => {
     const input = screen.getByPlaceholderText("Message Affent...");
     await user.type(input, "focus on the webui first");
 
-    expect(screen.getByTestId("composer-intent")).toHaveTextContent("Ready to guide this run");
-    expect(screen.getByTestId("composer-intent")).toHaveTextContent("Sends to the current run, not a new chat");
+    expect(screen.getByTestId("composer-intent")).toHaveTextContent("Guidance ready");
+    expect(screen.getByTestId("composer-intent")).toHaveTextContent("Sends into this run, not a new chat");
     expect(screen.getByRole("button", { name: "Stop" })).toBeVisible();
     expect(screen.getByRole("button", { name: "Send guidance" })).toBeEnabled();
 
@@ -151,8 +170,8 @@ describe("Composer", () => {
     await user.type(screen.getByPlaceholderText("Message Affent..."), "Analyze recent market trends for Affine");
 
     expect(screen.getByTestId("composer-task-hint")).toHaveAttribute("data-tone", "warning");
-    expect(screen.getByTestId("composer-task-hint")).toHaveTextContent("Current web info unavailable");
-    expect(screen.getByTestId("composer-task-hint")).toHaveTextContent("results may be incomplete");
+    expect(screen.getByTestId("composer-task-hint")).toHaveTextContent("Needs current sources");
+    expect(screen.getByTestId("composer-task-hint")).toHaveTextContent("unless you provide sources");
     expect(screen.getByRole("button", { name: "Send anyway" })).toBeEnabled();
   });
 
@@ -171,8 +190,8 @@ describe("Composer", () => {
     await user.type(screen.getByPlaceholderText("Message Affent..."), "Affine 是 Bittensor 的一个子网，请收集信息向我介绍");
 
     expect(screen.getByTestId("composer-task-hint")).toHaveAttribute("data-tone", "warning");
-    expect(screen.getByTestId("composer-task-hint")).toHaveTextContent("Current web access limited");
-    expect(screen.getByTestId("composer-task-hint")).toHaveTextContent("search or page browsing is only partially available");
+    expect(screen.getByTestId("composer-task-hint")).toHaveTextContent("Direct sources help");
+    expect(screen.getByTestId("composer-task-hint")).toHaveTextContent("paste URLs or files");
     expect(screen.getByRole("button", { name: "Send anyway" })).toBeEnabled();
   });
 
@@ -191,8 +210,8 @@ describe("Composer", () => {
     await user.type(screen.getByPlaceholderText("Message Affent..."), "check latest market news");
 
     expect(screen.getByTestId("composer-task-hint")).toHaveAttribute("data-tone", "unknown");
-    expect(screen.getByTestId("composer-task-hint")).toHaveTextContent("Web access unknown");
-    expect(screen.getByTestId("composer-task-hint")).toHaveTextContent("has not reported web access yet");
+    expect(screen.getByTestId("composer-task-hint")).toHaveTextContent("Current sources unknown");
+    expect(screen.getByTestId("composer-task-hint")).toHaveTextContent("web access has not loaded");
     expect(screen.getByRole("button", { name: "Start anyway" })).toBeEnabled();
   });
 
@@ -211,7 +230,7 @@ describe("Composer", () => {
     const input = screen.getByPlaceholderText("Message Affent...");
     expect(input).toHaveValue("Guidance for current run:");
     expect(input).toHaveFocus();
-    expect(screen.getByTestId("composer-intent")).toHaveTextContent("Ready to guide this run");
+    expect(screen.getByTestId("composer-intent")).toHaveTextContent("Guidance ready");
     expect(screen.getByTestId("composer-context")).toHaveTextContent("Using suggested next step");
     expect(screen.getByRole("button", { name: "Send guidance" })).toBeEnabled();
   });
@@ -235,7 +254,7 @@ describe("Composer", () => {
 
     expect(input).toHaveValue("Guidance for current run: check tests first");
     expect(screen.getByTestId("composer-context")).toHaveTextContent("Editing sent guidance");
-    expect(screen.getByTestId("composer-context")).toHaveTextContent("Replaced");
+    expect(screen.getByTestId("composer-context")).not.toHaveTextContent("Replaced");
     expect(screen.getByRole("button", { name: "Send guidance" })).toBeEnabled();
   });
 
@@ -301,7 +320,25 @@ describe("Composer", () => {
 
     expect(input).toHaveValue("Use this loaded file text in the next step:");
     expect(screen.getByTestId("composer-context")).toHaveTextContent("Using file text");
+    expect(screen.getByTestId("composer-context")).not.toHaveTextContent("Replaced");
     expect(screen.getByTestId("composer-context")).toHaveTextContent("Use this loaded file text in the next step:");
+  });
+
+  it("labels imported context into an empty message as added, not replaced", () => {
+    render(
+      <Composer
+        disabled={false}
+        busy={false}
+        draft={{ id: 1, content: "Use this file in the next step: a.txt", source: "artifact" }}
+        onSubmit={vi.fn()}
+        onCancel={vi.fn()}
+      />,
+    );
+
+    expect(screen.getByPlaceholderText("Message Affent...")).toHaveValue("Use this file in the next step: a.txt");
+    expect(screen.getByTestId("composer-context")).toHaveTextContent("File added to message");
+    expect(screen.getByTestId("composer-context")).toHaveTextContent("Added");
+    expect(screen.getByTestId("composer-context")).not.toHaveTextContent("Replaced");
   });
 
   it("replaces hand-written text when editing a previous message", async () => {
@@ -322,7 +359,7 @@ describe("Composer", () => {
 
     expect(input).toHaveValue("list the files");
     expect(screen.getByTestId("composer-context")).toHaveTextContent("Editing previous message");
-    expect(screen.getByTestId("composer-context")).toHaveTextContent("Replaced");
+    expect(screen.getByTestId("composer-context")).not.toHaveTextContent("Replaced");
     expect(screen.getByRole("button", { name: "Send edited" })).toBeEnabled();
   });
 

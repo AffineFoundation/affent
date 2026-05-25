@@ -4,6 +4,7 @@ import type { ToolCallState, TurnState } from "../store/sessionState";
 import type { UseAsDraft } from "../view/draftSource";
 import { buildExecutionTree, formatTokenUsageCompact, formatTokenUsageDetail, type ExecutionTreeNode } from "../view/executionTree";
 import { CopyButton } from "./CopyButton";
+import { CopyMenu } from "./CopyMenu";
 import { fmtDuration } from "./format";
 import { HighlightText } from "./HighlightText";
 import { TraceDisclosure } from "./TraceDisclosure";
@@ -28,6 +29,7 @@ export function ExecutionTree({
   const openableNodeIds = useMemo(() => collectNodeIds(nodes, hasOpenableNodeBody), [nodes]);
   const activePath = useMemo(() => findRunningPath(nodes), [nodes]);
   const activePathIds = useMemo(() => new Set(activePath.map((node) => node.id)), [activePath]);
+  const issueNodes = useMemo(() => collectIssueNodes(nodes), [nodes]);
   const [openOverrides, setOpenOverrides] = useState<Record<string, boolean>>({});
   if (nodes.length === 0) return null;
 
@@ -59,16 +61,24 @@ export function ExecutionTree({
           <strong title={activePathSummary(activePath)}>{activePathSummary(activePath)}</strong>
         </div>
       ) : null}
-      {notableNodeIds.length > 0 ? (
-        <div className="execution-tree-actions" data-testid="execution-tree-actions">
-          <button type="button" onClick={openNotableNodes}>
-            Show important
-          </button>
-          <button type="button" onClick={foldAllNodes}>
-            Collapse details
-          </button>
-        </div>
-      ) : null}
+      <div className="execution-tree-actions" data-testid="execution-tree-actions">
+        {issueNodes.length > 0 ? (
+          <CopyButton label="Copy issues" value={actionIssueText(issueNodes)} className="node-action" />
+        ) : null}
+        <CopyMenu className="execution-copy-menu" panelClassName="execution-copy-menu-panel">
+          <CopyButton label="Copy all details" value={actionTreeText(nodes)} className="node-action" />
+        </CopyMenu>
+        {notableNodeIds.length > 0 ? (
+          <>
+            <button type="button" onClick={openNotableNodes}>
+              Show important
+            </button>
+            <button type="button" onClick={foldAllNodes}>
+              Collapse details
+            </button>
+          </>
+        ) : null}
+      </div>
       {nodes.map((node) => (
         <ExecutionNodeView
           key={node.id}
@@ -236,7 +246,7 @@ function NodeDetails({
   onOpenArtifact?: (path: string) => void;
   onUseAsDraft?: UseAsDraft;
 }) {
-  const primaryResult = node.report ?? node.summary ?? node.resultSummary ?? node.resultText;
+  const primaryResult = primaryResultForNode(node);
   const nextHint = node.nextHint;
   const hasOutcome =
     !!nextHint ||
@@ -267,6 +277,9 @@ function NodeDetails({
       <ActionInspectorSummary node={node} searchQuery={searchQuery} />
       <div className="node-actions" aria-label="Tool actions">
         <CopyButton label="Copy action record" value={actionRecordText(node, primaryResult)} />
+        {node.children.length > 0 ? (
+          <CopyButton label="Copy all nested details" value={actionTreeText([node])} />
+        ) : null}
         {node.args ? <CopyButton label="Copy input" value={JSON.stringify(node.args, null, 2)} /> : null}
         {primaryResult ? <CopyButton label="Copy output" value={primaryResult} /> : null}
         {primaryResult && onUseAsDraft ? (
@@ -478,6 +491,37 @@ function statusLabel(node: ExecutionTreeNode): string {
   return "done";
 }
 
+function primaryResultForNode(node: ExecutionTreeNode): string | undefined {
+  if (node.report) return node.report;
+  if (node.summary) return node.summary;
+  if (node.resultText && node.resultText !== node.resultSummary) return node.resultText;
+  return node.resultSummary ?? node.resultText;
+}
+
+function actionTreeText(nodes: readonly ExecutionTreeNode[]): string {
+  const records: string[] = [];
+  const visit = (node: ExecutionTreeNode, path: string) => {
+    records.push([
+      `# ${path} ${node.title}`,
+      actionRecordText(node, primaryResultForNode(node)),
+    ].join("\n"));
+    node.children.forEach((child, index) => visit(child, `${path}.${index + 1}`));
+  };
+  nodes.forEach((node, index) => visit(node, String(index + 1)));
+  return records.join("\n\n---\n\n");
+}
+
+function collectIssueNodes(nodes: readonly ExecutionTreeNode[]): ExecutionTreeNode[] {
+  return nodes.flatMap((node) => [
+    ...(node.status === "error" ? [node] : []),
+    ...collectIssueNodes(node.children),
+  ]);
+}
+
+function actionIssueText(nodes: readonly ExecutionTreeNode[]): string {
+  return nodes.map((node, index) => [`# issue ${index + 1}: ${node.title}`, actionRecordText(node, primaryResultForNode(node))].join("\n")).join("\n\n---\n\n");
+}
+
 function actionRecordText(node: ExecutionTreeNode, primaryResult?: string): string {
   const lines = [
     `Action: ${node.title}`,
@@ -487,6 +531,7 @@ function actionRecordText(node: ExecutionTreeNode, primaryResult?: string): stri
   ];
   if (node.durationMs != null) lines.push(`Duration: ${fmtDuration(node.durationMs)}`);
   if (node.exitCode != null) lines.push(`Exit: ${node.exitCode}`);
+  if (node.callId) lines.push(`Call ID: ${node.callId}`);
   if (node.objective) lines.push(`Task: ${node.objective}`);
   if (node.mcpServer) lines.push(`MCP server: ${node.mcpServer}`);
   if (node.mcpTool) lines.push(`MCP action: ${node.mcpTool}`);

@@ -3,7 +3,7 @@ import userEvent from "@testing-library/user-event";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { App } from "./App";
 import { completedTurn } from "./fixtures/completedTurn";
-import { maxTurns, resultTruncated, runningSubagent, toolError } from "./fixtures/scenarios";
+import { cancelledTurn, maxTurns, resultTruncated, runningSubagent, toolError } from "./fixtures/scenarios";
 
 describe("App", () => {
   afterEach(() => {
@@ -77,6 +77,11 @@ describe("App", () => {
     expect(screen.getByTestId("timeline-empty")).toHaveTextContent("What should we work on?");
     expect(screen.getByTestId("timeline-empty")).toHaveTextContent("saved research task");
     expect(screen.getByRole("button", { name: /Open latest chat/ })).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "Use as draft" }));
+    expect(screen.getByPlaceholderText("Message Affent...")).toHaveValue("saved research task");
+    expect(screen.getByTestId("composer-context")).toHaveTextContent("Starting from recent chat");
+    await user.click(screen.getByRole("button", { name: "Remove" }));
+    expect(screen.getByPlaceholderText("Message Affent...")).toHaveValue("");
     expect(fetchImpl).not.toHaveBeenCalledWith("/v1/sessions/s1/history?after=-1&limit=500", expect.anything());
     expect(fetchImpl).not.toHaveBeenCalledWith("/v1/sessions/s1/events", expect.anything());
 
@@ -87,16 +92,13 @@ describe("App", () => {
     expect(context).toHaveTextContent("Result ready");
     expect(context).toHaveTextContent("README.md main.go");
     const details = screen.getByTestId("chat-context-details");
-    expect(details).not.toHaveAttribute("open");
-    expect(chatContextMetric(details, "Actions 1")).not.toBeVisible();
+    expect(chatContextMetric(details, "Actions 1")).toBeVisible();
+    expect(chatContextMetric(details, "Tokens 138")).toBeVisible();
     const contextText = context.textContent?.replace(/\s+/g, " ").trim();
     expect(contextText).toContain("Result ready · README.md main.go");
     expect(contextText).toContain("Task: list the files");
     expect(context).toHaveAccessibleName("Result ready · README.md main.go · Task: list the files");
-    await user.click(screen.getByText("Metrics"));
-    expect(details).toHaveAttribute("open");
-    expect(chatContextMetric(details, "Actions 1")).toBeVisible();
-    expect(chatContextMetric(details, "Tokens 138")).toBeVisible();
+    expect(screen.queryByText("Metrics")).toBeNull();
     expect(context.querySelector(".chat-context-primary")).toHaveTextContent("README.md main.go");
     expect(context.querySelector(".chat-context-topic")).toHaveTextContent("Task:");
     expect(context.querySelector(".chat-context-topic")?.textContent).toContain("Task: list the files");
@@ -108,6 +110,43 @@ describe("App", () => {
     expect(screen.getByRole("button", { name: "Resume" })).toBeDisabled();
     expect(screen.queryByTestId("session-strip")).toBeNull();
     expect(fetchImpl).not.toHaveBeenCalledWith("/v1/sessions/s1/events", expect.anything());
+  });
+
+  it("keeps internal session ids out of the latest-chat shortcut", async () => {
+    const fetchImpl = vi.fn(async (input: RequestInfo | URL) => {
+      const url = String(input);
+      if (url === "/v1/sessions?limit=100") {
+        return jsonResponse({
+          sessions: [
+            {
+              id: "saved-session-abcdef123456",
+              active: false,
+              durable: true,
+              last_used_at: "2026-05-23T18:30:00Z",
+              has_conversation: true,
+              has_events: true,
+              has_artifacts: false,
+              has_memory: false,
+              has_runtime_skills: false,
+            },
+          ],
+          has_more: false,
+        });
+      }
+      return jsonResponse({ error: { message: `unexpected ${url}` } }, 404);
+    });
+    vi.stubGlobal("fetch", fetchImpl);
+
+    render(<App />);
+
+    const empty = await screen.findByTestId("timeline-empty");
+    const latest = within(empty).getByTestId("intro-latest-chat");
+    expect(latest).toHaveTextContent("Saved chat");
+    expect(latest).toHaveTextContent("May 23 18:30 UTC");
+    expect(latest).not.toHaveTextContent("saved-se...123456");
+    expect(within(latest).queryByRole("button", { name: "Use as draft" })).toBeNull();
+    expect(within(latest).getByRole("button", { name: /Open latest chat/ })).toBeInTheDocument();
+    expect(screen.getByTestId("session-list")).toHaveTextContent("saved-se...123456");
   });
 
   it("loads every history page before rendering a saved chat", async () => {
@@ -226,25 +265,25 @@ describe("App", () => {
     render(<App />);
 
     const runtime = await screen.findByTestId("runtime-capabilities");
-    expect(runtime).toHaveTextContent("Capabilities");
-    expect(runtime).toHaveTextContent("Local project mode");
-    expect(runtime).toHaveTextContent("current outside information may be incomplete");
-    expect(runtime).toHaveTextContent("Research");
-    expect(runtime).toHaveTextContent("Offline");
-    expect(runtime).toHaveTextContent("No live web tools for current outside information.");
+    expect(runtime).toHaveTextContent("This chat");
+    expect(runtime).toHaveTextContent("Chat-only mode");
+    expect(runtime).toHaveTextContent("local project tools may be unavailable");
+    expect(runtime).toHaveTextContent("Web");
+    expect(runtime).toHaveTextContent("Not available");
+    expect(runtime).toHaveTextContent("Current outside information may be incomplete.");
     expect(runtime).toHaveTextContent("Project");
-    expect(runtime).toHaveTextContent("Read-only");
-    expect(runtime).toHaveTextContent("Workers");
-    expect(runtime).toHaveTextContent("Delegation on");
-    expect(runtime).toHaveTextContent("Can hand off focused work (2 levels, 4 focused task types).");
-    expect(runtime).toHaveTextContent("Recall");
+    expect(runtime).toHaveTextContent("Unavailable");
+    expect(runtime).toHaveTextContent("Agents");
+    expect(runtime).toHaveTextContent("Subtasks available");
+    expect(runtime).toHaveTextContent("Can delegate focused work (2 levels, 4 focused task types).");
+    expect(runtime).toHaveTextContent("Context");
     expect(runtime).toHaveTextContent("Memory");
     expect(runtime).toHaveTextContent("Can use saved memory.");
     const input = screen.getByPlaceholderText("Message Affent...");
     expect(input).toBeVisible();
     await userEvent.type(input, "Analyze Affine recent market trends and Twitter reaction");
-    expect(screen.getByTestId("composer-task-hint")).toHaveTextContent("Current web info unavailable");
-    expect(screen.getByTestId("composer-task-hint")).toHaveTextContent("results may be incomplete");
+    expect(screen.getByTestId("composer-task-hint")).toHaveTextContent("Needs current sources");
+    expect(screen.getByTestId("composer-task-hint")).toHaveTextContent("unless you provide sources");
     expect(screen.queryByTestId("chat-context-bar")).toBeNull();
   });
 
@@ -297,10 +336,15 @@ describe("App", () => {
     expect(screen.queryByTestId("workflow-status")).toBeNull();
     messageResponse.resolve(jsonResponse({ session_id: "new-1", turn_id: "t1" }));
     await waitFor(() => expect(fetchImpl).toHaveBeenCalledWith("/v1/sessions/new-1/messages", expect.objectContaining({ method: "POST" })));
-    await waitFor(() => expect(screen.queryByTestId("pending-turn")).toBeNull());
+    await waitFor(() => expect(screen.getByTestId("connection-pill")).toHaveTextContent("Disconnected"));
+    expect(screen.getByTestId("pending-turn")).toHaveTextContent("summarize the repo");
+    expect(screen.getByTestId("pending-turn")).toHaveTextContent("Preparing the first update.");
     expect(screen.queryByRole("button", { name: "Working" })).toBeNull();
     expect(screen.getByTestId("workspace-shell")).toHaveAttribute("data-session-nav", "visible");
-    expect(screen.getByTestId("session-list")).toHaveTextContent("new-1");
+    expect(screen.getByTestId("session-list")).toHaveTextContent("repo");
+    expect(screen.getByTestId("session-list")).not.toHaveTextContent("No messages yet");
+    expect(screen.getByTestId("session-list")).not.toHaveTextContent("New live chat");
+    expect(screen.getByTestId("session-list")).not.toHaveTextContent("new-1");
     expect(screen.queryByRole("button", { name: "New chat" })).toBeNull();
     expect(screen.getByRole("button", { name: "New" })).toBeInTheDocument();
   });
@@ -367,6 +411,10 @@ describe("App", () => {
     expect(context).not.toHaveTextContent("Status:");
     expect(context).toHaveTextContent("next update");
     expect(context).not.toHaveTextContent("Result ready");
+    expect(screen.getByTestId("session-list")).toHaveTextContent("list the files");
+    expect(screen.getByTestId("session-list")).toHaveTextContent("Sending · main.go");
+    expect(screen.getByTestId("session-list")).toHaveTextContent("Waiting for the next update.");
+    expect(screen.getByTestId("session-list")).not.toHaveTextContent("Answer · There are two files.");
 
     messageResponse.resolve(jsonResponse({ session_id: "s1", turn_id: "t2" }));
     await waitFor(() => expect(fetchImpl).toHaveBeenCalledWith("/v1/sessions/s1/messages", expect.objectContaining({ method: "POST" })));
@@ -429,6 +477,83 @@ describe("App", () => {
 
     expect(await within(screen.getByTestId("timeline")).findByText("Bittensor is a decentralized AI network.")).toBeVisible();
     await waitFor(() => expect(fetchImpl).toHaveBeenCalledWith("/v1/sessions/saved-1/events", expect.anything()));
+    const eventCall = fetchImpl.mock.calls.find(([url]) => String(url) === "/v1/sessions/saved-1/events");
+    const eventHeaders = eventCall?.[1]?.headers as Headers;
+    expect(eventHeaders.get("Last-Event-ID")).toBe("11");
+  });
+
+  it("refreshes history after sending from a saved chat when no live stream is open yet", async () => {
+    const user = userEvent.setup();
+    let historyCalls = 0;
+    const followUp = [
+      ...completedTurn,
+      { id: 12, type: "turn.start", data: { turn_id: "t2" } },
+      { id: 13, type: "user.message", data: { turn_id: "t2", text: "explain Bittensor" } },
+      { id: 14, type: "tool.request", data: {
+        turn_id: "t2",
+        call_id: "c2",
+        tool: "web_fetch",
+        args: { url: "https://example.com/bittensor" },
+        args_truncated: false,
+        args_bytes: 42,
+        args_omitted_bytes: 0,
+        args_cap_bytes: 65536,
+      } },
+    ];
+    const fetchImpl = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = String(input);
+      if (url === "/v1/sessions?limit=100") {
+        return jsonResponse({
+          sessions: [
+            {
+              id: "saved-1",
+              active: false,
+              durable: true,
+              latest_user_message: "previous task",
+              has_conversation: true,
+              has_events: true,
+              has_artifacts: false,
+              has_memory: false,
+              has_runtime_skills: false,
+            },
+          ],
+          has_more: false,
+        });
+      }
+      if (url === "/v1/sessions/saved-1/history?after=-1&limit=500") {
+        historyCalls += 1;
+        return jsonResponse({
+          session_id: "saved-1",
+          events: historyCalls === 1 ? completedTurn : followUp,
+          next_after: historyCalls === 1 ? 11 : 14,
+          has_more: false,
+          trace_schema_detected: false,
+        });
+      }
+      if (url === "/v1/sessions/saved-1/messages" && init?.method === "POST") {
+        return jsonResponse({ session_id: "saved-1", turn_id: "t2" }, 202);
+      }
+      if (url === "/v1/sessions/saved-1/events") return eventStreamResponse("");
+      return jsonResponse({ error: { message: `unexpected ${url}` } }, 404);
+    });
+    vi.stubGlobal("fetch", fetchImpl);
+
+    render(<App />);
+
+    const sessionList = await screen.findByTestId("session-list");
+    await user.click(within(sessionList).getByRole("button", { name: /previous task/ }));
+    await screen.findByText("There are two files.");
+
+    await user.type(screen.getByPlaceholderText("Message Affent..."), "explain Bittensor");
+    await user.click(screen.getByRole("button", { name: "Resume" }));
+
+    await waitFor(() => {
+      const activity = screen.getAllByTestId("agent-activity");
+      expect(activity.some((node) => node.textContent?.includes("Fetch example.com/bittensor"))).toBe(true);
+    });
+    expect(screen.getByTestId("chat-context-bar")).toHaveTextContent("Bittensor");
+    expect(fetchImpl).toHaveBeenCalledWith("/v1/sessions/saved-1/history?after=-1&limit=500", expect.anything());
+    expect(historyCalls).toBeGreaterThanOrEqual(2);
   });
 
   it("keeps the draft when sending a message fails", async () => {
@@ -513,7 +638,9 @@ describe("App", () => {
 
     await waitFor(() => expect(input).toHaveFocus());
     expect(screen.getByTestId("workspace-shell")).toHaveAttribute("data-session-nav", "visible");
-    expect(screen.getByTestId("session-list")).toHaveTextContent("new-1");
+    expect(screen.getByTestId("session-list")).toHaveTextContent("New chat");
+    expect(screen.getByTestId("session-list")).toHaveTextContent("No messages yet");
+    expect(screen.getByTestId("session-list")).not.toHaveTextContent("new-1");
   });
 
   it("clears the current surface immediately when switching sessions", async () => {
@@ -570,7 +697,7 @@ describe("App", () => {
     render(<App />);
 
     expect(await screen.findByText("There are two files.")).toBeVisible();
-    await user.click(screen.getByRole("button", { name: /s2/ }));
+    await user.click(screen.getByRole("button", { name: /New chat.*No messages yet/ }));
 
     expect(screen.queryByText("There are two files.")).toBeNull();
     expect(screen.getByTestId("timeline-empty")).toHaveTextContent("What should we work on?");
@@ -714,6 +841,51 @@ describe("App", () => {
 
     expect(screen.getByPlaceholderText("Message Affent...")).toHaveValue("Guidance for current run:check tests first");
     expect(screen.getByTestId("composer-context")).toHaveTextContent("Editing sent guidance");
+  });
+
+  it("shows a stopping state while a running turn is being cancelled", async () => {
+    const user = userEvent.setup();
+    const cancelled = deferred<Response>();
+    let historyCalls = 0;
+    const fetchImpl = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = String(input);
+      if (url === "/v1/sessions?limit=100") {
+        return jsonResponse({
+          sessions: [{ id: "s1", active: true, durable: true, has_conversation: true, has_events: true, has_artifacts: false, has_memory: false, has_runtime_skills: false }],
+          has_more: false,
+        });
+      }
+      if (url === "/v1/sessions/s1/history?after=-1&limit=500") {
+        historyCalls += 1;
+        return jsonResponse({
+          session_id: "s1",
+          events: historyCalls === 1 ? runningSubagent : cancelledTurn,
+          next_after: 3,
+          has_more: false,
+          trace_schema_detected: false,
+        });
+      }
+      if (url === "/v1/sessions/s1/events") return eventStreamResponse("");
+      if (url === "/v1/sessions/s1/cancel" && init?.method === "POST") return cancelled.promise;
+      return jsonResponse({ error: { message: `unexpected ${url}` } }, 404);
+    });
+    vi.stubGlobal("fetch", fetchImpl);
+
+    render(<App />);
+
+    await screen.findByRole("button", { name: "Stop" });
+    await user.click(screen.getByRole("button", { name: "Guide run" }));
+    await user.type(screen.getByPlaceholderText("Message Affent..."), "please stop after this");
+    await user.click(within(screen.getByTestId("composer")).getByRole("button", { name: "Stop" }));
+
+    expect(screen.getByTestId("composer")).toHaveAttribute("data-cancelling", "true");
+    expect(screen.getByTestId("composer-intent")).toHaveTextContent("Stopping run");
+    expect(within(screen.getByTestId("composer")).getByRole("button", { name: "Stopping" })).toBeDisabled();
+    expect(within(screen.getByTestId("composer")).getByRole("button", { name: "Send guidance" })).toBeDisabled();
+
+    cancelled.resolve(jsonResponse({ session_id: "s1", cancelled: true }));
+    await waitFor(() => expect(screen.getByTestId("composer")).toHaveAttribute("data-cancelling", "false"));
+    expect(fetchImpl).toHaveBeenCalledWith("/v1/sessions/s1/cancel", expect.objectContaining({ method: "POST" }));
   });
 
   it("moves an expanded tool result into the composer draft", async () => {

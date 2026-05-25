@@ -1,9 +1,13 @@
 import { render, screen, within } from "@testing-library/react";
-import { describe, expect, it } from "vitest";
+import userEvent from "@testing-library/user-event";
+import { describe, expect, it, vi } from "vitest";
 import { MarkdownText } from "./MarkdownText";
 
 describe("MarkdownText", () => {
-  it("renders structured markdown as scannable document elements", () => {
+  it("renders structured markdown as scannable document elements", async () => {
+    const user = userEvent.setup();
+    const writeText = vi.fn().mockResolvedValue(undefined);
+    Object.defineProperty(navigator, "clipboard", { configurable: true, value: { writeText } });
     render(
       <MarkdownText
         text={[
@@ -25,6 +29,12 @@ describe("MarkdownText", () => {
     expect(within(table).getByRole("columnheader", { name: "Source" })).toBeInTheDocument();
     expect(within(table).getByRole("cell", { name: "netuid 120" })).toBeInTheDocument();
     expect(screen.getByRole("list")).toHaveTextContent("Reason mining");
+    expect(screen.getByText("Table")).toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: "Copy table" }));
+
+    expect(writeText).toHaveBeenCalledWith("Source\tSignal\nTAOstats\tnetuid 120");
+    expect(screen.getByRole("button", { name: "Copied" })).toBeInTheDocument();
   });
 
   it("falls back to highlighted plain text while searching", () => {
@@ -56,5 +66,39 @@ describe("MarkdownText", () => {
     const labelled = screen.getByRole("link", { name: "Affine dashboard" });
     expect(labelled).toHaveAttribute("href", "https://www.affine.io/");
     expect(labelled).toHaveAttribute("target", "_blank");
+  });
+
+  it("copies fenced code blocks with readable language context", async () => {
+    const user = userEvent.setup();
+    const writeText = vi.fn().mockResolvedValue(undefined);
+    Object.defineProperty(navigator, "clipboard", { configurable: true, value: { writeText } });
+    render(
+      <MarkdownText
+        text={[
+          "Run `npm test` after the patch.",
+          "",
+          "```bash",
+          "npm test -- --run src/components/MarkdownText.test.tsx",
+          "npm run build",
+          "```",
+        ].join("\n")}
+      />,
+    );
+
+    expect(screen.getByText("npm test")).toBeInTheDocument();
+    expect(screen.getByText("Shell")).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "Copy shell code" }));
+
+    expect(writeText).toHaveBeenCalledWith(
+      "npm test -- --run src/components/MarkdownText.test.tsx\nnpm run build",
+    );
+    expect(screen.getByRole("button", { name: "Copied" })).toBeInTheDocument();
+  });
+
+  it("keeps unlabeled code blocks generic", () => {
+    render(<MarkdownText text={["```", "{\"ok\": true}", "```"].join("\n")} />);
+
+    expect(screen.getByText("Code")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Copy code" })).toBeInTheDocument();
   });
 });

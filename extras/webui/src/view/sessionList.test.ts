@@ -74,7 +74,7 @@ describe("sessionList view model", () => {
     const rows = buildSessionRows([session({ id: "new-session" })]);
 
     expect(rows[0].title).toBe("New chat");
-    expect(rows[0].meta).toEqual(["new-session", "No messages yet"]);
+    expect(rows[0].meta).toEqual(["No messages yet"]);
     expect(rows[0].metrics).toEqual([]);
     expect(rows[0].searchText).toContain("no messages yet");
   });
@@ -139,6 +139,24 @@ describe("sessionList view model", () => {
     });
     expect(rows[0].searchText).toContain("affine 是 bittensor");
     expect(rows[0].searchText).toContain("affine market research");
+  });
+
+  it("prefers explicit summary title fields over a rough runtime title", () => {
+    const rows = buildSessionRows([
+      session({
+        id: "summary-title-first",
+        durable: true,
+        title: "请你收集 Affine 信息",
+        summary_title: "Affine（Bittensor 子网）",
+        latest_user_message: "请你收集 Affine（Bittensor 子网）的相关信息并向我介绍",
+      }),
+    ]);
+
+    expect(rows[0]).toMatchObject({
+      title: "Affine（Bittensor 子网）",
+      titleSource: "provided",
+    });
+    expect(rows[0].searchText).toContain("请你收集 affine 信息");
   });
 
   it("re-summarizes provided titles that are only the raw first prompt", () => {
@@ -212,6 +230,44 @@ describe("sessionList view model", () => {
 
     expect(rows[0].title).toBe("Repository file listing");
     expect(rows[0].meta).not.toContain("s1");
+  });
+
+  it("uses a pending first task as the selected chat title before events arrive", () => {
+    const rows = mergeCurrentSessionRow(
+      buildSessionRows([session({ id: "new-1", active: true, durable: true })]),
+      "new-1",
+      reduceRawEvents([]),
+      "summarize the repo",
+    );
+
+    expect(rows[0]).toMatchObject({
+      title: "repo",
+      detail: "Sending · summarize the repo",
+      preview: "Waiting for the next update.",
+      status: "Live",
+      tone: "running",
+      meta: [],
+    });
+    expect(rows[0].searchText).toContain("summarize the repo");
+    expect(rows[0].searchText).toContain("waiting for the next update");
+  });
+
+  it("surfaces a pending follow-up without replacing the original chat topic", () => {
+    const rows = mergeCurrentSessionRow(
+      buildSessionRows([session({ id: "s1", active: true, durable: true, latest_user_message: "list the files" })]),
+      "s1",
+      reduceRawEvents(completedTurn),
+      "explain main.go",
+    );
+
+    expect(rows[0]).toMatchObject({
+      title: "list the files",
+      detail: "Sending · main.go",
+      preview: "Waiting for the next update.",
+      status: "Live",
+      tone: "running",
+    });
+    expect(rows[0].searchText).toContain("explain main.go");
   });
 
   it("turns long instruction-style tasks into topic-like titles", () => {
@@ -343,6 +399,50 @@ describe("sessionList view model", () => {
       detail: undefined,
     });
     expect(rows[0].searchText).toContain("continue this task from where it stopped");
+  });
+
+  it("ignores raw continuation prompts when they are saved as runtime titles", () => {
+    const rows = buildSessionRows([
+      session({
+        id: "raw-continuation-title",
+        durable: true,
+        title: "请继续同一个任务。基于已有证据输出报告",
+        topic_user_message: "真实收集 Affine（Bittensor 子网）的相关信息并向我介绍",
+        latest_user_message: "请继续同一个任务。基于已有证据输出报告",
+      }),
+    ]);
+
+    expect(rows[0]).toMatchObject({
+      title: "Affine（Bittensor 子网）",
+      titleSource: "topic",
+      detail: "Latest · 基于已有证据输出报告",
+    });
+    expect(rows[0].searchText).toContain("请继续同一个任务");
+  });
+
+  it("keeps runtime recovery prompts out of chat titles", () => {
+    const recoveryPrompt = "Tools are disabled for the rest of this turn, but the previous assistant step still requested another tool. Do not call tools again. Use only existing tool results.";
+    const rows = buildSessionRows([
+      session({
+        id: "runtime-recovery-session",
+        active: true,
+        durable: true,
+        summary_title: "Tools are disabled for the rest of this turn",
+        latest_user_message: recoveryPrompt,
+        topic_user_message: recoveryPrompt,
+        has_conversation: true,
+        has_events: true,
+      }),
+    ]);
+
+    expect(rows[0]).toMatchObject({
+      title: "Live chat",
+      titleSource: "fallback",
+      preview: undefined,
+      status: "Live",
+    });
+    expect(rows[0].meta).toContain("runtime-...ession");
+    expect(rows[0].searchText).toContain("tools are disabled");
   });
 
   it("uses the selected timeline state when the API summary lacks recent task context", () => {

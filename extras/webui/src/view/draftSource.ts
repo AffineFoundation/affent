@@ -7,6 +7,7 @@ export type DraftSource =
   | "error"
   | "guidance_receipt"
   | "previous_message"
+  | "recent_chat"
   | "result"
   | "starter"
   | "tool_guidance"
@@ -25,6 +26,7 @@ const draftSourceLabels: Record<DraftSource, string> = {
   error: "Continuing after error",
   guidance_receipt: "Editing sent guidance",
   previous_message: "Editing previous message",
+  recent_chat: "Starting from recent chat",
   result: "Continuing from output",
   starter: "Starting from draft",
   tool_guidance: "Using suggested next step",
@@ -41,6 +43,7 @@ const draftMergeModes: Record<DraftSource, DraftMergeMode> = {
   error: "append",
   guidance_receipt: "replace",
   previous_message: "replace",
+  recent_chat: "replace",
   result: "append",
   starter: "replace",
   tool_guidance: "append",

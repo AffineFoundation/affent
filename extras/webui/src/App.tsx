@@ -36,6 +36,11 @@ interface StatusBanner {
   detail?: string;
 }
 
+interface HistoryLoadResult {
+  session: SessionState;
+  cursor: number;
+}
+
 const demoReplayDelayMs = 180;
 const historyPageLimit = 500;
 const maxHistoryPages = 50;
@@ -54,6 +59,7 @@ export function App() {
   const [selectedSessionId, setSelectedSessionId] = useState<string | undefined>();
   const [session, setSession] = useState<SessionState>(() => initialSessionState());
   const [actionBusy, setActionBusy] = useState(false);
+  const [cancelBusy, setCancelBusy] = useState(false);
   const [pendingMessage, setPendingMessage] = useState<PendingMessageView | undefined>();
   const [guidanceReceipts, setGuidanceReceipts] = useState<GuidanceReceiptView[]>([]);
   const [composerDraft, setComposerDraft] = useState<ComposerDraft | undefined>();
@@ -62,6 +68,7 @@ export function App() {
   const sendInFlightRef = useRef(false);
   const sendFailedRef = useRef(false);
   const streamClosedRef = useRef(false);
+  const streamSessionIdRef = useRef<string | undefined>(undefined);
   const nextGuidanceReceiptId = useRef(0);
   const conversationScrollRef = useRef<HTMLDivElement | null>(null);
   const demoActive = status.state === "demo";
@@ -69,6 +76,11 @@ export function App() {
     () => sessions.find((candidate) => candidate.id === selectedSessionId),
     [selectedSessionId, sessions],
   );
+  const selectedSessionTitle = useMemo(() => {
+    if (!selectedSession) return undefined;
+    const row = buildSessionRows([selectedSession])[0];
+    return row?.titleSource === "provided" ? row.title : undefined;
+  }, [selectedSession]);
   const selectedSessionActive = selectedSession?.active === true;
   const workflow = useMemo(() => deriveWorkflowStatus(session), [session]);
   const runtimeCapabilities = useMemo(
@@ -82,8 +94,9 @@ export function App() {
       hasSelectedSession: !!selectedSessionId,
       pendingTask: pendingMessage?.kind === "task" ? pendingMessage.text : undefined,
       pendingGuidance: pendingMessage?.kind === "guidance" ? pendingMessage.text : undefined,
+      sessionTitle: selectedSessionTitle,
     }),
-    [pendingMessage, session, selectedSessionId, workflow],
+    [pendingMessage, selectedSessionId, selectedSessionTitle, session, workflow],
   );
   const showWorkflowStatus = overview.tone === "error" || overview.tone === "warning";
   const showSessionNav = !demoActive && sessions.length > 0;
@@ -102,15 +115,17 @@ export function App() {
     return {
       id: row.id,
       title: row.title,
-      meta: row.meta.join(" · "),
+      draft: row.titleSource === "fallback" ? undefined : row.title,
+      meta: latestChatMeta(row.updated),
     };
   }, [sessions, showSessionNav]);
 
   const loadHistory = useCallback(
-    async (sessionId: string, signal?: AbortSignal): Promise<SessionState> => {
+    async (sessionId: string, signal?: AbortSignal): Promise<HistoryLoadResult> => {
       setStatus({ state: "loading", label: "Loading history" });
       let detail = "no trace meta";
       let nextSession = initialSessionState();
+      let cursor = -1;
       try {
         const events: RawEvent[] = [];
         let after = -1;
@@ -124,12 +139,14 @@ export function App() {
             traceSchemaDetected = true;
             traceSchemaVersion = history.trace_schema_version;
           }
+          cursor = history.next_after;
           if (!history.has_more) break;
           if (history.next_after === after) throw new Error("history pagination stalled");
           after = history.next_after;
           if (page === maxHistoryPages - 1) throw new Error("history is too long to load safely");
         }
 
+        cursor = events.length > 0 ? Math.max(cursor, lastRawEventId(events)) : cursor;
         detail = traceSchemaDetected ? `schema v${traceSchemaVersion}` : detail;
         nextSession = reduceRawEvents(events);
       } catch (err) {
@@ -145,7 +162,7 @@ export function App() {
         label: "Connected",
         detail,
       });
-      return nextSession;
+      return { session: nextSession, cursor };
     },
     [client],
   );
@@ -198,7 +215,10 @@ export function App() {
       const timer = window.setTimeout(() => {
         if (cancelled) return;
         setSession((current) => applyRawEvent(current, event));
-        if (event.type === EventType.TurnEnd) setActionBusy(false);
+        if (event.type === EventType.TurnEnd) {
+          setActionBusy(false);
+          setCancelBusy(false);
+        }
         schedule(index + 1);
       }, demoDelayFor(event));
       timers.push(timer);
@@ -220,6 +240,7 @@ export function App() {
   useEffect(() => {
     if (session.status === "running") return;
     setGuidanceReceipts([]);
+    setCancelBusy(false);
   }, [session.status]);
 
   useEffect(() => {
@@ -228,20 +249,26 @@ export function App() {
     const ac = new AbortController();
     async function connectLive() {
       try {
-        await loadHistory(liveSessionId, ac.signal);
+        const history = await loadHistory(liveSessionId, ac.signal);
         if (ac.signal.aborted) return;
         if (!selectedSessionActive) return;
         streamClosedRef.current = false;
+        streamSessionIdRef.current = liveSessionId;
         setStatus((current) => ({ ...current, state: "live", label: "Live" }));
         await streamSessionEvents(client, liveSessionId, {
           signal: ac.signal,
+          lastEventId: history.cursor,
           onEvent: (event) => {
             setSession((current) => applyRawEvent(current, event));
-            if (event.type === EventType.TurnEnd) setActionBusy(false);
+            if (event.type === EventType.TurnEnd) {
+              setActionBusy(false);
+              setCancelBusy(false);
+            }
           },
         });
         if (!ac.signal.aborted) {
           streamClosedRef.current = true;
+          if (streamSessionIdRef.current === liveSessionId) streamSessionIdRef.current = undefined;
           setStatus((current) => {
             if (sendInFlightRef.current || sendFailedRef.current) return current;
             if (current.state === "error") return current;
@@ -254,16 +281,21 @@ export function App() {
         }
       } catch (err) {
         if (isAbortError(err)) return;
+        if (streamSessionIdRef.current === liveSessionId) streamSessionIdRef.current = undefined;
         setStatus({ state: "error", label: "Connection issue", detail: formatError(err) });
       }
     }
     void connectLive();
-    return () => ac.abort();
+    return () => {
+      ac.abort();
+      if (streamSessionIdRef.current === liveSessionId) streamSessionIdRef.current = undefined;
+    };
   }, [client, demoActive, loadHistory, selectedSessionActive, selectedSessionId]);
 
   function resetSessionSurface(nextSessionId: string) {
     if (nextSessionId === selectedSessionId) return;
     streamClosedRef.current = false;
+    streamSessionIdRef.current = undefined;
     sendInFlightRef.current = false;
     sendFailedRef.current = false;
     setSelectedSessionId(nextSessionId);
@@ -272,6 +304,7 @@ export function App() {
     setGuidanceReceipts([]);
     setArtifact({ state: "idle" });
     setActionBusy(false);
+    setCancelBusy(false);
     setStatus({ state: "loading", label: "Loading history", detail: nextSessionId });
   }
 
@@ -317,12 +350,13 @@ export function App() {
           { id: ++nextGuidanceReceiptId.current, text: content },
         ]);
       }
-      if (streamClosedRef.current) {
+      if (pendingKind === "task") markSessionLive(targetSessionId, content);
+      const hasOpenStream = streamSessionIdRef.current === targetSessionId && !streamClosedRef.current;
+      if (!hasOpenStream) {
         const reconciled = await loadHistory(targetSessionId);
-        if (pendingKind === "task") releaseSettledTurn(reconciled);
+        if (pendingKind === "task") releaseSettledTurn(reconciled.session, content);
         setStatus({ state: "disconnected", label: "Disconnected", detail: "history refreshed" });
       } else {
-        markSessionLive(targetSessionId, content);
         setStatus((current) => ({ ...current, state: "live", label: "Running" }));
       }
     } catch (err) {
@@ -336,10 +370,15 @@ export function App() {
     }
   }
 
-  function releaseSettledTurn(nextSession: SessionState) {
+  function releaseSettledTurn(nextSession: SessionState, pendingText?: string) {
     if (nextSession.status === "running") return;
-    setPendingMessage(undefined);
-    setGuidanceReceipts([]);
+    const accepted = pendingText
+      ? nextSession.turns.some((turn) => (turn.userText ?? "").trim() === pendingText.trim())
+      : true;
+    if (accepted) {
+      setPendingMessage(undefined);
+      setGuidanceReceipts([]);
+    }
     setActionBusy(false);
   }
 
@@ -382,7 +421,8 @@ export function App() {
   }
 
   async function handleCancel() {
-    if (!selectedSessionId) return;
+    if (!selectedSessionId || cancelBusy) return;
+    setCancelBusy(true);
     setActionBusy(true);
     try {
       await cancelSessionTurn(client, selectedSessionId);
@@ -390,6 +430,7 @@ export function App() {
     } catch (err) {
       setStatus({ state: "error", label: "Cancel failed", detail: formatError(err) });
     } finally {
+      setCancelBusy(false);
       setActionBusy(false);
     }
   }
@@ -474,6 +515,7 @@ export function App() {
               sessions={sessions}
               selectedId={selectedSessionId}
               currentSession={session}
+              pendingTask={pendingMessage?.kind === "task" ? pendingMessage.text : undefined}
               demoActive={demoActive}
               onSelect={resetSessionSurface}
               onNew={() => void handleNewSession()}
@@ -517,6 +559,7 @@ export function App() {
               disabled={demoActive}
               disabledReason={status.detail}
               busy={actionBusy || session.status === "running"}
+              cancelling={cancelBusy}
               hasSession={!!selectedSessionId}
               resumeSession={composerResumesSavedChat}
               draft={composerDraft}
@@ -530,6 +573,15 @@ export function App() {
       </main>
     </div>
   );
+}
+
+function latestChatMeta(updated: string): string | undefined {
+  return updated && updated !== "No messages yet" ? updated : undefined;
+}
+
+function lastRawEventId(events: readonly RawEvent[]): number {
+  const last = events[events.length - 1];
+  return typeof last?.id === "number" ? last.id : -1;
 }
 
 function ChatContextBar({ overview }: { overview: SessionOverview }) {
@@ -623,21 +675,20 @@ function RuntimeStatusBar({ view }: { view: RuntimeCapabilityView }) {
       aria-label={`${view.headline}. ${view.detail}`}
     >
       <summary>
-        <span className="runtime-status-kicker">Capabilities</span>
+        <span className="runtime-status-kicker">This chat</span>
         <span className="runtime-capability-title">{view.headline}</span>
-        <span className="runtime-capability-detail">
-          <span className="runtime-capability-separator" aria-hidden="true">·</span>
-          {view.detail}
-        </span>
       </summary>
-      <div className="runtime-capability-list">
-        {view.chips.map((chip) => (
-          <div key={`${chip.group}:${chip.label}`} className="runtime-capability-item" data-tone={chip.tone}>
-            <b>{chip.group}</b>
-            <strong>{chip.label}</strong>
-            <small>{chip.detail}</small>
-          </div>
-        ))}
+      <div className="runtime-capability-panel">
+        <p className="runtime-capability-panel-detail">{view.detail}</p>
+        <div className="runtime-capability-list">
+          {view.chips.map((chip) => (
+            <div key={`${chip.group}:${chip.label}`} className="runtime-capability-item" data-tone={chip.tone}>
+              <b>{chip.group}</b>
+              <strong>{chip.label}</strong>
+              <small>{chip.detail}</small>
+            </div>
+          ))}
+        </div>
       </div>
     </details>
   );

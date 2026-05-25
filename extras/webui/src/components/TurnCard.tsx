@@ -10,9 +10,11 @@ import { buildTurnBoundaryView } from "../view/turnBoundary";
 import { buildTurnWorkSummaryWithOptions, type TurnWorkSummary, type WorkSummaryItem } from "../view/turnWorkSummary";
 import { buildTurnArtifacts, type TurnArtifact } from "../view/turnArtifacts";
 import { CopyButton } from "./CopyButton";
+import { CopyMenu } from "./CopyMenu";
 import { ExecutionTree } from "./ExecutionTree";
 import { HighlightText } from "./HighlightText";
 import { MarkdownText } from "./MarkdownText";
+import { markdownToPlainText } from "../view/textPreview";
 
 // One turn as a flowing work segment. Human-readable actions stay in the
 // timeline; structured debug data is available inline through disclosure
@@ -248,6 +250,7 @@ function AgentActivity({
   const userTouched = useRef(false);
   const [open, setOpen] = useState(autoOpen);
   const showDigestLabel = activity.digest.label !== activity.statusLabel;
+  const issueNodes = activityIssueNodes(activity.nodes);
 
   useEffect(() => {
     if (!userTouched.current) setOpen(autoOpen);
@@ -279,7 +282,17 @@ function AgentActivity({
           <small>{activity.statusLabel}</small>
           <span className="agent-activity-chevron" aria-hidden="true" />
         </button>
-        <CopyButton label="Copy activity summary" value={activityCopyText(activity)} className="agent-activity-copy-action" />
+        <span className="agent-activity-actions">
+          {issueNodes.length > 0 ? (
+            <CopyButton label="Copy issues" value={activityIssueCopyText(issueNodes)} className="agent-activity-copy-action" />
+          ) : null}
+          <CopyMenu className="agent-activity-copy-menu" panelClassName="agent-activity-copy-menu-panel">
+            <CopyButton label="Copy activity summary" value={activityCopyText(activity)} className="agent-activity-copy-action" />
+            {activity.nodes.length > 0 ? (
+              <CopyButton label="Copy activity details" value={activityDetailsCopyText(activity)} className="agent-activity-copy-action" />
+            ) : null}
+          </CopyMenu>
+        </span>
       </div>
       <div
         className="agent-activity-digest"
@@ -397,6 +410,39 @@ function activityNodeCopyLines(node: TurnActivityNode): string[] {
     `${indent}${node.label}: ${node.title}${detail}${meta}${evidence}`,
     ...node.children.flatMap(activityNodeCopyLines),
   ];
+}
+
+function activityDetailsCopyText(activity: TurnActivityView): string {
+  const lines = [
+    `${activity.title} (${activity.statusLabel})`,
+    activity.digest.label && activity.digest.label !== activity.statusLabel
+      ? `${activity.digest.label}: ${activity.digest.summary}`
+      : activity.digest.summary,
+    ...activity.nodes.flatMap((node, index) => activityNodeDetailCopyLines(node, String(index + 1))),
+  ];
+  return lines.filter((line): line is string => Boolean(line?.trim())).join("\n\n---\n\n");
+}
+
+function activityNodeBranchCopyText(node: TurnActivityNode): string {
+  return activityNodeDetailCopyLines(node, "1").join("\n\n---\n\n");
+}
+
+function activityNodeDetailCopyLines(node: TurnActivityNode, path: string): string[] {
+  return [
+    [`# ${path} ${node.title}`, node.copyText].join("\n"),
+    ...node.children.flatMap((child, index) => activityNodeDetailCopyLines(child, `${path}.${index + 1}`)),
+  ];
+}
+
+function activityIssueNodes(nodes: readonly TurnActivityNode[]): TurnActivityNode[] {
+  return nodes.flatMap((node) => [
+    ...(node.status === "error" ? [node] : []),
+    ...activityIssueNodes(node.children),
+  ]);
+}
+
+function activityIssueCopyText(nodes: readonly TurnActivityNode[]): string {
+  return nodes.map((node, index) => [`# issue ${index + 1}: ${node.title}`, node.copyText].join("\n")).join("\n\n---\n\n");
 }
 
 function evidenceCopyValue(item: TurnActivityEvidence): string {
@@ -587,15 +633,21 @@ function AgentActivityNode({
             </span>
           ) : null}
         </span>
-        {nextAction && onUseAsDraft ? (
-          <button
-            type="button"
-            className="agent-activity-node-action"
-            onClick={() => onUseAsDraft(nextAction.draft, "tool_guidance")}
-          >
-            Use this next step
-          </button>
-        ) : null}
+        <span className="agent-activity-node-actions">
+          <CopyButton label="Copy step" value={node.copyText} className="agent-activity-node-action" />
+          {hasChildren ? (
+            <CopyButton label="Copy branch" value={activityNodeBranchCopyText(node)} className="agent-activity-node-action" />
+          ) : null}
+          {nextAction && onUseAsDraft ? (
+            <button
+              type="button"
+              className="agent-activity-node-action"
+              onClick={() => onUseAsDraft(nextAction.draft, "tool_guidance")}
+            >
+              Use this next step
+            </button>
+          ) : null}
+        </span>
         {node.meta ? <span className="agent-activity-meta">{node.meta}</span> : null}
       </div>
       {open && hasChildren ? (
@@ -822,7 +874,7 @@ function WorkDetails({
           <span>{heading.title}</span>
           {heading.detail ? (
             <>
-              {" · "}
+              {" "}
               <small>{heading.detail}</small>
             </>
           ) : null}
@@ -972,14 +1024,11 @@ function WorkSummary({ summary }: { summary: WorkSummaryDisplay }) {
   return (
     <div className="work-summary" data-testid="work-summary" aria-label={[summary.actionLabel, ...summary.items.map((item) => item.label)].filter(Boolean).join(" · ")}>
       {summary.actionLabel ? (
-        <>
-          <span className="work-summary-separator" aria-hidden="true"> · </span>
-          <span>{summary.actionLabel}</span>
-        </>
+        <span>{summary.actionLabel}</span>
       ) : null}
-      {summary.items.map((item) => (
+      {summary.items.map((item, index) => (
         <span className="work-summary-part" key={`${item.tone}-${item.label}`}>
-          <span className="work-summary-separator" aria-hidden="true"> · </span>
+          {summary.actionLabel || index > 0 ? <span className="work-summary-separator" aria-hidden="true"> · </span> : null}
           <WorkSummaryChip item={item} />
         </span>
       ))}
@@ -1116,7 +1165,15 @@ function MessageStep({
       ) : null}
       {variant === "assistant" ? (
         <div className="message-actions">
-          <CopyButton label="Copy answer" value={text} className="message-action" />
+          <CopyMenu
+            label="Copy answer"
+            className="message-copy-menu"
+            panelClassName="message-copy-menu-panel"
+            triggerClassName="message-action"
+          >
+            <CopyButton label="Copy markdown" value={text} className="message-action" />
+            <CopyButton label="Copy plain text" value={markdownToPlainText(text)} className="message-action" />
+          </CopyMenu>
           {onContinue && !streaming ? (
             <button type="button" className="message-action" onClick={() => onContinue(answerDraft(text), "answer")}>
               Ask follow-up

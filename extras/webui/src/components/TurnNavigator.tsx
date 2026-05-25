@@ -31,8 +31,15 @@ export function TurnNavigator({
         <span className="turn-nav-label-row">
           <span>Messages</span>
           {onOpenFind ? (
-            <button type="button" className="turn-nav-find" aria-pressed={findActive} onClick={onOpenFind}>
-              Search
+            <button
+              type="button"
+              className="turn-nav-find"
+              aria-label="Find in chat"
+              aria-pressed={findActive}
+              title="Find messages, sources, or output"
+              onClick={onOpenFind}
+            >
+              <span aria-hidden="true">Find</span>
             </button>
           ) : null}
         </span>

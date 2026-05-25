@@ -24,6 +24,7 @@ export interface TurnActivityNode {
   title: string;
   detail?: string;
   meta?: string;
+  copyText: string;
   nextHint?: string;
   suggestedNext: string[];
   evidence: TurnActivityEvidence[];
@@ -512,6 +513,7 @@ function activityNodeFromExecutionNode(turn: TurnState, node: ExecutionTreeNode)
     title: summarize(node.title, 120),
     detail: actionDetail(node),
     meta: actionMeta(node, call),
+    copyText: activityNodeRecordText(node),
     nextHint: node.nextHint,
     suggestedNext: node.suggestedNext,
     evidence: collectEvidence(node),
@@ -520,6 +522,39 @@ function activityNodeFromExecutionNode(turn: TurnState, node: ExecutionTreeNode)
     autoOpen: node.status === "running" || node.children.some(hasRunningDescendant),
     children: node.children.map((child) => activityNodeFromExecutionNode(turn, child)),
   };
+}
+
+function activityNodeRecordText(node: ExecutionTreeNode): string {
+  const lines = [
+    `Action: ${node.title}`,
+    `Kind: ${node.label}`,
+    `Tool: ${node.tool}`,
+    `Status: ${copyStatusLabel(node.status)}`,
+  ];
+  if (node.durationMs != null) lines.push(`Duration: ${formatDuration(node.durationMs)}`);
+  if (node.exitCode != null) lines.push(`Exit: ${node.exitCode}`);
+  if (node.callId) lines.push(`Call ID: ${node.callId}`);
+  if (node.objective) lines.push(`Task: ${node.objective}`);
+  if (node.mcpServer) lines.push(`MCP server: ${node.mcpServer}`);
+  if (node.mcpTool) lines.push(`MCP action: ${node.mcpTool}`);
+  if (node.nextHint) lines.push(`Next: ${node.nextHint}`);
+  if (node.args) lines.push(`Input:\n${JSON.stringify(node.args, null, 2)}`);
+  const result = primaryCopyResult(node);
+  if (result) lines.push(`Output:\n${summarize(result, 2000)}`);
+  return lines.join("\n");
+}
+
+function primaryCopyResult(node: ExecutionTreeNode): string | undefined {
+  if (node.report) return node.report;
+  if (node.summary) return node.summary;
+  if (node.resultText && node.resultText !== node.resultSummary) return node.resultText;
+  return node.resultSummary ?? node.resultText;
+}
+
+function copyStatusLabel(status: ToolCallStatus): string {
+  if (status === "running") return "running";
+  if (status === "error") return "failed";
+  return "done";
 }
 
 function hasRunningDescendant(node: ExecutionTreeNode): boolean {

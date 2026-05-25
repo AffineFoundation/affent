@@ -3,6 +3,49 @@ export function summarizePreview(text: string, limit: number): string {
   return limitText(singleLine, limit);
 }
 
+export function markdownToPlainText(text: string): string {
+  const lines = text.replace(/\r\n/g, "\n").split("\n");
+  const output: string[] = [];
+  let inCodeBlock = false;
+  let fenceMarker = "";
+
+  for (const line of lines) {
+    const fence = codeFenceMarker(line);
+    if (!inCodeBlock && fence) {
+      appendBlankLine(output);
+      inCodeBlock = true;
+      fenceMarker = fence;
+      continue;
+    }
+
+    if (inCodeBlock) {
+      if (isClosingFence(line, fenceMarker)) {
+        inCodeBlock = false;
+        fenceMarker = "";
+      } else {
+        output.push(line);
+      }
+      continue;
+    }
+
+    if (looksLikeTableSeparator(line)) continue;
+    if (looksLikeTableLine(line)) {
+      const row = tablePlainTextRow(line);
+      if (row) output.push(row);
+      continue;
+    }
+
+    const cleaned = cleanPlainTextLine(line);
+    if (cleaned) {
+      output.push(cleaned);
+    } else {
+      appendBlankLine(output);
+    }
+  }
+
+  return output.join("\n").trim();
+}
+
 export function summarizeAnswerPreview(text: string, limit: number): string {
   const report = reportFactPreview(text);
   if (report) return limitText(report, limit);
@@ -54,6 +97,23 @@ function stripMarkdownTables(text: string): string {
   return output.join("\n");
 }
 
+function appendBlankLine(output: string[]): void {
+  if (output.length === 0) return;
+  if (output[output.length - 1] === "") return;
+  output.push("");
+}
+
+function codeFenceMarker(line: string): string | undefined {
+  const match = line.match(/^[ \t]{0,3}(`{3,}|~{3,})/);
+  return match?.[1];
+}
+
+function isClosingFence(line: string, fenceMarker: string): boolean {
+  if (!fenceMarker) return false;
+  const pattern = new RegExp(`^[ \\t]{0,3}${escapeRegExp(fenceMarker)}[ \\t]*$`);
+  return pattern.test(line);
+}
+
 function looksLikeTableLine(line: string | undefined): boolean {
   if (!line) return false;
   const trimmed = line.trim();
@@ -64,6 +124,20 @@ function looksLikeTableLine(line: string | undefined): boolean {
 function looksLikeTableSeparator(line: string | undefined): boolean {
   if (!line) return false;
   return /^[\s|:-]+$/.test(line.trim()) && line.includes("-") && line.includes("|");
+}
+
+function tablePlainTextRow(line: string): string | undefined {
+  const cells = splitTableCells(line).map(cleanPlainTextLine);
+  if (cells.length === 0) return undefined;
+  return cells.join("\t").trim();
+}
+
+function splitTableCells(line: string): string[] {
+  const trimmed = line.trim();
+  const cells = trimmed.split("|");
+  if (trimmed.startsWith("|")) cells.shift();
+  if (trimmed.endsWith("|")) cells.pop();
+  return cells;
 }
 
 function removeAnswerPreamble(text: string): string {
@@ -159,4 +233,17 @@ function cleanInlineMarkdown(value: string): string {
     .replace(/^\d+[.)]\s+/, "")
     .replace(/\s+/g, " ")
     .trim();
+}
+
+function cleanPlainTextLine(value: string): string {
+  return cleanInlineMarkdown(value)
+    .replace(/^[ \t]{0,3}#{1,6}[ \t]+/, "")
+    .replace(/^[ \t]{0,3}>[ \t]?/, "")
+    .replace(/^[ \t]*[-*+][ \t]+/, "")
+    .replace(/^[ \t]*\d+[.)][ \t]+/, "")
+    .trim();
+}
+
+function escapeRegExp(value: string): string {
+  return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }

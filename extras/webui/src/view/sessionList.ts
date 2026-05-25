@@ -40,8 +40,8 @@ export function buildSessionRows(sessions: readonly SessionSummary[]): SessionRo
     const status = session.active ? "Live" : session.durable ? "Saved" : "Ephemeral";
     const chips = featureChips(session);
     const metrics = usageMetrics(session);
-    const titleSource = session.topic_user_message || session.latest_user_message;
-    const providedTitle = providedSessionTitle(session, titleSource);
+    const titleSource = displayUserMessage(session.topic_user_message) || displayUserMessage(session.latest_user_message);
+    const providedTitle = providedSessionTitle(session);
     const title = providedTitle ?? (titleSource ? summarizeSessionTitle(titleSource) : fallbackSessionTitle(session));
     const titleKind: SessionTitleSource = providedTitle ? "provided" : titleSource ? "topic" : "fallback";
     const detail = summarizeSessionDetail(session, title);
@@ -70,7 +70,7 @@ export function buildSessionRows(sessions: readonly SessionSummary[]): SessionRo
       preview,
       meta: buildRowMeta(session.id, updated, {
         empty: !titleSource && !session.has_conversation && !session.has_events,
-        includeId: !titleSource,
+        includeId: !titleSource && shouldShowSessionIdMeta(session),
       }),
       status,
       tone: session.active ? "running" : session.durable ? "saved" : "muted",
@@ -102,9 +102,11 @@ export function mergeCurrentSessionRow(
   rows: readonly SessionRowView[],
   selectedId: string | undefined,
   session: SessionState | undefined,
+  pendingTask?: string,
 ): SessionRowView[] {
-  if (!selectedId || !session || session.turns.length === 0) return [...rows];
-  return rows.map((row) => (row.id === selectedId ? mergeCurrentSession(row, session) : row));
+  const pending = pendingTask?.trim();
+  if (!selectedId || (!pending && (!session || session.turns.length === 0))) return [...rows];
+  return rows.map((row) => (row.id === selectedId ? mergeCurrentSession(row, session, pendingTask) : row));
 }
 
 export function filterSessionRows(
@@ -116,17 +118,23 @@ export function filterSessionRows(
   return rows.filter((row) => matchesFilter(row, filter) && (!search || row.searchText.includes(search)));
 }
 
-function mergeCurrentSession(row: SessionRowView, session: SessionState): SessionRowView {
-  const latestTurn = session.turns.at(-1);
-  const title = currentSessionTitle(row, session);
-  const detail = currentSessionDetail(session, title);
-  const preview = currentSessionPreview(session, title, detail);
-  const hasTopicTitle = row.titleSource === "provided" || Boolean(conversationTopicFromTurns(session.turns));
-  const metrics = currentSessionMetrics(session);
-  const chips = mergeChips(row.chips, currentSessionChips(session));
-  const status = currentSessionStatus(session, row.status);
-  const userSearchText = session.turns.map((turn) => turn.userText).join(" ");
-  const searchText = [row.id, title, detail, preview, status, userSearchText, ...metrics, ...chips].join(" ").toLowerCase();
+function mergeCurrentSession(row: SessionRowView, session: SessionState | undefined, pendingTask?: string): SessionRowView {
+  const latestTurn = session?.turns.at(-1);
+  const pending = pendingTask?.replace(/\s+/g, " ").trim();
+  const title = currentSessionTitle(row, session, pending);
+  const pendingDetail = pending ? `Sending · ${summarizeLatestPendingTask(pending, title)}` : undefined;
+  const detail = pendingDetail ?? (session ? currentSessionDetail(session, title) : row.detail);
+  const preview = pending
+    ? "Waiting for the next update."
+    : session
+      ? currentSessionPreview(session, title, detail)
+      : row.preview;
+  const hasTopicTitle = row.titleSource === "provided" || Boolean(session && conversationTopicFromTurns(session.turns));
+  const metrics = session ? currentSessionMetrics(session) : row.metrics;
+  const chips = session ? mergeChips(row.chips, currentSessionChips(session)) : row.chips;
+  const status = pending ? "Live" : session ? currentSessionStatus(session, row.status) : row.status;
+  const userSearchText = session?.turns.map((turn) => turn.userText).join(" ") ?? "";
+  const searchText = [row.id, title, detail, preview, status, userSearchText, pending, ...metrics, ...chips].join(" ").toLowerCase();
   const updated = latestTurn?.userText && row.updated === noMessagesYet ? "" : row.updated;
 
   return {
@@ -134,9 +142,9 @@ function mergeCurrentSession(row: SessionRowView, session: SessionState): Sessio
     title,
     detail,
     preview,
-    meta: buildRowMeta(row.id, updated, { includeId: !hasTopicTitle }),
+    meta: buildRowMeta(row.id, updated, { includeId: !hasTopicTitle && !pending }),
     status,
-    tone: currentSessionTone(session, row.tone),
+    tone: pending ? "running" : session ? currentSessionTone(session, row.tone) : row.tone,
     updated,
     metrics,
     chips,
@@ -144,10 +152,17 @@ function mergeCurrentSession(row: SessionRowView, session: SessionState): Sessio
   };
 }
 
-function currentSessionTitle(row: SessionRowView, session: SessionState): string {
+function currentSessionTitle(row: SessionRowView, session: SessionState | undefined, pending?: string): string {
   if (row.titleSource === "provided") return row.title;
-  const topic = conversationTopicFromTurns(session.turns);
-  return topic ? summarizeSessionTitle(topic) : row.title;
+  const topic = session ? conversationTopicFromTurns(session.turns) : undefined;
+  if (topic) return summarizeSessionTitle(topic);
+  return pending ? summarizeSessionTitle(pending) : row.title;
+}
+
+function summarizeLatestPendingTask(text: string, title: string): string {
+  const summary = summarizeSessionTitle(stripContinuationPrefix(text));
+  if (summary && summary !== title) return summarize(summary, 72);
+  return summarize(text, 72);
 }
 
 function currentSessionDetail(session: SessionState, title: string): string | undefined {
@@ -294,22 +309,48 @@ function shortenSessionId(id: string): string {
   return `${id.slice(0, 8)}...${id.slice(-6)}`;
 }
 
+function shouldShowSessionIdMeta(session: SessionSummary): boolean {
+  return session.has_conversation || session.has_events;
+}
+
 function fallbackSessionTitle(session: SessionSummary): string {
   const hasWork = session.has_conversation || session.has_events;
   if (session.active) return hasWork ? "Live chat" : "New live chat";
+  if (!hasWork && session.has_memory) return "Memory chat";
+  if (!hasWork && session.has_artifacts) return "Files chat";
   if (session.durable) return hasWork ? "Saved chat" : "New chat";
   return hasWork ? "Recent chat" : "New chat";
 }
 
-function providedSessionTitle(session: SessionSummary, titleSource?: string): string | undefined {
-  const titles = [session.title, session.summary_title, session.generated_title]
+function providedSessionTitle(session: SessionSummary): string | undefined {
+  const titles = [session.summary_title, session.generated_title, session.title]
+    .map((value) => value?.replace(/\s+/g, " ").trim())
+    .filter((value): value is string => Boolean(value))
+    .filter((value) => !isInternalRuntimePrompt(value));
+  const rawSources = [session.topic_user_message, session.latest_user_message]
     .map((value) => value?.replace(/\s+/g, " ").trim())
     .filter((value): value is string => Boolean(value));
   for (const title of titles) {
-    if (titleSource && isRawPromptTitle(title, titleSource)) continue;
+    if (rawSources.some((source) => isRawPromptTitle(title, source))) continue;
     return summarize(title, 58);
   }
   return undefined;
+}
+
+function displayUserMessage(value?: string): string | undefined {
+  const text = value?.replace(/\s+/g, " ").trim();
+  if (!text || isInternalRuntimePrompt(text)) return undefined;
+  return text;
+}
+
+function isInternalRuntimePrompt(text: string): boolean {
+  const normalized = normalizeComparableTitle(text);
+  return normalized.startsWith("tools are disabled for the rest of this turn") ||
+    normalized.startsWith("do not call tools.") ||
+    normalized.startsWith("do not call tools again.") ||
+    normalized.startsWith("do not execute the task yet.") ||
+    normalized.includes("previous assistant step still requested another tool") ||
+    normalized.includes("use only existing tool results");
 }
 
 function isRawPromptTitle(title: string, source: string): boolean {
@@ -335,14 +376,16 @@ function looksLikeInstructionPrompt(text: string): boolean {
 }
 
 function summarizeSessionDetail(session: SessionSummary, title: string): string | undefined {
-  if (!session.topic_user_message || !session.latest_user_message) return undefined;
-  if (session.topic_user_message === session.latest_user_message) return undefined;
-  return summarizeLatestRequestDetail(session.latest_user_message, title);
+  const topic = displayUserMessage(session.topic_user_message);
+  const latest = displayUserMessage(session.latest_user_message);
+  if (!topic || !latest) return undefined;
+  if (topic === latest) return undefined;
+  return summarizeLatestRequestDetail(latest, title);
 }
 
 function summarizeSessionPreview(session: SessionSummary, title: string, detail?: string): string | undefined {
   if (detail) return detail;
-  const source = session.latest_user_message || session.topic_user_message;
+  const source = displayUserMessage(session.latest_user_message) || displayUserMessage(session.topic_user_message);
   if (!source) return undefined;
   return latestRequestPreview(source, title);
 }

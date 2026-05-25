@@ -8,6 +8,7 @@ export interface ParsedSSEBlock {
 
 export interface StreamEventsOptions {
   signal?: AbortSignal;
+  lastEventId?: number;
   onEvent: (event: RawEvent) => void;
 }
 

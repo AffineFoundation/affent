@@ -17,6 +17,8 @@ const filterModes: { mode: TimelineFilterMode; label: string }[] = [
   { mode: "repaired", label: "Auto-fixed" },
 ];
 
+const selectionScrollStepPx = 36;
+
 // The conversation is the primary product surface. Search and filters stay
 // available, but are framed as a plain find tool instead of a trace console.
 export function Timeline({
@@ -46,7 +48,6 @@ export function Timeline({
 }) {
   const endRef = useRef<HTMLDivElement | null>(null);
   const latestAnswerRef = useRef<HTMLDivElement | null>(null);
-  const latestTurnRef = useRef<HTMLDivElement | null>(null);
   const activityCount = session.events.length + (pendingMessage ? 1 : 0) + guidanceReceipts.length;
   const prevActivityCount = useRef(activityCount);
   const prevSessionId = useRef(sessionId);
@@ -54,7 +55,10 @@ export function Timeline({
   const userBrowsedHistory = useRef(false);
   const autoFollowPaused = useRef(false);
   const pointerSelecting = useRef(false);
-  const frozenSelectionScrollTop = useRef<number | undefined>(undefined);
+  const selectionScrollTop = useRef<number | undefined>(undefined);
+  const selectionEdgeRaf = useRef<number | undefined>(undefined);
+  const selectionEdgeVelocity = useRef(0);
+  const touchStartY = useRef<number | undefined>(undefined);
   const [following, setFollowing] = useState(true);
   const [newActivity, setNewActivity] = useState(false);
   const [filterMode, setFilterMode] = useState<TimelineFilterMode>("all");
@@ -75,7 +79,8 @@ export function Timeline({
     [session.turns, visibleTurns],
   );
   const pendingFollowUp = pendingMessage?.kind === "task" && session.turns.length > 0 ? pendingMessage.text : undefined;
-  const conversationMapAvailable = Boolean(session.turns.length > 1 || pendingFollowUp || hasIssueContext(session));
+  const singleLiveTurn = session.status === "running" && session.turns.length === 1 && !pendingFollowUp;
+  const conversationMapAvailable = Boolean(session.turns.length > 1 || pendingFollowUp || (!singleLiveTurn && hasIssueContext(session)));
   const showConversationMap = conversationMapAvailable && (visibleTurnNav.length > 0 || filtered);
   const compactConversationMap = session.status === "running" && visibleTurnNav.length === 1 && !filtered;
   const canFindInChat = showConversationMap || hasIssueContext(session);
@@ -96,8 +101,8 @@ export function Timeline({
     userBrowsedHistory.current = false;
     autoFollowPaused.current = false;
     pointerSelecting.current = false;
+    cancelSelectionEdgeScroll();
     latestAnswerRef.current = null;
-    latestTurnRef.current = null;
     setFollowing(true);
     setNewActivity(false);
     setFilterMode("all");
@@ -116,60 +121,76 @@ export function Timeline({
 
   useEffect(() => {
     const scrollRoot = scrollRootRef?.current;
-    const hasActiveSelection = () => {
-      const selection = document.getSelection?.();
-      return Boolean(selection && !selection.isCollapsed && selection.toString().trim());
-    };
     const shouldIgnorePointer = (event: Event) => {
       if (event.type !== "pointerdown") return false;
       const target = event.target;
       if (!(target instanceof HTMLElement)) return false;
       return Boolean(target.closest("button, a, input, textarea, select, summary, [role='button']"));
     };
+    const distanceToLatest = () => latestDistance(scrollRoot);
+    const onTouchStart = (event: Event) => {
+      const touchEvent = event as TouchEvent;
+      touchStartY.current = touchEvent.touches[0]?.clientY;
+    };
     const markUserBrowsing = (event: Event) => {
       if (shouldIgnorePointer(event)) return;
+      if (isForwardOverscrollAtLatest(event, distanceToLatest(), touchStartY.current)) return;
       userBrowsedHistory.current = true;
       autoFollowPaused.current = true;
       if (event.type === "pointerdown") {
         pointerSelecting.current = true;
-        frozenSelectionScrollTop.current = currentScrollTop(scrollRoot);
+        selectionScrollTop.current = currentScrollTop(scrollRoot);
         return;
       }
       setFollowing(false);
     };
     const onPointerUp = () => {
       pointerSelecting.current = false;
-      if (!hasActiveSelection()) frozenSelectionScrollTop.current = undefined;
+      cancelSelectionEdgeScroll();
+      if (!hasActiveTextSelection()) selectionScrollTop.current = undefined;
+    };
+    const onPointerMove = (event: Event) => {
+      updateSelectionEdgeScroll(event as PointerEvent);
     };
     const onSelectionChange = () => {
-      if (!hasActiveSelection() && !pointerSelecting.current) frozenSelectionScrollTop.current = undefined;
+      if (hasActiveTextSelection()) {
+        userBrowsedHistory.current = true;
+        autoFollowPaused.current = true;
+        selectionScrollTop.current ??= currentScrollTop(scrollRoot);
+        return;
+      }
+      cancelSelectionEdgeScroll();
+      if (!pointerSelecting.current) selectionScrollTop.current = undefined;
     };
     const onScroll = () => {
-      if (pointerSelecting.current || hasActiveSelection()) {
-        restoreFrozenSelectionScroll(scrollRoot, frozenSelectionScrollTop.current);
+      if (pointerSelecting.current || hasActiveTextSelection()) {
+        selectionScrollTop.current = limitSelectionScroll(scrollRoot, selectionScrollTop.current);
         return;
       }
       if (!userBrowsedHistory.current) return;
-      const distance = scrollRoot
-        ? scrollRoot.scrollHeight - scrollRoot.scrollTop - scrollRoot.clientHeight
-        : document.documentElement.scrollHeight - window.scrollY - window.innerHeight;
+      const distance = distanceToLatest();
       if (distance < 180) autoFollowPaused.current = false;
       setFollowing(distance < 180);
       if (distance < 180) setNewActivity(false);
     };
     const target: Window | HTMLElement = scrollRoot ?? window;
     target.addEventListener("wheel", markUserBrowsing, { passive: true });
+    target.addEventListener("touchstart", onTouchStart, { passive: true });
     target.addEventListener("touchmove", markUserBrowsing, { passive: true });
     target.addEventListener("pointerdown", markUserBrowsing, { passive: true });
     target.addEventListener("scroll", onScroll, { passive: true });
     window.addEventListener("pointerup", onPointerUp, { passive: true });
+    window.addEventListener("pointermove", onPointerMove, { passive: true });
     document.addEventListener("selectionchange", onSelectionChange);
     return () => {
+      cancelSelectionEdgeScroll();
       target.removeEventListener("wheel", markUserBrowsing);
+      target.removeEventListener("touchstart", onTouchStart);
       target.removeEventListener("touchmove", markUserBrowsing);
       target.removeEventListener("pointerdown", markUserBrowsing);
       target.removeEventListener("scroll", onScroll);
       window.removeEventListener("pointerup", onPointerUp);
+      window.removeEventListener("pointermove", onPointerMove);
       document.removeEventListener("selectionchange", onSelectionChange);
     };
   }, [scrollRootRef]);
@@ -179,9 +200,8 @@ export function Timeline({
     const hasNewActivity = activityCount > prevActivityCount.current;
     prevActivityCount.current = activityCount;
     if (!hasNewActivity) return;
-    const selection = document.getSelection?.();
-    const selectingText = pointerSelecting.current || Boolean(selection && !selection.isCollapsed && selection.toString().trim());
-    if (selectingText) restoreFrozenSelectionScroll(scrollRootRef?.current, frozenSelectionScrollTop.current);
+    const selectingText = pointerSelecting.current || hasActiveTextSelection();
+    if (selectingText) selectionScrollTop.current = limitSelectionScroll(scrollRootRef?.current, selectionScrollTop.current);
     const answerTarget = latestAnswerRef.current;
     const shouldOpenAtAnswer =
       focusAnswerOnNextHistory.current &&
@@ -204,8 +224,7 @@ export function Timeline({
     }
     focusAnswerOnNextHistory.current = false;
     if (following && !autoFollowPaused.current && !selectingText) {
-      const target = session.status === "running" ? latestTurnRef.current : endRef.current;
-      target?.scrollIntoView?.({ behavior: "auto", block: session.status === "running" ? "start" : "end" });
+      endRef.current?.scrollIntoView?.({ behavior: "auto", block: "end" });
     } else {
       if (!selectingText) setNewActivity(true);
     }
@@ -215,7 +234,9 @@ export function Timeline({
     userBrowsedHistory.current = false;
     autoFollowPaused.current = false;
     pointerSelecting.current = false;
-    frozenSelectionScrollTop.current = undefined;
+    selectionScrollTop.current = undefined;
+    cancelSelectionEdgeScroll();
+    touchStartY.current = undefined;
     setFollowing(true);
     setNewActivity(false);
     endRef.current?.scrollIntoView?.({ behavior: "auto", block: "end" });
@@ -225,6 +246,66 @@ export function Timeline({
     setFilterMode("all");
     setSearchQuery("");
     setFiltersOpen(false);
+  }
+
+  function cancelSelectionEdgeScroll() {
+    selectionEdgeVelocity.current = 0;
+    if (selectionEdgeRaf.current != null) {
+      cancelAnimationFrame(selectionEdgeRaf.current);
+      selectionEdgeRaf.current = undefined;
+    }
+  }
+
+  function updateSelectionEdgeScroll(event: PointerEvent) {
+    if (!(pointerSelecting.current || hasActiveTextSelection())) {
+      cancelSelectionEdgeScroll();
+      return;
+    }
+    const scrollRoot = scrollRootRef?.current;
+    const bounds = scrollRoot?.getBoundingClientRect() ?? { top: 0, bottom: window.innerHeight };
+    const edgePx = 72;
+    const maxStepPx = 18;
+    const topPressure = Math.max(0, bounds.top + edgePx - event.clientY) / edgePx;
+    const bottomPressure = Math.max(0, event.clientY - (bounds.bottom - edgePx)) / edgePx;
+    let velocity = 0;
+    if (topPressure > 0) velocity = -Math.max(4, Math.ceil(Math.min(1, topPressure) * maxStepPx));
+    if (bottomPressure > 0) velocity = Math.max(4, Math.ceil(Math.min(1, bottomPressure) * maxStepPx));
+
+    const current = currentScrollTop(scrollRoot);
+    const maxScroll = maxScrollTop(scrollRoot);
+    if ((velocity < 0 && current <= 0) || (velocity > 0 && current >= maxScroll)) velocity = 0;
+    selectionEdgeVelocity.current = velocity;
+    if (!velocity) {
+      cancelSelectionEdgeScroll();
+      return;
+    }
+    if (selectionEdgeRaf.current == null) {
+      selectionEdgeRaf.current = requestAnimationFrame(runSelectionEdgeScroll);
+    }
+  }
+
+  function runSelectionEdgeScroll() {
+    selectionEdgeRaf.current = undefined;
+    const velocity = selectionEdgeVelocity.current;
+    if (!velocity || !(pointerSelecting.current || hasActiveTextSelection())) {
+      cancelSelectionEdgeScroll();
+      return;
+    }
+    const scrollRoot = scrollRootRef?.current;
+    const current = currentScrollTop(scrollRoot);
+    const maxScroll = maxScrollTop(scrollRoot);
+    const next = Math.max(0, Math.min(maxScroll, current + velocity));
+    if (scrollRoot) {
+      scrollRoot.scrollTop = next;
+    } else {
+      window.scrollTo({ top: next, behavior: "auto" });
+    }
+    selectionScrollTop.current = next;
+    if (next === current || next <= 0 || next >= maxScroll) {
+      cancelSelectionEdgeScroll();
+      return;
+    }
+    selectionEdgeRaf.current = requestAnimationFrame(runSelectionEdgeScroll);
   }
 
   if (session.turns.length === 0 && !pendingMessage) {
@@ -245,12 +326,21 @@ export function Timeline({
                   </span>
                 </div>
                 {hasSavedChats && latestChat && onOpenLatestChat ? (
-                  <button type="button" className="intro-latest-chat" onClick={onOpenLatestChat}>
+                  <div className="intro-latest-chat" data-testid="intro-latest-chat">
                     <span>Latest chat</span>
                     <strong>{latestChat.title}</strong>
                     {latestChat.meta ? <small>{latestChat.meta}</small> : null}
-                    <b>Open latest chat</b>
-                  </button>
+                    <div className="intro-latest-chat-actions">
+                      {latestChat.draft && onUseAsDraft ? (
+                        <button type="button" onClick={() => onUseAsDraft(latestChat.draft ?? latestChat.title, "recent_chat")}>
+                          Use as draft
+                        </button>
+                      ) : null}
+                      <button type="button" onClick={onOpenLatestChat}>
+                        Open latest chat
+                      </button>
+                    </div>
+                  </div>
                 ) : null}
                 {onUseAsDraft ? <IntroStarterPanel onUseAsDraft={onUseAsDraft} /> : null}
               </div>
@@ -262,7 +352,7 @@ export function Timeline({
   }
   if (session.turns.length === 0 && pendingMessage) {
     return (
-      <div className="timeline" data-testid="timeline">
+      <div className="timeline" data-testid="timeline" data-pending-first="true">
         <PendingTurn message={pendingMessage} followUp={false} />
         <div ref={endRef} className="timeline-end" aria-hidden="true" />
       </div>
@@ -315,7 +405,6 @@ export function Timeline({
                 <div
                   key={turn.id}
                   ref={(node) => {
-                    if (isLatestTurn) latestTurnRef.current = node;
                     if (isLatestTurn) latestAnswerRef.current = turn.assistantText.trim() ? node : null;
                   }}
                   className="timeline-turn-anchor"
@@ -393,6 +482,13 @@ function TimelineFindPanel({
   onReset: () => void;
 }) {
   const filterOpen = filtersOpen || filterMode !== "all";
+  const inputRef = useRef<HTMLInputElement | null>(null);
+
+  useEffect(() => {
+    if (!open) return;
+    inputRef.current?.focus({ preventScroll: true });
+  }, [open]);
+
   return (
     <details
       className="timeline-toolbar"
@@ -401,7 +497,7 @@ function TimelineFindPanel({
       onToggle={(event) => onOpenChange(event.currentTarget.open)}
     >
       <summary>
-        <span>{searchText ? `Search "${searchText}"` : "Search in chat"}</span>
+        <span>{searchText ? `Find "${searchText}"` : "Find in chat"}</span>
         {open || filtered ? (
           <span className="timeline-match-count" data-testid="timeline-match-count">
             {matchingTurns}/{turnCount} messages
@@ -411,11 +507,12 @@ function TimelineFindPanel({
       {open ? (
         <div className="timeline-toolbox">
           <label className="timeline-search">
-            <span>Search messages, sources, or output</span>
+            <span>Find messages, sources, or output</span>
             <input
+              ref={inputRef}
               value={searchQuery}
               onChange={(event) => onSearchChange(event.target.value)}
-              placeholder="Message, source, output"
+              placeholder="Type to find"
               data-testid="timeline-search"
             />
           </label>
@@ -521,6 +618,7 @@ export interface PendingMessageView {
 
 export interface LatestChatShortcut {
   title: string;
+  draft?: string;
   meta?: string;
 }
 
@@ -619,13 +717,44 @@ function currentScrollTop(scrollRoot?: HTMLElement | null): number {
   return scrollRoot ? scrollRoot.scrollTop : window.scrollY;
 }
 
-function restoreFrozenSelectionScroll(scrollRoot: HTMLElement | null | undefined, scrollTop: number | undefined) {
-  if (scrollTop == null) return;
-  if (scrollRoot) {
-    scrollRoot.scrollTop = scrollTop;
-    return;
+function maxScrollTop(scrollRoot?: HTMLElement | null): number {
+  if (scrollRoot) return Math.max(0, scrollRoot.scrollHeight - scrollRoot.clientHeight);
+  return Math.max(0, document.documentElement.scrollHeight - window.innerHeight);
+}
+
+function latestDistance(scrollRoot?: HTMLElement | null): number {
+  if (scrollRoot) return scrollRoot.scrollHeight - scrollRoot.scrollTop - scrollRoot.clientHeight;
+  return document.documentElement.scrollHeight - window.scrollY - window.innerHeight;
+}
+
+function isForwardOverscrollAtLatest(event: Event, distanceToLatest: number, touchStartY?: number): boolean {
+  if (distanceToLatest > 24) return false;
+  if (typeof WheelEvent !== "undefined" && event instanceof WheelEvent) return event.deltaY > 0;
+  if ("deltaY" in event && typeof event.deltaY === "number") return event.deltaY > 0;
+  if (typeof TouchEvent !== "undefined" && event instanceof TouchEvent) {
+    const currentY = event.touches[0]?.clientY;
+    return touchStartY != null && currentY != null && currentY < touchStartY;
   }
-  window.scrollTo({ top: scrollTop, behavior: "auto" });
+  return false;
+}
+
+function hasActiveTextSelection(): boolean {
+  const selection = document.getSelection?.();
+  return Boolean(selection && !selection.isCollapsed && selection.toString().trim());
+}
+
+function limitSelectionScroll(scrollRoot: HTMLElement | null | undefined, previousScrollTop: number | undefined): number {
+  const current = currentScrollTop(scrollRoot);
+  if (previousScrollTop == null) return current;
+  const delta = current - previousScrollTop;
+  if (Math.abs(delta) <= selectionScrollStepPx) return current;
+  const next = previousScrollTop + Math.sign(delta) * selectionScrollStepPx;
+  if (scrollRoot) {
+    scrollRoot.scrollTop = next;
+  } else {
+    window.scrollTo({ top: next, behavior: "auto" });
+  }
+  return next;
 }
 
 function summarize(text: string, limit: number): string {

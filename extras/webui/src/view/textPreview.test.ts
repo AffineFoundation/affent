@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { previewText, summarizeAnswerPreview, summarizePreview } from "./textPreview";
+import { markdownToPlainText, previewText, summarizeAnswerPreview, summarizePreview } from "./textPreview";
 
 describe("textPreview", () => {
   it("removes markdown table syntax from compact previews", () => {
@@ -51,5 +51,30 @@ describe("textPreview", () => {
     expect(preview).toBe("Affine（Bittensor Subnet 120）调研报告: Subnet ID (NetUID) 120 · 定位 Reason Mining");
     expect(preview).not.toContain("说明");
     expect(preview).not.toContain("官方站点");
+  });
+
+  it("keeps code blocks and tables intact in plain text copies", () => {
+    const plain = markdownToPlainText([
+      "# Affine",
+      "",
+      "| Name | Value |",
+      "| --- | --- |",
+      "| Branch | feature/x |",
+      "",
+      "```ts",
+      "const value = 1;",
+      "```",
+      "",
+      "- item one",
+    ].join("\n"));
+
+    expect(plain).toContain("Affine");
+    expect(plain).toContain("Name\tValue");
+    expect(plain).toContain("Branch\tfeature/x");
+    expect(plain).toContain("const value = 1;");
+    expect(plain).toContain("item one");
+    expect(plain).not.toContain("#");
+    expect(plain).not.toContain("```");
+    expect(plain).not.toContain("| --- |");
   });
 });

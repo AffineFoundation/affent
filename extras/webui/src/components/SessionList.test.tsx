@@ -188,27 +188,32 @@ describe("SessionList", () => {
   it("describes empty chats without internal metrics", () => {
     renderList([session({ id: "new-session" })]);
 
-    const row = screen.getByRole("button", { name: /new-session/ });
+    const row = screen.getByRole("button", { name: /New chat/ });
     expect(row).toHaveTextContent("New chat");
     expect(row).toHaveTextContent("No messages yet");
+    expect(row).not.toHaveTextContent("new-session");
     expect(row).not.toHaveTextContent("empty");
   });
 
-  it("keeps multi-chat search visible while filters stay quiet until focus", async () => {
+  it("keeps multi-chat search quiet until the user asks for it", async () => {
     const user = userEvent.setup();
     renderList([session({ id: "s1", active: true }), session({ id: "s2", durable: true })]);
 
     const tools = screen.getByTestId("session-tools");
     expect(tools).toHaveAttribute("data-expanded", "false");
-    expect(within(tools).getByText("Search chats")).toBeInTheDocument();
+    expect(within(tools).getByRole("button", { name: "Find chats" })).toBeInTheDocument();
+    expect(within(tools).getByText("Search and filters")).toBeInTheDocument();
+    expect(screen.queryByTestId("session-search")).toBeNull();
     expect(within(tools).queryByText("2/2")).toBeNull();
     expect(within(tools).queryByRole("button", { name: /Saved/ })).toBeNull();
 
-    await user.click(screen.getByTestId("session-search"));
+    await user.click(within(tools).getByRole("button", { name: "Find chats" }));
     expect(tools).toHaveAttribute("data-expanded", "true");
+    expect(within(tools).getByText("Find chats")).toBeInTheDocument();
     expect(within(tools).getByText("2/2")).toBeInTheDocument();
     expect(within(tools).getByRole("button", { name: /Saved/ })).toBeInTheDocument();
     expect(screen.getByTestId("session-search")).toBeVisible();
+    expect(screen.getByTestId("session-search")).toHaveFocus();
   });
 
   it("offers a compact mobile chat switcher for selected saved chats", async () => {
@@ -248,7 +253,8 @@ describe("SessionList", () => {
     );
 
     expect(screen.getAllByText("2 chats")).toHaveLength(2);
-    expect(screen.getByRole("button", { name: "Hide chat list" })).toHaveTextContent("2 chats");
+    expect(screen.getByRole("button", { name: "Switch chats" })).toHaveTextContent("2 chats");
+    expect(screen.getByLabelText("Chats")).toHaveAttribute("data-mobile-open", "false");
     expect(screen.queryByText(/messages|actions|issues|continued|ephemeral/i)).toBeNull();
   });
 
@@ -261,16 +267,9 @@ describe("SessionList", () => {
   });
 
   it("shows the selected session's latest task from the live timeline state", () => {
-    render(
-      <SessionList
-        sessions={[session({ id: "s1", durable: true, has_events: true })]}
-        selectedId="s1"
-        currentSession={reduceRawEvents(completedTurn)}
-        demoActive={false}
-        onSelect={vi.fn()}
-        onNew={vi.fn()}
-      />,
-    );
+    renderList([session({ id: "s1", durable: true, has_events: true })], {
+      currentSession: reduceRawEvents(completedTurn),
+    });
 
     const row = screen.getByRole("button", { name: /list the files/ });
     expect(row).toHaveTextContent("Done");
@@ -278,6 +277,20 @@ describe("SessionList", () => {
     expect(within(row).getByTestId("session-preview")).toHaveTextContent("Answer · There are two files.");
     expect(row).not.toHaveTextContent("1 action");
     expect(row).not.toHaveTextContent("No messages yet");
+  });
+
+  it("shows a pending follow-up in the selected chat row immediately", () => {
+    renderList([session({ id: "s1", active: true, durable: true, latest_user_message: "list the files" })], {
+      currentSession: reduceRawEvents(completedTurn),
+      pendingTask: "explain main.go",
+    });
+
+    const row = screen.getByRole("button", { name: /list the files/ });
+    expect(row).toHaveTextContent("Sending · main.go");
+    expect(row).toHaveTextContent("Waiting for the next update.");
+    expect(row).toHaveTextContent("Live");
+    expect(row).not.toHaveTextContent("There are two files.");
+    expect(screen.getByRole("button", { name: "Switch chats" })).toHaveTextContent("Sending · main.go");
   });
 
   it("shows the original task topic instead of a continuation prompt", () => {
@@ -368,17 +381,17 @@ describe("SessionList", () => {
       session({ id: "artifact-three", durable: true, has_artifacts: true }),
     ]);
 
-    await user.click(screen.getByTestId("session-search"));
-    await user.click(screen.getByRole("button", { name: /Memory/ }));
-    expect(screen.getByTestId("session-list")).toHaveTextContent("memory-two");
-    expect(screen.getByTestId("session-list")).not.toHaveTextContent("artifact-three");
+    await user.click(screen.getByRole("button", { name: "Find chats" }));
+    await user.click(within(screen.getByRole("group", { name: "Session filter" })).getByRole("button", { name: /Memory/ }));
+    expect(screen.getByTestId("session-list")).toHaveTextContent("Memory chat");
+    expect(screen.getByTestId("session-list")).not.toHaveTextContent("Files chat");
 
     await user.clear(screen.getByTestId("session-search"));
     await user.type(screen.getByTestId("session-search"), "artifact");
     expect(screen.getByTestId("session-filter-empty")).toHaveTextContent("No matching chats");
 
     await user.click(within(screen.getByTestId("session-filter-empty")).getByRole("button", { name: "Reset" }));
-    expect(screen.getByTestId("session-list")).toHaveTextContent("artifact-three");
+    expect(screen.getByTestId("session-list")).toHaveTextContent("Files chat");
   });
 
   it("renders the offline preview row without live filters or new-chat actions", async () => {
@@ -401,11 +414,16 @@ describe("SessionList", () => {
   });
 });
 
-function renderList(sessions: SessionSummary[]) {
+function renderList(
+  sessions: SessionSummary[],
+  opts: { currentSession?: ReturnType<typeof reduceRawEvents>; pendingTask?: string } = {},
+) {
   return render(
     <SessionList
       sessions={sessions}
       selectedId={sessions[0]?.id}
+      currentSession={opts.currentSession}
+      pendingTask={opts.pendingTask}
       demoActive={false}
       onSelect={vi.fn()}
       onNew={vi.fn()}

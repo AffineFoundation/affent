@@ -77,6 +77,7 @@ export class ApiClient {
   async streamEvents(path: string, options: StreamEventsOptions): Promise<void> {
     const headers = new Headers();
     headers.set("Accept", "text/event-stream");
+    if (options.lastEventId != null) headers.set("Last-Event-ID", String(options.lastEventId));
     if (this.authToken) headers.set("Authorization", `Bearer ${this.authToken}`);
 
     const resp = await this.fetchImpl(this.url(path), {

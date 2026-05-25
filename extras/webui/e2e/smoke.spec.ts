@@ -1,4 +1,5 @@
 import { expect, test, type Page } from "@playwright/test";
+import type { RawEvent } from "../src/api/events";
 import { completedSubagentTree, runningSubagent } from "../src/fixtures/scenarios";
 
 const artifactTurn = [
@@ -53,15 +54,113 @@ const streamingAnswer = [
   },
 ];
 
+const liveGapHistory: RawEvent[] = [
+  { id: 0, type: "trace.meta", data: { schema_version: 1 } },
+  { id: 1, type: "turn.start", data: { turn_id: "t1" } },
+  { id: 2, type: "user.message", data: { turn_id: "t1", text: "affine 是 bittensor 的一个子网，请收集信息" } },
+  {
+    id: 3,
+    type: "tool.request",
+    data: {
+      turn_id: "t1",
+      call_id: "fetch-affine",
+      tool: "web_fetch",
+      args: { url: "https://www.coingecko.com/en/coins/affine" },
+      args_truncated: false,
+      args_bytes: 52,
+      args_omitted_bytes: 0,
+      args_cap_bytes: 8192,
+    },
+  },
+];
+
+const liveGapReplay: RawEvent[] = [
+  {
+    id: 4,
+    type: "tool.result",
+    data: {
+      call_id: "fetch-affine",
+      exit_code: 0,
+      duration_ms: 1240,
+      result_summary: "Affine price page fetched from CoinGecko.",
+      result: "Affine price page fetched from CoinGecko.",
+      result_truncated: false,
+      result_bytes: 43,
+      result_omitted_bytes: 0,
+      result_cap_bytes: 8192,
+    },
+  },
+  { id: 5, type: "message.done", data: { turn_id: "t1", text: "Affine data fetched.", finish_reason: "stop" } },
+  { id: 6, type: "turn.end", data: { turn_id: "t1", reason: "completed", tool_stats: { tool_requests: 1, tool_duration_ms: 1240 } } },
+];
+
+const failedWebFetch: RawEvent[] = [
+  { id: 0, type: "trace.meta", data: { schema_version: 1 } },
+  { id: 1, type: "turn.start", data: { turn_id: "t1" } },
+  { id: 2, type: "user.message", data: { turn_id: "t1", text: "收集 affine 的相关信息" } },
+  {
+    id: 3,
+    type: "tool.request",
+    data: {
+      turn_id: "t1",
+      call_id: "fetch-affine-failed",
+      tool: "web_fetch",
+      args: { url: "https://www.coingecko.com/en/coins/affine" },
+      args_truncated: false,
+      args_bytes: 52,
+      args_omitted_bytes: 0,
+      args_cap_bytes: 8192,
+    },
+  },
+  {
+    id: 4,
+    type: "tool.result",
+    data: {
+      call_id: "fetch-affine-failed",
+      exit_code: 1,
+      duration_ms: 860,
+      result_summary: "GET https://www.coingecko.com/en/coins/affine returned 403",
+      result: "GET https://www.coingecko.com/en/coins/affine returned 403 Forbidden. Retry with another source.",
+      result_truncated: false,
+      result_bytes: 94,
+      result_omitted_bytes: 0,
+      result_cap_bytes: 8192,
+    },
+  },
+  { id: 5, type: "message.done", data: { turn_id: "t1", text: "CoinGecko fetch failed; try another source.", finish_reason: "stop" } },
+  { id: 6, type: "turn.end", data: { turn_id: "t1", reason: "completed", tool_stats: { tool_requests: 1, tool_errors: 1, tool_duration_ms: 860 } } },
+];
+
+function encodeSSE(events: readonly RawEvent[]): string {
+  return events.map((event) => `id: ${event.id}\nevent: ${event.type}\ndata: ${JSON.stringify(event.data)}\n\n`).join("");
+}
+
 async function openFindInChat(page: Page) {
   const toolbar = page.getByTestId("timeline-toolbar");
   if ((await toolbar.count()) === 0) {
-    await page.getByTestId("turn-navigator").getByRole("button", { name: "Search" }).click();
+    await page.getByTestId("turn-navigator").getByRole("button", { name: "Find in chat" }).click();
   }
   await expect(toolbar).toBeVisible();
   if ((await toolbar.getAttribute("open")) === null) {
     await toolbar.locator("summary").click();
   }
+}
+
+async function installClipboardSpy(page: Page) {
+  await page.addInitScript(() => {
+    Object.defineProperty(navigator, "clipboard", {
+      configurable: true,
+      value: {
+        writeText: async (text: string) => {
+          (window as unknown as { __copiedText?: string }).__copiedText = text;
+        },
+      },
+    });
+  });
+}
+
+async function copiedText(page: Page): Promise<string> {
+  return page.evaluate(() => (window as unknown as { __copiedText?: string }).__copiedText ?? "");
 }
 
 test("empty chat opens as a low-noise conversation starter", async ({ page }) => {
@@ -107,7 +206,12 @@ test("empty chat opens as a low-noise conversation starter", async ({ page }) =>
       body: "",
     });
   });
+  let releaseMessageResponse: (() => void) | undefined;
+  const messageResponseGate = new Promise<void>((resolve) => {
+    releaseMessageResponse = resolve;
+  });
   await page.route("**/v1/sessions/new-ui/messages", async (route) => {
+    await messageResponseGate;
     await route.fulfill({
       status: 503,
       contentType: "application/json",
@@ -147,12 +251,84 @@ test("empty chat opens as a low-noise conversation starter", async ({ page }) =>
   await page.getByRole("button", { name: "New chat" }).click();
   await expect(page.getByPlaceholder("Message Affent...")).toBeFocused();
   await expect(page.getByTestId("workspace-shell")).toHaveAttribute("data-session-nav", "visible");
-  await expect(page.getByTestId("session-list")).toContainText("new-ui");
+  await expect(page.getByTestId("session-list")).toContainText("New chat");
+  await expect(page.getByTestId("session-list")).toContainText("No messages yet");
+  await expect(page.getByTestId("session-list")).not.toContainText("new-ui");
   await expect(page.getByTestId("session-tools")).toHaveCount(0);
   await page.getByPlaceholder("Message Affent...").fill("send should survive failure");
   await page.getByRole("button", { name: "Send" }).click();
+  await expect(page.getByTestId("timeline")).toHaveAttribute("data-pending-first", "true");
+  await expect(page.getByTestId("pending-turn")).toContainText("send should survive failure");
+  await expect(page.getByTestId("pending-turn")).toContainText("Preparing the first update.");
+  await expect(page.getByTestId("pending-turn")).toBeVisible();
+  expect(await page.evaluate(() => document.documentElement.scrollWidth > document.documentElement.clientWidth)).toBe(false);
+  releaseMessageResponse?.();
   await expect(page.getByTestId("connection-pill")).toContainText("Send failed");
   await expect(page.getByPlaceholder("Message Affent...")).toHaveValue("send should survive failure");
+});
+
+test("saved chats do not push the mobile composer out of reach", async ({ page }, testInfo) => {
+  await page.route("**/v1/sessions?limit=100", async (route) => {
+    await route.fulfill({
+      contentType: "application/json",
+      body: JSON.stringify({
+        sessions: [
+          {
+            id: "saved-affine",
+            active: false,
+            durable: true,
+            topic_user_message: "Affine research notes",
+            has_conversation: true,
+            has_events: true,
+            has_artifacts: false,
+            has_memory: false,
+            has_runtime_skills: false,
+            last_used_at: "2026-05-25T10:38:00Z",
+          },
+          {
+            id: "saved-project",
+            active: false,
+            durable: true,
+            topic_user_message: "Project review",
+            has_conversation: true,
+            has_events: true,
+            has_artifacts: false,
+            has_memory: false,
+            has_runtime_skills: false,
+            last_used_at: "2026-05-25T09:12:00Z",
+          },
+        ],
+        has_more: false,
+      }),
+    });
+  });
+
+  await page.goto("/");
+
+  await expect(page.getByTestId("timeline-empty")).toContainText("What should we work on?");
+  await expect(page.getByPlaceholder("Message Affent...")).toBeVisible();
+  await expect(page.getByRole("button", { name: "Start" })).toBeVisible();
+  await page.getByRole("button", { name: "Use as draft" }).click();
+  await expect(page.getByPlaceholder("Message Affent...")).toHaveValue("Affine research notes");
+  await expect(page.getByTestId("composer-context")).toContainText("Starting from recent chat");
+  await page.getByRole("button", { name: "Remove" }).click();
+  await expect(page.getByPlaceholder("Message Affent...")).toHaveValue("");
+  await expect(page.getByTestId("workspace-shell")).toHaveAttribute("data-session-nav", "visible");
+  if (testInfo.project.name === "mobile") {
+    await expect(page.getByRole("complementary", { name: "Chats" })).toHaveAttribute("data-mobile-open", "false");
+    await expect(page.getByTestId("session-list")).toBeHidden();
+    await expect(page.getByRole("button", { name: "Switch chats" })).toContainText("2 chats");
+    const composerBox = await page.getByTestId("composer").boundingBox();
+    const viewport = page.viewportSize();
+    expect((composerBox?.y ?? Number.POSITIVE_INFINITY) + (composerBox?.height ?? 0)).toBeLessThanOrEqual((viewport?.height ?? 0) + 1);
+
+    await page.getByRole("button", { name: "Switch chats" }).click();
+    await expect(page.getByTestId("session-list")).toBeVisible();
+    await expect(page.getByRole("button", { name: "Hide chat list" })).toContainText("2 chats");
+  } else {
+    await expect(page.getByTestId("session-list")).toBeVisible();
+    await expect(page.getByTestId("session-list")).toContainText("Affine research notes");
+  }
 });
 
 test("offline preview keeps creation controls read-only while the API is unreachable", async ({ page }) => {
@@ -240,15 +416,15 @@ test("composer warns before current-web tasks when web access is unavailable", a
 
   await page.goto("/");
 
-  await expect(page.getByTestId("runtime-capabilities")).toContainText("Local project mode");
-  await expect(page.getByTestId("runtime-capabilities")).toContainText("Research");
-  await expect(page.getByTestId("runtime-capabilities")).toContainText("Offline");
-  await expect(page.getByTestId("runtime-capabilities")).toContainText("No live web tools for current outside information.");
-  await expect(page.getByTestId("runtime-capabilities")).toContainText("Workers");
-  await expect(page.getByTestId("runtime-capabilities")).toContainText("Delegation on");
+  await expect(page.getByTestId("runtime-capabilities")).toContainText("Project work ready");
+  await expect(page.getByTestId("runtime-capabilities")).toContainText("Web");
+  await expect(page.getByTestId("runtime-capabilities")).toContainText("Not available");
+  await expect(page.getByTestId("runtime-capabilities")).toContainText("Current outside information may be incomplete.");
+  await expect(page.getByTestId("runtime-capabilities")).toContainText("Agents");
+  await expect(page.getByTestId("runtime-capabilities")).toContainText("Subtasks available");
   await page.getByPlaceholder("Message Affent...").fill("Analyze Affine recent market trends and Twitter reaction");
-  await expect(page.getByTestId("composer-task-hint")).toContainText("Current web info unavailable");
-  await expect(page.getByTestId("composer-task-hint")).toContainText("results may be incomplete");
+  await expect(page.getByTestId("composer-task-hint")).toContainText("Needs current sources");
+  await expect(page.getByTestId("composer-task-hint")).toContainText("unless you provide sources");
 });
 
 test("streaming answers show a live writing state", async ({ page }, testInfo) => {
@@ -305,7 +481,7 @@ test("streaming answers show a live writing state", async ({ page }, testInfo) =
   await expect(page.getByTestId("msg-assistant").getByRole("status")).toContainText("Writing");
   await expect(page.getByRole("button", { name: "Ask follow-up" })).toHaveCount(0);
   await expect(page.getByTestId("timeline-toolbar")).toHaveCount(0);
-  await expect(page.getByRole("button", { name: "Working" })).toBeDisabled();
+  await expect(page.getByTestId("composer").getByRole("button", { name: "Send guidance" })).toBeDisabled();
   await page.screenshot({
     path: testInfo.outputPath(`streaming-answer-${testInfo.project.name}.png`),
     fullPage: true,
@@ -314,7 +490,137 @@ test("streaming answers show a live writing state", async ({ page }, testInfo) =
   expect(errors, `console errors: ${errors.join(" | ")}`).toEqual([]);
 });
 
-test("markdown tables stay inside the chat surface on narrow screens", async ({ page }) => {
+test("live event stream replays the gap after history loading", async ({ page }) => {
+  let lastEventID = "";
+  await page.route("**/v1/sessions?limit=100", async (route) => {
+    await route.fulfill({
+      contentType: "application/json",
+      body: JSON.stringify({
+        sessions: [
+          {
+            id: "live-gap",
+            active: true,
+            durable: true,
+            latest_user_message: "affine 是 bittensor 的一个子网，请收集信息",
+            has_conversation: true,
+            has_events: true,
+            has_artifacts: false,
+            has_memory: false,
+            has_runtime_skills: false,
+          },
+        ],
+        has_more: false,
+      }),
+    });
+  });
+  await page.route("**/v1/sessions/live-gap/history?after=-1&limit=500", async (route) => {
+    await route.fulfill({
+      contentType: "application/json",
+      body: JSON.stringify({
+        session_id: "live-gap",
+        events: liveGapHistory,
+        next_after: 3,
+        has_more: false,
+        trace_schema_version: 1,
+        trace_schema_detected: true,
+      }),
+    });
+  });
+  await page.route("**/v1/sessions/live-gap/events", async (route) => {
+    lastEventID = route.request().headers()["last-event-id"] ?? "";
+    await route.fulfill({
+      contentType: "text/event-stream",
+      body: encodeSSE(liveGapReplay),
+    });
+  });
+
+  await page.goto("/");
+
+  await expect(page.getByTestId("msg-assistant")).toContainText("Affine data fetched.");
+  await expect(page.getByTestId("msg-assistant")).toHaveAttribute("data-streaming", "false");
+  await expect(page.getByRole("button", { name: "Ask follow-up" })).toBeVisible();
+  await expect(page.getByTestId("pending-turn")).toHaveCount(0);
+  expect(lastEventID).toBe("3");
+});
+
+test("web-fetch failure details can be copied as issues, activity, and full work records", async ({ page }) => {
+  await installClipboardSpy(page);
+  await page.route("**/v1/sessions?limit=100", async (route) => {
+    await route.fulfill({
+      contentType: "application/json",
+      body: JSON.stringify({
+        sessions: [
+          {
+            id: "copy-failure",
+            active: true,
+            durable: true,
+            latest_user_message: "收集 affine 的相关信息",
+            has_conversation: true,
+            has_events: true,
+            has_artifacts: false,
+            has_memory: false,
+            has_runtime_skills: false,
+          },
+        ],
+        has_more: false,
+      }),
+    });
+  });
+  await page.route("**/v1/sessions/copy-failure/history?after=-1&limit=500", async (route) => {
+    await route.fulfill({
+      contentType: "application/json",
+      body: JSON.stringify({
+        session_id: "copy-failure",
+        events: failedWebFetch,
+        next_after: failedWebFetch.length - 1,
+        has_more: false,
+        trace_schema_version: 1,
+        trace_schema_detected: true,
+      }),
+    });
+  });
+  await page.route("**/v1/sessions/copy-failure/events", async (route) => {
+    await route.fulfill({ contentType: "text/event-stream", body: "" });
+  });
+
+  await page.goto("/");
+
+  const activity = page.getByTestId("agent-activity").first();
+  await expect(activity).toContainText("Answered after working around 1 issue");
+  await expect(activity).not.toContainText("https://www.coingecko.com/en/coins/affine");
+  await activity.getByRole("button", { name: "Copy issues" }).click();
+  let copied = await copiedText(page);
+  expect(copied).toContain("https://www.coingecko.com/en/coins/affine");
+  expect(copied).toContain("403 Forbidden");
+
+  await activity.getByRole("button", { name: /What Affent did/ }).click();
+  await expect(activity).toContainText("coingecko.com/en/coins/affine");
+  await activity.getByRole("button", { name: "Copy", exact: true }).click();
+  await activity.getByRole("button", { name: "Copy activity details" }).click();
+  copied = await copiedText(page);
+  expect(copied).toContain("web_fetch");
+  expect(copied).toContain("fetch-affine-failed");
+  expect(copied).toContain("Retry with another source");
+
+  await page.getByTestId("turn-navigator").getByRole("button", { name: "Find in chat" }).click();
+  await page.getByText("Filters").click();
+  await page.getByRole("button", { name: "Actions" }).click();
+  await page.getByRole("button", { name: /Work details/ }).first().click();
+  const executionTree = page.getByTestId("execution-tree");
+  await executionTree.getByRole("button", { name: "Copy issues" }).click();
+  copied = await copiedText(page);
+  expect(copied).toContain("GET https://www.coingecko.com/en/coins/affine returned 403");
+
+  await executionTree.getByRole("button", { name: "Copy", exact: true }).click();
+  await executionTree.getByRole("button", { name: "Copy all details" }).click();
+  copied = await copiedText(page);
+  expect(copied).toContain("Action: Fetch coingecko.com/en/coins");
+  expect(copied).toContain('"url": "https://www.coingecko.com/en/coins/affine"');
+  expect(copied).toContain("Retry with another source");
+});
+
+test("markdown tables and code actions stay usable inside the chat surface", async ({ page }) => {
+  await installClipboardSpy(page);
   await page.route("**/v1/sessions?limit=100", async (route) => {
     await route.fulfill({
       contentType: "application/json",
@@ -354,6 +660,11 @@ test("markdown tables stay inside the chat surface on narrow screens", async ({ 
                 "| --- | --- |",
                 "| Winner-take-all incentive design | Long uninterrupted leadership can make new participant marginal returns approach zero and should be monitored carefully. |",
                 "| Market-data limits | CoinMarketCap and TaoStats can render dynamic shells, so quote freshness needs explicit source timestamps. |",
+                "",
+                "```bash",
+                "npm test -- --run src/components/MarkdownText.test.tsx",
+                "npm run build",
+                "```",
               ].join("\n"),
             },
           },
@@ -371,6 +682,14 @@ test("markdown tables stay inside the chat surface on narrow screens", async ({ 
 
   await page.goto("/");
   await expect(page.getByRole("table")).toBeVisible();
+  await page.getByRole("button", { name: "Copy table" }).click();
+  await expect(page.locator(".markdown-table-copy", { hasText: "Copied" })).toBeVisible();
+  expect(await copiedText(page)).toContain("Risk category\tWhat to watch");
+  expect(await copiedText(page)).toContain("Market-data limits\tCoinMarketCap and TaoStats");
+  await expect(page.locator(".markdown-code-head").getByText("Shell", { exact: true })).toBeVisible();
+  await page.getByRole("button", { name: "Copy shell code" }).click();
+  await expect(page.locator(".markdown-code-copy", { hasText: "Copied" })).toBeVisible();
+  expect(await copiedText(page)).toBe("npm test -- --run src/components/MarkdownText.test.tsx\nnpm run build");
 
   if ((page.viewportSize()?.width ?? 0) <= 768) {
     const boxes = await page.evaluate(() => {
@@ -389,6 +708,66 @@ test("markdown tables stay inside the chat surface on narrow screens", async ({ 
     expect(boxes.wrapperRight).toBeLessThanOrEqual(boxes.surfaceRight + 1);
     expect(boxes.scrollWidth).toBe(boxes.viewportWidth);
   }
+});
+
+test("assistant answers expose markdown and plain-text copy actions", async ({ page }) => {
+  await installClipboardSpy(page);
+  await page.route("**/v1/sessions?limit=100", async (route) => {
+    await route.fulfill({
+      contentType: "application/json",
+      body: JSON.stringify({
+        sessions: [
+          {
+            id: "copy-answer",
+            active: true,
+            durable: true,
+            has_conversation: true,
+            has_events: true,
+            has_artifacts: false,
+            has_memory: false,
+            has_runtime_skills: false,
+          },
+        ],
+        has_more: false,
+      }),
+    });
+  });
+  await page.route("**/v1/sessions/copy-answer/history?after=-1&limit=500", async (route) => {
+    await route.fulfill({
+      contentType: "application/json",
+      body: JSON.stringify({
+        session_id: "copy-answer",
+        events: [
+          { id: 1, type: "turn.start", data: { turn_id: "t1" } },
+          { id: 2, type: "user.message", data: { turn_id: "t1", text: "list files" } },
+          {
+            id: 3,
+            type: "message.done",
+            data: {
+              turn_id: "t1",
+              finish_reason: "stop",
+              text: "Use `fd` and keep a short plan.\n\n```bash\nfd -t f\n```",
+            },
+          },
+          { id: 4, type: "turn.end", data: { turn_id: "t1", reason: "completed" } },
+        ],
+        next_after: 4,
+        has_more: false,
+        trace_schema_detected: true,
+      }),
+    });
+  });
+  await page.route("**/v1/sessions/copy-answer/events", async (route) => {
+    await route.fulfill({ contentType: "text/event-stream", body: "" });
+  });
+
+  await page.goto("/");
+
+  await page.getByRole("button", { name: "Copy answer" }).click();
+  await expect(page.getByRole("button", { name: "Copy markdown" })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Copy plain text" })).toBeVisible();
+  await page.getByRole("button", { name: "Copy plain text" }).click();
+  expect(await copiedText(page)).toBe("Use fd and keep a short plan.\n\nfd -t f");
 });
 
 test("running work reads like an Affent chat update before drill-down", async ({ page }, testInfo) => {
@@ -472,14 +851,14 @@ test("running work reads like an Affent chat update before drill-down", async ({
   const runningBox = await page.getByTestId("running-answer").boundingBox();
   expect(runningBox?.y ?? Number.POSITIVE_INFINITY).toBeLessThan((scrollBox?.y ?? 0) + 220);
   await expect(page.getByTestId("timeline-toolbar")).toHaveCount(0);
-  await expect(page.getByTestId("turn-navigator").getByRole("button", { name: "Search" })).toHaveAttribute("aria-pressed", "false");
+  await expect(page.getByTestId("turn-navigator")).toHaveCount(0);
   await expect(page.getByText("Filters")).not.toBeVisible();
   await expect(page.getByTestId("timeline-match-count")).toHaveCount(0);
   await expect(page.getByTestId("session-strip")).toHaveCount(0);
-  await expect(page.getByRole("button", { name: "Working" })).toBeDisabled();
+  await expect(page.getByTestId("composer").getByRole("button", { name: "Send guidance" })).toBeDisabled();
   await page.getByPlaceholder("Message Affent...").fill("prioritize the product flow");
-  await expect(page.getByTestId("composer-intent")).toContainText("Ready to guide this run");
-  await expect(page.getByTestId("composer-intent")).toContainText("Sends to the current run, not a new chat");
+  await expect(page.getByTestId("composer-intent")).toContainText("Guidance ready");
+  await expect(page.getByTestId("composer-intent")).toContainText("Sends into this run, not a new chat");
   const composerSendGuidance = page.getByTestId("composer").getByRole("button", { name: "Send guidance" });
   await expect(composerSendGuidance).toBeEnabled();
   await composerSendGuidance.click();
@@ -617,7 +996,7 @@ test("workflow timeline renders with inline drill-down", async ({ page }, testIn
     "true",
   );
   await expect(page.getByTestId("timeline-toolbar")).toHaveCount(0);
-  await expect(page.getByTestId("turn-navigator").getByRole("button", { name: "Search" })).toHaveAttribute("aria-pressed", "false");
+  await expect(page.getByTestId("turn-navigator").getByRole("button", { name: "Find in chat" })).toHaveAttribute("aria-pressed", "false");
   await expect(page.getByTestId("turn-title").nth(0)).toContainText("delegate docs inspection");
   await expect(page.getByTestId("turn-title").nth(1)).toContainText("show a large artifact");
   await expect(page.getByTestId("turn-boundary")).toHaveCount(0);
@@ -669,7 +1048,7 @@ test("workflow timeline renders with inline drill-down", async ({ page }, testIn
   await page.getByRole("button", { name: "Edit prompt" }).first().click();
   await expect(page.getByPlaceholder("Message Affent...")).toHaveValue("delegate docs inspection");
   await expect(page.getByTestId("composer-context")).toContainText("Editing previous message");
-  await expect(page.getByTestId("composer-context")).toContainText("Replaced");
+  await expect(page.getByTestId("composer-context")).not.toContainText("Replaced");
   await expect(page.getByRole("button", { name: "Send edited" })).toBeEnabled();
   await expect(page.getByRole("button", { name: "Clear" })).toHaveCount(0);
   await page.getByRole("button", { name: "Remove" }).click();
@@ -709,7 +1088,7 @@ test("workflow timeline renders with inline drill-down", async ({ page }, testIn
   await page.getByRole("button", { name: "Use this next step" }).first().click();
   await expect(page.getByPlaceholder("Message Affent...")).toHaveValue(/Continue: Replace result parsing with explicit child trace events/);
 
-  await page.getByTestId("turn-navigator").getByRole("button", { name: "Search" }).click();
+  await page.getByTestId("turn-navigator").getByRole("button", { name: "Find in chat" }).click();
   await page.getByText("Filters").click();
   await page.getByRole("button", { name: "Actions" }).click();
   await expect(page.getByTestId("work-thread").first()).toBeVisible();

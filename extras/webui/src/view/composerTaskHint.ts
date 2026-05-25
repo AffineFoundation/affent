@@ -75,32 +75,32 @@ export function buildComposerTaskHint(text: string, runtime?: RuntimeCapabilityV
 
   if (!runtime) {
     return {
-      label: "Web access unknown",
-      detail: "This request may need live sources, but this chat has not reported web access yet.",
+      label: "Current sources unknown",
+      detail: "This request may need current sources; web access has not loaded for this chat yet.",
       tone: "unknown",
     };
   }
 
   if (runtime.research === "off") {
     return {
-      label: "Current web info unavailable",
-      detail: "This request needs live sources; results may be incomplete until search or page access is enabled.",
+      label: "Needs current sources",
+      detail: "Web access is not available here; results may be incomplete unless you provide sources.",
       tone: "warning",
     };
   }
 
   if (runtime.research === "limited") {
     return {
-      label: "Current web access limited",
-      detail: "This may need current sources; search or page browsing is only partially available.",
+      label: "Direct sources help",
+      detail: "Discovery is limited; paste URLs or files if this task depends on current information.",
       tone: "warning",
     };
   }
 
   if (runtime.research === "unknown") {
     return {
-      label: "Web access unknown",
-      detail: "Send once to refresh this chat's web access before relying on current information.",
+      label: "Current sources unknown",
+      detail: "Send once to refresh this chat's capabilities before relying on current information.",
       tone: "unknown",
     };
   }

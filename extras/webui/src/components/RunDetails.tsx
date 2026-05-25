@@ -7,6 +7,7 @@ export function RunDetails({
   ariaLabel = "Work metrics",
   summaryLabel = "Metrics",
   valueFirst = false,
+  inlineLimit = 3,
 }: {
   metrics: readonly SessionOverviewMetric[];
   className: string;
@@ -14,27 +15,53 @@ export function RunDetails({
   ariaLabel?: string;
   summaryLabel?: string;
   valueFirst?: boolean;
+  inlineLimit?: number;
 }) {
   if (metrics.length === 0) return null;
+  const visibleMetrics = metrics.slice(0, inlineLimit);
+  const overflowMetrics = metrics.slice(inlineLimit);
   return (
-    <details className={className} data-testid={testId}>
-      <summary aria-label={ariaLabel}>{summaryLabel}</summary>
-      <div className="run-detail-metrics" aria-label={ariaLabel}>
-        {metrics.map((metric) => (
-          <span key={`${metric.label}-${metric.value}`} data-tone={metric.tone}>
-            {valueFirst ? (
-              <>
-                <b>{metric.value}</b> {formatMetricLabel(metric.label, metric.value)}
-              </>
-            ) : (
-              <>
-                {metric.label} {metric.value}
-              </>
-            )}
-          </span>
+    <div className={className} data-testid={testId} aria-label={ariaLabel}>
+      <div className="run-detail-inline">
+        {visibleMetrics.map((metric) => (
+          <MetricChip key={`${metric.label}-${metric.value}`} metric={metric} valueFirst={valueFirst} />
         ))}
+        {overflowMetrics.length > 0 ? (
+          <details className="run-detail-overflow">
+            <summary aria-label={`${summaryLabel}: ${overflowMetrics.length} more`}>
+              +{overflowMetrics.length}
+            </summary>
+            <div className="run-detail-metrics" aria-label={ariaLabel}>
+              {overflowMetrics.map((metric) => (
+                <MetricChip key={`${metric.label}-${metric.value}`} metric={metric} valueFirst={valueFirst} />
+              ))}
+            </div>
+          </details>
+        ) : null}
       </div>
-    </details>
+    </div>
+  );
+}
+
+function MetricChip({
+  metric,
+  valueFirst,
+}: {
+  metric: SessionOverviewMetric;
+  valueFirst: boolean;
+}) {
+  return (
+    <span data-tone={metric.tone}>
+      {valueFirst ? (
+        <>
+          <b>{metric.value}</b> {formatMetricLabel(metric.label, metric.value)}
+        </>
+      ) : (
+        <>
+          {metric.label} {metric.value}
+        </>
+      )}
+    </span>
   );
 }
 

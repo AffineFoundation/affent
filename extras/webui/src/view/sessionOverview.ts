@@ -28,12 +28,14 @@ export function buildSessionOverview({
   hasSelectedSession,
   pendingTask,
   pendingGuidance,
+  sessionTitle,
 }: {
   session: SessionState;
   workflow: WorkflowStatus;
   hasSelectedSession: boolean;
   pendingTask?: string;
   pendingGuidance?: string;
+  sessionTitle?: string;
 }): SessionOverview {
   const latestTurn = session.turns.at(-1);
   const latestActivity = latestTurn ? buildTurnActivity(latestTurn) : undefined;
@@ -56,7 +58,7 @@ export function buildSessionOverview({
 
   if (guidance && latestTurn?.status === "running") {
     return {
-      headline: task ?? "Live turn",
+      headline: sessionTitle ?? task ?? "Live turn",
       detail: "Applying your guidance to the current run.",
       stateLabel: "Sending guidance",
       tone: "running",
@@ -89,7 +91,7 @@ export function buildSessionOverview({
 
   const tone = toneForTurn(latestTurn);
   return {
-    headline: task ?? workflow.title,
+    headline: sessionTitle ?? task ?? workflow.title,
     detail: overviewDetail(latestTurn, latestActivity, workflow),
     stateLabel: workflow.title,
     tone,

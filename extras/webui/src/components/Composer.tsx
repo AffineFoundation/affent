@@ -20,6 +20,7 @@ interface DraftContext {
 export function Composer({
   disabled,
   busy,
+  cancelling = false,
   hasSession = true,
   resumeSession = false,
   draft,
@@ -31,6 +32,7 @@ export function Composer({
 }: {
   disabled: boolean;
   busy: boolean;
+  cancelling?: boolean;
   hasSession?: boolean;
   resumeSession?: boolean;
   draft?: ComposerDraft;
@@ -75,7 +77,7 @@ export function Composer({
 
   async function submit() {
     const trimmed = content.trim();
-    if (!trimmed || disabled) return;
+    if (!trimmed || disabled || cancelling) return;
     try {
       await onSubmit(trimmed);
       setContent("");
@@ -160,18 +162,17 @@ export function Composer({
     textareaRef.current?.focus();
   }
 
-  const active = busy || dragActive || content.trim() !== "";
+  const active = busy || cancelling || dragActive || content.trim() !== "";
   const contentText = content.trim();
   const hasContent = contentText !== "";
   const lineCount = hasContent ? contentText.split(/\r\n|\r|\n/).length : 0;
-  const composerStatus = composerStatusLabel({ busy, dragActive, draftContext, hasSession, resumeSession, hasContent });
-  const composerMeta = composerMetaLabel({ contentText, lineCount, draftContext, busy, hasSession, resumeSession });
+  const composerStatus = composerStatusLabel({ busy, cancelling, dragActive, draftContext, hasSession, resumeSession, hasContent });
+  const composerMeta = composerMetaLabel({ contentText, lineCount, draftContext, busy, cancelling, hasSession, resumeSession });
   const taskHint = buildComposerTaskHint(contentText, runtimeCapabilities);
   const compactResume = resumeSession && !busy && !hasContent && !draftContext && !taskHint;
   const placeholder = "Message Affent...";
   const primaryLabel = primaryActionLabel({
     busy,
-    hasContent,
     hasSession,
     resumeSession,
     draftContext,
@@ -194,6 +195,7 @@ export function Composer({
       className="composer"
       data-active={active}
       data-busy={busy ? "true" : "false"}
+      data-cancelling={cancelling ? "true" : "false"}
       data-dragging={dragActive}
       data-resume-idle={compactResume ? "true" : "false"}
       data-readonly="false"
@@ -214,7 +216,7 @@ export function Composer({
       </div>
       {draftContext ? (
         <div className="composer-context" data-testid="composer-context">
-          <span className="composer-context-mode">{draftModeLabel(draftContext.mode)}</span>
+          {draftContext.mode === "append" ? <span className="composer-context-mode">{draftModeLabel(draftContext.mode)}</span> : null}
           <div className="composer-context-copy">
             <span>{draftContext.label}</span>
             <small title={draftContext.content}>{draftContext.preview}</small>
@@ -245,11 +247,11 @@ export function Composer({
           </button>
         ) : null}
         {busy ? (
-          <button type="button" className="secondary-action" onClick={() => void onCancel()}>
-            Stop
+          <button type="button" className="secondary-action" disabled={cancelling} onClick={() => void onCancel()}>
+            {cancelling ? "Stopping" : "Stop"}
           </button>
         ) : null}
-        <button type="button" className="primary-action" disabled={content.trim() === ""} onClick={() => void submit()}>
+        <button type="button" className="primary-action" disabled={content.trim() === "" || cancelling} onClick={() => void submit()}>
           {primaryLabel}
         </button>
       </div>
@@ -260,7 +262,8 @@ export function Composer({
 function mergeDraftContent(current: string, incoming: string, replace: boolean): { content: string; mode: DraftContext["mode"] } {
   const next = incoming.trim();
   if (!next) return { content: current, mode: replace ? "replace" : "append" };
-  if (replace || current.trim() === "") return { content: next, mode: "replace" };
+  if (replace) return { content: next, mode: "replace" };
+  if (current.trim() === "") return { content: next, mode: "append" };
   if (current.trim() === next) return { content: current, mode: "replace" };
   return { content: `${current.trimEnd()}\n\n${next}`, mode: "append" };
 }
@@ -280,11 +283,12 @@ function summarizeDraft(text: string, limit: number): string {
 }
 
 function draftModeLabel(mode: DraftContext["mode"]): string {
-  return mode === "replace" ? "Replaced" : "Added";
+  return mode === "append" ? "Added" : "";
 }
 
 function composerStatusLabel({
   busy,
+  cancelling,
   dragActive,
   draftContext,
   hasSession,
@@ -292,6 +296,7 @@ function composerStatusLabel({
   hasContent,
 }: {
   busy: boolean;
+  cancelling: boolean;
   dragActive: boolean;
   draftContext?: DraftContext;
   hasSession: boolean;
@@ -299,7 +304,8 @@ function composerStatusLabel({
   hasContent: boolean;
 }): string {
   if (dragActive) return "Adding context";
-  if (busy) return hasContent ? "Ready to guide this run" : "Affent is working";
+  if (cancelling) return "Stopping run";
+  if (busy) return hasContent ? "Guidance ready" : "Live run";
   if (draftContext) return draftContext.mode === "append" ? "Follow-up with context" : "Draft ready";
   if (!hasSession) return hasContent ? "Ready to start" : "New task";
   if (resumeSession) return hasContent ? "Ready to resume" : "Resume chat";
@@ -308,20 +314,18 @@ function composerStatusLabel({
 
 function primaryActionLabel({
   busy,
-  hasContent,
   hasSession,
   resumeSession,
   draftContext,
   taskHintActive,
 }: {
   busy: boolean;
-  hasContent: boolean;
   hasSession: boolean;
   resumeSession: boolean;
   draftContext?: DraftContext;
   taskHintActive: boolean;
 }): string {
-  if (busy) return hasContent ? "Send guidance" : "Working";
+  if (busy) return "Send guidance";
   if (taskHintActive && !draftContext) {
     if (resumeSession) return "Resume anyway";
     return hasSession ? "Send anyway" : "Start anyway";
@@ -338,6 +342,7 @@ function composerMetaLabel({
   lineCount,
   draftContext,
   busy,
+  cancelling,
   hasSession,
   resumeSession,
 }: {
@@ -345,10 +350,12 @@ function composerMetaLabel({
   lineCount: number;
   draftContext?: DraftContext;
   busy: boolean;
+  cancelling: boolean;
   hasSession: boolean;
   resumeSession: boolean;
 }): string | undefined {
-  if (busy) return contentText ? "Sends to the current run, not a new chat" : "Type to guide the current run";
+  if (cancelling) return "Waiting for Affent to stop safely";
+  if (busy) return contentText ? "Sends into this run, not a new chat" : "Type guidance while Affent works";
   if (draftContext) return draftContext.label;
   if (!contentText) {
     if (resumeSession) return "Type a message to continue this chat";
