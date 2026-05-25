@@ -222,6 +222,8 @@ func addToolStatsSnapshot(dst *ToolStatsSnapshot, src ToolStatsSnapshot) {
 	dst.ToolDurationMS += src.ToolDurationMS
 	dst.LoopGuardInterventions += src.LoopGuardInterventions
 	dst.ForcedNoTools += src.ForcedNoTools
+	dst.ToolContextTruncated += src.ToolContextTruncated
+	dst.ToolContextOmitted += src.ToolContextOmitted
 }
 
 func statsBoundarySnapshot(cfg Config) statsBoundaries {

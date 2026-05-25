@@ -194,6 +194,11 @@ diagnostics.
 - `forced_no_tools`: forced no-tool follow-ups after repeated blocking guard
   interventions. Soft guard warnings such as `loop_guard_repeated_failures`
   are counted as interventions but do not by themselves force tools off.
+- `tool_context_truncated`: count of tool results shortened before being fed
+  back into the model conversation. This is separate from
+  `tool.result.result_truncated`, which reports event-payload truncation.
+- `tool_context_omitted_bytes`: total bytes omitted from tool results before
+  model-context insertion.
 
 ### `error`
 

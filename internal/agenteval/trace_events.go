@@ -127,19 +127,21 @@ func applyTraceEvent(t *Trace, pending map[string]int, typ string, data json.Raw
 			t.TurnEndReason = p.Reason
 			if p.ToolStats != nil {
 				t.ToolStats = ToolRuntimeStats{
-					ToolRequests:           p.ToolStats.ToolRequests,
-					ToolNameCanonicalized:  p.ToolStats.ToolNameCanonicalized,
-					ToolArgsRepaired:       p.ToolStats.ToolArgsRepaired,
-					ToolRepairCalls:        p.ToolStats.ToolRepairCalls,
-					ToolRepairSucceeded:    p.ToolStats.ToolRepairSucceeded,
-					ToolRepairFailed:       p.ToolStats.ToolRepairFailed,
-					ToolRepairNotes:        p.ToolStats.ToolRepairNotes,
-					ToolRepairByKind:       p.ToolStats.ToolRepairByKind,
-					ToolFailureByKind:      p.ToolStats.ToolFailureByKind,
-					ToolErrors:             p.ToolStats.ToolErrors,
-					ToolDurationMS:         p.ToolStats.ToolDurationMS,
-					LoopGuardInterventions: p.ToolStats.LoopGuardInterventions,
-					ForcedNoTools:          p.ToolStats.ForcedNoTools,
+					ToolRequests:            p.ToolStats.ToolRequests,
+					ToolNameCanonicalized:   p.ToolStats.ToolNameCanonicalized,
+					ToolArgsRepaired:        p.ToolStats.ToolArgsRepaired,
+					ToolRepairCalls:         p.ToolStats.ToolRepairCalls,
+					ToolRepairSucceeded:     p.ToolStats.ToolRepairSucceeded,
+					ToolRepairFailed:        p.ToolStats.ToolRepairFailed,
+					ToolRepairNotes:         p.ToolStats.ToolRepairNotes,
+					ToolRepairByKind:        p.ToolStats.ToolRepairByKind,
+					ToolFailureByKind:       p.ToolStats.ToolFailureByKind,
+					ToolErrors:              p.ToolStats.ToolErrors,
+					ToolDurationMS:          p.ToolStats.ToolDurationMS,
+					LoopGuardInterventions:  p.ToolStats.LoopGuardInterventions,
+					ForcedNoTools:           p.ToolStats.ForcedNoTools,
+					ToolContextTruncated:    p.ToolStats.ToolContextTruncated,
+					ToolContextOmittedBytes: p.ToolStats.ToolContextOmittedBytes,
 				}
 			}
 			return true, nil

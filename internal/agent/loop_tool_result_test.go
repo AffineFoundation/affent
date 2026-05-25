@@ -443,6 +443,13 @@ func TestRunTurn_UsesLoopToolResultContextCap(t *testing.T) {
 			if !strings.Contains(secondReq, "[... 896 more bytes truncated.") {
 				t.Fatalf("second request should include loop-specific truncation marker, body=%s", secondReq)
 			}
+			var p sse.TurnEndPayload
+			if err := json.Unmarshal(ev.Data, &p); err != nil {
+				t.Fatalf("decode turn.end: %v", err)
+			}
+			if p.ToolStats == nil || p.ToolStats.ToolContextTruncated != 1 || p.ToolStats.ToolContextOmittedBytes != 896 {
+				t.Fatalf("turn.end should summarize model-context truncation, got %+v", p.ToolStats)
+			}
 			return
 		case <-deadline:
 			t.Fatal("timeout waiting for turn.end")

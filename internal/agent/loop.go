@@ -1032,6 +1032,7 @@ func (l *Loop) runTurn(ctx context.Context, turnID, userText string, opts TurnOp
 					}
 				}
 			}
+			recordToolContextTruncation(&toolStats, toolName, result, l.toolResultMaxBytesInContextFor(toolName))
 			l.publishAndAppendToolResultWithDelegation(turnID, callID, toolName, result, isErr, toolDuration, delegation)
 			toolCallsUsed++
 			recordToolRepairOutcome(&toolStats, repairedToolCall, isErr)

@@ -167,6 +167,8 @@ type batchSummary struct {
 	LoopGuardInterventions     int
 	ForcedNoTools              int
 	ToolDurationMS             int64
+	ToolContextTruncated       int
+	ToolContextOmittedBytes    int
 	ToolArgsTruncated          int
 	ToolArgsOmittedBytes       int
 	ToolResultsTruncated       int
@@ -246,6 +248,8 @@ func (s *batchSummary) add(res agenteval.BatchResult) {
 	s.LoopGuardInterventions += res.ToolStats.LoopGuardInterventions
 	s.ForcedNoTools += res.ToolStats.ForcedNoTools
 	s.ToolDurationMS += res.ToolStats.ToolDurationMS
+	s.ToolContextTruncated += res.ToolStats.ToolContextTruncated
+	s.ToolContextOmittedBytes += res.ToolStats.ToolContextOmittedBytes
 	s.ToolArgsTruncated += res.ToolTruncation.ArgsTruncated
 	s.ToolArgsOmittedBytes += res.ToolTruncation.ArgsOmittedBytes
 	s.ToolResultsTruncated += res.ToolTruncation.ResultsTruncated
@@ -708,6 +712,8 @@ type batchResultRecord struct {
 	LoopGuardInterventions     int                                        `json:"loop_guard_interventions"`
 	ForcedNoTools              int                                        `json:"forced_no_tools"`
 	ToolDurationMS             int64                                      `json:"tool_duration_ms"`
+	ToolContextTruncated       int                                        `json:"tool_context_truncated"`
+	ToolContextOmittedBytes    int                                        `json:"tool_context_omitted_bytes"`
 	ToolArgsTruncated          int                                        `json:"tool_args_truncated"`
 	ToolArgsOmittedBytes       int                                        `json:"tool_args_omitted_bytes"`
 	ToolResultsTruncated       int                                        `json:"tool_results_truncated"`
@@ -772,6 +778,8 @@ type batchSummaryRecord struct {
 	LoopGuardInterventions     int                                        `json:"loop_guard_interventions"`
 	ForcedNoTools              int                                        `json:"forced_no_tools"`
 	ToolDurationMS             int64                                      `json:"tool_duration_ms"`
+	ToolContextTruncated       int                                        `json:"tool_context_truncated"`
+	ToolContextOmittedBytes    int                                        `json:"tool_context_omitted_bytes"`
 	ToolArgsTruncated          int                                        `json:"tool_args_truncated"`
 	ToolArgsOmittedBytes       int                                        `json:"tool_args_omitted_bytes"`
 	ToolResultsTruncated       int                                        `json:"tool_results_truncated"`
@@ -841,6 +849,8 @@ func printBatchResultJSONL(w io.Writer, meta evalJSONLMetadata, res agenteval.Ba
 		LoopGuardInterventions:     res.ToolStats.LoopGuardInterventions,
 		ForcedNoTools:              res.ToolStats.ForcedNoTools,
 		ToolDurationMS:             res.ToolStats.ToolDurationMS,
+		ToolContextTruncated:       res.ToolStats.ToolContextTruncated,
+		ToolContextOmittedBytes:    res.ToolStats.ToolContextOmittedBytes,
 		ToolArgsTruncated:          res.ToolTruncation.ArgsTruncated,
 		ToolArgsOmittedBytes:       res.ToolTruncation.ArgsOmittedBytes,
 		ToolResultsTruncated:       res.ToolTruncation.ResultsTruncated,
@@ -900,6 +910,8 @@ func printBatchSummaryJSONL(w io.Writer, meta evalJSONLMetadata, s batchSummary)
 		LoopGuardInterventions:     s.LoopGuardInterventions,
 		ForcedNoTools:              s.ForcedNoTools,
 		ToolDurationMS:             s.ToolDurationMS,
+		ToolContextTruncated:       s.ToolContextTruncated,
+		ToolContextOmittedBytes:    s.ToolContextOmittedBytes,
 		ToolArgsTruncated:          s.ToolArgsTruncated,
 		ToolArgsOmittedBytes:       s.ToolArgsOmittedBytes,
 		ToolResultsTruncated:       s.ToolResultsTruncated,

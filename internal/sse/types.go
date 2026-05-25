@@ -204,6 +204,12 @@ type ToolRuntimeStats struct {
 	ToolDurationMS         int64 `json:"tool_duration_ms,omitempty"`
 	LoopGuardInterventions int   `json:"loop_guard_interventions,omitempty"`
 	ForcedNoTools          int   `json:"forced_no_tools,omitempty"`
+	// ToolContextTruncated counts tool results that were shortened before
+	// being appended back into the model conversation. This is separate
+	// from ToolResultPayload.ResultTruncated, which reports event payload
+	// truncation for trace transport.
+	ToolContextTruncated    int `json:"tool_context_truncated,omitempty"`
+	ToolContextOmittedBytes int `json:"tool_context_omitted_bytes,omitempty"`
 }
 
 type ErrorPayload struct {

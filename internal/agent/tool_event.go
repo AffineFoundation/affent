@@ -114,10 +114,21 @@ func toolRuntimeStatsPtr(stats sse.ToolRuntimeStats) *sse.ToolRuntimeStats {
 		stats.ToolErrors == 0 &&
 		stats.ToolDurationMS == 0 &&
 		stats.LoopGuardInterventions == 0 &&
-		stats.ForcedNoTools == 0 {
+		stats.ForcedNoTools == 0 &&
+		stats.ToolContextTruncated == 0 &&
+		stats.ToolContextOmittedBytes == 0 {
 		return nil
 	}
 	return &stats
+}
+
+func recordToolContextTruncation(stats *sse.ToolRuntimeStats, toolName, result string, max int) {
+	if stats == nil || len(result) <= max {
+		return
+	}
+	cut := textutil.AlignBackward(result, max)
+	stats.ToolContextTruncated++
+	stats.ToolContextOmittedBytes += len(result) - cut
 }
 
 func recordToolFailureKind(stats *sse.ToolRuntimeStats, result string, failed bool) {

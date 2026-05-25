@@ -286,32 +286,36 @@ func TestSession_ToolStatsSnapshot_AccumulatesFromTurnEnd(t *testing.T) {
 			TurnID: "t1",
 			Reason: sse.TurnEndCompleted,
 			ToolStats: &sse.ToolRuntimeStats{
-				ToolRequests:           2,
-				ToolNameCanonicalized:  1,
-				ToolArgsRepaired:       1,
-				ToolRepairCalls:        1,
-				ToolRepairSucceeded:    1,
-				ToolRepairNotes:        3,
-				ToolRepairByKind:       map[string]int{"tool_name": 1, "alias_rename": 2},
-				ToolErrors:             0,
-				ToolDurationMS:         15,
-				LoopGuardInterventions: 1,
+				ToolRequests:            2,
+				ToolNameCanonicalized:   1,
+				ToolArgsRepaired:        1,
+				ToolRepairCalls:         1,
+				ToolRepairSucceeded:     1,
+				ToolRepairNotes:         3,
+				ToolRepairByKind:        map[string]int{"tool_name": 1, "alias_rename": 2},
+				ToolErrors:              0,
+				ToolDurationMS:          15,
+				LoopGuardInterventions:  1,
+				ToolContextTruncated:    2,
+				ToolContextOmittedBytes: 2048,
 			},
 		},
 		{
 			TurnID: "t2",
 			Reason: sse.TurnEndMaxTurns,
 			ToolStats: &sse.ToolRuntimeStats{
-				ToolRequests:      1,
-				ToolArgsRepaired:  1,
-				ToolRepairCalls:   1,
-				ToolRepairFailed:  1,
-				ToolRepairNotes:   1,
-				ToolRepairByKind:  map[string]int{"alias_rename": 1},
-				ToolFailureByKind: map[string]int{"invalid_args": 1},
-				ToolErrors:        1,
-				ToolDurationMS:    7,
-				ForcedNoTools:     1,
+				ToolRequests:            1,
+				ToolArgsRepaired:        1,
+				ToolRepairCalls:         1,
+				ToolRepairFailed:        1,
+				ToolRepairNotes:         1,
+				ToolRepairByKind:        map[string]int{"alias_rename": 1},
+				ToolFailureByKind:       map[string]int{"invalid_args": 1},
+				ToolErrors:              1,
+				ToolDurationMS:          7,
+				ForcedNoTools:           1,
+				ToolContextTruncated:    1,
+				ToolContextOmittedBytes: 512,
 			},
 		},
 	} {
@@ -338,7 +342,9 @@ func TestSession_ToolStatsSnapshot_AccumulatesFromTurnEnd(t *testing.T) {
 			got.ToolErrors == 1 &&
 			got.ToolDurationMS == 22 &&
 			got.LoopGuardInterventions == 1 &&
-			got.ForcedNoTools == 1 {
+			got.ForcedNoTools == 1 &&
+			got.ToolContextTruncated == 3 &&
+			got.ToolContextOmitted == 2560 {
 			break
 		}
 		if time.Now().After(deadline) {
@@ -359,7 +365,8 @@ func TestSession_ToolStatsSnapshot_AccumulatesFromTurnEnd(t *testing.T) {
 	if len(resp.Sessions) != 1 {
 		t.Fatalf("sessions = %d, want 1", len(resp.Sessions))
 	}
-	if resp.Sessions[0].Tools.ToolRepairFailed != 1 || resp.Aggregate.Tools.ToolRepairSucceeded != 1 {
+	if resp.Sessions[0].Tools.ToolRepairFailed != 1 || resp.Aggregate.Tools.ToolRepairSucceeded != 1 ||
+		resp.Sessions[0].Tools.ToolContextTruncated != 3 || resp.Aggregate.Tools.ToolContextOmitted != 2560 {
 		t.Fatalf("stats tool snapshots = session:%+v aggregate:%+v", resp.Sessions[0].Tools, resp.Aggregate.Tools)
 	}
 	if resp.Sessions[0].Tools.ToolRepairByKind["alias_rename"] != 3 || resp.Aggregate.Tools.ToolRepairByKind["tool_name"] != 1 {
@@ -369,7 +376,8 @@ func TestSession_ToolStatsSnapshot_AccumulatesFromTurnEnd(t *testing.T) {
 		t.Fatalf("stats failure kinds = session:%+v aggregate:%+v", resp.Sessions[0].Tools.ToolFailureByKind, resp.Aggregate.Tools.ToolFailureByKind)
 	}
 	summary := summarizeActiveSession(s, pool.cfg)
-	if summary.Tools == nil || summary.Tools.ToolRepairCalls != 2 || summary.Tools.ToolErrors != 1 {
+	if summary.Tools == nil || summary.Tools.ToolRepairCalls != 2 || summary.Tools.ToolErrors != 1 ||
+		summary.Tools.ToolContextTruncated != 3 || summary.Tools.ToolContextOmitted != 2560 {
 		t.Fatalf("active session summary tools = %+v", summary.Tools)
 	}
 	if summary.Tools.ToolRepairByKind["alias_rename"] != 3 {
