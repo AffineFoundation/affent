@@ -26,6 +26,7 @@ import type { DraftSource } from "./view/draftSource";
 import { buildRuntimeCapabilityView, type RuntimeCapabilityView } from "./view/runtimeCapabilities";
 import { buildSessionRows } from "./view/sessionList";
 import { buildSessionOverview, type SessionOverview } from "./view/sessionOverview";
+import { isContinuationPrompt } from "./view/continuationPrompt";
 
 type SurfaceState = "connecting" | "connected" | "live" | "loading" | "demo" | "disconnected" | "error";
 
@@ -348,6 +349,9 @@ export function App() {
       const next = current.map((item) => {
         if (item.id !== sessionId) return item;
         found = true;
+        const existingLatest = item.latest_user_message?.trim();
+        const topicUserMessage = item.topic_user_message ||
+          (existingLatest && !isContinuationPrompt(existingLatest) ? existingLatest : latestUserMessage);
         return {
           ...item,
           active: true,
@@ -355,7 +359,7 @@ export function App() {
           has_conversation: true,
           has_events: true,
           latest_user_message: latestUserMessage,
-          topic_user_message: item.topic_user_message || item.latest_user_message || latestUserMessage,
+          topic_user_message: topicUserMessage,
         };
       });
       if (found) return next;
@@ -579,7 +583,7 @@ function chatContextLabel({
 
 function chatContextPrimary(overview: SessionOverview): string {
   if (overview.stateLabel === "Sending") return overview.headline;
-  if (overview.stateLabel === "Guidance sending") return overview.detail;
+  if (overview.stateLabel === "Adding note") return overview.detail;
   if (overview.detail) return overview.detail;
   return overview.headline;
 }

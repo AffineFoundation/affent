@@ -223,8 +223,8 @@ function nextBrief(
   }
   if (turn.status === "running") {
     return {
-      value: "Guidance can still be sent while this work is running.",
-      action: { label: "Guide turn", draft: "Guidance for the current work: ", source: "tool_guidance" },
+      value: "You can still add a note while this work is running.",
+      action: { label: "Add note", draft: "Note for current work: ", source: "tool_guidance" },
     };
   }
   if (turn.status === "max_turns") {

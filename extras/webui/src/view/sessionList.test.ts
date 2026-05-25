@@ -215,6 +215,24 @@ describe("sessionList view model", () => {
     expect(rows[0].title).toBe("会话标题摘要");
   });
 
+  it("extracts the task subject from long instruction-style first messages", () => {
+    const rows = buildSessionRows([
+      session({
+        id: "csv-export",
+        durable: true,
+        latest_user_message: "帮我新增一个导出 CSV 的功能，要求支持筛选条件和权限控制",
+      }),
+      session({
+        id: "blank-login",
+        durable: true,
+        latest_user_message: "请你修复登录页面的空白问题，顺便补充回归测试",
+      }),
+    ]);
+
+    expect(rows.find((row) => row.id === "csv-export")?.title).toBe("导出 CSV 功能");
+    expect(rows.find((row) => row.id === "blank-login")?.title).toBe("登录页面 空白问题");
+  });
+
   it("does not repeat the topic when a continuation prompt embeds the original task", () => {
     const rows = buildSessionRows([
       session({

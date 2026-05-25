@@ -467,10 +467,11 @@ test("running work reads like an Affent chat update before drill-down", async ({
   await expect(page.getByTestId("session-strip")).toHaveCount(0);
   await expect(page.getByRole("button", { name: "Working" })).toBeDisabled();
   await page.getByPlaceholder("Message Affent...").fill("prioritize the product flow");
-  await expect(page.getByTestId("composer-intent")).toContainText("Ready to intervene");
-  await expect(page.getByTestId("composer-intent")).toContainText("Send guidance into the live turn");
-  await expect(page.getByRole("button", { name: "Send guidance" })).toBeEnabled();
-  await page.getByRole("button", { name: "Send guidance" }).click();
+  await expect(page.getByTestId("composer-intent")).toContainText("Ready to add note");
+  await expect(page.getByTestId("composer-intent")).toContainText("Add a note to the current run");
+  const composerAddNote = page.getByTestId("composer").getByRole("button", { name: "Add note" });
+  await expect(composerAddNote).toBeEnabled();
+  await composerAddNote.click();
   expect(guidanceRequests).toEqual(["prioritize the product flow"]);
   await expect(page.getByPlaceholder("Message Affent...")).toHaveValue("");
   await page.screenshot({

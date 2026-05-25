@@ -536,15 +536,15 @@ function GuidanceReceipt({
   onUseAsDraft?: UseAsDraft;
 }) {
   return (
-    <section className="flow-turn guidance-receipt" data-testid="guidance-receipt" aria-label="Guidance sent">
+    <section className="flow-turn guidance-receipt" data-testid="guidance-receipt" aria-label="Note sent">
       <div className="conversation-turn">
-        <div className="flow-step flow-step-user" role="group" aria-label="Sent guidance">
-          <span className="pending-guidance-label">Guidance sent</span>
+        <div className="flow-step flow-step-user" role="group" aria-label="Sent note">
+          <span className="pending-guidance-label">Note sent</span>
           <div className="flow-text">{receipt.text}</div>
           {onUseAsDraft ? (
             <div className="message-actions">
               <button type="button" className="message-action" onClick={() => onUseAsDraft(receipt.text, "guidance_receipt")}>
-                Edit guidance
+                Edit note
               </button>
             </div>
           ) : null}
@@ -552,7 +552,7 @@ function GuidanceReceipt({
         <div className="assistant-cluster">
           <div className="assistant-name">Affent</div>
           <div className="guidance-receipt-note">
-            <span>Added to the current turn.</span>
+            <span>Added to the current run.</span>
           </div>
         </div>
       </div>
@@ -564,7 +564,7 @@ function PendingTurn({ message, followUp }: { message: PendingMessageView; follo
   const text = message.text;
   const isGuidance = message.kind === "guidance";
   const responseLabel = isGuidance
-    ? "Adding guidance to the live turn."
+    ? "Adding your note to the current run."
     : followUp
       ? "Waiting for the next update in this chat."
       : "Preparing the first update.";
@@ -579,7 +579,7 @@ function PendingTurn({ message, followUp }: { message: PendingMessageView; follo
     >
       <header className="flow-turn-head">
         <div className="turn-title-group">
-          <div className="turn-index">{isGuidance ? "Guidance" : "You"}</div>
+          <div className="turn-index">{isGuidance ? "Note" : "You"}</div>
           <div className="turn-title" data-testid="turn-title" title={text}>
             {summarize(text, 72)}
           </div>
@@ -590,8 +590,8 @@ function PendingTurn({ message, followUp }: { message: PendingMessageView; follo
         </div>
       </header>
       <div className="conversation-turn">
-        <div className="flow-step flow-step-user" role="group" aria-label={isGuidance ? "Guidance message" : "You message"}>
-          {isGuidance ? <span className="pending-guidance-label">Live guidance</span> : null}
+        <div className="flow-step flow-step-user" role="group" aria-label={isGuidance ? "Note for current run" : "You message"}>
+          {isGuidance ? <span className="pending-guidance-label">Live note</span> : null}
           <div className="flow-text">{text}</div>
         </div>
         <div className="assistant-cluster">

@@ -170,7 +170,7 @@ export function Composer({
   const compactResume = resumeSession && !busy && !hasContent && !draftContext && !taskHint;
   const placeholder = "Message Affent...";
   const primaryLabel = busy
-    ? hasContent ? "Send guidance" : "Working"
+    ? hasContent ? "Add note" : "Working"
     : !hasSession
       ? "Start"
       : draftContext?.source === "previous_message"
@@ -300,7 +300,7 @@ function composerStatusLabel({
   hasContent: boolean;
 }): string {
   if (dragActive) return "Adding context";
-  if (busy) return hasContent ? "Ready to intervene" : "Working on this turn";
+  if (busy) return hasContent ? "Ready to add note" : "Working on this";
   if (draftContext) return draftContext.mode === "append" ? "Follow-up with context" : "Draft ready";
   if (!hasSession) return hasContent ? "Ready to start" : "New task";
   if (resumeSession) return hasContent ? "Ready to send" : "Follow-up";
@@ -322,7 +322,7 @@ function composerMetaLabel({
   hasSession: boolean;
   resumeSession: boolean;
 }): string | undefined {
-  if (busy) return contentText ? "Send guidance into the live turn" : "Live session";
+  if (busy) return contentText ? "Add a note to the current run" : "Affent is working";
   if (draftContext) return draftContext.label;
   if (!contentText) {
     if (resumeSession) return "Type a message to continue this chat";

@@ -3,6 +3,15 @@ import type { SessionState } from "../store/sessionState";
 import { conversationTopicFromTurns } from "./continuationPrompt";
 
 const noMessagesYet = "No messages yet";
+const cnTitleActions = [
+  "新增", "添加", "实现", "开发", "构建", "创建", "写", "编写", "修复", "解决", "优化", "重构",
+  "完善", "改进", "设计", "理解", "查看", "检查", "审查", "收集", "检索", "查询", "查找",
+  "搜索", "调研", "研究", "介绍", "分析", "总结", "梳理", "说明", "整理",
+].join("|");
+const enTitleActions = [
+  "review", "research", "inspect", "summarize", "analyze", "explain", "fix", "debug",
+  "improve", "refactor", "implement", "build", "create", "design", "understand",
+].join("|");
 
 export type SessionListFilter = "all" | "active" | "saved" | "artifacts" | "memory";
 export type SessionRowTone = "running" | "saved" | "muted" | "error" | "warning";
@@ -266,6 +275,8 @@ export function summarizeSessionTitle(text: string): string {
   if (directReply) return summarize(directReply, 42);
   const intentTitle = summarizeIntentTitle(cleaned);
   if (intentTitle) return summarize(intentTitle, 42);
+  const actionTitle = summarizeActionRequest(cleaned);
+  if (actionTitle) return summarize(actionTitle, 42);
   const firstLine = cleaned.split(/\n+/)[0] ?? cleaned;
   const primaryClause = firstLine
     .split(/(?:[。！？；;]+|[.!?]+(?=\s|$))/)
@@ -297,6 +308,29 @@ function summarizeIntentTitle(text: string): string | undefined {
   const focusTitle = summarizeFocusPhrase(text);
   if (focusTitle) return focusTitle;
   return undefined;
+}
+
+function summarizeActionRequest(text: string): string | undefined {
+  const patterns = [
+    new RegExp(`^(?:请你?|麻烦你?|帮我|帮忙|真实地?|真实|实际地?|完整地?|详细地?|认真地?)?\\s*(?:${cnTitleActions})\\s*(?:一下|下|一个|一种|一类|一份|这个|当前)?\\s*([^。！？；;\\n]{2,120})`, "i"),
+    new RegExp(`^(?:please\\s+|can you\\s+|could you\\s+)?(?:${enTitleActions})\\s+(?:the\\s+|a\\s+|an\\s+|current\\s+)?([^!?;\\n]{2,120})`, "i"),
+  ];
+  for (const pattern of patterns) {
+    const match = text.match(pattern);
+    if (!match) continue;
+    const title = normalizeActionTitle(match[1]);
+    if (title) return title;
+  }
+  return undefined;
+}
+
+function normalizeActionTitle(text: string): string {
+  const scoped = text
+    .split(/(?:，|,)\s*(?:要求|需要|并且|同时|顺便|然后|再|so that|with|and then)\s*/i)[0]
+    .replace(/^(?:一下|下|一个|一种|一类|一份|这个|当前)\s*/i, "")
+    .replace(/^(?:the|a|an)\s+/i, "")
+    .trim();
+  return normalizeTitlePhrase(scoped);
 }
 
 function summarizeTitleFeedback(text: string): string | undefined {

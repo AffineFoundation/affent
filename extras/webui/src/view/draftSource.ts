@@ -23,7 +23,7 @@ const draftSourceLabels: Record<DraftSource, string> = {
   artifact_text: "Using file text",
   continuation: "Requesting final answer",
   error: "Continuing after error",
-  guidance_receipt: "Editing sent guidance",
+  guidance_receipt: "Editing sent note",
   previous_message: "Editing previous message",
   result: "Continuing from output",
   starter: "Starting from draft",

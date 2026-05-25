@@ -59,19 +59,19 @@ describe("buildSessionOverview", () => {
     expect(overview.metrics).not.toContainEqual({ label: "Actions", value: "1" });
   });
 
-  it("labels pending live guidance as an intervention", () => {
+  it("labels pending live note as an intervention", () => {
     const session = reduceRawEvents(runningSubagent);
     const overview = buildSessionOverview({
       session,
       workflow: deriveWorkflowStatus(session),
       hasSelectedSession: true,
-      pendingGuidance: "Guidance for the current work: inspect tests first",
+      pendingGuidance: "Note for current work: inspect tests first",
     });
 
     expect(overview).toMatchObject({
       headline: "use a subagent to inspect docs",
-      stateLabel: "Guidance sending",
-      detail: "Guidance is being added to the current turn.",
+      stateLabel: "Adding note",
+      detail: "Your note is being added to the current run.",
       tone: "running",
       active: true,
     });
