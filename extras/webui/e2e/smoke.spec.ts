@@ -670,6 +670,8 @@ test("workflow timeline renders with inline drill-down", async ({ page }, testIn
   });
   await page.getByRole("button", { name: "Copy activity summary" }).first().click();
   await expect(page.getByTestId("agent-activity").first().getByRole("button", { name: "Copied" })).toBeVisible();
+  await page.getByRole("button", { name: "Use this next step" }).first().click();
+  await expect(page.getByPlaceholder("Message Affent...")).toHaveValue(/Continue: Replace result parsing with explicit child trace events/);
 
   await page.getByTestId("turn-navigator").getByRole("button", { name: "Search" }).click();
   await page.getByText("Filters").click();

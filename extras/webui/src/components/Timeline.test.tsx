@@ -757,6 +757,20 @@ describe("Timeline", () => {
     );
   });
 
+  it("turns a specific activity node next step into an editable message", async () => {
+    const user = userEvent.setup();
+    const onUseAsDraft = vi.fn();
+    renderTimeline(completedSubagentTree, undefined, undefined, onUseAsDraft);
+
+    await user.click(screen.getByRole("button", { name: /What Affent did/ }));
+    await user.click(within(screen.getByTestId("agent-activity-tree")).getByRole("button", { name: "Use this next step" }));
+
+    expect(onUseAsDraft).toHaveBeenCalledWith(
+      "Continue: Replace result parsing with explicit child trace events when backend exposes them.",
+      "tool_guidance",
+    );
+  });
+
   it("does not auto-collapse a historical subagent the user opened", async () => {
     const user = userEvent.setup();
     const { rerender } = renderTimeline(completedSubagentTree);

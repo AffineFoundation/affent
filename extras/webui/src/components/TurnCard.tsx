@@ -348,6 +348,7 @@ function AgentActivity({
                   openOverrides={openOverrides}
                   onOpenChange={setNodeOpen}
                   searchQuery={searchQuery}
+                  onUseAsDraft={onUseAsDraft}
                 />
               ))}
             </div>
@@ -507,14 +508,17 @@ function AgentActivityNode({
   openOverrides,
   onOpenChange,
   searchQuery,
+  onUseAsDraft,
 }: {
   node: TurnActivityNode;
   openOverrides: Record<string, boolean>;
   onOpenChange: (nodeId: string, open: boolean) => void;
   searchQuery?: string;
+  onUseAsDraft?: UseAsDraft;
 }) {
   const hasChildren = node.children.length > 0;
   const open = openOverrides[node.id] ?? node.autoOpen;
+  const nextAction = nodeNextAction(node);
 
   function toggleOpen() {
     if (!hasChildren) return;
@@ -563,6 +567,15 @@ function AgentActivityNode({
             </span>
           ) : null}
         </span>
+        {nextAction && onUseAsDraft ? (
+          <button
+            type="button"
+            className="agent-activity-node-action"
+            onClick={() => onUseAsDraft(nextAction.draft, "tool_guidance")}
+          >
+            Use this next step
+          </button>
+        ) : null}
         {node.meta ? <span className="agent-activity-meta">{node.meta}</span> : null}
       </div>
       {open && hasChildren ? (
@@ -574,12 +587,19 @@ function AgentActivityNode({
               openOverrides={openOverrides}
               onOpenChange={onOpenChange}
               searchQuery={searchQuery}
+              onUseAsDraft={onUseAsDraft}
             />
           ))}
         </div>
       ) : null}
     </div>
   );
+}
+
+function nodeNextAction(node: TurnActivityNode): { draft: string } | undefined {
+  const next = node.suggestedNext[0] ?? node.nextHint;
+  if (!next?.trim()) return undefined;
+  return { draft: `Continue: ${summarize(next, 160)}` };
 }
 
 interface FallbackAnswer {
