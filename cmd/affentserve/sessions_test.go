@@ -1282,6 +1282,7 @@ func TestSessionPool_EvalModeRegistersOnlyBasicTools(t *testing.T) {
 		"web_search",
 		"browser_navigate",
 		"browser_snapshot",
+		"browser_find",
 	} {
 		if _, ok := s.registry.Get(name); ok {
 			t.Fatalf("%s should not be registered in eval mode", name)

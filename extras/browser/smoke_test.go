@@ -114,6 +114,39 @@ func TestSession_ClickStaleRef(t *testing.T) {
 	}
 }
 
+func TestSession_FindToolSearchesRenderedPage(t *testing.T) {
+	bin := findChromium(t)
+	sess, err := NewSession(SessionConfig{
+		BinaryPath: bin,
+		NoSandbox:  true,
+	})
+	if err != nil {
+		t.Fatalf("NewSession: %v", err)
+	}
+	defer sess.Close()
+
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+
+	const body = `<html><body>
+        <h1>Affine metrics</h1>
+        <p>Market cap is $55.4M and liquidity is $44.8M.</p>
+        <a href="/market">Market details</a>
+    </body></html>`
+	if _, err := runNavigate(ctx, sess, dataURL(body), ""); err != nil {
+		t.Fatalf("runNavigate: %v", err)
+	}
+	out, err := FindTool(sess).Execute(ctx, []byte(`{"query":"market","max_results":3}`))
+	if err != nil {
+		t.Fatalf("browser_find: %v", err)
+	}
+	for _, want := range []string{`QUERY: "market"`, `[interactive ref=`, `Market details`, `[text p] Market cap is $55.4M`} {
+		if !strings.Contains(out, want) {
+			t.Fatalf("browser_find output missing %q:\n%s", want, out)
+		}
+	}
+}
+
 func TestSession_TypeAndSubmitFlow(t *testing.T) {
 	bin := findChromium(t)
 	sess, err := NewSession(SessionConfig{

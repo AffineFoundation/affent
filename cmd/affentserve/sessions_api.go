@@ -450,7 +450,7 @@ func summarizeActiveCapabilities(s *Session, cfg Config) sessionCapabilities {
 		Plan:              hasTool(agent.PlanToolName),
 		Memory:            hasTool("memory"),
 		SessionSearch:     hasTool("session_search"),
-		Browser:           hasTool("browser_navigate") || hasTool("browser_snapshot"),
+		Browser:           hasTool("browser_navigate") || hasTool("browser_snapshot") || hasTool("browser_find"),
 		BrowserScreenshot: hasTool("browser_screenshot"),
 		Web:               hasTool("web_fetch"),
 		WebSearch:         hasTool("web_search"),

@@ -768,6 +768,15 @@ func TestSessionCapabilities_IncludesFocusedResearchWithBrowserOnly(t *testing.T
 	}
 }
 
+func TestSessionCapabilities_TreatsBrowserFindAsBrowserSurface(t *testing.T) {
+	reg := agent.NewRegistry()
+	reg.Add(&agent.Tool{Name: "browser_find"})
+	caps := summarizeActiveCapabilities(&Session{registry: reg}, Config{})
+	if !caps.Browser {
+		t.Fatalf("browser_find should report browser capability: %+v", caps)
+	}
+}
+
 // TestSessionCapabilities_OmitsFocusedTaskProfilesWhenDisabled pins
 // the absent-when-off contract via omitempty. The JSON wire form
 // should not carry an empty array misleading clients into thinking
