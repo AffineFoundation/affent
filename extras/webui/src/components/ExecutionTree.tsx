@@ -363,14 +363,14 @@ function NodeDetails({
       ) : null}
       {hasPayload ? (
         <DetailSection
-          title="Technical details"
-          summary={events.length ? `${events.length} log ${events.length === 1 ? "entry" : "entries"}` : "input"}
+          title="Action record"
+          summary={actionRecordSummary(Boolean(node.args), events.length)}
           collapsible
           defaultOpen={!!searchQuery?.trim()}
         >
           {node.args ? (
             <>
-              <DetailLine label="input" value={formatBytes(node.argsBytes, node.argsOmittedBytes, node.argsCapBytes, node.argsTruncated)} />
+              <DetailLine label="request input" value={formatBytes(node.argsBytes, node.argsOmittedBytes, node.argsCapBytes, node.argsTruncated)} />
               <pre className="code">{JSON.stringify(node.args, null, 2)}</pre>
             </>
           ) : null}
@@ -381,6 +381,13 @@ function NodeDetails({
       ) : null}
     </div>
   );
+}
+
+function actionRecordSummary(hasInput: boolean, eventCount: number): string {
+  const parts: string[] = [];
+  if (hasInput) parts.push("input");
+  if (eventCount > 0) parts.push(`${eventCount} event ${eventCount === 1 ? "record" : "records"}`);
+  return parts.join(" + ") || "records";
 }
 
 function ActionInspectorSummary({ node, searchQuery }: { node: ExecutionTreeNode; searchQuery?: string }) {

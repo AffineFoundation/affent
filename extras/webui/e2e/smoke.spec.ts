@@ -679,7 +679,9 @@ test("workflow timeline renders with inline drill-down", async ({ page }, testIn
   await expect(page.getByTestId("tool-details")).toBeVisible();
   await expect(page.getByTestId("tool-details").first()).toContainText("Output");
   await expect(page.getByTestId("tool-details").first()).toContainText("Action details");
-  await expect(page.getByTestId("tool-details").first()).toContainText("Technical details");
+  await expect(page.getByTestId("tool-details").first()).toContainText("Action record");
+  await expect(page.getByTestId("tool-details").first()).toContainText(/input \+ \d+ event records/);
+  await expect(page.getByTestId("tool-details").first()).toContainText("request input");
   await expect(page.getByTestId("action-inspector-summary").first()).toContainText("Status");
   await expect(page.getByTestId("action-inspector-summary").first()).toContainText("done");
   await expect(page.getByTestId("action-inspector-summary").first()).toContainText("Usage");

@@ -456,7 +456,9 @@ describe("Timeline", () => {
     expect(details).toHaveTextContent("list_files");
     expect(details).toHaveTextContent("Output");
     expect(details).toHaveTextContent("Action details");
-    expect(details).toHaveTextContent("Technical details");
+    expect(details).toHaveTextContent("Action record");
+    expect(details).toHaveTextContent(/input \+ \d+ event records/);
+    expect(details).toHaveTextContent("request input");
     expect(within(details).getByText("Event records")).toBeInTheDocument();
     expect(within(details).getByText(/\d+ records/)).toBeInTheDocument();
     expect(within(details).queryByTestId("event-trace")).toBeNull();
