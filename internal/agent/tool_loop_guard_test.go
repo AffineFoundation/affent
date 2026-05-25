@@ -121,12 +121,17 @@ func TestToolLoopGuard_WebFetchFailsFast(t *testing.T) {
 	if got := g.recordOutcome("web_fetch", false); got != "" {
 		t.Fatalf("third web_fetch failure should wait for halt threshold, got %q", got)
 	}
+	for i := 4; i < webFetchFailureHaltThreshold; i++ {
+		if got := g.recordOutcome("web_fetch", false); got != "" {
+			t.Fatalf("web_fetch failure %d should wait for halt threshold, got %q", i, got)
+		}
+	}
 	got = g.recordOutcome("web_fetch", false)
-	if !strings.Contains(got, "failed 4 consecutive times") {
-		t.Fatalf("fourth web_fetch failure should halt, got %q", got)
+	if !strings.Contains(got, "failed 8 consecutive times") {
+		t.Fatalf("eighth web_fetch failure should halt, got %q", got)
 	}
 	got = g.recordAttempt("web_fetch", json.RawMessage(`{"url":"https://example.com/other"}`))
-	if !strings.Contains(got, "already failed 4 consecutive times") {
+	if !strings.Contains(got, "already failed 8 consecutive times") {
 		t.Fatalf("halted web_fetch should block subsequent attempts with web threshold, got %q", got)
 	}
 }

@@ -113,6 +113,9 @@ func TestWithExternalResearchSystemGuidance_AppendsOnce(t *testing.T) {
 			t.Fatalf("browser-only guidance missing %q:\n%s", want, browserOnly)
 		}
 	}
+	if !strings.Contains(browserOnly, "public search result pages") || !strings.Contains(browserOnly, "bot challenge") {
+		t.Fatalf("browser-only guidance should explain browser-based discovery:\n%s", browserOnly)
+	}
 
 	webOnly := WithExternalResearchSystemGuidance("be helpful", externalResearchToolSurface{WebSearch: true, WebFetch: true})
 	for _, forbidden := range []string{"browser_navigate", "browser_snapshot", "browser tools"} {

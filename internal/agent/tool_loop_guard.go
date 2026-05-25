@@ -17,7 +17,7 @@ const (
 	toolFailureWarnThreshold        = 3
 	toolFailureHaltThreshold        = 8
 	webFetchFailureWarnThreshold    = 2
-	webFetchFailureHaltThreshold    = 4
+	webFetchFailureHaltThreshold    = 8
 
 	loopGuardCallCapKind             = "loop_guard_call_cap"
 	loopGuardHaltedToolKind          = "loop_guard_halted_tool"
