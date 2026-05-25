@@ -71,6 +71,10 @@ func IsNoEvidenceResult(tool, result string) bool {
 
 func IsNoEvidenceWebFetchResult(result string) bool {
 	result = strings.TrimSpace(result)
+	if strings.HasPrefix(result, "[dynamic page shell:") &&
+		strings.Contains(result, "Embedded data preview (page source evidence; verify relevance before using):") {
+		return false
+	}
 	return strings.HasPrefix(result, "[empty response:") ||
 		strings.HasPrefix(result, "[blocked response:") ||
 		strings.HasPrefix(result, "[dynamic page shell:") ||

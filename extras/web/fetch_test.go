@@ -394,6 +394,35 @@ func TestFetchTool_DynamicAppShellReportsNoEvidence(t *testing.T) {
 	}
 }
 
+func TestFetchTool_DynamicAppShellSurfacesRelevantEmbeddedData(t *testing.T) {
+	scripts := strings.Repeat(`<script src="/_next/static/chunks/app.js"></script>`, 10)
+	var older strings.Builder
+	for i := 1; i <= 30; i++ {
+		fmt.Fprintf(&older, `{"netuid":%d,"subnet_name":"Other %d","github_repo":"https://github.com/example/%d","subnet_url":"example.com/%d"},`, i, i, i, i)
+	}
+	embedded := `<script>self.__next_f.push(["",{"props":{"pageProps":{"data":[` + older.String() + `{"netuid":120,"subnet_name":"Affine","github_repo":"https://github.com/AffineFoundation/affine","subnet_url":"www.affine.io","contact":"hello@affine.io"},{"netuid":120,"price":"0.061","market_cap":"195094","volume_24h":"5001","rank":5}]}}}])</script>`
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "text/html; charset=utf-8")
+		w.Write([]byte(`<!doctype html><html><head>` + scripts + `</head><body><div id="__next"><main>Loading...</main></div>` + embedded + `</body></html>`))
+	}))
+	defer srv.Close()
+
+	tool := FetchTool(FetchConfig{AllowPrivateNetwork: true})
+	args, _ := json.Marshal(map[string]string{"url": srv.URL + "/subnets/120"})
+	out, err := tool.Execute(context.Background(), args)
+	if err != nil {
+		t.Fatalf("Execute: %v", err)
+	}
+	for _, want := range []string{"dynamic page shell", "Embedded data preview (page source evidence", `"netuid":120`, `"subnet_name":"Affine"`, `"market_cap":"195094"`, "Next:"} {
+		if !strings.Contains(out, want) {
+			t.Fatalf("dynamic shell embedded data output missing %q:\n%s", want, out)
+		}
+	}
+	if strings.Contains(out, "Failure: kind=dynamic_shell") {
+		t.Fatalf("dynamic shell with relevant embedded data should not be counted as no-evidence failure:\n%s", out)
+	}
+}
+
 func TestFetchTool_LargeClientRenderedShellReportsNoEvidence(t *testing.T) {
 	scripts := strings.Repeat(`<script src="/_next/static/chunks/app.js"></script>`, 40)
 	largeState := strings.Repeat(`<script>self.__next_f.push(["",{"bootstrap":"`+strings.Repeat("x", 1024)+`"}])</script>`, 600)

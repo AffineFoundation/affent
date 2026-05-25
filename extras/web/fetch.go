@@ -213,7 +213,7 @@ func fetch(ctx context.Context, cfg FetchConfig, requestURL string) (string, err
 		return blockedFetchResult(finalURL, ct, reason), nil
 	}
 	if reason := dynamicPageShellReason(body, ct, out); reason != "" {
-		return dynamicPageShellResult(finalURL, ct, reason, dynamicShellDiscoveryPreview(out), dynamicShellDiscoveryLinks(body, finalURL)), nil
+		return dynamicPageShellResult(finalURL, ct, reason, dynamicShellDiscoveryPreview(out), dynamicShellDiscoveryLinks(body, finalURL), embeddedDataSnippets(body, finalURL)), nil
 	}
 
 	if len(out) > cfg.MaxResultChars {
@@ -247,7 +247,7 @@ type dynamicShellLink struct {
 	order int
 }
 
-func dynamicPageShellResult(finalURL, contentType, reason, preview string, links []dynamicShellLink) string {
+func dynamicPageShellResult(finalURL, contentType, reason, preview string, links []dynamicShellLink, dataSnippets []string) string {
 	var b strings.Builder
 	fmt.Fprintf(&b, "[dynamic page shell: URL=%s, Content-Type=%q, Reason=%q]", finalURL, contentType, reason)
 	if preview != "" {
@@ -262,6 +262,14 @@ func dynamicPageShellResult(finalURL, contentType, reason, preview string, links
 				fmt.Fprintf(&b, "\n- %s", link.URL)
 			}
 		}
+	}
+	if len(dataSnippets) > 0 {
+		b.WriteString("\nEmbedded data preview (page source evidence; verify relevance before using):")
+		for _, snippet := range dataSnippets {
+			fmt.Fprintf(&b, "\n- %s", snippet)
+		}
+		b.WriteString("\nNext: the rendered page shell itself is not evidence; use the embedded data preview only when it directly matches the requested entity/URL, otherwise switch to a canonical API/text/source page or mark rendered-only fields as unverified.")
+		return b.String()
 	}
 	b.WriteString("\nFailure: kind=dynamic_shell\nNext: do not treat this loading/app shell as source evidence; use the discovery preview/links only to choose a canonical API/text/source page, or answer with this source marked as dynamic/unverified.")
 	return b.String()

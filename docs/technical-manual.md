@@ -261,6 +261,11 @@ the agent can switch source instead of burning turns:
   extracted from visible shell navigation; use them only to choose a canonical
   API/text/export endpoint, not as verified page evidence. If
   no better source is available, mark the source as dynamic/unverified.
+  When the fetched HTML contains URL-relevant embedded app state or JSON, the
+  result can instead include an `Embedded data preview (page source evidence)`
+  block. That block is bounded and does not make the rendered shell itself
+  evidence; use it only when the fields directly match the requested entity or
+  route, and prefer canonical API/text/export endpoints when available.
 - `Failure: kind=non_text`: the source returned an image, PDF, archive, or
   another body that is not readable page evidence.
 - `Failure: kind=timeout`, `network_error`, `rate_limited`, `server_error`,

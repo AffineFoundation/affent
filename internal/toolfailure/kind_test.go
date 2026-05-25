@@ -74,6 +74,7 @@ func TestIsNoEvidenceResult(t *testing.T) {
 		{name: "fetch non text", tool: "web_fetch", result: "[non-text response: URL=https://example]", want: true},
 		{name: "fetch blocked challenge", tool: "web_fetch", result: "[blocked response: URL=https://example]\nFailure: kind=blocked", want: true},
 		{name: "fetch dynamic shell", tool: "web_fetch", result: "[dynamic page shell: URL=https://example]\nFailure: kind=dynamic_shell", want: true},
+		{name: "fetch dynamic shell with embedded evidence", tool: "web_fetch", result: "[dynamic page shell: URL=https://example]\nEmbedded data preview (page source evidence; verify relevance before using):\n- {\"id\":120,\"name\":\"Affine\"}", want: false},
 		{name: "search none", tool: "web_search", result: "(no results)\nFailure: kind=no_results", want: true},
 		{name: "search unusable", tool: "web_search", result: "(no usable results: search provider returned no URLs)\nFailure: kind=no_results", want: true},
 		{name: "search hits", tool: "web_search", result: "1. Result\n   https://example.com\n   snippet", want: false},

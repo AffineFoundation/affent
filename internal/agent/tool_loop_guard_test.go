@@ -389,6 +389,7 @@ func TestToolOutcomeCountsNoEvidenceWebFetchAsFailure(t *testing.T) {
 		{name: "web fetch empty", tool: "web_fetch", result: "[empty response: URL=https://example]", want: false},
 		{name: "web fetch blocked challenge", tool: "web_fetch", result: "[blocked response: URL=https://example]\nFailure: kind=blocked", want: false},
 		{name: "web fetch dynamic shell", tool: "web_fetch", result: "[dynamic page shell: URL=https://example]\nFailure: kind=dynamic_shell", want: false},
+		{name: "web fetch dynamic shell embedded evidence", tool: "web_fetch", result: "[dynamic page shell: URL=https://example]\nEmbedded data preview (page source evidence; verify relevance before using):\n- {\"id\":120,\"name\":\"Affine\"}", want: true},
 		{name: "web fetch non text", tool: "web_fetch", result: "  [non-text response: URL=https://example]  ", want: false},
 		{name: "web fetch hard error", tool: "web_fetch", result: "Error: http 403", isErr: true, want: false},
 		{name: "web search no results", tool: "web_search", result: "(no results)\nFailure: kind=no_results", want: false},
