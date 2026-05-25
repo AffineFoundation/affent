@@ -144,7 +144,7 @@ describe("EventTrace", () => {
 
     expect(screen.getByText("Hello")).toBeInTheDocument();
     expect(screen.getByText("2 updates · 5 chars")).toBeInTheDocument();
-    expect(screen.getByText("3 raw events")).toBeInTheDocument();
+    expect(screen.getByText("3 source entries")).toBeInTheDocument();
     expect(screen.getByText(/"type": "message.done"/)).toBeInTheDocument();
     expect(screen.getByText("Thinking notes")).toBeInTheDocument();
   });
@@ -170,7 +170,7 @@ describe("EventTrace", () => {
     await user.click(screen.getAllByText("Assistant output")[0]);
 
     expect(screen.getByText("Hello")).toBeInTheDocument();
-    expect(screen.getByText("2 raw events")).toBeInTheDocument();
+    expect(screen.getByText("2 source entries")).toBeInTheDocument();
   });
 
   it("copies grouped delta raw event JSON payloads", async () => {
