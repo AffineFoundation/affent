@@ -715,7 +715,7 @@ test("workflow timeline renders with inline drill-down", async ({ page }, testIn
   await expect(page.locator(".execution-tree mark", { hasText: "MCP_search" }).first()).toBeVisible();
   const firstToolDetails = page.getByTestId("tool-details").first();
   const toolTraceSummary = firstToolDetails.locator(".nested-raw > summary");
-  await expect(toolTraceSummary).toContainText("Trace");
+  await expect(toolTraceSummary).toContainText("Event records");
   await expect(toolTraceSummary).toContainText(/\d+ records/);
   await expect(firstToolDetails.getByText(/\d+ events/)).toHaveCount(0);
   await toolTraceSummary.click();

@@ -457,11 +457,11 @@ describe("Timeline", () => {
     expect(details).toHaveTextContent("Output");
     expect(details).toHaveTextContent("Action details");
     expect(details).toHaveTextContent("Technical details");
-    expect(within(details).getByText("Trace")).toBeInTheDocument();
+    expect(within(details).getByText("Event records")).toBeInTheDocument();
     expect(within(details).getByText(/\d+ records/)).toBeInTheDocument();
     expect(within(details).queryByTestId("event-trace")).toBeNull();
 
-    await user.click(within(details).getByText("Trace"));
+    await user.click(within(details).getByText("Event records"));
 
     expect(within(details).getByTestId("event-trace")).toBeInTheDocument();
   });

@@ -6,7 +6,7 @@ import { EventTrace } from "./EventTrace";
 export function TraceDisclosure({
   events,
   className,
-  label = "Trace",
+  label = "Event records",
   children,
 }: {
   events: readonly NormalizedEvent[];
