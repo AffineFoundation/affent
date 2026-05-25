@@ -502,6 +502,22 @@ func TestToolFailureKindAtLeast(t *testing.T) {
 	})
 }
 
+func TestToolFailureKindAtMost(t *testing.T) {
+	trace := Trace{Tools: []ToolCall{
+		{CallID: "c1", Tool: "web_fetch", ExitCode: 0, FailureKind: "empty_response"},
+		{CallID: "c2", Tool: "web_fetch", ExitCode: 0, FailureKind: "empty_response"},
+	}}
+	if res := ToolFailureKindAtMost("empty_response", 2).Eval(trace); !res.Pass {
+		t.Fatalf("expected at-most check to pass: %+v", res)
+	}
+	if res := ToolFailureKindAtMost("dynamic_shell", 0).Eval(trace); !res.Pass {
+		t.Fatalf("expected missing kind to pass at max 0: %+v", res)
+	}
+	if res := ToolFailureKindAtMost("empty_response", 1).Eval(trace); res.Pass {
+		t.Fatal("expected at-most check to fail when count is above max")
+	}
+}
+
 func TestApplyTraceEventDerivesToolResultFailureKind(t *testing.T) {
 	trace := Trace{}
 	pending := map[string]int{}

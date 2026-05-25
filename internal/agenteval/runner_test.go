@@ -2064,6 +2064,148 @@ func TestRunner_EndToEnd_ExternalResearchDynamicShellDiscoveryLinks(t *testing.T
 	}
 }
 
+// TestRunner_EndToEnd_ExternalResearchDynamicShellEmbeddedData pins the
+// positive path for client-rendered dashboards whose HTML source already
+// contains URL-relevant structured data. In that case web_fetch returns an
+// Embedded data preview, the result is evidence rather than dynamic_shell
+// failure, and the agent should answer without spending another turn on a
+// fallback metrics API.
+func TestRunner_EndToEnd_ExternalResearchDynamicShellEmbeddedData(t *testing.T) {
+	webSearch := agent.Tool{
+		Name:        "web_search",
+		Description: "Test-only search stand-in: returns docs plus a dashboard with embedded data.",
+		Schema: json.RawMessage(`{
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["query"],
+            "properties": {
+                "query": {"type": "string"},
+                "num_results": {"type": "integer"}
+            }
+        }`),
+		Execute: func(ctx context.Context, args json.RawMessage) (string, error) {
+			return `[
+  {"title":"Orchid Subnet official docs","url":"https://official.example/orchid/about","snippet":"Primary source describing Orchid as a decentralized reasoning subnet."},
+  {"title":"Orchid market dashboard","url":"https://dashboard.example/subnets/120","snippet":"Client-rendered dashboard. HTML source contains subnet app state."},
+  {"title":"Orchid metrics API","url":"https://api.example/orchid/metrics.json","snippet":"Fallback metrics endpoint if dashboard source has no evidence."}
+]`, nil
+		},
+	}
+	webFetch := agent.Tool{
+		Name:        "web_fetch",
+		Description: "Test-only fetch stand-in: dashboard returns embedded page-source evidence.",
+		Schema: json.RawMessage(`{
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["url"],
+            "properties": {
+                "url": {"type": "string"}
+            }
+        }`),
+		Execute: func(ctx context.Context, args json.RawMessage) (string, error) {
+			var p struct {
+				URL string `json:"url"`
+			}
+			if err := json.Unmarshal(args, &p); err != nil {
+				return "", err
+			}
+			switch p.URL {
+			case "https://official.example/orchid/about":
+				return "Official docs, updated 2026-05-20: Orchid is a decentralized reasoning subnet.", nil
+			case "https://dashboard.example/subnets/120":
+				return `[dynamic page shell: URL=https://dashboard.example/subnets/120, Content-Type="text/html", Reason="client-rendered app shell"]
+Embedded data preview (page source evidence; verify relevance before using):
+- {"netuid":120,"subnet_name":"Orchid","github_repo":"https://github.com/example/orchid","subnet_url":"orchid.example","contact":"hello@orchid.example"}
+- {"netuid":120,"name":"Orchid","price":"0.061","market_cap":"195094","volume_24h":"5001","rank":5}
+Next: the rendered page shell itself is not evidence; use the embedded data preview only when it directly matches the requested entity/URL, otherwise switch to a canonical API/text/source page or mark rendered-only fields as unverified.`, nil
+			case "https://api.example/orchid/metrics.json":
+				return "", fmt.Errorf("fallback metrics API should not be fetched when dashboard source contains structured embedded evidence")
+			default:
+				return "", fmt.Errorf("unexpected test URL %q", p.URL)
+			}
+		},
+	}
+
+	turn1 := []string{
+		`{"choices":[{"delta":{"role":"assistant","tool_calls":[{"index":0,"id":"s1","type":"function","function":{"name":"web_search","arguments":"{\"query\":\"Orchid Subnet recent trend market metrics\",\"num_results\":5}"}}]},"finish_reason":null}]}`,
+		`{"choices":[{"delta":{},"finish_reason":"tool_calls"}]}`,
+		`[DONE]`,
+	}
+	turn2 := []string{
+		`{"choices":[{"delta":{"role":"assistant","tool_calls":[{"index":0,"id":"f1","type":"function","function":{"name":"web_fetch","arguments":"{\"url\":\"https://official.example/orchid/about\"}"}},{"index":1,"id":"f2","type":"function","function":{"name":"web_fetch","arguments":"{\"url\":\"https://dashboard.example/subnets/120\"}"}}]},"finish_reason":null}]}`,
+		`{"choices":[{"delta":{},"finish_reason":"tool_calls"}]}`,
+		`[DONE]`,
+	}
+	turn3 := []string{
+		`{"choices":[{"delta":{"role":"assistant","content":"Orchid is a decentralized reasoning subnet according to the official docs. The dashboard page is client-rendered, but its page source exposed embedded data directly matching subnet netuid 120, including github_repo https://github.com/example/orchid, price 0.061, market cap 195094, volume 5001, and rank 5. I used that embedded page-source evidence and did not need the fallback metrics API."},"finish_reason":"stop"}]}`,
+		`[DONE]`,
+	}
+	srv := newScriptedLLM(t, [][]string{turn1, turn2, turn3})
+	orchidSearch := func(args map[string]any) bool {
+		q, _ := args["query"].(string)
+		return strings.Contains(q, "Orchid Subnet")
+	}
+	fetchURL := func(url string) func(map[string]any) bool {
+		return func(args map[string]any) bool {
+			return args["url"] == url
+		}
+	}
+
+	scenario := Scenario{
+		Name:         "external_research_dynamic_shell_embedded_data",
+		Description:  "agent uses URL-relevant embedded dashboard data as evidence instead of treating the dashboard as a dynamic-shell failure",
+		Prompt:       "Assess current Orchid Subnet market metrics. If a fetched dashboard contains embedded page-source data for the requested subnet, use it as evidence and do not fetch fallback metrics unnecessarily.",
+		MaxTurnSteps: 6,
+		Checks: []Check{
+			TurnEndedCleanly(),
+			ToolCalled("web_search", orchidSearch),
+			ToolCalled("web_fetch", fetchURL("https://official.example/orchid/about")),
+			ToolCalled("web_fetch", fetchURL("https://dashboard.example/subnets/120")),
+			ToolNotCalled("web_fetch", fetchURL("https://api.example/orchid/metrics.json")),
+			ToolFailureKindAtMost("dynamic_shell", 0),
+			ToolResultContains("web_fetch", "Embedded data preview (page source evidence"),
+			ToolResultContains("web_fetch", `"netuid":120`),
+			ToolResultContains("web_fetch", `"market_cap":"195094"`),
+			ToolCalledBeforeMatching("web_search", orchidSearch, "web_fetch", fetchURL("https://dashboard.example/subnets/120")),
+			FinalTextContains("decentralized reasoning subnet"),
+			FinalTextContains("embedded data directly matching subnet netuid 120"),
+			FinalTextContains("market cap 195094"),
+			FinalTextContains("did not need the fallback metrics API"),
+		},
+	}
+
+	runner := &Runner{
+		LLM:            agent.NewLLMClient(srv.URL, "", "fake-model"),
+		MaxTurnSteps:   6,
+		PerCallTimeout: 5 * time.Second,
+		RunTimeout:     20 * time.Second,
+		Log:            zerolog.Nop(),
+		BuildRegistry: func(ctx context.Context, workspaceDir string, exec executor.Executor) (*agent.Registry, error) {
+			_ = ctx
+			_ = workspaceDir
+			_ = exec
+			reg := agent.NewRegistry()
+			reg.Add(&webSearch)
+			reg.Add(&webFetch)
+			return reg, nil
+		},
+	}
+
+	out, err := runner.Run(context.Background(), scenario)
+	if err != nil {
+		t.Fatalf("Runner.Run: %v", err)
+	}
+	if !out.Pass {
+		t.Errorf("expected all checks to pass; failed: %v", out.FailedChecks())
+		for _, r := range out.Results {
+			t.Logf("  %s: pass=%v detail=%s", r.Check, r.Pass, r.Detail)
+		}
+	}
+	if len(out.Trace.Tools) != 3 {
+		t.Fatalf("expected one search and two fetches; got %+v", out.Trace.Tools)
+	}
+}
+
 // TestRunner_EndToEnd_ExternalResearchDynamicHostGuard pins the runtime side
 // of dynamic-shell recovery: if a model keeps trying dashboard/page routes on
 // the same host after two dynamic shells, the loop guard blocks more page-route
