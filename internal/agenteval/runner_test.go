@@ -2877,3 +2877,137 @@ func TestRunner_RequiresScenarioName(t *testing.T) {
 		t.Errorf("unexpected error: %v", err)
 	}
 }
+
+// TestRunner_EndToEnd_ExternalResearchAffineBittensorFlow mirrors the real
+// Affine/Bittensor investigation shape so future changes don't regress back to
+// broad retries that burn the turn budget before the answer is assembled.
+func TestRunner_EndToEnd_ExternalResearchAffineBittensorFlow(t *testing.T) {
+	webSearch := agent.Tool{
+		Name:        "web_search",
+		Description: "Test-only search stand-in: returns an official source, a market page, and a social snippet.",
+		Schema: json.RawMessage(`{
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["query"],
+            "properties": {
+                "query": {"type": "string"},
+                "num_results": {"type": "integer"}
+            }
+        }`),
+		Execute: func(ctx context.Context, args json.RawMessage) (string, error) {
+			return `[
+  {"title":"Affine SN120 official docs","url":"https://official.example/affine/about","snippet":"Affine is a Bittensor subnet focused on model-training and reasoning workloads."},
+  {"title":"Affine SN120 market metrics","url":"https://metrics.example/affine","snippet":"Current price, market cap, 24h volume, and recent change for Affine SN120."},
+  {"title":"Recent community discussion","url":"https://social.example/search/affine","snippet":"Direct-reader warning: do not direct-fetch this social result. Mixed reactions about recent momentum and liquidity."}
+]`, nil
+		},
+	}
+	webFetch := agent.Tool{
+		Name:        "web_fetch",
+		Description: "Test-only fetch stand-in: returns deterministic Affine page text.",
+		Schema: json.RawMessage(`{
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["url"],
+            "properties": {
+                "url": {"type": "string"}
+            }
+        }`),
+		Execute: func(ctx context.Context, args json.RawMessage) (string, error) {
+			var p struct {
+				URL string `json:"url"`
+			}
+			if err := json.Unmarshal(args, &p); err != nil {
+				return "", err
+			}
+			switch p.URL {
+			case "https://official.example/affine/about":
+				return "Official docs, updated 2026-05-24: Affine is a Bittensor SN120 subnet for training-and-reasoning workloads.", nil
+			case "https://metrics.example/affine":
+				return "Metrics snapshot as of 2026-05-24T12:00:00Z: price $0.0632, market cap $195094, 24h volume $5001, 24h change +0.4%.", nil
+			default:
+				return "", fmt.Errorf("unexpected test URL %q", p.URL)
+			}
+		},
+	}
+
+	srv := newScriptedLLM(t, [][]string{
+		{
+			`{"choices":[{"delta":{"role":"assistant","tool_calls":[{"index":0,"id":"s1","type":"function","function":{"name":"web_search","arguments":"{\"query\":\"Affine Bittensor SN120 market price market cap official domain\",\"num_results\":5}"}}]},"finish_reason":null}]}`,
+			`{"choices":[{"delta":{},"finish_reason":"tool_calls"}]}`,
+			`[DONE]`,
+		},
+		{
+			`{"choices":[{"delta":{"role":"assistant","tool_calls":[{"index":0,"id":"f1","type":"function","function":{"name":"web_fetch","arguments":"{\"url\":\"https://official.example/affine/about\"}"}},{"index":1,"id":"f2","type":"function","function":{"name":"web_fetch","arguments":"{\"url\":\"https://metrics.example/affine\"}"}}]},"finish_reason":null}]}`,
+			`{"choices":[{"delta":{},"finish_reason":"tool_calls"}]}`,
+			`[DONE]`,
+		},
+		{
+			`{"choices":[{"delta":{"role":"assistant","content":"Affine is a Bittensor SN120 subnet focused on training-and-reasoning workloads according to the official docs. As of 2026-05-24T12:00:00Z, the metrics source reports price $0.0632, market cap $195094, 24h volume $5001, and a small positive daily change. The social result had a Direct-reader warning, so I treated it only as weak mixed sentiment evidence and did not fetch it. Overall, the current trend looks stable but still early and volatile."},"finish_reason":"stop"}]}`,
+			`[DONE]`,
+		},
+	})
+	searchArgs := func(args map[string]any) bool {
+		q, _ := args["query"].(string)
+		return strings.Contains(q, "Affine") &&
+			strings.Contains(q, "Bittensor") &&
+			strings.Contains(q, "market") &&
+			strings.Contains(q, "price")
+	}
+	fetchURL := func(url string) func(map[string]any) bool {
+		return func(args map[string]any) bool { return args["url"] == url }
+	}
+
+	scenario := Scenario{
+		Name:        "external_research_affine_bittensor_flow",
+		Description: "agent discovers official and metrics sources, skips direct social fetch, and ends from verified evidence",
+		Prompt:      "Affine is a Bittensor SN120 subnet. Assess its recent trend and market position. Start from official and market sources, preserve the Bittensor/SN120 disambiguator, and keep social snippets as weak evidence only.",
+		MaxTurnSteps: 6,
+		Checks: []Check{
+			TurnEndedCleanly(),
+			ToolCalled("web_search", searchArgs),
+			ToolResultContains("web_search", "Direct-reader warning"),
+			ToolCalled("web_fetch", fetchURL("https://official.example/affine/about")),
+			ToolCalled("web_fetch", fetchURL("https://metrics.example/affine")),
+			ToolNotCalled("web_fetch", fetchURL("https://social.example/search/affine")),
+			ToolCalledBeforeMatching("web_search", searchArgs, "web_fetch", fetchURL("https://official.example/affine/about")),
+			ToolCalledBeforeMatching("web_search", searchArgs, "web_fetch", fetchURL("https://metrics.example/affine")),
+			FinalTextContains("Bittensor SN120 subnet"),
+			FinalTextContains("price $0.0632"),
+			FinalTextContains("market cap $195094"),
+			FinalTextContains("weak mixed sentiment evidence"),
+			FinalTextContains("stable but still early and volatile"),
+		},
+	}
+
+	runner := &Runner{
+		LLM:            agent.NewLLMClient(srv.URL, "", "fake-model"),
+		MaxTurnSteps:   6,
+		PerCallTimeout: 5 * time.Second,
+		RunTimeout:     20 * time.Second,
+		Log:            zerolog.Nop(),
+		BuildRegistry: func(ctx context.Context, workspaceDir string, exec executor.Executor) (*agent.Registry, error) {
+			_ = ctx
+			_ = workspaceDir
+			_ = exec
+			reg := agent.NewRegistry()
+			reg.Add(&webSearch)
+			reg.Add(&webFetch)
+			return reg, nil
+		},
+	}
+
+	out, err := runner.Run(context.Background(), scenario)
+	if err != nil {
+		t.Fatalf("Runner.Run: %v", err)
+	}
+	if !out.Pass {
+		t.Errorf("expected all checks to pass; failed: %v", out.FailedChecks())
+		for _, r := range out.Results {
+			t.Logf("  %s: pass=%v detail=%s", r.Check, r.Pass, r.Detail)
+		}
+	}
+	if len(out.Trace.Tools) != 3 {
+		t.Fatalf("expected one search and two fetches; got %+v", out.Trace.Tools)
+	}
+}

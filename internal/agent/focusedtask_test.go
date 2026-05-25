@@ -444,7 +444,7 @@ func TestWithFocusedTaskSystemGuidance_AppendsOnce(t *testing.T) {
 	if WithFocusedTaskSystemGuidance("") == "" {
 		t.Fatal("empty input should fall back to default + guidance")
 	}
-	for _, want := range []string{"ordinary current-fact questions", "use available web/browser tools directly", "ordinary web research", "Delegation has its own LLM/tool budget"} {
+	for _, want := range []string{"ordinary current-fact questions", "use available web/browser tools directly", "ordinary web research", "Delegation has its own LLM/tool budget", "parent ecosystem, the entity name or ticker, and the metric intent", "visible list or table already shows the target entity row", "exact row label, ticker, or id"} {
 		if !strings.Contains(once, want) {
 			t.Fatalf("focused-task guidance missing delegation budget guard %q:\n%s", want, once)
 		}
@@ -463,7 +463,7 @@ func TestWithFocusedTaskSystemGuidance_AppendsOnce(t *testing.T) {
 
 func TestResearchProfileGuidesGeneralExternalResearch(t *testing.T) {
 	profile := researchProfile()
-	for _, want := range []string{"registered external lookup tools", "authoritative sources", "Source hint", "llms.txt", "Direct-reader warning", "Embedded data preview", "page-source evidence", "dynamic metric/dashboard/detail pages", "price market cap FDV volume supply TVL", "24h 7d volume market cap", "validators miners stake emission", "rather than repeating only the entity name", "Open the 1-3 highest-value visible result URLs", "before refining the search", "Preserve user-provided disambiguators", "network/subnet id", "same-name standalone product", "searched the asserted parent ecosystem", "absent from one visible list", "parent ecosystem plus known ids/synonyms", "successfully accessed only when a tool actually read that URL", "discovered/unverified", "market, metrics, or trend questions", "social posts", "independent corroborating source", "API/text/export endpoints"} {
+	for _, want := range []string{"registered external lookup tools", "authoritative sources", "Source hint", "llms.txt", "Direct-reader warning", "Embedded data preview", "page-source evidence", "dynamic metric/dashboard/detail pages", "price market cap FDV volume supply TVL", "24h 7d volume market cap", "validators miners stake emission", "rather than repeating only the entity name", "Open the 1-3 highest-value visible result URLs", "before refining the search", "Preserve user-provided disambiguators", "network/subnet id", "parent ecosystem, the entity name or ticker, and the metric intent", "visible list or table already shows the target entity row", "same-name standalone product", "searched the asserted parent ecosystem", "absent from one visible list", "parent ecosystem plus known ids/synonyms", "successfully accessed only when a tool actually read that URL", "discovered/unverified", "market, metrics, or trend questions", "social posts", "independent corroborating source", "API/text/export endpoints"} {
 		if !strings.Contains(profile.SystemPromptHints, want) {
 			t.Fatalf("research profile guidance missing %q:\n%s", want, profile.SystemPromptHints)
 		}

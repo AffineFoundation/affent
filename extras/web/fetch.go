@@ -585,7 +585,7 @@ func validateRenderedFallbackURL(ctx context.Context, cfg FetchConfig, rawURL st
 
 func shouldUseRenderedFallback(reason FetchFallbackReason) bool {
 	switch reason.Kind {
-	case "blocked", "rate_limited", "dynamic_shell", "direct_reader_trap", "search_results_page":
+	case "blocked", "rate_limited", "dynamic_shell", "direct_reader_trap", "search_results_page", "not_found":
 		return true
 	default:
 		return false

@@ -609,6 +609,40 @@ func TestFetchTool_UsesRenderedFallbackForDynamicShell(t *testing.T) {
 	}
 }
 
+func TestFetchTool_UsesRenderedFallbackForNotFoundHTML(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "text/html; charset=utf-8")
+		w.WriteHeader(http.StatusNotFound)
+		w.Write([]byte(`<html><body><main><h1>404</h1><a href="/subnets">Subnets</a></main></body></html>`))
+	}))
+	defer srv.Close()
+
+	var gotReason FetchFallbackReason
+	tool := FetchTool(FetchConfig{
+		AllowPrivateNetwork: true,
+		RenderedFallback: func(_ context.Context, requestURL string, reason FetchFallbackReason) (string, error) {
+			gotReason = reason
+			return "URL: " + requestURL + "\nTITLE: recovered page\n\nPAGE TEXT:\np: rendered 404 with a usable navigation link\n", nil
+		},
+	})
+	args, _ := json.Marshal(map[string]string{"url": srv.URL})
+	out, err := tool.Execute(context.Background(), args)
+	if err != nil {
+		t.Fatalf("Execute: %v", err)
+	}
+	for _, want := range []string{"rendered browser fallback", "DirectFetchReason=\"not_found\"", "recovered page", "usable navigation link"} {
+		if !strings.Contains(out, want) {
+			t.Fatalf("not-found rendered fallback output missing %q:\n%s", want, out)
+		}
+	}
+	if gotReason.Kind != "not_found" || gotReason.Status != http.StatusNotFound || gotReason.FinalURL == "" {
+		t.Fatalf("not-found fallback reason not populated: %+v", gotReason)
+	}
+	if strings.Contains(out, "Failure: kind=not_found") {
+		t.Fatalf("successful rendered fallback should not be counted as not_found:\n%s", out)
+	}
+}
+
 func TestRenderedFallbackSourceAccessRecordsRequestedURL(t *testing.T) {
 	out, err := renderedFallbackResult(context.Background(), FetchConfig{
 		AllowPrivateNetwork: true,
