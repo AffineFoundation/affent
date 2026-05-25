@@ -263,6 +263,69 @@ func TestUserMessageSummariesFromMessagesKeepStableTopic(t *testing.T) {
 	}
 }
 
+func TestSummarizeSessionTitleFromUserMessage(t *testing.T) {
+	for _, tc := range []struct {
+		name string
+		in   string
+		want string
+	}{
+		{
+			name: "chinese subnet research",
+			in:   "affine 是 Bittensor 的一个子网，请收集信息并向我介绍",
+			want: "Affine（Bittensor 子网）",
+		},
+		{
+			name: "title feedback",
+			in:   "会话的标题最好是经过总结的，而不是把第一句话的输入当做标题",
+			want: "会话标题摘要",
+		},
+		{
+			name: "focus phrase",
+			in:   "理解当前项目，重点关注webui的设计",
+			want: "WebUI 设计",
+		},
+		{
+			name: "english review",
+			in:   "please review the WebUI session list behavior",
+			want: "WebUI session list behavior",
+		},
+		{
+			name: "question topic",
+			in:   "bittensor是什么",
+			want: "Bittensor",
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := summarizeSessionTitleFromUserMessage(tc.in); got != tc.want {
+				t.Fatalf("title = %q, want %q", got, tc.want)
+			}
+		})
+	}
+}
+
+func TestSummarizeDurableSessionIncludesGeneratedTitle(t *testing.T) {
+	memRoot := t.TempDir()
+	pool := newPoolWithMemoryRoot(t, memRoot)
+	createDurableSessionDir(t, pool, "titled")
+	convPath := filepath.Join(pool.sessionDirPath("titled"), "conversation.jsonl")
+	if err := os.WriteFile(convPath, []byte(
+		`{"role":"user","content":"affine 是 Bittensor 的一个子网，请收集信息并向我介绍"}`+"\n",
+	), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	summary, found, err := summarizeDurableSession(pool, "titled")
+	if err != nil {
+		t.Fatalf("summarizeDurableSession: %v", err)
+	}
+	if !found {
+		t.Fatal("durable session should be found")
+	}
+	if summary.SummaryTitle != "Affine（Bittensor 子网）" {
+		t.Fatalf("summary_title = %q, want generated topic title", summary.SummaryTitle)
+	}
+}
+
 func TestLatestUserMessageFromConversationFileDoesNotScanWholeHugeLog(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "conversation.jsonl")
 	body := `{"role":"user","content":"old task outside bounded tail"}` + "\n" +

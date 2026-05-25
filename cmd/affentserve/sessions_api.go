@@ -9,10 +9,12 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"regexp"
 	"sort"
 	"strconv"
 	"strings"
 	"time"
+	"unicode/utf8"
 
 	agent "github.com/affinefoundation/affent/internal/agent"
 	"github.com/affinefoundation/affent/internal/jsonl"
@@ -49,6 +51,7 @@ type sessionCreateResponse struct {
 
 type sessionSummary struct {
 	ID                string                `json:"id"`
+	SummaryTitle      string                `json:"summary_title,omitempty"`
 	Active            bool                  `json:"active"`
 	Durable           bool                  `json:"durable"`
 	CreatedAt         string                `json:"created_at,omitempty"`
@@ -419,7 +422,7 @@ func summarizeActiveSession(s *Session, cfg Config) sessionSummary {
 	tools := s.ToolStatsSnapshot()
 	browser := s.BrowserStatsSnapshot()
 	caps := summarizeActiveCapabilities(s, cfg)
-	return sessionSummary{
+	summary := sessionSummary{
 		ID:                s.ID,
 		Active:            true,
 		CreatedAt:         formatTime(createdAt),
@@ -431,6 +434,8 @@ func summarizeActiveSession(s *Session, cfg Config) sessionSummary {
 		Tools:             &tools,
 		Browser:           &browser,
 	}
+	populateSessionSummaryTitle(&summary)
+	return summary
 }
 
 func summarizeActiveCapabilities(s *Session, cfg Config) sessionCapabilities {
@@ -550,6 +555,7 @@ func summarizeDurableSession(pool *SessionPool, id string) (sessionSummary, bool
 		}
 	}
 	summary.LastUsedAt = formatTime(newest)
+	populateSessionSummaryTitle(&summary)
 	return summary, true, nil
 }
 
@@ -565,6 +571,9 @@ func mergeSessionSummaries(a, b sessionSummary) sessionSummary {
 	}
 	if a.TopicUserMessage == "" && b.TopicUserMessage != "" {
 		a.TopicUserMessage = b.TopicUserMessage
+	}
+	if a.SummaryTitle == "" && b.SummaryTitle != "" {
+		a.SummaryTitle = b.SummaryTitle
 	}
 	a.HasEvents = a.HasEvents || b.HasEvents
 	a.HasPlan = a.HasPlan || b.HasPlan
@@ -726,6 +735,194 @@ func userMessageSummariesFromMessages(messages []agent.ChatMessage) (string, str
 		topic = latest
 	}
 	return latest, topic
+}
+
+var (
+	cnSessionTitleActionRE = regexp.MustCompile(`^(?:请你?|麻烦你?|帮我|帮忙|真实地?|真实|实际地?|完整地?|详细地?|认真地?)?\s*(?:新增|添加|实现|开发|构建|创建|写|编写|修复|解决|优化|重构|完善|改进|设计|理解|查看|检查|审查|收集|检索|查询|查找|搜索|调研|研究|介绍|分析|总结|梳理|说明|整理)\s*(?:一下|下|一个|一种|一类|一份|这个|当前)?\s*([^。！？；;\n]{2,120})`)
+	enSessionTitleActionRE = regexp.MustCompile(`(?i)^(?:please\s+|can you\s+|could you\s+)?(?:review|research|inspect|summarize|analyze|explain|fix|debug|improve|refactor|implement|build|create|design|understand)\s+(?:the\s+|a\s+|an\s+|current\s+)?([^!?;\n]{2,120})`)
+	cnSessionTitleTopicRE  = regexp.MustCompile(`^(.{1,40}?)\s*(?:是|为)\s*(.{1,50}?)\s*的\s*(?:一个|一种|一类)?\s*(子网|项目|协议|平台|工具|框架|网络)\s*$`)
+	enSessionTitleTopicRE  = regexp.MustCompile(`(?i)^(.{1,40}?)\s+(?:is|as)\s+(?:an?\s+)?(.{1,50}?)\s+(subnet|project|protocol|platform|tool|framework|network)\s*$`)
+)
+
+func populateSessionSummaryTitle(summary *sessionSummary) {
+	source := summary.TopicUserMessage
+	if source == "" {
+		source = summary.LatestUserMessage
+	}
+	title := summarizeSessionTitleFromUserMessage(source)
+	if title == "" || normalizeSessionTitleComparable(title) == normalizeSessionTitleComparable(source) {
+		return
+	}
+	summary.SummaryTitle = truncateSessionTitle(title, 58)
+}
+
+func summarizeSessionTitleFromUserMessage(text string) string {
+	cleaned := strings.TrimSpace(strings.Join(strings.Fields(text), " "))
+	if cleaned == "" {
+		return ""
+	}
+	if title := summarizeSessionTitleFeedback(cleaned); title != "" {
+		return title
+	}
+	if title := summarizeSessionFocusTitle(cleaned); title != "" {
+		return title
+	}
+	if title := summarizeSessionActionTitle(cleaned); title != "" {
+		return title
+	}
+	firstClause := firstSessionTitleClause(cleaned)
+	topicInput := prettySessionTopicName(trimSessionTitleSuffix(stripSessionTitlePrefix(firstClause)))
+	if title := summarizeSessionTopicStatement(topicInput); title != "" {
+		return title
+	}
+	return normalizeSessionTitlePhrase(topicInput)
+}
+
+func summarizeSessionTitleFeedback(text string) string {
+	lower := strings.ToLower(text)
+	if (strings.Contains(text, "会话") || strings.Contains(text, "聊天") || strings.Contains(lower, "session") || strings.Contains(lower, "chat")) &&
+		(strings.Contains(text, "标题") || strings.Contains(lower, "title")) &&
+		(strings.Contains(text, "总结") || strings.Contains(text, "摘要") || strings.Contains(text, "归纳") || strings.Contains(text, "概括") || strings.Contains(lower, "summar")) {
+		return "会话标题摘要"
+	}
+	return ""
+}
+
+func summarizeSessionFocusTitle(text string) string {
+	for _, marker := range []string{"重点关注", "主要关注", "优先关注", "关注", "围绕", "关于", "针对"} {
+		if _, tail, ok := strings.Cut(text, marker); ok {
+			return normalizeSessionTitlePhrase(firstSessionTitleClause(tail))
+		}
+	}
+	lower := strings.ToLower(text)
+	for _, marker := range []string{"focus on ", "focused on ", "focusing on ", "around ", "about ", "regarding "} {
+		if idx := strings.Index(lower, marker); idx >= 0 {
+			return normalizeSessionTitlePhrase(firstSessionTitleClause(text[idx+len(marker):]))
+		}
+	}
+	return ""
+}
+
+func summarizeSessionActionTitle(text string) string {
+	for _, re := range []*regexp.Regexp{cnSessionTitleActionRE, enSessionTitleActionRE} {
+		match := re.FindStringSubmatch(text)
+		if len(match) < 2 {
+			continue
+		}
+		if title := normalizeSessionTitlePhrase(match[1]); title != "" {
+			return title
+		}
+	}
+	return ""
+}
+
+func summarizeSessionTopicStatement(text string) string {
+	if match := cnSessionTitleTopicRE.FindStringSubmatch(text); len(match) == 4 {
+		return prettySessionTopicName(match[1]) + "（" + prettySessionTopicName(match[2]) + " " + prettySessionTopicName(match[3]) + "）"
+	}
+	if match := enSessionTitleTopicRE.FindStringSubmatch(text); len(match) == 4 {
+		return prettySessionTopicName(match[1]) + " (" + prettySessionTopicName(match[2]) + " " + strings.ToLower(match[3]) + ")"
+	}
+	return ""
+}
+
+func firstSessionTitleClause(text string) string {
+	value := strings.TrimSpace(text)
+	for _, sep := range []string{"。", "！", "？", "；", ";", "!", "?", "，", ","} {
+		if head, _, ok := strings.Cut(value, sep); ok && strings.TrimSpace(head) != "" {
+			value = strings.TrimSpace(head)
+			break
+		}
+	}
+	return value
+}
+
+func normalizeSessionTitlePhrase(text string) string {
+	value := strings.TrimSpace(text)
+	for {
+		next := stripSessionTitlePrefix(value)
+		next = trimSessionTitleSuffix(next)
+		if next == value {
+			break
+		}
+		value = next
+	}
+	value = strings.ReplaceAll(value, "的", " ")
+	value = strings.TrimSpace(strings.Join(strings.Fields(value), " "))
+	return prettySessionTopicName(value)
+}
+
+func stripSessionTitlePrefix(text string) string {
+	value := strings.TrimSpace(text)
+	prefixes := []string{
+		"请你", "请", "麻烦你", "麻烦", "帮我", "帮忙", "真实地", "真实", "实际地", "实际", "完整地", "完整", "详细地", "详细", "认真地", "认真",
+		"收集", "检索", "查询", "查找", "搜索", "调研", "研究", "介绍", "分析", "总结", "梳理", "说明", "整理", "获取", "输出", "生成",
+	}
+	for _, prefix := range prefixes {
+		if strings.HasPrefix(value, prefix) {
+			return strings.TrimSpace(strings.TrimPrefix(value, prefix))
+		}
+	}
+	lower := strings.ToLower(value)
+	for _, prefix := range []string{"please ", "can you ", "could you ", "the ", "a ", "an ", "review ", "research ", "inspect ", "summarize ", "analyze ", "explain "} {
+		if strings.HasPrefix(lower, prefix) {
+			return strings.TrimSpace(value[len(prefix):])
+		}
+	}
+	return value
+}
+
+func trimSessionTitleSuffix(text string) string {
+	value := strings.TrimSpace(text)
+	for _, sep := range []string{"并向我介绍", "并介绍", "并说明", "并分析", "并总结", "向我介绍", "相关信息", "相关资料", "相关内容", "信息", "资料", "内容"} {
+		if idx := strings.Index(value, sep); idx >= 0 {
+			value = strings.TrimSpace(value[:idx])
+		}
+	}
+	for _, suffix := range []string{"是什么", "是啥", "是什麼"} {
+		value = strings.TrimSuffix(value, suffix)
+	}
+	return strings.TrimSpace(value)
+}
+
+func prettySessionTopicName(text string) string {
+	value := strings.TrimSpace(strings.Join(strings.Fields(strings.Trim(text, "“”\"'")), " "))
+	replacements := []struct {
+		from string
+		to   string
+	}{
+		{"affine", "Affine"},
+		{"bittensor", "Bittensor"},
+		{"webui", "WebUI"},
+		{"api", "API"},
+		{"mcp", "MCP"},
+		{"llm", "LLM"},
+		{"tao", "TAO"},
+	}
+	for _, repl := range replacements {
+		value = replaceSessionTitleWord(value, repl.from, repl.to)
+	}
+	return value
+}
+
+func replaceSessionTitleWord(text, from, to string) string {
+	re := regexp.MustCompile(`(?i)\b` + regexp.QuoteMeta(from) + `\b`)
+	return re.ReplaceAllString(text, to)
+}
+
+func normalizeSessionTitleComparable(text string) string {
+	return strings.ToLower(strings.TrimSpace(strings.Join(strings.Fields(text), " ")))
+}
+
+func truncateSessionTitle(text string, limit int) string {
+	if utf8.RuneCountInString(text) <= limit {
+		return text
+	}
+	runes := []rune(text)
+	if limit <= 3 {
+		return string(runes[:limit])
+	}
+	return string(runes[:limit-3]) + "..."
 }
 
 func summarizeLatestUserMessage(text string) string {
