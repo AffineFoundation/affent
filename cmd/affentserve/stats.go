@@ -45,6 +45,7 @@ type statsBoundaries struct {
 	ToolRequestArgsEvent       int    `json:"tool_request_args_event_bytes"`
 	ToolRequestArgString       int    `json:"tool_request_arg_string_bytes"`
 	ToolResultContext          int    `json:"tool_result_context_bytes"`
+	ToolResultContextBudget    int    `json:"tool_result_context_budget_bytes"`
 	ToolResultEvent            int    `json:"tool_result_event_bytes"`
 	ToolResultPreview          int    `json:"tool_result_preview_bytes"`
 	RepairableToolArg          int    `json:"repairable_tool_arg_bytes"`
@@ -257,6 +258,7 @@ func statsBoundarySnapshot(cfg Config) statsBoundaries {
 		ToolRequestArgsEvent:       ab.ToolRequestArgsEvent,
 		ToolRequestArgString:       ab.ToolRequestArgString,
 		ToolResultContext:          ab.ToolResultContextBytes,
+		ToolResultContextBudget:    ab.ToolResultContextBudgetBytes,
 		ToolResultEvent:            ab.ToolResultEventBytes,
 		ToolResultPreview:          ab.ToolResultPreviewBytes,
 		RepairableToolArg:          ab.RepairableToolArgBytes,

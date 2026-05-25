@@ -986,6 +986,17 @@ func TestLoopToolResultContextCapsByTool(t *testing.T) {
 	}
 }
 
+func TestLoopToolResultContextBudgetDefaultAndOverride(t *testing.T) {
+	loop := &Loop{}
+	if got := loop.toolResultContextBudgetBytes(); got != DefaultToolResultContextBudgetBytes {
+		t.Fatalf("default tool context budget = %d, want %d", got, DefaultToolResultContextBudgetBytes)
+	}
+	loop.ToolResultContextBudgetBytes = 321
+	if got := loop.toolResultContextBudgetBytes(); got != 321 {
+		t.Fatalf("explicit tool context budget = %d, want 321", got)
+	}
+}
+
 func TestTruncateToolResultForContextGuidanceByTool(t *testing.T) {
 	payload := strings.Repeat("x", 256)
 

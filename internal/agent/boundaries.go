@@ -14,6 +14,7 @@ type RuntimeBoundaries struct {
 	ToolRequestArgString            int
 	ToolRequestArgsEvent            int
 	ToolResultContextBytes          int
+	ToolResultContextBudgetBytes    int
 	ToolResultPreviewBytes          int
 	ToolResultEventBytes            int
 	RepairableToolArgBytes          int
@@ -80,6 +81,7 @@ func DefaultRuntimeBoundaries() RuntimeBoundaries {
 		ToolRequestArgString:            maxToolRequestArgStringBytes,
 		ToolRequestArgsEvent:            maxToolRequestArgsEventBytes,
 		ToolResultContextBytes:          MaxToolResultBytesInContext,
+		ToolResultContextBudgetBytes:    DefaultToolResultContextBudgetBytes,
 		ToolResultPreviewBytes:          MaxToolResultPreviewInEvent,
 		ToolResultEventBytes:            MaxToolResultBytesInEvent,
 		RepairableToolArgBytes:          maxRepairableToolArgBytes,

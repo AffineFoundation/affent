@@ -55,6 +55,12 @@ const (
 // large API response can balloon the prompt for every subsequent turn.
 const MaxToolResultBytesInContext = 8 * 1024
 
+// DefaultToolResultContextBudgetBytes caps the combined raw tool-result
+// bytes appended to model context during one user turn. Per-tool caps stop
+// one oversized result; this turn-level budget stops many medium browser/web
+// results from accumulating into a huge follow-up prompt.
+const DefaultToolResultContextBudgetBytes = 48 * 1024
+
 // MaxToolResultPreviewInEvent is what we put in the tool.result event
 // payload's result_summary. Bigger than the in-context cap is fine
 // because front-ends might want to render more for the user even if
@@ -96,6 +102,10 @@ type Loop struct {
 	// into conversation history for subsequent LLM calls. Zero uses
 	// MaxToolResultBytesInContext. Full tool results still go to SSE.
 	ToolResultMaxBytesInContext int
+	// ToolResultContextBudgetBytes caps the combined raw tool result bytes
+	// persisted into conversation history during one user turn. Zero uses
+	// DefaultToolResultContextBudgetBytes. Full tool results still go to SSE.
+	ToolResultContextBudgetBytes int
 	// ToolResultArtifactDir, when set, stores full tool outputs that were
 	// too large for the tool.result event. ToolResultArtifactPathPrefix is
 	// the workspace-relative prefix exposed in the event payload.
@@ -734,6 +744,7 @@ func (l *Loop) runTurn(ctx context.Context, turnID, userText string, opts TurnOp
 	forceNoToolsNext := false
 	guardInterventions := 0
 	toolStats := sse.ToolRuntimeStats{}
+	toolContextBudget := newToolResultContextBudget(l.toolResultContextBudgetBytes())
 	for {
 		if ctx.Err() != nil {
 			endReason = sse.TurnEndCancelled
@@ -912,7 +923,8 @@ func (l *Loop) runTurn(ctx context.Context, turnID, userText string, opts TurnOp
 			})
 			if argsRepairErr != nil {
 				result := fmt.Sprintf("tool_arg_repair: %v", argsRepairErr)
-				l.publishAndAppendToolResultWithDelegation(turnID, callID, toolName, result, true, 0, delegation)
+				omitted := l.publishAndAppendToolResultWithContext(turnID, callID, toolName, result, true, 0, delegation, toolContextBudget)
+				recordToolContextOmission(&toolStats, omitted)
 				toolCallsUsed++
 				recordToolRepairOutcome(&toolStats, repairedToolCall, true)
 				toolStats.ToolErrors++
@@ -984,7 +996,8 @@ func (l *Loop) runTurn(ctx context.Context, turnID, userText string, opts TurnOp
 				continue
 			}
 			if result := loopGuard.recordAttempt(toolName, args); result != "" {
-				l.publishAndAppendToolResultWithDelegation(turnID, callID, toolName, result, true, 0, delegation)
+				omitted := l.publishAndAppendToolResultWithContext(turnID, callID, toolName, result, true, 0, delegation, toolContextBudget)
+				recordToolContextOmission(&toolStats, omitted)
 				toolCallsUsed++
 				recordToolRepairOutcome(&toolStats, repairedToolCall, true)
 				toolStats.ToolErrors++
@@ -1004,7 +1017,8 @@ func (l *Loop) runTurn(ctx context.Context, turnID, userText string, opts TurnOp
 			toolStart := time.Now()
 			tools := l.toolsForTurn(opts)
 			if tools == nil {
-				l.publishAndAppendToolResultWithDelegation(turnID, callID, toolName, "tool registry is not configured", true, 0, delegation)
+				omitted := l.publishAndAppendToolResultWithContext(turnID, callID, toolName, "tool registry is not configured", true, 0, delegation, toolContextBudget)
+				recordToolContextOmission(&toolStats, omitted)
 				toolCallsUsed++
 				recordToolRepairOutcome(&toolStats, repairedToolCall, true)
 				toolStats.ToolErrors++
@@ -1032,8 +1046,8 @@ func (l *Loop) runTurn(ctx context.Context, turnID, userText string, opts TurnOp
 					}
 				}
 			}
-			recordToolContextTruncation(&toolStats, toolName, result, l.toolResultMaxBytesInContextFor(toolName))
-			l.publishAndAppendToolResultWithDelegation(turnID, callID, toolName, result, isErr, toolDuration, delegation)
+			omitted := l.publishAndAppendToolResultWithContext(turnID, callID, toolName, result, isErr, toolDuration, delegation, toolContextBudget)
+			recordToolContextOmission(&toolStats, omitted)
 			toolCallsUsed++
 			recordToolRepairOutcome(&toolStats, repairedToolCall, isErr)
 			for _, state := range postToolPolicies {
@@ -1242,6 +1256,10 @@ func (l *Loop) publishAndAppendToolResult(turnID, callID, name, result string, i
 // result without joining on call_id. nil delegation degrades to the
 // original behavior.
 func (l *Loop) publishAndAppendToolResultWithDelegation(turnID, callID, name, result string, isErr bool, duration time.Duration, delegation *sse.DelegationMeta) {
+	l.publishAndAppendToolResultWithContext(turnID, callID, name, result, isErr, duration, delegation, nil)
+}
+
+func (l *Loop) publishAndAppendToolResultWithContext(turnID, callID, name, result string, isErr bool, duration time.Duration, delegation *sse.DelegationMeta, contextBudget *toolResultContextBudget) int {
 	exit := 0
 	if isErr {
 		exit = 1
@@ -1254,9 +1272,10 @@ func (l *Loop) publishAndAppendToolResultWithDelegation(turnID, callID, name, re
 		payload.Delegation = delegation
 	}
 	l.publish(sse.TypeToolResult, payload)
+	content, omitted := contextBudget.truncateToolResult(name, result, l.toolResultMaxBytesInContextFor(name))
 	if err := l.Conv.Append(ChatMessage{
 		Role:       "tool",
-		Content:    truncateToolResultForContext(name, result, l.toolResultMaxBytesInContextFor(name)),
+		Content:    content,
 		ToolCallID: callID,
 		Name:       name,
 	}); err != nil {
@@ -1266,6 +1285,7 @@ func (l *Loop) publishAndAppendToolResultWithDelegation(turnID, callID, name, re
 		// that pairing loudly.
 		l.Log.Error().Err(err).Str("call_id", callID).Msg("conv append tool result")
 	}
+	return omitted
 }
 
 func (l *Loop) attachToolResultArtifact(payload *sse.ToolResultPayload, callID, result string) {
@@ -1547,6 +1567,13 @@ func (l *Loop) toolResultMaxBytesInContext() int {
 		return l.ToolResultMaxBytesInContext
 	}
 	return MaxToolResultBytesInContext
+}
+
+func (l *Loop) toolResultContextBudgetBytes() int {
+	if l.ToolResultContextBudgetBytes > 0 {
+		return l.ToolResultContextBudgetBytes
+	}
+	return DefaultToolResultContextBudgetBytes
 }
 
 // defaultToolResultLimits maps tool names to their context-byte caps.

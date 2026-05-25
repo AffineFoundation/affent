@@ -59,6 +59,9 @@ func TestHandleStats_EmptyPool(t *testing.T) {
 	if resp.Boundaries.ToolResultEvent != agent.DefaultRuntimeBoundaries().ToolResultEventBytes {
 		t.Fatalf("Boundaries.ToolResultEvent = %d, want %d", resp.Boundaries.ToolResultEvent, agent.DefaultRuntimeBoundaries().ToolResultEventBytes)
 	}
+	if resp.Boundaries.ToolResultContextBudget != agent.DefaultRuntimeBoundaries().ToolResultContextBudgetBytes {
+		t.Fatalf("Boundaries.ToolResultContextBudget = %d, want %d", resp.Boundaries.ToolResultContextBudget, agent.DefaultRuntimeBoundaries().ToolResultContextBudgetBytes)
+	}
 	if resp.Boundaries.MCPToolResultBytes <= 0 {
 		t.Fatalf("Boundaries.MCPToolResultBytes = %d, want positive", resp.Boundaries.MCPToolResultBytes)
 	}
@@ -123,6 +126,9 @@ func TestStatsBoundarySnapshotUsesConfiguredTurnLimits(t *testing.T) {
 	}
 	if got.StreamReasoningBytes != agent.DefaultRuntimeBoundaries().StreamReasoningBytes {
 		t.Fatalf("StreamReasoningBytes = %d, want %d", got.StreamReasoningBytes, agent.DefaultRuntimeBoundaries().StreamReasoningBytes)
+	}
+	if got.ToolResultContextBudget != agent.DefaultRuntimeBoundaries().ToolResultContextBudgetBytes {
+		t.Fatalf("ToolResultContextBudget = %d, want %d", got.ToolResultContextBudget, agent.DefaultRuntimeBoundaries().ToolResultContextBudgetBytes)
 	}
 	if got.PlanStateBytes != agent.DefaultRuntimeBoundaries().PlanStateBytes {
 		t.Fatalf("PlanStateBytes = %d, want %d", got.PlanStateBytes, agent.DefaultRuntimeBoundaries().PlanStateBytes)

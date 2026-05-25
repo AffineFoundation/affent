@@ -122,13 +122,12 @@ func toolRuntimeStatsPtr(stats sse.ToolRuntimeStats) *sse.ToolRuntimeStats {
 	return &stats
 }
 
-func recordToolContextTruncation(stats *sse.ToolRuntimeStats, toolName, result string, max int) {
-	if stats == nil || len(result) <= max {
+func recordToolContextOmission(stats *sse.ToolRuntimeStats, omitted int) {
+	if stats == nil || omitted <= 0 {
 		return
 	}
-	cut := textutil.AlignBackward(result, max)
 	stats.ToolContextTruncated++
-	stats.ToolContextOmittedBytes += len(result) - cut
+	stats.ToolContextOmittedBytes += omitted
 }
 
 func recordToolFailureKind(stats *sse.ToolRuntimeStats, result string, failed bool) {
@@ -271,6 +270,60 @@ func truncateToolResultForContext(toolName, result string, max int) string {
 	return result[:cut] + toolResultContextTruncationMarker(toolName, len(result)-cut)
 }
 
+type toolResultContextBudget struct {
+	remaining int
+}
+
+func newToolResultContextBudget(max int) *toolResultContextBudget {
+	if max <= 0 {
+		return nil
+	}
+	return &toolResultContextBudget{remaining: max}
+}
+
+func (b *toolResultContextBudget) truncateToolResult(toolName, result string, perToolMax int) (string, int) {
+	if result == "" {
+		return "", 0
+	}
+	if perToolMax <= 0 {
+		perToolMax = MaxToolResultBytesInContext
+	}
+	if b == nil {
+		return truncateToolResultForContext(toolName, result, perToolMax), toolResultContextOmittedBytes(result, perToolMax)
+	}
+	if b.remaining <= 0 {
+		return toolResultContextBudgetExhaustedMarker(toolName, len(result)), len(result)
+	}
+
+	max := perToolMax
+	budgetLimited := false
+	if b.remaining < max {
+		max = b.remaining
+		budgetLimited = true
+	}
+	if len(result) <= max {
+		b.remaining -= len(result)
+		return result, 0
+	}
+
+	cut := textutil.AlignBackward(result, max)
+	b.remaining -= cut
+	omitted := len(result) - cut
+	marker := toolResultContextTruncationMarker(toolName, omitted)
+	if budgetLimited {
+		marker = toolResultContextBudgetTruncationMarker(toolName, omitted)
+	}
+	return result[:cut] + marker, omitted
+}
+
+func toolResultContextOmittedBytes(result string, max int) int {
+	if len(result) <= max {
+		return 0
+	}
+	cut := textutil.AlignBackward(result, max)
+	return len(result) - cut
+}
+
 func defaultContextTruncationMarker(omitted int) string {
 	return fmt.Sprintf(
 		"\n\n[... %d more bytes truncated. Re-run the command piping through head/tail/grep/sed, or save the output to a file inside the configured workspace and read it in chunks, if you need more.]",
@@ -292,5 +345,45 @@ func toolResultContextTruncationMarker(toolName string, omitted int) string {
 		)
 	default:
 		return defaultContextTruncationMarker(omitted)
+	}
+}
+
+func toolResultContextBudgetTruncationMarker(toolName string, omitted int) string {
+	switch toolName {
+	case "browser_navigate", "browser_snapshot", "browser_scroll", "browser_wait", "browser_click", "browser_type":
+		return fmt.Sprintf(
+			"\n\n[... %d more bytes omitted from %s before model context because the per-turn tool-result context budget is nearly exhausted. Use browser_find, navigate to a narrower page/section, or answer from verified evidence already collected.]",
+			omitted, toolName,
+		)
+	case "web_fetch":
+		return fmt.Sprintf(
+			"\n\n[... %d more bytes omitted from web_fetch before model context because the per-turn tool-result context budget is nearly exhausted. Use a narrower canonical/API/text source, or answer with clearly marked gaps from verified evidence already collected.]",
+			omitted,
+		)
+	default:
+		return fmt.Sprintf(
+			"\n\n[... %d more bytes omitted before model context because the per-turn tool-result context budget is nearly exhausted. Use narrower tool calls or answer from verified evidence already collected.]",
+			omitted,
+		)
+	}
+}
+
+func toolResultContextBudgetExhaustedMarker(toolName string, omitted int) string {
+	switch toolName {
+	case "browser_navigate", "browser_snapshot", "browser_scroll", "browser_wait", "browser_click", "browser_type":
+		return fmt.Sprintf(
+			"[tool result omitted from model context: %d bytes from %s exceeded the per-turn tool-result context budget. Use browser_find, navigate to a narrower page/section, or answer from verified evidence already collected.]",
+			omitted, toolName,
+		)
+	case "web_fetch":
+		return fmt.Sprintf(
+			"[tool result omitted from model context: %d bytes from web_fetch exceeded the per-turn tool-result context budget. Use a narrower canonical/API/text source, or answer with clearly marked gaps from verified evidence already collected.]",
+			omitted,
+		)
+	default:
+		return fmt.Sprintf(
+			"[tool result omitted from model context: %d bytes from %s exceeded the per-turn tool-result context budget. Use narrower tool calls or answer from verified evidence already collected.]",
+			omitted, toolName,
+		)
 	}
 }
