@@ -155,7 +155,7 @@ func TestWithExternalResearchSystemGuidance_AppendsOnce(t *testing.T) {
 	base := "be helpful"
 	surface := externalResearchToolSurface{WebSearch: true, WebFetch: true, Browser: true, BrowserFind: true}
 	once := WithExternalResearchSystemGuidance(base, surface)
-	for _, want := range []string{"External research:", "web_search", "authoritative", "Do not open every search result", "weak sentiment", "Source hint", "llms.txt", "Direct-reader warning", "browser_navigate", "browser_find", "repeated scrolling", "dynamic dashboards", "field-label queries", "price market cap FDV volume supply TVL", "24h 7d volume market cap", "validators miners stake emission", "Do not repeat browser_find with only the entity name", "Dashboard text can interleave global header metrics", "label/value adjacency", "bot/challenge", "social posts", "dates/freshness", "Embedded data preview", "page-source evidence", "If web_fetch fails", "Do not keep retrying the same failing URL", "If web_search returns no results", "distinctive entities", "stale_ref", "fresh visible ref", "Preserve user-provided disambiguators", "network/subnet id", "same-name standalone product", "searched the asserted parent ecosystem", "absent from one visible list", "parent ecosystem plus known ids/synonyms", "successfully accessed only when a tool actually read that URL", "actual fetched_url/browser_rendered_url", "requested_url only records what you asked for", "Do not say a field was unavailable", "PAGE TEXT", "discovered/unverified", "API/text/export endpoints"} {
+	for _, want := range []string{"External research:", "web_search", "authoritative", "Do not open every search result", "weak sentiment", "Source hint", "llms.txt", "Direct-reader warning", "browser_navigate", "browser_find", "repeated scrolling", "dynamic dashboards", "field-label queries", "price market cap FDV volume supply TVL", "24h 7d volume market cap", "validators miners stake emission", "Do not repeat browser_find with only the entity name", "Dashboard text can interleave global header metrics", "label/value adjacency", "bot/challenge", "social posts", "dates/freshness", "Embedded data preview", "page-source evidence", "If web_fetch fails", "Do not keep retrying the same failing URL", "If web_search returns no results", "distinctive entities", "stale_ref", "fresh visible ref", "Preserve user-provided disambiguators", "network/subnet id", "same-name standalone product", "searched the asserted parent ecosystem", "absent from one visible list", "parent ecosystem plus known ids/synonyms", "successfully accessed only when a tool actually read that URL", "actual fetched_url/browser_rendered_url", "requested_url only records what you asked for", "browser_find no-match only means", "current rendered page text", "Do not say a field was unavailable", "PAGE TEXT", "discovered/unverified", "API/text/export endpoints"} {
 		if !strings.Contains(once, want) {
 			t.Fatalf("external research guidance missing %q:\n%s", want, once)
 		}
@@ -237,7 +237,9 @@ func TestFinalEvidenceDigestExtractsRecentVerifiedMetrics(t *testing.T) {
 	for _, want := range []string{
 		"Final evidence digest",
 		"Metric caution",
+		"Source status caution",
 		"label when the adjacency",
+		"Links in page text are discovered/unverified",
 		"browser_find",
 		"browser_rendered_url=https://www.tao.app/subnets/120?active_tab=about",
 		"Accessed URL: https://www.tao.app/subnets/120?active_tab=about",
@@ -286,6 +288,41 @@ func TestFinalEvidenceDigestPrioritizesMetricEvidenceOverRecentLowValuePages(t *
 		t.Fatalf("metric evidence should rank before recent low-value Docker page:\n%s", got)
 	}
 	for _, want := range []string{"Subnet Price 0.0639 TAO", "Validators 64", "Metric caution"} {
+		if !strings.Contains(got, want) {
+			t.Fatalf("digest missing %q:\n%s", want, got)
+		}
+	}
+}
+
+func TestFinalEvidenceDigestDownranksFindMisses(t *testing.T) {
+	msgs := []ChatMessage{
+		{
+			Role: "tool",
+			Name: "web_fetch",
+			Content: "SourceAccess: fetched_url=https://github.com/ysjprojects/affine-sn120; linked_urls_in_content=discovered_unverified_until_fetched\n" +
+				"TITLE: GitHub - ysjprojects/affine-sn120\n" +
+				"Affine is an incentivized RL environment for Bittensor SN120.\n",
+		},
+		{
+			Role: "tool",
+			Name: "browser_find",
+			Content: "SourceAccess: browser_rendered_url=https://taostats.io/subnets; snapshot_id=3; page_text_below=verified_page_evidence\n" +
+				"URL: https://taostats.io/subnets\n" +
+				"TITLE: Subnets · taostats\n" +
+				"QUERY: \"affine\"\n" +
+				"MATCHES: none\n",
+		},
+	}
+	got := finalEvidenceDigest(msgs)
+	githubIdx := strings.Index(got, "https://github.com/ysjprojects/affine-sn120")
+	findIdx := strings.Index(got, "MATCHES: none")
+	if githubIdx < 0 {
+		t.Fatalf("digest missing successful source:\n%s", got)
+	}
+	if findIdx >= 0 && githubIdx > findIdx {
+		t.Fatalf("successful source should rank before find miss:\n%s", got)
+	}
+	for _, want := range []string{"browser_find no-match", "not that the entity is absent from the whole site"} {
 		if !strings.Contains(got, want) {
 			t.Fatalf("digest missing %q:\n%s", want, got)
 		}
