@@ -152,6 +152,7 @@ var defaultSubagentModeRegistry = DefaultSubagentModeRegistry()
 
 const SubagentSystemGuidance = `Subagent delegation:
 - The subagent_run tool is available by default, but use it only for these triggers: the user explicitly asks for a subagent/delegation, asks for isolated review, asks for broad exploration, or asks to avoid main-context pollution.
+- Do not use subagent_run for ordinary web research, single-page/source extraction, or a few direct tool calls. Use parent tools and answer from the gathered evidence.
 - When one of those triggers is present, call subagent_run as the first tool.
 - Do not spend parent context listing directories or reading large files just to prepare that delegation. Put likely paths, uncertainty, and the concrete question in the subagent task; the child can inspect them in its isolated context.
 - Subagents may delegate one more bounded subtask when the tool schema exposes subagent_run. Use that only for clearly separable noisy work; each layer must return a compressed evidence report, not a transcript.
@@ -160,6 +161,7 @@ const SubagentSystemGuidance = `Subagent delegation:
 
 const SubagentBrowserDelegationGuidance = `Subagent browser delegation:
 - For rendered web pages, delegate a narrow page/snapshot objective. If the user asks for current-page visible information, say that explicitly in the subagent task and tell the child not to click tabs or broaden across the site.
+- Do not delegate broad open-web research just because browser tools are available. Use parent web/browser tools directly unless isolation is explicitly needed.
 - Split cross-tab or multi-page audits into separate bounded requests instead of asking for "all information" in one child run.`
 
 func WithSubagentSystemGuidance(prompt string, browserAvailable ...bool) string {

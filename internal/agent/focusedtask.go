@@ -639,7 +639,7 @@ func focusedTaskSystemGuidance(kinds []FocusedTaskKind) string {
 		b.WriteString("\n- Trigger explore when you don't already know which files implement the change and you'd otherwise list directories or read many files just to orient.")
 	}
 	if available[FocusedTaskResearch] {
-		b.WriteString("\n- Trigger research when the task needs current/external facts and you have no other authoritative source.")
+		b.WriteString("\n- Trigger research only when external fact-gathering must be isolated from the parent context or would require many noisy source inspections. For ordinary current-fact questions, use available web/browser tools directly and answer once enough evidence is gathered.")
 	}
 	if available[FocusedTaskVerify] {
 		b.WriteString("\n- Trigger verify when you are about to assert a strong claim (a test passes, a file has shape X) and have not yet checked it in this conversation.")
@@ -649,6 +649,7 @@ func focusedTaskSystemGuidance(kinds []FocusedTaskKind) string {
 	}
 	b.WriteString("\n- Each call must carry a concrete objective (a question or assignment, not \"look around\"). Pass max_turns only when you have a reason to override the default.")
 	b.WriteString("\n- After run_task returns, answer from its summary + findings. Do not re-fetch the same sources, repeat the same shell commands, or open the same files unless the result is incomplete (warnings present, parse failure, or ok=false).")
+	b.WriteString("\n- Prefer direct parent tools for one-screen checks, a handful of source reads, or ordinary web research. Delegation has its own LLM/tool budget and should buy real context isolation.")
 	b.WriteString("\n- Do not call run_task for tasks better answered by a single direct tool call. One read_file is cheaper than a focused task that wraps one read_file.")
 	return b.String()
 }

@@ -444,9 +444,14 @@ func TestWithFocusedTaskSystemGuidance_AppendsOnce(t *testing.T) {
 	if WithFocusedTaskSystemGuidance("") == "" {
 		t.Fatal("empty input should fall back to default + guidance")
 	}
+	for _, want := range []string{"ordinary current-fact questions", "use available web/browser tools directly", "ordinary web research", "Delegation has its own LLM/tool budget"} {
+		if !strings.Contains(once, want) {
+			t.Fatalf("focused-task guidance missing delegation budget guard %q:\n%s", want, once)
+		}
+	}
 
 	limited := WithFocusedTaskSystemGuidance(base, FocusedTaskExplore, FocusedTaskVerify)
-	if strings.Contains(limited, "Trigger research") || strings.Contains(limited, "research external facts") {
+	if strings.Contains(limited, "Trigger research") || strings.Contains(limited, "ordinary current-fact questions") {
 		t.Fatalf("limited focused-task guidance should not mention unavailable research:\n%s", limited)
 	}
 	for _, want := range []string{"Trigger explore", "Trigger verify"} {

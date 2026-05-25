@@ -516,6 +516,15 @@ func TestWithSubagentSystemGuidance(t *testing.T) {
 	if !strings.Contains(got, "Subagent delegation:") {
 		t.Fatal("guidance missing from default prompt")
 	}
+	for _, want := range []string{
+		"ordinary web research",
+		"single-page/source extraction",
+		"Use parent tools",
+	} {
+		if !strings.Contains(got, want) {
+			t.Fatalf("subagent guidance missing parent-tool budget guard %q:\n%s", want, got)
+		}
+	}
 	for _, forbidden := range []string{
 		"Subagent browser delegation:",
 		"current-page visible information",
@@ -534,6 +543,8 @@ func TestWithSubagentSystemGuidance(t *testing.T) {
 		"delegate a narrow page/snapshot objective",
 		"current-page visible information",
 		"not to click tabs",
+		"Do not delegate broad open-web research",
+		"Use parent web/browser tools directly",
 		"Split cross-tab or multi-page audits",
 	} {
 		if !strings.Contains(withBrowser, want) {
