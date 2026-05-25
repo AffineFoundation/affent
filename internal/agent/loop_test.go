@@ -215,6 +215,45 @@ func TestFinalNoToolsPromptsRequireEvidenceRescan(t *testing.T) {
 	}
 }
 
+func TestFinalEvidenceDigestExtractsRecentVerifiedMetrics(t *testing.T) {
+	msgs := []ChatMessage{
+		{
+			Role:    "tool",
+			Name:    "browser_navigate",
+			Content: "SourceAccess: browser_rendered_url=https://duckduckgo.com/?q=affine; snapshot_id=1; page_text_below=search_results_discovery_only\nURL: https://duckduckgo.com/?q=affine\nTITLE: search\n[text span] ignored result snippet with Price $999\n",
+		},
+		{
+			Role: "tool",
+			Name: "browser_find",
+			Content: "SourceAccess: browser_rendered_url=https://www.tao.app/subnets/120?active_tab=about; requested_url=https://www.tao.app/subnets; snapshot_id=14; page_text_below=verified_page_evidence\n" +
+				"URL: https://www.tao.app/subnets/120?active_tab=about\n" +
+				"TITLE: SN120 - Affine | TAO.app | Your Gateway to Bittensor\n" +
+				"QUERY: \"Affine metric price market cap stake TAO\"\n" +
+				"[text span] TAO Price $ 277.32 -1.02 % 1D Vol $ 168.66M -39 % MC $ 3.03B FDV $ 5.82B Circ. Supply 10.94M Block 8,260,180\n" +
+				"[text div] Price 0.06342 T/ d L: 0.060 T H: 0.086 T Market Cap 201.04K T FDV 1.32M T\n",
+		},
+	}
+	got := finalEvidenceDigest(msgs)
+	for _, want := range []string{
+		"Final evidence digest",
+		"browser_find",
+		"browser_rendered_url=https://www.tao.app/subnets/120?active_tab=about",
+		"Accessed URL: https://www.tao.app/subnets/120?active_tab=about",
+		"Requested URL only: https://www.tao.app/subnets",
+		"requested_url=https://www.tao.app/subnets",
+		"TAO Price $ 277.32",
+		"MC $ 3.03B",
+		"Market Cap 201.04K T",
+	} {
+		if !strings.Contains(got, want) {
+			t.Fatalf("digest missing %q:\n%s", want, got)
+		}
+	}
+	if strings.Contains(got, "ignored result snippet") {
+		t.Fatalf("digest should skip discovery-only search result pages:\n%s", got)
+	}
+}
+
 func TestWithRuntimeContextSystemGuidance_IncludesDateAndFreshnessRule(t *testing.T) {
 	now := time.Date(2026, 5, 25, 12, 34, 56, 0, time.FixedZone("test", 8*60*60))
 	got := WithRuntimeContextSystemGuidance("be helpful", now)

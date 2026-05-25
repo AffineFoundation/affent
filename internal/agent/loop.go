@@ -1712,6 +1712,9 @@ var forceNoToolsFinalPrompt = `Tools are disabled for the rest of this turn, but
 Do not call tools again. ` + finalEvidenceDiscipline + ` Start the final answer now. Keep it concise, separate verified facts from gaps, and list any important sources that were unavailable or blocked.`
 
 func (l *Loop) runFinalNoToolsStep(ctx context.Context, turnID, prompt string) (*FinishInfo, string, error) {
+	if digest := finalEvidenceDigest(l.Conv.Snapshot()); digest != "" {
+		prompt = prompt + "\n\n" + digest
+	}
 	if err := l.Conv.Append(ChatMessage{Role: "user", Content: prompt}); err != nil {
 		l.Log.Error().Err(err).Str("turn_id", turnID).Msg("conv append final no-tools prompt")
 		return nil, sse.TurnEndError, err

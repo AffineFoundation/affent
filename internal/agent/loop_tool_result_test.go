@@ -1407,6 +1407,7 @@ func TestRunTurn_FinalNoToolsOnMaxTurnsForcesSummary(t *testing.T) {
 	var finalRequestHadTools atomic.Bool
 	var finalRequestHadToolChoiceNone atomic.Bool
 	var finalRequestHadMaxTurnsPrompt atomic.Bool
+	var finalRequestHadEvidenceDigest atomic.Bool
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		body, _ := readReqBody(r)
 		w.Header().Set("Content-Type", "text/event-stream")
@@ -1427,6 +1428,7 @@ func TestRunTurn_FinalNoToolsOnMaxTurnsForcesSummary(t *testing.T) {
 			finalRequestHadTools.Store(strings.Contains(body, `"tools"`))
 			finalRequestHadToolChoiceNone.Store(strings.Contains(body, `"tool_choice":"none"`))
 			finalRequestHadMaxTurnsPrompt.Store(strings.Contains(body, "The tool-step budget for this turn is exhausted."))
+			finalRequestHadEvidenceDigest.Store(strings.Contains(body, "Final evidence digest extracted from prior tool results") && strings.Contains(body, "TAO Price $ 277.32") && strings.Contains(body, "MC $ 3.03B"))
 			w.Write([]byte("data: {\"choices\":[{\"delta\":{\"role\":\"assistant\",\"content\":\"partial summary from evidence\"},\"finish_reason\":\"stop\"}]}\n\n"))
 			w.Write([]byte("data: [DONE]\n\n"))
 			fl.Flush()
@@ -1439,7 +1441,7 @@ func TestRunTurn_FinalNoToolsOnMaxTurnsForcesSummary(t *testing.T) {
 		t.Fatal(err)
 	}
 	reg := NewRegistry()
-	reg.Add(fakeBigResultTool("evidence"))
+	reg.Add(fakeBigResultTool("SourceAccess: browser_rendered_url=https://www.tao.app/subnets/120?active_tab=about; snapshot_id=14; page_text_below=verified_page_evidence\nURL: https://www.tao.app/subnets/120?active_tab=about\nTITLE: SN120 - Affine | TAO.app | Your Gateway to Bittensor\n[text span] TAO Price $ 277.32 -1.02 % 1D Vol $ 168.66M -39 % MC $ 3.03B FDV $ 5.82B Circ. Supply 10.94M Block 8,260,180\n"))
 
 	events := make(chan sse.Event, 256)
 	loop := &Loop{
@@ -1488,6 +1490,9 @@ func TestRunTurn_FinalNoToolsOnMaxTurnsForcesSummary(t *testing.T) {
 				}
 				if !finalRequestHadMaxTurnsPrompt.Load() {
 					t.Fatal("final max-turns recovery request must include explicit no-tool summary prompt")
+				}
+				if !finalRequestHadEvidenceDigest.Load() {
+					t.Fatal("final max-turns recovery request must include compact evidence digest")
 				}
 				return
 			}
