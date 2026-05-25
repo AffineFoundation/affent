@@ -107,7 +107,7 @@ function currentSessionTitle(row: SessionRowView, session: SessionState): string
 function currentSessionStatus(session: SessionState, fallback: string): string {
   if (session.status === "running") return "Live";
   if (session.status === "completed") return "Done";
-  if (session.status === "max_turns") return "Needs continuation";
+  if (session.status === "max_turns") return "No final answer";
   if (session.status === "error") return "Blocked";
   if (session.status === "cancelled") return "Cancelled";
   return fallback;

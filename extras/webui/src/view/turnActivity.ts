@@ -119,8 +119,8 @@ export function buildTurnActivity(turn: TurnState, opts: TurnActivityOptions = {
       id: `${turn.id}:continue`,
       kind: "attention",
       label: "Next",
-      title: "Ready to continue",
-      detail: "The action limit was reached before the final reply.",
+      title: "Final answer not produced",
+      detail: "The runtime stopped at its action limit before synthesizing the final reply.",
       tone: "warning",
     });
   }
@@ -229,8 +229,12 @@ function nextBrief(
   }
   if (turn.status === "max_turns") {
     return {
-      value: "Continue this task from where it stopped.",
-      action: { label: "Resume here", draft: "Continue this task from where it stopped.", source: "continuation" },
+      value: "Ask for a final answer from the evidence already gathered.",
+      action: {
+        label: "Final answer",
+        draft: "Do not call more tools. Based only on the evidence already gathered in this chat, produce the final answer.",
+        source: "continuation",
+      },
     };
   }
   const failed = shouldLeadWithFailure(turn) ? findFailedNode(nodes) : undefined;

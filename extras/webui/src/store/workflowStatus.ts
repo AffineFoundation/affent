@@ -46,8 +46,8 @@ export function deriveWorkflowStatus(session: SessionState): WorkflowStatus {
   if (turn.status === "max_turns") {
     return {
       phase: "blocked",
-      title: "Needs continuation",
-      detail: "The action limit was reached; continue the session when ready.",
+      title: "Final answer not produced",
+      detail: "The action limit was reached before the final reply was synthesized.",
       active: false,
       progress: 88,
     };

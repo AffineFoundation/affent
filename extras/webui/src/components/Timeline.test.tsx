@@ -1072,12 +1072,16 @@ describe("Timeline", () => {
     const onUseAsDraft = vi.fn();
     renderTimeline(maxTurns, undefined, undefined, onUseAsDraft);
 
-    expect(screen.getByTestId("fallback-answer")).toHaveTextContent("Needs continuation");
-    expect(screen.getByTestId("fallback-answer")).toHaveTextContent("before a final answer");
-    expect(screen.getByTestId("continuation-card")).toHaveTextContent("Ready to continue");
-    await user.click(screen.getByRole("button", { name: "Continue task" }));
+    expect(screen.getByTestId("fallback-answer")).toHaveTextContent("No final answer yet");
+    expect(screen.getByTestId("fallback-answer")).toHaveTextContent("before synthesizing the final reply");
+    expect(screen.getByTestId("continuation-card")).toHaveTextContent("Final answer not produced");
+    expect(screen.getByTestId("continuation-card")).toHaveTextContent("gathered evidence");
+    await user.click(screen.getByRole("button", { name: "Ask for final answer" }));
 
-    expect(onUseAsDraft).toHaveBeenCalledWith("Continue this task from where it stopped.", "continuation");
+    expect(onUseAsDraft).toHaveBeenCalledWith(
+      "Do not call more tools. Based only on the evidence already gathered in this chat, produce the final answer.",
+      "continuation",
+    );
   });
 
   it("summarizes historical action-limit turns as handoffs without repeating the status label", () => {

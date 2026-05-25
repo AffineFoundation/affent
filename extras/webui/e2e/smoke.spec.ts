@@ -309,6 +309,83 @@ test("streaming answers show a live writing state", async ({ page }, testInfo) =
   expect(errors, `console errors: ${errors.join(" | ")}`).toEqual([]);
 });
 
+test("markdown tables stay inside the chat surface on narrow screens", async ({ page }) => {
+  await page.route("**/v1/sessions?limit=100", async (route) => {
+    await route.fulfill({
+      contentType: "application/json",
+      body: JSON.stringify({
+        sessions: [
+          {
+            id: "table-session",
+            active: true,
+            durable: true,
+            has_conversation: true,
+            has_events: true,
+            has_artifacts: false,
+            has_memory: false,
+            has_runtime_skills: false,
+          },
+        ],
+        has_more: false,
+      }),
+    });
+  });
+  await page.route("**/v1/sessions/table-session/history?after=-1&limit=500", async (route) => {
+    await route.fulfill({
+      contentType: "application/json",
+      body: JSON.stringify({
+        session_id: "table-session",
+        events: [
+          { id: 1, type: "turn.start", data: { turn_id: "t1" } },
+          { id: 2, type: "user.message", data: { turn_id: "t1", text: "summarize market risks" } },
+          {
+            id: 3,
+            type: "message.done",
+            data: {
+              turn_id: "t1",
+              finish_reason: "stop",
+              text: [
+                "| Risk category | What to watch |",
+                "| --- | --- |",
+                "| Winner-take-all incentive design | Long uninterrupted leadership can make new participant marginal returns approach zero and should be monitored carefully. |",
+                "| Market-data limits | CoinMarketCap and TaoStats can render dynamic shells, so quote freshness needs explicit source timestamps. |",
+              ].join("\n"),
+            },
+          },
+          { id: 4, type: "turn.end", data: { turn_id: "t1", reason: "completed" } },
+        ],
+        next_after: 4,
+        has_more: false,
+        trace_schema_detected: true,
+      }),
+    });
+  });
+  await page.route("**/v1/sessions/table-session/events", async (route) => {
+    await route.fulfill({ contentType: "text/event-stream", body: "" });
+  });
+
+  await page.goto("/");
+  await expect(page.getByRole("table")).toBeVisible();
+
+  if ((page.viewportSize()?.width ?? 0) <= 768) {
+    const boxes = await page.evaluate(() => {
+      const table = document.querySelector(".markdown-text table")?.getBoundingClientRect();
+      const wrapper = document.querySelector(".markdown-table-scroll")?.getBoundingClientRect();
+      const surface = document.querySelector(".timeline-surface")?.getBoundingClientRect();
+      return {
+        tableRight: table?.right ?? 0,
+        wrapperRight: wrapper?.right ?? 0,
+        surfaceRight: surface?.right ?? 0,
+        scrollWidth: document.documentElement.scrollWidth,
+        viewportWidth: document.documentElement.clientWidth,
+      };
+    });
+    expect(boxes.tableRight).toBeLessThanOrEqual(boxes.wrapperRight + 1);
+    expect(boxes.wrapperRight).toBeLessThanOrEqual(boxes.surfaceRight + 1);
+    expect(boxes.scrollWidth).toBe(boxes.viewportWidth);
+  }
+});
+
 test("running work reads like an Affent chat update before drill-down", async ({ page }, testInfo) => {
   const errors: string[] = [];
   page.on("console", (m) => {
@@ -495,9 +572,19 @@ test("workflow timeline renders with inline drill-down", async ({ page }, testIn
   const viewport = page.viewportSize();
   const composerBox = await page.getByTestId("composer").boundingBox();
   const scrollBox = await page.getByTestId("conversation-scroll").boundingBox();
+  const workspaceBox = await page.getByTestId("workspace-shell").boundingBox();
   expect(composerBox?.y ?? Number.POSITIVE_INFINITY).toBeLessThan(viewport?.height ?? 0);
   expect((composerBox?.y ?? 0) + (composerBox?.height ?? 0)).toBeGreaterThan(0);
   expect((scrollBox?.y ?? 0) + (scrollBox?.height ?? 0)).toBeLessThanOrEqual((composerBox?.y ?? 0) + 1);
+  if ((viewport?.width ?? 0) <= 768) {
+    const sessionBox = await page.locator(".session-panel").boundingBox();
+    const surfaceBox = await page.locator(".timeline-surface").boundingBox();
+    expect(sessionBox?.y ?? Number.POSITIVE_INFINITY).toBeLessThan((surfaceBox?.y ?? 0) + 1);
+    expect(sessionBox?.y ?? Number.POSITIVE_INFINITY).toBeLessThan((composerBox?.y ?? 0) + 1);
+  } else {
+    const surfaceBox = await page.locator(".timeline-surface").boundingBox();
+    expect(surfaceBox?.y ?? 0).toBeLessThanOrEqual((workspaceBox?.y ?? 0) + 1);
+  }
   await expect(page.getByTestId("workflow-status")).toHaveCount(0);
   await expect(page.getByTestId("turn-card")).toHaveCount(2);
   await expect(page.getByTestId("conversation-map")).toContainText("show a large artifact");

@@ -593,8 +593,8 @@ function buildFallbackAnswer(turn: TurnState, opts: { continuedAfterLimit?: bool
   if (opts.continuedAfterLimit) return undefined;
   if (turn.status === "max_turns") {
     return {
-      title: "Needs continuation",
-      text: "The action limit was reached before a final answer. You can continue with the same chat context below.",
+      title: "No final answer yet",
+      text: "The runtime reached its action limit before synthesizing the final reply.",
     };
   }
   if (turn.status === "cancelled") {
@@ -965,15 +965,20 @@ function artifactDraft(path: string): string {
 
 function ContinuationPrompt({ turn, onUseAsDraft }: { turn: TurnState; onUseAsDraft?: UseAsDraft }) {
   const draft = continuationDraft(turn);
+  const hasEvidence = turn.toolCalls.some((call) => call.status === "success" && (call.resultSummary || call.result || call.resultArtifactPath));
   return (
     <div className="continuation-card" data-testid="continuation-card">
       <div>
-        <div className="continuation-title">Ready to continue</div>
-        <div className="continuation-copy">The action limit was reached, but this chat keeps the work context.</div>
+        <div className="continuation-title">Final answer not produced</div>
+        <div className="continuation-copy">
+          {hasEvidence
+            ? "The runtime gathered evidence but stopped at its action limit before synthesizing a final reply."
+            : "The runtime stopped at its action limit before it could produce a final reply."}
+        </div>
       </div>
       {onUseAsDraft ? (
         <button type="button" className="node-action" onClick={() => onUseAsDraft(draft, "continuation")}>
-          Continue task
+          Ask for final answer
         </button>
       ) : null}
     </div>
@@ -982,7 +987,9 @@ function ContinuationPrompt({ turn, onUseAsDraft }: { turn: TurnState; onUseAsDr
 
 function continuationDraft(turn: TurnState): string {
   const task = turn.userText ? summarize(turn.userText, 120) : "";
-  return task ? `Continue this task from where it stopped: ${task}` : "Continue this task from where it stopped.";
+  return task
+    ? `Do not call more tools. Based only on the evidence already gathered in this chat, produce the final answer for: ${task}`
+    : "Do not call more tools. Based only on the evidence already gathered in this chat, produce the final answer.";
 }
 
 function MessageStep({
@@ -1104,7 +1111,7 @@ function humanTurnStatus(status: TurnState["status"], reason?: string, opts: { c
   if (status === "running") return "Working";
   if (status === "completed") return "Done";
   if (status === "max_turns" && opts.continuedAfterLimit) return "Continued";
-  if (status === "max_turns") return "Needs continuation";
+  if (status === "max_turns") return "No final answer";
   if (status === "cancelled") return "Cancelled";
   if (status === "error") return "Blocked";
   return reason ?? status;

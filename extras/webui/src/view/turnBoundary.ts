@@ -36,7 +36,7 @@ export function buildTurnBoundaryView({
 function boundaryStatus(turn: TurnState, opts: { continuedAfterLimit?: boolean } = {}): string {
   if (turn.status === "running") return "In progress";
   if (turn.status === "max_turns" && opts.continuedAfterLimit) return "Continued";
-  if (turn.status === "max_turns") return "Needs continuation";
+  if (turn.status === "max_turns") return "No final answer";
   if (turn.status === "error" || turn.error) return "Needs attention";
   if (turn.status === "cancelled") return "Cancelled";
   if (turn.status === "completed") return "Done";

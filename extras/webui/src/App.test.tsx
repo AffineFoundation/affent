@@ -789,9 +789,11 @@ describe("App", () => {
 
     render(<App />);
 
-    await user.click(await screen.findByRole("button", { name: "Continue task" }));
+    await user.click(await screen.findByRole("button", { name: "Ask for final answer" }));
 
-    expect(screen.getByPlaceholderText("Message Affent...")).toHaveValue("Continue this task from where it stopped.");
+    expect(screen.getByPlaceholderText("Message Affent...")).toHaveValue(
+      "Do not call more tools. Based only on the evidence already gathered in this chat, produce the final answer.",
+    );
     expect(screen.getByTestId("composer-context")).toHaveTextContent("Continuing stopped task");
   });
 

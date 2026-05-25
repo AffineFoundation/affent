@@ -3646,6 +3646,25 @@ a.agent-activity-evidence-chip:focus-visible {
   text-underline-offset: 2px;
 }
 
+@media (max-width: 768px) {
+  .markdown-table-scroll {
+    overflow-x: auto;
+    overscroll-behavior-x: contain;
+  }
+
+  .markdown-text table {
+    width: 100%;
+    table-layout: fixed;
+  }
+
+  .markdown-text th,
+  .markdown-text td {
+    min-width: 0;
+    overflow-wrap: anywhere;
+    word-break: break-word;
+  }
+}
+
 .flow-text.muted {
   color: var(--text-muted);
   font-style: italic;
@@ -5424,6 +5443,10 @@ pre.code {
     border-left: 0;
     border-right: 0;
   }
+  .workspace-shell[data-session-nav="visible"] .timeline-surface {
+    min-height: calc(100svh - 190px);
+    height: calc(100svh - 190px);
+  }
   .surface-context {
     padding: 10px 12px 0;
   }
@@ -5491,7 +5514,7 @@ pre.code {
     padding-bottom: 10px;
   }
   .session-panel {
-    order: 2;
+    order: 0;
   }
   .workflow-status {
     grid-template-columns: minmax(0, 1fr);
