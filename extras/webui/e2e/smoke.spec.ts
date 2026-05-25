@@ -668,6 +668,8 @@ test("workflow timeline renders with inline drill-down", async ({ page }, testIn
     path: testInfo.outputPath(`workflow-closed-${testInfo.project.name}.png`),
     fullPage: true,
   });
+  await page.getByRole("button", { name: "Copy activity summary" }).first().click();
+  await expect(page.getByTestId("agent-activity").first().getByRole("button", { name: "Copied" })).toBeVisible();
 
   await page.getByTestId("turn-navigator").getByRole("button", { name: "Search" }).click();
   await page.getByText("Filters").click();

@@ -2811,6 +2811,14 @@ mark {
   animation: rail-grow 460ms var(--ease-snap) both;
 }
 
+.agent-activity-headbar {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 8px;
+  align-items: center;
+  min-width: 0;
+}
+
 .agent-activity-head {
   display: grid;
   grid-template-columns: auto auto minmax(0, 1fr);
@@ -2829,6 +2837,32 @@ mark {
   font-weight: 700;
   text-align: left;
   transition: background var(--motion-fast) ease;
+}
+
+.agent-activity-copy-action {
+  min-height: 26px;
+  border: 1px solid rgba(217, 224, 232, 0.78);
+  border-radius: var(--radius-sm);
+  background: rgba(255, 255, 255, 0.68);
+  color: var(--text-muted);
+  cursor: pointer;
+  font: inherit;
+  font-size: 11.5px;
+  font-weight: 700;
+  padding: 0 8px;
+  white-space: nowrap;
+  opacity: 0.82;
+  transition: border-color 140ms ease, background 140ms ease, color 140ms ease, opacity 140ms ease, transform 140ms ease;
+}
+
+.agent-activity-copy-action:hover,
+.agent-activity-copy-action:focus-visible {
+  border-color: rgba(20, 184, 166, 0.3);
+  background: rgba(240, 253, 250, 0.74);
+  color: var(--text);
+  opacity: 1;
+  outline: none;
+  transform: translateY(-1px);
 }
 
 .agent-activity-head:hover,
@@ -5599,6 +5633,13 @@ pre.code {
   .agent-activity-digest {
     grid-template-columns: minmax(0, 1fr);
     gap: 3px;
+  }
+  .agent-activity-headbar {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .agent-activity-copy-action {
+    justify-self: start;
+    margin-left: 17px;
   }
   .agent-activity-digest strong {
     white-space: normal;

@@ -722,6 +722,27 @@ describe("Timeline", () => {
     expect(screen.getAllByText("subagent_01").length).toBeGreaterThan(0);
   });
 
+  it("copies the processed agent activity summary without opening raw details", async () => {
+    const user = userEvent.setup();
+    const writeText = vi.fn().mockResolvedValue(undefined);
+    Object.defineProperty(navigator, "clipboard", { configurable: true, value: { writeText } });
+    renderTimeline(completedSubagentTree);
+
+    await user.click(screen.getByRole("button", { name: "Copy activity summary" }));
+
+    expect(writeText).toHaveBeenCalledTimes(1);
+    const copied = writeText.mock.calls[0][0] as string;
+    expect(copied).toContain("What Affent did (Done)");
+    expect(copied).toContain("Result: WebUI must render trace details");
+    expect(copied).toContain("Goal: delegate docs inspection");
+    expect(copied).toContain("Read docs/webui-product-design.md");
+    expect(copied).toContain("Delegate: Find the WebUI trace requirements");
+    expect(copied).toContain("MCP: Search");
+    expect(copied).not.toContain("tool.request");
+    expect(screen.queryByTestId("execution-tree")).toBeNull();
+    expect(screen.getByRole("button", { name: "Copied" })).toBeInTheDocument();
+  });
+
   it("turns a processed activity next step into an editable message", async () => {
     const user = userEvent.setup();
     const onUseAsDraft = vi.fn();

@@ -273,11 +273,14 @@ function AgentActivity({
       data-open={open ? "true" : "false"}
       aria-label={activity.title}
     >
-      <button type="button" className="agent-activity-head" aria-expanded={open} onClick={toggleOpen}>
-        <span>{activity.title}</span>
-        <small>{activity.statusLabel}</small>
-        <span className="agent-activity-chevron" aria-hidden="true" />
-      </button>
+      <div className="agent-activity-headbar">
+        <button type="button" className="agent-activity-head" aria-expanded={open} onClick={toggleOpen}>
+          <span>{activity.title}</span>
+          <small>{activity.statusLabel}</small>
+          <span className="agent-activity-chevron" aria-hidden="true" />
+        </button>
+        <CopyButton label="Copy activity summary" value={activityCopyText(activity)} className="agent-activity-copy-action" />
+      </div>
       <div
         className="agent-activity-digest"
         data-testid="agent-activity-digest"
@@ -353,6 +356,41 @@ function AgentActivity({
       ) : null}
     </section>
   );
+}
+
+function activityCopyText(activity: TurnActivityView): string {
+  const lines = [
+    `${activity.title} (${activity.statusLabel})`,
+    activity.digest.label && activity.digest.label !== activity.statusLabel
+      ? `${activity.digest.label}: ${activity.digest.summary}`
+      : activity.digest.summary,
+    activity.digest.meta.length > 0 ? `Meta: ${activity.digest.meta.join(", ")}` : undefined,
+    ...activity.brief.rows.map(activityBriefCopyLine),
+    ...activity.nodes.flatMap(activityNodeCopyLines),
+  ];
+  return lines.filter((line): line is string => Boolean(line?.trim())).join("\n");
+}
+
+function activityBriefCopyLine(row: TurnActivityBriefRow): string {
+  if ("evidence" in row) {
+    return `${row.label}: ${row.evidence.map(evidenceCopyValue).join(", ")}`;
+  }
+  return `${row.label}: ${row.value}`;
+}
+
+function activityNodeCopyLines(node: TurnActivityNode): string[] {
+  const indent = "  ".repeat(node.depth);
+  const detail = node.detail ? ` - ${node.detail}` : "";
+  const meta = node.meta ? ` (${node.meta})` : "";
+  const evidence = node.evidence.length > 0 ? ` [${node.evidence.map(evidenceCopyValue).join(", ")}]` : "";
+  return [
+    `${indent}${node.label}: ${node.title}${detail}${meta}${evidence}`,
+    ...node.children.flatMap(activityNodeCopyLines),
+  ];
+}
+
+function evidenceCopyValue(item: TurnActivityEvidence): string {
+  return `${item.label} ${item.displayValue || item.value}`;
 }
 
 function agentActivityDigestLabel(activity: TurnActivityView, showDigestLabel: boolean): string {
