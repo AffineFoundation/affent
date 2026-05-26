@@ -392,6 +392,9 @@ func TestBatchScenarioChecks_UsesSharedCheckLibrary(t *testing.T) {
 		RequiredLoopDecisionResults: map[string]int{
 			"defer": 1,
 		},
+		RequiredLoopDecisionMatches: []LoopDecisionRequirement{
+			{Kind: "evidence_quality", Decision: "defer", Trigger: "source_access_dynamic_partial"},
+		},
 		RequiredFocusedTaskCounts: map[string]int{
 			"explore": 1,
 		},
@@ -434,6 +437,7 @@ func TestBatchScenarioChecks_UsesSharedCheckLibrary(t *testing.T) {
 		"tool_stats_at_least:memory_updates:1",
 		"loop_decision_kind_at_least:evidence_quality:1",
 		"loop_decision_result_at_least:defer:1",
+		"loop_decision_match_at_least:evidence_quality:defer:source_access_dynamic_partial:1",
 		"focused_task_called_at_least:explore:1",
 		"subagent_called_at_least:review:1",
 		"no_delegation_errors",
@@ -455,6 +459,20 @@ func TestBatchScenarioChecks_UsesSharedCheckLibrary(t *testing.T) {
 		if !strings.HasPrefix(checks[i].Name, want) {
 			t.Errorf("check[%d].Name = %q, want prefix %q", i, checks[i].Name, want)
 		}
+	}
+}
+
+func TestBatchScenarioChecks_LoopDecisionMatchDefaultsToOne(t *testing.T) {
+	checks := BatchScenarioChecks(BatchScenario{
+		RequiredLoopDecisionMatches: []LoopDecisionRequirement{
+			{Kind: "evidence_quality", Decision: "defer", Trigger: "source_access_dynamic_partial"},
+		},
+	})
+	if len(checks) != 2 {
+		t.Fatalf("checks count = %d, want turn-end + loop decision match: %+v", len(checks), checks)
+	}
+	if !strings.HasPrefix(checks[1].Name, "loop_decision_match_at_least:evidence_quality:defer:source_access_dynamic_partial:1") {
+		t.Fatalf("default min check name = %q", checks[1].Name)
 	}
 }
 

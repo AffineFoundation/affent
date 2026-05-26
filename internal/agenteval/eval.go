@@ -47,6 +47,15 @@ type ToolArgContainsRequirement struct {
 	Min int
 }
 
+type LoopDecisionRequirement struct {
+	Kind     string
+	Decision string
+	Trigger  string
+	// Min is the required number of matching loop.decision events. Values
+	// <=0 default to one so scenarios can spell the common case tersely.
+	Min int
+}
+
 type BatchScenario struct {
 	Name                          string
 	Suites                        []string
@@ -66,6 +75,7 @@ type BatchScenario struct {
 	RequiredToolStatsAtLeast      map[string]int
 	RequiredLoopDecisionKinds     map[string]int
 	RequiredLoopDecisionResults   map[string]int
+	RequiredLoopDecisionMatches   []LoopDecisionRequirement
 	RequiredCommandBeforeTool     []CommandToolOrderRequirement
 	RequiredCommandAfterTool      []CommandToolOrderRequirement
 	RequiredTools                 []string
@@ -776,6 +786,13 @@ func BatchScenarioChecks(scenario BatchScenario) []Check {
 	}
 	for _, decision := range sortedStringMapKeys(scenario.RequiredLoopDecisionResults) {
 		checks = append(checks, LoopDecisionResultAtLeast(decision, scenario.RequiredLoopDecisionResults[decision]))
+	}
+	for _, req := range scenario.RequiredLoopDecisionMatches {
+		min := req.Min
+		if min <= 0 {
+			min = 1
+		}
+		checks = append(checks, LoopDecisionMatchAtLeast(req.Kind, req.Decision, req.Trigger, min))
 	}
 	for _, taskType := range sortedStringMapKeys(scenario.RequiredFocusedTaskCounts) {
 		checks = append(checks, FocusedTaskCalledAtLeast(taskType, scenario.RequiredFocusedTaskCounts[taskType]))

@@ -420,6 +420,63 @@ func LoopDecisionResultAtLeast(decision string, min int) Check {
 	}
 }
 
+func LoopDecisionMatchAtLeast(kind, decision, trigger string, min int) Check {
+	return Check{
+		Name: fmt.Sprintf("loop_decision_match_at_least:%s:%s:%s:%d", kind, decision, trigger, min),
+		Eval: func(t Trace) CheckResult {
+			count := 0
+			var examples []string
+			for _, d := range t.LoopDecisions {
+				if kind != "" && d.Kind != kind {
+					continue
+				}
+				if decision != "" && d.Decision != decision {
+					continue
+				}
+				if trigger != "" && d.Trigger != trigger {
+					continue
+				}
+				count++
+				if len(examples) < 3 {
+					examples = append(examples, formatLoopDecisionExample(d))
+				}
+			}
+			if count >= min {
+				return CheckResult{Pass: true, Detail: fmt.Sprintf("matched=%d examples=%v", count, examples)}
+			}
+			return CheckResult{
+				Pass:   false,
+				Detail: fmt.Sprintf("matched=%d, want >= %d for kind=%q decision=%q trigger=%q; observed=%v", count, min, kind, decision, trigger, loopDecisionExamples(t.LoopDecisions, 5)),
+			}
+		},
+	}
+}
+
+func loopDecisionExamples(decisions []LoopDecision, max int) []string {
+	if max <= 0 || len(decisions) == 0 {
+		return nil
+	}
+	examples := make([]string, 0, min(max, len(decisions)))
+	for i, d := range decisions {
+		if i >= max {
+			break
+		}
+		examples = append(examples, formatLoopDecisionExample(d))
+	}
+	return examples
+}
+
+func formatLoopDecisionExample(d LoopDecision) string {
+	parts := []string{
+		"kind=" + d.Kind,
+		"decision=" + d.Decision,
+	}
+	if d.Trigger != "" {
+		parts = append(parts, "trigger="+d.Trigger)
+	}
+	return strings.Join(parts, " ")
+}
+
 func FocusedTaskCalledAtLeast(taskType string, min int) Check {
 	return Check{
 		Name: fmt.Sprintf("focused_task_called_at_least:%s:%d", taskType, min),
