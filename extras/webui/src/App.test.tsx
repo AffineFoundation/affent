@@ -1197,6 +1197,94 @@ describe("App", () => {
     expect(within(row).getByTestId("session-chips")).toHaveTextContent("Memory");
   });
 
+  it("refreshes visible plan state after a live plan update", async () => {
+    const live = controllableEventStream();
+    let planCalls = 0;
+    const fetchImpl = vi.fn(async (input: RequestInfo | URL) => {
+      const url = String(input);
+      if (url === "/v1/sessions?limit=100") {
+        return jsonResponse({
+          sessions: [{ id: "s1", active: true, durable: true, has_conversation: true, has_events: true, has_artifacts: false, has_memory: false, has_runtime_skills: false }],
+          has_more: false,
+        });
+      }
+      if (url === "/v1/sessions/s1/history?after=-1&limit=500") {
+        return jsonResponse({ session_id: "s1", events: [], next_after: -1, has_more: false, trace_schema_detected: false });
+      }
+      if (url === "/v1/sessions/s1/events") return live.response;
+      if (url === "/v1/sessions/s1/plan") {
+        planCalls += 1;
+        return jsonResponse({
+          session_id: "s1",
+          plan: { steps: [{ step: "Collect evidence", status: "in_progress" }, { step: "Write summary", status: "pending" }] },
+          summary: {
+            label: "Plan",
+            total_steps: 2,
+            completed_steps: 0,
+            active: true,
+            blocked: false,
+            done: false,
+            current_step: "Collect evidence",
+            current_step_index: 1,
+            current_step_status: "in_progress",
+            error: false,
+          },
+        });
+      }
+      return jsonResponse({ error: { message: `unexpected ${url}` } }, 404);
+    });
+    vi.stubGlobal("fetch", fetchImpl);
+
+    render(<App />);
+
+    await waitFor(() => expect(fetchImpl).toHaveBeenCalledWith("/v1/sessions/s1/events", expect.anything()));
+
+    live.send([
+      { id: 1, type: "turn.start", data: { turn_id: "t1" } },
+      { id: 2, type: "user.message", data: { turn_id: "t1", text: "plan the analysis" } },
+      {
+        id: 3,
+        type: "tool.request",
+        data: {
+          turn_id: "t1",
+          call_id: "c1",
+          tool: "plan",
+          args: {
+            action: "set",
+            steps: [
+              { step: "Collect evidence", status: "in_progress" },
+              { step: "Write summary", status: "pending" },
+            ],
+          },
+          args_truncated: false,
+          args_bytes: 128,
+          args_omitted_bytes: 0,
+          args_cap_bytes: 8192,
+        },
+      },
+      {
+        id: 4,
+        type: "tool.result",
+        data: {
+          turn_id: "t1",
+          call_id: "c1",
+          exit_code: 0,
+          result_summary: "{\"ok\":true,\"active\":true}",
+          result: "{\"ok\":true,\"active\":true}",
+          result_truncated: false,
+          result_bytes: 25,
+          result_omitted_bytes: 0,
+          result_cap_bytes: 262144,
+        },
+      },
+      { id: 5, type: "turn.end", data: { turn_id: "t1", reason: "completed", tool_stats: { tool_requests: 1, plan_calls: 1, plan_by_action: { set: 1 } } } },
+    ]);
+    live.close();
+
+    await waitFor(() => expect(planCalls).toBe(1));
+    expect(await screen.findByTestId("chat-context-details")).toHaveTextContent("Plan 0/2 · step 1 active");
+  });
+
   it("moves tool Next guidance into the composer draft", async () => {
     const user = userEvent.setup();
     const fetchImpl = vi.fn(async (input: RequestInfo | URL) => {

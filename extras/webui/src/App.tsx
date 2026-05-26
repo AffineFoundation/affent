@@ -6,6 +6,7 @@ import {
   createSession,
   deleteSession,
   getSessionMemory,
+  getSessionPlan,
   getSessionHistory,
   installSkill,
   listSessions,
@@ -15,6 +16,7 @@ import {
   sendSessionMessage,
   streamSessionEvents,
   type SessionMemoryResponse,
+  type SessionPlanSummary,
   type SessionSkillInfo,
   type SessionSkillInstallRequest,
   type SessionSummary,
@@ -93,6 +95,7 @@ export function App() {
   const [guidanceReceipts, setGuidanceReceipts] = useState<GuidanceReceiptView[]>([]);
   const [skillsState, setSkillsState] = useState<SkillsState>({ state: "idle" });
   const [memoryState, setMemoryState] = useState<MemoryState>({ state: "idle" });
+  const [livePlanSummary, setLivePlanSummary] = useState<SessionPlanSummary | undefined>();
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [sessionsCollapsed, setSessionsCollapsed] = useState(false);
   const [mobileTopbarHidden, setMobileTopbarHidden] = useState(false);
@@ -135,6 +138,19 @@ export function App() {
     () => session.turns.reduce((sum, turn) => sum + memoryUpdatesForTurn(turn).length, 0),
     [session.turns],
   );
+  const planMutationCount = useMemo(
+    () => session.turns.reduce(
+      (sum, turn) => sum + turn.toolCalls.filter((call) => (
+        call.tool === "plan"
+        && call.status === "success"
+        && call.exitCode === 0
+        && isPlanMutationAction(call.args.action)
+      )).length,
+      0,
+    ),
+    [session.turns],
+  );
+  const planSummary = livePlanSummary ?? selectedSession?.plan_summary;
   const capabilityView = useMemo(
     () => buildRuntimeCapabilityView(selectedSession?.capabilities, { selectedSessionId }),
     [selectedSession?.capabilities, selectedSessionId],
@@ -147,10 +163,10 @@ export function App() {
       pendingTask: pendingMessage?.kind === "task" ? pendingMessage.text : undefined,
       pendingGuidance: pendingMessage?.kind === "guidance" ? pendingMessage.text : undefined,
       sessionTitle: selectedSessionTitle,
-      planSummary: selectedSession?.plan_summary,
+      planSummary,
       contextSummary: selectedSession?.context,
     }),
-    [pendingMessage, selectedSession?.context, selectedSession?.plan_summary, selectedSessionId, selectedSessionTitle, session, workflow],
+    [pendingMessage, planSummary, selectedSession?.context, selectedSessionId, selectedSessionTitle, session, workflow],
   );
   const showWorkflowStatus = overview.tone === "error" || overview.tone === "warning";
   const showSessionNav = !demoActive && sessions.length > 0;
@@ -247,6 +263,45 @@ export function App() {
       return changed ? next : current;
     });
   }, [memoryUpdateCount, selectedSessionId]);
+
+  useEffect(() => {
+    setLivePlanSummary(undefined);
+  }, [selectedSessionId]);
+
+  useEffect(() => {
+    if (demoActive || !selectedSessionId || planMutationCount <= 0) return;
+    const ac = new AbortController();
+    getSessionPlan(client, selectedSessionId, ac.signal)
+      .then((resp) => {
+        const nextSummary = resp.summary;
+        setLivePlanSummary(nextSummary);
+        setSessions((current) => {
+          let changed = false;
+          const next = current.map((item) => {
+            if (item.id !== selectedSessionId) return item;
+            changed = true;
+            return { ...item, has_plan: !!nextSummary, plan_summary: nextSummary };
+          });
+          return changed ? next : current;
+        });
+      })
+      .catch((err) => {
+        if (isAbortError(err)) return;
+        if (err instanceof ApiError && err.status === 404) {
+          setLivePlanSummary(undefined);
+          setSessions((current) => {
+            let changed = false;
+            const next = current.map((item) => {
+              if (item.id !== selectedSessionId || (!item.has_plan && !item.plan_summary)) return item;
+              changed = true;
+              return { ...item, has_plan: false, plan_summary: undefined };
+            });
+            return changed ? next : current;
+          });
+        }
+      });
+    return () => ac.abort();
+  }, [client, demoActive, planMutationCount, selectedSessionId]);
 
   const handleReadSkill = useCallback(
     async (name: string): Promise<SessionSkillInfo> => {
@@ -856,6 +911,11 @@ function initialTheme(): ThemeMode {
 
 function latestChatMeta(updated: string): string | undefined {
   return updated && updated !== "No messages yet" ? updated : undefined;
+}
+
+function isPlanMutationAction(value: unknown): boolean {
+  const action = typeof value === "string" ? value.trim().toLowerCase() : "";
+  return action === "set" || action === "update" || action === "clear";
 }
 
 function lastRawEventId(events: readonly RawEvent[]): number {

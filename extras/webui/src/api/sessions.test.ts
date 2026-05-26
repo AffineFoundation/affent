@@ -5,6 +5,7 @@ import {
   createSession,
   deleteSession,
   getSessionHistory,
+  getSessionPlan,
   listSessions,
   readSessionArtifact,
   sendSessionMessage,
@@ -26,6 +27,11 @@ describe("session API helpers", () => {
     await getSessionHistory(client, "s/1", { after: -1, limit: 500 });
 
     expect(fetchImpl.mock.calls[1][0]).toBe("/v1/sessions/s%2F1/history?after=-1&limit=500");
+
+    fetchImpl.mockResolvedValueOnce(jsonResponse({ session_id: "s/1", plan: {}, summary: undefined }));
+    await getSessionPlan(client, "s/1");
+
+    expect(fetchImpl.mock.calls[2][0]).toBe("/v1/sessions/s%2F1/plan");
   });
 
   it("uses the documented HTTP methods for controls", async () => {

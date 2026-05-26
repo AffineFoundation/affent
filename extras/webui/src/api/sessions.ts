@@ -83,6 +83,12 @@ export interface SessionMemoryResponse {
   topics?: SessionMemoryBucket[];
 }
 
+export interface SessionPlanResponse {
+  session_id: string;
+  plan: unknown;
+  summary?: SessionPlanSummary;
+}
+
 export interface SessionSkillInfo {
   name: string;
   description?: string;
@@ -271,6 +277,14 @@ export function getSessionMemory(
   signal?: AbortSignal,
 ): Promise<SessionMemoryResponse> {
   return client.json<SessionMemoryResponse>(`/v1/sessions/${encodeURIComponent(sessionId)}/memory`, { signal });
+}
+
+export function getSessionPlan(
+  client: ApiClient,
+  sessionId: string,
+  signal?: AbortSignal,
+): Promise<SessionPlanResponse> {
+  return client.json<SessionPlanResponse>(`/v1/sessions/${encodeURIComponent(sessionId)}/plan`, { signal });
 }
 
 export function listSkills(
