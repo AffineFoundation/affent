@@ -120,6 +120,11 @@ Scenario records describe one eval case:
   `unknown_field_drop`, and `other`.
   New traces prefer the authoritative `turn.end.tool_stats` repair summary;
   older traces fall back to classifying `tool.request.repair_notes`.
+- `tool_repair_examples`: optional bounded examples of repaired or
+  canonicalized tool calls. Each sample includes tool index, call id, final
+  tool name, original tool name when present, canonicalized/args-repaired
+  flags, compact original argument preview, repair notes/kinds, exit code, and
+  whether the repaired call succeeded.
 - `tool_failure_by_kind`: optional map of structured tool failure kind to
   count. New traces prefer `turn.end.tool_stats`; replay of older or partial
   traces may derive counts from per-call `tool.result.failure_kinds`,
@@ -285,6 +290,7 @@ Summary records aggregate all scenario records from the same process:
 - Tool totals: `tool_calls`, `tool_errors`, `tool_repaired`,
   `tool_name_canonicalized`, `tool_repair_calls`, `tool_repair_succeeded`,
   `tool_repair_failed`, `tool_repair_notes`, `tool_repair_by_kind`,
+  `tool_repair_examples`,
   `tool_failure_by_kind`, `loop_guard_interventions`, `forced_no_tools`,
   `source_access_results`, `source_access_verified`,
   `source_access_discovery_only`, `source_access_network`,

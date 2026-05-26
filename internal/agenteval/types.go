@@ -322,6 +322,20 @@ type ToolRepairStats struct {
 	ByKind         map[string]int
 }
 
+type ToolRepairExample struct {
+	ToolIndex           int      `json:"tool_index"`
+	CallID              string   `json:"call_id,omitempty"`
+	Tool                string   `json:"tool"`
+	OriginalTool        string   `json:"original_tool,omitempty"`
+	Canonicalized       bool     `json:"canonicalized,omitempty"`
+	ArgsRepaired        bool     `json:"args_repaired,omitempty"`
+	OriginalArgsSummary string   `json:"original_args_summary,omitempty"`
+	RepairNotes         []string `json:"repair_notes,omitempty"`
+	RepairKinds         []string `json:"repair_kinds,omitempty"`
+	ExitCode            int      `json:"exit_code"`
+	Succeeded           bool     `json:"succeeded"`
+}
+
 type ToolFailureExample struct {
 	Kind          string `json:"kind"`
 	Tool          string `json:"tool"`
@@ -443,6 +457,35 @@ func (t Trace) RepairStats() ToolRepairStats {
 		}
 	}
 	return stats
+}
+
+func (t Trace) ToolRepairExamples(maxExamples int) []ToolRepairExample {
+	if maxExamples <= 0 {
+		return nil
+	}
+	var out []ToolRepairExample
+	for i, c := range t.Tools {
+		if len(out) >= maxExamples {
+			break
+		}
+		if !c.Canonicalized && !c.ArgsRepaired && len(c.RepairNotes) == 0 {
+			continue
+		}
+		out = append(out, ToolRepairExample{
+			ToolIndex:           i + 1,
+			CallID:              c.CallID,
+			Tool:                c.Tool,
+			OriginalTool:        c.OriginalTool,
+			Canonicalized:       c.Canonicalized,
+			ArgsRepaired:        c.ArgsRepaired,
+			OriginalArgsSummary: compactOneLine(c.OriginalArgsSummary, 220),
+			RepairNotes:         compactStringSlice(c.RepairNotes, 8, 220),
+			RepairKinds:         repairKindsForCall(c),
+			ExitCode:            c.ExitCode,
+			Succeeded:           c.ExitCode == 0,
+		})
+	}
+	return out
 }
 
 func (t Trace) ToolFailureKindCounts() map[string]int {
@@ -964,6 +1007,27 @@ func (s *ToolRepairStats) addKind(kind string) {
 		s.ByKind = map[string]int{}
 	}
 	s.ByKind[kind]++
+}
+
+func repairKindsForCall(c ToolCall) []string {
+	seen := map[string]bool{}
+	var out []string
+	for _, note := range c.RepairNotes {
+		kind := toolrepair.Kind(note)
+		if kind == "" || seen[kind] {
+			continue
+		}
+		seen[kind] = true
+		out = append(out, kind)
+	}
+	classified := len(out) > 0
+	if !classified && c.Canonicalized {
+		out = append(out, "tool_name")
+	}
+	if !classified && c.ArgsRepaired {
+		out = append(out, "malformed_json")
+	}
+	return out
 }
 
 func cloneStringIntMap(in map[string]int) map[string]int {

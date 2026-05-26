@@ -4,15 +4,19 @@ import (
 	"os"
 	"path/filepath"
 	"reflect"
+	"strings"
 	"testing"
 )
 
 func TestTrace_RepairStats_ClassifiesRepairNotes(t *testing.T) {
 	tr := Trace{Tools: []ToolCall{
 		{
-			Tool:          "read_file",
-			Canonicalized: true,
-			ArgsRepaired:  true,
+			CallID:              "repair-1",
+			Tool:                "read_file",
+			OriginalTool:        "readFile",
+			Canonicalized:       true,
+			ArgsRepaired:        true,
+			OriginalArgsSummary: `{"file_path":"README.md","extra":true}`,
 			RepairNotes: []string{
 				"canonicalized tool readFile to read_file",
 				"unwrapped field arguments",
@@ -70,6 +74,22 @@ func TestTrace_RepairStats_ClassifiesRepairNotes(t *testing.T) {
 	}
 	if !got.HasAny() {
 		t.Fatal("HasAny() = false, want true")
+	}
+	examples := tr.ToolRepairExamples(2)
+	if len(examples) != 2 {
+		t.Fatalf("ToolRepairExamples len = %d, want 2: %+v", len(examples), examples)
+	}
+	if examples[0].CallID != "repair-1" ||
+		examples[0].Tool != "read_file" ||
+		examples[0].OriginalTool != "readFile" ||
+		!examples[0].Canonicalized ||
+		!examples[0].ArgsRepaired ||
+		!reflect.DeepEqual(examples[0].RepairKinds, []string{"tool_name", "wrapper_unwrap", "alias_rename", "enum_normalization", "type_coercion", "unknown_field_drop"}) ||
+		!strings.Contains(examples[0].OriginalArgsSummary, "file_path") {
+		t.Fatalf("ToolRepairExamples[0] = %+v", examples[0])
+	}
+	if examples[1].Tool != "shell" || !examples[1].ArgsRepaired || examples[1].Succeeded {
+		t.Fatalf("ToolRepairExamples[1] = %+v", examples[1])
 	}
 }
 

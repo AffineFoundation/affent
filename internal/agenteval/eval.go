@@ -27,6 +27,7 @@ const (
 	DefaultBatchTimeout            = 5 * time.Minute
 	DefaultBatchMaxTurnSteps       = 10
 	DefaultVerifierOutputCapBytes  = 1 * 1024 * 1024
+	maxDebugToolRepairExamples     = 5
 	maxDebugToolTruncationExamples = 5
 	maxDebugSourceAccessExamples   = 5
 	maxDebugMemoryUpdateExamples   = 5
@@ -175,6 +176,7 @@ type BatchResult struct {
 	RuntimeErrorExamples   map[string][]RuntimeErrorExample
 	LoopDecisionStats      LoopDecisionStats
 	ContextCompactions     ContextCompactionStats
+	ToolRepairExamples     []ToolRepairExample
 	ToolFailureExamples    map[string][]ToolFailureExample
 	SourceAccessExamples   []SourceAccessExample
 	MemoryUpdateExamples   []MemoryUpdateExample
@@ -227,6 +229,7 @@ type DebugManifest struct {
 	ExpectationCapabilityFailedNames []string                   `json:"expectation_capability_failed_names,omitempty"`
 	Failures                         []string                   `json:"failures,omitempty"`
 	DebugBrief                       *DebugBrief                `json:"debug_brief,omitempty"`
+	ToolRepairExamples               []ToolRepairExample        `json:"tool_repair_examples,omitempty"`
 	SourceAccessExamples             []SourceAccessExample      `json:"source_access_examples,omitempty"`
 	MemoryUpdateExamples             []MemoryUpdateExample      `json:"memory_update_examples,omitempty"`
 	SessionSearchExamples            []SessionSearchExample     `json:"session_search_examples,omitempty"`
@@ -771,6 +774,7 @@ func (r BatchRunner) Run(ctx context.Context, scenario BatchScenario) BatchResul
 		res.RuntimeErrorExamples = trace.RuntimeErrorExamples(2)
 		res.LoopDecisionStats = trace.LoopDecisionStats(2)
 		res.ContextCompactions = trace.ContextCompactionStats(2)
+		res.ToolRepairExamples = trace.ToolRepairExamples(maxDebugToolRepairExamples)
 		res.ToolFailureExamples = trace.ToolFailureExamples(2)
 		res.SourceAccessExamples = trace.SourceAccessExamples(maxDebugSourceAccessExamples)
 		res.MemoryUpdateExamples = trace.MemoryUpdateExamples(maxDebugMemoryUpdateExamples)
@@ -810,6 +814,9 @@ func writeScenarioDebugArtifacts(res *BatchResult, scenario BatchScenario, stdou
 	if trace != nil && len(res.TraceEventTypes) == 0 {
 		res.TraceEventTypes = cloneStringIntMap(trace.RawTypes)
 		res.TraceEvents = sumStringIntMap(trace.RawTypes)
+	}
+	if trace != nil && len(res.ToolRepairExamples) == 0 {
+		res.ToolRepairExamples = trace.ToolRepairExamples(maxDebugToolRepairExamples)
 	}
 	if trace != nil && len(res.MemoryUpdateExamples) == 0 {
 		res.MemoryUpdateExamples = trace.MemoryUpdateExamples(maxDebugMemoryUpdateExamples)
@@ -875,6 +882,7 @@ func writeScenarioDebugArtifacts(res *BatchResult, scenario BatchScenario, stdou
 		ExpectationCapabilityFailedNames: ExpectationCapabilityFailedNames(res.OK, expectationCapabilities),
 		Failures:                         append([]string(nil), res.Failures...),
 		DebugBrief:                       BuildDebugBrief(*res),
+		ToolRepairExamples:               append([]ToolRepairExample(nil), res.ToolRepairExamples...),
 		SourceAccessExamples:             append([]SourceAccessExample(nil), res.SourceAccessExamples...),
 		MemoryUpdateExamples:             append([]MemoryUpdateExample(nil), res.MemoryUpdateExamples...),
 		SessionSearchExamples:            append([]SessionSearchExample(nil), res.SessionSearchExamples...),

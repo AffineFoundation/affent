@@ -793,6 +793,17 @@ func TestBatchSummaryAggregatesRuntimeMetrics(t *testing.T) {
 			Notes:          2,
 			ByKind:         map[string]int{"tool_name": 1, "alias_rename": 1},
 		},
+		ToolRepairExamples: []agenteval.ToolRepairExample{{
+			ToolIndex:     1,
+			CallID:        "repair-1",
+			Tool:          "read_file",
+			OriginalTool:  "readFile",
+			Canonicalized: true,
+			ArgsRepaired:  true,
+			RepairNotes:   []string{"canonicalized tool readFile to read_file", "renamed field file_path to path"},
+			RepairKinds:   []string{"tool_name", "alias_rename"},
+			Succeeded:     true,
+		}},
 		ToolTruncation: agenteval.ToolTruncationStats{
 			ArgsTruncated:    1,
 			ArgsOmittedBytes: 128,
@@ -1050,6 +1061,9 @@ func TestBatchSummaryAggregatesRuntimeMetrics(t *testing.T) {
 	if !strings.Contains(out.String(), "repair_calls=5,ok=4,failed=1") {
 		t.Fatalf("summary output missing repair outcome rollup:\n%s", out.String())
 	}
+	if !strings.Contains(out.String(), `tool_repair_example: tool=read_file original=readFile call_id=repair-1 kinds=tool_name,alias_rename canonicalized=true args_repaired=true exit=0 note="canonicalized tool readFile to read_file"`) {
+		t.Fatalf("summary output missing tool repair example:\n%s", out.String())
+	}
 	if !strings.Contains(out.String(), "plan=calls:3,errors:1 plan_by_action=set:1,update:2") {
 		t.Fatalf("summary output missing plan rollup:\n%s", out.String())
 	}
@@ -1067,6 +1081,9 @@ func TestBatchSummaryAggregatesRuntimeMetrics(t *testing.T) {
 	}
 	if summary.ToolRepairCalls != 5 || summary.ToolRepairSucceeded != 4 || summary.ToolRepairFailed != 1 {
 		t.Fatalf("repair outcomes = calls:%d ok:%d failed:%d, want 5/4/1", summary.ToolRepairCalls, summary.ToolRepairSucceeded, summary.ToolRepairFailed)
+	}
+	if len(summary.ToolRepairExamples) != 1 || summary.ToolRepairExamples[0].CallID != "repair-1" {
+		t.Fatalf("ToolRepairExamples = %#v", summary.ToolRepairExamples)
 	}
 	wantRepairKinds := map[string]int{"tool_name": 1, "alias_rename": 2, "type_coercion": 2}
 	if !reflect.DeepEqual(summary.ToolRepairByKind, wantRepairKinds) {
@@ -1373,6 +1390,17 @@ func TestPrintBatchResultJSONL(t *testing.T) {
 			Notes:          3,
 			ByKind:         map[string]int{"alias_rename": 2, "type_coercion": 1},
 		},
+		ToolRepairExamples: []agenteval.ToolRepairExample{{
+			ToolIndex:     1,
+			CallID:        "repair-jsonl-1",
+			Tool:          "read_file",
+			OriginalTool:  "readFile",
+			Canonicalized: true,
+			ArgsRepaired:  true,
+			RepairNotes:   []string{"canonicalized tool readFile to read_file", "renamed field file_path to path"},
+			RepairKinds:   []string{"tool_name", "alias_rename"},
+			Succeeded:     true,
+		}},
 		Plan: agenteval.PlanStats{
 			Calls:    2,
 			ByAction: map[string]int{"set": 1, "update": 1},
@@ -1667,6 +1695,19 @@ func TestPrintBatchResultJSONL(t *testing.T) {
 	}
 	if repairKinds["alias_rename"] != float64(2) || repairKinds["type_coercion"] != float64(1) {
 		t.Fatalf("tool_repair_by_kind = %#v", repairKinds)
+	}
+	toolRepairExamples, ok := got["tool_repair_examples"].([]any)
+	if !ok || len(toolRepairExamples) != 1 {
+		t.Fatalf("tool_repair_examples = %#v\njson=%s", got["tool_repair_examples"], out.String())
+	}
+	toolRepairExample, ok := toolRepairExamples[0].(map[string]any)
+	if !ok ||
+		toolRepairExample["call_id"] != "repair-jsonl-1" ||
+		toolRepairExample["tool"] != "read_file" ||
+		toolRepairExample["original_tool"] != "readFile" ||
+		toolRepairExample["canonicalized"] != true ||
+		!jsonArrayContainsString(toolRepairExample["repair_kinds"], "alias_rename") {
+		t.Fatalf("tool_repair_example = %#v\njson=%s", toolRepairExamples[0], out.String())
 	}
 	planByAction, ok := got["plan_by_action"].(map[string]any)
 	if !ok {
@@ -2114,7 +2155,18 @@ func TestPrintBatchSummaryJSONL(t *testing.T) {
 		ToolRepairFailed:      1,
 		ToolRepairNotes:       4,
 		ToolRepairByKind:      map[string]int{"tool_name": 2, "malformed_json": 1, "type_coercion": 1},
-		ToolFailureByKind:     map[string]int{"blocked": 1},
+		ToolRepairExamples: []agenteval.ToolRepairExample{{
+			ToolIndex:     1,
+			CallID:        "summary-repair-1",
+			Tool:          "read_file",
+			OriginalTool:  "readFile",
+			Canonicalized: true,
+			ArgsRepaired:  true,
+			RepairNotes:   []string{"canonicalized tool readFile to read_file"},
+			RepairKinds:   []string{"tool_name"},
+			Succeeded:     true,
+		}},
+		ToolFailureByKind: map[string]int{"blocked": 1},
 		ToolFailureExamples: map[string][]agenteval.ToolFailureExample{
 			"blocked": {
 				{Kind: "blocked", Tool: "web_fetch", ArgsSummary: `url="https://blocked.example"`, ResultSummary: "blocked | Next: use another source", ExitCode: 1},
@@ -2393,6 +2445,18 @@ func TestPrintBatchSummaryJSONL(t *testing.T) {
 	}
 	if repairKinds["tool_name"] != float64(2) || repairKinds["malformed_json"] != float64(1) || repairKinds["type_coercion"] != float64(1) {
 		t.Fatalf("tool_repair_by_kind = %#v", repairKinds)
+	}
+	toolRepairExamples, ok := got["tool_repair_examples"].([]any)
+	if !ok || len(toolRepairExamples) != 1 {
+		t.Fatalf("tool_repair_examples = %#v\njson=%s", got["tool_repair_examples"], out.String())
+	}
+	toolRepairExample, ok := toolRepairExamples[0].(map[string]any)
+	if !ok ||
+		toolRepairExample["call_id"] != "summary-repair-1" ||
+		toolRepairExample["tool"] != "read_file" ||
+		toolRepairExample["original_tool"] != "readFile" ||
+		!jsonArrayContainsString(toolRepairExample["repair_kinds"], "tool_name") {
+		t.Fatalf("tool_repair_example = %#v\njson=%s", toolRepairExamples[0], out.String())
 	}
 	toolFailureKinds, ok := got["tool_failure_by_kind"].(map[string]any)
 	if !ok || toolFailureKinds["blocked"] != float64(1) {

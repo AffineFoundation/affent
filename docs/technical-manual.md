@@ -422,9 +422,12 @@ a different source, or a clearly marked gap. Per-turn workflow caps emit
 `loop_guard_call_cap`. First-tool and post-tool workflow policies emit
 `tool_policy_first_tool`, `tool_policy_repeat`, or `tool_policy_active` when
 they block a model call before the underlying tool runs. Per-turn stats expose
-`tool_failure_by_kind` plus `source_access_results`,
+`tool_repair_by_kind`, `tool_failure_by_kind`, plus `source_access_results`,
 `source_access_verified`, `source_access_discovery_only`, and
-`source_access_network`. Durable transcript recall is tracked with
+`source_access_network`. Eval debug manifests, timelines, and JSONL records
+also include bounded `tool_repair_examples`, so repeated small-model tool-name,
+alias, enum, type-coercion, and unknown-field mistakes can be inspected without
+opening raw trace events. Durable transcript recall is tracked with
 `session_search_calls`, `session_search_results`,
 `session_search_context_hits`, and `session_search_matched_terms`. Eval debug
 manifests, timelines, and JSONL records also include bounded

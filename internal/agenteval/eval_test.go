@@ -1317,6 +1317,11 @@ func TestWriteScenarioDebugArtifactsIndexesTraceAndFinalText(t *testing.T) {
 			TurnID:                 "turn-debug",
 			CallID:                 "call-1",
 			Tool:                   "web_fetch",
+			OriginalTool:           "webFetch",
+			Canonicalized:          true,
+			ArgsRepaired:           true,
+			OriginalArgsSummary:    `{"URL":"https://example.test/report"}`,
+			RepairNotes:            []string{"canonicalized tool webFetch to web_fetch", "renamed field URL to url"},
 			Args:                   map[string]any{"url": "https://example.test/report"},
 			ArgsTruncated:          true,
 			ArgsBytes:              70000,
@@ -1597,6 +1602,15 @@ func TestWriteScenarioDebugArtifactsIndexesTraceAndFinalText(t *testing.T) {
 		manifest.RuntimeSurface.Tools[0].Name != "web_fetch" {
 		t.Fatalf("manifest runtime surface = %+v", manifest.RuntimeSurface)
 	}
+	if len(manifest.ToolRepairExamples) != 1 ||
+		manifest.ToolRepairExamples[0].ToolIndex != 1 ||
+		manifest.ToolRepairExamples[0].Tool != "web_fetch" ||
+		manifest.ToolRepairExamples[0].OriginalTool != "webFetch" ||
+		!manifest.ToolRepairExamples[0].Canonicalized ||
+		!manifest.ToolRepairExamples[0].ArgsRepaired ||
+		!reflect.DeepEqual(manifest.ToolRepairExamples[0].RepairKinds, []string{"tool_name", "alias_rename"}) {
+		t.Fatalf("manifest tool repair examples = %+v", manifest.ToolRepairExamples)
+	}
 	if len(manifest.SourceAccessExamples) != 3 ||
 		manifest.SourceAccessExamples[0].Tool != "web_fetch" ||
 		manifest.SourceAccessExamples[0].Status != "dynamic_partial" ||
@@ -1702,6 +1716,9 @@ func TestWriteScenarioDebugArtifactsIndexesTraceAndFinalText(t *testing.T) {
 		"metrics: tools=7 tool_errors=1 repaired=0 canonicalized=0 loop_guard=1 forced_no_tools=0 evidence=1/2_verified,network=1,partial=1,discovery=1 memory_updates=2(add:1,replace:1,remove:0) session_search=calls:1,results:2,context:1,terms:2 tool_context_trunc=2,omitted=8192 compactions=1,reactive=1,removed=12,summary_bytes=512 tokens=100/20",
 		"## Runtime Surface",
 		"`web_fetch`",
+		"## Tool Repair",
+		"tool#1 `web_fetch` original=`webFetch` call_id=`call-1` canonicalized=`true` args_repaired=`true` exit=`1` kinds=`tool_name,alias_rename`",
+		"note: renamed field URL to url",
 		"trace_deltas: `true`",
 		"affentctl_command",
 		"--api-key '<redacted>'",

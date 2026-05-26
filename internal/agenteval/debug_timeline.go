@@ -83,6 +83,7 @@ func renderDebugTimeline(res BatchResult, scenario BatchScenario, trace *Trace) 
 	renderTimelineTraceEvents(&b, trace)
 	renderTimelineRuntimeSurface(&b, trace)
 	renderTimelineLoopErrors(&b, trace)
+	renderTimelineToolRepair(&b, trace)
 	renderTimelineCompactions(&b, trace)
 	renderTimelineDecisions(&b, trace)
 	renderTimelineSourceEvidence(&b, trace)
@@ -688,6 +689,34 @@ func renderTimelineLoopErrors(b *strings.Builder, trace *Trace) {
 	}
 	for _, err := range trace.LoopErrors {
 		fmt.Fprintf(b, "- %s\n", timelineInline(err, timelineErrorPreviewBytes))
+	}
+}
+
+func renderTimelineToolRepair(b *strings.Builder, trace *Trace) {
+	examples := trace.ToolRepairExamples(len(trace.Tools))
+	if len(examples) == 0 {
+		return
+	}
+	b.WriteString("\n## Tool Repair\n\n")
+	for i, ex := range examples {
+		fmt.Fprintf(b, "%d. tool#%d `%s`", i+1, ex.ToolIndex, ex.Tool)
+		if ex.OriginalTool != "" {
+			fmt.Fprintf(b, " original=`%s`", ex.OriginalTool)
+		}
+		if ex.CallID != "" {
+			fmt.Fprintf(b, " call_id=`%s`", ex.CallID)
+		}
+		fmt.Fprintf(b, " canonicalized=`%t` args_repaired=`%t` exit=`%d`", ex.Canonicalized, ex.ArgsRepaired, ex.ExitCode)
+		if len(ex.RepairKinds) > 0 {
+			fmt.Fprintf(b, " kinds=`%s`", strings.Join(ex.RepairKinds, ","))
+		}
+		b.WriteByte('\n')
+		if ex.OriginalArgsSummary != "" {
+			fmt.Fprintf(b, "   original_args: %s\n", timelineInline(ex.OriginalArgsSummary, timelineMemoryPreviewBytes))
+		}
+		for _, note := range ex.RepairNotes {
+			fmt.Fprintf(b, "   note: %s\n", timelineInline(note, timelineMemoryPreviewBytes))
+		}
 	}
 }
 

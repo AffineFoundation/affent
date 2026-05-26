@@ -471,6 +471,7 @@ type batchSummary struct {
 	ToolRepairFailed                     int
 	ToolRepairNotes                      int
 	ToolRepairByKind                     map[string]int
+	ToolRepairExamples                   []agenteval.ToolRepairExample
 	ToolFailureByKind                    map[string]int
 	ToolFailureExamples                  map[string][]agenteval.ToolFailureExample
 	RuntimeErrors                        int
@@ -584,6 +585,7 @@ func (s *batchSummary) add(res agenteval.BatchResult) {
 		}
 		s.ToolRepairByKind[k] += v
 	}
+	s.ToolRepairExamples = appendToolRepairExamples(s.ToolRepairExamples, res.ToolRepairExamples, batchSummaryExamplesPerKind)
 	for k, v := range res.ToolStats.ToolFailureByKind {
 		if s.ToolFailureByKind == nil {
 			s.ToolFailureByKind = map[string]int{}
@@ -1070,6 +1072,7 @@ func printBatchSummary(w io.Writer, s batchSummary) {
 	fmt.Fprintln(w)
 	printFailureHintLines(w, s.FailureKinds, "")
 	printFailureExampleLines(w, s.FailureExamples, "")
+	printToolRepairExampleLines(w, s.ToolRepairExamples, "")
 	printToolFailureHintLines(w, s.ToolFailureByKind, "")
 	printToolFailureExampleLines(w, s.ToolFailureExamples, "")
 	printFailureHintLines(w, s.RuntimeErrorByKind, "")
@@ -1377,6 +1380,26 @@ func printFailureExampleLines(w io.Writer, examples map[string][]batchFailureExa
 			}
 			fmt.Fprintln(w)
 		}
+	}
+}
+
+func printToolRepairExampleLines(w io.Writer, examples []agenteval.ToolRepairExample, indent string) {
+	for _, ex := range examples {
+		fmt.Fprintf(w, "%stool_repair_example: tool=%s", indent, ex.Tool)
+		if ex.OriginalTool != "" {
+			fmt.Fprintf(w, " original=%s", ex.OriginalTool)
+		}
+		if ex.CallID != "" {
+			fmt.Fprintf(w, " call_id=%s", ex.CallID)
+		}
+		if len(ex.RepairKinds) > 0 {
+			fmt.Fprintf(w, " kinds=%s", strings.Join(ex.RepairKinds, ","))
+		}
+		fmt.Fprintf(w, " canonicalized=%t args_repaired=%t exit=%d", ex.Canonicalized, ex.ArgsRepaired, ex.ExitCode)
+		if len(ex.RepairNotes) > 0 {
+			fmt.Fprintf(w, " note=%q", ex.RepairNotes[0])
+		}
+		fmt.Fprintln(w)
 	}
 }
 
@@ -1832,6 +1855,7 @@ type batchResultRecord struct {
 	ToolRepairFailed                 int                                        `json:"tool_repair_failed,omitempty"`
 	ToolRepairNotes                  int                                        `json:"tool_repair_notes,omitempty"`
 	ToolRepairByKind                 map[string]int                             `json:"tool_repair_by_kind,omitempty"`
+	ToolRepairExamples               []agenteval.ToolRepairExample              `json:"tool_repair_examples,omitempty"`
 	ToolFailureByKind                map[string]int                             `json:"tool_failure_by_kind,omitempty"`
 	ToolFailureExamples              map[string][]agenteval.ToolFailureExample  `json:"tool_failure_examples,omitempty"`
 	MemoryUpdateExamples             []agenteval.MemoryUpdateExample            `json:"memory_update_examples,omitempty"`
@@ -1954,6 +1978,7 @@ type batchSummaryRecord struct {
 	ToolRepairFailed                     int                                              `json:"tool_repair_failed,omitempty"`
 	ToolRepairNotes                      int                                              `json:"tool_repair_notes,omitempty"`
 	ToolRepairByKind                     map[string]int                                   `json:"tool_repair_by_kind,omitempty"`
+	ToolRepairExamples                   []agenteval.ToolRepairExample                    `json:"tool_repair_examples,omitempty"`
 	ToolFailureByKind                    map[string]int                                   `json:"tool_failure_by_kind,omitempty"`
 	ToolFailureExamples                  map[string][]agenteval.ToolFailureExample        `json:"tool_failure_examples,omitempty"`
 	RuntimeErrorByKind                   map[string]int                                   `json:"runtime_error_by_kind,omitempty"`
@@ -2104,6 +2129,7 @@ func printBatchResultJSONL(w io.Writer, meta evalJSONLMetadata, res agenteval.Ba
 		ToolRepairFailed:                 res.Repair.FailedCalls,
 		ToolRepairNotes:                  res.Repair.Notes,
 		ToolRepairByKind:                 cloneStringIntMap(res.Repair.ByKind),
+		ToolRepairExamples:               cloneToolRepairExamples(res.ToolRepairExamples),
 		ToolFailureByKind:                cloneStringIntMap(res.ToolStats.ToolFailureByKind),
 		ToolFailureExamples:              cloneToolFailureExamples(res.ToolFailureExamples),
 		MemoryUpdateExamples:             cloneMemoryUpdateExamples(res.MemoryUpdateExamples),
@@ -2297,6 +2323,7 @@ func printBatchSummaryJSONL(w io.Writer, meta evalJSONLMetadata, s batchSummary,
 		ToolRepairFailed:                     s.ToolRepairFailed,
 		ToolRepairNotes:                      s.ToolRepairNotes,
 		ToolRepairByKind:                     cloneStringIntMap(s.ToolRepairByKind),
+		ToolRepairExamples:                   cloneToolRepairExamples(s.ToolRepairExamples),
 		ToolFailureByKind:                    cloneStringIntMap(s.ToolFailureByKind),
 		ToolFailureExamples:                  cloneToolFailureExamples(s.ToolFailureExamples),
 		RuntimeErrorByKind:                   cloneStringIntMap(s.RuntimeErrorByKind),
@@ -2494,6 +2521,23 @@ func cloneToolFailureExamples(in map[string][]agenteval.ToolFailureExample) map[
 	return cloneExampleMap(in)
 }
 
+func cloneToolRepairExamples(in []agenteval.ToolRepairExample) []agenteval.ToolRepairExample {
+	if len(in) == 0 {
+		return nil
+	}
+	out := make([]agenteval.ToolRepairExample, 0, len(in))
+	for _, ex := range in {
+		if len(ex.RepairNotes) > 0 {
+			ex.RepairNotes = append([]string(nil), ex.RepairNotes...)
+		}
+		if len(ex.RepairKinds) > 0 {
+			ex.RepairKinds = append([]string(nil), ex.RepairKinds...)
+		}
+		out = append(out, ex)
+	}
+	return out
+}
+
 func cloneRuntimeErrorExamples(in map[string][]agenteval.RuntimeErrorExample) map[string][]agenteval.RuntimeErrorExample {
 	return cloneExampleMap(in)
 }
@@ -2596,6 +2640,25 @@ func appendLoopDecisionExamples(dst, src []agenteval.LoopDecision, limit int) []
 	for _, ex := range src {
 		if len(dst) >= limit {
 			break
+		}
+		dst = append(dst, ex)
+	}
+	return dst
+}
+
+func appendToolRepairExamples(dst, src []agenteval.ToolRepairExample, limit int) []agenteval.ToolRepairExample {
+	if limit <= 0 || len(dst) >= limit {
+		return dst
+	}
+	for _, ex := range src {
+		if len(dst) >= limit {
+			break
+		}
+		if len(ex.RepairNotes) > 0 {
+			ex.RepairNotes = append([]string(nil), ex.RepairNotes...)
+		}
+		if len(ex.RepairKinds) > 0 {
+			ex.RepairKinds = append([]string(nil), ex.RepairKinds...)
 		}
 		dst = append(dst, ex)
 	}
@@ -2876,6 +2939,7 @@ func printBatchResult(w io.Writer, res agenteval.BatchResult) {
 		fmt.Fprintf(w, "  - %s\n", failure)
 	}
 	printFailureHintLines(w, failureKindsForResult(res.Failures), "  ")
+	printToolRepairExampleLines(w, res.ToolRepairExamples, "  ")
 	printToolFailureHintLines(w, res.ToolStats.ToolFailureByKind, "  ")
 	printToolFailureExampleLines(w, res.ToolFailureExamples, "  ")
 	printFailureHintLines(w, res.RuntimeErrorByKind, "  ")
