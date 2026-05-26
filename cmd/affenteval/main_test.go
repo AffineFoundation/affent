@@ -207,6 +207,7 @@ func TestPrintBatchResultIncludesTraceMetrics(t *testing.T) {
 		BatchScenario:    "sample",
 		Workspace:        "/tmp/ws",
 		TracePath:        "/tmp/ws/trace.jsonl",
+		AffentctlCommand: []string{"go", "run", "./cmd/affentctl", "run", "--trace", "/tmp/ws/trace.jsonl"},
 		OK:               true,
 		Duration:         1234 * time.Millisecond,
 		TurnEndReason:    "completed",
@@ -287,6 +288,7 @@ func TestPrintBatchResultIncludesTraceMetrics(t *testing.T) {
 		"PASS sample (1.234s)",
 		"workspace: /tmp/ws (removed)",
 		"trace: /tmp/ws/trace.jsonl",
+		"command: go run ./cmd/affentctl run --trace /tmp/ws/trace.jsonl",
 		"metrics: tools=3 errors=2 repaired=1 canonicalized=1 loop_guard=2 forced_no_tools=1 tool_ms=45 tokens=100/25 trunc=args:1,results:1,artifacts:1 omitted=512/4096 ctx_trunc=3,omitted=9216 tool_failure_kinds=invalid_args:1 runtime_error_kinds=llm_timeout:1 loop_decisions=1 loop_decision_kinds=evidence_quality:1 loop_decision_results=defer:1 compactions=2,reactive=1,removed=64,summary_bytes=4096 delegation=focused_tasks:2,subagents:1 delegation_errors=focused_tasks:1,subagents:1 focused_task_by_type=explore:1,verify:1 subagent_by_mode=review:1 plan=calls:3,errors:1 plan_by_action=set:1,update:2 end=completed",
 		`verifier: pass exit=0 duration=80ms output=1200 truncated omitted=176 cap=1024 command="go test ./..."`,
 		"tool_failure_hint[invalid_args]",
@@ -641,6 +643,7 @@ func TestPrintBatchResultJSONL(t *testing.T) {
 		TracePath:          "/tmp/ws/trace.jsonl",
 		OK:                 true,
 		Duration:           1500 * time.Millisecond,
+		AffentctlCommand:   []string{"go", "run", "./cmd/affentctl", "run", "--api-key", "<redacted>"},
 		TraceSchemaVersion: 1,
 		TraceEvents:        7,
 		TraceEventTypes: map[string]int{
@@ -791,6 +794,10 @@ func TestPrintBatchResultJSONL(t *testing.T) {
 	}
 	if _, ok := got["failure_kinds"]; ok {
 		t.Fatalf("passing result should omit failure_kinds, got %#v", got["failure_kinds"])
+	}
+	command, ok := got["affentctl_command"].([]any)
+	if !ok || len(command) != 6 || command[0] != "go" || command[5] != "<redacted>" {
+		t.Fatalf("affentctl_command = %#v\njson=%s", got["affentctl_command"], out.String())
 	}
 	toolFailureKinds, ok := got["tool_failure_by_kind"].(map[string]any)
 	if !ok || toolFailureKinds["blocked"] != float64(1) {

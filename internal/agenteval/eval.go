@@ -134,6 +134,7 @@ type BatchResult struct {
 	FinalTextPath        string
 	StdoutPath           string
 	StderrPath           string
+	AffentctlCommand     []string
 	RunExitCode          int
 	OK                   bool
 	Failures             []string
@@ -173,24 +174,25 @@ type BatchResult struct {
 }
 
 type DebugManifest struct {
-	SchemaVersion   int                        `json:"schema_version"`
-	Scenario        string                     `json:"scenario"`
-	OK              bool                       `json:"ok"`
-	Workspace       string                     `json:"workspace"`
-	TracePath       string                     `json:"trace_path"`
-	TimelinePath    string                     `json:"timeline_path,omitempty"`
-	FinalTextPath   string                     `json:"final_text_path,omitempty"`
-	StdoutPath      string                     `json:"stdout_path,omitempty"`
-	StderrPath      string                     `json:"stderr_path,omitempty"`
-	RunExitCode     int                        `json:"run_exit_code"`
-	ConversationDir string                     `json:"conversation_dir,omitempty"`
-	ArtifactDir     string                     `json:"artifact_dir,omitempty"`
-	TraceDeltas     bool                       `json:"trace_deltas,omitempty"`
-	Prompt          string                     `json:"prompt"`
-	Failures        []string                   `json:"failures,omitempty"`
-	Metrics         DebugMetrics               `json:"metrics"`
-	RuntimeSurface  *sse.RuntimeSurfacePayload `json:"runtime_surface,omitempty"`
-	GeneratedAt     string                     `json:"generated_at"`
+	SchemaVersion    int                        `json:"schema_version"`
+	Scenario         string                     `json:"scenario"`
+	OK               bool                       `json:"ok"`
+	Workspace        string                     `json:"workspace"`
+	TracePath        string                     `json:"trace_path"`
+	TimelinePath     string                     `json:"timeline_path,omitempty"`
+	FinalTextPath    string                     `json:"final_text_path,omitempty"`
+	StdoutPath       string                     `json:"stdout_path,omitempty"`
+	StderrPath       string                     `json:"stderr_path,omitempty"`
+	AffentctlCommand []string                   `json:"affentctl_command,omitempty"`
+	RunExitCode      int                        `json:"run_exit_code"`
+	ConversationDir  string                     `json:"conversation_dir,omitempty"`
+	ArtifactDir      string                     `json:"artifact_dir,omitempty"`
+	TraceDeltas      bool                       `json:"trace_deltas,omitempty"`
+	Prompt           string                     `json:"prompt"`
+	Failures         []string                   `json:"failures,omitempty"`
+	Metrics          DebugMetrics               `json:"metrics"`
+	RuntimeSurface   *sse.RuntimeSurfacePayload `json:"runtime_surface,omitempty"`
+	GeneratedAt      string                     `json:"generated_at"`
 }
 
 type DebugMetrics struct {
@@ -381,7 +383,8 @@ func (r BatchRunner) Run(ctx context.Context, scenario BatchScenario) BatchResul
 	res.TracePath = tracePath
 	runCtx, cancel := context.WithTimeout(ctx, r.Timeout)
 	defer cancel()
-	stdout, stderr, exitCode, err := r.runAffentctl(runCtx, repoRoot, workspace, tracePath, scenario)
+	stdout, stderr, exitCode, command, err := r.runAffentctl(runCtx, repoRoot, workspace, tracePath, scenario)
+	res.AffentctlCommand = command
 	res.FinalText = strings.TrimSpace(stdout)
 	res.RunExitCode = exitCode
 	if err != nil {
@@ -482,22 +485,23 @@ func writeScenarioDebugArtifacts(res *BatchResult, scenario BatchScenario, stdou
 
 	manifestPath := filepath.Join(res.Workspace, "affenteval-debug.json")
 	manifest := DebugManifest{
-		SchemaVersion:   1,
-		Scenario:        res.BatchScenario,
-		OK:              res.OK,
-		Workspace:       res.Workspace,
-		TracePath:       res.TracePath,
-		TimelinePath:    timelinePath,
-		FinalTextPath:   finalTextPath,
-		StdoutPath:      stdoutPath,
-		StderrPath:      stderrPath,
-		RunExitCode:     res.RunExitCode,
-		ConversationDir: filepath.Join(res.Workspace, ".affentctl"),
-		ArtifactDir:     filepath.Join(res.Workspace, ".affent", "artifacts"),
-		TraceDeltas:     res.TraceDeltas,
-		Prompt:          scenario.Prompt,
-		Failures:        append([]string(nil), res.Failures...),
-		RuntimeSurface:  cloneRuntimeSurface(res.RuntimeSurface),
+		SchemaVersion:    1,
+		Scenario:         res.BatchScenario,
+		OK:               res.OK,
+		Workspace:        res.Workspace,
+		TracePath:        res.TracePath,
+		TimelinePath:     timelinePath,
+		FinalTextPath:    finalTextPath,
+		StdoutPath:       stdoutPath,
+		StderrPath:       stderrPath,
+		AffentctlCommand: append([]string(nil), res.AffentctlCommand...),
+		RunExitCode:      res.RunExitCode,
+		ConversationDir:  filepath.Join(res.Workspace, ".affentctl"),
+		ArtifactDir:      filepath.Join(res.Workspace, ".affent", "artifacts"),
+		TraceDeltas:      res.TraceDeltas,
+		Prompt:           scenario.Prompt,
+		Failures:         append([]string(nil), res.Failures...),
+		RuntimeSurface:   cloneRuntimeSurface(res.RuntimeSurface),
 		Metrics: DebugMetrics{
 			TurnEndReason:              res.TurnEndReason,
 			ToolCalls:                  res.ToolCalls,
@@ -596,7 +600,7 @@ func (r BatchResult) fail(format string, args ...any) BatchResult {
 	return r
 }
 
-func (r BatchRunner) runAffentctl(ctx context.Context, repoRoot, workspace, tracePath string, scenario BatchScenario) (string, string, int, error) {
+func (r BatchRunner) runAffentctl(ctx context.Context, repoRoot, workspace, tracePath string, scenario BatchScenario) (string, string, int, []string, error) {
 	if strings.TrimSpace(r.BaseURL) == "" {
 		r.BaseURL = os.Getenv("AFFENTCTL_BASE_URL")
 	}
@@ -607,13 +611,14 @@ func (r BatchRunner) runAffentctl(ctx context.Context, repoRoot, workspace, trac
 		r.Model = os.Getenv("AFFENTCTL_MODEL")
 	}
 	if strings.TrimSpace(r.BaseURL) == "" || strings.TrimSpace(r.Model) == "" {
-		return "", "", 64, errors.New("base URL and model are required (flags or AFFENTCTL_BASE_URL/AFFENTCTL_MODEL)")
+		return "", "", 64, nil, errors.New("base URL and model are required (flags or AFFENTCTL_BASE_URL/AFFENTCTL_MODEL)")
 	}
 	goBin := r.GoBin
 	if goBin == "" {
 		goBin = findGo(repoRoot)
 	}
 	args := r.affentctlRunArgs(workspace, tracePath, scenario)
+	redactedCommand := redactedCommandArgv(goBin, args)
 	cmd := exec.CommandContext(ctx, goBin, args...)
 	cmd.Dir = repoRoot
 	cmd.Env = append(os.Environ(), "PATH="+evalPath(repoRoot))
@@ -621,7 +626,7 @@ func (r BatchRunner) runAffentctl(ctx context.Context, repoRoot, workspace, trac
 	cmd.Stdout = &stdout
 	cmd.Stderr = &stderr
 	err := runEvalCommand(ctx, cmd)
-	return stdout.String(), stderr.String(), exitCodeFromError(err), err
+	return stdout.String(), stderr.String(), exitCodeFromError(err), redactedCommand, err
 }
 
 func (r BatchRunner) affentctlRunArgs(workspace, tracePath string, scenario BatchScenario) []string {
@@ -677,6 +682,43 @@ func appendStringFlag(args []string, flagName, value string) []string {
 		return args
 	}
 	return append(args, flagName, value)
+}
+
+func redactedCommandArgv(bin string, args []string) []string {
+	bin = strings.TrimSpace(bin)
+	if bin == "" {
+		bin = "go"
+	}
+	out := make([]string, 0, len(args)+1)
+	out = append(out, bin)
+	nextReplacement := ""
+	for _, arg := range args {
+		if nextReplacement != "" {
+			out = append(out, nextReplacement)
+			nextReplacement = ""
+			continue
+		}
+		if arg == "--api-key" {
+			out = append(out, arg)
+			nextReplacement = "<redacted>"
+			continue
+		}
+		if arg == "--prompt" {
+			out = append(out, arg)
+			nextReplacement = "<prompt>"
+			continue
+		}
+		if strings.HasPrefix(arg, "--api-key=") {
+			out = append(out, "--api-key=<redacted>")
+			continue
+		}
+		if strings.HasPrefix(arg, "--prompt=") {
+			out = append(out, "--prompt=<prompt>")
+			continue
+		}
+		out = append(out, arg)
+	}
+	return out
 }
 
 type verifierRun struct {

@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
+	"reflect"
 	"strings"
 	"testing"
 	"time"
@@ -1013,6 +1014,7 @@ func TestWriteScenarioDebugArtifactsIndexesTraceAndFinalText(t *testing.T) {
 		OK:                 false,
 		Failures:           []string{"missing required evidence"},
 		FinalText:          "partial answer",
+		AffentctlCommand:   []string{"go", "run", "./cmd/affentctl", "run", "--api-key", "<redacted>", "--prompt", "<prompt>"},
 		RunExitCode:        3,
 		TraceDeltas:        true,
 		TurnEndReason:      "completed",
@@ -1097,6 +1099,7 @@ func TestWriteScenarioDebugArtifactsIndexesTraceAndFinalText(t *testing.T) {
 		manifest.FinalTextPath != res.FinalTextPath ||
 		manifest.StdoutPath != res.StdoutPath ||
 		manifest.StderrPath != res.StderrPath ||
+		!reflect.DeepEqual(manifest.AffentctlCommand, res.AffentctlCommand) ||
 		manifest.RunExitCode != 3 ||
 		!manifest.TraceDeltas {
 		t.Fatalf("manifest paths = %+v", manifest)
@@ -1135,6 +1138,8 @@ func TestWriteScenarioDebugArtifactsIndexesTraceAndFinalText(t *testing.T) {
 		"## Runtime Surface",
 		"`web_fetch`",
 		"trace_deltas: `true`",
+		"affentctl_command",
+		"--api-key '<redacted>'",
 		"## Trace Events",
 		"`message.delta`: `2`",
 		"## Tool Timeline",
@@ -1145,6 +1150,27 @@ func TestWriteScenarioDebugArtifactsIndexesTraceAndFinalText(t *testing.T) {
 	} {
 		if !strings.Contains(string(timeline), want) {
 			t.Fatalf("timeline missing %q:\n%s", want, string(timeline))
+		}
+	}
+}
+
+func TestRedactedCommandArgvHidesAPIKey(t *testing.T) {
+	got := redactedCommandArgv("go", []string{
+		"run", "./cmd/affentctl", "run",
+		"--api-key", "sk-secret",
+		"--api-key=sk-other-secret",
+		"--prompt", "large prompt body",
+		"--prompt=other prompt body",
+		"--model", "model-a",
+	})
+	joined := strings.Join(got, "\x00")
+	if strings.Contains(joined, "sk-secret") || strings.Contains(joined, "sk-other-secret") ||
+		strings.Contains(joined, "large prompt body") || strings.Contains(joined, "other prompt body") {
+		t.Fatalf("command leaked sensitive argv value: %#v", got)
+	}
+	for _, want := range []string{"go", "--api-key\x00<redacted>", "--api-key=<redacted>", "--prompt\x00<prompt>", "--prompt=<prompt>", "--model\x00model-a"} {
+		if !strings.Contains(joined, want) {
+			t.Fatalf("redacted command missing %q: %#v", want, got)
 		}
 	}
 }

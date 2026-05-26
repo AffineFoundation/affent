@@ -874,6 +874,7 @@ type batchResultRecord struct {
 	FinalTextPath              string                                     `json:"final_text_path,omitempty"`
 	StdoutPath                 string                                     `json:"stdout_path,omitempty"`
 	StderrPath                 string                                     `json:"stderr_path,omitempty"`
+	AffentctlCommand           []string                                   `json:"affentctl_command,omitempty"`
 	TraceSchemaVersion         int                                        `json:"trace_schema_version,omitempty"`
 	TurnEndReason              string                                     `json:"turn_end_reason,omitempty"`
 	ToolCalls                  int                                        `json:"tool_calls"`
@@ -1075,6 +1076,7 @@ func printBatchResultJSONL(w io.Writer, meta evalJSONLMetadata, res agenteval.Ba
 		FinalTextPath:              retainedDebugPath(res.FinalTextPath, res.WorkspaceRemoved),
 		StdoutPath:                 retainedDebugPath(res.StdoutPath, res.WorkspaceRemoved),
 		StderrPath:                 retainedDebugPath(res.StderrPath, res.WorkspaceRemoved),
+		AffentctlCommand:           append([]string(nil), res.AffentctlCommand...),
 		TraceSchemaVersion:         res.TraceSchemaVersion,
 		TurnEndReason:              res.TurnEndReason,
 		ToolCalls:                  res.ToolCalls,
@@ -1447,6 +1449,9 @@ func printBatchResult(w io.Writer, res agenteval.BatchResult) {
 	}
 	if path := retainedDebugPath(res.StderrPath, res.WorkspaceRemoved); path != "" {
 		fmt.Fprintf(w, "  stderr: %s\n", path)
+	}
+	if len(res.AffentctlCommand) > 0 {
+		fmt.Fprintf(w, "  command: %s\n", strings.Join(res.AffentctlCommand, " "))
 	}
 	if res.RunExitCode != 0 {
 		fmt.Fprintf(w, "  run_exit: %d\n", res.RunExitCode)

@@ -42,6 +42,12 @@ func renderDebugTimeline(res BatchResult, scenario BatchScenario, trace *Trace) 
 	if res.StderrPath != "" {
 		fmt.Fprintf(&b, "- stderr: `%s`\n", res.StderrPath)
 	}
+	if len(res.AffentctlCommand) > 0 {
+		b.WriteString("- affentctl_command:\n")
+		b.WriteString("  ```text\n")
+		b.WriteString(timelineBlock(shellQuoteCommand(res.AffentctlCommand), timelineArgsPreviewBytes))
+		b.WriteString("\n  ```\n")
+	}
 	fmt.Fprintf(&b, "- metrics: tools=%d tool_errors=%d repaired=%d canonicalized=%d loop_guard=%d forced_no_tools=%d tokens=%d/%d\n",
 		res.ToolCalls,
 		res.ToolStats.ToolErrors,
@@ -280,4 +286,25 @@ func timelineBlock(s string, maxBytes int) string {
 
 func timelineInline(s string, maxBytes int) string {
 	return textutil.CompactWhitespace(textutil.Preview(s, maxBytes, "..."))
+}
+
+func shellQuoteCommand(args []string) string {
+	if len(args) == 0 {
+		return ""
+	}
+	quoted := make([]string, 0, len(args))
+	for _, arg := range args {
+		quoted = append(quoted, shellQuoteToken(arg))
+	}
+	return strings.Join(quoted, " ")
+}
+
+func shellQuoteToken(s string) string {
+	if s == "" {
+		return "''"
+	}
+	if strings.ContainsAny(s, " \t\n'\"\\$`!&|;()<>*?[#~=%") {
+		return "'" + strings.ReplaceAll(s, "'", "'\\''") + "'"
+	}
+	return s
 }

@@ -55,6 +55,8 @@ Scenario records describe one eval case:
 - `final_text_path`, `stdout_path`, `stderr_path`: retained files containing
   the final assistant text, full `affentctl` stdout, and full `affentctl`
   stderr for local debugging.
+- `affentctl_command`: redacted command argv used for the scenario run. API
+  keys are replaced with `<redacted>`.
 - `runtime_surface`: compact copy of the latest effective runtime surface when
   the trace reached turn start. It records sorted tool names, broad
   capabilities such as `web_fetch`, `web_search`, `browser`, `memory`, and
