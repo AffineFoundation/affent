@@ -260,11 +260,29 @@ function eventDisplay(event: NormalizedEvent, context: DisplayContext): EventDis
       return { label: "Token usage", meta: usageMeta(event, request), badges: [] };
     case EventType.TurnEnd:
       return { label: turnEndLabel(event), meta: turnEndMeta(event, request), badges: [] };
+    case EventType.LoopDecision:
+      return { label: "Loop decision", meta: loopDecisionMeta(event, request), badges: loopDecisionBadges(event) };
     case EventType.Error:
       return { label: "Error", meta: errorMeta(event, request), badges: readBoolean(event.data, "recoverable") ? ["recoverable"] : [] };
     default:
       return { label: event.type, meta: fallbackMeta(event, context), badges: [] };
   }
+}
+
+function loopDecisionMeta(event: NormalizedEvent, turn: string | undefined): string[] {
+  return compact([
+    turn,
+    readString(event.data, "kind"),
+    readString(event.data, "decision"),
+    streamSummary(readString(event.data, "reason") ?? readString(event.data, "required_action") ?? ""),
+  ]);
+}
+
+function loopDecisionBadges(event: NormalizedEvent): string[] {
+  return compact([
+    readString(event.data, "confidence"),
+    readBoolean(event.data, "visible_in_ui") ? "visible" : undefined,
+  ]);
 }
 
 function toolRequestMeta(event: NormalizedEvent, turn: string | undefined): string[] {

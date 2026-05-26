@@ -2,6 +2,7 @@ import {
   EventType,
   TurnEndReason,
   type ErrorPayload,
+  type LoopDecisionPayload,
   type MessageDeltaPayload,
   type MessageDonePayload,
   type RawEvent,
@@ -212,6 +213,13 @@ function applyEventPayload(state: SessionState, ev: NormalizedEvent): SessionSta
         messageStreaming: false,
       }));
       return { ...next, status: deriveSessionStatus(next.turns) };
+    }
+    case EventType.LoopDecision: {
+      const p = ev.data as LoopDecisionPayload;
+      return {
+        ...state,
+        loopDecisions: [...state.loopDecisions, { ...p, eventId: ev.id }],
+      };
     }
     case EventType.Error: {
       const p = ev.data as ErrorPayload;

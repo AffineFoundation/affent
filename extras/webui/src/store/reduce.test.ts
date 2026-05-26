@@ -157,6 +157,46 @@ describe("reduce — terminal statuses", () => {
 });
 
 describe("reduce — robustness", () => {
+  it("records loop decisions without counting them as unknown", () => {
+    const s = reduceRawEvents([
+      { id: 0, type: "turn.start", data: { turn_id: "t1" } },
+      {
+        id: 1,
+        type: "loop.decision",
+        data: {
+          turn_id: "t1",
+          loop_id: "affent-runtime",
+          decision_id: "d1",
+          kind: "evidence_quality",
+          trigger: "dynamic_page_shell",
+          decision: "defer",
+          confidence: "high",
+          reason: "Only a dynamic shell was captured.",
+          required_action: "Use browser_network before citing values.",
+          visible_in_ui: true,
+        },
+      },
+      { id: 2, type: "turn.end", data: { turn_id: "t1", reason: "completed" } },
+    ]);
+
+    expect(s.unknownEventCount).toBe(0);
+    expect(s.loopDecisions).toEqual([
+      {
+        eventId: 1,
+        turn_id: "t1",
+        loop_id: "affent-runtime",
+        decision_id: "d1",
+        kind: "evidence_quality",
+        trigger: "dynamic_page_shell",
+        decision: "defer",
+        confidence: "high",
+        reason: "Only a dynamic shell was captured.",
+        required_action: "Use browser_network before citing values.",
+        visible_in_ui: true,
+      },
+    ]);
+  });
+
   it("counts unknown event types without crashing or dropping turns", () => {
     const s = reduceRawEvents([
       { id: 0, type: "turn.start", data: { turn_id: "t1" } },

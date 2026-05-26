@@ -1,4 +1,4 @@
-import type { ToolRuntimeStats } from "../api/events";
+import type { LoopDecisionPayload, ToolRuntimeStats } from "../api/events";
 import type { NormalizedEvent } from "../normalize/normalizeEvent";
 
 // The structured view of a session that the reducer builds from the
@@ -49,6 +49,10 @@ export interface TurnUsage {
   outputTokens: number;
 }
 
+export interface LoopDecisionState extends LoopDecisionPayload {
+  eventId: number;
+}
+
 export interface TurnState {
   id: string;
   status: TurnStatus;
@@ -73,6 +77,8 @@ export interface SessionState {
   events: NormalizedEvent[];
   turns: TurnState[];
   totalUsage: TurnUsage;
+  /** Structured loop/checkpoint decisions surfaced outside assistant text. */
+  loopDecisions: LoopDecisionState[];
   /** Events whose type this build doesn't know — kept visible, never fatal. */
   unknownEventCount: number;
 }
@@ -83,6 +89,7 @@ export function initialSessionState(): SessionState {
     events: [],
     turns: [],
     totalUsage: { inputTokens: 0, outputTokens: 0 },
+    loopDecisions: [],
     unknownEventCount: 0,
   };
 }

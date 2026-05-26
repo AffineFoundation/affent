@@ -34,13 +34,25 @@ describe("eventTrace view model", () => {
           result_artifact_path: ".affent/artifacts/c1.txt",
         },
       },
-      { id: 3, type: "turn.end", data: { turn_id: "t1", reason: "max_turns", tool_stats: { tool_requests: 2, tool_errors: 1, source_access_verified: 2, source_access_network: 1, source_access_dynamic_partial: 1, tool_duration_ms: 1200 } } },
+      {
+        id: 4,
+        type: "loop.decision",
+        data: {
+          turn_id: "t1",
+          kind: "evidence_quality",
+          decision: "defer",
+          confidence: "high",
+          reason: "Dynamic page shell needs network evidence.",
+          visible_in_ui: true,
+        },
+      },
+      { id: 5, type: "turn.end", data: { turn_id: "t1", reason: "max_turns", tool_stats: { tool_requests: 2, tool_errors: 1, source_access_verified: 2, source_access_network: 1, source_access_dynamic_partial: 1, tool_duration_ms: 1200 } } },
     ]));
-    const [request, result, finished] = model.items;
+    const [request, result, decision, finished] = model.items;
 
     expect(model.metadata).toHaveLength(1);
     expect(model.metadata[0].type).toBe("trace.meta");
-    expect(model.items).toHaveLength(3);
+    expect(model.items).toHaveLength(4);
     expect(request).toMatchObject({
       kind: "event",
       display: {
@@ -55,6 +67,14 @@ describe("eventTrace view model", () => {
         label: "Action failed",
         meta: ["read_file", "42 ms", "file missing", "artifact c1.txt (1 KiB, 3 KiB omitted)"],
         badges: ["truncated", "full output"],
+      },
+    });
+    expect(decision).toMatchObject({
+      kind: "event",
+      display: {
+        label: "Loop decision",
+        meta: ["Request 1", "evidence_quality", "defer", "Dynamic page shell needs network evidence."],
+        badges: ["high", "visible"],
       },
     });
     expect(finished).toMatchObject({

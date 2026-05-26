@@ -21,6 +21,7 @@ export const EventType = {
   ToolResult: "tool.result",
   Usage: "usage",
   TurnEnd: "turn.end",
+  LoopDecision: "loop.decision",
   Error: "error",
 } as const;
 
@@ -134,6 +135,20 @@ export interface TurnEndPayload {
   tool_stats?: ToolRuntimeStats;
 }
 
+export interface LoopDecisionPayload {
+  turn_id?: string;
+  loop_id?: string;
+  decision_id?: string;
+  kind: string;
+  trigger?: string;
+  decision: string;
+  confidence?: string;
+  reason?: string;
+  required_action?: string;
+  token_budget?: number;
+  visible_in_ui?: boolean;
+}
+
 export interface ErrorPayload {
   turn_id: string;
   code: string;
@@ -154,6 +169,7 @@ export interface PayloadByType {
   [EventType.ToolResult]: ToolResultPayload;
   [EventType.Usage]: UsagePayload;
   [EventType.TurnEnd]: TurnEndPayload;
+  [EventType.LoopDecision]: LoopDecisionPayload;
   [EventType.Error]: ErrorPayload;
 }
 

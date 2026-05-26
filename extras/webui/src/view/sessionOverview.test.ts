@@ -159,6 +159,35 @@ describe("buildSessionOverview", () => {
     ]));
   });
 
+  it("surfaces visible loop decisions in the session overview", () => {
+    const session = reduceRawEvents([
+      { id: 1, type: "turn.start", data: { turn_id: "t1" } },
+      { id: 2, type: "user.message", data: { turn_id: "t1", text: "inspect taostats subnet 19" } },
+      {
+        id: 3,
+        type: "loop.decision",
+        data: {
+          turn_id: "t1",
+          kind: "evidence_quality",
+          decision: "defer",
+          confidence: "high",
+          reason: "Dynamic page shell needs network evidence.",
+          visible_in_ui: true,
+        },
+      },
+      { id: 4, type: "turn.end", data: { turn_id: "t1", reason: "completed" } },
+    ]);
+    const overview = buildSessionOverview({
+      session,
+      workflow: deriveWorkflowStatus(session),
+      hasSelectedSession: true,
+    });
+
+    expect(overview.metrics).toEqual(expect.arrayContaining([
+      { label: "Loop decision", value: "1 · defer", tone: "warning" },
+    ]));
+  });
+
   it("uses the generated session title for loaded chats when the API provides one", () => {
     const session = reduceRawEvents(completedTurn);
     const overview = buildSessionOverview({

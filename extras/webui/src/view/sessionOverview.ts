@@ -139,6 +139,8 @@ function buildMetrics(session: SessionState, latestTurn?: TurnState, latestActiv
   if (settledIssues > 0) metrics.push({ label: settledIssues === 1 ? "Tool issue" : "Tool issues", value: String(settledIssues), tone: "warning" });
   const artifactMetric = buildArtifactMetric(session);
   if (artifactMetric) metrics.push(artifactMetric);
+  const loopDecisionMetric = buildLoopDecisionMetric(session);
+  if (loopDecisionMetric) metrics.push(loopDecisionMetric);
   const workMetric = buildWorkMetric(latestTurn, latestActivity, currentIssueCount > 0);
   if (workMetric) metrics.push(workMetric);
   const threadMetrics = latestTurn ? buildThreadMetrics(session, latestTurn) : undefined;
@@ -170,6 +172,18 @@ function buildArtifactMetric(session: SessionState): SessionOverviewMetric | und
   const label = sessionArtifactLabel(session);
   if (!label) return undefined;
   return { label: label.startsWith("1 file") ? "Artifact" : "Artifacts", value: label };
+}
+
+function buildLoopDecisionMetric(session: SessionState): SessionOverviewMetric | undefined {
+  const visible = session.loopDecisions.filter((decision) => decision.visible_in_ui !== false);
+  if (visible.length === 0) return undefined;
+  const latest = visible.at(-1);
+  const suffix = latest?.decision ? ` · ${latest.decision}` : "";
+  return {
+    label: visible.length === 1 ? "Loop decision" : "Loop decisions",
+    value: `${visible.length}${suffix}`,
+    tone: latest?.decision === "defer" ? "warning" : undefined,
+  };
 }
 
 function buildWorkMetric(

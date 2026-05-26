@@ -8,6 +8,17 @@ describe("normalizeEvent", () => {
     expect(norm.every((e) => e.known)).toBe(true);
   });
 
+  it("marks loop decision events as known", () => {
+    const decision = normalizeEvent({
+      id: 100,
+      type: "loop.decision",
+      data: { turn_id: "t1", kind: "loop_stop", decision: "continue" },
+    });
+
+    expect(decision.known).toBe(true);
+    expect(decision.turnId).toBe("t1");
+  });
+
   it("extracts turn_id where the payload carries one", () => {
     const turnStart = normalizeEvent(completedTurn[1]);
     expect(turnStart.turnId).toBe("t1");

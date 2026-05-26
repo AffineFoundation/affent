@@ -20,6 +20,7 @@ const (
 	TypeToolResult    = "tool.result"
 	TypeUsage         = "usage"
 	TypeTurnEnd       = "turn.end"
+	TypeLoopDecision  = "loop.decision"
 	TypeError         = "error"
 )
 
@@ -185,6 +186,26 @@ type TurnEndPayload struct {
 	TurnID    string            `json:"turn_id"`
 	Reason    string            `json:"reason"`
 	ToolStats *ToolRuntimeStats `json:"tool_stats,omitempty"`
+}
+
+// LoopDecisionPayload records one short protocol decision made outside the
+// normal assistant message stream. It is intended for checkpoint/feed/stop
+// decisions that must be visible in trace and WebUI without requiring users
+// to read hidden prompt text.
+type LoopDecisionPayload struct {
+	TurnID         string `json:"turn_id,omitempty"`
+	LoopID         string `json:"loop_id,omitempty"`
+	DecisionID     string `json:"decision_id,omitempty"`
+	Kind           string `json:"kind"`
+	Trigger        string `json:"trigger,omitempty"`
+	Decision       string `json:"decision"`
+	Confidence     string `json:"confidence,omitempty"`
+	Reason         string `json:"reason,omitempty"`
+	RequiredAction string `json:"required_action,omitempty"`
+	TokenBudget    int    `json:"token_budget,omitempty"`
+	// VisibleInUI is nil by default, which consumers should treat as visible.
+	// Use a pointer so an explicit false still survives JSON omitempty.
+	VisibleInUI *bool `json:"visible_in_ui,omitempty"`
 }
 
 type ToolRuntimeStats struct {
