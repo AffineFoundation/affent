@@ -80,6 +80,12 @@ Scenario records describe one eval case:
   stderr for local debugging.
 - `affentctl_command`: redacted command argv used for the scenario run. API
   keys are replaced with `<redacted>`.
+- `expectations`: optional structured copy of the scenario's declarative checks,
+  including required/forbidden tools, tool counts, source-access requirements,
+  loop-decision requirements, context-compaction requirements, plan/delegation
+  constraints, protected files, and related max-turn/compaction settings. This
+  lets batch-analysis scripts inspect why a scenario passed or failed without
+  reopening the debug manifest.
 - `runtime_surface`: compact copy of the latest effective runtime surface when
   the trace reached turn start. It records sorted tool names, broad
   capabilities such as `web_fetch`, `web_search`, `browser`, `memory`, and

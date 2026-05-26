@@ -158,6 +158,7 @@ type BatchResult struct {
 	AffentctlCommand       []string
 	RunExitCode            int
 	OK                     bool
+	Expectations           *DebugScenarioExpectations
 	Failures               []string
 	Duration               time.Duration
 	FinalText              string
@@ -491,6 +492,8 @@ func (r BatchRunner) Run(ctx context.Context, scenario BatchScenario) BatchResul
 	if scenario.MaxTurns <= 0 {
 		scenario.MaxTurns = DefaultBatchMaxTurnSteps
 	}
+	expectations := debugScenarioExpectations(scenario)
+	res.Expectations = &expectations
 	if strings.TrimSpace(r.RepoRoot) == "" {
 		r.RepoRoot = "."
 	}
@@ -599,6 +602,8 @@ func writeScenarioDebugArtifacts(res *BatchResult, scenario BatchScenario, stdou
 	if res == nil || strings.TrimSpace(res.Workspace) == "" {
 		return nil
 	}
+	expectations := debugScenarioExpectations(scenario)
+	res.Expectations = &expectations
 	if trace != nil && len(res.TraceEventTypes) == 0 {
 		res.TraceEventTypes = cloneStringIntMap(trace.RawTypes)
 		res.TraceEvents = sumStringIntMap(trace.RawTypes)
@@ -653,7 +658,7 @@ func writeScenarioDebugArtifacts(res *BatchResult, scenario BatchScenario, stdou
 		ArtifactDir:               filepath.Join(res.Workspace, ".affent", "artifacts"),
 		TraceDeltas:               res.TraceDeltas,
 		Prompt:                    scenario.Prompt,
-		Expectations:              debugScenarioExpectations(scenario),
+		Expectations:              expectations,
 		Failures:                  append([]string(nil), res.Failures...),
 		DebugBrief:                BuildDebugBrief(*res),
 		SourceAccessExamples:      append([]SourceAccessExample(nil), res.SourceAccessExamples...),

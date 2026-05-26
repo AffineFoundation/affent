@@ -1002,12 +1002,22 @@ func TestPrintBatchResultJSONL(t *testing.T) {
 	meta.RuntimeWeb = true
 	meta.RuntimeBrowser = true
 	printBatchResultJSONL(&out, meta, agenteval.BatchResult{
-		BatchScenario:      "sample",
-		Workspace:          "/tmp/ws",
-		TracePath:          "/tmp/ws/trace.jsonl",
-		OK:                 true,
-		Duration:           1500 * time.Millisecond,
-		AffentctlCommand:   []string{"go", "run", "./cmd/affentctl", "run", "--api-key", "<redacted>"},
+		BatchScenario:    "sample",
+		Workspace:        "/tmp/ws",
+		TracePath:        "/tmp/ws/trace.jsonl",
+		OK:               true,
+		Duration:         1500 * time.Millisecond,
+		AffentctlCommand: []string{"go", "run", "./cmd/affentctl", "run", "--api-key", "<redacted>"},
+		Expectations: &agenteval.DebugScenarioExpectations{
+			Suites:        []string{"long-run", "live-web"},
+			RequiredTools: []string{"web_fetch", "browser_network_read"},
+			RequiredSourceAccess: []agenteval.DebugSourceAccessRequirement{
+				{Status: "network", Tool: "browser_network_read", URLContains: "metrics.example", SourceMethod: "network_xhr_fetch", JSONPath: "$.price"},
+			},
+			RequiredToolStatsAtLeast: map[string]int{
+				"source_access_network": 1,
+			},
+		},
 		TraceSchemaVersion: 1,
 		TraceEvents:        7,
 		TraceEventTypes: map[string]int{
@@ -1217,6 +1227,21 @@ func TestPrintBatchResultJSONL(t *testing.T) {
 	}
 	if _, ok := got["failure_kinds"]; ok {
 		t.Fatalf("passing result should omit failure_kinds, got %#v", got["failure_kinds"])
+	}
+	expectations, ok := got["expectations"].(map[string]any)
+	if !ok {
+		t.Fatalf("expectations missing or wrong type: %#v\njson=%s", got["expectations"], out.String())
+	}
+	if !jsonArrayContainsString(expectations["required_tools"], "browser_network_read") {
+		t.Fatalf("expectations.required_tools = %#v\njson=%s", expectations["required_tools"], out.String())
+	}
+	stats, ok := expectations["required_tool_stats_at_least"].(map[string]any)
+	if !ok || stats["source_access_network"] != float64(1) {
+		t.Fatalf("expectations.required_tool_stats_at_least = %#v\njson=%s", expectations["required_tool_stats_at_least"], out.String())
+	}
+	sourceReqs, ok := expectations["required_source_access"].([]any)
+	if !ok || len(sourceReqs) != 1 {
+		t.Fatalf("expectations.required_source_access = %#v\njson=%s", expectations["required_source_access"], out.String())
 	}
 	command, ok := got["affentctl_command"].([]any)
 	if !ok || len(command) != 6 || command[0] != "go" || command[5] != "<redacted>" {

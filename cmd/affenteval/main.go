@@ -1411,6 +1411,7 @@ type batchResultRecord struct {
 	StdoutPath                 string                                     `json:"stdout_path,omitempty"`
 	StderrPath                 string                                     `json:"stderr_path,omitempty"`
 	AffentctlCommand           []string                                   `json:"affentctl_command,omitempty"`
+	Expectations               *agenteval.DebugScenarioExpectations       `json:"expectations,omitempty"`
 	TraceSchemaVersion         int                                        `json:"trace_schema_version,omitempty"`
 	TurnEndReason              string                                     `json:"turn_end_reason,omitempty"`
 	ToolCalls                  int                                        `json:"tool_calls"`
@@ -1658,6 +1659,7 @@ func printBatchResultJSONL(w io.Writer, meta evalJSONLMetadata, res agenteval.Ba
 		StdoutPath:                 retainedDebugPath(res.StdoutPath, res.WorkspaceRemoved),
 		StderrPath:                 retainedDebugPath(res.StderrPath, res.WorkspaceRemoved),
 		AffentctlCommand:           append([]string(nil), res.AffentctlCommand...),
+		Expectations:               res.Expectations,
 		TraceSchemaVersion:         res.TraceSchemaVersion,
 		TurnEndReason:              res.TurnEndReason,
 		ToolCalls:                  res.ToolCalls,
