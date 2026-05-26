@@ -129,6 +129,16 @@ func TestRunRejectsInvalidConfigBeforeScenarios(t *testing.T) {
 			want: "--seed",
 		},
 		{
+			name: "runtime web unsupported",
+			args: []string{"--runtime-web"},
+			want: "--runtime-web/--runtime-browser are not supported",
+		},
+		{
+			name: "runtime browser unsupported",
+			args: []string{"--runtime-browser"},
+			want: "--runtime-web/--runtime-browser are not supported",
+		},
+		{
 			name: "unknown executor",
 			args: []string{"--executor=remote"},
 			want: "unknown --executor",

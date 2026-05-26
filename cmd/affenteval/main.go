@@ -53,8 +53,8 @@ func run(args []string) int {
 		executor          = fs.String("executor", "local", "affentctl tool executor for scenario runs: local, sandbox, or docker:<container>")
 		runtimeEvalMode   = fs.Bool("runtime-eval-mode", false, "pass affentctl --eval-mode to keep only the basic benchmark tool surface during scenario runs")
 		runtimeMemory     = fs.Bool("runtime-memory", false, "pass affentctl --memory=true during scenario runs; useful with --runtime-eval-mode for memory-only opt-in")
-		runtimeWeb        = fs.Bool("runtime-web", false, "pass affentctl --web=true during scenario runs; opt into web_fetch/web_search in eval mode")
-		runtimeBrowser    = fs.Bool("runtime-browser", false, "pass affentctl --browser=true during scenario runs; opt into browser tools in eval mode")
+		runtimeWeb        = fs.Bool("runtime-web", false, "reserved for a future external-web eval runtime; currently unsupported by the affentctl batch runner")
+		runtimeBrowser    = fs.Bool("runtime-browser", false, "reserved for a future browser eval runtime; currently unsupported by the affentctl batch runner")
 		runtimeMCPConfig  = fs.String("runtime-mcp-config", "", "pass affentctl --mcp-config PATH during scenario runs; useful with --runtime-eval-mode to opt into MCP only")
 		timeout           = fs.Duration("timeout", 5*time.Minute, "per-scenario timeout")
 		verifierOutputCap = fs.Int("verifier-output-cap", agenteval.DefaultVerifierOutputCapBytes, "maximum verifier output bytes buffered per scenario")
@@ -103,7 +103,7 @@ success and trace-level process quality.`)
 		fmt.Fprintf(os.Stderr, "scenario: %v\n", err)
 		return 64
 	}
-	if err := validateRunConfig(*temperature, *topP, *maxTokens, *seed, *timeout, *executor, len(scenarios), *workRoot, flagWasSet(fs, "work-root"), *verifierOutputCap); err != nil {
+	if err := validateRunConfig(*temperature, *topP, *maxTokens, *seed, *timeout, *executor, len(scenarios), *workRoot, flagWasSet(fs, "work-root"), *verifierOutputCap, *runtimeWeb, *runtimeBrowser); err != nil {
 		fmt.Fprintf(os.Stderr, "config: %v\n", err)
 		return 64
 	}
@@ -1304,12 +1304,15 @@ func failureKind(failure string) string {
 	}
 }
 
-func validateRunConfig(temperature, topP, maxTokens, seed string, timeout time.Duration, executor string, scenarioCount int, workRoot string, workRootSet bool, verifierOutputCap int) error {
+func validateRunConfig(temperature, topP, maxTokens, seed string, timeout time.Duration, executor string, scenarioCount int, workRoot string, workRootSet bool, verifierOutputCap int, runtimeWeb, runtimeBrowser bool) error {
 	if timeout <= 0 {
 		return fmt.Errorf("--timeout must be a positive duration")
 	}
 	if verifierOutputCap <= 0 {
 		return fmt.Errorf("--verifier-output-cap must be positive")
+	}
+	if runtimeWeb || runtimeBrowser {
+		return fmt.Errorf("--runtime-web/--runtime-browser are not supported by the affentctl batch runner yet; use in-process browser runner tests or affentserve-based eval wiring until an external runtime adapter is implemented")
 	}
 	if err := validateEvalExecutor(executor, scenarioCount, workRoot, workRootSet); err != nil {
 		return err

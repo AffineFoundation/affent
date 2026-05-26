@@ -270,6 +270,9 @@ func scenarioInSuite(s BatchScenario, suite string) bool {
 func (r BatchRunner) Run(ctx context.Context, scenario BatchScenario) BatchResult {
 	start := time.Now()
 	res := BatchResult{BatchScenario: scenario.Name}
+	if r.RuntimeWeb || r.RuntimeBrowser {
+		return res.fail("runtime web/browser tools are not supported by the affentctl batch runner yet; use in-process browser runner tests or affentserve-based eval wiring until an external runtime adapter is implemented")
+	}
 	if r.Timeout <= 0 {
 		r.Timeout = DefaultBatchTimeout
 	}
@@ -472,12 +475,6 @@ func (r BatchRunner) affentctlRunArgs(workspace, tracePath string, scenario Batc
 	}
 	if r.RuntimeMemory || scenario.EnableMemory {
 		args = append(args, "--memory=true")
-	}
-	if r.RuntimeWeb {
-		args = append(args, "--web=true")
-	}
-	if r.RuntimeBrowser {
-		args = append(args, "--browser=true")
 	}
 	args = appendStringFlag(args, "--mcp-config", r.RuntimeMCPConfig)
 	return args

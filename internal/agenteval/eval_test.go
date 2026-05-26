@@ -959,8 +959,6 @@ func TestBatchRunnerAffentctlRunArgsForwardsExecutor(t *testing.T) {
 		Seed:             " 42 ",
 		Executor:         "docker:affent-eval",
 		RuntimeEvalMode:  true,
-		RuntimeWeb:       true,
-		RuntimeBrowser:   true,
 		RuntimeMCPConfig: " /tmp/eval-mcp.json ",
 	}).affentctlRunArgs("/tmp/ws", "/tmp/ws/trace.jsonl", BatchScenario{
 		Prompt:       "fix it",
@@ -984,13 +982,46 @@ func TestBatchRunnerAffentctlRunArgsForwardsExecutor(t *testing.T) {
 		"--api-key\x00secret",
 		"--eval-mode",
 		"--memory=true",
-		"--web=true",
-		"--browser=true",
 		"--mcp-config\x00/tmp/eval-mcp.json",
 	} {
 		if !strings.Contains(joined, want) {
 			t.Fatalf("args missing %q:\n%q", want, args)
 		}
+	}
+	for _, unsupported := range []string{"--web=true", "--browser=true"} {
+		if strings.Contains(joined, unsupported) {
+			t.Fatalf("args should not include unsupported runtime flag %q:\n%q", unsupported, args)
+		}
+	}
+}
+
+func TestBatchRunnerRunRejectsUnsupportedExternalRuntimeFlags(t *testing.T) {
+	cases := []struct {
+		name   string
+		runner BatchRunner
+	}{
+		{
+			name:   "runtime web",
+			runner: BatchRunner{RuntimeWeb: true},
+		},
+		{
+			name:   "runtime browser",
+			runner: BatchRunner{RuntimeBrowser: true},
+		},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			res := tc.runner.Run(context.Background(), BatchScenario{Name: "unsupported-runtime", MaxTurns: 1})
+			if res.OK {
+				t.Fatalf("Run OK = true, want unsupported runtime failure")
+			}
+			if res.Workspace != "" {
+				t.Fatalf("Workspace = %q, want early rejection before workspace creation", res.Workspace)
+			}
+			if len(res.Failures) != 1 || !strings.Contains(res.Failures[0], "runtime web/browser tools are not supported") {
+				t.Fatalf("Failures = %#v", res.Failures)
+			}
+		})
 	}
 }
 
