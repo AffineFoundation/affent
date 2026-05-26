@@ -13,9 +13,9 @@ import (
 	"regexp"
 	"strings"
 	"time"
-	"unicode/utf8"
 
 	agent "github.com/affinefoundation/affent/internal/agent"
+	"github.com/affinefoundation/affent/internal/textutil"
 	"github.com/affinefoundation/affent/internal/websource"
 	"golang.org/x/net/html"
 )
@@ -296,14 +296,7 @@ func dynamicResultReason(r SearchResult) string {
 }
 
 func truncateSearchField(s string, maxBytes int) string {
-	if maxBytes <= 0 || len(s) <= maxBytes {
-		return s
-	}
-	cut := maxBytes
-	for cut > 0 && !utf8.RuneStart(s[cut]) {
-		cut--
-	}
-	return s[:cut] + "...(truncated)"
+	return textutil.Preview(s, maxBytes, "...(truncated)")
 }
 
 func recoverableSearchError(err error) error {
@@ -1004,7 +997,7 @@ func textContent(n *html.Node) string {
 		}
 	}
 	walk(n)
-	return strings.Join(strings.Fields(b.String()), " ")
+	return textutil.CompactWhitespace(b.String())
 }
 
 func hasClass(n *html.Node, want string) bool {

@@ -11,8 +11,10 @@ import (
 	"net/http/httptest"
 	"strings"
 	"testing"
+	"unicode/utf8"
 
 	agent "github.com/affinefoundation/affent/internal/agent"
+	"github.com/affinefoundation/affent/internal/metrictext"
 )
 
 type roundTripFunc func(*http.Request) (*http.Response, error)
@@ -120,6 +122,84 @@ func TestFetchTool_PlainText(t *testing.T) {
 		if !strings.Contains(out, want) {
 			t.Errorf("plain text output missing %q\n%s", want, out)
 		}
+	}
+}
+
+func TestFetchTool_AddsMetricAmbiguityNoteForMultiplePriceLikeValues(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "text/html; charset=utf-8")
+		w.Write([]byte(`
+<html><body>
+<h1>Affine SN120</h1>
+<p>TAO Price $277.32 MC $3.03B FDV $5.82B</p>
+<p>Price 0.06342 T Market Cap 201.04K T FDV 1.32M T</p>
+</body></html>`))
+	}))
+	defer srv.Close()
+
+	tool := FetchTool(FetchConfig{AllowPrivateNetwork: true})
+	args, _ := json.Marshal(map[string]string{"url": srv.URL})
+	out, err := tool.Execute(context.Background(), args)
+	if err != nil {
+		t.Fatalf("Execute: %v", err)
+	}
+	for _, want := range []string{
+		metrictext.AmbiguityNote,
+		"SourceAccess: fetched_url=" + srv.URL,
+		"TAO Price $277.32",
+		"Price 0.06342 T",
+	} {
+		if !strings.Contains(out, want) {
+			t.Fatalf("output missing %q:\n%s", want, out)
+		}
+	}
+}
+
+func TestTruncateSearchField_SmallLimitKeepsUTF8(t *testing.T) {
+	got := truncateSearchField("hello世界", 7)
+	if !utf8.ValidString(got) {
+		t.Fatalf("truncateSearchField returned invalid UTF-8: %q", got)
+	}
+	if !strings.HasPrefix(got, "hello") {
+		t.Fatalf("truncateSearchField should preserve the safe prefix, got %q", got)
+	}
+}
+
+func TestFetchTool_AddsMetricAmbiguityNoteToRenderedFallback(t *testing.T) {
+	srv := httptest.NewServer(http.NotFoundHandler())
+	defer srv.Close()
+
+	tool := FetchTool(FetchConfig{
+		AllowPrivateNetwork: true,
+		RenderedFallback: func(context.Context, string, FetchFallbackReason) (string, error) {
+			return `URL: https://tao.app/subnets/120
+TITLE: Affine SN120 | TAO.app
+SNAPSHOT_ID: 11
+
+PAGE TEXT:
+p: TAO Price $277.32 MC $3.03B FDV $5.82B
+p: Price 0.06342 T Market Cap 201.04K T FDV 1.32M T
+`, nil
+		},
+	})
+	args, _ := json.Marshal(map[string]string{"url": srv.URL})
+	out, err := tool.Execute(context.Background(), args)
+	if err != nil {
+		t.Fatalf("Execute: %v", err)
+	}
+	for _, want := range []string{
+		metrictext.AmbiguityNote,
+		"SourceAccess: fetched_url=" + srv.URL,
+		"mode=rendered_browser_fallback",
+		"TAO Price $277.32",
+		"Price 0.06342 T",
+	} {
+		if !strings.Contains(out, want) {
+			t.Fatalf("output missing %q:\n%s", want, out)
+		}
+	}
+	if strings.Count(out, metrictext.AmbiguityNote) != 1 {
+		t.Fatalf("metric ambiguity note should appear once:\n%s", out)
 	}
 }
 
@@ -622,7 +702,7 @@ func TestFetchTool_UsesRenderedFallbackForNotFoundHTML(t *testing.T) {
 		AllowPrivateNetwork: true,
 		RenderedFallback: func(_ context.Context, requestURL string, reason FetchFallbackReason) (string, error) {
 			gotReason = reason
-			return "URL: " + requestURL + "\nTITLE: recovered page\n\nPAGE TEXT:\np: rendered 404 with a usable navigation link\n", nil
+			return "SourceAccess: browser_rendered_url=" + requestURL + "; snapshot_id=1; page_text_below=not_found_page_discovery_only; links_in_snapshot=discovered_unverified_until_opened\nURL: " + requestURL + "\nTITLE: recovered page\n\nPAGE TEXT:\np: rendered 404 with a usable navigation link\n", nil
 		},
 	})
 	args, _ := json.Marshal(map[string]string{"url": srv.URL})
@@ -630,7 +710,7 @@ func TestFetchTool_UsesRenderedFallbackForNotFoundHTML(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Execute: %v", err)
 	}
-	for _, want := range []string{"rendered browser fallback", "DirectFetchReason=\"not_found\"", "recovered page", "usable navigation link"} {
+	for _, want := range []string{"rendered browser fallback", "DirectFetchReason=\"not_found\"", "rendered_browser_source_status=not_found_page_discovery_only", "recovered page", "usable navigation link"} {
 		if !strings.Contains(out, want) {
 			t.Fatalf("not-found rendered fallback output missing %q:\n%s", want, out)
 		}
@@ -640,6 +720,24 @@ func TestFetchTool_UsesRenderedFallbackForNotFoundHTML(t *testing.T) {
 	}
 	if strings.Contains(out, "Failure: kind=not_found") {
 		t.Fatalf("successful rendered fallback should not be counted as not_found:\n%s", out)
+	}
+}
+
+func TestFetchTool_UsesRenderedFallbackSourceStatusForSearchResultsPages(t *testing.T) {
+	tool := FetchTool(FetchConfig{
+		AllowPrivateNetwork: true,
+		RenderedFallback: func(_ context.Context, requestURL string, reason FetchFallbackReason) (string, error) {
+			return "SourceAccess: browser_rendered_url=" + requestURL + "; snapshot_id=1; page_text_below=search_results_discovery_only; result_links_and_snippets=unverified_until_opened\nURL: " + requestURL + "\nTITLE: search\nPAGE TEXT:\np: result snippets only\n", nil
+		},
+	})
+	out, err := tool.Execute(context.Background(), mustJSON(t, map[string]string{"url": "https://duckduckgo.com/?q=affine"}))
+	if err != nil {
+		t.Fatalf("Execute: %v", err)
+	}
+	for _, want := range []string{"rendered_browser_source_status=search_results_discovery_only", "rendered browser fallback succeeded"} {
+		if !strings.Contains(out, want) {
+			t.Fatalf("search-results rendered fallback output missing %q:\n%s", want, out)
+		}
 	}
 }
 
@@ -666,6 +764,15 @@ func TestRenderedFallbackSourceAccessRecordsRequestedURL(t *testing.T) {
 			t.Fatalf("rendered fallback output missing %q:\n%s", want, out)
 		}
 	}
+}
+
+func mustJSON(t *testing.T, v any) json.RawMessage {
+	t.Helper()
+	raw, err := json.Marshal(v)
+	if err != nil {
+		t.Fatalf("marshal json: %v", err)
+	}
+	return raw
 }
 
 func TestFetchTool_UsesRenderedFallbackForEmptyHTML(t *testing.T) {

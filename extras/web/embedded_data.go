@@ -5,7 +5,8 @@ import (
 	"sort"
 	"strings"
 	"unicode"
-	"unicode/utf8"
+
+	"github.com/affinefoundation/affent/internal/textutil"
 )
 
 const (
@@ -261,13 +262,7 @@ func embeddedDataSnippetBounds(source string, idx int) (int, int) {
 		end = len(source)
 		start = max(0, end-maxEmbeddedDataSnippetChars)
 	}
-	for start > 0 && !utf8.RuneStart(source[start]) {
-		start--
-	}
-	for end < len(source) && !utf8.RuneStart(source[end]) {
-		end++
-	}
-	return start, end
+	return textutil.AlignBackward(source, start), textutil.AlignForward(source, end)
 }
 
 func embeddedDataSnippetScore(snippet string, terms []string) int {
@@ -319,7 +314,7 @@ func isMostlyDigits(s string) bool {
 
 func compactEmbeddedDataSnippet(snippet string) string {
 	snippet = trimEmbeddedDataToJSONish(snippet)
-	snippet = strings.Join(strings.Fields(snippet), " ")
+	snippet = textutil.CompactWhitespace(snippet)
 	snippet = strings.Trim(snippet, " ,;")
 	if snippet == "" {
 		return ""
@@ -327,11 +322,7 @@ func compactEmbeddedDataSnippet(snippet string) string {
 	if len(snippet) <= maxEmbeddedDataSnippetChars {
 		return snippet
 	}
-	cut := maxEmbeddedDataSnippetChars
-	for cut > 0 && !utf8.RuneStart(snippet[cut]) {
-		cut--
-	}
-	return strings.TrimSpace(snippet[:cut]) + "...(truncated)"
+	return textutil.Preview(strings.TrimSpace(snippet), maxEmbeddedDataSnippetChars, "...(truncated)")
 }
 
 func trimEmbeddedDataToJSONish(snippet string) string {

@@ -21,7 +21,10 @@ import (
 	htmltomarkdown "github.com/JohannesKaufmann/html-to-markdown/v2"
 	"github.com/JohannesKaufmann/html-to-markdown/v2/converter"
 	agent "github.com/affinefoundation/affent/internal/agent"
+	"github.com/affinefoundation/affent/internal/metrictext"
 	"github.com/affinefoundation/affent/internal/netguard"
+	"github.com/affinefoundation/affent/internal/sourceaccess"
+	"github.com/affinefoundation/affent/internal/textutil"
 	"github.com/affinefoundation/affent/internal/websource"
 	readability "github.com/go-shiori/go-readability"
 	"golang.org/x/net/html"
@@ -276,11 +279,11 @@ func addSourceAccessHeader(requestURL, finalURL, out string) string {
 		finalURL = requestURL
 	}
 	var b strings.Builder
-	fmt.Fprintf(&b, "SourceAccess: fetched_url=%s", finalURL)
-	if requestURL != "" && requestURL != finalURL {
-		fmt.Fprintf(&b, "; requested_url=%s", requestURL)
+	b.WriteString(sourceaccess.FormatFetchedHeader(finalURL, requestURL))
+	if metrictext.HasMultiplePriceLikeValues(out) {
+		b.WriteString(metrictext.AmbiguityNote)
+		b.WriteString("\n")
 	}
-	b.WriteString("; linked_urls_in_content=discovered_unverified_until_fetched\n")
 	b.WriteString(strings.TrimSpace(out))
 	return b.String()
 }
@@ -289,13 +292,7 @@ func truncateFetchResult(out string, maxChars int) string {
 	if maxChars <= 0 || len(out) <= maxChars {
 		return out
 	}
-	// Snap back to a UTF-8 rune boundary so accented Latin, CJK, or emoji
-	// content doesn't get cut mid-rune and land in context as invalid UTF-8.
-	cut := maxChars
-	for cut > 0 && !utf8.RuneStart(out[cut]) {
-		cut--
-	}
-	return out[:cut] + "\n\n...(truncated)"
+	return textutil.Preview(out, maxChars, "\n\n...(truncated)")
 }
 
 func emptyFetchResult(finalURL, contentType string) string {
@@ -344,7 +341,7 @@ func dynamicPageShellResult(finalURL, contentType, reason, preview string, links
 }
 
 func dynamicShellDiscoveryPreview(markdown string) string {
-	text := strings.Join(strings.Fields(markdown), " ")
+	text := textutil.CompactWhitespace(markdown)
 	if text == "" {
 		return ""
 	}
@@ -353,14 +350,7 @@ func dynamicShellDiscoveryPreview(markdown string) string {
 	if len(text) <= 80 && containsAny(lower, "loading", "loading...", "enable javascript", "please enable javascript") {
 		return ""
 	}
-	if len(text) > maxDynamicShellPreviewChars {
-		cut := maxDynamicShellPreviewChars
-		for cut > 0 && !utf8.RuneStart(text[cut]) {
-			cut--
-		}
-		text = text[:cut] + "...(truncated)"
-	}
-	return text
+	return textutil.Preview(text, maxDynamicShellPreviewChars, "...(truncated)")
 }
 
 func dynamicShellDiscoveryLinks(body []byte, baseURL string) []dynamicShellLink {
@@ -472,15 +462,8 @@ func dynamicShellLinkScore(text, rawURL string) int {
 }
 
 func truncateDiscoveryLinkText(text string) string {
-	text = strings.Join(strings.Fields(text), " ")
-	if len(text) <= maxDynamicShellLinkText {
-		return text
-	}
-	cut := maxDynamicShellLinkText
-	for cut > 0 && !utf8.RuneStart(text[cut]) {
-		cut--
-	}
-	return strings.TrimSpace(text[:cut]) + "...(truncated)"
+	text = textutil.CompactWhitespace(text)
+	return textutil.Preview(text, maxDynamicShellLinkText, "...(truncated)")
 }
 
 func directFetchPreflightResult(ctx context.Context, cfg FetchConfig, rawURL string) string {
@@ -527,11 +510,17 @@ func renderedFallbackResult(ctx context.Context, cfg FetchConfig, requestURL str
 	if fallbackBlock := blockedPageReason(out, reason.FinalURL); fallbackBlock != "" {
 		return "", fmt.Errorf("rendered fallback returned blocked/challenge page: %s", fallbackBlock)
 	}
-	prefix := fmt.Sprintf("SourceAccess: fetched_url=%s", reason.FinalURL)
-	if requestURL != "" && requestURL != reason.FinalURL {
-		prefix += fmt.Sprintf("; requested_url=%s", requestURL)
+	renderedStatus := ""
+	if info, ok := sourceaccess.FirstInfoFromResult(out); ok {
+		switch info.PageTextBelow {
+		case "search_results_discovery_only":
+			renderedStatus = "rendered_browser_source_status=search_results_discovery_only"
+		case "not_found_page_discovery_only":
+			renderedStatus = "rendered_browser_source_status=not_found_page_discovery_only"
+		}
 	}
-	prefix += fmt.Sprintf("; mode=rendered_browser_fallback; linked_urls_in_content=discovered_unverified_until_fetched\n[rendered browser fallback succeeded: URL=%s, DirectFetchReason=%q", reason.FinalURL, reason.Kind)
+	prefix := sourceaccess.FormatSourceAccessLine("fetched_url", reason.FinalURL, requestURL, "mode=rendered_browser_fallback", "linked_urls_in_content=discovered_unverified_until_fetched", renderedStatus)
+	prefix += fmt.Sprintf("[rendered browser fallback succeeded: URL=%s, DirectFetchReason=%q", reason.FinalURL, reason.Kind)
 	if reason.Status > 0 {
 		prefix += fmt.Sprintf(", DirectFetchStatus=%d", reason.Status)
 	}
@@ -539,7 +528,11 @@ func renderedFallbackResult(ctx context.Context, cfg FetchConfig, requestURL str
 		prefix += fmt.Sprintf(", DirectFetchDetail=%q", reason.Detail)
 	}
 	prefix += "]\n"
-	return prefix + truncateFetchResult(out, cfg.MaxResultChars), nil
+	body := truncateFetchResult(out, cfg.MaxResultChars)
+	if metrictext.HasMultiplePriceLikeValues(body) {
+		return prefix + metrictext.AmbiguityNote + "\n" + body, nil
+	}
+	return prefix + body, nil
 }
 
 func validateRenderedFallbackURL(ctx context.Context, cfg FetchConfig, rawURL string) error {
@@ -781,11 +774,7 @@ func looksLikeText(body []byte) bool {
 	const sampleLimit = 1024
 	sample := body
 	if len(sample) > sampleLimit {
-		cut := sampleLimit
-		for cut > 0 && !utf8.RuneStart(sample[cut]) {
-			cut--
-		}
-		sample = sample[:cut]
+		sample = sample[:textutil.AlignBackward(string(sample), sampleLimit)]
 	}
 	if len(sample) == 0 || !utf8.Valid(sample) {
 		return false
@@ -854,7 +843,7 @@ func dynamicPageShellReason(body []byte, contentType, markdown string) string {
 		return ""
 	}
 
-	text := strings.ToLower(strings.Join(strings.Fields(markdown), " "))
+	text := strings.ToLower(textutil.CompactWhitespace(markdown))
 	switch {
 	case text == "":
 		return "client-rendered app shell with no readable text"
