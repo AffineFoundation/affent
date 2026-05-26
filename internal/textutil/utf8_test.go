@@ -1,6 +1,7 @@
 package textutil
 
 import (
+	"strings"
 	"testing"
 	"unicode/utf8"
 )
@@ -47,6 +48,76 @@ func TestAlignBackward(t *testing.T) {
 				t.Errorf("AlignBackward(%q, %d) = %d, want %d", c.s, c.pos, got, c.want)
 			}
 		})
+	}
+}
+
+func TestPreview(t *testing.T) {
+	got := Preview("hello世界", 7, "...")
+	if got != "hello..." {
+		t.Fatalf("Preview() = %q, want %q", got, "hello...")
+	}
+	if !utf8.ValidString(got) {
+		t.Fatalf("Preview() should keep valid UTF-8, got %q", got)
+	}
+	if got := Preview("short", 10, "..."); got != "short" {
+		t.Fatalf("Preview() should not change short input, got %q", got)
+	}
+}
+
+func TestPreviewRunes(t *testing.T) {
+	got := PreviewRunes("hello世界", 5, "...")
+	if got != "hello..." {
+		t.Fatalf("PreviewRunes() = %q, want %q", got, "hello...")
+	}
+	if !utf8.ValidString(got) {
+		t.Fatalf("PreviewRunes() should keep valid UTF-8, got %q", got)
+	}
+	if got := PreviewRunes("short", 10, "..."); got != "short" {
+		t.Fatalf("PreviewRunes() should not change short input, got %q", got)
+	}
+}
+
+func TestCompactWhitespace(t *testing.T) {
+	if got := CompactWhitespace("  hello \n\t world  "); got != "hello world" {
+		t.Fatalf("CompactWhitespace() = %q, want %q", got, "hello world")
+	}
+	if got := CompactWhitespace(""); got != "" {
+		t.Fatalf("CompactWhitespace() should keep empty string, got %q", got)
+	}
+}
+
+func TestTruncateWithMarker(t *testing.T) {
+	got, omitted := TruncateWithMarker("hello世界world", 8, func(omitted int) string {
+		return "..."
+	})
+	if got != "hello..." {
+		t.Fatalf("TruncateWithMarker() = %q, want %q", got, "hello...")
+	}
+	if omitted <= 0 {
+		t.Fatalf("TruncateWithMarker() should report omitted bytes, got %d", omitted)
+	}
+
+	got, omitted = TruncateWithMarker("hello世界world", 8, func(omitted int) string {
+		return strings.Repeat("x", omitted/2)
+	})
+	if !utf8.ValidString(got) {
+		t.Fatalf("TruncateWithMarker() should keep valid UTF-8, got %q", got)
+	}
+	if omitted <= 0 {
+		t.Fatalf("TruncateWithMarker() should report omitted bytes, got %d", omitted)
+	}
+}
+
+func TestPreviewHead(t *testing.T) {
+	head, omitted := PreviewHead("hello世界world", 8)
+	if head != "hello世" {
+		t.Fatalf("PreviewHead() head = %q, want %q", head, "hello世")
+	}
+	if omitted <= 0 {
+		t.Fatalf("PreviewHead() should report omitted bytes, got %d", omitted)
+	}
+	if !utf8.ValidString(head) {
+		t.Fatalf("PreviewHead() should keep valid UTF-8, got %q", head)
 	}
 }
 
