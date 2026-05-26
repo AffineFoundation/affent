@@ -109,6 +109,24 @@ func TestBuildDebugBriefClassifiesSessionRecallQuality(t *testing.T) {
 		!stringSliceContains(brief.Tags, "empty_recall") {
 		t.Fatalf("empty recall debug item = %+v tags=%+v", empty, brief.Tags)
 	}
+
+	brief = BuildDebugBrief(BatchResult{
+		OK: true,
+		ToolStats: ToolRuntimeStats{
+			SessionSearchCalls:        2,
+			SessionSearchResults:      2,
+			SessionSearchContextHits:  2,
+			SessionSearchMatchedTerms: 1,
+		},
+	})
+	recall = debugBriefItemByKind(brief, "recall")
+	if recall == nil ||
+		recall.Severity != "warn" ||
+		recall.Message != "session recall matched fewer query terms than calls; inspect examples for broad or stale recovery" ||
+		recall.Counts["matched_terms"] != 1 ||
+		!stringSliceContains(brief.Tags, "recall:weak_matched_terms") {
+		t.Fatalf("weak recall debug item = %+v tags=%+v", recall, brief.Tags)
+	}
 }
 
 func TestBuildDebugBriefClassifiesContextCompactionSummaryQuality(t *testing.T) {

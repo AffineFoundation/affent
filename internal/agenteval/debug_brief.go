@@ -157,6 +157,10 @@ func BuildDebugBrief(res BatchResult) *DebugBrief {
 			severity = "warn"
 			tags = []string{"recall", "recall:no_matched_terms"}
 			message = "session recall returned hits without matched terms; inspect examples before trusting recovery"
+		} else if res.ToolStats.SessionSearchCalls > 0 && res.ToolStats.SessionSearchMatchedTerms < res.ToolStats.SessionSearchCalls {
+			severity = "warn"
+			tags = append(tags, "recall:weak_matched_terms")
+			message = "session recall matched fewer query terms than calls; inspect examples for broad or stale recovery"
 		}
 		add(kind, severity, message, []string{"session_search_examples", "session_search_results", "tool_timeline"}, map[string]int{
 			"calls":         res.ToolStats.SessionSearchCalls,
