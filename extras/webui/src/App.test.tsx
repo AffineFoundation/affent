@@ -853,7 +853,8 @@ describe("App", () => {
     expect(screen.getByText("What should we work on?")).toBeVisible();
   });
 
-  it("shows the server snapshot in the top status strip", async () => {
+  it("keeps technical server details out of the top status strip and shows them in Profile", async () => {
+    const user = userEvent.setup();
     const fetchImpl = vi.fn(async (input: RequestInfo | URL) => {
       const url = String(input);
       if (url === "/v1/stats") {
@@ -887,30 +888,40 @@ describe("App", () => {
 
     render(<App />);
 
-    const status = await screen.findByTestId("server-status-bar");
-    expect(status).toHaveTextContent("Server");
-    expect(status).toHaveTextContent("Healthy");
-    expect(status).toHaveTextContent("qwen3.6-35b-a3b");
-    expect(status).toHaveTextContent("Executor local");
-    expect(status).toHaveTextContent("3 active sessions");
-    expect(status).toHaveTextContent("2 running turns");
-    expect(status).toHaveTextContent("Browser on");
-    expect(status).toHaveTextContent("Web on");
-    expect(status).toHaveTextContent("Web search on");
-    expect(status).toHaveTextContent("Memory on");
-    expect(status).toHaveTextContent("Builtins on");
-    expect(status).toHaveTextContent("Subtasks on");
-    expect(status).toHaveTextContent("Web search tavily");
-    expect(status).toHaveTextContent("Browser cache on");
-    expect(status).toHaveTextContent("Listen 0.0.0.0:7777");
-    expect(status).toHaveTextContent("Workspace sessions");
-    expect(status).toHaveTextContent("Memory session-state");
-    expect(within(status).getByTitle("/workspace/sessions")).toBeInTheDocument();
-    expect(within(status).getByTitle("/workspace/session-state")).toBeInTheDocument();
-    expect(status).toHaveTextContent("Updated");
+    const status = await screen.findByTestId("workbench-status-bar");
+    expect(status).toHaveTextContent("Ready");
+    expect(status).toHaveTextContent("Start a task or continue a saved chat");
+    expect(status).not.toHaveTextContent("qwen3.6-35b-a3b");
+    expect(status).not.toHaveTextContent("Executor local");
+    expect(status).not.toHaveTextContent("Browser on");
+    expect(status).not.toHaveTextContent("Web search on");
+    expect(status).not.toHaveTextContent("Memory on");
+    expect(status).not.toHaveTextContent("Listen 0.0.0.0:7777");
+
+    await user.click(within(status).getByRole("button", { name: "Profile" }));
+    const profile = await screen.findByTestId("profile-dialog");
+    expect(profile).toHaveTextContent("Environment settings");
+    expect(profile).toHaveTextContent("API keys");
+    expect(profile).toHaveTextContent("Managed by server environment");
+    expect(profile).toHaveTextContent("qwen3.6-35b-a3b");
+    expect(profile).toHaveTextContent("local");
+    expect(profile).toHaveTextContent("Browser");
+    expect(profile).toHaveTextContent("Web access");
+    expect(profile).toHaveTextContent("Web search");
+    expect(profile).toHaveTextContent("Memory");
+    expect(profile).toHaveTextContent("Built-in tools");
+    expect(profile).toHaveTextContent("Subtasks");
+    expect(profile).toHaveTextContent("tavily");
+    expect(profile).toHaveTextContent("Listen address");
+    expect(profile).toHaveTextContent("0.0.0.0:7777");
+    expect(profile).toHaveTextContent("Workspace sessions");
+    expect(profile).toHaveTextContent("Memory session-state");
+    expect(within(profile).getByTitle("/workspace/sessions")).toBeInTheDocument();
+    expect(within(profile).getByTitle("/workspace/session-state")).toBeInTheDocument();
+    expect(profile).toHaveTextContent("Updated");
   });
 
-  it("keeps the server strip visible when stats polling fails", async () => {
+  it("keeps a simple workbench status visible when stats polling fails", async () => {
     const fetchImpl = vi.fn(async (input: RequestInfo | URL) => {
       const url = String(input);
       if (url === "/v1/stats") {
@@ -925,9 +936,9 @@ describe("App", () => {
 
     render(<App />);
 
-    const status = await screen.findByTestId("server-status-bar");
-    expect(status).toHaveTextContent("Server");
-    expect(status).toHaveTextContent("Server unavailable");
+    const status = await screen.findByTestId("workbench-status-bar");
+    expect(status).toHaveTextContent("Connection issue");
+    expect(status).toHaveTextContent("Open Profile for diagnostics");
   });
 
   it("shows the selected session title while a titled chat loads", async () => {
