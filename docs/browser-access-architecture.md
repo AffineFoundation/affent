@@ -199,7 +199,9 @@ Browser sessions should be tied to Affent sessions:
   artifact directory.
 - Snapshot reads should wait only a short bounded window for pending network
   observer body reads to settle, so JavaScript dashboards expose captured
-  XHR/fetch refs without making browser tools feel stuck.
+  XHR/fetch refs without making browser tools feel stuck. If the queue is still
+  active after that window, the snapshot should say so as partial dynamic
+  evidence instead of silently implying that no network data exists.
 - WebUI should show page status, current URL, screenshots, network evidence,
   and source-access warnings.
 

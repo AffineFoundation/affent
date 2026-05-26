@@ -146,6 +146,35 @@ func TestFormatSnapshotResultSurfacesDynamicMetricDiagnostics(t *testing.T) {
 	}
 }
 
+func TestApplyNetworkSettleDiagnosticMarksPartialDynamicEvidence(t *testing.T) {
+	snap := &Snapshot{
+		SnapshotID: 14,
+		URL:        "https://taostats.io/subnets/120",
+		Title:      "Affine SN120 · taostats",
+		TextBlocks: []TextBlock{{Type: "p", Text: "Market Cap"}},
+	}
+	applyNetworkSettleDiagnostic(snap, false)
+	applyNetworkSettleDiagnostic(snap, false)
+
+	out, err := formatSnapshotResult(snap)
+	if err != nil {
+		t.Fatalf("pending network evidence diagnostic should warn but not block: %v", err)
+	}
+	if count := strings.Count(out, "network_evidence_capture_pending"); count != 1 {
+		t.Fatalf("pending network evidence diagnostic count = %d, want 1:\n%s", count, out)
+	}
+	for _, want := range []string{
+		"page_text_below=partial_dynamic_page_evidence",
+		"visible page text is partial dynamic evidence (network evidence capture pending)",
+		"call browser_snapshot again or browser_network",
+		"before treating absent captured refs as unavailable",
+	} {
+		if !strings.Contains(out, want) {
+			t.Fatalf("pending network evidence output missing %q:\n%s", want, out)
+		}
+	}
+}
+
 func TestFormatSnapshotResultIncludesNetworkEvidenceHints(t *testing.T) {
 	out, err := formatSnapshotResult(&Snapshot{
 		SnapshotID: 12,

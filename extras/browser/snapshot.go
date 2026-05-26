@@ -81,6 +81,7 @@ const (
 	maxSnapshotNetworkHints    = 5
 	snapshotNetworkSettleMax   = 750 * time.Millisecond
 	snapshotNetworkSettleQuiet = 50 * time.Millisecond
+	networkEvidencePendingDiag = "network_evidence_capture_pending: pending XHR/fetch body reads were still settling; call browser_snapshot again or browser_network before treating absent captured refs as unavailable"
 )
 
 // snapshotJS runs in the page's JS realm. It:
@@ -290,8 +291,9 @@ func (s *Session) TakeSnapshot(ctx context.Context) (*Snapshot, error) {
 	if s.page == nil {
 		return nil, ErrNoPage
 	}
+	networkSettled := true
 	if s.network != nil {
-		s.network.WaitIdle(ctx, snapshotNetworkSettleMax, snapshotNetworkSettleQuiet)
+		networkSettled = s.network.WaitIdle(ctx, snapshotNetworkSettleMax, snapshotNetworkSettleQuiet)
 	}
 	page := s.withContext(ctx)
 	result, err := page.Eval(snapshotJS)
@@ -307,6 +309,7 @@ func (s *Session) TakeSnapshot(ctx context.Context) (*Snapshot, error) {
 		return nil, fmt.Errorf("decode snapshot: %w (raw=%s)", err, string(raw))
 	}
 	snap.SnapshotID = s.newSnapshotID()
+	applyNetworkSettleDiagnostic(&snap, networkSettled)
 	if s.network != nil {
 		snap.Network = s.network.Search("", maxSnapshotNetworkHints)
 		for i := range snap.Network {
@@ -314,6 +317,18 @@ func (s *Session) TakeSnapshot(ctx context.Context) (*Snapshot, error) {
 		}
 	}
 	return &snap, nil
+}
+
+func applyNetworkSettleDiagnostic(snap *Snapshot, settled bool) {
+	if snap == nil || settled {
+		return
+	}
+	for _, diagnostic := range snap.Diagnostics {
+		if strings.Contains(diagnostic, "network_evidence_capture_pending") {
+			return
+		}
+	}
+	snap.Diagnostics = append(snap.Diagnostics, networkEvidencePendingDiag)
 }
 
 // elementByRef locates the DOM element associated with a ref id from
@@ -570,6 +585,8 @@ func snapshotDynamicPartialReason(snap *Snapshot) string {
 		switch {
 		case strings.Contains(lower, "empty_dynamic_metric_widgets"):
 			return "empty dynamic metric widgets"
+		case strings.Contains(lower, "network_evidence_capture_pending"):
+			return "network evidence capture pending"
 		}
 	}
 	return ""
