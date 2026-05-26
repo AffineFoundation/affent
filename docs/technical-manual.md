@@ -828,11 +828,12 @@ failed counts so long-run reports can show whether regressions cluster around
 memory, browser/web evidence, delegation, plan, or context compaction. Text and
 JSONL summaries also include an aggregate expected-capability pass rate for CI
 and model/provider comparison dashboards, plus bounded failed-scenario examples
-per expected capability so operators can jump from a browser/memory/plan
-regression to the retained trace or timeline. The per-family expectation gate
-can fail a run when one capability family regresses even if the aggregate
-expectation pass rate is still acceptable. JSONL summary records also aggregate
-debug brief tags as `debug_brief_by_tag` for batch triage.
+per failure kind and expected capability so operators can jump from a
+turn-end/verifier/browser/memory/plan regression to the retained trace or
+timeline. The per-family expectation gate can fail a run when one capability
+family regresses even if the aggregate expectation pass rate is still
+acceptable. JSONL summary records also aggregate debug brief tags as
+`debug_brief_by_tag` for batch triage.
 JSONL scenario records also include a compact `runtime_surface` summary so
 batch analysis can group outcomes by actual tool/capability surface. JSONL
 summary records include per-scenario counts for runtime tools and capabilities

@@ -301,7 +301,9 @@ Summary records aggregate all scenario records from the same process:
 - Token totals: `input_tokens`, `output_tokens`.
 - Turn end totals: `end_completed`, `end_max_turns`, `end_errors`,
   `end_cancelled`, `end_unknown`.
-- Failure totals: `failure_kinds`.
+- Failure totals and examples: `failure_kinds`, plus `failure_examples`, a
+  bounded per-kind sample containing scenario name, compact failure text, and
+  retained trace/timeline/debug-manifest paths when available.
 - Tool failure totals and diagnostics: `tool_failure_by_kind`,
   `tool_failure_hints`, `tool_failure_examples`.
 - Runtime error totals and diagnostics: `runtime_error_by_kind`,

@@ -35,6 +35,14 @@ type expectationCapabilityFailureExample struct {
 	DebugManifestPath string         `json:"debug_manifest_path,omitempty"`
 }
 
+type batchFailureExample struct {
+	Scenario          string `json:"scenario"`
+	Failure           string `json:"failure"`
+	TracePath         string `json:"trace_path,omitempty"`
+	TimelinePath      string `json:"timeline_path,omitempty"`
+	DebugManifestPath string `json:"debug_manifest_path,omitempty"`
+}
+
 func main() {
 	if err := loadDotEnv(); err != nil {
 		fmt.Fprintf(os.Stderr, "affenteval: load .env: %v\n", err)
@@ -521,6 +529,7 @@ type batchSummary struct {
 	EndCancelled                         int
 	EndUnknown                           int
 	FailureKinds                         map[string]int
+	FailureExamples                      map[string][]batchFailureExample
 	DebugBriefByTag                      map[string]int
 	ExpectationScenarios                 int
 	ExpectationSuites                    map[string]int
@@ -723,10 +732,12 @@ func (s *batchSummary) add(res agenteval.BatchResult) {
 		s.PlanByAction[k] += v
 	}
 	for _, failure := range res.Failures {
+		kind := failureKind(failure)
 		if s.FailureKinds == nil {
 			s.FailureKinds = map[string]int{}
 		}
-		s.FailureKinds[failureKind(failure)]++
+		s.FailureKinds[kind]++
+		s.addFailureExample(kind, res, failure)
 	}
 	if brief := agenteval.BuildDebugBrief(res); brief != nil {
 		if s.DebugBriefByTag == nil {
@@ -739,6 +750,26 @@ func (s *batchSummary) add(res agenteval.BatchResult) {
 	if res.Expectations != nil {
 		s.addExpectations(res)
 	}
+}
+
+func (s *batchSummary) addFailureExample(kind string, res agenteval.BatchResult, failure string) {
+	kind = strings.TrimSpace(kind)
+	if kind == "" {
+		kind = "unknown"
+	}
+	if s.FailureExamples == nil {
+		s.FailureExamples = map[string][]batchFailureExample{}
+	}
+	if len(s.FailureExamples[kind]) >= batchSummaryExamplesPerKind {
+		return
+	}
+	s.FailureExamples[kind] = append(s.FailureExamples[kind], batchFailureExample{
+		Scenario:          res.BatchScenario,
+		Failure:           compactFailureText(failure),
+		TracePath:         res.TracePath,
+		TimelinePath:      retainedDebugPath(res.TimelinePath, res.WorkspaceRemoved),
+		DebugManifestPath: retainedDebugPath(res.DebugManifestPath, res.WorkspaceRemoved),
+	})
 }
 
 func (s *batchSummary) addExpectations(res agenteval.BatchResult) {
@@ -1034,6 +1065,7 @@ func printBatchSummary(w io.Writer, s batchSummary) {
 	printPlanRollup(w, s.PlanCalls, s.PlanByAction, s.PlanErrors)
 	fmt.Fprintln(w)
 	printFailureHintLines(w, s.FailureKinds, "")
+	printFailureExampleLines(w, s.FailureExamples, "")
 	printToolFailureHintLines(w, s.ToolFailureByKind, "")
 	printToolFailureExampleLines(w, s.ToolFailureExamples, "")
 	printFailureHintLines(w, s.RuntimeErrorByKind, "")
@@ -1128,6 +1160,15 @@ func printPlanRollup(w io.Writer, calls int, byAction map[string]int, errors int
 
 func formatFailureKinds(counts map[string]int) string {
 	return formatStringIntCounts(counts)
+}
+
+func compactFailureText(failure string) string {
+	failure = strings.TrimSpace(strings.Join(strings.Fields(failure), " "))
+	const max = 240
+	if len(failure) <= max {
+		return failure
+	}
+	return failure[:max] + "..."
 }
 
 func formatDebugBriefTags(tags []string) string {
@@ -1301,6 +1342,35 @@ func printFailureHintLines(w io.Writer, counts map[string]int, indent string) {
 	sort.Strings(keys)
 	for _, key := range keys {
 		fmt.Fprintf(w, "%shint[%s]: %s\n", indent, key, hints[key])
+	}
+}
+
+func printFailureExampleLines(w io.Writer, examples map[string][]batchFailureExample, indent string) {
+	if len(examples) == 0 {
+		return
+	}
+	kinds := make([]string, 0, len(examples))
+	for kind := range examples {
+		kinds = append(kinds, kind)
+	}
+	sort.Strings(kinds)
+	for _, kind := range kinds {
+		for _, ex := range examples[kind] {
+			fmt.Fprintf(w, "%sfailure_example[%s]: scenario=%s", indent, kind, ex.Scenario)
+			if ex.Failure != "" {
+				fmt.Fprintf(w, " failure=%q", ex.Failure)
+			}
+			if ex.TracePath != "" {
+				fmt.Fprintf(w, " trace=%s", ex.TracePath)
+			}
+			if ex.TimelinePath != "" {
+				fmt.Fprintf(w, " timeline=%s", ex.TimelinePath)
+			}
+			if ex.DebugManifestPath != "" {
+				fmt.Fprintf(w, " debug_manifest=%s", ex.DebugManifestPath)
+			}
+			fmt.Fprintln(w)
+		}
 	}
 }
 
@@ -1884,6 +1954,7 @@ type batchSummaryRecord struct {
 	EndCancelled                         int                                              `json:"end_cancelled"`
 	EndUnknown                           int                                              `json:"end_unknown"`
 	FailureKinds                         map[string]int                                   `json:"failure_kinds,omitempty"`
+	FailureExamples                      map[string][]batchFailureExample                 `json:"failure_examples,omitempty"`
 	FailureHints                         failureHintMap                                   `json:"failure_hints,omitempty"`
 	ToolFailureHints                     failureHintMap                                   `json:"tool_failure_hints,omitempty"`
 	RuntimeErrorHints                    failureHintMap                                   `json:"runtime_error_hints,omitempty"`
@@ -2222,6 +2293,7 @@ func printBatchSummaryJSONL(w io.Writer, meta evalJSONLMetadata, s batchSummary,
 		EndCancelled:                         s.EndCancelled,
 		EndUnknown:                           s.EndUnknown,
 		FailureKinds:                         cloneFailureKinds(s.FailureKinds),
+		FailureExamples:                      cloneBatchFailureExamples(s.FailureExamples),
 		FailureHints:                         failureHintsForKinds(s.FailureKinds),
 		ToolFailureHints:                     toolFailureHintsForKinds(s.ToolFailureByKind),
 		RuntimeErrorHints:                    failureHintsForKinds(s.RuntimeErrorByKind),
@@ -2356,6 +2428,10 @@ func cloneToolFailureExamples(in map[string][]agenteval.ToolFailureExample) map[
 }
 
 func cloneRuntimeErrorExamples(in map[string][]agenteval.RuntimeErrorExample) map[string][]agenteval.RuntimeErrorExample {
+	return cloneExampleMap(in)
+}
+
+func cloneBatchFailureExamples(in map[string][]batchFailureExample) map[string][]batchFailureExample {
 	return cloneExampleMap(in)
 }
 

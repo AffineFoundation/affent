@@ -955,6 +955,11 @@ func TestBatchSummaryAggregatesRuntimeMetrics(t *testing.T) {
 	if !strings.Contains(out.String(), "debug_brief=context_compaction:1,context_compaction:reactive:1,loop_guard:2,outcome:failed:1,plan:2,plan:set:1,plan:update:1,plan_error:1,recall:1,runtime_error:1,runtime_error:context_overflow:1,runtime_error:llm_timeout:1,source_access:2,source_network:2,source_unverified:1,tool_failure:1,tool_failure:invalid_args:1,tool_failure:timeout:1,truncation:2,turn_end:max_turns:1") {
 		t.Fatalf("summary output missing debug brief tag rollup:\n%s", out.String())
 	}
+	if !strings.Contains(out.String(), `failure_example[turn_end]: scenario=taostats-rendered failure="turn ended with reason \"max_turns\" (expected completed)"`) ||
+		!strings.Contains(out.String(), "trace=/tmp/affenteval/taostats-rendered/trace.jsonl") ||
+		!strings.Contains(out.String(), "timeline=/tmp/affenteval/taostats-rendered/affenteval-timeline.md") {
+		t.Fatalf("summary output missing grouped failure example:\n%s", out.String())
+	}
 	if !strings.Contains(out.String(), "expectations=scenarios:2 expectation_capabilities=browser:2,context_compaction:1,delegation:1,memory:1,plan:1,session:2,session_search:1,source_access:2,verifier:1,web:1,workspace:1 expectation_capability_pass=browser:1/2,context_compaction:0/1,delegation:0/1,memory:1/1,plan:0/1,session:1/2,session_search:0/1,source_access:1/2,verifier:1/1,web:0/1,workspace:1/1 expectation_capability_pass_rate=42.9% expectation_tools=browser_network_read:2,memory:1,read_file:1,repo_search:1,run_task:1,session_search:1,web_fetch:1 expectation_source_access=network:2 expectation_suites=live-web:1,long-run:1") {
 		t.Fatalf("summary output missing expectation rollup:\n%s", out.String())
 	}
@@ -2092,12 +2097,20 @@ func TestPrintBatchSummaryJSONL(t *testing.T) {
 		EndCancelled:               0,
 		EndUnknown:                 0,
 		FailureKinds:               map[string]int{"missing_command": 1, "turn_end": 1},
-		DebugBriefByTag:            map[string]int{"outcome:failed": 1, "tool_failure:blocked": 1, "runtime_error:llm_timeout": 1},
-		ExpectationScenarios:       2,
-		ExpectationSuites:          map[string]int{"long-run": 1, "live-web": 1},
-		ExpectationCapabilities:    map[string]int{"browser": 2, "source_access": 2, "web": 1},
-		ExpectationCapabilityPass:  map[string]int{"browser": 1, "source_access": 1},
-		ExpectationCapabilityFail:  map[string]int{"browser": 1, "source_access": 1, "web": 1},
+		FailureExamples: map[string][]batchFailureExample{
+			"turn_end": {{
+				Scenario:     "taostats-rendered",
+				Failure:      `turn ended with reason "max_turns" (expected completed)`,
+				TracePath:    "/tmp/affenteval/taostats-rendered/trace.jsonl",
+				TimelinePath: "/tmp/affenteval/taostats-rendered/affenteval-timeline.md",
+			}},
+		},
+		DebugBriefByTag:           map[string]int{"outcome:failed": 1, "tool_failure:blocked": 1, "runtime_error:llm_timeout": 1},
+		ExpectationScenarios:      2,
+		ExpectationSuites:         map[string]int{"long-run": 1, "live-web": 1},
+		ExpectationCapabilities:   map[string]int{"browser": 2, "source_access": 2, "web": 1},
+		ExpectationCapabilityPass: map[string]int{"browser": 1, "source_access": 1},
+		ExpectationCapabilityFail: map[string]int{"browser": 1, "source_access": 1, "web": 1},
 		ExpectationCapabilityFailureExamples: map[string][]expectationCapabilityFailureExample{
 			"browser": {{
 				Capability:     "browser",
@@ -2275,6 +2288,21 @@ func TestPrintBatchSummaryJSONL(t *testing.T) {
 	runtimeErrorExamples, ok := got["runtime_error_examples"].(map[string]any)
 	if !ok || !strings.Contains(fmt.Sprint(runtimeErrorExamples["llm_timeout"]), "timed out") {
 		t.Fatalf("runtime_error_examples = %#v\njson=%s", got["runtime_error_examples"], out.String())
+	}
+	failureExamples, ok := got["failure_examples"].(map[string]any)
+	if !ok {
+		t.Fatalf("failure_examples = %#v\njson=%s", got["failure_examples"], out.String())
+	}
+	turnEndExamples, ok := failureExamples["turn_end"].([]any)
+	if !ok || len(turnEndExamples) != 1 {
+		t.Fatalf("turn_end failure_examples = %#v\njson=%s", failureExamples["turn_end"], out.String())
+	}
+	turnEndExample, ok := turnEndExamples[0].(map[string]any)
+	if !ok ||
+		turnEndExample["scenario"] != "taostats-rendered" ||
+		turnEndExample["failure"] != `turn ended with reason "max_turns" (expected completed)` ||
+		turnEndExample["trace_path"] != "/tmp/affenteval/taostats-rendered/trace.jsonl" {
+		t.Fatalf("turn_end failure example = %#v\njson=%s", turnEndExamples[0], out.String())
 	}
 	sourceAccessExamples, ok := got["source_access_examples"].([]any)
 	if !ok || len(sourceAccessExamples) != 1 {
