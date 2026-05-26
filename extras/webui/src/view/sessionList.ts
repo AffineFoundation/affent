@@ -17,7 +17,7 @@ const enTitleActions = [
   "improve", "refactor", "implement", "build", "create", "design", "understand",
 ].join("|");
 
-export type SessionListFilter = "all" | "active" | "saved" | "artifacts" | "memory" | "plan" | "evidence";
+export type SessionListFilter = "all" | "active" | "saved" | "artifacts" | "memory" | "plan" | "evidence" | "issues";
 export type SessionRowTone = "running" | "saved" | "muted" | "error" | "warning";
 type SessionTitleSource = "provided" | "topic" | "fallback";
 
@@ -377,6 +377,7 @@ export function countSessionsByFilter(rows: readonly SessionRowView[]): Record<S
     memory: rows.filter((row) => row.chips.includes("memory")).length,
     plan: rows.filter((row) => row.chips.includes("plan")).length,
     evidence: rows.filter(hasEvidenceMetric).length,
+    issues: rows.filter(needsAttention).length,
   };
 }
 
@@ -388,11 +389,18 @@ function matchesFilter(row: SessionRowView, filter: SessionListFilter): boolean 
   if (filter === "memory") return row.chips.includes("memory");
   if (filter === "plan") return row.chips.includes("plan");
   if (filter === "evidence") return hasEvidenceMetric(row);
+  if (filter === "issues") return needsAttention(row);
   return true;
 }
 
 function hasEvidenceMetric(row: SessionRowView): boolean {
   return row.metrics.some((metric) => metric.startsWith("Evidence "));
+}
+
+function needsAttention(row: SessionRowView): boolean {
+  if (row.tone === "error" || row.tone === "warning") return true;
+  if (row.status === "Blocked" || row.status === "Needs final answer") return true;
+  return row.metrics.some((metric) => /\bissues?\b/i.test(metric) || /\btool issues?\b/i.test(metric) || /\bprior issues?\b/i.test(metric));
 }
 
 function usageMetrics(session: SessionSummary): string[] {

@@ -208,13 +208,20 @@ describe("sessionList view model", () => {
           source_access_verified: 1,
         },
       }),
+      session({
+        id: "issue-f",
+        durable: true,
+        latest_user_message: "debug broken browser extraction",
+        tools: { tool_requests: 2, tool_errors: 1, tool_repair_succeeded: 0, tool_repair_failed: 0 },
+      }),
     ]);
 
-    expect(countSessionsByFilter(rows)).toMatchObject({ all: 5, active: 1, saved: 4, artifacts: 1, memory: 1, plan: 1, evidence: 1 });
+    expect(countSessionsByFilter(rows)).toMatchObject({ all: 6, active: 1, saved: 5, artifacts: 1, memory: 1, plan: 1, evidence: 1, issues: 1 });
     expect(filterSessionRows(rows, "active", "")).toHaveLength(1);
     expect(filterSessionRows(rows, "memory", "")[0].id).toBe("saved-b");
     expect(filterSessionRows(rows, "plan", "")[0].id).toBe("planned-d");
     expect(filterSessionRows(rows, "evidence", "")[0].id).toBe("evidence-e");
+    expect(filterSessionRows(rows, "issues", "")[0].id).toBe("issue-f");
     expect(filterSessionRows(rows, "all", "artifact")[0].id).toBe("artifact-c");
   });
 
