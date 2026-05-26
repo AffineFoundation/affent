@@ -115,6 +115,38 @@ func TestFormatEvent_CompactsDelegationToolResults(t *testing.T) {
 			t.Fatalf("compact focused-task result should not expose raw JSON scaffolding:\n%s", got)
 		}
 	})
+
+	t.Run("memory result keeps durable update state without raw JSON", func(t *testing.T) {
+		raw := `{"ok":true,"message":"entry added","target":"memory","topic":"markets","entries":["Alpha Coast reports use marker MEM-STOCK-73.","Use source-led confidence for market notes."],"usage":{"percent":12,"chars_used":98,"chars_limit":800,"entry_count":2}}`
+		got := formatEvent(ChatMessage{Role: "tool", Name: MemoryToolName, Content: raw})
+		for _, want := range []string{
+			"TOOL_RESULT[memory]",
+			"ok=true target=memory topic=markets usage=12%,98/800 chars,2 entries",
+			"message: entry added",
+			"Alpha Coast reports use marker MEM-STOCK-73.",
+			"Use source-led confidence for market notes.",
+		} {
+			if !strings.Contains(got, want) {
+				t.Fatalf("compact memory result missing %q:\n%s", want, got)
+			}
+		}
+		if strings.Contains(got, `"entries"`) || strings.Contains(got, `"usage"`) {
+			t.Fatalf("compact memory result should not expose raw JSON scaffolding:\n%s", got)
+		}
+	})
+
+	t.Run("memory search result keeps snippets and freshness", func(t *testing.T) {
+		raw := `{"ok":true,"message":"1 result(s)","target":"memory","results":[{"topic":"ops","snippet":"deploys use fly.io remote builders","score":2.5,"created_at":"2026-05-20T10:00:00Z"}]}`
+		got := formatEvent(ChatMessage{Role: "tool", Name: MemoryToolName, Content: raw})
+		for _, want := range []string{
+			"message: 1 result(s)",
+			"topic=ops created_at=2026-05-20T10:00:00Z score=2.500 deploys use fly.io remote builders",
+		} {
+			if !strings.Contains(got, want) {
+				t.Fatalf("compact memory search result missing %q:\n%s", want, got)
+			}
+		}
+	})
 }
 
 // TestTruncateChars pins the byte-cap + UTF-8-safe truncation +

@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/affinefoundation/affent/internal/memory"
 	"github.com/affinefoundation/affent/internal/textutil"
 )
 
@@ -45,6 +46,7 @@ const (
 	compactToolArgsMaxChars  = 300
 	compactDelegationMaxText = 6000
 	compactDelegationMaxList = 8
+	compactMemoryMaxText     = 500
 )
 
 // LLMSummaryCompactor implements rolling LLM summarization. Layout
@@ -349,8 +351,53 @@ func compactToolResultForSummary(toolName, content string) string {
 		if out, ok := compactFocusedTaskResultForSummary(content); ok {
 			return out
 		}
+	case MemoryToolName:
+		if out, ok := compactMemoryResultForSummary(content); ok {
+			return out
+		}
 	}
 	return content
+}
+
+func compactMemoryResultForSummary(content string) (string, bool) {
+	var resp memory.MemoryResponse
+	if err := json.Unmarshal([]byte(content), &resp); err != nil {
+		return "", false
+	}
+	if resp.Target == "" && resp.Message == "" && len(resp.Entries) == 0 && len(resp.Results) == 0 && len(resp.Topics) == 0 {
+		return "", false
+	}
+	var b strings.Builder
+	fmt.Fprintf(&b, "ok=%t", resp.OK)
+	if resp.Target != "" {
+		fmt.Fprintf(&b, " target=%s", resp.Target)
+	}
+	if resp.Topic != "" {
+		fmt.Fprintf(&b, " topic=%s", resp.Topic)
+	}
+	if resp.Usage != nil {
+		fmt.Fprintf(&b, " usage=%d%%,%d/%d chars,%d entries", resp.Usage.Percent, resp.Usage.CharsUsed, resp.Usage.CharsLimit, resp.Usage.EntryCount)
+	}
+	if strings.TrimSpace(resp.Message) != "" {
+		fmt.Fprintf(&b, "\nmessage: %s", textutil.Preview(strings.TrimSpace(resp.Message), compactMemoryMaxText))
+	}
+	if len(resp.Entries) > 0 {
+		b.WriteString("\nentries:")
+		appendCompactStringList(&b, resp.Entries)
+	}
+	if len(resp.Matches) > 0 {
+		b.WriteString("\nmatches:")
+		appendCompactStringList(&b, resp.Matches)
+	}
+	if len(resp.Results) > 0 {
+		b.WriteString("\nresults:")
+		appendCompactMemoryResults(&b, resp.Results)
+	}
+	if len(resp.Topics) > 0 {
+		b.WriteString("\ntopics:")
+		appendCompactMemoryTopics(&b, resp.Topics)
+	}
+	return b.String(), true
 }
 
 func compactSubagentResultForSummary(content string) (string, bool) {
@@ -490,6 +537,52 @@ func appendCompactStringList(b *strings.Builder, items []string) {
 	}
 	if len(items) > limit {
 		fmt.Fprintf(b, "\n- ... %d more item(s)", len(items)-limit)
+	}
+}
+
+func appendCompactMemoryResults(b *strings.Builder, results []memory.MemorySearchResult) {
+	limit := len(results)
+	if limit > compactDelegationMaxList {
+		limit = compactDelegationMaxList
+	}
+	for _, result := range results[:limit] {
+		b.WriteString("\n- ")
+		if result.Topic != "" {
+			b.WriteString("topic=")
+			b.WriteString(textutil.Preview(strings.TrimSpace(result.Topic), 120))
+			b.WriteByte(' ')
+		}
+		if result.CreatedAt != "" {
+			b.WriteString("created_at=")
+			b.WriteString(textutil.Preview(strings.TrimSpace(result.CreatedAt), 80))
+			b.WriteByte(' ')
+		}
+		if result.Score > 0 {
+			fmt.Fprintf(b, "score=%.3f ", result.Score)
+		}
+		b.WriteString(textutil.Preview(strings.TrimSpace(result.Snippet), compactMemoryMaxText))
+	}
+	if len(results) > limit {
+		fmt.Fprintf(b, "\n- ... %d more result(s)", len(results)-limit)
+	}
+}
+
+func appendCompactMemoryTopics(b *strings.Builder, topics []memory.MemoryTopicSummary) {
+	limit := len(topics)
+	if limit > compactDelegationMaxList {
+		limit = compactDelegationMaxList
+	}
+	for _, topic := range topics[:limit] {
+		b.WriteString("\n- ")
+		b.WriteString(textutil.Preview(strings.TrimSpace(topic.Topic), 120))
+		fmt.Fprintf(b, " entries=%d chars=%d", topic.Entries, topic.Chars)
+		if topic.NewestAt != "" {
+			b.WriteString(" newest_at=")
+			b.WriteString(textutil.Preview(strings.TrimSpace(topic.NewestAt), 80))
+		}
+	}
+	if len(topics) > limit {
+		fmt.Fprintf(b, "\n- ... %d more topic(s)", len(topics)-limit)
 	}
 }
 
