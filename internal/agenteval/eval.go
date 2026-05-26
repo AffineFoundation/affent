@@ -270,6 +270,7 @@ func BuiltinBatchScenarios() []BatchScenario {
 		planNotForSimpleReadScenario(),
 		planResumeCurrentStepScenario(),
 		memoryCrossSessionRecallScenario(),
+		sessionHistoryRecallScenario(),
 		memoryConfirmedWriteStatsScenario(),
 		smallToolRepeatedReadScenario(),
 		smallToolEditRecoveryScenario(),

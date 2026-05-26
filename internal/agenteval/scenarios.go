@@ -1131,6 +1131,42 @@ func memoryCrossSessionRecallScenario() BatchScenario {
 	}
 }
 
+func sessionHistoryRecallScenario() BatchScenario {
+	return BatchScenario{
+		Name:      "session-history-cross-session-recall",
+		Suites:    []string{smallModelToolsSuite, longRunSuite},
+		SessionID: "history-reader",
+		Prompt:    "从过去会话中查找 Alpha Coast 股票分析的历史决策，回答必须使用的 history marker、risk label、以及证据来自哪个 session。必须使用 session_search；不要读取文件、运行 shell、使用 memory 或修改文件。如果历史里没有相关事实，要明确说缺失。",
+		Files: map[string]string{
+			".affentctl/market-alpha.jsonl": `{"role":"user","content":"Alpha Coast Q2 stock analysis decision needed"}
+{"role":"assistant","content":"decision: Alpha Coast Q2 stock analysis must cite history marker HIST-STOCK-44 and risk label inventory-drag. Evidence should cite session market-alpha."}
+`,
+			".affentctl/distractor.jsonl": `{"role":"user","content":"Alpha Coast older draft"}
+{"role":"assistant","content":"outdated draft: use stale marker HIST-OLD-00 and ignore inventory risk."}
+`,
+			"README.md": "# Session History Recall Eval\n\nThis file intentionally does not contain the history marker.\n",
+		},
+		RequiredTools: []string{"session_search"},
+		RequiredToolCounts: map[string]int{
+			"session_search": 1,
+		},
+		RequiredToolArgContains: []ToolArgContainsRequirement{
+			{Tool: "session_search", Arg: "query", Substring: "Alpha Coast"},
+		},
+		RequiredToolResultText: map[string][]string{
+			"session_search": {"HIST-STOCK-44", "inventory-drag", "market-alpha"},
+		},
+		RequiredFinalText:  []string{"HIST-STOCK-44", "inventory-drag", "market-alpha"},
+		ForbiddenFinalText: []string{"HIST-OLD-00"},
+		ForbiddenTools:     []string{"memory", "read_file", "shell", "write_file", "edit_file"},
+		ProtectedFiles:     []string{".affentctl/market-alpha.jsonl", ".affentctl/distractor.jsonl", "README.md"},
+		MaxSuccessfulToolCallsByTool: map[string]int{
+			"session_search": 1,
+		},
+		MaxTurns: 5,
+	}
+}
+
 func memoryConfirmedWriteStatsScenario() BatchScenario {
 	return BatchScenario{
 		Name:         "memory-confirmed-write-stats",

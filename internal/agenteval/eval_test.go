@@ -536,6 +536,7 @@ func TestSelectBatchScenariosForSuite(t *testing.T) {
 	foundPlanSkip := false
 	foundPlanResume := false
 	foundMemoryRecall := false
+	foundSessionHistoryRecall := false
 	foundMemoryWriteStats := false
 	foundSymbolContext := false
 	foundSymbolContextRuntimeCapabilities := false
@@ -629,6 +630,21 @@ func TestSelectBatchScenariosForSuite(t *testing.T) {
 			}
 			if len(scenario.RequiredToolArgContains) != 2 {
 				t.Fatalf("memory-cross-session-recall RequiredToolArgContains = %#v, want action/query constraints", scenario.RequiredToolArgContains)
+			}
+		}
+		if scenario.Name == "session-history-cross-session-recall" {
+			foundSessionHistoryRecall = true
+			if scenario.SessionID != "history-reader" {
+				t.Fatalf("session-history-cross-session-recall SessionID = %q, want history-reader", scenario.SessionID)
+			}
+			if !stringSliceContains(scenario.RequiredTools, "session_search") {
+				t.Fatalf("session-history-cross-session-recall RequiredTools = %#v, want session_search", scenario.RequiredTools)
+			}
+			if scenario.RequiredToolCounts["session_search"] != 1 || scenario.MaxSuccessfulToolCallsByTool["session_search"] != 1 {
+				t.Fatalf("session-history-cross-session-recall tool counts = required:%#v max:%#v", scenario.RequiredToolCounts, scenario.MaxSuccessfulToolCallsByTool)
+			}
+			if len(scenario.RequiredToolArgContains) != 1 {
+				t.Fatalf("session-history-cross-session-recall RequiredToolArgContains = %#v, want query constraint", scenario.RequiredToolArgContains)
 			}
 		}
 		if scenario.Name == "memory-confirmed-write-stats" {
@@ -746,6 +762,9 @@ func TestSelectBatchScenariosForSuite(t *testing.T) {
 	if !foundMemoryRecall {
 		t.Fatalf("small-model-tools suite missing memory-cross-session-recall")
 	}
+	if !foundSessionHistoryRecall {
+		t.Fatalf("small-model-tools suite missing session-history-cross-session-recall")
+	}
 	if !foundMemoryWriteStats {
 		t.Fatalf("small-model-tools suite missing memory-confirmed-write-stats")
 	}
@@ -778,8 +797,8 @@ func TestSelectLongRunSuite(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(scenarios) != 6 {
-		t.Fatalf("long-run suite size = %d, want 6", len(scenarios))
+	if len(scenarios) != 7 {
+		t.Fatalf("long-run suite size = %d, want 7", len(scenarios))
 	}
 	seen := map[string]BatchScenario{}
 	for _, scenario := range scenarios {
@@ -853,6 +872,20 @@ func TestSelectLongRunSuite(t *testing.T) {
 	}
 	if memoryRecall.RequiredToolCounts["memory"] != 1 || memoryRecall.MaxSuccessfulToolCallsByTool["memory"] != 1 {
 		t.Fatalf("memory recall tool constraints = counts:%#v max:%#v", memoryRecall.RequiredToolCounts, memoryRecall.MaxSuccessfulToolCallsByTool)
+	}
+
+	sessionHistory, ok := seen["session-history-cross-session-recall"]
+	if !ok {
+		t.Fatalf("long-run suite missing session history recall scenario")
+	}
+	if sessionHistory.SessionID != "history-reader" {
+		t.Fatalf("session history fields = session:%q", sessionHistory.SessionID)
+	}
+	if sessionHistory.RequiredToolCounts["session_search"] != 1 || sessionHistory.MaxSuccessfulToolCallsByTool["session_search"] != 1 {
+		t.Fatalf("session history tool constraints = counts:%#v max:%#v", sessionHistory.RequiredToolCounts, sessionHistory.MaxSuccessfulToolCallsByTool)
+	}
+	if !stringSliceContains(sessionHistory.ForbiddenFinalText, "HIST-OLD-00") {
+		t.Fatalf("session history final text constraints = forbidden:%#v", sessionHistory.ForbiddenFinalText)
 	}
 
 	memoryWrite, ok := seen["memory-confirmed-write-stats"]

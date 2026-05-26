@@ -728,11 +728,11 @@ Current built-in suites:
 Run scenarios:
 
 ```bash
-go run ./cmd/affenteval --suite small-model-tools --runtime-tools workspace,memory,plan,skill,delegation --temperature 0
-go run ./cmd/affenteval --suite long-run --runtime-tools workspace,memory,plan --temperature 0
+go run ./cmd/affenteval --suite small-model-tools --runtime-tools workspace,recall,plan,skill,delegation --temperature 0
+go run ./cmd/affenteval --suite long-run --runtime-tools workspace,recall,plan --temperature 0
 go run ./cmd/affenteval --suite live-web --runtime-web --runtime-browser --temperature 0 --keep-workspaces
 go run ./cmd/affenteval --scenario coding-python-slug --runtime-tools workspace --temperature 0
-go run ./cmd/affenteval --suite small-model-tools --runtime-tools workspace,memory,plan,skill,delegation --jsonl > eval.jsonl
+go run ./cmd/affenteval --suite small-model-tools --runtime-tools workspace,recall,plan,skill,delegation --jsonl > eval.jsonl
 ```
 
 Run a one-off prompt through the same batch harness:
@@ -768,8 +768,8 @@ seen across the batch.
 Run through Docker:
 
 ```bash
-make eval-container EVAL_RUNTIME_TOOLS=workspace,memory,plan,skill,delegation EVAL_ARGS='--suite small-model-tools --temperature 0'
-make eval-container EVAL_RUNTIME_TOOLS=workspace,memory,plan EVAL_ARGS='--suite long-run --temperature 0'
+make eval-container EVAL_RUNTIME_TOOLS=workspace,recall,plan,skill,delegation EVAL_ARGS='--suite small-model-tools --temperature 0'
+make eval-container EVAL_RUNTIME_TOOLS=workspace,recall,plan EVAL_ARGS='--suite long-run --temperature 0'
 make eval-agent-container EVAL_RUNTIME_TOOLS=workspace EVAL_ARGS='--scenario coding-python-slug --temperature 0'
 make eval-agent-container EVAL_RUNTIME_TOOLS=readonly_workspace EVAL_ARGS='--scenario repo-inspection --temperature 0'
 make eval-agent-container EVAL_RUNTIME_MEMORY=true EVAL_ARGS='--scenario your-memory-scenario --temperature 0'
