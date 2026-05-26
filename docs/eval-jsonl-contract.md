@@ -40,8 +40,8 @@ Shared metadata fields:
 - `min_pass_rate`, `min_completion_rate`,
   `min_source_access_verified_rate`, `max_tool_error_rate`,
   `max_tool_context_truncation_rate`, `max_tool_result_truncation_rate`,
-  `max_avg_total_tokens`: optional quality gate thresholds configured for the
-  run. Disabled gates are omitted.
+  `max_avg_context_compactions`, `max_avg_total_tokens`: optional quality gate
+  thresholds configured for the run. Disabled gates are omitted.
 
 ## Scenario Record
 
