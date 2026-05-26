@@ -1792,7 +1792,7 @@ func TestWriteScenarioDebugArtifactsIndexesTraceAndFinalText(t *testing.T) {
 	}
 	for _, want := range []string{
 		"# Affent Eval Timeline",
-		"metrics: tools=7 tool_errors=1 repaired=0 canonicalized=0 loop_guard=1 forced_no_tools=0 evidence=1/2_verified,network=1,partial=1,discovery=1 memory_updates=2(add:1,replace:1,remove:0) session_search=calls:1,results:2,context:1,terms:2 tool_context_trunc=2,omitted=8192 compactions=1,reactive=1,removed=12,summary_bytes=512,summary_missing=0,summary_empty=0 tokens=100/20",
+		"metrics: tools=7 tool_errors=1 repaired=0 canonicalized=0 loop_guard=1 forced_no_tools=0 evidence=1/2_verified,network=1,partial=1,discovery=1 memory_updates=2(add:1,replace:1,remove:0) session_search=calls:1,results:2,context:1,terms:2,terms_per_call:2.00 tool_context_trunc=2,omitted=8192 compactions=1,reactive=1,removed=12,summary_bytes=512,summary_missing=0,summary_empty=0 tokens=100/20",
 		"## Runtime Surface",
 		"`web_fetch`",
 		"## Tool Repair",

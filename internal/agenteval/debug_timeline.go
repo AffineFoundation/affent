@@ -134,11 +134,12 @@ func timelineMetricsSummary(res BatchResult) string {
 		res.ToolStats.SessionSearchResults > 0 ||
 		res.ToolStats.SessionSearchContextHits > 0 ||
 		res.ToolStats.SessionSearchMatchedTerms > 0 {
-		parts = append(parts, fmt.Sprintf("session_search=calls:%d,results:%d,context:%d,terms:%d",
+		parts = append(parts, fmt.Sprintf("session_search=calls:%d,results:%d,context:%d,terms:%d,terms_per_call:%s",
 			res.ToolStats.SessionSearchCalls,
 			res.ToolStats.SessionSearchResults,
 			res.ToolStats.SessionSearchContextHits,
 			res.ToolStats.SessionSearchMatchedTerms,
+			timelineOptionalNumber(timelineOptionalRatio(res.ToolStats.SessionSearchMatchedTerms, res.ToolStats.SessionSearchCalls)),
 		))
 	}
 	if res.ToolStats.ToolContextTruncated > 0 || res.ToolStats.ToolContextOmittedBytes > 0 {
@@ -1212,6 +1213,21 @@ func timelineBlock(s string, maxBytes int) string {
 
 func timelineInline(s string, maxBytes int) string {
 	return textutil.CompactWhitespace(textutil.Preview(s, maxBytes, "..."))
+}
+
+func timelineOptionalRatio(numerator, denominator int) *float64 {
+	if denominator <= 0 {
+		return nil
+	}
+	v := float64(numerator) / float64(denominator)
+	return &v
+}
+
+func timelineOptionalNumber(value *float64) string {
+	if value == nil {
+		return "n/a"
+	}
+	return fmt.Sprintf("%.2f", *value)
 }
 
 func indentTimelineText(s, prefix string) string {

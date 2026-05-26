@@ -432,11 +432,12 @@ showing the blocked tool, compact args/result guidance, failure kind, and
 whether the rejection came from loop guard logic or tool policy. Durable
 transcript recall is tracked with
 `session_search_calls`, `session_search_results`,
-`session_search_context_hits`, and `session_search_matched_terms`. Eval debug
-manifests, timelines, and JSONL records also include bounded
-`session_search_examples` with the query, matched session, turn, matched terms,
-context flag, and compact snippet preview, so poor resume/recovery runs can be
-debugged without opening the full transcript. Each `tool.result` can expose
+`session_search_context_hits`, `session_search_matched_terms`, and matched
+terms per call. Eval debug manifests, timelines, and JSONL records also include
+bounded `session_search_examples` with the query, matched session, turn,
+matched terms, context flag, and compact snippet preview, so poor
+resume/recovery runs can be debugged without opening the full transcript. Each
+`tool.result` can expose
 `failure_kind` plus `failure_kinds`, so eval runs and UIs can distinguish a
 useful recovery path from a run that simply accumulated failed retrievals,
 discovery-only pages, empty recall, or policy violations.
