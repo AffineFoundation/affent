@@ -159,6 +159,124 @@ func TestLoad_RecognizesAllSupportedFiles(t *testing.T) {
 	}
 }
 
+func TestLoad_IncludesRepoMap(t *testing.T) {
+	dir := t.TempDir()
+	mustDir := func(name string) {
+		if err := os.Mkdir(filepath.Join(dir, name), 0o755); err != nil {
+			t.Fatal(err)
+		}
+	}
+	mustDir("cmd")
+	mustDir("internal")
+	mustDir("docs")
+	mustDir(".git")
+	mustDir("node_modules")
+	mustDir(filepath.Join("cmd", "affentctl"))
+	mustDir(filepath.Join("cmd", "affentserve"))
+	writeFile(t, dir, "go.mod", "module example.test")
+
+	got := Load(dir)
+	for _, want := range []string{
+		"REPO MAP",
+		"Top-level directories:",
+		"- cmd/",
+		"affentctl",
+		"affentserve",
+		"- internal/",
+		"- docs/",
+		"Top-level files:",
+		"go.mod",
+	} {
+		if !strings.Contains(got, want) {
+			t.Fatalf("repo map missing %q:\n%s", want, got)
+		}
+	}
+	for _, forbidden := range []string{".git/", "node_modules"} {
+		if strings.Contains(got, forbidden) {
+			t.Fatalf("repo map should skip %q:\n%s", forbidden, got)
+		}
+	}
+}
+
+func TestLoad_RespectsGitignoreInRepoMapAndGoHints(t *testing.T) {
+	dir := t.TempDir()
+	writeFile(t, dir, ".gitignore", "generated/\n*.jsonl\n")
+	mustDir := func(name string) {
+		if err := os.MkdirAll(filepath.Join(dir, name), 0o755); err != nil {
+			t.Fatal(err)
+		}
+	}
+	mustDir("generated")
+	mustDir("internal/app")
+	writeFile(t, dir, "generated/skip.go", `package generated
+
+func Hidden() {}
+`)
+	writeFile(t, dir, "internal/app/main.go", `package app
+
+func Visible() {}
+`)
+	writeFile(t, dir, "run.jsonl", "ignored runtime record")
+
+	got := Load(dir)
+	if strings.Contains(got, "generated/skip.go") || strings.Contains(got, "Hidden") || strings.Contains(got, "run.jsonl") {
+		t.Fatalf("project context should skip gitignored content:\n%s", got)
+	}
+	if !strings.Contains(got, "internal/app") || !strings.Contains(got, "Visible") {
+		t.Fatalf("project context should still include visible Go hints:\n%s", got)
+	}
+}
+
+func TestLoad_IncludesGoSymbolHints(t *testing.T) {
+	dir := t.TempDir()
+	mustDir := func(name string) {
+		if err := os.MkdirAll(filepath.Join(dir, name), 0o755); err != nil {
+			t.Fatal(err)
+		}
+	}
+	mustDir("cmd/affentctl")
+	mustDir("internal/projectcontext")
+	mustDir(".git")
+	writeFile(t, dir, "cmd/affentctl/main.go", `package main
+
+type Config struct{}
+
+func main() {}
+`)
+	writeFile(t, dir, "internal/projectcontext/projectcontext.go", `package projectcontext
+
+type Index struct{}
+
+func Load() {}
+`)
+	writeFile(t, dir, "internal/projectcontext/projectcontext_test.go", `package projectcontext
+
+func TestIgnoreMe(t *testing.T) {}
+`)
+
+	got := Load(dir)
+	for _, want := range []string{
+		"GO SYMBOL HINTS",
+		"cmd/affentctl",
+		"main.go",
+		"Config",
+		"main",
+		"internal/projectcontext",
+		"projectcontext.go",
+		"Index",
+		"Load",
+	} {
+		if !strings.Contains(got, want) {
+			t.Fatalf("go symbol hints missing %q:\n%s", want, got)
+		}
+	}
+	for _, forbidden := range []string{"TestIgnoreMe", ".git"} {
+		if strings.Contains(got, forbidden) {
+			t.Fatalf("go symbol hints should skip %q:\n%s", forbidden, got)
+		}
+	}
+}
+
 func TestLoad_NonexistentDir(t *testing.T) {
 	if got := Load(filepath.Join(t.TempDir(), "does-not-exist")); got != "" {
 		t.Fatalf("expected empty for nonexistent dir, got %q", got)
@@ -167,7 +285,7 @@ func TestLoad_NonexistentDir(t *testing.T) {
 
 func TestTruncateFile_UTF8Safe(t *testing.T) {
 	s := strings.Repeat("🔧", 100) + strings.Repeat("привет", 50)
-	out := truncateFile(s, 50)
+	out := truncateFile(s, 50, true)
 	if len(out) > 50 {
 		t.Fatalf("truncated string exceeds limit: %d > 50", len(out))
 	}
