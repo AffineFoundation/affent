@@ -212,10 +212,11 @@ type ToolRuntimeStats struct {
 	// SourceAccess counters classify tool results that expose normalized source
 	// evidence headers. They measure evidence quality separately from raw tool
 	// volume, so evals can distinguish verified reads from discovery-only pages.
-	SourceAccessResults       int `json:"source_access_results,omitempty"`
-	SourceAccessVerified      int `json:"source_access_verified,omitempty"`
-	SourceAccessDiscoveryOnly int `json:"source_access_discovery_only,omitempty"`
-	SourceAccessNetwork       int `json:"source_access_network,omitempty"`
+	SourceAccessResults        int `json:"source_access_results,omitempty"`
+	SourceAccessVerified       int `json:"source_access_verified,omitempty"`
+	SourceAccessDiscoveryOnly  int `json:"source_access_discovery_only,omitempty"`
+	SourceAccessNetwork        int `json:"source_access_network,omitempty"`
+	SourceAccessDynamicPartial int `json:"source_access_dynamic_partial,omitempty"`
 	// MemoryUpdate counters count confirmed durable memory mutations only:
 	// memory tool calls with ok=true and action add/replace/remove.
 	MemoryUpdates       int `json:"memory_updates,omitempty"`

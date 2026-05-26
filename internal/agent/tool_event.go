@@ -113,6 +113,7 @@ func toolRuntimeStatsPtr(stats sse.ToolRuntimeStats) *sse.ToolRuntimeStats {
 		stats.SourceAccessVerified == 0 &&
 		stats.SourceAccessDiscoveryOnly == 0 &&
 		stats.SourceAccessNetwork == 0 &&
+		stats.SourceAccessDynamicPartial == 0 &&
 		stats.MemoryUpdates == 0 &&
 		stats.MemoryUpdateAdd == 0 &&
 		stats.MemoryUpdateReplace == 0 &&
@@ -164,6 +165,9 @@ func recordSourceAccessStats(stats *sse.ToolRuntimeStats, result string) {
 	}
 	if info.IsNetworkSource() {
 		stats.SourceAccessNetwork++
+	}
+	if sourceaccess.HasDynamicPartialEvidence(result) {
+		stats.SourceAccessDynamicPartial++
 	}
 }
 

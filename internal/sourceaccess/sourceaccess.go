@@ -70,6 +70,14 @@ func (i Info) IsNetworkSource() bool {
 	return i.URLField == "browser_network_url" || i.SourceMethod == "network_xhr_fetch"
 }
 
+// HasDynamicPartialEvidence reports that a rendered/browser source was reached
+// but its visible DOM also warned about dynamic metric widgets or equivalent
+// partial evidence. Callers should treat this as "readable page evidence with
+// hidden fields", not as a complete factual source for dashboard metrics.
+func HasDynamicPartialEvidence(result string) bool {
+	return strings.Contains(result, "empty_dynamic_metric_widgets:")
+}
+
 // FirstInfoFromResult returns the first SourceAccess record visible in a full
 // tool result. The boolean reports whether a SourceAccess line was found.
 func FirstInfoFromResult(result string) (Info, bool) {

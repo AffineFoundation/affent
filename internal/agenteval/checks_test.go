@@ -366,20 +366,21 @@ func TestToolRequestRepaired(t *testing.T) {
 
 func TestToolStatsAtLeast(t *testing.T) {
 	trace := Trace{ToolStats: ToolRuntimeStats{
-		ToolArgsRepaired:          2,
-		ToolRepairCalls:           2,
-		ToolRepairSucceeded:       1,
-		ToolRepairFailed:          1,
-		ToolRepairNotes:           3,
-		ToolErrors:                1,
-		ToolDurationMS:            25,
-		SourceAccessResults:       3,
-		SourceAccessVerified:      2,
-		SourceAccessDiscoveryOnly: 1,
-		SourceAccessNetwork:       1,
-		MemoryUpdates:             2,
-		MemoryUpdateAdd:           1,
-		MemoryUpdateReplace:       1,
+		ToolArgsRepaired:           2,
+		ToolRepairCalls:            2,
+		ToolRepairSucceeded:        1,
+		ToolRepairFailed:           1,
+		ToolRepairNotes:            3,
+		ToolErrors:                 1,
+		ToolDurationMS:             25,
+		SourceAccessResults:        3,
+		SourceAccessVerified:       2,
+		SourceAccessDiscoveryOnly:  1,
+		SourceAccessNetwork:        1,
+		SourceAccessDynamicPartial: 1,
+		MemoryUpdates:              2,
+		MemoryUpdateAdd:            1,
+		MemoryUpdateReplace:        1,
 	}}
 	if res := ToolStatsAtLeast("tool_args_repaired", 2).Eval(trace); !res.Pass {
 		t.Fatalf("expected stats check to pass: %+v", res)
@@ -407,6 +408,9 @@ func TestToolStatsAtLeast(t *testing.T) {
 	}
 	if res := ToolStatsAtLeast("source_access_network", 1).Eval(trace); !res.Pass {
 		t.Fatalf("expected source_access_network stats check to pass: %+v", res)
+	}
+	if res := ToolStatsAtLeast("source_access_dynamic_partial", 1).Eval(trace); !res.Pass {
+		t.Fatalf("expected source_access_dynamic_partial stats check to pass: %+v", res)
 	}
 	if res := ToolStatsAtLeast("memory_updates", 2).Eval(trace); !res.Pass {
 		t.Fatalf("expected memory_updates stats check to pass: %+v", res)

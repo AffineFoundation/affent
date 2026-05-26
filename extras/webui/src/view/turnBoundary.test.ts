@@ -46,13 +46,14 @@ describe("turnBoundary view model", () => {
         toolStats: {
           source_access_verified: 2,
           source_access_network: 1,
+          source_access_dynamic_partial: 1,
         },
       }),
       turnNumber: 3,
     });
 
-    expect(view.meta).toEqual(["2 sources", "1 network"]);
-    expect(view.ariaLabel).toContain("2 sources. 1 network");
+    expect(view.meta).toEqual(["2 sources", "1 network", "1 partial"]);
+    expect(view.ariaLabel).toContain("2 sources. 1 network. 1 partial");
   });
 
   it("marks a max-turn boundary as continued when a later message has taken over", () => {

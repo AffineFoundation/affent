@@ -80,11 +80,12 @@ describe("deriveWorkflowStatus", () => {
             tool_requests: 1,
             source_access_verified: 2,
             source_access_network: 1,
+            source_access_dynamic_partial: 1,
           },
         },
       },
     ]));
 
-    expect(status.detail).toBe("2 evidence sources verified, including 1 network response.");
+    expect(status.detail).toBe("1 network source verified after 1 partial dynamic source.");
   });
 });

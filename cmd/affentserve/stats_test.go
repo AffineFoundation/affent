@@ -413,47 +413,49 @@ func TestSession_ToolStatsSnapshot_AccumulatesFromTurnEnd(t *testing.T) {
 			TurnID: "t1",
 			Reason: sse.TurnEndCompleted,
 			ToolStats: &sse.ToolRuntimeStats{
-				ToolRequests:              2,
-				ToolNameCanonicalized:     1,
-				ToolArgsRepaired:          1,
-				ToolRepairCalls:           1,
-				ToolRepairSucceeded:       1,
-				ToolRepairNotes:           3,
-				ToolRepairByKind:          map[string]int{"tool_name": 1, "alias_rename": 2},
-				ToolErrors:                0,
-				ToolDurationMS:            15,
-				LoopGuardInterventions:    1,
-				SourceAccessResults:       2,
-				SourceAccessVerified:      1,
-				SourceAccessDiscoveryOnly: 1,
-				MemoryUpdates:             2,
-				MemoryUpdateAdd:           1,
-				MemoryUpdateReplace:       1,
-				ToolContextTruncated:      2,
-				ToolContextOmittedBytes:   2048,
+				ToolRequests:               2,
+				ToolNameCanonicalized:      1,
+				ToolArgsRepaired:           1,
+				ToolRepairCalls:            1,
+				ToolRepairSucceeded:        1,
+				ToolRepairNotes:            3,
+				ToolRepairByKind:           map[string]int{"tool_name": 1, "alias_rename": 2},
+				ToolErrors:                 0,
+				ToolDurationMS:             15,
+				LoopGuardInterventions:     1,
+				SourceAccessResults:        2,
+				SourceAccessVerified:       1,
+				SourceAccessDiscoveryOnly:  1,
+				SourceAccessDynamicPartial: 1,
+				MemoryUpdates:              2,
+				MemoryUpdateAdd:            1,
+				MemoryUpdateReplace:        1,
+				ToolContextTruncated:       2,
+				ToolContextOmittedBytes:    2048,
 			},
 		},
 		{
 			TurnID: "t2",
 			Reason: sse.TurnEndMaxTurns,
 			ToolStats: &sse.ToolRuntimeStats{
-				ToolRequests:            1,
-				ToolArgsRepaired:        1,
-				ToolRepairCalls:         1,
-				ToolRepairFailed:        1,
-				ToolRepairNotes:         1,
-				ToolRepairByKind:        map[string]int{"alias_rename": 1},
-				ToolFailureByKind:       map[string]int{"invalid_args": 1},
-				ToolErrors:              1,
-				ToolDurationMS:          7,
-				ForcedNoTools:           1,
-				SourceAccessResults:     1,
-				SourceAccessVerified:    1,
-				SourceAccessNetwork:     1,
-				MemoryUpdates:           1,
-				MemoryUpdateRemove:      1,
-				ToolContextTruncated:    1,
-				ToolContextOmittedBytes: 512,
+				ToolRequests:               1,
+				ToolArgsRepaired:           1,
+				ToolRepairCalls:            1,
+				ToolRepairFailed:           1,
+				ToolRepairNotes:            1,
+				ToolRepairByKind:           map[string]int{"alias_rename": 1},
+				ToolFailureByKind:          map[string]int{"invalid_args": 1},
+				ToolErrors:                 1,
+				ToolDurationMS:             7,
+				ForcedNoTools:              1,
+				SourceAccessResults:        1,
+				SourceAccessVerified:       1,
+				SourceAccessNetwork:        1,
+				SourceAccessDynamicPartial: 1,
+				MemoryUpdates:              1,
+				MemoryUpdateRemove:         1,
+				ToolContextTruncated:       1,
+				ToolContextOmittedBytes:    512,
 			},
 		},
 	} {
@@ -485,6 +487,7 @@ func TestSession_ToolStatsSnapshot_AccumulatesFromTurnEnd(t *testing.T) {
 			got.SourceAccessVerified == 2 &&
 			got.SourceAccessDiscovery == 1 &&
 			got.SourceAccessNetwork == 1 &&
+			got.SourceAccessDynamic == 2 &&
 			got.MemoryUpdates == 3 &&
 			got.MemoryUpdateAdd == 1 &&
 			got.MemoryUpdateReplace == 1 &&
@@ -513,6 +516,7 @@ func TestSession_ToolStatsSnapshot_AccumulatesFromTurnEnd(t *testing.T) {
 	}
 	if resp.Sessions[0].Tools.ToolRepairFailed != 1 || resp.Aggregate.Tools.ToolRepairSucceeded != 1 ||
 		resp.Sessions[0].Tools.SourceAccessVerified != 2 || resp.Aggregate.Tools.SourceAccessNetwork != 1 ||
+		resp.Aggregate.Tools.SourceAccessDynamic != 2 ||
 		resp.Sessions[0].Tools.MemoryUpdates != 3 || resp.Aggregate.Tools.MemoryUpdateRemove != 1 ||
 		resp.Sessions[0].Tools.ToolContextTruncated != 3 || resp.Aggregate.Tools.ToolContextOmitted != 2560 {
 		t.Fatalf("stats tool snapshots = session:%+v aggregate:%+v", resp.Sessions[0].Tools, resp.Aggregate.Tools)
@@ -526,6 +530,7 @@ func TestSession_ToolStatsSnapshot_AccumulatesFromTurnEnd(t *testing.T) {
 	summary := summarizeActiveSession(s, pool.cfg)
 	if summary.Tools == nil || summary.Tools.ToolRepairCalls != 2 || summary.Tools.ToolErrors != 1 ||
 		summary.Tools.SourceAccessResults != 3 || summary.Tools.SourceAccessDiscovery != 1 ||
+		summary.Tools.SourceAccessDynamic != 2 ||
 		summary.Tools.MemoryUpdates != 3 || summary.Tools.MemoryUpdateAdd != 1 ||
 		summary.Tools.ToolContextTruncated != 3 || summary.Tools.ToolContextOmitted != 2560 {
 		t.Fatalf("active session summary tools = %+v", summary.Tools)

@@ -59,6 +59,16 @@ func TestParseLineNetworkSource(t *testing.T) {
 	}
 }
 
+func TestHasDynamicPartialEvidence(t *testing.T) {
+	result := "SourceAccess: browser_rendered_url=https://taostats.io/subnets/120\nPAGE DIAGNOSTICS:\n- empty_dynamic_metric_widgets: 2 visible custom metric widget(s) exposed no text value"
+	if !HasDynamicPartialEvidence(result) {
+		t.Fatal("HasDynamicPartialEvidence = false, want true")
+	}
+	if HasDynamicPartialEvidence("SourceAccess: browser_network_url=https://example.com/api; source_method=network_xhr_fetch") {
+		t.Fatal("network evidence without diagnostics should not be dynamic partial")
+	}
+}
+
 func TestFormatSourceAccessLine(t *testing.T) {
 	got := FormatSourceAccessLine("browser_rendered_url", "https://example.com/final", "https://example.com/start", "page_text_below=verified_page_evidence", "; snapshot_id=7")
 	want := "SourceAccess: browser_rendered_url=https://example.com/final; requested_url=https://example.com/start; page_text_below=verified_page_evidence; snapshot_id=7\n"

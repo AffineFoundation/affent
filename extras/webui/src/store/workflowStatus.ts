@@ -120,6 +120,11 @@ function completionDetail(turn: TurnState): string {
   if (turn.toolStats?.tool_errors) return `${turn.toolStats.tool_errors} action issue(s) surfaced.`;
   const verifiedSources = turn.toolStats?.source_access_verified ?? 0;
   const networkSources = turn.toolStats?.source_access_network ?? 0;
+  const dynamicPartialSources = turn.toolStats?.source_access_dynamic_partial ?? 0;
+  if (dynamicPartialSources > 0 && networkSources > 0) {
+    return `${networkSources} network ${pluralize("source", networkSources)} verified after ${dynamicPartialSources} partial dynamic ${pluralize("source", dynamicPartialSources)}.`;
+  }
+  if (dynamicPartialSources > 0) return `${dynamicPartialSources} partial dynamic ${pluralize("source", dynamicPartialSources)} needs follow-up evidence.`;
   if (verifiedSources > 0 && networkSources > 0) {
     return `${verifiedSources} evidence ${pluralize("source", verifiedSources)} verified, including ${networkSources} network ${pluralize("response", networkSources)}.`;
   }

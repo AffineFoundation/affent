@@ -351,6 +351,7 @@ function turnEndMeta(event: NormalizedEvent, turn: string | undefined): string[]
   const toolDuration = typeof toolStats?.tool_duration_ms === "number" ? toolStats.tool_duration_ms : undefined;
   const verifiedSources = typeof toolStats?.source_access_verified === "number" ? toolStats.source_access_verified : undefined;
   const networkSources = typeof toolStats?.source_access_network === "number" ? toolStats.source_access_network : undefined;
+  const dynamicPartialSources = typeof toolStats?.source_access_dynamic_partial === "number" ? toolStats.source_access_dynamic_partial : undefined;
 
   return compact([
     turn,
@@ -359,6 +360,7 @@ function turnEndMeta(event: NormalizedEvent, turn: string | undefined): string[]
     typeof toolErrors === "number" && toolErrors > 0 ? `${toolErrors} failed` : undefined,
     typeof verifiedSources === "number" && verifiedSources > 0 ? `${verifiedSources} sources` : undefined,
     typeof networkSources === "number" && networkSources > 0 ? `${networkSources} network` : undefined,
+    typeof dynamicPartialSources === "number" && dynamicPartialSources > 0 ? `${dynamicPartialSources} partial` : undefined,
     typeof toolDuration === "number" ? formatDuration(toolDuration) : undefined,
   ]);
 }

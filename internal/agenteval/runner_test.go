@@ -2645,6 +2645,7 @@ BODY_BYTES: 77
 			ToolStatsAtLeast("source_access_results", 2),
 			ToolStatsAtLeast("source_access_verified", 1),
 			ToolStatsAtLeast("source_access_network", 1),
+			ToolStatsAtLeast("source_access_dynamic_partial", 1),
 			FinalTextContains("market cap 201.04K T"),
 			FinalTextContains("price 0.06342 T"),
 			FinalTextContains("captured same-site network response"),

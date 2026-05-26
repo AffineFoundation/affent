@@ -161,6 +161,7 @@ describe("buildTurnWorkSummary", () => {
             tool_requests: 1,
             source_access_verified: 2,
             source_access_network: 1,
+            source_access_dynamic_partial: 1,
             tool_duration_ms: 64,
           },
         },
@@ -169,9 +170,11 @@ describe("buildTurnWorkSummary", () => {
 
     expect(summary.items).toContainEqual({ label: "2 verified sources", tone: "info" });
     expect(summary.items).toContainEqual({ label: "1 network source", tone: "info" });
+    expect(summary.items).toContainEqual({ label: "1 partial source", tone: "warning" });
     expect(summary.headlineItems).toEqual([
       { label: "2 verified sources", tone: "info" },
       { label: "1 network source", tone: "info" },
+      { label: "1 partial source", tone: "warning" },
     ]);
   });
 

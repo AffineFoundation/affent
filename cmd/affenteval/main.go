@@ -174,6 +174,7 @@ type batchSummary struct {
 	SourceAccessVerified       int
 	SourceAccessDiscoveryOnly  int
 	SourceAccessNetwork        int
+	SourceAccessDynamicPartial int
 	MemoryUpdates              int
 	MemoryUpdateAdd            int
 	MemoryUpdateReplace        int
@@ -263,6 +264,7 @@ func (s *batchSummary) add(res agenteval.BatchResult) {
 	s.SourceAccessVerified += res.ToolStats.SourceAccessVerified
 	s.SourceAccessDiscoveryOnly += res.ToolStats.SourceAccessDiscoveryOnly
 	s.SourceAccessNetwork += res.ToolStats.SourceAccessNetwork
+	s.SourceAccessDynamicPartial += res.ToolStats.SourceAccessDynamicPartial
 	s.MemoryUpdates += res.ToolStats.MemoryUpdates
 	s.MemoryUpdateAdd += res.ToolStats.MemoryUpdateAdd
 	s.MemoryUpdateReplace += res.ToolStats.MemoryUpdateReplace
@@ -395,11 +397,12 @@ func printBatchSummary(w io.Writer, s batchSummary) {
 		fmt.Fprintf(w, " tool_failure_kinds=%s", formatStringIntCounts(s.ToolFailureByKind))
 	}
 	if hasBatchSourceAccessStats(s) {
-		fmt.Fprintf(w, " source_access=results:%d,verified:%d,discovery:%d,network:%d",
+		fmt.Fprintf(w, " source_access=results:%d,verified:%d,discovery:%d,network:%d,dynamic_partial:%d",
 			s.SourceAccessResults,
 			s.SourceAccessVerified,
 			s.SourceAccessDiscoveryOnly,
 			s.SourceAccessNetwork,
+			s.SourceAccessDynamicPartial,
 		)
 	}
 	if hasBatchMemoryUpdateStats(s) {
@@ -459,7 +462,8 @@ func hasBatchSourceAccessStats(s batchSummary) bool {
 	return s.SourceAccessResults > 0 ||
 		s.SourceAccessVerified > 0 ||
 		s.SourceAccessDiscoveryOnly > 0 ||
-		s.SourceAccessNetwork > 0
+		s.SourceAccessNetwork > 0 ||
+		s.SourceAccessDynamicPartial > 0
 }
 
 func printDelegationRollup(w io.Writer, focusedTaskCalls int, focusedTaskByType map[string]int, focusedTaskErrors int, subagentCalls int, subagentByMode map[string]int, subagentErrors int) {
@@ -771,6 +775,7 @@ type batchResultRecord struct {
 	SourceAccessVerified       int                                        `json:"source_access_verified"`
 	SourceAccessDiscoveryOnly  int                                        `json:"source_access_discovery_only"`
 	SourceAccessNetwork        int                                        `json:"source_access_network"`
+	SourceAccessDynamicPartial int                                        `json:"source_access_dynamic_partial"`
 	MemoryUpdates              int                                        `json:"memory_updates"`
 	MemoryUpdateAdd            int                                        `json:"memory_update_add"`
 	MemoryUpdateReplace        int                                        `json:"memory_update_replace"`
@@ -845,6 +850,7 @@ type batchSummaryRecord struct {
 	SourceAccessVerified       int                                        `json:"source_access_verified"`
 	SourceAccessDiscoveryOnly  int                                        `json:"source_access_discovery_only"`
 	SourceAccessNetwork        int                                        `json:"source_access_network"`
+	SourceAccessDynamicPartial int                                        `json:"source_access_dynamic_partial"`
 	MemoryUpdates              int                                        `json:"memory_updates"`
 	MemoryUpdateAdd            int                                        `json:"memory_update_add"`
 	MemoryUpdateReplace        int                                        `json:"memory_update_replace"`
@@ -924,6 +930,7 @@ func printBatchResultJSONL(w io.Writer, meta evalJSONLMetadata, res agenteval.Ba
 		SourceAccessVerified:       res.ToolStats.SourceAccessVerified,
 		SourceAccessDiscoveryOnly:  res.ToolStats.SourceAccessDiscoveryOnly,
 		SourceAccessNetwork:        res.ToolStats.SourceAccessNetwork,
+		SourceAccessDynamicPartial: res.ToolStats.SourceAccessDynamicPartial,
 		MemoryUpdates:              res.ToolStats.MemoryUpdates,
 		MemoryUpdateAdd:            res.ToolStats.MemoryUpdateAdd,
 		MemoryUpdateReplace:        res.ToolStats.MemoryUpdateReplace,
@@ -993,6 +1000,7 @@ func printBatchSummaryJSONL(w io.Writer, meta evalJSONLMetadata, s batchSummary)
 		SourceAccessVerified:       s.SourceAccessVerified,
 		SourceAccessDiscoveryOnly:  s.SourceAccessDiscoveryOnly,
 		SourceAccessNetwork:        s.SourceAccessNetwork,
+		SourceAccessDynamicPartial: s.SourceAccessDynamicPartial,
 		MemoryUpdates:              s.MemoryUpdates,
 		MemoryUpdateAdd:            s.MemoryUpdateAdd,
 		MemoryUpdateReplace:        s.MemoryUpdateReplace,
@@ -1162,11 +1170,12 @@ func printBatchResult(w io.Writer, res agenteval.BatchResult) {
 		fmt.Fprintf(w, " tool_failure_kinds=%s", formatStringIntCounts(res.ToolStats.ToolFailureByKind))
 	}
 	if hasSourceAccessStats(res.ToolStats) {
-		fmt.Fprintf(w, " source_access=results:%d,verified:%d,discovery:%d,network:%d",
+		fmt.Fprintf(w, " source_access=results:%d,verified:%d,discovery:%d,network:%d,dynamic_partial:%d",
 			res.ToolStats.SourceAccessResults,
 			res.ToolStats.SourceAccessVerified,
 			res.ToolStats.SourceAccessDiscoveryOnly,
 			res.ToolStats.SourceAccessNetwork,
+			res.ToolStats.SourceAccessDynamicPartial,
 		)
 	}
 	if hasMemoryUpdateStats(res.ToolStats) {
@@ -1231,7 +1240,8 @@ func hasSourceAccessStats(stats agenteval.ToolRuntimeStats) bool {
 	return stats.SourceAccessResults > 0 ||
 		stats.SourceAccessVerified > 0 ||
 		stats.SourceAccessDiscoveryOnly > 0 ||
-		stats.SourceAccessNetwork > 0
+		stats.SourceAccessNetwork > 0 ||
+		stats.SourceAccessDynamicPartial > 0
 }
 
 func hasMemoryUpdateStats(stats agenteval.ToolRuntimeStats) bool {

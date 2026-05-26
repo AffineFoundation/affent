@@ -35,6 +35,7 @@ export function buildTurnWorkSummaryWithOptions(
   const durationMs = turn.toolStats?.tool_duration_ms ?? sumDurations(calls);
   const verifiedSources = turn.toolStats?.source_access_verified ?? 0;
   const networkSources = turn.toolStats?.source_access_network ?? 0;
+  const dynamicPartialSources = turn.toolStats?.source_access_dynamic_partial ?? 0;
   const actionLabel = actionSummary(calls);
   const items: WorkSummaryItem[] = [];
   const finalAnswerReady = turn.status === "completed" && Boolean(turn.assistantText.trim());
@@ -46,6 +47,7 @@ export function buildTurnWorkSummaryWithOptions(
   if (repaired) items.push({ label: `${repaired} repaired`, tone: "warning" });
   if (verifiedSources > 0) items.push({ label: `${verifiedSources} verified ${pluralize("source", verifiedSources)}`, tone: "info" });
   if (networkSources > 0) items.push({ label: `${networkSources} network ${pluralize("source", networkSources)}`, tone: "info" });
+  if (dynamicPartialSources > 0) items.push({ label: `${dynamicPartialSources} partial ${pluralize("source", dynamicPartialSources)}`, tone: "warning" });
   if (truncated) items.push({ label: `${truncated} truncated`, tone: "info" });
   if (artifacts.length) items.push({ label: artifactCountLabel(artifacts) ?? `${artifacts.length} file${artifacts.length === 1 ? "" : "s"}`, tone: "artifact" });
   if (durationMs != null && durationMs > 0) items.push({ label: formatDuration(durationMs), tone: "muted" });

@@ -72,6 +72,7 @@ type Session struct {
 	sourceAccessVerified   atomic.Int64
 	sourceAccessDiscovery  atomic.Int64
 	sourceAccessNetwork    atomic.Int64
+	sourceAccessDynamic    atomic.Int64
 	memoryUpdates          atomic.Int64
 	memoryUpdateAdd        atomic.Int64
 	memoryUpdateReplace    atomic.Int64
@@ -1365,6 +1366,7 @@ type ToolStatsSnapshot struct {
 	SourceAccessVerified   int64            `json:"source_access_verified"`
 	SourceAccessDiscovery  int64            `json:"source_access_discovery_only"`
 	SourceAccessNetwork    int64            `json:"source_access_network"`
+	SourceAccessDynamic    int64            `json:"source_access_dynamic_partial"`
 	MemoryUpdates          int64            `json:"memory_updates"`
 	MemoryUpdateAdd        int64            `json:"memory_update_add"`
 	MemoryUpdateReplace    int64            `json:"memory_update_replace"`
@@ -1399,6 +1401,7 @@ func (s *Session) ToolStatsSnapshot() ToolStatsSnapshot {
 		SourceAccessVerified:   s.sourceAccessVerified.Load(),
 		SourceAccessDiscovery:  s.sourceAccessDiscovery.Load(),
 		SourceAccessNetwork:    s.sourceAccessNetwork.Load(),
+		SourceAccessDynamic:    s.sourceAccessDynamic.Load(),
 		MemoryUpdates:          s.memoryUpdates.Load(),
 		MemoryUpdateAdd:        s.memoryUpdateAdd.Load(),
 		MemoryUpdateReplace:    s.memoryUpdateReplace.Load(),
@@ -1516,6 +1519,7 @@ func (s *Session) addToolStats(stats sse.ToolRuntimeStats) {
 	s.sourceAccessVerified.Add(int64(stats.SourceAccessVerified))
 	s.sourceAccessDiscovery.Add(int64(stats.SourceAccessDiscoveryOnly))
 	s.sourceAccessNetwork.Add(int64(stats.SourceAccessNetwork))
+	s.sourceAccessDynamic.Add(int64(stats.SourceAccessDynamicPartial))
 	s.memoryUpdates.Add(int64(stats.MemoryUpdates))
 	s.memoryUpdateAdd.Add(int64(stats.MemoryUpdateAdd))
 	s.memoryUpdateReplace.Add(int64(stats.MemoryUpdateReplace))
