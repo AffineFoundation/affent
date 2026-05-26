@@ -65,6 +65,11 @@ func TestRunHelpDoesNotLeakEnvSecrets(t *testing.T) {
 			t.Fatalf("--help missing env hint %q:\n%s", want, help)
 		}
 	}
+	for _, want := range []string{"-runtime-web", "-runtime-browser"} {
+		if !strings.Contains(help, want) {
+			t.Fatalf("--help missing runtime eval flag %q:\n%s", want, help)
+		}
+	}
 }
 
 func TestRunRejectsInvalidConfigBeforeScenarios(t *testing.T) {
@@ -464,7 +469,10 @@ func TestPrintBatchSummaryIncludesRepairOutcomesWithoutKinds(t *testing.T) {
 
 func TestPrintBatchResultJSONL(t *testing.T) {
 	var out bytes.Buffer
-	printBatchResultJSONL(&out, testEvalJSONLMetadata(), agenteval.BatchResult{
+	meta := testEvalJSONLMetadata()
+	meta.RuntimeWeb = true
+	meta.RuntimeBrowser = true
+	printBatchResultJSONL(&out, meta, agenteval.BatchResult{
 		BatchScenario:      "sample",
 		Workspace:          "/tmp/ws",
 		TracePath:          "/tmp/ws/trace.jsonl",
@@ -544,6 +552,8 @@ func TestPrintBatchResultJSONL(t *testing.T) {
 		"top_p":                         "0.9",
 		"max_tokens":                    "512",
 		"seed":                          "42",
+		"runtime_web":                   true,
+		"runtime_browser":               true,
 		"timeout_ms":                    float64(300000),
 		"scenario":                      "sample",
 		"ok":                            true,
@@ -939,7 +949,10 @@ func TestPrintBatchResultJSONL_OmitsPlanForNoPlanCalls(t *testing.T) {
 
 func TestPrintBatchSummaryJSONL(t *testing.T) {
 	var out bytes.Buffer
-	printBatchSummaryJSONL(&out, testEvalJSONLMetadata(), batchSummary{
+	meta := testEvalJSONLMetadata()
+	meta.RuntimeWeb = true
+	meta.RuntimeBrowser = true
+	printBatchSummaryJSONL(&out, meta, batchSummary{
 		Total:                 2,
 		Passed:                1,
 		Failed:                1,
@@ -1010,6 +1023,8 @@ func TestPrintBatchSummaryJSONL(t *testing.T) {
 		"top_p":                         "0.9",
 		"max_tokens":                    "512",
 		"seed":                          "42",
+		"runtime_web":                   true,
+		"runtime_browser":               true,
 		"timeout_ms":                    float64(300000),
 		"scenarios":                     float64(2),
 		"passed":                        float64(1),
@@ -1126,7 +1141,7 @@ func TestCloneTraceSchemaVersions(t *testing.T) {
 func TestEvalJSONLMetadataFromConfig(t *testing.T) {
 	t.Setenv("AFFENTCTL_MODEL", "env-model")
 	t.Setenv("AFFENTEVAL_PROVIDER_LABEL", "env-provider")
-	meta := evalJSONLMetadataFromConfig("small-model-tools", "", "", "", "0", "", "", "", false, false, "", 5*time.Minute)
+	meta := evalJSONLMetadataFromConfig("small-model-tools", "", "", "", "0", "", "", "", false, false, false, false, "", 5*time.Minute)
 	if meta.SchemaVersion != evalJSONLSchemaVersion {
 		t.Fatalf("SchemaVersion = %d, want %d", meta.SchemaVersion, evalJSONLSchemaVersion)
 	}
@@ -1140,8 +1155,8 @@ func TestEvalJSONLMetadataFromConfig(t *testing.T) {
 		t.Fatalf("metadata = %+v", meta)
 	}
 
-	meta = evalJSONLMetadataFromConfig(" custom ", " flag-model ", " flag-provider ", " sandbox ", " 0.4 ", " 0.9 ", " 512 ", " 42 ", true, true, " /tmp/mcp.json ", time.Second)
-	if meta.Model != "flag-model" || meta.ProviderLabel != "flag-provider" || meta.Executor != "sandbox" || meta.Temperature != "0.4" || meta.TopP != "0.9" || meta.MaxTokens != "512" || meta.Seed != "42" || meta.Suite != "custom" || !meta.RuntimeEvalMode || !meta.RuntimeMemory || !meta.RuntimeMCP || meta.TimeoutMS != 1000 {
+	meta = evalJSONLMetadataFromConfig(" custom ", " flag-model ", " flag-provider ", " sandbox ", " 0.4 ", " 0.9 ", " 512 ", " 42 ", true, true, true, true, " /tmp/mcp.json ", time.Second)
+	if meta.Model != "flag-model" || meta.ProviderLabel != "flag-provider" || meta.Executor != "sandbox" || meta.Temperature != "0.4" || meta.TopP != "0.9" || meta.MaxTokens != "512" || meta.Seed != "42" || meta.Suite != "custom" || !meta.RuntimeEvalMode || !meta.RuntimeMemory || !meta.RuntimeWeb || !meta.RuntimeBrowser || !meta.RuntimeMCP || meta.TimeoutMS != 1000 {
 		t.Fatalf("flag metadata not normalized: %+v", meta)
 	}
 }

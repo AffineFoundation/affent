@@ -682,6 +682,224 @@ func smallToolWrongToolNameScenario() BatchScenario {
 	}
 }
 
+func defaultRuntimeRepoSearchScenario() BatchScenario {
+	return BatchScenario{
+		Name:   "default-runtime-repo-search",
+		Suites: []string{smallModelToolsSuite},
+		Prompt: "find the repo_search implementation in this workspace and answer from the result. use repo_search first; do not broad search.",
+		Files: map[string]string{
+			"README.md": "# Repo Search Runtime Eval\n",
+			"internal/agent/repo_search.go": `package agent
+
+func repoSearchTool() {}
+`,
+		},
+		RequiredTools: []string{"repo_search"},
+		RequiredToolArgContains: []ToolArgContainsRequirement{
+			{Tool: "repo_search", Arg: "query", Substring: "repoSearchTool"},
+			{Tool: "repo_search", Arg: "path", Substring: "internal/agent"},
+		},
+		RequiredFinalText:  []string{"repo_search", "internal/agent/repo_search.go"},
+		ForbiddenTools:     []string{"shell"},
+		ProtectedFiles:     []string{"README.md", "internal/agent/repo_search.go"},
+		MaxParentToolCalls: 1,
+		MaxSuccessfulToolCallsByTool: map[string]int{
+			"repo_search": 1,
+		},
+		MaxTurns: 4,
+	}
+}
+
+func defaultRuntimeSymbolContextScenario() BatchScenario {
+	return BatchScenario{
+		Name:   "default-runtime-symbol-context",
+		Suites: []string{smallModelToolsSuite},
+		Prompt: "find the SymbolContextToolName declaration in this workspace and answer from the result. use symbol_context first; do not broad search.",
+		Files: map[string]string{
+			"README.md": "# Symbol Context Runtime Eval\n",
+			"internal/agent/symbol_context.go": `package agent
+
+const SymbolContextToolName = "symbol_context"
+`,
+		},
+		RequiredTools: []string{"symbol_context"},
+		RequiredToolArgContains: []ToolArgContainsRequirement{
+			{Tool: "symbol_context", Arg: "query", Substring: "SymbolContextToolName"},
+			{Tool: "symbol_context", Arg: "path", Substring: "internal/agent"},
+		},
+		RequiredFinalText:  []string{"symbol_context", "internal/agent/symbol_context.go"},
+		ForbiddenTools:     []string{"shell"},
+		ProtectedFiles:     []string{"README.md", "internal/agent/symbol_context.go"},
+		MaxParentToolCalls: 1,
+		MaxSuccessfulToolCallsByTool: map[string]int{
+			"symbol_context": 1,
+		},
+		MaxTurns: 4,
+	}
+}
+
+func defaultRuntimeSymbolContextRuntimeCapabilitiesScenario() BatchScenario {
+	return BatchScenario{
+		Name:   "default-runtime-symbol-context-runtime-capabilities",
+		Suites: []string{smallModelToolsSuite},
+		Prompt: "find where runtime capabilities are resolved in this workspace and answer from the declaration. use symbol_context first; do not broad search.",
+		Files: map[string]string{
+			"README.md": "# Symbol Context Runtime Eval\n",
+			"cmd/affentctl/common.go": `package main
+
+type runtimeCapabilities struct {
+	SymbolContext bool
+}
+
+func resolveRuntimeCapabilities() runtimeCapabilities {
+	return runtimeCapabilities{SymbolContext: true}
+}
+`,
+		},
+		RequiredTools: []string{"symbol_context"},
+		RequiredToolArgContains: []ToolArgContainsRequirement{
+			{Tool: "symbol_context", Arg: "query", Substring: "runtime capabilities"},
+		},
+		RequiredFinalText:  []string{"resolveRuntimeCapabilities", "cmd/affentctl/common.go"},
+		ForbiddenTools:     []string{"shell"},
+		ProtectedFiles:     []string{"README.md", "cmd/affentctl/common.go"},
+		MaxParentToolCalls: 1,
+		MaxSuccessfulToolCallsByTool: map[string]int{
+			"symbol_context": 1,
+		},
+		MaxTurns: 4,
+	}
+}
+
+func defaultRuntimeSymbolContextThenReadFileScenario() BatchScenario {
+	return BatchScenario{
+		Name:   "default-runtime-symbol-context-then-read-file",
+		Suites: []string{smallModelToolsSuite},
+		Prompt: "find where runtime capabilities are resolved in this workspace, then inspect that file and answer whether SymbolContext is enabled by default. use symbol_context first; do not broad search.",
+		Files: map[string]string{
+			"README.md": "# Symbol Context Runtime Eval\n",
+			"cmd/affentctl/common.go": `package main
+
+type runtimeCapabilities struct {
+	SymbolContext bool
+}
+
+func resolveRuntimeCapabilities() runtimeCapabilities {
+	return runtimeCapabilities{SymbolContext: true}
+}
+`,
+		},
+		RequiredTools: []string{"symbol_context", "read_file"},
+		RequiredToolArgContains: []ToolArgContainsRequirement{
+			{Tool: "symbol_context", Arg: "query", Substring: "runtime capabilities"},
+			{Tool: "read_file", Arg: "path", Substring: "cmd/affentctl/common.go"},
+		},
+		RequiredToolOrder: []ToolOrderRequirement{
+			{Earlier: "symbol_context", Later: "read_file"},
+		},
+		RequiredFinalText:  []string{"resolveRuntimeCapabilities", "SymbolContext: true", "cmd/affentctl/common.go"},
+		ForbiddenTools:     []string{"shell"},
+		ProtectedFiles:     []string{"README.md", "cmd/affentctl/common.go"},
+		MaxParentToolCalls: 2,
+		MaxSuccessfulToolCallsByTool: map[string]int{
+			"symbol_context": 1,
+			"read_file":      1,
+		},
+		MaxTurns: 5,
+	}
+}
+
+func defaultRuntimeFileContextScenario() BatchScenario {
+	return BatchScenario{
+		Name:   "default-runtime-file-context",
+		Suites: []string{smallModelToolsSuite},
+		Prompt: "inspect the long focused-task guidance file and tell me whether it says to use file_context before read_file on large files. use file_context first; do not broad search.",
+		Files: map[string]string{
+			"README.md": "# File Context Runtime Eval\n",
+			"internal/agent/focusedtask.go": `package agent
+
+// filler to make the file long enough that a compact view is useful.
+// 01
+// 02
+// 03
+// 04
+// 05
+// 06
+// 07
+// 08
+// 09
+// 10
+// 11
+// 12
+// 13
+// 14
+// 15
+// 16
+// 17
+// 18
+// 19
+// 20
+// 21
+// 22
+// 23
+// 24
+// 25
+// 26
+// 27
+// 28
+// 29
+// 30
+// 31
+// 32
+// 33
+// 34
+// 35
+// 36
+// 37
+// 38
+// 39
+// 40
+// 41
+// 42
+// 43
+// 44
+// 45
+// 46
+// 47
+// 48
+// 49
+// 50
+// 51
+// 52
+// 53
+// 54
+// 55
+// 56
+// 57
+// 58
+// 59
+// 60
+
+// Use file_context before read_file when the target file is long or noisy.
+func guide() {}
+`,
+		},
+		RequiredTools: []string{"file_context"},
+		RequiredToolArgContains: []ToolArgContainsRequirement{
+			{Tool: "file_context", Arg: "query", Substring: "file_context"},
+			{Tool: "file_context", Arg: "path", Substring: "internal/agent/focusedtask.go"},
+		},
+		RequiredFinalText:  []string{"file_context before read_file", "internal/agent/focusedtask.go"},
+		ForbiddenTools:     []string{"shell"},
+		ProtectedFiles:     []string{"README.md", "internal/agent/focusedtask.go"},
+		MaxParentToolCalls: 1,
+		MaxSuccessfulToolCallsByTool: map[string]int{
+			"file_context": 1,
+		},
+		MaxTurns: 4,
+	}
+}
+
 func skillToolReadScenario() BatchScenario {
 	return BatchScenario{
 		Name:   "skill-tool-read",

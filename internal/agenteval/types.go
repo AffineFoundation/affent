@@ -9,6 +9,7 @@ import (
 	"github.com/affinefoundation/affent/internal/agent"
 	"github.com/affinefoundation/affent/internal/executor"
 	"github.com/affinefoundation/affent/internal/sse"
+	"github.com/affinefoundation/affent/internal/textutil"
 	"github.com/affinefoundation/affent/internal/toolfailure"
 	"github.com/affinefoundation/affent/internal/toolrepair"
 )
@@ -407,18 +408,14 @@ func summarizeToolFailureResult(result string) string {
 }
 
 func compactOneLine(s string, max int) string {
-	s = strings.Join(strings.Fields(s), " ")
+	s = textutil.CompactWhitespace(s)
 	if max <= 0 || len(s) <= max {
 		return s
 	}
-	runes := []rune(s)
-	if len(runes) <= max {
-		return s
-	}
 	if max <= 3 {
-		return string(runes[:max])
+		return textutil.PreviewRunes(s, max, "")
 	}
-	return string(runes[:max-3]) + "..."
+	return textutil.PreviewRunes(s, max-3, "...")
 }
 
 func (t Trace) LoopErrorKindCounts() map[string]int {
@@ -551,8 +548,8 @@ type DelegationStats struct {
 	// FocusedTaskCalls is the total number of run_task tool calls.
 	FocusedTaskCalls int
 	// FocusedTaskByType breaks the total down by task_type
-	// (recall / explore / research / verify / review). Keys with zero
-	// counts are not included.
+	// (recall / explore / web_extract / research / verify / review).
+	// Keys with zero counts are not included.
 	FocusedTaskByType map[string]int
 	// FocusedTaskErrors counts run_task calls whose ExitCode != 0.
 	// This includes loop-guard rejections (cap-exceeded) and child

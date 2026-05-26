@@ -9,6 +9,19 @@ import (
 	"time"
 )
 
+func TestTrimOneLine_CompactsWhitespaceAndTruncates(t *testing.T) {
+	got := trimOneLine("  hello \n\t world  "+strings.Repeat("界", 200), 12)
+	if strings.ContainsAny(got, "\n\t") {
+		t.Fatalf("trimOneLine should compact whitespace, got %q", got)
+	}
+	if !strings.HasPrefix(got, "hello world") {
+		t.Fatalf("trimOneLine lost leading content: %q", got)
+	}
+	if !strings.HasSuffix(got, "...") {
+		t.Fatalf("trimOneLine should append ellipsis when truncated, got %q", got)
+	}
+}
+
 func TestCheckTraceFlagsProcessRegressions(t *testing.T) {
 	trace := Trace{Tools: []ToolCall{
 		{Tool: "shell", Args: map[string]any{"command": "python -m pytest 2>&1 | head -80"}},
@@ -433,8 +446,8 @@ func TestSelectBatchScenariosForSuite(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(scenarios) < 6 {
-		t.Fatalf("small-model-tools suite size = %d, want at least 6", len(scenarios))
+	if len(scenarios) < 8 {
+		t.Fatalf("small-model-tools suite size = %d, want at least 8", len(scenarios))
 	}
 	foundOversized := false
 	foundRepeatedRead := false
@@ -442,6 +455,11 @@ func TestSelectBatchScenariosForSuite(t *testing.T) {
 	foundSkillInstallGuard := false
 	foundPlanRepair := false
 	foundPlanSkip := false
+	foundSymbolContext := false
+	foundSymbolContextRuntimeCapabilities := false
+	foundSymbolContextThenReadFile := false
+	foundFileContext := false
+	foundRepoSearch := false
 	for _, scenario := range scenarios {
 		if !scenarioInSuite(scenario, "small-model-tools") {
 			t.Fatalf("scenario %s missing suite marker", scenario.Name)
@@ -498,6 +516,84 @@ func TestSelectBatchScenariosForSuite(t *testing.T) {
 				t.Fatalf("plan-not-for-simple-read ForbiddenTools = %#v, want plan", scenario.ForbiddenTools)
 			}
 		}
+		if scenario.Name == "default-runtime-repo-search" {
+			foundRepoSearch = true
+			if !stringSliceContains(scenario.RequiredTools, "repo_search") {
+				t.Fatalf("default-runtime-repo-search RequiredTools = %#v, want repo_search", scenario.RequiredTools)
+			}
+			if len(scenario.RequiredToolArgContains) != 2 {
+				t.Fatalf("default-runtime-repo-search RequiredToolArgContains = %#v, want query/path constraints", scenario.RequiredToolArgContains)
+			}
+			if scenario.MaxParentToolCalls != 1 {
+				t.Fatalf("default-runtime-repo-search MaxParentToolCalls = %d, want 1", scenario.MaxParentToolCalls)
+			}
+			if scenario.MaxSuccessfulToolCallsByTool["repo_search"] != 1 {
+				t.Fatalf("default-runtime-repo-search MaxSuccessfulToolCallsByTool = %#v, want repo_search=1", scenario.MaxSuccessfulToolCallsByTool)
+			}
+		}
+		if scenario.Name == "default-runtime-symbol-context" {
+			foundSymbolContext = true
+			if !stringSliceContains(scenario.RequiredTools, "symbol_context") {
+				t.Fatalf("default-runtime-symbol-context RequiredTools = %#v, want symbol_context", scenario.RequiredTools)
+			}
+			if len(scenario.RequiredToolArgContains) != 2 {
+				t.Fatalf("default-runtime-symbol-context RequiredToolArgContains = %#v, want query/path constraints", scenario.RequiredToolArgContains)
+			}
+			if scenario.MaxParentToolCalls != 1 {
+				t.Fatalf("default-runtime-symbol-context MaxParentToolCalls = %d, want 1", scenario.MaxParentToolCalls)
+			}
+			if scenario.MaxSuccessfulToolCallsByTool["symbol_context"] != 1 {
+				t.Fatalf("default-runtime-symbol-context MaxSuccessfulToolCallsByTool = %#v, want symbol_context=1", scenario.MaxSuccessfulToolCallsByTool)
+			}
+		}
+		if scenario.Name == "default-runtime-symbol-context-runtime-capabilities" {
+			foundSymbolContextRuntimeCapabilities = true
+			if !stringSliceContains(scenario.RequiredTools, "symbol_context") {
+				t.Fatalf("default-runtime-symbol-context-runtime-capabilities RequiredTools = %#v, want symbol_context", scenario.RequiredTools)
+			}
+			if len(scenario.RequiredToolArgContains) != 1 {
+				t.Fatalf("default-runtime-symbol-context-runtime-capabilities RequiredToolArgContains = %#v, want query-only constraint", scenario.RequiredToolArgContains)
+			}
+			if scenario.MaxParentToolCalls != 1 {
+				t.Fatalf("default-runtime-symbol-context-runtime-capabilities MaxParentToolCalls = %d, want 1", scenario.MaxParentToolCalls)
+			}
+			if scenario.MaxSuccessfulToolCallsByTool["symbol_context"] != 1 {
+				t.Fatalf("default-runtime-symbol-context-runtime-capabilities MaxSuccessfulToolCallsByTool = %#v, want symbol_context=1", scenario.MaxSuccessfulToolCallsByTool)
+			}
+		}
+		if scenario.Name == "default-runtime-symbol-context-then-read-file" {
+			foundSymbolContextThenReadFile = true
+			if !stringSliceContains(scenario.RequiredTools, "symbol_context") || !stringSliceContains(scenario.RequiredTools, "read_file") {
+				t.Fatalf("default-runtime-symbol-context-then-read-file RequiredTools = %#v, want symbol_context and read_file", scenario.RequiredTools)
+			}
+			if len(scenario.RequiredToolArgContains) != 2 {
+				t.Fatalf("default-runtime-symbol-context-then-read-file RequiredToolArgContains = %#v, want query/path constraints", scenario.RequiredToolArgContains)
+			}
+			if len(scenario.RequiredToolOrder) != 1 || scenario.RequiredToolOrder[0] != (ToolOrderRequirement{Earlier: "symbol_context", Later: "read_file"}) {
+				t.Fatalf("default-runtime-symbol-context-then-read-file RequiredToolOrder = %#v, want symbol_context before read_file", scenario.RequiredToolOrder)
+			}
+			if scenario.MaxParentToolCalls != 2 {
+				t.Fatalf("default-runtime-symbol-context-then-read-file MaxParentToolCalls = %d, want 2", scenario.MaxParentToolCalls)
+			}
+			if scenario.MaxSuccessfulToolCallsByTool["symbol_context"] != 1 || scenario.MaxSuccessfulToolCallsByTool["read_file"] != 1 {
+				t.Fatalf("default-runtime-symbol-context-then-read-file MaxSuccessfulToolCallsByTool = %#v, want symbol_context=1 read_file=1", scenario.MaxSuccessfulToolCallsByTool)
+			}
+		}
+		if scenario.Name == "default-runtime-file-context" {
+			foundFileContext = true
+			if !stringSliceContains(scenario.RequiredTools, "file_context") {
+				t.Fatalf("default-runtime-file-context RequiredTools = %#v, want file_context", scenario.RequiredTools)
+			}
+			if len(scenario.RequiredToolArgContains) != 2 {
+				t.Fatalf("default-runtime-file-context RequiredToolArgContains = %#v, want query/path constraints", scenario.RequiredToolArgContains)
+			}
+			if scenario.MaxParentToolCalls != 1 {
+				t.Fatalf("default-runtime-file-context MaxParentToolCalls = %d, want 1", scenario.MaxParentToolCalls)
+			}
+			if scenario.MaxSuccessfulToolCallsByTool["file_context"] != 1 {
+				t.Fatalf("default-runtime-file-context MaxSuccessfulToolCallsByTool = %#v, want file_context=1", scenario.MaxSuccessfulToolCallsByTool)
+			}
+		}
 	}
 	if !foundOversized {
 		t.Fatalf("small-model-tools suite missing runtime-oversized-tool-result")
@@ -516,6 +612,21 @@ func TestSelectBatchScenariosForSuite(t *testing.T) {
 	}
 	if !foundPlanSkip {
 		t.Fatalf("small-model-tools suite missing plan-not-for-simple-read")
+	}
+	if !foundRepoSearch {
+		t.Fatalf("small-model-tools suite missing default-runtime-repo-search")
+	}
+	if !foundSymbolContext {
+		t.Fatalf("small-model-tools suite missing default-runtime-symbol-context")
+	}
+	if !foundSymbolContextRuntimeCapabilities {
+		t.Fatalf("small-model-tools suite missing default-runtime-symbol-context-runtime-capabilities")
+	}
+	if !foundSymbolContextThenReadFile {
+		t.Fatalf("small-model-tools suite missing default-runtime-symbol-context-then-read-file")
+	}
+	if !foundFileContext {
+		t.Fatalf("small-model-tools suite missing default-runtime-file-context")
 	}
 	one, err := SelectBatchScenariosForSuite("small-model-tools", []string{"small-tools-wrong-field-read"})
 	if err != nil {
@@ -688,6 +799,8 @@ func TestBatchRunnerAffentctlRunArgsForwardsExecutor(t *testing.T) {
 		Executor:         "docker:affent-eval",
 		RuntimeEvalMode:  true,
 		RuntimeMemory:    true,
+		RuntimeWeb:       true,
+		RuntimeBrowser:   true,
 		RuntimeMCPConfig: " /tmp/eval-mcp.json ",
 	}).affentctlRunArgs("/tmp/ws", "/tmp/ws/trace.jsonl", BatchScenario{
 		Prompt:   "fix it",
@@ -706,10 +819,53 @@ func TestBatchRunnerAffentctlRunArgsForwardsExecutor(t *testing.T) {
 		"--api-key\x00secret",
 		"--eval-mode",
 		"--memory=true",
+		"--web=true",
+		"--browser=true",
 		"--mcp-config\x00/tmp/eval-mcp.json",
 	} {
 		if !strings.Contains(joined, want) {
 			t.Fatalf("args missing %q:\n%q", want, args)
 		}
+	}
+}
+
+func TestBatchRunnerRunHonorsScenarioVerifierTimeout(t *testing.T) {
+	repoRoot := t.TempDir()
+	goBin := filepath.Join(t.TempDir(), "go")
+	traceBody := strings.Join([]string{
+		`{"type":"trace.meta","data":{"schema_version":1}}`,
+		`{"type":"turn.end","data":{"reason":"completed"}}`,
+	}, "\n") + "\n"
+	script := "#!/bin/sh\nset -eu\ntrace=\"\"\nprev=\"\"\nfor arg in \"$@\"; do\n  if [ \"$prev\" = \"--trace\" ]; then\n    trace=\"$arg\"\n  fi\n  prev=\"$arg\"\ndone\ncase \"${1:-}\" in\n  run)\n    : ;;\n  *)\n    echo \"unexpected args: $*\" >&2\n    exit 1\n    ;;\nesac\nmkdir -p \"$(dirname \"$trace\")\"\ncat >\"$trace\" <<'EOF'\n" + traceBody + "EOF\nexit 0\n"
+	if err := os.WriteFile(goBin, []byte(script), 0o755); err != nil {
+		t.Fatal(err)
+	}
+
+	runner := BatchRunner{
+		RepoRoot: repoRoot,
+		BaseURL:  "http://127.0.0.1:0",
+		APIKey:   "test",
+		Model:    "fake-model",
+		GoBin:    goBin,
+		Timeout:  5 * time.Second,
+	}
+	res := runner.Run(context.Background(), BatchScenario{
+		Name:            "verifier-timeout",
+		Prompt:          "answer briefly",
+		VerifyCommand:   "sleep 2",
+		VerifierTimeout: 100 * time.Millisecond,
+		MaxTurns:        1,
+	})
+	if res.OK {
+		t.Fatalf("expected verifier timeout run to fail, got OK: %+v", res)
+	}
+	if !res.Verifier.Ran || res.Verifier.OK {
+		t.Fatalf("verifier result should record a failed run: %+v", res.Verifier)
+	}
+	if res.Verifier.ExitCode != -1 {
+		t.Fatalf("verifier exit code = %d, want -1 on timeout", res.Verifier.ExitCode)
+	}
+	if !strings.Contains(strings.Join(res.Failures, "\n"), "verify command failed: sleep 2") {
+		t.Fatalf("failures should mention verifier failure, got: %+v", res.Failures)
 	}
 }

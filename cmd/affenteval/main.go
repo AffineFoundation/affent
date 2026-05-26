@@ -53,6 +53,8 @@ func run(args []string) int {
 		executor          = fs.String("executor", "local", "affentctl tool executor for scenario runs: local, sandbox, or docker:<container>")
 		runtimeEvalMode   = fs.Bool("runtime-eval-mode", false, "pass affentctl --eval-mode to keep only the basic benchmark tool surface during scenario runs")
 		runtimeMemory     = fs.Bool("runtime-memory", false, "pass affentctl --memory=true during scenario runs; useful with --runtime-eval-mode for memory-only opt-in")
+		runtimeWeb        = fs.Bool("runtime-web", false, "pass affentctl --web=true during scenario runs; opt into web_fetch/web_search in eval mode")
+		runtimeBrowser    = fs.Bool("runtime-browser", false, "pass affentctl --browser=true during scenario runs; opt into browser tools in eval mode")
 		runtimeMCPConfig  = fs.String("runtime-mcp-config", "", "pass affentctl --mcp-config PATH during scenario runs; useful with --runtime-eval-mode to opt into MCP only")
 		timeout           = fs.Duration("timeout", 5*time.Minute, "per-scenario timeout")
 		verifierOutputCap = fs.Int("verifier-output-cap", agenteval.DefaultVerifierOutputCapBytes, "maximum verifier output bytes buffered per scenario")
@@ -118,12 +120,14 @@ success and trace-level process quality.`)
 		Executor:                 *executor,
 		RuntimeEvalMode:          *runtimeEvalMode,
 		RuntimeMemory:            *runtimeMemory,
+		RuntimeWeb:               *runtimeWeb,
+		RuntimeBrowser:           *runtimeBrowser,
 		RuntimeMCPConfig:         *runtimeMCPConfig,
 		Timeout:                  *timeout,
 		VerifierOutputCapBytes:   *verifierOutputCap,
 		CleanupPassingWorkspaces: !*keepWorkspaces,
 	}
-	jsonlMeta := evalJSONLMetadataFromConfig(*suite, *model, *providerLabel, *executor, *temperature, *topP, *maxTokens, *seed, *runtimeEvalMode, *runtimeMemory, *runtimeMCPConfig, *timeout)
+	jsonlMeta := evalJSONLMetadataFromConfig(*suite, *model, *providerLabel, *executor, *temperature, *topP, *maxTokens, *seed, *runtimeEvalMode, *runtimeMemory, *runtimeWeb, *runtimeBrowser, *runtimeMCPConfig, *timeout)
 	ctx := context.Background()
 	var summary batchSummary
 	for _, scenario := range scenarios {
@@ -655,11 +659,13 @@ type evalJSONLMetadata struct {
 	Seed            string `json:"seed,omitempty"`
 	RuntimeEvalMode bool   `json:"runtime_eval_mode,omitempty"`
 	RuntimeMemory   bool   `json:"runtime_memory,omitempty"`
+	RuntimeWeb      bool   `json:"runtime_web,omitempty"`
+	RuntimeBrowser  bool   `json:"runtime_browser,omitempty"`
 	RuntimeMCP      bool   `json:"runtime_mcp,omitempty"`
 	TimeoutMS       int64  `json:"timeout_ms"`
 }
 
-func evalJSONLMetadataFromConfig(suite, model, providerLabel, executor, temperature, topP, maxTokens, seed string, runtimeEvalMode, runtimeMemory bool, runtimeMCPConfig string, timeout time.Duration) evalJSONLMetadata {
+func evalJSONLMetadataFromConfig(suite, model, providerLabel, executor, temperature, topP, maxTokens, seed string, runtimeEvalMode, runtimeMemory, runtimeWeb, runtimeBrowser bool, runtimeMCPConfig string, timeout time.Duration) evalJSONLMetadata {
 	model = strings.TrimSpace(model)
 	if model == "" {
 		model = strings.TrimSpace(os.Getenv("AFFENTCTL_MODEL"))
@@ -680,6 +686,8 @@ func evalJSONLMetadataFromConfig(suite, model, providerLabel, executor, temperat
 		Seed:            strings.TrimSpace(seed),
 		RuntimeEvalMode: runtimeEvalMode,
 		RuntimeMemory:   runtimeMemory,
+		RuntimeWeb:      runtimeWeb,
+		RuntimeBrowser:  runtimeBrowser,
 		RuntimeMCP:      strings.TrimSpace(runtimeMCPConfig) != "",
 		TimeoutMS:       timeout.Milliseconds(),
 	}

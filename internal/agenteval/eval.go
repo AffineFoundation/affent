@@ -18,6 +18,7 @@ import (
 	"time"
 
 	"github.com/affinefoundation/affent/internal/jsonl"
+	"github.com/affinefoundation/affent/internal/textutil"
 )
 
 const (
@@ -52,6 +53,7 @@ type BatchScenario struct {
 	Prompt                        string
 	Files                         map[string]string
 	VerifyCommand                 string
+	VerifierTimeout               time.Duration
 	ExpectedSkill                 string
 	ForbiddenCommands             []string
 	RequiredCommands              []string
@@ -93,6 +95,8 @@ type BatchRunner struct {
 	Executor                 string
 	RuntimeEvalMode          bool
 	RuntimeMemory            bool
+	RuntimeWeb               bool
+	RuntimeBrowser           bool
 	RuntimeMCPConfig         string
 	GoBin                    string
 	Timeout                  time.Duration
@@ -160,6 +164,11 @@ func BuiltinBatchScenarios() []BatchScenario {
 		smallToolBadJSONReadScenario(),
 		smallToolWrongFieldReadScenario(),
 		smallToolWrongToolNameScenario(),
+		defaultRuntimeSymbolContextScenario(),
+		defaultRuntimeSymbolContextRuntimeCapabilitiesScenario(),
+		defaultRuntimeSymbolContextThenReadFileScenario(),
+		defaultRuntimeFileContextScenario(),
+		defaultRuntimeRepoSearchScenario(),
 		skillToolReadScenario(),
 		skillRemoteInstallGuardScenario(),
 		planCodingRepairScenario(),
@@ -299,7 +308,15 @@ func (r BatchRunner) Run(ctx context.Context, scenario BatchScenario) BatchResul
 		res.Failures = append(res.Failures, err.Error())
 	}
 	if scenario.VerifyCommand != "" {
-		verifier := r.runVerifier(runCtx, workspace, repoRoot, scenario.VerifyCommand)
+		verifierCtx := runCtx
+		var verifierCancel context.CancelFunc
+		if scenario.VerifierTimeout > 0 {
+			verifierCtx, verifierCancel = context.WithTimeout(runCtx, scenario.VerifierTimeout)
+		}
+		verifier := r.runVerifier(verifierCtx, workspace, repoRoot, scenario.VerifyCommand)
+		if verifierCancel != nil {
+			verifierCancel()
+		}
 		res.Verifier = verifier.Result
 		if verifier.Err != nil {
 			res.Failures = append(res.Failures, fmt.Sprintf("verify command failed: %s: %v\n%s", scenario.VerifyCommand, verifier.Err, trimOneLine(verifier.Output, 1200)))
@@ -439,6 +456,12 @@ func (r BatchRunner) affentctlRunArgs(workspace, tracePath string, scenario Batc
 	}
 	if r.RuntimeMemory {
 		args = append(args, "--memory=true")
+	}
+	if r.RuntimeWeb {
+		args = append(args, "--web=true")
+	}
+	if r.RuntimeBrowser {
+		args = append(args, "--browser=true")
 	}
 	args = appendStringFlag(args, "--mcp-config", r.RuntimeMCPConfig)
 	return args
@@ -882,10 +905,9 @@ func dedupeNonEmpty(parts []string) []string {
 }
 
 func trimOneLine(s string, n int) string {
-	s = strings.TrimSpace(s)
-	s = strings.Join(strings.Fields(s), " ")
+	s = textutil.CompactWhitespace(s)
 	if len(s) <= n {
 		return s
 	}
-	return s[:n] + "..."
+	return textutil.Preview(s, n, "...")
 }

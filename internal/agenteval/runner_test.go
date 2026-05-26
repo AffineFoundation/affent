@@ -60,6 +60,26 @@ func newScriptedLLM(t *testing.T, script [][]string) *httptest.Server {
 	return srv
 }
 
+func writeRecallSessionLog(t *testing.T, sessionsDir, sid string, msgs ...agent.ChatMessage) {
+	t.Helper()
+	if err := os.MkdirAll(sessionsDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	path := filepath.Join(sessionsDir, sid+".jsonl")
+	f, err := os.Create(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer f.Close()
+	enc := json.NewEncoder(f)
+	enc.SetEscapeHTML(false)
+	for _, msg := range msgs {
+		if err := enc.Encode(msg); err != nil {
+			t.Fatal(err)
+		}
+	}
+}
+
 // TestRunner_EndToEnd_OneToolCall pins the full Runner pipeline on a
 // minimal scenario: the LLM requests one read_file, the runtime
 // returns the file contents, the LLM produces a final text answer.
@@ -332,6 +352,590 @@ func TestRunner_DefaultRuntimeLoadsWorkspaceSkills(t *testing.T) {
 	}
 }
 
+// TestRunner_DefaultRuntimeAdvertisesRepoSearchAndCanUseIt pins the
+// repo discovery path end-to-end: the default runtime must expose
+// repo_search and the model must be able to call it and answer from
+// the compact result.
+func TestRunner_DefaultRuntimeAdvertisesRepoSearchAndCanUseIt(t *testing.T) {
+	type capturedRequest struct {
+		Messages []struct {
+			Role    string `json:"role"`
+			Content string `json:"content"`
+		} `json:"messages"`
+		Tools []struct {
+			Function struct {
+				Name string `json:"name"`
+			} `json:"function"`
+		} `json:"tools"`
+	}
+	requests := make(chan capturedRequest, 1)
+	var calls atomic.Int32
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		raw, err := io.ReadAll(r.Body)
+		if err != nil {
+			t.Errorf("read request body: %v", err)
+		}
+		var req capturedRequest
+		if err := json.Unmarshal(raw, &req); err != nil {
+			t.Errorf("decode request body: %v", err)
+		}
+		select {
+		case requests <- req:
+		default:
+		}
+		w.Header().Set("Content-Type", "text/event-stream")
+		w.WriteHeader(http.StatusOK)
+		flusher := w.(http.Flusher)
+		idx := int(calls.Add(1)) - 1
+		payloads := [][]string{
+			{
+				`{"choices":[{"delta":{"role":"assistant","tool_calls":[{"index":0,"id":"r1","type":"function","function":{"name":"repo_search","arguments":""}}]},"finish_reason":null}]}`,
+				`{"choices":[{"delta":{"tool_calls":[{"index":0,"function":{"arguments":"{\"query\":\"repoSearchTool\",\"path\":\"internal/agent\",\"max_results\":3}"}}]},"finish_reason":null}]}`,
+				`{"choices":[{"delta":{},"finish_reason":"tool_calls"}]}`,
+				`[DONE]`,
+			},
+			{
+				`{"choices":[{"delta":{"role":"assistant","content":"repo_search found internal/agent/repo_search.go, so the built-in discovery path is available."},"finish_reason":"stop"}]}`,
+				`[DONE]`,
+			},
+		}
+		chosen := payloads[len(payloads)-1]
+		if idx < len(payloads) {
+			chosen = payloads[idx]
+		}
+		for _, p := range chosen {
+			_, _ = w.Write([]byte("data: " + p + "\n\n"))
+			flusher.Flush()
+		}
+	}))
+	t.Cleanup(srv.Close)
+
+	scenario := Scenario{
+		Name:        "default_runtime_repo_search",
+		Description: "default eval runtime advertises repo_search and can use it for workspace discovery",
+		Prompt:      "find the repo_search implementation in this workspace and answer from the result",
+		Setup: func(workspaceDir string) error {
+			if err := os.MkdirAll(filepath.Join(workspaceDir, "internal", "agent"), 0o755); err != nil {
+				return err
+			}
+			return os.WriteFile(filepath.Join(workspaceDir, "internal", "agent", "repo_search.go"), []byte("package agent\n\nfunc repoSearchTool() {}\n"), 0o644)
+		},
+		MaxTurnSteps: 4,
+		Checks: []Check{
+			TurnEndedCleanly(),
+			ToolCalled("repo_search", func(args map[string]any) bool {
+				return args["query"] == "repoSearchTool" && args["path"] == "internal/agent"
+			}),
+			FinalTextContains("repo_search found internal/agent/repo_search.go"),
+		},
+	}
+
+	runner := &Runner{
+		LLM:            agent.NewLLMClient(srv.URL, "", "fake-model"),
+		MaxTurnSteps:   4,
+		PerCallTimeout: 5 * time.Second,
+		RunTimeout:     20 * time.Second,
+		Log:            zerolog.Nop(),
+	}
+
+	out, err := runner.Run(context.Background(), scenario)
+	if err != nil {
+		t.Fatalf("Runner.Run: %v", err)
+	}
+	if !out.Pass {
+		t.Fatalf("expected all checks to pass; failed: %v", out.FailedChecks())
+	}
+	select {
+	case req := <-requests:
+		foundTool := false
+		for _, tool := range req.Tools {
+			if tool.Function.Name == "repo_search" {
+				foundTool = true
+			}
+		}
+		if !foundTool {
+			t.Fatalf("default runtime should advertise repo_search; tools=%+v", req.Tools)
+		}
+	case <-time.After(2 * time.Second):
+		t.Fatal("LLM request was not captured")
+	}
+}
+
+// TestRunner_DefaultRuntimeAdvertisesSymbolContextAndCanUseIt pins the
+// symbol discovery path end-to-end: the default runtime must expose
+// symbol_context and the model must be able to call it and answer from
+// the compact result.
+func TestRunner_DefaultRuntimeAdvertisesSymbolContextAndCanUseIt(t *testing.T) {
+	type capturedRequest struct {
+		Messages []struct {
+			Role    string `json:"role"`
+			Content string `json:"content"`
+		} `json:"messages"`
+		Tools []struct {
+			Function struct {
+				Name string `json:"name"`
+			} `json:"function"`
+		} `json:"tools"`
+	}
+	requests := make(chan capturedRequest, 1)
+	var calls atomic.Int32
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		raw, err := io.ReadAll(r.Body)
+		if err != nil {
+			t.Errorf("read request body: %v", err)
+		}
+		var req capturedRequest
+		if err := json.Unmarshal(raw, &req); err != nil {
+			t.Errorf("decode request body: %v", err)
+		}
+		select {
+		case requests <- req:
+		default:
+		}
+		w.Header().Set("Content-Type", "text/event-stream")
+		w.WriteHeader(http.StatusOK)
+		flusher := w.(http.Flusher)
+		idx := int(calls.Add(1)) - 1
+		payloads := [][]string{
+			{
+				`{"choices":[{"delta":{"role":"assistant","tool_calls":[{"index":0,"id":"s1","type":"function","function":{"name":"symbol_context","arguments":""}}]},"finish_reason":null}]}`,
+				`{"choices":[{"delta":{"tool_calls":[{"index":0,"function":{"arguments":"{\"query\":\"SymbolContextToolName\",\"path\":\"internal/agent\",\"max_results\":3}"}}]},"finish_reason":null}]}`,
+				`{"choices":[{"delta":{},"finish_reason":"tool_calls"}]}`,
+				`[DONE]`,
+			},
+			{
+				`{"choices":[{"delta":{"role":"assistant","content":"symbol_context found internal/agent/symbol_context.go, so the built-in symbol discovery path is available."},"finish_reason":"stop"}]}`,
+				`[DONE]`,
+			},
+		}
+		chosen := payloads[len(payloads)-1]
+		if idx < len(payloads) {
+			chosen = payloads[idx]
+		}
+		for _, p := range chosen {
+			_, _ = w.Write([]byte("data: " + p + "\n\n"))
+			flusher.Flush()
+		}
+	}))
+	t.Cleanup(srv.Close)
+
+	scenario := Scenario{
+		Name:        "default_runtime_symbol_context",
+		Description: "default eval runtime advertises symbol_context and can use it for symbol discovery",
+		Prompt:      "find the symbol_context implementation in this workspace and answer from the result",
+		Setup: func(workspaceDir string) error {
+			if err := os.MkdirAll(filepath.Join(workspaceDir, "internal", "agent"), 0o755); err != nil {
+				return err
+			}
+			return os.WriteFile(filepath.Join(workspaceDir, "internal", "agent", "symbol_context.go"), []byte("package agent\n\nconst SymbolContextToolName = \"symbol_context\"\n"), 0o644)
+		},
+		MaxTurnSteps: 4,
+		Checks: []Check{
+			TurnEndedCleanly(),
+			ToolCalled("symbol_context", func(args map[string]any) bool {
+				return args["query"] == "SymbolContextToolName" && args["path"] == "internal/agent"
+			}),
+			FinalTextContains("symbol_context found internal/agent/symbol_context.go"),
+		},
+	}
+
+	runner := &Runner{
+		LLM:            agent.NewLLMClient(srv.URL, "", "fake-model"),
+		MaxTurnSteps:   4,
+		PerCallTimeout: 5 * time.Second,
+		RunTimeout:     20 * time.Second,
+		Log:            zerolog.Nop(),
+	}
+
+	out, err := runner.Run(context.Background(), scenario)
+	if err != nil {
+		t.Fatalf("Runner.Run: %v", err)
+	}
+	if !out.Pass {
+		t.Fatalf("expected all checks to pass; failed: %v", out.FailedChecks())
+	}
+	select {
+	case req := <-requests:
+		foundTool := false
+		for _, tool := range req.Tools {
+			if tool.Function.Name == "symbol_context" {
+				foundTool = true
+			}
+		}
+		if !foundTool {
+			t.Fatalf("default runtime should advertise symbol_context; tools=%+v", req.Tools)
+		}
+	case <-time.After(2 * time.Second):
+		t.Fatal("LLM request was not captured")
+	}
+}
+
+// TestRunner_DefaultRuntimeCanUseSymbolContextForCapabilityDiscovery pins a
+// more natural lookup: the model only knows the feature description, not the
+// exact file, so it should use symbol_context with a general query and answer
+// from the declaration.
+func TestRunner_DefaultRuntimeCanUseSymbolContextForCapabilityDiscovery(t *testing.T) {
+	type capturedRequest struct {
+		Messages []struct {
+			Role    string `json:"role"`
+			Content string `json:"content"`
+		} `json:"messages"`
+		Tools []struct {
+			Function struct {
+				Name string `json:"name"`
+			} `json:"function"`
+		} `json:"tools"`
+	}
+	requests := make(chan capturedRequest, 1)
+	var calls atomic.Int32
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		raw, err := io.ReadAll(r.Body)
+		if err != nil {
+			t.Errorf("read request body: %v", err)
+		}
+		var req capturedRequest
+		if err := json.Unmarshal(raw, &req); err != nil {
+			t.Errorf("decode request body: %v", err)
+		}
+		select {
+		case requests <- req:
+		default:
+		}
+		w.Header().Set("Content-Type", "text/event-stream")
+		w.WriteHeader(http.StatusOK)
+		flusher := w.(http.Flusher)
+		idx := int(calls.Add(1)) - 1
+		payloads := [][]string{
+			{
+				`{"choices":[{"delta":{"role":"assistant","tool_calls":[{"index":0,"id":"s1","type":"function","function":{"name":"symbol_context","arguments":""}}]},"finish_reason":null}]}`,
+				`{"choices":[{"delta":{"tool_calls":[{"index":0,"function":{"arguments":"{\"query\":\"runtime capabilities\",\"max_results\":3}"}}]},"finish_reason":null}]}`,
+				`{"choices":[{"delta":{},"finish_reason":"tool_calls"}]}`,
+				`[DONE]`,
+			},
+			{
+				`{"choices":[{"delta":{"role":"assistant","content":"symbol_context found cmd/affentctl/common.go, where resolveRuntimeCapabilities is defined."},"finish_reason":"stop"}]}`,
+				`[DONE]`,
+			},
+		}
+		chosen := payloads[len(payloads)-1]
+		if idx < len(payloads) {
+			chosen = payloads[idx]
+		}
+		for _, p := range chosen {
+			_, _ = w.Write([]byte("data: " + p + "\n\n"))
+			flusher.Flush()
+		}
+	}))
+	t.Cleanup(srv.Close)
+
+	scenario := Scenario{
+		Name:        "default_runtime_symbol_context_runtime_capabilities",
+		Description: "default runtime uses symbol_context to resolve capability-related declarations from a general description",
+		Prompt:      "find where runtime capabilities are resolved in this workspace and answer from the declaration",
+		Setup: func(workspaceDir string) error {
+			if err := os.MkdirAll(filepath.Join(workspaceDir, "cmd", "affentctl"), 0o755); err != nil {
+				return err
+			}
+			return os.WriteFile(filepath.Join(workspaceDir, "cmd", "affentctl", "common.go"), []byte(`package main
+
+type runtimeCapabilities struct {
+	SymbolContext bool
+}
+
+func resolveRuntimeCapabilities() runtimeCapabilities {
+	return runtimeCapabilities{SymbolContext: true}
+}
+`), 0o644)
+		},
+		MaxTurnSteps: 4,
+		Checks: []Check{
+			TurnEndedCleanly(),
+			ToolCalled("symbol_context", func(args map[string]any) bool {
+				_, hasPath := args["path"]
+				return args["query"] == "runtime capabilities" && !hasPath
+			}),
+			FinalTextContains("resolveRuntimeCapabilities"),
+			FinalTextContains("cmd/affentctl/common.go"),
+		},
+	}
+
+	runner := &Runner{
+		LLM:            agent.NewLLMClient(srv.URL, "", "fake-model"),
+		MaxTurnSteps:   4,
+		PerCallTimeout: 5 * time.Second,
+		RunTimeout:     20 * time.Second,
+		Log:            zerolog.Nop(),
+	}
+
+	out, err := runner.Run(context.Background(), scenario)
+	if err != nil {
+		t.Fatalf("Runner.Run: %v", err)
+	}
+	if !out.Pass {
+		t.Fatalf("expected all checks to pass; failed: %v", out.FailedChecks())
+	}
+	select {
+	case req := <-requests:
+		foundTool := false
+		for _, tool := range req.Tools {
+			if tool.Function.Name == "symbol_context" {
+				foundTool = true
+			}
+		}
+		if !foundTool {
+			t.Fatalf("default runtime should advertise symbol_context; tools=%+v", req.Tools)
+		}
+	case <-time.After(2 * time.Second):
+		t.Fatal("LLM request was not captured")
+	}
+}
+
+// TestRunner_DefaultRuntimeCanUseSymbolContextThenReadFile pins the real
+// workflow for a weak-to-strong lookup: symbol_context narrows the file, then
+// read_file confirms the exact default value before answering.
+func TestRunner_DefaultRuntimeCanUseSymbolContextThenReadFile(t *testing.T) {
+	type capturedRequest struct {
+		Messages []struct {
+			Role    string `json:"role"`
+			Content string `json:"content"`
+		} `json:"messages"`
+		Tools []struct {
+			Function struct {
+				Name string `json:"name"`
+			} `json:"function"`
+		} `json:"tools"`
+	}
+	requests := make(chan capturedRequest, 1)
+	var calls atomic.Int32
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		raw, err := io.ReadAll(r.Body)
+		if err != nil {
+			t.Errorf("read request body: %v", err)
+		}
+		var req capturedRequest
+		if err := json.Unmarshal(raw, &req); err != nil {
+			t.Errorf("decode request body: %v", err)
+		}
+		select {
+		case requests <- req:
+		default:
+		}
+		w.Header().Set("Content-Type", "text/event-stream")
+		w.WriteHeader(http.StatusOK)
+		flusher := w.(http.Flusher)
+		idx := int(calls.Add(1)) - 1
+		payloads := [][]string{
+			{
+				`{"choices":[{"delta":{"role":"assistant","tool_calls":[{"index":0,"id":"s1","type":"function","function":{"name":"symbol_context","arguments":""}}]},"finish_reason":null}]}`,
+				`{"choices":[{"delta":{"tool_calls":[{"index":0,"function":{"arguments":"{\"query\":\"runtime capabilities\",\"max_results\":3}"}}]},"finish_reason":null}]}`,
+				`{"choices":[{"delta":{},"finish_reason":"tool_calls"}]}`,
+				`[DONE]`,
+			},
+			{
+				`{"choices":[{"delta":{"role":"assistant","tool_calls":[{"index":0,"id":"r1","type":"function","function":{"name":"read_file","arguments":""}}]},"finish_reason":null}]}`,
+				`{"choices":[{"delta":{"tool_calls":[{"index":0,"function":{"arguments":"{\"path\":\"cmd/affentctl/common.go\"}"}}]},"finish_reason":null}]}`,
+				`{"choices":[{"delta":{},"finish_reason":"tool_calls"}]}`,
+				`[DONE]`,
+			},
+			{
+				`{"choices":[{"delta":{"role":"assistant","content":"resolveRuntimeCapabilities sets SymbolContext to true by default in cmd/affentctl/common.go."},"finish_reason":"stop"}]}`,
+				`[DONE]`,
+			},
+		}
+		chosen := payloads[len(payloads)-1]
+		if idx < len(payloads) {
+			chosen = payloads[idx]
+		}
+		for _, p := range chosen {
+			_, _ = w.Write([]byte("data: " + p + "\n\n"))
+			flusher.Flush()
+		}
+	}))
+	t.Cleanup(srv.Close)
+
+	scenario := Scenario{
+		Name:        "default_runtime_symbol_context_then_read_file",
+		Description: "default runtime uses symbol_context to narrow a file and then read_file to confirm the default capability value",
+		Prompt:      "find where runtime capabilities are resolved, then inspect the file and tell me whether SymbolContext is enabled by default",
+		Setup: func(workspaceDir string) error {
+			if err := os.MkdirAll(filepath.Join(workspaceDir, "cmd", "affentctl"), 0o755); err != nil {
+				return err
+			}
+			return os.WriteFile(filepath.Join(workspaceDir, "cmd", "affentctl", "common.go"), []byte(`package main
+
+type runtimeCapabilities struct {
+	SymbolContext bool
+}
+
+func resolveRuntimeCapabilities() runtimeCapabilities {
+	return runtimeCapabilities{SymbolContext: true}
+}
+`), 0o644)
+		},
+		MaxTurnSteps: 5,
+		Checks: []Check{
+			TurnEndedCleanly(),
+			ToolCalled("symbol_context", func(args map[string]any) bool {
+				_, hasPath := args["path"]
+				return args["query"] == "runtime capabilities" && !hasPath
+			}),
+			ToolCalled("read_file", func(args map[string]any) bool {
+				return args["path"] == "cmd/affentctl/common.go"
+			}),
+			ToolCalledBefore("symbol_context", "read_file"),
+			FinalTextContains("resolveRuntimeCapabilities sets SymbolContext to true by default"),
+			FinalTextContains("cmd/affentctl/common.go"),
+		},
+	}
+
+	runner := &Runner{
+		LLM:            agent.NewLLMClient(srv.URL, "", "fake-model"),
+		MaxTurnSteps:   5,
+		PerCallTimeout: 5 * time.Second,
+		RunTimeout:     20 * time.Second,
+		Log:            zerolog.Nop(),
+	}
+
+	out, err := runner.Run(context.Background(), scenario)
+	if err != nil {
+		t.Fatalf("Runner.Run: %v", err)
+	}
+	if !out.Pass {
+		t.Fatalf("expected all checks to pass; failed: %v", out.FailedChecks())
+	}
+	select {
+	case req := <-requests:
+		foundTool := false
+		for _, tool := range req.Tools {
+			if tool.Function.Name == "symbol_context" {
+				foundTool = true
+			}
+		}
+		if !foundTool {
+			t.Fatalf("default runtime should advertise symbol_context; tools=%+v", req.Tools)
+		}
+	case <-time.After(2 * time.Second):
+		t.Fatal("LLM request was not captured")
+	}
+}
+
+// TestRunner_DefaultRuntimeCanUseFileContext pins the long-file path:
+// file_context compresses a noisy file, then the model answers from the
+// compact result without needing a full read_file dump.
+func TestRunner_DefaultRuntimeCanUseFileContext(t *testing.T) {
+	type capturedRequest struct {
+		Messages []struct {
+			Role    string `json:"role"`
+			Content string `json:"content"`
+		} `json:"messages"`
+		Tools []struct {
+			Function struct {
+				Name string `json:"name"`
+			} `json:"function"`
+		} `json:"tools"`
+	}
+	requests := make(chan capturedRequest, 1)
+	var calls atomic.Int32
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		raw, err := io.ReadAll(r.Body)
+		if err != nil {
+			t.Errorf("read request body: %v", err)
+		}
+		var req capturedRequest
+		if err := json.Unmarshal(raw, &req); err != nil {
+			t.Errorf("decode request body: %v", err)
+		}
+		select {
+		case requests <- req:
+		default:
+		}
+		w.Header().Set("Content-Type", "text/event-stream")
+		w.WriteHeader(http.StatusOK)
+		flusher := w.(http.Flusher)
+		idx := int(calls.Add(1)) - 1
+		payloads := [][]string{
+			{
+				`{"choices":[{"delta":{"role":"assistant","tool_calls":[{"index":0,"id":"f1","type":"function","function":{"name":"file_context","arguments":""}}]},"finish_reason":null}]}`,
+				`{"choices":[{"delta":{"tool_calls":[{"index":0,"function":{"arguments":"{\"query\":\"file_context\",\"path\":\"internal/agent/focusedtask.go\",\"max_bytes\":1200,\"context_lines\":3,\"max_matches\":2}"}}]},"finish_reason":null}]}`,
+				`{"choices":[{"delta":{},"finish_reason":"tool_calls"}]}`,
+				`[DONE]`,
+			},
+			{
+				`{"choices":[{"delta":{"role":"assistant","content":"file_context before read_file when the target file is long or noisy, and the compact result points at internal/agent/focusedtask.go."},"finish_reason":"stop"}]}`,
+				`[DONE]`,
+			},
+		}
+		chosen := payloads[len(payloads)-1]
+		if idx < len(payloads) {
+			chosen = payloads[idx]
+		}
+		for _, p := range chosen {
+			_, _ = w.Write([]byte("data: " + p + "\n\n"))
+			flusher.Flush()
+		}
+	}))
+	t.Cleanup(srv.Close)
+
+	scenario := Scenario{
+		Name:        "default_runtime_file_context",
+		Description: "default runtime uses file_context to compress a long file before answering",
+		Prompt:      "inspect the long focused-task guidance file and tell me whether it says to use file_context before read_file on large files",
+		Setup: func(workspaceDir string) error {
+			if err := os.MkdirAll(filepath.Join(workspaceDir, "internal", "agent"), 0o755); err != nil {
+				return err
+			}
+			var b strings.Builder
+			b.WriteString("package agent\n\n")
+			for i := 1; i <= 80; i++ {
+				fmt.Fprintf(&b, "// filler line %02d\n", i)
+			}
+			b.WriteString("// Use file_context before read_file when the target file is long or noisy.\n")
+			b.WriteString("func guide() {}\n")
+			return os.WriteFile(filepath.Join(workspaceDir, "internal", "agent", "focusedtask.go"), []byte(b.String()), 0o644)
+		},
+		MaxTurnSteps: 4,
+		Checks: []Check{
+			TurnEndedCleanly(),
+			MaxToolCalls(1),
+			ToolCalled("file_context", func(args map[string]any) bool {
+				return args["query"] == "file_context" && args["path"] == "internal/agent/focusedtask.go"
+			}),
+			FinalTextContains("file_context before read_file"),
+			FinalTextContains("internal/agent/focusedtask.go"),
+		},
+	}
+
+	runner := &Runner{
+		LLM:            agent.NewLLMClient(srv.URL, "", "fake-model"),
+		MaxTurnSteps:   4,
+		PerCallTimeout: 5 * time.Second,
+		RunTimeout:     20 * time.Second,
+		Log:            zerolog.Nop(),
+	}
+
+	out, err := runner.Run(context.Background(), scenario)
+	if err != nil {
+		t.Fatalf("Runner.Run: %v", err)
+	}
+	if !out.Pass {
+		t.Fatalf("expected all checks to pass; failed: %v", out.FailedChecks())
+	}
+	select {
+	case req := <-requests:
+		foundTool := false
+		for _, tool := range req.Tools {
+			if tool.Function.Name == "file_context" {
+				foundTool = true
+			}
+		}
+		if !foundTool {
+			t.Fatalf("default runtime should advertise file_context; tools=%+v", req.Tools)
+		}
+	case <-time.After(2 * time.Second):
+		t.Fatal("LLM request was not captured")
+	}
+}
+
 // TestRunner_EndToEnd_NoToolPath pins the path where the LLM answers
 // without any tool call. Tools timeline must be empty; FinalText must
 // be set; the smoke-level TurnEndedCleanly check still passes.
@@ -521,6 +1125,455 @@ func TestRunner_EndToEnd_SubagentDelegation(t *testing.T) {
 	}
 	if len(out.Trace.Tools) > 0 && out.Trace.Tools[0].Tool != "subagent_run" {
 		t.Errorf("first parent tool call should be subagent_run; got %q", out.Trace.Tools[0].Tool)
+	}
+}
+
+// TestRunner_EndToEnd_FocusedTaskWebExtractDelegation mirrors the real
+// page-level isolation shape: the parent delegates a bounded web page read
+// to run_task(web_extract), the child reads the page with web_fetch, and the
+// parent answers from the structured report without doing its own direct page
+// inspection.
+func TestRunner_EndToEnd_FocusedTaskWebExtractDelegation(t *testing.T) {
+	parentTurn1 := []string{
+		`{"choices":[{"delta":{"role":"assistant","tool_calls":[{"index":0,"id":"p1","type":"function","function":{"name":"run_task","arguments":"{\"task_type\":\"web_extract\",\"objective\":\"inspect the Affine page and extract the market snapshot\"}"}}]},"finish_reason":"tool_calls"}]}`,
+		`{"choices":[{"delta":{},"finish_reason":"tool_calls"}]}`,
+		`[DONE]`,
+	}
+	childTurn1 := []string{
+		`{"choices":[{"delta":{"role":"assistant","tool_calls":[{"index":0,"id":"c1","type":"function","function":{"name":"web_fetch","arguments":"{\"url\":\"https://example.com/affine\"}"}}]},"finish_reason":"tool_calls"}]}`,
+		`{"choices":[{"delta":{},"finish_reason":"tool_calls"}]}`,
+		`[DONE]`,
+	}
+	childTurn2 := []string{
+		`{"choices":[{"delta":{"role":"assistant","content":"{\"task_type\":\"web_extract\",\"ok\":true,\"summary\":\"extracted the market snapshot from the page\",\"findings\":[{\"claim\":\"Affine is SN120 on the inspected page\",\"evidence\":\"page row shows Affine SN120 and the market snapshot fields\",\"source\":\"https://example.com/affine\"},{\"claim\":\"Affine market snapshot is current enough for trend analysis\",\"evidence\":\"page text includes price and market cap fields for the current snapshot\",\"source\":\"https://example.com/affine\"}]}"},"finish_reason":"stop"}]}`,
+		`[DONE]`,
+	}
+	parentTurn2 := []string{
+		`{"choices":[{"delta":{"role":"assistant","content":"The focused task extracted the Affine market snapshot from the page and reported the evidence without the parent re-reading the source. Final answer: Affine is SN120 and the page included a current market snapshot suitable for trend analysis."},"finish_reason":"stop"}]}`,
+		`[DONE]`,
+	}
+	srv := newScriptedLLM(t, [][]string{parentTurn1, childTurn1, childTurn2, parentTurn2})
+	llmClient := agent.NewLLMClient(srv.URL, "", "fake-model")
+	webFetch := agent.Tool{
+		Name:        "web_fetch",
+		Description: "Test-only fetch stand-in for focused web extraction.",
+		Schema: json.RawMessage(`{
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["url"],
+            "properties": {
+                "url": {"type": "string"}
+            }
+        }`),
+		Execute: func(ctx context.Context, args json.RawMessage) (string, error) {
+			var p struct {
+				URL string `json:"url"`
+			}
+			if err := json.Unmarshal(args, &p); err != nil {
+				return "", err
+			}
+			if p.URL != "https://example.com/affine" {
+				return "", fmt.Errorf("unexpected test URL %q", p.URL)
+			}
+			return "Affine SN120\nPrice: $17.62\nMarket cap: $56.3M\n24h change: -2.2%\n", nil
+		},
+	}
+
+	scenario := Scenario{
+		Name:         "focused_task_web_extract_delegation",
+		Description:  "parent delegates page-level web extraction to run_task and answers from the structured report",
+		Prompt:       "inspect the Affine page and extract the market snapshot. please use run_task so the page reading stays isolated.",
+		MaxTurnSteps: 4,
+		Checks: []Check{
+			TurnEndedCleanly(),
+			ToolCalledAtLeast("run_task", 1),
+			ToolArgContainsAtLeast("run_task", "task_type", "web_extract", 1),
+			FocusedTaskCalledAtLeast("web_extract", 1),
+			ToolNotCalledAfter("run_task", []string{"read_file", "list_files", "shell", "edit_file", "write_file"}),
+			MaxToolCallsAfter("run_task", 0),
+			FinalTextContains("SN120"),
+			FinalTextContains("market snapshot"),
+		},
+	}
+
+	runner := &Runner{
+		LLM:            llmClient,
+		MaxTurnSteps:   4,
+		PerCallTimeout: 5 * time.Second,
+		RunTimeout:     20 * time.Second,
+		Log:            zerolog.Nop(),
+		BuildRegistry: func(ctx context.Context, workspaceDir string, exec executor.Executor) (*agent.Registry, error) {
+			reg, err := defaultBuildRegistry(ctx, workspaceDir, exec)
+			if err != nil {
+				return nil, err
+			}
+			agent.RegisterFocusedTasks(reg, agent.FocusedTaskDeps{
+				LLM:              llmClient,
+				HostWorkspaceDir: workspaceDir,
+				TranscriptDir:    filepath.Join(workspaceDir, "focused-tasks"),
+				Log:              zerolog.Nop(),
+				RegisterWebTools: func(ctx context.Context, reg *agent.Registry) (func(), error) {
+					reg.Add(&webFetch)
+					return nil, nil
+				},
+			})
+			return reg, nil
+		},
+	}
+
+	out, err := runner.Run(context.Background(), scenario)
+	if err != nil {
+		t.Fatalf("Runner.Run: %v", err)
+	}
+	if !out.Pass {
+		t.Errorf("expected all checks to pass; failed: %v", out.FailedChecks())
+		for _, r := range out.Results {
+			t.Logf("  %s: pass=%v detail=%s", r.Check, r.Pass, r.Detail)
+		}
+		for i, c := range out.Trace.Tools {
+			t.Logf("  trace[%d]: tool=%s delegation=%+v args=%+v result=%s", i, c.Tool, c.Delegation, c.Args, c.Result)
+		}
+	}
+	if len(out.Trace.Tools) == 0 || out.Trace.Tools[0].Tool != "run_task" {
+		t.Fatalf("expected parent to delegate via run_task; got %+v", out.Trace.Tools)
+	}
+	if !strings.Contains(out.Trace.Tools[0].Result, `"task_type":"web_extract"`) || !strings.Contains(out.Trace.Tools[0].Result, `"findings"`) {
+		t.Fatalf("run_task result should be compact web_extract JSON; got %q", out.Trace.Tools[0].Result)
+	}
+	for _, raw := range []string{"Price: $17.62", "Market cap: $56.3M"} {
+		if strings.Contains(out.Trace.Tools[0].Result, raw) {
+			t.Fatalf("parent trace should not contain raw page text %q: %q", raw, out.Trace.Tools[0].Result)
+		}
+	}
+}
+
+// TestRunner_EndToEnd_FocusedTaskWebExtractPriceDisambiguation mirrors the
+// page-level isolation path on a price-heavy page: the child extracts the
+// visible values into a compact report, and the parent must preserve the
+// TAO top-bar price and the Affine subnet/body price as separate facts.
+func TestRunner_EndToEnd_FocusedTaskWebExtractPriceDisambiguation(t *testing.T) {
+	parentTurn1 := []string{
+		`{"choices":[{"delta":{"role":"assistant","tool_calls":[{"index":0,"id":"p1","type":"function","function":{"name":"run_task","arguments":"{\"task_type\":\"web_extract\",\"objective\":\"inspect the TAO.app subnet page and extract the market snapshot with the price values kept separate\"}"}}]},"finish_reason":"tool_calls"}]}`,
+		`{"choices":[{"delta":{},"finish_reason":"tool_calls"}]}`,
+		`[DONE]`,
+	}
+	childTurn1 := []string{
+		`{"choices":[{"delta":{"role":"assistant","tool_calls":[{"index":0,"id":"c1","type":"function","function":{"name":"web_fetch","arguments":"{\"url\":\"https://www.tao.app/subnets/120?active_tab=about\"}"}}]},"finish_reason":"tool_calls"}]}`,
+		`{"choices":[{"delta":{},"finish_reason":"tool_calls"}]}`,
+		`[DONE]`,
+	}
+	childTurn2 := []string{
+		`{"choices":[{"delta":{"role":"assistant","content":"{\"task_type\":\"web_extract\",\"ok\":true,\"summary\":\"extracted the subnet page snapshot\",\"findings\":[{\"claim\":\"The TAO.app top bar shows TAO Price $277.32\",\"evidence\":\"the chrome/top bar price is separate from the subnet body\",\"source\":\"https://www.tao.app/subnets/120?active_tab=about\"},{\"claim\":\"The Affine SN120 subnet body shows Price 0.06342 T\",\"evidence\":\"the subnet table/body row lists the subnet price in T\",\"source\":\"https://www.tao.app/subnets/120?active_tab=about\"},{\"claim\":\"The subnet page also shows Market Cap 201.04K T and FDV 1.32M T\",\"evidence\":\"those values are shown alongside the subnet body price\",\"source\":\"https://www.tao.app/subnets/120?active_tab=about\"}]}"},"finish_reason":"stop"}]}`,
+		`[DONE]`,
+	}
+	parentTurn2 := []string{
+		`{"choices":[{"delta":{"role":"assistant","content":"The TAO.app snapshot keeps two price-like values separate: the top bar shows TAO Price $277.32, while the Affine SN120 subnet body shows Price 0.06342 T with Market Cap 201.04K T and FDV 1.32M T. The parent kept the extracted facts compact instead of re-reading the page dump."},"finish_reason":"stop"}]}`,
+		`[DONE]`,
+	}
+	srv := newScriptedLLM(t, [][]string{parentTurn1, childTurn1, childTurn2, parentTurn2})
+	llmClient := agent.NewLLMClient(srv.URL, "", "fake-model")
+	webFetch := agent.Tool{
+		Name:        "web_fetch",
+		Description: "Test-only fetch stand-in for focused web extraction.",
+		Schema: json.RawMessage(`{
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["url"],
+            "properties": {
+                "url": {"type": "string"}
+            }
+        }`),
+		Execute: func(ctx context.Context, args json.RawMessage) (string, error) {
+			var p struct {
+				URL string `json:"url"`
+			}
+			if err := json.Unmarshal(args, &p); err != nil {
+				return "", err
+			}
+			if p.URL != "https://www.tao.app/subnets/120?active_tab=about" {
+				return "", fmt.Errorf("unexpected test URL %q", p.URL)
+			}
+			return "SourceAccess: browser_rendered_url=https://www.tao.app/subnets/120?active_tab=about; snapshot_id=14; page_text_below=verified_page_evidence\nTAO Price $277.32\nAffine SN120\nPrice 0.06342 T\nMarket Cap 201.04K T\nFDV 1.32M T\n", nil
+		},
+	}
+
+	scenario := Scenario{
+		Name:         "focused_task_web_extract_price_disambiguation",
+		Description:  "parent delegates price-heavy page reading to run_task(web_extract) and keeps top-bar and subnet price facts separate",
+		Prompt:       "inspect the TAO.app subnet page and extract the market snapshot. keep the price values separate and use run_task so the page reading stays isolated.",
+		MaxTurnSteps: 4,
+		Checks: []Check{
+			TurnEndedCleanly(),
+			ToolCalledAtLeast("run_task", 1),
+			ToolArgContainsAtLeast("run_task", "task_type", "web_extract", 1),
+			FocusedTaskCalledAtLeast("web_extract", 1),
+			ToolNotCalledAfter("run_task", []string{"read_file", "list_files", "shell", "edit_file", "write_file"}),
+			MaxToolCallsAfter("run_task", 0),
+			FinalTextContains("TAO Price $277.32"),
+			FinalTextContains("Price 0.06342 T"),
+			FinalTextContains("Market Cap 201.04K T"),
+			FinalTextContains("FDV 1.32M T"),
+		},
+	}
+
+	runner := &Runner{
+		LLM:            llmClient,
+		MaxTurnSteps:   4,
+		PerCallTimeout: 5 * time.Second,
+		RunTimeout:     20 * time.Second,
+		Log:            zerolog.Nop(),
+		BuildRegistry: func(ctx context.Context, workspaceDir string, exec executor.Executor) (*agent.Registry, error) {
+			reg, err := defaultBuildRegistry(ctx, workspaceDir, exec)
+			if err != nil {
+				return nil, err
+			}
+			agent.RegisterFocusedTasks(reg, agent.FocusedTaskDeps{
+				LLM:              llmClient,
+				HostWorkspaceDir: workspaceDir,
+				TranscriptDir:    filepath.Join(workspaceDir, "focused-tasks"),
+				Log:              zerolog.Nop(),
+				RegisterWebTools: func(ctx context.Context, reg *agent.Registry) (func(), error) {
+					reg.Add(&webFetch)
+					return nil, nil
+				},
+			})
+			return reg, nil
+		},
+	}
+
+	out, err := runner.Run(context.Background(), scenario)
+	if err != nil {
+		t.Fatalf("Runner.Run: %v", err)
+	}
+	if !out.Pass {
+		t.Errorf("expected all checks to pass; failed: %v", out.FailedChecks())
+		for _, r := range out.Results {
+			t.Logf("  %s: pass=%v detail=%s", r.Check, r.Pass, r.Detail)
+		}
+		for i, c := range out.Trace.Tools {
+			t.Logf("  trace[%d]: tool=%s delegation=%+v args=%+v result=%s", i, c.Tool, c.Delegation, c.Args, c.Result)
+		}
+	}
+	if len(out.Trace.Tools) == 0 || out.Trace.Tools[0].Tool != "run_task" {
+		t.Fatalf("expected parent to delegate via run_task; got %+v", out.Trace.Tools)
+	}
+	if !strings.Contains(out.Trace.Tools[0].Result, `"task_type":"web_extract"`) || !strings.Contains(out.Trace.Tools[0].Result, `"findings"`) {
+		t.Fatalf("run_task result should be compact web_extract JSON; got %q", out.Trace.Tools[0].Result)
+	}
+	for _, raw := range []string{
+		"SourceAccess: browser_rendered_url=",
+		"TAO Price $277.32\nAffine SN120\nPrice 0.06342 T\nMarket Cap 201.04K T\nFDV 1.32M T",
+	} {
+		if strings.Contains(out.Trace.Tools[0].Result, raw) {
+			t.Fatalf("parent trace should not contain raw page dump %q: %q", raw, out.Trace.Tools[0].Result)
+		}
+	}
+}
+
+// TestRunner_EndToEnd_FocusedTaskExploreRepoSearchDelegation mirrors
+// the workspace-discovery shape: the parent delegates code discovery
+// to run_task(explore), the child uses repo_search instead of a broad
+// shell sweep, and the parent answers from the compressed report.
+func TestRunner_EndToEnd_FocusedTaskExploreRepoSearchDelegation(t *testing.T) {
+	parentTurn1 := []string{
+		`{"choices":[{"delta":{"role":"assistant","tool_calls":[{"index":0,"id":"p1","type":"function","function":{"name":"run_task","arguments":"{\"task_type\":\"explore\",\"objective\":\"find the repo_search implementation in this workspace\"}"}}]},"finish_reason":"tool_calls"}]}`,
+		`{"choices":[{"delta":{},"finish_reason":"tool_calls"}]}`,
+		`[DONE]`,
+	}
+	childTurn1 := []string{
+		`{"choices":[{"delta":{"role":"assistant","tool_calls":[{"index":0,"id":"c1","type":"function","function":{"name":"repo_search","arguments":"{\"query\":\"repoSearchTool\",\"path\":\"internal/agent\",\"max_results\":3}"}}]},"finish_reason":"tool_calls"}]}`,
+		`{"choices":[{"delta":{},"finish_reason":"tool_calls"}]}`,
+		`[DONE]`,
+	}
+	childTurn2 := []string{
+		`{"choices":[{"delta":{"role":"assistant","content":"{\"task_type\":\"explore\",\"ok\":true,\"summary\":\"located the repo_search implementation\",\"findings\":[{\"claim\":\"repo_search is implemented in internal/agent/repo_search.go\",\"evidence\":\"repo_search found the implementation file and the repoSearchTool symbol\",\"source\":\"internal/agent/repo_search.go\"}]}"},"finish_reason":"stop"}]}`,
+		`[DONE]`,
+	}
+	parentTurn2 := []string{
+		`{"choices":[{"delta":{"role":"assistant","content":"The focused task found the repo_search implementation in internal/agent/repo_search.go and returned a compact report."},"finish_reason":"stop"}]}`,
+		`[DONE]`,
+	}
+	srv := newScriptedLLM(t, [][]string{parentTurn1, childTurn1, childTurn2, parentTurn2})
+	llmClient := agent.NewLLMClient(srv.URL, "", "fake-model")
+
+	scenario := Scenario{
+		Name:        "focused_task_explore_repo_search_delegation",
+		Description: "parent delegates workspace code discovery to run_task(explore) and child uses repo_search",
+		Prompt:      "find the repo_search implementation in this workspace. please use run_task so the lookup stays isolated.",
+		Setup: func(workspaceDir string) error {
+			if err := os.MkdirAll(filepath.Join(workspaceDir, "internal", "agent"), 0o755); err != nil {
+				return err
+			}
+			return os.WriteFile(filepath.Join(workspaceDir, "internal", "agent", "repo_search.go"), []byte("package agent\n\nfunc repoSearchTool() {}\n"), 0o644)
+		},
+		MaxTurnSteps: 4,
+		Checks: []Check{
+			TurnEndedCleanly(),
+			ToolCalledAtLeast("run_task", 1),
+			ToolArgContainsAtLeast("run_task", "task_type", "explore", 1),
+			FocusedTaskCalledAtLeast("explore", 1),
+			ToolResultContains("run_task", "repo_search found the implementation file"),
+			FinalTextContains("repo_search implementation in internal/agent/repo_search.go"),
+		},
+	}
+
+	runner := &Runner{
+		LLM:            llmClient,
+		MaxTurnSteps:   4,
+		PerCallTimeout: 5 * time.Second,
+		RunTimeout:     20 * time.Second,
+		Log:            zerolog.Nop(),
+		BuildRegistry: func(ctx context.Context, workspaceDir string, exec executor.Executor) (*agent.Registry, error) {
+			reg, err := defaultBuildRegistry(ctx, workspaceDir, exec)
+			if err != nil {
+				return nil, err
+			}
+			agent.RegisterFocusedTasks(reg, agent.FocusedTaskDeps{
+				LLM:              llmClient,
+				Executor:         exec,
+				HostWorkspaceDir: workspaceDir,
+				Log:              zerolog.Nop(),
+			})
+			return reg, nil
+		},
+	}
+
+	out, err := runner.Run(context.Background(), scenario)
+	if err != nil {
+		t.Fatalf("Runner.Run: %v", err)
+	}
+	if !out.Pass {
+		t.Fatalf("expected all checks to pass; failed: %v", out.FailedChecks())
+	}
+	if len(out.Trace.Tools) == 0 || out.Trace.Tools[0].Tool != "run_task" {
+		t.Fatalf("expected parent to delegate via run_task; got %+v", out.Trace.Tools)
+	}
+	if !strings.Contains(out.Trace.Tools[0].Result, `"task_type":"explore"`) || !strings.Contains(out.Trace.Tools[0].Result, "repo_search found the implementation file") {
+		t.Fatalf("run_task result should include the repo_search evidence; got %q", out.Trace.Tools[0].Result)
+	}
+}
+
+// TestRunner_EndToEnd_FocusedTaskRecallMemoryAndSessionSearch mirrors the
+// recall workflow: the parent delegates to run_task(recall), the child
+// searches durable memory first, then prior sessions, and the parent
+// answers from the compact structured report instead of redoing the lookup
+// itself. This is the narrowest end-to-end proof that recall is a bounded
+// isolation surface rather than ad hoc prompt glue.
+func TestRunner_EndToEnd_FocusedTaskRecallMemoryAndSessionSearch(t *testing.T) {
+	parentTurn1 := []string{
+		`{"choices":[{"delta":{"role":"assistant","tool_calls":[{"index":0,"id":"p1","type":"function","function":{"name":"run_task","arguments":"{\"task_type\":\"recall\",\"objective\":\"find the user's response preference from memory and prior session history\"}"}}]},"finish_reason":"tool_calls"}]}`,
+		`{"choices":[{"delta":{},"finish_reason":"tool_calls"}]}`,
+		`[DONE]`,
+	}
+	childTurn1 := []string{
+		`{"choices":[{"delta":{"role":"assistant","tool_calls":[{"index":0,"id":"c1","type":"function","function":{"name":"memory","arguments":"{\"action\":\"search\",\"topic\":\"prefs\",\"query\":\"terse responses no bullet lists\",\"top_k\":3}"}}]},"finish_reason":"tool_calls"}]}`,
+		`{"choices":[{"delta":{},"finish_reason":"tool_calls"}]}`,
+		`[DONE]`,
+	}
+	childTurn2 := []string{
+		`{"choices":[{"delta":{"role":"assistant","tool_calls":[{"index":0,"id":"c2","type":"function","function":{"name":"session_search","arguments":"{\"query\":\"terse responses no bullet lists\",\"top_k\":3,\"max_per_session\":2}"}}]},"finish_reason":"tool_calls"}]}`,
+		`{"choices":[{"delta":{},"finish_reason":"tool_calls"}]}`,
+		`[DONE]`,
+	}
+	recallReport := fmt.Sprintf("```json\n%s\n```", `{"task_type":"recall","ok":true,"summary":"recalled the user's terse-response preference from memory and a prior session","findings":[{"claim":"the user prefers terse responses and no bullet lists","evidence":"memory topic prefs says the user prefers terse responses and no bullet lists","source":"memory:prefs","confidence":"high"},{"claim":"a past session repeats the same terse preference","evidence":"the prior session says to keep replies terse and skip bullet lists","source":"past-style","confidence":"medium"}],"warnings":[],"not_found":[],"suggested_next":[]}`)
+	childTurn3 := []string{
+		fmt.Sprintf(`{"choices":[{"delta":{"role":"assistant","content":%q},"finish_reason":"stop"}]}`, recallReport),
+		`[DONE]`,
+	}
+	parentTurn2 := []string{
+		`{"choices":[{"delta":{"role":"assistant","content":"The user prefers terse responses and no bullet lists, confirmed by durable memory and a prior session. I kept the recall isolated instead of re-searching in the parent turn."},"finish_reason":"stop"}]}`,
+		`[DONE]`,
+	}
+	parentTurn3 := []string{
+		`{"choices":[{"delta":{"role":"assistant","content":"The user prefers terse responses and no bullet lists, confirmed by durable memory and a prior session. I kept the recall isolated instead of re-searching in the parent turn."},"finish_reason":"stop"}]}`,
+		`[DONE]`,
+	}
+	srv := newScriptedLLM(t, [][]string{parentTurn1, childTurn1, childTurn2, childTurn3, parentTurn2, parentTurn3})
+	llmClient := agent.NewLLMClient(srv.URL, "", "fake-model")
+
+	scenario := Scenario{
+		Name:        "focused_task_recall_memory_session_search",
+		Description: "parent delegates recall to run_task and child uses memory plus session_search before answering",
+		Prompt:      "find the user's response preference from memory and prior session history. use run_task so the recall stays isolated.",
+		Setup: func(workspaceDir string) error {
+			memStore := memory.NewFileMemoryStore(workspaceDir)
+			if _, err := memStore.Add(memory.TargetMemory, "prefs", "The user prefers terse responses and no bullet lists."); err != nil {
+				return err
+			}
+			sessionsDir := filepath.Join(workspaceDir, ".affentctl")
+			writeRecallSessionLog(t, sessionsDir, "past-style",
+				agent.ChatMessage{Role: "user", Content: "please keep it terse and no bullet lists"},
+				agent.ChatMessage{Role: "assistant", Content: "Got it. Terse responses only."},
+			)
+			writeRecallSessionLog(t, sessionsDir, "distractor",
+				agent.ChatMessage{Role: "user", Content: "please explain everything in detail"},
+				agent.ChatMessage{Role: "assistant", Content: "Sure, I will be verbose."},
+			)
+			return nil
+		},
+		MaxTurnSteps: 6,
+		Checks: []Check{
+			TurnEndedCleanly(),
+			ToolCalledAtLeast("run_task", 1),
+			ToolArgContainsAtLeast("run_task", "task_type", "recall", 1),
+			FocusedTaskCalledAtLeast("recall", 1),
+			ToolResultContains("run_task", "\"tool\":\"memory\""),
+			ToolResultContains("run_task", "\"tool\":\"session_search\""),
+			ToolResultContains("run_task", "terse responses and no bullet lists"),
+			FinalTextContains("terse responses"),
+			FinalTextContains("no bullet lists"),
+		},
+	}
+
+	runner := &Runner{
+		LLM:            llmClient,
+		MaxTurnSteps:   6,
+		PerCallTimeout: 5 * time.Second,
+		RunTimeout:     20 * time.Second,
+		Log:            zerolog.Nop(),
+		BuildRegistry: func(ctx context.Context, workspaceDir string, exec executor.Executor) (*agent.Registry, error) {
+			reg, err := defaultBuildRegistry(ctx, workspaceDir, exec)
+			if err != nil {
+				return nil, err
+			}
+			agent.RegisterFocusedTasks(reg, agent.FocusedTaskDeps{
+				LLM:              llmClient,
+				Executor:         exec,
+				HostWorkspaceDir: workspaceDir,
+				Memory:           memory.NewFileMemoryStore(workspaceDir),
+				SessionsDir:      filepath.Join(workspaceDir, ".affentctl"),
+				ParentSessionID:  "recall-parent",
+				TranscriptDir:    filepath.Join(workspaceDir, "focused-tasks"),
+				Log:              zerolog.Nop(),
+				PerCallTimeout:   5 * time.Second,
+			})
+			return reg, nil
+		},
+	}
+
+	out, err := runner.Run(context.Background(), scenario)
+	if err != nil {
+		t.Fatalf("Runner.Run: %v", err)
+	}
+	if !out.Pass {
+		t.Errorf("expected all checks to pass; failed: %v", out.FailedChecks())
+		for _, r := range out.Results {
+			t.Logf("  %s: pass=%v detail=%s", r.Check, r.Pass, r.Detail)
+		}
+		for i, c := range out.Trace.Tools {
+			t.Logf("  trace[%d]: tool=%s delegation=%+v args=%+v result=%s", i, c.Tool, c.Delegation, c.Args, c.Result)
+		}
+	}
+	if len(out.Trace.Tools) == 0 || out.Trace.Tools[0].Tool != "run_task" {
+		t.Fatalf("expected parent to delegate via run_task; got %+v", out.Trace.Tools)
+	}
+	if !strings.Contains(out.Trace.Tools[0].Result, `"task_type":"recall"`) || !strings.Contains(out.Trace.Tools[0].Result, "memory:prefs") {
+		t.Fatalf("run_task result should include the recall evidence; got %q", out.Trace.Tools[0].Result)
+	}
+	for _, raw := range []string{"memory search"} {
+		if strings.Contains(out.Trace.Tools[0].Result, raw) {
+			t.Fatalf("parent trace should not contain the raw recall workflow %q: %q", raw, out.Trace.Tools[0].Result)
+		}
 	}
 }
 
@@ -1348,6 +2401,265 @@ Body:
 	}
 	if !strings.Contains(out.Trace.Tools[0].Result, "Canonical region: us-east-1") {
 		t.Errorf("tool result should contain the snapshot text; got %q", out.Trace.Tools[0].Result)
+	}
+}
+
+// TestRunner_EndToEnd_WebSnapshotPriceDisambiguation locks in the browser path
+// for pages that expose both a top-bar market price and a subnet/body price on
+// the same rendered page.
+func TestRunner_EndToEnd_WebSnapshotPriceDisambiguation(t *testing.T) {
+	const snapshot = `SourceAccess: browser_rendered_url=https://www.tao.app/subnets/120?active_tab=about; snapshot_id=14; page_text_below=verified_page_evidence
+URL: https://www.tao.app/subnets/120?active_tab=about
+TITLE: SN120 - Affine | TAO.app | Your Gateway to Bittensor
+INTERACTIVE ELEMENTS:
+[1] button "About"
+[2] button "Metrics"
+
+PAGE TEXT:
+[text span] TAO Price $ 277.32 -1.02 % 1D Vol $ 168.66M -39 % MC $ 3.03B FDV $ 5.82B Circ. Supply 10.94M
+[text div] Price 0.06342 T/ d L: 0.060 T H: 0.086 T Market Cap 201.04K T FDV 1.32M T`
+
+	browserNavigate := agent.Tool{
+		Name:        "browser_navigate",
+		Description: "Test-only browser navigate stand-in: returns a deterministic TAO.app snapshot.",
+		Schema: json.RawMessage(`{
+            "type": "object",
+            "required": ["url"],
+            "properties": {
+                "url": {"type": "string"},
+                "wait_until": {"type": "string"}
+            }
+        }`),
+		Execute: func(ctx context.Context, args json.RawMessage) (string, error) {
+			return snapshot, nil
+		},
+	}
+	browserFind := agent.Tool{
+		Name:        "browser_find",
+		Description: "Test-only browser find stand-in: returns compact price-like snippets.",
+		Schema: json.RawMessage(`{
+            "type": "object",
+            "required": ["query"],
+            "properties": {
+                "query": {"type": "string"},
+                "max_results": {"type": "integer"}
+            }
+        }`),
+		Execute: func(ctx context.Context, args json.RawMessage) (string, error) {
+			return `SourceAccess: browser_rendered_url=https://www.tao.app/subnets/120?active_tab=about; snapshot_id=15; page_text_below=verified_page_evidence
+URL: https://www.tao.app/subnets/120?active_tab=about
+TITLE: SN120 - Affine | TAO.app | Your Gateway to Bittensor
+QUERY: "price market cap fdv volume"
+[text span] TAO Price $ 277.32 -1.02 % 1D Vol $ 168.66M -39 % MC $ 3.03B FDV $ 5.82B Circ. Supply 10.94M
+[text div] Price 0.06342 T | Market Cap 201.04K T | FDV 1.32M T`, nil
+		},
+	}
+
+	turn1 := []string{
+		`{"choices":[{"delta":{"role":"assistant","tool_calls":[{"index":0,"id":"b1","type":"function","function":{"name":"browser_navigate","arguments":"{\"url\":\"https://www.tao.app/subnets/120?active_tab=about\",\"wait_until\":\"networkidle\"}"}}]},"finish_reason":null}]}`,
+		`{"choices":[{"delta":{},"finish_reason":"tool_calls"}]}`,
+		`[DONE]`,
+	}
+	turn2 := []string{
+		`{"choices":[{"delta":{"role":"assistant","tool_calls":[{"index":0,"id":"f1","type":"function","function":{"name":"browser_find","arguments":"{\"query\":\"price market cap fdv volume\",\"max_results\":5}"}}]},"finish_reason":null}]}`,
+		`{"choices":[{"delta":{},"finish_reason":"tool_calls"}]}`,
+		`[DONE]`,
+	}
+	turn3 := []string{
+		`{"choices":[{"delta":{"role":"assistant","content":"The browser snapshot shows two distinct price-like values on the same TAO.app page. The top bar has TAO Price $277.32, which is the broader TAO market price in the site chrome. The body has the Affine SN120 subnet price Price 0.06342 T, along with Market Cap 201.04K T and FDV 1.32M T. These should be kept separate and not conflated."},"finish_reason":"stop"}]}`,
+		`[DONE]`,
+	}
+	srv := newScriptedLLM(t, [][]string{turn1, turn2, turn3})
+	browserArgs := func(tool string, want string) func(map[string]any) bool {
+		return func(args map[string]any) bool {
+			if tool == "browser_navigate" {
+				return args["url"] == want
+			}
+			if tool == "browser_find" {
+				return strings.Contains(fmt.Sprint(args["query"]), want)
+			}
+			return false
+		}
+	}
+
+	scenario := Scenario{
+		Name:         "web_snapshot_price_disambiguation",
+		Description:  "browser snapshot and find should preserve top-bar TAO price and subnet/body price separately",
+		Prompt:       "Read the TAO.app page for Affine SN120 and report the different price-like values without conflating them.",
+		MaxTurnSteps: 5,
+		Checks: []Check{
+			TurnEndedCleanly(),
+			ToolCalled("browser_navigate", browserArgs("browser_navigate", "https://www.tao.app/subnets/120?active_tab=about")),
+			ToolCalled("browser_find", browserArgs("browser_find", "price market cap fdv volume")),
+			ToolCalledBeforeMatching("browser_navigate", browserArgs("browser_navigate", "https://www.tao.app/subnets/120?active_tab=about"), "browser_find", browserArgs("browser_find", "price market cap fdv volume")),
+			FinalTextContains("TAO Price $277.32"),
+			FinalTextContains("Price 0.06342 T"),
+			FinalTextContains("Market Cap 201.04K T"),
+			FinalTextContains("broader TAO market price"),
+			FinalTextContains("Affine SN120 subnet price"),
+		},
+	}
+
+	runner := &Runner{
+		LLM:            agent.NewLLMClient(srv.URL, "", "fake-model"),
+		MaxTurnSteps:   5,
+		PerCallTimeout: 5 * time.Second,
+		RunTimeout:     15 * time.Second,
+		Log:            zerolog.Nop(),
+		BuildRegistry: func(ctx context.Context, workspaceDir string, exec executor.Executor) (*agent.Registry, error) {
+			_ = ctx
+			_ = workspaceDir
+			_ = exec
+			reg := agent.NewRegistry()
+			reg.Add(&browserNavigate)
+			reg.Add(&browserFind)
+			return reg, nil
+		},
+	}
+
+	out, err := runner.Run(context.Background(), scenario)
+	if err != nil {
+		t.Fatalf("Runner.Run: %v", err)
+	}
+	if !out.Pass {
+		t.Errorf("expected all checks to pass; failed: %v", out.FailedChecks())
+		for _, r := range out.Results {
+			t.Logf("  %s: pass=%v detail=%s", r.Check, r.Pass, r.Detail)
+		}
+	}
+	if len(out.Trace.Tools) != 2 {
+		t.Fatalf("expected navigate + find; got %+v", out.Trace.Tools)
+	}
+}
+
+// TestRunner_EndToEnd_Browser404DiscoveryOnly keeps the browser 404 / page
+// not found path honest: the model should treat it as a discovery page and use
+// the visible navigation links rather than the body as evidence.
+func TestRunner_EndToEnd_Browser404DiscoveryOnly(t *testing.T) {
+	const snapshot = `SourceAccess: browser_rendered_url=https://example.test/missing; snapshot_id=21; page_text_below=not_found_page_discovery_only; links_in_snapshot=discovered_unverified_until_opened
+URL: https://example.test/missing
+TITLE: 404 - Page Not Found
+SNAPSHOT_ID: 21
+
+INTERACTIVE ELEMENTS:
+[1] link "Docs" → /docs
+[2] link "Subnets" → /subnets
+
+PAGE TEXT:
+[text h1] Page not found
+[text p] Use the navigation links to reach /docs or /subnets.`
+
+	const find = `SourceAccess: browser_rendered_url=https://example.test/missing; snapshot_id=22; page_text_below=not_found_page_discovery_only; links_in_snapshot=discovered_unverified_until_opened
+URL: https://example.test/missing
+TITLE: 404 - Page Not Found
+SNAPSHOT_ID: 22
+QUERY: "docs"
+
+MATCHES:
+[interactive ref=1] link "Docs" → /docs
+[text p] Use the navigation links to reach /docs or /subnets.`
+
+	browserNavigate := agent.Tool{
+		Name:        "browser_navigate",
+		Description: "Test-only browser navigate stand-in: returns a deterministic 404 discovery page.",
+		Schema: json.RawMessage(`{
+            "type": "object",
+            "required": ["url"],
+            "properties": {
+                "url": {"type": "string"},
+                "wait_until": {"type": "string"}
+            }
+        }`),
+		Execute: func(ctx context.Context, args json.RawMessage) (string, error) {
+			return snapshot, nil
+		},
+	}
+	browserFind := agent.Tool{
+		Name:        "browser_find",
+		Description: "Test-only browser find stand-in: returns compact 404 discovery matches.",
+		Schema: json.RawMessage(`{
+            "type": "object",
+            "required": ["query"],
+            "properties": {
+                "query": {"type": "string"},
+                "max_results": {"type": "integer"}
+            }
+        }`),
+		Execute: func(ctx context.Context, args json.RawMessage) (string, error) {
+			return find, nil
+		},
+	}
+
+	turn1 := []string{
+		`{"choices":[{"delta":{"role":"assistant","tool_calls":[{"index":0,"id":"b1","type":"function","function":{"name":"browser_navigate","arguments":"{\"url\":\"https://example.test/missing\",\"wait_until\":\"networkidle\"}"}}]},"finish_reason":null}]}`,
+		`{"choices":[{"delta":{},"finish_reason":"tool_calls"}]}`,
+		`[DONE]`,
+	}
+	turn2 := []string{
+		`{"choices":[{"delta":{"role":"assistant","tool_calls":[{"index":0,"id":"f1","type":"function","function":{"name":"browser_find","arguments":"{\"query\":\"docs\",\"max_results\":5}"}}]},"finish_reason":null}]}`,
+		`{"choices":[{"delta":{},"finish_reason":"tool_calls"}]}`,
+		`[DONE]`,
+	}
+	turn3 := []string{
+		`{"choices":[{"delta":{"role":"assistant","content":"This URL is a 404 discovery page, not verified evidence. The browser output shows a Docs link and a Subnets link, so the next step is to follow one of those navigation links rather than rely on the page body. That keeps the missing page discovery-only while still letting me continue to the correct canonical source."},"finish_reason":"stop"}]}`,
+		`[DONE]`,
+	}
+	srv := newScriptedLLM(t, [][]string{turn1, turn2, turn3})
+
+	scenario := Scenario{
+		Name:         "browser_404_discovery_only",
+		Description:  "browser 404 pages should be treated as discovery-only and followed via visible navigation links",
+		Prompt:       "Open the missing page and continue from whatever navigation links it exposes. Do not treat the 404 body as verified evidence.",
+		MaxTurnSteps: 5,
+		Checks: []Check{
+			TurnEndedCleanly(),
+			ToolCalled("browser_navigate", func(args map[string]any) bool {
+				return args["url"] == "https://example.test/missing"
+			}),
+			ToolCalled("browser_find", func(args map[string]any) bool {
+				return strings.Contains(fmt.Sprint(args["query"]), "docs")
+			}),
+			ToolCalledBeforeMatching("browser_navigate", func(args map[string]any) bool {
+				return args["url"] == "https://example.test/missing"
+			}, "browser_find", func(args map[string]any) bool {
+				return strings.Contains(fmt.Sprint(args["query"]), "docs")
+			}),
+			FinalTextContains("404 discovery page"),
+			FinalTextContains("not verified evidence"),
+			FinalTextContains("Docs link"),
+			FinalTextContains("missing page discovery-only"),
+		},
+	}
+
+	runner := &Runner{
+		LLM:            agent.NewLLMClient(srv.URL, "", "fake-model"),
+		MaxTurnSteps:   5,
+		PerCallTimeout: 5 * time.Second,
+		RunTimeout:     15 * time.Second,
+		Log:            zerolog.Nop(),
+		BuildRegistry: func(ctx context.Context, workspaceDir string, exec executor.Executor) (*agent.Registry, error) {
+			_ = ctx
+			_ = workspaceDir
+			_ = exec
+			reg := agent.NewRegistry()
+			reg.Add(&browserNavigate)
+			reg.Add(&browserFind)
+			return reg, nil
+		},
+	}
+
+	out, err := runner.Run(context.Background(), scenario)
+	if err != nil {
+		t.Fatalf("Runner.Run: %v", err)
+	}
+	if !out.Pass {
+		t.Errorf("expected all checks to pass; failed: %v", out.FailedChecks())
+		for _, r := range out.Results {
+			t.Logf("  %s: pass=%v detail=%s", r.Check, r.Pass, r.Detail)
+		}
+	}
+	if len(out.Trace.Tools) != 2 {
+		t.Fatalf("expected navigate + find; got %+v", out.Trace.Tools)
 	}
 }
 
@@ -2959,9 +4271,9 @@ func TestRunner_EndToEnd_ExternalResearchAffineBittensorFlow(t *testing.T) {
 	}
 
 	scenario := Scenario{
-		Name:        "external_research_affine_bittensor_flow",
-		Description: "agent discovers official and metrics sources, skips direct social fetch, and ends from verified evidence",
-		Prompt:      "Affine is a Bittensor SN120 subnet. Assess its recent trend and market position. Start from official and market sources, preserve the Bittensor/SN120 disambiguator, and keep social snippets as weak evidence only.",
+		Name:         "external_research_affine_bittensor_flow",
+		Description:  "agent discovers official and metrics sources, skips direct social fetch, and ends from verified evidence",
+		Prompt:       "Affine is a Bittensor SN120 subnet. Assess its recent trend and market position. Start from official and market sources, preserve the Bittensor/SN120 disambiguator, and keep social snippets as weak evidence only.",
 		MaxTurnSteps: 6,
 		Checks: []Check{
 			TurnEndedCleanly(),
@@ -3009,5 +4321,135 @@ func TestRunner_EndToEnd_ExternalResearchAffineBittensorFlow(t *testing.T) {
 	}
 	if len(out.Trace.Tools) != 3 {
 		t.Fatalf("expected one search and two fetches; got %+v", out.Trace.Tools)
+	}
+}
+
+// TestRunner_EndToEnd_ExternalResearchAffinePriceDisambiguation locks in the
+// mixed-price failure mode from the real TAO.app page: the title/top bar shows
+// the broader TAO price, while the body shows the subnet price for Affine.
+func TestRunner_EndToEnd_ExternalResearchAffinePriceDisambiguation(t *testing.T) {
+	webSearch := agent.Tool{
+		Name:        "web_search",
+		Description: "Test-only search stand-in: returns a TAO.app page candidate.",
+		Schema: json.RawMessage(`{
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["query"],
+            "properties": {
+                "query": {"type": "string"},
+                "num_results": {"type": "integer"}
+            }
+        }`),
+		Execute: func(ctx context.Context, args json.RawMessage) (string, error) {
+			return `[
+  {"title":"Affine SN120 on TAO.app","url":"https://www.tao.app/subnets/120?active_tab=about","snippet":"TAO Price $277.32 in the top bar; body shows Price 0.06342 T, Market Cap 201.04K T, and FDV 1.32M T."},
+  {"title":"Affine SN120 metrics","url":"https://metrics.example/affine","snippet":"Subnet metrics page with price, market cap, and 24h volume."}
+]`, nil
+		},
+	}
+	webFetch := agent.Tool{
+		Name:        "web_fetch",
+		Description: "Test-only fetch stand-in: returns deterministic TAO.app page text with two price-like values.",
+		Schema: json.RawMessage(`{
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["url"],
+            "properties": {
+                "url": {"type": "string"}
+            }
+        }`),
+		Execute: func(ctx context.Context, args json.RawMessage) (string, error) {
+			var p struct {
+				URL string `json:"url"`
+			}
+			if err := json.Unmarshal(args, &p); err != nil {
+				return "", err
+			}
+			switch p.URL {
+			case "https://www.tao.app/subnets/120?active_tab=about":
+				return "SourceAccess: browser_rendered_url=https://www.tao.app/subnets/120?active_tab=about; snapshot_id=14; page_text_below=verified_page_evidence\n" +
+					"URL: https://www.tao.app/subnets/120?active_tab=about\n" +
+					"TITLE: SN120 - Affine | TAO.app | Your Gateway to Bittensor\n" +
+					"[text span] TAO Price $ 277.32 -1.02 % 1D Vol $ 168.66M -39 % MC $ 3.03B FDV $ 5.82B Circ. Supply 10.94M\n" +
+					"[text div] Price 0.06342 T/ d L: 0.060 T H: 0.086 T Market Cap 201.04K T FDV 1.32M T\n", nil
+			default:
+				return "", fmt.Errorf("unexpected test URL %q", p.URL)
+			}
+		},
+	}
+
+	turn1 := []string{
+		`{"choices":[{"delta":{"role":"assistant","tool_calls":[{"index":0,"id":"s1","type":"function","function":{"name":"web_search","arguments":"{\"query\":\"Affine SN120 TAO.app price market cap subnet price\",\"num_results\":5}"}}]},"finish_reason":null}]}`,
+		`{"choices":[{"delta":{},"finish_reason":"tool_calls"}]}`,
+		`[DONE]`,
+	}
+	turn2 := []string{
+		`{"choices":[{"delta":{"role":"assistant","tool_calls":[{"index":0,"id":"f1","type":"function","function":{"name":"web_fetch","arguments":"{\"url\":\"https://www.tao.app/subnets/120?active_tab=about\"}"}}]},"finish_reason":null}]}`,
+		`{"choices":[{"delta":{},"finish_reason":"tool_calls"}]}`,
+		`[DONE]`,
+	}
+	turn3 := []string{
+		`{"choices":[{"delta":{"role":"assistant","content":"The TAO.app page shows two separate price-like values and they should not be conflated. The title/top-bar value is TAO Price $277.32, which is the broader TAO token price shown by the site chrome. The subnet/body value is Price 0.06342 T, which is the Affine SN120 subnet price in the page content. The body also shows Market Cap 201.04K T and FDV 1.32M T, while the larger MC $3.03B value belongs to the TAO top bar. So the subnet price is 0.06342 T, not $277.32."},"finish_reason":"stop"}]}`,
+		`[DONE]`,
+	}
+	srv := newScriptedLLM(t, [][]string{turn1, turn2, turn3})
+	searchArgs := func(args map[string]any) bool {
+		q, _ := args["query"].(string)
+		return strings.Contains(q, "Affine") && strings.Contains(q, "TAO.app") && strings.Contains(q, "price")
+	}
+	fetchURL := func(url string) func(map[string]any) bool {
+		return func(args map[string]any) bool { return args["url"] == url }
+	}
+
+	scenario := Scenario{
+		Name:         "external_research_affine_price_disambiguation",
+		Description:  "agent must keep the TAO top-bar price separate from the Affine subnet/body price",
+		Prompt:       "Affine is a Bittensor SN120 subnet. Read the TAO.app page and report the different price-like values without conflating them. Use the visible labels exactly.",
+		MaxTurnSteps: 6,
+		Checks: []Check{
+			TurnEndedCleanly(),
+			ToolCalled("web_search", searchArgs),
+			ToolResultContains("web_search", "TAO Price $277.32"),
+			ToolCalled("web_fetch", fetchURL("https://www.tao.app/subnets/120?active_tab=about")),
+			ToolCalledBeforeMatching("web_search", searchArgs, "web_fetch", fetchURL("https://www.tao.app/subnets/120?active_tab=about")),
+			FinalTextContains("TAO Price $277.32"),
+			FinalTextContains("Price 0.06342 T"),
+			FinalTextContains("Market Cap 201.04K T"),
+			FinalTextContains("FDV 1.32M T"),
+			FinalTextContains("broader TAO token price"),
+			FinalTextContains("Affine SN120 subnet price"),
+		},
+	}
+
+	runner := &Runner{
+		LLM:            agent.NewLLMClient(srv.URL, "", "fake-model"),
+		MaxTurnSteps:   6,
+		PerCallTimeout: 5 * time.Second,
+		RunTimeout:     20 * time.Second,
+		Log:            zerolog.Nop(),
+		BuildRegistry: func(ctx context.Context, workspaceDir string, exec executor.Executor) (*agent.Registry, error) {
+			_ = ctx
+			_ = workspaceDir
+			_ = exec
+			reg := agent.NewRegistry()
+			reg.Add(&webSearch)
+			reg.Add(&webFetch)
+			return reg, nil
+		},
+	}
+
+	out, err := runner.Run(context.Background(), scenario)
+	if err != nil {
+		t.Fatalf("Runner.Run: %v", err)
+	}
+	if !out.Pass {
+		t.Errorf("expected all checks to pass; failed: %v", out.FailedChecks())
+		for _, r := range out.Results {
+			t.Logf("  %s: pass=%v detail=%s", r.Check, r.Pass, r.Detail)
+		}
+	}
+	if strings.Contains(out.Trace.FinalText, "TAO Price $277.32 is the Affine price") ||
+		strings.Contains(out.Trace.FinalText, "0.06342 T is the broader TAO price") {
+		t.Fatalf("final text conflated the two price-like values:\n%s", out.Trace.FinalText)
 	}
 }
