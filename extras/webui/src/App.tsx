@@ -39,6 +39,7 @@ interface StatusBanner {
 }
 
 type ServerStatusState = "loading" | "ready" | "unavailable";
+type ThemeMode = "light" | "dark";
 
 interface HistoryLoadResult {
   session: SessionState;
@@ -48,6 +49,7 @@ interface HistoryLoadResult {
 const demoReplayDelayMs = 180;
 const historyPageLimit = 500;
 const maxHistoryPages = 50;
+const themeStorageKey = "affent.theme";
 
 // The shell stays deliberately thin: transport helpers own HTTP details,
 // the reducer owns event interpretation, and UI components receive stable
@@ -55,6 +57,7 @@ const maxHistoryPages = 50;
 // turning App into a protocol parser.
 export function App() {
   const client = useMemo(() => new ApiClient({ basePath: import.meta.env.VITE_AFFENT_API_BASE }), []);
+  const [theme, setTheme] = useState<ThemeMode>(() => initialTheme());
   const [status, setStatus] = useState<StatusBanner>({
     state: "connecting",
     label: "Connecting",
@@ -82,6 +85,16 @@ export function App() {
   useEffect(() => {
     sessionsRef.current = sessions;
   }, [sessions]);
+
+  useEffect(() => {
+    document.documentElement.dataset.theme = theme;
+    try {
+      window.localStorage.setItem(themeStorageKey, theme);
+    } catch {
+      // Local persistence is best effort; theme switching still works.
+    }
+  }, [theme]);
+
   useEffect(() => {
     const ac = new AbortController();
     let timer: number | undefined;
@@ -581,7 +594,7 @@ export function App() {
   }
 
   return (
-    <div className="app" data-testid="app-shell">
+    <div className="app" data-theme={theme} data-testid="app-shell">
       <div className="app-topbar">
         <header className="app-header">
           <h1>Affent</h1>
@@ -589,6 +602,14 @@ export function App() {
             {connectionLabel}
           </span>
           <span className="spacer" />
+          <div className="theme-switch" role="group" aria-label="Color theme">
+            <button type="button" aria-pressed={theme === "light"} onClick={() => setTheme("light")}>
+              White
+            </button>
+            <button type="button" aria-pressed={theme === "dark"} onClick={() => setTheme("dark")}>
+              Black
+            </button>
+          </div>
           {showHeaderNewChat ? (
             <button type="button" className="header-new-chat" disabled={actionBusy} onClick={() => void handleNewSession()}>
               New chat
@@ -676,6 +697,20 @@ export function App() {
       </main>
     </div>
   );
+}
+
+function initialTheme(): ThemeMode {
+  if (typeof window === "undefined") return "light";
+  try {
+    const stored = window.localStorage.getItem(themeStorageKey);
+    if (stored === "dark" || stored === "light") return stored;
+  } catch {
+    return "light";
+  }
+  if (typeof window.matchMedia === "function" && window.matchMedia("(prefers-color-scheme: dark)").matches) {
+    return "dark";
+  }
+  return "light";
 }
 
 function latestChatMeta(updated: string): string | undefined {

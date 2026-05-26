@@ -42,6 +42,38 @@
   color-scheme: light;
 }
 
+html[data-theme="dark"] {
+  --bg: #050609;
+  --bg-raised: #111418;
+  --bg-sunken: #090c11;
+  --border: #252b34;
+  --border-strong: #3a4451;
+
+  --text: #f4f6f8;
+  --text-muted: #a5afbd;
+  --text-faint: #697586;
+
+  --c-success: #36d28f;
+  --c-success-bg: rgba(22, 101, 52, 0.18);
+  --c-running: #7aa7ff;
+  --c-running-bg: rgba(37, 99, 235, 0.18);
+  --c-warn: #f6bd62;
+  --c-warn-bg: rgba(146, 64, 14, 0.18);
+  --c-error: #ff8c8c;
+  --c-error-bg: rgba(127, 29, 29, 0.2);
+  --c-boundary: #aeb8c7;
+  --c-boundary-bg: rgba(71, 85, 105, 0.24);
+  --c-muted: #94a3b8;
+  --accent: #2dd4bf;
+  --accent-soft: rgba(45, 212, 191, 0.13);
+
+  --shadow-pop: 0 22px 60px rgba(0, 0, 0, 0.44), 0 5px 18px rgba(0, 0, 0, 0.32);
+  --shadow-soft: 0 1px 0 rgba(255, 255, 255, 0.04), 0 18px 38px rgba(0, 0, 0, 0.28);
+  --shadow-surface: 0 32px 90px rgba(0, 0, 0, 0.5), 0 1px 0 rgba(255, 255, 255, 0.06) inset;
+
+  color-scheme: dark;
+}
+
 * {
   box-sizing: border-box;
 }
@@ -144,6 +176,44 @@ body {
 
 .app-header .spacer {
   flex: 1;
+}
+
+.theme-switch {
+  display: inline-flex;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: 2px;
+  height: 30px;
+  border: 1px solid rgba(189, 199, 211, 0.72);
+  border-radius: var(--radius-sm);
+  background: rgba(255, 255, 255, 0.62);
+  padding: 2px;
+}
+
+.theme-switch button {
+  min-width: 52px;
+  height: 24px;
+  border: 0;
+  border-radius: 4px;
+  background: transparent;
+  color: var(--text-muted);
+  font: inherit;
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: background var(--motion-fast) ease, color var(--motion-fast) ease, transform var(--motion-fast) ease;
+}
+
+.theme-switch button[aria-pressed="true"] {
+  background: var(--text);
+  color: var(--bg-raised);
+}
+
+.theme-switch button:not([aria-pressed="true"]):hover,
+.theme-switch button:not([aria-pressed="true"]):focus-visible {
+  background: var(--accent-soft);
+  color: var(--text);
+  outline: none;
 }
 
 .workbench-status-bar {
@@ -6957,6 +7027,280 @@ pre.code {
   100% {
     transform: translateX(72%);
   }
+}
+
+/* ---- Black theme ---- */
+html[data-theme="dark"] body {
+  background:
+    radial-gradient(circle at 48% -10%, rgba(45, 212, 191, 0.08), transparent 32%),
+    linear-gradient(180deg, #0b0d11 0%, #06070a 42%, var(--bg) 100%);
+}
+
+html[data-theme="dark"] .app::before {
+  background:
+    linear-gradient(180deg, rgba(45, 212, 191, 0.09), transparent 250px),
+    linear-gradient(90deg, rgba(255, 255, 255, 0.026), transparent 19%, transparent 81%, rgba(255, 255, 255, 0.026));
+}
+
+html[data-theme="dark"] .app-topbar {
+  border-bottom-color: rgba(42, 49, 60, 0.84);
+  background: rgba(8, 10, 13, 0.88);
+}
+
+html[data-theme="dark"] .app-header,
+html[data-theme="dark"] .workbench-status-bar,
+html[data-theme="dark"] .surface-context,
+html[data-theme="dark"] .conversation-map,
+html[data-theme="dark"] .panel-head,
+html[data-theme="dark"] .session-tools,
+html[data-theme="dark"] .artifact-footer,
+html[data-theme="dark"] .markdown-text hr {
+  border-color: rgba(42, 49, 60, 0.82);
+}
+
+html[data-theme="dark"] .theme-switch,
+html[data-theme="dark"] .connection-pill,
+html[data-theme="dark"] .header-new-chat,
+html[data-theme="dark"] .new-chat-action,
+html[data-theme="dark"] .mobile-session-toggle,
+html[data-theme="dark"] .runtime-status-bar,
+html[data-theme="dark"] .session-panel,
+html[data-theme="dark"] .session-search input,
+html[data-theme="dark"] .session-filter button,
+html[data-theme="dark"] .session-delete-action,
+html[data-theme="dark"] .session-delete-confirm button,
+html[data-theme="dark"] .artifact-copy-menu-panel,
+html[data-theme="dark"] .artifact-view-toggle,
+html[data-theme="dark"] .artifact-search input,
+html[data-theme="dark"] .artifact-stats span,
+html[data-theme="dark"] .artifact-match-list,
+html[data-theme="dark"] .artifact-match-list button,
+html[data-theme="dark"] .turn-nav-find,
+html[data-theme="dark"] .execution-tree-actions button,
+html[data-theme="dark"] .execution-copy-menu .copy-menu-trigger,
+html[data-theme="dark"] .execution-copy-menu-panel,
+html[data-theme="dark"] .state-pill,
+html[data-theme="dark"] .flow-tool {
+  border-color: rgba(58, 68, 81, 0.82);
+  background: rgba(17, 20, 24, 0.78);
+}
+
+html[data-theme="dark"] .timeline-surface {
+  border-color: rgba(48, 56, 68, 0.9);
+  background:
+    linear-gradient(180deg, rgba(18, 21, 26, 0.97), rgba(10, 12, 16, 0.94)),
+    #0b0d11;
+  box-shadow: var(--shadow-surface);
+}
+
+html[data-theme="dark"] .surface-context,
+html[data-theme="dark"] .conversation-map {
+  background: rgba(11, 13, 17, 0.78);
+}
+
+html[data-theme="dark"] .conversation-scroll {
+  background:
+    linear-gradient(180deg, rgba(18, 21, 26, 0.36), transparent 128px),
+    linear-gradient(90deg, transparent, rgba(45, 212, 191, 0.026) 50%, transparent);
+}
+
+html[data-theme="dark"] .timeline-empty {
+  border-color: rgba(58, 68, 81, 0.82);
+  background:
+    linear-gradient(180deg, rgba(17, 20, 24, 0.74), rgba(10, 12, 16, 0.66)),
+    rgba(11, 13, 17, 0.72);
+}
+
+html[data-theme="dark"] .intro-latest-chat {
+  border-color: rgba(45, 212, 191, 0.26);
+  background:
+    linear-gradient(135deg, rgba(45, 212, 191, 0.11), rgba(122, 167, 255, 0.08)),
+    rgba(17, 20, 24, 0.86);
+}
+
+html[data-theme="dark"] .intro-latest-chat:focus-within,
+html[data-theme="dark"] .intro-latest-chat:hover {
+  border-color: rgba(45, 212, 191, 0.5);
+  background:
+    linear-gradient(135deg, rgba(45, 212, 191, 0.15), rgba(122, 167, 255, 0.12)),
+    rgba(20, 24, 30, 0.92);
+}
+
+html[data-theme="dark"] .intro-latest-chat-actions button,
+html[data-theme="dark"] .intro-draft-preview button {
+  border-color: rgba(45, 212, 191, 0.28);
+  background: rgba(17, 20, 24, 0.84);
+  color: var(--text);
+}
+
+html[data-theme="dark"] .intro-latest-chat-actions button:hover,
+html[data-theme="dark"] .intro-latest-chat-actions button:focus-visible,
+html[data-theme="dark"] .intro-draft-preview button:hover,
+html[data-theme="dark"] .intro-draft-preview button:focus-visible,
+html[data-theme="dark"] .intro-latest-chat-actions button:last-child {
+  border-color: rgba(45, 212, 191, 0.46);
+  background: rgba(45, 212, 191, 0.12);
+}
+
+html[data-theme="dark"] .intro-starters button {
+  background: rgba(17, 20, 24, 0.48);
+}
+
+html[data-theme="dark"] .intro-starters button:hover,
+html[data-theme="dark"] .intro-starters button:focus-visible,
+html[data-theme="dark"] .intro-starters button[aria-pressed="true"] {
+  background: linear-gradient(90deg, rgba(45, 212, 191, 0.14), rgba(17, 20, 24, 0.66));
+}
+
+html[data-theme="dark"] .intro-draft-preview {
+  border-left-color: rgba(45, 212, 191, 0.26);
+}
+
+html[data-theme="dark"] .composer {
+  border-color: rgba(58, 68, 81, 0.9);
+  background:
+    linear-gradient(180deg, rgba(18, 21, 26, 0.98), rgba(11, 13, 17, 0.94)),
+    rgba(12, 14, 18, 0.94);
+  box-shadow: 0 18px 48px rgba(0, 0, 0, 0.42), 0 1px 0 rgba(255, 255, 255, 0.05) inset;
+}
+
+html[data-theme="dark"] .composer:focus-within {
+  border-color: rgba(45, 212, 191, 0.48);
+  background: rgba(18, 21, 26, 0.98);
+  box-shadow: 0 24px 58px rgba(0, 0, 0, 0.48), 0 0 0 3px rgba(45, 212, 191, 0.1);
+}
+
+html[data-theme="dark"] .session-panel[data-compact="true"] {
+  background: transparent;
+}
+
+html[data-theme="dark"] .session-tools[data-expanded="true"],
+html[data-theme="dark"] .session-panel[data-mobile-open="false"],
+html[data-theme="dark"] .session-panel[data-mobile-open="true"] .mobile-session-toggle,
+html[data-theme="dark"] .runtime-capability-panel,
+html[data-theme="dark"] .runtime-capability-overflow-body,
+html[data-theme="dark"] .artifact-code[data-view="json"],
+html[data-theme="dark"] .composer-task-hint[data-tone="unknown"] {
+  background: rgba(14, 17, 22, 0.78);
+}
+
+html[data-theme="dark"] .session-row {
+  background: transparent;
+}
+
+html[data-theme="dark"] .session-row:hover,
+html[data-theme="dark"] .session-row:focus-visible,
+html[data-theme="dark"] .session-row.is-selected {
+  border-color: rgba(78, 90, 106, 0.86);
+  background: rgba(19, 24, 30, 0.9);
+}
+
+html[data-theme="dark"] .session-row.is-selected {
+  border-color: rgba(45, 212, 191, 0.34);
+}
+
+html[data-theme="dark"] .session-filter button[aria-pressed="true"],
+html[data-theme="dark"] .artifact-view-toggle button[aria-pressed="true"],
+html[data-theme="dark"] .theme-switch button[aria-pressed="true"] {
+  background: #f4f6f8;
+  color: #080a0d;
+}
+
+html[data-theme="dark"] .header-new-chat:hover,
+html[data-theme="dark"] .new-chat-action:hover,
+html[data-theme="dark"] .session-find-toggle:hover,
+html[data-theme="dark"] .session-find-toggle:focus-visible,
+html[data-theme="dark"] .artifact-match-list button:hover,
+html[data-theme="dark"] .artifact-match-list button:focus-visible,
+html[data-theme="dark"] .execution-tree-actions button:hover,
+html[data-theme="dark"] .execution-tree-actions button:focus-visible,
+html[data-theme="dark"] .execution-copy-menu .copy-menu-trigger:hover,
+html[data-theme="dark"] .execution-copy-menu .copy-menu-trigger:focus-visible,
+html[data-theme="dark"] .execution-copy-menu[data-open="true"] .copy-menu-trigger {
+  background: rgba(45, 212, 191, 0.12);
+  border-color: rgba(45, 212, 191, 0.42);
+}
+
+html[data-theme="dark"] .composer-context,
+html[data-theme="dark"] .composer-drop-hint,
+html[data-theme="dark"] .execution-now {
+  border-color: rgba(45, 212, 191, 0.28);
+  background: rgba(45, 212, 191, 0.12);
+  color: var(--accent);
+}
+
+html[data-theme="dark"] .composer-context-mode,
+html[data-theme="dark"] .execution-now span {
+  border-color: rgba(45, 212, 191, 0.24);
+  background: rgba(255, 255, 255, 0.06);
+  color: var(--accent);
+}
+
+html[data-theme="dark"] .composer-context small,
+html[data-theme="dark"] .composer-context button,
+html[data-theme="dark"] .markdown-text a,
+html[data-theme="dark"] .state-pill[data-tone="artifact"] {
+  color: var(--accent);
+}
+
+html[data-theme="dark"] .composer-context button:hover {
+  background: rgba(255, 255, 255, 0.08);
+  color: var(--text);
+}
+
+html[data-theme="dark"] .session-delete-confirm {
+  border-color: rgba(248, 113, 113, 0.32);
+  background: rgba(127, 29, 29, 0.18);
+}
+
+html[data-theme="dark"] .session-delete-confirm button.danger:hover,
+html[data-theme="dark"] .session-delete-confirm button.danger:focus-visible {
+  background: rgba(127, 29, 29, 0.3);
+}
+
+html[data-theme="dark"] .execution-row {
+  border-color: rgba(48, 56, 68, 0.88);
+  background:
+    linear-gradient(180deg, rgba(18, 21, 26, 0.9), rgba(14, 17, 22, 0.82)),
+    rgba(11, 13, 17, 0.84);
+  box-shadow: 0 1px 0 rgba(255, 255, 255, 0.03);
+}
+
+html[data-theme="dark"] .execution-row:not(:disabled):hover {
+  border-color: rgba(45, 212, 191, 0.36);
+  background: rgba(20, 24, 30, 0.96);
+  box-shadow: 0 14px 34px rgba(0, 0, 0, 0.34);
+}
+
+html[data-theme="dark"] .execution-node[data-status="running"] > .execution-row,
+html[data-theme="dark"] .flow-tool[data-status="running"] {
+  background:
+    linear-gradient(100deg, rgba(37, 99, 235, 0.12), rgba(45, 212, 191, 0.14), rgba(37, 99, 235, 0.12)),
+    rgba(14, 17, 22, 0.92);
+}
+
+html[data-theme="dark"] .markdown-text th {
+  background: rgba(17, 20, 24, 0.96);
+}
+
+html[data-theme="dark"] .primary-action {
+  border-color: #f4f6f8;
+  color: #080a0d;
+  background:
+    linear-gradient(180deg, #ffffff, #dbe1ea),
+    #f4f6f8;
+  box-shadow: 0 12px 28px rgba(0, 0, 0, 0.38);
+}
+
+html[data-theme="dark"] .secondary-action,
+html[data-theme="dark"] .ghost-action {
+  border-color: rgba(58, 68, 81, 0.9);
+  background: rgba(17, 20, 24, 0.84);
+  color: var(--text);
+}
+
+html[data-theme="dark"] ::selection {
+  background: rgba(45, 212, 191, 0.28);
 }
 
 /* ---- Responsive ---- */

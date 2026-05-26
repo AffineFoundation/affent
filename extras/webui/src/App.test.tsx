@@ -8,6 +8,27 @@ import { cancelledTurn, maxTurns, resultTruncated, runningSubagent, toolError } 
 describe("App", () => {
   afterEach(() => {
     vi.restoreAllMocks();
+    window.localStorage.clear();
+    document.documentElement.removeAttribute("data-theme");
+  });
+
+  it("switches between white and black themes", async () => {
+    const user = userEvent.setup();
+    vi.stubGlobal("fetch", vi.fn(async () => Promise.reject(new Error("network down"))));
+
+    render(<App />);
+
+    expect(screen.getByTestId("app-shell")).toHaveAttribute("data-theme", "light");
+    await user.click(screen.getByRole("button", { name: "Black" }));
+
+    expect(screen.getByTestId("app-shell")).toHaveAttribute("data-theme", "dark");
+    expect(document.documentElement).toHaveAttribute("data-theme", "dark");
+    expect(window.localStorage.getItem("affent.theme")).toBe("dark");
+    expect(screen.getByRole("button", { name: "Black" })).toHaveAttribute("aria-pressed", "true");
+
+    await user.click(screen.getByRole("button", { name: "White" }));
+    expect(screen.getByTestId("app-shell")).toHaveAttribute("data-theme", "light");
+    expect(window.localStorage.getItem("affent.theme")).toBe("light");
   });
 
   it("falls back to an offline preview when the API is unreachable", async () => {
