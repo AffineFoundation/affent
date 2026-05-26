@@ -42,9 +42,9 @@ Shared metadata fields:
   `min_session_search_context_hit_rate`,
   `min_tool_repair_success_rate`, `min_verifier_pass_rate`,
   `max_forced_no_tools_rate`,
-  `max_loop_guard_intervention_rate`, `max_source_dynamic_partial_rate`,
-  `max_tool_error_rate`, `max_tool_context_truncation_rate`,
-  `max_tool_result_truncation_rate`,
+  `max_loop_guard_intervention_rate`, `max_source_discovery_only_rate`,
+  `max_source_dynamic_partial_rate`, `max_tool_error_rate`,
+  `max_tool_context_truncation_rate`, `max_tool_result_truncation_rate`,
   `max_avg_runtime_errors`, `max_avg_context_compactions`,
   `max_avg_total_tokens`: optional quality gate thresholds configured for the
   run. Disabled gates are omitted.
@@ -238,6 +238,7 @@ Summary records aggregate all scenario records from the same process:
   `tool_repair_success_rate` when repaired/canonicalized tool calls were
   observed, `verifier_pass_rate` when verifier commands ran,
   `source_access_verified_rate` when source evidence was observed,
+  `source_discovery_only_rate` when source evidence was observed,
   `source_dynamic_partial_rate` when source evidence was observed,
   `session_search_context_hit_rate` when session search returned prior-session
   hits,
