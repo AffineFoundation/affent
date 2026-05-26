@@ -1,24 +1,9 @@
 import { useEffect, useRef, useState, type CSSProperties, type RefObject } from "react";
 import type { SessionState } from "../store/sessionState";
 import type { UseAsDraft } from "../view/draftSource";
-import { countTurnsByMode, turnMatchesFilter, type TimelineFilterMode } from "../view/timelineFilter";
 import { TurnCard } from "./TurnCard";
 import { CopyButton } from "./CopyButton";
 import { CopyMenu } from "./CopyMenu";
-
-const timelineFilterModes: { mode: TimelineFilterMode; label: string }[] = [
-  { mode: "all", label: "All" },
-  { mode: "tools", label: "Tools" },
-  { mode: "evidence", label: "Evidence" },
-  { mode: "recall", label: "Recall" },
-  { mode: "guard", label: "Guard" },
-  { mode: "context", label: "Context" },
-  { mode: "errors", label: "Issues" },
-  { mode: "artifacts", label: "Files" },
-  { mode: "memory", label: "Memory" },
-  { mode: "truncated", label: "Truncated" },
-  { mode: "repaired", label: "Repaired" },
-];
 
 const textSelectionPauseMs = 2200;
 
@@ -62,14 +47,6 @@ export function Timeline({
   const touchStartY = useRef<number | undefined>(undefined);
   const [following, setFollowing] = useState(true);
   const [newActivity, setNewActivity] = useState(false);
-  const [filterMode, setFilterMode] = useState<TimelineFilterMode>("all");
-  const [filterQuery, setFilterQuery] = useState("");
-  const filter = { mode: filterMode, query: filterQuery };
-  const modeCounts = countTurnsByMode(session.turns, session.events, timelineFilterModes.map((item) => item.mode), filterQuery);
-  const showTimelineFilters = shouldShowTimelineFilters(session);
-  const visibleTurns = showTimelineFilters
-    ? session.turns.filter((turn) => turnMatchesFilter(turn, session.events, filter))
-    : session.turns;
   const pendingFollowUp = pendingMessage?.kind === "task" && session.turns.length > 0 ? pendingMessage.text : undefined;
 
   useEffect(() => {
@@ -82,8 +59,6 @@ export function Timeline({
     pointerSelecting.current = false;
     selectionPauseUntil.current = 0;
     latestAnswerRef.current = null;
-    setFilterMode("all");
-    setFilterQuery("");
     setFollowing(true);
     setNewActivity(false);
   }, [activityCount, initialHistoryFocus, sessionId]);
@@ -274,70 +249,37 @@ export function Timeline({
           Jump to latest
         </button>
       ) : null}
-      {showTimelineFilters ? (
-        <div className="timeline-filter" data-testid="timeline-filter">
-          <div className="timeline-filter-modes" role="group" aria-label="Timeline filter">
-            {timelineFilterModes.map(({ mode, label }) => (
-              <button
-                key={mode}
-                type="button"
-                aria-pressed={filterMode === mode}
-                onClick={() => setFilterMode(mode)}
-              >
-                <span>{label}</span>
-                <small>{modeCounts[mode] ?? 0}</small>
-              </button>
-            ))}
-          </div>
-          <input
-            type="search"
-            aria-label="Search turns"
-            placeholder="Search turns"
-            value={filterQuery}
-            onChange={(event) => setFilterQuery(event.currentTarget.value)}
-          />
-        </div>
-      ) : null}
       <div className="timeline" data-testid="timeline">
-        {visibleTurns.length > 0 ? (
-          <>
-            {visibleTurns.map((turn) => {
-              const turnIndex = session.turns.indexOf(turn);
-              const isLatestTurn = turn === session.turns.at(-1);
-              return (
-                <div
-                  key={turn.id}
-                  ref={(node) => {
-                    if (isLatestTurn) latestAnswerRef.current = turn.assistantText.trim() ? node : null;
-                  }}
-                  className="timeline-turn-anchor"
-                >
-                  <TurnCard
-                    turn={turn}
-                    turnNumber={turnIndex + 1}
-                    anchorId={`turn-${turnIndex + 1}`}
-                    events={session.events}
-                    sessionId={sessionId}
-                    isLatest={isLatestTurn}
-                    showHeader={false}
-                    showBoundary={false}
-                    searchQuery={showTimelineFilters ? filterQuery : undefined}
-                    onOpenArtifact={onOpenArtifact}
-                    onUseAsDraft={onUseAsDraft}
-                  />
-                </div>
-              );
-            })}
-            {guidanceReceipts.map((receipt) => (
-              <GuidanceReceipt key={receipt.id} receipt={receipt} onUseAsDraft={onUseAsDraft} />
-            ))}
-            {pendingMessage ? <PendingTurn message={pendingMessage} followUp={Boolean(pendingFollowUp)} /> : null}
-          </>
-        ) : (
-          <div className="timeline-empty filtered" data-testid="timeline-filter-empty">
-            <h3>No matching turns</h3>
-          </div>
-        )}
+        {session.turns.map((turn) => {
+          const turnIndex = session.turns.indexOf(turn);
+          const isLatestTurn = turn === session.turns.at(-1);
+          return (
+            <div
+              key={turn.id}
+              ref={(node) => {
+                if (isLatestTurn) latestAnswerRef.current = turn.assistantText.trim() ? node : null;
+              }}
+              className="timeline-turn-anchor"
+            >
+              <TurnCard
+                turn={turn}
+                turnNumber={turnIndex + 1}
+                anchorId={`turn-${turnIndex + 1}`}
+                events={session.events}
+                sessionId={sessionId}
+                isLatest={isLatestTurn}
+                showHeader={false}
+                showBoundary={false}
+                onOpenArtifact={onOpenArtifact}
+                onUseAsDraft={onUseAsDraft}
+              />
+            </div>
+          );
+        })}
+        {guidanceReceipts.map((receipt) => (
+          <GuidanceReceipt key={receipt.id} receipt={receipt} onUseAsDraft={onUseAsDraft} />
+        ))}
+        {pendingMessage ? <PendingTurn message={pendingMessage} followUp={Boolean(pendingFollowUp)} /> : null}
         <div ref={endRef} className="timeline-end" aria-hidden="true" />
       </div>
     </>
@@ -540,34 +482,6 @@ function isForwardOverscrollAtLatest(event: Event, distanceToLatest: number, tou
 function hasActiveTextSelection(): boolean {
   const selection = document.getSelection?.();
   return Boolean(selection && !selection.isCollapsed && selection.toString().trim());
-}
-
-function shouldShowTimelineFilters(session: SessionState): boolean {
-  if (session.turns.length > 2) return true;
-  return session.turns.some((turn) =>
-    turn.status === "error" ||
-    turn.status === "max_turns" ||
-    !!turn.error ||
-    turn.toolCalls.length > 1 ||
-    (turn.toolStats?.session_search_calls ?? 0) > 0 ||
-    (turn.toolStats?.session_search_results ?? 0) > 0 ||
-    (turn.toolStats?.loop_guard_interventions ?? 0) > 0 ||
-    (turn.toolStats?.forced_no_tools ?? 0) > 0 ||
-    (turn.loopDecisions ?? []).some((decision) => decision.visible_in_ui !== false) ||
-    (turn.contextCompactions?.length ?? 0) > 0 ||
-    turn.toolCalls.some((tool) =>
-      tool.status === "error" ||
-      !!tool.resultArtifactPath ||
-      !!tool.argsTruncated ||
-      !!tool.resultTruncated ||
-      !!tool.argsRepaired ||
-      !!tool.canonicalized ||
-      !!tool.originalTool ||
-      !!tool.repairNotes?.length ||
-      tool.tool === "session_search" ||
-      (tool.result ?? tool.resultSummary ?? "").includes("SourceAccess:")
-    )
-  );
 }
 
 function summarize(text: string, limit: number): string {

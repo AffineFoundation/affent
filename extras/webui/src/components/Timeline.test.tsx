@@ -81,8 +81,7 @@ describe("Timeline", () => {
     expect(screen.queryByText("0 actions")).toBeNull();
   });
 
-  it("filters long timelines by evidence and loop guard turns", async () => {
-    const user = userEvent.setup();
+  it("keeps long timelines unfiltered so the chat stays clean and complete", () => {
     const events: RawEvent[] = [
       { id: 1, type: "turn.start", data: { turn_id: "source-turn" } },
       { id: 2, type: "user.message", data: { turn_id: "source-turn", text: "inspect taostats source" } },
@@ -173,32 +172,13 @@ describe("Timeline", () => {
     ];
     renderTimeline(events);
 
-    const filterBar = screen.getByTestId("timeline-filter");
-    const filterGroup = within(filterBar).getByRole("group", { name: "Timeline filter" });
-    expect(within(filterGroup).getByRole("button", { name: /Evidence\s+1/ })).toBeInTheDocument();
-    expect(within(filterGroup).getByRole("button", { name: /Recall\s+1/ })).toBeInTheDocument();
-    expect(within(filterGroup).getByRole("button", { name: /Guard\s+1/ })).toBeInTheDocument();
+    expect(screen.queryByTestId("timeline-filter")).toBeNull();
+    expect(screen.queryByRole("group", { name: "Timeline filter" })).toBeNull();
+    expect(screen.queryByRole("searchbox", { name: "Search turns" })).toBeNull();
     expect(screen.getByTestId("timeline")).toHaveTextContent("inspect taostats source");
     expect(screen.getByTestId("timeline")).toHaveTextContent("resume alpha coast analysis");
     expect(screen.getByTestId("timeline")).toHaveTextContent("recover repeated calls");
-
-    await user.click(within(filterGroup).getByRole("button", { name: /Evidence/ }));
-
-    expect(screen.getByTestId("timeline")).toHaveTextContent("inspect taostats source");
-    expect(screen.getByTestId("timeline")).not.toHaveTextContent("resume alpha coast analysis");
-    expect(screen.getByTestId("timeline")).not.toHaveTextContent("recover repeated calls");
-    expect(screen.getByTestId("timeline")).not.toHaveTextContent("write final note");
-
-    await user.click(within(filterGroup).getByRole("button", { name: /Recall/ }));
-
-    expect(screen.getByTestId("timeline")).toHaveTextContent("resume alpha coast analysis");
-    expect(screen.getByTestId("timeline")).not.toHaveTextContent("inspect taostats source");
-    expect(screen.getByTestId("timeline")).not.toHaveTextContent("recover repeated calls");
-
-    await user.click(within(filterGroup).getByRole("button", { name: /Guard/ }));
-
-    expect(screen.getByTestId("timeline")).toHaveTextContent("recover repeated calls");
-    expect(screen.getByTestId("timeline")).not.toHaveTextContent("inspect taostats source");
+    expect(screen.getByTestId("timeline")).toHaveTextContent("write final note");
   });
 
   it("keeps artifact summaries visible in the activity digest when evidence is also present", () => {
