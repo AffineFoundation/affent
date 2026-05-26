@@ -1040,6 +1040,64 @@ func planNotForSimpleReadScenario() BatchScenario {
 	}
 }
 
+func planResumeCurrentStepScenario() BatchScenario {
+	return BatchScenario{
+		Name:        "plan-resume-current-step",
+		Suites:      []string{smallModelToolsSuite, longRunSuite},
+		SessionID:   "plan-resume",
+		ExecutePlan: true,
+		Prompt:      "继续当前 session 已确认的 active plan。只执行当前 step，不要重新制定计划。读取当前 step 的 evidence 文件，回答 resume marker 和 evidence 路径，并更新当前 step 的状态、证据或备注。不要读取已完成 step 的旧证据。",
+		Files: map[string]string{
+			".affentctl/plan-resume.plan.json": `{
+  "version": 1,
+  "updated_at": "2026-05-26T00:00:00Z",
+  "steps": [
+    {
+      "text": "read retired launch archive from archive/old-plan.md",
+      "status": "completed",
+      "evidence": ["archive/old-plan.md"],
+      "note": "stale archive already checked"
+    },
+    {
+      "text": "read current launch evidence from docs/current-plan.md and report the resume marker",
+      "status": "in_progress",
+      "evidence": ["docs/current-plan.md"]
+    },
+    {
+      "text": "prepare the final handoff after the current evidence is confirmed",
+      "status": "pending"
+    }
+  ]
+}
+`,
+			"docs/current-plan.md": "resume marker: RESUME-CURRENT-42\nlaunch region: us-east\nlaunch count: 7\n",
+			"archive/old-plan.md":  "resume marker: STALE-PLAN-99\nlaunch region: eu-west\nlaunch count: 2\n",
+		},
+		RequiredTools: []string{"read_file", "plan"},
+		RequiredToolCounts: map[string]int{
+			"plan": 1,
+		},
+		RequiredToolArgContains: []ToolArgContainsRequirement{
+			{Tool: "read_file", Arg: "path", Substring: "docs/current-plan.md"},
+			{Tool: "plan", Arg: "action", Substring: "update"},
+			{Tool: "plan", Arg: "index", Substring: "2"},
+		},
+		RequiredToolResultText: map[string][]string{
+			"plan": {"updated step 2"},
+		},
+		RequiredFinalText:   []string{"RESUME-CURRENT-42", "docs/current-plan.md"},
+		ForbiddenFinalText:  []string{"STALE-PLAN-99", "archive/old-plan.md"},
+		ForbiddenTools:      []string{"shell", "write_file", "edit_file"},
+		RequireNoPlanErrors: true,
+		ProtectedFiles:      []string{"docs/current-plan.md", "archive/old-plan.md"},
+		MaxParentToolCalls:  3,
+		MaxSuccessfulToolCallsByTool: map[string]int{
+			"read_file": 1,
+		},
+		MaxTurns: 6,
+	}
+}
+
 func smallToolRepeatedReadScenario() BatchScenario {
 	return BatchScenario{
 		Name:   "small-tools-repeated-read",

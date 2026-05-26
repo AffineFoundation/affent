@@ -455,6 +455,7 @@ func TestSelectBatchScenariosForSuite(t *testing.T) {
 	foundSkillInstallGuard := false
 	foundPlanRepair := false
 	foundPlanSkip := false
+	foundPlanResume := false
 	foundSymbolContext := false
 	foundSymbolContextRuntimeCapabilities := false
 	foundSymbolContextThenReadFile := false
@@ -514,6 +515,24 @@ func TestSelectBatchScenariosForSuite(t *testing.T) {
 			foundPlanSkip = true
 			if !stringSliceContains(scenario.ForbiddenTools, "plan") {
 				t.Fatalf("plan-not-for-simple-read ForbiddenTools = %#v, want plan", scenario.ForbiddenTools)
+			}
+		}
+		if scenario.Name == "plan-resume-current-step" {
+			foundPlanResume = true
+			if !scenario.ExecutePlan || scenario.SessionID != "plan-resume" {
+				t.Fatalf("plan-resume-current-step execution fields = execute_plan:%v session:%q", scenario.ExecutePlan, scenario.SessionID)
+			}
+			if !scenario.RequireNoPlanErrors {
+				t.Fatal("plan-resume-current-step should require clean plan usage")
+			}
+			if scenario.RequiredToolCounts["plan"] != 1 {
+				t.Fatalf("plan-resume-current-step RequiredToolCounts = %#v, want plan=1", scenario.RequiredToolCounts)
+			}
+			if scenario.MaxSuccessfulToolCallsByTool["read_file"] != 1 {
+				t.Fatalf("plan-resume-current-step read_file cap = %#v, want 1", scenario.MaxSuccessfulToolCallsByTool)
+			}
+			if len(scenario.RequiredToolArgContains) != 3 {
+				t.Fatalf("plan-resume-current-step RequiredToolArgContains = %#v, want current read and step 2 update constraints", scenario.RequiredToolArgContains)
 			}
 		}
 		if scenario.Name == "default-runtime-repo-search" {
@@ -613,6 +632,9 @@ func TestSelectBatchScenariosForSuite(t *testing.T) {
 	if !foundPlanSkip {
 		t.Fatalf("small-model-tools suite missing plan-not-for-simple-read")
 	}
+	if !foundPlanResume {
+		t.Fatalf("small-model-tools suite missing plan-resume-current-step")
+	}
 	if !foundRepoSearch {
 		t.Fatalf("small-model-tools suite missing default-runtime-repo-search")
 	}
@@ -642,8 +664,8 @@ func TestSelectLongRunSuite(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(scenarios) != 3 {
-		t.Fatalf("long-run suite size = %d, want 3", len(scenarios))
+	if len(scenarios) != 4 {
+		t.Fatalf("long-run suite size = %d, want 4", len(scenarios))
 	}
 	seen := map[string]BatchScenario{}
 	for _, scenario := range scenarios {
@@ -692,6 +714,20 @@ func TestSelectLongRunSuite(t *testing.T) {
 	}
 	if !stringSliceContains(pr.RequiredFinalText, "PR Summary") || !stringSliceContains(pr.RequiredFinalText, "Tests") {
 		t.Fatalf("code PR scenario RequiredFinalText = %#v, want PR Summary and Tests", pr.RequiredFinalText)
+	}
+
+	planResume, ok := seen["plan-resume-current-step"]
+	if !ok {
+		t.Fatalf("long-run suite missing plan resume scenario")
+	}
+	if !planResume.ExecutePlan || planResume.SessionID != "plan-resume" {
+		t.Fatalf("plan resume execution fields = execute_plan:%v session:%q", planResume.ExecutePlan, planResume.SessionID)
+	}
+	if !stringSliceContains(planResume.RequiredFinalText, "RESUME-CURRENT-42") || !stringSliceContains(planResume.ForbiddenFinalText, "STALE-PLAN-99") {
+		t.Fatalf("plan resume final text constraints = required:%#v forbidden:%#v", planResume.RequiredFinalText, planResume.ForbiddenFinalText)
+	}
+	if planResume.RequiredToolCounts["plan"] != 1 || planResume.MaxSuccessfulToolCallsByTool["read_file"] != 1 {
+		t.Fatalf("plan resume tool constraints = counts:%#v max:%#v", planResume.RequiredToolCounts, planResume.MaxSuccessfulToolCallsByTool)
 	}
 }
 
@@ -861,13 +897,17 @@ func TestBatchRunnerAffentctlRunArgsForwardsExecutor(t *testing.T) {
 		RuntimeBrowser:   true,
 		RuntimeMCPConfig: " /tmp/eval-mcp.json ",
 	}).affentctlRunArgs("/tmp/ws", "/tmp/ws/trace.jsonl", BatchScenario{
-		Prompt:   "fix it",
-		MaxTurns: 3,
+		Prompt:      "fix it",
+		SessionID:   "planned",
+		ExecutePlan: true,
+		MaxTurns:    3,
 	})
 	joined := strings.Join(args, "\x00")
 	for _, want := range []string{
 		"--executor\x00docker:affent-eval",
 		"--workspace\x00/tmp/ws",
+		"--session-id\x00planned",
+		"--execute-plan",
 		"--trace\x00/tmp/ws/trace.jsonl",
 		"--max-turns\x003",
 		"--temperature\x000",

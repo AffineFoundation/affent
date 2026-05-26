@@ -51,6 +51,8 @@ type BatchScenario struct {
 	Name                          string
 	Suites                        []string
 	Prompt                        string
+	SessionID                     string
+	ExecutePlan                   bool
 	Files                         map[string]string
 	VerifyCommand                 string
 	VerifierTimeout               time.Duration
@@ -173,6 +175,7 @@ func BuiltinBatchScenarios() []BatchScenario {
 		skillRemoteInstallGuardScenario(),
 		planCodingRepairScenario(),
 		planNotForSimpleReadScenario(),
+		planResumeCurrentStepScenario(),
 		smallToolRepeatedReadScenario(),
 		smallToolEditRecoveryScenario(),
 		smallToolShellFailureScenario(),
@@ -446,6 +449,12 @@ func (r BatchRunner) affentctlRunArgs(workspace, tracePath string, scenario Batc
 		"--trace", tracePath,
 		"--trace-skip-deltas",
 		"--prompt", scenario.Prompt,
+	}
+	if strings.TrimSpace(scenario.SessionID) != "" {
+		args = append(args, "--session-id", strings.TrimSpace(scenario.SessionID))
+	}
+	if scenario.ExecutePlan {
+		args = append(args, "--execute-plan")
 	}
 	if r.APIKey != "" {
 		args = append(args, "--api-key", r.APIKey)
