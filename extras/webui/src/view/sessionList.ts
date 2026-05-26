@@ -17,7 +17,7 @@ const enTitleActions = [
   "improve", "refactor", "implement", "build", "create", "design", "understand",
 ].join("|");
 
-export type SessionListFilter = "all" | "active" | "saved" | "artifacts" | "memory";
+export type SessionListFilter = "all" | "active" | "saved" | "artifacts" | "memory" | "plan";
 export type SessionRowTone = "running" | "saved" | "muted" | "error" | "warning";
 type SessionTitleSource = "provided" | "topic" | "fallback";
 
@@ -345,6 +345,7 @@ export function countSessionsByFilter(rows: readonly SessionRowView[]): Record<S
     saved: rows.filter((row) => row.status === "Saved").length,
     artifacts: rows.filter((row) => row.chips.includes("files") || row.chips.includes("artifacts")).length,
     memory: rows.filter((row) => row.chips.includes("memory")).length,
+    plan: rows.filter((row) => row.chips.includes("plan")).length,
   };
 }
 
@@ -354,6 +355,7 @@ function matchesFilter(row: SessionRowView, filter: SessionListFilter): boolean 
   if (filter === "saved") return row.status === "Saved";
   if (filter === "artifacts") return row.chips.includes("files") || row.chips.includes("artifacts");
   if (filter === "memory") return row.chips.includes("memory");
+  if (filter === "plan") return row.chips.includes("plan");
   return true;
 }
 
@@ -373,6 +375,7 @@ function featureChips(session: SessionSummary): string[] {
   const chips: string[] = [];
   if (session.has_artifacts) chips.push("files");
   if (session.has_memory) chips.push("memory");
+  if (session.has_plan) chips.push("plan");
   if (session.has_runtime_skills) chips.push("skills");
   return chips;
 }
@@ -381,6 +384,7 @@ function fallbackSessionTitle(session: SessionSummary): string {
   const hasWork = session.has_conversation || session.has_events;
   if (session.active) return hasWork ? "Live chat" : "New live chat";
   if (!hasWork && session.has_memory) return "Memory chat";
+  if (!hasWork && session.has_plan) return "Planned chat";
   if (!hasWork && session.has_artifacts) return "Files chat";
   if (session.durable) return hasWork ? "Saved chat" : "New chat";
   return hasWork ? "Recent chat" : "New chat";

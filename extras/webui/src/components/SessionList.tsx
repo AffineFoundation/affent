@@ -15,6 +15,7 @@ const filters: { mode: SessionListFilter; label: string }[] = [
   { mode: "saved", label: "Saved" },
   { mode: "artifacts", label: "Files" },
   { mode: "memory", label: "Memory" },
+  { mode: "plan", label: "Plan" },
 ];
 
 export function SessionList({
@@ -312,6 +313,8 @@ function sessionChipLabel(chip: string): string {
   switch (chip) {
     case "memory":
       return "Memory";
+    case "plan":
+      return "Plan";
     case "skills":
       return "Skills";
     case "unclassified":

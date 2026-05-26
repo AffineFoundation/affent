@@ -368,6 +368,7 @@ describe("SessionList", () => {
             durable: true,
             latest_user_message: "review the repo",
             has_memory: true,
+            has_plan: true,
             has_runtime_skills: true,
             has_artifacts: true,
           }),
@@ -380,7 +381,7 @@ describe("SessionList", () => {
     );
 
     const row = screen.getByRole("button", { name: /repo/ });
-    expect(within(row).getByTestId("session-chips")).toHaveTextContent("Memory · Skills");
+    expect(within(row).getByTestId("session-chips")).toHaveTextContent("Memory · Plan · Skills");
     expect(within(row).getByTestId("session-chips")).not.toHaveTextContent("Files");
   });
 
@@ -529,6 +530,7 @@ describe("SessionList", () => {
       session({ id: "live-one", active: true, has_events: true }),
       session({ id: "memory-two", durable: true, has_memory: true }),
       session({ id: "artifact-three", durable: true, has_artifacts: true }),
+      session({ id: "plan-four", durable: true, has_plan: true }),
     ]);
 
     await user.click(screen.getByRole("button", { name: "Search chats" }));
@@ -542,6 +544,11 @@ describe("SessionList", () => {
 
     await user.click(within(screen.getByTestId("session-filter-empty")).getByRole("button", { name: "Reset" }));
     expect(screen.getByTestId("session-list")).toHaveTextContent("Files chat");
+
+    await user.click(screen.getByRole("button", { name: "Search chats" }));
+    await user.click(within(screen.getByRole("group", { name: "Session filter" })).getByRole("button", { name: /Plan/ }));
+    expect(screen.getByTestId("session-list")).toHaveTextContent("Planned chat");
+    expect(screen.getByTestId("session-list")).not.toHaveTextContent("Memory chat");
   });
 
   it("renders the offline preview row without live filters or new-chat actions", async () => {
