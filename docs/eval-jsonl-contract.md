@@ -42,10 +42,11 @@ Shared metadata fields:
   `min_source_access_verified_rate`,
   `min_session_search_context_hit_rate`,
   `min_tool_repair_success_rate`, `min_verifier_pass_rate`,
-  `max_forced_no_tools_rate`,
+  `max_focused_task_error_rate`, `max_forced_no_tools_rate`,
   `max_loop_guard_intervention_rate`, `max_plan_error_rate`,
   `max_source_discovery_only_rate`,
-  `max_source_dynamic_partial_rate`, `max_tool_error_rate`,
+  `max_source_dynamic_partial_rate`, `max_subagent_error_rate`,
+  `max_tool_error_rate`,
   `max_tool_context_truncation_rate`, `max_tool_result_truncation_rate`,
   `max_avg_runtime_errors`, `max_avg_context_compactions`,
   `max_avg_total_tokens`: optional quality gate thresholds configured for the
@@ -237,6 +238,8 @@ Summary records aggregate all scenario records from the same process:
   `memory_update_rate`, `runtime_surface_rate`,
   `tool_error_rate`, `forced_no_tools_rate`, and
   `loop_guard_intervention_rate` when tool calls were observed,
+  `focused_task_error_rate` when focused-task calls were observed,
+  `subagent_error_rate` when subagent calls were observed,
   `plan_error_rate` when plan calls were observed,
   `tool_repair_success_rate` when repaired/canonicalized tool calls were
   observed, `verifier_pass_rate` when verifier commands ran,
@@ -266,9 +269,9 @@ Summary records aggregate all scenario records from the same process:
   `tool_result_artifacts`, plus `tool_truncation_examples`, the first bounded
   samples across the batch.
 - Delegation totals: `focused_task_calls`, `focused_task_by_type`,
-  `focused_task_errors`, `subagent_calls`, `subagent_by_mode`,
-  `subagent_errors`. These fields are omitted when no delegated tool calls were
-  observed.
+  `focused_task_errors`, `focused_task_error_rate`, `subagent_calls`,
+  `subagent_by_mode`, `subagent_errors`, and `subagent_error_rate`. These
+  fields are omitted when no delegated tool calls were observed.
 - Plan totals: `plan_calls`, `plan_by_action`, `plan_errors`, and
   `plan_error_rate`. These fields are omitted when no plan tool calls were
   observed.

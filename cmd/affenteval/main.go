@@ -80,11 +80,13 @@ func run(args []string) int {
 			MinSessionSearchContextHitRate: fs.Float64("min-session-search-context-hit-rate", -1, "optional quality gate: minimum session_search context-hit rate, 0..1"),
 			MinToolRepairSuccessRate:       fs.Float64("min-tool-repair-success-rate", -1, "optional quality gate: minimum successful tool-call repair rate, 0..1"),
 			MinVerifierPassRate:            fs.Float64("min-verifier-pass-rate", -1, "optional quality gate: minimum verifier pass rate, 0..1"),
+			MaxFocusedTaskErrorRate:        fs.Float64("max-focused-task-error-rate", -1, "optional quality gate: maximum focused-task error rate per focused-task call, 0..1"),
 			MaxForcedNoToolsRate:           fs.Float64("max-forced-no-tools-rate", -1, "optional quality gate: maximum forced no-tool follow-up rate per tool call, 0..1"),
 			MaxLoopGuardInterventionRate:   fs.Float64("max-loop-guard-intervention-rate", -1, "optional quality gate: maximum loop guard intervention rate per tool call, 0..1"),
 			MaxPlanErrorRate:               fs.Float64("max-plan-error-rate", -1, "optional quality gate: maximum plan tool error rate per plan call, 0..1"),
 			MaxSourceDiscoveryOnlyRate:     fs.Float64("max-source-discovery-only-rate", -1, "optional quality gate: maximum discovery-only source access rate, 0..1"),
 			MaxSourceDynamicPartialRate:    fs.Float64("max-source-dynamic-partial-rate", -1, "optional quality gate: maximum dynamic-partial source access rate, 0..1"),
+			MaxSubagentErrorRate:           fs.Float64("max-subagent-error-rate", -1, "optional quality gate: maximum subagent error rate per subagent call, 0..1"),
 			MaxToolErrorRate:               fs.Float64("max-tool-error-rate", -1, "optional quality gate: maximum tool error rate, 0..1"),
 			MaxToolContextTruncationRate:   fs.Float64("max-tool-context-truncation-rate", -1, "optional quality gate: maximum tool-context truncation rate, 0..1"),
 			MaxToolResultTruncationRate:    fs.Float64("max-tool-result-truncation-rate", -1, "optional quality gate: maximum tool-result event truncation rate, 0..1"),
@@ -226,11 +228,13 @@ type qualityGateConfig struct {
 	MinSessionSearchContextHitRate *float64
 	MinToolRepairSuccessRate       *float64
 	MinVerifierPassRate            *float64
+	MaxFocusedTaskErrorRate        *float64
 	MaxForcedNoToolsRate           *float64
 	MaxLoopGuardInterventionRate   *float64
 	MaxPlanErrorRate               *float64
 	MaxSourceDiscoveryOnlyRate     *float64
 	MaxSourceDynamicPartialRate    *float64
+	MaxSubagentErrorRate           *float64
 	MaxToolErrorRate               *float64
 	MaxToolContextTruncationRate   *float64
 	MaxToolResultTruncationRate    *float64
@@ -554,12 +558,14 @@ func printBatchSummary(w io.Writer, s batchSummary) {
 		s.RemovedWorkspaces,
 		s.CleanupErrors,
 	)
-	fmt.Fprintf(w, " rates=pass:%s,completed:%s,memory_update:%s,runtime_surface:%s,tool_error:%s,plan_error:%s,repair_success:%s,verifier_pass:%s,evidence_verified:%s,source_network:%s,source_discovery:%s,source_dynamic_partial:%s avg_tokens=%.1f/%.1f",
+	fmt.Fprintf(w, " rates=pass:%s,completed:%s,memory_update:%s,runtime_surface:%s,tool_error:%s,focused_task_error:%s,subagent_error:%s,plan_error:%s,repair_success:%s,verifier_pass:%s,evidence_verified:%s,source_network:%s,source_discovery:%s,source_dynamic_partial:%s avg_tokens=%.1f/%.1f",
 		formatPercent(batchRatio(s.Passed, s.Total)),
 		formatPercent(batchRatio(s.EndCompleted, s.Total)),
 		formatPercent(batchRatio(s.MemoryUpdates, s.Total)),
 		formatPercent(batchRatio(s.RuntimeSurfaceScenarios, s.Total)),
 		formatOptionalPercent(batchOptionalRatio(s.ToolErrors, s.ToolCalls)),
+		formatOptionalPercent(batchOptionalRatio(s.FocusedTaskErrors, s.FocusedTaskCalls)),
+		formatOptionalPercent(batchOptionalRatio(s.SubagentErrors, s.SubagentCalls)),
 		formatOptionalPercent(batchOptionalRatio(s.PlanErrors, s.PlanCalls)),
 		formatOptionalPercent(batchOptionalRatio(s.ToolRepairSucceeded, s.ToolRepairCalls)),
 		formatOptionalPercent(batchOptionalRatio(s.VerifierPassed, s.VerifierRuns)),
@@ -785,11 +791,13 @@ func validateQualityGateConfig(g qualityGateConfig) error {
 		{"--min-session-search-context-hit-rate", g.MinSessionSearchContextHitRate, true},
 		{"--min-tool-repair-success-rate", g.MinToolRepairSuccessRate, true},
 		{"--min-verifier-pass-rate", g.MinVerifierPassRate, true},
+		{"--max-focused-task-error-rate", g.MaxFocusedTaskErrorRate, true},
 		{"--max-forced-no-tools-rate", g.MaxForcedNoToolsRate, true},
 		{"--max-loop-guard-intervention-rate", g.MaxLoopGuardInterventionRate, true},
 		{"--max-plan-error-rate", g.MaxPlanErrorRate, true},
 		{"--max-source-discovery-only-rate", g.MaxSourceDiscoveryOnlyRate, true},
 		{"--max-source-dynamic-partial-rate", g.MaxSourceDynamicPartialRate, true},
+		{"--max-subagent-error-rate", g.MaxSubagentErrorRate, true},
 		{"--max-tool-error-rate", g.MaxToolErrorRate, true},
 		{"--max-tool-context-truncation-rate", g.MaxToolContextTruncationRate, true},
 		{"--max-tool-result-truncation-rate", g.MaxToolResultTruncationRate, true},
@@ -850,11 +858,13 @@ func qualityGateFailures(s batchSummary, g qualityGateConfig) []string {
 	checkMin("session_search_context_hit_rate", batchRatio(s.SessionSearchContextHits, s.SessionSearchResults), g.MinSessionSearchContextHitRate, s.SessionSearchResults > 0)
 	checkMin("tool_repair_success_rate", batchRatio(s.ToolRepairSucceeded, s.ToolRepairCalls), g.MinToolRepairSuccessRate, s.ToolRepairCalls > 0)
 	checkMin("verifier_pass_rate", batchRatio(s.VerifierPassed, s.VerifierRuns), g.MinVerifierPassRate, s.VerifierRuns > 0)
+	checkMax("focused_task_error_rate", batchRatio(s.FocusedTaskErrors, s.FocusedTaskCalls), g.MaxFocusedTaskErrorRate, s.FocusedTaskCalls > 0)
 	checkMax("forced_no_tools_rate", batchRatio(s.ForcedNoTools, s.ToolCalls), g.MaxForcedNoToolsRate, s.ToolCalls > 0)
 	checkMax("loop_guard_intervention_rate", batchRatio(s.LoopGuardInterventions, s.ToolCalls), g.MaxLoopGuardInterventionRate, s.ToolCalls > 0)
 	checkMax("plan_error_rate", batchRatio(s.PlanErrors, s.PlanCalls), g.MaxPlanErrorRate, s.PlanCalls > 0)
 	checkMax("source_discovery_only_rate", batchRatio(s.SourceAccessDiscoveryOnly, s.SourceAccessResults), g.MaxSourceDiscoveryOnlyRate, s.SourceAccessResults > 0)
 	checkMax("source_dynamic_partial_rate", batchRatio(s.SourceAccessDynamicPartial, s.SourceAccessResults), g.MaxSourceDynamicPartialRate, s.SourceAccessResults > 0)
+	checkMax("subagent_error_rate", batchRatio(s.SubagentErrors, s.SubagentCalls), g.MaxSubagentErrorRate, s.SubagentCalls > 0)
 	checkMax("tool_error_rate", batchRatio(s.ToolErrors, s.ToolCalls), g.MaxToolErrorRate, s.ToolCalls > 0)
 	checkMax("tool_context_truncation_rate", batchRatio(s.ToolContextTruncated, s.ToolCalls), g.MaxToolContextTruncationRate, s.ToolCalls > 0)
 	checkMax("tool_result_truncation_rate", batchRatio(s.ToolResultsTruncated, s.ToolCalls), g.MaxToolResultTruncationRate, s.ToolCalls > 0)
@@ -1112,11 +1122,13 @@ type evalJSONLMetadata struct {
 	MinSessionSearchContextHitRate *float64 `json:"min_session_search_context_hit_rate,omitempty"`
 	MinToolRepairSuccessRate       *float64 `json:"min_tool_repair_success_rate,omitempty"`
 	MinVerifierPassRate            *float64 `json:"min_verifier_pass_rate,omitempty"`
+	MaxFocusedTaskErrorRate        *float64 `json:"max_focused_task_error_rate,omitempty"`
 	MaxForcedNoToolsRate           *float64 `json:"max_forced_no_tools_rate,omitempty"`
 	MaxLoopGuardInterventionRate   *float64 `json:"max_loop_guard_intervention_rate,omitempty"`
 	MaxPlanErrorRate               *float64 `json:"max_plan_error_rate,omitempty"`
 	MaxSourceDiscoveryOnlyRate     *float64 `json:"max_source_discovery_only_rate,omitempty"`
 	MaxSourceDynamicPartialRate    *float64 `json:"max_source_dynamic_partial_rate,omitempty"`
+	MaxSubagentErrorRate           *float64 `json:"max_subagent_error_rate,omitempty"`
 	MaxToolErrorRate               *float64 `json:"max_tool_error_rate,omitempty"`
 	MaxToolContextTruncationRate   *float64 `json:"max_tool_context_truncation_rate,omitempty"`
 	MaxToolResultTruncationRate    *float64 `json:"max_tool_result_truncation_rate,omitempty"`
@@ -1162,11 +1174,13 @@ func evalJSONLMetadataFromConfig(suite, model, providerLabel, executor, temperat
 		MinSessionSearchContextHitRate: enabledQualityGateValue(gates.MinSessionSearchContextHitRate),
 		MinToolRepairSuccessRate:       enabledQualityGateValue(gates.MinToolRepairSuccessRate),
 		MinVerifierPassRate:            enabledQualityGateValue(gates.MinVerifierPassRate),
+		MaxFocusedTaskErrorRate:        enabledQualityGateValue(gates.MaxFocusedTaskErrorRate),
 		MaxForcedNoToolsRate:           enabledQualityGateValue(gates.MaxForcedNoToolsRate),
 		MaxLoopGuardInterventionRate:   enabledQualityGateValue(gates.MaxLoopGuardInterventionRate),
 		MaxPlanErrorRate:               enabledQualityGateValue(gates.MaxPlanErrorRate),
 		MaxSourceDiscoveryOnlyRate:     enabledQualityGateValue(gates.MaxSourceDiscoveryOnlyRate),
 		MaxSourceDynamicPartialRate:    enabledQualityGateValue(gates.MaxSourceDynamicPartialRate),
+		MaxSubagentErrorRate:           enabledQualityGateValue(gates.MaxSubagentErrorRate),
 		MaxToolErrorRate:               enabledQualityGateValue(gates.MaxToolErrorRate),
 		MaxToolContextTruncationRate:   enabledQualityGateValue(gates.MaxToolContextTruncationRate),
 		MaxToolResultTruncationRate:    enabledQualityGateValue(gates.MaxToolResultTruncationRate),
@@ -1310,6 +1324,8 @@ type batchSummaryRecord struct {
 	CompletionRate              float64                                    `json:"completion_rate"`
 	MemoryUpdateRate            float64                                    `json:"memory_update_rate"`
 	ToolErrorRate               *float64                                   `json:"tool_error_rate,omitempty"`
+	FocusedTaskErrorRate        *float64                                   `json:"focused_task_error_rate,omitempty"`
+	SubagentErrorRate           *float64                                   `json:"subagent_error_rate,omitempty"`
 	ForcedNoToolsRate           *float64                                   `json:"forced_no_tools_rate,omitempty"`
 	LoopGuardInterventionRate   *float64                                   `json:"loop_guard_intervention_rate,omitempty"`
 	PlanErrorRate               *float64                                   `json:"plan_error_rate,omitempty"`
@@ -1624,6 +1640,8 @@ func printBatchSummaryJSONL(w io.Writer, meta evalJSONLMetadata, s batchSummary,
 		CompletionRate:              batchRatio(s.EndCompleted, s.Total),
 		MemoryUpdateRate:            batchRatio(s.MemoryUpdates, s.Total),
 		ToolErrorRate:               batchOptionalRatio(s.ToolErrors, s.ToolCalls),
+		FocusedTaskErrorRate:        batchOptionalRatio(s.FocusedTaskErrors, s.FocusedTaskCalls),
+		SubagentErrorRate:           batchOptionalRatio(s.SubagentErrors, s.SubagentCalls),
 		ForcedNoToolsRate:           batchOptionalRatio(s.ForcedNoTools, s.ToolCalls),
 		LoopGuardInterventionRate:   batchOptionalRatio(s.LoopGuardInterventions, s.ToolCalls),
 		PlanErrorRate:               batchOptionalRatio(s.PlanErrors, s.PlanCalls),
@@ -1748,11 +1766,13 @@ func hasQualityGateThresholds(meta evalJSONLMetadata) bool {
 		meta.MinSessionSearchContextHitRate != nil ||
 		meta.MinToolRepairSuccessRate != nil ||
 		meta.MinVerifierPassRate != nil ||
+		meta.MaxFocusedTaskErrorRate != nil ||
 		meta.MaxForcedNoToolsRate != nil ||
 		meta.MaxLoopGuardInterventionRate != nil ||
 		meta.MaxPlanErrorRate != nil ||
 		meta.MaxSourceDiscoveryOnlyRate != nil ||
 		meta.MaxSourceDynamicPartialRate != nil ||
+		meta.MaxSubagentErrorRate != nil ||
 		meta.MaxToolErrorRate != nil ||
 		meta.MaxToolContextTruncationRate != nil ||
 		meta.MaxToolResultTruncationRate != nil ||

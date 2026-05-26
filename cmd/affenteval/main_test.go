@@ -150,6 +150,16 @@ func TestRunRejectsInvalidConfigBeforeScenarios(t *testing.T) {
 			want: "--max-plan-error-rate must be between 0 and 1",
 		},
 		{
+			name: "max focused task error rate too high",
+			args: []string{"--max-focused-task-error-rate=1.1"},
+			want: "--max-focused-task-error-rate must be between 0 and 1",
+		},
+		{
+			name: "max subagent error rate too high",
+			args: []string{"--max-subagent-error-rate=1.1"},
+			want: "--max-subagent-error-rate must be between 0 and 1",
+		},
+		{
 			name: "negative max avg tokens",
 			args: []string{"--max-avg-total-tokens=-2"},
 			want: "--max-avg-total-tokens must be disabled with -1 or set to a non-negative value",
@@ -282,6 +292,10 @@ func TestQualityGateFailures(t *testing.T) {
 		ToolErrors:                 1,
 		LoopGuardInterventions:     2,
 		ForcedNoTools:              1,
+		FocusedTaskCalls:           4,
+		FocusedTaskErrors:          2,
+		SubagentCalls:              2,
+		SubagentErrors:             1,
 		PlanCalls:                  4,
 		PlanErrors:                 2,
 		ToolRepairCalls:            4,
@@ -315,11 +329,13 @@ func TestQualityGateFailures(t *testing.T) {
 		MinSessionSearchContextHitRate: ptr(0.75),
 		MinToolRepairSuccessRate:       ptr(0.9),
 		MinVerifierPassRate:            ptr(0.75),
+		MaxFocusedTaskErrorRate:        ptr(0.25),
 		MaxForcedNoToolsRate:           ptr(0.1),
 		MaxLoopGuardInterventionRate:   ptr(0.3),
 		MaxPlanErrorRate:               ptr(0.25),
 		MaxSourceDiscoveryOnlyRate:     ptr(0.1),
 		MaxSourceDynamicPartialRate:    ptr(0.1),
+		MaxSubagentErrorRate:           ptr(0.25),
 		MaxToolErrorRate:               ptr(0.1),
 		MaxToolContextTruncationRate:   ptr(0.5),
 		MaxToolResultTruncationRate:    ptr(0.4),
@@ -333,6 +349,7 @@ func TestQualityGateFailures(t *testing.T) {
 		"avg_runtime_errors 1.500 > max 1.000",
 		"avg_total_tokens 55.000 > max 40.000",
 		"completion_rate 0.500 < min 0.750",
+		"focused_task_error_rate 0.500 > max 0.250",
 		"forced_no_tools_rate 0.200 > max 0.100",
 		"loop_guard_intervention_rate 0.400 > max 0.300",
 		"memory_update_rate 0.500 < min 0.750",
@@ -344,6 +361,7 @@ func TestQualityGateFailures(t *testing.T) {
 		"source_dynamic_partial_rate 0.250 > max 0.100",
 		"source_network_rate 0.250 < min 0.500",
 		"source_access_verified_rate 0.750 < min 0.900",
+		"subagent_error_rate 0.500 > max 0.250",
 		"tool_context_truncation_rate 0.800 > max 0.500",
 		"tool_error_rate 0.200 > max 0.100",
 		"tool_repair_success_rate 0.750 < min 0.900",
@@ -758,7 +776,7 @@ func TestBatchSummaryAggregatesRuntimeMetrics(t *testing.T) {
 	if !strings.Contains(out.String(), "ctx_trunc=3,omitted=5120") {
 		t.Fatalf("summary output missing context truncation rollup:\n%s", out.String())
 	}
-	if !strings.Contains(out.String(), "rates=pass:50.0%,completed:50.0%,memory_update:0.0%,runtime_surface:100.0%,tool_error:20.0%,plan_error:33.3%,repair_success:80.0%,verifier_pass:50.0%,evidence_verified:75.0%,source_network:75.0%,source_discovery:0.0%,source_dynamic_partial:0.0% avg_tokens=45.0/10.0") {
+	if !strings.Contains(out.String(), "rates=pass:50.0%,completed:50.0%,memory_update:0.0%,runtime_surface:100.0%,tool_error:20.0%,focused_task_error:n/a,subagent_error:n/a,plan_error:33.3%,repair_success:80.0%,verifier_pass:50.0%,evidence_verified:75.0%,source_network:75.0%,source_discovery:0.0%,source_dynamic_partial:0.0% avg_tokens=45.0/10.0") {
 		t.Fatalf("summary output missing normalized rates:\n%s", out.String())
 	}
 	if !strings.Contains(out.String(), "context_pressure=avg_compactions:0.50,avg_removed:16.0,tool_ctx_trunc:60.0%") {
@@ -1541,6 +1559,12 @@ func TestBatchSummaryAggregatesDelegationAcrossScenarios(t *testing.T) {
 	if got["focused_task_calls"] != float64(4) {
 		t.Errorf("summary.focused_task_calls = %#v, want 4", got["focused_task_calls"])
 	}
+	if got["focused_task_error_rate"] != float64(0.25) {
+		t.Errorf("summary.focused_task_error_rate = %#v, want 0.25", got["focused_task_error_rate"])
+	}
+	if got["subagent_error_rate"] != float64(1) {
+		t.Errorf("summary.subagent_error_rate = %#v, want 1", got["subagent_error_rate"])
+	}
 	byType, ok := got["focused_task_by_type"].(map[string]any)
 	if !ok || byType["recall"] != float64(3) || byType["explore"] != float64(1) {
 		t.Errorf("summary.focused_task_by_type = %#v", byType)
@@ -1551,6 +1575,7 @@ func TestBatchSummaryAggregatesDelegationAcrossScenarios(t *testing.T) {
 	for _, want := range []string{
 		"delegation=focused_tasks:4,subagents:1",
 		"delegation_errors=focused_tasks:1,subagents:1",
+		"focused_task_error:25.0%,subagent_error:100.0%",
 		"focused_task_by_type=explore:1,recall:3",
 		"subagent_by_mode=review:1",
 	} {
@@ -1771,6 +1796,10 @@ func TestPrintBatchSummaryJSONL(t *testing.T) {
 		FailureKinds:               map[string]int{"missing_command": 1, "turn_end": 1},
 		DebugBriefByTag:            map[string]int{"outcome:failed": 1, "tool_failure:blocked": 1, "runtime_error:llm_timeout": 1},
 		RemovedWorkspaces:          1,
+		FocusedTaskCalls:           4,
+		FocusedTaskErrors:          1,
+		SubagentCalls:              2,
+		SubagentErrors:             1,
 		PlanCalls:                  3,
 		PlanByAction:               map[string]int{"set": 1, "update": 2},
 		PlanErrors:                 1,
@@ -1801,6 +1830,8 @@ func TestPrintBatchSummaryJSONL(t *testing.T) {
 		"completion_rate":                 float64(0.5),
 		"memory_update_rate":              float64(0.5),
 		"tool_error_rate":                 float64(0.2),
+		"focused_task_error_rate":         float64(0.25),
+		"subagent_error_rate":             float64(0.5),
 		"forced_no_tools_rate":            float64(0.2),
 		"loop_guard_intervention_rate":    float64(0.6),
 		"plan_error_rate":                 float64(1.0 / 3.0),
@@ -1863,6 +1894,10 @@ func TestPrintBatchSummaryJSONL(t *testing.T) {
 		"end_unknown":                     float64(0),
 		"removed_workspaces":              float64(1),
 		"cleanup_errors":                  float64(0),
+		"focused_task_calls":              float64(4),
+		"focused_task_errors":             float64(1),
+		"subagent_calls":                  float64(2),
+		"subagent_errors":                 float64(1),
 		"plan_calls":                      float64(3),
 		"plan_errors":                     float64(1),
 		"loop_decisions":                  float64(1),
@@ -2060,11 +2095,13 @@ func TestEvalJSONLMetadataFromConfig(t *testing.T) {
 	minSessionSearchContextHitRate := 0.75
 	minToolRepairSuccessRate := 0.85
 	minVerifierPassRate := 0.9
+	maxFocusedTaskErrorRate := 0.07
 	maxForcedNoToolsRate := 0.1
 	maxLoopGuardInterventionRate := 0.15
 	maxPlanErrorRate := 0.05
 	maxSourceDiscoveryOnlyRate := 0.1
 	maxSourceDynamicPartialRate := 0.1
+	maxSubagentErrorRate := 0.08
 	maxToolErrorRate := 0.05
 	maxToolResultTruncationRate := 0.2
 	maxAvgRuntimeErrors := 0.05
@@ -2079,11 +2116,13 @@ func TestEvalJSONLMetadataFromConfig(t *testing.T) {
 		MinSessionSearchContextHitRate: &minSessionSearchContextHitRate,
 		MinToolRepairSuccessRate:       &minToolRepairSuccessRate,
 		MinVerifierPassRate:            &minVerifierPassRate,
+		MaxFocusedTaskErrorRate:        &maxFocusedTaskErrorRate,
 		MaxForcedNoToolsRate:           &maxForcedNoToolsRate,
 		MaxLoopGuardInterventionRate:   &maxLoopGuardInterventionRate,
 		MaxPlanErrorRate:               &maxPlanErrorRate,
 		MaxSourceDiscoveryOnlyRate:     &maxSourceDiscoveryOnlyRate,
 		MaxSourceDynamicPartialRate:    &maxSourceDynamicPartialRate,
+		MaxSubagentErrorRate:           &maxSubagentErrorRate,
 		MaxToolErrorRate:               &maxToolErrorRate,
 		MaxToolResultTruncationRate:    &maxToolResultTruncationRate,
 		MaxAvgRuntimeErrors:            &maxAvgRuntimeErrors,
@@ -2093,7 +2132,7 @@ func TestEvalJSONLMetadataFromConfig(t *testing.T) {
 	if meta.Model != "flag-model" || meta.ProviderLabel != "flag-provider" || meta.Executor != "sandbox" || meta.Temperature != "0.4" || meta.TopP != "0.9" || meta.MaxTokens != "512" || meta.Seed != "42" || meta.Suite != "custom" || !meta.RuntimeEvalMode || meta.RuntimeTools != "readonly_workspace,web" || !meta.RuntimeAllTools || !meta.RuntimeMemory || !meta.RuntimeWeb || !meta.RuntimeBrowser || !meta.TraceDeltas || !meta.RuntimeMCP || meta.TimeoutMS != 1000 {
 		t.Fatalf("flag metadata not normalized: %+v", meta)
 	}
-	if meta.MinPassRate == nil || *meta.MinPassRate != 0.8 || meta.MinMemoryUpdateRate == nil || *meta.MinMemoryUpdateRate != 0.2 || meta.MinRuntimeSurfaceRate == nil || *meta.MinRuntimeSurfaceRate != 0.9 || meta.MinSourceNetworkRate == nil || *meta.MinSourceNetworkRate != 0.5 || meta.MinSourceAccessVerifiedRate == nil || *meta.MinSourceAccessVerifiedRate != 0.9 || meta.MinSessionSearchContextHitRate == nil || *meta.MinSessionSearchContextHitRate != 0.75 || meta.MinToolRepairSuccessRate == nil || *meta.MinToolRepairSuccessRate != 0.85 || meta.MinVerifierPassRate == nil || *meta.MinVerifierPassRate != 0.9 || meta.MaxForcedNoToolsRate == nil || *meta.MaxForcedNoToolsRate != 0.1 || meta.MaxLoopGuardInterventionRate == nil || *meta.MaxLoopGuardInterventionRate != 0.15 || meta.MaxPlanErrorRate == nil || *meta.MaxPlanErrorRate != 0.05 || meta.MaxSourceDiscoveryOnlyRate == nil || *meta.MaxSourceDiscoveryOnlyRate != 0.1 || meta.MaxSourceDynamicPartialRate == nil || *meta.MaxSourceDynamicPartialRate != 0.1 || meta.MaxToolErrorRate == nil || *meta.MaxToolErrorRate != 0.05 || meta.MaxToolResultTruncationRate == nil || *meta.MaxToolResultTruncationRate != 0.2 || meta.MaxAvgRuntimeErrors == nil || *meta.MaxAvgRuntimeErrors != 0.05 || meta.MaxAvgContextCompactions == nil || *meta.MaxAvgContextCompactions != 0.1 || meta.MaxAvgTotalTokens == nil || *meta.MaxAvgTotalTokens != 120000 {
+	if meta.MinPassRate == nil || *meta.MinPassRate != 0.8 || meta.MinMemoryUpdateRate == nil || *meta.MinMemoryUpdateRate != 0.2 || meta.MinRuntimeSurfaceRate == nil || *meta.MinRuntimeSurfaceRate != 0.9 || meta.MinSourceNetworkRate == nil || *meta.MinSourceNetworkRate != 0.5 || meta.MinSourceAccessVerifiedRate == nil || *meta.MinSourceAccessVerifiedRate != 0.9 || meta.MinSessionSearchContextHitRate == nil || *meta.MinSessionSearchContextHitRate != 0.75 || meta.MinToolRepairSuccessRate == nil || *meta.MinToolRepairSuccessRate != 0.85 || meta.MinVerifierPassRate == nil || *meta.MinVerifierPassRate != 0.9 || meta.MaxFocusedTaskErrorRate == nil || *meta.MaxFocusedTaskErrorRate != 0.07 || meta.MaxForcedNoToolsRate == nil || *meta.MaxForcedNoToolsRate != 0.1 || meta.MaxLoopGuardInterventionRate == nil || *meta.MaxLoopGuardInterventionRate != 0.15 || meta.MaxPlanErrorRate == nil || *meta.MaxPlanErrorRate != 0.05 || meta.MaxSourceDiscoveryOnlyRate == nil || *meta.MaxSourceDiscoveryOnlyRate != 0.1 || meta.MaxSourceDynamicPartialRate == nil || *meta.MaxSourceDynamicPartialRate != 0.1 || meta.MaxSubagentErrorRate == nil || *meta.MaxSubagentErrorRate != 0.08 || meta.MaxToolErrorRate == nil || *meta.MaxToolErrorRate != 0.05 || meta.MaxToolResultTruncationRate == nil || *meta.MaxToolResultTruncationRate != 0.2 || meta.MaxAvgRuntimeErrors == nil || *meta.MaxAvgRuntimeErrors != 0.05 || meta.MaxAvgContextCompactions == nil || *meta.MaxAvgContextCompactions != 0.1 || meta.MaxAvgTotalTokens == nil || *meta.MaxAvgTotalTokens != 120000 {
 		t.Fatalf("quality gate metadata not preserved: %+v", meta)
 	}
 	if meta.MinCompletionRate != nil || meta.MaxToolContextTruncationRate != nil {
