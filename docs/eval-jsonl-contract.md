@@ -57,8 +57,9 @@ Shared metadata fields:
   `max_avg_runtime_errors`, `max_avg_context_compactions`,
   `max_avg_reactive_context_compactions`,
   `max_avg_context_removed_messages`, `max_avg_context_summary_bytes`,
-  `max_avg_tool_calls`, `max_avg_total_tokens`: optional quality gate
-  thresholds configured for the run. Disabled gates are omitted.
+  `max_avg_tool_calls`, `max_avg_duration_ms`, `max_avg_total_tokens`:
+  optional quality gate thresholds configured for the run. Disabled gates are
+  omitted.
 
 ## Scenario Record
 
@@ -274,7 +275,7 @@ surface for trend analysis.
 
 Summary records aggregate all scenario records from the same process:
 
-- `scenarios`, `passed`, `failed`, `duration_ms`.
+- `scenarios`, `passed`, `failed`, `duration_ms`, `avg_duration_ms`.
 - Normalized comparison metrics: `pass_rate`, `completion_rate`,
   `memory_update_rate`, `runtime_surface_rate`,
   `tool_error_rate`, `forced_no_tools_rate`, and

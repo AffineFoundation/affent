@@ -777,8 +777,9 @@ include `quality_gates_passed` when any gate is enabled and
 `quality_gate_failures` when a gate failed, so stored eval artifacts can explain
 CI or model-comparison failures without stderr.
 The default text summary also prints the key normalized rates used for long-run
-debugging, including pass/completion, memory update coverage, runtime-surface
-coverage, tool errors, focused-task/subagent errors, plan errors, repair success, verifier pass rate,
+debugging, including pass/completion, average scenario duration, memory update
+coverage, runtime-surface coverage, tool errors, focused-task/subagent errors,
+plan errors, repair success, verifier pass rate,
 verified evidence, network/discovery/dynamic-partial source ratios, average
 context compactions, reactive context compactions, aggregate and per-family
 expected-capability pass rates, messages removed by compaction, compaction
@@ -801,8 +802,8 @@ Use `--min-pass-rate`, `--min-completion-rate`,
 `--max-tool-result-truncation-rate`, `--max-avg-runtime-errors`,
 `--max-avg-context-compactions`, `--max-avg-reactive-context-compactions`,
 `--max-avg-context-removed-messages`, `--max-avg-context-summary-bytes`,
-`--max-avg-tool-calls`, and `--max-avg-total-tokens` for CI or model/provider
-comparison runs.
+`--max-avg-tool-calls`, `--max-avg-duration-ms`, and
+`--max-avg-total-tokens` for CI or model/provider comparison runs.
 
 Run a one-off prompt through the same batch harness:
 
