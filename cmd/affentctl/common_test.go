@@ -688,6 +688,23 @@ func TestEvalModeAllowsExplicitEvalTools(t *testing.T) {
 	if historyCaps.Memory || historyCaps.Skill || historyCaps.Plan || historyCaps.ProjectContext || historyCaps.WebFetch || historyCaps.WebSearch || historyCaps.Browser || historyCaps.Subagent || historyCaps.FocusedTasks {
 		t.Fatalf("--eval-tools=session_search must not enable unrelated surfaces, caps=%+v", historyCaps)
 	}
+
+	var recall commonFlags
+	recallFS := flag.NewFlagSet("test", flag.ContinueOnError)
+	recall.bind(recallFS)
+	if err := recallFS.Parse([]string{"--eval-mode", "--eval-tools=recall"}); err != nil {
+		t.Fatal(err)
+	}
+	if err := applyConfig(&recall, recallFS); err != nil {
+		t.Fatal(err)
+	}
+	recallCaps := resolveRuntimeCapabilities(recall)
+	if recallCaps.Builtins || !recallCaps.Memory || !recallCaps.SessionSearch {
+		t.Fatalf("--eval-tools=recall should enable memory and session_search without builtins, caps=%+v", recallCaps)
+	}
+	if recallCaps.Skill || recallCaps.Plan || recallCaps.ProjectContext || recallCaps.WebFetch || recallCaps.WebSearch || recallCaps.Browser || recallCaps.Subagent || recallCaps.FocusedTasks {
+		t.Fatalf("--eval-tools=recall must not enable unrelated surfaces, caps=%+v", recallCaps)
+	}
 }
 
 func TestEvalToolsRequireEvalMode(t *testing.T) {
@@ -1180,6 +1197,46 @@ func TestSetupLoop_EvalModeAllowsSessionSearchWithoutWorkspaceBuiltins(t *testin
 		if strings.Contains(msgs[0].Content, forbidden) {
 			t.Fatalf("session_search-only eval prompt should not include %q guidance:\n%s", forbidden, msgs[0].Content)
 		}
+	}
+}
+
+func TestSetupLoop_EvalModeRecallGroupRegistersMemoryAndSessionSearch(t *testing.T) {
+	var cf commonFlags
+	fs := flag.NewFlagSet("test", flag.ContinueOnError)
+	cf.bind(fs)
+	if err := fs.Parse([]string{
+		"--workspace", t.TempDir(),
+		"--model", "fake-model",
+		"--base-url", "http://127.0.0.1:1/v1",
+		"--eval-mode",
+		"--eval-tools=recall",
+		"--quiet",
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if err := applyConfig(&cf, fs); err != nil {
+		t.Fatal(err)
+	}
+	b, code := setupLoop(cf)
+	if code != 0 {
+		t.Fatalf("setupLoop code=%d", code)
+	}
+	defer b.close()
+	for _, name := range []string{agent.MemoryToolName, agent.SessionSearchToolName} {
+		if _, ok := b.loop.Tools.Get(name); !ok {
+			t.Fatalf("%s should be registered by --eval-tools=recall", name)
+		}
+	}
+	for _, name := range []string{"shell", "read_file", "write_file", "list_files", agent.PlanToolName} {
+		if _, ok := b.loop.Tools.Get(name); ok {
+			t.Fatalf("%s should not be registered by recall-only --eval-tools", name)
+		}
+	}
+	msgs := b.loop.Conv.Snapshot()
+	if len(msgs) == 0 ||
+		!strings.Contains(msgs[0].Content, "Memory retrieval:") ||
+		!strings.Contains(msgs[0].Content, "Session history retrieval:") {
+		t.Fatalf("recall eval prompt should include memory and session guidance:\n%+v", msgs)
 	}
 }
 

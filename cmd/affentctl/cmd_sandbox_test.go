@@ -402,6 +402,7 @@ func TestMakeImageServeEnablesBuiltinsInsideRuntimeContainer(t *testing.T) {
 		`browser-screenshot) args="$$args --browser=true --browser-screenshot=true"`,
 		`web-search) args="$$args --web=true --web-search=true"`,
 		`memory) args="$$args --memory=true"`,
+		`recall) args="$$args --eval-tools=recall"`,
 		`unknown SERVE_EVAL_PERMISSIONS entry`,
 		`$(MAKE) image-serve-restart`,
 		`SERVE_CONTAINER_NAME="$(SERVE_EVAL_CONTAINER_NAME)"`,
@@ -540,6 +541,7 @@ func TestMakeOneClickContainerTargetsUseSharedLimits(t *testing.T) {
 			`args="--eval-mode"`,
 			`browser) args="$$args --browser=true"`,
 			`web-search) args="$$args --web=true --web-search=true"`,
+			`recall) args="$$args --eval-tools=recall"`,
 			`$(MAKE) image-serve-restart`,
 			`SERVE_DEFAULT_ARGS=""`,
 			`CONTAINER_MEMORY="$(CONTAINER_MEMORY)"`,
@@ -616,6 +618,15 @@ func TestMakeEvalServePermissionsExpandToServeArgs(t *testing.T) {
 	} {
 		if !strings.Contains(out, want) {
 			t.Fatalf("expanded eval serve args missing %q:\n%s", want, out)
+		}
+	}
+
+	out = runMakeEvalServePermissions(t, contextDir, "web-search recall")
+	for _, want := range []string{
+		"SERVE_ARGS=--eval-mode --web=true --web-search=true --eval-tools=recall",
+	} {
+		if !strings.Contains(out, want) {
+			t.Fatalf("expanded recall eval serve args missing %q:\n%s", want, out)
 		}
 	}
 

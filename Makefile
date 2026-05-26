@@ -398,7 +398,8 @@ eval-serve-container:
 			web) args="$$args --web=true" ;; \
 			web-search) args="$$args --web=true --web-search=true" ;; \
 			memory) args="$$args --memory=true" ;; \
-			*) echo "unknown SERVE_EVAL_PERMISSIONS entry: $$permission (valid: none browser browser-screenshot web web-search memory)" >&2; exit 2 ;; \
+			recall) args="$$args --eval-tools=recall" ;; \
+			*) echo "unknown SERVE_EVAL_PERMISSIONS entry: $$permission (valid: none browser browser-screenshot web web-search memory recall)" >&2; exit 2 ;; \
 		esac; \
 	done; \
 	if test -n "$(SERVE_ARGS)"; then args="$$args $(SERVE_ARGS)"; fi; \

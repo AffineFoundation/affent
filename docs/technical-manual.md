@@ -789,6 +789,7 @@ forward host `AFFENTCTL_TEMPERATURE`, `AFFENTCTL_TOP_P`,
 tasks start from a no-tool surface and prompts only describe registered
 capabilities. Opt capabilities back in only for suites that explicitly measure
 them: `--runtime-tools read_file,shell`, `--runtime-tools readonly_workspace,web`,
+`--runtime-tools recall` for durable memory plus prior-session search,
 `--runtime-memory`, `--runtime-web`, `--runtime-browser`, `--runtime-mcp-config`,
 or the matching lower-level `affentctl` flags. Use `--eval-all-tools` /
 `--runtime-all-tools` only for smoke/debug runs that intentionally exercise the
@@ -833,8 +834,8 @@ make eval-serve-browser-container
 
 Use `SERVE_EVAL_PERMISSIONS` to opt specific environment capabilities back in,
 for example `SERVE_EVAL_PERMISSIONS='browser'` for LiveWeb-style rendered-page
-tasks, or `SERVE_EVAL_PERMISSIONS='web web-search memory'` for direct HTTP
-retrieval plus memory. Keep this list narrow: enabling `web-search` implies
+tasks, or `SERVE_EVAL_PERMISSIONS='web web-search recall'` for direct HTTP
+retrieval plus durable recall. Keep this list narrow: enabling `web-search` implies
 `web` and requires a configured search backend such as `TAVILY_API_KEY` or
 `AFFENT_WEB_SEARCH_PROVIDER=google` with Google CSE credentials, while
 browser-only evals should not need web/search permissions.

@@ -1529,6 +1529,47 @@ func TestSessionPool_EvalModeAllowsSessionSearchWithoutWorkspaceBuiltins(t *test
 	}
 }
 
+func TestSessionPool_EvalModeRecallGroupRegistersMemoryAndSessionSearch(t *testing.T) {
+	cfg := Config{
+		Listen:         "127.0.0.1:0",
+		MaxSessions:    4,
+		SessionIdleTTL: "5m",
+		WorkspaceRoot:  t.TempDir(),
+		MemoryRoot:     t.TempDir(),
+		BaseURL:        "http://127.0.0.1:0",
+		APIKey:         "test",
+		Model:          "fake",
+		EvalMode:       true,
+		EvalTools:      "recall",
+	}
+	pool, err := NewSessionPool(cfg, zerolog.New(io.Discard))
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(pool.Shutdown)
+
+	s, err := pool.GetOrCreate("eval-recall")
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, name := range []string{agent.MemoryToolName, agent.SessionSearchToolName} {
+		if _, ok := s.registry.Get(name); !ok {
+			t.Fatalf("%s should be registered by recall eval_tools", name)
+		}
+	}
+	for _, name := range []string{"shell", "read_file", "write_file", "list_files", agent.PlanToolName, agent.SubagentToolName, agent.FocusedTaskToolName} {
+		if _, ok := s.registry.Get(name); ok {
+			t.Fatalf("%s should not be registered with recall-only eval_tools", name)
+		}
+	}
+	msgs := s.conv.Snapshot()
+	if len(msgs) == 0 ||
+		!strings.Contains(msgs[0].Content, "Memory retrieval:") ||
+		!strings.Contains(msgs[0].Content, "Session history retrieval:") {
+		t.Fatalf("recall eval prompt should include memory and session guidance:\n%+v", msgs)
+	}
+}
+
 func TestSessionPool_WebSearchFallsBackToHTMLWithoutBackend(t *testing.T) {
 	t.Setenv("AFFENT_WEB_SEARCH_PROVIDER", "")
 	t.Setenv("TAVILY_API_KEY", "")

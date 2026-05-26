@@ -58,7 +58,7 @@ func run(args []string) int {
 		seed              = fs.String("seed", "", "deterministic-sampling seed forwarded to affentctl; empty keeps provider default")
 		executor          = fs.String("executor", "local", "affentctl tool executor for scenario runs: local, sandbox, or docker:<container>")
 		runtimeEvalMode   = fs.Bool("runtime-eval-mode", true, "pass affentctl --eval-mode during scenario runs; default true so evals start with no tools")
-		runtimeTools      = fs.String("runtime-tools", "", "comma-separated affentctl --eval-tools allowlist, e.g. readonly_workspace,web or read_file,shell")
+		runtimeTools      = fs.String("runtime-tools", "", "comma-separated affentctl --eval-tools allowlist, e.g. readonly_workspace,web,recall or read_file,shell")
 		runtimeAllTools   = fs.Bool("runtime-all-tools", false, "pass affentctl --eval-all-tools to enable the full tool surface under runtime eval mode")
 		runtimeMemory     = fs.Bool("runtime-memory", false, "pass affentctl --memory=true during scenario runs; useful for memory-only opt-in")
 		runtimeWeb        = fs.Bool("runtime-web", false, "pass affentctl --web --web-search during scenario runs for external retrieval/debug evals")
@@ -1797,6 +1797,8 @@ func enabledRuntimeToolSet(runtimeTools string, runtimeAllTools, runtimeMemory, 
 			add("web_fetch")
 		case "browser":
 			add(evalBrowserToolNames()...)
+		case "recall":
+			add("memory", agent.SessionSearchToolName)
 		case "delegation":
 			add("subagent_run", "run_task")
 		default:

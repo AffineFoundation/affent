@@ -78,7 +78,7 @@ func parseFlagsAndConfig(argv []string) (Config, error) {
 		enableMemory       = fs.Bool("memory", true, "Register agent runtime's memory tool.")
 		enableBuiltins     = fs.Bool("builtins", false, "Register shell + file builtins (LocalExecutor). DANGEROUS on a shared host — only enable in a sandboxed environment. Env: AFFENTSERVE_BUILTINS.")
 		evalMode           = fs.Bool("eval-mode", false, "Strict benchmark mode: disable all tools by default; opt in with --eval-tools, --eval-all-tools, --builtins=true, --browser=true, --web=true, or --memory=true. Env: AFFENTSERVE_EVAL_MODE.")
-		evalTools          = fs.String("eval-tools", "", "Comma-separated tool allowlist used only with --eval-mode, e.g. read_file,shell,repo_search; groups: workspace,readonly_workspace,web,browser,delegation. Env: AFFENTSERVE_EVAL_TOOLS.")
+		evalTools          = fs.String("eval-tools", "", "Comma-separated tool allowlist used only with --eval-mode, e.g. read_file,shell,repo_search; groups: workspace,readonly_workspace,web,browser,recall,delegation. Env: AFFENTSERVE_EVAL_TOOLS.")
 		evalAllTools       = fs.Bool("eval-all-tools", false, "With --eval-mode, enable the full serve tool surface instead of the default no-tool surface. Env: AFFENTSERVE_EVAL_ALL_TOOLS.")
 		enableSubagent     = fs.Bool("subagent", true, "Register the subagent_run tool — a bounded isolated Loop with read-only inspection tools. Doesn't require --builtins but inherits the shell tool when --builtins is also on.")
 		subagentMaxDepth   = fs.Int("subagent-max-depth", agent.DefaultSubagentMaxDepth, "Maximum recursive subagent depth; 1 disables nested subagents, hard max 4. Env: AFFENTSERVE_SUBAGENT_MAX_DEPTH.")

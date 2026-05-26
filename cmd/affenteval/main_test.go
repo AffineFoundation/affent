@@ -223,6 +223,14 @@ func TestValidateRuntimeToolSurface(t *testing.T) {
 				RequiredTools: []string{"memory"},
 			},
 		},
+		{
+			name:   "recall group satisfies memory and session search",
+			runner: BatchRuntimeToolConfig{RuntimeEvalMode: true, RuntimeTools: "recall"},
+			scenario: agenteval.BatchScenario{
+				Name:          "recall",
+				RequiredTools: []string{"memory", "session_search"},
+			},
+		},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {

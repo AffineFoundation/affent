@@ -160,7 +160,7 @@ func (c *commonFlags) bind(fs *flag.FlagSet) {
 	fs.StringVar(&c.systemPromptPath, "system-prompt", "", "override system prompt; '-' or file path or literal")
 	fs.BoolVar(&c.quiet, "quiet", false, "suppress stderr progress")
 	fs.BoolVar(&c.evalMode, "eval-mode", false, "strict benchmark mode: disable all tools by default; opt in with --eval-tools, --eval-all-tools, --memory=true, --web=true, --browser=true, or --mcp-config (env: AFFENTCTL_EVAL_MODE)")
-	fs.StringVar(&c.evalTools, "eval-tools", "", "comma-separated tool allowlist used only with --eval-mode, e.g. read_file,shell,repo_search; groups: workspace,readonly_workspace,web,browser,delegation,mcp (env: AFFENTCTL_EVAL_TOOLS)")
+	fs.StringVar(&c.evalTools, "eval-tools", "", "comma-separated tool allowlist used only with --eval-mode, e.g. read_file,shell,repo_search; groups: workspace,readonly_workspace,web,browser,recall,delegation,mcp (env: AFFENTCTL_EVAL_TOOLS)")
 	fs.BoolVar(&c.evalAllTools, "eval-all-tools", false, "with --eval-mode, enable the full tool surface instead of the default no-tool surface (env: AFFENTCTL_EVAL_ALL_TOOLS)")
 	fs.BoolVar(&c.memoryEnabled, "memory", true, "enable persistent memory: inject MEMORY.md / USER.md snapshot into the system prompt and register the memory tool (env: AFFENTCTL_MEMORY)")
 	fs.BoolVar(&c.memoryOnly, "memory-only", false, "register only the memory tool (no shell/file/MCP) and disable project context; for memory benchmarks. Implies --memory (env: AFFENTCTL_MEMORY_ONLY)")
@@ -950,6 +950,9 @@ func evalToolAllowlist(c commonFlags) (map[string]bool, []string) {
 			for _, n := range evalBrowserToolNames() {
 				add(n)
 			}
+		case "recall":
+			add(agent.MemoryToolName)
+			add(agent.SessionSearchToolName)
 		case "delegation":
 			add(agent.SubagentToolName)
 			add(agent.FocusedTaskToolName)

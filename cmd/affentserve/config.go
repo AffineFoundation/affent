@@ -530,6 +530,9 @@ func serveEvalToolAllowlist(c Config) (map[string]bool, []string) {
 			for _, n := range serveEvalBrowserToolNames() {
 				add(n)
 			}
+		case "recall":
+			add(agent.MemoryToolName)
+			add(agent.SessionSearchToolName)
 		case "delegation":
 			add(agent.SubagentToolName)
 			add(agent.FocusedTaskToolName)

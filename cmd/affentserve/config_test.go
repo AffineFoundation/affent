@@ -338,6 +338,18 @@ func TestResolveServeRuntimeCapabilitiesEvalMode(t *testing.T) {
 		t.Fatalf("session_search eval_tools should not enable unrelated surfaces: %+v", caps)
 	}
 
+	recall := base
+	recall.enableBuiltinsSet = false
+	recall.EnableBuiltins = false
+	recall.EvalTools = "recall"
+	caps = resolveServeRuntimeCapabilities(recall)
+	if caps.Builtins || !caps.Memory || !caps.WorkflowTools {
+		t.Fatalf("recall eval_tools should enable memory and workflow tools without builtins: %+v", caps)
+	}
+	if caps.Browser || caps.Web || caps.WebSearch || caps.Subagent || caps.FocusedTasks {
+		t.Fatalf("recall eval_tools should not enable unrelated surfaces: %+v", caps)
+	}
+
 	allTools := base
 	allTools.EvalAllTools = true
 	caps = resolveServeRuntimeCapabilities(allTools)
