@@ -13,6 +13,9 @@ export interface ServerStatsResponse {
   enable_builtins?: boolean;
   enable_subagent?: boolean;
   enable_focused_tasks?: boolean;
+  eval_mode?: boolean;
+  eval_tools?: string;
+  eval_all_tools?: boolean;
   shutting_down?: boolean;
   workspace_root?: string;
   memory_root?: string;

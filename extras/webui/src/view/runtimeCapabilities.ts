@@ -45,8 +45,8 @@ export function buildRuntimeCapabilityView(caps?: SessionCapabilities, opts: { s
   if (caps.eval_mode) {
     chips.push({
       group: "Mode",
-      label: "Eval constraints",
-      detail: "Some choices may be fixed for repeatable runs.",
+      label: caps.eval_all_tools ? "Eval · all tools" : "Eval constraints",
+      detail: evalModeDetail(caps),
       tone: "warning",
     });
   }
@@ -160,4 +160,11 @@ function focusedTaskLabel(profiles?: readonly string[]): string {
   const count = profiles?.length ?? 0;
   if (count === 0) return "focused task types";
   return `${count} focused task types`;
+}
+
+function evalModeDetail(caps: SessionCapabilities): string {
+  if (caps.eval_all_tools) return "Full tool surface is enabled for this repeatable run.";
+  const tools = caps.eval_tools?.trim();
+  if (!tools) return "Tools are disabled by default unless explicitly enabled.";
+  return `Allowed tools: ${tools}.`;
 }

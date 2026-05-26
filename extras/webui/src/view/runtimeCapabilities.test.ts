@@ -167,6 +167,7 @@ describe("buildRuntimeCapabilityView", () => {
   it("keeps eval constraints as a secondary capability instead of front-loading them", () => {
     const view = buildRuntimeCapabilityView({
       eval_mode: true,
+      eval_tools: "web,browser",
       builtins: true,
       skill_install: false,
       plan: false,
@@ -186,7 +187,7 @@ describe("buildRuntimeCapabilityView", () => {
     expect(view?.chips[view!.chips.length - 1]).toEqual({
       group: "Mode",
       label: "Eval constraints",
-      detail: "Some choices may be fixed for repeatable runs.",
+      detail: "Allowed tools: web,browser.",
       tone: "warning",
     });
     expect(view?.chips[0]).toEqual({
@@ -194,6 +195,40 @@ describe("buildRuntimeCapabilityView", () => {
       label: "Web search + browser",
       detail: "Can find and inspect current sources.",
       tone: "ready",
+    });
+  });
+
+  it("surfaces no-tool and full-tool eval modes distinctly", () => {
+    const base = {
+      builtins: false,
+      skill_install: false,
+      plan: false,
+      memory: false,
+      session_search: false,
+      symbol_context: false,
+      repo_search: false,
+      browser: false,
+      browser_screenshot: false,
+      web: false,
+      web_search: false,
+      subagent: false,
+      subagent_max_depth: 1,
+      focused_tasks: false,
+    };
+    const noTools = buildRuntimeCapabilityView({ ...base, eval_mode: true });
+    expect(noTools?.chips.at(-1)).toEqual({
+      group: "Mode",
+      label: "Eval constraints",
+      detail: "Tools are disabled by default unless explicitly enabled.",
+      tone: "warning",
+    });
+
+    const allTools = buildRuntimeCapabilityView({ ...base, eval_mode: true, eval_all_tools: true });
+    expect(allTools?.chips.at(-1)).toEqual({
+      group: "Mode",
+      label: "Eval · all tools",
+      detail: "Full tool surface is enabled for this repeatable run.",
+      tone: "warning",
     });
   });
 });

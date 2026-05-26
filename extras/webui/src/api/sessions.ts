@@ -122,6 +122,8 @@ export interface SessionSkillInstallRequest {
 
 export interface SessionCapabilities {
   eval_mode: boolean;
+  eval_tools?: string;
+  eval_all_tools?: boolean;
   builtins: boolean;
   skill_install: boolean;
   plan: boolean;

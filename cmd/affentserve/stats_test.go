@@ -50,6 +50,9 @@ func TestHandleStats_EmptyPool(t *testing.T) {
 	if resp.EnableBrowser || resp.EnableWeb || resp.EnableWebSearch || resp.EnableMemory || resp.EnableBuiltins || resp.EnableSubagent || resp.EnableFocusedTasks {
 		t.Fatalf("runtime switches should default to off: %+v", resp)
 	}
+	if resp.EvalMode || resp.EvalTools != "" || resp.EvalAllTools {
+		t.Fatalf("eval stats should default to off: %+v", resp)
+	}
 	if resp.ShuttingDown {
 		t.Fatal("ShuttingDown = true, want false for fresh pool")
 	}
@@ -320,6 +323,9 @@ func TestHandleStats_ReportsRuntimeSwitches(t *testing.T) {
 	pool.cfg.EnableBuiltins = true
 	pool.cfg.EnableSubagent = true
 	pool.cfg.EnableFocusedTasks = true
+	pool.cfg.EvalMode = true
+	pool.cfg.EvalTools = "read_file,shell"
+	pool.cfg.EvalAllTools = true
 	h := handleStats(pool.cfg, pool)
 	r := httptest.NewRequest("GET", "/v1/stats", nil)
 	w := httptest.NewRecorder()
@@ -331,6 +337,9 @@ func TestHandleStats_ReportsRuntimeSwitches(t *testing.T) {
 	}
 	if !resp.EnableBrowser || !resp.EnableWeb || !resp.EnableWebSearch || !resp.EnableMemory || !resp.EnableBuiltins || !resp.EnableSubagent || !resp.EnableFocusedTasks {
 		t.Fatalf("runtime switches = %+v, want all true", resp)
+	}
+	if !resp.EvalMode || resp.EvalTools != "read_file,shell" || !resp.EvalAllTools {
+		t.Fatalf("eval switches = %+v, want eval mode/tool allowlist/all-tools visible", resp)
 	}
 }
 

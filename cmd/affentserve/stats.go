@@ -31,6 +31,9 @@ type statsResponse struct {
 	EnableBuiltins     bool                   `json:"enable_builtins"`
 	EnableSubagent     bool                   `json:"enable_subagent"`
 	EnableFocusedTasks bool                   `json:"enable_focused_tasks"`
+	EvalMode           bool                   `json:"eval_mode"`
+	EvalTools          string                 `json:"eval_tools,omitempty"`
+	EvalAllTools       bool                   `json:"eval_all_tools,omitempty"`
 	ShuttingDown       bool                   `json:"shutting_down"`
 	WorkspaceRoot      string                 `json:"workspace_root,omitempty"`
 	MemoryRoot         string                 `json:"memory_root,omitempty"`
@@ -213,6 +216,9 @@ func handleStats(cfg Config, pool *SessionPool) http.HandlerFunc {
 			EnableBuiltins:     cfg.EnableBuiltins,
 			EnableSubagent:     cfg.EnableSubagent,
 			EnableFocusedTasks: cfg.EnableFocusedTasks,
+			EvalMode:           cfg.EvalMode,
+			EvalTools:          cfg.EvalTools,
+			EvalAllTools:       cfg.EvalAllTools,
 			ShuttingDown:       pool.IsShuttingDown(),
 			WorkspaceRoot:      cfg.WorkspaceRoot,
 			MemoryRoot:         cfg.MemoryRoot,

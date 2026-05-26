@@ -19,6 +19,7 @@ func TestSessionCapabilitiesReportsEvalMode(t *testing.T) {
 		APIKey:             "test",
 		Model:              "fake",
 		EvalMode:           true,
+		EvalTools:          "read_file,shell",
 		EnableSubagent:     true,
 		EnableFocusedTasks: true,
 	}
@@ -36,8 +37,16 @@ func TestSessionCapabilitiesReportsEvalMode(t *testing.T) {
 	if !caps.EvalMode {
 		t.Fatal("active session capabilities should report eval_mode=true")
 	}
+	if caps.EvalTools != "read_file,shell" || caps.EvalAllTools {
+		t.Fatalf("active session capabilities should report eval allowlist, got %+v", caps)
+	}
 	if caps.Builtins || caps.Browser {
-		t.Fatalf("strict eval mode should report no tools by default, got %+v", caps)
+		t.Fatalf("strict eval mode should not report complete builtins or browser for a partial allowlist, got %+v", caps)
+	}
+	for _, name := range []string{"read_file", "shell"} {
+		if _, ok := s.registry.Get(name); !ok {
+			t.Fatalf("test sanity: eval allowlist should register %s", name)
+		}
 	}
 	if caps.SkillInstall || caps.Plan || caps.Subagent || caps.FocusedTasks {
 		t.Fatalf("eval mode should report workflow tools disabled, got %+v", caps)
