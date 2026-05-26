@@ -123,8 +123,7 @@ export function App() {
   const compactNav = demoActive || !showSessionNav;
   const showHeaderNewChat = !demoActive && !showSessionNav;
   const showChatContext = !demoActive && (session.turns.length > 0 || !!pendingMessage);
-  const historyLoading = status.state === "loading" && !!selectedSessionId;
-  const showSurfaceContext = !historyLoading && (showChatContext || showWorkflowStatus);
+  const showSurfaceContext = showChatContext || showWorkflowStatus;
   const surfaceBusy = actionBusy || session.status === "running" || !!pendingMessage;
   const surfaceMode = session.turns.length === 0 && !pendingMessage ? "empty" : "conversation";
   const composerResumesSavedChat = !!selectedSessionId && !selectedSessionActive && session.turns.length > 0;
@@ -633,17 +632,15 @@ export function App() {
                 sessionId={selectedSessionId}
                 pendingMessage={pendingMessage}
                 guidanceReceipts={guidanceReceipts}
-              scrollRootRef={conversationScrollRef}
-              onOpenArtifact={(path) => void handleOpenArtifact(path)}
-              onUseAsDraft={handleUseAsDraft}
-              savedChatCount={sessions.length}
-              latestChat={latestChatShortcut}
-              onOpenLatestChat={latestChatShortcut ? () => resetSessionSurface(latestChatShortcut.id, { preserveSession: true }) : undefined}
-              initialHistoryFocus={selectedSessionId && !selectedSessionActive ? "answer" : "latest"}
-              loadingHistory={historyLoading}
-              sessionTitle={status.state === "loading" ? status.detail : selectedSessionTitle}
-            />
-          </div>
+                scrollRootRef={conversationScrollRef}
+                onOpenArtifact={(path) => void handleOpenArtifact(path)}
+                onUseAsDraft={handleUseAsDraft}
+                savedChatCount={sessions.length}
+                latestChat={latestChatShortcut}
+                onOpenLatestChat={latestChatShortcut ? () => resetSessionSurface(latestChatShortcut.id, { preserveSession: true }) : undefined}
+                initialHistoryFocus={selectedSessionId && !selectedSessionActive ? "answer" : "latest"}
+              />
+            </div>
             <Composer
               disabled={demoActive}
               disabledReason={status.detail}

@@ -320,10 +320,12 @@ body {
 .surface-context {
   grid-row: 1;
   display: grid;
+  position: relative;
+  z-index: 12;
   min-width: 0;
   width: 100%;
   max-width: 100%;
-  overflow: hidden;
+  overflow: visible;
   padding: 10px 16px 0;
   border-bottom: 1px solid rgba(221, 227, 234, 0.62);
   background: rgba(252, 253, 254, 0.78);
@@ -566,7 +568,7 @@ body {
   position: absolute;
   right: 0;
   top: calc(100% + 6px);
-  z-index: 20;
+  z-index: 120;
   display: grid;
   gap: 0;
   min-width: 178px;
@@ -2829,36 +2831,6 @@ mark {
 
 .jump-live:hover {
   border-color: rgba(20, 184, 166, 0.72);
-}
-
-.timeline-loading-banner {
-  position: sticky;
-  top: 10px;
-  z-index: 8;
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-  align-items: center;
-  justify-content: space-between;
-  width: 100%;
-  margin: 0 0 12px;
-  border: 1px solid rgba(20, 184, 166, 0.18);
-  border-radius: var(--radius-sm);
-  background: rgba(240, 253, 250, 0.92);
-  color: var(--text);
-  padding: 10px 12px;
-  box-shadow: 0 10px 24px rgba(15, 23, 42, 0.08);
-  animation: rise-in 180ms ease;
-}
-
-.timeline-loading-banner strong {
-  font-size: 12.5px;
-  font-weight: 700;
-}
-
-.timeline-loading-banner span {
-  color: var(--text-muted);
-  font-size: 12px;
 }
 
 .flow-turn {
@@ -6859,7 +6831,6 @@ html[data-theme="dark"] .guidance-receipt-note {
 
 html[data-theme="dark"] .pending-turn[data-kind="guidance"] .pending-response,
 html[data-theme="dark"] .pending-response,
-html[data-theme="dark"] .timeline-loading-banner,
 html[data-theme="dark"] .jump-live {
   border-color: rgba(58, 68, 81, 0.86);
   background: rgba(17, 20, 24, 0.9);

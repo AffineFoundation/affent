@@ -1325,7 +1325,7 @@ function MessageStep({
       {variant === "assistant" ? (
         <div className="message-actions">
           <CopyMenu
-            label="Copy answer"
+            label="Copy"
             className="message-copy-menu"
             panelClassName="message-copy-menu-panel"
             triggerClassName="message-action"
@@ -1347,10 +1347,7 @@ function MessageStep({
       ) : null}
       {variant === "user" && onReuse ? (
         <div className="message-actions">
-          <CopyButton label="Copy message" value={text} className="message-action" />
-          <button type="button" className="message-action" onClick={() => onReuse(text, "previous_message")}>
-            Edit prompt
-          </button>
+          <CopyButton label="Copy" value={text} className="message-action" />
         </div>
       ) : null}
     </div>

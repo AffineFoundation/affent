@@ -343,8 +343,7 @@ describe("App", () => {
     render(<App />);
 
     await waitFor(() => expect(screen.getByTestId("connection-pill")).toHaveTextContent("Loading chat"));
-    expect(screen.getByTestId("timeline-loading")).toHaveTextContent("Loading chat");
-    expect(screen.queryByText("What should we work on?")).toBeNull();
+    expect(screen.queryByTestId("timeline-loading")).toBeNull();
 
     history.resolve(
       jsonResponse({ session_id: "research-1", events: [], next_after: -1, has_more: false, trace_schema_detected: false }),
@@ -864,8 +863,9 @@ describe("App", () => {
     await user.click(screen.getByRole("button", { name: /New chat.*No messages yet/ }));
 
     expect(screen.getByText("There are two files.")).toBeVisible();
-    expect(screen.getByTestId("timeline-loading")).toHaveTextContent("Loading chat");
-    expect(screen.queryByTestId("chat-context-bar")).toBeNull();
+    expect(screen.getByTestId("connection-pill")).toHaveTextContent("Loading chat");
+    expect(screen.queryByTestId("timeline-loading")).toBeNull();
+    expect(screen.getByTestId("chat-context-bar")).toBeInTheDocument();
     expect(screen.queryByTestId("session-strip")).toBeNull();
 
     s2History.resolve(jsonResponse({ session_id: "s2", events: [], next_after: -1, has_more: false, trace_schema_detected: false }));
@@ -996,7 +996,7 @@ describe("App", () => {
     await user.click(screen.getByRole("button", { name: /affine recent research/i }));
 
     expect(screen.getByTestId("connection-pill")).toHaveTextContent("Loading Affine recent research");
-    expect(screen.getByTestId("timeline-loading")).toHaveTextContent("Loading Affine recent research");
+    expect(screen.queryByTestId("timeline-loading")).toBeNull();
 
     s2History.resolve(jsonResponse({ session_id: "s2", events: [], next_after: -1, has_more: false, trace_schema_detected: false }));
     await waitFor(() => expect(fetchImpl).toHaveBeenCalledWith("/v1/sessions/s2/history?after=-1&limit=500", expect.anything()));
@@ -1395,8 +1395,7 @@ describe("App", () => {
     expect(screen.getByRole("button", { name: "Retry" })).toBeEnabled();
   });
 
-  it("moves a previous user message into the composer draft", async () => {
-    const user = userEvent.setup();
+  it("keeps previous prompt editing out of the composer flow", async () => {
     const fetchImpl = vi.fn(async (input: RequestInfo | URL) => {
       const url = String(input);
       if (url === "/v1/sessions?limit=100") {
@@ -1415,11 +1414,10 @@ describe("App", () => {
 
     render(<App />);
 
-    await user.click(await screen.findByRole("button", { name: "Edit prompt" }));
+    await screen.findByText("There are two files.");
 
-    expect(screen.getByPlaceholderText("Message Affent...")).toHaveValue("list the files");
-    expect(screen.getByTestId("composer-context")).toHaveTextContent("Editing previous message");
-    expect(screen.getByPlaceholderText("Message Affent...")).toHaveFocus();
+    expect(screen.queryByRole("button", { name: "Edit prompt" })).toBeNull();
+    expect(screen.getByPlaceholderText("Message Affent...")).toHaveValue("");
   });
 });
 

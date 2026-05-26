@@ -1,7 +1,6 @@
 import { useEffect, useRef, useState, type CSSProperties, type RefObject } from "react";
 import type { SessionState } from "../store/sessionState";
 import type { UseAsDraft } from "../view/draftSource";
-import { formatLoadingChatTitle } from "../view/sessionList";
 import { TurnCard } from "./TurnCard";
 import { CopyButton } from "./CopyButton";
 
@@ -19,8 +18,6 @@ export function Timeline({
   latestChat,
   onOpenLatestChat,
   initialHistoryFocus = "latest",
-  loadingHistory = false,
-  sessionTitle,
 }: {
   session: SessionState;
   sessionId?: string;
@@ -33,8 +30,6 @@ export function Timeline({
   latestChat?: LatestChatShortcut;
   onOpenLatestChat?: () => void;
   initialHistoryFocus?: "answer" | "latest";
-  loadingHistory?: boolean;
-  sessionTitle?: string;
 }) {
   const endRef = useRef<HTMLDivElement | null>(null);
   const latestAnswerRef = useRef<HTMLDivElement | null>(null);
@@ -185,25 +180,6 @@ export function Timeline({
   }
 
   if (session.turns.length === 0 && !pendingMessage) {
-    if (loadingHistory) {
-      return (
-        <section className="flow-turn intro-turn timeline-loading" data-testid="timeline-loading" aria-busy="true">
-          <div className="conversation-turn">
-            <div className="assistant-cluster">
-              <div className="assistant-name">Affent</div>
-              <div className="flow-step flow-step-assistant">
-                <div className="flow-text intro-copy">
-                  <div className="intro-heading">
-                    <strong>{formatLoadingChatTitle(sessionTitle)}</strong>
-                    <span>Loading the conversation before showing it.</span>
-                  </div>
-                </div>
-              </div>
-            </div>
-          </div>
-        </section>
-      );
-    }
     const hasSavedChats = savedChatCount > 0;
     return (
       <section className="flow-turn intro-turn" data-testid="timeline-empty">
@@ -254,13 +230,6 @@ export function Timeline({
     );
   }
   const showJumpToLatest = newActivity && (!following || session.status === "completed");
-  const loadingBanner =
-    loadingHistory && session.turns.length > 0 ? (
-      <section className="timeline-loading-banner" data-testid="timeline-loading" aria-busy="true">
-        <strong>{formatLoadingChatTitle(sessionTitle)}</strong>
-        <span>Keeping this chat visible while the new one loads.</span>
-      </section>
-    ) : null;
   return (
     <>
       {showJumpToLatest ? (
@@ -268,7 +237,6 @@ export function Timeline({
           Jump to latest
         </button>
       ) : null}
-      {loadingBanner}
       <div className="timeline" data-testid="timeline">
         {visibleTurns.length > 0 ? (
           <>
@@ -403,7 +371,7 @@ function GuidanceReceipt({
           <span className="pending-guidance-label">Guidance sent</span>
           <div className="flow-text">{receipt.text}</div>
           <div className="message-actions">
-            <CopyButton label="Copy guidance" value={receipt.text} className="message-action" />
+            <CopyButton label="Copy" value={receipt.text} className="message-action" />
             {onUseAsDraft ? (
               <button type="button" className="message-action" onClick={() => onUseAsDraft(receipt.text, "guidance_receipt")}>
                 Edit guidance
@@ -456,7 +424,7 @@ function PendingTurn({ message, followUp }: { message: PendingMessageView; follo
           {isGuidance ? <span className="pending-guidance-label">Live guidance</span> : null}
           <div className="flow-text">{text}</div>
           <div className="message-actions">
-            <CopyButton label={isGuidance ? "Copy guidance" : "Copy message"} value={text} className="message-action" />
+            <CopyButton label="Copy" value={text} className="message-action" />
           </div>
         </div>
         <div className="assistant-cluster">

@@ -26,6 +26,7 @@ describe("Timeline", () => {
     expect(screen.getByTestId("agent-activity")).toHaveTextContent("What Affent did");
     expect(screen.getByTestId("agent-activity-digest")).toHaveTextContent("Result");
     expect(screen.getByTestId("agent-activity-digest")).toHaveTextContent("README.md main.go");
+    expect(screen.getByTestId("agent-activity-digest")).toHaveTextContent("138 tokens");
     expect(screen.getByTestId("agent-activity").textContent?.match(/README\.md main\.go/g)).toHaveLength(1);
     expect(screen.queryByTestId("agent-activity-brief")).toBeNull();
     expect(screen.getByRole("button", { name: /What Affent did/ })).toHaveAttribute("aria-expanded", "false");
@@ -170,13 +171,6 @@ describe("Timeline", () => {
     expect(screen.getByTestId("timeline-empty")).not.toHaveTextContent("Message");
   });
 
-  it("keeps generic session titles out of the loading banner", () => {
-    render(<Timeline session={reduceRawEvents([])} loadingHistory sessionTitle="Live chat" />);
-
-    expect(screen.getByTestId("timeline-loading")).toHaveTextContent("Loading chat");
-    expect(screen.getByTestId("timeline-loading")).not.toHaveTextContent("Loading Live chat");
-  });
-
   it("offers a direct way back to the latest saved chat without auto-opening it", async () => {
     const user = userEvent.setup();
     const onOpenLatestChat = vi.fn();
@@ -248,7 +242,7 @@ describe("Timeline", () => {
     expect(screen.getByTestId("pending-turn")).toHaveTextContent("Starting");
     expect(screen.getByTestId("pending-turn")).not.toHaveTextContent("events");
 
-    await user.click(within(screen.getByTestId("pending-turn")).getByRole("button", { name: "Copy message" }));
+    await user.click(within(screen.getByTestId("pending-turn")).getByRole("button", { name: "Copy" }));
 
     expect(writeText).toHaveBeenCalledWith("summarize the repo");
   });
@@ -279,7 +273,7 @@ describe("Timeline", () => {
     expect(screen.getByTestId("pending-turn")).toHaveTextContent("Applying your guidance to the current run.");
     expect(screen.getByTestId("pending-turn")).not.toHaveTextContent("Preparing the first update.");
 
-    await user.click(within(screen.getByTestId("pending-turn")).getByRole("button", { name: "Copy guidance" }));
+    await user.click(within(screen.getByTestId("pending-turn")).getByRole("button", { name: "Copy" }));
 
     expect(writeText).toHaveBeenCalledWith("Guidance for current run: check tests first");
   });
@@ -303,7 +297,7 @@ describe("Timeline", () => {
 
     const writeText = vi.fn().mockResolvedValue(undefined);
     Object.defineProperty(navigator, "clipboard", { configurable: true, value: { writeText } });
-    await user.click(within(screen.getByTestId("guidance-receipt")).getByRole("button", { name: "Copy guidance" }));
+    await user.click(within(screen.getByTestId("guidance-receipt")).getByRole("button", { name: "Copy" }));
     expect(writeText).toHaveBeenCalledWith("Guidance for current run: check tests first");
 
     await user.click(screen.getByRole("button", { name: "Edit guidance" }));
@@ -461,13 +455,13 @@ describe("Timeline", () => {
     Object.defineProperty(navigator, "clipboard", { configurable: true, value: { writeText } });
     renderTimeline(completedTurn);
 
-    await user.click(screen.getByRole("button", { name: "Copy answer" }));
+    await user.click(within(screen.getByTestId("msg-assistant")).getByRole("button", { name: "Copy" }));
     await user.click(screen.getByRole("button", { name: "Copy plain text" }));
 
     expect(writeText).toHaveBeenCalledWith("There are two files.");
     expect(screen.queryByRole("button", { name: "Copy markdown" })).toBeNull();
     expect(screen.queryByRole("button", { name: "Copy plain text" })).toBeNull();
-    expect(screen.getByRole("button", { name: "Copy answer" })).toBeInTheDocument();
+    expect(within(screen.getByTestId("msg-assistant")).getByRole("button", { name: "Copy" })).toBeInTheDocument();
   });
 
   it("copies the user's message from the chat bubble", async () => {
@@ -476,7 +470,7 @@ describe("Timeline", () => {
     Object.defineProperty(navigator, "clipboard", { configurable: true, value: { writeText } });
     renderTimeline(completedTurn, "s1", undefined, vi.fn());
 
-    await user.click(screen.getByRole("button", { name: "Copy message" }));
+    await user.click(within(screen.getByTestId("msg-user")).getByRole("button", { name: "Copy" }));
 
     expect(writeText).toHaveBeenCalledWith("list the files");
     expect(screen.getByRole("button", { name: "Copied" })).toBeInTheDocument();
@@ -527,14 +521,12 @@ describe("Timeline", () => {
     );
   });
 
-  it("reuses a previous user message as an editable draft", async () => {
-    const user = userEvent.setup();
+  it("keeps previous prompt editing out of message chrome", () => {
     const onUseAsDraft = vi.fn();
     renderTimeline(completedTurn, "s1", undefined, onUseAsDraft);
 
-    await user.click(screen.getByRole("button", { name: "Edit prompt" }));
-
-    expect(onUseAsDraft).toHaveBeenCalledWith("list the files", "previous_message");
+    expect(screen.queryByRole("button", { name: "Edit prompt" })).toBeNull();
+    expect(onUseAsDraft).not.toHaveBeenCalled();
   });
 
   it("expands a tool card inline on click", async () => {

@@ -18,7 +18,7 @@ describe("buildTurnActivity", () => {
       digest: {
         label: "Result",
         summary: "README.md main.go",
-        meta: ["1 step", "1 action"],
+        meta: ["1 step", "1 action", "138 tokens"],
         tone: "success",
       },
     });
