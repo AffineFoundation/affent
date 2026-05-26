@@ -817,6 +817,8 @@ type batchResultRecord struct {
 	DurationMS                 int64                                      `json:"duration_ms"`
 	Workspace                  string                                     `json:"workspace"`
 	TracePath                  string                                     `json:"trace_path"`
+	DebugManifestPath          string                                     `json:"debug_manifest_path,omitempty"`
+	FinalTextPath              string                                     `json:"final_text_path,omitempty"`
 	TraceSchemaVersion         int                                        `json:"trace_schema_version,omitempty"`
 	TurnEndReason              string                                     `json:"turn_end_reason,omitempty"`
 	ToolCalls                  int                                        `json:"tool_calls"`
@@ -988,6 +990,8 @@ func printBatchResultJSONL(w io.Writer, meta evalJSONLMetadata, res agenteval.Ba
 		DurationMS:                 res.Duration.Milliseconds(),
 		Workspace:                  res.Workspace,
 		TracePath:                  res.TracePath,
+		DebugManifestPath:          retainedDebugPath(res.DebugManifestPath, res.WorkspaceRemoved),
+		FinalTextPath:              retainedDebugPath(res.FinalTextPath, res.WorkspaceRemoved),
 		TraceSchemaVersion:         res.TraceSchemaVersion,
 		TurnEndReason:              res.TurnEndReason,
 		ToolCalls:                  res.ToolCalls,
@@ -1252,6 +1256,12 @@ func printBatchResult(w io.Writer, res agenteval.BatchResult) {
 	}
 	fmt.Fprintln(w)
 	fmt.Fprintf(w, "  trace: %s\n", res.TracePath)
+	if path := retainedDebugPath(res.DebugManifestPath, res.WorkspaceRemoved); path != "" {
+		fmt.Fprintf(w, "  debug: %s\n", path)
+	}
+	if path := retainedDebugPath(res.FinalTextPath, res.WorkspaceRemoved); path != "" {
+		fmt.Fprintf(w, "  final: %s\n", path)
+	}
 	fmt.Fprintf(w, "  metrics: tools=%d errors=%d repaired=%d canonicalized=%d loop_guard=%d forced_no_tools=%d tool_ms=%d tokens=%d/%d",
 		res.ToolCalls,
 		res.ToolStats.ToolErrors,
@@ -1355,6 +1365,14 @@ func printBatchResult(w io.Writer, res agenteval.BatchResult) {
 	printFailureHintLines(w, res.RuntimeErrorByKind, "  ")
 	printRuntimeErrorExampleLines(w, res.RuntimeErrorExamples, "  ")
 	printLoopDecisionExampleLines(w, res.LoopDecisionStats.Examples, "  ")
+}
+
+func retainedDebugPath(path string, workspaceRemoved bool) string {
+	path = strings.TrimSpace(path)
+	if workspaceRemoved {
+		return ""
+	}
+	return path
 }
 
 func hasToolTruncation(stats agenteval.ToolTruncationStats) bool {

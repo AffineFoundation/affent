@@ -2,6 +2,7 @@ package agenteval
 
 import (
 	"context"
+	"encoding/json"
 	"os"
 	"path/filepath"
 	"strings"
@@ -982,6 +983,66 @@ func TestBatchRunnerKeepsFailingWorkspace(t *testing.T) {
 	}
 	if _, err := os.Stat(workspace); err != nil {
 		t.Fatalf("failing workspace should remain: %v", err)
+	}
+}
+
+func TestWriteScenarioDebugArtifactsIndexesTraceAndFinalText(t *testing.T) {
+	workspace := t.TempDir()
+	tracePath := filepath.Join(workspace, "trace.jsonl")
+	if err := os.WriteFile(tracePath, []byte(`{"type":"trace.meta","data":{"schema_version":1}}`+"\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	res := BatchResult{
+		BatchScenario:      "debug-case",
+		Workspace:          workspace,
+		TracePath:          tracePath,
+		OK:                 false,
+		Failures:           []string{"missing required evidence"},
+		FinalText:          "partial answer",
+		TurnEndReason:      "completed",
+		ToolCalls:          3,
+		ToolStats:          ToolRuntimeStats{ToolErrors: 1, LoopGuardInterventions: 1, SourceAccessResults: 2, SourceAccessVerified: 1},
+		ContextCompactions: ContextCompactionStats{Count: 1, Reactive: 1, RemovedMessages: 12},
+		Usage:              Usage{InputTokens: 100, OutputTokens: 20},
+	}
+	err := writeScenarioDebugArtifacts(&res, BatchScenario{Prompt: "research with evidence"})
+	if err != nil {
+		t.Fatalf("writeScenarioDebugArtifacts: %v", err)
+	}
+	if res.DebugManifestPath == "" || res.FinalTextPath == "" {
+		t.Fatalf("debug paths not populated: %+v", res)
+	}
+	if raw, err := os.ReadFile(res.FinalTextPath); err != nil || string(raw) != "partial answer" {
+		t.Fatalf("final text file = %q err=%v", string(raw), err)
+	}
+	var manifest DebugManifest
+	raw, err := os.ReadFile(res.DebugManifestPath)
+	if err != nil {
+		t.Fatalf("read manifest: %v", err)
+	}
+	if err := json.Unmarshal(raw, &manifest); err != nil {
+		t.Fatalf("decode manifest: %v\n%s", err, string(raw))
+	}
+	if manifest.Scenario != "debug-case" || manifest.OK || manifest.Prompt != "research with evidence" {
+		t.Fatalf("manifest identity = %+v", manifest)
+	}
+	if manifest.TracePath != tracePath || manifest.FinalTextPath != res.FinalTextPath {
+		t.Fatalf("manifest paths = %+v", manifest)
+	}
+	if len(manifest.Failures) != 1 || manifest.Failures[0] != "missing required evidence" {
+		t.Fatalf("manifest failures = %+v", manifest.Failures)
+	}
+	if manifest.Metrics.ToolCalls != 3 ||
+		manifest.Metrics.ToolErrors != 1 ||
+		manifest.Metrics.LoopGuardInterventions != 1 ||
+		manifest.Metrics.SourceAccessResults != 2 ||
+		manifest.Metrics.SourceAccessVerified != 1 ||
+		manifest.Metrics.ContextCompactions != 1 ||
+		manifest.Metrics.ReactiveContextCompactions != 1 ||
+		manifest.Metrics.ContextCompactionRemoved != 12 ||
+		manifest.Metrics.InputTokens != 100 ||
+		manifest.Metrics.OutputTokens != 20 {
+		t.Fatalf("manifest metrics = %+v", manifest.Metrics)
 	}
 }
 

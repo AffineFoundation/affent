@@ -127,6 +127,8 @@ type BatchResult struct {
 	BatchScenario        string
 	Workspace            string
 	TracePath            string
+	DebugManifestPath    string
+	FinalTextPath        string
 	OK                   bool
 	Failures             []string
 	Duration             time.Duration
@@ -156,6 +158,42 @@ type BatchResult struct {
 	// repair_notes. Zero-value when no tool repair/canonicalization
 	// occurred.
 	Repair ToolRepairStats
+}
+
+type DebugManifest struct {
+	SchemaVersion   int          `json:"schema_version"`
+	Scenario        string       `json:"scenario"`
+	OK              bool         `json:"ok"`
+	Workspace       string       `json:"workspace"`
+	TracePath       string       `json:"trace_path"`
+	FinalTextPath   string       `json:"final_text_path,omitempty"`
+	ConversationDir string       `json:"conversation_dir,omitempty"`
+	ArtifactDir     string       `json:"artifact_dir,omitempty"`
+	Prompt          string       `json:"prompt"`
+	Failures        []string     `json:"failures,omitempty"`
+	Metrics         DebugMetrics `json:"metrics"`
+	GeneratedAt     string       `json:"generated_at"`
+}
+
+type DebugMetrics struct {
+	TurnEndReason              string `json:"turn_end_reason,omitempty"`
+	ToolCalls                  int    `json:"tool_calls"`
+	ToolErrors                 int    `json:"tool_errors"`
+	ToolArgsRepaired           int    `json:"tool_args_repaired"`
+	ToolNameCanonicalized      int    `json:"tool_name_canonicalized"`
+	LoopGuardInterventions     int    `json:"loop_guard_interventions"`
+	ForcedNoTools              int    `json:"forced_no_tools"`
+	SourceAccessResults        int    `json:"source_access_results"`
+	SourceAccessVerified       int    `json:"source_access_verified"`
+	SourceAccessDiscoveryOnly  int    `json:"source_access_discovery_only"`
+	SourceAccessNetwork        int    `json:"source_access_network"`
+	SourceAccessDynamicPartial int    `json:"source_access_dynamic_partial"`
+	MemoryUpdates              int    `json:"memory_updates"`
+	ContextCompactions         int    `json:"context_compactions"`
+	ReactiveContextCompactions int    `json:"reactive_context_compactions"`
+	ContextCompactionRemoved   int    `json:"context_compaction_removed_messages"`
+	InputTokens                int    `json:"input_tokens"`
+	OutputTokens               int    `json:"output_tokens"`
 }
 
 type VerifierResult struct {
@@ -382,8 +420,68 @@ func (r BatchRunner) Run(ctx context.Context, scenario BatchScenario) BatchResul
 	mergeRuntimeDiagnosticsFromFailures(&res, 2)
 	res.Duration = time.Since(start)
 	res.OK = len(res.Failures) == 0
+	if err := writeScenarioDebugArtifacts(&res, scenario); err != nil {
+		res.Failures = append(res.Failures, fmt.Sprintf("write debug manifest: %v", err))
+		res.OK = false
+	}
 	r.cleanupPassingWorkspace(&res, workspace)
 	return res
+}
+
+func writeScenarioDebugArtifacts(res *BatchResult, scenario BatchScenario) error {
+	if res == nil || strings.TrimSpace(res.Workspace) == "" {
+		return nil
+	}
+	finalTextPath := filepath.Join(res.Workspace, "affenteval-final.txt")
+	if err := os.WriteFile(finalTextPath, []byte(res.FinalText), 0o644); err != nil {
+		return err
+	}
+	res.FinalTextPath = finalTextPath
+
+	manifestPath := filepath.Join(res.Workspace, "affenteval-debug.json")
+	manifest := DebugManifest{
+		SchemaVersion:   1,
+		Scenario:        res.BatchScenario,
+		OK:              res.OK,
+		Workspace:       res.Workspace,
+		TracePath:       res.TracePath,
+		FinalTextPath:   finalTextPath,
+		ConversationDir: filepath.Join(res.Workspace, ".affentctl"),
+		ArtifactDir:     filepath.Join(res.Workspace, ".affent", "artifacts"),
+		Prompt:          scenario.Prompt,
+		Failures:        append([]string(nil), res.Failures...),
+		Metrics: DebugMetrics{
+			TurnEndReason:              res.TurnEndReason,
+			ToolCalls:                  res.ToolCalls,
+			ToolErrors:                 res.ToolStats.ToolErrors,
+			ToolArgsRepaired:           res.ToolStats.ToolArgsRepaired,
+			ToolNameCanonicalized:      res.ToolStats.ToolNameCanonicalized,
+			LoopGuardInterventions:     res.ToolStats.LoopGuardInterventions,
+			ForcedNoTools:              res.ToolStats.ForcedNoTools,
+			SourceAccessResults:        res.ToolStats.SourceAccessResults,
+			SourceAccessVerified:       res.ToolStats.SourceAccessVerified,
+			SourceAccessDiscoveryOnly:  res.ToolStats.SourceAccessDiscoveryOnly,
+			SourceAccessNetwork:        res.ToolStats.SourceAccessNetwork,
+			SourceAccessDynamicPartial: res.ToolStats.SourceAccessDynamicPartial,
+			MemoryUpdates:              res.ToolStats.MemoryUpdates,
+			ContextCompactions:         res.ContextCompactions.Count,
+			ReactiveContextCompactions: res.ContextCompactions.Reactive,
+			ContextCompactionRemoved:   res.ContextCompactions.RemovedMessages,
+			InputTokens:                res.Usage.InputTokens,
+			OutputTokens:               res.Usage.OutputTokens,
+		},
+		GeneratedAt: time.Now().UTC().Format(time.RFC3339),
+	}
+	raw, err := json.MarshalIndent(manifest, "", "  ")
+	if err != nil {
+		return err
+	}
+	raw = append(raw, '\n')
+	if err := os.WriteFile(manifestPath, raw, 0o644); err != nil {
+		return err
+	}
+	res.DebugManifestPath = manifestPath
+	return nil
 }
 
 func mergeRuntimeDiagnosticsFromFailures(res *BatchResult, maxExamplesPerKind int) {

@@ -307,6 +307,44 @@ func TestPrintBatchResultIncludesRepairOutcomesWithoutKinds(t *testing.T) {
 	}
 }
 
+func TestPrintBatchResultIncludesDebugPathsForRetainedWorkspace(t *testing.T) {
+	var out bytes.Buffer
+	printBatchResult(&out, agenteval.BatchResult{
+		BatchScenario:     "debuggable",
+		Workspace:         "/tmp/ws",
+		TracePath:         "/tmp/ws/trace.jsonl",
+		DebugManifestPath: "/tmp/ws/affenteval-debug.json",
+		FinalTextPath:     "/tmp/ws/affenteval-final.txt",
+		Duration:          10 * time.Millisecond,
+	})
+	got := out.String()
+	for _, want := range []string{
+		"debug: /tmp/ws/affenteval-debug.json",
+		"final: /tmp/ws/affenteval-final.txt",
+	} {
+		if !strings.Contains(got, want) {
+			t.Fatalf("output missing %q:\n%s", want, got)
+		}
+	}
+}
+
+func TestPrintBatchResultOmitsDebugPathsForRemovedWorkspace(t *testing.T) {
+	var out bytes.Buffer
+	printBatchResult(&out, agenteval.BatchResult{
+		BatchScenario:     "cleaned",
+		Workspace:         "/tmp/ws",
+		TracePath:         "/tmp/ws/trace.jsonl",
+		DebugManifestPath: "/tmp/ws/affenteval-debug.json",
+		FinalTextPath:     "/tmp/ws/affenteval-final.txt",
+		WorkspaceRemoved:  true,
+		Duration:          10 * time.Millisecond,
+	})
+	got := out.String()
+	if strings.Contains(got, "affenteval-debug.json") || strings.Contains(got, "affenteval-final.txt") {
+		t.Fatalf("removed workspace should not advertise stale debug paths:\n%s", got)
+	}
+}
+
 func TestBatchSummaryAggregatesRuntimeMetrics(t *testing.T) {
 	var summary batchSummary
 	summary.add(agenteval.BatchResult{
@@ -742,6 +780,28 @@ func TestPrintBatchResultJSONL(t *testing.T) {
 	}
 	if planByAction["set"] != float64(1) || planByAction["update"] != float64(1) {
 		t.Fatalf("plan_by_action = %#v", planByAction)
+	}
+}
+
+func TestPrintBatchResultJSONLIncludesDebugPathsForRetainedWorkspace(t *testing.T) {
+	var out bytes.Buffer
+	printBatchResultJSONL(&out, testEvalJSONLMetadata(), agenteval.BatchResult{
+		BatchScenario:     "debuggable",
+		Workspace:         "/tmp/ws",
+		TracePath:         "/tmp/ws/trace.jsonl",
+		DebugManifestPath: "/tmp/ws/affenteval-debug.json",
+		FinalTextPath:     "/tmp/ws/affenteval-final.txt",
+	})
+
+	var got map[string]any
+	if err := json.Unmarshal(out.Bytes(), &got); err != nil {
+		t.Fatalf("jsonl result did not decode: %v\n%s", err, out.String())
+	}
+	if got["debug_manifest_path"] != "/tmp/ws/affenteval-debug.json" {
+		t.Fatalf("debug_manifest_path = %#v\njson=%s", got["debug_manifest_path"], out.String())
+	}
+	if got["final_text_path"] != "/tmp/ws/affenteval-final.txt" {
+		t.Fatalf("final_text_path = %#v\njson=%s", got["final_text_path"], out.String())
 	}
 }
 
