@@ -91,9 +91,12 @@ func registerServer(ctx context.Context, reg *agent.Registry, spec ServerSpec, l
 			desc = fmt.Sprintf("MCP tool %s/%s", spec.Name, t.Name)
 		}
 		reg.Add(&agent.Tool{
-			Name:        affentName,
-			Description: desc,
-			Schema:      schema,
+			Name:           affentName,
+			Description:    desc,
+			Schema:         schema,
+			CatalogGroup:   "MCP",
+			CatalogSource:  spec.Name,
+			CatalogRawName: t.Name,
 			Execute: func(ctx context.Context, args json.RawMessage) (string, error) {
 				res, err := c.CallTool(ctx, toolName, args)
 				if err != nil {

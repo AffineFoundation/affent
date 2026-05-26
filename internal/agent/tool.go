@@ -15,10 +15,25 @@ import (
 // emits a tool_call. The schema is JSON Schema served verbatim to the
 // model alongside the tool name and description.
 type Tool struct {
-	Name        string
-	Description string
-	Schema      json.RawMessage // JSON Schema for the function arguments
-	Execute     func(ctx context.Context, args json.RawMessage) (string, error)
+	Name           string
+	Description    string
+	Schema         json.RawMessage // JSON Schema for the function arguments
+	Execute        func(ctx context.Context, args json.RawMessage) (string, error)
+	CatalogGroup   string
+	CatalogSource  string
+	CatalogRawName string
+}
+
+// ToolCatalogEntry is the read-only catalog shape exposed to the UI.
+// It keeps the model-facing tool name, the original/raw name when one
+// exists, and enough source metadata to group by category/server.
+type ToolCatalogEntry struct {
+	Name        string          `json:"name"`
+	RawName     string          `json:"raw_name,omitempty"`
+	Description string          `json:"description"`
+	Parameters  json.RawMessage `json:"parameters"`
+	Group       string          `json:"group"`
+	Source      string          `json:"source,omitempty"`
 }
 
 // ToolDef returns the OpenAI-shape definition the LLM sees.
@@ -28,6 +43,18 @@ func (t *Tool) AsDef() ToolDef {
 	d.Function.Description = t.Description
 	d.Function.Parameters = t.Schema
 	return d
+}
+
+func (t *Tool) CatalogEntry() ToolCatalogEntry {
+	entry := ToolCatalogEntry{
+		Name:        t.Name,
+		RawName:     t.catalogRawName(),
+		Description: t.Description,
+		Parameters:  t.Schema,
+		Group:       t.catalogGroup(),
+		Source:      strings.TrimSpace(t.CatalogSource),
+	}
+	return entry
 }
 
 // Registry is a name -> Tool map shared by a session loop. Safe for
@@ -113,6 +140,52 @@ func (r *Registry) Defs() []ToolDef {
 		out = append(out, r.tools[n].AsDef())
 	}
 	return out
+}
+
+func (r *Registry) Catalog() []ToolCatalogEntry {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+	out := make([]ToolCatalogEntry, 0, len(r.order))
+	for _, n := range r.order {
+		out = append(out, r.tools[n].CatalogEntry())
+	}
+	return out
+}
+
+func (t *Tool) catalogGroup() string {
+	if t == nil {
+		return "Other"
+	}
+	if group := strings.TrimSpace(t.CatalogGroup); group != "" {
+		return group
+	}
+	switch t.Name {
+	case SkillToolName, PlanToolName, SubagentToolName, FocusedTaskToolName:
+		return "Core"
+	case MemoryToolName:
+		return "Memory"
+	case SessionSearchToolName:
+		return "History"
+	case "shell", "read_file", "file_context", "write_file", "edit_file", "list_files", SymbolContextToolName, "repo_search":
+		return "Workspace"
+	case "web_search", "web_fetch", "browser_navigate", "browser_snapshot", "browser_find", "browser_click", "browser_scroll", "browser_type", "browser_wait", "browser_screenshot":
+		return "Research"
+	default:
+		if strings.TrimSpace(t.CatalogSource) != "" {
+			return "MCP"
+		}
+		return "Other"
+	}
+}
+
+func (t *Tool) catalogRawName() string {
+	if t == nil {
+		return ""
+	}
+	if raw := strings.TrimSpace(t.CatalogRawName); raw != "" {
+		return raw
+	}
+	return ""
 }
 
 func (r *Registry) suggestions(name string, limit int) []string {

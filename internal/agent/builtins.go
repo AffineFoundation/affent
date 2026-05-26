@@ -127,9 +127,12 @@ func RegisterBuiltins(r *Registry, deps BuiltinDeps) {
 	}
 	r.Add(shellTool(deps))
 	r.Add(readFileTool(deps))
+	r.Add(fileContextTool(deps))
 	r.Add(writeFileTool(deps))
 	r.Add(editFileTool(deps))
 	r.Add(listFilesTool(deps))
+	r.Add(symbolContextTool(deps))
+	r.Add(repoSearchTool(deps))
 	if deps.Memory != nil {
 		r.Add(memoryTool(deps.Memory))
 	}
@@ -266,7 +269,7 @@ func skillTool(reg *SkillRegistry, skillDir string, confirmInstall SkillInstallC
 				if len(proposal.AutoActivation.Any) > 0 {
 					triggerSummary = strings.Join(proposal.AutoActivation.Any, ", ")
 				}
-				return fmt.Sprintf("prepared skill install proposal_id=%s name=%q source=%s triggers=%s required_tools=%s body_bytes=%d\n\nReview this proposal with the user and ask for explicit confirmation before installing. After the user confirms this exact proposal, call skill with action=confirm_install and proposal_id=%q.\n\nbody_preview:\n%s", proposal.ID, proposal.Name, proposal.Source, triggerSummary, skillRequiredToolsSummary(proposal.RequiredTools), len(proposal.Body), proposal.ID, previewN(strings.TrimSpace(proposal.Body), MaxToolResultPreviewInEvent)), nil
+				return fmt.Sprintf("prepared skill install proposal_id=%s name=%q source=%s triggers=%s required_tools=%s body_bytes=%d\n\nReview this proposal with the user and ask for explicit confirmation before installing. After the user confirms this exact proposal, call skill with action=confirm_install and proposal_id=%q.\n\nbody_preview:\n%s", proposal.ID, proposal.Name, proposal.Source, triggerSummary, skillRequiredToolsSummary(proposal.RequiredTools), len(proposal.Body), proposal.ID, textutil.Preview(strings.TrimSpace(proposal.Body), MaxToolResultPreviewInEvent)), nil
 			case "confirm_install":
 				if strings.TrimSpace(skillDir) == "" {
 					return "", errors.New("skill install is not configured for this runtime\nNext: ask the operator to run affent with a workspace-backed skill directory, or paste the skill body into the current task without installing it")
