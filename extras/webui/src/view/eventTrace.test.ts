@@ -234,6 +234,38 @@ describe("eventTrace view model", () => {
     ]);
   });
 
+  it("surfaces source evidence status on tool result rows", () => {
+    const items = buildEventTraceItems(normalizeEvents([
+      {
+        id: 1,
+        type: "tool.request",
+        data: { turn_id: "t1", call_id: "c1", tool: "browser_navigate" },
+      },
+      {
+        id: 2,
+        type: "tool.result",
+        data: {
+          turn_id: "t1",
+          call_id: "c1",
+          exit_code: 0,
+          duration_ms: 42,
+          result_summary: "SourceAccess: browser_rendered_url=https://taostats.io/subnets/120; page_text_below=partial_dynamic_page_evidence",
+          result: "SourceAccess: browser_rendered_url=https://taostats.io/subnets/120; page_text_below=partial_dynamic_page_evidence\nPAGE TEXT:\nMarket Cap",
+          result_truncated: false,
+        },
+      },
+    ]));
+
+    expect(items[1]).toMatchObject({
+      kind: "event",
+      display: {
+        label: "Action finished",
+        meta: ["browser_navigate", "42 ms", "partial source", "https://taostats.io/subnets/120"],
+        badges: ["dynamic_partial"],
+      },
+    });
+  });
+
   it("collapses whitespace and truncates long summaries", () => {
     expect(streamSummary("  line one\n\tline two  ")).toBe("line one line two");
     expect(streamSummary("x".repeat(120))).toBe(`${"x".repeat(95)}...`);

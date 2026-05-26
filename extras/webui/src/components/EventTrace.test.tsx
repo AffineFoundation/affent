@@ -94,6 +94,34 @@ describe("EventTrace", () => {
     expect(screen.getByText("no_verified_source")).toBeInTheDocument();
   });
 
+  it("surfaces source evidence status in tool result rows", () => {
+    const events = normalizeEvents([
+      {
+        id: 1,
+        type: "tool.request",
+        data: { turn_id: "t1", call_id: "c1", tool: "browser_network_read" },
+      },
+      {
+        id: 2,
+        type: "tool.result",
+        data: {
+          turn_id: "t1",
+          call_id: "c1",
+          exit_code: 0,
+          result_summary: "SourceAccess: browser_network_url=https://taostats.io/api/subnets/120; source_method=network_xhr_fetch",
+          result: "SourceAccess: browser_network_url=https://taostats.io/api/subnets/120; source_method=network_xhr_fetch\n{\"price\":\"0.06342 T\"}",
+          result_truncated: false,
+        },
+      },
+    ]);
+
+    render(<EventTrace events={events} />);
+
+    expect(screen.getByText("Action finished")).toBeInTheDocument();
+    expect(screen.getByText("browser_network_read · network source · https://taostats.io/api/subnets/120")).toBeInTheDocument();
+    expect(screen.getByText("network")).toBeInTheDocument();
+  });
+
   it("groups request lifecycle events into one readable record", async () => {
     const user = userEvent.setup();
     const raws = [

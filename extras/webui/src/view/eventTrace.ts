@@ -1,6 +1,7 @@
 import { EventType } from "../api/events";
 import type { NormalizedEvent } from "../normalize/normalizeEvent";
 import { formatByteCount } from "./byteFormat";
+import { describeSourceAccess, sourceEvidenceLabel } from "./sourceAccess";
 import { artifactDisplayLabel, artifactName } from "./turnArtifacts";
 
 export type EventTraceItem =
@@ -372,10 +373,12 @@ function toolResultMeta(event: NormalizedEvent, context: DisplayContext): string
   const omittedBytes = readNumber(event.data, "result_omitted_bytes");
   const capBytes = readNumber(event.data, "result_cap_bytes");
   const resultTruncated = readBoolean(event.data, "result_truncated");
+  const sourceAccess = describeSourceAccess(readString(event.data, "result") ?? readString(event.data, "result_summary"));
   return compact([
     tool,
     typeof duration === "number" ? formatDuration(duration) : undefined,
-    streamSummary(readString(event.data, "result_summary") ?? readString(event.data, "result") ?? ""),
+    sourceAccess ? sourceEvidenceLabel(sourceAccess) : undefined,
+    sourceAccess ? sourceAccess.accessedUrl : streamSummary(readString(event.data, "result_summary") ?? readString(event.data, "result") ?? ""),
     artifactPath
       ? `artifact ${artifactDisplayLabel({
           path: artifactPath,
@@ -391,8 +394,10 @@ function toolResultMeta(event: NormalizedEvent, context: DisplayContext): string
 }
 
 function toolResultBadges(event: NormalizedEvent): string[] {
+  const sourceAccess = describeSourceAccess(readString(event.data, "result") ?? readString(event.data, "result_summary"));
   return compact([
     ...eventFailureKinds(event),
+    sourceAccess ? sourceAccess.status : undefined,
     readBoolean(event.data, "result_truncated") ? "truncated" : undefined,
     readString(event.data, "result_artifact_path") ? "full output" : undefined,
   ]);
