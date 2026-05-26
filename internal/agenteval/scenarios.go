@@ -1130,6 +1130,44 @@ func memoryCrossSessionRecallScenario() BatchScenario {
 	}
 }
 
+func memoryConfirmedWriteStatsScenario() BatchScenario {
+	return BatchScenario{
+		Name:         "memory-confirmed-write-stats",
+		Suites:       []string{smallModelToolsSuite, longRunSuite},
+		SessionID:    "memory-writer",
+		EnableMemory: true,
+		Prompt:       "使用 memory 工具把这条长期项目规则保存到 target=memory topic=markets：Alpha Coast future stock reports must include marker MEM-WRITE-91 and confidence tag source-led. 只调用一次 memory action=add；不要搜索、不要读取文件、不要运行 shell、不要修改文件。完成后回答已保存的 marker、topic 和 confidence tag。",
+		Files: map[string]string{
+			"README.md": "# Memory Write Eval\n\nThis file intentionally does not contain the memory marker.\n",
+		},
+		RequiredTools: []string{"memory"},
+		RequiredToolCounts: map[string]int{
+			"memory": 1,
+		},
+		RequiredToolArgContains: []ToolArgContainsRequirement{
+			{Tool: "memory", Arg: "action", Substring: "add"},
+			{Tool: "memory", Arg: "target", Substring: "memory"},
+			{Tool: "memory", Arg: "topic", Substring: "markets"},
+			{Tool: "memory", Arg: "content", Substring: "MEM-WRITE-91"},
+			{Tool: "memory", Arg: "content", Substring: "source-led"},
+		},
+		RequiredToolResultText: map[string][]string{
+			"memory": {"\"ok\":true", "MEM-WRITE-91", "markets"},
+		},
+		RequiredToolStatsAtLeast: map[string]int{
+			"memory_updates":    1,
+			"memory_update_add": 1,
+		},
+		RequiredFinalText: []string{"MEM-WRITE-91", "markets", "source-led"},
+		ForbiddenTools:    []string{"read_file", "shell", "write_file", "edit_file"},
+		ProtectedFiles:    []string{"README.md"},
+		MaxSuccessfulToolCallsByTool: map[string]int{
+			"memory": 1,
+		},
+		MaxTurns: 5,
+	}
+}
+
 func smallToolRepeatedReadScenario() BatchScenario {
 	return BatchScenario{
 		Name:   "small-tools-repeated-read",

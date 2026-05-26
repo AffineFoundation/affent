@@ -367,6 +367,9 @@ func TestBatchScenarioChecks_UsesSharedCheckLibrary(t *testing.T) {
 		RequiredToolFailureKindCounts: map[string]int{
 			"invalid_args": 1,
 		},
+		RequiredToolStatsAtLeast: map[string]int{
+			"memory_updates": 1,
+		},
 		RequiredFocusedTaskCounts: map[string]int{
 			"explore": 1,
 		},
@@ -406,6 +409,7 @@ func TestBatchScenarioChecks_UsesSharedCheckLibrary(t *testing.T) {
 		"tool_called_before:read_file->edit_file",
 		"tool_called_at_least:plan:2",
 		"tool_failure_kind_at_least:invalid_args:1",
+		"tool_stats_at_least:memory_updates:1",
 		"focused_task_called_at_least:explore:1",
 		"subagent_called_at_least:review:1",
 		"no_delegation_errors",
@@ -460,6 +464,7 @@ func TestSelectBatchScenariosForSuite(t *testing.T) {
 	foundPlanSkip := false
 	foundPlanResume := false
 	foundMemoryRecall := false
+	foundMemoryWriteStats := false
 	foundSymbolContext := false
 	foundSymbolContextRuntimeCapabilities := false
 	foundSymbolContextThenReadFile := false
@@ -552,6 +557,18 @@ func TestSelectBatchScenariosForSuite(t *testing.T) {
 			}
 			if len(scenario.RequiredToolArgContains) != 2 {
 				t.Fatalf("memory-cross-session-recall RequiredToolArgContains = %#v, want action/query constraints", scenario.RequiredToolArgContains)
+			}
+		}
+		if scenario.Name == "memory-confirmed-write-stats" {
+			foundMemoryWriteStats = true
+			if !scenario.EnableMemory || scenario.SessionID != "memory-writer" {
+				t.Fatalf("memory-confirmed-write-stats memory/session fields = memory:%v session:%q", scenario.EnableMemory, scenario.SessionID)
+			}
+			if scenario.RequiredToolStatsAtLeast["memory_updates"] != 1 || scenario.RequiredToolStatsAtLeast["memory_update_add"] != 1 {
+				t.Fatalf("memory-confirmed-write-stats stats = %#v, want memory update/add requirements", scenario.RequiredToolStatsAtLeast)
+			}
+			if scenario.RequiredToolCounts["memory"] != 1 || scenario.MaxSuccessfulToolCallsByTool["memory"] != 1 {
+				t.Fatalf("memory-confirmed-write-stats tool counts = required:%#v max:%#v", scenario.RequiredToolCounts, scenario.MaxSuccessfulToolCallsByTool)
 			}
 		}
 		if scenario.Name == "default-runtime-repo-search" {
@@ -657,6 +674,9 @@ func TestSelectBatchScenariosForSuite(t *testing.T) {
 	if !foundMemoryRecall {
 		t.Fatalf("small-model-tools suite missing memory-cross-session-recall")
 	}
+	if !foundMemoryWriteStats {
+		t.Fatalf("small-model-tools suite missing memory-confirmed-write-stats")
+	}
 	if !foundRepoSearch {
 		t.Fatalf("small-model-tools suite missing default-runtime-repo-search")
 	}
@@ -686,8 +706,8 @@ func TestSelectLongRunSuite(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(scenarios) != 5 {
-		t.Fatalf("long-run suite size = %d, want 5", len(scenarios))
+	if len(scenarios) != 6 {
+		t.Fatalf("long-run suite size = %d, want 6", len(scenarios))
 	}
 	seen := map[string]BatchScenario{}
 	for _, scenario := range scenarios {
@@ -761,6 +781,17 @@ func TestSelectLongRunSuite(t *testing.T) {
 	}
 	if memoryRecall.RequiredToolCounts["memory"] != 1 || memoryRecall.MaxSuccessfulToolCallsByTool["memory"] != 1 {
 		t.Fatalf("memory recall tool constraints = counts:%#v max:%#v", memoryRecall.RequiredToolCounts, memoryRecall.MaxSuccessfulToolCallsByTool)
+	}
+
+	memoryWrite, ok := seen["memory-confirmed-write-stats"]
+	if !ok {
+		t.Fatalf("long-run suite missing memory write stats scenario")
+	}
+	if !memoryWrite.EnableMemory || memoryWrite.SessionID != "memory-writer" {
+		t.Fatalf("memory write fields = memory:%v session:%q", memoryWrite.EnableMemory, memoryWrite.SessionID)
+	}
+	if memoryWrite.RequiredToolStatsAtLeast["memory_updates"] != 1 || memoryWrite.RequiredToolStatsAtLeast["memory_update_add"] != 1 {
+		t.Fatalf("memory write stats constraints = %#v", memoryWrite.RequiredToolStatsAtLeast)
 	}
 }
 
