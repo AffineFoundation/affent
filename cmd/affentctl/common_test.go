@@ -671,6 +671,23 @@ func TestEvalModeAllowsExplicitEvalTools(t *testing.T) {
 	if caps.Memory || caps.Skill || caps.Plan || caps.SessionSearch || caps.ProjectContext || caps.Browser || caps.Subagent || caps.FocusedTasks {
 		t.Fatalf("--eval-tools must not enable unrequested surfaces, caps=%+v", caps)
 	}
+
+	var history commonFlags
+	historyFS := flag.NewFlagSet("test", flag.ContinueOnError)
+	history.bind(historyFS)
+	if err := historyFS.Parse([]string{"--eval-mode", "--eval-tools=session_search"}); err != nil {
+		t.Fatal(err)
+	}
+	if err := applyConfig(&history, historyFS); err != nil {
+		t.Fatal(err)
+	}
+	historyCaps := resolveRuntimeCapabilities(history)
+	if historyCaps.Builtins || !historyCaps.SessionSearch {
+		t.Fatalf("--eval-tools=session_search should enable history recall without builtins, caps=%+v", historyCaps)
+	}
+	if historyCaps.Memory || historyCaps.Skill || historyCaps.Plan || historyCaps.ProjectContext || historyCaps.WebFetch || historyCaps.WebSearch || historyCaps.Browser || historyCaps.Subagent || historyCaps.FocusedTasks {
+		t.Fatalf("--eval-tools=session_search must not enable unrelated surfaces, caps=%+v", historyCaps)
+	}
 }
 
 func TestEvalToolsRequireEvalMode(t *testing.T) {
@@ -1106,7 +1123,7 @@ func TestSetupLoop_EvalModeAllowsIndividualToolsAndPromptMatchesRegistry(t *test
 			t.Fatalf("%s should be registered when requested by --eval-tools", name)
 		}
 	}
-	for _, name := range []string{"write_file", "list_files", agent.MemoryToolName, agent.PlanToolName, agent.SubagentToolName, agent.FocusedTaskToolName} {
+	for _, name := range []string{"write_file", "list_files", agent.MemoryToolName, agent.PlanToolName, agent.SessionSearchToolName, agent.SubagentToolName, agent.FocusedTaskToolName} {
 		if _, ok := b.loop.Tools.Get(name); ok {
 			t.Fatalf("%s should not be registered when absent from --eval-tools", name)
 		}
@@ -1121,6 +1138,47 @@ func TestSetupLoop_EvalModeAllowsIndividualToolsAndPromptMatchesRegistry(t *test
 	for _, forbidden := range []string{"Memory retrieval:", "Session history retrieval:", "External research:", "Subagent delegation:", "Focused tasks (run_task):", "Affent plan tool guidance:", "write_file", "run_task"} {
 		if strings.Contains(msgs[0].Content, forbidden) {
 			t.Fatalf("eval-mode prompt should not include unregistered %q guidance:\n%s", forbidden, msgs[0].Content)
+		}
+	}
+}
+
+func TestSetupLoop_EvalModeAllowsSessionSearchWithoutWorkspaceBuiltins(t *testing.T) {
+	var cf commonFlags
+	fs := flag.NewFlagSet("test", flag.ContinueOnError)
+	cf.bind(fs)
+	if err := fs.Parse([]string{
+		"--workspace", t.TempDir(),
+		"--model", "fake-model",
+		"--base-url", "http://127.0.0.1:1/v1",
+		"--eval-mode",
+		"--eval-tools=session_search",
+		"--quiet",
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if err := applyConfig(&cf, fs); err != nil {
+		t.Fatal(err)
+	}
+	b, code := setupLoop(cf)
+	if code != 0 {
+		t.Fatalf("setupLoop code=%d", code)
+	}
+	defer b.close()
+	if _, ok := b.loop.Tools.Get(agent.SessionSearchToolName); !ok {
+		t.Fatal("session_search should be registered when requested by --eval-tools")
+	}
+	for _, name := range []string{"shell", "read_file", "write_file", "list_files", agent.MemoryToolName, agent.PlanToolName, agent.SubagentToolName, agent.FocusedTaskToolName} {
+		if _, ok := b.loop.Tools.Get(name); ok {
+			t.Fatalf("%s should not be registered with session_search-only --eval-tools", name)
+		}
+	}
+	msgs := b.loop.Conv.Snapshot()
+	if len(msgs) == 0 || !strings.Contains(msgs[0].Content, "Session history retrieval:") {
+		t.Fatalf("session_search-only eval prompt should include session guidance:\n%+v", msgs)
+	}
+	for _, forbidden := range []string{"Workspace directory", "Memory retrieval:", "Affent plan tool guidance:", "Subagent delegation:", "Focused tasks (run_task):"} {
+		if strings.Contains(msgs[0].Content, forbidden) {
+			t.Fatalf("session_search-only eval prompt should not include %q guidance:\n%s", forbidden, msgs[0].Content)
 		}
 	}
 }

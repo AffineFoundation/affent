@@ -884,7 +884,6 @@ func resolveRuntimeCapabilities(c commonFlags) runtimeCapabilities {
 		caps.SessionSearch = false
 		if allowed[agent.SessionSearchToolName] {
 			caps.SessionSearch = true
-			caps.Builtins = true
 		}
 		caps.ProjectContext = false
 		caps.SymbolContext = allowed[agent.SymbolContextToolName]
@@ -1001,7 +1000,7 @@ func evalAllowlistHasUnknown(allowed map[string]bool) bool {
 }
 
 func evalAllowlistHasBuiltin(allowed map[string]bool) bool {
-	for _, name := range append(evalWorkspaceToolNames(), agent.SkillToolName, agent.SessionSearchToolName, agent.PlanToolName) {
+	for _, name := range append(evalWorkspaceToolNames(), agent.SkillToolName, agent.PlanToolName) {
 		if allowed[name] {
 			return true
 		}
@@ -1329,6 +1328,11 @@ func setupLoop(c commonFlags) (*loopBundle, int) {
 			return nil, exitRuntime
 		}
 		agent.RegisterMemoryOnly(tools, memStore)
+	}
+	if caps.SessionSearch {
+		if _, ok := tools.Get(agent.SessionSearchToolName); !ok {
+			agent.RegisterSessionSearchOnly(tools, convDir, sid)
+		}
 	}
 	if caps.WebFetch {
 		if caps.Browser {
