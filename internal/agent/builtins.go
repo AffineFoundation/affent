@@ -136,9 +136,7 @@ func RegisterBuiltins(r *Registry, deps BuiltinDeps) {
 	if deps.Memory != nil {
 		r.Add(memoryTool(deps.Memory))
 	}
-	if deps.SessionsDir != "" {
-		r.Add(sessionSearchTool(deps.SessionsDir, deps.SessionID))
-	}
+	RegisterSessionSearchOnly(r, deps.SessionsDir, deps.SessionID)
 	if deps.PlanPath != "" {
 		r.Add(planTool(deps.PlanPath))
 	}

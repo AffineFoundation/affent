@@ -399,9 +399,9 @@ func TestSessionPool_ConversationLogIsDurable(t *testing.T) {
 	}
 }
 
-func TestSessionPool_BuiltinsRegisterSessionSearchOverDurableConversations(t *testing.T) {
+func TestSessionPool_RegistersSessionSearchWithoutShellBuiltins(t *testing.T) {
 	pool := newTestPool(t, 4, "5m")
-	pool.cfg.EnableBuiltins = true
+	pool.cfg.EnableBuiltins = false
 
 	past, err := pool.GetOrCreate("past-research")
 	if err != nil {
@@ -423,7 +423,10 @@ func TestSessionPool_BuiltinsRegisterSessionSearchOverDurableConversations(t *te
 	}
 	tool, ok := current.registry.Get(agent.SessionSearchToolName)
 	if !ok {
-		t.Fatal("builtins should register session_search for durable session recall")
+		t.Fatal("workflow tools should register session_search for durable session recall")
+	}
+	if _, ok := current.registry.Get("shell"); ok {
+		t.Fatal("session_search should not require shell builtins")
 	}
 	msgs := current.conv.Snapshot()
 	if len(msgs) == 0 || !strings.Contains(msgs[0].Content, "Session history retrieval:") {
@@ -1258,15 +1261,18 @@ func TestSessionPool_NoBuiltinsUsesCapabilityMatchedSystemPrompt(t *testing.T) {
 		t.Fatal("system prompt missing")
 	}
 	prompt := msgs[0].Content
-	if !strings.Contains(prompt, "only tool is 'memory'") {
-		t.Fatalf("memory-only session should use memory-only prompt:\n%s", prompt)
+	if !strings.Contains(prompt, "limited-tool runtime") {
+		t.Fatalf("tool-light session should use limited-tool prompt:\n%s", prompt)
 	}
 	if !strings.Contains(prompt, "Memory retrieval:") {
-		t.Fatalf("memory-only session should include memory retrieval guidance:\n%s", prompt)
+		t.Fatalf("tool-light session should include memory retrieval guidance:\n%s", prompt)
+	}
+	if !strings.Contains(prompt, "Session history retrieval:") {
+		t.Fatalf("tool-light session should include session history guidance:\n%s", prompt)
 	}
 	for _, forbidden := range []string{"'shell' tool", "read_file", "write_file", "edit_file", "list_files"} {
 		if strings.Contains(prompt, forbidden) {
-			t.Fatalf("memory-only prompt should not mention unavailable %q:\n%s", forbidden, prompt)
+			t.Fatalf("tool-light prompt should not mention unavailable %q:\n%s", forbidden, prompt)
 		}
 	}
 }
@@ -1463,7 +1469,7 @@ func TestSessionPool_EvalModeAllowsIndividualToolsAndPromptMatchesRegistry(t *te
 			t.Fatalf("%s should be registered when requested by eval_tools", name)
 		}
 	}
-	for _, name := range []string{"write_file", "list_files", agent.MemoryToolName, agent.PlanToolName, agent.SubagentToolName, agent.FocusedTaskToolName} {
+	for _, name := range []string{"write_file", "list_files", agent.MemoryToolName, agent.PlanToolName, agent.SessionSearchToolName, agent.SubagentToolName, agent.FocusedTaskToolName} {
 		if _, ok := s.registry.Get(name); ok {
 			t.Fatalf("%s should not be registered when absent from eval_tools", name)
 		}
@@ -1478,6 +1484,47 @@ func TestSessionPool_EvalModeAllowsIndividualToolsAndPromptMatchesRegistry(t *te
 	for _, forbidden := range []string{"Memory retrieval:", "Session history retrieval:", "External research:", "Subagent delegation:", "Focused tasks (run_task):", "Affent plan tool guidance:", "write_file", "run_task"} {
 		if strings.Contains(msgs[0].Content, forbidden) {
 			t.Fatalf("eval-mode prompt should not include unregistered %q guidance:\n%s", forbidden, msgs[0].Content)
+		}
+	}
+}
+
+func TestSessionPool_EvalModeAllowsSessionSearchWithoutWorkspaceBuiltins(t *testing.T) {
+	cfg := Config{
+		Listen:         "127.0.0.1:0",
+		MaxSessions:    4,
+		SessionIdleTTL: "5m",
+		WorkspaceRoot:  t.TempDir(),
+		BaseURL:        "http://127.0.0.1:0",
+		APIKey:         "test",
+		Model:          "fake",
+		EvalMode:       true,
+		EvalTools:      agent.SessionSearchToolName,
+	}
+	pool, err := NewSessionPool(cfg, zerolog.New(io.Discard))
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(pool.Shutdown)
+
+	s, err := pool.GetOrCreate("eval-session-search")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, ok := s.registry.Get(agent.SessionSearchToolName); !ok {
+		t.Fatal("session_search should be registered when requested by eval_tools")
+	}
+	for _, name := range []string{"shell", "read_file", "write_file", "list_files", agent.MemoryToolName, agent.PlanToolName, agent.SubagentToolName, agent.FocusedTaskToolName} {
+		if _, ok := s.registry.Get(name); ok {
+			t.Fatalf("%s should not be registered with session_search-only eval_tools", name)
+		}
+	}
+	msgs := s.conv.Snapshot()
+	if len(msgs) == 0 || !strings.Contains(msgs[0].Content, "Session history retrieval:") {
+		t.Fatalf("session_search-only eval prompt should include session guidance:\n%+v", msgs)
+	}
+	for _, forbidden := range []string{"Workspace:", "Memory retrieval:", "Affent plan tool guidance:", "Subagent delegation:", "Focused tasks (run_task):"} {
+		if strings.Contains(msgs[0].Content, forbidden) {
+			t.Fatalf("session_search-only eval prompt should not include %q guidance:\n%s", forbidden, msgs[0].Content)
 		}
 	}
 }

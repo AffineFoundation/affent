@@ -536,6 +536,11 @@ func (p *SessionPool) buildSession(id string) (*Session, error) {
 		// exposed but still want durable per-user notes.
 		agent.RegisterMemoryOnly(reg, memStore)
 	}
+	if workflowToolsEnabled(p.cfg) {
+		if _, ok := reg.Get(agent.SessionSearchToolName); !ok {
+			agent.RegisterSessionSearchOnly(reg, p.sessionRootPath(), id)
+		}
+	}
 
 	var browser *affentbrowser.Session
 	if p.cfg.EnableBrowser {

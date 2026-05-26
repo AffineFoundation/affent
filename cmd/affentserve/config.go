@@ -560,7 +560,7 @@ func serveEvalKnownToolNames() []string {
 }
 
 func serveEvalAllowlistHasBuiltin(allowed map[string]bool) bool {
-	for _, name := range append(serveEvalWorkspaceToolNames(), agent.SkillToolName, agent.SessionSearchToolName, agent.PlanToolName) {
+	for _, name := range append(serveEvalWorkspaceToolNames(), agent.SkillToolName, agent.PlanToolName) {
 		if allowed[name] {
 			return true
 		}

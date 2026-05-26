@@ -17,6 +17,15 @@ type SessionSearchHit = sessionsearch.Hit
 // SessionSearchResponse is the tool's return shape.
 type SessionSearchResponse = sessionsearch.Response
 
+// RegisterSessionSearchOnly registers the read-only transcript search tool
+// without shell or workspace builtins.
+func RegisterSessionSearchOnly(r *Registry, sessionsDir, currentSessionID string) {
+	if r == nil || strings.TrimSpace(sessionsDir) == "" {
+		return
+	}
+	r.Add(sessionSearchTool(sessionsDir, currentSessionID))
+}
+
 // sessionSearchTool searches past workspace transcripts. The current
 // session is excluded so the agent does not match its own in-flight
 // turns.

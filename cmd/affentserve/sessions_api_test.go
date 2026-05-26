@@ -920,10 +920,10 @@ func TestSessionCapabilitiesReflectActualRegisteredTools(t *testing.T) {
 		t.Fatal(err)
 	}
 	caps := summarizeActiveCapabilities(s, pool.cfg)
-	if caps.Builtins || caps.SkillInstall || caps.Plan || caps.SessionSearch || caps.RepoSearch {
+	if caps.Builtins || caps.SkillInstall || caps.Plan || caps.RepoSearch {
 		t.Fatalf("tool-light session should not report builtin-only tools: %+v", caps)
 	}
-	if !caps.Memory || !caps.Subagent || !caps.FocusedTasks {
+	if !caps.Memory || !caps.SessionSearch || !caps.Subagent || !caps.FocusedTasks {
 		t.Fatalf("tool-light session should report actually registered non-builtin tools: %+v", caps)
 	}
 }
