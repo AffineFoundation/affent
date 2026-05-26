@@ -297,16 +297,7 @@ describe("App", () => {
     await userEvent.type(input, "help me install a skill from github");
     expect(screen.getByTestId("composer-task-hint")).toHaveTextContent("Skill install ready");
     expect(screen.getByTestId("composer-task-hint")).toHaveTextContent("propose_install");
-    const toolsPanel = await screen.findByTestId("session-tools-panel");
-    expect(toolsPanel).toHaveTextContent("3 tools available");
-    await userEvent.click(within(toolsPanel).getByText("3 tools available"));
-    expect(within(toolsPanel).getByTestId("session-tools-search")).toBeVisible();
-    expect(toolsPanel).toHaveTextContent("Workspace");
-    expect(toolsPanel).toHaveTextContent("Research");
-    expect(toolsPanel).toHaveTextContent("MCP · taostats");
-    expect(within(toolsPanel).getByTestId("session-tools-list")).toHaveTextContent("read_file");
-    expect(within(toolsPanel).getByTestId("session-tools-list")).toHaveTextContent("taostats_query");
-    expect(within(toolsPanel).getByText("Raw name: query")).toBeInTheDocument();
+    expect(screen.queryByTestId("session-tools-panel")).toBeNull();
     expect(screen.queryByTestId("chat-context-bar")).toBeNull();
   });
 

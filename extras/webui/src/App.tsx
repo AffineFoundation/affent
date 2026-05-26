@@ -6,12 +6,9 @@ import {
   createSession,
   getSessionHistory,
   listSessions,
-  listSessionTools,
   readSessionArtifact,
   sendSessionMessage,
   streamSessionEvents,
-  type SessionToolInfo,
-  type SessionToolsSurfaceInfo,
   type SessionSummary,
 } from "./api/sessions";
 import { getServerStats, type ServerStatsResponse } from "./api/stats";
@@ -19,7 +16,6 @@ import { ArtifactViewer, type ArtifactViewerState } from "./components/ArtifactV
 import { EventType, type RawEvent } from "./api/events";
 import { Composer, type ComposerDraft } from "./components/Composer";
 import { SessionList } from "./components/SessionList";
-import { SessionToolsPanel } from "./components/SessionToolsPanel";
 import { Timeline, type GuidanceReceiptView, type PendingMessageView } from "./components/Timeline";
 import { WorkflowStatus } from "./components/WorkflowStatus";
 import { RunDetails } from "./components/RunDetails";
@@ -48,12 +44,6 @@ interface HistoryLoadResult {
   cursor: number;
 }
 
-type SessionToolsState =
-  | { state: "idle" }
-  | { state: "loading" }
-  | { state: "ready"; tools: SessionToolInfo[]; surface?: SessionToolsSurfaceInfo }
-  | { state: "error"; message: string };
-
 const demoReplayDelayMs = 180;
 const historyPageLimit = 500;
 const maxHistoryPages = 50;
@@ -80,7 +70,6 @@ export function App() {
   const [composerDraft, setComposerDraft] = useState<ComposerDraft | undefined>();
   const [composerFocusSignal, setComposerFocusSignal] = useState(0);
   const [artifact, setArtifact] = useState<ArtifactViewerState>({ state: "idle" });
-  const [sessionTools, setSessionTools] = useState<SessionToolsState>({ state: "idle" });
   const sendInFlightRef = useRef(false);
   const sendFailedRef = useRef(false);
   const streamClosedRef = useRef(false);
@@ -149,9 +138,8 @@ export function App() {
   const compactNav = demoActive || !showSessionNav;
   const showHeaderNewChat = !demoActive && !showSessionNav;
   const showChatContext = !demoActive && (session.turns.length > 0 || !!pendingMessage);
-  const showSessionTools = !demoActive && selectedSessionActive && selectedSessionId;
   const historyLoading = status.state === "loading" && !!selectedSessionId;
-  const showSurfaceContext = !historyLoading && (showChatContext || showWorkflowStatus || showSessionTools);
+  const showSurfaceContext = !historyLoading && (showChatContext || showWorkflowStatus);
   const surfaceBusy = actionBusy || session.status === "running" || !!pendingMessage;
   const surfaceMode = session.turns.length === 0 && !pendingMessage ? "empty" : "conversation";
   const composerResumesSavedChat = !!selectedSessionId && !selectedSessionActive && session.turns.length > 0;
@@ -272,31 +260,6 @@ export function App() {
     void load();
     return () => ac.abort();
   }, [client]);
-
-  useEffect(() => {
-    const sessionId = showSessionTools ? selectedSessionId : undefined;
-    const ac = new AbortController();
-    if (!sessionId) {
-      setSessionTools({ state: "idle" });
-      return () => ac.abort();
-    }
-    setSessionTools({ state: "loading" });
-    void listSessionTools(client, sessionId, ac.signal)
-      .then((resp) => {
-        if (!ac.signal.aborted) {
-          setSessionTools({ state: "ready", tools: resp.tools, surface: resp.surface });
-        }
-      })
-      .catch((err) => {
-        if (ac.signal.aborted || isAbortError(err)) return;
-        if (err instanceof ApiError && err.status === 409) {
-          setSessionTools({ state: "idle" });
-          return;
-        }
-        setSessionTools({ state: "error", message: formatError(err) });
-      });
-    return () => ac.abort();
-  }, [client, selectedSessionId, showSessionTools]);
 
   useEffect(() => {
     if (!demoActive) return;
@@ -639,14 +602,6 @@ export function App() {
               <div className="surface-context">
                 {showChatContext ? <ChatContextBar overview={overview} /> : null}
                 {showWorkflowStatus ? <WorkflowStatus overview={overview} /> : null}
-                {showSessionTools ? (
-                <SessionToolsPanel
-                  tools={sessionTools.state === "ready" ? sessionTools.tools : undefined}
-                  loading={sessionTools.state === "loading"}
-                  error={sessionTools.state === "error" ? sessionTools.message : undefined}
-                  surface={sessionTools.state === "ready" ? sessionTools.surface : undefined}
-                />
-                ) : null}
               </div>
             ) : null}
             <div className="conversation-scroll" ref={conversationScrollRef} data-testid="conversation-scroll">
