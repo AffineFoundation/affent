@@ -51,6 +51,7 @@ func TestRunListQualityProfiles(t *testing.T) {
 		"max-source-dynamic-partial-rate=0.200",
 		"max-debug-brief-tag-rate=recall:weak_context=0.000",
 		"max-debug-brief-tag-rate=source_dynamic_without_network=0.000",
+		"max-debug-brief-tag-rate=tool_repair:failed=0.000",
 		"max-debug-brief-tag-rate=truncation:missing_artifact=0.000",
 	} {
 		if !strings.Contains(out, want) {
@@ -634,8 +635,9 @@ func TestApplyQualityGateProfile(t *testing.T) {
 		gates.MaxDebugBriefTagRates["recall:no_context"] != 0 ||
 		gates.MaxDebugBriefTagRates["recall:no_matched_terms"] != 0 ||
 		gates.MaxDebugBriefTagRates["recall:weak_context"] != 0 ||
-		gates.MaxDebugBriefTagRates["recall:weak_matched_terms"] != 0 {
-		t.Fatalf("longrun debug brief tag gates = %#v, want recall quality and truncation artifact gates", gates.MaxDebugBriefTagRates)
+		gates.MaxDebugBriefTagRates["recall:weak_matched_terms"] != 0 ||
+		gates.MaxDebugBriefTagRates["tool_repair:failed"] != 0 {
+		t.Fatalf("longrun debug brief tag gates = %#v, want recall, repair, and truncation artifact gates", gates.MaxDebugBriefTagRates)
 	}
 
 	webGates := qualityGateConfig{MinSourceAccessVerifiedRate: float64Ptr(-1)}
@@ -1272,7 +1274,7 @@ func TestBatchSummaryAggregatesRuntimeMetrics(t *testing.T) {
 	if !strings.Contains(out.String(), "source_access=results:4,verified:3,discovery:0,network:3,dynamic_partial:0") {
 		t.Fatalf("summary output missing source access rollup:\n%s", out.String())
 	}
-	if !strings.Contains(out.String(), "debug_brief=context_compaction:1,context_compaction:reactive:1,loop_guard:2,outcome:failed:1,plan:2,plan:set:1,plan:update:1,plan_error:1,recall:1,recall:context:1,recall:weak_context:1,runtime_error:1,runtime_error:context_overflow:1,runtime_error:llm_timeout:1,source_access:2,source_network:2,source_unverified:1,tool_failure:1,tool_failure:invalid_args:1,tool_failure:timeout:1,truncation:2,truncation:missing_artifact:1,turn_end:max_turns:1") {
+	if !strings.Contains(out.String(), "debug_brief=context_compaction:1,context_compaction:reactive:1,loop_guard:2,outcome:failed:1,plan:2,plan:set:1,plan:update:1,plan_error:1,recall:1,recall:context:1,recall:weak_context:1,runtime_error:1,runtime_error:context_overflow:1,runtime_error:llm_timeout:1,source_access:2,source_network:2,source_unverified:1,tool_failure:1,tool_failure:invalid_args:1,tool_failure:timeout:1,tool_repair:2,tool_repair:alias_rename:2,tool_repair:failed:1,tool_repair:tool_name:1,tool_repair:type_coercion:1,truncation:2,truncation:missing_artifact:1,turn_end:max_turns:1") {
 		t.Fatalf("summary output missing debug brief tag rollup:\n%s", out.String())
 	}
 	if !strings.Contains(out.String(), `failure_example[turn_end]: scenario=taostats-rendered failure="turn ended with reason \"max_turns\" (expected completed)"`) ||

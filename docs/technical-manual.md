@@ -783,8 +783,9 @@ enabled thresholds into metadata so result files preserve their pass/fail
 conditions. Use `--quality-profile longrun` for general long-run regression
 runs; it includes minimum trace-event, memory-update, session-search
 context-hit, scenario-level session-recall debug tag, and missing
-truncation-artifact gates so observability, shared memory, and cross-session
-recovery regressions fail the batch. Use
+truncation-artifact gates, plus a scenario-level failed tool-repair gate, so
+observability, shared memory, tool recovery, and cross-session recovery
+regressions fail the batch. Use
 `--quality-profile web-evidence` for live/current web evidence runs; it also
 fails scenario-level debug brief tags such as dynamic source evidence without
 network-backed reads or without an explicit evidence-quality defer decision.

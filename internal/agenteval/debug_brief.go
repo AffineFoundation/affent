@@ -48,6 +48,27 @@ func BuildDebugBrief(res BatchResult) *DebugBrief {
 		}
 		add("tool_failure_by_kind", "warn", "structured tool failures observed", []string{"tool_timeline", "tool_failure_examples"}, counts, tags...)
 	}
+	if res.Repair.HasAny() {
+		severity := "info"
+		message := "tool calls were repaired or canonicalized; inspect examples for small-model tool drift"
+		tags := []string{"tool_repair"}
+		counts := map[string]int{
+			"calls":     res.Repair.Calls,
+			"succeeded": res.Repair.SucceededCalls,
+			"failed":    res.Repair.FailedCalls,
+			"notes":     res.Repair.Notes,
+		}
+		for kind, count := range res.Repair.ByKind {
+			counts["kind:"+kind] = count
+			tags = append(tags, "tool_repair:"+kind)
+		}
+		if res.Repair.FailedCalls > 0 {
+			severity = "warn"
+			message = "tool repair failed for at least one call; inspect repair examples before trusting tool recovery"
+			tags = append(tags, "tool_repair:failed")
+		}
+		add("tool_repair", severity, message, []string{"tool_repair_examples", "tool_timeline"}, counts, tags...)
+	}
 	if counts := filteredPositiveCounts(res.RuntimeErrorByKind); len(counts) > 0 {
 		tags := []string{"runtime_error"}
 		for kind := range counts {

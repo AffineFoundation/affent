@@ -82,6 +82,51 @@ func TestBuildDebugBriefClassifiesUnfinishedPlan(t *testing.T) {
 	}
 }
 
+func TestBuildDebugBriefClassifiesToolRepairQuality(t *testing.T) {
+	brief := BuildDebugBrief(BatchResult{
+		OK: true,
+		Repair: ToolRepairStats{
+			Calls:          2,
+			SucceededCalls: 2,
+			Notes:          3,
+			ByKind:         map[string]int{"alias_rename": 1, "type_coercion": 2},
+		},
+	})
+	repair := debugBriefItemByKind(brief, "tool_repair")
+	if repair == nil ||
+		repair.Severity != "info" ||
+		repair.Message != "tool calls were repaired or canonicalized; inspect examples for small-model tool drift" ||
+		repair.Counts["calls"] != 2 ||
+		repair.Counts["succeeded"] != 2 ||
+		repair.Counts["notes"] != 3 ||
+		repair.Counts["kind:type_coercion"] != 2 ||
+		!stringSliceContains(repair.Inspect, "tool_repair_examples") ||
+		!stringSliceContains(brief.Tags, "tool_repair:alias_rename") ||
+		!stringSliceContains(brief.Tags, "tool_repair:type_coercion") {
+		t.Fatalf("tool repair debug item = %+v tags=%+v", repair, brief.Tags)
+	}
+
+	brief = BuildDebugBrief(BatchResult{
+		OK: true,
+		Repair: ToolRepairStats{
+			Calls:          2,
+			SucceededCalls: 1,
+			FailedCalls:    1,
+			Notes:          1,
+			ByKind:         map[string]int{"malformed_json": 1},
+		},
+	})
+	repair = debugBriefItemByKind(brief, "tool_repair")
+	if repair == nil ||
+		repair.Severity != "warn" ||
+		repair.Message != "tool repair failed for at least one call; inspect repair examples before trusting tool recovery" ||
+		repair.Counts["failed"] != 1 ||
+		!stringSliceContains(brief.Tags, "tool_repair:failed") ||
+		!stringSliceContains(brief.Tags, "tool_repair:malformed_json") {
+		t.Fatalf("failed tool repair debug item = %+v tags=%+v", repair, brief.Tags)
+	}
+}
+
 func TestBuildDebugBriefClassifiesSessionRecallQuality(t *testing.T) {
 	brief := BuildDebugBrief(BatchResult{
 		OK: true,

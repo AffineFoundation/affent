@@ -412,6 +412,7 @@ func qualityGateProfileDefinitions() []qualityGateProfileDefinition {
 					"recall:no_matched_terms":     0,
 					"recall:weak_context":         0,
 					"recall:weak_matched_terms":   0,
+					"tool_repair:failed":          0,
 					"truncation:missing_artifact": 0,
 				},
 			},
