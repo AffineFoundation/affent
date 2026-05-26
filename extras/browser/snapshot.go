@@ -7,6 +7,9 @@ import (
 	"net/url"
 	"strings"
 
+	"github.com/affinefoundation/affent/internal/metrictext"
+	"github.com/affinefoundation/affent/internal/sourceaccess"
+	"github.com/affinefoundation/affent/internal/textutil"
 	"github.com/affinefoundation/affent/internal/websource"
 	"github.com/go-rod/rod"
 )
@@ -275,6 +278,9 @@ func (snap *Snapshot) Format() string {
 		fmt.Fprintf(&b, "TITLE: %s\n", snap.Title)
 	}
 	fmt.Fprintf(&b, "SNAPSHOT_ID: %d\n", snap.SnapshotID)
+	if metrictext.HasMultiplePriceLikeValues(snapshotMetricText(snap)) {
+		fmt.Fprintf(&b, "%s\n", metrictext.AmbiguityNote)
+	}
 	b.WriteString("\n")
 
 	interactiveNames := map[string]struct{}{}
@@ -308,6 +314,34 @@ func (snap *Snapshot) Format() string {
 	return b.String()
 }
 
+func snapshotMetricText(snap *Snapshot) string {
+	if snap == nil {
+		return ""
+	}
+	var b strings.Builder
+	if snap.Title != "" {
+		b.WriteString(snap.Title)
+		b.WriteByte('\n')
+	}
+	for _, el := range snap.Interactive {
+		if el.Name != "" {
+			b.WriteString(el.Name)
+			b.WriteByte('\n')
+		}
+		if el.Value != "" {
+			b.WriteString(el.Value)
+			b.WriteByte('\n')
+		}
+	}
+	for _, block := range snap.TextBlocks {
+		if block.Text != "" {
+			b.WriteString(block.Text)
+			b.WriteByte('\n')
+		}
+	}
+	return b.String()
+}
+
 func formatSnapshotResult(snap *Snapshot) (string, error) {
 	return formatSnapshotResultWithRequested(snap, "")
 }
@@ -321,7 +355,7 @@ func formatSnapshotResultWithRequested(snap *Snapshot, requestedURL string) (str
 			blockedSnapshotNext(reason),
 		)
 	}
-	out = browserSourceAccessLine(snap.URL, snap.SnapshotID, requestedURL) + out
+	out = browserSourceAccessLine(snap.URL, snap.SnapshotID, requestedURL, snapshotNotFoundReason(snap)) + out
 	return out, nil
 }
 
@@ -332,21 +366,16 @@ func blockedSnapshotNext(reason string) string {
 	return "do not treat this page as evidence; use a different search provider, a known canonical URL, direct web_fetch/API/text source, or answer with this source marked unavailable"
 }
 
-func browserSourceAccessLine(rawURL string, snapshotID int64, requestedURL string) string {
-	u := strings.NewReplacer("\r", " ", "\n", " ").Replace(strings.TrimSpace(rawURL))
-	requested := strings.NewReplacer("\r", " ", "\n", " ").Replace(strings.TrimSpace(requestedURL))
-	requestedSuffix := ""
-	if requested != "" && requested != u {
-		requestedSuffix = "; requested_url=" + requested
+func browserSourceAccessLine(rawURL string, snapshotID int64, requestedURL, notFoundReason string) string {
+	if browserURLIsSearchResultPage(rawURL) {
+		return sourceaccess.FormatBrowserHeader(rawURL, requestedURL, "page_text_below=search_results_discovery_only", "; result_links_and_snippets=unverified_until_opened", snapshotID) +
+			"Next: treat this page as discovery only; open 1-3 high-value result URLs from the visible refs (official, primary, metrics, docs, or source repositories) before refining the search, and do not cite snippets as verified facts.\n"
 	}
-	if browserURLIsSearchResultPage(u) {
-		return fmt.Sprintf(
-			"SourceAccess: browser_rendered_url=%s%s; snapshot_id=%d; page_text_below=search_results_discovery_only; result_links_and_snippets=unverified_until_opened\n"+
-				"Next: treat this page as discovery only; open 1-3 high-value result URLs from the visible refs (official, primary, metrics, docs, or source repositories) before refining the search, and do not cite snippets as verified facts.\n",
-			u, requestedSuffix, snapshotID,
-		)
+	if notFoundReason != "" {
+		return sourceaccess.FormatBrowserHeader(rawURL, requestedURL, "page_text_below=not_found_page_discovery_only", "; links_in_snapshot=discovered_unverified_until_opened", snapshotID) +
+			"Next: treat this page as a not-found page; use the visible navigation links or a canonical URL from discovery results, and do not cite the page body as verified evidence.\n"
 	}
-	return fmt.Sprintf("SourceAccess: browser_rendered_url=%s%s; snapshot_id=%d; page_text_below=verified_page_evidence; links_in_snapshot=discovered_unverified_until_opened\n", u, requestedSuffix, snapshotID)
+	return sourceaccess.FormatBrowserHeader(rawURL, requestedURL, "page_text_below=verified_page_evidence", "; links_in_snapshot=discovered_unverified_until_opened", snapshotID)
 }
 
 func browserURLIsSearchResultPage(rawURL string) bool {
@@ -388,6 +417,33 @@ func blockedSnapshotReason(snap *Snapshot) string {
 			return "cloudflare challenge text"
 		case strings.Contains(text, "verify you are human"):
 			return "human verification challenge"
+		}
+	}
+	return ""
+}
+
+func snapshotNotFoundReason(snap *Snapshot) string {
+	if snap == nil {
+		return ""
+	}
+	url := strings.ToLower(strings.TrimSpace(snap.URL))
+	title := strings.ToLower(strings.TrimSpace(snap.Title))
+	switch {
+	case strings.Contains(title, "page not found"),
+		strings.Contains(title, "404 not found"),
+		strings.Contains(title, "error 404"),
+		strings.Contains(title, "404") && strings.Contains(title, "not found"),
+		strings.Contains(url, "/404"):
+		return "404 page title"
+	}
+	for _, block := range snap.TextBlocks {
+		text := strings.ToLower(block.Text)
+		switch {
+		case strings.Contains(text, "page not found"),
+			strings.Contains(text, "404 not found"),
+			strings.Contains(text, "error 404"),
+			strings.Contains(text, "not found") && strings.Contains(text, "404"):
+			return "404 page text"
 		}
 	}
 	return ""
@@ -491,7 +547,7 @@ func formatInteractive(el InteractiveElement) string {
 }
 
 func normalizedSnapshotText(s string) string {
-	return strings.ToLower(strings.Join(strings.Fields(strings.TrimSpace(s)), " "))
+	return strings.ToLower(textutil.CompactWhitespace(s))
 }
 
 func truncateSnapshotField(s string, limit int) string {
@@ -499,9 +555,9 @@ func truncateSnapshotField(s string, limit int) string {
 		return s
 	}
 	if limit <= len("...(truncated)") {
-		return s[:limit]
+		return s[:textutil.AlignBackward(s, limit)]
 	}
-	return strings.TrimSpace(s[:limit-len("...(truncated)")]) + "...(truncated)"
+	return textutil.Preview(s, limit, "...(truncated)")
 }
 
 func minInt(a, b int) int {

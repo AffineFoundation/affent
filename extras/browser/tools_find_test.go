@@ -98,6 +98,31 @@ func TestBrowserFindNormalPageIsNotBlocked(t *testing.T) {
 	}
 }
 
+func TestBrowserFindMarksNotFoundPagesAsDiscoveryOnly(t *testing.T) {
+	out, err := formatBrowserFindResult(&BrowserFindResult{
+		SnapshotID: 12,
+		URL:        "https://example.test/missing",
+		Title:      "404 - Page Not Found",
+		TextBlocks: []TextBlock{
+			{Type: "h1", Text: "Page not found"},
+			{Type: "p", Text: "Use the navigation links to reach /docs or /subnets."},
+		},
+	}, "docs", 8)
+	if err != nil {
+		t.Fatalf("404 find result should still return a body: %v", err)
+	}
+	for _, want := range []string{
+		"SourceAccess: browser_rendered_url=https://example.test/missing",
+		"page_text_below=not_found_page_discovery_only",
+		"links_in_snapshot=discovered_unverified_until_opened",
+		"Next: treat this page as a not-found page",
+	} {
+		if !strings.Contains(out, want) {
+			t.Fatalf("404 find output missing %q:\n%s", want, out)
+		}
+	}
+}
+
 func TestBrowserFindDeduplicatesEquivalentTextMatches(t *testing.T) {
 	result := &BrowserFindResult{
 		URL: "https://example.test",

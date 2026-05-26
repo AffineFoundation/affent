@@ -3,6 +3,8 @@ package browser
 import (
 	"context"
 	"encoding/json"
+	"fmt"
+	"reflect"
 	"strings"
 	"testing"
 	"time"
@@ -174,6 +176,75 @@ func TestBrowserNavigateTimeoutErrorHasRecoveryHint(t *testing.T) {
 		if !strings.Contains(err.Error(), want) {
 			t.Fatalf("timeout guidance missing %q: %v", want, err)
 		}
+	}
+}
+
+func TestIsBlockedByClientNavigateError(t *testing.T) {
+	cases := []struct {
+		err  error
+		want bool
+	}{
+		{err: nil, want: false},
+		{err: context.DeadlineExceeded, want: false},
+		{err: fmt.Errorf("navigate failed: net::ERR_BLOCKED_BY_CLIENT"), want: true},
+		{err: fmt.Errorf("navigation failed: blocked by client"), want: true},
+	}
+	for _, tc := range cases {
+		if got := isBlockedByClientNavigateError(tc.err); got != tc.want {
+			t.Fatalf("isBlockedByClientNavigateError(%v) = %v, want %v", tc.err, got, tc.want)
+		}
+	}
+}
+
+func TestBrowserRecoveryNotePrefixesNavigateOutput(t *testing.T) {
+	note := "browser_navigate recovered by relaxing the default domain blocklist after ERR_BLOCKED_BY_CLIENT; domain_relaxations=1"
+	out := prependBrowserRecoveryNote("snapshot body", note)
+	if !strings.HasPrefix(out, "("+note+")\n\n") {
+		t.Fatalf("expected recovery note prefix, got:\n%s", out)
+	}
+	if !strings.HasSuffix(out, "snapshot body") {
+		t.Fatalf("expected original body after recovery note, got:\n%s", out)
+	}
+}
+
+func TestRelaxedDomainInterceptConfigPreservesExplicitBlocks(t *testing.T) {
+	cases := []struct {
+		name string
+		in   InterceptConfig
+		want []string
+	}{
+		{
+			name: "defaults become empty",
+			in:   InterceptConfig{},
+			want: []string{},
+		},
+		{
+			name: "explicit block list preserved",
+			in:   InterceptConfig{BlockedDomains: []string{"example.com"}},
+			want: []string{"example.com"},
+		},
+		{
+			name: "allow all unchanged",
+			in:   InterceptConfig{AllowAllDomains: true},
+			want: nil,
+		},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			got := relaxedDomainInterceptConfig(tc.in)
+			if tc.want == nil {
+				if got.AllowAllDomains != tc.in.AllowAllDomains {
+					t.Fatalf("AllowAllDomains changed: got=%v want=%v", got.AllowAllDomains, tc.in.AllowAllDomains)
+				}
+				return
+			}
+			if got.AllowAllDomains != tc.in.AllowAllDomains {
+				t.Fatalf("AllowAllDomains changed: got=%v want=%v", got.AllowAllDomains, tc.in.AllowAllDomains)
+			}
+			if !reflect.DeepEqual(got.BlockedDomains, tc.want) {
+				t.Fatalf("BlockedDomains = %#v, want %#v", got.BlockedDomains, tc.want)
+			}
+		})
 	}
 }
 

@@ -96,11 +96,35 @@ func runNavigate(ctx context.Context, s *Session, url, waitUntil string) (string
 	navCtx, navCancel := context.WithTimeout(ctx, navigationLoadTimeout)
 	defer navCancel()
 	page := s.withContext(navCtx)
+	recoveryNote := ""
 	if err := page.Navigate(url); err != nil {
+		if isBlockedByClientNavigateError(err) {
+			if relaxErr := s.relaxDomainBlocking(); relaxErr == nil {
+				recoveryNote = fmt.Sprintf(
+					"browser_navigate recovered by relaxing the default domain blocklist after ERR_BLOCKED_BY_CLIENT; domain_relaxations=%d",
+					s.interceptStats.DomainRelaxations.Load(),
+				)
+				page = s.withContext(navCtx)
+				if retryErr := page.Navigate(url); retryErr == nil {
+					return finishNavigate(ctx, s, url, waitUntil, recoveryNote)
+				} else {
+					err = retryErr
+				}
+			} else if err == nil {
+				err = relaxErr
+			}
+		}
 		if navCtx.Err() != nil {
 			return "", browserNavigateTimeoutError(url, navigationLoadTimeout, err)
 		}
 		return "", fmt.Errorf("navigate: %w", err)
+	}
+	return finishNavigate(ctx, s, url, waitUntil, recoveryNote)
+}
+
+func finishNavigate(ctx context.Context, s *Session, url, waitUntil, recoveryNote string) (string, error) {
+	if s.page == nil {
+		return "", ErrNoPage
 	}
 	if err := waitForLoad(ctx, s, waitUntil, navigationLoadTimeout); err != nil {
 		// Soft failure: the page may still be usable even if the wait
@@ -112,13 +136,34 @@ func runNavigate(ctx context.Context, s *Session, url, waitUntil string) (string
 		}
 		formatted, blockErr := formatSnapshotResultWithRequested(snap, url)
 		formatted = fmt.Sprintf("(navigation wait timed out: %v)\n\n%s", err, formatted)
+		formatted = prependBrowserRecoveryNote(formatted, recoveryNote)
 		return formatted, blockErr
 	}
 	snap, err := s.TakeSnapshot(ctx)
 	if err != nil {
 		return "", fmt.Errorf("snapshot: %w", err)
 	}
-	return formatSnapshotResultWithRequested(snap, url)
+	formatted, err := formatSnapshotResultWithRequested(snap, url)
+	if err != nil {
+		return formatted, err
+	}
+	return prependBrowserRecoveryNote(formatted, recoveryNote), nil
+}
+
+func prependBrowserRecoveryNote(out, note string) string {
+	note = strings.TrimSpace(note)
+	if note == "" {
+		return out
+	}
+	return fmt.Sprintf("(%s)\n\n%s", note, out)
+}
+
+func isBlockedByClientNavigateError(err error) bool {
+	if err == nil {
+		return false
+	}
+	msg := strings.ToLower(err.Error())
+	return strings.Contains(msg, "err_blocked_by_client") || strings.Contains(msg, "blocked by client")
 }
 
 func browserNavigateTimeoutError(url string, timeout time.Duration, err error) error {

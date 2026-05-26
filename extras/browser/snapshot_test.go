@@ -4,6 +4,9 @@ import (
 	"fmt"
 	"strings"
 	"testing"
+	"unicode/utf8"
+
+	"github.com/affinefoundation/affent/internal/metrictext"
 )
 
 // Snapshot serialization unit tests. These don't need a real browser —
@@ -113,6 +116,68 @@ func TestFormatSnapshotResultAllowsNormalPages(t *testing.T) {
 	} {
 		if !strings.Contains(out, want) {
 			t.Fatalf("normal snapshot missing source access marker %q:\n%s", want, out)
+		}
+	}
+}
+
+func TestFormatSnapshotResultMarksNotFoundPagesAsDiscoveryOnly(t *testing.T) {
+	out, err := formatSnapshotResult(&Snapshot{
+		SnapshotID: 8,
+		URL:        "https://example.com/missing",
+		Title:      "404 - Page Not Found",
+		TextBlocks: []TextBlock{
+			{Type: "h1", Text: "Page not found"},
+			{Type: "p", Text: "Use the navigation links to reach /docs or /subnets."},
+		},
+		Interactive: []InteractiveElement{
+			{Ref: 1, Role: "link", Name: "Docs", Href: "/docs"},
+		},
+	})
+	if err != nil {
+		t.Fatalf("404 pages should still return a snapshot body: %v", err)
+	}
+	for _, want := range []string{
+		"SourceAccess: browser_rendered_url=https://example.com/missing",
+		"page_text_below=not_found_page_discovery_only",
+		"links_in_snapshot=discovered_unverified_until_opened",
+		"Next: treat this page as a not-found page",
+		"do not cite the page body as verified evidence",
+		"Page not found",
+		"[1] link \"Docs\" → /docs",
+	} {
+		if !strings.Contains(out, want) {
+			t.Fatalf("404 snapshot missing %q:\n%s", want, out)
+		}
+	}
+	if strings.Contains(out, "page_text_below=verified_page_evidence") {
+		t.Fatalf("404 page must not be marked as verified evidence:\n%s", out)
+	}
+}
+
+func TestFormatSnapshotResultWarnsOnMultiplePriceLikeValues(t *testing.T) {
+	out, err := formatSnapshotResult(&Snapshot{
+		SnapshotID: 11,
+		URL:        "https://tao.app/subnets/120",
+		Title:      "Affine SN120 | TAO.app",
+		Interactive: []InteractiveElement{
+			{Ref: 1, Role: "button", Name: "TAO Price $277.32"},
+		},
+		TextBlocks: []TextBlock{
+			{Type: "p", Text: "TAO Price $277.32 MC $3.03B FDV $5.82B"},
+			{Type: "p", Text: "Price 0.06342 T Market Cap 201.04K T FDV 1.32M T"},
+		},
+	})
+	if err != nil {
+		t.Fatalf("normal page should not be blocked: %v", err)
+	}
+	for _, want := range []string{
+		metrictext.AmbiguityNote,
+		"TAO Price $277.32",
+		"Price 0.06342 T",
+		"SourceAccess: browser_rendered_url=https://tao.app/subnets/120",
+	} {
+		if !strings.Contains(out, want) {
+			t.Fatalf("snapshot missing %q:\n%s", want, out)
 		}
 	}
 }
@@ -236,6 +301,16 @@ func TestFormatInteractive_TruncatesLongHrefAndValue(t *testing.T) {
 	}
 	if len(got) > maxFormattedInteractiveURL+maxFormattedValue+80 {
 		t.Fatalf("formatted interactive line too large: len=%d line=%q", len(got), got)
+	}
+}
+
+func TestTruncateSnapshotField_SmallLimitKeepsUTF8(t *testing.T) {
+	got := truncateSnapshotField("hello世界", 7)
+	if !utf8.ValidString(got) {
+		t.Fatalf("truncateSnapshotField returned invalid UTF-8: %q", got)
+	}
+	if len(got) > 7 {
+		t.Fatalf("truncateSnapshotField exceeded limit: len=%d value=%q", len(got), got)
 	}
 }
 

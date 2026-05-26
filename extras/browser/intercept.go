@@ -242,11 +242,12 @@ func isReplaySafeHeader(name string) bool {
 // InterceptStats tracks per-session counters. Exposed for tests and
 // for callers that want to log throughput / hit-rate metrics.
 type InterceptStats struct {
-	BlockedByType   atomic.Int64
-	BlockedByDomain atomic.Int64
-	CacheHit        atomic.Int64
-	CacheMiss       atomic.Int64
-	NetworkFetch    atomic.Int64
+	BlockedByType     atomic.Int64
+	BlockedByDomain   atomic.Int64
+	DomainRelaxations atomic.Int64
+	CacheHit          atomic.Int64
+	CacheMiss         atomic.Int64
+	NetworkFetch      atomic.Int64
 	// CacheWrite counts successful out-of-band cache populations from
 	// the observer (separate from CacheMiss, which only records that
 	// the intercept stage didn't find a fresh entry). Useful for

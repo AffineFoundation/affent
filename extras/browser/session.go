@@ -108,6 +108,7 @@ type Session struct {
 	browser  *rod.Browser
 	page     *rod.Page
 
+	mu sync.Mutex
 	// refsMu guards snapshotID. We don't keep a Go-side ref→element
 	// map because the JS side stamps data-affent-ref="N" on each
 	// element; Go-side lookups go through page.Element(`[data-affent-
@@ -128,9 +129,10 @@ type Session struct {
 
 // InterceptStats returns a snapshot of the session's request
 // interceptor counters. Useful for benchmark logs / debug.
-func (s *Session) InterceptStats() (blockedType, blockedDomain, cacheHit, cacheMiss, networkFetch int64) {
+func (s *Session) InterceptStats() (blockedType, blockedDomain, domainRelaxations, cacheHit, cacheMiss, networkFetch int64) {
 	return s.interceptStats.BlockedByType.Load(),
 		s.interceptStats.BlockedByDomain.Load(),
+		s.interceptStats.DomainRelaxations.Load(),
 		s.interceptStats.CacheHit.Load(),
 		s.interceptStats.CacheMiss.Load(),
 		s.interceptStats.NetworkFetch.Load()
@@ -293,6 +295,46 @@ func NewSession(cfg SessionConfig) (*Session, error) {
 	startCacheObserver(page, cfg.Intercept.Cache, &s.interceptStats)
 
 	return s, nil
+}
+
+// relaxDomainBlocking widens the current session's interceptor just
+// enough to stop blocking tracker domains. It keeps resource-type and
+// private-network guards intact. This is a recovery path for pages
+// that are otherwise healthy but depend on one of the default blocked
+// domains to boot their main document or JS bundle.
+func (s *Session) relaxDomainBlocking() error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.cfg.Intercept.AllowAllDomains {
+		return nil
+	}
+	original := s.cfg.Intercept
+	if s.hijackRouter != nil {
+		if err := s.hijackRouter.Stop(); err != nil {
+			return err
+		}
+		s.hijackRouter = nil
+	}
+	relaxed := relaxedDomainInterceptConfig(original)
+	router, err := installInterceptor(s.page, relaxed, &s.interceptStats)
+	if err != nil {
+		if restore, restoreErr := installInterceptor(s.page, original, &s.interceptStats); restoreErr == nil {
+			s.hijackRouter = restore
+		}
+		return err
+	}
+	s.interceptStats.DomainRelaxations.Add(1)
+	s.cfg.Intercept = relaxed
+	s.hijackRouter = router
+	return nil
+}
+
+func relaxedDomainInterceptConfig(cfg InterceptConfig) InterceptConfig {
+	relaxed := cfg
+	if relaxed.BlockedDomains == nil {
+		relaxed.BlockedDomains = []string{}
+	}
+	return relaxed
 }
 
 func chromiumBinaryPath(override string) string {

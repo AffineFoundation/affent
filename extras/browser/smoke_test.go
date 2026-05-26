@@ -187,6 +187,38 @@ func TestSession_FindToolSearchesRenderedPage(t *testing.T) {
 	}
 }
 
+func TestSession_RelaxDomainBlockingKeepsBrowserUsable(t *testing.T) {
+	bin := findChromium(t)
+	sess, err := NewSession(SessionConfig{
+		BinaryPath: bin,
+		NoSandbox:  true,
+		Intercept: InterceptConfig{
+			BlockedDomains: []string{"example.com"},
+		},
+	})
+	if err != nil {
+		t.Fatalf("NewSession: %v", err)
+	}
+	defer sess.Close()
+
+	if err := sess.relaxDomainBlocking(); err != nil {
+		t.Fatalf("relaxDomainBlocking: %v", err)
+	}
+	if !sess.cfg.Intercept.AllowAllDomains {
+		t.Fatal("relaxDomainBlocking should flip AllowAllDomains on the live session")
+	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+	out, err := runNavigate(ctx, sess, dataURL(`<html><body><h1>relaxed</h1></body></html>`), "")
+	if err != nil {
+		t.Fatalf("runNavigate after relax: %v", err)
+	}
+	if !strings.Contains(out, "relaxed") {
+		t.Fatalf("navigate after relax should still work, got:\n%s", out)
+	}
+}
+
 func TestSession_TypeAndSubmitFlow(t *testing.T) {
 	bin := findChromium(t)
 	sess, err := NewSession(SessionConfig{

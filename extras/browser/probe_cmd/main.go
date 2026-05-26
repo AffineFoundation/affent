@@ -15,6 +15,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/affinefoundation/affent/internal/textutil"
 	"github.com/go-rod/rod"
 	"github.com/go-rod/rod/lib/launcher"
 	"github.com/go-rod/rod/lib/launcher/flags"
@@ -204,10 +205,7 @@ func report(p *rod.Page, label string) {
 }
 
 func truncate(s string, n int) string {
-	if len(s) <= n {
-		return s
-	}
-	return s[:n] + "…"
+	return textutil.Preview(s, n, "…")
 }
 
 func fail(msg string, args ...interface{}) {

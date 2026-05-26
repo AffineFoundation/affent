@@ -8,6 +8,7 @@ import (
 	"time"
 
 	agent "github.com/affinefoundation/affent/internal/agent"
+	"github.com/affinefoundation/affent/internal/textutil"
 )
 
 const (
@@ -358,7 +359,11 @@ func formatBrowserFindResult(result *BrowserFindResult, query string, limit int)
 			reason,
 		)
 	}
-	out = browserSourceAccessLine(result.URL, result.SnapshotID, "") + out
+	out = browserSourceAccessLine(result.URL, result.SnapshotID, "", snapshotNotFoundReason(&Snapshot{
+		URL:        result.URL,
+		Title:      result.Title,
+		TextBlocks: result.TextBlocks,
+	})) + out
 	return out, nil
 }
 
@@ -476,7 +481,7 @@ func browserFindQueryTerms(query string) []string {
 }
 
 func snippetAround(text, query string, limit int) string {
-	text = strings.Join(strings.Fields(strings.TrimSpace(text)), " ")
+	text = textutil.CompactWhitespace(text)
 	if limit <= 0 || len(text) <= limit {
 		return text
 	}
