@@ -42,7 +42,8 @@ Shared metadata fields:
   thresholds are still written as ordinary gate fields, and explicitly supplied
   gate flags override profile defaults.
 - `min_pass_rate`, `min_completion_rate`, `min_memory_update_rate`,
-  `min_runtime_surface_rate`, `min_source_network_rate`,
+  `min_runtime_surface_rate`, `min_trace_event_rate`,
+  `min_source_network_rate`,
   `min_source_access_verified_rate`,
   `min_expectation_capability_pass_rate`,
   `min_each_expectation_capability_pass_rate`,
@@ -297,7 +298,7 @@ Summary records aggregate all scenario records from the same process:
 
 - `scenarios`, `passed`, `failed`, `duration_ms`, `avg_duration_ms`.
 - Normalized comparison metrics: `pass_rate`, `completion_rate`,
-  `memory_update_rate`, `runtime_surface_rate`,
+  `memory_update_rate`, `runtime_surface_rate`, `trace_event_rate`,
   `tool_error_rate`, `forced_no_tools_rate`, and
   `loop_guard_intervention_rate` when tool calls were observed,
   `focused_task_error_rate` when focused-task calls were observed,
@@ -400,8 +401,10 @@ Summary records aggregate all scenario records from the same process:
   `quality_gate_failures` lists failed gate comparisons when any thresholds
   were violated. `debug_brief_tag_rate[tag]` failures use total scenarios as
   the denominator.
-- Runtime surface totals: `runtime_surface_rate`, `runtime_surface_scenarios`,
-  `runtime_surface_tools`, and `runtime_surface_capabilities`. Counts are
+- Runtime surface and trace coverage totals: `runtime_surface_rate`,
+  `runtime_surface_scenarios`, `runtime_surface_tools`,
+  `runtime_surface_capabilities`, `trace_event_rate`, and
+  `trace_event_scenarios`. Counts are
   per-scenario surface presence, not model call counts; use them to group pass
   rates and failures by the actual tool/capability surface exposed during the
   run. Partial workspace surfaces are counted as `workspace_partial`.

@@ -140,6 +140,7 @@ func run(args []string) int {
 			MinCompletionRate:                    fs.Float64("min-completion-rate", -1, "optional quality gate: minimum completed-turn rate, 0..1"),
 			MinMemoryUpdateRate:                  fs.Float64("min-memory-update-rate", -1, "optional quality gate: minimum confirmed memory updates per scenario, 0..1"),
 			MinRuntimeSurfaceRate:                fs.Float64("min-runtime-surface-rate", -1, "optional quality gate: minimum scenario rate with recorded runtime surface, 0..1"),
+			MinTraceEventRate:                    fs.Float64("min-trace-event-rate", -1, "optional quality gate: minimum scenario rate with parsed trace events, 0..1"),
 			MinSourceNetworkRate:                 fs.Float64("min-source-network-rate", -1, "optional quality gate: minimum network/API source access rate, 0..1"),
 			MinSourceAccessVerifiedRate:          fs.Float64("min-source-access-verified-rate", -1, "optional quality gate: minimum verified SourceAccess rate, 0..1"),
 			MinExpectationCapabilityPassRate:     fs.Float64("min-expectation-capability-pass-rate", -1, "optional quality gate: minimum pass rate across declared expectation capability instances, 0..1"),
@@ -336,6 +337,7 @@ type qualityGateConfig struct {
 	MinCompletionRate                    *float64
 	MinMemoryUpdateRate                  *float64
 	MinRuntimeSurfaceRate                *float64
+	MinTraceEventRate                    *float64
 	MinSourceNetworkRate                 *float64
 	MinSourceAccessVerifiedRate          *float64
 	MinExpectationCapabilityPassRate     *float64
@@ -387,6 +389,7 @@ func qualityGateProfileDefinitions() []qualityGateProfileDefinition {
 				MinSessionSearchContextHitRate:       float64Ptr(0.75),
 				MinSessionSearchMatchedTermsPerCall:  float64Ptr(1.0),
 				MinRuntimeSurfaceRate:                float64Ptr(0.90),
+				MinTraceEventRate:                    float64Ptr(0.90),
 				MaxFocusedTaskErrorRate:              float64Ptr(0.10),
 				MaxForcedNoToolsRate:                 float64Ptr(0.10),
 				MaxLoopGuardInterventionRate:         float64Ptr(0.20),
@@ -415,6 +418,7 @@ func qualityGateProfileDefinitions() []qualityGateProfileDefinition {
 				MinExpectationCapabilityPassRate:     float64Ptr(0.80),
 				MinEachExpectationCapabilityPassRate: float64Ptr(0.50),
 				MinRuntimeSurfaceRate:                float64Ptr(0.90),
+				MinTraceEventRate:                    float64Ptr(0.90),
 				MinSourceNetworkRate:                 float64Ptr(0.50),
 				MinSourceAccessVerifiedRate:          float64Ptr(0.90),
 				MaxForcedNoToolsRate:                 float64Ptr(0.10),
@@ -463,6 +467,7 @@ func qualityGateConfigLines(g qualityGateConfig) []string {
 	add("min-completion-rate", g.MinCompletionRate)
 	add("min-memory-update-rate", g.MinMemoryUpdateRate)
 	add("min-runtime-surface-rate", g.MinRuntimeSurfaceRate)
+	add("min-trace-event-rate", g.MinTraceEventRate)
 	add("min-source-network-rate", g.MinSourceNetworkRate)
 	add("min-source-access-verified-rate", g.MinSourceAccessVerifiedRate)
 	add("min-expectation-capability-pass-rate", g.MinExpectationCapabilityPassRate)
@@ -523,6 +528,7 @@ func applyQualityGateProfile(g *qualityGateConfig, profile string, flagSet func(
 	apply("min-completion-rate", &g.MinCompletionRate, profileConfig.MinCompletionRate)
 	apply("min-memory-update-rate", &g.MinMemoryUpdateRate, profileConfig.MinMemoryUpdateRate)
 	apply("min-runtime-surface-rate", &g.MinRuntimeSurfaceRate, profileConfig.MinRuntimeSurfaceRate)
+	apply("min-trace-event-rate", &g.MinTraceEventRate, profileConfig.MinTraceEventRate)
 	apply("min-source-network-rate", &g.MinSourceNetworkRate, profileConfig.MinSourceNetworkRate)
 	apply("min-source-access-verified-rate", &g.MinSourceAccessVerifiedRate, profileConfig.MinSourceAccessVerifiedRate)
 	apply("min-expectation-capability-pass-rate", &g.MinExpectationCapabilityPassRate, profileConfig.MinExpectationCapabilityPassRate)
@@ -663,6 +669,7 @@ type batchSummary struct {
 	VerifierOutputTruncated              int
 	VerifierOutputOmittedBytes           int
 	TraceSchemaVersions                  map[int]int
+	TraceEventScenarios                  int
 	TraceEvents                          int
 	TraceEventTypes                      map[string]int
 	InputTokens                          int
@@ -845,6 +852,9 @@ func (s *batchSummary) add(res agenteval.BatchResult) {
 			s.TraceSchemaVersions = map[int]int{}
 		}
 		s.TraceSchemaVersions[res.TraceSchemaVersion]++
+	}
+	if res.TraceEvents > 0 {
+		s.TraceEventScenarios++
 	}
 	s.TraceEvents += res.TraceEvents
 	for k, v := range res.TraceEventTypes {
@@ -1217,6 +1227,7 @@ func printBatchSummary(w io.Writer, s batchSummary) {
 		if len(s.TraceEventTypes) > 0 {
 			fmt.Fprintf(w, " trace_event_types=%s", formatStringIntCounts(s.TraceEventTypes))
 		}
+		fmt.Fprintf(w, " trace_event_scenarios=%d,rate=%s", s.TraceEventScenarios, formatPercent(batchRatio(s.TraceEventScenarios, s.Total)))
 	}
 	if hasBatchToolContextTruncation(s) {
 		fmt.Fprintf(w, " ctx_trunc=%d,omitted=%d", s.ToolContextTruncated, s.ToolContextOmittedBytes)
@@ -1432,6 +1443,7 @@ func validateQualityGateConfig(g qualityGateConfig) error {
 		{"--min-completion-rate", g.MinCompletionRate, true},
 		{"--min-memory-update-rate", g.MinMemoryUpdateRate, true},
 		{"--min-runtime-surface-rate", g.MinRuntimeSurfaceRate, true},
+		{"--min-trace-event-rate", g.MinTraceEventRate, true},
 		{"--min-source-network-rate", g.MinSourceNetworkRate, true},
 		{"--min-source-access-verified-rate", g.MinSourceAccessVerifiedRate, true},
 		{"--min-expectation-capability-pass-rate", g.MinExpectationCapabilityPassRate, true},
@@ -1526,6 +1538,7 @@ func qualityGateFailures(s batchSummary, g qualityGateConfig) []string {
 	checkMin("completion_rate", batchRatio(s.EndCompleted, s.Total), g.MinCompletionRate, s.Total > 0)
 	checkMin("memory_update_rate", batchRatio(s.MemoryUpdates, s.Total), g.MinMemoryUpdateRate, s.Total > 0)
 	checkMin("runtime_surface_rate", batchRatio(s.RuntimeSurfaceScenarios, s.Total), g.MinRuntimeSurfaceRate, s.Total > 0)
+	checkMin("trace_event_rate", batchRatio(s.TraceEventScenarios, s.Total), g.MinTraceEventRate, s.Total > 0)
 	checkMin("source_network_rate", batchRatio(s.SourceAccessNetwork, s.SourceAccessResults), g.MinSourceNetworkRate, s.SourceAccessResults > 0)
 	checkMin("source_access_verified_rate", batchRatio(s.SourceAccessVerified, s.SourceAccessResults), g.MinSourceAccessVerifiedRate, s.SourceAccessResults > 0)
 	expectationCapabilityPassed, expectationCapabilityTotal := expectationCapabilityPassTotals(s)
@@ -2051,6 +2064,7 @@ type evalJSONLMetadata struct {
 	MinCompletionRate                    *float64           `json:"min_completion_rate,omitempty"`
 	MinMemoryUpdateRate                  *float64           `json:"min_memory_update_rate,omitempty"`
 	MinRuntimeSurfaceRate                *float64           `json:"min_runtime_surface_rate,omitempty"`
+	MinTraceEventRate                    *float64           `json:"min_trace_event_rate,omitempty"`
 	MinSourceNetworkRate                 *float64           `json:"min_source_network_rate,omitempty"`
 	MinSourceAccessVerifiedRate          *float64           `json:"min_source_access_verified_rate,omitempty"`
 	MinExpectationCapabilityPassRate     *float64           `json:"min_expectation_capability_pass_rate,omitempty"`
@@ -2115,6 +2129,7 @@ func evalJSONLMetadataFromConfig(suite, model, providerLabel, executor, temperat
 		MinCompletionRate:                    enabledQualityGateValue(gates.MinCompletionRate),
 		MinMemoryUpdateRate:                  enabledQualityGateValue(gates.MinMemoryUpdateRate),
 		MinRuntimeSurfaceRate:                enabledQualityGateValue(gates.MinRuntimeSurfaceRate),
+		MinTraceEventRate:                    enabledQualityGateValue(gates.MinTraceEventRate),
 		MinSourceNetworkRate:                 enabledQualityGateValue(gates.MinSourceNetworkRate),
 		MinSourceAccessVerifiedRate:          enabledQualityGateValue(gates.MinSourceAccessVerifiedRate),
 		MinExpectationCapabilityPassRate:     enabledQualityGateValue(gates.MinExpectationCapabilityPassRate),
@@ -2318,6 +2333,7 @@ type batchSummaryRecord struct {
 	SourceDynamicPartialRate             *float64                                         `json:"source_dynamic_partial_rate,omitempty"`
 	SessionSearchContextHitRate          *float64                                         `json:"session_search_context_hit_rate,omitempty"`
 	SessionSearchMatchedTermsPerCall     *float64                                         `json:"session_search_matched_terms_per_call,omitempty"`
+	TraceEventRate                       float64                                          `json:"trace_event_rate"`
 	AvgRuntimeErrors                     float64                                          `json:"avg_runtime_errors"`
 	AvgContextCompactions                float64                                          `json:"avg_context_compactions"`
 	AvgReactiveCompactions               float64                                          `json:"avg_reactive_context_compactions"`
@@ -2393,6 +2409,7 @@ type batchSummaryRecord struct {
 	VerifierOutputTruncated              int                                              `json:"verifier_output_truncated"`
 	VerifierOutputOmittedBytes           int                                              `json:"verifier_output_omitted_bytes"`
 	TraceSchemaVersions                  map[int]int                                      `json:"trace_schema_versions,omitempty"`
+	TraceEventScenarios                  int                                              `json:"trace_event_scenarios,omitempty"`
 	TraceEvents                          int                                              `json:"trace_events,omitempty"`
 	TraceEventTypes                      map[string]int                                   `json:"trace_event_types,omitempty"`
 	InputTokens                          int                                              `json:"input_tokens"`
@@ -2676,6 +2693,7 @@ func printBatchSummaryJSONL(w io.Writer, meta evalJSONLMetadata, s batchSummary,
 		SourceDynamicPartialRate:             batchOptionalRatio(s.SourceAccessDynamicPartial, s.SourceAccessResults),
 		SessionSearchContextHitRate:          batchOptionalRatio(s.SessionSearchContextHits, s.SessionSearchResults),
 		SessionSearchMatchedTermsPerCall:     batchOptionalRatio(s.SessionSearchMatchedTerms, s.SessionSearchCalls),
+		TraceEventRate:                       batchRatio(s.TraceEventScenarios, s.Total),
 		AvgRuntimeErrors:                     batchAverage(s.RuntimeErrors, s.Total),
 		AvgContextCompactions:                batchAverage(s.ContextCompactions, s.Total),
 		AvgReactiveCompactions:               batchAverage(s.ContextCompactionsReactive, s.Total),
@@ -2751,6 +2769,7 @@ func printBatchSummaryJSONL(w io.Writer, meta evalJSONLMetadata, s batchSummary,
 		VerifierOutputTruncated:              s.VerifierOutputTruncated,
 		VerifierOutputOmittedBytes:           s.VerifierOutputOmittedBytes,
 		TraceSchemaVersions:                  cloneTraceSchemaVersions(s.TraceSchemaVersions),
+		TraceEventScenarios:                  s.TraceEventScenarios,
 		TraceEvents:                          s.TraceEvents,
 		TraceEventTypes:                      cloneStringIntMap(s.TraceEventTypes),
 		InputTokens:                          s.InputTokens,
@@ -2812,6 +2831,7 @@ func hasQualityGateThresholds(meta evalJSONLMetadata) bool {
 		meta.MinCompletionRate != nil ||
 		meta.MinMemoryUpdateRate != nil ||
 		meta.MinRuntimeSurfaceRate != nil ||
+		meta.MinTraceEventRate != nil ||
 		meta.MinSourceNetworkRate != nil ||
 		meta.MinSourceAccessVerifiedRate != nil ||
 		meta.MinExpectationCapabilityPassRate != nil ||
