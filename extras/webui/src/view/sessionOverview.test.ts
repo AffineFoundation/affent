@@ -342,6 +342,34 @@ describe("buildSessionOverview", () => {
     ]));
   });
 
+  it("surfaces loop guard interventions in the session overview", () => {
+    const session = reduceRawEvents([
+      { id: 1, type: "turn.start", data: { turn_id: "t1" } },
+      { id: 2, type: "user.message", data: { turn_id: "t1", text: "recover repeated tool calls" } },
+      {
+        id: 3,
+        type: "turn.end",
+        data: {
+          turn_id: "t1",
+          reason: "max_turns",
+          tool_stats: {
+            loop_guard_interventions: 2,
+            forced_no_tools: 1,
+          },
+        },
+      },
+    ]);
+    const overview = buildSessionOverview({
+      session,
+      workflow: deriveWorkflowStatus(session),
+      hasSelectedSession: true,
+    });
+
+    expect(overview.metrics).toEqual(expect.arrayContaining([
+      { label: "Guard", value: "2 interventions · 1 no-tools", tone: "warning" },
+    ]));
+  });
+
   it("surfaces the persisted plan step summary in the session overview", () => {
     const session = reduceRawEvents(completedTurn);
     const overview = buildSessionOverview({

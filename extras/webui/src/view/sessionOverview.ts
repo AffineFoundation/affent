@@ -156,6 +156,8 @@ function buildMetrics(
   if (artifactMetric) metrics.push(artifactMetric);
   const loopDecisionMetric = buildLoopDecisionMetric(session);
   if (loopDecisionMetric) metrics.push(loopDecisionMetric);
+  const guardMetric = buildLoopGuardMetric(session);
+  if (guardMetric) metrics.push(guardMetric);
   const compactMetric = buildContextCompactionMetric(session);
   if (compactMetric) metrics.push(compactMetric);
   const memoryMetric = buildMemoryUpdateMetric(session);
@@ -218,6 +220,18 @@ function buildMemoryUpdateMetric(session: SessionState): SessionOverviewMetric |
     parts.push(`${latest.location}: ${summarizePreview(latest.preview, 48)}`);
   }
   return { label: "Memory", value: parts.join(" · "), tone: "success" };
+}
+
+function buildLoopGuardMetric(session: SessionState): SessionOverviewMetric | undefined {
+  const stats = session.turns.reduce((acc, turn) => {
+    acc.interventions += turn.toolStats?.loop_guard_interventions ?? 0;
+    acc.forcedNoTools += turn.toolStats?.forced_no_tools ?? 0;
+    return acc;
+  }, { interventions: 0, forcedNoTools: 0 });
+  if (stats.interventions <= 0) return undefined;
+  const parts = [`${stats.interventions} ${stats.interventions === 1 ? "intervention" : "interventions"}`];
+  if (stats.forcedNoTools > 0) parts.push(`${stats.forcedNoTools} no-tools`);
+  return { label: "Guard", value: parts.join(" · "), tone: "warning" };
 }
 
 function buildSourceAccessMetric(session: SessionState): SessionOverviewMetric | undefined {
