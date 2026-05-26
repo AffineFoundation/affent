@@ -1,12 +1,14 @@
 package browser
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
 	"net/http"
 	"net/url"
 	"sort"
+	"strconv"
 	"strings"
 	"sync"
 
@@ -22,6 +24,7 @@ const (
 	defaultNetworkReadBytes     = 16 * 1024
 	maxNetworkReadBytes         = 64 * 1024
 	maxNetworkQueryBytes        = 512
+	maxNetworkJSONPathBytes     = 512
 	defaultNetworkMaxResults    = 8
 	maxNetworkMaxResults        = 20
 )
@@ -291,6 +294,11 @@ func NetworkReadTool(s *Session) *agent.Tool {
                 "maxLength": 4096,
                 "description": "Network response ref from browser_network, such as n3, or the exact captured response URL."
             },
+            "json_path": {
+                "type": "string",
+                "maxLength": %d,
+                "description": "Optional JSON subtree path to return, using a bounded subset such as $.data.items[0].price, data.items[0], or [0].metrics. Use this to avoid dumping large API responses."
+            },
             "max_bytes": {
                 "type": "integer",
                 "minimum": 1,
@@ -299,22 +307,27 @@ func NetworkReadTool(s *Session) *agent.Tool {
                 "description": "Maximum response body bytes to return."
             }
         }
-    }`, maxNetworkReadBytes, defaultNetworkReadBytes))
+    }`, maxNetworkJSONPathBytes, maxNetworkReadBytes, defaultNetworkReadBytes))
 	return &agent.Tool{
 		Name:        "browser_network_read",
-		Description: "Read a captured same-site browser XHR/fetch response by ref or exact URL. Returns bounded JSON/text evidence with the source URL. Use this instead of guessing values from rendered labels when a dynamic dashboard hides metric text.",
+		Description: "Read a captured same-site browser XHR/fetch response by ref or exact URL. Returns bounded JSON/text evidence with the source URL; pass json_path to extract one JSON subtree from large responses. Use this instead of guessing values from rendered labels when a dynamic dashboard hides metric text.",
 		Schema:      schema,
 		Execute: func(ctx context.Context, raw json.RawMessage) (string, error) {
 			var args struct {
 				Ref      string `json:"ref"`
+				JSONPath string `json:"json_path"`
 				MaxBytes int    `json:"max_bytes"`
 			}
-			if err := decodeBrowserToolArgs(raw, &args, "retry browser_network_read with only documented fields: ref and max_bytes"); err != nil {
+			if err := decodeBrowserToolArgs(raw, &args, "retry browser_network_read with only documented fields: ref, json_path, and max_bytes"); err != nil {
 				return "", err
 			}
 			ref := strings.TrimSpace(args.Ref)
 			if ref == "" {
 				return "", browserInvalidArgs("ref is required", "retry with a ref returned by browser_network, for example n1")
+			}
+			jsonPath := strings.TrimSpace(args.JSONPath)
+			if len(jsonPath) > maxNetworkJSONPathBytes {
+				return "", browserInvalidArgs(fmt.Sprintf("json_path is %d bytes; browser_network_read supports paths up to %d bytes", len(jsonPath), maxNetworkJSONPathBytes), "retry with a shorter path such as data.items[0].price")
 			}
 			maxBytes := args.MaxBytes
 			if maxBytes <= 0 {
@@ -327,7 +340,7 @@ func NetworkReadTool(s *Session) *agent.Tool {
 			if !ok {
 				return "", fmt.Errorf("network response %q was not found in the current browser session\nFailure: kind=not_found\nNext: call browser_network with a distinctive query from the current page or navigate/wait until the dashboard has loaded its XHR/fetch responses", ref)
 			}
-			return formatNetworkReadResult(entry, maxBytes), nil
+			return formatNetworkReadResult(entry, maxBytes, jsonPath)
 		},
 	}
 }
@@ -355,11 +368,19 @@ func formatNetworkSearchResults(query string, entries []NetworkEvidenceEntry) st
 	return b.String()
 }
 
-func formatNetworkReadResult(entry NetworkEvidenceEntry, maxBytes int) string {
+func formatNetworkReadResult(entry NetworkEvidenceEntry, maxBytes int, jsonPath string) (string, error) {
 	if maxBytes <= 0 {
 		maxBytes = defaultNetworkReadBytes
 	}
 	body := entry.Body
+	if jsonPath != "" {
+		selected, err := selectNetworkJSONPath(entry.Body, jsonPath)
+		if err != nil {
+			return "", err
+		}
+		body = selected
+	}
+	bodyBytes := len(body)
 	omitted := 0
 	if len(body) > maxBytes {
 		omitted = len(body) - maxBytes
@@ -367,7 +388,10 @@ func formatNetworkReadResult(entry NetworkEvidenceEntry, maxBytes int) string {
 	}
 	var b strings.Builder
 	fmt.Fprintf(&b, "SourceAccess: browser_network_url=%s; ref=%s; status=%d; content_type=%s; source_method=network_xhr_fetch\n", entry.URL, entry.Ref, entry.StatusCode, entry.ContentType)
-	fmt.Fprintf(&b, "BODY_BYTES: %d", len(entry.Body))
+	if jsonPath != "" {
+		fmt.Fprintf(&b, "JSON_PATH: %s\n", jsonPath)
+	}
+	fmt.Fprintf(&b, "BODY_BYTES: %d", bodyBytes)
 	if omitted > 0 {
 		fmt.Fprintf(&b, " (showing %d, omitted %d)", len(body), omitted)
 	}
@@ -376,7 +400,172 @@ func formatNetworkReadResult(entry NetworkEvidenceEntry, maxBytes int) string {
 	if omitted > 0 {
 		fmt.Fprintf(&b, "\n[... %d bytes omitted; retry with a narrower query or max_bytes up to %d ...]\n", omitted, maxNetworkReadBytes)
 	}
-	return b.String()
+	return b.String(), nil
+}
+
+type networkJSONPathStep struct {
+	key   *string
+	index *int
+	raw   string
+}
+
+func selectNetworkJSONPath(body []byte, jsonPath string) ([]byte, error) {
+	steps, err := parseNetworkJSONPath(jsonPath)
+	if err != nil {
+		return nil, browserInvalidArgsWrap(err, "retry with a supported JSON path such as $.data.items[0].price, data.items[0], or [0].metrics")
+	}
+	dec := json.NewDecoder(bytes.NewReader(body))
+	dec.UseNumber()
+	var current any
+	if err := dec.Decode(&current); err != nil {
+		return nil, fmt.Errorf("network response is not valid JSON for json_path %q: %w\nFailure: kind=invalid_args\nNext: retry browser_network_read without json_path, or select a JSON response returned by browser_network", jsonPath, err)
+	}
+	for _, step := range steps {
+		if step.key != nil {
+			obj, ok := current.(map[string]any)
+			if !ok {
+				return nil, networkJSONPathNotFound(jsonPath, step.raw)
+			}
+			next, ok := obj[*step.key]
+			if !ok {
+				return nil, networkJSONPathNotFound(jsonPath, step.raw)
+			}
+			current = next
+			continue
+		}
+		if step.index != nil {
+			arr, ok := current.([]any)
+			if !ok || *step.index < 0 || *step.index >= len(arr) {
+				return nil, networkJSONPathNotFound(jsonPath, step.raw)
+			}
+			current = arr[*step.index]
+		}
+	}
+	selected, err := json.Marshal(current)
+	if err != nil {
+		return nil, fmt.Errorf("encode json_path %q result: %w\nFailure: kind=invalid_args\nNext: retry browser_network_read without json_path", jsonPath, err)
+	}
+	return selected, nil
+}
+
+func networkJSONPathNotFound(jsonPath, step string) error {
+	return fmt.Errorf("json_path %q was not found at %q in the captured network response\nFailure: kind=not_found\nNext: call browser_network with a distinctive key/value query, inspect the preview, retry with a valid JSON subtree path, or read without json_path", jsonPath, step)
+}
+
+func parseNetworkJSONPath(raw string) ([]networkJSONPathStep, error) {
+	p := strings.TrimSpace(raw)
+	if p == "" {
+		return nil, fmt.Errorf("json_path is blank")
+	}
+	if p == "$" {
+		return nil, nil
+	}
+	if strings.HasPrefix(p, "$.") {
+		p = p[2:]
+	} else if strings.HasPrefix(p, "$[") {
+		p = p[1:]
+	} else if strings.HasPrefix(p, "$") {
+		return nil, fmt.Errorf("json_path %q has unsupported syntax after $", raw)
+	}
+	var steps []networkJSONPathStep
+	for i := 0; i < len(p); {
+		switch p[i] {
+		case '.':
+			i++
+			field, next, err := parseNetworkJSONField(p, i)
+			if err != nil {
+				return nil, err
+			}
+			steps = append(steps, networkJSONPathKey(field))
+			i = next
+		case '[':
+			step, next, err := parseNetworkJSONBracket(p, i)
+			if err != nil {
+				return nil, err
+			}
+			steps = append(steps, step)
+			i = next
+		default:
+			field, next, err := parseNetworkJSONField(p, i)
+			if err != nil {
+				return nil, err
+			}
+			steps = append(steps, networkJSONPathKey(field))
+			i = next
+		}
+	}
+	return steps, nil
+}
+
+func parseNetworkJSONField(p string, start int) (string, int, error) {
+	if start >= len(p) {
+		return "", start, fmt.Errorf("json_path field is missing")
+	}
+	end := start
+	for end < len(p) && p[end] != '.' && p[end] != '[' {
+		end++
+	}
+	field := strings.TrimSpace(p[start:end])
+	if field == "" {
+		return "", start, fmt.Errorf("json_path field is missing")
+	}
+	if strings.ContainsAny(field, `]"'`) {
+		return "", start, fmt.Errorf("json_path field %q uses unsupported characters; use bracket-quoted keys for complex names", field)
+	}
+	return field, end, nil
+}
+
+func parseNetworkJSONBracket(p string, start int) (networkJSONPathStep, int, error) {
+	end := strings.IndexByte(p[start:], ']')
+	if end < 0 {
+		return networkJSONPathStep{}, start, fmt.Errorf("json_path bracket is missing closing ]")
+	}
+	end += start
+	body := strings.TrimSpace(p[start+1 : end])
+	if body == "" {
+		return networkJSONPathStep{}, start, fmt.Errorf("json_path bracket is empty")
+	}
+	if body[0] == '"' || body[0] == '\'' {
+		key, err := parseNetworkJSONQuotedKey(body)
+		if err != nil {
+			return networkJSONPathStep{}, start, err
+		}
+		step := networkJSONPathKey(key)
+		step.raw = p[start : end+1]
+		return step, end + 1, nil
+	}
+	index, err := strconv.Atoi(body)
+	if err != nil || index < 0 {
+		return networkJSONPathStep{}, start, fmt.Errorf("json_path bracket %q must be a non-negative array index or quoted key", body)
+	}
+	step := networkJSONPathIndex(index)
+	step.raw = p[start : end+1]
+	return step, end + 1, nil
+}
+
+func parseNetworkJSONQuotedKey(body string) (string, error) {
+	if len(body) < 2 || body[0] != body[len(body)-1] {
+		return "", fmt.Errorf("json_path quoted key %q is missing a matching quote", body)
+	}
+	if body[0] != '"' && body[0] != '\'' {
+		return "", fmt.Errorf("json_path quoted key must use single or double quotes")
+	}
+	key := body[1 : len(body)-1]
+	if strings.ContainsAny(key, `\`) {
+		return "", fmt.Errorf("json_path quoted key %q uses unsupported escapes", body)
+	}
+	if key == "" {
+		return "", fmt.Errorf("json_path quoted key is blank")
+	}
+	return key, nil
+}
+
+func networkJSONPathKey(key string) networkJSONPathStep {
+	return networkJSONPathStep{key: &key, raw: key}
+}
+
+func networkJSONPathIndex(index int) networkJSONPathStep {
+	return networkJSONPathStep{index: &index, raw: "[" + strconv.Itoa(index) + "]"}
 }
 
 func sortedNetworkRefs(entries []NetworkEvidenceEntry) []string {

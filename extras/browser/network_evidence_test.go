@@ -97,6 +97,47 @@ func TestNetworkEvidenceToolsSearchAndRead(t *testing.T) {
 	}
 }
 
+func TestNetworkEvidenceReadJSONPathExtractsSubtree(t *testing.T) {
+	log := NewNetworkEvidenceLog()
+	log.ObserveResponse("https://taostats.io/subnets/120", proto.NetworkResourceTypeDocument)
+	log.Add("https://taostats.io/api/subnets/120", 200, proto.NetworkResourceTypeXHR, http.Header{"Content-Type": {"application/json"}}, []byte(`{"data":{"items":[{"name":"Affine","metrics":{"market_cap":"201.04K T","volume_24h":"5.1K T"}}],"meta":{"source":"api"}}}`))
+	s := &Session{network: log}
+
+	readOut, err := NetworkReadTool(s).Execute(context.Background(), json.RawMessage(`{"ref":"n1","json_path":"$.data.items[0].metrics.market_cap","max_bytes":128}`))
+	if err != nil {
+		t.Fatalf("browser_network_read json_path: %v", err)
+	}
+	for _, want := range []string{
+		"SourceAccess: browser_network_url=https://taostats.io/api/subnets/120",
+		"JSON_PATH: $.data.items[0].metrics.market_cap",
+		`"201.04K T"`,
+	} {
+		if !strings.Contains(readOut, want) {
+			t.Fatalf("json_path output missing %q:\n%s", want, readOut)
+		}
+	}
+	if strings.Contains(readOut, "volume_24h") || strings.Contains(readOut, `"source":"api"`) {
+		t.Fatalf("json_path output should not dump sibling fields:\n%s", readOut)
+	}
+}
+
+func TestNetworkEvidenceReadJSONPathGuidesMissingPath(t *testing.T) {
+	log := NewNetworkEvidenceLog()
+	log.ObserveResponse("https://metrics.example/dashboard", proto.NetworkResourceTypeDocument)
+	log.Add("https://metrics.example/api/current", 200, proto.NetworkResourceTypeFetch, http.Header{"Content-Type": {"application/json"}}, []byte(`{"items":[]}`))
+	s := &Session{network: log}
+
+	_, err := NetworkReadTool(s).Execute(context.Background(), json.RawMessage(`{"ref":"n1","json_path":"items[0].price"}`))
+	if err == nil {
+		t.Fatal("missing json_path should error")
+	}
+	for _, want := range []string{"json_path", "Failure: kind=not_found", "read without json_path"} {
+		if !strings.Contains(err.Error(), want) {
+			t.Fatalf("missing-path error missing %q: %v", want, err)
+		}
+	}
+}
+
 func TestNetworkEvidenceToolsNoMatchesAndMissingRefGuideRecovery(t *testing.T) {
 	s := &Session{network: NewNetworkEvidenceLog()}
 	searchOut, err := NetworkSearchTool(s).Execute(context.Background(), json.RawMessage(`{"query":"Affine"}`))
