@@ -306,6 +306,7 @@ function evidenceHeadlineScore(item: TurnActivityEvidence): number {
   if (item.label === "Discovery Source") return 35;
   if (item.label === "Fetched") return 100;
   if (item.label === "Searched") return 90;
+  if (item.label === "History") return 85;
   if (item.label === "Read") return 80;
   if (item.label === "Changed") return 70;
   if (item.label === "MCP") return 60;
@@ -782,7 +783,7 @@ function shouldShowEvidence(node: ExecutionTreeNode): boolean {
 }
 
 function isEvidenceTool(tool: string): boolean {
-  return tool === "web_fetch" || tool === "web_search" || tool === "browser_navigate" || tool === "browser_snapshot" || tool === "browser_find" || tool === "browser_network_read";
+  return tool === "web_fetch" || tool === "web_search" || tool === "session_search" || tool === "browser_navigate" || tool === "browser_snapshot" || tool === "browser_find" || tool === "browser_network_read";
 }
 
 function collectEvidenceInto(node: ExecutionTreeNode, evidence: TurnActivityEvidence[]) {
@@ -802,6 +803,7 @@ function evidenceFromNode(node: ExecutionTreeNode): TurnActivityEvidence | undef
       displayValue,
     };
   }
+  if (node.tool === "session_search") return sessionSearchEvidence(node);
   const url = stringArg(node, "url");
   if (node.tool === "web_fetch" && url) return { label: "Fetched", value: url, displayValue: readableUrl(url) };
   const path = stringArg(node, "path") ?? stringArg(node, "file") ?? stringArg(node, "filename");
@@ -818,6 +820,65 @@ function evidenceFromNode(node: ExecutionTreeNode): TurnActivityEvidence | undef
 
 function sourceAccessFromNode(node: ExecutionTreeNode) {
   return describeSourceAccess(node.resultText ?? node.resultSummary);
+}
+
+function sessionSearchEvidence(node: ExecutionTreeNode): TurnActivityEvidence | undefined {
+  const payload = parseJsonObject(node.resultText) ?? parseJsonObject(node.resultSummary);
+  const results = Array.isArray(payload?.results) ? payload.results : [];
+  for (const candidate of results) {
+    if (!isRecord(candidate)) continue;
+    const sessionId = stringField(candidate, "session_id");
+    if (!sessionId) continue;
+    const turnIndex = numberField(candidate, "turn_idx");
+    const matchedTerms = stringArrayField(candidate, "matched_terms").slice(0, 3);
+    const contextIncluded = booleanField(candidate, "context_included");
+    const value = [sessionId, turnIndex == null ? undefined : `turn-${turnIndex}`].filter(Boolean).join(":");
+    const displayValue = [
+      sessionId,
+      turnIndex == null ? undefined : `turn ${turnIndex}`,
+      matchedTerms.length > 0 ? matchedTerms.join(", ") : undefined,
+      contextIncluded ? "context" : undefined,
+    ].filter(Boolean).join(" · ");
+    return { label: "History", value, displayValue };
+  }
+  return undefined;
+}
+
+function parseJsonObject(text?: string): Record<string, unknown> | undefined {
+  if (!text) return undefined;
+  try {
+    const value = JSON.parse(text);
+    return isRecord(value) ? value : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+function stringField(record: Record<string, unknown>, key: string): string | undefined {
+  const value = record[key];
+  return typeof value === "string" && value.trim() ? value.trim() : undefined;
+}
+
+function numberField(record: Record<string, unknown>, key: string): number | undefined {
+  const value = record[key];
+  if (typeof value === "number" && Number.isFinite(value)) return value;
+  if (typeof value !== "string" || !value.trim()) return undefined;
+  const parsed = Number(value);
+  return Number.isFinite(parsed) ? parsed : undefined;
+}
+
+function booleanField(record: Record<string, unknown>, key: string): boolean {
+  return record[key] === true;
+}
+
+function stringArrayField(record: Record<string, unknown>, key: string): string[] {
+  const value = record[key];
+  if (!Array.isArray(value)) return [];
+  return value.filter((item): item is string => typeof item === "string" && !!item.trim()).map((item) => item.trim());
 }
 
 function sourceEvidenceDisplayValue(sourceAccess: NonNullable<ReturnType<typeof sourceAccessFromNode>>): string {

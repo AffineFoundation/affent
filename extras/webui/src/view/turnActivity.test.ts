@@ -524,6 +524,87 @@ describe("buildTurnActivity", () => {
     expect(activity?.evidenceAction?.draft).toContain("- Partial Source taostats.io/subnets/120");
   });
 
+  it("surfaces session search hits as history evidence", () => {
+    const turn = reduceRawEvents([
+      { id: 1, type: "turn.start", data: { turn_id: "t1" } },
+      { id: 2, type: "user.message", data: { turn_id: "t1", text: "resume alpha coast analysis" } },
+      {
+        id: 3,
+        type: "tool.request",
+        data: {
+          turn_id: "t1",
+          call_id: "c1",
+          tool: "session_search",
+          args: { query: "Alpha Coast marker" },
+          args_truncated: false,
+          args_bytes: 36,
+          args_omitted_bytes: 0,
+          args_cap_bytes: 8192,
+        },
+      },
+      {
+        id: 4,
+        type: "tool.result",
+        data: {
+          call_id: "c1",
+          exit_code: 0,
+          duration_ms: 24,
+          result_summary: JSON.stringify({
+            query: "Alpha Coast marker",
+            total: 1,
+            results: [
+              {
+                session_id: "market-alpha",
+                turn_idx: 4,
+                role: "assistant",
+                snippet: "history marker HIST-STOCK-44 and inventory-drag risk",
+                matched_terms: ["alpha", "coast"],
+                context_included: true,
+              },
+            ],
+          }),
+          result: JSON.stringify({
+            query: "Alpha Coast marker",
+            total: 1,
+            results: [
+              {
+                session_id: "market-alpha",
+                turn_idx: 4,
+                role: "assistant",
+                snippet: "history marker HIST-STOCK-44 and inventory-drag risk",
+                matched_terms: ["alpha", "coast"],
+                context_included: true,
+              },
+            ],
+          }),
+          result_truncated: false,
+          result_bytes: 220,
+          result_omitted_bytes: 0,
+          result_cap_bytes: 8192,
+        },
+      },
+      { id: 5, type: "turn.end", data: { turn_id: "t1", reason: "completed" } },
+    ]).turns[0];
+
+    const activity = buildTurnActivity(turn);
+
+    expect(activity?.evidencePreview).toEqual([
+      { label: "History", value: "market-alpha:turn-4", displayValue: "market-alpha · turn 4 · alpha, coast · context" },
+    ]);
+    expect(activity?.brief.rows).toContainEqual({
+      id: "evidence",
+      label: "Sources",
+      evidence: [
+        { label: "History", value: "market-alpha:turn-4", displayValue: "market-alpha · turn 4 · alpha, coast · context" },
+      ],
+      action: {
+        label: "Use sources",
+        draft: "Use this evidence in the next step:\n- History market-alpha · turn 4 · alpha, coast · context",
+        source: "evidence",
+      },
+    });
+  });
+
   it("adds artifact summaries to the activity digest meta for file-bearing turns", () => {
     const turn = reduceRawEvents(resultTruncated).turns[0];
     const activity = buildTurnActivity(turn);
