@@ -4,6 +4,7 @@ export function hasIssueContext(session: SessionState): boolean {
   if (session.turns.length > 1 || session.unknownEventCount > 0) return true;
   return session.turns.some((turn) => {
     if (turn.status === "error" || turn.status === "max_turns" || turn.error) return true;
+    if ((turn.toolStats?.source_access_dynamic_partial ?? 0) > 0 || (turn.toolStats?.source_access_discovery_only ?? 0) > 0) return true;
     if (turn.toolCalls.length > 1) return true;
     return turn.toolCalls.some((call) =>
       call.status === "error" ||

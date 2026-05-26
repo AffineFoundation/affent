@@ -22,7 +22,32 @@ describe("hasIssueContext", () => {
     expect(hasIssueContext(reduceRawEvents(resultTruncated))).toBe(true);
     expect(hasIssueContext(reduceRawEvents([...completedTurn, ...namespaceTurn("second")]))).toBe(true);
   });
+
+  it("shows issue controls when source evidence is partial or discovery-only", () => {
+    expect(hasIssueContext(reduceRawEvents(sourceEvidenceTurn({
+      source_access_results: 2,
+      source_access_verified: 1,
+      source_access_dynamic_partial: 1,
+    })))).toBe(true);
+    expect(hasIssueContext(reduceRawEvents(sourceEvidenceTurn({
+      source_access_results: 1,
+      source_access_discovery_only: 1,
+    })))).toBe(true);
+    expect(hasIssueContext(reduceRawEvents(sourceEvidenceTurn({
+      source_access_results: 1,
+      source_access_verified: 1,
+    })))).toBe(false);
+  });
 });
+
+function sourceEvidenceTurn(toolStats: Record<string, number>): RawEvent[] {
+  return [
+    { id: 1, type: "turn.start", data: { turn_id: "t1" } },
+    { id: 2, type: "user.message", data: { turn_id: "t1", text: "read a source" } },
+    { id: 3, type: "message.done", data: { turn_id: "t1", text: "source read", finish_reason: "stop" } },
+    { id: 4, type: "turn.end", data: { turn_id: "t1", reason: "completed", tool_stats: toolStats } },
+  ];
+}
 
 function namespaceTurn(suffix: string): RawEvent[] {
   return [
