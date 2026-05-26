@@ -558,6 +558,9 @@ func printBatchSummary(w io.Writer, s batchSummary) {
 	if hasBatchToolContextTruncation(s) {
 		fmt.Fprintf(w, " ctx_trunc=%d,omitted=%d", s.ToolContextTruncated, s.ToolContextOmittedBytes)
 	}
+	if len(s.DebugBriefByTag) > 0 {
+		fmt.Fprintf(w, " debug_brief=%s", formatStringIntCounts(s.DebugBriefByTag))
+	}
 	printDelegationRollup(w, s.FocusedTaskCalls, s.FocusedTaskByType, s.FocusedTaskErrors, s.SubagentCalls, s.SubagentByMode, s.SubagentErrors)
 	printPlanRollup(w, s.PlanCalls, s.PlanByAction, s.PlanErrors)
 	fmt.Fprintln(w)
@@ -634,6 +637,15 @@ func printPlanRollup(w io.Writer, calls int, byAction map[string]int, errors int
 
 func formatFailureKinds(counts map[string]int) string {
 	return formatStringIntCounts(counts)
+}
+
+func formatDebugBriefTags(tags []string) string {
+	if len(tags) == 0 {
+		return ""
+	}
+	out := append([]string(nil), tags...)
+	sort.Strings(out)
+	return strings.Join(out, ",")
 }
 
 func printFailureHintLines(w io.Writer, counts map[string]int, indent string) {
@@ -1597,6 +1609,9 @@ func printBatchResult(w io.Writer, res agenteval.BatchResult) {
 			res.ContextCompactions.RemovedMessages,
 			res.ContextCompactions.SummaryBytes,
 		)
+	}
+	if brief := agenteval.BuildDebugBrief(res); brief != nil {
+		fmt.Fprintf(w, " debug_brief=%s", formatDebugBriefTags(brief.Tags))
 	}
 	printDelegationRollup(w, res.Delegation.FocusedTaskCalls, res.Delegation.FocusedTaskByType, res.Delegation.FocusedTaskErrors, res.Delegation.SubagentCalls, res.Delegation.SubagentByMode, res.Delegation.SubagentErrors)
 	printPlanRollup(w, res.Plan.Calls, res.Plan.ByAction, res.Plan.Errors)
