@@ -503,6 +503,8 @@ type batchSummary struct {
 	ExpectationScenarios       int
 	ExpectationSuites          map[string]int
 	ExpectationCapabilities    map[string]int
+	ExpectationCapabilityPass  map[string]int
+	ExpectationCapabilityFail  map[string]int
 	ExpectationRequiredTools   map[string]int
 	ExpectationSourceAccess    map[string]int
 	RemovedWorkspaces          int
@@ -712,11 +714,11 @@ func (s *batchSummary) add(res agenteval.BatchResult) {
 		}
 	}
 	if res.Expectations != nil {
-		s.addExpectations(*res.Expectations)
+		s.addExpectations(*res.Expectations, res.OK)
 	}
 }
 
-func (s *batchSummary) addExpectations(exp agenteval.DebugScenarioExpectations) {
+func (s *batchSummary) addExpectations(exp agenteval.DebugScenarioExpectations, ok bool) {
 	s.ExpectationScenarios++
 	addCountMapValues(&s.ExpectationSuites, exp.Suites)
 	addCountMapValues(&s.ExpectationRequiredTools, expectationRequiredToolNames(exp))
@@ -734,6 +736,11 @@ func (s *batchSummary) addExpectations(exp agenteval.DebugScenarioExpectations) 
 	}
 	sort.Strings(keys)
 	addCountMapValues(&s.ExpectationCapabilities, keys)
+	if ok {
+		addCountMapValues(&s.ExpectationCapabilityPass, keys)
+	} else {
+		addCountMapValues(&s.ExpectationCapabilityFail, keys)
+	}
 }
 
 func expectationRequiredToolNames(exp agenteval.DebugScenarioExpectations) []string {
@@ -1042,6 +1049,7 @@ func printBatchSummary(w io.Writer, s batchSummary) {
 		fmt.Fprintf(w, " expectations=scenarios:%d", s.ExpectationScenarios)
 		if len(s.ExpectationCapabilities) > 0 {
 			fmt.Fprintf(w, " expectation_capabilities=%s", formatStringIntCounts(s.ExpectationCapabilities))
+			fmt.Fprintf(w, " expectation_capability_pass=%s", formatPassTotalCounts(s.ExpectationCapabilityPass, s.ExpectationCapabilities))
 		}
 		if len(s.ExpectationRequiredTools) > 0 {
 			fmt.Fprintf(w, " expectation_tools=%s", formatStringIntCounts(s.ExpectationRequiredTools))
@@ -1514,6 +1522,22 @@ func formatStringIntCounts(counts map[string]int) string {
 	return strings.Join(parts, ",")
 }
 
+func formatPassTotalCounts(passed, total map[string]int) string {
+	if len(total) == 0 {
+		return "none"
+	}
+	keys := make([]string, 0, len(total))
+	for key := range total {
+		keys = append(keys, key)
+	}
+	sort.Strings(keys)
+	parts := make([]string, 0, len(keys))
+	for _, key := range keys {
+		parts = append(parts, fmt.Sprintf("%s:%d/%d", key, passed[key], total[key]))
+	}
+	return strings.Join(parts, ",")
+}
+
 type evalJSONLMetadata struct {
 	SchemaVersion                  int      `json:"schema_version"`
 	Suite                          string   `json:"suite,omitempty"`
@@ -1845,6 +1869,9 @@ type batchSummaryRecord struct {
 	ExpectationScenarios        int                                        `json:"expectation_scenarios,omitempty"`
 	ExpectationSuites           map[string]int                             `json:"expectation_suites,omitempty"`
 	ExpectationCapabilities     map[string]int                             `json:"expectation_capabilities,omitempty"`
+	ExpectationCapabilityPassed map[string]int                             `json:"expectation_capability_passed,omitempty"`
+	ExpectationCapabilityFailed map[string]int                             `json:"expectation_capability_failed,omitempty"`
+	ExpectationCapabilityRate   map[string]float64                         `json:"expectation_capability_pass_rate,omitempty"`
 	ExpectationRequiredTools    map[string]int                             `json:"expectation_required_tools,omitempty"`
 	ExpectationSourceAccess     map[string]int                             `json:"expectation_source_access,omitempty"`
 	QualityGatesPassed          *bool                                      `json:"quality_gates_passed,omitempty"`
@@ -2168,6 +2195,9 @@ func printBatchSummaryJSONL(w io.Writer, meta evalJSONLMetadata, s batchSummary,
 		ExpectationScenarios:        s.ExpectationScenarios,
 		ExpectationSuites:           cloneStringIntMap(s.ExpectationSuites),
 		ExpectationCapabilities:     cloneStringIntMap(s.ExpectationCapabilities),
+		ExpectationCapabilityPassed: cloneStringIntMap(s.ExpectationCapabilityPass),
+		ExpectationCapabilityFailed: cloneStringIntMap(s.ExpectationCapabilityFail),
+		ExpectationCapabilityRate:   expectationCapabilityPassRates(s.ExpectationCapabilities, s.ExpectationCapabilityPass),
 		ExpectationRequiredTools:    cloneStringIntMap(s.ExpectationRequiredTools),
 		ExpectationSourceAccess:     cloneStringIntMap(s.ExpectationSourceAccess),
 		QualityGatesPassed:          qualityGatesPassedForJSONL(meta, gateFailures),
@@ -2218,6 +2248,23 @@ func hasQualityGateThresholds(meta evalJSONLMetadata) bool {
 		meta.MaxAvgContextCompactions != nil ||
 		meta.MaxAvgReactiveCompactions != nil ||
 		meta.MaxAvgTotalTokens != nil
+}
+
+func expectationCapabilityPassRates(total, passed map[string]int) map[string]float64 {
+	if len(total) == 0 {
+		return nil
+	}
+	out := map[string]float64{}
+	for cap, count := range total {
+		if count <= 0 {
+			continue
+		}
+		out[cap] = float64(passed[cap]) / float64(count)
+	}
+	if len(out) == 0 {
+		return nil
+	}
+	return out
 }
 
 // cloneStringIntMap returns a copy of in or nil if in is empty. Used

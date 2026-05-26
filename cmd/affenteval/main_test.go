@@ -895,7 +895,7 @@ func TestBatchSummaryAggregatesRuntimeMetrics(t *testing.T) {
 	if !strings.Contains(out.String(), "debug_brief=context_compaction:1,context_compaction:reactive:1,loop_guard:2,outcome:failed:1,plan:2,plan:set:1,plan:update:1,plan_error:1,recall:1,runtime_error:1,runtime_error:context_overflow:1,runtime_error:llm_timeout:1,source_access:2,source_network:2,source_unverified:1,tool_failure:1,tool_failure:invalid_args:1,tool_failure:timeout:1,truncation:2,turn_end:max_turns:1") {
 		t.Fatalf("summary output missing debug brief tag rollup:\n%s", out.String())
 	}
-	if !strings.Contains(out.String(), "expectations=scenarios:2 expectation_capabilities=browser:2,context_compaction:1,delegation:1,memory:1,plan:1,session:2,session_search:1,source_access:2,verifier:1,web:1,workspace:1 expectation_tools=browser_network_read:2,memory:1,read_file:1,repo_search:1,run_task:1,session_search:1,web_fetch:1 expectation_source_access=network:2 expectation_suites=live-web:1,long-run:1") {
+	if !strings.Contains(out.String(), "expectations=scenarios:2 expectation_capabilities=browser:2,context_compaction:1,delegation:1,memory:1,plan:1,session:2,session_search:1,source_access:2,verifier:1,web:1,workspace:1 expectation_capability_pass=browser:1/2,context_compaction:0/1,delegation:0/1,memory:1/1,plan:0/1,session:1/2,session_search:0/1,source_access:1/2,verifier:1/1,web:0/1,workspace:1/1 expectation_tools=browser_network_read:2,memory:1,read_file:1,repo_search:1,run_task:1,session_search:1,web_fetch:1 expectation_source_access=network:2 expectation_suites=live-web:1,long-run:1") {
 		t.Fatalf("summary output missing expectation rollup:\n%s", out.String())
 	}
 	if !strings.Contains(out.String(), "repair_kinds=alias_rename:2,tool_name:1,type_coercion:2") {
@@ -1030,6 +1030,30 @@ func TestBatchSummaryAggregatesRuntimeMetrics(t *testing.T) {
 	}
 	if !reflect.DeepEqual(summary.ExpectationCapabilities, wantExpectationCaps) {
 		t.Fatalf("ExpectationCapabilities = %#v, want %#v", summary.ExpectationCapabilities, wantExpectationCaps)
+	}
+	wantExpectationPass := map[string]int{
+		"browser":       1,
+		"memory":        1,
+		"session":       1,
+		"source_access": 1,
+		"verifier":      1,
+		"workspace":     1,
+	}
+	if !reflect.DeepEqual(summary.ExpectationCapabilityPass, wantExpectationPass) {
+		t.Fatalf("ExpectationCapabilityPass = %#v, want %#v", summary.ExpectationCapabilityPass, wantExpectationPass)
+	}
+	wantExpectationFail := map[string]int{
+		"browser":            1,
+		"context_compaction": 1,
+		"delegation":         1,
+		"plan":               1,
+		"session":            1,
+		"session_search":     1,
+		"source_access":      1,
+		"web":                1,
+	}
+	if !reflect.DeepEqual(summary.ExpectationCapabilityFail, wantExpectationFail) {
+		t.Fatalf("ExpectationCapabilityFail = %#v, want %#v", summary.ExpectationCapabilityFail, wantExpectationFail)
 	}
 	wantExpectationTools := map[string]int{"read_file": 1, "repo_search": 1, "memory": 1, "web_fetch": 1, "browser_network_read": 2, "session_search": 1, "run_task": 1}
 	if !reflect.DeepEqual(summary.ExpectationRequiredTools, wantExpectationTools) {
@@ -1993,6 +2017,8 @@ func TestPrintBatchSummaryJSONL(t *testing.T) {
 		ExpectationScenarios:       2,
 		ExpectationSuites:          map[string]int{"long-run": 1, "live-web": 1},
 		ExpectationCapabilities:    map[string]int{"browser": 2, "source_access": 2, "web": 1},
+		ExpectationCapabilityPass:  map[string]int{"browser": 1, "source_access": 1},
+		ExpectationCapabilityFail:  map[string]int{"browser": 1, "source_access": 1, "web": 1},
 		ExpectationRequiredTools:   map[string]int{"web_fetch": 1, "browser_network_read": 1},
 		ExpectationSourceAccess:    map[string]int{"network": 2},
 		RemovedWorkspaces:          1,
@@ -2197,6 +2223,26 @@ func TestPrintBatchSummaryJSONL(t *testing.T) {
 		expectationCapabilities["source_access"] != float64(2) ||
 		expectationCapabilities["web"] != float64(1) {
 		t.Fatalf("expectation_capabilities = %#v\njson=%s", got["expectation_capabilities"], out.String())
+	}
+	expectationCapabilityPassed, ok := got["expectation_capability_passed"].(map[string]any)
+	if !ok ||
+		expectationCapabilityPassed["browser"] != float64(1) ||
+		expectationCapabilityPassed["source_access"] != float64(1) {
+		t.Fatalf("expectation_capability_passed = %#v\njson=%s", got["expectation_capability_passed"], out.String())
+	}
+	expectationCapabilityFailed, ok := got["expectation_capability_failed"].(map[string]any)
+	if !ok ||
+		expectationCapabilityFailed["browser"] != float64(1) ||
+		expectationCapabilityFailed["source_access"] != float64(1) ||
+		expectationCapabilityFailed["web"] != float64(1) {
+		t.Fatalf("expectation_capability_failed = %#v\njson=%s", got["expectation_capability_failed"], out.String())
+	}
+	expectationCapabilityRate, ok := got["expectation_capability_pass_rate"].(map[string]any)
+	if !ok ||
+		expectationCapabilityRate["browser"] != float64(0.5) ||
+		expectationCapabilityRate["source_access"] != float64(0.5) ||
+		expectationCapabilityRate["web"] != float64(0) {
+		t.Fatalf("expectation_capability_pass_rate = %#v\njson=%s", got["expectation_capability_pass_rate"], out.String())
 	}
 	expectationTools, ok := got["expectation_required_tools"].(map[string]any)
 	if !ok ||

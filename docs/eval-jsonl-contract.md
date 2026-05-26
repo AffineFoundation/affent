@@ -311,10 +311,12 @@ Summary records aggregate all scenario records from the same process:
   counts declared source-access statuses such as `network` or `verified`; and
   `expectation_capabilities` counts broad required capability families such as
   `workspace`, `memory`, `session_search`, `source_access`, `web`, `browser`,
-  `delegation`, `plan`, `context_compaction`, `verifier`, and `mcp`. These are
-  declaration coverage counters, not observed runtime behavior. Use them with
-  runtime-surface and outcome fields to see which capability classes a batch
-  actually exercised.
+  `delegation`, `plan`, `context_compaction`, `verifier`, and `mcp`.
+  `expectation_capability_passed`, `expectation_capability_failed`, and
+  `expectation_capability_pass_rate` split those declared capability families
+  by scenario outcome. These are declaration/outcome counters, not observed
+  runtime behavior. Use them with runtime-surface fields to see which capability
+  classes a batch actually exercised and where failures cluster.
 - Quality gate outcome: `quality_profile` identifies any built-in profile used,
   `quality_gates_passed` is present on summary records when at least one quality
   gate threshold was configured, and
