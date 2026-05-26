@@ -3574,22 +3574,22 @@ mark {
 }
 
 .message-side-actions {
-  position: absolute;
-  top: 8px;
+  position: relative;
   z-index: 4;
   display: block;
   width: 30px;
   min-height: 30px;
   max-width: none;
+  margin-top: -3px;
   padding: 0;
 }
 
 .message-side-actions[data-side="user"] {
-  left: 2px;
+  justify-self: end;
 }
 
 .message-side-actions[data-side="assistant"] {
-  right: 2px;
+  justify-self: start;
 }
 
 .flow-step-user .message-actions {
@@ -3669,6 +3669,11 @@ mark {
   box-shadow: 0 18px 42px rgba(15, 23, 42, 0.14);
   padding: 6px;
   animation: detail-reveal var(--motion-panel) var(--ease-snap);
+}
+
+.message-side-actions[data-side="user"] .message-copy-menu-panel {
+  right: 0;
+  left: auto;
 }
 
 .message-copy-menu-panel .message-action {
