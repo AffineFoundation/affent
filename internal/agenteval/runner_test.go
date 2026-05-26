@@ -2533,13 +2533,13 @@ QUERY: "price market cap fdv volume"
 }
 
 func TestRunner_EndToEnd_WebSnapshotNetworkEvidenceFlow(t *testing.T) {
-	const snapshot = `SourceAccess: browser_rendered_url=https://taostats.io/subnets/120; snapshot_id=18; page_text_below=partial_dynamic_page_evidence; rendered_browser_source_status=partial_dynamic_page_evidence
-URL: https://taostats.io/subnets/120
+	const snapshot = `SourceAccess: browser_rendered_url=https://app.taostats.io/subnets/120; snapshot_id=18; page_text_below=partial_dynamic_page_evidence; rendered_browser_source_status=partial_dynamic_page_evidence
+URL: https://app.taostats.io/subnets/120
 TITLE: Affine SN120 · TaoStats
 PAGE DIAGNOSTICS:
 - empty_dynamic_metric_widgets: 2 visible custom metric widget(s) exposed no text value; use browser_network/browser_network_read, API/text/source endpoint, or mark those fields unverified
 CAPTURED NETWORK RESPONSES:
-- n1 status=200 resource=fetch content_type=application/json url=https://taostats.io/api/subnets/120
+- n1 status=200 resource=fetch content_type=application/json url=https://api.taostats.io/subnets/120
 Next: use browser_network with a specific metric/entity/API-path query, then browser_network_read on the best ref before citing hidden dashboard values.
 
 PAGE TEXT:
@@ -2576,7 +2576,7 @@ p: 24hr Volume`
 			return `BROWSER NETWORK EVIDENCE
 query: "market_cap"
 MATCHES:
-- n1 status=200 resource=fetch content_type=application/json url=https://taostats.io/api/subnets/120
+- n1 status=200 resource=fetch content_type=application/json url=https://api.taostats.io/subnets/120
   preview: {"name":"Affine","netuid":120,"market_cap":"201.04K T","price":"0.06342 T"}
 Next: call browser_network_read with the most relevant ref before citing values.`, nil
 		},
@@ -2593,14 +2593,14 @@ Next: call browser_network_read with the most relevant ref before citing values.
             }
         }`),
 		Execute: func(ctx context.Context, args json.RawMessage) (string, error) {
-			return `SourceAccess: browser_network_url=https://taostats.io/api/subnets/120; ref=n1; status=200; content_type=application/json; source_method=network_xhr_fetch
+			return `SourceAccess: browser_network_url=https://api.taostats.io/subnets/120; ref=n1; status=200; content_type=application/json; source_method=network_xhr_fetch
 BODY_BYTES: 77
 {"name":"Affine","netuid":120,"market_cap":"201.04K T","price":"0.06342 T"}`, nil
 		},
 	}
 
 	turn1 := []string{
-		`{"choices":[{"delta":{"role":"assistant","tool_calls":[{"index":0,"id":"b1","type":"function","function":{"name":"browser_navigate","arguments":"{\"url\":\"https://taostats.io/subnets/120\",\"wait_until\":\"networkidle\"}"}}]},"finish_reason":null}]}`,
+		`{"choices":[{"delta":{"role":"assistant","tool_calls":[{"index":0,"id":"b1","type":"function","function":{"name":"browser_navigate","arguments":"{\"url\":\"https://app.taostats.io/subnets/120\",\"wait_until\":\"networkidle\"}"}}]},"finish_reason":null}]}`,
 		`{"choices":[{"delta":{},"finish_reason":"tool_calls"}]}`,
 		`[DONE]`,
 	}
@@ -2615,12 +2615,12 @@ BODY_BYTES: 77
 		`[DONE]`,
 	}
 	turn4 := []string{
-		`{"choices":[{"delta":{"role":"assistant","content":"The rendered TaoStats page showed Affine SN120 but hid the metric values in dynamic widgets, so I used the captured same-site network response before citing numbers. The network evidence at https://taostats.io/api/subnets/120 reports market cap 201.04K T and price 0.06342 T for Affine netuid 120."},"finish_reason":"stop"}]}`,
+		`{"choices":[{"delta":{"role":"assistant","content":"The rendered TaoStats app page showed Affine SN120 but hid the metric values in dynamic widgets, so I used the captured same-site sibling API network response before citing numbers. The network evidence at https://api.taostats.io/subnets/120 reports market cap 201.04K T and price 0.06342 T for Affine netuid 120."},"finish_reason":"stop"}]}`,
 		`[DONE]`,
 	}
 	srv := newScriptedLLM(t, [][]string{turn1, turn2, turn3, turn4})
 	navigateArgs := func(args map[string]any) bool {
-		return args["url"] == "https://taostats.io/subnets/120"
+		return args["url"] == "https://app.taostats.io/subnets/120"
 	}
 	networkArgs := func(args map[string]any) bool {
 		return strings.Contains(fmt.Sprint(args["query"]), "market_cap")
@@ -2632,7 +2632,7 @@ BODY_BYTES: 77
 	scenario := Scenario{
 		Name:         "web_snapshot_network_evidence_flow",
 		Description:  "agent follows browser snapshot network refs and reads XHR evidence before citing hidden dashboard values",
-		Prompt:       "Read the TaoStats Affine SN120 page. If rendered metric values are hidden in dynamic widgets, use captured browser network evidence before reporting market cap and price.",
+		Prompt:       "Read the TaoStats Affine SN120 app page. If rendered metric values are hidden in dynamic widgets, use captured browser network evidence, including same-site sibling API subdomains, before reporting market cap and price.",
 		MaxTurnSteps: 6,
 		Checks: []Check{
 			TurnEndedCleanly(),
@@ -2648,7 +2648,7 @@ BODY_BYTES: 77
 			ToolStatsAtLeast("source_access_dynamic_partial", 1),
 			FinalTextContains("market cap 201.04K T"),
 			FinalTextContains("price 0.06342 T"),
-			FinalTextContains("captured same-site network response"),
+			FinalTextContains("captured same-site sibling API network response"),
 		},
 	}
 

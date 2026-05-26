@@ -154,6 +154,15 @@ func TestNetworkEvidenceToolsSearchAndRead(t *testing.T) {
 	}
 }
 
+func TestNetworkEvidenceSearchDescriptionMentionsSiblingAPISubdomains(t *testing.T) {
+	tool := NetworkSearchTool(&Session{network: NewNetworkEvidenceLog()})
+	for _, want := range []string{"same-site", "sibling API subdomains", "same registrable domain"} {
+		if !strings.Contains(tool.Description, want) {
+			t.Fatalf("browser_network description missing %q:\n%s", want, tool.Description)
+		}
+	}
+}
+
 func TestNetworkEvidenceSearchShowsNestedJSONPathHints(t *testing.T) {
 	log := NewNetworkEvidenceLog()
 	log.ObserveResponse("https://taostats.io/subnets/120", proto.NetworkResourceTypeDocument)

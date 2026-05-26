@@ -427,7 +427,7 @@ func NetworkSearchTool(s *Session) *agent.Tool {
     }`, maxNetworkQueryBytes, maxNetworkMaxResults, defaultNetworkMaxResults))
 	return &agent.Tool{
 		Name:        "browser_network",
-		Description: "Search captured same-site browser XHR/fetch JSON or text responses from the current session. Use after browser_navigate/browser_snapshot reports partial dynamic content, empty metric widgets, or labels without values. Returns compact refs; read a selected response with browser_network_read.",
+		Description: "Search captured same-site browser XHR/fetch JSON or text responses from the current session, including sibling API subdomains under the same registrable domain. Use after browser_navigate/browser_snapshot reports partial dynamic content, empty metric widgets, or labels without values. Returns compact refs; read a selected response with browser_network_read.",
 		Schema:      schema,
 		Execute: func(ctx context.Context, raw json.RawMessage) (string, error) {
 			var args struct {
