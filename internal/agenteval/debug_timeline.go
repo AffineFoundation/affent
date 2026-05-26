@@ -6,6 +6,7 @@ import (
 	"sort"
 	"strings"
 
+	"github.com/affinefoundation/affent/internal/sourceaccess"
 	"github.com/affinefoundation/affent/internal/textutil"
 )
 
@@ -72,6 +73,7 @@ func renderDebugTimeline(res BatchResult, scenario BatchScenario, trace *Trace) 
 	renderTimelineLoopErrors(&b, trace)
 	renderTimelineCompactions(&b, trace)
 	renderTimelineDecisions(&b, trace)
+	renderTimelineSourceEvidence(&b, trace)
 	renderTimelineTools(&b, trace)
 	renderTimelineFinal(&b, trace)
 	return b.String()
@@ -250,6 +252,49 @@ func renderTimelineDecisions(b *strings.Builder, trace *Trace) {
 		if d.RequiredAction != "" {
 			fmt.Fprintf(b, "   required_action: %s\n", timelineInline(d.RequiredAction, 600))
 		}
+	}
+}
+
+func renderTimelineSourceEvidence(b *strings.Builder, trace *Trace) {
+	type sourceEvidence struct {
+		Index int
+		Tool  ToolCall
+		Info  sourceaccess.Info
+	}
+	var entries []sourceEvidence
+	for i, tool := range trace.Tools {
+		info, ok := sourceaccess.FirstInfoFromResult(tool.Result)
+		if !ok {
+			continue
+		}
+		entries = append(entries, sourceEvidence{Index: i + 1, Tool: tool, Info: info})
+	}
+	if len(entries) == 0 {
+		return
+	}
+	b.WriteString("\n## Source Evidence\n\n")
+	for i, entry := range entries {
+		status := "verified"
+		switch {
+		case entry.Info.IsNetworkSource():
+			status = "network"
+		case entry.Info.IsDynamicPartial() || sourceaccess.HasDynamicPartialEvidence(entry.Tool.Result):
+			status = "dynamic_partial"
+		case entry.Info.IsDiscoveryOnly():
+			status = "discovery_only"
+		}
+		url := entry.Info.AccessedURL
+		if url == "" {
+			url = "(unknown)"
+		}
+		fmt.Fprintf(b, "%d. tool#%d `%s` status=`%s` url=`%s`", i+1, entry.Index, entry.Tool.Tool, status, url)
+		if entry.Info.RequestedURL != "" {
+			fmt.Fprintf(b, " requested=`%s`", entry.Info.RequestedURL)
+		}
+		if entry.Tool.CallID != "" {
+			fmt.Fprintf(b, " call_id=`%s`", entry.Tool.CallID)
+		}
+		b.WriteByte('\n')
 	}
 }
 
