@@ -129,6 +129,60 @@ func TestBuildDebugBriefClassifiesSessionRecallQuality(t *testing.T) {
 	}
 }
 
+func TestBuildDebugBriefClassifiesSourceAccessQuality(t *testing.T) {
+	brief := BuildDebugBrief(BatchResult{
+		OK: true,
+		ToolStats: ToolRuntimeStats{
+			SourceAccessResults:        2,
+			SourceAccessVerified:       0,
+			SourceAccessDynamicPartial: 1,
+		},
+	})
+	item := debugBriefItemByKind(brief, "source_access")
+	if item == nil ||
+		item.Severity != "warn" ||
+		item.Message != "dynamic source evidence lacked network-backed reads; inspect browser network captures before trusting current facts" ||
+		item.Counts["results"] != 2 ||
+		item.Counts["dynamic_partial"] != 1 ||
+		!stringSliceContains(item.Inspect, "source_evidence") ||
+		!stringSliceContains(brief.Tags, "source_unverified_all") ||
+		!stringSliceContains(brief.Tags, "source_dynamic_without_network") {
+		t.Fatalf("dynamic source access item = %+v tags=%+v", item, brief.Tags)
+	}
+
+	brief = BuildDebugBrief(BatchResult{
+		OK: true,
+		ToolStats: ToolRuntimeStats{
+			SourceAccessResults:       2,
+			SourceAccessDiscoveryOnly: 2,
+		},
+	})
+	item = debugBriefItemByKind(brief, "source_access")
+	if item == nil ||
+		item.Severity != "warn" ||
+		item.Message != "source access only found discovery results; fetch readable pages or network evidence before trusting current facts" ||
+		item.Counts["discovery_only"] != 2 ||
+		!stringSliceContains(brief.Tags, "source_discovery_only_all") {
+		t.Fatalf("discovery-only source access item = %+v tags=%+v", item, brief.Tags)
+	}
+
+	brief = BuildDebugBrief(BatchResult{
+		OK: true,
+		ToolStats: ToolRuntimeStats{
+			SourceAccessResults:  1,
+			SourceAccessVerified: 1,
+			SourceAccessNetwork:  1,
+		},
+	})
+	item = debugBriefItemByKind(brief, "source_access")
+	if item == nil ||
+		item.Severity != "info" ||
+		item.Message != "source evidence was captured; inspect evidence before relying on current facts" ||
+		!stringSliceContains(brief.Tags, "source_network") {
+		t.Fatalf("verified source access item = %+v tags=%+v", item, brief.Tags)
+	}
+}
+
 func TestBuildDebugBriefClassifiesContextCompactionSummaryQuality(t *testing.T) {
 	brief := BuildDebugBrief(BatchResult{
 		OK: true,

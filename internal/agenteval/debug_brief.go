@@ -117,21 +117,39 @@ func BuildDebugBrief(res BatchResult) *DebugBrief {
 	}
 	if res.ToolStats.SourceAccessResults > 0 {
 		severity := "info"
+		message := "source evidence was captured; inspect evidence before relying on current facts"
 		tags := []string{"source_access"}
 		if res.ToolStats.SourceAccessVerified < res.ToolStats.SourceAccessResults {
 			severity = "warn"
 			tags = append(tags, "source_unverified")
-		}
-		if res.ToolStats.SourceAccessDynamicPartial > 0 {
-			tags = append(tags, "source_dynamic_partial")
+			message = "some source evidence was unverified; inspect examples before trusting current facts"
+			if res.ToolStats.SourceAccessVerified == 0 {
+				tags = append(tags, "source_unverified_all")
+				message = "source access returned no verified evidence; inspect examples before trusting current facts"
+			}
 		}
 		if res.ToolStats.SourceAccessDiscoveryOnly > 0 {
+			severity = "warn"
 			tags = append(tags, "source_discovery_only")
+			message = "some source evidence stopped at discovery results; inspect examples before trusting current facts"
+			if res.ToolStats.SourceAccessDiscoveryOnly == res.ToolStats.SourceAccessResults {
+				tags = append(tags, "source_discovery_only_all")
+				message = "source access only found discovery results; fetch readable pages or network evidence before trusting current facts"
+			}
+		}
+		if res.ToolStats.SourceAccessDynamicPartial > 0 {
+			severity = "warn"
+			tags = append(tags, "source_dynamic_partial")
+			message = "dynamic source evidence was partial; inspect rendered text and network captures before trusting current facts"
+			if res.ToolStats.SourceAccessNetwork == 0 {
+				tags = append(tags, "source_dynamic_without_network")
+				message = "dynamic source evidence lacked network-backed reads; inspect browser network captures before trusting current facts"
+			}
 		}
 		if res.ToolStats.SourceAccessNetwork > 0 {
 			tags = append(tags, "source_network")
 		}
-		add("source_access", severity, "source evidence quality needs review before relying on final answer", []string{"source_evidence"}, map[string]int{
+		add("source_access", severity, message, []string{"source_evidence"}, map[string]int{
 			"results":         res.ToolStats.SourceAccessResults,
 			"verified":        res.ToolStats.SourceAccessVerified,
 			"network":         res.ToolStats.SourceAccessNetwork,
