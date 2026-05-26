@@ -158,15 +158,16 @@ func recordSourceAccessStats(stats *sse.ToolRuntimeStats, result string) {
 		return
 	}
 	stats.SourceAccessResults++
+	dynamicPartial := sourceaccess.HasDynamicPartialEvidence(result)
 	if info.IsDiscoveryOnly() {
 		stats.SourceAccessDiscoveryOnly++
-	} else if info.AccessedURL != "" {
+	} else if info.AccessedURL != "" && !dynamicPartial {
 		stats.SourceAccessVerified++
 	}
 	if info.IsNetworkSource() {
 		stats.SourceAccessNetwork++
 	}
-	if sourceaccess.HasDynamicPartialEvidence(result) {
+	if dynamicPartial {
 		stats.SourceAccessDynamicPartial++
 	}
 }

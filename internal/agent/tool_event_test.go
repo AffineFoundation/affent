@@ -65,8 +65,8 @@ func TestRecordSourceAccessStats(t *testing.T) {
 	if stats.SourceAccessResults != 4 {
 		t.Fatalf("SourceAccessResults = %d, want 4", stats.SourceAccessResults)
 	}
-	if stats.SourceAccessVerified != 3 {
-		t.Fatalf("SourceAccessVerified = %d, want 3", stats.SourceAccessVerified)
+	if stats.SourceAccessVerified != 2 {
+		t.Fatalf("SourceAccessVerified = %d, want 2", stats.SourceAccessVerified)
 	}
 	if stats.SourceAccessDiscoveryOnly != 1 {
 		t.Fatalf("SourceAccessDiscoveryOnly = %d, want 1", stats.SourceAccessDiscoveryOnly)

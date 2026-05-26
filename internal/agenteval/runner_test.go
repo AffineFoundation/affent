@@ -2533,7 +2533,7 @@ QUERY: "price market cap fdv volume"
 }
 
 func TestRunner_EndToEnd_WebSnapshotNetworkEvidenceFlow(t *testing.T) {
-	const snapshot = `SourceAccess: browser_rendered_url=https://taostats.io/subnets/120; snapshot_id=18; page_text_below=verified_page_evidence
+	const snapshot = `SourceAccess: browser_rendered_url=https://taostats.io/subnets/120; snapshot_id=18; page_text_below=partial_dynamic_page_evidence; rendered_browser_source_status=partial_dynamic_page_evidence
 URL: https://taostats.io/subnets/120
 TITLE: Affine SN120 · TaoStats
 PAGE DIAGNOSTICS:

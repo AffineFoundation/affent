@@ -129,7 +129,9 @@ func TestFormatSnapshotResultSurfacesDynamicMetricDiagnostics(t *testing.T) {
 	}
 	for _, want := range []string{
 		"SourceAccess: browser_rendered_url=https://taostats.io/subnets/120",
-		"page_text_below=verified_page_evidence",
+		"page_text_below=partial_dynamic_page_evidence",
+		"rendered_browser_source_status=partial_dynamic_page_evidence",
+		"visible page text is partial dynamic evidence",
 		"PAGE DIAGNOSTICS:",
 		"empty_dynamic_metric_widgets",
 		"browser_network/browser_network_read",
@@ -138,6 +140,9 @@ func TestFormatSnapshotResultSurfacesDynamicMetricDiagnostics(t *testing.T) {
 		if !strings.Contains(out, want) {
 			t.Fatalf("dynamic metric diagnostic output missing %q:\n%s", want, out)
 		}
+	}
+	if strings.Contains(out, "page_text_below=verified_page_evidence") {
+		t.Fatalf("dynamic metric snapshot must not be marked as fully verified evidence:\n%s", out)
 	}
 }
 

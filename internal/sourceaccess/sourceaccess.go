@@ -70,11 +70,29 @@ func (i Info) IsNetworkSource() bool {
 	return i.URLField == "browser_network_url" || i.SourceMethod == "network_xhr_fetch"
 }
 
+// IsDynamicPartial reports that rendered browser text was available but the
+// source itself declared hidden/dynamic fields that still need stronger
+// evidence before use as dashboard facts.
+func (i Info) IsDynamicPartial() bool {
+	switch i.PageTextBelow {
+	case "partial_dynamic_page_evidence":
+		return true
+	}
+	switch i.RenderedBrowserSourceStatus {
+	case "partial_dynamic_page_evidence":
+		return true
+	}
+	return false
+}
+
 // HasDynamicPartialEvidence reports that a rendered/browser source was reached
 // but its visible DOM also warned about dynamic metric widgets or equivalent
 // partial evidence. Callers should treat this as "readable page evidence with
 // hidden fields", not as a complete factual source for dashboard metrics.
 func HasDynamicPartialEvidence(result string) bool {
+	if info, ok := FirstInfoFromResult(result); ok && info.IsDynamicPartial() {
+		return true
+	}
 	return strings.Contains(result, "empty_dynamic_metric_widgets:")
 }
 

@@ -363,7 +363,7 @@ func formatBrowserFindResult(result *BrowserFindResult, query string, limit int)
 		URL:        result.URL,
 		Title:      result.Title,
 		TextBlocks: result.TextBlocks,
-	})) + out
+	}), "") + out
 	return out, nil
 }
 

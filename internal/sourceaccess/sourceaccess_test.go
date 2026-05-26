@@ -64,6 +64,11 @@ func TestHasDynamicPartialEvidence(t *testing.T) {
 	if !HasDynamicPartialEvidence(result) {
 		t.Fatal("HasDynamicPartialEvidence = false, want true")
 	}
+	headerResult := "SourceAccess: browser_rendered_url=https://taostats.io/subnets/120; page_text_below=partial_dynamic_page_evidence; rendered_browser_source_status=partial_dynamic_page_evidence\nPAGE TEXT:\nMarket Cap"
+	info, ok := FirstInfoFromResult(headerResult)
+	if !ok || !info.IsDynamicPartial() || !HasDynamicPartialEvidence(headerResult) {
+		t.Fatalf("partial dynamic header not recognized: info=%+v ok=%v", info, ok)
+	}
 	if HasDynamicPartialEvidence("SourceAccess: browser_network_url=https://example.com/api; source_method=network_xhr_fetch") {
 		t.Fatal("network evidence without diagnostics should not be dynamic partial")
 	}

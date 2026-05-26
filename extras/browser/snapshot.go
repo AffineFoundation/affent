@@ -450,7 +450,7 @@ func formatSnapshotResultWithRequested(snap *Snapshot, requestedURL string) (str
 			blockedSnapshotNext(reason),
 		)
 	}
-	out = browserSourceAccessLine(snap.URL, snap.SnapshotID, requestedURL, snapshotNotFoundReason(snap)) + out
+	out = browserSourceAccessLine(snap.URL, snap.SnapshotID, requestedURL, snapshotNotFoundReason(snap), snapshotDynamicPartialReason(snap)) + out
 	return out, nil
 }
 
@@ -461,7 +461,7 @@ func blockedSnapshotNext(reason string) string {
 	return "do not treat this page as evidence; use a different search provider, a known canonical URL, direct web_fetch/API/text source, or answer with this source marked unavailable"
 }
 
-func browserSourceAccessLine(rawURL string, snapshotID int64, requestedURL, notFoundReason string) string {
+func browserSourceAccessLine(rawURL string, snapshotID int64, requestedURL, notFoundReason, dynamicPartialReason string) string {
 	if browserURLIsSearchResultPage(rawURL) {
 		return sourceaccess.FormatBrowserHeader(rawURL, requestedURL, "page_text_below=search_results_discovery_only", "; result_links_and_snippets=unverified_until_opened", snapshotID) +
 			"Next: treat this page as discovery only; open 1-3 high-value result URLs from the visible refs (official, primary, metrics, docs, or source repositories) before refining the search, and do not cite snippets as verified facts.\n"
@@ -469,6 +469,10 @@ func browserSourceAccessLine(rawURL string, snapshotID int64, requestedURL, notF
 	if notFoundReason != "" {
 		return sourceaccess.FormatBrowserHeader(rawURL, requestedURL, "page_text_below=not_found_page_discovery_only", "; links_in_snapshot=discovered_unverified_until_opened", snapshotID) +
 			"Next: treat this page as a not-found page; use the visible navigation links or a canonical URL from discovery results, and do not cite the page body as verified evidence.\n"
+	}
+	if dynamicPartialReason != "" {
+		return sourceaccess.FormatBrowserHeader(rawURL, requestedURL, "page_text_below=partial_dynamic_page_evidence", "; rendered_browser_source_status=partial_dynamic_page_evidence; links_in_snapshot=discovered_unverified_until_opened", snapshotID) +
+			"Next: visible page text is partial dynamic evidence (" + dynamicPartialReason + "); use browser_network/browser_network_read, an API/text/source endpoint, or mark hidden fields unverified before citing dashboard metrics.\n"
 	}
 	return sourceaccess.FormatBrowserHeader(rawURL, requestedURL, "page_text_below=verified_page_evidence", "; links_in_snapshot=discovered_unverified_until_opened", snapshotID)
 }
@@ -546,6 +550,20 @@ func snapshotNotFoundReason(snap *Snapshot) string {
 			strings.Contains(text, "error 404"),
 			strings.Contains(text, "not found") && strings.Contains(text, "404"):
 			return "404 page text"
+		}
+	}
+	return ""
+}
+
+func snapshotDynamicPartialReason(snap *Snapshot) string {
+	if snap == nil {
+		return ""
+	}
+	for _, diagnostic := range snap.Diagnostics {
+		lower := strings.ToLower(strings.TrimSpace(diagnostic))
+		switch {
+		case strings.Contains(lower, "empty_dynamic_metric_widgets"):
+			return "empty dynamic metric widgets"
 		}
 	}
 	return ""
