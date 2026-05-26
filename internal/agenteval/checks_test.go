@@ -366,13 +366,17 @@ func TestToolRequestRepaired(t *testing.T) {
 
 func TestToolStatsAtLeast(t *testing.T) {
 	trace := Trace{ToolStats: ToolRuntimeStats{
-		ToolArgsRepaired:    2,
-		ToolRepairCalls:     2,
-		ToolRepairSucceeded: 1,
-		ToolRepairFailed:    1,
-		ToolRepairNotes:     3,
-		ToolErrors:          1,
-		ToolDurationMS:      25,
+		ToolArgsRepaired:          2,
+		ToolRepairCalls:           2,
+		ToolRepairSucceeded:       1,
+		ToolRepairFailed:          1,
+		ToolRepairNotes:           3,
+		ToolErrors:                1,
+		ToolDurationMS:            25,
+		SourceAccessResults:       3,
+		SourceAccessVerified:      2,
+		SourceAccessDiscoveryOnly: 1,
+		SourceAccessNetwork:       1,
 	}}
 	if res := ToolStatsAtLeast("tool_args_repaired", 2).Eval(trace); !res.Pass {
 		t.Fatalf("expected stats check to pass: %+v", res)
@@ -391,6 +395,15 @@ func TestToolStatsAtLeast(t *testing.T) {
 	}
 	if res := ToolStatsAtLeast("tool_duration_ms", 20).Eval(trace); !res.Pass {
 		t.Fatalf("expected tool_duration_ms stats check to pass: %+v", res)
+	}
+	if res := ToolStatsAtLeast("source_access_verified", 2).Eval(trace); !res.Pass {
+		t.Fatalf("expected source_access_verified stats check to pass: %+v", res)
+	}
+	if res := ToolStatsAtLeast("source_access_discovery_only", 1).Eval(trace); !res.Pass {
+		t.Fatalf("expected source_access_discovery_only stats check to pass: %+v", res)
+	}
+	if res := ToolStatsAtLeast("source_access_network", 1).Eval(trace); !res.Pass {
+		t.Fatalf("expected source_access_network stats check to pass: %+v", res)
 	}
 	if res := ToolStatsAtLeast("tool_args_repaired", 3).Eval(trace); res.Pass {
 		t.Fatal("expected stats check below threshold to fail")

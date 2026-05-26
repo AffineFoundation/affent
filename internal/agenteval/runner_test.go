@@ -3131,7 +3131,8 @@ func TestRunner_EndToEnd_ExternalResearchDynamicShellRecovery(t *testing.T) {
 			}
 			switch p.URL {
 			case "https://official.example/helio/about":
-				return "Official docs, updated 2026-05-21: Helio is a decentralized routing subnet for inference traffic.", nil
+				return "SourceAccess: fetched_url=https://official.example/helio/about; linked_urls_in_content=discovered_unverified_until_fetched\n" +
+					"Official docs, updated 2026-05-21: Helio is a decentralized routing subnet for inference traffic.", nil
 			case "https://dashboard.example/helio":
 				return "[dynamic page shell: URL=https://dashboard.example/helio, Content-Type=\"text/html\", Reason=\"low evidence app shell\"]\nFailure: kind=dynamic_shell\nNext: do not treat this loading/app shell as source evidence; use a canonical API/text/source page, another available source, or answer with this source marked as dynamic/unverified.", nil
 			case "https://api.example/helio/metrics.txt":
@@ -3567,7 +3568,8 @@ func TestRunner_EndToEnd_ExternalResearchDynamicHostGuard(t *testing.T) {
 			}
 			switch p.URL {
 			case "https://official.example/helio/about":
-				return "Official docs, updated 2026-05-21: Helio is a decentralized routing subnet for inference traffic.", nil
+				return "SourceAccess: fetched_url=https://official.example/helio/about; linked_urls_in_content=discovered_unverified_until_fetched\n" +
+					"Official docs, updated 2026-05-21: Helio is a decentralized routing subnet for inference traffic.", nil
 			case "https://metrics.example/helio", "https://metrics.example/helio/validators":
 				dynamicDispatches.Add(1)
 				return "[dynamic page shell: URL=" + p.URL + ", Content-Type=\"text/html\", Reason=\"client-rendered app shell\"]\nFailure: kind=dynamic_shell\nNext: do not treat this loading/app shell as source evidence; use a canonical API/text/source page.", nil
@@ -3576,7 +3578,8 @@ func TestRunner_EndToEnd_ExternalResearchDynamicHostGuard(t *testing.T) {
 				return "this page route should have been blocked before dispatch", nil
 			case "https://metrics.example/api/helio/metrics.json":
 				apiDispatches.Add(1)
-				return `{"as_of":"2026-05-24T12:00:00Z","price_usd":6.42,"market_cap_usd":"32.5M","change_24h":"+4.8%"}`, nil
+				return "SourceAccess: fetched_url=https://metrics.example/api/helio/metrics.json; linked_urls_in_content=discovered_unverified_until_fetched\n" +
+					`{"as_of":"2026-05-24T12:00:00Z","price_usd":6.42,"market_cap_usd":"32.5M","change_24h":"+4.8%"}`, nil
 			default:
 				return "", fmt.Errorf("unexpected test URL %q", p.URL)
 			}
@@ -3635,6 +3638,8 @@ func TestRunner_EndToEnd_ExternalResearchDynamicHostGuard(t *testing.T) {
 			ToolCalled("web_fetch", fetchURL("https://metrics.example/helio/validators")),
 			ToolCalled("web_fetch", fetchURL("https://metrics.example/helio/emissions")),
 			ToolCalled("web_fetch", fetchURL("https://metrics.example/api/helio/metrics.json")),
+			ToolStatsAtLeast("source_access_results", 2),
+			ToolStatsAtLeast("source_access_verified", 2),
 			ToolFailureKindAtLeast("dynamic_shell", 2),
 			ToolFailureKindAtLeast("loop_guard_repeated_failed_input", 1),
 			ToolResultContains("web_fetch", "blocked web_fetch to host"),
@@ -4234,9 +4239,11 @@ func TestRunner_EndToEnd_ExternalResearchAffineBittensorFlow(t *testing.T) {
 			}
 			switch p.URL {
 			case "https://official.example/affine/about":
-				return "Official docs, updated 2026-05-24: Affine is a Bittensor SN120 subnet for training-and-reasoning workloads.", nil
+				return "SourceAccess: fetched_url=https://official.example/affine/about; linked_urls_in_content=discovered_unverified_until_fetched\n" +
+					"Official docs, updated 2026-05-24: Affine is a Bittensor SN120 subnet for training-and-reasoning workloads.", nil
 			case "https://metrics.example/affine":
-				return "Metrics snapshot as of 2026-05-24T12:00:00Z: price $0.0632, market cap $195094, 24h volume $5001, 24h change +0.4%.", nil
+				return "SourceAccess: fetched_url=https://metrics.example/affine; linked_urls_in_content=discovered_unverified_until_fetched\n" +
+					"Metrics snapshot as of 2026-05-24T12:00:00Z: price $0.0632, market cap $195094, 24h volume $5001, 24h change +0.4%.", nil
 			default:
 				return "", fmt.Errorf("unexpected test URL %q", p.URL)
 			}
@@ -4281,6 +4288,8 @@ func TestRunner_EndToEnd_ExternalResearchAffineBittensorFlow(t *testing.T) {
 			ToolResultContains("web_search", "Direct-reader warning"),
 			ToolCalled("web_fetch", fetchURL("https://official.example/affine/about")),
 			ToolCalled("web_fetch", fetchURL("https://metrics.example/affine")),
+			ToolStatsAtLeast("source_access_results", 2),
+			ToolStatsAtLeast("source_access_verified", 2),
 			ToolNotCalled("web_fetch", fetchURL("https://social.example/search/affine")),
 			ToolCalledBeforeMatching("web_search", searchArgs, "web_fetch", fetchURL("https://official.example/affine/about")),
 			ToolCalledBeforeMatching("web_search", searchArgs, "web_fetch", fetchURL("https://metrics.example/affine")),
@@ -4411,6 +4420,8 @@ func TestRunner_EndToEnd_ExternalResearchAffinePriceDisambiguation(t *testing.T)
 			ToolCalled("web_search", searchArgs),
 			ToolResultContains("web_search", "TAO Price $277.32"),
 			ToolCalled("web_fetch", fetchURL("https://www.tao.app/subnets/120?active_tab=about")),
+			ToolStatsAtLeast("source_access_results", 1),
+			ToolStatsAtLeast("source_access_verified", 1),
 			ToolCalledBeforeMatching("web_search", searchArgs, "web_fetch", fetchURL("https://www.tao.app/subnets/120?active_tab=about")),
 			FinalTextContains("TAO Price $277.32"),
 			FinalTextContains("Price 0.06342 T"),
