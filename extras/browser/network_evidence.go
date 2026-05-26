@@ -161,7 +161,14 @@ func networkEntryMatches(entry NetworkEvidenceEntry, query string) bool {
 		strings.Contains(strings.ToLower(entry.Resource), query) {
 		return true
 	}
-	return strings.Contains(strings.ToLower(string(entry.Body)), query)
+	if strings.Contains(strings.ToLower(string(entry.Body)), query) {
+		return true
+	}
+	terms := networkQueryTerms(query)
+	if len(terms) == 0 {
+		return false
+	}
+	return networkTextMatchesAnyTerm(entry.URL+" "+entry.ContentType+" "+entry.Resource+" "+string(entry.Body), terms)
 }
 
 func cloneNetworkEntry(entry NetworkEvidenceEntry) NetworkEvidenceEntry {
@@ -466,14 +473,15 @@ func networkJSONPathHints(body []byte, query string) []string {
 		return nil
 	}
 	query = strings.ToLower(strings.TrimSpace(query))
+	queryTerms := networkQueryTerms(query)
 	seen := map[string]bool{}
 	visited := 0
 	var hints []string
-	collectNetworkJSONPathHints(root, "$", query, seen, &visited, &hints)
+	collectNetworkJSONPathHints(root, "$", query, queryTerms, seen, &visited, &hints)
 	return hints
 }
 
-func collectNetworkJSONPathHints(v any, path string, query string, seen map[string]bool, visited *int, hints *[]string) {
+func collectNetworkJSONPathHints(v any, path string, query string, queryTerms []string, seen map[string]bool, visited *int, hints *[]string) {
 	if len(*hints) >= maxNetworkJSONPathHints || *visited >= maxNetworkJSONPathScanNodes {
 		return
 	}
@@ -490,20 +498,20 @@ func collectNetworkJSONPathHints(v any, path string, query string, seen map[stri
 			if !ok {
 				continue
 			}
-			collectNetworkJSONPathHints(value[key], nextPath, query, seen, visited, hints)
+			collectNetworkJSONPathHints(value[key], nextPath, query, queryTerms, seen, visited, hints)
 			if len(*hints) >= maxNetworkJSONPathHints || *visited >= maxNetworkJSONPathScanNodes {
 				return
 			}
 		}
 	case []any:
 		for i, item := range value {
-			collectNetworkJSONPathHints(item, path+"["+strconv.Itoa(i)+"]", query, seen, visited, hints)
+			collectNetworkJSONPathHints(item, path+"["+strconv.Itoa(i)+"]", query, queryTerms, seen, visited, hints)
 			if len(*hints) >= maxNetworkJSONPathHints || *visited >= maxNetworkJSONPathScanNodes {
 				return
 			}
 		}
 	default:
-		hint, ok := formatNetworkJSONPathHint(path, value, query)
+		hint, ok := formatNetworkJSONPathHint(path, value, query, queryTerms)
 		if !ok || seen[path] {
 			return
 		}
@@ -512,13 +520,13 @@ func collectNetworkJSONPathHints(v any, path string, query string, seen map[stri
 	}
 }
 
-func formatNetworkJSONPathHint(path string, value any, query string) (string, bool) {
+func formatNetworkJSONPathHint(path string, value any, query string, queryTerms []string) (string, bool) {
 	rendered, ok := renderNetworkJSONHintValue(value)
 	if !ok {
 		return "", false
 	}
 	search := strings.ToLower(path + " " + rendered)
-	if query != "" && !strings.Contains(search, query) {
+	if query != "" && !strings.Contains(search, query) && !networkTextMatchesAnyTerm(search, queryTerms) {
 		return "", false
 	}
 	rendered = textutil.Preview(textutil.CompactWhitespace(rendered), maxNetworkJSONPathHintValue)
@@ -539,6 +547,62 @@ func renderNetworkJSONHintValue(value any) (string, bool) {
 		return "", false
 	}
 	return string(raw), true
+}
+
+func networkQueryTerms(query string) []string {
+	normalized := normalizeNetworkSearchText(query)
+	if normalized == "" {
+		return nil
+	}
+	seen := map[string]bool{}
+	var terms []string
+	for _, term := range strings.Fields(normalized) {
+		if len(term) < 2 || seen[term] {
+			continue
+		}
+		seen[term] = true
+		terms = append(terms, term)
+	}
+	return terms
+}
+
+func networkTextMatchesAnyTerm(text string, terms []string) bool {
+	if len(terms) == 0 {
+		return false
+	}
+	normalized := normalizeNetworkSearchText(text)
+	if normalized == "" {
+		return false
+	}
+	fields := map[string]bool{}
+	for _, field := range strings.Fields(normalized) {
+		fields[field] = true
+	}
+	for _, term := range terms {
+		if fields[term] {
+			return true
+		}
+	}
+	return false
+}
+
+func normalizeNetworkSearchText(text string) string {
+	text = strings.ToLower(text)
+	var b strings.Builder
+	b.Grow(len(text))
+	lastSpace := true
+	for _, r := range text {
+		if (r >= 'a' && r <= 'z') || (r >= '0' && r <= '9') {
+			b.WriteRune(r)
+			lastSpace = false
+			continue
+		}
+		if !lastSpace {
+			b.WriteByte(' ')
+			lastSpace = true
+		}
+	}
+	return strings.TrimSpace(b.String())
 }
 
 func joinNetworkJSONPath(base, key string) (string, bool) {

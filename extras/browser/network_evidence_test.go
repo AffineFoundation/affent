@@ -118,6 +118,27 @@ func TestNetworkEvidenceSearchShowsNestedJSONPathHints(t *testing.T) {
 	}
 }
 
+func TestNetworkEvidenceSearchTokenizesMetricLabelQueries(t *testing.T) {
+	log := NewNetworkEvidenceLog()
+	log.ObserveResponse("https://taostats.io/subnets/120", proto.NetworkResourceTypeDocument)
+	log.Add("https://taostats.io/api/subnets/120/metrics", 200, proto.NetworkResourceTypeFetch, http.Header{"Content-Type": {"application/json"}}, []byte(`{"netuid":120,"name":"Affine","price":"0.06342 T","market_cap":"201.04K T","fdv":"1.32M T"}`))
+	s := &Session{network: log}
+
+	searchOut, err := NetworkSearchTool(s).Execute(context.Background(), json.RawMessage(`{"query":"price market cap FDV volume supply TVL","max_results":3}`))
+	if err != nil {
+		t.Fatalf("browser_network multi-label query: %v", err)
+	}
+	for _, want := range []string{
+		"n1 status=200 resource=fetch content_type=application/json",
+		`json_paths: $.fdv="1.32M T"; $.market_cap="201.04K T"; $.price="0.06342 T"`,
+		"Next: call browser_network_read with the most relevant ref and json_path",
+	} {
+		if !strings.Contains(searchOut, want) {
+			t.Fatalf("multi-label network search missing %q:\n%s", want, searchOut)
+		}
+	}
+}
+
 func TestNetworkEvidenceReadJSONPathExtractsSubtree(t *testing.T) {
 	log := NewNetworkEvidenceLog()
 	log.ObserveResponse("https://taostats.io/subnets/120", proto.NetworkResourceTypeDocument)
