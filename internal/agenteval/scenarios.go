@@ -1750,12 +1750,23 @@ func liveWebTaostatsDynamicEvidenceScenario() BatchScenario {
 			{Tool: "browser_navigate", Arg: "url", Substring: "taostats.io/subnets/120"},
 		},
 		RequiredToolStatsAtLeast: map[string]int{
-			"source_access_network": 1,
+			"source_access_results":  1,
+			"source_access_verified": 1,
+			"source_access_network":  1,
+		},
+		RequiredToolResultText: map[string][]string{
+			"browser_network_read": {
+				"SourceAccess:",
+				"browser_network_url=",
+				"source_method=network_xhr_fetch",
+			},
 		},
 		RequiredFinalText: []string{
 			"SN120",
 			"Affine",
 			"taostats.io",
+			"browser_network_url",
+			"source_method",
 		},
 		ForbiddenFinalText: []string{
 			"subnet price $277.32",

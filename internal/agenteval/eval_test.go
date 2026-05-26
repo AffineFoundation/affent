@@ -1007,8 +1007,20 @@ func TestSelectLiveWebSuite(t *testing.T) {
 			t.Fatalf("live-web RequiredTools = %#v, want %q", scenario.RequiredTools, want)
 		}
 	}
-	if scenario.RequiredToolStatsAtLeast["source_access_network"] != 1 {
-		t.Fatalf("live-web source access requirements = %#v, want source_access_network=1", scenario.RequiredToolStatsAtLeast)
+	for _, field := range []string{"source_access_results", "source_access_verified", "source_access_network"} {
+		if scenario.RequiredToolStatsAtLeast[field] != 1 {
+			t.Fatalf("live-web source access requirements = %#v, want %s=1", scenario.RequiredToolStatsAtLeast, field)
+		}
+	}
+	for _, want := range []string{"SourceAccess:", "browser_network_url=", "source_method=network_xhr_fetch"} {
+		if !stringSliceContains(scenario.RequiredToolResultText["browser_network_read"], want) {
+			t.Fatalf("live-web browser_network_read result requirements = %#v, want %q", scenario.RequiredToolResultText["browser_network_read"], want)
+		}
+	}
+	for _, want := range []string{"browser_network_url", "source_method"} {
+		if !stringSliceContains(scenario.RequiredFinalText, want) {
+			t.Fatalf("live-web RequiredFinalText = %#v, want %q", scenario.RequiredFinalText, want)
+		}
 	}
 	if !stringSliceContains(scenario.ForbiddenTools, "shell") {
 		t.Fatalf("live-web ForbiddenTools = %#v, want shell", scenario.ForbiddenTools)
