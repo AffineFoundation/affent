@@ -558,6 +558,8 @@ func TestToolLoopGuard_PerTurnCallCapForExternalResearchTools(t *testing.T) {
 		{tool: "browser_navigate", cap: perTurnCallCaps["browser_navigate"], want: "browser cap"},
 		{tool: "browser_snapshot", cap: perTurnCallCaps["browser_snapshot"], want: "browser cap"},
 		{tool: "browser_find", cap: perTurnCallCaps["browser_find"], want: "browser cap"},
+		{tool: "browser_network", cap: perTurnCallCaps["browser_network"], want: "browser cap"},
+		{tool: "browser_network_read", cap: perTurnCallCaps["browser_network_read"], want: "browser cap"},
 	}
 	for _, c := range cases {
 		t.Run(c.tool, func(t *testing.T) {

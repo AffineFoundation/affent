@@ -174,6 +174,33 @@ func TestShouldFetchResponseBodyForCache(t *testing.T) {
 	}
 }
 
+func TestShouldFetchResponseBodyForObserver(t *testing.T) {
+	cache := &legacyTestCache{}
+	cases := []struct {
+		name              string
+		encodedDataLength float64
+		cache             ResponseCache
+		network           *NetworkEvidenceLog
+		want              bool
+	}{
+		{name: "cache under cache cap", encodedDataLength: maxCachedResponseBodyBytes, cache: cache, want: true},
+		{name: "cache over cache cap skipped", encodedDataLength: maxCachedResponseBodyBytes + 1, cache: cache, want: false},
+		{name: "network under evidence cap", encodedDataLength: maxNetworkEvidenceBodyBytes, network: NewNetworkEvidenceLog(), want: true},
+		{name: "network over evidence cap skipped", encodedDataLength: maxNetworkEvidenceBodyBytes + 1, network: NewNetworkEvidenceLog(), want: false},
+		{name: "unknown length allowed for network", encodedDataLength: 0, network: NewNetworkEvidenceLog(), want: true},
+		{name: "cache can still fetch body larger than network evidence cap", encodedDataLength: maxNetworkEvidenceBodyBytes + 1, cache: cache, network: NewNetworkEvidenceLog(), want: true},
+		{name: "no consumer skips", encodedDataLength: 0, want: false},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			got := shouldFetchResponseBodyForObserver(c.encodedDataLength, c.cache, c.network)
+			if got != c.want {
+				t.Fatalf("shouldFetchResponseBodyForObserver(%v) = %t, want %t", c.encodedDataLength, got, c.want)
+			}
+		})
+	}
+}
+
 func TestPutResponseCacheUsesPreciseFileCacheResult(t *testing.T) {
 	c, err := NewFileResponseCache(t.TempDir(), 0)
 	if err != nil {

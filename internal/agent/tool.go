@@ -168,7 +168,7 @@ func (t *Tool) catalogGroup() string {
 		return "History"
 	case "shell", "read_file", "file_context", "write_file", "edit_file", "list_files", SymbolContextToolName, "repo_search":
 		return "Workspace"
-	case "web_search", "web_fetch", "browser_navigate", "browser_snapshot", "browser_find", "browser_click", "browser_scroll", "browser_type", "browser_wait", "browser_screenshot":
+	case "web_search", "web_fetch", "browser_navigate", "browser_snapshot", "browser_find", "browser_network", "browser_network_read", "browser_click", "browser_scroll", "browser_type", "browser_wait", "browser_screenshot":
 		return "Research"
 	default:
 		if strings.TrimSpace(t.CatalogSource) != "" {

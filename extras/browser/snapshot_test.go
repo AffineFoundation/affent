@@ -67,6 +67,18 @@ func TestFormatSnapshotResultFlagsBotChallenges(t *testing.T) {
 			},
 			want: "cloudflare challenge text",
 		},
+		{
+			name: "turnstile diagnostic",
+			snap: &Snapshot{
+				SnapshotID:  1,
+				URL:         "https://taostats.io/subnets/120",
+				Title:       "0.0631 · SN120 · Affine",
+				Diagnostics: []string{"cloudflare_turnstile_or_challenge_visible: page content may be gated; do not treat missing metric values as unavailable facts"},
+				TextBlocks:  []TextBlock{{Type: "p", Text: "Market Cap"}},
+				Interactive: []InteractiveElement{{Ref: 1, Role: "button", Name: "Connect Wallet"}},
+			},
+			want: "cloudflare turnstile/challenge widget",
+		},
 	}
 	for _, c := range cases {
 		t.Run(c.name, func(t *testing.T) {
@@ -89,10 +101,42 @@ func TestFormatSnapshotResultFlagsBotChallenges(t *testing.T) {
 			if !strings.Contains(out, "URL: "+c.snap.URL) {
 				t.Fatalf("blocked snapshot should still include page evidence for UI/debugging:\n%s", out)
 			}
+			if len(c.snap.Diagnostics) > 0 && !strings.Contains(out, "PAGE DIAGNOSTICS:") {
+				t.Fatalf("blocked snapshot should include diagnostics for UI/debugging:\n%s", out)
+			}
 			if strings.Contains(out, "SourceAccess:") {
 				t.Fatalf("blocked snapshot must not be marked as verified source evidence:\n%s", out)
 			}
 		})
+	}
+}
+
+func TestFormatSnapshotResultSurfacesDynamicMetricDiagnostics(t *testing.T) {
+	out, err := formatSnapshotResult(&Snapshot{
+		SnapshotID: 9,
+		URL:        "https://taostats.io/subnets/120",
+		Title:      "0.0631 · SN120 · Affine",
+		Diagnostics: []string{
+			"empty_dynamic_metric_widgets: 3 visible custom metric widget(s) exposed no text value; use API/text/source endpoint or mark those fields unverified",
+		},
+		TextBlocks: []TextBlock{
+			{Type: "p", Text: "Market Cap"},
+			{Type: "p", Text: "24hr Volume"},
+		},
+	})
+	if err != nil {
+		t.Fatalf("empty metric widgets alone should warn but not block: %v", err)
+	}
+	for _, want := range []string{
+		"SourceAccess: browser_rendered_url=https://taostats.io/subnets/120",
+		"page_text_below=verified_page_evidence",
+		"PAGE DIAGNOSTICS:",
+		"empty_dynamic_metric_widgets",
+		"mark those fields unverified",
+	} {
+		if !strings.Contains(out, want) {
+			t.Fatalf("dynamic metric diagnostic output missing %q:\n%s", want, out)
+		}
 	}
 }
 

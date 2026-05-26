@@ -26,6 +26,13 @@ type Snapshot struct {
 	URL   string `json:"url"`
 	Title string `json:"title"`
 
+	// Diagnostics are deterministic DOM-level warnings about the
+	// rendered page, such as bot/challenge overlays or custom metric
+	// widgets whose visible values are not exposed as text. They are
+	// shown to the model before page text so it does not treat a
+	// title-only / label-only snapshot as complete evidence.
+	Diagnostics []string `json:"diagnostics,omitempty"`
+
 	// Interactive elements found on the page, in DOM order. Each
 	// carries a stable ref id valid until the next Snapshot() call;
 	// click_, type_ etc. take this ref.
@@ -162,6 +169,57 @@ const snapshotJS = `() => {
   const MAX_BLOCK_CHARS = 400;
   const blocks = [];
   let blockCount = 0, truncated = false;
+  const diagnostics = [];
+
+  function hasVisibleTurnstileOrChallenge() {
+    const selectors = [
+      '#cf-turnstile',
+      '[id*="cf-turnstile" i]',
+      '[name="cf-turnstile-response"]',
+      'iframe[src*="challenges.cloudflare.com"]',
+      'script[src*="challenges.cloudflare.com/turnstile"]',
+      '[data-sitekey][class*="cf" i]',
+    ];
+    return selectors.some(sel => {
+      try {
+        const el = document.querySelector(sel);
+        if (!el) return false;
+        if (el.tagName === 'SCRIPT') return true;
+        return isVisible(el) || !!el.closest('[aria-hidden="false"]');
+      } catch (_) {
+        return false;
+      }
+    });
+  }
+
+  function emptyMetricCustomElementCount() {
+    const selectors = [
+      'number-flow-react',
+      'number-flow',
+      '[data-number-flow]',
+      '[data-slot*="number" i]',
+      '[class*="number-flow" i]',
+    ];
+    let count = 0;
+    selectors.forEach(sel => {
+      document.querySelectorAll(sel).forEach(el => {
+        if (!isVisible(el)) return;
+        const text = clean(el.textContent);
+        const aria = clean(el.getAttribute && (el.getAttribute('aria-label') || el.getAttribute('aria-valuetext') || el.getAttribute('title')));
+        if (!text && !aria) count++;
+      });
+    });
+    return count;
+  }
+
+  if (hasVisibleTurnstileOrChallenge()) {
+    diagnostics.push('cloudflare_turnstile_or_challenge_visible: page content may be gated; do not treat missing metric values as unavailable facts');
+  }
+  const emptyMetricCount = emptyMetricCustomElementCount();
+  if (emptyMetricCount > 0) {
+    diagnostics.push('empty_dynamic_metric_widgets: ' + emptyMetricCount + ' visible custom metric widget(s) exposed no text value; use API/text/source endpoint or mark those fields unverified');
+  }
+
   // Headings, paragraphs, list items, table cells, blockquote, pre
   // are unambiguous text blocks. Divs and spans get included only
   // when they contain a non-empty direct text node — that catches
@@ -209,6 +267,7 @@ const snapshotJS = `() => {
   return {
     url: location.href,
     title: document.title,
+    diagnostics: diagnostics,
     interactive: interactive,
     text_blocks: blocks,
     truncated_blocks: truncated,
@@ -280,6 +339,16 @@ func (snap *Snapshot) Format() string {
 	fmt.Fprintf(&b, "SNAPSHOT_ID: %d\n", snap.SnapshotID)
 	if metrictext.HasMultiplePriceLikeValues(snapshotMetricText(snap)) {
 		fmt.Fprintf(&b, "%s\n", metrictext.AmbiguityNote)
+	}
+	if len(snap.Diagnostics) > 0 {
+		b.WriteString("PAGE DIAGNOSTICS:\n")
+		for _, diagnostic := range snap.Diagnostics {
+			diagnostic = strings.TrimSpace(diagnostic)
+			if diagnostic == "" {
+				continue
+			}
+			fmt.Fprintf(&b, "- %s\n", truncateSnapshotField(diagnostic, maxGroupedTextLine))
+		}
 	}
 	b.WriteString("\n")
 
@@ -403,6 +472,13 @@ func blockedSnapshotReason(snap *Snapshot) string {
 		return "browser challenge title"
 	case strings.Contains(title, "sorry") && strings.Contains(url, "google."):
 		return "google challenge title"
+	}
+	for _, diagnostic := range snap.Diagnostics {
+		lower := strings.ToLower(diagnostic)
+		switch {
+		case strings.Contains(lower, "cloudflare_turnstile") || strings.Contains(lower, "challenge_visible"):
+			return "cloudflare turnstile/challenge widget"
+		}
 	}
 	for _, block := range snap.TextBlocks {
 		text := strings.ToLower(block.Text)

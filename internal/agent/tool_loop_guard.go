@@ -49,17 +49,19 @@ const (
 // these caps enforce runtime workflow contracts, not per-deployment
 // policy.
 var perTurnCallCaps = map[string]int{
-	FocusedTaskToolName: 3,
-	PlanToolName:        6,
-	"web_search":        4,
-	"web_fetch":         8,
-	"browser_navigate":  8,
-	"browser_snapshot":  4,
-	"browser_find":      8,
-	"browser_click":     5,
-	"browser_scroll":    5,
-	"browser_type":      5,
-	"browser_wait":      4,
+	FocusedTaskToolName:    3,
+	PlanToolName:           6,
+	"web_search":           4,
+	"web_fetch":            8,
+	"browser_navigate":     8,
+	"browser_snapshot":     4,
+	"browser_find":         8,
+	"browser_network":      8,
+	"browser_network_read": 8,
+	"browser_click":        5,
+	"browser_scroll":       5,
+	"browser_type":         5,
+	"browser_wait":         4,
 }
 
 type toolLoopGuard struct {
@@ -457,7 +459,7 @@ func isBrowserInteractionTool(tool string) bool {
 
 func isBrowserTool(tool string) bool {
 	switch tool {
-	case "browser_navigate", "browser_snapshot", "browser_find", "browser_click", "browser_scroll", "browser_type", "browser_wait", "browser_screenshot":
+	case "browser_navigate", "browser_snapshot", "browser_find", "browser_network", "browser_network_read", "browser_click", "browser_scroll", "browser_type", "browser_wait", "browser_screenshot":
 		return true
 	default:
 		return false

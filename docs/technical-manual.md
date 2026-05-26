@@ -299,6 +299,11 @@ Browser and web tool results also use smaller per-tool context budgets than
 generic tools. Full results remain available in trace events, but only the
 compact prefix is fed back into the next LLM call. This keeps repeated rendered
 page inspections from dominating context on small and medium models.
+The target browser architecture is documented in
+[`docs/browser-access-architecture.md`](browser-access-architecture.md):
+rendered pages should produce compact observations, diagnostics, source-access
+status, and eventually bounded network evidence, not raw HTML dumps or
+site-specific fallback scrapers.
 
 - `Failure: kind=blocked`: the source refused direct fetch, commonly HTTP 401
   or 403, or returned a successful HTTP response that is only an anti-bot,
@@ -496,6 +501,12 @@ If the browser lands on a 404 or "page not found" page, the snapshot and
 `browser_find` output are still returned for navigation discovery, but the
 `SourceAccess:` line marks them as `not_found_page_discovery_only` so the
 model does not treat the body as verified evidence.
+Browser sessions also keep a bounded same-site XHR/fetch evidence log.
+`browser_network` searches captured JSON/text responses and returns compact
+refs; `browser_network_read` reads a selected ref with
+`SourceAccess: browser_network_url=...; source_method=network_xhr_fetch`.
+Use this path for dynamic dashboards whose rendered text exposes labels but not
+the underlying metric values.
 
 Session endpoints:
 
@@ -665,6 +676,11 @@ Focused tasks and subagents return structured reports to the parent session
 without injecting their full intermediate work into the parent conversation.
 They are bounded by task size, turn count, depth, output caps, and read-only
 tool policies where applicable.
+When rolling compaction later summarizes the session, `run_task` and
+`subagent_run` tool results are rendered as compact delegation summaries
+(`summary`/`findings` or `report` plus bounded metadata and tool-call names)
+instead of raw JSON, so long sessions preserve the evidence the parent acted on
+without paying to re-summarize child transcripts or bulky response metadata.
 `web_extract` is the focused-task variant for page-level reading: use it when
 one page or a small bounded set of pages contains too much raw text for the
 parent turn, so the child keeps the evidence compact and the parent only sees
@@ -684,10 +700,17 @@ go run ./cmd/affenteval --list
 go run ./cmd/affenteval --list-suites
 ```
 
+Current built-in suites:
+
+- `small-model-tools`: weak-model tool calling, recovery, and compact-context behavior.
+- `hard-agent`: harder local agent tasks such as coding, planning, and subagent workflows.
+- `long-run`: deterministic complex tasks for longer practical runs, currently covering stock synthesis, Bittensor subnet research, and code implementation with PR-style reporting.
+
 Run scenarios:
 
 ```bash
 go run ./cmd/affenteval --suite small-model-tools --temperature 0
+go run ./cmd/affenteval --suite long-run --temperature 0
 go run ./cmd/affenteval --scenario coding-python-slug --temperature 0
 go run ./cmd/affenteval --suite small-model-tools --jsonl > eval.jsonl
 ```
@@ -696,6 +719,7 @@ Run through Docker:
 
 ```bash
 make eval-container EVAL_ARGS='--suite small-model-tools --temperature 0'
+make eval-container EVAL_ARGS='--suite long-run --temperature 0'
 make eval-agent-container EVAL_ARGS='--scenario coding-python-slug --temperature 0'
 make eval-agent-container EVAL_RUNTIME_MEMORY=true EVAL_ARGS='--scenario your-memory-scenario --temperature 0'
 make eval-agent-container EVAL_RUNTIME_MCP_CONFIG=/workspace/config/mcp.json EVAL_ARGS='--scenario your-mcp-scenario --temperature 0'

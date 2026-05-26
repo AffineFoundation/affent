@@ -156,9 +156,9 @@ func TestWithMemorySystemGuidance_AppendsOnce(t *testing.T) {
 
 func TestWithExternalResearchSystemGuidance_AppendsOnce(t *testing.T) {
 	base := "be helpful"
-	surface := externalResearchToolSurface{WebSearch: true, WebFetch: true, Browser: true, BrowserFind: true}
+	surface := externalResearchToolSurface{WebSearch: true, WebFetch: true, Browser: true, BrowserFind: true, BrowserNetwork: true}
 	once := WithExternalResearchSystemGuidance(base, surface)
-	for _, want := range []string{"External research:", "web_search", "authoritative", "Do not open every search result", "weak sentiment", "Source hint", "llms.txt", "Direct-reader warning", "browser_navigate", "browser_find", "repeated scrolling", "dynamic dashboards", "field-label queries", "price market cap FDV volume supply TVL", "24h 7d volume market cap", "validators miners stake emission", "Do not repeat browser_find with only the entity name", "If the current page already shows the target entity in a visible list or row", "exact row label, ticker, or id", "Dashboard text can interleave global header metrics", "label/value adjacency", "bot/challenge", "social posts", "dates/freshness", "Embedded data preview", "page-source evidence", "If web_fetch fails", "Do not keep retrying the same failing URL", "If web_search returns no results", "distinctive entities", "stale_ref", "fresh visible ref", "open 1-3 high-value visible result URLs", "before refining the search", "Preserve user-provided disambiguators", "network/subnet id", "parent ecosystem, the entity name or ticker, and the metric intent", "same-name standalone product", "searched the asserted parent ecosystem", "absent from one visible list", "parent ecosystem plus known ids/synonyms", "successfully accessed only when a tool actually read that URL", "actual fetched_url/browser_rendered_url", "requested_url only records what you asked for", "browser_find no-match only means", "current rendered page text", "Do not say a field was unavailable", "PAGE TEXT", "discovered/unverified", "API/text/export endpoints"} {
+	for _, want := range []string{"External research:", "web_search", "authoritative", "Do not open every search result", "weak sentiment", "Source hint", "llms.txt", "Direct-reader warning", "browser_navigate", "browser_find", "browser_network", "browser_network_read", "same-site XHR/fetch", "repeated scrolling", "dynamic dashboards", "field-label queries", "price market cap FDV volume supply TVL", "24h 7d volume market cap", "validators miners stake emission", "Do not repeat browser_find with only the entity name", "If the current page already shows the target entity in a visible list or row", "exact row label, ticker, or id", "Dashboard text can interleave global header metrics", "label/value adjacency", "bot/challenge", "social posts", "dates/freshness", "Embedded data preview", "page-source evidence", "If web_fetch fails", "Do not keep retrying the same failing URL", "If web_search returns no results", "distinctive entities", "stale_ref", "fresh visible ref", "open 1-3 high-value visible result URLs", "before refining the search", "Preserve user-provided disambiguators", "network/subnet id", "parent ecosystem, the entity name or ticker, and the metric intent", "same-name standalone product", "searched the asserted parent ecosystem", "absent from one visible list", "parent ecosystem plus known ids/synonyms", "successfully accessed only when a tool actually read that URL", "actual fetched_url/browser_rendered_url", "requested_url only records what you asked for", "browser_find no-match only means", "current rendered page text", "Do not say a field was unavailable", "PAGE TEXT", "discovered/unverified", "API/text/export endpoints"} {
 		if !strings.Contains(once, want) {
 			t.Fatalf("external research guidance missing %q:\n%s", want, once)
 		}
@@ -605,9 +605,15 @@ func TestExternalResearchSurfaceForRegistry(t *testing.T) {
 			wantOK: true,
 		},
 		{
+			name:   "browser network",
+			tools:  []string{"browser_network"},
+			want:   externalResearchToolSurface{Browser: true, BrowserNetwork: true},
+			wantOK: true,
+		},
+		{
 			name:   "all",
-			tools:  []string{"web_search", "web_fetch", "browser_navigate", "browser_snapshot", "browser_find"},
-			want:   externalResearchToolSurface{WebSearch: true, WebFetch: true, Browser: true, BrowserFind: true},
+			tools:  []string{"web_search", "web_fetch", "browser_navigate", "browser_snapshot", "browser_find", "browser_network", "browser_network_read"},
+			want:   externalResearchToolSurface{WebSearch: true, WebFetch: true, Browser: true, BrowserFind: true, BrowserNetwork: true},
 			wantOK: true,
 		},
 	}
@@ -1267,23 +1273,25 @@ func TestPreviewN_UTF8Safe(t *testing.T) {
 func TestLoopToolResultContextCapsByTool(t *testing.T) {
 	loop := &Loop{}
 	cases := map[string]int{
-		"read_file":           12 * 1024,
-		"shell":               6 * 1024,
-		"web_fetch":           5 * 1024,
-		"browser_navigate":    3 * 1024,
-		"browser_snapshot":    3 * 1024,
-		"browser_find":        2 * 1024,
-		"browser_scroll":      2 * 1024,
-		"browser_wait":        2 * 1024,
-		"browser_click":       2 * 1024,
-		"browser_type":        2 * 1024,
-		MemoryToolName:        4 * 1024,
-		SessionSearchToolName: 4 * 1024,
-		"web_search":          3 * 1024,
-		"list_files":          4 * 1024,
-		"edit_file":           2 * 1024,
-		"browser_screenshot":  2 * 1024,
-		"unknown":             MaxToolResultBytesInContext,
+		"read_file":            12 * 1024,
+		"shell":                6 * 1024,
+		"web_fetch":            5 * 1024,
+		"browser_navigate":     3 * 1024,
+		"browser_snapshot":     3 * 1024,
+		"browser_find":         2 * 1024,
+		"browser_network":      2 * 1024,
+		"browser_network_read": 4 * 1024,
+		"browser_scroll":       2 * 1024,
+		"browser_wait":         2 * 1024,
+		"browser_click":        2 * 1024,
+		"browser_type":         2 * 1024,
+		MemoryToolName:         4 * 1024,
+		SessionSearchToolName:  4 * 1024,
+		"web_search":           3 * 1024,
+		"list_files":           4 * 1024,
+		"edit_file":            2 * 1024,
+		"browser_screenshot":   2 * 1024,
+		"unknown":              MaxToolResultBytesInContext,
 	}
 	for tool, want := range cases {
 		if got := loop.toolResultMaxBytesInContextFor(tool); got != want {

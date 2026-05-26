@@ -627,6 +627,11 @@ func TestSkillProviderForToolsFiltersUnavailableRequiredTools(t *testing.T) {
 		t.Fatalf("browser skill must not activate without browser_find:\n%s", got)
 	}
 	withBrowser.Add(&Tool{Name: "browser_find"})
+	if got := SkillProviderForTools(skills, withBrowser)("访问 https://example.com 并读取页面标题"); got != "" {
+		t.Fatalf("browser skill must not activate without browser_network tools:\n%s", got)
+	}
+	withBrowser.Add(&Tool{Name: "browser_network"})
+	withBrowser.Add(&Tool{Name: "browser_network_read"})
 	got := SkillProviderForTools(skills, withBrowser)("访问 https://example.com 并读取页面标题")
 	if !strings.Contains(got, "web_snapshot_fact_extraction") {
 		t.Fatalf("browser skill should activate when its required tool exists:\n%s", got)

@@ -464,7 +464,7 @@ func summarizeActiveCapabilities(s *Session, cfg Config) sessionCapabilities {
 		SessionSearch:     hasTool("session_search"),
 		SymbolContext:     hasTool("symbol_context"),
 		RepoSearch:        hasTool("repo_search"),
-		Browser:           hasTool("browser_navigate") || hasTool("browser_snapshot") || hasTool("browser_find"),
+		Browser:           hasTool("browser_navigate") || hasTool("browser_snapshot") || hasTool("browser_find") || hasTool("browser_network") || hasTool("browser_network_read"),
 		BrowserScreenshot: hasTool("browser_screenshot"),
 		Web:               hasTool("web_fetch"),
 		WebSearch:         webSearch,

@@ -125,6 +125,7 @@ type Session struct {
 	// the router so its background goroutine exits.
 	hijackRouter   *rod.HijackRouter
 	interceptStats InterceptStats
+	network        *NetworkEvidenceLog
 }
 
 // InterceptStats returns a snapshot of the session's request
@@ -140,7 +141,7 @@ func (s *Session) InterceptStats() (blockedType, blockedDomain, domainRelaxation
 
 // NewSession boots a fresh browser and an about:blank page.
 func NewSession(cfg SessionConfig) (*Session, error) {
-	s := &Session{cfg: cfg}
+	s := &Session{cfg: cfg, network: NewNetworkEvidenceLog()}
 
 	l := launcher.New()
 	if bin := chromiumBinaryPath(cfg.BinaryPath); bin != "" {
@@ -292,7 +293,7 @@ func NewSession(cfg SessionConfig) (*Session, error) {
 	// network stack (preserving the real TLS fingerprint), and a
 	// Network domain observer copies successful responses into the
 	// cache afterwards.
-	startCacheObserver(page, cfg.Intercept.Cache, &s.interceptStats)
+	startCacheObserver(page, cfg.Intercept.Cache, &s.interceptStats, s.network)
 
 	return s, nil
 }

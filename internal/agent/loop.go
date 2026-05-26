@@ -407,10 +407,11 @@ const externalResearchSystemGuidanceMarker = "External research:"
 const runtimeContextSystemGuidanceMarker = "Runtime context:"
 
 type externalResearchToolSurface struct {
-	WebSearch   bool
-	WebFetch    bool
-	Browser     bool
-	BrowserFind bool
+	WebSearch      bool
+	WebFetch       bool
+	Browser        bool
+	BrowserFind    bool
+	BrowserNetwork bool
 }
 
 func externalResearchSystemGuidance(surface externalResearchToolSurface) string {
@@ -447,6 +448,9 @@ func externalResearchSystemGuidance(surface externalResearchToolSurface) string 
 		b.WriteString("\n- Dashboard text can interleave global header metrics, entity metrics, and labels in one line. Only pair a numeric value with a metric label when the label/value adjacency or embedded data is explicit; otherwise report it as ambiguous or global instead of assigning it to the entity. If multiple price-like values are visible, keep them separate and preserve their visible labels, such as title price versus body/top-bar USD price.")
 		b.WriteString("\n- Do not infer project maturity, scale, ranking quality, or market position from a table row number or visible order unless the table's sort column and metric label are explicit. A row such as \"5 NameSN120\" may be an index or current sort order, not evidence of project size or quality.")
 	}
+	if surface.BrowserNetwork {
+		b.WriteString("\n- If browser_navigate/browser_snapshot reports partial dynamic content, empty metric widgets, or visible labels without values, use browser_network to search captured same-site XHR/fetch responses, then browser_network_read on the relevant ref before citing hidden JSON/text values. Do not cite browser_network previews directly; read the response first.")
+	}
 	if surface.WebFetch {
 		b.WriteString("\n- If web_fetch returns Embedded data preview, treat matching fields as page-source evidence for the requested entity or route; ignore unrelated shell metadata, and prefer a canonical API/text/export source when the embedded data is insufficient or ambiguous.")
 		b.WriteString("\n- If web_fetch fails with a blocked page, dynamic app shell, HTTP error, timeout, or non-text response, follow the tool's Next guidance. Do not keep retrying the same failing URL; ")
@@ -471,7 +475,7 @@ func externalResearchSystemGuidance(surface externalResearchToolSurface) string 
 	b.WriteString("\n- For short-name market or trend requests, start discovery with the parent ecosystem, the entity name or ticker, and the metric intent (price, market cap, volume, TVL, stake, emission). If the first pass is noisy, refine once with the official domain or known ids/synonyms rather than repeating the bare name.")
 	b.WriteString("\n- When the user states a relationship such as \"X is a Y project/subnet/protocol\", treat the parent ecosystem as the search scope. A same-name standalone product outside that scope is disambiguation evidence only; do not use it as the main answer or as disproof until you have searched the asserted parent ecosystem directly.")
 	b.WriteString("\n- Do not conclude that a named entity does not exist only because it is absent from one visible list, first page, or broad search. For short-name entities, try one targeted refinement with the parent ecosystem plus known ids/synonyms, site search/filter controls, or a canonical index/API before reporting not found.")
-	b.WriteString("\n- If you report source access status, mark a URL as successfully accessed only when a tool actually read that URL and returned usable content. Use the actual fetched_url/browser_rendered_url from SourceAccess as the accessed URL; requested_url only records what you asked for before redirects or route changes. Links discovered on result pages or another page but not opened are discovered/unverified, not successful sources.")
+	b.WriteString("\n- If you report source access status, mark a URL as successfully accessed only when a tool actually read that URL and returned usable content. Use the actual fetched_url/browser_rendered_url/browser_network_url from SourceAccess as the accessed URL; requested_url only records what you asked for before redirects or route changes. Links discovered on result pages or another page but not opened are discovered/unverified, not successful sources.")
 	b.WriteString("\n- A browser_find no-match only means the query was absent from the current rendered page text; it is not proof that the entity/source is absent from the whole site or dataset. Say \"not visible in the inspected page/list\" unless a canonical source explicitly reports absence.")
 	b.WriteString("\n- Discovery-only pages (search results, 404/not-found pages, and rendered browser fallbacks that explicitly report discovery-only status) are navigation aids, not evidence. You may use their links or snippets to choose the next source, but do not cite their page body as verified fact.")
 	b.WriteString("\n- Before the final answer, re-scan the latest successful SourceAccess outputs for requested names, ids, prices, counts, dates, and status labels. Do not say a field was unavailable if a successful tool result's PAGE TEXT or extracted content already contains that field; instead report the value with that source. Treat search-result pages and 404 discovery-only pages as navigation aids, not evidence.")
@@ -638,10 +642,11 @@ func WithRegistrySystemGuidance(prompt string, reg *Registry) string {
 
 func externalResearchSurfaceForRegistry(reg *Registry) (externalResearchToolSurface, bool) {
 	surface := externalResearchToolSurface{
-		WebSearch:   hasRegisteredTool(reg, "web_search"),
-		WebFetch:    hasRegisteredTool(reg, "web_fetch"),
-		Browser:     hasRegisteredTool(reg, "browser_navigate") || hasRegisteredTool(reg, "browser_snapshot") || hasRegisteredTool(reg, "browser_find"),
-		BrowserFind: hasRegisteredTool(reg, "browser_find"),
+		WebSearch:      hasRegisteredTool(reg, "web_search"),
+		WebFetch:       hasRegisteredTool(reg, "web_fetch"),
+		Browser:        hasRegisteredTool(reg, "browser_navigate") || hasRegisteredTool(reg, "browser_snapshot") || hasRegisteredTool(reg, "browser_find") || hasRegisteredTool(reg, "browser_network") || hasRegisteredTool(reg, "browser_network_read"),
+		BrowserFind:    hasRegisteredTool(reg, "browser_find"),
+		BrowserNetwork: hasRegisteredTool(reg, "browser_network") || hasRegisteredTool(reg, "browser_network_read"),
 	}
 	return surface, surface.WebSearch || surface.WebFetch || surface.Browser
 }
@@ -1763,7 +1768,7 @@ func (l *Loop) finalNoToolsOnMaxTurnsForTurn(opts TurnOptions) bool {
 	return l.FinalNoToolsOnMaxTurns || opts.FinalNoToolsOnMaxTurns
 }
 
-const finalEvidenceDiscipline = `Use only existing tool results. Re-scan the latest successful SourceAccess outputs for requested names, ids, prices, counts, dates, and status labels before declaring any field unavailable. Discovery-only pages (search results, 404/not-found pages, and rendered browser fallbacks that explicitly report discovery-only status) are navigation aids, not evidence. Cite actual fetched_url/browser_rendered_url values as accessed sources; treat requested_url and discovered links as unverified unless a tool result actually read them. A browser_find no-match only means the query was absent from the current rendered page text; do not turn it into a whole-site or whole-dataset absence claim. On dashboard rows that mix global metrics, entity metrics, values, and labels, only pair a numeric value with a metric label when the label/value adjacency or embedded data is explicit; otherwise mark it ambiguous or global. If multiple price-like values are visible, keep them separate and preserve their visible labels, such as title price versus body/top-bar USD price. Do not infer project maturity, scale, ranking quality, or market position from a table row number or visible order unless the table's sort column and metric label are explicit.`
+const finalEvidenceDiscipline = `Use only existing tool results. Re-scan the latest successful SourceAccess outputs for requested names, ids, prices, counts, dates, and status labels before declaring any field unavailable. Discovery-only pages (search results, 404/not-found pages, and rendered browser fallbacks that explicitly report discovery-only status) are navigation aids, not evidence. Cite actual fetched_url/browser_rendered_url/browser_network_url values as accessed sources; treat requested_url and discovered links as unverified unless a tool result actually read them. A browser_find no-match only means the query was absent from the current rendered page text; do not turn it into a whole-site or whole-dataset absence claim. On dashboard rows that mix global metrics, entity metrics, values, and labels, only pair a numeric value with a metric label when the label/value adjacency or embedded data is explicit; otherwise mark it ambiguous or global. If multiple price-like values are visible, keep them separate and preserve their visible labels, such as title price versus body/top-bar USD price. Do not infer project maturity, scale, ranking quality, or market position from a table row number or visible order unless the table's sort column and metric label are explicit.`
 
 var lengthRecoveryPrompt = `The previous assistant response was cut off while summarizing evidence gathered in this turn.
 
@@ -1820,23 +1825,25 @@ func (l *Loop) toolResultContextBudgetBytes() int {
 // get a smaller one. Unlisted tools fall back to
 // MaxToolResultBytesInContext.
 var defaultToolResultLimits = map[string]int{
-	"read_file":           12 * 1024,
-	"shell":               6 * 1024,
-	"web_fetch":           5 * 1024,
-	"browser_navigate":    3 * 1024,
-	"browser_snapshot":    3 * 1024,
-	"browser_find":        2 * 1024,
-	"browser_scroll":      2 * 1024,
-	"browser_wait":        2 * 1024,
-	"browser_click":       2 * 1024,
-	"browser_type":        2 * 1024,
-	MemoryToolName:        4 * 1024,
-	SessionSearchToolName: 4 * 1024,
-	"web_search":          3 * 1024,
-	"list_files":          4 * 1024,
-	"write_file":          2 * 1024,
-	"edit_file":           2 * 1024,
-	"browser_screenshot":  2 * 1024,
+	"read_file":            12 * 1024,
+	"shell":                6 * 1024,
+	"web_fetch":            5 * 1024,
+	"browser_navigate":     3 * 1024,
+	"browser_snapshot":     3 * 1024,
+	"browser_find":         2 * 1024,
+	"browser_network":      2 * 1024,
+	"browser_network_read": 4 * 1024,
+	"browser_scroll":       2 * 1024,
+	"browser_wait":         2 * 1024,
+	"browser_click":        2 * 1024,
+	"browser_type":         2 * 1024,
+	MemoryToolName:         4 * 1024,
+	SessionSearchToolName:  4 * 1024,
+	"web_search":           3 * 1024,
+	"list_files":           4 * 1024,
+	"write_file":           2 * 1024,
+	"edit_file":            2 * 1024,
+	"browser_screenshot":   2 * 1024,
 }
 
 func (l *Loop) toolResultMaxBytesInContextFor(toolName string) int {

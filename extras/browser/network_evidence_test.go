@@ -1,0 +1,111 @@
+package browser
+
+import (
+	"context"
+	"encoding/json"
+	"net/http"
+	"strings"
+	"testing"
+
+	"github.com/go-rod/rod/lib/proto"
+)
+
+func TestNetworkEvidenceLogCapturesSameSiteXHRFetchOnly(t *testing.T) {
+	log := NewNetworkEvidenceLog()
+	log.ObserveResponse("https://taostats.io/subnets/120", proto.NetworkResourceTypeDocument)
+
+	if _, ok := log.Add("https://taostats.io/api/subnets/120", 200, proto.NetworkResourceTypeFetch, http.Header{"Content-Type": {"application/json"}}, []byte(`{"name":"Affine","netuid":120,"price":"0.0631"}`)); !ok {
+		t.Fatal("same-site JSON fetch should be captured")
+	}
+	if _, ok := log.Add("https://stats.g.doubleclick.net/g/collect", 200, proto.NetworkResourceTypeFetch, http.Header{"Content-Type": {"application/json"}}, []byte(`{"tracker":true}`)); ok {
+		t.Fatal("third-party analytics response must not be captured")
+	}
+	if _, ok := log.Add("https://taostats.io/_next/static/chunks/app.js", 200, proto.NetworkResourceTypeScript, http.Header{"Content-Type": {"application/javascript"}}, []byte(`console.log("Affine")`)); ok {
+		t.Fatal("script resources must not be captured as evidence")
+	}
+	if _, ok := log.Add("https://taostats.io/api/private", 403, proto.NetworkResourceTypeXHR, http.Header{"Content-Type": {"application/json"}}, []byte(`{"error":"blocked"}`)); ok {
+		t.Fatal("HTTP error responses must not be captured as evidence")
+	}
+
+	got := log.Search("Affine", 10)
+	if len(got) != 1 {
+		t.Fatalf("Search returned %d entries, want 1: %+v", len(got), got)
+	}
+	if got[0].Ref != "n1" || !strings.Contains(string(got[0].Body), `"netuid":120`) {
+		t.Fatalf("captured entry = %+v body=%s", got[0], got[0].Body)
+	}
+}
+
+func TestNetworkEvidenceToolsSearchAndRead(t *testing.T) {
+	log := NewNetworkEvidenceLog()
+	log.ObserveResponse("https://taostats.io/subnets/120", proto.NetworkResourceTypeDocument)
+	log.Add("https://taostats.io/api/subnets/120", 200, proto.NetworkResourceTypeXHR, http.Header{"Content-Type": {"application/json; charset=utf-8"}}, []byte(`{"subnet":"Affine","netuid":120,"market_cap":"201.04K T"}`))
+	s := &Session{network: log}
+
+	searchTool := NetworkSearchTool(s)
+	searchOut, err := searchTool.Execute(context.Background(), json.RawMessage(`{"query":"market_cap","max_results":5}`))
+	if err != nil {
+		t.Fatalf("browser_network: %v", err)
+	}
+	for _, want := range []string{
+		"BROWSER NETWORK EVIDENCE",
+		"n1 status=200 resource=xhr content_type=application/json",
+		"market_cap",
+		"Next: call browser_network_read",
+	} {
+		if !strings.Contains(searchOut, want) {
+			t.Fatalf("browser_network output missing %q:\n%s", want, searchOut)
+		}
+	}
+
+	readTool := NetworkReadTool(s)
+	readOut, err := readTool.Execute(context.Background(), json.RawMessage(`{"ref":"n1","max_bytes":128}`))
+	if err != nil {
+		t.Fatalf("browser_network_read: %v", err)
+	}
+	for _, want := range []string{
+		"SourceAccess: browser_network_url=https://taostats.io/api/subnets/120",
+		"source_method=network_xhr_fetch",
+		`"market_cap":"201.04K T"`,
+	} {
+		if !strings.Contains(readOut, want) {
+			t.Fatalf("browser_network_read output missing %q:\n%s", want, readOut)
+		}
+	}
+}
+
+func TestNetworkEvidenceToolsNoMatchesAndMissingRefGuideRecovery(t *testing.T) {
+	s := &Session{network: NewNetworkEvidenceLog()}
+	searchOut, err := NetworkSearchTool(s).Execute(context.Background(), json.RawMessage(`{"query":"Affine"}`))
+	if err != nil {
+		t.Fatalf("browser_network no-match should not error: %v", err)
+	}
+	if !strings.Contains(searchOut, "MATCHES: none") || !strings.Contains(searchOut, "mark hidden fields unverified") {
+		t.Fatalf("no-match output missing recovery guidance:\n%s", searchOut)
+	}
+
+	_, err = NetworkReadTool(s).Execute(context.Background(), json.RawMessage(`{"ref":"n99"}`))
+	if err == nil {
+		t.Fatal("missing network ref should error")
+	}
+	for _, want := range []string{"Failure: kind=not_found", "browser_network", "dashboard has loaded"} {
+		if !strings.Contains(err.Error(), want) {
+			t.Fatalf("missing-ref error missing %q: %v", want, err)
+		}
+	}
+}
+
+func TestNetworkEvidenceCandidateFiltersBinaryAndOversizedBodies(t *testing.T) {
+	if !networkEvidenceCandidate("https://example.com/api", 200, proto.NetworkResourceTypeFetch, "application/json", []byte(`{"ok":true}`)) {
+		t.Fatal("JSON fetch should be a candidate")
+	}
+	if networkEvidenceCandidate("https://example.com/api", 200, proto.NetworkResourceTypeImage, "application/json", []byte(`{"ok":true}`)) {
+		t.Fatal("non-XHR/fetch resources should not be candidates")
+	}
+	if networkEvidenceCandidate("https://example.com/api", 200, proto.NetworkResourceTypeFetch, "application/octet-stream", []byte{0, 1, 2, 3}) {
+		t.Fatal("binary bodies should not be candidates")
+	}
+	if networkEvidenceCandidate("https://example.com/api", 200, proto.NetworkResourceTypeFetch, "application/json", make([]byte, maxNetworkEvidenceBodyBytes+1)) {
+		t.Fatal("oversized bodies should not be candidates")
+	}
+}

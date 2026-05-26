@@ -6,7 +6,9 @@
     "browser_navigate",
     "browser_wait",
     "browser_snapshot",
-    "browser_find"
+    "browser_find",
+    "browser_network",
+    "browser_network_read"
   ],
   "auto_activation": {
     "any": [

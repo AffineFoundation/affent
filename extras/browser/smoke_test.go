@@ -4,6 +4,8 @@ package browser
 
 import (
 	"context"
+	"net/http"
+	"net/http/httptest"
 	"os"
 	"os/exec"
 	"strconv"
@@ -187,6 +189,96 @@ func TestSession_FindToolSearchesRenderedPage(t *testing.T) {
 	}
 }
 
+func TestSession_NetworkEvidenceCapturesDashboardXHR(t *testing.T) {
+	bin := findChromium(t)
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/":
+			w.Header().Set("Content-Type", "text/html; charset=utf-8")
+			_, _ = w.Write([]byte(`<!doctype html>
+<html>
+<body>
+  <h1>Affine SN120 dashboard</h1>
+  <dl>
+    <dt>Market Cap</dt><dd id="market-cap">loading</dd>
+    <dt>24h Volume</dt><dd id="volume">loading</dd>
+  </dl>
+  <div id="status">booting</div>
+  <script>
+    fetch('/api/metrics')
+      .then((r) => r.json())
+      .then(() => {
+        document.getElementById('market-cap').textContent = 'loaded from API';
+        document.getElementById('volume').textContent = 'loaded from API';
+        document.getElementById('status').textContent = 'loaded';
+      });
+  </script>
+</body>
+</html>`))
+		case "/api/metrics":
+			w.Header().Set("Content-Type", "application/json; charset=utf-8")
+			_, _ = w.Write([]byte(`{"subnet":"Affine","netuid":120,"market_cap":"201.04K T","volume_24h":"18.7K T"}`))
+		default:
+			http.NotFound(w, r)
+		}
+	}))
+	defer srv.Close()
+
+	sess, err := NewSession(SessionConfig{
+		BinaryPath: bin,
+		NoSandbox:  true,
+		Intercept:  InterceptConfig{AllowPrivateNetwork: true},
+	})
+	if err != nil {
+		t.Fatalf("NewSession: %v", err)
+	}
+	defer sess.Close()
+
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+
+	out, err := runNavigate(ctx, sess, srv.URL+"/", "networkidle")
+	if err != nil {
+		t.Fatalf("runNavigate: %v", err)
+	}
+	for _, want := range []string{"Affine SN120 dashboard", "Market Cap", "loaded from API"} {
+		if !strings.Contains(out, want) {
+			t.Fatalf("snapshot output missing %q:\n%s", want, out)
+		}
+	}
+	if strings.Contains(out, "201.04K T") || strings.Contains(out, "18.7K T") {
+		t.Fatalf("fixture should not expose metric values in rendered text:\n%s", out)
+	}
+
+	findOut, err := FindTool(sess).Execute(ctx, []byte(`{"query":"201.04K T","max_results":3}`))
+	if err != nil {
+		t.Fatalf("browser_find exact hidden value: %v", err)
+	}
+	if !strings.Contains(findOut, "MATCHES: none") {
+		t.Fatalf("hidden API value should not be visible to browser_find:\n%s", findOut)
+	}
+
+	searchOut := waitForNetworkEvidence(t, ctx, sess, "market_cap")
+	ref := firstNetworkRef(searchOut)
+	if ref == "" {
+		t.Fatalf("browser_network search did not expose a network ref:\n%s", searchOut)
+	}
+	readOut, err := NetworkReadTool(sess).Execute(ctx, []byte(`{"ref":"`+ref+`","max_bytes":512}`))
+	if err != nil {
+		t.Fatalf("browser_network_read: %v", err)
+	}
+	for _, want := range []string{
+		"SourceAccess: browser_network_url=" + srv.URL + "/api/metrics",
+		"source_method=network_xhr_fetch",
+		`"market_cap":"201.04K T"`,
+		`"volume_24h":"18.7K T"`,
+	} {
+		if !strings.Contains(readOut, want) {
+			t.Fatalf("browser_network_read output missing %q:\n%s", want, readOut)
+		}
+	}
+}
+
 func TestSession_RelaxDomainBlockingKeepsBrowserUsable(t *testing.T) {
 	bin := findChromium(t)
 	sess, err := NewSession(SessionConfig{
@@ -266,6 +358,37 @@ func TestSession_TypeAndSubmitFlow(t *testing.T) {
 	if !strings.Contains(result, "q=hello") {
 		t.Errorf("submit didn't update page; result:\n%s", result)
 	}
+}
+
+func waitForNetworkEvidence(t *testing.T, ctx context.Context, sess *Session, query string) string {
+	t.Helper()
+	deadline := time.Now().Add(5 * time.Second)
+	tool := NetworkSearchTool(sess)
+	args := []byte(`{"query":"` + query + `","max_results":5}`)
+	var last string
+	for time.Now().Before(deadline) {
+		out, err := tool.Execute(ctx, args)
+		if err != nil {
+			t.Fatalf("browser_network: %v", err)
+		}
+		last = out
+		if strings.Contains(out, "MATCHES:") && !strings.Contains(out, "MATCHES: none") {
+			return out
+		}
+		time.Sleep(50 * time.Millisecond)
+	}
+	t.Fatalf("timed out waiting for browser_network evidence for %q; last output:\n%s", query, last)
+	return ""
+}
+
+func firstNetworkRef(out string) string {
+	for _, line := range strings.Split(out, "\n") {
+		fields := strings.Fields(line)
+		if len(fields) >= 2 && fields[0] == "-" && strings.HasPrefix(fields[1], "n") {
+			return fields[1]
+		}
+	}
+	return ""
 }
 
 // findFirstRef scans `out` for the first line starting with [N] that

@@ -26,6 +26,16 @@ func shouldFetchResponseBodyForCache(encodedDataLength float64) bool {
 	return encodedDataLength <= 0 || encodedDataLength <= maxCachedResponseBodyBytes
 }
 
+func shouldFetchResponseBodyForObserver(encodedDataLength float64, cache ResponseCache, networkLog *NetworkEvidenceLog) bool {
+	if cache != nil && shouldFetchResponseBodyForCache(encodedDataLength) {
+		return true
+	}
+	if networkLog != nil && (encodedDataLength <= 0 || encodedDataLength <= maxNetworkEvidenceBodyBytes) {
+		return true
+	}
+	return false
+}
+
 type responseCachePutResult interface {
 	PutResult(ctx context.Context, url string, entry *CachedResponse) (stored bool, err error)
 }
@@ -65,14 +75,19 @@ func putResponseCache(ctx context.Context, cache ResponseCache, url string, entr
 // Note: getResponseBody is a one-shot read; calling it twice fails.
 // We tolerate the error (means the body was already drained, e.g. by
 // a separate hijack callback).
-func startCacheObserver(page *rod.Page, cache ResponseCache, stats *InterceptStats) {
-	if cache == nil {
+func startCacheObserver(page *rod.Page, cache ResponseCache, stats *InterceptStats, network ...*NetworkEvidenceLog) {
+	var networkLog *NetworkEvidenceLog
+	if len(network) > 0 {
+		networkLog = network[0]
+	}
+	if cache == nil && networkLog == nil {
 		return
 	}
 	type pending struct {
 		url        string
 		statusCode int
 		headers    http.Header
+		resource   proto.NetworkResourceType
 	}
 	var pendingMap sync.Map
 	sem := make(chan struct{}, observerBodyFetchConcurrency)
@@ -84,6 +99,9 @@ func startCacheObserver(page *rod.Page, cache ResponseCache, stats *InterceptSta
 			}
 			if !strings.HasPrefix(strings.ToLower(e.Response.URL), "http") {
 				return
+			}
+			if networkLog != nil {
+				networkLog.ObserveResponse(e.Response.URL, e.Type)
 			}
 			status := int(e.Response.Status)
 			if status < 200 || status >= 400 {
@@ -109,6 +127,7 @@ func startCacheObserver(page *rod.Page, cache ResponseCache, stats *InterceptSta
 				url:        e.Response.URL,
 				statusCode: status,
 				headers:    hdrs,
+				resource:   e.Type,
 			})
 		},
 		func(e *proto.NetworkLoadingFinished) {
@@ -119,7 +138,7 @@ func startCacheObserver(page *rod.Page, cache ResponseCache, stats *InterceptSta
 			}
 			p := raw.(pending)
 			reqID := e.RequestID
-			if !shouldFetchResponseBodyForCache(e.EncodedDataLength) {
+			if !shouldFetchResponseBodyForObserver(e.EncodedDataLength, cache, networkLog) {
 				return
 			}
 			// Best-effort acquire a semaphore slot. If we're already
@@ -142,15 +161,20 @@ func startCacheObserver(page *rod.Page, cache ResponseCache, stats *InterceptSta
 				if len(body) > maxCachedResponseBodyBytes {
 					return
 				}
-				entry := &CachedResponse{
-					URL:        p.url,
-					StatusCode: p.statusCode,
-					Headers:    p.headers,
-					Body:       body,
+				if networkLog != nil {
+					networkLog.Add(p.url, p.statusCode, p.resource, p.headers, body)
 				}
-				stored, err := putResponseCache(context.Background(), cache, p.url, entry)
-				if err == nil && stored && stats != nil {
-					stats.CacheWrite.Add(1)
+				if cache != nil {
+					entry := &CachedResponse{
+						URL:        p.url,
+						StatusCode: p.statusCode,
+						Headers:    p.headers,
+						Body:       body,
+					}
+					stored, err := putResponseCache(context.Background(), cache, p.url, entry)
+					if err == nil && stored && stats != nil {
+						stats.CacheWrite.Add(1)
+					}
 				}
 			}()
 		},

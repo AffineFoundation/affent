@@ -206,7 +206,7 @@ func TestSubagentPostPolicyBlocksParentBrowserAfterSuccessfulReport(t *testing.T
 	for _, name := range policy.BlockedTools {
 		blocked[name] = true
 	}
-	for _, name := range []string{"browser_navigate", "browser_snapshot", "browser_find", "browser_wait", "browser_click", "browser_scroll"} {
+	for _, name := range []string{"browser_navigate", "browser_snapshot", "browser_find", "browser_network", "browser_network_read", "browser_wait", "browser_click", "browser_scroll"} {
 		if !blocked[name] {
 			t.Fatalf("successful subagent report should block parent-side %s repeats; blocked=%v", name, policy.BlockedTools)
 		}
@@ -636,6 +636,7 @@ func TestSubagentSystemPromptIncludesWebExtractionGuidance(t *testing.T) {
 		"Call browser_navigate first",
 		"answer directly from the returned snapshot",
 		"Use browser_find",
+		"browser_network_read",
 		"Do not click through tabs",
 		"External research:",
 	} {

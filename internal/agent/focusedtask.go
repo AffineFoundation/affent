@@ -743,6 +743,8 @@ func FocusedTaskPostToolPolicy() *PostToolPolicy {
 			"browser_wait",
 			"browser_snapshot",
 			"browser_find",
+			"browser_network",
+			"browser_network_read",
 			"browser_click",
 			"browser_type",
 			"browser_scroll",
