@@ -386,6 +386,12 @@ func TestBatchScenarioChecks_UsesSharedCheckLibrary(t *testing.T) {
 		RequiredToolStatsAtLeast: map[string]int{
 			"memory_updates": 1,
 		},
+		RequiredLoopDecisionKinds: map[string]int{
+			"evidence_quality": 1,
+		},
+		RequiredLoopDecisionResults: map[string]int{
+			"defer": 1,
+		},
 		RequiredFocusedTaskCounts: map[string]int{
 			"explore": 1,
 		},
@@ -426,6 +432,8 @@ func TestBatchScenarioChecks_UsesSharedCheckLibrary(t *testing.T) {
 		"tool_called_at_least:plan:2",
 		"tool_failure_kind_at_least:invalid_args:1",
 		"tool_stats_at_least:memory_updates:1",
+		"loop_decision_kind_at_least:evidence_quality:1",
+		"loop_decision_result_at_least:defer:1",
 		"focused_task_called_at_least:explore:1",
 		"subagent_called_at_least:review:1",
 		"no_delegation_errors",

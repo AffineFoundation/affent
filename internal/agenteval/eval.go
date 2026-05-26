@@ -64,6 +64,8 @@ type BatchScenario struct {
 	RequiredToolCounts            map[string]int
 	RequiredToolFailureKindCounts map[string]int
 	RequiredToolStatsAtLeast      map[string]int
+	RequiredLoopDecisionKinds     map[string]int
+	RequiredLoopDecisionResults   map[string]int
 	RequiredCommandBeforeTool     []CommandToolOrderRequirement
 	RequiredCommandAfterTool      []CommandToolOrderRequirement
 	RequiredTools                 []string
@@ -768,6 +770,12 @@ func BatchScenarioChecks(scenario BatchScenario) []Check {
 	}
 	for _, field := range sortedStringMapKeys(scenario.RequiredToolStatsAtLeast) {
 		checks = append(checks, ToolStatsAtLeast(field, scenario.RequiredToolStatsAtLeast[field]))
+	}
+	for _, kind := range sortedStringMapKeys(scenario.RequiredLoopDecisionKinds) {
+		checks = append(checks, LoopDecisionKindAtLeast(kind, scenario.RequiredLoopDecisionKinds[kind]))
+	}
+	for _, decision := range sortedStringMapKeys(scenario.RequiredLoopDecisionResults) {
+		checks = append(checks, LoopDecisionResultAtLeast(decision, scenario.RequiredLoopDecisionResults[decision]))
 	}
 	for _, taskType := range sortedStringMapKeys(scenario.RequiredFocusedTaskCounts) {
 		checks = append(checks, FocusedTaskCalledAtLeast(taskType, scenario.RequiredFocusedTaskCounts[taskType]))

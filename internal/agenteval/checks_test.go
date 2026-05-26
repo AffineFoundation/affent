@@ -544,6 +544,33 @@ func TestToolFailureKindAtMost(t *testing.T) {
 	}
 }
 
+func TestLoopDecisionChecks(t *testing.T) {
+	trace := Trace{LoopDecisions: []LoopDecision{
+		{Kind: "evidence_quality", Decision: "defer", Trigger: "source_access_dynamic_partial"},
+		{Kind: "loop_stop", Decision: "continue"},
+	}}
+	if res := LoopDecisionKindAtLeast("evidence_quality", 1).Eval(trace); !res.Pass {
+		t.Fatalf("expected evidence_quality decision kind check to pass: %+v", res)
+	}
+	if res := LoopDecisionResultAtLeast("defer", 1).Eval(trace); !res.Pass {
+		t.Fatalf("expected defer decision result check to pass: %+v", res)
+	}
+	res := LoopDecisionKindAtLeast("memory_write", 1).Eval(trace)
+	if res.Pass {
+		t.Fatal("expected missing loop decision kind to fail")
+	}
+	if !strings.Contains(res.Detail, "memory_write=0") || !strings.Contains(res.Detail, "evidence_quality") {
+		t.Fatalf("failure detail should include requested and observed decision kinds: %s", res.Detail)
+	}
+	res = LoopDecisionResultAtLeast("yes", 1).Eval(trace)
+	if res.Pass {
+		t.Fatal("expected missing loop decision result to fail")
+	}
+	if !strings.Contains(res.Detail, "yes=0") || !strings.Contains(res.Detail, "defer") {
+		t.Fatalf("failure detail should include requested and observed decision results: %s", res.Detail)
+	}
+}
+
 func TestApplyTraceEventDerivesToolResultFailureKind(t *testing.T) {
 	trace := Trace{}
 	pending := map[string]int{}

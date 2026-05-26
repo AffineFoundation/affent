@@ -386,6 +386,40 @@ func ToolFailureKindAtMost(kind string, max int) Check {
 	}
 }
 
+func LoopDecisionKindAtLeast(kind string, min int) Check {
+	return Check{
+		Name: fmt.Sprintf("loop_decision_kind_at_least:%s:%d", kind, min),
+		Eval: func(t Trace) CheckResult {
+			stats := t.LoopDecisionStats(0)
+			got := stats.ByKind[kind]
+			if got >= min {
+				return CheckResult{Pass: true, Detail: fmt.Sprintf("%s=%d", kind, got)}
+			}
+			return CheckResult{
+				Pass:   false,
+				Detail: fmt.Sprintf("%s=%d, want >= %d; loop_decision_kinds=%v", kind, got, min, stats.ByKind),
+			}
+		},
+	}
+}
+
+func LoopDecisionResultAtLeast(decision string, min int) Check {
+	return Check{
+		Name: fmt.Sprintf("loop_decision_result_at_least:%s:%d", decision, min),
+		Eval: func(t Trace) CheckResult {
+			stats := t.LoopDecisionStats(0)
+			got := stats.ByDecision[decision]
+			if got >= min {
+				return CheckResult{Pass: true, Detail: fmt.Sprintf("%s=%d", decision, got)}
+			}
+			return CheckResult{
+				Pass:   false,
+				Detail: fmt.Sprintf("%s=%d, want >= %d; loop_decision_results=%v", decision, got, min, stats.ByDecision),
+			}
+		},
+	}
+}
+
 func FocusedTaskCalledAtLeast(taskType string, min int) Check {
 	return Check{
 		Name: fmt.Sprintf("focused_task_called_at_least:%s:%d", taskType, min),
