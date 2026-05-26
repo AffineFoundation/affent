@@ -847,9 +847,10 @@ capabilities. Opt capabilities back in only for suites that explicitly measure
 them: `--runtime-tools read_file,shell`, `--runtime-tools readonly_workspace,web`,
 `--runtime-tools recall` for durable memory plus prior-session search,
 `--runtime-memory`, `--runtime-web`, `--runtime-browser`, `--runtime-mcp-config`,
-or the matching lower-level `affentctl` flags. Use `--eval-all-tools` /
-`--runtime-all-tools` only for smoke/debug runs that intentionally exercise the
-full surface. The eval container does not forward host `AFFENTCTL_EVAL_MODE`,
+or the matching lower-level `affentctl --eval-tools` flags, which imply eval
+mode. Use `--eval-all-tools` / `--runtime-all-tools` only for smoke/debug runs
+that intentionally exercise the full surface. The eval container does not
+forward host `AFFENTCTL_EVAL_MODE`,
 `AFFENTCTL_EVAL_TOOLS`, `AFFENTCTL_EVAL_ALL_TOOLS`, `AFFENTCTL_SUBAGENT`,
 `AFFENTCTL_FOCUSED_TASKS`, or `AFFENTCTL_PROJECT_CONTEXT`; use the
 `EVAL_RUNTIME_*` knobs above. Use `--runtime-web` when a scenario explicitly

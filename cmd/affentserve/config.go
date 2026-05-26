@@ -460,7 +460,7 @@ func resolveServeRuntimeCapabilities(c Config) serveRuntimeCapabilities {
 		FocusedTasks:      c.EnableFocusedTasks,
 		WorkflowTools:     true,
 	}
-	if !c.EvalMode {
+	if !serveEvalModeEnabled(c) {
 		return caps
 	}
 	if c.EvalAllTools {
@@ -491,6 +491,10 @@ func resolveServeRuntimeCapabilities(c Config) serveRuntimeCapabilities {
 	caps.FocusedTasks = (c.enableFocusedTasksSet && c.EnableFocusedTasks) || allowed[agent.FocusedTaskToolName]
 	caps.WorkflowTools = allowed[agent.SkillToolName] || allowed[agent.PlanToolName] || allowed[agent.SessionSearchToolName]
 	return caps
+}
+
+func serveEvalModeEnabled(c Config) bool {
+	return c.EvalMode || strings.TrimSpace(c.EvalTools) != "" || c.EvalAllTools
 }
 
 func serveEvalToolAllowlist(c Config) (map[string]bool, []string) {
@@ -581,9 +585,10 @@ func serveEvalAllowlistHasBrowser(allowed map[string]bool) bool {
 }
 
 func (c Config) EffectiveRuntimeConfig() Config {
-	if !c.EvalMode {
+	if !serveEvalModeEnabled(c) {
 		return c
 	}
+	c.EvalMode = true
 	caps := resolveServeRuntimeCapabilities(c)
 	c.EnableBuiltins = caps.Builtins
 	c.EnableMemory = caps.Memory
@@ -757,9 +762,6 @@ func (c Config) Validate() error {
 	}
 	if c.CompactKeepLast < 0 {
 		return fmt.Errorf("compact_keep_last must be zero or a positive integer")
-	}
-	if !c.EvalMode && (strings.TrimSpace(c.EvalTools) != "" || c.EvalAllTools) {
-		return errors.New("eval_tools and eval_all_tools require eval_mode")
 	}
 	caps := resolveServeRuntimeCapabilities(c)
 	if c.EnableWebSearch && !caps.Web {

@@ -276,13 +276,12 @@ func TestParseFlagsAndConfig_EvalModeDisablesToolsByDefault(t *testing.T) {
 	cfg, err = parseFlagsAndConfig([]string{
 		"--base-url", "https://example/v1",
 		"--model", "demo",
-		"--eval-mode",
 		"--eval-all-tools",
 	})
 	if err != nil {
-		t.Fatalf("parseFlagsAndConfig eval all tools: %v", err)
+		t.Fatalf("parseFlagsAndConfig eval all tools implied eval mode: %v", err)
 	}
-	if !cfg.EvalAllTools || !cfg.EnableBuiltins || !cfg.EnableMemory || !cfg.EnableBrowser || !cfg.BrowserScreenshot || !cfg.EnableWeb || !cfg.EnableWebSearch || !cfg.EnableSubagent || !cfg.EnableFocusedTasks {
+	if !cfg.EvalMode || !cfg.EvalAllTools || !cfg.EnableBuiltins || !cfg.EnableMemory || !cfg.EnableBrowser || !cfg.BrowserScreenshot || !cfg.EnableWeb || !cfg.EnableWebSearch || !cfg.EnableSubagent || !cfg.EnableFocusedTasks {
 		t.Fatalf("--eval-all-tools should enable the full serve tool surface: %+v", cfg)
 	}
 }

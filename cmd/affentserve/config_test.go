@@ -409,22 +409,44 @@ func TestConfig_ValidateEvalModeRejectsUnusedEnvironmentOptions(t *testing.T) {
 	}
 }
 
-func TestConfig_ValidateEvalToolsRequireEvalMode(t *testing.T) {
-	for _, cfg := range []Config{
-		{EvalTools: "read_file"},
-		{EvalAllTools: true},
+func TestConfig_EvalToolFlagsImplyEvalMode(t *testing.T) {
+	for _, tc := range []struct {
+		name string
+		cfg  Config
+		want func(Config) bool
+	}{
+		{
+			name: "allowlist",
+			cfg:  Config{EvalTools: "read_file"},
+			want: func(effective Config) bool {
+				return effective.EvalMode && effective.EnableBuiltins && !effective.EnableMemory && !effective.EnableWeb && !effective.EnableBrowser && !effective.EnableSubagent && !effective.EnableFocusedTasks
+			},
+		},
+		{
+			name: "all tools",
+			cfg:  Config{EvalAllTools: true},
+			want: func(effective Config) bool {
+				return effective.EvalMode && effective.EnableBuiltins && effective.EnableMemory && effective.EnableWeb && effective.EnableWebSearch && effective.EnableBrowser && effective.BrowserScreenshot && effective.EnableSubagent && effective.EnableFocusedTasks
+			},
+		},
 	} {
-		cfg.BaseURL = "https://example/v1"
-		cfg.Model = "demo"
-		cfg.MaxSessions = 1
-		cfg.SessionIdleTTL = "5m"
-		cfg.PerCallTimeout = "3m"
-		cfg.RetryBackoff = "4s"
-		cfg.SubagentMaxDepth = agent.DefaultSubagentMaxDepth
-		err := cfg.Validate()
-		if err == nil || !strings.Contains(err.Error(), "require eval_mode") {
-			t.Fatalf("Validate error = %v, want require eval_mode", err)
-		}
+		t.Run(tc.name, func(t *testing.T) {
+			cfg := tc.cfg
+			cfg.BaseURL = "https://example/v1"
+			cfg.Model = "demo"
+			cfg.MaxSessions = 1
+			cfg.SessionIdleTTL = "5m"
+			cfg.PerCallTimeout = "3m"
+			cfg.RetryBackoff = "4s"
+			cfg.SubagentMaxDepth = agent.DefaultSubagentMaxDepth
+			if err := cfg.Validate(); err != nil {
+				t.Fatal(err)
+			}
+			effective := cfg.EffectiveRuntimeConfig()
+			if !tc.want(effective) {
+				t.Fatalf("EffectiveRuntimeConfig = %+v", effective)
+			}
+		})
 	}
 }
 

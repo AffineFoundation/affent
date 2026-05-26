@@ -707,20 +707,45 @@ func TestEvalModeAllowsExplicitEvalTools(t *testing.T) {
 	}
 }
 
-func TestEvalToolsRequireEvalMode(t *testing.T) {
-	for _, args := range [][]string{
-		{"--eval-tools=read_file"},
-		{"--eval-all-tools"},
+func TestEvalToolFlagsImplyEvalMode(t *testing.T) {
+	for _, tc := range []struct {
+		name string
+		args []string
+		want func(runtimeCapabilities) bool
+	}{
+		{
+			name: "allowlist",
+			args: []string{"--eval-tools=read_file"},
+			want: func(caps runtimeCapabilities) bool {
+				return caps.Builtins && !caps.Memory && !caps.WebFetch && !caps.Browser && !caps.Subagent && !caps.FocusedTasks
+			},
+		},
+		{
+			name: "all tools",
+			args: []string{"--eval-all-tools"},
+			want: func(caps runtimeCapabilities) bool {
+				return caps.Builtins && caps.Memory && caps.Skill && caps.Plan && caps.SessionSearch && caps.WebFetch && caps.WebSearch && caps.Browser && caps.BrowserScreenshot && caps.Subagent && caps.FocusedTasks && !caps.ProjectContext
+			},
+		},
 	} {
-		var cf commonFlags
-		fs := flag.NewFlagSet("test", flag.ContinueOnError)
-		cf.bind(fs)
-		if err := fs.Parse(args); err != nil {
-			t.Fatal(err)
-		}
-		if err := applyConfig(&cf, fs); err == nil || !strings.Contains(err.Error(), "require --eval-mode") {
-			t.Fatalf("applyConfig(%v) err=%v, want require --eval-mode", args, err)
-		}
+		t.Run(tc.name, func(t *testing.T) {
+			var cf commonFlags
+			fs := flag.NewFlagSet("test", flag.ContinueOnError)
+			cf.bind(fs)
+			if err := fs.Parse(tc.args); err != nil {
+				t.Fatal(err)
+			}
+			if err := applyConfig(&cf, fs); err != nil {
+				t.Fatal(err)
+			}
+			if !cf.evalMode {
+				t.Fatalf("applyConfig(%v) should infer eval mode", tc.args)
+			}
+			caps := resolveRuntimeCapabilities(cf)
+			if !tc.want(caps) {
+				t.Fatalf("resolveRuntimeCapabilities(%v) = %+v", tc.args, caps)
+			}
+		})
 	}
 }
 

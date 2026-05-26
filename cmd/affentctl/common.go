@@ -160,8 +160,8 @@ func (c *commonFlags) bind(fs *flag.FlagSet) {
 	fs.StringVar(&c.systemPromptPath, "system-prompt", "", "override system prompt; '-' or file path or literal")
 	fs.BoolVar(&c.quiet, "quiet", false, "suppress stderr progress")
 	fs.BoolVar(&c.evalMode, "eval-mode", false, "strict benchmark mode: disable all tools by default; opt in with --eval-tools, --eval-all-tools, --memory=true, --web=true, --browser=true, or --mcp-config (env: AFFENTCTL_EVAL_MODE)")
-	fs.StringVar(&c.evalTools, "eval-tools", "", "comma-separated tool allowlist used only with --eval-mode, e.g. read_file,shell,repo_search; groups: workspace,readonly_workspace,web,browser,recall,delegation,mcp (env: AFFENTCTL_EVAL_TOOLS)")
-	fs.BoolVar(&c.evalAllTools, "eval-all-tools", false, "with --eval-mode, enable the full tool surface instead of the default no-tool surface (env: AFFENTCTL_EVAL_ALL_TOOLS)")
+	fs.StringVar(&c.evalTools, "eval-tools", "", "comma-separated eval tool allowlist; implies --eval-mode. Examples: read_file,shell,repo_search; groups: workspace,readonly_workspace,web,browser,recall,delegation,mcp,all (env: AFFENTCTL_EVAL_TOOLS)")
+	fs.BoolVar(&c.evalAllTools, "eval-all-tools", false, "enable eval mode with the full tool surface instead of the default no-tool surface (env: AFFENTCTL_EVAL_ALL_TOOLS)")
 	fs.BoolVar(&c.memoryEnabled, "memory", true, "enable persistent memory: inject MEMORY.md / USER.md snapshot into the system prompt and register the memory tool (env: AFFENTCTL_MEMORY)")
 	fs.BoolVar(&c.memoryOnly, "memory-only", false, "register only the memory tool (no shell/file/MCP) and disable project context; for memory benchmarks. Implies --memory (env: AFFENTCTL_MEMORY_ONLY)")
 	fs.StringVar(&c.memoryWorkspaceStore, "memory-workspace-store", "", "(legacy) path to a pre-v2 single-file MEMORY.md; if set, migration moves it into the v2 topic layout on first access. Prefer --memory-dir for new setups.")
@@ -417,6 +417,9 @@ func applyConfig(c *commonFlags, fs *flag.FlagSet) error {
 		// they're disabled together for the same isolation reason.
 		c.focusedTasksEnabled = false
 	}
+	if strings.TrimSpace(c.evalTools) != "" || c.evalAllTools {
+		c.evalMode = true
+	}
 	if err := normalizeRuntimeLimits(c); err != nil {
 		return err
 	}
@@ -455,9 +458,6 @@ func normalizeRuntimeLimits(c *commonFlags) error {
 	}
 	if c.browserScreenshot && !c.browserEnabled {
 		return fmt.Errorf("--browser-screenshot requires --browser")
-	}
-	if !c.evalMode && (strings.TrimSpace(c.evalTools) != "" || c.evalAllTools) {
-		return fmt.Errorf("--eval-tools and --eval-all-tools require --eval-mode")
 	}
 	return nil
 }
