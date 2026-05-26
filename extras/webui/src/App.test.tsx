@@ -5,6 +5,10 @@ import { App } from "./App";
 import { completedTurn } from "./fixtures/completedTurn";
 import { cancelledTurn, maxTurns, resultTruncated, runningSubagent, toolError } from "./fixtures/scenarios";
 
+async function openMessageOptions(user: ReturnType<typeof userEvent.setup>, scope = document.body) {
+  await user.click(within(scope).getByRole("button", { name: "Message options" }));
+}
+
 describe("App", () => {
   afterEach(() => {
     vi.restoreAllMocks();
@@ -29,6 +33,20 @@ describe("App", () => {
     await user.click(screen.getByRole("button", { name: "White" }));
     expect(screen.getByTestId("app-shell")).toHaveAttribute("data-theme", "light");
     expect(window.localStorage.getItem("affent.theme")).toBe("light");
+  });
+
+  it("lets mobile users explicitly hide and restore the top controls", async () => {
+    const user = userEvent.setup();
+    vi.stubGlobal("fetch", vi.fn(async () => Promise.reject(new Error("network down"))));
+
+    render(<App />);
+
+    await user.click(screen.getByRole("button", { name: "Hide top controls" }));
+    expect(screen.getByTestId("app-shell")).toHaveAttribute("data-mobile-topbar", "hidden");
+    expect(screen.getByRole("button", { name: "Show top controls" })).toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: "Show top controls" }));
+    expect(screen.getByTestId("app-shell")).toHaveAttribute("data-mobile-topbar", "visible");
   });
 
   it("falls back to an offline preview when the API is unreachable", async () => {
@@ -352,6 +370,31 @@ describe("App", () => {
           ],
         });
       }
+      if (url === "/v1/sessions/research-1/memory") {
+        return jsonResponse({
+          session_id: "research-1",
+          has_memory: true,
+          user: {
+            target: "user",
+            topic: "user",
+            entries: ["prefers concise reports"],
+            entry_count: 1,
+            chars_used: 23,
+            chars_limit: 1375,
+            percent: 1,
+          },
+          core: {
+            target: "memory",
+            topic: "core",
+            entries: ["project facts are durable"],
+            entry_count: 1,
+            chars_used: 25,
+            chars_limit: 2200,
+            percent: 1,
+          },
+          topics: [],
+        });
+      }
       if (url === "/v1/sessions/research-1/events") return eventStreamResponse("");
       return jsonResponse({ error: { message: `unexpected ${url}` } }, 404);
     });
@@ -379,6 +422,8 @@ describe("App", () => {
     expect(screen.getByTestId("composer-task-hint")).toHaveTextContent("propose_install");
     expect(screen.queryByTestId("session-tools-panel")).toBeNull();
     await userEvent.click(screen.getByLabelText("Settings"));
+    expect(await screen.findByTestId("session-memory-panel")).toHaveTextContent("2 entries");
+    expect(screen.getByTestId("session-memory-panel")).toHaveTextContent("project facts are durable");
     expect(await screen.findByTestId("session-skills-panel")).toHaveTextContent("1 skill");
     expect(screen.getByTestId("session-skills-panel")).toHaveTextContent("coding_repair_workflow");
     expect(screen.queryByTestId("chat-context-bar")).toBeNull();
@@ -1155,6 +1200,7 @@ describe("App", () => {
     expect(screen.getByTestId("guidance-receipt")).toHaveTextContent("check tests first");
     expect(screen.getByTestId("guidance-receipt")).toHaveTextContent("Affent will use this in the current run.");
 
+    await openMessageOptions(user, screen.getByTestId("guidance-receipt"));
     await user.click(screen.getByRole("button", { name: "Edit guidance" }));
 
     expect(screen.getByPlaceholderText("Message Affent...")).toHaveValue("Guidance for current run:check tests first");
@@ -1377,7 +1423,9 @@ describe("App", () => {
 
     render(<App />);
 
-    await user.click(await screen.findByRole("button", { name: "Ask follow-up" }));
+    await screen.findByText("There are two files.");
+    await openMessageOptions(user, screen.getByTestId("msg-assistant"));
+    await user.click(screen.getByRole("button", { name: "Ask follow-up" }));
 
     expect(screen.getByPlaceholderText("Message Affent...")).toHaveValue(
       "Continue from this answer: There are two files.",
@@ -1406,7 +1454,9 @@ describe("App", () => {
 
     render(<App />);
 
-    await user.click(await screen.findByRole("button", { name: "Retry from here" }));
+    await screen.findByText("There are two files.");
+    await openMessageOptions(user, screen.getByTestId("msg-assistant"));
+    await user.click(screen.getByRole("button", { name: "Retry from here" }));
 
     expect(screen.getByPlaceholderText("Message Affent...")).toHaveValue(
       "Retry from this reply:\n\nThere are two files.",

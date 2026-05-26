@@ -5,6 +5,7 @@ import {
   cancelSessionTurn,
   createSession,
   deleteSession,
+  getSessionMemory,
   getSessionHistory,
   installSkill,
   listSessions,
@@ -13,6 +14,7 @@ import {
   readSkill,
   sendSessionMessage,
   streamSessionEvents,
+  type SessionMemoryResponse,
   type SessionSkillInfo,
   type SessionSkillInstallRequest,
   type SessionSummary,
@@ -21,6 +23,7 @@ import { ArtifactViewer, type ArtifactViewerState } from "./components/ArtifactV
 import { EventType, type RawEvent } from "./api/events";
 import { Composer, type ComposerDraft } from "./components/Composer";
 import { SessionList } from "./components/SessionList";
+import { SessionMemoryPanel } from "./components/SessionMemoryPanel";
 import { SessionSkillsPanel } from "./components/SessionSkillsPanel";
 import { Timeline, type GuidanceReceiptView, type PendingMessageView } from "./components/Timeline";
 import { WorkflowStatus } from "./components/WorkflowStatus";
@@ -56,6 +59,13 @@ type SkillsState =
   | { state: "ready"; skills: SessionSkillInfo[]; installEnabled: boolean }
   | { state: "error"; error: string };
 
+type MemoryState =
+  | { state: "idle" }
+  | { state: "empty" }
+  | { state: "loading" }
+  | { state: "ready"; memory: SessionMemoryResponse }
+  | { state: "error"; error: string };
+
 const demoReplayDelayMs = 180;
 const historyPageLimit = 500;
 const maxHistoryPages = 50;
@@ -81,8 +91,10 @@ export function App() {
   const [pendingMessage, setPendingMessage] = useState<PendingMessageView | undefined>();
   const [guidanceReceipts, setGuidanceReceipts] = useState<GuidanceReceiptView[]>([]);
   const [skillsState, setSkillsState] = useState<SkillsState>({ state: "idle" });
+  const [memoryState, setMemoryState] = useState<MemoryState>({ state: "idle" });
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [sessionsCollapsed, setSessionsCollapsed] = useState(false);
+  const [mobileTopbarHidden, setMobileTopbarHidden] = useState(false);
   const [composerDraft, setComposerDraft] = useState<ComposerDraft | undefined>();
   const [composerFocusSignal, setComposerFocusSignal] = useState(0);
   const [artifact, setArtifact] = useState<ArtifactViewerState>({ state: "idle" });
@@ -194,6 +206,28 @@ export function App() {
       });
     return () => ac.abort();
   }, [client, demoActive, settingsOpen]);
+
+  useEffect(() => {
+    if (demoActive || !settingsOpen) {
+      setMemoryState({ state: "idle" });
+      return;
+    }
+    if (!selectedSessionId) {
+      setMemoryState({ state: "empty" });
+      return;
+    }
+    const ac = new AbortController();
+    setMemoryState({ state: "loading" });
+    getSessionMemory(client, selectedSessionId, ac.signal)
+      .then((memory) => {
+        setMemoryState({ state: "ready", memory });
+      })
+      .catch((err) => {
+        if (isAbortError(err)) return;
+        setMemoryState({ state: "error", error: formatError(err) });
+      });
+    return () => ac.abort();
+  }, [client, demoActive, selectedSessionId, settingsOpen]);
 
   const handleReadSkill = useCallback(
     async (name: string): Promise<SessionSkillInfo> => {
@@ -623,7 +657,17 @@ export function App() {
   }
 
   return (
-    <div className="app" data-theme={theme} data-testid="app-shell">
+    <div
+      className="app"
+      data-theme={theme}
+      data-mobile-topbar={mobileTopbarHidden ? "hidden" : "visible"}
+      data-testid="app-shell"
+    >
+      {mobileTopbarHidden ? (
+        <button type="button" className="mobile-chrome-restore" aria-label="Show top controls" onClick={() => setMobileTopbarHidden(false)}>
+          Show
+        </button>
+      ) : null}
       <div className="app-topbar">
         <header className="app-header">
           <h1>Affent</h1>
@@ -631,6 +675,9 @@ export function App() {
             {connectionLabel}
           </span>
           <span className="spacer" />
+          <button type="button" className="mobile-chrome-toggle" aria-label="Hide top controls" onClick={() => setMobileTopbarHidden(true)}>
+            Hide
+          </button>
           <div className="theme-switch" role="group" aria-label="Color theme">
             <button type="button" aria-pressed={theme === "light"} onClick={() => setTheme("light")}>
               White
@@ -650,8 +697,14 @@ export function App() {
             <div className="settings-panel">
               <div className="settings-panel-head">
                 <strong>Settings</strong>
-                <span>Skills and runtime preferences live here.</span>
+                <span>Skills, memory, and runtime preferences live here.</span>
               </div>
+              <SessionMemoryPanel
+                memory={memoryState.state === "ready" ? memoryState.memory : undefined}
+                loading={memoryState.state === "loading"}
+                error={memoryState.state === "error" ? memoryState.error : undefined}
+                noSession={memoryState.state === "empty"}
+              />
               <SessionSkillsPanel
                 skills={skillsState.state === "ready" ? skillsState.skills : undefined}
                 loading={skillsState.state === "loading"}

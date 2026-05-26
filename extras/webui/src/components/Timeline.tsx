@@ -3,6 +3,7 @@ import type { SessionState } from "../store/sessionState";
 import type { UseAsDraft } from "../view/draftSource";
 import { TurnCard } from "./TurnCard";
 import { CopyButton } from "./CopyButton";
+import { CopyMenu } from "./CopyMenu";
 
 // The conversation is the primary product surface. Keep the scan path clean:
 // auxiliary traces stay inline with the turns that produced them.
@@ -369,13 +370,21 @@ function GuidanceReceipt({
         <div className="flow-step flow-step-user" role="group" aria-label="Sent guidance">
           <span className="pending-guidance-label">Guidance sent</span>
           <div className="flow-text">{receipt.text}</div>
-          <div className="message-actions">
-            <CopyButton label="Copy" value={receipt.text} className="message-action" />
-            {onUseAsDraft ? (
-              <button type="button" className="message-action" onClick={() => onUseAsDraft(receipt.text, "guidance_receipt")}>
-                Edit guidance
-              </button>
-            ) : null}
+          <div className="message-actions message-side-actions" data-side="user">
+            <CopyMenu
+              label="..."
+              ariaLabel="Message options"
+              className="message-copy-menu"
+              panelClassName="message-copy-menu-panel"
+              triggerClassName="message-side-trigger"
+            >
+              <CopyButton label="Copy" value={receipt.text} className="message-action" />
+              {onUseAsDraft ? (
+                <button type="button" className="message-action" onClick={() => onUseAsDraft(receipt.text, "guidance_receipt")}>
+                  Edit guidance
+                </button>
+              ) : null}
+            </CopyMenu>
           </div>
         </div>
         <div className="assistant-cluster">
@@ -422,8 +431,16 @@ function PendingTurn({ message, followUp }: { message: PendingMessageView; follo
         <div className="flow-step flow-step-user" role="group" aria-label={isGuidance ? "Guidance for current run" : "You message"}>
           {isGuidance ? <span className="pending-guidance-label">Live guidance</span> : null}
           <div className="flow-text">{text}</div>
-          <div className="message-actions">
-            <CopyButton label="Copy" value={text} className="message-action" />
+          <div className="message-actions message-side-actions" data-side="user">
+            <CopyMenu
+              label="..."
+              ariaLabel="Message options"
+              className="message-copy-menu"
+              panelClassName="message-copy-menu-panel"
+              triggerClassName="message-side-trigger"
+            >
+              <CopyButton label="Copy" value={text} className="message-action" />
+            </CopyMenu>
           </div>
         </div>
         <div className="assistant-cluster">

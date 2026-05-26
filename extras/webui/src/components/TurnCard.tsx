@@ -1323,31 +1323,43 @@ function MessageStep({
         </div>
       ) : null}
       {variant === "assistant" ? (
-        <div className="message-actions">
+        <div className="message-actions message-side-actions" data-side="assistant">
           <CopyMenu
-            label="Copy"
+            label="..."
+            ariaLabel="Message options"
             className="message-copy-menu"
             panelClassName="message-copy-menu-panel"
-            triggerClassName="message-action"
+            triggerClassName="message-side-trigger"
           >
             <CopyButton label="Copy markdown" value={text} className="message-action" />
             <CopyButton label="Copy plain text" value={markdownToPlainText(text)} className="message-action" />
+            {onContinue && !streaming ? (
+              <button type="button" className="message-action" onClick={() => onContinue(answerDraft(text), "answer")}>
+                Ask follow-up
+              </button>
+            ) : null}
+            {onRetry && !streaming ? (
+              <button type="button" className="message-action" onClick={() => onRetry(retryReplyDraft(text), "retry_reply")}>
+                Retry from here
+              </button>
+            ) : null}
           </CopyMenu>
-          {onContinue && !streaming ? (
-            <button type="button" className="message-action" onClick={() => onContinue(answerDraft(text), "answer")}>
-              Ask follow-up
-            </button>
-          ) : null}
-          {onRetry && !streaming ? (
-            <button type="button" className="message-action" onClick={() => onRetry(retryReplyDraft(text), "retry_reply")}>
-              Retry from here
-            </button>
-          ) : null}
         </div>
       ) : null}
       {variant === "user" && onReuse ? (
-        <div className="message-actions">
-          <CopyButton label="Copy" value={text} className="message-action" />
+        <div className="message-actions message-side-actions" data-side="user">
+          <CopyMenu
+            label="..."
+            ariaLabel="Message options"
+            className="message-copy-menu"
+            panelClassName="message-copy-menu-panel"
+            triggerClassName="message-side-trigger"
+          >
+            <CopyButton label="Copy" value={text} className="message-action" />
+            <button type="button" className="message-action" onClick={() => onReuse(text, "previous_message")}>
+              Edit message
+            </button>
+          </CopyMenu>
         </div>
       ) : null}
     </div>

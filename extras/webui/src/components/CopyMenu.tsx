@@ -3,12 +3,14 @@ import { useEffect, useLayoutEffect, useRef, useState, type CSSProperties, type 
 
 export function CopyMenu({
   label = "Copy",
+  ariaLabel,
   className,
   panelClassName,
   triggerClassName,
   children,
 }: {
   label?: string;
+  ariaLabel?: string;
   className: string;
   panelClassName: string;
   triggerClassName?: string;
@@ -85,6 +87,7 @@ export function CopyMenu({
         className={`copy-menu-trigger${triggerClassName ? ` ${triggerClassName}` : ""}`}
         aria-haspopup="menu"
         aria-expanded={open}
+        aria-label={ariaLabel}
         onClick={() => setOpen((current) => !current)}
       >
         {label}

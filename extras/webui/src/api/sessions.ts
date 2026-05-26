@@ -64,6 +64,25 @@ export interface SessionToolsResponse {
   surface?: SessionToolsSurfaceInfo;
 }
 
+export interface SessionMemoryBucket {
+  target: string;
+  topic?: string;
+  entries?: string[];
+  entry_count: number;
+  chars_used: number;
+  chars_limit?: number;
+  percent?: number;
+  newest_at?: string;
+}
+
+export interface SessionMemoryResponse {
+  session_id: string;
+  has_memory: boolean;
+  user?: SessionMemoryBucket;
+  core?: SessionMemoryBucket;
+  topics?: SessionMemoryBucket[];
+}
+
 export interface SessionSkillInfo {
   name: string;
   description?: string;
@@ -233,6 +252,14 @@ export function listSessionTools(
   signal?: AbortSignal,
 ): Promise<SessionToolsResponse> {
   return client.json<SessionToolsResponse>(`/v1/sessions/${encodeURIComponent(sessionId)}/tools`, { signal });
+}
+
+export function getSessionMemory(
+  client: ApiClient,
+  sessionId: string,
+  signal?: AbortSignal,
+): Promise<SessionMemoryResponse> {
+  return client.json<SessionMemoryResponse>(`/v1/sessions/${encodeURIComponent(sessionId)}/memory`, { signal });
 }
 
 export function listSkills(

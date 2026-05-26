@@ -18,6 +18,10 @@ function renderTimeline(
   return render(<Timeline session={session} sessionId={sessionId} onOpenArtifact={onOpenArtifact} onUseAsDraft={onUseAsDraft} />);
 }
 
+async function openMessageOptions(user: ReturnType<typeof userEvent.setup>, scope: HTMLElement) {
+  await user.click(within(scope).getByRole("button", { name: "Message options" }));
+}
+
 describe("Timeline", () => {
   it("renders the assistant answer with folded completed work details", async () => {
     const user = userEvent.setup();
@@ -242,7 +246,8 @@ describe("Timeline", () => {
     expect(screen.getByTestId("pending-turn")).toHaveTextContent("Starting");
     expect(screen.getByTestId("pending-turn")).not.toHaveTextContent("events");
 
-    await user.click(within(screen.getByTestId("pending-turn")).getByRole("button", { name: "Copy" }));
+    await openMessageOptions(user, screen.getByTestId("pending-turn"));
+    await user.click(screen.getByRole("button", { name: "Copy" }));
 
     expect(writeText).toHaveBeenCalledWith("summarize the repo");
   });
@@ -273,7 +278,8 @@ describe("Timeline", () => {
     expect(screen.getByTestId("pending-turn")).toHaveTextContent("Applying your guidance to the current run.");
     expect(screen.getByTestId("pending-turn")).not.toHaveTextContent("Preparing the first update.");
 
-    await user.click(within(screen.getByTestId("pending-turn")).getByRole("button", { name: "Copy" }));
+    await openMessageOptions(user, screen.getByTestId("pending-turn"));
+    await user.click(screen.getByRole("button", { name: "Copy" }));
 
     expect(writeText).toHaveBeenCalledWith("Guidance for current run: check tests first");
   });
@@ -297,9 +303,11 @@ describe("Timeline", () => {
 
     const writeText = vi.fn().mockResolvedValue(undefined);
     Object.defineProperty(navigator, "clipboard", { configurable: true, value: { writeText } });
-    await user.click(within(screen.getByTestId("guidance-receipt")).getByRole("button", { name: "Copy" }));
+    await openMessageOptions(user, screen.getByTestId("guidance-receipt"));
+    await user.click(screen.getByRole("button", { name: "Copy" }));
     expect(writeText).toHaveBeenCalledWith("Guidance for current run: check tests first");
 
+    await openMessageOptions(user, screen.getByTestId("guidance-receipt"));
     await user.click(screen.getByRole("button", { name: "Edit guidance" }));
 
     expect(onUseAsDraft).toHaveBeenCalledWith("Guidance for current run: check tests first", "guidance_receipt");
@@ -455,13 +463,13 @@ describe("Timeline", () => {
     Object.defineProperty(navigator, "clipboard", { configurable: true, value: { writeText } });
     renderTimeline(completedTurn);
 
-    await user.click(within(screen.getByTestId("msg-assistant")).getByRole("button", { name: "Copy" }));
+    await openMessageOptions(user, screen.getByTestId("msg-assistant"));
     await user.click(screen.getByRole("button", { name: "Copy plain text" }));
 
     expect(writeText).toHaveBeenCalledWith("There are two files.");
     expect(screen.queryByRole("button", { name: "Copy markdown" })).toBeNull();
     expect(screen.queryByRole("button", { name: "Copy plain text" })).toBeNull();
-    expect(within(screen.getByTestId("msg-assistant")).getByRole("button", { name: "Copy" })).toBeInTheDocument();
+    expect(within(screen.getByTestId("msg-assistant")).getByRole("button", { name: "Message options" })).toBeInTheDocument();
   });
 
   it("copies the user's message from the chat bubble", async () => {
@@ -470,10 +478,11 @@ describe("Timeline", () => {
     Object.defineProperty(navigator, "clipboard", { configurable: true, value: { writeText } });
     renderTimeline(completedTurn, "s1", undefined, vi.fn());
 
-    await user.click(within(screen.getByTestId("msg-user")).getByRole("button", { name: "Copy" }));
+    await openMessageOptions(user, screen.getByTestId("msg-user"));
+    await user.click(screen.getByRole("button", { name: "Copy" }));
 
     expect(writeText).toHaveBeenCalledWith("list the files");
-    expect(screen.getByRole("button", { name: "Copied" })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Copy" })).toBeNull();
   });
 
   it("turns an assistant answer into a follow-up draft", async () => {
@@ -481,6 +490,7 @@ describe("Timeline", () => {
     const onUseAsDraft = vi.fn();
     renderTimeline(completedTurn, "s1", undefined, onUseAsDraft);
 
+    await openMessageOptions(user, screen.getByTestId("msg-assistant"));
     await user.click(screen.getByRole("button", { name: "Ask follow-up" }));
 
     expect(onUseAsDraft).toHaveBeenCalledWith("Continue from this answer: There are two files.", "answer");
@@ -491,6 +501,7 @@ describe("Timeline", () => {
     const onUseAsDraft = vi.fn();
     renderTimeline(completedTurn, "s1", undefined, onUseAsDraft);
 
+    await openMessageOptions(user, screen.getByTestId("msg-assistant"));
     await user.click(screen.getByRole("button", { name: "Retry from here" }));
 
     expect(onUseAsDraft).toHaveBeenCalledWith("Retry from this reply:\n\nThere are two files.", "retry_reply");
@@ -513,6 +524,7 @@ describe("Timeline", () => {
       { id: 3, type: "turn.end", data: { turn_id: "t1", reason: "completed" } },
     ], "s1", undefined, onUseAsDraft);
 
+    await openMessageOptions(user, screen.getByTestId("msg-assistant"));
     await user.click(screen.getByRole("button", { name: "Retry from here" }));
 
     expect(onUseAsDraft).toHaveBeenCalledWith(

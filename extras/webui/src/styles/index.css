@@ -216,6 +216,11 @@ body {
   outline: none;
 }
 
+.mobile-chrome-toggle,
+.mobile-chrome-restore {
+  display: none;
+}
+
 .settings-menu {
   position: relative;
   flex: 0 0 auto;
@@ -1148,6 +1153,25 @@ body {
   font-size: 12px;
   line-height: 1.5;
   white-space: pre-wrap;
+}
+
+.session-memory-entries {
+  display: grid;
+  gap: 6px;
+  max-height: 260px;
+  overflow: auto;
+  margin: 0;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: var(--bg-sunken);
+  color: var(--text);
+  padding: 8px 10px 8px 26px;
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+.session-memory-entries li {
+  padding-left: 2px;
 }
 
 .session-skill-preview {
@@ -3424,6 +3448,7 @@ mark {
 }
 
 .flow-step {
+  position: relative;
   display: grid;
   gap: 5px;
   min-width: 0;
@@ -3513,15 +3538,70 @@ mark {
   padding-top: 1px;
 }
 
+.message-side-actions {
+  position: absolute;
+  top: 8px;
+  z-index: 4;
+  display: block;
+  width: 30px;
+  min-height: 30px;
+  max-width: none;
+  padding: 0;
+}
+
+.message-side-actions[data-side="user"] {
+  left: 2px;
+}
+
+.message-side-actions[data-side="assistant"] {
+  right: 2px;
+}
+
 .flow-step-user .message-actions {
   justify-content: flex-end;
   max-width: min(680px, 88%);
+}
+
+.flow-step-user .message-side-actions {
+  justify-content: initial;
+  max-width: none;
 }
 
 .message-copy-menu {
   position: relative;
   z-index: 2;
   min-width: 0;
+}
+
+.message-copy-menu .copy-menu-trigger.message-side-trigger {
+  display: inline-grid;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  min-width: 28px;
+  border: 1px solid transparent;
+  border-radius: 999px;
+  background: transparent;
+  color: var(--text-faint);
+  font: inherit;
+  font-size: 14px;
+  font-weight: 800;
+  line-height: 1;
+  letter-spacing: 0;
+  padding: 0 0 5px;
+  cursor: pointer;
+  opacity: 0.58;
+  transition: opacity 140ms ease, color 140ms ease, background 140ms ease, border-color 140ms ease;
+}
+
+.flow-step:hover .message-copy-menu .copy-menu-trigger.message-side-trigger,
+.message-copy-menu .copy-menu-trigger.message-side-trigger:focus-visible,
+.message-copy-menu[data-open="true"] .copy-menu-trigger.message-side-trigger {
+  border-color: rgba(20, 184, 166, 0.24);
+  background: rgba(240, 253, 250, 0.9);
+  color: var(--text);
+  opacity: 1;
+  outline: none;
 }
 
 .message-copy-menu .copy-menu-trigger.message-action {
@@ -6851,6 +6931,8 @@ html[data-theme="dark"] .markdown-text hr {
 }
 
 html[data-theme="dark"] .theme-switch,
+html[data-theme="dark"] .mobile-chrome-toggle,
+html[data-theme="dark"] .mobile-chrome-restore,
 html[data-theme="dark"] .settings-menu > summary,
 html[data-theme="dark"] .settings-panel,
 html[data-theme="dark"] .connection-pill,
@@ -6980,6 +7062,7 @@ html[data-theme="dark"] .runtime-capability-panel,
 html[data-theme="dark"] .runtime-capability-overflow-body,
 html[data-theme="dark"] .artifact-code[data-view="json"],
 html[data-theme="dark"] .session-skill-body,
+html[data-theme="dark"] .session-memory-entries,
 html[data-theme="dark"] .composer-task-hint[data-tone="unknown"] {
   background: rgba(14, 17, 22, 0.78);
 }
@@ -7205,9 +7288,18 @@ html[data-theme="dark"] .agent-activity-node-action {
   box-shadow: none;
 }
 
+html[data-theme="dark"] .message-copy-menu .copy-menu-trigger.message-side-trigger {
+  border-color: transparent;
+  background: transparent;
+  color: var(--text-faint);
+}
+
 html[data-theme="dark"] .message-action:hover,
 html[data-theme="dark"] .message-action:focus-visible,
 html[data-theme="dark"] .message-copy-menu[data-open="true"] .copy-menu-trigger.message-action,
+html[data-theme="dark"] .message-copy-menu .copy-menu-trigger.message-side-trigger:hover,
+html[data-theme="dark"] .message-copy-menu .copy-menu-trigger.message-side-trigger:focus-visible,
+html[data-theme="dark"] .message-copy-menu[data-open="true"] .copy-menu-trigger.message-side-trigger,
 html[data-theme="dark"] .agent-activity-copy-menu .copy-menu-trigger:hover,
 html[data-theme="dark"] .agent-activity-copy-menu .copy-menu-trigger:focus-visible,
 html[data-theme="dark"] .agent-activity-copy-menu[data-open="true"] .copy-menu-trigger,
@@ -7338,6 +7430,49 @@ html[data-theme="dark"] ::selection {
   .app-main {
     padding: 10px;
   }
+  .mobile-chrome-toggle,
+  .mobile-chrome-restore {
+    align-items: center;
+    justify-content: center;
+    height: 30px;
+    border: 1px solid rgba(189, 199, 211, 0.78);
+    border-radius: var(--radius-sm);
+    background: rgba(255, 255, 255, 0.82);
+    color: var(--text-muted);
+    padding: 0 9px;
+    font: inherit;
+    font-size: 12px;
+    font-weight: 700;
+    cursor: pointer;
+  }
+  .mobile-chrome-toggle {
+    display: inline-flex;
+  }
+  .mobile-chrome-restore {
+    position: fixed;
+    z-index: 96;
+    top: 8px;
+    right: 8px;
+    display: inline-flex;
+    box-shadow: var(--shadow-soft);
+  }
+  .app-topbar {
+    max-height: 96px;
+    overflow: visible;
+    transition:
+      max-height 180ms ease,
+      opacity 160ms ease,
+      transform 180ms ease,
+      border-color 160ms ease;
+  }
+  .app[data-mobile-topbar="hidden"] .app-topbar {
+    max-height: 0;
+    overflow: hidden;
+    pointer-events: none;
+    opacity: 0;
+    transform: translateY(-12px);
+    border-bottom-color: transparent;
+  }
   .app-header {
     flex-wrap: wrap;
     padding: 10px 12px;
@@ -7380,6 +7515,9 @@ html[data-theme="dark"] ::selection {
     box-shadow: 0 24px 72px rgba(15, 23, 42, 0.24);
     transform: translateX(calc(-100% - 22px));
     transition: transform 220ms var(--ease-snap), box-shadow 220ms ease;
+  }
+  .app[data-mobile-topbar="hidden"] .session-panel {
+    top: 10px;
   }
   .session-panel[data-mobile-open="true"] {
     transform: translateX(0);
@@ -7447,6 +7585,12 @@ html[data-theme="dark"] ::selection {
     font-size: 12px;
     cursor: pointer;
   }
+  .session-collapse-action {
+    display: none;
+  }
+  .app[data-mobile-topbar="hidden"] .mobile-session-launcher {
+    display: none;
+  }
   .timeline-surface {
     order: 1;
     min-height: calc(100svh - 72px);
@@ -7459,6 +7603,14 @@ html[data-theme="dark"] ::selection {
   .workspace-shell[data-session-nav="visible"] .timeline-surface {
     min-height: calc(100svh - 72px);
     height: calc(100svh - 72px);
+  }
+  .app[data-mobile-topbar="hidden"] .timeline-surface,
+  .app[data-mobile-topbar="hidden"] .workspace-shell[data-session-nav="visible"] .timeline-surface {
+    min-height: calc(100svh - 20px);
+    height: calc(100svh - 20px);
+  }
+  .app[data-mobile-topbar="hidden"] .surface-context {
+    display: none;
   }
   .surface-context {
     padding: 10px 12px 0;
