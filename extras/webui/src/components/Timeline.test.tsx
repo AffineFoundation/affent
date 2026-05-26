@@ -1022,6 +1022,11 @@ describe("Timeline", () => {
     rerender(<ScrollHarness events={completedTurn} guidanceReceipts={[{ id: 1, text: "check tests first" }]} />);
 
     expect(screen.getByRole("button", { name: /jump to latest/i })).toBeInTheDocument();
+
+    Object.defineProperty(scrollRoot, "scrollTop", { configurable: true, value: 900 });
+    fireEvent.scroll(scrollRoot);
+
+    expect(screen.getByRole("button", { name: /jump to latest/i })).toBeInTheDocument();
   });
 
   it("follows local guidance receipts when already at the latest message", () => {

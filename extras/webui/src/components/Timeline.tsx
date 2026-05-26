@@ -109,7 +109,6 @@ export function Timeline({
       if (!userBrowsedHistory.current) return;
       if (distance < 180) autoFollowPaused.current = false;
       setFollowing(distance < 180);
-      if (distance < 180) setNewActivity(false);
     };
     const target: Window | HTMLElement = scrollRoot ?? window;
     target.addEventListener("wheel", markUserBrowsing, { passive: true });
@@ -229,7 +228,7 @@ export function Timeline({
       </div>
     );
   }
-  const showJumpToLatest = newActivity && (!following || session.status === "completed");
+  const showJumpToLatest = newActivity;
   return (
     <>
       {showJumpToLatest ? (

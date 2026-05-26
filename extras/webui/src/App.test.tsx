@@ -335,6 +335,23 @@ describe("App", () => {
           ],
         });
       }
+      if (url === "/v1/skills") {
+        return jsonResponse({
+          session_id: "account",
+          count: 1,
+          install_enabled: true,
+          skills: [
+            {
+              name: "coding_repair_workflow",
+              description: "Repair code by reproducing failures first.",
+              source: "embed:internal/agent/builtin_skills/coding_repair_workflow/SKILL.md",
+              runtime: false,
+              body_preview: "AFFENT ACTIVE SKILL: coding_repair_workflow",
+              body_bytes: 128,
+            },
+          ],
+        });
+      }
       if (url === "/v1/sessions/research-1/events") return eventStreamResponse("");
       return jsonResponse({ error: { message: `unexpected ${url}` } }, 404);
     });
@@ -361,6 +378,9 @@ describe("App", () => {
     expect(screen.getByTestId("composer-task-hint")).toHaveTextContent("Skill install ready");
     expect(screen.getByTestId("composer-task-hint")).toHaveTextContent("propose_install");
     expect(screen.queryByTestId("session-tools-panel")).toBeNull();
+    await userEvent.click(screen.getByLabelText("Settings"));
+    expect(await screen.findByTestId("session-skills-panel")).toHaveTextContent("1 skill");
+    expect(screen.getByTestId("session-skills-panel")).toHaveTextContent("coding_repair_workflow");
     expect(screen.queryByTestId("chat-context-bar")).toBeNull();
   });
 

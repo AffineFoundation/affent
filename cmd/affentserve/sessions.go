@@ -38,6 +38,8 @@ type Session struct {
 	conv          *agent.Conversation
 	llm           *agent.LLMClient
 	registry      *agent.Registry
+	skillRegistry *agent.SkillRegistry
+	skillDir      string
 	events        chan sse.Event
 	browser       *affentbrowser.Session
 	workspace     string
@@ -432,14 +434,14 @@ func (p *SessionPool) buildSession(id string) (*Session, error) {
 	}
 	var localExec *executor.LocalExecutor
 	var skillReg *agent.SkillRegistry
+	skillDir := ""
 	planPath := ""
 	if p.cfg.EnableBuiltins {
 		localExec = executor.NewLocalExecutor(id, workspace)
-		skillDir := ""
 		if workflowToolsEnabled(p.cfg) {
 			skillDir = agent.DefaultWorkspaceSkillDir(sessionDir)
 			var skillErr error
-			skillReg, skillErr = agent.RuntimeSkillRegistry(skillDir)
+			skillReg, skillErr = sessionRuntimeSkillRegistry(p, skillDir)
 			if skillErr != nil {
 				_ = os.RemoveAll(workspace)
 				return nil, fmt.Errorf("skills: %w", skillErr)
@@ -660,6 +662,8 @@ func (p *SessionPool) buildSession(id string) (*Session, error) {
 		conv:          conv,
 		llm:           llm,
 		registry:      reg,
+		skillRegistry: skillReg,
+		skillDir:      skillDir,
 		events:        events,
 		browser:       browser,
 		workspace:     workspace,

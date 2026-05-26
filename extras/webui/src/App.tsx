@@ -6,16 +6,22 @@ import {
   createSession,
   deleteSession,
   getSessionHistory,
+  installSkill,
   listSessions,
+  listSkills,
   readSessionArtifact,
+  readSkill,
   sendSessionMessage,
   streamSessionEvents,
+  type SessionSkillInfo,
+  type SessionSkillInstallRequest,
   type SessionSummary,
 } from "./api/sessions";
 import { ArtifactViewer, type ArtifactViewerState } from "./components/ArtifactViewer";
 import { EventType, type RawEvent } from "./api/events";
 import { Composer, type ComposerDraft } from "./components/Composer";
 import { SessionList } from "./components/SessionList";
+import { SessionSkillsPanel } from "./components/SessionSkillsPanel";
 import { Timeline, type GuidanceReceiptView, type PendingMessageView } from "./components/Timeline";
 import { WorkflowStatus } from "./components/WorkflowStatus";
 import { RunDetails } from "./components/RunDetails";
@@ -44,6 +50,12 @@ interface HistoryLoadResult {
   cursor: number;
 }
 
+type SkillsState =
+  | { state: "idle" }
+  | { state: "loading" }
+  | { state: "ready"; skills: SessionSkillInfo[]; installEnabled: boolean }
+  | { state: "error"; error: string };
+
 const demoReplayDelayMs = 180;
 const historyPageLimit = 500;
 const maxHistoryPages = 50;
@@ -68,6 +80,9 @@ export function App() {
   const [deletingSessionId, setDeletingSessionId] = useState<string | undefined>();
   const [pendingMessage, setPendingMessage] = useState<PendingMessageView | undefined>();
   const [guidanceReceipts, setGuidanceReceipts] = useState<GuidanceReceiptView[]>([]);
+  const [skillsState, setSkillsState] = useState<SkillsState>({ state: "idle" });
+  const [settingsOpen, setSettingsOpen] = useState(false);
+  const [sessionsCollapsed, setSessionsCollapsed] = useState(false);
   const [composerDraft, setComposerDraft] = useState<ComposerDraft | undefined>();
   const [composerFocusSignal, setComposerFocusSignal] = useState(0);
   const [artifact, setArtifact] = useState<ArtifactViewerState>({ state: "idle" });
@@ -156,6 +171,49 @@ export function App() {
   const loadingSessionDetail = useCallback(
     (sessionId: string | undefined, sessionList?: readonly SessionSummary[]): string => resolveSessionTitle(sessionId, sessionList) ?? "Loading chat",
     [resolveSessionTitle],
+  );
+
+  useEffect(() => {
+    if (demoActive || !settingsOpen) {
+      setSkillsState({ state: "idle" });
+      return;
+    }
+    const ac = new AbortController();
+    setSkillsState({ state: "loading" });
+    listSkills(client, ac.signal)
+      .then((resp) => {
+        setSkillsState({
+          state: "ready",
+          skills: resp.skills,
+          installEnabled: resp.install_enabled,
+        });
+      })
+      .catch((err) => {
+        if (isAbortError(err)) return;
+        setSkillsState({ state: "error", error: formatError(err) });
+      });
+    return () => ac.abort();
+  }, [client, demoActive, settingsOpen]);
+
+  const handleReadSkill = useCallback(
+    async (name: string): Promise<SessionSkillInfo> => {
+      const resp = await readSkill(client, name);
+      return resp.skill;
+    },
+    [client],
+  );
+
+  const handleInstallSkill = useCallback(
+    async (request: SessionSkillInstallRequest): Promise<SessionSkillInfo> => {
+      const resp = await installSkill(client, request);
+      setSkillsState((current) => {
+        if (current.state !== "ready") return current;
+        const nextSkills = [resp.skill, ...current.skills.filter((skill) => skill.name !== resp.skill.name)];
+        return { ...current, skills: nextSkills, installEnabled: true };
+      });
+      return resp.skill;
+    },
+    [client],
   );
 
   const loadHistory = useCallback(
@@ -581,6 +639,29 @@ export function App() {
               Black
             </button>
           </div>
+          <details
+            className="settings-menu"
+            open={settingsOpen}
+            onToggle={(event) => setSettingsOpen(event.currentTarget.open)}
+          >
+            <summary aria-label="Settings">
+              <span>Settings</span>
+            </summary>
+            <div className="settings-panel">
+              <div className="settings-panel-head">
+                <strong>Settings</strong>
+                <span>Skills and runtime preferences live here.</span>
+              </div>
+              <SessionSkillsPanel
+                skills={skillsState.state === "ready" ? skillsState.skills : undefined}
+                loading={skillsState.state === "loading"}
+                error={skillsState.state === "error" ? skillsState.error : undefined}
+                installEnabled={skillsState.state === "ready" ? skillsState.installEnabled : false}
+                onReadSkill={handleReadSkill}
+                onInstallSkill={handleInstallSkill}
+              />
+            </div>
+          </details>
           {showHeaderNewChat ? (
             <button type="button" className="header-new-chat" disabled={actionBusy} onClick={() => void handleNewSession()}>
               New chat
@@ -592,10 +673,21 @@ export function App() {
         <div
           className="workspace-shell"
           data-compact-nav={compactNav}
-          data-session-nav={showSessionNav ? "visible" : "hidden"}
+          data-session-nav={showSessionNav ? (sessionsCollapsed ? "collapsed" : "visible") : "hidden"}
           data-testid="workspace-shell"
         >
-          {showSessionNav ? (
+          {showSessionNav && sessionsCollapsed ? (
+            <button
+              type="button"
+              className="session-rail-toggle"
+              aria-label="Show chats"
+              onClick={() => setSessionsCollapsed(false)}
+            >
+              <span aria-hidden="true">☰</span>
+              <b>Chats</b>
+            </button>
+          ) : null}
+          {showSessionNav && !sessionsCollapsed ? (
             <SessionList
               sessions={sessions}
               selectedId={selectedSessionId}
@@ -606,6 +698,7 @@ export function App() {
               onNew={() => void handleNewSession()}
               onDelete={(sessionId) => void handleDeleteSession(sessionId)}
               deletingId={deletingSessionId}
+              onCollapse={() => setSessionsCollapsed(true)}
             />
           ) : null}
           <section

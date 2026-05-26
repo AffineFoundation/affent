@@ -298,7 +298,7 @@ func listSessionSummaries(pool *SessionPool, opts sessionListOptions) ([]session
 				continue
 			}
 			id := entry.Name()
-			if id <= opts.After || agent.ValidateSessionID(id) != nil {
+			if strings.HasPrefix(id, ".") || id <= opts.After || agent.ValidateSessionID(id) != nil {
 				continue
 			}
 			if _, ok := candidates[id]; ok {

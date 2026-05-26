@@ -271,7 +271,7 @@ describe("SessionList", () => {
 
     expect(panel).toHaveAttribute("data-has-selection", "true");
     expect(panel).toHaveAttribute("data-mobile-open", "false");
-    expect(launcher).toHaveTextContent("Chats");
+    expect(launcher).not.toHaveTextContent("Affine research");
     expect(launcher).toHaveTextContent("2");
     expect(launcher).not.toHaveTextContent("Affine research");
     expect(launcher).not.toHaveTextContent("Switch");
@@ -289,7 +289,7 @@ describe("SessionList", () => {
     ]);
 
     const launcher = screen.getByRole("button", { name: "Open chats" });
-    expect(launcher).toHaveTextContent("Chats");
+    expect(launcher).toHaveTextContent("2");
     expect(launcher).not.toHaveTextContent("Saved chat");
     expect(launcher).not.toHaveTextContent("May 24 17:37 UTC");
     expect(launcher).not.toHaveTextContent("saved-empty");
@@ -334,6 +334,16 @@ describe("SessionList", () => {
     expect(screen.getByRole("button", { name: "New" })).toBeInTheDocument();
     expect(screen.getByText("No chats yet. Type a request to start.")).toBeInTheDocument();
     expect(screen.queryByTestId("session-tools")).toBeNull();
+  });
+
+  it("offers a desktop control to collapse the chat rail", async () => {
+    const user = userEvent.setup();
+    const onCollapse = vi.fn();
+    renderList([session({ id: "s1", latest_user_message: "current affine research" })], { onCollapse });
+
+    await user.click(screen.getByRole("button", { name: "Hide chats" }));
+
+    expect(onCollapse).toHaveBeenCalled();
   });
 
   it("shows the selected session's latest task from the live timeline state", () => {
@@ -556,7 +566,7 @@ describe("SessionList", () => {
 
 function renderList(
   sessions: SessionSummary[],
-  opts: { currentSession?: ReturnType<typeof reduceRawEvents>; pendingTask?: string; onDelete?: (id: string) => void } = {},
+  opts: { currentSession?: ReturnType<typeof reduceRawEvents>; pendingTask?: string; onDelete?: (id: string) => void; onCollapse?: () => void } = {},
 ) {
   return render(
     <SessionList
@@ -568,6 +578,7 @@ function renderList(
       onSelect={vi.fn()}
       onNew={vi.fn()}
       onDelete={opts.onDelete}
+      onCollapse={opts.onCollapse}
     />,
   );
 }

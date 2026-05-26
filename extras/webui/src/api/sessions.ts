@@ -63,6 +63,43 @@ export interface SessionToolsResponse {
   surface?: SessionToolsSurfaceInfo;
 }
 
+export interface SessionSkillInfo {
+  name: string;
+  description?: string;
+  source?: string;
+  runtime: boolean;
+  required_tools?: string[];
+  triggers?: string[];
+  auto_activation?: {
+    any?: string[];
+    all_any?: string[][];
+  };
+  body_preview?: string;
+  body_bytes: number;
+  body?: string;
+}
+
+export interface SessionSkillsResponse {
+  session_id: string;
+  count: number;
+  install_enabled: boolean;
+  skills: SessionSkillInfo[];
+}
+
+export interface SessionSkillResponse {
+  session_id: string;
+  skill: SessionSkillInfo;
+}
+
+export interface SessionSkillInstallRequest {
+  name: string;
+  description?: string;
+  body: string;
+  source?: string;
+  triggers?: string[];
+  required_tools?: string[];
+}
+
 export interface SessionCapabilities {
   eval_mode: boolean;
   builtins: boolean;
@@ -195,6 +232,66 @@ export function listSessionTools(
   signal?: AbortSignal,
 ): Promise<SessionToolsResponse> {
   return client.json<SessionToolsResponse>(`/v1/sessions/${encodeURIComponent(sessionId)}/tools`, { signal });
+}
+
+export function listSessionSkills(
+  client: ApiClient,
+  sessionId: string,
+  signal?: AbortSignal,
+): Promise<SessionSkillsResponse> {
+  return client.json<SessionSkillsResponse>(`/v1/sessions/${encodeURIComponent(sessionId)}/skills`, { signal });
+}
+
+export function listSkills(
+  client: ApiClient,
+  signal?: AbortSignal,
+): Promise<SessionSkillsResponse> {
+  return client.json<SessionSkillsResponse>("/v1/skills", { signal });
+}
+
+export function readSessionSkill(
+  client: ApiClient,
+  sessionId: string,
+  name: string,
+  signal?: AbortSignal,
+): Promise<SessionSkillResponse> {
+  return client.json<SessionSkillResponse>(
+    `/v1/sessions/${encodeURIComponent(sessionId)}/skills/${encodeURIComponent(name)}`,
+    { signal },
+  );
+}
+
+export function readSkill(
+  client: ApiClient,
+  name: string,
+  signal?: AbortSignal,
+): Promise<SessionSkillResponse> {
+  return client.json<SessionSkillResponse>(`/v1/skills/${encodeURIComponent(name)}`, { signal });
+}
+
+export function installSessionSkill(
+  client: ApiClient,
+  sessionId: string,
+  body: SessionSkillInstallRequest,
+  signal?: AbortSignal,
+): Promise<SessionSkillResponse> {
+  return client.json<SessionSkillResponse>(`/v1/sessions/${encodeURIComponent(sessionId)}/skills`, {
+    method: "POST",
+    body,
+    signal,
+  });
+}
+
+export function installSkill(
+  client: ApiClient,
+  body: SessionSkillInstallRequest,
+  signal?: AbortSignal,
+): Promise<SessionSkillResponse> {
+  return client.json<SessionSkillResponse>("/v1/skills", {
+    method: "POST",
+    body,
+    signal,
+  });
 }
 
 export function createSession(

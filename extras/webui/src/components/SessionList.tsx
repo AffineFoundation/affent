@@ -27,6 +27,7 @@ export function SessionList({
   onNew,
   onDelete,
   deletingId,
+  onCollapse,
 }: {
   sessions: readonly SessionSummary[];
   selectedId?: string;
@@ -37,6 +38,7 @@ export function SessionList({
   onNew: () => void;
   onDelete?: (id: string) => void | Promise<void>;
   deletingId?: string;
+  onCollapse?: () => void;
 }) {
   const [filter, setFilter] = useState<SessionListFilter>("all");
   const [query, setQuery] = useState("");
@@ -83,7 +85,7 @@ export function SessionList({
           aria-expanded={mobileOpen}
           onClick={() => setMobileOpen((open) => !open)}
         >
-          <span>Chats</span>
+          <span aria-hidden="true">☰</span>
           <b>{rows.length}</b>
         </button>
       ) : null}
@@ -107,6 +109,16 @@ export function SessionList({
           <h2>Chats</h2>
           <span>{demoActive ? "Read-only replay" : chatListSummary(rows.length, counts.active)}</span>
         </div>
+        {onCollapse ? (
+          <button
+            type="button"
+            className="session-collapse-action"
+            aria-label="Hide chats"
+            onClick={onCollapse}
+          >
+            Hide
+          </button>
+        ) : null}
         <button
           type="button"
           className="mobile-session-close"

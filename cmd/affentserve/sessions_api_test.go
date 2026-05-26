@@ -508,6 +508,29 @@ func TestHandleSessionList_PaginatesBySessionID(t *testing.T) {
 	}
 }
 
+func TestHandleSessionListSkipsHiddenSystemDirs(t *testing.T) {
+	memRoot := t.TempDir()
+	pool := newPoolWithMemoryRoot(t, memRoot)
+	createDurableSessionDir(t, pool, "visible")
+	if err := os.MkdirAll(filepath.Join(memRoot, ".affentserve", "account-skills"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+
+	r := httptest.NewRequest(http.MethodGet, "/v1/sessions", nil)
+	w := httptest.NewRecorder()
+	handleSessionsCollection(pool).ServeHTTP(w, r)
+	if got := w.Result().StatusCode; got != http.StatusOK {
+		t.Fatalf("status = %d, want 200; body=%s", got, w.Body.String())
+	}
+	var resp sessionListResponse
+	if err := json.Unmarshal(w.Body.Bytes(), &resp); err != nil {
+		t.Fatalf("decode: %v body=%s", err, w.Body.String())
+	}
+	if got, want := sessionIDs(resp.Sessions), []string{"visible"}; !sameStrings(got, want) {
+		t.Fatalf("session ids = %v, want %v", got, want)
+	}
+}
+
 func TestHandleSessionDetail_ReadsDurableSessionAfterRestart(t *testing.T) {
 	memRoot := t.TempDir()
 	pool1 := newPoolWithMemoryRoot(t, memRoot)
