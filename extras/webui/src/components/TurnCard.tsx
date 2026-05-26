@@ -87,7 +87,6 @@ export function TurnCard({
     <section id={anchorId} className="flow-turn" data-testid="turn-card" data-status={turn.status}>
       <header className="flow-turn-head" data-testid="turn-head" data-visible={showHeader ? "true" : "false"}>
         <div className="turn-title-group">
-          <div className="turn-index">Message {turnNumber}</div>
           <div className="turn-title" data-testid="turn-title" title={title}>
             <HighlightText text={title} query={searchQuery} />
           </div>
@@ -108,7 +107,6 @@ export function TurnCard({
           data-status={turn.status}
           data-tone={boundary.tone}
         >
-          <span className="turn-boundary-index">{`Message ${turnNumber}`}</span>
           <span className="turn-boundary-title" title={title}>
             <HighlightText text={boundary.title} query={searchQuery} />
           </span>

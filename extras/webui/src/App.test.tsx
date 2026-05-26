@@ -564,13 +564,7 @@ describe("App", () => {
     expect(await screen.findByTestId("pending-turn")).toHaveTextContent("explain main.go");
     expect(screen.getByTestId("pending-turn")).toHaveTextContent("Waiting for the next update in this chat.");
     expect(screen.getByTestId("pending-turn")).not.toHaveTextContent("Preparing the first update.");
-    expect(screen.queryByTestId("turn-nav-current")).toBeNull();
-    const nav = screen.getByTestId("turn-navigator");
-    expect(within(nav).getByTestId("turn-nav-glance")).toHaveTextContent("explain main.go");
-    expect(within(nav).getByRole("link", { name: /Message 2: explain main.go.*Waiting.*current/ })).toHaveAttribute(
-      "href",
-      "#pending-turn",
-    );
+    expect(screen.queryByTestId("turn-navigator")).toBeNull();
     const context = screen.getByTestId("chat-context-bar");
     expect(context).toHaveTextContent("main.go");
     expect(context).toHaveTextContent("Sending");

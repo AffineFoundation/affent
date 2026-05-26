@@ -18,24 +18,6 @@ function renderTimeline(
   return render(<Timeline session={session} sessionId={sessionId} onOpenArtifact={onOpenArtifact} onUseAsDraft={onUseAsDraft} />);
 }
 
-async function openTimelineTools(user: ReturnType<typeof userEvent.setup>) {
-  let toolbar = screen.queryByTestId("timeline-toolbar");
-  if (!toolbar) {
-    await user.click(screen.getByRole("button", { name: "Search in chat" }));
-    toolbar = await screen.findByTestId("timeline-toolbar");
-  }
-  if (!toolbar.hasAttribute("open")) {
-    await user.click(within(toolbar).getByText("Search in chat"));
-  }
-}
-
-async function openTimelineFilters(user: ReturnType<typeof userEvent.setup>) {
-  const advanced = screen.getByTestId("timeline-advanced-filter");
-  if (!advanced.hasAttribute("open")) {
-    await user.click(within(advanced).getByText("Filters"));
-  }
-}
-
 describe("Timeline", () => {
   it("renders the assistant answer with folded completed work details", async () => {
     const user = userEvent.setup();
@@ -67,64 +49,31 @@ describe("Timeline", () => {
     expect(screen.queryByText("Technical trace")).toBeNull();
   });
 
-  it("shows turn summaries for quick multi-turn navigation", () => {
+  it("keeps multi-turn chats clean without a conversation map above the thread", () => {
     renderTimeline([...completedTurn, ...messageOnlyTurn]);
 
-    expect(screen.getByTestId("conversation-map")).toBeInTheDocument();
+    expect(screen.queryByTestId("conversation-map")).toBeNull();
+    expect(screen.queryByTestId("turn-navigator")).toBeNull();
+    expect(screen.queryByTestId("turn-nav-glance")).toBeNull();
     expect(screen.queryByTestId("timeline-toolbar")).toBeNull();
-    const nav = screen.getByTestId("turn-navigator");
-    expect(within(nav).getByText("Messages")).toBeInTheDocument();
-    expect(within(nav).getByRole("button", { name: "Search in chat" })).toHaveAttribute("aria-pressed", "false");
-    expect(within(nav).getByText("2 messages · no tool needed")).toBeInTheDocument();
-    expect(within(nav).queryByTestId("turn-nav-current")).toBeNull();
-    expect(within(nav).getByTestId("turn-nav-progress")).toBeInTheDocument();
-    expect(within(nav).getByTestId("turn-nav-glance")).toBeInTheDocument();
-    expect(within(nav).getByTestId("turn-nav-glance")).toHaveTextContent("list the files");
-    expect(within(nav).getByTestId("turn-nav-glance")).toHaveTextContent("Result");
-    expect(within(nav).getByTestId("turn-nav-glance")).toHaveTextContent("README.md main.go");
-    expect(within(nav).getByTestId("turn-nav-glance")).toHaveTextContent("message only");
-    expect(within(nav).getByTestId("turn-nav-glance")).toHaveTextContent("Answer");
-    expect(within(nav).getByTestId("turn-nav-glance")).toHaveTextContent("no tool needed");
-    expect(within(nav).getAllByText("message only").length).toBeGreaterThanOrEqual(1);
-    expect(within(nav).getAllByText("Answered").length).toBeGreaterThanOrEqual(1);
-    expect(within(nav).queryByText("1 action")).toBeNull();
-    expect(within(nav).getByRole("link", { name: /Jump to message 2: message only — Answer: no tool needed \(current\)/ })).toHaveAttribute("href", "#turn-2");
-    expect(within(nav).getByRole("link", { name: /Jump to message 1: list the files — Result: README.md main.go/ })).toHaveAttribute("href", "#turn-1");
-    expect(within(nav).getByRole("link", { name: /Jump to message 2: message only — Answer: no tool needed \(current\)/ })).toHaveAttribute("data-current", "true");
-    expect(within(nav).getByRole("link", { name: /Jump to message 2: message only — Answer: no tool needed \(current\)/ })).toHaveAttribute("aria-current", "step");
-    expect(within(nav).getByRole("link", { name: /Message 1: list the files.*Result: README.md main.go/ })).toHaveAttribute("href", "#turn-1");
-    expect(within(nav).getByRole("link", { name: /Message 2: message only.*Answer: no tool needed/ })).toHaveAttribute("href", "#turn-2");
-    expect(within(nav).getByRole("link", { name: /Message 2: message only.*current/ })).toHaveAttribute("data-current", "true");
-    expect(within(nav).getByRole("link", { name: /Message 2: message only.*current/ })).toHaveAttribute("aria-current", "true");
     expect(screen.getAllByTestId("turn-title").map((node) => node.textContent)).toEqual([
       "list the files",
       "message only",
     ]);
     expect(screen.queryByTestId("turn-boundary")).toBeNull();
     const heads = screen.getAllByTestId("turn-head");
-    expect(heads[0]).toHaveAttribute("data-visible", "true");
-    expect(heads[1]).toHaveAttribute("data-visible", "true");
-    expect(heads[0]).toHaveTextContent("Message 1");
+    expect(heads[0]).toHaveAttribute("data-visible", "false");
+    expect(heads[1]).toHaveAttribute("data-visible", "false");
+    expect(heads[0]).not.toHaveTextContent("Message 1");
     expect(heads[0]).toHaveTextContent("list the files");
     expect(heads[0]).toHaveTextContent("Done");
     expect(heads[0]).toHaveTextContent("1 action");
     expect(heads[0]).toHaveTextContent("12ms");
     expect(heads[0]).toHaveTextContent("138 tokens");
-    expect(heads[1]).toHaveTextContent("Message 2");
+    expect(heads[1]).not.toHaveTextContent("Message 2");
     expect(heads[1]).toHaveTextContent("message only");
     expect(heads[1]).toHaveTextContent("Done");
     expect(screen.queryByText("0 actions")).toBeNull();
-  });
-
-  it("shows artifact summaries in the navigation glance for file-bearing turns", () => {
-    renderTimeline([...resultTruncated, ...messageOnlyTurn]);
-
-    const nav = screen.getByTestId("turn-navigator");
-    expect(within(nav).getByTestId("turn-nav-glance")).toHaveTextContent("1 file (8 KiB, 1 MiB omitted)");
-    expect(within(nav).getByRole("link", { name: /Message 1: completed.*1 file \(8 KiB, 1 MiB omitted\)/ })).toHaveAttribute(
-      "href",
-      "#turn-1",
-    );
   });
 
   it("keeps artifact summaries visible in the activity digest when evidence is also present", () => {
@@ -311,29 +260,8 @@ describe("Timeline", () => {
     expect(screen.getByTestId("pending-turn")).toHaveTextContent("explain main.go");
     expect(screen.getByTestId("pending-turn")).toHaveTextContent("Waiting for the next update in this chat.");
     expect(screen.getByTestId("pending-turn")).not.toHaveTextContent("Preparing the first update.");
-    expect(screen.getByTestId("conversation-map")).toHaveTextContent("2 messages");
-    expect(screen.queryByTestId("turn-nav-current")).toBeNull();
-    const nav = screen.getByTestId("turn-navigator");
-    const glance = within(nav).getByTestId("turn-nav-glance");
-    expect(glance).toHaveTextContent("explain main.go");
-    expect(glance).toHaveTextContent("Waiting");
-    expect(glance).toHaveTextContent("Affent will add the next update here.");
-    expect(within(nav).getByRole("link", { name: /Jump to pending message 2: explain main.go — Waiting: Affent will add the next update here\. \(current\)/ })).toHaveAttribute(
-      "href",
-      "#pending-turn",
-    );
-    expect(within(nav).getByRole("link", { name: /Jump to pending message 2: explain main.go — Waiting: Affent will add the next update here\. \(current\)/ })).toHaveAttribute(
-      "aria-current",
-      "step",
-    );
-    expect(within(nav).getByRole("link", { name: /Message 2: explain main.go — Waiting: Affent will add the next update here\. \(current\)/ })).toHaveAttribute(
-      "data-current",
-      "true",
-    );
-    expect(within(nav).getByRole("link", { name: /Message 2: explain main.go — Waiting: Affent will add the next update here\. \(current\)/ })).toHaveAttribute(
-      "aria-current",
-      "true",
-    );
+    expect(screen.queryByTestId("conversation-map")).toBeNull();
+    expect(screen.queryByTestId("turn-navigator")).toBeNull();
   });
 
   it("shows pending live guidance as intervention instead of a new task", async () => {
@@ -474,8 +402,7 @@ describe("Timeline", () => {
     expect(runningAnswer).not.toHaveTextContent("summarize the repo");
   });
 
-  it("hides completed reasoning until a search surfaces it", async () => {
-    const user = userEvent.setup();
+  it("hides completed reasoning from the main scan path", () => {
     renderTimeline([...completedTurn, ...messageOnlyTurn]);
 
     expect(screen.queryByRole("button", { name: /Thinking/ })).toBeNull();
@@ -483,14 +410,6 @@ describe("Timeline", () => {
     expect(screen.getByTestId("agent-activity")).not.toHaveTextContent("I should list files.");
     expect(screen.queryByText(/\d+ events/)).not.toBeInTheDocument();
     expect(screen.queryByTestId("event-trace")).toBeNull();
-
-    await openTimelineTools(user);
-    await user.type(screen.getByTestId("timeline-search"), "I should list files");
-
-    const thinking = screen.getByRole("button", { name: /Thinking/ });
-    expect(thinking).toBeInTheDocument();
-    expect(thinking).toHaveAttribute("aria-expanded", "true");
-    expect(thinking.parentElement?.textContent).toContain("I should list files");
   });
 
   it("keeps historical completed reasoning out of the main scan path", () => {
@@ -1081,130 +1000,6 @@ describe("Timeline", () => {
     expect(within(screen.getAllByTestId("tool-details")[0]).getAllByText(/WebUI must render trace details/).length).toBeGreaterThan(0);
   });
 
-  it("filters turns by tool activity without leaving the workflow page", async () => {
-    const user = userEvent.setup();
-    renderTimeline([...completedTurn, ...messageOnlyTurn]);
-
-    expect(screen.queryByTestId("timeline-match-count")).toBeNull();
-    await openTimelineTools(user);
-    expect(screen.getByTestId("timeline-match-count")).toHaveTextContent("2/2 messages");
-    await openTimelineFilters(user);
-    await user.click(screen.getByRole("button", { name: "Actions" }));
-
-    expect(screen.getByTestId("timeline-match-count")).toHaveTextContent("1/2 messages");
-    expect(within(screen.getByTestId("timeline")).getAllByText("list the files").length).toBeGreaterThan(0);
-    expect(screen.queryByText("message only")).toBeNull();
-  });
-
-  it("filters directly to artifact and repair turns", async () => {
-    const user = userEvent.setup();
-    renderTimeline([
-      ...namespaceEvents(completedTurn, "a", 0),
-      ...namespaceEvents(resultTruncated, "b", 100),
-      ...namespaceEvents(argsRepaired, "c", 200),
-    ]);
-
-    await openTimelineTools(user);
-    await openTimelineFilters(user);
-    expect(screen.getByRole("button", { name: "All" })).toHaveTextContent("3");
-    expect(screen.getByRole("button", { name: "Files" })).toHaveTextContent("1");
-    expect(screen.getByRole("button", { name: "Auto-fixed" })).toHaveTextContent("1");
-    expect(screen.getByRole("button", { name: "Issues" })).toHaveTextContent("0");
-
-    await user.click(screen.getByRole("button", { name: "Files" }));
-    expect(screen.getByTestId("timeline-match-count")).toHaveTextContent("1/3 messages");
-    expect(screen.getByRole("button", { name: "Show all" })).toBeInTheDocument();
-    expect(screen.getByTestId("turn-artifacts")).toHaveTextContent("cat big.log");
-
-    await user.click(screen.getByRole("button", { name: "Auto-fixed" }));
-    expect(screen.getByTestId("timeline-match-count")).toHaveTextContent("1/3 messages");
-    expect(screen.getByTestId("work-summary")).toHaveTextContent("1 repaired");
-
-    await user.click(screen.getByRole("button", { name: "Large outputs" }));
-    expect(screen.getByTestId("timeline-match-count")).toHaveTextContent("1/3 messages");
-    expect(screen.getByTestId("work-summary")).toHaveTextContent("1 truncated");
-  });
-
-  it("searches event content and highlights visible matches", async () => {
-    const user = userEvent.setup();
-    renderTimeline(completedSubagentTree);
-
-    expect(screen.queryByTestId("execution-tree")).toBeNull();
-    expect(screen.queryByTestId("timeline-toolbar")).toBeNull();
-    expect(within(screen.getByTestId("turn-navigator")).getByRole("button", { name: "Search in chat" })).toBeInTheDocument();
-    expect(screen.queryByTestId("timeline-match-count")).toBeNull();
-    expect(screen.queryByText("Filters")).toBeNull();
-    await openTimelineTools(user);
-    expect(within(screen.getByTestId("turn-navigator")).getByRole("button", { name: "Search in chat" })).toHaveAttribute("aria-pressed", "true");
-    expect(screen.getByText("Search messages, sources, or output")).toBeInTheDocument();
-    expect(screen.getByTestId("timeline-search")).toHaveFocus();
-    expect(screen.getByText("Filters")).toBeVisible();
-    await user.type(screen.getByTestId("timeline-search"), "External MCP service");
-
-    expect(screen.getByTestId("timeline-match-count")).toHaveTextContent("1/1 messages");
-    expect(screen.getByTestId("work-thread")).toHaveAttribute("data-open", "true");
-    expect(screen.getAllByText("External MCP service").length).toBeGreaterThan(0);
-    expect(screen.getAllByText("External MCP service").some((node) => node.tagName.toLowerCase() === "mark")).toBe(true);
-  });
-
-  it("keeps folded work folded when search only matches the chat answer", async () => {
-    const user = userEvent.setup();
-    renderTimeline(completedSubagentTree);
-
-    await openTimelineTools(user);
-    await user.type(screen.getByTestId("timeline-search"), "delegated checks found");
-
-    expect(screen.getByTestId("timeline-match-count")).toHaveTextContent("1/1 messages");
-    expect(screen.getByTestId("work-thread")).toHaveAttribute("data-open", "false");
-    expect(screen.queryByTestId("execution-tree")).toBeNull();
-  });
-
-  it("shows an empty filtered state when no event content matches", async () => {
-    const user = userEvent.setup();
-    renderTimeline([...completedTurn, ...messageOnlyTurn]);
-
-    await openTimelineTools(user);
-    await user.type(screen.getByTestId("timeline-search"), "definitely-not-present");
-
-    expect(within(screen.getByTestId("conversation-map")).getByTestId("timeline-toolbar")).toBeInTheDocument();
-    expect(screen.queryByTestId("turn-navigator")).toBeNull();
-    expect(screen.getByTestId("timeline-search")).toHaveValue("definitely-not-present");
-    expect(screen.getByTestId("timeline-filter-empty")).toHaveTextContent("No matching messages");
-    expect(screen.getByTestId("timeline-filter-empty")).toHaveTextContent("definitely-not-present");
-    expect(screen.getByTestId("timeline-match-count")).toHaveTextContent("0/2 messages");
-    expect(screen.getByRole("button", { name: "Show all" })).toBeInTheDocument();
-    expect(screen.queryByRole("button", { name: "Reset filters" })).toBeNull();
-
-    await user.click(screen.getByRole("button", { name: "Show all" }));
-    expect(screen.getByTestId("timeline-search")).toHaveValue("");
-    expect(screen.getByTestId("timeline-match-count")).toHaveTextContent("2/2 messages");
-    expect(screen.queryByTestId("timeline-filter-empty")).toBeNull();
-  });
-
-  it("resets search and filters when switching sessions", async () => {
-    const user = userEvent.setup();
-    const { rerender } = render(
-      <Timeline session={reduceRawEvents([...completedTurn, ...messageOnlyTurn])} sessionId="s1" />,
-    );
-
-    await openTimelineTools(user);
-    await user.type(screen.getByTestId("timeline-search"), "definitely-not-present");
-    expect(screen.getByTestId("timeline-filter-empty")).toBeInTheDocument();
-
-    rerender(<Timeline session={reduceRawEvents([
-      ...messageOnlyTurn,
-      ...namespaceEvents(messageOnlyTurn, "second", 100),
-    ])} sessionId="s2" />);
-
-    expect(screen.queryByTestId("timeline-search")).toBeNull();
-    expect(screen.queryByTestId("timeline-filter-empty")).toBeNull();
-    expect(screen.queryByTestId("timeline-match-count")).toBeNull();
-    await openTimelineTools(user);
-    expect(screen.getByTestId("timeline-search")).toHaveValue("");
-    expect(screen.getByTestId("timeline-match-count")).toHaveTextContent("2/2 messages");
-    expect(within(screen.getByTestId("timeline")).getAllByText("message only").length).toBeGreaterThan(0);
-  });
-
   it("shows an in-panel jump control when live activity arrives while browsing history", () => {
     const { rerender } = render(<ScrollHarness events={completedTurn} />);
     const scrollRoot = screen.getByTestId("scroll-root");
@@ -1627,7 +1422,7 @@ describe("Timeline", () => {
     expect(screen.getByTestId("fallback-answer")).toHaveTextContent("Affent reached its action limit");
     expect(screen.getByTestId("continuation-card")).toHaveTextContent("Final answer not produced");
     expect(screen.getByTestId("continuation-card")).toHaveTextContent("Affent gathered evidence");
-    expect(within(screen.getByTestId("turn-navigator")).getByTestId("turn-nav-glance")).toHaveTextContent("Needs final answer");
+    expect(screen.queryByTestId("turn-navigator")).toBeNull();
     await user.click(screen.getByRole("button", { name: "Ask for final answer" }));
 
     expect(onUseAsDraft).toHaveBeenCalledWith(
@@ -1651,8 +1446,7 @@ describe("Timeline", () => {
     expect(screen.queryByTestId("work-thread")).toBeNull();
   });
 
-  it("keeps historical handoff tool details hidden until search asks for them", async () => {
-    const user = userEvent.setup();
+  it("keeps historical handoff tool details hidden in the main scan path", () => {
     renderTimeline([
       { id: 0, type: "turn.start", data: { turn_id: "t1" } },
       {
@@ -1672,15 +1466,6 @@ describe("Timeline", () => {
     ]);
 
     expect(screen.queryByTestId("work-thread")).toBeNull();
-    await openTimelineTools(user);
-    await user.type(screen.getByTestId("timeline-search"), "memory");
-
-    const toolDetails = screen.getByRole("button", { name: /Action details|Run summary/ });
-    expect(toolDetails).toHaveAccessibleName("Action details · continued in message 2 · 2 calls · 7ms");
-    const visibleWorkDetails = toolDetails.textContent?.replace(/\s+/g, " ").trim() ?? "";
-    expect(visibleWorkDetails).toContain("Action details continued in message 2");
-    expect(visibleWorkDetails).not.toContain("Run summary ·");
-    expect(toolDetails).not.toHaveTextContent("2 actions");
   });
 
   it("keeps confirmed memory update content visible on historical turns", () => {
@@ -1838,19 +1623,3 @@ const runningStarted: RawEvent[] = [
   { id: 30, type: "turn.start", data: { turn_id: "t3" } },
   { id: 31, type: "user.message", data: { turn_id: "t3", text: "summarize the repo" } },
 ];
-
-function namespaceEvents(raws: RawEvent[], suffix: string, idOffset: number): RawEvent[] {
-  return raws.map((event) => ({
-    ...event,
-    id: event.id + idOffset,
-    data: namespacePayload(event.data, suffix),
-  }));
-}
-
-function namespacePayload(data: unknown, suffix: string): unknown {
-  if (!data || typeof data !== "object" || Array.isArray(data)) return data;
-  const copy: Record<string, unknown> = { ...(data as Record<string, unknown>) };
-  if (typeof copy.turn_id === "string") copy.turn_id = `${copy.turn_id}_${suffix}`;
-  if (typeof copy.call_id === "string") copy.call_id = `${copy.call_id}_${suffix}`;
-  return copy;
-}
