@@ -283,6 +283,82 @@ describe("buildTurnActivity", () => {
     });
   });
 
+  it("surfaces source evidence quality in the activity evidence preview", () => {
+    const turn = reduceRawEvents([
+      { id: 1, type: "turn.start", data: { turn_id: "t1" } },
+      { id: 2, type: "user.message", data: { turn_id: "t1", text: "research taostats" } },
+      {
+        id: 3,
+        type: "tool.request",
+        data: {
+          turn_id: "t1",
+          call_id: "c1",
+          tool: "browser_navigate",
+          args: { url: "https://taostats.io/subnets/120", wait_until: "networkidle" },
+          args_truncated: false,
+          args_bytes: 64,
+          args_omitted_bytes: 0,
+          args_cap_bytes: 8192,
+        },
+      },
+      {
+        id: 4,
+        type: "tool.result",
+        data: {
+          call_id: "c1",
+          exit_code: 0,
+          duration_ms: 80,
+          result_summary: "SourceAccess: browser_rendered_url=https://taostats.io/subnets/120; page_text_below=partial_dynamic_page_evidence",
+          result: "SourceAccess: browser_rendered_url=https://taostats.io/subnets/120; page_text_below=partial_dynamic_page_evidence\nPAGE TEXT:\nMarket Cap",
+          result_truncated: false,
+          result_bytes: 128,
+          result_omitted_bytes: 0,
+          result_cap_bytes: 8192,
+        },
+      },
+      {
+        id: 5,
+        type: "tool.request",
+        data: {
+          turn_id: "t1",
+          call_id: "c2",
+          tool: "browser_network_read",
+          args: { ref: "n1" },
+          args_truncated: false,
+          args_bytes: 16,
+          args_omitted_bytes: 0,
+          args_cap_bytes: 8192,
+        },
+      },
+      {
+        id: 6,
+        type: "tool.result",
+        data: {
+          call_id: "c2",
+          exit_code: 0,
+          duration_ms: 30,
+          result_summary: "SourceAccess: browser_network_url=https://taostats.io/api/subnets/120; source_method=network_xhr_fetch",
+          result: "SourceAccess: browser_network_url=https://taostats.io/api/subnets/120; source_method=network_xhr_fetch\n{\"price\":\"0.06342 T\"}",
+          result_truncated: false,
+          result_bytes: 140,
+          result_omitted_bytes: 0,
+          result_cap_bytes: 8192,
+        },
+      },
+      { id: 7, type: "message.done", data: { turn_id: "t1", text: "Used network evidence." } },
+      { id: 8, type: "turn.end", data: { turn_id: "t1", reason: "completed" } },
+    ]).turns[0];
+
+    const activity = buildTurnActivity(turn);
+
+    expect(activity?.evidencePreview).toEqual([
+      { label: "Network Source", value: "https://taostats.io/api/subnets/120", displayValue: "taostats.io/api/subnets" },
+      { label: "Partial Source", value: "https://taostats.io/subnets/120", displayValue: "taostats.io/subnets/120" },
+    ]);
+    expect(activity?.evidenceAction?.draft).toContain("- Network Source taostats.io/api/subnets");
+    expect(activity?.evidenceAction?.draft).toContain("- Partial Source taostats.io/subnets/120");
+  });
+
   it("adds artifact summaries to the activity digest meta for file-bearing turns", () => {
     const turn = reduceRawEvents(resultTruncated).turns[0];
     const activity = buildTurnActivity(turn);

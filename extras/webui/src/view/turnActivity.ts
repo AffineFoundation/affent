@@ -3,6 +3,7 @@ import { detectConstraintDeviations } from "./constraintDeviation";
 import type { DraftSource } from "./draftSource";
 import { summarizeUserError } from "./errorSummary";
 import { buildExecutionTree, formatTokenUsageCompact, type ExecutionTreeNode } from "./executionTree";
+import { describeSourceAccess, sourceEvidenceLabel } from "./sourceAccess";
 import { artifactCountLabel, buildTurnArtifacts } from "./turnArtifacts";
 
 export type TurnActivityTone = "running" | "success" | "warning" | "error" | "muted";
@@ -226,6 +227,10 @@ function selectHeadlineEvidence(evidence: readonly TurnActivityEvidence[], visib
 }
 
 function evidenceHeadlineScore(item: TurnActivityEvidence): number {
+  if (item.label === "Network Source") return 120;
+  if (item.label === "Verified Source") return 110;
+  if (item.label === "Partial Source") return 95;
+  if (item.label === "Discovery Source") return 35;
   if (item.label === "Fetched") return 100;
   if (item.label === "Searched") return 90;
   if (item.label === "Read") return 80;
@@ -629,11 +634,11 @@ function collectEvidence(node: ExecutionTreeNode): TurnActivityEvidence[] {
 }
 
 function shouldShowEvidence(node: ExecutionTreeNode): boolean {
-  return node.children.length > 0 || node.kind === "subagent" || node.kind === "focused_task" || isEvidenceTool(node.tool);
+  return node.children.length > 0 || node.kind === "subagent" || node.kind === "focused_task" || isEvidenceTool(node.tool) || !!sourceAccessFromNode(node);
 }
 
 function isEvidenceTool(tool: string): boolean {
-  return tool === "web_fetch" || tool === "web_search";
+  return tool === "web_fetch" || tool === "web_search" || tool === "browser_navigate" || tool === "browser_snapshot" || tool === "browser_find" || tool === "browser_network_read";
 }
 
 function collectEvidenceInto(node: ExecutionTreeNode, evidence: TurnActivityEvidence[]) {
@@ -644,6 +649,14 @@ function collectEvidenceInto(node: ExecutionTreeNode, evidence: TurnActivityEvid
 
 function evidenceFromNode(node: ExecutionTreeNode): TurnActivityEvidence | undefined {
   if (node.status !== "success") return undefined;
+  const sourceAccess = sourceAccessFromNode(node);
+  if (sourceAccess) {
+    return {
+      label: titleCase(sourceEvidenceLabel(sourceAccess)),
+      value: sourceAccess.accessedUrl,
+      displayValue: readableUrl(sourceAccess.accessedUrl),
+    };
+  }
   const url = stringArg(node, "url");
   if (node.tool === "web_fetch" && url) return { label: "Fetched", value: url, displayValue: readableUrl(url) };
   const path = stringArg(node, "path") ?? stringArg(node, "file") ?? stringArg(node, "filename");
@@ -656,6 +669,14 @@ function evidenceFromNode(node: ExecutionTreeNode): TurnActivityEvidence | undef
   const command = stringArg(node, "command");
   if (node.tool === "shell" && command) return { label: "Ran", value: command };
   return undefined;
+}
+
+function sourceAccessFromNode(node: ExecutionTreeNode) {
+  return describeSourceAccess(node.resultText ?? node.resultSummary);
+}
+
+function titleCase(value: string): string {
+  return value.replace(/\b\w/g, (char) => char.toUpperCase());
 }
 
 function handledIssueBrief(turn: TurnState): TurnActivityBriefRow | undefined {
