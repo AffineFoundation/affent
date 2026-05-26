@@ -914,6 +914,17 @@ func cloneStringIntMap(in map[string]int) map[string]int {
 	return out
 }
 
+func cloneStringSliceMap(in map[string][]string) map[string][]string {
+	if len(in) == 0 {
+		return nil
+	}
+	out := make(map[string][]string, len(in))
+	for k, v := range in {
+		out[k] = append([]string(nil), v...)
+	}
+	return out
+}
+
 func sumStringIntMap(in map[string]int) int {
 	var total int
 	for _, v := range in {

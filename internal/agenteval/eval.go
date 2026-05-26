@@ -241,10 +241,18 @@ type DebugScenarioExpectations struct {
 	ForbiddenCommands             []string                          `json:"forbidden_commands,omitempty"`
 	RequiredCommandCounts         map[string]int                    `json:"required_command_counts,omitempty"`
 	RequiredToolCounts            map[string]int                    `json:"required_tool_counts,omitempty"`
+	RequiredToolFailureKindCounts map[string]int                    `json:"required_tool_failure_kind_counts,omitempty"`
+	RequiredToolStatsAtLeast      map[string]int                    `json:"required_tool_stats_at_least,omitempty"`
+	RequiredLoopDecisionKinds     map[string]int                    `json:"required_loop_decision_kinds,omitempty"`
+	RequiredLoopDecisionResults   map[string]int                    `json:"required_loop_decision_results,omitempty"`
+	RequiredLoopDecisionMatches   []DebugLoopDecisionRequirement    `json:"required_loop_decision_matches,omitempty"`
+	RequiredToolResultText        map[string][]string               `json:"required_tool_result_text,omitempty"`
 	RequiredToolArgContains       []DebugToolArgContainsRequirement `json:"required_tool_arg_contains,omitempty"`
 	RequiredSourceAccess          []DebugSourceAccessRequirement    `json:"required_source_access,omitempty"`
 	RequiredFinalText             []string                          `json:"required_final_text,omitempty"`
 	ForbiddenFinalText            []string                          `json:"forbidden_final_text,omitempty"`
+	RequiredTruncatedResults      []string                          `json:"required_truncated_results,omitempty"`
+	RequiredResultArtifacts       []string                          `json:"required_result_artifacts,omitempty"`
 	RequiredContextCompactions    int                               `json:"required_context_compactions,omitempty"`
 	RequiredReactiveCompactions   int                               `json:"required_reactive_context_compactions,omitempty"`
 	RequiredCompactionRemovedMsgs int                               `json:"required_compaction_removed_messages,omitempty"`
@@ -261,6 +269,13 @@ type DebugToolArgContainsRequirement struct {
 	Arg       string `json:"arg"`
 	Substring string `json:"substring"`
 	Min       int    `json:"min,omitempty"`
+}
+
+type DebugLoopDecisionRequirement struct {
+	Kind     string `json:"kind,omitempty"`
+	Decision string `json:"decision,omitempty"`
+	Trigger  string `json:"trigger,omitempty"`
+	Min      int    `json:"min,omitempty"`
 }
 
 type DebugSourceAccessRequirement struct {
@@ -701,6 +716,15 @@ func debugScenarioExpectations(s BatchScenario) DebugScenarioExpectations {
 			Min:          req.Min,
 		})
 	}
+	loopReqs := make([]DebugLoopDecisionRequirement, 0, len(s.RequiredLoopDecisionMatches))
+	for _, req := range s.RequiredLoopDecisionMatches {
+		loopReqs = append(loopReqs, DebugLoopDecisionRequirement{
+			Kind:     req.Kind,
+			Decision: req.Decision,
+			Trigger:  req.Trigger,
+			Min:      req.Min,
+		})
+	}
 	checks := BatchScenarioChecks(s)
 	checkNames := make([]string, 0, len(checks))
 	for _, check := range checks {
@@ -722,10 +746,18 @@ func debugScenarioExpectations(s BatchScenario) DebugScenarioExpectations {
 		ForbiddenCommands:             append([]string(nil), s.ForbiddenCommands...),
 		RequiredCommandCounts:         cloneStringIntMap(s.RequiredCommandCounts),
 		RequiredToolCounts:            cloneStringIntMap(s.RequiredToolCounts),
+		RequiredToolFailureKindCounts: cloneStringIntMap(s.RequiredToolFailureKindCounts),
+		RequiredToolStatsAtLeast:      cloneStringIntMap(s.RequiredToolStatsAtLeast),
+		RequiredLoopDecisionKinds:     cloneStringIntMap(s.RequiredLoopDecisionKinds),
+		RequiredLoopDecisionResults:   cloneStringIntMap(s.RequiredLoopDecisionResults),
+		RequiredLoopDecisionMatches:   loopReqs,
+		RequiredToolResultText:        cloneStringSliceMap(s.RequiredToolResultText),
 		RequiredToolArgContains:       reqArgs,
 		RequiredSourceAccess:          sourceReqs,
 		RequiredFinalText:             append([]string(nil), s.RequiredFinalText...),
 		ForbiddenFinalText:            append([]string(nil), s.ForbiddenFinalText...),
+		RequiredTruncatedResults:      append([]string(nil), s.RequiredTruncatedResults...),
+		RequiredResultArtifacts:       append([]string(nil), s.RequiredResultArtifacts...),
 		RequiredContextCompactions:    s.RequiredContextCompactions,
 		RequiredReactiveCompactions:   s.RequiredReactiveCompactions,
 		RequiredCompactionRemovedMsgs: s.RequiredCompactionRemovedMsgs,

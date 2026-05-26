@@ -296,6 +296,31 @@ func renderTimelineScenarioExpectations(b *strings.Builder, scenario BatchScenar
 	writeTimelineStringList(b, "forbidden_commands", exp.ForbiddenCommands)
 	writeTimelineCountsLine(b, "required_tool_counts", exp.RequiredToolCounts)
 	writeTimelineCountsLine(b, "required_command_counts", exp.RequiredCommandCounts)
+	writeTimelineCountsLine(b, "required_tool_failure_kind_counts", exp.RequiredToolFailureKindCounts)
+	writeTimelineCountsLine(b, "required_tool_stats_at_least", exp.RequiredToolStatsAtLeast)
+	writeTimelineCountsLine(b, "required_loop_decision_kinds", exp.RequiredLoopDecisionKinds)
+	writeTimelineCountsLine(b, "required_loop_decision_results", exp.RequiredLoopDecisionResults)
+	if len(exp.RequiredLoopDecisionMatches) > 0 {
+		for _, req := range exp.RequiredLoopDecisionMatches {
+			min := req.Min
+			if min <= 0 {
+				min = 1
+			}
+			var parts []string
+			if req.Kind != "" {
+				parts = append(parts, fmt.Sprintf("kind=%s", req.Kind))
+			}
+			if req.Decision != "" {
+				parts = append(parts, fmt.Sprintf("decision=%s", req.Decision))
+			}
+			if req.Trigger != "" {
+				parts = append(parts, fmt.Sprintf("trigger=%s", req.Trigger))
+			}
+			parts = append(parts, fmt.Sprintf("min=%d", min))
+			fmt.Fprintf(b, "- required_loop_decision: `%s`\n", strings.Join(parts, " "))
+		}
+	}
+	writeTimelineStringSliceMap(b, "required_tool_result_text", exp.RequiredToolResultText)
 	if len(exp.RequiredSourceAccess) > 0 {
 		for _, req := range exp.RequiredSourceAccess {
 			min := req.Min
@@ -324,6 +349,8 @@ func renderTimelineScenarioExpectations(b *strings.Builder, scenario BatchScenar
 	}
 	writeTimelineStringList(b, "required_final_text", exp.RequiredFinalText)
 	writeTimelineStringList(b, "forbidden_final_text", exp.ForbiddenFinalText)
+	writeTimelineStringList(b, "required_truncated_results", exp.RequiredTruncatedResults)
+	writeTimelineStringList(b, "required_result_artifacts", exp.RequiredResultArtifacts)
 	if len(exp.RequiredToolArgContains) > 0 {
 		for _, req := range exp.RequiredToolArgContains {
 			min := req.Min
@@ -369,10 +396,18 @@ func hasTimelineScenarioExpectations(exp DebugScenarioExpectations) bool {
 		len(exp.ForbiddenCommands) > 0 ||
 		len(exp.RequiredCommandCounts) > 0 ||
 		len(exp.RequiredToolCounts) > 0 ||
+		len(exp.RequiredToolFailureKindCounts) > 0 ||
+		len(exp.RequiredToolStatsAtLeast) > 0 ||
+		len(exp.RequiredLoopDecisionKinds) > 0 ||
+		len(exp.RequiredLoopDecisionResults) > 0 ||
+		len(exp.RequiredLoopDecisionMatches) > 0 ||
+		len(exp.RequiredToolResultText) > 0 ||
 		len(exp.RequiredToolArgContains) > 0 ||
 		len(exp.RequiredSourceAccess) > 0 ||
 		len(exp.RequiredFinalText) > 0 ||
 		len(exp.ForbiddenFinalText) > 0 ||
+		len(exp.RequiredTruncatedResults) > 0 ||
+		len(exp.RequiredResultArtifacts) > 0 ||
 		exp.RequiredContextCompactions > 0 ||
 		exp.RequiredReactiveCompactions > 0 ||
 		exp.RequiredCompactionRemovedMsgs > 0 ||
@@ -400,6 +435,33 @@ func writeTimelineStringList(b *strings.Builder, label string, values []string) 
 		return
 	}
 	fmt.Fprintf(b, "- %s: `%s`\n", label, strings.Join(preview, "`, `"))
+}
+
+func writeTimelineStringSliceMap(b *strings.Builder, label string, values map[string][]string) {
+	if len(values) == 0 {
+		return
+	}
+	keys := make([]string, 0, len(values))
+	for key, list := range values {
+		if strings.TrimSpace(key) != "" && len(list) > 0 {
+			keys = append(keys, key)
+		}
+	}
+	sort.Strings(keys)
+	for _, key := range keys {
+		preview := make([]string, 0, len(values[key]))
+		for _, value := range values[key] {
+			value = strings.TrimSpace(value)
+			if value == "" {
+				continue
+			}
+			preview = append(preview, timelineInline(value, 180))
+		}
+		if len(preview) == 0 {
+			continue
+		}
+		fmt.Fprintf(b, "- %s[%s]: `%s`\n", label, key, strings.Join(preview, "`, `"))
+	}
 }
 
 func writeTimelineCountsLine(b *strings.Builder, label string, counts map[string]int) {

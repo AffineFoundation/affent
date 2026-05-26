@@ -1378,6 +1378,7 @@ func TestWriteScenarioDebugArtifactsIndexesTraceAndFinalText(t *testing.T) {
 		LoopDecisions: []LoopDecision{{
 			Kind:     "evidence_quality",
 			Decision: "defer",
+			Trigger:  "source_access_dynamic_partial",
 			Reason:   "need browser network evidence",
 		}},
 		ContextCompactions: []ContextCompaction{{
@@ -1405,6 +1406,26 @@ func TestWriteScenarioDebugArtifactsIndexesTraceAndFinalText(t *testing.T) {
 		RequiredToolCounts: map[string]int{
 			"browser_network_read": 1,
 		},
+		RequiredToolFailureKindCounts: map[string]int{
+			"dynamic_shell": 1,
+		},
+		RequiredToolStatsAtLeast: map[string]int{
+			"memory_updates":                2,
+			"source_access_dynamic_partial": 1,
+			"source_access_network":         1,
+		},
+		RequiredLoopDecisionKinds: map[string]int{
+			"evidence_quality": 1,
+		},
+		RequiredLoopDecisionResults: map[string]int{
+			"defer": 1,
+		},
+		RequiredLoopDecisionMatches: []LoopDecisionRequirement{
+			{Kind: "evidence_quality", Decision: "defer", Trigger: "source_access_dynamic_partial"},
+		},
+		RequiredToolResultText: map[string][]string{
+			"browser_network_read": {"SourceAccess:", "source_method=network_xhr_fetch"},
+		},
 		RequiredToolArgContains: []ToolArgContainsRequirement{
 			{Tool: "browser_network_read", Arg: "json_path", Substring: "$.price"},
 		},
@@ -1413,6 +1434,8 @@ func TestWriteScenarioDebugArtifactsIndexesTraceAndFinalText(t *testing.T) {
 		},
 		RequiredFinalText:             []string{"0.06342 T"},
 		ForbiddenFinalText:            []string{"subnet price $277.32"},
+		RequiredTruncatedResults:      []string{"web_fetch"},
+		RequiredResultArtifacts:       []string{"web_fetch"},
 		RequiredContextCompactions:    1,
 		RequiredCompactionRemovedMsgs: 12,
 		RequiredContextSummaryText:    []string{"browser network evidence"},
@@ -1469,12 +1492,23 @@ func TestWriteScenarioDebugArtifactsIndexesTraceAndFinalText(t *testing.T) {
 		!reflect.DeepEqual(manifest.Expectations.RequiredTools, []string{"web_fetch", "browser_network_read"}) ||
 		!reflect.DeepEqual(manifest.Expectations.ForbiddenTools, []string{"shell"}) ||
 		manifest.Expectations.RequiredToolCounts["browser_network_read"] != 1 ||
+		manifest.Expectations.RequiredToolFailureKindCounts["dynamic_shell"] != 1 ||
+		manifest.Expectations.RequiredToolStatsAtLeast["memory_updates"] != 2 ||
+		manifest.Expectations.RequiredToolStatsAtLeast["source_access_dynamic_partial"] != 1 ||
+		manifest.Expectations.RequiredToolStatsAtLeast["source_access_network"] != 1 ||
+		manifest.Expectations.RequiredLoopDecisionKinds["evidence_quality"] != 1 ||
+		manifest.Expectations.RequiredLoopDecisionResults["defer"] != 1 ||
+		len(manifest.Expectations.RequiredLoopDecisionMatches) != 1 ||
+		manifest.Expectations.RequiredLoopDecisionMatches[0] != (DebugLoopDecisionRequirement{Kind: "evidence_quality", Decision: "defer", Trigger: "source_access_dynamic_partial"}) ||
+		!reflect.DeepEqual(manifest.Expectations.RequiredToolResultText["browser_network_read"], []string{"SourceAccess:", "source_method=network_xhr_fetch"}) ||
 		len(manifest.Expectations.RequiredToolArgContains) != 1 ||
 		manifest.Expectations.RequiredToolArgContains[0] != (DebugToolArgContainsRequirement{Tool: "browser_network_read", Arg: "json_path", Substring: "$.price"}) ||
 		len(manifest.Expectations.RequiredSourceAccess) != 1 ||
 		manifest.Expectations.RequiredSourceAccess[0] != (DebugSourceAccessRequirement{Status: "network", Tool: "browser_network_read", URLContains: "taostats.io/api", SourceMethod: "network_xhr_fetch", JSONPath: "$.price"}) ||
 		!stringSliceContains(manifest.Expectations.RequiredFinalText, "0.06342 T") ||
 		!stringSliceContains(manifest.Expectations.ForbiddenFinalText, "subnet price $277.32") ||
+		!reflect.DeepEqual(manifest.Expectations.RequiredTruncatedResults, []string{"web_fetch"}) ||
+		!reflect.DeepEqual(manifest.Expectations.RequiredResultArtifacts, []string{"web_fetch"}) ||
 		manifest.Expectations.RequiredContextCompactions != 1 ||
 		manifest.Expectations.RequiredCompactionRemovedMsgs != 12 ||
 		!stringSliceContains(manifest.Expectations.RequiredContextSummaryText, "browser network evidence") {
@@ -1602,9 +1636,17 @@ func TestWriteScenarioDebugArtifactsIndexesTraceAndFinalText(t *testing.T) {
 		"required_tools: `web_fetch`, `browser_network_read`",
 		"forbidden_tools: `shell`",
 		"required_tool_counts: `browser_network_read=1`",
+		"required_tool_failure_kind_counts: `dynamic_shell=1`",
+		"required_tool_stats_at_least: `memory_updates=2,source_access_dynamic_partial=1,source_access_network=1`",
+		"required_loop_decision_kinds: `evidence_quality=1`",
+		"required_loop_decision_results: `defer=1`",
+		"required_loop_decision: `kind=evidence_quality decision=defer trigger=source_access_dynamic_partial min=1`",
+		"required_tool_result_text[browser_network_read]: `SourceAccess:`, `source_method=network_xhr_fetch`",
 		"required_source_access: `status=network tool=browser_network_read url_contains=taostats.io/api source_method=network_xhr_fetch json_path=$.price min=1`",
 		"required_final_text: `0.06342 T`",
 		"forbidden_final_text: `subnet price $277.32`",
+		"required_truncated_results: `web_fetch`",
+		"required_result_artifacts: `web_fetch`",
 		"required_tool_arg: `browser_network_read.json_path` contains `$.price` min=`1`",
 		"context_requirements: `compactions>=1 removed_messages>=12`",
 		"context_summary_contains: `browser network evidence`",
