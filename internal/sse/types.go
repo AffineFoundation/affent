@@ -209,6 +209,13 @@ type ToolRuntimeStats struct {
 	ToolDurationMS         int64 `json:"tool_duration_ms,omitempty"`
 	LoopGuardInterventions int   `json:"loop_guard_interventions,omitempty"`
 	ForcedNoTools          int   `json:"forced_no_tools,omitempty"`
+	// SourceAccess counters classify tool results that expose normalized source
+	// evidence headers. They measure evidence quality separately from raw tool
+	// volume, so evals can distinguish verified reads from discovery-only pages.
+	SourceAccessResults       int `json:"source_access_results,omitempty"`
+	SourceAccessVerified      int `json:"source_access_verified,omitempty"`
+	SourceAccessDiscoveryOnly int `json:"source_access_discovery_only,omitempty"`
+	SourceAccessNetwork       int `json:"source_access_network,omitempty"`
 	// ToolContextTruncated counts tool results that were shortened before
 	// being appended back into the model conversation. This is separate
 	// from ToolResultPayload.ResultTruncated, which reports event payload

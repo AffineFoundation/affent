@@ -410,9 +410,12 @@ a different source, or a clearly marked gap. Per-turn workflow caps emit
 `loop_guard_call_cap`. First-tool and post-tool workflow policies emit
 `tool_policy_first_tool`, `tool_policy_repeat`, or `tool_policy_active` when
 they block a model call before the underlying tool runs. Per-turn stats expose
-`tool_failure_by_kind`, and each `tool.result` can expose `failure_kind` plus
+`tool_failure_by_kind` plus `source_access_results`,
+`source_access_verified`, `source_access_discovery_only`, and
+`source_access_network`, and each `tool.result` can expose `failure_kind` plus
 `failure_kinds`, so eval runs and UIs can distinguish a useful recovery path
-from a run that simply accumulated failed retrievals or policy violations.
+from a run that simply accumulated failed retrievals, discovery-only pages, or
+policy violations.
 Successful-but-no-evidence web results, such as `dynamic_shell`,
 `empty_response`, `non_text`, or `no_results`, contribute to
 `tool_failure_by_kind` even when their `tool.result.exit_code` is `0`;

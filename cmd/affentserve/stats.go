@@ -271,6 +271,10 @@ func addToolStatsSnapshot(dst *ToolStatsSnapshot, src ToolStatsSnapshot) {
 	dst.ToolDurationMS += src.ToolDurationMS
 	dst.LoopGuardInterventions += src.LoopGuardInterventions
 	dst.ForcedNoTools += src.ForcedNoTools
+	dst.SourceAccessResults += src.SourceAccessResults
+	dst.SourceAccessVerified += src.SourceAccessVerified
+	dst.SourceAccessDiscovery += src.SourceAccessDiscovery
+	dst.SourceAccessNetwork += src.SourceAccessNetwork
 	dst.ToolContextTruncated += src.ToolContextTruncated
 	dst.ToolContextOmitted += src.ToolContextOmitted
 }

@@ -170,6 +170,10 @@ type batchSummary struct {
 	RuntimeErrorExamples       map[string][]agenteval.RuntimeErrorExample
 	LoopGuardInterventions     int
 	ForcedNoTools              int
+	SourceAccessResults        int
+	SourceAccessVerified       int
+	SourceAccessDiscoveryOnly  int
+	SourceAccessNetwork        int
 	ToolDurationMS             int64
 	ToolContextTruncated       int
 	ToolContextOmittedBytes    int
@@ -251,6 +255,10 @@ func (s *batchSummary) add(res agenteval.BatchResult) {
 	mergeExampleMap(&s.RuntimeErrorExamples, res.RuntimeErrorExamples, batchSummaryExamplesPerKind)
 	s.LoopGuardInterventions += res.ToolStats.LoopGuardInterventions
 	s.ForcedNoTools += res.ToolStats.ForcedNoTools
+	s.SourceAccessResults += res.ToolStats.SourceAccessResults
+	s.SourceAccessVerified += res.ToolStats.SourceAccessVerified
+	s.SourceAccessDiscoveryOnly += res.ToolStats.SourceAccessDiscoveryOnly
+	s.SourceAccessNetwork += res.ToolStats.SourceAccessNetwork
 	s.ToolDurationMS += res.ToolStats.ToolDurationMS
 	s.ToolContextTruncated += res.ToolStats.ToolContextTruncated
 	s.ToolContextOmittedBytes += res.ToolStats.ToolContextOmittedBytes
@@ -378,6 +386,14 @@ func printBatchSummary(w io.Writer, s batchSummary) {
 	if len(s.ToolFailureByKind) > 0 {
 		fmt.Fprintf(w, " tool_failure_kinds=%s", formatStringIntCounts(s.ToolFailureByKind))
 	}
+	if hasBatchSourceAccessStats(s) {
+		fmt.Fprintf(w, " source_access=results:%d,verified:%d,discovery:%d,network:%d",
+			s.SourceAccessResults,
+			s.SourceAccessVerified,
+			s.SourceAccessDiscoveryOnly,
+			s.SourceAccessNetwork,
+		)
+	}
 	if len(s.RuntimeErrorByKind) > 0 {
 		fmt.Fprintf(w, " runtime_error_kinds=%s", formatStringIntCounts(s.RuntimeErrorByKind))
 	}
@@ -421,6 +437,13 @@ func hasBatchRepairStats(s batchSummary) bool {
 
 func hasBatchToolContextTruncation(s batchSummary) bool {
 	return s.ToolContextTruncated > 0 || s.ToolContextOmittedBytes > 0
+}
+
+func hasBatchSourceAccessStats(s batchSummary) bool {
+	return s.SourceAccessResults > 0 ||
+		s.SourceAccessVerified > 0 ||
+		s.SourceAccessDiscoveryOnly > 0 ||
+		s.SourceAccessNetwork > 0
 }
 
 func printDelegationRollup(w io.Writer, focusedTaskCalls int, focusedTaskByType map[string]int, focusedTaskErrors int, subagentCalls int, subagentByMode map[string]int, subagentErrors int) {
@@ -728,6 +751,10 @@ type batchResultRecord struct {
 	RuntimeErrorExamples       map[string][]agenteval.RuntimeErrorExample `json:"runtime_error_examples,omitempty"`
 	LoopGuardInterventions     int                                        `json:"loop_guard_interventions"`
 	ForcedNoTools              int                                        `json:"forced_no_tools"`
+	SourceAccessResults        int                                        `json:"source_access_results"`
+	SourceAccessVerified       int                                        `json:"source_access_verified"`
+	SourceAccessDiscoveryOnly  int                                        `json:"source_access_discovery_only"`
+	SourceAccessNetwork        int                                        `json:"source_access_network"`
 	ToolDurationMS             int64                                      `json:"tool_duration_ms"`
 	ToolContextTruncated       int                                        `json:"tool_context_truncated"`
 	ToolContextOmittedBytes    int                                        `json:"tool_context_omitted_bytes"`
@@ -794,6 +821,10 @@ type batchSummaryRecord struct {
 	RuntimeErrorExamples       map[string][]agenteval.RuntimeErrorExample `json:"runtime_error_examples,omitempty"`
 	LoopGuardInterventions     int                                        `json:"loop_guard_interventions"`
 	ForcedNoTools              int                                        `json:"forced_no_tools"`
+	SourceAccessResults        int                                        `json:"source_access_results"`
+	SourceAccessVerified       int                                        `json:"source_access_verified"`
+	SourceAccessDiscoveryOnly  int                                        `json:"source_access_discovery_only"`
+	SourceAccessNetwork        int                                        `json:"source_access_network"`
 	ToolDurationMS             int64                                      `json:"tool_duration_ms"`
 	ToolContextTruncated       int                                        `json:"tool_context_truncated"`
 	ToolContextOmittedBytes    int                                        `json:"tool_context_omitted_bytes"`
@@ -865,6 +896,10 @@ func printBatchResultJSONL(w io.Writer, meta evalJSONLMetadata, res agenteval.Ba
 		RuntimeErrorExamples:       cloneRuntimeErrorExamples(res.RuntimeErrorExamples),
 		LoopGuardInterventions:     res.ToolStats.LoopGuardInterventions,
 		ForcedNoTools:              res.ToolStats.ForcedNoTools,
+		SourceAccessResults:        res.ToolStats.SourceAccessResults,
+		SourceAccessVerified:       res.ToolStats.SourceAccessVerified,
+		SourceAccessDiscoveryOnly:  res.ToolStats.SourceAccessDiscoveryOnly,
+		SourceAccessNetwork:        res.ToolStats.SourceAccessNetwork,
 		ToolDurationMS:             res.ToolStats.ToolDurationMS,
 		ToolContextTruncated:       res.ToolStats.ToolContextTruncated,
 		ToolContextOmittedBytes:    res.ToolStats.ToolContextOmittedBytes,
@@ -926,6 +961,10 @@ func printBatchSummaryJSONL(w io.Writer, meta evalJSONLMetadata, s batchSummary)
 		RuntimeErrorExamples:       cloneRuntimeErrorExamples(s.RuntimeErrorExamples),
 		LoopGuardInterventions:     s.LoopGuardInterventions,
 		ForcedNoTools:              s.ForcedNoTools,
+		SourceAccessResults:        s.SourceAccessResults,
+		SourceAccessVerified:       s.SourceAccessVerified,
+		SourceAccessDiscoveryOnly:  s.SourceAccessDiscoveryOnly,
+		SourceAccessNetwork:        s.SourceAccessNetwork,
 		ToolDurationMS:             s.ToolDurationMS,
 		ToolContextTruncated:       s.ToolContextTruncated,
 		ToolContextOmittedBytes:    s.ToolContextOmittedBytes,
@@ -1090,6 +1129,14 @@ func printBatchResult(w io.Writer, res agenteval.BatchResult) {
 	if len(res.ToolStats.ToolFailureByKind) > 0 {
 		fmt.Fprintf(w, " tool_failure_kinds=%s", formatStringIntCounts(res.ToolStats.ToolFailureByKind))
 	}
+	if hasSourceAccessStats(res.ToolStats) {
+		fmt.Fprintf(w, " source_access=results:%d,verified:%d,discovery:%d,network:%d",
+			res.ToolStats.SourceAccessResults,
+			res.ToolStats.SourceAccessVerified,
+			res.ToolStats.SourceAccessDiscoveryOnly,
+			res.ToolStats.SourceAccessNetwork,
+		)
+	}
 	if len(res.RuntimeErrorByKind) > 0 {
 		fmt.Fprintf(w, " runtime_error_kinds=%s", formatStringIntCounts(res.RuntimeErrorByKind))
 	}
@@ -1138,6 +1185,13 @@ func hasToolTruncation(stats agenteval.ToolTruncationStats) bool {
 
 func hasToolContextTruncation(stats agenteval.ToolRuntimeStats) bool {
 	return stats.ToolContextTruncated > 0 || stats.ToolContextOmittedBytes > 0
+}
+
+func hasSourceAccessStats(stats agenteval.ToolRuntimeStats) bool {
+	return stats.SourceAccessResults > 0 ||
+		stats.SourceAccessVerified > 0 ||
+		stats.SourceAccessDiscoveryOnly > 0 ||
+		stats.SourceAccessNetwork > 0
 }
 
 func failureKind(failure string) string {

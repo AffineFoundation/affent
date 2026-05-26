@@ -102,6 +102,15 @@ Scenario records describe one eval case:
   but do not by themselves force a no-tool follow-up, so API/text fallback
   tools can still run after a recoverable web failure pattern.
 - `tool_duration_ms`: total runtime tool dispatch duration.
+- `source_access_results`: count of tool results with a normalized
+  `SourceAccess:` evidence header.
+- `source_access_verified`: count of `SourceAccess:` results with an accessed
+  URL that were not discovery-only.
+- `source_access_discovery_only`: count of search-result, not-found, or
+  rendered fallback `SourceAccess:` results that are navigation aids rather
+  than factual evidence.
+- `source_access_network`: count of `SourceAccess:` results read from captured
+  browser XHR/fetch evidence.
 - `tool_context_truncated`: count of tool results shortened before being fed
   back into the model conversation.
 - `tool_context_omitted_bytes`: total bytes omitted from tool results before
@@ -155,8 +164,9 @@ Summary records aggregate all scenario records from the same process:
   `tool_name_canonicalized`, `tool_repair_calls`, `tool_repair_succeeded`,
   `tool_repair_failed`, `tool_repair_notes`, `tool_repair_by_kind`,
   `tool_failure_by_kind`, `loop_guard_interventions`, `forced_no_tools`,
-  `tool_duration_ms`, `tool_context_truncated`,
-  `tool_context_omitted_bytes`.
+  `source_access_results`, `source_access_verified`,
+  `source_access_discovery_only`, `source_access_network`, `tool_duration_ms`,
+  `tool_context_truncated`, `tool_context_omitted_bytes`.
 - Truncation totals: `tool_args_truncated`, `tool_args_omitted_bytes`,
   `tool_results_truncated`, `tool_results_omitted_bytes`,
   `tool_result_artifacts`.

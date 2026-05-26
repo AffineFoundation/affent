@@ -230,21 +230,25 @@ type ToolCall struct {
 }
 
 type ToolRuntimeStats struct {
-	ToolRequests            int
-	ToolNameCanonicalized   int
-	ToolArgsRepaired        int
-	ToolRepairCalls         int
-	ToolRepairSucceeded     int
-	ToolRepairFailed        int
-	ToolRepairNotes         int
-	ToolRepairByKind        map[string]int
-	ToolFailureByKind       map[string]int
-	ToolErrors              int
-	ToolDurationMS          int64
-	LoopGuardInterventions  int
-	ForcedNoTools           int
-	ToolContextTruncated    int
-	ToolContextOmittedBytes int
+	ToolRequests              int
+	ToolNameCanonicalized     int
+	ToolArgsRepaired          int
+	ToolRepairCalls           int
+	ToolRepairSucceeded       int
+	ToolRepairFailed          int
+	ToolRepairNotes           int
+	ToolRepairByKind          map[string]int
+	ToolFailureByKind         map[string]int
+	ToolErrors                int
+	ToolDurationMS            int64
+	LoopGuardInterventions    int
+	ForcedNoTools             int
+	SourceAccessResults       int
+	SourceAccessVerified      int
+	SourceAccessDiscoveryOnly int
+	SourceAccessNetwork       int
+	ToolContextTruncated      int
+	ToolContextOmittedBytes   int
 }
 
 type ToolTruncationStats struct {

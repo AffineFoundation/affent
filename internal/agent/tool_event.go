@@ -109,6 +109,10 @@ func toolRuntimeStatsPtr(stats sse.ToolRuntimeStats) *sse.ToolRuntimeStats {
 		stats.ToolDurationMS == 0 &&
 		stats.LoopGuardInterventions == 0 &&
 		stats.ForcedNoTools == 0 &&
+		stats.SourceAccessResults == 0 &&
+		stats.SourceAccessVerified == 0 &&
+		stats.SourceAccessDiscoveryOnly == 0 &&
+		stats.SourceAccessNetwork == 0 &&
 		stats.ToolContextTruncated == 0 &&
 		stats.ToolContextOmittedBytes == 0 {
 		return nil
@@ -137,6 +141,25 @@ func recordToolFailureKind(stats *sse.ToolRuntimeStats, tool, result string, fai
 	}
 	for _, kind := range kinds {
 		stats.ToolFailureByKind[kind]++
+	}
+}
+
+func recordSourceAccessStats(stats *sse.ToolRuntimeStats, result string) {
+	if stats == nil {
+		return
+	}
+	info, ok := sourceaccess.FirstInfoFromResult(result)
+	if !ok {
+		return
+	}
+	stats.SourceAccessResults++
+	if info.IsDiscoveryOnly() {
+		stats.SourceAccessDiscoveryOnly++
+	} else if info.AccessedURL != "" {
+		stats.SourceAccessVerified++
+	}
+	if info.IsNetworkSource() {
+		stats.SourceAccessNetwork++
 	}
 }
 

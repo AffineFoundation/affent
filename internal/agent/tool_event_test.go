@@ -54,6 +54,27 @@ func TestRecordToolFailureKind(t *testing.T) {
 	}
 }
 
+func TestRecordSourceAccessStats(t *testing.T) {
+	var stats sse.ToolRuntimeStats
+	recordSourceAccessStats(&stats, "SourceAccess: browser_rendered_url=https://example.com/page; page_text_below=verified_page_evidence\nPAGE TEXT:\nok")
+	recordSourceAccessStats(&stats, "SourceAccess: browser_rendered_url=https://example.com/search; page_text_below=search_results_discovery_only\nPAGE TEXT:\nresult")
+	recordSourceAccessStats(&stats, "SourceAccess: browser_network_url=https://example.com/api; source_method=network_xhr_fetch\n{\"ok\":true}")
+	recordSourceAccessStats(&stats, "plain tool output")
+
+	if stats.SourceAccessResults != 3 {
+		t.Fatalf("SourceAccessResults = %d, want 3", stats.SourceAccessResults)
+	}
+	if stats.SourceAccessVerified != 2 {
+		t.Fatalf("SourceAccessVerified = %d, want 2", stats.SourceAccessVerified)
+	}
+	if stats.SourceAccessDiscoveryOnly != 1 {
+		t.Fatalf("SourceAccessDiscoveryOnly = %d, want 1", stats.SourceAccessDiscoveryOnly)
+	}
+	if stats.SourceAccessNetwork != 1 {
+		t.Fatalf("SourceAccessNetwork = %d, want 1", stats.SourceAccessNetwork)
+	}
+}
+
 func TestToolFailureKindForOutcome(t *testing.T) {
 	if got := toolFailureKindForOutcome("web_fetch", "fetch failed\nFailure: kind=blocked, status=403\nNext: use another source", true); got != "blocked" {
 		t.Fatalf("hard failure kind = %q, want blocked", got)

@@ -453,17 +453,21 @@ func NoPlanErrors() Check {
 }
 
 var toolStatsAccessors = map[string]func(ToolRuntimeStats) int64{
-	"tool_requests":            func(s ToolRuntimeStats) int64 { return int64(s.ToolRequests) },
-	"tool_name_canonicalized":  func(s ToolRuntimeStats) int64 { return int64(s.ToolNameCanonicalized) },
-	"tool_args_repaired":       func(s ToolRuntimeStats) int64 { return int64(s.ToolArgsRepaired) },
-	"tool_repair_calls":        func(s ToolRuntimeStats) int64 { return int64(s.ToolRepairCalls) },
-	"tool_repair_succeeded":    func(s ToolRuntimeStats) int64 { return int64(s.ToolRepairSucceeded) },
-	"tool_repair_failed":       func(s ToolRuntimeStats) int64 { return int64(s.ToolRepairFailed) },
-	"tool_repair_notes":        func(s ToolRuntimeStats) int64 { return int64(s.ToolRepairNotes) },
-	"tool_errors":              func(s ToolRuntimeStats) int64 { return int64(s.ToolErrors) },
-	"tool_duration_ms":         func(s ToolRuntimeStats) int64 { return s.ToolDurationMS },
-	"loop_guard_interventions": func(s ToolRuntimeStats) int64 { return int64(s.LoopGuardInterventions) },
-	"forced_no_tools":          func(s ToolRuntimeStats) int64 { return int64(s.ForcedNoTools) },
+	"tool_requests":                func(s ToolRuntimeStats) int64 { return int64(s.ToolRequests) },
+	"tool_name_canonicalized":      func(s ToolRuntimeStats) int64 { return int64(s.ToolNameCanonicalized) },
+	"tool_args_repaired":           func(s ToolRuntimeStats) int64 { return int64(s.ToolArgsRepaired) },
+	"tool_repair_calls":            func(s ToolRuntimeStats) int64 { return int64(s.ToolRepairCalls) },
+	"tool_repair_succeeded":        func(s ToolRuntimeStats) int64 { return int64(s.ToolRepairSucceeded) },
+	"tool_repair_failed":           func(s ToolRuntimeStats) int64 { return int64(s.ToolRepairFailed) },
+	"tool_repair_notes":            func(s ToolRuntimeStats) int64 { return int64(s.ToolRepairNotes) },
+	"tool_errors":                  func(s ToolRuntimeStats) int64 { return int64(s.ToolErrors) },
+	"tool_duration_ms":             func(s ToolRuntimeStats) int64 { return s.ToolDurationMS },
+	"loop_guard_interventions":     func(s ToolRuntimeStats) int64 { return int64(s.LoopGuardInterventions) },
+	"forced_no_tools":              func(s ToolRuntimeStats) int64 { return int64(s.ForcedNoTools) },
+	"source_access_results":        func(s ToolRuntimeStats) int64 { return int64(s.SourceAccessResults) },
+	"source_access_verified":       func(s ToolRuntimeStats) int64 { return int64(s.SourceAccessVerified) },
+	"source_access_discovery_only": func(s ToolRuntimeStats) int64 { return int64(s.SourceAccessDiscoveryOnly) },
+	"source_access_network":        func(s ToolRuntimeStats) int64 { return int64(s.SourceAccessNetwork) },
 }
 
 func toolStatsField(stats ToolRuntimeStats, field string) (int64, bool) {

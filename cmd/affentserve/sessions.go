@@ -68,6 +68,10 @@ type Session struct {
 	toolDurationMS         atomic.Int64
 	loopGuardInterventions atomic.Int64
 	forcedNoTools          atomic.Int64
+	sourceAccessResults    atomic.Int64
+	sourceAccessVerified   atomic.Int64
+	sourceAccessDiscovery  atomic.Int64
+	sourceAccessNetwork    atomic.Int64
 	toolContextTruncated   atomic.Int64
 	toolContextOmitted     atomic.Int64
 	toolRepairMu           sync.Mutex
@@ -1353,6 +1357,10 @@ type ToolStatsSnapshot struct {
 	ToolDurationMS         int64            `json:"tool_duration_ms"`
 	LoopGuardInterventions int64            `json:"loop_guard_interventions"`
 	ForcedNoTools          int64            `json:"forced_no_tools"`
+	SourceAccessResults    int64            `json:"source_access_results"`
+	SourceAccessVerified   int64            `json:"source_access_verified"`
+	SourceAccessDiscovery  int64            `json:"source_access_discovery_only"`
+	SourceAccessNetwork    int64            `json:"source_access_network"`
 	ToolContextTruncated   int64            `json:"tool_context_truncated"`
 	ToolContextOmitted     int64            `json:"tool_context_omitted_bytes"`
 }
@@ -1379,6 +1387,10 @@ func (s *Session) ToolStatsSnapshot() ToolStatsSnapshot {
 		ToolDurationMS:         s.toolDurationMS.Load(),
 		LoopGuardInterventions: s.loopGuardInterventions.Load(),
 		ForcedNoTools:          s.forcedNoTools.Load(),
+		SourceAccessResults:    s.sourceAccessResults.Load(),
+		SourceAccessVerified:   s.sourceAccessVerified.Load(),
+		SourceAccessDiscovery:  s.sourceAccessDiscovery.Load(),
+		SourceAccessNetwork:    s.sourceAccessNetwork.Load(),
 		ToolContextTruncated:   s.toolContextTruncated.Load(),
 		ToolContextOmitted:     s.toolContextOmitted.Load(),
 	}
@@ -1488,6 +1500,10 @@ func (s *Session) addToolStats(stats sse.ToolRuntimeStats) {
 	s.toolDurationMS.Add(stats.ToolDurationMS)
 	s.loopGuardInterventions.Add(int64(stats.LoopGuardInterventions))
 	s.forcedNoTools.Add(int64(stats.ForcedNoTools))
+	s.sourceAccessResults.Add(int64(stats.SourceAccessResults))
+	s.sourceAccessVerified.Add(int64(stats.SourceAccessVerified))
+	s.sourceAccessDiscovery.Add(int64(stats.SourceAccessDiscoveryOnly))
+	s.sourceAccessNetwork.Add(int64(stats.SourceAccessNetwork))
 	s.toolContextTruncated.Add(int64(stats.ToolContextTruncated))
 	s.toolContextOmitted.Add(int64(stats.ToolContextOmittedBytes))
 	if len(stats.ToolRepairByKind) > 0 {

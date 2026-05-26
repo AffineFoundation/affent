@@ -46,6 +46,19 @@ func TestFirstInfoFromResult(t *testing.T) {
 	}
 }
 
+func TestParseLineNetworkSource(t *testing.T) {
+	info := ParseLine("SourceAccess: browser_network_url=https://example.com/api/data; source_method=network_xhr_fetch")
+	if got, want := info.URLField, "browser_network_url"; got != want {
+		t.Fatalf("URLField = %q, want %q", got, want)
+	}
+	if got, want := info.AccessedURL, "https://example.com/api/data"; got != want {
+		t.Fatalf("AccessedURL = %q, want %q", got, want)
+	}
+	if !info.IsNetworkSource() {
+		t.Fatal("IsNetworkSource = false, want true")
+	}
+}
+
 func TestFormatSourceAccessLine(t *testing.T) {
 	got := FormatSourceAccessLine("browser_rendered_url", "https://example.com/final", "https://example.com/start", "page_text_below=verified_page_evidence", "; snapshot_id=7")
 	want := "SourceAccess: browser_rendered_url=https://example.com/final; requested_url=https://example.com/start; page_text_below=verified_page_evidence; snapshot_id=7\n"

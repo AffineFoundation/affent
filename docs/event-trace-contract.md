@@ -203,6 +203,16 @@ diagnostics.
 - `forced_no_tools`: forced no-tool follow-ups after repeated blocking guard
   interventions. Soft guard warnings such as `loop_guard_repeated_failures`
   are counted as interventions but do not by themselves force tools off.
+- `source_access_results`: count of dispatched tool results that included a
+  normalized `SourceAccess:` header.
+- `source_access_verified`: count of `SourceAccess:` results with an accessed
+  URL that were not marked discovery-only.
+- `source_access_discovery_only`: count of `SourceAccess:` results marked as
+  search-result, not-found, or rendered-browser fallback discovery rather than
+  factual evidence.
+- `source_access_network`: count of `SourceAccess:` results read from captured
+  browser XHR/fetch evidence (`browser_network_url` or
+  `source_method=network_xhr_fetch`).
 - `tool_context_truncated`: count of tool results shortened before being fed
   back into the model conversation. This is separate from
   `tool.result.result_truncated`, which reports event-payload truncation.

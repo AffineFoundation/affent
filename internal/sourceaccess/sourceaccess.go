@@ -7,10 +7,12 @@ import (
 
 // Info captures the normalized fields we care about from SourceAccess lines.
 type Info struct {
+	URLField                    string
 	AccessedURL                 string
 	RequestedURL                string
 	PageTextBelow               string
 	RenderedBrowserSourceStatus string
+	SourceMethod                string
 }
 
 // ParseLine extracts the accessed/requested URLs from a SourceAccess line.
@@ -27,15 +29,22 @@ func ParseLine(line string) Info {
 		field = strings.TrimSpace(field)
 		switch {
 		case strings.HasPrefix(field, "fetched_url="):
+			info.URLField = "fetched_url"
 			info.AccessedURL = strings.TrimSpace(strings.TrimPrefix(field, "fetched_url="))
 		case strings.HasPrefix(field, "browser_rendered_url="):
+			info.URLField = "browser_rendered_url"
 			info.AccessedURL = strings.TrimSpace(strings.TrimPrefix(field, "browser_rendered_url="))
+		case strings.HasPrefix(field, "browser_network_url="):
+			info.URLField = "browser_network_url"
+			info.AccessedURL = strings.TrimSpace(strings.TrimPrefix(field, "browser_network_url="))
 		case strings.HasPrefix(field, "requested_url="):
 			info.RequestedURL = strings.TrimSpace(strings.TrimPrefix(field, "requested_url="))
 		case strings.HasPrefix(field, "page_text_below="):
 			info.PageTextBelow = strings.TrimSpace(strings.TrimPrefix(field, "page_text_below="))
 		case strings.HasPrefix(field, "rendered_browser_source_status="):
 			info.RenderedBrowserSourceStatus = strings.TrimSpace(strings.TrimPrefix(field, "rendered_browser_source_status="))
+		case strings.HasPrefix(field, "source_method="):
+			info.SourceMethod = strings.TrimSpace(strings.TrimPrefix(field, "source_method="))
 		}
 	}
 	return info
@@ -53,6 +62,12 @@ func (i Info) IsDiscoveryOnly() bool {
 		return true
 	}
 	return false
+}
+
+// IsNetworkSource reports whether the source line came from captured browser
+// XHR/fetch evidence rather than rendered page text or a direct fetch.
+func (i Info) IsNetworkSource() bool {
+	return i.URLField == "browser_network_url" || i.SourceMethod == "network_xhr_fetch"
 }
 
 // FirstInfoFromResult returns the first SourceAccess record visible in a full
@@ -83,8 +98,9 @@ func AccessedURLFromResult(result string) string {
 }
 
 // FormatSourceAccessLine formats a single SourceAccess header line.
-// Callers supply the canonical URL field name (fetched_url or
-// browser_rendered_url) and any additional semicolon-delimited fields.
+// Callers supply the canonical URL field name (fetched_url,
+// browser_rendered_url, or browser_network_url) and any additional
+// semicolon-delimited fields.
 func FormatSourceAccessLine(urlField, accessedURL, requestedURL string, fields ...string) string {
 	accessedURL = sanitizeHeaderValue(accessedURL)
 	requested := sanitizeHeaderValue(requestedURL)
