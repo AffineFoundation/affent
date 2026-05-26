@@ -731,6 +731,19 @@ go run ./cmd/affenteval --scenario coding-python-slug --temperature 0
 go run ./cmd/affenteval --suite small-model-tools --jsonl > eval.jsonl
 ```
 
+Run a one-off prompt through the same batch harness:
+
+```bash
+go run ./cmd/affenteval --prompt "Analyze the current project and report the risky parts." --name project-audit --max-turns 12 --keep-workspaces
+go run ./cmd/affenteval --prompt-file request.md --runtime-web --name web-research --max-turns 20 --keep-workspaces
+```
+
+Each run writes a trace JSONL plus retained debug files in the scenario
+workspace: `affenteval-debug.json`, `affenteval-final.txt`,
+`affenteval-stdout.txt`, and `affenteval-stderr.txt`. Failed workspaces are
+kept automatically; `--keep-workspaces` also keeps passing runs for local
+inspection.
+
 Run through Docker:
 
 ```bash
@@ -756,10 +769,11 @@ tools remain available when built-ins are available. Opt memory or MCP back in
 only for suites that explicitly measure those capabilities. The eval container
 does not forward host `AFFENTCTL_EVAL_MODE`, `AFFENTCTL_SUBAGENT`,
 `AFFENTCTL_FOCUSED_TASKS`, or `AFFENTCTL_PROJECT_CONTEXT`; use the
-`EVAL_RUNTIME_*` knobs above. Use `--runtime-browser` and `--runtime-web`
-when a scenario explicitly measures rendered-page inspection or direct web
-retrieval; otherwise keep them off so evals stay on the minimal surface they
-intend to measure.
+`EVAL_RUNTIME_*` knobs above. Use `--runtime-web` when a scenario explicitly
+measures direct web retrieval; otherwise keep it off so evals stay on the
+minimal surface they intend to measure. Browser runtime evals are still routed
+through affentserve/browser-session wiring; `affenteval --runtime-browser` is
+reserved until the affentctl batch runner has an external browser adapter.
 
 When project context is enabled in normal runtime mode, Affent also injects a
 small auto-generated repository map alongside user-authored project notes. The

@@ -439,6 +439,18 @@ func TestTypedEnvConfigRejectsInvalidValues(t *testing.T) {
 			want: "AFFENTCTL_EVAL_MODE=\"sometimes\"",
 		},
 		{
+			name: "web bool",
+			env:  "AFFENTCTL_WEB",
+			val:  "sometimes",
+			want: "AFFENTCTL_WEB=\"sometimes\"",
+		},
+		{
+			name: "web search bool",
+			env:  "AFFENTCTL_WEB_SEARCH",
+			val:  "sometimes",
+			want: "AFFENTCTL_WEB_SEARCH=\"sometimes\"",
+		},
+		{
 			name: "subagent max depth int",
 			env:  "AFFENTCTL_SUBAGENT_MAX_DEPTH",
 			val:  "deep",
@@ -617,6 +629,86 @@ func TestEvalModeAllowsExplicitMemory(t *testing.T) {
 	}
 }
 
+func TestEvalModeAllowsExplicitWeb(t *testing.T) {
+	var cf commonFlags
+	fs := flag.NewFlagSet("test", flag.ContinueOnError)
+	cf.bind(fs)
+	if err := fs.Parse([]string{"--eval-mode", "--web", "--web-search"}); err != nil {
+		t.Fatal(err)
+	}
+	if err := applyConfig(&cf, fs); err != nil {
+		t.Fatal(err)
+	}
+	caps := resolveRuntimeCapabilities(cf)
+	if !caps.WebFetch || !caps.WebSearch {
+		t.Fatalf("--eval-mode --web --web-search should enable web tools, caps=%+v", caps)
+	}
+	if caps.Memory || caps.Skill || caps.Plan || caps.SessionSearch || caps.ProjectContext || caps.Browser || caps.Subagent || caps.FocusedTasks {
+		t.Fatalf("explicit web must not re-enable non-basic eval surfaces, caps=%+v", caps)
+	}
+}
+
+func TestWebCanBeEnabledFromConfigEnvAndCLI(t *testing.T) {
+	t.Run("config aliases", func(t *testing.T) {
+		dir := t.TempDir()
+		cfgPath := filepath.Join(dir, "c.json")
+		if err := os.WriteFile(cfgPath, []byte(`{"enable_web":true,"enable_web_search":true}`), 0o644); err != nil {
+			t.Fatal(err)
+		}
+		var cf commonFlags
+		fs := flag.NewFlagSet("test", flag.ContinueOnError)
+		cf.bind(fs)
+		if err := fs.Parse([]string{"--config", cfgPath}); err != nil {
+			t.Fatal(err)
+		}
+		if err := applyConfig(&cf, fs); err != nil {
+			t.Fatal(err)
+		}
+		if !cf.webEnabled || !cf.webSearchEnabled {
+			t.Fatalf("config web aliases not applied: web=%t search=%t", cf.webEnabled, cf.webSearchEnabled)
+		}
+	})
+
+	t.Run("env beats config", func(t *testing.T) {
+		dir := t.TempDir()
+		cfgPath := filepath.Join(dir, "c.json")
+		if err := os.WriteFile(cfgPath, []byte(`{"web":false,"web_search":false}`), 0o644); err != nil {
+			t.Fatal(err)
+		}
+		t.Setenv("AFFENTCTL_WEB", "true")
+		t.Setenv("AFFENTCTL_WEB_SEARCH", "true")
+		var cf commonFlags
+		fs := flag.NewFlagSet("test", flag.ContinueOnError)
+		cf.bind(fs)
+		if err := fs.Parse([]string{"--config", cfgPath}); err != nil {
+			t.Fatal(err)
+		}
+		if err := applyConfig(&cf, fs); err != nil {
+			t.Fatal(err)
+		}
+		if !cf.webEnabled || !cf.webSearchEnabled {
+			t.Fatalf("env web flags not applied: web=%t search=%t", cf.webEnabled, cf.webSearchEnabled)
+		}
+	})
+
+	t.Run("cli beats env", func(t *testing.T) {
+		t.Setenv("AFFENTCTL_WEB", "false")
+		t.Setenv("AFFENTCTL_WEB_SEARCH", "false")
+		var cf commonFlags
+		fs := flag.NewFlagSet("test", flag.ContinueOnError)
+		cf.bind(fs)
+		if err := fs.Parse([]string{"--web=true", "--web-search=true"}); err != nil {
+			t.Fatal(err)
+		}
+		if err := applyConfig(&cf, fs); err != nil {
+			t.Fatal(err)
+		}
+		if !cf.webEnabled || !cf.webSearchEnabled {
+			t.Fatalf("cli web flags not applied: web=%t search=%t", cf.webEnabled, cf.webSearchEnabled)
+		}
+	})
+}
+
 func TestMemoryDefaultsOnAndCanBeDisabled(t *testing.T) {
 	var cf commonFlags
 	fs := flag.NewFlagSet("test", flag.ContinueOnError)
@@ -737,6 +829,35 @@ func TestSetupLoop_SubagentDisabledDoesNotRegisterToolOrPolicies(t *testing.T) {
 	msgs := b.loop.Conv.Snapshot()
 	if len(msgs) == 0 || strings.Contains(msgs[0].Content, "Subagent delegation:") {
 		t.Fatal("system prompt should not include subagent guidance when disabled")
+	}
+}
+
+func TestSetupLoop_WebOptInRegistersTools(t *testing.T) {
+	var cf commonFlags
+	fs := flag.NewFlagSet("test", flag.ContinueOnError)
+	cf.bind(fs)
+	if err := fs.Parse([]string{
+		"--workspace", t.TempDir(),
+		"--model", "fake-model",
+		"--base-url", "http://127.0.0.1:1/v1",
+		"--web",
+		"--web-search",
+		"--quiet",
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if err := applyConfig(&cf, fs); err != nil {
+		t.Fatal(err)
+	}
+	b, code := setupLoop(cf)
+	if code != 0 {
+		t.Fatalf("setupLoop code=%d", code)
+	}
+	defer b.close()
+	for _, name := range []string{"web_fetch", "web_search"} {
+		if _, ok := b.loop.Tools.Get(name); !ok {
+			t.Fatalf("%s should be registered when --web --web-search is set", name)
+		}
 	}
 }
 
@@ -1057,6 +1178,8 @@ func TestNoEnvVarLeaksIntoFlagDefaults(t *testing.T) {
 		"AFFENTCTL_EXECUTOR":           "docker:sentinel-XYZ123",
 		"AFFENTCTL_EVAL_MODE":          "sentinel-eval-mode-XYZ123",
 		"AFFENTCTL_SUBAGENT_MAX_DEPTH": "99",
+		"AFFENTCTL_WEB":                "sentinel-web-XYZ123",
+		"AFFENTCTL_WEB_SEARCH":         "sentinel-web-search-XYZ123",
 		"AFFENTCTL_TEMPERATURE":        "sentinel-temperature-XYZ123",
 		"AFFENTCTL_TOP_P":              "sentinel-top-p-XYZ123",
 		"AFFENTCTL_MAX_TOKENS":         "sentinel-max-tokens-XYZ123",
@@ -1092,6 +1215,8 @@ func TestNoEnvVarLeaksIntoFlagDefaults(t *testing.T) {
 			want = "2"
 		} else if name == "focused-tasks" {
 			want = "true"
+		} else if name == "web" || name == "web-search" {
+			want = "false"
 		}
 		if got != want {
 			t.Errorf("%s default = %q, want %q (env-bound flags must not show env values in --help)", name, got, want)
@@ -1330,6 +1455,7 @@ func TestNormalizeRuntimeLimits(t *testing.T) {
 		{name: "retry backoff", edit: func(c *commonFlags) { c.retryBackoff = 0 }, want: "--retry-backoff must be a positive duration"},
 		{name: "subagent depth too low", edit: func(c *commonFlags) { c.subagentMaxDepth = 0 }, want: "--subagent-max-depth must be between 1 and 4"},
 		{name: "subagent depth too high", edit: func(c *commonFlags) { c.subagentMaxDepth = agent.MaxSubagentDepth + 1 }, want: "--subagent-max-depth must be between 1 and 4"},
+		{name: "web search without web", edit: func(c *commonFlags) { c.webSearchEnabled = true }, want: "--web-search requires --web"},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {

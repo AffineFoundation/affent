@@ -1084,6 +1084,7 @@ func TestBatchRunnerAffentctlRunArgsForwardsExecutor(t *testing.T) {
 		Seed:             " 42 ",
 		Executor:         "docker:affent-eval",
 		RuntimeEvalMode:  true,
+		RuntimeWeb:       true,
 		RuntimeMCPConfig: " /tmp/eval-mcp.json ",
 	}).affentctlRunArgs("/tmp/ws", "/tmp/ws/trace.jsonl", BatchScenario{
 		Prompt:       "fix it",
@@ -1107,46 +1108,55 @@ func TestBatchRunnerAffentctlRunArgsForwardsExecutor(t *testing.T) {
 		"--api-key\x00secret",
 		"--eval-mode",
 		"--memory=true",
+		"--web=true",
+		"--web-search=true",
 		"--mcp-config\x00/tmp/eval-mcp.json",
 	} {
 		if !strings.Contains(joined, want) {
 			t.Fatalf("args missing %q:\n%q", want, args)
 		}
 	}
-	for _, unsupported := range []string{"--web=true", "--browser=true"} {
+	for _, unsupported := range []string{"--browser=true"} {
 		if strings.Contains(joined, unsupported) {
 			t.Fatalf("args should not include unsupported runtime flag %q:\n%q", unsupported, args)
 		}
 	}
 }
 
-func TestBatchRunnerRunRejectsUnsupportedExternalRuntimeFlags(t *testing.T) {
-	cases := []struct {
-		name   string
-		runner BatchRunner
-	}{
-		{
-			name:   "runtime web",
-			runner: BatchRunner{RuntimeWeb: true},
-		},
-		{
-			name:   "runtime browser",
-			runner: BatchRunner{RuntimeBrowser: true},
-		},
+func TestBatchRunnerRunRejectsUnsupportedBrowserRuntimeFlag(t *testing.T) {
+	res := (BatchRunner{RuntimeBrowser: true}).Run(context.Background(), BatchScenario{Name: "unsupported-runtime", MaxTurns: 1})
+	if res.OK {
+		t.Fatalf("Run OK = true, want unsupported runtime failure")
 	}
-	for _, tc := range cases {
-		t.Run(tc.name, func(t *testing.T) {
-			res := tc.runner.Run(context.Background(), BatchScenario{Name: "unsupported-runtime", MaxTurns: 1})
-			if res.OK {
-				t.Fatalf("Run OK = true, want unsupported runtime failure")
-			}
-			if res.Workspace != "" {
-				t.Fatalf("Workspace = %q, want early rejection before workspace creation", res.Workspace)
-			}
-			if len(res.Failures) != 1 || !strings.Contains(res.Failures[0], "runtime web/browser tools are not supported") {
-				t.Fatalf("Failures = %#v", res.Failures)
-			}
-		})
+	if res.Workspace != "" {
+		t.Fatalf("Workspace = %q, want early rejection before workspace creation", res.Workspace)
+	}
+	if len(res.Failures) != 1 || !strings.Contains(res.Failures[0], "runtime browser tools are not supported") {
+		t.Fatalf("Failures = %#v", res.Failures)
+	}
+}
+
+func TestGoCommandUsableForRepoChecksModuleLoad(t *testing.T) {
+	repoRoot := t.TempDir()
+	if err := os.WriteFile(filepath.Join(repoRoot, "go.mod"), []byte("module example.test/eval\n\ngo 1.24.0\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	dir := t.TempDir()
+	good := filepath.Join(dir, "go-good")
+	goodScript := "#!/bin/sh\nif [ \"$1\" = list ] && [ \"$2\" = -m ] && [ \"${GOTOOLCHAIN:-}\" = local ]; then exit 0; fi\nexit 1\n"
+	if err := os.WriteFile(good, []byte(goodScript), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	bad := filepath.Join(dir, "go-bad")
+	badScript := "#!/bin/sh\necho 'go: go.mod requires go >= 1.24.0 (running go 1.22.12; GOTOOLCHAIN=local)' >&2\nexit 1\n"
+	if err := os.WriteFile(bad, []byte(badScript), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if !goCommandUsableForRepo(good, repoRoot) {
+		t.Fatal("expected module-load-capable go command to be usable")
+	}
+	if goCommandUsableForRepo(bad, repoRoot) {
+		t.Fatal("expected stale go command to be rejected")
 	}
 }
 

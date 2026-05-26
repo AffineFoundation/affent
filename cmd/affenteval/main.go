@@ -59,7 +59,7 @@ func run(args []string) int {
 		executor          = fs.String("executor", "local", "affentctl tool executor for scenario runs: local, sandbox, or docker:<container>")
 		runtimeEvalMode   = fs.Bool("runtime-eval-mode", false, "pass affentctl --eval-mode to keep only the basic benchmark tool surface during scenario runs")
 		runtimeMemory     = fs.Bool("runtime-memory", false, "pass affentctl --memory=true during scenario runs; useful with --runtime-eval-mode for memory-only opt-in")
-		runtimeWeb        = fs.Bool("runtime-web", false, "reserved for a future external-web eval runtime; currently unsupported by the affentctl batch runner")
+		runtimeWeb        = fs.Bool("runtime-web", false, "pass affentctl --web --web-search during scenario runs for external retrieval/debug evals")
 		runtimeBrowser    = fs.Bool("runtime-browser", false, "reserved for a future browser eval runtime; currently unsupported by the affentctl batch runner")
 		runtimeMCPConfig  = fs.String("runtime-mcp-config", "", "pass affentctl --mcp-config PATH during scenario runs; useful with --runtime-eval-mode to opt into MCP only")
 		timeout           = fs.Duration("timeout", 5*time.Minute, "per-scenario timeout")
@@ -1482,8 +1482,8 @@ func validateRunConfig(temperature, topP, maxTokens, seed string, timeout time.D
 	if verifierOutputCap <= 0 {
 		return fmt.Errorf("--verifier-output-cap must be positive")
 	}
-	if runtimeWeb || runtimeBrowser {
-		return fmt.Errorf("--runtime-web/--runtime-browser are not supported by the affentctl batch runner yet; use in-process browser runner tests or affentserve-based eval wiring until an external runtime adapter is implemented")
+	if runtimeBrowser {
+		return fmt.Errorf("--runtime-browser is not supported by the affentctl batch runner yet; use affentserve-based eval wiring until an external browser runtime adapter is implemented")
 	}
 	if err := validateEvalExecutor(executor, scenarioCount, workRoot, workRootSet); err != nil {
 		return err

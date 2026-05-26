@@ -331,8 +331,8 @@ func scenarioInSuite(s BatchScenario, suite string) bool {
 func (r BatchRunner) Run(ctx context.Context, scenario BatchScenario) BatchResult {
 	start := time.Now()
 	res := BatchResult{BatchScenario: scenario.Name}
-	if r.RuntimeWeb || r.RuntimeBrowser {
-		return res.fail("runtime web/browser tools are not supported by the affentctl batch runner yet; use in-process browser runner tests or affentserve-based eval wiring until an external runtime adapter is implemented")
+	if r.RuntimeBrowser {
+		return res.fail("runtime browser tools are not supported by the affentctl batch runner yet; use affentserve-based eval wiring until an external browser runtime adapter is implemented")
 	}
 	if r.Timeout <= 0 {
 		r.Timeout = DefaultBatchTimeout
@@ -612,6 +612,9 @@ func (r BatchRunner) affentctlRunArgs(workspace, tracePath string, scenario Batc
 	}
 	if r.RuntimeMemory || scenario.EnableMemory {
 		args = append(args, "--memory=true")
+	}
+	if r.RuntimeWeb {
+		args = append(args, "--web=true", "--web-search=true")
 	}
 	args = appendStringFlag(args, "--mcp-config", r.RuntimeMCPConfig)
 	return args
@@ -1050,20 +1053,38 @@ func evalPath(repoRoot string) string {
 
 func findGo(repoRoot string) string {
 	for _, candidate := range []string{
+		"/usr/local/go/bin/go",
 		filepath.Join(repoRoot, ".tmp", "toolchains", "go", "bin", "go"),
 		filepath.Join(os.Getenv("HOME"), ".local", "go-toolchain", "go", "bin", "go"),
 		"go",
 	} {
 		if path, err := exec.LookPath(candidate); err == nil {
-			return path
+			if goCommandUsableForRepo(path, repoRoot) {
+				return path
+			}
+			continue
 		}
 		if filepath.IsAbs(candidate) {
 			if st, err := os.Stat(candidate); err == nil && !st.IsDir() {
-				return candidate
+				if goCommandUsableForRepo(candidate, repoRoot) {
+					return candidate
+				}
 			}
 		}
 	}
 	return "go"
+}
+
+func goCommandUsableForRepo(goBin, repoRoot string) bool {
+	if strings.TrimSpace(goBin) == "" {
+		return false
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+	defer cancel()
+	cmd := exec.CommandContext(ctx, goBin, "list", "-m")
+	cmd.Dir = repoRoot
+	cmd.Env = append(os.Environ(), "GOTOOLCHAIN=local")
+	return cmd.Run() == nil
 }
 
 func dedupeNonEmpty(parts []string) []string {

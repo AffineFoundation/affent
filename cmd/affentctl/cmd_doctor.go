@@ -187,19 +187,16 @@ func doctorCapabilitySummary(c commonFlags) string {
 	if caps.FocusedTasks {
 		// Build a probe from what affentctl actually wires: workspace +
 		// LLM are always present at run time, executor + memory +
-		// session_search follow the builtins/memory flags. affentctl
-		// does NOT wire a web registrar today, so research drops out
-		// of the schema — the model never sees a task_type it can't
-		// fulfill. Doctor reflects that filter so the operator can
-		// confirm the deployed surface matches their intent.
+		// session_search follow the builtins/memory flags. Web follows
+		// the explicit --web opt-in. Browser stays false because
+		// affentctl does not manage browser sessions yet.
 		probe := agent.FocusedTaskAvailabilityProbe{
 			HasLLM:       true,
 			HasWorkspace: true,
 			HasExecutor:  caps.Builtins,
 			HasMemory:    caps.Memory,
 			HasSessions:  caps.SessionSearch,
-			// HasWeb / HasBrowser stay false: affentctl has no path
-			// that registers web or browser tools for focused tasks.
+			HasWeb:       caps.WebFetch,
 		}
 		kinds := probe.AvailableKinds(nil)
 		if len(kinds) == 0 {

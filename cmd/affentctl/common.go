@@ -14,6 +14,7 @@ import (
 	"strings"
 	"time"
 
+	affentweb "github.com/affinefoundation/affent/extras/web"
 	agent "github.com/affinefoundation/affent/internal/agent"
 	"github.com/affinefoundation/affent/internal/eventlog"
 	"github.com/affinefoundation/affent/internal/executor"
@@ -123,6 +124,12 @@ type commonFlags struct {
 	// toggled independently. Default on.
 	focusedTasksEnabled bool
 
+	// webEnabled registers extras/web tools. It is off by default for
+	// affentctl so local coding runs do not unexpectedly use network,
+	// but eval/debug drivers can opt in for real external research.
+	webEnabled       bool
+	webSearchEnabled bool
+
 	// Sampling pass-through to the upstream LLM. Strings preserve the
 	// "unset" / "explicit 0" distinction that evals need (temperature=0
 	// for deterministic decoding must not be confused with "use provider
@@ -166,6 +173,8 @@ func (c *commonFlags) bind(fs *flag.FlagSet) {
 	fs.BoolVar(&c.subagentEnabled, "subagent", true, "register subagent_run for bounded read-only delegation; set false to force a single-loop agent (env: AFFENTCTL_SUBAGENT)")
 	fs.IntVar(&c.subagentMaxDepth, "subagent-max-depth", agent.DefaultSubagentMaxDepth, "maximum recursive subagent depth; 1 disables nested subagents, hard max 4 (env: AFFENTCTL_SUBAGENT_MAX_DEPTH)")
 	fs.BoolVar(&c.focusedTasksEnabled, "focused-tasks", true, "register run_task for bounded focused tasks with structured output; set false to hide the surface (env: AFFENTCTL_FOCUSED_TASKS)")
+	fs.BoolVar(&c.webEnabled, "web", false, "register web_fetch for public web retrieval; blocks private network addresses by default (env: AFFENTCTL_WEB)")
+	fs.BoolVar(&c.webSearchEnabled, "web-search", false, "register web_search alongside web_fetch; requires --web (env: AFFENTCTL_WEB_SEARCH)")
 	fs.StringVar(&c.temperature, "temperature", "", "sampling temperature forwarded to upstream LLM (omit → provider default; set 0 for deterministic eval decoding; env: AFFENTCTL_TEMPERATURE)")
 	fs.StringVar(&c.topP, "top-p", "", "top-p (nucleus) sampling forwarded to upstream (omit → provider default; env: AFFENTCTL_TOP_P)")
 	fs.StringVar(&c.maxTokens, "max-tokens", "", "max output tokens forwarded to upstream (omit → provider default; env: AFFENTCTL_MAX_TOKENS)")
@@ -269,6 +278,8 @@ var flagEnvSources = map[string]string{
 	"subagent":           "AFFENTCTL_SUBAGENT",
 	"subagent-max-depth": "AFFENTCTL_SUBAGENT_MAX_DEPTH",
 	"focused-tasks":      "AFFENTCTL_FOCUSED_TASKS",
+	"web":                "AFFENTCTL_WEB",
+	"web-search":         "AFFENTCTL_WEB_SEARCH",
 	"temperature":        "AFFENTCTL_TEMPERATURE",
 	"top-p":              "AFFENTCTL_TOP_P",
 	"max-tokens":         "AFFENTCTL_MAX_TOKENS",
@@ -343,6 +354,15 @@ type fileConfig struct {
 	// can use the same name in both binaries.
 	FocusedTasks       *bool `json:"focused_tasks"`
 	EnableFocusedTasks *bool `json:"enable_focused_tasks"`
+	// Web is the affentctl-native key. EnableWeb mirrors
+	// affentserve's config spelling so shared config templates can
+	// use the same name in both binaries.
+	Web       *bool `json:"web"`
+	EnableWeb *bool `json:"enable_web"`
+	// WebSearch is the affentctl-native key. EnableWebSearch mirrors
+	// affentserve's config spelling.
+	WebSearch       *bool `json:"web_search"`
+	EnableWebSearch *bool `json:"enable_web_search"`
 	// Sampling forwarded to upstream. Kept as strings to mirror the CLI
 	// flags and preserve the "unset vs explicit 0" distinction that
 	// pointers give us at the wire layer.
@@ -409,6 +429,9 @@ func normalizeRuntimeLimits(c *commonFlags) error {
 	}
 	if c.subagentMaxDepth < 1 || c.subagentMaxDepth > agent.MaxSubagentDepth {
 		return fmt.Errorf("--subagent-max-depth must be between 1 and %d", agent.MaxSubagentDepth)
+	}
+	if c.webSearchEnabled && !c.webEnabled {
+		return fmt.Errorf("--web-search requires --web")
 	}
 	return nil
 }
@@ -525,6 +548,10 @@ func loadConfigFile(c *commonFlags, fs *flag.FlagSet) error {
 	setInt("subagent-max-depth", &c.subagentMaxDepth, cfg.SubagentMaxDepth)
 	setBool("focused-tasks", &c.focusedTasksEnabled, cfg.FocusedTasks)
 	setBool("focused-tasks", &c.focusedTasksEnabled, cfg.EnableFocusedTasks)
+	setBool("web", &c.webEnabled, cfg.Web)
+	setBool("web", &c.webEnabled, cfg.EnableWeb)
+	setBool("web-search", &c.webSearchEnabled, cfg.WebSearch)
+	setBool("web-search", &c.webSearchEnabled, cfg.EnableWebSearch)
 	setString("temperature", &c.temperature, cfg.Temperature)
 	setString("top-p", &c.topP, cfg.TopP)
 	setString("max-tokens", &c.maxTokens, cfg.MaxTokens)
@@ -610,6 +637,12 @@ func applyEnvConfig(c *commonFlags, fs *flag.FlagSet) error {
 		return err
 	}
 	if err := setBoolStrict("focused-tasks", "AFFENTCTL_FOCUSED_TASKS", &c.focusedTasksEnabled); err != nil {
+		return err
+	}
+	if err := setBoolStrict("web", "AFFENTCTL_WEB", &c.webEnabled); err != nil {
+		return err
+	}
+	if err := setBoolStrict("web-search", "AFFENTCTL_WEB_SEARCH", &c.webSearchEnabled); err != nil {
 		return err
 	}
 	if err := setBoolStrict("eval-mode", "AFFENTCTL_EVAL_MODE", &c.evalMode); err != nil {
@@ -744,6 +777,8 @@ func resolveRuntimeCapabilities(c commonFlags) runtimeCapabilities {
 		ProjectContext:       c.projectContext,
 		SymbolContext:        true,
 		RepoSearch:           true,
+		WebFetch:             c.webEnabled,
+		WebSearch:            c.webEnabled && c.webSearchEnabled,
 		Subagent:             c.subagentEnabled,
 		FocusedTasks:         c.focusedTasksEnabled,
 	}
@@ -756,6 +791,8 @@ func resolveRuntimeCapabilities(c commonFlags) runtimeCapabilities {
 		caps.ProjectContext = false
 		caps.SymbolContext = true
 		caps.RepoSearch = true
+		caps.WebFetch = c.webEnabled
+		caps.WebSearch = c.webEnabled && c.webSearchEnabled
 		caps.Subagent = false
 		caps.FocusedTasks = false
 	}
@@ -768,6 +805,26 @@ func (b *loopBundle) close() {
 	}
 	if b.traceClose != nil {
 		_ = b.traceClose()
+	}
+}
+
+func registerAffentctlWebTools(reg *agent.Registry, includeSearch bool) error {
+	if includeSearch {
+		return affentweb.RegisterAll(reg, affentweb.Options{Fetch: affentweb.FetchConfig{}})
+	}
+	affentweb.RegisterFetch(reg, affentweb.FetchConfig{})
+	return nil
+}
+
+func affentctlFocusedTaskWebRegistrar(enabled, includeSearch bool) func(context.Context, *agent.Registry) (func(), error) {
+	if !enabled {
+		return nil
+	}
+	return func(_ context.Context, reg *agent.Registry) (func(), error) {
+		if err := registerAffentctlWebTools(reg, includeSearch); err != nil {
+			return nil, fmt.Errorf("focused task web_search: %w", err)
+		}
+		return nil, nil
 	}
 }
 
@@ -905,6 +962,12 @@ func setupLoop(c commonFlags) (*loopBundle, int) {
 			DisableSkill: !caps.Skill,
 		})
 	}
+	if caps.WebFetch {
+		if err := registerAffentctlWebTools(tools, caps.WebSearch); err != nil {
+			log.Error().Err(err).Msg("web setup")
+			return nil, exitRuntime
+		}
+	}
 
 	mcpConfigPath := ""
 	if caps.MCP {
@@ -972,6 +1035,7 @@ func setupLoop(c commonFlags) (*loopBundle, int) {
 			ProjectContextDir: projectContextDir,
 			Log:               log,
 			PerCallTimeout:    c.callTimeout,
+			RegisterWebTools:  affentctlFocusedTaskWebRegistrar(caps.WebFetch, caps.WebSearch),
 		})
 	}
 	systemPrompt = agent.WithRegistrySystemGuidance(systemPrompt, tools)
