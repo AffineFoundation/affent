@@ -1256,6 +1256,67 @@ func longRunMultiTaskSessionRecoveryScenario() BatchScenario {
 	}
 }
 
+func longRunContextCompactionRetentionScenario() BatchScenario {
+	return BatchScenario{
+		Name:   "longrun-context-compaction-retention",
+		Suites: []string{longRunSuite},
+		Prompt: "你正在恢复一个会触发上下文压缩的多任务 session。请按顺序读取 current/phase.md、current/stock.md、current/subnet.md、current/pr.md、current/evidence.md，然后只根据这些 current 文件输出 phase marker、stock marker、subnet marker、PR marker、evidence source。不要运行 shell，不要搜索，不要修改文件。最终必须保留 COMPRESS-PHASE-09、COMPRESS-HRO-31、COMPRESS-SN120-42、COMPRESS-PR-77。",
+		Files: map[string]string{
+			"current/phase.md":    "Current phase marker: COMPRESS-PHASE-09. Use only current/*.md as authoritative handoff state.\n",
+			"current/stock.md":    "Helio Robotics stock marker: COMPRESS-HRO-31. Current risk label: inventory-normalization. Next action: compare Q3 backlog with revenue conversion.\n",
+			"current/subnet.md":   "Bittensor Affine SN120 subnet marker: COMPRESS-SN120-42. Current risk label: validator-concentration. Next action: recheck emissions and miner dispersion.\n",
+			"current/pr.md":       "Code PR marker: COMPRESS-PR-77. Current implementation status: Queue.Push priority ordering is stable and tests are green.\n",
+			"current/evidence.md": "Evidence source: current-evidence-pack-5. Stock evidence comes from current/stock.md, subnet evidence from current/subnet.md, PR evidence from current/pr.md.\n",
+			"archive/stale.md":    "Outdated markers: COMPRESS-OLD-01, COMPRESS-SN000-00, COMPRESS-PR-OLD. Do not use this archive file.\n",
+		},
+		RequiredTools: []string{"read_file"},
+		RequiredToolCounts: map[string]int{
+			"read_file": 5,
+		},
+		RequiredToolArgContains: []ToolArgContainsRequirement{
+			{Tool: "read_file", Arg: "path", Substring: "current/phase.md"},
+			{Tool: "read_file", Arg: "path", Substring: "current/stock.md"},
+			{Tool: "read_file", Arg: "path", Substring: "current/subnet.md"},
+			{Tool: "read_file", Arg: "path", Substring: "current/pr.md"},
+			{Tool: "read_file", Arg: "path", Substring: "current/evidence.md"},
+		},
+		RequiredContextCompactions:    1,
+		RequiredCompactionRemovedMsgs: 1,
+		RequiredContextSummaryText: []string{
+			"COMPRESS-HRO-31",
+			"COMPRESS-SN120-42",
+			"COMPRESS-PR-77",
+		},
+		RequiredFinalText: []string{
+			"COMPRESS-PHASE-09",
+			"COMPRESS-HRO-31",
+			"COMPRESS-SN120-42",
+			"COMPRESS-PR-77",
+			"current-evidence-pack-5",
+		},
+		ForbiddenFinalText: []string{
+			"COMPRESS-OLD-01",
+			"COMPRESS-SN000-00",
+			"COMPRESS-PR-OLD",
+		},
+		ForbiddenTools: []string{"shell", "repo_search", "web_fetch", "web_search", "write_file", "edit_file"},
+		ProtectedFiles: []string{
+			"current/phase.md",
+			"current/stock.md",
+			"current/subnet.md",
+			"current/pr.md",
+			"current/evidence.md",
+			"archive/stale.md",
+		},
+		MaxSuccessfulToolCallsByTool: map[string]int{
+			"read_file": 5,
+		},
+		MaxTurns:        12,
+		CompactTrigger:  6,
+		CompactKeepLast: 3,
+	}
+}
+
 func memoryConfirmedWriteStatsScenario() BatchScenario {
 	return BatchScenario{
 		Name:         "memory-confirmed-write-stats",

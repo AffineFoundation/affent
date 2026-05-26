@@ -818,8 +818,8 @@ func TestSelectLongRunSuite(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(scenarios) != 9 {
-		t.Fatalf("long-run suite size = %d, want 9", len(scenarios))
+	if len(scenarios) != 10 {
+		t.Fatalf("long-run suite size = %d, want 10", len(scenarios))
 	}
 	seen := map[string]BatchScenario{}
 	for _, scenario := range scenarios {
@@ -931,6 +931,28 @@ func TestSelectLongRunSuite(t *testing.T) {
 		}
 	}
 	assertSessionSearchDiagnosticsRequiredForTerms(t, multiTaskRecovery, []string{`"northstar"`, `"biotech"`})
+
+	compactionRetention, ok := seen["longrun-context-compaction-retention"]
+	if !ok {
+		t.Fatalf("long-run suite missing context compaction retention scenario")
+	}
+	if compactionRetention.CompactTrigger != 6 || compactionRetention.CompactKeepLast != 3 {
+		t.Fatalf("compaction retention settings = trigger:%d keep_last:%d, want 6/3", compactionRetention.CompactTrigger, compactionRetention.CompactKeepLast)
+	}
+	if compactionRetention.RequiredContextCompactions != 1 || compactionRetention.RequiredCompactionRemovedMsgs != 1 {
+		t.Fatalf("compaction retention requirements = compactions:%d removed:%d, want 1/1", compactionRetention.RequiredContextCompactions, compactionRetention.RequiredCompactionRemovedMsgs)
+	}
+	if compactionRetention.RequiredToolCounts["read_file"] != 5 || compactionRetention.MaxSuccessfulToolCallsByTool["read_file"] != 5 {
+		t.Fatalf("compaction retention read constraints = counts:%#v max:%#v", compactionRetention.RequiredToolCounts, compactionRetention.MaxSuccessfulToolCallsByTool)
+	}
+	for _, want := range []string{"COMPRESS-HRO-31", "COMPRESS-SN120-42", "COMPRESS-PR-77"} {
+		if !stringSliceContains(compactionRetention.RequiredContextSummaryText, want) {
+			t.Fatalf("compaction retention RequiredContextSummaryText = %#v, want %q", compactionRetention.RequiredContextSummaryText, want)
+		}
+	}
+	if !stringSliceContains(compactionRetention.ForbiddenTools, "shell") {
+		t.Fatalf("compaction retention ForbiddenTools = %#v, want shell", compactionRetention.ForbiddenTools)
+	}
 
 	memoryWrite, ok := seen["memory-confirmed-write-stats"]
 	if !ok {
@@ -1581,11 +1603,13 @@ func TestBatchRunnerAffentctlRunArgsForwardsExecutor(t *testing.T) {
 		RuntimeBrowser:   true,
 		RuntimeMCPConfig: " /tmp/eval-mcp.json ",
 	}).affentctlRunArgs("/tmp/ws", "/tmp/ws/trace.jsonl", BatchScenario{
-		Prompt:       "fix it",
-		SessionID:    "planned",
-		ExecutePlan:  true,
-		EnableMemory: true,
-		MaxTurns:     3,
+		Prompt:          "fix it",
+		SessionID:       "planned",
+		ExecutePlan:     true,
+		EnableMemory:    true,
+		MaxTurns:        3,
+		CompactTrigger:  6,
+		CompactKeepLast: 3,
 	})
 	joined := strings.Join(args, "\x00")
 	for _, want := range []string{
@@ -1596,6 +1620,8 @@ func TestBatchRunnerAffentctlRunArgsForwardsExecutor(t *testing.T) {
 		"--trace\x00/tmp/ws/trace.jsonl",
 		"--trace-skip-deltas",
 		"--max-turns\x003",
+		"--compact-trigger\x006",
+		"--compact-keep-last\x003",
 		"--temperature\x000",
 		"--top-p\x000.9",
 		"--max-tokens\x00512",

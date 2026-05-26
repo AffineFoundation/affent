@@ -105,6 +105,8 @@ type BatchScenario struct {
 	MaxParentToolCalls            int
 	MaxSuccessfulToolCallsByTool  map[string]int
 	MaxTurns                      int
+	CompactTrigger                int
+	CompactKeepLast               int
 }
 
 type BatchRunner struct {
@@ -297,6 +299,7 @@ func BuiltinBatchScenarios() []BatchScenario {
 		memoryCrossSessionRecallScenario(),
 		sessionHistoryRecallScenario(),
 		longRunMultiTaskSessionRecoveryScenario(),
+		longRunContextCompactionRetentionScenario(),
 		memoryConfirmedWriteStatsScenario(),
 		smallToolRepeatedReadScenario(),
 		smallToolEditRecoveryScenario(),
@@ -770,6 +773,12 @@ func (r BatchRunner) affentctlRunArgs(workspace, tracePath string, scenario Batc
 		"--max-turns", fmt.Sprint(scenario.MaxTurns),
 		"--trace", tracePath,
 		"--prompt", scenario.Prompt,
+	}
+	if scenario.CompactTrigger > 0 {
+		args = append(args, "--compact-trigger", fmt.Sprint(scenario.CompactTrigger))
+	}
+	if scenario.CompactKeepLast > 0 {
+		args = append(args, "--compact-keep-last", fmt.Sprint(scenario.CompactKeepLast))
 	}
 	if !r.TraceDeltas {
 		args = append(args, "--trace-skip-deltas")
