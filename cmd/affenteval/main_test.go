@@ -749,7 +749,7 @@ func TestBatchSummaryAggregatesRuntimeMetrics(t *testing.T) {
 	if !strings.Contains(out.String(), "ctx_trunc=3,omitted=5120") {
 		t.Fatalf("summary output missing context truncation rollup:\n%s", out.String())
 	}
-	if !strings.Contains(out.String(), "rates=pass:50.0%,completed:50.0%,tool_error:20.0%,repair_success:80.0%,verifier_pass:50.0%,evidence_verified:75.0% avg_tokens=45.0/10.0") {
+	if !strings.Contains(out.String(), "rates=pass:50.0%,completed:50.0%,memory_update:0.0%,runtime_surface:100.0%,tool_error:20.0%,repair_success:80.0%,verifier_pass:50.0%,evidence_verified:75.0%,source_network:75.0%,source_discovery:0.0%,source_dynamic_partial:0.0% avg_tokens=45.0/10.0") {
 		t.Fatalf("summary output missing normalized rates:\n%s", out.String())
 	}
 	if !strings.Contains(out.String(), "context_pressure=avg_compactions:0.50,avg_removed:16.0,tool_ctx_trunc:60.0%") {

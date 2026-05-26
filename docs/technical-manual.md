@@ -752,6 +752,10 @@ enabled thresholds into metadata so result files preserve their pass/fail
 conditions. JSONL summary records also include `quality_gates_passed` when any
 gate is enabled and `quality_gate_failures` when a gate failed, so stored eval
 artifacts can explain CI or model-comparison failures without stderr.
+The default text summary also prints the key normalized rates used for long-run
+debugging, including pass/completion, memory update coverage, runtime-surface
+coverage, tool errors, repair success, verifier pass rate, verified evidence,
+and network/discovery/dynamic-partial source ratios.
 Use `--min-pass-rate`, `--min-completion-rate`,
 `--min-memory-update-rate`, `--min-runtime-surface-rate`,
 `--min-source-network-rate`,
