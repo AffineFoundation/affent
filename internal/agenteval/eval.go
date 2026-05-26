@@ -610,6 +610,7 @@ func BuiltinBatchScenarios() []BatchScenario {
 		longRunCodePRScenario(),
 		longRunFocusedTaskRecoveryScenario(),
 		liveWebTaostatsDynamicEvidenceScenario(),
+		liveWebTaostatsWebFetchRecoveryScenario(),
 	}
 }
 

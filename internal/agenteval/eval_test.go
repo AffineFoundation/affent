@@ -1013,12 +1013,16 @@ func TestSelectLiveWebSuite(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(scenarios) != 1 {
-		t.Fatalf("live-web suite size = %d, want 1", len(scenarios))
+	if len(scenarios) != 2 {
+		t.Fatalf("live-web suite size = %d, want 2", len(scenarios))
 	}
-	scenario := scenarios[0]
-	if scenario.Name != "live-web-taostats-sn120-dynamic-evidence" {
-		t.Fatalf("live-web scenario name = %q", scenario.Name)
+	seen := map[string]BatchScenario{}
+	for _, scenario := range scenarios {
+		seen[scenario.Name] = scenario
+	}
+	scenario, ok := seen["live-web-taostats-sn120-dynamic-evidence"]
+	if !ok {
+		t.Fatalf("live-web suite missing dynamic evidence scenario")
 	}
 	for _, want := range []string{"browser_navigate", "browser_network", "browser_network_read"} {
 		if !stringSliceContains(scenario.RequiredTools, want) {
@@ -1046,6 +1050,34 @@ func TestSelectLiveWebSuite(t *testing.T) {
 	}
 	if !stringSliceContains(scenario.ForbiddenTools, "shell") {
 		t.Fatalf("live-web ForbiddenTools = %#v, want shell", scenario.ForbiddenTools)
+	}
+
+	recovery, ok := seen["live-web-taostats-web-fetch-recovery"]
+	if !ok {
+		t.Fatalf("live-web suite missing web_fetch recovery scenario")
+	}
+	for _, want := range []string{"web_fetch", "browser_navigate", "browser_network", "browser_network_read"} {
+		if !stringSliceContains(recovery.RequiredTools, want) {
+			t.Fatalf("live-web recovery RequiredTools = %#v, want %q", recovery.RequiredTools, want)
+		}
+	}
+	if recovery.RequiredToolCounts["web_fetch"] != 1 || recovery.RequiredToolCounts["browser_network_read"] != 1 {
+		t.Fatalf("live-web recovery tool counts = %#v, want web_fetch/browser_network_read once", recovery.RequiredToolCounts)
+	}
+	if len(recovery.RequiredToolOrder) != 3 ||
+		recovery.RequiredToolOrder[0] != (ToolOrderRequirement{Earlier: "web_fetch", Later: "browser_navigate"}) ||
+		recovery.RequiredToolOrder[1] != (ToolOrderRequirement{Earlier: "browser_navigate", Later: "browser_network"}) ||
+		recovery.RequiredToolOrder[2] != (ToolOrderRequirement{Earlier: "browser_network", Later: "browser_network_read"}) {
+		t.Fatalf("live-web recovery tool order = %#v", recovery.RequiredToolOrder)
+	}
+	if len(recovery.RequiredSourceAccess) != 1 ||
+		recovery.RequiredSourceAccess[0] != (SourceAccessRequirement{Status: "network", Tool: "browser_network_read", URLContains: "taostats.io", SourceMethod: "network_xhr_fetch"}) {
+		t.Fatalf("live-web recovery RequiredSourceAccess = %#v", recovery.RequiredSourceAccess)
+	}
+	for _, want := range []string{"web_fetch", "browser_network_url", "source_method"} {
+		if !stringSliceContains(recovery.RequiredFinalText, want) {
+			t.Fatalf("live-web recovery RequiredFinalText = %#v, want %q", recovery.RequiredFinalText, want)
+		}
 	}
 }
 

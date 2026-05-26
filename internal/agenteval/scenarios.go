@@ -1787,6 +1787,70 @@ func liveWebTaostatsDynamicEvidenceScenario() BatchScenario {
 	}
 }
 
+func liveWebTaostatsWebFetchRecoveryScenario() BatchScenario {
+	return BatchScenario{
+		Name:   "live-web-taostats-web-fetch-recovery",
+		Suites: []string{liveWebSuite},
+		Prompt: "请核验 taostats.io 的 Affine / Bittensor SN120 页面，同时测试直接文字访问到浏览器证据的恢复路径。第一步先用 web_fetch 读取 https://taostats.io/subnets/120；如果结果只有标题、导航、React/JS shell、空指标卡、动态页面提示，或缺少价格/市值/验证者等关键字段，不得把 web_fetch 结果当作数值证据。随后必须使用 browser_navigate 打开页面，再用 browser_network 搜索同源 XHR/JSON，最后用 browser_network_read 读取可验证响应。最终回答必须说明 web_fetch 是否足够、哪些字段来自 browser_network_url/source_method、哪些字段仍未验证；不要编造未读到的指标。",
+		Files: map[string]string{
+			"README.md": "# Live Web Recovery Eval\n\nThis scenario checks whether a weak direct-reader result on a JavaScript dashboard is recovered through rendered browser and network evidence.\n",
+		},
+		RequiredTools: []string{
+			"web_fetch",
+			"browser_navigate",
+			"browser_network",
+			"browser_network_read",
+		},
+		RequiredToolCounts: map[string]int{
+			"web_fetch":            1,
+			"browser_network_read": 1,
+		},
+		RequiredToolArgContains: []ToolArgContainsRequirement{
+			{Tool: "web_fetch", Arg: "url", Substring: "taostats.io/subnets/120"},
+			{Tool: "browser_navigate", Arg: "url", Substring: "taostats.io/subnets/120"},
+		},
+		RequiredToolOrder: []ToolOrderRequirement{
+			{Earlier: "web_fetch", Later: "browser_navigate"},
+			{Earlier: "browser_navigate", Later: "browser_network"},
+			{Earlier: "browser_network", Later: "browser_network_read"},
+		},
+		RequiredToolStatsAtLeast: map[string]int{
+			"source_access_results":  1,
+			"source_access_verified": 1,
+			"source_access_network":  1,
+		},
+		RequiredSourceAccess: []SourceAccessRequirement{
+			{
+				Status:       "network",
+				Tool:         "browser_network_read",
+				URLContains:  "taostats.io",
+				SourceMethod: "network_xhr_fetch",
+			},
+		},
+		RequiredToolResultText: map[string][]string{
+			"browser_network_read": {
+				"SourceAccess:",
+				"browser_network_url=",
+				"source_method=network_xhr_fetch",
+			},
+		},
+		RequiredFinalText: []string{
+			"web_fetch",
+			"browser_network_url",
+			"source_method",
+		},
+		ForbiddenFinalText: []string{
+			"subnet price $277.32",
+			"Affine market cap $3.03B",
+			"无需 browser_network",
+		},
+		ForbiddenTools:     []string{"shell", "write_file", "edit_file"},
+		ProtectedFiles:     []string{"README.md"},
+		MaxParentToolCalls: 18,
+		MaxTurns:           16,
+	}
+}
+
 func subagentNestedFactsScenario() BatchScenario {
 	return BatchScenario{
 		Name:   "subagent-nested-facts",
