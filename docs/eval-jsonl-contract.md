@@ -219,6 +219,11 @@ Scenario records describe one eval case:
   compaction events. Each sample includes the turn id, before/after message
   counts, removed message count, reactive/proactive flag, reason, and summary
   byte size.
+- `context_compactions`, `context_compactions_reactive`,
+  `context_compaction_removed_messages`, `context_compaction_summary_bytes`,
+  `context_compaction_summary_missing`, and
+  `context_compaction_summary_empty`: optional context pressure counters
+  collected from context compaction trace events.
 - `tool_truncation_examples`: optional bounded examples of tool calls whose
   request args, event result, result artifact, or model-context insertion were
   truncated. Each sample includes the tool index, call id, tool name, omitted
@@ -296,7 +301,8 @@ Summary records aggregate all scenario records from the same process:
   hits,
   `avg_runtime_errors`, `avg_context_compactions`,
   `avg_reactive_context_compactions`, `avg_context_removed_messages`,
-  `avg_context_summary_bytes`, `avg_tool_calls`,
+  `avg_context_summary_bytes`, `avg_context_summary_missing`,
+  `avg_context_summary_empty`, `avg_tool_calls`,
   `tool_context_truncation_rate` and
   `tool_result_truncation_rate` when tool calls were observed,
   `avg_input_tokens`, `avg_output_tokens`, and `avg_total_tokens`.
@@ -342,6 +348,10 @@ Summary records aggregate all scenario records from the same process:
   `runtime_error_hints`, `runtime_error_examples`.
 - Source evidence examples: `source_access_examples`, the first bounded
   samples across the batch.
+- Context pressure totals: `context_compactions`,
+  `context_compactions_reactive`, `context_compaction_removed_messages`,
+  `context_compaction_summary_bytes`, `context_compaction_summary_missing`, and
+  `context_compaction_summary_empty`.
 - Context compaction examples: `context_compaction_examples`, the first bounded
   samples across the batch.
 - Debug brief tag totals: `debug_brief_by_tag`, counting how many scenarios

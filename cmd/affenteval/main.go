@@ -536,6 +536,8 @@ type batchSummary struct {
 	ContextCompactionsReactive           int
 	ContextCompactionRemoved             int
 	ContextCompactionSummary             int
+	ContextCompactionSummaryMissing      int
+	ContextCompactionSummaryEmpty        int
 	ContextCompactionExamples            []agenteval.ContextCompaction
 	LoopGuardInterventions               int
 	ForcedNoTools                        int
@@ -705,6 +707,8 @@ func (s *batchSummary) add(res agenteval.BatchResult) {
 	s.ContextCompactionsReactive += res.ContextCompactions.Reactive
 	s.ContextCompactionRemoved += res.ContextCompactions.RemovedMessages
 	s.ContextCompactionSummary += res.ContextCompactions.SummaryBytes
+	s.ContextCompactionSummaryMissing += res.ContextCompactions.SummaryMissing
+	s.ContextCompactionSummaryEmpty += res.ContextCompactions.SummaryEmpty
 	s.ContextCompactionExamples = appendContextCompactionExamples(s.ContextCompactionExamples, res.ContextCompactions.Examples, batchSummaryExamplesPerKind)
 	s.LoopGuardInterventions += res.ToolStats.LoopGuardInterventions
 	s.ForcedNoTools += res.ToolStats.ForcedNoTools
@@ -1042,11 +1046,13 @@ func printBatchSummary(w io.Writer, s batchSummary) {
 		batchAverage(s.InputTokens, s.Total),
 		batchAverage(s.OutputTokens, s.Total),
 	)
-	fmt.Fprintf(w, " context_pressure=avg_compactions:%.2f,avg_reactive:%.2f,avg_removed:%.1f,avg_summary_bytes:%.0f,tool_ctx_trunc:%s",
+	fmt.Fprintf(w, " context_pressure=avg_compactions:%.2f,avg_reactive:%.2f,avg_removed:%.1f,avg_summary_bytes:%.0f,avg_summary_missing:%.2f,avg_summary_empty:%.2f,tool_ctx_trunc:%s",
 		batchAverage(s.ContextCompactions, s.Total),
 		batchAverage(s.ContextCompactionsReactive, s.Total),
 		batchAverage(s.ContextCompactionRemoved, s.Total),
 		batchAverage(s.ContextCompactionSummary, s.Total),
+		batchAverage(s.ContextCompactionSummaryMissing, s.Total),
+		batchAverage(s.ContextCompactionSummaryEmpty, s.Total),
 		formatOptionalPercent(batchOptionalRatio(s.ToolContextTruncated, s.ToolCalls)),
 	)
 	if hasBatchRepairStats(s) {
@@ -1105,11 +1111,13 @@ func printBatchSummary(w io.Writer, s batchSummary) {
 		}
 	}
 	if s.ContextCompactions > 0 {
-		fmt.Fprintf(w, " compactions=%d,reactive=%d,removed=%d,summary_bytes=%d",
+		fmt.Fprintf(w, " compactions=%d,reactive=%d,removed=%d,summary_bytes=%d,summary_missing=%d,summary_empty=%d",
 			s.ContextCompactions,
 			s.ContextCompactionsReactive,
 			s.ContextCompactionRemoved,
 			s.ContextCompactionSummary,
+			s.ContextCompactionSummaryMissing,
+			s.ContextCompactionSummaryEmpty,
 		)
 	}
 	if s.TraceEvents > 0 {
@@ -2059,6 +2067,8 @@ type batchResultRecord struct {
 	ContextCompactionsReactive       int                                        `json:"context_compactions_reactive,omitempty"`
 	ContextCompactionRemoved         int                                        `json:"context_compaction_removed_messages,omitempty"`
 	ContextCompactionSummary         int                                        `json:"context_compaction_summary_bytes,omitempty"`
+	ContextCompactionSummaryMissing  int                                        `json:"context_compaction_summary_missing,omitempty"`
+	ContextCompactionSummaryEmpty    int                                        `json:"context_compaction_summary_empty,omitempty"`
 	ContextCompactionExamples        []agenteval.ContextCompaction              `json:"context_compaction_examples,omitempty"`
 	LoopGuardInterventions           int                                        `json:"loop_guard_interventions"`
 	ForcedNoTools                    int                                        `json:"forced_no_tools"`
@@ -2153,6 +2163,8 @@ type batchSummaryRecord struct {
 	AvgReactiveCompactions               float64                                          `json:"avg_reactive_context_compactions"`
 	AvgContextRemovedMessages            float64                                          `json:"avg_context_removed_messages"`
 	AvgContextSummaryBytes               float64                                          `json:"avg_context_summary_bytes"`
+	AvgContextSummaryMissing             float64                                          `json:"avg_context_summary_missing"`
+	AvgContextSummaryEmpty               float64                                          `json:"avg_context_summary_empty"`
 	AvgToolCalls                         float64                                          `json:"avg_tool_calls"`
 	ToolContextTruncationRate            *float64                                         `json:"tool_context_truncation_rate,omitempty"`
 	ToolResultTruncationRate             *float64                                         `json:"tool_result_truncation_rate,omitempty"`
@@ -2185,6 +2197,8 @@ type batchSummaryRecord struct {
 	ContextCompactionsReactive           int                                              `json:"context_compactions_reactive,omitempty"`
 	ContextCompactionRemoved             int                                              `json:"context_compaction_removed_messages,omitempty"`
 	ContextCompactionSummary             int                                              `json:"context_compaction_summary_bytes,omitempty"`
+	ContextCompactionSummaryMissing      int                                              `json:"context_compaction_summary_missing,omitempty"`
+	ContextCompactionSummaryEmpty        int                                              `json:"context_compaction_summary_empty,omitempty"`
 	ContextCompactionExamples            []agenteval.ContextCompaction                    `json:"context_compaction_examples,omitempty"`
 	LoopGuardInterventions               int                                              `json:"loop_guard_interventions"`
 	ForcedNoTools                        int                                              `json:"forced_no_tools"`
@@ -2336,6 +2350,8 @@ func printBatchResultJSONL(w io.Writer, meta evalJSONLMetadata, res agenteval.Ba
 		ContextCompactionsReactive:       res.ContextCompactions.Reactive,
 		ContextCompactionRemoved:         res.ContextCompactions.RemovedMessages,
 		ContextCompactionSummary:         res.ContextCompactions.SummaryBytes,
+		ContextCompactionSummaryMissing:  res.ContextCompactions.SummaryMissing,
+		ContextCompactionSummaryEmpty:    res.ContextCompactions.SummaryEmpty,
 		ContextCompactionExamples:        cloneContextCompactionExamples(res.ContextCompactions.Examples),
 		LoopGuardInterventions:           res.ToolStats.LoopGuardInterventions,
 		ForcedNoTools:                    res.ToolStats.ForcedNoTools,
@@ -2504,6 +2520,8 @@ func printBatchSummaryJSONL(w io.Writer, meta evalJSONLMetadata, s batchSummary,
 		AvgReactiveCompactions:               batchAverage(s.ContextCompactionsReactive, s.Total),
 		AvgContextRemovedMessages:            batchAverage(s.ContextCompactionRemoved, s.Total),
 		AvgContextSummaryBytes:               batchAverage(s.ContextCompactionSummary, s.Total),
+		AvgContextSummaryMissing:             batchAverage(s.ContextCompactionSummaryMissing, s.Total),
+		AvgContextSummaryEmpty:               batchAverage(s.ContextCompactionSummaryEmpty, s.Total),
 		AvgToolCalls:                         batchAverage(s.ToolCalls, s.Total),
 		ToolContextTruncationRate:            batchOptionalRatio(s.ToolContextTruncated, s.ToolCalls),
 		ToolResultTruncationRate:             batchOptionalRatio(s.ToolResultsTruncated, s.ToolCalls),
@@ -2536,6 +2554,8 @@ func printBatchSummaryJSONL(w io.Writer, meta evalJSONLMetadata, s batchSummary,
 		ContextCompactionsReactive:           s.ContextCompactionsReactive,
 		ContextCompactionRemoved:             s.ContextCompactionRemoved,
 		ContextCompactionSummary:             s.ContextCompactionSummary,
+		ContextCompactionSummaryMissing:      s.ContextCompactionSummaryMissing,
+		ContextCompactionSummaryEmpty:        s.ContextCompactionSummaryEmpty,
 		ContextCompactionExamples:            cloneContextCompactionExamples(s.ContextCompactionExamples),
 		LoopGuardInterventions:               s.LoopGuardInterventions,
 		ForcedNoTools:                        s.ForcedNoTools,
@@ -3134,11 +3154,13 @@ func printBatchResult(w io.Writer, res agenteval.BatchResult) {
 		}
 	}
 	if res.ContextCompactions.Count > 0 {
-		fmt.Fprintf(w, " compactions=%d,reactive=%d,removed=%d,summary_bytes=%d",
+		fmt.Fprintf(w, " compactions=%d,reactive=%d,removed=%d,summary_bytes=%d,summary_missing=%d,summary_empty=%d",
 			res.ContextCompactions.Count,
 			res.ContextCompactions.Reactive,
 			res.ContextCompactions.RemovedMessages,
 			res.ContextCompactions.SummaryBytes,
+			res.ContextCompactions.SummaryMissing,
+			res.ContextCompactions.SummaryEmpty,
 		)
 	}
 	if brief := agenteval.BuildDebugBrief(res); brief != nil {

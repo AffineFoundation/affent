@@ -583,6 +583,8 @@ type DebugMetrics struct {
 	ReactiveContextCompactions int            `json:"reactive_context_compactions"`
 	ContextCompactionRemoved   int            `json:"context_compaction_removed_messages"`
 	ContextCompactionSummary   int            `json:"context_compaction_summary_bytes,omitempty"`
+	ContextCompactionMissing   int            `json:"context_compaction_summary_missing,omitempty"`
+	ContextCompactionEmpty     int            `json:"context_compaction_summary_empty,omitempty"`
 	ToolContextTruncated       int            `json:"tool_context_truncated,omitempty"`
 	ToolContextOmittedBytes    int            `json:"tool_context_omitted_bytes,omitempty"`
 	InputTokens                int            `json:"input_tokens"`
@@ -963,6 +965,8 @@ func writeScenarioDebugArtifacts(res *BatchResult, scenario BatchScenario, stdou
 			ReactiveContextCompactions: res.ContextCompactions.Reactive,
 			ContextCompactionRemoved:   res.ContextCompactions.RemovedMessages,
 			ContextCompactionSummary:   res.ContextCompactions.SummaryBytes,
+			ContextCompactionMissing:   res.ContextCompactions.SummaryMissing,
+			ContextCompactionEmpty:     res.ContextCompactions.SummaryEmpty,
 			ToolContextTruncated:       res.ToolStats.ToolContextTruncated,
 			ToolContextOmittedBytes:    res.ToolStats.ToolContextOmittedBytes,
 			InputTokens:                res.Usage.InputTokens,
