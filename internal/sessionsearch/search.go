@@ -19,12 +19,14 @@ import (
 
 // Hit is one matched message from a past session.
 type Hit struct {
-	SessionID string  `json:"session_id"`
-	TurnIdx   int     `json:"turn_idx"`
-	Role      string  `json:"role"`
-	Snippet   string  `json:"snippet"`
-	Score     float64 `json:"score"`
-	ModTime   string  `json:"mod_time,omitempty"`
+	SessionID       string   `json:"session_id"`
+	TurnIdx         int      `json:"turn_idx"`
+	Role            string   `json:"role"`
+	Snippet         string   `json:"snippet"`
+	Score           float64  `json:"score"`
+	MatchedTerms    []string `json:"matched_terms,omitempty"`
+	ContextIncluded bool     `json:"context_included,omitempty"`
+	ModTime         string   `json:"mod_time,omitempty"`
 }
 
 // Response is the session_search tool return shape.
@@ -202,7 +204,7 @@ func scoreFile(ctx context.Context, path, sid string, terms []string, maxPerSess
 			prev = searchableMessage{}
 			continue
 		}
-		score, snippetContent := scoreSearchableMessage(searchableMessage{
+		score, snippetContent, matchedTerms, contextIncluded := scoreSearchableMessage(searchableMessage{
 			role:    m.Role,
 			content: content,
 		}, prev, terms)
@@ -211,12 +213,14 @@ func scoreFile(ctx context.Context, path, sid string, terms []string, maxPerSess
 			continue
 		}
 		fileHits = appendBoundedHits(fileHits, Hit{
-			SessionID: sid,
-			TurnIdx:   turn,
-			Role:      m.Role,
-			Snippet:   SnippetAround(snippetContent, terms),
-			Score:     score,
-			ModTime:   mtime,
+			SessionID:       sid,
+			TurnIdx:         turn,
+			Role:            m.Role,
+			Snippet:         SnippetAround(snippetContent, terms),
+			Score:           score,
+			MatchedTerms:    append([]string(nil), matchedTerms...),
+			ContextIncluded: contextIncluded,
+			ModTime:         mtime,
 		}, maxPerSession)
 	}
 	sortHits(fileHits)
@@ -231,20 +235,20 @@ type searchableMessage struct {
 	content string
 }
 
-func scoreSearchableMessage(cur, prev searchableMessage, terms []string) (float64, string) {
-	score := ScoreContent(cur.content, terms)
+func scoreSearchableMessage(cur, prev searchableMessage, terms []string) (float64, string, []string, bool) {
+	score, matchedTerms := scoreContentDetails(cur.content, terms)
 	if score <= 0 {
-		return 0, cur.content
+		return 0, cur.content, nil, false
 	}
 	if cur.role != "assistant" || prev.role != "user" || strings.TrimSpace(prev.content) == "" {
-		return score, cur.content
+		return score, cur.content, matchedTerms, false
 	}
 	combined := prev.content + "\n" + cur.content
-	combinedScore := ScoreContent(combined, terms)
+	combinedScore, combinedTerms := scoreContentDetails(combined, terms)
 	if combinedScore <= score {
-		return score, cur.content
+		return score, cur.content, matchedTerms, false
 	}
-	return combinedScore, "user: " + prev.content + "\nassistant: " + cur.content
+	return combinedScore, "user: " + prev.content + "\nassistant: " + cur.content, combinedTerms, true
 }
 
 func regularFileModTime(path string) (string, bool) {
@@ -364,6 +368,11 @@ var stopwords = map[string]bool{
 // ScoreContent counts unique-term overlap with a small boost for
 // total-occurrence count.
 func ScoreContent(content string, terms []string) float64 {
+	score, _ := scoreContentDetails(content, terms)
+	return score
+}
+
+func scoreContentDetails(content string, terms []string) (float64, []string) {
 	counts := countContentTerms(content, terms)
 	unique, total := 0, 0
 	for _, c := range counts {
@@ -371,9 +380,25 @@ func ScoreContent(content string, terms []string) float64 {
 		total += c
 	}
 	if unique == 0 {
-		return 0
+		return 0, nil
 	}
-	return float64(unique) + 0.1*float64(total)
+	return float64(unique) + 0.1*float64(total), matchedTermsInQueryOrder(terms, counts)
+}
+
+func matchedTermsInQueryOrder(terms []string, counts map[string]int) []string {
+	if len(counts) == 0 {
+		return nil
+	}
+	out := make([]string, 0, len(counts))
+	seen := map[string]bool{}
+	for _, term := range terms {
+		if term == "" || seen[term] || counts[term] <= 0 {
+			continue
+		}
+		seen[term] = true
+		out = append(out, term)
+	}
+	return out
 }
 
 func countContentTerms(content string, terms []string) map[string]int {

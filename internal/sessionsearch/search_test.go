@@ -151,6 +151,10 @@ func TestSearchAssistantHitCarriesAdjacentUserContext(t *testing.T) {
 	if hits[0].SessionID != "market-alpha" || hits[0].Role != "assistant" {
 		t.Fatalf("adjacent context should rank the decision hit first, got %+v", hits)
 	}
+	if !hits[0].ContextIncluded {
+		t.Fatalf("adjacent context hit should mark context_included: %+v", hits[0])
+	}
+	requireMatchedTerms(t, hits[0].MatchedTerms, "alpha", "coast", "inventory", "drag")
 	for _, want := range []string{"user: Alpha Coast", "assistant: decision", "HIST-STOCK-44", "inventory-drag"} {
 		if !strings.Contains(hits[0].Snippet, want) {
 			t.Fatalf("contextual snippet missing %q:\n%+v", want, hits[0])
@@ -178,9 +182,26 @@ func TestSearchMatchesChineseWithoutSpaces(t *testing.T) {
 	if hits[0].SessionID != "stock-cn" {
 		t.Fatalf("Chinese CJK token overlap should rank stock decision first, got %+v", hits)
 	}
+	if !hits[0].ContextIncluded {
+		t.Fatalf("Chinese contextual hit should mark context_included: %+v", hits[0])
+	}
+	requireMatchedTerms(t, hits[0].MatchedTerms, "股", "票", "分", "析", "库", "存", "风", "险")
 	for _, want := range []string{"请分析Alpha Coast股票", "库存拖累风险", "HIST-CN-88"} {
 		if !strings.Contains(hits[0].Snippet, want) {
 			t.Fatalf("Chinese contextual snippet missing %q:\n%+v", want, hits[0])
+		}
+	}
+}
+
+func requireMatchedTerms(t *testing.T, got []string, want ...string) {
+	t.Helper()
+	seen := map[string]bool{}
+	for _, term := range got {
+		seen[term] = true
+	}
+	for _, term := range want {
+		if !seen[term] {
+			t.Fatalf("matched_terms missing %q: got %v", term, got)
 		}
 	}
 }
