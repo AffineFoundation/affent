@@ -1850,7 +1850,7 @@ func TestWriteScenarioDebugArtifactsIndexesTraceAndFinalText(t *testing.T) {
 		"protected_files: `README.md`",
 		"forbidden_file_substrings[notes.md]: `uncited taostats metric`",
 		"evidence: `1/2` verified, network=`1`, partial=`1`, discovery=`1`",
-		"recall: calls=`1`, results=`2`, context=`1`, terms=`2`; inspect Session Search examples before trusting recovered state.",
+		"recall_weak_context: calls=`1`, results=`2`, context=`1`, terms=`2`; only some hits included adjacent context; inspect Session Search examples for incomplete recovery.",
 		"context: compactions=`1`, reactive=`1`, removed_messages=`12`, summary_bytes=`512`",
 		"truncation: tool_context=2 omitted_context=8192 args=1 args_omitted=128 results=1 results_omitted=4096 artifacts=1",
 		"## Trace Events",

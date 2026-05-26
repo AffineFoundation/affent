@@ -88,7 +88,7 @@ func TestBuildDebugBriefClassifiesSessionRecallQuality(t *testing.T) {
 		ToolStats: ToolRuntimeStats{
 			SessionSearchCalls:        1,
 			SessionSearchResults:      2,
-			SessionSearchContextHits:  1,
+			SessionSearchContextHits:  2,
 			SessionSearchMatchedTerms: 3,
 		},
 	})
@@ -96,7 +96,7 @@ func TestBuildDebugBriefClassifiesSessionRecallQuality(t *testing.T) {
 	if recall == nil ||
 		recall.Severity != "info" ||
 		recall.Message != "session recall returned history with adjacent context" ||
-		recall.Counts["context_hits"] != 1 ||
+		recall.Counts["context_hits"] != 2 ||
 		!stringSliceContains(recall.Inspect, "session_search_examples") ||
 		!stringSliceContains(brief.Tags, "recall:context") {
 		t.Fatalf("context recall debug item = %+v tags=%+v", recall, brief.Tags)
@@ -117,6 +117,24 @@ func TestBuildDebugBriefClassifiesSessionRecallQuality(t *testing.T) {
 		recall.Message != "session recall returned hits without adjacent context; inspect examples for stale or shallow recovery" ||
 		!stringSliceContains(brief.Tags, "recall:no_context") {
 		t.Fatalf("shallow recall debug item = %+v tags=%+v", recall, brief.Tags)
+	}
+
+	brief = BuildDebugBrief(BatchResult{
+		OK: true,
+		ToolStats: ToolRuntimeStats{
+			SessionSearchCalls:        1,
+			SessionSearchResults:      2,
+			SessionSearchContextHits:  1,
+			SessionSearchMatchedTerms: 3,
+		},
+	})
+	recall = debugBriefItemByKind(brief, "recall")
+	if recall == nil ||
+		recall.Severity != "warn" ||
+		recall.Message != "session recall returned only partial adjacent context; inspect examples for incomplete recovery" ||
+		recall.Counts["context_hits"] != 1 ||
+		!stringSliceContains(brief.Tags, "recall:weak_context") {
+		t.Fatalf("weak context recall debug item = %+v tags=%+v", recall, brief.Tags)
 	}
 
 	brief = BuildDebugBrief(BatchResult{

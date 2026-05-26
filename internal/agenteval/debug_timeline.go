@@ -227,6 +227,9 @@ func renderTimelineDebugBrief(b *strings.Builder, res BatchResult) {
 		} else if res.ToolStats.SessionSearchResults > 0 && res.ToolStats.SessionSearchMatchedTerms == 0 {
 			tone = "recall_no_terms"
 			guidance = "hits lacked matched terms; inspect Session Search examples before trusting recovery."
+		} else if res.ToolStats.SessionSearchResults > 0 && res.ToolStats.SessionSearchContextHits < res.ToolStats.SessionSearchResults {
+			tone = "recall_weak_context"
+			guidance = "only some hits included adjacent context; inspect Session Search examples for incomplete recovery."
 		}
 		fmt.Fprintf(b, "- %s: calls=`%d`, results=`%d`, context=`%d`, terms=`%d`; %s\n",
 			tone,

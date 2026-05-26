@@ -180,8 +180,9 @@ Scenario records describe one eval case:
   `source_discovery_only_all`,
   `memory_update:replace`, `empty_recall`,
   `recall:no_context`, `recall:no_matched_terms`,
-  `recall:weak_matched_terms`, `delegation_error:focused_task`, `plan_error`,
-  `plan:unfinished`, `context_compaction:reactive`,
+  `recall:weak_context`, `recall:weak_matched_terms`,
+  `delegation_error:focused_task`, `plan_error`, `plan:unfinished`,
+  `context_compaction:reactive`,
   `context_compaction:summary_missing`, `context_compaction:summary_empty`,
   `truncation`, and
   `truncation:missing_artifact`, plus ordered `items` with a severity, message,

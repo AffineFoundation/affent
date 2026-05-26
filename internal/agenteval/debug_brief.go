@@ -186,6 +186,10 @@ func BuildDebugBrief(res BatchResult) *DebugBrief {
 			severity = "warn"
 			tags = []string{"recall", "recall:no_matched_terms"}
 			message = "session recall returned hits without matched terms; inspect examples before trusting recovery"
+		} else if res.ToolStats.SessionSearchResults > 0 && res.ToolStats.SessionSearchContextHits < res.ToolStats.SessionSearchResults {
+			severity = "warn"
+			tags = append(tags, "recall:weak_context")
+			message = "session recall returned only partial adjacent context; inspect examples for incomplete recovery"
 		} else if res.ToolStats.SessionSearchCalls > 0 && res.ToolStats.SessionSearchMatchedTerms < res.ToolStats.SessionSearchCalls {
 			severity = "warn"
 			tags = append(tags, "recall:weak_matched_terms")
