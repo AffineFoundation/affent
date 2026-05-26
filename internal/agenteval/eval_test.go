@@ -1336,7 +1336,7 @@ func TestWriteScenarioDebugArtifactsIndexesTraceAndFinalText(t *testing.T) {
 			ContextBytes:           4096,
 			ContextOmittedBytes:    8192,
 			ContextEstimatedTokens: 1024,
-			FailureKinds:           []string{"dynamic_shell"},
+			FailureKinds:           []string{"dynamic_shell", "loop_guard_repeated_failed_input"},
 			ExitCode:               1,
 			DurationMS:             42,
 		}, {
@@ -1619,6 +1619,15 @@ func TestWriteScenarioDebugArtifactsIndexesTraceAndFinalText(t *testing.T) {
 		manifest.SourceAccessExamples[2].Status != "discovery_only" {
 		t.Fatalf("manifest source access examples = %+v", manifest.SourceAccessExamples)
 	}
+	if len(manifest.LoopGuardExamples) != 1 ||
+		manifest.LoopGuardExamples[0].ToolIndex != 1 ||
+		manifest.LoopGuardExamples[0].CallID != "call-1" ||
+		manifest.LoopGuardExamples[0].Tool != "web_fetch" ||
+		manifest.LoopGuardExamples[0].Kind != "loop_guard_repeated_failed_input" ||
+		manifest.LoopGuardExamples[0].Category != "loop_guard" ||
+		!strings.Contains(manifest.LoopGuardExamples[0].ArgsSummary, "https://example.test/report") {
+		t.Fatalf("manifest loop guard examples = %+v", manifest.LoopGuardExamples)
+	}
 	if len(manifest.MemoryUpdateExamples) != 2 ||
 		manifest.MemoryUpdateExamples[0].ToolIndex != 4 ||
 		manifest.MemoryUpdateExamples[0].Action != "replace" ||
@@ -1729,6 +1738,9 @@ func TestWriteScenarioDebugArtifactsIndexesTraceAndFinalText(t *testing.T) {
 		"runtime_error_by_kind: `llm_timeout=1`",
 		"runtime_error_example[llm_timeout]: llm stream timed out after first token",
 		"loop_guard: `1` intervention(s), `0` forced no-tools",
+		"## Loop Guard",
+		"tool#1 `web_fetch` kind=`loop_guard_repeated_failed_input` category=`loop_guard` exit=`1` call_id=`call-1`",
+		"args: url=\"https://example.test/report\"",
 		"child_transcripts: `2` indexed",
 		"## Child Transcripts",
 		"kind=`focused_task` path=`.affentctl/focused-tasks/debug-session/focused_alpha.jsonl`",

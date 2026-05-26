@@ -174,6 +174,12 @@ Scenario records describe one eval case:
   `loop_guard_repeated_failures` still count under `loop_guard_interventions`
   but do not by themselves force a no-tool follow-up, so API/text fallback
   tools can still run after a recoverable web failure pattern.
+- `loop_guard_examples`: optional bounded examples of loop-guard and tool
+  policy rejections. Each sample includes the failure kind, category
+  (`loop_guard` or `tool_policy`), tool index, call id, tool name, compact
+  argument/result previews, and exit code. Use this when `loop_guard_interventions`
+  or `forced_no_tools` spike and the generic failure-kind counts do not show
+  which attempted call was blocked.
 - `tool_duration_ms`: total runtime tool dispatch duration.
 - `source_access_results`: count of tool results with a normalized
   `SourceAccess:` evidence header.
@@ -292,6 +298,7 @@ Summary records aggregate all scenario records from the same process:
   `tool_repair_failed`, `tool_repair_notes`, `tool_repair_by_kind`,
   `tool_repair_examples`,
   `tool_failure_by_kind`, `loop_guard_interventions`, `forced_no_tools`,
+  `loop_guard_examples`,
   `source_access_results`, `source_access_verified`,
   `source_access_discovery_only`, `source_access_network`,
   `session_search_calls`, `session_search_results`,

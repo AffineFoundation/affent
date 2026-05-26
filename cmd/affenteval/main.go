@@ -474,6 +474,7 @@ type batchSummary struct {
 	ToolRepairExamples                   []agenteval.ToolRepairExample
 	ToolFailureByKind                    map[string]int
 	ToolFailureExamples                  map[string][]agenteval.ToolFailureExample
+	LoopGuardExamples                    []agenteval.LoopGuardExample
 	RuntimeErrors                        int
 	RuntimeErrorByKind                   map[string]int
 	RuntimeErrorExamples                 map[string][]agenteval.RuntimeErrorExample
@@ -586,6 +587,7 @@ func (s *batchSummary) add(res agenteval.BatchResult) {
 		s.ToolRepairByKind[k] += v
 	}
 	s.ToolRepairExamples = appendToolRepairExamples(s.ToolRepairExamples, res.ToolRepairExamples, batchSummaryExamplesPerKind)
+	s.LoopGuardExamples = appendLoopGuardExamples(s.LoopGuardExamples, res.LoopGuardExamples, batchSummaryExamplesPerKind)
 	for k, v := range res.ToolStats.ToolFailureByKind {
 		if s.ToolFailureByKind == nil {
 			s.ToolFailureByKind = map[string]int{}
@@ -1075,6 +1077,7 @@ func printBatchSummary(w io.Writer, s batchSummary) {
 	printToolRepairExampleLines(w, s.ToolRepairExamples, "")
 	printToolFailureHintLines(w, s.ToolFailureByKind, "")
 	printToolFailureExampleLines(w, s.ToolFailureExamples, "")
+	printLoopGuardExampleLines(w, s.LoopGuardExamples, "")
 	printFailureHintLines(w, s.RuntimeErrorByKind, "")
 	printRuntimeErrorExampleLines(w, s.RuntimeErrorExamples, "")
 	printLoopDecisionExampleLines(w, s.LoopDecisionExamples, "")
@@ -1439,6 +1442,23 @@ func printToolFailureExampleLines(w io.Writer, examples map[string][]agenteval.T
 			}
 			fmt.Fprintln(w)
 		}
+	}
+}
+
+func printLoopGuardExampleLines(w io.Writer, examples []agenteval.LoopGuardExample, indent string) {
+	for _, ex := range examples {
+		fmt.Fprintf(w, "%sloop_guard_example[%s]: category=%s tool=%s", indent, ex.Kind, ex.Category, ex.Tool)
+		if ex.CallID != "" {
+			fmt.Fprintf(w, " call_id=%s", ex.CallID)
+		}
+		if ex.ArgsSummary != "" {
+			fmt.Fprintf(w, " args=%s", ex.ArgsSummary)
+		}
+		fmt.Fprintf(w, " exit=%d", ex.ExitCode)
+		if ex.ResultSummary != "" {
+			fmt.Fprintf(w, " result=%s", ex.ResultSummary)
+		}
+		fmt.Fprintln(w)
 	}
 }
 
@@ -1858,6 +1878,7 @@ type batchResultRecord struct {
 	ToolRepairExamples               []agenteval.ToolRepairExample              `json:"tool_repair_examples,omitempty"`
 	ToolFailureByKind                map[string]int                             `json:"tool_failure_by_kind,omitempty"`
 	ToolFailureExamples              map[string][]agenteval.ToolFailureExample  `json:"tool_failure_examples,omitempty"`
+	LoopGuardExamples                []agenteval.LoopGuardExample               `json:"loop_guard_examples,omitempty"`
 	MemoryUpdateExamples             []agenteval.MemoryUpdateExample            `json:"memory_update_examples,omitempty"`
 	RuntimeErrorByKind               map[string]int                             `json:"runtime_error_by_kind,omitempty"`
 	RuntimeErrorExamples             map[string][]agenteval.RuntimeErrorExample `json:"runtime_error_examples,omitempty"`
@@ -1981,6 +2002,7 @@ type batchSummaryRecord struct {
 	ToolRepairExamples                   []agenteval.ToolRepairExample                    `json:"tool_repair_examples,omitempty"`
 	ToolFailureByKind                    map[string]int                                   `json:"tool_failure_by_kind,omitempty"`
 	ToolFailureExamples                  map[string][]agenteval.ToolFailureExample        `json:"tool_failure_examples,omitempty"`
+	LoopGuardExamples                    []agenteval.LoopGuardExample                     `json:"loop_guard_examples,omitempty"`
 	RuntimeErrorByKind                   map[string]int                                   `json:"runtime_error_by_kind,omitempty"`
 	RuntimeErrorExamples                 map[string][]agenteval.RuntimeErrorExample       `json:"runtime_error_examples,omitempty"`
 	RuntimeSurfaceRate                   float64                                          `json:"runtime_surface_rate"`
@@ -2132,6 +2154,7 @@ func printBatchResultJSONL(w io.Writer, meta evalJSONLMetadata, res agenteval.Ba
 		ToolRepairExamples:               cloneToolRepairExamples(res.ToolRepairExamples),
 		ToolFailureByKind:                cloneStringIntMap(res.ToolStats.ToolFailureByKind),
 		ToolFailureExamples:              cloneToolFailureExamples(res.ToolFailureExamples),
+		LoopGuardExamples:                cloneLoopGuardExamples(res.LoopGuardExamples),
 		MemoryUpdateExamples:             cloneMemoryUpdateExamples(res.MemoryUpdateExamples),
 		RuntimeErrorByKind:               cloneStringIntMap(res.RuntimeErrorByKind),
 		RuntimeErrorExamples:             cloneRuntimeErrorExamples(res.RuntimeErrorExamples),
@@ -2326,6 +2349,7 @@ func printBatchSummaryJSONL(w io.Writer, meta evalJSONLMetadata, s batchSummary,
 		ToolRepairExamples:                   cloneToolRepairExamples(s.ToolRepairExamples),
 		ToolFailureByKind:                    cloneStringIntMap(s.ToolFailureByKind),
 		ToolFailureExamples:                  cloneToolFailureExamples(s.ToolFailureExamples),
+		LoopGuardExamples:                    cloneLoopGuardExamples(s.LoopGuardExamples),
 		RuntimeErrorByKind:                   cloneStringIntMap(s.RuntimeErrorByKind),
 		RuntimeErrorExamples:                 cloneRuntimeErrorExamples(s.RuntimeErrorExamples),
 		RuntimeSurfaceRate:                   batchRatio(s.RuntimeSurfaceScenarios, s.Total),
@@ -2538,6 +2562,13 @@ func cloneToolRepairExamples(in []agenteval.ToolRepairExample) []agenteval.ToolR
 	return out
 }
 
+func cloneLoopGuardExamples(in []agenteval.LoopGuardExample) []agenteval.LoopGuardExample {
+	if len(in) == 0 {
+		return nil
+	}
+	return append([]agenteval.LoopGuardExample(nil), in...)
+}
+
 func cloneRuntimeErrorExamples(in map[string][]agenteval.RuntimeErrorExample) map[string][]agenteval.RuntimeErrorExample {
 	return cloneExampleMap(in)
 }
@@ -2659,6 +2690,19 @@ func appendToolRepairExamples(dst, src []agenteval.ToolRepairExample, limit int)
 		}
 		if len(ex.RepairKinds) > 0 {
 			ex.RepairKinds = append([]string(nil), ex.RepairKinds...)
+		}
+		dst = append(dst, ex)
+	}
+	return dst
+}
+
+func appendLoopGuardExamples(dst, src []agenteval.LoopGuardExample, limit int) []agenteval.LoopGuardExample {
+	if limit <= 0 || len(dst) >= limit {
+		return dst
+	}
+	for _, ex := range src {
+		if len(dst) >= limit {
+			break
 		}
 		dst = append(dst, ex)
 	}
@@ -2942,6 +2986,7 @@ func printBatchResult(w io.Writer, res agenteval.BatchResult) {
 	printToolRepairExampleLines(w, res.ToolRepairExamples, "  ")
 	printToolFailureHintLines(w, res.ToolStats.ToolFailureByKind, "  ")
 	printToolFailureExampleLines(w, res.ToolFailureExamples, "  ")
+	printLoopGuardExampleLines(w, res.LoopGuardExamples, "  ")
 	printFailureHintLines(w, res.RuntimeErrorByKind, "  ")
 	printRuntimeErrorExampleLines(w, res.RuntimeErrorExamples, "  ")
 	printLoopDecisionExampleLines(w, res.LoopDecisionStats.Examples, "  ")

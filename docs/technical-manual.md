@@ -427,7 +427,10 @@ they block a model call before the underlying tool runs. Per-turn stats expose
 `source_access_network`. Eval debug manifests, timelines, and JSONL records
 also include bounded `tool_repair_examples`, so repeated small-model tool-name,
 alias, enum, type-coercion, and unknown-field mistakes can be inspected without
-opening raw trace events. Durable transcript recall is tracked with
+opening raw trace events. They also include bounded `loop_guard_examples`,
+showing the blocked tool, compact args/result guidance, failure kind, and
+whether the rejection came from loop guard logic or tool policy. Durable
+transcript recall is tracked with
 `session_search_calls`, `session_search_results`,
 `session_search_context_hits`, and `session_search_matched_terms`. Eval debug
 manifests, timelines, and JSONL records also include bounded

@@ -717,6 +717,7 @@ func TestTraceToolFailureExamples(t *testing.T) {
 	trace := Trace{Tools: []ToolCall{
 		{
 			Tool:         "web_fetch",
+			CallID:       "fetch-1",
 			Args:         map[string]any{"url": "https://dashboard.example/helio", "timeout": 10},
 			Result:       "[dynamic page shell: URL=https://dashboard.example/helio]\nFailure: kind=dynamic_shell\nNext: use a text/API/source page.",
 			FailureKinds: []string{"dynamic_shell"},
@@ -743,6 +744,17 @@ func TestTraceToolFailureExamples(t *testing.T) {
 	search := examples["no_results"]
 	if len(search) != 1 || !strings.Contains(search[0].ArgsSummary, "rare subnet") {
 		t.Fatalf("no_results example missing query context: %#v", search)
+	}
+	trace.Tools[0].FailureKinds = append(trace.Tools[0].FailureKinds, "loop_guard_repeated_failed_input")
+	guards := trace.LoopGuardExamples(1)
+	if len(guards) != 1 ||
+		guards[0].Kind != "loop_guard_repeated_failed_input" ||
+		guards[0].Category != "loop_guard" ||
+		guards[0].ToolIndex != 1 ||
+		guards[0].CallID != "fetch-1" ||
+		guards[0].Tool != "web_fetch" ||
+		!strings.Contains(guards[0].ArgsSummary, "dashboard.example") {
+		t.Fatalf("loop guard example = %#v", guards)
 	}
 }
 

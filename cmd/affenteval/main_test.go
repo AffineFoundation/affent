@@ -579,6 +579,16 @@ func TestPrintBatchResultIncludesTraceMetrics(t *testing.T) {
 				{Kind: "invalid_args", Tool: "web_fetch", ArgsSummary: `url="https://example.com"`, ResultSummary: "url is required | Next: retry with a full URL", ExitCode: 1},
 			},
 		},
+		LoopGuardExamples: []agenteval.LoopGuardExample{{
+			Kind:          "loop_guard_repeated_failed_input",
+			Category:      "loop_guard",
+			ToolIndex:     1,
+			CallID:        "guard-print-1",
+			Tool:          "web_fetch",
+			ArgsSummary:   `url="https://example.com"`,
+			ResultSummary: "repeated failed input | Next: stop retrying this URL",
+			ExitCode:      1,
+		}},
 		RuntimeErrorByKind: map[string]int{"llm_timeout": 1},
 		RuntimeErrorExamples: map[string][]agenteval.RuntimeErrorExample{
 			"llm_timeout": {
@@ -657,6 +667,7 @@ func TestPrintBatchResultIncludesTraceMetrics(t *testing.T) {
 		"tool_failure_hint[invalid_args]",
 		"invalid arguments",
 		`tool_failure_example[invalid_args]: tool=web_fetch args=url="https://example.com" exit=1 result=url is required | Next: retry with a full URL`,
+		`loop_guard_example[loop_guard_repeated_failed_input]: category=loop_guard tool=web_fetch call_id=guard-print-1 args=url="https://example.com" exit=1 result=repeated failed input | Next: stop retrying this URL`,
 		"hint[llm_timeout]",
 		"runtime_error_example[llm_timeout]: LLM llm_stream timed out after 4m0s",
 		"loop_decision_example[evidence_quality]: decision=defer trigger=source_access_dynamic_partial confidence=high reason=dynamic widgets lacked text action=read browser network responses",
@@ -803,6 +814,16 @@ func TestBatchSummaryAggregatesRuntimeMetrics(t *testing.T) {
 			RepairNotes:   []string{"canonicalized tool readFile to read_file", "renamed field file_path to path"},
 			RepairKinds:   []string{"tool_name", "alias_rename"},
 			Succeeded:     true,
+		}},
+		LoopGuardExamples: []agenteval.LoopGuardExample{{
+			Kind:          "loop_guard_repeated_failed_input",
+			Category:      "loop_guard",
+			ToolIndex:     2,
+			CallID:        "guard-1",
+			Tool:          "web_fetch",
+			ArgsSummary:   `url="https://loop.example"`,
+			ResultSummary: "repeated failed input | Next: use browser_network_read",
+			ExitCode:      1,
 		}},
 		ToolTruncation: agenteval.ToolTruncationStats{
 			ArgsTruncated:    1,
@@ -1052,6 +1073,9 @@ func TestBatchSummaryAggregatesRuntimeMetrics(t *testing.T) {
 	if !strings.Contains(out.String(), `tool_failure_example[timeout]: tool=web_fetch args=url="https://slow.example"`) {
 		t.Fatalf("summary output missing tool failure example:\n%s", out.String())
 	}
+	if !strings.Contains(out.String(), `loop_guard_example[loop_guard_repeated_failed_input]: category=loop_guard tool=web_fetch call_id=guard-1 args=url="https://loop.example" exit=1 result=repeated failed input | Next: use browser_network_read`) {
+		t.Fatalf("summary output missing loop guard example:\n%s", out.String())
+	}
 	if !strings.Contains(out.String(), "runtime_error_example[llm_timeout]: LLM llm_stream timed out after 4m0s") {
 		t.Fatalf("summary output missing runtime error example:\n%s", out.String())
 	}
@@ -1084,6 +1108,9 @@ func TestBatchSummaryAggregatesRuntimeMetrics(t *testing.T) {
 	}
 	if len(summary.ToolRepairExamples) != 1 || summary.ToolRepairExamples[0].CallID != "repair-1" {
 		t.Fatalf("ToolRepairExamples = %#v", summary.ToolRepairExamples)
+	}
+	if len(summary.LoopGuardExamples) != 1 || summary.LoopGuardExamples[0].CallID != "guard-1" {
+		t.Fatalf("LoopGuardExamples = %#v", summary.LoopGuardExamples)
 	}
 	wantRepairKinds := map[string]int{"tool_name": 1, "alias_rename": 2, "type_coercion": 2}
 	if !reflect.DeepEqual(summary.ToolRepairByKind, wantRepairKinds) {
@@ -1302,6 +1329,16 @@ func TestPrintBatchResultJSONL(t *testing.T) {
 				{Kind: "blocked", Tool: "web_fetch", ArgsSummary: `url="https://blocked.example/metrics"`, ResultSummary: "HTTP 403 | Next: use another source", ExitCode: 1},
 			},
 		},
+		LoopGuardExamples: []agenteval.LoopGuardExample{{
+			Kind:          "tool_policy_forced_no_tools",
+			Category:      "tool_policy",
+			ToolIndex:     1,
+			CallID:        "guard-jsonl-1",
+			Tool:          "web_fetch",
+			ArgsSummary:   `url="https://blocked.example/metrics"`,
+			ResultSummary: "forced no-tools after repeated failures",
+			ExitCode:      1,
+		}},
 		SourceAccessExamples: []agenteval.SourceAccessExample{{
 			ToolIndex:    2,
 			CallID:       "net-1",
@@ -1573,6 +1610,19 @@ func TestPrintBatchResultJSONL(t *testing.T) {
 		!strings.Contains(fmt.Sprint(blockedExample["args_summary"]), "blocked.example") ||
 		!strings.Contains(fmt.Sprint(blockedExample["result_summary"]), "Next:") {
 		t.Fatalf("blocked tool_failure_example = %#v\njson=%s", blockedExamples[0], out.String())
+	}
+	loopGuardExamples, ok := got["loop_guard_examples"].([]any)
+	if !ok || len(loopGuardExamples) != 1 {
+		t.Fatalf("loop_guard_examples = %#v\njson=%s", got["loop_guard_examples"], out.String())
+	}
+	loopGuardExample, ok := loopGuardExamples[0].(map[string]any)
+	if !ok ||
+		loopGuardExample["call_id"] != "guard-jsonl-1" ||
+		loopGuardExample["kind"] != "tool_policy_forced_no_tools" ||
+		loopGuardExample["category"] != "tool_policy" ||
+		loopGuardExample["tool"] != "web_fetch" ||
+		!strings.Contains(fmt.Sprint(loopGuardExample["args_summary"]), "blocked.example") {
+		t.Fatalf("loop_guard_example = %#v\njson=%s", loopGuardExamples[0], out.String())
 	}
 	runtimeErrorKinds, ok := got["runtime_error_by_kind"].(map[string]any)
 	if !ok || runtimeErrorKinds["llm_incomplete_stream"] != float64(1) {
@@ -2172,6 +2222,16 @@ func TestPrintBatchSummaryJSONL(t *testing.T) {
 				{Kind: "blocked", Tool: "web_fetch", ArgsSummary: `url="https://blocked.example"`, ResultSummary: "blocked | Next: use another source", ExitCode: 1},
 			},
 		},
+		LoopGuardExamples: []agenteval.LoopGuardExample{{
+			Kind:          "loop_guard_repeated_failed_input",
+			Category:      "loop_guard",
+			ToolIndex:     1,
+			CallID:        "summary-guard-1",
+			Tool:          "web_fetch",
+			ArgsSummary:   `url="https://blocked.example"`,
+			ResultSummary: "repeated failed input",
+			ExitCode:      1,
+		}},
 		RuntimeErrors:      1,
 		RuntimeErrorByKind: map[string]int{"llm_timeout": 1},
 		RuntimeErrorExamples: map[string][]agenteval.RuntimeErrorExample{
@@ -2469,6 +2529,18 @@ func TestPrintBatchSummaryJSONL(t *testing.T) {
 	toolFailureExamples, ok := got["tool_failure_examples"].(map[string]any)
 	if !ok || !strings.Contains(fmt.Sprint(toolFailureExamples["blocked"]), "blocked.example") {
 		t.Fatalf("tool_failure_examples = %#v\njson=%s", got["tool_failure_examples"], out.String())
+	}
+	loopGuardExamples, ok := got["loop_guard_examples"].([]any)
+	if !ok || len(loopGuardExamples) != 1 {
+		t.Fatalf("loop_guard_examples = %#v\njson=%s", got["loop_guard_examples"], out.String())
+	}
+	loopGuardExample, ok := loopGuardExamples[0].(map[string]any)
+	if !ok ||
+		loopGuardExample["call_id"] != "summary-guard-1" ||
+		loopGuardExample["kind"] != "loop_guard_repeated_failed_input" ||
+		loopGuardExample["category"] != "loop_guard" ||
+		!strings.Contains(fmt.Sprint(loopGuardExample["args_summary"]), "blocked.example") {
+		t.Fatalf("loop_guard_example = %#v\njson=%s", loopGuardExamples[0], out.String())
 	}
 	runtimeErrorKinds, ok := got["runtime_error_by_kind"].(map[string]any)
 	if !ok || runtimeErrorKinds["llm_timeout"] != float64(1) {

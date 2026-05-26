@@ -84,6 +84,7 @@ func renderDebugTimeline(res BatchResult, scenario BatchScenario, trace *Trace) 
 	renderTimelineRuntimeSurface(&b, trace)
 	renderTimelineLoopErrors(&b, trace)
 	renderTimelineToolRepair(&b, trace)
+	renderTimelineLoopGuard(&b, trace)
 	renderTimelineCompactions(&b, trace)
 	renderTimelineDecisions(&b, trace)
 	renderTimelineSourceEvidence(&b, trace)
@@ -182,7 +183,7 @@ func renderTimelineDebugBrief(b *strings.Builder, res BatchResult) {
 		fmt.Fprintf(b, "- %s\n", line)
 	}
 	if res.ToolStats.LoopGuardInterventions > 0 {
-		fmt.Fprintf(b, "- loop_guard: `%d` intervention(s), `%d` forced no-tools; inspect Loop Decisions and latest tool guidance.\n", res.ToolStats.LoopGuardInterventions, res.ToolStats.ForcedNoTools)
+		fmt.Fprintf(b, "- loop_guard: `%d` intervention(s), `%d` forced no-tools; inspect Loop Guard, Loop Decisions, and latest tool guidance.\n", res.ToolStats.LoopGuardInterventions, res.ToolStats.ForcedNoTools)
 	}
 	if res.Delegation.HasAny() {
 		fmt.Fprintf(b, "- delegation: focused_tasks=`%d`, focused_task_errors=`%d`, subagents=`%d`, subagent_errors=`%d`; inspect child transcripts and parent merge quality.\n",
@@ -528,6 +529,7 @@ func writeTimelineCountsLine(b *strings.Builder, label string, counts map[string
 func hasTimelineDebugBrief(res BatchResult) bool {
 	return BuildDebugBrief(res) != nil ||
 		len(res.ToolFailureExamples) > 0 ||
+		len(res.LoopGuardExamples) > 0 ||
 		len(res.RuntimeErrorExamples) > 0
 }
 
@@ -716,6 +718,34 @@ func renderTimelineToolRepair(b *strings.Builder, trace *Trace) {
 		}
 		for _, note := range ex.RepairNotes {
 			fmt.Fprintf(b, "   note: %s\n", timelineInline(note, timelineMemoryPreviewBytes))
+		}
+	}
+}
+
+func renderTimelineLoopGuard(b *strings.Builder, trace *Trace) {
+	examples := trace.LoopGuardExamples(len(trace.Tools))
+	if len(examples) == 0 {
+		return
+	}
+	b.WriteString("\n## Loop Guard\n\n")
+	for i, ex := range examples {
+		fmt.Fprintf(b, "%d. tool#%d `%s` kind=`%s` category=`%s` exit=`%d`",
+			i+1,
+			ex.ToolIndex,
+			ex.Tool,
+			ex.Kind,
+			ex.Category,
+			ex.ExitCode,
+		)
+		if ex.CallID != "" {
+			fmt.Fprintf(b, " call_id=`%s`", ex.CallID)
+		}
+		b.WriteByte('\n')
+		if ex.ArgsSummary != "" {
+			fmt.Fprintf(b, "   args: %s\n", timelineInline(ex.ArgsSummary, timelineMemoryPreviewBytes))
+		}
+		if ex.ResultSummary != "" {
+			fmt.Fprintf(b, "   result: %s\n", timelineInline(ex.ResultSummary, timelineResultPreviewBytes))
 		}
 	}
 }

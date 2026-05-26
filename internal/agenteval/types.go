@@ -344,6 +344,17 @@ type ToolFailureExample struct {
 	ExitCode      int    `json:"exit_code"`
 }
 
+type LoopGuardExample struct {
+	Kind          string `json:"kind"`
+	Category      string `json:"category"`
+	ToolIndex     int    `json:"tool_index"`
+	CallID        string `json:"call_id,omitempty"`
+	Tool          string `json:"tool"`
+	ArgsSummary   string `json:"args_summary,omitempty"`
+	ResultSummary string `json:"result_summary,omitempty"`
+	ExitCode      int    `json:"exit_code"`
+}
+
 type MemoryUpdateExample struct {
 	ToolIndex       int    `json:"tool_index"`
 	CallID          string `json:"call_id,omitempty"`
@@ -529,6 +540,38 @@ func (t Trace) ToolFailureExamples(maxPerKind int) map[string][]ToolFailureExamp
 	}
 	if len(out) == 0 {
 		return nil
+	}
+	return out
+}
+
+func (t Trace) LoopGuardExamples(maxExamples int) []LoopGuardExample {
+	if maxExamples <= 0 {
+		return nil
+	}
+	var out []LoopGuardExample
+	for i, c := range t.Tools {
+		if len(out) >= maxExamples {
+			break
+		}
+		for _, kind := range toolFailureKindsForCall(c) {
+			category, ok := loopGuardExampleCategory(kind)
+			if !ok {
+				continue
+			}
+			out = append(out, LoopGuardExample{
+				Kind:          kind,
+				Category:      category,
+				ToolIndex:     i + 1,
+				CallID:        c.CallID,
+				Tool:          c.Tool,
+				ArgsSummary:   summarizeToolCallArgs(c.Args),
+				ResultSummary: summarizeToolFailureResult(c.Result),
+				ExitCode:      c.ExitCode,
+			})
+			if len(out) >= maxExamples {
+				break
+			}
+		}
 	}
 	return out
 }
@@ -834,6 +877,17 @@ func summarizeToolFailureResult(result string) string {
 		}
 	}
 	return compactOneLine(strings.Join(parts, " | "), 260)
+}
+
+func loopGuardExampleCategory(kind string) (string, bool) {
+	switch {
+	case strings.HasPrefix(kind, "loop_guard_"):
+		return "loop_guard", true
+	case strings.HasPrefix(kind, "tool_policy_"):
+		return "tool_policy", true
+	default:
+		return "", false
+	}
 }
 
 func compactOneLine(s string, max int) string {
