@@ -637,6 +637,64 @@ func TestSelectBatchScenariosForSuite(t *testing.T) {
 	}
 }
 
+func TestSelectLongRunSuite(t *testing.T) {
+	scenarios, err := SelectBatchScenariosForSuite("long-run", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(scenarios) != 3 {
+		t.Fatalf("long-run suite size = %d, want 3", len(scenarios))
+	}
+	seen := map[string]BatchScenario{}
+	for _, scenario := range scenarios {
+		if !scenarioInSuite(scenario, "long-run") {
+			t.Fatalf("scenario %s missing long-run suite marker", scenario.Name)
+		}
+		seen[scenario.Name] = scenario
+	}
+
+	stock, ok := seen["longrun-stock-analysis-synthesis"]
+	if !ok {
+		t.Fatalf("long-run suite missing stock analysis scenario")
+	}
+	if !stringSliceContains(stock.RequiredTools, "repo_search") || !stringSliceContains(stock.RequiredTools, "read_file") {
+		t.Fatalf("stock scenario RequiredTools = %#v, want repo_search/read_file", stock.RequiredTools)
+	}
+	if len(stock.RequiredToolOrder) != 1 || stock.RequiredToolOrder[0] != (ToolOrderRequirement{Earlier: "repo_search", Later: "read_file"}) {
+		t.Fatalf("stock scenario RequiredToolOrder = %#v, want repo_search before read_file", stock.RequiredToolOrder)
+	}
+	if !stringSliceContains(stock.ForbiddenTools, "shell") {
+		t.Fatalf("stock scenario ForbiddenTools = %#v, want shell", stock.ForbiddenTools)
+	}
+
+	subnet, ok := seen["longrun-bittensor-subnet-synthesis"]
+	if !ok {
+		t.Fatalf("long-run suite missing Bittensor subnet scenario")
+	}
+	for _, want := range []string{"0.06342 T", "201.04K T", "metrics/tao-app-snapshot.txt"} {
+		if !stringSliceContains(subnet.RequiredFinalText, want) {
+			t.Fatalf("Bittensor scenario RequiredFinalText = %#v, want %q", subnet.RequiredFinalText, want)
+		}
+	}
+	if !stringSliceContains(subnet.ForbiddenFinalText, "subnet price $277.32") {
+		t.Fatalf("Bittensor scenario ForbiddenFinalText = %#v, want TAO/subnet price conflation guard", subnet.ForbiddenFinalText)
+	}
+
+	pr, ok := seen["longrun-code-implementation-pr-summary"]
+	if !ok {
+		t.Fatalf("long-run suite missing code PR scenario")
+	}
+	if !stringSliceContains(pr.RequiredTools, "edit_file") {
+		t.Fatalf("code PR scenario RequiredTools = %#v, want edit_file", pr.RequiredTools)
+	}
+	if pr.RequiredCommandCounts[`go test`] != 2 {
+		t.Fatalf("code PR scenario RequiredCommandCounts = %#v, want go test=2", pr.RequiredCommandCounts)
+	}
+	if !stringSliceContains(pr.RequiredFinalText, "PR Summary") || !stringSliceContains(pr.RequiredFinalText, "Tests") {
+		t.Fatalf("code PR scenario RequiredFinalText = %#v, want PR Summary and Tests", pr.RequiredFinalText)
+	}
+}
+
 func TestFocusedTaskScenarioRequiresExploreTask(t *testing.T) {
 	for _, scenario := range BuiltinBatchScenarios() {
 		if scenario.Name != "focused-task-project-facts" {

@@ -177,6 +177,9 @@ func BuiltinBatchScenarios() []BatchScenario {
 		smallToolEditRecoveryScenario(),
 		smallToolShellFailureScenario(),
 		oversizedToolResultScenario(),
+		longRunStockAnalysisScenario(),
+		longRunBittensorSubnetScenario(),
+		longRunCodePRScenario(),
 	}
 }
 

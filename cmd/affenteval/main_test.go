@@ -21,7 +21,7 @@ func TestRunListSuites(t *testing.T) {
 	if code != 0 {
 		t.Fatalf("run --list-suites exit = %d", code)
 	}
-	for _, want := range []string{"hard-agent", "small-model-tools"} {
+	for _, want := range []string{"hard-agent", "long-run", "small-model-tools"} {
 		if !strings.Contains(out, want) {
 			t.Fatalf("--list-suites output missing %q:\n%s", want, out)
 		}
