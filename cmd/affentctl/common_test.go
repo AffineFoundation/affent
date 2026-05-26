@@ -590,7 +590,7 @@ func TestEvalModeEnvAppliesStrictToolSurface(t *testing.T) {
 	if !caps.Builtins || !caps.MCP {
 		t.Fatalf("eval mode should keep basic tools and allow explicit MCP config, caps=%+v", caps)
 	}
-	if caps.Memory || caps.Skill || caps.Plan || caps.SessionSearch || caps.ProjectContext || caps.WebFetch || caps.WebSearch || caps.Browser || caps.Subagent || caps.FocusedTasks {
+	if caps.Memory || caps.Skill || caps.Plan || caps.SessionSearch || caps.ProjectContext || !caps.RepoSearch || caps.WebFetch || caps.WebSearch || caps.Browser || caps.Subagent || caps.FocusedTasks {
 		t.Fatalf("eval mode should default to the minimal benchmark surface, caps=%+v", caps)
 	}
 	if cf.memoryOnly {
@@ -612,7 +612,7 @@ func TestEvalModeAllowsExplicitMemory(t *testing.T) {
 	if !caps.Memory {
 		t.Fatalf("--eval-mode --memory=true should enable memory, caps=%+v", caps)
 	}
-	if caps.Skill || caps.Plan || caps.SessionSearch || caps.WebFetch || caps.WebSearch || caps.Browser || caps.Subagent || caps.FocusedTasks {
+	if caps.Skill || caps.Plan || caps.SessionSearch || !caps.RepoSearch || caps.WebFetch || caps.WebSearch || caps.Browser || caps.Subagent || caps.FocusedTasks {
 		t.Fatalf("explicit memory must not re-enable non-basic eval surfaces, caps=%+v", caps)
 	}
 }

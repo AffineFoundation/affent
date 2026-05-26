@@ -13,7 +13,6 @@ import (
 	"strconv"
 	"strings"
 	"time"
-	"unicode/utf8"
 
 	agent "github.com/affinefoundation/affent/internal/agent"
 	"github.com/affinefoundation/affent/internal/eventlog"
@@ -21,6 +20,7 @@ import (
 	"github.com/affinefoundation/affent/internal/mcp"
 	"github.com/affinefoundation/affent/internal/memory"
 	"github.com/affinefoundation/affent/internal/sse"
+	"github.com/affinefoundation/affent/internal/textutil"
 	"github.com/google/uuid"
 	"github.com/rs/zerolog"
 )
@@ -41,21 +41,12 @@ const (
 	mcpStartupPerServerOverrun = 5 * time.Second
 )
 
-// trimUTF8 returns s clipped to at most n bytes, snapping back to a
-// UTF-8 rune boundary so multi-byte sequences (CJK / Cyrillic /
-// accented Latin / emoji) aren't split across the cut. Callers append
-// their own ellipsis marker.
+// trimUTF8 returns the UTF-8-safe prefix of s clipped to at most n
+// bytes, so multi-byte sequences (CJK / Cyrillic / accented Latin /
+// emoji) aren't split across the cut.
 func trimUTF8(s string, n int) string {
-	if n <= 0 {
-		return ""
-	}
-	if len(s) <= n {
-		return s
-	}
-	for n > 0 && !utf8.RuneStart(s[n]) {
-		n--
-	}
-	return s[:n]
+	head, _ := textutil.TruncateWithMarker(s, n, func(int) string { return "" })
+	return head
 }
 
 // commonFlags is what every subcommand wants -- model endpoint, workspace,
@@ -174,7 +165,7 @@ func (c *commonFlags) bind(fs *flag.FlagSet) {
 	fs.StringVar(&c.executor, "executor", "local", "shell-tool backend: 'local' (host; no isolation), 'sandbox' (auto-start affentctl's memory-limited Docker sandbox), or 'docker:<container_id>' (exec into an existing container). (env: AFFENTCTL_EXECUTOR)")
 	fs.BoolVar(&c.subagentEnabled, "subagent", true, "register subagent_run for bounded read-only delegation; set false to force a single-loop agent (env: AFFENTCTL_SUBAGENT)")
 	fs.IntVar(&c.subagentMaxDepth, "subagent-max-depth", agent.DefaultSubagentMaxDepth, "maximum recursive subagent depth; 1 disables nested subagents, hard max 4 (env: AFFENTCTL_SUBAGENT_MAX_DEPTH)")
-	fs.BoolVar(&c.focusedTasksEnabled, "focused-tasks", true, "register run_task for bounded focused tasks (recall/explore/research/verify/review) with structured output; set false to hide the surface (env: AFFENTCTL_FOCUSED_TASKS)")
+	fs.BoolVar(&c.focusedTasksEnabled, "focused-tasks", true, "register run_task for bounded focused tasks with structured output; set false to hide the surface (env: AFFENTCTL_FOCUSED_TASKS)")
 	fs.StringVar(&c.temperature, "temperature", "", "sampling temperature forwarded to upstream LLM (omit → provider default; set 0 for deterministic eval decoding; env: AFFENTCTL_TEMPERATURE)")
 	fs.StringVar(&c.topP, "top-p", "", "top-p (nucleus) sampling forwarded to upstream (omit → provider default; env: AFFENTCTL_TOP_P)")
 	fs.StringVar(&c.maxTokens, "max-tokens", "", "max output tokens forwarded to upstream (omit → provider default; env: AFFENTCTL_MAX_TOKENS)")
@@ -729,6 +720,8 @@ type runtimeCapabilities struct {
 	Plan                 bool
 	SessionSearch        bool
 	ProjectContext       bool
+	SymbolContext        bool
+	RepoSearch           bool
 	WebFetch             bool
 	WebSearch            bool
 	Browser              bool
@@ -749,6 +742,8 @@ func resolveRuntimeCapabilities(c commonFlags) runtimeCapabilities {
 		Plan:                 true,
 		SessionSearch:        true,
 		ProjectContext:       c.projectContext,
+		SymbolContext:        true,
+		RepoSearch:           true,
 		Subagent:             c.subagentEnabled,
 		FocusedTasks:         c.focusedTasksEnabled,
 	}
@@ -759,6 +754,8 @@ func resolveRuntimeCapabilities(c commonFlags) runtimeCapabilities {
 		caps.Plan = false
 		caps.SessionSearch = false
 		caps.ProjectContext = false
+		caps.SymbolContext = true
+		caps.RepoSearch = true
 		caps.Subagent = false
 		caps.FocusedTasks = false
 	}

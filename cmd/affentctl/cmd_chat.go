@@ -20,6 +20,7 @@ import (
 	"github.com/affinefoundation/affent/internal/eventlog"
 	"github.com/affinefoundation/affent/internal/planstate"
 	"github.com/affinefoundation/affent/internal/sse"
+	"github.com/affinefoundation/affent/internal/textutil"
 )
 
 // turnCancelDrainTimeout caps how long drainInteractive blocks after a
@@ -298,18 +299,12 @@ func summarizeArgs(args map[string]any) string {
 	// tool families; fall back to JSON when there is no obvious handle.
 	for _, k := range []string{"command", "path", "url", "query", "name", "id"} {
 		if v, ok := args[k]; ok {
-			s := fmt.Sprint(v)
-			if len(s) > 80 {
-				s = trimUTF8(s, 77) + "..."
-			}
+			s := textutil.Preview(fmt.Sprint(v), 77, "...")
 			return fmt.Sprintf("%s=%q", k, s)
 		}
 	}
 	raw, _ := json.Marshal(args)
-	s := string(raw)
-	if len(s) > 80 {
-		s = trimUTF8(s, 77) + "..."
-	}
+	s := textutil.Preview(string(raw), 77, "...")
 	return s
 }
 

@@ -164,6 +164,8 @@ func TestDoctorCmdReportsReadyLocalConfig(t *testing.T) {
 		"memory_only=false",
 		"session_search=true",
 		"project_context=true",
+		"symbol_context=true",
+		"repo_search=true",
 		"web_fetch=false",
 		"web_search=false",
 		"browser=false",
@@ -211,6 +213,36 @@ func TestDoctorCapabilitySummary_FocusedTaskProfiles_Default(t *testing.T) {
 	// reporting line exists to surface for the operator.
 	if strings.Contains(got, "research") {
 		t.Fatalf("research must be filtered out without a web registrar:\n%s", got)
+	}
+}
+
+func TestDoctorCapabilitySummary_RepoSearch_DefaultAndMemoryOnly(t *testing.T) {
+	got := doctorCapabilitySummary(commonFlags{
+		memoryEnabled:       true,
+		projectContext:      true,
+		subagentEnabled:     true,
+		focusedTasksEnabled: true,
+		executor:            "local",
+	})
+	if !strings.Contains(got, "repo_search=true") {
+		t.Fatalf("repo_search should be on by default in affentctl:\n%s", got)
+	}
+	if !strings.Contains(got, "symbol_context=true") {
+		t.Fatalf("symbol_context should be on by default in affentctl:\n%s", got)
+	}
+
+	got = doctorCapabilitySummary(commonFlags{
+		memoryEnabled:       true,
+		memoryOnly:          true,
+		projectContext:      true,
+		focusedTasksEnabled: true,
+		executor:            "sandbox",
+	})
+	if !strings.Contains(got, "repo_search=false") {
+		t.Fatalf("memory-only should not report repo_search:\n%s", got)
+	}
+	if !strings.Contains(got, "symbol_context=false") {
+		t.Fatalf("memory-only should not report symbol_context:\n%s", got)
 	}
 }
 
@@ -288,6 +320,8 @@ func TestDoctorCapabilitySummaryMemoryOnlyMatchesRegisteredTools(t *testing.T) {
 		"memory_only=true",
 		"session_search=false",
 		"project_context=false",
+		"symbol_context=false",
+		"repo_search=false",
 		"web_fetch=false",
 		"web_search=false",
 		"browser=false",
@@ -322,6 +356,8 @@ func TestDoctorCapabilitySummaryEvalModeMatchesStrictSurface(t *testing.T) {
 		"eval_mode=true",
 		"session_search=false",
 		"project_context=false",
+		"symbol_context=true",
+		"repo_search=true",
 		"web_fetch=false",
 		"web_search=false",
 		"browser=false",
