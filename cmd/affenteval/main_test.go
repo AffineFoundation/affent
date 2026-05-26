@@ -574,6 +574,15 @@ func TestBatchSummaryAggregatesRuntimeMetrics(t *testing.T) {
 			ArgsTruncated:    1,
 			ArgsOmittedBytes: 128,
 		},
+		ToolTruncationExamples: []agenteval.ToolTruncationExample{{
+			ToolIndex:              2,
+			CallID:                 "trunc-1",
+			Tool:                   "web_fetch",
+			ArgsTruncated:          true,
+			ArgsOmittedBytes:       128,
+			ContextOmittedBytes:    1024,
+			ContextEstimatedTokens: 256,
+		}},
 		SourceAccessExamples: []agenteval.SourceAccessExample{{
 			ToolIndex: 1,
 			CallID:    "source-1",
@@ -797,6 +806,9 @@ func TestBatchSummaryAggregatesRuntimeMetrics(t *testing.T) {
 	if len(summary.SourceAccessExamples) != 1 || summary.SourceAccessExamples[0].CallID != "source-1" {
 		t.Fatalf("SourceAccessExamples = %#v", summary.SourceAccessExamples)
 	}
+	if len(summary.ToolTruncationExamples) != 1 || summary.ToolTruncationExamples[0].CallID != "trunc-1" {
+		t.Fatalf("ToolTruncationExamples = %#v", summary.ToolTruncationExamples)
+	}
 	if got := summary.ToolFailureExamples["timeout"]; len(got) != 1 || got[0].Tool != "web_fetch" {
 		t.Fatalf("ToolFailureExamples[timeout] = %#v", got)
 	}
@@ -941,6 +953,17 @@ func TestPrintBatchResultJSONL(t *testing.T) {
 			ResultsOmittedBytes: 8192,
 			ResultArtifacts:     1,
 		},
+		ToolTruncationExamples: []agenteval.ToolTruncationExample{{
+			ToolIndex:           1,
+			CallID:              "trunc-jsonl-1",
+			Tool:                "web_fetch",
+			ArgsTruncated:       true,
+			ArgsOmittedBytes:    1024,
+			ResultTruncated:     true,
+			ResultOmittedBytes:  8192,
+			ResultArtifactPath:  ".affent/artifacts/tool-results/000001-trunc-jsonl-1.txt",
+			ContextOmittedBytes: 6144,
+		}},
 		Repair: agenteval.ToolRepairStats{
 			Calls:          2,
 			SucceededCalls: 1,
@@ -1139,6 +1162,20 @@ func TestPrintBatchResultJSONL(t *testing.T) {
 		memoryUpdateExample["location"] != "memory:markets" ||
 		!strings.Contains(fmt.Sprint(memoryUpdateExample["preview"]), "browser_network_read") {
 		t.Fatalf("memory_update_example = %#v\njson=%s", memoryUpdateExamples[0], out.String())
+	}
+	toolTruncationExamples, ok := got["tool_truncation_examples"].([]any)
+	if !ok || len(toolTruncationExamples) != 1 {
+		t.Fatalf("tool_truncation_examples = %#v\njson=%s", got["tool_truncation_examples"], out.String())
+	}
+	toolTruncationExample, ok := toolTruncationExamples[0].(map[string]any)
+	if !ok ||
+		toolTruncationExample["call_id"] != "trunc-jsonl-1" ||
+		toolTruncationExample["tool"] != "web_fetch" ||
+		toolTruncationExample["args_truncated"] != true ||
+		toolTruncationExample["result_truncated"] != true ||
+		toolTruncationExample["context_omitted_bytes"] != float64(6144) ||
+		!strings.Contains(fmt.Sprint(toolTruncationExample["result_artifact_path"]), "trunc-jsonl-1") {
+		t.Fatalf("tool_truncation_example = %#v\njson=%s", toolTruncationExamples[0], out.String())
 	}
 	loopDecisionByKind, ok := got["loop_decision_by_kind"].(map[string]any)
 	if !ok || loopDecisionByKind["evidence_quality"] != float64(1) {
@@ -1643,18 +1680,26 @@ func TestPrintBatchSummaryJSONL(t *testing.T) {
 			URL:       "https://metrics.example/api.json",
 			JSONPath:  "$.price",
 		}},
-		SessionSearchCalls:         1,
-		SessionSearchResults:       2,
-		SessionSearchContextHits:   1,
-		SessionSearchMatchedTerms:  2,
-		ToolDurationMS:             120,
-		ToolContextTruncated:       4,
-		ToolContextOmittedBytes:    12288,
-		ToolArgsTruncated:          1,
-		ToolArgsOmittedBytes:       256,
-		ToolResultsTruncated:       2,
-		ToolResultsOmittedBytes:    4096,
-		ToolResultArtifacts:        2,
+		SessionSearchCalls:        1,
+		SessionSearchResults:      2,
+		SessionSearchContextHits:  1,
+		SessionSearchMatchedTerms: 2,
+		ToolDurationMS:            120,
+		ToolContextTruncated:      4,
+		ToolContextOmittedBytes:   12288,
+		ToolArgsTruncated:         1,
+		ToolArgsOmittedBytes:      256,
+		ToolResultsTruncated:      2,
+		ToolResultsOmittedBytes:   4096,
+		ToolResultArtifacts:       2,
+		ToolTruncationExamples: []agenteval.ToolTruncationExample{{
+			ToolIndex:          4,
+			CallID:             "summary-trunc-1",
+			Tool:               "browser_snapshot",
+			ResultTruncated:    true,
+			ResultOmittedBytes: 4096,
+			ResultArtifactPath: ".affent/artifacts/tool-results/000004-summary-trunc-1.txt",
+		}},
 		VerifierRuns:               2,
 		VerifierPassed:             1,
 		VerifierFailed:             1,
@@ -1821,6 +1866,18 @@ func TestPrintBatchSummaryJSONL(t *testing.T) {
 		sourceAccessExample["status"] != "network" ||
 		sourceAccessExample["json_path"] != "$.price" {
 		t.Fatalf("source_access_example = %#v\njson=%s", sourceAccessExamples[0], out.String())
+	}
+	toolTruncationExamples, ok := got["tool_truncation_examples"].([]any)
+	if !ok || len(toolTruncationExamples) != 1 {
+		t.Fatalf("tool_truncation_examples = %#v\njson=%s", got["tool_truncation_examples"], out.String())
+	}
+	toolTruncationExample, ok := toolTruncationExamples[0].(map[string]any)
+	if !ok ||
+		toolTruncationExample["call_id"] != "summary-trunc-1" ||
+		toolTruncationExample["tool"] != "browser_snapshot" ||
+		toolTruncationExample["result_truncated"] != true ||
+		toolTruncationExample["result_omitted_bytes"] != float64(4096) {
+		t.Fatalf("tool_truncation_example = %#v\njson=%s", toolTruncationExamples[0], out.String())
 	}
 	debugBriefByTag, ok := got["debug_brief_by_tag"].(map[string]any)
 	if !ok ||

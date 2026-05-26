@@ -170,6 +170,11 @@ Scenario records describe one eval case:
   compaction events. Each sample includes the turn id, before/after message
   counts, removed message count, reactive/proactive flag, reason, and summary
   byte size.
+- `tool_truncation_examples`: optional bounded examples of tool calls whose
+  request args, event result, result artifact, or model-context insertion were
+  truncated. Each sample includes the tool index, call id, tool name, omitted
+  byte counts, cap byte counts, artifact path when present, and context bytes
+  omitted before the tool result was fed back to the model.
 - `tool_context_truncated`: count of tool results shortened before being fed
   back into the model conversation.
 - `tool_context_omitted_bytes`: total bytes omitted from tool results before
@@ -239,7 +244,8 @@ Summary records aggregate all scenario records from the same process:
   `tool_context_truncated`, `tool_context_omitted_bytes`.
 - Truncation totals: `tool_args_truncated`, `tool_args_omitted_bytes`,
   `tool_results_truncated`, `tool_results_omitted_bytes`,
-  `tool_result_artifacts`.
+  `tool_result_artifacts`, plus `tool_truncation_examples`, the first bounded
+  samples across the batch.
 - Delegation totals: `focused_task_calls`, `focused_task_by_type`,
   `focused_task_errors`, `subagent_calls`, `subagent_by_mode`,
   `subagent_errors`. These fields are omitted when no delegated tool calls were

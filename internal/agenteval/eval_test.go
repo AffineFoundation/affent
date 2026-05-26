@@ -75,7 +75,7 @@ func TestParseTraceFileReadsToolRequestsAndFinalText(t *testing.T) {
 		`{"type":"trace.meta","data":{"schema_version":1}}`,
 		`{"type":"runtime.surface","data":{"turn_id":"t1","tool_count":2,"tools":[{"name":"web_fetch","group":"Web"},{"name":"web_search","group":"Web"}],"capabilities":{"web_fetch":true,"web_search":true},"max_turn_steps":12,"max_tool_calls":7,"tool_result_event_cap_bytes":262144,"tool_result_context_max_bytes":5120,"tool_result_context_budget_bytes":32768,"tool_result_artifact_prefix":".affent/artifacts/tool-results"}}`,
 		`{"type":"tool.request","data":{"call_id":"c1","tool":"shell","args":{"command":"go test ./..."},"args_truncated":true,"args_bytes":70000,"args_omitted_bytes":512,"args_cap_bytes":65536,"original_tool":"Shell","original_args_summary":"{\"cmd\":\"go test ./...\"}","canonicalized":true,"args_repaired":true,"repair_notes":["renamed tool","renamed field"]}}`,
-		`{"type":"tool.result","data":{"call_id":"c1","result":"ok","exit_code":0,"duration_ms":17,"result_truncated":true,"result_bytes":300000,"result_omitted_bytes":4096,"result_cap_bytes":262144,"result_artifact_path":".affent/artifacts/tool-results/000001-c1.txt"}}`,
+		`{"type":"tool.result","data":{"call_id":"c1","result":"ok","exit_code":0,"duration_ms":17,"result_truncated":true,"result_bytes":300000,"result_omitted_bytes":4096,"result_cap_bytes":262144,"context_bytes":4096,"context_omitted_bytes":8192,"context_estimated_tokens":1024,"result_artifact_path":".affent/artifacts/tool-results/000001-c1.txt"}}`,
 		`{"type":"tool.result","data":{"call_id":"guarded","result":"blocked\nFailure: kind=invalid_args","exit_code":1}}`,
 		`{"type":"usage","data":{"input_tokens":11,"output_tokens":7}}`,
 		`{"type":"error","data":{"message":"transient stream warning","failure_kind":"llm_timeout"}}`,
@@ -126,6 +126,18 @@ func TestParseTraceFileReadsToolRequestsAndFinalText(t *testing.T) {
 	}
 	if tc.ResultArtifactPath != ".affent/artifacts/tool-results/000001-c1.txt" {
 		t.Fatalf("ResultArtifactPath = %q", tc.ResultArtifactPath)
+	}
+	if tc.ContextBytes != 4096 || tc.ContextOmittedBytes != 8192 || tc.ContextEstimatedTokens != 1024 {
+		t.Fatalf("tool result context truncation metadata not parsed: %+v", tc)
+	}
+	examples := trace.ToolTruncationExamples(1)
+	if len(examples) != 1 ||
+		examples[0].CallID != "c1" ||
+		!examples[0].ArgsTruncated ||
+		!examples[0].ResultTruncated ||
+		examples[0].ContextOmittedBytes != 8192 ||
+		examples[0].ResultArtifactPath != ".affent/artifacts/tool-results/000001-c1.txt" {
+		t.Fatalf("ToolTruncationExamples = %+v", examples)
 	}
 	if stats := SummarizeToolTruncation(trace); stats.ArgsTruncated != 1 || stats.ArgsOmittedBytes != 512 || stats.ResultsTruncated != 1 || stats.ResultsOmittedBytes != 4096 || stats.ResultArtifacts != 1 {
 		t.Fatalf("ToolTruncationStats = %+v", stats)
@@ -1203,14 +1215,26 @@ func TestWriteScenarioDebugArtifactsIndexesTraceAndFinalText(t *testing.T) {
 		},
 		RuntimeSurfaces: []sse.RuntimeSurfacePayload{*res.RuntimeSurface},
 		Tools: []ToolCall{{
-			TurnID:       "turn-debug",
-			CallID:       "call-1",
-			Tool:         "web_fetch",
-			Args:         map[string]any{"url": "https://example.test/report"},
-			Result:       "SourceAccess: browser_rendered_url=https://taostats.io/subnets/120; page_text_below=partial_dynamic_page_evidence; rendered_browser_source_status=partial_dynamic_page_evidence\nPAGE DIAGNOSTICS:\n- empty_dynamic_metric_widgets: 2 visible custom metric widget(s) exposed no text value\nPAGE TEXT:\nAffine SN120",
-			FailureKinds: []string{"dynamic_shell"},
-			ExitCode:     1,
-			DurationMS:   42,
+			TurnID:                 "turn-debug",
+			CallID:                 "call-1",
+			Tool:                   "web_fetch",
+			Args:                   map[string]any{"url": "https://example.test/report"},
+			ArgsTruncated:          true,
+			ArgsBytes:              70000,
+			ArgsOmittedBytes:       128,
+			ArgsCapBytes:           65536,
+			Result:                 "SourceAccess: browser_rendered_url=https://taostats.io/subnets/120; page_text_below=partial_dynamic_page_evidence; rendered_browser_source_status=partial_dynamic_page_evidence\nPAGE DIAGNOSTICS:\n- empty_dynamic_metric_widgets: 2 visible custom metric widget(s) exposed no text value\nPAGE TEXT:\nAffine SN120",
+			ResultTruncated:        true,
+			ResultBytes:            300000,
+			ResultOmittedBytes:     4096,
+			ResultCapBytes:         262144,
+			ResultArtifactPath:     ".affent/artifacts/tool-results/000001-call-1.txt",
+			ContextBytes:           4096,
+			ContextOmittedBytes:    8192,
+			ContextEstimatedTokens: 1024,
+			FailureKinds:           []string{"dynamic_shell"},
+			ExitCode:               1,
+			DurationMS:             42,
 		}, {
 			TurnID:     "turn-debug",
 			CallID:     "call-2",
@@ -1343,6 +1367,15 @@ func TestWriteScenarioDebugArtifactsIndexesTraceAndFinalText(t *testing.T) {
 		manifest.MemoryUpdateExamples[1].Action != "add" ||
 		manifest.MemoryUpdateExamples[1].Location != "memory:research" {
 		t.Fatalf("manifest memory update examples = %+v", manifest.MemoryUpdateExamples)
+	}
+	if len(manifest.ToolTruncationExamples) != 1 ||
+		manifest.ToolTruncationExamples[0].ToolIndex != 1 ||
+		manifest.ToolTruncationExamples[0].CallID != "call-1" ||
+		!manifest.ToolTruncationExamples[0].ArgsTruncated ||
+		!manifest.ToolTruncationExamples[0].ResultTruncated ||
+		manifest.ToolTruncationExamples[0].ContextOmittedBytes != 8192 ||
+		manifest.ToolTruncationExamples[0].ResultArtifactPath != ".affent/artifacts/tool-results/000001-call-1.txt" {
+		t.Fatalf("manifest tool truncation examples = %+v", manifest.ToolTruncationExamples)
 	}
 	if len(manifest.ContextCompactionExamples) != 1 ||
 		manifest.ContextCompactionExamples[0].TurnID != "turn-debug" ||

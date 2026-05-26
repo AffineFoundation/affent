@@ -219,6 +219,12 @@ type ToolCall struct {
 	// tool result when the event payload was truncated and the runtime
 	// persisted an artifact.
 	ResultArtifactPath string
+	// ContextBytes/ContextOmittedBytes describe the tool-result text that was
+	// actually appended to the model conversation after context caps. These are
+	// distinct from Result* event transport truncation fields.
+	ContextBytes           int
+	ContextOmittedBytes    int
+	ContextEstimatedTokens int
 	// FailureKind is the machine-readable structured failure kind from
 	// tool.result, when the tool surfaced one.
 	FailureKind string
@@ -283,6 +289,24 @@ type ToolTruncationStats struct {
 	ResultsTruncated    int
 	ResultsOmittedBytes int
 	ResultArtifacts     int
+}
+
+type ToolTruncationExample struct {
+	ToolIndex              int    `json:"tool_index"`
+	CallID                 string `json:"call_id,omitempty"`
+	Tool                   string `json:"tool"`
+	ArgsTruncated          bool   `json:"args_truncated,omitempty"`
+	ArgsBytes              int    `json:"args_bytes,omitempty"`
+	ArgsOmittedBytes       int    `json:"args_omitted_bytes,omitempty"`
+	ArgsCapBytes           int    `json:"args_cap_bytes,omitempty"`
+	ResultTruncated        bool   `json:"result_truncated,omitempty"`
+	ResultBytes            int    `json:"result_bytes,omitempty"`
+	ResultOmittedBytes     int    `json:"result_omitted_bytes,omitempty"`
+	ResultCapBytes         int    `json:"result_cap_bytes,omitempty"`
+	ResultArtifactPath     string `json:"result_artifact_path,omitempty"`
+	ContextBytes           int    `json:"context_bytes,omitempty"`
+	ContextOmittedBytes    int    `json:"context_omitted_bytes,omitempty"`
+	ContextEstimatedTokens int    `json:"context_estimated_tokens,omitempty"`
 }
 
 // ToolRepairStats classifies runtime tool-call recovery work. New traces carry
@@ -499,6 +523,39 @@ func (t Trace) SourceAccessExamples(maxExamples int) []SourceAccessExample {
 			URLField:     info.URLField,
 			SourceMethod: info.SourceMethod,
 			JSONPath:     info.JSONPath,
+		})
+	}
+	return out
+}
+
+func (t Trace) ToolTruncationExamples(maxExamples int) []ToolTruncationExample {
+	if maxExamples <= 0 {
+		return nil
+	}
+	var out []ToolTruncationExample
+	for i, c := range t.Tools {
+		if len(out) >= maxExamples {
+			break
+		}
+		if !c.ArgsTruncated && !c.ResultTruncated && c.ResultArtifactPath == "" && c.ContextOmittedBytes <= 0 {
+			continue
+		}
+		out = append(out, ToolTruncationExample{
+			ToolIndex:              i + 1,
+			CallID:                 c.CallID,
+			Tool:                   c.Tool,
+			ArgsTruncated:          c.ArgsTruncated,
+			ArgsBytes:              c.ArgsBytes,
+			ArgsOmittedBytes:       c.ArgsOmittedBytes,
+			ArgsCapBytes:           c.ArgsCapBytes,
+			ResultTruncated:        c.ResultTruncated,
+			ResultBytes:            c.ResultBytes,
+			ResultOmittedBytes:     c.ResultOmittedBytes,
+			ResultCapBytes:         c.ResultCapBytes,
+			ResultArtifactPath:     c.ResultArtifactPath,
+			ContextBytes:           c.ContextBytes,
+			ContextOmittedBytes:    c.ContextOmittedBytes,
+			ContextEstimatedTokens: c.ContextEstimatedTokens,
 		})
 	}
 	return out

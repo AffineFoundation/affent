@@ -265,6 +265,7 @@ type batchSummary struct {
 	ToolResultsTruncated       int
 	ToolResultsOmittedBytes    int
 	ToolResultArtifacts        int
+	ToolTruncationExamples     []agenteval.ToolTruncationExample
 	VerifierRuns               int
 	VerifierPassed             int
 	VerifierFailed             int
@@ -397,6 +398,7 @@ func (s *batchSummary) add(res agenteval.BatchResult) {
 	s.ToolResultsTruncated += res.ToolTruncation.ResultsTruncated
 	s.ToolResultsOmittedBytes += res.ToolTruncation.ResultsOmittedBytes
 	s.ToolResultArtifacts += res.ToolTruncation.ResultArtifacts
+	s.ToolTruncationExamples = appendToolTruncationExamples(s.ToolTruncationExamples, res.ToolTruncationExamples, batchSummaryExamplesPerKind)
 	if res.Verifier.Ran {
 		s.VerifierRuns++
 		if res.Verifier.OK {
@@ -1166,6 +1168,7 @@ type batchResultRecord struct {
 	ToolResultsTruncated       int                                        `json:"tool_results_truncated"`
 	ToolResultsOmittedBytes    int                                        `json:"tool_results_omitted_bytes"`
 	ToolResultArtifacts        int                                        `json:"tool_result_artifacts"`
+	ToolTruncationExamples     []agenteval.ToolTruncationExample          `json:"tool_truncation_examples,omitempty"`
 	VerifierCommand            string                                     `json:"verifier_command,omitempty"`
 	VerifierRan                bool                                       `json:"verifier_ran"`
 	VerifierOK                 bool                                       `json:"verifier_ok"`
@@ -1270,6 +1273,7 @@ type batchSummaryRecord struct {
 	ToolResultsTruncated       int                                        `json:"tool_results_truncated"`
 	ToolResultsOmittedBytes    int                                        `json:"tool_results_omitted_bytes"`
 	ToolResultArtifacts        int                                        `json:"tool_result_artifacts"`
+	ToolTruncationExamples     []agenteval.ToolTruncationExample          `json:"tool_truncation_examples,omitempty"`
 	VerifierRuns               int                                        `json:"verifier_runs"`
 	VerifierPassed             int                                        `json:"verifier_passed"`
 	VerifierFailed             int                                        `json:"verifier_failed"`
@@ -1394,6 +1398,7 @@ func printBatchResultJSONL(w io.Writer, meta evalJSONLMetadata, res agenteval.Ba
 		ToolResultsTruncated:       res.ToolTruncation.ResultsTruncated,
 		ToolResultsOmittedBytes:    res.ToolTruncation.ResultsOmittedBytes,
 		ToolResultArtifacts:        res.ToolTruncation.ResultArtifacts,
+		ToolTruncationExamples:     cloneToolTruncationExamples(res.ToolTruncationExamples),
 		VerifierCommand:            res.Verifier.Command,
 		VerifierRan:                res.Verifier.Ran,
 		VerifierOK:                 res.Verifier.OK,
@@ -1571,6 +1576,7 @@ func printBatchSummaryJSONL(w io.Writer, meta evalJSONLMetadata, s batchSummary,
 		ToolResultsTruncated:       s.ToolResultsTruncated,
 		ToolResultsOmittedBytes:    s.ToolResultsOmittedBytes,
 		ToolResultArtifacts:        s.ToolResultArtifacts,
+		ToolTruncationExamples:     cloneToolTruncationExamples(s.ToolTruncationExamples),
 		VerifierRuns:               s.VerifierRuns,
 		VerifierPassed:             s.VerifierPassed,
 		VerifierFailed:             s.VerifierFailed,
@@ -1663,6 +1669,13 @@ func cloneMemoryUpdateExamples(in []agenteval.MemoryUpdateExample) []agenteval.M
 	return append([]agenteval.MemoryUpdateExample(nil), in...)
 }
 
+func cloneToolTruncationExamples(in []agenteval.ToolTruncationExample) []agenteval.ToolTruncationExample {
+	if len(in) == 0 {
+		return nil
+	}
+	return append([]agenteval.ToolTruncationExample(nil), in...)
+}
+
 func cloneLoopDecisionExamples(in []agenteval.LoopDecision) []agenteval.LoopDecision {
 	if len(in) == 0 {
 		return nil
@@ -1691,6 +1704,19 @@ func appendLoopDecisionExamples(dst, src []agenteval.LoopDecision, limit int) []
 }
 
 func appendSourceAccessExamples(dst, src []agenteval.SourceAccessExample, limit int) []agenteval.SourceAccessExample {
+	if limit <= 0 || len(dst) >= limit {
+		return dst
+	}
+	for _, ex := range src {
+		if len(dst) >= limit {
+			break
+		}
+		dst = append(dst, ex)
+	}
+	return dst
+}
+
+func appendToolTruncationExamples(dst, src []agenteval.ToolTruncationExample, limit int) []agenteval.ToolTruncationExample {
 	if limit <= 0 || len(dst) >= limit {
 		return dst
 	}

@@ -85,6 +85,9 @@ func applyTraceEvent(t *Trace, pending map[string]int, typ string, data json.Raw
 			t.Tools[idx].ResultOmittedBytes = p.ResultOmittedBytes
 			t.Tools[idx].ResultCapBytes = p.ResultCapBytes
 			t.Tools[idx].ResultArtifactPath = p.ResultArtifactPath
+			t.Tools[idx].ContextBytes = p.ContextBytes
+			t.Tools[idx].ContextOmittedBytes = p.ContextOmittedBytes
+			t.Tools[idx].ContextEstimatedTokens = p.ContextEstimatedTokens
 			t.Tools[idx].FailureKind = failureKind
 			t.Tools[idx].FailureKinds = failureKinds
 			t.Tools[idx].ExitCode = p.ExitCode
@@ -104,21 +107,24 @@ func applyTraceEvent(t *Trace, pending map[string]int, typ string, data json.Raw
 		failureKinds := toolResultFailureKinds("", p)
 		failureKind := firstString(failureKinds)
 		t.Tools = append(t.Tools, ToolCall{
-			TurnID:             p.TurnID,
-			CallID:             p.CallID,
-			Result:             p.Result,
-			ResultTruncated:    p.ResultTruncated,
-			ResultBytes:        p.ResultBytes,
-			ResultOmittedBytes: p.ResultOmittedBytes,
-			ResultCapBytes:     p.ResultCapBytes,
-			ResultArtifactPath: p.ResultArtifactPath,
-			FailureKind:        failureKind,
-			FailureKinds:       failureKinds,
-			ExitCode:           p.ExitCode,
-			DurationMS:         p.DurationMS,
-			IsErr:              p.ExitCode != 0,
-			Delegation:         p.Delegation,
-			MemoryUpdate:       p.MemoryUpdate,
+			TurnID:                 p.TurnID,
+			CallID:                 p.CallID,
+			Result:                 p.Result,
+			ResultTruncated:        p.ResultTruncated,
+			ResultBytes:            p.ResultBytes,
+			ResultOmittedBytes:     p.ResultOmittedBytes,
+			ResultCapBytes:         p.ResultCapBytes,
+			ResultArtifactPath:     p.ResultArtifactPath,
+			ContextBytes:           p.ContextBytes,
+			ContextOmittedBytes:    p.ContextOmittedBytes,
+			ContextEstimatedTokens: p.ContextEstimatedTokens,
+			FailureKind:            failureKind,
+			FailureKinds:           failureKinds,
+			ExitCode:               p.ExitCode,
+			DurationMS:             p.DurationMS,
+			IsErr:                  p.ExitCode != 0,
+			Delegation:             p.Delegation,
+			MemoryUpdate:           p.MemoryUpdate,
 		})
 	case sse.TypeUsage:
 		var p sse.UsagePayload

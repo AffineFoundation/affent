@@ -23,12 +23,13 @@ import (
 )
 
 const (
-	DefaultBatchTimeout           = 5 * time.Minute
-	DefaultBatchMaxTurnSteps      = 10
-	DefaultVerifierOutputCapBytes = 1 * 1024 * 1024
-	maxDebugSourceAccessExamples  = 5
-	maxDebugMemoryUpdateExamples  = 5
-	maxTraceLineBytes             = jsonl.DefaultMaxRecordBytes
+	DefaultBatchTimeout            = 5 * time.Minute
+	DefaultBatchMaxTurnSteps       = 10
+	DefaultVerifierOutputCapBytes  = 1 * 1024 * 1024
+	maxDebugToolTruncationExamples = 5
+	maxDebugSourceAccessExamples   = 5
+	maxDebugMemoryUpdateExamples   = 5
+	maxTraceLineBytes              = jsonl.DefaultMaxRecordBytes
 )
 
 type ToolOrderRequirement struct {
@@ -130,39 +131,40 @@ type BatchRunner struct {
 }
 
 type BatchResult struct {
-	BatchScenario        string
-	Workspace            string
-	TracePath            string
-	DebugManifestPath    string
-	TimelinePath         string
-	FinalTextPath        string
-	StdoutPath           string
-	StderrPath           string
-	AffentctlCommand     []string
-	RunExitCode          int
-	OK                   bool
-	Failures             []string
-	Duration             time.Duration
-	FinalText            string
-	TraceSchemaVersion   int
-	TraceEvents          int
-	TraceEventTypes      map[string]int
-	TurnEndReason        string
-	ToolCalls            int
-	ToolStats            ToolRuntimeStats
-	RuntimeErrorByKind   map[string]int
-	RuntimeErrorExamples map[string][]RuntimeErrorExample
-	LoopDecisionStats    LoopDecisionStats
-	ContextCompactions   ContextCompactionStats
-	ToolFailureExamples  map[string][]ToolFailureExample
-	SourceAccessExamples []SourceAccessExample
-	MemoryUpdateExamples []MemoryUpdateExample
-	ToolTruncation       ToolTruncationStats
-	Usage                Usage
-	Verifier             VerifierResult
-	WorkspaceRemoved     bool
-	CleanupError         string
-	TraceDeltas          bool
+	BatchScenario          string
+	Workspace              string
+	TracePath              string
+	DebugManifestPath      string
+	TimelinePath           string
+	FinalTextPath          string
+	StdoutPath             string
+	StderrPath             string
+	AffentctlCommand       []string
+	RunExitCode            int
+	OK                     bool
+	Failures               []string
+	Duration               time.Duration
+	FinalText              string
+	TraceSchemaVersion     int
+	TraceEvents            int
+	TraceEventTypes        map[string]int
+	TurnEndReason          string
+	ToolCalls              int
+	ToolStats              ToolRuntimeStats
+	RuntimeErrorByKind     map[string]int
+	RuntimeErrorExamples   map[string][]RuntimeErrorExample
+	LoopDecisionStats      LoopDecisionStats
+	ContextCompactions     ContextCompactionStats
+	ToolFailureExamples    map[string][]ToolFailureExample
+	SourceAccessExamples   []SourceAccessExample
+	MemoryUpdateExamples   []MemoryUpdateExample
+	ToolTruncationExamples []ToolTruncationExample
+	ToolTruncation         ToolTruncationStats
+	Usage                  Usage
+	Verifier               VerifierResult
+	WorkspaceRemoved       bool
+	CleanupError           string
+	TraceDeltas            bool
 	// Delegation aggregates focused-task / subagent calls observed
 	// in the trace. Zero-value when the scenario used no delegation
 	// tool; HasAny() reports whether the block is worth surfacing.
@@ -199,6 +201,7 @@ type DebugManifest struct {
 	DebugBrief                *DebugBrief                `json:"debug_brief,omitempty"`
 	SourceAccessExamples      []SourceAccessExample      `json:"source_access_examples,omitempty"`
 	MemoryUpdateExamples      []MemoryUpdateExample      `json:"memory_update_examples,omitempty"`
+	ToolTruncationExamples    []ToolTruncationExample    `json:"tool_truncation_examples,omitempty"`
 	ContextCompactionExamples []ContextCompaction        `json:"context_compaction_examples,omitempty"`
 	Metrics                   DebugMetrics               `json:"metrics"`
 	RuntimeSurface            *sse.RuntimeSurfacePayload `json:"runtime_surface,omitempty"`
@@ -461,6 +464,7 @@ func (r BatchRunner) Run(ctx context.Context, scenario BatchScenario) BatchResul
 		res.ToolFailureExamples = trace.ToolFailureExamples(2)
 		res.SourceAccessExamples = trace.SourceAccessExamples(maxDebugSourceAccessExamples)
 		res.MemoryUpdateExamples = trace.MemoryUpdateExamples(maxDebugMemoryUpdateExamples)
+		res.ToolTruncationExamples = trace.ToolTruncationExamples(maxDebugToolTruncationExamples)
 		res.ToolTruncation = SummarizeToolTruncation(trace)
 		res.Usage = trace.Usage
 		res.Delegation = trace.DelegationStats()
@@ -498,6 +502,9 @@ func writeScenarioDebugArtifacts(res *BatchResult, scenario BatchScenario, stdou
 	}
 	if trace != nil && len(res.SourceAccessExamples) == 0 {
 		res.SourceAccessExamples = trace.SourceAccessExamples(maxDebugSourceAccessExamples)
+	}
+	if trace != nil && len(res.ToolTruncationExamples) == 0 {
+		res.ToolTruncationExamples = trace.ToolTruncationExamples(maxDebugToolTruncationExamples)
 	}
 	finalTextPath := filepath.Join(res.Workspace, "affenteval-final.txt")
 	if err := os.WriteFile(finalTextPath, []byte(res.FinalText), 0o644); err != nil {
@@ -541,6 +548,7 @@ func writeScenarioDebugArtifacts(res *BatchResult, scenario BatchScenario, stdou
 		DebugBrief:                BuildDebugBrief(*res),
 		SourceAccessExamples:      append([]SourceAccessExample(nil), res.SourceAccessExamples...),
 		MemoryUpdateExamples:      append([]MemoryUpdateExample(nil), res.MemoryUpdateExamples...),
+		ToolTruncationExamples:    append([]ToolTruncationExample(nil), res.ToolTruncationExamples...),
 		ContextCompactionExamples: append([]ContextCompaction(nil), res.ContextCompactions.Examples...),
 		RuntimeSurface:            cloneRuntimeSurface(res.RuntimeSurface),
 		Metrics: DebugMetrics{
