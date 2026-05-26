@@ -1807,7 +1807,7 @@ body {
 }
 
 .conversation-scroll > .intro-turn {
-  margin-top: clamp(34px, 13vh, 132px);
+  margin-top: 0;
   margin-bottom: auto;
 }
 
