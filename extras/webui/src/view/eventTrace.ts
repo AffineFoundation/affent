@@ -379,6 +379,7 @@ function toolResultMeta(event: NormalizedEvent, context: DisplayContext): string
     typeof duration === "number" ? formatDuration(duration) : undefined,
     sourceAccess ? sourceEvidenceLabel(sourceAccess) : undefined,
     sourceAccess ? sourceAccess.accessedUrl : streamSummary(readString(event.data, "result_summary") ?? readString(event.data, "result") ?? ""),
+    sourceAccess?.jsonPath ? `json path ${sourceAccess.jsonPath}` : undefined,
     artifactPath
       ? `artifact ${artifactDisplayLabel({
           path: artifactPath,

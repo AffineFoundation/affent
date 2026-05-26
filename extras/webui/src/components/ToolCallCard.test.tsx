@@ -65,6 +65,18 @@ describe("ToolCallCard", () => {
     expect(within(details).getByText(/partial source/)).toBeInTheDocument();
     expect(within(details).getByText("https://taostats.io/subnets/120")).toBeInTheDocument();
   });
+
+  it("shows the JSON path used for network evidence", async () => {
+    const user = userEvent.setup();
+    render(<ToolCallCard call={networkSourceAccessCall()} events={[]} />);
+
+    await user.click(screen.getByRole("button", { name: /browser_network_read/ }));
+
+    const details = screen.getByTestId("tool-details");
+    expect(within(details).getByText(/network source/)).toBeInTheDocument();
+    expect(within(details).getByText("https://taostats.io/api/subnets/120")).toBeInTheDocument();
+    expect(within(details).getByText("$.data.items[0].metrics.market_cap")).toBeInTheDocument();
+  });
 });
 
 function artifactCall(): ToolCallState {
@@ -141,6 +153,23 @@ function sourceAccessCall(): ToolCallState {
     durationMs: 42,
     resultSummary: "SourceAccess: browser_rendered_url=https://taostats.io/subnets/120; page_text_below=partial_dynamic_page_evidence; rendered_browser_source_status=partial_dynamic_page_evidence",
     result: "SourceAccess: browser_rendered_url=https://taostats.io/subnets/120; page_text_below=partial_dynamic_page_evidence; rendered_browser_source_status=partial_dynamic_page_evidence\nPAGE TEXT:\nMarket Cap",
+    resultTruncated: false,
+  };
+}
+
+function networkSourceAccessCall(): ToolCallState {
+  return {
+    callId: "c5",
+    tool: "browser_network_read",
+    args: { ref: "n1", json_path: "$.data.items[0].metrics.market_cap" },
+    argsTruncated: false,
+    argsRepaired: false,
+    canonicalized: false,
+    status: "success",
+    exitCode: 0,
+    durationMs: 9,
+    resultSummary: "SourceAccess: browser_network_url=https://taostats.io/api/subnets/120; source_method=network_xhr_fetch\nJSON_PATH: $.data.items[0].metrics.market_cap",
+    result: "SourceAccess: browser_network_url=https://taostats.io/api/subnets/120; source_method=network_xhr_fetch\nJSON_PATH: $.data.items[0].metrics.market_cap\n\"201.04K T\"",
     resultTruncated: false,
   };
 }

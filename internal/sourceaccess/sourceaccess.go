@@ -13,6 +13,7 @@ type Info struct {
 	PageTextBelow               string
 	RenderedBrowserSourceStatus string
 	SourceMethod                string
+	JSONPath                    string
 }
 
 // ParseLine extracts the accessed/requested URLs from a SourceAccess line.
@@ -99,13 +100,21 @@ func HasDynamicPartialEvidence(result string) bool {
 // FirstInfoFromResult returns the first SourceAccess record visible in a full
 // tool result. The boolean reports whether a SourceAccess line was found.
 func FirstInfoFromResult(result string) (Info, bool) {
+	info := Info{}
+	found := false
 	for _, line := range strings.Split(result, "\n") {
 		line = strings.TrimSpace(line)
-		if strings.HasPrefix(line, "SourceAccess:") {
-			return ParseLine(line), true
+		if strings.HasPrefix(line, "SourceAccess:") && !found {
+			info = ParseLine(line)
+			found = true
+			continue
+		}
+		if found && strings.HasPrefix(line, "JSON_PATH:") {
+			info.JSONPath = strings.TrimSpace(strings.TrimPrefix(line, "JSON_PATH:"))
+			break
 		}
 	}
-	return Info{}, false
+	return info, found
 }
 
 // AccessedURLFromResult returns the first accessed URL visible in a full tool

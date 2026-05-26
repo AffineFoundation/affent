@@ -134,6 +134,7 @@ function SourceAccessDetails({ info }: { info: SourceAccessInfo }) {
     <div className="kv">
       <b>source</b> {sourceEvidenceLabel(info)} · <code>{info.accessedUrl}</code>
       {info.requestedUrl ? <> · requested <code>{info.requestedUrl}</code></> : null}
+      {info.jsonPath ? <> · json path <code>{info.jsonPath}</code></> : null}
     </div>
   );
 }

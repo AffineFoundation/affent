@@ -651,10 +651,13 @@ function evidenceFromNode(node: ExecutionTreeNode): TurnActivityEvidence | undef
   if (node.status !== "success") return undefined;
   const sourceAccess = sourceAccessFromNode(node);
   if (sourceAccess) {
+    const displayValue = sourceAccess.jsonPath
+      ? `${readableUrl(sourceAccess.accessedUrl)} · ${sourceAccess.jsonPath}`
+      : readableUrl(sourceAccess.accessedUrl);
     return {
       label: titleCase(sourceEvidenceLabel(sourceAccess)),
       value: sourceAccess.accessedUrl,
-      displayValue: readableUrl(sourceAccess.accessedUrl),
+      displayValue,
     };
   }
   const url = stringArg(node, "url");

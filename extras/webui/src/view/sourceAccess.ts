@@ -7,6 +7,7 @@ export interface SourceAccessInfo {
   pageTextBelow?: string;
   renderedBrowserSourceStatus?: string;
   sourceMethod?: string;
+  jsonPath?: string;
   status: SourceEvidenceStatus;
 }
 
@@ -23,6 +24,7 @@ export function describeSourceAccess(result: string | undefined): SourceAccessIn
     pageTextBelow: fields.page_text_below,
     renderedBrowserSourceStatus: fields.rendered_browser_source_status,
     sourceMethod: fields.source_method,
+    jsonPath: firstJSONPathLine(result),
     status: "verified",
   };
   info.status = sourceEvidenceStatus(info, result ?? "");
@@ -56,6 +58,12 @@ function sourceEvidenceStatus(info: SourceAccessInfo, result: string): SourceEvi
 function firstSourceAccessLine(result: string | undefined): string | undefined {
   if (!result) return undefined;
   return result.split(/\r?\n/).find((line) => line.trimStart().startsWith("SourceAccess:"))?.trim();
+}
+
+function firstJSONPathLine(result: string | undefined): string | undefined {
+  if (!result) return undefined;
+  const value = result.split(/\r?\n/).find((line) => line.trimStart().startsWith("JSON_PATH:"))?.replace(/^\s*JSON_PATH:\s*/, "").trim();
+  return value || undefined;
 }
 
 function sourceAccessFields(line: string): Record<string, string> {

@@ -291,6 +291,9 @@ func renderTimelineSourceEvidence(b *strings.Builder, trace *Trace) {
 		if entry.Info.RequestedURL != "" {
 			fmt.Fprintf(b, " requested=`%s`", entry.Info.RequestedURL)
 		}
+		if entry.Info.JSONPath != "" {
+			fmt.Fprintf(b, " json_path=`%s`", entry.Info.JSONPath)
+		}
 		if entry.Tool.CallID != "" {
 			fmt.Fprintf(b, " call_id=`%s`", entry.Tool.CallID)
 		}

@@ -59,6 +59,19 @@ func TestParseLineNetworkSource(t *testing.T) {
 	}
 }
 
+func TestFirstInfoFromResultCapturesNetworkJSONPath(t *testing.T) {
+	info, ok := FirstInfoFromResult("SourceAccess: browser_network_url=https://example.com/api/data; source_method=network_xhr_fetch\nJSON_PATH: $.data.items[0].price\n\"0.06342 T\"")
+	if !ok {
+		t.Fatal("FirstInfoFromResult() = false, want true")
+	}
+	if got, want := info.JSONPath, "$.data.items[0].price"; got != want {
+		t.Fatalf("JSONPath = %q, want %q", got, want)
+	}
+	if !info.IsNetworkSource() {
+		t.Fatal("IsNetworkSource = false, want true")
+	}
+}
+
 func TestHasDynamicPartialEvidence(t *testing.T) {
 	result := "SourceAccess: browser_rendered_url=https://taostats.io/subnets/120\nPAGE DIAGNOSTICS:\n- empty_dynamic_metric_widgets: 2 visible custom metric widget(s) exposed no text value"
 	if !HasDynamicPartialEvidence(result) {
