@@ -162,6 +162,8 @@ function buildMetrics(
   if (compactMetric) metrics.push(compactMetric);
   const memoryMetric = buildMemoryUpdateMetric(session);
   if (memoryMetric) metrics.push(memoryMetric);
+  const recallMetric = buildSessionRecallMetric(session);
+  if (recallMetric) metrics.push(recallMetric);
   const sourceMetric = buildSourceAccessMetric(session);
   if (sourceMetric) metrics.push(sourceMetric);
   const planMetric = buildPlanMetric(planSummary);
@@ -266,6 +268,40 @@ function buildSourceAccessMetric(session: SessionState): SessionOverviewMetric |
     label: "Evidence",
     value: parts.join(" · "),
     tone: stats.source_access_verified < stats.source_access_results || stats.source_access_dynamic_partial > 0 ? "warning" : undefined,
+  };
+}
+
+function buildSessionRecallMetric(session: SessionState): SessionOverviewMetric | undefined {
+  const stats = session.turns.reduce<Required<Pick<ToolRuntimeStats,
+    | "session_search_calls"
+    | "session_search_results"
+    | "session_search_context_hits"
+    | "session_search_matched_terms"
+  >>>((acc, turn) => {
+    const toolStats = turn.toolStats;
+    acc.session_search_calls += toolStats?.session_search_calls ?? 0;
+    acc.session_search_results += toolStats?.session_search_results ?? 0;
+    acc.session_search_context_hits += toolStats?.session_search_context_hits ?? 0;
+    acc.session_search_matched_terms += toolStats?.session_search_matched_terms ?? 0;
+    return acc;
+  }, {
+    session_search_calls: 0,
+    session_search_results: 0,
+    session_search_context_hits: 0,
+    session_search_matched_terms: 0,
+  });
+
+  if (stats.session_search_calls <= 0 && stats.session_search_results <= 0) return undefined;
+  const parts = [`${stats.session_search_results} ${stats.session_search_results === 1 ? "hit" : "hits"}`];
+  if (stats.session_search_calls > 1 || stats.session_search_results === 0) {
+    parts.push(`${stats.session_search_calls} ${stats.session_search_calls === 1 ? "search" : "searches"}`);
+  }
+  if (stats.session_search_context_hits > 0) parts.push(`${stats.session_search_context_hits} context`);
+  if (stats.session_search_matched_terms > 0) parts.push(`${stats.session_search_matched_terms} terms`);
+  return {
+    label: "Recall",
+    value: parts.join(" · "),
+    tone: stats.session_search_results > 0 ? "success" : "warning",
   };
 }
 

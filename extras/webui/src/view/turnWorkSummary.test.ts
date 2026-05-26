@@ -178,6 +178,52 @@ describe("buildTurnWorkSummary", () => {
     ]);
   });
 
+  it("surfaces session recall hits as visible work", () => {
+    const summary = buildTurnWorkSummary(reduceRawEvents([
+      { id: 1, type: "turn.start", data: { turn_id: "t1" } },
+      {
+        id: 2,
+        type: "tool.request",
+        data: {
+          turn_id: "t1",
+          call_id: "c1",
+          tool: "session_search",
+          args: { query: "Alpha Coast marker" },
+        },
+      },
+      {
+        id: 3,
+        type: "tool.result",
+        data: {
+          call_id: "c1",
+          exit_code: 0,
+          duration_ms: 24,
+          result_summary: "{\"total\":2}",
+          result_truncated: false,
+        },
+      },
+      {
+        id: 4,
+        type: "turn.end",
+        data: {
+          turn_id: "t1",
+          reason: "completed",
+          tool_stats: {
+            tool_requests: 1,
+            session_search_calls: 1,
+            session_search_results: 2,
+            session_search_context_hits: 1,
+            session_search_matched_terms: 3,
+            tool_duration_ms: 24,
+          },
+        },
+      },
+    ]).turns[0]);
+
+    expect(summary.items).toContainEqual({ label: "2 recall hits", tone: "info" });
+    expect(summary.headlineItems).toEqual([{ label: "2 recall hits", tone: "info" }]);
+  });
+
   it("does not count unchanged original tool metadata as repaired work", () => {
     const summary = buildTurnWorkSummary(reduceRawEvents([
       { id: 1, type: "turn.start", data: { turn_id: "t1" } },

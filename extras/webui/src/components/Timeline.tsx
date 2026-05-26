@@ -10,6 +10,7 @@ const timelineFilterModes: { mode: TimelineFilterMode; label: string }[] = [
   { mode: "all", label: "All" },
   { mode: "tools", label: "Tools" },
   { mode: "evidence", label: "Evidence" },
+  { mode: "recall", label: "Recall" },
   { mode: "guard", label: "Guard" },
   { mode: "context", label: "Context" },
   { mode: "errors", label: "Issues" },
@@ -535,6 +536,8 @@ function shouldShowTimelineFilters(session: SessionState): boolean {
     turn.status === "max_turns" ||
     !!turn.error ||
     turn.toolCalls.length > 1 ||
+    (turn.toolStats?.session_search_calls ?? 0) > 0 ||
+    (turn.toolStats?.session_search_results ?? 0) > 0 ||
     (turn.toolStats?.loop_guard_interventions ?? 0) > 0 ||
     (turn.toolStats?.forced_no_tools ?? 0) > 0 ||
     (turn.loopDecisions ?? []).some((decision) => decision.visible_in_ui !== false) ||
@@ -548,6 +551,7 @@ function shouldShowTimelineFilters(session: SessionState): boolean {
       !!tool.canonicalized ||
       !!tool.originalTool ||
       !!tool.repairNotes?.length ||
+      tool.tool === "session_search" ||
       (tool.result ?? tool.resultSummary ?? "").includes("SourceAccess:")
     )
   );

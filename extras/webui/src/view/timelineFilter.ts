@@ -10,6 +10,7 @@ export type TimelineFilterMode =
   | "tools"
   | "messages"
   | "evidence"
+  | "recall"
   | "guard"
   | "context"
   | "artifacts"
@@ -66,6 +67,10 @@ function matchesMode(turn: TurnState, mode: TimelineFilterMode): boolean {
       return !!(turn.userText || turn.assistantText || turn.thinkingText);
     case "evidence":
       return turn.toolCalls.some((tool) => !!describeSourceAccess(tool.result ?? tool.resultSummary));
+    case "recall":
+      return (turn.toolStats?.session_search_calls ?? 0) > 0 ||
+        (turn.toolStats?.session_search_results ?? 0) > 0 ||
+        turn.toolCalls.some((tool) => tool.tool === "session_search");
     case "guard":
       return (turn.toolStats?.loop_guard_interventions ?? 0) > 0 ||
         (turn.toolStats?.forced_no_tools ?? 0) > 0 ||
@@ -96,11 +101,25 @@ function searchableTurnText(turn: TurnState, events: readonly NormalizedEvent[])
     turn.error?.message,
     ...(turn.loopDecisions ?? []).flatMap(searchableLoopDecisionText),
     ...(turn.contextCompactions ?? []).flatMap(searchableContextCompactionText),
+    ...searchableSessionRecallText(turn),
     ...buildExecutionTree(turn).flatMap(searchableExecutionNodeText),
     ...turn.toolCalls.flatMap(searchableToolText),
     ...events.filter((event) => eventBelongsToTurn(event, turn)).map((event) => JSON.stringify(event.raw)),
   ];
   return normalizeQuery(chunks.filter(Boolean).join("\n"));
+}
+
+function searchableSessionRecallText(turn: TurnState): string[] {
+  const stats = turn.toolStats;
+  if (!stats || ((stats.session_search_calls ?? 0) <= 0 && (stats.session_search_results ?? 0) <= 0)) return [];
+  return [
+    "recall",
+    "session history",
+    "history search",
+    `${stats.session_search_results ?? 0} hits`,
+    `${stats.session_search_context_hits ?? 0} context`,
+    `${stats.session_search_matched_terms ?? 0} terms`,
+  ];
 }
 
 function searchableContextCompactionText(compaction: NonNullable<TurnState["contextCompactions"]>[number]): string[] {

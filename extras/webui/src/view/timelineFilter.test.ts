@@ -19,7 +19,7 @@ describe("timelineFilter", () => {
 
   it("does not match specialized runtime filters when a plain turn lacks those states", () => {
     const session = reduceRawEvents(completedTurn);
-    const modes: TimelineFilterMode[] = ["artifacts", "memory", "evidence", "guard", "context", "truncated", "repaired", "errors"];
+    const modes: TimelineFilterMode[] = ["artifacts", "memory", "evidence", "recall", "guard", "context", "truncated", "repaired", "errors"];
 
     for (const mode of modes) {
       expect(turnMatchesFilter(session.turns[0], session.events, { mode, query: "" })).toBe(false);
@@ -47,6 +47,15 @@ describe("timelineFilter", () => {
     const session = reduceRawEvents(loopGuardTurn());
 
     expect(turnMatchesFilter(session.turns[0], session.events, { mode: "guard", query: "" })).toBe(true);
+    expect(turnMatchesFilter(session.turns[0], session.events, { mode: "evidence", query: "" })).toBe(false);
+  });
+
+  it("matches session recall turns from turn stats and search text", () => {
+    const session = reduceRawEvents(sessionRecallTurn());
+
+    expect(turnMatchesFilter(session.turns[0], session.events, { mode: "recall", query: "" })).toBe(true);
+    expect(turnMatchesFilter(session.turns[0], session.events, { mode: "recall", query: "session history" })).toBe(true);
+    expect(turnMatchesFilter(session.turns[0], session.events, { mode: "recall", query: "2 hits" })).toBe(true);
     expect(turnMatchesFilter(session.turns[0], session.events, { mode: "evidence", query: "" })).toBe(false);
   });
 
@@ -172,6 +181,47 @@ function loopGuardTurn(): typeof resultTruncated {
         tool_stats: {
           loop_guard_interventions: 2,
           forced_no_tools: 1,
+        },
+      },
+    },
+  ];
+}
+
+function sessionRecallTurn(): typeof resultTruncated {
+  return [
+    { id: 0, type: "turn.start", data: { turn_id: "recall_turn" } },
+    {
+      id: 1,
+      type: "tool.request",
+      data: {
+        turn_id: "recall_turn",
+        call_id: "recall_call",
+        tool: "session_search",
+        args: { query: "Alpha Coast market marker" },
+      },
+    },
+    {
+      id: 2,
+      type: "tool.result",
+      data: {
+        call_id: "recall_call",
+        exit_code: 0,
+        duration_ms: 32,
+        result_summary: "{\"total\":2}",
+        result_truncated: false,
+      },
+    },
+    {
+      id: 3,
+      type: "turn.end",
+      data: {
+        turn_id: "recall_turn",
+        reason: "completed",
+        tool_stats: {
+          session_search_calls: 1,
+          session_search_results: 2,
+          session_search_context_hits: 1,
+          session_search_matched_terms: 3,
         },
       },
     },

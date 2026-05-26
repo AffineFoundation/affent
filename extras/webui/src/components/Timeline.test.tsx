@@ -129,25 +129,71 @@ describe("Timeline", () => {
           tool_stats: { tool_requests: 2, loop_guard_interventions: 1, forced_no_tools: 1 },
         },
       },
-      { id: 11, type: "turn.start", data: { turn_id: "plain-turn" } },
-      { id: 12, type: "user.message", data: { turn_id: "plain-turn", text: "write final note" } },
-      { id: 13, type: "message.done", data: { turn_id: "plain-turn", text: "Plain note." } },
-      { id: 14, type: "turn.end", data: { turn_id: "plain-turn", reason: "completed" } },
+      { id: 15, type: "turn.start", data: { turn_id: "recall-turn" } },
+      { id: 16, type: "user.message", data: { turn_id: "recall-turn", text: "resume alpha coast analysis" } },
+      {
+        id: 17,
+        type: "tool.request",
+        data: {
+          turn_id: "recall-turn",
+          call_id: "recall-1",
+          tool: "session_search",
+          args: { query: "Alpha Coast marker" },
+          args_truncated: false,
+          args_bytes: 36,
+          args_omitted_bytes: 0,
+          args_cap_bytes: 8192,
+        },
+      },
+      {
+        id: 18,
+        type: "tool.result",
+        data: {
+          call_id: "recall-1",
+          exit_code: 0,
+          duration_ms: 24,
+          result_summary: "{\"total\":2}",
+          result: "{\"total\":2}",
+          result_truncated: false,
+        },
+      },
+      {
+        id: 19,
+        type: "turn.end",
+        data: {
+          turn_id: "recall-turn",
+          reason: "completed",
+          tool_stats: { tool_requests: 1, session_search_calls: 1, session_search_results: 2, session_search_context_hits: 1, session_search_matched_terms: 3 },
+        },
+      },
+      { id: 20, type: "turn.start", data: { turn_id: "plain-turn" } },
+      { id: 21, type: "user.message", data: { turn_id: "plain-turn", text: "write final note" } },
+      { id: 22, type: "message.done", data: { turn_id: "plain-turn", text: "Plain note." } },
+      { id: 23, type: "turn.end", data: { turn_id: "plain-turn", reason: "completed" } },
     ];
     renderTimeline(events);
 
     const filterBar = screen.getByTestId("timeline-filter");
     const filterGroup = within(filterBar).getByRole("group", { name: "Timeline filter" });
     expect(within(filterGroup).getByRole("button", { name: /Evidence\s+1/ })).toBeInTheDocument();
+    expect(within(filterGroup).getByRole("button", { name: /Recall\s+1/ })).toBeInTheDocument();
     expect(within(filterGroup).getByRole("button", { name: /Guard\s+1/ })).toBeInTheDocument();
     expect(screen.getByTestId("timeline")).toHaveTextContent("inspect taostats source");
+    expect(screen.getByTestId("timeline")).toHaveTextContent("resume alpha coast analysis");
     expect(screen.getByTestId("timeline")).toHaveTextContent("recover repeated calls");
 
     await user.click(within(filterGroup).getByRole("button", { name: /Evidence/ }));
 
     expect(screen.getByTestId("timeline")).toHaveTextContent("inspect taostats source");
+    expect(screen.getByTestId("timeline")).not.toHaveTextContent("resume alpha coast analysis");
     expect(screen.getByTestId("timeline")).not.toHaveTextContent("recover repeated calls");
     expect(screen.getByTestId("timeline")).not.toHaveTextContent("write final note");
+
+    await user.click(within(filterGroup).getByRole("button", { name: /Recall/ }));
+
+    expect(screen.getByTestId("timeline")).toHaveTextContent("resume alpha coast analysis");
+    expect(screen.getByTestId("timeline")).not.toHaveTextContent("inspect taostats source");
+    expect(screen.getByTestId("timeline")).not.toHaveTextContent("recover repeated calls");
 
     await user.click(within(filterGroup).getByRole("button", { name: /Guard/ }));
 

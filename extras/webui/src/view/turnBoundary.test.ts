@@ -56,6 +56,23 @@ describe("turnBoundary view model", () => {
     expect(view.ariaLabel).toContain("2 sources. 1 network. 1 partial");
   });
 
+  it("includes session recall hits in completed turn metadata", () => {
+    const view = buildTurnBoundaryView({
+      turn: turn({
+        toolStats: {
+          session_search_calls: 1,
+          session_search_results: 2,
+          session_search_context_hits: 1,
+          session_search_matched_terms: 3,
+        },
+      }),
+      turnNumber: 3,
+    });
+
+    expect(view.meta).toEqual(["2 recall hits"]);
+    expect(view.ariaLabel).toContain("2 recall hits");
+  });
+
   it("marks a max-turn boundary as continued when a later message has taken over", () => {
     const view = buildTurnBoundaryView({
       turn: turn({ status: "max_turns" }),

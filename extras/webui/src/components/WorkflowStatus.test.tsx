@@ -261,6 +261,38 @@ describe("WorkflowStatus", () => {
     expect(summary).toHaveTextContent("1 update · memory:markets: Alpha Coast market reports use marker MEM-STOCK...");
     expect(within(summary).getByText("1 update · memory:markets: Alpha Coast market reports use marker MEM-STOCK...")).toHaveAttribute("data-tone", "success");
   });
+
+  it("pins session recall summaries in the collapsed workflow summary", () => {
+    const session = reduceRawEvents([
+      { id: 1, type: "turn.start", data: { turn_id: "t1" } },
+      { id: 2, type: "user.message", data: { turn_id: "t1", text: "resume alpha coast analysis" } },
+      {
+        id: 3,
+        type: "turn.end",
+        data: {
+          turn_id: "t1",
+          reason: "completed",
+          tool_stats: {
+            session_search_calls: 1,
+            session_search_results: 2,
+            session_search_context_hits: 1,
+            session_search_matched_terms: 3,
+          },
+        },
+      },
+    ]);
+
+    render(<WorkflowStatus overview={buildSessionOverview({
+      session,
+      workflow: deriveWorkflowStatus(session),
+      hasSelectedSession: true,
+    })} />);
+
+    const summary = screen.getByTestId("workflow-status").querySelector("summary") as HTMLElement;
+    expect(summary).toHaveTextContent("2 hits · 1 context · 3 terms");
+    expect(within(summary).getByText("2 hits · 1 context · 3 terms")).toHaveAttribute("data-tone", "success");
+    expect(screen.getByTestId("workflow-details")).toHaveTextContent("Recall 2 hits · 1 context · 3 terms");
+  });
 });
 
 function metric(root: HTMLElement, text: string): HTMLElement {
