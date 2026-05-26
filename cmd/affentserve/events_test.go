@@ -371,6 +371,24 @@ func TestReplaySessionEventsUsesDurableLineCursorIDs(t *testing.T) {
 	}
 }
 
+func TestReplaySessionEventsRejectsFutureTraceSchemaVersion(t *testing.T) {
+	dir := t.TempDir()
+	body := strings.Join([]string{
+		`{"id":0,"type":"trace.meta","data":{"schema_version":999}}`,
+		`{"id":1,"type":"turn.start","data":{"turn_id":"future"}}`,
+		"",
+	}, "\n")
+	if err := os.WriteFile(filepath.Join(dir, "events.jsonl"), []byte(body), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	rec := httptest.NewRecorder()
+	spy := &flushSpyRecorder{ResponseRecorder: rec}
+	if _, err := replaySessionEvents(spy, spy, dir, -1); err == nil || !strings.Contains(err.Error(), "unsupported trace schema_version 999") {
+		t.Fatalf("replaySessionEvents should reject future schema version, got err=%v", err)
+	}
+}
+
 func TestHandleSessionHistoryNormalizesLegacyEventIDsToLineCursor(t *testing.T) {
 	dir := t.TempDir()
 	body := strings.Join([]string{
@@ -391,6 +409,22 @@ func TestHandleSessionHistoryNormalizesLegacyEventIDsToLineCursor(t *testing.T) 
 	}
 	if resp.Events[0].ID != 0 || resp.Events[1].ID != 1 || resp.NextAfter != 1 {
 		t.Fatalf("history should expose durable line cursor ids, got ids %d/%d next_after=%d", resp.Events[0].ID, resp.Events[1].ID, resp.NextAfter)
+	}
+}
+
+func TestHandleSessionHistoryRejectsFutureTraceSchemaVersion(t *testing.T) {
+	dir := t.TempDir()
+	body := strings.Join([]string{
+		`{"id":0,"type":"trace.meta","data":{"schema_version":999}}`,
+		`{"id":1,"type":"turn.start","data":{"turn_id":"future"}}`,
+		"",
+	}, "\n")
+	if err := os.WriteFile(filepath.Join(dir, "events.jsonl"), []byte(body), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	if _, err := readSessionHistory(dir, "future-session", -1, 10); err == nil || !strings.Contains(err.Error(), "unsupported trace schema_version 999") {
+		t.Fatalf("readSessionHistory should reject future schema version, got err=%v", err)
 	}
 }
 

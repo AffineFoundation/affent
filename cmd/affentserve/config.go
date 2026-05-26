@@ -188,10 +188,9 @@ type Config struct {
 	subagentMaxDepthSet bool
 
 	// EnableFocusedTasks registers the run_task tool — bounded focused
-	// tasks (recall / explore / research / verify / review) with a
-	// per-kind tool whitelist and structured JSON output. Independent
-	// of EnableSubagent: a deployment can run focused tasks without
-	// exposing the free-form subagent_run surface, and vice versa.
+	// tasks with a per-kind tool whitelist and structured JSON output.
+	// Independent of EnableSubagent: a deployment can run focused tasks
+	// without exposing the free-form subagent_run surface, and vice versa.
 	// On by default.
 	EnableFocusedTasks    bool `json:"enable_focused_tasks"`
 	enableFocusedTasksSet bool

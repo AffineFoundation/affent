@@ -80,7 +80,7 @@ func parseFlagsAndConfig(argv []string) (Config, error) {
 		evalMode           = fs.Bool("eval-mode", false, "Strict benchmark mode: disable skills, plan, subagent, focused tasks, dynamic workflow injection, memory, and environment tools by default; opt into needed env permissions with --browser=true, --web=true, or --memory=true. Env: AFFENTSERVE_EVAL_MODE.")
 		enableSubagent     = fs.Bool("subagent", true, "Register the subagent_run tool — a bounded isolated Loop with read-only inspection tools. Doesn't require --builtins but inherits the shell tool when --builtins is also on.")
 		subagentMaxDepth   = fs.Int("subagent-max-depth", agent.DefaultSubagentMaxDepth, "Maximum recursive subagent depth; 1 disables nested subagents, hard max 4. Env: AFFENTSERVE_SUBAGENT_MAX_DEPTH.")
-		enableFocusedTasks = fs.Bool("focused-tasks", true, "Register the run_task tool — bounded focused tasks (recall/explore/research/verify/review) with a per-kind tool whitelist and structured JSON output. Independent of --subagent. Env: AFFENTSERVE_FOCUSED_TASKS.")
+		enableFocusedTasks = fs.Bool("focused-tasks", true, "Register the run_task tool — bounded focused tasks with a per-kind tool whitelist and structured JSON output. Independent of --subagent. Env: AFFENTSERVE_FOCUSED_TASKS.")
 		browserCacheDir    = fs.String("browser-cache-dir", "", "Enable an on-disk response cache for browser sessions; empty disables caching.")
 		browserCacheTTL    = fs.String("browser-cache-ttl", "", "Cache TTL when --browser-cache-dir is set ('24h' default; '0s' disables expiry).")
 		browserCacheSweep  = fs.String("browser-cache-sweep-interval", "", "How often cache GC deletes expired files when --browser-cache-dir is set (default = TTL/8, min 5m; explicit values must be >=5m).")

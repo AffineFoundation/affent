@@ -89,6 +89,70 @@ func TestHandleSessionArtifacts_ListAndReadChunks(t *testing.T) {
 	}
 }
 
+func TestHandleSessionArtifacts_PersistsAcrossGracefulShutdown(t *testing.T) {
+	memRoot := t.TempDir()
+	cfg := Config{
+		Listen:         "127.0.0.1:0",
+		MaxSessions:    4,
+		SessionIdleTTL: "5m",
+		WorkspaceRoot:  t.TempDir(),
+		MemoryRoot:     memRoot,
+		BaseURL:        "http://127.0.0.1:0",
+		APIKey:         "test",
+		Model:          "fake",
+	}
+	pool, err := NewSessionPool(cfg, zerologDiscard())
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(pool.Shutdown)
+
+	sessionID := "artifact-restart"
+	if _, err := pool.GetOrCreate(sessionID); err != nil {
+		t.Fatal(err)
+	}
+	artifactRel := filepath.ToSlash(filepath.Join(artifactPathPrefix, "000001-c1.txt"))
+	artifactPath := filepath.Join(memRoot, sessionID, filepath.FromSlash(artifactRel))
+	if err := os.MkdirAll(filepath.Dir(artifactPath), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(artifactPath, []byte("persisted artifact payload"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	pool.Shutdown()
+
+	pool2, err := NewSessionPool(cfg, zerologDiscard())
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(pool2.Shutdown)
+
+	r := httptest.NewRequest(http.MethodGet, "/v1/sessions/"+sessionID+"/artifacts", nil)
+	w := httptest.NewRecorder()
+	handleSessionArtifacts(pool2, sessionID, "", w, r)
+	if got := w.Result().StatusCode; got != http.StatusOK {
+		t.Fatalf("list after restart status = %d: %s", got, w.Body.String())
+	}
+	var list artifactListResponse
+	if err := json.Unmarshal(w.Body.Bytes(), &list); err != nil {
+		t.Fatalf("decode list after restart: %v\n%s", err, w.Body.String())
+	}
+	if len(list.Artifacts) != 1 || list.Artifacts[0].Path != artifactRel {
+		t.Fatalf("artifact list after restart = %+v", list.Artifacts)
+	}
+
+	r = httptest.NewRequest(http.MethodGet, "/v1/sessions/"+sessionID+"/artifacts/"+artifactRel, nil)
+	w = httptest.NewRecorder()
+	handleSessionArtifacts(pool2, sessionID, "/"+artifactRel, w, r)
+	if got := w.Result().StatusCode; got != http.StatusOK {
+		t.Fatalf("read after restart status = %d: %s", got, w.Body.String())
+	}
+	if got := w.Body.String(); got != "persisted artifact payload" {
+		t.Fatalf("artifact payload after restart = %q", got)
+	}
+}
+
 func TestHandleSessionArtifacts_ListPaginatesByArtifactPath(t *testing.T) {
 	memRoot := t.TempDir()
 	pool := artifactTestPool(t, memRoot)

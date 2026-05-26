@@ -13,6 +13,10 @@ import (
 func TestHandleSessionTools_ListsActiveSessionRegistry(t *testing.T) {
 	pool := newTestPool(t, 4, "5m")
 	pool.cfg.EnableBuiltins = true
+	pool.cfg.EnableMemory = true
+	pool.cfg.EnableWeb = true
+	pool.cfg.EnableSubagent = true
+	pool.cfg.EnableFocusedTasks = true
 	if _, err := pool.GetOrCreate("tools-active"); err != nil {
 		t.Fatalf("GetOrCreate: %v", err)
 	}
@@ -33,6 +37,9 @@ func TestHandleSessionTools_ListsActiveSessionRegistry(t *testing.T) {
 	if resp.Count != len(resp.Tools) || resp.Count == 0 {
 		t.Fatalf("count/tools mismatch or empty: count=%d tools=%+v", resp.Count, resp.Tools)
 	}
+	if resp.Surface.Headline == "" || resp.Surface.Status == "" || resp.Surface.Tone == "" {
+		t.Fatalf("surface = %+v, want non-empty diagnostics", resp.Surface)
+	}
 	if !toolCatalogHas(resp.Tools, "skill") {
 		t.Fatalf("tool catalog missing skill: %+v", resp.Tools)
 	}
@@ -43,6 +50,47 @@ func TestHandleSessionTools_ListsActiveSessionRegistry(t *testing.T) {
 		if len(tool.Parameters) == 0 {
 			t.Fatalf("tool %s has empty parameters schema", tool.Name)
 		}
+	}
+}
+
+func TestHandleSessionTools_ReportsFilteredSurfaceDiagnostics(t *testing.T) {
+	pool := newTestPool(t, 4, "5m")
+	reg := agent.NewRegistry()
+	reg.Add(&agent.Tool{
+		Name:        "browser_navigate",
+		Description: "Navigate the current page.",
+		Schema:      json.RawMessage(`{"type":"object","properties":{"url":{"type":"string"}}}`),
+	})
+	pool.mu.Lock()
+	pool.sessions["tools-filtered"] = &Session{
+		ID:       "tools-filtered",
+		loop:     &agent.Loop{},
+		registry: reg,
+		closedCh: make(chan struct{}),
+	}
+	pool.mu.Unlock()
+
+	r := httptest.NewRequest(http.MethodGet, "/v1/sessions/tools-filtered/tools", nil)
+	w := httptest.NewRecorder()
+	handleSessionRoutes(pool).ServeHTTP(w, r)
+	if got := w.Result().StatusCode; got != http.StatusOK {
+		t.Fatalf("status = %d, want 200; body=%s", got, w.Body.String())
+	}
+	var resp sessionToolsResponse
+	if err := json.Unmarshal(w.Body.Bytes(), &resp); err != nil {
+		t.Fatalf("decode: %v body=%s", err, w.Body.String())
+	}
+	if resp.Surface.Status != "restricted" {
+		t.Fatalf("surface status = %q, want restricted; surface=%+v", resp.Surface.Status, resp.Surface)
+	}
+	if resp.Surface.Tone != "warning" {
+		t.Fatalf("surface tone = %q, want warning; surface=%+v", resp.Surface.Tone, resp.Surface)
+	}
+	if !strings.Contains(strings.Join(resp.Surface.DisabledReasons, " "), "Workspace tools are off.") {
+		t.Fatalf("surface disabled reasons = %+v, want workspace warning", resp.Surface.DisabledReasons)
+	}
+	if len(resp.Surface.Warnings) != 0 {
+		t.Fatalf("unexpected warnings = %+v", resp.Surface.Warnings)
 	}
 }
 
@@ -86,6 +134,48 @@ func TestHandleSessionTools_ExposesBrowserFindSchema(t *testing.T) {
 		return
 	}
 	t.Fatal("browser_find disappeared while scanning catalog")
+}
+
+func TestHandleSessionTools_ExposesSourceGrouping(t *testing.T) {
+	pool := newTestPool(t, 4, "5m")
+	reg := agent.NewRegistry()
+	reg.Add(&agent.Tool{
+		Name:           "taostats_query",
+		Description:    "Query TaoStats data.",
+		Schema:         json.RawMessage(`{"type":"object","properties":{"query":{"type":"string"}}}`),
+		CatalogGroup:   "MCP",
+		CatalogSource:  "taostats",
+		CatalogRawName: "query",
+	})
+	pool.mu.Lock()
+	pool.sessions["tools-mcp"] = &Session{
+		ID:       "tools-mcp",
+		loop:     &agent.Loop{},
+		registry: reg,
+		closedCh: make(chan struct{}),
+	}
+	pool.mu.Unlock()
+
+	r := httptest.NewRequest(http.MethodGet, "/v1/sessions/tools-mcp/tools", nil)
+	w := httptest.NewRecorder()
+	handleSessionRoutes(pool).ServeHTTP(w, r)
+	if got := w.Result().StatusCode; got != http.StatusOK {
+		t.Fatalf("status = %d, want 200; body=%s", got, w.Body.String())
+	}
+	var resp sessionToolsResponse
+	if err := json.Unmarshal(w.Body.Bytes(), &resp); err != nil {
+		t.Fatalf("decode: %v body=%s", err, w.Body.String())
+	}
+	if len(resp.Tools) != 1 {
+		t.Fatalf("tool catalog length = %d, want 1", len(resp.Tools))
+	}
+	tool := resp.Tools[0]
+	if tool.Group != "MCP" || tool.Source != "taostats" {
+		t.Fatalf("tool metadata = %+v, want MCP/taostats", tool)
+	}
+	if tool.RawName != "query" {
+		t.Fatalf("raw_name = %q, want query", tool.RawName)
+	}
 }
 
 func TestHandleSessionTools_InactiveDurableSessionReturnsConflict(t *testing.T) {

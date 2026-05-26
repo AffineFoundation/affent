@@ -35,8 +35,20 @@ func TestHandleStats_EmptyPool(t *testing.T) {
 	if err := json.Unmarshal(w.Body.Bytes(), &resp); err != nil {
 		t.Fatalf("decode: %v body=%s", err, w.Body.String())
 	}
+	if !strings.Contains(w.Body.String(), "\"domain_relaxations\":0") {
+		t.Fatalf("response JSON missing domain_relaxations field: %s", w.Body.String())
+	}
 	if resp.ActiveSessions != 0 {
 		t.Fatalf("ActiveSessions = %d, want 0", resp.ActiveSessions)
+	}
+	if resp.RunningTurns != 0 {
+		t.Fatalf("RunningTurns = %d, want 0", resp.RunningTurns)
+	}
+	if resp.ExecutorMode != "off" {
+		t.Fatalf("ExecutorMode = %q, want off", resp.ExecutorMode)
+	}
+	if resp.EnableBrowser || resp.EnableWeb || resp.EnableWebSearch || resp.EnableMemory || resp.EnableBuiltins || resp.EnableSubagent || resp.EnableFocusedTasks {
+		t.Fatalf("runtime switches should default to off: %+v", resp)
 	}
 	if resp.ShuttingDown {
 		t.Fatal("ShuttingDown = true, want false for fresh pool")
@@ -79,6 +91,9 @@ func TestHandleStats_EmptyPool(t *testing.T) {
 	}
 	if resp.Boundaries.JSONLRecordBytes <= 0 {
 		t.Fatalf("Boundaries.JSONLRecordBytes = %d, want positive", resp.Boundaries.JSONLRecordBytes)
+	}
+	if resp.Aggregate.DomainRelaxations != 0 {
+		t.Fatalf("Aggregate.DomainRelaxations = %d, want 0 for empty pool", resp.Aggregate.DomainRelaxations)
 	}
 	if resp.Boundaries.LoopGuardIdenticalCalls <= 0 || resp.Boundaries.LoopGuardFailureWarn <= 0 ||
 		resp.Boundaries.LoopGuardFailureHalt <= 0 || resp.Boundaries.LoopGuardWebFetchWarn <= 0 ||
@@ -227,6 +242,15 @@ func TestHandleStats_ListsSessionsSorted(t *testing.T) {
 	if resp.ActiveSessions != 3 {
 		t.Fatalf("ActiveSessions = %d, want 3", resp.ActiveSessions)
 	}
+	if resp.RunningTurns != 0 {
+		t.Fatalf("RunningTurns = %d, want 0 for idle sessions", resp.RunningTurns)
+	}
+	if resp.ExecutorMode != "off" {
+		t.Fatalf("ExecutorMode = %q, want off for default builtins-disabled pool", resp.ExecutorMode)
+	}
+	if resp.EnableBrowser || resp.EnableWeb || resp.EnableWebSearch || resp.EnableMemory || resp.EnableBuiltins || resp.EnableSubagent || resp.EnableFocusedTasks {
+		t.Fatalf("runtime switches should be off in default pool: %+v", resp)
+	}
 	got := make([]string, len(resp.Sessions))
 	for i, s := range resp.Sessions {
 		got[i] = s.ID
@@ -241,6 +265,68 @@ func TestHandleStats_ListsSessionsSorted(t *testing.T) {
 		if s.CreatedAt == "" || s.LastUsedAt == "" {
 			t.Fatalf("session %s has empty timestamps: %+v", s.ID, s)
 		}
+	}
+}
+
+func TestHandleStats_ReportsRunningTurns(t *testing.T) {
+	pool := newTestPool(t, 8, "5m")
+	s, err := pool.GetOrCreate("running")
+	if err != nil {
+		t.Fatalf("GetOrCreate: %v", err)
+	}
+	s.activeTurns.Store(1)
+
+	h := handleStats(pool.cfg, pool)
+	r := httptest.NewRequest("GET", "/v1/stats", nil)
+	w := httptest.NewRecorder()
+	h.ServeHTTP(w, r)
+
+	var resp statsResponse
+	if err := json.Unmarshal(w.Body.Bytes(), &resp); err != nil {
+		t.Fatalf("decode: %v", err)
+	}
+	if resp.RunningTurns != 1 {
+		t.Fatalf("RunningTurns = %d, want 1", resp.RunningTurns)
+	}
+}
+
+func TestHandleStats_ReportsExecutorMode(t *testing.T) {
+	pool := newTestPool(t, 8, "5m")
+	pool.cfg.EnableBuiltins = true
+	h := handleStats(pool.cfg, pool)
+	r := httptest.NewRequest("GET", "/v1/stats", nil)
+	w := httptest.NewRecorder()
+	h.ServeHTTP(w, r)
+
+	var resp statsResponse
+	if err := json.Unmarshal(w.Body.Bytes(), &resp); err != nil {
+		t.Fatalf("decode: %v", err)
+	}
+	if resp.ExecutorMode != "local" {
+		t.Fatalf("ExecutorMode = %q, want local", resp.ExecutorMode)
+	}
+}
+
+func TestHandleStats_ReportsRuntimeSwitches(t *testing.T) {
+	pool := newTestPool(t, 8, "5m")
+	pool.cfg.EnableBrowser = true
+	pool.cfg.EnableWeb = true
+	pool.cfg.EnableWebSearch = true
+	pool.cfg.EnableMemory = true
+	pool.cfg.EnableBuiltins = true
+	pool.cfg.EnableSubagent = true
+	pool.cfg.EnableFocusedTasks = true
+	h := handleStats(pool.cfg, pool)
+	r := httptest.NewRequest("GET", "/v1/stats", nil)
+	w := httptest.NewRecorder()
+	h.ServeHTTP(w, r)
+
+	var resp statsResponse
+	if err := json.Unmarshal(w.Body.Bytes(), &resp); err != nil {
+		t.Fatalf("decode: %v", err)
+	}
+	if !resp.EnableBrowser || !resp.EnableWeb || !resp.EnableWebSearch || !resp.EnableMemory || !resp.EnableBuiltins || !resp.EnableSubagent || !resp.EnableFocusedTasks {
+		t.Fatalf("runtime switches = %+v, want all true", resp)
 	}
 }
 

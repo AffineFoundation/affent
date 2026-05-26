@@ -207,6 +207,16 @@ type sessionHistoryPage struct {
 	TraceSchemaDetected bool
 }
 
+func validateTraceSchemaVersion(version int) error {
+	if version <= 0 {
+		return nil
+	}
+	if version > sse.TraceSchemaVersion {
+		return fmt.Errorf("unsupported trace schema_version %d (max %d)", version, sse.TraceSchemaVersion)
+	}
+	return nil
+}
+
 // handleSessionHistory replays persisted session events from
 // events.jsonl. The cursor is the zero-based JSONL line number, not
 // sse.Event.ID: Loop event ids are per-process and can repeat after a
@@ -331,6 +341,9 @@ func readSessionHistoryPage(sessionDir string, after int64, limit int) (sessionH
 		if ev.Type == sse.TypeTraceMeta {
 			var meta sse.TraceMetaPayload
 			if err := json.Unmarshal(ev.Data, &meta); err == nil {
+				if err := validateTraceSchemaVersion(meta.SchemaVersion); err != nil {
+					return sessionHistoryPage{}, err
+				}
 				page.TraceSchemaVersion = meta.SchemaVersion
 				page.TraceSchemaDetected = true
 			}

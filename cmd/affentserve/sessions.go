@@ -283,10 +283,10 @@ func (p *SessionPool) subagentChildToolRegistrar(workspace string) func(context.
 
 // focusedTaskWebRegistrar returns the per-call hook that gives a
 // focused-task child the web_fetch (+ optional web_search) tools when
-// the deployment has enabled web globally. nil disables the research
-// profile via FocusedTaskDeps.profileAvailable; the run_task schema
-// drops research from the enum in that case so the model never sees an
-// option it can't fulfill.
+// the deployment has enabled web globally. nil disables the web_extract
+// and research profiles via FocusedTaskDeps.profileAvailable; the
+// run_task schema drops them from the enum in that case so the model
+// never sees an option it can't fulfill.
 func (p *SessionPool) focusedTaskWebRegistrar() func(context.Context, *agent.Registry) (func(), error) {
 	if !p.cfg.EnableWeb {
 		return nil
@@ -1291,24 +1291,26 @@ func (s *Session) CancelTurn() {
 // counters when a browser is attached; zeros otherwise. Used by the
 // /v1/stats endpoint and per-session debug logs.
 type BrowserStatsSnapshot struct {
-	BlockedByType   int64 `json:"blocked_by_type"`
-	BlockedByDomain int64 `json:"blocked_by_domain"`
-	CacheHit        int64 `json:"cache_hit"`
-	CacheMiss       int64 `json:"cache_miss"`
-	NetworkFetch    int64 `json:"network_fetch"`
+	BlockedByType     int64 `json:"blocked_by_type"`
+	BlockedByDomain   int64 `json:"blocked_by_domain"`
+	DomainRelaxations int64 `json:"domain_relaxations"`
+	CacheHit          int64 `json:"cache_hit"`
+	CacheMiss         int64 `json:"cache_miss"`
+	NetworkFetch      int64 `json:"network_fetch"`
 }
 
 func (s *Session) BrowserStatsSnapshot() BrowserStatsSnapshot {
 	if s == nil || s.browser == nil {
 		return BrowserStatsSnapshot{}
 	}
-	bt, bd, ch, cm, nf := s.browser.InterceptStats()
+	bt, bd, dr, ch, cm, nf := s.browser.InterceptStats()
 	return BrowserStatsSnapshot{
-		BlockedByType:   bt,
-		BlockedByDomain: bd,
-		CacheHit:        ch,
-		CacheMiss:       cm,
-		NetworkFetch:    nf,
+		BlockedByType:     bt,
+		BlockedByDomain:   bd,
+		DomainRelaxations: dr,
+		CacheHit:          ch,
+		CacheMiss:         cm,
+		NetworkFetch:      nf,
 	}
 }
 

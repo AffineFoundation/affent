@@ -14,10 +14,10 @@ import (
 	"strconv"
 	"strings"
 	"time"
-	"unicode/utf8"
 
 	agent "github.com/affinefoundation/affent/internal/agent"
 	"github.com/affinefoundation/affent/internal/jsonl"
+	"github.com/affinefoundation/affent/internal/textutil"
 )
 
 const (
@@ -80,6 +80,8 @@ type sessionCapabilities struct {
 	Plan              bool   `json:"plan"`
 	Memory            bool   `json:"memory"`
 	SessionSearch     bool   `json:"session_search"`
+	SymbolContext     bool   `json:"symbol_context"`
+	RepoSearch        bool   `json:"repo_search"`
 	Browser           bool   `json:"browser"`
 	BrowserScreenshot bool   `json:"browser_screenshot"`
 	Web               bool   `json:"web"`
@@ -460,6 +462,8 @@ func summarizeActiveCapabilities(s *Session, cfg Config) sessionCapabilities {
 		Plan:              hasTool(agent.PlanToolName),
 		Memory:            hasTool("memory"),
 		SessionSearch:     hasTool("session_search"),
+		SymbolContext:     hasTool("symbol_context"),
+		RepoSearch:        hasTool("repo_search"),
 		Browser:           hasTool("browser_navigate") || hasTool("browser_snapshot") || hasTool("browser_find"),
 		BrowserScreenshot: hasTool("browser_screenshot"),
 		Web:               hasTool("web_fetch"),
@@ -765,7 +769,7 @@ func populateSessionSummaryTitle(summary *sessionSummary) {
 }
 
 func summarizeSessionTitleFromUserMessage(text string) string {
-	cleaned := strings.TrimSpace(strings.Join(strings.Fields(text), " "))
+	cleaned := textutil.CompactWhitespace(text)
 	if cleaned == "" {
 		return ""
 	}
@@ -856,7 +860,7 @@ func normalizeSessionTitlePhrase(text string) string {
 		value = next
 	}
 	value = strings.ReplaceAll(value, "的", " ")
-	value = strings.TrimSpace(strings.Join(strings.Fields(value), " "))
+	value = textutil.CompactWhitespace(value)
 	return prettySessionTopicName(value)
 }
 
@@ -894,7 +898,7 @@ func trimSessionTitleSuffix(text string) string {
 }
 
 func prettySessionTopicName(text string) string {
-	value := strings.TrimSpace(strings.Join(strings.Fields(strings.Trim(text, "“”\"'")), " "))
+	value := textutil.CompactWhitespace(strings.Trim(text, "“”\"'"))
 	replacements := []struct {
 		from string
 		to   string
@@ -919,31 +923,17 @@ func replaceSessionTitleWord(text, from, to string) string {
 }
 
 func normalizeSessionTitleComparable(text string) string {
-	return strings.ToLower(strings.TrimSpace(strings.Join(strings.Fields(text), " ")))
+	return strings.ToLower(textutil.CompactWhitespace(text))
 }
 
 func truncateSessionTitle(text string, limit int) string {
-	if utf8.RuneCountInString(text) <= limit {
-		return text
-	}
-	runes := []rune(text)
-	if limit <= 3 {
-		return string(runes[:limit])
-	}
-	return string(runes[:limit-3]) + "..."
+	return textutil.PreviewRunes(text, limit, "...")
 }
 
 func summarizeLatestUserMessage(text string) string {
 	text = unwrapSessionSummaryUserPrompt(text)
-	singleLine := strings.Join(strings.Fields(text), " ")
-	runes := []rune(singleLine)
-	if len(runes) <= maxSessionTaskSummaryChars {
-		return singleLine
-	}
-	if maxSessionTaskSummaryChars <= 3 {
-		return string(runes[:maxSessionTaskSummaryChars])
-	}
-	return string(runes[:maxSessionTaskSummaryChars-3]) + "..."
+	singleLine := textutil.CompactWhitespace(text)
+	return textutil.PreviewRunes(singleLine, maxSessionTaskSummaryChars, "...")
 }
 
 func unwrapSessionSummaryUserPrompt(text string) string {
@@ -962,7 +952,7 @@ func unwrapSessionSummaryUserPrompt(text string) string {
 }
 
 func isContinuationSessionPrompt(text string) bool {
-	normalized := strings.ToLower(strings.Join(strings.Fields(text), " "))
+	normalized := strings.ToLower(textutil.CompactWhitespace(text))
 	if normalized == "" {
 		return false
 	}

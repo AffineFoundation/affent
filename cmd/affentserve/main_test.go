@@ -395,14 +395,14 @@ func TestFocusedTaskProfilesForLog_MatchesProbeRules(t *testing.T) {
 			want: []string{"recall", "explore", "verify", "review"},
 		},
 		{
-			name: "with web exposes research too",
+			name: "with web exposes web_extract and research",
 			cfg:  Config{EnableFocusedTasks: true, EnableBuiltins: true, EnableMemory: true, EnableWeb: true},
-			want: []string{"recall", "explore", "research", "verify", "review"},
+			want: []string{"recall", "explore", "web_extract", "research", "verify", "review"},
 		},
 		{
-			name: "with browser exposes research too",
+			name: "with browser exposes web_extract and research",
 			cfg:  Config{EnableFocusedTasks: true, EnableBuiltins: true, EnableMemory: true, EnableBrowser: true},
-			want: []string{"recall", "explore", "research", "verify", "review"},
+			want: []string{"recall", "explore", "web_extract", "research", "verify", "review"},
 		},
 		{
 			name: "no memory and no builtins still has session-backed recall + file-tool-backed others",

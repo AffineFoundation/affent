@@ -47,6 +47,8 @@ func TestHandleSessionCreate_ExplicitIDAndDetail(t *testing.T) {
 		Plan:             true,
 		Memory:           true,
 		SessionSearch:    false,
+		SymbolContext:    true,
+		RepoSearch:       true,
 		Web:              true,
 		Subagent:         true,
 		SubagentMaxDepth: 3,
@@ -54,6 +56,7 @@ func TestHandleSessionCreate_ExplicitIDAndDetail(t *testing.T) {
 		FocusedTaskProfiles: []string{
 			"recall",
 			"explore",
+			"web_extract",
 			"research",
 			"verify",
 			"review",
@@ -381,6 +384,16 @@ func TestSummarizeLatestUserMessageUnwrapsPlanModePrompts(t *testing.T) {
 				t.Fatalf("summary = %q, want %q", got, tc.want)
 			}
 		})
+	}
+}
+
+func TestTruncateSessionTitleUsesRuneSafePreview(t *testing.T) {
+	got := truncateSessionTitle("Affine 子网研究任务", 8)
+	if !strings.HasPrefix(got, "Affine ") {
+		t.Fatalf("title truncation should preserve safe prefix, got %q", got)
+	}
+	if !utf8.ValidString(got) {
+		t.Fatalf("title truncation produced invalid UTF-8: %q", got)
 	}
 }
 
@@ -772,7 +785,7 @@ func TestSessionCapabilitiesReflectActualRegisteredTools(t *testing.T) {
 		t.Fatal(err)
 	}
 	caps := summarizeActiveCapabilities(s, pool.cfg)
-	if caps.Builtins || caps.SkillInstall || caps.Plan || caps.SessionSearch {
+	if caps.Builtins || caps.SkillInstall || caps.Plan || caps.SessionSearch || caps.RepoSearch {
 		t.Fatalf("tool-light session should not report builtin-only tools: %+v", caps)
 	}
 	if !caps.Memory || !caps.Subagent || !caps.FocusedTasks {
@@ -809,8 +822,8 @@ func TestSessionCapabilities_IncludesFocusedTaskProfiles(t *testing.T) {
 	pool.cfg.EnableBuiltins = true
 	pool.cfg.EnableMemory = true
 	pool.cfg.EnableFocusedTasks = true
-	// EnableWeb and EnableBrowser stay false: research must be filtered
-	// out of the reported profile list.
+	// EnableWeb and EnableBrowser stay false: web_extract and research
+	// must be filtered out of the reported profile list.
 	s, err := pool.GetOrCreate("with-focused-tasks")
 	if err != nil {
 		t.Fatal(err)
@@ -823,12 +836,12 @@ func TestSessionCapabilities_IncludesFocusedTaskProfiles(t *testing.T) {
 	if !reflect.DeepEqual(caps.FocusedTaskProfiles, want) {
 		t.Fatalf("FocusedTaskProfiles = %+v, want %+v", caps.FocusedTaskProfiles, want)
 	}
-	// Defensive: research must NOT appear when both external lookup
-	// surfaces are off; if it did, the model would see a task_type it
-	// can't fulfill.
+	// Defensive: web_extract and research must NOT appear when both
+	// external lookup surfaces are off; if they did, the model would
+	// see task_type values it can't fulfill.
 	for _, k := range caps.FocusedTaskProfiles {
-		if k == "research" {
-			t.Errorf("research must be filtered out without --web/--browser: %+v", caps.FocusedTaskProfiles)
+		if k == "research" || k == "web_extract" {
+			t.Errorf("web_extract/research must be filtered out without --web/--browser: %+v", caps.FocusedTaskProfiles)
 		}
 	}
 }
@@ -842,7 +855,7 @@ func TestSessionCapabilities_IncludesFocusedResearchWithBrowserOnly(t *testing.T
 		EnableBrowser:      true,
 		EnableWeb:          false,
 	})
-	want := []string{"recall", "explore", "research", "verify", "review"}
+	want := []string{"recall", "explore", "web_extract", "research", "verify", "review"}
 	if !reflect.DeepEqual(caps.FocusedTaskProfiles, want) {
 		t.Fatalf("FocusedTaskProfiles = %+v, want %+v", caps.FocusedTaskProfiles, want)
 	}

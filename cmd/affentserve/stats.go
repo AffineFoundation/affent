@@ -22,6 +22,15 @@ type statsResponse struct {
 	Build            buildInfo              `json:"build"`
 	MaxSessions      int                    `json:"max_sessions"`
 	ActiveSessions   int                    `json:"active_sessions"`
+	RunningTurns     int                    `json:"running_turns"`
+	ExecutorMode     string                 `json:"executor_mode"`
+	EnableBrowser    bool                   `json:"enable_browser"`
+	EnableWeb        bool                   `json:"enable_web"`
+	EnableWebSearch  bool                   `json:"enable_web_search"`
+	EnableMemory     bool                   `json:"enable_memory"`
+	EnableBuiltins   bool                   `json:"enable_builtins"`
+	EnableSubagent   bool                   `json:"enable_subagent"`
+	EnableFocusedTasks bool                 `json:"enable_focused_tasks"`
 	ShuttingDown     bool                   `json:"shutting_down"`
 	WorkspaceRoot    string                 `json:"workspace_root,omitempty"`
 	MemoryRoot       string                 `json:"memory_root,omitempty"`
@@ -124,16 +133,17 @@ type sessionStatsResponse struct {
 }
 
 type aggregateStats struct {
-	BlockedByType   int64                `json:"blocked_by_type"`
-	BlockedByDomain int64                `json:"blocked_by_domain"`
-	CacheHit        int64                `json:"cache_hit"`
-	CacheMiss       int64                `json:"cache_miss"`
-	NetworkFetch    int64                `json:"network_fetch"`
-	InputTokens     int64                `json:"input_tokens"`
-	OutputTokens    int64                `json:"output_tokens"`
-	Turns           int64                `json:"turns"`
-	Tools           ToolStatsSnapshot    `json:"tools"`
-	Runtime         RuntimeStatsSnapshot `json:"runtime"`
+	BlockedByType     int64                `json:"blocked_by_type"`
+	BlockedByDomain   int64                `json:"blocked_by_domain"`
+	DomainRelaxations int64                `json:"domain_relaxations"`
+	CacheHit          int64                `json:"cache_hit"`
+	CacheMiss         int64                `json:"cache_miss"`
+	NetworkFetch      int64                `json:"network_fetch"`
+	InputTokens       int64                `json:"input_tokens"`
+	OutputTokens      int64                `json:"output_tokens"`
+	Turns             int64                `json:"turns"`
+	Tools             ToolStatsSnapshot    `json:"tools"`
+	Runtime           RuntimeStatsSnapshot `json:"runtime"`
 }
 
 func handleStats(cfg Config, pool *SessionPool) http.HandlerFunc {
@@ -153,10 +163,14 @@ func handleStats(cfg Config, pool *SessionPool) http.HandlerFunc {
 
 		sess := make([]sessionStatsResponse, 0, len(snap))
 		var agg aggregateStats
+		runningTurns := 0
 		for _, s := range snap {
 			s.mu.Lock()
 			created, lastUsed := s.createdAt, s.lastUsed
 			s.mu.Unlock()
+			if s.isActiveTurn() {
+				runningTurns++
+			}
 			b := s.BrowserStatsSnapshot()
 			u := s.UsageSnapshot()
 			tools := s.ToolStatsSnapshot()
@@ -172,6 +186,7 @@ func handleStats(cfg Config, pool *SessionPool) http.HandlerFunc {
 			})
 			agg.BlockedByType += b.BlockedByType
 			agg.BlockedByDomain += b.BlockedByDomain
+			agg.DomainRelaxations += b.DomainRelaxations
 			agg.CacheHit += b.CacheHit
 			agg.CacheMiss += b.CacheMiss
 			agg.NetworkFetch += b.NetworkFetch
@@ -188,6 +203,15 @@ func handleStats(cfg Config, pool *SessionPool) http.HandlerFunc {
 			Build:            currentBuildInfo(),
 			MaxSessions:      cfg.MaxSessions,
 			ActiveSessions:   len(sess),
+			RunningTurns:     runningTurns,
+			ExecutorMode:     executorMode(cfg),
+			EnableBrowser:    cfg.EnableBrowser,
+			EnableWeb:        cfg.EnableWeb,
+			EnableWebSearch:  cfg.EnableWebSearch,
+			EnableMemory:     cfg.EnableMemory,
+			EnableBuiltins:   cfg.EnableBuiltins,
+			EnableSubagent:   cfg.EnableSubagent,
+			EnableFocusedTasks: cfg.EnableFocusedTasks,
 			ShuttingDown:     pool.IsShuttingDown(),
 			WorkspaceRoot:    cfg.WorkspaceRoot,
 			MemoryRoot:       cfg.MemoryRoot,
@@ -209,6 +233,13 @@ func statsWebSearchBackend(cfg Config) string {
 		return ""
 	}
 	return configuredSearchBackendName()
+}
+
+func executorMode(cfg Config) string {
+	if cfg.EnableBuiltins {
+		return "local"
+	}
+	return "off"
 }
 
 func addToolStatsSnapshot(dst *ToolStatsSnapshot, src ToolStatsSnapshot) {
