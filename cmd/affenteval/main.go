@@ -77,6 +77,7 @@ func run(args []string) int {
 			MinSourceAccessVerifiedRate:    fs.Float64("min-source-access-verified-rate", -1, "optional quality gate: minimum verified SourceAccess rate, 0..1"),
 			MinSessionSearchContextHitRate: fs.Float64("min-session-search-context-hit-rate", -1, "optional quality gate: minimum session_search context-hit rate, 0..1"),
 			MinToolRepairSuccessRate:       fs.Float64("min-tool-repair-success-rate", -1, "optional quality gate: minimum successful tool-call repair rate, 0..1"),
+			MinVerifierPassRate:            fs.Float64("min-verifier-pass-rate", -1, "optional quality gate: minimum verifier pass rate, 0..1"),
 			MaxForcedNoToolsRate:           fs.Float64("max-forced-no-tools-rate", -1, "optional quality gate: maximum forced no-tool follow-up rate per tool call, 0..1"),
 			MaxLoopGuardInterventionRate:   fs.Float64("max-loop-guard-intervention-rate", -1, "optional quality gate: maximum loop guard intervention rate per tool call, 0..1"),
 			MaxToolErrorRate:               fs.Float64("max-tool-error-rate", -1, "optional quality gate: maximum tool error rate, 0..1"),
@@ -217,6 +218,7 @@ type qualityGateConfig struct {
 	MinSourceAccessVerifiedRate    *float64
 	MinSessionSearchContextHitRate *float64
 	MinToolRepairSuccessRate       *float64
+	MinVerifierPassRate            *float64
 	MaxForcedNoToolsRate           *float64
 	MaxLoopGuardInterventionRate   *float64
 	MaxToolErrorRate               *float64
@@ -764,6 +766,7 @@ func validateQualityGateConfig(g qualityGateConfig) error {
 		{"--min-source-access-verified-rate", g.MinSourceAccessVerifiedRate, true},
 		{"--min-session-search-context-hit-rate", g.MinSessionSearchContextHitRate, true},
 		{"--min-tool-repair-success-rate", g.MinToolRepairSuccessRate, true},
+		{"--min-verifier-pass-rate", g.MinVerifierPassRate, true},
 		{"--max-forced-no-tools-rate", g.MaxForcedNoToolsRate, true},
 		{"--max-loop-guard-intervention-rate", g.MaxLoopGuardInterventionRate, true},
 		{"--max-tool-error-rate", g.MaxToolErrorRate, true},
@@ -823,6 +826,7 @@ func qualityGateFailures(s batchSummary, g qualityGateConfig) []string {
 	checkMin("source_access_verified_rate", batchRatio(s.SourceAccessVerified, s.SourceAccessResults), g.MinSourceAccessVerifiedRate, s.SourceAccessResults > 0)
 	checkMin("session_search_context_hit_rate", batchRatio(s.SessionSearchContextHits, s.SessionSearchResults), g.MinSessionSearchContextHitRate, s.SessionSearchResults > 0)
 	checkMin("tool_repair_success_rate", batchRatio(s.ToolRepairSucceeded, s.ToolRepairCalls), g.MinToolRepairSuccessRate, s.ToolRepairCalls > 0)
+	checkMin("verifier_pass_rate", batchRatio(s.VerifierPassed, s.VerifierRuns), g.MinVerifierPassRate, s.VerifierRuns > 0)
 	checkMax("forced_no_tools_rate", batchRatio(s.ForcedNoTools, s.ToolCalls), g.MaxForcedNoToolsRate, s.ToolCalls > 0)
 	checkMax("loop_guard_intervention_rate", batchRatio(s.LoopGuardInterventions, s.ToolCalls), g.MaxLoopGuardInterventionRate, s.ToolCalls > 0)
 	checkMax("tool_error_rate", batchRatio(s.ToolErrors, s.ToolCalls), g.MaxToolErrorRate, s.ToolCalls > 0)
@@ -1079,6 +1083,7 @@ type evalJSONLMetadata struct {
 	MinSourceAccessVerifiedRate    *float64 `json:"min_source_access_verified_rate,omitempty"`
 	MinSessionSearchContextHitRate *float64 `json:"min_session_search_context_hit_rate,omitempty"`
 	MinToolRepairSuccessRate       *float64 `json:"min_tool_repair_success_rate,omitempty"`
+	MinVerifierPassRate            *float64 `json:"min_verifier_pass_rate,omitempty"`
 	MaxForcedNoToolsRate           *float64 `json:"max_forced_no_tools_rate,omitempty"`
 	MaxLoopGuardInterventionRate   *float64 `json:"max_loop_guard_intervention_rate,omitempty"`
 	MaxToolErrorRate               *float64 `json:"max_tool_error_rate,omitempty"`
@@ -1123,6 +1128,7 @@ func evalJSONLMetadataFromConfig(suite, model, providerLabel, executor, temperat
 		MinSourceAccessVerifiedRate:    enabledQualityGateValue(gates.MinSourceAccessVerifiedRate),
 		MinSessionSearchContextHitRate: enabledQualityGateValue(gates.MinSessionSearchContextHitRate),
 		MinToolRepairSuccessRate:       enabledQualityGateValue(gates.MinToolRepairSuccessRate),
+		MinVerifierPassRate:            enabledQualityGateValue(gates.MinVerifierPassRate),
 		MaxForcedNoToolsRate:           enabledQualityGateValue(gates.MaxForcedNoToolsRate),
 		MaxLoopGuardInterventionRate:   enabledQualityGateValue(gates.MaxLoopGuardInterventionRate),
 		MaxToolErrorRate:               enabledQualityGateValue(gates.MaxToolErrorRate),
@@ -1693,6 +1699,7 @@ func hasQualityGateThresholds(meta evalJSONLMetadata) bool {
 		meta.MinSourceAccessVerifiedRate != nil ||
 		meta.MinSessionSearchContextHitRate != nil ||
 		meta.MinToolRepairSuccessRate != nil ||
+		meta.MinVerifierPassRate != nil ||
 		meta.MaxForcedNoToolsRate != nil ||
 		meta.MaxLoopGuardInterventionRate != nil ||
 		meta.MaxToolErrorRate != nil ||
