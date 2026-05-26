@@ -215,6 +215,7 @@ success and trace-level process quality.`)
 		printBatchSummaryJSONL(os.Stdout, jsonlMeta, summary, gateFailures)
 	} else {
 		printBatchSummary(os.Stdout, summary)
+		printBatchQualityGates(os.Stdout, jsonlMeta, gateFailures)
 	}
 	if len(gateFailures) > 0 {
 		fmt.Fprintln(os.Stderr, "quality gates failed:")
@@ -849,6 +850,27 @@ func printBatchSummary(w io.Writer, s batchSummary) {
 	printFailureHintLines(w, s.RuntimeErrorByKind, "")
 	printRuntimeErrorExampleLines(w, s.RuntimeErrorExamples, "")
 	printLoopDecisionExampleLines(w, s.LoopDecisionExamples, "")
+}
+
+func printBatchQualityGates(w io.Writer, meta evalJSONLMetadata, failures []string) {
+	if !hasQualityGateThresholds(meta) {
+		return
+	}
+	status := "passed"
+	if len(failures) > 0 {
+		status = "failed"
+	}
+	fmt.Fprintf(w, "QUALITY_GATES status=%s", status)
+	if strings.TrimSpace(meta.QualityProfile) != "" {
+		fmt.Fprintf(w, " profile=%s", strings.TrimSpace(meta.QualityProfile))
+	}
+	if len(failures) > 0 {
+		fmt.Fprintf(w, " failures=%d", len(failures))
+	}
+	fmt.Fprintln(w)
+	for _, failure := range failures {
+		fmt.Fprintf(w, "  gate_failure: %s\n", failure)
+	}
 }
 
 func mergeExampleMap[T any](dst *map[string][]T, src map[string][]T, maxPerKind int) {

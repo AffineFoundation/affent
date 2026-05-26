@@ -996,6 +996,31 @@ func TestPrintBatchSummaryIncludesRepairOutcomesWithoutKinds(t *testing.T) {
 	}
 }
 
+func TestPrintBatchQualityGates(t *testing.T) {
+	var out bytes.Buffer
+	meta := testEvalJSONLMetadata()
+	printBatchQualityGates(&out, meta, nil)
+	if out.Len() != 0 {
+		t.Fatalf("disabled quality gates should not print, got:\n%s", out.String())
+	}
+
+	minPassRate := 0.8
+	meta.MinPassRate = &minPassRate
+	meta.QualityProfile = "longrun"
+	printBatchQualityGates(&out, meta, []string{"pass_rate 0.500 < min 0.800"})
+	got := out.String()
+	if !strings.Contains(got, "QUALITY_GATES status=failed profile=longrun failures=1") ||
+		!strings.Contains(got, "gate_failure: pass_rate 0.500 < min 0.800") {
+		t.Fatalf("failed quality gates output missing status or failure:\n%s", got)
+	}
+
+	out.Reset()
+	printBatchQualityGates(&out, meta, nil)
+	if strings.TrimSpace(out.String()) != "QUALITY_GATES status=passed profile=longrun" {
+		t.Fatalf("passed quality gates output = %q", out.String())
+	}
+}
+
 func TestPrintBatchResultJSONL(t *testing.T) {
 	var out bytes.Buffer
 	meta := testEvalJSONLMetadata()
