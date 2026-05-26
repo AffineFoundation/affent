@@ -1269,8 +1269,27 @@ func (l *Loop) runTurn(ctx context.Context, turnID, userText string, opts TurnOp
 	if !finishedNaturally && endReason == sse.TurnEndCompleted {
 		endReason = sse.TurnEndMaxTurns
 	}
+	l.publishEvidenceQualityDecisions(turnID, toolStats)
 	l.publish(sse.TypeUsage, sse.UsagePayload{TurnID: turnID, InputTokens: totalIn, OutputTokens: totalOut})
 	l.publish(sse.TypeTurnEnd, sse.TurnEndPayload{TurnID: turnID, Reason: endReason, ToolStats: toolRuntimeStatsPtr(toolStats)})
+}
+
+func (l *Loop) publishEvidenceQualityDecisions(turnID string, stats sse.ToolRuntimeStats) {
+	if stats.SourceAccessDynamicPartial == 0 || stats.SourceAccessNetwork > 0 {
+		return
+	}
+	visible := true
+	l.publish(sse.TypeLoopDecision, sse.LoopDecisionPayload{
+		TurnID:         turnID,
+		DecisionID:     "evidence-quality-dynamic-partial",
+		Kind:           "evidence_quality",
+		Trigger:        "source_access_dynamic_partial",
+		Decision:       "defer",
+		Confidence:     "high",
+		Reason:         "Rendered page evidence included dynamic metric widgets without text values and no network/API source was captured.",
+		RequiredAction: "Read browser network responses or an official API/source before citing dynamic page metrics.",
+		VisibleInUI:    &visible,
+	})
 }
 
 func (l *Loop) activeFirstToolPolicy(userText string, opts TurnOptions) *FirstToolPolicy {

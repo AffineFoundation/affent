@@ -383,6 +383,99 @@ func TestRunTurn_ToolResultReportsDispatchDuration(t *testing.T) {
 	}
 }
 
+func TestRunTurn_EmitsLoopDecisionForPartialDynamicEvidence(t *testing.T) {
+	var calls int32
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "text/event-stream")
+		w.WriteHeader(200)
+		fl := w.(http.Flusher)
+		if atomic.AddInt32(&calls, 1) == 1 {
+			lines := []string{
+				`data: {"choices":[{"delta":{"role":"assistant","tool_calls":[{"index":0,"id":"snap1","type":"function","function":{"name":"browser_snapshot","arguments":"{}"}}]},"finish_reason":null}]}`,
+				`data: {"choices":[{"delta":{},"finish_reason":"tool_calls"}]}`,
+				`data: [DONE]`,
+			}
+			for _, l := range lines {
+				w.Write([]byte(l + "\n\n"))
+				fl.Flush()
+			}
+			return
+		}
+		w.Write([]byte("data: {\"choices\":[{\"delta\":{\"role\":\"assistant\",\"content\":\"partial metrics need verification\"},\"finish_reason\":\"stop\"}]}\n\n"))
+		w.Write([]byte("data: [DONE]\n\n"))
+		fl.Flush()
+	}))
+	t.Cleanup(srv.Close)
+
+	conv, err := OpenConversationAt(filepath.Join(t.TempDir(), "sess.jsonl"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	reg := NewRegistry()
+	reg.Add(&Tool{
+		Name:        "browser_snapshot",
+		Description: "test snapshot",
+		Schema:      json.RawMessage(`{"type":"object","properties":{}}`),
+		Execute: func(ctx context.Context, args json.RawMessage) (string, error) {
+			return "SourceAccess: browser_rendered_url=https://taostats.io/subnets/19; page_text_below=verified_page_evidence\nPAGE DIAGNOSTICS:\n- empty_dynamic_metric_widgets: 2 visible custom metric widget(s) exposed no text value\nPAGE TEXT:\nsubnet shell", nil
+		},
+	})
+
+	events := make(chan sse.Event, 256)
+	loop := &Loop{
+		LLM: NewLLMClient(srv.URL, "", "fake-model"), Tools: reg, Conv: conv, Events: events,
+		MaxTurnSteps: 4, PerCallTimeout: 5 * time.Second,
+	}
+	if err := loop.EnsureSystemPrompt("base"); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := loop.SendUser(context.Background(), "inspect taostats"); err != nil {
+		t.Fatal(err)
+	}
+
+	deadline := time.After(10 * time.Second)
+	sawDecision := false
+	for {
+		select {
+		case ev, ok := <-events:
+			if !ok {
+				t.Fatal("event channel closed before turn.end")
+			}
+			switch ev.Type {
+			case sse.TypeLoopDecision:
+				var p sse.LoopDecisionPayload
+				if err := json.Unmarshal(ev.Data, &p); err != nil {
+					t.Fatalf("decode loop.decision: %v", err)
+				}
+				sawDecision = true
+				if p.TurnID == "" || p.Kind != "evidence_quality" || p.Decision != "defer" || p.Confidence != "high" {
+					t.Fatalf("unexpected loop.decision payload: %+v", p)
+				}
+				if p.VisibleInUI == nil || !*p.VisibleInUI {
+					t.Fatalf("loop.decision should be visible in UI: %+v", p)
+				}
+				if !strings.Contains(p.RequiredAction, "browser network") || !strings.Contains(p.Reason, "dynamic metric widgets") {
+					t.Fatalf("loop.decision missing actionable dynamic evidence guidance: %+v", p)
+				}
+			case sse.TypeTurnEnd:
+				var p sse.TurnEndPayload
+				if err := json.Unmarshal(ev.Data, &p); err != nil {
+					t.Fatalf("decode turn.end: %v", err)
+				}
+				if !sawDecision {
+					t.Fatal("expected loop.decision before turn.end")
+				}
+				if p.ToolStats == nil || p.ToolStats.SourceAccessDynamicPartial != 1 || p.ToolStats.SourceAccessNetwork != 0 {
+					t.Fatalf("turn.end missing partial dynamic source stats: %+v", p.ToolStats)
+				}
+				return
+			}
+		case <-deadline:
+			t.Fatal("timeout waiting for turn.end")
+		}
+	}
+}
+
 func TestRunTurn_UsesLoopToolResultContextCap(t *testing.T) {
 	payload := strings.Repeat("A", 1024)
 	var calls int32
