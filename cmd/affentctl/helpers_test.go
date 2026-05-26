@@ -475,8 +475,8 @@ func TestChatPlanSlashExecuteUsesPersistedPlan(t *testing.T) {
 		!strings.Contains(prompt, "continue carefully") {
 		t.Fatalf("execute prompt = %q", prompt)
 	}
-	if opts.Tools != nil || opts.FirstToolPolicy != nil || opts.MaxToolCalls != 0 {
-		t.Fatalf("execute-plan options = %+v, want normal tool surface", opts)
+	if opts.Tools != nil || opts.FirstToolPolicy != nil || opts.MaxToolCalls != 0 || len(opts.ToolCallPolicies) != 1 {
+		t.Fatalf("execute-plan options = %+v, want normal tool surface plus plan policy", opts)
 	}
 }
 

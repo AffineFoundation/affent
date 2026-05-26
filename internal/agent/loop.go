@@ -215,6 +215,8 @@ type TurnOptions struct {
 	// FinalNoToolsOnMaxTurns asks for one final no-tool answer after this
 	// turn's tool budget is exhausted.
 	FinalNoToolsOnMaxTurns bool
+	// ToolCallPolicies augments Loop.ToolCallPolicies for this turn only.
+	ToolCallPolicies []*ToolCallPolicy
 }
 
 type FirstToolPolicy struct {
@@ -1157,7 +1159,7 @@ func (l *Loop) runTurn(ctx context.Context, turnID, userText string, opts TurnOp
 				recordToolFailureKind(&toolStats, toolName, result, true)
 				continue
 			}
-			if result, ok := l.toolCallPolicyRejection(userText, toolName, args, toolCallsUsed); ok {
+			if result, ok := l.toolCallPolicyRejection(userText, toolName, args, toolCallsUsed, opts); ok {
 				rejectionPayload := toolResultEventPayloadForTurn(turnID, callID, 1, result)
 				rejectionPayload.Delegation = delegation
 				l.publish(sse.TypeToolResult, rejectionPayload)
@@ -1366,8 +1368,8 @@ func postToolActiveRejection(states []*activePostToolPolicyState, toolName strin
 	return "", false
 }
 
-func (l *Loop) toolCallPolicyRejection(userText, toolName string, args json.RawMessage, toolCallsUsed int) (string, bool) {
-	for _, p := range l.ToolCallPolicies {
+func (l *Loop) toolCallPolicyRejection(userText, toolName string, args json.RawMessage, toolCallsUsed int, opts TurnOptions) (string, bool) {
+	for _, p := range l.configuredToolCallPolicies(opts) {
 		if p == nil || p.ToolName == "" || p.ToolName != toolName || p.Reject == nil {
 			continue
 		}
@@ -1387,6 +1389,16 @@ func (l *Loop) toolCallPolicyRejection(userText, toolName string, args json.RawM
 		return withToolPolicyFailureKind(result, toolPolicyRejectedKind), true
 	}
 	return "", false
+}
+
+func (l *Loop) configuredToolCallPolicies(opts TurnOptions) []*ToolCallPolicy {
+	if len(opts.ToolCallPolicies) == 0 {
+		return l.ToolCallPolicies
+	}
+	out := make([]*ToolCallPolicy, 0, len(l.ToolCallPolicies)+len(opts.ToolCallPolicies))
+	out = append(out, l.ToolCallPolicies...)
+	out = append(out, opts.ToolCallPolicies...)
+	return out
 }
 
 func withToolPolicyFailureKind(result, kind string) string {

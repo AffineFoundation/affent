@@ -186,6 +186,13 @@ func TestHandleSessionMessage_ExecutePlanStartsConfirmedPlanTurn(t *testing.T) {
 		!strings.Contains(msgs[len(msgs)-1].Content, "call plan with action=update for that same step") {
 		t.Fatalf("execute-plan prompt should enforce step execution/update discipline, got %q", msgs[len(msgs)-1].Content)
 	}
+	opts, err := sessionMessageTurnOptions(s, sessionMessageModeExecutePlan)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(opts.ToolCallPolicies) != 1 {
+		t.Fatalf("execute-plan tool policies = %+v, want plan policy", opts.ToolCallPolicies)
+	}
 }
 
 func TestHandleSessionMessage_BusySessionReturnsConflict(t *testing.T) {

@@ -420,7 +420,7 @@ func chatPlanSlashTurn(line string, b *loopBundle) (string, agent.TurnOptions, b
 		if err != nil {
 			return "", agent.TurnOptions{}, false, err
 		}
-		return prompt, agent.TurnOptions{}, true, nil
+		return prompt, agent.ExecutePlanTurnOptions(), true, nil
 	default:
 		return "", agent.TurnOptions{}, false, nil
 	}

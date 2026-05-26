@@ -430,6 +430,47 @@ func TestPlanOnlyTurnOptionsRequiresPositiveBudget(t *testing.T) {
 	}
 }
 
+func TestPlanExecuteToolCallPolicyRejectsSetAndClear(t *testing.T) {
+	policy := PlanExecuteToolCallPolicy()
+	for _, action := range []string{"set", "clear"} {
+		t.Run(action, func(t *testing.T) {
+			got, reject := policy.Reject(ToolCallPolicyContext{
+				ToolName: PlanToolName,
+				Args:     json.RawMessage(fmt.Sprintf(`{"action":%q}`, action)),
+			})
+			if !reject {
+				t.Fatalf("action %s should be rejected", action)
+			}
+			for _, want := range []string{"execute_plan", "do not replace or clear", "action=update"} {
+				if !strings.Contains(got, want) {
+					t.Fatalf("rejection missing %q: %q", want, got)
+				}
+			}
+		})
+	}
+}
+
+func TestPlanExecuteToolCallPolicyAllowsViewAndUpdate(t *testing.T) {
+	policy := PlanExecuteToolCallPolicy()
+	for _, action := range []string{"view", "update"} {
+		t.Run(action, func(t *testing.T) {
+			if got, reject := policy.Reject(ToolCallPolicyContext{
+				ToolName: PlanToolName,
+				Args:     json.RawMessage(fmt.Sprintf(`{"action":%q}`, action)),
+			}); reject {
+				t.Fatalf("action %s should pass, got %q", action, got)
+			}
+		})
+	}
+}
+
+func TestExecutePlanTurnOptionsInstallsPlanPolicy(t *testing.T) {
+	opts := ExecutePlanTurnOptions()
+	if len(opts.ToolCallPolicies) != 1 || opts.ToolCallPolicies[0].ToolName != PlanToolName {
+		t.Fatalf("ExecutePlanTurnOptions policies = %+v, want one plan policy", opts.ToolCallPolicies)
+	}
+}
+
 func TestPlanOnlyUserPromptPreservesRequestAndForbidsExecution(t *testing.T) {
 	got := PlanOnlyUserPrompt("  fix the failing tests  ")
 	for _, want := range []string{

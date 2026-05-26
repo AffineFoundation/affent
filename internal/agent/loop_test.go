@@ -845,6 +845,7 @@ func TestLoopTurnOptionsOverrideToolSurfaceAndPolicies(t *testing.T) {
 	loop := &Loop{
 		Tools:                  baseTools,
 		FirstToolPolicy:        &FirstToolPolicy{ToolName: "shell"},
+		ToolCallPolicies:       []*ToolCallPolicy{{ToolName: "shell", Reject: func(ToolCallPolicyContext) (string, bool) { return "base shell policy", true }}},
 		MaxToolCalls:           8,
 		FinalNoToolsOnMaxTurns: false,
 	}
@@ -853,6 +854,7 @@ func TestLoopTurnOptionsOverrideToolSurfaceAndPolicies(t *testing.T) {
 		FirstToolPolicy:        PlanFirstToolPolicy(),
 		MaxToolCalls:           2,
 		FinalNoToolsOnMaxTurns: true,
+		ToolCallPolicies:       []*ToolCallPolicy{{ToolName: PlanToolName, Reject: func(ToolCallPolicyContext) (string, bool) { return "turn plan policy", true }}},
 	}
 
 	defs := loop.toolDefs(opts)
@@ -868,6 +870,9 @@ func TestLoopTurnOptionsOverrideToolSurfaceAndPolicies(t *testing.T) {
 	if !loop.finalNoToolsOnMaxTurnsForTurn(opts) {
 		t.Fatal("turn should request final no-tool answer on max turns")
 	}
+	if got, ok := loop.toolCallPolicyRejection("draft a plan", PlanToolName, json.RawMessage(`{"action":"view"}`), 0, opts); !ok || !strings.Contains(got, "turn plan policy") {
+		t.Fatalf("turn tool-call policy = %q ok=%t, want plan policy", got, ok)
+	}
 
 	baseDefs := loop.toolDefs(TurnOptions{})
 	if len(baseDefs) != 2 {
@@ -875,6 +880,9 @@ func TestLoopTurnOptionsOverrideToolSurfaceAndPolicies(t *testing.T) {
 	}
 	if got := loop.activeFirstToolPolicy("draft a plan", TurnOptions{}); got == nil || got.ToolName != "shell" {
 		t.Fatalf("base first-tool policy changed = %+v, want shell", got)
+	}
+	if got, ok := loop.toolCallPolicyRejection("run shell", "shell", json.RawMessage(`{}`), 0, TurnOptions{}); !ok || !strings.Contains(got, "base shell policy") {
+		t.Fatalf("base tool-call policy changed = %q ok=%t, want shell policy", got, ok)
 	}
 }
 

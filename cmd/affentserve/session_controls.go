@@ -180,7 +180,7 @@ func sessionMessageTurnOptions(sess *Session, mode string) (agent.TurnOptions, e
 		if _, ok := sess.registry.Get(agent.PlanToolName); !ok {
 			return agent.TurnOptions{}, errors.New("plan tool is not available")
 		}
-		return agent.TurnOptions{}, nil
+		return agent.ExecutePlanTurnOptions(), nil
 	}
 	return agent.PlanOnlyTurnOptions(sess.registry, sessionPlanOnlyMaxToolCalls)
 }

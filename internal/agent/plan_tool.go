@@ -583,6 +583,37 @@ func PlanOnlyTurnOptions(reg *Registry, maxToolCalls int) (TurnOptions, error) {
 	}, nil
 }
 
+func ExecutePlanTurnOptions() TurnOptions {
+	return TurnOptions{
+		ToolCallPolicies: []*ToolCallPolicy{PlanExecuteToolCallPolicy()},
+	}
+}
+
+func PlanExecuteToolCallPolicy() *ToolCallPolicy {
+	return &ToolCallPolicy{
+		ToolName: PlanToolName,
+		Reject: func(ctx ToolCallPolicyContext) (string, bool) {
+			action := planActionFromRawArgs(ctx.Args)
+			switch action {
+			case "set", "clear":
+				return "execute_plan: the persisted plan is already confirmed; do not replace or clear it during execution.\nNext: execute the current active step, then call plan with action=update for that same step using status, evidence, or note.", true
+			default:
+				return "", false
+			}
+		},
+	}
+}
+
+func planActionFromRawArgs(args json.RawMessage) string {
+	var raw struct {
+		Action string `json:"action"`
+	}
+	if err := json.Unmarshal(args, &raw); err != nil {
+		return ""
+	}
+	return normalizePlanAction(raw.Action)
+}
+
 func PlanOnlyUserPrompt(request string) string {
 	request = strings.TrimSpace(request)
 	if request == "" {

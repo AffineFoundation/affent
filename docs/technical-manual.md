@@ -125,7 +125,9 @@ omitted, the current unfinished step called out explicitly, and a reminder to
 update that same step with status, evidence, or note after progress. This is a
 bounded execution aid rather than a strict workflow engine: the runtime steers
 the model to execute and update the current step, while loop guards and evals
-track whether the plan tool was used cleanly.
+track whether the plan tool was used cleanly. Execute-plan turns also reject
+`plan action=set` and `plan action=clear` so a confirmed plan is updated in
+place instead of being silently replaced during execution.
 
 ## Docker Paths
 

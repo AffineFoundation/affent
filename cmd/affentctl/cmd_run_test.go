@@ -131,6 +131,8 @@ func TestPrepareRunExecutePlanUsesPersistedUnfinishedPlan(t *testing.T) {
 		"Execute-plan mode is enabled.",
 		"The user has confirmed execution",
 		"plan:1/2",
+		"Execute only the current unfinished step first",
+		"call plan with action=update for that same step",
 		"Proceed with the active persisted plan.",
 	} {
 		if !strings.Contains(got, want) {

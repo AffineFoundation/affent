@@ -68,6 +68,7 @@ Required: --model. --prompt is required unless --execute-plan is set.`)
 		return code
 	}
 	defer b.close()
+	turnOpts := agent.TurnOptions{}
 	if *planOnly {
 		if err := enableRunPlanOnly(b); err != nil {
 			fmt.Fprintf(os.Stderr, "plan-only: %v\n", err)
@@ -81,6 +82,7 @@ Required: --model. --prompt is required unless --execute-plan is set.`)
 			fmt.Fprintf(os.Stderr, "execute-plan: %v\n", err)
 			return exitUsage
 		}
+		turnOpts = agent.ExecutePlanTurnOptions()
 	}
 
 	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
@@ -96,7 +98,7 @@ Required: --model. --prompt is required unless --execute-plan is set.`)
 		b.log.Info().Str("session_id", b.sessionID).Msg("new session")
 	}
 
-	turnID, err := b.loop.SendUser(ctx, prompt)
+	turnID, err := b.loop.SendUserWithOptions(ctx, prompt, turnOpts)
 	if err != nil {
 		b.log.Error().Err(err).Msg("send user")
 		return exitRuntime
@@ -207,7 +209,7 @@ func runExecutePlanPrompt(request, label string) string {
 	}
 	return `Execute-plan mode is enabled.
 
-The user has confirmed execution of this session's persisted task plan (` + strings.TrimSpace(label) + `). Continue from AFFENT ACTIVE PLAN, execute the next concrete step, update the plan as progress changes, and do not restart planning unless the persisted plan is stale or impossible to execute.
+The user has confirmed execution of this session's persisted task plan (` + strings.TrimSpace(label) + `). Continue from AFFENT ACTIVE PLAN. Execute only the current unfinished step first, use the tools needed for that step, then call plan with action=update for that same step before the final answer. Mark the step completed only when its evidence or implementation is actually done; otherwise keep it in_progress or blocked with a short note. Do not restart planning or call action=set unless the persisted plan is stale or impossible to execute.
 
 User confirmation/request:
 ` + request
