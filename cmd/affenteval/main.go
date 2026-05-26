@@ -753,12 +753,7 @@ func (s *batchSummary) addExpectations(res agenteval.BatchResult) {
 		}
 		addCountMapValue(&s.ExpectationSourceAccess, status)
 	}
-	caps := expectationCapabilitySet(exp)
-	keys := make([]string, 0, len(caps))
-	for cap := range caps {
-		keys = append(keys, cap)
-	}
-	sort.Strings(keys)
+	keys := expectationCapabilityNames(exp)
 	addCountMapValues(&s.ExpectationCapabilities, keys)
 	if res.OK {
 		addCountMapValues(&s.ExpectationCapabilityPass, keys)
@@ -912,6 +907,50 @@ func expectationCapabilitySet(exp agenteval.DebugScenarioExpectations) map[strin
 		caps["workspace"] = true
 	}
 	return caps
+}
+
+func expectationCapabilityNames(exp agenteval.DebugScenarioExpectations) []string {
+	caps := expectationCapabilitySet(exp)
+	if len(caps) == 0 {
+		return nil
+	}
+	names := make([]string, 0, len(caps))
+	for cap := range caps {
+		names = append(names, cap)
+	}
+	sort.Strings(names)
+	return names
+}
+
+func batchResultExpectationCapabilityNames(res agenteval.BatchResult) []string {
+	if res.Expectations == nil {
+		return nil
+	}
+	return expectationCapabilityNames(*res.Expectations)
+}
+
+func batchResultExpectationCapabilityOutcome(res agenteval.BatchResult, names []string) string {
+	if len(names) == 0 {
+		return ""
+	}
+	if res.OK {
+		return "passed"
+	}
+	return "failed"
+}
+
+func batchResultExpectationCapabilityPassedNames(res agenteval.BatchResult, names []string) []string {
+	if len(names) == 0 || !res.OK {
+		return nil
+	}
+	return append([]string(nil), names...)
+}
+
+func batchResultExpectationCapabilityFailedNames(res agenteval.BatchResult, names []string) []string {
+	if len(names) == 0 || res.OK {
+		return nil
+	}
+	return append([]string(nil), names...)
 }
 
 func addExpectationToolCapabilities(caps map[string]bool, tool string) {
@@ -1762,95 +1801,99 @@ func normalizedEvalExecutor(executor string) string {
 
 type batchResultRecord struct {
 	evalJSONLMetadata
-	Type                       string                                     `json:"type"`
-	Scenario                   string                                     `json:"scenario"`
-	OK                         bool                                       `json:"ok"`
-	RunExitCode                int                                        `json:"run_exit_code"`
-	DurationMS                 int64                                      `json:"duration_ms"`
-	Workspace                  string                                     `json:"workspace"`
-	TracePath                  string                                     `json:"trace_path"`
-	DebugManifestPath          string                                     `json:"debug_manifest_path,omitempty"`
-	TimelinePath               string                                     `json:"timeline_path,omitempty"`
-	FinalTextPath              string                                     `json:"final_text_path,omitempty"`
-	StdoutPath                 string                                     `json:"stdout_path,omitempty"`
-	StderrPath                 string                                     `json:"stderr_path,omitempty"`
-	AffentctlCommand           []string                                   `json:"affentctl_command,omitempty"`
-	Expectations               *agenteval.DebugScenarioExpectations       `json:"expectations,omitempty"`
-	TraceSchemaVersion         int                                        `json:"trace_schema_version,omitempty"`
-	TurnEndReason              string                                     `json:"turn_end_reason,omitempty"`
-	ToolCalls                  int                                        `json:"tool_calls"`
-	ToolErrors                 int                                        `json:"tool_errors"`
-	ToolRepaired               int                                        `json:"tool_repaired"`
-	ToolNameCanonicalized      int                                        `json:"tool_name_canonicalized"`
-	ToolRepairCalls            int                                        `json:"tool_repair_calls,omitempty"`
-	ToolRepairSucceeded        int                                        `json:"tool_repair_succeeded,omitempty"`
-	ToolRepairFailed           int                                        `json:"tool_repair_failed,omitempty"`
-	ToolRepairNotes            int                                        `json:"tool_repair_notes,omitempty"`
-	ToolRepairByKind           map[string]int                             `json:"tool_repair_by_kind,omitempty"`
-	ToolFailureByKind          map[string]int                             `json:"tool_failure_by_kind,omitempty"`
-	ToolFailureExamples        map[string][]agenteval.ToolFailureExample  `json:"tool_failure_examples,omitempty"`
-	MemoryUpdateExamples       []agenteval.MemoryUpdateExample            `json:"memory_update_examples,omitempty"`
-	RuntimeErrorByKind         map[string]int                             `json:"runtime_error_by_kind,omitempty"`
-	RuntimeErrorExamples       map[string][]agenteval.RuntimeErrorExample `json:"runtime_error_examples,omitempty"`
-	RuntimeSurface             *runtimeSurfaceSummary                     `json:"runtime_surface,omitempty"`
-	RuntimeSurfaceScenarios    int                                        `json:"runtime_surface_scenarios,omitempty"`
-	RuntimeSurfaceTools        map[string]int                             `json:"runtime_surface_tools,omitempty"`
-	RuntimeSurfaceCapabilities map[string]int                             `json:"runtime_surface_capabilities,omitempty"`
-	LoopDecisions              int                                        `json:"loop_decisions,omitempty"`
-	LoopDecisionByKind         map[string]int                             `json:"loop_decision_by_kind,omitempty"`
-	LoopDecisionByDecision     map[string]int                             `json:"loop_decision_by_decision,omitempty"`
-	LoopDecisionExamples       []agenteval.LoopDecision                   `json:"loop_decision_examples,omitempty"`
-	ContextCompactions         int                                        `json:"context_compactions,omitempty"`
-	ContextCompactionsReactive int                                        `json:"context_compactions_reactive,omitempty"`
-	ContextCompactionRemoved   int                                        `json:"context_compaction_removed_messages,omitempty"`
-	ContextCompactionSummary   int                                        `json:"context_compaction_summary_bytes,omitempty"`
-	ContextCompactionExamples  []agenteval.ContextCompaction              `json:"context_compaction_examples,omitempty"`
-	LoopGuardInterventions     int                                        `json:"loop_guard_interventions"`
-	ForcedNoTools              int                                        `json:"forced_no_tools"`
-	SourceAccessResults        int                                        `json:"source_access_results"`
-	SourceAccessVerified       int                                        `json:"source_access_verified"`
-	SourceAccessDiscoveryOnly  int                                        `json:"source_access_discovery_only"`
-	SourceAccessNetwork        int                                        `json:"source_access_network"`
-	SourceAccessDynamicPartial int                                        `json:"source_access_dynamic_partial"`
-	SourceAccessExamples       []agenteval.SourceAccessExample            `json:"source_access_examples,omitempty"`
-	MemoryUpdates              int                                        `json:"memory_updates"`
-	MemoryUpdateAdd            int                                        `json:"memory_update_add"`
-	MemoryUpdateReplace        int                                        `json:"memory_update_replace"`
-	MemoryUpdateRemove         int                                        `json:"memory_update_remove"`
-	SessionSearchCalls         int                                        `json:"session_search_calls,omitempty"`
-	SessionSearchResults       int                                        `json:"session_search_results,omitempty"`
-	SessionSearchContextHits   int                                        `json:"session_search_context_hits,omitempty"`
-	SessionSearchMatchedTerms  int                                        `json:"session_search_matched_terms,omitempty"`
-	ToolDurationMS             int64                                      `json:"tool_duration_ms"`
-	ToolContextTruncated       int                                        `json:"tool_context_truncated"`
-	ToolContextOmittedBytes    int                                        `json:"tool_context_omitted_bytes"`
-	ToolArgsTruncated          int                                        `json:"tool_args_truncated"`
-	ToolArgsOmittedBytes       int                                        `json:"tool_args_omitted_bytes"`
-	ToolResultsTruncated       int                                        `json:"tool_results_truncated"`
-	ToolResultsOmittedBytes    int                                        `json:"tool_results_omitted_bytes"`
-	ToolResultArtifacts        int                                        `json:"tool_result_artifacts"`
-	ToolTruncationExamples     []agenteval.ToolTruncationExample          `json:"tool_truncation_examples,omitempty"`
-	VerifierCommand            string                                     `json:"verifier_command,omitempty"`
-	VerifierRan                bool                                       `json:"verifier_ran"`
-	VerifierOK                 bool                                       `json:"verifier_ok"`
-	VerifierExitCode           int                                        `json:"verifier_exit_code"`
-	VerifierDurationMS         int64                                      `json:"verifier_duration_ms"`
-	VerifierOutputBytes        int                                        `json:"verifier_output_bytes"`
-	VerifierOutputTruncated    bool                                       `json:"verifier_output_truncated"`
-	VerifierOutputOmittedBytes int                                        `json:"verifier_output_omitted_bytes"`
-	VerifierOutputCapBytes     int                                        `json:"verifier_output_cap_bytes"`
-	TraceEvents                int                                        `json:"trace_events,omitempty"`
-	TraceEventTypes            map[string]int                             `json:"trace_event_types,omitempty"`
-	InputTokens                int                                        `json:"input_tokens"`
-	OutputTokens               int                                        `json:"output_tokens"`
-	WorkspaceRemoved           bool                                       `json:"workspace_removed,omitempty"`
-	CleanupError               string                                     `json:"cleanup_error,omitempty"`
-	Failures                   []string                                   `json:"failures,omitempty"`
-	FailureKinds               map[string]int                             `json:"failure_kinds,omitempty"`
-	FailureHints               failureHintMap                             `json:"failure_hints,omitempty"`
-	ToolFailureHints           failureHintMap                             `json:"tool_failure_hints,omitempty"`
-	RuntimeErrorHints          failureHintMap                             `json:"runtime_error_hints,omitempty"`
-	DebugBrief                 *agenteval.DebugBrief                      `json:"debug_brief,omitempty"`
+	Type                             string                                     `json:"type"`
+	Scenario                         string                                     `json:"scenario"`
+	OK                               bool                                       `json:"ok"`
+	RunExitCode                      int                                        `json:"run_exit_code"`
+	DurationMS                       int64                                      `json:"duration_ms"`
+	Workspace                        string                                     `json:"workspace"`
+	TracePath                        string                                     `json:"trace_path"`
+	DebugManifestPath                string                                     `json:"debug_manifest_path,omitempty"`
+	TimelinePath                     string                                     `json:"timeline_path,omitempty"`
+	FinalTextPath                    string                                     `json:"final_text_path,omitempty"`
+	StdoutPath                       string                                     `json:"stdout_path,omitempty"`
+	StderrPath                       string                                     `json:"stderr_path,omitempty"`
+	AffentctlCommand                 []string                                   `json:"affentctl_command,omitempty"`
+	Expectations                     *agenteval.DebugScenarioExpectations       `json:"expectations,omitempty"`
+	ExpectationCapabilityNames       []string                                   `json:"expectation_capability_names,omitempty"`
+	ExpectationCapabilityOutcome     string                                     `json:"expectation_capability_outcome,omitempty"`
+	ExpectationCapabilityPassedNames []string                                   `json:"expectation_capability_passed_names,omitempty"`
+	ExpectationCapabilityFailedNames []string                                   `json:"expectation_capability_failed_names,omitempty"`
+	TraceSchemaVersion               int                                        `json:"trace_schema_version,omitempty"`
+	TurnEndReason                    string                                     `json:"turn_end_reason,omitempty"`
+	ToolCalls                        int                                        `json:"tool_calls"`
+	ToolErrors                       int                                        `json:"tool_errors"`
+	ToolRepaired                     int                                        `json:"tool_repaired"`
+	ToolNameCanonicalized            int                                        `json:"tool_name_canonicalized"`
+	ToolRepairCalls                  int                                        `json:"tool_repair_calls,omitempty"`
+	ToolRepairSucceeded              int                                        `json:"tool_repair_succeeded,omitempty"`
+	ToolRepairFailed                 int                                        `json:"tool_repair_failed,omitempty"`
+	ToolRepairNotes                  int                                        `json:"tool_repair_notes,omitempty"`
+	ToolRepairByKind                 map[string]int                             `json:"tool_repair_by_kind,omitempty"`
+	ToolFailureByKind                map[string]int                             `json:"tool_failure_by_kind,omitempty"`
+	ToolFailureExamples              map[string][]agenteval.ToolFailureExample  `json:"tool_failure_examples,omitempty"`
+	MemoryUpdateExamples             []agenteval.MemoryUpdateExample            `json:"memory_update_examples,omitempty"`
+	RuntimeErrorByKind               map[string]int                             `json:"runtime_error_by_kind,omitempty"`
+	RuntimeErrorExamples             map[string][]agenteval.RuntimeErrorExample `json:"runtime_error_examples,omitempty"`
+	RuntimeSurface                   *runtimeSurfaceSummary                     `json:"runtime_surface,omitempty"`
+	RuntimeSurfaceScenarios          int                                        `json:"runtime_surface_scenarios,omitempty"`
+	RuntimeSurfaceTools              map[string]int                             `json:"runtime_surface_tools,omitempty"`
+	RuntimeSurfaceCapabilities       map[string]int                             `json:"runtime_surface_capabilities,omitempty"`
+	LoopDecisions                    int                                        `json:"loop_decisions,omitempty"`
+	LoopDecisionByKind               map[string]int                             `json:"loop_decision_by_kind,omitempty"`
+	LoopDecisionByDecision           map[string]int                             `json:"loop_decision_by_decision,omitempty"`
+	LoopDecisionExamples             []agenteval.LoopDecision                   `json:"loop_decision_examples,omitempty"`
+	ContextCompactions               int                                        `json:"context_compactions,omitempty"`
+	ContextCompactionsReactive       int                                        `json:"context_compactions_reactive,omitempty"`
+	ContextCompactionRemoved         int                                        `json:"context_compaction_removed_messages,omitempty"`
+	ContextCompactionSummary         int                                        `json:"context_compaction_summary_bytes,omitempty"`
+	ContextCompactionExamples        []agenteval.ContextCompaction              `json:"context_compaction_examples,omitempty"`
+	LoopGuardInterventions           int                                        `json:"loop_guard_interventions"`
+	ForcedNoTools                    int                                        `json:"forced_no_tools"`
+	SourceAccessResults              int                                        `json:"source_access_results"`
+	SourceAccessVerified             int                                        `json:"source_access_verified"`
+	SourceAccessDiscoveryOnly        int                                        `json:"source_access_discovery_only"`
+	SourceAccessNetwork              int                                        `json:"source_access_network"`
+	SourceAccessDynamicPartial       int                                        `json:"source_access_dynamic_partial"`
+	SourceAccessExamples             []agenteval.SourceAccessExample            `json:"source_access_examples,omitempty"`
+	MemoryUpdates                    int                                        `json:"memory_updates"`
+	MemoryUpdateAdd                  int                                        `json:"memory_update_add"`
+	MemoryUpdateReplace              int                                        `json:"memory_update_replace"`
+	MemoryUpdateRemove               int                                        `json:"memory_update_remove"`
+	SessionSearchCalls               int                                        `json:"session_search_calls,omitempty"`
+	SessionSearchResults             int                                        `json:"session_search_results,omitempty"`
+	SessionSearchContextHits         int                                        `json:"session_search_context_hits,omitempty"`
+	SessionSearchMatchedTerms        int                                        `json:"session_search_matched_terms,omitempty"`
+	ToolDurationMS                   int64                                      `json:"tool_duration_ms"`
+	ToolContextTruncated             int                                        `json:"tool_context_truncated"`
+	ToolContextOmittedBytes          int                                        `json:"tool_context_omitted_bytes"`
+	ToolArgsTruncated                int                                        `json:"tool_args_truncated"`
+	ToolArgsOmittedBytes             int                                        `json:"tool_args_omitted_bytes"`
+	ToolResultsTruncated             int                                        `json:"tool_results_truncated"`
+	ToolResultsOmittedBytes          int                                        `json:"tool_results_omitted_bytes"`
+	ToolResultArtifacts              int                                        `json:"tool_result_artifacts"`
+	ToolTruncationExamples           []agenteval.ToolTruncationExample          `json:"tool_truncation_examples,omitempty"`
+	VerifierCommand                  string                                     `json:"verifier_command,omitempty"`
+	VerifierRan                      bool                                       `json:"verifier_ran"`
+	VerifierOK                       bool                                       `json:"verifier_ok"`
+	VerifierExitCode                 int                                        `json:"verifier_exit_code"`
+	VerifierDurationMS               int64                                      `json:"verifier_duration_ms"`
+	VerifierOutputBytes              int                                        `json:"verifier_output_bytes"`
+	VerifierOutputTruncated          bool                                       `json:"verifier_output_truncated"`
+	VerifierOutputOmittedBytes       int                                        `json:"verifier_output_omitted_bytes"`
+	VerifierOutputCapBytes           int                                        `json:"verifier_output_cap_bytes"`
+	TraceEvents                      int                                        `json:"trace_events,omitempty"`
+	TraceEventTypes                  map[string]int                             `json:"trace_event_types,omitempty"`
+	InputTokens                      int                                        `json:"input_tokens"`
+	OutputTokens                     int                                        `json:"output_tokens"`
+	WorkspaceRemoved                 bool                                       `json:"workspace_removed,omitempty"`
+	CleanupError                     string                                     `json:"cleanup_error,omitempty"`
+	Failures                         []string                                   `json:"failures,omitempty"`
+	FailureKinds                     map[string]int                             `json:"failure_kinds,omitempty"`
+	FailureHints                     failureHintMap                             `json:"failure_hints,omitempty"`
+	ToolFailureHints                 failureHintMap                             `json:"tool_failure_hints,omitempty"`
+	RuntimeErrorHints                failureHintMap                             `json:"runtime_error_hints,omitempty"`
+	DebugBrief                       *agenteval.DebugBrief                      `json:"debug_brief,omitempty"`
 
 	// Per-scenario delegation breakdown. Fields are omitted from the
 	// JSONL when the scenario used no delegation tools, so older
@@ -2021,103 +2064,109 @@ type runtimeSurfaceSummary struct {
 
 func printBatchResultJSONL(w io.Writer, meta evalJSONLMetadata, res agenteval.BatchResult) {
 	failureKinds := failureKindsForResult(res.Failures)
+	expectationCapabilityNames := batchResultExpectationCapabilityNames(res)
+	expectationCapabilityOutcome := batchResultExpectationCapabilityOutcome(res, expectationCapabilityNames)
 	writeJSONLine(w, batchResultRecord{
-		evalJSONLMetadata:          meta,
-		Type:                       "scenario",
-		Scenario:                   res.BatchScenario,
-		OK:                         res.OK,
-		RunExitCode:                res.RunExitCode,
-		DurationMS:                 res.Duration.Milliseconds(),
-		Workspace:                  res.Workspace,
-		TracePath:                  res.TracePath,
-		DebugManifestPath:          retainedDebugPath(res.DebugManifestPath, res.WorkspaceRemoved),
-		TimelinePath:               retainedDebugPath(res.TimelinePath, res.WorkspaceRemoved),
-		FinalTextPath:              retainedDebugPath(res.FinalTextPath, res.WorkspaceRemoved),
-		StdoutPath:                 retainedDebugPath(res.StdoutPath, res.WorkspaceRemoved),
-		StderrPath:                 retainedDebugPath(res.StderrPath, res.WorkspaceRemoved),
-		AffentctlCommand:           append([]string(nil), res.AffentctlCommand...),
-		Expectations:               res.Expectations,
-		TraceSchemaVersion:         res.TraceSchemaVersion,
-		TurnEndReason:              res.TurnEndReason,
-		ToolCalls:                  res.ToolCalls,
-		ToolErrors:                 res.ToolStats.ToolErrors,
-		ToolRepaired:               res.ToolStats.ToolArgsRepaired,
-		ToolNameCanonicalized:      res.ToolStats.ToolNameCanonicalized,
-		ToolRepairCalls:            res.Repair.Calls,
-		ToolRepairSucceeded:        res.Repair.SucceededCalls,
-		ToolRepairFailed:           res.Repair.FailedCalls,
-		ToolRepairNotes:            res.Repair.Notes,
-		ToolRepairByKind:           cloneStringIntMap(res.Repair.ByKind),
-		ToolFailureByKind:          cloneStringIntMap(res.ToolStats.ToolFailureByKind),
-		ToolFailureExamples:        cloneToolFailureExamples(res.ToolFailureExamples),
-		MemoryUpdateExamples:       cloneMemoryUpdateExamples(res.MemoryUpdateExamples),
-		RuntimeErrorByKind:         cloneStringIntMap(res.RuntimeErrorByKind),
-		RuntimeErrorExamples:       cloneRuntimeErrorExamples(res.RuntimeErrorExamples),
-		RuntimeSurface:             runtimeSurfaceSummaryForJSONL(res.RuntimeSurface),
-		LoopDecisions:              res.LoopDecisionStats.Count,
-		LoopDecisionByKind:         cloneStringIntMap(res.LoopDecisionStats.ByKind),
-		LoopDecisionByDecision:     cloneStringIntMap(res.LoopDecisionStats.ByDecision),
-		LoopDecisionExamples:       cloneLoopDecisionExamples(res.LoopDecisionStats.Examples),
-		ContextCompactions:         res.ContextCompactions.Count,
-		ContextCompactionsReactive: res.ContextCompactions.Reactive,
-		ContextCompactionRemoved:   res.ContextCompactions.RemovedMessages,
-		ContextCompactionSummary:   res.ContextCompactions.SummaryBytes,
-		ContextCompactionExamples:  cloneContextCompactionExamples(res.ContextCompactions.Examples),
-		LoopGuardInterventions:     res.ToolStats.LoopGuardInterventions,
-		ForcedNoTools:              res.ToolStats.ForcedNoTools,
-		SourceAccessResults:        res.ToolStats.SourceAccessResults,
-		SourceAccessVerified:       res.ToolStats.SourceAccessVerified,
-		SourceAccessDiscoveryOnly:  res.ToolStats.SourceAccessDiscoveryOnly,
-		SourceAccessNetwork:        res.ToolStats.SourceAccessNetwork,
-		SourceAccessDynamicPartial: res.ToolStats.SourceAccessDynamicPartial,
-		SourceAccessExamples:       cloneSourceAccessExamples(res.SourceAccessExamples),
-		MemoryUpdates:              res.ToolStats.MemoryUpdates,
-		MemoryUpdateAdd:            res.ToolStats.MemoryUpdateAdd,
-		MemoryUpdateReplace:        res.ToolStats.MemoryUpdateReplace,
-		MemoryUpdateRemove:         res.ToolStats.MemoryUpdateRemove,
-		SessionSearchCalls:         res.ToolStats.SessionSearchCalls,
-		SessionSearchResults:       res.ToolStats.SessionSearchResults,
-		SessionSearchContextHits:   res.ToolStats.SessionSearchContextHits,
-		SessionSearchMatchedTerms:  res.ToolStats.SessionSearchMatchedTerms,
-		ToolDurationMS:             res.ToolStats.ToolDurationMS,
-		ToolContextTruncated:       res.ToolStats.ToolContextTruncated,
-		ToolContextOmittedBytes:    res.ToolStats.ToolContextOmittedBytes,
-		ToolArgsTruncated:          res.ToolTruncation.ArgsTruncated,
-		ToolArgsOmittedBytes:       res.ToolTruncation.ArgsOmittedBytes,
-		ToolResultsTruncated:       res.ToolTruncation.ResultsTruncated,
-		ToolResultsOmittedBytes:    res.ToolTruncation.ResultsOmittedBytes,
-		ToolResultArtifacts:        res.ToolTruncation.ResultArtifacts,
-		ToolTruncationExamples:     cloneToolTruncationExamples(res.ToolTruncationExamples),
-		VerifierCommand:            res.Verifier.Command,
-		VerifierRan:                res.Verifier.Ran,
-		VerifierOK:                 res.Verifier.OK,
-		VerifierExitCode:           res.Verifier.ExitCode,
-		VerifierDurationMS:         res.Verifier.Duration.Milliseconds(),
-		VerifierOutputBytes:        res.Verifier.OutputBytes,
-		VerifierOutputTruncated:    res.Verifier.OutputTruncated,
-		VerifierOutputOmittedBytes: res.Verifier.OutputOmittedBytes,
-		VerifierOutputCapBytes:     res.Verifier.OutputCapBytes,
-		TraceEvents:                res.TraceEvents,
-		TraceEventTypes:            cloneStringIntMap(res.TraceEventTypes),
-		InputTokens:                res.Usage.InputTokens,
-		OutputTokens:               res.Usage.OutputTokens,
-		WorkspaceRemoved:           res.WorkspaceRemoved,
-		CleanupError:               res.CleanupError,
-		Failures:                   res.Failures,
-		FailureKinds:               failureKinds,
-		FailureHints:               failureHintsForKinds(failureKinds),
-		ToolFailureHints:           toolFailureHintsForKinds(res.ToolStats.ToolFailureByKind),
-		RuntimeErrorHints:          failureHintsForKinds(res.RuntimeErrorByKind),
-		DebugBrief:                 agenteval.BuildDebugBrief(res),
-		FocusedTaskCalls:           res.Delegation.FocusedTaskCalls,
-		FocusedTaskByType:          res.Delegation.FocusedTaskByType,
-		FocusedTaskErrors:          res.Delegation.FocusedTaskErrors,
-		SubagentCalls:              res.Delegation.SubagentCalls,
-		SubagentByMode:             res.Delegation.SubagentByMode,
-		SubagentErrors:             res.Delegation.SubagentErrors,
-		PlanCalls:                  res.Plan.Calls,
-		PlanByAction:               cloneStringIntMap(res.Plan.ByAction),
-		PlanErrors:                 res.Plan.Errors,
+		evalJSONLMetadata:                meta,
+		Type:                             "scenario",
+		Scenario:                         res.BatchScenario,
+		OK:                               res.OK,
+		RunExitCode:                      res.RunExitCode,
+		DurationMS:                       res.Duration.Milliseconds(),
+		Workspace:                        res.Workspace,
+		TracePath:                        res.TracePath,
+		DebugManifestPath:                retainedDebugPath(res.DebugManifestPath, res.WorkspaceRemoved),
+		TimelinePath:                     retainedDebugPath(res.TimelinePath, res.WorkspaceRemoved),
+		FinalTextPath:                    retainedDebugPath(res.FinalTextPath, res.WorkspaceRemoved),
+		StdoutPath:                       retainedDebugPath(res.StdoutPath, res.WorkspaceRemoved),
+		StderrPath:                       retainedDebugPath(res.StderrPath, res.WorkspaceRemoved),
+		AffentctlCommand:                 append([]string(nil), res.AffentctlCommand...),
+		Expectations:                     res.Expectations,
+		ExpectationCapabilityNames:       expectationCapabilityNames,
+		ExpectationCapabilityOutcome:     expectationCapabilityOutcome,
+		ExpectationCapabilityPassedNames: batchResultExpectationCapabilityPassedNames(res, expectationCapabilityNames),
+		ExpectationCapabilityFailedNames: batchResultExpectationCapabilityFailedNames(res, expectationCapabilityNames),
+		TraceSchemaVersion:               res.TraceSchemaVersion,
+		TurnEndReason:                    res.TurnEndReason,
+		ToolCalls:                        res.ToolCalls,
+		ToolErrors:                       res.ToolStats.ToolErrors,
+		ToolRepaired:                     res.ToolStats.ToolArgsRepaired,
+		ToolNameCanonicalized:            res.ToolStats.ToolNameCanonicalized,
+		ToolRepairCalls:                  res.Repair.Calls,
+		ToolRepairSucceeded:              res.Repair.SucceededCalls,
+		ToolRepairFailed:                 res.Repair.FailedCalls,
+		ToolRepairNotes:                  res.Repair.Notes,
+		ToolRepairByKind:                 cloneStringIntMap(res.Repair.ByKind),
+		ToolFailureByKind:                cloneStringIntMap(res.ToolStats.ToolFailureByKind),
+		ToolFailureExamples:              cloneToolFailureExamples(res.ToolFailureExamples),
+		MemoryUpdateExamples:             cloneMemoryUpdateExamples(res.MemoryUpdateExamples),
+		RuntimeErrorByKind:               cloneStringIntMap(res.RuntimeErrorByKind),
+		RuntimeErrorExamples:             cloneRuntimeErrorExamples(res.RuntimeErrorExamples),
+		RuntimeSurface:                   runtimeSurfaceSummaryForJSONL(res.RuntimeSurface),
+		LoopDecisions:                    res.LoopDecisionStats.Count,
+		LoopDecisionByKind:               cloneStringIntMap(res.LoopDecisionStats.ByKind),
+		LoopDecisionByDecision:           cloneStringIntMap(res.LoopDecisionStats.ByDecision),
+		LoopDecisionExamples:             cloneLoopDecisionExamples(res.LoopDecisionStats.Examples),
+		ContextCompactions:               res.ContextCompactions.Count,
+		ContextCompactionsReactive:       res.ContextCompactions.Reactive,
+		ContextCompactionRemoved:         res.ContextCompactions.RemovedMessages,
+		ContextCompactionSummary:         res.ContextCompactions.SummaryBytes,
+		ContextCompactionExamples:        cloneContextCompactionExamples(res.ContextCompactions.Examples),
+		LoopGuardInterventions:           res.ToolStats.LoopGuardInterventions,
+		ForcedNoTools:                    res.ToolStats.ForcedNoTools,
+		SourceAccessResults:              res.ToolStats.SourceAccessResults,
+		SourceAccessVerified:             res.ToolStats.SourceAccessVerified,
+		SourceAccessDiscoveryOnly:        res.ToolStats.SourceAccessDiscoveryOnly,
+		SourceAccessNetwork:              res.ToolStats.SourceAccessNetwork,
+		SourceAccessDynamicPartial:       res.ToolStats.SourceAccessDynamicPartial,
+		SourceAccessExamples:             cloneSourceAccessExamples(res.SourceAccessExamples),
+		MemoryUpdates:                    res.ToolStats.MemoryUpdates,
+		MemoryUpdateAdd:                  res.ToolStats.MemoryUpdateAdd,
+		MemoryUpdateReplace:              res.ToolStats.MemoryUpdateReplace,
+		MemoryUpdateRemove:               res.ToolStats.MemoryUpdateRemove,
+		SessionSearchCalls:               res.ToolStats.SessionSearchCalls,
+		SessionSearchResults:             res.ToolStats.SessionSearchResults,
+		SessionSearchContextHits:         res.ToolStats.SessionSearchContextHits,
+		SessionSearchMatchedTerms:        res.ToolStats.SessionSearchMatchedTerms,
+		ToolDurationMS:                   res.ToolStats.ToolDurationMS,
+		ToolContextTruncated:             res.ToolStats.ToolContextTruncated,
+		ToolContextOmittedBytes:          res.ToolStats.ToolContextOmittedBytes,
+		ToolArgsTruncated:                res.ToolTruncation.ArgsTruncated,
+		ToolArgsOmittedBytes:             res.ToolTruncation.ArgsOmittedBytes,
+		ToolResultsTruncated:             res.ToolTruncation.ResultsTruncated,
+		ToolResultsOmittedBytes:          res.ToolTruncation.ResultsOmittedBytes,
+		ToolResultArtifacts:              res.ToolTruncation.ResultArtifacts,
+		ToolTruncationExamples:           cloneToolTruncationExamples(res.ToolTruncationExamples),
+		VerifierCommand:                  res.Verifier.Command,
+		VerifierRan:                      res.Verifier.Ran,
+		VerifierOK:                       res.Verifier.OK,
+		VerifierExitCode:                 res.Verifier.ExitCode,
+		VerifierDurationMS:               res.Verifier.Duration.Milliseconds(),
+		VerifierOutputBytes:              res.Verifier.OutputBytes,
+		VerifierOutputTruncated:          res.Verifier.OutputTruncated,
+		VerifierOutputOmittedBytes:       res.Verifier.OutputOmittedBytes,
+		VerifierOutputCapBytes:           res.Verifier.OutputCapBytes,
+		TraceEvents:                      res.TraceEvents,
+		TraceEventTypes:                  cloneStringIntMap(res.TraceEventTypes),
+		InputTokens:                      res.Usage.InputTokens,
+		OutputTokens:                     res.Usage.OutputTokens,
+		WorkspaceRemoved:                 res.WorkspaceRemoved,
+		CleanupError:                     res.CleanupError,
+		Failures:                         res.Failures,
+		FailureKinds:                     failureKinds,
+		FailureHints:                     failureHintsForKinds(failureKinds),
+		ToolFailureHints:                 toolFailureHintsForKinds(res.ToolStats.ToolFailureByKind),
+		RuntimeErrorHints:                failureHintsForKinds(res.RuntimeErrorByKind),
+		DebugBrief:                       agenteval.BuildDebugBrief(res),
+		FocusedTaskCalls:                 res.Delegation.FocusedTaskCalls,
+		FocusedTaskByType:                res.Delegation.FocusedTaskByType,
+		FocusedTaskErrors:                res.Delegation.FocusedTaskErrors,
+		SubagentCalls:                    res.Delegation.SubagentCalls,
+		SubagentByMode:                   res.Delegation.SubagentByMode,
+		SubagentErrors:                   res.Delegation.SubagentErrors,
+		PlanCalls:                        res.Plan.Calls,
+		PlanByAction:                     cloneStringIntMap(res.Plan.ByAction),
+		PlanErrors:                       res.Plan.Errors,
 	})
 }
 

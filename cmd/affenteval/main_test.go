@@ -484,6 +484,37 @@ func TestApplyQualityGateProfile(t *testing.T) {
 	}
 }
 
+func TestBatchResultExpectationCapabilityOutcome(t *testing.T) {
+	res := agenteval.BatchResult{
+		OK: false,
+		Expectations: &agenteval.DebugScenarioExpectations{
+			RequiredTools: []string{"browser_network_read", "memory"},
+			ExecutePlan:   true,
+		},
+	}
+	names := batchResultExpectationCapabilityNames(res)
+	wantNames := []string{"browser", "memory", "plan", "source_access"}
+	if !reflect.DeepEqual(names, wantNames) {
+		t.Fatalf("capability names = %#v, want %#v", names, wantNames)
+	}
+	if got := batchResultExpectationCapabilityOutcome(res, names); got != "failed" {
+		t.Fatalf("outcome = %q, want failed", got)
+	}
+	if got := batchResultExpectationCapabilityFailedNames(res, names); !reflect.DeepEqual(got, wantNames) {
+		t.Fatalf("failed names = %#v, want %#v", got, wantNames)
+	}
+	if got := batchResultExpectationCapabilityPassedNames(res, names); got != nil {
+		t.Fatalf("failed result should not report passed names: %#v", got)
+	}
+	res.OK = true
+	if got := batchResultExpectationCapabilityOutcome(res, names); got != "passed" {
+		t.Fatalf("outcome = %q, want passed", got)
+	}
+	if got := batchResultExpectationCapabilityPassedNames(res, names); !reflect.DeepEqual(got, wantNames) {
+		t.Fatalf("passed names = %#v, want %#v", got, wantNames)
+	}
+}
+
 type BatchRuntimeToolConfig struct {
 	RuntimeEvalMode  bool
 	RuntimeTools     string
@@ -1379,6 +1410,20 @@ func TestPrintBatchResultJSONL(t *testing.T) {
 	}
 	if !jsonArrayContainsString(expectations["required_tools"], "browser_network_read") {
 		t.Fatalf("expectations.required_tools = %#v\njson=%s", expectations["required_tools"], out.String())
+	}
+	if got["expectation_capability_outcome"] != "passed" {
+		t.Fatalf("expectation_capability_outcome = %#v\njson=%s", got["expectation_capability_outcome"], out.String())
+	}
+	for _, cap := range []string{"browser", "source_access", "web"} {
+		if !jsonArrayContainsString(got["expectation_capability_names"], cap) {
+			t.Fatalf("expectation_capability_names missing %q: %#v\njson=%s", cap, got["expectation_capability_names"], out.String())
+		}
+		if !jsonArrayContainsString(got["expectation_capability_passed_names"], cap) {
+			t.Fatalf("expectation_capability_passed_names missing %q: %#v\njson=%s", cap, got["expectation_capability_passed_names"], out.String())
+		}
+	}
+	if _, ok := got["expectation_capability_failed_names"]; ok {
+		t.Fatalf("passing result should omit expectation_capability_failed_names, got %#v", got["expectation_capability_failed_names"])
 	}
 	stats, ok := expectations["required_tool_stats_at_least"].(map[string]any)
 	if !ok || stats["source_access_network"] != float64(1) {

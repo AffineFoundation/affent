@@ -88,6 +88,12 @@ Scenario records describe one eval case:
   constraints, protected files, and related max-turn/compaction settings. This
   lets batch-analysis scripts inspect why a scenario passed or failed without
   reopening the debug manifest.
+- `expectation_capability_names`, `expectation_capability_outcome`,
+  `expectation_capability_passed_names`, and
+  `expectation_capability_failed_names`: optional scenario-level derived
+  capability families and their scenario outcome. These use the same broad
+  capability inference as summary records, so consumers can group individual
+  scenario rows without reimplementing expectation parsing.
 - `runtime_surface`: compact copy of the latest effective runtime surface when
   the trace reached turn start. It records sorted tool names, broad
   capabilities such as `web_fetch`, `web_search`, `browser`, `memory`, and
