@@ -131,6 +131,33 @@ func TestSearchReadsAffentserveDurableConversationLogs(t *testing.T) {
 	}
 }
 
+func TestSearchAssistantHitCarriesAdjacentUserContext(t *testing.T) {
+	dir := t.TempDir()
+	writeSessionLog(t, dir, "market-alpha", []testMessage{
+		{Role: "user", Content: "Alpha Coast Q2 stock analysis decision needed"},
+		{Role: "assistant", Content: "decision: use history marker HIST-STOCK-44 and risk label inventory-drag"},
+	})
+	writeSessionLog(t, dir, "direct-low", []testMessage{
+		{Role: "assistant", Content: "inventory-drag note without the stock name"},
+	})
+
+	hits, err := Search(context.Background(), dir, "", "Alpha Coast inventory-drag", 5, 3)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(hits) == 0 {
+		t.Fatal("expected adjacent user/assistant context hit")
+	}
+	if hits[0].SessionID != "market-alpha" || hits[0].Role != "assistant" {
+		t.Fatalf("adjacent context should rank the decision hit first, got %+v", hits)
+	}
+	for _, want := range []string{"user: Alpha Coast", "assistant: decision", "HIST-STOCK-44", "inventory-drag"} {
+		if !strings.Contains(hits[0].Snippet, want) {
+			t.Fatalf("contextual snippet missing %q:\n%+v", want, hits[0])
+		}
+	}
+}
+
 func TestSearchSkipsSymlinkSessionLogs(t *testing.T) {
 	dir := t.TempDir()
 	outside := filepath.Join(t.TempDir(), "outside.jsonl")

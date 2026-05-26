@@ -168,6 +168,7 @@ func scoreFile(ctx context.Context, path, sid string, terms []string, maxPerSess
 	reader := bufio.NewReaderSize(f, 64*1024)
 	var fileHits []Hit
 	turn := 0
+	var prev searchableMessage
 	for {
 		line, overLimit, err := jsonl.ReadBoundedLine(reader, maxSessionLogLineBytes)
 		if errors.Is(err, io.EOF) {
@@ -181,6 +182,7 @@ func scoreFile(ctx context.Context, path, sid string, terms []string, maxPerSess
 		}
 		turn++
 		if overLimit {
+			prev = searchableMessage{}
 			continue
 		}
 		var m struct {
@@ -188,16 +190,23 @@ func scoreFile(ctx context.Context, path, sid string, terms []string, maxPerSess
 			Content string `json:"content"`
 		}
 		if err := json.Unmarshal(line, &m); err != nil {
+			prev = searchableMessage{}
 			continue
 		}
 		if m.Role != "user" && m.Role != "assistant" {
+			prev = searchableMessage{}
 			continue
 		}
 		content := strings.TrimSpace(m.Content)
 		if content == "" {
+			prev = searchableMessage{}
 			continue
 		}
-		score := ScoreContent(content, terms)
+		score, snippetContent := scoreSearchableMessage(searchableMessage{
+			role:    m.Role,
+			content: content,
+		}, prev, terms)
+		prev = searchableMessage{role: m.Role, content: content}
 		if score <= 0 {
 			continue
 		}
@@ -205,7 +214,7 @@ func scoreFile(ctx context.Context, path, sid string, terms []string, maxPerSess
 			SessionID: sid,
 			TurnIdx:   turn,
 			Role:      m.Role,
-			Snippet:   SnippetAround(content, terms),
+			Snippet:   SnippetAround(snippetContent, terms),
 			Score:     score,
 			ModTime:   mtime,
 		}, maxPerSession)
@@ -215,6 +224,27 @@ func scoreFile(ctx context.Context, path, sid string, terms []string, maxPerSess
 		fileHits = fileHits[:maxPerSession]
 	}
 	return fileHits, nil
+}
+
+type searchableMessage struct {
+	role    string
+	content string
+}
+
+func scoreSearchableMessage(cur, prev searchableMessage, terms []string) (float64, string) {
+	score := ScoreContent(cur.content, terms)
+	if score <= 0 {
+		return 0, cur.content
+	}
+	if cur.role != "assistant" || prev.role != "user" || strings.TrimSpace(prev.content) == "" {
+		return score, cur.content
+	}
+	combined := prev.content + "\n" + cur.content
+	combinedScore := ScoreContent(combined, terms)
+	if combinedScore <= score {
+		return score, cur.content
+	}
+	return combinedScore, "user: " + prev.content + "\nassistant: " + cur.content
 }
 
 func regularFileModTime(path string) (string, bool) {
