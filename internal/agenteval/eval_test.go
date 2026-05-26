@@ -1359,7 +1359,30 @@ func TestWriteScenarioDebugArtifactsIndexesTraceAndFinalText(t *testing.T) {
 		FinalText:    "partial answer",
 		FinishReason: "stop",
 	}
-	err := writeScenarioDebugArtifacts(&res, BatchScenario{Prompt: "research with evidence"}, "partial answer\n", "runtime log\n", &trace)
+	scenario := BatchScenario{
+		Prompt:   "research with evidence",
+		Suites:   []string{longRunSuite, liveWebSuite},
+		MaxTurns: 12,
+		RequiredTools: []string{
+			"web_fetch",
+			"browser_network_read",
+		},
+		ForbiddenTools: []string{"shell"},
+		RequiredToolCounts: map[string]int{
+			"browser_network_read": 1,
+		},
+		RequiredToolArgContains: []ToolArgContainsRequirement{
+			{Tool: "browser_network_read", Arg: "json_path", Substring: "$.price"},
+		},
+		RequiredFinalText:             []string{"0.06342 T"},
+		ForbiddenFinalText:            []string{"subnet price $277.32"},
+		RequiredContextCompactions:    1,
+		RequiredCompactionRemovedMsgs: 12,
+		RequiredContextSummaryText:    []string{"browser network evidence"},
+		CompactTrigger:                6,
+		CompactKeepLast:               3,
+	}
+	err := writeScenarioDebugArtifacts(&res, scenario, "partial answer\n", "runtime log\n", &trace)
 	if err != nil {
 		t.Fatalf("writeScenarioDebugArtifacts: %v", err)
 	}
@@ -1398,6 +1421,25 @@ func TestWriteScenarioDebugArtifactsIndexesTraceAndFinalText(t *testing.T) {
 	}
 	if len(manifest.Failures) != 1 || manifest.Failures[0] != "missing required evidence" {
 		t.Fatalf("manifest failures = %+v", manifest.Failures)
+	}
+	if manifest.Expectations.MaxTurns != 12 ||
+		manifest.Expectations.CompactTrigger != 6 ||
+		manifest.Expectations.CompactKeepLast != 3 ||
+		!stringSliceContains(manifest.Expectations.CheckNames, "turn_ended_cleanly") ||
+		!stringSliceContains(manifest.Expectations.CheckNames, "tool_called:web_fetch") ||
+		!stringSliceContains(manifest.Expectations.CheckNames, "context_compaction_summary_contains:browser network evidence") ||
+		!reflect.DeepEqual(manifest.Expectations.Suites, []string{longRunSuite, liveWebSuite}) ||
+		!reflect.DeepEqual(manifest.Expectations.RequiredTools, []string{"web_fetch", "browser_network_read"}) ||
+		!reflect.DeepEqual(manifest.Expectations.ForbiddenTools, []string{"shell"}) ||
+		manifest.Expectations.RequiredToolCounts["browser_network_read"] != 1 ||
+		len(manifest.Expectations.RequiredToolArgContains) != 1 ||
+		manifest.Expectations.RequiredToolArgContains[0] != (DebugToolArgContainsRequirement{Tool: "browser_network_read", Arg: "json_path", Substring: "$.price"}) ||
+		!stringSliceContains(manifest.Expectations.RequiredFinalText, "0.06342 T") ||
+		!stringSliceContains(manifest.Expectations.ForbiddenFinalText, "subnet price $277.32") ||
+		manifest.Expectations.RequiredContextCompactions != 1 ||
+		manifest.Expectations.RequiredCompactionRemovedMsgs != 12 ||
+		!stringSliceContains(manifest.Expectations.RequiredContextSummaryText, "browser network evidence") {
+		t.Fatalf("manifest expectations = %+v", manifest.Expectations)
 	}
 	if manifest.DebugBrief == nil || len(manifest.DebugBrief.Tags) == 0 {
 		t.Fatalf("manifest debug brief missing: %+v", manifest.DebugBrief)
@@ -1514,6 +1556,18 @@ func TestWriteScenarioDebugArtifactsIndexesTraceAndFinalText(t *testing.T) {
 		"## Child Transcripts",
 		"kind=`focused_task` path=`.affentctl/focused-tasks/debug-session/focused_alpha.jsonl`",
 		"kind=`subagent` path=`.affentctl/subagents/debug-session/subagent_beta.jsonl`",
+		"## Scenario Expectations",
+		"suites: `long-run`, `live-web`",
+		"runtime: `max_turns=12 compact_trigger=6 compact_keep_last=3`",
+		"checks: `turn_ended_cleanly`",
+		"required_tools: `web_fetch`, `browser_network_read`",
+		"forbidden_tools: `shell`",
+		"required_tool_counts: `browser_network_read=1`",
+		"required_final_text: `0.06342 T`",
+		"forbidden_final_text: `subnet price $277.32`",
+		"required_tool_arg: `browser_network_read.json_path` contains `$.price` min=`1`",
+		"context_requirements: `compactions>=1 removed_messages>=12`",
+		"context_summary_contains: `browser network evidence`",
 		"evidence: `1/2` verified, network=`1`, partial=`1`, discovery=`1`",
 		"recall: calls=`1`, results=`2`, context=`1`, terms=`2`",
 		"context: compactions=`1`, reactive=`1`, removed_messages=`12`, summary_bytes=`512`",

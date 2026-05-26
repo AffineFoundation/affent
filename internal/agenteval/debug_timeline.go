@@ -67,6 +67,7 @@ func renderDebugTimeline(res BatchResult, scenario BatchScenario, trace *Trace) 
 	}
 	renderTimelineDebugBrief(&b, res)
 	renderTimelineChildTranscripts(&b, res.ChildTranscripts)
+	renderTimelineScenarioExpectations(&b, scenario)
 
 	b.WriteString("\n## Prompt\n\n")
 	b.WriteString("```text\n")
@@ -249,6 +250,136 @@ func renderTimelineChildTranscripts(b *strings.Builder, refs []DebugTranscriptRe
 	for _, ref := range refs {
 		fmt.Fprintf(b, "- kind=`%s` path=`%s` bytes=`%d`\n", ref.Kind, ref.Path, ref.Bytes)
 	}
+}
+
+func renderTimelineScenarioExpectations(b *strings.Builder, scenario BatchScenario) {
+	exp := debugScenarioExpectations(scenario)
+	if !hasTimelineScenarioExpectations(exp) {
+		return
+	}
+	b.WriteString("\n## Scenario Expectations\n\n")
+	if len(exp.Suites) > 0 {
+		fmt.Fprintf(b, "- suites: `%s`\n", strings.Join(exp.Suites, "`, `"))
+	}
+	if exp.SessionID != "" || exp.ExecutePlan || exp.EnableMemory || exp.MaxTurns > 0 || exp.CompactTrigger > 0 || exp.CompactKeepLast > 0 {
+		var parts []string
+		if exp.SessionID != "" {
+			parts = append(parts, fmt.Sprintf("session_id=%s", exp.SessionID))
+		}
+		if exp.ExecutePlan {
+			parts = append(parts, "execute_plan=true")
+		}
+		if exp.EnableMemory {
+			parts = append(parts, "enable_memory=true")
+		}
+		if exp.MaxTurns > 0 {
+			parts = append(parts, fmt.Sprintf("max_turns=%d", exp.MaxTurns))
+		}
+		if exp.CompactTrigger > 0 {
+			parts = append(parts, fmt.Sprintf("compact_trigger=%d", exp.CompactTrigger))
+		}
+		if exp.CompactKeepLast > 0 {
+			parts = append(parts, fmt.Sprintf("compact_keep_last=%d", exp.CompactKeepLast))
+		}
+		fmt.Fprintf(b, "- runtime: `%s`\n", strings.Join(parts, " "))
+	}
+	if exp.VerifyCommand != "" {
+		fmt.Fprintf(b, "- verify_command: `%s`\n", timelineInline(exp.VerifyCommand, timelineArgsPreviewBytes))
+	}
+	if exp.ExpectedSkill != "" {
+		fmt.Fprintf(b, "- expected_skill: `%s`\n", timelineInline(exp.ExpectedSkill, timelineArgsPreviewBytes))
+	}
+	writeTimelineStringList(b, "checks", exp.CheckNames)
+	writeTimelineStringList(b, "required_tools", exp.RequiredTools)
+	writeTimelineStringList(b, "forbidden_tools", exp.ForbiddenTools)
+	writeTimelineStringList(b, "required_commands", exp.RequiredCommands)
+	writeTimelineStringList(b, "forbidden_commands", exp.ForbiddenCommands)
+	writeTimelineCountsLine(b, "required_tool_counts", exp.RequiredToolCounts)
+	writeTimelineCountsLine(b, "required_command_counts", exp.RequiredCommandCounts)
+	writeTimelineStringList(b, "required_final_text", exp.RequiredFinalText)
+	writeTimelineStringList(b, "forbidden_final_text", exp.ForbiddenFinalText)
+	if len(exp.RequiredToolArgContains) > 0 {
+		for _, req := range exp.RequiredToolArgContains {
+			min := req.Min
+			if min <= 0 {
+				min = 1
+			}
+			fmt.Fprintf(b, "- required_tool_arg: `%s.%s` contains `%s` min=`%d`\n", req.Tool, req.Arg, timelineInline(req.Substring, 160), min)
+		}
+	}
+	if exp.RequiredContextCompactions > 0 || exp.RequiredReactiveCompactions > 0 || exp.RequiredCompactionRemovedMsgs > 0 || len(exp.RequiredContextSummaryText) > 0 {
+		var parts []string
+		if exp.RequiredContextCompactions > 0 {
+			parts = append(parts, fmt.Sprintf("compactions>=%d", exp.RequiredContextCompactions))
+		}
+		if exp.RequiredReactiveCompactions > 0 {
+			parts = append(parts, fmt.Sprintf("reactive>=%d", exp.RequiredReactiveCompactions))
+		}
+		if exp.RequiredCompactionRemovedMsgs > 0 {
+			parts = append(parts, fmt.Sprintf("removed_messages>=%d", exp.RequiredCompactionRemovedMsgs))
+		}
+		if len(parts) > 0 {
+			fmt.Fprintf(b, "- context_requirements: `%s`\n", strings.Join(parts, " "))
+		}
+		writeTimelineStringList(b, "context_summary_contains", exp.RequiredContextSummaryText)
+	}
+	if exp.MaxParentToolCalls > 0 {
+		fmt.Fprintf(b, "- max_parent_tool_calls: `%d`\n", exp.MaxParentToolCalls)
+	}
+	writeTimelineCountsLine(b, "max_successful_tool_calls_by_tool", exp.MaxSuccessfulToolCallsByTool)
+}
+
+func hasTimelineScenarioExpectations(exp DebugScenarioExpectations) bool {
+	return len(exp.Suites) > 0 ||
+		len(exp.CheckNames) > 0 ||
+		exp.SessionID != "" ||
+		exp.ExecutePlan ||
+		exp.EnableMemory ||
+		exp.VerifyCommand != "" ||
+		exp.ExpectedSkill != "" ||
+		len(exp.RequiredTools) > 0 ||
+		len(exp.ForbiddenTools) > 0 ||
+		len(exp.RequiredCommands) > 0 ||
+		len(exp.ForbiddenCommands) > 0 ||
+		len(exp.RequiredCommandCounts) > 0 ||
+		len(exp.RequiredToolCounts) > 0 ||
+		len(exp.RequiredToolArgContains) > 0 ||
+		len(exp.RequiredFinalText) > 0 ||
+		len(exp.ForbiddenFinalText) > 0 ||
+		exp.RequiredContextCompactions > 0 ||
+		exp.RequiredReactiveCompactions > 0 ||
+		exp.RequiredCompactionRemovedMsgs > 0 ||
+		len(exp.RequiredContextSummaryText) > 0 ||
+		exp.MaxParentToolCalls > 0 ||
+		len(exp.MaxSuccessfulToolCallsByTool) > 0 ||
+		exp.MaxTurns > 0 ||
+		exp.CompactTrigger > 0 ||
+		exp.CompactKeepLast > 0
+}
+
+func writeTimelineStringList(b *strings.Builder, label string, values []string) {
+	if len(values) == 0 {
+		return
+	}
+	preview := make([]string, 0, len(values))
+	for _, value := range values {
+		value = strings.TrimSpace(value)
+		if value == "" {
+			continue
+		}
+		preview = append(preview, timelineInline(value, 180))
+	}
+	if len(preview) == 0 {
+		return
+	}
+	fmt.Fprintf(b, "- %s: `%s`\n", label, strings.Join(preview, "`, `"))
+}
+
+func writeTimelineCountsLine(b *strings.Builder, label string, counts map[string]int) {
+	if len(counts) == 0 {
+		return
+	}
+	fmt.Fprintf(b, "- %s: `%s`\n", label, timelineCounts(counts))
 }
 
 func hasTimelineDebugBrief(res BatchResult) bool {

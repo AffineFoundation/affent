@@ -202,6 +202,7 @@ type DebugManifest struct {
 	ArtifactDir               string                     `json:"artifact_dir,omitempty"`
 	TraceDeltas               bool                       `json:"trace_deltas,omitempty"`
 	Prompt                    string                     `json:"prompt"`
+	Expectations              DebugScenarioExpectations  `json:"expectations,omitempty"`
 	Failures                  []string                   `json:"failures,omitempty"`
 	DebugBrief                *DebugBrief                `json:"debug_brief,omitempty"`
 	SourceAccessExamples      []SourceAccessExample      `json:"source_access_examples,omitempty"`
@@ -212,6 +213,41 @@ type DebugManifest struct {
 	Metrics                   DebugMetrics               `json:"metrics"`
 	RuntimeSurface            *sse.RuntimeSurfacePayload `json:"runtime_surface,omitempty"`
 	GeneratedAt               string                     `json:"generated_at"`
+}
+
+type DebugScenarioExpectations struct {
+	CheckNames                    []string                          `json:"check_names,omitempty"`
+	Suites                        []string                          `json:"suites,omitempty"`
+	SessionID                     string                            `json:"session_id,omitempty"`
+	ExecutePlan                   bool                              `json:"execute_plan,omitempty"`
+	EnableMemory                  bool                              `json:"enable_memory,omitempty"`
+	VerifyCommand                 string                            `json:"verify_command,omitempty"`
+	ExpectedSkill                 string                            `json:"expected_skill,omitempty"`
+	RequiredTools                 []string                          `json:"required_tools,omitempty"`
+	ForbiddenTools                []string                          `json:"forbidden_tools,omitempty"`
+	RequiredCommands              []string                          `json:"required_commands,omitempty"`
+	ForbiddenCommands             []string                          `json:"forbidden_commands,omitempty"`
+	RequiredCommandCounts         map[string]int                    `json:"required_command_counts,omitempty"`
+	RequiredToolCounts            map[string]int                    `json:"required_tool_counts,omitempty"`
+	RequiredToolArgContains       []DebugToolArgContainsRequirement `json:"required_tool_arg_contains,omitempty"`
+	RequiredFinalText             []string                          `json:"required_final_text,omitempty"`
+	ForbiddenFinalText            []string                          `json:"forbidden_final_text,omitempty"`
+	RequiredContextCompactions    int                               `json:"required_context_compactions,omitempty"`
+	RequiredReactiveCompactions   int                               `json:"required_reactive_context_compactions,omitempty"`
+	RequiredCompactionRemovedMsgs int                               `json:"required_compaction_removed_messages,omitempty"`
+	RequiredContextSummaryText    []string                          `json:"required_context_summary_text,omitempty"`
+	MaxParentToolCalls            int                               `json:"max_parent_tool_calls,omitempty"`
+	MaxSuccessfulToolCallsByTool  map[string]int                    `json:"max_successful_tool_calls_by_tool,omitempty"`
+	MaxTurns                      int                               `json:"max_turns,omitempty"`
+	CompactTrigger                int                               `json:"compact_trigger,omitempty"`
+	CompactKeepLast               int                               `json:"compact_keep_last,omitempty"`
+}
+
+type DebugToolArgContainsRequirement struct {
+	Tool      string `json:"tool"`
+	Arg       string `json:"arg"`
+	Substring string `json:"substring"`
+	Min       int    `json:"min,omitempty"`
 }
 
 type DebugTranscriptRef struct {
@@ -561,6 +597,7 @@ func writeScenarioDebugArtifacts(res *BatchResult, scenario BatchScenario, stdou
 		ArtifactDir:               filepath.Join(res.Workspace, ".affent", "artifacts"),
 		TraceDeltas:               res.TraceDeltas,
 		Prompt:                    scenario.Prompt,
+		Expectations:              debugScenarioExpectations(scenario),
 		Failures:                  append([]string(nil), res.Failures...),
 		DebugBrief:                BuildDebugBrief(*res),
 		SourceAccessExamples:      append([]SourceAccessExample(nil), res.SourceAccessExamples...),
@@ -619,6 +656,52 @@ func writeScenarioDebugArtifacts(res *BatchResult, scenario BatchScenario, stdou
 	}
 	res.DebugManifestPath = manifestPath
 	return nil
+}
+
+func debugScenarioExpectations(s BatchScenario) DebugScenarioExpectations {
+	reqArgs := make([]DebugToolArgContainsRequirement, 0, len(s.RequiredToolArgContains))
+	for _, req := range s.RequiredToolArgContains {
+		reqArgs = append(reqArgs, DebugToolArgContainsRequirement{
+			Tool:      req.Tool,
+			Arg:       req.Arg,
+			Substring: req.Substring,
+			Min:       req.Min,
+		})
+	}
+	checks := BatchScenarioChecks(s)
+	checkNames := make([]string, 0, len(checks))
+	for _, check := range checks {
+		if strings.TrimSpace(check.Name) != "" {
+			checkNames = append(checkNames, check.Name)
+		}
+	}
+	return DebugScenarioExpectations{
+		CheckNames:                    checkNames,
+		Suites:                        append([]string(nil), s.Suites...),
+		SessionID:                     strings.TrimSpace(s.SessionID),
+		ExecutePlan:                   s.ExecutePlan,
+		EnableMemory:                  s.EnableMemory,
+		VerifyCommand:                 strings.TrimSpace(s.VerifyCommand),
+		ExpectedSkill:                 strings.TrimSpace(s.ExpectedSkill),
+		RequiredTools:                 append([]string(nil), s.RequiredTools...),
+		ForbiddenTools:                append([]string(nil), s.ForbiddenTools...),
+		RequiredCommands:              append([]string(nil), s.RequiredCommands...),
+		ForbiddenCommands:             append([]string(nil), s.ForbiddenCommands...),
+		RequiredCommandCounts:         cloneStringIntMap(s.RequiredCommandCounts),
+		RequiredToolCounts:            cloneStringIntMap(s.RequiredToolCounts),
+		RequiredToolArgContains:       reqArgs,
+		RequiredFinalText:             append([]string(nil), s.RequiredFinalText...),
+		ForbiddenFinalText:            append([]string(nil), s.ForbiddenFinalText...),
+		RequiredContextCompactions:    s.RequiredContextCompactions,
+		RequiredReactiveCompactions:   s.RequiredReactiveCompactions,
+		RequiredCompactionRemovedMsgs: s.RequiredCompactionRemovedMsgs,
+		RequiredContextSummaryText:    append([]string(nil), s.RequiredContextSummaryText...),
+		MaxParentToolCalls:            s.MaxParentToolCalls,
+		MaxSuccessfulToolCallsByTool:  cloneStringIntMap(s.MaxSuccessfulToolCallsByTool),
+		MaxTurns:                      s.MaxTurns,
+		CompactTrigger:                s.CompactTrigger,
+		CompactKeepLast:               s.CompactKeepLast,
+	}
 }
 
 func collectDebugChildTranscripts(workspace string, maxRefs int) []DebugTranscriptRef {
