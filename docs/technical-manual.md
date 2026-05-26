@@ -728,10 +728,10 @@ Current built-in suites:
 Run scenarios:
 
 ```bash
-go run ./cmd/affenteval --suite small-model-tools --temperature 0
-go run ./cmd/affenteval --suite long-run --temperature 0
+go run ./cmd/affenteval --suite small-model-tools --runtime-tools workspace,memory,plan,delegation --temperature 0
+go run ./cmd/affenteval --suite long-run --runtime-tools workspace,memory,plan --temperature 0
 go run ./cmd/affenteval --suite live-web --runtime-web --runtime-browser --temperature 0 --keep-workspaces
-go run ./cmd/affenteval --scenario coding-python-slug --temperature 0
+go run ./cmd/affenteval --scenario coding-python-slug --runtime-tools workspace --temperature 0
 go run ./cmd/affenteval --suite small-model-tools --jsonl > eval.jsonl
 ```
 
@@ -768,9 +768,9 @@ seen across the batch.
 Run through Docker:
 
 ```bash
-make eval-container EVAL_ARGS='--suite small-model-tools --temperature 0'
-make eval-container EVAL_ARGS='--suite long-run --temperature 0'
-make eval-agent-container EVAL_ARGS='--scenario coding-python-slug --temperature 0'
+make eval-container EVAL_RUNTIME_TOOLS=workspace,memory,plan,delegation EVAL_ARGS='--suite small-model-tools --temperature 0'
+make eval-container EVAL_RUNTIME_TOOLS=workspace,memory,plan EVAL_ARGS='--suite long-run --temperature 0'
+make eval-agent-container EVAL_RUNTIME_TOOLS=workspace EVAL_ARGS='--scenario coding-python-slug --temperature 0'
 make eval-agent-container EVAL_RUNTIME_TOOLS=readonly_workspace EVAL_ARGS='--scenario repo-inspection --temperature 0'
 make eval-agent-container EVAL_RUNTIME_MEMORY=true EVAL_ARGS='--scenario your-memory-scenario --temperature 0'
 make eval-agent-container EVAL_RUNTIME_WEB=true EVAL_RUNTIME_BROWSER=true EVAL_ARGS='--prompt-file request.md --name rendered-web-debug --max-turns 20'
@@ -785,15 +785,14 @@ forward host `AFFENTCTL_TEMPERATURE`, `AFFENTCTL_TOP_P`,
 `EVAL_ARGS` so they are also recorded in JSONL metadata. Use
 `EVAL_DOCKER_ARGS` only for deliberate extra container environment.
 
-Use runtime eval mode when Affent itself is the benchmark agent and the model
-should not receive extra product affordances. In eval mode, `affentctl` and
-`affentserve` start from a no-tool surface. Opt capabilities back in only for
-suites that explicitly measure them: `--memory=true`, `--web=true`,
-`--browser=true`, `--builtins=true` in serve, `--mcp-config` in ctl, or a
-precise `--eval-tools` allowlist such as `read_file,shell` or
-`readonly_workspace,web`. Use `--eval-all-tools` / `--runtime-all-tools` only
-for smoke/debug runs that intentionally exercise the full surface. The eval
-container does not forward host `AFFENTCTL_EVAL_MODE`,
+`affenteval` runs `affentctl` in runtime eval mode by default so benchmark
+tasks start from a no-tool surface and prompts only describe registered
+capabilities. Opt capabilities back in only for suites that explicitly measure
+them: `--runtime-tools read_file,shell`, `--runtime-tools readonly_workspace,web`,
+`--runtime-memory`, `--runtime-web`, `--runtime-browser`, `--runtime-mcp-config`,
+or the matching lower-level `affentctl` flags. Use `--eval-all-tools` /
+`--runtime-all-tools` only for smoke/debug runs that intentionally exercise the
+full surface. The eval container does not forward host `AFFENTCTL_EVAL_MODE`,
 `AFFENTCTL_EVAL_TOOLS`, `AFFENTCTL_EVAL_ALL_TOOLS`, `AFFENTCTL_SUBAGENT`,
 `AFFENTCTL_FOCUSED_TASKS`, or `AFFENTCTL_PROJECT_CONTEXT`; use the
 `EVAL_RUNTIME_*` knobs above. Use `--runtime-web` when a scenario explicitly

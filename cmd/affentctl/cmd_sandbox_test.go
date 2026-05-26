@@ -476,7 +476,7 @@ func TestMakeOneClickContainerTargetsUseSharedLimits(t *testing.T) {
 		"CONTAINER_CPUS ?= 2",
 		"CONTAINER_PIDS ?= 512",
 		"SERVE_DEFAULT_ARGS ?= --web=true --browser=true --web-search=false --browser-cache-dir=/workspace/browser-cache",
-		"EVAL_RUNTIME_EVAL_MODE ?= false",
+		"EVAL_RUNTIME_EVAL_MODE ?= true",
 		"EVAL_RUNTIME_MEMORY ?= false",
 		"EVAL_RUNTIME_MCP_CONFIG ?=",
 		"eval-agent-container: eval-container",

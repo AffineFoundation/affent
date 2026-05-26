@@ -14,8 +14,8 @@ EVAL_IMAGE ?= affinefoundation/affent:latest
 EVAL_ARGS ?= --list
 EVAL_WORK_ROOT ?= /workspace/.tmp/eval
 EVAL_DOCKER_ARGS ?=
-EVAL_RUNTIME_EVAL_MODE ?= false
-EVAL_RUNTIME_EVAL_MODE_ARGS = $(if $(filter true yes 1,$(EVAL_RUNTIME_EVAL_MODE)),--runtime-eval-mode,)
+EVAL_RUNTIME_EVAL_MODE ?= true
+EVAL_RUNTIME_EVAL_MODE_ARGS = $(if $(filter false no 0,$(EVAL_RUNTIME_EVAL_MODE)),--runtime-eval-mode=false,$(if $(filter true yes 1,$(EVAL_RUNTIME_EVAL_MODE)),--runtime-eval-mode,))
 EVAL_RUNTIME_TOOLS ?=
 EVAL_RUNTIME_TOOLS_ARGS = $(if $(strip $(EVAL_RUNTIME_TOOLS)),--runtime-tools "$(EVAL_RUNTIME_TOOLS)",)
 EVAL_RUNTIME_ALL_TOOLS ?= false

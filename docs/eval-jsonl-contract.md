@@ -20,7 +20,7 @@ Shared metadata fields:
 - `max_tokens`: optional max output token limit passed to `affentctl`.
 - `seed`: optional deterministic-sampling seed passed to `affentctl`.
 - `runtime_eval_mode`: optional boolean, present when the eval runner passed
-  `affentctl run --eval-mode`.
+  `affentctl run --eval-mode`. This is the default for `affenteval`.
 - `runtime_tools`: optional comma-separated tool allowlist passed via
   `--runtime-tools` / `affentctl --eval-tools`.
 - `runtime_all_tools`: optional boolean, present when the eval runner passed

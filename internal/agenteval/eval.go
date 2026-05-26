@@ -687,7 +687,8 @@ func (r BatchRunner) affentctlRunArgs(workspace, tracePath string, scenario Batc
 	args = appendStringFlag(args, "--top-p", r.TopP)
 	args = appendStringFlag(args, "--max-tokens", r.MaxTokens)
 	args = appendStringFlag(args, "--seed", r.Seed)
-	if r.RuntimeEvalMode {
+	runtimeEvalMode := r.RuntimeEvalMode || strings.TrimSpace(r.RuntimeTools) != "" || r.RuntimeAllTools
+	if runtimeEvalMode {
 		args = append(args, "--eval-mode")
 	}
 	if r.RuntimeAllTools {

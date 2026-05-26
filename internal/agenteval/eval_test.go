@@ -1289,6 +1289,36 @@ func TestBatchRunnerAffentctlRunArgsForwardsExecutor(t *testing.T) {
 	}
 }
 
+func TestBatchRunnerAffentctlRunArgsEvalToolFlagsImplyEvalMode(t *testing.T) {
+	for _, tc := range []struct {
+		name   string
+		runner BatchRunner
+		want   string
+	}{
+		{
+			name:   "runtime tools",
+			runner: BatchRunner{RuntimeTools: "read_file"},
+			want:   "--eval-tools\x00read_file",
+		},
+		{
+			name:   "all tools",
+			runner: BatchRunner{RuntimeAllTools: true},
+			want:   "--eval-all-tools",
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			args := tc.runner.affentctlRunArgs("/tmp/ws", "/tmp/ws/trace.jsonl", BatchScenario{Prompt: "debug", MaxTurns: 1})
+			joined := strings.Join(args, "\x00")
+			if !strings.Contains(joined, "--eval-mode") {
+				t.Fatalf("eval tool flags should imply --eval-mode:\n%q", args)
+			}
+			if !strings.Contains(joined, tc.want) {
+				t.Fatalf("args missing %q:\n%q", tc.want, args)
+			}
+		})
+	}
+}
+
 func TestBatchRunnerAffentctlRunArgsCanKeepTraceDeltas(t *testing.T) {
 	args := (BatchRunner{
 		BaseURL:     "https://llm.example/v1",
