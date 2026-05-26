@@ -1043,7 +1043,7 @@ func TestWriteScenarioDebugArtifactsIndexesTraceAndFinalText(t *testing.T) {
 		RunExitCode:      3,
 		TraceDeltas:      true,
 		TurnEndReason:    "completed",
-		ToolCalls:        3,
+		ToolCalls:        5,
 		Repair:           ToolRepairStats{Calls: 1, SucceededCalls: 1, Notes: 2, ByKind: map[string]int{"tool_name": 1, "alias_rename": 1}},
 		ToolStats: ToolRuntimeStats{
 			ToolErrors:                 1,
@@ -1103,6 +1103,31 @@ func TestWriteScenarioDebugArtifactsIndexesTraceAndFinalText(t *testing.T) {
 			Tool:     "browser_navigate",
 			Args:     map[string]any{"url": "https://search.example/?q=affine"},
 			Result:   "SourceAccess: browser_rendered_url=https://search.example/?q=affine; page_text_below=search_results_discovery_only\nPAGE TEXT:\nAffine result",
+			ExitCode: 0,
+		}, {
+			TurnID: "turn-debug",
+			CallID: "call-4",
+			Tool:   "memory",
+			Args: map[string]any{
+				"action":   "replace",
+				"target":   "memory",
+				"topic":    "markets",
+				"old_text": "Use direct price labels from dynamic dashboards.",
+				"content":  "Use browser_network_read json_path before citing dynamic dashboard metrics.",
+			},
+			Result:   `{"ok":true,"target":"memory","topic":"markets","message":"replaced"}`,
+			ExitCode: 0,
+		}, {
+			TurnID: "turn-debug",
+			CallID: "call-5",
+			Tool:   "memory",
+			Args: map[string]any{
+				"action":  "add",
+				"target":  "memory",
+				"topic":   "research",
+				"content": "Record network evidence gaps explicitly.",
+			},
+			Result:   `{"ok":true,"target":"memory","topic":"research","message":"added"}`,
 			ExitCode: 0,
 		}},
 		LoopDecisions: []LoopDecision{{
@@ -1169,7 +1194,7 @@ func TestWriteScenarioDebugArtifactsIndexesTraceAndFinalText(t *testing.T) {
 		manifest.RuntimeSurface.Tools[0].Name != "web_fetch" {
 		t.Fatalf("manifest runtime surface = %+v", manifest.RuntimeSurface)
 	}
-	if manifest.Metrics.ToolCalls != 3 ||
+	if manifest.Metrics.ToolCalls != 5 ||
 		manifest.Metrics.ToolErrors != 1 ||
 		manifest.Metrics.LoopGuardInterventions != 1 ||
 		manifest.Metrics.SourceAccessResults != 2 ||
@@ -1204,7 +1229,7 @@ func TestWriteScenarioDebugArtifactsIndexesTraceAndFinalText(t *testing.T) {
 	}
 	for _, want := range []string{
 		"# Affent Eval Timeline",
-		"metrics: tools=3 tool_errors=1 repaired=0 canonicalized=0 loop_guard=1 forced_no_tools=0 evidence=1/2_verified,network=1,partial=1,discovery=1 memory_updates=2(add:1,replace:1,remove:0) tool_context_trunc=2,omitted=8192 compactions=1,reactive=1,removed=12,summary_bytes=512 tokens=100/20",
+		"metrics: tools=5 tool_errors=1 repaired=0 canonicalized=0 loop_guard=1 forced_no_tools=0 evidence=1/2_verified,network=1,partial=1,discovery=1 memory_updates=2(add:1,replace:1,remove:0) tool_context_trunc=2,omitted=8192 compactions=1,reactive=1,removed=12,summary_bytes=512 tokens=100/20",
 		"## Runtime Surface",
 		"`web_fetch`",
 		"trace_deltas: `true`",
@@ -1216,6 +1241,11 @@ func TestWriteScenarioDebugArtifactsIndexesTraceAndFinalText(t *testing.T) {
 		"tool#1 `web_fetch` status=`dynamic_partial` url=`https://taostats.io/subnets/120`",
 		"tool#2 `browser_network_read` status=`network` url=`https://taostats.io/api/subnets/120` json_path=`$.price`",
 		"tool#3 `browser_navigate` status=`discovery_only` url=`https://search.example/?q=affine`",
+		"## Memory Updates",
+		"tool#4 action=`replace` location=`memory:markets` call_id=`call-4`",
+		"Use direct price labels from dynamic dashboards. -> Use browser_network_read json_path before citing dynamic dashboard metrics.",
+		"tool#5 action=`add` location=`memory:research` call_id=`call-5`",
+		"Record network evidence gaps explicitly.",
 		"## Tool Timeline",
 		"failure_kinds: `dynamic_shell`",
 		"need browser network evidence",

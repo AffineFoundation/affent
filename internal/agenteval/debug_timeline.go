@@ -15,7 +15,16 @@ const (
 	timelineArgsPreviewBytes   = 1600
 	timelineResultPreviewBytes = 2000
 	timelineErrorPreviewBytes  = 1200
+	timelineMemoryPreviewBytes = 220
 )
+
+type timelineMemoryUpdate struct {
+	Index    int
+	Tool     ToolCall
+	Action   string
+	Location string
+	Preview  string
+}
 
 func renderDebugTimeline(res BatchResult, scenario BatchScenario, trace *Trace) string {
 	var b strings.Builder
@@ -74,6 +83,7 @@ func renderDebugTimeline(res BatchResult, scenario BatchScenario, trace *Trace) 
 	renderTimelineCompactions(&b, trace)
 	renderTimelineDecisions(&b, trace)
 	renderTimelineSourceEvidence(&b, trace)
+	renderTimelineMemoryUpdates(&b, trace)
 	renderTimelineTools(&b, trace)
 	renderTimelineFinal(&b, trace)
 	return b.String()
@@ -299,6 +309,109 @@ func renderTimelineSourceEvidence(b *strings.Builder, trace *Trace) {
 		}
 		b.WriteByte('\n')
 	}
+}
+
+func renderTimelineMemoryUpdates(b *strings.Builder, trace *Trace) {
+	var entries []timelineMemoryUpdate
+	for i, tool := range trace.Tools {
+		update, ok := memoryUpdateFromTool(tool)
+		if !ok {
+			continue
+		}
+		update.Index = i + 1
+		update.Tool = tool
+		entries = append(entries, update)
+	}
+	if len(entries) == 0 {
+		return
+	}
+	b.WriteString("\n## Memory Updates\n\n")
+	for i, entry := range entries {
+		fmt.Fprintf(b, "%d. tool#%d action=`%s` location=`%s`", i+1, entry.Index, entry.Action, entry.Location)
+		if entry.Tool.CallID != "" {
+			fmt.Fprintf(b, " call_id=`%s`", entry.Tool.CallID)
+		}
+		b.WriteByte('\n')
+		if entry.Preview != "" {
+			fmt.Fprintf(b, "   %s\n", timelineInline(entry.Preview, timelineMemoryPreviewBytes))
+		}
+	}
+}
+
+func memoryUpdateFromTool(tool ToolCall) (timelineMemoryUpdate, bool) {
+	var zero timelineMemoryUpdate
+	if tool.Tool != "memory" || tool.ExitCode != 0 || tool.IsErr {
+		return zero, false
+	}
+	var resp struct {
+		OK     bool   `json:"ok"`
+		Target string `json:"target"`
+		Topic  string `json:"topic"`
+	}
+	if err := json.Unmarshal([]byte(tool.Result), &resp); err != nil || !resp.OK {
+		return zero, false
+	}
+	action := strings.ToLower(strings.TrimSpace(stringMapArg(tool.Args, "action")))
+	switch action {
+	case "add", "replace", "remove":
+	default:
+		return zero, false
+	}
+	target := firstNonEmpty(resp.Target, stringMapArg(tool.Args, "target"), "memory")
+	topic := normalizeTimelineMemoryTopic(target, firstNonEmpty(resp.Topic, stringMapArg(tool.Args, "topic"), "general"))
+	oldText := stringMapArg(tool.Args, "old_text")
+	newText := stringMapArg(tool.Args, "content")
+	preview := timelineMemoryUpdatePreview(action, oldText, newText)
+	return timelineMemoryUpdate{
+		Action:   action,
+		Location: target + ":" + topic,
+		Preview:  preview,
+	}, true
+}
+
+func timelineMemoryUpdatePreview(action, oldText, newText string) string {
+	oldPreview := timelineInline(oldText, 100)
+	newPreview := timelineInline(newText, 100)
+	switch action {
+	case "add":
+		return firstNonEmpty(newPreview, "No content supplied")
+	case "replace":
+		if oldPreview != "" && newPreview != "" {
+			return oldPreview + " -> " + newPreview
+		}
+		return firstNonEmpty(newPreview, oldPreview, "No content supplied")
+	case "remove":
+		return firstNonEmpty(oldPreview, "No content supplied")
+	default:
+		return ""
+	}
+}
+
+func stringMapArg(args map[string]any, key string) string {
+	value, ok := args[key]
+	if !ok {
+		return ""
+	}
+	if s, ok := value.(string); ok {
+		return strings.TrimSpace(s)
+	}
+	return ""
+}
+
+func normalizeTimelineMemoryTopic(target, topic string) string {
+	if target == "user" {
+		return "user"
+	}
+	return firstNonEmpty(topic, "general")
+}
+
+func firstNonEmpty(values ...string) string {
+	for _, value := range values {
+		if strings.TrimSpace(value) != "" {
+			return strings.TrimSpace(value)
+		}
+	}
+	return ""
 }
 
 func renderTimelineTools(b *strings.Builder, trace *Trace) {
