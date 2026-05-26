@@ -1426,9 +1426,26 @@ func TestWriteScenarioDebugArtifactsIndexesTraceAndFinalText(t *testing.T) {
 		RequiredToolResultText: map[string][]string{
 			"browser_network_read": {"SourceAccess:", "source_method=network_xhr_fetch"},
 		},
+		RequiredToolOrder: []ToolOrderRequirement{
+			{Earlier: "web_fetch", Later: "browser_network_read"},
+		},
 		RequiredToolArgContains: []ToolArgContainsRequirement{
 			{Tool: "browser_network_read", Arg: "json_path", Substring: "$.price"},
 		},
+		RequiredCommandBeforeTool: []CommandToolOrderRequirement{
+			{Command: "go test", Tool: "memory"},
+		},
+		RequiredCommandAfterTool: []CommandToolOrderRequirement{
+			{Command: "go test", Tool: "edit_file"},
+		},
+		RequiredFocusedTaskCounts: map[string]int{
+			"research": 1,
+		},
+		RequiredSubagentModeCounts: map[string]int{
+			"review": 1,
+		},
+		RequireNoDelegationErrors: true,
+		RequireNoPlanErrors:       true,
 		RequiredSourceAccess: []SourceAccessRequirement{
 			{Status: "network", Tool: "browser_network_read", URLContains: "taostats.io/api", SourceMethod: "network_xhr_fetch", JSONPath: "$.price"},
 		},
@@ -1439,8 +1456,12 @@ func TestWriteScenarioDebugArtifactsIndexesTraceAndFinalText(t *testing.T) {
 		RequiredContextCompactions:    1,
 		RequiredCompactionRemovedMsgs: 12,
 		RequiredContextSummaryText:    []string{"browser network evidence"},
-		CompactTrigger:                6,
-		CompactKeepLast:               3,
+		ProtectedFiles:                []string{"README.md"},
+		ForbiddenFileSubstrings: map[string][]string{
+			"notes.md": {"uncited taostats metric"},
+		},
+		CompactTrigger:  6,
+		CompactKeepLast: 3,
 	}
 	err := writeScenarioDebugArtifacts(&res, scenario, "partial answer\n", "runtime log\n", &trace)
 	if err != nil {
@@ -1501,6 +1522,16 @@ func TestWriteScenarioDebugArtifactsIndexesTraceAndFinalText(t *testing.T) {
 		len(manifest.Expectations.RequiredLoopDecisionMatches) != 1 ||
 		manifest.Expectations.RequiredLoopDecisionMatches[0] != (DebugLoopDecisionRequirement{Kind: "evidence_quality", Decision: "defer", Trigger: "source_access_dynamic_partial"}) ||
 		!reflect.DeepEqual(manifest.Expectations.RequiredToolResultText["browser_network_read"], []string{"SourceAccess:", "source_method=network_xhr_fetch"}) ||
+		len(manifest.Expectations.RequiredToolOrder) != 1 ||
+		manifest.Expectations.RequiredToolOrder[0] != (DebugToolOrderRequirement{Earlier: "web_fetch", Later: "browser_network_read"}) ||
+		len(manifest.Expectations.RequiredCommandBeforeTool) != 1 ||
+		manifest.Expectations.RequiredCommandBeforeTool[0] != (DebugCommandToolOrderRequirement{Command: "go test", Tool: "memory"}) ||
+		len(manifest.Expectations.RequiredCommandAfterTool) != 1 ||
+		manifest.Expectations.RequiredCommandAfterTool[0] != (DebugCommandToolOrderRequirement{Command: "go test", Tool: "edit_file"}) ||
+		manifest.Expectations.RequiredFocusedTaskCounts["research"] != 1 ||
+		manifest.Expectations.RequiredSubagentModeCounts["review"] != 1 ||
+		!manifest.Expectations.RequireNoDelegationErrors ||
+		!manifest.Expectations.RequireNoPlanErrors ||
 		len(manifest.Expectations.RequiredToolArgContains) != 1 ||
 		manifest.Expectations.RequiredToolArgContains[0] != (DebugToolArgContainsRequirement{Tool: "browser_network_read", Arg: "json_path", Substring: "$.price"}) ||
 		len(manifest.Expectations.RequiredSourceAccess) != 1 ||
@@ -1511,7 +1542,9 @@ func TestWriteScenarioDebugArtifactsIndexesTraceAndFinalText(t *testing.T) {
 		!reflect.DeepEqual(manifest.Expectations.RequiredResultArtifacts, []string{"web_fetch"}) ||
 		manifest.Expectations.RequiredContextCompactions != 1 ||
 		manifest.Expectations.RequiredCompactionRemovedMsgs != 12 ||
-		!stringSliceContains(manifest.Expectations.RequiredContextSummaryText, "browser network evidence") {
+		!stringSliceContains(manifest.Expectations.RequiredContextSummaryText, "browser network evidence") ||
+		!reflect.DeepEqual(manifest.Expectations.ProtectedFiles, []string{"README.md"}) ||
+		!reflect.DeepEqual(manifest.Expectations.ForbiddenFileSubstrings["notes.md"], []string{"uncited taostats metric"}) {
 		t.Fatalf("manifest expectations = %+v", manifest.Expectations)
 	}
 	if manifest.DebugBrief == nil || len(manifest.DebugBrief.Tags) == 0 {
@@ -1636,10 +1669,16 @@ func TestWriteScenarioDebugArtifactsIndexesTraceAndFinalText(t *testing.T) {
 		"required_tools: `web_fetch`, `browser_network_read`",
 		"forbidden_tools: `shell`",
 		"required_tool_counts: `browser_network_read=1`",
+		"required_tool_order: `web_fetch -> browser_network_read`",
+		"required_command_before_tool: `go test -> memory`",
+		"required_command_after_tool: `go test -> edit_file`",
 		"required_tool_failure_kind_counts: `dynamic_shell=1`",
 		"required_tool_stats_at_least: `memory_updates=2,source_access_dynamic_partial=1,source_access_network=1`",
 		"required_loop_decision_kinds: `evidence_quality=1`",
 		"required_loop_decision_results: `defer=1`",
+		"required_focused_task_counts: `research=1`",
+		"required_subagent_mode_counts: `review=1`",
+		"required_no_errors: `delegation plan`",
 		"required_loop_decision: `kind=evidence_quality decision=defer trigger=source_access_dynamic_partial min=1`",
 		"required_tool_result_text[browser_network_read]: `SourceAccess:`, `source_method=network_xhr_fetch`",
 		"required_source_access: `status=network tool=browser_network_read url_contains=taostats.io/api source_method=network_xhr_fetch json_path=$.price min=1`",
@@ -1650,6 +1689,8 @@ func TestWriteScenarioDebugArtifactsIndexesTraceAndFinalText(t *testing.T) {
 		"required_tool_arg: `browser_network_read.json_path` contains `$.price` min=`1`",
 		"context_requirements: `compactions>=1 removed_messages>=12`",
 		"context_summary_contains: `browser network evidence`",
+		"protected_files: `README.md`",
+		"forbidden_file_substrings[notes.md]: `uncited taostats metric`",
 		"evidence: `1/2` verified, network=`1`, partial=`1`, discovery=`1`",
 		"recall: calls=`1`, results=`2`, context=`1`, terms=`2`",
 		"context: compactions=`1`, reactive=`1`, removed_messages=`12`, summary_bytes=`512`",

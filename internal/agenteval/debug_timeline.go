@@ -296,10 +296,25 @@ func renderTimelineScenarioExpectations(b *strings.Builder, scenario BatchScenar
 	writeTimelineStringList(b, "forbidden_commands", exp.ForbiddenCommands)
 	writeTimelineCountsLine(b, "required_tool_counts", exp.RequiredToolCounts)
 	writeTimelineCountsLine(b, "required_command_counts", exp.RequiredCommandCounts)
+	writeTimelineToolOrders(b, "required_tool_order", exp.RequiredToolOrder)
+	writeTimelineCommandToolOrders(b, "required_command_before_tool", exp.RequiredCommandBeforeTool)
+	writeTimelineCommandToolOrders(b, "required_command_after_tool", exp.RequiredCommandAfterTool)
 	writeTimelineCountsLine(b, "required_tool_failure_kind_counts", exp.RequiredToolFailureKindCounts)
 	writeTimelineCountsLine(b, "required_tool_stats_at_least", exp.RequiredToolStatsAtLeast)
 	writeTimelineCountsLine(b, "required_loop_decision_kinds", exp.RequiredLoopDecisionKinds)
 	writeTimelineCountsLine(b, "required_loop_decision_results", exp.RequiredLoopDecisionResults)
+	writeTimelineCountsLine(b, "required_focused_task_counts", exp.RequiredFocusedTaskCounts)
+	writeTimelineCountsLine(b, "required_subagent_mode_counts", exp.RequiredSubagentModeCounts)
+	if exp.RequireNoDelegationErrors || exp.RequireNoPlanErrors {
+		var parts []string
+		if exp.RequireNoDelegationErrors {
+			parts = append(parts, "delegation")
+		}
+		if exp.RequireNoPlanErrors {
+			parts = append(parts, "plan")
+		}
+		fmt.Fprintf(b, "- required_no_errors: `%s`\n", strings.Join(parts, " "))
+	}
 	if len(exp.RequiredLoopDecisionMatches) > 0 {
 		for _, req := range exp.RequiredLoopDecisionMatches {
 			min := req.Min
@@ -376,6 +391,8 @@ func renderTimelineScenarioExpectations(b *strings.Builder, scenario BatchScenar
 		}
 		writeTimelineStringList(b, "context_summary_contains", exp.RequiredContextSummaryText)
 	}
+	writeTimelineStringList(b, "protected_files", exp.ProtectedFiles)
+	writeTimelineStringSliceMap(b, "forbidden_file_substrings", exp.ForbiddenFileSubstrings)
 	if exp.MaxParentToolCalls > 0 {
 		fmt.Fprintf(b, "- max_parent_tool_calls: `%d`\n", exp.MaxParentToolCalls)
 	}
@@ -396,11 +413,18 @@ func hasTimelineScenarioExpectations(exp DebugScenarioExpectations) bool {
 		len(exp.ForbiddenCommands) > 0 ||
 		len(exp.RequiredCommandCounts) > 0 ||
 		len(exp.RequiredToolCounts) > 0 ||
+		len(exp.RequiredCommandBeforeTool) > 0 ||
+		len(exp.RequiredCommandAfterTool) > 0 ||
+		len(exp.RequiredToolOrder) > 0 ||
 		len(exp.RequiredToolFailureKindCounts) > 0 ||
 		len(exp.RequiredToolStatsAtLeast) > 0 ||
 		len(exp.RequiredLoopDecisionKinds) > 0 ||
 		len(exp.RequiredLoopDecisionResults) > 0 ||
 		len(exp.RequiredLoopDecisionMatches) > 0 ||
+		len(exp.RequiredFocusedTaskCounts) > 0 ||
+		len(exp.RequiredSubagentModeCounts) > 0 ||
+		exp.RequireNoDelegationErrors ||
+		exp.RequireNoPlanErrors ||
 		len(exp.RequiredToolResultText) > 0 ||
 		len(exp.RequiredToolArgContains) > 0 ||
 		len(exp.RequiredSourceAccess) > 0 ||
@@ -412,6 +436,8 @@ func hasTimelineScenarioExpectations(exp DebugScenarioExpectations) bool {
 		exp.RequiredReactiveCompactions > 0 ||
 		exp.RequiredCompactionRemovedMsgs > 0 ||
 		len(exp.RequiredContextSummaryText) > 0 ||
+		len(exp.ProtectedFiles) > 0 ||
+		len(exp.ForbiddenFileSubstrings) > 0 ||
 		exp.MaxParentToolCalls > 0 ||
 		len(exp.MaxSuccessfulToolCallsByTool) > 0 ||
 		exp.MaxTurns > 0 ||
@@ -435,6 +461,24 @@ func writeTimelineStringList(b *strings.Builder, label string, values []string) 
 		return
 	}
 	fmt.Fprintf(b, "- %s: `%s`\n", label, strings.Join(preview, "`, `"))
+}
+
+func writeTimelineToolOrders(b *strings.Builder, label string, orders []DebugToolOrderRequirement) {
+	for _, order := range orders {
+		if strings.TrimSpace(order.Earlier) == "" && strings.TrimSpace(order.Later) == "" {
+			continue
+		}
+		fmt.Fprintf(b, "- %s: `%s -> %s`\n", label, timelineInline(order.Earlier, 120), timelineInline(order.Later, 120))
+	}
+}
+
+func writeTimelineCommandToolOrders(b *strings.Builder, label string, orders []DebugCommandToolOrderRequirement) {
+	for _, order := range orders {
+		if strings.TrimSpace(order.Command) == "" && strings.TrimSpace(order.Tool) == "" {
+			continue
+		}
+		fmt.Fprintf(b, "- %s: `%s -> %s`\n", label, timelineInline(order.Command, 180), timelineInline(order.Tool, 120))
+	}
 }
 
 func writeTimelineStringSliceMap(b *strings.Builder, label string, values map[string][]string) {
