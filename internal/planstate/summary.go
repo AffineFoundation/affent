@@ -4,6 +4,8 @@ import (
 	"encoding/json"
 	"fmt"
 	"strings"
+
+	"github.com/affinefoundation/affent/internal/textutil"
 )
 
 const (
@@ -86,7 +88,7 @@ func normalizeStatus(status string) string {
 }
 
 func canonicalStepKey(text, status string) string {
-	return strings.ToLower(strings.Join(strings.Fields(text), " ")) + "\x00" + status
+	return strings.ToLower(textutil.CompactWhitespace(text)) + "\x00" + status
 }
 
 func currentStepPriority(status string) int {
@@ -103,7 +105,7 @@ func currentStepPriority(status string) int {
 }
 
 func compactCurrentStep(text string) string {
-	text = strings.Join(strings.Fields(text), " ")
+	text = textutil.CompactWhitespace(text)
 	if len(text) <= maxCurrentStepBytes {
 		return text
 	}

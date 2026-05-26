@@ -10,7 +10,8 @@ import (
 	"strconv"
 	"strings"
 	"time"
-	"unicode/utf8"
+
+	"github.com/affinefoundation/affent/internal/textutil"
 )
 
 // DockerExecExecutor runs the agent's shell + file tools against a
@@ -202,13 +203,7 @@ func (d *DockerExecExecutor) ReadFile(ctx context.Context, path string, maxBytes
 		return "", fmt.Errorf("%s appears to be binary (contains null bytes); use shell with file/xxd/base64 to inspect", path)
 	}
 	if len(out) > maxBytes {
-		// Snap back to a UTF-8 rune boundary; head -c counts bytes
-		// and will happily cut a multi-byte rune in half.
-		cut := maxBytes
-		for cut > 0 && !utf8.RuneStart(out[cut]) {
-			cut--
-		}
-		return out[:cut] + fmt.Sprintf("\n... [truncated; %d-byte cap]", maxBytes), nil
+		return textutil.Preview(out, maxBytes, fmt.Sprintf("\n... [truncated; %d-byte cap]", maxBytes)), nil
 	}
 	return out, nil
 }

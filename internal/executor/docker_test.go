@@ -9,6 +9,7 @@ import (
 	"strings"
 	"testing"
 	"time"
+	"unicode/utf8"
 )
 
 // dockerOrSkip starts a short-lived alpine container for the test and
@@ -156,6 +157,20 @@ func TestDockerExecFileOps_Roundtrip(t *testing.T) {
 	}
 	if !strings.HasSuffix(short, "[truncated; 5-byte cap]") {
 		t.Errorf("truncated read missing suffix: %q", short)
+	}
+	res, err = d.Exec(ctx, []string{"sh", "-c", "printf 'hello世界world' > /work/notes/utf8.txt"}, ExecOptions{})
+	if err != nil {
+		t.Fatalf("create utf8 text file: %v", err)
+	}
+	if res.ExitCode != 0 {
+		t.Fatalf("create utf8 text file exit=%d stderr=%s", res.ExitCode, res.Stderr)
+	}
+	utf8Short, err := d.ReadFile(ctx, "/work/notes/utf8.txt", 7)
+	if err != nil {
+		t.Fatalf("read utf8 truncated: %v", err)
+	}
+	if !utf8.ValidString(utf8Short) {
+		t.Fatalf("truncated utf8 read should stay valid UTF-8: %q", utf8Short)
 	}
 	res, err = d.Exec(ctx, []string{"sh", "-c", "yes x | head -c 4194305 > /work/notes/large.txt"}, ExecOptions{})
 	if err != nil {

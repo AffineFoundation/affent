@@ -12,6 +12,8 @@ import (
 	"strings"
 	"sync"
 	"time"
+
+	"github.com/affinefoundation/affent/internal/textutil"
 )
 
 const (
@@ -273,7 +275,7 @@ func normalizePersistedPlanSteps(steps []planStep) ([]planStep, error) {
 }
 
 func canonicalPlanStepText(text string) string {
-	return strings.ToLower(strings.Join(strings.Fields(text), " "))
+	return strings.ToLower(textutil.CompactWhitespace(text))
 }
 
 func normalizePlanStep(step planStep) (planStep, error) {
@@ -647,12 +649,12 @@ func formatActivePlanStep(index int, step planStep) string {
 		status = "pending"
 	}
 	var b strings.Builder
-	fmt.Fprintf(&b, "%d. [%s] %s", index, status, previewN(strings.TrimSpace(step.Text), maxActivePlanStepTextBytes))
+	fmt.Fprintf(&b, "%d. [%s] %s", index, status, textutil.Preview(strings.TrimSpace(step.Text), maxActivePlanStepTextBytes))
 	if evidence := activePlanEvidenceSummary(step.Evidence); evidence != "" {
 		fmt.Fprintf(&b, " evidence: %s", evidence)
 	}
 	if note := strings.TrimSpace(step.Note); note != "" {
-		fmt.Fprintf(&b, " note: %s", previewN(note, maxActivePlanNoteBytes))
+		fmt.Fprintf(&b, " note: %s", textutil.Preview(note, maxActivePlanNoteBytes))
 	}
 	b.WriteByte('\n')
 	return b.String()
@@ -665,7 +667,7 @@ func activePlanEvidenceSummary(evidence []string) string {
 		if ref == "" {
 			continue
 		}
-		refs = append(refs, previewN(ref, maxActivePlanEvidenceRefBytes))
+		refs = append(refs, textutil.Preview(ref, maxActivePlanEvidenceRefBytes))
 		if len(refs) == maxActivePlanEvidenceRefs {
 			break
 		}

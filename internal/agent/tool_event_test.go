@@ -1,6 +1,7 @@
 package agent
 
 import (
+	"strings"
 	"testing"
 
 	"github.com/affinefoundation/affent/internal/sse"
@@ -78,5 +79,15 @@ func TestToolFailureKindsForOutcome(t *testing.T) {
 		if got[i] != want[i] {
 			t.Fatalf("toolFailureKindsForOutcome() = %#v, want %#v", got, want)
 		}
+	}
+}
+
+func TestTruncateToolResultForContextIncludesArtifactHint(t *testing.T) {
+	got := truncateToolResultForContext("shell", strings.Repeat("x", 128), 16, ".affent/artifacts/tool-results/000001-c1.txt")
+	if !strings.Contains(got, ".affent/artifacts/tool-results/000001-c1.txt") {
+		t.Fatalf("expected artifact path hint in truncated result, got %q", got)
+	}
+	if !strings.Contains(got, "read_file") {
+		t.Fatalf("expected read_file hint in truncated result, got %q", got)
 	}
 }

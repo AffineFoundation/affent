@@ -8,6 +8,8 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+
+	"github.com/affinefoundation/affent/internal/textutil"
 )
 
 type toolSchema struct {
@@ -725,7 +727,7 @@ func toolErrorHelp(t *Tool, args json.RawMessage) string {
 	}
 	if len(args) > 0 {
 		b.WriteString("\nReceived: ")
-		b.WriteString(previewN(string(args), 240))
+		b.WriteString(textutil.Preview(string(args), 240))
 	}
 	b.WriteString("\nNext: fix the arguments and retry once, or use a different tool if the same error repeats.")
 	return b.String()

@@ -337,10 +337,7 @@ func formatEvent(m ChatMessage) string {
 }
 
 func truncateChars(s string, n int) string {
-	if len(s) <= n {
-		return s
-	}
-	return s[:textutil.AlignBackward(s, n)] + "...(truncated)"
+	return textutil.Preview(s, n, "...(truncated)")
 }
 
 // IsContextOverflow reports whether err looks like an upstream "input
@@ -357,6 +354,7 @@ func truncateChars(s string, n int) string {
 //   - Together / Fireworks: "input length is greater than the maximum allowed", "is greater than the maximum allowed token count"
 //   - vLLM / sglang / TGI:  "context_length_exceeded", "string too long"
 //   - Chutes / OpenRouter:  pass-through of any of the above
+//
 // contextOverflowKeywords covers the phrasing each major
 // OpenAI-compatible provider emits when input length exceeds the
 // context window. Collected from production errors, not the spec.

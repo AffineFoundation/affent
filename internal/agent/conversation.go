@@ -13,6 +13,7 @@ import (
 	"sync"
 
 	"github.com/affinefoundation/affent/internal/jsonl"
+	"github.com/affinefoundation/affent/internal/textutil"
 )
 
 const maxConversationLineBytes = jsonl.DefaultMaxRecordBytes
@@ -52,10 +53,8 @@ func ValidateSessionID(sessionID string) error {
 	if filepath.Base(leaf) != leaf || strings.ContainsAny(sessionID, "/\\\x00") || sessionID == ".." || sessionID == "." {
 		return fmt.Errorf("invalid session id %q (must be a plain filename, no path separators)", sessionID)
 	}
-	for _, r := range sessionID {
-		if r < 0x20 || r == 0x7F {
-			return fmt.Errorf("invalid session id %q (contains ASCII control character U+%04X)", sessionID, r)
-		}
+	if textutil.ContainsASCIIControlBytes(sessionID) {
+		return fmt.Errorf("invalid session id %q (contains ASCII control characters)", sessionID)
 	}
 	return nil
 }

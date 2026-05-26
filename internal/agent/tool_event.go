@@ -6,25 +6,19 @@ import (
 	"strings"
 	"time"
 
+	"github.com/affinefoundation/affent/internal/sourceaccess"
 	"github.com/affinefoundation/affent/internal/sse"
 	"github.com/affinefoundation/affent/internal/textutil"
 	"github.com/affinefoundation/affent/internal/toolfailure"
 	"github.com/affinefoundation/affent/internal/toolrepair"
 )
 
-func previewN(s string, n int) string {
-	if len(s) <= n {
-		return s
-	}
-	return s[:textutil.AlignBackward(s, n)] + "..."
-}
-
 func summarizeOriginalToolArgs(raw string) string {
 	raw = strings.TrimSpace(raw)
 	if raw == "" {
 		return ""
 	}
-	return previewN(raw, 512)
+	return textutil.Preview(raw, 512)
 }
 
 func toolRequestArgsView(args json.RawMessage) map[string]any {
@@ -184,7 +178,7 @@ func toolResultEventPayload(callID string, exitCode int, result string) sse.Tool
 	payload := sse.ToolResultPayload{
 		CallID:             callID,
 		ExitCode:           exitCode,
-		ResultSummary:      previewN(result, MaxToolResultPreviewInEvent),
+		ResultSummary:      textutil.Preview(result, MaxToolResultPreviewInEvent),
 		Result:             cappedResult,
 		ResultTruncated:    truncated,
 		ResultBytes:        len(result),
@@ -234,40 +228,26 @@ func truncateForEvent(s string, max int) string {
 }
 
 func truncateForEventWithStats(s string, max int) (string, bool, int) {
-	if len(s) <= max {
-		return s, false, 0
-	}
-	omitted := len(s) - max
-	for {
-		marker := fmt.Sprintf("\n... [%d more bytes truncated from tool.result event payload]", omitted)
-		limit := max - len(marker)
-		if limit <= 0 {
-			cut := textutil.AlignBackward(s, max)
-			return s[:cut], true, len(s) - cut
-		}
-		cut := textutil.AlignBackward(s, limit)
-		actualOmitted := len(s) - cut
-		if actualOmitted == omitted {
-			return s[:cut] + marker, true, actualOmitted
-		}
-		omitted = actualOmitted
-	}
+	out, omitted := textutil.TruncateWithMarker(s, max, func(omitted int) string {
+		return fmt.Sprintf("\n... [%d more bytes truncated from tool.result event payload]", omitted)
+	})
+	return out, omitted > 0, omitted
 }
 
 func truncateForContext(s string, max int) string {
-	if len(s) <= max {
-		return s
+	head, omitted := textutil.PreviewHead(s, max)
+	if omitted == 0 {
+		return head
 	}
-	cut := textutil.AlignBackward(s, max)
-	return s[:cut] + defaultContextTruncationMarker(len(s)-cut)
+	return head + defaultContextTruncationMarker(omitted)
 }
 
-func truncateToolResultForContext(toolName, result string, max int) string {
-	if len(result) <= max {
-		return result
+func truncateToolResultForContext(toolName, result string, max int, artifactPath string) string {
+	head, omitted := textutil.PreviewHead(result, max)
+	if omitted == 0 {
+		return head
 	}
-	cut := textutil.AlignBackward(result, max)
-	return result[:cut] + toolResultContextTruncationMarker(toolName, len(result)-cut)
+	return head + toolResultContextTruncationMarker(toolName, omitted, artifactPath)
 }
 
 type toolResultContextBudget struct {
@@ -286,7 +266,7 @@ func (b *toolResultContextBudget) exhausted() bool {
 	return b != nil && b.remaining <= 0
 }
 
-func (b *toolResultContextBudget) truncateToolResult(toolName, result string, perToolMax int) (string, int) {
+func (b *toolResultContextBudget) truncateToolResult(toolName, result string, perToolMax int, artifactPath string) (string, int) {
 	if result == "" {
 		return "", 0
 	}
@@ -294,13 +274,13 @@ func (b *toolResultContextBudget) truncateToolResult(toolName, result string, pe
 		perToolMax = MaxToolResultBytesInContext
 	}
 	if b == nil {
-		return truncateToolResultForContext(toolName, result, perToolMax), toolResultContextOmittedBytes(result, perToolMax)
+		return truncateToolResultForContext(toolName, result, perToolMax, artifactPath), toolResultContextOmittedBytes(result, perToolMax)
 	}
 	if repeatedBrowserPage := b.recordBrowserPageResult(toolName, result); repeatedBrowserPage {
 		return b.truncateRepeatedBrowserPageResult(toolName, result, perToolMax)
 	}
 	if b.remaining <= 0 {
-		return toolResultContextBudgetExhaustedResult(toolName, result)
+		return toolResultContextBudgetExhaustedResult(toolName, result, artifactPath)
 	}
 
 	max := perToolMax
@@ -317,9 +297,9 @@ func (b *toolResultContextBudget) truncateToolResult(toolName, result string, pe
 	cut := textutil.AlignBackward(result, max)
 	b.remaining -= cut
 	omitted := len(result) - cut
-	marker := toolResultContextTruncationMarker(toolName, omitted)
+	marker := toolResultContextTruncationMarker(toolName, omitted, artifactPath)
 	if budgetLimited {
-		marker = toolResultContextBudgetTruncationMarker(toolName, omitted)
+		marker = toolResultContextBudgetTruncationMarker(toolName, omitted, artifactPath)
 	}
 	return result[:cut] + marker, omitted
 }
@@ -342,7 +322,7 @@ func (b *toolResultContextBudget) recordBrowserPageResult(toolName, result strin
 
 func (b *toolResultContextBudget) truncateRepeatedBrowserPageResult(toolName, result string, perToolMax int) (string, int) {
 	if b == nil || b.remaining <= 0 {
-		return toolResultContextBudgetExhaustedResult(toolName, result)
+		return toolResultContextBudgetExhaustedResult(toolName, result, "")
 	}
 	headMax := min(perToolMax, 768)
 	headMax = min(headMax, b.remaining)
@@ -366,48 +346,24 @@ func isBrowserPageSnapshotTool(toolName string) bool {
 }
 
 func toolResultBrowserURL(result string) string {
-	for _, line := range strings.Split(result, "\n") {
-		line = strings.TrimSpace(line)
-		if strings.HasPrefix(line, "SourceAccess:") {
-			for _, field := range strings.Split(line, ";") {
-				field = strings.TrimSpace(field)
-				if strings.HasPrefix(field, "SourceAccess:") {
-					field = strings.TrimSpace(strings.TrimPrefix(field, "SourceAccess:"))
-				}
-				if strings.HasPrefix(field, "browser_rendered_url=") {
-					return strings.TrimSpace(strings.TrimPrefix(field, "browser_rendered_url="))
-				}
-			}
-		}
-		if strings.HasPrefix(line, "URL: ") {
-			return strings.TrimSpace(strings.TrimPrefix(line, "URL: "))
-		}
-	}
-	return ""
+	return sourceaccess.AccessedURLFromResult(result)
 }
 
-func toolResultContextBudgetExhaustedResult(toolName, result string) (string, int) {
+func toolResultContextBudgetExhaustedResult(toolName, result string, artifactPath string) (string, int) {
 	head := toolResultContextEvidenceHead(result, 512)
 	if head == "" {
-		return toolResultContextBudgetExhaustedMarker(toolName, len(result)), len(result)
+		return toolResultContextBudgetExhaustedMarker(toolName, len(result), artifactPath), len(result)
 	}
 	omitted := max(0, len(result)-len(head))
 	if omitted == 0 {
 		return head, 0
 	}
-	return head + "\n\n" + toolResultContextBudgetExhaustedMarker(toolName, omitted), omitted
+	return head + "\n\n" + toolResultContextBudgetExhaustedMarker(toolName, omitted, artifactPath), omitted
 }
 
 func toolResultContextEvidenceHead(result string, maxBytes int) string {
-	if maxBytes <= 0 {
-		return ""
-	}
-	result = strings.TrimSpace(result)
-	if result == "" {
-		return ""
-	}
-	cut := textutil.AlignBackward(result, min(len(result), maxBytes))
-	return strings.TrimSpace(result[:cut])
+	head, _ := textutil.PreviewHead(result, maxBytes)
+	return head
 }
 
 func repeatedBrowserPageContextMarker(toolName string, omitted int) string {
@@ -418,11 +374,8 @@ func repeatedBrowserPageContextMarker(toolName string, omitted int) string {
 }
 
 func toolResultContextOmittedBytes(result string, max int) int {
-	if len(result) <= max {
-		return 0
-	}
-	cut := textutil.AlignBackward(result, max)
-	return len(result) - cut
+	_, omitted := textutil.PreviewHead(result, max)
+	return omitted
 }
 
 func defaultContextTruncationMarker(omitted int) string {
@@ -432,59 +385,67 @@ func defaultContextTruncationMarker(omitted int) string {
 	)
 }
 
-func toolResultContextTruncationMarker(toolName string, omitted int) string {
+func toolResultContextTruncationMarker(toolName string, omitted int, artifactPath string) string {
 	switch toolName {
 	case "browser_navigate", "browser_snapshot", "browser_scroll", "browser_wait", "browser_click", "browser_type":
 		return fmt.Sprintf(
 			"\n\n[... %d more bytes truncated from %s before model context. Use browser_find for targeted visible text, navigate to a more specific URL/section, or answer from the verified visible evidence instead of repeating broad page snapshots.]",
 			omitted, toolName,
-		)
+		) + artifactReadHint(artifactPath)
 	case "web_fetch":
 		return fmt.Sprintf(
 			"\n\n[... %d more bytes truncated from web_fetch before model context. Use a more specific API/text/source URL, fetch a narrower canonical page, or answer with clearly marked gaps from the verified evidence already visible.]",
 			omitted,
-		)
+		) + artifactReadHint(artifactPath)
 	default:
-		return defaultContextTruncationMarker(omitted)
+		return defaultContextTruncationMarker(omitted) + artifactReadHint(artifactPath)
 	}
 }
 
-func toolResultContextBudgetTruncationMarker(toolName string, omitted int) string {
+func toolResultContextBudgetTruncationMarker(toolName string, omitted int, artifactPath string) string {
 	switch toolName {
 	case "browser_navigate", "browser_snapshot", "browser_scroll", "browser_wait", "browser_click", "browser_type":
 		return fmt.Sprintf(
 			"\n\n[... %d more bytes omitted from %s before model context because the per-turn tool-result context budget is nearly exhausted. Use browser_find, navigate to a narrower page/section, or answer from verified evidence already collected.]",
 			omitted, toolName,
-		)
+		) + artifactReadHint(artifactPath)
 	case "web_fetch":
 		return fmt.Sprintf(
 			"\n\n[... %d more bytes omitted from web_fetch before model context because the per-turn tool-result context budget is nearly exhausted. Use a narrower canonical/API/text source, or answer with clearly marked gaps from verified evidence already collected.]",
 			omitted,
-		)
+		) + artifactReadHint(artifactPath)
 	default:
 		return fmt.Sprintf(
 			"\n\n[... %d more bytes omitted before model context because the per-turn tool-result context budget is nearly exhausted. Use narrower tool calls or answer from verified evidence already collected.]",
 			omitted,
-		)
+		) + artifactReadHint(artifactPath)
 	}
 }
 
-func toolResultContextBudgetExhaustedMarker(toolName string, omitted int) string {
+func toolResultContextBudgetExhaustedMarker(toolName string, omitted int, artifactPath string) string {
 	switch toolName {
 	case "browser_navigate", "browser_snapshot", "browser_scroll", "browser_wait", "browser_click", "browser_type":
 		return fmt.Sprintf(
 			"[tool result omitted from model context: %d bytes from %s exceeded the per-turn tool-result context budget. Use browser_find, navigate to a narrower page/section, or answer from verified evidence already collected.]",
 			omitted, toolName,
-		)
+		) + artifactReadHint(artifactPath)
 	case "web_fetch":
 		return fmt.Sprintf(
 			"[tool result omitted from model context: %d bytes from web_fetch exceeded the per-turn tool-result context budget. Use a narrower canonical/API/text source, or answer with clearly marked gaps from verified evidence already collected.]",
 			omitted,
-		)
+		) + artifactReadHint(artifactPath)
 	default:
 		return fmt.Sprintf(
 			"[tool result omitted from model context: %d bytes from %s exceeded the per-turn tool-result context budget. Use narrower tool calls or answer from verified evidence already collected.]",
 			omitted, toolName,
-		)
+		) + artifactReadHint(artifactPath)
 	}
+}
+
+func artifactReadHint(artifactPath string) string {
+	artifactPath = strings.TrimSpace(artifactPath)
+	if artifactPath == "" {
+		return ""
+	}
+	return "\nUse the saved artifact with read_file if you need the complete output: " + artifactPath
 }
