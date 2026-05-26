@@ -780,8 +780,8 @@ debugging, including pass/completion, memory update coverage, runtime-surface
 coverage, tool errors, focused-task/subagent errors, plan errors, repair success, verifier pass rate,
 verified evidence, network/discovery/dynamic-partial source ratios, average
 context compactions, reactive context compactions, aggregate and per-family
-expected-capability pass rates, messages removed by compaction, and
-tool-context truncation.
+expected-capability pass rates, messages removed by compaction, compaction
+summary size, and tool-context truncation.
 Use `--min-pass-rate`, `--min-completion-rate`,
 `--min-memory-update-rate`, `--min-runtime-surface-rate`,
 `--min-source-network-rate`,
@@ -799,8 +799,8 @@ Use `--min-pass-rate`, `--min-completion-rate`,
 `--max-tool-context-truncation-rate`,
 `--max-tool-result-truncation-rate`, `--max-avg-runtime-errors`,
 `--max-avg-context-compactions`, `--max-avg-reactive-context-compactions`,
-`--max-avg-context-removed-messages`, and `--max-avg-total-tokens` for CI or
-model/provider comparison runs.
+`--max-avg-context-removed-messages`, `--max-avg-context-summary-bytes`, and
+`--max-avg-total-tokens` for CI or model/provider comparison runs.
 
 Run a one-off prompt through the same batch harness:
 

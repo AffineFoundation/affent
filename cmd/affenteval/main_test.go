@@ -42,6 +42,7 @@ func TestRunListQualityProfiles(t *testing.T) {
 		"min-pass-rate=0.800",
 		"max-avg-total-tokens=120000.000",
 		"max-avg-context-removed-messages=120.000",
+		"max-avg-context-summary-bytes=24000.000",
 		"min-source-access-verified-rate=0.900",
 		"max-source-dynamic-partial-rate=0.200",
 	} {
@@ -364,6 +365,7 @@ func TestQualityGateFailures(t *testing.T) {
 		ContextCompactions:         1,
 		ContextCompactionsReactive: 1,
 		ContextCompactionRemoved:   32,
+		ContextCompactionSummary:   2048,
 		ExpectationCapabilities:    map[string]int{"browser": 2, "memory": 1, "web": 1},
 		ExpectationCapabilityPass:  map[string]int{"browser": 1, "memory": 1},
 	}
@@ -393,12 +395,14 @@ func TestQualityGateFailures(t *testing.T) {
 		MaxAvgContextCompactions:             ptr(0.25),
 		MaxAvgReactiveCompactions:            ptr(0.25),
 		MaxAvgContextRemovedMessages:         ptr(12),
+		MaxAvgContextSummaryBytes:            ptr(512),
 		MaxAvgTotalTokens:                    ptr(40),
 	})
 	got := strings.Join(failures, "\n")
 	for _, want := range []string{
 		"avg_context_compactions 0.500 > max 0.250",
 		"avg_context_removed_messages 16.000 > max 12.000",
+		"avg_context_summary_bytes 1024.000 > max 512.000",
 		"avg_reactive_context_compactions 0.500 > max 0.250",
 		"avg_runtime_errors 1.500 > max 1.000",
 		"avg_total_tokens 55.000 > max 40.000",
@@ -464,6 +468,9 @@ func TestApplyQualityGateProfile(t *testing.T) {
 	if gates.MaxAvgContextRemovedMessages == nil || *gates.MaxAvgContextRemovedMessages != 120 {
 		t.Fatalf("longrun max avg context removed messages = %#v, want 120", gates.MaxAvgContextRemovedMessages)
 	}
+	if gates.MaxAvgContextSummaryBytes == nil || *gates.MaxAvgContextSummaryBytes != 24000 {
+		t.Fatalf("longrun max avg context summary bytes = %#v, want 24000", gates.MaxAvgContextSummaryBytes)
+	}
 	if gates.MinExpectationCapabilityPassRate == nil || *gates.MinExpectationCapabilityPassRate != 0.80 {
 		t.Fatalf("longrun min expectation capability pass rate = %#v, want 0.80", gates.MinExpectationCapabilityPassRate)
 	}
@@ -483,6 +490,7 @@ func TestApplyQualityGateProfile(t *testing.T) {
 		webGates.MinExpectationCapabilityPassRate == nil || *webGates.MinExpectationCapabilityPassRate != 0.80 ||
 		webGates.MinEachExpectationCapabilityPassRate == nil || *webGates.MinEachExpectationCapabilityPassRate != 0.50 ||
 		webGates.MaxAvgContextRemovedMessages == nil || *webGates.MaxAvgContextRemovedMessages != 80 ||
+		webGates.MaxAvgContextSummaryBytes == nil || *webGates.MaxAvgContextSummaryBytes != 20000 ||
 		webGates.MaxSourceDynamicPartialRate == nil || *webGates.MaxSourceDynamicPartialRate != 0.20 {
 		t.Fatalf("web-evidence gates not applied: %+v", webGates)
 	}
@@ -1071,7 +1079,7 @@ func TestBatchSummaryAggregatesRuntimeMetrics(t *testing.T) {
 	if !strings.Contains(out.String(), "rates=pass:50.0%,completed:50.0%,memory_update:0.0%,runtime_surface:100.0%,tool_error:20.0%,focused_task_error:n/a,subagent_error:n/a,plan_error:33.3%,repair_success:80.0%,verifier_pass:50.0%,evidence_verified:75.0%,source_network:75.0%,source_discovery:0.0%,source_dynamic_partial:0.0% avg_tokens=45.0/10.0") {
 		t.Fatalf("summary output missing normalized rates:\n%s", out.String())
 	}
-	if !strings.Contains(out.String(), "context_pressure=avg_compactions:0.50,avg_reactive:0.50,avg_removed:16.0,tool_ctx_trunc:60.0%") {
+	if !strings.Contains(out.String(), "context_pressure=avg_compactions:0.50,avg_reactive:0.50,avg_removed:16.0,avg_summary_bytes:1024,tool_ctx_trunc:60.0%") {
 		t.Fatalf("summary output missing context pressure rates:\n%s", out.String())
 	}
 	if !strings.Contains(out.String(), "source_access=results:4,verified:3,discovery:0,network:3,dynamic_partial:0") {
@@ -2319,6 +2327,7 @@ func TestPrintBatchSummaryJSONL(t *testing.T) {
 		ContextCompactions:         1,
 		ContextCompactionsReactive: 1,
 		ContextCompactionRemoved:   32,
+		ContextCompactionSummary:   2048,
 		ContextCompactionExamples: []agenteval.ContextCompaction{{
 			TurnID:          "turn-summary-jsonl",
 			BeforeMessages:  64,
@@ -2491,6 +2500,7 @@ func TestPrintBatchSummaryJSONL(t *testing.T) {
 		"avg_runtime_errors":              float64(0.5),
 		"avg_context_compactions":         float64(0.5),
 		"avg_context_removed_messages":    float64(16),
+		"avg_context_summary_bytes":       float64(1024),
 		"tool_context_truncation_rate":    float64(0.8),
 		"tool_result_truncation_rate":     float64(0.4),
 		"duration_ms":                     float64(2500),
@@ -2905,6 +2915,7 @@ func TestEvalJSONLMetadataFromConfig(t *testing.T) {
 	maxAvgContextCompactions := 0.1
 	maxAvgReactiveContextCompactions := 0.2
 	maxAvgContextRemovedMessages := 40.0
+	maxAvgContextSummaryBytes := 16000.0
 	maxAvgTotalTokens := 120000.0
 	meta = evalJSONLMetadataFromConfig(" custom ", " flag-model ", " flag-provider ", " sandbox ", " 0.4 ", " 0.9 ", " 512 ", " 42 ", true, " readonly_workspace,web ", true, true, true, true, true, " /tmp/mcp.json ", time.Second, " Web-Evidence ", qualityGateConfig{
 		MinPassRate:                          &minPassRate,
@@ -2930,12 +2941,13 @@ func TestEvalJSONLMetadataFromConfig(t *testing.T) {
 		MaxAvgContextCompactions:             &maxAvgContextCompactions,
 		MaxAvgReactiveCompactions:            &maxAvgReactiveContextCompactions,
 		MaxAvgContextRemovedMessages:         &maxAvgContextRemovedMessages,
+		MaxAvgContextSummaryBytes:            &maxAvgContextSummaryBytes,
 		MaxAvgTotalTokens:                    &maxAvgTotalTokens,
 	})
 	if meta.Model != "flag-model" || meta.ProviderLabel != "flag-provider" || meta.Executor != "sandbox" || meta.Temperature != "0.4" || meta.TopP != "0.9" || meta.MaxTokens != "512" || meta.Seed != "42" || meta.Suite != "custom" || !meta.RuntimeEvalMode || meta.RuntimeTools != "readonly_workspace,web" || !meta.RuntimeAllTools || !meta.RuntimeMemory || !meta.RuntimeWeb || !meta.RuntimeBrowser || !meta.TraceDeltas || !meta.RuntimeMCP || meta.TimeoutMS != 1000 || meta.QualityProfile != "web-evidence" {
 		t.Fatalf("flag metadata not normalized: %+v", meta)
 	}
-	if meta.MinPassRate == nil || *meta.MinPassRate != 0.8 || meta.MinMemoryUpdateRate == nil || *meta.MinMemoryUpdateRate != 0.2 || meta.MinRuntimeSurfaceRate == nil || *meta.MinRuntimeSurfaceRate != 0.9 || meta.MinSourceNetworkRate == nil || *meta.MinSourceNetworkRate != 0.5 || meta.MinSourceAccessVerifiedRate == nil || *meta.MinSourceAccessVerifiedRate != 0.9 || meta.MinExpectationCapabilityPassRate == nil || *meta.MinExpectationCapabilityPassRate != 0.7 || meta.MinEachExpectationCapabilityPassRate == nil || *meta.MinEachExpectationCapabilityPassRate != 0.6 || meta.MinSessionSearchContextHitRate == nil || *meta.MinSessionSearchContextHitRate != 0.75 || meta.MinToolRepairSuccessRate == nil || *meta.MinToolRepairSuccessRate != 0.85 || meta.MinVerifierPassRate == nil || *meta.MinVerifierPassRate != 0.9 || meta.MaxFocusedTaskErrorRate == nil || *meta.MaxFocusedTaskErrorRate != 0.07 || meta.MaxForcedNoToolsRate == nil || *meta.MaxForcedNoToolsRate != 0.1 || meta.MaxLoopGuardInterventionRate == nil || *meta.MaxLoopGuardInterventionRate != 0.15 || meta.MaxPlanErrorRate == nil || *meta.MaxPlanErrorRate != 0.05 || meta.MaxSourceDiscoveryOnlyRate == nil || *meta.MaxSourceDiscoveryOnlyRate != 0.1 || meta.MaxSourceDynamicPartialRate == nil || *meta.MaxSourceDynamicPartialRate != 0.1 || meta.MaxSubagentErrorRate == nil || *meta.MaxSubagentErrorRate != 0.08 || meta.MaxToolErrorRate == nil || *meta.MaxToolErrorRate != 0.05 || meta.MaxToolResultTruncationRate == nil || *meta.MaxToolResultTruncationRate != 0.2 || meta.MaxAvgRuntimeErrors == nil || *meta.MaxAvgRuntimeErrors != 0.05 || meta.MaxAvgContextCompactions == nil || *meta.MaxAvgContextCompactions != 0.1 || meta.MaxAvgReactiveCompactions == nil || *meta.MaxAvgReactiveCompactions != 0.2 || meta.MaxAvgContextRemovedMessages == nil || *meta.MaxAvgContextRemovedMessages != 40 || meta.MaxAvgTotalTokens == nil || *meta.MaxAvgTotalTokens != 120000 {
+	if meta.MinPassRate == nil || *meta.MinPassRate != 0.8 || meta.MinMemoryUpdateRate == nil || *meta.MinMemoryUpdateRate != 0.2 || meta.MinRuntimeSurfaceRate == nil || *meta.MinRuntimeSurfaceRate != 0.9 || meta.MinSourceNetworkRate == nil || *meta.MinSourceNetworkRate != 0.5 || meta.MinSourceAccessVerifiedRate == nil || *meta.MinSourceAccessVerifiedRate != 0.9 || meta.MinExpectationCapabilityPassRate == nil || *meta.MinExpectationCapabilityPassRate != 0.7 || meta.MinEachExpectationCapabilityPassRate == nil || *meta.MinEachExpectationCapabilityPassRate != 0.6 || meta.MinSessionSearchContextHitRate == nil || *meta.MinSessionSearchContextHitRate != 0.75 || meta.MinToolRepairSuccessRate == nil || *meta.MinToolRepairSuccessRate != 0.85 || meta.MinVerifierPassRate == nil || *meta.MinVerifierPassRate != 0.9 || meta.MaxFocusedTaskErrorRate == nil || *meta.MaxFocusedTaskErrorRate != 0.07 || meta.MaxForcedNoToolsRate == nil || *meta.MaxForcedNoToolsRate != 0.1 || meta.MaxLoopGuardInterventionRate == nil || *meta.MaxLoopGuardInterventionRate != 0.15 || meta.MaxPlanErrorRate == nil || *meta.MaxPlanErrorRate != 0.05 || meta.MaxSourceDiscoveryOnlyRate == nil || *meta.MaxSourceDiscoveryOnlyRate != 0.1 || meta.MaxSourceDynamicPartialRate == nil || *meta.MaxSourceDynamicPartialRate != 0.1 || meta.MaxSubagentErrorRate == nil || *meta.MaxSubagentErrorRate != 0.08 || meta.MaxToolErrorRate == nil || *meta.MaxToolErrorRate != 0.05 || meta.MaxToolResultTruncationRate == nil || *meta.MaxToolResultTruncationRate != 0.2 || meta.MaxAvgRuntimeErrors == nil || *meta.MaxAvgRuntimeErrors != 0.05 || meta.MaxAvgContextCompactions == nil || *meta.MaxAvgContextCompactions != 0.1 || meta.MaxAvgReactiveCompactions == nil || *meta.MaxAvgReactiveCompactions != 0.2 || meta.MaxAvgContextRemovedMessages == nil || *meta.MaxAvgContextRemovedMessages != 40 || meta.MaxAvgContextSummaryBytes == nil || *meta.MaxAvgContextSummaryBytes != 16000 || meta.MaxAvgTotalTokens == nil || *meta.MaxAvgTotalTokens != 120000 {
 		t.Fatalf("quality gate metadata not preserved: %+v", meta)
 	}
 	if meta.MinCompletionRate != nil || meta.MaxToolContextTruncationRate != nil {
