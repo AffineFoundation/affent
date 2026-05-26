@@ -1122,6 +1122,7 @@ type batchResultRecord struct {
 	ToolRepairByKind           map[string]int                             `json:"tool_repair_by_kind,omitempty"`
 	ToolFailureByKind          map[string]int                             `json:"tool_failure_by_kind,omitempty"`
 	ToolFailureExamples        map[string][]agenteval.ToolFailureExample  `json:"tool_failure_examples,omitempty"`
+	MemoryUpdateExamples       []agenteval.MemoryUpdateExample            `json:"memory_update_examples,omitempty"`
 	RuntimeErrorByKind         map[string]int                             `json:"runtime_error_by_kind,omitempty"`
 	RuntimeErrorExamples       map[string][]agenteval.RuntimeErrorExample `json:"runtime_error_examples,omitempty"`
 	RuntimeSurface             *runtimeSurfaceSummary                     `json:"runtime_surface,omitempty"`
@@ -1348,6 +1349,7 @@ func printBatchResultJSONL(w io.Writer, meta evalJSONLMetadata, res agenteval.Ba
 		ToolRepairByKind:           cloneStringIntMap(res.Repair.ByKind),
 		ToolFailureByKind:          cloneStringIntMap(res.ToolStats.ToolFailureByKind),
 		ToolFailureExamples:        cloneToolFailureExamples(res.ToolFailureExamples),
+		MemoryUpdateExamples:       cloneMemoryUpdateExamples(res.MemoryUpdateExamples),
 		RuntimeErrorByKind:         cloneStringIntMap(res.RuntimeErrorByKind),
 		RuntimeErrorExamples:       cloneRuntimeErrorExamples(res.RuntimeErrorExamples),
 		RuntimeSurface:             runtimeSurfaceSummaryForJSONL(res.RuntimeSurface),
@@ -1633,6 +1635,13 @@ func cloneToolFailureExamples(in map[string][]agenteval.ToolFailureExample) map[
 
 func cloneRuntimeErrorExamples(in map[string][]agenteval.RuntimeErrorExample) map[string][]agenteval.RuntimeErrorExample {
 	return cloneExampleMap(in)
+}
+
+func cloneMemoryUpdateExamples(in []agenteval.MemoryUpdateExample) []agenteval.MemoryUpdateExample {
+	if len(in) == 0 {
+		return nil
+	}
+	return append([]agenteval.MemoryUpdateExample(nil), in...)
 }
 
 func cloneLoopDecisionExamples(in []agenteval.LoopDecision) []agenteval.LoopDecision {

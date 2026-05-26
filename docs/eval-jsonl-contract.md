@@ -129,10 +129,10 @@ Scenario records describe one eval case:
 - `debug_brief`: optional machine-readable triage block for failed or
   diagnostic-heavy scenarios. It contains sorted `tags` such as
   `outcome:failed`, `tool_failure:blocked`, `runtime_error:llm_timeout`,
-  `source_dynamic_partial`, `empty_recall`, `context_compaction:reactive`, and
-  `truncation`, plus ordered `items` with a severity, message, inspect targets,
-  and relevant counts. This is the compact "what to inspect first" index for
-  long-run batch analysis.
+  `source_dynamic_partial`, `memory_update:replace`, `empty_recall`,
+  `context_compaction:reactive`, and `truncation`, plus ordered `items` with a
+  severity, message, inspect targets, and relevant counts. This is the compact
+  "what to inspect first" index for long-run batch analysis.
 - `loop_guard_interventions`: runtime loop guard intervention count.
 - `forced_no_tools`: count of forced no-tool follow-up requests after repeated
   blocking loop guard interventions. Soft warnings such as
@@ -156,6 +156,11 @@ Scenario records describe one eval case:
   adjacent transcript context.
 - `session_search_matched_terms`: count of unique matched query terms reported
   across parsed `session_search` responses.
+- `memory_update_examples`: optional bounded per-scenario examples of confirmed
+  durable memory mutations. Each sample includes the tool index, call id,
+  action, target/topic location, and compact previous/next previews when
+  available. These examples make long-run memory drift auditable without
+  opening the full trace or markdown timeline.
 - `tool_context_truncated`: count of tool results shortened before being fed
   back into the model conversation.
 - `tool_context_omitted_bytes`: total bytes omitted from tool results before

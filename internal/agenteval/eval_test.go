@@ -1300,6 +1300,7 @@ func TestWriteScenarioDebugArtifactsIndexesTraceAndFinalText(t *testing.T) {
 	if !stringSliceContains(manifest.DebugBrief.Tags, "tool_failure:dynamic_shell") ||
 		!stringSliceContains(manifest.DebugBrief.Tags, "runtime_error:llm_timeout") ||
 		!stringSliceContains(manifest.DebugBrief.Tags, "source_dynamic_partial") ||
+		!stringSliceContains(manifest.DebugBrief.Tags, "memory_update:replace") ||
 		!stringSliceContains(manifest.DebugBrief.Tags, "context_compaction:reactive") ||
 		!stringSliceContains(manifest.DebugBrief.Tags, "truncation") {
 		t.Fatalf("manifest debug brief tags = %+v", manifest.DebugBrief.Tags)
@@ -1310,6 +1311,15 @@ func TestWriteScenarioDebugArtifactsIndexesTraceAndFinalText(t *testing.T) {
 		!manifest.RuntimeSurface.Capabilities.WebSearch ||
 		manifest.RuntimeSurface.Tools[0].Name != "web_fetch" {
 		t.Fatalf("manifest runtime surface = %+v", manifest.RuntimeSurface)
+	}
+	if len(manifest.MemoryUpdateExamples) != 2 ||
+		manifest.MemoryUpdateExamples[0].ToolIndex != 4 ||
+		manifest.MemoryUpdateExamples[0].Action != "replace" ||
+		manifest.MemoryUpdateExamples[0].Location != "memory:markets" ||
+		!strings.Contains(manifest.MemoryUpdateExamples[0].Preview, "browser_network_read") ||
+		manifest.MemoryUpdateExamples[1].Action != "add" ||
+		manifest.MemoryUpdateExamples[1].Location != "memory:research" {
+		t.Fatalf("manifest memory update examples = %+v", manifest.MemoryUpdateExamples)
 	}
 	if manifest.Metrics.ToolCalls != 5 ||
 		manifest.Metrics.ToolErrors != 1 ||

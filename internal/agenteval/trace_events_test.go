@@ -64,6 +64,10 @@ func TestApplyTraceEventKeepsMemoryUpdateMetadata(t *testing.T) {
 	if update == nil || update.Action != "replace" || update.Location != "memory:markets" || update.Preview != "old fact -> new fact" {
 		t.Fatalf("MemoryUpdate = %+v", update)
 	}
+	examples := trace.MemoryUpdateExamples(2)
+	if len(examples) != 1 || examples[0].CallID != "mem1" || examples[0].PreviousPreview != "old fact" || examples[0].NextPreview != "new fact" {
+		t.Fatalf("MemoryUpdateExamples = %+v", examples)
+	}
 
 	timeline := renderDebugTimeline(BatchResult{BatchScenario: "memory-meta"}, BatchScenario{Prompt: "remember this"}, &trace)
 	for _, want := range []string{

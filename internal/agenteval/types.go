@@ -305,6 +305,18 @@ type ToolFailureExample struct {
 	ExitCode      int    `json:"exit_code"`
 }
 
+type MemoryUpdateExample struct {
+	ToolIndex       int    `json:"tool_index"`
+	CallID          string `json:"call_id,omitempty"`
+	Action          string `json:"action"`
+	Target          string `json:"target"`
+	Topic           string `json:"topic,omitempty"`
+	Location        string `json:"location"`
+	Preview         string `json:"preview,omitempty"`
+	PreviousPreview string `json:"previous_preview,omitempty"`
+	NextPreview     string `json:"next_preview,omitempty"`
+}
+
 type RuntimeErrorExample struct {
 	Kind    string `json:"kind"`
 	Message string `json:"message"`
@@ -423,6 +435,142 @@ func (t Trace) ToolFailureExamples(maxPerKind int) map[string][]ToolFailureExamp
 		return nil
 	}
 	return out
+}
+
+func (t Trace) MemoryUpdateExamples(maxExamples int) []MemoryUpdateExample {
+	if maxExamples <= 0 {
+		return nil
+	}
+	var out []MemoryUpdateExample
+	for i, c := range t.Tools {
+		if len(out) >= maxExamples {
+			break
+		}
+		ex, ok := memoryUpdateExampleForTool(i+1, c)
+		if ok {
+			out = append(out, ex)
+		}
+	}
+	return out
+}
+
+func memoryUpdateExampleForTool(index int, c ToolCall) (MemoryUpdateExample, bool) {
+	if c.MemoryUpdate != nil {
+		return memoryUpdateExampleFromMeta(index, c.CallID, c.MemoryUpdate)
+	}
+	if c.Tool != "memory" || c.ExitCode != 0 || c.IsErr {
+		return MemoryUpdateExample{}, false
+	}
+	var resp struct {
+		OK     bool   `json:"ok"`
+		Target string `json:"target"`
+		Topic  string `json:"topic"`
+	}
+	if err := json.Unmarshal([]byte(c.Result), &resp); err != nil || !resp.OK {
+		return MemoryUpdateExample{}, false
+	}
+	action := strings.ToLower(strings.TrimSpace(memoryUpdateArg(c.Args, "action")))
+	switch action {
+	case "add", "replace", "remove":
+	default:
+		return MemoryUpdateExample{}, false
+	}
+	target := firstNonEmptyMemoryUpdateValue(resp.Target, memoryUpdateArg(c.Args, "target"), "memory")
+	topic := firstNonEmptyMemoryUpdateValue(resp.Topic, memoryUpdateArg(c.Args, "topic"), "general")
+	if target == "user" {
+		topic = "user"
+	}
+	previousPreview := compactOneLine(memoryUpdateArg(c.Args, "old_text"), 160)
+	nextPreview := compactOneLine(memoryUpdateArg(c.Args, "content"), 160)
+	preview := memoryUpdateExamplePreview(action, previousPreview, nextPreview)
+	return MemoryUpdateExample{
+		ToolIndex:       index,
+		CallID:          c.CallID,
+		Action:          action,
+		Target:          target,
+		Topic:           topic,
+		Location:        target + ":" + topic,
+		Preview:         preview,
+		PreviousPreview: previousPreview,
+		NextPreview:     nextPreview,
+	}, true
+}
+
+func memoryUpdateExampleFromMeta(index int, callID string, meta *sse.MemoryUpdateMeta) (MemoryUpdateExample, bool) {
+	if meta == nil {
+		return MemoryUpdateExample{}, false
+	}
+	action := strings.ToLower(strings.TrimSpace(meta.Action))
+	switch action {
+	case "add", "replace", "remove":
+	default:
+		return MemoryUpdateExample{}, false
+	}
+	target := firstNonEmptyMemoryUpdateValue(meta.Target, "memory")
+	topic := firstNonEmptyMemoryUpdateValue(meta.Topic, "general")
+	if target == "user" {
+		topic = "user"
+	}
+	location := strings.TrimSpace(meta.Location)
+	if location == "" {
+		location = target + ":" + topic
+	}
+	previousPreview := compactOneLine(meta.PreviousPreview, 160)
+	nextPreview := compactOneLine(meta.NextPreview, 160)
+	preview := compactOneLine(meta.Preview, 220)
+	if preview == "" {
+		preview = memoryUpdateExamplePreview(action, previousPreview, nextPreview)
+	}
+	return MemoryUpdateExample{
+		ToolIndex:       index,
+		CallID:          callID,
+		Action:          action,
+		Target:          target,
+		Topic:           topic,
+		Location:        location,
+		Preview:         preview,
+		PreviousPreview: previousPreview,
+		NextPreview:     nextPreview,
+	}, true
+}
+
+func memoryUpdateExamplePreview(action, previousPreview, nextPreview string) string {
+	switch action {
+	case "add":
+		return nextPreview
+	case "replace":
+		if previousPreview != "" && nextPreview != "" {
+			return previousPreview + " -> " + nextPreview
+		}
+		return firstNonEmptyMemoryUpdateValue(nextPreview, previousPreview)
+	case "remove":
+		return previousPreview
+	default:
+		return ""
+	}
+}
+
+func memoryUpdateArg(args map[string]any, key string) string {
+	if len(args) == 0 {
+		return ""
+	}
+	value, ok := args[key]
+	if !ok {
+		return ""
+	}
+	if s, ok := value.(string); ok {
+		return strings.TrimSpace(s)
+	}
+	return strings.TrimSpace(fmt.Sprint(value))
+}
+
+func firstNonEmptyMemoryUpdateValue(values ...string) string {
+	for _, value := range values {
+		if strings.TrimSpace(value) != "" {
+			return strings.TrimSpace(value)
+		}
+	}
+	return ""
 }
 
 func toolFailureKindsForCall(c ToolCall) []string {

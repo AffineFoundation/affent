@@ -103,6 +103,27 @@ func BuildDebugBrief(res BatchResult) *DebugBrief {
 			"matched_terms": res.ToolStats.SessionSearchMatchedTerms,
 		}, tag)
 	}
+	if res.ToolStats.MemoryUpdates > 0 ||
+		res.ToolStats.MemoryUpdateAdd > 0 ||
+		res.ToolStats.MemoryUpdateReplace > 0 ||
+		res.ToolStats.MemoryUpdateRemove > 0 {
+		tags := []string{"memory_update"}
+		if res.ToolStats.MemoryUpdateAdd > 0 {
+			tags = append(tags, "memory_update:add")
+		}
+		if res.ToolStats.MemoryUpdateReplace > 0 {
+			tags = append(tags, "memory_update:replace")
+		}
+		if res.ToolStats.MemoryUpdateRemove > 0 {
+			tags = append(tags, "memory_update:remove")
+		}
+		add("memory_update", "info", "durable memory was updated; inspect examples before comparing long-run behavior", []string{"memory_update_examples", "memory_updates", "tool_timeline"}, map[string]int{
+			"updates": res.ToolStats.MemoryUpdates,
+			"add":     res.ToolStats.MemoryUpdateAdd,
+			"replace": res.ToolStats.MemoryUpdateReplace,
+			"remove":  res.ToolStats.MemoryUpdateRemove,
+		}, tags...)
+	}
 	if res.ContextCompactions.Count > 0 {
 		tags := []string{"context_compaction"}
 		if res.ContextCompactions.Reactive > 0 {

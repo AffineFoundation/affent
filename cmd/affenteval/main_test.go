@@ -844,6 +844,8 @@ func TestPrintBatchResultJSONL(t *testing.T) {
 			ToolDurationMS:            75,
 			LoopGuardInterventions:    3,
 			ForcedNoTools:             1,
+			MemoryUpdates:             1,
+			MemoryUpdateAdd:           1,
 			SessionSearchCalls:        1,
 			SessionSearchResults:      2,
 			SessionSearchContextHits:  1,
@@ -856,6 +858,15 @@ func TestPrintBatchResultJSONL(t *testing.T) {
 				{Kind: "blocked", Tool: "web_fetch", ArgsSummary: `url="https://blocked.example/metrics"`, ResultSummary: "HTTP 403 | Next: use another source", ExitCode: 1},
 			},
 		},
+		MemoryUpdateExamples: []agenteval.MemoryUpdateExample{{
+			ToolIndex: 3,
+			CallID:    "mem-1",
+			Action:    "add",
+			Target:    "memory",
+			Topic:     "markets",
+			Location:  "memory:markets",
+			Preview:   "Prefer browser_network_read evidence for dynamic market pages.",
+		}},
 		RuntimeErrorByKind: map[string]int{"llm_incomplete_stream": 1},
 		RuntimeErrorExamples: map[string][]agenteval.RuntimeErrorExample{
 			"llm_incomplete_stream": {
@@ -943,6 +954,8 @@ func TestPrintBatchResultJSONL(t *testing.T) {
 		"tool_repair_notes":                   float64(3),
 		"loop_guard_interventions":            float64(3),
 		"forced_no_tools":                     float64(1),
+		"memory_updates":                      float64(1),
+		"memory_update_add":                   float64(1),
 		"session_search_calls":                float64(1),
 		"session_search_results":              float64(2),
 		"session_search_context_hits":         float64(1),
@@ -1043,6 +1056,7 @@ func TestPrintBatchResultJSONL(t *testing.T) {
 	if !jsonArrayContainsString(debugBrief["tags"], "tool_failure:blocked") ||
 		!jsonArrayContainsString(debugBrief["tags"], "runtime_error:llm_incomplete_stream") ||
 		!jsonArrayContainsString(debugBrief["tags"], "loop_guard") ||
+		!jsonArrayContainsString(debugBrief["tags"], "memory_update:add") ||
 		!jsonArrayContainsString(debugBrief["tags"], "recall") ||
 		!jsonArrayContainsString(debugBrief["tags"], "context_compaction:reactive") ||
 		!jsonArrayContainsString(debugBrief["tags"], "truncation") {
@@ -1051,6 +1065,17 @@ func TestPrintBatchResultJSONL(t *testing.T) {
 	items, ok := debugBrief["items"].([]any)
 	if !ok || len(items) == 0 {
 		t.Fatalf("debug_brief items = %#v\njson=%s", debugBrief["items"], out.String())
+	}
+	memoryUpdateExamples, ok := got["memory_update_examples"].([]any)
+	if !ok || len(memoryUpdateExamples) != 1 {
+		t.Fatalf("memory_update_examples = %#v\njson=%s", got["memory_update_examples"], out.String())
+	}
+	memoryUpdateExample, ok := memoryUpdateExamples[0].(map[string]any)
+	if !ok ||
+		memoryUpdateExample["action"] != "add" ||
+		memoryUpdateExample["location"] != "memory:markets" ||
+		!strings.Contains(fmt.Sprint(memoryUpdateExample["preview"]), "browser_network_read") {
+		t.Fatalf("memory_update_example = %#v\njson=%s", memoryUpdateExamples[0], out.String())
 	}
 	loopDecisionByKind, ok := got["loop_decision_by_kind"].(map[string]any)
 	if !ok || loopDecisionByKind["evidence_quality"] != float64(1) {
