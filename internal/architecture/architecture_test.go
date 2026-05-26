@@ -39,10 +39,12 @@ const modulePath = "github.com/affinefoundation/affent"
 //
 // The contract is layered:
 //
-//	leaves      - sse, textutil                              (zero internal deps)
-//	leaf-deps   - projectcontext, sessionsearch, memory      (only textutil; no cross-layer)
-//	exec        - executor                                   (no internal deps)
-//	wire        - mcp                                        (textutil caps + sse + agent adapter — see note)
+//	leaves      - jsonl, netguard, sourceaccess, sse, textutil,
+//	              toolfailure, toolrepair, websource, workspaceignore
+//	leaf-deps   - gosymbols, memory, metrictext, planstate,
+//	              projectcontext, sessionsearch
+//	exec        - executor
+//	wire        - eventlog, mcp                              (mcp -> agent adapter — see note)
 //	core        - agent                                      (everything below)
 //	app         - agenteval, e2e                             (depends on agent)
 //
@@ -60,27 +62,46 @@ const modulePath = "github.com/affinefoundation/affent"
 // from agent.
 var allowedDeps = map[string]map[string]bool{
 	// --- leaves ---
-	"internal/sse":      {},
-	"internal/textutil": {},
+	"internal/jsonl":           {},
+	"internal/netguard":        {},
+	"internal/sourceaccess":    {},
+	"internal/sse":             {},
+	"internal/textutil":        {},
+	"internal/toolfailure":     {},
+	"internal/toolrepair":      {},
+	"internal/websource":       {},
+	"internal/workspaceignore": {},
 
 	// --- leaf-deps: small packages that legitimately use textutil
 	// for cap-aware string trimming. None of them depend on each
 	// other or on anything heavier than textutil.
-	"internal/projectcontext": {
-		"internal/textutil": true,
-	},
 	"internal/memory": {
 		"internal/textutil": true,
 	},
+	"internal/metrictext": {
+		"internal/textutil": true,
+	},
+	"internal/planstate": {
+		"internal/textutil": true,
+	},
+	"internal/gosymbols": {
+		"internal/textutil":        true,
+		"internal/workspaceignore": true,
+	},
+	"internal/projectcontext": {
+		"internal/gosymbols":       true,
+		"internal/textutil":        true,
+		"internal/workspaceignore": true,
+	},
 	"internal/sessionsearch": {
+		"internal/jsonl":    true,
 		"internal/textutil": true,
 	},
 
 	// --- exec ---
-	"internal/executor": {},
-
-	// --- plan state (leaf) ---
-	"internal/planstate": {},
+	"internal/executor": {
+		"internal/textutil": true,
+	},
 
 	// --- trace persistence ---
 	// eventlog is the canonical JSONL recorder for sse.Events. It
@@ -92,27 +113,41 @@ var allowedDeps = map[string]map[string]bool{
 
 	// --- protocol wire ---
 	"internal/mcp": {
+		"internal/jsonl":    true,
 		"internal/textutil": true,
-		"internal/sse":      true,
 		"internal/agent":    true, // see package-level note on register.go
 	},
 
 	// --- agent runtime ---
 	"internal/agent": {
-		"internal/executor":       true,
-		"internal/memory":         true,
-		"internal/mcp":            true,
-		"internal/projectcontext": true,
-		"internal/sessionsearch":  true,
-		"internal/sse":            true,
-		"internal/textutil":       true,
+		"internal/executor":        true,
+		"internal/gosymbols":       true,
+		"internal/jsonl":           true,
+		"internal/memory":          true,
+		"internal/metrictext":      true,
+		"internal/mcp":             true,
+		"internal/projectcontext":  true,
+		"internal/sessionsearch":   true,
+		"internal/sourceaccess":    true,
+		"internal/sse":             true,
+		"internal/textutil":        true,
+		"internal/toolfailure":     true,
+		"internal/toolrepair":      true,
+		"internal/websource":       true,
+		"internal/workspaceignore": true,
 	},
 
 	// --- evaluation harness ---
 	"internal/agenteval": {
-		"internal/agent":    true,
-		"internal/executor": true,
-		"internal/sse":      true,
+		"internal/agent":        true,
+		"internal/executor":     true,
+		"internal/jsonl":        true,
+		"internal/planstate":    true,
+		"internal/sourceaccess": true,
+		"internal/sse":          true,
+		"internal/textutil":     true,
+		"internal/toolfailure":  true,
+		"internal/toolrepair":   true,
 	},
 
 	// --- end-to-end test fixtures ---
