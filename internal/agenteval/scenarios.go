@@ -1154,7 +1154,15 @@ func sessionHistoryRecallScenario() BatchScenario {
 			{Tool: "session_search", Arg: "query", Substring: "Alpha Coast"},
 		},
 		RequiredToolResultText: map[string][]string{
-			"session_search": {"HIST-STOCK-44", "inventory-drag", "market-alpha"},
+			"session_search": {
+				"HIST-STOCK-44",
+				"inventory-drag",
+				"market-alpha",
+				`"context_included":true`,
+				`"matched_terms"`,
+				`"alpha"`,
+				`"coast"`,
+			},
 		},
 		RequiredFinalText:  []string{"HIST-STOCK-44", "inventory-drag", "market-alpha"},
 		ForbiddenFinalText: []string{"HIST-OLD-00"},

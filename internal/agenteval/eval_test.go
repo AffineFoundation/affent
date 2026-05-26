@@ -646,6 +646,7 @@ func TestSelectBatchScenariosForSuite(t *testing.T) {
 			if len(scenario.RequiredToolArgContains) != 1 {
 				t.Fatalf("session-history-cross-session-recall RequiredToolArgContains = %#v, want query constraint", scenario.RequiredToolArgContains)
 			}
+			assertSessionSearchDiagnosticsRequired(t, scenario)
 		}
 		if scenario.Name == "memory-confirmed-write-stats" {
 			foundMemoryWriteStats = true
@@ -887,6 +888,7 @@ func TestSelectLongRunSuite(t *testing.T) {
 	if !stringSliceContains(sessionHistory.ForbiddenFinalText, "HIST-OLD-00") {
 		t.Fatalf("session history final text constraints = forbidden:%#v", sessionHistory.ForbiddenFinalText)
 	}
+	assertSessionSearchDiagnosticsRequired(t, sessionHistory)
 
 	memoryWrite, ok := seen["memory-confirmed-write-stats"]
 	if !ok {
@@ -1003,6 +1005,16 @@ func stringSliceContains(values []string, want string) bool {
 		}
 	}
 	return false
+}
+
+func assertSessionSearchDiagnosticsRequired(t *testing.T, scenario BatchScenario) {
+	t.Helper()
+	required := strings.Join(scenario.RequiredToolResultText["session_search"], "\n")
+	for _, want := range []string{`"context_included":true`, `"matched_terms"`, `"alpha"`, `"coast"`} {
+		if !strings.Contains(required, want) {
+			t.Fatalf("%s RequiredToolResultText session_search = %#v, want %q", scenario.Name, scenario.RequiredToolResultText, want)
+		}
+	}
 }
 
 func commandToolOrderContains(values []CommandToolOrderRequirement, want CommandToolOrderRequirement) bool {
