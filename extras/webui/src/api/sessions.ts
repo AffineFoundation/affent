@@ -172,6 +172,16 @@ export interface SessionContextSummary {
   messages_until_compact: number;
 }
 
+export interface SessionContextCompactionSummary {
+  count: number;
+  reactive: number;
+  removed_messages: number;
+  summary_bytes?: number;
+  latest_reason?: string;
+  latest_reactive?: boolean;
+  tail_only?: boolean;
+}
+
 export interface SessionSummary {
   id: string;
   /** Human-readable summarized chat title, when the runtime provides one. */
@@ -197,6 +207,7 @@ export interface SessionSummary {
   has_memory: boolean;
   has_runtime_skills: boolean;
   context?: SessionContextSummary;
+  context_compactions?: SessionContextCompactionSummary;
   usage?: UsageSnapshot;
   tools?: ToolStatsSnapshot;
   browser?: BrowserStatsSnapshot;

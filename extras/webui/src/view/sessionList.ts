@@ -1,4 +1,4 @@
-import type { SessionContextSummary, SessionPlanSummary, SessionSummary } from "../api/sessions";
+import type { SessionContextCompactionSummary, SessionContextSummary, SessionPlanSummary, SessionSummary } from "../api/sessions";
 import type { SessionState } from "../store/sessionState";
 import { conversationTopicFromTurns } from "./continuationPrompt";
 import { summarizeUserError } from "./errorSummary";
@@ -321,10 +321,11 @@ function currentSessionCompactionMetric(session: SessionState): string | undefin
   const count = session.contextCompactions.length;
   if (count === 0) return undefined;
   const latest = session.contextCompactions.at(-1);
-  const parts = [`${count} ${count === 1 ? "compaction" : "compactions"}`];
-  if (latest?.reactive) parts.push("reactive");
-  if (latest?.removed_messages && latest.removed_messages > 0) parts.push(`-${latest.removed_messages} msgs`);
-  return parts.join(", ");
+  return formatCompactionMetric({
+    count,
+    latestReactive: latest?.reactive,
+    removedMessages: latest?.removed_messages ?? 0,
+  });
 }
 
 function turnNeedsAttention(turn: SessionState["turns"][number]): boolean {
@@ -383,6 +384,8 @@ function usageMetrics(session: SessionSummary): string[] {
   if (session.browser && session.browser.network_fetch > 0) metrics.push(`${session.browser.network_fetch} web`);
   const contextMetric = sessionContextMetric(session.context);
   if (contextMetric) metrics.push(contextMetric);
+  const compactionMetric = sessionCompactionMetric(session.context_compactions);
+  if (compactionMetric) metrics.push(compactionMetric);
   const planMetric = sessionPlanMetric(session.plan_summary);
   if (planMetric) metrics.push(planMetric);
   return metrics;
@@ -399,6 +402,33 @@ function sessionContextMetric(context: SessionContextSummary | undefined): strin
   if (remaining >= 0 && remaining <= 10) {
     parts.push(`${remaining} msg${remaining === 1 ? "" : "s"} left`);
   }
+  return parts.join(", ");
+}
+
+function sessionCompactionMetric(summary: SessionContextCompactionSummary | undefined): string | undefined {
+  if (!summary || summary.count <= 0) return undefined;
+  return formatCompactionMetric({
+    count: summary.count,
+    latestReactive: summary.latest_reactive,
+    removedMessages: summary.removed_messages,
+    tailOnly: summary.tail_only,
+  });
+}
+
+function formatCompactionMetric({
+  count,
+  latestReactive,
+  removedMessages,
+  tailOnly,
+}: {
+  count: number;
+  latestReactive?: boolean;
+  removedMessages?: number;
+  tailOnly?: boolean;
+}): string {
+  const parts = [`${tailOnly ? "recent " : ""}${count} ${count === 1 ? "compaction" : "compactions"}`];
+  if (latestReactive) parts.push("reactive");
+  if (removedMessages && removedMessages > 0) parts.push(`-${removedMessages} msgs`);
   return parts.join(", ");
 }
 

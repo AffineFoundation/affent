@@ -129,6 +129,41 @@ describe("sessionList view model", () => {
     expect(rows[0].searchText).not.toContain("context 10%");
   });
 
+  it("surfaces durable context compaction summaries in row stats and search", () => {
+    const rows = buildSessionRows([
+      session({
+        id: "compacted-session",
+        durable: true,
+        latest_user_message: "continue long run after compaction",
+        context_compactions: {
+          count: 2,
+          reactive: 1,
+          removed_messages: 96,
+          summary_bytes: 4096,
+          latest_reason: "context_overflow",
+          latest_reactive: true,
+        },
+      }),
+      session({
+        id: "large-compacted-session",
+        durable: true,
+        latest_user_message: "continue old long run",
+        context_compactions: {
+          count: 3,
+          reactive: 2,
+          removed_messages: 144,
+          latest_reactive: false,
+          tail_only: true,
+        },
+      }),
+    ]);
+
+    expect(rows.find((row) => row.id === "compacted-session")?.metrics).toContain("2 compactions, reactive, -96 msgs");
+    expect(rows.find((row) => row.id === "compacted-session")?.searchText).toContain("2 compactions, reactive, -96 msgs");
+    expect(rows.find((row) => row.id === "large-compacted-session")?.metrics).toContain("recent 3 compactions, -144 msgs");
+    expect(rows.find((row) => row.id === "large-compacted-session")?.searchText).toContain("recent 3 compactions");
+  });
+
   it("filters rows by status, features, and search text", () => {
     const rows = buildSessionRows([
       session({ id: "live-a", active: true, has_events: true }),

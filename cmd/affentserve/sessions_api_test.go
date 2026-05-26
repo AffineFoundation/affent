@@ -196,6 +196,11 @@ func TestMergeSessionSummariesKeepsActiveLatestUserMessage(t *testing.T) {
 	if got.Context != context {
 		t.Fatalf("context summary = %+v, want durable context carried over", got.Context)
 	}
+	compactions := &sessionContextCompactionSummary{Count: 1, Reactive: 1, RemovedMessages: 32, SummaryBytes: 2048, LatestReason: "context_overflow", LatestReactive: true}
+	got = mergeSessionSummaries(sessionSummary{ID: "active", Active: true}, sessionSummary{ID: "active", Durable: true, ContextCompactions: compactions})
+	if got.ContextCompactions != compactions {
+		t.Fatalf("context compactions = %+v, want durable compactions carried over", got.ContextCompactions)
+	}
 }
 
 func TestSessionContextSnapshotUsesCompactionTrigger(t *testing.T) {
@@ -324,6 +329,17 @@ func TestSummarizeDurableSessionRestoresTopicFromEventsAfterCompaction(t *testin
 	}
 	if summary.SummaryTitle != "Affine（Bittensor 子网）" {
 		t.Fatalf("summary_title = %q, want original task title", summary.SummaryTitle)
+	}
+	if summary.ContextCompactions == nil {
+		t.Fatal("context_compactions should be summarized from durable events")
+	}
+	if summary.ContextCompactions.Count != 1 ||
+		summary.ContextCompactions.Reactive != 1 ||
+		summary.ContextCompactions.RemovedMessages != 36 ||
+		summary.ContextCompactions.SummaryBytes != 1024 ||
+		summary.ContextCompactions.LatestReason != "context_overflow" ||
+		!summary.ContextCompactions.LatestReactive {
+		t.Fatalf("context_compactions = %+v, want durable compaction summary", summary.ContextCompactions)
 	}
 }
 

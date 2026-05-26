@@ -52,28 +52,29 @@ type sessionCreateResponse struct {
 }
 
 type sessionSummary struct {
-	ID                string                 `json:"id"`
-	SummaryTitle      string                 `json:"summary_title,omitempty"`
-	Active            bool                   `json:"active"`
-	Durable           bool                   `json:"durable"`
-	CreatedAt         string                 `json:"created_at,omitempty"`
-	LastUsedAt        string                 `json:"last_used_at,omitempty"`
-	Capabilities      *sessionCapabilities   `json:"capabilities,omitempty"`
-	HasConversation   bool                   `json:"has_conversation"`
-	LatestUserMessage string                 `json:"latest_user_message,omitempty"`
-	TopicUserMessage  string                 `json:"topic_user_message,omitempty"`
-	HasEvents         bool                   `json:"has_events"`
-	HasPlan           bool                   `json:"has_plan"`
-	PlanSummary       *sessionPlanSummary    `json:"plan_summary,omitempty"`
-	HasArtifacts      bool                   `json:"has_artifacts"`
-	HasMemory         bool                   `json:"has_memory"`
-	HasRuntimeSkills  bool                   `json:"has_runtime_skills"`
-	RuntimeSkillNames []string               `json:"runtime_skill_names,omitempty"`
-	Context           *sessionContextSummary `json:"context,omitempty"`
-	Usage             *UsageSnapshot         `json:"usage,omitempty"`
-	Tools             *ToolStatsSnapshot     `json:"tools,omitempty"`
-	Runtime           *RuntimeStatsSnapshot  `json:"runtime,omitempty"`
-	Browser           *BrowserStatsSnapshot  `json:"browser,omitempty"`
+	ID                 string                           `json:"id"`
+	SummaryTitle       string                           `json:"summary_title,omitempty"`
+	Active             bool                             `json:"active"`
+	Durable            bool                             `json:"durable"`
+	CreatedAt          string                           `json:"created_at,omitempty"`
+	LastUsedAt         string                           `json:"last_used_at,omitempty"`
+	Capabilities       *sessionCapabilities             `json:"capabilities,omitempty"`
+	HasConversation    bool                             `json:"has_conversation"`
+	LatestUserMessage  string                           `json:"latest_user_message,omitempty"`
+	TopicUserMessage   string                           `json:"topic_user_message,omitempty"`
+	HasEvents          bool                             `json:"has_events"`
+	HasPlan            bool                             `json:"has_plan"`
+	PlanSummary        *sessionPlanSummary              `json:"plan_summary,omitempty"`
+	HasArtifacts       bool                             `json:"has_artifacts"`
+	HasMemory          bool                             `json:"has_memory"`
+	HasRuntimeSkills   bool                             `json:"has_runtime_skills"`
+	RuntimeSkillNames  []string                         `json:"runtime_skill_names,omitempty"`
+	Context            *sessionContextSummary           `json:"context,omitempty"`
+	ContextCompactions *sessionContextCompactionSummary `json:"context_compactions,omitempty"`
+	Usage              *UsageSnapshot                   `json:"usage,omitempty"`
+	Tools              *ToolStatsSnapshot               `json:"tools,omitempty"`
+	Runtime            *RuntimeStatsSnapshot            `json:"runtime,omitempty"`
+	Browser            *BrowserStatsSnapshot            `json:"browser,omitempty"`
 }
 
 type sessionContextSummary struct {
@@ -81,6 +82,16 @@ type sessionContextSummary struct {
 	CompactTrigger       int `json:"compact_trigger"`
 	CompactPercent       int `json:"compact_percent"`
 	MessagesUntilCompact int `json:"messages_until_compact"`
+}
+
+type sessionContextCompactionSummary struct {
+	Count           int    `json:"count"`
+	Reactive        int    `json:"reactive"`
+	RemovedMessages int    `json:"removed_messages"`
+	SummaryBytes    int    `json:"summary_bytes,omitempty"`
+	LatestReason    string `json:"latest_reason,omitempty"`
+	LatestReactive  bool   `json:"latest_reactive,omitempty"`
+	TailOnly        bool   `json:"tail_only,omitempty"`
 }
 
 type sessionCapabilities struct {
@@ -592,6 +603,11 @@ func summarizeDurableSession(pool *SessionPool, id string) (sessionSummary, bool
 		if topic != "" {
 			summary.TopicUserMessage = topic
 		}
+		compactions, err := contextCompactionSummaryFromEventsFile(filepath.Join(dir, "events.jsonl"))
+		if err != nil {
+			return sessionSummary{}, false, err
+		}
+		summary.ContextCompactions = compactions
 	}
 	var planMod time.Time
 	if exists, planMod, err = durableRegularFileModTime(filepath.Join(dir, "plan.json")); err != nil {
@@ -657,6 +673,9 @@ func mergeSessionSummaries(a, b sessionSummary) sessionSummary {
 	a.RuntimeSkillNames = mergeStringLists(a.RuntimeSkillNames, b.RuntimeSkillNames)
 	if b.Context != nil {
 		a.Context = b.Context
+	}
+	if b.ContextCompactions != nil {
+		a.ContextCompactions = b.ContextCompactions
 	}
 	if a.CreatedAt == "" {
 		a.CreatedAt = b.CreatedAt
@@ -838,6 +857,68 @@ func scanUserMessagesFromEvents(r *bufio.Reader) (sessionUserMessageScan, error)
 		}
 	}
 	return scan, nil
+}
+
+func contextCompactionSummaryFromEventsFile(path string) (*sessionContextCompactionSummary, error) {
+	f, err := os.Open(path)
+	if err != nil {
+		if errors.Is(err, os.ErrNotExist) {
+			return nil, nil
+		}
+		return nil, err
+	}
+	defer f.Close()
+	info, err := f.Stat()
+	if err != nil {
+		return nil, err
+	}
+	tailOnly := info.Size() > maxSessionSummaryTailBytes
+	if err := seekSessionSummaryTail(f); err != nil {
+		return nil, err
+	}
+	summary, err := scanContextCompactionsFromEvents(bufio.NewReaderSize(f, 64*1024))
+	if err != nil {
+		return nil, err
+	}
+	if summary.Count == 0 {
+		return nil, nil
+	}
+	summary.TailOnly = tailOnly
+	return &summary, nil
+}
+
+func scanContextCompactionsFromEvents(r *bufio.Reader) (sessionContextCompactionSummary, error) {
+	var summary sessionContextCompactionSummary
+	for {
+		line, tooLong, err := jsonl.ReadBoundedLine(r, maxSessionSummaryLineBytes)
+		if errors.Is(err, io.EOF) {
+			break
+		}
+		if err != nil {
+			return sessionContextCompactionSummary{}, err
+		}
+		if tooLong {
+			continue
+		}
+		line = bytes.TrimRight(line, "\r\n")
+		var ev sse.Event
+		if err := json.Unmarshal(line, &ev); err != nil || ev.Type != sse.TypeContextCompact {
+			continue
+		}
+		var p sse.ContextCompactPayload
+		if err := json.Unmarshal(ev.Data, &p); err != nil {
+			continue
+		}
+		summary.Count++
+		if p.Reactive {
+			summary.Reactive++
+		}
+		summary.RemovedMessages += p.RemovedMessages
+		summary.SummaryBytes += p.SummaryBytes
+		summary.LatestReason = p.Reason
+		summary.LatestReactive = p.Reactive
+	}
+	return summary, nil
 }
 
 func seekSessionSummaryTail(f *os.File) error {
