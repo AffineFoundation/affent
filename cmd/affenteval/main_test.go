@@ -409,6 +409,14 @@ func TestBatchSummaryAggregatesRuntimeMetrics(t *testing.T) {
 			Calls:    1,
 			ByAction: map[string]int{"set": 1},
 		},
+		RuntimeSurface: &sse.RuntimeSurfacePayload{
+			ToolCount: 2,
+			Tools: []sse.RuntimeSurfaceTool{
+				{Name: "web_fetch"},
+				{Name: "browser_find"},
+			},
+			Capabilities: sse.RuntimeCapabilities{WebFetch: true, Browser: true},
+		},
 		Verifier: agenteval.VerifierResult{Ran: true, OK: true, ExitCode: 0, OutputBytes: 64, OutputCapBytes: 1024},
 		Usage:    agenteval.Usage{InputTokens: 20, OutputTokens: 5},
 	})
@@ -475,6 +483,15 @@ func TestBatchSummaryAggregatesRuntimeMetrics(t *testing.T) {
 			ByAction: map[string]int{"update": 2},
 			Errors:   1,
 		},
+		RuntimeSurface: &sse.RuntimeSurfacePayload{
+			ToolCount: 3,
+			Tools: []sse.RuntimeSurfaceTool{
+				{Name: "web_fetch"},
+				{Name: "web_search"},
+				{Name: "browser_find"},
+			},
+			Capabilities: sse.RuntimeCapabilities{WebFetch: true, WebSearch: true, Browser: true},
+		},
 		Verifier: agenteval.VerifierResult{
 			Ran:                true,
 			OK:                 false,
@@ -504,6 +521,9 @@ func TestBatchSummaryAggregatesRuntimeMetrics(t *testing.T) {
 	}
 	if !strings.Contains(out.String(), "runtime_error_kinds=context_overflow:1,llm_timeout:2") {
 		t.Fatalf("summary output missing runtime error kind rollup:\n%s", out.String())
+	}
+	if !strings.Contains(out.String(), "runtime_surface=scenarios:2 runtime_capabilities=browser:2,web_fetch:2,web_search:1 runtime_tools=browser_find:2,web_fetch:2,web_search:1") {
+		t.Fatalf("summary output missing runtime surface rollup:\n%s", out.String())
 	}
 	if !strings.Contains(out.String(), "loop_decisions=1 loop_decision_kinds=evidence_quality:1 loop_decision_results=defer:1") {
 		t.Fatalf("summary output missing loop decision rollup:\n%s", out.String())
@@ -550,6 +570,15 @@ func TestBatchSummaryAggregatesRuntimeMetrics(t *testing.T) {
 	}
 	if !reflect.DeepEqual(summary.RuntimeErrorByKind, map[string]int{"llm_timeout": 2, "context_overflow": 1}) {
 		t.Fatalf("RuntimeErrorByKind = %#v", summary.RuntimeErrorByKind)
+	}
+	if summary.RuntimeSurfaceScenarios != 2 {
+		t.Fatalf("RuntimeSurfaceScenarios = %d, want 2", summary.RuntimeSurfaceScenarios)
+	}
+	if !reflect.DeepEqual(summary.RuntimeSurfaceCapabilities, map[string]int{"web_fetch": 2, "web_search": 1, "browser": 2}) {
+		t.Fatalf("RuntimeSurfaceCapabilities = %#v", summary.RuntimeSurfaceCapabilities)
+	}
+	if !reflect.DeepEqual(summary.RuntimeSurfaceTools, map[string]int{"web_fetch": 2, "web_search": 1, "browser_find": 2}) {
+		t.Fatalf("RuntimeSurfaceTools = %#v", summary.RuntimeSurfaceTools)
 	}
 	if got := summary.ToolFailureExamples["timeout"]; len(got) != 1 || got[0].Tool != "web_fetch" {
 		t.Fatalf("ToolFailureExamples[timeout] = %#v", got)
@@ -1203,9 +1232,12 @@ func TestPrintBatchSummaryJSONL(t *testing.T) {
 				{Kind: "llm_timeout", Message: "LLM llm_stream timed out after 4m0s"},
 			},
 		},
-		LoopDecisions:          1,
-		LoopDecisionByKind:     map[string]int{"evidence_quality": 1},
-		LoopDecisionByDecision: map[string]int{"defer": 1},
+		RuntimeSurfaceScenarios:    2,
+		RuntimeSurfaceTools:        map[string]int{"web_fetch": 2, "browser_find": 1},
+		RuntimeSurfaceCapabilities: map[string]int{"web_fetch": 2, "browser": 1},
+		LoopDecisions:              1,
+		LoopDecisionByKind:         map[string]int{"evidence_quality": 1},
+		LoopDecisionByDecision:     map[string]int{"defer": 1},
 		LoopDecisionExamples: []agenteval.LoopDecision{
 			{Kind: "evidence_quality", Decision: "defer", RequiredAction: "read browser network responses"},
 		},
@@ -1296,6 +1328,7 @@ func TestPrintBatchSummaryJSONL(t *testing.T) {
 		"plan_calls":                    float64(3),
 		"plan_errors":                   float64(1),
 		"loop_decisions":                float64(1),
+		"runtime_surface_scenarios":     float64(2),
 	} {
 		if got[key] != want {
 			t.Fatalf("%s = %v, want %v\njson=%s", key, got[key], want, out.String())
@@ -1345,6 +1378,14 @@ func TestPrintBatchSummaryJSONL(t *testing.T) {
 	runtimeErrorExamples, ok := got["runtime_error_examples"].(map[string]any)
 	if !ok || !strings.Contains(fmt.Sprint(runtimeErrorExamples["llm_timeout"]), "timed out") {
 		t.Fatalf("runtime_error_examples = %#v\njson=%s", got["runtime_error_examples"], out.String())
+	}
+	runtimeSurfaceTools, ok := got["runtime_surface_tools"].(map[string]any)
+	if !ok || runtimeSurfaceTools["web_fetch"] != float64(2) || runtimeSurfaceTools["browser_find"] != float64(1) {
+		t.Fatalf("runtime_surface_tools = %#v\njson=%s", got["runtime_surface_tools"], out.String())
+	}
+	runtimeSurfaceCapabilities, ok := got["runtime_surface_capabilities"].(map[string]any)
+	if !ok || runtimeSurfaceCapabilities["web_fetch"] != float64(2) || runtimeSurfaceCapabilities["browser"] != float64(1) {
+		t.Fatalf("runtime_surface_capabilities = %#v\njson=%s", got["runtime_surface_capabilities"], out.String())
 	}
 	loopDecisionByKind, ok := got["loop_decision_by_kind"].(map[string]any)
 	if !ok || loopDecisionByKind["evidence_quality"] != float64(1) {

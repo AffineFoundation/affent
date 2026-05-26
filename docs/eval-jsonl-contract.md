@@ -201,6 +201,11 @@ Summary records aggregate all scenario records from the same process:
   `tool_failure_hints`, `tool_failure_examples`.
 - Runtime error totals and diagnostics: `runtime_error_by_kind`,
   `runtime_error_hints`, `runtime_error_examples`.
+- Runtime surface totals: `runtime_surface_scenarios`,
+  `runtime_surface_tools`, and `runtime_surface_capabilities`. Counts are
+  per-scenario surface presence, not model call counts; use them to group pass
+  rates and failures by the actual tool/capability surface exposed during the
+  run.
 - Cleanup totals: `removed_workspaces`, `cleanup_errors`.
 
 ## Compatibility

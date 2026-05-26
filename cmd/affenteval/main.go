@@ -173,6 +173,9 @@ type batchSummary struct {
 	ToolFailureExamples        map[string][]agenteval.ToolFailureExample
 	RuntimeErrorByKind         map[string]int
 	RuntimeErrorExamples       map[string][]agenteval.RuntimeErrorExample
+	RuntimeSurfaceScenarios    int
+	RuntimeSurfaceTools        map[string]int
+	RuntimeSurfaceCapabilities map[string]int
 	LoopDecisions              int
 	LoopDecisionByKind         map[string]int
 	LoopDecisionByDecision     map[string]int
@@ -271,6 +274,21 @@ func (s *batchSummary) add(res agenteval.BatchResult) {
 		s.RuntimeErrorByKind[k] += v
 	}
 	mergeExampleMap(&s.RuntimeErrorExamples, res.RuntimeErrorExamples, batchSummaryExamplesPerKind)
+	if res.RuntimeSurface != nil {
+		s.RuntimeSurfaceScenarios++
+		if s.RuntimeSurfaceTools == nil {
+			s.RuntimeSurfaceTools = map[string]int{}
+		}
+		for _, tool := range runtimeSurfaceToolNames(res.RuntimeSurface) {
+			s.RuntimeSurfaceTools[tool]++
+		}
+		if s.RuntimeSurfaceCapabilities == nil {
+			s.RuntimeSurfaceCapabilities = map[string]int{}
+		}
+		for _, cap := range runtimeSurfaceCapabilityNames(res.RuntimeSurface.Capabilities) {
+			s.RuntimeSurfaceCapabilities[cap]++
+		}
+	}
 	s.LoopDecisions += res.LoopDecisionStats.Count
 	for k, v := range res.LoopDecisionStats.ByKind {
 		if s.LoopDecisionByKind == nil {
@@ -446,6 +464,15 @@ func printBatchSummary(w io.Writer, s batchSummary) {
 	}
 	if len(s.RuntimeErrorByKind) > 0 {
 		fmt.Fprintf(w, " runtime_error_kinds=%s", formatStringIntCounts(s.RuntimeErrorByKind))
+	}
+	if s.RuntimeSurfaceScenarios > 0 {
+		fmt.Fprintf(w, " runtime_surface=scenarios:%d", s.RuntimeSurfaceScenarios)
+		if len(s.RuntimeSurfaceCapabilities) > 0 {
+			fmt.Fprintf(w, " runtime_capabilities=%s", formatStringIntCounts(s.RuntimeSurfaceCapabilities))
+		}
+		if len(s.RuntimeSurfaceTools) > 0 {
+			fmt.Fprintf(w, " runtime_tools=%s", formatStringIntCounts(s.RuntimeSurfaceTools))
+		}
 	}
 	if s.LoopDecisions > 0 {
 		fmt.Fprintf(w, " loop_decisions=%d", s.LoopDecisions)
@@ -844,6 +871,9 @@ type batchResultRecord struct {
 	RuntimeErrorByKind         map[string]int                             `json:"runtime_error_by_kind,omitempty"`
 	RuntimeErrorExamples       map[string][]agenteval.RuntimeErrorExample `json:"runtime_error_examples,omitempty"`
 	RuntimeSurface             *runtimeSurfaceSummary                     `json:"runtime_surface,omitempty"`
+	RuntimeSurfaceScenarios    int                                        `json:"runtime_surface_scenarios,omitempty"`
+	RuntimeSurfaceTools        map[string]int                             `json:"runtime_surface_tools,omitempty"`
+	RuntimeSurfaceCapabilities map[string]int                             `json:"runtime_surface_capabilities,omitempty"`
 	LoopDecisions              int                                        `json:"loop_decisions,omitempty"`
 	LoopDecisionByKind         map[string]int                             `json:"loop_decision_by_kind,omitempty"`
 	LoopDecisionByDecision     map[string]int                             `json:"loop_decision_by_decision,omitempty"`
@@ -927,6 +957,9 @@ type batchSummaryRecord struct {
 	ToolFailureExamples        map[string][]agenteval.ToolFailureExample  `json:"tool_failure_examples,omitempty"`
 	RuntimeErrorByKind         map[string]int                             `json:"runtime_error_by_kind,omitempty"`
 	RuntimeErrorExamples       map[string][]agenteval.RuntimeErrorExample `json:"runtime_error_examples,omitempty"`
+	RuntimeSurfaceScenarios    int                                        `json:"runtime_surface_scenarios,omitempty"`
+	RuntimeSurfaceTools        map[string]int                             `json:"runtime_surface_tools,omitempty"`
+	RuntimeSurfaceCapabilities map[string]int                             `json:"runtime_surface_capabilities,omitempty"`
 	LoopDecisions              int                                        `json:"loop_decisions,omitempty"`
 	LoopDecisionByKind         map[string]int                             `json:"loop_decision_by_kind,omitempty"`
 	LoopDecisionByDecision     map[string]int                             `json:"loop_decision_by_decision,omitempty"`
@@ -1096,17 +1129,7 @@ func runtimeSurfaceSummaryForJSONL(surface *sse.RuntimeSurfacePayload) *runtimeS
 	if surface == nil {
 		return nil
 	}
-	tools := make([]string, 0, len(surface.Tools))
-	seen := map[string]bool{}
-	for _, tool := range surface.Tools {
-		name := strings.TrimSpace(tool.Name)
-		if name == "" || seen[name] {
-			continue
-		}
-		seen[name] = true
-		tools = append(tools, name)
-	}
-	sort.Strings(tools)
+	tools := runtimeSurfaceToolNames(surface)
 	caps := surface.Capabilities
 	return &runtimeSurfaceSummary{
 		ToolCount:                    surface.ToolCount,
@@ -1120,6 +1143,62 @@ func runtimeSurfaceSummaryForJSONL(surface *sse.RuntimeSurfacePayload) *runtimeS
 		ToolResultArtifactPrefix:     surface.ToolResultArtifactPrefix,
 		TurnToolOverride:             surface.TurnToolOverride,
 	}
+}
+
+func runtimeSurfaceToolNames(surface *sse.RuntimeSurfacePayload) []string {
+	if surface == nil {
+		return nil
+	}
+	tools := make([]string, 0, len(surface.Tools))
+	seen := map[string]bool{}
+	for _, tool := range surface.Tools {
+		name := strings.TrimSpace(tool.Name)
+		if name == "" || seen[name] {
+			continue
+		}
+		seen[name] = true
+		tools = append(tools, name)
+	}
+	sort.Strings(tools)
+	return tools
+}
+
+func runtimeSurfaceCapabilityNames(c sse.RuntimeCapabilities) []string {
+	var out []string
+	if c.Builtins {
+		out = append(out, "builtins")
+	}
+	if c.Memory {
+		out = append(out, "memory")
+	}
+	if c.Plan {
+		out = append(out, "plan")
+	}
+	if c.SessionSearch {
+		out = append(out, "session_search")
+	}
+	if c.WebFetch {
+		out = append(out, "web_fetch")
+	}
+	if c.WebSearch {
+		out = append(out, "web_search")
+	}
+	if c.Browser {
+		out = append(out, "browser")
+	}
+	if c.Subagent {
+		out = append(out, "subagent")
+	}
+	if c.FocusedTasks {
+		out = append(out, "focused_tasks")
+	}
+	if c.Skill {
+		out = append(out, "skill")
+	}
+	if c.MCP {
+		out = append(out, "mcp")
+	}
+	return out
 }
 
 func printBatchSummaryJSONL(w io.Writer, meta evalJSONLMetadata, s batchSummary) {
@@ -1143,6 +1222,9 @@ func printBatchSummaryJSONL(w io.Writer, meta evalJSONLMetadata, s batchSummary)
 		ToolFailureExamples:        cloneToolFailureExamples(s.ToolFailureExamples),
 		RuntimeErrorByKind:         cloneStringIntMap(s.RuntimeErrorByKind),
 		RuntimeErrorExamples:       cloneRuntimeErrorExamples(s.RuntimeErrorExamples),
+		RuntimeSurfaceScenarios:    s.RuntimeSurfaceScenarios,
+		RuntimeSurfaceTools:        cloneStringIntMap(s.RuntimeSurfaceTools),
+		RuntimeSurfaceCapabilities: cloneStringIntMap(s.RuntimeSurfaceCapabilities),
 		LoopDecisions:              s.LoopDecisions,
 		LoopDecisionByKind:         cloneStringIntMap(s.LoopDecisionByKind),
 		LoopDecisionByDecision:     cloneStringIntMap(s.LoopDecisionByDecision),
