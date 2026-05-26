@@ -187,6 +187,7 @@ function requestRecordGroup(
       requestLabel(context, turnId),
       streamSummary(readString(userMessage?.data, "text") ?? ""),
       readString(end?.data, "reason"),
+      ...toolRuntimeStatsMeta(readToolStats(end)),
       tokenTotal > 0 ? `${tokenTotal} tokens` : undefined,
     ]),
     badges: [],
@@ -429,27 +430,56 @@ function turnEndLabel(event: NormalizedEvent): string {
 }
 
 function turnEndMeta(event: NormalizedEvent, turn: string | undefined): string[] {
-  const stats = event.data && typeof event.data === "object"
-    ? (event.data as { tool_stats?: unknown }).tool_stats
-    : undefined;
-  const toolStats = stats && typeof stats === "object" ? stats as Record<string, unknown> : undefined;
-  const toolRequests = typeof toolStats?.tool_requests === "number" ? toolStats.tool_requests : undefined;
-  const toolErrors = typeof toolStats?.tool_errors === "number" ? toolStats.tool_errors : undefined;
-  const toolDuration = typeof toolStats?.tool_duration_ms === "number" ? toolStats.tool_duration_ms : undefined;
-  const verifiedSources = typeof toolStats?.source_access_verified === "number" ? toolStats.source_access_verified : undefined;
-  const networkSources = typeof toolStats?.source_access_network === "number" ? toolStats.source_access_network : undefined;
-  const dynamicPartialSources = typeof toolStats?.source_access_dynamic_partial === "number" ? toolStats.source_access_dynamic_partial : undefined;
-
   return compact([
     turn,
     readString(event.data, "reason"),
+    ...toolRuntimeStatsMeta(readToolStats(event)),
+  ]);
+}
+
+function readToolStats(event: NormalizedEvent | undefined): Record<string, unknown> | undefined {
+  const stats = event?.data && typeof event.data === "object"
+    ? (event.data as { tool_stats?: unknown }).tool_stats
+    : undefined;
+  return stats && typeof stats === "object" && !Array.isArray(stats) ? stats as Record<string, unknown> : undefined;
+}
+
+function toolRuntimeStatsMeta(toolStats: Record<string, unknown> | undefined): string[] {
+  const toolRequests = readNumber(toolStats, "tool_requests");
+  const toolErrors = readNumber(toolStats, "tool_errors");
+  const loopGuard = readNumber(toolStats, "loop_guard_interventions");
+  const forcedNoTools = readNumber(toolStats, "forced_no_tools");
+  const memoryUpdates = readNumber(toolStats, "memory_updates");
+  const verifiedSources = readNumber(toolStats, "source_access_verified");
+  const networkSources = readNumber(toolStats, "source_access_network");
+  const dynamicPartialSources = readNumber(toolStats, "source_access_dynamic_partial");
+  const toolDuration = readNumber(toolStats, "tool_duration_ms");
+
+  return compact([
     typeof toolRequests === "number" ? `${toolRequests} actions` : undefined,
     typeof toolErrors === "number" && toolErrors > 0 ? `${toolErrors} failed` : undefined,
+    typeof loopGuard === "number" && loopGuard > 0 ? `Guard ${loopGuard}` : undefined,
+    typeof forcedNoTools === "number" && forcedNoTools > 0 ? `${forcedNoTools} no-tools` : undefined,
+    typeof memoryUpdates === "number" && memoryUpdates > 0 ? memoryUpdateStatsMeta(toolStats, memoryUpdates) : undefined,
     typeof verifiedSources === "number" && verifiedSources > 0 ? `${verifiedSources} sources` : undefined,
     typeof networkSources === "number" && networkSources > 0 ? `${networkSources} network` : undefined,
     typeof dynamicPartialSources === "number" && dynamicPartialSources > 0 ? `${dynamicPartialSources} partial` : undefined,
     typeof toolDuration === "number" ? formatDuration(toolDuration) : undefined,
   ]);
+}
+
+function memoryUpdateStatsMeta(toolStats: Record<string, unknown> | undefined, total: number): string {
+  const parts = [
+    countLabel(readNumber(toolStats, "memory_update_add"), "add"),
+    countLabel(readNumber(toolStats, "memory_update_replace"), "replace"),
+    countLabel(readNumber(toolStats, "memory_update_remove"), "remove"),
+  ].filter(Boolean);
+  const label = `${total} memory update${total === 1 ? "" : "s"}`;
+  return parts.length > 0 ? `${label} (${parts.join(", ")})` : label;
+}
+
+function countLabel(count: number | undefined, label: string): string | undefined {
+  return typeof count === "number" && count > 0 ? `${count} ${label}` : undefined;
 }
 
 function errorMeta(event: NormalizedEvent, turn: string | undefined): string[] {

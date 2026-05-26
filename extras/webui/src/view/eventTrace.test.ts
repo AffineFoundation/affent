@@ -172,6 +172,68 @@ describe("eventTrace view model", () => {
     ]);
   });
 
+  it("promotes long-run runtime counters into request trace summaries", () => {
+    const items = buildEventTraceItems(normalizeEvents([
+      { id: 1, type: "turn.start", data: { turn_id: "t1" } },
+      { id: 2, type: "user.message", data: { turn_id: "t1", text: "recover repeated web failures" } },
+      {
+        id: 3,
+        type: "turn.end",
+        data: {
+          turn_id: "t1",
+          reason: "max_turns",
+          tool_stats: {
+            tool_requests: 4,
+            tool_errors: 1,
+            loop_guard_interventions: 2,
+            forced_no_tools: 1,
+            memory_updates: 3,
+            memory_update_add: 2,
+            memory_update_replace: 1,
+            source_access_verified: 2,
+            tool_duration_ms: 1250,
+          },
+        },
+      },
+      {
+        id: 4,
+        type: "turn.end",
+        data: {
+          turn_id: "single",
+          reason: "completed",
+          tool_stats: {
+            loop_guard_interventions: 1,
+            memory_updates: 1,
+            memory_update_remove: 1,
+          },
+        },
+      },
+    ]));
+
+    expect(items.map((item) => {
+      if (item.kind === "eventGroup") return [item.label, item.meta];
+      if (item.kind === "event") return [item.display.label, item.display.meta];
+      return item.label;
+    })).toEqual([
+      [
+        "Request trace",
+        [
+          "Request 1",
+          "recover repeated web failures",
+          "max_turns",
+          "4 actions",
+          "1 failed",
+          "Guard 2",
+          "1 no-tools",
+          "3 memory updates (2 add, 1 replace)",
+          "2 sources",
+          "1.3 s",
+        ],
+      ],
+      ["Request finished", ["Request 2", "completed", "Guard 1", "1 memory update (1 remove)"]],
+    ]);
+  });
+
   it("collapses whitespace and truncates long summaries", () => {
     expect(streamSummary("  line one\n\tline two  ")).toBe("line one line two");
     expect(streamSummary("x".repeat(120))).toBe(`${"x".repeat(95)}...`);

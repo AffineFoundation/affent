@@ -122,6 +122,36 @@ describe("EventTrace", () => {
     expect(screen.getByText(/"type": "turn.end"/)).toBeInTheDocument();
   });
 
+  it("surfaces guard and memory update counters in collapsed request records", () => {
+    const raws = [
+      { id: 1, type: "turn.start", data: { turn_id: "t1" } },
+      { id: 2, type: "user.message", data: { turn_id: "t1", text: "recover repeated browser failures" } },
+      {
+        id: 3,
+        type: "turn.end",
+        data: {
+          turn_id: "t1",
+          reason: "max_turns",
+          tool_stats: {
+            tool_requests: 4,
+            tool_errors: 1,
+            loop_guard_interventions: 2,
+            forced_no_tools: 1,
+            memory_updates: 2,
+            memory_update_add: 1,
+            memory_update_replace: 1,
+          },
+        },
+      },
+    ];
+
+    render(<EventTrace events={normalizeEvents(raws)} />);
+
+    expect(screen.getByText("Request trace")).toBeInTheDocument();
+    expect(screen.getByText("Request 1 · recover repeated browser failures · max_turns · 4 actions · 1 failed · Guard 2 · 1 no-tools · 2 memory updates (1 add, 1 replace)")).toBeInTheDocument();
+    expect(screen.queryByText(/"loop_guard_interventions"/)).not.toBeInTheDocument();
+  });
+
   it("marks unknown events without dropping their payload", async () => {
     const user = userEvent.setup();
     const events = normalizeEvents([{ id: 99, type: "future.event", data: { turn_id: "t1", payload: "kept" } }]);
