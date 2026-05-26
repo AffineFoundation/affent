@@ -254,6 +254,7 @@ func TestResolveServeRuntimeCapabilitiesEvalMode(t *testing.T) {
 	base := Config{
 		EvalMode:           true,
 		EnableBuiltins:     true,
+		enableBuiltinsSet:  true,
 		EnableMemory:       true,
 		EnableBrowser:      true,
 		BrowserScreenshot:  true,
@@ -264,7 +265,7 @@ func TestResolveServeRuntimeCapabilitiesEvalMode(t *testing.T) {
 	}
 	caps := resolveServeRuntimeCapabilities(base)
 	if !caps.Builtins {
-		t.Fatal("eval mode should preserve enabled builtins")
+		t.Fatal("eval mode should preserve explicitly enabled builtins")
 	}
 	if caps.Memory || caps.Browser || caps.BrowserScreenshot || caps.Web || caps.WebSearch || caps.Subagent || caps.FocusedTasks || caps.WorkflowTools {
 		t.Fatalf("implicit eval capabilities should stay off: %+v", caps)
@@ -311,6 +312,25 @@ func TestResolveServeRuntimeCapabilitiesEvalMode(t *testing.T) {
 	caps = resolveServeRuntimeCapabilities(memory)
 	if !caps.Memory {
 		t.Fatal("explicit memory should be available in eval mode")
+	}
+
+	tools := base
+	tools.enableBuiltinsSet = false
+	tools.EnableBuiltins = false
+	tools.EvalTools = "read_file,shell,web_search"
+	caps = resolveServeRuntimeCapabilities(tools)
+	if !caps.Builtins || !caps.Web || !caps.WebSearch {
+		t.Fatalf("eval_tools should opt requested tool families into eval mode: %+v", caps)
+	}
+	if caps.Memory || caps.Browser || caps.Subagent || caps.FocusedTasks || caps.WorkflowTools {
+		t.Fatalf("eval_tools should not enable unrelated surfaces: %+v", caps)
+	}
+
+	allTools := base
+	allTools.EvalAllTools = true
+	caps = resolveServeRuntimeCapabilities(allTools)
+	if !caps.Builtins || !caps.Memory || !caps.Browser || !caps.BrowserScreenshot || !caps.Web || !caps.WebSearch || !caps.Subagent || !caps.FocusedTasks || !caps.WorkflowTools {
+		t.Fatalf("eval_all_tools should enable the full serve surface: %+v", caps)
 	}
 }
 
@@ -362,6 +382,25 @@ func TestConfig_ValidateEvalModeRejectsUnusedEnvironmentOptions(t *testing.T) {
 				t.Fatalf("Validate error = %v, want contains %q", err, tc.want)
 			}
 		})
+	}
+}
+
+func TestConfig_ValidateEvalToolsRequireEvalMode(t *testing.T) {
+	for _, cfg := range []Config{
+		{EvalTools: "read_file"},
+		{EvalAllTools: true},
+	} {
+		cfg.BaseURL = "https://example/v1"
+		cfg.Model = "demo"
+		cfg.MaxSessions = 1
+		cfg.SessionIdleTTL = "5m"
+		cfg.PerCallTimeout = "3m"
+		cfg.RetryBackoff = "4s"
+		cfg.SubagentMaxDepth = agent.DefaultSubagentMaxDepth
+		err := cfg.Validate()
+		if err == nil || !strings.Contains(err.Error(), "require eval_mode") {
+			t.Fatalf("Validate error = %v, want require eval_mode", err)
+		}
 	}
 }
 

@@ -9,6 +9,8 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"sort"
+	"strings"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -142,7 +144,7 @@ var ErrShuttingDown = errors.New("session pool is shutting down")
 var ErrNoIdleSession = errors.New("no idle session available for eviction")
 
 func workflowToolsEnabled(cfg Config) bool {
-	return !cfg.EvalMode
+	return resolveServeRuntimeCapabilities(cfg).WorkflowTools
 }
 
 // NewSessionPool constructs a pool with the idle-GC goroutine running.
@@ -366,6 +368,69 @@ func browserRenderedFallback(browser *affentbrowser.Session) affentweb.RenderedF
 	}
 }
 
+func filterServeEvalModeTools(reg *agent.Registry, cfg Config) error {
+	if reg == nil || !cfg.EvalMode || cfg.EvalAllTools {
+		return nil
+	}
+	allowed, requested := serveEvalToolAllowlist(cfg)
+	if cfg.enableBuiltinsSet && cfg.EnableBuiltins {
+		for _, name := range serveEvalWorkspaceToolNames() {
+			allowed[name] = true
+		}
+	}
+	if cfg.EnableMemory {
+		allowed[agent.MemoryToolName] = true
+	}
+	if cfg.EnableWeb {
+		allowed["web_fetch"] = true
+	}
+	if cfg.EnableWebSearch {
+		allowed["web_search"] = true
+	}
+	if cfg.EnableBrowser {
+		for _, name := range serveEvalBrowserToolNames() {
+			if name == "browser_screenshot" && !cfg.BrowserScreenshot {
+				continue
+			}
+			allowed[name] = true
+		}
+	}
+	if cfg.EnableSubagent {
+		allowed[agent.SubagentToolName] = true
+	}
+	if cfg.EnableFocusedTasks {
+		allowed[agent.FocusedTaskToolName] = true
+	}
+	for _, def := range reg.Defs() {
+		if !allowed[def.Function.Name] {
+			reg.Remove(def.Function.Name)
+		}
+	}
+	var missing []string
+	for _, name := range requested {
+		if _, ok := reg.Get(name); !ok {
+			missing = append(missing, name)
+		}
+	}
+	if len(missing) > 0 {
+		sort.Strings(missing)
+		return fmt.Errorf("eval_tools requested unavailable tool(s): %s", strings.Join(missing, ", "))
+	}
+	return nil
+}
+
+func serveRegistryHasWorkspaceTool(reg *agent.Registry) bool {
+	if reg == nil {
+		return false
+	}
+	for _, name := range serveEvalWorkspaceToolNames() {
+		if _, ok := reg.Get(name); ok {
+			return true
+		}
+	}
+	return false
+}
+
 // buildSession constructs all per-session affent state. Errors here
 // propagate to the chat-completions caller and abort the request.
 func (p *SessionPool) buildSession(id string) (*Session, error) {
@@ -532,6 +597,13 @@ func (p *SessionPool) buildSession(id string) (*Session, error) {
 			RegisterBrowserTools: p.focusedTaskBrowserRegistrar(workspace),
 		})
 	}
+	if err := filterServeEvalModeTools(reg, p.cfg); err != nil {
+		_ = os.RemoveAll(workspace)
+		if browser != nil {
+			_ = browser.Close()
+		}
+		return nil, err
+	}
 
 	// Generous event buffer — chat handler subscribes and drains, but
 	// during turn execution we don't want to block the loop on a slow
@@ -629,17 +701,17 @@ func (p *SessionPool) buildSession(id string) (*Session, error) {
 	}
 	systemPrompt = agent.WithRegistrySystemGuidance(systemPrompt, reg)
 	systemPrompt = agent.WithRuntimeContextSystemGuidance(systemPrompt, time.Now())
-	if p.cfg.EnableBuiltins {
+	if serveRegistryHasWorkspaceTool(reg) {
 		// affentserve's per-session workspace is a freshly-allocated
 		// temp dir, not /workspace. DefaultSystemPrompt's "save under
 		// /workspace" guidance would otherwise have the model probe
 		// non-existent paths for 1-2 tool calls before discovering
 		// the real one from a rejection. Anchor it explicitly, same
-		// shape as affentctl. Gated on EnableBuiltins because without
-		// shell/file tools the anchor is irrelevant — the model has
+		// shape as affentctl. Gated on the actual registry because without
+		// workspace tools the anchor is irrelevant — the model has
 		// nothing that consumes a workspace path.
 		systemPrompt += "\n\nYour workspace directory is \"" + workspace +
-			"\". Use this exact path (or a relative path inside it) with the file tools."
+			"\". Use this exact path (or a relative path inside it) with registered workspace tools."
 	}
 	if err := loop.EnsureSystemPrompt(systemPrompt); err != nil {
 		_ = os.RemoveAll(workspace)

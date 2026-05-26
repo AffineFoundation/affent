@@ -169,24 +169,36 @@ func TestParseFlagsAndConfig_BuiltinsFromEnv(t *testing.T) {
 	}
 }
 
-func TestParseFlagsAndConfig_EvalModeDisablesNonBasicSurfaces(t *testing.T) {
+func TestParseFlagsAndConfig_EvalModeDisablesToolsByDefault(t *testing.T) {
 	t.Setenv("AFFENTSERVE_SUBAGENT", "true")
 	t.Setenv("AFFENTSERVE_FOCUSED_TASKS", "true")
 	t.Setenv("TAVILY_API_KEY", "test-key")
 	cfg, err := parseFlagsAndConfig([]string{
 		"--base-url", "https://example/v1",
 		"--model", "demo",
-		"--builtins",
 		"--eval-mode",
 	})
 	if err != nil {
 		t.Fatalf("parseFlagsAndConfig: %v", err)
 	}
-	if !cfg.EvalMode || !cfg.EnableBuiltins {
-		t.Fatalf("eval mode should preserve explicit basic builtins: eval=%t builtins=%t", cfg.EvalMode, cfg.EnableBuiltins)
+	if !cfg.EvalMode {
+		t.Fatal("eval mode should be enabled")
 	}
-	if cfg.EnableMemory || cfg.EnableBrowser || cfg.BrowserScreenshot || cfg.EnableWeb || cfg.EnableWebSearch || cfg.EnableSubagent || cfg.EnableFocusedTasks {
-		t.Fatalf("eval mode should disable non-basic surfaces: %+v", cfg)
+	if cfg.EnableBuiltins || cfg.EnableMemory || cfg.EnableBrowser || cfg.BrowserScreenshot || cfg.EnableWeb || cfg.EnableWebSearch || cfg.EnableSubagent || cfg.EnableFocusedTasks {
+		t.Fatalf("eval mode should disable tools by default: %+v", cfg)
+	}
+
+	cfg, err = parseFlagsAndConfig([]string{
+		"--base-url", "https://example/v1",
+		"--model", "demo",
+		"--eval-mode",
+		"--builtins=true",
+	})
+	if err != nil {
+		t.Fatalf("parseFlagsAndConfig explicit builtins: %v", err)
+	}
+	if !cfg.EnableBuiltins {
+		t.Fatal("--eval-mode --builtins=true should opt workspace tools back in")
 	}
 
 	cfg, err = parseFlagsAndConfig([]string{
@@ -246,6 +258,32 @@ func TestParseFlagsAndConfig_EvalModeDisablesNonBasicSurfaces(t *testing.T) {
 	}
 	if cfg.EnableWebSearch {
 		t.Fatalf("--eval-mode --web=true must not imply web_search: %+v", cfg)
+	}
+
+	cfg, err = parseFlagsAndConfig([]string{
+		"--base-url", "https://example/v1",
+		"--model", "demo",
+		"--eval-mode",
+		"--eval-tools=read_file,shell",
+	})
+	if err != nil {
+		t.Fatalf("parseFlagsAndConfig explicit eval tools: %v", err)
+	}
+	if !cfg.EnableBuiltins || cfg.EvalTools != "read_file,shell" {
+		t.Fatalf("--eval-tools should enable only the required serve tool family: %+v", cfg)
+	}
+
+	cfg, err = parseFlagsAndConfig([]string{
+		"--base-url", "https://example/v1",
+		"--model", "demo",
+		"--eval-mode",
+		"--eval-all-tools",
+	})
+	if err != nil {
+		t.Fatalf("parseFlagsAndConfig eval all tools: %v", err)
+	}
+	if !cfg.EvalAllTools || !cfg.EnableBuiltins || !cfg.EnableMemory || !cfg.EnableBrowser || !cfg.BrowserScreenshot || !cfg.EnableWeb || !cfg.EnableWebSearch || !cfg.EnableSubagent || !cfg.EnableFocusedTasks {
+		t.Fatalf("--eval-all-tools should enable the full serve tool surface: %+v", cfg)
 	}
 }
 

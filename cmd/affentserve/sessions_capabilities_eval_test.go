@@ -19,7 +19,6 @@ func TestSessionCapabilitiesReportsEvalMode(t *testing.T) {
 		APIKey:             "test",
 		Model:              "fake",
 		EvalMode:           true,
-		EnableBuiltins:     true,
 		EnableSubagent:     true,
 		EnableFocusedTasks: true,
 	}
@@ -37,8 +36,8 @@ func TestSessionCapabilitiesReportsEvalMode(t *testing.T) {
 	if !caps.EvalMode {
 		t.Fatal("active session capabilities should report eval_mode=true")
 	}
-	if !caps.Builtins || caps.Browser {
-		t.Fatalf("strict eval mode should report basic tools without browser, got %+v", caps)
+	if caps.Builtins || caps.Browser {
+		t.Fatalf("strict eval mode should report no tools by default, got %+v", caps)
 	}
 	if caps.SkillInstall || caps.Plan || caps.Subagent || caps.FocusedTasks {
 		t.Fatalf("eval mode should report workflow tools disabled, got %+v", caps)

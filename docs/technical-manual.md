@@ -766,6 +766,7 @@ Run through Docker:
 make eval-container EVAL_ARGS='--suite small-model-tools --temperature 0'
 make eval-container EVAL_ARGS='--suite long-run --temperature 0'
 make eval-agent-container EVAL_ARGS='--scenario coding-python-slug --temperature 0'
+make eval-agent-container EVAL_RUNTIME_TOOLS=readonly_workspace EVAL_ARGS='--scenario repo-inspection --temperature 0'
 make eval-agent-container EVAL_RUNTIME_MEMORY=true EVAL_ARGS='--scenario your-memory-scenario --temperature 0'
 make eval-agent-container EVAL_RUNTIME_WEB=true EVAL_RUNTIME_BROWSER=true EVAL_ARGS='--prompt-file request.md --name rendered-web-debug --max-turns 20'
 make eval-agent-container EVAL_RUNTIME_WEB=true EVAL_RUNTIME_BROWSER=true EVAL_TRACE_DELTAS=true EVAL_ARGS='--prompt-file request.md --name full-trace-debug --max-turns 20'
@@ -780,12 +781,15 @@ forward host `AFFENTCTL_TEMPERATURE`, `AFFENTCTL_TOP_P`,
 `EVAL_DOCKER_ARGS` only for deliberate extra container environment.
 
 Use runtime eval mode when Affent itself is the benchmark agent and the model
-should not receive extra product affordances. In eval mode, dynamic workflow
-features such as skills, runtime skill install, subagents, focused tasks, MCP,
-project context, session search, and memory are disabled by default; shell/file
-tools remain available when built-ins are available. Opt memory or MCP back in
-only for suites that explicitly measure those capabilities. The eval container
-does not forward host `AFFENTCTL_EVAL_MODE`, `AFFENTCTL_SUBAGENT`,
+should not receive extra product affordances. In eval mode, `affentctl` and
+`affentserve` start from a no-tool surface. Opt capabilities back in only for
+suites that explicitly measure them: `--memory=true`, `--web=true`,
+`--browser=true`, `--builtins=true` in serve, `--mcp-config` in ctl, or a
+precise `--eval-tools` allowlist such as `read_file,shell` or
+`readonly_workspace,web`. Use `--eval-all-tools` / `--runtime-all-tools` only
+for smoke/debug runs that intentionally exercise the full surface. The eval
+container does not forward host `AFFENTCTL_EVAL_MODE`,
+`AFFENTCTL_EVAL_TOOLS`, `AFFENTCTL_EVAL_ALL_TOOLS`, `AFFENTCTL_SUBAGENT`,
 `AFFENTCTL_FOCUSED_TASKS`, or `AFFENTCTL_PROJECT_CONTEXT`; use the
 `EVAL_RUNTIME_*` knobs above. Use `--runtime-web` when a scenario explicitly
 measures direct web retrieval; use `--runtime-browser` for rendered-page debug

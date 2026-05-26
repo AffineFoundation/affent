@@ -1284,7 +1284,7 @@ func TestSessionPool_SubagentRegistersExternalResearchPolicy(t *testing.T) {
 	}
 }
 
-func TestSessionPool_EvalModeRegistersOnlyBasicTools(t *testing.T) {
+func TestSessionPool_EvalModeRegistersNoToolsByDefault(t *testing.T) {
 	cfg := Config{
 		Listen:             "127.0.0.1:0",
 		MaxSessions:        4,
@@ -1294,11 +1294,9 @@ func TestSessionPool_EvalModeRegistersOnlyBasicTools(t *testing.T) {
 		APIKey:             "test",
 		Model:              "fake",
 		EvalMode:           true,
-		EnableBuiltins:     true,
 		EnableSubagent:     true,
 		EnableFocusedTasks: true,
 		EnableWeb:          true,
-		EnableBrowser:      true,
 	}
 	pool, err := NewSessionPool(cfg, zerolog.New(io.Discard))
 	if err != nil {
@@ -1311,8 +1309,8 @@ func TestSessionPool_EvalModeRegistersOnlyBasicTools(t *testing.T) {
 		t.Fatal(err)
 	}
 	for _, name := range []string{"shell", "read_file", "write_file", "edit_file", "list_files"} {
-		if _, ok := s.registry.Get(name); !ok {
-			t.Fatalf("%s should remain registered in eval mode", name)
+		if _, ok := s.registry.Get(name); ok {
+			t.Fatalf("%s should not be registered by default in eval mode", name)
 		}
 	}
 	for _, name := range []string{
@@ -1383,6 +1381,52 @@ func TestSessionPool_EvalModeRegistersOnlyBasicTools(t *testing.T) {
 	for _, forbidden := range []string{"Subagent delegation:", "Focused tasks (run_task):", "Affent plan tool guidance:", "Memory retrieval:", "Session history retrieval:"} {
 		if strings.Contains(msgs[0].Content, forbidden) {
 			t.Fatalf("eval-mode system prompt should not include %q guidance:\n%s", forbidden, msgs[0].Content)
+		}
+	}
+}
+
+func TestSessionPool_EvalModeAllowsIndividualToolsAndPromptMatchesRegistry(t *testing.T) {
+	cfg := Config{
+		Listen:         "127.0.0.1:0",
+		MaxSessions:    4,
+		SessionIdleTTL: "5m",
+		WorkspaceRoot:  t.TempDir(),
+		BaseURL:        "http://127.0.0.1:0",
+		APIKey:         "test",
+		Model:          "fake",
+		EvalMode:       true,
+		EvalTools:      "read_file,shell",
+	}
+	pool, err := NewSessionPool(cfg, zerolog.New(io.Discard))
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(pool.Shutdown)
+
+	s, err := pool.GetOrCreate("eval-tools")
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, name := range []string{"read_file", "shell"} {
+		if _, ok := s.registry.Get(name); !ok {
+			t.Fatalf("%s should be registered when requested by eval_tools", name)
+		}
+	}
+	for _, name := range []string{"write_file", "list_files", agent.MemoryToolName, agent.PlanToolName, agent.SubagentToolName, agent.FocusedTaskToolName} {
+		if _, ok := s.registry.Get(name); ok {
+			t.Fatalf("%s should not be registered when absent from eval_tools", name)
+		}
+	}
+	msgs := s.conv.Snapshot()
+	if len(msgs) == 0 {
+		t.Fatal("system prompt missing")
+	}
+	if !strings.Contains(msgs[0].Content, s.workspace) {
+		t.Fatalf("eval-mode workspace prompt should mention actual workspace when workspace tools are registered:\n%s", msgs[0].Content)
+	}
+	for _, forbidden := range []string{"Memory retrieval:", "Session history retrieval:", "External research:", "Subagent delegation:", "Focused tasks (run_task):", "Affent plan tool guidance:", "write_file", "run_task"} {
+		if strings.Contains(msgs[0].Content, forbidden) {
+			t.Fatalf("eval-mode prompt should not include unregistered %q guidance:\n%s", forbidden, msgs[0].Content)
 		}
 	}
 }

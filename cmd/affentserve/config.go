@@ -131,15 +131,22 @@ type Config struct {
 	// explicitly. When enabled, shell commands run as the affentserve
 	// process's UID via executor.LocalExecutor; for kernel-level
 	// isolation, run affentserve itself inside a sandbox.
-	EnableBuiltins bool `json:"enable_builtins"`
+	EnableBuiltins    bool `json:"enable_builtins"`
+	enableBuiltinsSet bool
 
-	// EvalMode freezes sessions to a strict single-loop benchmark
-	// surface. It disables skills, browser/web tools, subagent,
-	// focused tasks, other dynamic workflow injection, and memory by
-	// default. Shell/file builtins remain available when enabled; memory
-	// and environment permissions such as browser/web can be opted back
-	// in only when explicitly configured.
+	// EvalMode freezes sessions to a strict benchmark surface. It
+	// disables all tools by default; opt back in with EvalTools,
+	// EvalAllTools, or explicit capability flags such as enable_memory,
+	// enable_web, enable_browser, and enable_builtins.
 	EvalMode bool `json:"eval_mode"`
+
+	// EvalTools is a comma-separated allowlist used only with EvalMode.
+	// Tool groups mirror affentctl: workspace, readonly_workspace, web,
+	// browser, delegation, and all.
+	EvalTools string `json:"eval_tools"`
+
+	// EvalAllTools enables the full serve tool surface under EvalMode.
+	EvalAllTools bool `json:"eval_all_tools"`
 
 	// SystemPrompt overrides agent.DefaultSystemPrompt. Empty falls
 	// through to agent runtime's builtin.
@@ -312,6 +319,9 @@ func (c *Config) Resolve() error {
 	if !c.enableFocusedTasksSet {
 		c.EnableFocusedTasks = true
 	}
+	if c.EnableBuiltins {
+		c.enableBuiltinsSet = true
+	}
 	for _, e := range []struct {
 		envs []string
 		dest *string
@@ -326,6 +336,7 @@ func (c *Config) Resolve() error {
 		{[]string{"AFFENTSERVE_SESSION_RETENTION"}, &c.SessionRetention},
 		{[]string{"AFFENTSERVE_PER_CALL_TIMEOUT"}, &c.PerCallTimeout},
 		{[]string{"AFFENTSERVE_RETRY_BACKOFF"}, &c.RetryBackoff},
+		{[]string{"AFFENTSERVE_EVAL_TOOLS"}, &c.EvalTools},
 	} {
 		if v := firstNonEmptyEnv(e.envs...); v != "" {
 			*e.dest = v
@@ -364,6 +375,7 @@ func (c *Config) Resolve() error {
 		{"AFFENTSERVE_MEMORY", &c.EnableMemory},
 		{"AFFENTSERVE_BUILTINS", &c.EnableBuiltins},
 		{"AFFENTSERVE_EVAL_MODE", &c.EvalMode},
+		{"AFFENTSERVE_EVAL_ALL_TOOLS", &c.EvalAllTools},
 		{"AFFENTSERVE_SUBAGENT", &c.EnableSubagent},
 		{"AFFENTSERVE_FOCUSED_TASKS", &c.EnableFocusedTasks},
 	} {
@@ -384,6 +396,8 @@ func (c *Config) Resolve() error {
 				c.enableWebSearchSet = true
 			case "AFFENTSERVE_MEMORY":
 				c.enableMemorySet = true
+			case "AFFENTSERVE_BUILTINS":
+				c.enableBuiltinsSet = true
 			}
 		}
 	}
@@ -449,19 +463,118 @@ func resolveServeRuntimeCapabilities(c Config) serveRuntimeCapabilities {
 	if !c.EvalMode {
 		return caps
 	}
-	// Eval mode starts from a strict single-loop surface. Operators may
-	// explicitly opt into environment permissions that an eval suite
-	// actually needs, such as LiveWeb's browser access, without enabling
-	// workflow accelerators like skills, plan, subagents, or focused tasks.
-	caps.Memory = c.enableMemorySet && c.EnableMemory
-	caps.Browser = c.enableBrowserSet && c.EnableBrowser
+	if c.EvalAllTools {
+		caps.Builtins = true
+		caps.Memory = true
+		caps.Browser = true
+		caps.BrowserScreenshot = true
+		caps.Web = true
+		caps.WebSearch = true
+		caps.Subagent = true
+		caps.FocusedTasks = true
+		caps.WorkflowTools = true
+		return caps
+	}
+	allowed, _ := serveEvalToolAllowlist(c)
+	// Eval mode starts from a no-tool surface. Operators may explicitly
+	// opt into just the tool families an eval suite needs.
+	caps.Builtins = (c.enableBuiltinsSet && c.EnableBuiltins) || serveEvalAllowlistHasBuiltin(allowed)
+	caps.Memory = (c.enableMemorySet && c.EnableMemory) || allowed[agent.MemoryToolName]
+	caps.Browser = (c.enableBrowserSet && c.EnableBrowser) || serveEvalAllowlistHasBrowser(allowed)
 	caps.BrowserScreenshot = caps.Browser && c.browserScreenshotSet && c.BrowserScreenshot
-	caps.Web = c.enableWebSet && c.EnableWeb
-	caps.WebSearch = caps.Web && c.enableWebSearchSet && c.EnableWebSearch
-	caps.Subagent = false
-	caps.FocusedTasks = false
-	caps.WorkflowTools = false
+	if allowed["browser_screenshot"] {
+		caps.BrowserScreenshot = true
+	}
+	caps.Web = (c.enableWebSet && c.EnableWeb) || allowed["web_fetch"] || allowed["web_search"]
+	caps.WebSearch = (caps.Web && c.enableWebSearchSet && c.EnableWebSearch) || allowed["web_search"]
+	caps.Subagent = (c.enableSubagentSet && c.EnableSubagent) || allowed[agent.SubagentToolName]
+	caps.FocusedTasks = (c.enableFocusedTasksSet && c.EnableFocusedTasks) || allowed[agent.FocusedTaskToolName]
+	caps.WorkflowTools = allowed[agent.SkillToolName] || allowed[agent.PlanToolName] || allowed[agent.SessionSearchToolName]
 	return caps
+}
+
+func serveEvalToolAllowlist(c Config) (map[string]bool, []string) {
+	allowed := map[string]bool{}
+	var requested []string
+	add := func(name string) {
+		name = strings.TrimSpace(name)
+		if name == "" {
+			return
+		}
+		if !allowed[name] {
+			requested = append(requested, name)
+		}
+		allowed[name] = true
+	}
+	for _, raw := range strings.FieldsFunc(c.EvalTools, func(r rune) bool {
+		return r == ',' || r == ';' || r == ' ' || r == '\n' || r == '\t'
+	}) {
+		switch name := strings.TrimSpace(raw); name {
+		case "", "none":
+			continue
+		case "all":
+			for _, n := range serveEvalKnownToolNames() {
+				add(n)
+			}
+		case "workspace":
+			for _, n := range serveEvalWorkspaceToolNames() {
+				add(n)
+			}
+		case "readonly_workspace":
+			for _, n := range serveEvalReadonlyWorkspaceToolNames() {
+				add(n)
+			}
+		case "web":
+			add("web_fetch")
+		case "browser":
+			for _, n := range serveEvalBrowserToolNames() {
+				add(n)
+			}
+		case "delegation":
+			add(agent.SubagentToolName)
+			add(agent.FocusedTaskToolName)
+		default:
+			add(name)
+		}
+	}
+	return allowed, requested
+}
+
+func serveEvalWorkspaceToolNames() []string {
+	return []string{"shell", "read_file", "file_context", "write_file", "edit_file", "list_files", agent.SymbolContextToolName, "repo_search"}
+}
+
+func serveEvalReadonlyWorkspaceToolNames() []string {
+	return []string{"read_file", "file_context", "list_files", agent.SymbolContextToolName, "repo_search"}
+}
+
+func serveEvalBrowserToolNames() []string {
+	return []string{"browser_navigate", "browser_snapshot", "browser_find", "browser_network", "browser_network_read", "browser_click", "browser_scroll", "browser_type", "browser_wait", "browser_screenshot"}
+}
+
+func serveEvalKnownToolNames() []string {
+	out := append([]string{}, serveEvalWorkspaceToolNames()...)
+	out = append(out, agent.SkillToolName, agent.MemoryToolName, agent.PlanToolName, agent.SubagentToolName, agent.FocusedTaskToolName, "web_fetch", "web_search")
+	out = append(out, serveEvalBrowserToolNames()...)
+	return out
+}
+
+func serveEvalAllowlistHasBuiltin(allowed map[string]bool) bool {
+	for _, name := range append(serveEvalWorkspaceToolNames(), agent.SkillToolName, agent.SessionSearchToolName, agent.PlanToolName) {
+		if allowed[name] {
+			return true
+		}
+	}
+	return false
+}
+
+func serveEvalAllowlistHasBrowser(allowed map[string]bool) bool {
+	for _, name := range serveEvalBrowserToolNames() {
+		if allowed[name] {
+			return true
+		}
+	}
+	return false
 }
 
 func (c Config) EffectiveRuntimeConfig() Config {
@@ -641,6 +754,9 @@ func (c Config) Validate() error {
 	}
 	if c.CompactKeepLast < 0 {
 		return fmt.Errorf("compact_keep_last must be zero or a positive integer")
+	}
+	if !c.EvalMode && (strings.TrimSpace(c.EvalTools) != "" || c.EvalAllTools) {
+		return errors.New("eval_tools and eval_all_tools require eval_mode")
 	}
 	caps := resolveServeRuntimeCapabilities(c)
 	if c.EnableWebSearch && !caps.Web {
