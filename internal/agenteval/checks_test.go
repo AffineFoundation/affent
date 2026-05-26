@@ -591,6 +591,36 @@ func TestLoopDecisionMatchAtLeast(t *testing.T) {
 	}
 }
 
+func TestContextCompactionChecks(t *testing.T) {
+	trace := Trace{ContextCompactions: []ContextCompaction{
+		{TurnID: "t1", BeforeMessages: 50, AfterMessages: 20, RemovedMessages: 30, Reactive: false, Reason: "threshold", SummaryPresent: true, SummaryBytes: 1200},
+		{TurnID: "t2", BeforeMessages: 40, AfterMessages: 10, RemovedMessages: 30, Reactive: true, Reason: "context_overflow", SummaryPresent: true, SummaryBytes: 900},
+	}}
+	stats := trace.ContextCompactionStats(1)
+	if stats.Count != 2 || stats.Proactive != 1 || stats.Reactive != 1 || stats.RemovedMessages != 60 || stats.SummaryBytes != 2100 {
+		t.Fatalf("ContextCompactionStats = %+v", stats)
+	}
+	if len(stats.Examples) != 1 || stats.Examples[0].Reason != "threshold" {
+		t.Fatalf("ContextCompactionStats examples = %+v", stats.Examples)
+	}
+	if res := ContextCompactionsAtLeast(2).Eval(trace); !res.Pass {
+		t.Fatalf("expected total compaction check to pass: %+v", res)
+	}
+	if res := ReactiveContextCompactionsAtLeast(1).Eval(trace); !res.Pass {
+		t.Fatalf("expected reactive compaction check to pass: %+v", res)
+	}
+	if res := ContextCompactionRemovedMessagesAtLeast(60).Eval(trace); !res.Pass {
+		t.Fatalf("expected removed-message compaction check to pass: %+v", res)
+	}
+	res := ReactiveContextCompactionsAtLeast(2).Eval(trace)
+	if res.Pass {
+		t.Fatal("expected reactive compaction check to fail")
+	}
+	if !strings.Contains(res.Detail, "reactive_context_compactions=1") || !strings.Contains(res.Detail, "proactive=1") {
+		t.Fatalf("failure detail should include reactive/proactive counts: %s", res.Detail)
+	}
+}
+
 func TestApplyTraceEventDerivesToolResultFailureKind(t *testing.T) {
 	trace := Trace{}
 	pending := map[string]int{}

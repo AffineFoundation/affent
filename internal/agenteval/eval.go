@@ -76,6 +76,9 @@ type BatchScenario struct {
 	RequiredLoopDecisionKinds     map[string]int
 	RequiredLoopDecisionResults   map[string]int
 	RequiredLoopDecisionMatches   []LoopDecisionRequirement
+	RequiredContextCompactions    int
+	RequiredReactiveCompactions   int
+	RequiredCompactionRemovedMsgs int
 	RequiredCommandBeforeTool     []CommandToolOrderRequirement
 	RequiredCommandAfterTool      []CommandToolOrderRequirement
 	RequiredTools                 []string
@@ -135,6 +138,7 @@ type BatchResult struct {
 	RuntimeErrorByKind   map[string]int
 	RuntimeErrorExamples map[string][]RuntimeErrorExample
 	LoopDecisionStats    LoopDecisionStats
+	ContextCompactions   ContextCompactionStats
 	ToolFailureExamples  map[string][]ToolFailureExample
 	ToolTruncation       ToolTruncationStats
 	Usage                Usage
@@ -361,6 +365,7 @@ func (r BatchRunner) Run(ctx context.Context, scenario BatchScenario) BatchResul
 		res.RuntimeErrorByKind = trace.LoopErrorKindCounts()
 		res.RuntimeErrorExamples = trace.RuntimeErrorExamples(2)
 		res.LoopDecisionStats = trace.LoopDecisionStats(2)
+		res.ContextCompactions = trace.ContextCompactionStats(2)
 		res.ToolFailureExamples = trace.ToolFailureExamples(2)
 		res.ToolTruncation = SummarizeToolTruncation(trace)
 		res.Usage = trace.Usage
@@ -793,6 +798,15 @@ func BatchScenarioChecks(scenario BatchScenario) []Check {
 			min = 1
 		}
 		checks = append(checks, LoopDecisionMatchAtLeast(req.Kind, req.Decision, req.Trigger, min))
+	}
+	if scenario.RequiredContextCompactions > 0 {
+		checks = append(checks, ContextCompactionsAtLeast(scenario.RequiredContextCompactions))
+	}
+	if scenario.RequiredReactiveCompactions > 0 {
+		checks = append(checks, ReactiveContextCompactionsAtLeast(scenario.RequiredReactiveCompactions))
+	}
+	if scenario.RequiredCompactionRemovedMsgs > 0 {
+		checks = append(checks, ContextCompactionRemovedMessagesAtLeast(scenario.RequiredCompactionRemovedMsgs))
 	}
 	for _, taskType := range sortedStringMapKeys(scenario.RequiredFocusedTaskCounts) {
 		checks = append(checks, FocusedTaskCalledAtLeast(taskType, scenario.RequiredFocusedTaskCounts[taskType]))

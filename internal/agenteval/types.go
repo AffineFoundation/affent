@@ -144,6 +144,10 @@ type Trace struct {
 	// evidence_quality defer events. These are separate from assistant text so
 	// evals can measure when guardrails fired and whether they were actionable.
 	LoopDecisions []LoopDecision
+	// ContextCompactions records model-context rewrites produced by the
+	// rolling compactor. The full user-visible trace remains in events.jsonl;
+	// these entries let long-run evals assert that context pressure was handled.
+	ContextCompactions []ContextCompaction
 
 	// RawTypes counts every event type the run produced, by name
 	// (e.g. {"tool.request": 5, "message.delta": 1300}). Populated
@@ -310,6 +314,26 @@ type LoopDecisionStats struct {
 	ByKind     map[string]int
 	ByDecision map[string]int
 	Examples   []LoopDecision
+}
+
+type ContextCompaction struct {
+	TurnID          string `json:"turn_id,omitempty"`
+	BeforeMessages  int    `json:"before_messages"`
+	AfterMessages   int    `json:"after_messages"`
+	RemovedMessages int    `json:"removed_messages"`
+	Reactive        bool   `json:"reactive"`
+	Reason          string `json:"reason"`
+	SummaryPresent  bool   `json:"summary_present,omitempty"`
+	SummaryBytes    int    `json:"summary_bytes,omitempty"`
+}
+
+type ContextCompactionStats struct {
+	Count           int
+	Reactive        int
+	Proactive       int
+	RemovedMessages int
+	SummaryBytes    int
+	Examples        []ContextCompaction
 }
 
 func (s ToolRepairStats) HasAny() bool {
@@ -517,6 +541,34 @@ func (t Trace) LoopDecisionStats(maxExamples int) LoopDecisionStats {
 			RequiredAction: compactOneLine(decision.RequiredAction, 260),
 			TurnID:         decision.TurnID,
 			DecisionID:     decision.DecisionID,
+		})
+	}
+	return stats
+}
+
+func (t Trace) ContextCompactionStats(maxExamples int) ContextCompactionStats {
+	stats := ContextCompactionStats{}
+	for _, compaction := range t.ContextCompactions {
+		stats.Count++
+		if compaction.Reactive {
+			stats.Reactive++
+		} else {
+			stats.Proactive++
+		}
+		stats.RemovedMessages += compaction.RemovedMessages
+		stats.SummaryBytes += compaction.SummaryBytes
+		if maxExamples <= 0 || len(stats.Examples) >= maxExamples {
+			continue
+		}
+		stats.Examples = append(stats.Examples, ContextCompaction{
+			TurnID:          compaction.TurnID,
+			BeforeMessages:  compaction.BeforeMessages,
+			AfterMessages:   compaction.AfterMessages,
+			RemovedMessages: compaction.RemovedMessages,
+			Reactive:        compaction.Reactive,
+			Reason:          compaction.Reason,
+			SummaryPresent:  compaction.SummaryPresent,
+			SummaryBytes:    compaction.SummaryBytes,
 		})
 	}
 	return stats

@@ -172,6 +172,10 @@ type batchSummary struct {
 	LoopDecisionByKind         map[string]int
 	LoopDecisionByDecision     map[string]int
 	LoopDecisionExamples       []agenteval.LoopDecision
+	ContextCompactions         int
+	ContextCompactionsReactive int
+	ContextCompactionRemoved   int
+	ContextCompactionSummary   int
 	LoopGuardInterventions     int
 	ForcedNoTools              int
 	SourceAccessResults        int
@@ -276,6 +280,10 @@ func (s *batchSummary) add(res agenteval.BatchResult) {
 		s.LoopDecisionByDecision[k] += v
 	}
 	s.LoopDecisionExamples = appendLoopDecisionExamples(s.LoopDecisionExamples, res.LoopDecisionStats.Examples, batchSummaryExamplesPerKind)
+	s.ContextCompactions += res.ContextCompactions.Count
+	s.ContextCompactionsReactive += res.ContextCompactions.Reactive
+	s.ContextCompactionRemoved += res.ContextCompactions.RemovedMessages
+	s.ContextCompactionSummary += res.ContextCompactions.SummaryBytes
 	s.LoopGuardInterventions += res.ToolStats.LoopGuardInterventions
 	s.ForcedNoTools += res.ToolStats.ForcedNoTools
 	s.SourceAccessResults += res.ToolStats.SourceAccessResults
@@ -442,6 +450,14 @@ func printBatchSummary(w io.Writer, s batchSummary) {
 		if len(s.LoopDecisionByDecision) > 0 {
 			fmt.Fprintf(w, " loop_decision_results=%s", formatStringIntCounts(s.LoopDecisionByDecision))
 		}
+	}
+	if s.ContextCompactions > 0 {
+		fmt.Fprintf(w, " compactions=%d,reactive=%d,removed=%d,summary_bytes=%d",
+			s.ContextCompactions,
+			s.ContextCompactionsReactive,
+			s.ContextCompactionRemoved,
+			s.ContextCompactionSummary,
+		)
 	}
 	if hasBatchToolContextTruncation(s) {
 		fmt.Fprintf(w, " ctx_trunc=%d,omitted=%d", s.ToolContextTruncated, s.ToolContextOmittedBytes)
@@ -820,6 +836,10 @@ type batchResultRecord struct {
 	LoopDecisionByKind         map[string]int                             `json:"loop_decision_by_kind,omitempty"`
 	LoopDecisionByDecision     map[string]int                             `json:"loop_decision_by_decision,omitempty"`
 	LoopDecisionExamples       []agenteval.LoopDecision                   `json:"loop_decision_examples,omitempty"`
+	ContextCompactions         int                                        `json:"context_compactions,omitempty"`
+	ContextCompactionsReactive int                                        `json:"context_compactions_reactive,omitempty"`
+	ContextCompactionRemoved   int                                        `json:"context_compaction_removed_messages,omitempty"`
+	ContextCompactionSummary   int                                        `json:"context_compaction_summary_bytes,omitempty"`
 	LoopGuardInterventions     int                                        `json:"loop_guard_interventions"`
 	ForcedNoTools              int                                        `json:"forced_no_tools"`
 	SourceAccessResults        int                                        `json:"source_access_results"`
@@ -899,6 +919,10 @@ type batchSummaryRecord struct {
 	LoopDecisionByKind         map[string]int                             `json:"loop_decision_by_kind,omitempty"`
 	LoopDecisionByDecision     map[string]int                             `json:"loop_decision_by_decision,omitempty"`
 	LoopDecisionExamples       []agenteval.LoopDecision                   `json:"loop_decision_examples,omitempty"`
+	ContextCompactions         int                                        `json:"context_compactions,omitempty"`
+	ContextCompactionsReactive int                                        `json:"context_compactions_reactive,omitempty"`
+	ContextCompactionRemoved   int                                        `json:"context_compaction_removed_messages,omitempty"`
+	ContextCompactionSummary   int                                        `json:"context_compaction_summary_bytes,omitempty"`
 	LoopGuardInterventions     int                                        `json:"loop_guard_interventions"`
 	ForcedNoTools              int                                        `json:"forced_no_tools"`
 	SourceAccessResults        int                                        `json:"source_access_results"`
@@ -983,6 +1007,10 @@ func printBatchResultJSONL(w io.Writer, meta evalJSONLMetadata, res agenteval.Ba
 		LoopDecisionByKind:         cloneStringIntMap(res.LoopDecisionStats.ByKind),
 		LoopDecisionByDecision:     cloneStringIntMap(res.LoopDecisionStats.ByDecision),
 		LoopDecisionExamples:       cloneLoopDecisionExamples(res.LoopDecisionStats.Examples),
+		ContextCompactions:         res.ContextCompactions.Count,
+		ContextCompactionsReactive: res.ContextCompactions.Reactive,
+		ContextCompactionRemoved:   res.ContextCompactions.RemovedMessages,
+		ContextCompactionSummary:   res.ContextCompactions.SummaryBytes,
 		LoopGuardInterventions:     res.ToolStats.LoopGuardInterventions,
 		ForcedNoTools:              res.ToolStats.ForcedNoTools,
 		SourceAccessResults:        res.ToolStats.SourceAccessResults,
@@ -1057,6 +1085,10 @@ func printBatchSummaryJSONL(w io.Writer, meta evalJSONLMetadata, s batchSummary)
 		LoopDecisionByKind:         cloneStringIntMap(s.LoopDecisionByKind),
 		LoopDecisionByDecision:     cloneStringIntMap(s.LoopDecisionByDecision),
 		LoopDecisionExamples:       cloneLoopDecisionExamples(s.LoopDecisionExamples),
+		ContextCompactions:         s.ContextCompactions,
+		ContextCompactionsReactive: s.ContextCompactionsReactive,
+		ContextCompactionRemoved:   s.ContextCompactionRemoved,
+		ContextCompactionSummary:   s.ContextCompactionSummary,
 		LoopGuardInterventions:     s.LoopGuardInterventions,
 		ForcedNoTools:              s.ForcedNoTools,
 		SourceAccessResults:        s.SourceAccessResults,
@@ -1280,6 +1312,14 @@ func printBatchResult(w io.Writer, res agenteval.BatchResult) {
 		if len(res.LoopDecisionStats.ByDecision) > 0 {
 			fmt.Fprintf(w, " loop_decision_results=%s", formatStringIntCounts(res.LoopDecisionStats.ByDecision))
 		}
+	}
+	if res.ContextCompactions.Count > 0 {
+		fmt.Fprintf(w, " compactions=%d,reactive=%d,removed=%d,summary_bytes=%d",
+			res.ContextCompactions.Count,
+			res.ContextCompactions.Reactive,
+			res.ContextCompactions.RemovedMessages,
+			res.ContextCompactions.SummaryBytes,
+		)
 	}
 	printDelegationRollup(w, res.Delegation.FocusedTaskCalls, res.Delegation.FocusedTaskByType, res.Delegation.FocusedTaskErrors, res.Delegation.SubagentCalls, res.Delegation.SubagentByMode, res.Delegation.SubagentErrors)
 	printPlanRollup(w, res.Plan.Calls, res.Plan.ByAction, res.Plan.Errors)

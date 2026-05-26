@@ -75,6 +75,7 @@ func TestParseTraceFileReadsToolRequestsAndFinalText(t *testing.T) {
 		`{"type":"usage","data":{"input_tokens":11,"output_tokens":7}}`,
 		`{"type":"error","data":{"message":"transient stream warning","failure_kind":"llm_timeout"}}`,
 		`{"type":"loop.decision","data":{"turn_id":"t1","decision_id":"d1","kind":"evidence_quality","trigger":"source_access_dynamic_partial","decision":"defer","confidence":"high","reason":"Dynamic widgets had no text values.","required_action":"Read browser network responses before citing metrics.","visible_in_ui":true}}`,
+		`{"type":"context.compacted","data":{"turn_id":"t1","before_messages":50,"after_messages":18,"removed_messages":32,"reactive":true,"reason":"context_overflow","summary_present":true,"summary_bytes":2048}}`,
 		`{"type":"message.done","data":{"text":"Conclusion: green","finish_reason":"stop"}}`,
 		`{"type":"turn.end","data":{"reason":"completed","tool_stats":{"tool_requests":2,"tool_name_canonicalized":1,"tool_args_repaired":1,"tool_repair_calls":1,"tool_repair_succeeded":1,"tool_repair_failed":0,"tool_repair_notes":2,"tool_repair_by_kind":{"tool_name":1,"alias_rename":1},"tool_failure_by_kind":{"invalid_args":1},"tool_errors":1,"tool_duration_ms":17,"loop_guard_interventions":1,"forced_no_tools":1,"source_access_dynamic_partial":1,"memory_updates":2,"memory_update_add":1,"memory_update_replace":1,"tool_context_truncated":2,"tool_context_omitted_bytes":8192}}}`,
 	}, "\n") + "\n"
@@ -145,6 +146,13 @@ func TestParseTraceFileReadsToolRequestsAndFinalText(t *testing.T) {
 		loopDecisions.Examples[0].Trigger != "source_access_dynamic_partial" ||
 		!strings.Contains(loopDecisions.Examples[0].RequiredAction, "browser network") {
 		t.Fatalf("LoopDecisionStats examples = %+v", loopDecisions.Examples)
+	}
+	compactions := trace.ContextCompactionStats(1)
+	if compactions.Count != 1 || compactions.Reactive != 1 || compactions.Proactive != 0 || compactions.RemovedMessages != 32 || compactions.SummaryBytes != 2048 {
+		t.Fatalf("ContextCompactionStats = %+v", compactions)
+	}
+	if len(compactions.Examples) != 1 || compactions.Examples[0].Reason != "context_overflow" || !compactions.Examples[0].SummaryPresent {
+		t.Fatalf("ContextCompactionStats examples = %+v", compactions.Examples)
 	}
 	if trace.FinalText != "Conclusion: green" {
 		t.Fatalf("FinalText = %q", trace.FinalText)
@@ -395,6 +403,9 @@ func TestBatchScenarioChecks_UsesSharedCheckLibrary(t *testing.T) {
 		RequiredLoopDecisionMatches: []LoopDecisionRequirement{
 			{Kind: "evidence_quality", Decision: "defer", Trigger: "source_access_dynamic_partial"},
 		},
+		RequiredContextCompactions:    1,
+		RequiredReactiveCompactions:   1,
+		RequiredCompactionRemovedMsgs: 20,
 		RequiredFocusedTaskCounts: map[string]int{
 			"explore": 1,
 		},
@@ -438,6 +449,9 @@ func TestBatchScenarioChecks_UsesSharedCheckLibrary(t *testing.T) {
 		"loop_decision_kind_at_least:evidence_quality:1",
 		"loop_decision_result_at_least:defer:1",
 		"loop_decision_match_at_least:evidence_quality:defer:source_access_dynamic_partial:1",
+		"context_compactions_at_least:1",
+		"reactive_context_compactions_at_least:1",
+		"context_compaction_removed_messages_at_least:20",
 		"focused_task_called_at_least:explore:1",
 		"subagent_called_at_least:review:1",
 		"no_delegation_errors",

@@ -173,6 +173,24 @@ func applyTraceEvent(t *Trace, pending map[string]int, typ string, data json.Raw
 			TurnID:         p.TurnID,
 			DecisionID:     p.DecisionID,
 		})
+	case sse.TypeContextCompact:
+		var p sse.ContextCompactPayload
+		if err := json.Unmarshal(data, &p); err != nil {
+			return false, err
+		}
+		if !traceEventMatchesTurn(p.TurnID, turnID) {
+			return false, nil
+		}
+		t.ContextCompactions = append(t.ContextCompactions, ContextCompaction{
+			TurnID:          p.TurnID,
+			BeforeMessages:  p.BeforeMessages,
+			AfterMessages:   p.AfterMessages,
+			RemovedMessages: p.RemovedMessages,
+			Reactive:        p.Reactive,
+			Reason:          p.Reason,
+			SummaryPresent:  p.SummaryPresent,
+			SummaryBytes:    p.SummaryBytes,
+		})
 	case sse.TypeError:
 		var p sse.ErrorPayload
 		if err := json.Unmarshal(data, &p); err == nil && p.Message != "" {

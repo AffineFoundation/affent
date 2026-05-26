@@ -452,6 +452,54 @@ func LoopDecisionMatchAtLeast(kind, decision, trigger string, min int) Check {
 	}
 }
 
+func ContextCompactionsAtLeast(min int) Check {
+	return Check{
+		Name: fmt.Sprintf("context_compactions_at_least:%d", min),
+		Eval: func(t Trace) CheckResult {
+			stats := t.ContextCompactionStats(0)
+			if stats.Count >= min {
+				return CheckResult{Pass: true, Detail: fmt.Sprintf("context_compactions=%d", stats.Count)}
+			}
+			return CheckResult{
+				Pass:   false,
+				Detail: fmt.Sprintf("context_compactions=%d, want >= %d", stats.Count, min),
+			}
+		},
+	}
+}
+
+func ReactiveContextCompactionsAtLeast(min int) Check {
+	return Check{
+		Name: fmt.Sprintf("reactive_context_compactions_at_least:%d", min),
+		Eval: func(t Trace) CheckResult {
+			stats := t.ContextCompactionStats(0)
+			if stats.Reactive >= min {
+				return CheckResult{Pass: true, Detail: fmt.Sprintf("reactive_context_compactions=%d", stats.Reactive)}
+			}
+			return CheckResult{
+				Pass:   false,
+				Detail: fmt.Sprintf("reactive_context_compactions=%d, want >= %d; total=%d proactive=%d", stats.Reactive, min, stats.Count, stats.Proactive),
+			}
+		},
+	}
+}
+
+func ContextCompactionRemovedMessagesAtLeast(min int) Check {
+	return Check{
+		Name: fmt.Sprintf("context_compaction_removed_messages_at_least:%d", min),
+		Eval: func(t Trace) CheckResult {
+			stats := t.ContextCompactionStats(0)
+			if stats.RemovedMessages >= min {
+				return CheckResult{Pass: true, Detail: fmt.Sprintf("removed_messages=%d", stats.RemovedMessages)}
+			}
+			return CheckResult{
+				Pass:   false,
+				Detail: fmt.Sprintf("removed_messages=%d, want >= %d; context_compactions=%d", stats.RemovedMessages, min, stats.Count),
+			}
+		},
+	}
+}
+
 func loopDecisionExamples(decisions []LoopDecision, max int) []string {
 	if max <= 0 || len(decisions) == 0 {
 		return nil
