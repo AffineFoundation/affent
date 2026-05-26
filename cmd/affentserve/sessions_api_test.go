@@ -167,6 +167,7 @@ func TestHandleSessionList_MergesActiveAndDurableSessions(t *testing.T) {
 }
 
 func TestMergeSessionSummariesKeepsActiveLatestUserMessage(t *testing.T) {
+	context := &sessionContextSummary{MessageCount: 96, CompactTrigger: 120, CompactPercent: 80, MessagesUntilCompact: 24}
 	got := mergeSessionSummaries(
 		sessionSummary{
 			ID:                "active",
@@ -179,6 +180,7 @@ func TestMergeSessionSummariesKeepsActiveLatestUserMessage(t *testing.T) {
 			Durable:           true,
 			LatestUserMessage: "older durable task",
 			TopicUserMessage:  "older durable topic",
+			Context:           context,
 		},
 	)
 	if got.LatestUserMessage != "new in-memory task" {
@@ -189,6 +191,24 @@ func TestMergeSessionSummariesKeepsActiveLatestUserMessage(t *testing.T) {
 	}
 	if !got.Active || !got.Durable {
 		t.Fatalf("merged active/durable flags = %+v", got)
+	}
+	if got.Context != context {
+		t.Fatalf("context summary = %+v, want durable context carried over", got.Context)
+	}
+}
+
+func TestSessionContextSnapshotUsesCompactionTrigger(t *testing.T) {
+	got := sessionContextSnapshot(96, Config{CompactTrigger: 120})
+	if got.MessageCount != 96 || got.CompactTrigger != 120 || got.CompactPercent != 80 || got.MessagesUntilCompact != 24 {
+		t.Fatalf("context snapshot = %+v, want 96/120 at 80%% with 24 remaining", got)
+	}
+	over := sessionContextSnapshot(130, Config{CompactTrigger: 120})
+	if over.CompactPercent != 108 || over.MessagesUntilCompact != 0 {
+		t.Fatalf("over-trigger snapshot = %+v, want 108%% and no remaining messages", over)
+	}
+	def := sessionContextSnapshot(1, Config{})
+	if def.CompactTrigger != agent.DefaultSummaryTriggerMsgs {
+		t.Fatalf("default trigger = %d, want %d", def.CompactTrigger, agent.DefaultSummaryTriggerMsgs)
 	}
 }
 

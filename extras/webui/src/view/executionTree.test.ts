@@ -19,7 +19,9 @@ describe("buildExecutionTree", () => {
       tool: "MCP_search",
     });
     expect(subagent.tokenUsage).toEqual({ inputTokens: 310, outputTokens: 82, totalTokens: 392, costUsd: undefined });
+    expect(subagent.contextEstimatedTokens).toBe(186);
     expect(subagent.metrics).toEqual(expect.arrayContaining([
+      { label: "merged", value: "~186 tokens" },
       { label: "tokens", value: "392 tokens" },
       { label: "input", value: "310" },
       { label: "output", value: "82" },
@@ -30,6 +32,7 @@ describe("buildExecutionTree", () => {
     expect(focused.tool).toBe("run_task");
     expect(focused.preview).toBe("Trace UI needs hierarchical detail for focused tasks and subagents.");
     expect(focused.tokenUsage).toEqual({ inputTokens: 220, outputTokens: 58, totalTokens: 278, costUsd: undefined });
+    expect(focused.contextEstimatedTokens).toBe(195);
   });
 
   it("summarizes shell work by the command instead of the raw tool name", () => {
@@ -40,6 +43,8 @@ describe("buildExecutionTree", () => {
     expect(shell.preview).toBe("line 1 line 2 …(truncated)");
     expect(shell.subtitle).toBeUndefined();
     expect(shell.tool).toBe("shell");
+    expect(shell.contextEstimatedTokens).toBe(1024);
+    expect(shell.metrics).toContainEqual({ label: "merged", value: "~1024 tokens" });
   });
 
   it("uses plain titles for simple shell directory listings", () => {

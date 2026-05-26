@@ -1,4 +1,5 @@
-import type { SessionPlanSummary } from "../api/sessions";
+import { EventType } from "../api/events";
+import type { SessionContextSummary, SessionPlanSummary } from "../api/sessions";
 import type { SessionState, TurnState } from "../store/sessionState";
 import type { WorkflowStatus } from "../store/workflowStatus";
 import { conversationTopicFromTurns } from "./continuationPrompt";
@@ -32,6 +33,7 @@ export function buildSessionOverview({
   pendingGuidance,
   sessionTitle,
   planSummary,
+  contextSummary,
 }: {
   session: SessionState;
   workflow: WorkflowStatus;
@@ -40,6 +42,7 @@ export function buildSessionOverview({
   pendingGuidance?: string;
   sessionTitle?: string;
   planSummary?: SessionPlanSummary;
+  contextSummary?: SessionContextSummary;
 }): SessionOverview {
   const latestTurn = session.turns.at(-1);
   const latestActivity = latestTurn ? buildTurnActivity(latestTurn) : undefined;
@@ -56,7 +59,7 @@ export function buildSessionOverview({
       stateLabel: "Sending",
       tone: "running",
       active: true,
-      metrics: buildMetrics(session, undefined, undefined, planSummary),
+      metrics: buildMetrics(session, undefined, undefined, planSummary, contextSummary),
     };
   }
 
@@ -67,7 +70,7 @@ export function buildSessionOverview({
       stateLabel: "Sending guidance",
       tone: "running",
       active: true,
-      metrics: buildMetrics(session, latestTurn, latestActivity, planSummary),
+      metrics: buildMetrics(session, latestTurn, latestActivity, planSummary, contextSummary),
     };
   }
 
@@ -78,7 +81,7 @@ export function buildSessionOverview({
       stateLabel: "Ready",
       tone: "ready",
       active: false,
-      metrics: buildMetrics(session, undefined, undefined, planSummary),
+      metrics: buildMetrics(session, undefined, undefined, planSummary, contextSummary),
     };
   }
 
@@ -89,7 +92,7 @@ export function buildSessionOverview({
       stateLabel: "Ready",
       tone: "ready",
       active: false,
-      metrics: buildMetrics(session, undefined, undefined, planSummary),
+      metrics: buildMetrics(session, undefined, undefined, planSummary, contextSummary),
     };
   }
 
@@ -100,7 +103,7 @@ export function buildSessionOverview({
     stateLabel: workflow.title,
     tone,
     active: workflow.active,
-    metrics: buildMetrics(session, latestTurn, latestActivity, planSummary),
+    metrics: buildMetrics(session, latestTurn, latestActivity, planSummary, contextSummary),
   };
 }
 
@@ -138,11 +141,14 @@ function buildMetrics(
   latestTurn?: TurnState,
   latestActivity?: TurnActivityView,
   planSummary?: SessionPlanSummary,
+  contextSummary?: SessionContextSummary,
 ): SessionOverviewMetric[] {
   const metrics: SessionOverviewMetric[] = [];
 
   const currentIssueCount = latestTurn ? currentTurnIssueCount(latestTurn) : 0;
   if (currentIssueCount > 0) metrics.push({ label: currentIssueCount === 1 ? "Issue" : "Issues", value: String(currentIssueCount), tone: "error" });
+  const contextMetric = buildContextUsageMetric(session, contextSummary);
+  if (contextMetric) metrics.push(contextMetric);
   const settledIssues = latestTurn ? settledToolIssueCount(latestTurn) : 0;
   if (settledIssues > 0) metrics.push({ label: settledIssues === 1 ? "Tool issue" : "Tool issues", value: String(settledIssues), tone: "warning" });
   const artifactMetric = buildArtifactMetric(session);
@@ -189,6 +195,63 @@ function buildContextCompactionMetric(session: SessionState): SessionOverviewMet
     value: `${session.contextCompactions.length}${suffix}`,
     tone: latest?.reactive ? "warning" : undefined,
   };
+}
+
+function buildContextUsageMetric(session: SessionState, context?: SessionContextSummary): SessionOverviewMetric | undefined {
+  const limit = context?.compact_trigger;
+  if (!limit || limit <= 0) return undefined;
+  const eventCount = estimateModelContextMessages(session);
+  const summaryCount = context?.message_count ?? 0;
+  const count = Math.max(eventCount, summaryCount);
+  if (count <= 0) return undefined;
+  const percent = Math.round((count / limit) * 100);
+  return {
+    label: "Context",
+    value: `${formatCount(count)}/${formatCount(limit)} · ${percent}%`,
+    tone: percent >= 95 ? "error" : percent >= 80 ? "warning" : undefined,
+  };
+}
+
+function estimateModelContextMessages(session: SessionState): number {
+  let count = 0;
+  let assistantToolTurn: string | undefined;
+  let toolRequestsInBatch = 0;
+  for (const event of session.events) {
+    switch (event.type) {
+      case EventType.UserMessage:
+        count += 1;
+        assistantToolTurn = undefined;
+        toolRequestsInBatch = 0;
+        break;
+      case EventType.MessageDone:
+        count += 1;
+        assistantToolTurn = undefined;
+        toolRequestsInBatch = 0;
+        break;
+      case EventType.ToolRequest:
+        if (event.turnId !== assistantToolTurn || toolRequestsInBatch === 0) {
+          count += 1;
+          assistantToolTurn = event.turnId;
+          toolRequestsInBatch = 1;
+        } else {
+          toolRequestsInBatch += 1;
+        }
+        break;
+      case EventType.ToolResult:
+        count += 1;
+        assistantToolTurn = undefined;
+        toolRequestsInBatch = 0;
+        break;
+      case EventType.ContextCompacted: {
+        const after = readNumber(event.data, "after_messages");
+        if (after != null) count = after;
+        assistantToolTurn = undefined;
+        toolRequestsInBatch = 0;
+        break;
+      }
+    }
+  }
+  return count;
 }
 
 function buildPlanMetric(plan: SessionPlanSummary | undefined): SessionOverviewMetric | undefined {
@@ -337,6 +400,12 @@ function formatCount(value: number): string {
   if (value < 1000) return String(value);
   if (value < 10_000) return `${(value / 1000).toFixed(1)}k`;
   return `${Math.round(value / 1000)}k`;
+}
+
+function readNumber(value: unknown, key: string): number | undefined {
+  if (!value || typeof value !== "object") return undefined;
+  const raw = (value as Record<string, unknown>)[key];
+  return typeof raw === "number" && Number.isFinite(raw) ? raw : undefined;
 }
 
 function toneForTurn(turn: TurnState): SessionOverviewTone {

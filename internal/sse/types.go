@@ -194,6 +194,14 @@ type ToolResultPayload struct {
 	ResultBytes        int    `json:"result_bytes"`
 	ResultOmittedBytes int    `json:"result_omitted_bytes"`
 	ResultCapBytes     int    `json:"result_cap_bytes"`
+	// ContextBytes is the exact byte length of the tool result text that was
+	// appended to the parent model conversation after per-tool and per-turn
+	// context caps. ContextEstimatedTokens is a tokenizer-free estimate for UI
+	// budgeting; provider tokenizers differ, so exact token attribution is only
+	// available from the next upstream usage event.
+	ContextBytes           int `json:"context_bytes,omitempty"`
+	ContextOmittedBytes    int `json:"context_omitted_bytes,omitempty"`
+	ContextEstimatedTokens int `json:"context_estimated_tokens,omitempty"`
 	// ResultArtifactPath is a workspace-relative path to the complete
 	// tool output when ResultTruncated is true and the loop has artifact
 	// persistence configured. Empty means no full artifact is available.

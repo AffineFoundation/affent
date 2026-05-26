@@ -118,6 +118,9 @@ describe("reduce — truncated result", () => {
     const c = s.turns[0].toolCalls[0];
     expect(c.resultTruncated).toBe(true);
     expect(c.resultArtifactPath).toBe(".affent/artifacts/tool-results/000001-c1.txt");
+    expect(c.contextBytes).toBe(4096);
+    expect(c.contextOmittedBytes).toBe(4096);
+    expect(c.contextEstimatedTokens).toBe(1024);
   });
 });
 

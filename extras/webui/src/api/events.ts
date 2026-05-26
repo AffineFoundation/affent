@@ -137,6 +137,9 @@ export interface ToolResultPayload {
   result_bytes: number;
   result_omitted_bytes: number;
   result_cap_bytes: number;
+  context_bytes?: number;
+  context_omitted_bytes?: number;
+  context_estimated_tokens?: number;
   /** Workspace-relative path to the complete output when truncated. */
   result_artifact_path?: string;
 }

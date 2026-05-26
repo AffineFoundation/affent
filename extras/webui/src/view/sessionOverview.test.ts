@@ -110,6 +110,47 @@ describe("buildSessionOverview", () => {
     ]);
   });
 
+  it("surfaces session context pressure from the server summary", () => {
+    const session = reduceRawEvents([]);
+    const overview = buildSessionOverview({
+      session,
+      workflow: deriveWorkflowStatus(session),
+      hasSelectedSession: true,
+      contextSummary: {
+        message_count: 192,
+        compact_trigger: 240,
+        compact_percent: 80,
+        messages_until_compact: 48,
+      },
+    });
+
+    expect(overview.metrics).toContainEqual({ label: "Context", value: "192/240 · 80%", tone: "warning" });
+  });
+
+  it("does not understate context pressure when local events exceed the session summary", () => {
+    const session = reduceRawEvents([
+      { id: 1, type: "turn.start", data: { turn_id: "t1" } },
+      { id: 2, type: "user.message", data: { turn_id: "t1", text: "inspect" } },
+      { id: 3, type: "tool.request", data: { turn_id: "t1", call_id: "c1", tool: "shell", args: { command: "ls" } } },
+      { id: 4, type: "tool.result", data: { turn_id: "t1", call_id: "c1", exit_code: 0, result_summary: "ok", result: "ok" } },
+      { id: 5, type: "message.done", data: { turn_id: "t1", text: "done" } },
+      { id: 6, type: "turn.end", data: { turn_id: "t1", reason: "completed" } },
+    ]);
+    const overview = buildSessionOverview({
+      session,
+      workflow: deriveWorkflowStatus(session),
+      hasSelectedSession: true,
+      contextSummary: {
+        message_count: 1,
+        compact_trigger: 4,
+        compact_percent: 25,
+        messages_until_compact: 3,
+      },
+    });
+
+    expect(overview.metrics).toContainEqual({ label: "Context", value: "4/4 · 100%", tone: "error" });
+  });
+
   it("surfaces artifact output in the session overview", () => {
     const session = reduceRawEvents([
       { id: 1, type: "turn.start", data: { turn_id: "t1" } },
@@ -507,6 +548,24 @@ describe("buildSessionOverview", () => {
     });
 
     expect(overview.metrics).toEqual([{ label: "Chat tokens", value: "2.0k" }]);
+  });
+
+  it("shows current context usage against the compaction trigger", () => {
+    const session = reduceRawEvents([
+      { id: 1, type: "turn.start", data: { turn_id: "t1" } },
+      { id: 2, type: "user.message", data: { turn_id: "t1", text: "inspect docs" } },
+      { id: 3, type: "tool.request", data: { turn_id: "t1", call_id: "c1", tool: "shell", args: { command: "ls" } } },
+      { id: 4, type: "tool.result", data: { turn_id: "t1", call_id: "c1", exit_code: 0, result_summary: "a", result: "a", result_truncated: false, result_bytes: 1, result_omitted_bytes: 0, result_cap_bytes: 262144 } },
+      { id: 5, type: "message.done", data: { turn_id: "t1", text: "done" } },
+    ]);
+    const overview = buildSessionOverview({
+      session,
+      workflow: deriveWorkflowStatus(session),
+      hasSelectedSession: true,
+      contextSummary: { message_count: 1, compact_trigger: 20, compact_percent: 5, messages_until_compact: 19 },
+    });
+
+    expect(overview.metrics[0]).toEqual({ label: "Context", value: "4/20 · 20%" });
   });
 
   it("keeps the original research topic after a finalization prompt", () => {

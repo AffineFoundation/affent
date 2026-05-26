@@ -51,6 +51,9 @@ export interface ExecutionTreeNode {
   resultBytes?: number;
   resultOmittedBytes?: number;
   resultCapBytes?: number;
+  contextBytes?: number;
+  contextOmittedBytes?: number;
+  contextEstimatedTokens?: number;
   summary?: string;
   report?: string;
   taskType?: string;
@@ -154,6 +157,9 @@ function nodeFromToolCall(call: ToolCallState, depth: number, id: string): Execu
     resultBytes: call.resultBytes,
     resultOmittedBytes: call.resultOmittedBytes,
     resultCapBytes: call.resultCapBytes,
+    contextBytes: call.contextBytes,
+    contextOmittedBytes: call.contextOmittedBytes,
+    contextEstimatedTokens: call.contextEstimatedTokens,
     summary: readString(parsed, "summary"),
     report: readString(parsed, "report"),
     taskType: readString(parsed, "task_type") ?? readString(call.args, "task_type"),
@@ -368,6 +374,9 @@ function baseMetrics(call: ToolCallState): ExecutionMetric[] {
   if (call.callId) metrics.push({ label: "request id", value: call.callId });
   if (call.durationMs != null) metrics.push({ label: "duration", value: `${call.durationMs}ms` });
   if (call.exitCode != null) metrics.push({ label: "exit", value: String(call.exitCode) });
+  if (call.contextEstimatedTokens && call.contextEstimatedTokens > 0) {
+    metrics.push({ label: "merged", value: `~${call.contextEstimatedTokens} tokens` });
+  }
   return metrics;
 }
 

@@ -53,6 +53,17 @@ describe("ExecutionTree", () => {
 
     expect(screen.getByText(/Status done · Exit 0 · File 000001-c2\.txt \(8 KiB, 1 MiB omitted\) · \+2 more/)).toBeInTheDocument();
   });
+
+  it("shows delegated result size merged into the parent context", async () => {
+    const user = userEvent.setup();
+    const turn = delegatedTurn();
+
+    render(<ExecutionTree turn={turn} events={[]} />);
+
+    expect(screen.getByText("merged ~360 tokens")).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: /Delegated work Inspect docs/ }));
+    expect(screen.getByTestId("action-inspector-summary")).toHaveTextContent("Merged ~360 tokens");
+  });
 });
 
 function runningTurn(): TurnState {
@@ -105,6 +116,36 @@ function artifactTurn(): TurnState {
         resultOmittedBytes: 1048576,
         resultCapBytes: 8192,
         resultArtifactPath: ".affent/artifacts/tool-results/000001-c2.txt",
+      },
+    ],
+  };
+}
+
+function delegatedTurn(): TurnState {
+  return {
+    id: "t3",
+    status: "completed",
+    userText: "delegate",
+    thinkingText: "",
+    thinkingStreaming: false,
+    assistantText: "",
+    messageStreaming: false,
+    toolCalls: [
+      {
+        callId: "c3",
+        tool: "subagent_run",
+        args: { task: "Inspect docs" },
+        argsTruncated: false,
+        argsRepaired: false,
+        canonicalized: false,
+        status: "success",
+        exitCode: 0,
+        result: JSON.stringify({ summary: "done" }),
+        resultSummary: "done",
+        resultTruncated: false,
+        contextBytes: 1440,
+        contextOmittedBytes: 0,
+        contextEstimatedTokens: 360,
       },
     ],
   };

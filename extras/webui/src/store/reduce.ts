@@ -191,6 +191,9 @@ function applyEventPayload(state: SessionState, ev: NormalizedEvent): SessionSta
         resultBytes: p.result_bytes,
         resultOmittedBytes: p.result_omitted_bytes,
         resultCapBytes: p.result_cap_bytes,
+        contextBytes: p.context_bytes,
+        contextOmittedBytes: p.context_omitted_bytes,
+        contextEstimatedTokens: p.context_estimated_tokens,
         resultArtifactPath: p.result_artifact_path,
       }));
     }

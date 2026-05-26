@@ -52,27 +52,35 @@ type sessionCreateResponse struct {
 }
 
 type sessionSummary struct {
-	ID                string                `json:"id"`
-	SummaryTitle      string                `json:"summary_title,omitempty"`
-	Active            bool                  `json:"active"`
-	Durable           bool                  `json:"durable"`
-	CreatedAt         string                `json:"created_at,omitempty"`
-	LastUsedAt        string                `json:"last_used_at,omitempty"`
-	Capabilities      *sessionCapabilities  `json:"capabilities,omitempty"`
-	HasConversation   bool                  `json:"has_conversation"`
-	LatestUserMessage string                `json:"latest_user_message,omitempty"`
-	TopicUserMessage  string                `json:"topic_user_message,omitempty"`
-	HasEvents         bool                  `json:"has_events"`
-	HasPlan           bool                  `json:"has_plan"`
-	PlanSummary       *sessionPlanSummary   `json:"plan_summary,omitempty"`
-	HasArtifacts      bool                  `json:"has_artifacts"`
-	HasMemory         bool                  `json:"has_memory"`
-	HasRuntimeSkills  bool                  `json:"has_runtime_skills"`
-	RuntimeSkillNames []string              `json:"runtime_skill_names,omitempty"`
-	Usage             *UsageSnapshot        `json:"usage,omitempty"`
-	Tools             *ToolStatsSnapshot    `json:"tools,omitempty"`
-	Runtime           *RuntimeStatsSnapshot `json:"runtime,omitempty"`
-	Browser           *BrowserStatsSnapshot `json:"browser,omitempty"`
+	ID                string                 `json:"id"`
+	SummaryTitle      string                 `json:"summary_title,omitempty"`
+	Active            bool                   `json:"active"`
+	Durable           bool                   `json:"durable"`
+	CreatedAt         string                 `json:"created_at,omitempty"`
+	LastUsedAt        string                 `json:"last_used_at,omitempty"`
+	Capabilities      *sessionCapabilities   `json:"capabilities,omitempty"`
+	HasConversation   bool                   `json:"has_conversation"`
+	LatestUserMessage string                 `json:"latest_user_message,omitempty"`
+	TopicUserMessage  string                 `json:"topic_user_message,omitempty"`
+	HasEvents         bool                   `json:"has_events"`
+	HasPlan           bool                   `json:"has_plan"`
+	PlanSummary       *sessionPlanSummary    `json:"plan_summary,omitempty"`
+	HasArtifacts      bool                   `json:"has_artifacts"`
+	HasMemory         bool                   `json:"has_memory"`
+	HasRuntimeSkills  bool                   `json:"has_runtime_skills"`
+	RuntimeSkillNames []string               `json:"runtime_skill_names,omitempty"`
+	Context           *sessionContextSummary `json:"context,omitempty"`
+	Usage             *UsageSnapshot         `json:"usage,omitempty"`
+	Tools             *ToolStatsSnapshot     `json:"tools,omitempty"`
+	Runtime           *RuntimeStatsSnapshot  `json:"runtime,omitempty"`
+	Browser           *BrowserStatsSnapshot  `json:"browser,omitempty"`
+}
+
+type sessionContextSummary struct {
+	MessageCount         int `json:"message_count"`
+	CompactTrigger       int `json:"compact_trigger"`
+	CompactPercent       int `json:"compact_percent"`
+	MessagesUntilCompact int `json:"messages_until_compact"`
 }
 
 type sessionCapabilities struct {
@@ -424,6 +432,7 @@ func summarizeActiveSession(s *Session, cfg Config) sessionSummary {
 	s.mu.Unlock()
 	messages := s.conv.Snapshot()
 	latestUser, topicUser := userMessageSummariesFromMessages(messages)
+	context := sessionContextSnapshot(len(messages), cfg)
 	usage := s.UsageSnapshot()
 	tools := s.ToolStatsSnapshot()
 	runtime := s.RuntimeStatsSnapshot()
@@ -437,6 +446,7 @@ func summarizeActiveSession(s *Session, cfg Config) sessionSummary {
 		LatestUserMessage: latestUser,
 		TopicUserMessage:  topicUser,
 		Capabilities:      &caps,
+		Context:           &context,
 		Usage:             &usage,
 		Tools:             &tools,
 		Runtime:           &runtime,
@@ -612,6 +622,9 @@ func mergeSessionSummaries(a, b sessionSummary) sessionSummary {
 	a.HasMemory = a.HasMemory || b.HasMemory
 	a.HasRuntimeSkills = a.HasRuntimeSkills || b.HasRuntimeSkills
 	a.RuntimeSkillNames = mergeStringLists(a.RuntimeSkillNames, b.RuntimeSkillNames)
+	if b.Context != nil {
+		a.Context = b.Context
+	}
 	if a.CreatedAt == "" {
 		a.CreatedAt = b.CreatedAt
 	}
@@ -629,6 +642,27 @@ func mergeSessionSummaries(a, b sessionSummary) sessionSummary {
 		a.Capabilities = b.Capabilities
 	}
 	return a
+}
+
+func sessionContextSnapshot(messageCount int, cfg Config) sessionContextSummary {
+	trigger := cfg.CompactTrigger
+	if trigger <= 0 {
+		trigger = agent.DefaultSummaryTriggerMsgs
+	}
+	remaining := trigger - messageCount
+	if remaining < 0 {
+		remaining = 0
+	}
+	percent := 0
+	if trigger > 0 {
+		percent = (messageCount*100 + trigger/2) / trigger
+	}
+	return sessionContextSummary{
+		MessageCount:         messageCount,
+		CompactTrigger:       trigger,
+		CompactPercent:       percent,
+		MessagesUntilCompact: remaining,
+	}
 }
 
 func durableSessionDirInfo(path string) (os.FileInfo, bool, error) {

@@ -192,6 +192,15 @@ done:
 	if sawResult.ResultCapBytes != MaxToolResultBytesInEvent {
 		t.Fatalf("ResultCapBytes = %d, want %d", sawResult.ResultCapBytes, MaxToolResultBytesInEvent)
 	}
+	if sawResult.ContextBytes <= 0 || sawResult.ContextBytes >= sawResult.ResultBytes {
+		t.Fatalf("ContextBytes = %d, want compacted below result bytes %d", sawResult.ContextBytes, sawResult.ResultBytes)
+	}
+	if sawResult.ContextOmittedBytes <= 0 {
+		t.Fatalf("ContextOmittedBytes = %d, want context truncation", sawResult.ContextOmittedBytes)
+	}
+	if sawResult.ContextEstimatedTokens <= 0 {
+		t.Fatalf("ContextEstimatedTokens = %d, want positive estimate", sawResult.ContextEstimatedTokens)
+	}
 	if len(sawResult.ResultSummary) > MaxToolResultPreviewInEvent+8 {
 		t.Fatalf("ResultSummary should be truncated near %d, got %d",
 			MaxToolResultPreviewInEvent, len(sawResult.ResultSummary))

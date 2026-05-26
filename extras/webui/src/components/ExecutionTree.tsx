@@ -140,6 +140,9 @@ function ExecutionNodeView({
           {node.argsTruncated || node.resultTruncated ? <span className="badge" data-kind="truncation">truncated</span> : null}
           {node.repairNotes?.length || node.originalTool ? <span className="badge" data-kind="repair">repaired</span> : null}
           {node.resultArtifactPath ? <span className="badge" data-kind="artifact">artifact</span> : null}
+          {node.contextEstimatedTokens && (node.kind === "subagent" || node.kind === "focused_task") ? (
+            <span className="tool-meta">merged ~{node.contextEstimatedTokens} tokens</span>
+          ) : null}
           {node.tokenUsage ? <span className="tool-meta">{formatTokenUsageCompact(node.tokenUsage)}</span> : null}
           {node.durationMs != null ? <span className="tool-meta">{fmtDuration(node.durationMs)}</span> : null}
         </span>
@@ -394,6 +397,7 @@ function ActionInspectorSummary({ node, searchQuery }: { node: ExecutionTreeNode
     { label: "Status", value: statusLabel(node), tone: node.status },
     node.durationMs != null ? { label: "Duration", value: fmtDuration(node.durationMs) } : undefined,
     node.exitCode != null ? { label: "Exit", value: String(node.exitCode), tone: node.exitCode === 0 ? "success" : "error" } : undefined,
+    node.contextEstimatedTokens && (node.kind === "subagent" || node.kind === "focused_task") ? { label: "Merged", value: `~${node.contextEstimatedTokens} tokens` } : undefined,
     node.tokenUsage ? { label: "Usage", value: formatTokenUsageDetail(node.tokenUsage) } : undefined,
     node.tokenUsage?.costUsd != null ? { label: "Cost", value: formatCost(node.tokenUsage.costUsd) } : undefined,
     node.resultArtifactPath ? { label: "File", value: artifactSummary(node), tone: "artifact" } : undefined,

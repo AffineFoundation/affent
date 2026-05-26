@@ -1523,8 +1523,11 @@ func (l *Loop) publishAndAppendToolResultWithContext(turnID, callID, name, resul
 	if delegation != nil {
 		payload.Delegation = delegation
 	}
-	l.publish(sse.TypeToolResult, payload)
 	content, omitted := contextBudget.truncateToolResult(name, result, l.toolResultMaxBytesInContextFor(name), payload.ResultArtifactPath)
+	payload.ContextBytes = len(content)
+	payload.ContextOmittedBytes = omitted
+	payload.ContextEstimatedTokens = estimateContextTokens(content)
+	l.publish(sse.TypeToolResult, payload)
 	if err := l.Conv.Append(ChatMessage{
 		Role:       "tool",
 		Content:    content,
@@ -1538,6 +1541,17 @@ func (l *Loop) publishAndAppendToolResultWithContext(turnID, callID, name, resul
 		l.Log.Error().Err(err).Str("call_id", callID).Msg("conv append tool result")
 	}
 	return omitted
+}
+
+func estimateContextTokens(text string) int {
+	text = strings.TrimSpace(text)
+	if text == "" {
+		return 0
+	}
+	// Cheap cross-provider estimate used only for UI budgeting. It is
+	// intentionally conservative for mixed code/prose without importing a
+	// provider-specific tokenizer into the runtime hot path.
+	return (len([]rune(text)) + 3) / 4
 }
 
 func (l *Loop) attachToolResultArtifact(payload *sse.ToolResultPayload, callID, result string) {

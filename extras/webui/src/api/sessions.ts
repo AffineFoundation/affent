@@ -156,6 +156,13 @@ export interface SessionPlanSummary {
   error: boolean;
 }
 
+export interface SessionContextSummary {
+  message_count: number;
+  compact_trigger: number;
+  compact_percent: number;
+  messages_until_compact: number;
+}
+
 export interface SessionSummary {
   id: string;
   /** Human-readable summarized chat title, when the runtime provides one. */
@@ -180,6 +187,7 @@ export interface SessionSummary {
   has_artifacts: boolean;
   has_memory: boolean;
   has_runtime_skills: boolean;
+  context?: SessionContextSummary;
   usage?: UsageSnapshot;
   tools?: ToolStatsSnapshot;
   browser?: BrowserStatsSnapshot;

@@ -34,6 +34,9 @@ export interface ToolCallState {
   resultBytes?: number;
   resultOmittedBytes?: number;
   resultCapBytes?: number;
+  contextBytes?: number;
+  contextOmittedBytes?: number;
+  contextEstimatedTokens?: number;
   /** Workspace-relative path to the full output when the result was capped. */
   resultArtifactPath?: string;
 }
