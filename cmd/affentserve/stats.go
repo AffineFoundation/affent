@@ -296,6 +296,10 @@ func addToolStatsSnapshot(dst *ToolStatsSnapshot, src ToolStatsSnapshot) {
 
 func addRuntimeStatsSnapshot(dst *RuntimeStatsSnapshot, src RuntimeStatsSnapshot) {
 	dst.RuntimeErrors += src.RuntimeErrors
+	dst.ContextCompactions += src.ContextCompactions
+	dst.ContextCompactionsReactive += src.ContextCompactionsReactive
+	dst.ContextCompactionRemovedMessages += src.ContextCompactionRemovedMessages
+	dst.ContextCompactionSummaryBytes += src.ContextCompactionSummaryBytes
 	if len(src.TurnEndByReason) > 0 {
 		if dst.TurnEndByReason == nil {
 			dst.TurnEndByReason = make(map[string]int64, len(src.TurnEndByReason))

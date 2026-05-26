@@ -90,6 +90,10 @@ type Session struct {
 	toolRepairByKind       map[string]int64
 	toolFailureByKind      map[string]int64
 	runtimeErrors          atomic.Int64
+	contextCompactions     atomic.Int64
+	contextCompactionReact atomic.Int64
+	contextCompactionRmMsg atomic.Int64
+	contextCompactionBytes atomic.Int64
 	runtimeStatsMu         sync.Mutex
 	turnEndByReason        map[string]int64
 	runtimeErrorByKind     map[string]int64
@@ -1514,9 +1518,13 @@ func (s *Session) ToolStatsSnapshot() ToolStatsSnapshot {
 // a missing final answer can be a turn budget outcome, while LLM stream
 // failures are runtime errors, not browser/web_fetch failures.
 type RuntimeStatsSnapshot struct {
-	TurnEndByReason    map[string]int64 `json:"turn_end_by_reason,omitempty"`
-	RuntimeErrors      int64            `json:"runtime_errors"`
-	RuntimeErrorByKind map[string]int64 `json:"runtime_error_by_kind,omitempty"`
+	TurnEndByReason                  map[string]int64 `json:"turn_end_by_reason,omitempty"`
+	RuntimeErrors                    int64            `json:"runtime_errors"`
+	RuntimeErrorByKind               map[string]int64 `json:"runtime_error_by_kind,omitempty"`
+	ContextCompactions               int64            `json:"context_compactions,omitempty"`
+	ContextCompactionsReactive       int64            `json:"context_compactions_reactive,omitempty"`
+	ContextCompactionRemovedMessages int64            `json:"context_compaction_removed_messages,omitempty"`
+	ContextCompactionSummaryBytes    int64            `json:"context_compaction_summary_bytes,omitempty"`
 }
 
 func (s *Session) RuntimeStatsSnapshot() RuntimeStatsSnapshot {
@@ -1528,9 +1536,13 @@ func (s *Session) RuntimeStatsSnapshot() RuntimeStatsSnapshot {
 	errorByKind := cloneStringInt64Map(s.runtimeErrorByKind)
 	s.runtimeStatsMu.Unlock()
 	return RuntimeStatsSnapshot{
-		TurnEndByReason:    turnEndByReason,
-		RuntimeErrors:      s.runtimeErrors.Load(),
-		RuntimeErrorByKind: errorByKind,
+		TurnEndByReason:                  turnEndByReason,
+		RuntimeErrors:                    s.runtimeErrors.Load(),
+		RuntimeErrorByKind:               errorByKind,
+		ContextCompactions:               s.contextCompactions.Load(),
+		ContextCompactionsReactive:       s.contextCompactionReact.Load(),
+		ContextCompactionRemovedMessages: s.contextCompactionRmMsg.Load(),
+		ContextCompactionSummaryBytes:    s.contextCompactionBytes.Load(),
 	}
 }
 
@@ -1573,6 +1585,12 @@ func (s *Session) observeForStats(ev sse.Event) {
 			return
 		}
 		s.addRuntimeError(p.FailureKind)
+	case sse.TypeContextCompact:
+		var p sse.ContextCompactPayload
+		if err := json.Unmarshal(ev.Data, &p); err != nil {
+			return
+		}
+		s.addContextCompaction(p)
 	}
 }
 
@@ -1599,6 +1617,19 @@ func (s *Session) addRuntimeError(kind string) {
 		s.runtimeErrorByKind = map[string]int64{}
 	}
 	s.runtimeErrorByKind[kind]++
+}
+
+func (s *Session) addContextCompaction(p sse.ContextCompactPayload) {
+	s.contextCompactions.Add(1)
+	if p.Reactive {
+		s.contextCompactionReact.Add(1)
+	}
+	if p.RemovedMessages > 0 {
+		s.contextCompactionRmMsg.Add(int64(p.RemovedMessages))
+	}
+	if p.SummaryBytes > 0 {
+		s.contextCompactionBytes.Add(int64(p.SummaryBytes))
+	}
 }
 
 func (s *Session) addToolStats(stats sse.ToolRuntimeStats) {

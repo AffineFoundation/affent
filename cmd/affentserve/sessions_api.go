@@ -466,8 +466,23 @@ func summarizeActiveSession(s *Session, cfg Config) sessionSummary {
 		Runtime:           &runtime,
 		Browser:           &browser,
 	}
+	if compactions := contextCompactionSummaryFromRuntimeStats(runtime); compactions != nil {
+		summary.ContextCompactions = compactions
+	}
 	populateSessionSummaryTitle(&summary)
 	return summary
+}
+
+func contextCompactionSummaryFromRuntimeStats(stats RuntimeStatsSnapshot) *sessionContextCompactionSummary {
+	if stats.ContextCompactions <= 0 {
+		return nil
+	}
+	return &sessionContextCompactionSummary{
+		Count:           int(stats.ContextCompactions),
+		Reactive:        int(stats.ContextCompactionsReactive),
+		RemovedMessages: int(stats.ContextCompactionRemovedMessages),
+		SummaryBytes:    int(stats.ContextCompactionSummaryBytes),
+	}
 }
 
 func summarizeActiveCapabilities(s *Session, cfg Config) sessionCapabilities {

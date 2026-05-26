@@ -506,7 +506,11 @@ Operational endpoints:
   fallback chain). `runtime.turn_end_by_reason.max_turns`
   indicates the agent exhausted its per-turn action budget before a final
   answer; `runtime.runtime_error_by_kind` tracks non-tool failures such as
-  `llm_timeout` and `llm_incomplete_stream`. Browser stats expose
+  `llm_timeout` and `llm_incomplete_stream`. Runtime stats also expose
+  `context_compactions`, `context_compactions_reactive`,
+  `context_compaction_removed_messages`, and
+  `context_compaction_summary_bytes` so long-run operators can see context
+  pressure without opening the raw trace. Browser stats expose
   `blocked_by_type`, `blocked_by_domain`, and `domain_relaxations` so
   operators can see when the runtime had to temporarily widen the default
   domain blocklist to recover a page that was otherwise healthy but depended
