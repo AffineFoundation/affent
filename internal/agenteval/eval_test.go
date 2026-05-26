@@ -1503,6 +1503,18 @@ func TestWriteScenarioDebugArtifactsIndexesTraceAndFinalText(t *testing.T) {
 	if len(manifest.Failures) != 1 || manifest.Failures[0] != "missing required evidence" {
 		t.Fatalf("manifest failures = %+v", manifest.Failures)
 	}
+	wantCapabilities := []string{"browser", "context_compaction", "delegation", "memory", "plan", "source_access", "web", "workspace"}
+	if !reflect.DeepEqual(manifest.ExpectationCapabilityNames, wantCapabilities) ||
+		manifest.ExpectationCapabilityOutcome != "failed" ||
+		len(manifest.ExpectationCapabilityPassedNames) != 0 ||
+		!reflect.DeepEqual(manifest.ExpectationCapabilityFailedNames, wantCapabilities) {
+		t.Fatalf("manifest expectation capabilities = names:%#v outcome:%q passed:%#v failed:%#v",
+			manifest.ExpectationCapabilityNames,
+			manifest.ExpectationCapabilityOutcome,
+			manifest.ExpectationCapabilityPassedNames,
+			manifest.ExpectationCapabilityFailedNames,
+		)
+	}
 	if manifest.Expectations.MaxTurns != 12 ||
 		manifest.Expectations.CompactTrigger != 6 ||
 		manifest.Expectations.CompactKeepLast != 3 ||
@@ -1663,6 +1675,7 @@ func TestWriteScenarioDebugArtifactsIndexesTraceAndFinalText(t *testing.T) {
 		"kind=`focused_task` path=`.affentctl/focused-tasks/debug-session/focused_alpha.jsonl`",
 		"kind=`subagent` path=`.affentctl/subagents/debug-session/subagent_beta.jsonl`",
 		"## Scenario Expectations",
+		"expectation_capabilities: `browser`, `context_compaction`, `delegation`, `memory`, `plan`, `source_access`, `web`, `workspace` outcome=`failed`",
 		"suites: `long-run`, `live-web`",
 		"runtime: `max_turns=12 compact_trigger=6 compact_keep_last=3`",
 		"checks: `turn_ended_cleanly`",

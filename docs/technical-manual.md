@@ -814,12 +814,12 @@ The trace emits a `runtime.surface` event at turn start, and the debug
 manifest copies the latest surface into `runtime_surface`, including the
 effective tool names, broad capability flags, partial workspace tool lists, and
 key tool-result limits. The manifest and JSONL scenario record also include a
-machine-readable `debug_brief` with stable tags and inspection hints. Scenario
-JSONL records also include structured `expectations` plus derived expected
-capability names/outcome, so batch-analysis scripts can group failures by
-required tools, evidence checks, plan/delegation constraints, and
-context-compaction requirements without reopening the manifest or reimplementing
-capability inference.
+machine-readable `debug_brief` with stable tags and inspection hints. The debug
+manifest, timeline, and JSONL scenario record also include structured
+`expectations` plus derived expected capability names/outcome, so
+batch-analysis scripts can group failures by required tools, evidence checks,
+plan/delegation constraints, and context-compaction requirements without
+reimplementing capability inference.
 Text and JSONL summary records aggregate those declarations as expectation
 coverage counters, including suites, required tools, required source-access
 statuses, and broad capabilities such as memory, browser, delegation, plan,

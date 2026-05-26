@@ -17,6 +17,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/affinefoundation/affent/internal/agent"
 	"github.com/affinefoundation/affent/internal/jsonl"
 	"github.com/affinefoundation/affent/internal/sse"
 	"github.com/affinefoundation/affent/internal/textutil"
@@ -200,32 +201,36 @@ type BatchResult struct {
 }
 
 type DebugManifest struct {
-	SchemaVersion             int                        `json:"schema_version"`
-	Scenario                  string                     `json:"scenario"`
-	OK                        bool                       `json:"ok"`
-	Workspace                 string                     `json:"workspace"`
-	TracePath                 string                     `json:"trace_path"`
-	TimelinePath              string                     `json:"timeline_path,omitempty"`
-	FinalTextPath             string                     `json:"final_text_path,omitempty"`
-	StdoutPath                string                     `json:"stdout_path,omitempty"`
-	StderrPath                string                     `json:"stderr_path,omitempty"`
-	AffentctlCommand          []string                   `json:"affentctl_command,omitempty"`
-	RunExitCode               int                        `json:"run_exit_code"`
-	ConversationDir           string                     `json:"conversation_dir,omitempty"`
-	ArtifactDir               string                     `json:"artifact_dir,omitempty"`
-	TraceDeltas               bool                       `json:"trace_deltas,omitempty"`
-	Prompt                    string                     `json:"prompt"`
-	Expectations              DebugScenarioExpectations  `json:"expectations,omitempty"`
-	Failures                  []string                   `json:"failures,omitempty"`
-	DebugBrief                *DebugBrief                `json:"debug_brief,omitempty"`
-	SourceAccessExamples      []SourceAccessExample      `json:"source_access_examples,omitempty"`
-	MemoryUpdateExamples      []MemoryUpdateExample      `json:"memory_update_examples,omitempty"`
-	ToolTruncationExamples    []ToolTruncationExample    `json:"tool_truncation_examples,omitempty"`
-	ContextCompactionExamples []ContextCompaction        `json:"context_compaction_examples,omitempty"`
-	ChildTranscripts          []DebugTranscriptRef       `json:"child_transcripts,omitempty"`
-	Metrics                   DebugMetrics               `json:"metrics"`
-	RuntimeSurface            *sse.RuntimeSurfacePayload `json:"runtime_surface,omitempty"`
-	GeneratedAt               string                     `json:"generated_at"`
+	SchemaVersion                    int                        `json:"schema_version"`
+	Scenario                         string                     `json:"scenario"`
+	OK                               bool                       `json:"ok"`
+	Workspace                        string                     `json:"workspace"`
+	TracePath                        string                     `json:"trace_path"`
+	TimelinePath                     string                     `json:"timeline_path,omitempty"`
+	FinalTextPath                    string                     `json:"final_text_path,omitempty"`
+	StdoutPath                       string                     `json:"stdout_path,omitempty"`
+	StderrPath                       string                     `json:"stderr_path,omitempty"`
+	AffentctlCommand                 []string                   `json:"affentctl_command,omitempty"`
+	RunExitCode                      int                        `json:"run_exit_code"`
+	ConversationDir                  string                     `json:"conversation_dir,omitempty"`
+	ArtifactDir                      string                     `json:"artifact_dir,omitempty"`
+	TraceDeltas                      bool                       `json:"trace_deltas,omitempty"`
+	Prompt                           string                     `json:"prompt"`
+	Expectations                     DebugScenarioExpectations  `json:"expectations,omitempty"`
+	ExpectationCapabilityNames       []string                   `json:"expectation_capability_names,omitempty"`
+	ExpectationCapabilityOutcome     string                     `json:"expectation_capability_outcome,omitempty"`
+	ExpectationCapabilityPassedNames []string                   `json:"expectation_capability_passed_names,omitempty"`
+	ExpectationCapabilityFailedNames []string                   `json:"expectation_capability_failed_names,omitempty"`
+	Failures                         []string                   `json:"failures,omitempty"`
+	DebugBrief                       *DebugBrief                `json:"debug_brief,omitempty"`
+	SourceAccessExamples             []SourceAccessExample      `json:"source_access_examples,omitempty"`
+	MemoryUpdateExamples             []MemoryUpdateExample      `json:"memory_update_examples,omitempty"`
+	ToolTruncationExamples           []ToolTruncationExample    `json:"tool_truncation_examples,omitempty"`
+	ContextCompactionExamples        []ContextCompaction        `json:"context_compaction_examples,omitempty"`
+	ChildTranscripts                 []DebugTranscriptRef       `json:"child_transcripts,omitempty"`
+	Metrics                          DebugMetrics               `json:"metrics"`
+	RuntimeSurface                   *sse.RuntimeSurfacePayload `json:"runtime_surface,omitempty"`
+	GeneratedAt                      string                     `json:"generated_at"`
 }
 
 type DebugScenarioExpectations struct {
@@ -272,6 +277,196 @@ type DebugScenarioExpectations struct {
 	MaxTurns                      int                                `json:"max_turns,omitempty"`
 	CompactTrigger                int                                `json:"compact_trigger,omitempty"`
 	CompactKeepLast               int                                `json:"compact_keep_last,omitempty"`
+}
+
+// ExpectationCapabilityNames derives broad capability families from a
+// scenario's declarative expectations. The labels intentionally match
+// affenteval summary fields so scenario rows, debug manifests, timelines, and
+// batch summaries group regressions the same way.
+func ExpectationCapabilityNames(exp DebugScenarioExpectations) []string {
+	caps := map[string]bool{}
+	if strings.TrimSpace(exp.SessionID) != "" {
+		caps["session"] = true
+	}
+	if exp.ExecutePlan || exp.RequireNoPlanErrors {
+		caps["plan"] = true
+	}
+	if exp.EnableMemory {
+		caps["memory"] = true
+	}
+	if exp.VerifyCommand != "" {
+		caps["verifier"] = true
+	}
+	if len(exp.RequiredSourceAccess) > 0 {
+		caps["source_access"] = true
+	}
+	for _, req := range exp.RequiredSourceAccess {
+		addExpectationToolCapabilities(caps, req.Tool)
+	}
+	if exp.RequiredContextCompactions > 0 ||
+		exp.RequiredReactiveCompactions > 0 ||
+		exp.RequiredCompactionRemovedMsgs > 0 ||
+		len(exp.RequiredContextSummaryText) > 0 {
+		caps["context_compaction"] = true
+	}
+	if len(exp.RequiredFocusedTaskCounts) > 0 ||
+		len(exp.RequiredSubagentModeCounts) > 0 ||
+		exp.RequireNoDelegationErrors {
+		caps["delegation"] = true
+	}
+	for _, tool := range expectationRequiredToolNames(exp) {
+		addExpectationToolCapabilities(caps, tool)
+	}
+	for stat := range exp.RequiredToolStatsAtLeast {
+		addExpectationStatCapabilities(caps, stat)
+	}
+	for range exp.RequiredCommandBeforeTool {
+		caps["workspace"] = true
+	}
+	for range exp.RequiredCommandAfterTool {
+		caps["workspace"] = true
+	}
+	if len(exp.RequiredCommands) > 0 || len(exp.RequiredCommandCounts) > 0 {
+		caps["workspace"] = true
+	}
+	if len(caps) == 0 {
+		return nil
+	}
+	names := make([]string, 0, len(caps))
+	for cap := range caps {
+		names = append(names, cap)
+	}
+	sort.Strings(names)
+	return names
+}
+
+func ExpectationCapabilityOutcome(ok bool, names []string) string {
+	if len(names) == 0 {
+		return ""
+	}
+	if ok {
+		return "passed"
+	}
+	return "failed"
+}
+
+func ExpectationCapabilityPassedNames(ok bool, names []string) []string {
+	if len(names) == 0 || !ok {
+		return nil
+	}
+	return append([]string(nil), names...)
+}
+
+func ExpectationCapabilityFailedNames(ok bool, names []string) []string {
+	if len(names) == 0 || ok {
+		return nil
+	}
+	return append([]string(nil), names...)
+}
+
+func expectationRequiredToolNames(exp DebugScenarioExpectations) []string {
+	tools := map[string]bool{}
+	add := func(tool string) {
+		tool = strings.TrimSpace(tool)
+		if tool != "" {
+			tools[tool] = true
+		}
+	}
+	for _, tool := range exp.RequiredTools {
+		add(tool)
+	}
+	for tool := range exp.RequiredToolCounts {
+		add(tool)
+	}
+	for tool := range exp.RequiredToolResultText {
+		add(tool)
+	}
+	for _, req := range exp.RequiredSourceAccess {
+		add(req.Tool)
+	}
+	for _, req := range exp.RequiredToolArgContains {
+		add(req.Tool)
+	}
+	for _, req := range exp.RequiredToolOrder {
+		add(req.Earlier)
+		add(req.Later)
+	}
+	for _, req := range exp.RequiredCommandBeforeTool {
+		add(req.Tool)
+	}
+	for _, req := range exp.RequiredCommandAfterTool {
+		add(req.Tool)
+	}
+	for _, tool := range exp.RequiredTruncatedResults {
+		add(tool)
+	}
+	for _, tool := range exp.RequiredResultArtifacts {
+		add(tool)
+	}
+	for tool := range exp.MaxSuccessfulToolCallsByTool {
+		add(tool)
+	}
+	out := make([]string, 0, len(tools))
+	for tool := range tools {
+		out = append(out, tool)
+	}
+	sort.Strings(out)
+	return out
+}
+
+func addExpectationToolCapabilities(caps map[string]bool, tool string) {
+	tool = strings.TrimSpace(tool)
+	if tool == "" {
+		return
+	}
+	switch {
+	case tool == agent.MemoryToolName:
+		caps["memory"] = true
+	case tool == agent.SessionSearchToolName:
+		caps["session_search"] = true
+	case tool == agent.PlanToolName:
+		caps["plan"] = true
+	case tool == agent.SubagentToolName || tool == agent.FocusedTaskToolName:
+		caps["delegation"] = true
+	case tool == "web_fetch" || tool == "web_search":
+		caps["web"] = true
+		caps["source_access"] = true
+	case strings.HasPrefix(tool, "browser_"):
+		caps["browser"] = true
+		caps["source_access"] = true
+	case tool == "mcp":
+		caps["mcp"] = true
+	default:
+		if isExpectationWorkspaceTool(tool) {
+			caps["workspace"] = true
+		}
+	}
+}
+
+func addExpectationStatCapabilities(caps map[string]bool, stat string) {
+	switch {
+	case strings.HasPrefix(stat, "memory_"):
+		caps["memory"] = true
+	case strings.HasPrefix(stat, "session_search_"):
+		caps["session_search"] = true
+	case strings.HasPrefix(stat, "source_access_"):
+		caps["source_access"] = true
+	case strings.Contains(stat, "focused_task") || strings.Contains(stat, "subagent"):
+		caps["delegation"] = true
+	case strings.Contains(stat, "plan"):
+		caps["plan"] = true
+	case strings.Contains(stat, "context_compaction"):
+		caps["context_compaction"] = true
+	}
+}
+
+func isExpectationWorkspaceTool(tool string) bool {
+	switch tool {
+	case "shell", "read_file", "file_context", "write_file", "edit_file", "list_files", "symbol_context", "repo_search":
+		return true
+	default:
+		return false
+	}
 }
 
 type DebugToolArgContainsRequirement struct {
@@ -642,31 +837,36 @@ func writeScenarioDebugArtifacts(res *BatchResult, scenario BatchScenario, stdou
 	res.TimelinePath = timelinePath
 
 	manifestPath := filepath.Join(res.Workspace, "affenteval-debug.json")
+	expectationCapabilities := ExpectationCapabilityNames(expectations)
 	manifest := DebugManifest{
-		SchemaVersion:             1,
-		Scenario:                  res.BatchScenario,
-		OK:                        res.OK,
-		Workspace:                 res.Workspace,
-		TracePath:                 res.TracePath,
-		TimelinePath:              timelinePath,
-		FinalTextPath:             finalTextPath,
-		StdoutPath:                stdoutPath,
-		StderrPath:                stderrPath,
-		AffentctlCommand:          append([]string(nil), res.AffentctlCommand...),
-		RunExitCode:               res.RunExitCode,
-		ConversationDir:           filepath.Join(res.Workspace, ".affentctl"),
-		ArtifactDir:               filepath.Join(res.Workspace, ".affent", "artifacts"),
-		TraceDeltas:               res.TraceDeltas,
-		Prompt:                    scenario.Prompt,
-		Expectations:              expectations,
-		Failures:                  append([]string(nil), res.Failures...),
-		DebugBrief:                BuildDebugBrief(*res),
-		SourceAccessExamples:      append([]SourceAccessExample(nil), res.SourceAccessExamples...),
-		MemoryUpdateExamples:      append([]MemoryUpdateExample(nil), res.MemoryUpdateExamples...),
-		ToolTruncationExamples:    append([]ToolTruncationExample(nil), res.ToolTruncationExamples...),
-		ContextCompactionExamples: append([]ContextCompaction(nil), res.ContextCompactions.Examples...),
-		ChildTranscripts:          append([]DebugTranscriptRef(nil), res.ChildTranscripts...),
-		RuntimeSurface:            cloneRuntimeSurface(res.RuntimeSurface),
+		SchemaVersion:                    1,
+		Scenario:                         res.BatchScenario,
+		OK:                               res.OK,
+		Workspace:                        res.Workspace,
+		TracePath:                        res.TracePath,
+		TimelinePath:                     timelinePath,
+		FinalTextPath:                    finalTextPath,
+		StdoutPath:                       stdoutPath,
+		StderrPath:                       stderrPath,
+		AffentctlCommand:                 append([]string(nil), res.AffentctlCommand...),
+		RunExitCode:                      res.RunExitCode,
+		ConversationDir:                  filepath.Join(res.Workspace, ".affentctl"),
+		ArtifactDir:                      filepath.Join(res.Workspace, ".affent", "artifacts"),
+		TraceDeltas:                      res.TraceDeltas,
+		Prompt:                           scenario.Prompt,
+		Expectations:                     expectations,
+		ExpectationCapabilityNames:       expectationCapabilities,
+		ExpectationCapabilityOutcome:     ExpectationCapabilityOutcome(res.OK, expectationCapabilities),
+		ExpectationCapabilityPassedNames: ExpectationCapabilityPassedNames(res.OK, expectationCapabilities),
+		ExpectationCapabilityFailedNames: ExpectationCapabilityFailedNames(res.OK, expectationCapabilities),
+		Failures:                         append([]string(nil), res.Failures...),
+		DebugBrief:                       BuildDebugBrief(*res),
+		SourceAccessExamples:             append([]SourceAccessExample(nil), res.SourceAccessExamples...),
+		MemoryUpdateExamples:             append([]MemoryUpdateExample(nil), res.MemoryUpdateExamples...),
+		ToolTruncationExamples:           append([]ToolTruncationExample(nil), res.ToolTruncationExamples...),
+		ContextCompactionExamples:        append([]ContextCompaction(nil), res.ContextCompactions.Examples...),
+		ChildTranscripts:                 append([]DebugTranscriptRef(nil), res.ChildTranscripts...),
+		RuntimeSurface:                   cloneRuntimeSurface(res.RuntimeSurface),
 		Metrics: DebugMetrics{
 			TurnEndReason:              res.TurnEndReason,
 			ToolCalls:                  res.ToolCalls,

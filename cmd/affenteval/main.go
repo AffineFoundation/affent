@@ -753,7 +753,7 @@ func (s *batchSummary) addExpectations(res agenteval.BatchResult) {
 		}
 		addCountMapValue(&s.ExpectationSourceAccess, status)
 	}
-	keys := expectationCapabilityNames(exp)
+	keys := agenteval.ExpectationCapabilityNames(exp)
 	addCountMapValues(&s.ExpectationCapabilities, keys)
 	if res.OK {
 		addCountMapValues(&s.ExpectationCapabilityPass, keys)
@@ -860,150 +860,23 @@ func addCountMapValue(dst *map[string]int, value string) {
 	(*dst)[value]++
 }
 
-func expectationCapabilitySet(exp agenteval.DebugScenarioExpectations) map[string]bool {
-	caps := map[string]bool{}
-	if strings.TrimSpace(exp.SessionID) != "" {
-		caps["session"] = true
-	}
-	if exp.ExecutePlan || exp.RequireNoPlanErrors {
-		caps["plan"] = true
-	}
-	if exp.EnableMemory {
-		caps["memory"] = true
-	}
-	if exp.VerifyCommand != "" {
-		caps["verifier"] = true
-	}
-	if len(exp.RequiredSourceAccess) > 0 {
-		caps["source_access"] = true
-	}
-	for _, req := range exp.RequiredSourceAccess {
-		addExpectationToolCapabilities(caps, req.Tool)
-	}
-	if exp.RequiredContextCompactions > 0 ||
-		exp.RequiredReactiveCompactions > 0 ||
-		exp.RequiredCompactionRemovedMsgs > 0 ||
-		len(exp.RequiredContextSummaryText) > 0 {
-		caps["context_compaction"] = true
-	}
-	if len(exp.RequiredFocusedTaskCounts) > 0 ||
-		len(exp.RequiredSubagentModeCounts) > 0 ||
-		exp.RequireNoDelegationErrors {
-		caps["delegation"] = true
-	}
-	for _, tool := range expectationRequiredToolNames(exp) {
-		addExpectationToolCapabilities(caps, tool)
-	}
-	for stat := range exp.RequiredToolStatsAtLeast {
-		addExpectationStatCapabilities(caps, stat)
-	}
-	for range exp.RequiredCommandBeforeTool {
-		caps["workspace"] = true
-	}
-	for range exp.RequiredCommandAfterTool {
-		caps["workspace"] = true
-	}
-	if len(exp.RequiredCommands) > 0 || len(exp.RequiredCommandCounts) > 0 {
-		caps["workspace"] = true
-	}
-	return caps
-}
-
-func expectationCapabilityNames(exp agenteval.DebugScenarioExpectations) []string {
-	caps := expectationCapabilitySet(exp)
-	if len(caps) == 0 {
-		return nil
-	}
-	names := make([]string, 0, len(caps))
-	for cap := range caps {
-		names = append(names, cap)
-	}
-	sort.Strings(names)
-	return names
-}
-
 func batchResultExpectationCapabilityNames(res agenteval.BatchResult) []string {
 	if res.Expectations == nil {
 		return nil
 	}
-	return expectationCapabilityNames(*res.Expectations)
+	return agenteval.ExpectationCapabilityNames(*res.Expectations)
 }
 
 func batchResultExpectationCapabilityOutcome(res agenteval.BatchResult, names []string) string {
-	if len(names) == 0 {
-		return ""
-	}
-	if res.OK {
-		return "passed"
-	}
-	return "failed"
+	return agenteval.ExpectationCapabilityOutcome(res.OK, names)
 }
 
 func batchResultExpectationCapabilityPassedNames(res agenteval.BatchResult, names []string) []string {
-	if len(names) == 0 || !res.OK {
-		return nil
-	}
-	return append([]string(nil), names...)
+	return agenteval.ExpectationCapabilityPassedNames(res.OK, names)
 }
 
 func batchResultExpectationCapabilityFailedNames(res agenteval.BatchResult, names []string) []string {
-	if len(names) == 0 || res.OK {
-		return nil
-	}
-	return append([]string(nil), names...)
-}
-
-func addExpectationToolCapabilities(caps map[string]bool, tool string) {
-	tool = strings.TrimSpace(tool)
-	if tool == "" {
-		return
-	}
-	switch {
-	case tool == agent.MemoryToolName:
-		caps["memory"] = true
-	case tool == agent.SessionSearchToolName:
-		caps["session_search"] = true
-	case tool == agent.PlanToolName:
-		caps["plan"] = true
-	case tool == agent.SubagentToolName || tool == agent.FocusedTaskToolName:
-		caps["delegation"] = true
-	case tool == "web_fetch" || tool == "web_search":
-		caps["web"] = true
-		caps["source_access"] = true
-	case strings.HasPrefix(tool, "browser_"):
-		caps["browser"] = true
-		caps["source_access"] = true
-	case tool == "mcp":
-		caps["mcp"] = true
-	default:
-		if isWorkspaceTool(tool) {
-			caps["workspace"] = true
-		}
-	}
-}
-
-func addExpectationStatCapabilities(caps map[string]bool, stat string) {
-	switch {
-	case strings.HasPrefix(stat, "memory_"):
-		caps["memory"] = true
-	case strings.HasPrefix(stat, "session_search_"):
-		caps["session_search"] = true
-	case strings.HasPrefix(stat, "source_access_"):
-		caps["source_access"] = true
-	case strings.Contains(stat, "focused_task") || strings.Contains(stat, "subagent"):
-		caps["delegation"] = true
-	case strings.Contains(stat, "context_compaction"):
-		caps["context_compaction"] = true
-	}
-}
-
-func isWorkspaceTool(tool string) bool {
-	for _, name := range evalWorkspaceToolNames() {
-		if tool == name {
-			return true
-		}
-	}
-	return false
+	return agenteval.ExpectationCapabilityFailedNames(res.OK, names)
 }
 
 func printBatchSummary(w io.Writer, s batchSummary) {

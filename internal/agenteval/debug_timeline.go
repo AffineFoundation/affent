@@ -67,7 +67,7 @@ func renderDebugTimeline(res BatchResult, scenario BatchScenario, trace *Trace) 
 	}
 	renderTimelineDebugBrief(&b, res)
 	renderTimelineChildTranscripts(&b, res.ChildTranscripts)
-	renderTimelineScenarioExpectations(&b, scenario)
+	renderTimelineScenarioExpectations(&b, scenario, res.OK)
 
 	b.WriteString("\n## Prompt\n\n")
 	b.WriteString("```text\n")
@@ -252,12 +252,19 @@ func renderTimelineChildTranscripts(b *strings.Builder, refs []DebugTranscriptRe
 	}
 }
 
-func renderTimelineScenarioExpectations(b *strings.Builder, scenario BatchScenario) {
+func renderTimelineScenarioExpectations(b *strings.Builder, scenario BatchScenario, ok bool) {
 	exp := debugScenarioExpectations(scenario)
 	if !hasTimelineScenarioExpectations(exp) {
 		return
 	}
 	b.WriteString("\n## Scenario Expectations\n\n")
+	if caps := ExpectationCapabilityNames(exp); len(caps) > 0 {
+		fmt.Fprintf(b, "- expectation_capabilities: `%s`", strings.Join(caps, "`, `"))
+		if outcome := ExpectationCapabilityOutcome(ok, caps); outcome != "" {
+			fmt.Fprintf(b, " outcome=`%s`", outcome)
+		}
+		b.WriteString("\n")
+	}
 	if len(exp.Suites) > 0 {
 		fmt.Fprintf(b, "- suites: `%s`\n", strings.Join(exp.Suites, "`, `"))
 	}
