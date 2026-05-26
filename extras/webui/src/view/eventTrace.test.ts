@@ -127,6 +127,62 @@ describe("eventTrace view model", () => {
     });
   });
 
+  it("summarizes session search match diagnostics", () => {
+    const model = buildEventTraceModel(normalizeEvents([
+      {
+        id: 1,
+        type: "tool.request",
+        data: {
+          turn_id: "t1",
+          call_id: "search-1",
+          tool: "session_search",
+          args: { query: "Alpha Coast inventory" },
+        },
+      },
+      {
+        id: 2,
+        type: "tool.result",
+        data: {
+          turn_id: "t1",
+          call_id: "search-1",
+          exit_code: 0,
+          duration_ms: 25,
+          result: JSON.stringify({
+            query: "Alpha Coast inventory",
+            total: 2,
+            results: [
+              {
+                session_id: "market-alpha",
+                turn_idx: 2,
+                role: "assistant",
+                snippet: "user: Alpha Coast\nassistant: inventory-drag",
+                score: 4.4,
+                matched_terms: ["alpha", "coast", "inventory"],
+                context_included: true,
+              },
+            ],
+          }),
+        },
+      },
+    ]));
+
+    expect(model.items[1]).toMatchObject({
+      kind: "event",
+      display: {
+        label: "Action finished",
+        meta: [
+          "session_search",
+          "25 ms",
+          "2 history hits",
+          "market-alpha",
+          "turn 2",
+          "matched alpha, coast, inventory",
+          "adjacent context",
+        ],
+      },
+    });
+  });
+
   it("groups interleaved delta events per turn and type", () => {
     const items = buildEventTraceItems(normalizeEvents([
       { id: 1, type: "message.delta", data: { turn_id: "t1", delta: "Hel" } },

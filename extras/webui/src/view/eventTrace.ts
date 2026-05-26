@@ -374,11 +374,17 @@ function toolResultMeta(event: NormalizedEvent, context: DisplayContext): string
   const capBytes = readNumber(event.data, "result_cap_bytes");
   const resultTruncated = readBoolean(event.data, "result_truncated");
   const sourceAccess = describeSourceAccess(readString(event.data, "result") ?? readString(event.data, "result_summary"));
+  const sessionSearchPayload = tool === "session_search" ? parseJSONRecord(readString(event.data, "result")) : undefined;
+  const sessionSearch = sessionSearchPayload ? sessionSearchMeta(sessionSearchPayload) : [];
+  const resultPreview = sessionSearchPayload
+    ? readString(sessionSearchPayload, "message")
+    : readString(event.data, "result_summary") ?? readString(event.data, "result") ?? "";
   return compact([
     tool,
     typeof duration === "number" ? formatDuration(duration) : undefined,
+    ...sessionSearch,
     sourceAccess ? sourceEvidenceLabel(sourceAccess) : undefined,
-    sourceAccess ? sourceAccess.accessedUrl : streamSummary(readString(event.data, "result_summary") ?? readString(event.data, "result") ?? ""),
+    sourceAccess ? sourceAccess.accessedUrl : resultPreview ? streamSummary(resultPreview) : undefined,
     sourceAccess?.jsonPath ? `json path ${sourceAccess.jsonPath}` : undefined,
     artifactPath
       ? `artifact ${artifactDisplayLabel({
@@ -401,6 +407,20 @@ function toolResultBadges(event: NormalizedEvent): string[] {
     sourceAccess ? sourceAccess.status : undefined,
     readBoolean(event.data, "result_truncated") ? "truncated" : undefined,
     readString(event.data, "result_artifact_path") ? "full output" : undefined,
+  ]);
+}
+
+function sessionSearchMeta(payload: Record<string, unknown>): string[] {
+  const total = readNumber(payload, "total");
+  const results = readObjectArray(payload, "results");
+  const first = results[0];
+  const matchedTerms = first ? readStringArray(first, "matched_terms") : [];
+  return compact([
+    typeof total === "number" ? `${total} history hit${total === 1 ? "" : "s"}` : undefined,
+    first ? readString(first, "session_id") : undefined,
+    first && typeof readNumber(first, "turn_idx") === "number" ? `turn ${readNumber(first, "turn_idx")}` : undefined,
+    matchedTerms.length > 0 ? `matched ${matchedTerms.slice(0, 8).join(", ")}` : undefined,
+    first && readBoolean(first, "context_included") ? "adjacent context" : undefined,
   ]);
 }
 
@@ -547,6 +567,13 @@ function readStringArray(data: unknown, key: string): string[] {
   return value.filter((item): item is string => typeof item === "string" && item !== "");
 }
 
+function readObjectArray(data: unknown, key: string): Array<Record<string, unknown>> {
+  if (!data || typeof data !== "object") return [];
+  const value = (data as Record<string, unknown>)[key];
+  if (!Array.isArray(value)) return [];
+  return value.filter((item): item is Record<string, unknown> => !!item && typeof item === "object" && !Array.isArray(item));
+}
+
 function readNumber(data: unknown, key: string): number | undefined {
   if (!data || typeof data !== "object") return undefined;
   const value = (data as Record<string, unknown>)[key];
@@ -556,4 +583,14 @@ function readNumber(data: unknown, key: string): number | undefined {
 function readBoolean(data: unknown, key: string): boolean {
   if (!data || typeof data !== "object") return false;
   return (data as Record<string, unknown>)[key] === true;
+}
+
+function parseJSONRecord(text: string | undefined): Record<string, unknown> | undefined {
+  if (!text) return undefined;
+  try {
+    const value: unknown = JSON.parse(text);
+    return value && typeof value === "object" && !Array.isArray(value) ? value as Record<string, unknown> : undefined;
+  } catch {
+    return undefined;
+  }
 }
