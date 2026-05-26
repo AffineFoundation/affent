@@ -74,7 +74,8 @@ func TestNetworkEvidenceToolsSearchAndRead(t *testing.T) {
 		"BROWSER NETWORK EVIDENCE",
 		"n1 status=200 resource=xhr content_type=application/json",
 		"market_cap",
-		"Next: call browser_network_read",
+		`json_paths: $.market_cap="201.04K T"`,
+		"Next: call browser_network_read with the most relevant ref and json_path",
 	} {
 		if !strings.Contains(searchOut, want) {
 			t.Fatalf("browser_network output missing %q:\n%s", want, searchOut)
@@ -93,6 +94,26 @@ func TestNetworkEvidenceToolsSearchAndRead(t *testing.T) {
 	} {
 		if !strings.Contains(readOut, want) {
 			t.Fatalf("browser_network_read output missing %q:\n%s", want, readOut)
+		}
+	}
+}
+
+func TestNetworkEvidenceSearchShowsNestedJSONPathHints(t *testing.T) {
+	log := NewNetworkEvidenceLog()
+	log.ObserveResponse("https://taostats.io/subnets/120", proto.NetworkResourceTypeDocument)
+	log.Add("https://taostats.io/api/subnets/120", 200, proto.NetworkResourceTypeXHR, http.Header{"Content-Type": {"application/json"}}, []byte(`{"data":{"items":[{"name":"Affine","metrics":{"market_cap":"201.04K T","volume_24h":"5.1K T"}}],"meta":{"source":"api"}}}`))
+	s := &Session{network: log}
+
+	searchOut, err := NetworkSearchTool(s).Execute(context.Background(), json.RawMessage(`{"query":"market_cap","max_results":1}`))
+	if err != nil {
+		t.Fatalf("browser_network: %v", err)
+	}
+	for _, want := range []string{
+		`json_paths: $.data.items[0].metrics.market_cap="201.04K T"`,
+		"Next: call browser_network_read with the most relevant ref and json_path",
+	} {
+		if !strings.Contains(searchOut, want) {
+			t.Fatalf("nested json path output missing %q:\n%s", want, searchOut)
 		}
 	}
 }

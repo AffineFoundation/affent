@@ -25,6 +25,9 @@ const (
 	maxNetworkReadBytes         = 64 * 1024
 	maxNetworkQueryBytes        = 512
 	maxNetworkJSONPathBytes     = 512
+	maxNetworkJSONPathHints     = 8
+	maxNetworkJSONPathHintValue = 96
+	maxNetworkJSONPathScanNodes = 240
 	defaultNetworkMaxResults    = 8
 	maxNetworkMaxResults        = 20
 )
@@ -363,8 +366,11 @@ func formatNetworkSearchResults(query string, entries []NetworkEvidenceEntry) st
 		if preview != "" {
 			fmt.Fprintf(&b, "  preview: %s\n", preview)
 		}
+		if hints := networkJSONPathHints(entry.Body, query); len(hints) > 0 {
+			fmt.Fprintf(&b, "  json_paths: %s\n", strings.Join(hints, "; "))
+		}
 	}
-	b.WriteString("Next: call browser_network_read with the most relevant ref before citing values.\n")
+	b.WriteString("Next: call browser_network_read with the most relevant ref and json_path before citing values.\n")
 	return b.String()
 }
 
@@ -450,6 +456,120 @@ func selectNetworkJSONPath(body []byte, jsonPath string) ([]byte, error) {
 
 func networkJSONPathNotFound(jsonPath, step string) error {
 	return fmt.Errorf("json_path %q was not found at %q in the captured network response\nFailure: kind=not_found\nNext: call browser_network with a distinctive key/value query, inspect the preview, retry with a valid JSON subtree path, or read without json_path", jsonPath, step)
+}
+
+func networkJSONPathHints(body []byte, query string) []string {
+	dec := json.NewDecoder(bytes.NewReader(body))
+	dec.UseNumber()
+	var root any
+	if err := dec.Decode(&root); err != nil {
+		return nil
+	}
+	query = strings.ToLower(strings.TrimSpace(query))
+	seen := map[string]bool{}
+	visited := 0
+	var hints []string
+	collectNetworkJSONPathHints(root, "$", query, seen, &visited, &hints)
+	return hints
+}
+
+func collectNetworkJSONPathHints(v any, path string, query string, seen map[string]bool, visited *int, hints *[]string) {
+	if len(*hints) >= maxNetworkJSONPathHints || *visited >= maxNetworkJSONPathScanNodes {
+		return
+	}
+	*visited++
+	switch value := v.(type) {
+	case map[string]any:
+		keys := make([]string, 0, len(value))
+		for key := range value {
+			keys = append(keys, key)
+		}
+		sort.Strings(keys)
+		for _, key := range keys {
+			nextPath, ok := joinNetworkJSONPath(path, key)
+			if !ok {
+				continue
+			}
+			collectNetworkJSONPathHints(value[key], nextPath, query, seen, visited, hints)
+			if len(*hints) >= maxNetworkJSONPathHints || *visited >= maxNetworkJSONPathScanNodes {
+				return
+			}
+		}
+	case []any:
+		for i, item := range value {
+			collectNetworkJSONPathHints(item, path+"["+strconv.Itoa(i)+"]", query, seen, visited, hints)
+			if len(*hints) >= maxNetworkJSONPathHints || *visited >= maxNetworkJSONPathScanNodes {
+				return
+			}
+		}
+	default:
+		hint, ok := formatNetworkJSONPathHint(path, value, query)
+		if !ok || seen[path] {
+			return
+		}
+		seen[path] = true
+		*hints = append(*hints, hint)
+	}
+}
+
+func formatNetworkJSONPathHint(path string, value any, query string) (string, bool) {
+	rendered, ok := renderNetworkJSONHintValue(value)
+	if !ok {
+		return "", false
+	}
+	search := strings.ToLower(path + " " + rendered)
+	if query != "" && !strings.Contains(search, query) {
+		return "", false
+	}
+	rendered = textutil.Preview(textutil.CompactWhitespace(rendered), maxNetworkJSONPathHintValue)
+	if rendered == "" {
+		return "", false
+	}
+	return path + "=" + rendered, true
+}
+
+func renderNetworkJSONHintValue(value any) (string, bool) {
+	switch value.(type) {
+	case nil, string, bool, json.Number, float64, int, int64, uint64:
+	default:
+		return "", false
+	}
+	raw, err := json.Marshal(value)
+	if err != nil {
+		return "", false
+	}
+	return string(raw), true
+}
+
+func joinNetworkJSONPath(base, key string) (string, bool) {
+	if networkJSONSimpleKey(key) {
+		return base + "." + key, true
+	}
+	if !strings.ContainsAny(key, `'\`) {
+		return base + "['" + key + "']", true
+	}
+	if !strings.ContainsAny(key, `"\\`) {
+		return base + `["` + key + `"]`, true
+	}
+	return "", false
+}
+
+func networkJSONSimpleKey(key string) bool {
+	if key == "" {
+		return false
+	}
+	for i, r := range key {
+		if i == 0 {
+			if r != '_' && (r < 'A' || r > 'Z') && (r < 'a' || r > 'z') {
+				return false
+			}
+			continue
+		}
+		if r != '_' && (r < 'A' || r > 'Z') && (r < 'a' || r > 'z') && (r < '0' || r > '9') {
+			return false
+		}
+	}
+	return true
 }
 
 func parseNetworkJSONPath(raw string) ([]networkJSONPathStep, error) {
