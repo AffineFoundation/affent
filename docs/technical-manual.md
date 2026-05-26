@@ -766,13 +766,14 @@ The default text summary also prints the key normalized rates used for long-run
 debugging, including pass/completion, memory update coverage, runtime-surface
 coverage, tool errors, focused-task/subagent errors, plan errors, repair success, verifier pass rate,
 verified evidence, network/discovery/dynamic-partial source ratios, average
-context compactions, reactive context compactions, expected-capability pass
-rate, and tool-context truncation.
+context compactions, reactive context compactions, aggregate and per-family
+expected-capability pass rates, and tool-context truncation.
 Use `--min-pass-rate`, `--min-completion-rate`,
 `--min-memory-update-rate`, `--min-runtime-surface-rate`,
 `--min-source-network-rate`,
 `--min-source-access-verified-rate`,
 `--min-expectation-capability-pass-rate`,
+`--min-each-expectation-capability-pass-rate`,
 `--min-session-search-context-hit-rate`, `--min-tool-repair-success-rate`,
 `--min-verifier-pass-rate`, `--max-tool-error-rate`,
 `--max-focused-task-error-rate`, `--max-subagent-error-rate`,
@@ -822,9 +823,11 @@ coverage counters, including suites, required tools, required source-access
 statuses, and broad capabilities such as memory, browser, delegation, plan,
 and context compaction. They also split expected capabilities into passed and
 failed counts so long-run reports can show whether regressions cluster around
-memory, browser/web evidence, delegation, plan, or context compaction. JSONL
-summary records also aggregate debug brief tags as `debug_brief_by_tag` for
-batch triage.
+memory, browser/web evidence, delegation, plan, or context compaction. The
+per-family expectation gate can fail a run when one capability family
+regresses even if the aggregate expectation pass rate is still acceptable.
+JSONL summary records also aggregate debug brief tags as `debug_brief_by_tag`
+for batch triage.
 JSONL scenario records also include a compact `runtime_surface` summary so
 batch analysis can group outcomes by actual tool/capability surface. JSONL
 summary records include per-scenario counts for runtime tools and capabilities

@@ -45,6 +45,7 @@ Shared metadata fields:
   `min_runtime_surface_rate`, `min_source_network_rate`,
   `min_source_access_verified_rate`,
   `min_expectation_capability_pass_rate`,
+  `min_each_expectation_capability_pass_rate`,
   `min_session_search_context_hit_rate`,
   `min_tool_repair_success_rate`, `min_verifier_pass_rate`,
   `max_focused_task_error_rate`, `max_forced_no_tools_rate`,
@@ -316,8 +317,11 @@ Summary records aggregate all scenario records from the same process:
   `expectation_capability_passed`, `expectation_capability_failed`, and
   `expectation_capability_pass_rate` split those declared capability families
   by scenario outcome. These are declaration/outcome counters, not observed
-  runtime behavior. Use them with runtime-surface fields to see which capability
-  classes a batch actually exercised and where failures cluster.
+  runtime behavior. Use them with runtime-surface fields to see which
+  capability classes a batch actually exercised and where failures cluster.
+  `min_each_expectation_capability_pass_rate` gates each family in
+  `expectation_capability_pass_rate` independently, so a memory or browser
+  regression cannot be hidden by unrelated passing capabilities.
 - Quality gate outcome: `quality_profile` identifies any built-in profile used,
   `quality_gates_passed` is present on summary records when at least one quality
   gate threshold was configured, and
