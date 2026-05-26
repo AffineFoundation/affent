@@ -41,6 +41,9 @@ SERVE_HEALTH_INTERVAL ?= 1
 SERVE_CONTAINER_NAME ?= affent-serve
 SERVE_WORKSPACE_ROOT ?= /workspace/sessions
 SERVE_MEMORY_ROOT ?= /workspace/session-state
+WEBUI_DEV_PORT ?= 18789
+WEBUI_API_PORT ?= 18791
+WEBUI_API_TARGET ?= http://127.0.0.1:$(WEBUI_API_PORT)
 DOCTOR_ARGS ?=
 SMOKE_CONTAINER_NAME ?= affent-serve-smoke
 SMOKE_WORKSPACE ?= $(CURDIR)/.tmp/image-serve-smoke
@@ -76,6 +79,7 @@ fi
 endef
 
 .PHONY: affentctl affentctl-local doctor sandbox-start sandbox-status sandbox-stop image-build image-run image-serve image-serve-up image-serve-status image-serve-health image-serve-health-wait image-serve-logs image-serve-stop image-serve-restart image-serve-smoke eval-container eval-agent-container eval-serve-container eval-serve-browser-container test-container
+.PHONY: webui-dev image-serve-existing
 
 affentctl:
 	mkdir -p "$(dir $(AFFENTCTL))" .tmp/go-build .tmp/go-mod
@@ -117,6 +121,12 @@ image-run: image-build
 
 image-serve: image-build
 	"$(AFFENTCTL)" image run --workspace "$(IMAGE_WORKSPACE)" --memory "$(CONTAINER_MEMORY)" --cpus "$(CONTAINER_CPUS)" --pids-limit "$(CONTAINER_PIDS)" $(if $(SERVE_CONTAINER_NAME),--name "$(SERVE_CONTAINER_NAME)") --timeout 0s --detach --rm=false --publish "$(SERVE_PUBLISH)" $(IMAGE_RUN_ARGS) -- affentserve --listen "$(SERVE_LISTEN)" $(if $(SERVE_BASE_URL),--base-url "$(SERVE_BASE_URL)") $(if $(SERVE_API_KEY),--api-key "$(SERVE_API_KEY)") $(if $(SERVE_MODEL),--model "$(SERVE_MODEL)") --workspace-root "$(SERVE_WORKSPACE_ROOT)" --memory-root "$(SERVE_MEMORY_ROOT)" --builtins $(SERVE_DEFAULT_ARGS) $(SERVE_ARGS)
+
+image-serve-existing:
+	"$(AFFENTCTL)" image run --workspace "$(IMAGE_WORKSPACE)" --memory "$(CONTAINER_MEMORY)" --cpus "$(CONTAINER_CPUS)" --pids-limit "$(CONTAINER_PIDS)" $(if $(SERVE_CONTAINER_NAME),--name "$(SERVE_CONTAINER_NAME)") --timeout 0s --detach --rm=false --publish "$(SERVE_PUBLISH)" $(IMAGE_RUN_ARGS) -- affentserve --listen "$(SERVE_LISTEN)" $(if $(SERVE_BASE_URL),--base-url "$(SERVE_BASE_URL)") $(if $(SERVE_API_KEY),--api-key "$(SERVE_API_KEY)") $(if $(SERVE_MODEL),--model "$(SERVE_MODEL)") --workspace-root "$(SERVE_WORKSPACE_ROOT)" --memory-root "$(SERVE_MEMORY_ROOT)" --builtins $(SERVE_DEFAULT_ARGS) $(SERVE_ARGS)
+
+webui-dev:
+	cd extras/webui && VITE_AFFENT_API_TARGET="$(WEBUI_API_TARGET)" VITE_AFFENT_WEBUI_PORT="$(WEBUI_DEV_PORT)" npm run dev -- --host 0.0.0.0 --port "$(WEBUI_DEV_PORT)"
 
 image-serve-up:
 	@if test -z "$(SERVE_CONTAINER_NAME)"; then \

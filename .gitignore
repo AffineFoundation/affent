@@ -33,3 +33,6 @@ affent-workspace/
 
 # Claude Code local state (per-session scratch, never committed)
 .claude/
+
+# Draft / scratch docs kept locally only (never committed)
+docs/drafts/
