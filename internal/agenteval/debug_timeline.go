@@ -498,6 +498,29 @@ func renderTimelineMemoryUpdates(b *strings.Builder, trace *Trace) {
 
 func memoryUpdateFromTool(tool ToolCall) (timelineMemoryUpdate, bool) {
 	var zero timelineMemoryUpdate
+	if tool.MemoryUpdate != nil {
+		action := strings.ToLower(strings.TrimSpace(tool.MemoryUpdate.Action))
+		switch action {
+		case "add", "replace", "remove":
+		default:
+			return zero, false
+		}
+		location := strings.TrimSpace(tool.MemoryUpdate.Location)
+		if location == "" {
+			target := firstNonEmpty(tool.MemoryUpdate.Target, "memory")
+			topic := normalizeTimelineMemoryTopic(target, firstNonEmpty(tool.MemoryUpdate.Topic, "general"))
+			location = target + ":" + topic
+		}
+		preview := firstNonEmpty(
+			tool.MemoryUpdate.Preview,
+			timelineMemoryUpdatePreview(action, tool.MemoryUpdate.PreviousPreview, tool.MemoryUpdate.NextPreview),
+		)
+		return timelineMemoryUpdate{
+			Action:   action,
+			Location: location,
+			Preview:  preview,
+		}, true
+	}
 	if tool.Tool != "memory" || tool.ExitCode != 0 || tool.IsErr {
 		return zero, false
 	}

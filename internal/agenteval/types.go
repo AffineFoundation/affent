@@ -239,6 +239,10 @@ type ToolCall struct {
 	// metadata block trace consumers most often filter on. Nil for
 	// non-delegation tools.
 	Delegation *sse.DelegationMeta
+	// MemoryUpdate, when set, is the runtime's structured summary of a
+	// confirmed memory add/replace/remove operation. Prefer this over
+	// reparsing capped request args or memory response JSON.
+	MemoryUpdate *sse.MemoryUpdateMeta
 }
 
 type ToolRuntimeStats struct {

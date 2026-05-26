@@ -90,6 +90,7 @@ func applyTraceEvent(t *Trace, pending map[string]int, typ string, data json.Raw
 			t.Tools[idx].ExitCode = p.ExitCode
 			t.Tools[idx].DurationMS = p.DurationMS
 			t.Tools[idx].IsErr = p.ExitCode != 0
+			t.Tools[idx].MemoryUpdate = p.MemoryUpdate
 			// If a stream-cut or replay split the request/result events,
 			// the result might carry delegation while the request didn't
 			// (or vice versa). Prefer whichever side has it; the runtime
@@ -117,6 +118,7 @@ func applyTraceEvent(t *Trace, pending map[string]int, typ string, data json.Raw
 			DurationMS:         p.DurationMS,
 			IsErr:              p.ExitCode != 0,
 			Delegation:         p.Delegation,
+			MemoryUpdate:       p.MemoryUpdate,
 		})
 	case sse.TypeUsage:
 		var p sse.UsagePayload
