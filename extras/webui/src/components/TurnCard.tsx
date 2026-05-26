@@ -1,4 +1,4 @@
-import { useState, type CSSProperties } from "react";
+import { useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
 import { EventType } from "../api/events";
 import type { NormalizedEvent } from "../normalize/normalizeEvent";
 import type { ToolCallState, TurnError, TurnState } from "../store/sessionState";
@@ -260,6 +260,16 @@ function AgentActivity({
   const showDigestLabel = activity.digest.label !== activity.statusLabel;
   const issueNodes = activityIssueNodes(activity.nodes);
   const evidenceSummaryLabel = activity.evidenceCount === 1 ? "Source" : "Sources";
+  const seenMotionIds = useRef<Set<string>>(new Set());
+  const motionIds = useMemo(() => activityMotionIds(activity), [activity]);
+  const newMotionIds = useMemo(
+    () => new Set(motionIds.filter((id) => !seenMotionIds.current.has(id))),
+    [motionIds],
+  );
+
+  useEffect(() => {
+    for (const id of motionIds) seenMotionIds.current.add(id);
+  }, [motionIds]);
 
   function setNodeOpen(nodeId: string, open: boolean) {
     setOpenOverrides((current) => ({ ...current, [nodeId]: open }));
@@ -347,14 +357,26 @@ function AgentActivity({
           {activity.brief.rows.length > 0 ? (
             <div className="agent-activity-brief" data-testid="agent-activity-brief">
               {activity.brief.rows.map((row) => (
-                <ActivityBriefRow key={row.id} row={row} searchQuery={searchQuery} onUseAsDraft={onUseAsDraft} />
+                <ActivityBriefRow
+                  key={row.id}
+                  row={row}
+                  searchQuery={searchQuery}
+                  onUseAsDraft={onUseAsDraft}
+                  isNew={newMotionIds.has(activityBriefMotionId(row.id))}
+                />
               ))}
             </div>
           ) : null}
           {activity.items.length > 0 ? (
             <div className="agent-activity-flow">
               {activity.items.map((item) => (
-                <div key={item.id} className="agent-activity-item" data-kind={item.kind} data-tone={item.tone}>
+                <div
+                  key={item.id}
+                  className="agent-activity-item"
+                  data-kind={item.kind}
+                  data-tone={item.tone}
+                  data-new={newMotionIds.has(activityItemMotionId(item.id)) ? "true" : "false"}
+                >
                   <span className="agent-activity-dot" aria-hidden="true" />
                   <span className="agent-activity-copy">
                     <span className="agent-activity-label">{item.label}</span>
@@ -382,6 +404,7 @@ function AgentActivity({
                   onOpenChange={setNodeOpen}
                   searchQuery={searchQuery}
                   onUseAsDraft={onUseAsDraft}
+                  newMotionIds={newMotionIds}
                 />
               ))}
             </div>
@@ -390,6 +413,30 @@ function AgentActivity({
       ) : null}
     </section>
   );
+}
+
+function activityMotionIds(activity: TurnActivityView): string[] {
+  return [
+    ...activity.brief.rows.map((row) => activityBriefMotionId(row.id)),
+    ...activity.items.map((item) => activityItemMotionId(item.id)),
+    ...activity.nodes.flatMap(activityNodeMotionIds),
+  ];
+}
+
+function activityBriefMotionId(id: string): string {
+  return `brief:${id}`;
+}
+
+function activityItemMotionId(id: string): string {
+  return `item:${id}`;
+}
+
+function activityNodeMotionIds(node: TurnActivityNode): string[] {
+  return [activityNodeMotionId(node.id), ...node.children.flatMap(activityNodeMotionIds)];
+}
+
+function activityNodeMotionId(id: string): string {
+  return `node:${id}`;
 }
 
 function activityCopyText(activity: TurnActivityView): string {
@@ -530,13 +577,15 @@ function ActivityBriefRow({
   row,
   searchQuery,
   onUseAsDraft,
+  isNew,
 }: {
   row: TurnActivityBriefRow;
   searchQuery?: string;
   onUseAsDraft?: UseAsDraft;
+  isNew?: boolean;
 }) {
   return (
-    <div className="agent-activity-brief-row" data-kind={row.id} data-tone={row.tone}>
+    <div className="agent-activity-brief-row" data-kind={row.id} data-tone={row.tone} data-new={isNew ? "true" : "false"}>
       <span className="agent-activity-brief-label">{row.label}</span>
       {"evidence" in row ? (
         <>
@@ -643,12 +692,14 @@ function AgentActivityNode({
   onOpenChange,
   searchQuery,
   onUseAsDraft,
+  newMotionIds,
 }: {
   node: TurnActivityNode;
   openOverrides: Record<string, boolean>;
   onOpenChange: (nodeId: string, open: boolean) => void;
   searchQuery?: string;
   onUseAsDraft?: UseAsDraft;
+  newMotionIds: ReadonlySet<string>;
 }) {
   const hasChildren = node.children.length > 0;
   const open = openOverrides[node.id] ?? node.autoOpen;
@@ -667,6 +718,7 @@ function AgentActivityNode({
       data-status={node.status}
       data-depth={node.depth}
       data-open={open ? "true" : "false"}
+      data-new={newMotionIds.has(activityNodeMotionId(node.id)) ? "true" : "false"}
       style={{ "--depth": node.depth } as CSSProperties}
     >
       <div className="agent-activity-node-row" data-testid="agent-activity-node-row" data-interactive={hasChildren ? "true" : "false"}>
@@ -728,6 +780,7 @@ function AgentActivityNode({
               onOpenChange={onOpenChange}
               searchQuery={searchQuery}
               onUseAsDraft={onUseAsDraft}
+              newMotionIds={newMotionIds}
             />
           ))}
         </div>

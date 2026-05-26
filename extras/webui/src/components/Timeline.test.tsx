@@ -1266,6 +1266,23 @@ describe("Timeline", () => {
     expect(scrollIntoView).toHaveBeenCalledWith({ behavior: "auto", block: "end" });
   });
 
+  it("pauses live follow when the scroll position moves away without a wheel event", () => {
+    const { scrollIntoView } = installScrollIntoViewSpy();
+    const { rerender } = render(<ScrollHarness events={runningStarted} />);
+    const scrollRoot = screen.getByTestId("scroll-root");
+    Object.defineProperties(scrollRoot, {
+      clientHeight: { configurable: true, value: 300 },
+      scrollHeight: { configurable: true, value: 1200 },
+      scrollTop: { configurable: true, value: 420 },
+    });
+
+    fireEvent.scroll(scrollRoot);
+    rerender(<ScrollHarness events={runningSubagent} />);
+
+    expect(scrollIntoView).not.toHaveBeenCalled();
+    expect(screen.getByRole("button", { name: /jump to latest/i })).toBeInTheDocument();
+  });
+
   it("follows running updates to the newest content instead of pinning the turn header", () => {
     const { scrollIntoView } = installScrollIntoViewSpy();
     const { rerender } = render(<ScrollHarness events={runningStarted} />);

@@ -156,11 +156,17 @@ export function Timeline({
       }
     };
     const onScroll = () => {
-      if (pointerSelecting.current || hasActiveTextSelection()) {
+      if (hasActiveTextSelection()) {
+        return;
+      }
+      const distance = distanceToLatest();
+      if (distance >= 180) {
+        userBrowsedHistory.current = true;
+        autoFollowPaused.current = true;
+        setFollowing(false);
         return;
       }
       if (!userBrowsedHistory.current) return;
-      const distance = distanceToLatest();
       if (distance < 180) autoFollowPaused.current = false;
       setFollowing(distance < 180);
       if (distance < 180) setNewActivity(false);
