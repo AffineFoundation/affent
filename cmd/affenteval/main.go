@@ -486,9 +486,12 @@ func printBatchSummary(w io.Writer, s batchSummary) {
 		s.RemovedWorkspaces,
 		s.CleanupErrors,
 	)
-	fmt.Fprintf(w, " rates=pass:%s,completed:%s,evidence_verified:%s avg_tokens=%.1f/%.1f",
+	fmt.Fprintf(w, " rates=pass:%s,completed:%s,tool_error:%s,repair_success:%s,verifier_pass:%s,evidence_verified:%s avg_tokens=%.1f/%.1f",
 		formatPercent(batchRatio(s.Passed, s.Total)),
 		formatPercent(batchRatio(s.EndCompleted, s.Total)),
+		formatOptionalPercent(batchOptionalRatio(s.ToolErrors, s.ToolCalls)),
+		formatOptionalPercent(batchOptionalRatio(s.ToolRepairSucceeded, s.ToolRepairCalls)),
+		formatOptionalPercent(batchOptionalRatio(s.VerifierPassed, s.VerifierRuns)),
 		formatOptionalPercent(batchOptionalRatio(s.SourceAccessVerified, s.SourceAccessResults)),
 		batchAverage(s.InputTokens, s.Total),
 		batchAverage(s.OutputTokens, s.Total),
@@ -1075,6 +1078,9 @@ type batchSummaryRecord struct {
 	Failed                     int                                        `json:"failed"`
 	PassRate                   float64                                    `json:"pass_rate"`
 	CompletionRate             float64                                    `json:"completion_rate"`
+	ToolErrorRate              *float64                                   `json:"tool_error_rate,omitempty"`
+	ToolRepairSuccessRate      *float64                                   `json:"tool_repair_success_rate,omitempty"`
+	VerifierPassRate           *float64                                   `json:"verifier_pass_rate,omitempty"`
 	SourceAccessVerifiedRate   *float64                                   `json:"source_access_verified_rate,omitempty"`
 	DurationMS                 int64                                      `json:"duration_ms"`
 	ToolCalls                  int                                        `json:"tool_calls"`
@@ -1363,6 +1369,9 @@ func printBatchSummaryJSONL(w io.Writer, meta evalJSONLMetadata, s batchSummary)
 		Failed:                     s.Failed,
 		PassRate:                   batchRatio(s.Passed, s.Total),
 		CompletionRate:             batchRatio(s.EndCompleted, s.Total),
+		ToolErrorRate:              batchOptionalRatio(s.ToolErrors, s.ToolCalls),
+		ToolRepairSuccessRate:      batchOptionalRatio(s.ToolRepairSucceeded, s.ToolRepairCalls),
+		VerifierPassRate:           batchOptionalRatio(s.VerifierPassed, s.VerifierRuns),
 		SourceAccessVerifiedRate:   batchOptionalRatio(s.SourceAccessVerified, s.SourceAccessResults),
 		DurationMS:                 s.Duration.Milliseconds(),
 		ToolCalls:                  s.ToolCalls,

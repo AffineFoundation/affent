@@ -202,6 +202,9 @@ Summary records aggregate all scenario records from the same process:
 
 - `scenarios`, `passed`, `failed`, `duration_ms`.
 - Normalized comparison metrics: `pass_rate`, `completion_rate`,
+  `tool_error_rate` when tool calls were observed,
+  `tool_repair_success_rate` when repaired/canonicalized tool calls were
+  observed, `verifier_pass_rate` when verifier commands ran,
   `source_access_verified_rate` when source evidence was observed,
   `avg_input_tokens`, `avg_output_tokens`, and `avg_total_tokens`.
 - Tool totals: `tool_calls`, `tool_errors`, `tool_repaired`,

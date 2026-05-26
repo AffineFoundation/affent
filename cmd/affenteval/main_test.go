@@ -623,7 +623,7 @@ func TestBatchSummaryAggregatesRuntimeMetrics(t *testing.T) {
 	if !strings.Contains(out.String(), "ctx_trunc=3,omitted=5120") {
 		t.Fatalf("summary output missing context truncation rollup:\n%s", out.String())
 	}
-	if !strings.Contains(out.String(), "rates=pass:50.0%,completed:50.0%,evidence_verified:75.0% avg_tokens=45.0/10.0") {
+	if !strings.Contains(out.String(), "rates=pass:50.0%,completed:50.0%,tool_error:20.0%,repair_success:80.0%,verifier_pass:50.0%,evidence_verified:75.0% avg_tokens=45.0/10.0") {
 		t.Fatalf("summary output missing normalized rates:\n%s", out.String())
 	}
 	if !strings.Contains(out.String(), "source_access=results:4,verified:3,discovery:0,network:3,dynamic_partial:0") {
@@ -1516,6 +1516,9 @@ func TestPrintBatchSummaryJSONL(t *testing.T) {
 		"failed":                        float64(1),
 		"pass_rate":                     float64(0.5),
 		"completion_rate":               float64(0.5),
+		"tool_error_rate":               float64(0.2),
+		"tool_repair_success_rate":      float64(0.75),
+		"verifier_pass_rate":            float64(0.5),
 		"source_access_verified_rate":   float64(0.75),
 		"duration_ms":                   float64(2500),
 		"tool_calls":                    float64(5),
