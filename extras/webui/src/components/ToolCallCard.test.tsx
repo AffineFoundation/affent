@@ -1,4 +1,4 @@
-import { render, screen } from "@testing-library/react";
+import { render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it } from "vitest";
 import type { ToolCallState } from "../store/sessionState";
@@ -49,6 +49,21 @@ describe("ToolCallCard", () => {
 
     expect(screen.getByText("failure")).toBeInTheDocument();
     expect(screen.getByText("dynamic_shell, no_verified_source")).toBeInTheDocument();
+  });
+
+  it("surfaces source evidence status on web tool calls", async () => {
+    const user = userEvent.setup();
+    render(<ToolCallCard call={sourceAccessCall()} events={[]} />);
+
+    const toggle = screen.getByRole("button", { name: /browser_navigate/ });
+    expect(toggle).toHaveTextContent("partial source");
+
+    await user.click(toggle);
+
+    const details = screen.getByTestId("tool-details");
+    expect(within(details).getByText("source")).toBeInTheDocument();
+    expect(within(details).getByText(/partial source/)).toBeInTheDocument();
+    expect(within(details).getByText("https://taostats.io/subnets/120")).toBeInTheDocument();
   });
 });
 
@@ -109,6 +124,23 @@ function failureKindCall(): ToolCallState {
     failureKinds: ["dynamic_shell", "no_verified_source"],
     resultSummary: "Only a dynamic shell was available.",
     result: "Failure: kind=dynamic_shell",
+    resultTruncated: false,
+  };
+}
+
+function sourceAccessCall(): ToolCallState {
+  return {
+    callId: "c4",
+    tool: "browser_navigate",
+    args: { url: "https://taostats.io/subnets/120", wait_until: "networkidle" },
+    argsTruncated: false,
+    argsRepaired: false,
+    canonicalized: false,
+    status: "success",
+    exitCode: 0,
+    durationMs: 42,
+    resultSummary: "SourceAccess: browser_rendered_url=https://taostats.io/subnets/120; page_text_below=partial_dynamic_page_evidence; rendered_browser_source_status=partial_dynamic_page_evidence",
+    result: "SourceAccess: browser_rendered_url=https://taostats.io/subnets/120; page_text_below=partial_dynamic_page_evidence; rendered_browser_source_status=partial_dynamic_page_evidence\nPAGE TEXT:\nMarket Cap",
     resultTruncated: false,
   };
 }

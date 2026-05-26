@@ -4,6 +4,7 @@ import type { ToolCallState } from "../store/sessionState";
 import { fmtDuration } from "./format";
 import { artifactDisplayLabel, artifactName } from "../view/turnArtifacts";
 import { describeMemoryUpdate, type MemoryUpdateSummary } from "../view/memoryUpdate";
+import { describeSourceAccess, sourceEvidenceLabel, type SourceAccessInfo } from "../view/sourceAccess";
 import { TraceDisclosure } from "./TraceDisclosure";
 
 // Tool steps stay compact in the flow and expand in place. Status, repair,
@@ -18,6 +19,7 @@ export function ToolCallCard({
 }) {
   const [open, setOpen] = useState(false);
   const memoryUpdate = describeMemoryUpdate(call);
+  const sourceAccess = describeSourceAccess(call.result ?? call.resultSummary);
   const failureKinds = callFailureKinds(call);
 
   return (
@@ -44,6 +46,9 @@ export function ToolCallCard({
         {call.resultArtifactPath ? (
           <span className="badge" data-kind="artifact">artifact</span>
         ) : null}
+        {sourceAccess ? (
+          <span className="badge" data-kind={sourceAccess.status === "verified" || sourceAccess.status === "network" ? "schema" : "warning"}>{sourceEvidenceLabel(sourceAccess)}</span>
+        ) : null}
         {failureKinds.slice(0, 2).map((kind) => (
           <span className="badge" data-kind="error" key={kind}>{kind}</span>
         ))}
@@ -52,7 +57,7 @@ export function ToolCallCard({
         ) : null}
         {call.durationMs != null ? <span className="tool-meta">{fmtDuration(call.durationMs)}</span> : null}
       </button>
-      {open ? <ToolDetails call={call} events={events} memoryUpdate={memoryUpdate} /> : null}
+      {open ? <ToolDetails call={call} events={events} memoryUpdate={memoryUpdate} sourceAccess={sourceAccess} /> : null}
     </div>
   );
 }
@@ -71,10 +76,12 @@ function ToolDetails({
   call,
   events,
   memoryUpdate,
+  sourceAccess,
 }: {
   call: ToolCallState;
   events: readonly NormalizedEvent[];
   memoryUpdate?: MemoryUpdateSummary;
+  sourceAccess?: SourceAccessInfo;
 }) {
   const hasResult = call.result != null && call.result !== "";
   const failureKinds = callFailureKinds(call);
@@ -96,6 +103,7 @@ function ToolDetails({
           <b>failure</b> {failureKinds.join(", ")}
         </div>
       ) : null}
+      {sourceAccess ? <SourceAccessDetails info={sourceAccess} /> : null}
       <div className="kv">
         <b>input</b>
         {call.argsTruncated ? " (truncated)" : ""}
@@ -117,6 +125,15 @@ function ToolDetails({
         </div>
       ) : null}
       <TraceDisclosure events={events} className="nested-raw" />
+    </div>
+  );
+}
+
+function SourceAccessDetails({ info }: { info: SourceAccessInfo }) {
+  return (
+    <div className="kv">
+      <b>source</b> {sourceEvidenceLabel(info)} · <code>{info.accessedUrl}</code>
+      {info.requestedUrl ? <> · requested <code>{info.requestedUrl}</code></> : null}
     </div>
   );
 }
