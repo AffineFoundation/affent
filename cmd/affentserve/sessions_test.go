@@ -399,6 +399,57 @@ func TestSessionPool_ConversationLogIsDurable(t *testing.T) {
 	}
 }
 
+func TestSessionPool_BuiltinsRegisterSessionSearchOverDurableConversations(t *testing.T) {
+	pool := newTestPool(t, 4, "5m")
+	pool.cfg.EnableBuiltins = true
+
+	past, err := pool.GetOrCreate("past-research")
+	if err != nil {
+		t.Fatalf("GetOrCreate past: %v", err)
+	}
+	if err := past.conv.Append(agent.ChatMessage{Role: "user", Content: "investigate taostats subnet metrics"}); err != nil {
+		t.Fatalf("append past user: %v", err)
+	}
+	if err := past.conv.Append(agent.ChatMessage{Role: "assistant", Content: "decision: use browser_network_read before citing hidden market cap values"}); err != nil {
+		t.Fatalf("append past assistant: %v", err)
+	}
+
+	current, err := pool.GetOrCreate("current-research")
+	if err != nil {
+		t.Fatalf("GetOrCreate current: %v", err)
+	}
+	if err := current.conv.Append(agent.ChatMessage{Role: "user", Content: "browser_network_read should not match current session"}); err != nil {
+		t.Fatalf("append current: %v", err)
+	}
+	tool, ok := current.registry.Get(agent.SessionSearchToolName)
+	if !ok {
+		t.Fatal("builtins should register session_search for durable session recall")
+	}
+	msgs := current.conv.Snapshot()
+	if len(msgs) == 0 || !strings.Contains(msgs[0].Content, "Session history retrieval:") {
+		t.Fatalf("system prompt should include session search guidance when registered:\n%+v", msgs)
+	}
+	out, err := tool.Execute(context.Background(), json.RawMessage(`{"query":"browser_network_read market cap","top_k":5}`))
+	if err != nil {
+		t.Fatalf("session_search execute: %v", err)
+	}
+	var resp agent.SessionSearchResponse
+	if err := json.Unmarshal([]byte(out), &resp); err != nil {
+		t.Fatalf("decode session_search response: %v\n%s", err, out)
+	}
+	if len(resp.Results) == 0 {
+		t.Fatalf("expected durable past session hit, got %+v", resp)
+	}
+	for _, hit := range resp.Results {
+		if hit.SessionID == current.ID {
+			t.Fatalf("session_search must exclude current session: %+v", resp.Results)
+		}
+	}
+	if resp.Results[0].SessionID != past.ID || !strings.Contains(resp.Results[0].Snippet, "browser_network_read") {
+		t.Fatalf("unexpected session_search hit: %+v", resp.Results[0])
+	}
+}
+
 func TestSessionPool_ShutdownPreservesDurableState(t *testing.T) {
 	memRoot := t.TempDir()
 	cfg := Config{

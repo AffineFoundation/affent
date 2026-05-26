@@ -32,6 +32,26 @@ func writeSessionLog(t *testing.T, dir, sessionID string, msgs []testMessage) {
 	}
 }
 
+func writeDurableSessionLog(t *testing.T, root, sessionID string, msgs []testMessage) {
+	t.Helper()
+	dir := filepath.Join(root, sessionID)
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	path := filepath.Join(dir, "conversation.jsonl")
+	f, err := os.Create(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer f.Close()
+	enc := json.NewEncoder(f)
+	for _, m := range msgs {
+		if err := enc.Encode(m); err != nil {
+			t.Fatal(err)
+		}
+	}
+}
+
 func TestSearchFindsAndRanksMatches(t *testing.T) {
 	dir := t.TempDir()
 	writeSessionLog(t, dir, "low", []testMessage{
@@ -76,6 +96,38 @@ func TestSearchExcludesCurrentAndSkipsNonConversationRoles(t *testing.T) {
 	}
 	if hits[0].SessionID != "earlier" || hits[0].Role != "assistant" {
 		t.Fatalf("unexpected hit: %+v", hits[0])
+	}
+}
+
+func TestSearchReadsAffentserveDurableConversationLogs(t *testing.T) {
+	dir := t.TempDir()
+	writeDurableSessionLog(t, dir, "past-research", []testMessage{
+		{Role: "user", Content: "research taostats subnet"},
+		{Role: "assistant", Content: "decision: use browser_network_read for hidden market cap values"},
+	})
+	writeDurableSessionLog(t, dir, "current", []testMessage{
+		{Role: "user", Content: "browser_network_read current in-flight note"},
+	})
+	writeSessionLog(t, dir, "flat-legacy", []testMessage{
+		{Role: "assistant", Content: "legacy flat jsonl session still searchable with browser_network_read"},
+	})
+
+	hits, err := Search(context.Background(), dir, "current", "browser_network_read", 10, 3)
+	if err != nil {
+		t.Fatal(err)
+	}
+	got := map[string]bool{}
+	for _, hit := range hits {
+		got[hit.SessionID] = true
+		if hit.SessionID == "current" {
+			t.Fatalf("current durable session must be excluded: %+v", hits)
+		}
+	}
+	if !got["past-research"] {
+		t.Fatalf("durable conversation log was not searched: %+v", hits)
+	}
+	if !got["flat-legacy"] {
+		t.Fatalf("flat jsonl compatibility was lost: %+v", hits)
 	}
 }
 

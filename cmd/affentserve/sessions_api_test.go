@@ -48,7 +48,7 @@ func TestHandleSessionCreate_ExplicitIDAndDetail(t *testing.T) {
 		SkillInstall:     true,
 		Plan:             true,
 		Memory:           true,
-		SessionSearch:    false,
+		SessionSearch:    true,
 		SymbolContext:    true,
 		RepoSearch:       true,
 		Web:              true,

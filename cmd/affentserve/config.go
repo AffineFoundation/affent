@@ -554,7 +554,7 @@ func serveEvalBrowserToolNames() []string {
 
 func serveEvalKnownToolNames() []string {
 	out := append([]string{}, serveEvalWorkspaceToolNames()...)
-	out = append(out, agent.SkillToolName, agent.MemoryToolName, agent.PlanToolName, agent.SubagentToolName, agent.FocusedTaskToolName, "web_fetch", "web_search")
+	out = append(out, agent.SkillToolName, agent.MemoryToolName, agent.PlanToolName, agent.SessionSearchToolName, agent.SubagentToolName, agent.FocusedTaskToolName, "web_fetch", "web_search")
 	out = append(out, serveEvalBrowserToolNames()...)
 	return out
 }

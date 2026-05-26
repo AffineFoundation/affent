@@ -74,7 +74,29 @@ func Search(ctx context.Context, sessionsDir, currentSessionID, query string, to
 			if ctx.Err() != nil {
 				return nil, ctx.Err()
 			}
-			if ent.IsDir() || !strings.HasSuffix(ent.Name(), ".jsonl") {
+			if ent.IsDir() {
+				sid := ent.Name()
+				if sid == currentSessionID || entryIsSymlink(ent) {
+					continue
+				}
+				path := filepath.Join(sessionsDir, sid, "conversation.jsonl")
+				mtime, ok := regularFileModTime(path)
+				if !ok {
+					continue
+				}
+				hits, serr := scoreFile(ctx, path, sid, terms, maxPerSession, mtime)
+				if serr != nil {
+					if ctx.Err() != nil {
+						return nil, ctx.Err()
+					}
+					continue
+				}
+				for _, hit := range hits {
+					all = appendBoundedHits(all, hit, topK)
+				}
+				continue
+			}
+			if !strings.HasSuffix(ent.Name(), ".jsonl") {
 				continue
 			}
 			if entryIsSymlink(ent) {
@@ -193,6 +215,14 @@ func scoreFile(ctx context.Context, path, sid string, terms []string, maxPerSess
 		fileHits = fileHits[:maxPerSession]
 	}
 	return fileHits, nil
+}
+
+func regularFileModTime(path string) (string, bool) {
+	info, err := os.Lstat(path)
+	if err != nil || info.IsDir() || info.Mode()&os.ModeSymlink != 0 {
+		return "", false
+	}
+	return info.ModTime().UTC().Format(time.RFC3339), true
 }
 
 func entryIsSymlink(ent os.DirEntry) bool {
