@@ -742,7 +742,7 @@ go run ./cmd/affenteval --suite long-run --runtime-tools workspace,recall,plan -
 go run ./cmd/affenteval --suite live-web --runtime-web --runtime-browser --temperature 0 --keep-workspaces
 go run ./cmd/affenteval --scenario coding-python-slug --runtime-tools workspace --temperature 0
 go run ./cmd/affenteval --suite small-model-tools --runtime-tools workspace,recall,plan,skill,delegation --jsonl > eval.jsonl
-go run ./cmd/affenteval --suite long-run --runtime-tools workspace,recall,plan --min-pass-rate 0.8 --min-completion-rate 0.9 --min-memory-update-rate 0.1 --min-session-search-context-hit-rate 0.5 --max-tool-error-rate 0.05 --max-forced-no-tools-rate 0.05 --max-loop-guard-intervention-rate 0.1 --max-tool-context-truncation-rate 0.2 --max-avg-runtime-errors 0 --max-avg-context-compactions 1 --max-avg-total-tokens 120000
+go run ./cmd/affenteval --suite long-run --runtime-tools workspace,recall,plan --min-pass-rate 0.8 --min-completion-rate 0.9 --min-memory-update-rate 0.1 --min-session-search-context-hit-rate 0.5 --min-tool-repair-success-rate 0.8 --max-tool-error-rate 0.05 --max-forced-no-tools-rate 0.05 --max-loop-guard-intervention-rate 0.1 --max-tool-context-truncation-rate 0.2 --max-avg-runtime-errors 0 --max-avg-context-compactions 1 --max-avg-total-tokens 120000
 ```
 
 Quality gate flags are optional and disabled by default. They return exit code
@@ -754,8 +754,9 @@ gate is enabled and `quality_gate_failures` when a gate failed, so stored eval
 artifacts can explain CI or model-comparison failures without stderr.
 Use `--min-pass-rate`, `--min-completion-rate`,
 `--min-memory-update-rate`, `--min-source-access-verified-rate`,
-`--min-session-search-context-hit-rate`, `--max-tool-error-rate`,
-`--max-forced-no-tools-rate`, `--max-loop-guard-intervention-rate`,
+`--min-session-search-context-hit-rate`, `--min-tool-repair-success-rate`,
+`--max-tool-error-rate`, `--max-forced-no-tools-rate`,
+`--max-loop-guard-intervention-rate`,
 `--max-tool-context-truncation-rate`,
 `--max-tool-result-truncation-rate`, `--max-avg-runtime-errors`,
 `--max-avg-context-compactions`, and `--max-avg-total-tokens` for CI or
