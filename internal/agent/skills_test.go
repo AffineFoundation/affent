@@ -14,6 +14,8 @@ func TestBuiltinSkillProvider_WebSnapshotTriggers(t *testing.T) {
 		"AFFENT ACTIVE SKILL: web_snapshot_fact_extraction",
 		"current-page visible facts",
 		"Use browser_find",
+		"network_evidence_capture_pending",
+		"browser_snapshot once more if capture is still settling",
 		"search result page",
 		"Open the 1-3 highest-value visible result URLs",
 		"Do not use shell/curl/python",
@@ -89,7 +91,7 @@ func TestBuiltinSkillBodiesLoadFromEmbeddedFiles(t *testing.T) {
 	if err != nil {
 		t.Fatalf("embedded web_snapshot_fact_extraction skill should be readable: %v", err)
 	}
-	for _, want := range []string{"preserve the exact visible numeric string and unit", "Do not round, normalize, or backfill missing precision"} {
+	for _, want := range []string{"network_evidence_capture_pending", "browser_snapshot once more if capture is still settling", "preserve the exact visible numeric string and unit", "Do not round, normalize, or backfill missing precision"} {
 		if !strings.Contains(string(raw), want) {
 			t.Fatalf("embedded web_snapshot_fact_extraction skill missing %q", want)
 		}
