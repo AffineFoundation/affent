@@ -986,6 +986,77 @@ describe("App", () => {
     expect(screen.queryByTestId("profile-dialog")).toBeNull();
   });
 
+  it("loads runtime diagnostics inside settings without changing the top strip", async () => {
+    const user = userEvent.setup();
+    const fetchImpl = vi.fn(async (input: RequestInfo | URL) => {
+      const url = String(input);
+      if (url === "/v1/sessions?limit=100") {
+        return jsonResponse({ sessions: [], has_more: false });
+      }
+      if (url === "/v1/stats") {
+        return jsonResponse({
+          model: "qwen-small",
+          executor_mode: "local",
+          enable_builtins: true,
+          enable_web: true,
+          enable_browser: true,
+          enable_memory: true,
+          active_sessions: 2,
+          running_turns: 1,
+          eval_mode: true,
+          eval_tools: "workspace,recall",
+          aggregate: {
+            blocked_by_type: 0,
+            blocked_by_domain: 0,
+            cache_hit: 1,
+            cache_miss: 1,
+            network_fetch: 1,
+            input_tokens: 1000,
+            output_tokens: 250,
+            turns: 3,
+            tools: {
+              tool_requests: 4,
+              tool_errors: 0,
+              source_access_results: 3,
+              source_access_verified: 2,
+              source_access_network: 1,
+              session_search_calls: 1,
+              session_search_results: 2,
+              session_search_context_hits: 1,
+              session_search_matched_terms: 3,
+            },
+            runtime: {
+              runtime_errors: 0,
+              context_compactions: 1,
+              context_compactions_reactive: 1,
+              context_compaction_removed_messages: 72,
+            },
+          },
+        });
+      }
+      if (url === "/v1/skills") {
+        return jsonResponse({ skills: [], count: 0, install_enabled: false });
+      }
+      return jsonResponse({ error: { message: `unexpected ${url}` } }, 404);
+    });
+    vi.stubGlobal("fetch", fetchImpl);
+
+    render(<App />);
+
+    expect(await screen.findByTestId("connection-pill")).toHaveTextContent("Connected");
+    expect(screen.getByTestId("connection-pill")).not.toHaveTextContent("qwen-small");
+
+    await user.click(screen.getByLabelText("Settings"));
+
+    const runtime = await screen.findByTestId("runtime-stats-panel");
+    expect(runtime).toHaveTextContent("qwen-small");
+    expect(runtime).toHaveTextContent("2 sessions · 1 running · eval · workspace,recall · executor local");
+    expect(screen.getByTestId("runtime-stats-grid")).toHaveTextContent("Evidence2/3 verified · 1 network");
+    expect(screen.getByTestId("runtime-stats-grid")).toHaveTextContent("Recall2 hits · 1 context · 3 terms");
+    expect(screen.getByTestId("runtime-stats-grid")).toHaveTextContent("Context1 compaction · 1 reactive · -72 msgs");
+    expect(screen.getByTestId("connection-pill")).not.toHaveTextContent("qwen-small");
+  });
+
   it("keeps the top bar compact when stats polling would fail", async () => {
     const fetchImpl = vi.fn(async (input: RequestInfo | URL) => {
       const url = String(input);

@@ -1,8 +1,95 @@
 import type { ApiClient } from "./client";
 
+export interface BuildInfo {
+  revision?: string;
+  date?: string;
+}
+
+export interface StatsUsageSnapshot {
+  input_tokens: number;
+  output_tokens: number;
+  turns: number;
+}
+
+export interface StatsBrowserSnapshot {
+  blocked_by_type: number;
+  blocked_by_domain: number;
+  domain_relaxations?: number;
+  cache_hit: number;
+  cache_miss: number;
+  network_fetch: number;
+}
+
+export interface StatsToolSnapshot {
+  tool_requests: number;
+  tool_name_canonicalized?: number;
+  tool_args_repaired?: number;
+  tool_repair_calls?: number;
+  tool_repair_succeeded?: number;
+  tool_repair_failed?: number;
+  tool_repair_notes?: number;
+  tool_repair_by_kind?: Record<string, number>;
+  tool_failure_by_kind?: Record<string, number>;
+  tool_errors: number;
+  tool_duration_ms?: number;
+  loop_guard_interventions?: number;
+  forced_no_tools?: number;
+  source_access_results?: number;
+  source_access_verified?: number;
+  source_access_discovery_only?: number;
+  source_access_network?: number;
+  source_access_dynamic_partial?: number;
+  memory_updates?: number;
+  memory_update_add?: number;
+  memory_update_replace?: number;
+  memory_update_remove?: number;
+  session_search_calls?: number;
+  session_search_results?: number;
+  session_search_context_hits?: number;
+  session_search_matched_terms?: number;
+  tool_context_truncated?: number;
+  tool_context_omitted_bytes?: number;
+}
+
+export interface StatsRuntimeSnapshot {
+  turn_end_by_reason?: Record<string, number>;
+  runtime_errors: number;
+  runtime_error_by_kind?: Record<string, number>;
+  context_compactions?: number;
+  context_compactions_reactive?: number;
+  context_compaction_removed_messages?: number;
+  context_compaction_summary_bytes?: number;
+}
+
+export interface ServerSessionStats {
+  id: string;
+  created_at: string;
+  last_used_at: string;
+  usage: StatsUsageSnapshot;
+  tools: StatsToolSnapshot;
+  runtime: StatsRuntimeSnapshot;
+  browser: StatsBrowserSnapshot;
+}
+
+export interface ServerAggregateStats {
+  blocked_by_type: number;
+  blocked_by_domain: number;
+  domain_relaxations?: number;
+  cache_hit: number;
+  cache_miss: number;
+  network_fetch: number;
+  input_tokens: number;
+  output_tokens: number;
+  turns: number;
+  tools: StatsToolSnapshot;
+  runtime: StatsRuntimeSnapshot;
+}
+
 export interface ServerStatsResponse {
   listen?: string;
   model?: string;
+  build?: BuildInfo;
+  max_sessions?: number;
   active_sessions?: number;
   running_turns?: number;
   executor_mode?: string;
@@ -19,9 +106,13 @@ export interface ServerStatsResponse {
   shutting_down?: boolean;
   workspace_root?: string;
   memory_root?: string;
+  session_state_root?: string;
   browser_cache_dir?: string;
   web_search_backend?: string;
   server_time?: string;
+  sessions?: ServerSessionStats[];
+  aggregate?: ServerAggregateStats;
+  boundaries?: Record<string, number | string>;
 }
 
 export function getServerStats(client: ApiClient, signal?: AbortSignal): Promise<ServerStatsResponse> {

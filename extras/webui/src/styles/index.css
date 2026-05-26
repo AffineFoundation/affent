@@ -1225,6 +1225,13 @@ body {
   color: var(--c-error);
 }
 
+.runtime-stats-grid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  min-width: 0;
+}
+
 .session-tools-runtime {
   display: grid;
   gap: 6px;

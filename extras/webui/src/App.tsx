@@ -21,11 +21,13 @@ import {
   type SessionSkillInstallRequest,
   type SessionSummary,
 } from "./api/sessions";
+import { getServerStats, type ServerStatsResponse } from "./api/stats";
 import { ArtifactViewer, type ArtifactViewerState } from "./components/ArtifactViewer";
 import { EventType, type RawEvent } from "./api/events";
 import { Composer, type ComposerDraft } from "./components/Composer";
 import { SessionList } from "./components/SessionList";
 import { SessionMemoryPanel } from "./components/SessionMemoryPanel";
+import { RuntimeStatsPanel } from "./components/RuntimeStatsPanel";
 import { SessionSkillsPanel } from "./components/SessionSkillsPanel";
 import { Timeline, type GuidanceReceiptView, type PendingMessageView } from "./components/Timeline";
 import { WorkflowStatus } from "./components/WorkflowStatus";
@@ -69,6 +71,12 @@ type MemoryState =
   | { state: "ready"; memory: SessionMemoryResponse }
   | { state: "error"; error: string };
 
+type RuntimeStatsState =
+  | { state: "idle" }
+  | { state: "loading" }
+  | { state: "ready"; stats: ServerStatsResponse }
+  | { state: "error"; error: string };
+
 const demoReplayDelayMs = 180;
 const historyPageLimit = 500;
 const maxHistoryPages = 50;
@@ -95,6 +103,7 @@ export function App() {
   const [guidanceReceipts, setGuidanceReceipts] = useState<GuidanceReceiptView[]>([]);
   const [skillsState, setSkillsState] = useState<SkillsState>({ state: "idle" });
   const [memoryState, setMemoryState] = useState<MemoryState>({ state: "idle" });
+  const [runtimeStatsState, setRuntimeStatsState] = useState<RuntimeStatsState>({ state: "idle" });
   const [livePlanSummary, setLivePlanSummary] = useState<SessionPlanSummary | undefined>();
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [sessionsCollapsed, setSessionsCollapsed] = useState(false);
@@ -206,6 +215,24 @@ export function App() {
     (sessionId: string | undefined, sessionList?: readonly SessionSummary[]): string => resolveSessionTitle(sessionId, sessionList) ?? "Loading chat",
     [resolveSessionTitle],
   );
+
+  useEffect(() => {
+    if (demoActive || !settingsOpen) {
+      setRuntimeStatsState({ state: "idle" });
+      return;
+    }
+    const ac = new AbortController();
+    setRuntimeStatsState({ state: "loading" });
+    getServerStats(client, ac.signal)
+      .then((stats) => {
+        setRuntimeStatsState({ state: "ready", stats });
+      })
+      .catch((err) => {
+        if (isAbortError(err)) return;
+        setRuntimeStatsState({ state: "error", error: formatError(err) });
+      });
+    return () => ac.abort();
+  }, [client, demoActive, settingsOpen]);
 
   useEffect(() => {
     if (demoActive || !settingsOpen) {
@@ -786,6 +813,12 @@ export function App() {
                 <strong>Settings</strong>
                 <span>Skills, memory, and runtime preferences live here.</span>
               </div>
+              <RuntimeStatsPanel
+                stats={runtimeStatsState.state === "ready" ? runtimeStatsState.stats : undefined}
+                loading={runtimeStatsState.state === "loading"}
+                error={runtimeStatsState.state === "error" ? runtimeStatsState.error : undefined}
+                defaultOpen
+              />
               <SessionMemoryPanel
                 memory={memoryState.state === "ready" ? memoryState.memory : undefined}
                 loading={memoryState.state === "loading"}
