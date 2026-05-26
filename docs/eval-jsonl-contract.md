@@ -37,6 +37,10 @@ Shared metadata fields:
 - `runtime_mcp`: optional boolean, present when the eval runner passed a runtime
   MCP config. The config path itself is not written to JSONL.
 - `timeout_ms`: per-scenario timeout in milliseconds.
+- `min_pass_rate`, `min_completion_rate`,
+  `min_source_access_verified_rate`, `max_tool_error_rate`,
+  `max_tool_context_truncation_rate`, `max_avg_total_tokens`: optional quality
+  gate thresholds configured for the run. Disabled gates are omitted.
 
 ## Scenario Record
 

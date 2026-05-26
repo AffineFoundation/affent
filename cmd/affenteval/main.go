@@ -169,7 +169,7 @@ success and trace-level process quality.`)
 		VerifierOutputCapBytes:   *verifierOutputCap,
 		CleanupPassingWorkspaces: !*keepWorkspaces,
 	}
-	jsonlMeta := evalJSONLMetadataFromConfig(*suite, *model, *providerLabel, *executor, *temperature, *topP, *maxTokens, *seed, *runtimeEvalMode, *runtimeTools, *runtimeAllTools, *runtimeMemory, *runtimeWeb, *runtimeBrowser, *traceDeltas, *runtimeMCPConfig, *timeout)
+	jsonlMeta := evalJSONLMetadataFromConfig(*suite, *model, *providerLabel, *executor, *temperature, *topP, *maxTokens, *seed, *runtimeEvalMode, *runtimeTools, *runtimeAllTools, *runtimeMemory, *runtimeWeb, *runtimeBrowser, *traceDeltas, *runtimeMCPConfig, *timeout, gates)
 	ctx := context.Background()
 	var summary batchSummary
 	for _, scenario := range scenarios {
@@ -1015,27 +1015,33 @@ func formatStringIntCounts(counts map[string]int) string {
 }
 
 type evalJSONLMetadata struct {
-	SchemaVersion   int    `json:"schema_version"`
-	Suite           string `json:"suite,omitempty"`
-	Model           string `json:"model,omitempty"`
-	ProviderLabel   string `json:"provider_label,omitempty"`
-	Executor        string `json:"executor"`
-	Temperature     string `json:"temperature,omitempty"`
-	TopP            string `json:"top_p,omitempty"`
-	MaxTokens       string `json:"max_tokens,omitempty"`
-	Seed            string `json:"seed,omitempty"`
-	RuntimeEvalMode bool   `json:"runtime_eval_mode,omitempty"`
-	RuntimeTools    string `json:"runtime_tools,omitempty"`
-	RuntimeAllTools bool   `json:"runtime_all_tools,omitempty"`
-	RuntimeMemory   bool   `json:"runtime_memory,omitempty"`
-	RuntimeWeb      bool   `json:"runtime_web,omitempty"`
-	RuntimeBrowser  bool   `json:"runtime_browser,omitempty"`
-	TraceDeltas     bool   `json:"trace_deltas,omitempty"`
-	RuntimeMCP      bool   `json:"runtime_mcp,omitempty"`
-	TimeoutMS       int64  `json:"timeout_ms"`
+	SchemaVersion                int      `json:"schema_version"`
+	Suite                        string   `json:"suite,omitempty"`
+	Model                        string   `json:"model,omitempty"`
+	ProviderLabel                string   `json:"provider_label,omitempty"`
+	Executor                     string   `json:"executor"`
+	Temperature                  string   `json:"temperature,omitempty"`
+	TopP                         string   `json:"top_p,omitempty"`
+	MaxTokens                    string   `json:"max_tokens,omitempty"`
+	Seed                         string   `json:"seed,omitempty"`
+	RuntimeEvalMode              bool     `json:"runtime_eval_mode,omitempty"`
+	RuntimeTools                 string   `json:"runtime_tools,omitempty"`
+	RuntimeAllTools              bool     `json:"runtime_all_tools,omitempty"`
+	RuntimeMemory                bool     `json:"runtime_memory,omitempty"`
+	RuntimeWeb                   bool     `json:"runtime_web,omitempty"`
+	RuntimeBrowser               bool     `json:"runtime_browser,omitempty"`
+	TraceDeltas                  bool     `json:"trace_deltas,omitempty"`
+	RuntimeMCP                   bool     `json:"runtime_mcp,omitempty"`
+	TimeoutMS                    int64    `json:"timeout_ms"`
+	MinPassRate                  *float64 `json:"min_pass_rate,omitempty"`
+	MinCompletionRate            *float64 `json:"min_completion_rate,omitempty"`
+	MinSourceAccessVerifiedRate  *float64 `json:"min_source_access_verified_rate,omitempty"`
+	MaxToolErrorRate             *float64 `json:"max_tool_error_rate,omitempty"`
+	MaxToolContextTruncationRate *float64 `json:"max_tool_context_truncation_rate,omitempty"`
+	MaxAvgTotalTokens            *float64 `json:"max_avg_total_tokens,omitempty"`
 }
 
-func evalJSONLMetadataFromConfig(suite, model, providerLabel, executor, temperature, topP, maxTokens, seed string, runtimeEvalMode bool, runtimeTools string, runtimeAllTools, runtimeMemory, runtimeWeb, runtimeBrowser, traceDeltas bool, runtimeMCPConfig string, timeout time.Duration) evalJSONLMetadata {
+func evalJSONLMetadataFromConfig(suite, model, providerLabel, executor, temperature, topP, maxTokens, seed string, runtimeEvalMode bool, runtimeTools string, runtimeAllTools, runtimeMemory, runtimeWeb, runtimeBrowser, traceDeltas bool, runtimeMCPConfig string, timeout time.Duration, gates qualityGateConfig) evalJSONLMetadata {
 	model = strings.TrimSpace(model)
 	if model == "" {
 		model = strings.TrimSpace(os.Getenv("AFFENTCTL_MODEL"))
@@ -1045,25 +1051,39 @@ func evalJSONLMetadataFromConfig(suite, model, providerLabel, executor, temperat
 		providerLabel = strings.TrimSpace(os.Getenv("AFFENTEVAL_PROVIDER_LABEL"))
 	}
 	return evalJSONLMetadata{
-		SchemaVersion:   evalJSONLSchemaVersion,
-		Suite:           strings.TrimSpace(suite),
-		Model:           model,
-		ProviderLabel:   providerLabel,
-		Executor:        normalizedEvalExecutor(executor),
-		Temperature:     strings.TrimSpace(temperature),
-		TopP:            strings.TrimSpace(topP),
-		MaxTokens:       strings.TrimSpace(maxTokens),
-		Seed:            strings.TrimSpace(seed),
-		RuntimeEvalMode: runtimeEvalMode,
-		RuntimeTools:    strings.TrimSpace(runtimeTools),
-		RuntimeAllTools: runtimeAllTools,
-		RuntimeMemory:   runtimeMemory,
-		RuntimeWeb:      runtimeWeb,
-		RuntimeBrowser:  runtimeBrowser,
-		TraceDeltas:     traceDeltas,
-		RuntimeMCP:      strings.TrimSpace(runtimeMCPConfig) != "",
-		TimeoutMS:       timeout.Milliseconds(),
+		SchemaVersion:                evalJSONLSchemaVersion,
+		Suite:                        strings.TrimSpace(suite),
+		Model:                        model,
+		ProviderLabel:                providerLabel,
+		Executor:                     normalizedEvalExecutor(executor),
+		Temperature:                  strings.TrimSpace(temperature),
+		TopP:                         strings.TrimSpace(topP),
+		MaxTokens:                    strings.TrimSpace(maxTokens),
+		Seed:                         strings.TrimSpace(seed),
+		RuntimeEvalMode:              runtimeEvalMode,
+		RuntimeTools:                 strings.TrimSpace(runtimeTools),
+		RuntimeAllTools:              runtimeAllTools,
+		RuntimeMemory:                runtimeMemory,
+		RuntimeWeb:                   runtimeWeb,
+		RuntimeBrowser:               runtimeBrowser,
+		TraceDeltas:                  traceDeltas,
+		RuntimeMCP:                   strings.TrimSpace(runtimeMCPConfig) != "",
+		TimeoutMS:                    timeout.Milliseconds(),
+		MinPassRate:                  enabledQualityGateValue(gates.MinPassRate),
+		MinCompletionRate:            enabledQualityGateValue(gates.MinCompletionRate),
+		MinSourceAccessVerifiedRate:  enabledQualityGateValue(gates.MinSourceAccessVerifiedRate),
+		MaxToolErrorRate:             enabledQualityGateValue(gates.MaxToolErrorRate),
+		MaxToolContextTruncationRate: enabledQualityGateValue(gates.MaxToolContextTruncationRate),
+		MaxAvgTotalTokens:            enabledQualityGateValue(gates.MaxAvgTotalTokens),
 	}
+}
+
+func enabledQualityGateValue(value *float64) *float64 {
+	if value == nil || *value < 0 {
+		return nil
+	}
+	clone := *value
+	return &clone
 }
 
 func normalizedEvalExecutor(executor string) string {
