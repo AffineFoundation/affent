@@ -55,8 +55,9 @@ Shared metadata fields:
   `max_tool_error_rate`,
   `max_tool_context_truncation_rate`, `max_tool_result_truncation_rate`,
   `max_avg_runtime_errors`, `max_avg_context_compactions`,
-  `max_avg_reactive_context_compactions`, `max_avg_total_tokens`: optional
-  quality gate thresholds configured for the run. Disabled gates are omitted.
+  `max_avg_reactive_context_compactions`,
+  `max_avg_context_removed_messages`, `max_avg_total_tokens`: optional quality
+  gate thresholds configured for the run. Disabled gates are omitted.
 
 ## Scenario Record
 

@@ -115,6 +115,7 @@ func run(args []string) int {
 			MaxAvgRuntimeErrors:                  fs.Float64("max-avg-runtime-errors", -1, "optional quality gate: maximum average runtime error events per scenario"),
 			MaxAvgContextCompactions:             fs.Float64("max-avg-context-compactions", -1, "optional quality gate: maximum average context compactions per scenario"),
 			MaxAvgReactiveCompactions:            fs.Float64("max-avg-reactive-context-compactions", -1, "optional quality gate: maximum average reactive context compactions per scenario"),
+			MaxAvgContextRemovedMessages:         fs.Float64("max-avg-context-removed-messages", -1, "optional quality gate: maximum average messages removed by context compaction per scenario"),
 			MaxAvgTotalTokens:                    fs.Float64("max-avg-total-tokens", -1, "optional quality gate: maximum average total tokens per scenario"),
 		}
 	)
@@ -277,6 +278,7 @@ type qualityGateConfig struct {
 	MaxAvgRuntimeErrors                  *float64
 	MaxAvgContextCompactions             *float64
 	MaxAvgReactiveCompactions            *float64
+	MaxAvgContextRemovedMessages         *float64
 	MaxAvgTotalTokens                    *float64
 }
 
@@ -307,6 +309,7 @@ func qualityGateProfileDefinitions() []qualityGateProfileDefinition {
 				MaxToolResultTruncationRate:          float64Ptr(0.20),
 				MaxAvgRuntimeErrors:                  float64Ptr(0.20),
 				MaxAvgReactiveCompactions:            float64Ptr(0.50),
+				MaxAvgContextRemovedMessages:         float64Ptr(120),
 				MaxAvgTotalTokens:                    float64Ptr(120000),
 			},
 		},
@@ -328,6 +331,7 @@ func qualityGateProfileDefinitions() []qualityGateProfileDefinition {
 				MaxToolErrorRate:                     float64Ptr(0.10),
 				MaxToolResultTruncationRate:          float64Ptr(0.25),
 				MaxAvgRuntimeErrors:                  float64Ptr(0.20),
+				MaxAvgContextRemovedMessages:         float64Ptr(80),
 				MaxAvgTotalTokens:                    float64Ptr(120000),
 			},
 		},
@@ -375,6 +379,7 @@ func qualityGateConfigLines(g qualityGateConfig) []string {
 	add("max-avg-runtime-errors", g.MaxAvgRuntimeErrors)
 	add("max-avg-context-compactions", g.MaxAvgContextCompactions)
 	add("max-avg-reactive-context-compactions", g.MaxAvgReactiveCompactions)
+	add("max-avg-context-removed-messages", g.MaxAvgContextRemovedMessages)
 	add("max-avg-total-tokens", g.MaxAvgTotalTokens)
 	return lines
 }
@@ -421,6 +426,7 @@ func applyQualityGateProfile(g *qualityGateConfig, profile string, flagSet func(
 	apply("max-avg-runtime-errors", &g.MaxAvgRuntimeErrors, profileConfig.MaxAvgRuntimeErrors)
 	apply("max-avg-context-compactions", &g.MaxAvgContextCompactions, profileConfig.MaxAvgContextCompactions)
 	apply("max-avg-reactive-context-compactions", &g.MaxAvgReactiveCompactions, profileConfig.MaxAvgReactiveCompactions)
+	apply("max-avg-context-removed-messages", &g.MaxAvgContextRemovedMessages, profileConfig.MaxAvgContextRemovedMessages)
 	apply("max-avg-total-tokens", &g.MaxAvgTotalTokens, profileConfig.MaxAvgTotalTokens)
 	return nil
 }
@@ -1267,6 +1273,7 @@ func validateQualityGateConfig(g qualityGateConfig) error {
 		{"--max-avg-runtime-errors", g.MaxAvgRuntimeErrors, false},
 		{"--max-avg-context-compactions", g.MaxAvgContextCompactions, false},
 		{"--max-avg-reactive-context-compactions", g.MaxAvgReactiveCompactions, false},
+		{"--max-avg-context-removed-messages", g.MaxAvgContextRemovedMessages, false},
 		{"--max-avg-total-tokens", g.MaxAvgTotalTokens, false},
 	} {
 		if gate.value == nil {
@@ -1338,6 +1345,7 @@ func qualityGateFailures(s batchSummary, g qualityGateConfig) []string {
 	checkMax("avg_runtime_errors", batchAverage(s.RuntimeErrors, s.Total), g.MaxAvgRuntimeErrors, s.Total > 0)
 	checkMax("avg_context_compactions", batchAverage(s.ContextCompactions, s.Total), g.MaxAvgContextCompactions, s.Total > 0)
 	checkMax("avg_reactive_context_compactions", batchAverage(s.ContextCompactionsReactive, s.Total), g.MaxAvgReactiveCompactions, s.Total > 0)
+	checkMax("avg_context_removed_messages", batchAverage(s.ContextCompactionRemoved, s.Total), g.MaxAvgContextRemovedMessages, s.Total > 0)
 	checkMax("avg_total_tokens", batchAverage(s.InputTokens+s.OutputTokens, s.Total), g.MaxAvgTotalTokens, s.Total > 0)
 	sort.Strings(failures)
 	return failures
@@ -1839,6 +1847,7 @@ type evalJSONLMetadata struct {
 	MaxAvgRuntimeErrors                  *float64 `json:"max_avg_runtime_errors,omitempty"`
 	MaxAvgContextCompactions             *float64 `json:"max_avg_context_compactions,omitempty"`
 	MaxAvgReactiveCompactions            *float64 `json:"max_avg_reactive_context_compactions,omitempty"`
+	MaxAvgContextRemovedMessages         *float64 `json:"max_avg_context_removed_messages,omitempty"`
 	MaxAvgTotalTokens                    *float64 `json:"max_avg_total_tokens,omitempty"`
 }
 
@@ -1895,6 +1904,7 @@ func evalJSONLMetadataFromConfig(suite, model, providerLabel, executor, temperat
 		MaxAvgRuntimeErrors:                  enabledQualityGateValue(gates.MaxAvgRuntimeErrors),
 		MaxAvgContextCompactions:             enabledQualityGateValue(gates.MaxAvgContextCompactions),
 		MaxAvgReactiveCompactions:            enabledQualityGateValue(gates.MaxAvgReactiveCompactions),
+		MaxAvgContextRemovedMessages:         enabledQualityGateValue(gates.MaxAvgContextRemovedMessages),
 		MaxAvgTotalTokens:                    enabledQualityGateValue(gates.MaxAvgTotalTokens),
 	}
 }
@@ -2551,6 +2561,7 @@ func hasQualityGateThresholds(meta evalJSONLMetadata) bool {
 		meta.MaxAvgRuntimeErrors != nil ||
 		meta.MaxAvgContextCompactions != nil ||
 		meta.MaxAvgReactiveCompactions != nil ||
+		meta.MaxAvgContextRemovedMessages != nil ||
 		meta.MaxAvgTotalTokens != nil
 }
 
