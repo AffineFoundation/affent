@@ -49,8 +49,8 @@ Shared metadata fields:
   `max_tool_error_rate`,
   `max_tool_context_truncation_rate`, `max_tool_result_truncation_rate`,
   `max_avg_runtime_errors`, `max_avg_context_compactions`,
-  `max_avg_total_tokens`: optional quality gate thresholds configured for the
-  run. Disabled gates are omitted.
+  `max_avg_reactive_context_compactions`, `max_avg_total_tokens`: optional
+  quality gate thresholds configured for the run. Disabled gates are omitted.
 
 ## Scenario Record
 
@@ -252,7 +252,7 @@ Summary records aggregate all scenario records from the same process:
   `session_search_context_hit_rate` when session search returned prior-session
   hits,
   `avg_runtime_errors`, `avg_context_compactions`,
-  `avg_context_removed_messages`,
+  `avg_reactive_context_compactions`, `avg_context_removed_messages`,
   `tool_context_truncation_rate` and `tool_result_truncation_rate` when tool
   calls were observed,
   `avg_input_tokens`, `avg_output_tokens`, and `avg_total_tokens`.

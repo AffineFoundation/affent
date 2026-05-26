@@ -746,7 +746,7 @@ go run ./cmd/affenteval --suite long-run --runtime-tools workspace,recall,plan,d
 go run ./cmd/affenteval --suite live-web --runtime-web --runtime-browser --temperature 0 --keep-workspaces
 go run ./cmd/affenteval --scenario coding-python-slug --runtime-tools workspace --temperature 0
 go run ./cmd/affenteval --suite small-model-tools --runtime-tools workspace,recall,plan,skill,delegation --jsonl > eval.jsonl
-go run ./cmd/affenteval --suite long-run --runtime-tools workspace,recall,plan,delegation --min-pass-rate 0.8 --min-completion-rate 0.9 --min-memory-update-rate 0.1 --min-runtime-surface-rate 1 --min-source-network-rate 0.2 --min-session-search-context-hit-rate 0.5 --min-tool-repair-success-rate 0.8 --min-verifier-pass-rate 0.8 --max-tool-error-rate 0.05 --max-focused-task-error-rate 0 --max-subagent-error-rate 0 --max-forced-no-tools-rate 0.05 --max-loop-guard-intervention-rate 0.1 --max-plan-error-rate 0 --max-source-discovery-only-rate 0.1 --max-source-dynamic-partial-rate 0.1 --max-tool-context-truncation-rate 0.2 --max-avg-runtime-errors 0 --max-avg-context-compactions 1 --max-avg-total-tokens 120000
+go run ./cmd/affenteval --suite long-run --runtime-tools workspace,recall,plan,delegation --min-pass-rate 0.8 --min-completion-rate 0.9 --min-memory-update-rate 0.1 --min-runtime-surface-rate 1 --min-source-network-rate 0.2 --min-session-search-context-hit-rate 0.5 --min-tool-repair-success-rate 0.8 --min-verifier-pass-rate 0.8 --max-tool-error-rate 0.05 --max-focused-task-error-rate 0 --max-subagent-error-rate 0 --max-forced-no-tools-rate 0.05 --max-loop-guard-intervention-rate 0.1 --max-plan-error-rate 0 --max-source-discovery-only-rate 0.1 --max-source-dynamic-partial-rate 0.1 --max-tool-context-truncation-rate 0.2 --max-avg-runtime-errors 0 --max-avg-context-compactions 1 --max-avg-reactive-context-compactions 0.5 --max-avg-total-tokens 120000
 ```
 
 Quality gate flags are optional and disabled by default. They return exit code
@@ -759,7 +759,8 @@ artifacts can explain CI or model-comparison failures without stderr.
 The default text summary also prints the key normalized rates used for long-run
 debugging, including pass/completion, memory update coverage, runtime-surface
 coverage, tool errors, focused-task/subagent errors, plan errors, repair success, verifier pass rate,
-verified evidence, and network/discovery/dynamic-partial source ratios.
+verified evidence, network/discovery/dynamic-partial source ratios, average
+context compactions, reactive context compactions, and tool-context truncation.
 Use `--min-pass-rate`, `--min-completion-rate`,
 `--min-memory-update-rate`, `--min-runtime-surface-rate`,
 `--min-source-network-rate`,
@@ -774,8 +775,8 @@ Use `--min-pass-rate`, `--min-completion-rate`,
 `--max-source-dynamic-partial-rate`,
 `--max-tool-context-truncation-rate`,
 `--max-tool-result-truncation-rate`, `--max-avg-runtime-errors`,
-`--max-avg-context-compactions`, and `--max-avg-total-tokens` for CI or
-model/provider comparison runs.
+`--max-avg-context-compactions`, `--max-avg-reactive-context-compactions`,
+and `--max-avg-total-tokens` for CI or model/provider comparison runs.
 
 Run a one-off prompt through the same batch harness:
 
