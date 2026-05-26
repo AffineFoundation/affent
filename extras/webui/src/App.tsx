@@ -115,8 +115,9 @@ export function App() {
       pendingTask: pendingMessage?.kind === "task" ? pendingMessage.text : undefined,
       pendingGuidance: pendingMessage?.kind === "guidance" ? pendingMessage.text : undefined,
       sessionTitle: selectedSessionTitle,
+      planSummary: selectedSession?.plan_summary,
     }),
-    [pendingMessage, selectedSessionId, selectedSessionTitle, session, workflow],
+    [pendingMessage, selectedSession?.plan_summary, selectedSessionId, selectedSessionTitle, session, workflow],
   );
   const showWorkflowStatus = overview.tone === "error" || overview.tone === "warning";
   const showSessionNav = !demoActive && sessions.length > 0;

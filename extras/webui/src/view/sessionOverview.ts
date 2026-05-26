@@ -1,3 +1,4 @@
+import type { SessionPlanSummary } from "../api/sessions";
 import type { SessionState, TurnState } from "../store/sessionState";
 import type { WorkflowStatus } from "../store/workflowStatus";
 import { conversationTopicFromTurns } from "./continuationPrompt";
@@ -30,6 +31,7 @@ export function buildSessionOverview({
   pendingTask,
   pendingGuidance,
   sessionTitle,
+  planSummary,
 }: {
   session: SessionState;
   workflow: WorkflowStatus;
@@ -37,6 +39,7 @@ export function buildSessionOverview({
   pendingTask?: string;
   pendingGuidance?: string;
   sessionTitle?: string;
+  planSummary?: SessionPlanSummary;
 }): SessionOverview {
   const latestTurn = session.turns.at(-1);
   const latestActivity = latestTurn ? buildTurnActivity(latestTurn) : undefined;
@@ -53,7 +56,7 @@ export function buildSessionOverview({
       stateLabel: "Sending",
       tone: "running",
       active: true,
-      metrics: buildMetrics(session),
+      metrics: buildMetrics(session, undefined, undefined, planSummary),
     };
   }
 
@@ -64,7 +67,7 @@ export function buildSessionOverview({
       stateLabel: "Sending guidance",
       tone: "running",
       active: true,
-      metrics: buildMetrics(session, latestTurn, latestActivity),
+      metrics: buildMetrics(session, latestTurn, latestActivity, planSummary),
     };
   }
 
@@ -75,7 +78,7 @@ export function buildSessionOverview({
       stateLabel: "Ready",
       tone: "ready",
       active: false,
-      metrics: buildMetrics(session),
+      metrics: buildMetrics(session, undefined, undefined, planSummary),
     };
   }
 
@@ -86,7 +89,7 @@ export function buildSessionOverview({
       stateLabel: "Ready",
       tone: "ready",
       active: false,
-      metrics: buildMetrics(session),
+      metrics: buildMetrics(session, undefined, undefined, planSummary),
     };
   }
 
@@ -97,7 +100,7 @@ export function buildSessionOverview({
     stateLabel: workflow.title,
     tone,
     active: workflow.active,
-    metrics: buildMetrics(session, latestTurn, latestActivity),
+    metrics: buildMetrics(session, latestTurn, latestActivity, planSummary),
   };
 }
 
@@ -130,7 +133,12 @@ function isMechanicalActivitySummary(summary: string): boolean {
   return /^(\d+ )?actions? completed(?:;|\.|$)/i.test(summary) || summary === "No action details.";
 }
 
-function buildMetrics(session: SessionState, latestTurn?: TurnState, latestActivity?: TurnActivityView): SessionOverviewMetric[] {
+function buildMetrics(
+  session: SessionState,
+  latestTurn?: TurnState,
+  latestActivity?: TurnActivityView,
+  planSummary?: SessionPlanSummary,
+): SessionOverviewMetric[] {
   const metrics: SessionOverviewMetric[] = [];
 
   const currentIssueCount = latestTurn ? currentTurnIssueCount(latestTurn) : 0;
@@ -141,6 +149,8 @@ function buildMetrics(session: SessionState, latestTurn?: TurnState, latestActiv
   if (artifactMetric) metrics.push(artifactMetric);
   const loopDecisionMetric = buildLoopDecisionMetric(session);
   if (loopDecisionMetric) metrics.push(loopDecisionMetric);
+  const planMetric = buildPlanMetric(planSummary);
+  if (planMetric) metrics.push(planMetric);
   const workMetric = buildWorkMetric(latestTurn, latestActivity, currentIssueCount > 0);
   if (workMetric) metrics.push(workMetric);
   const threadMetrics = latestTurn ? buildThreadMetrics(session, latestTurn) : undefined;
@@ -166,6 +176,36 @@ function buildMetrics(session: SessionState, latestTurn?: TurnState, latestActiv
   if (session.unknownEventCount > 0) metrics.push({ label: "Unclassified", value: String(session.unknownEventCount), tone: "warning" });
 
   return metrics;
+}
+
+function buildPlanMetric(plan: SessionPlanSummary | undefined): SessionOverviewMetric | undefined {
+  if (!plan) return undefined;
+  if (plan.error) return { label: "Plan", value: "unreadable", tone: "warning" };
+  if (plan.total_steps <= 0) return undefined;
+  const parts = [`${plan.completed_steps}/${plan.total_steps}`];
+  if (plan.current_step_index && !plan.done) {
+    parts.push(`step ${plan.current_step_index} ${planStatusLabel(plan)}`);
+  } else if (plan.done) {
+    parts.push("done");
+  } else if (plan.last_completed_step_index) {
+    parts.push(`last step ${plan.last_completed_step_index}`);
+  }
+  return {
+    label: "Plan",
+    value: parts.join(" · "),
+    tone: plan.blocked || plan.error ? "warning" : plan.done ? "success" : undefined,
+  };
+}
+
+function planStatusLabel(plan: SessionPlanSummary): string {
+  const status = plan.current_step_status?.trim();
+  if (status === "in_progress") return "active";
+  if (status === "blocked") return "blocked";
+  if (status === "completed") return "done";
+  if (status === "pending") return "pending";
+  if (plan.active) return "active";
+  if (plan.blocked) return "blocked";
+  return "pending";
 }
 
 function buildArtifactMetric(session: SessionState): SessionOverviewMetric | undefined {

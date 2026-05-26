@@ -188,6 +188,62 @@ describe("buildSessionOverview", () => {
     ]));
   });
 
+  it("surfaces the persisted plan step summary in the session overview", () => {
+    const session = reduceRawEvents(completedTurn);
+    const overview = buildSessionOverview({
+      session,
+      workflow: deriveWorkflowStatus(session),
+      hasSelectedSession: true,
+      planSummary: {
+        label: "plan:1/3:active",
+        total_steps: 3,
+        completed_steps: 1,
+        active: true,
+        blocked: false,
+        done: false,
+        current_step: "verify browser evidence",
+        current_step_index: 2,
+        current_step_status: "in_progress",
+        last_completed_step: "inspect plan state",
+        last_completed_step_index: 1,
+        error: false,
+      },
+    });
+
+    expect(overview.metrics).toEqual(expect.arrayContaining([
+      { label: "Plan", value: "1/3 · step 2 active", tone: undefined },
+    ]));
+  });
+
+  it("marks blocked persisted plan steps as warning context", () => {
+    const session = reduceRawEvents(completedTurn);
+    const overview = buildSessionOverview({
+      session,
+      workflow: deriveWorkflowStatus(session),
+      hasSelectedSession: true,
+      planSummary: {
+        label: "plan:1/2:blocked",
+        total_steps: 2,
+        completed_steps: 1,
+        active: false,
+        blocked: true,
+        done: false,
+        current_step: "wait for approval",
+        current_step_index: 2,
+        current_step_status: "blocked",
+        last_completed_step: "prepare patch",
+        last_completed_step_index: 1,
+        blocked_step: "wait for approval",
+        blocked_step_index: 2,
+        error: false,
+      },
+    });
+
+    expect(overview.metrics).toEqual(expect.arrayContaining([
+      { label: "Plan", value: "1/2 · step 2 blocked", tone: "warning" },
+    ]));
+  });
+
   it("uses the generated session title for loaded chats when the API provides one", () => {
     const session = reduceRawEvents(completedTurn);
     const overview = buildSessionOverview({

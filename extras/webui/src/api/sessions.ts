@@ -82,6 +82,23 @@ export interface SessionCapabilities {
   focused_task_profiles?: string[];
 }
 
+export interface SessionPlanSummary {
+  label: string;
+  total_steps: number;
+  completed_steps: number;
+  active: boolean;
+  blocked: boolean;
+  done: boolean;
+  current_step?: string;
+  current_step_index?: number;
+  current_step_status?: string;
+  last_completed_step?: string;
+  last_completed_step_index?: number;
+  blocked_step?: string;
+  blocked_step_index?: number;
+  error: boolean;
+}
+
 export interface SessionSummary {
   id: string;
   /** Human-readable summarized chat title, when the runtime provides one. */
@@ -100,6 +117,7 @@ export interface SessionSummary {
   latest_user_message?: string;
   topic_user_message?: string;
   has_plan?: boolean;
+  plan_summary?: SessionPlanSummary;
   has_conversation: boolean;
   has_events: boolean;
   has_artifacts: boolean;
