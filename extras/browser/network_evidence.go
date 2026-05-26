@@ -51,6 +51,12 @@ type NetworkEvidenceLog struct {
 	lastActivity time.Time
 }
 
+type scoredNetworkEvidenceEntry struct {
+	entry NetworkEvidenceEntry
+	score int
+	index int
+}
+
 func NewNetworkEvidenceLog() *NetworkEvidenceLog {
 	return &NetworkEvidenceLog{}
 }
@@ -176,15 +182,45 @@ func (l *NetworkEvidenceLog) Search(query string, maxResults int) []NetworkEvide
 	}
 	l.mu.Lock()
 	defer l.mu.Unlock()
-	var out []NetworkEvidenceEntry
-	for i := len(l.entries) - 1; i >= 0 && len(out) < maxResults; i-- {
+	if query == "" {
+		var out []NetworkEvidenceEntry
+		for i := len(l.entries) - 1; i >= 0 && len(out) < maxResults; i-- {
+			entry := l.entries[i]
+			if !networkEntryMatchesPageHost(entry, l.pageHost) {
+				continue
+			}
+			out = append(out, cloneNetworkEntry(entry))
+		}
+		return out
+	}
+	terms := networkQueryTerms(query)
+	var scored []scoredNetworkEvidenceEntry
+	for i := len(l.entries) - 1; i >= 0; i-- {
 		entry := l.entries[i]
 		if !networkEntryMatchesPageHost(entry, l.pageHost) {
 			continue
 		}
-		if query == "" || networkEntryMatches(entry, query) {
-			out = append(out, cloneNetworkEntry(entry))
+		score := networkEntryScore(entry, query, terms)
+		if score > 0 {
+			scored = append(scored, scoredNetworkEvidenceEntry{
+				entry: cloneNetworkEntry(entry),
+				score: score,
+				index: i,
+			})
 		}
+	}
+	sort.SliceStable(scored, func(i, j int) bool {
+		if scored[i].score != scored[j].score {
+			return scored[i].score > scored[j].score
+		}
+		return scored[i].index > scored[j].index
+	})
+	if len(scored) > maxResults {
+		scored = scored[:maxResults]
+	}
+	out := make([]NetworkEvidenceEntry, 0, len(scored))
+	for _, item := range scored {
+		out = append(out, item.entry)
 	}
 	return out
 }
@@ -216,20 +252,59 @@ func networkEntryMatchesPageHost(entry NetworkEvidenceEntry, pageHost string) bo
 	return host != "" && sameSiteOrSubdomain(host, pageHost)
 }
 
-func networkEntryMatches(entry NetworkEvidenceEntry, query string) bool {
-	if strings.Contains(strings.ToLower(entry.URL), query) ||
-		strings.Contains(strings.ToLower(entry.ContentType), query) ||
-		strings.Contains(strings.ToLower(entry.Resource), query) {
-		return true
+func networkEntryScore(entry NetworkEvidenceEntry, query string, terms []string) int {
+	urlText := strings.ToLower(entry.URL)
+	metaText := strings.ToLower(entry.ContentType + " " + entry.Resource)
+	bodyText := strings.ToLower(string(entry.Body))
+	combined := urlText + " " + metaText + " " + bodyText
+	score := 0
+	if query != "" {
+		if strings.Contains(urlText, query) {
+			score += 90
+		}
+		if strings.Contains(bodyText, query) {
+			score += 70
+		}
+		if strings.Contains(metaText, query) {
+			score += 20
+		}
+		normalizedQuery := normalizeNetworkSearchText(query)
+		normalizedCombined := normalizeNetworkSearchText(combined)
+		if normalizedQuery != "" && strings.Contains(normalizedCombined, normalizedQuery) {
+			score += 45
+		}
 	}
-	if strings.Contains(strings.ToLower(string(entry.Body)), query) {
-		return true
+	if len(terms) > 0 {
+		matched := 0
+		normalizedURL := normalizeNetworkSearchText(urlText)
+		normalizedMeta := normalizeNetworkSearchText(metaText)
+		normalizedBody := normalizeNetworkSearchText(bodyText)
+		for _, term := range terms {
+			termScore := 0
+			if networkNormalizedTextContainsTerm(normalizedURL, term) {
+				termScore += 18
+			}
+			if networkNormalizedTextContainsTerm(normalizedBody, term) {
+				termScore += 12
+			}
+			if networkNormalizedTextContainsTerm(normalizedMeta, term) {
+				termScore += 5
+			}
+			if termScore > 0 {
+				matched++
+				score += termScore
+			}
+		}
+		if matched == len(terms) {
+			score += 40
+		} else if matched > 1 {
+			score += 8 * matched
+		}
 	}
-	terms := networkQueryTerms(query)
-	if len(terms) == 0 {
-		return false
+	if len(networkJSONPathHints(entry.Body, query)) > 0 {
+		score += 35
 	}
-	return networkTextMatchesAnyTerm(entry.URL+" "+entry.ContentType+" "+entry.Resource+" "+string(entry.Body), terms)
+	return score
 }
 
 func cloneNetworkEntry(entry NetworkEvidenceEntry) NetworkEvidenceEntry {
@@ -641,6 +716,18 @@ func networkTextMatchesAnyTerm(text string, terms []string) bool {
 	}
 	for _, term := range terms {
 		if fields[term] {
+			return true
+		}
+	}
+	return false
+}
+
+func networkNormalizedTextContainsTerm(normalized, term string) bool {
+	if normalized == "" || term == "" {
+		return false
+	}
+	for _, field := range strings.Fields(normalized) {
+		if field == term {
 			return true
 		}
 	}

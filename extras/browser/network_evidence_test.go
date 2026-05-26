@@ -178,6 +178,21 @@ func TestNetworkEvidenceSearchTokenizesMetricLabelQueries(t *testing.T) {
 	}
 }
 
+func TestNetworkEvidenceSearchRanksSpecificMetricResponseBeforeRecentWeakMatch(t *testing.T) {
+	log := NewNetworkEvidenceLog()
+	log.ObserveResponse("https://taostats.io/subnets/120", proto.NetworkResourceTypeDocument)
+	log.Add("https://taostats.io/api/subnets/120/metrics", 200, proto.NetworkResourceTypeXHR, http.Header{"Content-Type": {"application/json"}}, []byte(`{"netuid":120,"name":"Affine","market_cap":"201.04K T","validators":64}`))
+	log.Add("https://taostats.io/api/subnets/120/activity", 200, proto.NetworkResourceTypeXHR, http.Header{"Content-Type": {"application/json"}}, []byte(`{"netuid":120,"name":"Affine","events":[{"kind":"heartbeat"}]}`))
+
+	got := log.Search("Affine market cap", 2)
+	if len(got) != 2 {
+		t.Fatalf("Search returned %d entries, want 2: %+v", len(got), got)
+	}
+	if got[0].URL != "https://taostats.io/api/subnets/120/metrics" {
+		t.Fatalf("specific metric response should rank first, got %+v", got)
+	}
+}
+
 func TestNetworkEvidenceReadJSONPathExtractsSubtree(t *testing.T) {
 	log := NewNetworkEvidenceLog()
 	log.ObserveResponse("https://taostats.io/subnets/120", proto.NetworkResourceTypeDocument)
