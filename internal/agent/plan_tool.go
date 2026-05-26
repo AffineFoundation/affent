@@ -584,12 +584,20 @@ func PlanOnlyTurnOptions(reg *Registry, maxToolCalls int) (TurnOptions, error) {
 }
 
 func ExecutePlanTurnOptions() TurnOptions {
+	return ExecutePlanTurnOptionsForStep(0)
+}
+
+func ExecutePlanTurnOptionsForStep(currentStepIndex int) TurnOptions {
 	return TurnOptions{
-		ToolCallPolicies: []*ToolCallPolicy{PlanExecuteToolCallPolicy()},
+		ToolCallPolicies: []*ToolCallPolicy{PlanExecuteToolCallPolicyForStep(currentStepIndex)},
 	}
 }
 
 func PlanExecuteToolCallPolicy() *ToolCallPolicy {
+	return PlanExecuteToolCallPolicyForStep(0)
+}
+
+func PlanExecuteToolCallPolicyForStep(currentStepIndex int) *ToolCallPolicy {
 	return &ToolCallPolicy{
 		ToolName: PlanToolName,
 		Reject: func(ctx ToolCallPolicyContext) (string, bool) {
@@ -597,6 +605,12 @@ func PlanExecuteToolCallPolicy() *ToolCallPolicy {
 			switch action {
 			case "set", "clear":
 				return "execute_plan: the persisted plan is already confirmed; do not replace or clear it during execution.\nNext: execute the current active step, then call plan with action=update for that same step using status, evidence, or note.", true
+			case "update":
+				index := planIndexFromRawArgs(ctx.Args)
+				if currentStepIndex > 0 && index > 0 && index != currentStepIndex {
+					return fmt.Sprintf("execute_plan: update only the current active step %d during this turn; do not skip ahead or rewrite another step.\nNext: execute step %d, then call plan with action=update index=%d using status, evidence, or note.", currentStepIndex, currentStepIndex, currentStepIndex), true
+				}
+				return "", false
 			default:
 				return "", false
 			}
@@ -612,6 +626,16 @@ func planActionFromRawArgs(args json.RawMessage) string {
 		return ""
 	}
 	return normalizePlanAction(raw.Action)
+}
+
+func planIndexFromRawArgs(args json.RawMessage) int {
+	var raw struct {
+		Index int `json:"index"`
+	}
+	if err := json.Unmarshal(args, &raw); err != nil {
+		return 0
+	}
+	return raw.Index
 }
 
 func PlanOnlyUserPrompt(request string) string {

@@ -123,9 +123,12 @@ func TestPrepareRunExecutePlanUsesPersistedUnfinishedPlan(t *testing.T) {
 	}
 	b := &loopBundle{loop: &agent.Loop{Tools: testPlanRegistry(t)}, workspace: workspace, sessionID: "planned"}
 
-	got, err := prepareRunExecutePlan(b, "")
+	got, stepIndex, err := prepareRunExecutePlan(b, "")
 	if err != nil {
 		t.Fatalf("prepareRunExecutePlan: %v", err)
+	}
+	if stepIndex != 2 {
+		t.Fatalf("execute plan step index = %d, want 2", stepIndex)
 	}
 	for _, want := range []string{
 		"Execute-plan mode is enabled.",
@@ -165,7 +168,7 @@ func TestPrepareRunExecutePlanRejectsNonExecutablePlans(t *testing.T) {
 				}
 			}
 
-			_, err := prepareRunExecutePlan(&loopBundle{loop: &agent.Loop{Tools: testPlanRegistry(t)}, workspace: workspace, sessionID: "planned"}, "continue")
+			_, _, err := prepareRunExecutePlan(&loopBundle{loop: &agent.Loop{Tools: testPlanRegistry(t)}, workspace: workspace, sessionID: "planned"}, "continue")
 			if err == nil || !strings.Contains(err.Error(), tc.want) {
 				t.Fatalf("prepareRunExecutePlan error = %v, want %q", err, tc.want)
 			}
@@ -182,7 +185,7 @@ func TestPrepareRunExecutePlanRequiresPlanTool(t *testing.T) {
 	if err := os.WriteFile(localSessionPlanPath(convDir, "planned"), []byte(`{"version":1,"steps":[{"text":"ship","status":"pending"}]}`+"\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	_, err := prepareRunExecutePlan(&loopBundle{loop: &agent.Loop{Tools: agent.NewRegistry()}, workspace: workspace, sessionID: "planned"}, "")
+	_, _, err := prepareRunExecutePlan(&loopBundle{loop: &agent.Loop{Tools: agent.NewRegistry()}, workspace: workspace, sessionID: "planned"}, "")
 	if err == nil || !strings.Contains(err.Error(), "plan tool is not available") {
 		t.Fatalf("prepareRunExecutePlan error = %v, want missing plan tool", err)
 	}

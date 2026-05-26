@@ -416,11 +416,11 @@ func chatPlanSlashTurn(line string, b *loopBundle) (string, agent.TurnOptions, b
 		}
 		return agent.PlanOnlyUserPrompt(arg), opts, true, nil
 	case "execute":
-		prompt, err := prepareRunExecutePlan(b, arg)
+		prompt, executePlanStepIndex, err := prepareRunExecutePlan(b, arg)
 		if err != nil {
 			return "", agent.TurnOptions{}, false, err
 		}
-		return prompt, agent.ExecutePlanTurnOptions(), true, nil
+		return prompt, agent.ExecutePlanTurnOptionsForStep(executePlanStepIndex), true, nil
 	default:
 		return "", agent.TurnOptions{}, false, nil
 	}

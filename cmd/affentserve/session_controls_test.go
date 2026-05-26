@@ -92,7 +92,7 @@ func TestHandleSessionMessage_PlanOnlyStartsConstrainedTurn(t *testing.T) {
 	if len(msgs) == 0 || !strings.Contains(msgs[len(msgs)-1].Content, "Plan-only mode is enabled.") || !strings.Contains(msgs[len(msgs)-1].Content, "draft the migration") {
 		t.Fatalf("last conversation message should be wrapped plan-only prompt, got %+v", msgs)
 	}
-	opts, err := sessionMessageTurnOptions(s, sessionMessageModePlanOnly)
+	opts, err := sessionMessageTurnOptions(s, sessionMessageModePlanOnly, 0)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -186,12 +186,18 @@ func TestHandleSessionMessage_ExecutePlanStartsConfirmedPlanTurn(t *testing.T) {
 		!strings.Contains(msgs[len(msgs)-1].Content, "call plan with action=update for that same step") {
 		t.Fatalf("execute-plan prompt should enforce step execution/update discipline, got %q", msgs[len(msgs)-1].Content)
 	}
-	opts, err := sessionMessageTurnOptions(s, sessionMessageModeExecutePlan)
+	opts, err := sessionMessageTurnOptions(s, sessionMessageModeExecutePlan, 1)
 	if err != nil {
 		t.Fatal(err)
 	}
 	if len(opts.ToolCallPolicies) != 1 {
 		t.Fatalf("execute-plan tool policies = %+v, want plan policy", opts.ToolCallPolicies)
+	}
+	if got, reject := opts.ToolCallPolicies[0].Reject(agent.ToolCallPolicyContext{
+		ToolName: agent.PlanToolName,
+		Args:     json.RawMessage(`{"action":"update","index":2,"status":"completed"}`),
+	}); !reject || !strings.Contains(got, "update only the current active step 1") {
+		t.Fatalf("execute-plan policy should reject wrong step update, reject=%v got=%q", reject, got)
 	}
 }
 

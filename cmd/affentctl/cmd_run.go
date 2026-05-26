@@ -77,12 +77,13 @@ Required: --model. --prompt is required unless --execute-plan is set.`)
 		prompt = agent.PlanOnlyUserPrompt(prompt)
 	} else if *executePlan {
 		var err error
-		prompt, err = prepareRunExecutePlan(b, prompt)
+		var executePlanStepIndex int
+		prompt, executePlanStepIndex, err = prepareRunExecutePlan(b, prompt)
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "execute-plan: %v\n", err)
 			return exitUsage
 		}
-		turnOpts = agent.ExecutePlanTurnOptions()
+		turnOpts = agent.ExecutePlanTurnOptionsForStep(executePlanStepIndex)
 	}
 
 	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
@@ -147,32 +148,34 @@ func validateRunModeFlags(c commonFlags, planOnly, executePlan bool) error {
 	return nil
 }
 
-func prepareRunExecutePlan(b *loopBundle, prompt string) (string, error) {
+func prepareRunExecutePlan(b *loopBundle, prompt string) (string, int, error) {
 	if b == nil || strings.TrimSpace(b.workspace) == "" || strings.TrimSpace(b.sessionID) == "" {
-		return "", fmt.Errorf("session plan is not available")
+		return "", 0, fmt.Errorf("session plan is not available")
 	}
 	if !loopHasPlanTool(b) {
-		return "", fmt.Errorf("plan tool is not available")
+		return "", 0, fmt.Errorf("plan tool is not available")
 	}
 	summary := runSessionPlanSummary(b)
 	switch {
 	case summary.Error:
-		return "", fmt.Errorf("session %q has an unreadable plan; inspect or clear it with affentctl sessions --plan/--clear-plan", b.sessionID)
+		return "", 0, fmt.Errorf("session %q has an unreadable plan; inspect or clear it with affentctl sessions --plan/--clear-plan", b.sessionID)
 	case summary.Label == planstate.LabelMissing:
-		return "", fmt.Errorf("session %q has no persisted plan; create one with --plan-only first", b.sessionID)
+		return "", 0, fmt.Errorf("session %q has no persisted plan; create one with --plan-only first", b.sessionID)
 	case summary.Label == planstate.LabelEmpty:
-		return "", fmt.Errorf("session %q has an empty plan; create a concrete plan with --plan-only first", b.sessionID)
+		return "", 0, fmt.Errorf("session %q has an empty plan; create a concrete plan with --plan-only first", b.sessionID)
 	case summary.Done:
-		return "", fmt.Errorf("session %q plan is already done; clear it or create a new plan", b.sessionID)
+		return "", 0, fmt.Errorf("session %q plan is already done; clear it or create a new plan", b.sessionID)
 	case summary.Blocked:
-		return "", fmt.Errorf("session %q plan is blocked at step %d; resolve the blocker before executing", b.sessionID, summary.CurrentStepIndex)
+		return "", 0, fmt.Errorf("session %q plan is blocked at step %d; resolve the blocker before executing", b.sessionID, summary.CurrentStepIndex)
 	case summary.TotalSteps == 0:
-		return "", fmt.Errorf("session %q has no executable plan steps", b.sessionID)
+		return "", 0, fmt.Errorf("session %q has no executable plan steps", b.sessionID)
+	case summary.CurrentStepIndex <= 0:
+		return "", 0, fmt.Errorf("session %q has no current executable plan step", b.sessionID)
 	}
 	if strings.TrimSpace(prompt) == "" {
 		prompt = "Proceed with the active persisted plan."
 	}
-	return runExecutePlanPrompt(prompt, summary.Label), nil
+	return runExecutePlanPrompt(prompt, summary.Label), summary.CurrentStepIndex, nil
 }
 
 func loopHasPlanTool(b *loopBundle) bool {

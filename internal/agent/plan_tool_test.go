@@ -464,10 +464,45 @@ func TestPlanExecuteToolCallPolicyAllowsViewAndUpdate(t *testing.T) {
 	}
 }
 
+func TestPlanExecuteToolCallPolicyRejectsWrongStepUpdate(t *testing.T) {
+	policy := PlanExecuteToolCallPolicyForStep(2)
+	got, reject := policy.Reject(ToolCallPolicyContext{
+		ToolName: PlanToolName,
+		Args:     json.RawMessage(`{"action":"update","index":3,"status":"completed"}`),
+	})
+	if !reject {
+		t.Fatal("wrong step update should be rejected")
+	}
+	for _, want := range []string{"execute_plan", "current active step 2", "index=2"} {
+		if !strings.Contains(got, want) {
+			t.Fatalf("wrong-step rejection missing %q: %q", want, got)
+		}
+	}
+	if got, reject := policy.Reject(ToolCallPolicyContext{
+		ToolName: PlanToolName,
+		Args:     json.RawMessage(`{"action":"update","index":2,"status":"completed"}`),
+	}); reject {
+		t.Fatalf("current step update should pass, got %q", got)
+	}
+}
+
 func TestExecutePlanTurnOptionsInstallsPlanPolicy(t *testing.T) {
 	opts := ExecutePlanTurnOptions()
 	if len(opts.ToolCallPolicies) != 1 || opts.ToolCallPolicies[0].ToolName != PlanToolName {
 		t.Fatalf("ExecutePlanTurnOptions policies = %+v, want one plan policy", opts.ToolCallPolicies)
+	}
+}
+
+func TestExecutePlanTurnOptionsForStepInstallsStepPolicy(t *testing.T) {
+	opts := ExecutePlanTurnOptionsForStep(4)
+	if len(opts.ToolCallPolicies) != 1 || opts.ToolCallPolicies[0].ToolName != PlanToolName {
+		t.Fatalf("ExecutePlanTurnOptionsForStep policies = %+v, want one plan policy", opts.ToolCallPolicies)
+	}
+	if got, reject := opts.ToolCallPolicies[0].Reject(ToolCallPolicyContext{
+		ToolName: PlanToolName,
+		Args:     json.RawMessage(`{"action":"update","index":1,"status":"completed"}`),
+	}); !reject || !strings.Contains(got, "current active step 4") {
+		t.Fatalf("step policy reject=%v got=%q, want current active step 4", reject, got)
 	}
 }
 

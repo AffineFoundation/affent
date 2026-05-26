@@ -63,12 +63,13 @@ func handleSessionMessage(pool *SessionPool, sessionID string, w http.ResponseWr
 		writeJSONErrorTyped(w, http.StatusBadRequest, "content is required", nil, "bad_request")
 		return
 	}
+	executePlanStepIndex := 0
 	if sessionMessageModeRequiresPlanTool(mode) && !pool.cfg.EnableBuiltins {
 		writeJSONErrorTyped(w, http.StatusConflict, "session mode unavailable", errors.New("plan tool is not available"), "mode_unavailable")
 		return
 	}
 	if mode == sessionMessageModeExecutePlan {
-		content, err = prepareSessionExecutePlan(pool, sessionID, content)
+		content, executePlanStepIndex, err = prepareSessionExecutePlan(pool, sessionID, content)
 		if err != nil {
 			writeJSONErrorTyped(w, http.StatusBadRequest, "execute plan", err, "bad_request")
 			return
@@ -86,7 +87,7 @@ func handleSessionMessage(pool *SessionPool, sessionID string, w http.ResponseWr
 		writeJSONError(w, http.StatusInternalServerError, "create session", err)
 		return
 	}
-	opts, err := sessionMessageTurnOptions(sess, mode)
+	opts, err := sessionMessageTurnOptions(sess, mode, executePlanStepIndex)
 	if err != nil {
 		writeJSONErrorTyped(w, http.StatusConflict, "session mode unavailable", err, "mode_unavailable")
 		return
@@ -169,7 +170,7 @@ func normalizeSessionMessageMode(raw string) (string, error) {
 	}
 }
 
-func sessionMessageTurnOptions(sess *Session, mode string) (agent.TurnOptions, error) {
+func sessionMessageTurnOptions(sess *Session, mode string, executePlanStepIndex int) (agent.TurnOptions, error) {
 	if !sessionMessageModeRequiresPlanTool(mode) {
 		return agent.TurnOptions{}, nil
 	}
@@ -180,7 +181,7 @@ func sessionMessageTurnOptions(sess *Session, mode string) (agent.TurnOptions, e
 		if _, ok := sess.registry.Get(agent.PlanToolName); !ok {
 			return agent.TurnOptions{}, errors.New("plan tool is not available")
 		}
-		return agent.ExecutePlanTurnOptions(), nil
+		return agent.ExecutePlanTurnOptionsForStep(executePlanStepIndex), nil
 	}
 	return agent.PlanOnlyTurnOptions(sess.registry, sessionPlanOnlyMaxToolCalls)
 }
@@ -189,27 +190,29 @@ func sessionMessageModeRequiresPlanTool(mode string) bool {
 	return mode == sessionMessageModePlanOnly || mode == sessionMessageModeExecutePlan
 }
 
-func prepareSessionExecutePlan(pool *SessionPool, sessionID, request string) (string, error) {
+func prepareSessionExecutePlan(pool *SessionPool, sessionID, request string) (string, int, error) {
 	summary := summarizeSessionPlanFile(pool, sessionID)
 	switch {
 	case summary == nil:
-		return "", fmt.Errorf("session %q has no persisted plan; create one with mode=%q first", sessionID, sessionMessageModePlanOnly)
+		return "", 0, fmt.Errorf("session %q has no persisted plan; create one with mode=%q first", sessionID, sessionMessageModePlanOnly)
 	case summary.Error:
-		return "", fmt.Errorf("session %q has an unreadable plan; inspect or clear it with the session plan API", sessionID)
+		return "", 0, fmt.Errorf("session %q has an unreadable plan; inspect or clear it with the session plan API", sessionID)
 	case summary.Label == planstate.LabelEmpty:
-		return "", fmt.Errorf("session %q has an empty plan; create a concrete plan with mode=%q first", sessionID, sessionMessageModePlanOnly)
+		return "", 0, fmt.Errorf("session %q has an empty plan; create a concrete plan with mode=%q first", sessionID, sessionMessageModePlanOnly)
 	case summary.Done:
-		return "", fmt.Errorf("session %q plan is already done; clear it or create a new plan", sessionID)
+		return "", 0, fmt.Errorf("session %q plan is already done; clear it or create a new plan", sessionID)
 	case summary.Blocked:
-		return "", fmt.Errorf("session %q plan is blocked at step %d; resolve the blocker before executing", sessionID, summary.CurrentStepIndex)
+		return "", 0, fmt.Errorf("session %q plan is blocked at step %d; resolve the blocker before executing", sessionID, summary.CurrentStepIndex)
 	case summary.TotalSteps == 0:
-		return "", fmt.Errorf("session %q has no executable plan steps", sessionID)
+		return "", 0, fmt.Errorf("session %q has no executable plan steps", sessionID)
+	case summary.CurrentStepIndex <= 0:
+		return "", 0, fmt.Errorf("session %q has no current executable plan step", sessionID)
 	}
 	request = strings.TrimSpace(request)
 	if request == "" {
 		request = "Proceed with the active persisted plan."
 	}
-	return sessionExecutePlanPrompt(request, summary.Label), nil
+	return sessionExecutePlanPrompt(request, summary.Label), summary.CurrentStepIndex, nil
 }
 
 func sessionExecutePlanPrompt(request, label string) string {
