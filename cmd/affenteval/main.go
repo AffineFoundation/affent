@@ -71,16 +71,17 @@ func run(args []string) int {
 		jsonl             = fs.Bool("jsonl", false, "emit machine-readable JSONL records instead of text")
 		keepWorkspaces    = fs.Bool("keep-workspaces", false, "keep passing scenario workspaces; failing scenario workspaces are always kept")
 		gates             = qualityGateConfig{
-			MinPassRate:                  fs.Float64("min-pass-rate", -1, "optional quality gate: minimum batch pass rate, 0..1"),
-			MinCompletionRate:            fs.Float64("min-completion-rate", -1, "optional quality gate: minimum completed-turn rate, 0..1"),
-			MinSourceAccessVerifiedRate:  fs.Float64("min-source-access-verified-rate", -1, "optional quality gate: minimum verified SourceAccess rate, 0..1"),
-			MaxLoopGuardInterventionRate: fs.Float64("max-loop-guard-intervention-rate", -1, "optional quality gate: maximum loop guard intervention rate per tool call, 0..1"),
-			MaxToolErrorRate:             fs.Float64("max-tool-error-rate", -1, "optional quality gate: maximum tool error rate, 0..1"),
-			MaxToolContextTruncationRate: fs.Float64("max-tool-context-truncation-rate", -1, "optional quality gate: maximum tool-context truncation rate, 0..1"),
-			MaxToolResultTruncationRate:  fs.Float64("max-tool-result-truncation-rate", -1, "optional quality gate: maximum tool-result event truncation rate, 0..1"),
-			MaxAvgRuntimeErrors:          fs.Float64("max-avg-runtime-errors", -1, "optional quality gate: maximum average runtime error events per scenario"),
-			MaxAvgContextCompactions:     fs.Float64("max-avg-context-compactions", -1, "optional quality gate: maximum average context compactions per scenario"),
-			MaxAvgTotalTokens:            fs.Float64("max-avg-total-tokens", -1, "optional quality gate: maximum average total tokens per scenario"),
+			MinPassRate:                    fs.Float64("min-pass-rate", -1, "optional quality gate: minimum batch pass rate, 0..1"),
+			MinCompletionRate:              fs.Float64("min-completion-rate", -1, "optional quality gate: minimum completed-turn rate, 0..1"),
+			MinSourceAccessVerifiedRate:    fs.Float64("min-source-access-verified-rate", -1, "optional quality gate: minimum verified SourceAccess rate, 0..1"),
+			MinSessionSearchContextHitRate: fs.Float64("min-session-search-context-hit-rate", -1, "optional quality gate: minimum session_search context-hit rate, 0..1"),
+			MaxLoopGuardInterventionRate:   fs.Float64("max-loop-guard-intervention-rate", -1, "optional quality gate: maximum loop guard intervention rate per tool call, 0..1"),
+			MaxToolErrorRate:               fs.Float64("max-tool-error-rate", -1, "optional quality gate: maximum tool error rate, 0..1"),
+			MaxToolContextTruncationRate:   fs.Float64("max-tool-context-truncation-rate", -1, "optional quality gate: maximum tool-context truncation rate, 0..1"),
+			MaxToolResultTruncationRate:    fs.Float64("max-tool-result-truncation-rate", -1, "optional quality gate: maximum tool-result event truncation rate, 0..1"),
+			MaxAvgRuntimeErrors:            fs.Float64("max-avg-runtime-errors", -1, "optional quality gate: maximum average runtime error events per scenario"),
+			MaxAvgContextCompactions:       fs.Float64("max-avg-context-compactions", -1, "optional quality gate: maximum average context compactions per scenario"),
+			MaxAvgTotalTokens:              fs.Float64("max-avg-total-tokens", -1, "optional quality gate: maximum average total tokens per scenario"),
 		}
 	)
 	fs.Usage = func() {
@@ -207,16 +208,17 @@ success and trace-level process quality.`)
 }
 
 type qualityGateConfig struct {
-	MinPassRate                  *float64
-	MinCompletionRate            *float64
-	MinSourceAccessVerifiedRate  *float64
-	MaxLoopGuardInterventionRate *float64
-	MaxToolErrorRate             *float64
-	MaxToolContextTruncationRate *float64
-	MaxToolResultTruncationRate  *float64
-	MaxAvgRuntimeErrors          *float64
-	MaxAvgContextCompactions     *float64
-	MaxAvgTotalTokens            *float64
+	MinPassRate                    *float64
+	MinCompletionRate              *float64
+	MinSourceAccessVerifiedRate    *float64
+	MinSessionSearchContextHitRate *float64
+	MaxLoopGuardInterventionRate   *float64
+	MaxToolErrorRate               *float64
+	MaxToolContextTruncationRate   *float64
+	MaxToolResultTruncationRate    *float64
+	MaxAvgRuntimeErrors            *float64
+	MaxAvgContextCompactions       *float64
+	MaxAvgTotalTokens              *float64
 }
 
 type batchSummary struct {
@@ -753,6 +755,7 @@ func validateQualityGateConfig(g qualityGateConfig) error {
 		{"--min-pass-rate", g.MinPassRate, true},
 		{"--min-completion-rate", g.MinCompletionRate, true},
 		{"--min-source-access-verified-rate", g.MinSourceAccessVerifiedRate, true},
+		{"--min-session-search-context-hit-rate", g.MinSessionSearchContextHitRate, true},
 		{"--max-loop-guard-intervention-rate", g.MaxLoopGuardInterventionRate, true},
 		{"--max-tool-error-rate", g.MaxToolErrorRate, true},
 		{"--max-tool-context-truncation-rate", g.MaxToolContextTruncationRate, true},
@@ -808,6 +811,7 @@ func qualityGateFailures(s batchSummary, g qualityGateConfig) []string {
 	checkMin("pass_rate", batchRatio(s.Passed, s.Total), g.MinPassRate, s.Total > 0)
 	checkMin("completion_rate", batchRatio(s.EndCompleted, s.Total), g.MinCompletionRate, s.Total > 0)
 	checkMin("source_access_verified_rate", batchRatio(s.SourceAccessVerified, s.SourceAccessResults), g.MinSourceAccessVerifiedRate, s.SourceAccessResults > 0)
+	checkMin("session_search_context_hit_rate", batchRatio(s.SessionSearchContextHits, s.SessionSearchResults), g.MinSessionSearchContextHitRate, s.SessionSearchResults > 0)
 	checkMax("loop_guard_intervention_rate", batchRatio(s.LoopGuardInterventions, s.ToolCalls), g.MaxLoopGuardInterventionRate, s.ToolCalls > 0)
 	checkMax("tool_error_rate", batchRatio(s.ToolErrors, s.ToolCalls), g.MaxToolErrorRate, s.ToolCalls > 0)
 	checkMax("tool_context_truncation_rate", batchRatio(s.ToolContextTruncated, s.ToolCalls), g.MaxToolContextTruncationRate, s.ToolCalls > 0)
@@ -1039,34 +1043,35 @@ func formatStringIntCounts(counts map[string]int) string {
 }
 
 type evalJSONLMetadata struct {
-	SchemaVersion                int      `json:"schema_version"`
-	Suite                        string   `json:"suite,omitempty"`
-	Model                        string   `json:"model,omitempty"`
-	ProviderLabel                string   `json:"provider_label,omitempty"`
-	Executor                     string   `json:"executor"`
-	Temperature                  string   `json:"temperature,omitempty"`
-	TopP                         string   `json:"top_p,omitempty"`
-	MaxTokens                    string   `json:"max_tokens,omitempty"`
-	Seed                         string   `json:"seed,omitempty"`
-	RuntimeEvalMode              bool     `json:"runtime_eval_mode,omitempty"`
-	RuntimeTools                 string   `json:"runtime_tools,omitempty"`
-	RuntimeAllTools              bool     `json:"runtime_all_tools,omitempty"`
-	RuntimeMemory                bool     `json:"runtime_memory,omitempty"`
-	RuntimeWeb                   bool     `json:"runtime_web,omitempty"`
-	RuntimeBrowser               bool     `json:"runtime_browser,omitempty"`
-	TraceDeltas                  bool     `json:"trace_deltas,omitempty"`
-	RuntimeMCP                   bool     `json:"runtime_mcp,omitempty"`
-	TimeoutMS                    int64    `json:"timeout_ms"`
-	MinPassRate                  *float64 `json:"min_pass_rate,omitempty"`
-	MinCompletionRate            *float64 `json:"min_completion_rate,omitempty"`
-	MinSourceAccessVerifiedRate  *float64 `json:"min_source_access_verified_rate,omitempty"`
-	MaxLoopGuardInterventionRate *float64 `json:"max_loop_guard_intervention_rate,omitempty"`
-	MaxToolErrorRate             *float64 `json:"max_tool_error_rate,omitempty"`
-	MaxToolContextTruncationRate *float64 `json:"max_tool_context_truncation_rate,omitempty"`
-	MaxToolResultTruncationRate  *float64 `json:"max_tool_result_truncation_rate,omitempty"`
-	MaxAvgRuntimeErrors          *float64 `json:"max_avg_runtime_errors,omitempty"`
-	MaxAvgContextCompactions     *float64 `json:"max_avg_context_compactions,omitempty"`
-	MaxAvgTotalTokens            *float64 `json:"max_avg_total_tokens,omitempty"`
+	SchemaVersion                  int      `json:"schema_version"`
+	Suite                          string   `json:"suite,omitempty"`
+	Model                          string   `json:"model,omitempty"`
+	ProviderLabel                  string   `json:"provider_label,omitempty"`
+	Executor                       string   `json:"executor"`
+	Temperature                    string   `json:"temperature,omitempty"`
+	TopP                           string   `json:"top_p,omitempty"`
+	MaxTokens                      string   `json:"max_tokens,omitempty"`
+	Seed                           string   `json:"seed,omitempty"`
+	RuntimeEvalMode                bool     `json:"runtime_eval_mode,omitempty"`
+	RuntimeTools                   string   `json:"runtime_tools,omitempty"`
+	RuntimeAllTools                bool     `json:"runtime_all_tools,omitempty"`
+	RuntimeMemory                  bool     `json:"runtime_memory,omitempty"`
+	RuntimeWeb                     bool     `json:"runtime_web,omitempty"`
+	RuntimeBrowser                 bool     `json:"runtime_browser,omitempty"`
+	TraceDeltas                    bool     `json:"trace_deltas,omitempty"`
+	RuntimeMCP                     bool     `json:"runtime_mcp,omitempty"`
+	TimeoutMS                      int64    `json:"timeout_ms"`
+	MinPassRate                    *float64 `json:"min_pass_rate,omitempty"`
+	MinCompletionRate              *float64 `json:"min_completion_rate,omitempty"`
+	MinSourceAccessVerifiedRate    *float64 `json:"min_source_access_verified_rate,omitempty"`
+	MinSessionSearchContextHitRate *float64 `json:"min_session_search_context_hit_rate,omitempty"`
+	MaxLoopGuardInterventionRate   *float64 `json:"max_loop_guard_intervention_rate,omitempty"`
+	MaxToolErrorRate               *float64 `json:"max_tool_error_rate,omitempty"`
+	MaxToolContextTruncationRate   *float64 `json:"max_tool_context_truncation_rate,omitempty"`
+	MaxToolResultTruncationRate    *float64 `json:"max_tool_result_truncation_rate,omitempty"`
+	MaxAvgRuntimeErrors            *float64 `json:"max_avg_runtime_errors,omitempty"`
+	MaxAvgContextCompactions       *float64 `json:"max_avg_context_compactions,omitempty"`
+	MaxAvgTotalTokens              *float64 `json:"max_avg_total_tokens,omitempty"`
 }
 
 func evalJSONLMetadataFromConfig(suite, model, providerLabel, executor, temperature, topP, maxTokens, seed string, runtimeEvalMode bool, runtimeTools string, runtimeAllTools, runtimeMemory, runtimeWeb, runtimeBrowser, traceDeltas bool, runtimeMCPConfig string, timeout time.Duration, gates qualityGateConfig) evalJSONLMetadata {
@@ -1079,34 +1084,35 @@ func evalJSONLMetadataFromConfig(suite, model, providerLabel, executor, temperat
 		providerLabel = strings.TrimSpace(os.Getenv("AFFENTEVAL_PROVIDER_LABEL"))
 	}
 	return evalJSONLMetadata{
-		SchemaVersion:                evalJSONLSchemaVersion,
-		Suite:                        strings.TrimSpace(suite),
-		Model:                        model,
-		ProviderLabel:                providerLabel,
-		Executor:                     normalizedEvalExecutor(executor),
-		Temperature:                  strings.TrimSpace(temperature),
-		TopP:                         strings.TrimSpace(topP),
-		MaxTokens:                    strings.TrimSpace(maxTokens),
-		Seed:                         strings.TrimSpace(seed),
-		RuntimeEvalMode:              runtimeEvalMode,
-		RuntimeTools:                 strings.TrimSpace(runtimeTools),
-		RuntimeAllTools:              runtimeAllTools,
-		RuntimeMemory:                runtimeMemory,
-		RuntimeWeb:                   runtimeWeb,
-		RuntimeBrowser:               runtimeBrowser,
-		TraceDeltas:                  traceDeltas,
-		RuntimeMCP:                   strings.TrimSpace(runtimeMCPConfig) != "",
-		TimeoutMS:                    timeout.Milliseconds(),
-		MinPassRate:                  enabledQualityGateValue(gates.MinPassRate),
-		MinCompletionRate:            enabledQualityGateValue(gates.MinCompletionRate),
-		MinSourceAccessVerifiedRate:  enabledQualityGateValue(gates.MinSourceAccessVerifiedRate),
-		MaxLoopGuardInterventionRate: enabledQualityGateValue(gates.MaxLoopGuardInterventionRate),
-		MaxToolErrorRate:             enabledQualityGateValue(gates.MaxToolErrorRate),
-		MaxToolContextTruncationRate: enabledQualityGateValue(gates.MaxToolContextTruncationRate),
-		MaxToolResultTruncationRate:  enabledQualityGateValue(gates.MaxToolResultTruncationRate),
-		MaxAvgRuntimeErrors:          enabledQualityGateValue(gates.MaxAvgRuntimeErrors),
-		MaxAvgContextCompactions:     enabledQualityGateValue(gates.MaxAvgContextCompactions),
-		MaxAvgTotalTokens:            enabledQualityGateValue(gates.MaxAvgTotalTokens),
+		SchemaVersion:                  evalJSONLSchemaVersion,
+		Suite:                          strings.TrimSpace(suite),
+		Model:                          model,
+		ProviderLabel:                  providerLabel,
+		Executor:                       normalizedEvalExecutor(executor),
+		Temperature:                    strings.TrimSpace(temperature),
+		TopP:                           strings.TrimSpace(topP),
+		MaxTokens:                      strings.TrimSpace(maxTokens),
+		Seed:                           strings.TrimSpace(seed),
+		RuntimeEvalMode:                runtimeEvalMode,
+		RuntimeTools:                   strings.TrimSpace(runtimeTools),
+		RuntimeAllTools:                runtimeAllTools,
+		RuntimeMemory:                  runtimeMemory,
+		RuntimeWeb:                     runtimeWeb,
+		RuntimeBrowser:                 runtimeBrowser,
+		TraceDeltas:                    traceDeltas,
+		RuntimeMCP:                     strings.TrimSpace(runtimeMCPConfig) != "",
+		TimeoutMS:                      timeout.Milliseconds(),
+		MinPassRate:                    enabledQualityGateValue(gates.MinPassRate),
+		MinCompletionRate:              enabledQualityGateValue(gates.MinCompletionRate),
+		MinSourceAccessVerifiedRate:    enabledQualityGateValue(gates.MinSourceAccessVerifiedRate),
+		MinSessionSearchContextHitRate: enabledQualityGateValue(gates.MinSessionSearchContextHitRate),
+		MaxLoopGuardInterventionRate:   enabledQualityGateValue(gates.MaxLoopGuardInterventionRate),
+		MaxToolErrorRate:               enabledQualityGateValue(gates.MaxToolErrorRate),
+		MaxToolContextTruncationRate:   enabledQualityGateValue(gates.MaxToolContextTruncationRate),
+		MaxToolResultTruncationRate:    enabledQualityGateValue(gates.MaxToolResultTruncationRate),
+		MaxAvgRuntimeErrors:            enabledQualityGateValue(gates.MaxAvgRuntimeErrors),
+		MaxAvgContextCompactions:       enabledQualityGateValue(gates.MaxAvgContextCompactions),
+		MaxAvgTotalTokens:              enabledQualityGateValue(gates.MaxAvgTotalTokens),
 	}
 }
 
@@ -1236,100 +1242,101 @@ type batchResultRecord struct {
 
 type batchSummaryRecord struct {
 	evalJSONLMetadata
-	Type                       string                                     `json:"type"`
-	Scenarios                  int                                        `json:"scenarios"`
-	Passed                     int                                        `json:"passed"`
-	Failed                     int                                        `json:"failed"`
-	PassRate                   float64                                    `json:"pass_rate"`
-	CompletionRate             float64                                    `json:"completion_rate"`
-	ToolErrorRate              *float64                                   `json:"tool_error_rate,omitempty"`
-	LoopGuardInterventionRate  *float64                                   `json:"loop_guard_intervention_rate,omitempty"`
-	ToolRepairSuccessRate      *float64                                   `json:"tool_repair_success_rate,omitempty"`
-	VerifierPassRate           *float64                                   `json:"verifier_pass_rate,omitempty"`
-	SourceAccessVerifiedRate   *float64                                   `json:"source_access_verified_rate,omitempty"`
-	AvgRuntimeErrors           float64                                    `json:"avg_runtime_errors"`
-	AvgContextCompactions      float64                                    `json:"avg_context_compactions"`
-	AvgContextRemovedMessages  float64                                    `json:"avg_context_removed_messages"`
-	ToolContextTruncationRate  *float64                                   `json:"tool_context_truncation_rate,omitempty"`
-	ToolResultTruncationRate   *float64                                   `json:"tool_result_truncation_rate,omitempty"`
-	DurationMS                 int64                                      `json:"duration_ms"`
-	ToolCalls                  int                                        `json:"tool_calls"`
-	ToolErrors                 int                                        `json:"tool_errors"`
-	ToolRepaired               int                                        `json:"tool_repaired"`
-	ToolNameCanonicalized      int                                        `json:"tool_name_canonicalized"`
-	ToolRepairCalls            int                                        `json:"tool_repair_calls,omitempty"`
-	ToolRepairSucceeded        int                                        `json:"tool_repair_succeeded,omitempty"`
-	ToolRepairFailed           int                                        `json:"tool_repair_failed,omitempty"`
-	ToolRepairNotes            int                                        `json:"tool_repair_notes,omitempty"`
-	ToolRepairByKind           map[string]int                             `json:"tool_repair_by_kind,omitempty"`
-	ToolFailureByKind          map[string]int                             `json:"tool_failure_by_kind,omitempty"`
-	ToolFailureExamples        map[string][]agenteval.ToolFailureExample  `json:"tool_failure_examples,omitempty"`
-	RuntimeErrorByKind         map[string]int                             `json:"runtime_error_by_kind,omitempty"`
-	RuntimeErrorExamples       map[string][]agenteval.RuntimeErrorExample `json:"runtime_error_examples,omitempty"`
-	RuntimeSurfaceScenarios    int                                        `json:"runtime_surface_scenarios,omitempty"`
-	RuntimeSurfaceTools        map[string]int                             `json:"runtime_surface_tools,omitempty"`
-	RuntimeSurfaceCapabilities map[string]int                             `json:"runtime_surface_capabilities,omitempty"`
-	LoopDecisions              int                                        `json:"loop_decisions,omitempty"`
-	LoopDecisionByKind         map[string]int                             `json:"loop_decision_by_kind,omitempty"`
-	LoopDecisionByDecision     map[string]int                             `json:"loop_decision_by_decision,omitempty"`
-	LoopDecisionExamples       []agenteval.LoopDecision                   `json:"loop_decision_examples,omitempty"`
-	ContextCompactions         int                                        `json:"context_compactions,omitempty"`
-	ContextCompactionsReactive int                                        `json:"context_compactions_reactive,omitempty"`
-	ContextCompactionRemoved   int                                        `json:"context_compaction_removed_messages,omitempty"`
-	ContextCompactionSummary   int                                        `json:"context_compaction_summary_bytes,omitempty"`
-	ContextCompactionExamples  []agenteval.ContextCompaction              `json:"context_compaction_examples,omitempty"`
-	LoopGuardInterventions     int                                        `json:"loop_guard_interventions"`
-	ForcedNoTools              int                                        `json:"forced_no_tools"`
-	SourceAccessResults        int                                        `json:"source_access_results"`
-	SourceAccessVerified       int                                        `json:"source_access_verified"`
-	SourceAccessDiscoveryOnly  int                                        `json:"source_access_discovery_only"`
-	SourceAccessNetwork        int                                        `json:"source_access_network"`
-	SourceAccessDynamicPartial int                                        `json:"source_access_dynamic_partial"`
-	SourceAccessExamples       []agenteval.SourceAccessExample            `json:"source_access_examples,omitempty"`
-	MemoryUpdates              int                                        `json:"memory_updates"`
-	MemoryUpdateAdd            int                                        `json:"memory_update_add"`
-	MemoryUpdateReplace        int                                        `json:"memory_update_replace"`
-	MemoryUpdateRemove         int                                        `json:"memory_update_remove"`
-	SessionSearchCalls         int                                        `json:"session_search_calls,omitempty"`
-	SessionSearchResults       int                                        `json:"session_search_results,omitempty"`
-	SessionSearchContextHits   int                                        `json:"session_search_context_hits,omitempty"`
-	SessionSearchMatchedTerms  int                                        `json:"session_search_matched_terms,omitempty"`
-	ToolDurationMS             int64                                      `json:"tool_duration_ms"`
-	ToolContextTruncated       int                                        `json:"tool_context_truncated"`
-	ToolContextOmittedBytes    int                                        `json:"tool_context_omitted_bytes"`
-	ToolArgsTruncated          int                                        `json:"tool_args_truncated"`
-	ToolArgsOmittedBytes       int                                        `json:"tool_args_omitted_bytes"`
-	ToolResultsTruncated       int                                        `json:"tool_results_truncated"`
-	ToolResultsOmittedBytes    int                                        `json:"tool_results_omitted_bytes"`
-	ToolResultArtifacts        int                                        `json:"tool_result_artifacts"`
-	ToolTruncationExamples     []agenteval.ToolTruncationExample          `json:"tool_truncation_examples,omitempty"`
-	VerifierRuns               int                                        `json:"verifier_runs"`
-	VerifierPassed             int                                        `json:"verifier_passed"`
-	VerifierFailed             int                                        `json:"verifier_failed"`
-	VerifierOutputTruncated    int                                        `json:"verifier_output_truncated"`
-	VerifierOutputOmittedBytes int                                        `json:"verifier_output_omitted_bytes"`
-	TraceSchemaVersions        map[int]int                                `json:"trace_schema_versions,omitempty"`
-	TraceEvents                int                                        `json:"trace_events,omitempty"`
-	TraceEventTypes            map[string]int                             `json:"trace_event_types,omitempty"`
-	InputTokens                int                                        `json:"input_tokens"`
-	OutputTokens               int                                        `json:"output_tokens"`
-	AvgInputTokens             float64                                    `json:"avg_input_tokens"`
-	AvgOutputTokens            float64                                    `json:"avg_output_tokens"`
-	AvgTotalTokens             float64                                    `json:"avg_total_tokens"`
-	EndCompleted               int                                        `json:"end_completed"`
-	EndMaxTurns                int                                        `json:"end_max_turns"`
-	EndErrors                  int                                        `json:"end_errors"`
-	EndCancelled               int                                        `json:"end_cancelled"`
-	EndUnknown                 int                                        `json:"end_unknown"`
-	FailureKinds               map[string]int                             `json:"failure_kinds,omitempty"`
-	FailureHints               failureHintMap                             `json:"failure_hints,omitempty"`
-	ToolFailureHints           failureHintMap                             `json:"tool_failure_hints,omitempty"`
-	RuntimeErrorHints          failureHintMap                             `json:"runtime_error_hints,omitempty"`
-	DebugBriefByTag            map[string]int                             `json:"debug_brief_by_tag,omitempty"`
-	QualityGatesPassed         *bool                                      `json:"quality_gates_passed,omitempty"`
-	QualityGateFailures        []string                                   `json:"quality_gate_failures,omitempty"`
-	RemovedWorkspaces          int                                        `json:"removed_workspaces"`
-	CleanupErrors              int                                        `json:"cleanup_errors"`
+	Type                        string                                     `json:"type"`
+	Scenarios                   int                                        `json:"scenarios"`
+	Passed                      int                                        `json:"passed"`
+	Failed                      int                                        `json:"failed"`
+	PassRate                    float64                                    `json:"pass_rate"`
+	CompletionRate              float64                                    `json:"completion_rate"`
+	ToolErrorRate               *float64                                   `json:"tool_error_rate,omitempty"`
+	LoopGuardInterventionRate   *float64                                   `json:"loop_guard_intervention_rate,omitempty"`
+	ToolRepairSuccessRate       *float64                                   `json:"tool_repair_success_rate,omitempty"`
+	VerifierPassRate            *float64                                   `json:"verifier_pass_rate,omitempty"`
+	SourceAccessVerifiedRate    *float64                                   `json:"source_access_verified_rate,omitempty"`
+	SessionSearchContextHitRate *float64                                   `json:"session_search_context_hit_rate,omitempty"`
+	AvgRuntimeErrors            float64                                    `json:"avg_runtime_errors"`
+	AvgContextCompactions       float64                                    `json:"avg_context_compactions"`
+	AvgContextRemovedMessages   float64                                    `json:"avg_context_removed_messages"`
+	ToolContextTruncationRate   *float64                                   `json:"tool_context_truncation_rate,omitempty"`
+	ToolResultTruncationRate    *float64                                   `json:"tool_result_truncation_rate,omitempty"`
+	DurationMS                  int64                                      `json:"duration_ms"`
+	ToolCalls                   int                                        `json:"tool_calls"`
+	ToolErrors                  int                                        `json:"tool_errors"`
+	ToolRepaired                int                                        `json:"tool_repaired"`
+	ToolNameCanonicalized       int                                        `json:"tool_name_canonicalized"`
+	ToolRepairCalls             int                                        `json:"tool_repair_calls,omitempty"`
+	ToolRepairSucceeded         int                                        `json:"tool_repair_succeeded,omitempty"`
+	ToolRepairFailed            int                                        `json:"tool_repair_failed,omitempty"`
+	ToolRepairNotes             int                                        `json:"tool_repair_notes,omitempty"`
+	ToolRepairByKind            map[string]int                             `json:"tool_repair_by_kind,omitempty"`
+	ToolFailureByKind           map[string]int                             `json:"tool_failure_by_kind,omitempty"`
+	ToolFailureExamples         map[string][]agenteval.ToolFailureExample  `json:"tool_failure_examples,omitempty"`
+	RuntimeErrorByKind          map[string]int                             `json:"runtime_error_by_kind,omitempty"`
+	RuntimeErrorExamples        map[string][]agenteval.RuntimeErrorExample `json:"runtime_error_examples,omitempty"`
+	RuntimeSurfaceScenarios     int                                        `json:"runtime_surface_scenarios,omitempty"`
+	RuntimeSurfaceTools         map[string]int                             `json:"runtime_surface_tools,omitempty"`
+	RuntimeSurfaceCapabilities  map[string]int                             `json:"runtime_surface_capabilities,omitempty"`
+	LoopDecisions               int                                        `json:"loop_decisions,omitempty"`
+	LoopDecisionByKind          map[string]int                             `json:"loop_decision_by_kind,omitempty"`
+	LoopDecisionByDecision      map[string]int                             `json:"loop_decision_by_decision,omitempty"`
+	LoopDecisionExamples        []agenteval.LoopDecision                   `json:"loop_decision_examples,omitempty"`
+	ContextCompactions          int                                        `json:"context_compactions,omitempty"`
+	ContextCompactionsReactive  int                                        `json:"context_compactions_reactive,omitempty"`
+	ContextCompactionRemoved    int                                        `json:"context_compaction_removed_messages,omitempty"`
+	ContextCompactionSummary    int                                        `json:"context_compaction_summary_bytes,omitempty"`
+	ContextCompactionExamples   []agenteval.ContextCompaction              `json:"context_compaction_examples,omitempty"`
+	LoopGuardInterventions      int                                        `json:"loop_guard_interventions"`
+	ForcedNoTools               int                                        `json:"forced_no_tools"`
+	SourceAccessResults         int                                        `json:"source_access_results"`
+	SourceAccessVerified        int                                        `json:"source_access_verified"`
+	SourceAccessDiscoveryOnly   int                                        `json:"source_access_discovery_only"`
+	SourceAccessNetwork         int                                        `json:"source_access_network"`
+	SourceAccessDynamicPartial  int                                        `json:"source_access_dynamic_partial"`
+	SourceAccessExamples        []agenteval.SourceAccessExample            `json:"source_access_examples,omitempty"`
+	MemoryUpdates               int                                        `json:"memory_updates"`
+	MemoryUpdateAdd             int                                        `json:"memory_update_add"`
+	MemoryUpdateReplace         int                                        `json:"memory_update_replace"`
+	MemoryUpdateRemove          int                                        `json:"memory_update_remove"`
+	SessionSearchCalls          int                                        `json:"session_search_calls,omitempty"`
+	SessionSearchResults        int                                        `json:"session_search_results,omitempty"`
+	SessionSearchContextHits    int                                        `json:"session_search_context_hits,omitempty"`
+	SessionSearchMatchedTerms   int                                        `json:"session_search_matched_terms,omitempty"`
+	ToolDurationMS              int64                                      `json:"tool_duration_ms"`
+	ToolContextTruncated        int                                        `json:"tool_context_truncated"`
+	ToolContextOmittedBytes     int                                        `json:"tool_context_omitted_bytes"`
+	ToolArgsTruncated           int                                        `json:"tool_args_truncated"`
+	ToolArgsOmittedBytes        int                                        `json:"tool_args_omitted_bytes"`
+	ToolResultsTruncated        int                                        `json:"tool_results_truncated"`
+	ToolResultsOmittedBytes     int                                        `json:"tool_results_omitted_bytes"`
+	ToolResultArtifacts         int                                        `json:"tool_result_artifacts"`
+	ToolTruncationExamples      []agenteval.ToolTruncationExample          `json:"tool_truncation_examples,omitempty"`
+	VerifierRuns                int                                        `json:"verifier_runs"`
+	VerifierPassed              int                                        `json:"verifier_passed"`
+	VerifierFailed              int                                        `json:"verifier_failed"`
+	VerifierOutputTruncated     int                                        `json:"verifier_output_truncated"`
+	VerifierOutputOmittedBytes  int                                        `json:"verifier_output_omitted_bytes"`
+	TraceSchemaVersions         map[int]int                                `json:"trace_schema_versions,omitempty"`
+	TraceEvents                 int                                        `json:"trace_events,omitempty"`
+	TraceEventTypes             map[string]int                             `json:"trace_event_types,omitempty"`
+	InputTokens                 int                                        `json:"input_tokens"`
+	OutputTokens                int                                        `json:"output_tokens"`
+	AvgInputTokens              float64                                    `json:"avg_input_tokens"`
+	AvgOutputTokens             float64                                    `json:"avg_output_tokens"`
+	AvgTotalTokens              float64                                    `json:"avg_total_tokens"`
+	EndCompleted                int                                        `json:"end_completed"`
+	EndMaxTurns                 int                                        `json:"end_max_turns"`
+	EndErrors                   int                                        `json:"end_errors"`
+	EndCancelled                int                                        `json:"end_cancelled"`
+	EndUnknown                  int                                        `json:"end_unknown"`
+	FailureKinds                map[string]int                             `json:"failure_kinds,omitempty"`
+	FailureHints                failureHintMap                             `json:"failure_hints,omitempty"`
+	ToolFailureHints            failureHintMap                             `json:"tool_failure_hints,omitempty"`
+	RuntimeErrorHints           failureHintMap                             `json:"runtime_error_hints,omitempty"`
+	DebugBriefByTag             map[string]int                             `json:"debug_brief_by_tag,omitempty"`
+	QualityGatesPassed          *bool                                      `json:"quality_gates_passed,omitempty"`
+	QualityGateFailures         []string                                   `json:"quality_gate_failures,omitempty"`
+	RemovedWorkspaces           int                                        `json:"removed_workspaces"`
+	CleanupErrors               int                                        `json:"cleanup_errors"`
 
 	// Per-batch delegation aggregates. Same omitempty discipline as
 	// the per-scenario record so a batch with zero delegation usage
@@ -1541,110 +1548,111 @@ func runtimeSurfaceCapabilityNames(c sse.RuntimeCapabilities) []string {
 
 func printBatchSummaryJSONL(w io.Writer, meta evalJSONLMetadata, s batchSummary, gateFailures []string) {
 	writeJSONLine(w, batchSummaryRecord{
-		evalJSONLMetadata:          meta,
-		Type:                       "summary",
-		Scenarios:                  s.Total,
-		Passed:                     s.Passed,
-		Failed:                     s.Failed,
-		PassRate:                   batchRatio(s.Passed, s.Total),
-		CompletionRate:             batchRatio(s.EndCompleted, s.Total),
-		ToolErrorRate:              batchOptionalRatio(s.ToolErrors, s.ToolCalls),
-		LoopGuardInterventionRate:  batchOptionalRatio(s.LoopGuardInterventions, s.ToolCalls),
-		ToolRepairSuccessRate:      batchOptionalRatio(s.ToolRepairSucceeded, s.ToolRepairCalls),
-		VerifierPassRate:           batchOptionalRatio(s.VerifierPassed, s.VerifierRuns),
-		SourceAccessVerifiedRate:   batchOptionalRatio(s.SourceAccessVerified, s.SourceAccessResults),
-		AvgRuntimeErrors:           batchAverage(s.RuntimeErrors, s.Total),
-		AvgContextCompactions:      batchAverage(s.ContextCompactions, s.Total),
-		AvgContextRemovedMessages:  batchAverage(s.ContextCompactionRemoved, s.Total),
-		ToolContextTruncationRate:  batchOptionalRatio(s.ToolContextTruncated, s.ToolCalls),
-		ToolResultTruncationRate:   batchOptionalRatio(s.ToolResultsTruncated, s.ToolCalls),
-		DurationMS:                 s.Duration.Milliseconds(),
-		ToolCalls:                  s.ToolCalls,
-		ToolErrors:                 s.ToolErrors,
-		ToolRepaired:               s.ToolRepaired,
-		ToolNameCanonicalized:      s.ToolNameCanonicalized,
-		ToolRepairCalls:            s.ToolRepairCalls,
-		ToolRepairSucceeded:        s.ToolRepairSucceeded,
-		ToolRepairFailed:           s.ToolRepairFailed,
-		ToolRepairNotes:            s.ToolRepairNotes,
-		ToolRepairByKind:           cloneStringIntMap(s.ToolRepairByKind),
-		ToolFailureByKind:          cloneStringIntMap(s.ToolFailureByKind),
-		ToolFailureExamples:        cloneToolFailureExamples(s.ToolFailureExamples),
-		RuntimeErrorByKind:         cloneStringIntMap(s.RuntimeErrorByKind),
-		RuntimeErrorExamples:       cloneRuntimeErrorExamples(s.RuntimeErrorExamples),
-		RuntimeSurfaceScenarios:    s.RuntimeSurfaceScenarios,
-		RuntimeSurfaceTools:        cloneStringIntMap(s.RuntimeSurfaceTools),
-		RuntimeSurfaceCapabilities: cloneStringIntMap(s.RuntimeSurfaceCapabilities),
-		LoopDecisions:              s.LoopDecisions,
-		LoopDecisionByKind:         cloneStringIntMap(s.LoopDecisionByKind),
-		LoopDecisionByDecision:     cloneStringIntMap(s.LoopDecisionByDecision),
-		LoopDecisionExamples:       cloneLoopDecisionExamples(s.LoopDecisionExamples),
-		ContextCompactions:         s.ContextCompactions,
-		ContextCompactionsReactive: s.ContextCompactionsReactive,
-		ContextCompactionRemoved:   s.ContextCompactionRemoved,
-		ContextCompactionSummary:   s.ContextCompactionSummary,
-		ContextCompactionExamples:  cloneContextCompactionExamples(s.ContextCompactionExamples),
-		LoopGuardInterventions:     s.LoopGuardInterventions,
-		ForcedNoTools:              s.ForcedNoTools,
-		SourceAccessResults:        s.SourceAccessResults,
-		SourceAccessVerified:       s.SourceAccessVerified,
-		SourceAccessDiscoveryOnly:  s.SourceAccessDiscoveryOnly,
-		SourceAccessNetwork:        s.SourceAccessNetwork,
-		SourceAccessDynamicPartial: s.SourceAccessDynamicPartial,
-		SourceAccessExamples:       cloneSourceAccessExamples(s.SourceAccessExamples),
-		MemoryUpdates:              s.MemoryUpdates,
-		MemoryUpdateAdd:            s.MemoryUpdateAdd,
-		MemoryUpdateReplace:        s.MemoryUpdateReplace,
-		MemoryUpdateRemove:         s.MemoryUpdateRemove,
-		SessionSearchCalls:         s.SessionSearchCalls,
-		SessionSearchResults:       s.SessionSearchResults,
-		SessionSearchContextHits:   s.SessionSearchContextHits,
-		SessionSearchMatchedTerms:  s.SessionSearchMatchedTerms,
-		ToolDurationMS:             s.ToolDurationMS,
-		ToolContextTruncated:       s.ToolContextTruncated,
-		ToolContextOmittedBytes:    s.ToolContextOmittedBytes,
-		ToolArgsTruncated:          s.ToolArgsTruncated,
-		ToolArgsOmittedBytes:       s.ToolArgsOmittedBytes,
-		ToolResultsTruncated:       s.ToolResultsTruncated,
-		ToolResultsOmittedBytes:    s.ToolResultsOmittedBytes,
-		ToolResultArtifacts:        s.ToolResultArtifacts,
-		ToolTruncationExamples:     cloneToolTruncationExamples(s.ToolTruncationExamples),
-		VerifierRuns:               s.VerifierRuns,
-		VerifierPassed:             s.VerifierPassed,
-		VerifierFailed:             s.VerifierFailed,
-		VerifierOutputTruncated:    s.VerifierOutputTruncated,
-		VerifierOutputOmittedBytes: s.VerifierOutputOmittedBytes,
-		TraceSchemaVersions:        cloneTraceSchemaVersions(s.TraceSchemaVersions),
-		TraceEvents:                s.TraceEvents,
-		TraceEventTypes:            cloneStringIntMap(s.TraceEventTypes),
-		InputTokens:                s.InputTokens,
-		OutputTokens:               s.OutputTokens,
-		AvgInputTokens:             batchAverage(s.InputTokens, s.Total),
-		AvgOutputTokens:            batchAverage(s.OutputTokens, s.Total),
-		AvgTotalTokens:             batchAverage(s.InputTokens+s.OutputTokens, s.Total),
-		EndCompleted:               s.EndCompleted,
-		EndMaxTurns:                s.EndMaxTurns,
-		EndErrors:                  s.EndErrors,
-		EndCancelled:               s.EndCancelled,
-		EndUnknown:                 s.EndUnknown,
-		FailureKinds:               cloneFailureKinds(s.FailureKinds),
-		FailureHints:               failureHintsForKinds(s.FailureKinds),
-		ToolFailureHints:           toolFailureHintsForKinds(s.ToolFailureByKind),
-		RuntimeErrorHints:          failureHintsForKinds(s.RuntimeErrorByKind),
-		DebugBriefByTag:            cloneStringIntMap(s.DebugBriefByTag),
-		QualityGatesPassed:         qualityGatesPassedForJSONL(meta, gateFailures),
-		QualityGateFailures:        append([]string(nil), gateFailures...),
-		RemovedWorkspaces:          s.RemovedWorkspaces,
-		CleanupErrors:              s.CleanupErrors,
-		FocusedTaskCalls:           s.FocusedTaskCalls,
-		FocusedTaskByType:          cloneStringIntMap(s.FocusedTaskByType),
-		FocusedTaskErrors:          s.FocusedTaskErrors,
-		SubagentCalls:              s.SubagentCalls,
-		SubagentByMode:             cloneStringIntMap(s.SubagentByMode),
-		SubagentErrors:             s.SubagentErrors,
-		PlanCalls:                  s.PlanCalls,
-		PlanByAction:               cloneStringIntMap(s.PlanByAction),
-		PlanErrors:                 s.PlanErrors,
+		evalJSONLMetadata:           meta,
+		Type:                        "summary",
+		Scenarios:                   s.Total,
+		Passed:                      s.Passed,
+		Failed:                      s.Failed,
+		PassRate:                    batchRatio(s.Passed, s.Total),
+		CompletionRate:              batchRatio(s.EndCompleted, s.Total),
+		ToolErrorRate:               batchOptionalRatio(s.ToolErrors, s.ToolCalls),
+		LoopGuardInterventionRate:   batchOptionalRatio(s.LoopGuardInterventions, s.ToolCalls),
+		ToolRepairSuccessRate:       batchOptionalRatio(s.ToolRepairSucceeded, s.ToolRepairCalls),
+		VerifierPassRate:            batchOptionalRatio(s.VerifierPassed, s.VerifierRuns),
+		SourceAccessVerifiedRate:    batchOptionalRatio(s.SourceAccessVerified, s.SourceAccessResults),
+		SessionSearchContextHitRate: batchOptionalRatio(s.SessionSearchContextHits, s.SessionSearchResults),
+		AvgRuntimeErrors:            batchAverage(s.RuntimeErrors, s.Total),
+		AvgContextCompactions:       batchAverage(s.ContextCompactions, s.Total),
+		AvgContextRemovedMessages:   batchAverage(s.ContextCompactionRemoved, s.Total),
+		ToolContextTruncationRate:   batchOptionalRatio(s.ToolContextTruncated, s.ToolCalls),
+		ToolResultTruncationRate:    batchOptionalRatio(s.ToolResultsTruncated, s.ToolCalls),
+		DurationMS:                  s.Duration.Milliseconds(),
+		ToolCalls:                   s.ToolCalls,
+		ToolErrors:                  s.ToolErrors,
+		ToolRepaired:                s.ToolRepaired,
+		ToolNameCanonicalized:       s.ToolNameCanonicalized,
+		ToolRepairCalls:             s.ToolRepairCalls,
+		ToolRepairSucceeded:         s.ToolRepairSucceeded,
+		ToolRepairFailed:            s.ToolRepairFailed,
+		ToolRepairNotes:             s.ToolRepairNotes,
+		ToolRepairByKind:            cloneStringIntMap(s.ToolRepairByKind),
+		ToolFailureByKind:           cloneStringIntMap(s.ToolFailureByKind),
+		ToolFailureExamples:         cloneToolFailureExamples(s.ToolFailureExamples),
+		RuntimeErrorByKind:          cloneStringIntMap(s.RuntimeErrorByKind),
+		RuntimeErrorExamples:        cloneRuntimeErrorExamples(s.RuntimeErrorExamples),
+		RuntimeSurfaceScenarios:     s.RuntimeSurfaceScenarios,
+		RuntimeSurfaceTools:         cloneStringIntMap(s.RuntimeSurfaceTools),
+		RuntimeSurfaceCapabilities:  cloneStringIntMap(s.RuntimeSurfaceCapabilities),
+		LoopDecisions:               s.LoopDecisions,
+		LoopDecisionByKind:          cloneStringIntMap(s.LoopDecisionByKind),
+		LoopDecisionByDecision:      cloneStringIntMap(s.LoopDecisionByDecision),
+		LoopDecisionExamples:        cloneLoopDecisionExamples(s.LoopDecisionExamples),
+		ContextCompactions:          s.ContextCompactions,
+		ContextCompactionsReactive:  s.ContextCompactionsReactive,
+		ContextCompactionRemoved:    s.ContextCompactionRemoved,
+		ContextCompactionSummary:    s.ContextCompactionSummary,
+		ContextCompactionExamples:   cloneContextCompactionExamples(s.ContextCompactionExamples),
+		LoopGuardInterventions:      s.LoopGuardInterventions,
+		ForcedNoTools:               s.ForcedNoTools,
+		SourceAccessResults:         s.SourceAccessResults,
+		SourceAccessVerified:        s.SourceAccessVerified,
+		SourceAccessDiscoveryOnly:   s.SourceAccessDiscoveryOnly,
+		SourceAccessNetwork:         s.SourceAccessNetwork,
+		SourceAccessDynamicPartial:  s.SourceAccessDynamicPartial,
+		SourceAccessExamples:        cloneSourceAccessExamples(s.SourceAccessExamples),
+		MemoryUpdates:               s.MemoryUpdates,
+		MemoryUpdateAdd:             s.MemoryUpdateAdd,
+		MemoryUpdateReplace:         s.MemoryUpdateReplace,
+		MemoryUpdateRemove:          s.MemoryUpdateRemove,
+		SessionSearchCalls:          s.SessionSearchCalls,
+		SessionSearchResults:        s.SessionSearchResults,
+		SessionSearchContextHits:    s.SessionSearchContextHits,
+		SessionSearchMatchedTerms:   s.SessionSearchMatchedTerms,
+		ToolDurationMS:              s.ToolDurationMS,
+		ToolContextTruncated:        s.ToolContextTruncated,
+		ToolContextOmittedBytes:     s.ToolContextOmittedBytes,
+		ToolArgsTruncated:           s.ToolArgsTruncated,
+		ToolArgsOmittedBytes:        s.ToolArgsOmittedBytes,
+		ToolResultsTruncated:        s.ToolResultsTruncated,
+		ToolResultsOmittedBytes:     s.ToolResultsOmittedBytes,
+		ToolResultArtifacts:         s.ToolResultArtifacts,
+		ToolTruncationExamples:      cloneToolTruncationExamples(s.ToolTruncationExamples),
+		VerifierRuns:                s.VerifierRuns,
+		VerifierPassed:              s.VerifierPassed,
+		VerifierFailed:              s.VerifierFailed,
+		VerifierOutputTruncated:     s.VerifierOutputTruncated,
+		VerifierOutputOmittedBytes:  s.VerifierOutputOmittedBytes,
+		TraceSchemaVersions:         cloneTraceSchemaVersions(s.TraceSchemaVersions),
+		TraceEvents:                 s.TraceEvents,
+		TraceEventTypes:             cloneStringIntMap(s.TraceEventTypes),
+		InputTokens:                 s.InputTokens,
+		OutputTokens:                s.OutputTokens,
+		AvgInputTokens:              batchAverage(s.InputTokens, s.Total),
+		AvgOutputTokens:             batchAverage(s.OutputTokens, s.Total),
+		AvgTotalTokens:              batchAverage(s.InputTokens+s.OutputTokens, s.Total),
+		EndCompleted:                s.EndCompleted,
+		EndMaxTurns:                 s.EndMaxTurns,
+		EndErrors:                   s.EndErrors,
+		EndCancelled:                s.EndCancelled,
+		EndUnknown:                  s.EndUnknown,
+		FailureKinds:                cloneFailureKinds(s.FailureKinds),
+		FailureHints:                failureHintsForKinds(s.FailureKinds),
+		ToolFailureHints:            toolFailureHintsForKinds(s.ToolFailureByKind),
+		RuntimeErrorHints:           failureHintsForKinds(s.RuntimeErrorByKind),
+		DebugBriefByTag:             cloneStringIntMap(s.DebugBriefByTag),
+		QualityGatesPassed:          qualityGatesPassedForJSONL(meta, gateFailures),
+		QualityGateFailures:         append([]string(nil), gateFailures...),
+		RemovedWorkspaces:           s.RemovedWorkspaces,
+		CleanupErrors:               s.CleanupErrors,
+		FocusedTaskCalls:            s.FocusedTaskCalls,
+		FocusedTaskByType:           cloneStringIntMap(s.FocusedTaskByType),
+		FocusedTaskErrors:           s.FocusedTaskErrors,
+		SubagentCalls:               s.SubagentCalls,
+		SubagentByMode:              cloneStringIntMap(s.SubagentByMode),
+		SubagentErrors:              s.SubagentErrors,
+		PlanCalls:                   s.PlanCalls,
+		PlanByAction:                cloneStringIntMap(s.PlanByAction),
+		PlanErrors:                  s.PlanErrors,
 	})
 }
 
@@ -1660,6 +1668,7 @@ func hasQualityGateThresholds(meta evalJSONLMetadata) bool {
 	return meta.MinPassRate != nil ||
 		meta.MinCompletionRate != nil ||
 		meta.MinSourceAccessVerifiedRate != nil ||
+		meta.MinSessionSearchContextHitRate != nil ||
 		meta.MaxLoopGuardInterventionRate != nil ||
 		meta.MaxToolErrorRate != nil ||
 		meta.MaxToolContextTruncationRate != nil ||
