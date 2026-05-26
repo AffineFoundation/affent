@@ -199,6 +199,8 @@ success and trace-level process quality.`)
 		fmt.Fprintf(os.Stderr, "config: %v\n", err)
 		return 64
 	}
+	jsonlMeta := evalJSONLMetadataFromConfig(*suite, *model, *providerLabel, *executor, *temperature, *topP, *maxTokens, *seed, *runtimeEvalMode, *runtimeTools, *runtimeAllTools, *runtimeMemory, *runtimeWeb, *runtimeBrowser, *traceDeltas, *runtimeMCPConfig, *timeout, *qualityProfile, gates)
+	deferPassingCleanup := !*keepWorkspaces && hasQualityGateThresholds(jsonlMeta)
 	runner := agenteval.BatchRunner{
 		RepoRoot:                 *repoRoot,
 		WorkRoot:                 *workRoot,
@@ -220,21 +222,42 @@ success and trace-level process quality.`)
 		TraceDeltas:              *traceDeltas,
 		Timeout:                  *timeout,
 		VerifierOutputCapBytes:   *verifierOutputCap,
-		CleanupPassingWorkspaces: !*keepWorkspaces,
+		CleanupPassingWorkspaces: !*keepWorkspaces && !deferPassingCleanup,
 	}
-	jsonlMeta := evalJSONLMetadataFromConfig(*suite, *model, *providerLabel, *executor, *temperature, *topP, *maxTokens, *seed, *runtimeEvalMode, *runtimeTools, *runtimeAllTools, *runtimeMemory, *runtimeWeb, *runtimeBrowser, *traceDeltas, *runtimeMCPConfig, *timeout, *qualityProfile, gates)
 	ctx := context.Background()
 	var summary batchSummary
-	for _, scenario := range scenarios {
-		res := runner.Run(ctx, scenario)
-		summary.add(res)
-		if *jsonl {
-			printBatchResultJSONL(os.Stdout, jsonlMeta, res)
-		} else {
-			printBatchResult(os.Stdout, res)
+	var gateFailures []string
+	if deferPassingCleanup {
+		results := make([]agenteval.BatchResult, 0, len(scenarios))
+		for _, scenario := range scenarios {
+			res := runner.Run(ctx, scenario)
+			results = append(results, res)
 		}
+		summary = summarizeBatchResults(results)
+		gateFailures = qualityGateFailures(summary, gates)
+		if len(gateFailures) == 0 {
+			cleanupPassingBatchResults(results)
+			summary = summarizeBatchResults(results)
+		}
+		for _, res := range results {
+			if *jsonl {
+				printBatchResultJSONL(os.Stdout, jsonlMeta, res)
+			} else {
+				printBatchResult(os.Stdout, res)
+			}
+		}
+	} else {
+		for _, scenario := range scenarios {
+			res := runner.Run(ctx, scenario)
+			summary.add(res)
+			if *jsonl {
+				printBatchResultJSONL(os.Stdout, jsonlMeta, res)
+			} else {
+				printBatchResult(os.Stdout, res)
+			}
+		}
+		gateFailures = qualityGateFailures(summary, gates)
 	}
-	gateFailures := qualityGateFailures(summary, gates)
 	if *jsonl {
 		printBatchSummaryJSONL(os.Stdout, jsonlMeta, summary, gateFailures)
 	} else {
@@ -587,6 +610,27 @@ type batchSummary struct {
 	PlanByAction map[string]int
 	PlanErrors   int
 	PlanExamples []agenteval.PlanExample
+}
+
+func summarizeBatchResults(results []agenteval.BatchResult) batchSummary {
+	var summary batchSummary
+	for _, res := range results {
+		summary.add(res)
+	}
+	return summary
+}
+
+func cleanupPassingBatchResults(results []agenteval.BatchResult) {
+	for i := range results {
+		if !results[i].OK || results[i].WorkspaceRemoved || strings.TrimSpace(results[i].Workspace) == "" {
+			continue
+		}
+		if err := os.RemoveAll(results[i].Workspace); err != nil {
+			results[i].CleanupError = err.Error()
+			continue
+		}
+		results[i].WorkspaceRemoved = true
+	}
 }
 
 func (s *batchSummary) add(res agenteval.BatchResult) {

@@ -817,10 +817,13 @@ go run ./cmd/affenteval --prompt-file request.md --runtime-web --runtime-browser
 Each run writes a trace JSONL plus retained debug files in the scenario
 workspace: `affenteval-debug.json`, `affenteval-timeline.md`,
 `affenteval-final.txt`, `affenteval-stdout.txt`, and
-`affenteval-stderr.txt`. Failed workspaces are kept automatically;
-`--keep-workspaces` also keeps passing runs for local inspection. The timeline
-is the human-readable index for debugging: it links the raw trace, starts with
-a `Debug Brief` for failed or diagnostic-heavy runs, shows the redacted
+`affenteval-stderr.txt`. Failed workspaces are kept automatically. When quality
+gates are enabled, passing workspaces are kept until the batch gate result is
+known; if any gate fails they remain for trace/timeline inspection, otherwise
+they are cleaned unless `--keep-workspaces` is set. `--keep-workspaces` also
+keeps passing runs for local inspection. The timeline is the human-readable
+index for debugging: it links the raw trace, starts with a `Debug Brief` for
+failed or diagnostic-heavy runs, shows the redacted
 `affentctl` command argv, trace event type counts, effective runtime surface,
 tool calls with args/result previews, child transcript refs,
 truncation/artifact pointers, loop decisions, context compactions, and runtime

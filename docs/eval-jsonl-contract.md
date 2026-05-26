@@ -262,7 +262,9 @@ Scenario records describe one eval case:
 - `verifier_output_cap_bytes`: verifier output cap used for the run.
 - `input_tokens`: summed provider input tokens.
 - `output_tokens`: summed provider output tokens.
-- `workspace_removed`: whether a passing workspace was cleaned up.
+- `workspace_removed`: whether a passing workspace was cleaned up. Quality-gated
+  runs retain passing workspaces when a batch gate fails so scenario artifacts
+  remain inspectable.
 - `cleanup_error`: workspace cleanup error, when cleanup failed.
 - `failures`: failure details for failed scenarios.
 - `failure_kinds`: grouped failure counters for summaries.

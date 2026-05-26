@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"path/filepath"
 	"reflect"
 	"strings"
 	"testing"
@@ -458,6 +459,94 @@ func TestQualityGateFailures(t *testing.T) {
 	})
 	if len(unavailable) != 1 || !strings.Contains(unavailable[0], "source_access_verified_rate unavailable") {
 		t.Fatalf("unavailable source gate failures = %#v", unavailable)
+	}
+}
+
+func TestDeferredCleanupKeepsPassingWorkspacesWhenGatesFail(t *testing.T) {
+	dir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(dir, "affenteval-timeline.md"), []byte("trace"), 0o644); err != nil {
+		t.Fatalf("write marker: %v", err)
+	}
+	results := []agenteval.BatchResult{{
+		OK:        true,
+		Workspace: dir,
+		ToolCalls: 5,
+	}}
+
+	summary := summarizeBatchResults(results)
+	failures := qualityGateFailures(summary, qualityGateConfig{MaxAvgToolCalls: float64Ptr(1)})
+	if len(failures) == 0 {
+		t.Fatal("quality gate should fail")
+	}
+	if len(failures) == 0 {
+		cleanupPassingBatchResults(results)
+	}
+
+	if results[0].WorkspaceRemoved {
+		t.Fatal("passing workspace should remain when the batch gate fails")
+	}
+	if _, err := os.Stat(filepath.Join(dir, "affenteval-timeline.md")); err != nil {
+		t.Fatalf("retained workspace marker: %v", err)
+	}
+}
+
+func TestDeferredCleanupRemovesPassingWorkspacesWhenGatesPass(t *testing.T) {
+	dir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(dir, "affenteval-timeline.md"), []byte("trace"), 0o644); err != nil {
+		t.Fatalf("write marker: %v", err)
+	}
+	results := []agenteval.BatchResult{{
+		OK:        true,
+		Workspace: dir,
+		ToolCalls: 1,
+	}}
+
+	summary := summarizeBatchResults(results)
+	failures := qualityGateFailures(summary, qualityGateConfig{MaxAvgToolCalls: float64Ptr(2)})
+	if len(failures) != 0 {
+		t.Fatalf("quality gate should pass: %#v", failures)
+	}
+	if len(failures) == 0 {
+		cleanupPassingBatchResults(results)
+	}
+
+	if !results[0].WorkspaceRemoved || results[0].CleanupError != "" {
+		t.Fatalf("passing workspace cleanup result = removed:%v err:%q", results[0].WorkspaceRemoved, results[0].CleanupError)
+	}
+	if _, err := os.Stat(dir); !os.IsNotExist(err) {
+		t.Fatalf("passing workspace should be removed after gates pass, stat err=%v", err)
+	}
+}
+
+func TestCleanupPassingBatchResults(t *testing.T) {
+	passDir := t.TempDir()
+	failDir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(passDir, "marker.txt"), []byte("pass"), 0o644); err != nil {
+		t.Fatalf("write pass marker: %v", err)
+	}
+	if err := os.WriteFile(filepath.Join(failDir, "marker.txt"), []byte("fail"), 0o644); err != nil {
+		t.Fatalf("write fail marker: %v", err)
+	}
+	results := []agenteval.BatchResult{
+		{OK: true, Workspace: passDir},
+		{OK: false, Workspace: failDir},
+		{OK: true, WorkspaceRemoved: true, Workspace: filepath.Join(t.TempDir(), "already-removed")},
+		{OK: true, Workspace: " "},
+	}
+
+	cleanupPassingBatchResults(results)
+
+	if !results[0].WorkspaceRemoved || results[0].CleanupError != "" {
+		t.Fatalf("passing workspace cleanup result = removed:%v err:%q", results[0].WorkspaceRemoved, results[0].CleanupError)
+	}
+	if _, err := os.Stat(passDir); !os.IsNotExist(err) {
+		t.Fatalf("passing workspace should be removed, stat err=%v", err)
+	}
+	if results[1].WorkspaceRemoved {
+		t.Fatal("failed workspace should not be removed")
+	}
+	if _, err := os.Stat(filepath.Join(failDir, "marker.txt")); err != nil {
+		t.Fatalf("failed workspace marker should remain: %v", err)
 	}
 }
 
