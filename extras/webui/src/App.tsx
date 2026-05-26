@@ -694,7 +694,8 @@ export function App() {
             onToggle={(event) => setSettingsOpen(event.currentTarget.open)}
           >
             <summary aria-label="Settings">
-              <span>Settings</span>
+              <span className="settings-icon" aria-hidden="true">⚙</span>
+              <span className="settings-label">Settings</span>
             </summary>
             <div className="settings-panel">
               <div className="settings-panel-head">
