@@ -602,6 +602,42 @@ func TestMemoryAtomicWriteRoundtrip(t *testing.T) {
 	}
 }
 
+func TestMemoryReadIgnoresSymlinkFile(t *testing.T) {
+	dir := t.TempDir()
+	outside := filepath.Join(t.TempDir(), "outside.md")
+	if err := os.WriteFile(outside, []byte("secret"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	link := filepath.Join(dir, "MEMORY.md")
+	if err := os.Symlink(outside, link); err != nil {
+		t.Skipf("symlink unavailable: %v", err)
+	}
+	got, err := readMemoryFile(link)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(got) != 0 {
+		t.Fatalf("symlink memory file should be ignored, got %+v", got)
+	}
+}
+
+func TestMemoryInspectReturnsContentOnlyBucket(t *testing.T) {
+	s := newTestStore(t)
+	if resp, err := s.Add(TargetMemory, "deploy", "deploy fact"); err != nil || !resp.OK {
+		t.Fatalf("Add memory: resp=%+v err=%v", resp, err)
+	}
+	got, err := s.Inspect(TargetMemory, "deploy")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !got.OK || got.Topic != "deploy" || got.Usage == nil || got.Usage.EntryCount != 1 {
+		t.Fatalf("Inspect response = %+v", got)
+	}
+	if len(got.Entries) != 1 || got.Entries[0] != "deploy fact" {
+		t.Fatalf("Inspect entries = %+v", got.Entries)
+	}
+}
+
 func TestMemoryReadRejectsOversizedFile(t *testing.T) {
 	dir := t.TempDir()
 	path := filepath.Join(dir, "MEMORY.md")

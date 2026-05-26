@@ -914,6 +914,27 @@ func (s *FileMemoryStore) ListTopics(target MemoryTarget) (MemoryResponse, error
 	return MemoryResponse{OK: true, Target: target, Topics: topics, Message: msg}, nil
 }
 
+// Inspect returns one bucket's current entries without mutating the store.
+// Entries are content-only previews, matching Add/Replace/Remove responses.
+func (s *FileMemoryStore) Inspect(target MemoryTarget, topic string) (MemoryResponse, error) {
+	if err := validateTarget(target); err != nil {
+		return MemoryResponse{Target: target, Message: err.Error()}, nil
+	}
+	topic = normalizeTopic(target, topic)
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	_ = s.migrateLegacyLocked()
+	if target == TargetMemory && s.MemoryDir == "" {
+		return MemoryResponse{Target: target, Topic: topic, Message: "memory dir is not configured"}, nil
+	}
+	path := s.bucketPathLocked(target, topic)
+	entries, err := readMemoryFile(path)
+	if err != nil {
+		return MemoryResponse{}, err
+	}
+	return s.respondLocked(target, topic, true, "bucket inspected", entries, nil), nil
+}
+
 // migrateLegacyLocked moves a pre-v2 .affent/MEMORY.md into
 // .affent/memory/topics/general.md the first time the new layout
 // is touched, then marks the migration done. Idempotent and safe
@@ -1019,7 +1040,12 @@ func (s *FileMemoryStore) listTopicFilesLocked(limit int) ([]memoryTopicFile, bo
 	if limit <= 0 {
 		limit = s.topicCountLimit()
 	}
-	dir, err := os.Open(filepath.Join(s.MemoryDir, "topics"))
+	topicDir := filepath.Join(s.MemoryDir, "topics")
+	info, err := os.Lstat(topicDir)
+	if err != nil || !info.IsDir() || info.Mode()&os.ModeSymlink != 0 {
+		return nil, false
+	}
+	dir, err := os.Open(topicDir)
 	if err != nil {
 		return nil, false
 	}
@@ -1374,6 +1400,16 @@ func findUnique(entries []string, oldText string) (int, []string) {
 }
 
 func readMemoryFile(path string) ([]string, error) {
+	info, err := os.Lstat(path)
+	if err != nil {
+		if errors.Is(err, os.ErrNotExist) {
+			return nil, nil
+		}
+		return nil, err
+	}
+	if info.IsDir() || info.Mode()&os.ModeSymlink != 0 {
+		return nil, nil
+	}
 	f, err := os.Open(path)
 	if err != nil {
 		if errors.Is(err, os.ErrNotExist) {
