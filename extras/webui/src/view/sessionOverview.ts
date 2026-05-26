@@ -1,4 +1,4 @@
-import { EventType } from "../api/events";
+import { EventType, type ToolRuntimeStats } from "../api/events";
 import type { SessionContextSummary, SessionPlanSummary } from "../api/sessions";
 import type { SessionState, TurnState } from "../store/sessionState";
 import type { WorkflowStatus } from "../store/workflowStatus";
@@ -160,6 +160,8 @@ function buildMetrics(
   if (compactMetric) metrics.push(compactMetric);
   const memoryMetric = buildMemoryUpdateMetric(session);
   if (memoryMetric) metrics.push(memoryMetric);
+  const sourceMetric = buildSourceAccessMetric(session);
+  if (sourceMetric) metrics.push(sourceMetric);
   const planMetric = buildPlanMetric(planSummary);
   if (planMetric) metrics.push(planMetric);
   const workMetric = buildWorkMetric(latestTurn, latestActivity, currentIssueCount > 0);
@@ -216,6 +218,41 @@ function buildMemoryUpdateMetric(session: SessionState): SessionOverviewMetric |
     parts.push(`${latest.location}: ${summarizePreview(latest.preview, 48)}`);
   }
   return { label: "Memory", value: parts.join(" · "), tone: "success" };
+}
+
+function buildSourceAccessMetric(session: SessionState): SessionOverviewMetric | undefined {
+  const stats = session.turns.reduce<Required<Pick<ToolRuntimeStats,
+    | "source_access_results"
+    | "source_access_verified"
+    | "source_access_discovery_only"
+    | "source_access_network"
+    | "source_access_dynamic_partial"
+  >>>((acc, turn) => {
+    const toolStats = turn.toolStats;
+    acc.source_access_results += toolStats?.source_access_results ?? 0;
+    acc.source_access_verified += toolStats?.source_access_verified ?? 0;
+    acc.source_access_discovery_only += toolStats?.source_access_discovery_only ?? 0;
+    acc.source_access_network += toolStats?.source_access_network ?? 0;
+    acc.source_access_dynamic_partial += toolStats?.source_access_dynamic_partial ?? 0;
+    return acc;
+  }, {
+    source_access_results: 0,
+    source_access_verified: 0,
+    source_access_discovery_only: 0,
+    source_access_network: 0,
+    source_access_dynamic_partial: 0,
+  });
+
+  if (stats.source_access_results <= 0) return undefined;
+  const parts = [`${stats.source_access_verified}/${stats.source_access_results} verified`];
+  if (stats.source_access_network > 0) parts.push(`${stats.source_access_network} network`);
+  if (stats.source_access_dynamic_partial > 0) parts.push(`${stats.source_access_dynamic_partial} partial`);
+  if (stats.source_access_discovery_only > 0) parts.push(`${stats.source_access_discovery_only} discovery`);
+  return {
+    label: "Evidence",
+    value: parts.join(" · "),
+    tone: stats.source_access_verified < stats.source_access_results || stats.source_access_dynamic_partial > 0 ? "warning" : undefined,
+  };
 }
 
 function buildContextUsageMetric(session: SessionState, context?: SessionContextSummary): SessionOverviewMetric | undefined {

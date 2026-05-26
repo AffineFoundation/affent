@@ -311,6 +311,37 @@ describe("buildSessionOverview", () => {
     ]));
   });
 
+  it("surfaces source evidence quality in the session overview", () => {
+    const session = reduceRawEvents([
+      { id: 1, type: "turn.start", data: { turn_id: "t1" } },
+      { id: 2, type: "user.message", data: { turn_id: "t1", text: "verify dynamic dashboard facts" } },
+      {
+        id: 3,
+        type: "turn.end",
+        data: {
+          turn_id: "t1",
+          reason: "completed",
+          tool_stats: {
+            source_access_results: 4,
+            source_access_verified: 1,
+            source_access_network: 1,
+            source_access_dynamic_partial: 1,
+            source_access_discovery_only: 1,
+          },
+        },
+      },
+    ]);
+    const overview = buildSessionOverview({
+      session,
+      workflow: deriveWorkflowStatus(session),
+      hasSelectedSession: true,
+    });
+
+    expect(overview.metrics).toEqual(expect.arrayContaining([
+      { label: "Evidence", value: "1/4 verified · 1 network · 1 partial · 1 discovery", tone: "warning" },
+    ]));
+  });
+
   it("surfaces the persisted plan step summary in the session overview", () => {
     const session = reduceRawEvents(completedTurn);
     const overview = buildSessionOverview({
