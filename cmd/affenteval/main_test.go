@@ -280,6 +280,7 @@ func TestQualityGateFailures(t *testing.T) {
 		ToolRepairSucceeded:      3,
 		VerifierRuns:             2,
 		VerifierPassed:           1,
+		RuntimeErrors:            3,
 		SourceAccessResults:      4,
 		SourceAccessVerified:     3,
 		ToolContextTruncated:     4,
@@ -297,12 +298,14 @@ func TestQualityGateFailures(t *testing.T) {
 		MaxToolErrorRate:             ptr(0.1),
 		MaxToolContextTruncationRate: ptr(0.5),
 		MaxToolResultTruncationRate:  ptr(0.4),
+		MaxAvgRuntimeErrors:          ptr(1.0),
 		MaxAvgContextCompactions:     ptr(0.25),
 		MaxAvgTotalTokens:            ptr(40),
 	})
 	got := strings.Join(failures, "\n")
 	for _, want := range []string{
 		"avg_context_compactions 0.500 > max 0.250",
+		"avg_runtime_errors 1.500 > max 1.000",
 		"avg_total_tokens 55.000 > max 40.000",
 		"completion_rate 0.500 < min 0.750",
 		"loop_guard_intervention_rate 0.400 > max 0.300",
@@ -798,6 +801,9 @@ func TestBatchSummaryAggregatesRuntimeMetrics(t *testing.T) {
 	}
 	if !reflect.DeepEqual(summary.RuntimeErrorByKind, map[string]int{"llm_timeout": 2, "context_overflow": 1}) {
 		t.Fatalf("RuntimeErrorByKind = %#v", summary.RuntimeErrorByKind)
+	}
+	if summary.RuntimeErrors != 3 {
+		t.Fatalf("RuntimeErrors = %d, want 3", summary.RuntimeErrors)
 	}
 	if summary.SessionSearchCalls != 1 || summary.SessionSearchResults != 2 || summary.SessionSearchContextHits != 1 || summary.SessionSearchMatchedTerms != 2 {
 		t.Fatalf("session search summary = calls:%d results:%d context:%d terms:%d", summary.SessionSearchCalls, summary.SessionSearchResults, summary.SessionSearchContextHits, summary.SessionSearchMatchedTerms)
@@ -1647,6 +1653,7 @@ func TestPrintBatchSummaryJSONL(t *testing.T) {
 				{Kind: "blocked", Tool: "web_fetch", ArgsSummary: `url="https://blocked.example"`, ResultSummary: "blocked | Next: use another source", ExitCode: 1},
 			},
 		},
+		RuntimeErrors:      1,
 		RuntimeErrorByKind: map[string]int{"llm_timeout": 1},
 		RuntimeErrorExamples: map[string][]agenteval.RuntimeErrorExample{
 			"llm_timeout": {
@@ -1759,6 +1766,7 @@ func TestPrintBatchSummaryJSONL(t *testing.T) {
 		"tool_repair_success_rate":      float64(0.75),
 		"verifier_pass_rate":            float64(0.5),
 		"source_access_verified_rate":   float64(0.75),
+		"avg_runtime_errors":            float64(0.5),
 		"avg_context_compactions":       float64(0.5),
 		"avg_context_removed_messages":  float64(16),
 		"tool_context_truncation_rate":  float64(0.8),
@@ -2001,6 +2009,7 @@ func TestEvalJSONLMetadataFromConfig(t *testing.T) {
 	maxLoopGuardInterventionRate := 0.15
 	maxToolErrorRate := 0.05
 	maxToolResultTruncationRate := 0.2
+	maxAvgRuntimeErrors := 0.05
 	maxAvgContextCompactions := 0.1
 	maxAvgTotalTokens := 120000.0
 	meta = evalJSONLMetadataFromConfig(" custom ", " flag-model ", " flag-provider ", " sandbox ", " 0.4 ", " 0.9 ", " 512 ", " 42 ", true, " readonly_workspace,web ", true, true, true, true, true, " /tmp/mcp.json ", time.Second, qualityGateConfig{
@@ -2009,13 +2018,14 @@ func TestEvalJSONLMetadataFromConfig(t *testing.T) {
 		MaxLoopGuardInterventionRate: &maxLoopGuardInterventionRate,
 		MaxToolErrorRate:             &maxToolErrorRate,
 		MaxToolResultTruncationRate:  &maxToolResultTruncationRate,
+		MaxAvgRuntimeErrors:          &maxAvgRuntimeErrors,
 		MaxAvgContextCompactions:     &maxAvgContextCompactions,
 		MaxAvgTotalTokens:            &maxAvgTotalTokens,
 	})
 	if meta.Model != "flag-model" || meta.ProviderLabel != "flag-provider" || meta.Executor != "sandbox" || meta.Temperature != "0.4" || meta.TopP != "0.9" || meta.MaxTokens != "512" || meta.Seed != "42" || meta.Suite != "custom" || !meta.RuntimeEvalMode || meta.RuntimeTools != "readonly_workspace,web" || !meta.RuntimeAllTools || !meta.RuntimeMemory || !meta.RuntimeWeb || !meta.RuntimeBrowser || !meta.TraceDeltas || !meta.RuntimeMCP || meta.TimeoutMS != 1000 {
 		t.Fatalf("flag metadata not normalized: %+v", meta)
 	}
-	if meta.MinPassRate == nil || *meta.MinPassRate != 0.8 || meta.MinSourceAccessVerifiedRate == nil || *meta.MinSourceAccessVerifiedRate != 0.9 || meta.MaxLoopGuardInterventionRate == nil || *meta.MaxLoopGuardInterventionRate != 0.15 || meta.MaxToolErrorRate == nil || *meta.MaxToolErrorRate != 0.05 || meta.MaxToolResultTruncationRate == nil || *meta.MaxToolResultTruncationRate != 0.2 || meta.MaxAvgContextCompactions == nil || *meta.MaxAvgContextCompactions != 0.1 || meta.MaxAvgTotalTokens == nil || *meta.MaxAvgTotalTokens != 120000 {
+	if meta.MinPassRate == nil || *meta.MinPassRate != 0.8 || meta.MinSourceAccessVerifiedRate == nil || *meta.MinSourceAccessVerifiedRate != 0.9 || meta.MaxLoopGuardInterventionRate == nil || *meta.MaxLoopGuardInterventionRate != 0.15 || meta.MaxToolErrorRate == nil || *meta.MaxToolErrorRate != 0.05 || meta.MaxToolResultTruncationRate == nil || *meta.MaxToolResultTruncationRate != 0.2 || meta.MaxAvgRuntimeErrors == nil || *meta.MaxAvgRuntimeErrors != 0.05 || meta.MaxAvgContextCompactions == nil || *meta.MaxAvgContextCompactions != 0.1 || meta.MaxAvgTotalTokens == nil || *meta.MaxAvgTotalTokens != 120000 {
 		t.Fatalf("quality gate metadata not preserved: %+v", meta)
 	}
 	if meta.MinCompletionRate != nil || meta.MaxToolContextTruncationRate != nil {
