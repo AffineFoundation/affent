@@ -1314,7 +1314,7 @@ describe("Timeline", () => {
     expect(screen.getByRole("button", { name: /jump to latest/i })).toBeInTheDocument();
   });
 
-  it("limits auto-scroll speed while the user is selecting text", () => {
+  it("does not change scroll position while the user is selecting text", () => {
     const { scrollIntoView } = installScrollIntoViewSpy();
     const { rerender } = render(<ScrollHarness events={completedTurn} />);
     const scrollRoot = screen.getByTestId("scroll-root");
@@ -1325,17 +1325,17 @@ describe("Timeline", () => {
     fireEvent.pointerDown(scrollRoot);
     scrollRoot.scrollTop = 260;
     fireEvent.scroll(scrollRoot);
-    expect(scrollRoot.scrollTop).toBe(160);
+    expect(scrollRoot.scrollTop).toBe(260);
 
     scrollRoot.scrollTop = 260;
     rerender(<ScrollHarness events={completedTurn} guidanceReceipts={[{ id: 1, text: "check tests first" }]} />);
 
     expect(scrollIntoView).not.toHaveBeenCalled();
-    expect(scrollRoot.scrollTop).toBe(176);
-    expect(screen.queryByRole("button", { name: /latest/i })).toBeNull();
+    expect(scrollRoot.scrollTop).toBe(260);
+    expect(screen.getByRole("button", { name: /jump to latest/i })).toBeInTheDocument();
   });
 
-  it("does not synthesize edge scrolling for touch text selection", () => {
+  it("does not synthesize edge scrolling while selecting text", () => {
     render(<ScrollHarness events={completedTurn} />);
     const scrollRoot = screen.getByTestId("scroll-root");
     Object.defineProperties(scrollRoot, {
@@ -1354,22 +1354,19 @@ describe("Timeline", () => {
       y: 0,
       toJSON: () => ({}),
     }));
-    const cancelAnimationFrameSpy = vi.spyOn(window, "cancelAnimationFrame").mockImplementation(() => undefined);
+    const requestAnimationFrameSpy = vi.spyOn(window, "requestAnimationFrame");
 
-    fireEvent.pointerDown(scrollRoot, { clientY: 120, pointerType: "touch" });
+    fireEvent.pointerDown(scrollRoot, { clientY: 120, pointerType: "mouse" });
     const pointerMove = new Event("pointermove");
     Object.defineProperty(pointerMove, "clientY", { value: 292 });
-    Object.defineProperty(pointerMove, "pointerType", { value: "touch" });
+    Object.defineProperty(pointerMove, "pointerType", { value: "mouse" });
     window.dispatchEvent(pointerMove);
 
     expect(scrollRoot.scrollTop).toBe(144);
-
-    fireEvent.pointerUp(window);
-
-    expect(cancelAnimationFrameSpy).not.toHaveBeenCalled();
+    expect(requestAnimationFrameSpy).not.toHaveBeenCalled();
   });
 
-  it("limits live follow scroll when text selection starts outside the pointer path", () => {
+  it("does not force live follow scroll when text selection starts outside the pointer path", () => {
     const { scrollIntoView } = installScrollIntoViewSpy();
     const { rerender } = render(<ScrollHarness events={completedTurn} />);
     const scrollRoot = screen.getByTestId("scroll-root");
@@ -1385,14 +1382,14 @@ describe("Timeline", () => {
     scrollRoot.scrollTop = 480;
     fireEvent.scroll(scrollRoot);
 
-    expect(scrollRoot.scrollTop).toBe(196);
+    expect(scrollRoot.scrollTop).toBe(480);
 
     scrollRoot.scrollTop = 480;
     rerender(<ScrollHarness events={completedTurn} guidanceReceipts={[{ id: 1, text: "check tests first" }]} />);
 
     expect(scrollIntoView).not.toHaveBeenCalled();
-    expect(scrollRoot.scrollTop).toBe(212);
-    expect(screen.queryByRole("button", { name: /latest/i })).toBeNull();
+    expect(scrollRoot.scrollTop).toBe(480);
+    expect(screen.getByRole("button", { name: /jump to latest/i })).toBeInTheDocument();
   });
 
   it("hides return-to-latest while browsing older messages until new activity arrives", () => {

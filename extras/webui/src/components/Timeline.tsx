@@ -19,8 +19,6 @@ const filterModes: { mode: TimelineFilterMode; label: string }[] = [
   { mode: "repaired", label: "Auto-fixed" },
 ];
 
-const selectionScrollStepPx = 16;
-
 // The conversation is the primary product surface. Search and filters stay
 // available, but are framed as a plain find tool instead of a trace console.
 export function Timeline({
@@ -61,11 +59,7 @@ export function Timeline({
   const userBrowsedHistory = useRef(false);
   const autoFollowPaused = useRef(false);
   const pointerSelecting = useRef(false);
-  const selectionScrollTop = useRef<number | undefined>(undefined);
-  const selectionEdgeRaf = useRef<number | undefined>(undefined);
-  const selectionEdgeVelocity = useRef(0);
   const touchStartY = useRef<number | undefined>(undefined);
-  const lastPointerType = useRef<PointerEvent["pointerType"] | undefined>(undefined);
   const [following, setFollowing] = useState(true);
   const [newActivity, setNewActivity] = useState(false);
   const [filterMode, setFilterMode] = useState<TimelineFilterMode>("all");
@@ -108,7 +102,6 @@ export function Timeline({
     userBrowsedHistory.current = false;
     autoFollowPaused.current = false;
     pointerSelecting.current = false;
-    cancelSelectionEdgeScroll();
     latestAnswerRef.current = null;
     setFollowing(true);
     setNewActivity(false);
@@ -148,39 +141,22 @@ export function Timeline({
       userBrowsedHistory.current = true;
       autoFollowPaused.current = true;
       if (event.type === "pointerdown") {
-        if ("pointerType" in event) lastPointerType.current = (event as PointerEvent).pointerType;
         pointerSelecting.current = true;
-        selectionScrollTop.current = currentScrollTop(scrollRoot);
         return;
       }
       setFollowing(false);
     };
     const onPointerUp = () => {
       pointerSelecting.current = false;
-      cancelSelectionEdgeScroll();
-      if (!hasActiveTextSelection()) selectionScrollTop.current = undefined;
-    };
-    const onPointerMove = (event: Event) => {
-      updateSelectionEdgeScroll(event as PointerEvent);
     };
     const onSelectionChange = () => {
       if (hasActiveTextSelection()) {
         userBrowsedHistory.current = true;
         autoFollowPaused.current = true;
-        selectionScrollTop.current ??= currentScrollTop(scrollRoot);
-        return;
       }
-      cancelSelectionEdgeScroll();
-      if (!pointerSelecting.current) selectionScrollTop.current = undefined;
-      if (!pointerSelecting.current) lastPointerType.current = undefined;
     };
     const onScroll = () => {
       if (pointerSelecting.current || hasActiveTextSelection()) {
-        if (lastPointerType.current === "touch") {
-          selectionScrollTop.current = currentScrollTop(scrollRoot);
-          return;
-        }
-        selectionScrollTop.current = limitSelectionScroll(scrollRoot, selectionScrollTop.current);
         return;
       }
       if (!userBrowsedHistory.current) return;
@@ -196,17 +172,14 @@ export function Timeline({
     target.addEventListener("pointerdown", markUserBrowsing, { passive: true });
     target.addEventListener("scroll", onScroll, { passive: true });
     window.addEventListener("pointerup", onPointerUp, { passive: true });
-    window.addEventListener("pointermove", onPointerMove, { passive: true });
     document.addEventListener("selectionchange", onSelectionChange);
     return () => {
-      cancelSelectionEdgeScroll();
       target.removeEventListener("wheel", markUserBrowsing);
       target.removeEventListener("touchstart", onTouchStart);
       target.removeEventListener("touchmove", markUserBrowsing);
       target.removeEventListener("pointerdown", markUserBrowsing);
       target.removeEventListener("scroll", onScroll);
       window.removeEventListener("pointerup", onPointerUp);
-      window.removeEventListener("pointermove", onPointerMove);
       document.removeEventListener("selectionchange", onSelectionChange);
     };
   }, [scrollRootRef]);
@@ -217,7 +190,12 @@ export function Timeline({
     prevActivityCount.current = activityCount;
     if (!hasNewActivity) return;
     const selectingText = pointerSelecting.current || hasActiveTextSelection();
-    if (selectingText) selectionScrollTop.current = limitSelectionScroll(scrollRootRef?.current, selectionScrollTop.current);
+    if (selectingText) {
+      userBrowsedHistory.current = true;
+      autoFollowPaused.current = true;
+      setNewActivity(true);
+      return;
+    }
     const answerTarget = latestAnswerRef.current;
     const shouldOpenAtAnswer =
       focusAnswerOnNextHistory.current &&
@@ -225,7 +203,7 @@ export function Timeline({
       !filtered &&
       session.status !== "running" &&
       Boolean(answerTarget);
-    if (shouldOpenAtAnswer && !selectingText) {
+    if (shouldOpenAtAnswer) {
       focusAnswerOnNextHistory.current = false;
       answerTarget?.scrollIntoView?.({ behavior: "auto", block: "start" });
       const scrollRoot = scrollRootRef?.current;
@@ -239,10 +217,10 @@ export function Timeline({
       return;
     }
     focusAnswerOnNextHistory.current = false;
-    if (following && !autoFollowPaused.current && !selectingText) {
+    if (following && !autoFollowPaused.current) {
       endRef.current?.scrollIntoView?.({ behavior: "auto", block: "end" });
     } else {
-      if (!selectingText) setNewActivity(true);
+      setNewActivity(true);
     }
   }, [activityCount, filtered, following, pendingMessage, scrollRootRef, session.status]);
 
@@ -250,8 +228,6 @@ export function Timeline({
     userBrowsedHistory.current = false;
     autoFollowPaused.current = false;
     pointerSelecting.current = false;
-    selectionScrollTop.current = undefined;
-    cancelSelectionEdgeScroll();
     touchStartY.current = undefined;
     setFollowing(true);
     setNewActivity(false);
@@ -262,70 +238,6 @@ export function Timeline({
     setFilterMode("all");
     setSearchQuery("");
     setFiltersOpen(false);
-  }
-
-  function cancelSelectionEdgeScroll() {
-    selectionEdgeVelocity.current = 0;
-    if (selectionEdgeRaf.current != null) {
-      cancelAnimationFrame(selectionEdgeRaf.current);
-      selectionEdgeRaf.current = undefined;
-    }
-  }
-
-  function updateSelectionEdgeScroll(event: PointerEvent) {
-    if (!(pointerSelecting.current || hasActiveTextSelection())) {
-      cancelSelectionEdgeScroll();
-      return;
-    }
-    if (event.pointerType === "touch") {
-      cancelSelectionEdgeScroll();
-      return;
-    }
-    const scrollRoot = scrollRootRef?.current;
-    const bounds = scrollRoot?.getBoundingClientRect() ?? { top: 0, bottom: window.innerHeight };
-    const edgePx = 72;
-    const maxStepPx = 12;
-    const topPressure = Math.max(0, bounds.top + edgePx - event.clientY) / edgePx;
-    const bottomPressure = Math.max(0, event.clientY - (bounds.bottom - edgePx)) / edgePx;
-    let velocity = 0;
-    if (topPressure > 0) velocity = -Math.max(4, Math.ceil(Math.min(1, topPressure) * maxStepPx));
-    if (bottomPressure > 0) velocity = Math.max(4, Math.ceil(Math.min(1, bottomPressure) * maxStepPx));
-
-    const current = currentScrollTop(scrollRoot);
-    const maxScroll = maxScrollTop(scrollRoot);
-    if ((velocity < 0 && current <= 0) || (velocity > 0 && current >= maxScroll)) velocity = 0;
-    selectionEdgeVelocity.current = velocity;
-    if (!velocity) {
-      cancelSelectionEdgeScroll();
-      return;
-    }
-    if (selectionEdgeRaf.current == null) {
-      selectionEdgeRaf.current = requestAnimationFrame(runSelectionEdgeScroll);
-    }
-  }
-
-  function runSelectionEdgeScroll() {
-    selectionEdgeRaf.current = undefined;
-    const velocity = selectionEdgeVelocity.current;
-    if (!velocity || !(pointerSelecting.current || hasActiveTextSelection())) {
-      cancelSelectionEdgeScroll();
-      return;
-    }
-    const scrollRoot = scrollRootRef?.current;
-    const current = currentScrollTop(scrollRoot);
-    const maxScroll = maxScrollTop(scrollRoot);
-    const next = Math.max(0, Math.min(maxScroll, current + velocity));
-    if (scrollRoot) {
-      scrollRoot.scrollTop = next;
-    } else {
-      window.scrollTo({ top: next, behavior: "auto" });
-    }
-    selectionScrollTop.current = next;
-    if (next === current || next <= 0 || next >= maxScroll) {
-      cancelSelectionEdgeScroll();
-      return;
-    }
-    selectionEdgeRaf.current = requestAnimationFrame(runSelectionEdgeScroll);
   }
 
   if (session.turns.length === 0 && !pendingMessage) {
@@ -761,15 +673,6 @@ function PendingTurn({ message, followUp }: { message: PendingMessageView; follo
   );
 }
 
-function currentScrollTop(scrollRoot?: HTMLElement | null): number {
-  return scrollRoot ? scrollRoot.scrollTop : window.scrollY;
-}
-
-function maxScrollTop(scrollRoot?: HTMLElement | null): number {
-  if (scrollRoot) return Math.max(0, scrollRoot.scrollHeight - scrollRoot.clientHeight);
-  return Math.max(0, document.documentElement.scrollHeight - window.innerHeight);
-}
-
 function latestDistance(scrollRoot?: HTMLElement | null): number {
   if (scrollRoot) return scrollRoot.scrollHeight - scrollRoot.scrollTop - scrollRoot.clientHeight;
   return document.documentElement.scrollHeight - window.scrollY - window.innerHeight;
@@ -789,20 +692,6 @@ function isForwardOverscrollAtLatest(event: Event, distanceToLatest: number, tou
 function hasActiveTextSelection(): boolean {
   const selection = document.getSelection?.();
   return Boolean(selection && !selection.isCollapsed && selection.toString().trim());
-}
-
-function limitSelectionScroll(scrollRoot: HTMLElement | null | undefined, previousScrollTop: number | undefined): number {
-  const current = currentScrollTop(scrollRoot);
-  if (previousScrollTop == null) return current;
-  const delta = current - previousScrollTop;
-  if (Math.abs(delta) <= selectionScrollStepPx) return current;
-  const next = previousScrollTop + Math.sign(delta) * selectionScrollStepPx;
-  if (scrollRoot) {
-    scrollRoot.scrollTop = next;
-  } else {
-    window.scrollTo({ top: next, behavior: "auto" });
-  }
-  return next;
 }
 
 function summarize(text: string, limit: number): string {
