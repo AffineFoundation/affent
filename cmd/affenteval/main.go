@@ -117,6 +117,8 @@ func run(args []string) int {
 			MaxAvgReactiveCompactions:            fs.Float64("max-avg-reactive-context-compactions", -1, "optional quality gate: maximum average reactive context compactions per scenario"),
 			MaxAvgContextRemovedMessages:         fs.Float64("max-avg-context-removed-messages", -1, "optional quality gate: maximum average messages removed by context compaction per scenario"),
 			MaxAvgContextSummaryBytes:            fs.Float64("max-avg-context-summary-bytes", -1, "optional quality gate: maximum average context compaction summary bytes per scenario"),
+			MaxAvgContextSummaryMissing:          fs.Float64("max-avg-context-summary-missing", -1, "optional quality gate: maximum average missing context compaction summaries per scenario"),
+			MaxAvgContextSummaryEmpty:            fs.Float64("max-avg-context-summary-empty", -1, "optional quality gate: maximum average empty context compaction summaries per scenario"),
 			MaxAvgToolCalls:                      fs.Float64("max-avg-tool-calls", -1, "optional quality gate: maximum average tool calls per scenario"),
 			MaxAvgDurationMS:                     fs.Float64("max-avg-duration-ms", -1, "optional quality gate: maximum average scenario duration in milliseconds"),
 			MaxAvgTotalTokens:                    fs.Float64("max-avg-total-tokens", -1, "optional quality gate: maximum average total tokens per scenario"),
@@ -306,6 +308,8 @@ type qualityGateConfig struct {
 	MaxAvgReactiveCompactions            *float64
 	MaxAvgContextRemovedMessages         *float64
 	MaxAvgContextSummaryBytes            *float64
+	MaxAvgContextSummaryMissing          *float64
+	MaxAvgContextSummaryEmpty            *float64
 	MaxAvgToolCalls                      *float64
 	MaxAvgDurationMS                     *float64
 	MaxAvgTotalTokens                    *float64
@@ -340,6 +344,8 @@ func qualityGateProfileDefinitions() []qualityGateProfileDefinition {
 				MaxAvgReactiveCompactions:            float64Ptr(0.50),
 				MaxAvgContextRemovedMessages:         float64Ptr(120),
 				MaxAvgContextSummaryBytes:            float64Ptr(24000),
+				MaxAvgContextSummaryMissing:          float64Ptr(0),
+				MaxAvgContextSummaryEmpty:            float64Ptr(0),
 				MaxAvgToolCalls:                      float64Ptr(14),
 				MaxAvgDurationMS:                     float64Ptr(180000),
 				MaxAvgTotalTokens:                    float64Ptr(120000),
@@ -365,6 +371,8 @@ func qualityGateProfileDefinitions() []qualityGateProfileDefinition {
 				MaxAvgRuntimeErrors:                  float64Ptr(0.20),
 				MaxAvgContextRemovedMessages:         float64Ptr(80),
 				MaxAvgContextSummaryBytes:            float64Ptr(20000),
+				MaxAvgContextSummaryMissing:          float64Ptr(0),
+				MaxAvgContextSummaryEmpty:            float64Ptr(0),
 				MaxAvgToolCalls:                      float64Ptr(18),
 				MaxAvgDurationMS:                     float64Ptr(240000),
 				MaxAvgTotalTokens:                    float64Ptr(120000),
@@ -416,6 +424,8 @@ func qualityGateConfigLines(g qualityGateConfig) []string {
 	add("max-avg-reactive-context-compactions", g.MaxAvgReactiveCompactions)
 	add("max-avg-context-removed-messages", g.MaxAvgContextRemovedMessages)
 	add("max-avg-context-summary-bytes", g.MaxAvgContextSummaryBytes)
+	add("max-avg-context-summary-missing", g.MaxAvgContextSummaryMissing)
+	add("max-avg-context-summary-empty", g.MaxAvgContextSummaryEmpty)
 	add("max-avg-tool-calls", g.MaxAvgToolCalls)
 	add("max-avg-duration-ms", g.MaxAvgDurationMS)
 	add("max-avg-total-tokens", g.MaxAvgTotalTokens)
@@ -466,6 +476,8 @@ func applyQualityGateProfile(g *qualityGateConfig, profile string, flagSet func(
 	apply("max-avg-reactive-context-compactions", &g.MaxAvgReactiveCompactions, profileConfig.MaxAvgReactiveCompactions)
 	apply("max-avg-context-removed-messages", &g.MaxAvgContextRemovedMessages, profileConfig.MaxAvgContextRemovedMessages)
 	apply("max-avg-context-summary-bytes", &g.MaxAvgContextSummaryBytes, profileConfig.MaxAvgContextSummaryBytes)
+	apply("max-avg-context-summary-missing", &g.MaxAvgContextSummaryMissing, profileConfig.MaxAvgContextSummaryMissing)
+	apply("max-avg-context-summary-empty", &g.MaxAvgContextSummaryEmpty, profileConfig.MaxAvgContextSummaryEmpty)
 	apply("max-avg-tool-calls", &g.MaxAvgToolCalls, profileConfig.MaxAvgToolCalls)
 	apply("max-avg-duration-ms", &g.MaxAvgDurationMS, profileConfig.MaxAvgDurationMS)
 	apply("max-avg-total-tokens", &g.MaxAvgTotalTokens, profileConfig.MaxAvgTotalTokens)
@@ -1355,6 +1367,8 @@ func validateQualityGateConfig(g qualityGateConfig) error {
 		{"--max-avg-reactive-context-compactions", g.MaxAvgReactiveCompactions, false},
 		{"--max-avg-context-removed-messages", g.MaxAvgContextRemovedMessages, false},
 		{"--max-avg-context-summary-bytes", g.MaxAvgContextSummaryBytes, false},
+		{"--max-avg-context-summary-missing", g.MaxAvgContextSummaryMissing, false},
+		{"--max-avg-context-summary-empty", g.MaxAvgContextSummaryEmpty, false},
 		{"--max-avg-tool-calls", g.MaxAvgToolCalls, false},
 		{"--max-avg-duration-ms", g.MaxAvgDurationMS, false},
 		{"--max-avg-total-tokens", g.MaxAvgTotalTokens, false},
@@ -1430,6 +1444,8 @@ func qualityGateFailures(s batchSummary, g qualityGateConfig) []string {
 	checkMax("avg_reactive_context_compactions", batchAverage(s.ContextCompactionsReactive, s.Total), g.MaxAvgReactiveCompactions, s.Total > 0)
 	checkMax("avg_context_removed_messages", batchAverage(s.ContextCompactionRemoved, s.Total), g.MaxAvgContextRemovedMessages, s.Total > 0)
 	checkMax("avg_context_summary_bytes", batchAverage(s.ContextCompactionSummary, s.Total), g.MaxAvgContextSummaryBytes, s.Total > 0)
+	checkMax("avg_context_summary_missing", batchAverage(s.ContextCompactionSummaryMissing, s.Total), g.MaxAvgContextSummaryMissing, s.Total > 0)
+	checkMax("avg_context_summary_empty", batchAverage(s.ContextCompactionSummaryEmpty, s.Total), g.MaxAvgContextSummaryEmpty, s.Total > 0)
 	checkMax("avg_tool_calls", batchAverage(s.ToolCalls, s.Total), g.MaxAvgToolCalls, s.Total > 0)
 	checkMax("avg_duration_ms", batchAverageInt64(s.Duration.Milliseconds(), s.Total), g.MaxAvgDurationMS, s.Total > 0)
 	checkMax("avg_total_tokens", batchAverage(s.InputTokens+s.OutputTokens, s.Total), g.MaxAvgTotalTokens, s.Total > 0)
@@ -1935,6 +1951,8 @@ type evalJSONLMetadata struct {
 	MaxAvgReactiveCompactions            *float64 `json:"max_avg_reactive_context_compactions,omitempty"`
 	MaxAvgContextRemovedMessages         *float64 `json:"max_avg_context_removed_messages,omitempty"`
 	MaxAvgContextSummaryBytes            *float64 `json:"max_avg_context_summary_bytes,omitempty"`
+	MaxAvgContextSummaryMissing          *float64 `json:"max_avg_context_summary_missing,omitempty"`
+	MaxAvgContextSummaryEmpty            *float64 `json:"max_avg_context_summary_empty,omitempty"`
 	MaxAvgToolCalls                      *float64 `json:"max_avg_tool_calls,omitempty"`
 	MaxAvgDurationMS                     *float64 `json:"max_avg_duration_ms,omitempty"`
 	MaxAvgTotalTokens                    *float64 `json:"max_avg_total_tokens,omitempty"`
@@ -1995,6 +2013,8 @@ func evalJSONLMetadataFromConfig(suite, model, providerLabel, executor, temperat
 		MaxAvgReactiveCompactions:            enabledQualityGateValue(gates.MaxAvgReactiveCompactions),
 		MaxAvgContextRemovedMessages:         enabledQualityGateValue(gates.MaxAvgContextRemovedMessages),
 		MaxAvgContextSummaryBytes:            enabledQualityGateValue(gates.MaxAvgContextSummaryBytes),
+		MaxAvgContextSummaryMissing:          enabledQualityGateValue(gates.MaxAvgContextSummaryMissing),
+		MaxAvgContextSummaryEmpty:            enabledQualityGateValue(gates.MaxAvgContextSummaryEmpty),
 		MaxAvgToolCalls:                      enabledQualityGateValue(gates.MaxAvgToolCalls),
 		MaxAvgDurationMS:                     enabledQualityGateValue(gates.MaxAvgDurationMS),
 		MaxAvgTotalTokens:                    enabledQualityGateValue(gates.MaxAvgTotalTokens),
@@ -2673,6 +2693,8 @@ func hasQualityGateThresholds(meta evalJSONLMetadata) bool {
 		meta.MaxAvgReactiveCompactions != nil ||
 		meta.MaxAvgContextRemovedMessages != nil ||
 		meta.MaxAvgContextSummaryBytes != nil ||
+		meta.MaxAvgContextSummaryMissing != nil ||
+		meta.MaxAvgContextSummaryEmpty != nil ||
 		meta.MaxAvgToolCalls != nil ||
 		meta.MaxAvgDurationMS != nil ||
 		meta.MaxAvgTotalTokens != nil

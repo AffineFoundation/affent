@@ -792,7 +792,8 @@ plan errors, repair success, verifier pass rate,
 verified evidence, network/discovery/dynamic-partial source ratios, average
 context compactions, reactive context compactions, aggregate and per-family
 expected-capability pass rates, messages removed by compaction, compaction
-summary size, average tool calls, and tool-context truncation.
+summary size, missing/empty compaction summaries, average tool calls, and
+tool-context truncation.
 Use `--min-pass-rate`, `--min-completion-rate`,
 `--min-memory-update-rate`, `--min-runtime-surface-rate`,
 `--min-source-network-rate`,
@@ -811,8 +812,9 @@ Use `--min-pass-rate`, `--min-completion-rate`,
 `--max-tool-result-truncation-rate`, `--max-avg-runtime-errors`,
 `--max-avg-context-compactions`, `--max-avg-reactive-context-compactions`,
 `--max-avg-context-removed-messages`, `--max-avg-context-summary-bytes`,
-`--max-avg-tool-calls`, `--max-avg-duration-ms`, and
-`--max-avg-total-tokens` for CI or model/provider comparison runs.
+`--max-avg-context-summary-missing`, `--max-avg-context-summary-empty`,
+`--max-avg-tool-calls`, `--max-avg-duration-ms`, and `--max-avg-total-tokens`
+for CI or model/provider comparison runs.
 
 Run a one-off prompt through the same batch harness:
 

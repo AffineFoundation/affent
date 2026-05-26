@@ -57,6 +57,7 @@ Shared metadata fields:
   `max_avg_runtime_errors`, `max_avg_context_compactions`,
   `max_avg_reactive_context_compactions`,
   `max_avg_context_removed_messages`, `max_avg_context_summary_bytes`,
+  `max_avg_context_summary_missing`, `max_avg_context_summary_empty`,
   `max_avg_tool_calls`, `max_avg_duration_ms`, `max_avg_total_tokens`:
   optional quality gate thresholds configured for the run. Disabled gates are
   omitted.
