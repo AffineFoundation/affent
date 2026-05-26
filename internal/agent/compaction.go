@@ -360,6 +360,10 @@ func compactToolResultForSummary(toolName, content string) string {
 		if out, ok := compactPlanResultForSummary(content); ok {
 			return out
 		}
+	case SessionSearchToolName:
+		if out, ok := compactSessionSearchResultForSummary(content); ok {
+			return out
+		}
 	}
 	return content
 }
@@ -401,6 +405,40 @@ func compactMemoryResultForSummary(content string) (string, bool) {
 	if len(resp.Topics) > 0 {
 		b.WriteString("\ntopics:")
 		appendCompactMemoryTopics(&b, resp.Topics)
+	}
+	return b.String(), true
+}
+
+func compactSessionSearchResultForSummary(content string) (string, bool) {
+	var resp SessionSearchResponse
+	if err := json.Unmarshal([]byte(content), &resp); err != nil {
+		return "", false
+	}
+	if resp.Query == "" && resp.Message == "" && resp.Total == 0 && len(resp.Results) == 0 {
+		return "", false
+	}
+	var b strings.Builder
+	if strings.TrimSpace(resp.Query) != "" {
+		fmt.Fprintf(&b, "query: %s", textutil.Preview(strings.TrimSpace(resp.Query), compactMemoryMaxText))
+	}
+	if resp.Total > 0 || len(resp.Results) > 0 {
+		if b.Len() > 0 {
+			b.WriteByte('\n')
+		}
+		fmt.Fprintf(&b, "total: %d result(s)", resp.Total)
+	}
+	if strings.TrimSpace(resp.Message) != "" {
+		if b.Len() > 0 {
+			b.WriteByte('\n')
+		}
+		fmt.Fprintf(&b, "message: %s", textutil.Preview(strings.TrimSpace(resp.Message), compactMemoryMaxText))
+	}
+	if len(resp.Results) > 0 {
+		if b.Len() > 0 {
+			b.WriteByte('\n')
+		}
+		b.WriteString("results:")
+		appendCompactSessionSearchHits(&b, resp.Results)
 	}
 	return b.String(), true
 }
@@ -616,6 +654,49 @@ func appendCompactMemoryTopics(b *strings.Builder, topics []memory.MemoryTopicSu
 	}
 	if len(topics) > limit {
 		fmt.Fprintf(b, "\n- ... %d more topic(s)", len(topics)-limit)
+	}
+}
+
+func appendCompactSessionSearchHits(b *strings.Builder, hits []SessionSearchHit) {
+	limit := len(hits)
+	if limit > compactDelegationMaxList {
+		limit = compactDelegationMaxList
+	}
+	for _, hit := range hits[:limit] {
+		b.WriteString("\n- ")
+		if hit.SessionID != "" {
+			b.WriteString("session=")
+			b.WriteString(textutil.Preview(strings.TrimSpace(hit.SessionID), 120))
+			b.WriteByte(' ')
+		}
+		if hit.TurnIdx > 0 {
+			fmt.Fprintf(b, "turn=%d ", hit.TurnIdx)
+		}
+		if hit.Role != "" {
+			b.WriteString("role=")
+			b.WriteString(textutil.Preview(strings.TrimSpace(hit.Role), 40))
+			b.WriteByte(' ')
+		}
+		if hit.ContextIncluded {
+			b.WriteString("context=true ")
+		}
+		if hit.ModTime != "" {
+			b.WriteString("mod_time=")
+			b.WriteString(textutil.Preview(strings.TrimSpace(hit.ModTime), 80))
+			b.WriteByte(' ')
+		}
+		if hit.Score > 0 {
+			fmt.Fprintf(b, "score=%.3f ", hit.Score)
+		}
+		if len(hit.MatchedTerms) > 0 {
+			b.WriteString("terms=")
+			appendCompactInlineList(b, hit.MatchedTerms, maxActivePlanEvidenceRefs, 80)
+			b.WriteByte(' ')
+		}
+		b.WriteString(textutil.Preview(strings.TrimSpace(hit.Snippet), compactMemoryMaxText))
+	}
+	if len(hits) > limit {
+		fmt.Fprintf(b, "\n- ... %d more hit(s)", len(hits)-limit)
 	}
 }
 
