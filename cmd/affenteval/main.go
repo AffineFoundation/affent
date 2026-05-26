@@ -76,6 +76,7 @@ func run(args []string) int {
 			MinSourceAccessVerifiedRate:  fs.Float64("min-source-access-verified-rate", -1, "optional quality gate: minimum verified SourceAccess rate, 0..1"),
 			MaxToolErrorRate:             fs.Float64("max-tool-error-rate", -1, "optional quality gate: maximum tool error rate, 0..1"),
 			MaxToolContextTruncationRate: fs.Float64("max-tool-context-truncation-rate", -1, "optional quality gate: maximum tool-context truncation rate, 0..1"),
+			MaxToolResultTruncationRate:  fs.Float64("max-tool-result-truncation-rate", -1, "optional quality gate: maximum tool-result event truncation rate, 0..1"),
 			MaxAvgTotalTokens:            fs.Float64("max-avg-total-tokens", -1, "optional quality gate: maximum average total tokens per scenario"),
 		}
 	)
@@ -208,6 +209,7 @@ type qualityGateConfig struct {
 	MinSourceAccessVerifiedRate  *float64
 	MaxToolErrorRate             *float64
 	MaxToolContextTruncationRate *float64
+	MaxToolResultTruncationRate  *float64
 	MaxAvgTotalTokens            *float64
 }
 
@@ -745,6 +747,7 @@ func validateQualityGateConfig(g qualityGateConfig) error {
 		{"--min-source-access-verified-rate", g.MinSourceAccessVerifiedRate, true},
 		{"--max-tool-error-rate", g.MaxToolErrorRate, true},
 		{"--max-tool-context-truncation-rate", g.MaxToolContextTruncationRate, true},
+		{"--max-tool-result-truncation-rate", g.MaxToolResultTruncationRate, true},
 		{"--max-avg-total-tokens", g.MaxAvgTotalTokens, false},
 	} {
 		if gate.value == nil {
@@ -796,6 +799,7 @@ func qualityGateFailures(s batchSummary, g qualityGateConfig) []string {
 	checkMin("source_access_verified_rate", batchRatio(s.SourceAccessVerified, s.SourceAccessResults), g.MinSourceAccessVerifiedRate, s.SourceAccessResults > 0)
 	checkMax("tool_error_rate", batchRatio(s.ToolErrors, s.ToolCalls), g.MaxToolErrorRate, s.ToolCalls > 0)
 	checkMax("tool_context_truncation_rate", batchRatio(s.ToolContextTruncated, s.ToolCalls), g.MaxToolContextTruncationRate, s.ToolCalls > 0)
+	checkMax("tool_result_truncation_rate", batchRatio(s.ToolResultsTruncated, s.ToolCalls), g.MaxToolResultTruncationRate, s.ToolCalls > 0)
 	checkMax("avg_total_tokens", batchAverage(s.InputTokens+s.OutputTokens, s.Total), g.MaxAvgTotalTokens, s.Total > 0)
 	sort.Strings(failures)
 	return failures
@@ -1044,6 +1048,7 @@ type evalJSONLMetadata struct {
 	MinSourceAccessVerifiedRate  *float64 `json:"min_source_access_verified_rate,omitempty"`
 	MaxToolErrorRate             *float64 `json:"max_tool_error_rate,omitempty"`
 	MaxToolContextTruncationRate *float64 `json:"max_tool_context_truncation_rate,omitempty"`
+	MaxToolResultTruncationRate  *float64 `json:"max_tool_result_truncation_rate,omitempty"`
 	MaxAvgTotalTokens            *float64 `json:"max_avg_total_tokens,omitempty"`
 }
 
@@ -1080,6 +1085,7 @@ func evalJSONLMetadataFromConfig(suite, model, providerLabel, executor, temperat
 		MinSourceAccessVerifiedRate:  enabledQualityGateValue(gates.MinSourceAccessVerifiedRate),
 		MaxToolErrorRate:             enabledQualityGateValue(gates.MaxToolErrorRate),
 		MaxToolContextTruncationRate: enabledQualityGateValue(gates.MaxToolContextTruncationRate),
+		MaxToolResultTruncationRate:  enabledQualityGateValue(gates.MaxToolResultTruncationRate),
 		MaxAvgTotalTokens:            enabledQualityGateValue(gates.MaxAvgTotalTokens),
 	}
 }
@@ -1223,6 +1229,7 @@ type batchSummaryRecord struct {
 	AvgContextCompactions      float64                                    `json:"avg_context_compactions"`
 	AvgContextRemovedMessages  float64                                    `json:"avg_context_removed_messages"`
 	ToolContextTruncationRate  *float64                                   `json:"tool_context_truncation_rate,omitempty"`
+	ToolResultTruncationRate   *float64                                   `json:"tool_result_truncation_rate,omitempty"`
 	DurationMS                 int64                                      `json:"duration_ms"`
 	ToolCalls                  int                                        `json:"tool_calls"`
 	ToolErrors                 int                                        `json:"tool_errors"`
@@ -1526,6 +1533,7 @@ func printBatchSummaryJSONL(w io.Writer, meta evalJSONLMetadata, s batchSummary,
 		AvgContextCompactions:      batchAverage(s.ContextCompactions, s.Total),
 		AvgContextRemovedMessages:  batchAverage(s.ContextCompactionRemoved, s.Total),
 		ToolContextTruncationRate:  batchOptionalRatio(s.ToolContextTruncated, s.ToolCalls),
+		ToolResultTruncationRate:   batchOptionalRatio(s.ToolResultsTruncated, s.ToolCalls),
 		DurationMS:                 s.Duration.Milliseconds(),
 		ToolCalls:                  s.ToolCalls,
 		ToolErrors:                 s.ToolErrors,
@@ -1630,6 +1638,7 @@ func hasQualityGateThresholds(meta evalJSONLMetadata) bool {
 		meta.MinSourceAccessVerifiedRate != nil ||
 		meta.MaxToolErrorRate != nil ||
 		meta.MaxToolContextTruncationRate != nil ||
+		meta.MaxToolResultTruncationRate != nil ||
 		meta.MaxAvgTotalTokens != nil
 }
 

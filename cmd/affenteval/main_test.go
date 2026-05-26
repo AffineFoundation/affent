@@ -282,6 +282,7 @@ func TestQualityGateFailures(t *testing.T) {
 		SourceAccessResults:      4,
 		SourceAccessVerified:     3,
 		ToolContextTruncated:     4,
+		ToolResultsTruncated:     3,
 		InputTokens:              90,
 		OutputTokens:             20,
 		ContextCompactions:       1,
@@ -293,6 +294,7 @@ func TestQualityGateFailures(t *testing.T) {
 		MinSourceAccessVerifiedRate:  ptr(0.9),
 		MaxToolErrorRate:             ptr(0.1),
 		MaxToolContextTruncationRate: ptr(0.5),
+		MaxToolResultTruncationRate:  ptr(0.4),
 		MaxAvgTotalTokens:            ptr(40),
 	})
 	got := strings.Join(failures, "\n")
@@ -303,6 +305,7 @@ func TestQualityGateFailures(t *testing.T) {
 		"source_access_verified_rate 0.750 < min 0.900",
 		"tool_context_truncation_rate 0.800 > max 0.500",
 		"tool_error_rate 0.200 > max 0.100",
+		"tool_result_truncation_rate 0.600 > max 0.400",
 	} {
 		if !strings.Contains(got, want) {
 			t.Fatalf("quality gate failures missing %q:\n%s", want, got)
@@ -1753,6 +1756,7 @@ func TestPrintBatchSummaryJSONL(t *testing.T) {
 		"avg_context_compactions":       float64(0.5),
 		"avg_context_removed_messages":  float64(16),
 		"tool_context_truncation_rate":  float64(0.8),
+		"tool_result_truncation_rate":   float64(0.4),
 		"duration_ms":                   float64(2500),
 		"tool_calls":                    float64(5),
 		"tool_errors":                   float64(1),
@@ -1989,17 +1993,19 @@ func TestEvalJSONLMetadataFromConfig(t *testing.T) {
 	minPassRate := 0.8
 	minSourceRate := 0.9
 	maxToolErrorRate := 0.05
+	maxToolResultTruncationRate := 0.2
 	maxAvgTotalTokens := 120000.0
 	meta = evalJSONLMetadataFromConfig(" custom ", " flag-model ", " flag-provider ", " sandbox ", " 0.4 ", " 0.9 ", " 512 ", " 42 ", true, " readonly_workspace,web ", true, true, true, true, true, " /tmp/mcp.json ", time.Second, qualityGateConfig{
 		MinPassRate:                 &minPassRate,
 		MinSourceAccessVerifiedRate: &minSourceRate,
 		MaxToolErrorRate:            &maxToolErrorRate,
+		MaxToolResultTruncationRate: &maxToolResultTruncationRate,
 		MaxAvgTotalTokens:           &maxAvgTotalTokens,
 	})
 	if meta.Model != "flag-model" || meta.ProviderLabel != "flag-provider" || meta.Executor != "sandbox" || meta.Temperature != "0.4" || meta.TopP != "0.9" || meta.MaxTokens != "512" || meta.Seed != "42" || meta.Suite != "custom" || !meta.RuntimeEvalMode || meta.RuntimeTools != "readonly_workspace,web" || !meta.RuntimeAllTools || !meta.RuntimeMemory || !meta.RuntimeWeb || !meta.RuntimeBrowser || !meta.TraceDeltas || !meta.RuntimeMCP || meta.TimeoutMS != 1000 {
 		t.Fatalf("flag metadata not normalized: %+v", meta)
 	}
-	if meta.MinPassRate == nil || *meta.MinPassRate != 0.8 || meta.MinSourceAccessVerifiedRate == nil || *meta.MinSourceAccessVerifiedRate != 0.9 || meta.MaxToolErrorRate == nil || *meta.MaxToolErrorRate != 0.05 || meta.MaxAvgTotalTokens == nil || *meta.MaxAvgTotalTokens != 120000 {
+	if meta.MinPassRate == nil || *meta.MinPassRate != 0.8 || meta.MinSourceAccessVerifiedRate == nil || *meta.MinSourceAccessVerifiedRate != 0.9 || meta.MaxToolErrorRate == nil || *meta.MaxToolErrorRate != 0.05 || meta.MaxToolResultTruncationRate == nil || *meta.MaxToolResultTruncationRate != 0.2 || meta.MaxAvgTotalTokens == nil || *meta.MaxAvgTotalTokens != 120000 {
 		t.Fatalf("quality gate metadata not preserved: %+v", meta)
 	}
 	if meta.MinCompletionRate != nil || meta.MaxToolContextTruncationRate != nil {

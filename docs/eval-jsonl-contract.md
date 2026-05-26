@@ -39,8 +39,9 @@ Shared metadata fields:
 - `timeout_ms`: per-scenario timeout in milliseconds.
 - `min_pass_rate`, `min_completion_rate`,
   `min_source_access_verified_rate`, `max_tool_error_rate`,
-  `max_tool_context_truncation_rate`, `max_avg_total_tokens`: optional quality
-  gate thresholds configured for the run. Disabled gates are omitted.
+  `max_tool_context_truncation_rate`, `max_tool_result_truncation_rate`,
+  `max_avg_total_tokens`: optional quality gate thresholds configured for the
+  run. Disabled gates are omitted.
 
 ## Scenario Record
 
@@ -230,7 +231,8 @@ Summary records aggregate all scenario records from the same process:
   observed, `verifier_pass_rate` when verifier commands ran,
   `source_access_verified_rate` when source evidence was observed,
   `avg_context_compactions`, `avg_context_removed_messages`,
-  `tool_context_truncation_rate` when tool calls were observed,
+  `tool_context_truncation_rate` and `tool_result_truncation_rate` when tool
+  calls were observed,
   `avg_input_tokens`, `avg_output_tokens`, and `avg_total_tokens`.
 - Tool totals: `tool_calls`, `tool_errors`, `tool_repaired`,
   `tool_name_canonicalized`, `tool_repair_calls`, `tool_repair_succeeded`,

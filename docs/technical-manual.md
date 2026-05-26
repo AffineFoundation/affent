@@ -754,8 +754,8 @@ gate is enabled and `quality_gate_failures` when a gate failed, so stored eval
 artifacts can explain CI or model-comparison failures without stderr.
 Use `--min-pass-rate`, `--min-completion-rate`,
 `--min-source-access-verified-rate`, `--max-tool-error-rate`,
-`--max-tool-context-truncation-rate`, and `--max-avg-total-tokens` for CI or
-model/provider comparison runs.
+`--max-tool-context-truncation-rate`, `--max-tool-result-truncation-rate`, and
+`--max-avg-total-tokens` for CI or model/provider comparison runs.
 
 Run a one-off prompt through the same batch harness:
 
