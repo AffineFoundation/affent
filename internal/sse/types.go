@@ -273,9 +273,9 @@ type LoopDecisionPayload struct {
 }
 
 // ContextCompactPayload records when the model conversation was rewritten into
-// a shorter rolling summary. It is intentionally metadata-only: the summary
-// content remains in conversation state, while trace/UI get enough information
-// to explain why older messages are no longer in the model context.
+// a shorter rolling summary. SummaryPreview is bounded by the runtime before
+// publication so trace/UI can inspect what state survived without receiving an
+// unbounded copy of the conversation.
 type ContextCompactPayload struct {
 	TurnID          string `json:"turn_id,omitempty"`
 	BeforeMessages  int    `json:"before_messages"`
@@ -285,6 +285,7 @@ type ContextCompactPayload struct {
 	Reason          string `json:"reason"`
 	SummaryPresent  bool   `json:"summary_present,omitempty"`
 	SummaryBytes    int    `json:"summary_bytes,omitempty"`
+	SummaryPreview  string `json:"summary_preview,omitempty"`
 }
 
 type ToolRuntimeStats struct {

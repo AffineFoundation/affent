@@ -211,6 +211,7 @@ func applyTraceEvent(t *Trace, pending map[string]int, typ string, data json.Raw
 			Reason:          p.Reason,
 			SummaryPresent:  p.SummaryPresent,
 			SummaryBytes:    p.SummaryBytes,
+			SummaryPreview:  p.SummaryPreview,
 		})
 	case sse.TypeError:
 		var p sse.ErrorPayload

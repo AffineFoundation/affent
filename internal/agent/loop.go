@@ -17,6 +17,7 @@ import (
 
 	"github.com/affinefoundation/affent/internal/memory"
 	"github.com/affinefoundation/affent/internal/sse"
+	"github.com/affinefoundation/affent/internal/textutil"
 	"github.com/affinefoundation/affent/internal/toolfailure"
 	"github.com/google/uuid"
 	"github.com/rs/zerolog"
@@ -68,6 +69,11 @@ const DefaultToolResultContextBudgetBytes = 32 * 1024
 // the model doesn't see it; smaller is fine too. 4 KiB is a comfortable
 // chat-bubble length.
 const MaxToolResultPreviewInEvent = 4 * 1024
+
+// MaxContextSummaryPreviewInEvent caps the rolling summary text copied into
+// context.compacted events. The full summary remains in conversation state;
+// traces and UI only need a bounded preview for long-run debugging.
+const MaxContextSummaryPreviewInEvent = 4 * 1024
 
 // MaxToolResultBytesInEvent caps the full tool.result event payload.
 // The conversation context has its own smaller cap above; this one
@@ -2181,9 +2187,12 @@ func (l *Loop) maybeCompact(ctx context.Context, turnID string, reactive bool) b
 
 func (l *Loop) publishContextCompacted(turnID string, before, after int, reactive bool, msgs []ChatMessage) {
 	summaryBytes := 0
+	summaryPreview := ""
 	for _, msg := range msgs {
 		if msg.Role == "user" && strings.HasPrefix(msg.Content, summaryPrefix) {
-			summaryBytes = len(msg.Content) - len(summaryPrefix)
+			summary := strings.TrimSpace(strings.TrimPrefix(msg.Content, summaryPrefix))
+			summaryBytes = len(summary)
+			summaryPreview = textutil.Preview(summary, MaxContextSummaryPreviewInEvent)
 			break
 		}
 	}
@@ -2200,6 +2209,7 @@ func (l *Loop) publishContextCompacted(turnID string, before, after int, reactiv
 		Reason:          reason,
 		SummaryPresent:  summaryBytes > 0,
 		SummaryBytes:    summaryBytes,
+		SummaryPreview:  summaryPreview,
 	})
 }
 

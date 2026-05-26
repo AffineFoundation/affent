@@ -386,6 +386,7 @@ type ContextCompaction struct {
 	Reason          string `json:"reason"`
 	SummaryPresent  bool   `json:"summary_present,omitempty"`
 	SummaryBytes    int    `json:"summary_bytes,omitempty"`
+	SummaryPreview  string `json:"summary_preview,omitempty"`
 }
 
 type ContextCompactionStats struct {
@@ -836,6 +837,7 @@ func (t Trace) ContextCompactionStats(maxExamples int) ContextCompactionStats {
 			Reason:          compaction.Reason,
 			SummaryPresent:  compaction.SummaryPresent,
 			SummaryBytes:    compaction.SummaryBytes,
+			SummaryPreview:  compactOneLine(compaction.SummaryPreview, 600),
 		})
 	}
 	return stats

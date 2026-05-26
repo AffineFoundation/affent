@@ -596,7 +596,7 @@ func TestLoopMaybeCompactPublishesContextCompacted(t *testing.T) {
 	if payload.TurnID != "turn-1" || payload.BeforeMessages != len(msgs) || payload.AfterMessages >= payload.BeforeMessages || payload.RemovedMessages != payload.BeforeMessages-payload.AfterMessages {
 		t.Fatalf("payload = %+v, want before/after/removal metadata", payload)
 	}
-	if payload.Reactive || payload.Reason != "threshold" || !payload.SummaryPresent || payload.SummaryBytes != len("earlier work") {
+	if payload.Reactive || payload.Reason != "threshold" || !payload.SummaryPresent || payload.SummaryBytes != len("earlier work") || payload.SummaryPreview != "earlier work" {
 		t.Fatalf("payload = %+v, want proactive threshold summary metadata", payload)
 	}
 }

@@ -80,7 +80,7 @@ func TestParseTraceFileReadsToolRequestsAndFinalText(t *testing.T) {
 		`{"type":"usage","data":{"input_tokens":11,"output_tokens":7}}`,
 		`{"type":"error","data":{"message":"transient stream warning","failure_kind":"llm_timeout"}}`,
 		`{"type":"loop.decision","data":{"turn_id":"t1","decision_id":"d1","kind":"evidence_quality","trigger":"source_access_dynamic_partial","decision":"defer","confidence":"high","reason":"Dynamic widgets had no text values.","required_action":"Read browser network responses before citing metrics.","visible_in_ui":true}}`,
-		`{"type":"context.compacted","data":{"turn_id":"t1","before_messages":50,"after_messages":18,"removed_messages":32,"reactive":true,"reason":"context_overflow","summary_present":true,"summary_bytes":2048}}`,
+		`{"type":"context.compacted","data":{"turn_id":"t1","before_messages":50,"after_messages":18,"removed_messages":32,"reactive":true,"reason":"context_overflow","summary_present":true,"summary_bytes":2048,"summary_preview":"USER_CONTEXT: keep market evidence and exact source URLs"}}`,
 		`{"type":"message.done","data":{"text":"Conclusion: green","finish_reason":"stop"}}`,
 		`{"type":"turn.end","data":{"reason":"completed","tool_stats":{"tool_requests":2,"tool_name_canonicalized":1,"tool_args_repaired":1,"tool_repair_calls":1,"tool_repair_succeeded":1,"tool_repair_failed":0,"tool_repair_notes":2,"tool_repair_by_kind":{"tool_name":1,"alias_rename":1},"tool_failure_by_kind":{"invalid_args":1},"tool_errors":1,"tool_duration_ms":17,"loop_guard_interventions":1,"forced_no_tools":1,"source_access_dynamic_partial":1,"memory_updates":2,"memory_update_add":1,"memory_update_replace":1,"session_search_calls":1,"session_search_results":2,"session_search_context_hits":1,"session_search_matched_terms":2,"tool_context_truncated":2,"tool_context_omitted_bytes":8192}}}`,
 	}, "\n") + "\n"
@@ -176,7 +176,10 @@ func TestParseTraceFileReadsToolRequestsAndFinalText(t *testing.T) {
 	if compactions.Count != 1 || compactions.Reactive != 1 || compactions.Proactive != 0 || compactions.RemovedMessages != 32 || compactions.SummaryBytes != 2048 {
 		t.Fatalf("ContextCompactionStats = %+v", compactions)
 	}
-	if len(compactions.Examples) != 1 || compactions.Examples[0].Reason != "context_overflow" || !compactions.Examples[0].SummaryPresent {
+	if len(compactions.Examples) != 1 ||
+		compactions.Examples[0].Reason != "context_overflow" ||
+		!compactions.Examples[0].SummaryPresent ||
+		!strings.Contains(compactions.Examples[0].SummaryPreview, "market evidence") {
 		t.Fatalf("ContextCompactionStats examples = %+v", compactions.Examples)
 	}
 	if trace.FinalText != "Conclusion: green" {
@@ -1230,6 +1233,7 @@ func TestWriteScenarioDebugArtifactsIndexesTraceAndFinalText(t *testing.T) {
 				Reason:          "context_overflow",
 				SummaryPresent:  true,
 				SummaryBytes:    512,
+				SummaryPreview:  "USER_CONTEXT: debug run must preserve browser network evidence.",
 			}},
 		},
 		Usage: Usage{InputTokens: 100, OutputTokens: 20},
@@ -1326,6 +1330,7 @@ func TestWriteScenarioDebugArtifactsIndexesTraceAndFinalText(t *testing.T) {
 			Reactive:        true,
 			Reason:          "context_overflow",
 			SummaryBytes:    512,
+			SummaryPreview:  "USER_CONTEXT: debug run must preserve browser network evidence.",
 		}},
 		FinalText:    "partial answer",
 		FinishReason: "stop",
@@ -1418,7 +1423,8 @@ func TestWriteScenarioDebugArtifactsIndexesTraceAndFinalText(t *testing.T) {
 		manifest.ContextCompactionExamples[0].TurnID != "turn-debug" ||
 		!manifest.ContextCompactionExamples[0].Reactive ||
 		manifest.ContextCompactionExamples[0].RemovedMessages != 18 ||
-		manifest.ContextCompactionExamples[0].Reason != "context_overflow" {
+		manifest.ContextCompactionExamples[0].Reason != "context_overflow" ||
+		!strings.Contains(manifest.ContextCompactionExamples[0].SummaryPreview, "browser network evidence") {
 		t.Fatalf("manifest context compaction examples = %+v", manifest.ContextCompactionExamples)
 	}
 	if len(manifest.ChildTranscripts) != 2 ||
@@ -1509,6 +1515,8 @@ func TestWriteScenarioDebugArtifactsIndexesTraceAndFinalText(t *testing.T) {
 		"failure_kinds: `dynamic_shell`",
 		"need browser network evidence",
 		"Context Compactions",
+		"summary_preview:",
+		"USER_CONTEXT: debug run must preserve browser network evidence.",
 		"Final Message",
 	} {
 		if !strings.Contains(string(timeline), want) {

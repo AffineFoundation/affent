@@ -735,6 +735,7 @@ func TestBatchSummaryAggregatesRuntimeMetrics(t *testing.T) {
 				Reason:          "context_overflow",
 				SummaryPresent:  true,
 				SummaryBytes:    2048,
+				SummaryPreview:  "USER_CONTEXT: preserve the market evidence trail.",
 			}},
 		},
 		Repair: agenteval.ToolRepairStats{
@@ -893,7 +894,9 @@ func TestBatchSummaryAggregatesRuntimeMetrics(t *testing.T) {
 	if summary.LoopDecisions != 1 || summary.LoopDecisionByKind["evidence_quality"] != 1 || summary.LoopDecisionByDecision["defer"] != 1 {
 		t.Fatalf("loop decision summary = count:%d kinds:%#v decisions:%#v", summary.LoopDecisions, summary.LoopDecisionByKind, summary.LoopDecisionByDecision)
 	}
-	if len(summary.ContextCompactionExamples) != 1 || summary.ContextCompactionExamples[0].TurnID != "turn-summary" {
+	if len(summary.ContextCompactionExamples) != 1 ||
+		summary.ContextCompactionExamples[0].TurnID != "turn-summary" ||
+		!strings.Contains(summary.ContextCompactionExamples[0].SummaryPreview, "market evidence") {
 		t.Fatalf("ContextCompactionExamples = %#v", summary.ContextCompactionExamples)
 	}
 	if summary.PlanCalls != 3 || summary.PlanErrors != 1 {
@@ -1019,6 +1022,7 @@ func TestPrintBatchResultJSONL(t *testing.T) {
 				Reason:          "context_overflow",
 				SummaryPresent:  true,
 				SummaryBytes:    3072,
+				SummaryPreview:  "USER_CONTEXT: keep browser network evidence in summary.",
 			}},
 		},
 		ToolTruncation: agenteval.ToolTruncationStats{
@@ -1273,7 +1277,8 @@ func TestPrintBatchResultJSONL(t *testing.T) {
 		contextCompactionExample["turn_id"] != "turn-jsonl" ||
 		contextCompactionExample["reactive"] != true ||
 		contextCompactionExample["removed_messages"] != float64(56) ||
-		contextCompactionExample["reason"] != "context_overflow" {
+		contextCompactionExample["reason"] != "context_overflow" ||
+		!strings.Contains(fmt.Sprint(contextCompactionExample["summary_preview"]), "browser network evidence") {
 		t.Fatalf("context_compaction_example = %#v\njson=%s", contextCompactionExamples[0], out.String())
 	}
 	repairKinds, ok := got["tool_repair_by_kind"].(map[string]any)
@@ -1749,6 +1754,7 @@ func TestPrintBatchSummaryJSONL(t *testing.T) {
 			Reason:          "context_overflow",
 			SummaryPresent:  true,
 			SummaryBytes:    2048,
+			SummaryPreview:  "USER_CONTEXT: preserve JSONL summary evidence.",
 		}},
 		LoopGuardInterventions:     3,
 		ForcedNoTools:              1,
@@ -2027,7 +2033,8 @@ func TestPrintBatchSummaryJSONL(t *testing.T) {
 	if !ok ||
 		contextCompactionExample["turn_id"] != "turn-summary-jsonl" ||
 		contextCompactionExample["removed_messages"] != float64(44) ||
-		contextCompactionExample["reason"] != "context_overflow" {
+		contextCompactionExample["reason"] != "context_overflow" ||
+		!strings.Contains(fmt.Sprint(contextCompactionExample["summary_preview"]), "JSONL summary evidence") {
 		t.Fatalf("context_compaction_example = %#v\njson=%s", contextCompactionExamples[0], out.String())
 	}
 	planByAction, ok := got["plan_by_action"].(map[string]any)

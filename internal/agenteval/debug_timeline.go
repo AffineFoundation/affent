@@ -434,6 +434,12 @@ func renderTimelineCompactions(b *strings.Builder, trace *Trace) {
 			c.SummaryBytes,
 			timelineInline(c.Reason, 300),
 		)
+		if c.SummaryPreview != "" {
+			b.WriteString("   summary_preview:\n")
+			b.WriteString("   ```text\n")
+			b.WriteString(indentTimelineText(timelineBlock(c.SummaryPreview, timelineResultPreviewBytes), "   "))
+			b.WriteString("\n   ```\n")
+		}
 	}
 }
 
@@ -735,6 +741,13 @@ func timelineBlock(s string, maxBytes int) string {
 
 func timelineInline(s string, maxBytes int) string {
 	return textutil.CompactWhitespace(textutil.Preview(s, maxBytes, "..."))
+}
+
+func indentTimelineText(s, prefix string) string {
+	if s == "" {
+		return prefix
+	}
+	return prefix + strings.ReplaceAll(s, "\n", "\n"+prefix)
 }
 
 func shellQuoteCommand(args []string) string {
