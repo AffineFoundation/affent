@@ -76,6 +76,7 @@ func run(args []string) int {
 			MinMemoryUpdateRate:            fs.Float64("min-memory-update-rate", -1, "optional quality gate: minimum confirmed memory updates per scenario, 0..1"),
 			MinSourceAccessVerifiedRate:    fs.Float64("min-source-access-verified-rate", -1, "optional quality gate: minimum verified SourceAccess rate, 0..1"),
 			MinSessionSearchContextHitRate: fs.Float64("min-session-search-context-hit-rate", -1, "optional quality gate: minimum session_search context-hit rate, 0..1"),
+			MaxForcedNoToolsRate:           fs.Float64("max-forced-no-tools-rate", -1, "optional quality gate: maximum forced no-tool follow-up rate per tool call, 0..1"),
 			MaxLoopGuardInterventionRate:   fs.Float64("max-loop-guard-intervention-rate", -1, "optional quality gate: maximum loop guard intervention rate per tool call, 0..1"),
 			MaxToolErrorRate:               fs.Float64("max-tool-error-rate", -1, "optional quality gate: maximum tool error rate, 0..1"),
 			MaxToolContextTruncationRate:   fs.Float64("max-tool-context-truncation-rate", -1, "optional quality gate: maximum tool-context truncation rate, 0..1"),
@@ -214,6 +215,7 @@ type qualityGateConfig struct {
 	MinMemoryUpdateRate            *float64
 	MinSourceAccessVerifiedRate    *float64
 	MinSessionSearchContextHitRate *float64
+	MaxForcedNoToolsRate           *float64
 	MaxLoopGuardInterventionRate   *float64
 	MaxToolErrorRate               *float64
 	MaxToolContextTruncationRate   *float64
@@ -759,6 +761,7 @@ func validateQualityGateConfig(g qualityGateConfig) error {
 		{"--min-memory-update-rate", g.MinMemoryUpdateRate, true},
 		{"--min-source-access-verified-rate", g.MinSourceAccessVerifiedRate, true},
 		{"--min-session-search-context-hit-rate", g.MinSessionSearchContextHitRate, true},
+		{"--max-forced-no-tools-rate", g.MaxForcedNoToolsRate, true},
 		{"--max-loop-guard-intervention-rate", g.MaxLoopGuardInterventionRate, true},
 		{"--max-tool-error-rate", g.MaxToolErrorRate, true},
 		{"--max-tool-context-truncation-rate", g.MaxToolContextTruncationRate, true},
@@ -816,6 +819,7 @@ func qualityGateFailures(s batchSummary, g qualityGateConfig) []string {
 	checkMin("memory_update_rate", batchRatio(s.MemoryUpdates, s.Total), g.MinMemoryUpdateRate, s.Total > 0)
 	checkMin("source_access_verified_rate", batchRatio(s.SourceAccessVerified, s.SourceAccessResults), g.MinSourceAccessVerifiedRate, s.SourceAccessResults > 0)
 	checkMin("session_search_context_hit_rate", batchRatio(s.SessionSearchContextHits, s.SessionSearchResults), g.MinSessionSearchContextHitRate, s.SessionSearchResults > 0)
+	checkMax("forced_no_tools_rate", batchRatio(s.ForcedNoTools, s.ToolCalls), g.MaxForcedNoToolsRate, s.ToolCalls > 0)
 	checkMax("loop_guard_intervention_rate", batchRatio(s.LoopGuardInterventions, s.ToolCalls), g.MaxLoopGuardInterventionRate, s.ToolCalls > 0)
 	checkMax("tool_error_rate", batchRatio(s.ToolErrors, s.ToolCalls), g.MaxToolErrorRate, s.ToolCalls > 0)
 	checkMax("tool_context_truncation_rate", batchRatio(s.ToolContextTruncated, s.ToolCalls), g.MaxToolContextTruncationRate, s.ToolCalls > 0)
@@ -1070,6 +1074,7 @@ type evalJSONLMetadata struct {
 	MinMemoryUpdateRate            *float64 `json:"min_memory_update_rate,omitempty"`
 	MinSourceAccessVerifiedRate    *float64 `json:"min_source_access_verified_rate,omitempty"`
 	MinSessionSearchContextHitRate *float64 `json:"min_session_search_context_hit_rate,omitempty"`
+	MaxForcedNoToolsRate           *float64 `json:"max_forced_no_tools_rate,omitempty"`
 	MaxLoopGuardInterventionRate   *float64 `json:"max_loop_guard_intervention_rate,omitempty"`
 	MaxToolErrorRate               *float64 `json:"max_tool_error_rate,omitempty"`
 	MaxToolContextTruncationRate   *float64 `json:"max_tool_context_truncation_rate,omitempty"`
@@ -1112,6 +1117,7 @@ func evalJSONLMetadataFromConfig(suite, model, providerLabel, executor, temperat
 		MinMemoryUpdateRate:            enabledQualityGateValue(gates.MinMemoryUpdateRate),
 		MinSourceAccessVerifiedRate:    enabledQualityGateValue(gates.MinSourceAccessVerifiedRate),
 		MinSessionSearchContextHitRate: enabledQualityGateValue(gates.MinSessionSearchContextHitRate),
+		MaxForcedNoToolsRate:           enabledQualityGateValue(gates.MaxForcedNoToolsRate),
 		MaxLoopGuardInterventionRate:   enabledQualityGateValue(gates.MaxLoopGuardInterventionRate),
 		MaxToolErrorRate:               enabledQualityGateValue(gates.MaxToolErrorRate),
 		MaxToolContextTruncationRate:   enabledQualityGateValue(gates.MaxToolContextTruncationRate),
@@ -1256,6 +1262,7 @@ type batchSummaryRecord struct {
 	CompletionRate              float64                                    `json:"completion_rate"`
 	MemoryUpdateRate            float64                                    `json:"memory_update_rate"`
 	ToolErrorRate               *float64                                   `json:"tool_error_rate,omitempty"`
+	ForcedNoToolsRate           *float64                                   `json:"forced_no_tools_rate,omitempty"`
 	LoopGuardInterventionRate   *float64                                   `json:"loop_guard_intervention_rate,omitempty"`
 	ToolRepairSuccessRate       *float64                                   `json:"tool_repair_success_rate,omitempty"`
 	VerifierPassRate            *float64                                   `json:"verifier_pass_rate,omitempty"`
@@ -1564,6 +1571,7 @@ func printBatchSummaryJSONL(w io.Writer, meta evalJSONLMetadata, s batchSummary,
 		CompletionRate:              batchRatio(s.EndCompleted, s.Total),
 		MemoryUpdateRate:            batchRatio(s.MemoryUpdates, s.Total),
 		ToolErrorRate:               batchOptionalRatio(s.ToolErrors, s.ToolCalls),
+		ForcedNoToolsRate:           batchOptionalRatio(s.ForcedNoTools, s.ToolCalls),
 		LoopGuardInterventionRate:   batchOptionalRatio(s.LoopGuardInterventions, s.ToolCalls),
 		ToolRepairSuccessRate:       batchOptionalRatio(s.ToolRepairSucceeded, s.ToolRepairCalls),
 		VerifierPassRate:            batchOptionalRatio(s.VerifierPassed, s.VerifierRuns),
@@ -1678,6 +1686,7 @@ func hasQualityGateThresholds(meta evalJSONLMetadata) bool {
 		meta.MinMemoryUpdateRate != nil ||
 		meta.MinSourceAccessVerifiedRate != nil ||
 		meta.MinSessionSearchContextHitRate != nil ||
+		meta.MaxForcedNoToolsRate != nil ||
 		meta.MaxLoopGuardInterventionRate != nil ||
 		meta.MaxToolErrorRate != nil ||
 		meta.MaxToolContextTruncationRate != nil ||
