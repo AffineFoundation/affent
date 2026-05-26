@@ -34,7 +34,7 @@ describe("eventTrace view model", () => {
           result_artifact_path: ".affent/artifacts/c1.txt",
         },
       },
-      { id: 3, type: "turn.end", data: { turn_id: "t1", reason: "max_turns", tool_stats: { tool_requests: 2, tool_errors: 1, tool_duration_ms: 1200 } } },
+      { id: 3, type: "turn.end", data: { turn_id: "t1", reason: "max_turns", tool_stats: { tool_requests: 2, tool_errors: 1, source_access_verified: 2, source_access_network: 1, tool_duration_ms: 1200 } } },
     ]));
     const [request, result, finished] = model.items;
 
@@ -61,7 +61,7 @@ describe("eventTrace view model", () => {
       kind: "event",
       display: {
         label: "Stopped at limit",
-        meta: ["Request 1", "max_turns", "2 actions", "1 failed", "1.2 s"],
+        meta: ["Request 1", "max_turns", "2 actions", "1 failed", "2 sources", "1 network", "1.2 s"],
       },
     });
   });

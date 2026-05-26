@@ -349,12 +349,16 @@ function turnEndMeta(event: NormalizedEvent, turn: string | undefined): string[]
   const toolRequests = typeof toolStats?.tool_requests === "number" ? toolStats.tool_requests : undefined;
   const toolErrors = typeof toolStats?.tool_errors === "number" ? toolStats.tool_errors : undefined;
   const toolDuration = typeof toolStats?.tool_duration_ms === "number" ? toolStats.tool_duration_ms : undefined;
+  const verifiedSources = typeof toolStats?.source_access_verified === "number" ? toolStats.source_access_verified : undefined;
+  const networkSources = typeof toolStats?.source_access_network === "number" ? toolStats.source_access_network : undefined;
 
   return compact([
     turn,
     readString(event.data, "reason"),
     typeof toolRequests === "number" ? `${toolRequests} actions` : undefined,
     typeof toolErrors === "number" && toolErrors > 0 ? `${toolErrors} failed` : undefined,
+    typeof verifiedSources === "number" && verifiedSources > 0 ? `${verifiedSources} sources` : undefined,
+    typeof networkSources === "number" && networkSources > 0 ? `${networkSources} network` : undefined,
     typeof toolDuration === "number" ? formatDuration(toolDuration) : undefined,
   ]);
 }

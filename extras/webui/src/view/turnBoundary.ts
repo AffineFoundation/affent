@@ -58,8 +58,12 @@ function buildBoundaryMeta(turn: TurnState, artifactCount: number, artifactLabel
   const meta: string[] = [];
   const durationMs = turn.toolStats?.tool_duration_ms ?? sumDurations(turn.toolCalls);
   const tokenCount = turn.usage ? turn.usage.inputTokens + turn.usage.outputTokens : undefined;
+  const verifiedSources = turn.toolStats?.source_access_verified ?? 0;
+  const networkSources = turn.toolStats?.source_access_network ?? 0;
 
   if (turn.toolCalls.length > 0) meta.push(`${turn.toolCalls.length} ${pluralize("action", turn.toolCalls.length)}`);
+  if (verifiedSources > 0) meta.push(`${verifiedSources} ${pluralize("source", verifiedSources)}`);
+  if (networkSources > 0) meta.push(`${networkSources} network`);
   if (artifactCount > 0) meta.push(artifactLabel ? artifactLabel : `${artifactCount} ${pluralize("file", artifactCount)}`);
   if (durationMs != null && durationMs > 0) meta.push(formatDuration(durationMs));
   if (tokenCount != null && tokenCount > 0) meta.push(`${tokenCount} tokens`);

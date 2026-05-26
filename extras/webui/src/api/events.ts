@@ -117,6 +117,10 @@ export interface ToolRuntimeStats {
   tool_duration_ms?: number;
   loop_guard_interventions?: number;
   forced_no_tools?: number;
+  source_access_results?: number;
+  source_access_verified?: number;
+  source_access_discovery_only?: number;
+  source_access_network?: number;
   memory_updates?: number;
   memory_update_add?: number;
   memory_update_replace?: number;

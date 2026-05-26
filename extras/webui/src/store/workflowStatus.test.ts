@@ -44,4 +44,47 @@ describe("deriveWorkflowStatus", () => {
       currentTool: "shell",
     });
   });
+
+  it("uses verified source evidence as the completed workflow detail", () => {
+    const status = deriveWorkflowStatus(reduceRawEvents([
+      { id: 1, type: "turn.start", data: { turn_id: "t1" } },
+      { id: 2, type: "user.message", data: { turn_id: "t1", text: "verify dynamic web metrics" } },
+      {
+        id: 3,
+        type: "tool.request",
+        data: {
+          turn_id: "t1",
+          call_id: "c1",
+          tool: "browser_network_read",
+          args: { ref: "net:1" },
+        },
+      },
+      {
+        id: 4,
+        type: "tool.result",
+        data: {
+          call_id: "c1",
+          exit_code: 0,
+          duration_ms: 20,
+          result_summary: "validated metrics",
+          result_truncated: false,
+        },
+      },
+      {
+        id: 5,
+        type: "turn.end",
+        data: {
+          turn_id: "t1",
+          reason: "completed",
+          tool_stats: {
+            tool_requests: 1,
+            source_access_verified: 2,
+            source_access_network: 1,
+          },
+        },
+      },
+    ]));
+
+    expect(status.detail).toBe("2 evidence sources verified, including 1 network response.");
+  });
 });

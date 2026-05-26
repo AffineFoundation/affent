@@ -127,6 +127,54 @@ describe("buildTurnWorkSummary", () => {
     expect(summary.items).toContainEqual({ label: "1 repaired", tone: "warning" });
   });
 
+  it("surfaces verified source and network evidence stats", () => {
+    const summary = buildTurnWorkSummary(reduceRawEvents([
+      { id: 1, type: "turn.start", data: { turn_id: "t1" } },
+      {
+        id: 2,
+        type: "tool.request",
+        data: {
+          turn_id: "t1",
+          call_id: "c1",
+          tool: "browser_network_read",
+          args: { ref: "net:1" },
+        },
+      },
+      {
+        id: 3,
+        type: "tool.result",
+        data: {
+          call_id: "c1",
+          exit_code: 0,
+          duration_ms: 64,
+          result_summary: "validated dynamic metrics",
+          result_truncated: false,
+        },
+      },
+      {
+        id: 4,
+        type: "turn.end",
+        data: {
+          turn_id: "t1",
+          reason: "completed",
+          tool_stats: {
+            tool_requests: 1,
+            source_access_verified: 2,
+            source_access_network: 1,
+            tool_duration_ms: 64,
+          },
+        },
+      },
+    ]).turns[0]);
+
+    expect(summary.items).toContainEqual({ label: "2 verified sources", tone: "info" });
+    expect(summary.items).toContainEqual({ label: "1 network source", tone: "info" });
+    expect(summary.headlineItems).toEqual([
+      { label: "2 verified sources", tone: "info" },
+      { label: "1 network source", tone: "info" },
+    ]);
+  });
+
   it("does not count unchanged original tool metadata as repaired work", () => {
     const summary = buildTurnWorkSummary(reduceRawEvents([
       { id: 1, type: "turn.start", data: { turn_id: "t1" } },

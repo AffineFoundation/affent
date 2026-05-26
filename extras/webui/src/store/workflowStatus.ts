@@ -118,6 +118,16 @@ function toolDetail(tool: ToolCallState): string {
 
 function completionDetail(turn: TurnState): string {
   if (turn.toolStats?.tool_errors) return `${turn.toolStats.tool_errors} action issue(s) surfaced.`;
+  const verifiedSources = turn.toolStats?.source_access_verified ?? 0;
+  const networkSources = turn.toolStats?.source_access_network ?? 0;
+  if (verifiedSources > 0 && networkSources > 0) {
+    return `${verifiedSources} evidence ${pluralize("source", verifiedSources)} verified, including ${networkSources} network ${pluralize("response", networkSources)}.`;
+  }
+  if (verifiedSources > 0) return `${verifiedSources} evidence ${pluralize("source", verifiedSources)} verified.`;
   if (turn.toolCalls.length > 0) return `${turn.toolCalls.length} action${turn.toolCalls.length === 1 ? "" : "s"} completed.`;
   return "No external actions were needed.";
+}
+
+function pluralize(label: string, count: number): string {
+  return count === 1 ? label : `${label}s`;
 }

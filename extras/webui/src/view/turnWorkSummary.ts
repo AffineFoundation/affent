@@ -33,6 +33,8 @@ export function buildTurnWorkSummaryWithOptions(
   const truncated = calls.filter((call) => call.argsTruncated || call.resultTruncated).length;
   const artifacts = buildTurnArtifacts(turn);
   const durationMs = turn.toolStats?.tool_duration_ms ?? sumDurations(calls);
+  const verifiedSources = turn.toolStats?.source_access_verified ?? 0;
+  const networkSources = turn.toolStats?.source_access_network ?? 0;
   const actionLabel = actionSummary(calls);
   const items: WorkSummaryItem[] = [];
   const finalAnswerReady = turn.status === "completed" && Boolean(turn.assistantText.trim());
@@ -42,6 +44,8 @@ export function buildTurnWorkSummaryWithOptions(
   if (failed && !opts.continuedAfterLimit) items.push({ label: finalAnswerReady ? toolIssueLabel(failed) : `${failed} failed`, tone: finalAnswerReady ? "warning" : "error" });
   if (running) items.push({ label: `${running} running`, tone: "running" });
   if (repaired) items.push({ label: `${repaired} repaired`, tone: "warning" });
+  if (verifiedSources > 0) items.push({ label: `${verifiedSources} verified ${pluralize("source", verifiedSources)}`, tone: "info" });
+  if (networkSources > 0) items.push({ label: `${networkSources} network ${pluralize("source", networkSources)}`, tone: "info" });
   if (truncated) items.push({ label: `${truncated} truncated`, tone: "info" });
   if (artifacts.length) items.push({ label: artifactCountLabel(artifacts) ?? `${artifacts.length} file${artifacts.length === 1 ? "" : "s"}`, tone: "artifact" });
   if (durationMs != null && durationMs > 0) items.push({ label: formatDuration(durationMs), tone: "muted" });
@@ -83,6 +87,10 @@ function sumDurations(calls: readonly ToolCallState[]): number | undefined {
 
 function toolIssueLabel(count: number): string {
   return `${count} tool issue${count === 1 ? "" : "s"}`;
+}
+
+function pluralize(label: string, count: number): string {
+  return count === 1 ? label : `${label}s`;
 }
 
 function actionSummary(calls: readonly ToolCallState[]): string {

@@ -40,6 +40,21 @@ describe("turnBoundary view model", () => {
     expect(buildTurnBoundaryView({ turn: turn({ status: "error" }), turnNumber: 1 }).tone).toBe("error");
   });
 
+  it("includes verified source and network evidence in completed turn metadata", () => {
+    const view = buildTurnBoundaryView({
+      turn: turn({
+        toolStats: {
+          source_access_verified: 2,
+          source_access_network: 1,
+        },
+      }),
+      turnNumber: 3,
+    });
+
+    expect(view.meta).toEqual(["2 sources", "1 network"]);
+    expect(view.ariaLabel).toContain("2 sources. 1 network");
+  });
+
   it("marks a max-turn boundary as continued when a later message has taken over", () => {
     const view = buildTurnBoundaryView({
       turn: turn({ status: "max_turns" }),
