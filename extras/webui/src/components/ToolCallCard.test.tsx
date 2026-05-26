@@ -18,6 +18,23 @@ describe("ToolCallCard", () => {
     expect(screen.getByText("full output")).toBeInTheDocument();
     expect(screen.getByText("000001-c1.txt (8 KiB, 1 MiB omitted)")).toBeInTheDocument();
   });
+
+  it("surfaces memory updates while collapsed and expands the saved content", async () => {
+    const user = userEvent.setup();
+    const call = memoryAddCall();
+
+    render(<ToolCallCard call={call} events={[]} />);
+
+    const toggle = screen.getByRole("button", { name: /memory/ });
+    expect(toggle).toHaveTextContent("Saved memory");
+    expect(toggle).toHaveTextContent("memory:markets");
+    expect(toggle).toHaveTextContent("MEM-STOCK-73");
+
+    await user.click(toggle);
+
+    expect(screen.getByTestId("memory-update-card")).toHaveTextContent("Saved memory");
+    expect(screen.getByTestId("memory-update-card")).toHaveTextContent("source-led confidence");
+  });
 });
 
 function artifactCall(): ToolCallState {
@@ -38,5 +55,27 @@ function artifactCall(): ToolCallState {
     resultOmittedBytes: 1048576,
     resultCapBytes: 8192,
     resultArtifactPath: ".affent/artifacts/tool-results/000001-c1.txt",
+  };
+}
+
+function memoryAddCall(): ToolCallState {
+  return {
+    callId: "c2",
+    tool: "memory",
+    args: {
+      action: "add",
+      target: "memory",
+      topic: "markets",
+      content: "Alpha Coast market reports must include marker MEM-STOCK-73 and source-led confidence.",
+    },
+    argsTruncated: false,
+    argsRepaired: false,
+    canonicalized: false,
+    status: "success",
+    exitCode: 0,
+    durationMs: 7,
+    resultSummary: "{\"ok\":true,\"message\":\"added\"}",
+    result: "{\"ok\":true,\"message\":\"added\"}",
+    resultTruncated: false,
   };
 }

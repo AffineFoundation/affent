@@ -1098,6 +1098,38 @@ func planResumeCurrentStepScenario() BatchScenario {
 	}
 }
 
+func memoryCrossSessionRecallScenario() BatchScenario {
+	return BatchScenario{
+		Name:         "memory-cross-session-recall",
+		Suites:       []string{smallModelToolsSuite, longRunSuite},
+		SessionID:    "memory-reader",
+		EnableMemory: true,
+		Prompt:       "从持久记忆中查找 Alpha Coast 股票分析约定，回答 memory marker、topic/source，以及应该使用的 confidence tag。必须使用 memory 工具搜索；不要读取文件、运行 shell 或修改任何文件。如果记忆里没有相关事实，要明确说缺失。",
+		Files: map[string]string{
+			".affent/memory/topics/markets.md": "2026-05-26T00:00:00Z Alpha Coast market reports must include memory marker MEM-STOCK-73 and confidence tag source-led when summarizing stock analysis.\n",
+			"README.md":                        "# Memory Recall Eval\n\nThis file intentionally does not contain the memory marker.\n",
+		},
+		RequiredTools: []string{"memory"},
+		RequiredToolCounts: map[string]int{
+			"memory": 1,
+		},
+		RequiredToolArgContains: []ToolArgContainsRequirement{
+			{Tool: "memory", Arg: "action", Substring: "search"},
+			{Tool: "memory", Arg: "query", Substring: "Alpha Coast"},
+		},
+		RequiredToolResultText: map[string][]string{
+			"memory": {"MEM-STOCK-73", "source-led", "markets"},
+		},
+		RequiredFinalText: []string{"MEM-STOCK-73", "source-led", "markets"},
+		ForbiddenTools:    []string{"read_file", "shell", "write_file", "edit_file"},
+		ProtectedFiles:    []string{".affent/memory/topics/markets.md", "README.md"},
+		MaxSuccessfulToolCallsByTool: map[string]int{
+			"memory": 1,
+		},
+		MaxTurns: 5,
+	}
+}
+
 func smallToolRepeatedReadScenario() BatchScenario {
 	return BatchScenario{
 		Name:   "small-tools-repeated-read",

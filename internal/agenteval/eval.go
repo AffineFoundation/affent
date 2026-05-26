@@ -53,6 +53,7 @@ type BatchScenario struct {
 	Prompt                        string
 	SessionID                     string
 	ExecutePlan                   bool
+	EnableMemory                  bool
 	Files                         map[string]string
 	VerifyCommand                 string
 	VerifierTimeout               time.Duration
@@ -176,6 +177,7 @@ func BuiltinBatchScenarios() []BatchScenario {
 		planCodingRepairScenario(),
 		planNotForSimpleReadScenario(),
 		planResumeCurrentStepScenario(),
+		memoryCrossSessionRecallScenario(),
 		smallToolRepeatedReadScenario(),
 		smallToolEditRecoveryScenario(),
 		smallToolShellFailureScenario(),
@@ -466,7 +468,7 @@ func (r BatchRunner) affentctlRunArgs(workspace, tracePath string, scenario Batc
 	if r.RuntimeEvalMode {
 		args = append(args, "--eval-mode")
 	}
-	if r.RuntimeMemory {
+	if r.RuntimeMemory || scenario.EnableMemory {
 		args = append(args, "--memory=true")
 	}
 	if r.RuntimeWeb {

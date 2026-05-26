@@ -456,6 +456,7 @@ func TestSelectBatchScenariosForSuite(t *testing.T) {
 	foundPlanRepair := false
 	foundPlanSkip := false
 	foundPlanResume := false
+	foundMemoryRecall := false
 	foundSymbolContext := false
 	foundSymbolContextRuntimeCapabilities := false
 	foundSymbolContextThenReadFile := false
@@ -533,6 +534,21 @@ func TestSelectBatchScenariosForSuite(t *testing.T) {
 			}
 			if len(scenario.RequiredToolArgContains) != 3 {
 				t.Fatalf("plan-resume-current-step RequiredToolArgContains = %#v, want current read and step 2 update constraints", scenario.RequiredToolArgContains)
+			}
+		}
+		if scenario.Name == "memory-cross-session-recall" {
+			foundMemoryRecall = true
+			if !scenario.EnableMemory || scenario.SessionID != "memory-reader" {
+				t.Fatalf("memory-cross-session-recall memory/session fields = memory:%v session:%q", scenario.EnableMemory, scenario.SessionID)
+			}
+			if !stringSliceContains(scenario.RequiredTools, "memory") {
+				t.Fatalf("memory-cross-session-recall RequiredTools = %#v, want memory", scenario.RequiredTools)
+			}
+			if scenario.RequiredToolCounts["memory"] != 1 || scenario.MaxSuccessfulToolCallsByTool["memory"] != 1 {
+				t.Fatalf("memory-cross-session-recall tool counts = required:%#v max:%#v", scenario.RequiredToolCounts, scenario.MaxSuccessfulToolCallsByTool)
+			}
+			if len(scenario.RequiredToolArgContains) != 2 {
+				t.Fatalf("memory-cross-session-recall RequiredToolArgContains = %#v, want action/query constraints", scenario.RequiredToolArgContains)
 			}
 		}
 		if scenario.Name == "default-runtime-repo-search" {
@@ -635,6 +651,9 @@ func TestSelectBatchScenariosForSuite(t *testing.T) {
 	if !foundPlanResume {
 		t.Fatalf("small-model-tools suite missing plan-resume-current-step")
 	}
+	if !foundMemoryRecall {
+		t.Fatalf("small-model-tools suite missing memory-cross-session-recall")
+	}
 	if !foundRepoSearch {
 		t.Fatalf("small-model-tools suite missing default-runtime-repo-search")
 	}
@@ -664,8 +683,8 @@ func TestSelectLongRunSuite(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(scenarios) != 4 {
-		t.Fatalf("long-run suite size = %d, want 4", len(scenarios))
+	if len(scenarios) != 5 {
+		t.Fatalf("long-run suite size = %d, want 5", len(scenarios))
 	}
 	seen := map[string]BatchScenario{}
 	for _, scenario := range scenarios {
@@ -728,6 +747,17 @@ func TestSelectLongRunSuite(t *testing.T) {
 	}
 	if planResume.RequiredToolCounts["plan"] != 1 || planResume.MaxSuccessfulToolCallsByTool["read_file"] != 1 {
 		t.Fatalf("plan resume tool constraints = counts:%#v max:%#v", planResume.RequiredToolCounts, planResume.MaxSuccessfulToolCallsByTool)
+	}
+
+	memoryRecall, ok := seen["memory-cross-session-recall"]
+	if !ok {
+		t.Fatalf("long-run suite missing memory recall scenario")
+	}
+	if !memoryRecall.EnableMemory || memoryRecall.SessionID != "memory-reader" {
+		t.Fatalf("memory recall fields = memory:%v session:%q", memoryRecall.EnableMemory, memoryRecall.SessionID)
+	}
+	if memoryRecall.RequiredToolCounts["memory"] != 1 || memoryRecall.MaxSuccessfulToolCallsByTool["memory"] != 1 {
+		t.Fatalf("memory recall tool constraints = counts:%#v max:%#v", memoryRecall.RequiredToolCounts, memoryRecall.MaxSuccessfulToolCallsByTool)
 	}
 }
 
@@ -892,15 +922,15 @@ func TestBatchRunnerAffentctlRunArgsForwardsExecutor(t *testing.T) {
 		Seed:             " 42 ",
 		Executor:         "docker:affent-eval",
 		RuntimeEvalMode:  true,
-		RuntimeMemory:    true,
 		RuntimeWeb:       true,
 		RuntimeBrowser:   true,
 		RuntimeMCPConfig: " /tmp/eval-mcp.json ",
 	}).affentctlRunArgs("/tmp/ws", "/tmp/ws/trace.jsonl", BatchScenario{
-		Prompt:      "fix it",
-		SessionID:   "planned",
-		ExecutePlan: true,
-		MaxTurns:    3,
+		Prompt:       "fix it",
+		SessionID:    "planned",
+		ExecutePlan:  true,
+		EnableMemory: true,
+		MaxTurns:     3,
 	})
 	joined := strings.Join(args, "\x00")
 	for _, want := range []string{

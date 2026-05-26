@@ -3,6 +3,7 @@ import type { NormalizedEvent } from "../normalize/normalizeEvent";
 import type { ToolCallState } from "../store/sessionState";
 import { fmtDuration } from "./format";
 import { artifactDisplayLabel, artifactName } from "../view/turnArtifacts";
+import { describeMemoryUpdate, type MemoryUpdateSummary } from "../view/memoryUpdate";
 import { TraceDisclosure } from "./TraceDisclosure";
 
 // Tool steps stay compact in the flow and expand in place. Status, repair,
@@ -16,6 +17,7 @@ export function ToolCallCard({
   events: readonly NormalizedEvent[];
 }) {
   const [open, setOpen] = useState(false);
+  const memoryUpdate = describeMemoryUpdate(call);
 
   return (
     <div className="flow-tool" data-status={call.status} data-testid="tool-card">
@@ -27,7 +29,11 @@ export function ToolCallCard({
       >
         <span className="pulse-dot" data-status={call.status} aria-hidden="true" />
         <span className="tool-name">{call.tool}</span>
+        {memoryUpdate ? <MemoryUpdateInline summary={memoryUpdate} /> : null}
         <span className="grow" />
+        {memoryUpdate ? (
+          <span className="badge" data-kind="memory">memory</span>
+        ) : null}
         {call.argsRepaired || call.canonicalized ? (
           <span className="badge" data-kind="repair">repaired</span>
         ) : null}
@@ -42,15 +48,34 @@ export function ToolCallCard({
         ) : null}
         {call.durationMs != null ? <span className="tool-meta">{fmtDuration(call.durationMs)}</span> : null}
       </button>
-      {open ? <ToolDetails call={call} events={events} /> : null}
+      {open ? <ToolDetails call={call} events={events} memoryUpdate={memoryUpdate} /> : null}
     </div>
   );
 }
 
-function ToolDetails({ call, events }: { call: ToolCallState; events: readonly NormalizedEvent[] }) {
+function MemoryUpdateInline({ summary }: { summary: MemoryUpdateSummary }) {
+  return (
+    <span className="memory-update-inline">
+      <b>{summary.label}</b>
+      <span>{summary.location}</span>
+      <span>{summary.preview}</span>
+    </span>
+  );
+}
+
+function ToolDetails({
+  call,
+  events,
+  memoryUpdate,
+}: {
+  call: ToolCallState;
+  events: readonly NormalizedEvent[];
+  memoryUpdate?: MemoryUpdateSummary;
+}) {
   const hasResult = call.result != null && call.result !== "";
   return (
     <div className="tool-details" data-testid="tool-details">
+      {memoryUpdate ? <MemoryUpdateDetails summary={memoryUpdate} /> : null}
       {call.canonicalized && call.originalTool ? (
         <div className="kv">
           <b>renamed</b> <code>{call.originalTool}</code> → <code>{call.tool}</code>
@@ -82,6 +107,18 @@ function ToolDetails({ call, events }: { call: ToolCallState; events: readonly N
         </div>
       ) : null}
       <TraceDisclosure events={events} className="nested-raw" />
+    </div>
+  );
+}
+
+function MemoryUpdateDetails({ summary }: { summary: MemoryUpdateSummary }) {
+  return (
+    <div className="memory-update-card" data-testid="memory-update-card">
+      <div>
+        <b>{summary.label}</b>
+        <code>{summary.location}</code>
+      </div>
+      <p>{summary.preview}</p>
     </div>
   );
 }
