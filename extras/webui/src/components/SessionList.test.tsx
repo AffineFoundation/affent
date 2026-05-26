@@ -253,8 +253,9 @@ describe("SessionList", () => {
     const confirm = screen.getByRole("group", { name: "Confirm delete chat" });
 
     expect(confirm).toHaveTextContent("Delete this chat?");
+    expect(screen.queryByRole("button", { name: "Delete chat" })).toBeNull();
     expect(onDelete).not.toHaveBeenCalled();
-    await user.click(within(confirm).getByRole("button", { name: "Delete" }));
+    await user.click(within(confirm).getByRole("button", { name: "Confirm" }));
     expect(onDelete).toHaveBeenCalledWith("s1");
   });
 

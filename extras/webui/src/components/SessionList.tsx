@@ -219,7 +219,7 @@ export function SessionList({
                       </span>
                     ) : null}
                   </button>
-                  {onDelete ? (
+                  {onDelete && !confirmingDelete ? (
                     <button
                       type="button"
                       className="session-delete-action"
@@ -245,7 +245,7 @@ export function SessionList({
                           void onDelete(row.id);
                         }}
                       >
-                        Delete
+                        Confirm
                       </button>
                     </div>
                   ) : null}

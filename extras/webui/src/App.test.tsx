@@ -206,7 +206,7 @@ describe("App", () => {
 
     expect(await screen.findByTestId("session-list")).toHaveTextContent("delete this stale experiment");
     await user.click(screen.getByRole("button", { name: "Delete chat" }));
-    await user.click(within(screen.getByRole("group", { name: "Confirm delete chat" })).getByRole("button", { name: "Delete" }));
+    await user.click(within(screen.getByRole("group", { name: "Confirm delete chat" })).getByRole("button", { name: "Confirm" }));
 
     await waitFor(() => expect(screen.queryByTestId("session-list")).toBeNull());
     expect(fetchImpl).toHaveBeenCalledWith("/v1/sessions/delete-me", expect.objectContaining({ method: "DELETE" }));
@@ -772,31 +772,28 @@ describe("App", () => {
     expect(screen.queryByText("Session details")).toBeNull();
   });
 
-  it("focuses the composer after creating a new chat", async () => {
+  it("opens a blank chat draft without creating an empty saved chat", async () => {
     const user = userEvent.setup();
-    const fetchImpl = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+    const fetchImpl = vi.fn(async (input: RequestInfo | URL) => {
       const url = String(input);
       if (url === "/v1/sessions?limit=100") {
-        return jsonResponse({ sessions: [], has_more: false });
-      }
-      if (url === "/v1/sessions" && init?.method === "POST") {
         return jsonResponse({
-          session: {
-            id: "new-1",
-            active: false,
-            durable: true,
-            has_conversation: false,
-            has_events: false,
-            has_artifacts: false,
-            has_memory: false,
-            has_runtime_skills: false,
-          },
+          sessions: [
+            {
+              id: "saved-1",
+              active: false,
+              durable: true,
+              latest_user_message: "existing saved work",
+              has_conversation: true,
+              has_events: true,
+              has_artifacts: false,
+              has_memory: false,
+              has_runtime_skills: false,
+            },
+          ],
+          has_more: false,
         });
       }
-      if (url === "/v1/sessions/new-1/history?after=-1&limit=500") {
-        return jsonResponse({ session_id: "new-1", events: [], next_after: -1, has_more: false, trace_schema_detected: false });
-      }
-      if (url === "/v1/sessions/new-1/events") return eventStreamResponse("");
       return jsonResponse({ error: { message: `unexpected ${url}` } }, 404);
     });
     vi.stubGlobal("fetch", fetchImpl);
@@ -804,15 +801,16 @@ describe("App", () => {
     render(<App />);
 
     const input = await screen.findByPlaceholderText("Message Affent...");
-    await user.click(screen.getByRole("button", { name: "New chat" }));
+    expect(await screen.findAllByText("existing saved work")).not.toHaveLength(0);
+    await user.click(screen.getByRole("button", { name: "New" }));
 
     await waitFor(() => expect(input).toHaveFocus());
-    expect(screen.getByTestId("connection-pill")).toHaveTextContent("Connected");
+    expect(screen.getByTestId("connection-pill")).toHaveTextContent("Ready");
     expect(screen.getByTestId("connection-pill")).toHaveAttribute("title", "Ready to chat");
     expect(screen.getByTestId("workspace-shell")).toHaveAttribute("data-session-nav", "visible");
-    expect(screen.getByTestId("session-list")).toHaveTextContent("New chat");
-    expect(screen.getByTestId("session-list")).toHaveTextContent("No messages yet");
-    expect(screen.getByTestId("session-list")).not.toHaveTextContent("new-1");
+    expect(screen.getByTestId("session-list")).toHaveTextContent("existing saved work");
+    expect(screen.getByTestId("session-list")).not.toHaveTextContent("New chat");
+    expect(fetchImpl).not.toHaveBeenCalledWith("/v1/sessions", expect.objectContaining({ method: "POST" }));
   });
 
   it("keeps the current chat visible while a switched session history loads", async () => {

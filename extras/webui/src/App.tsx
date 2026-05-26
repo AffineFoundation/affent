@@ -388,20 +388,21 @@ export function App() {
   }
 
   async function handleNewSession(): Promise<string | undefined> {
-    setActionBusy(true);
-    try {
-      const created = await createSession(client);
-      setSessions((current) => [created.session, ...current.filter((s) => s.id !== created.session.id)]);
-      resetSessionSurface(created.session.id);
-      setComposerFocusSignal((current) => current + 1);
-      setStatus({ state: "connected", label: "Ready", detail: "Ready to chat" });
-      return created.session.id;
-    } catch (err) {
-      setStatus({ state: "error", label: "Create failed", detail: formatError(err) });
-      return undefined;
-    } finally {
-      setActionBusy(false);
-    }
+    streamClosedRef.current = false;
+    streamSessionIdRef.current = undefined;
+    sendInFlightRef.current = false;
+    sendFailedRef.current = false;
+    setSelectedSessionId(undefined);
+    setSession(initialSessionState());
+    setPendingMessage(undefined);
+    setGuidanceReceipts([]);
+    setArtifact({ state: "idle" });
+    setActionBusy(false);
+    setCancelBusy(false);
+    setComposerDraft(undefined);
+    setComposerFocusSignal((current) => current + 1);
+    setStatus({ state: "connected", label: "Ready", detail: "Ready to chat" });
+    return undefined;
   }
 
   async function handleDeleteSession(sessionId: string): Promise<void> {
