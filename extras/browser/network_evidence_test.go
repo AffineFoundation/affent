@@ -37,6 +37,23 @@ func TestNetworkEvidenceLogCapturesSameSiteXHRFetchOnly(t *testing.T) {
 	}
 }
 
+func TestNetworkEvidenceLogCapturesSiblingAPISubdomainsOnlyWithinSameSite(t *testing.T) {
+	log := NewNetworkEvidenceLog()
+	log.ObserveResponse("https://app.metrics.example.com/dashboard", proto.NetworkResourceTypeDocument)
+
+	if _, ok := log.Add("https://api.metrics.example.com/v1/subnets/120", 200, proto.NetworkResourceTypeFetch, http.Header{"Content-Type": {"application/json"}}, []byte(`{"name":"Affine","netuid":120}`)); !ok {
+		t.Fatal("sibling API subdomain under the same registrable domain should be captured")
+	}
+	if _, ok := log.Add("https://analytics.example.net/collect", 200, proto.NetworkResourceTypeFetch, http.Header{"Content-Type": {"application/json"}}, []byte(`{"tracker":true}`)); ok {
+		t.Fatal("different registrable domain must still be treated as third-party")
+	}
+
+	got := log.Search("Affine", 10)
+	if len(got) != 1 || got[0].URL != "https://api.metrics.example.com/v1/subnets/120" {
+		t.Fatalf("same-site sibling API search result = %+v, want only API response", got)
+	}
+}
+
 func TestNetworkEvidenceLogWaitIdleTracksAsyncBodyReads(t *testing.T) {
 	log := NewNetworkEvidenceLog()
 	log.BeginRead()

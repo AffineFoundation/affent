@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"net"
 	"net/http"
 	"net/url"
 	"sort"
@@ -16,6 +17,7 @@ import (
 	agent "github.com/affinefoundation/affent/internal/agent"
 	"github.com/affinefoundation/affent/internal/textutil"
 	"github.com/go-rod/rod/lib/proto"
+	"golang.org/x/net/publicsuffix"
 )
 
 const (
@@ -357,7 +359,24 @@ func normalizedURLHost(rawURL string) string {
 func sameSiteOrSubdomain(host, pageHost string) bool {
 	host = strings.TrimPrefix(strings.ToLower(host), "www.")
 	pageHost = strings.TrimPrefix(strings.ToLower(pageHost), "www.")
-	return host == pageHost || strings.HasSuffix(host, "."+pageHost) || strings.HasSuffix(pageHost, "."+host)
+	if host == pageHost || strings.HasSuffix(host, "."+pageHost) || strings.HasSuffix(pageHost, "."+host) {
+		return true
+	}
+	site, siteOK := registrableDomain(host)
+	pageSite, pageSiteOK := registrableDomain(pageHost)
+	return siteOK && pageSiteOK && site == pageSite
+}
+
+func registrableDomain(host string) (string, bool) {
+	host = strings.Trim(strings.ToLower(strings.TrimSpace(host)), ".")
+	if host == "" || net.ParseIP(host) != nil {
+		return "", false
+	}
+	site, err := publicsuffix.EffectiveTLDPlusOne(host)
+	if err != nil || site == "" {
+		return "", false
+	}
+	return site, true
 }
 
 func compactContentType(contentType string) string {
