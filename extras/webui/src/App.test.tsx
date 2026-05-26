@@ -915,20 +915,19 @@ describe("App", () => {
 
     render(<App />);
 
-    const status = await screen.findByTestId("workbench-status-bar");
-    expect(status).toHaveTextContent("Ready");
-    expect(status).toHaveTextContent("Start a task or continue a saved chat");
-    expect(status).not.toHaveTextContent("qwen3.6-35b-a3b");
-    expect(status).not.toHaveTextContent("Executor local");
-    expect(status).not.toHaveTextContent("Browser on");
-    expect(status).not.toHaveTextContent("Web search on");
-    expect(status).not.toHaveTextContent("Memory on");
-    expect(status).not.toHaveTextContent("Listen 0.0.0.0:7777");
-    expect(within(status).queryByRole("button", { name: "Profile" })).toBeNull();
+    expect(await screen.findByTestId("connection-pill")).toHaveTextContent("Connected");
+    expect(screen.queryByTestId("workbench-status-bar")).toBeNull();
+    expect(screen.queryByText("Start a task or continue a saved chat")).toBeNull();
+    expect(screen.queryByText("qwen3.6-35b-a3b")).toBeNull();
+    expect(screen.queryByText("Executor local")).toBeNull();
+    expect(screen.queryByText("Browser on")).toBeNull();
+    expect(screen.queryByText("Web search on")).toBeNull();
+    expect(screen.queryByText("Memory on")).toBeNull();
+    expect(screen.queryByText("Listen 0.0.0.0:7777")).toBeNull();
     expect(screen.queryByTestId("profile-dialog")).toBeNull();
   });
 
-  it("keeps a simple workbench status visible when stats polling fails", async () => {
+  it("keeps the top bar compact when stats polling would fail", async () => {
     const fetchImpl = vi.fn(async (input: RequestInfo | URL) => {
       const url = String(input);
       if (url === "/v1/stats") {
@@ -943,9 +942,9 @@ describe("App", () => {
 
     render(<App />);
 
-    const status = await screen.findByTestId("workbench-status-bar");
-    expect(status).toHaveTextContent("Connection issue");
-    expect(status).toHaveTextContent("Some live status is unavailable");
+    expect(await screen.findByTestId("connection-pill")).toBeVisible();
+    expect(screen.queryByTestId("workbench-status-bar")).toBeNull();
+    expect(screen.queryByText("Some live status is unavailable")).toBeNull();
   });
 
   it("shows the selected session title while a titled chat loads", async () => {

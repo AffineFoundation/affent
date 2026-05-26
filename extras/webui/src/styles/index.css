@@ -216,57 +216,6 @@ body {
   outline: none;
 }
 
-.workbench-status-bar {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  min-width: 0;
-  padding: 8px 22px 10px;
-  border-top: 1px solid rgba(227, 233, 239, 0.82);
-}
-
-.workbench-status-dot {
-  flex: 0 0 auto;
-  width: 8px;
-  height: 8px;
-  border-radius: 999px;
-  background: var(--c-success);
-  box-shadow: 0 0 0 3px var(--c-success-bg);
-}
-
-.workbench-status-dot[data-tone="running"] {
-  background: var(--c-running);
-  box-shadow: 0 0 0 3px var(--c-running-bg);
-}
-
-.workbench-status-dot[data-tone="warning"] {
-  background: var(--c-warn);
-  box-shadow: 0 0 0 3px var(--c-warn-bg);
-}
-
-.workbench-status-copy {
-  display: flex;
-  align-items: baseline;
-  gap: 8px;
-  min-width: 0;
-  color: var(--text-muted);
-  font-size: 12px;
-  font-weight: 600;
-}
-
-.workbench-status-copy strong {
-  color: var(--text);
-  font-size: 12.5px;
-  font-weight: 750;
-  white-space: nowrap;
-}
-
-.workbench-status-copy span {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
 .header-new-chat {
   display: inline-flex;
   align-items: center;
@@ -7117,7 +7066,6 @@ html[data-theme="dark"] .app-topbar {
 }
 
 html[data-theme="dark"] .app-header,
-html[data-theme="dark"] .workbench-status-bar,
 html[data-theme="dark"] .surface-context,
 html[data-theme="dark"] .conversation-map,
 html[data-theme="dark"] .panel-head,
@@ -7639,14 +7587,6 @@ html[data-theme="dark"] ::selection {
   .app-header {
     flex-wrap: wrap;
     padding: 10px 12px;
-  }
-  .workbench-status-bar {
-    flex-wrap: wrap;
-    padding: 6px 12px 8px;
-    gap: 6px 8px;
-  }
-  .workbench-status-copy {
-    flex: 1 1 180px;
   }
   .workspace-shell {
     grid-template-columns: minmax(0, 1fr);

@@ -12,7 +12,6 @@ import {
   streamSessionEvents,
   type SessionSummary,
 } from "./api/sessions";
-import { getServerStats, type ServerStatsResponse } from "./api/stats";
 import { ArtifactViewer, type ArtifactViewerState } from "./components/ArtifactViewer";
 import { EventType, type RawEvent } from "./api/events";
 import { Composer, type ComposerDraft } from "./components/Composer";
@@ -38,7 +37,6 @@ interface StatusBanner {
   detail?: string;
 }
 
-type ServerStatusState = "loading" | "ready" | "unavailable";
 type ThemeMode = "light" | "dark";
 
 interface HistoryLoadResult {
@@ -63,8 +61,6 @@ export function App() {
     label: "Connecting",
   });
   const [sessions, setSessions] = useState<SessionSummary[]>([]);
-  const [serverStats, setServerStats] = useState<ServerStatsResponse | undefined>();
-  const [serverStatusState, setServerStatusState] = useState<ServerStatusState>("loading");
   const [selectedSessionId, setSelectedSessionId] = useState<string | undefined>();
   const [session, setSession] = useState<SessionState>(() => initialSessionState());
   const [actionBusy, setActionBusy] = useState(false);
@@ -95,32 +91,6 @@ export function App() {
     }
   }, [theme]);
 
-  useEffect(() => {
-    const ac = new AbortController();
-    let timer: number | undefined;
-
-    async function loadStats() {
-      try {
-        const next = await getServerStats(client, ac.signal);
-        if (!ac.signal.aborted) setServerStats(next);
-        if (!ac.signal.aborted) setServerStatusState("ready");
-      } catch (err) {
-        if (!isAbortError(err)) {
-          setServerStatusState("unavailable");
-        }
-      }
-    }
-
-    void loadStats();
-    timer = window.setInterval(() => {
-      void loadStats();
-    }, 15_000);
-
-    return () => {
-      ac.abort();
-      if (timer != null) window.clearInterval(timer);
-    };
-  }, [client]);
   const demoActive = status.state === "demo";
   const selectedSession = useMemo(
     () => sessions.find((candidate) => candidate.id === selectedSessionId),
@@ -617,12 +587,6 @@ export function App() {
             </button>
           ) : null}
         </header>
-        <WorkbenchStatusBar
-          stats={serverStats}
-          state={serverStatusState}
-          busy={surfaceBusy}
-          needsAttention={overview.tone === "error" || overview.tone === "warning"}
-        />
       </div>
       <main className="app-main">
         <div
@@ -812,48 +776,6 @@ function compactContextText(text: string, limit: number): string {
   const normalized = text.replace(/\s+/g, " ").trim();
   if (normalized.length <= limit) return normalized;
   return `${normalized.slice(0, Math.max(0, limit - 3)).trimEnd()}...`;
-}
-
-function WorkbenchStatusBar({
-  stats,
-  state,
-  busy,
-  needsAttention,
-}: {
-  stats?: ServerStatsResponse;
-  state: ServerStatusState;
-  busy: boolean;
-  needsAttention: boolean;
-}) {
-  const status = workbenchStatus({ stats, state, busy, needsAttention });
-  return (
-    <section className="workbench-status-bar" data-testid="workbench-status-bar" aria-label="Workbench status">
-      <span className="workbench-status-dot" data-tone={status.tone} aria-hidden="true" />
-      <div className="workbench-status-copy">
-        <strong>{status.label}</strong>
-        <span>{status.detail}</span>
-      </div>
-    </section>
-  );
-}
-
-function workbenchStatus({
-  stats,
-  state,
-  busy,
-  needsAttention,
-}: {
-  stats?: ServerStatsResponse;
-  state: ServerStatusState;
-  busy: boolean;
-  needsAttention: boolean;
-}): { label: string; detail: string; tone: "ready" | "running" | "warning" } {
-  if (state === "loading") return { label: "Connecting", detail: "Preparing the workbench", tone: "running" };
-  if (state === "unavailable") return { label: "Connection issue", detail: "Some live status is unavailable", tone: "warning" };
-  if (stats?.shutting_down) return { label: "Server stopping", detail: "Finish or save current work", tone: "warning" };
-  if (needsAttention) return { label: "Needs attention", detail: "Review the current task before continuing", tone: "warning" };
-  if (busy) return { label: "Working", detail: "Affent is handling the current task", tone: "running" };
-  return { label: "Ready", detail: "Start a task or continue a saved chat", tone: "ready" };
 }
 
 function isAbortError(err: unknown): boolean {
