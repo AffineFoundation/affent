@@ -999,21 +999,28 @@ func TestWriteScenarioDebugArtifactsIndexesTraceAndFinalText(t *testing.T) {
 		OK:                 false,
 		Failures:           []string{"missing required evidence"},
 		FinalText:          "partial answer",
+		RunExitCode:        3,
 		TurnEndReason:      "completed",
 		ToolCalls:          3,
 		ToolStats:          ToolRuntimeStats{ToolErrors: 1, LoopGuardInterventions: 1, SourceAccessResults: 2, SourceAccessVerified: 1},
 		ContextCompactions: ContextCompactionStats{Count: 1, Reactive: 1, RemovedMessages: 12},
 		Usage:              Usage{InputTokens: 100, OutputTokens: 20},
 	}
-	err := writeScenarioDebugArtifacts(&res, BatchScenario{Prompt: "research with evidence"})
+	err := writeScenarioDebugArtifacts(&res, BatchScenario{Prompt: "research with evidence"}, "partial answer\n", "runtime log\n")
 	if err != nil {
 		t.Fatalf("writeScenarioDebugArtifacts: %v", err)
 	}
-	if res.DebugManifestPath == "" || res.FinalTextPath == "" {
+	if res.DebugManifestPath == "" || res.FinalTextPath == "" || res.StdoutPath == "" || res.StderrPath == "" {
 		t.Fatalf("debug paths not populated: %+v", res)
 	}
 	if raw, err := os.ReadFile(res.FinalTextPath); err != nil || string(raw) != "partial answer" {
 		t.Fatalf("final text file = %q err=%v", string(raw), err)
+	}
+	if raw, err := os.ReadFile(res.StdoutPath); err != nil || string(raw) != "partial answer\n" {
+		t.Fatalf("stdout file = %q err=%v", string(raw), err)
+	}
+	if raw, err := os.ReadFile(res.StderrPath); err != nil || string(raw) != "runtime log\n" {
+		t.Fatalf("stderr file = %q err=%v", string(raw), err)
 	}
 	var manifest DebugManifest
 	raw, err := os.ReadFile(res.DebugManifestPath)
@@ -1026,7 +1033,11 @@ func TestWriteScenarioDebugArtifactsIndexesTraceAndFinalText(t *testing.T) {
 	if manifest.Scenario != "debug-case" || manifest.OK || manifest.Prompt != "research with evidence" {
 		t.Fatalf("manifest identity = %+v", manifest)
 	}
-	if manifest.TracePath != tracePath || manifest.FinalTextPath != res.FinalTextPath {
+	if manifest.TracePath != tracePath ||
+		manifest.FinalTextPath != res.FinalTextPath ||
+		manifest.StdoutPath != res.StdoutPath ||
+		manifest.StderrPath != res.StderrPath ||
+		manifest.RunExitCode != 3 {
 		t.Fatalf("manifest paths = %+v", manifest)
 	}
 	if len(manifest.Failures) != 1 || manifest.Failures[0] != "missing required evidence" {

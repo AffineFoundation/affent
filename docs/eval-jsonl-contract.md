@@ -41,6 +41,12 @@ Scenario records describe one eval case:
 - `workspace`: scenario workspace path.
 - `trace_path`: trace JSONL path.
 - `trace_schema_version`: parsed runtime trace schema version, when available.
+- `debug_manifest_path`: retained debug manifest path, when the workspace was
+  not removed.
+- `final_text_path`, `stdout_path`, `stderr_path`: retained files containing
+  the final assistant text, full `affentctl` stdout, and full `affentctl`
+  stderr for local debugging.
+- `run_exit_code`: `affentctl run` exit code for the scenario.
 - `turn_end_reason`: runtime turn end reason, when available.
 - `tool_calls`: number of tool calls in the trace.
 - `tool_errors`: runtime tool error count, limited to non-zero tool exits.

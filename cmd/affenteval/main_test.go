@@ -184,6 +184,32 @@ func TestRunRejectsInvalidConfigBeforeScenarios(t *testing.T) {
 	}
 }
 
+func TestSelectedEvalScenariosBuildsAdHocPromptScenario(t *testing.T) {
+	promptFile := writeTempFile(t, "Investigate a complex task.\n")
+	scenarios, err := selectedEvalScenarios("", "", "", promptFile, "market-debug", "sess-1", 12, "test -f trace.jsonl")
+	if err != nil {
+		t.Fatalf("selectedEvalScenarios: %v", err)
+	}
+	if len(scenarios) != 1 {
+		t.Fatalf("scenario count = %d, want 1", len(scenarios))
+	}
+	got := scenarios[0]
+	if got.Name != "market-debug" ||
+		got.Prompt != "Investigate a complex task.\n" ||
+		got.SessionID != "sess-1" ||
+		got.MaxTurns != 12 ||
+		got.VerifyCommand != "test -f trace.jsonl" {
+		t.Fatalf("ad-hoc scenario = %+v", got)
+	}
+}
+
+func TestSelectedEvalScenariosRejectsMixedAdHocAndBuiltins(t *testing.T) {
+	_, err := selectedEvalScenarios("long-run", "", "debug this", "", "adhoc", "", 4, "")
+	if err == nil || !strings.Contains(err.Error(), "cannot be combined") {
+		t.Fatalf("mixed ad-hoc error = %v", err)
+	}
+}
+
 func TestPrintBatchResultIncludesTraceMetrics(t *testing.T) {
 	var out bytes.Buffer
 	printBatchResult(&out, agenteval.BatchResult{
@@ -315,12 +341,18 @@ func TestPrintBatchResultIncludesDebugPathsForRetainedWorkspace(t *testing.T) {
 		TracePath:         "/tmp/ws/trace.jsonl",
 		DebugManifestPath: "/tmp/ws/affenteval-debug.json",
 		FinalTextPath:     "/tmp/ws/affenteval-final.txt",
+		StdoutPath:        "/tmp/ws/affenteval-stdout.txt",
+		StderrPath:        "/tmp/ws/affenteval-stderr.txt",
+		RunExitCode:       3,
 		Duration:          10 * time.Millisecond,
 	})
 	got := out.String()
 	for _, want := range []string{
 		"debug: /tmp/ws/affenteval-debug.json",
 		"final: /tmp/ws/affenteval-final.txt",
+		"stdout: /tmp/ws/affenteval-stdout.txt",
+		"stderr: /tmp/ws/affenteval-stderr.txt",
+		"run_exit: 3",
 	} {
 		if !strings.Contains(got, want) {
 			t.Fatalf("output missing %q:\n%s", want, got)
@@ -336,11 +368,16 @@ func TestPrintBatchResultOmitsDebugPathsForRemovedWorkspace(t *testing.T) {
 		TracePath:         "/tmp/ws/trace.jsonl",
 		DebugManifestPath: "/tmp/ws/affenteval-debug.json",
 		FinalTextPath:     "/tmp/ws/affenteval-final.txt",
+		StdoutPath:        "/tmp/ws/affenteval-stdout.txt",
+		StderrPath:        "/tmp/ws/affenteval-stderr.txt",
 		WorkspaceRemoved:  true,
 		Duration:          10 * time.Millisecond,
 	})
 	got := out.String()
-	if strings.Contains(got, "affenteval-debug.json") || strings.Contains(got, "affenteval-final.txt") {
+	if strings.Contains(got, "affenteval-debug.json") ||
+		strings.Contains(got, "affenteval-final.txt") ||
+		strings.Contains(got, "affenteval-stdout.txt") ||
+		strings.Contains(got, "affenteval-stderr.txt") {
 		t.Fatalf("removed workspace should not advertise stale debug paths:\n%s", got)
 	}
 }
@@ -791,6 +828,9 @@ func TestPrintBatchResultJSONLIncludesDebugPathsForRetainedWorkspace(t *testing.
 		TracePath:         "/tmp/ws/trace.jsonl",
 		DebugManifestPath: "/tmp/ws/affenteval-debug.json",
 		FinalTextPath:     "/tmp/ws/affenteval-final.txt",
+		StdoutPath:        "/tmp/ws/affenteval-stdout.txt",
+		StderrPath:        "/tmp/ws/affenteval-stderr.txt",
+		RunExitCode:       2,
 	})
 
 	var got map[string]any
@@ -802,6 +842,15 @@ func TestPrintBatchResultJSONLIncludesDebugPathsForRetainedWorkspace(t *testing.
 	}
 	if got["final_text_path"] != "/tmp/ws/affenteval-final.txt" {
 		t.Fatalf("final_text_path = %#v\njson=%s", got["final_text_path"], out.String())
+	}
+	if got["stdout_path"] != "/tmp/ws/affenteval-stdout.txt" {
+		t.Fatalf("stdout_path = %#v\njson=%s", got["stdout_path"], out.String())
+	}
+	if got["stderr_path"] != "/tmp/ws/affenteval-stderr.txt" {
+		t.Fatalf("stderr_path = %#v\njson=%s", got["stderr_path"], out.String())
+	}
+	if got["run_exit_code"] != float64(2) {
+		t.Fatalf("run_exit_code = %#v\njson=%s", got["run_exit_code"], out.String())
 	}
 }
 
@@ -1453,6 +1502,15 @@ func captureStdout(t *testing.T, fn func() int) (string, int) {
 		t.Fatal(err)
 	}
 	return buf.String(), code
+}
+
+func writeTempFile(t *testing.T, body string) string {
+	t.Helper()
+	path := t.TempDir() + "/prompt.txt"
+	if err := os.WriteFile(path, []byte(body), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	return path
 }
 
 func captureStderr(t *testing.T, fn func() int) (string, int) {

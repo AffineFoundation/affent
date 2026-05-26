@@ -129,6 +129,9 @@ type BatchResult struct {
 	TracePath            string
 	DebugManifestPath    string
 	FinalTextPath        string
+	StdoutPath           string
+	StderrPath           string
+	RunExitCode          int
 	OK                   bool
 	Failures             []string
 	Duration             time.Duration
@@ -167,6 +170,9 @@ type DebugManifest struct {
 	Workspace       string       `json:"workspace"`
 	TracePath       string       `json:"trace_path"`
 	FinalTextPath   string       `json:"final_text_path,omitempty"`
+	StdoutPath      string       `json:"stdout_path,omitempty"`
+	StderrPath      string       `json:"stderr_path,omitempty"`
+	RunExitCode     int          `json:"run_exit_code"`
 	ConversationDir string       `json:"conversation_dir,omitempty"`
 	ArtifactDir     string       `json:"artifact_dir,omitempty"`
 	Prompt          string       `json:"prompt"`
@@ -366,6 +372,7 @@ func (r BatchRunner) Run(ctx context.Context, scenario BatchScenario) BatchResul
 	defer cancel()
 	stdout, stderr, exitCode, err := r.runAffentctl(runCtx, repoRoot, workspace, tracePath, scenario)
 	res.FinalText = strings.TrimSpace(stdout)
+	res.RunExitCode = exitCode
 	if err != nil {
 		res.Failures = append(res.Failures, fmt.Sprintf("affentctl run failed: exit=%d err=%v stderr=%s", exitCode, err, trimOneLine(stderr, 800)))
 	}
@@ -420,7 +427,7 @@ func (r BatchRunner) Run(ctx context.Context, scenario BatchScenario) BatchResul
 	mergeRuntimeDiagnosticsFromFailures(&res, 2)
 	res.Duration = time.Since(start)
 	res.OK = len(res.Failures) == 0
-	if err := writeScenarioDebugArtifacts(&res, scenario); err != nil {
+	if err := writeScenarioDebugArtifacts(&res, scenario, stdout, stderr); err != nil {
 		res.Failures = append(res.Failures, fmt.Sprintf("write debug manifest: %v", err))
 		res.OK = false
 	}
@@ -428,7 +435,7 @@ func (r BatchRunner) Run(ctx context.Context, scenario BatchScenario) BatchResul
 	return res
 }
 
-func writeScenarioDebugArtifacts(res *BatchResult, scenario BatchScenario) error {
+func writeScenarioDebugArtifacts(res *BatchResult, scenario BatchScenario, stdout, stderr string) error {
 	if res == nil || strings.TrimSpace(res.Workspace) == "" {
 		return nil
 	}
@@ -437,6 +444,16 @@ func writeScenarioDebugArtifacts(res *BatchResult, scenario BatchScenario) error
 		return err
 	}
 	res.FinalTextPath = finalTextPath
+	stdoutPath := filepath.Join(res.Workspace, "affenteval-stdout.txt")
+	if err := os.WriteFile(stdoutPath, []byte(stdout), 0o644); err != nil {
+		return err
+	}
+	res.StdoutPath = stdoutPath
+	stderrPath := filepath.Join(res.Workspace, "affenteval-stderr.txt")
+	if err := os.WriteFile(stderrPath, []byte(stderr), 0o644); err != nil {
+		return err
+	}
+	res.StderrPath = stderrPath
 
 	manifestPath := filepath.Join(res.Workspace, "affenteval-debug.json")
 	manifest := DebugManifest{
@@ -446,6 +463,9 @@ func writeScenarioDebugArtifacts(res *BatchResult, scenario BatchScenario) error
 		Workspace:       res.Workspace,
 		TracePath:       res.TracePath,
 		FinalTextPath:   finalTextPath,
+		StdoutPath:      stdoutPath,
+		StderrPath:      stderrPath,
+		RunExitCode:     res.RunExitCode,
 		ConversationDir: filepath.Join(res.Workspace, ".affentctl"),
 		ArtifactDir:     filepath.Join(res.Workspace, ".affent", "artifacts"),
 		Prompt:          scenario.Prompt,

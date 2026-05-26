@@ -40,6 +40,12 @@ func run(args []string) int {
 		listSuites        = fs.Bool("list-suites", false, "list built-in scenario suites and exit")
 		suite             = fs.String("suite", "", "scenario suite to run/list (e.g. small-model-tools)")
 		scenarioCSV       = fs.String("scenario", "", "comma-separated scenario names; empty runs all")
+		prompt            = fs.String("prompt", "", "run one ad-hoc prompt; use '-' for stdin")
+		promptFile        = fs.String("prompt-file", "", "run one ad-hoc prompt read from file")
+		adHocName         = fs.String("name", "adhoc", "scenario name for --prompt/--prompt-file debug runs")
+		adHocSessionID    = fs.String("session-id", "", "session id forwarded to affentctl for --prompt/--prompt-file debug runs")
+		adHocMaxTurns     = fs.Int("max-turns", agenteval.DefaultBatchMaxTurnSteps, "max assistant/tool loop steps for --prompt/--prompt-file debug runs")
+		adHocVerify       = fs.String("verify-command", "", "optional verifier command for --prompt/--prompt-file debug runs")
 		repoRoot          = fs.String("repo-root", ".", "Affent repository root")
 		workRoot          = fs.String("work-root", "", "directory for temporary scenario workspaces; default $TMPDIR/affent-eval")
 		baseURL           = fs.String("base-url", "", "OpenAI-compatible endpoint (env: AFFENTCTL_BASE_URL)")
@@ -97,8 +103,7 @@ success and trace-level process quality.`)
 		}
 		return 0
 	}
-	names := splitCSV(*scenarioCSV)
-	scenarios, err := agenteval.SelectBatchScenariosForSuite(*suite, names)
+	scenarios, err := selectedEvalScenarios(*suite, *scenarioCSV, *prompt, *promptFile, *adHocName, *adHocSessionID, *adHocMaxTurns, *adHocVerify)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "scenario: %v\n", err)
 		return 64
@@ -814,11 +819,14 @@ type batchResultRecord struct {
 	Type                       string                                     `json:"type"`
 	Scenario                   string                                     `json:"scenario"`
 	OK                         bool                                       `json:"ok"`
+	RunExitCode                int                                        `json:"run_exit_code"`
 	DurationMS                 int64                                      `json:"duration_ms"`
 	Workspace                  string                                     `json:"workspace"`
 	TracePath                  string                                     `json:"trace_path"`
 	DebugManifestPath          string                                     `json:"debug_manifest_path,omitempty"`
 	FinalTextPath              string                                     `json:"final_text_path,omitempty"`
+	StdoutPath                 string                                     `json:"stdout_path,omitempty"`
+	StderrPath                 string                                     `json:"stderr_path,omitempty"`
 	TraceSchemaVersion         int                                        `json:"trace_schema_version,omitempty"`
 	TurnEndReason              string                                     `json:"turn_end_reason,omitempty"`
 	ToolCalls                  int                                        `json:"tool_calls"`
@@ -987,11 +995,14 @@ func printBatchResultJSONL(w io.Writer, meta evalJSONLMetadata, res agenteval.Ba
 		Type:                       "scenario",
 		Scenario:                   res.BatchScenario,
 		OK:                         res.OK,
+		RunExitCode:                res.RunExitCode,
 		DurationMS:                 res.Duration.Milliseconds(),
 		Workspace:                  res.Workspace,
 		TracePath:                  res.TracePath,
 		DebugManifestPath:          retainedDebugPath(res.DebugManifestPath, res.WorkspaceRemoved),
 		FinalTextPath:              retainedDebugPath(res.FinalTextPath, res.WorkspaceRemoved),
+		StdoutPath:                 retainedDebugPath(res.StdoutPath, res.WorkspaceRemoved),
+		StderrPath:                 retainedDebugPath(res.StderrPath, res.WorkspaceRemoved),
 		TraceSchemaVersion:         res.TraceSchemaVersion,
 		TurnEndReason:              res.TurnEndReason,
 		ToolCalls:                  res.ToolCalls,
@@ -1261,6 +1272,15 @@ func printBatchResult(w io.Writer, res agenteval.BatchResult) {
 	}
 	if path := retainedDebugPath(res.FinalTextPath, res.WorkspaceRemoved); path != "" {
 		fmt.Fprintf(w, "  final: %s\n", path)
+	}
+	if path := retainedDebugPath(res.StdoutPath, res.WorkspaceRemoved); path != "" {
+		fmt.Fprintf(w, "  stdout: %s\n", path)
+	}
+	if path := retainedDebugPath(res.StderrPath, res.WorkspaceRemoved); path != "" {
+		fmt.Fprintf(w, "  stderr: %s\n", path)
+	}
+	if res.RunExitCode != 0 {
+		fmt.Fprintf(w, "  run_exit: %d\n", res.RunExitCode)
 	}
 	fmt.Fprintf(w, "  metrics: tools=%d errors=%d repaired=%d canonicalized=%d loop_guard=%d forced_no_tools=%d tool_ms=%d tokens=%d/%d",
 		res.ToolCalls,
@@ -1563,6 +1583,59 @@ func flagWasSet(fs *flag.FlagSet, name string) bool {
 		}
 	})
 	return wasSet
+}
+
+func selectedEvalScenarios(suite, scenarioCSV, prompt, promptFile, name, sessionID string, maxTurns int, verifyCommand string) ([]agenteval.BatchScenario, error) {
+	if strings.TrimSpace(prompt) != "" || strings.TrimSpace(promptFile) != "" {
+		if strings.TrimSpace(suite) != "" || strings.TrimSpace(scenarioCSV) != "" {
+			return nil, fmt.Errorf("--prompt/--prompt-file cannot be combined with --suite or --scenario")
+		}
+		if maxTurns <= 0 {
+			return nil, fmt.Errorf("--max-turns must be positive")
+		}
+		body, err := readAdHocPrompt(prompt, promptFile)
+		if err != nil {
+			return nil, err
+		}
+		if strings.TrimSpace(body) == "" {
+			return nil, fmt.Errorf("ad-hoc prompt is empty")
+		}
+		name = strings.TrimSpace(name)
+		if name == "" {
+			name = "adhoc"
+		}
+		return []agenteval.BatchScenario{{
+			Name:          name,
+			Prompt:        body,
+			SessionID:     strings.TrimSpace(sessionID),
+			MaxTurns:      maxTurns,
+			VerifyCommand: strings.TrimSpace(verifyCommand),
+		}}, nil
+	}
+	names := splitCSV(scenarioCSV)
+	return agenteval.SelectBatchScenariosForSuite(suite, names)
+}
+
+func readAdHocPrompt(prompt, promptFile string) (string, error) {
+	promptFile = strings.TrimSpace(promptFile)
+	if strings.TrimSpace(prompt) != "" && promptFile != "" {
+		return "", fmt.Errorf("--prompt and --prompt-file cannot be used together")
+	}
+	if promptFile != "" {
+		raw, err := os.ReadFile(promptFile)
+		if err != nil {
+			return "", fmt.Errorf("--prompt-file: %w", err)
+		}
+		return string(raw), nil
+	}
+	if prompt == "-" {
+		raw, err := io.ReadAll(os.Stdin)
+		if err != nil {
+			return "", fmt.Errorf("--prompt=-: %w", err)
+		}
+		return string(raw), nil
+	}
+	return prompt, nil
 }
 
 func splitCSV(s string) []string {
