@@ -140,7 +140,7 @@ function nodeFromToolCall(call: ToolCallState, depth: number, id: string): Execu
     label: labelFor(kind, call.tool, parsed),
     title: titleFor(kind, call.tool, call.args, parsed),
     subtitle: subtitleFor(kind, call.tool, call.args, parsed),
-    preview: previewFor(call.resultSummary, call.result, parsed),
+    preview: previewFor(call.tool, call.resultSummary, call.result, parsed),
     status: call.status,
     callId: call.callId,
     exitCode: call.exitCode,
@@ -205,7 +205,7 @@ function nodeFromChildTool(child: ChildToolCall, depth: number, id: string): Exe
     label: labelFor(kind, tool, parsed),
     title: titleFor(kind, tool, args, parsed),
     subtitle: subtitleFor(kind, tool, args, parsed),
-    preview: previewFor(resultSummary, resultText, parsed),
+    preview: previewFor(tool, resultSummary, resultText, parsed),
     status,
     exitCode,
     args,
@@ -272,6 +272,10 @@ function titleFor(kind: ExecutionNodeKind, tool: string, args?: JsonObject, pars
     const query = readString(args, "query") ?? readString(args, "q");
     return query ? `Search ${compactLine(query, 80)}` : "Search web";
   }
+  if (tool === "session_search") {
+    const query = readString(args, "query") ?? readString(args, "q");
+    return query ? `Search history ${compactLine(query, 80)}` : "Search history";
+  }
   if (tool === "read_file") return readString(args, "path") ?? "Read file";
   if (tool === "list_files") {
     const path = readString(args, "path");
@@ -336,7 +340,11 @@ function labelForTool(tool: string): string {
   return "Action";
 }
 
-function previewFor(resultSummary?: string, resultText?: string, parsed?: JsonObject): string | undefined {
+function previewFor(tool: string, resultSummary?: string, resultText?: string, parsed?: JsonObject): string | undefined {
+  if (tool === "session_search") {
+    const sessionSearch = sessionSearchPreview(parsed);
+    if (sessionSearch) return sessionSearch;
+  }
   const finding = readFindings(parsed)[0];
   const raw =
     readString(parsed, "summary") ??
@@ -346,6 +354,25 @@ function previewFor(resultSummary?: string, resultText?: string, parsed?: JsonOb
     resultText;
   if (!raw) return undefined;
   return compactLine(raw, 132);
+}
+
+function sessionSearchPreview(parsed?: JsonObject): string | undefined {
+  const message = readString(parsed, "message");
+  const results = readObjectList(parsed, "results");
+  const total = readNumber(parsed, "total") ?? results.length;
+  if (!message && total === 0 && results.length === 0) return "0 history hits";
+  if (results.length === 0) return message ? compactLine(message, 132) : undefined;
+
+  const first = results[0];
+  const matchedTerms = readStringList(first, "matched_terms").slice(0, 4);
+  const parts = [
+    `${total} history ${pluralize("hit", total)}`,
+    readString(first, "session_id"),
+    readNumber(first, "turn_idx") != null ? `turn ${readNumber(first, "turn_idx")}` : undefined,
+    matchedTerms.length > 0 ? `matched ${matchedTerms.join(", ")}` : undefined,
+    readBoolean(first, "context_included") ? "context" : undefined,
+  ].filter((part): part is string => !!part);
+  return compactLine(parts.join(" · "), 132);
 }
 
 function nextHintFrom(text?: string): string | undefined {
@@ -505,6 +532,12 @@ function readObject(obj: JsonObject | undefined, key: string): JsonObject | unde
   return isObject(value) ? value : undefined;
 }
 
+function readObjectList(obj: JsonObject | undefined, key: string): JsonObject[] {
+  const raw = obj?.[key];
+  if (!Array.isArray(raw)) return [];
+  return raw.filter(isObject);
+}
+
 function readString(obj: JsonObject | undefined, key: string): string | undefined {
   const value = obj?.[key];
   return typeof value === "string" && value.trim() !== "" ? value : undefined;
@@ -513,6 +546,10 @@ function readString(obj: JsonObject | undefined, key: string): string | undefine
 function readNumber(obj: JsonObject | undefined, key: string): number | undefined {
   const value = obj?.[key];
   return typeof value === "number" && Number.isFinite(value) ? value : undefined;
+}
+
+function readBoolean(obj: JsonObject | undefined, key: string): boolean {
+  return obj?.[key] === true;
 }
 
 function isObject(value: unknown): value is JsonObject {

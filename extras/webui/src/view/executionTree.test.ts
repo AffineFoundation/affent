@@ -101,4 +101,44 @@ describe("buildExecutionTree", () => {
     expect(listFiles.title).toBe("List current directory");
     expect(listFiles.label).toBe("File action");
   });
+
+  it("summarizes session history searches without exposing raw JSON", () => {
+    const [search] = buildExecutionTree(reduceRawEvents([
+      { id: 1, type: "turn.start", data: { turn_id: "t1" } },
+      {
+        id: 2,
+        type: "tool.request",
+        data: {
+          turn_id: "t1",
+          call_id: "c1",
+          tool: "session_search",
+          args: { query: "Alpha Coast marker" },
+        },
+      },
+      {
+        id: 3,
+        type: "tool.result",
+        data: {
+          call_id: "c1",
+          exit_code: 0,
+          result_summary: JSON.stringify({
+            query: "Alpha Coast marker",
+            total: 2,
+            results: [
+              {
+                session_id: "market-alpha",
+                turn_idx: 4,
+                matched_terms: ["alpha", "coast"],
+                context_included: true,
+              },
+            ],
+          }),
+        },
+      },
+    ]).turns[0]);
+
+    expect(search.label).toBe("Search");
+    expect(search.title).toBe("Search history Alpha Coast marker");
+    expect(search.preview).toBe("2 history hits · market-alpha · turn 4 · matched alpha, coast · context");
+  });
 });
