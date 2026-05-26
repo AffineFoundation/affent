@@ -74,6 +74,7 @@ func run(args []string) int {
 			MinPassRate:                    fs.Float64("min-pass-rate", -1, "optional quality gate: minimum batch pass rate, 0..1"),
 			MinCompletionRate:              fs.Float64("min-completion-rate", -1, "optional quality gate: minimum completed-turn rate, 0..1"),
 			MinMemoryUpdateRate:            fs.Float64("min-memory-update-rate", -1, "optional quality gate: minimum confirmed memory updates per scenario, 0..1"),
+			MinRuntimeSurfaceRate:          fs.Float64("min-runtime-surface-rate", -1, "optional quality gate: minimum scenario rate with recorded runtime surface, 0..1"),
 			MinSourceNetworkRate:           fs.Float64("min-source-network-rate", -1, "optional quality gate: minimum network/API source access rate, 0..1"),
 			MinSourceAccessVerifiedRate:    fs.Float64("min-source-access-verified-rate", -1, "optional quality gate: minimum verified SourceAccess rate, 0..1"),
 			MinSessionSearchContextHitRate: fs.Float64("min-session-search-context-hit-rate", -1, "optional quality gate: minimum session_search context-hit rate, 0..1"),
@@ -218,6 +219,7 @@ type qualityGateConfig struct {
 	MinPassRate                    *float64
 	MinCompletionRate              *float64
 	MinMemoryUpdateRate            *float64
+	MinRuntimeSurfaceRate          *float64
 	MinSourceNetworkRate           *float64
 	MinSourceAccessVerifiedRate    *float64
 	MinSessionSearchContextHitRate *float64
@@ -769,6 +771,7 @@ func validateQualityGateConfig(g qualityGateConfig) error {
 		{"--min-pass-rate", g.MinPassRate, true},
 		{"--min-completion-rate", g.MinCompletionRate, true},
 		{"--min-memory-update-rate", g.MinMemoryUpdateRate, true},
+		{"--min-runtime-surface-rate", g.MinRuntimeSurfaceRate, true},
 		{"--min-source-network-rate", g.MinSourceNetworkRate, true},
 		{"--min-source-access-verified-rate", g.MinSourceAccessVerifiedRate, true},
 		{"--min-session-search-context-hit-rate", g.MinSessionSearchContextHitRate, true},
@@ -832,6 +835,7 @@ func qualityGateFailures(s batchSummary, g qualityGateConfig) []string {
 	checkMin("pass_rate", batchRatio(s.Passed, s.Total), g.MinPassRate, s.Total > 0)
 	checkMin("completion_rate", batchRatio(s.EndCompleted, s.Total), g.MinCompletionRate, s.Total > 0)
 	checkMin("memory_update_rate", batchRatio(s.MemoryUpdates, s.Total), g.MinMemoryUpdateRate, s.Total > 0)
+	checkMin("runtime_surface_rate", batchRatio(s.RuntimeSurfaceScenarios, s.Total), g.MinRuntimeSurfaceRate, s.Total > 0)
 	checkMin("source_network_rate", batchRatio(s.SourceAccessNetwork, s.SourceAccessResults), g.MinSourceNetworkRate, s.SourceAccessResults > 0)
 	checkMin("source_access_verified_rate", batchRatio(s.SourceAccessVerified, s.SourceAccessResults), g.MinSourceAccessVerifiedRate, s.SourceAccessResults > 0)
 	checkMin("session_search_context_hit_rate", batchRatio(s.SessionSearchContextHits, s.SessionSearchResults), g.MinSessionSearchContextHitRate, s.SessionSearchResults > 0)
@@ -1092,6 +1096,7 @@ type evalJSONLMetadata struct {
 	MinPassRate                    *float64 `json:"min_pass_rate,omitempty"`
 	MinCompletionRate              *float64 `json:"min_completion_rate,omitempty"`
 	MinMemoryUpdateRate            *float64 `json:"min_memory_update_rate,omitempty"`
+	MinRuntimeSurfaceRate          *float64 `json:"min_runtime_surface_rate,omitempty"`
 	MinSourceNetworkRate           *float64 `json:"min_source_network_rate,omitempty"`
 	MinSourceAccessVerifiedRate    *float64 `json:"min_source_access_verified_rate,omitempty"`
 	MinSessionSearchContextHitRate *float64 `json:"min_session_search_context_hit_rate,omitempty"`
@@ -1140,6 +1145,7 @@ func evalJSONLMetadataFromConfig(suite, model, providerLabel, executor, temperat
 		MinPassRate:                    enabledQualityGateValue(gates.MinPassRate),
 		MinCompletionRate:              enabledQualityGateValue(gates.MinCompletionRate),
 		MinMemoryUpdateRate:            enabledQualityGateValue(gates.MinMemoryUpdateRate),
+		MinRuntimeSurfaceRate:          enabledQualityGateValue(gates.MinRuntimeSurfaceRate),
 		MinSourceNetworkRate:           enabledQualityGateValue(gates.MinSourceNetworkRate),
 		MinSourceAccessVerifiedRate:    enabledQualityGateValue(gates.MinSourceAccessVerifiedRate),
 		MinSessionSearchContextHitRate: enabledQualityGateValue(gates.MinSessionSearchContextHitRate),
@@ -1320,6 +1326,7 @@ type batchSummaryRecord struct {
 	ToolFailureExamples         map[string][]agenteval.ToolFailureExample  `json:"tool_failure_examples,omitempty"`
 	RuntimeErrorByKind          map[string]int                             `json:"runtime_error_by_kind,omitempty"`
 	RuntimeErrorExamples        map[string][]agenteval.RuntimeErrorExample `json:"runtime_error_examples,omitempty"`
+	RuntimeSurfaceRate          float64                                    `json:"runtime_surface_rate"`
 	RuntimeSurfaceScenarios     int                                        `json:"runtime_surface_scenarios,omitempty"`
 	RuntimeSurfaceTools         map[string]int                             `json:"runtime_surface_tools,omitempty"`
 	RuntimeSurfaceCapabilities  map[string]int                             `json:"runtime_surface_capabilities,omitempty"`
@@ -1632,6 +1639,7 @@ func printBatchSummaryJSONL(w io.Writer, meta evalJSONLMetadata, s batchSummary,
 		ToolFailureExamples:         cloneToolFailureExamples(s.ToolFailureExamples),
 		RuntimeErrorByKind:          cloneStringIntMap(s.RuntimeErrorByKind),
 		RuntimeErrorExamples:        cloneRuntimeErrorExamples(s.RuntimeErrorExamples),
+		RuntimeSurfaceRate:          batchRatio(s.RuntimeSurfaceScenarios, s.Total),
 		RuntimeSurfaceScenarios:     s.RuntimeSurfaceScenarios,
 		RuntimeSurfaceTools:         cloneStringIntMap(s.RuntimeSurfaceTools),
 		RuntimeSurfaceCapabilities:  cloneStringIntMap(s.RuntimeSurfaceCapabilities),
@@ -1720,6 +1728,7 @@ func hasQualityGateThresholds(meta evalJSONLMetadata) bool {
 	return meta.MinPassRate != nil ||
 		meta.MinCompletionRate != nil ||
 		meta.MinMemoryUpdateRate != nil ||
+		meta.MinRuntimeSurfaceRate != nil ||
 		meta.MinSourceNetworkRate != nil ||
 		meta.MinSourceAccessVerifiedRate != nil ||
 		meta.MinSessionSearchContextHitRate != nil ||

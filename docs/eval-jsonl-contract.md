@@ -38,7 +38,8 @@ Shared metadata fields:
   MCP config. The config path itself is not written to JSONL.
 - `timeout_ms`: per-scenario timeout in milliseconds.
 - `min_pass_rate`, `min_completion_rate`, `min_memory_update_rate`,
-  `min_source_network_rate`, `min_source_access_verified_rate`,
+  `min_runtime_surface_rate`, `min_source_network_rate`,
+  `min_source_access_verified_rate`,
   `min_session_search_context_hit_rate`,
   `min_tool_repair_success_rate`, `min_verifier_pass_rate`,
   `max_forced_no_tools_rate`,
@@ -232,7 +233,7 @@ Summary records aggregate all scenario records from the same process:
 
 - `scenarios`, `passed`, `failed`, `duration_ms`.
 - Normalized comparison metrics: `pass_rate`, `completion_rate`,
-  `memory_update_rate`,
+  `memory_update_rate`, `runtime_surface_rate`,
   `tool_error_rate`, `forced_no_tools_rate`, and
   `loop_guard_intervention_rate` when tool calls were observed,
   `tool_repair_success_rate` when repaired/canonicalized tool calls were
@@ -289,7 +290,7 @@ Summary records aggregate all scenario records from the same process:
   when at least one quality gate threshold was configured, and
   `quality_gate_failures` lists failed gate comparisons when any thresholds
   were violated.
-- Runtime surface totals: `runtime_surface_scenarios`,
+- Runtime surface totals: `runtime_surface_rate`, `runtime_surface_scenarios`,
   `runtime_surface_tools`, and `runtime_surface_capabilities`. Counts are
   per-scenario surface presence, not model call counts; use them to group pass
   rates and failures by the actual tool/capability surface exposed during the
