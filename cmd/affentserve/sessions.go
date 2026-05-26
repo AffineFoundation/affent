@@ -72,6 +72,10 @@ type Session struct {
 	sourceAccessVerified   atomic.Int64
 	sourceAccessDiscovery  atomic.Int64
 	sourceAccessNetwork    atomic.Int64
+	memoryUpdates          atomic.Int64
+	memoryUpdateAdd        atomic.Int64
+	memoryUpdateReplace    atomic.Int64
+	memoryUpdateRemove     atomic.Int64
 	toolContextTruncated   atomic.Int64
 	toolContextOmitted     atomic.Int64
 	toolRepairMu           sync.Mutex
@@ -1361,6 +1365,10 @@ type ToolStatsSnapshot struct {
 	SourceAccessVerified   int64            `json:"source_access_verified"`
 	SourceAccessDiscovery  int64            `json:"source_access_discovery_only"`
 	SourceAccessNetwork    int64            `json:"source_access_network"`
+	MemoryUpdates          int64            `json:"memory_updates"`
+	MemoryUpdateAdd        int64            `json:"memory_update_add"`
+	MemoryUpdateReplace    int64            `json:"memory_update_replace"`
+	MemoryUpdateRemove     int64            `json:"memory_update_remove"`
 	ToolContextTruncated   int64            `json:"tool_context_truncated"`
 	ToolContextOmitted     int64            `json:"tool_context_omitted_bytes"`
 }
@@ -1391,6 +1399,10 @@ func (s *Session) ToolStatsSnapshot() ToolStatsSnapshot {
 		SourceAccessVerified:   s.sourceAccessVerified.Load(),
 		SourceAccessDiscovery:  s.sourceAccessDiscovery.Load(),
 		SourceAccessNetwork:    s.sourceAccessNetwork.Load(),
+		MemoryUpdates:          s.memoryUpdates.Load(),
+		MemoryUpdateAdd:        s.memoryUpdateAdd.Load(),
+		MemoryUpdateReplace:    s.memoryUpdateReplace.Load(),
+		MemoryUpdateRemove:     s.memoryUpdateRemove.Load(),
 		ToolContextTruncated:   s.toolContextTruncated.Load(),
 		ToolContextOmitted:     s.toolContextOmitted.Load(),
 	}
@@ -1504,6 +1516,10 @@ func (s *Session) addToolStats(stats sse.ToolRuntimeStats) {
 	s.sourceAccessVerified.Add(int64(stats.SourceAccessVerified))
 	s.sourceAccessDiscovery.Add(int64(stats.SourceAccessDiscoveryOnly))
 	s.sourceAccessNetwork.Add(int64(stats.SourceAccessNetwork))
+	s.memoryUpdates.Add(int64(stats.MemoryUpdates))
+	s.memoryUpdateAdd.Add(int64(stats.MemoryUpdateAdd))
+	s.memoryUpdateReplace.Add(int64(stats.MemoryUpdateReplace))
+	s.memoryUpdateRemove.Add(int64(stats.MemoryUpdateRemove))
 	s.toolContextTruncated.Add(int64(stats.ToolContextTruncated))
 	s.toolContextOmitted.Add(int64(stats.ToolContextOmittedBytes))
 	if len(stats.ToolRepairByKind) > 0 {

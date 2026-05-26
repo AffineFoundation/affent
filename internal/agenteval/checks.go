@@ -468,6 +468,10 @@ var toolStatsAccessors = map[string]func(ToolRuntimeStats) int64{
 	"source_access_verified":       func(s ToolRuntimeStats) int64 { return int64(s.SourceAccessVerified) },
 	"source_access_discovery_only": func(s ToolRuntimeStats) int64 { return int64(s.SourceAccessDiscoveryOnly) },
 	"source_access_network":        func(s ToolRuntimeStats) int64 { return int64(s.SourceAccessNetwork) },
+	"memory_updates":               func(s ToolRuntimeStats) int64 { return int64(s.MemoryUpdates) },
+	"memory_update_add":            func(s ToolRuntimeStats) int64 { return int64(s.MemoryUpdateAdd) },
+	"memory_update_replace":        func(s ToolRuntimeStats) int64 { return int64(s.MemoryUpdateReplace) },
+	"memory_update_remove":         func(s ToolRuntimeStats) int64 { return int64(s.MemoryUpdateRemove) },
 }
 
 func toolStatsField(stats ToolRuntimeStats, field string) (int64, bool) {

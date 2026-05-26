@@ -113,6 +113,10 @@ func toolRuntimeStatsPtr(stats sse.ToolRuntimeStats) *sse.ToolRuntimeStats {
 		stats.SourceAccessVerified == 0 &&
 		stats.SourceAccessDiscoveryOnly == 0 &&
 		stats.SourceAccessNetwork == 0 &&
+		stats.MemoryUpdates == 0 &&
+		stats.MemoryUpdateAdd == 0 &&
+		stats.MemoryUpdateReplace == 0 &&
+		stats.MemoryUpdateRemove == 0 &&
 		stats.ToolContextTruncated == 0 &&
 		stats.ToolContextOmittedBytes == 0 {
 		return nil
@@ -160,6 +164,37 @@ func recordSourceAccessStats(stats *sse.ToolRuntimeStats, result string) {
 	}
 	if info.IsNetworkSource() {
 		stats.SourceAccessNetwork++
+	}
+}
+
+func recordMemoryUpdateStats(stats *sse.ToolRuntimeStats, tool string, args json.RawMessage, result string, isErr bool) {
+	if stats == nil || tool != MemoryToolName || isErr {
+		return
+	}
+	var req struct {
+		Action string `json:"action"`
+	}
+	if err := json.Unmarshal(args, &req); err != nil {
+		return
+	}
+	action := strings.TrimSpace(req.Action)
+	if action != memoryActionAdd && action != memoryActionReplace && action != memoryActionRemove {
+		return
+	}
+	var resp struct {
+		OK bool `json:"ok"`
+	}
+	if err := json.Unmarshal([]byte(result), &resp); err != nil || !resp.OK {
+		return
+	}
+	stats.MemoryUpdates++
+	switch action {
+	case memoryActionAdd:
+		stats.MemoryUpdateAdd++
+	case memoryActionReplace:
+		stats.MemoryUpdateReplace++
+	case memoryActionRemove:
+		stats.MemoryUpdateRemove++
 	}
 }
 

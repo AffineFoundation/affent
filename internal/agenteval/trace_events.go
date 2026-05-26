@@ -144,6 +144,10 @@ func applyTraceEvent(t *Trace, pending map[string]int, typ string, data json.Raw
 					SourceAccessVerified:      p.ToolStats.SourceAccessVerified,
 					SourceAccessDiscoveryOnly: p.ToolStats.SourceAccessDiscoveryOnly,
 					SourceAccessNetwork:       p.ToolStats.SourceAccessNetwork,
+					MemoryUpdates:             p.ToolStats.MemoryUpdates,
+					MemoryUpdateAdd:           p.ToolStats.MemoryUpdateAdd,
+					MemoryUpdateReplace:       p.ToolStats.MemoryUpdateReplace,
+					MemoryUpdateRemove:        p.ToolStats.MemoryUpdateRemove,
 					ToolContextTruncated:      p.ToolStats.ToolContextTruncated,
 					ToolContextOmittedBytes:   p.ToolStats.ToolContextOmittedBytes,
 				}

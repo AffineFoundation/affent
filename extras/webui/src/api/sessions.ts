@@ -27,6 +27,10 @@ export interface ToolStatsSnapshot {
   tool_errors: number;
   tool_repair_succeeded: number;
   tool_repair_failed: number;
+  memory_updates?: number;
+  memory_update_add?: number;
+  memory_update_replace?: number;
+  memory_update_remove?: number;
 }
 
 export interface SessionToolInfo {

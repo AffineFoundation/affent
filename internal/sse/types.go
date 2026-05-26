@@ -216,6 +216,12 @@ type ToolRuntimeStats struct {
 	SourceAccessVerified      int `json:"source_access_verified,omitempty"`
 	SourceAccessDiscoveryOnly int `json:"source_access_discovery_only,omitempty"`
 	SourceAccessNetwork       int `json:"source_access_network,omitempty"`
+	// MemoryUpdate counters count confirmed durable memory mutations only:
+	// memory tool calls with ok=true and action add/replace/remove.
+	MemoryUpdates       int `json:"memory_updates,omitempty"`
+	MemoryUpdateAdd     int `json:"memory_update_add,omitempty"`
+	MemoryUpdateReplace int `json:"memory_update_replace,omitempty"`
+	MemoryUpdateRemove  int `json:"memory_update_remove,omitempty"`
 	// ToolContextTruncated counts tool results that were shortened before
 	// being appended back into the model conversation. This is separate
 	// from ToolResultPayload.ResultTruncated, which reports event payload

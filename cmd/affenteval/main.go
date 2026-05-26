@@ -174,6 +174,10 @@ type batchSummary struct {
 	SourceAccessVerified       int
 	SourceAccessDiscoveryOnly  int
 	SourceAccessNetwork        int
+	MemoryUpdates              int
+	MemoryUpdateAdd            int
+	MemoryUpdateReplace        int
+	MemoryUpdateRemove         int
 	ToolDurationMS             int64
 	ToolContextTruncated       int
 	ToolContextOmittedBytes    int
@@ -259,6 +263,10 @@ func (s *batchSummary) add(res agenteval.BatchResult) {
 	s.SourceAccessVerified += res.ToolStats.SourceAccessVerified
 	s.SourceAccessDiscoveryOnly += res.ToolStats.SourceAccessDiscoveryOnly
 	s.SourceAccessNetwork += res.ToolStats.SourceAccessNetwork
+	s.MemoryUpdates += res.ToolStats.MemoryUpdates
+	s.MemoryUpdateAdd += res.ToolStats.MemoryUpdateAdd
+	s.MemoryUpdateReplace += res.ToolStats.MemoryUpdateReplace
+	s.MemoryUpdateRemove += res.ToolStats.MemoryUpdateRemove
 	s.ToolDurationMS += res.ToolStats.ToolDurationMS
 	s.ToolContextTruncated += res.ToolStats.ToolContextTruncated
 	s.ToolContextOmittedBytes += res.ToolStats.ToolContextOmittedBytes
@@ -392,6 +400,14 @@ func printBatchSummary(w io.Writer, s batchSummary) {
 			s.SourceAccessVerified,
 			s.SourceAccessDiscoveryOnly,
 			s.SourceAccessNetwork,
+		)
+	}
+	if hasBatchMemoryUpdateStats(s) {
+		fmt.Fprintf(w, " memory_updates=%d(add:%d,replace:%d,remove:%d)",
+			s.MemoryUpdates,
+			s.MemoryUpdateAdd,
+			s.MemoryUpdateReplace,
+			s.MemoryUpdateRemove,
 		)
 	}
 	if len(s.RuntimeErrorByKind) > 0 {
@@ -755,6 +771,10 @@ type batchResultRecord struct {
 	SourceAccessVerified       int                                        `json:"source_access_verified"`
 	SourceAccessDiscoveryOnly  int                                        `json:"source_access_discovery_only"`
 	SourceAccessNetwork        int                                        `json:"source_access_network"`
+	MemoryUpdates              int                                        `json:"memory_updates"`
+	MemoryUpdateAdd            int                                        `json:"memory_update_add"`
+	MemoryUpdateReplace        int                                        `json:"memory_update_replace"`
+	MemoryUpdateRemove         int                                        `json:"memory_update_remove"`
 	ToolDurationMS             int64                                      `json:"tool_duration_ms"`
 	ToolContextTruncated       int                                        `json:"tool_context_truncated"`
 	ToolContextOmittedBytes    int                                        `json:"tool_context_omitted_bytes"`
@@ -825,6 +845,10 @@ type batchSummaryRecord struct {
 	SourceAccessVerified       int                                        `json:"source_access_verified"`
 	SourceAccessDiscoveryOnly  int                                        `json:"source_access_discovery_only"`
 	SourceAccessNetwork        int                                        `json:"source_access_network"`
+	MemoryUpdates              int                                        `json:"memory_updates"`
+	MemoryUpdateAdd            int                                        `json:"memory_update_add"`
+	MemoryUpdateReplace        int                                        `json:"memory_update_replace"`
+	MemoryUpdateRemove         int                                        `json:"memory_update_remove"`
 	ToolDurationMS             int64                                      `json:"tool_duration_ms"`
 	ToolContextTruncated       int                                        `json:"tool_context_truncated"`
 	ToolContextOmittedBytes    int                                        `json:"tool_context_omitted_bytes"`
@@ -900,6 +924,10 @@ func printBatchResultJSONL(w io.Writer, meta evalJSONLMetadata, res agenteval.Ba
 		SourceAccessVerified:       res.ToolStats.SourceAccessVerified,
 		SourceAccessDiscoveryOnly:  res.ToolStats.SourceAccessDiscoveryOnly,
 		SourceAccessNetwork:        res.ToolStats.SourceAccessNetwork,
+		MemoryUpdates:              res.ToolStats.MemoryUpdates,
+		MemoryUpdateAdd:            res.ToolStats.MemoryUpdateAdd,
+		MemoryUpdateReplace:        res.ToolStats.MemoryUpdateReplace,
+		MemoryUpdateRemove:         res.ToolStats.MemoryUpdateRemove,
 		ToolDurationMS:             res.ToolStats.ToolDurationMS,
 		ToolContextTruncated:       res.ToolStats.ToolContextTruncated,
 		ToolContextOmittedBytes:    res.ToolStats.ToolContextOmittedBytes,
@@ -965,6 +993,10 @@ func printBatchSummaryJSONL(w io.Writer, meta evalJSONLMetadata, s batchSummary)
 		SourceAccessVerified:       s.SourceAccessVerified,
 		SourceAccessDiscoveryOnly:  s.SourceAccessDiscoveryOnly,
 		SourceAccessNetwork:        s.SourceAccessNetwork,
+		MemoryUpdates:              s.MemoryUpdates,
+		MemoryUpdateAdd:            s.MemoryUpdateAdd,
+		MemoryUpdateReplace:        s.MemoryUpdateReplace,
+		MemoryUpdateRemove:         s.MemoryUpdateRemove,
 		ToolDurationMS:             s.ToolDurationMS,
 		ToolContextTruncated:       s.ToolContextTruncated,
 		ToolContextOmittedBytes:    s.ToolContextOmittedBytes,
@@ -1137,6 +1169,14 @@ func printBatchResult(w io.Writer, res agenteval.BatchResult) {
 			res.ToolStats.SourceAccessNetwork,
 		)
 	}
+	if hasMemoryUpdateStats(res.ToolStats) {
+		fmt.Fprintf(w, " memory_updates=%d(add:%d,replace:%d,remove:%d)",
+			res.ToolStats.MemoryUpdates,
+			res.ToolStats.MemoryUpdateAdd,
+			res.ToolStats.MemoryUpdateReplace,
+			res.ToolStats.MemoryUpdateRemove,
+		)
+	}
 	if len(res.RuntimeErrorByKind) > 0 {
 		fmt.Fprintf(w, " runtime_error_kinds=%s", formatStringIntCounts(res.RuntimeErrorByKind))
 	}
@@ -1192,6 +1232,20 @@ func hasSourceAccessStats(stats agenteval.ToolRuntimeStats) bool {
 		stats.SourceAccessVerified > 0 ||
 		stats.SourceAccessDiscoveryOnly > 0 ||
 		stats.SourceAccessNetwork > 0
+}
+
+func hasMemoryUpdateStats(stats agenteval.ToolRuntimeStats) bool {
+	return stats.MemoryUpdates > 0 ||
+		stats.MemoryUpdateAdd > 0 ||
+		stats.MemoryUpdateReplace > 0 ||
+		stats.MemoryUpdateRemove > 0
+}
+
+func hasBatchMemoryUpdateStats(stats batchSummary) bool {
+	return stats.MemoryUpdates > 0 ||
+		stats.MemoryUpdateAdd > 0 ||
+		stats.MemoryUpdateReplace > 0 ||
+		stats.MemoryUpdateRemove > 0
 }
 
 func failureKind(failure string) string {

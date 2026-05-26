@@ -75,6 +75,22 @@ func TestRecordSourceAccessStats(t *testing.T) {
 	}
 }
 
+func TestRecordMemoryUpdateStats(t *testing.T) {
+	var stats sse.ToolRuntimeStats
+	recordMemoryUpdateStats(&stats, "memory", []byte(`{"action":"add","target":"memory","topic":"markets"}`), `{"ok":true,"target":"memory","topic":"markets","message":"added"}`, false)
+	recordMemoryUpdateStats(&stats, "memory", []byte(`{"action":"replace","target":"user"}`), `{"ok":true,"target":"user","message":"replaced"}`, false)
+	recordMemoryUpdateStats(&stats, "memory", []byte(`{"action":"remove","target":"memory","topic":"old"}`), `{"ok":true,"target":"memory","topic":"old","message":"removed"}`, false)
+
+	recordMemoryUpdateStats(&stats, "memory", []byte(`{"action":"search","query":"markets"}`), `{"ok":true}`, false)
+	recordMemoryUpdateStats(&stats, "memory", []byte(`{"action":"add","content":"blocked"}`), `{"ok":false,"message":"blocked"}`, false)
+	recordMemoryUpdateStats(&stats, "memory", []byte(`{"action":"add","content":"failed"}`), `{"ok":true}`, true)
+	recordMemoryUpdateStats(&stats, "read_file", []byte(`{"action":"add"}`), `{"ok":true}`, false)
+
+	if stats.MemoryUpdates != 3 || stats.MemoryUpdateAdd != 1 || stats.MemoryUpdateReplace != 1 || stats.MemoryUpdateRemove != 1 {
+		t.Fatalf("memory update stats = %+v", stats)
+	}
+}
+
 func TestToolFailureKindForOutcome(t *testing.T) {
 	if got := toolFailureKindForOutcome("web_fetch", "fetch failed\nFailure: kind=blocked, status=403\nNext: use another source", true); got != "blocked" {
 		t.Fatalf("hard failure kind = %q, want blocked", got)

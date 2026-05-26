@@ -247,6 +247,10 @@ type ToolRuntimeStats struct {
 	SourceAccessVerified      int
 	SourceAccessDiscoveryOnly int
 	SourceAccessNetwork       int
+	MemoryUpdates             int
+	MemoryUpdateAdd           int
+	MemoryUpdateReplace       int
+	MemoryUpdateRemove        int
 	ToolContextTruncated      int
 	ToolContextOmittedBytes   int
 }

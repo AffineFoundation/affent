@@ -1210,6 +1210,7 @@ func (l *Loop) runTurn(ctx context.Context, turnID, userText string, opts TurnOp
 			toolDuration := time.Since(toolStart)
 			toolStats.ToolDurationMS += toolDuration.Milliseconds()
 			recordSourceAccessStats(&toolStats, result)
+			recordMemoryUpdateStats(&toolStats, toolName, args, result, isErr)
 			guardResult, outcomeOK := loopGuard.recordToolResult(toolName, args, result, isErr)
 			if guardResult != "" {
 				if result != "" {

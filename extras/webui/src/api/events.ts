@@ -117,6 +117,10 @@ export interface ToolRuntimeStats {
   tool_duration_ms?: number;
   loop_guard_interventions?: number;
   forced_no_tools?: number;
+  memory_updates?: number;
+  memory_update_add?: number;
+  memory_update_replace?: number;
+  memory_update_remove?: number;
 }
 
 export interface TurnEndPayload {

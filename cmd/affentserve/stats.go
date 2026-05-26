@@ -275,6 +275,10 @@ func addToolStatsSnapshot(dst *ToolStatsSnapshot, src ToolStatsSnapshot) {
 	dst.SourceAccessVerified += src.SourceAccessVerified
 	dst.SourceAccessDiscovery += src.SourceAccessDiscovery
 	dst.SourceAccessNetwork += src.SourceAccessNetwork
+	dst.MemoryUpdates += src.MemoryUpdates
+	dst.MemoryUpdateAdd += src.MemoryUpdateAdd
+	dst.MemoryUpdateReplace += src.MemoryUpdateReplace
+	dst.MemoryUpdateRemove += src.MemoryUpdateRemove
 	dst.ToolContextTruncated += src.ToolContextTruncated
 	dst.ToolContextOmitted += src.ToolContextOmitted
 }

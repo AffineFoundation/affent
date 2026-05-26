@@ -377,6 +377,9 @@ func TestToolStatsAtLeast(t *testing.T) {
 		SourceAccessVerified:      2,
 		SourceAccessDiscoveryOnly: 1,
 		SourceAccessNetwork:       1,
+		MemoryUpdates:             2,
+		MemoryUpdateAdd:           1,
+		MemoryUpdateReplace:       1,
 	}}
 	if res := ToolStatsAtLeast("tool_args_repaired", 2).Eval(trace); !res.Pass {
 		t.Fatalf("expected stats check to pass: %+v", res)
@@ -404,6 +407,12 @@ func TestToolStatsAtLeast(t *testing.T) {
 	}
 	if res := ToolStatsAtLeast("source_access_network", 1).Eval(trace); !res.Pass {
 		t.Fatalf("expected source_access_network stats check to pass: %+v", res)
+	}
+	if res := ToolStatsAtLeast("memory_updates", 2).Eval(trace); !res.Pass {
+		t.Fatalf("expected memory_updates stats check to pass: %+v", res)
+	}
+	if res := ToolStatsAtLeast("memory_update_replace", 1).Eval(trace); !res.Pass {
+		t.Fatalf("expected memory_update_replace stats check to pass: %+v", res)
 	}
 	if res := ToolStatsAtLeast("tool_args_repaired", 3).Eval(trace); res.Pass {
 		t.Fatal("expected stats check below threshold to fail")
