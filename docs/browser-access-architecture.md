@@ -197,6 +197,9 @@ Browser sessions should be tied to Affent sessions:
 - Optional persistent profile for long-running authenticated workflows.
 - Network log, snapshots, screenshots, and DOM artifacts under the session
   artifact directory.
+- Snapshot reads should wait only a short bounded window for pending network
+  observer body reads to settle, so JavaScript dashboards expose captured
+  XHR/fetch refs without making browser tools feel stuck.
 - WebUI should show page status, current URL, screenshots, network evidence,
   and source-access warnings.
 
@@ -234,6 +237,8 @@ tests.
 
 - Capture bounded same-origin XHR/fetch responses during browser sessions.
 - Add `browser_network` and `browser_network_read`.
+- Keep network capture asynchronous, but make snapshot formatting wait for the
+  capture queue to become briefly idle before reporting available network refs.
 - Store full safe responses as artifacts and give the model compact previews.
 - Add eval fixtures for API-backed dashboards.
 

@@ -152,8 +152,16 @@ func startCacheObserver(page *rod.Page, cache ResponseCache, stats *InterceptSta
 			default:
 				return
 			}
+			if networkLog != nil {
+				networkLog.BeginRead()
+			}
 			go func() {
-				defer func() { <-sem }()
+				defer func() {
+					if networkLog != nil {
+						networkLog.EndRead()
+					}
+					<-sem
+				}()
 				body, err := getResponseBody(page, reqID)
 				if err != nil {
 					return

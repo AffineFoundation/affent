@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"net/url"
 	"strings"
+	"time"
 
 	"github.com/affinefoundation/affent/internal/metrictext"
 	"github.com/affinefoundation/affent/internal/sourceaccess"
@@ -78,6 +79,8 @@ const (
 	maxFormattedValue          = 160
 	maxGroupedTextLine         = 220
 	maxSnapshotNetworkHints    = 5
+	snapshotNetworkSettleMax   = 750 * time.Millisecond
+	snapshotNetworkSettleQuiet = 50 * time.Millisecond
 )
 
 // snapshotJS runs in the page's JS realm. It:
@@ -286,6 +289,9 @@ const snapshotJS = `() => {
 func (s *Session) TakeSnapshot(ctx context.Context) (*Snapshot, error) {
 	if s.page == nil {
 		return nil, ErrNoPage
+	}
+	if s.network != nil {
+		s.network.WaitIdle(ctx, snapshotNetworkSettleMax, snapshotNetworkSettleQuiet)
 	}
 	page := s.withContext(ctx)
 	result, err := page.Eval(snapshotJS)

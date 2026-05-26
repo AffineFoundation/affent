@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/go-rod/rod/lib/proto"
 )
@@ -33,6 +34,44 @@ func TestNetworkEvidenceLogCapturesSameSiteXHRFetchOnly(t *testing.T) {
 	}
 	if got[0].Ref != "n1" || !strings.Contains(string(got[0].Body), `"netuid":120`) {
 		t.Fatalf("captured entry = %+v body=%s", got[0], got[0].Body)
+	}
+}
+
+func TestNetworkEvidenceLogWaitIdleTracksAsyncBodyReads(t *testing.T) {
+	log := NewNetworkEvidenceLog()
+	log.BeginRead()
+	done := make(chan bool, 1)
+	go func() {
+		done <- log.WaitIdle(context.Background(), 200*time.Millisecond, 0)
+	}()
+
+	select {
+	case <-done:
+		t.Fatal("WaitIdle returned while an async body read was pending")
+	case <-time.After(20 * time.Millisecond):
+	}
+
+	log.EndRead()
+	select {
+	case ok := <-done:
+		if !ok {
+			t.Fatal("WaitIdle returned false after the pending read ended")
+		}
+	case <-time.After(200 * time.Millisecond):
+		t.Fatal("WaitIdle did not return after the pending read ended")
+	}
+}
+
+func TestNetworkEvidenceLogWaitIdleHonorsQuietWindow(t *testing.T) {
+	log := NewNetworkEvidenceLog()
+	log.BeginRead()
+	log.EndRead()
+	start := time.Now()
+	if !log.WaitIdle(context.Background(), 250*time.Millisecond, 50*time.Millisecond) {
+		t.Fatal("WaitIdle should return true once the quiet window elapses")
+	}
+	if elapsed := time.Since(start); elapsed < 40*time.Millisecond {
+		t.Fatalf("WaitIdle returned before quiet window elapsed: %s", elapsed)
 	}
 }
 

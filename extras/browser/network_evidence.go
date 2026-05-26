@@ -11,6 +11,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"time"
 
 	agent "github.com/affinefoundation/affent/internal/agent"
 	"github.com/affinefoundation/affent/internal/textutil"
@@ -42,14 +43,72 @@ type NetworkEvidenceEntry struct {
 }
 
 type NetworkEvidenceLog struct {
-	mu       sync.Mutex
-	next     int
-	pageHost string
-	entries  []NetworkEvidenceEntry
+	mu           sync.Mutex
+	next         int
+	pageHost     string
+	entries      []NetworkEvidenceEntry
+	pendingReads int
+	lastActivity time.Time
 }
 
 func NewNetworkEvidenceLog() *NetworkEvidenceLog {
 	return &NetworkEvidenceLog{}
+}
+
+func (l *NetworkEvidenceLog) BeginRead() {
+	if l == nil {
+		return
+	}
+	l.mu.Lock()
+	l.pendingReads++
+	l.lastActivity = time.Now()
+	l.mu.Unlock()
+}
+
+func (l *NetworkEvidenceLog) EndRead() {
+	if l == nil {
+		return
+	}
+	l.mu.Lock()
+	if l.pendingReads > 0 {
+		l.pendingReads--
+	}
+	l.lastActivity = time.Now()
+	l.mu.Unlock()
+}
+
+func (l *NetworkEvidenceLog) WaitIdle(ctx context.Context, maxWait, quietFor time.Duration) bool {
+	if l == nil || maxWait <= 0 {
+		return true
+	}
+	deadline := time.Now().Add(maxWait)
+	ticker := time.NewTicker(25 * time.Millisecond)
+	defer ticker.Stop()
+	for {
+		if l.isIdle(quietFor) {
+			return true
+		}
+		if time.Now().After(deadline) {
+			return false
+		}
+		select {
+		case <-ctx.Done():
+			return false
+		case <-ticker.C:
+		}
+	}
+}
+
+func (l *NetworkEvidenceLog) isIdle(quietFor time.Duration) bool {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	if l.pendingReads > 0 {
+		return false
+	}
+	if quietFor <= 0 || l.lastActivity.IsZero() {
+		return true
+	}
+	return time.Since(l.lastActivity) >= quietFor
 }
 
 func (l *NetworkEvidenceLog) ObserveResponse(rawURL string, resource proto.NetworkResourceType) {
@@ -62,6 +121,7 @@ func (l *NetworkEvidenceLog) ObserveResponse(rawURL string, resource proto.Netwo
 	}
 	l.mu.Lock()
 	l.pageHost = host
+	l.lastActivity = time.Now()
 	l.mu.Unlock()
 }
 
@@ -86,6 +146,7 @@ func (l *NetworkEvidenceLog) Add(rawURL string, status int, resource proto.Netwo
 		body = body[:maxNetworkEvidenceBodyBytes]
 	}
 	l.next++
+	l.lastActivity = time.Now()
 	entry := NetworkEvidenceEntry{
 		Ref:         fmt.Sprintf("n%d", l.next),
 		URL:         rawURL,
