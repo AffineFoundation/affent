@@ -103,12 +103,7 @@ describe("App", () => {
     expect(context.querySelector(".chat-context-primary")).toHaveTextContent("README.md main.go");
     expect(context.querySelector(".chat-context-topic")).toBeNull();
     expect(screen.queryByTestId("runtime-capabilities")).toBeNull();
-    await user.click(screen.getByRole("button", { name: "Profile" }));
-    const profile = await screen.findByTestId("profile-dialog");
-    expect(profile).toHaveTextContent("Current chat capabilities");
-    expect(profile).toHaveTextContent("Capabilities not confirmed");
-    expect(profile).toHaveTextContent("This saved chat has no capability snapshot yet.");
-    await user.click(within(profile).getByRole("button", { name: "Close profile" }));
+    expect(screen.queryByRole("button", { name: "Profile" })).toBeNull();
     expect(await screen.findByTestId("msg-assistant")).toHaveTextContent("There are two files.");
     expect(screen.getByTestId("composer-intent")).toHaveTextContent("Resume chat");
     expect(screen.getByTestId("composer-intent")).toHaveTextContent("continue this chat");
@@ -292,25 +287,7 @@ describe("App", () => {
     );
 
     expect(screen.queryByTestId("runtime-capabilities")).toBeNull();
-    await userEvent.click(screen.getByRole("button", { name: "Profile" }));
-    const profile = await screen.findByTestId("profile-dialog");
-    expect(profile).toHaveTextContent("Current chat capabilities");
-    expect(profile).toHaveTextContent("Chat-only mode");
-    expect(profile).toHaveTextContent("Local project tools may be unavailable, and live sources are off.");
-    expect(profile).toHaveTextContent("Research");
-    expect(profile).toHaveTextContent("No live sources");
-    expect(profile).toHaveTextContent("Current outside information may be incomplete.");
-    expect(profile).toHaveTextContent("Skills");
-    expect(profile).toHaveTextContent("Skill install");
-    expect(profile).toHaveTextContent("Files");
-    expect(profile).toHaveTextContent("Unavailable");
-    expect(profile).toHaveTextContent("Subtasks");
-    expect(profile).toHaveTextContent("Nested work");
-    expect(profile).toHaveTextContent("Can delegate focused work (2 levels, 4 focused task types).");
-    expect(profile).toHaveTextContent("Context");
-    expect(profile).toHaveTextContent("Saved memory");
-    expect(profile).toHaveTextContent("Can use saved memory.");
-    await userEvent.click(within(profile).getByRole("button", { name: "Close profile" }));
+    expect(screen.queryByRole("button", { name: "Profile" })).toBeNull();
     const input = screen.getByPlaceholderText("Message Affent...");
     expect(input).toBeVisible();
     await userEvent.type(input, "Analyze Affine recent market trends and Twitter reaction");
@@ -851,8 +828,7 @@ describe("App", () => {
     expect(screen.getByText("What should we work on?")).toBeVisible();
   });
 
-  it("keeps technical server details out of the top status strip and shows them in Profile", async () => {
-    const user = userEvent.setup();
+  it("keeps technical server details out of the top status strip", async () => {
     const fetchImpl = vi.fn(async (input: RequestInfo | URL) => {
       const url = String(input);
       if (url === "/v1/stats") {
@@ -895,28 +871,8 @@ describe("App", () => {
     expect(status).not.toHaveTextContent("Web search on");
     expect(status).not.toHaveTextContent("Memory on");
     expect(status).not.toHaveTextContent("Listen 0.0.0.0:7777");
-
-    await user.click(within(status).getByRole("button", { name: "Profile" }));
-    const profile = await screen.findByTestId("profile-dialog");
-    expect(profile).toHaveTextContent("Environment settings");
-    expect(profile).toHaveTextContent("API keys");
-    expect(profile).toHaveTextContent("Managed by server environment");
-    expect(profile).toHaveTextContent("qwen3.6-35b-a3b");
-    expect(profile).toHaveTextContent("local");
-    expect(profile).toHaveTextContent("Browser");
-    expect(profile).toHaveTextContent("Web access");
-    expect(profile).toHaveTextContent("Web search");
-    expect(profile).toHaveTextContent("Memory");
-    expect(profile).toHaveTextContent("Built-in tools");
-    expect(profile).toHaveTextContent("Subtasks");
-    expect(profile).toHaveTextContent("tavily");
-    expect(profile).toHaveTextContent("Listen address");
-    expect(profile).toHaveTextContent("0.0.0.0:7777");
-    expect(profile).toHaveTextContent("Workspace sessions");
-    expect(profile).toHaveTextContent("Memory session-state");
-    expect(within(profile).getByTitle("/workspace/sessions")).toBeInTheDocument();
-    expect(within(profile).getByTitle("/workspace/session-state")).toBeInTheDocument();
-    expect(profile).toHaveTextContent("Updated");
+    expect(within(status).queryByRole("button", { name: "Profile" })).toBeNull();
+    expect(screen.queryByTestId("profile-dialog")).toBeNull();
   });
 
   it("keeps a simple workbench status visible when stats polling fails", async () => {
@@ -936,7 +892,7 @@ describe("App", () => {
 
     const status = await screen.findByTestId("workbench-status-bar");
     expect(status).toHaveTextContent("Connection issue");
-    expect(status).toHaveTextContent("Open Profile for diagnostics");
+    expect(status).toHaveTextContent("Some live status is unavailable");
   });
 
   it("shows the selected session title while a titled chat loads", async () => {

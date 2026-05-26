@@ -28,7 +28,7 @@ import { applyRawEvent, reduceRawEvents } from "./store/reduce";
 import { initialSessionState, type SessionState } from "./store/sessionState";
 import { deriveWorkflowStatus } from "./store/workflowStatus";
 import type { DraftSource } from "./view/draftSource";
-import { buildRuntimeCapabilityView, type RuntimeCapabilityView } from "./view/runtimeCapabilities";
+import { buildRuntimeCapabilityView } from "./view/runtimeCapabilities";
 import { buildSessionRows, formatLoadingChatTitle } from "./view/sessionList";
 import { buildSessionOverview, type SessionOverview } from "./view/sessionOverview";
 import { isContinuationPrompt } from "./view/continuationPrompt";
@@ -71,7 +71,6 @@ export function App() {
   const [sessions, setSessions] = useState<SessionSummary[]>([]);
   const [serverStats, setServerStats] = useState<ServerStatsResponse | undefined>();
   const [serverStatusState, setServerStatusState] = useState<ServerStatusState>("loading");
-  const [profileOpen, setProfileOpen] = useState(false);
   const [selectedSessionId, setSelectedSessionId] = useState<string | undefined>();
   const [session, setSession] = useState<SessionState>(() => initialSessionState());
   const [actionBusy, setActionBusy] = useState(false);
@@ -610,12 +609,8 @@ export function App() {
           state={serverStatusState}
           busy={surfaceBusy}
           needsAttention={overview.tone === "error" || overview.tone === "warning"}
-          onOpenProfile={() => setProfileOpen(true)}
         />
       </div>
-      {profileOpen ? (
-        <ProfileDialog stats={serverStats} state={serverStatusState} capabilityView={capabilityView} onClose={() => setProfileOpen(false)} />
-      ) : null}
       <main className="app-main">
         <div
           className="workspace-shell"
@@ -803,13 +798,11 @@ function WorkbenchStatusBar({
   state,
   busy,
   needsAttention,
-  onOpenProfile,
 }: {
   stats?: ServerStatsResponse;
   state: ServerStatusState;
   busy: boolean;
   needsAttention: boolean;
-  onOpenProfile: () => void;
 }) {
   const status = workbenchStatus({ stats, state, busy, needsAttention });
   return (
@@ -819,117 +812,6 @@ function WorkbenchStatusBar({
         <strong>{status.label}</strong>
         <span>{status.detail}</span>
       </div>
-      <button type="button" className="profile-button" onClick={onOpenProfile}>
-        Profile
-      </button>
-    </section>
-  );
-}
-
-function ProfileDialog({
-  stats,
-  state,
-  capabilityView,
-  onClose,
-}: {
-  stats?: ServerStatsResponse;
-  state: ServerStatusState;
-  capabilityView?: RuntimeCapabilityView;
-  onClose: () => void;
-}) {
-  const serverHealth =
-    state === "loading" ? "Checking connection" : state === "unavailable" ? "Server unavailable" : stats?.shutting_down ? "Shutting down" : "Healthy";
-  const tools = [
-    profileSwitch("Browser", stats?.enable_browser),
-    profileSwitch("Web access", stats?.enable_web),
-    profileSwitch("Web search", stats?.enable_web_search),
-    profileSwitch("Memory", stats?.enable_memory),
-    profileSwitch("Built-in tools", stats?.enable_builtins),
-    profileSwitch("Subtasks", stats?.enable_subagent || stats?.enable_focused_tasks),
-    stats?.web_search_backend ? { label: "Search provider", value: stats.web_search_backend } : undefined,
-    stats?.browser_cache_dir ? { label: "Browser cache", value: "On" } : undefined,
-  ].filter((item): item is ProfileItem => Boolean(item));
-  const runtime = [
-    stats?.listen ? { label: "Listen address", value: stats.listen } : undefined,
-    typeof stats?.active_sessions === "number" ? { label: "Active sessions", value: String(stats.active_sessions) } : undefined,
-    typeof stats?.running_turns === "number" ? { label: "Running turns", value: String(stats.running_turns) } : undefined,
-    stats?.workspace_root ? { label: "Workspace", value: formatServerRoot("Workspace", stats.workspace_root), title: stats.workspace_root } : undefined,
-    stats?.memory_root ? { label: "Memory store", value: formatServerRoot("Memory", stats.memory_root), title: stats.memory_root } : undefined,
-    stats?.server_time ? { label: "Updated", value: formatServerTime(stats.server_time), title: stats.server_time } : undefined,
-  ].filter((item): item is ProfileItem => Boolean(item));
-  const capabilities = capabilityView
-    ? [
-        { label: "Current chat", value: capabilityView.headline },
-        { label: "Detail", value: capabilityView.detail },
-        ...capabilityView.chips.map((chip) => ({
-          label: chip.group,
-          value: `${chip.label}: ${chip.detail}`,
-        })),
-      ]
-    : undefined;
-
-  return (
-    <div className="profile-overlay" role="presentation" onMouseDown={onClose}>
-      <section
-        className="profile-dialog"
-        role="dialog"
-        aria-modal="true"
-        aria-labelledby="profile-dialog-title"
-        data-testid="profile-dialog"
-        onMouseDown={(event) => event.stopPropagation()}
-      >
-        <header className="profile-dialog-head">
-          <div>
-            <span className="profile-kicker">Profile</span>
-            <h2 id="profile-dialog-title">Environment settings</h2>
-          </div>
-          <button type="button" className="profile-close" aria-label="Close profile" onClick={onClose}>
-            Close
-          </button>
-        </header>
-        <div className="profile-dialog-body">
-          <ProfileSection
-            title="Account and keys"
-            items={[
-              { label: "API keys", value: "Managed by server environment" },
-              { label: "Browser storage", value: "No keys stored in this page" },
-            ]}
-          />
-          <ProfileSection
-            title="Model"
-            items={[
-              { label: "Server", value: serverHealth },
-              { label: "Model", value: stats?.model ?? "Not reported" },
-              { label: "Executor", value: stats?.executor_mode ?? "Not reported" },
-            ]}
-          />
-          {capabilities ? <ProfileSection title="Current chat capabilities" items={capabilities} /> : null}
-          <ProfileSection title="Tools" items={tools.length > 0 ? tools : [{ label: "Capabilities", value: "Not reported" }]} />
-          <ProfileSection title="Advanced diagnostics" items={runtime.length > 0 ? runtime : [{ label: "Runtime", value: "Not reported" }]} />
-        </div>
-      </section>
-    </div>
-  );
-}
-
-interface ProfileItem {
-  label: string;
-  value: string;
-  title?: string;
-}
-
-function ProfileSection({ title, items }: { title: string; items: readonly ProfileItem[] }) {
-  return (
-    <section className="profile-section">
-      <h3>{title}</h3>
-      <dl>
-        {items.map((item) => (
-          <div key={`${title}:${item.label}`} className="profile-row">
-            <dt>{item.label}</dt>
-            <dd title={item.title}>{item.value}</dd>
-          </div>
-        ))}
-      </dl>
     </section>
   );
 }
@@ -946,35 +828,11 @@ function workbenchStatus({
   needsAttention: boolean;
 }): { label: string; detail: string; tone: "ready" | "running" | "warning" } {
   if (state === "loading") return { label: "Connecting", detail: "Preparing the workbench", tone: "running" };
-  if (state === "unavailable") return { label: "Connection issue", detail: "Open Profile for diagnostics", tone: "warning" };
+  if (state === "unavailable") return { label: "Connection issue", detail: "Some live status is unavailable", tone: "warning" };
   if (stats?.shutting_down) return { label: "Server stopping", detail: "Finish or save current work", tone: "warning" };
   if (needsAttention) return { label: "Needs attention", detail: "Review the current task before continuing", tone: "warning" };
   if (busy) return { label: "Working", detail: "Affent is handling the current task", tone: "running" };
   return { label: "Ready", detail: "Start a task or continue a saved chat", tone: "ready" };
-}
-
-function profileSwitch(label: string, enabled?: boolean): ProfileItem | undefined {
-  if (enabled == null) return undefined;
-  return {
-    label,
-    value: enabled ? "On" : "Off",
-  };
-}
-
-function formatServerTime(value: string): string {
-  const date = new Date(value);
-  if (Number.isNaN(date.getTime())) return value;
-  return new Intl.DateTimeFormat(undefined, {
-    hour: "2-digit",
-    minute: "2-digit",
-    timeZoneName: "short",
-  }).format(date);
-}
-
-function formatServerRoot(label: "Workspace" | "Memory", root: string): string {
-  const normalized = root.replace(/\/+$/, "");
-  const leaf = normalized.split("/").filter(Boolean).at(-1) ?? normalized;
-  return `${label} ${leaf}`;
 }
 
 function isAbortError(err: unknown): boolean {
