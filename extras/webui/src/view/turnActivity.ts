@@ -617,6 +617,7 @@ function contextCompactionDetail(compaction: NonNullable<ReturnType<typeof lates
     compaction.removed_messages > 0 ? `removed ${compaction.removed_messages}` : undefined,
     compaction.summary_bytes && compaction.summary_bytes > 0 ? `${formatByteCount(compaction.summary_bytes)} summary` : undefined,
     compaction.summary_present === false ? "summary missing" : undefined,
+    compaction.summary_preview ? `summary: ${summarize(compaction.summary_preview, 180)}` : undefined,
   ].filter(Boolean);
   return parts.join(" · ");
 }

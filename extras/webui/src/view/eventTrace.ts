@@ -317,6 +317,7 @@ function contextCompactedMeta(event: NormalizedEvent, turn: string | undefined):
     typeof before === "number" && typeof after === "number" ? `${before} -> ${after} messages` : undefined,
     typeof removed === "number" ? `${removed} removed` : undefined,
     typeof summaryBytes === "number" && summaryBytes > 0 ? `${formatByteCount(summaryBytes)} summary` : undefined,
+    readString(event.data, "summary_preview") ? `summary: ${streamSummary(readString(event.data, "summary_preview") ?? "")}` : undefined,
   ]);
 }
 

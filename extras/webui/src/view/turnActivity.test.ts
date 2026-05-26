@@ -96,6 +96,7 @@ describe("buildTurnActivity", () => {
           reason: "context_overflow",
           summary_present: true,
           summary_bytes: 4096,
+          summary_preview: "USER_CONTEXT: continue the Bittensor subnet report with browser network evidence.",
         },
       },
       { id: 4, type: "turn.end", data: { turn_id: "t1", reason: "completed" } },
@@ -105,7 +106,7 @@ describe("buildTurnActivity", () => {
 
     expect(activity?.digest).toEqual({
       label: "Context",
-      summary: "Context compacted reactively: 90->18 messages · removed 72 · 4 KiB summary",
+      summary: "Context compacted reactively: 90->18 messages · removed 72 · 4 KiB summary · summary: USER_CONTEXT: continue the Bittensor subnet report with browser network evidence.",
       meta: ["1 compaction"],
       tone: "warning",
     });
@@ -114,7 +115,7 @@ describe("buildTurnActivity", () => {
       {
         id: "compaction:3",
         label: "Context",
-        value: "reactive · 90->18 messages · removed 72 · 4 KiB summary · context_overflow",
+        value: "reactive · 90->18 messages · removed 72 · 4 KiB summary · summary: USER_CONTEXT: continue the Bittensor subnet report with browser network evidence. · context_overflow",
         tone: "warning",
       },
     ]);

@@ -69,6 +69,7 @@ describe("eventTrace view model", () => {
           reason: "context_overflow",
           summary_present: true,
           summary_bytes: 2048,
+          summary_preview: "USER_CONTEXT: keep exact source URLs and current plan state.",
         },
       },
       {
@@ -133,7 +134,7 @@ describe("eventTrace view model", () => {
       kind: "event",
       display: {
         label: "Context compacted",
-        meta: ["Request 1", "context_overflow", "42 -> 13 messages", "29 removed", "2 KiB summary"],
+        meta: ["Request 1", "context_overflow", "42 -> 13 messages", "29 removed", "2 KiB summary", "summary: USER_CONTEXT: keep exact source URLs and current plan state."],
         badges: ["reactive", "summary"],
       },
     });

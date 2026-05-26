@@ -331,6 +331,7 @@ describe("reduce — robustness", () => {
           reason: "context_overflow",
           summary_present: true,
           summary_bytes: 4096,
+          summary_preview: "USER_CONTEXT: preserve code review state.",
         },
       },
       { id: 2, type: "turn.end", data: { turn_id: "t1", reason: "completed" } },
@@ -348,6 +349,7 @@ describe("reduce — robustness", () => {
         reason: "context_overflow",
         summary_present: true,
         summary_bytes: 4096,
+        summary_preview: "USER_CONTEXT: preserve code review state.",
       },
     ]);
     expect(s.turns[0].contextCompactions).toEqual(s.contextCompactions);

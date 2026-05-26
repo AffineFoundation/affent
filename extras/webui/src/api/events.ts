@@ -233,6 +233,7 @@ export interface ContextCompactedPayload {
   reason: string;
   summary_present?: boolean;
   summary_bytes?: number;
+  summary_preview?: string;
 }
 
 export interface ErrorPayload {
