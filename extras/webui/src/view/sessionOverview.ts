@@ -154,10 +154,8 @@ function buildMetrics(
   if (settledIssues > 0) metrics.push({ label: settledIssues === 1 ? "Tool issue" : "Tool issues", value: String(settledIssues), tone: "warning" });
   const artifactMetric = buildArtifactMetric(session);
   if (artifactMetric) metrics.push(artifactMetric);
-  const loopDecisionMetric = buildLoopDecisionMetric(session);
-  if (loopDecisionMetric) metrics.push(loopDecisionMetric);
-  const guardMetric = buildLoopGuardMetric(session);
-  if (guardMetric) metrics.push(guardMetric);
+  const loopMetric = buildLoopMetric(session);
+  if (loopMetric) metrics.push(loopMetric);
   const compactMetric = buildContextCompactionMetric(session);
   if (compactMetric) metrics.push(compactMetric);
   const memoryMetric = buildMemoryUpdateMetric(session);
@@ -224,16 +222,24 @@ function buildMemoryUpdateMetric(session: SessionState): SessionOverviewMetric |
   return { label: "Memory", value: parts.join(" · "), tone: "success" };
 }
 
-function buildLoopGuardMetric(session: SessionState): SessionOverviewMetric | undefined {
+function buildLoopMetric(session: SessionState): SessionOverviewMetric | undefined {
   const stats = session.turns.reduce((acc, turn) => {
     acc.interventions += turn.toolStats?.loop_guard_interventions ?? 0;
     acc.forcedNoTools += turn.toolStats?.forced_no_tools ?? 0;
+    if (turn.status === "max_turns" || turn.endReason === "max_turns") acc.maxTurns += 1;
     return acc;
-  }, { interventions: 0, forcedNoTools: 0 });
-  if (stats.interventions <= 0) return undefined;
-  const parts = [`${stats.interventions} ${stats.interventions === 1 ? "intervention" : "interventions"}`];
+  }, { interventions: 0, forcedNoTools: 0, maxTurns: 0 });
+  const visibleDecisions = session.loopDecisions.filter((decision) => decision.visible_in_ui !== false);
+  if (stats.interventions <= 0 && stats.forcedNoTools <= 0 && stats.maxTurns <= 0 && visibleDecisions.length === 0) return undefined;
+  const parts: string[] = [];
+  if (stats.maxTurns > 0) parts.push(`${stats.maxTurns} max-turn${stats.maxTurns === 1 ? "" : "s"}`);
+  if (stats.interventions > 0) parts.push(`${stats.interventions} guard${stats.interventions === 1 ? "" : "s"}`);
   if (stats.forcedNoTools > 0) parts.push(`${stats.forcedNoTools} no-tools`);
-  return { label: "Guard", value: parts.join(" · "), tone: "warning" };
+  if (visibleDecisions.length > 0) {
+    const latest = visibleDecisions.at(-1);
+    parts.push(`${visibleDecisions.length} decision${visibleDecisions.length === 1 ? "" : "s"}${latest?.decision ? ` ${latest.decision}` : ""}`);
+  }
+  return { label: "Loop", value: parts.join(" · "), tone: stats.maxTurns > 0 || stats.interventions > 0 ? "warning" : undefined };
 }
 
 function buildSourceAccessMetric(session: SessionState): SessionOverviewMetric | undefined {
@@ -396,18 +402,6 @@ function buildArtifactMetric(session: SessionState): SessionOverviewMetric | und
   const label = sessionArtifactLabel(session);
   if (!label) return undefined;
   return { label: label.startsWith("1 file") ? "Artifact" : "Artifacts", value: label };
-}
-
-function buildLoopDecisionMetric(session: SessionState): SessionOverviewMetric | undefined {
-  const visible = session.loopDecisions.filter((decision) => decision.visible_in_ui !== false);
-  if (visible.length === 0) return undefined;
-  const latest = visible.at(-1);
-  const suffix = latest?.decision ? ` · ${latest.decision}` : "";
-  return {
-    label: visible.length === 1 ? "Loop decision" : "Loop decisions",
-    value: `${visible.length}${suffix}`,
-    tone: latest?.decision === "defer" ? "warning" : undefined,
-  };
 }
 
 function buildWorkMetric(

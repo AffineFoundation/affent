@@ -293,6 +293,36 @@ describe("WorkflowStatus", () => {
     expect(within(summary).getByText("2 hits · 1 context · 3 terms")).toHaveAttribute("data-tone", "success");
     expect(screen.getByTestId("workflow-details")).toHaveTextContent("Recall 2 hits · 1 context · 3 terms");
   });
+
+  it("pins loop pressure in the collapsed workflow summary", () => {
+    const session = reduceRawEvents([
+      { id: 1, type: "turn.start", data: { turn_id: "t1" } },
+      { id: 2, type: "user.message", data: { turn_id: "t1", text: "keep investigating" } },
+      {
+        id: 3,
+        type: "turn.end",
+        data: {
+          turn_id: "t1",
+          reason: "max_turns",
+          tool_stats: {
+            loop_guard_interventions: 2,
+            forced_no_tools: 1,
+          },
+        },
+      },
+    ]);
+
+    render(<WorkflowStatus overview={buildSessionOverview({
+      session,
+      workflow: deriveWorkflowStatus(session),
+      hasSelectedSession: true,
+    })} />);
+
+    const summary = screen.getByTestId("workflow-status").querySelector("summary") as HTMLElement;
+    expect(summary).toHaveTextContent("1 max-turn · 2 guards · 1 no-tools");
+    expect(within(summary).getByText("1 max-turn · 2 guards · 1 no-tools")).toHaveAttribute("data-tone", "warning");
+    expect(screen.getByTestId("workflow-details")).toHaveTextContent("Loop 1 max-turn · 2 guards · 1 no-tools");
+  });
 });
 
 function metric(root: HTMLElement, text: string): HTMLElement {

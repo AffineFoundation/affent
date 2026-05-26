@@ -47,6 +47,7 @@ describe("RuntimeStatsPanel", () => {
               session_search_matched_terms: 3,
             },
             runtime: {
+              turn_end_by_reason: { completed: 4, max_turns: 1 },
               runtime_errors: 1,
               context_compactions: 1,
               context_compactions_reactive: 1,
@@ -64,7 +65,7 @@ describe("RuntimeStatsPanel", () => {
     expect(screen.getByTestId("runtime-stats-grid")).toHaveTextContent("Evidence2/3 verified · 1 network · 1 partial");
     expect(screen.getByTestId("runtime-stats-grid")).toHaveTextContent("Recall2 hits · 1 context · 3 terms");
     expect(screen.getByTestId("runtime-stats-grid")).toHaveTextContent("Context1 compaction · 1 reactive · -72 msgs · 4 KiB summary");
-    expect(screen.getByTestId("runtime-stats-grid")).toHaveTextContent("Guard2 interventions · 1 no-tools");
+    expect(screen.getByTestId("runtime-stats-grid")).toHaveTextContent("Loop1 max-turn · 2 guards · 1 no-tools");
     expect(screen.getByTestId("runtime-stats-grid")).toHaveTextContent("Errors1 tool · 1 runtime");
   });
 

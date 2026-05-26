@@ -22,6 +22,8 @@ describe("SessionSkillsPanel", () => {
             description: "Repair code by reproducing failures first.",
             source: "embed:skill",
             runtime: false,
+            triggers: ["fix", "repair"],
+            required_tools: ["workspace"],
             body_preview: "AFFENT ACTIVE SKILL: coding_repair_workflow",
             body_bytes: 96,
           },
@@ -35,6 +37,9 @@ describe("SessionSkillsPanel", () => {
     await user.click(screen.getByText("1 skill"));
     expect(screen.getByTestId("session-skills-list")).toHaveTextContent("coding_repair_workflow");
     expect(screen.getByTestId("session-skills-list")).toHaveTextContent("Repair code by reproducing failures first.");
+    expect(screen.getByTestId("session-skills-panel")).toHaveTextContent("1 triggerable");
+    expect(screen.getByTestId("session-skills-list")).toHaveTextContent("2 triggers");
+    expect(screen.getByTestId("session-skills-list")).toHaveTextContent("1 tool");
 
     await user.click(screen.getByText("coding_repair_workflow"));
 
@@ -59,6 +64,7 @@ describe("SessionSkillsPanel", () => {
     await user.type(screen.getByLabelText("Name"), "manual_demo");
     await user.type(screen.getByLabelText("Summary"), "Manual workflow.");
     await user.type(screen.getByLabelText("Triggers"), "manual demo");
+    await user.type(screen.getByLabelText("Required tools"), "workspace, browser");
     await user.type(screen.getByLabelText("Full content"), "AFFENT ACTIVE SKILL: manual_demo\nUse this workflow.");
     await user.click(screen.getByRole("button", { name: "Save skill" }));
 
@@ -67,6 +73,7 @@ describe("SessionSkillsPanel", () => {
       description: "Manual workflow.",
       body: "AFFENT ACTIVE SKILL: manual_demo\nUse this workflow.",
       triggers: ["manual demo"],
+      required_tools: ["workspace", "browser"],
     });
     expect(within(screen.getByTestId("session-skills-list")).queryByText("manual_demo")).toBeNull();
   });

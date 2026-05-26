@@ -1105,7 +1105,7 @@ body {
 
 .session-skill-item > summary {
   display: grid;
-  grid-template-columns: minmax(138px, 0.45fr) minmax(0, 1fr);
+  grid-template-columns: minmax(138px, 0.38fr) minmax(0, 1fr) auto;
   gap: 8px;
   align-items: center;
   min-height: 38px;
@@ -1141,6 +1141,32 @@ body {
 .session-skill-meta {
   color: var(--text-faint);
   font-size: 11.5px;
+}
+
+.session-skill-status {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 5px;
+  min-width: 0;
+}
+
+.session-skill-status span {
+  display: inline-flex;
+  align-items: center;
+  max-width: 128px;
+  min-height: 20px;
+  overflow: hidden;
+  border: 1px solid rgba(217, 224, 232, 0.88);
+  border-radius: 999px;
+  background: rgba(248, 250, 252, 0.78);
+  color: var(--text-muted);
+  font-size: 10.5px;
+  font-weight: 650;
+  line-height: 1;
+  padding: 0 7px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .session-skill-detail {
@@ -7474,6 +7500,9 @@ html[data-theme="dark"] ::selection {
   .session-skill-form,
   .session-skill-item > summary {
     grid-template-columns: minmax(0, 1fr);
+  }
+  .session-skill-status {
+    justify-content: flex-start;
   }
   .conversation-scroll {
     padding: 8px 12px 12px;

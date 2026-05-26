@@ -89,8 +89,8 @@ function runtimeMetrics(stats: ServerStatsResponse): RuntimeMetric[] {
   if (memory) metrics.push(memory);
   const compaction = compactionMetric(runtime);
   if (compaction) metrics.push(compaction);
-  const guard = guardMetric(tools);
-  if (guard) metrics.push(guard);
+  const loop = loopMetric(tools, runtime);
+  if (loop) metrics.push(loop);
   const errors = errorMetric(tools, runtime);
   if (errors) metrics.push(errors);
   const browser = browserMetric(aggregate);
@@ -167,12 +167,16 @@ function compactionMetric(runtime?: StatsRuntimeSnapshot): RuntimeMetric | undef
   return { label: "Context", value: parts.join(" · "), tone: (runtime?.context_compactions_reactive ?? 0) > 0 ? "warning" : "ready" };
 }
 
-function guardMetric(tools?: StatsToolSnapshot): RuntimeMetric | undefined {
+function loopMetric(tools?: StatsToolSnapshot, runtime?: StatsRuntimeSnapshot): RuntimeMetric | undefined {
   const interventions = tools?.loop_guard_interventions ?? 0;
-  if (interventions <= 0) return undefined;
-  const parts = [`${interventions} ${interventions === 1 ? "intervention" : "interventions"}`];
+  const forcedNoTools = tools?.forced_no_tools ?? 0;
+  const maxTurns = runtime?.turn_end_by_reason?.max_turns ?? 0;
+  if (interventions <= 0 && forcedNoTools <= 0 && maxTurns <= 0) return undefined;
+  const parts: string[] = [];
+  if (maxTurns > 0) parts.push(`${maxTurns} max-turn${maxTurns === 1 ? "" : "s"}`);
+  if (interventions > 0) parts.push(`${interventions} guard${interventions === 1 ? "" : "s"}`);
   if ((tools?.forced_no_tools ?? 0) > 0) parts.push(`${tools?.forced_no_tools} no-tools`);
-  return { label: "Guard", value: parts.join(" · "), tone: "warning" };
+  return { label: "Loop", value: parts.join(" · "), tone: "warning" };
 }
 
 function errorMetric(tools?: StatsToolSnapshot, runtime?: StatsRuntimeSnapshot): RuntimeMetric | undefined {

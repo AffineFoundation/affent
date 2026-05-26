@@ -30,7 +30,7 @@ export function SessionSkillsPanel({
   const [bodyByName, setBodyByName] = useState<Record<string, SkillBodyState>>({});
   const [panelOpen, setPanelOpen] = useState(defaultOpen);
   const [showForm, setShowForm] = useState(false);
-  const [form, setForm] = useState({ name: "", description: "", triggers: "", body: "" });
+  const [form, setForm] = useState({ name: "", description: "", triggers: "", requiredTools: "", body: "" });
   const [installError, setInstallError] = useState<string | undefined>();
   const [installing, setInstalling] = useState(false);
   const allSkills = skills ?? [];
@@ -52,8 +52,8 @@ export function SessionSkillsPanel({
     : error
       ? error
       : runtimeCount > 0
-        ? `${runtimeCount} custom · ${allSkills.length - runtimeCount} built in`
-        : "Built-in workflows ready";
+        ? `${runtimeCount} custom · ${allSkills.length - runtimeCount} built in${activationCoverage(allSkills)}`
+        : `Built-in workflows ready${activationCoverage(allSkills)}`;
 
   async function loadBody(name: string) {
     if (!onReadSkill || bodyByName[name]?.body || bodyByName[name]?.loading) return;
@@ -77,9 +77,10 @@ export function SessionSkillsPanel({
         description: form.description || undefined,
         body: form.body,
         triggers: splitList(form.triggers),
+        required_tools: splitList(form.requiredTools),
       });
       setBodyByName((current) => ({ ...current, [installed.name]: { body: installed.body ?? form.body } }));
-      setForm({ name: "", description: "", triggers: "", body: "" });
+      setForm({ name: "", description: "", triggers: "", requiredTools: "", body: "" });
       setShowForm(false);
     } catch (err) {
       setInstallError(formatPanelError(err));
@@ -142,6 +143,14 @@ export function SessionSkillsPanel({
                     placeholder="comma or newline separated"
                   />
                 </label>
+                <label>
+                  <span>Required tools</span>
+                  <input
+                    value={form.requiredTools}
+                    onChange={(event) => setForm((current) => ({ ...current, requiredTools: event.target.value }))}
+                    placeholder="workspace, browser, web"
+                  />
+                </label>
                 <label className="session-skill-form-body">
                   <span>Full content</span>
                   <textarea
@@ -173,9 +182,14 @@ export function SessionSkillsPanel({
                       <summary>
                         <span className="session-skill-title">
                           <strong>{skill.name}</strong>
-                          <span>{skill.runtime ? "Custom" : "Built in"}</span>
+                          <span>{skillKindLabel(skill)}</span>
                         </span>
                         <span className="session-skill-desc">{skill.description || "No summary"}</span>
+                        <span className="session-skill-status">
+                          {skillSummaryTags(skill).map((tag) => (
+                            <span key={tag} title={tag}>{tag}</span>
+                          ))}
+                        </span>
                       </summary>
                       <div className="session-skill-detail">
                         <div className="session-skill-meta">
@@ -221,6 +235,29 @@ function activationSummary(skill: SessionSkillInfo): string {
   if (triggers.length > 0) return `Triggers: ${triggers.slice(0, 3).join(", ")}${triggers.length > 3 ? "..." : ""}`;
   if (skill.required_tools && skill.required_tools.length > 0) return `Needs: ${skill.required_tools.join(", ")}`;
   return "";
+}
+
+function skillKindLabel(skill: SessionSkillInfo): string {
+  return skill.runtime ? "Custom" : "Built in";
+}
+
+function activationCoverage(skills: readonly SessionSkillInfo[]): string {
+  const triggerable = skills.filter((skill) => (skill.triggers?.length ?? skill.auto_activation?.any?.length ?? 0) > 0).length;
+  const toolBound = skills.filter((skill) => (skill.required_tools?.length ?? 0) > 0).length;
+  const parts: string[] = [];
+  if (triggerable > 0) parts.push(`${triggerable} triggerable`);
+  if (toolBound > 0) parts.push(`${toolBound} tool-bound`);
+  return parts.length > 0 ? ` · ${parts.join(" · ")}` : "";
+}
+
+function skillSummaryTags(skill: SessionSkillInfo): string[] {
+  const tags = [skillKindLabel(skill)];
+  const triggers = skill.triggers ?? skill.auto_activation?.any ?? [];
+  if (triggers.length > 0) tags.push(`${triggers.length} trigger${triggers.length === 1 ? "" : "s"}`);
+  const requiredTools = skill.required_tools?.length ?? 0;
+  if (requiredTools > 0) tags.push(`${requiredTools} tool${requiredTools === 1 ? "" : "s"}`);
+  if (skill.source) tags.push(skill.source);
+  return tags;
 }
 
 function formatPanelError(err: unknown): string {
