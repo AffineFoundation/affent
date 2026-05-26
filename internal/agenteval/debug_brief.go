@@ -137,7 +137,7 @@ func BuildDebugBrief(res BatchResult) *DebugBrief {
 		}, tags...)
 	}
 	if hasDebugBriefTruncation(res) {
-		add("truncation", "warn", "tool or context output was truncated; inspect artifacts before judging evidence", []string{"artifacts", "tool_timeline"}, map[string]int{
+		add("truncation", "warn", "tool or context output was truncated; inspect examples and artifacts before judging evidence", []string{"tool_truncation_examples", "artifacts", "tool_timeline"}, map[string]int{
 			"tool_context":    res.ToolStats.ToolContextTruncated,
 			"omitted_context": res.ToolStats.ToolContextOmittedBytes,
 			"args":            res.ToolTruncation.ArgsTruncated,

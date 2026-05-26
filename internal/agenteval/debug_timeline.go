@@ -85,6 +85,7 @@ func renderDebugTimeline(res BatchResult, scenario BatchScenario, trace *Trace) 
 	renderTimelineDecisions(&b, trace)
 	renderTimelineSourceEvidence(&b, trace)
 	renderTimelineMemoryUpdates(&b, trace)
+	renderTimelineToolTruncation(&b, trace)
 	renderTimelineTools(&b, trace)
 	renderTimelineFinal(&b, trace)
 	return b.String()
@@ -209,7 +210,7 @@ func renderTimelineDebugBrief(b *strings.Builder, res BatchResult) {
 		)
 	}
 	if hasDebugBriefTruncation(res) {
-		fmt.Fprintf(b, "- truncation: tool_context=%d omitted_context=%d args=%d args_omitted=%d results=%d results_omitted=%d artifacts=%d; inspect artifacts and capped tool outputs.\n",
+		fmt.Fprintf(b, "- truncation: tool_context=%d omitted_context=%d args=%d args_omitted=%d results=%d results_omitted=%d artifacts=%d; inspect Tool Truncation, artifacts, and capped tool outputs.\n",
 			res.ToolStats.ToolContextTruncated,
 			res.ToolStats.ToolContextOmittedBytes,
 			res.ToolTruncation.ArgsTruncated,
@@ -492,6 +493,36 @@ func renderTimelineMemoryUpdates(b *strings.Builder, trace *Trace) {
 		b.WriteByte('\n')
 		if entry.Preview != "" {
 			fmt.Fprintf(b, "   %s\n", timelineInline(entry.Preview, timelineMemoryPreviewBytes))
+		}
+	}
+}
+
+func renderTimelineToolTruncation(b *strings.Builder, trace *Trace) {
+	examples := trace.ToolTruncationExamples(len(trace.Tools))
+	if len(examples) == 0 {
+		return
+	}
+	b.WriteString("\n## Tool Truncation\n\n")
+	for i, ex := range examples {
+		fmt.Fprintf(b, "%d. tool#%d `%s`", i+1, ex.ToolIndex, ex.Tool)
+		if ex.CallID != "" {
+			fmt.Fprintf(b, " call_id=`%s`", ex.CallID)
+		}
+		b.WriteByte('\n')
+		if ex.ArgsTruncated || ex.ArgsOmittedBytes > 0 {
+			fmt.Fprintf(b, "   args: truncated=`%t` bytes=`%d` omitted=`%d` cap=`%d`\n",
+				ex.ArgsTruncated, ex.ArgsBytes, ex.ArgsOmittedBytes, ex.ArgsCapBytes)
+		}
+		if ex.ResultTruncated || ex.ResultOmittedBytes > 0 {
+			fmt.Fprintf(b, "   result: truncated=`%t` bytes=`%d` omitted=`%d` cap=`%d`\n",
+				ex.ResultTruncated, ex.ResultBytes, ex.ResultOmittedBytes, ex.ResultCapBytes)
+		}
+		if ex.ContextOmittedBytes > 0 || ex.ContextBytes > 0 || ex.ContextEstimatedTokens > 0 {
+			fmt.Fprintf(b, "   context: bytes=`%d` omitted=`%d` estimated_tokens=`%d`\n",
+				ex.ContextBytes, ex.ContextOmittedBytes, ex.ContextEstimatedTokens)
+		}
+		if ex.ResultArtifactPath != "" {
+			fmt.Fprintf(b, "   artifact: `%s`\n", ex.ResultArtifactPath)
 		}
 	}
 }
