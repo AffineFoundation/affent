@@ -4,9 +4,9 @@ import (
 	"encoding/json"
 	"errors"
 	"strings"
-	"unicode/utf8"
 
 	"github.com/affinefoundation/affent/internal/sse"
+	"github.com/affinefoundation/affent/internal/textutil"
 )
 
 // Output-shaping limits for focused tasks. Kept small so structured
@@ -221,13 +221,13 @@ func buildFocusedTaskResult(profile FocusedTaskProfile, objective, childID strin
 		// whether to retry / narrow / give up; no model content is
 		// trusted under this branch.
 		result.OK = false
-		result.Summary = sanitizeUntrustedText(previewN(strings.TrimSpace(res.Report), maxFocusedTaskSummaryBytes))
+		result.Summary = sanitizeUntrustedText(textutil.Preview(strings.TrimSpace(res.Report), maxFocusedTaskSummaryBytes))
 		if result.Summary == "" {
 			result.Summary = "focused task did not complete: " + nonEmpty(res.TurnEndReason, "unknown")
 		}
 		result.Warnings = []string{"child_did_not_complete:" + nonEmpty(res.TurnEndReason, "unknown")}
 		if res.Err != nil {
-			result.Error = sanitizeUntrustedText(previewN(strings.TrimSpace(res.Err.Error()), maxFocusedTaskFindingEvidenceBytes))
+			result.Error = sanitizeUntrustedText(textutil.Preview(strings.TrimSpace(res.Err.Error()), maxFocusedTaskFindingEvidenceBytes))
 		}
 		if len(res.LoopErrors) > 0 {
 			result.LoopErrors = trimAndCapStringList(res.LoopErrors)
@@ -242,7 +242,7 @@ func buildFocusedTaskResult(profile FocusedTaskProfile, objective, childID strin
 		// loses the structured slices and is warned to treat summary
 		// as free-form.
 		result.OK = true
-		result.Summary = sanitizeUntrustedText(previewN(strings.TrimSpace(res.Report), maxFocusedTaskSummaryBytes))
+		result.Summary = sanitizeUntrustedText(textutil.Preview(strings.TrimSpace(res.Report), maxFocusedTaskSummaryBytes))
 		result.Warnings = []string{"structured_output_parse_failed"}
 		if len(res.LoopErrors) > 0 {
 			result.LoopErrors = trimAndCapStringList(res.LoopErrors)
@@ -256,7 +256,7 @@ func buildFocusedTaskResult(profile FocusedTaskProfile, objective, childID strin
 		// FALSE → ok:false), but cannot upgrade past runtime success.
 		result.OK = result.OK && *parsed.OK
 	}
-	result.Summary = sanitizeUntrustedText(previewN(strings.TrimSpace(parsed.Summary), maxFocusedTaskSummaryBytes))
+	result.Summary = sanitizeUntrustedText(textutil.Preview(strings.TrimSpace(parsed.Summary), maxFocusedTaskSummaryBytes))
 	var findingWarnings []string
 	result.Findings, findingWarnings = sanitizeFindings(profile.Kind, parsed.Findings)
 	result.NotFound = trimAndCapStringList(parsed.NotFound)
@@ -284,22 +284,22 @@ func sanitizeFindings(kind FocusedTaskKind, in []FocusedTaskFinding) ([]FocusedT
 		}
 		source := sanitizeUntrustedText(strings.TrimSpace(f.Source))
 		if source == "" {
-			warnings = append(warnings, "omitted finding without source: "+previewN(claim, 160))
+			warnings = append(warnings, "omitted finding without source: "+textutil.Preview(claim, 160))
 			continue
 		}
-		evidence := sanitizeUntrustedText(previewN(strings.TrimSpace(f.Evidence), maxFocusedTaskFindingEvidenceBytes))
+		evidence := sanitizeUntrustedText(textutil.Preview(strings.TrimSpace(f.Evidence), maxFocusedTaskFindingEvidenceBytes))
 		if evidence == "" {
-			warnings = append(warnings, "omitted finding without evidence: "+previewN(claim, 160))
+			warnings = append(warnings, "omitted finding without evidence: "+textutil.Preview(claim, 160))
 			continue
 		}
 		severity := normalizeSeverity(f.Severity)
 		if kind == FocusedTaskReview && !validFocusedTaskSeverity(severity) {
-			warnings = append(warnings, "omitted review finding without valid severity: "+previewN(claim, 160))
+			warnings = append(warnings, "omitted review finding without valid severity: "+textutil.Preview(claim, 160))
 			continue
 		}
 		confidence := normalizeConfidence(f.Confidence)
 		if kind == FocusedTaskRecall && !validFocusedTaskConfidence(confidence) {
-			warnings = append(warnings, "omitted recall finding without valid confidence: "+previewN(claim, 160))
+			warnings = append(warnings, "omitted recall finding without valid confidence: "+textutil.Preview(claim, 160))
 			continue
 		}
 		out = append(out, FocusedTaskFinding{
@@ -373,36 +373,7 @@ func trimAndCapStringList(in []string) []string {
 // decoding, which normalizes downstream string handling without
 // having to write a separate UTF-8 validator.
 func sanitizeUntrustedText(s string) string {
-	if s == "" {
-		return s
-	}
-	clean := utf8.ValidString(s)
-	for i := 0; i < len(s); i++ {
-		c := s[i]
-		if c == '\t' || c == '\n' || c == '\r' {
-			continue
-		}
-		if c < 0x20 || c == 0x7F {
-			clean = false
-			break
-		}
-	}
-	if clean {
-		return s
-	}
-	var b strings.Builder
-	b.Grow(len(s))
-	for _, r := range s {
-		switch {
-		case r == '\t' || r == '\n' || r == '\r':
-			b.WriteRune(r)
-		case r < 0x20, r == 0x7F:
-			// dropped: C0 controls (incl. NUL and ESC) and DEL
-		default:
-			b.WriteRune(r)
-		}
-	}
-	return b.String()
+	return textutil.StripASCIIControls(s)
 }
 
 func capToolCalls(in []subagentToolCall) []subagentToolCall {

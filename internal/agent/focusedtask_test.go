@@ -42,12 +42,13 @@ func TestFocusedTaskProfileRegistry_RegisterLookupOrder(t *testing.T) {
 	}
 }
 
-func TestDefaultFocusedTaskProfileRegistry_FiveKindsInOrder(t *testing.T) {
+func TestDefaultFocusedTaskProfileRegistry_SixKindsInOrder(t *testing.T) {
 	reg := DefaultFocusedTaskProfileRegistry()
 	got := reg.Profiles()
 	want := []FocusedTaskKind{
 		FocusedTaskRecall,
 		FocusedTaskExplore,
+		FocusedTaskWebExtract,
 		FocusedTaskResearch,
 		FocusedTaskVerify,
 		FocusedTaskReview,
@@ -119,7 +120,7 @@ func TestFocusedTaskAvailabilityProbe_AvailableKinds_DefaultRegistry(t *testing.
 		{
 			name:  "workspace + LLM only exposes file-backed profiles",
 			probe: FocusedTaskAvailabilityProbe{HasLLM: true, HasWorkspace: true},
-			// recall is filtered (no memory, no sessions). research filtered (no web/browser).
+			// recall is filtered (no memory, no sessions). web_extract/research filtered (no web/browser).
 			want: []FocusedTaskKind{FocusedTaskExplore, FocusedTaskVerify, FocusedTaskReview},
 		},
 		{
@@ -128,14 +129,14 @@ func TestFocusedTaskAvailabilityProbe_AvailableKinds_DefaultRegistry(t *testing.
 			want:  []FocusedTaskKind{FocusedTaskRecall, FocusedTaskExplore, FocusedTaskVerify, FocusedTaskReview},
 		},
 		{
-			name:  "with web registrar research becomes available",
+			name:  "with web registrar exposes page extraction and research",
 			probe: FocusedTaskAvailabilityProbe{HasLLM: true, HasWorkspace: true, HasExecutor: true, HasMemory: true, HasSessions: true, HasWeb: true},
-			want:  []FocusedTaskKind{FocusedTaskRecall, FocusedTaskExplore, FocusedTaskResearch, FocusedTaskVerify, FocusedTaskReview},
+			want:  []FocusedTaskKind{FocusedTaskRecall, FocusedTaskExplore, FocusedTaskWebExtract, FocusedTaskResearch, FocusedTaskVerify, FocusedTaskReview},
 		},
 		{
 			name:  "with browser registrar research becomes available",
 			probe: FocusedTaskAvailabilityProbe{HasLLM: true, HasWorkspace: true, HasExecutor: true, HasMemory: true, HasSessions: true, HasBrowser: true},
-			want:  []FocusedTaskKind{FocusedTaskRecall, FocusedTaskExplore, FocusedTaskResearch, FocusedTaskVerify, FocusedTaskReview},
+			want:  []FocusedTaskKind{FocusedTaskRecall, FocusedTaskExplore, FocusedTaskWebExtract, FocusedTaskResearch, FocusedTaskVerify, FocusedTaskReview},
 		},
 	}
 	for _, c := range cases {
@@ -189,6 +190,28 @@ func TestProfileAvailable_RequiresAtLeastOneDeclaredDep(t *testing.T) {
 			want: true,
 		},
 		{
+			name:    "web_extract needs external registrar",
+			profile: webExtractProfile(),
+			mutate:  func(d *FocusedTaskDeps) { /* no web/browser */ },
+			want:    false,
+		},
+		{
+			name:    "web_extract ok with web registrar",
+			profile: webExtractProfile(),
+			mutate: func(d *FocusedTaskDeps) {
+				d.RegisterWebTools = noopRegistrar
+			},
+			want: true,
+		},
+		{
+			name:    "web_extract ok with browser registrar",
+			profile: webExtractProfile(),
+			mutate: func(d *FocusedTaskDeps) {
+				d.RegisterBrowserTools = noopRegistrar
+			},
+			want: true,
+		},
+		{
 			name:    "research needs external registrar",
 			profile: researchProfile(),
 			mutate:  func(d *FocusedTaskDeps) { /* no web/browser */ },
@@ -209,6 +232,15 @@ func TestProfileAvailable_RequiresAtLeastOneDeclaredDep(t *testing.T) {
 				d.RegisterBrowserTools = noopRegistrar
 			},
 			want: true,
+		},
+		{
+			name: "custom symbol_context-only profile",
+			profile: FocusedTaskProfile{
+				Kind:  "custom-symbol-context",
+				Tools: FocusedTaskToolPolicy{AllowSymbolContext: true},
+			},
+			mutate: func(d *FocusedTaskDeps) {},
+			want:   true,
 		},
 		{
 			name:    "empty-tools profile is unavailable",
@@ -360,8 +392,13 @@ func TestBuildFocusedTaskRegistry_PerProfileToolSet(t *testing.T) {
 		},
 		{
 			profile: exploreProfile(),
-			want:    map[string]bool{"read_file": true, "list_files": true, "shell": true, "session_search": true},
+			want:    map[string]bool{"read_file": true, "file_context": true, "list_files": true, "symbol_context": true, "repo_search": true, "shell": true, "session_search": true},
 			notWant: []string{"memory", "web_fetch", "web_search", "write_file", "edit_file", FocusedTaskToolName, SubagentToolName},
+		},
+		{
+			profile: webExtractProfile(),
+			want:    map[string]bool{},
+			notWant: []string{"read_file", "list_files", "shell", "memory", "session_search", "write_file", "edit_file", FocusedTaskToolName, SubagentToolName},
 		},
 		{
 			profile: researchProfile(),
@@ -370,12 +407,12 @@ func TestBuildFocusedTaskRegistry_PerProfileToolSet(t *testing.T) {
 		},
 		{
 			profile: verifyProfile(),
-			want:    map[string]bool{"read_file": true, "list_files": true, "shell": true, "session_search": true},
+			want:    map[string]bool{"read_file": true, "file_context": true, "list_files": true, "symbol_context": true, "repo_search": true, "shell": true, "session_search": true},
 			notWant: []string{"web_fetch", "web_search", "write_file", "edit_file", FocusedTaskToolName, SubagentToolName},
 		},
 		{
 			profile: reviewProfile(),
-			want:    map[string]bool{"read_file": true, "list_files": true, "shell": true, "session_search": true},
+			want:    map[string]bool{"read_file": true, "file_context": true, "list_files": true, "symbol_context": true, "repo_search": true, "shell": true, "session_search": true},
 			notWant: []string{"write_file", "edit_file", FocusedTaskToolName, SubagentToolName},
 		},
 	}
@@ -444,7 +481,7 @@ func TestWithFocusedTaskSystemGuidance_AppendsOnce(t *testing.T) {
 	if WithFocusedTaskSystemGuidance("") == "" {
 		t.Fatal("empty input should fall back to default + guidance")
 	}
-	for _, want := range []string{"ordinary current-fact questions", "use available web/browser tools directly", "ordinary web research", "Delegation has its own LLM/tool budget", "parent ecosystem, the entity name or ticker, and the metric intent", "visible list or table already shows the target entity row", "exact row label, ticker, or id"} {
+	for _, want := range []string{"ordinary current-fact questions", "use available web/browser tools directly", "ordinary web research", "web_extract when you already have one page", "bounded to one or a few pages but each page is long, dynamic, or noisy", "run_task(web_extract)", "Delegation has its own LLM/tool budget", "parent ecosystem, the entity name or ticker, and the metric intent", "visible list or table already shows the target entity row", "exact row label, ticker, or id", "symbol_context before repo_search", "repo_search before broad shell rg/find/grep"} {
 		if !strings.Contains(once, want) {
 			t.Fatalf("focused-task guidance missing delegation budget guard %q:\n%s", want, once)
 		}
@@ -461,9 +498,24 @@ func TestWithFocusedTaskSystemGuidance_AppendsOnce(t *testing.T) {
 	}
 }
 
+func TestVerifyAndReviewProfilesGuideRepoSearch(t *testing.T) {
+	verify := verifyProfile()
+	for _, want := range []string{"symbol_context", "repo_search", "SMALLEST check", "one targeted file inspection"} {
+		if !strings.Contains(verify.SystemPromptHints, want) {
+			t.Fatalf("verify profile guidance missing %q:\n%s", want, verify.SystemPromptHints)
+		}
+	}
+	review := reviewProfile()
+	for _, want := range []string{"symbol_context", "repo_search", "named change/files", "Inspect ONLY"} {
+		if !strings.Contains(review.SystemPromptHints, want) {
+			t.Fatalf("review profile guidance missing %q:\n%s", want, review.SystemPromptHints)
+		}
+	}
+}
+
 func TestResearchProfileGuidesGeneralExternalResearch(t *testing.T) {
 	profile := researchProfile()
-	for _, want := range []string{"registered external lookup tools", "authoritative sources", "Source hint", "llms.txt", "Direct-reader warning", "Embedded data preview", "page-source evidence", "dynamic metric/dashboard/detail pages", "price market cap FDV volume supply TVL", "24h 7d volume market cap", "validators miners stake emission", "rather than repeating only the entity name", "Open the 1-3 highest-value visible result URLs", "before refining the search", "Preserve user-provided disambiguators", "network/subnet id", "parent ecosystem, the entity name or ticker, and the metric intent", "visible list or table already shows the target entity row", "same-name standalone product", "searched the asserted parent ecosystem", "absent from one visible list", "parent ecosystem plus known ids/synonyms", "successfully accessed only when a tool actually read that URL", "discovered/unverified", "market, metrics, or trend questions", "social posts", "independent corroborating source", "API/text/export endpoints"} {
+	for _, want := range []string{"registered external lookup tools", "authoritative sources", "Source hint", "llms.txt", "Direct-reader warning", "Embedded data preview", "page-source evidence", "dynamic metric/dashboard/detail pages", "price market cap FDV volume supply TVL", "24h 7d volume market cap", "validators miners stake emission", "rather than repeating only the entity name", "Open the 1-3 highest-value visible result URLs", "before refining the search", "Preserve user-provided disambiguators", "network/subnet id", "parent ecosystem, the entity name or ticker, and the metric intent", "visible list or table already shows the target entity row", "same-name standalone product", "searched the asserted parent ecosystem", "absent from one visible list", "parent ecosystem plus known ids/synonyms", "successfully accessed only when a tool actually read that URL", "discovered/unverified", "market, metrics, or trend questions", "social posts", "independent corroborating source", "API/text/export endpoints", "keep the exact numeric string and unit you saw", "Do not round or backfill missing precision"} {
 		if !strings.Contains(profile.SystemPromptHints, want) {
 			t.Fatalf("research profile guidance missing %q:\n%s", want, profile.SystemPromptHints)
 		}
@@ -687,6 +739,81 @@ func TestRunFocusedTask_ResearchUsesWebToolThenEmitsJSON(t *testing.T) {
 	for _, forbidden := range []string{"web_search", "browser_navigate", "browser_snapshot", "browser tools"} {
 		if strings.Contains(prompt, forbidden) {
 			t.Fatalf("fetch-only research prompt should not mention unavailable %q:\n%s", forbidden, prompt)
+		}
+	}
+}
+
+func TestRunFocusedTask_WebExtractUsesWebToolThenEmitsJSON(t *testing.T) {
+	var fetchedURL string
+	webRegistrar := func(ctx context.Context, reg *Registry) (func(), error) {
+		reg.Add(&Tool{
+			Name:        "web_fetch",
+			Description: "stub web_fetch for tests",
+			Schema:      json.RawMessage(`{"type":"object","required":["url"],"properties":{"url":{"type":"string"}}}`),
+			Execute: func(_ context.Context, args json.RawMessage) (string, error) {
+				var p struct {
+					URL string `json:"url"`
+				}
+				if err := json.Unmarshal(args, &p); err != nil {
+					return "", err
+				}
+				fetchedURL = p.URL
+				return "Page title: Affine\nPrice: $17.62\nMarket cap: $56.3M\n24h change: -2.2%\n", nil
+			},
+		})
+		return nil, nil
+	}
+
+	step := 0
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "text/event-stream")
+		w.WriteHeader(http.StatusOK)
+		step++
+		switch step {
+		case 1:
+			_, _ = w.Write([]byte(`data: {"choices":[{"delta":{"role":"assistant","tool_calls":[{"index":0,"id":"c1","type":"function","function":{"name":"web_fetch","arguments":"{\"url\":\"https://taostats.io/subnets/120\"}"}}]},"finish_reason":"tool_calls"}]}` + "\n\n"))
+		default:
+			body := `{"task_type":"web_extract","ok":true,"summary":"extracted the subnet row and market snapshot","findings":[{"claim":"Affine is SN120 on taostats","evidence":"taostats subnet table row 5 shows Affine SN120","source":"https://taostats.io/subnets"},{"claim":"Affine market snapshot is around $17.62 with a $56.3M market cap","evidence":"web_fetch returned price and market cap fields","source":"https://taostats.io/subnets/120"}]}`
+			_, _ = w.Write([]byte("data: {\"choices\":[{\"delta\":{\"role\":\"assistant\",\"content\":" + strconvQuote(body) + "},\"finish_reason\":\"stop\"}]}\n\n"))
+		}
+		_, _ = w.Write([]byte("data: [DONE]\n\n"))
+	}))
+	t.Cleanup(srv.Close)
+
+	transcriptDir := t.TempDir()
+	raw, err := runFocusedTask(context.Background(), FocusedTaskDeps{
+		LLM:              NewLLMClient(srv.URL, "", "fake"),
+		HostWorkspaceDir: t.TempDir(),
+		TranscriptDir:    transcriptDir,
+		Log:              zerolog.Nop(),
+		PerCallTimeout:   5 * time.Second,
+		RegisterWebTools: webRegistrar,
+	}, webExtractProfile(), "inspect the Affine subnet page and extract the market snapshot", 4)
+	if err != nil {
+		t.Fatalf("runFocusedTask: %v\n%s", err, raw)
+	}
+
+	var got FocusedTaskResult
+	if err := json.Unmarshal([]byte(raw), &got); err != nil {
+		t.Fatalf("decode: %v\n%s", err, raw)
+	}
+	if !got.OK || got.TaskType != FocusedTaskWebExtract {
+		t.Fatalf("unexpected runtime metadata: %+v", got)
+	}
+	if len(got.Findings) != 2 {
+		t.Fatalf("expected two findings, got %+v", got.Findings)
+	}
+	if got.Findings[0].Source != "https://taostats.io/subnets" || got.Findings[1].Source != "https://taostats.io/subnets/120" {
+		t.Fatalf("unexpected sources: %+v", got.Findings)
+	}
+	if fetchedURL != "https://taostats.io/subnets/120" {
+		t.Fatalf("web_fetch stub was not invoked on the dispatch path; fetchedURL=%q", fetchedURL)
+	}
+
+	prompt := focusedTaskTranscriptText(t, transcriptDir)
+	for _, want := range []string{"web_extract hints", "page-level extraction", "compact evidence", "1-3 highest-value result URLs", "exact visible value and unit", "Do not round, normalize, recompute"} {
+		if !strings.Contains(prompt, want) {
+			t.Fatalf("web_extract prompt missing %q:\n%s", want, prompt)
 		}
 	}
 }

@@ -13,6 +13,7 @@ import (
 	"sync"
 	"sync/atomic"
 	"time"
+	"unicode/utf8"
 
 	"github.com/affinefoundation/affent/internal/memory"
 	"github.com/affinefoundation/affent/internal/sse"
@@ -267,7 +268,7 @@ const (
 // package constants so the prompt and the enforcement stay in sync.
 var DefaultSystemPrompt = fmt.Sprintf(`You are the user's general-purpose agent inside a configured workspace.
 You have a 'shell' tool for arbitrary shell commands and 'read_file' /
-'write_file' / 'edit_file' / 'list_files' for the workspace. The caller may
+ 'file_context' / 'write_file' / 'edit_file' / 'list_files' / 'symbol_context' / 'repo_search' for the workspace. The caller may
 provide the exact workspace path; use that path or relative paths inside it.
 
 Instruction hierarchy:
@@ -293,6 +294,11 @@ Default work loop for engineering tasks:
    If an available tool is explicitly designed for bounded exploration or
    review, use it early for broad investigations instead of spending the parent
    context on directory walks and large file reads.
+   For workspace code discovery, prefer symbol_context when you know the likely
+   symbol or declaration, then repo_search before broad shell rg/find/grep
+   sweeps when you know the likely topic but not the exact file. For long files
+   that you already know matter, use file_context first to get a compact view,
+   then read_file only if you need the full body.
 2. Reproduce when possible: run the failing test/command before changing code.
 3. Make the smallest coherent change. Prefer edit_file for surgical edits and
    write_file only when replacing or creating a whole file is clearer.
@@ -438,7 +444,7 @@ func externalResearchSystemGuidance(surface externalResearchToolSurface) string 
 		b.WriteString("\n- Use browser_find on the current page for targeted labels or metrics before repeated scrolling; it returns compact snippets and refs for visible matches.")
 		b.WriteString("\n- On dynamic metric/dashboard/detail pages, especially for market, trend, subnet, token, company, or product status questions, call browser_find with field-label queries such as \"price market cap FDV volume supply TVL\", \"24h 7d volume market cap\", \"validators miners stake emission\", or the user's requested labels before scrolling, clicking tabs, or declaring those metrics unavailable. Do not repeat browser_find with only the entity name after the page already identifies the entity; search for missing field labels instead.")
 		b.WriteString("\n- If the current page already shows the target entity in a visible list or row, use that exact row label, ticker, or id as the next query or stop if the source is already sufficient. Do not keep broadening with the bare entity name once the row is in view.")
-		b.WriteString("\n- Dashboard text can interleave global header metrics, entity metrics, and labels in one line. Only pair a numeric value with a metric label when the label/value adjacency or embedded data is explicit; otherwise report it as ambiguous or global instead of assigning it to the entity.")
+		b.WriteString("\n- Dashboard text can interleave global header metrics, entity metrics, and labels in one line. Only pair a numeric value with a metric label when the label/value adjacency or embedded data is explicit; otherwise report it as ambiguous or global instead of assigning it to the entity. If multiple price-like values are visible, keep them separate and preserve their visible labels, such as title price versus body/top-bar USD price.")
 		b.WriteString("\n- Do not infer project maturity, scale, ranking quality, or market position from a table row number or visible order unless the table's sort column and metric label are explicit. A row such as \"5 NameSN120\" may be an index or current sort order, not evidence of project size or quality.")
 	}
 	if surface.WebFetch {
@@ -467,7 +473,8 @@ func externalResearchSystemGuidance(surface externalResearchToolSurface) string 
 	b.WriteString("\n- Do not conclude that a named entity does not exist only because it is absent from one visible list, first page, or broad search. For short-name entities, try one targeted refinement with the parent ecosystem plus known ids/synonyms, site search/filter controls, or a canonical index/API before reporting not found.")
 	b.WriteString("\n- If you report source access status, mark a URL as successfully accessed only when a tool actually read that URL and returned usable content. Use the actual fetched_url/browser_rendered_url from SourceAccess as the accessed URL; requested_url only records what you asked for before redirects or route changes. Links discovered on result pages or another page but not opened are discovered/unverified, not successful sources.")
 	b.WriteString("\n- A browser_find no-match only means the query was absent from the current rendered page text; it is not proof that the entity/source is absent from the whole site or dataset. Say \"not visible in the inspected page/list\" unless a canonical source explicitly reports absence.")
-	b.WriteString("\n- Before the final answer, re-scan the latest successful SourceAccess outputs for requested names, ids, prices, counts, dates, and status labels. Do not say a field was unavailable if a successful tool result's PAGE TEXT or extracted content already contains that field; instead report the value with that source.")
+	b.WriteString("\n- Discovery-only pages (search results, 404/not-found pages, and rendered browser fallbacks that explicitly report discovery-only status) are navigation aids, not evidence. You may use their links or snippets to choose the next source, but do not cite their page body as verified fact.")
+	b.WriteString("\n- Before the final answer, re-scan the latest successful SourceAccess outputs for requested names, ids, prices, counts, dates, and status labels. Do not say a field was unavailable if a successful tool result's PAGE TEXT or extracted content already contains that field; instead report the value with that source. Treat search-result pages and 404 discovery-only pages as navigation aids, not evidence.")
 	b.WriteString("\n- For market, metrics, or trend questions, collect a current source-of-record plus at least one independent corroborating source when the available tools make that possible. Prefer official API/text/export endpoints for metrics over dashboard routes that require JavaScript. Keep social posts, forum comments, and influencer takes separate from verified facts, and label them as sentiment or claims.")
 	b.WriteString("\n- Include concrete dates/freshness for time-sensitive facts. When sources disagree, state the conflict and prefer the source with the clearest provenance.")
 	if surface.WebSearch {
@@ -1401,7 +1408,7 @@ func finalAnswerNeedsEvidenceRecovery(content string, toolCallsUsed int) bool {
 		return false
 	}
 	content = strings.TrimSpace(content)
-	if content == "" || len([]rune(content)) > 140 {
+	if content == "" || utf8.RuneCountInString(content) > 140 {
 		return false
 	}
 	lower := strings.ToLower(content)
@@ -1478,7 +1485,7 @@ func (l *Loop) publishAndAppendToolResultWithContext(turnID, callID, name, resul
 		payload.Delegation = delegation
 	}
 	l.publish(sse.TypeToolResult, payload)
-	content, omitted := contextBudget.truncateToolResult(name, result, l.toolResultMaxBytesInContextFor(name))
+	content, omitted := contextBudget.truncateToolResult(name, result, l.toolResultMaxBytesInContextFor(name), payload.ResultArtifactPath)
 	if err := l.Conv.Append(ChatMessage{
 		Role:       "tool",
 		Content:    content,
@@ -1756,7 +1763,7 @@ func (l *Loop) finalNoToolsOnMaxTurnsForTurn(opts TurnOptions) bool {
 	return l.FinalNoToolsOnMaxTurns || opts.FinalNoToolsOnMaxTurns
 }
 
-const finalEvidenceDiscipline = `Use only existing tool results. Re-scan the latest successful SourceAccess outputs for requested names, ids, prices, counts, dates, and status labels before declaring any field unavailable. Cite actual fetched_url/browser_rendered_url values as accessed sources; treat requested_url and discovered links as unverified unless a tool result actually read them. A browser_find no-match only means the query was absent from the current rendered page text; do not turn it into a whole-site or whole-dataset absence claim. On dashboard rows that mix global metrics, entity metrics, values, and labels, only pair a numeric value with a metric label when the label/value adjacency or embedded data is explicit; otherwise mark it ambiguous or global. Do not infer project maturity, scale, ranking quality, or market position from a table row number or visible order unless the table's sort column and metric label are explicit.`
+const finalEvidenceDiscipline = `Use only existing tool results. Re-scan the latest successful SourceAccess outputs for requested names, ids, prices, counts, dates, and status labels before declaring any field unavailable. Discovery-only pages (search results, 404/not-found pages, and rendered browser fallbacks that explicitly report discovery-only status) are navigation aids, not evidence. Cite actual fetched_url/browser_rendered_url values as accessed sources; treat requested_url and discovered links as unverified unless a tool result actually read them. A browser_find no-match only means the query was absent from the current rendered page text; do not turn it into a whole-site or whole-dataset absence claim. On dashboard rows that mix global metrics, entity metrics, values, and labels, only pair a numeric value with a metric label when the label/value adjacency or embedded data is explicit; otherwise mark it ambiguous or global. If multiple price-like values are visible, keep them separate and preserve their visible labels, such as title price versus body/top-bar USD price. Do not infer project maturity, scale, ranking quality, or market position from a table row number or visible order unless the table's sort column and metric label are explicit.`
 
 var lengthRecoveryPrompt = `The previous assistant response was cut off while summarizing evidence gathered in this turn.
 

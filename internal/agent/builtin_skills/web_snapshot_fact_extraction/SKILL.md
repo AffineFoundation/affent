@@ -8,4 +8,5 @@ Use this procedure for rendered web-page fact extraction:
 - Do not use shell/curl/python to fetch the same web page when the user asked for browser-based access or when browser_* tools are available.
 - Treat page titles, labels, and values separately. Do not label a nearby number as a metric unless the snapshot gives enough context.
 - When a page exposes multiple price-like values, report them separately with their visible source (for example: title price vs body/top-bar USD price). Do not replace a small title decimal with a nearby large USD value, and do not infer which one is the asset price unless the label says so.
+- When extracting metrics, preserve the exact visible numeric string and unit. Do not round, normalize, or backfill missing precision from memory; if the page is noisy, verify the row label/ticker/id before trusting the number.
 - If the user asks for "all information" on a dynamic site, report the visible overview first and say which extra tabs/pages require separate bounded inspection instead of trying to audit the whole site in one run.

@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -304,6 +305,16 @@ Files inspected:
 			}
 		}
 	})
+	t.Run("control bytes are stripped from visible lines", func(t *testing.T) {
+		report := "## Evidence:\n- accepted:\x00 03:00-04:30 UTC\n- note:\x1b[31mred\x1b[0m\n\nFiles inspected:\n- source-of-truth.md"
+		got := sanitizeSubagentReportForParent(report)
+		if strings.ContainsAny(got, "\x00\x1b") {
+			t.Fatalf("sanitized report still contains control bytes:\n%q", got)
+		}
+		if !strings.Contains(got, "03:00-04:30 UTC") || !strings.Contains(got, "red") {
+			t.Fatalf("sanitized report should preserve visible content:\n%s", got)
+		}
+	})
 	t.Run("chinese excluded conflict heading", func(t *testing.T) {
 		report := `## Evidence:
 - source-of-truth.md: 03:00-04:30 UTC
@@ -557,6 +568,8 @@ func TestWithSubagentSystemGuidance(t *testing.T) {
 		"ordinary web research",
 		"single-page/source extraction",
 		"Use parent tools",
+		"symbol_context",
+		"repo_search",
 	} {
 		if !strings.Contains(got, want) {
 			t.Fatalf("subagent guidance missing parent-tool budget guard %q:\n%s", want, got)
@@ -748,7 +761,7 @@ func TestBuildSubagentRegistry_HasNoWriteAndBoundedNestedSubagent(t *testing.T) 
 		}
 	}
 	// Sanity: the expected read-only set IS present.
-	for _, expected := range []string{"skill", "read_file", "list_files", "shell", "memory", "session_search", "subagent_run"} {
+	for _, expected := range []string{"skill", "read_file", "list_files", "symbol_context", "repo_search", "shell", "memory", "session_search", "subagent_run"} {
 		if !names[expected] {
 			t.Errorf("subagent missing expected read-only tool %q", expected)
 		}
@@ -790,7 +803,7 @@ func TestBuildSubagentRegistry_HonorsOptionalDeps(t *testing.T) {
 		}
 	}
 	// skill / read_file / list_files don't gate on executor — they always exist.
-	for _, always := range []string{"skill", "read_file", "list_files"} {
+	for _, always := range []string{"skill", "read_file", "list_files", "symbol_context", "repo_search"} {
 		if !names[always] {
 			t.Errorf("subagent must always register %q (no gating dep)", always)
 		}
@@ -963,6 +976,66 @@ func TestRunSubagent_DoesNotPolluteParentConversation(t *testing.T) {
 	}
 	if !found {
 		t.Errorf("expected a non-empty subagent transcript under %s; got entries %v", transcripts, entries)
+	}
+}
+
+func TestRunSubagent_DefaultRegistryUsesRepoSearch(t *testing.T) {
+	ws := t.TempDir()
+	if err := os.MkdirAll(filepath.Join(ws, "internal", "agent"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(ws, "internal", "agent", "repo_search.go"), []byte("package agent\n\nfunc repoSearchTool() {}\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	step := 0
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		step++
+		w.Header().Set("Content-Type", "text/event-stream")
+		w.WriteHeader(http.StatusOK)
+		switch step {
+		case 1:
+			var req struct {
+				Tools []struct {
+					Function struct {
+						Name string `json:"name"`
+					} `json:"function"`
+				} `json:"tools"`
+			}
+			raw, _ := io.ReadAll(r.Body)
+			if err := json.Unmarshal(raw, &req); err != nil {
+				t.Fatalf("decode request body: %v", err)
+			}
+			found := false
+			for _, tool := range req.Tools {
+				if tool.Function.Name == "repo_search" {
+					found = true
+				}
+			}
+			if !found {
+				t.Fatalf("child registry missing repo_search; tools=%+v", req.Tools)
+			}
+			_, _ = w.Write([]byte(`data: {"choices":[{"delta":{"role":"assistant","tool_calls":[{"index":0,"id":"c1","type":"function","function":{"name":"repo_search","arguments":"{\"query\":\"repoSearchTool\",\"path\":\"internal/agent\",\"max_results\":3}"}}]},"finish_reason":"tool_calls"}]}` + "\n\n"))
+			_, _ = w.Write([]byte("data: [DONE]\n\n"))
+		default:
+			_, _ = w.Write([]byte(`data: {"choices":[{"delta":{"role":"assistant","content":"Conclusion:\nrepo_search found internal/agent/repo_search.go\nEvidence:\n- repo_search found the implementation file and symbol name repoSearchTool"},"finish_reason":"stop"}]}` + "\n\n"))
+			_, _ = w.Write([]byte("data: [DONE]\n\n"))
+		}
+	}))
+	t.Cleanup(srv.Close)
+
+	out, err := runSubagent(context.Background(), SubagentDeps{
+		LLM:              NewLLMClient(srv.URL, "", "fake"),
+		HostWorkspaceDir: ws,
+		TranscriptDir:    t.TempDir(),
+		Log:              zerolog.Nop(),
+		PerCallTimeout:   5 * time.Second,
+	}, SubagentMode{Name: "explore"}, "find the repo_search implementation", 4)
+	if err != nil {
+		t.Fatalf("runSubagent: %v\n%s", err, out)
+	}
+	if !strings.Contains(out, "repo_search found internal/agent/repo_search.go") {
+		t.Fatalf("subagent should answer from repo_search result; got %s", out)
 	}
 }
 

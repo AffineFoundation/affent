@@ -13,6 +13,8 @@ import (
 	"sort"
 	"strings"
 	"sync"
+
+	"github.com/affinefoundation/affent/internal/textutil"
 )
 
 //go:embed builtin_skills/*/SKILL.md builtin_skills/*/skill.json
@@ -1010,10 +1012,8 @@ func normalizeSkillRequiredTools(in []string) ([]string, error) {
 }
 
 func validateRuntimeSkillSource(source string) error {
-	for _, r := range source {
-		if r < 0x20 || r == 0x7f {
-			return fmt.Errorf("skill source must not contain control characters")
-		}
+	if textutil.ContainsASCIIControlBytes(source) {
+		return fmt.Errorf("skill source must not contain control characters")
 	}
 	return nil
 }

@@ -90,7 +90,8 @@ type DelegationMeta struct {
 	// Always set when DelegationMeta is non-nil.
 	Kind string `json:"kind"`
 	// TaskType is set when Kind == "focused_task" — the run_task tool's
-	// task_type argument (recall, explore, research, verify, review).
+	// task_type argument (recall, explore, web_extract, research, verify,
+	// review).
 	TaskType string `json:"task_type,omitempty"`
 	// Mode is set when Kind == "subagent" — the subagent_run tool's
 	// mode argument (explore, review, test, research, ...).

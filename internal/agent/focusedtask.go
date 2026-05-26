@@ -54,11 +54,12 @@ const (
 type FocusedTaskKind string
 
 const (
-	FocusedTaskRecall   FocusedTaskKind = "recall"
-	FocusedTaskExplore  FocusedTaskKind = "explore"
-	FocusedTaskResearch FocusedTaskKind = "research"
-	FocusedTaskVerify   FocusedTaskKind = "verify"
-	FocusedTaskReview   FocusedTaskKind = "review"
+	FocusedTaskRecall     FocusedTaskKind = "recall"
+	FocusedTaskExplore    FocusedTaskKind = "explore"
+	FocusedTaskWebExtract FocusedTaskKind = "web_extract"
+	FocusedTaskResearch   FocusedTaskKind = "research"
+	FocusedTaskVerify     FocusedTaskKind = "verify"
+	FocusedTaskReview     FocusedTaskKind = "review"
 )
 
 // FocusedTaskToolPolicy declares which capability classes a focused-
@@ -70,6 +71,8 @@ const (
 type FocusedTaskToolPolicy struct {
 	AllowReadFile      bool
 	AllowListFiles     bool
+	AllowSymbolContext bool // gated on HostWorkspaceDir
+	AllowRepoSearch    bool // gated on HostWorkspaceDir
 	AllowReadOnlyShell bool // gated on Executor
 	AllowMemory        bool // read-only memory; gated on Memory store
 	AllowSessionSearch bool // gated on SessionsDir
@@ -78,7 +81,7 @@ type FocusedTaskToolPolicy struct {
 }
 
 func (p FocusedTaskToolPolicy) anyAllowed() bool {
-	return p.AllowReadFile || p.AllowListFiles || p.AllowReadOnlyShell ||
+	return p.AllowReadFile || p.AllowListFiles || p.AllowSymbolContext || p.AllowRepoSearch || p.AllowReadOnlyShell ||
 		p.AllowMemory || p.AllowSessionSearch || p.AllowWeb || p.AllowBrowser
 }
 
@@ -137,12 +140,13 @@ func (r *FocusedTaskProfileRegistry) Profiles() []FocusedTaskProfile {
 
 // DefaultFocusedTaskProfileRegistry returns the canonical built-in
 // profile set. Order matters for trace UIs and the schema enum:
-// recall → explore → research → verify → review reads as a progression
-// from "look it up" to "make a judgment".
+// recall → explore → web_extract → research → verify → review reads
+// as a progression from "look it up" to "make a judgment".
 func DefaultFocusedTaskProfileRegistry() *FocusedTaskProfileRegistry {
 	r := &FocusedTaskProfileRegistry{}
 	r.Register(recallProfile())
 	r.Register(exploreProfile())
+	r.Register(webExtractProfile())
 	r.Register(researchProfile())
 	r.Register(verifyProfile())
 	r.Register(reviewProfile())
@@ -212,13 +216,14 @@ func (d FocusedTaskDeps) resolveProfileRegistry() *FocusedTaskProfileRegistry {
 // ProfileAvailable logic, so live-wiring and diagnostic-wiring can
 // never drift on which capabilities count for which profile.
 type FocusedTaskAvailabilityProbe struct {
-	HasLLM       bool
-	HasWorkspace bool
-	HasExecutor  bool
-	HasMemory    bool
-	HasSessions  bool
-	HasWeb       bool
-	HasBrowser   bool
+	HasLLM           bool
+	HasWorkspace     bool
+	HasExecutor      bool
+	HasMemory        bool
+	HasSessions      bool
+	HasWeb           bool
+	HasBrowser       bool
+	HasSymbolContext bool
 }
 
 // ProfileAvailable reports whether at least one capability the
@@ -229,6 +234,8 @@ func (p FocusedTaskAvailabilityProbe) ProfileAvailable(profile FocusedTaskProfil
 	pol := profile.Tools
 	return (pol.AllowReadFile && p.HasWorkspace) ||
 		(pol.AllowListFiles && p.HasWorkspace) ||
+		(pol.AllowSymbolContext && p.HasWorkspace) ||
+		(pol.AllowRepoSearch && p.HasWorkspace) ||
 		(pol.AllowReadOnlyShell && p.HasExecutor) ||
 		(pol.AllowMemory && p.HasMemory) ||
 		(pol.AllowSessionSearch && p.HasSessions) ||
@@ -263,13 +270,14 @@ func (p FocusedTaskAvailabilityProbe) AvailableKinds(reg *FocusedTaskProfileRegi
 // having to invent stub LLM / executor / memory values.
 func (d FocusedTaskDeps) Probe() FocusedTaskAvailabilityProbe {
 	return FocusedTaskAvailabilityProbe{
-		HasLLM:       d.LLM != nil,
-		HasWorkspace: d.HostWorkspaceDir != "",
-		HasExecutor:  d.Executor != nil,
-		HasMemory:    d.Memory != nil,
-		HasSessions:  d.SessionsDir != "",
-		HasWeb:       d.RegisterWebTools != nil,
-		HasBrowser:   d.RegisterBrowserTools != nil,
+		HasLLM:           d.LLM != nil,
+		HasWorkspace:     d.HostWorkspaceDir != "",
+		HasExecutor:      d.Executor != nil,
+		HasMemory:        d.Memory != nil,
+		HasSessions:      d.SessionsDir != "",
+		HasWeb:           d.RegisterWebTools != nil,
+		HasBrowser:       d.RegisterBrowserTools != nil,
+		HasSymbolContext: d.HostWorkspaceDir != "",
 	}
 }
 
@@ -461,9 +469,16 @@ func buildFocusedTaskRegistry(ctx context.Context, deps FocusedTaskDeps, profile
 
 	if profile.Tools.AllowReadFile {
 		reg.Add(subagentReadFileTool(bd))
+		reg.Add(fileContextTool(bd))
 	}
 	if profile.Tools.AllowListFiles {
 		reg.Add(subagentListFilesTool(bd))
+	}
+	if profile.Tools.AllowSymbolContext && deps.HostWorkspaceDir != "" {
+		reg.Add(symbolContextTool(bd))
+	}
+	if profile.Tools.AllowRepoSearch && deps.HostWorkspaceDir != "" {
+		reg.Add(repoSearchTool(bd))
 	}
 	if profile.Tools.AllowReadOnlyShell && deps.Executor != nil {
 		reg.Add(readOnlyShellTool(bd))
@@ -510,6 +525,7 @@ func buildFocusedTaskRegistry(ctx context.Context, deps FocusedTaskDeps, profile
 func focusedTaskToolDescription(available []FocusedTaskProfile) string {
 	var b strings.Builder
 	hasResearch := false
+	hasWebExtract := false
 	var useCases []string
 	for _, p := range available {
 		switch p.Kind {
@@ -517,6 +533,9 @@ func focusedTaskToolDescription(available []FocusedTaskProfile) string {
 			useCases = append(useCases, "recall prior context")
 		case FocusedTaskExplore:
 			useCases = append(useCases, "explore the workspace")
+		case FocusedTaskWebExtract:
+			useCases = append(useCases, "extract facts from web pages")
+			hasWebExtract = true
 		case FocusedTaskResearch:
 			useCases = append(useCases, "research external facts")
 			hasResearch = true
@@ -542,8 +561,8 @@ func focusedTaskToolDescription(available []FocusedTaskProfile) string {
 		b.WriteString(p.Description)
 	}
 	b.WriteString(". The child has its own bounded tool set")
-	if hasResearch {
-		b.WriteString(" (read-only for recall/explore/verify/review; registered external lookup tools for research)")
+	if hasResearch || hasWebExtract {
+		b.WriteString(" (read-only for recall/explore/verify/review; registered external lookup tools for web_extract/research)")
 	} else {
 		b.WriteString(" (read-only for recall/explore/verify/review)")
 	}
@@ -613,7 +632,7 @@ func withFocusedTaskSystemGuidanceForTool(prompt string, tool *Tool) string {
 
 func focusedTaskSystemGuidance(kinds []FocusedTaskKind) string {
 	if len(kinds) == 0 {
-		kinds = []FocusedTaskKind{FocusedTaskRecall, FocusedTaskExplore, FocusedTaskResearch, FocusedTaskVerify, FocusedTaskReview}
+		kinds = []FocusedTaskKind{FocusedTaskRecall, FocusedTaskExplore, FocusedTaskWebExtract, FocusedTaskResearch, FocusedTaskVerify, FocusedTaskReview}
 	}
 	available := map[FocusedTaskKind]bool{}
 	var names []string
@@ -637,9 +656,16 @@ func focusedTaskSystemGuidance(kinds []FocusedTaskKind) string {
 	}
 	if available[FocusedTaskExplore] {
 		b.WriteString("\n- Trigger explore when you don't already know which files implement the change and you'd otherwise list directories or read many files just to orient.")
+		b.WriteString("\n- Use symbol_context before repo_search when you know the likely symbol or declaration. Use repo_search before broad shell rg/find/grep sweeps when you know the likely topic but not the exact file.")
+	}
+	if available[FocusedTaskWebExtract] {
+		b.WriteString("\n- Trigger web_extract when you already have one page or a very small bounded set of pages to inspect and the goal is to extract compact evidence without flooding this turn's context with raw page text.")
+		b.WriteString("\n- Use web_extract before broader research when the user wants facts from specific pages, dashboards, docs, or articles. Keep the objective narrow: one domain, one route, or one bounded page set.")
 	}
 	if available[FocusedTaskResearch] {
 		b.WriteString("\n- Trigger research only when external fact-gathering must be isolated from the parent context or would require many noisy source inspections. For ordinary current-fact questions, use available web/browser tools directly and answer once enough evidence is gathered.")
+		b.WriteString("\n- Use research for discovery and synthesis across multiple sources. Use web_extract for page-by-page reading when you already know which pages matter and want to keep raw content out of the parent context.")
+		b.WriteString("\n- When a task is bounded to one or a few pages but each page is long, dynamic, or noisy, prefer delegating page reading to run_task(web_extract) first so the parent keeps only compact findings instead of raw page dumps.")
 		b.WriteString("\n- For short-name market or trend requests, start discovery with the parent ecosystem, the entity name or ticker, and the metric intent (price, market cap, volume, TVL, stake, emission). If the first pass is noisy, refine once with the official domain or known ids/synonyms rather than repeating the bare name.")
 		b.WriteString("\n- If a visible list or table already shows the target entity row, use that exact row label, ticker, or id as the next query or stop if the source is sufficient. Do not keep broadening with the bare entity name once the row is in view.")
 	}
@@ -794,6 +820,26 @@ var focusedTaskDelegationPhrases = []string{
 //     the child what good output looks like for THIS kind specifically.
 // -----------------------------------------------------------------------------
 
+func webExtractProfile() FocusedTaskProfile {
+	return FocusedTaskProfile{
+		Kind:            FocusedTaskWebExtract,
+		Description:     "read one or a few web pages and extract compact cited facts without flooding the parent context. Read-only.",
+		DefaultMaxTurns: 4,
+		Tools: FocusedTaskToolPolicy{
+			AllowWeb:     true,
+			AllowBrowser: true,
+		},
+		SystemPromptHints: `web_extract hints:
+- Treat the objective as page-level extraction, not open-ended browsing. Stay on one page or a very small bounded set of pages unless the user explicitly asked for breadth.
+- Each finding's "source" must be the exact URL you read. Keep compact evidence short and factual; do not copy entire page bodies into findings.
+- When extracting numbers, quote the exact visible value and unit from the page. Do not round, normalize, recompute, or infer missing decimals; if the value is ambiguous, record the ambiguity in warnings or not_found instead of guessing.
+- Prefer canonical docs, APIs, llms.txt, export endpoints, or stable article URLs over search result pages, app shells, and dashboard landing pages.
+- If the first page is a search result or navigation hub, open only the 1-3 highest-value result URLs or direct links, then stop once you have enough evidence.
+- When a page exposes the needed fields directly, extract those fields and return. Do not scroll around looking for more unless the objective requires it.
+- If the requested page is inaccessible or the page body is thin, record the gap in warnings or not_found rather than broadening into unrelated discovery.`,
+	}
+}
+
 func recallProfile() FocusedTaskProfile {
 	return FocusedTaskProfile{
 		Kind:            FocusedTaskRecall,
@@ -819,11 +865,13 @@ func exploreProfile() FocusedTaskProfile {
 		Tools: FocusedTaskToolPolicy{
 			AllowReadFile:      true,
 			AllowListFiles:     true,
+			AllowSymbolContext: true,
+			AllowRepoSearch:    true,
 			AllowReadOnlyShell: true,
 			AllowSessionSearch: true,
 		},
 		SystemPromptHints: `explore hints:
-- Prefer list_files and read_file. If a guarded shell tool is registered, use rg/find/grep only when the file location is not obvious from listing; otherwise navigate via list_files + read_file alone.
+- Prefer list_files, symbol_context, file_context, and repo_search first. If a guarded shell tool is registered, use rg/find/grep only when symbol_context, file_context, repo_search, and listing are not enough; otherwise navigate via list_files + file_context + read_file alone.
 - Each finding's "source" must be a workspace-relative file path, ideally with a line number (e.g., "internal/agent/loop.go:142").
 - Cap "findings" at the smallest set that answers the objective. If the objective is broader than ~10 files, surface a warning and propose a narrower next step in suggested_next instead of reading everything.
 - Do not open files outside the workspace. Do not modify any file.`,
@@ -847,6 +895,7 @@ func researchProfile() FocusedTaskProfile {
 - If a lookup result marks a URL with a Direct-reader warning, do not spend direct page-reading calls on that URL; treat the snippet as weak discovery/sentiment or choose a canonical source URL instead.
 - If a browser lookup returns a search result page, treat snippets as discovery only. Open the 1-3 highest-value visible result URLs (official, primary, metrics, docs, or source repositories) before refining the search, and do not cite snippets as verified facts.
 - If a fetched source returns Embedded data preview, treat matching fields as page-source evidence for the requested entity or route; ignore unrelated shell metadata, and prefer a canonical API/text/export source when the embedded data is insufficient or ambiguous.
+- When the task asks for prices, market caps, volume, or similar metrics, keep the exact numeric string and unit you saw. Do not round or backfill missing precision from memory; if the page is noisy, verify the row label/ticker/id before trusting the number.
 - On dynamic metric/dashboard/detail pages, especially for market, trend, subnet, token, company, or product status questions, use targeted visible-field searches before scrolling, clicking tabs, or declaring metrics unavailable. Search for missing labels such as "price market cap FDV volume supply TVL", "24h 7d volume market cap", or "validators miners stake emission" rather than repeating only the entity name after the page already identifies it.
 - Preserve user-provided disambiguators when discovering sources and evaluating evidence: ecosystem or parent project, ticker, network/subnet id, official domain, version, geography, and date range. If a short name is ambiguous, resolve the entity before collecting metrics or sentiment.
 - For short-name market or trend requests, start discovery with the parent ecosystem, the entity name or ticker, and the metric intent (price, market cap, volume, TVL, stake, emission). If the first pass is noisy, refine once with the official domain or known ids/synonyms rather than repeating the bare name.
@@ -868,11 +917,13 @@ func verifyProfile() FocusedTaskProfile {
 		Tools: FocusedTaskToolPolicy{
 			AllowReadFile:      true,
 			AllowListFiles:     true,
+			AllowSymbolContext: true,
+			AllowRepoSearch:    true,
 			AllowReadOnlyShell: true,
 			AllowSessionSearch: true,
 		},
 		SystemPromptHints: `verify hints:
-- Run the SMALLEST check that resolves the claim: one targeted file inspection, or (if a guarded shell tool is registered) one test or symbol grep. Stop after the first decisive result.
+- Run the SMALLEST check that resolves the claim: one targeted file inspection, or (if a guarded shell tool is registered) one test or symbol grep. Use symbol_context before repo_search when you know the likely symbol or declaration, use file_context before read_file when the target file is long or noisy, and use repo_search before broad shell rg/find/grep when you know the likely file or topic but not the exact path. Stop after the first decisive result.
 - "ok": true means the claim was VERIFIED. "ok": false means the claim was FALSIFIED. If you could not run the check (missing tool, file gone), keep ok=true and surface the gap in warnings + not_found instead of fabricating a pass/fail.
 - Every finding must cite either the file:line consulted or, when a shell tool is registered, the shell command plus an excerpt of its output with exit code.
 - Do not propose code fixes. Verification is not repair — the parent agent decides whether to act.`,
@@ -887,6 +938,8 @@ func reviewProfile() FocusedTaskProfile {
 		Tools: FocusedTaskToolPolicy{
 			AllowReadFile:      true,
 			AllowListFiles:     true,
+			AllowSymbolContext: true,
+			AllowRepoSearch:    true,
 			AllowReadOnlyShell: true,
 			AllowSessionSearch: true,
 		},
@@ -894,7 +947,7 @@ func reviewProfile() FocusedTaskProfile {
 - "findings" are RISKS, not summaries. Each must include "severity" set to low, medium, or high.
 - "not_found" lists tests, validation, or edge-case coverage that is MISSING for the change under review.
 - "suggested_next" lists at most three highest-leverage follow-ups, one fix per item.
-- Inspect ONLY the named change/files and one level of caller context. Do not propose unrelated refactors.
+- Inspect ONLY the named change/files and one level of caller context. Use symbol_context before repo_search when the change names symbols or modules but not exact files. Use file_context before read_file on large files. Do not propose unrelated refactors.
 - If you found no risks, say so via summary and an empty findings list, and use warnings to record residual uncertainty (e.g., "concurrent caller paths not yet exercised").`,
 	}
 }

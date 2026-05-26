@@ -16,6 +16,7 @@ import (
 
 	"github.com/affinefoundation/affent/internal/memory"
 	"github.com/affinefoundation/affent/internal/sse"
+	"github.com/affinefoundation/affent/internal/textutil"
 	"github.com/rs/zerolog"
 )
 
@@ -47,6 +48,8 @@ func TestDefaultSystemPromptReflectsRuntimeBudgets(t *testing.T) {
 		fmt.Sprintf("After %d tool calls", DefaultMaxTurnSteps/2),
 		fmt.Sprintf("past %d calls", DefaultMaxTurnSteps*4/5),
 		fmt.Sprintf("~%dKB", MaxToolResultBytesInContext/1024),
+		"symbol_context",
+		"repo_search",
 		"Match the user's language",
 		"Chinese, answer in Chinese",
 	} {
@@ -210,6 +213,7 @@ func TestFinalNoToolsPromptsRequireEvidenceRescan(t *testing.T) {
 			"Re-scan the latest successful SourceAccess outputs",
 			"prices, counts, dates",
 			"before declaring any field unavailable",
+			"Discovery-only pages (search results, 404/not-found pages",
 			"actual fetched_url/browser_rendered_url",
 			"requested_url and discovered links as unverified",
 			"Do not infer project maturity, scale, ranking quality",
@@ -221,12 +225,33 @@ func TestFinalNoToolsPromptsRequireEvidenceRescan(t *testing.T) {
 	}
 }
 
+func TestFinalEvidenceDisciplineRejectsDiscoveryOnlyPages(t *testing.T) {
+	for _, want := range []string{
+		"Discovery-only pages (search results, 404/not-found pages",
+		"Re-scan the latest successful SourceAccess outputs",
+		"before declaring any field unavailable",
+	} {
+		if !strings.Contains(finalEvidenceDiscipline, want) {
+			t.Fatalf("final evidence discipline missing %q:\n%s", want, finalEvidenceDiscipline)
+		}
+	}
+}
+
 func TestFinalEvidenceDigestExtractsRecentVerifiedMetrics(t *testing.T) {
 	msgs := []ChatMessage{
 		{
 			Role:    "tool",
 			Name:    "browser_navigate",
 			Content: "SourceAccess: browser_rendered_url=https://duckduckgo.com/?q=affine; snapshot_id=1; page_text_below=search_results_discovery_only\nURL: https://duckduckgo.com/?q=affine\nTITLE: search\n[text span] ignored result snippet with Price $999\n",
+		},
+		{
+			Role: "tool",
+			Name: "browser_navigate",
+			Content: "SourceAccess: browser_rendered_url=https://example.test/missing; snapshot_id=2; page_text_below=not_found_page_discovery_only; links_in_snapshot=discovered_unverified_until_opened\n" +
+				"URL: https://example.test/missing\n" +
+				"TITLE: 404 - Page Not Found\n" +
+				"PAGE TEXT:\n" +
+				"[text p] use the navigation links to reach /docs or /subnets\n",
 		},
 		{
 			Role: "tool",
@@ -261,6 +286,42 @@ func TestFinalEvidenceDigestExtractsRecentVerifiedMetrics(t *testing.T) {
 	}
 	if strings.Contains(got, "ignored result snippet") {
 		t.Fatalf("digest should skip discovery-only search result pages:\n%s", got)
+	}
+	if strings.Contains(got, "page_text_below=not_found_page_discovery_only") || strings.Contains(got, "use the navigation links to reach /docs or /subnets") {
+		t.Fatalf("digest should skip discovery-only 404 pages:\n%s", got)
+	}
+}
+
+func TestFinalEvidenceDigestSkipsRenderedBrowserDiscoveryOnlyFallbacks(t *testing.T) {
+	msgs := []ChatMessage{
+		{
+			Role: "tool",
+			Name: "web_fetch",
+			Content: "SourceAccess: fetched_url=https://example.test/missing; requested_url=https://example.test/missing?q=affine; mode=rendered_browser_fallback; linked_urls_in_content=discovered_unverified_until_fetched; rendered_browser_source_status=not_found_page_discovery_only\n" +
+				"[rendered browser fallback succeeded: URL=https://example.test/missing, DirectFetchReason=\"not_found\"]\n" +
+				"SourceAccess: browser_rendered_url=https://example.test/missing; snapshot_id=21; page_text_below=not_found_page_discovery_only; links_in_snapshot=discovered_unverified_until_opened\n" +
+				"URL: https://example.test/missing\n" +
+				"TITLE: 404 - Page Not Found\n" +
+				"PAGE TEXT:\n" +
+				"[text p] use the navigation links to reach /docs or /subnets\n",
+		},
+	}
+	got := finalEvidenceDigest(msgs)
+	if got != "" {
+		t.Fatalf("digest should skip rendered-browser discovery-only fallbacks entirely, got:\n%s", got)
+	}
+}
+
+func TestNormalizeFinalEvidenceLine_CompactsWhitespaceAndTruncates(t *testing.T) {
+	got := normalizeFinalEvidenceLine("  hello \n\t world  " + strings.Repeat("你", 300))
+	if strings.ContainsAny(got, "\n\t") {
+		t.Fatalf("normalizeFinalEvidenceLine should compact whitespace, got %q", got)
+	}
+	if !strings.HasPrefix(got, "hello world") {
+		t.Fatalf("normalizeFinalEvidenceLine lost leading content: %q", got)
+	}
+	if len(got) > 523 {
+		t.Fatalf("normalizeFinalEvidenceLine too long: %d", len(got))
 	}
 }
 
@@ -297,6 +358,32 @@ func TestFinalEvidenceDigestPrioritizesMetricEvidenceOverRecentLowValuePages(t *
 		if !strings.Contains(got, want) {
 			t.Fatalf("digest missing %q:\n%s", want, got)
 		}
+	}
+}
+
+func TestFinalEvidenceDigestPreservesMultiplePriceLikeValuesSeparately(t *testing.T) {
+	msgs := []ChatMessage{
+		{
+			Role: "tool",
+			Name: "browser_snapshot",
+			Content: "SourceAccess: browser_rendered_url=https://www.tao.app/subnets/120?active_tab=about; snapshot_id=14; page_text_below=verified_page_evidence\n" +
+				"URL: https://www.tao.app/subnets/120?active_tab=about\n" +
+				"TITLE: SN120 - Affine | TAO.app | Your Gateway to Bittensor\n" +
+				"[text span] TAO Price $ 277.32 -1.02 % 1D Vol $ 168.66M -39 % MC $ 3.03B FDV $ 5.82B Circ. Supply 10.94M\n" +
+				"[text div] Price 0.06342 T/ d L: 0.060 T H: 0.086 T Market Cap 201.04K T FDV 1.32M T\n",
+		},
+	}
+	got := finalEvidenceDigest(msgs)
+	for _, want := range []string{"TAO Price $ 277.32", "Price 0.06342 T", "Market Cap 201.04K T", "MC $ 3.03B", "FDV 1.32M T"} {
+		if !strings.Contains(got, want) {
+			t.Fatalf("digest missing %q:\n%s", want, got)
+		}
+	}
+	if !strings.Contains(got, "Metric caution: multiple price-like values are visible in this source") {
+		t.Fatalf("digest should explicitly warn about multiple price-like values:\n%s", got)
+	}
+	if strings.Contains(got, "Price 277.32") && !strings.Contains(got, "TAO Price $ 277.32") {
+		t.Fatalf("digest should preserve the visible label on the larger price-like value:\n%s", got)
 	}
 }
 
@@ -431,7 +518,7 @@ func TestExternalResearchGuidanceMatchesToolSurface(t *testing.T) {
 				"Prefer Bing, DuckDuckGo, or site search over Google",
 				"stale_ref",
 			},
-			forbidden: []string{"web_search", "search results", "browser tools"},
+			forbidden: []string{"web_search", "browser tools"},
 		},
 		{
 			name:    "browser only",
@@ -1169,10 +1256,10 @@ func TestPublish_NilEventsIsSilent(t *testing.T) {
 func TestPreviewN_UTF8Safe(t *testing.T) {
 	in := "héllo wörld" // 'é' and 'ö' are each 2 bytes
 	for n := 1; n < len(in); n++ {
-		out := previewN(in, n)
+		out := textutil.Preview(in, n)
 		cut := strings.TrimSuffix(out, "...")
 		if !utf8.ValidString(cut) {
-			t.Fatalf("previewN(%q, %d) produced invalid UTF-8 prefix: %q", in, n, cut)
+			t.Fatalf("textutil.Preview(%q, %d) produced invalid UTF-8 prefix: %q", in, n, cut)
 		}
 	}
 }
@@ -1222,12 +1309,12 @@ func TestLoopToolResultContextBudgetDefaultAndOverride(t *testing.T) {
 
 func TestToolResultContextBudgetExhaustionPreservesEvidenceHead(t *testing.T) {
 	budget := newToolResultContextBudget(1)
-	first, omitted := budget.truncateToolResult("browser_navigate", "x", 1024)
+	first, omitted := budget.truncateToolResult("browser_navigate", "x", 1024, "")
 	if first != "x" || omitted != 0 {
 		t.Fatalf("first result = %q omitted=%d, want exact fit", first, omitted)
 	}
 	payload := "SourceAccess: browser_rendered_url=https://example.com/report; snapshot_id=4; page_text_below=verified_page_evidence; links_in_snapshot=discovered_unverified_until_opened\nURL: https://example.com/report\nTITLE: Report\nSNAPSHOT_ID: 4\n\nPAGE TEXT:\np: useful evidence\n" + strings.Repeat("z", 2048)
-	second, omitted := budget.truncateToolResult("browser_navigate", payload, 4096)
+	second, omitted := budget.truncateToolResult("browser_navigate", payload, 4096, "")
 	for _, want := range []string{
 		"SourceAccess: browser_rendered_url=https://example.com/report",
 		"URL: https://example.com/report",
@@ -1246,13 +1333,13 @@ func TestToolResultContextBudgetExhaustionPreservesEvidenceHead(t *testing.T) {
 func TestToolResultContextBudgetCompactsRepeatedBrowserPageReads(t *testing.T) {
 	budget := newToolResultContextBudget(16 * 1024)
 	payload := "SourceAccess: browser_rendered_url=https://example.com/report; snapshot_id=4; page_text_below=verified_page_evidence; links_in_snapshot=discovered_unverified_until_opened\nURL: https://example.com/report\nTITLE: Report\nSNAPSHOT_ID: 4\n\nPAGE TEXT:\np: useful evidence\n" + strings.Repeat("first ", 1000)
-	first, omitted := budget.truncateToolResult("browser_navigate", payload, 4*1024)
+	first, omitted := budget.truncateToolResult("browser_navigate", payload, 4*1024, "")
 	if omitted <= 0 || !strings.Contains(first, "first first") {
 		t.Fatalf("first browser read should use normal per-tool truncation, omitted=%d:\n%s", omitted, first)
 	}
 
 	repeatedPayload := "SourceAccess: browser_rendered_url=https://example.com/report; snapshot_id=5; page_text_below=verified_page_evidence; links_in_snapshot=discovered_unverified_until_opened\nURL: https://example.com/report\nTITLE: Report\nSNAPSHOT_ID: 5\n\nPAGE TEXT:\np: useful evidence again\n" + strings.Repeat("repeat ", 1000)
-	second, omitted := budget.truncateToolResult("browser_snapshot", repeatedPayload, 4*1024)
+	second, omitted := budget.truncateToolResult("browser_snapshot", repeatedPayload, 4*1024, "")
 	for _, want := range []string{
 		"SourceAccess: browser_rendered_url=https://example.com/report",
 		"URL: https://example.com/report",
@@ -1271,7 +1358,7 @@ func TestToolResultContextBudgetCompactsRepeatedBrowserPageReads(t *testing.T) {
 func TestTruncateToolResultForContextGuidanceByTool(t *testing.T) {
 	payload := strings.Repeat("x", 256)
 
-	browser := truncateToolResultForContext("browser_snapshot", payload, 32)
+	browser := truncateToolResultForContext("browser_snapshot", payload, 32, "")
 	for _, want := range []string{"browser_snapshot", "browser_find", "broad page snapshots"} {
 		if !strings.Contains(browser, want) {
 			t.Fatalf("browser truncation guidance missing %q:\n%s", want, browser)
@@ -1281,14 +1368,14 @@ func TestTruncateToolResultForContextGuidanceByTool(t *testing.T) {
 		t.Fatalf("browser truncation guidance should not suggest shell piping:\n%s", browser)
 	}
 
-	web := truncateToolResultForContext("web_fetch", payload, 32)
+	web := truncateToolResultForContext("web_fetch", payload, 32, "")
 	for _, want := range []string{"web_fetch", "specific API/text/source URL", "verified evidence"} {
 		if !strings.Contains(web, want) {
 			t.Fatalf("web_fetch truncation guidance missing %q:\n%s", want, web)
 		}
 	}
 
-	shell := truncateToolResultForContext("shell", payload, 32)
+	shell := truncateToolResultForContext("shell", payload, 32, "")
 	if !strings.Contains(shell, "head/tail/grep/sed") {
 		t.Fatalf("shell truncation should keep command-oriented guidance:\n%s", shell)
 	}

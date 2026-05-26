@@ -14,6 +14,7 @@ import (
 	"github.com/affinefoundation/affent/internal/executor"
 	"github.com/affinefoundation/affent/internal/memory"
 	"github.com/affinefoundation/affent/internal/sse"
+	"github.com/affinefoundation/affent/internal/textutil"
 	"github.com/google/uuid"
 	"github.com/rs/zerolog"
 )
@@ -610,7 +611,10 @@ func buildSubagentRegistry(deps SubagentDeps) *Registry {
 	bd := BuiltinDeps{Executor: deps.Executor, HostWorkspaceDir: deps.HostWorkspaceDir}
 	reg.Add(skillTool(builtinSkillProviderRegistry, "", nil))
 	reg.Add(subagentReadFileTool(bd))
+	reg.Add(fileContextTool(bd))
 	reg.Add(subagentListFilesTool(bd))
+	reg.Add(symbolContextTool(bd))
+	reg.Add(repoSearchTool(bd))
 	if deps.Executor != nil {
 		reg.Add(readOnlyShellTool(bd))
 	}
@@ -790,6 +794,7 @@ func sanitizeSubagentReportForParent(report string) string {
 	skipping := false
 	omitted := false
 	for _, line := range lines {
+		line = textutil.StripASCIIControls(line)
 		trimmed := strings.TrimSpace(line)
 		lower := strings.ToLower(trimmed)
 		if startsRejectedCandidateSection(lower) {
@@ -886,6 +891,7 @@ func looksRejectedDetailLine(lower string) bool {
 }
 
 func sanitizedRejectedDetailLine(line string) string {
+	line = textutil.StripASCIIControls(line)
 	if strings.HasPrefix(strings.TrimSpace(line), "|") {
 		cells := strings.Split(line, "|")
 		if len(cells) > 2 {
@@ -967,7 +973,7 @@ func incompleteSubagentReport(reason string, toolCalls []subagentToolCall) strin
 			b.WriteString(call.Tool)
 			if len(call.Args) > 0 {
 				b.WriteString(" ")
-				b.WriteString(previewN(formatSubagentArgs(call.Args), 240))
+				b.WriteString(textutil.Preview(formatSubagentArgs(call.Args), 240))
 			}
 			if call.ExitCode != 0 {
 				b.WriteString(" (exit ")
@@ -1018,7 +1024,7 @@ func successfulSubagentResultSummaries(toolCalls []subagentToolCall) []string {
 			} else if command, _ := call.Args["command"].(string); command != "" {
 				item += " " + command
 			}
-			item += ": " + previewN(strings.TrimSpace(call.ResultSummary), 500)
+			item += ": " + textutil.Preview(strings.TrimSpace(call.ResultSummary), 500)
 			out = append(out, item)
 		}
 		if len(out) >= 8 {
@@ -1122,7 +1128,7 @@ func subagentSystemPromptFor(mode SubagentMode, regs ...*Registry) string {
 Rules:
 - Return evidence, not broad plans.
 - Use only the tools needed to answer the assigned task.
-- Prefer direct inspection of likely files over repository-wide search. Avoid broad find/grep sweeps when the task already names files, symbols, or modules.
+- Prefer direct inspection of likely files over broad repository-wide search. Use symbol_context, file_context, repo_search, or a narrow list_files pass before broad find/grep sweeps when the task already names files, symbols, or modules.
 - Stop once you have enough evidence for a useful answer. Do not spend the whole budget just to make the review exhaustive.
 - If a tool result says a tool or turn budget was reached, immediately produce the final report from the evidence already gathered.
 - Do not modify files. You have no write/edit tools.

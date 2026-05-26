@@ -19,6 +19,8 @@ func TestBuiltinSkillProvider_WebSnapshotTriggers(t *testing.T) {
 		"Do not use shell/curl/python",
 		"Treat page titles, labels, and values separately",
 		"multiple price-like values",
+		"preserve the exact visible numeric string and unit",
+		"Do not round, normalize, or backfill missing precision",
 	} {
 		if !strings.Contains(got, want) {
 			t.Fatalf("skill output missing %q:\n%s", want, got)
@@ -81,6 +83,15 @@ func TestBuiltinSkillBodiesLoadFromEmbeddedFiles(t *testing.T) {
 		}
 		if !strings.Contains(string(raw), tc.marker) {
 			t.Fatalf("embedded skill %s missing marker %q", tc.name, tc.marker)
+		}
+	}
+	raw, err := builtinSkillFS.ReadFile("builtin_skills/web_snapshot_fact_extraction/SKILL.md")
+	if err != nil {
+		t.Fatalf("embedded web_snapshot_fact_extraction skill should be readable: %v", err)
+	}
+	for _, want := range []string{"preserve the exact visible numeric string and unit", "Do not round, normalize, or backfill missing precision"} {
+		if !strings.Contains(string(raw), want) {
+			t.Fatalf("embedded web_snapshot_fact_extraction skill missing %q", want)
 		}
 	}
 }

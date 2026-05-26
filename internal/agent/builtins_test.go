@@ -114,7 +114,7 @@ func TestRegisterBuiltins_DisableSkillOmitsSkillToolOnly(t *testing.T) {
 	if _, ok := r.Get(SkillToolName); ok {
 		t.Fatal("skill tool should be omitted when DisableSkill is true")
 	}
-	for _, name := range []string{"shell", "read_file", "write_file", "edit_file", "list_files"} {
+	for _, name := range []string{"shell", "read_file", "file_context", "write_file", "edit_file", "list_files", "symbol_context", "repo_search"} {
 		if _, ok := r.Get(name); !ok {
 			t.Fatalf("%s should still be registered when only skill is disabled", name)
 		}
