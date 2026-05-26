@@ -1167,8 +1167,23 @@ func TestWriteScenarioDebugArtifactsIndexesTraceAndFinalText(t *testing.T) {
 			ToolContextTruncated:       2,
 			ToolContextOmittedBytes:    8192,
 		},
-		ContextCompactions: ContextCompactionStats{Count: 1, Reactive: 1, RemovedMessages: 12, SummaryBytes: 512},
-		Usage:              Usage{InputTokens: 100, OutputTokens: 20},
+		ContextCompactions: ContextCompactionStats{
+			Count:           1,
+			Reactive:        1,
+			RemovedMessages: 12,
+			SummaryBytes:    512,
+			Examples: []ContextCompaction{{
+				TurnID:          "turn-debug",
+				BeforeMessages:  30,
+				AfterMessages:   12,
+				RemovedMessages: 18,
+				Reactive:        true,
+				Reason:          "context_overflow",
+				SummaryPresent:  true,
+				SummaryBytes:    512,
+			}},
+		},
+		Usage: Usage{InputTokens: 100, OutputTokens: 20},
 		RuntimeSurface: &sse.RuntimeSurfacePayload{
 			TurnID:    "turn-debug",
 			ToolCount: 2,
@@ -1320,6 +1335,13 @@ func TestWriteScenarioDebugArtifactsIndexesTraceAndFinalText(t *testing.T) {
 		manifest.MemoryUpdateExamples[1].Action != "add" ||
 		manifest.MemoryUpdateExamples[1].Location != "memory:research" {
 		t.Fatalf("manifest memory update examples = %+v", manifest.MemoryUpdateExamples)
+	}
+	if len(manifest.ContextCompactionExamples) != 1 ||
+		manifest.ContextCompactionExamples[0].TurnID != "turn-debug" ||
+		!manifest.ContextCompactionExamples[0].Reactive ||
+		manifest.ContextCompactionExamples[0].RemovedMessages != 18 ||
+		manifest.ContextCompactionExamples[0].Reason != "context_overflow" {
+		t.Fatalf("manifest context compaction examples = %+v", manifest.ContextCompactionExamples)
 	}
 	if manifest.Metrics.ToolCalls != 5 ||
 		manifest.Metrics.ToolErrors != 1 ||

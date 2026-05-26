@@ -178,27 +178,28 @@ type BatchResult struct {
 }
 
 type DebugManifest struct {
-	SchemaVersion        int                        `json:"schema_version"`
-	Scenario             string                     `json:"scenario"`
-	OK                   bool                       `json:"ok"`
-	Workspace            string                     `json:"workspace"`
-	TracePath            string                     `json:"trace_path"`
-	TimelinePath         string                     `json:"timeline_path,omitempty"`
-	FinalTextPath        string                     `json:"final_text_path,omitempty"`
-	StdoutPath           string                     `json:"stdout_path,omitempty"`
-	StderrPath           string                     `json:"stderr_path,omitempty"`
-	AffentctlCommand     []string                   `json:"affentctl_command,omitempty"`
-	RunExitCode          int                        `json:"run_exit_code"`
-	ConversationDir      string                     `json:"conversation_dir,omitempty"`
-	ArtifactDir          string                     `json:"artifact_dir,omitempty"`
-	TraceDeltas          bool                       `json:"trace_deltas,omitempty"`
-	Prompt               string                     `json:"prompt"`
-	Failures             []string                   `json:"failures,omitempty"`
-	DebugBrief           *DebugBrief                `json:"debug_brief,omitempty"`
-	MemoryUpdateExamples []MemoryUpdateExample      `json:"memory_update_examples,omitempty"`
-	Metrics              DebugMetrics               `json:"metrics"`
-	RuntimeSurface       *sse.RuntimeSurfacePayload `json:"runtime_surface,omitempty"`
-	GeneratedAt          string                     `json:"generated_at"`
+	SchemaVersion             int                        `json:"schema_version"`
+	Scenario                  string                     `json:"scenario"`
+	OK                        bool                       `json:"ok"`
+	Workspace                 string                     `json:"workspace"`
+	TracePath                 string                     `json:"trace_path"`
+	TimelinePath              string                     `json:"timeline_path,omitempty"`
+	FinalTextPath             string                     `json:"final_text_path,omitempty"`
+	StdoutPath                string                     `json:"stdout_path,omitempty"`
+	StderrPath                string                     `json:"stderr_path,omitempty"`
+	AffentctlCommand          []string                   `json:"affentctl_command,omitempty"`
+	RunExitCode               int                        `json:"run_exit_code"`
+	ConversationDir           string                     `json:"conversation_dir,omitempty"`
+	ArtifactDir               string                     `json:"artifact_dir,omitempty"`
+	TraceDeltas               bool                       `json:"trace_deltas,omitempty"`
+	Prompt                    string                     `json:"prompt"`
+	Failures                  []string                   `json:"failures,omitempty"`
+	DebugBrief                *DebugBrief                `json:"debug_brief,omitempty"`
+	MemoryUpdateExamples      []MemoryUpdateExample      `json:"memory_update_examples,omitempty"`
+	ContextCompactionExamples []ContextCompaction        `json:"context_compaction_examples,omitempty"`
+	Metrics                   DebugMetrics               `json:"metrics"`
+	RuntimeSurface            *sse.RuntimeSurfacePayload `json:"runtime_surface,omitempty"`
+	GeneratedAt               string                     `json:"generated_at"`
 }
 
 type DebugMetrics struct {
@@ -514,25 +515,26 @@ func writeScenarioDebugArtifacts(res *BatchResult, scenario BatchScenario, stdou
 
 	manifestPath := filepath.Join(res.Workspace, "affenteval-debug.json")
 	manifest := DebugManifest{
-		SchemaVersion:        1,
-		Scenario:             res.BatchScenario,
-		OK:                   res.OK,
-		Workspace:            res.Workspace,
-		TracePath:            res.TracePath,
-		TimelinePath:         timelinePath,
-		FinalTextPath:        finalTextPath,
-		StdoutPath:           stdoutPath,
-		StderrPath:           stderrPath,
-		AffentctlCommand:     append([]string(nil), res.AffentctlCommand...),
-		RunExitCode:          res.RunExitCode,
-		ConversationDir:      filepath.Join(res.Workspace, ".affentctl"),
-		ArtifactDir:          filepath.Join(res.Workspace, ".affent", "artifacts"),
-		TraceDeltas:          res.TraceDeltas,
-		Prompt:               scenario.Prompt,
-		Failures:             append([]string(nil), res.Failures...),
-		DebugBrief:           BuildDebugBrief(*res),
-		MemoryUpdateExamples: append([]MemoryUpdateExample(nil), res.MemoryUpdateExamples...),
-		RuntimeSurface:       cloneRuntimeSurface(res.RuntimeSurface),
+		SchemaVersion:             1,
+		Scenario:                  res.BatchScenario,
+		OK:                        res.OK,
+		Workspace:                 res.Workspace,
+		TracePath:                 res.TracePath,
+		TimelinePath:              timelinePath,
+		FinalTextPath:             finalTextPath,
+		StdoutPath:                stdoutPath,
+		StderrPath:                stderrPath,
+		AffentctlCommand:          append([]string(nil), res.AffentctlCommand...),
+		RunExitCode:               res.RunExitCode,
+		ConversationDir:           filepath.Join(res.Workspace, ".affentctl"),
+		ArtifactDir:               filepath.Join(res.Workspace, ".affent", "artifacts"),
+		TraceDeltas:               res.TraceDeltas,
+		Prompt:                    scenario.Prompt,
+		Failures:                  append([]string(nil), res.Failures...),
+		DebugBrief:                BuildDebugBrief(*res),
+		MemoryUpdateExamples:      append([]MemoryUpdateExample(nil), res.MemoryUpdateExamples...),
+		ContextCompactionExamples: append([]ContextCompaction(nil), res.ContextCompactions.Examples...),
+		RuntimeSurface:            cloneRuntimeSurface(res.RuntimeSurface),
 		Metrics: DebugMetrics{
 			TurnEndReason:              res.TurnEndReason,
 			ToolCalls:                  res.ToolCalls,

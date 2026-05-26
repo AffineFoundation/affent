@@ -637,6 +637,16 @@ func TestBatchSummaryAggregatesRuntimeMetrics(t *testing.T) {
 			Reactive:        1,
 			RemovedMessages: 32,
 			SummaryBytes:    2048,
+			Examples: []agenteval.ContextCompaction{{
+				TurnID:          "turn-summary",
+				BeforeMessages:  70,
+				AfterMessages:   22,
+				RemovedMessages: 48,
+				Reactive:        true,
+				Reason:          "context_overflow",
+				SummaryPresent:  true,
+				SummaryBytes:    2048,
+			}},
 		},
 		Repair: agenteval.ToolRepairStats{
 			Calls:          3,
@@ -785,6 +795,9 @@ func TestBatchSummaryAggregatesRuntimeMetrics(t *testing.T) {
 	if summary.LoopDecisions != 1 || summary.LoopDecisionByKind["evidence_quality"] != 1 || summary.LoopDecisionByDecision["defer"] != 1 {
 		t.Fatalf("loop decision summary = count:%d kinds:%#v decisions:%#v", summary.LoopDecisions, summary.LoopDecisionByKind, summary.LoopDecisionByDecision)
 	}
+	if len(summary.ContextCompactionExamples) != 1 || summary.ContextCompactionExamples[0].TurnID != "turn-summary" {
+		t.Fatalf("ContextCompactionExamples = %#v", summary.ContextCompactionExamples)
+	}
 	if summary.PlanCalls != 3 || summary.PlanErrors != 1 {
 		t.Fatalf("plan counts = calls:%d errors:%d, want 3/1", summary.PlanCalls, summary.PlanErrors)
 	}
@@ -886,6 +899,16 @@ func TestPrintBatchResultJSONL(t *testing.T) {
 			Reactive:        1,
 			RemovedMessages: 48,
 			SummaryBytes:    3072,
+			Examples: []agenteval.ContextCompaction{{
+				TurnID:          "turn-jsonl",
+				BeforeMessages:  80,
+				AfterMessages:   24,
+				RemovedMessages: 56,
+				Reactive:        true,
+				Reason:          "context_overflow",
+				SummaryPresent:  true,
+				SummaryBytes:    3072,
+			}},
 		},
 		ToolTruncation: agenteval.ToolTruncationStats{
 			ArgsTruncated:       2,
@@ -1088,6 +1111,18 @@ func TestPrintBatchResultJSONL(t *testing.T) {
 	loopDecisionExamples, ok := got["loop_decision_examples"].([]any)
 	if !ok || len(loopDecisionExamples) != 1 {
 		t.Fatalf("loop_decision_examples = %#v\njson=%s", got["loop_decision_examples"], out.String())
+	}
+	contextCompactionExamples, ok := got["context_compaction_examples"].([]any)
+	if !ok || len(contextCompactionExamples) != 1 {
+		t.Fatalf("context_compaction_examples = %#v\njson=%s", got["context_compaction_examples"], out.String())
+	}
+	contextCompactionExample, ok := contextCompactionExamples[0].(map[string]any)
+	if !ok ||
+		contextCompactionExample["turn_id"] != "turn-jsonl" ||
+		contextCompactionExample["reactive"] != true ||
+		contextCompactionExample["removed_messages"] != float64(56) ||
+		contextCompactionExample["reason"] != "context_overflow" {
+		t.Fatalf("context_compaction_example = %#v\njson=%s", contextCompactionExamples[0], out.String())
 	}
 	repairKinds, ok := got["tool_repair_by_kind"].(map[string]any)
 	if !ok {
@@ -1542,8 +1577,18 @@ func TestPrintBatchSummaryJSONL(t *testing.T) {
 		LoopDecisionExamples: []agenteval.LoopDecision{
 			{Kind: "evidence_quality", Decision: "defer", RequiredAction: "read browser network responses"},
 		},
-		ContextCompactions:         1,
-		ContextCompactionRemoved:   32,
+		ContextCompactions:       1,
+		ContextCompactionRemoved: 32,
+		ContextCompactionExamples: []agenteval.ContextCompaction{{
+			TurnID:          "turn-summary-jsonl",
+			BeforeMessages:  64,
+			AfterMessages:   20,
+			RemovedMessages: 44,
+			Reactive:        true,
+			Reason:          "context_overflow",
+			SummaryPresent:  true,
+			SummaryBytes:    2048,
+		}},
 		LoopGuardInterventions:     3,
 		ForcedNoTools:              1,
 		SourceAccessResults:        4,
@@ -1744,6 +1789,17 @@ func TestPrintBatchSummaryJSONL(t *testing.T) {
 	loopDecisionExamples, ok := got["loop_decision_examples"].([]any)
 	if !ok || len(loopDecisionExamples) != 1 {
 		t.Fatalf("loop_decision_examples = %#v\njson=%s", got["loop_decision_examples"], out.String())
+	}
+	contextCompactionExamples, ok := got["context_compaction_examples"].([]any)
+	if !ok || len(contextCompactionExamples) != 1 {
+		t.Fatalf("context_compaction_examples = %#v\njson=%s", got["context_compaction_examples"], out.String())
+	}
+	contextCompactionExample, ok := contextCompactionExamples[0].(map[string]any)
+	if !ok ||
+		contextCompactionExample["turn_id"] != "turn-summary-jsonl" ||
+		contextCompactionExample["removed_messages"] != float64(44) ||
+		contextCompactionExample["reason"] != "context_overflow" {
+		t.Fatalf("context_compaction_example = %#v\njson=%s", contextCompactionExamples[0], out.String())
 	}
 	planByAction, ok := got["plan_by_action"].(map[string]any)
 	if !ok {

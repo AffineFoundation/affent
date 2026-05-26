@@ -161,6 +161,10 @@ Scenario records describe one eval case:
   action, target/topic location, and compact previous/next previews when
   available. These examples make long-run memory drift auditable without
   opening the full trace or markdown timeline.
+- `context_compaction_examples`: optional bounded examples of context
+  compaction events. Each sample includes the turn id, before/after message
+  counts, removed message count, reactive/proactive flag, reason, and summary
+  byte size.
 - `tool_context_truncated`: count of tool results shortened before being fed
   back into the model conversation.
 - `tool_context_omitted_bytes`: total bytes omitted from tool results before
@@ -248,6 +252,8 @@ Summary records aggregate all scenario records from the same process:
   `tool_failure_hints`, `tool_failure_examples`.
 - Runtime error totals and diagnostics: `runtime_error_by_kind`,
   `runtime_error_hints`, `runtime_error_examples`.
+- Context compaction examples: `context_compaction_examples`, the first bounded
+  samples across the batch.
 - Debug brief tag totals: `debug_brief_by_tag`, counting how many scenarios
   emitted each machine-readable triage tag.
 - Quality gate outcome: `quality_gates_passed` is present on summary records

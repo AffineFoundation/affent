@@ -240,6 +240,7 @@ type batchSummary struct {
 	ContextCompactionsReactive int
 	ContextCompactionRemoved   int
 	ContextCompactionSummary   int
+	ContextCompactionExamples  []agenteval.ContextCompaction
 	LoopGuardInterventions     int
 	ForcedNoTools              int
 	SourceAccessResults        int
@@ -370,6 +371,7 @@ func (s *batchSummary) add(res agenteval.BatchResult) {
 	s.ContextCompactionsReactive += res.ContextCompactions.Reactive
 	s.ContextCompactionRemoved += res.ContextCompactions.RemovedMessages
 	s.ContextCompactionSummary += res.ContextCompactions.SummaryBytes
+	s.ContextCompactionExamples = appendContextCompactionExamples(s.ContextCompactionExamples, res.ContextCompactions.Examples, batchSummaryExamplesPerKind)
 	s.LoopGuardInterventions += res.ToolStats.LoopGuardInterventions
 	s.ForcedNoTools += res.ToolStats.ForcedNoTools
 	s.SourceAccessResults += res.ToolStats.SourceAccessResults
@@ -1137,6 +1139,7 @@ type batchResultRecord struct {
 	ContextCompactionsReactive int                                        `json:"context_compactions_reactive,omitempty"`
 	ContextCompactionRemoved   int                                        `json:"context_compaction_removed_messages,omitempty"`
 	ContextCompactionSummary   int                                        `json:"context_compaction_summary_bytes,omitempty"`
+	ContextCompactionExamples  []agenteval.ContextCompaction              `json:"context_compaction_examples,omitempty"`
 	LoopGuardInterventions     int                                        `json:"loop_guard_interventions"`
 	ForcedNoTools              int                                        `json:"forced_no_tools"`
 	SourceAccessResults        int                                        `json:"source_access_results"`
@@ -1239,6 +1242,7 @@ type batchSummaryRecord struct {
 	ContextCompactionsReactive int                                        `json:"context_compactions_reactive,omitempty"`
 	ContextCompactionRemoved   int                                        `json:"context_compaction_removed_messages,omitempty"`
 	ContextCompactionSummary   int                                        `json:"context_compaction_summary_bytes,omitempty"`
+	ContextCompactionExamples  []agenteval.ContextCompaction              `json:"context_compaction_examples,omitempty"`
 	LoopGuardInterventions     int                                        `json:"loop_guard_interventions"`
 	ForcedNoTools              int                                        `json:"forced_no_tools"`
 	SourceAccessResults        int                                        `json:"source_access_results"`
@@ -1361,6 +1365,7 @@ func printBatchResultJSONL(w io.Writer, meta evalJSONLMetadata, res agenteval.Ba
 		ContextCompactionsReactive: res.ContextCompactions.Reactive,
 		ContextCompactionRemoved:   res.ContextCompactions.RemovedMessages,
 		ContextCompactionSummary:   res.ContextCompactions.SummaryBytes,
+		ContextCompactionExamples:  cloneContextCompactionExamples(res.ContextCompactions.Examples),
 		LoopGuardInterventions:     res.ToolStats.LoopGuardInterventions,
 		ForcedNoTools:              res.ToolStats.ForcedNoTools,
 		SourceAccessResults:        res.ToolStats.SourceAccessResults,
@@ -1536,6 +1541,7 @@ func printBatchSummaryJSONL(w io.Writer, meta evalJSONLMetadata, s batchSummary,
 		ContextCompactionsReactive: s.ContextCompactionsReactive,
 		ContextCompactionRemoved:   s.ContextCompactionRemoved,
 		ContextCompactionSummary:   s.ContextCompactionSummary,
+		ContextCompactionExamples:  cloneContextCompactionExamples(s.ContextCompactionExamples),
 		LoopGuardInterventions:     s.LoopGuardInterventions,
 		ForcedNoTools:              s.ForcedNoTools,
 		SourceAccessResults:        s.SourceAccessResults,
@@ -1651,7 +1657,27 @@ func cloneLoopDecisionExamples(in []agenteval.LoopDecision) []agenteval.LoopDeci
 	return append([]agenteval.LoopDecision(nil), in...)
 }
 
+func cloneContextCompactionExamples(in []agenteval.ContextCompaction) []agenteval.ContextCompaction {
+	if len(in) == 0 {
+		return nil
+	}
+	return append([]agenteval.ContextCompaction(nil), in...)
+}
+
 func appendLoopDecisionExamples(dst, src []agenteval.LoopDecision, limit int) []agenteval.LoopDecision {
+	if limit <= 0 || len(dst) >= limit {
+		return dst
+	}
+	for _, ex := range src {
+		if len(dst) >= limit {
+			break
+		}
+		dst = append(dst, ex)
+	}
+	return dst
+}
+
+func appendContextCompactionExamples(dst, src []agenteval.ContextCompaction, limit int) []agenteval.ContextCompaction {
 	if limit <= 0 || len(dst) >= limit {
 		return dst
 	}
