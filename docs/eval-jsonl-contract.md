@@ -27,6 +27,9 @@ Shared metadata fields:
   enabled web search/runtime web tools with `--runtime-web`.
 - `runtime_browser`: optional boolean, present when the eval runner explicitly
   enabled browser runtime tools with `--runtime-browser`.
+- `trace_deltas`: optional boolean, present when the eval runner retained
+  streaming message delta events with `--trace-deltas`. When omitted, the
+  runner passed `affentctl --trace-skip-deltas` to keep traces compact.
 - `runtime_mcp`: optional boolean, present when the eval runner passed a runtime
   MCP config. The config path itself is not written to JSONL.
 - `timeout_ms`: per-scenario timeout in milliseconds.

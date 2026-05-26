@@ -118,6 +118,7 @@ type BatchRunner struct {
 	RuntimeWeb               bool
 	RuntimeBrowser           bool
 	RuntimeMCPConfig         string
+	TraceDeltas              bool
 	GoBin                    string
 	Timeout                  time.Duration
 	VerifierOutputCapBytes   int
@@ -152,6 +153,7 @@ type BatchResult struct {
 	Verifier             VerifierResult
 	WorkspaceRemoved     bool
 	CleanupError         string
+	TraceDeltas          bool
 	// Delegation aggregates focused-task / subagent calls observed
 	// in the trace. Zero-value when the scenario used no delegation
 	// tool; HasAny() reports whether the block is worth surfacing.
@@ -181,6 +183,7 @@ type DebugManifest struct {
 	RunExitCode     int                        `json:"run_exit_code"`
 	ConversationDir string                     `json:"conversation_dir,omitempty"`
 	ArtifactDir     string                     `json:"artifact_dir,omitempty"`
+	TraceDeltas     bool                       `json:"trace_deltas,omitempty"`
 	Prompt          string                     `json:"prompt"`
 	Failures        []string                   `json:"failures,omitempty"`
 	Metrics         DebugMetrics               `json:"metrics"`
@@ -337,7 +340,7 @@ func scenarioInSuite(s BatchScenario, suite string) bool {
 
 func (r BatchRunner) Run(ctx context.Context, scenario BatchScenario) BatchResult {
 	start := time.Now()
-	res := BatchResult{BatchScenario: scenario.Name}
+	res := BatchResult{BatchScenario: scenario.Name, TraceDeltas: r.TraceDeltas}
 	if r.Timeout <= 0 {
 		r.Timeout = DefaultBatchTimeout
 	}
@@ -481,6 +484,7 @@ func writeScenarioDebugArtifacts(res *BatchResult, scenario BatchScenario, stdou
 		RunExitCode:     res.RunExitCode,
 		ConversationDir: filepath.Join(res.Workspace, ".affentctl"),
 		ArtifactDir:     filepath.Join(res.Workspace, ".affent", "artifacts"),
+		TraceDeltas:     res.TraceDeltas,
 		Prompt:          scenario.Prompt,
 		Failures:        append([]string(nil), res.Failures...),
 		RuntimeSurface:  cloneRuntimeSurface(res.RuntimeSurface),
@@ -621,8 +625,10 @@ func (r BatchRunner) affentctlRunArgs(workspace, tracePath string, scenario Batc
 		"--model", r.Model,
 		"--max-turns", fmt.Sprint(scenario.MaxTurns),
 		"--trace", tracePath,
-		"--trace-skip-deltas",
 		"--prompt", scenario.Prompt,
+	}
+	if !r.TraceDeltas {
+		args = append(args, "--trace-skip-deltas")
 	}
 	if strings.TrimSpace(scenario.SessionID) != "" {
 		args = append(args, "--session-id", strings.TrimSpace(scenario.SessionID))

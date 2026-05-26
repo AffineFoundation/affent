@@ -28,6 +28,11 @@ func renderDebugTimeline(res BatchResult, scenario BatchScenario, trace *Trace) 
 	if res.TracePath != "" {
 		fmt.Fprintf(&b, "- trace_jsonl: `%s`\n", res.TracePath)
 	}
+	if res.TraceDeltas {
+		fmt.Fprintf(&b, "- trace_deltas: `true`\n")
+	} else {
+		fmt.Fprintf(&b, "- trace_deltas: `false` (streaming deltas skipped; rerun with `--trace-deltas` for full trace)\n")
+	}
 	if res.FinalTextPath != "" {
 		fmt.Fprintf(&b, "- final_text: `%s`\n", res.FinalTextPath)
 	}

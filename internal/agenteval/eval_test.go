@@ -1014,6 +1014,7 @@ func TestWriteScenarioDebugArtifactsIndexesTraceAndFinalText(t *testing.T) {
 		Failures:           []string{"missing required evidence"},
 		FinalText:          "partial answer",
 		RunExitCode:        3,
+		TraceDeltas:        true,
 		TurnEndReason:      "completed",
 		ToolCalls:          3,
 		ToolStats:          ToolRuntimeStats{ToolErrors: 1, LoopGuardInterventions: 1, SourceAccessResults: 2, SourceAccessVerified: 1},
@@ -1090,7 +1091,8 @@ func TestWriteScenarioDebugArtifactsIndexesTraceAndFinalText(t *testing.T) {
 		manifest.FinalTextPath != res.FinalTextPath ||
 		manifest.StdoutPath != res.StdoutPath ||
 		manifest.StderrPath != res.StderrPath ||
-		manifest.RunExitCode != 3 {
+		manifest.RunExitCode != 3 ||
+		!manifest.TraceDeltas {
 		t.Fatalf("manifest paths = %+v", manifest)
 	}
 	if len(manifest.Failures) != 1 || manifest.Failures[0] != "missing required evidence" {
@@ -1123,6 +1125,7 @@ func TestWriteScenarioDebugArtifactsIndexesTraceAndFinalText(t *testing.T) {
 		"# Affent Eval Timeline",
 		"## Runtime Surface",
 		"`web_fetch`",
+		"trace_deltas: `true`",
 		"## Tool Timeline",
 		"failure_kinds: `dynamic_shell`",
 		"need browser network evidence",
@@ -1179,6 +1182,7 @@ func TestBatchRunnerAffentctlRunArgsForwardsExecutor(t *testing.T) {
 		"--session-id\x00planned",
 		"--execute-plan",
 		"--trace\x00/tmp/ws/trace.jsonl",
+		"--trace-skip-deltas",
 		"--max-turns\x003",
 		"--temperature\x000",
 		"--top-p\x000.9",
@@ -1195,6 +1199,21 @@ func TestBatchRunnerAffentctlRunArgsForwardsExecutor(t *testing.T) {
 		if !strings.Contains(joined, want) {
 			t.Fatalf("args missing %q:\n%q", want, args)
 		}
+	}
+}
+
+func TestBatchRunnerAffentctlRunArgsCanKeepTraceDeltas(t *testing.T) {
+	args := (BatchRunner{
+		BaseURL:     "https://llm.example/v1",
+		Model:       "model-a",
+		TraceDeltas: true,
+	}).affentctlRunArgs("/tmp/ws", "/tmp/ws/trace.jsonl", BatchScenario{Prompt: "debug stream", MaxTurns: 2})
+	joined := strings.Join(args, "\x00")
+	if !strings.Contains(joined, "--trace\x00/tmp/ws/trace.jsonl") {
+		t.Fatalf("args missing trace path:\n%q", args)
+	}
+	if strings.Contains(joined, "--trace-skip-deltas") {
+		t.Fatalf("TraceDeltas should not pass --trace-skip-deltas:\n%q", args)
 	}
 }
 

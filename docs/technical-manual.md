@@ -737,6 +737,7 @@ Run a one-off prompt through the same batch harness:
 go run ./cmd/affenteval --prompt "Analyze the current project and report the risky parts." --name project-audit --max-turns 12 --keep-workspaces
 go run ./cmd/affenteval --prompt-file request.md --runtime-web --name web-research --max-turns 20 --keep-workspaces
 go run ./cmd/affenteval --prompt-file request.md --runtime-web --runtime-browser --name rendered-web-debug --max-turns 20 --keep-workspaces
+go run ./cmd/affenteval --prompt-file request.md --runtime-web --runtime-browser --trace-deltas --name full-trace-debug --max-turns 20 --keep-workspaces
 ```
 
 Each run writes a trace JSONL plus retained debug files in the scenario
@@ -747,7 +748,10 @@ workspace: `affenteval-debug.json`, `affenteval-timeline.md`,
 is the human-readable index for debugging: it links the raw trace, shows the
 effective runtime surface, lists tool calls with args/result previews,
 truncation/artifact pointers, loop decisions, context compactions, and runtime
-errors. The trace emits a `runtime.surface` event at turn start, and the debug
+errors. By default, eval traces pass `affentctl --trace-skip-deltas` so token
+streaming deltas do not bury the tool timeline; use `--trace-deltas` only for
+deep provider/stream debugging when the raw `message.delta` sequence matters.
+The trace emits a `runtime.surface` event at turn start, and the debug
 manifest copies the latest surface into `runtime_surface`, including the
 effective tool names, broad capability flags, and key tool-result limits.
 JSONL scenario records also include a compact `runtime_surface` summary so
@@ -763,6 +767,7 @@ make eval-container EVAL_ARGS='--suite long-run --temperature 0'
 make eval-agent-container EVAL_ARGS='--scenario coding-python-slug --temperature 0'
 make eval-agent-container EVAL_RUNTIME_MEMORY=true EVAL_ARGS='--scenario your-memory-scenario --temperature 0'
 make eval-agent-container EVAL_RUNTIME_WEB=true EVAL_RUNTIME_BROWSER=true EVAL_ARGS='--prompt-file request.md --name rendered-web-debug --max-turns 20'
+make eval-agent-container EVAL_RUNTIME_WEB=true EVAL_RUNTIME_BROWSER=true EVAL_TRACE_DELTAS=true EVAL_ARGS='--prompt-file request.md --name full-trace-debug --max-turns 20'
 make eval-agent-container EVAL_RUNTIME_MCP_CONFIG=/workspace/config/mcp.json EVAL_ARGS='--scenario your-mcp-scenario --temperature 0'
 ```
 

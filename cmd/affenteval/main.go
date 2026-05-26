@@ -62,6 +62,7 @@ func run(args []string) int {
 		runtimeWeb        = fs.Bool("runtime-web", false, "pass affentctl --web --web-search during scenario runs for external retrieval/debug evals")
 		runtimeBrowser    = fs.Bool("runtime-browser", false, "pass affentctl --browser during scenario runs for rendered-page/browser debug evals")
 		runtimeMCPConfig  = fs.String("runtime-mcp-config", "", "pass affentctl --mcp-config PATH during scenario runs; useful with --runtime-eval-mode to opt into MCP only")
+		traceDeltas       = fs.Bool("trace-deltas", false, "retain streaming message delta events in trace JSONL for deep debugging; default skips deltas to keep traces compact")
 		timeout           = fs.Duration("timeout", 5*time.Minute, "per-scenario timeout")
 		verifierOutputCap = fs.Int("verifier-output-cap", agenteval.DefaultVerifierOutputCapBytes, "maximum verifier output bytes buffered per scenario")
 		jsonl             = fs.Bool("jsonl", false, "emit machine-readable JSONL records instead of text")
@@ -128,11 +129,12 @@ success and trace-level process quality.`)
 		RuntimeWeb:               *runtimeWeb,
 		RuntimeBrowser:           *runtimeBrowser,
 		RuntimeMCPConfig:         *runtimeMCPConfig,
+		TraceDeltas:              *traceDeltas,
 		Timeout:                  *timeout,
 		VerifierOutputCapBytes:   *verifierOutputCap,
 		CleanupPassingWorkspaces: !*keepWorkspaces,
 	}
-	jsonlMeta := evalJSONLMetadataFromConfig(*suite, *model, *providerLabel, *executor, *temperature, *topP, *maxTokens, *seed, *runtimeEvalMode, *runtimeMemory, *runtimeWeb, *runtimeBrowser, *runtimeMCPConfig, *timeout)
+	jsonlMeta := evalJSONLMetadataFromConfig(*suite, *model, *providerLabel, *executor, *temperature, *topP, *maxTokens, *seed, *runtimeEvalMode, *runtimeMemory, *runtimeWeb, *runtimeBrowser, *traceDeltas, *runtimeMCPConfig, *timeout)
 	ctx := context.Background()
 	var summary batchSummary
 	for _, scenario := range scenarios {
@@ -801,11 +803,12 @@ type evalJSONLMetadata struct {
 	RuntimeMemory   bool   `json:"runtime_memory,omitempty"`
 	RuntimeWeb      bool   `json:"runtime_web,omitempty"`
 	RuntimeBrowser  bool   `json:"runtime_browser,omitempty"`
+	TraceDeltas     bool   `json:"trace_deltas,omitempty"`
 	RuntimeMCP      bool   `json:"runtime_mcp,omitempty"`
 	TimeoutMS       int64  `json:"timeout_ms"`
 }
 
-func evalJSONLMetadataFromConfig(suite, model, providerLabel, executor, temperature, topP, maxTokens, seed string, runtimeEvalMode, runtimeMemory, runtimeWeb, runtimeBrowser bool, runtimeMCPConfig string, timeout time.Duration) evalJSONLMetadata {
+func evalJSONLMetadataFromConfig(suite, model, providerLabel, executor, temperature, topP, maxTokens, seed string, runtimeEvalMode, runtimeMemory, runtimeWeb, runtimeBrowser, traceDeltas bool, runtimeMCPConfig string, timeout time.Duration) evalJSONLMetadata {
 	model = strings.TrimSpace(model)
 	if model == "" {
 		model = strings.TrimSpace(os.Getenv("AFFENTCTL_MODEL"))
@@ -828,6 +831,7 @@ func evalJSONLMetadataFromConfig(suite, model, providerLabel, executor, temperat
 		RuntimeMemory:   runtimeMemory,
 		RuntimeWeb:      runtimeWeb,
 		RuntimeBrowser:  runtimeBrowser,
+		TraceDeltas:     traceDeltas,
 		RuntimeMCP:      strings.TrimSpace(runtimeMCPConfig) != "",
 		TimeoutMS:       timeout.Milliseconds(),
 	}
@@ -1396,6 +1400,9 @@ func printBatchResult(w io.Writer, res agenteval.BatchResult) {
 	}
 	fmt.Fprintln(w)
 	fmt.Fprintf(w, "  trace: %s\n", res.TracePath)
+	if res.TraceDeltas {
+		fmt.Fprintln(w, "  trace_deltas: true")
+	}
 	if path := retainedDebugPath(res.DebugManifestPath, res.WorkspaceRemoved); path != "" {
 		fmt.Fprintf(w, "  debug: %s\n", path)
 	}
