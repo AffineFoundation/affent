@@ -492,6 +492,9 @@ func TestBatchSummaryAggregatesRuntimeMetrics(t *testing.T) {
 			ToolErrors:                0,
 			ToolDurationMS:            10,
 			LoopGuardInterventions:    1,
+			SourceAccessResults:       2,
+			SourceAccessVerified:      2,
+			SourceAccessNetwork:       2,
 			SessionSearchCalls:        1,
 			SessionSearchResults:      2,
 			SessionSearchContextHits:  1,
@@ -542,6 +545,9 @@ func TestBatchSummaryAggregatesRuntimeMetrics(t *testing.T) {
 			ToolDurationMS:          40,
 			LoopGuardInterventions:  2,
 			ForcedNoTools:           1,
+			SourceAccessResults:     2,
+			SourceAccessVerified:    1,
+			SourceAccessNetwork:     1,
 			ToolContextTruncated:    2,
 			ToolContextOmittedBytes: 4096,
 		},
@@ -617,7 +623,13 @@ func TestBatchSummaryAggregatesRuntimeMetrics(t *testing.T) {
 	if !strings.Contains(out.String(), "ctx_trunc=3,omitted=5120") {
 		t.Fatalf("summary output missing context truncation rollup:\n%s", out.String())
 	}
-	if !strings.Contains(out.String(), "debug_brief=context_compaction:1,context_compaction:reactive:1,loop_guard:2,outcome:failed:1,recall:1,runtime_error:1,runtime_error:context_overflow:1,runtime_error:llm_timeout:1,tool_failure:1,tool_failure:invalid_args:1,tool_failure:timeout:1,truncation:2,turn_end:max_turns:1") {
+	if !strings.Contains(out.String(), "rates=pass:50.0%,completed:50.0%,evidence_verified:75.0% avg_tokens=45.0/10.0") {
+		t.Fatalf("summary output missing normalized rates:\n%s", out.String())
+	}
+	if !strings.Contains(out.String(), "source_access=results:4,verified:3,discovery:0,network:3,dynamic_partial:0") {
+		t.Fatalf("summary output missing source access rollup:\n%s", out.String())
+	}
+	if !strings.Contains(out.String(), "debug_brief=context_compaction:1,context_compaction:reactive:1,loop_guard:2,outcome:failed:1,recall:1,runtime_error:1,runtime_error:context_overflow:1,runtime_error:llm_timeout:1,source_access:2,source_network:2,source_unverified:1,tool_failure:1,tool_failure:invalid_args:1,tool_failure:timeout:1,truncation:2,turn_end:max_turns:1") {
 		t.Fatalf("summary output missing debug brief tag rollup:\n%s", out.String())
 	}
 	if !strings.Contains(out.String(), "repair_kinds=alias_rename:2,tool_name:1,type_coercion:2") {
@@ -1442,6 +1454,10 @@ func TestPrintBatchSummaryJSONL(t *testing.T) {
 		},
 		LoopGuardInterventions:     3,
 		ForcedNoTools:              1,
+		SourceAccessResults:        4,
+		SourceAccessVerified:       3,
+		SourceAccessNetwork:        2,
+		SourceAccessDynamicPartial: 1,
 		SessionSearchCalls:         1,
 		SessionSearchResults:       2,
 		SessionSearchContextHits:   1,
@@ -1498,6 +1514,9 @@ func TestPrintBatchSummaryJSONL(t *testing.T) {
 		"scenarios":                     float64(2),
 		"passed":                        float64(1),
 		"failed":                        float64(1),
+		"pass_rate":                     float64(0.5),
+		"completion_rate":               float64(0.5),
+		"source_access_verified_rate":   float64(0.75),
 		"duration_ms":                   float64(2500),
 		"tool_calls":                    float64(5),
 		"tool_errors":                   float64(1),
@@ -1509,6 +1528,10 @@ func TestPrintBatchSummaryJSONL(t *testing.T) {
 		"tool_repair_notes":             float64(4),
 		"loop_guard_interventions":      float64(3),
 		"forced_no_tools":               float64(1),
+		"source_access_results":         float64(4),
+		"source_access_verified":        float64(3),
+		"source_access_network":         float64(2),
+		"source_access_dynamic_partial": float64(1),
 		"session_search_calls":          float64(1),
 		"session_search_results":        float64(2),
 		"session_search_context_hits":   float64(1),
@@ -1529,6 +1552,9 @@ func TestPrintBatchSummaryJSONL(t *testing.T) {
 		"trace_events":                  float64(12),
 		"input_tokens":                  float64(90),
 		"output_tokens":                 float64(20),
+		"avg_input_tokens":              float64(45),
+		"avg_output_tokens":             float64(10),
+		"avg_total_tokens":              float64(55),
 		"end_completed":                 float64(1),
 		"end_max_turns":                 float64(1),
 		"end_errors":                    float64(0),

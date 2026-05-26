@@ -486,6 +486,13 @@ func printBatchSummary(w io.Writer, s batchSummary) {
 		s.RemovedWorkspaces,
 		s.CleanupErrors,
 	)
+	fmt.Fprintf(w, " rates=pass:%s,completed:%s,evidence_verified:%s avg_tokens=%.1f/%.1f",
+		formatPercent(batchRatio(s.Passed, s.Total)),
+		formatPercent(batchRatio(s.EndCompleted, s.Total)),
+		formatOptionalPercent(batchOptionalRatio(s.SourceAccessVerified, s.SourceAccessResults)),
+		batchAverage(s.InputTokens, s.Total),
+		batchAverage(s.OutputTokens, s.Total),
+	)
 	if hasBatchRepairStats(s) {
 		fmt.Fprintf(w, " repair_calls=%d,ok=%d,failed=%d", s.ToolRepairCalls, s.ToolRepairSucceeded, s.ToolRepairFailed)
 	}
@@ -646,6 +653,39 @@ func formatDebugBriefTags(tags []string) string {
 	out := append([]string(nil), tags...)
 	sort.Strings(out)
 	return strings.Join(out, ",")
+}
+
+func batchRatio(numerator, denominator int) float64 {
+	if denominator <= 0 {
+		return 0
+	}
+	return float64(numerator) / float64(denominator)
+}
+
+func batchOptionalRatio(numerator, denominator int) *float64 {
+	if denominator <= 0 {
+		return nil
+	}
+	value := batchRatio(numerator, denominator)
+	return &value
+}
+
+func batchAverage(total, count int) float64 {
+	if count <= 0 {
+		return 0
+	}
+	return float64(total) / float64(count)
+}
+
+func formatPercent(value float64) string {
+	return fmt.Sprintf("%.1f%%", value*100)
+}
+
+func formatOptionalPercent(value *float64) string {
+	if value == nil {
+		return "n/a"
+	}
+	return formatPercent(*value)
 }
 
 func printFailureHintLines(w io.Writer, counts map[string]int, indent string) {
@@ -1033,6 +1073,9 @@ type batchSummaryRecord struct {
 	Scenarios                  int                                        `json:"scenarios"`
 	Passed                     int                                        `json:"passed"`
 	Failed                     int                                        `json:"failed"`
+	PassRate                   float64                                    `json:"pass_rate"`
+	CompletionRate             float64                                    `json:"completion_rate"`
+	SourceAccessVerifiedRate   *float64                                   `json:"source_access_verified_rate,omitempty"`
 	DurationMS                 int64                                      `json:"duration_ms"`
 	ToolCalls                  int                                        `json:"tool_calls"`
 	ToolErrors                 int                                        `json:"tool_errors"`
@@ -1091,6 +1134,9 @@ type batchSummaryRecord struct {
 	TraceEventTypes            map[string]int                             `json:"trace_event_types,omitempty"`
 	InputTokens                int                                        `json:"input_tokens"`
 	OutputTokens               int                                        `json:"output_tokens"`
+	AvgInputTokens             float64                                    `json:"avg_input_tokens"`
+	AvgOutputTokens            float64                                    `json:"avg_output_tokens"`
+	AvgTotalTokens             float64                                    `json:"avg_total_tokens"`
 	EndCompleted               int                                        `json:"end_completed"`
 	EndMaxTurns                int                                        `json:"end_max_turns"`
 	EndErrors                  int                                        `json:"end_errors"`
@@ -1315,6 +1361,9 @@ func printBatchSummaryJSONL(w io.Writer, meta evalJSONLMetadata, s batchSummary)
 		Scenarios:                  s.Total,
 		Passed:                     s.Passed,
 		Failed:                     s.Failed,
+		PassRate:                   batchRatio(s.Passed, s.Total),
+		CompletionRate:             batchRatio(s.EndCompleted, s.Total),
+		SourceAccessVerifiedRate:   batchOptionalRatio(s.SourceAccessVerified, s.SourceAccessResults),
 		DurationMS:                 s.Duration.Milliseconds(),
 		ToolCalls:                  s.ToolCalls,
 		ToolErrors:                 s.ToolErrors,
@@ -1373,6 +1422,9 @@ func printBatchSummaryJSONL(w io.Writer, meta evalJSONLMetadata, s batchSummary)
 		TraceEventTypes:            cloneStringIntMap(s.TraceEventTypes),
 		InputTokens:                s.InputTokens,
 		OutputTokens:               s.OutputTokens,
+		AvgInputTokens:             batchAverage(s.InputTokens, s.Total),
+		AvgOutputTokens:            batchAverage(s.OutputTokens, s.Total),
+		AvgTotalTokens:             batchAverage(s.InputTokens+s.OutputTokens, s.Total),
 		EndCompleted:               s.EndCompleted,
 		EndMaxTurns:                s.EndMaxTurns,
 		EndErrors:                  s.EndErrors,

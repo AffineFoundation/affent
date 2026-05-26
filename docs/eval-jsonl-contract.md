@@ -201,6 +201,9 @@ surface for trend analysis.
 Summary records aggregate all scenario records from the same process:
 
 - `scenarios`, `passed`, `failed`, `duration_ms`.
+- Normalized comparison metrics: `pass_rate`, `completion_rate`,
+  `source_access_verified_rate` when source evidence was observed,
+  `avg_input_tokens`, `avg_output_tokens`, and `avg_total_tokens`.
 - Tool totals: `tool_calls`, `tool_errors`, `tool_repaired`,
   `tool_name_canonicalized`, `tool_repair_calls`, `tool_repair_succeeded`,
   `tool_repair_failed`, `tool_repair_notes`, `tool_repair_by_kind`,
