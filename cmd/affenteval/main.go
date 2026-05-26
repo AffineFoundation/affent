@@ -70,6 +70,7 @@ func run(args []string) int {
 		verifierOutputCap = fs.Int("verifier-output-cap", agenteval.DefaultVerifierOutputCapBytes, "maximum verifier output bytes buffered per scenario")
 		jsonl             = fs.Bool("jsonl", false, "emit machine-readable JSONL records instead of text")
 		keepWorkspaces    = fs.Bool("keep-workspaces", false, "keep passing scenario workspaces; failing scenario workspaces are always kept")
+		qualityProfile    = fs.String("quality-profile", "", "predefined quality gate profile: longrun or web-evidence; explicit gate flags override profile thresholds")
 		gates             = qualityGateConfig{
 			MinPassRate:                    fs.Float64("min-pass-rate", -1, "optional quality gate: minimum batch pass rate, 0..1"),
 			MinCompletionRate:              fs.Float64("min-completion-rate", -1, "optional quality gate: minimum completed-turn rate, 0..1"),
@@ -107,6 +108,12 @@ success and trace-level process quality.`)
 		if errors.Is(err, flag.ErrHelp) {
 			return 0
 		}
+		return 64
+	}
+	if err := applyQualityGateProfile(&gates, *qualityProfile, func(name string) bool {
+		return flagWasSet(fs, name)
+	}); err != nil {
+		fmt.Fprintf(os.Stderr, "config: %v\n", err)
 		return 64
 	}
 	if err := validateQualityGateConfig(gates); err != nil {
@@ -186,7 +193,7 @@ success and trace-level process quality.`)
 		VerifierOutputCapBytes:   *verifierOutputCap,
 		CleanupPassingWorkspaces: !*keepWorkspaces,
 	}
-	jsonlMeta := evalJSONLMetadataFromConfig(*suite, *model, *providerLabel, *executor, *temperature, *topP, *maxTokens, *seed, *runtimeEvalMode, *runtimeTools, *runtimeAllTools, *runtimeMemory, *runtimeWeb, *runtimeBrowser, *traceDeltas, *runtimeMCPConfig, *timeout, gates)
+	jsonlMeta := evalJSONLMetadataFromConfig(*suite, *model, *providerLabel, *executor, *temperature, *topP, *maxTokens, *seed, *runtimeEvalMode, *runtimeTools, *runtimeAllTools, *runtimeMemory, *runtimeWeb, *runtimeBrowser, *traceDeltas, *runtimeMCPConfig, *timeout, *qualityProfile, gates)
 	ctx := context.Background()
 	var summary batchSummary
 	for _, scenario := range scenarios {
@@ -243,6 +250,102 @@ type qualityGateConfig struct {
 	MaxAvgContextCompactions       *float64
 	MaxAvgReactiveCompactions      *float64
 	MaxAvgTotalTokens              *float64
+}
+
+func applyQualityGateProfile(g *qualityGateConfig, profile string, flagSet func(name string) bool) error {
+	profile = strings.ToLower(strings.TrimSpace(profile))
+	if profile == "" {
+		return nil
+	}
+	if g == nil {
+		return nil
+	}
+	profileConfig, err := qualityGateProfileConfig(profile)
+	if err != nil {
+		return err
+	}
+	apply := func(name string, dst **float64, src *float64) {
+		if src == nil || (flagSet != nil && flagSet(name)) {
+			return
+		}
+		*dst = cloneFloat64Ptr(src)
+	}
+	apply("min-pass-rate", &g.MinPassRate, profileConfig.MinPassRate)
+	apply("min-completion-rate", &g.MinCompletionRate, profileConfig.MinCompletionRate)
+	apply("min-memory-update-rate", &g.MinMemoryUpdateRate, profileConfig.MinMemoryUpdateRate)
+	apply("min-runtime-surface-rate", &g.MinRuntimeSurfaceRate, profileConfig.MinRuntimeSurfaceRate)
+	apply("min-source-network-rate", &g.MinSourceNetworkRate, profileConfig.MinSourceNetworkRate)
+	apply("min-source-access-verified-rate", &g.MinSourceAccessVerifiedRate, profileConfig.MinSourceAccessVerifiedRate)
+	apply("min-session-search-context-hit-rate", &g.MinSessionSearchContextHitRate, profileConfig.MinSessionSearchContextHitRate)
+	apply("min-tool-repair-success-rate", &g.MinToolRepairSuccessRate, profileConfig.MinToolRepairSuccessRate)
+	apply("min-verifier-pass-rate", &g.MinVerifierPassRate, profileConfig.MinVerifierPassRate)
+	apply("max-focused-task-error-rate", &g.MaxFocusedTaskErrorRate, profileConfig.MaxFocusedTaskErrorRate)
+	apply("max-forced-no-tools-rate", &g.MaxForcedNoToolsRate, profileConfig.MaxForcedNoToolsRate)
+	apply("max-loop-guard-intervention-rate", &g.MaxLoopGuardInterventionRate, profileConfig.MaxLoopGuardInterventionRate)
+	apply("max-plan-error-rate", &g.MaxPlanErrorRate, profileConfig.MaxPlanErrorRate)
+	apply("max-source-discovery-only-rate", &g.MaxSourceDiscoveryOnlyRate, profileConfig.MaxSourceDiscoveryOnlyRate)
+	apply("max-source-dynamic-partial-rate", &g.MaxSourceDynamicPartialRate, profileConfig.MaxSourceDynamicPartialRate)
+	apply("max-subagent-error-rate", &g.MaxSubagentErrorRate, profileConfig.MaxSubagentErrorRate)
+	apply("max-tool-error-rate", &g.MaxToolErrorRate, profileConfig.MaxToolErrorRate)
+	apply("max-tool-context-truncation-rate", &g.MaxToolContextTruncationRate, profileConfig.MaxToolContextTruncationRate)
+	apply("max-tool-result-truncation-rate", &g.MaxToolResultTruncationRate, profileConfig.MaxToolResultTruncationRate)
+	apply("max-avg-runtime-errors", &g.MaxAvgRuntimeErrors, profileConfig.MaxAvgRuntimeErrors)
+	apply("max-avg-context-compactions", &g.MaxAvgContextCompactions, profileConfig.MaxAvgContextCompactions)
+	apply("max-avg-reactive-context-compactions", &g.MaxAvgReactiveCompactions, profileConfig.MaxAvgReactiveCompactions)
+	apply("max-avg-total-tokens", &g.MaxAvgTotalTokens, profileConfig.MaxAvgTotalTokens)
+	return nil
+}
+
+func qualityGateProfileConfig(profile string) (qualityGateConfig, error) {
+	switch strings.ToLower(strings.TrimSpace(profile)) {
+	case "longrun":
+		return qualityGateConfig{
+			MinPassRate:                  float64Ptr(0.80),
+			MinCompletionRate:            float64Ptr(0.90),
+			MinRuntimeSurfaceRate:        float64Ptr(0.90),
+			MaxFocusedTaskErrorRate:      float64Ptr(0.10),
+			MaxForcedNoToolsRate:         float64Ptr(0.10),
+			MaxLoopGuardInterventionRate: float64Ptr(0.20),
+			MaxPlanErrorRate:             float64Ptr(0.05),
+			MaxSubagentErrorRate:         float64Ptr(0.10),
+			MaxToolErrorRate:             float64Ptr(0.08),
+			MaxToolContextTruncationRate: float64Ptr(0.30),
+			MaxToolResultTruncationRate:  float64Ptr(0.20),
+			MaxAvgRuntimeErrors:          float64Ptr(0.20),
+			MaxAvgReactiveCompactions:    float64Ptr(0.50),
+			MaxAvgTotalTokens:            float64Ptr(120000),
+		}, nil
+	case "web-evidence":
+		return qualityGateConfig{
+			MinPassRate:                  float64Ptr(0.80),
+			MinCompletionRate:            float64Ptr(0.90),
+			MinRuntimeSurfaceRate:        float64Ptr(0.90),
+			MinSourceNetworkRate:         float64Ptr(0.50),
+			MinSourceAccessVerifiedRate:  float64Ptr(0.90),
+			MaxForcedNoToolsRate:         float64Ptr(0.10),
+			MaxLoopGuardInterventionRate: float64Ptr(0.25),
+			MaxSourceDiscoveryOnlyRate:   float64Ptr(0.15),
+			MaxSourceDynamicPartialRate:  float64Ptr(0.20),
+			MaxToolErrorRate:             float64Ptr(0.10),
+			MaxToolResultTruncationRate:  float64Ptr(0.25),
+			MaxAvgRuntimeErrors:          float64Ptr(0.20),
+			MaxAvgTotalTokens:            float64Ptr(120000),
+		}, nil
+	default:
+		return qualityGateConfig{}, fmt.Errorf("--quality-profile must be one of: longrun, web-evidence")
+	}
+}
+
+func float64Ptr(value float64) *float64 {
+	return &value
+}
+
+func cloneFloat64Ptr(value *float64) *float64 {
+	if value == nil {
+		return nil
+	}
+	clone := *value
+	return &clone
 }
 
 type batchSummary struct {
@@ -1118,6 +1221,7 @@ type evalJSONLMetadata struct {
 	TraceDeltas                    bool     `json:"trace_deltas,omitempty"`
 	RuntimeMCP                     bool     `json:"runtime_mcp,omitempty"`
 	TimeoutMS                      int64    `json:"timeout_ms"`
+	QualityProfile                 string   `json:"quality_profile,omitempty"`
 	MinPassRate                    *float64 `json:"min_pass_rate,omitempty"`
 	MinCompletionRate              *float64 `json:"min_completion_rate,omitempty"`
 	MinMemoryUpdateRate            *float64 `json:"min_memory_update_rate,omitempty"`
@@ -1143,7 +1247,7 @@ type evalJSONLMetadata struct {
 	MaxAvgTotalTokens              *float64 `json:"max_avg_total_tokens,omitempty"`
 }
 
-func evalJSONLMetadataFromConfig(suite, model, providerLabel, executor, temperature, topP, maxTokens, seed string, runtimeEvalMode bool, runtimeTools string, runtimeAllTools, runtimeMemory, runtimeWeb, runtimeBrowser, traceDeltas bool, runtimeMCPConfig string, timeout time.Duration, gates qualityGateConfig) evalJSONLMetadata {
+func evalJSONLMetadataFromConfig(suite, model, providerLabel, executor, temperature, topP, maxTokens, seed string, runtimeEvalMode bool, runtimeTools string, runtimeAllTools, runtimeMemory, runtimeWeb, runtimeBrowser, traceDeltas bool, runtimeMCPConfig string, timeout time.Duration, qualityProfile string, gates qualityGateConfig) evalJSONLMetadata {
 	model = strings.TrimSpace(model)
 	if model == "" {
 		model = strings.TrimSpace(os.Getenv("AFFENTCTL_MODEL"))
@@ -1171,6 +1275,7 @@ func evalJSONLMetadataFromConfig(suite, model, providerLabel, executor, temperat
 		TraceDeltas:                    traceDeltas,
 		RuntimeMCP:                     strings.TrimSpace(runtimeMCPConfig) != "",
 		TimeoutMS:                      timeout.Milliseconds(),
+		QualityProfile:                 strings.ToLower(strings.TrimSpace(qualityProfile)),
 		MinPassRate:                    enabledQualityGateValue(gates.MinPassRate),
 		MinCompletionRate:              enabledQualityGateValue(gates.MinCompletionRate),
 		MinMemoryUpdateRate:            enabledQualityGateValue(gates.MinMemoryUpdateRate),

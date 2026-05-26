@@ -71,6 +71,9 @@ func TestRunHelpDoesNotLeakEnvSecrets(t *testing.T) {
 			t.Fatalf("--help missing runtime eval flag %q:\n%s", want, help)
 		}
 	}
+	if !strings.Contains(help, "-quality-profile") || !strings.Contains(help, "web-evidence") {
+		t.Fatalf("--help missing quality profile flag:\n%s", help)
+	}
 }
 
 func TestRunRejectsInvalidConfigBeforeScenarios(t *testing.T) {
@@ -168,6 +171,11 @@ func TestRunRejectsInvalidConfigBeforeScenarios(t *testing.T) {
 			name: "negative max avg reactive context compactions",
 			args: []string{"--max-avg-reactive-context-compactions=-2"},
 			want: "--max-avg-reactive-context-compactions must be disabled with -1 or set to a non-negative value",
+		},
+		{
+			name: "unknown quality profile",
+			args: []string{"--quality-profile=experimental"},
+			want: "--quality-profile must be one of",
 		},
 		{
 			name: "empty docker executor",
@@ -388,6 +396,45 @@ func TestQualityGateFailures(t *testing.T) {
 	})
 	if len(unavailable) != 1 || !strings.Contains(unavailable[0], "source_access_verified_rate unavailable") {
 		t.Fatalf("unavailable source gate failures = %#v", unavailable)
+	}
+}
+
+func TestApplyQualityGateProfile(t *testing.T) {
+	gates := qualityGateConfig{
+		MinPassRate:       float64Ptr(-1),
+		MaxToolErrorRate:  float64Ptr(0.33),
+		MaxAvgTotalTokens: float64Ptr(-1),
+	}
+	err := applyQualityGateProfile(&gates, "longrun", func(name string) bool {
+		return name == "max-tool-error-rate"
+	})
+	if err != nil {
+		t.Fatalf("applyQualityGateProfile: %v", err)
+	}
+	if gates.MinPassRate == nil || *gates.MinPassRate != 0.80 {
+		t.Fatalf("longrun min pass rate = %#v, want 0.80", gates.MinPassRate)
+	}
+	if gates.MaxToolErrorRate == nil || *gates.MaxToolErrorRate != 0.33 {
+		t.Fatalf("explicit max tool error rate should win, got %#v", gates.MaxToolErrorRate)
+	}
+	if gates.MaxAvgTotalTokens == nil || *gates.MaxAvgTotalTokens != 120000 {
+		t.Fatalf("longrun max avg tokens = %#v, want 120000", gates.MaxAvgTotalTokens)
+	}
+	if gates.MinSourceAccessVerifiedRate != nil && *gates.MinSourceAccessVerifiedRate >= 0 {
+		t.Fatalf("longrun profile should not require source evidence for non-web suites: %#v", gates.MinSourceAccessVerifiedRate)
+	}
+
+	webGates := qualityGateConfig{MinSourceAccessVerifiedRate: float64Ptr(-1)}
+	if err := applyQualityGateProfile(&webGates, "web-evidence", nil); err != nil {
+		t.Fatalf("apply web-evidence profile: %v", err)
+	}
+	if webGates.MinSourceAccessVerifiedRate == nil || *webGates.MinSourceAccessVerifiedRate != 0.90 ||
+		webGates.MinSourceNetworkRate == nil || *webGates.MinSourceNetworkRate != 0.50 ||
+		webGates.MaxSourceDynamicPartialRate == nil || *webGates.MaxSourceDynamicPartialRate != 0.20 {
+		t.Fatalf("web-evidence gates not applied: %+v", webGates)
+	}
+	if err := applyQualityGateProfile(&qualityGateConfig{}, "unknown", nil); err == nil || !strings.Contains(err.Error(), "--quality-profile") {
+		t.Fatalf("unknown profile err = %v", err)
 	}
 }
 
@@ -2092,7 +2139,7 @@ func TestCloneTraceSchemaVersions(t *testing.T) {
 func TestEvalJSONLMetadataFromConfig(t *testing.T) {
 	t.Setenv("AFFENTCTL_MODEL", "env-model")
 	t.Setenv("AFFENTEVAL_PROVIDER_LABEL", "env-provider")
-	meta := evalJSONLMetadataFromConfig("small-model-tools", "", "", "", "0", "", "", "", false, "", false, false, false, false, false, "", 5*time.Minute, qualityGateConfig{})
+	meta := evalJSONLMetadataFromConfig("small-model-tools", "", "", "", "0", "", "", "", false, "", false, false, false, false, false, "", 5*time.Minute, "", qualityGateConfig{})
 	if meta.SchemaVersion != evalJSONLSchemaVersion {
 		t.Fatalf("SchemaVersion = %d, want %d", meta.SchemaVersion, evalJSONLSchemaVersion)
 	}
@@ -2127,7 +2174,7 @@ func TestEvalJSONLMetadataFromConfig(t *testing.T) {
 	maxAvgContextCompactions := 0.1
 	maxAvgReactiveContextCompactions := 0.2
 	maxAvgTotalTokens := 120000.0
-	meta = evalJSONLMetadataFromConfig(" custom ", " flag-model ", " flag-provider ", " sandbox ", " 0.4 ", " 0.9 ", " 512 ", " 42 ", true, " readonly_workspace,web ", true, true, true, true, true, " /tmp/mcp.json ", time.Second, qualityGateConfig{
+	meta = evalJSONLMetadataFromConfig(" custom ", " flag-model ", " flag-provider ", " sandbox ", " 0.4 ", " 0.9 ", " 512 ", " 42 ", true, " readonly_workspace,web ", true, true, true, true, true, " /tmp/mcp.json ", time.Second, " Web-Evidence ", qualityGateConfig{
 		MinPassRate:                    &minPassRate,
 		MinMemoryUpdateRate:            &minMemoryUpdateRate,
 		MinRuntimeSurfaceRate:          &minRuntimeSurfaceRate,
@@ -2150,7 +2197,7 @@ func TestEvalJSONLMetadataFromConfig(t *testing.T) {
 		MaxAvgReactiveCompactions:      &maxAvgReactiveContextCompactions,
 		MaxAvgTotalTokens:              &maxAvgTotalTokens,
 	})
-	if meta.Model != "flag-model" || meta.ProviderLabel != "flag-provider" || meta.Executor != "sandbox" || meta.Temperature != "0.4" || meta.TopP != "0.9" || meta.MaxTokens != "512" || meta.Seed != "42" || meta.Suite != "custom" || !meta.RuntimeEvalMode || meta.RuntimeTools != "readonly_workspace,web" || !meta.RuntimeAllTools || !meta.RuntimeMemory || !meta.RuntimeWeb || !meta.RuntimeBrowser || !meta.TraceDeltas || !meta.RuntimeMCP || meta.TimeoutMS != 1000 {
+	if meta.Model != "flag-model" || meta.ProviderLabel != "flag-provider" || meta.Executor != "sandbox" || meta.Temperature != "0.4" || meta.TopP != "0.9" || meta.MaxTokens != "512" || meta.Seed != "42" || meta.Suite != "custom" || !meta.RuntimeEvalMode || meta.RuntimeTools != "readonly_workspace,web" || !meta.RuntimeAllTools || !meta.RuntimeMemory || !meta.RuntimeWeb || !meta.RuntimeBrowser || !meta.TraceDeltas || !meta.RuntimeMCP || meta.TimeoutMS != 1000 || meta.QualityProfile != "web-evidence" {
 		t.Fatalf("flag metadata not normalized: %+v", meta)
 	}
 	if meta.MinPassRate == nil || *meta.MinPassRate != 0.8 || meta.MinMemoryUpdateRate == nil || *meta.MinMemoryUpdateRate != 0.2 || meta.MinRuntimeSurfaceRate == nil || *meta.MinRuntimeSurfaceRate != 0.9 || meta.MinSourceNetworkRate == nil || *meta.MinSourceNetworkRate != 0.5 || meta.MinSourceAccessVerifiedRate == nil || *meta.MinSourceAccessVerifiedRate != 0.9 || meta.MinSessionSearchContextHitRate == nil || *meta.MinSessionSearchContextHitRate != 0.75 || meta.MinToolRepairSuccessRate == nil || *meta.MinToolRepairSuccessRate != 0.85 || meta.MinVerifierPassRate == nil || *meta.MinVerifierPassRate != 0.9 || meta.MaxFocusedTaskErrorRate == nil || *meta.MaxFocusedTaskErrorRate != 0.07 || meta.MaxForcedNoToolsRate == nil || *meta.MaxForcedNoToolsRate != 0.1 || meta.MaxLoopGuardInterventionRate == nil || *meta.MaxLoopGuardInterventionRate != 0.15 || meta.MaxPlanErrorRate == nil || *meta.MaxPlanErrorRate != 0.05 || meta.MaxSourceDiscoveryOnlyRate == nil || *meta.MaxSourceDiscoveryOnlyRate != 0.1 || meta.MaxSourceDynamicPartialRate == nil || *meta.MaxSourceDynamicPartialRate != 0.1 || meta.MaxSubagentErrorRate == nil || *meta.MaxSubagentErrorRate != 0.08 || meta.MaxToolErrorRate == nil || *meta.MaxToolErrorRate != 0.05 || meta.MaxToolResultTruncationRate == nil || *meta.MaxToolResultTruncationRate != 0.2 || meta.MaxAvgRuntimeErrors == nil || *meta.MaxAvgRuntimeErrors != 0.05 || meta.MaxAvgContextCompactions == nil || *meta.MaxAvgContextCompactions != 0.1 || meta.MaxAvgReactiveCompactions == nil || *meta.MaxAvgReactiveCompactions != 0.2 || meta.MaxAvgTotalTokens == nil || *meta.MaxAvgTotalTokens != 120000 {
