@@ -256,7 +256,7 @@ describe("buildSessionOverview", () => {
     });
 
     expect(overview.metrics).toEqual(expect.arrayContaining([
-      { label: "Compaction", value: "1 · reactive", tone: "warning" },
+      { label: "Compaction", value: "1 · reactive · -72 msgs · 4 KiB summary", tone: "warning" },
     ]));
   });
 

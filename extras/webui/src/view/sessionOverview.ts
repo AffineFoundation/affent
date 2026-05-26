@@ -189,10 +189,17 @@ function buildMetrics(
 function buildContextCompactionMetric(session: SessionState): SessionOverviewMetric | undefined {
   if (session.contextCompactions.length === 0) return undefined;
   const latest = session.contextCompactions.at(-1);
-  const suffix = latest?.reactive ? " · reactive" : "";
+  const parts = [String(session.contextCompactions.length)];
+  if (latest?.reactive) parts.push("reactive");
+  if (latest?.removed_messages && latest.removed_messages > 0) {
+    parts.push(`-${formatCount(latest.removed_messages)} msgs`);
+  }
+  if (latest?.summary_bytes && latest.summary_bytes > 0) {
+    parts.push(`${formatBytes(latest.summary_bytes)} summary`);
+  }
   return {
     label: session.contextCompactions.length === 1 ? "Compaction" : "Compactions",
-    value: `${session.contextCompactions.length}${suffix}`,
+    value: parts.join(" · "),
     tone: latest?.reactive ? "warning" : undefined,
   };
 }
@@ -400,6 +407,12 @@ function formatCount(value: number): string {
   if (value < 1000) return String(value);
   if (value < 10_000) return `${(value / 1000).toFixed(1)}k`;
   return `${Math.round(value / 1000)}k`;
+}
+
+function formatBytes(value: number): string {
+  if (value < 1024) return `${value} B`;
+  if (value < 1024 * 1024) return `${Math.round(value / 1024)} KiB`;
+  return `${Math.round(value / (1024 * 1024))} MiB`;
 }
 
 function readNumber(value: unknown, key: string): number | undefined {

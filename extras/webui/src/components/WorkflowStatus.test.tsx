@@ -169,6 +169,46 @@ describe("WorkflowStatus", () => {
 
     expect(screen.getByTestId("workflow-status")).toHaveTextContent("1 file (8 KiB, 1 MiB omitted)");
   });
+
+  it("pins context pressure and compaction health in the collapsed workflow summary", () => {
+    const session = reduceRawEvents([
+      { id: 1, type: "turn.start", data: { turn_id: "t1" } },
+      { id: 2, type: "user.message", data: { turn_id: "t1", text: "continue long run" } },
+      {
+        id: 3,
+        type: "context.compacted",
+        data: {
+          turn_id: "t1",
+          before_messages: 90,
+          after_messages: 18,
+          removed_messages: 72,
+          reactive: true,
+          reason: "context_overflow",
+          summary_present: true,
+          summary_bytes: 4096,
+        },
+      },
+      { id: 4, type: "turn.end", data: { turn_id: "t1", reason: "completed" } },
+    ]);
+
+    render(<WorkflowStatus overview={buildSessionOverview({
+      session,
+      workflow: deriveWorkflowStatus(session),
+      hasSelectedSession: true,
+      contextSummary: {
+        message_count: 230,
+        compact_trigger: 240,
+        compact_percent: 96,
+        messages_until_compact: 10,
+      },
+    })} />);
+
+    const summary = screen.getByTestId("workflow-status").querySelector("summary") as HTMLElement;
+    expect(summary).toHaveTextContent("230/240 · 96%");
+    expect(summary).toHaveTextContent("1 · reactive · -72 msgs · 4 KiB summary");
+    expect(within(summary).getByText("230/240 · 96%")).toHaveAttribute("data-tone", "error");
+    expect(within(summary).getByText("1 · reactive · -72 msgs · 4 KiB summary")).toHaveAttribute("data-tone", "warning");
+  });
 });
 
 function metric(root: HTMLElement, text: string): HTMLElement {

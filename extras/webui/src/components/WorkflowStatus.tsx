@@ -1,4 +1,4 @@
-import type { SessionOverview } from "../view/sessionOverview";
+import type { SessionOverview, SessionOverviewMetric } from "../view/sessionOverview";
 import { RunDetails } from "./RunDetails";
 
 export function WorkflowStatus({
@@ -6,7 +6,7 @@ export function WorkflowStatus({
 }: {
   overview: SessionOverview;
 }) {
-  const artifactMetric = overview.metrics.find((metric) => metric.label === "Artifact" || metric.label === "Artifacts");
+  const pinnedMetrics = pinnedWorkflowMetrics(overview.metrics);
   return (
     <details className="workflow-status" data-active={overview.active} data-tone={overview.tone} data-testid="workflow-status">
       <summary className="workflow-line">
@@ -17,11 +17,11 @@ export function WorkflowStatus({
         <span className="state-pill" data-tone={overview.tone}>
           {overview.stateLabel}
         </span>
-        {artifactMetric ? (
-          <span className="state-pill" data-tone="artifact">
-            {artifactMetric.value}
+        {pinnedMetrics.map((metric) => (
+          <span key={`${metric.label}:${metric.value}`} className="state-pill" data-tone={pinnedMetricTone(metric)}>
+            {metric.value}
           </span>
-        ) : null}
+        ))}
       </summary>
       <div className="workflow-status-body">
         <p>{overview.detail}</p>
@@ -36,6 +36,22 @@ export function WorkflowStatus({
       </div>
     </details>
   );
+}
+
+function pinnedWorkflowMetrics(metrics: readonly SessionOverviewMetric[]): SessionOverviewMetric[] {
+  const pinned: SessionOverviewMetric[] = [];
+  const context = metrics.find((metric) => metric.label === "Context");
+  const compaction = metrics.find((metric) => metric.label === "Compaction" || metric.label === "Compactions");
+  const artifact = metrics.find((metric) => metric.label === "Artifact" || metric.label === "Artifacts");
+  if (context && context.tone) pinned.push(context);
+  if (compaction) pinned.push(compaction);
+  if (artifact) pinned.push(artifact);
+  return pinned.slice(0, 2);
+}
+
+function pinnedMetricTone(metric: SessionOverviewMetric): SessionOverviewMetric["tone"] | "artifact" | undefined {
+  if (metric.label === "Artifact" || metric.label === "Artifacts") return "artifact";
+  return metric.tone;
 }
 
 function dotStatus(overview: SessionOverview): string {
