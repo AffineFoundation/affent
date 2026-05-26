@@ -637,6 +637,7 @@ func TestApplyQualityGateProfile(t *testing.T) {
 		webGates.MaxAvgToolCalls == nil || *webGates.MaxAvgToolCalls != 18 ||
 		webGates.MaxAvgDurationMS == nil || *webGates.MaxAvgDurationMS != 240000 ||
 		webGates.MaxSourceDynamicPartialRate == nil || *webGates.MaxSourceDynamicPartialRate != 0.20 ||
+		webGates.MaxDebugBriefTagRates["source_dynamic_without_decision"] != 0 ||
 		webGates.MaxDebugBriefTagRates["source_dynamic_without_network"] != 0 ||
 		webGates.MaxDebugBriefTagRates["source_unverified_all"] != 0 ||
 		webGates.MaxDebugBriefTagRates["source_discovery_only_all"] != 0 {

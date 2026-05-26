@@ -144,6 +144,9 @@ func BuildDebugBrief(res BatchResult) *DebugBrief {
 			if res.ToolStats.SourceAccessNetwork == 0 {
 				tags = append(tags, "source_dynamic_without_network")
 				message = "dynamic source evidence lacked network-backed reads; inspect browser network captures before trusting current facts"
+			} else if !hasLoopDecisionStatsMatch(res.LoopDecisionStats, "evidence_quality", "defer", "source_access_dynamic_partial") {
+				tags = append(tags, "source_dynamic_without_decision")
+				message = "dynamic source evidence was partial without an evidence-quality defer decision; inspect network evidence and final citations"
 			}
 		}
 		if res.ToolStats.SourceAccessNetwork > 0 {
@@ -260,6 +263,18 @@ func hasDebugBriefTruncation(res BatchResult) bool {
 		res.ToolTruncation.ResultsTruncated > 0 ||
 		res.ToolTruncation.ResultsOmittedBytes > 0 ||
 		res.ToolTruncation.ResultArtifacts > 0
+}
+
+func hasLoopDecisionStatsMatch(stats LoopDecisionStats, kind, decision, trigger string) bool {
+	if key := loopDecisionMatchKey(kind, decision, trigger); key != "" && stats.ByMatch[key] > 0 {
+		return true
+	}
+	for _, d := range stats.Examples {
+		if d.Kind == kind && d.Decision == decision && d.Trigger == trigger {
+			return true
+		}
+	}
+	return false
 }
 
 func filteredPositiveCounts(counts map[string]int) map[string]int {

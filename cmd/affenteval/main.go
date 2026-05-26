@@ -432,9 +432,10 @@ func qualityGateProfileDefinitions() []qualityGateProfileDefinition {
 				MaxAvgDurationMS:                     float64Ptr(240000),
 				MaxAvgTotalTokens:                    float64Ptr(120000),
 				MaxDebugBriefTagRates: map[string]float64{
-					"source_discovery_only_all":      0,
-					"source_dynamic_without_network": 0,
-					"source_unverified_all":          0,
+					"source_discovery_only_all":       0,
+					"source_dynamic_without_decision": 0,
+					"source_dynamic_without_network":  0,
+					"source_unverified_all":           0,
 				},
 			},
 		},

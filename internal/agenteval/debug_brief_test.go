@@ -169,6 +169,49 @@ func TestBuildDebugBriefClassifiesSourceAccessQuality(t *testing.T) {
 	brief = BuildDebugBrief(BatchResult{
 		OK: true,
 		ToolStats: ToolRuntimeStats{
+			SourceAccessResults:        1,
+			SourceAccessVerified:       1,
+			SourceAccessNetwork:        1,
+			SourceAccessDynamicPartial: 1,
+		},
+	})
+	item = debugBriefItemByKind(brief, "source_access")
+	if item == nil ||
+		item.Severity != "warn" ||
+		item.Message != "dynamic source evidence was partial without an evidence-quality defer decision; inspect network evidence and final citations" ||
+		!stringSliceContains(brief.Tags, "source_network") ||
+		!stringSliceContains(brief.Tags, "source_dynamic_without_decision") {
+		t.Fatalf("dynamic source access without decision item = %+v tags=%+v", item, brief.Tags)
+	}
+
+	brief = BuildDebugBrief(BatchResult{
+		OK: true,
+		ToolStats: ToolRuntimeStats{
+			SourceAccessResults:        1,
+			SourceAccessVerified:       1,
+			SourceAccessNetwork:        1,
+			SourceAccessDynamicPartial: 1,
+		},
+		LoopDecisionStats: LoopDecisionStats{
+			Examples: []LoopDecision{{
+				Kind:     "evidence_quality",
+				Decision: "defer",
+				Trigger:  "source_access_dynamic_partial",
+			}},
+		},
+	})
+	item = debugBriefItemByKind(brief, "source_access")
+	if item == nil ||
+		item.Severity != "warn" ||
+		item.Message != "dynamic source evidence was partial; inspect rendered text and network captures before trusting current facts" ||
+		!stringSliceContains(brief.Tags, "source_network") ||
+		stringSliceContains(brief.Tags, "source_dynamic_without_decision") {
+		t.Fatalf("dynamic source access with decision item = %+v tags=%+v", item, brief.Tags)
+	}
+
+	brief = BuildDebugBrief(BatchResult{
+		OK: true,
+		ToolStats: ToolRuntimeStats{
 			SourceAccessResults:  1,
 			SourceAccessVerified: 1,
 			SourceAccessNetwork:  1,

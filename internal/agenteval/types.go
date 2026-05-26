@@ -414,6 +414,7 @@ type LoopDecisionStats struct {
 	Count      int
 	ByKind     map[string]int
 	ByDecision map[string]int
+	ByMatch    map[string]int
 	Examples   []LoopDecision
 }
 
@@ -959,6 +960,13 @@ func (t Trace) LoopDecisionStats(maxExamples int) LoopDecisionStats {
 			}
 			stats.ByDecision[decision.Decision]++
 		}
+		matchKey := loopDecisionMatchKey(decision.Kind, decision.Decision, decision.Trigger)
+		if matchKey != "" {
+			if stats.ByMatch == nil {
+				stats.ByMatch = map[string]int{}
+			}
+			stats.ByMatch[matchKey]++
+		}
 		if maxExamples <= 0 || len(stats.Examples) >= maxExamples {
 			continue
 		}
@@ -974,6 +982,13 @@ func (t Trace) LoopDecisionStats(maxExamples int) LoopDecisionStats {
 		})
 	}
 	return stats
+}
+
+func loopDecisionMatchKey(kind, decision, trigger string) string {
+	if kind == "" || decision == "" || trigger == "" {
+		return ""
+	}
+	return kind + "\x00" + decision + "\x00" + trigger
 }
 
 func (t Trace) ContextCompactionStats(maxExamples int) ContextCompactionStats {

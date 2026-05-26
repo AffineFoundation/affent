@@ -175,7 +175,8 @@ Scenario records describe one eval case:
   diagnostic-heavy scenarios. It contains sorted `tags` such as
   `outcome:failed`, `tool_failure:blocked`, `runtime_error:llm_timeout`,
   `source_dynamic_partial`, `source_dynamic_without_network`,
-  `source_unverified_all`, `source_discovery_only_all`,
+  `source_dynamic_without_decision`, `source_unverified_all`,
+  `source_discovery_only_all`,
   `memory_update:replace`, `empty_recall`,
   `recall:no_context`, `recall:no_matched_terms`,
   `recall:weak_matched_terms`, `delegation_error:focused_task`, `plan_error`,

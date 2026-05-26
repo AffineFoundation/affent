@@ -164,7 +164,10 @@ func TestParseTraceFileReadsToolRequestsAndFinalText(t *testing.T) {
 		t.Fatalf("RuntimeErrorExamples = %+v", examples)
 	}
 	loopDecisions := trace.LoopDecisionStats(1)
-	if loopDecisions.Count != 1 || loopDecisions.ByKind["evidence_quality"] != 1 || loopDecisions.ByDecision["defer"] != 1 {
+	if loopDecisions.Count != 1 ||
+		loopDecisions.ByKind["evidence_quality"] != 1 ||
+		loopDecisions.ByDecision["defer"] != 1 ||
+		loopDecisions.ByMatch[loopDecisionMatchKey("evidence_quality", "defer", "source_access_dynamic_partial")] != 1 {
 		t.Fatalf("LoopDecisionStats = %+v", loopDecisions)
 	}
 	if len(loopDecisions.Examples) != 1 ||
