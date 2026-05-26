@@ -393,6 +393,7 @@ func TestDoctorBoundarySummaryUsesConfiguredTurnLimits(t *testing.T) {
 		"loop_guard_identical_calls=3",
 		"loop_guard_failure_warn=3",
 		"loop_guard_failure_halt=8",
+		"loop_guard_browser_find_no_match=3",
 		"plan_per_turn_calls=6",
 		"plan_steps=12",
 		"plan_step_text=240B",

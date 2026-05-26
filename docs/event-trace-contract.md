@@ -130,7 +130,8 @@ diagnostics.
   covered. Runtime loop guards may emit `loop_guard_repeated_call`,
   `loop_guard_repeated_failed_input`, `loop_guard_repeated_failures`,
   `loop_guard_halted_tool`, `loop_guard_call_cap`, or
-  `loop_guard_direct_reader_warning`. Runtime workflow policies may emit
+  `loop_guard_direct_reader_warning`, or `loop_guard_no_new_evidence`.
+  Runtime workflow policies may emit
   `tool_policy_first_tool`, `tool_policy_repeat`, or
   `tool_policy_active`.
 - `duration_ms`: optional measured implementation time for dispatched tools.

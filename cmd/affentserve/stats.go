@@ -17,109 +17,110 @@ import (
 // passes who want a quick "is the browser cache actually helping?"
 // signal without standing up Prometheus.
 type statsResponse struct {
-	Listen           string                 `json:"listen"`
-	Model            string                 `json:"model"`
-	Build            buildInfo              `json:"build"`
-	MaxSessions      int                    `json:"max_sessions"`
-	ActiveSessions   int                    `json:"active_sessions"`
-	RunningTurns     int                    `json:"running_turns"`
-	ExecutorMode     string                 `json:"executor_mode"`
-	EnableBrowser    bool                   `json:"enable_browser"`
-	EnableWeb        bool                   `json:"enable_web"`
-	EnableWebSearch  bool                   `json:"enable_web_search"`
-	EnableMemory     bool                   `json:"enable_memory"`
-	EnableBuiltins   bool                   `json:"enable_builtins"`
-	EnableSubagent   bool                   `json:"enable_subagent"`
-	EnableFocusedTasks bool                 `json:"enable_focused_tasks"`
-	ShuttingDown     bool                   `json:"shutting_down"`
-	WorkspaceRoot    string                 `json:"workspace_root,omitempty"`
-	MemoryRoot       string                 `json:"memory_root,omitempty"`
-	SessionStateRoot string                 `json:"session_state_root"`
-	BrowserCacheDir  string                 `json:"browser_cache_dir,omitempty"`
-	WebSearchBackend string                 `json:"web_search_backend,omitempty"`
-	ServerTime       string                 `json:"server_time"`
-	Sessions         []sessionStatsResponse `json:"sessions"`
-	Aggregate        aggregateStats         `json:"aggregate"`
-	Boundaries       statsBoundaries        `json:"boundaries"`
+	Listen             string                 `json:"listen"`
+	Model              string                 `json:"model"`
+	Build              buildInfo              `json:"build"`
+	MaxSessions        int                    `json:"max_sessions"`
+	ActiveSessions     int                    `json:"active_sessions"`
+	RunningTurns       int                    `json:"running_turns"`
+	ExecutorMode       string                 `json:"executor_mode"`
+	EnableBrowser      bool                   `json:"enable_browser"`
+	EnableWeb          bool                   `json:"enable_web"`
+	EnableWebSearch    bool                   `json:"enable_web_search"`
+	EnableMemory       bool                   `json:"enable_memory"`
+	EnableBuiltins     bool                   `json:"enable_builtins"`
+	EnableSubagent     bool                   `json:"enable_subagent"`
+	EnableFocusedTasks bool                   `json:"enable_focused_tasks"`
+	ShuttingDown       bool                   `json:"shutting_down"`
+	WorkspaceRoot      string                 `json:"workspace_root,omitempty"`
+	MemoryRoot         string                 `json:"memory_root,omitempty"`
+	SessionStateRoot   string                 `json:"session_state_root"`
+	BrowserCacheDir    string                 `json:"browser_cache_dir,omitempty"`
+	WebSearchBackend   string                 `json:"web_search_backend,omitempty"`
+	ServerTime         string                 `json:"server_time"`
+	Sessions           []sessionStatsResponse `json:"sessions"`
+	Aggregate          aggregateStats         `json:"aggregate"`
+	Boundaries         statsBoundaries        `json:"boundaries"`
 }
 
 type statsBoundaries struct {
-	MaxTurnSteps               int    `json:"max_turn_steps"`
-	PerCallTimeout             string `json:"per_call_timeout"`
-	LLMRequestBodyBytes        int    `json:"llm_request_body_bytes"`
-	LLMErrorBodyBytes          int    `json:"llm_error_body_bytes"`
-	StreamContentBytes         int    `json:"stream_content_bytes"`
-	StreamReasoningBytes       int    `json:"stream_reasoning_bytes"`
-	StreamToolArgBytes         int    `json:"stream_tool_arg_bytes"`
-	StreamToolCalls            int    `json:"stream_tool_calls"`
-	StreamScannerBytes         int    `json:"stream_scanner_bytes"`
-	ToolRequestArgsEvent       int    `json:"tool_request_args_event_bytes"`
-	ToolRequestArgString       int    `json:"tool_request_arg_string_bytes"`
-	ToolResultContext          int    `json:"tool_result_context_bytes"`
-	ToolResultContextBudget    int    `json:"tool_result_context_budget_bytes"`
-	ToolResultEvent            int    `json:"tool_result_event_bytes"`
-	ToolResultPreview          int    `json:"tool_result_preview_bytes"`
-	RepairableToolArg          int    `json:"repairable_tool_arg_bytes"`
-	ProjectContextBytes        int    `json:"project_context_bytes"`
-	LoopGuardIdenticalCalls    int    `json:"loop_guard_identical_calls"`
-	LoopGuardFailureWarn       int    `json:"loop_guard_failure_warn"`
-	LoopGuardFailureHalt       int    `json:"loop_guard_failure_halt"`
-	LoopGuardWebFetchWarn      int    `json:"loop_guard_web_fetch_failure_warn"`
-	LoopGuardWebFetchHalt      int    `json:"loop_guard_web_fetch_failure_halt"`
-	PlanPerTurnCalls           int    `json:"plan_per_turn_calls"`
-	PlanSteps                  int    `json:"plan_steps"`
-	PlanStepTextBytes          int    `json:"plan_step_text_bytes"`
-	PlanNoteBytes              int    `json:"plan_note_bytes"`
-	PlanEvidenceRefs           int    `json:"plan_evidence_refs"`
-	PlanEvidenceRefBytes       int    `json:"plan_evidence_ref_bytes"`
-	PlanStateBytes             int    `json:"plan_state_bytes"`
-	ActivePlanStepBytes        int    `json:"active_plan_step_bytes"`
-	ActivePlanNoteBytes        int    `json:"active_plan_note_bytes"`
-	ActivePlanEvidenceRefs     int    `json:"active_plan_evidence_refs"`
-	ActivePlanEvidenceRefBytes int    `json:"active_plan_evidence_ref_bytes"`
-	FocusedTaskDefaultTurns    int    `json:"focused_task_default_turns"`
-	FocusedTaskMaxTurns        int    `json:"focused_task_max_turns"`
-	FocusedTaskPerTurnCalls    int    `json:"focused_task_per_turn_calls"`
-	FocusedTaskTypeBytes       int    `json:"focused_task_type_bytes"`
-	FocusedTaskObjectiveBytes  int    `json:"focused_task_objective_bytes"`
-	FocusedTaskToolResult      int    `json:"focused_task_tool_result_bytes"`
-	FocusedTaskSummaryBytes    int    `json:"focused_task_summary_bytes"`
-	FocusedTaskFindingEvidence int    `json:"focused_task_finding_evidence_bytes"`
-	FocusedTaskFindings        int    `json:"focused_task_findings"`
-	FocusedTaskListEntries     int    `json:"focused_task_list_entries"`
-	FocusedTaskToolCalls       int    `json:"focused_task_tool_calls"`
-	SubagentDefaultTurns       int    `json:"subagent_default_turns"`
-	SubagentMaxTurns           int    `json:"subagent_max_turns"`
-	SubagentTaskBytes          int    `json:"subagent_task_bytes"`
-	SubagentModeBytes          int    `json:"subagent_mode_bytes"`
-	SubagentToolResult         int    `json:"subagent_tool_result_bytes"`
-	SubagentDefaultDepth       int    `json:"subagent_default_depth"`
-	SubagentConfiguredMaxDepth int    `json:"subagent_configured_max_depth"`
-	SubagentHardMaxDepth       int    `json:"subagent_hard_max_depth"`
-	SkillActionBytes           int    `json:"skill_action_bytes"`
-	SkillNameBytes             int    `json:"skill_name_bytes"`
-	SkillDescriptionBytes      int    `json:"skill_description_bytes"`
-	SkillBodyBytes             int    `json:"skill_body_bytes"`
-	SkillSourceBytes           int    `json:"skill_source_bytes"`
-	SkillTriggers              int    `json:"skill_triggers"`
-	SkillTriggerBytes          int    `json:"skill_trigger_bytes"`
-	SkillRequiredTools         int    `json:"skill_required_tools"`
-	SkillRequiredToolBytes     int    `json:"skill_required_tool_bytes"`
-	RuntimeSkills              int    `json:"runtime_skills"`
-	RuntimeSkillDirReadBatch   int    `json:"runtime_skill_dir_read_batch"`
-	RuntimeSkillManifestBytes  int    `json:"runtime_skill_manifest_bytes"`
-	RuntimeSkillProposalBytes  int    `json:"runtime_skill_proposal_bytes"`
-	RuntimeSkillProposalID     int    `json:"runtime_skill_proposal_id_bytes"`
-	MCPToolResultBytes         int    `json:"mcp_tool_result_bytes"`
-	MCPHTTPJSONResponse        int    `json:"mcp_http_json_response_bytes"`
-	MCPHTTPSSELine             int    `json:"mcp_http_sse_line_bytes"`
-	MCPStdioFrame              int    `json:"mcp_stdio_frame_bytes"`
-	JSONLRecordBytes           int    `json:"jsonl_record_bytes"`
-	MemoryFileBytes            int    `json:"memory_file_bytes"`
-	MemorySearchQuery          int    `json:"memory_search_query_bytes"`
-	MemorySearchTerms          int    `json:"memory_search_terms"`
-	MemorySearchSnippet        int    `json:"memory_search_snippet_chars"`
-	MemoryResponseEntry        int    `json:"memory_response_entry_chars"`
+	MaxTurnSteps                int    `json:"max_turn_steps"`
+	PerCallTimeout              string `json:"per_call_timeout"`
+	LLMRequestBodyBytes         int    `json:"llm_request_body_bytes"`
+	LLMErrorBodyBytes           int    `json:"llm_error_body_bytes"`
+	StreamContentBytes          int    `json:"stream_content_bytes"`
+	StreamReasoningBytes        int    `json:"stream_reasoning_bytes"`
+	StreamToolArgBytes          int    `json:"stream_tool_arg_bytes"`
+	StreamToolCalls             int    `json:"stream_tool_calls"`
+	StreamScannerBytes          int    `json:"stream_scanner_bytes"`
+	ToolRequestArgsEvent        int    `json:"tool_request_args_event_bytes"`
+	ToolRequestArgString        int    `json:"tool_request_arg_string_bytes"`
+	ToolResultContext           int    `json:"tool_result_context_bytes"`
+	ToolResultContextBudget     int    `json:"tool_result_context_budget_bytes"`
+	ToolResultEvent             int    `json:"tool_result_event_bytes"`
+	ToolResultPreview           int    `json:"tool_result_preview_bytes"`
+	RepairableToolArg           int    `json:"repairable_tool_arg_bytes"`
+	ProjectContextBytes         int    `json:"project_context_bytes"`
+	LoopGuardIdenticalCalls     int    `json:"loop_guard_identical_calls"`
+	LoopGuardFailureWarn        int    `json:"loop_guard_failure_warn"`
+	LoopGuardFailureHalt        int    `json:"loop_guard_failure_halt"`
+	LoopGuardWebFetchWarn       int    `json:"loop_guard_web_fetch_failure_warn"`
+	LoopGuardWebFetchHalt       int    `json:"loop_guard_web_fetch_failure_halt"`
+	LoopGuardBrowserFindNoMatch int    `json:"loop_guard_browser_find_no_match"`
+	PlanPerTurnCalls            int    `json:"plan_per_turn_calls"`
+	PlanSteps                   int    `json:"plan_steps"`
+	PlanStepTextBytes           int    `json:"plan_step_text_bytes"`
+	PlanNoteBytes               int    `json:"plan_note_bytes"`
+	PlanEvidenceRefs            int    `json:"plan_evidence_refs"`
+	PlanEvidenceRefBytes        int    `json:"plan_evidence_ref_bytes"`
+	PlanStateBytes              int    `json:"plan_state_bytes"`
+	ActivePlanStepBytes         int    `json:"active_plan_step_bytes"`
+	ActivePlanNoteBytes         int    `json:"active_plan_note_bytes"`
+	ActivePlanEvidenceRefs      int    `json:"active_plan_evidence_refs"`
+	ActivePlanEvidenceRefBytes  int    `json:"active_plan_evidence_ref_bytes"`
+	FocusedTaskDefaultTurns     int    `json:"focused_task_default_turns"`
+	FocusedTaskMaxTurns         int    `json:"focused_task_max_turns"`
+	FocusedTaskPerTurnCalls     int    `json:"focused_task_per_turn_calls"`
+	FocusedTaskTypeBytes        int    `json:"focused_task_type_bytes"`
+	FocusedTaskObjectiveBytes   int    `json:"focused_task_objective_bytes"`
+	FocusedTaskToolResult       int    `json:"focused_task_tool_result_bytes"`
+	FocusedTaskSummaryBytes     int    `json:"focused_task_summary_bytes"`
+	FocusedTaskFindingEvidence  int    `json:"focused_task_finding_evidence_bytes"`
+	FocusedTaskFindings         int    `json:"focused_task_findings"`
+	FocusedTaskListEntries      int    `json:"focused_task_list_entries"`
+	FocusedTaskToolCalls        int    `json:"focused_task_tool_calls"`
+	SubagentDefaultTurns        int    `json:"subagent_default_turns"`
+	SubagentMaxTurns            int    `json:"subagent_max_turns"`
+	SubagentTaskBytes           int    `json:"subagent_task_bytes"`
+	SubagentModeBytes           int    `json:"subagent_mode_bytes"`
+	SubagentToolResult          int    `json:"subagent_tool_result_bytes"`
+	SubagentDefaultDepth        int    `json:"subagent_default_depth"`
+	SubagentConfiguredMaxDepth  int    `json:"subagent_configured_max_depth"`
+	SubagentHardMaxDepth        int    `json:"subagent_hard_max_depth"`
+	SkillActionBytes            int    `json:"skill_action_bytes"`
+	SkillNameBytes              int    `json:"skill_name_bytes"`
+	SkillDescriptionBytes       int    `json:"skill_description_bytes"`
+	SkillBodyBytes              int    `json:"skill_body_bytes"`
+	SkillSourceBytes            int    `json:"skill_source_bytes"`
+	SkillTriggers               int    `json:"skill_triggers"`
+	SkillTriggerBytes           int    `json:"skill_trigger_bytes"`
+	SkillRequiredTools          int    `json:"skill_required_tools"`
+	SkillRequiredToolBytes      int    `json:"skill_required_tool_bytes"`
+	RuntimeSkills               int    `json:"runtime_skills"`
+	RuntimeSkillDirReadBatch    int    `json:"runtime_skill_dir_read_batch"`
+	RuntimeSkillManifestBytes   int    `json:"runtime_skill_manifest_bytes"`
+	RuntimeSkillProposalBytes   int    `json:"runtime_skill_proposal_bytes"`
+	RuntimeSkillProposalID      int    `json:"runtime_skill_proposal_id_bytes"`
+	MCPToolResultBytes          int    `json:"mcp_tool_result_bytes"`
+	MCPHTTPJSONResponse         int    `json:"mcp_http_json_response_bytes"`
+	MCPHTTPSSELine              int    `json:"mcp_http_sse_line_bytes"`
+	MCPStdioFrame               int    `json:"mcp_stdio_frame_bytes"`
+	JSONLRecordBytes            int    `json:"jsonl_record_bytes"`
+	MemoryFileBytes             int    `json:"memory_file_bytes"`
+	MemorySearchQuery           int    `json:"memory_search_query_bytes"`
+	MemorySearchTerms           int    `json:"memory_search_terms"`
+	MemorySearchSnippet         int    `json:"memory_search_snippet_chars"`
+	MemoryResponseEntry         int    `json:"memory_response_entry_chars"`
 }
 
 type sessionStatsResponse struct {
@@ -198,30 +199,30 @@ func handleStats(cfg Config, pool *SessionPool) http.HandlerFunc {
 		}
 
 		resp := statsResponse{
-			Listen:           cfg.Listen,
-			Model:            cfg.Model,
-			Build:            currentBuildInfo(),
-			MaxSessions:      cfg.MaxSessions,
-			ActiveSessions:   len(sess),
-			RunningTurns:     runningTurns,
-			ExecutorMode:     executorMode(cfg),
-			EnableBrowser:    cfg.EnableBrowser,
-			EnableWeb:        cfg.EnableWeb,
-			EnableWebSearch:  cfg.EnableWebSearch,
-			EnableMemory:     cfg.EnableMemory,
-			EnableBuiltins:   cfg.EnableBuiltins,
-			EnableSubagent:   cfg.EnableSubagent,
+			Listen:             cfg.Listen,
+			Model:              cfg.Model,
+			Build:              currentBuildInfo(),
+			MaxSessions:        cfg.MaxSessions,
+			ActiveSessions:     len(sess),
+			RunningTurns:       runningTurns,
+			ExecutorMode:       executorMode(cfg),
+			EnableBrowser:      cfg.EnableBrowser,
+			EnableWeb:          cfg.EnableWeb,
+			EnableWebSearch:    cfg.EnableWebSearch,
+			EnableMemory:       cfg.EnableMemory,
+			EnableBuiltins:     cfg.EnableBuiltins,
+			EnableSubagent:     cfg.EnableSubagent,
 			EnableFocusedTasks: cfg.EnableFocusedTasks,
-			ShuttingDown:     pool.IsShuttingDown(),
-			WorkspaceRoot:    cfg.WorkspaceRoot,
-			MemoryRoot:       cfg.MemoryRoot,
-			SessionStateRoot: pool.sessionRootPath(),
-			BrowserCacheDir:  cfg.BrowserCacheDir,
-			WebSearchBackend: statsWebSearchBackend(cfg),
-			ServerTime:       time.Now().UTC().Format(time.RFC3339),
-			Sessions:         sess,
-			Aggregate:        agg,
-			Boundaries:       statsBoundarySnapshot(cfg),
+			ShuttingDown:       pool.IsShuttingDown(),
+			WorkspaceRoot:      cfg.WorkspaceRoot,
+			MemoryRoot:         cfg.MemoryRoot,
+			SessionStateRoot:   pool.sessionRootPath(),
+			BrowserCacheDir:    cfg.BrowserCacheDir,
+			WebSearchBackend:   statsWebSearchBackend(cfg),
+			ServerTime:         time.Now().UTC().Format(time.RFC3339),
+			Sessions:           sess,
+			Aggregate:          agg,
+			Boundaries:         statsBoundarySnapshot(cfg),
 		}
 		w.Header().Set("Content-Type", "application/json")
 		_ = json.NewEncoder(w).Encode(resp)
@@ -313,81 +314,82 @@ func statsBoundarySnapshot(cfg Config) statsBoundaries {
 		subagentMaxDepth = agent.MaxSubagentDepth
 	}
 	return statsBoundaries{
-		MaxTurnSteps:               maxTurnSteps,
-		PerCallTimeout:             perCallTimeout.String(),
-		LLMRequestBodyBytes:        ab.LLMRequestBodyBytes,
-		LLMErrorBodyBytes:          ab.LLMErrorBodyBytes,
-		StreamContentBytes:         ab.StreamContentBytes,
-		StreamReasoningBytes:       ab.StreamReasoningBytes,
-		StreamToolArgBytes:         ab.StreamToolArgBytes,
-		StreamToolCalls:            ab.StreamToolCalls,
-		StreamScannerBytes:         ab.StreamScannerBytes,
-		ToolRequestArgsEvent:       ab.ToolRequestArgsEvent,
-		ToolRequestArgString:       ab.ToolRequestArgString,
-		ToolResultContext:          ab.ToolResultContextBytes,
-		ToolResultContextBudget:    ab.ToolResultContextBudgetBytes,
-		ToolResultEvent:            ab.ToolResultEventBytes,
-		ToolResultPreview:          ab.ToolResultPreviewBytes,
-		RepairableToolArg:          ab.RepairableToolArgBytes,
-		ProjectContextBytes:        ab.ProjectContextBytes,
-		LoopGuardIdenticalCalls:    ab.LoopGuardIdenticalCalls,
-		LoopGuardFailureWarn:       ab.LoopGuardFailureWarn,
-		LoopGuardFailureHalt:       ab.LoopGuardFailureHalt,
-		LoopGuardWebFetchWarn:      ab.LoopGuardWebFetchFailureWarn,
-		LoopGuardWebFetchHalt:      ab.LoopGuardWebFetchFailureHalt,
-		PlanPerTurnCalls:           ab.PlanPerTurnCalls,
-		PlanSteps:                  ab.PlanSteps,
-		PlanStepTextBytes:          ab.PlanStepTextBytes,
-		PlanNoteBytes:              ab.PlanNoteBytes,
-		PlanEvidenceRefs:           ab.PlanEvidenceRefs,
-		PlanEvidenceRefBytes:       ab.PlanEvidenceRefBytes,
-		PlanStateBytes:             ab.PlanStateBytes,
-		ActivePlanStepBytes:        ab.ActivePlanStepBytes,
-		ActivePlanNoteBytes:        ab.ActivePlanNoteBytes,
-		ActivePlanEvidenceRefs:     ab.ActivePlanEvidenceRefs,
-		ActivePlanEvidenceRefBytes: ab.ActivePlanEvidenceRef,
-		FocusedTaskDefaultTurns:    ab.FocusedTaskDefaultTurns,
-		FocusedTaskMaxTurns:        ab.FocusedTaskMaxTurns,
-		FocusedTaskPerTurnCalls:    ab.FocusedTaskPerTurnCalls,
-		FocusedTaskTypeBytes:       ab.FocusedTaskTypeBytes,
-		FocusedTaskObjectiveBytes:  ab.FocusedTaskObjectiveBytes,
-		FocusedTaskToolResult:      ab.FocusedTaskToolResultBytes,
-		FocusedTaskSummaryBytes:    ab.FocusedTaskSummaryBytes,
-		FocusedTaskFindingEvidence: ab.FocusedTaskFindingEvidenceBytes,
-		FocusedTaskFindings:        ab.FocusedTaskFindings,
-		FocusedTaskListEntries:     ab.FocusedTaskListEntries,
-		FocusedTaskToolCalls:       ab.FocusedTaskToolCalls,
-		SubagentDefaultTurns:       ab.SubagentDefaultTurns,
-		SubagentMaxTurns:           ab.SubagentMaxTurns,
-		SubagentTaskBytes:          ab.SubagentTaskBytes,
-		SubagentModeBytes:          ab.SubagentModeBytes,
-		SubagentToolResult:         ab.SubagentToolResultBytes,
-		SubagentDefaultDepth:       ab.SubagentDefaultDepth,
-		SubagentConfiguredMaxDepth: subagentMaxDepth,
-		SubagentHardMaxDepth:       ab.SubagentHardMaxDepth,
-		SkillActionBytes:           ab.SkillActionBytes,
-		SkillNameBytes:             ab.SkillNameBytes,
-		SkillDescriptionBytes:      ab.SkillDescriptionBytes,
-		SkillBodyBytes:             ab.SkillBodyBytes,
-		SkillSourceBytes:           ab.SkillSourceBytes,
-		SkillTriggers:              ab.SkillTriggers,
-		SkillTriggerBytes:          ab.SkillTriggerBytes,
-		SkillRequiredTools:         ab.SkillRequiredTools,
-		SkillRequiredToolBytes:     ab.SkillRequiredToolBytes,
-		RuntimeSkills:              ab.RuntimeSkills,
-		RuntimeSkillDirReadBatch:   ab.RuntimeSkillDirReadBatch,
-		RuntimeSkillManifestBytes:  ab.RuntimeSkillManifestBytes,
-		RuntimeSkillProposalBytes:  ab.RuntimeSkillProposalBytes,
-		RuntimeSkillProposalID:     ab.RuntimeSkillProposalIDBytes,
-		MCPToolResultBytes:         mb.ToolResultBytes,
-		MCPHTTPJSONResponse:        mb.HTTPJSONResponseBytes,
-		MCPHTTPSSELine:             mb.HTTPSSELineBytes,
-		MCPStdioFrame:              mb.StdioFrameBytes,
-		JSONLRecordBytes:           jsonl.DefaultMaxRecordBytes,
-		MemoryFileBytes:            mem.FileBytes,
-		MemorySearchQuery:          mem.SearchQueryBytes,
-		MemorySearchTerms:          mem.SearchQueryTerms,
-		MemorySearchSnippet:        mem.SearchSnippet,
-		MemoryResponseEntry:        mem.ResponseEntry,
+		MaxTurnSteps:                maxTurnSteps,
+		PerCallTimeout:              perCallTimeout.String(),
+		LLMRequestBodyBytes:         ab.LLMRequestBodyBytes,
+		LLMErrorBodyBytes:           ab.LLMErrorBodyBytes,
+		StreamContentBytes:          ab.StreamContentBytes,
+		StreamReasoningBytes:        ab.StreamReasoningBytes,
+		StreamToolArgBytes:          ab.StreamToolArgBytes,
+		StreamToolCalls:             ab.StreamToolCalls,
+		StreamScannerBytes:          ab.StreamScannerBytes,
+		ToolRequestArgsEvent:        ab.ToolRequestArgsEvent,
+		ToolRequestArgString:        ab.ToolRequestArgString,
+		ToolResultContext:           ab.ToolResultContextBytes,
+		ToolResultContextBudget:     ab.ToolResultContextBudgetBytes,
+		ToolResultEvent:             ab.ToolResultEventBytes,
+		ToolResultPreview:           ab.ToolResultPreviewBytes,
+		RepairableToolArg:           ab.RepairableToolArgBytes,
+		ProjectContextBytes:         ab.ProjectContextBytes,
+		LoopGuardIdenticalCalls:     ab.LoopGuardIdenticalCalls,
+		LoopGuardFailureWarn:        ab.LoopGuardFailureWarn,
+		LoopGuardFailureHalt:        ab.LoopGuardFailureHalt,
+		LoopGuardWebFetchWarn:       ab.LoopGuardWebFetchFailureWarn,
+		LoopGuardWebFetchHalt:       ab.LoopGuardWebFetchFailureHalt,
+		LoopGuardBrowserFindNoMatch: ab.LoopGuardBrowserFindNoMatch,
+		PlanPerTurnCalls:            ab.PlanPerTurnCalls,
+		PlanSteps:                   ab.PlanSteps,
+		PlanStepTextBytes:           ab.PlanStepTextBytes,
+		PlanNoteBytes:               ab.PlanNoteBytes,
+		PlanEvidenceRefs:            ab.PlanEvidenceRefs,
+		PlanEvidenceRefBytes:        ab.PlanEvidenceRefBytes,
+		PlanStateBytes:              ab.PlanStateBytes,
+		ActivePlanStepBytes:         ab.ActivePlanStepBytes,
+		ActivePlanNoteBytes:         ab.ActivePlanNoteBytes,
+		ActivePlanEvidenceRefs:      ab.ActivePlanEvidenceRefs,
+		ActivePlanEvidenceRefBytes:  ab.ActivePlanEvidenceRef,
+		FocusedTaskDefaultTurns:     ab.FocusedTaskDefaultTurns,
+		FocusedTaskMaxTurns:         ab.FocusedTaskMaxTurns,
+		FocusedTaskPerTurnCalls:     ab.FocusedTaskPerTurnCalls,
+		FocusedTaskTypeBytes:        ab.FocusedTaskTypeBytes,
+		FocusedTaskObjectiveBytes:   ab.FocusedTaskObjectiveBytes,
+		FocusedTaskToolResult:       ab.FocusedTaskToolResultBytes,
+		FocusedTaskSummaryBytes:     ab.FocusedTaskSummaryBytes,
+		FocusedTaskFindingEvidence:  ab.FocusedTaskFindingEvidenceBytes,
+		FocusedTaskFindings:         ab.FocusedTaskFindings,
+		FocusedTaskListEntries:      ab.FocusedTaskListEntries,
+		FocusedTaskToolCalls:        ab.FocusedTaskToolCalls,
+		SubagentDefaultTurns:        ab.SubagentDefaultTurns,
+		SubagentMaxTurns:            ab.SubagentMaxTurns,
+		SubagentTaskBytes:           ab.SubagentTaskBytes,
+		SubagentModeBytes:           ab.SubagentModeBytes,
+		SubagentToolResult:          ab.SubagentToolResultBytes,
+		SubagentDefaultDepth:        ab.SubagentDefaultDepth,
+		SubagentConfiguredMaxDepth:  subagentMaxDepth,
+		SubagentHardMaxDepth:        ab.SubagentHardMaxDepth,
+		SkillActionBytes:            ab.SkillActionBytes,
+		SkillNameBytes:              ab.SkillNameBytes,
+		SkillDescriptionBytes:       ab.SkillDescriptionBytes,
+		SkillBodyBytes:              ab.SkillBodyBytes,
+		SkillSourceBytes:            ab.SkillSourceBytes,
+		SkillTriggers:               ab.SkillTriggers,
+		SkillTriggerBytes:           ab.SkillTriggerBytes,
+		SkillRequiredTools:          ab.SkillRequiredTools,
+		SkillRequiredToolBytes:      ab.SkillRequiredToolBytes,
+		RuntimeSkills:               ab.RuntimeSkills,
+		RuntimeSkillDirReadBatch:    ab.RuntimeSkillDirReadBatch,
+		RuntimeSkillManifestBytes:   ab.RuntimeSkillManifestBytes,
+		RuntimeSkillProposalBytes:   ab.RuntimeSkillProposalBytes,
+		RuntimeSkillProposalID:      ab.RuntimeSkillProposalIDBytes,
+		MCPToolResultBytes:          mb.ToolResultBytes,
+		MCPHTTPJSONResponse:         mb.HTTPJSONResponseBytes,
+		MCPHTTPSSELine:              mb.HTTPSSELineBytes,
+		MCPStdioFrame:               mb.StdioFrameBytes,
+		JSONLRecordBytes:            jsonl.DefaultMaxRecordBytes,
+		MemoryFileBytes:             mem.FileBytes,
+		MemorySearchQuery:           mem.SearchQueryBytes,
+		MemorySearchTerms:           mem.SearchQueryTerms,
+		MemorySearchSnippet:         mem.SearchSnippet,
+		MemoryResponseEntry:         mem.ResponseEntry,
 	}
 }

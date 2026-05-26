@@ -8,6 +8,7 @@ import (
 	"path"
 	"strings"
 
+	"github.com/affinefoundation/affent/internal/sourceaccess"
 	"github.com/affinefoundation/affent/internal/toolfailure"
 	"github.com/affinefoundation/affent/internal/websource"
 )
@@ -20,6 +21,7 @@ const (
 	webFetchFailureHaltThreshold    = 8
 	browserInteractionWarnThreshold = 2
 	browserInteractionHaltThreshold = 5
+	browserFindNoMatchThreshold     = 3
 
 	loopGuardCallCapKind             = "loop_guard_call_cap"
 	loopGuardHaltedToolKind          = "loop_guard_halted_tool"
@@ -27,6 +29,7 @@ const (
 	loopGuardRepeatedFailuresKind    = "loop_guard_repeated_failures"
 	loopGuardRepeatedFailedInputKind = "loop_guard_repeated_failed_input"
 	loopGuardDirectReaderWarningKind = "loop_guard_direct_reader_warning"
+	loopGuardNoNewEvidenceKind       = "loop_guard_no_new_evidence"
 
 	maxDirectReaderWarningURLs = 64
 )
@@ -75,6 +78,8 @@ type toolLoopGuard struct {
 	// turns pay no allocation for this layer.
 	perToolCounts           map[string]int
 	directReaderWarningURLs map[string]bool
+	browserFindNoMatchURL   string
+	browserFindNoMatchCount int
 }
 
 type toolCallKey struct {
@@ -203,7 +208,61 @@ func (g *toolLoopGuard) recordToolResult(tool string, args json.RawMessage, resu
 	guardResult := g.recordOutcome(tool, outcomeOK)
 	g.recordDirectReaderWarnings(tool, result)
 	g.recordArgumentOutcome(tool, args, result, outcomeOK)
+	if browserGuard := g.recordBrowserFindNoMatch(tool, result, isErr); browserGuard != "" {
+		if guardResult != "" {
+			guardResult += "\n\n" + browserGuard
+		} else {
+			guardResult = browserGuard
+		}
+		outcomeOK = false
+	}
 	return guardResult, outcomeOK
+}
+
+func (g *toolLoopGuard) recordBrowserFindNoMatch(tool, result string, isErr bool) string {
+	if g == nil || tool != "browser_find" || isErr {
+		return ""
+	}
+	info, _ := sourceaccess.FirstInfoFromResult(result)
+	u := info.AccessedURL
+	if u == "" {
+		u = "__unknown_browser_page__"
+	}
+	if !browserFindNoMatches(result) {
+		if g.browserFindNoMatchURL == u {
+			g.browserFindNoMatchCount = 0
+		}
+		return ""
+	}
+	if g.browserFindNoMatchURL != u {
+		g.browserFindNoMatchURL = u
+		g.browserFindNoMatchCount = 0
+	}
+	g.browserFindNoMatchCount++
+	if g.browserFindNoMatchCount < browserFindNoMatchThreshold {
+		return ""
+	}
+	return browserFindNoNewEvidenceMessage(u, g.browserFindNoMatchCount)
+}
+
+func browserFindNoMatches(result string) bool {
+	for _, line := range strings.Split(result, "\n") {
+		if strings.TrimSpace(line) == "MATCHES: none" {
+			return true
+		}
+	}
+	return false
+}
+
+func browserFindNoNewEvidenceMessage(rawURL string, count int) string {
+	source := "the current rendered page"
+	if rawURL != "" && rawURL != "__unknown_browser_page__" {
+		source = fmt.Sprintf("%q", rawURL)
+	}
+	return withLoopGuardFailureKind(
+		fmt.Sprintf("loop_guard: browser_find returned no matches on %s %d times this turn. Repeating page-text searches is unlikely to add evidence.\nNext: inspect the current browser_snapshot once for visible labels, use browser_network/browser_network_read for hidden XHR/fetch data if available, navigate to a different source, or answer that the field is not visible in the inspected page.", source, count),
+		loopGuardNoNewEvidenceKind,
+	)
 }
 
 func (g *toolLoopGuard) recordDirectReaderWarnings(tool, result string) {

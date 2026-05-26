@@ -616,6 +616,8 @@ func toolFailureKindHint(kind string) string {
 		return "loop guard blocked an excessive number of workflow-tool calls in one turn; continue from current plan/delegation results"
 	case "loop_guard_direct_reader_warning":
 		return "loop guard blocked direct web_fetch to a URL already marked by web_search as a direct-reader trap; use the snippet as weak evidence or switch to an API/text/source URL"
+	case "loop_guard_no_new_evidence":
+		return "loop guard stopped repeated tool calls that were not adding evidence; switch source/tool, use a narrower evidence path, or answer with a clearly marked gap"
 	case "tool_policy_first_tool":
 		return "runtime policy blocked an early tool because a required first tool was skipped; call the required planner/delegation tool first"
 	case "tool_policy_repeat":

@@ -97,7 +97,8 @@ func TestHandleStats_EmptyPool(t *testing.T) {
 	}
 	if resp.Boundaries.LoopGuardIdenticalCalls <= 0 || resp.Boundaries.LoopGuardFailureWarn <= 0 ||
 		resp.Boundaries.LoopGuardFailureHalt <= 0 || resp.Boundaries.LoopGuardWebFetchWarn <= 0 ||
-		resp.Boundaries.LoopGuardWebFetchHalt <= 0 || resp.Boundaries.PlanPerTurnCalls <= 0 {
+		resp.Boundaries.LoopGuardWebFetchHalt <= 0 || resp.Boundaries.LoopGuardBrowserFindNoMatch <= 0 ||
+		resp.Boundaries.PlanPerTurnCalls <= 0 {
 		t.Fatalf("loop guard boundaries must be positive: %+v", resp.Boundaries)
 	}
 	if resp.Boundaries.PlanSteps <= 0 || resp.Boundaries.PlanStepTextBytes <= 0 || resp.Boundaries.PlanNoteBytes <= 0 ||
@@ -165,6 +166,9 @@ func TestStatsBoundarySnapshotUsesConfiguredTurnLimits(t *testing.T) {
 	}
 	if got.LoopGuardWebFetchHalt != agent.DefaultRuntimeBoundaries().LoopGuardWebFetchFailureHalt {
 		t.Fatalf("LoopGuardWebFetchHalt = %d, want %d", got.LoopGuardWebFetchHalt, agent.DefaultRuntimeBoundaries().LoopGuardWebFetchFailureHalt)
+	}
+	if got.LoopGuardBrowserFindNoMatch != agent.DefaultRuntimeBoundaries().LoopGuardBrowserFindNoMatch {
+		t.Fatalf("LoopGuardBrowserFindNoMatch = %d, want %d", got.LoopGuardBrowserFindNoMatch, agent.DefaultRuntimeBoundaries().LoopGuardBrowserFindNoMatch)
 	}
 	if got.FocusedTaskToolResult != agent.DefaultRuntimeBoundaries().FocusedTaskToolResultBytes {
 		t.Fatalf("FocusedTaskToolResult = %d, want %d", got.FocusedTaskToolResult, agent.DefaultRuntimeBoundaries().FocusedTaskToolResultBytes)

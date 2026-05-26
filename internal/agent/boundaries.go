@@ -24,6 +24,7 @@ type RuntimeBoundaries struct {
 	LoopGuardFailureHalt            int
 	LoopGuardWebFetchFailureWarn    int
 	LoopGuardWebFetchFailureHalt    int
+	LoopGuardBrowserFindNoMatch     int
 	PlanPerTurnCalls                int
 	PlanSteps                       int
 	PlanStepTextBytes               int
@@ -91,6 +92,7 @@ func DefaultRuntimeBoundaries() RuntimeBoundaries {
 		LoopGuardFailureHalt:            toolFailureHaltThreshold,
 		LoopGuardWebFetchFailureWarn:    webFetchFailureWarnThreshold,
 		LoopGuardWebFetchFailureHalt:    webFetchFailureHaltThreshold,
+		LoopGuardBrowserFindNoMatch:     browserFindNoMatchThreshold,
 		PlanPerTurnCalls:                perTurnCallCaps[PlanToolName],
 		PlanSteps:                       maxPlanSteps,
 		PlanStepTextBytes:               maxPlanStepTextBytes,

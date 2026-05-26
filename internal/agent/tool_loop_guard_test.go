@@ -489,6 +489,56 @@ func TestToolLoopGuard_WebSearchNoEvidenceUsesSearchGuidance(t *testing.T) {
 	}
 }
 
+func TestToolLoopGuard_BrowserFindNoMatchesStopsPageTextSearchLoop(t *testing.T) {
+	g := newToolLoopGuard()
+	args := json.RawMessage(`{"query":"market cap","max_results":3}`)
+	noMatch := "SourceAccess: browser_rendered_url=https://dash.example/subnets/120; snapshot_id=3; page_text_below=verified_page_evidence\nQUERY: \"market cap\"\nMATCHES: none\nNext: retry browser_find with a shorter or different visible phrase, call browser_snapshot to inspect current text, scroll once if the desired section is likely off-screen, or continue from existing evidence.\n"
+	for i := 1; i < browserFindNoMatchThreshold; i++ {
+		if got := g.recordAttempt("browser_find", args); got != "" {
+			t.Fatalf("browser_find attempt %d should pass before no-match threshold: %q", i, got)
+		}
+		guard, ok := g.recordToolResult("browser_find", args, noMatch, false)
+		if guard != "" || !ok {
+			t.Fatalf("browser_find no-match %d should not guard yet; guard=%q ok=%v", i, guard, ok)
+		}
+	}
+	if got := g.recordAttempt("browser_find", json.RawMessage(`{"query":"validators","max_results":3}`)); got != "" {
+		t.Fatalf("attempt at threshold should still run so it can record its result: %q", got)
+	}
+	guard, ok := g.recordToolResult("browser_find", json.RawMessage(`{"query":"validators","max_results":3}`), noMatch, false)
+	if ok {
+		t.Fatal("threshold no-match should count as no new evidence")
+	}
+	for _, want := range []string{
+		"browser_find returned no matches",
+		"https://dash.example/subnets/120",
+		"browser_snapshot",
+		"browser_network/browser_network_read",
+		"not visible in the inspected page",
+		"Failure: kind=loop_guard_no_new_evidence",
+	} {
+		if !strings.Contains(guard, want) {
+			t.Fatalf("browser_find no-new-evidence guard missing %q: %q", want, guard)
+		}
+	}
+}
+
+func TestToolLoopGuard_BrowserFindMatchResetsNoMatchLoop(t *testing.T) {
+	g := newToolLoopGuard()
+	args := json.RawMessage(`{"query":"market cap","max_results":3}`)
+	noMatch := "SourceAccess: browser_rendered_url=https://dash.example/subnets/120; snapshot_id=3; page_text_below=verified_page_evidence\nQUERY: \"market cap\"\nMATCHES: none\n"
+	match := "SourceAccess: browser_rendered_url=https://dash.example/subnets/120; snapshot_id=4; page_text_below=verified_page_evidence\nQUERY: \"market\"\nMATCHES:\n- [text] Market Cap 201.04K T\n"
+	for i := 0; i < browserFindNoMatchThreshold-1; i++ {
+		g.recordToolResult("browser_find", args, noMatch, false)
+	}
+	if guard, ok := g.recordToolResult("browser_find", json.RawMessage(`{"query":"market"}`), match, false); guard != "" || !ok {
+		t.Fatalf("browser_find match should reset no-match loop; guard=%q ok=%v", guard, ok)
+	}
+	if guard, ok := g.recordToolResult("browser_find", args, noMatch, false); guard != "" || !ok {
+		t.Fatalf("post-match no-match should restart count, not guard; guard=%q ok=%v", guard, ok)
+	}
+}
+
 // TestToolLoopGuard_PerTurnCallCapForRunTask pins the
 // over-delegation mitigation: a model can keep varying run_task's
 // arguments (different task_type / objective / max_turns each call)

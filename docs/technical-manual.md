@@ -402,7 +402,11 @@ still get one distinct-URL retry before host-level blocking. Repeated
 `dynamic_shell` results on the same host also block additional dashboard/page
 routes, while leaving likely API/text/export paths such as `/api/...` or
 `.json`/`.csv` URLs available as fallbacks. Generic identical call repeats emit
-`loop_guard_repeated_call`, and per-turn workflow caps emit
+`loop_guard_repeated_call`. Browser page-text search also has an evidence
+guard: after `browser_find` returns no matches on the same rendered page three
+times in one turn, the runtime emits `loop_guard_no_new_evidence` and steers
+the model toward one snapshot inspection, `browser_network`/`browser_network_read`,
+a different source, or a clearly marked gap. Per-turn workflow caps emit
 `loop_guard_call_cap`. First-tool and post-tool workflow policies emit
 `tool_policy_first_tool`, `tool_policy_repeat`, or `tool_policy_active` when
 they block a model call before the underlying tool runs. Per-turn stats expose
