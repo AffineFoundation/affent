@@ -566,7 +566,22 @@ function sessionCompactionMetric(summary: SessionContextCompactionSummary | unde
     latestReactive: summary.latest_reactive,
     removedMessages: summary.removed_messages,
     tailOnly: summary.tail_only,
+    summaryLabel: durableCompactionSummaryLabel(summary),
   });
+}
+
+function durableCompactionSummaryLabel(summary: SessionContextCompactionSummary): string | undefined {
+  if (summary.latest_summary_state === "missing") return "summary missing";
+  if (summary.latest_summary_state === "empty") return "summary empty";
+  if ((summary.summary_missing ?? 0) > 0) {
+    const count = summary.summary_missing ?? 0;
+    return `${count} missing ${count === 1 ? "summary" : "summaries"}`;
+  }
+  if ((summary.summary_empty ?? 0) > 0) {
+    const count = summary.summary_empty ?? 0;
+    return `${count} empty ${count === 1 ? "summary" : "summaries"}`;
+  }
+  return undefined;
 }
 
 function formatCompactionMetric({

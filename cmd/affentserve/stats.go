@@ -302,6 +302,8 @@ func addRuntimeStatsSnapshot(dst *RuntimeStatsSnapshot, src RuntimeStatsSnapshot
 	dst.ContextCompactionsReactive += src.ContextCompactionsReactive
 	dst.ContextCompactionRemovedMessages += src.ContextCompactionRemovedMessages
 	dst.ContextCompactionSummaryBytes += src.ContextCompactionSummaryBytes
+	dst.ContextCompactionSummaryMissing += src.ContextCompactionSummaryMissing
+	dst.ContextCompactionSummaryEmpty += src.ContextCompactionSummaryEmpty
 	if len(src.TurnEndByReason) > 0 {
 		if dst.TurnEndByReason == nil {
 			dst.TurnEndByReason = make(map[string]int64, len(src.TurnEndByReason))

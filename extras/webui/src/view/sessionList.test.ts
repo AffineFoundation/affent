@@ -224,6 +224,8 @@ describe("sessionList view model", () => {
           count: 3,
           reactive: 2,
           removed_messages: 144,
+          summary_missing: 1,
+          latest_summary_state: "missing",
           latest_reactive: false,
           tail_only: true,
         },
@@ -232,8 +234,8 @@ describe("sessionList view model", () => {
 
     expect(rows.find((row) => row.id === "compacted-session")?.metrics).toContain("2 compactions, reactive, -96 msgs");
     expect(rows.find((row) => row.id === "compacted-session")?.searchText).toContain("2 compactions, reactive, -96 msgs");
-    expect(rows.find((row) => row.id === "large-compacted-session")?.metrics).toContain("recent 3 compactions, -144 msgs");
-    expect(rows.find((row) => row.id === "large-compacted-session")?.searchText).toContain("recent 3 compactions");
+    expect(rows.find((row) => row.id === "large-compacted-session")?.metrics).toContain("recent 3 compactions, -144 msgs, summary missing");
+    expect(rows.find((row) => row.id === "large-compacted-session")?.searchText).toContain("summary missing");
   });
 
   it("filters rows by status, features, and search text", () => {

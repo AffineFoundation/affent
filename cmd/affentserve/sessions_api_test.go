@@ -310,6 +310,7 @@ func TestSummarizeDurableSessionRestoresTopicFromEventsAfterCompaction(t *testin
 	if err := os.WriteFile(filepath.Join(dir, "events.jsonl"), []byte(
 		sessionEventLine(t, sse.TypeUserMessage, sse.UserMessagePayload{TurnID: "t1", Text: "affine 是 Bittensor 的一个子网，请收集信息并向我介绍"})+
 			sessionEventLine(t, sse.TypeContextCompact, sse.ContextCompactPayload{TurnID: "t1", BeforeMessages: 48, AfterMessages: 12, RemovedMessages: 36, Reactive: true, Reason: "context_overflow", SummaryPresent: true, SummaryBytes: 1024})+
+			sessionEventLine(t, sse.TypeContextCompact, map[string]any{"turn_id": "t2", "before_messages": 44, "after_messages": 18, "removed_messages": 26, "reactive": false, "reason": "proactive_threshold", "summary_present": false})+
 			sessionEventLine(t, sse.TypeUserMessage, sse.UserMessagePayload{TurnID: "t2", Text: "请继续同一个任务。基于已有证据输出报告"}),
 	), 0o644); err != nil {
 		t.Fatal(err)
@@ -334,12 +335,14 @@ func TestSummarizeDurableSessionRestoresTopicFromEventsAfterCompaction(t *testin
 	if summary.ContextCompactions == nil {
 		t.Fatal("context_compactions should be summarized from durable events")
 	}
-	if summary.ContextCompactions.Count != 1 ||
+	if summary.ContextCompactions.Count != 2 ||
 		summary.ContextCompactions.Reactive != 1 ||
-		summary.ContextCompactions.RemovedMessages != 36 ||
+		summary.ContextCompactions.RemovedMessages != 62 ||
 		summary.ContextCompactions.SummaryBytes != 1024 ||
-		summary.ContextCompactions.LatestReason != "context_overflow" ||
-		!summary.ContextCompactions.LatestReactive {
+		summary.ContextCompactions.SummaryMissing != 1 ||
+		summary.ContextCompactions.LatestReason != "proactive_threshold" ||
+		summary.ContextCompactions.LatestReactive ||
+		summary.ContextCompactions.LatestSummaryState != "missing" {
 		t.Fatalf("context_compactions = %+v, want durable compaction summary", summary.ContextCompactions)
 	}
 }

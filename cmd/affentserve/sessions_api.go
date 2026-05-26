@@ -85,13 +85,16 @@ type sessionContextSummary struct {
 }
 
 type sessionContextCompactionSummary struct {
-	Count           int    `json:"count"`
-	Reactive        int    `json:"reactive"`
-	RemovedMessages int    `json:"removed_messages"`
-	SummaryBytes    int    `json:"summary_bytes,omitempty"`
-	LatestReason    string `json:"latest_reason,omitempty"`
-	LatestReactive  bool   `json:"latest_reactive,omitempty"`
-	TailOnly        bool   `json:"tail_only,omitempty"`
+	Count              int    `json:"count"`
+	Reactive           int    `json:"reactive"`
+	RemovedMessages    int    `json:"removed_messages"`
+	SummaryBytes       int    `json:"summary_bytes,omitempty"`
+	SummaryMissing     int    `json:"summary_missing,omitempty"`
+	SummaryEmpty       int    `json:"summary_empty,omitempty"`
+	LatestReason       string `json:"latest_reason,omitempty"`
+	LatestReactive     bool   `json:"latest_reactive,omitempty"`
+	LatestSummaryState string `json:"latest_summary_state,omitempty"`
+	TailOnly           bool   `json:"tail_only,omitempty"`
 }
 
 type sessionCapabilities struct {
@@ -482,6 +485,8 @@ func contextCompactionSummaryFromRuntimeStats(stats RuntimeStatsSnapshot) *sessi
 		Reactive:        int(stats.ContextCompactionsReactive),
 		RemovedMessages: int(stats.ContextCompactionRemovedMessages),
 		SummaryBytes:    int(stats.ContextCompactionSummaryBytes),
+		SummaryMissing:  int(stats.ContextCompactionSummaryMissing),
+		SummaryEmpty:    int(stats.ContextCompactionSummaryEmpty),
 	}
 }
 
@@ -928,6 +933,10 @@ func scanContextCompactionsFromEvents(r *bufio.Reader) (sessionContextCompaction
 		if err := json.Unmarshal(ev.Data, &p); err != nil {
 			continue
 		}
+		var raw struct {
+			SummaryPresent *bool `json:"summary_present"`
+		}
+		_ = json.Unmarshal(ev.Data, &raw)
 		summary.Count++
 		if p.Reactive {
 			summary.Reactive++
@@ -936,8 +945,29 @@ func scanContextCompactionsFromEvents(r *bufio.Reader) (sessionContextCompaction
 		summary.SummaryBytes += p.SummaryBytes
 		summary.LatestReason = p.Reason
 		summary.LatestReactive = p.Reactive
+		state := contextCompactSummaryState(p.SummaryPresent, p.SummaryBytes, p.SummaryPreview, raw.SummaryPresent != nil)
+		switch state {
+		case "missing":
+			summary.SummaryMissing++
+		case "empty":
+			summary.SummaryEmpty++
+		}
+		summary.LatestSummaryState = state
 	}
 	return summary, nil
+}
+
+func contextCompactSummaryState(summaryPresent bool, summaryBytes int, summaryPreview string, summaryPresentKnown bool) string {
+	if summaryBytes > 0 || strings.TrimSpace(summaryPreview) != "" {
+		return "present"
+	}
+	if !summaryPresentKnown {
+		return ""
+	}
+	if !summaryPresent {
+		return "missing"
+	}
+	return "empty"
 }
 
 func seekSessionSummaryTail(f *os.File) error {

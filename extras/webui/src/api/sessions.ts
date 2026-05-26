@@ -184,8 +184,11 @@ export interface SessionContextCompactionSummary {
   reactive: number;
   removed_messages: number;
   summary_bytes?: number;
+  summary_missing?: number;
+  summary_empty?: number;
   latest_reason?: string;
   latest_reactive?: boolean;
+  latest_summary_state?: "present" | "missing" | "empty";
   tail_only?: boolean;
 }
 

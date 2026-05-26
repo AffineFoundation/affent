@@ -94,6 +94,8 @@ type Session struct {
 	contextCompactionReact atomic.Int64
 	contextCompactionRmMsg atomic.Int64
 	contextCompactionBytes atomic.Int64
+	contextCompactionMiss  atomic.Int64
+	contextCompactionEmpty atomic.Int64
 	runtimeStatsMu         sync.Mutex
 	turnEndByReason        map[string]int64
 	runtimeErrorByKind     map[string]int64
@@ -1537,6 +1539,8 @@ type RuntimeStatsSnapshot struct {
 	ContextCompactionsReactive       int64            `json:"context_compactions_reactive,omitempty"`
 	ContextCompactionRemovedMessages int64            `json:"context_compaction_removed_messages,omitempty"`
 	ContextCompactionSummaryBytes    int64            `json:"context_compaction_summary_bytes,omitempty"`
+	ContextCompactionSummaryMissing  int64            `json:"context_compaction_summary_missing,omitempty"`
+	ContextCompactionSummaryEmpty    int64            `json:"context_compaction_summary_empty,omitempty"`
 }
 
 func (s *Session) RuntimeStatsSnapshot() RuntimeStatsSnapshot {
@@ -1555,6 +1559,8 @@ func (s *Session) RuntimeStatsSnapshot() RuntimeStatsSnapshot {
 		ContextCompactionsReactive:       s.contextCompactionReact.Load(),
 		ContextCompactionRemovedMessages: s.contextCompactionRmMsg.Load(),
 		ContextCompactionSummaryBytes:    s.contextCompactionBytes.Load(),
+		ContextCompactionSummaryMissing:  s.contextCompactionMiss.Load(),
+		ContextCompactionSummaryEmpty:    s.contextCompactionEmpty.Load(),
 	}
 }
 
@@ -1641,6 +1647,12 @@ func (s *Session) addContextCompaction(p sse.ContextCompactPayload) {
 	}
 	if p.SummaryBytes > 0 {
 		s.contextCompactionBytes.Add(int64(p.SummaryBytes))
+	}
+	switch contextCompactSummaryState(p.SummaryPresent, p.SummaryBytes, p.SummaryPreview, true) {
+	case "missing":
+		s.contextCompactionMiss.Add(1)
+	case "empty":
+		s.contextCompactionEmpty.Add(1)
 	}
 }
 

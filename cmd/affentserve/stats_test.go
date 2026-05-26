@@ -647,6 +647,7 @@ func TestSession_RuntimeStatsSnapshot_AccumulatesTurnReasonsAndErrors(t *testing
 	for _, p := range []sse.ContextCompactPayload{
 		{TurnID: "t2", BeforeMessages: 60, AfterMessages: 18, RemovedMessages: 42, Reactive: true, Reason: "context_overflow", SummaryPresent: true, SummaryBytes: 2048},
 		{TurnID: "t3", BeforeMessages: 48, AfterMessages: 20, RemovedMessages: 28, Reactive: false, Reason: "proactive_threshold", SummaryPresent: true, SummaryBytes: 1024},
+		{TurnID: "t4", BeforeMessages: 44, AfterMessages: 18, RemovedMessages: 26, Reactive: true, Reason: "context_overflow", SummaryPresent: false},
 	} {
 		ev, err := sse.NewEvent(sse.TypeContextCompact, p)
 		if err != nil {
@@ -666,10 +667,11 @@ func TestSession_RuntimeStatsSnapshot_AccumulatesTurnReasonsAndErrors(t *testing
 			got.RuntimeErrors == 3 &&
 			got.RuntimeErrorByKind["llm_timeout"] == 1 &&
 			got.RuntimeErrorByKind["llm_incomplete_stream"] == 1 &&
-			got.ContextCompactions == 2 &&
-			got.ContextCompactionsReactive == 1 &&
-			got.ContextCompactionRemovedMessages == 70 &&
-			got.ContextCompactionSummaryBytes == 3072 {
+			got.ContextCompactions == 3 &&
+			got.ContextCompactionsReactive == 2 &&
+			got.ContextCompactionRemovedMessages == 96 &&
+			got.ContextCompactionSummaryBytes == 3072 &&
+			got.ContextCompactionSummaryMissing == 1 {
 			break
 		}
 		if time.Now().After(deadline) {
@@ -695,22 +697,24 @@ func TestSession_RuntimeStatsSnapshot_AccumulatesTurnReasonsAndErrors(t *testing
 		resp.Sessions[0].Runtime.RuntimeErrors != 3 ||
 		resp.Aggregate.Runtime.RuntimeErrorByKind["llm_timeout"] != 1 ||
 		resp.Aggregate.Runtime.RuntimeErrorByKind["llm_incomplete_stream"] != 1 ||
-		resp.Sessions[0].Runtime.ContextCompactions != 2 ||
-		resp.Aggregate.Runtime.ContextCompactionRemovedMessages != 70 {
+		resp.Sessions[0].Runtime.ContextCompactions != 3 ||
+		resp.Aggregate.Runtime.ContextCompactionRemovedMessages != 96 ||
+		resp.Aggregate.Runtime.ContextCompactionSummaryMissing != 1 {
 		t.Fatalf("runtime stats = session:%+v aggregate:%+v", resp.Sessions[0].Runtime, resp.Aggregate.Runtime)
 	}
 	summary := summarizeActiveSession(s, pool.cfg)
 	if summary.Runtime == nil ||
 		summary.Runtime.TurnEndByReason[sse.TurnEndMaxTurns] != 2 ||
 		summary.Runtime.RuntimeErrorByKind["llm_timeout"] != 1 ||
-		summary.Runtime.ContextCompactions != 2 {
+		summary.Runtime.ContextCompactions != 3 {
 		t.Fatalf("active session runtime summary = %+v", summary.Runtime)
 	}
 	if summary.ContextCompactions == nil ||
-		summary.ContextCompactions.Count != 2 ||
-		summary.ContextCompactions.Reactive != 1 ||
-		summary.ContextCompactions.RemovedMessages != 70 ||
-		summary.ContextCompactions.SummaryBytes != 3072 {
+		summary.ContextCompactions.Count != 3 ||
+		summary.ContextCompactions.Reactive != 2 ||
+		summary.ContextCompactions.RemovedMessages != 96 ||
+		summary.ContextCompactions.SummaryBytes != 3072 ||
+		summary.ContextCompactions.SummaryMissing != 1 {
 		t.Fatalf("active session context compactions = %+v", summary.ContextCompactions)
 	}
 }
