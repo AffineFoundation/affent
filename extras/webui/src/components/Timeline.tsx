@@ -20,6 +20,8 @@ const timelineFilterModes: { mode: TimelineFilterMode; label: string }[] = [
   { mode: "repaired", label: "Repaired" },
 ];
 
+const textSelectionPauseMs = 2200;
+
 // The conversation is the primary product surface. Keep the scan path clean:
 // auxiliary traces stay inline with the turns that produced them.
 export function Timeline({
@@ -56,6 +58,7 @@ export function Timeline({
   const userBrowsedHistory = useRef(false);
   const autoFollowPaused = useRef(false);
   const pointerSelecting = useRef(false);
+  const selectionPauseUntil = useRef(0);
   const touchStartY = useRef<number | undefined>(undefined);
   const [following, setFollowing] = useState(true);
   const [newActivity, setNewActivity] = useState(false);
@@ -77,6 +80,7 @@ export function Timeline({
     userBrowsedHistory.current = false;
     autoFollowPaused.current = false;
     pointerSelecting.current = false;
+    selectionPauseUntil.current = 0;
     latestAnswerRef.current = null;
     setFilterMode("all");
     setFilterQuery("");
@@ -86,20 +90,26 @@ export function Timeline({
 
   useEffect(() => {
     const scrollRoot = scrollRootRef?.current;
-    const shouldIgnorePointer = (event: Event) => {
-      if (event.type !== "pointerdown") return false;
+    const shouldIgnoreInteraction = (event: Event) => {
       const target = event.target;
       if (!(target instanceof HTMLElement)) return false;
       return Boolean(target.closest("button, a, input, textarea, select, summary, [role='button']"));
     };
+    const holdSelectionPause = () => {
+      selectionPauseUntil.current = Date.now() + textSelectionPauseMs;
+      userBrowsedHistory.current = true;
+      autoFollowPaused.current = true;
+    };
+    const isSelectionInteractionActive = () => pointerSelecting.current || Date.now() < selectionPauseUntil.current || hasActiveTextSelection();
     const distanceToLatest = () => latestDistance(scrollRoot);
     const onTouchStart = (event: Event) => {
       const touchEvent = event as TouchEvent;
       touchStartY.current = touchEvent.touches[0]?.clientY;
+      if (!shouldIgnoreInteraction(event)) holdSelectionPause();
     };
     const markUserBrowsing = (event: Event) => {
-      if (shouldIgnorePointer(event)) return;
-      if (pointerSelecting.current || hasActiveTextSelection()) {
+      if (shouldIgnoreInteraction(event)) return;
+      if (isSelectionInteractionActive()) {
         if (event.type !== "pointerdown") return;
       }
       if (isForwardOverscrollAtLatest(event, distanceToLatest(), touchStartY.current)) return;
@@ -107,6 +117,7 @@ export function Timeline({
       autoFollowPaused.current = true;
       if (event.type === "pointerdown") {
         pointerSelecting.current = true;
+        holdSelectionPause();
         return;
       }
       setFollowing(false);
@@ -116,12 +127,13 @@ export function Timeline({
     };
     const onSelectionChange = () => {
       if (hasActiveTextSelection()) {
+        selectionPauseUntil.current = Date.now() + textSelectionPauseMs;
         userBrowsedHistory.current = true;
         autoFollowPaused.current = true;
       }
     };
     const onScroll = () => {
-      if (hasActiveTextSelection()) {
+      if (isSelectionInteractionActive()) {
         return;
       }
       const distance = distanceToLatest();
@@ -159,7 +171,7 @@ export function Timeline({
     const hasNewActivity = activityCount > prevActivityCount.current;
     prevActivityCount.current = activityCount;
     if (!hasNewActivity) return;
-    const selectingText = pointerSelecting.current || hasActiveTextSelection();
+    const selectingText = pointerSelecting.current || Date.now() < selectionPauseUntil.current || hasActiveTextSelection();
     if (selectingText) {
       userBrowsedHistory.current = true;
       autoFollowPaused.current = true;
@@ -197,6 +209,7 @@ export function Timeline({
     userBrowsedHistory.current = false;
     autoFollowPaused.current = false;
     pointerSelecting.current = false;
+    selectionPauseUntil.current = 0;
     touchStartY.current = undefined;
     setFollowing(true);
     setNewActivity(false);

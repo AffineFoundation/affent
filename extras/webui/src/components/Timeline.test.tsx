@@ -1276,6 +1276,24 @@ describe("Timeline", () => {
     expect(screen.getByRole("button", { name: /jump to latest/i })).toBeInTheDocument();
   });
 
+  it("does not force live follow during a mobile long press before selection appears", () => {
+    const { scrollIntoView } = installScrollIntoViewSpy();
+    const { rerender } = render(<ScrollHarness events={completedTurn} />);
+    const scrollRoot = screen.getByTestId("scroll-root");
+    Object.defineProperties(scrollRoot, {
+      clientHeight: { configurable: true, value: 300 },
+      scrollHeight: { configurable: true, value: 1200 },
+      scrollTop: { configurable: true, writable: true, value: 900 },
+    });
+
+    fireEvent.touchStart(scrollRoot, { touches: [{ clientY: 180 }] });
+    fireEvent.scroll(scrollRoot);
+    rerender(<ScrollHarness events={completedTurn} guidanceReceipts={[{ id: 1, text: "check tests first" }]} />);
+
+    expect(scrollIntoView).not.toHaveBeenCalled();
+    expect(screen.getByRole("button", { name: /jump to latest/i })).toBeInTheDocument();
+  });
+
   it("does not synthesize edge scrolling while selecting text", () => {
     render(<ScrollHarness events={completedTurn} />);
     const scrollRoot = screen.getByTestId("scroll-root");
