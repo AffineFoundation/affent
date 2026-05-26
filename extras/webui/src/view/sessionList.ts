@@ -248,6 +248,7 @@ function currentSessionMetrics(session: SessionState): string[] {
   const toolIssueCount = session.turns.reduce((sum, turn) => sum + settledToolIssueCount(turn), 0);
   const guardMetric = loopGuardMetric(currentSessionLoopGuardStats(session));
   const sourceMetric = sourceAccessMetric(currentSessionSourceAccessStats(session));
+  const recallMetric = sessionSearchMetric(currentSessionRecallStats(session));
   const artifactMetric = currentSessionArtifactMetric(session);
   const compactionMetric = currentSessionCompactionMetric(session);
   return [summarizeSessionMetrics({
@@ -257,7 +258,7 @@ function currentSessionMetrics(session: SessionState): string[] {
     continued: continuedCount,
     priorIssues: priorIssueCount,
     toolIssues: toolIssueCount,
-  }), ...(guardMetric ? [guardMetric] : []), ...(sourceMetric ? [sourceMetric] : []), ...(compactionMetric ? [compactionMetric] : []), ...(artifactMetric ? [artifactMetric] : [])];
+  }), ...(guardMetric ? [guardMetric] : []), ...(sourceMetric ? [sourceMetric] : []), ...(recallMetric ? [recallMetric] : []), ...(compactionMetric ? [compactionMetric] : []), ...(artifactMetric ? [artifactMetric] : [])];
 }
 
 function summarizeSessionMetrics({
@@ -304,6 +305,7 @@ function currentSessionSearchMetrics(session: SessionState): string[] {
   const toolIssueCount = session.turns.reduce((sum, turn) => sum + settledToolIssueCount(turn), 0);
   const guardMetric = loopGuardMetric(currentSessionLoopGuardStats(session));
   const sourceMetric = sourceAccessMetric(currentSessionSourceAccessStats(session));
+  const recallMetric = sessionSearchMetric(currentSessionRecallStats(session));
   const artifactMetric = currentSessionArtifactMetric(session);
   const compactionMetric = currentSessionCompactionMetric(session);
   const metrics = [`${session.turns.length} message${session.turns.length === 1 ? "" : "s"}`];
@@ -314,6 +316,7 @@ function currentSessionSearchMetrics(session: SessionState): string[] {
   if (toolIssueCount > 0) metrics.push(`${toolIssueCount} tool issue${toolIssueCount === 1 ? "" : "s"}`);
   if (guardMetric) metrics.push(guardMetric);
   if (sourceMetric) metrics.push(sourceMetric);
+  if (recallMetric) metrics.push(recallMetric);
   if (compactionMetric) metrics.push(compactionMetric);
   if (artifactMetric) metrics.push(artifactMetric);
   return metrics;
@@ -340,6 +343,18 @@ function currentSessionSourceAccessStats(session: SessionState): Required<Source
     stats.source_access_dynamic_partial += toolStats.source_access_dynamic_partial ?? 0;
     return stats;
   }, emptySourceAccessStats());
+}
+
+function currentSessionRecallStats(session: SessionState): Required<SessionSearchStats> {
+  return session.turns.reduce<Required<SessionSearchStats>>((stats, turn) => {
+    const toolStats = turn.toolStats;
+    if (!toolStats) return stats;
+    stats.session_search_calls += toolStats.session_search_calls ?? 0;
+    stats.session_search_results += toolStats.session_search_results ?? 0;
+    stats.session_search_context_hits += toolStats.session_search_context_hits ?? 0;
+    stats.session_search_matched_terms += toolStats.session_search_matched_terms ?? 0;
+    return stats;
+  }, emptySessionSearchStats());
 }
 
 function currentSessionArtifactMetric(session: SessionState): string | undefined {
@@ -435,6 +450,8 @@ function usageMetrics(session: SessionSummary): string[] {
   if (guardMetric) metrics.push(guardMetric);
   const sourceMetric = sourceAccessMetric(session.tools);
   if (sourceMetric) metrics.push(sourceMetric);
+  const recallMetric = sessionSearchMetric(session.tools);
+  if (recallMetric) metrics.push(recallMetric);
   const contextMetric = sessionContextMetric(session.context);
   if (contextMetric) metrics.push(contextMetric);
   const compactionMetric = sessionCompactionMetric(session.context_compactions);
@@ -494,6 +511,35 @@ function sourceAccessMetric(stats: SourceAccessStats | undefined): string | unde
   if (network > 0) parts.push(`${network} network`);
   if (partial > 0) parts.push(`${partial} partial`);
   if (discovery > 0) parts.push(`${discovery} discovery`);
+  return parts.join(", ");
+}
+
+interface SessionSearchStats {
+  session_search_calls?: number;
+  session_search_results?: number;
+  session_search_context_hits?: number;
+  session_search_matched_terms?: number;
+}
+
+function emptySessionSearchStats(): Required<SessionSearchStats> {
+  return {
+    session_search_calls: 0,
+    session_search_results: 0,
+    session_search_context_hits: 0,
+    session_search_matched_terms: 0,
+  };
+}
+
+function sessionSearchMetric(stats: SessionSearchStats | undefined): string | undefined {
+  const calls = stats?.session_search_calls ?? 0;
+  const results = stats?.session_search_results ?? 0;
+  const contextHits = stats?.session_search_context_hits ?? 0;
+  const matchedTerms = stats?.session_search_matched_terms ?? 0;
+  if (calls <= 0 && results <= 0 && contextHits <= 0 && matchedTerms <= 0) return undefined;
+  const parts = [`Recall ${results} hit${results === 1 ? "" : "s"}`];
+  if (calls > 1 || results === 0) parts.push(`${calls} search${calls === 1 ? "" : "es"}`);
+  if (contextHits > 0) parts.push(`${contextHits} context`);
+  if (matchedTerms > 0) parts.push(`${matchedTerms} terms`);
   return parts.join(", ");
 }
 

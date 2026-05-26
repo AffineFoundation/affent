@@ -476,6 +476,8 @@ function toolRuntimeStatsMeta(toolStats: Record<string, unknown> | undefined): s
   const loopGuard = readNumber(toolStats, "loop_guard_interventions");
   const forcedNoTools = readNumber(toolStats, "forced_no_tools");
   const memoryUpdates = readNumber(toolStats, "memory_updates");
+  const sessionSearchCalls = readNumber(toolStats, "session_search_calls");
+  const sessionSearchResults = readNumber(toolStats, "session_search_results");
   const verifiedSources = readNumber(toolStats, "source_access_verified");
   const networkSources = readNumber(toolStats, "source_access_network");
   const dynamicPartialSources = readNumber(toolStats, "source_access_dynamic_partial");
@@ -487,11 +489,23 @@ function toolRuntimeStatsMeta(toolStats: Record<string, unknown> | undefined): s
     typeof loopGuard === "number" && loopGuard > 0 ? `Guard ${loopGuard}` : undefined,
     typeof forcedNoTools === "number" && forcedNoTools > 0 ? `${forcedNoTools} no-tools` : undefined,
     typeof memoryUpdates === "number" && memoryUpdates > 0 ? memoryUpdateStatsMeta(toolStats, memoryUpdates) : undefined,
+    typeof sessionSearchResults === "number" && (sessionSearchResults > 0 || (sessionSearchCalls ?? 0) > 0) ? sessionSearchStatsMeta(toolStats, sessionSearchResults) : undefined,
     typeof verifiedSources === "number" && verifiedSources > 0 ? `${verifiedSources} sources` : undefined,
     typeof networkSources === "number" && networkSources > 0 ? `${networkSources} network` : undefined,
     typeof dynamicPartialSources === "number" && dynamicPartialSources > 0 ? `${dynamicPartialSources} partial` : undefined,
     typeof toolDuration === "number" ? formatDuration(toolDuration) : undefined,
   ]);
+}
+
+function sessionSearchStatsMeta(toolStats: Record<string, unknown> | undefined, results: number): string {
+  const calls = readNumber(toolStats, "session_search_calls") ?? 0;
+  const contextHits = readNumber(toolStats, "session_search_context_hits") ?? 0;
+  const matchedTerms = readNumber(toolStats, "session_search_matched_terms") ?? 0;
+  const parts = [`Recall ${results} hit${results === 1 ? "" : "s"}`];
+  if (calls > 1 || results === 0) parts.push(`${calls} search${calls === 1 ? "" : "es"}`);
+  if (contextHits > 0) parts.push(`${contextHits} context`);
+  if (matchedTerms > 0) parts.push(`${matchedTerms} terms`);
+  return parts.join(", ");
 }
 
 function memoryUpdateStatsMeta(toolStats: Record<string, unknown> | undefined, total: number): string {

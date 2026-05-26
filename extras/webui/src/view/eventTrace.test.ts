@@ -71,7 +71,26 @@ describe("eventTrace view model", () => {
           summary_bytes: 2048,
         },
       },
-      { id: 7, type: "turn.end", data: { turn_id: "t1", reason: "max_turns", tool_stats: { tool_requests: 2, tool_errors: 1, source_access_verified: 2, source_access_network: 1, source_access_dynamic_partial: 1, tool_duration_ms: 1200 } } },
+      {
+        id: 7,
+        type: "turn.end",
+        data: {
+          turn_id: "t1",
+          reason: "max_turns",
+          tool_stats: {
+            tool_requests: 2,
+            tool_errors: 1,
+            session_search_calls: 1,
+            session_search_results: 2,
+            session_search_context_hits: 1,
+            session_search_matched_terms: 3,
+            source_access_verified: 2,
+            source_access_network: 1,
+            source_access_dynamic_partial: 1,
+            tool_duration_ms: 1200,
+          },
+        },
+      },
     ]));
     const [request, result, surface, decision, compacted, finished] = model.items;
 
@@ -122,7 +141,7 @@ describe("eventTrace view model", () => {
       kind: "event",
       display: {
         label: "Stopped at limit",
-        meta: ["Request 1", "max_turns", "2 actions", "1 failed", "2 sources", "1 network", "1 partial", "1.2 s"],
+        meta: ["Request 1", "max_turns", "2 actions", "1 failed", "Recall 2 hits, 1 context, 3 terms", "2 sources", "1 network", "1 partial", "1.2 s"],
       },
     });
   });
@@ -246,6 +265,10 @@ describe("eventTrace view model", () => {
             memory_updates: 3,
             memory_update_add: 2,
             memory_update_replace: 1,
+            session_search_calls: 1,
+            session_search_results: 2,
+            session_search_context_hits: 1,
+            session_search_matched_terms: 3,
             source_access_verified: 2,
             tool_duration_ms: 1250,
           },
@@ -282,6 +305,7 @@ describe("eventTrace view model", () => {
           "Guard 2",
           "1 no-tools",
           "3 memory updates (2 add, 1 replace)",
+          "Recall 2 hits, 1 context, 3 terms",
           "2 sources",
           "1.3 s",
         ],

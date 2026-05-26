@@ -75,6 +75,30 @@ describe("sessionList view model", () => {
     expect(rows[0].searchText).toContain("1 network");
   });
 
+  it("surfaces session search recall quality in row stats and search", () => {
+    const rows = buildSessionRows([
+      session({
+        id: "recall-session",
+        durable: true,
+        latest_user_message: "resume alpha coast analysis",
+        tools: {
+          tool_requests: 1,
+          tool_errors: 0,
+          tool_repair_succeeded: 0,
+          tool_repair_failed: 0,
+          session_search_calls: 1,
+          session_search_results: 2,
+          session_search_context_hits: 1,
+          session_search_matched_terms: 3,
+        },
+      }),
+    ]);
+
+    expect(rows[0].metrics).toContain("Recall 2 hits, 1 context, 3 terms");
+    expect(rows[0].stats).toBe("1 action · Recall 2 hits, 1 context, 3 terms");
+    expect(rows[0].searchText).toContain("recall 2 hits, 1 context, 3 terms");
+  });
+
   it("surfaces loop guard interventions in row stats and search", () => {
     const rows = buildSessionRows([
       session({
@@ -802,6 +826,34 @@ describe("sessionList view model", () => {
 
     expect(rows[0].stats).toBe("1 message · Evidence 1/2 verified, 1 network, 1 partial, 1 discovery");
     expect(rows[0].searchText).toContain("evidence 1/2 verified");
+  });
+
+  it("surfaces live session search recall in the selected chat row stats", () => {
+    const rows = mergeCurrentSessionRow(
+      buildSessionRows([session({ id: "s1", durable: true, has_events: true })]),
+      "s1",
+      reduceRawEvents([
+        { id: 1, type: "turn.start", data: { turn_id: "t1" } },
+        { id: 2, type: "user.message", data: { turn_id: "t1", text: "resume alpha coast analysis" } },
+        {
+          id: 3,
+          type: "turn.end",
+          data: {
+            turn_id: "t1",
+            reason: "completed",
+            tool_stats: {
+              session_search_calls: 1,
+              session_search_results: 2,
+              session_search_context_hits: 1,
+              session_search_matched_terms: 3,
+            },
+          },
+        },
+      ]),
+    );
+
+    expect(rows[0].stats).toBe("1 message · Recall 2 hits, 1 context, 3 terms");
+    expect(rows[0].searchText).toContain("recall 2 hits, 1 context, 3 terms");
   });
 
   it("surfaces live loop guard interventions in the selected chat row stats", () => {

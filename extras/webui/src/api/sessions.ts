@@ -35,6 +35,10 @@ export interface ToolStatsSnapshot {
   source_access_discovery_only?: number;
   source_access_network?: number;
   source_access_dynamic_partial?: number;
+  session_search_calls?: number;
+  session_search_results?: number;
+  session_search_context_hits?: number;
+  session_search_matched_terms?: number;
   memory_updates?: number;
   memory_update_add?: number;
   memory_update_replace?: number;
