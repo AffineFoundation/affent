@@ -47,6 +47,7 @@ const (
 	compactDelegationMaxText = 6000
 	compactDelegationMaxList = 8
 	compactMemoryMaxText     = 500
+	compactPlanStepMaxText   = 300
 )
 
 // LLMSummaryCompactor implements rolling LLM summarization. Layout
@@ -355,6 +356,10 @@ func compactToolResultForSummary(toolName, content string) string {
 		if out, ok := compactMemoryResultForSummary(content); ok {
 			return out
 		}
+	case PlanToolName:
+		if out, ok := compactPlanResultForSummary(content); ok {
+			return out
+		}
 	}
 	return content
 }
@@ -396,6 +401,34 @@ func compactMemoryResultForSummary(content string) (string, bool) {
 	if len(resp.Topics) > 0 {
 		b.WriteString("\ntopics:")
 		appendCompactMemoryTopics(&b, resp.Topics)
+	}
+	return b.String(), true
+}
+
+func compactPlanResultForSummary(content string) (string, bool) {
+	var st planState
+	if err := json.Unmarshal([]byte(content), &st); err != nil {
+		return "", false
+	}
+	if st.Message == "" && st.UpdatedAt == "" && len(st.Steps) == 0 {
+		return "", false
+	}
+	var b strings.Builder
+	if st.Message != "" {
+		fmt.Fprintf(&b, "message: %s", textutil.Preview(strings.TrimSpace(st.Message), compactMemoryMaxText))
+	}
+	if st.UpdatedAt != "" {
+		if b.Len() > 0 {
+			b.WriteByte('\n')
+		}
+		fmt.Fprintf(&b, "updated_at: %s", textutil.Preview(strings.TrimSpace(st.UpdatedAt), 80))
+	}
+	if len(st.Steps) > 0 {
+		if b.Len() > 0 {
+			b.WriteByte('\n')
+		}
+		b.WriteString("steps:")
+		appendCompactPlanSteps(&b, st.Steps)
 	}
 	return b.String(), true
 }
@@ -583,6 +616,59 @@ func appendCompactMemoryTopics(b *strings.Builder, topics []memory.MemoryTopicSu
 	}
 	if len(topics) > limit {
 		fmt.Fprintf(b, "\n- ... %d more topic(s)", len(topics)-limit)
+	}
+}
+
+func appendCompactPlanSteps(b *strings.Builder, steps []planStep) {
+	limit := len(steps)
+	if limit > maxPlanSteps {
+		limit = maxPlanSteps
+	}
+	for i, step := range steps[:limit] {
+		status := strings.TrimSpace(step.Status)
+		if status == "" {
+			status = "pending"
+		}
+		fmt.Fprintf(b, "\n- %d. [%s] %s", i+1, status, textutil.Preview(strings.TrimSpace(step.Text), compactPlanStepMaxText))
+		if len(step.Evidence) > 0 {
+			b.WriteString(" evidence=")
+			appendCompactInlineList(b, step.Evidence, maxActivePlanEvidenceRefs, maxActivePlanEvidenceRefBytes)
+		}
+		if strings.TrimSpace(step.Note) != "" {
+			b.WriteString(" note=")
+			b.WriteString(textutil.Preview(strings.TrimSpace(step.Note), maxActivePlanNoteBytes))
+		}
+	}
+	if len(steps) > limit {
+		fmt.Fprintf(b, "\n- ... %d more step(s)", len(steps)-limit)
+	}
+}
+
+func appendCompactInlineList(b *strings.Builder, items []string, maxItems, maxText int) {
+	if maxItems <= 0 {
+		maxItems = len(items)
+	}
+	limit := len(items)
+	if limit > maxItems {
+		limit = maxItems
+	}
+	wrote := 0
+	for _, item := range items[:limit] {
+		item = strings.TrimSpace(item)
+		if item == "" {
+			continue
+		}
+		if wrote > 0 {
+			b.WriteString("; ")
+		}
+		b.WriteString(textutil.Preview(item, maxText))
+		wrote++
+	}
+	if len(items) > limit {
+		if wrote > 0 {
+			b.WriteString("; ")
+		}
+		fmt.Fprintf(b, "... %d more", len(items)-limit)
 	}
 }
 

@@ -147,6 +147,26 @@ func TestFormatEvent_CompactsDelegationToolResults(t *testing.T) {
 			}
 		}
 	})
+
+	t.Run("plan result keeps step state without raw JSON", func(t *testing.T) {
+		raw := `{"version":1,"updated_at":"2026-05-26T10:00:00Z","message":"updated step 2","steps":[{"text":"Inspect long-run trace pressure","status":"completed","evidence":["cmd/affenteval/main.go","go test ./cmd/affenteval"],"note":"gate added"},{"text":"Patch plan compaction summary","status":"in_progress","evidence":["internal/agent/compaction.go"]},{"text":"Run focused tests","status":"pending"}]}`
+		got := formatEvent(ChatMessage{Role: "tool", Name: PlanToolName, Content: raw})
+		for _, want := range []string{
+			"TOOL_RESULT[plan]",
+			"message: updated step 2",
+			"updated_at: 2026-05-26T10:00:00Z",
+			"1. [completed] Inspect long-run trace pressure evidence=cmd/affenteval/main.go; go test ./cmd/affenteval note=gate added",
+			"2. [in_progress] Patch plan compaction summary evidence=internal/agent/compaction.go",
+			"3. [pending] Run focused tests",
+		} {
+			if !strings.Contains(got, want) {
+				t.Fatalf("compact plan result missing %q:\n%s", want, got)
+			}
+		}
+		if strings.Contains(got, `"steps"`) || strings.Contains(got, `"status"`) {
+			t.Fatalf("compact plan result should not expose raw JSON scaffolding:\n%s", got)
+		}
+	})
 }
 
 // TestTruncateChars pins the byte-cap + UTF-8-safe truncation +
