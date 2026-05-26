@@ -52,6 +52,9 @@ func TestNetworkEvidenceLogCapturesSiblingAPISubdomainsOnlyWithinSameSite(t *tes
 	if len(got) != 1 || got[0].URL != "https://api.metrics.example.com/v1/subnets/120" {
 		t.Fatalf("same-site sibling API search result = %+v, want only API response", got)
 	}
+	if got[0].PageURL != "https://app.metrics.example.com/dashboard" {
+		t.Fatalf("same-site sibling API search result PageURL = %q, want document URL", got[0].PageURL)
+	}
 }
 
 func TestNetworkEvidenceLogWaitIdleTracksAsyncBodyReads(t *testing.T) {
@@ -145,8 +148,30 @@ func TestNetworkEvidenceToolsSearchAndRead(t *testing.T) {
 	}
 	for _, want := range []string{
 		"SourceAccess: browser_network_url=https://taostats.io/api/subnets/120",
+		"requested_url=https://taostats.io/subnets/120",
 		"source_method=network_xhr_fetch",
 		`"market_cap":"201.04K T"`,
+	} {
+		if !strings.Contains(readOut, want) {
+			t.Fatalf("browser_network_read output missing %q:\n%s", want, readOut)
+		}
+	}
+}
+
+func TestNetworkEvidenceReadIncludesPageURLForSiblingAPI(t *testing.T) {
+	log := NewNetworkEvidenceLog()
+	log.ObserveResponse("https://app.metrics.example.com/dashboard", proto.NetworkResourceTypeDocument)
+	log.Add("https://api.metrics.example.com/v1/current", 200, proto.NetworkResourceTypeFetch, http.Header{"Content-Type": {"application/json"}}, []byte(`{"name":"Affine","price":"0.06342 T"}`))
+	s := &Session{network: log}
+
+	readOut, err := NetworkReadTool(s).Execute(context.Background(), json.RawMessage(`{"ref":"n1","max_bytes":128}`))
+	if err != nil {
+		t.Fatalf("browser_network_read: %v", err)
+	}
+	for _, want := range []string{
+		"SourceAccess: browser_network_url=https://api.metrics.example.com/v1/current",
+		"requested_url=https://app.metrics.example.com/dashboard",
+		"source_method=network_xhr_fetch",
 	} {
 		if !strings.Contains(readOut, want) {
 			t.Fatalf("browser_network_read output missing %q:\n%s", want, readOut)
@@ -231,6 +256,7 @@ func TestNetworkEvidenceReadJSONPathExtractsSubtree(t *testing.T) {
 	}
 	for _, want := range []string{
 		"SourceAccess: browser_network_url=https://taostats.io/api/subnets/120",
+		"requested_url=https://taostats.io/subnets/120",
 		"JSON_PATH: $.data.items[0].metrics.market_cap",
 		`"201.04K T"`,
 	} {

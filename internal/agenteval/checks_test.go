@@ -452,7 +452,7 @@ func TestSourceAccessMatchAtLeast(t *testing.T) {
 		{
 			CallID: "net",
 			Tool:   "browser_network_read",
-			Result: "SourceAccess: browser_network_url=https://taostats.io/api/subnets/120; ref=n1; status=200; content_type=application/json; source_method=network_xhr_fetch\nJSON_PATH: $.market_cap\n\"201.04K T\"",
+			Result: "SourceAccess: browser_network_url=https://taostats.io/api/subnets/120; requested_url=https://taostats.io/subnets/120; ref=n1; status=200; content_type=application/json; source_method=network_xhr_fetch\nJSON_PATH: $.market_cap\n\"201.04K T\"",
 		},
 	}}
 

@@ -2593,7 +2593,7 @@ Next: call browser_network_read with the most relevant ref before citing values.
             }
         }`),
 		Execute: func(ctx context.Context, args json.RawMessage) (string, error) {
-			return `SourceAccess: browser_network_url=https://api.taostats.io/subnets/120; ref=n1; status=200; content_type=application/json; source_method=network_xhr_fetch
+			return `SourceAccess: browser_network_url=https://api.taostats.io/subnets/120; requested_url=https://app.taostats.io/subnets/120; ref=n1; status=200; content_type=application/json; source_method=network_xhr_fetch
 BODY_BYTES: 77
 {"name":"Affine","netuid":120,"market_cap":"201.04K T","price":"0.06342 T"}`, nil
 		},
@@ -2615,7 +2615,7 @@ BODY_BYTES: 77
 		`[DONE]`,
 	}
 	turn4 := []string{
-		`{"choices":[{"delta":{"role":"assistant","content":"The rendered TaoStats app page showed Affine SN120 but hid the metric values in dynamic widgets, so I used the captured same-site sibling API network response before citing numbers. The network evidence at https://api.taostats.io/subnets/120 reports market cap 201.04K T and price 0.06342 T for Affine netuid 120."},"finish_reason":"stop"}]}`,
+		`{"choices":[{"delta":{"role":"assistant","content":"The rendered TaoStats app page at https://app.taostats.io/subnets/120 showed Affine SN120 but hid the metric values in dynamic widgets, so I used the captured same-site sibling API network response before citing numbers. The network evidence at https://api.taostats.io/subnets/120 reports market cap 201.04K T and price 0.06342 T for Affine netuid 120."},"finish_reason":"stop"}]}`,
 		`[DONE]`,
 	}
 	srv := newScriptedLLM(t, [][]string{turn1, turn2, turn3, turn4})
@@ -2640,6 +2640,7 @@ BODY_BYTES: 77
 			ToolResultContains("browser_navigate", "CAPTURED NETWORK RESPONSES"),
 			ToolCalled("browser_network", networkArgs),
 			ToolCalled("browser_network_read", readArgs),
+			ToolResultContains("browser_network_read", "requested_url=https://app.taostats.io/subnets/120"),
 			ToolCalledBeforeMatching("browser_navigate", navigateArgs, "browser_network", networkArgs),
 			ToolCalledBeforeMatching("browser_network", networkArgs, "browser_network_read", readArgs),
 			ToolStatsAtLeast("source_access_results", 2),
@@ -2648,6 +2649,7 @@ BODY_BYTES: 77
 			ToolStatsAtLeast("source_access_dynamic_partial", 1),
 			FinalTextContains("market cap 201.04K T"),
 			FinalTextContains("price 0.06342 T"),
+			FinalTextContains("https://app.taostats.io/subnets/120"),
 			FinalTextContains("captured same-site sibling API network response"),
 		},
 	}

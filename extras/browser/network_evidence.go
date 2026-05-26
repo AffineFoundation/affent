@@ -15,6 +15,7 @@ import (
 	"time"
 
 	agent "github.com/affinefoundation/affent/internal/agent"
+	"github.com/affinefoundation/affent/internal/sourceaccess"
 	"github.com/affinefoundation/affent/internal/textutil"
 	"github.com/go-rod/rod/lib/proto"
 	"golang.org/x/net/publicsuffix"
@@ -38,6 +39,7 @@ const (
 type NetworkEvidenceEntry struct {
 	Ref         string `json:"ref"`
 	URL         string `json:"url"`
+	PageURL     string `json:"page_url,omitempty"`
 	StatusCode  int    `json:"status_code"`
 	Resource    string `json:"resource"`
 	ContentType string `json:"content_type,omitempty"`
@@ -48,6 +50,7 @@ type NetworkEvidenceLog struct {
 	mu           sync.Mutex
 	next         int
 	pageHost     string
+	pageURL      string
 	entries      []NetworkEvidenceEntry
 	pendingReads int
 	lastActivity time.Time
@@ -129,6 +132,7 @@ func (l *NetworkEvidenceLog) ObserveResponse(rawURL string, resource proto.Netwo
 	}
 	l.mu.Lock()
 	l.pageHost = host
+	l.pageURL = strings.TrimSpace(rawURL)
 	l.lastActivity = time.Now()
 	l.mu.Unlock()
 }
@@ -158,6 +162,7 @@ func (l *NetworkEvidenceLog) Add(rawURL string, status int, resource proto.Netwo
 	entry := NetworkEvidenceEntry{
 		Ref:         fmt.Sprintf("n%d", l.next),
 		URL:         rawURL,
+		PageURL:     l.pageURL,
 		StatusCode:  status,
 		Resource:    strings.ToLower(string(resource)),
 		ContentType: compactContentType(contentType),
@@ -555,7 +560,15 @@ func formatNetworkReadResult(entry NetworkEvidenceEntry, maxBytes int, jsonPath 
 		body = body[:maxBytes]
 	}
 	var b strings.Builder
-	fmt.Fprintf(&b, "SourceAccess: browser_network_url=%s; ref=%s; status=%d; content_type=%s; source_method=network_xhr_fetch\n", entry.URL, entry.Ref, entry.StatusCode, entry.ContentType)
+	b.WriteString(sourceaccess.FormatSourceAccessLine(
+		"browser_network_url",
+		entry.URL,
+		entry.PageURL,
+		fmt.Sprintf("ref=%s", entry.Ref),
+		fmt.Sprintf("status=%d", entry.StatusCode),
+		fmt.Sprintf("content_type=%s", entry.ContentType),
+		"source_method=network_xhr_fetch",
+	))
 	if jsonPath != "" {
 		fmt.Fprintf(&b, "JSON_PATH: %s\n", jsonPath)
 	}

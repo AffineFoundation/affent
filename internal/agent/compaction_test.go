@@ -207,13 +207,13 @@ func TestFormatEvent_CompactsDelegationToolResults(t *testing.T) {
 	})
 
 	t.Run("browser network read keeps json path source metadata", func(t *testing.T) {
-		raw := "SourceAccess: browser_network_url=https://taostats.io/api/subnets/120; ref=n3; status=200; content_type=application/json; source_method=network_xhr_fetch\n" +
+		raw := "SourceAccess: browser_network_url=https://taostats.io/api/subnets/120; requested_url=https://taostats.io/subnets/120; ref=n3; status=200; content_type=application/json; source_method=network_xhr_fetch\n" +
 			"JSON_PATH: $.data.market_cap\n" +
 			"BODY_BYTES: 8\n" +
 			"\"195094\""
 		got := formatEvent(ChatMessage{Role: "tool", Name: "browser_network_read", Content: raw})
 		for _, want := range []string{
-			"source_access: browser_network_url=https://taostats.io/api/subnets/120 source_method=network_xhr_fetch json_path=$.data.market_cap",
+			"source_access: browser_network_url=https://taostats.io/api/subnets/120 requested_url=https://taostats.io/subnets/120 source_method=network_xhr_fetch json_path=$.data.market_cap",
 			"body_preview:\n\"195094\"",
 		} {
 			if !strings.Contains(got, want) {
