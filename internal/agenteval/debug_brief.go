@@ -142,20 +142,28 @@ func BuildDebugBrief(res BatchResult) *DebugBrief {
 	if res.ToolStats.SessionSearchCalls > 0 || res.ToolStats.SessionSearchResults > 0 {
 		kind := "recall"
 		severity := "info"
-		tag := "recall"
-		message := "session recall was used"
+		message := "session recall returned history with adjacent context"
+		tags := []string{"recall", "recall:context"}
 		if res.ToolStats.SessionSearchCalls > 0 && res.ToolStats.SessionSearchResults == 0 {
 			kind = "empty_recall"
 			severity = "warn"
-			tag = "empty_recall"
+			tags = []string{"empty_recall"}
 			message = "session recall returned no results"
+		} else if res.ToolStats.SessionSearchResults > 0 && res.ToolStats.SessionSearchContextHits == 0 {
+			severity = "warn"
+			tags = []string{"recall", "recall:no_context"}
+			message = "session recall returned hits without adjacent context; inspect examples for stale or shallow recovery"
+		} else if res.ToolStats.SessionSearchResults > 0 && res.ToolStats.SessionSearchMatchedTerms == 0 {
+			severity = "warn"
+			tags = []string{"recall", "recall:no_matched_terms"}
+			message = "session recall returned hits without matched terms; inspect examples before trusting recovery"
 		}
-		add(kind, severity, message, []string{"session_search_results"}, map[string]int{
+		add(kind, severity, message, []string{"session_search_examples", "session_search_results", "tool_timeline"}, map[string]int{
 			"calls":         res.ToolStats.SessionSearchCalls,
 			"results":       res.ToolStats.SessionSearchResults,
 			"context_hits":  res.ToolStats.SessionSearchContextHits,
 			"matched_terms": res.ToolStats.SessionSearchMatchedTerms,
-		}, tag)
+		}, tags...)
 	}
 	if res.ToolStats.MemoryUpdates > 0 ||
 		res.ToolStats.MemoryUpdateAdd > 0 ||

@@ -57,6 +57,60 @@ func TestBuildDebugBriefIncludesDelegationAndPlanSignals(t *testing.T) {
 	}
 }
 
+func TestBuildDebugBriefClassifiesSessionRecallQuality(t *testing.T) {
+	brief := BuildDebugBrief(BatchResult{
+		OK: true,
+		ToolStats: ToolRuntimeStats{
+			SessionSearchCalls:        1,
+			SessionSearchResults:      2,
+			SessionSearchContextHits:  1,
+			SessionSearchMatchedTerms: 3,
+		},
+	})
+	recall := debugBriefItemByKind(brief, "recall")
+	if recall == nil ||
+		recall.Severity != "info" ||
+		recall.Message != "session recall returned history with adjacent context" ||
+		recall.Counts["context_hits"] != 1 ||
+		!stringSliceContains(recall.Inspect, "session_search_examples") ||
+		!stringSliceContains(brief.Tags, "recall:context") {
+		t.Fatalf("context recall debug item = %+v tags=%+v", recall, brief.Tags)
+	}
+
+	brief = BuildDebugBrief(BatchResult{
+		OK: true,
+		ToolStats: ToolRuntimeStats{
+			SessionSearchCalls:        1,
+			SessionSearchResults:      2,
+			SessionSearchContextHits:  0,
+			SessionSearchMatchedTerms: 3,
+		},
+	})
+	recall = debugBriefItemByKind(brief, "recall")
+	if recall == nil ||
+		recall.Severity != "warn" ||
+		recall.Message != "session recall returned hits without adjacent context; inspect examples for stale or shallow recovery" ||
+		!stringSliceContains(brief.Tags, "recall:no_context") {
+		t.Fatalf("shallow recall debug item = %+v tags=%+v", recall, brief.Tags)
+	}
+
+	brief = BuildDebugBrief(BatchResult{
+		OK: true,
+		ToolStats: ToolRuntimeStats{
+			SessionSearchCalls:   1,
+			SessionSearchResults: 0,
+		},
+	})
+	empty := debugBriefItemByKind(brief, "empty_recall")
+	if empty == nil ||
+		empty.Severity != "warn" ||
+		empty.Message != "session recall returned no results" ||
+		!stringSliceContains(empty.Inspect, "session_search_examples") ||
+		!stringSliceContains(brief.Tags, "empty_recall") {
+		t.Fatalf("empty recall debug item = %+v tags=%+v", empty, brief.Tags)
+	}
+}
+
 func debugBriefItemByKind(brief *DebugBrief, kind string) *DebugBriefItem {
 	if brief == nil {
 		return nil

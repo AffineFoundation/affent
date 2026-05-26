@@ -214,15 +214,24 @@ func renderTimelineDebugBrief(b *strings.Builder, res BatchResult) {
 	}
 	if res.ToolStats.SessionSearchCalls > 0 || res.ToolStats.SessionSearchResults > 0 {
 		tone := "recall"
+		guidance := "inspect Session Search examples before trusting recovered state."
 		if res.ToolStats.SessionSearchCalls > 0 && res.ToolStats.SessionSearchResults == 0 {
 			tone = "empty_recall"
+			guidance = "recovery found no prior-session evidence."
+		} else if res.ToolStats.SessionSearchResults > 0 && res.ToolStats.SessionSearchContextHits == 0 {
+			tone = "recall_no_context"
+			guidance = "hits lacked adjacent context; inspect Session Search examples for stale or shallow recovery."
+		} else if res.ToolStats.SessionSearchResults > 0 && res.ToolStats.SessionSearchMatchedTerms == 0 {
+			tone = "recall_no_terms"
+			guidance = "hits lacked matched terms; inspect Session Search examples before trusting recovery."
 		}
-		fmt.Fprintf(b, "- %s: calls=`%d`, results=`%d`, context=`%d`, terms=`%d`; inspect session_search results if resume quality is poor.\n",
+		fmt.Fprintf(b, "- %s: calls=`%d`, results=`%d`, context=`%d`, terms=`%d`; %s\n",
 			tone,
 			res.ToolStats.SessionSearchCalls,
 			res.ToolStats.SessionSearchResults,
 			res.ToolStats.SessionSearchContextHits,
 			res.ToolStats.SessionSearchMatchedTerms,
+			guidance,
 		)
 	}
 	if res.ContextCompactions.Count > 0 {
