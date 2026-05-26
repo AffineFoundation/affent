@@ -783,8 +783,11 @@ enabled thresholds into metadata so result files preserve their pass/fail
 conditions. Use `--quality-profile longrun` for general long-run regression
 runs; it includes minimum memory-update and session-search context-hit gates so
 shared memory and cross-session recovery regressions fail the batch. Use
-`--quality-profile web-evidence` for live/current web evidence runs; explicit
-gate flags override the profile defaults. JSONL summary records also
+`--quality-profile web-evidence` for live/current web evidence runs; it also
+fails scenario-level debug brief tags such as dynamic source evidence without
+network-backed reads. Explicit `--max-debug-brief-tag-rate tag=rate` flags
+merge with profile defaults and can disable one profile tag with `tag=-1`.
+Other explicit gate flags override the profile defaults. JSONL summary records also
 include `quality_gates_passed` when any gate is enabled and
 `quality_gate_failures` when a gate failed, so stored eval artifacts can explain
 CI or model-comparison failures without stderr.

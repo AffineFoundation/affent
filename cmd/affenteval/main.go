@@ -43,6 +43,50 @@ type batchFailureExample struct {
 	DebugManifestPath string `json:"debug_manifest_path,omitempty"`
 }
 
+type stringFloatMapFlag map[string]float64
+
+func (f *stringFloatMapFlag) Set(raw string) error {
+	key, valueText, ok := strings.Cut(strings.TrimSpace(raw), "=")
+	if !ok {
+		return fmt.Errorf("want tag=rate")
+	}
+	key = strings.TrimSpace(key)
+	if key == "" {
+		return fmt.Errorf("tag must be non-empty")
+	}
+	value, err := strconv.ParseFloat(strings.TrimSpace(valueText), 64)
+	if err != nil {
+		return fmt.Errorf("parse rate: %w", err)
+	}
+	if *f == nil {
+		*f = stringFloatMapFlag{}
+	}
+	(*f)[key] = value
+	return nil
+}
+
+func (f *stringFloatMapFlag) String() string {
+	if f == nil || len(*f) == 0 {
+		return ""
+	}
+	parts := make([]string, 0, len(*f))
+	for _, key := range sortedFloatMapKeys(map[string]float64(*f)) {
+		parts = append(parts, fmt.Sprintf("%s=%s", key, formatGateFloat((*f)[key])))
+	}
+	return strings.Join(parts, ",")
+}
+
+func (f stringFloatMapFlag) clone() map[string]float64 {
+	if len(f) == 0 {
+		return nil
+	}
+	clone := make(map[string]float64, len(f))
+	for key, value := range f {
+		clone[key] = value
+	}
+	return clone
+}
+
 func main() {
 	if err := loadDotEnv(); err != nil {
 		fmt.Fprintf(os.Stderr, "affenteval: load .env: %v\n", err)
@@ -55,6 +99,7 @@ func run(args []string) int {
 	fs := flag.NewFlagSet("affenteval", flag.ContinueOnError)
 	fs.SetOutput(os.Stderr)
 	var (
+		debugBriefTagGates  stringFloatMapFlag
 		list                = fs.Bool("list", false, "list built-in scenarios and exit")
 		listSuites          = fs.Bool("list-suites", false, "list built-in scenario suites and exit")
 		listQualityProfiles = fs.Bool("list-quality-profiles", false, "list built-in quality gate profiles and exit")
@@ -125,6 +170,7 @@ func run(args []string) int {
 			MaxAvgTotalTokens:                    fs.Float64("max-avg-total-tokens", -1, "optional quality gate: maximum average total tokens per scenario"),
 		}
 	)
+	fs.Var(&debugBriefTagGates, "max-debug-brief-tag-rate", "optional repeatable quality gate: maximum scenario rate for a debug_brief tag, as tag=rate; use tag=-1 to disable a profile default")
 	fs.Usage = func() {
 		fmt.Fprintln(fs.Output(), `usage: affenteval [flags]
 
@@ -137,6 +183,9 @@ success and trace-level process quality.`)
 			return 0
 		}
 		return 64
+	}
+	if len(debugBriefTagGates) > 0 {
+		gates.MaxDebugBriefTagRates = debugBriefTagGates.clone()
 	}
 	if *listQualityProfiles {
 		printQualityGateProfiles(os.Stdout)
@@ -315,6 +364,7 @@ type qualityGateConfig struct {
 	MaxAvgToolCalls                      *float64
 	MaxAvgDurationMS                     *float64
 	MaxAvgTotalTokens                    *float64
+	MaxDebugBriefTagRates                map[string]float64
 }
 
 type qualityGateProfileDefinition struct {
@@ -381,6 +431,11 @@ func qualityGateProfileDefinitions() []qualityGateProfileDefinition {
 				MaxAvgToolCalls:                      float64Ptr(18),
 				MaxAvgDurationMS:                     float64Ptr(240000),
 				MaxAvgTotalTokens:                    float64Ptr(120000),
+				MaxDebugBriefTagRates: map[string]float64{
+					"source_discovery_only_all":      0,
+					"source_dynamic_without_network": 0,
+					"source_unverified_all":          0,
+				},
 			},
 		},
 	}
@@ -435,6 +490,13 @@ func qualityGateConfigLines(g qualityGateConfig) []string {
 	add("max-avg-tool-calls", g.MaxAvgToolCalls)
 	add("max-avg-duration-ms", g.MaxAvgDurationMS)
 	add("max-avg-total-tokens", g.MaxAvgTotalTokens)
+	for _, tag := range sortedFloatMapKeys(g.MaxDebugBriefTagRates) {
+		value := g.MaxDebugBriefTagRates[tag]
+		if value < 0 {
+			continue
+		}
+		lines = append(lines, fmt.Sprintf("max-debug-brief-tag-rate=%s=%s", tag, formatGateFloat(value)))
+	}
 	return lines
 }
 
@@ -488,6 +550,15 @@ func applyQualityGateProfile(g *qualityGateConfig, profile string, flagSet func(
 	apply("max-avg-tool-calls", &g.MaxAvgToolCalls, profileConfig.MaxAvgToolCalls)
 	apply("max-avg-duration-ms", &g.MaxAvgDurationMS, profileConfig.MaxAvgDurationMS)
 	apply("max-avg-total-tokens", &g.MaxAvgTotalTokens, profileConfig.MaxAvgTotalTokens)
+	if len(profileConfig.MaxDebugBriefTagRates) > 0 {
+		profileTags := cloneStringFloatMap(profileConfig.MaxDebugBriefTagRates)
+		if flagSet != nil && flagSet("max-debug-brief-tag-rate") {
+			for tag, threshold := range g.MaxDebugBriefTagRates {
+				profileTags[tag] = threshold
+			}
+		}
+		g.MaxDebugBriefTagRates = profileTags
+	}
 	return nil
 }
 
@@ -1405,6 +1476,23 @@ func validateQualityGateConfig(g qualityGateConfig) error {
 			return fmt.Errorf("%s must be between 0 and 1", gate.name)
 		}
 	}
+	for tag, value := range g.MaxDebugBriefTagRates {
+		if strings.TrimSpace(tag) == "" {
+			return fmt.Errorf("--max-debug-brief-tag-rate tag must be non-empty")
+		}
+		if math.IsNaN(value) || math.IsInf(value, 0) {
+			return fmt.Errorf("--max-debug-brief-tag-rate[%s] must be finite", tag)
+		}
+		if value < 0 {
+			if value == -1 {
+				continue
+			}
+			return fmt.Errorf("--max-debug-brief-tag-rate[%s] must be disabled with -1 or set between 0 and 1", tag)
+		}
+		if value > 1 {
+			return fmt.Errorf("--max-debug-brief-tag-rate[%s] must be between 0 and 1", tag)
+		}
+	}
 	return nil
 }
 
@@ -1466,6 +1554,13 @@ func qualityGateFailures(s batchSummary, g qualityGateConfig) []string {
 	checkMax("avg_tool_calls", batchAverage(s.ToolCalls, s.Total), g.MaxAvgToolCalls, s.Total > 0)
 	checkMax("avg_duration_ms", batchAverageInt64(s.Duration.Milliseconds(), s.Total), g.MaxAvgDurationMS, s.Total > 0)
 	checkMax("avg_total_tokens", batchAverage(s.InputTokens+s.OutputTokens, s.Total), g.MaxAvgTotalTokens, s.Total > 0)
+	for _, tag := range sortedFloatMapKeys(g.MaxDebugBriefTagRates) {
+		threshold := g.MaxDebugBriefTagRates[tag]
+		if threshold < 0 {
+			continue
+		}
+		checkMax("debug_brief_tag_rate["+tag+"]", batchRatio(s.DebugBriefByTag[tag], s.Total), &threshold, s.Total > 0)
+	}
 	sort.Strings(failures)
 	return failures
 }
@@ -1906,6 +2001,15 @@ func formatStringIntCounts(counts map[string]int) string {
 	return strings.Join(parts, ",")
 }
 
+func sortedFloatMapKeys(counts map[string]float64) []string {
+	keys := make([]string, 0, len(counts))
+	for key := range counts {
+		keys = append(keys, key)
+	}
+	sort.Strings(keys)
+	return keys
+}
+
 func formatPassTotalCounts(passed, total map[string]int) string {
 	if len(total) == 0 {
 		return "none"
@@ -1923,57 +2027,58 @@ func formatPassTotalCounts(passed, total map[string]int) string {
 }
 
 type evalJSONLMetadata struct {
-	SchemaVersion                        int      `json:"schema_version"`
-	Suite                                string   `json:"suite,omitempty"`
-	Model                                string   `json:"model,omitempty"`
-	ProviderLabel                        string   `json:"provider_label,omitempty"`
-	Executor                             string   `json:"executor"`
-	Temperature                          string   `json:"temperature,omitempty"`
-	TopP                                 string   `json:"top_p,omitempty"`
-	MaxTokens                            string   `json:"max_tokens,omitempty"`
-	Seed                                 string   `json:"seed,omitempty"`
-	RuntimeEvalMode                      bool     `json:"runtime_eval_mode,omitempty"`
-	RuntimeTools                         string   `json:"runtime_tools,omitempty"`
-	RuntimeAllTools                      bool     `json:"runtime_all_tools,omitempty"`
-	RuntimeMemory                        bool     `json:"runtime_memory,omitempty"`
-	RuntimeWeb                           bool     `json:"runtime_web,omitempty"`
-	RuntimeBrowser                       bool     `json:"runtime_browser,omitempty"`
-	TraceDeltas                          bool     `json:"trace_deltas,omitempty"`
-	RuntimeMCP                           bool     `json:"runtime_mcp,omitempty"`
-	TimeoutMS                            int64    `json:"timeout_ms"`
-	QualityProfile                       string   `json:"quality_profile,omitempty"`
-	MinPassRate                          *float64 `json:"min_pass_rate,omitempty"`
-	MinCompletionRate                    *float64 `json:"min_completion_rate,omitempty"`
-	MinMemoryUpdateRate                  *float64 `json:"min_memory_update_rate,omitempty"`
-	MinRuntimeSurfaceRate                *float64 `json:"min_runtime_surface_rate,omitempty"`
-	MinSourceNetworkRate                 *float64 `json:"min_source_network_rate,omitempty"`
-	MinSourceAccessVerifiedRate          *float64 `json:"min_source_access_verified_rate,omitempty"`
-	MinExpectationCapabilityPassRate     *float64 `json:"min_expectation_capability_pass_rate,omitempty"`
-	MinEachExpectationCapabilityPassRate *float64 `json:"min_each_expectation_capability_pass_rate,omitempty"`
-	MinSessionSearchContextHitRate       *float64 `json:"min_session_search_context_hit_rate,omitempty"`
-	MinSessionSearchMatchedTermsPerCall  *float64 `json:"min_session_search_matched_terms_per_call,omitempty"`
-	MinToolRepairSuccessRate             *float64 `json:"min_tool_repair_success_rate,omitempty"`
-	MinVerifierPassRate                  *float64 `json:"min_verifier_pass_rate,omitempty"`
-	MaxFocusedTaskErrorRate              *float64 `json:"max_focused_task_error_rate,omitempty"`
-	MaxForcedNoToolsRate                 *float64 `json:"max_forced_no_tools_rate,omitempty"`
-	MaxLoopGuardInterventionRate         *float64 `json:"max_loop_guard_intervention_rate,omitempty"`
-	MaxPlanErrorRate                     *float64 `json:"max_plan_error_rate,omitempty"`
-	MaxSourceDiscoveryOnlyRate           *float64 `json:"max_source_discovery_only_rate,omitempty"`
-	MaxSourceDynamicPartialRate          *float64 `json:"max_source_dynamic_partial_rate,omitempty"`
-	MaxSubagentErrorRate                 *float64 `json:"max_subagent_error_rate,omitempty"`
-	MaxToolErrorRate                     *float64 `json:"max_tool_error_rate,omitempty"`
-	MaxToolContextTruncationRate         *float64 `json:"max_tool_context_truncation_rate,omitempty"`
-	MaxToolResultTruncationRate          *float64 `json:"max_tool_result_truncation_rate,omitempty"`
-	MaxAvgRuntimeErrors                  *float64 `json:"max_avg_runtime_errors,omitempty"`
-	MaxAvgContextCompactions             *float64 `json:"max_avg_context_compactions,omitempty"`
-	MaxAvgReactiveCompactions            *float64 `json:"max_avg_reactive_context_compactions,omitempty"`
-	MaxAvgContextRemovedMessages         *float64 `json:"max_avg_context_removed_messages,omitempty"`
-	MaxAvgContextSummaryBytes            *float64 `json:"max_avg_context_summary_bytes,omitempty"`
-	MaxAvgContextSummaryMissing          *float64 `json:"max_avg_context_summary_missing,omitempty"`
-	MaxAvgContextSummaryEmpty            *float64 `json:"max_avg_context_summary_empty,omitempty"`
-	MaxAvgToolCalls                      *float64 `json:"max_avg_tool_calls,omitempty"`
-	MaxAvgDurationMS                     *float64 `json:"max_avg_duration_ms,omitempty"`
-	MaxAvgTotalTokens                    *float64 `json:"max_avg_total_tokens,omitempty"`
+	SchemaVersion                        int                `json:"schema_version"`
+	Suite                                string             `json:"suite,omitempty"`
+	Model                                string             `json:"model,omitempty"`
+	ProviderLabel                        string             `json:"provider_label,omitempty"`
+	Executor                             string             `json:"executor"`
+	Temperature                          string             `json:"temperature,omitempty"`
+	TopP                                 string             `json:"top_p,omitempty"`
+	MaxTokens                            string             `json:"max_tokens,omitempty"`
+	Seed                                 string             `json:"seed,omitempty"`
+	RuntimeEvalMode                      bool               `json:"runtime_eval_mode,omitempty"`
+	RuntimeTools                         string             `json:"runtime_tools,omitempty"`
+	RuntimeAllTools                      bool               `json:"runtime_all_tools,omitempty"`
+	RuntimeMemory                        bool               `json:"runtime_memory,omitempty"`
+	RuntimeWeb                           bool               `json:"runtime_web,omitempty"`
+	RuntimeBrowser                       bool               `json:"runtime_browser,omitempty"`
+	TraceDeltas                          bool               `json:"trace_deltas,omitempty"`
+	RuntimeMCP                           bool               `json:"runtime_mcp,omitempty"`
+	TimeoutMS                            int64              `json:"timeout_ms"`
+	QualityProfile                       string             `json:"quality_profile,omitempty"`
+	MinPassRate                          *float64           `json:"min_pass_rate,omitempty"`
+	MinCompletionRate                    *float64           `json:"min_completion_rate,omitempty"`
+	MinMemoryUpdateRate                  *float64           `json:"min_memory_update_rate,omitempty"`
+	MinRuntimeSurfaceRate                *float64           `json:"min_runtime_surface_rate,omitempty"`
+	MinSourceNetworkRate                 *float64           `json:"min_source_network_rate,omitempty"`
+	MinSourceAccessVerifiedRate          *float64           `json:"min_source_access_verified_rate,omitempty"`
+	MinExpectationCapabilityPassRate     *float64           `json:"min_expectation_capability_pass_rate,omitempty"`
+	MinEachExpectationCapabilityPassRate *float64           `json:"min_each_expectation_capability_pass_rate,omitempty"`
+	MinSessionSearchContextHitRate       *float64           `json:"min_session_search_context_hit_rate,omitempty"`
+	MinSessionSearchMatchedTermsPerCall  *float64           `json:"min_session_search_matched_terms_per_call,omitempty"`
+	MinToolRepairSuccessRate             *float64           `json:"min_tool_repair_success_rate,omitempty"`
+	MinVerifierPassRate                  *float64           `json:"min_verifier_pass_rate,omitempty"`
+	MaxFocusedTaskErrorRate              *float64           `json:"max_focused_task_error_rate,omitempty"`
+	MaxForcedNoToolsRate                 *float64           `json:"max_forced_no_tools_rate,omitempty"`
+	MaxLoopGuardInterventionRate         *float64           `json:"max_loop_guard_intervention_rate,omitempty"`
+	MaxPlanErrorRate                     *float64           `json:"max_plan_error_rate,omitempty"`
+	MaxSourceDiscoveryOnlyRate           *float64           `json:"max_source_discovery_only_rate,omitempty"`
+	MaxSourceDynamicPartialRate          *float64           `json:"max_source_dynamic_partial_rate,omitempty"`
+	MaxSubagentErrorRate                 *float64           `json:"max_subagent_error_rate,omitempty"`
+	MaxToolErrorRate                     *float64           `json:"max_tool_error_rate,omitempty"`
+	MaxToolContextTruncationRate         *float64           `json:"max_tool_context_truncation_rate,omitempty"`
+	MaxToolResultTruncationRate          *float64           `json:"max_tool_result_truncation_rate,omitempty"`
+	MaxAvgRuntimeErrors                  *float64           `json:"max_avg_runtime_errors,omitempty"`
+	MaxAvgContextCompactions             *float64           `json:"max_avg_context_compactions,omitempty"`
+	MaxAvgReactiveCompactions            *float64           `json:"max_avg_reactive_context_compactions,omitempty"`
+	MaxAvgContextRemovedMessages         *float64           `json:"max_avg_context_removed_messages,omitempty"`
+	MaxAvgContextSummaryBytes            *float64           `json:"max_avg_context_summary_bytes,omitempty"`
+	MaxAvgContextSummaryMissing          *float64           `json:"max_avg_context_summary_missing,omitempty"`
+	MaxAvgContextSummaryEmpty            *float64           `json:"max_avg_context_summary_empty,omitempty"`
+	MaxAvgToolCalls                      *float64           `json:"max_avg_tool_calls,omitempty"`
+	MaxAvgDurationMS                     *float64           `json:"max_avg_duration_ms,omitempty"`
+	MaxAvgTotalTokens                    *float64           `json:"max_avg_total_tokens,omitempty"`
+	MaxDebugBriefTagRates                map[string]float64 `json:"max_debug_brief_tag_rates,omitempty"`
 }
 
 func evalJSONLMetadataFromConfig(suite, model, providerLabel, executor, temperature, topP, maxTokens, seed string, runtimeEvalMode bool, runtimeTools string, runtimeAllTools, runtimeMemory, runtimeWeb, runtimeBrowser, traceDeltas bool, runtimeMCPConfig string, timeout time.Duration, qualityProfile string, gates qualityGateConfig) evalJSONLMetadata {
@@ -2037,6 +2142,7 @@ func evalJSONLMetadataFromConfig(suite, model, providerLabel, executor, temperat
 		MaxAvgToolCalls:                      enabledQualityGateValue(gates.MaxAvgToolCalls),
 		MaxAvgDurationMS:                     enabledQualityGateValue(gates.MaxAvgDurationMS),
 		MaxAvgTotalTokens:                    enabledQualityGateValue(gates.MaxAvgTotalTokens),
+		MaxDebugBriefTagRates:                enabledQualityGateMap(gates.MaxDebugBriefTagRates),
 	}
 }
 
@@ -2046,6 +2152,19 @@ func enabledQualityGateValue(value *float64) *float64 {
 	}
 	clone := *value
 	return &clone
+}
+
+func enabledQualityGateMap(values map[string]float64) map[string]float64 {
+	out := make(map[string]float64, len(values))
+	for key, value := range values {
+		if value >= 0 {
+			out[key] = value
+		}
+	}
+	if len(out) == 0 {
+		return nil
+	}
+	return out
 }
 
 func normalizedEvalExecutor(executor string) string {
@@ -2719,7 +2838,8 @@ func hasQualityGateThresholds(meta evalJSONLMetadata) bool {
 		meta.MaxAvgContextSummaryEmpty != nil ||
 		meta.MaxAvgToolCalls != nil ||
 		meta.MaxAvgDurationMS != nil ||
-		meta.MaxAvgTotalTokens != nil
+		meta.MaxAvgTotalTokens != nil ||
+		len(meta.MaxDebugBriefTagRates) > 0
 }
 
 func expectationCapabilityPassRates(total, passed map[string]int) map[string]float64 {
@@ -2776,6 +2896,17 @@ func cloneStringIntMap(in map[string]int) map[string]int {
 		return nil
 	}
 	out := make(map[string]int, len(in))
+	for k, v := range in {
+		out[k] = v
+	}
+	return out
+}
+
+func cloneStringFloatMap(in map[string]float64) map[string]float64 {
+	if len(in) == 0 {
+		return nil
+	}
+	out := make(map[string]float64, len(in))
 	for k, v := range in {
 		out[k] = v
 	}

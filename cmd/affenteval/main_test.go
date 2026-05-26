@@ -48,6 +48,7 @@ func TestRunListQualityProfiles(t *testing.T) {
 		"max-avg-context-summary-bytes=24000.000",
 		"min-source-access-verified-rate=0.900",
 		"max-source-dynamic-partial-rate=0.200",
+		"max-debug-brief-tag-rate=source_dynamic_without_network=0.000",
 	} {
 		if !strings.Contains(out, want) {
 			t.Fatalf("--list-quality-profiles output missing %q:\n%s", want, out)
@@ -386,6 +387,7 @@ func TestQualityGateFailures(t *testing.T) {
 		ContextCompactionSummaryEmpty:   1,
 		ExpectationCapabilities:         map[string]int{"browser": 2, "memory": 1, "web": 1},
 		ExpectationCapabilityPass:       map[string]int{"browser": 1, "memory": 1},
+		DebugBriefByTag:                 map[string]int{"source_dynamic_without_network": 1},
 	}
 	failures := qualityGateFailures(summary, qualityGateConfig{
 		MinPassRate:                          ptr(0.75),
@@ -420,6 +422,7 @@ func TestQualityGateFailures(t *testing.T) {
 		MaxAvgToolCalls:                      ptr(2),
 		MaxAvgDurationMS:                     ptr(1000),
 		MaxAvgTotalTokens:                    ptr(40),
+		MaxDebugBriefTagRates:                map[string]float64{"source_dynamic_without_network": 0},
 	})
 	got := strings.Join(failures, "\n")
 	for _, want := range []string{
@@ -434,6 +437,7 @@ func TestQualityGateFailures(t *testing.T) {
 		"avg_tool_calls 2.500 > max 2.000",
 		"avg_total_tokens 55.000 > max 40.000",
 		"completion_rate 0.500 < min 0.750",
+		"debug_brief_tag_rate[source_dynamic_without_network] 0.500 > max 0.000",
 		"expectation_capability_pass_rate[browser] 0.500 < min 0.750",
 		"expectation_capability_pass_rate[web] 0.000 < min 0.750",
 		"expectation_capability_pass_rate 0.500 < min 0.750",
@@ -632,11 +636,34 @@ func TestApplyQualityGateProfile(t *testing.T) {
 		webGates.MaxAvgContextSummaryEmpty == nil || *webGates.MaxAvgContextSummaryEmpty != 0 ||
 		webGates.MaxAvgToolCalls == nil || *webGates.MaxAvgToolCalls != 18 ||
 		webGates.MaxAvgDurationMS == nil || *webGates.MaxAvgDurationMS != 240000 ||
-		webGates.MaxSourceDynamicPartialRate == nil || *webGates.MaxSourceDynamicPartialRate != 0.20 {
+		webGates.MaxSourceDynamicPartialRate == nil || *webGates.MaxSourceDynamicPartialRate != 0.20 ||
+		webGates.MaxDebugBriefTagRates["source_dynamic_without_network"] != 0 ||
+		webGates.MaxDebugBriefTagRates["source_unverified_all"] != 0 ||
+		webGates.MaxDebugBriefTagRates["source_discovery_only_all"] != 0 {
 		t.Fatalf("web-evidence gates not applied: %+v", webGates)
 	}
 	if err := applyQualityGateProfile(&qualityGateConfig{}, "unknown", nil); err == nil || !strings.Contains(err.Error(), "--quality-profile") {
 		t.Fatalf("unknown profile err = %v", err)
+	}
+
+	overrideGates := qualityGateConfig{
+		MaxDebugBriefTagRates: map[string]float64{
+			"source_dynamic_without_network": -1,
+			"recall:no_context":              0.25,
+		},
+	}
+	if err := applyQualityGateProfile(&overrideGates, "web-evidence", func(name string) bool {
+		return name == "max-debug-brief-tag-rate"
+	}); err != nil {
+		t.Fatalf("apply web-evidence profile with debug tag overrides: %v", err)
+	}
+	if overrideGates.MaxDebugBriefTagRates["source_dynamic_without_network"] != -1 ||
+		overrideGates.MaxDebugBriefTagRates["source_unverified_all"] != 0 ||
+		overrideGates.MaxDebugBriefTagRates["recall:no_context"] != 0.25 {
+		t.Fatalf("debug brief tag gates not merged: %+v", overrideGates.MaxDebugBriefTagRates)
+	}
+	if err := validateQualityGateConfig(overrideGates); err != nil {
+		t.Fatalf("validate debug brief tag gate override: %v", err)
 	}
 }
 
@@ -1489,6 +1516,14 @@ func TestPrintBatchQualityGates(t *testing.T) {
 	printBatchQualityGates(&out, meta, nil)
 	if strings.TrimSpace(out.String()) != "QUALITY_GATES status=passed profile=longrun" {
 		t.Fatalf("passed quality gates output = %q", out.String())
+	}
+
+	out.Reset()
+	meta = testEvalJSONLMetadata()
+	meta.MaxDebugBriefTagRates = map[string]float64{"source_dynamic_without_network": 0}
+	printBatchQualityGates(&out, meta, nil)
+	if strings.TrimSpace(out.String()) != "QUALITY_GATES status=passed" {
+		t.Fatalf("debug brief tag quality gates output = %q", out.String())
 	}
 }
 
@@ -3079,6 +3114,7 @@ func TestEvalJSONLMetadataFromConfig(t *testing.T) {
 	maxAvgToolCalls := 12.0
 	maxAvgDurationMS := 90000.0
 	maxAvgTotalTokens := 120000.0
+	maxDebugBriefTagRates := map[string]float64{"source_dynamic_without_network": 0}
 	meta = evalJSONLMetadataFromConfig(" custom ", " flag-model ", " flag-provider ", " sandbox ", " 0.4 ", " 0.9 ", " 512 ", " 42 ", true, " readonly_workspace,web ", true, true, true, true, true, " /tmp/mcp.json ", time.Second, " Web-Evidence ", qualityGateConfig{
 		MinPassRate:                          &minPassRate,
 		MinMemoryUpdateRate:                  &minMemoryUpdateRate,
@@ -3110,12 +3146,16 @@ func TestEvalJSONLMetadataFromConfig(t *testing.T) {
 		MaxAvgToolCalls:                      &maxAvgToolCalls,
 		MaxAvgDurationMS:                     &maxAvgDurationMS,
 		MaxAvgTotalTokens:                    &maxAvgTotalTokens,
+		MaxDebugBriefTagRates:                maxDebugBriefTagRates,
 	})
 	if meta.Model != "flag-model" || meta.ProviderLabel != "flag-provider" || meta.Executor != "sandbox" || meta.Temperature != "0.4" || meta.TopP != "0.9" || meta.MaxTokens != "512" || meta.Seed != "42" || meta.Suite != "custom" || !meta.RuntimeEvalMode || meta.RuntimeTools != "readonly_workspace,web" || !meta.RuntimeAllTools || !meta.RuntimeMemory || !meta.RuntimeWeb || !meta.RuntimeBrowser || !meta.TraceDeltas || !meta.RuntimeMCP || meta.TimeoutMS != 1000 || meta.QualityProfile != "web-evidence" {
 		t.Fatalf("flag metadata not normalized: %+v", meta)
 	}
 	if meta.MinPassRate == nil || *meta.MinPassRate != 0.8 || meta.MinMemoryUpdateRate == nil || *meta.MinMemoryUpdateRate != 0.2 || meta.MinRuntimeSurfaceRate == nil || *meta.MinRuntimeSurfaceRate != 0.9 || meta.MinSourceNetworkRate == nil || *meta.MinSourceNetworkRate != 0.5 || meta.MinSourceAccessVerifiedRate == nil || *meta.MinSourceAccessVerifiedRate != 0.9 || meta.MinExpectationCapabilityPassRate == nil || *meta.MinExpectationCapabilityPassRate != 0.7 || meta.MinEachExpectationCapabilityPassRate == nil || *meta.MinEachExpectationCapabilityPassRate != 0.6 || meta.MinSessionSearchContextHitRate == nil || *meta.MinSessionSearchContextHitRate != 0.75 || meta.MinSessionSearchMatchedTermsPerCall == nil || *meta.MinSessionSearchMatchedTermsPerCall != 1.25 || meta.MinToolRepairSuccessRate == nil || *meta.MinToolRepairSuccessRate != 0.85 || meta.MinVerifierPassRate == nil || *meta.MinVerifierPassRate != 0.9 || meta.MaxFocusedTaskErrorRate == nil || *meta.MaxFocusedTaskErrorRate != 0.07 || meta.MaxForcedNoToolsRate == nil || *meta.MaxForcedNoToolsRate != 0.1 || meta.MaxLoopGuardInterventionRate == nil || *meta.MaxLoopGuardInterventionRate != 0.15 || meta.MaxPlanErrorRate == nil || *meta.MaxPlanErrorRate != 0.05 || meta.MaxSourceDiscoveryOnlyRate == nil || *meta.MaxSourceDiscoveryOnlyRate != 0.1 || meta.MaxSourceDynamicPartialRate == nil || *meta.MaxSourceDynamicPartialRate != 0.1 || meta.MaxSubagentErrorRate == nil || *meta.MaxSubagentErrorRate != 0.08 || meta.MaxToolErrorRate == nil || *meta.MaxToolErrorRate != 0.05 || meta.MaxToolResultTruncationRate == nil || *meta.MaxToolResultTruncationRate != 0.2 || meta.MaxAvgRuntimeErrors == nil || *meta.MaxAvgRuntimeErrors != 0.05 || meta.MaxAvgContextCompactions == nil || *meta.MaxAvgContextCompactions != 0.1 || meta.MaxAvgReactiveCompactions == nil || *meta.MaxAvgReactiveCompactions != 0.2 || meta.MaxAvgContextRemovedMessages == nil || *meta.MaxAvgContextRemovedMessages != 40 || meta.MaxAvgContextSummaryBytes == nil || *meta.MaxAvgContextSummaryBytes != 16000 || meta.MaxAvgContextSummaryMissing == nil || *meta.MaxAvgContextSummaryMissing != 0 || meta.MaxAvgContextSummaryEmpty == nil || *meta.MaxAvgContextSummaryEmpty != 0 || meta.MaxAvgToolCalls == nil || *meta.MaxAvgToolCalls != 12 || meta.MaxAvgDurationMS == nil || *meta.MaxAvgDurationMS != 90000 || meta.MaxAvgTotalTokens == nil || *meta.MaxAvgTotalTokens != 120000 {
 		t.Fatalf("quality gate metadata not preserved: %+v", meta)
+	}
+	if !reflect.DeepEqual(meta.MaxDebugBriefTagRates, maxDebugBriefTagRates) {
+		t.Fatalf("debug brief tag gate metadata = %#v, want %#v", meta.MaxDebugBriefTagRates, maxDebugBriefTagRates)
 	}
 	if meta.MinCompletionRate != nil || meta.MaxToolContextTruncationRate != nil {
 		t.Fatalf("disabled quality gate metadata should be omitted: %+v", meta)

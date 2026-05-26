@@ -62,6 +62,12 @@ Shared metadata fields:
   `max_avg_tool_calls`, `max_avg_duration_ms`, `max_avg_total_tokens`:
   optional quality gate thresholds configured for the run. Disabled gates are
   omitted.
+- `max_debug_brief_tag_rates`: optional map of `debug_brief` tag to maximum
+  scenario rate. This lets profiles fail specific triage patterns, such as
+  dynamic web evidence without network-backed reads, without adding a bespoke
+  top-level metric for every future diagnostic tag. CLI overrides use
+  `--max-debug-brief-tag-rate tag=rate`; `tag=-1` disables a profile default
+  for that tag.
 
 ## Scenario Record
 
@@ -391,7 +397,8 @@ Summary records aggregate all scenario records from the same process:
   `quality_gates_passed` is present on summary records when at least one quality
   gate threshold was configured, and
   `quality_gate_failures` lists failed gate comparisons when any thresholds
-  were violated.
+  were violated. `debug_brief_tag_rate[tag]` failures use total scenarios as
+  the denominator.
 - Runtime surface totals: `runtime_surface_rate`, `runtime_surface_scenarios`,
   `runtime_surface_tools`, and `runtime_surface_capabilities`. Counts are
   per-scenario surface presence, not model call counts; use them to group pass
