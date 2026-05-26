@@ -785,10 +785,14 @@ func TestBatchSummaryAggregatesRuntimeMetrics(t *testing.T) {
 		Usage:    agenteval.Usage{InputTokens: 20, OutputTokens: 5},
 	})
 	summary.add(agenteval.BatchResult{
+		BatchScenario:      "taostats-rendered",
 		OK:                 false,
 		Duration:           250 * time.Millisecond,
 		ToolCalls:          3,
 		TraceSchemaVersion: 1,
+		TracePath:          "/tmp/affenteval/taostats-rendered/trace.jsonl",
+		DebugManifestPath:  "/tmp/affenteval/taostats-rendered/affenteval-debug.json",
+		TimelinePath:       "/tmp/affenteval/taostats-rendered/affenteval-timeline.md",
 		TurnEndReason:      "max_turns",
 		Expectations: &agenteval.DebugScenarioExpectations{
 			Suites:      []string{"live-web"},
@@ -922,6 +926,11 @@ func TestBatchSummaryAggregatesRuntimeMetrics(t *testing.T) {
 	}
 	if !strings.Contains(out.String(), "expectations=scenarios:2 expectation_capabilities=browser:2,context_compaction:1,delegation:1,memory:1,plan:1,session:2,session_search:1,source_access:2,verifier:1,web:1,workspace:1 expectation_capability_pass=browser:1/2,context_compaction:0/1,delegation:0/1,memory:1/1,plan:0/1,session:1/2,session_search:0/1,source_access:1/2,verifier:1/1,web:0/1,workspace:1/1 expectation_capability_pass_rate=42.9% expectation_tools=browser_network_read:2,memory:1,read_file:1,repo_search:1,run_task:1,session_search:1,web_fetch:1 expectation_source_access=network:2 expectation_suites=live-web:1,long-run:1") {
 		t.Fatalf("summary output missing expectation rollup:\n%s", out.String())
+	}
+	if !strings.Contains(out.String(), "expectation_capability_failure[browser]: scenario=taostats-rendered failure_kinds=missing_command:1,turn_end:1") ||
+		!strings.Contains(out.String(), "trace=/tmp/affenteval/taostats-rendered/trace.jsonl") ||
+		!strings.Contains(out.String(), "timeline=/tmp/affenteval/taostats-rendered/affenteval-timeline.md") {
+		t.Fatalf("summary output missing expectation capability failure example:\n%s", out.String())
 	}
 	if !strings.Contains(out.String(), "repair_kinds=alias_rename:2,tool_name:1,type_coercion:2") {
 		t.Fatalf("summary output missing repair kind rollup:\n%s", out.String())
@@ -2044,16 +2053,26 @@ func TestPrintBatchSummaryJSONL(t *testing.T) {
 		ExpectationCapabilities:    map[string]int{"browser": 2, "source_access": 2, "web": 1},
 		ExpectationCapabilityPass:  map[string]int{"browser": 1, "source_access": 1},
 		ExpectationCapabilityFail:  map[string]int{"browser": 1, "source_access": 1, "web": 1},
-		ExpectationRequiredTools:   map[string]int{"web_fetch": 1, "browser_network_read": 1},
-		ExpectationSourceAccess:    map[string]int{"network": 2},
-		RemovedWorkspaces:          1,
-		FocusedTaskCalls:           4,
-		FocusedTaskErrors:          1,
-		SubagentCalls:              2,
-		SubagentErrors:             1,
-		PlanCalls:                  3,
-		PlanByAction:               map[string]int{"set": 1, "update": 2},
-		PlanErrors:                 1,
+		ExpectationCapabilityFailureExamples: map[string][]expectationCapabilityFailureExample{
+			"browser": {{
+				Capability:     "browser",
+				Scenario:       "taostats-rendered",
+				FailureKinds:   map[string]int{"turn_end": 1},
+				DebugBriefTags: []string{"outcome:failed", "turn_end:max_turns"},
+				TracePath:      "/tmp/affenteval/taostats-rendered/trace.jsonl",
+				TimelinePath:   "/tmp/affenteval/taostats-rendered/affenteval-timeline.md",
+			}},
+		},
+		ExpectationRequiredTools: map[string]int{"web_fetch": 1, "browser_network_read": 1},
+		ExpectationSourceAccess:  map[string]int{"network": 2},
+		RemovedWorkspaces:        1,
+		FocusedTaskCalls:         4,
+		FocusedTaskErrors:        1,
+		SubagentCalls:            2,
+		SubagentErrors:           1,
+		PlanCalls:                3,
+		PlanByAction:             map[string]int{"set": 1, "update": 2},
+		PlanErrors:               1,
 	}, nil)
 
 	var got map[string]any
@@ -2280,6 +2299,21 @@ func TestPrintBatchSummaryJSONL(t *testing.T) {
 			got["expectation_capability_pass_rate_total"],
 			out.String(),
 		)
+	}
+	expectationFailureExamples, ok := got["expectation_capability_failure_examples"].(map[string]any)
+	if !ok {
+		t.Fatalf("expectation_capability_failure_examples = %#v\njson=%s", got["expectation_capability_failure_examples"], out.String())
+	}
+	browserExamples, ok := expectationFailureExamples["browser"].([]any)
+	if !ok || len(browserExamples) != 1 {
+		t.Fatalf("browser expectation failure examples = %#v\njson=%s", expectationFailureExamples["browser"], out.String())
+	}
+	browserExample, ok := browserExamples[0].(map[string]any)
+	if !ok ||
+		browserExample["scenario"] != "taostats-rendered" ||
+		browserExample["trace_path"] != "/tmp/affenteval/taostats-rendered/trace.jsonl" ||
+		browserExample["timeline_path"] != "/tmp/affenteval/taostats-rendered/affenteval-timeline.md" {
+		t.Fatalf("browser expectation failure example = %#v\njson=%s", browserExamples[0], out.String())
 	}
 	expectationTools, ok := got["expectation_required_tools"].(map[string]any)
 	if !ok ||

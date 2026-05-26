@@ -325,6 +325,10 @@ Summary records aggregate all scenario records from the same process:
   `expectation_capability_pass_rate_total` aggregate the same declared
   capability instances into one batch-level rate for CI dashboards and quality
   gates.
+  `expectation_capability_failure_examples` is a bounded map from capability
+  family to failed scenario examples with failure kinds, debug-brief tags, and
+  retained trace/timeline/debug-manifest paths when available. It is intended
+  as the direct "open this failed case first" index for long-run triage.
   `min_each_expectation_capability_pass_rate` gates each family in
   `expectation_capability_pass_rate` independently, so a memory or browser
   regression cannot be hidden by unrelated passing capabilities.
