@@ -35,6 +35,19 @@ describe("App", () => {
     expect(window.localStorage.getItem("affent.theme")).toBe("light");
   });
 
+  it("defaults to white even when the device prefers dark colors", async () => {
+    vi.stubGlobal("fetch", vi.fn(async () => Promise.reject(new Error("network down"))));
+    Object.defineProperty(window, "matchMedia", {
+      configurable: true,
+      value: vi.fn(() => ({ matches: true })),
+    });
+
+    render(<App />);
+
+    await waitFor(() => expect(screen.getByTestId("app-shell")).toHaveAttribute("data-theme", "light"));
+    expect(document.documentElement).toHaveAttribute("data-theme", "light");
+  });
+
   it("lets mobile users explicitly hide and restore the top controls", async () => {
     const user = userEvent.setup();
     vi.stubGlobal("fetch", vi.fn(async () => Promise.reject(new Error("network down"))));

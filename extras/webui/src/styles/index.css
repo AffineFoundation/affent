@@ -3583,13 +3583,14 @@ mark {
 .flow-step-user .flow-text {
   min-width: 0;
   max-width: min(660px, 82%);
+  border: 1px solid rgba(20, 184, 166, 0.2);
   background:
-    linear-gradient(180deg, rgba(24, 32, 43, 0.98), rgba(17, 21, 28, 0.98)),
-    #18202b;
-  color: #fff;
+    linear-gradient(180deg, rgba(238, 253, 250, 0.98), rgba(225, 247, 243, 0.94)),
+    var(--accent-soft);
+  color: #10201f;
   border-radius: 8px 8px 2px 8px;
   padding: 11px 14px;
-  box-shadow: 0 14px 28px rgba(17, 21, 28, 0.16);
+  box-shadow: 0 12px 24px rgba(15, 118, 110, 0.1);
 }
 
 .flow-step-assistant .flow-text {

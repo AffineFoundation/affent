@@ -936,9 +936,6 @@ function initialTheme(): ThemeMode {
   } catch {
     return "light";
   }
-  if (typeof window.matchMedia === "function" && window.matchMedia("(prefers-color-scheme: dark)").matches) {
-    return "dark";
-  }
   return "light";
 }
 
