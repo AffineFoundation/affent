@@ -1,5 +1,6 @@
 import { EventType } from "../api/events";
 import type { NormalizedEvent } from "../normalize/normalizeEvent";
+import { artifactDisplayLabel, artifactName } from "./turnArtifacts";
 
 export type EventTraceItem =
   | { kind: "event"; event: NormalizedEvent; display: EventDisplay }
@@ -176,7 +177,7 @@ function requestRecordGroup(
   return {
     kind: "eventGroup",
     key,
-    label: "Request history",
+    label: "Request trace",
     meta: compact([
       requestLabel(context, turnId),
       streamSummary(readString(userMessage?.data, "text") ?? ""),
@@ -235,7 +236,7 @@ function eventDisplay(event: NormalizedEvent, context: DisplayContext): EventDis
   switch (event.type) {
     case EventType.TraceMeta:
       return {
-        label: "History loaded",
+        label: "Trace loaded",
         meta: [],
         badges: schemaVersion(event) ? [`schema v${schemaVersion(event)}`] : [],
       };
@@ -291,10 +292,26 @@ function toolResultLabel(event: NormalizedEvent): string {
 function toolResultMeta(event: NormalizedEvent, context: DisplayContext): string[] {
   const duration = readNumber(event.data, "duration_ms");
   const tool = context.callTools.get(readString(event.data, "call_id") ?? "");
+  const artifactPath = readString(event.data, "result_artifact_path");
+  const resultBytes = readNumber(event.data, "result_bytes");
+  const omittedBytes = readNumber(event.data, "result_omitted_bytes");
+  const capBytes = readNumber(event.data, "result_cap_bytes");
+  const resultTruncated = readBoolean(event.data, "result_truncated");
   return compact([
     tool,
     typeof duration === "number" ? formatDuration(duration) : undefined,
     streamSummary(readString(event.data, "result_summary") ?? readString(event.data, "result") ?? ""),
+    artifactPath
+      ? `artifact ${artifactDisplayLabel({
+          path: artifactPath,
+          name: artifactName(artifactPath),
+          source: "",
+          truncated: resultTruncated,
+          bytes: resultBytes,
+          omittedBytes,
+          capBytes,
+        })}`
+      : undefined,
   ]);
 }
 

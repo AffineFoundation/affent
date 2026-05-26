@@ -23,14 +23,15 @@ describe("turnBoundary view model", () => {
       }),
       turnNumber: 2,
       artifactCount: 1,
+      artifactLabel: "1 file (8 KiB, 1 MiB omitted)",
     });
 
     expect(view).toEqual({
       title: "list the files",
       statusLabel: "Done",
       tone: "success",
-      meta: ["1 action", "1 file", "12ms", "138 tokens"],
-      ariaLabel: "Message 2: Done. list the files. 1 action. 1 file. 12ms. 138 tokens",
+      meta: ["1 action", "1 file (8 KiB, 1 MiB omitted)", "12ms", "138 tokens"],
+      ariaLabel: "Message 2: Done. list the files. 1 action. 1 file (8 KiB, 1 MiB omitted). 12ms. 138 tokens",
     });
   });
 

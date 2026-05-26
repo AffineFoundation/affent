@@ -6,15 +6,20 @@ import {
   createSession,
   getSessionHistory,
   listSessions,
+  listSessionTools,
   readSessionArtifact,
   sendSessionMessage,
   streamSessionEvents,
+  type SessionToolInfo,
+  type SessionToolsSurfaceInfo,
   type SessionSummary,
 } from "./api/sessions";
+import { getServerStats, type ServerStatsResponse } from "./api/stats";
 import { ArtifactViewer, type ArtifactViewerState } from "./components/ArtifactViewer";
 import { EventType, type RawEvent } from "./api/events";
 import { Composer, type ComposerDraft } from "./components/Composer";
 import { SessionList } from "./components/SessionList";
+import { SessionToolsPanel } from "./components/SessionToolsPanel";
 import { Timeline, type GuidanceReceiptView, type PendingMessageView } from "./components/Timeline";
 import { WorkflowStatus } from "./components/WorkflowStatus";
 import { RunDetails } from "./components/RunDetails";
@@ -24,7 +29,7 @@ import { initialSessionState, type SessionState } from "./store/sessionState";
 import { deriveWorkflowStatus } from "./store/workflowStatus";
 import type { DraftSource } from "./view/draftSource";
 import { buildRuntimeCapabilityView, type RuntimeCapabilityView } from "./view/runtimeCapabilities";
-import { buildSessionRows } from "./view/sessionList";
+import { buildSessionRows, formatLoadingChatTitle } from "./view/sessionList";
 import { buildSessionOverview, type SessionOverview } from "./view/sessionOverview";
 import { isContinuationPrompt } from "./view/continuationPrompt";
 
@@ -36,10 +41,18 @@ interface StatusBanner {
   detail?: string;
 }
 
+type ServerStatusState = "loading" | "ready" | "unavailable";
+
 interface HistoryLoadResult {
   session: SessionState;
   cursor: number;
 }
+
+type SessionToolsState =
+  | { state: "idle" }
+  | { state: "loading" }
+  | { state: "ready"; tools: SessionToolInfo[]; surface?: SessionToolsSurfaceInfo }
+  | { state: "error"; message: string };
 
 const demoReplayDelayMs = 180;
 const historyPageLimit = 500;
@@ -56,6 +69,8 @@ export function App() {
     label: "Connecting",
   });
   const [sessions, setSessions] = useState<SessionSummary[]>([]);
+  const [serverStats, setServerStats] = useState<ServerStatsResponse | undefined>();
+  const [serverStatusState, setServerStatusState] = useState<ServerStatusState>("loading");
   const [selectedSessionId, setSelectedSessionId] = useState<string | undefined>();
   const [session, setSession] = useState<SessionState>(() => initialSessionState());
   const [actionBusy, setActionBusy] = useState(false);
@@ -65,12 +80,43 @@ export function App() {
   const [composerDraft, setComposerDraft] = useState<ComposerDraft | undefined>();
   const [composerFocusSignal, setComposerFocusSignal] = useState(0);
   const [artifact, setArtifact] = useState<ArtifactViewerState>({ state: "idle" });
+  const [sessionTools, setSessionTools] = useState<SessionToolsState>({ state: "idle" });
   const sendInFlightRef = useRef(false);
   const sendFailedRef = useRef(false);
   const streamClosedRef = useRef(false);
   const streamSessionIdRef = useRef<string | undefined>(undefined);
   const nextGuidanceReceiptId = useRef(0);
   const conversationScrollRef = useRef<HTMLDivElement | null>(null);
+  const sessionsRef = useRef(sessions);
+  useEffect(() => {
+    sessionsRef.current = sessions;
+  }, [sessions]);
+  useEffect(() => {
+    const ac = new AbortController();
+    let timer: number | undefined;
+
+    async function loadStats() {
+      try {
+        const next = await getServerStats(client, ac.signal);
+        if (!ac.signal.aborted) setServerStats(next);
+        if (!ac.signal.aborted) setServerStatusState("ready");
+      } catch (err) {
+        if (!isAbortError(err)) {
+          setServerStatusState("unavailable");
+        }
+      }
+    }
+
+    void loadStats();
+    timer = window.setInterval(() => {
+      void loadStats();
+    }, 15_000);
+
+    return () => {
+      ac.abort();
+      if (timer != null) window.clearInterval(timer);
+    };
+  }, [client]);
   const demoActive = status.state === "demo";
   const selectedSession = useMemo(
     () => sessions.find((candidate) => candidate.id === selectedSessionId),
@@ -79,11 +125,11 @@ export function App() {
   const selectedSessionTitle = useMemo(() => {
     if (!selectedSession) return undefined;
     const row = buildSessionRows([selectedSession])[0];
-    return row?.titleSource === "provided" ? row.title : undefined;
+    return row?.title;
   }, [selectedSession]);
   const selectedSessionActive = selectedSession?.active === true;
   const workflow = useMemo(() => deriveWorkflowStatus(session), [session]);
-  const runtimeCapabilities = useMemo(
+  const capabilityView = useMemo(
     () => buildRuntimeCapabilityView(selectedSession?.capabilities, { selectedSessionId }),
     [selectedSession?.capabilities, selectedSessionId],
   );
@@ -103,11 +149,17 @@ export function App() {
   const compactNav = demoActive || !showSessionNav;
   const showHeaderNewChat = !demoActive && !showSessionNav;
   const showChatContext = !demoActive && (session.turns.length > 0 || !!pendingMessage);
-  const showRuntimeStatus = !demoActive && !!runtimeCapabilities && (!showChatContext || runtimeCapabilities.tone === "unknown");
-  const showSurfaceContext = showChatContext || showWorkflowStatus;
+  const showSessionTools = !demoActive && selectedSessionActive && selectedSessionId;
+  const showCapabilityStatus = !demoActive && !!capabilityView && (!showChatContext || capabilityView.tone === "unknown");
+  const historyLoading = status.state === "loading" && !!selectedSessionId;
+  const showSurfaceContext = !historyLoading && (showChatContext || showWorkflowStatus || showSessionTools);
   const surfaceBusy = actionBusy || session.status === "running" || !!pendingMessage;
   const surfaceMode = session.turns.length === 0 && !pendingMessage ? "empty" : "conversation";
   const composerResumesSavedChat = !!selectedSessionId && !selectedSessionActive && session.turns.length > 0;
+  const connectionLabel = useMemo(
+    () => (status.state === "loading" ? formatLoadingChatTitle(status.detail) : status.label),
+    [status.detail, status.label, status.state],
+  );
   const latestChatShortcut = useMemo(() => {
     if (!showSessionNav) return undefined;
     const row = buildSessionRows(sessions)[0];
@@ -119,11 +171,25 @@ export function App() {
       meta: latestChatMeta(row.updated),
     };
   }, [sessions, showSessionNav]);
+  const resolveSessionTitle = useCallback(
+    (sessionId: string | undefined, sessionList?: readonly SessionSummary[]): string | undefined => {
+      if (!sessionId) return undefined;
+      const source = sessionList ?? sessionsRef.current;
+      const session = source.find((candidate) => candidate.id === sessionId);
+      if (!session) return undefined;
+      return buildSessionRows([session])[0]?.title;
+    },
+    [],
+  );
+  const loadingSessionDetail = useCallback(
+    (sessionId: string | undefined, sessionList?: readonly SessionSummary[]): string => resolveSessionTitle(sessionId, sessionList) ?? "Loading chat",
+    [resolveSessionTitle],
+  );
 
   const loadHistory = useCallback(
     async (sessionId: string, signal?: AbortSignal): Promise<HistoryLoadResult> => {
-      setStatus({ state: "loading", label: "Loading history" });
-      let detail = "no trace meta";
+      setStatus({ state: "loading", label: "Loading chat", detail: loadingSessionDetail(sessionId) });
+      let detail = "Ready to chat";
       let nextSession = initialSessionState();
       let cursor = -1;
       try {
@@ -141,17 +207,17 @@ export function App() {
           }
           cursor = history.next_after;
           if (!history.has_more) break;
-          if (history.next_after === after) throw new Error("history pagination stalled");
+          if (history.next_after === after) throw new Error("trace pagination stalled");
           after = history.next_after;
-          if (page === maxHistoryPages - 1) throw new Error("history is too long to load safely");
+          if (page === maxHistoryPages - 1) throw new Error("trace is too long to load safely");
         }
 
         cursor = events.length > 0 ? Math.max(cursor, lastRawEventId(events)) : cursor;
-        detail = traceSchemaDetected ? `schema v${traceSchemaVersion}` : detail;
+        detail = events.length > 0 ? (traceSchemaDetected ? `schema v${traceSchemaVersion}` : detail) : detail;
         nextSession = reduceRawEvents(events);
       } catch (err) {
         if (err instanceof ApiError && err.status === 404) {
-          detail = "no persisted events";
+          detail = "no persisted trace events";
         } else {
           throw err;
         }
@@ -175,13 +241,23 @@ export function App() {
         if (ac.signal.aborted) return;
         setSessions(resp.sessions);
         const next = resp.sessions.find((s) => s.active)?.id;
-        setSelectedSessionId((current) => current && resp.sessions.some((s) => s.id === current) ? current : next);
+        const nextSelected = (current: string | undefined) =>
+          current && resp.sessions.some((s) => s.id === current) ? current : next;
+        setSelectedSessionId(nextSelected);
         setSession(initialSessionState());
-        setStatus({
-          state: "connected",
-          label: "Connected",
-          detail: sessionListDetail(resp.sessions),
-        });
+        if (next) {
+          setStatus({
+            state: "loading",
+            label: "Loading chat",
+            detail: loadingSessionDetail(next, resp.sessions),
+          });
+        } else {
+          setStatus({
+            state: "connected",
+            label: "Connected",
+            detail: sessionListDetail(resp.sessions),
+          });
+        }
       } catch (err) {
         if (isAbortError(err)) return;
         setSessions([]);
@@ -197,6 +273,31 @@ export function App() {
     void load();
     return () => ac.abort();
   }, [client]);
+
+  useEffect(() => {
+    const sessionId = showSessionTools ? selectedSessionId : undefined;
+    const ac = new AbortController();
+    if (!sessionId) {
+      setSessionTools({ state: "idle" });
+      return () => ac.abort();
+    }
+    setSessionTools({ state: "loading" });
+    void listSessionTools(client, sessionId, ac.signal)
+      .then((resp) => {
+        if (!ac.signal.aborted) {
+          setSessionTools({ state: "ready", tools: resp.tools, surface: resp.surface });
+        }
+      })
+      .catch((err) => {
+        if (ac.signal.aborted || isAbortError(err)) return;
+        if (err instanceof ApiError && err.status === 409) {
+          setSessionTools({ state: "idle" });
+          return;
+        }
+        setSessionTools({ state: "error", message: formatError(err) });
+      });
+    return () => ac.abort();
+  }, [client, selectedSessionId, showSessionTools]);
 
   useEffect(() => {
     if (!demoActive) return;
@@ -249,10 +350,10 @@ export function App() {
     const ac = new AbortController();
     async function connectLive() {
       try {
+        if (sendFailedRef.current || sendInFlightRef.current) return;
         const history = await loadHistory(liveSessionId, ac.signal);
         if (ac.signal.aborted) return;
         if (!selectedSessionActive) return;
-        if (sendFailedRef.current || sendInFlightRef.current) return;
         streamClosedRef.current = false;
         streamSessionIdRef.current = liveSessionId;
         setStatus((current) => ({ ...current, state: "live", label: "Live" }));
@@ -293,20 +394,20 @@ export function App() {
     };
   }, [client, demoActive, loadHistory, selectedSessionActive, selectedSessionId]);
 
-  function resetSessionSurface(nextSessionId: string) {
+  function resetSessionSurface(nextSessionId: string, opts?: { preserveSession?: boolean }) {
     if (nextSessionId === selectedSessionId) return;
     streamClosedRef.current = false;
     streamSessionIdRef.current = undefined;
     sendInFlightRef.current = false;
     sendFailedRef.current = false;
     setSelectedSessionId(nextSessionId);
-    setSession(initialSessionState());
+    if (!opts?.preserveSession) setSession(initialSessionState());
     setPendingMessage(undefined);
     setGuidanceReceipts([]);
     setArtifact({ state: "idle" });
     setActionBusy(false);
     setCancelBusy(false);
-    setStatus({ state: "loading", label: "Loading history", detail: nextSessionId });
+    setStatus({ state: "loading", label: "Loading chat", detail: loadingSessionDetail(nextSessionId) });
   }
 
   async function handleNewSession(): Promise<string | undefined> {
@@ -316,7 +417,7 @@ export function App() {
       setSessions((current) => [created.session, ...current.filter((s) => s.id !== created.session.id)]);
       resetSessionSurface(created.session.id);
       setComposerFocusSignal((current) => current + 1);
-      setStatus({ state: "connected", label: "Ready", detail: created.session.id });
+      setStatus({ state: "connected", label: "Ready", detail: "Ready to chat" });
       return created.session.id;
     } catch (err) {
       setStatus({ state: "error", label: "Create failed", detail: formatError(err) });
@@ -356,7 +457,7 @@ export function App() {
       if (!hasOpenStream) {
         const reconciled = await loadHistory(targetSessionId);
         if (pendingKind === "task") releaseSettledTurn(reconciled.session, content);
-        setStatus({ state: "disconnected", label: "Disconnected", detail: "history refreshed" });
+        setStatus({ state: "disconnected", label: "Disconnected", detail: "chat refreshed" });
       } else {
         setStatus((current) => ({ ...current, state: "live", label: "Running" }));
       }
@@ -491,20 +592,23 @@ export function App() {
 
   return (
     <div className="app" data-testid="app-shell">
-      <header className="app-header">
-        <h1>Affent</h1>
-        <span className="connection-pill" data-state={status.state} data-testid="connection-pill">
-          {status.label}
-        </span>
-        <span className="spacer" />
-        {showHeaderNewChat ? (
-          <button type="button" className="header-new-chat" disabled={actionBusy} onClick={() => void handleNewSession()}>
-            New chat
-          </button>
-        ) : null}
-      </header>
+      <div className="app-topbar">
+        <header className="app-header">
+          <h1>Affent</h1>
+          <span className="connection-pill" data-state={status.state} data-testid="connection-pill" title={status.detail ?? status.label}>
+            {connectionLabel}
+          </span>
+          <span className="spacer" />
+          {showHeaderNewChat ? (
+            <button type="button" className="header-new-chat" disabled={actionBusy} onClick={() => void handleNewSession()}>
+              New chat
+            </button>
+          ) : null}
+        </header>
+        <ServerStatusBar stats={serverStats} state={serverStatusState} />
+      </div>
       <main className="app-main">
-        {showRuntimeStatus && runtimeCapabilities ? <RuntimeStatusBar view={runtimeCapabilities} /> : null}
+        {showCapabilityStatus && capabilityView ? <RuntimeStatusBar view={capabilityView} /> : null}
         <div
           className="workspace-shell"
           data-compact-nav={compactNav}
@@ -518,7 +622,7 @@ export function App() {
               currentSession={session}
               pendingTask={pendingMessage?.kind === "task" ? pendingMessage.text : undefined}
               demoActive={demoActive}
-              onSelect={resetSessionSurface}
+              onSelect={(nextSessionId) => resetSessionSurface(nextSessionId, { preserveSession: true })}
               onNew={() => void handleNewSession()}
             />
           ) : null}
@@ -532,6 +636,14 @@ export function App() {
               <div className="surface-context">
                 {showChatContext ? <ChatContextBar overview={overview} /> : null}
                 {showWorkflowStatus ? <WorkflowStatus overview={overview} /> : null}
+                {showSessionTools ? (
+                <SessionToolsPanel
+                  tools={sessionTools.state === "ready" ? sessionTools.tools : undefined}
+                  loading={sessionTools.state === "loading"}
+                  error={sessionTools.state === "error" ? sessionTools.message : undefined}
+                  surface={sessionTools.state === "ready" ? sessionTools.surface : undefined}
+                />
+                ) : null}
               </div>
             ) : null}
             <div className="conversation-scroll" ref={conversationScrollRef} data-testid="conversation-scroll">
@@ -547,15 +659,17 @@ export function App() {
                 sessionId={selectedSessionId}
                 pendingMessage={pendingMessage}
                 guidanceReceipts={guidanceReceipts}
-                scrollRootRef={conversationScrollRef}
-                onOpenArtifact={(path) => void handleOpenArtifact(path)}
-                onUseAsDraft={handleUseAsDraft}
-                savedChatCount={sessions.length}
-                latestChat={latestChatShortcut}
-                onOpenLatestChat={latestChatShortcut ? () => resetSessionSurface(latestChatShortcut.id) : undefined}
-                initialHistoryFocus={selectedSessionId && !selectedSessionActive ? "answer" : "latest"}
-              />
-            </div>
+              scrollRootRef={conversationScrollRef}
+              onOpenArtifact={(path) => void handleOpenArtifact(path)}
+              onUseAsDraft={handleUseAsDraft}
+              savedChatCount={sessions.length}
+              latestChat={latestChatShortcut}
+              onOpenLatestChat={latestChatShortcut ? () => resetSessionSurface(latestChatShortcut.id, { preserveSession: true }) : undefined}
+              initialHistoryFocus={selectedSessionId && !selectedSessionActive ? "answer" : "latest"}
+              loadingHistory={historyLoading}
+              sessionTitle={status.state === "loading" ? status.detail : selectedSessionTitle}
+            />
+          </div>
             <Composer
               disabled={demoActive}
               disabledReason={status.detail}
@@ -565,7 +679,7 @@ export function App() {
               resumeSession={composerResumesSavedChat}
               draft={composerDraft}
               focusSignal={composerFocusSignal}
-              runtimeCapabilities={runtimeCapabilities}
+              runtimeCapabilities={capabilityView}
               onSubmit={handleSend}
               onCancel={handleCancel}
             />
@@ -606,12 +720,14 @@ function ChatContextBar({ overview }: { overview: SessionOverview }) {
           </>
         ) : null}
       </span>
-      <RunDetails
-        metrics={overview.metrics}
-        className="chat-context-details"
-        testId="chat-context-details"
-        ariaLabel="Current chat metrics"
-      />
+        <RunDetails
+          metrics={overview.metrics}
+          className="chat-context-details"
+          testId="chat-context-details"
+          ariaLabel="Session metrics"
+          summaryLabel="Session metrics"
+          inlineLimit={1}
+        />
     </div>
   );
 }
@@ -675,31 +791,166 @@ function compactContextText(text: string, limit: number): string {
 }
 
 function RuntimeStatusBar({ view }: { view: RuntimeCapabilityView }) {
+  const [expanded, setExpanded] = useState(false);
+  const hasChips = view.chips.length > 0;
+  const inlineChips = view.chips.slice(0, 2);
+  const overflowChips = view.chips.slice(2);
+
+  const header = (
+    <>
+      <div className="runtime-status-head">
+        <span className="runtime-status-kicker">Capabilities</span>
+        <span className="runtime-capability-title">{view.headline}</span>
+        {!expanded && overflowChips.length > 0 ? <span className="runtime-capability-more">+{overflowChips.length} more</span> : null}
+      </div>
+    </>
+  );
+
+  const panel = (
+    <>
+      <div className="runtime-capability-panel">
+        <p className="runtime-capability-panel-detail">{view.detail}</p>
+        {hasChips ? (
+          <div className="runtime-capability-list">
+            {inlineChips.map((chip) => (
+              <div key={`${chip.group}:${chip.label}`} className="runtime-capability-item" data-tone={chip.tone}>
+                <b>{chip.group}</b>
+                <strong>{chip.label}</strong>
+                <small>{chip.detail}</small>
+              </div>
+            ))}
+            {overflowChips.length > 0 ? (
+              <details className="runtime-capability-overflow">
+                <summary aria-label={`More capabilities: ${overflowChips.length} more`}>
+                  +{overflowChips.length} more
+                </summary>
+                <div className="runtime-capability-overflow-body">
+                  {overflowChips.map((chip) => (
+                    <div key={`${chip.group}:${chip.label}`} className="runtime-capability-item" data-tone={chip.tone}>
+                      <b>{chip.group}</b>
+                      <strong>{chip.label}</strong>
+                      <small>{chip.detail}</small>
+                    </div>
+                  ))}
+                </div>
+              </details>
+            ) : null}
+          </div>
+        ) : null}
+      </div>
+    </>
+  );
+
+  if (!hasChips) {
+    return (
+      <section className="runtime-status-bar" data-tone={view.tone} data-testid="runtime-capabilities" aria-label={`${view.headline}. ${view.detail}`}>
+        {header}
+        {panel}
+      </section>
+    );
+  }
+
   return (
     <details
       className="runtime-status-bar"
       data-tone={view.tone}
       data-testid="runtime-capabilities"
       aria-label={`${view.headline}. ${view.detail}`}
+      onToggle={(event) => setExpanded(event.currentTarget.open)}
     >
-      <summary>
-        <span className="runtime-status-kicker">This chat</span>
-        <span className="runtime-capability-title">{view.headline}</span>
-      </summary>
-      <div className="runtime-capability-panel">
-        <p className="runtime-capability-panel-detail">{view.detail}</p>
-        <div className="runtime-capability-list">
-          {view.chips.map((chip) => (
-            <div key={`${chip.group}:${chip.label}`} className="runtime-capability-item" data-tone={chip.tone}>
-              <b>{chip.group}</b>
-              <strong>{chip.label}</strong>
-              <small>{chip.detail}</small>
-            </div>
-          ))}
-        </div>
+      <summary>{header}</summary>
+      <div className="runtime-status-expandable">
+        {panel}
       </div>
     </details>
   );
+}
+
+function ServerStatusBar({ stats, state }: { stats?: ServerStatsResponse; state: ServerStatusState }) {
+  const chips = [
+    state === "loading"
+      ? { label: "Loading server status", tone: "warning" as const }
+      : state === "unavailable"
+        ? { label: "Server unavailable", tone: "warning" as const }
+        : {
+            label: stats?.shutting_down ? "Shutting down" : "Healthy",
+            tone: stats?.shutting_down ? ("warning" as const) : ("ready" as const),
+          },
+    stats?.model ? { label: stats.model, tone: "ready" as const } : undefined,
+    stats?.executor_mode
+      ? {
+          label: stats.executor_mode === "local" ? "Executor local" : `Executor ${stats.executor_mode}`,
+          tone: stats.executor_mode === "local" ? ("ready" as const) : ("warning" as const),
+        }
+      : undefined,
+    typeof stats?.active_sessions === "number"
+      ? { label: `${stats.active_sessions} active ${stats.active_sessions === 1 ? "session" : "sessions"}`, tone: "ready" as const }
+      : undefined,
+    typeof stats?.running_turns === "number"
+      ? { label: `${stats.running_turns} running ${stats.running_turns === 1 ? "turn" : "turns"}`, tone: stats.running_turns > 0 ? ("ready" as const) : ("warning" as const) }
+      : undefined,
+    runtimeSwitchChip("Browser", stats?.enable_browser),
+    runtimeSwitchChip("Web", stats?.enable_web),
+    runtimeSwitchChip("Web search", stats?.enable_web_search),
+    runtimeSwitchChip("Memory", stats?.enable_memory),
+    runtimeSwitchChip("Builtins", stats?.enable_builtins),
+    runtimeSwitchChip("Subtasks", stats?.enable_subagent || stats?.enable_focused_tasks),
+    stats?.web_search_backend ? { label: `Web search ${stats.web_search_backend}`, tone: "ready" as const } : undefined,
+    stats?.browser_cache_dir ? { label: "Browser cache on", tone: "ready" as const } : undefined,
+  ].filter((chip): chip is { label: string; tone: "ready" | "warning" } => Boolean(chip));
+  const meta = [
+    stats?.listen ? { text: `Listen ${stats.listen}` } : undefined,
+    stats?.workspace_root ? { text: formatServerRoot("Workspace", stats.workspace_root), title: stats.workspace_root } : undefined,
+    stats?.memory_root ? { text: formatServerRoot("Memory", stats.memory_root), title: stats.memory_root } : undefined,
+    stats?.server_time ? { text: `Updated ${formatServerTime(stats.server_time)}`, title: stats.server_time } : undefined,
+  ].filter((value): value is { text: string; title?: string } => Boolean(value));
+
+  return (
+    <section className="server-status-bar" data-testid="server-status-bar" aria-label="Server status">
+      <span className="server-status-kicker">Server</span>
+      <div className="server-status-pills">
+        {chips.map((chip) => (
+          <span key={chip.label} className="server-status-pill" data-tone={chip.tone}>
+            {chip.label}
+          </span>
+        ))}
+      </div>
+      {meta.length > 0 ? (
+        <div className="server-status-meta">
+          {meta.map((item, index) => (
+            <span key={`${item.text}:${index}`} title={item.title}>
+              {item.text}
+              {index < meta.length - 1 ? <span aria-hidden="true"> · </span> : null}
+            </span>
+          ))}
+        </div>
+      ) : null}
+    </section>
+  );
+}
+
+function formatServerTime(value: string): string {
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return value;
+  return new Intl.DateTimeFormat(undefined, {
+    hour: "2-digit",
+    minute: "2-digit",
+    timeZoneName: "short",
+  }).format(date);
+}
+
+function formatServerRoot(label: "Workspace" | "Memory", root: string): string {
+  const normalized = root.replace(/\/+$/, "");
+  const leaf = normalized.split("/").filter(Boolean).at(-1) ?? normalized;
+  return `${label} ${leaf}`;
+}
+
+function runtimeSwitchChip(label: string, enabled?: boolean): { label: string; tone: "ready" | "warning" } | undefined {
+  if (enabled == null) return undefined;
+  return {
+    label: `${label} ${enabled ? "on" : "off"}`,
+    tone: enabled ? "ready" : "warning",
+  };
 }
 
 function isAbortError(err: unknown): boolean {

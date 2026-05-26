@@ -72,7 +72,7 @@ describe("buildSessionOverview", () => {
       active: true,
     });
     expect(overview.detail).toContain("next update");
-    expect(overview.metrics).not.toContainEqual({ label: "Actions", value: "1" });
+    expect(overview.metrics).not.toContainEqual({ label: "Work", value: "1 action" });
   });
 
   it("labels pending live guidance as an intervention", () => {
@@ -105,9 +105,58 @@ describe("buildSessionOverview", () => {
     expect(overview.stateLabel).toBe("Result ready");
     expect(overview.detail).toBe("README.md main.go");
     expect(overview.metrics).toEqual([
-      { label: "Actions", value: "1", tone: undefined },
+      { label: "Work", value: "1 action", tone: undefined },
       { label: "Tokens", value: "138" },
     ]);
+  });
+
+  it("surfaces artifact output in the session overview", () => {
+    const session = reduceRawEvents([
+      { id: 1, type: "turn.start", data: { turn_id: "t1" } },
+      { id: 2, type: "user.message", data: { turn_id: "t1", text: "summarize the repo" } },
+      {
+        id: 3,
+        type: "tool.request",
+        data: {
+          turn_id: "t1",
+          call_id: "c1",
+          tool: "web_fetch",
+          args: { url: "https://example.invalid" },
+          args_truncated: false,
+          args_bytes: 32,
+          args_omitted_bytes: 0,
+          args_cap_bytes: 65536,
+        },
+      },
+      {
+        id: 4,
+        type: "tool.result",
+        data: {
+          turn_id: "t1",
+          call_id: "c1",
+          exit_code: 0,
+          duration_ms: 42,
+          result_summary: "saved output",
+          result: "saved output",
+          result_truncated: true,
+          result_bytes: 8192,
+          result_omitted_bytes: 1048576,
+          result_cap_bytes: 262144,
+          result_artifact_path: ".affent/artifacts/tool-results/000001-c1.txt",
+        },
+      },
+      { id: 5, type: "turn.end", data: { turn_id: "t1", reason: "completed" } },
+    ]);
+    const overview = buildSessionOverview({
+      session,
+      workflow: deriveWorkflowStatus(session),
+      hasSelectedSession: true,
+    });
+
+    expect(overview.metrics).toEqual(expect.arrayContaining([
+      { label: "Artifact", value: "1 file (8 KiB, 1 MiB omitted)" },
+      { label: "Work", value: "1 action · 1 source", tone: undefined },
+    ]));
   });
 
   it("uses the generated session title for loaded chats when the API provides one", () => {
@@ -146,10 +195,9 @@ describe("buildSessionOverview", () => {
     });
 
     expect(overview.metrics).toEqual(expect.arrayContaining([
-      { label: "Actions", value: "2", tone: undefined },
-      { label: "Evidence", value: "4" },
+      { label: "Work", value: "2 actions · 4 sources", tone: undefined },
     ]));
-    expect(overview.detail).toBe("WebUI must render trace details as expandable runtime structure.");
+    expect(overview.detail).toBe("WebUI must render trace details as expandable agent structure.");
   });
 
   it("keeps replayed turns task-first even without a selected live session", () => {
@@ -217,12 +265,12 @@ describe("buildSessionOverview", () => {
     expect(overview.tone).toBe("success");
     expect(overview.metrics).toEqual([
       { label: "Tool issue", value: "1", tone: "warning" },
-      { label: "Task actions", value: "1" },
+      { label: "Earlier work", value: "1 action" },
       { label: "Turn tokens", value: "1.2k" },
       { label: "Chat tokens", value: "1.7k" },
     ]);
     expect(overview.metrics).not.toEqual(expect.arrayContaining([
-      expect.objectContaining({ label: "Actions" }),
+      expect.objectContaining({ label: "Work" }),
     ]));
   });
 
@@ -309,15 +357,14 @@ describe("buildSessionOverview", () => {
 
     expect(overview.metrics).toEqual(expect.arrayContaining([
       { label: "Tool issue", value: "1", tone: "warning" },
-      { label: "Task actions", value: "2" },
-      { label: "Task evidence", value: "1" },
+      { label: "Earlier work", value: "2 actions · 1 source" },
     ]));
     expect(overview.metrics).not.toEqual(expect.arrayContaining([
-      expect.objectContaining({ label: "Evidence" }),
+      expect.objectContaining({ label: "Work" }),
     ]));
   });
 
-  it("surfaces unknown events as a lightweight notes metric", () => {
+  it("surfaces unknown events as an unclassified metric", () => {
     const session = reduceRawEvents([
       { id: 1, type: "turn.start", data: { turn_id: "t1" } },
       { id: 2, type: "future.event", data: { turn_id: "t1", payload: "kept" } },
@@ -329,7 +376,7 @@ describe("buildSessionOverview", () => {
       hasSelectedSession: true,
     });
 
-    expect(overview.metrics).toContainEqual({ label: "Notes", value: "1", tone: "warning" });
+    expect(overview.metrics).toContainEqual({ label: "Unclassified", value: "1", tone: "warning" });
   });
 
   it("uses explicit chat token wording when only aggregate usage is available", () => {
@@ -415,11 +462,62 @@ describe("buildSessionOverview", () => {
 
     expect(overview.metrics).toEqual(expect.arrayContaining([
       { label: "Tool issue", value: "1", tone: "warning" },
-      { label: "Actions", value: "1", tone: undefined },
+      { label: "Work", value: "1 action", tone: "warning" },
     ]));
     expect(overview.detail).toBe("I still found enough to answer.");
     expect(overview.metrics).not.toEqual(expect.arrayContaining([
       expect.objectContaining({ label: "Issue" }),
+    ]));
+  });
+
+  it("marks a completed chat with tool failures as a warning in the overview", () => {
+    const session = reduceRawEvents([
+      { id: 1, type: "turn.start", data: { turn_id: "t1" } },
+      { id: 2, type: "user.message", data: { turn_id: "t1", text: "research affine" } },
+      {
+        id: 3,
+        type: "tool.request",
+        data: {
+          turn_id: "t1",
+          call_id: "c1",
+          tool: "web_fetch",
+          args: { url: "https://example.invalid" },
+          args_truncated: false,
+          args_bytes: 32,
+          args_omitted_bytes: 0,
+          args_cap_bytes: 65536,
+        },
+      },
+      {
+        id: 4,
+        type: "tool.result",
+        data: {
+          turn_id: "t1",
+          call_id: "c1",
+          exit_code: 1,
+          duration_ms: 42,
+          result_summary: "DNS failed",
+          result: "DNS failed",
+          result_truncated: false,
+          result_bytes: 10,
+          result_omitted_bytes: 0,
+          result_cap_bytes: 262144,
+        },
+      },
+      { id: 5, type: "message.done", data: { turn_id: "t1", text: "I still found enough to answer." } },
+      { id: 6, type: "turn.end", data: { turn_id: "t1", reason: "completed" } },
+    ]);
+    const overview = buildSessionOverview({
+      session,
+      workflow: deriveWorkflowStatus(session),
+      hasSelectedSession: true,
+    });
+
+    expect(overview.tone).toBe("warning");
+    expect(overview.stateLabel).toBe("Result ready");
+    expect(overview.metrics).toEqual(expect.arrayContaining([
+      { label: "Tool issue", value: "1", tone: "warning" },
+      { label: "Work", value: "1 action", tone: "warning" },
     ]));
   });
 

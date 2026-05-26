@@ -4,7 +4,7 @@ import { buildRuntimeCapabilityView } from "./runtimeCapabilities";
 describe("buildRuntimeCapabilityView", () => {
   it("shows an unknown runtime for saved sessions without an active capability snapshot", () => {
     expect(buildRuntimeCapabilityView(undefined, { selectedSessionId: "saved-1" })).toMatchObject({
-      headline: "Runtime unknown",
+      headline: "Capabilities not confirmed",
       detail: "This saved chat has no capability snapshot yet.",
       tone: "unknown",
       research: "unknown",
@@ -19,10 +19,12 @@ describe("buildRuntimeCapabilityView", () => {
     const view = buildRuntimeCapabilityView({
       eval_mode: false,
       builtins: true,
-      skill_install: false,
+      skill_install: true,
       plan: false,
       memory: true,
       session_search: false,
+      symbol_context: true,
+      repo_search: true,
       browser: true,
       browser_screenshot: false,
       web: true,
@@ -40,11 +42,35 @@ describe("buildRuntimeCapabilityView", () => {
       research: "ready",
     });
     expect(view?.chips).toEqual([
-      { group: "Web", label: "Search + browser", detail: "Can discover and inspect current sources.", tone: "ready" },
-      { group: "Project", label: "Files + commands", detail: "Can inspect files and run local commands.", tone: "ready" },
-      { group: "Agents", label: "Subtasks available", detail: "Can delegate focused work (2 levels, 4 focused task types).", tone: "ready" },
-      { group: "Context", label: "Memory", detail: "Can use saved memory.", tone: "ready" },
+      { group: "Research", label: "Web search + browser", detail: "Can find and inspect current sources.", tone: "ready" },
+      { group: "Skills", label: "Skill install", detail: "Can install and activate runtime skills without restarting.", tone: "ready" },
+      { group: "Files", label: "Files + commands", detail: "Can inspect files and run local commands.", tone: "ready" },
+      { group: "Discovery", label: "Symbol index + repo search", detail: "Can locate declarations and search workspace text before broad file reads.", tone: "ready" },
+      { group: "Subtasks", label: "Nested work", detail: "Can delegate focused work (2 levels, 4 focused task types).", tone: "ready" },
+      { group: "Context", label: "Saved memory", detail: "Can use saved memory.", tone: "ready" },
     ]);
+  });
+
+  it("omits the skills chip when skill install is unavailable", () => {
+    const view = buildRuntimeCapabilityView({
+      eval_mode: false,
+      builtins: true,
+      skill_install: false,
+      plan: false,
+      memory: true,
+      session_search: false,
+      symbol_context: false,
+      repo_search: true,
+      browser: true,
+      browser_screenshot: false,
+      web: true,
+      web_search: true,
+      subagent: false,
+      subagent_max_depth: 1,
+      focused_tasks: false,
+    });
+
+    expect(view?.chips.some((chip) => chip.group === "Skills")).toBe(false);
   });
 
   it("warns before a live research task when external tools are off", () => {
@@ -55,6 +81,8 @@ describe("buildRuntimeCapabilityView", () => {
       plan: false,
       memory: true,
       session_search: false,
+      symbol_context: false,
+      repo_search: false,
       browser: false,
       browser_screenshot: false,
       web: false,
@@ -67,12 +95,12 @@ describe("buildRuntimeCapabilityView", () => {
 
     expect(view?.headline).toBe("Chat-only mode");
     expect(view?.research).toBe("off");
-    expect(view?.detail).toContain("local project tools may be unavailable");
+    expect(view?.detail).toContain("Local project tools may be unavailable");
     expect(view?.chips).toEqual(expect.arrayContaining([
-      { group: "Web", label: "Not available", detail: "Current outside information may be incomplete.", tone: "warning" },
-      { group: "Project", label: "Unavailable", detail: "Local file and command tools are off.", tone: "muted" },
-      { group: "Agents", label: "Subtasks available", detail: "Can delegate focused work (2 levels, 2 focused task types).", tone: "ready" },
-      { group: "Context", label: "Memory", detail: "Can use saved memory.", tone: "ready" },
+      { group: "Research", label: "No live sources", detail: "Current outside information may be incomplete.", tone: "warning" },
+      { group: "Files", label: "Unavailable", detail: "Local file and command tools are off.", tone: "muted" },
+      { group: "Subtasks", label: "Nested work", detail: "Can delegate focused work (2 levels, 2 focused task types).", tone: "ready" },
+      { group: "Context", label: "Saved memory", detail: "Can use saved memory.", tone: "ready" },
     ]));
   });
 
@@ -84,6 +112,8 @@ describe("buildRuntimeCapabilityView", () => {
       plan: false,
       memory: true,
       session_search: false,
+      symbol_context: false,
+      repo_search: false,
       browser: false,
       browser_screenshot: false,
       web: false,
@@ -109,6 +139,8 @@ describe("buildRuntimeCapabilityView", () => {
       plan: false,
       memory: false,
       session_search: false,
+      symbol_context: false,
+      repo_search: false,
       browser: false,
       browser_screenshot: true,
       web: true,
@@ -125,10 +157,43 @@ describe("buildRuntimeCapabilityView", () => {
       research: "limited",
     });
     expect(view?.chips).toEqual([
-      { group: "Web", label: "Direct sources", detail: "Can inspect provided URLs; discovery may be limited.", tone: "warning" },
-      { group: "Project", label: "Files + commands", detail: "Can inspect files and run local commands.", tone: "ready" },
-      { group: "Agents", label: "Single thread", detail: "No delegated workers for parallel or focused work.", tone: "muted" },
-      { group: "Context", label: "No recall", detail: "No memory or past chat search is available.", tone: "muted" },
+      { group: "Research", label: "Direct URLs", detail: "Can inspect provided URLs; discovery may be limited.", tone: "warning" },
+      { group: "Files", label: "Files + commands", detail: "Can inspect files and run local commands.", tone: "ready" },
+      { group: "Subtasks", label: "Single thread", detail: "No delegated workers for parallel or focused work.", tone: "muted" },
+      { group: "Context", label: "No saved context", detail: "No memory or past chat search is available.", tone: "muted" },
     ]);
+  });
+
+  it("keeps eval constraints as a secondary capability instead of front-loading them", () => {
+    const view = buildRuntimeCapabilityView({
+      eval_mode: true,
+      builtins: true,
+      skill_install: false,
+      plan: false,
+      memory: true,
+      session_search: true,
+      symbol_context: false,
+      repo_search: false,
+      browser: true,
+      browser_screenshot: false,
+      web: true,
+      web_search: true,
+      subagent: false,
+      subagent_max_depth: 1,
+      focused_tasks: false,
+    });
+
+    expect(view?.chips[view!.chips.length - 1]).toEqual({
+      group: "Mode",
+      label: "Eval constraints",
+      detail: "Some choices may be fixed for repeatable runs.",
+      tone: "warning",
+    });
+    expect(view?.chips[0]).toEqual({
+      group: "Research",
+      label: "Web search + browser",
+      detail: "Can find and inspect current sources.",
+      tone: "ready",
+    });
   });
 });

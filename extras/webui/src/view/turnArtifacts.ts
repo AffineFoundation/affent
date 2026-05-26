@@ -1,3 +1,4 @@
+import { formatBytes } from "./byteFormat";
 import type { ToolCallState, TurnState } from "../store/sessionState";
 
 export interface TurnArtifact {
@@ -6,6 +7,9 @@ export interface TurnArtifact {
   source: string;
   summary?: string;
   truncated: boolean;
+  bytes?: number;
+  omittedBytes?: number;
+  capBytes?: number;
 }
 
 export function buildTurnArtifacts(turn: TurnState): TurnArtifact[] {
@@ -21,13 +25,63 @@ export function buildTurnArtifacts(turn: TurnState): TurnArtifact[] {
       source: toolSource(call),
       summary: call.resultSummary,
       truncated: call.resultTruncated,
+      bytes: call.resultBytes,
+      omittedBytes: call.resultOmittedBytes,
+      capBytes: call.resultCapBytes,
     });
   }
 
   return artifacts;
 }
 
-function artifactName(path: string): string {
+export function artifactSizeLabel(artifact: TurnArtifact): string {
+  return formatBytes(artifact.bytes, artifact.omittedBytes, artifact.capBytes, artifact.truncated);
+}
+
+export function artifactDisplayLabel(artifact: TurnArtifact): string {
+  const size = artifactSizeLabel(artifact);
+  return `${artifact.name}${size ? ` ${size}` : ""}`;
+}
+
+export function artifactAggregateLabel(artifacts: readonly TurnArtifact[]): string | undefined {
+  if (artifacts.length === 0) return undefined;
+  if (artifacts.length === 1) return artifactDisplayLabel(artifacts[0]);
+  let bytes = 0;
+  let omittedBytes = 0;
+  let hasBytes = false;
+  let truncated = false;
+  for (const artifact of artifacts) {
+    if (artifact.bytes != null) {
+      bytes += artifact.bytes;
+      hasBytes = true;
+    }
+    if (artifact.omittedBytes != null) omittedBytes += artifact.omittedBytes;
+    truncated = truncated || artifact.truncated;
+  }
+  const size = formatBytes(hasBytes ? bytes : undefined, omittedBytes, undefined, truncated);
+  return size ? `${artifacts.length} files ${size}` : `${artifacts.length} files`;
+}
+
+export function artifactCountLabel(artifacts: readonly TurnArtifact[]): string | undefined {
+  if (artifacts.length === 0) return undefined;
+  let bytes = 0;
+  let omittedBytes = 0;
+  let hasBytes = false;
+  let truncated = false;
+  for (const artifact of artifacts) {
+    if (artifact.bytes != null) {
+      bytes += artifact.bytes;
+      hasBytes = true;
+    }
+    if (artifact.omittedBytes != null) omittedBytes += artifact.omittedBytes;
+    truncated = truncated || artifact.truncated;
+  }
+  const size = formatBytes(hasBytes ? bytes : undefined, omittedBytes, undefined, truncated);
+  const count = `${artifacts.length} ${artifacts.length === 1 ? "file" : "files"}`;
+  return size ? `${count} ${size}` : count;
+}
+
+export function artifactName(path: string): string {
   const normalized = path.replace(/\\/g, "/");
   const name = normalized.split("/").filter(Boolean).at(-1);
   return name || path;

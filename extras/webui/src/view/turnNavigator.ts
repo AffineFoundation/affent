@@ -1,6 +1,7 @@
 import type { TurnState } from "../store/sessionState";
 import { summarizePreview } from "./textPreview";
 import { buildTurnActivity } from "./turnActivity";
+import { artifactCountLabel, buildTurnArtifacts } from "./turnArtifacts";
 
 export interface TurnNavSourceItem {
   turn: TurnState;
@@ -49,7 +50,8 @@ export function buildTurnNavigatorView(items: readonly TurnNavSourceItem[], pend
       ? { label: activity.digest.label, summary: summarize(activity.digest.summary, 74), tone: activity.digest.tone }
       : undefined;
     const digest = preferAnswerDigest(activityDigest, answerDigest);
-    const activitySummary = digest?.summary;
+    const artifactSummary = artifactSummaryForTurn(turn);
+    const activitySummary = combineSummaries(digest?.summary, artifactSummary);
     const activityLabel = digest?.label;
     const activityTone = digest?.tone;
     const current = turn.id === currentId;
@@ -71,7 +73,7 @@ export function buildTurnNavigatorView(items: readonly TurnNavSourceItem[], pend
       current,
       pending: false,
       messageAriaLabel: `Message ${turnNumber}: ${summary}${activitySuffix}${current ? " (current)" : ""}`,
-      stepAriaLabel: `Jump to message ${turnNumber}: ${summary}${current ? " (current)" : ""}`,
+      stepAriaLabel: `Jump to message ${turnNumber}: ${summary}${activitySuffix}${current ? " (current)" : ""}`,
     };
   });
   if (pending) {
@@ -92,7 +94,7 @@ export function buildTurnNavigatorView(items: readonly TurnNavSourceItem[], pend
       current: true,
       pending: true,
       messageAriaLabel: `Message ${turnNumber}: ${summary} — Waiting: Affent will add the next update here. (current)`,
-      stepAriaLabel: `Jump to pending message ${turnNumber}: ${summary} (current)`,
+      stepAriaLabel: `Jump to pending message ${turnNumber}: ${summary} — Waiting: Affent will add the next update here. (current)`,
     });
   }
 
@@ -113,14 +115,22 @@ function currentTurnId(items: readonly TurnNavSourceItem[]): string | undefined 
 function turnNavSummary(current: TurnNavViewItem | undefined): string {
   if (!current) return "No messages yet";
   const focus = current.pending ? current.summary : current.activitySummary || current.summary;
-  const label = current.pending
-    ? "Sending"
-    : current.statusTone === "running"
-      ? "Working"
-      : current.statusTone === "error" || current.statusTone === "max_turns"
-        ? "Needs attention"
-        : current.activityLabel ?? "Latest";
-  return `${label} · ${summarize(focus, 74)}`;
+  if (current.pending) return `Sending · ${summarize(focus, 74)}`;
+  if (current.statusTone === "running") return `Working · ${summarize(focus, 74)}`;
+  if (current.statusTone === "max_turns") return `Needs final answer · ${summarize(focus, 74)}`;
+  if (current.statusTone === "error") return `Issue · ${summarize(focus, 74)}`;
+  return summarize(focus, 74);
+}
+
+function artifactSummaryForTurn(turn: TurnState): string | undefined {
+  return artifactCountLabel(buildTurnArtifacts(turn));
+}
+
+function combineSummaries(primary: string | undefined, artifact: string | undefined): string | undefined {
+  if (!primary) return artifact;
+  if (!artifact) return primary;
+  if (primary.includes(artifact)) return primary;
+  return `${primary} · ${artifact}`;
 }
 
 function preferAnswerDigest(
@@ -163,10 +173,10 @@ function statusLabel(turn: TurnState, opts: { continuedAfterLimit?: boolean; res
   if (turn.status === "running") return "Working";
   if (turn.status === "completed") {
     if (turn.assistantText.trim()) return "Answered";
-    return opts.resultLabel && opts.resultLabel !== "Answer" ? opts.resultLabel : "No answer";
+    return opts.resultLabel && opts.resultLabel !== "Answer" ? opts.resultLabel : "Needs answer";
   }
   if (turn.status === "max_turns" && opts.continuedAfterLimit) return "Continued";
-  if (turn.status === "max_turns") return "Needs answer";
+  if (turn.status === "max_turns") return "Needs final answer";
   if (turn.status === "error" || turn.error || turn.toolCalls.some((call) => call.status === "error")) return "Issue";
   if (turn.status === "cancelled") return "Stopped";
   return turn.status;

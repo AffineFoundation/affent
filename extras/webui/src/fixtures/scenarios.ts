@@ -193,7 +193,7 @@ export const completedSubagentTree: RawEvent[] = [
       duration_ms: 1480,
       result_summary: "Subagent found WebUI trace requirements and inspected three tools.",
       result: JSON.stringify({
-        report: "Conclusion:\nWebUI must render trace details as expandable runtime structure.\nEvidence:\n- docs/webui-product-design.md requires tool args, result, repair and truncation metadata.\n- docs/focused-tasks.md requires focused task timelines and child tool calls.",
+        report: "Conclusion:\nWebUI must render trace details as expandable agent structure.\nEvidence:\n- docs/webui-product-design.md requires tool args, result, repair and truncation metadata.\n- docs/focused-tasks.md requires focused task timelines and child tool calls.",
         ok: true,
         turn_end_reason: "completed",
         mode: "explore",

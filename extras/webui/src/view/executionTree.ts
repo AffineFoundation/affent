@@ -365,7 +365,7 @@ function readableUrl(value: string): string {
 
 function baseMetrics(call: ToolCallState): ExecutionMetric[] {
   const metrics: ExecutionMetric[] = [];
-  if (call.callId) metrics.push({ label: "call", value: call.callId });
+  if (call.callId) metrics.push({ label: "request id", value: call.callId });
   if (call.durationMs != null) metrics.push({ label: "duration", value: `${call.durationMs}ms` });
   if (call.exitCode != null) metrics.push({ label: "exit", value: String(call.exitCode) });
   return metrics;

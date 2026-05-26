@@ -14,16 +14,18 @@ export function buildTurnBoundaryView({
   turn,
   turnNumber,
   artifactCount = 0,
+  artifactLabel,
   continuedAfterLimit = false,
 }: {
   turn: TurnState;
   turnNumber: number;
   artifactCount?: number;
+  artifactLabel?: string;
   continuedAfterLimit?: boolean;
 }): TurnBoundaryView {
   const title = turnTitle(turn);
   const statusLabel = boundaryStatus(turn, { continuedAfterLimit });
-  const meta = buildBoundaryMeta(turn, artifactCount);
+  const meta = buildBoundaryMeta(turn, artifactCount, artifactLabel);
   return {
     title,
     statusLabel,
@@ -36,7 +38,7 @@ export function buildTurnBoundaryView({
 function boundaryStatus(turn: TurnState, opts: { continuedAfterLimit?: boolean } = {}): string {
   if (turn.status === "running") return "In progress";
   if (turn.status === "max_turns" && opts.continuedAfterLimit) return "Continued";
-  if (turn.status === "max_turns") return "No final answer";
+  if (turn.status === "max_turns") return "Needs final answer";
   if (turn.status === "error" || turn.error) return "Issue";
   if (turn.status === "cancelled") return "Cancelled";
   if (turn.status === "completed") return "Done";
@@ -52,13 +54,13 @@ function boundaryTone(turn: TurnState, opts: { continuedAfterLimit?: boolean } =
   return "muted";
 }
 
-function buildBoundaryMeta(turn: TurnState, artifactCount: number): string[] {
+function buildBoundaryMeta(turn: TurnState, artifactCount: number, artifactLabel?: string): string[] {
   const meta: string[] = [];
   const durationMs = turn.toolStats?.tool_duration_ms ?? sumDurations(turn.toolCalls);
   const tokenCount = turn.usage ? turn.usage.inputTokens + turn.usage.outputTokens : undefined;
 
   if (turn.toolCalls.length > 0) meta.push(`${turn.toolCalls.length} ${pluralize("action", turn.toolCalls.length)}`);
-  if (artifactCount > 0) meta.push(`${artifactCount} ${pluralize("file", artifactCount)}`);
+  if (artifactCount > 0) meta.push(artifactLabel ? artifactLabel : `${artifactCount} ${pluralize("file", artifactCount)}`);
   if (durationMs != null && durationMs > 0) meta.push(formatDuration(durationMs));
   if (tokenCount != null && tokenCount > 0) meta.push(`${tokenCount} tokens`);
   return meta;

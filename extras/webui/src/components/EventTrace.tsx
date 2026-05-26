@@ -10,8 +10,8 @@ export function EventTrace({ events }: { events: readonly NormalizedEvent[] }) {
     <div className="event-trace" data-testid="event-trace">
       {events.length > 0 ? (
         <div className="event-trace-actions">
-          <span className="event-trace-count">{events.length} history entries</span>
-          <CopyButton label="Copy history" value={copyHistoryText(events)} className="event-action" />
+          <span className="event-trace-count">{events.length} trace entries</span>
+          <CopyButton label="Copy trace" value={copyHistoryText(events)} className="event-action" />
         </div>
       ) : null}
       {model.metadata.length > 0 ? renderMetadata(model.metadata) : null}
@@ -39,7 +39,7 @@ function renderMetadata(events: readonly NormalizedEvent[]) {
         <>
           <span className="event-id">meta</span>
           <span className="event-copy">
-            <span className="event-kind-label">History metadata</span>
+            <span className="event-kind-label">Metadata</span>
             <span className="event-meta">{summary}</span>
           </span>
           <span className="event-badges" aria-hidden="true" />
@@ -75,7 +75,7 @@ function renderEvent(item: Extract<EventTraceItem, { kind: "event" }>) {
             <span className="event-meta">{item.display.meta.join(" · ")}</span>
           </span>
           <span className="event-badges">
-            {!item.event.known ? <span className="badge" data-kind="error">unknown</span> : null}
+            {!item.event.known ? <span className="badge" data-kind="error">unclassified</span> : null}
             {item.display.badges.map((badge) => <span key={badge} className="badge" data-kind="schema">{badge}</span>)}
           </span>
         </>
@@ -165,7 +165,7 @@ function renderDeltaGroup(item: Extract<EventTraceItem, { kind: "deltaGroup" }>)
         </div>
         <pre className="code delta-preview">{item.text || "(empty delta stream)"}</pre>
         <details className="nested-raw event-group-raw">
-          <summary>{item.events.length} history entries</summary>
+          <summary>{item.events.length} trace entries</summary>
           <pre className="code">{JSON.stringify(item.events.map((event) => event.raw), null, 2)}</pre>
         </details>
       </div>

@@ -22,6 +22,38 @@ export interface BrowserStatsSnapshot {
   network_fetch: number;
 }
 
+export interface ToolStatsSnapshot {
+  tool_requests: number;
+  tool_errors: number;
+  tool_repair_succeeded: number;
+  tool_repair_failed: number;
+}
+
+export interface SessionToolInfo {
+  name: string;
+  raw_name?: string;
+  description: string;
+  parameters: unknown;
+  group: string;
+  source?: string;
+}
+
+export interface SessionToolsSurfaceInfo {
+  headline: string;
+  detail: string;
+  tone: "ready" | "warning" | "muted" | "unknown";
+  status: "allowed" | "filtered" | "restricted" | "unknown";
+  disabled_reasons?: string[];
+  warnings?: string[];
+}
+
+export interface SessionToolsResponse {
+  session_id: string;
+  count: number;
+  tools: SessionToolInfo[];
+  surface?: SessionToolsSurfaceInfo;
+}
+
 export interface SessionCapabilities {
   eval_mode: boolean;
   builtins: boolean;
@@ -29,6 +61,8 @@ export interface SessionCapabilities {
   plan: boolean;
   memory: boolean;
   session_search: boolean;
+  symbol_context: boolean;
+  repo_search: boolean;
   browser: boolean;
   browser_screenshot: boolean;
   web: boolean;
@@ -63,6 +97,7 @@ export interface SessionSummary {
   has_memory: boolean;
   has_runtime_skills: boolean;
   usage?: UsageSnapshot;
+  tools?: ToolStatsSnapshot;
   browser?: BrowserStatsSnapshot;
 }
 
@@ -125,6 +160,14 @@ export function listSessions(
   if (opts.after) q.set("after", opts.after);
   if (opts.limit != null) q.set("limit", String(opts.limit));
   return client.json<SessionListResponse>(withQuery("/v1/sessions", q), { signal: opts.signal });
+}
+
+export function listSessionTools(
+  client: ApiClient,
+  sessionId: string,
+  signal?: AbortSignal,
+): Promise<SessionToolsResponse> {
+  return client.json<SessionToolsResponse>(`/v1/sessions/${encodeURIComponent(sessionId)}/tools`, { signal });
 }
 
 export function createSession(

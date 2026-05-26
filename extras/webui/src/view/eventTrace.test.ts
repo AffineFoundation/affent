@@ -27,6 +27,9 @@ describe("eventTrace view model", () => {
           exit_code: 1,
           duration_ms: 42,
           result_summary: "file missing",
+          result_bytes: 1024,
+          result_omitted_bytes: 3072,
+          result_cap_bytes: 1024,
           result_truncated: true,
           result_artifact_path: ".affent/artifacts/c1.txt",
         },
@@ -50,7 +53,7 @@ describe("eventTrace view model", () => {
       kind: "event",
       display: {
         label: "Action failed",
-        meta: ["read_file", "42 ms", "file missing"],
+        meta: ["read_file", "42 ms", "file missing", "artifact c1.txt (1 KiB, 3 KiB omitted)"],
         badges: ["truncated", "full output"],
       },
     });
@@ -101,7 +104,7 @@ describe("eventTrace view model", () => {
       if (item.kind === "deltaGroup") return item.label;
       return item.display.label;
     })).toEqual([
-      ["Request history", ["Request 1", "summarize the repo", "completed", "17 tokens"], [1, 2, 4, 5]],
+      ["Request trace", ["Request 1", "summarize the repo", "completed", "17 tokens"], [1, 2, 4, 5]],
       "Assistant output",
       "Request finished",
     ]);

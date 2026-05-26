@@ -283,6 +283,8 @@ test("saved chats do not push the mobile composer out of reach", async ({ page }
             has_artifacts: false,
             has_memory: false,
             has_runtime_skills: false,
+            usage: { input_tokens: 1200, output_tokens: 450, turns: 3 },
+            tools: { tool_requests: 5, tool_errors: 1, tool_repair_succeeded: 2, tool_repair_failed: 0 },
             last_used_at: "2026-05-25T10:38:00Z",
           },
           {
@@ -325,10 +327,162 @@ test("saved chats do not push the mobile composer out of reach", async ({ page }
     await page.getByRole("button", { name: "Switch chats" }).click();
     await expect(page.getByTestId("session-list")).toBeVisible();
     await expect(page.getByRole("button", { name: "Hide chat list" })).toContainText("2 chats");
+    await expect(page.getByTestId("session-list")).toContainText("3 messages · 5 actions · 1 issue");
   } else {
     await expect(page.getByTestId("session-list")).toBeVisible();
     await expect(page.getByTestId("session-list")).toContainText("Affine research notes");
+    await expect(page.getByTestId("session-list")).toContainText("3 messages · 5 actions · 1 issue");
   }
+});
+
+test("active session surfaces the current tool catalog", async ({ page }) => {
+  await page.route("**/v1/sessions?limit=100", async (route) => {
+    await route.fulfill({
+      contentType: "application/json",
+      body: JSON.stringify({
+        sessions: [
+          {
+            id: "research-1",
+            active: true,
+            durable: true,
+            capabilities: {
+              eval_mode: false,
+              builtins: true,
+              skill_install: false,
+              plan: false,
+              memory: true,
+              session_search: true,
+              symbol_context: false,
+              repo_search: true,
+              browser: true,
+              browser_screenshot: false,
+              web: true,
+              web_search: true,
+              subagent: true,
+              subagent_max_depth: 2,
+              focused_tasks: true,
+              focused_task_profiles: ["recall", "explore"],
+            },
+            topic_user_message: "Affine research notes",
+            has_conversation: true,
+            has_events: true,
+            has_artifacts: false,
+            has_memory: false,
+            has_runtime_skills: false,
+            usage: { input_tokens: 1200, output_tokens: 450, turns: 3 },
+            tools: { tool_requests: 5, tool_errors: 1, tool_repair_succeeded: 2, tool_repair_failed: 0 },
+            last_used_at: "2026-05-25T10:38:00Z",
+          },
+        ],
+        has_more: false,
+      }),
+    });
+  });
+  await page.route("**/v1/sessions/research-1/history?after=-1&limit=500", async (route) => {
+    await route.fulfill({
+      contentType: "application/json",
+      body: JSON.stringify({
+        session_id: "research-1",
+        events: [],
+        next_after: -1,
+        has_more: false,
+        trace_schema_detected: false,
+      }),
+    });
+  });
+  await page.route("**/v1/sessions/research-1/tools", async (route) => {
+    await route.fulfill({
+      contentType: "application/json",
+      body: JSON.stringify({
+        session_id: "research-1",
+        count: 3,
+        tools: [
+          { name: "read_file", group: "Workspace", description: "Read a file from the workspace.", parameters: { type: "object", properties: { path: { type: "string" } } } },
+          { name: "web_fetch", group: "Research", description: "Fetch a public URL.", parameters: { type: "object", properties: { url: { type: "string" } } } },
+          { name: "taostats_query", group: "MCP", source: "taostats", raw_name: "query", description: "Query MCP data for TAO stats.", parameters: { type: "object", properties: { query: { type: "string" } } } },
+        ],
+        surface: {
+          headline: "Visible tool surface",
+          detail: "These tools are the subset currently exposed to this session.",
+          tone: "ready",
+          status: "allowed",
+          disabled_reasons: [],
+          warnings: [],
+        },
+      }),
+    });
+  });
+  await page.route("**/v1/sessions/research-1/events", async (route) => {
+    await route.fulfill({
+      contentType: "text/event-stream",
+      body: "",
+    });
+  });
+
+  await installClipboardSpy(page);
+  await page.goto("/");
+
+  const panel = page.getByTestId("session-tools-panel");
+  await expect(panel).toContainText("3 tools available");
+  await expect(panel).toContainText("Workspace 1 · Research 1 · MCP · taostats 1");
+  await expect(panel).toContainText("Allow / filter status");
+  await expect(panel).toContainText("Visible tool surface");
+  await expect(panel).toContainText("These tools are the subset currently exposed to this session.");
+  await expect(panel).toContainText("Allowed");
+  await panel.getByText("3 tools available").click();
+  await expect(panel.getByRole("tab", { name: "All 3" })).toBeVisible();
+  await expect(panel.getByRole("tab", { name: "Workspace 1" })).toBeVisible();
+  await expect(panel.getByRole("tab", { name: "Research 1" })).toBeVisible();
+  await expect(panel.getByRole("tab", { name: "MCP · taostats 1" })).toBeVisible();
+  await panel.getByRole("tab", { name: "Research 1" }).click();
+  await expect(panel).toContainText("Research · 1 visible group");
+  await expect(panel.getByTestId("session-tools-list")).toContainText("web_fetch");
+  await expect(panel.getByTestId("session-tools-list")).not.toContainText("read_file");
+  await expect(panel.getByTestId("session-tools-list")).not.toContainText("taostats_query");
+  await panel.getByText("web_fetch").click();
+  await expect(page.getByTestId("session-tools-list")).toContainText("Schema 1 field");
+  await expect(page.getByTestId("session-tools-list")).toContainText("Description 4 words");
+  await expect(panel.getByRole("button", { name: "Copy diagnostic" })).toBeVisible();
+  await expect(panel.getByRole("button", { name: "Copy filtered catalog" })).toBeVisible();
+  await expect(panel.getByRole("button", { name: "Copy names" })).toBeVisible();
+  await panel.getByRole("button", { name: "Copy diagnostic" }).click();
+  await expect(copiedText(page)).resolves.toContain("Tool diagnostic");
+  await expect(copiedText(page)).resolves.toContain("Visible tool surface");
+  await expect(copiedText(page)).resolves.toContain("Filter: Research");
+  await panel.getByRole("button", { name: "Copy filtered catalog" }).click();
+  await expect(copiedText(page)).resolves.toContain("Tool catalog");
+  await expect(copiedText(page)).resolves.toContain("Research (1 tool)");
+  await expect(copiedText(page)).resolves.toContain("web_fetch — Fetch a public URL.");
+  await panel.getByRole("button", { name: "Copy names" }).click();
+  await expect(copiedText(page)).resolves.toContain("Tool names");
+  await expect(copiedText(page)).resolves.toContain("- web_fetch");
+  await expect(copiedText(page)).resolves.not.toContain("read_file");
+  await expect(copiedText(page)).resolves.not.toContain("taostats_query");
+  await page.getByTestId("session-tools-search").fill("missing");
+  await expect(page.getByRole("button", { name: "Clear" })).toBeVisible();
+  await expect(page.getByRole("tab", { name: "All 0" })).toBeVisible();
+  await expect(page.getByTestId("session-tools-list")).toContainText("No matching tools.");
+  await expect(panel).toContainText("Research · no tools match this filter");
+  await expect(panel).toContainText("Research · no matching tools");
+  await page.getByRole("button", { name: "Clear" }).click();
+  await expect(page.getByRole("button", { name: "Clear" })).toHaveCount(0);
+  await expect(panel).toContainText("Research · 1 visible group");
+  await panel.getByRole("tab", { name: "All 1" }).click();
+  await expect(panel.getByRole("tab", { name: "All 3", selected: true })).toBeVisible();
+  await expect(page.getByTestId("session-tools-search")).toBeVisible();
+  await expect(panel).toContainText("Workspace");
+  await expect(panel).toContainText("Research");
+  await expect(panel).toContainText("MCP · taostats");
+  await panel.getByRole("button", { name: /Workspace 1 tool/i }).click();
+  await expect(page.getByTestId("session-tools-list")).not.toContainText("read_file");
+  await panel.getByRole("button", { name: "Collapse all" }).click();
+  await expect(page.getByTestId("session-tools-list")).not.toContainText("web_fetch");
+  await panel.getByRole("button", { name: "Expand all" }).click();
+  await expect(page.getByTestId("session-tools-list")).toContainText("read_file");
+  await expect(panel).toContainText("Raw name: query");
+  await page.getByTestId("session-tools-search").fill("taostats");
+  await expect(page.getByTestId("session-tools-list")).toContainText("taostats_query");
+  await expect(page.getByTestId("session-tools-list")).toContainText("Search matches");
 });
 
 test("offline preview keeps creation controls read-only while the API is unreachable", async ({ page }) => {
@@ -375,6 +529,8 @@ test("composer warns before current-web tasks when web access is unavailable", a
               plan: false,
               memory: true,
               session_search: false,
+              symbol_context: false,
+              repo_search: false,
               browser: false,
               browser_screenshot: false,
               web: false,

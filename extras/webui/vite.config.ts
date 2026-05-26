@@ -9,6 +9,7 @@ const devPort = Number.parseInt(process.env.VITE_AFFENT_WEBUI_PORT || "18789", 1
 // affentserve embeds it at "/" or a deployment serves it under a subpath.
 export default defineConfig({
   base: "./",
+  cacheDir: ".vite-cache",
   plugins: [react()],
   server: {
     host: "0.0.0.0",

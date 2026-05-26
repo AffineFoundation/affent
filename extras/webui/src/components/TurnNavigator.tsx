@@ -1,6 +1,6 @@
 import type { CSSProperties } from "react";
 import type { TurnState } from "../store/sessionState";
-import { buildTurnNavigatorView } from "../view/turnNavigator";
+import { buildTurnNavigatorView, type TurnNavViewItem } from "../view/turnNavigator";
 import { HighlightText } from "./HighlightText";
 
 export interface TurnNavItem {
@@ -34,12 +34,12 @@ export function TurnNavigator({
             <button
               type="button"
               className="turn-nav-find"
-              aria-label="Find in chat"
+              aria-label="Search in chat"
               aria-pressed={findActive}
-              title="Find messages, sources, or output"
+              title="Search messages, sources, or output"
               onClick={onOpenFind}
             >
-              <span aria-hidden="true">Find</span>
+              <span aria-hidden="true">Search</span>
             </button>
           ) : null}
         </span>
@@ -56,6 +56,7 @@ export function TurnNavigator({
               href={item.href}
               data-status={item.statusTone}
               data-current={item.current ? "true" : "false"}
+              aria-current={item.current ? "step" : undefined}
               aria-label={item.stepAriaLabel}
               style={{ "--turn-index": index } as CSSProperties}
             >
@@ -73,6 +74,7 @@ export function TurnNavigator({
               href={item.href}
               data-status={item.statusTone}
               data-current={item.current ? "true" : "false"}
+              aria-current={item.current ? "true" : undefined}
               aria-label={item.messageAriaLabel}
               style={{ "--turn-index": index } as CSSProperties}
             >
@@ -88,11 +90,16 @@ export function TurnNavigator({
                   </em>
                 ) : null}
               </span>
-              <small>{item.current ? `Current · ${item.statusLabel}` : item.statusLabel}</small>
+              <small>{shouldShowCurrentStatusLabel(item) ? item.statusLabel : null}</small>
             </a>
           ))}
         </div>
       )}
     </nav>
   );
+}
+
+function shouldShowCurrentStatusLabel(item: TurnNavViewItem): boolean {
+  if (!item.current) return true;
+  return item.statusLabel === "Issue" || item.statusLabel === "Needs answer" || item.statusLabel === "Needs final answer";
 }

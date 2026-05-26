@@ -6,7 +6,6 @@ export function RunDetails({
   testId,
   ariaLabel = "Activity metrics",
   summaryLabel = "Metrics",
-  valueFirst = false,
   inlineLimit = 3,
 }: {
   metrics: readonly SessionOverviewMetric[];
@@ -14,27 +13,27 @@ export function RunDetails({
   testId: string;
   ariaLabel?: string;
   summaryLabel?: string;
-  valueFirst?: boolean;
   inlineLimit?: number;
 }) {
   if (metrics.length === 0) return null;
   const visibleMetrics = metrics.slice(0, inlineLimit);
   const overflowMetrics = metrics.slice(inlineLimit);
+  const visibleText = visibleMetrics.map(formatMetric).join(" · ");
   return (
     <div className={className} data-testid={testId} aria-label={ariaLabel}>
       <div className="run-detail-inline">
-        {visibleMetrics.map((metric) => (
-          <MetricChip key={`${metric.label}-${metric.value}`} metric={metric} valueFirst={valueFirst} />
-        ))}
+        <span className="run-detail-line" data-tone={summarizeTone(visibleMetrics)}>
+          {visibleText}
+        </span>
         {overflowMetrics.length > 0 ? (
           <details className="run-detail-overflow">
-            <summary aria-label={`${summaryLabel}: ${overflowMetrics.length} more`}>
-              +{overflowMetrics.length}
+            <summary aria-label={`${summaryLabel}: ${overflowMetrics.length} more ${metricNoun(overflowMetrics.length)}`}>
+              +{overflowMetrics.length} more
             </summary>
             <div className="run-detail-metrics" aria-label={ariaLabel}>
-              {overflowMetrics.map((metric) => (
-                <MetricChip key={`${metric.label}-${metric.value}`} metric={metric} valueFirst={valueFirst} />
-              ))}
+              <span className="run-detail-line" data-tone={summarizeTone(overflowMetrics)}>
+                {overflowMetrics.map(formatMetric).join(" · ")}
+              </span>
             </div>
           </details>
         ) : null}
@@ -43,30 +42,17 @@ export function RunDetails({
   );
 }
 
-function MetricChip({
-  metric,
-  valueFirst,
-}: {
-  metric: SessionOverviewMetric;
-  valueFirst: boolean;
-}) {
-  return (
-    <span data-tone={metric.tone}>
-      {valueFirst ? (
-        <>
-          <b>{metric.value}</b> {formatMetricLabel(metric.label, metric.value)}
-        </>
-      ) : (
-        <>
-          {metric.label} {metric.value}
-        </>
-      )}
-    </span>
-  );
+function formatMetric(metric: SessionOverviewMetric): string {
+  return `${metric.label} ${metric.value}`;
 }
 
-function formatMetricLabel(label: string, value: string): string {
-  const normalized = label.toLowerCase();
-  if (value === "1" && normalized.endsWith("s")) return normalized.slice(0, -1);
-  return normalized;
+function summarizeTone(metrics: readonly SessionOverviewMetric[]): SessionOverviewMetric["tone"] | undefined {
+  return metrics.find((metric) => metric.tone === "error")?.tone
+    ?? metrics.find((metric) => metric.tone === "warning")?.tone
+    ?? metrics.find((metric) => metric.tone === "running")?.tone
+    ?? metrics.find((metric) => metric.tone === "success")?.tone;
+}
+
+function metricNoun(count: number): string {
+  return count === 1 ? "metric" : "metrics";
 }

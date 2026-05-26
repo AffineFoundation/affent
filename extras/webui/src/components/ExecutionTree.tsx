@@ -3,6 +3,8 @@ import type { NormalizedEvent } from "../normalize/normalizeEvent";
 import type { ToolCallState, TurnState } from "../store/sessionState";
 import type { UseAsDraft } from "../view/draftSource";
 import { buildExecutionTree, formatTokenUsageCompact, formatTokenUsageDetail, type ExecutionTreeNode } from "../view/executionTree";
+import { formatBytes } from "../view/byteFormat";
+import { artifactDisplayLabel, artifactName } from "../view/turnArtifacts";
 import { CopyButton } from "./CopyButton";
 import { CopyMenu } from "./CopyMenu";
 import { fmtDuration } from "./format";
@@ -25,8 +27,6 @@ export function ExecutionTree({
   onUseAsDraft?: UseAsDraft;
 }) {
   const nodes = useMemo(() => buildExecutionTree(turn), [turn]);
-  const notableNodeIds = useMemo(() => collectNodeIds(nodes, isNotableNode), [nodes]);
-  const openableNodeIds = useMemo(() => collectNodeIds(nodes, hasOpenableNodeBody), [nodes]);
   const activePath = useMemo(() => findRunningPath(nodes), [nodes]);
   const activePathIds = useMemo(() => new Set(activePath.map((node) => node.id)), [activePath]);
   const issueNodes = useMemo(() => collectIssueNodes(nodes), [nodes]);
@@ -35,22 +35,6 @@ export function ExecutionTree({
 
   function setNodeOpen(nodeId: string, open: boolean) {
     setOpenOverrides((current) => ({ ...current, [nodeId]: open }));
-  }
-
-  function openNotableNodes() {
-    setOpenOverrides((current) => {
-      const next = { ...current };
-      for (const id of notableNodeIds) next[id] = true;
-      return next;
-    });
-  }
-
-  function foldAllNodes() {
-    setOpenOverrides((current) => {
-      const next = { ...current };
-      for (const id of openableNodeIds) next[id] = false;
-      return next;
-    });
   }
 
   return (
@@ -65,19 +49,9 @@ export function ExecutionTree({
         {issueNodes.length > 0 ? (
           <CopyButton label="Copy issues" value={actionIssueText(issueNodes)} className="node-action" />
         ) : null}
-        <CopyMenu className="execution-copy-menu" panelClassName="execution-copy-menu-panel">
+        <CopyMenu label="Copy details" className="execution-copy-menu" panelClassName="execution-copy-menu-panel">
           <CopyButton label="Copy all details" value={actionTreeText(nodes)} className="node-action" />
         </CopyMenu>
-        {notableNodeIds.length > 0 ? (
-          <>
-            <button type="button" onClick={openNotableNodes}>
-              Show important
-            </button>
-            <button type="button" onClick={foldAllNodes}>
-              Collapse details
-            </button>
-          </>
-        ) : null}
       </div>
       {nodes.map((node) => (
         <ExecutionNodeView
@@ -118,7 +92,7 @@ function ExecutionNodeView({
   onOpenArtifact?: (path: string) => void;
   onUseAsDraft?: UseAsDraft;
 }) {
-  const autoOpen = (isDelegation(node) && node.status === "running") || nodeSearchMatches(node, searchQuery);
+  const autoOpen = activeNodeIds.has(node.id) || nodeSearchMatches(node, searchQuery);
   const open = openOverrides[node.id] ?? autoOpen;
   const hasBody = hasNodeBody(node) || node.children.length > 0 || events.length > 0;
 
@@ -268,7 +242,6 @@ function NodeDetails({
     !!node.originalTool ||
     !!node.originalArgsSummary ||
     !!node.repairNotes?.length ||
-    node.metrics.length > 0 ||
     !!node.resultArtifactPath;
   const hasPayload = !!node.args || events.length > 0;
   const hasRepairComparison = !!(node.originalTool || node.originalArgsSummary || node.repairNotes?.length);
@@ -334,7 +307,7 @@ function NodeDetails({
           <div className="repair-compare" data-testid="repair-comparison">
             <div className="repair-pane">
               <div className="kv">
-                <b>model request</b>
+                <b>original action</b>
               </div>
               {node.originalTool ? <DetailLine label="tool" value={node.originalTool} mono searchQuery={searchQuery} /> : null}
               {node.originalArgsSummary ? (
@@ -345,7 +318,7 @@ function NodeDetails({
             </div>
             <div className="repair-pane">
               <div className="kv">
-                <b>executed request</b>
+                <b>executed action</b>
               </div>
               <DetailLine label="tool" value={node.tool} mono searchQuery={searchQuery} />
               {node.args ? <pre className="code compact-code">{JSON.stringify(node.args, null, 2)}</pre> : null}
@@ -355,14 +328,24 @@ function NodeDetails({
         </DetailSection>
       ) : null}
       {hasMetadata ? (
-        <DetailSection title="Run summary">
+        <DetailSection title="Overview" summary={actionSummaryPreview(node)} collapsible defaultOpen={!!searchQuery?.trim()}>
           {node.objective ? <DetailLine label="goal" value={node.objective} searchQuery={searchQuery} /> : null}
-          <DetailLine label="action type" value={node.label} searchQuery={searchQuery} />
           {node.childSessionId ? <DetailLine label="child session" value={node.childSessionId} mono /> : null}
           {node.turnEndReason ? <DetailLine label="finished" value={node.turnEndReason} /> : null}
-          {node.mcpServer ? <DetailLine label="external server" value={node.mcpServer} mono /> : null}
-          {node.mcpTool ? <DetailLine label="external action" value={node.mcpTool} mono /> : null}
-          {node.resultArtifactPath ? <DetailLine label="output file" value={node.resultArtifactPath} mono /> : null}
+          {node.mcpServer || node.mcpTool ? (
+            <DetailLine
+              label="external"
+              value={[node.mcpServer, node.mcpTool].filter(Boolean).join(" · ")}
+              mono
+            />
+          ) : null}
+          {node.resultArtifactPath ? (
+            <DetailLine
+              label="output file"
+              value={artifactSummary(node)}
+              mono
+            />
+          ) : null}
         </DetailSection>
       ) : null}
       {hasPayload ? (
@@ -390,8 +373,20 @@ function NodeDetails({
 function actionRecordSummary(hasInput: boolean, eventCount: number): string {
   const parts: string[] = [];
   if (hasInput) parts.push("input");
-  if (eventCount > 0) parts.push(`${eventCount} history entr${eventCount === 1 ? "y" : "ies"}`);
-  return parts.join(" + ") || "history";
+  if (eventCount > 0) parts.push(`${eventCount} trace entr${eventCount === 1 ? "y" : "ies"}`);
+  return parts.join(" + ") || "trace";
+}
+
+function actionSummaryPreview(node: ExecutionTreeNode): string {
+  const parts: string[] = [];
+  if (node.objective) parts.push("Goal set");
+  if (node.mcpServer || node.mcpTool) parts.push("External action");
+  if (node.resultArtifactPath) parts.push("Output file");
+  if (node.childSessionId) parts.push("Continued in child session");
+  if (node.turnEndReason) parts.push(node.turnEndReason === "completed" ? "Completed" : `Finished: ${summarize(node.turnEndReason, 28)}`);
+  if (parts.length === 0) return "No extra details";
+  if (parts.length === 1) return parts[0];
+  return `${parts[0]} · ${parts.slice(1).join(" · ")}`;
 }
 
 function ActionInspectorSummary({ node, searchQuery }: { node: ExecutionTreeNode; searchQuery?: string }) {
@@ -401,7 +396,7 @@ function ActionInspectorSummary({ node, searchQuery }: { node: ExecutionTreeNode
     node.exitCode != null ? { label: "Exit", value: String(node.exitCode), tone: node.exitCode === 0 ? "success" : "error" } : undefined,
     node.tokenUsage ? { label: "Usage", value: formatTokenUsageDetail(node.tokenUsage) } : undefined,
     node.tokenUsage?.costUsd != null ? { label: "Cost", value: formatCost(node.tokenUsage.costUsd) } : undefined,
-    node.resultArtifactPath ? { label: "File", value: "full output", tone: "artifact" } : undefined,
+    node.resultArtifactPath ? { label: "File", value: artifactSummary(node), tone: "artifact" } : undefined,
     node.repairNotes?.length || node.originalTool ? { label: "Repair", value: `${node.repairNotes?.length || 1} note${(node.repairNotes?.length || 1) === 1 ? "" : "s"}`, tone: "warning" } : undefined,
     node.resultTruncated || node.argsTruncated ? { label: "Limit", value: "truncated", tone: "warning" } : undefined,
   ]);
@@ -415,12 +410,10 @@ function ActionInspectorSummary({ node, searchQuery }: { node: ExecutionTreeNode
         </strong>
         {node.subtitle ? <code><HighlightText text={node.subtitle} query={searchQuery} /></code> : null}
       </div>
-      <div className="action-inspector-facts" aria-label="Action summary">
-        {items.map((item) => (
-          <span key={`${item.label}-${item.value}`} data-tone={item.tone}>
-            <b>{item.label}</b> {item.value}
-          </span>
-        ))}
+      <div className="action-inspector-facts" aria-label="Overview">
+        <span className="action-inspector-facts-line" data-tone={actionSummaryTone(items)}>
+          {summarizeActionFacts(items, 3)}
+        </span>
       </div>
     </section>
   );
@@ -430,6 +423,20 @@ function formatCost(value: number): string {
   if (value === 0) return "$0";
   if (value < 0.01) return `$${value.toFixed(4)}`;
   return `$${value.toFixed(2)}`;
+}
+
+function artifactSummary(node: ExecutionTreeNode): string {
+  if (!node.resultArtifactPath) return "full output";
+  return artifactDisplayLabel({
+    path: node.resultArtifactPath,
+    name: artifactName(node.resultArtifactPath),
+    source: "",
+    summary: node.resultSummary ?? undefined,
+    truncated: !!node.resultTruncated,
+    bytes: node.resultBytes,
+    omittedBytes: node.resultOmittedBytes,
+    capBytes: node.resultCapBytes,
+  });
 }
 
 type SummaryTone = "success" | "error" | "running" | "warning" | "artifact";
@@ -442,6 +449,58 @@ interface SummaryItem {
 
 function compactSummaryItems(items: Array<SummaryItem | undefined>): SummaryItem[] {
   return items.filter((item): item is SummaryItem => !!item);
+}
+
+function actionSummaryTone(items: readonly SummaryItem[]): SummaryTone | undefined {
+  return items.find((item) => item.tone === "error")?.tone
+    ?? items.find((item) => item.tone === "warning")?.tone
+    ?? items.find((item) => item.tone === "running")?.tone
+    ?? items.find((item) => item.tone === "success")?.tone
+    ?? items.find((item) => item.tone === "artifact")?.tone;
+}
+
+function summarizeActionFacts(items: readonly SummaryItem[], visibleCount: number): string {
+  const visible = selectHeadlineActionFacts(items, visibleCount).map((item) => `${item.label} ${item.value}`);
+  const remaining = items.length - visible.length;
+  if (remaining > 0) visible.push(`+${remaining} more`);
+  return visible.join(" · ");
+}
+
+function selectHeadlineActionFacts(items: readonly SummaryItem[], visibleCount: number): SummaryItem[] {
+  return items
+    .map((item, index) => ({ item, index, score: headlineActionScore(item) }))
+    .sort((left, right) => {
+      if (right.score !== left.score) return right.score - left.score;
+      return left.index - right.index;
+    })
+    .slice(0, visibleCount)
+    .sort((left, right) => left.index - right.index)
+    .map(({ item }) => item);
+}
+
+function headlineActionScore(item: SummaryItem): number {
+  if (item.label === "Status") {
+    if (item.tone === "error") return 100;
+    if (item.tone === "warning") return 95;
+    if (item.tone === "running") return 90;
+    return 85;
+  }
+  if (item.tone === "artifact") return 80;
+  if (item.label === "Exit") {
+    if (item.tone === "error") return 78;
+    if (item.tone === "warning") return 76;
+    return 74;
+  }
+  if (item.tone === "error") return 75;
+  if (item.tone === "warning") return 70;
+  if (item.label === "Repair") return 60;
+  if (item.label === "Limit") return 55;
+  if (item.tone === "running") return 50;
+  if (item.tone === "success") return 45;
+  if (item.label === "Duration") return 40;
+  if (item.label === "Usage") return 35;
+  if (item.label === "Cost") return 30;
+  return 10;
 }
 
 function DetailSection({
@@ -531,11 +590,11 @@ function actionRecordText(node: ExecutionTreeNode, primaryResult?: string): stri
   ];
   if (node.durationMs != null) lines.push(`Duration: ${fmtDuration(node.durationMs)}`);
   if (node.exitCode != null) lines.push(`Exit: ${node.exitCode}`);
-  if (node.callId) lines.push(`Call ID: ${node.callId}`);
+  if (node.callId) lines.push(`ID: ${node.callId}`);
   if (node.objective) lines.push(`Task: ${node.objective}`);
   if (node.mcpServer) lines.push(`MCP server: ${node.mcpServer}`);
   if (node.mcpTool) lines.push(`MCP action: ${node.mcpTool}`);
-  if (node.resultArtifactPath) lines.push(`Artifact: ${node.resultArtifactPath}`);
+  if (node.resultArtifactPath) lines.push(`Artifact: ${artifactSummary(node)}`);
   if (node.nextHint) lines.push(`Next: ${node.nextHint}`);
   if (node.args) lines.push(`Input:\n${JSON.stringify(node.args, null, 2)}`);
   if (primaryResult) lines.push(`Output:\n${summarize(primaryResult, 2000)}`);
@@ -613,14 +672,6 @@ function StringList({ label, items }: { label: string; items: string[] }) {
   );
 }
 
-function formatBytes(bytes?: number, omitted?: number, cap?: number, truncated?: boolean): string {
-  const parts: string[] = [];
-  if (bytes != null) parts.push(`${bytes} bytes`);
-  if (cap != null) parts.push(`cap ${cap}`);
-  if (truncated && omitted != null) parts.push(`${omitted} omitted`);
-  return parts.length ? `(${parts.join(", ")})` : "";
-}
-
 function hasNodeBody(node: ExecutionTreeNode): boolean {
   return !!(
     node.args ||
@@ -642,10 +693,6 @@ function hasNodeBody(node: ExecutionTreeNode): boolean {
     node.suggestedNext.length ||
     node.resultArtifactPath
   );
-}
-
-function hasOpenableNodeBody(node: ExecutionTreeNode): boolean {
-  return hasNodeBody(node) || node.children.length > 0;
 }
 
 function nodeSearchMatches(node: ExecutionTreeNode, searchQuery?: string): boolean {
@@ -690,31 +737,6 @@ function nodeSearchMatches(node: ExecutionTreeNode, searchQuery?: string): boole
 
 function normalizeSearch(value?: string): string {
   return value?.trim().toLowerCase() ?? "";
-}
-
-function isNotableNode(node: ExecutionTreeNode): boolean {
-  return !!(
-    node.status === "error" ||
-    node.status === "running" ||
-    node.argsTruncated ||
-    node.resultTruncated ||
-    node.resultArtifactPath ||
-    node.repairNotes?.length ||
-    node.originalTool
-  );
-}
-
-function collectNodeIds(nodes: readonly ExecutionTreeNode[], predicate: (node: ExecutionTreeNode) => boolean): string[] {
-  const ids: string[] = [];
-  for (const node of nodes) {
-    if (predicate(node) && hasOpenableNodeBody(node)) ids.push(node.id);
-    ids.push(...collectNodeIds(node.children, predicate));
-  }
-  return ids;
-}
-
-function isDelegation(node: ExecutionTreeNode): boolean {
-  return node.kind === "subagent" || node.kind === "focused_task";
 }
 
 function hasStructuredResult(node: ExecutionTreeNode): boolean {

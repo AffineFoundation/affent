@@ -34,6 +34,8 @@ describe("ArtifactViewer", () => {
 
     expect(screen.getByTestId("artifact-viewer")).toHaveTextContent("File preview");
     expect(screen.getByTestId("artifact-viewer")).toHaveTextContent("000001-c1.txt");
+    expect(screen.getByTestId("artifact-viewer")).toHaveTextContent("20 B loaded of 20 B total");
+    expect(screen.getByTestId("artifact-viewer")).toHaveTextContent("partial load");
     expect(screen.getByTestId("artifact-viewer")).toHaveTextContent("more available");
     expect(screen.getByTestId("artifact-viewer")).toHaveTextContent("File details");
     expect(screen.getByTestId("artifact-viewer")).toHaveTextContent("20 loaded");
@@ -42,6 +44,12 @@ describe("ArtifactViewer", () => {
     expect(screen.getByTestId("artifact-match-list")).toHaveTextContent("Line 1");
     expect(screen.getByTestId("artifact-match-list")).toHaveTextContent("hay needle stack");
     expect(screen.getAllByText("needle").every((node) => node.tagName.toLowerCase() === "mark")).toBe(true);
+    await user.click(screen.getByRole("button", { name: "Copy file" }));
+    await user.click(screen.getByRole("button", { name: "Copy path" }));
+    expect(writeText).toHaveBeenCalledWith(".affent/artifacts/tool-results/000001-c1.txt");
+    await user.click(screen.getByRole("button", { name: "Copy file" }));
+    await user.click(screen.getByRole("button", { name: "Copy text" }));
+    expect(writeText).toHaveBeenCalledWith("hay needle stack");
     await user.click(screen.getByRole("button", { name: "Copy matches" }));
     expect(writeText).toHaveBeenCalledWith(
       [
@@ -138,6 +146,10 @@ describe("ArtifactViewer", () => {
     expect(screen.getByRole("button", { name: "JSON" })).toHaveAttribute("aria-pressed", "true");
     expect(screen.getByTestId("artifact-content")).toHaveAttribute("data-view", "json");
     expect(screen.getByTestId("artifact-content")).toHaveTextContent('"status": "ok"');
+    expect(screen.getByTestId("artifact-viewer")).toHaveTextContent("29 B loaded of 28 B total");
+    expect(screen.getByTestId("artifact-viewer")).toHaveTextContent("complete file");
+    await user.click(screen.getByRole("button", { name: "Copy file" }));
+    await user.click(screen.getByRole("button", { name: "Copy text" }));
     await user.click(screen.getByRole("button", { name: "Use text" }));
     expect(onUseAsDraft).toHaveBeenCalledWith(
       [

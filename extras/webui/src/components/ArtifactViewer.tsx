@@ -1,8 +1,10 @@
 import { useState } from "react";
 import type { ArtifactChunk } from "../api/sessions";
 import { buildArtifactMatchPreviews, buildArtifactStats } from "../view/artifactViewer";
+import { formatByteCount } from "../view/byteFormat";
 import type { UseAsDraft } from "../view/draftSource";
 import { CopyButton } from "./CopyButton";
+import { CopyMenu } from "./CopyMenu";
 import { HighlightText } from "./HighlightText";
 
 export type ArtifactViewerState =
@@ -39,6 +41,12 @@ export function ArtifactViewer({
           <span className="artifact-eyebrow">File preview</span>
           <h3>{displayName(artifact.state === "ready" ? artifact.chunk.path : artifact.path)}</h3>
           <code>{artifact.state === "ready" ? artifact.chunk.path : artifact.path}</code>
+          {artifact.state === "ready" ? (
+            <small className="artifact-head-meta">
+              {formatByteCount(stats?.loadedBytes ?? 0)} loaded of {formatByteCount(stats?.totalBytes ?? 0)} total
+              {artifact.chunk.hasMore ? " · partial load" : " · complete file"}
+            </small>
+          ) : null}
         </div>
         <button type="button" className="node-action" onClick={onClose}>
           Close
@@ -59,11 +67,11 @@ export function ArtifactViewer({
           </div>
           <div className="artifact-toolbar">
             <label className="artifact-search">
-              <span>Find in file</span>
+              <span>Search in file</span>
               <input
                 value={artifact.query}
                 onChange={(event) => onSearch(event.target.value)}
-                placeholder="search loaded text"
+                placeholder="Search loaded text"
                 data-testid="artifact-search"
               />
             </label>
@@ -96,7 +104,15 @@ export function ArtifactViewer({
                 </button>
               </>
             ) : null}
-            <CopyButton label="Copy text" value={artifact.chunk.text} />
+            <CopyMenu
+              label="Copy file"
+              className="artifact-copy-menu"
+              panelClassName="artifact-copy-menu-panel"
+              triggerClassName="node-action artifact-copy-trigger"
+            >
+              <CopyButton label="Copy path" value={artifact.chunk.path} className="node-action" />
+              <CopyButton label="Copy text" value={artifact.chunk.text} className="node-action" />
+            </CopyMenu>
           </div>
           <div className="artifact-stats">
             <span>{stats?.loadedPercent}% loaded</span>

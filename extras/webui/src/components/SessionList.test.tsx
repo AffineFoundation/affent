@@ -28,6 +28,22 @@ describe("SessionList", () => {
     expect(row).not.toHaveTextContent("files");
   });
 
+  it("shows tool work in the row stats when the API summary includes it", () => {
+    renderList([
+      session({
+        id: "tools-session",
+        durable: true,
+        latest_user_message: "review the WebUI timeline",
+        usage: { input_tokens: 1200, output_tokens: 450, turns: 3 },
+        tools: { tool_requests: 5, tool_errors: 1, tool_repair_succeeded: 2, tool_repair_failed: 0 },
+      }),
+    ]);
+
+    const row = screen.getByRole("button", { name: /WebUI timeline/ });
+    expect(within(row).getByTestId("session-stats")).toHaveTextContent("3 messages · 5 actions · 1 issue");
+    expect(row).toHaveTextContent("3 messages · 5 actions · 1 issue");
+  });
+
   it("uses the latest user task as the row title while keeping the id out of the scan path", () => {
     renderList([
       session({
@@ -143,10 +159,21 @@ describe("SessionList", () => {
     );
 
     const row = screen.getByRole("button", { name: /Affine/ });
-    expect(row).toHaveTextContent("Done");
+    expect(row).toHaveTextContent("Blocked");
     expect(row).toHaveAttribute("data-preview", "pinned");
     expect(row).toHaveAccessibleDescription("Issue · DNS failed");
     expect(within(row).getByTestId("session-preview")).toHaveTextContent("Issue · DNS failed");
+  });
+
+  it("keeps the selected chat's resolved preview visible without hover", () => {
+    renderList([session({ id: "s1", durable: true, has_events: true })], {
+      currentSession: reduceRawEvents(completedTurn),
+    });
+
+    const row = screen.getByRole("button", { name: /list the files/ });
+    expect(row).toHaveAttribute("data-preview", "pinned");
+    expect(row).toHaveAccessibleDescription("Answer · There are two files.");
+    expect(within(row).getByTestId("session-preview")).toHaveTextContent("Answer · There are two files.");
   });
 
   it("shows the active chat before newer saved chats, then sorts saved chats by recency", () => {
@@ -228,6 +255,7 @@ describe("SessionList", () => {
 
     expect(panel).toHaveAttribute("data-has-selection", "true");
     expect(panel).toHaveAttribute("data-mobile-open", "false");
+    expect(toggle).not.toHaveTextContent("Current chat");
     expect(toggle).toHaveTextContent("Affine research");
     expect(toggle).toHaveTextContent("Switch");
 
@@ -236,6 +264,30 @@ describe("SessionList", () => {
     expect(panel).toHaveAttribute("data-mobile-open", "true");
     expect(toggle).toHaveAccessibleName("Hide chat list");
     expect(toggle).toHaveTextContent("Hide");
+  });
+
+  it("shows the selected chat meta in the mobile switcher when there is no detail", () => {
+    renderList([
+      session({ id: "saved-empty", durable: true, has_conversation: true, has_events: true, last_used_at: "2026-05-24T17:37:00Z" }),
+      session({ id: "saved-recent", durable: true, latest_user_message: "older project review", last_used_at: "2026-05-23T18:30:00Z" }),
+    ]);
+
+    const toggle = screen.getByRole("button", { name: "Switch chats" });
+    expect(toggle).toHaveTextContent("Saved chat");
+    expect(toggle).toHaveTextContent("May 24 17:37 UTC");
+    expect(toggle).not.toHaveTextContent("saved-empty");
+    expect(toggle).not.toHaveTextContent("Current chat");
+  });
+
+  it("prefers the resolved preview over the original request in the mobile switcher", () => {
+    renderList([session({ id: "s1", durable: true, has_events: true })], {
+      currentSession: reduceRawEvents(completedTurn),
+    });
+
+    const toggle = screen.getByRole("button", { name: "Switch chats" });
+    expect(toggle).toHaveTextContent("list the files");
+    expect(toggle).toHaveTextContent("Answer · There are two files.");
+    expect(toggle).not.toHaveTextContent("Latest · list the files");
   });
 
   it("uses plain chat counts instead of internal session metrics", () => {
@@ -275,8 +327,77 @@ describe("SessionList", () => {
     expect(row).toHaveTextContent("Done");
     expect(row).toHaveAccessibleDescription("Answer · There are two files.");
     expect(within(row).getByTestId("session-preview")).toHaveTextContent("Answer · There are two files.");
-    expect(row).not.toHaveTextContent("1 action");
+    expect(within(row).getByTestId("session-stats")).toHaveTextContent("1 message · 1 action");
     expect(row).not.toHaveTextContent("No messages yet");
+  });
+
+  it("shows feature chips for the selected chat without repeating artifact counts", () => {
+    render(
+      <SessionList
+        sessions={[
+          session({
+            id: "s1",
+            durable: true,
+            latest_user_message: "review the repo",
+            has_memory: true,
+            has_runtime_skills: true,
+            has_artifacts: true,
+          }),
+        ]}
+        selectedId="s1"
+        demoActive={false}
+        onSelect={vi.fn()}
+        onNew={vi.fn()}
+      />,
+    );
+
+    const row = screen.getByRole("button", { name: /repo/ });
+    expect(within(row).getByTestId("session-chips")).toHaveTextContent("Memory · Skills");
+    expect(within(row).getByTestId("session-chips")).not.toHaveTextContent("Files");
+  });
+
+  it("shows artifact size in the mobile switcher when the selected chat has output files", () => {
+    renderList([session({ id: "s1", durable: true, has_events: true })], {
+      currentSession: reduceRawEvents([
+        { id: 1, type: "turn.start", data: { turn_id: "t1" } },
+        {
+          id: 2,
+          type: "tool.request",
+          data: {
+            turn_id: "t1",
+            call_id: "c1",
+            tool: "web_fetch",
+            args: { url: "https://example.invalid" },
+            args_truncated: false,
+            args_bytes: 32,
+            args_omitted_bytes: 0,
+            args_cap_bytes: 65536,
+          },
+        },
+        {
+          id: 3,
+          type: "tool.result",
+          data: {
+            turn_id: "t1",
+            call_id: "c1",
+            exit_code: 0,
+            duration_ms: 42,
+            result_summary: "saved output",
+            result: "saved output",
+            result_truncated: true,
+            result_bytes: 8192,
+            result_omitted_bytes: 1048576,
+            result_cap_bytes: 262144,
+            result_artifact_path: ".affent/artifacts/tool-results/000001-c1.txt",
+          },
+        },
+        { id: 4, type: "turn.end", data: { turn_id: "t1", reason: "completed" } },
+      ]),
+    });
+
+    const toggle = screen.getByRole("button", { name: "Switch chats" });
+    expect(toggle).toHaveTextContent("1 message · 1 action · 1 file (8 KiB, 1 MiB omitted)");
+    expect(toggle).not.toHaveTextContent("May");
   });
 
   it("shows a pending follow-up in the selected chat row immediately", () => {

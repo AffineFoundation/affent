@@ -1,5 +1,6 @@
 import type { ToolCallState, TurnState } from "../store/sessionState";
 import { detectConstraintDeviations } from "./constraintDeviation";
+import { artifactCountLabel, buildTurnArtifacts } from "./turnArtifacts";
 
 export type WorkSummaryTone = "muted" | "running" | "error" | "warning" | "info" | "artifact";
 
@@ -30,7 +31,7 @@ export function buildTurnWorkSummaryWithOptions(
   const running = calls.filter((call) => call.status === "running").length;
   const repaired = calls.filter(hasRepair).length;
   const truncated = calls.filter((call) => call.argsTruncated || call.resultTruncated).length;
-  const artifacts = calls.filter((call) => call.resultArtifactPath).length;
+  const artifacts = buildTurnArtifacts(turn);
   const durationMs = turn.toolStats?.tool_duration_ms ?? sumDurations(calls);
   const actionLabel = actionSummary(calls);
   const items: WorkSummaryItem[] = [];
@@ -42,14 +43,27 @@ export function buildTurnWorkSummaryWithOptions(
   if (running) items.push({ label: `${running} running`, tone: "running" });
   if (repaired) items.push({ label: `${repaired} repaired`, tone: "warning" });
   if (truncated) items.push({ label: `${truncated} truncated`, tone: "info" });
-  if (artifacts) items.push({ label: `${artifacts} file${artifacts === 1 ? "" : "s"}`, tone: "artifact" });
+  if (artifacts.length) items.push({ label: artifactCountLabel(artifacts) ?? `${artifacts.length} file${artifacts.length === 1 ? "" : "s"}`, tone: "artifact" });
   if (durationMs != null && durationMs > 0) items.push({ label: formatDuration(durationMs), tone: "muted" });
 
   return {
     actionLabel,
     items,
-    headlineItems: items.filter((item) => item.tone !== "muted").slice(0, 3),
+    headlineItems: selectHeadlineWorkSummaryItems(items),
   };
+}
+
+export function selectHeadlineWorkSummaryItems(items: readonly WorkSummaryItem[], visibleCount = 3): WorkSummaryItem[] {
+  const visible = items.filter((item) => item.tone !== "muted").slice(0, visibleCount);
+  const artifact = items.find((item) => item.tone === "artifact");
+  if (!artifact || visible.some((item) => item === artifact)) return visible;
+  if (visible.length < visibleCount) return [...visible, artifact];
+  const replacementIndex = [...visible].reverse().findIndex((item) => item.tone !== "artifact");
+  if (replacementIndex < 0) return visible;
+  const actualIndex = visible.length - 1 - replacementIndex;
+  const next = [...visible];
+  next[actualIndex] = artifact;
+  return next;
 }
 
 function hasRepair(call: ToolCallState): boolean {

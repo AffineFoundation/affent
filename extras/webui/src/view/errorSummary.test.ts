@@ -7,7 +7,7 @@ describe("summarizeUserError", () => {
       "llm_request",
       'chat request: Post "http://127.0.0.1:9/chat/completions": dial tcp 127.0.0.1:9: connect: connection refused',
     )).toEqual({
-      title: "Runtime provider is unreachable",
+      title: "Provider unavailable",
       detail: "The model endpoint at 127.0.0.1:9 refused the connection.",
     });
   });

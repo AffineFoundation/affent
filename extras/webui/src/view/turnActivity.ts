@@ -3,6 +3,7 @@ import { detectConstraintDeviations } from "./constraintDeviation";
 import type { DraftSource } from "./draftSource";
 import { summarizeUserError } from "./errorSummary";
 import { buildExecutionTree, formatTokenUsageCompact, type ExecutionTreeNode } from "./executionTree";
+import { artifactCountLabel, buildTurnArtifacts } from "./turnArtifacts";
 
 export type TurnActivityTone = "running" | "success" | "warning" | "error" | "muted";
 export type TurnActivityKind = "reasoning" | "action" | "result" | "answer" | "attention";
@@ -90,8 +91,8 @@ export function buildTurnActivity(turn: TurnState, opts: TurnActivityOptions = {
     items.push({
       id: `${turn.id}:reasoning`,
       kind: "reasoning",
-      label: "Reasoning",
-      title: turn.thinkingStreaming ? "Thinking through the next step" : "Working plan",
+      label: "Thinking",
+      title: "Thinking through the next step",
       detail: summarize(turn.thinkingText, 180),
       tone: turn.thinkingStreaming ? "running" : "muted",
     });
@@ -99,7 +100,7 @@ export function buildTurnActivity(turn: TurnState, opts: TurnActivityOptions = {
     items.push({
       id: `${turn.id}:reasoning`,
       kind: "reasoning",
-      label: "Reasoning",
+      label: "Thinking",
       title: "Thinking through the next step",
       tone: "running",
     });
@@ -122,7 +123,7 @@ export function buildTurnActivity(turn: TurnState, opts: TurnActivityOptions = {
       kind: "attention",
       label: "Next",
       title: "Final answer not produced",
-      detail: "The runtime stopped at its action limit before synthesizing the final reply.",
+      detail: "Affent stopped at its action limit before synthesizing the final reply.",
       tone: "warning",
     });
   }
@@ -156,7 +157,7 @@ export function buildTurnActivity(turn: TurnState, opts: TurnActivityOptions = {
     tone: opts.continuedAfterLimit ? "muted" : activityTone(turn),
     digest,
     evidenceCount,
-    evidencePreview: evidence.slice(0, 3),
+    evidencePreview: selectHeadlineEvidence(evidence, 3),
     evidenceAction,
     brief: buildBrief(turn, nodes, opts, constraintDeviations, evidenceAction, evidence),
     items,
@@ -167,7 +168,7 @@ export function buildTurnActivity(turn: TurnState, opts: TurnActivityOptions = {
 function activityTitle(turn: TurnState, opts: TurnActivityOptions): string {
   if (opts.continuedAfterLimit) return "Earlier work";
   if (turn.status === "running") return "What Affent is doing";
-  if (turn.status === "error" || turn.error || turn.status === "max_turns") return "Needs attention";
+  if (turn.status === "error" || turn.error || turn.status === "max_turns") return "Issue";
   return "What Affent did";
 }
 
@@ -188,7 +189,7 @@ function buildBrief(
   if (evidence.length > 0) {
     rows.push({
       id: "evidence",
-      label: "Evidence",
+      label: "Sources",
       evidence,
       action: evidenceAction,
     });
@@ -204,13 +205,36 @@ function buildBrief(
 }
 
 function collectBriefEvidence(nodes: readonly TurnActivityNode[]): TurnActivityEvidence[] {
-  return collectAllEvidence(nodes).slice(0, 4);
+  return selectHeadlineEvidence(collectAllEvidence(nodes), 4);
 }
 
 function collectAllEvidence(nodes: readonly TurnActivityNode[]): TurnActivityEvidence[] {
   const evidence: TurnActivityEvidence[] = [];
   collectBriefEvidenceInto(nodes, evidence);
   return uniqueEvidence(evidence);
+}
+
+function selectHeadlineEvidence(evidence: readonly TurnActivityEvidence[], visibleCount: number): TurnActivityEvidence[] {
+  return evidence
+    .map((item, index) => ({ item, index, score: evidenceHeadlineScore(item) }))
+    .sort((left, right) => {
+      if (right.score !== left.score) return right.score - left.score;
+      return left.index - right.index;
+    })
+    .slice(0, visibleCount)
+    .map(({ item }) => item);
+}
+
+function evidenceHeadlineScore(item: TurnActivityEvidence): number {
+  if (item.label === "Fetched") return 100;
+  if (item.label === "Searched") return 90;
+  if (item.label === "Read") return 80;
+  if (item.label === "Changed") return 70;
+  if (item.label === "MCP") return 60;
+  if (item.label === "Listed") return 50;
+  if (item.label === "Ran") return 40;
+  if (item.label === "Failed") return 30;
+  return 10;
 }
 
 function collectBriefEvidenceInto(nodes: readonly TurnActivityNode[], evidence: TurnActivityEvidence[]) {
@@ -477,6 +501,7 @@ function digestMeta(turn: TurnState, nodes: readonly TurnActivityNode[]): string
   const meta: string[] = [];
   const actionCount = turn.toolCalls.length;
   const evidenceCount = countEvidence(nodes);
+  const artifactLabel = artifactCountLabel(buildTurnArtifacts(turn));
   const delegatedCount = nodes.filter(isDelegatedNode).length;
   if (delegatedCount > 0) {
     meta.push(`${delegatedCount} delegated ${pluralize("task", delegatedCount)}`);
@@ -484,6 +509,7 @@ function digestMeta(turn: TurnState, nodes: readonly TurnActivityNode[]): string
     meta.push(`${nodes.length} ${pluralize("step", nodes.length)}`);
   }
   if (actionCount > 0) meta.push(`${actionCount} ${pluralize("action", actionCount)}`);
+  if (artifactLabel) meta.push(artifactLabel);
   if (evidenceCount > 0) meta.push(`${evidenceCount} evidence`);
   return meta;
 }
@@ -533,7 +559,7 @@ function activityNodeRecordText(node: ExecutionTreeNode): string {
   ];
   if (node.durationMs != null) lines.push(`Duration: ${formatDuration(node.durationMs)}`);
   if (node.exitCode != null) lines.push(`Exit: ${node.exitCode}`);
-  if (node.callId) lines.push(`Call ID: ${node.callId}`);
+  if (node.callId) lines.push(`Request ID: ${node.callId}`);
   if (node.objective) lines.push(`Task: ${node.objective}`);
   if (node.mcpServer) lines.push(`MCP server: ${node.mcpServer}`);
   if (node.mcpTool) lines.push(`MCP action: ${node.mcpTool}`);
@@ -627,42 +653,63 @@ function handledIssueBrief(turn: TurnState): TurnActivityBriefRow | undefined {
   if (turn.status !== "completed" || !turn.assistantText.trim()) return undefined;
   const failed = turn.toolCalls.filter((call) => call.status === "error");
   if (failed.length === 0) return undefined;
-  const names = uniqueStrings(failed.map((call) => toolTargetLabel(call)).filter(Boolean)).slice(0, 3);
-  const suffix = names.length > 0 ? `: ${names.join(", ")}` : "";
+  const evidence = issueEvidenceFromFailedCalls(failed).slice(0, 3);
   return {
     id: "handled",
     label: "Tool issues",
-    value: `${failed.length} ${pluralize("tool issue", failed.length)} worked around${suffix}.`,
+    evidence,
     tone: "warning",
+    action: evidence.length > 0
+      ? {
+        label: "Use issue context",
+        draft: issueContextDraft(evidence),
+        source: "error",
+      }
+      : undefined,
   };
 }
 
-function toolTargetLabel(call: ToolCallState): string | undefined {
-  const url = typeof call.args.url === "string" ? readableUrl(call.args.url) : undefined;
-  if (call.tool === "web_fetch" && url) return url;
+function issueEvidenceFromFailedCalls(failed: readonly ToolCallState[]): TurnActivityEvidence[] {
+  const evidence: TurnActivityEvidence[] = [];
+  for (const call of failed) {
+    const item = issueTargetEvidence(call);
+    if (item) evidence.push(item);
+  }
+  return uniqueEvidence(evidence);
+}
+
+function issueContextDraft(evidence: readonly TurnActivityEvidence[]): string {
+  return [
+    "Use these issue targets in the next step:",
+    ...evidence.map((item) => `- ${evidenceDraftValue(item, { useRawValue: true })}`),
+  ].join("\n");
+}
+
+function issueTargetEvidence(call: ToolCallState): TurnActivityEvidence | undefined {
+  const url = typeof call.args.url === "string" ? call.args.url.trim() : undefined;
+  if (call.tool === "web_fetch" && url) {
+    return { label: "Failed", value: url, displayValue: readableUrl(url) };
+  }
   const query = typeof call.args.query === "string" ? call.args.query.trim() : undefined;
-  if (call.tool === "web_search" && query) return summarize(query, 42);
+  if (call.tool === "web_search" && query) {
+    return { label: "Failed", value: query, displayValue: summarize(query, 42) };
+  }
+  const command = typeof call.args.command === "string" ? call.args.command.trim() : undefined;
+  if (call.tool === "shell" && command) {
+    return { label: "Failed", value: command, displayValue: summarize(command, 42) };
+  }
   const task = typeof call.args.task === "string" ? call.args.task.trim() : undefined;
+  if (task) return { label: "Failed", value: task, displayValue: summarize(task, 42) };
   const objective = typeof call.args.objective === "string" ? call.args.objective.trim() : undefined;
+  if (objective) return { label: "Failed", value: objective, displayValue: summarize(objective, 42) };
   const path =
     typeof call.args.path === "string"
       ? call.args.path.trim()
       : typeof call.args.file === "string"
         ? call.args.file.trim()
         : undefined;
-  return summarize(task || objective || path || call.tool, 42);
-}
-
-function uniqueStrings(items: readonly (string | undefined)[]): string[] {
-  const seen = new Set<string>();
-  const unique: string[] = [];
-  for (const item of items) {
-    const value = item?.trim();
-    if (!value || seen.has(value)) continue;
-    seen.add(value);
-    unique.push(value);
-  }
-  return unique;
+  if (path) return { label: "Failed", value: path, displayValue: summarize(path, 42) };
+  return { label: "Failed", value: call.tool };
 }
 
 function readableUrl(value: string): string {
@@ -709,14 +756,15 @@ function evidenceDraft(evidence: readonly TurnActivityEvidence[]): string {
 
 function evidenceBriefAction(evidence: readonly TurnActivityEvidence[]): TurnActivityBriefAction {
   return {
-    label: "Use evidence",
+    label: "Use sources",
     draft: evidenceDraft(evidence),
     source: "evidence",
   };
 }
 
-function evidenceDraftValue(item: TurnActivityEvidence): string {
-  return `${item.label} ${item.displayValue || item.value}`;
+function evidenceDraftValue(item: TurnActivityEvidence, opts: { useRawValue?: boolean } = {}): string {
+  const value = opts.useRawValue ? item.value : item.displayValue || item.value;
+  return `${item.label} ${value}`;
 }
 
 function canonicalUrlKey(value: string): string {

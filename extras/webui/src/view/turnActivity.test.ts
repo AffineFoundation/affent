@@ -1,7 +1,8 @@
 import { describe, expect, it } from "vitest";
 import { completedTurn } from "../fixtures/completedTurn";
-import { completedSubagentTree, runningSubagent, toolError, turnError } from "../fixtures/scenarios";
+import { completedSubagentTree, resultTruncated, runningSubagent, toolError, turnError } from "../fixtures/scenarios";
 import { reduceRawEvents } from "../store/reduce";
+import type { TurnState } from "../store/sessionState";
 import { buildTurnActivity } from "./turnActivity";
 
 describe("buildTurnActivity", () => {
@@ -49,23 +50,23 @@ describe("buildTurnActivity", () => {
     });
     expect(activity?.digest).toEqual({
       label: "Result",
-      summary: "WebUI must render trace details as expandable runtime structure.",
+      summary: "WebUI must render trace details as expandable agent structure.",
       meta: ["2 delegated tasks", "2 actions", "4 evidence"],
       tone: "success",
     });
     expect(activity?.evidencePreview).toEqual([
-      { label: "Listed", value: "docs" },
       { label: "Read", value: "docs/webui-product-design.md" },
+      { label: "Read", value: "docs/focused-tasks.md" },
       { label: "MCP", value: "webui trace" },
     ]);
     expect(activity?.evidenceAction).toEqual({
-      label: "Use evidence",
+      label: "Use sources",
       draft: [
         "Use this evidence in the next step:",
-        "- Listed docs",
         "- Read docs/webui-product-design.md",
-        "- MCP webui trace",
         "- Read docs/focused-tasks.md",
+        "- MCP webui trace",
+        "- Listed docs",
       ].join("\n"),
       source: "evidence",
     });
@@ -73,21 +74,21 @@ describe("buildTurnActivity", () => {
       { id: "goal", label: "Goal", value: "delegate docs inspection" },
       {
         id: "evidence",
-        label: "Evidence",
+        label: "Sources",
         evidence: [
-          { label: "Listed", value: "docs" },
           { label: "Read", value: "docs/webui-product-design.md" },
-          { label: "MCP", value: "webui trace" },
           { label: "Read", value: "docs/focused-tasks.md" },
+          { label: "MCP", value: "webui trace" },
+          { label: "Listed", value: "docs" },
         ],
         action: {
-          label: "Use evidence",
+          label: "Use sources",
           draft: [
             "Use this evidence in the next step:",
-            "- Listed docs",
             "- Read docs/webui-product-design.md",
-            "- MCP webui trace",
             "- Read docs/focused-tasks.md",
+            "- MCP webui trace",
+            "- Listed docs",
           ].join("\n"),
           source: "evidence",
         },
@@ -104,7 +105,7 @@ describe("buildTurnActivity", () => {
         },
       },
     ]);
-    expect(activity?.nodes[0].detail).toBe("WebUI must render trace details as expandable runtime structure.");
+    expect(activity?.nodes[0].detail).toBe("WebUI must render trace details as expandable agent structure.");
     expect(activity?.nodes[0].meta).toBe("done · 1.48s · 392 tokens");
     expect(activity?.nodes[0].evidence).toEqual([
       { label: "Listed", value: "docs" },
@@ -138,6 +139,21 @@ describe("buildTurnActivity", () => {
         meta: ["1 delegated task", "1 action"],
         tone: "running",
       },
+    });
+    const thinkingActivity = buildTurnActivity({
+      id: "thinking",
+      status: "running",
+      thinkingText: "I should list files.",
+      thinkingStreaming: true,
+      assistantText: "",
+      messageStreaming: false,
+      toolCalls: [],
+      userText: "",
+    } as TurnState);
+
+    expect(thinkingActivity?.items[0]).toMatchObject({
+      label: "Thinking",
+      title: "Thinking through the next step",
     });
     expect(activity?.brief.rows).toEqual([
       { id: "goal", label: "Goal", value: "use a subagent to inspect docs" },
@@ -257,14 +273,22 @@ describe("buildTurnActivity", () => {
     expect(activity?.evidencePreview).toEqual([{ label: "Fetched", value: "https://www.affine.io/", displayValue: "affine.io" }]);
     expect(activity?.brief.rows).toContainEqual({
       id: "evidence",
-      label: "Evidence",
+      label: "Sources",
       evidence: [{ label: "Fetched", value: "https://www.affine.io/", displayValue: "affine.io" }],
       action: {
-        label: "Use evidence",
+        label: "Use sources",
         draft: "Use this evidence in the next step:\n- Fetched affine.io",
         source: "evidence",
       },
     });
+  });
+
+  it("adds artifact summaries to the activity digest meta for file-bearing turns", () => {
+    const turn = reduceRawEvents(resultTruncated).turns[0];
+    const activity = buildTurnActivity(turn);
+
+    expect(activity?.digest.meta).toContain("1 file (8 KiB, 1 MiB omitted)");
+    expect(activity?.items.map((item) => item.label)).not.toContain("Artifact");
   });
 
   it("softens a historical max-turn attempt after the chat continues", () => {
@@ -448,8 +472,13 @@ describe("buildTurnActivity", () => {
     expect(activity?.brief.rows).toContainEqual({
       id: "handled",
       label: "Tool issues",
-      value: "1 tool issue worked around: affine bittensor.",
+      evidence: [{ label: "Failed", value: "affine bittensor", displayValue: "affine bittensor" }],
       tone: "warning",
+      action: {
+        label: "Use issue context",
+        draft: "Use these issue targets in the next step:\n- Failed affine bittensor",
+        source: "error",
+      },
     });
   });
 
@@ -525,10 +554,10 @@ describe("buildTurnActivity", () => {
     expect(activity?.evidencePreview).toEqual([{ label: "Fetched", value: "https://www.affine.io/", displayValue: "affine.io" }]);
     expect(activity?.brief.rows).toContainEqual({
       id: "evidence",
-      label: "Evidence",
+      label: "Sources",
       evidence: [{ label: "Fetched", value: "https://www.affine.io/", displayValue: "affine.io" }],
       action: {
-        label: "Use evidence",
+        label: "Use sources",
         draft: "Use this evidence in the next step:\n- Fetched affine.io",
         source: "evidence",
       },
@@ -536,8 +565,13 @@ describe("buildTurnActivity", () => {
     expect(activity?.brief.rows).toContainEqual({
       id: "handled",
       label: "Tool issues",
-      value: "1 tool issue worked around: affine.invalid/missing.",
+      evidence: [{ label: "Failed", value: "https://affine.invalid/missing", displayValue: "affine.invalid/missing" }],
       tone: "warning",
+      action: {
+        label: "Use issue context",
+        draft: "Use these issue targets in the next step:\n- Failed https://affine.invalid/missing",
+        source: "error",
+      },
     });
     expect(activity?.nodes[0]).toMatchObject({
       title: "Fetch affine.invalid/missing",

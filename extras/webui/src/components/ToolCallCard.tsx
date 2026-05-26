@@ -2,6 +2,7 @@ import { useState } from "react";
 import type { NormalizedEvent } from "../normalize/normalizeEvent";
 import type { ToolCallState } from "../store/sessionState";
 import { fmtDuration } from "./format";
+import { artifactDisplayLabel, artifactName } from "../view/turnArtifacts";
 import { TraceDisclosure } from "./TraceDisclosure";
 
 // Tool steps stay compact in the flow and expand in place. Status, repair,
@@ -77,10 +78,24 @@ function ToolDetails({ call, events }: { call: ToolCallState; events: readonly N
       ) : null}
       {call.resultArtifactPath ? (
         <div className="kv">
-          <b>full output</b> <code>{call.resultArtifactPath}</code>
+          <b>full output</b> <code>{artifactSummary(call)}</code>
         </div>
       ) : null}
       <TraceDisclosure events={events} className="nested-raw" />
     </div>
   );
+}
+
+function artifactSummary(call: ToolCallState): string {
+  if (!call.resultArtifactPath) return "";
+  return artifactDisplayLabel({
+    path: call.resultArtifactPath,
+    name: artifactName(call.resultArtifactPath),
+    source: "",
+    summary: call.resultSummary ?? undefined,
+    truncated: call.resultTruncated,
+    bytes: call.resultBytes,
+    omittedBytes: call.resultOmittedBytes,
+    capBytes: call.resultCapBytes,
+  });
 }

@@ -99,8 +99,8 @@ export function SessionList({
           onClick={() => setMobileOpen((open) => !open)}
         >
           <span>
-            <b>{selectedRow ? "Current chat" : "Chats"}</b>
-            <small>{selectedRow ? mobileCurrentChatLabel(selectedRow) : chatCountLabel(rows.length)}</small>
+            <b>{selectedRow ? selectedRow.title : "Chats"}</b>
+            <small>{selectedRow ? mobileCurrentChatSummary(selectedRow) : chatCountLabel(rows.length)}</small>
           </span>
           <strong>{mobileOpen ? "Hide" : "Switch"}</strong>
         </button>
@@ -163,6 +163,8 @@ export function SessionList({
         ) : null}
         {!demoActive
           ? visibleRows.map((row) => {
+              const isSelected = selectedId === row.id;
+              const visibleChips = isSelected ? row.chips.filter((chip) => chip !== "files") : [];
               const previewId = row.preview ? `session-preview-${row.id}` : undefined;
               return (
                 <button
@@ -170,7 +172,7 @@ export function SessionList({
                   type="button"
                   className={`session-row${selectedId === row.id ? " is-selected" : ""}`}
                   data-tone={row.tone}
-                  data-preview={shouldPinRowPreview(row.tone) ? "pinned" : "hover"}
+                  data-preview={shouldPinRowPreview(row.tone, isSelected) ? "pinned" : "hover"}
                   aria-describedby={previewId}
                   onClick={() => onSelect(row.id)}
                 >
@@ -185,6 +187,16 @@ export function SessionList({
                   {row.preview ? (
                     <span id={previewId} className="session-preview" data-testid="session-preview">
                       {row.preview}
+                    </span>
+                  ) : null}
+                  {row.stats ? (
+                    <span className="session-stats" data-testid="session-stats">
+                      {row.stats}
+                    </span>
+                  ) : null}
+                  {visibleChips.length > 0 ? (
+                    <span className="session-chips" data-testid="session-chips">
+                      {visibleChips.map(sessionChipLabel).join(" · ")}
                     </span>
                   ) : null}
                   {row.meta.length > 0 ? (
@@ -206,7 +218,7 @@ export function SessionList({
 function dotStatus(tone: string): string {
   if (tone === "running") return "running";
   if (tone === "error") return "error";
-  if (tone === "warning") return "max_turns";
+  if (tone === "warning") return "warning";
   return "completed";
 }
 
@@ -214,14 +226,19 @@ function shouldShowRowStatus(status: string): boolean {
   return !["Saved", "Ephemeral"].includes(status);
 }
 
-function shouldPinRowPreview(tone: string): boolean {
-  return tone === "running" || tone === "error" || tone === "warning";
+function shouldPinRowPreview(tone: string, selected: boolean): boolean {
+  return selected || tone === "running" || tone === "error" || tone === "warning";
 }
 
-function mobileCurrentChatLabel(row: { title: string; detail?: string; preview?: string; status: string }): string {
+function mobileCurrentChatSummary(row: { title: string; detail?: string; preview?: string; stats?: string; status: string; updated?: string; meta?: readonly string[] }): string {
   if (row.status === "Live" && row.detail?.startsWith("Sending")) return row.detail;
-  if (row.status === "Live" && row.preview?.startsWith("Now")) return row.preview;
-  return row.title;
+  if (row.preview && row.preview !== "Waiting for the next update.") return row.preview;
+  if (row.detail) return row.detail;
+  if (row.stats) return row.stats;
+  if (row.updated && row.updated !== "No messages yet") return row.updated;
+  const meta = row.meta?.find((value) => value !== row.title && value !== "No messages yet");
+  if (meta) return meta;
+  return row.status;
 }
 
 function chatListSummary(total: number, running: number): string {
@@ -232,4 +249,19 @@ function chatListSummary(total: number, running: number): string {
 
 function chatCountLabel(total: number): string {
   return `${total} chat${total === 1 ? "" : "s"}`;
+}
+
+function sessionChipLabel(chip: string): string {
+  switch (chip) {
+    case "memory":
+      return "Memory";
+    case "skills":
+      return "Skills";
+    case "unclassified":
+      return "Unclassified";
+    case "artifacts":
+      return "Artifacts";
+    default:
+      return chip === "files" ? "Files" : chip;
+  }
 }

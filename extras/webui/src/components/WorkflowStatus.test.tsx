@@ -1,4 +1,5 @@
 import { render, screen, within } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import { describe, expect, it } from "vitest";
 import { completedTurn } from "../fixtures/completedTurn";
 import { reduceRawEvents } from "../store/reduce";
@@ -7,8 +8,9 @@ import { buildSessionOverview } from "../view/sessionOverview";
 import { WorkflowStatus } from "./WorkflowStatus";
 
 describe("WorkflowStatus", () => {
-  it("summarizes the latest completed chat with visible run metrics", () => {
+  it("summarizes the latest completed chat with visible run metrics", async () => {
     const session = reduceRawEvents(completedTurn);
+    const user = userEvent.setup();
     render(<WorkflowStatus overview={buildSessionOverview({
       session,
       workflow: deriveWorkflowStatus(session),
@@ -17,10 +19,21 @@ describe("WorkflowStatus", () => {
 
     expect(screen.getByTestId("workflow-status")).toHaveTextContent("list the files");
     expect(screen.getByTestId("workflow-status")).toHaveTextContent("Result ready");
-    expect(screen.getByTestId("workflow-status")).toHaveTextContent("README.md main.go");
     const details = screen.getByTestId("workflow-details");
-    expect(metric(details, "1 action")).toBeVisible();
-    expect(metric(details, "138 tokens")).toBeVisible();
+    expect(screen.getByTestId("workflow-status")).not.toHaveAttribute("open");
+    expect(details).not.toBeVisible();
+    const summary = screen.getByTestId("workflow-status").querySelector("summary");
+    expect(summary).toBeTruthy();
+    await user.click(summary!);
+    expect(screen.getByTestId("workflow-status")).toHaveAttribute("open");
+    expect(details).toBeVisible();
+    expect(screen.getByTestId("workflow-status")).toHaveTextContent("README.md main.go");
+    expect(metric(details, "Work 1 action")).toBeVisible();
+    expect(within(details).getByText("+1 more")).toBeInTheDocument();
+    expect(within(details).getByLabelText("Work metrics: 1 more metric")).toBeInTheDocument();
+    expect(within(details).getByText((_, element) => element?.textContent?.includes("Work 1 action") ?? false, { selector: ".run-detail-line" })).toBeInTheDocument();
+    await user.click(within(details).getByLabelText("Work metrics: 1 more metric"));
+    expect(metric(details, "Tokens 138")).toBeVisible();
     expect(screen.queryByText("Metrics")).toBeNull();
     expect(screen.queryByText("Run details")).toBeNull();
   });
@@ -58,8 +71,106 @@ describe("WorkflowStatus", () => {
     expect(screen.getByTestId("workflow-status")).not.toHaveTextContent("Using shell");
     expect(screen.getByTestId("workflow-status")).not.toHaveTextContent("shell");
   });
+
+  it("marks a completed chat with tool failures as a warning", () => {
+    const session = reduceRawEvents([
+      { id: 1, type: "turn.start", data: { turn_id: "t1" } },
+      { id: 2, type: "user.message", data: { turn_id: "t1", text: "research affine" } },
+      {
+        id: 3,
+        type: "tool.request",
+        data: {
+          turn_id: "t1",
+          call_id: "c1",
+          tool: "web_fetch",
+          args: { url: "https://example.invalid" },
+          args_truncated: false,
+          args_bytes: 32,
+          args_omitted_bytes: 0,
+          args_cap_bytes: 65536,
+        },
+      },
+      {
+        id: 4,
+        type: "tool.result",
+        data: {
+          turn_id: "t1",
+          call_id: "c1",
+          exit_code: 1,
+          duration_ms: 42,
+          result_summary: "DNS failed",
+          result: "DNS failed",
+          result_truncated: false,
+          result_bytes: 10,
+          result_omitted_bytes: 0,
+          result_cap_bytes: 262144,
+        },
+      },
+      { id: 5, type: "message.done", data: { turn_id: "t1", text: "I still found enough to answer." } },
+      { id: 6, type: "turn.end", data: { turn_id: "t1", reason: "completed" } },
+    ]);
+
+    render(<WorkflowStatus overview={buildSessionOverview({
+      session,
+      workflow: deriveWorkflowStatus(session),
+      hasSelectedSession: true,
+    })} />);
+
+    expect(screen.getByTestId("workflow-status")).toHaveAttribute("data-tone", "warning");
+    expect(screen.getByTestId("workflow-status").querySelector(".pulse-dot")).toHaveAttribute("data-status", "warning");
+    expect(screen.getByTestId("workflow-status")).toHaveTextContent("Result ready");
+    expect(within(screen.getByTestId("workflow-details")).getByText((_, element) => element?.textContent?.includes("Work 1 action") ?? false, { selector: ".run-detail-line" }))
+      .toHaveAttribute("data-tone", "warning");
+  });
+
+  it("shows artifact output in the workflow summary when the latest chat has files", () => {
+    const session = reduceRawEvents([
+      { id: 1, type: "turn.start", data: { turn_id: "t1" } },
+      { id: 2, type: "user.message", data: { turn_id: "t1", text: "summarize the repo" } },
+      {
+        id: 3,
+        type: "tool.request",
+        data: {
+          turn_id: "t1",
+          call_id: "c1",
+          tool: "web_fetch",
+          args: { url: "https://example.invalid" },
+          args_truncated: false,
+          args_bytes: 32,
+          args_omitted_bytes: 0,
+          args_cap_bytes: 65536,
+        },
+      },
+      {
+        id: 4,
+        type: "tool.result",
+        data: {
+          turn_id: "t1",
+          call_id: "c1",
+          exit_code: 0,
+          duration_ms: 42,
+          result_summary: "saved output",
+          result: "saved output",
+          result_truncated: true,
+          result_bytes: 8192,
+          result_omitted_bytes: 1048576,
+          result_cap_bytes: 262144,
+          result_artifact_path: ".affent/artifacts/tool-results/000001-c1.txt",
+        },
+      },
+      { id: 5, type: "turn.end", data: { turn_id: "t1", reason: "completed" } },
+    ]);
+
+    render(<WorkflowStatus overview={buildSessionOverview({
+      session,
+      workflow: deriveWorkflowStatus(session),
+      hasSelectedSession: true,
+    })} />);
+
+    expect(screen.getByTestId("workflow-status")).toHaveTextContent("1 file (8 KiB, 1 MiB omitted)");
+  });
 });
 
 function metric(root: HTMLElement, text: string): HTMLElement {
-  return within(root).getByText((_, element) => element?.textContent === text);
+  return within(root).getAllByText((_, element) => element?.textContent?.includes(text) ?? false, { selector: "span" })[0];
 }

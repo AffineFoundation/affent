@@ -171,7 +171,7 @@ describe("Composer", () => {
 
     expect(screen.getByTestId("composer-task-hint")).toHaveAttribute("data-tone", "warning");
     expect(screen.getByTestId("composer-task-hint")).toHaveTextContent("Needs current sources");
-    expect(screen.getByTestId("composer-task-hint")).toHaveTextContent("unless you provide sources");
+    expect(screen.getByTestId("composer-task-hint")).toHaveTextContent("paste URLs, docs, or files");
     expect(screen.getByRole("button", { name: "Send anyway" })).toBeEnabled();
   });
 
@@ -191,7 +191,7 @@ describe("Composer", () => {
 
     expect(screen.getByTestId("composer-task-hint")).toHaveAttribute("data-tone", "warning");
     expect(screen.getByTestId("composer-task-hint")).toHaveTextContent("Direct sources help");
-    expect(screen.getByTestId("composer-task-hint")).toHaveTextContent("paste URLs or files");
+    expect(screen.getByTestId("composer-task-hint")).toHaveTextContent("paste official URLs, docs, or files");
     expect(screen.getByRole("button", { name: "Send anyway" })).toBeEnabled();
   });
 
@@ -210,9 +210,29 @@ describe("Composer", () => {
     await user.type(screen.getByPlaceholderText("Message Affent..."), "check latest market news");
 
     expect(screen.getByTestId("composer-task-hint")).toHaveAttribute("data-tone", "unknown");
-    expect(screen.getByTestId("composer-task-hint")).toHaveTextContent("Current sources unknown");
-    expect(screen.getByTestId("composer-task-hint")).toHaveTextContent("web access has not loaded");
+    expect(screen.getByTestId("composer-task-hint")).toHaveTextContent("Current sources not confirmed");
+    expect(screen.getByTestId("composer-task-hint")).toHaveTextContent("paste URLs, docs, or files now");
     expect(screen.getByRole("button", { name: "Start anyway" })).toBeEnabled();
+  });
+
+  it("guides skill installation through the runtime skill workflow", async () => {
+    const user = userEvent.setup();
+    render(
+      <Composer
+        disabled={false}
+        busy={false}
+        runtimeCapabilities={runtimeWithSkillInstall()}
+        onSubmit={vi.fn()}
+        onCancel={vi.fn()}
+      />,
+    );
+
+    await user.type(screen.getByPlaceholderText("Message Affent..."), "install a skill from github");
+
+    expect(screen.getByTestId("composer-task-hint")).toHaveAttribute("data-tone", "ready");
+    expect(screen.getByTestId("composer-task-hint")).toHaveTextContent("Skill install ready");
+    expect(screen.getByTestId("composer-task-hint")).toHaveTextContent("propose_install");
+    expect(screen.getByRole("button", { name: "Send anyway" })).toBeEnabled();
   });
 
   it("loads suggested guidance while a turn is running", () => {
@@ -511,5 +531,18 @@ function runtime(research: RuntimeCapabilityView["research"]): RuntimeCapability
     tone: research === "ready" ? "ready" : research === "unknown" ? "unknown" : "warning",
     research,
     chips: [],
+  };
+}
+
+function runtimeWithSkillInstall(): RuntimeCapabilityView {
+  return {
+    headline: "Local work only",
+    detail: "Web search and browser are off",
+    tone: "warning",
+    research: "off",
+    chips: [
+      { group: "Files", label: "Files + commands", detail: "Can inspect files and run local commands.", tone: "ready" },
+      { group: "Skills", label: "Skill install", detail: "Can install and activate runtime skills without restarting.", tone: "ready" },
+    ],
   };
 }

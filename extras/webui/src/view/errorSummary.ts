@@ -8,7 +8,7 @@ export function summarizeUserError(code: string, message: string): UserErrorSumm
   const refused = text.match(/dial tcp ([^"\s]+): connect: connection refused/i);
   if (refused?.[1]) {
     return {
-      title: "Runtime provider is unreachable",
+      title: "Provider unavailable",
       detail: `The model endpoint at ${refused[1]} refused the connection.`,
     };
   }

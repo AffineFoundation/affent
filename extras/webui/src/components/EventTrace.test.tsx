@@ -25,19 +25,19 @@ describe("EventTrace", () => {
 
     render(<EventTrace events={events} />);
 
-    expect(screen.getByText("2 history entries")).toBeInTheDocument();
-    expect(screen.getByText("History metadata")).toBeInTheDocument();
+    expect(screen.getByText("2 trace entries")).toBeInTheDocument();
+    expect(screen.getByText("Metadata")).toBeInTheDocument();
     expect(screen.getByText("schema v1")).toBeInTheDocument();
-    expect(screen.queryByText("History loaded")).not.toBeInTheDocument();
+    expect(screen.queryByText("Trace loaded")).not.toBeInTheDocument();
     expect(screen.getByText("Started action")).toBeInTheDocument();
     expect(screen.getByText("Request 1 · read_file")).toBeInTheDocument();
     expect(screen.queryByText(/turn t1/)).not.toBeInTheDocument();
     expect(screen.queryByText(/call c1/)).not.toBeInTheDocument();
     expect(screen.queryByText("tool.request")).not.toBeInTheDocument();
 
-    await user.click(screen.getByRole("button", { name: "Copy history" }));
+    await user.click(screen.getByRole("button", { name: "Copy trace" }));
     expect(writeText).toHaveBeenCalledWith(`${JSON.stringify(events[0].raw)}\n${JSON.stringify(events[1].raw)}`);
-    await user.click(screen.getByText("History metadata"));
+    await user.click(screen.getByText("Metadata"));
     expect(screen.getByText("1 entry")).toBeInTheDocument();
     expect(screen.getByText(/"type": "trace.meta"/)).toBeInTheDocument();
     await user.click(screen.getByRole("button", { name: "Copy metadata" }));
@@ -64,7 +64,7 @@ describe("EventTrace", () => {
     render(<EventTrace events={events} />);
 
     expect(screen.getByText("Action finished")).toBeInTheDocument();
-    expect(screen.getByText("1.3 s · Updated extras/webui/src/components/EventTrace.tsx")).toBeInTheDocument();
+    expect(screen.getByText("1.3 s · Updated extras/webui/src/components/EventTrace.tsx · artifact c1.txt")).toBeInTheDocument();
     expect(screen.getByText("truncated")).toBeInTheDocument();
     expect(screen.getByText("full output")).toBeInTheDocument();
     expect(screen.queryByText("tool.result")).not.toBeInTheDocument();
@@ -82,14 +82,14 @@ describe("EventTrace", () => {
     render(<EventTrace events={normalizeEvents(raws)} />);
 
     expect(screen.getByText("1-4")).toBeInTheDocument();
-    expect(screen.getByText("Request history")).toBeInTheDocument();
+    expect(screen.getByText("Request trace")).toBeInTheDocument();
     expect(screen.getByText("Request 1 · summarize the repo · completed · 17 tokens")).toBeInTheDocument();
     expect(screen.queryByText("Started request")).not.toBeInTheDocument();
     expect(screen.queryByText("User message")).not.toBeInTheDocument();
     expect(screen.queryByText("Token usage")).not.toBeInTheDocument();
     expect(screen.queryByText("Request finished")).not.toBeInTheDocument();
 
-    await user.click(screen.getByText("Request history"));
+    await user.click(screen.getByText("Request trace"));
     await user.click(screen.getByRole("button", { name: "Copy events" }));
 
     expect(screen.getByText("4 events")).toBeInTheDocument();
@@ -104,7 +104,7 @@ describe("EventTrace", () => {
 
     render(<EventTrace events={events} />);
 
-    expect(screen.getByText("unknown")).toBeInTheDocument();
+    expect(screen.getByText("unclassified")).toBeInTheDocument();
     await user.click(screen.getByText("future.event"));
     expect(screen.getByText(/"payload": "kept"/)).toBeInTheDocument();
   });
@@ -147,7 +147,7 @@ describe("EventTrace", () => {
 
     expect(screen.getByText("Hello")).toBeInTheDocument();
     expect(screen.getByText("2 updates · 5 chars")).toBeInTheDocument();
-    expect(screen.getByText("3 history entries")).toBeInTheDocument();
+    expect(screen.getByText("3 trace entries")).toBeInTheDocument();
     expect(screen.getByText(/"type": "message.done"/)).toBeInTheDocument();
     expect(screen.getByText("Thinking notes")).toBeInTheDocument();
   });
@@ -173,7 +173,7 @@ describe("EventTrace", () => {
     await user.click(screen.getAllByText("Assistant output")[0]);
 
     expect(screen.getByText("Hello")).toBeInTheDocument();
-    expect(screen.getByText("2 history entries")).toBeInTheDocument();
+    expect(screen.getByText("2 trace entries")).toBeInTheDocument();
   });
 
   it("copies grouped delta raw event JSON payloads", async () => {

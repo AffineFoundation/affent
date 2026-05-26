@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { resultTruncated } from "../fixtures/scenarios";
 import { reduceRawEvents } from "../store/reduce";
-import { buildTurnArtifacts } from "./turnArtifacts";
+import { artifactAggregateLabel, artifactSizeLabel, buildTurnArtifacts } from "./turnArtifacts";
 
 describe("buildTurnArtifacts", () => {
   it("summarizes full-output artifacts from tool calls", () => {
@@ -14,7 +14,22 @@ describe("buildTurnArtifacts", () => {
         source: "cat big.log",
         summary: "line 1\nline 2\n…(truncated)",
         truncated: true,
+        bytes: 8192,
+        omittedBytes: 1048576,
+        capBytes: 8192,
       },
     ]);
+  });
+
+  it("formats artifact byte sizes compactly", () => {
+    const turn = reduceRawEvents(resultTruncated).turns[0];
+    const artifact = buildTurnArtifacts(turn)[0];
+    expect(artifactSizeLabel(artifact)).toBe("(8 KiB, 1 MiB omitted)");
+  });
+
+  it("summarizes artifact groups compactly", () => {
+    const turn = reduceRawEvents(resultTruncated).turns[0];
+    const artifact = buildTurnArtifacts(turn)[0];
+    expect(artifactAggregateLabel([artifact])).toBe("000001-c1.txt (8 KiB, 1 MiB omitted)");
   });
 });

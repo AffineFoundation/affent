@@ -3,6 +3,7 @@ import type { WorkflowStatus } from "../store/workflowStatus";
 import { conversationTopicFromTurns } from "./continuationPrompt";
 import { summarizeSessionTitle } from "./sessionList";
 import { buildTurnActivity, type TurnActivityView } from "./turnActivity";
+import { sessionArtifactLabel } from "./sessionArtifacts";
 import { summarizeAnswerPreview, summarizePreview } from "./textPreview";
 
 export type SessionOverviewTone = "ready" | "running" | "success" | "warning" | "error";
@@ -136,19 +137,16 @@ function buildMetrics(session: SessionState, latestTurn?: TurnState, latestActiv
   if (currentIssueCount > 0) metrics.push({ label: currentIssueCount === 1 ? "Issue" : "Issues", value: String(currentIssueCount), tone: "error" });
   const settledIssues = latestTurn ? settledToolIssueCount(latestTurn) : 0;
   if (settledIssues > 0) metrics.push({ label: settledIssues === 1 ? "Tool issue" : "Tool issues", value: String(settledIssues), tone: "warning" });
-  if (latestTurn?.toolCalls.length) {
-    const failed = latestTurn.toolCalls.some((call) => call.status === "error");
-    metrics.push({ label: "Actions", value: String(latestTurn.toolCalls.length), tone: currentIssueCount > 0 && failed ? "error" : undefined });
-  }
-  const evidenceCount = countActivityEvidence(latestActivity);
-  if (evidenceCount > 0) metrics.push({ label: "Evidence", value: String(evidenceCount) });
+  const artifactMetric = buildArtifactMetric(session);
+  if (artifactMetric) metrics.push(artifactMetric);
+  const workMetric = buildWorkMetric(latestTurn, latestActivity, currentIssueCount > 0);
+  if (workMetric) metrics.push(workMetric);
   const threadMetrics = latestTurn ? buildThreadMetrics(session, latestTurn) : undefined;
   if (threadMetrics) {
     if (threadMetrics.handledIssues > 0 && settledIssues === 0) {
       metrics.push({ label: threadMetrics.handledIssues === 1 ? "Tool issue" : "Tool issues", value: String(threadMetrics.handledIssues), tone: "warning" });
     }
-    metrics.push({ label: "Task actions", value: String(threadMetrics.actions) });
-    if (threadMetrics.evidence > 0) metrics.push({ label: "Task evidence", value: String(threadMetrics.evidence) });
+    metrics.push({ label: "Earlier work", value: summarizeThreadMetrics(threadMetrics) });
   }
   const latestTokens = turnTokenCount(latestTurn);
   const totalTokens = sessionTokenCount(session);
@@ -163,30 +161,61 @@ function buildMetrics(session: SessionState, latestTurn?: TurnState, latestActiv
   if (latestTurn?.endReason && latestTurn.endReason !== latestTurn.status) {
     metrics.push({ label: "End", value: latestTurn.endReason, tone: latestTurn.status === "max_turns" ? "warning" : undefined });
   }
-  if (session.unknownEventCount > 0) metrics.push({ label: "Notes", value: String(session.unknownEventCount), tone: "warning" });
+  if (session.unknownEventCount > 0) metrics.push({ label: "Unclassified", value: String(session.unknownEventCount), tone: "warning" });
 
   return metrics;
 }
 
+function buildArtifactMetric(session: SessionState): SessionOverviewMetric | undefined {
+  const label = sessionArtifactLabel(session);
+  if (!label) return undefined;
+  return { label: label.startsWith("1 file") ? "Artifact" : "Artifacts", value: label };
+}
+
+function buildWorkMetric(
+  latestTurn: TurnState | undefined,
+  latestActivity: TurnActivityView | undefined,
+  hasCurrentIssue: boolean,
+): SessionOverviewMetric | undefined {
+  const actionCount = latestTurn?.toolCalls.length ?? 0;
+  const sourceCount = countActivityEvidence(latestActivity);
+  if (actionCount === 0 && sourceCount === 0) return undefined;
+  const parts: string[] = [];
+  if (actionCount > 0) parts.push(`${actionCount} ${actionCount === 1 ? "action" : "actions"}`);
+  if (sourceCount > 0) parts.push(`${sourceCount} source${sourceCount === 1 ? "" : "s"}`);
+  const failed = latestTurn?.toolCalls.some((call) => call.status === "error") ?? false;
+  return {
+    label: "Work",
+    value: parts.join(" · "),
+    tone: failed ? (hasCurrentIssue ? "error" : "warning") : undefined,
+  };
+}
+
 interface ThreadMetrics {
   actions: number;
-  evidence: number;
+  sources: number;
   handledIssues: number;
+}
+
+function summarizeThreadMetrics(metrics: ThreadMetrics): string {
+  const parts = [`${metrics.actions} action${metrics.actions === 1 ? "" : "s"}`];
+  if (metrics.sources > 0) parts.push(`${metrics.sources} source${metrics.sources === 1 ? "" : "s"}`);
+  return parts.join(" · ");
 }
 
 function buildThreadMetrics(session: SessionState, latestTurn: TurnState): ThreadMetrics | undefined {
   if (!shouldShowThreadMetrics(session, latestTurn)) return undefined;
   let actions = 0;
-  let evidence = 0;
+  let sources = 0;
   let handledIssues = 0;
   for (const turn of session.turns) {
     if (turn === latestTurn) continue;
     actions += turn.toolCalls.length;
-    evidence += countActivityEvidence(buildTurnActivity(turn));
+    sources += countActivityEvidence(buildTurnActivity(turn));
     handledIssues += turn.toolCalls.filter((call) => call.status === "error").length;
   }
   if (actions === 0) return undefined;
-  return { actions, evidence, handledIssues };
+  return { actions, sources, handledIssues };
 }
 
 function shouldShowThreadMetrics(session: SessionState, latestTurn: TurnState): boolean {
@@ -245,7 +274,11 @@ function formatCount(value: number): string {
 
 function toneForTurn(turn: TurnState): SessionOverviewTone {
   if (turn.status === "running") return "running";
-  if (turn.status === "completed") return "success";
+  if (turn.status === "completed") {
+    const failedTools = turn.toolCalls.filter((call) => call.status === "error").length;
+    if (failedTools > 0) return turn.assistantText.trim() ? "warning" : "error";
+    return "success";
+  }
   if (turn.status === "max_turns") return "warning";
   if (turn.status === "cancelled" || turn.status === "error" || turn.error) return "error";
   return "ready";

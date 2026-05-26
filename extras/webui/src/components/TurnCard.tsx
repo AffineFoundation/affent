@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type CSSProperties } from "react";
+import { useState, type CSSProperties } from "react";
 import { EventType } from "../api/events";
 import type { NormalizedEvent } from "../normalize/normalizeEvent";
 import type { ToolCallState, TurnError, TurnState } from "../store/sessionState";
@@ -7,13 +7,14 @@ import { summarizeUserError } from "../view/errorSummary";
 import { buildExecutionTree, searchableExecutionNodeText } from "../view/executionTree";
 import { buildTurnActivity, type TurnActivityBriefRow, type TurnActivityEvidence, type TurnActivityNode, type TurnActivityView } from "../view/turnActivity";
 import { buildTurnBoundaryView } from "../view/turnBoundary";
-import { buildTurnWorkSummaryWithOptions, type TurnWorkSummary, type WorkSummaryItem } from "../view/turnWorkSummary";
-import { buildTurnArtifacts, type TurnArtifact } from "../view/turnArtifacts";
+import { buildTurnWorkSummaryWithOptions, selectHeadlineWorkSummaryItems, type TurnWorkSummary, type WorkSummaryItem } from "../view/turnWorkSummary";
+import { artifactCountLabel, artifactSizeLabel, buildTurnArtifacts, type TurnArtifact } from "../view/turnArtifacts";
 import { CopyButton } from "./CopyButton";
 import { CopyMenu } from "./CopyMenu";
 import { ExecutionTree } from "./ExecutionTree";
 import { HighlightText } from "./HighlightText";
 import { MarkdownText } from "./MarkdownText";
+import { useDisclosure } from "./useDisclosure";
 import { markdownToPlainText } from "../view/textPreview";
 
 // One turn as a flowing work segment. Human-readable actions stay in the
@@ -54,8 +55,18 @@ export function TurnCard({
   const artifacts = buildTurnArtifacts(turn);
   const activity = buildTurnActivity(turn, { continuedAfterLimit, continuedIntoTurnNumber });
   const fallbackAnswer = buildFallbackAnswer(turn, { continuedAfterLimit });
-  const boundary = buildTurnBoundaryView({ turn, turnNumber, artifactCount: artifacts.length, continuedAfterLimit });
+  const boundary = buildTurnBoundaryView({
+    turn,
+    turnNumber,
+    artifactCount: artifacts.length,
+    artifactLabel: artifactCountLabel(artifacts),
+    continuedAfterLimit,
+  });
   const headerMeta = boundary.meta.filter((item) => item !== workSummary.actionLabel);
+  const headerMetrics = turn.toolCalls.length > 0
+    ? summarizeHeaderMetrics(workSummary.actionLabel, headerMeta, workSummary.headlineItems)
+    : undefined;
+  const boundaryMeta = summarizeBoundaryMeta(boundary.meta, 3);
   const workSearchMatch = workSearchMatches(turn, relatedEvents, searchQuery);
   const showWorkDetails = shouldShowWorkDetails(turn, {
     isLatest,
@@ -84,15 +95,7 @@ export function TurnCard({
           <span>{humanTurnStatus(turn.status, turn.endReason, { continuedAfterLimit })}</span>
         </div>
         <div className="flow-metrics">
-          {turn.toolCalls.length > 0 ? <span>{workSummary.actionLabel}</span> : null}
-          {headerMeta.map((item) => (
-            <span key={item}>{item}</span>
-          ))}
-          {workSummary.headlineItems.map((item) => (
-            <span key={`${item.tone}-${item.label}`} className="metric-chip" data-tone={item.tone}>
-              {item.label}
-            </span>
-          ))}
+          {headerMetrics ? <span className="flow-metrics-line" data-tone={headerMetrics.tone}>{headerMetrics.text}</span> : null}
         </div>
       </header>
       {showBoundary ? (
@@ -108,11 +111,7 @@ export function TurnCard({
             <HighlightText text={boundary.title} query={searchQuery} />
           </span>
           <small className="turn-boundary-state">{boundary.statusLabel}</small>
-          {boundary.meta.map((item) => (
-            <small key={item} className="turn-boundary-meta">
-              {item}
-            </small>
-          ))}
+          {boundaryMeta ? <small className="turn-boundary-meta">{boundaryMeta}</small> : null}
         </div>
       ) : null}
       <div className="conversation-turn">
@@ -207,17 +206,7 @@ function shouldShowWorkDetails(
 
 function ReasoningDisclosure({ turn, searchQuery }: { turn: TurnState; searchQuery?: string }) {
   const autoOpen = turn.thinkingStreaming || turn.status === "running" || turn.status === "error" || Boolean(searchQuery?.trim());
-  const userTouched = useRef(false);
-  const [open, setOpen] = useState(autoOpen);
-
-  useEffect(() => {
-    if (!userTouched.current) setOpen(autoOpen);
-  }, [autoOpen]);
-
-  function toggleOpen() {
-    userTouched.current = true;
-    setOpen((current) => !current);
-  }
+  const [open, toggleOpen] = useDisclosure(autoOpen);
 
   return (
     <section className="inline-disclosure thinking-disclosure secondary-disclosure" data-open={open ? "true" : "false"}>
@@ -248,25 +237,17 @@ function AgentActivity({
 }) {
   const [openOverrides, setOpenOverrides] = useState<Record<string, boolean>>({});
   const autoOpen = activity.live || (isLatest && activity.tone === "error") || Boolean(searchQuery?.trim());
-  const userTouched = useRef(false);
-  const [open, setOpen] = useState(autoOpen);
+  const [open, toggleOpen] = useDisclosure(autoOpen);
   const showDigestLabel = activity.digest.label !== activity.statusLabel;
   const issueNodes = activityIssueNodes(activity.nodes);
-
-  useEffect(() => {
-    if (!userTouched.current) setOpen(autoOpen);
-  }, [autoOpen]);
+  const evidenceSummaryLabel = activity.evidenceCount === 1 ? "Source" : "Sources";
 
   function setNodeOpen(nodeId: string, open: boolean) {
     setOpenOverrides((current) => ({ ...current, [nodeId]: open }));
   }
 
-  function toggleOpen() {
-    userTouched.current = true;
-    setOpen((current) => !current);
-  }
-
-  const digestLabel = agentActivityDigestLabel(activity, showDigestLabel);
+  const evidenceSummary = summarizeAgentActivityEvidence(activity.evidencePreview, activity.evidenceCount, 2);
+  const digestLabel = agentActivityDigestLabel(activity, showDigestLabel, evidenceSummary);
 
   return (
     <section
@@ -287,8 +268,8 @@ function AgentActivity({
           {issueNodes.length > 0 ? (
             <CopyButton label="Copy issues" value={activityIssueCopyText(issueNodes)} className="agent-activity-copy-action" />
           ) : null}
-          <CopyMenu className="agent-activity-copy-menu" panelClassName="agent-activity-copy-menu-panel">
-            <CopyButton label="Copy activity summary" value={activityCopyText(activity)} className="agent-activity-copy-action" />
+          <CopyMenu label="Copy activity" className="agent-activity-copy-menu" panelClassName="agent-activity-copy-menu-panel">
+            <CopyButton label="Copy summary" value={activityCopyText(activity)} className="agent-activity-copy-action" />
             {activity.nodes.length > 0 ? (
               <CopyButton label="Copy activity details" value={activityDetailsCopyText(activity)} className="agent-activity-copy-action" />
             ) : null}
@@ -307,19 +288,29 @@ function AgentActivity({
           <HighlightText text={activity.digest.summary} query={searchQuery} />
         </strong>
         {activity.digest.meta.length > 0 ? (
-          <span className="agent-activity-digest-meta">
-            {activity.digest.meta.map((item) => (
-              <span key={item} className="agent-activity-meta-wrap">
-                <span className="agent-activity-text-separator" aria-hidden="true"> · </span>
-                <small>{item}</small>
-              </span>
-            ))}
-          </span>
+          <>
+            <span className="agent-activity-text-separator" aria-hidden="true"> · </span>
+            <span className="agent-activity-digest-meta">
+              <small>{summarizeAgentActivityMeta(activity.digest.meta, 3)}</small>
+            </span>
+          </>
         ) : null}
         {!open && activity.evidencePreview.length > 0 ? (
           <span className="agent-activity-digest-evidence" data-testid="agent-activity-digest-evidence">
             <span className="agent-activity-text-separator" aria-hidden="true"> · </span>
-            <EvidenceChipList items={activity.evidencePreview} searchQuery={searchQuery} />
+            <small className="agent-activity-digest-evidence-label">{evidenceSummaryLabel}</small>
+            <span className="agent-activity-text-separator" aria-hidden="true"> · </span>
+            <span className="agent-activity-digest-evidence-text">
+              <span className="agent-activity-digest-evidence-value">
+                {activity.evidencePreview[0] ? renderAgentActivityDigestEvidenceValue(activity.evidencePreview[0], searchQuery) : null}
+              </span>
+              {activity.evidenceCount > activity.evidencePreview.length ? (
+                <>
+                  <span className="agent-activity-text-separator" aria-hidden="true"> · </span>
+                  <small className="agent-activity-digest-evidence-more">{`+${activity.evidenceCount - activity.evidencePreview.length} more`}</small>
+                </>
+              ) : null}
+            </span>
             {activity.evidenceAction && onUseAsDraft ? (
               <button
                 type="button"
@@ -450,13 +441,70 @@ function evidenceCopyValue(item: TurnActivityEvidence): string {
   return `${item.label} ${item.displayValue || item.value}`;
 }
 
-function agentActivityDigestLabel(activity: TurnActivityView, showDigestLabel: boolean): string {
+function agentActivityDigestLabel(
+  activity: TurnActivityView,
+  showDigestLabel: boolean,
+  evidenceSummary?: string,
+): string {
   const parts = [
     showDigestLabel ? activity.digest.label : undefined,
     activity.digest.summary,
     ...activity.digest.meta,
+    evidenceSummary,
   ];
   return parts.filter(Boolean).join(" · ");
+}
+
+function summarizeAgentActivityMeta(meta: readonly string[], visibleCount = 2): string {
+  const visible = meta.slice(0, visibleCount);
+  const overflow = meta.length - visible.length;
+  if (overflow > 0) visible.push(`+${overflow} more`);
+  return visible.join(" · ");
+}
+
+function summarizeAgentActivityEvidence(
+  items: readonly TurnActivityEvidence[],
+  totalCount: number,
+  visibleCount = 2,
+): string | undefined {
+  if (items.length === 0) return undefined;
+  const preview = items.slice(0, visibleCount).map(evidenceDigestText).join(" · ");
+  const overflow = totalCount - Math.min(items.length, visibleCount);
+  const label = items.length === 1 && overflow === 0 ? "Source" : "Sources";
+  return [label, preview, overflow > 0 ? `+${overflow} more` : undefined].filter(Boolean).join(" · ");
+}
+
+function evidenceDigestText(item: TurnActivityEvidence): string {
+  return `${item.label} ${item.displayValue || item.value}`;
+}
+
+function renderAgentActivityDigestEvidenceValue(item: TurnActivityEvidence, searchQuery?: string) {
+  const body = (
+    <>
+      <b>{item.label}</b>
+      {" "}
+      <HighlightText text={item.displayValue || item.value} query={searchQuery} />
+    </>
+  );
+  if (isHttpUrl(item.value)) {
+    return (
+      <a
+        className="agent-activity-digest-evidence-link"
+        href={item.value}
+        title={item.value}
+        aria-label={`${item.label}: ${item.value}`}
+        target="_blank"
+        rel="noreferrer"
+      >
+        {body}
+      </a>
+    );
+  }
+  return (
+    <span className="agent-activity-digest-evidence-link" title={item.value} aria-label={`${item.label}: ${item.value}`}>
+      {body}
+    </span>
+  );
 }
 
 function ActivityBriefRow({
@@ -739,8 +787,8 @@ function buildFallbackAnswer(turn: TurnState, opts: { continuedAfterLimit?: bool
   if (opts.continuedAfterLimit) return undefined;
   if (turn.status === "max_turns") {
     return {
-      title: "No final answer yet",
-      text: "The runtime reached its action limit before synthesizing the final reply.",
+      title: "Needs final answer",
+      text: "Affent reached its action limit before synthesizing the final reply.",
     };
   }
   if (turn.status === "cancelled") {
@@ -870,17 +918,7 @@ function WorkDetails({
   const displaySummary = workSummaryDisplay(heading, summary);
   const label = workThreadLabel(heading, displaySummary);
   const threadStatus = workThreadStatus(turn);
-  const userTouched = useRef(false);
-  const [open, setOpen] = useState(autoOpen);
-
-  useEffect(() => {
-    if (!userTouched.current) setOpen(autoOpen);
-  }, [autoOpen]);
-
-  function toggle() {
-    userTouched.current = true;
-    setOpen((current) => !current);
-  }
+  const [open, toggle] = useDisclosure(autoOpen);
 
   return (
     <section className="work-thread" aria-label={label} data-testid="work-thread" data-open={open} data-status={threadStatus}>
@@ -963,7 +1001,7 @@ function workThreadHeading(turn: TurnState, opts: { continuedAfterLimit?: boolea
     return { title: "Action details", detail };
   }
   const failed = latestFailedTool(turn);
-  if ((failed && turn.status !== "completed") || turn.status === "error" || turn.error) {
+  if (failed || turn.status === "error" || turn.error) {
     const errorSummary = turn.error ? summarizeUserError(turn.error.code, turn.error.message) : undefined;
     return { title: "Action details", detail: failed ? `Issue: ${summarize(currentToolFocus(failed), 88)}` : errorSummary?.detail };
   }
@@ -976,17 +1014,17 @@ function workThreadHeading(turn: TurnState, opts: { continuedAfterLimit?: boolea
   if (turn.status === "cancelled") {
     return { title: "Action details", detail: "Cancelled before a final answer" };
   }
-  return { title: "Action details", detail: completedWorkDetail(turn) };
+  return { title: "Run summary", detail: completedWorkDetail(turn) };
 }
 
 function completedWorkDetail(turn: TurnState): string | undefined {
   const count = turn.toolCalls.length;
   if (count === 0) return undefined;
   const failed = turn.toolCalls.filter((call) => call.status === "error").length;
-  const calls = `${count} ${count === 1 ? "call" : "calls"}`;
-  if (failed && turn.assistantText.trim()) return `${calls} · ${failed} tool issue${failed === 1 ? "" : "s"}`;
-  if (failed) return `${failed} failed of ${calls}`;
-  return `${count} completed ${count === 1 ? "call" : "calls"}`;
+  const actions = `${count} ${count === 1 ? "action" : "actions"}`;
+  if (failed && turn.assistantText.trim()) return `${actions} · ${failed} tool issue${failed === 1 ? "" : "s"}`;
+  if (failed) return `${failed} failed of ${actions}`;
+  return `${count} completed ${count === 1 ? "action" : "actions"}`;
 }
 
 function latestFailedTool(turn: TurnState): ToolCallState | undefined {
@@ -1036,27 +1074,60 @@ function normalizeSearch(value?: string): string {
 
 function WorkSummary({ summary }: { summary: WorkSummaryDisplay }) {
   if (!summary.actionLabel && summary.items.length === 0) return null;
+  const text = summarizeWorkSummary(summary);
   return (
-    <div className="work-summary" data-testid="work-summary" aria-label={[summary.actionLabel, ...summary.items.map((item) => item.label)].filter(Boolean).join(" · ")}>
-      {summary.actionLabel ? (
-        <span>{summary.actionLabel}</span>
-      ) : null}
-      {summary.items.map((item, index) => (
-        <span className="work-summary-part" key={`${item.tone}-${item.label}`}>
-          {summary.actionLabel || index > 0 ? <span className="work-summary-separator" aria-hidden="true"> · </span> : null}
-          <WorkSummaryChip item={item} />
-        </span>
-      ))}
+    <div
+      className="work-summary"
+      data-testid="work-summary"
+      aria-label={[summary.actionLabel, ...summary.items.map((item) => item.label)].filter(Boolean).join(" · ")}
+    >
+      <span className="work-summary-line" data-tone={workSummaryTone(summary.items)}>
+        {text}
+      </span>
     </div>
   );
 }
 
-function WorkSummaryChip({ item }: { item: WorkSummaryItem }) {
-  return (
-    <span className="work-summary-chip" data-tone={item.tone}>
-      {item.label}
-    </span>
-  );
+function summarizeHeaderMetrics(
+  actionLabel: string,
+  meta: readonly string[],
+  items: readonly WorkSummaryItem[],
+): { text: string; tone?: WorkSummaryItem["tone"] } | undefined {
+  const parts: string[] = [];
+  if (actionLabel) parts.push(actionLabel);
+  parts.push(...meta.filter(Boolean));
+  if (items.length > 0) parts.push(`+${items.length} more`);
+  if (parts.length === 0) return undefined;
+  return {
+    text: parts.join(" · "),
+    tone: workSummaryTone(items),
+  };
+}
+
+function summarizeBoundaryMeta(meta: readonly string[], visibleCount: number): string | undefined {
+  if (meta.length === 0) return undefined;
+  const visible = meta.slice(0, visibleCount);
+  const remaining = meta.length - visible.length;
+  return remaining > 0 ? `${visible.join(" · ")} · +${remaining} more` : visible.join(" · ");
+}
+
+function summarizeWorkSummary(summary: WorkSummaryDisplay, visibleCount = 3): string {
+  const parts: string[] = [];
+  if (summary.actionLabel) parts.push(summary.actionLabel);
+  const visibleItems = selectHeadlineWorkSummaryItems(summary.items, visibleCount);
+  parts.push(...visibleItems.map((item) => item.label));
+  const remaining = summary.items.length - visibleItems.length;
+  if (remaining > 0) parts.push(`+${remaining} more`);
+  return parts.join(" · ");
+}
+
+function workSummaryTone(items: readonly WorkSummaryItem[]): WorkSummaryItem["tone"] | undefined {
+  return items.find((item) => item.tone === "error")?.tone
+    ?? items.find((item) => item.tone === "warning")?.tone
+    ?? items.find((item) => item.tone === "running")?.tone
+    ?? items.find((item) => item.tone === "info")?.tone
+    ?? items.find((item) => item.tone === "artifact")?.tone
+    ?? items.find((item) => item.tone === "muted")?.tone;
 }
 
 function ArtifactStrip({
@@ -1084,6 +1155,7 @@ function ArtifactStrip({
             <small title={artifact.source}>
               <HighlightText text={artifact.source} query={searchQuery} />
             </small>
+            {artifact.bytes != null ? <small className="artifact-pill-size">{artifactSizeLabel(artifact)}</small> : null}
           </div>
           <div className="artifact-pill-actions">
             {onUseAsDraft ? (
@@ -1116,8 +1188,8 @@ function ContinuationPrompt({ turn, onUseAsDraft }: { turn: TurnState; onUseAsDr
         <div className="continuation-title">Final answer not produced</div>
         <div className="continuation-copy">
           {hasEvidence
-            ? "The runtime gathered evidence but stopped at its action limit before synthesizing a final reply."
-            : "The runtime stopped at its action limit before it could produce a final reply."}
+            ? "Affent gathered evidence but stopped at its action limit before synthesizing a final reply."
+            : "Affent stopped at its action limit before it could produce a final reply."}
         </div>
       </div>
       {onUseAsDraft ? (
@@ -1223,7 +1295,7 @@ function ErrorBlock({ error, onUseAsDraft }: { error: TurnError; onUseAsDraft?: 
   const summary = summarizeUserError(error.code, error.message);
   const guidance = error.recoverable
     ? "You can continue from the message box below; the details stay attached to this chat."
-    : "Keep this chat for details, then start a new chat if the runtime cannot continue.";
+    : "Keep this chat for details, then start a new chat if Affent cannot continue.";
   const diagnostic = errorDiagnosticText(error);
 
   return (
@@ -1266,7 +1338,7 @@ function humanTurnStatus(status: TurnState["status"], reason?: string, opts: { c
   if (status === "running") return "Working";
   if (status === "completed") return "Done";
   if (status === "max_turns" && opts.continuedAfterLimit) return "Continued";
-  if (status === "max_turns") return "No final answer";
+  if (status === "max_turns") return "Needs final answer";
   if (status === "cancelled") return "Cancelled";
   if (status === "error") return "Blocked";
   return reason ?? status;

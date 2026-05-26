@@ -6,32 +6,42 @@ export function WorkflowStatus({
 }: {
   overview: SessionOverview;
 }) {
+  const artifactMetric = overview.metrics.find((metric) => metric.label === "Artifact" || metric.label === "Artifacts");
   return (
-    <section className="workflow-status" data-active={overview.active} data-tone={overview.tone} data-testid="workflow-status">
-      <div className="workflow-line" aria-label="Current chat state">
+    <details className="workflow-status" data-active={overview.active} data-tone={overview.tone} data-testid="workflow-status">
+      <summary className="workflow-line">
         <span className="pulse-dot" data-status={dotStatus(overview)} />
         <div className="workflow-title">
           <h2>{overview.headline}</h2>
-          <p>{overview.detail}</p>
         </div>
         <span className="state-pill" data-tone={overview.tone}>
           {overview.stateLabel}
         </span>
+        {artifactMetric ? (
+          <span className="state-pill" data-tone="artifact">
+            {artifactMetric.value}
+          </span>
+        ) : null}
+      </summary>
+      <div className="workflow-status-body">
+        <p>{overview.detail}</p>
         <RunDetails
           metrics={overview.metrics}
           className="workflow-details"
           testId="workflow-details"
-          valueFirst
+          ariaLabel="Session metrics"
+          summaryLabel="Work metrics"
+          inlineLimit={1}
         />
       </div>
-    </section>
+    </details>
   );
 }
 
 function dotStatus(overview: SessionOverview): string {
   if (overview.active) return "running";
   if (overview.tone === "error") return "error";
-  if (overview.tone === "warning") return "max_turns";
+  if (overview.tone === "warning") return "warning";
   if (overview.tone === "success") return "completed";
   return "cancelled";
 }

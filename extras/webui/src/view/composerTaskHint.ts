@@ -70,13 +70,100 @@ const liveResearchPhrases = [
   "评价",
 ] as const;
 
-export function buildComposerTaskHint(text: string, runtime?: RuntimeCapabilityView): ComposerTaskHint | undefined {
-  if (!looksLikeLiveResearch(text)) return undefined;
+const codeDiscoveryWords = [
+  "repo",
+  "repository",
+  "codebase",
+  "source",
+  "symbol",
+  "function",
+  "class",
+  "module",
+  "package",
+  "file",
+  "files",
+  "implementation",
+  "grep",
+  "search",
+  "inspect",
+] as const;
 
+const codeDiscoveryPhrases = [
+  "find the file",
+  "find the files",
+  "find file",
+  "find files",
+  "where is",
+  "where are",
+  "search the repo",
+  "search repository",
+  "search codebase",
+  "look in the repo",
+  "look in repository",
+  "local project",
+  "代码",
+  "源码",
+  "仓库",
+  "实现",
+  "函数",
+  "类",
+  "模块",
+  "包",
+  "文件",
+] as const;
+
+const skillInstallWords = [
+  "skill",
+  "skills",
+  "github",
+  "gitee",
+  "workflow",
+  "workflow.md",
+  "skill.md",
+  "skill.json",
+] as const;
+
+const skillInstallPhrases = [
+  "install skill",
+  "install a skill",
+  "install the skill",
+  "add a skill",
+  "add skill",
+  "find a skill",
+  "find the skill",
+  "search for a skill",
+  "search skill",
+  "skill install",
+  "skill installer",
+  "skill workflow",
+  "技能",
+  "安装 skill",
+  "安装一个 skill",
+  "安装技能",
+  "找 skill",
+  "找一个 skill",
+  "查找 skill",
+  "帮我找一个 skill",
+] as const;
+
+export function buildComposerTaskHint(text: string, runtime?: RuntimeCapabilityView): ComposerTaskHint | undefined {
+  if (looksLikeLiveResearch(text)) {
+    return buildLiveResearchHint(runtime);
+  }
+  if (looksLikeSkillInstall(text)) {
+    return buildSkillInstallHint(runtime);
+  }
+  if (looksLikeCodeDiscovery(text)) {
+    return buildCodeDiscoveryHint(runtime);
+  }
+  return undefined;
+}
+
+function buildLiveResearchHint(runtime?: RuntimeCapabilityView): ComposerTaskHint | undefined {
   if (!runtime) {
     return {
-      label: "Current sources unknown",
-      detail: "This request may need current sources; web access has not loaded for this chat yet.",
+      label: "Current sources not confirmed",
+      detail: "Send once to confirm this chat's sources, or paste URLs, docs, or files now if you already have them.",
       tone: "unknown",
     };
   }
@@ -84,7 +171,7 @@ export function buildComposerTaskHint(text: string, runtime?: RuntimeCapabilityV
   if (runtime.research === "off") {
     return {
       label: "Needs current sources",
-      detail: "Web access is not available here; results may be incomplete unless you provide sources.",
+      detail: "Web access is off here; paste URLs, docs, or files so the task can use current sources.",
       tone: "warning",
     };
   }
@@ -92,15 +179,15 @@ export function buildComposerTaskHint(text: string, runtime?: RuntimeCapabilityV
   if (runtime.research === "limited") {
     return {
       label: "Direct sources help",
-      detail: "Discovery is limited; paste URLs or files if this task depends on current information.",
+      detail: "Discovery is limited; paste official URLs, docs, or files if this task depends on current information.",
       tone: "warning",
     };
   }
 
   if (runtime.research === "unknown") {
     return {
-      label: "Current sources unknown",
-      detail: "Send once to refresh this chat's capabilities before relying on current information.",
+      label: "Current sources not confirmed",
+      detail: "Send once to confirm this chat's sources, or paste URLs, docs, or files now if you already have them.",
       tone: "unknown",
     };
   }
@@ -108,9 +195,84 @@ export function buildComposerTaskHint(text: string, runtime?: RuntimeCapabilityV
   return undefined;
 }
 
+function buildCodeDiscoveryHint(runtime?: RuntimeCapabilityView): ComposerTaskHint | undefined {
+  if (!runtime) {
+    return {
+      label: "Workspace tools not confirmed",
+      detail: "Send once to confirm this chat's code tools, or paste file paths now if you already have them.",
+      tone: "unknown",
+    };
+  }
+
+  if (runtime.chips.some((chip) => chip.group === "Discovery" && chip.label.includes("Symbol index"))) {
+    return {
+      label: "Symbol index ready",
+      detail: "Use symbol_context first for declarations and exact symbols, then repo_search for broader workspace text.",
+      tone: "ready",
+    };
+  }
+
+  if (runtime.chips.some((chip) => chip.group === "Discovery" && chip.label === "Repo search")) {
+    return {
+      label: "Repo search ready",
+      detail: "Use workspace text search before broad file reads; paste the likely file or symbol if you already know it.",
+      tone: "ready",
+    };
+  }
+
+  if (runtime.chips.some((chip) => chip.group === "Files" && chip.label === "Unavailable")) {
+    return {
+      label: "Local project tools are off",
+      detail: "Paste file paths, snippets, or a workspace snapshot so the task can still use direct evidence.",
+      tone: "warning",
+    };
+  }
+
+  return undefined;
+}
+
+function buildSkillInstallHint(runtime?: RuntimeCapabilityView): ComposerTaskHint | undefined {
+  if (!runtime) {
+    return {
+      label: "Skill install workflow",
+      detail: "Send once to confirm the chat's tools, or paste the skill URL, repository, or exact SKILL.md body.",
+      tone: "unknown",
+    };
+  }
+
+  if (runtime.chips.some((chip) => chip.group === "Skills" && chip.label === "Skill install")) {
+    return {
+      label: "Skill install ready",
+      detail: "Use the skill workflow: inspect the source, propose_install, then wait for explicit confirmation before confirm_install.",
+      tone: "ready",
+    };
+  }
+
+  return {
+    label: "Skill install unavailable",
+    detail: "Paste the exact SKILL.md body or ask for a runtime with skill install enabled before trying to install it.",
+    tone: "warning",
+  };
+}
+
 function looksLikeLiveResearch(text: string): boolean {
   const normalized = text.toLowerCase();
   if (normalized.trim().length < 8) return false;
   if (liveResearchPhrases.some((phrase) => normalized.includes(phrase))) return true;
   return liveResearchWords.some((term) => new RegExp(`\\b${term}\\b`, "i").test(normalized));
+}
+
+function looksLikeCodeDiscovery(text: string): boolean {
+  const normalized = text.toLowerCase();
+  if (normalized.trim().length < 8) return false;
+  if (codeDiscoveryPhrases.some((phrase) => normalized.includes(phrase))) return true;
+  return codeDiscoveryWords.some((term) => new RegExp(`\\b${term}\\b`, "i").test(normalized));
+}
+
+function looksLikeSkillInstall(text: string): boolean {
+  const normalized = text.toLowerCase();
+  if (normalized.trim().length < 8) return false;
+  if (skillInstallPhrases.some((phrase) => normalized.includes(phrase))) return true;
+  return skillInstallWords.some((term) => new RegExp(`\\b${term}\\b`, "i").test(normalized))
+    && (normalized.includes("install") || normalized.includes("add") || normalized.includes("find") || normalized.includes("search") || normalized.includes("获取") || normalized.includes("安装") || normalized.includes("找"));
 }

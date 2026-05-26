@@ -17,7 +17,7 @@ describe("turnNavigator view model", () => {
     ]);
 
     expect(view.countLabel).toBe("2 messages");
-    expect(view.summary).toBe("Latest · summarize findings");
+    expect(view.summary).toBe("summarize findings");
     expect(view.items.map((item) => item.current)).toEqual([false, true]);
     expect(view.items[0].summary).toBe("inspect repo");
     expect(view.items[0].activityLabel).toBe("Result");
@@ -26,6 +26,38 @@ describe("turnNavigator view model", () => {
     expect(view.current?.summary).toBe("summarize findings");
     expect(view.items[1].messageAriaLabel).toBe("Message 2: summarize findings (current)");
     expect(view.items[1].href).toBe("#turn-2");
+  });
+
+  it("includes artifact summaries in navigation labels for file-bearing turns", () => {
+    const view = buildTurnNavigatorView([
+      {
+        turn: turn({
+          id: "t1",
+          userText: "list the files",
+          toolCalls: [
+            tool({
+              resultSummary: "README.md main.go",
+              result: "README.md main.go",
+              resultArtifactPath: ".affent/artifacts/tool-results/000001-c1.txt",
+              resultTruncated: true,
+              resultBytes: 8192,
+              resultOmittedBytes: 1048576,
+              resultCapBytes: 8192,
+            }),
+          ],
+        }),
+        turnNumber: 1,
+      },
+    ]);
+
+    expect(view.summary).toBe("README.md main.go · 1 file (8 KiB, 1 MiB omitted)");
+    expect(view.items[0].activitySummary).toBe("README.md main.go · 1 file (8 KiB, 1 MiB omitted)");
+    expect(view.items[0].messageAriaLabel).toBe(
+      "Message 1: list the files — Result: README.md main.go · 1 file (8 KiB, 1 MiB omitted) (current)",
+    );
+    expect(view.items[0].stepAriaLabel).toBe(
+      "Jump to message 1: list the files — Result: README.md main.go · 1 file (8 KiB, 1 MiB omitted) (current)",
+    );
   });
 
   it("marks the running turn as current before later completed history", () => {
@@ -109,7 +141,7 @@ describe("turnNavigator view model", () => {
       },
     ]);
 
-    expect(view.summary).toBe("Answer · I found enough information to answer.");
+    expect(view.summary).toBe("I found enough information to answer.");
     expect(view.current?.statusLabel).toBe("Answered");
     expect(view.current?.statusTone).toBe("completed");
   });
@@ -129,7 +161,7 @@ describe("turnNavigator view model", () => {
       { turn: turn({ id: "t4", status: "max_turns", userText: "needs synthesis" }), turnNumber: 4 },
     ]);
 
-    expect(view.items.map((item) => item.statusLabel)).toEqual(["Answered", "Result", "No answer", "Needs answer"]);
+    expect(view.items.map((item) => item.statusLabel)).toEqual(["Answered", "Result", "Needs answer", "Needs final answer"]);
   });
 
   it("keeps attention for failed turns without a final answer", () => {
@@ -144,7 +176,7 @@ describe("turnNavigator view model", () => {
       },
     ]);
 
-    expect(view.summary).toBe("Needs attention · List files: Failed");
+    expect(view.summary).toBe("Issue · List files: Failed");
     expect(view.current?.statusTone).toBe("error");
   });
 
@@ -170,7 +202,7 @@ describe("turnNavigator view model", () => {
       },
     ]);
 
-    expect(view.summary).toBe("Answer · Final report.");
+    expect(view.summary).toBe("Final report.");
     expect(view.items[0].statusLabel).toBe("Continued");
     expect(view.items[0].statusTone).toBe("muted");
     expect(view.items[0].activityLabel).toBe("Handoff");
@@ -199,7 +231,7 @@ describe("turnNavigator view model", () => {
       },
     ]);
 
-    expect(view.summary).toBe("Answer · Final report.");
+    expect(view.summary).toBe("Final report.");
   });
 
   it("summarizes cumulative token use across conversation steps", () => {
@@ -222,7 +254,7 @@ describe("turnNavigator view model", () => {
       },
     ]);
 
-    expect(view.summary).toBe("Latest · finish the report");
+    expect(view.summary).toBe("finish the report");
   });
 
   it("uses the assistant answer as the map digest when no action summary exists", () => {

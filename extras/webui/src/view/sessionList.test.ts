@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import type { SessionSummary } from "../api/sessions";
 import { completedTurn } from "../fixtures/completedTurn";
 import { reduceRawEvents } from "../store/reduce";
-import { buildSessionRows, countSessionsByFilter, filterSessionRows, mergeCurrentSessionRow } from "./sessionList";
+import { buildSessionRows, countSessionsByFilter, filterSessionRows, formatLoadingChatTitle, mergeCurrentSessionRow } from "./sessionList";
 
 describe("sessionList view model", () => {
   it("maps API session summaries into scannable rows", () => {
@@ -30,6 +30,23 @@ describe("sessionList view model", () => {
     expect(rows[0].searchText).toContain("workspace-session-abcdef123456");
     expect(rows[0].searchText).toContain("review the webui timeline");
     expect(rows[0].searchText).not.toContain("tokens");
+  });
+
+  it("surfaces tool work in row stats when the summary includes tool counters", () => {
+    const rows = buildSessionRows([
+      session({
+        id: "tools-session",
+        durable: true,
+        latest_user_message: "review the webui timeline",
+        usage: { input_tokens: 1200, output_tokens: 450, turns: 3 },
+        tools: { tool_requests: 5, tool_errors: 1, tool_repair_succeeded: 2, tool_repair_failed: 0 },
+      }),
+    ]);
+
+    expect(rows[0].metrics).toEqual(["3 messages", "5 actions", "1 issue"]);
+    expect(rows[0].stats).toBe("3 messages · 5 actions · 1 issue");
+    expect(rows[0].searchText).toContain("5 actions");
+    expect(rows[0].searchText).toContain("1 issue");
   });
 
   it("filters rows by status, features, and search text", () => {
@@ -76,7 +93,25 @@ describe("sessionList view model", () => {
     expect(rows[0].title).toBe("New chat");
     expect(rows[0].meta).toEqual(["No messages yet"]);
     expect(rows[0].metrics).toEqual([]);
+    expect(rows[0].stats).toBeUndefined();
     expect(rows[0].searchText).toContain("no messages yet");
+  });
+
+  it("exposes a compact stats line only when it carries real work context", () => {
+    const baseRows = buildSessionRows([
+      session({
+        id: "simple-chat",
+        durable: true,
+        latest_user_message: "plain follow-up",
+        usage: { input_tokens: 1200, output_tokens: 450, turns: 3 },
+      }),
+    ]);
+
+    expect(baseRows[0].stats).toBeUndefined();
+
+    const workRows = mergeCurrentSessionRow(baseRows, "simple-chat", reduceRawEvents(completedTurn));
+    expect(workRows[0].stats).toBe("1 message · 1 action");
+    expect(workRows[0].searchText).toContain("1 message · 1 action");
   });
 
   it("uses human titles for saved or live chats when the API summary has no latest task", () => {
@@ -459,14 +494,60 @@ describe("sessionList view model", () => {
       status: "Done",
       tone: "saved",
       updated: "",
-      metrics: ["1 message", "1 action"],
+      metrics: ["1 message · 1 action"],
       chips: [],
     });
     expect(rows[0].searchText).toContain("list the files");
     expect(rows[0].searchText).toContain("there are two files");
   });
 
-  it("surfaces unknown events as a notes chip in the chat list", () => {
+  it("surfaces artifact output in the selected chat row stats", () => {
+    const rows = mergeCurrentSessionRow(
+      buildSessionRows([session({ id: "s1", durable: true, has_events: true })]),
+      "s1",
+      reduceRawEvents([
+        { id: 1, type: "turn.start", data: { turn_id: "t1" } },
+        { id: 2, type: "user.message", data: { turn_id: "t1", text: "research affine" } },
+        {
+          id: 3,
+          type: "tool.request",
+          data: {
+            turn_id: "t1",
+            call_id: "c1",
+            tool: "web_fetch",
+            args: { url: "https://example.invalid" },
+            args_truncated: false,
+            args_bytes: 32,
+            args_omitted_bytes: 0,
+            args_cap_bytes: 65536,
+          },
+        },
+        {
+          id: 4,
+          type: "tool.result",
+          data: {
+            turn_id: "t1",
+            call_id: "c1",
+            exit_code: 0,
+            duration_ms: 42,
+            result_summary: "saved output",
+            result: "saved output",
+            result_truncated: true,
+            result_bytes: 8192,
+            result_omitted_bytes: 1048576,
+            result_cap_bytes: 262144,
+            result_artifact_path: ".affent/artifacts/tool-results/000001-c1.txt",
+          },
+        },
+        { id: 5, type: "turn.end", data: { turn_id: "t1", reason: "completed" } },
+      ]),
+    );
+
+    expect(rows[0].stats).toBe("1 message · 1 action · 1 file (8 KiB, 1 MiB omitted)");
+    expect(rows[0].searchText).toContain("1 file (8 kib, 1 mib omitted)");
+  });
+
+  it("surfaces unknown events as an unclassified chip in the chat list", () => {
     const rows = mergeCurrentSessionRow(
       buildSessionRows([session({ id: "s1", durable: true, has_events: true })]),
       "s1",
@@ -477,7 +558,7 @@ describe("sessionList view model", () => {
       ]),
     );
 
-    expect(rows[0].chips).toContain("notes");
+    expect(rows[0].chips).toContain("unclassified");
   });
 
   it("keeps answered tool failures as tool issues instead of an error row", () => {
@@ -525,7 +606,7 @@ describe("sessionList view model", () => {
     expect(rows[0]).toMatchObject({
       status: "Done",
       tone: "saved",
-      metrics: ["1 message", "1 action", "1 tool issue"],
+      metrics: ["1 message · 1 action · 1 issue"],
     });
   });
 
@@ -571,10 +652,10 @@ describe("sessionList view model", () => {
     );
 
     expect(rows[0]).toMatchObject({
-      status: "Done",
+      status: "Blocked",
       tone: "error",
       preview: "Issue · DNS failed",
-      metrics: ["1 message", "1 action", "1 issue"],
+      metrics: ["1 message · 1 action · 1 issue"],
     });
     expect(rows[0].searchText).toContain("dns failed");
   });
@@ -591,10 +672,10 @@ describe("sessionList view model", () => {
     );
 
     expect(rows[0]).toMatchObject({
-      status: "No final answer",
+      status: "Needs final answer",
       tone: "warning",
       preview: "Needs final answer · Action limit reached before a final reply.",
-      metrics: ["1 message", "1 issue"],
+      metrics: ["1 message · 1 issue"],
     });
     expect(rows[0].searchText).toContain("needs final answer");
   });
@@ -615,7 +696,7 @@ describe("sessionList view model", () => {
       status: "Blocked",
       tone: "error",
       preview: "Issue · Provider returned an error",
-      metrics: ["1 message", "1 issue"],
+      metrics: ["1 message · 1 issue"],
     });
     expect(rows[0].searchText).toContain("provider returned an error");
   });
@@ -669,7 +750,7 @@ describe("sessionList view model", () => {
       title: "Affine",
       status: "Done",
       tone: "saved",
-      metrics: ["2 messages", "1 action", "1 continued"],
+      metrics: ["2 messages · 1 action · 1 continued"],
     });
     expect(rows[0].searchText).toContain("continue and summarize");
   });
@@ -749,7 +830,88 @@ describe("sessionList view model", () => {
       ]),
     );
 
-    expect(rows[0].metrics).toEqual(["2 messages", "2 actions", "1 continued", "1 tool issue"]);
+    expect(rows[0].metrics).toEqual(["2 messages · 2 actions · 1 continued"]);
+    expect(rows[0].searchText).toContain("1 tool issue");
+  });
+
+  it("sums separate prior and tool issues in the visible row metrics", () => {
+    const rows = mergeCurrentSessionRow(
+      buildSessionRows([session({ id: "s1", durable: true, has_events: true })]),
+      "s1",
+      reduceRawEvents([
+        { id: 1, type: "turn.start", data: { turn_id: "t1" } },
+        { id: 2, type: "user.message", data: { turn_id: "t1", text: "research affine" } },
+        {
+          id: 3,
+          type: "tool.request",
+          data: {
+            turn_id: "t1",
+            call_id: "c1",
+            tool: "web_fetch",
+            args: { url: "https://example.invalid" },
+            args_truncated: false,
+            args_bytes: 32,
+            args_omitted_bytes: 0,
+            args_cap_bytes: 65536,
+          },
+        },
+        {
+          id: 4,
+          type: "tool.result",
+          data: {
+            turn_id: "t1",
+            call_id: "c1",
+            exit_code: 1,
+            duration_ms: 42,
+            result_summary: "DNS failed",
+            result: "DNS failed",
+            result_truncated: false,
+            result_bytes: 10,
+            result_omitted_bytes: 0,
+            result_cap_bytes: 262144,
+          },
+        },
+        { id: 5, type: "turn.end", data: { turn_id: "t1", reason: "completed" } },
+        { id: 6, type: "turn.start", data: { turn_id: "t2" } },
+        { id: 7, type: "user.message", data: { turn_id: "t2", text: "continue with sources" } },
+        {
+          id: 8,
+          type: "tool.request",
+          data: {
+            turn_id: "t2",
+            call_id: "c2",
+            tool: "web_fetch",
+            args: { url: "https://blocked.example" },
+            args_truncated: false,
+            args_bytes: 32,
+            args_omitted_bytes: 0,
+            args_cap_bytes: 65536,
+          },
+        },
+        {
+          id: 9,
+          type: "tool.result",
+          data: {
+            turn_id: "t2",
+            call_id: "c2",
+            exit_code: 1,
+            duration_ms: 42,
+            result_summary: "blocked",
+            result: "blocked",
+            result_truncated: false,
+            result_bytes: 7,
+            result_omitted_bytes: 0,
+            result_cap_bytes: 262144,
+          },
+        },
+        { id: 10, type: "message.done", data: { turn_id: "t2", text: "Here is the report." } },
+        { id: 11, type: "turn.end", data: { turn_id: "t2", reason: "completed" } },
+      ]),
+    );
+
+    expect(rows[0].metrics).toEqual(["2 messages · 2 actions · 2 issues"]);
+    expect(rows[0].searchText).toContain("1 prior issue");
+    expect(rows[0].searchText).toContain("1 tool issue");
   });
 
   it("keeps a Chinese continuation from replacing the original session topic", () => {
@@ -772,9 +934,16 @@ describe("sessionList view model", () => {
       detail: "Latest · 基于已有证据输出报告",
       status: "Done",
       tone: "saved",
-      metrics: ["2 messages", "1 continued"],
+      metrics: ["2 messages · 1 continued"],
     });
     expect(rows[0].searchText).toContain("请继续同一个任务");
+  });
+
+  it("formats loading titles without exposing generic chat labels", () => {
+    expect(formatLoadingChatTitle(undefined)).toBe("Loading chat");
+    expect(formatLoadingChatTitle("Live chat")).toBe("Loading chat");
+    expect(formatLoadingChatTitle("saved chat")).toBe("Loading chat");
+    expect(formatLoadingChatTitle("Affine research")).toBe("Loading Affine research");
   });
 });
 

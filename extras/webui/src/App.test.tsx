@@ -91,7 +91,9 @@ describe("App", () => {
     expect(context).toHaveTextContent("Result ready");
     expect(context).toHaveTextContent("README.md main.go");
     const details = screen.getByTestId("chat-context-details");
-    expect(chatContextMetric(details, "Actions 1")).toBeVisible();
+    expect(chatContextMetric(details, "Work 1 action")).toBeVisible();
+    expect(within(details).getByLabelText("Session metrics: 1 more metric")).toBeInTheDocument();
+    await user.click(within(details).getByLabelText("Session metrics: 1 more metric"));
     expect(chatContextMetric(details, "Tokens 138")).toBeVisible();
     const contextText = context.textContent?.replace(/\s+/g, " ").trim();
     expect(contextText).toContain("Result ready · README.md main.go");
@@ -101,8 +103,13 @@ describe("App", () => {
     expect(context.querySelector(".chat-context-primary")).toHaveTextContent("README.md main.go");
     expect(context.querySelector(".chat-context-topic")).toBeNull();
     const runtime = await screen.findByTestId("runtime-capabilities");
-    expect(runtime).toHaveTextContent("Capability snapshot unknown");
-    expect(runtime).toHaveTextContent("This saved chat has not loaded a capability snapshot yet.");
+    expect(runtime).toHaveTextContent("Capabilities not confirmed");
+    expect(runtime).toHaveTextContent("This saved chat has no capability snapshot yet.");
+    expect(runtime).not.toHaveTextContent("Research");
+    expect(runtime).not.toHaveTextContent("Files");
+    expect(runtime).not.toHaveTextContent("Subtasks");
+    expect(runtime).not.toHaveTextContent("Context");
+    expect(within(runtime).queryByLabelText("More capabilities: 2 more")).toBeNull();
     expect(await screen.findByTestId("msg-assistant")).toHaveTextContent("There are two files.");
     expect(screen.getByTestId("composer-intent")).toHaveTextContent("Resume chat");
     expect(screen.getByTestId("composer-intent")).toHaveTextContent("continue this chat");
@@ -218,6 +225,7 @@ describe("App", () => {
   });
 
   it("surfaces runtime capabilities before a real task is sent", async () => {
+    const history = deferred<Response>();
     const fetchImpl = vi.fn(async (input: RequestInfo | URL) => {
       const url = String(input);
       if (url === "/v1/sessions?limit=100") {
@@ -230,10 +238,12 @@ describe("App", () => {
               capabilities: {
                 eval_mode: false,
                 builtins: false,
-                skill_install: false,
+                skill_install: true,
                 plan: false,
                 memory: true,
                 session_search: false,
+                symbol_context: false,
+                repo_search: false,
                 browser: false,
                 browser_screenshot: false,
                 web: false,
@@ -254,7 +264,18 @@ describe("App", () => {
         });
       }
       if (url === "/v1/sessions/research-1/history?after=-1&limit=500") {
-        return jsonResponse({ session_id: "research-1", events: [], next_after: -1, has_more: false, trace_schema_detected: false });
+        return history.promise;
+      }
+      if (url === "/v1/sessions/research-1/tools") {
+        return jsonResponse({
+          session_id: "research-1",
+          count: 3,
+          tools: [
+            { name: "read_file", group: "Workspace", description: "Read a file from the workspace.", parameters: { type: "object", properties: { path: { type: "string" } } } },
+            { name: "web_fetch", group: "Research", description: "Fetch a public URL.", parameters: { type: "object", properties: { url: { type: "string" } } } },
+            { name: "taostats_query", group: "MCP", source: "taostats", raw_name: "query", description: "Query MCP data for TAO stats.", parameters: { type: "object", properties: { query: { type: "string" } } } },
+          ],
+        });
       }
       if (url === "/v1/sessions/research-1/events") return eventStreamResponse("");
       return jsonResponse({ error: { message: `unexpected ${url}` } }, 404);
@@ -263,15 +284,29 @@ describe("App", () => {
 
     render(<App />);
 
+    await waitFor(() => expect(screen.getByTestId("connection-pill")).toHaveTextContent("Loading chat"));
+    expect(screen.getByTestId("timeline-loading")).toHaveTextContent("Loading chat");
+    expect(screen.queryByText("What should we work on?")).toBeNull();
+
+    history.resolve(
+      jsonResponse({ session_id: "research-1", events: [], next_after: -1, has_more: false, trace_schema_detected: false }),
+    );
+
     const runtime = await screen.findByTestId("runtime-capabilities");
-    expect(runtime).toHaveTextContent("This chat");
+    expect(runtime).toHaveTextContent("Capabilities");
     expect(runtime).toHaveTextContent("Chat-only mode");
-    expect(runtime).toHaveTextContent("Files, commands, and live sources are unavailable here.");
+    expect(runtime).toHaveTextContent("Local project tools may be unavailable, and live sources are off.");
     expect(runtime).toHaveTextContent("Research");
     expect(runtime).toHaveTextContent("No live sources");
     expect(runtime).toHaveTextContent("Current outside information may be incomplete.");
+    expect(runtime).toHaveTextContent("Skills");
+    expect(runtime).toHaveTextContent("Skill install");
     expect(runtime).toHaveTextContent("Files");
     expect(runtime).toHaveTextContent("Unavailable");
+    expect(within(runtime).getByText("+3 more", { selector: ".runtime-capability-more" })).toBeInTheDocument();
+    expect(within(runtime).getByLabelText("More capabilities: 3 more")).toBeInTheDocument();
+    await userEvent.click(within(runtime).getByLabelText("More capabilities: 3 more"));
+    expect(runtime).toHaveTextContent("Files");
     expect(runtime).toHaveTextContent("Subtasks");
     expect(runtime).toHaveTextContent("Nested work");
     expect(runtime).toHaveTextContent("Can delegate focused work (2 levels, 4 focused task types).");
@@ -282,7 +317,21 @@ describe("App", () => {
     expect(input).toBeVisible();
     await userEvent.type(input, "Analyze Affine recent market trends and Twitter reaction");
     expect(screen.getByTestId("composer-task-hint")).toHaveTextContent("Needs current sources");
-    expect(screen.getByTestId("composer-task-hint")).toHaveTextContent("unless you provide sources");
+    expect(screen.getByTestId("composer-task-hint")).toHaveTextContent("paste URLs, docs, or files");
+    await userEvent.clear(input);
+    await userEvent.type(input, "help me install a skill from github");
+    expect(screen.getByTestId("composer-task-hint")).toHaveTextContent("Skill install ready");
+    expect(screen.getByTestId("composer-task-hint")).toHaveTextContent("propose_install");
+    const toolsPanel = await screen.findByTestId("session-tools-panel");
+    expect(toolsPanel).toHaveTextContent("3 tools available");
+    await userEvent.click(within(toolsPanel).getByText("3 tools available"));
+    expect(within(toolsPanel).getByTestId("session-tools-search")).toBeVisible();
+    expect(toolsPanel).toHaveTextContent("Workspace");
+    expect(toolsPanel).toHaveTextContent("Research");
+    expect(toolsPanel).toHaveTextContent("MCP · taostats");
+    expect(within(toolsPanel).getByTestId("session-tools-list")).toHaveTextContent("read_file");
+    expect(within(toolsPanel).getByTestId("session-tools-list")).toHaveTextContent("taostats_query");
+    expect(within(toolsPanel).getByText("Raw name: query")).toBeInTheDocument();
     expect(screen.queryByTestId("chat-context-bar")).toBeNull();
   });
 
@@ -325,7 +374,7 @@ describe("App", () => {
 
     const input = await screen.findByPlaceholderText("Message Affent...");
     await user.type(input, "summarize the repo");
-    await user.click(screen.getByRole("button", { name: "Start" }));
+    await user.click(screen.getByRole("button", { name: "Start anyway" }));
 
     expect(await screen.findByTestId("pending-turn")).toHaveTextContent("summarize the repo");
     expect(screen.getByTestId("chat-context-bar")).toHaveTextContent("repo");
@@ -346,6 +395,95 @@ describe("App", () => {
     expect(screen.getByTestId("session-list")).not.toHaveTextContent("new-1");
     expect(screen.queryByRole("button", { name: "New chat" })).toBeNull();
     expect(screen.getByRole("button", { name: "New" })).toBeInTheDocument();
+  });
+
+  it("shows artifact output first in the chat context bar when the latest chat has files", async () => {
+    const user = userEvent.setup();
+    const fetchImpl = vi.fn(async (input: RequestInfo | URL) => {
+      const url = String(input);
+      if (url === "/v1/sessions?limit=100") {
+        return jsonResponse({
+          sessions: [
+            {
+              id: "artifact-session",
+              active: false,
+              durable: true,
+              topic_user_message: "artifact report task",
+              has_conversation: true,
+              has_events: true,
+              has_artifacts: true,
+              has_memory: false,
+              has_runtime_skills: false,
+              usage: { input_tokens: 120, output_tokens: 18, turns: 1 },
+            },
+          ],
+          has_more: false,
+        });
+      }
+      if (url === "/v1/sessions/artifact-session/history?after=-1&limit=500") {
+        return jsonResponse({
+          session_id: "artifact-session",
+          events: [
+            { id: 1, type: "turn.start", data: { turn_id: "t1" } },
+            { id: 2, type: "user.message", data: { turn_id: "t1", text: "summarize the repo" } },
+            {
+              id: 3,
+              type: "tool.request",
+              data: {
+                turn_id: "t1",
+                call_id: "c1",
+                tool: "web_fetch",
+                args: { url: "https://example.invalid" },
+                args_truncated: false,
+                args_bytes: 32,
+                args_omitted_bytes: 0,
+                args_cap_bytes: 65536,
+              },
+            },
+            {
+              id: 4,
+              type: "tool.result",
+              data: {
+                turn_id: "t1",
+                call_id: "c1",
+                exit_code: 0,
+                duration_ms: 42,
+                result_summary: "saved output",
+                result: "saved output",
+                result_truncated: true,
+                result_bytes: 8192,
+                result_omitted_bytes: 1048576,
+                result_cap_bytes: 262144,
+                result_artifact_path: ".affent/artifacts/tool-results/000001-c1.txt",
+              },
+            },
+            { id: 5, type: "message.done", data: { turn_id: "t1", text: "Here is the report." } },
+            { id: 6, type: "turn.end", data: { turn_id: "t1", reason: "completed" } },
+          ],
+          next_after: 6,
+          has_more: false,
+          trace_schema_version: 1,
+          trace_schema_detected: true,
+        });
+      }
+      if (url === "/v1/sessions/artifact-session/events") return eventStreamResponse("");
+      return jsonResponse({ error: { message: `unexpected ${url}` } }, 404);
+    });
+    vi.stubGlobal("fetch", fetchImpl);
+
+    render(<App />);
+
+    await user.click(await screen.findByRole("button", { name: /Open latest chat/ }));
+
+    const context = await screen.findByTestId("chat-context-bar");
+    expect(context).toHaveTextContent("Result ready");
+    expect(context).toHaveTextContent("Artifact 1 file (8 KiB, 1 MiB omitted)");
+    const details = screen.getByTestId("chat-context-details");
+    expect(chatContextMetric(details, "Artifact 1 file")).toBeVisible();
+    expect(within(details).getByLabelText("Session metrics: 1 more metric")).toBeInTheDocument();
+    await user.click(within(details).getByLabelText("Session metrics: 1 more metric"));
+    expect(chatContextMetric(details, "Work 1 action · 1 source")).toBeVisible();
+    expect(context).toHaveTextContent("Artifact 1 file (8 KiB, 1 MiB omitted)");
   });
 
   it("shows a pending follow-up as the active chat context", async () => {
@@ -399,7 +537,6 @@ describe("App", () => {
     expect(screen.queryByTestId("turn-nav-current")).toBeNull();
     const nav = screen.getByTestId("turn-navigator");
     expect(within(nav).getByTestId("turn-nav-glance")).toHaveTextContent("explain main.go");
-    expect(within(nav).getByTestId("turn-nav-glance")).toHaveTextContent("Current · Sending");
     expect(within(nav).getByRole("link", { name: /Message 2: explain main.go.*Waiting.*current/ })).toHaveAttribute(
       "href",
       "#pending-turn",
@@ -640,13 +777,15 @@ describe("App", () => {
     await user.click(screen.getByRole("button", { name: "New chat" }));
 
     await waitFor(() => expect(input).toHaveFocus());
+    expect(screen.getByTestId("connection-pill")).toHaveTextContent("Connected");
+    expect(screen.getByTestId("connection-pill")).toHaveAttribute("title", "Ready to chat");
     expect(screen.getByTestId("workspace-shell")).toHaveAttribute("data-session-nav", "visible");
     expect(screen.getByTestId("session-list")).toHaveTextContent("New chat");
     expect(screen.getByTestId("session-list")).toHaveTextContent("No messages yet");
     expect(screen.getByTestId("session-list")).not.toHaveTextContent("new-1");
   });
 
-  it("clears the current surface immediately when switching sessions", async () => {
+  it("keeps the current chat visible while a switched session history loads", async () => {
     const user = userEvent.setup();
     const s2History = deferred<Response>();
     const fetchImpl = vi.fn(async (input: RequestInfo | URL) => {
@@ -702,13 +841,155 @@ describe("App", () => {
     expect(await screen.findByText("There are two files.")).toBeVisible();
     await user.click(screen.getByRole("button", { name: /New chat.*No messages yet/ }));
 
-    expect(screen.queryByText("There are two files.")).toBeNull();
-    expect(screen.getByTestId("timeline-empty")).toHaveTextContent("What should we work on?");
+    expect(screen.getByText("There are two files.")).toBeVisible();
+    expect(screen.getByTestId("timeline-loading")).toHaveTextContent("Loading chat");
     expect(screen.queryByTestId("chat-context-bar")).toBeNull();
     expect(screen.queryByTestId("session-strip")).toBeNull();
 
     s2History.resolve(jsonResponse({ session_id: "s2", events: [], next_after: -1, has_more: false, trace_schema_detected: false }));
     await waitFor(() => expect(fetchImpl).toHaveBeenCalledWith("/v1/sessions/s2/history?after=-1&limit=500", expect.anything()));
+    await waitFor(() => expect(screen.queryByText("There are two files.")).toBeNull());
+    expect(screen.queryByTestId("timeline-loading")).toBeNull();
+    expect(screen.getByText("What should we work on?")).toBeVisible();
+  });
+
+  it("shows the server snapshot in the top status strip", async () => {
+    const fetchImpl = vi.fn(async (input: RequestInfo | URL) => {
+      const url = String(input);
+      if (url === "/v1/stats") {
+        return jsonResponse({
+          listen: "0.0.0.0:7777",
+          model: "qwen3.6-35b-a3b",
+          executor_mode: "local",
+          enable_browser: true,
+          enable_web: true,
+          enable_web_search: true,
+          enable_memory: true,
+          enable_builtins: true,
+          enable_subagent: true,
+          enable_focused_tasks: true,
+          active_sessions: 3,
+          running_turns: 2,
+          shutting_down: false,
+          web_search_backend: "tavily",
+          browser_cache_dir: "/workspace/browser-cache",
+          workspace_root: "/workspace/sessions",
+          memory_root: "/workspace/session-state",
+          server_time: "2026-05-25T18:55:00Z",
+        });
+      }
+      if (url === "/v1/sessions?limit=100") {
+        return jsonResponse({ sessions: [], has_more: false });
+      }
+      return jsonResponse({ error: { message: `unexpected ${url}` } }, 404);
+    });
+    vi.stubGlobal("fetch", fetchImpl);
+
+    render(<App />);
+
+    const status = await screen.findByTestId("server-status-bar");
+    expect(status).toHaveTextContent("Server");
+    expect(status).toHaveTextContent("Healthy");
+    expect(status).toHaveTextContent("qwen3.6-35b-a3b");
+    expect(status).toHaveTextContent("Executor local");
+    expect(status).toHaveTextContent("3 active sessions");
+    expect(status).toHaveTextContent("2 running turns");
+    expect(status).toHaveTextContent("Browser on");
+    expect(status).toHaveTextContent("Web on");
+    expect(status).toHaveTextContent("Web search on");
+    expect(status).toHaveTextContent("Memory on");
+    expect(status).toHaveTextContent("Builtins on");
+    expect(status).toHaveTextContent("Subtasks on");
+    expect(status).toHaveTextContent("Web search tavily");
+    expect(status).toHaveTextContent("Browser cache on");
+    expect(status).toHaveTextContent("Listen 0.0.0.0:7777");
+    expect(status).toHaveTextContent("Workspace sessions");
+    expect(status).toHaveTextContent("Memory session-state");
+    expect(within(status).getByTitle("/workspace/sessions")).toBeInTheDocument();
+    expect(within(status).getByTitle("/workspace/session-state")).toBeInTheDocument();
+    expect(status).toHaveTextContent("Updated");
+  });
+
+  it("keeps the server strip visible when stats polling fails", async () => {
+    const fetchImpl = vi.fn(async (input: RequestInfo | URL) => {
+      const url = String(input);
+      if (url === "/v1/stats") {
+        return jsonResponse({ error: { message: "stats offline" } }, 503);
+      }
+      if (url === "/v1/sessions?limit=100") {
+        return jsonResponse({ sessions: [], has_more: false });
+      }
+      return jsonResponse({ error: { message: `unexpected ${url}` } }, 404);
+    });
+    vi.stubGlobal("fetch", fetchImpl);
+
+    render(<App />);
+
+    const status = await screen.findByTestId("server-status-bar");
+    expect(status).toHaveTextContent("Server");
+    expect(status).toHaveTextContent("Server unavailable");
+  });
+
+  it("shows the selected session title while a titled chat loads", async () => {
+    const user = userEvent.setup();
+    const s2History = deferred<Response>();
+    const fetchImpl = vi.fn(async (input: RequestInfo | URL) => {
+      const url = String(input);
+      if (url === "/v1/sessions?limit=100") {
+        return jsonResponse({
+          sessions: [
+            {
+              id: "s1",
+              active: true,
+              durable: true,
+              topic_user_message: "current work",
+              has_conversation: true,
+              has_events: true,
+              has_artifacts: false,
+              has_memory: false,
+              has_runtime_skills: false,
+            },
+            {
+              id: "s2",
+              active: false,
+              durable: true,
+              topic_user_message: "affine recent research",
+              has_conversation: true,
+              has_events: true,
+              has_artifacts: false,
+              has_memory: false,
+              has_runtime_skills: false,
+            },
+          ],
+          has_more: false,
+        });
+      }
+      if (url === "/v1/sessions/s1/history?after=-1&limit=500") {
+        return jsonResponse({
+          session_id: "s1",
+          events: completedTurn,
+          next_after: 11,
+          has_more: false,
+          trace_schema_detected: false,
+        });
+      }
+      if (url === "/v1/sessions/s2/history?after=-1&limit=500") return s2History.promise;
+      if (url === "/v1/sessions/s1/events" || url === "/v1/sessions/s2/events") return eventStreamResponse("");
+      return jsonResponse({ error: { message: `unexpected ${url}` } }, 404);
+    });
+    vi.stubGlobal("fetch", fetchImpl);
+
+    render(<App />);
+
+    expect(await screen.findByText("There are two files.")).toBeVisible();
+    await user.click(screen.getByRole("button", { name: /affine recent research/i }));
+
+    expect(screen.getByTestId("connection-pill")).toHaveTextContent("Loading Affine recent research");
+    expect(screen.getByTestId("timeline-loading")).toHaveTextContent("Loading Affine recent research");
+
+    s2History.resolve(jsonResponse({ session_id: "s2", events: [], next_after: -1, has_more: false, trace_schema_detected: false }));
+    await waitFor(() => expect(fetchImpl).toHaveBeenCalledWith("/v1/sessions/s2/history?after=-1&limit=500", expect.anything()));
+    await waitFor(() => expect(screen.queryByTestId("timeline-loading")).toBeNull());
   });
 
   it("applies live SSE events after persisted history", async () => {
@@ -914,7 +1195,7 @@ describe("App", () => {
 
     render(<App />);
 
-    await user.click(await screen.findByRole("button", { name: /Action details/ }));
+    await user.click(await screen.findByRole("button", { name: /Run summary/ }));
     await user.click(screen.getByRole("button", { name: /List current directory/ }));
     await user.click(screen.getByRole("button", { name: "Use output" }));
 
@@ -1139,7 +1420,7 @@ function jsonResponse(body: unknown, status = 200): Response {
 }
 
 function chatContextMetric(root: HTMLElement, text: string): HTMLElement {
-  return within(root).getByText((_, element) => element?.textContent === text);
+  return within(root).getAllByText((_, element) => element?.textContent?.includes(text) ?? false, { selector: "span" })[0];
 }
 
 function eventStreamResponse(body: string): Response {

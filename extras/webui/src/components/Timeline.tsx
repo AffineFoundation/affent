@@ -3,6 +3,7 @@ import type { SessionState } from "../store/sessionState";
 import type { UseAsDraft } from "../view/draftSource";
 import { hasIssueContext } from "../view/issueContext";
 import { countMatchingTurns, countTurnsByMode, turnMatchesFilter, type TimelineFilterMode } from "../view/timelineFilter";
+import { formatLoadingChatTitle } from "../view/sessionList";
 import { TurnCard } from "./TurnCard";
 import { TurnNavigator } from "./TurnNavigator";
 import { CopyButton } from "./CopyButton";
@@ -17,7 +18,7 @@ const filterModes: { mode: TimelineFilterMode; label: string }[] = [
   { mode: "repaired", label: "Auto-fixed" },
 ];
 
-const selectionScrollStepPx = 36;
+const selectionScrollStepPx = 16;
 
 // The conversation is the primary product surface. Search and filters stay
 // available, but are framed as a plain find tool instead of a trace console.
@@ -33,6 +34,8 @@ export function Timeline({
   latestChat,
   onOpenLatestChat,
   initialHistoryFocus = "latest",
+  loadingHistory = false,
+  sessionTitle,
 }: {
   session: SessionState;
   sessionId?: string;
@@ -45,6 +48,8 @@ export function Timeline({
   latestChat?: LatestChatShortcut;
   onOpenLatestChat?: () => void;
   initialHistoryFocus?: "answer" | "latest";
+  loadingHistory?: boolean;
+  sessionTitle?: string;
 }) {
   const endRef = useRef<HTMLDivElement | null>(null);
   const latestAnswerRef = useRef<HTMLDivElement | null>(null);
@@ -59,6 +64,7 @@ export function Timeline({
   const selectionEdgeRaf = useRef<number | undefined>(undefined);
   const selectionEdgeVelocity = useRef(0);
   const touchStartY = useRef<number | undefined>(undefined);
+  const lastPointerType = useRef<PointerEvent["pointerType"] | undefined>(undefined);
   const [following, setFollowing] = useState(true);
   const [newActivity, setNewActivity] = useState(false);
   const [filterMode, setFilterMode] = useState<TimelineFilterMode>("all");
@@ -134,10 +140,14 @@ export function Timeline({
     };
     const markUserBrowsing = (event: Event) => {
       if (shouldIgnorePointer(event)) return;
+      if (pointerSelecting.current || hasActiveTextSelection()) {
+        if (event.type !== "pointerdown") return;
+      }
       if (isForwardOverscrollAtLatest(event, distanceToLatest(), touchStartY.current)) return;
       userBrowsedHistory.current = true;
       autoFollowPaused.current = true;
       if (event.type === "pointerdown") {
+        if ("pointerType" in event) lastPointerType.current = (event as PointerEvent).pointerType;
         pointerSelecting.current = true;
         selectionScrollTop.current = currentScrollTop(scrollRoot);
         return;
@@ -161,9 +171,14 @@ export function Timeline({
       }
       cancelSelectionEdgeScroll();
       if (!pointerSelecting.current) selectionScrollTop.current = undefined;
+      if (!pointerSelecting.current) lastPointerType.current = undefined;
     };
     const onScroll = () => {
       if (pointerSelecting.current || hasActiveTextSelection()) {
+        if (lastPointerType.current === "touch") {
+          selectionScrollTop.current = currentScrollTop(scrollRoot);
+          return;
+        }
         selectionScrollTop.current = limitSelectionScroll(scrollRoot, selectionScrollTop.current);
         return;
       }
@@ -261,10 +276,14 @@ export function Timeline({
       cancelSelectionEdgeScroll();
       return;
     }
+    if (event.pointerType === "touch") {
+      cancelSelectionEdgeScroll();
+      return;
+    }
     const scrollRoot = scrollRootRef?.current;
     const bounds = scrollRoot?.getBoundingClientRect() ?? { top: 0, bottom: window.innerHeight };
     const edgePx = 72;
-    const maxStepPx = 18;
+    const maxStepPx = 12;
     const topPressure = Math.max(0, bounds.top + edgePx - event.clientY) / edgePx;
     const bottomPressure = Math.max(0, event.clientY - (bounds.bottom - edgePx)) / edgePx;
     let velocity = 0;
@@ -309,6 +328,25 @@ export function Timeline({
   }
 
   if (session.turns.length === 0 && !pendingMessage) {
+    if (loadingHistory) {
+      return (
+        <section className="flow-turn intro-turn timeline-loading" data-testid="timeline-loading" aria-busy="true">
+          <div className="conversation-turn">
+            <div className="assistant-cluster">
+              <div className="assistant-name">Affent</div>
+              <div className="flow-step flow-step-assistant">
+                <div className="flow-text intro-copy">
+                  <div className="intro-heading">
+                    <strong>{formatLoadingChatTitle(sessionTitle)}</strong>
+                    <span>Loading the conversation before showing it.</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </section>
+      );
+    }
     const hasSavedChats = savedChatCount > 0;
     return (
       <section className="flow-turn intro-turn" data-testid="timeline-empty">
@@ -327,7 +365,7 @@ export function Timeline({
                 </div>
                 {hasSavedChats && latestChat && onOpenLatestChat ? (
                   <div className="intro-latest-chat" data-testid="intro-latest-chat">
-                    <span>Latest chat</span>
+                    <span>Recent chat</span>
                     <strong>{latestChat.title}</strong>
                     {latestChat.meta ? <small>{latestChat.meta}</small> : null}
                     <div className="intro-latest-chat-actions">
@@ -358,13 +396,22 @@ export function Timeline({
       </div>
     );
   }
+  const showJumpToLatest = newActivity && (!following || session.status === "completed");
+  const loadingBanner =
+    loadingHistory && session.turns.length > 0 ? (
+      <section className="timeline-loading-banner" data-testid="timeline-loading" aria-busy="true">
+        <strong>{formatLoadingChatTitle(sessionTitle)}</strong>
+        <span>Keeping this chat visible while the new one loads.</span>
+      </section>
+    ) : null;
   return (
     <>
-      {!following || newActivity ? (
+      {showJumpToLatest ? (
         <button type="button" className="jump-live" data-new={newActivity} onClick={jumpToLive}>
-          {newActivity ? "New activity - jump to latest" : "Back to latest"}
+          Jump to latest
         </button>
       ) : null}
+      {loadingBanner}
       {showConversationMap ? (
         <div className="conversation-map" data-testid="conversation-map" data-density={compactConversationMap ? "compact" : "normal"}>
           <TurnNavigator
@@ -497,7 +544,7 @@ function TimelineFindPanel({
       onToggle={(event) => onOpenChange(event.currentTarget.open)}
     >
       <summary>
-        <span>{searchText ? `Find "${searchText}"` : "Find in chat"}</span>
+        <span>{searchText ? `Search "${searchText}"` : "Search in chat"}</span>
         {open || filtered ? (
           <span className="timeline-match-count" data-testid="timeline-match-count">
             {matchingTurns}/{turnCount} messages
@@ -507,12 +554,12 @@ function TimelineFindPanel({
       {open ? (
         <div className="timeline-toolbox">
           <label className="timeline-search">
-            <span>Find messages, sources, or output</span>
+            <span>Search messages, sources, or output</span>
             <input
               ref={inputRef}
               value={searchQuery}
               onChange={(event) => onSearchChange(event.target.value)}
-              placeholder="Type to find"
+              placeholder="Type to search"
               data-testid="timeline-search"
             />
           </label>
@@ -602,7 +649,7 @@ const starterDrafts = [
   {
     title: "Fix a failure",
     preview: "Find the cause and smallest fix.",
-    prompt: "Find the failing test or runtime error, explain the cause, and propose the smallest fix.",
+    prompt: "Find the failing test or execution error, explain the cause, and propose the smallest fix.",
   },
   {
     title: "Investigate issue",
