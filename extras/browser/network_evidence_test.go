@@ -211,7 +211,16 @@ func TestNetworkEvidenceCandidateFiltersBinaryAndOversizedBodies(t *testing.T) {
 	if networkEvidenceCandidate("https://example.com/api", 200, proto.NetworkResourceTypeFetch, "application/octet-stream", []byte{0, 1, 2, 3}) {
 		t.Fatal("binary bodies should not be candidates")
 	}
-	if networkEvidenceCandidate("https://example.com/api", 200, proto.NetworkResourceTypeFetch, "application/json", make([]byte, maxNetworkEvidenceBodyBytes+1)) {
-		t.Fatal("oversized bodies should not be candidates")
+	if !networkEvidenceCandidate("https://example.com/api", 200, proto.NetworkResourceTypeFetch, "application/json", make([]byte, maxNetworkEvidenceBodyBytes+1)) {
+		t.Fatal("oversized JSON bodies should be candidates so the evidence log can keep a bounded prefix")
+	}
+	log := NewNetworkEvidenceLog()
+	log.ObserveResponse("https://example.com/dashboard", proto.NetworkResourceTypeDocument)
+	entry, ok := log.Add("https://example.com/api/large", 200, proto.NetworkResourceTypeFetch, http.Header{"Content-Type": {"application/json"}}, make([]byte, maxNetworkEvidenceBodyBytes+1))
+	if !ok {
+		t.Fatal("oversized JSON fetch should be captured with truncation")
+	}
+	if len(entry.Body) != maxNetworkEvidenceBodyBytes {
+		t.Fatalf("captured body length = %d, want %d", len(entry.Body), maxNetworkEvidenceBodyBytes)
 	}
 }

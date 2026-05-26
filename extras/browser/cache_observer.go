@@ -30,7 +30,7 @@ func shouldFetchResponseBodyForObserver(encodedDataLength float64, cache Respons
 	if cache != nil && shouldFetchResponseBodyForCache(encodedDataLength) {
 		return true
 	}
-	if networkLog != nil && (encodedDataLength <= 0 || encodedDataLength <= maxNetworkEvidenceBodyBytes) {
+	if networkLog != nil && (encodedDataLength <= 0 || encodedDataLength <= maxCachedResponseBodyBytes) {
 		return true
 	}
 	return false

@@ -111,6 +111,8 @@ Initial implementation:
 
 - Browser sessions capture bounded same-site XHR/fetch JSON/text responses from
   Chrome network events.
+- Large JSON/text responses are truncated into bounded evidence entries rather
+  than discarded solely because the full body is too large for model context.
 - `browser_network` returns compact refs and previews only.
 - `browser_network_read` returns bounded response bodies with
   `SourceAccess: browser_network_url=...; source_method=network_xhr_fetch`.

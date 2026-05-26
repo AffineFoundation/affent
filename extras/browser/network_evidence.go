@@ -191,7 +191,7 @@ func networkEvidenceCandidate(rawURL string, status int, resource proto.NetworkR
 	if normalizedURLHost(rawURL) == "" {
 		return false
 	}
-	if len(body) == 0 || len(body) > maxNetworkEvidenceBodyBytes {
+	if len(body) == 0 {
 		return false
 	}
 	ct := strings.ToLower(contentType)
