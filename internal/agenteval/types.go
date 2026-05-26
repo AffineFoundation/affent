@@ -435,6 +435,8 @@ type ContextCompactionStats struct {
 	Proactive       int
 	RemovedMessages int
 	SummaryBytes    int
+	SummaryMissing  int
+	SummaryEmpty    int
 	Examples        []ContextCompaction
 }
 
@@ -985,6 +987,12 @@ func (t Trace) ContextCompactionStats(maxExamples int) ContextCompactionStats {
 		}
 		stats.RemovedMessages += compaction.RemovedMessages
 		stats.SummaryBytes += compaction.SummaryBytes
+		if contextCompactionSummaryMissing(compaction) {
+			stats.SummaryMissing++
+		}
+		if contextCompactionSummaryEmpty(compaction) {
+			stats.SummaryEmpty++
+		}
 		if maxExamples <= 0 || len(stats.Examples) >= maxExamples {
 			continue
 		}
@@ -1001,6 +1009,14 @@ func (t Trace) ContextCompactionStats(maxExamples int) ContextCompactionStats {
 		})
 	}
 	return stats
+}
+
+func contextCompactionSummaryMissing(compaction ContextCompaction) bool {
+	return !compaction.SummaryPresent && compaction.SummaryBytes == 0 && strings.TrimSpace(compaction.SummaryPreview) == ""
+}
+
+func contextCompactionSummaryEmpty(compaction ContextCompaction) bool {
+	return compaction.SummaryPresent && compaction.SummaryBytes == 0 && strings.TrimSpace(compaction.SummaryPreview) == ""
 }
 
 func containsString(values []string, value string) bool {

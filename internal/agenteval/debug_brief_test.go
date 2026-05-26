@@ -111,6 +111,42 @@ func TestBuildDebugBriefClassifiesSessionRecallQuality(t *testing.T) {
 	}
 }
 
+func TestBuildDebugBriefClassifiesContextCompactionSummaryQuality(t *testing.T) {
+	brief := BuildDebugBrief(BatchResult{
+		OK: true,
+		ContextCompactions: ContextCompactionStats{
+			Count:           1,
+			Reactive:        1,
+			RemovedMessages: 42,
+			SummaryMissing:  1,
+		},
+	})
+	item := debugBriefItemByKind(brief, "context_compaction")
+	if item == nil ||
+		item.Severity != "warn" ||
+		item.Message != "context was compacted without a persisted summary; inspect examples before continuing" ||
+		item.Counts["summary_missing"] != 1 ||
+		!stringSliceContains(item.Inspect, "context_compaction_examples") ||
+		!stringSliceContains(brief.Tags, "context_compaction:summary_missing") {
+		t.Fatalf("missing-summary compaction item = %+v tags=%+v", item, brief.Tags)
+	}
+
+	brief = BuildDebugBrief(BatchResult{
+		OK: true,
+		ContextCompactions: ContextCompactionStats{
+			Count:        1,
+			SummaryEmpty: 1,
+		},
+	})
+	item = debugBriefItemByKind(brief, "context_compaction")
+	if item == nil ||
+		item.Message != "context compaction summary was empty; inspect examples before continuing" ||
+		item.Counts["summary_empty"] != 1 ||
+		!stringSliceContains(brief.Tags, "context_compaction:summary_empty") {
+		t.Fatalf("empty-summary compaction item = %+v tags=%+v", item, brief.Tags)
+	}
+}
+
 func debugBriefItemByKind(brief *DebugBrief, kind string) *DebugBriefItem {
 	if brief == nil {
 		return nil

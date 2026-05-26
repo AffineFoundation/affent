@@ -235,11 +235,16 @@ func renderTimelineDebugBrief(b *strings.Builder, res BatchResult) {
 		)
 	}
 	if res.ContextCompactions.Count > 0 {
-		fmt.Fprintf(b, "- context: compactions=`%d`, reactive=`%d`, removed_messages=`%d`, summary_bytes=`%d`; inspect Context Compactions for possible state loss.\n",
+		extra := ""
+		if res.ContextCompactions.SummaryMissing > 0 || res.ContextCompactions.SummaryEmpty > 0 {
+			extra = fmt.Sprintf(", summary_missing=`%d`, summary_empty=`%d`", res.ContextCompactions.SummaryMissing, res.ContextCompactions.SummaryEmpty)
+		}
+		fmt.Fprintf(b, "- context: compactions=`%d`, reactive=`%d`, removed_messages=`%d`, summary_bytes=`%d`%s; inspect Context Compactions for possible state loss.\n",
 			res.ContextCompactions.Count,
 			res.ContextCompactions.Reactive,
 			res.ContextCompactions.RemovedMessages,
 			res.ContextCompactions.SummaryBytes,
+			extra,
 		)
 	}
 	if hasDebugBriefTruncation(res) {
@@ -797,13 +802,20 @@ func renderTimelineCompactions(b *strings.Builder, trace *Trace) {
 	}
 	b.WriteString("\n## Context Compactions\n\n")
 	for i, c := range trace.ContextCompactions {
-		fmt.Fprintf(b, "%d. turn=`%s` reactive=`%t` messages=%d->%d removed=%d summary_bytes=%d reason=%s\n",
+		summaryState := "present"
+		if contextCompactionSummaryMissing(c) {
+			summaryState = "missing"
+		} else if contextCompactionSummaryEmpty(c) {
+			summaryState = "empty"
+		}
+		fmt.Fprintf(b, "%d. turn=`%s` reactive=`%t` messages=%d->%d removed=%d summary_state=%s summary_bytes=%d reason=%s\n",
 			i+1,
 			c.TurnID,
 			c.Reactive,
 			c.BeforeMessages,
 			c.AfterMessages,
 			c.RemovedMessages,
+			summaryState,
 			c.SummaryBytes,
 			timelineInline(c.Reason, 300),
 		)

@@ -188,14 +188,24 @@ func BuildDebugBrief(res BatchResult) *DebugBrief {
 	}
 	if res.ContextCompactions.Count > 0 {
 		tags := []string{"context_compaction"}
+		message := "context was compacted; inspect summary quality if resume degraded"
 		if res.ContextCompactions.Reactive > 0 {
 			tags = append(tags, "context_compaction:reactive")
 		}
-		add("context_compaction", "warn", "context was compacted; inspect summary quality if resume degraded", []string{"context_compactions"}, map[string]int{
+		if res.ContextCompactions.SummaryMissing > 0 {
+			tags = append(tags, "context_compaction:summary_missing")
+			message = "context was compacted without a persisted summary; inspect examples before continuing"
+		} else if res.ContextCompactions.SummaryEmpty > 0 {
+			tags = append(tags, "context_compaction:summary_empty")
+			message = "context compaction summary was empty; inspect examples before continuing"
+		}
+		add("context_compaction", "warn", message, []string{"context_compaction_examples", "context_compactions"}, map[string]int{
 			"count":            res.ContextCompactions.Count,
 			"reactive":         res.ContextCompactions.Reactive,
 			"removed_messages": res.ContextCompactions.RemovedMessages,
 			"summary_bytes":    res.ContextCompactions.SummaryBytes,
+			"summary_missing":  res.ContextCompactions.SummaryMissing,
+			"summary_empty":    res.ContextCompactions.SummaryEmpty,
 		}, tags...)
 	}
 	if hasDebugBriefTruncation(res) {

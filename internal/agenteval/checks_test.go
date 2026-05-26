@@ -698,6 +698,23 @@ func TestContextCompactionChecks(t *testing.T) {
 	}
 }
 
+func TestContextCompactionStatsClassifiesSummaryQuality(t *testing.T) {
+	trace := Trace{ContextCompactions: []ContextCompaction{
+		{TurnID: "missing", BeforeMessages: 50, AfterMessages: 10, RemovedMessages: 40, Reactive: true, Reason: "context_overflow"},
+		{TurnID: "empty", BeforeMessages: 30, AfterMessages: 12, RemovedMessages: 18, SummaryPresent: true, Reason: "threshold"},
+		{TurnID: "ok", BeforeMessages: 20, AfterMessages: 12, RemovedMessages: 8, SummaryPresent: true, SummaryBytes: 64, SummaryPreview: "USER_CONTEXT: keep source IDs."},
+	}}
+
+	stats := trace.ContextCompactionStats(3)
+
+	if stats.Count != 3 || stats.SummaryMissing != 1 || stats.SummaryEmpty != 1 || stats.SummaryBytes != 64 {
+		t.Fatalf("ContextCompactionStats summary quality = %+v", stats)
+	}
+	if len(stats.Examples) != 3 || stats.Examples[0].TurnID != "missing" || stats.Examples[1].TurnID != "empty" {
+		t.Fatalf("ContextCompactionStats examples = %+v", stats.Examples)
+	}
+}
+
 func TestApplyTraceEventDerivesToolResultFailureKind(t *testing.T) {
 	trace := Trace{}
 	pending := map[string]int{}
