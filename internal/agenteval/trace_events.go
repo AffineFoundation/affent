@@ -155,6 +155,24 @@ func applyTraceEvent(t *Trace, pending map[string]int, typ string, data json.Raw
 			}
 			return true, nil
 		}
+	case sse.TypeLoopDecision:
+		var p sse.LoopDecisionPayload
+		if err := json.Unmarshal(data, &p); err != nil {
+			return false, err
+		}
+		if !traceEventMatchesTurn(p.TurnID, turnID) {
+			return false, nil
+		}
+		t.LoopDecisions = append(t.LoopDecisions, LoopDecision{
+			Kind:           p.Kind,
+			Decision:       p.Decision,
+			Trigger:        p.Trigger,
+			Confidence:     p.Confidence,
+			Reason:         p.Reason,
+			RequiredAction: p.RequiredAction,
+			TurnID:         p.TurnID,
+			DecisionID:     p.DecisionID,
+		})
 	case sse.TypeError:
 		var p sse.ErrorPayload
 		if err := json.Unmarshal(data, &p); err == nil && p.Message != "" {

@@ -140,6 +140,10 @@ type Trace struct {
 	// eval reports can show examples without asking operators to open the
 	// full trace.
 	RuntimeErrors []RuntimeErrorExample
+	// LoopDecisions records structured protocol/runtime decisions such as
+	// evidence_quality defer events. These are separate from assistant text so
+	// evals can measure when guardrails fired and whether they were actionable.
+	LoopDecisions []LoopDecision
 
 	// RawTypes counts every event type the run produced, by name
 	// (e.g. {"tool.request": 5, "message.delta": 1300}). Populated
@@ -288,6 +292,24 @@ type ToolFailureExample struct {
 type RuntimeErrorExample struct {
 	Kind    string `json:"kind"`
 	Message string `json:"message"`
+}
+
+type LoopDecision struct {
+	Kind           string `json:"kind"`
+	Decision       string `json:"decision"`
+	Trigger        string `json:"trigger,omitempty"`
+	Confidence     string `json:"confidence,omitempty"`
+	Reason         string `json:"reason,omitempty"`
+	RequiredAction string `json:"required_action,omitempty"`
+	TurnID         string `json:"turn_id,omitempty"`
+	DecisionID     string `json:"decision_id,omitempty"`
+}
+
+type LoopDecisionStats struct {
+	Count      int
+	ByKind     map[string]int
+	ByDecision map[string]int
+	Examples   []LoopDecision
 }
 
 func (s ToolRepairStats) HasAny() bool {
@@ -465,6 +487,39 @@ func (t Trace) RuntimeErrorExamples(maxPerKind int) map[string][]RuntimeErrorExa
 		return nil
 	}
 	return out
+}
+
+func (t Trace) LoopDecisionStats(maxExamples int) LoopDecisionStats {
+	stats := LoopDecisionStats{}
+	for _, decision := range t.LoopDecisions {
+		stats.Count++
+		if decision.Kind != "" {
+			if stats.ByKind == nil {
+				stats.ByKind = map[string]int{}
+			}
+			stats.ByKind[decision.Kind]++
+		}
+		if decision.Decision != "" {
+			if stats.ByDecision == nil {
+				stats.ByDecision = map[string]int{}
+			}
+			stats.ByDecision[decision.Decision]++
+		}
+		if maxExamples <= 0 || len(stats.Examples) >= maxExamples {
+			continue
+		}
+		stats.Examples = append(stats.Examples, LoopDecision{
+			Kind:           decision.Kind,
+			Decision:       decision.Decision,
+			Trigger:        decision.Trigger,
+			Confidence:     decision.Confidence,
+			Reason:         compactOneLine(decision.Reason, 260),
+			RequiredAction: compactOneLine(decision.RequiredAction, 260),
+			TurnID:         decision.TurnID,
+			DecisionID:     decision.DecisionID,
+		})
+	}
+	return stats
 }
 
 func containsString(values []string, value string) bool {

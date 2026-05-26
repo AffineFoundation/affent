@@ -168,6 +168,10 @@ type batchSummary struct {
 	ToolFailureExamples        map[string][]agenteval.ToolFailureExample
 	RuntimeErrorByKind         map[string]int
 	RuntimeErrorExamples       map[string][]agenteval.RuntimeErrorExample
+	LoopDecisions              int
+	LoopDecisionByKind         map[string]int
+	LoopDecisionByDecision     map[string]int
+	LoopDecisionExamples       []agenteval.LoopDecision
 	LoopGuardInterventions     int
 	ForcedNoTools              int
 	SourceAccessResults        int
@@ -258,6 +262,20 @@ func (s *batchSummary) add(res agenteval.BatchResult) {
 		s.RuntimeErrorByKind[k] += v
 	}
 	mergeExampleMap(&s.RuntimeErrorExamples, res.RuntimeErrorExamples, batchSummaryExamplesPerKind)
+	s.LoopDecisions += res.LoopDecisionStats.Count
+	for k, v := range res.LoopDecisionStats.ByKind {
+		if s.LoopDecisionByKind == nil {
+			s.LoopDecisionByKind = map[string]int{}
+		}
+		s.LoopDecisionByKind[k] += v
+	}
+	for k, v := range res.LoopDecisionStats.ByDecision {
+		if s.LoopDecisionByDecision == nil {
+			s.LoopDecisionByDecision = map[string]int{}
+		}
+		s.LoopDecisionByDecision[k] += v
+	}
+	s.LoopDecisionExamples = appendLoopDecisionExamples(s.LoopDecisionExamples, res.LoopDecisionStats.Examples, batchSummaryExamplesPerKind)
 	s.LoopGuardInterventions += res.ToolStats.LoopGuardInterventions
 	s.ForcedNoTools += res.ToolStats.ForcedNoTools
 	s.SourceAccessResults += res.ToolStats.SourceAccessResults
@@ -416,6 +434,15 @@ func printBatchSummary(w io.Writer, s batchSummary) {
 	if len(s.RuntimeErrorByKind) > 0 {
 		fmt.Fprintf(w, " runtime_error_kinds=%s", formatStringIntCounts(s.RuntimeErrorByKind))
 	}
+	if s.LoopDecisions > 0 {
+		fmt.Fprintf(w, " loop_decisions=%d", s.LoopDecisions)
+		if len(s.LoopDecisionByKind) > 0 {
+			fmt.Fprintf(w, " loop_decision_kinds=%s", formatStringIntCounts(s.LoopDecisionByKind))
+		}
+		if len(s.LoopDecisionByDecision) > 0 {
+			fmt.Fprintf(w, " loop_decision_results=%s", formatStringIntCounts(s.LoopDecisionByDecision))
+		}
+	}
 	if hasBatchToolContextTruncation(s) {
 		fmt.Fprintf(w, " ctx_trunc=%d,omitted=%d", s.ToolContextTruncated, s.ToolContextOmittedBytes)
 	}
@@ -427,6 +454,7 @@ func printBatchSummary(w io.Writer, s batchSummary) {
 	printToolFailureExampleLines(w, s.ToolFailureExamples, "")
 	printFailureHintLines(w, s.RuntimeErrorByKind, "")
 	printRuntimeErrorExampleLines(w, s.RuntimeErrorExamples, "")
+	printLoopDecisionExampleLines(w, s.LoopDecisionExamples, "")
 }
 
 func mergeExampleMap[T any](dst *map[string][]T, src map[string][]T, maxPerKind int) {
@@ -563,6 +591,25 @@ func printRuntimeErrorExampleLines(w io.Writer, examples map[string][]agenteval.
 		for _, ex := range examples[kind] {
 			fmt.Fprintf(w, "%sruntime_error_example[%s]: %s\n", indent, kind, ex.Message)
 		}
+	}
+}
+
+func printLoopDecisionExampleLines(w io.Writer, examples []agenteval.LoopDecision, indent string) {
+	for _, ex := range examples {
+		fmt.Fprintf(w, "%sloop_decision_example[%s]: decision=%s", indent, ex.Kind, ex.Decision)
+		if ex.Trigger != "" {
+			fmt.Fprintf(w, " trigger=%s", ex.Trigger)
+		}
+		if ex.Confidence != "" {
+			fmt.Fprintf(w, " confidence=%s", ex.Confidence)
+		}
+		if ex.Reason != "" {
+			fmt.Fprintf(w, " reason=%s", ex.Reason)
+		}
+		if ex.RequiredAction != "" {
+			fmt.Fprintf(w, " action=%s", ex.RequiredAction)
+		}
+		fmt.Fprintln(w)
 	}
 }
 
@@ -769,6 +816,10 @@ type batchResultRecord struct {
 	ToolFailureExamples        map[string][]agenteval.ToolFailureExample  `json:"tool_failure_examples,omitempty"`
 	RuntimeErrorByKind         map[string]int                             `json:"runtime_error_by_kind,omitempty"`
 	RuntimeErrorExamples       map[string][]agenteval.RuntimeErrorExample `json:"runtime_error_examples,omitempty"`
+	LoopDecisions              int                                        `json:"loop_decisions,omitempty"`
+	LoopDecisionByKind         map[string]int                             `json:"loop_decision_by_kind,omitempty"`
+	LoopDecisionByDecision     map[string]int                             `json:"loop_decision_by_decision,omitempty"`
+	LoopDecisionExamples       []agenteval.LoopDecision                   `json:"loop_decision_examples,omitempty"`
 	LoopGuardInterventions     int                                        `json:"loop_guard_interventions"`
 	ForcedNoTools              int                                        `json:"forced_no_tools"`
 	SourceAccessResults        int                                        `json:"source_access_results"`
@@ -844,6 +895,10 @@ type batchSummaryRecord struct {
 	ToolFailureExamples        map[string][]agenteval.ToolFailureExample  `json:"tool_failure_examples,omitempty"`
 	RuntimeErrorByKind         map[string]int                             `json:"runtime_error_by_kind,omitempty"`
 	RuntimeErrorExamples       map[string][]agenteval.RuntimeErrorExample `json:"runtime_error_examples,omitempty"`
+	LoopDecisions              int                                        `json:"loop_decisions,omitempty"`
+	LoopDecisionByKind         map[string]int                             `json:"loop_decision_by_kind,omitempty"`
+	LoopDecisionByDecision     map[string]int                             `json:"loop_decision_by_decision,omitempty"`
+	LoopDecisionExamples       []agenteval.LoopDecision                   `json:"loop_decision_examples,omitempty"`
 	LoopGuardInterventions     int                                        `json:"loop_guard_interventions"`
 	ForcedNoTools              int                                        `json:"forced_no_tools"`
 	SourceAccessResults        int                                        `json:"source_access_results"`
@@ -924,6 +979,10 @@ func printBatchResultJSONL(w io.Writer, meta evalJSONLMetadata, res agenteval.Ba
 		ToolFailureExamples:        cloneToolFailureExamples(res.ToolFailureExamples),
 		RuntimeErrorByKind:         cloneStringIntMap(res.RuntimeErrorByKind),
 		RuntimeErrorExamples:       cloneRuntimeErrorExamples(res.RuntimeErrorExamples),
+		LoopDecisions:              res.LoopDecisionStats.Count,
+		LoopDecisionByKind:         cloneStringIntMap(res.LoopDecisionStats.ByKind),
+		LoopDecisionByDecision:     cloneStringIntMap(res.LoopDecisionStats.ByDecision),
+		LoopDecisionExamples:       cloneLoopDecisionExamples(res.LoopDecisionStats.Examples),
 		LoopGuardInterventions:     res.ToolStats.LoopGuardInterventions,
 		ForcedNoTools:              res.ToolStats.ForcedNoTools,
 		SourceAccessResults:        res.ToolStats.SourceAccessResults,
@@ -994,6 +1053,10 @@ func printBatchSummaryJSONL(w io.Writer, meta evalJSONLMetadata, s batchSummary)
 		ToolFailureExamples:        cloneToolFailureExamples(s.ToolFailureExamples),
 		RuntimeErrorByKind:         cloneStringIntMap(s.RuntimeErrorByKind),
 		RuntimeErrorExamples:       cloneRuntimeErrorExamples(s.RuntimeErrorExamples),
+		LoopDecisions:              s.LoopDecisions,
+		LoopDecisionByKind:         cloneStringIntMap(s.LoopDecisionByKind),
+		LoopDecisionByDecision:     cloneStringIntMap(s.LoopDecisionByDecision),
+		LoopDecisionExamples:       cloneLoopDecisionExamples(s.LoopDecisionExamples),
 		LoopGuardInterventions:     s.LoopGuardInterventions,
 		ForcedNoTools:              s.ForcedNoTools,
 		SourceAccessResults:        s.SourceAccessResults,
@@ -1064,6 +1127,26 @@ func cloneToolFailureExamples(in map[string][]agenteval.ToolFailureExample) map[
 
 func cloneRuntimeErrorExamples(in map[string][]agenteval.RuntimeErrorExample) map[string][]agenteval.RuntimeErrorExample {
 	return cloneExampleMap(in)
+}
+
+func cloneLoopDecisionExamples(in []agenteval.LoopDecision) []agenteval.LoopDecision {
+	if len(in) == 0 {
+		return nil
+	}
+	return append([]agenteval.LoopDecision(nil), in...)
+}
+
+func appendLoopDecisionExamples(dst, src []agenteval.LoopDecision, limit int) []agenteval.LoopDecision {
+	if limit <= 0 || len(dst) >= limit {
+		return dst
+	}
+	for _, ex := range src {
+		if len(dst) >= limit {
+			break
+		}
+		dst = append(dst, ex)
+	}
+	return dst
 }
 
 func cloneExampleMap[T any](in map[string][]T) map[string][]T {
@@ -1189,6 +1272,15 @@ func printBatchResult(w io.Writer, res agenteval.BatchResult) {
 	if len(res.RuntimeErrorByKind) > 0 {
 		fmt.Fprintf(w, " runtime_error_kinds=%s", formatStringIntCounts(res.RuntimeErrorByKind))
 	}
+	if res.LoopDecisionStats.Count > 0 {
+		fmt.Fprintf(w, " loop_decisions=%d", res.LoopDecisionStats.Count)
+		if len(res.LoopDecisionStats.ByKind) > 0 {
+			fmt.Fprintf(w, " loop_decision_kinds=%s", formatStringIntCounts(res.LoopDecisionStats.ByKind))
+		}
+		if len(res.LoopDecisionStats.ByDecision) > 0 {
+			fmt.Fprintf(w, " loop_decision_results=%s", formatStringIntCounts(res.LoopDecisionStats.ByDecision))
+		}
+	}
 	printDelegationRollup(w, res.Delegation.FocusedTaskCalls, res.Delegation.FocusedTaskByType, res.Delegation.FocusedTaskErrors, res.Delegation.SubagentCalls, res.Delegation.SubagentByMode, res.Delegation.SubagentErrors)
 	printPlanRollup(w, res.Plan.Calls, res.Plan.ByAction, res.Plan.Errors)
 	if res.TurnEndReason != "" {
@@ -1222,6 +1314,7 @@ func printBatchResult(w io.Writer, res agenteval.BatchResult) {
 	printToolFailureExampleLines(w, res.ToolFailureExamples, "  ")
 	printFailureHintLines(w, res.RuntimeErrorByKind, "  ")
 	printRuntimeErrorExampleLines(w, res.RuntimeErrorExamples, "  ")
+	printLoopDecisionExampleLines(w, res.LoopDecisionStats.Examples, "  ")
 }
 
 func hasToolTruncation(stats agenteval.ToolTruncationStats) bool {

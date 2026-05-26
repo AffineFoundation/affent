@@ -217,6 +217,14 @@ func TestPrintBatchResultIncludesTraceMetrics(t *testing.T) {
 				{Kind: "llm_timeout", Message: "LLM llm_stream timed out after 4m0s while waiting for chat completion (max-call-timeout/per-call-timeout=4m0s): context deadline exceeded"},
 			},
 		},
+		LoopDecisionStats: agenteval.LoopDecisionStats{
+			Count:      1,
+			ByKind:     map[string]int{"evidence_quality": 1},
+			ByDecision: map[string]int{"defer": 1},
+			Examples: []agenteval.LoopDecision{
+				{Kind: "evidence_quality", Decision: "defer", Trigger: "source_access_dynamic_partial", Confidence: "high", Reason: "dynamic widgets lacked text", RequiredAction: "read browser network responses"},
+			},
+		},
 		ToolTruncation: agenteval.ToolTruncationStats{
 			ArgsTruncated:       1,
 			ArgsOmittedBytes:    512,
@@ -255,13 +263,14 @@ func TestPrintBatchResultIncludesTraceMetrics(t *testing.T) {
 		"PASS sample (1.234s)",
 		"workspace: /tmp/ws (removed)",
 		"trace: /tmp/ws/trace.jsonl",
-		"metrics: tools=3 errors=2 repaired=1 canonicalized=1 loop_guard=2 forced_no_tools=1 tool_ms=45 tokens=100/25 trunc=args:1,results:1,artifacts:1 omitted=512/4096 ctx_trunc=3,omitted=9216 tool_failure_kinds=invalid_args:1 runtime_error_kinds=llm_timeout:1 delegation=focused_tasks:2,subagents:1 delegation_errors=focused_tasks:1,subagents:1 focused_task_by_type=explore:1,verify:1 subagent_by_mode=review:1 plan=calls:3,errors:1 plan_by_action=set:1,update:2 end=completed",
+		"metrics: tools=3 errors=2 repaired=1 canonicalized=1 loop_guard=2 forced_no_tools=1 tool_ms=45 tokens=100/25 trunc=args:1,results:1,artifacts:1 omitted=512/4096 ctx_trunc=3,omitted=9216 tool_failure_kinds=invalid_args:1 runtime_error_kinds=llm_timeout:1 loop_decisions=1 loop_decision_kinds=evidence_quality:1 loop_decision_results=defer:1 delegation=focused_tasks:2,subagents:1 delegation_errors=focused_tasks:1,subagents:1 focused_task_by_type=explore:1,verify:1 subagent_by_mode=review:1 plan=calls:3,errors:1 plan_by_action=set:1,update:2 end=completed",
 		`verifier: pass exit=0 duration=80ms output=1200 truncated omitted=176 cap=1024 command="go test ./..."`,
 		"tool_failure_hint[invalid_args]",
 		"invalid arguments",
 		`tool_failure_example[invalid_args]: tool=web_fetch args=url="https://example.com" exit=1 result=url is required | Next: retry with a full URL`,
 		"hint[llm_timeout]",
 		"runtime_error_example[llm_timeout]: LLM llm_stream timed out after 4m0s",
+		"loop_decision_example[evidence_quality]: decision=defer trigger=source_access_dynamic_partial confidence=high reason=dynamic widgets lacked text action=read browser network responses",
 	} {
 		if !strings.Contains(got, want) {
 			t.Fatalf("output missing %q:\n%s", want, got)
@@ -358,6 +367,14 @@ func TestBatchSummaryAggregatesRuntimeMetrics(t *testing.T) {
 				{Kind: "llm_timeout", Message: "LLM llm_stream timed out after 4m0s (endpoint=https://llm.example/v1/chat/completions)"},
 			},
 		},
+		LoopDecisionStats: agenteval.LoopDecisionStats{
+			Count:      1,
+			ByKind:     map[string]int{"evidence_quality": 1},
+			ByDecision: map[string]int{"defer": 1},
+			Examples: []agenteval.LoopDecision{
+				{Kind: "evidence_quality", Decision: "defer", Trigger: "source_access_dynamic_partial", RequiredAction: "read browser network responses"},
+			},
+		},
 		Repair: agenteval.ToolRepairStats{
 			Calls:          3,
 			SucceededCalls: 2,
@@ -405,6 +422,9 @@ func TestBatchSummaryAggregatesRuntimeMetrics(t *testing.T) {
 	if !strings.Contains(out.String(), "runtime_error_kinds=context_overflow:1,llm_timeout:2") {
 		t.Fatalf("summary output missing runtime error kind rollup:\n%s", out.String())
 	}
+	if !strings.Contains(out.String(), "loop_decisions=1 loop_decision_kinds=evidence_quality:1 loop_decision_results=defer:1") {
+		t.Fatalf("summary output missing loop decision rollup:\n%s", out.String())
+	}
 	if !strings.Contains(out.String(), "tool_failure_hint[invalid_args]") || !strings.Contains(out.String(), "tool_failure_hint[timeout]") {
 		t.Fatalf("summary output missing tool failure hints:\n%s", out.String())
 	}
@@ -416,6 +436,9 @@ func TestBatchSummaryAggregatesRuntimeMetrics(t *testing.T) {
 	}
 	if !strings.Contains(out.String(), "runtime_error_example[llm_timeout]: LLM llm_stream timed out after 4m0s") {
 		t.Fatalf("summary output missing runtime error example:\n%s", out.String())
+	}
+	if !strings.Contains(out.String(), "loop_decision_example[evidence_quality]: decision=defer trigger=source_access_dynamic_partial") {
+		t.Fatalf("summary output missing loop decision example:\n%s", out.String())
 	}
 	if !strings.Contains(out.String(), "repair_calls=5,ok=4,failed=1") {
 		t.Fatalf("summary output missing repair outcome rollup:\n%s", out.String())
@@ -447,6 +470,9 @@ func TestBatchSummaryAggregatesRuntimeMetrics(t *testing.T) {
 	}
 	if got := summary.RuntimeErrorExamples["llm_timeout"]; len(got) != 1 || !strings.Contains(got[0].Message, "llm_stream timed out") {
 		t.Fatalf("RuntimeErrorExamples[llm_timeout] = %#v", got)
+	}
+	if summary.LoopDecisions != 1 || summary.LoopDecisionByKind["evidence_quality"] != 1 || summary.LoopDecisionByDecision["defer"] != 1 {
+		t.Fatalf("loop decision summary = count:%d kinds:%#v decisions:%#v", summary.LoopDecisions, summary.LoopDecisionByKind, summary.LoopDecisionByDecision)
 	}
 	if summary.PlanCalls != 3 || summary.PlanErrors != 1 {
 		t.Fatalf("plan counts = calls:%d errors:%d, want 3/1", summary.PlanCalls, summary.PlanErrors)
@@ -512,6 +538,14 @@ func TestPrintBatchResultJSONL(t *testing.T) {
 		RuntimeErrorExamples: map[string][]agenteval.RuntimeErrorExample{
 			"llm_incomplete_stream": {
 				{Kind: "llm_incomplete_stream", Message: "LLM llm_stream ended with an incomplete SSE stream before finish_reason"},
+			},
+		},
+		LoopDecisionStats: agenteval.LoopDecisionStats{
+			Count:      1,
+			ByKind:     map[string]int{"evidence_quality": 1},
+			ByDecision: map[string]int{"defer": 1},
+			Examples: []agenteval.LoopDecision{
+				{Kind: "evidence_quality", Decision: "defer", Trigger: "source_access_dynamic_partial", RequiredAction: "read browser network responses"},
 			},
 		},
 		ToolTruncation: agenteval.ToolTruncationStats{
@@ -602,6 +636,7 @@ func TestPrintBatchResultJSONL(t *testing.T) {
 		"workspace_removed":             true,
 		"plan_calls":                    float64(2),
 		"plan_errors":                   float64(1),
+		"loop_decisions":                float64(1),
 	} {
 		if got[key] != want {
 			t.Fatalf("%s = %v, want %v\njson=%s", key, got[key], want, out.String())
@@ -655,6 +690,18 @@ func TestPrintBatchResultJSONL(t *testing.T) {
 	incompleteExample, ok := incompleteExamples[0].(map[string]any)
 	if !ok || !strings.Contains(fmt.Sprint(incompleteExample["message"]), "incomplete SSE stream") {
 		t.Fatalf("llm_incomplete_stream runtime_error_example = %#v\njson=%s", incompleteExamples[0], out.String())
+	}
+	loopDecisionByKind, ok := got["loop_decision_by_kind"].(map[string]any)
+	if !ok || loopDecisionByKind["evidence_quality"] != float64(1) {
+		t.Fatalf("loop_decision_by_kind = %#v\njson=%s", got["loop_decision_by_kind"], out.String())
+	}
+	loopDecisionByDecision, ok := got["loop_decision_by_decision"].(map[string]any)
+	if !ok || loopDecisionByDecision["defer"] != float64(1) {
+		t.Fatalf("loop_decision_by_decision = %#v\njson=%s", got["loop_decision_by_decision"], out.String())
+	}
+	loopDecisionExamples, ok := got["loop_decision_examples"].([]any)
+	if !ok || len(loopDecisionExamples) != 1 {
+		t.Fatalf("loop_decision_examples = %#v\njson=%s", got["loop_decision_examples"], out.String())
 	}
 	repairKinds, ok := got["tool_repair_by_kind"].(map[string]any)
 	if !ok {
@@ -988,6 +1035,12 @@ func TestPrintBatchSummaryJSONL(t *testing.T) {
 				{Kind: "llm_timeout", Message: "LLM llm_stream timed out after 4m0s"},
 			},
 		},
+		LoopDecisions:          1,
+		LoopDecisionByKind:     map[string]int{"evidence_quality": 1},
+		LoopDecisionByDecision: map[string]int{"defer": 1},
+		LoopDecisionExamples: []agenteval.LoopDecision{
+			{Kind: "evidence_quality", Decision: "defer", RequiredAction: "read browser network responses"},
+		},
 		LoopGuardInterventions:     3,
 		ForcedNoTools:              1,
 		ToolDurationMS:             120,
@@ -1074,6 +1127,7 @@ func TestPrintBatchSummaryJSONL(t *testing.T) {
 		"cleanup_errors":                float64(0),
 		"plan_calls":                    float64(3),
 		"plan_errors":                   float64(1),
+		"loop_decisions":                float64(1),
 	} {
 		if got[key] != want {
 			t.Fatalf("%s = %v, want %v\njson=%s", key, got[key], want, out.String())
@@ -1123,6 +1177,18 @@ func TestPrintBatchSummaryJSONL(t *testing.T) {
 	runtimeErrorExamples, ok := got["runtime_error_examples"].(map[string]any)
 	if !ok || !strings.Contains(fmt.Sprint(runtimeErrorExamples["llm_timeout"]), "timed out") {
 		t.Fatalf("runtime_error_examples = %#v\njson=%s", got["runtime_error_examples"], out.String())
+	}
+	loopDecisionByKind, ok := got["loop_decision_by_kind"].(map[string]any)
+	if !ok || loopDecisionByKind["evidence_quality"] != float64(1) {
+		t.Fatalf("loop_decision_by_kind = %#v\njson=%s", got["loop_decision_by_kind"], out.String())
+	}
+	loopDecisionByDecision, ok := got["loop_decision_by_decision"].(map[string]any)
+	if !ok || loopDecisionByDecision["defer"] != float64(1) {
+		t.Fatalf("loop_decision_by_decision = %#v\njson=%s", got["loop_decision_by_decision"], out.String())
+	}
+	loopDecisionExamples, ok := got["loop_decision_examples"].([]any)
+	if !ok || len(loopDecisionExamples) != 1 {
+		t.Fatalf("loop_decision_examples = %#v\njson=%s", got["loop_decision_examples"], out.String())
 	}
 	planByAction, ok := got["plan_by_action"].(map[string]any)
 	if !ok {

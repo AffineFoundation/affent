@@ -74,6 +74,7 @@ func TestParseTraceFileReadsToolRequestsAndFinalText(t *testing.T) {
 		`{"type":"tool.result","data":{"call_id":"guarded","result":"blocked\nFailure: kind=invalid_args","exit_code":1}}`,
 		`{"type":"usage","data":{"input_tokens":11,"output_tokens":7}}`,
 		`{"type":"error","data":{"message":"transient stream warning","failure_kind":"llm_timeout"}}`,
+		`{"type":"loop.decision","data":{"turn_id":"t1","decision_id":"d1","kind":"evidence_quality","trigger":"source_access_dynamic_partial","decision":"defer","confidence":"high","reason":"Dynamic widgets had no text values.","required_action":"Read browser network responses before citing metrics.","visible_in_ui":true}}`,
 		`{"type":"message.done","data":{"text":"Conclusion: green","finish_reason":"stop"}}`,
 		`{"type":"turn.end","data":{"reason":"completed","tool_stats":{"tool_requests":2,"tool_name_canonicalized":1,"tool_args_repaired":1,"tool_repair_calls":1,"tool_repair_succeeded":1,"tool_repair_failed":0,"tool_repair_notes":2,"tool_repair_by_kind":{"tool_name":1,"alias_rename":1},"tool_failure_by_kind":{"invalid_args":1},"tool_errors":1,"tool_duration_ms":17,"loop_guard_interventions":1,"forced_no_tools":1,"source_access_dynamic_partial":1,"memory_updates":2,"memory_update_add":1,"memory_update_replace":1,"tool_context_truncated":2,"tool_context_omitted_bytes":8192}}}`,
 	}, "\n") + "\n"
@@ -136,6 +137,15 @@ func TestParseTraceFileReadsToolRequestsAndFinalText(t *testing.T) {
 	if examples := trace.RuntimeErrorExamples(1); len(examples["llm_timeout"]) != 1 || !strings.Contains(examples["llm_timeout"][0].Message, "transient stream warning") {
 		t.Fatalf("RuntimeErrorExamples = %+v", examples)
 	}
+	loopDecisions := trace.LoopDecisionStats(1)
+	if loopDecisions.Count != 1 || loopDecisions.ByKind["evidence_quality"] != 1 || loopDecisions.ByDecision["defer"] != 1 {
+		t.Fatalf("LoopDecisionStats = %+v", loopDecisions)
+	}
+	if len(loopDecisions.Examples) != 1 ||
+		loopDecisions.Examples[0].Trigger != "source_access_dynamic_partial" ||
+		!strings.Contains(loopDecisions.Examples[0].RequiredAction, "browser network") {
+		t.Fatalf("LoopDecisionStats examples = %+v", loopDecisions.Examples)
+	}
 	if trace.FinalText != "Conclusion: green" {
 		t.Fatalf("FinalText = %q", trace.FinalText)
 	}
@@ -171,6 +181,9 @@ func TestParseTraceFileReadsToolRequestsAndFinalText(t *testing.T) {
 	}
 	if got := trace.RawTypes["tool.request"]; got != 1 {
 		t.Fatalf("RawTypes[tool.request] = %d", got)
+	}
+	if got := trace.RawTypes["loop.decision"]; got != 1 {
+		t.Fatalf("RawTypes[loop.decision] = %d", got)
 	}
 }
 
