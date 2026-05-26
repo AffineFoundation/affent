@@ -203,6 +203,12 @@ type DebugMetrics struct {
 	ToolErrors                 int            `json:"tool_errors"`
 	ToolArgsRepaired           int            `json:"tool_args_repaired"`
 	ToolNameCanonicalized      int            `json:"tool_name_canonicalized"`
+	ToolRepairCalls            int            `json:"tool_repair_calls,omitempty"`
+	ToolRepairSucceeded        int            `json:"tool_repair_succeeded,omitempty"`
+	ToolRepairFailed           int            `json:"tool_repair_failed,omitempty"`
+	ToolRepairNotes            int            `json:"tool_repair_notes,omitempty"`
+	ToolRepairByKind           map[string]int `json:"tool_repair_by_kind,omitempty"`
+	ToolFailureByKind          map[string]int `json:"tool_failure_by_kind,omitempty"`
 	LoopGuardInterventions     int            `json:"loop_guard_interventions"`
 	ForcedNoTools              int            `json:"forced_no_tools"`
 	SourceAccessResults        int            `json:"source_access_results"`
@@ -211,9 +217,15 @@ type DebugMetrics struct {
 	SourceAccessNetwork        int            `json:"source_access_network"`
 	SourceAccessDynamicPartial int            `json:"source_access_dynamic_partial"`
 	MemoryUpdates              int            `json:"memory_updates"`
+	MemoryUpdateAdd            int            `json:"memory_update_add,omitempty"`
+	MemoryUpdateReplace        int            `json:"memory_update_replace,omitempty"`
+	MemoryUpdateRemove         int            `json:"memory_update_remove,omitempty"`
 	ContextCompactions         int            `json:"context_compactions"`
 	ReactiveContextCompactions int            `json:"reactive_context_compactions"`
 	ContextCompactionRemoved   int            `json:"context_compaction_removed_messages"`
+	ContextCompactionSummary   int            `json:"context_compaction_summary_bytes,omitempty"`
+	ToolContextTruncated       int            `json:"tool_context_truncated,omitempty"`
+	ToolContextOmittedBytes    int            `json:"tool_context_omitted_bytes,omitempty"`
 	InputTokens                int            `json:"input_tokens"`
 	OutputTokens               int            `json:"output_tokens"`
 	TraceEvents                int            `json:"trace_events,omitempty"`
@@ -511,6 +523,12 @@ func writeScenarioDebugArtifacts(res *BatchResult, scenario BatchScenario, stdou
 			ToolErrors:                 res.ToolStats.ToolErrors,
 			ToolArgsRepaired:           res.ToolStats.ToolArgsRepaired,
 			ToolNameCanonicalized:      res.ToolStats.ToolNameCanonicalized,
+			ToolRepairCalls:            res.Repair.Calls,
+			ToolRepairSucceeded:        res.Repair.SucceededCalls,
+			ToolRepairFailed:           res.Repair.FailedCalls,
+			ToolRepairNotes:            res.Repair.Notes,
+			ToolRepairByKind:           cloneStringIntMap(res.Repair.ByKind),
+			ToolFailureByKind:          cloneStringIntMap(res.ToolStats.ToolFailureByKind),
 			LoopGuardInterventions:     res.ToolStats.LoopGuardInterventions,
 			ForcedNoTools:              res.ToolStats.ForcedNoTools,
 			SourceAccessResults:        res.ToolStats.SourceAccessResults,
@@ -519,9 +537,15 @@ func writeScenarioDebugArtifacts(res *BatchResult, scenario BatchScenario, stdou
 			SourceAccessNetwork:        res.ToolStats.SourceAccessNetwork,
 			SourceAccessDynamicPartial: res.ToolStats.SourceAccessDynamicPartial,
 			MemoryUpdates:              res.ToolStats.MemoryUpdates,
+			MemoryUpdateAdd:            res.ToolStats.MemoryUpdateAdd,
+			MemoryUpdateReplace:        res.ToolStats.MemoryUpdateReplace,
+			MemoryUpdateRemove:         res.ToolStats.MemoryUpdateRemove,
 			ContextCompactions:         res.ContextCompactions.Count,
 			ReactiveContextCompactions: res.ContextCompactions.Reactive,
 			ContextCompactionRemoved:   res.ContextCompactions.RemovedMessages,
+			ContextCompactionSummary:   res.ContextCompactions.SummaryBytes,
+			ToolContextTruncated:       res.ToolStats.ToolContextTruncated,
+			ToolContextOmittedBytes:    res.ToolStats.ToolContextOmittedBytes,
 			InputTokens:                res.Usage.InputTokens,
 			OutputTokens:               res.Usage.OutputTokens,
 			TraceEvents:                res.TraceEvents,

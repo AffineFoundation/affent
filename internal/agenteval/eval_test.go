@@ -1033,19 +1033,30 @@ func TestWriteScenarioDebugArtifactsIndexesTraceAndFinalText(t *testing.T) {
 		t.Fatal(err)
 	}
 	res := BatchResult{
-		BatchScenario:      "debug-case",
-		Workspace:          workspace,
-		TracePath:          tracePath,
-		OK:                 false,
-		Failures:           []string{"missing required evidence"},
-		FinalText:          "partial answer",
-		AffentctlCommand:   []string{"go", "run", "./cmd/affentctl", "run", "--api-key", "<redacted>", "--prompt", "<prompt>"},
-		RunExitCode:        3,
-		TraceDeltas:        true,
-		TurnEndReason:      "completed",
-		ToolCalls:          3,
-		ToolStats:          ToolRuntimeStats{ToolErrors: 1, LoopGuardInterventions: 1, SourceAccessResults: 2, SourceAccessVerified: 1},
-		ContextCompactions: ContextCompactionStats{Count: 1, Reactive: 1, RemovedMessages: 12},
+		BatchScenario:    "debug-case",
+		Workspace:        workspace,
+		TracePath:        tracePath,
+		OK:               false,
+		Failures:         []string{"missing required evidence"},
+		FinalText:        "partial answer",
+		AffentctlCommand: []string{"go", "run", "./cmd/affentctl", "run", "--api-key", "<redacted>", "--prompt", "<prompt>"},
+		RunExitCode:      3,
+		TraceDeltas:      true,
+		TurnEndReason:    "completed",
+		ToolCalls:        3,
+		Repair:           ToolRepairStats{Calls: 1, SucceededCalls: 1, Notes: 2, ByKind: map[string]int{"tool_name": 1, "alias_rename": 1}},
+		ToolStats: ToolRuntimeStats{
+			ToolErrors:              1,
+			ToolFailureByKind:       map[string]int{"dynamic_shell": 1},
+			LoopGuardInterventions:  1,
+			SourceAccessResults:     2,
+			SourceAccessVerified:    1,
+			MemoryUpdates:           1,
+			MemoryUpdateAdd:         1,
+			ToolContextTruncated:    2,
+			ToolContextOmittedBytes: 8192,
+		},
+		ContextCompactions: ContextCompactionStats{Count: 1, Reactive: 1, RemovedMessages: 12, SummaryBytes: 512},
 		Usage:              Usage{InputTokens: 100, OutputTokens: 20},
 		RuntimeSurface: &sse.RuntimeSurfacePayload{
 			TurnID:    "turn-debug",
@@ -1147,6 +1158,16 @@ func TestWriteScenarioDebugArtifactsIndexesTraceAndFinalText(t *testing.T) {
 		manifest.Metrics.ContextCompactions != 1 ||
 		manifest.Metrics.ReactiveContextCompactions != 1 ||
 		manifest.Metrics.ContextCompactionRemoved != 12 ||
+		manifest.Metrics.ContextCompactionSummary != 512 ||
+		manifest.Metrics.MemoryUpdates != 1 ||
+		manifest.Metrics.MemoryUpdateAdd != 1 ||
+		manifest.Metrics.ToolContextTruncated != 2 ||
+		manifest.Metrics.ToolContextOmittedBytes != 8192 ||
+		manifest.Metrics.ToolFailureByKind["dynamic_shell"] != 1 ||
+		manifest.Metrics.ToolRepairCalls != 1 ||
+		manifest.Metrics.ToolRepairSucceeded != 1 ||
+		manifest.Metrics.ToolRepairNotes != 2 ||
+		manifest.Metrics.ToolRepairByKind["alias_rename"] != 1 ||
 		manifest.Metrics.InputTokens != 100 ||
 		manifest.Metrics.OutputTokens != 20 ||
 		manifest.Metrics.TraceEvents != 5 ||
