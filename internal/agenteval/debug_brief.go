@@ -101,8 +101,11 @@ func BuildDebugBrief(res BatchResult) *DebugBrief {
 		message := "plan tool was used; inspect plan actions if task recovery drifted"
 		tags := []string{"plan"}
 		counts := map[string]int{
-			"calls":  res.Plan.Calls,
-			"errors": res.Plan.Errors,
+			"calls":              res.Plan.Calls,
+			"errors":             res.Plan.Errors,
+			"total_steps":        res.Plan.TotalSteps,
+			"completed_steps":    res.Plan.CompletedSteps,
+			"current_step_index": res.Plan.CurrentStepIndex,
 		}
 		for action, count := range res.Plan.ByAction {
 			counts["action:"+action] = count
@@ -112,6 +115,11 @@ func BuildDebugBrief(res BatchResult) *DebugBrief {
 			severity = "warn"
 			message = "plan tool had runtime errors; inspect plan actions before continuing"
 			tags = append(tags, "plan_error")
+		}
+		if res.Plan.TotalSteps > 0 && res.Plan.CompletedSteps < res.Plan.TotalSteps {
+			severity = "warn"
+			message = "latest plan state still has unfinished steps; inspect current step before resuming"
+			tags = append(tags, "plan:unfinished")
 		}
 		add("plan", severity, message, []string{"tool_timeline", "plan_calls"}, counts, tags...)
 	}

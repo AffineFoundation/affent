@@ -9,7 +9,7 @@ func TestTrace_PlanStats_Aggregation(t *testing.T) {
 	tr := Trace{
 		Tools: []ToolCall{
 			{Tool: "plan", Args: map[string]any{"action": "set"}},
-			{Tool: "plan", Args: map[string]any{"action": " update "}},
+			{Tool: "plan", Args: map[string]any{"action": " update "}, Result: `{"version":1,"steps":[{"text":"inspect","status":"completed"},{"text":"ship","status":"pending"}]}`},
 			{Tool: "plan", Args: map[string]any{"action": "UPDATE"}, ExitCode: 1, IsErr: true},
 			{Tool: "plan", Args: map[string]any{"action": 3}},
 			{Tool: "read_file", Args: map[string]any{"action": "view"}},
@@ -26,6 +26,13 @@ func TestTrace_PlanStats_Aggregation(t *testing.T) {
 	wantActions := map[string]int{"set": 1, "update": 2, "unknown": 1}
 	if !reflect.DeepEqual(got.ByAction, wantActions) {
 		t.Fatalf("ByAction = %#v, want %#v", got.ByAction, wantActions)
+	}
+	if got.TotalSteps != 2 ||
+		got.CompletedSteps != 1 ||
+		got.CurrentStepIndex != 2 ||
+		got.CurrentStepStatus != "pending" ||
+		got.CurrentStep != "ship" {
+		t.Fatalf("latest plan summary = %+v, want progress 1/2 current pending ship", got)
 	}
 	if !got.HasAny() {
 		t.Fatal("HasAny should report true when plan calls were observed")

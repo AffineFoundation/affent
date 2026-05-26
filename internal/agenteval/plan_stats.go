@@ -12,9 +12,14 @@ import (
 // It is intentionally derived from the existing tool.request surface so
 // evals can track plan-mode behavior without adding runtime state.
 type PlanStats struct {
-	Calls    int
-	ByAction map[string]int
-	Errors   int
+	Calls             int
+	ByAction          map[string]int
+	Errors            int
+	TotalSteps        int
+	CompletedSteps    int
+	CurrentStepIndex  int
+	CurrentStepStatus string
+	CurrentStep       string
 }
 
 func (s PlanStats) HasAny() bool {
@@ -40,6 +45,16 @@ func (t Trace) PlanStats() PlanStats {
 			s.ByAction = map[string]int{}
 		}
 		s.ByAction[action]++
+		if c.IsErr || c.ExitCode != 0 || strings.TrimSpace(c.Result) == "" {
+			continue
+		}
+		if summary, err := planstate.SummarizeJSON(json.RawMessage(c.Result)); err == nil {
+			s.TotalSteps = summary.TotalSteps
+			s.CompletedSteps = summary.CompletedSteps
+			s.CurrentStepIndex = summary.CurrentStepIndex
+			s.CurrentStepStatus = summary.CurrentStepStatus
+			s.CurrentStep = compactOneLine(summary.CurrentStep, 220)
+		}
 	}
 	return s
 }

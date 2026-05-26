@@ -57,6 +57,31 @@ func TestBuildDebugBriefIncludesDelegationAndPlanSignals(t *testing.T) {
 	}
 }
 
+func TestBuildDebugBriefClassifiesUnfinishedPlan(t *testing.T) {
+	brief := BuildDebugBrief(BatchResult{
+		OK: true,
+		Plan: PlanStats{
+			Calls:             3,
+			ByAction:          map[string]int{"set": 1, "update": 2},
+			TotalSteps:        4,
+			CompletedSteps:    2,
+			CurrentStepIndex:  3,
+			CurrentStepStatus: "pending",
+			CurrentStep:       "verify browser evidence",
+		},
+	})
+	plan := debugBriefItemByKind(brief, "plan")
+	if plan == nil ||
+		plan.Severity != "warn" ||
+		plan.Message != "latest plan state still has unfinished steps; inspect current step before resuming" ||
+		plan.Counts["total_steps"] != 4 ||
+		plan.Counts["completed_steps"] != 2 ||
+		plan.Counts["current_step_index"] != 3 ||
+		!stringSliceContains(brief.Tags, "plan:unfinished") {
+		t.Fatalf("unfinished plan debug item = %+v tags=%+v", plan, brief.Tags)
+	}
+}
+
 func TestBuildDebugBriefClassifiesSessionRecallQuality(t *testing.T) {
 	brief := BuildDebugBrief(BatchResult{
 		OK: true,
