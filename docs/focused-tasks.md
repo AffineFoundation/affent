@@ -2,9 +2,10 @@
 
 Focused Tasks are Affent's bounded delegation surface for short, typed
 auxiliary work. The parent agent can ask the runtime to run a task such as
-recall, exploration, research, verification, or review in an isolated child
-session. The child gets a task-specific prompt, a restricted tool set, and a
-small turn budget. Only a structured result is returned to the parent context.
+recall, exploration, page-level web extraction, research, verification, or
+review in an isolated child session. The child gets a task-specific prompt, a
+restricted tool set, and a small turn budget. Only a structured result is
+returned to the parent context.
 
 The feature is exposed through the `run_task` tool.
 
@@ -12,8 +13,10 @@ The feature is exposed through the `run_task` tool.
 
 Focused Tasks are designed to:
 
-- Keep recall, exploration, research, verification, and review work out of the
-  parent conversation unless the final result is useful.
+- Keep recall, exploration, web extraction, research, verification, and review
+  work out of the parent conversation unless the final result is useful.
+- Keep page-level web extraction out of the parent conversation unless the
+  final result is useful.
 - Give each auxiliary task a narrow prompt, tool set, and output contract.
 - Improve reliability for smaller or less consistent models.
 - Preserve full child traces for replay, debugging, UI inspection, and eval.
@@ -58,8 +61,14 @@ Allowed tools:
 
 - `list_files`.
 - `read_file`.
+- `file_context`.
 - Read-only shell where available.
+- `symbol_context`.
+- `repo_search`.
 - Optional `session_search`.
+
+Use `file_context` before `read_file` when a file is long or noisy and you only
+need a compact structured view first.
 
 Disallowed tools:
 
@@ -74,6 +83,31 @@ Expected output:
 - Suggested next inspection points.
 - Unchecked but likely relevant areas.
 
+### `web_extract`
+
+Read one or a few web pages and extract compact cited facts without flooding
+the parent context.
+
+Allowed tools:
+
+- `web_fetch`.
+- `web_search`, when configured.
+- `browser_navigate` and related browser inspection tools, when configured.
+
+Disallowed tools:
+
+- Workspace tools.
+- Shell.
+- Memory mutation.
+- Recursive focused tasks.
+
+Expected output:
+
+- Compact findings grounded in exact page URLs.
+- Explicit gaps or ambiguities when the page is noisy or incomplete.
+- Exact visible values and units when extracting numbers.
+- No raw page dumps in the parent-facing result.
+
 ### `research`
 
 Fetch external facts needed for the objective.
@@ -82,6 +116,7 @@ Allowed tools:
 
 - `web_fetch`.
 - `web_search`, when configured.
+- `browser_navigate` and related browser inspection tools, when configured.
 
 Disallowed tools:
 
@@ -159,7 +194,8 @@ Expected output:
 
 Fields:
 
-- `task_type`: one of `recall`, `explore`, `research`, `verify`, or `review`.
+- `task_type`: one of `recall`, `explore`, `web_extract`, `research`,
+  `verify`, or `review`.
 - `objective`: a specific task objective.
 - `max_turns`: optional child turn budget. The runtime applies profile defaults
   and hard caps.

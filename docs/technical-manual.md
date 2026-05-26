@@ -483,7 +483,19 @@ Operational endpoints:
   fallback chain). `runtime.turn_end_by_reason.max_turns`
   indicates the agent exhausted its per-turn action budget before a final
   answer; `runtime.runtime_error_by_kind` tracks non-tool failures such as
-  `llm_timeout` and `llm_incomplete_stream`.
+  `llm_timeout` and `llm_incomplete_stream`. Browser stats expose
+  `blocked_by_type`, `blocked_by_domain`, and `domain_relaxations` so
+  operators can see when the runtime had to temporarily widen the default
+  domain blocklist to recover a page that was otherwise healthy but depended
+  on a blocked third-party script or bootstrap URL.
+When `browser_navigate` recovers from `net::ERR_BLOCKED_BY_CLIENT`, the tool
+result is prefixed with a short recovery note before the usual
+`SourceAccess:` block. That keeps the recovery visible to both the model and
+operators without changing the snapshot format itself.
+If the browser lands on a 404 or "page not found" page, the snapshot and
+`browser_find` output are still returned for navigation discovery, but the
+`SourceAccess:` line marks them as `not_found_page_discovery_only` so the
+model does not treat the body as verified evidence.
 
 Session endpoints:
 
@@ -640,8 +652,8 @@ Optional capabilities:
 - Browser: real browser automation.
 - Skills: runtime-installable workflow instructions.
 - Subagent: bounded isolated child runtime for exploration or review.
-- Focused tasks: typed delegation surface for recall, explore, research,
-  verify, and review tasks.
+- Focused tasks: typed delegation surface for recall, explore, web_extract,
+  research, verify, and review tasks.
 
 Runtime skill installs use a proposal/confirmation path for remote candidates.
 Direct install is reserved for an exact skill body the user already supplied.
@@ -653,6 +665,15 @@ Focused tasks and subagents return structured reports to the parent session
 without injecting their full intermediate work into the parent conversation.
 They are bounded by task size, turn count, depth, output caps, and read-only
 tool policies where applicable.
+`web_extract` is the focused-task variant for page-level reading: use it when
+one page or a small bounded set of pages contains too much raw text for the
+parent turn, so the child keeps the evidence compact and the parent only sees
+findings, warnings, and suggested_next.
+For workspace code discovery, prefer the built-in `symbol_context` tool when
+you already know the likely symbol or declaration, use `file_context` before
+`read_file` on long or noisy files, then use `repo_search` before broad shell
+scans; these return compact file:line evidence and keep the parent context
+smaller.
 
 ## Evaluation
 
@@ -695,7 +716,31 @@ tools remain available when built-ins are available. Opt memory or MCP back in
 only for suites that explicitly measure those capabilities. The eval container
 does not forward host `AFFENTCTL_EVAL_MODE`, `AFFENTCTL_SUBAGENT`,
 `AFFENTCTL_FOCUSED_TASKS`, or `AFFENTCTL_PROJECT_CONTEXT`; use the
-`EVAL_RUNTIME_*` knobs above.
+`EVAL_RUNTIME_*` knobs above. Use `--runtime-browser` and `--runtime-web`
+when a scenario explicitly measures rendered-page inspection or direct web
+retrieval; otherwise keep them off so evals stay on the minimal surface they
+intend to measure.
+
+When project context is enabled in normal runtime mode, Affent also injects a
+small auto-generated repository map alongside user-authored project notes. The
+repo map summarizes the top-level workspace structure, skips hidden/build
+directories, and excludes the project-context files themselves so the model can
+orient itself without reading the whole tree.
+Affent also adds a shallow Go symbol hint block for visible Go packages so the
+model can see package names, entry files, and a few top-level declarations
+before it starts reading code.
+The `symbol_context` workspace-discovery tool uses the same Gitignore-aware
+symbol scan and returns exact declaration matches with file, line, package,
+and short signature snippets for code-orienting lookups.
+The `file_context` workspace-discovery tool returns a compact structured view
+of one file with head/tail snippets, query matches, and Go symbol hints when
+applicable, so models can inspect long files without flooding the parent turn.
+The `repo_search` workspace-discovery tool follows the same top-level ignore
+policy, including root `.gitignore` entries, so generated files and local
+cache/output trees stay out of the default search surface.
+The ignore matcher is intentionally lightweight but directory-aware: common
+patterns such as `build/`, `dist/`, `node_modules/`, and `*.jsonl` are skipped
+across nested paths, not only at the workspace root.
 
 For external OpenAI-compatible eval harnesses, run `affentserve` in eval mode:
 

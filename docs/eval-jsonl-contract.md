@@ -23,6 +23,10 @@ Shared metadata fields:
   `affentctl run --eval-mode`.
 - `runtime_memory`: optional boolean, present when the eval runner explicitly
   opted memory back into the runtime with `--runtime-memory`.
+- `runtime_web`: optional boolean, present when the eval runner explicitly
+  enabled web search/runtime web tools with `--runtime-web`.
+- `runtime_browser`: optional boolean, present when the eval runner explicitly
+  enabled browser runtime tools with `--runtime-browser`.
 - `runtime_mcp`: optional boolean, present when the eval runner passed a runtime
   MCP config. The config path itself is not written to JSONL.
 - `timeout_ms`: per-scenario timeout in milliseconds.
