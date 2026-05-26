@@ -709,6 +709,86 @@ func TestWebCanBeEnabledFromConfigEnvAndCLI(t *testing.T) {
 	})
 }
 
+func TestBrowserCanBeEnabledFromConfigEnvAndCLI(t *testing.T) {
+	t.Run("config aliases", func(t *testing.T) {
+		dir := t.TempDir()
+		cfgPath := filepath.Join(dir, "c.json")
+		if err := os.WriteFile(cfgPath, []byte(`{"enable_browser":true,"browser_screenshot":true}`), 0o644); err != nil {
+			t.Fatal(err)
+		}
+		var cf commonFlags
+		fs := flag.NewFlagSet("test", flag.ContinueOnError)
+		cf.bind(fs)
+		if err := fs.Parse([]string{"--config", cfgPath}); err != nil {
+			t.Fatal(err)
+		}
+		if err := applyConfig(&cf, fs); err != nil {
+			t.Fatal(err)
+		}
+		if !cf.browserEnabled || !cf.browserScreenshot {
+			t.Fatalf("config browser aliases not applied: browser=%t screenshot=%t", cf.browserEnabled, cf.browserScreenshot)
+		}
+	})
+
+	t.Run("env beats config", func(t *testing.T) {
+		dir := t.TempDir()
+		cfgPath := filepath.Join(dir, "c.json")
+		if err := os.WriteFile(cfgPath, []byte(`{"browser":false,"browser_screenshot":false}`), 0o644); err != nil {
+			t.Fatal(err)
+		}
+		t.Setenv("AFFENTCTL_BROWSER", "true")
+		t.Setenv("AFFENTCTL_BROWSER_SCREENSHOT", "true")
+		var cf commonFlags
+		fs := flag.NewFlagSet("test", flag.ContinueOnError)
+		cf.bind(fs)
+		if err := fs.Parse([]string{"--config", cfgPath}); err != nil {
+			t.Fatal(err)
+		}
+		if err := applyConfig(&cf, fs); err != nil {
+			t.Fatal(err)
+		}
+		if !cf.browserEnabled || !cf.browserScreenshot {
+			t.Fatalf("env browser flags not applied: browser=%t screenshot=%t", cf.browserEnabled, cf.browserScreenshot)
+		}
+	})
+
+	t.Run("cli beats env", func(t *testing.T) {
+		t.Setenv("AFFENTCTL_BROWSER", "false")
+		t.Setenv("AFFENTCTL_BROWSER_SCREENSHOT", "false")
+		var cf commonFlags
+		fs := flag.NewFlagSet("test", flag.ContinueOnError)
+		cf.bind(fs)
+		if err := fs.Parse([]string{"--browser=true", "--browser-screenshot=true"}); err != nil {
+			t.Fatal(err)
+		}
+		if err := applyConfig(&cf, fs); err != nil {
+			t.Fatal(err)
+		}
+		if !cf.browserEnabled || !cf.browserScreenshot {
+			t.Fatalf("cli browser flags not applied: browser=%t screenshot=%t", cf.browserEnabled, cf.browserScreenshot)
+		}
+	})
+}
+
+func TestEvalModeCanExplicitlyEnableBrowserOnly(t *testing.T) {
+	var cf commonFlags
+	fs := flag.NewFlagSet("test", flag.ContinueOnError)
+	cf.bind(fs)
+	if err := fs.Parse([]string{"--eval-mode", "--browser=true"}); err != nil {
+		t.Fatal(err)
+	}
+	if err := applyConfig(&cf, fs); err != nil {
+		t.Fatal(err)
+	}
+	caps := resolveRuntimeCapabilities(cf)
+	if !caps.Browser {
+		t.Fatalf("--eval-mode --browser should enable browser tools, caps=%+v", caps)
+	}
+	if caps.Memory || caps.Skill || caps.Plan || caps.SessionSearch || caps.ProjectContext || caps.WebFetch || caps.WebSearch || caps.Subagent || caps.FocusedTasks {
+		t.Fatalf("explicit browser must not re-enable non-basic eval surfaces, caps=%+v", caps)
+	}
+}
+
 func TestMemoryDefaultsOnAndCanBeDisabled(t *testing.T) {
 	var cf commonFlags
 	fs := flag.NewFlagSet("test", flag.ContinueOnError)
@@ -1215,7 +1295,7 @@ func TestNoEnvVarLeaksIntoFlagDefaults(t *testing.T) {
 			want = "2"
 		} else if name == "focused-tasks" {
 			want = "true"
-		} else if name == "web" || name == "web-search" {
+		} else if name == "web" || name == "web-search" || name == "browser" || name == "browser-screenshot" {
 			want = "false"
 		}
 		if got != want {
@@ -1456,6 +1536,7 @@ func TestNormalizeRuntimeLimits(t *testing.T) {
 		{name: "subagent depth too low", edit: func(c *commonFlags) { c.subagentMaxDepth = 0 }, want: "--subagent-max-depth must be between 1 and 4"},
 		{name: "subagent depth too high", edit: func(c *commonFlags) { c.subagentMaxDepth = agent.MaxSubagentDepth + 1 }, want: "--subagent-max-depth must be between 1 and 4"},
 		{name: "web search without web", edit: func(c *commonFlags) { c.webSearchEnabled = true }, want: "--web-search requires --web"},
+		{name: "browser screenshot without browser", edit: func(c *commonFlags) { c.browserScreenshot = true }, want: "--browser-screenshot requires --browser"},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {

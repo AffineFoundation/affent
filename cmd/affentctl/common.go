@@ -14,6 +14,7 @@ import (
 	"strings"
 	"time"
 
+	affentbrowser "github.com/affinefoundation/affent/extras/browser"
 	affentweb "github.com/affinefoundation/affent/extras/web"
 	agent "github.com/affinefoundation/affent/internal/agent"
 	"github.com/affinefoundation/affent/internal/eventlog"
@@ -127,8 +128,10 @@ type commonFlags struct {
 	// webEnabled registers extras/web tools. It is off by default for
 	// affentctl so local coding runs do not unexpectedly use network,
 	// but eval/debug drivers can opt in for real external research.
-	webEnabled       bool
-	webSearchEnabled bool
+	webEnabled        bool
+	webSearchEnabled  bool
+	browserEnabled    bool
+	browserScreenshot bool
 
 	// Sampling pass-through to the upstream LLM. Strings preserve the
 	// "unset" / "explicit 0" distinction that evals need (temperature=0
@@ -175,6 +178,8 @@ func (c *commonFlags) bind(fs *flag.FlagSet) {
 	fs.BoolVar(&c.focusedTasksEnabled, "focused-tasks", true, "register run_task for bounded focused tasks with structured output; set false to hide the surface (env: AFFENTCTL_FOCUSED_TASKS)")
 	fs.BoolVar(&c.webEnabled, "web", false, "register web_fetch for public web retrieval; blocks private network addresses by default (env: AFFENTCTL_WEB)")
 	fs.BoolVar(&c.webSearchEnabled, "web-search", false, "register web_search alongside web_fetch; requires --web (env: AFFENTCTL_WEB_SEARCH)")
+	fs.BoolVar(&c.browserEnabled, "browser", false, "register browser_navigate/browser_snapshot/browser_find/browser_network tools for rendered web debugging (env: AFFENTCTL_BROWSER)")
+	fs.BoolVar(&c.browserScreenshot, "browser-screenshot", false, "also register browser_screenshot; off by default because inline image payloads are large (env: AFFENTCTL_BROWSER_SCREENSHOT)")
 	fs.StringVar(&c.temperature, "temperature", "", "sampling temperature forwarded to upstream LLM (omit → provider default; set 0 for deterministic eval decoding; env: AFFENTCTL_TEMPERATURE)")
 	fs.StringVar(&c.topP, "top-p", "", "top-p (nucleus) sampling forwarded to upstream (omit → provider default; env: AFFENTCTL_TOP_P)")
 	fs.StringVar(&c.maxTokens, "max-tokens", "", "max output tokens forwarded to upstream (omit → provider default; env: AFFENTCTL_MAX_TOKENS)")
@@ -280,6 +285,8 @@ var flagEnvSources = map[string]string{
 	"focused-tasks":      "AFFENTCTL_FOCUSED_TASKS",
 	"web":                "AFFENTCTL_WEB",
 	"web-search":         "AFFENTCTL_WEB_SEARCH",
+	"browser":            "AFFENTCTL_BROWSER",
+	"browser-screenshot": "AFFENTCTL_BROWSER_SCREENSHOT",
 	"temperature":        "AFFENTCTL_TEMPERATURE",
 	"top-p":              "AFFENTCTL_TOP_P",
 	"max-tokens":         "AFFENTCTL_MAX_TOKENS",
@@ -363,6 +370,11 @@ type fileConfig struct {
 	// affentserve's config spelling.
 	WebSearch       *bool `json:"web_search"`
 	EnableWebSearch *bool `json:"enable_web_search"`
+	// Browser mirrors affentserve's browser runtime switch for ad-hoc
+	// CLI/eval debugging.
+	Browser           *bool `json:"browser"`
+	EnableBrowser     *bool `json:"enable_browser"`
+	BrowserScreenshot *bool `json:"browser_screenshot"`
 	// Sampling forwarded to upstream. Kept as strings to mirror the CLI
 	// flags and preserve the "unset vs explicit 0" distinction that
 	// pointers give us at the wire layer.
@@ -432,6 +444,9 @@ func normalizeRuntimeLimits(c *commonFlags) error {
 	}
 	if c.webSearchEnabled && !c.webEnabled {
 		return fmt.Errorf("--web-search requires --web")
+	}
+	if c.browserScreenshot && !c.browserEnabled {
+		return fmt.Errorf("--browser-screenshot requires --browser")
 	}
 	return nil
 }
@@ -552,6 +567,9 @@ func loadConfigFile(c *commonFlags, fs *flag.FlagSet) error {
 	setBool("web", &c.webEnabled, cfg.EnableWeb)
 	setBool("web-search", &c.webSearchEnabled, cfg.WebSearch)
 	setBool("web-search", &c.webSearchEnabled, cfg.EnableWebSearch)
+	setBool("browser", &c.browserEnabled, cfg.Browser)
+	setBool("browser", &c.browserEnabled, cfg.EnableBrowser)
+	setBool("browser-screenshot", &c.browserScreenshot, cfg.BrowserScreenshot)
 	setString("temperature", &c.temperature, cfg.Temperature)
 	setString("top-p", &c.topP, cfg.TopP)
 	setString("max-tokens", &c.maxTokens, cfg.MaxTokens)
@@ -645,6 +663,12 @@ func applyEnvConfig(c *commonFlags, fs *flag.FlagSet) error {
 	if err := setBoolStrict("web-search", "AFFENTCTL_WEB_SEARCH", &c.webSearchEnabled); err != nil {
 		return err
 	}
+	if err := setBoolStrict("browser", "AFFENTCTL_BROWSER", &c.browserEnabled); err != nil {
+		return err
+	}
+	if err := setBoolStrict("browser-screenshot", "AFFENTCTL_BROWSER_SCREENSHOT", &c.browserScreenshot); err != nil {
+		return err
+	}
 	if err := setBoolStrict("eval-mode", "AFFENTCTL_EVAL_MODE", &c.evalMode); err != nil {
 		return err
 	}
@@ -727,6 +751,7 @@ type loopBundle struct {
 	events     chan sse.Event
 	recorder   *eventlog.Recorder
 	traceClose func() error
+	browser    *affentbrowser.Session
 	sessionID  string
 	resumed    bool // true if we loaded an existing conversation
 	workspace  string
@@ -758,6 +783,7 @@ type runtimeCapabilities struct {
 	WebFetch             bool
 	WebSearch            bool
 	Browser              bool
+	BrowserScreenshot    bool
 	Subagent             bool
 	FocusedTasks         bool
 }
@@ -779,6 +805,8 @@ func resolveRuntimeCapabilities(c commonFlags) runtimeCapabilities {
 		RepoSearch:           true,
 		WebFetch:             c.webEnabled,
 		WebSearch:            c.webEnabled && c.webSearchEnabled,
+		Browser:              c.browserEnabled,
+		BrowserScreenshot:    c.browserEnabled && c.browserScreenshot,
 		Subagent:             c.subagentEnabled,
 		FocusedTasks:         c.focusedTasksEnabled,
 	}
@@ -793,6 +821,8 @@ func resolveRuntimeCapabilities(c commonFlags) runtimeCapabilities {
 		caps.RepoSearch = true
 		caps.WebFetch = c.webEnabled
 		caps.WebSearch = c.webEnabled && c.webSearchEnabled
+		caps.Browser = c.browserEnabled
+		caps.BrowserScreenshot = c.browserEnabled && c.browserScreenshot
 		caps.Subagent = false
 		caps.FocusedTasks = false
 	}
@@ -800,6 +830,9 @@ func resolveRuntimeCapabilities(c commonFlags) runtimeCapabilities {
 }
 
 func (b *loopBundle) close() {
+	if b.browser != nil {
+		_ = b.browser.Close()
+	}
 	for _, c := range b.mcpClients {
 		_ = c.Close()
 	}
@@ -816,6 +849,43 @@ func registerAffentctlWebTools(reg *agent.Registry, includeSearch bool) error {
 	return nil
 }
 
+func registerAffentctlWebToolsWithBrowser(reg *agent.Registry, includeSearch bool, browser *affentbrowser.Session) error {
+	fetchCfg := affentweb.FetchConfig{RenderedFallback: affentctlBrowserRenderedFallback(browser)}
+	if includeSearch {
+		return affentweb.RegisterAll(reg, affentweb.Options{Fetch: fetchCfg})
+	}
+	affentweb.RegisterFetch(reg, fetchCfg)
+	return nil
+}
+
+func affentctlBrowserRenderedFallback(browser *affentbrowser.Session) affentweb.RenderedFallbackFunc {
+	if browser == nil {
+		return nil
+	}
+	nav := affentbrowser.NavigateTool(browser)
+	return func(ctx context.Context, requestURL string, reason affentweb.FetchFallbackReason) (string, error) {
+		waitUntil := "networkidle"
+		if reason.Kind == "search_results_page" {
+			waitUntil = "load"
+		}
+		args, err := json.Marshal(map[string]string{
+			"url":        requestURL,
+			"wait_until": waitUntil,
+		})
+		if err != nil {
+			return "", err
+		}
+		return nav.Execute(ctx, args)
+	}
+}
+
+func newAffentctlBrowserSession(workspace string) (*affentbrowser.Session, error) {
+	return affentbrowser.NewSession(affentbrowser.SessionConfig{
+		NoSandbox:    true,
+		WorkspaceDir: workspace,
+	})
+}
+
 func affentctlFocusedTaskWebRegistrar(enabled, includeSearch bool) func(context.Context, *agent.Registry) (func(), error) {
 	if !enabled {
 		return nil
@@ -825,6 +895,43 @@ func affentctlFocusedTaskWebRegistrar(enabled, includeSearch bool) func(context.
 			return nil, fmt.Errorf("focused task web_search: %w", err)
 		}
 		return nil, nil
+	}
+}
+
+func affentctlFocusedTaskBrowserRegistrar(enabled, includeScreenshot bool, workspace string, webEnabled, webSearch bool) func(context.Context, *agent.Registry) (func(), error) {
+	if !enabled {
+		return nil
+	}
+	return func(_ context.Context, reg *agent.Registry) (func(), error) {
+		browser, err := newAffentctlBrowserSession(workspace)
+		if err != nil {
+			return nil, err
+		}
+		affentbrowser.RegisterAll(reg, browser, affentbrowser.Options{
+			IncludeScreenshot: includeScreenshot,
+		})
+		if webEnabled {
+			reg.Remove("web_fetch")
+			if err := registerAffentctlWebToolsWithBrowser(reg, webSearch, browser); err != nil {
+				_ = browser.Close()
+				return nil, err
+			}
+		}
+		return func() { _ = browser.Close() }, nil
+	}
+}
+
+func affentctlSubagentBrowserRegistrar(enabled bool, workspace string) func(context.Context, *agent.Registry) (func(), error) {
+	if !enabled {
+		return nil
+	}
+	return func(_ context.Context, reg *agent.Registry) (func(), error) {
+		browser, err := newAffentctlBrowserSession(workspace)
+		if err != nil {
+			return nil, err
+		}
+		affentbrowser.RegisterAll(reg, browser, affentbrowser.Options{})
+		return func() { _ = browser.Close() }, nil
 	}
 }
 
@@ -910,6 +1017,7 @@ func setupLoop(c commonFlags) (*loopBundle, int) {
 	var execBackend executor.Executor
 	var skillReg *agent.SkillRegistry
 	var conv *agent.Conversation
+	var browser *affentbrowser.Session
 	planPath := ""
 	if !caps.Builtins {
 		if memStore == nil {
@@ -963,10 +1071,33 @@ func setupLoop(c commonFlags) (*loopBundle, int) {
 		})
 	}
 	if caps.WebFetch {
-		if err := registerAffentctlWebTools(tools, caps.WebSearch); err != nil {
+		if caps.Browser {
+			var browserErr error
+			browser, browserErr = newAffentctlBrowserSession(workspace)
+			if browserErr != nil {
+				log.Error().Err(browserErr).Msg("browser setup")
+				return nil, exitRuntime
+			}
+			closers = append(closers, func() { _ = browser.Close() })
+			affentbrowser.RegisterAll(tools, browser, affentbrowser.Options{
+				IncludeScreenshot: caps.BrowserScreenshot,
+			})
+		}
+		if err := registerAffentctlWebToolsWithBrowser(tools, caps.WebSearch, browser); err != nil {
 			log.Error().Err(err).Msg("web setup")
 			return nil, exitRuntime
 		}
+	} else if caps.Browser {
+		var browserErr error
+		browser, browserErr = newAffentctlBrowserSession(workspace)
+		if browserErr != nil {
+			log.Error().Err(browserErr).Msg("browser setup")
+			return nil, exitRuntime
+		}
+		closers = append(closers, func() { _ = browser.Close() })
+		affentbrowser.RegisterAll(tools, browser, affentbrowser.Options{
+			IncludeScreenshot: caps.BrowserScreenshot,
+		})
 	}
 
 	mcpConfigPath := ""
@@ -1003,17 +1134,18 @@ func setupLoop(c commonFlags) (*loopBundle, int) {
 	}
 	if caps.Subagent {
 		agent.RegisterSubagent(tools, agent.SubagentDeps{
-			LLM:               llm,
-			Executor:          execBackend,
-			HostWorkspaceDir:  workspace,
-			Memory:            memStore,
-			SessionsDir:       convDir,
-			ParentSessionID:   sid,
-			TranscriptDir:     filepath.Join(convDir, "subagents", sid),
-			ProjectContextDir: projectContextDir,
-			Log:               log,
-			PerCallTimeout:    c.callTimeout,
-			MaxDepth:          c.subagentMaxDepth,
+			LLM:                llm,
+			Executor:           execBackend,
+			HostWorkspaceDir:   workspace,
+			Memory:             memStore,
+			SessionsDir:        convDir,
+			ParentSessionID:    sid,
+			TranscriptDir:      filepath.Join(convDir, "subagents", sid),
+			ProjectContextDir:  projectContextDir,
+			RegisterChildTools: affentctlSubagentBrowserRegistrar(caps.Browser, workspace),
+			Log:                log,
+			PerCallTimeout:     c.callTimeout,
+			MaxDepth:           c.subagentMaxDepth,
 		})
 	}
 	if caps.FocusedTasks {
@@ -1025,17 +1157,18 @@ func setupLoop(c commonFlags) (*loopBundle, int) {
 		// run_task isn't available; we sniff registration to keep the
 		// prompt and the schema consistent.
 		agent.RegisterFocusedTasks(tools, agent.FocusedTaskDeps{
-			LLM:               llm,
-			Executor:          execBackend,
-			HostWorkspaceDir:  workspace,
-			Memory:            memStore,
-			SessionsDir:       convDir,
-			ParentSessionID:   sid,
-			TranscriptDir:     filepath.Join(convDir, "focused-tasks", sid),
-			ProjectContextDir: projectContextDir,
-			Log:               log,
-			PerCallTimeout:    c.callTimeout,
-			RegisterWebTools:  affentctlFocusedTaskWebRegistrar(caps.WebFetch, caps.WebSearch),
+			LLM:                  llm,
+			Executor:             execBackend,
+			HostWorkspaceDir:     workspace,
+			Memory:               memStore,
+			SessionsDir:          convDir,
+			ParentSessionID:      sid,
+			TranscriptDir:        filepath.Join(convDir, "focused-tasks", sid),
+			ProjectContextDir:    projectContextDir,
+			Log:                  log,
+			PerCallTimeout:       c.callTimeout,
+			RegisterWebTools:     affentctlFocusedTaskWebRegistrar(caps.WebFetch, caps.WebSearch),
+			RegisterBrowserTools: affentctlFocusedTaskBrowserRegistrar(caps.Browser, false, workspace, caps.WebFetch, caps.WebSearch),
 		})
 	}
 	systemPrompt = agent.WithRegistrySystemGuidance(systemPrompt, tools)
@@ -1097,6 +1230,7 @@ func setupLoop(c commonFlags) (*loopBundle, int) {
 		events:     events,
 		recorder:   eventlog.NewRecorder(traceWriter, eventlog.Options{SkipDeltas: c.traceSkipDeltas}),
 		traceClose: traceClose,
+		browser:    browser,
 		sessionID:  sid,
 		resumed:    resumed,
 		workspace:  workspace,
@@ -1109,7 +1243,7 @@ func resolveSystemPrompt(c commonFlags, workspace string, caps runtimeCapabiliti
 	systemPrompt := agent.BaseSystemPromptForSurface(agent.SystemPromptSurface{
 		Builtins:   caps.Builtins,
 		Memory:     caps.Memory,
-		OtherTools: caps.MCP || caps.Subagent || caps.FocusedTasks || caps.Plan || caps.SessionSearch || caps.Skill,
+		OtherTools: caps.MCP || caps.Subagent || caps.FocusedTasks || caps.Plan || caps.SessionSearch || caps.Skill || caps.WebFetch || caps.WebSearch || caps.Browser,
 	})
 	if c.systemPromptPath != "" {
 		raw, err := readMaybeStdin(c.systemPromptPath)

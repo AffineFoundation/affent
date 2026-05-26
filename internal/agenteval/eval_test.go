@@ -1115,6 +1115,7 @@ func TestBatchRunnerAffentctlRunArgsForwardsExecutor(t *testing.T) {
 		Executor:         "docker:affent-eval",
 		RuntimeEvalMode:  true,
 		RuntimeWeb:       true,
+		RuntimeBrowser:   true,
 		RuntimeMCPConfig: " /tmp/eval-mcp.json ",
 	}).affentctlRunArgs("/tmp/ws", "/tmp/ws/trace.jsonl", BatchScenario{
 		Prompt:       "fix it",
@@ -1140,29 +1141,12 @@ func TestBatchRunnerAffentctlRunArgsForwardsExecutor(t *testing.T) {
 		"--memory=true",
 		"--web=true",
 		"--web-search=true",
+		"--browser=true",
 		"--mcp-config\x00/tmp/eval-mcp.json",
 	} {
 		if !strings.Contains(joined, want) {
 			t.Fatalf("args missing %q:\n%q", want, args)
 		}
-	}
-	for _, unsupported := range []string{"--browser=true"} {
-		if strings.Contains(joined, unsupported) {
-			t.Fatalf("args should not include unsupported runtime flag %q:\n%q", unsupported, args)
-		}
-	}
-}
-
-func TestBatchRunnerRunRejectsUnsupportedBrowserRuntimeFlag(t *testing.T) {
-	res := (BatchRunner{RuntimeBrowser: true}).Run(context.Background(), BatchScenario{Name: "unsupported-runtime", MaxTurns: 1})
-	if res.OK {
-		t.Fatalf("Run OK = true, want unsupported runtime failure")
-	}
-	if res.Workspace != "" {
-		t.Fatalf("Workspace = %q, want early rejection before workspace creation", res.Workspace)
-	}
-	if len(res.Failures) != 1 || !strings.Contains(res.Failures[0], "runtime browser tools are not supported") {
-		t.Fatalf("Failures = %#v", res.Failures)
 	}
 }
 

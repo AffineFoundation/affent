@@ -736,6 +736,7 @@ Run a one-off prompt through the same batch harness:
 ```bash
 go run ./cmd/affenteval --prompt "Analyze the current project and report the risky parts." --name project-audit --max-turns 12 --keep-workspaces
 go run ./cmd/affenteval --prompt-file request.md --runtime-web --name web-research --max-turns 20 --keep-workspaces
+go run ./cmd/affenteval --prompt-file request.md --runtime-web --runtime-browser --name rendered-web-debug --max-turns 20 --keep-workspaces
 ```
 
 Each run writes a trace JSONL plus retained debug files in the scenario
@@ -753,6 +754,7 @@ make eval-container EVAL_ARGS='--suite small-model-tools --temperature 0'
 make eval-container EVAL_ARGS='--suite long-run --temperature 0'
 make eval-agent-container EVAL_ARGS='--scenario coding-python-slug --temperature 0'
 make eval-agent-container EVAL_RUNTIME_MEMORY=true EVAL_ARGS='--scenario your-memory-scenario --temperature 0'
+make eval-agent-container EVAL_RUNTIME_WEB=true EVAL_RUNTIME_BROWSER=true EVAL_ARGS='--prompt-file request.md --name rendered-web-debug --max-turns 20'
 make eval-agent-container EVAL_RUNTIME_MCP_CONFIG=/workspace/config/mcp.json EVAL_ARGS='--scenario your-mcp-scenario --temperature 0'
 ```
 
@@ -772,10 +774,12 @@ only for suites that explicitly measure those capabilities. The eval container
 does not forward host `AFFENTCTL_EVAL_MODE`, `AFFENTCTL_SUBAGENT`,
 `AFFENTCTL_FOCUSED_TASKS`, or `AFFENTCTL_PROJECT_CONTEXT`; use the
 `EVAL_RUNTIME_*` knobs above. Use `--runtime-web` when a scenario explicitly
-measures direct web retrieval; otherwise keep it off so evals stay on the
-minimal surface they intend to measure. Browser runtime evals are still routed
-through affentserve/browser-session wiring; `affenteval --runtime-browser` is
-reserved until the affentctl batch runner has an external browser adapter.
+measures direct web retrieval; use `--runtime-browser` for rendered-page debug
+runs that need `browser_navigate`, `browser_snapshot`, `browser_find`, or
+captured network evidence. When both runtime flags are set, `web_fetch` can
+fall back through the same session browser for JavaScript-heavy pages.
+Otherwise keep these surfaces off so evals stay on the minimal surface they
+intend to measure.
 
 When project context is enabled in normal runtime mode, Affent also injects a
 small auto-generated repository map alongside user-authored project notes. The

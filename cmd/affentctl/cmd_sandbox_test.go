@@ -531,7 +531,7 @@ func TestMakeOneClickContainerTargetsUseSharedLimits(t *testing.T) {
 			`--cpus "$(CONTAINER_CPUS)"`,
 			`--pids-limit "$(CONTAINER_PIDS)"`,
 			`-e AFFENTEVAL_PROVIDER_LABEL`,
-			`$(EVAL_RUNTIME_EVAL_MODE_ARGS) $(EVAL_RUNTIME_MEMORY_ARGS) $(EVAL_RUNTIME_MCP_CONFIG_ARGS) $(EVAL_ARGS)`,
+			`$(EVAL_RUNTIME_EVAL_MODE_ARGS) $(EVAL_RUNTIME_MEMORY_ARGS) $(EVAL_RUNTIME_WEB_ARGS) $(EVAL_RUNTIME_BROWSER_ARGS) $(EVAL_RUNTIME_MCP_CONFIG_ARGS) $(EVAL_ARGS)`,
 		},
 		"eval-agent-container": {
 			`eval-agent-container: EVAL_RUNTIME_EVAL_MODE=true`,

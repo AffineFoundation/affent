@@ -18,6 +18,10 @@ EVAL_RUNTIME_EVAL_MODE ?= false
 EVAL_RUNTIME_EVAL_MODE_ARGS = $(if $(filter true yes 1,$(EVAL_RUNTIME_EVAL_MODE)),--runtime-eval-mode,)
 EVAL_RUNTIME_MEMORY ?= false
 EVAL_RUNTIME_MEMORY_ARGS = $(if $(filter true yes 1,$(EVAL_RUNTIME_MEMORY)),--runtime-memory,)
+EVAL_RUNTIME_WEB ?= false
+EVAL_RUNTIME_WEB_ARGS = $(if $(filter true yes 1,$(EVAL_RUNTIME_WEB)),--runtime-web,)
+EVAL_RUNTIME_BROWSER ?= false
+EVAL_RUNTIME_BROWSER_ARGS = $(if $(filter true yes 1,$(EVAL_RUNTIME_BROWSER)),--runtime-browser,)
 EVAL_RUNTIME_MCP_CONFIG ?=
 EVAL_RUNTIME_MCP_CONFIG_ARGS = $(if $(strip $(EVAL_RUNTIME_MCP_CONFIG)),--runtime-mcp-config "$(EVAL_RUNTIME_MCP_CONFIG)",)
 SERVE_EVAL_CONTAINER_NAME ?= affent-eval-serve
@@ -372,7 +376,7 @@ eval-container: affentctl
 		-w /workspace \
 		$(EVAL_DOCKER_ARGS) \
 		"$(EVAL_IMAGE)" \
-		go run ./cmd/affenteval --repo-root /workspace --work-root "$(EVAL_WORK_ROOT)" --executor local $(EVAL_RUNTIME_EVAL_MODE_ARGS) $(EVAL_RUNTIME_MEMORY_ARGS) $(EVAL_RUNTIME_MCP_CONFIG_ARGS) $(EVAL_ARGS)
+		go run ./cmd/affenteval --repo-root /workspace --work-root "$(EVAL_WORK_ROOT)" --executor local $(EVAL_RUNTIME_EVAL_MODE_ARGS) $(EVAL_RUNTIME_MEMORY_ARGS) $(EVAL_RUNTIME_WEB_ARGS) $(EVAL_RUNTIME_BROWSER_ARGS) $(EVAL_RUNTIME_MCP_CONFIG_ARGS) $(EVAL_ARGS)
 
 eval-agent-container: EVAL_RUNTIME_EVAL_MODE=true
 eval-agent-container: eval-container
