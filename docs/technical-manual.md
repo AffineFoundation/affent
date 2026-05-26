@@ -823,11 +823,12 @@ coverage counters, including suites, required tools, required source-access
 statuses, and broad capabilities such as memory, browser, delegation, plan,
 and context compaction. They also split expected capabilities into passed and
 failed counts so long-run reports can show whether regressions cluster around
-memory, browser/web evidence, delegation, plan, or context compaction. The
-per-family expectation gate can fail a run when one capability family
-regresses even if the aggregate expectation pass rate is still acceptable.
-JSONL summary records also aggregate debug brief tags as `debug_brief_by_tag`
-for batch triage.
+memory, browser/web evidence, delegation, plan, or context compaction. Text and
+JSONL summaries also include an aggregate expected-capability pass rate for CI
+and model/provider comparison dashboards. The per-family expectation gate can
+fail a run when one capability family regresses even if the aggregate
+expectation pass rate is still acceptable. JSONL summary records also aggregate
+debug brief tags as `debug_brief_by_tag` for batch triage.
 JSONL scenario records also include a compact `runtime_surface` summary so
 batch analysis can group outcomes by actual tool/capability surface. JSONL
 summary records include per-scenario counts for runtime tools and capabilities

@@ -920,7 +920,7 @@ func TestBatchSummaryAggregatesRuntimeMetrics(t *testing.T) {
 	if !strings.Contains(out.String(), "debug_brief=context_compaction:1,context_compaction:reactive:1,loop_guard:2,outcome:failed:1,plan:2,plan:set:1,plan:update:1,plan_error:1,recall:1,runtime_error:1,runtime_error:context_overflow:1,runtime_error:llm_timeout:1,source_access:2,source_network:2,source_unverified:1,tool_failure:1,tool_failure:invalid_args:1,tool_failure:timeout:1,truncation:2,turn_end:max_turns:1") {
 		t.Fatalf("summary output missing debug brief tag rollup:\n%s", out.String())
 	}
-	if !strings.Contains(out.String(), "expectations=scenarios:2 expectation_capabilities=browser:2,context_compaction:1,delegation:1,memory:1,plan:1,session:2,session_search:1,source_access:2,verifier:1,web:1,workspace:1 expectation_capability_pass=browser:1/2,context_compaction:0/1,delegation:0/1,memory:1/1,plan:0/1,session:1/2,session_search:0/1,source_access:1/2,verifier:1/1,web:0/1,workspace:1/1 expectation_tools=browser_network_read:2,memory:1,read_file:1,repo_search:1,run_task:1,session_search:1,web_fetch:1 expectation_source_access=network:2 expectation_suites=live-web:1,long-run:1") {
+	if !strings.Contains(out.String(), "expectations=scenarios:2 expectation_capabilities=browser:2,context_compaction:1,delegation:1,memory:1,plan:1,session:2,session_search:1,source_access:2,verifier:1,web:1,workspace:1 expectation_capability_pass=browser:1/2,context_compaction:0/1,delegation:0/1,memory:1/1,plan:0/1,session:1/2,session_search:0/1,source_access:1/2,verifier:1/1,web:0/1,workspace:1/1 expectation_capability_pass_rate=42.9% expectation_tools=browser_network_read:2,memory:1,read_file:1,repo_search:1,run_task:1,session_search:1,web_fetch:1 expectation_source_access=network:2 expectation_suites=live-web:1,long-run:1") {
 		t.Fatalf("summary output missing expectation rollup:\n%s", out.String())
 	}
 	if !strings.Contains(out.String(), "repair_kinds=alias_rename:2,tool_name:1,type_coercion:2") {
@@ -2268,6 +2268,18 @@ func TestPrintBatchSummaryJSONL(t *testing.T) {
 		expectationCapabilityRate["source_access"] != float64(0.5) ||
 		expectationCapabilityRate["web"] != float64(0) {
 		t.Fatalf("expectation_capability_pass_rate = %#v\njson=%s", got["expectation_capability_pass_rate"], out.String())
+	}
+	if got["expectation_capability_total"] != float64(5) ||
+		got["expectation_capability_passed_total"] != float64(2) ||
+		got["expectation_capability_failed_total"] != float64(3) ||
+		got["expectation_capability_pass_rate_total"] != float64(0.4) {
+		t.Fatalf("expectation capability totals not preserved: total=%#v passed=%#v failed=%#v rate=%#v\njson=%s",
+			got["expectation_capability_total"],
+			got["expectation_capability_passed_total"],
+			got["expectation_capability_failed_total"],
+			got["expectation_capability_pass_rate_total"],
+			out.String(),
+		)
 	}
 	expectationTools, ok := got["expectation_required_tools"].(map[string]any)
 	if !ok ||

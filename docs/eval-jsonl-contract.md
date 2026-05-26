@@ -319,6 +319,12 @@ Summary records aggregate all scenario records from the same process:
   by scenario outcome. These are declaration/outcome counters, not observed
   runtime behavior. Use them with runtime-surface fields to see which
   capability classes a batch actually exercised and where failures cluster.
+  `expectation_capability_total`,
+  `expectation_capability_passed_total`,
+  `expectation_capability_failed_total`, and
+  `expectation_capability_pass_rate_total` aggregate the same declared
+  capability instances into one batch-level rate for CI dashboards and quality
+  gates.
   `min_each_expectation_capability_pass_rate` gates each family in
   `expectation_capability_pass_rate` independently, so a memory or browser
   regression cannot be hidden by unrelated passing capabilities.
