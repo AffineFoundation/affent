@@ -74,8 +74,8 @@ function memoryAddCall(): ToolCallState {
     status: "success",
     exitCode: 0,
     durationMs: 7,
-    resultSummary: "{\"ok\":true,\"message\":\"added\"}",
-    result: "{\"ok\":true,\"message\":\"added\"}",
+    resultSummary: "{\"ok\":true,\"target\":\"memory\",\"topic\":\"markets\",\"message\":\"added\"}",
+    result: "{\"ok\":true,\"target\":\"memory\",\"topic\":\"markets\",\"message\":\"added\"}",
     resultTruncated: false,
   };
 }

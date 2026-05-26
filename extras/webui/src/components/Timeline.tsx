@@ -14,6 +14,7 @@ const filterModes: { mode: TimelineFilterMode; label: string }[] = [
   { mode: "tools", label: "Actions" },
   { mode: "messages", label: "Messages" },
   { mode: "artifacts", label: "Files" },
+  { mode: "memory", label: "Memory" },
   { mode: "truncated", label: "Large outputs" },
   { mode: "repaired", label: "Auto-fixed" },
 ];

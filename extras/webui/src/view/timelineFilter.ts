@@ -1,6 +1,7 @@
 import type { NormalizedEvent } from "../normalize/normalizeEvent";
 import type { ToolCallState, TurnState } from "../store/sessionState";
 import { buildExecutionTree, searchableExecutionNodeText } from "./executionTree";
+import { describeMemoryUpdate } from "./memoryUpdate";
 
 export type TimelineFilterMode =
   | "all"
@@ -8,6 +9,7 @@ export type TimelineFilterMode =
   | "tools"
   | "messages"
   | "artifacts"
+  | "memory"
   | "truncated"
   | "repaired";
 
@@ -60,6 +62,8 @@ function matchesMode(turn: TurnState, mode: TimelineFilterMode): boolean {
       return !!(turn.userText || turn.assistantText || turn.thinkingText);
     case "artifacts":
       return turn.toolCalls.some((tool) => !!tool.resultArtifactPath);
+    case "memory":
+      return turn.toolCalls.some((tool) => !!describeMemoryUpdate(tool));
     case "truncated":
       return turn.toolCalls.some((tool) => tool.argsTruncated || tool.resultTruncated);
     case "repaired":

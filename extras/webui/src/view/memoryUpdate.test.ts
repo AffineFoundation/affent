@@ -9,7 +9,7 @@ describe("describeMemoryUpdate", () => {
       target: "memory",
       topic: "markets",
       content: "Alpha Coast market reports use marker MEM-STOCK-73 and source-led confidence.",
-    }))).toEqual({
+    }, { ok: true, target: "memory", topic: "markets" }))).toEqual({
       action: "add",
       label: "Saved memory",
       target: "memory",
@@ -24,25 +24,34 @@ describe("describeMemoryUpdate", () => {
       action: "replace",
       topic: "deploy",
       content: "Use canary deploys for dashboard refresh changes.",
-    }))?.label).toBe("Updated memory");
+    }, { ok: true, target: "memory", topic: "deploy" }))?.label).toBe("Updated memory");
 
     expect(describeMemoryUpdate(memoryCall({
       action: "remove",
       topic: "deploy",
       old_text: "stale deploy instruction",
-    }))?.preview).toBe("stale deploy instruction");
+    }, { ok: true, target: "memory", topic: "deploy" }))?.preview).toBe("stale deploy instruction");
 
     expect(describeMemoryUpdate(memoryCall({ action: "search", query: "deploy" }))).toBeUndefined();
   });
 
   it("defaults omitted target and topic to the memory general bucket", () => {
-    const summary = describeMemoryUpdate(memoryCall({ action: "add", content: "Remember the local test command." }));
+    const summary = describeMemoryUpdate(memoryCall({ action: "add", content: "Remember the local test command." }, { ok: true, target: "memory", topic: "general" }));
 
     expect(summary?.location).toBe("memory:general");
   });
+
+  it("does not surface failed or unconfirmed memory writes as saved updates", () => {
+    expect(describeMemoryUpdate(memoryCall(
+      { action: "add", content: "blocked content" },
+      { ok: false, target: "memory", topic: "general", message: "blocked" },
+    ))).toBeUndefined();
+
+    expect(describeMemoryUpdate(memoryCall({ action: "add", content: "missing result" }, null))).toBeUndefined();
+  });
 });
 
-function memoryCall(args: Record<string, unknown>): ToolCallState {
+function memoryCall(args: Record<string, unknown>, response: Record<string, unknown> | null = { ok: true }): ToolCallState {
   return {
     callId: "c1",
     tool: "memory",
@@ -52,8 +61,8 @@ function memoryCall(args: Record<string, unknown>): ToolCallState {
     canonicalized: false,
     status: "success",
     exitCode: 0,
-    resultSummary: "{}",
-    result: "{}",
+    resultSummary: response ? JSON.stringify(response) : undefined,
+    result: response ? JSON.stringify(response) : undefined,
     resultTruncated: false,
   };
 }

@@ -13,11 +13,15 @@ export interface MemoryUpdateSummary {
 
 export function describeMemoryUpdate(call: ToolCallState): MemoryUpdateSummary | undefined {
   if (call.tool !== "memory") return undefined;
+  if (call.status !== "success" || call.exitCode !== 0) return undefined;
+  const response = parseMemoryResponse(call.result);
+  if (!response?.ok) return undefined;
+
   const action = stringArg(call, "action")?.toLowerCase();
   if (action !== "add" && action !== "replace" && action !== "remove") return undefined;
 
-  const target = stringArg(call, "target") ?? "memory";
-  const topic = normalizeMemoryTopic(target, stringArg(call, "topic"));
+  const target = response.target ?? stringArg(call, "target") ?? "memory";
+  const topic = normalizeMemoryTopic(target, response.topic ?? stringArg(call, "topic"));
   const content = action === "remove"
     ? stringArg(call, "old_text")
     : stringArg(call, "content");
@@ -31,6 +35,22 @@ export function describeMemoryUpdate(call: ToolCallState): MemoryUpdateSummary |
     location: `${target}:${topic}`,
     preview,
   };
+}
+
+function parseMemoryResponse(raw: string | undefined): { ok?: boolean; target?: string; topic?: string } | undefined {
+  if (!raw) return undefined;
+  try {
+    const parsed = JSON.parse(raw) as unknown;
+    if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) return undefined;
+    const obj = parsed as Record<string, unknown>;
+    return {
+      ok: obj.ok === true,
+      target: typeof obj.target === "string" && obj.target.trim() ? obj.target.trim() : undefined,
+      topic: typeof obj.topic === "string" && obj.topic.trim() ? obj.topic.trim() : undefined,
+    };
+  } catch {
+    return undefined;
+  }
 }
 
 function memoryUpdateLabel(action: MemoryUpdateAction): string {

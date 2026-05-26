@@ -19,11 +19,20 @@ describe("timelineFilter", () => {
 
   it("does not match specialized runtime filters when a plain turn lacks those states", () => {
     const session = reduceRawEvents(completedTurn);
-    const modes: TimelineFilterMode[] = ["artifacts", "truncated", "repaired", "errors"];
+    const modes: TimelineFilterMode[] = ["artifacts", "memory", "truncated", "repaired", "errors"];
 
     for (const mode of modes) {
       expect(turnMatchesFilter(session.turns[0], session.events, { mode, query: "" })).toBe(false);
     }
+  });
+
+  it("matches only confirmed memory update turns", () => {
+    const saved = reduceRawEvents(memoryUpdateTurn({ ok: true }));
+    const rejected = reduceRawEvents(memoryUpdateTurn({ ok: false, message: "blocked" }));
+
+    expect(turnMatchesFilter(saved.turns[0], saved.events, { mode: "memory", query: "" })).toBe(true);
+    expect(turnMatchesFilter(saved.turns[0], saved.events, { mode: "memory", query: "MEM-STOCK-73" })).toBe(true);
+    expect(turnMatchesFilter(rejected.turns[0], rejected.events, { mode: "memory", query: "" })).toBe(false);
   });
 
   it("counts every filter mode against the current search query", () => {
@@ -57,6 +66,39 @@ function namespaceEvents(raws: typeof resultTruncated, suffix: string, idOffset:
     id: event.id + idOffset,
     data: namespacePayload(event.data, suffix),
   }));
+}
+
+function memoryUpdateTurn(response: Record<string, unknown>): typeof resultTruncated {
+  return [
+    { id: 0, type: "turn.start", data: { turn_id: "memory_turn" } },
+    {
+      id: 1,
+      type: "tool.request",
+      data: {
+        turn_id: "memory_turn",
+        call_id: "memory_call",
+        tool: "memory",
+        args: {
+          action: "add",
+          target: "memory",
+          topic: "markets",
+          content: "Alpha Coast reports use marker MEM-STOCK-73.",
+        },
+      },
+    },
+    {
+      id: 2,
+      type: "tool.result",
+      data: {
+        call_id: "memory_call",
+        exit_code: 0,
+        result_summary: JSON.stringify({ target: "memory", topic: "markets", ...response }),
+        result: JSON.stringify({ target: "memory", topic: "markets", ...response }),
+        result_truncated: false,
+      },
+    },
+    { id: 3, type: "turn.end", data: { turn_id: "memory_turn", reason: "completed" } },
+  ];
 }
 
 function namespacePayload(data: unknown, suffix: string): unknown {
