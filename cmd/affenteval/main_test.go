@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/affinefoundation/affent/internal/agenteval"
+	"github.com/affinefoundation/affent/internal/sse"
 )
 
 func TestRunListSuites(t *testing.T) {
@@ -826,6 +827,21 @@ func TestPrintBatchResultJSONLIncludesDebugPathsForRetainedWorkspace(t *testing.
 		StdoutPath:        "/tmp/ws/affenteval-stdout.txt",
 		StderrPath:        "/tmp/ws/affenteval-stderr.txt",
 		RunExitCode:       2,
+		RuntimeSurface: &sse.RuntimeSurfacePayload{
+			ToolCount: 3,
+			Tools: []sse.RuntimeSurfaceTool{
+				{Name: "web_fetch"},
+				{Name: "browser_find"},
+				{Name: "web_fetch"},
+			},
+			Capabilities:                 sse.RuntimeCapabilities{WebFetch: true, Browser: true},
+			MaxTurnSteps:                 12,
+			MaxToolCalls:                 40,
+			ToolResultEventCapBytes:      8192,
+			ToolResultContextMaxBytes:    4096,
+			ToolResultContextBudgetBytes: 32768,
+			ToolResultArtifactPrefix:     ".affent/artifacts/tool-results",
+		},
 	})
 
 	var got map[string]any
@@ -849,6 +865,25 @@ func TestPrintBatchResultJSONLIncludesDebugPathsForRetainedWorkspace(t *testing.
 	}
 	if got["run_exit_code"] != float64(2) {
 		t.Fatalf("run_exit_code = %#v\njson=%s", got["run_exit_code"], out.String())
+	}
+	surface, ok := got["runtime_surface"].(map[string]any)
+	if !ok {
+		t.Fatalf("runtime_surface missing or wrong type: %#v\njson=%s", got["runtime_surface"], out.String())
+	}
+	if surface["tool_count"] != float64(3) ||
+		surface["max_turn_steps"] != float64(12) ||
+		surface["max_tool_calls"] != float64(40) ||
+		surface["tool_result_event_cap_bytes"] != float64(8192) ||
+		surface["tool_result_artifact_prefix"] != ".affent/artifacts/tool-results" {
+		t.Fatalf("runtime_surface limits = %#v\njson=%s", surface, out.String())
+	}
+	tools, ok := surface["tools"].([]any)
+	if !ok || len(tools) != 2 || tools[0] != "browser_find" || tools[1] != "web_fetch" {
+		t.Fatalf("runtime_surface tools = %#v\njson=%s", surface["tools"], out.String())
+	}
+	caps, ok := surface["capabilities"].(map[string]any)
+	if !ok || caps["web_fetch"] != true || caps["browser"] != true {
+		t.Fatalf("runtime_surface capabilities = %#v\njson=%s", surface["capabilities"], out.String())
 	}
 }
 

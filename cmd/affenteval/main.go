@@ -843,6 +843,7 @@ type batchResultRecord struct {
 	ToolFailureExamples        map[string][]agenteval.ToolFailureExample  `json:"tool_failure_examples,omitempty"`
 	RuntimeErrorByKind         map[string]int                             `json:"runtime_error_by_kind,omitempty"`
 	RuntimeErrorExamples       map[string][]agenteval.RuntimeErrorExample `json:"runtime_error_examples,omitempty"`
+	RuntimeSurface             *runtimeSurfaceSummary                     `json:"runtime_surface,omitempty"`
 	LoopDecisions              int                                        `json:"loop_decisions,omitempty"`
 	LoopDecisionByKind         map[string]int                             `json:"loop_decision_by_kind,omitempty"`
 	LoopDecisionByDecision     map[string]int                             `json:"loop_decision_by_decision,omitempty"`
@@ -989,6 +990,19 @@ type batchSummaryRecord struct {
 	PlanErrors   int            `json:"plan_errors,omitempty"`
 }
 
+type runtimeSurfaceSummary struct {
+	ToolCount                    int                      `json:"tool_count"`
+	Tools                        []string                 `json:"tools,omitempty"`
+	Capabilities                 *sse.RuntimeCapabilities `json:"capabilities,omitempty"`
+	MaxTurnSteps                 int                      `json:"max_turn_steps,omitempty"`
+	MaxToolCalls                 int                      `json:"max_tool_calls,omitempty"`
+	ToolResultEventCapBytes      int                      `json:"tool_result_event_cap_bytes,omitempty"`
+	ToolResultContextMaxBytes    int                      `json:"tool_result_context_max_bytes,omitempty"`
+	ToolResultContextBudgetBytes int                      `json:"tool_result_context_budget_bytes,omitempty"`
+	ToolResultArtifactPrefix     string                   `json:"tool_result_artifact_prefix,omitempty"`
+	TurnToolOverride             bool                     `json:"turn_tool_override,omitempty"`
+}
+
 func printBatchResultJSONL(w io.Writer, meta evalJSONLMetadata, res agenteval.BatchResult) {
 	failureKinds := failureKindsForResult(res.Failures)
 	writeJSONLine(w, batchResultRecord{
@@ -1020,6 +1034,7 @@ func printBatchResultJSONL(w io.Writer, meta evalJSONLMetadata, res agenteval.Ba
 		ToolFailureExamples:        cloneToolFailureExamples(res.ToolFailureExamples),
 		RuntimeErrorByKind:         cloneStringIntMap(res.RuntimeErrorByKind),
 		RuntimeErrorExamples:       cloneRuntimeErrorExamples(res.RuntimeErrorExamples),
+		RuntimeSurface:             runtimeSurfaceSummaryForJSONL(res.RuntimeSurface),
 		LoopDecisions:              res.LoopDecisionStats.Count,
 		LoopDecisionByKind:         cloneStringIntMap(res.LoopDecisionStats.ByKind),
 		LoopDecisionByDecision:     cloneStringIntMap(res.LoopDecisionStats.ByDecision),
@@ -1075,6 +1090,36 @@ func printBatchResultJSONL(w io.Writer, meta evalJSONLMetadata, res agenteval.Ba
 		PlanByAction:               cloneStringIntMap(res.Plan.ByAction),
 		PlanErrors:                 res.Plan.Errors,
 	})
+}
+
+func runtimeSurfaceSummaryForJSONL(surface *sse.RuntimeSurfacePayload) *runtimeSurfaceSummary {
+	if surface == nil {
+		return nil
+	}
+	tools := make([]string, 0, len(surface.Tools))
+	seen := map[string]bool{}
+	for _, tool := range surface.Tools {
+		name := strings.TrimSpace(tool.Name)
+		if name == "" || seen[name] {
+			continue
+		}
+		seen[name] = true
+		tools = append(tools, name)
+	}
+	sort.Strings(tools)
+	caps := surface.Capabilities
+	return &runtimeSurfaceSummary{
+		ToolCount:                    surface.ToolCount,
+		Tools:                        tools,
+		Capabilities:                 &caps,
+		MaxTurnSteps:                 surface.MaxTurnSteps,
+		MaxToolCalls:                 surface.MaxToolCalls,
+		ToolResultEventCapBytes:      surface.ToolResultEventCapBytes,
+		ToolResultContextMaxBytes:    surface.ToolResultContextMaxBytes,
+		ToolResultContextBudgetBytes: surface.ToolResultContextBudgetBytes,
+		ToolResultArtifactPrefix:     surface.ToolResultArtifactPrefix,
+		TurnToolOverride:             surface.TurnToolOverride,
+	}
 }
 
 func printBatchSummaryJSONL(w io.Writer, meta evalJSONLMetadata, s batchSummary) {
