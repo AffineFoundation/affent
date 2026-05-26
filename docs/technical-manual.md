@@ -754,7 +754,8 @@ streaming deltas do not bury the tool timeline; use `--trace-deltas` only for
 deep provider/stream debugging when the raw `message.delta` sequence matters.
 The trace emits a `runtime.surface` event at turn start, and the debug
 manifest copies the latest surface into `runtime_surface`, including the
-effective tool names, broad capability flags, and key tool-result limits.
+effective tool names, broad capability flags, partial workspace tool lists, and
+key tool-result limits.
 JSONL scenario records also include a compact `runtime_surface` summary so
 batch analysis can group outcomes by actual tool/capability surface. JSONL
 summary records include per-scenario counts for runtime tools and capabilities

@@ -1202,6 +1202,8 @@ func runtimeSurfaceCapabilityNames(c sse.RuntimeCapabilities) []string {
 	var out []string
 	if c.Builtins {
 		out = append(out, "builtins")
+	} else if len(c.WorkspaceTools) > 0 {
+		out = append(out, "workspace_partial")
 	}
 	if c.Memory {
 		out = append(out, "memory")

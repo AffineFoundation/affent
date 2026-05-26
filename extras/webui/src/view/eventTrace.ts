@@ -293,12 +293,14 @@ function runtimeSurfaceMeta(event: NormalizedEvent, turn: string | undefined): s
 
 function runtimeSurfaceBadges(event: NormalizedEvent): string[] {
   const caps = readObject(event.data, "capabilities");
+  const workspaceTools = readStringArray(caps, "workspace_tools");
   return compact([
     readBoolean(caps, "web_search") ? "web search" : readBoolean(caps, "web_fetch") ? "web fetch" : undefined,
     readBoolean(caps, "browser") ? "browser" : undefined,
     readBoolean(caps, "memory") ? "memory" : undefined,
     readBoolean(caps, "subagent") ? "subagent" : undefined,
     readBoolean(caps, "focused_tasks") ? "focused tasks" : undefined,
+    readBoolean(caps, "builtins") ? "workspace tools" : workspaceTools.length > 0 ? `workspace: ${workspaceTools.join(", ")}` : undefined,
   ]);
 }
 
@@ -487,6 +489,13 @@ function readObject(data: unknown, key: string): Record<string, unknown> | undef
   if (!data || typeof data !== "object") return undefined;
   const value = (data as Record<string, unknown>)[key];
   return value && typeof value === "object" && !Array.isArray(value) ? value as Record<string, unknown> : undefined;
+}
+
+function readStringArray(data: unknown, key: string): string[] {
+  if (!data || typeof data !== "object") return [];
+  const value = (data as Record<string, unknown>)[key];
+  if (!Array.isArray(value)) return [];
+  return value.filter((item): item is string => typeof item === "string" && item !== "");
 }
 
 function readNumber(data: unknown, key: string): number | undefined {

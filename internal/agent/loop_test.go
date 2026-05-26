@@ -1297,6 +1297,12 @@ func TestPublishRuntimeSurfaceCapturesEffectiveTools(t *testing.T) {
 	if !payload.Capabilities.WebFetch || !payload.Capabilities.WebSearch || !payload.Capabilities.Memory {
 		t.Fatalf("capabilities missing expected tools: %+v", payload.Capabilities)
 	}
+	if payload.Capabilities.Builtins {
+		t.Fatalf("partial workspace surface should not claim full builtins: %+v", payload.Capabilities)
+	}
+	if len(payload.Capabilities.WorkspaceTools) != 1 || payload.Capabilities.WorkspaceTools[0] != "read_file" {
+		t.Fatalf("workspace tools = %#v, want read_file", payload.Capabilities.WorkspaceTools)
+	}
 	if payload.Capabilities.Browser || payload.Capabilities.Plan {
 		t.Fatalf("capabilities should not invent unavailable surfaces: %+v", payload.Capabilities)
 	}

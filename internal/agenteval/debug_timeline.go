@@ -126,6 +126,11 @@ func renderTimelineRuntimeSurface(b *strings.Builder, trace *Trace) {
 		fmt.Fprintf(b, "- tools: `%s`\n", strings.Join(names, "`, `"))
 	}
 	var caps []string
+	if surface.Capabilities.Builtins {
+		caps = append(caps, "workspace_tools")
+	} else if len(surface.Capabilities.WorkspaceTools) > 0 {
+		caps = append(caps, "workspace:"+strings.Join(surface.Capabilities.WorkspaceTools, ","))
+	}
 	if surface.Capabilities.WebFetch {
 		caps = append(caps, "web_fetch")
 	}

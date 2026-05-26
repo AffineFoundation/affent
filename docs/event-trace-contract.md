@@ -64,6 +64,22 @@ diagnostics.
 - `turn_id`: runtime turn id.
 - `text`: user message text.
 
+### `runtime.surface`
+
+- `turn_id`: runtime turn id.
+- `tool_count`: count of tools registered for the turn.
+- `tools`: optional effective tool list with `name`, `raw_name`, `group`, and
+  `source` metadata.
+- `capabilities`: broad runtime capability flags. `builtins` means the core
+  workspace tools (`shell`, `read_file`, `write_file`, `edit_file`,
+  `list_files`) are all present. `workspace_tools` lists the concrete
+  workspace tools present for partial or expanded workspace surfaces.
+- `max_turn_steps`, `max_tool_calls`: optional runtime limits.
+- `tool_result_event_cap_bytes`, `tool_result_context_max_bytes`,
+  `tool_result_context_budget_bytes`, `tool_result_artifact_prefix`: optional
+  tool-result transport and model-context limits.
+- `turn_tool_override`: optional true when the turn used a local tool override.
+
 ### `message.delta`
 
 - `turn_id`: runtime turn id.

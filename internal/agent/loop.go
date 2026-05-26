@@ -1812,19 +1812,60 @@ func runtimeCapabilitiesForRegistry(reg *Registry) sse.RuntimeCapabilities {
 	if reg == nil {
 		return sse.RuntimeCapabilities{}
 	}
+	workspaceTools := runtimeWorkspaceToolsForRegistry(reg)
 	return sse.RuntimeCapabilities{
-		Builtins:      hasRegisteredTool(reg, "shell") && hasRegisteredTool(reg, "read_file") && hasRegisteredTool(reg, "write_file") && hasRegisteredTool(reg, "edit_file") && hasRegisteredTool(reg, "list_files"),
-		Memory:        hasRegisteredTool(reg, MemoryToolName),
-		Plan:          hasRegisteredTool(reg, PlanToolName),
-		SessionSearch: hasRegisteredTool(reg, SessionSearchToolName),
-		WebFetch:      hasRegisteredTool(reg, "web_fetch"),
-		WebSearch:     hasRegisteredTool(reg, "web_search"),
-		Browser:       hasRegisteredTool(reg, "browser_navigate") || hasRegisteredTool(reg, "browser_snapshot") || hasRegisteredTool(reg, "browser_find") || hasRegisteredTool(reg, "browser_network") || hasRegisteredTool(reg, "browser_network_read"),
-		Subagent:      hasRegisteredTool(reg, SubagentToolName),
-		FocusedTasks:  hasRegisteredTool(reg, FocusedTaskToolName),
-		Skill:         hasRegisteredTool(reg, SkillToolName),
-		MCP:           registryHasMCPTools(reg),
+		Builtins:       runtimeHasCoreWorkspaceTools(workspaceTools),
+		WorkspaceTools: workspaceTools,
+		Memory:         hasRegisteredTool(reg, MemoryToolName),
+		Plan:           hasRegisteredTool(reg, PlanToolName),
+		SessionSearch:  hasRegisteredTool(reg, SessionSearchToolName),
+		WebFetch:       hasRegisteredTool(reg, "web_fetch"),
+		WebSearch:      hasRegisteredTool(reg, "web_search"),
+		Browser:        hasRegisteredTool(reg, "browser_navigate") || hasRegisteredTool(reg, "browser_snapshot") || hasRegisteredTool(reg, "browser_find") || hasRegisteredTool(reg, "browser_network") || hasRegisteredTool(reg, "browser_network_read"),
+		Subagent:       hasRegisteredTool(reg, SubagentToolName),
+		FocusedTasks:   hasRegisteredTool(reg, FocusedTaskToolName),
+		Skill:          hasRegisteredTool(reg, SkillToolName),
+		MCP:            registryHasMCPTools(reg),
 	}
+}
+
+func runtimeWorkspaceToolsForRegistry(reg *Registry) []string {
+	if reg == nil {
+		return nil
+	}
+	candidates := []string{
+		"shell",
+		"read_file",
+		"file_context",
+		"write_file",
+		"edit_file",
+		"list_files",
+		SymbolContextToolName,
+		"repo_search",
+	}
+	tools := make([]string, 0, len(candidates))
+	for _, name := range candidates {
+		if hasRegisteredTool(reg, name) {
+			tools = append(tools, name)
+		}
+	}
+	return tools
+}
+
+func runtimeHasCoreWorkspaceTools(names []string) bool {
+	if len(names) == 0 {
+		return false
+	}
+	seen := make(map[string]bool, len(names))
+	for _, name := range names {
+		seen[name] = true
+	}
+	for _, required := range []string{"shell", "read_file", "write_file", "edit_file", "list_files"} {
+		if !seen[required] {
+			return false
+		}
+	}
+	return true
 }
 
 func registryHasMCPTools(reg *Registry) bool {

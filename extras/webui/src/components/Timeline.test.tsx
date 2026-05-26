@@ -1541,7 +1541,7 @@ describe("Timeline", () => {
             { name: "memory", group: "Memory" },
             { name: "run_task", group: "Core" },
           ],
-          capabilities: { web_fetch: true, web_search: true, memory: true, focused_tasks: true },
+          capabilities: { web_fetch: true, web_search: true, memory: true, focused_tasks: true, workspace_tools: ["read_file"] },
           max_turn_steps: 20,
           tool_result_event_cap_bytes: 262144,
           tool_result_context_budget_bytes: 32768,
@@ -1554,6 +1554,7 @@ describe("Timeline", () => {
     expect(surface).toHaveTextContent("Runtime surface");
     expect(surface).toHaveTextContent("4 tools");
     expect(surface).toHaveTextContent("web search");
+    expect(surface).toHaveTextContent("workspace: read_file");
     expect(surface).toHaveTextContent("20 max turns");
     fireEvent.click(within(surface).getByText("Runtime surface"));
     expect(surface).toHaveTextContent("web_fetch");

@@ -256,6 +256,7 @@ function runtimeCapabilityLabels(caps: RuntimeCapabilities): string[] {
   if (caps.subagent) labels.push("subagent");
   if (caps.focused_tasks) labels.push("focused tasks");
   if (caps.builtins) labels.push("workspace tools");
+  else if (caps.workspace_tools?.length) labels.push(`workspace: ${caps.workspace_tools.join(", ")}`);
   if (caps.session_search) labels.push("session history");
   if (caps.skill) labels.push("skills");
   if (caps.mcp) labels.push("mcp");

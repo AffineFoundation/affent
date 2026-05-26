@@ -40,7 +40,7 @@ describe("eventTrace view model", () => {
         data: {
           turn_id: "t1",
           tool_count: 16,
-          capabilities: { web_search: true, memory: true, subagent: true, focused_tasks: true },
+          capabilities: { web_search: true, memory: true, subagent: true, focused_tasks: true, workspace_tools: ["read_file"] },
           max_turn_steps: 12,
           max_tool_calls: 8,
         },
@@ -91,7 +91,7 @@ describe("eventTrace view model", () => {
       display: {
         label: "Runtime surface",
         meta: ["Request 1", "16 tools", "12 turns", "8 tool cap"],
-        badges: ["web search", "memory", "subagent", "focused tasks"],
+        badges: ["web search", "memory", "subagent", "focused tasks", "workspace: read_file"],
       },
     });
     expect(result).toMatchObject({

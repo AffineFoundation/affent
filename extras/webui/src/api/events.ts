@@ -75,6 +75,7 @@ export interface RuntimeSurfaceTool {
 
 export interface RuntimeCapabilities {
   builtins?: boolean;
+  workspace_tools?: string[];
   memory?: boolean;
   plan?: boolean;
   session_search?: boolean;

@@ -423,7 +423,7 @@ func TestBatchSummaryAggregatesRuntimeMetrics(t *testing.T) {
 				{Name: "web_fetch"},
 				{Name: "browser_find"},
 			},
-			Capabilities: sse.RuntimeCapabilities{WebFetch: true, Browser: true},
+			Capabilities: sse.RuntimeCapabilities{WorkspaceTools: []string{"read_file"}, WebFetch: true, Browser: true},
 		},
 		Verifier: agenteval.VerifierResult{Ran: true, OK: true, ExitCode: 0, OutputBytes: 64, OutputCapBytes: 1024},
 		Usage:    agenteval.Usage{InputTokens: 20, OutputTokens: 5},
@@ -530,7 +530,7 @@ func TestBatchSummaryAggregatesRuntimeMetrics(t *testing.T) {
 	if !strings.Contains(out.String(), "runtime_error_kinds=context_overflow:1,llm_timeout:2") {
 		t.Fatalf("summary output missing runtime error kind rollup:\n%s", out.String())
 	}
-	if !strings.Contains(out.String(), "runtime_surface=scenarios:2 runtime_capabilities=browser:2,web_fetch:2,web_search:1 runtime_tools=browser_find:2,web_fetch:2,web_search:1") {
+	if !strings.Contains(out.String(), "runtime_surface=scenarios:2 runtime_capabilities=browser:2,web_fetch:2,web_search:1,workspace_partial:1 runtime_tools=browser_find:2,web_fetch:2,web_search:1") {
 		t.Fatalf("summary output missing runtime surface rollup:\n%s", out.String())
 	}
 	if !strings.Contains(out.String(), "loop_decisions=1 loop_decision_kinds=evidence_quality:1 loop_decision_results=defer:1") {
@@ -588,7 +588,7 @@ func TestBatchSummaryAggregatesRuntimeMetrics(t *testing.T) {
 	if summary.RuntimeSurfaceScenarios != 2 {
 		t.Fatalf("RuntimeSurfaceScenarios = %d, want 2", summary.RuntimeSurfaceScenarios)
 	}
-	if !reflect.DeepEqual(summary.RuntimeSurfaceCapabilities, map[string]int{"web_fetch": 2, "web_search": 1, "browser": 2}) {
+	if !reflect.DeepEqual(summary.RuntimeSurfaceCapabilities, map[string]int{"web_fetch": 2, "web_search": 1, "browser": 2, "workspace_partial": 1}) {
 		t.Fatalf("RuntimeSurfaceCapabilities = %#v", summary.RuntimeSurfaceCapabilities)
 	}
 	if !reflect.DeepEqual(summary.RuntimeSurfaceTools, map[string]int{"web_fetch": 2, "web_search": 1, "browser_find": 2}) {
@@ -893,7 +893,7 @@ func TestPrintBatchResultJSONLIncludesDebugPathsForRetainedWorkspace(t *testing.
 				{Name: "browser_find"},
 				{Name: "web_fetch"},
 			},
-			Capabilities:                 sse.RuntimeCapabilities{WebFetch: true, Browser: true},
+			Capabilities:                 sse.RuntimeCapabilities{WorkspaceTools: []string{"read_file", "repo_search"}, WebFetch: true, Browser: true},
 			MaxTurnSteps:                 12,
 			MaxToolCalls:                 40,
 			ToolResultEventCapBytes:      8192,
@@ -943,6 +943,10 @@ func TestPrintBatchResultJSONLIncludesDebugPathsForRetainedWorkspace(t *testing.
 	caps, ok := surface["capabilities"].(map[string]any)
 	if !ok || caps["web_fetch"] != true || caps["browser"] != true {
 		t.Fatalf("runtime_surface capabilities = %#v\njson=%s", surface["capabilities"], out.String())
+	}
+	workspaceTools, ok := caps["workspace_tools"].([]any)
+	if !ok || len(workspaceTools) != 2 || workspaceTools[0] != "read_file" || workspaceTools[1] != "repo_search" {
+		t.Fatalf("runtime_surface workspace tools = %#v\njson=%s", caps["workspace_tools"], out.String())
 	}
 }
 

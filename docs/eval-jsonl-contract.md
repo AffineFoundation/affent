@@ -64,7 +64,8 @@ Scenario records describe one eval case:
 - `runtime_surface`: compact copy of the latest effective runtime surface when
   the trace reached turn start. It records sorted tool names, broad
   capabilities such as `web_fetch`, `web_search`, `browser`, `memory`, and
-  `subagent`, plus key tool-result limits. Retained debug manifests include the
+  `subagent`, partial `workspace_tools` when only some workspace tools are
+  enabled, plus key tool-result limits. Retained debug manifests include the
   fuller `runtime_surface` block with per-tool group/source metadata.
 - `run_exit_code`: `affentctl run` exit code for the scenario.
 - `turn_end_reason`: runtime turn end reason, when available.
@@ -217,7 +218,7 @@ Summary records aggregate all scenario records from the same process:
   `runtime_surface_tools`, and `runtime_surface_capabilities`. Counts are
   per-scenario surface presence, not model call counts; use them to group pass
   rates and failures by the actual tool/capability surface exposed during the
-  run.
+  run. Partial workspace surfaces are counted as `workspace_partial`.
 - Cleanup totals: `removed_workspaces`, `cleanup_errors`.
 
 ## Compatibility
