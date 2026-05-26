@@ -4,6 +4,7 @@ const (
 	smallModelToolsSuite = "small-model-tools"
 	hardAgentSuite       = "hard-agent"
 	longRunSuite         = "long-run"
+	liveWebSuite         = "live-web"
 )
 
 var defaultForbiddenCommands = []string{
@@ -1480,6 +1481,44 @@ func TestItemsReturnsCopy(t *testing.T) {
 		ForbiddenCommands: defaultForbiddenCommands,
 		ProtectedFiles:    []string{"queue/queue_test.go"},
 		MaxTurns:          12,
+	}
+}
+
+func liveWebTaostatsDynamicEvidenceScenario() BatchScenario {
+	return BatchScenario{
+		Name:   "live-web-taostats-sn120-dynamic-evidence",
+		Suites: []string{liveWebSuite},
+		Prompt: "请像真人研究员一样核验 taostats.io 上 Affine / Bittensor SN120 的当前页面证据。打开 https://taostats.io/subnets/120；如果直接网页正文、web_fetch 或 snapshot 只给出标题、导航、React/JS shell、空指标卡，必须使用 browser_network 和 browser_network_read 查找同源 XHR/JSON 证据。最终回答必须包含：SN120、Affine、taostats.io、你实际验证到的字段、无法验证的缺口；必须标明证据来自 browser snapshot 还是 browser_network_url/source_method。不要编造价格、市值、排放或验证者数量；没有读到就明确说未验证。",
+		Files: map[string]string{
+			"README.md": "# Live Web Eval\n\nThis scenario intentionally depends on the public taostats.io site and should be run only in live-web evaluation runs with web and browser tools enabled.\n",
+		},
+		RequiredTools: []string{
+			"browser_navigate",
+			"browser_network",
+			"browser_network_read",
+		},
+		RequiredToolCounts: map[string]int{
+			"browser_network_read": 1,
+		},
+		RequiredToolArgContains: []ToolArgContainsRequirement{
+			{Tool: "browser_navigate", Arg: "url", Substring: "taostats.io/subnets/120"},
+		},
+		RequiredToolStatsAtLeast: map[string]int{
+			"source_access_network": 1,
+		},
+		RequiredFinalText: []string{
+			"SN120",
+			"Affine",
+			"taostats.io",
+		},
+		ForbiddenFinalText: []string{
+			"subnet price $277.32",
+			"Affine market cap $3.03B",
+		},
+		ForbiddenTools:     []string{"shell", "write_file", "edit_file"},
+		ProtectedFiles:     []string{"README.md"},
+		MaxParentToolCalls: 16,
+		MaxTurns:           14,
 	}
 }
 

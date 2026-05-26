@@ -867,6 +867,31 @@ func TestSelectLongRunSuite(t *testing.T) {
 	}
 }
 
+func TestSelectLiveWebSuite(t *testing.T) {
+	scenarios, err := SelectBatchScenariosForSuite("live-web", nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(scenarios) != 1 {
+		t.Fatalf("live-web suite size = %d, want 1", len(scenarios))
+	}
+	scenario := scenarios[0]
+	if scenario.Name != "live-web-taostats-sn120-dynamic-evidence" {
+		t.Fatalf("live-web scenario name = %q", scenario.Name)
+	}
+	for _, want := range []string{"browser_navigate", "browser_network", "browser_network_read"} {
+		if !stringSliceContains(scenario.RequiredTools, want) {
+			t.Fatalf("live-web RequiredTools = %#v, want %q", scenario.RequiredTools, want)
+		}
+	}
+	if scenario.RequiredToolStatsAtLeast["source_access_network"] != 1 {
+		t.Fatalf("live-web source access requirements = %#v, want source_access_network=1", scenario.RequiredToolStatsAtLeast)
+	}
+	if !stringSliceContains(scenario.ForbiddenTools, "shell") {
+		t.Fatalf("live-web ForbiddenTools = %#v, want shell", scenario.ForbiddenTools)
+	}
+}
+
 func TestFocusedTaskScenarioRequiresExploreTask(t *testing.T) {
 	for _, scenario := range BuiltinBatchScenarios() {
 		if scenario.Name != "focused-task-project-facts" {

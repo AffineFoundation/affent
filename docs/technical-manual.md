@@ -721,12 +721,16 @@ Current built-in suites:
 - `small-model-tools`: weak-model tool calling, recovery, and compact-context behavior.
 - `hard-agent`: harder local agent tasks such as coding, planning, and subagent workflows.
 - `long-run`: deterministic complex tasks for longer practical runs, currently covering stock synthesis, Bittensor subnet research, and code implementation with PR-style reporting.
+- `live-web`: non-CI live web regressions for JavaScript-heavy pages and
+  evidence-quality recovery. These scenarios intentionally depend on public
+  sites and should be run with web/browser tools enabled.
 
 Run scenarios:
 
 ```bash
 go run ./cmd/affenteval --suite small-model-tools --temperature 0
 go run ./cmd/affenteval --suite long-run --temperature 0
+go run ./cmd/affenteval --suite live-web --runtime-web --runtime-browser --temperature 0 --keep-workspaces
 go run ./cmd/affenteval --scenario coding-python-slug --temperature 0
 go run ./cmd/affenteval --suite small-model-tools --jsonl > eval.jsonl
 ```

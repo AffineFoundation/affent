@@ -266,6 +266,7 @@ func BuiltinBatchScenarios() []BatchScenario {
 		longRunStockAnalysisScenario(),
 		longRunBittensorSubnetScenario(),
 		longRunCodePRScenario(),
+		liveWebTaostatsDynamicEvidenceScenario(),
 	}
 }
 
