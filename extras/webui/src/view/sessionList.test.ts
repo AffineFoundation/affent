@@ -78,6 +78,57 @@ describe("sessionList view model", () => {
     expect(rows[0].searchText).toContain("plan 1/3, step 2 active");
   });
 
+  it("surfaces high context pressure in row stats and search", () => {
+    const rows = buildSessionRows([
+      session({
+        id: "long-run-session",
+        durable: true,
+        latest_user_message: "continue long market run",
+        context: {
+          message_count: 192,
+          compact_trigger: 240,
+          compact_percent: 80,
+          messages_until_compact: 48,
+        },
+      }),
+      session({
+        id: "near-compact-session",
+        durable: true,
+        latest_user_message: "continue bittensor subnet audit",
+        context: {
+          message_count: 34,
+          compact_trigger: 80,
+          compact_percent: 43,
+          messages_until_compact: 4,
+        },
+      }),
+    ]);
+
+    expect(rows.find((row) => row.id === "long-run-session")?.metrics).toContain("Context 80%");
+    expect(rows.find((row) => row.id === "long-run-session")?.searchText).toContain("context 80%");
+    expect(rows.find((row) => row.id === "near-compact-session")?.metrics).toContain("Context 43%, 4 msgs left");
+    expect(rows.find((row) => row.id === "near-compact-session")?.searchText).toContain("4 msgs left");
+  });
+
+  it("keeps low context pressure out of row stats", () => {
+    const rows = buildSessionRows([
+      session({
+        id: "short-session",
+        durable: true,
+        latest_user_message: "short task",
+        context: {
+          message_count: 12,
+          compact_trigger: 120,
+          compact_percent: 10,
+          messages_until_compact: 108,
+        },
+      }),
+    ]);
+
+    expect(rows[0].metrics).not.toEqual(expect.arrayContaining([expect.stringContaining("Context")]));
+    expect(rows[0].searchText).not.toContain("context 10%");
+  });
+
   it("filters rows by status, features, and search text", () => {
     const rows = buildSessionRows([
       session({ id: "live-a", active: true, has_events: true }),

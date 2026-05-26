@@ -1,4 +1,4 @@
-import type { SessionPlanSummary, SessionSummary } from "../api/sessions";
+import type { SessionContextSummary, SessionPlanSummary, SessionSummary } from "../api/sessions";
 import type { SessionState } from "../store/sessionState";
 import { conversationTopicFromTurns } from "./continuationPrompt";
 import { summarizeUserError } from "./errorSummary";
@@ -368,9 +368,25 @@ function usageMetrics(session: SessionSummary): string[] {
   const toolErrors = session.tools?.tool_errors ?? 0;
   if (toolErrors > 0) metrics.push(`${toolErrors} issue${toolErrors === 1 ? "" : "s"}`);
   if (session.browser && session.browser.network_fetch > 0) metrics.push(`${session.browser.network_fetch} web`);
+  const contextMetric = sessionContextMetric(session.context);
+  if (contextMetric) metrics.push(contextMetric);
   const planMetric = sessionPlanMetric(session.plan_summary);
   if (planMetric) metrics.push(planMetric);
   return metrics;
+}
+
+function sessionContextMetric(context: SessionContextSummary | undefined): string | undefined {
+  if (!context || context.compact_trigger <= 0) return undefined;
+  const percent = context.compact_percent > 0
+    ? Math.round(context.compact_percent)
+    : Math.round((context.message_count / context.compact_trigger) * 100);
+  const remaining = context.messages_until_compact;
+  if (percent < 80 && remaining > 10) return undefined;
+  const parts = [`Context ${Math.max(0, percent)}%`];
+  if (remaining >= 0 && remaining <= 10) {
+    parts.push(`${remaining} msg${remaining === 1 ? "" : "s"} left`);
+  }
+  return parts.join(", ");
 }
 
 function sessionPlanMetric(plan: SessionPlanSummary | undefined): string | undefined {
