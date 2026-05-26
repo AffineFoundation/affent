@@ -7353,6 +7353,242 @@ html[data-theme="dark"] .memory-update-card {
   background: rgba(13, 40, 38, 0.52);
 }
 
+html[data-theme="dark"] .workflow-status {
+  border-bottom-color: rgba(58, 68, 81, 0.82);
+  background: rgba(11, 13, 17, 0.78);
+}
+
+html[data-theme="dark"] .workflow-status::before {
+  background: linear-gradient(110deg, transparent, rgba(45, 212, 191, 0.08), transparent);
+}
+
+html[data-theme="dark"] .chat-context-state,
+html[data-theme="dark"] .run-detail-line,
+html[data-theme="dark"] .run-detail-overflow summary,
+html[data-theme="dark"] .run-detail-metrics {
+  border-color: rgba(58, 68, 81, 0.86);
+  background: rgba(17, 20, 24, 0.92);
+  color: var(--text-muted);
+  box-shadow: var(--shadow-soft);
+}
+
+html[data-theme="dark"] .run-detail-overflow summary:hover,
+html[data-theme="dark"] .run-detail-overflow summary:focus-visible,
+html[data-theme="dark"] .run-detail-overflow[open] summary {
+  border-color: rgba(45, 212, 191, 0.42);
+  background: rgba(45, 212, 191, 0.12);
+  color: var(--text);
+}
+
+html[data-theme="dark"] .conversation-map,
+html[data-theme="dark"] .timeline-toolbar > summary,
+html[data-theme="dark"] .timeline-advanced > summary,
+html[data-theme="dark"] .timeline-reset,
+html[data-theme="dark"] .timeline-search input,
+html[data-theme="dark"] .timeline-filter,
+html[data-theme="dark"] .timeline-filter button[aria-pressed="true"] {
+  border-color: rgba(58, 68, 81, 0.82);
+  background: rgba(17, 20, 24, 0.78);
+}
+
+html[data-theme="dark"] .turn-nav-progress::before {
+  background: linear-gradient(90deg, rgba(45, 212, 191, 0.36), rgba(58, 68, 81, 0.86));
+}
+
+html[data-theme="dark"] .turn-nav-step span,
+html[data-theme="dark"] .turn-nav-glance-item,
+html[data-theme="dark"] .turn-nav-glance-index,
+html[data-theme="dark"] .turn-nav-glance-item small {
+  border-color: rgba(58, 68, 81, 0.84);
+  background: rgba(17, 20, 24, 0.82);
+  color: var(--text-muted);
+}
+
+html[data-theme="dark"] .turn-nav-step:hover span,
+html[data-theme="dark"] .turn-nav-step:focus-visible span,
+html[data-theme="dark"] .turn-nav-glance-item:hover,
+html[data-theme="dark"] .turn-nav-glance-item:focus-visible,
+html[data-theme="dark"] .turn-nav-glance-item[data-current="true"] {
+  border-color: rgba(45, 212, 191, 0.4);
+  background: rgba(45, 212, 191, 0.11);
+  color: var(--text);
+  box-shadow: 0 10px 24px rgba(0, 0, 0, 0.24);
+}
+
+html[data-theme="dark"] .timeline-toolbar[open] {
+  border-top-color: rgba(58, 68, 81, 0.78);
+}
+
+html[data-theme="dark"] .flow-step-assistant .flow-text {
+  border-color: rgba(58, 68, 81, 0.88);
+  background:
+    linear-gradient(180deg, rgba(18, 21, 26, 0.94), rgba(12, 15, 20, 0.88)),
+    rgba(14, 17, 22, 0.92);
+  color: var(--text);
+  box-shadow: 0 14px 34px rgba(0, 0, 0, 0.28);
+}
+
+html[data-theme="dark"] .flow-step-user .flow-text {
+  border: 1px solid rgba(78, 90, 106, 0.52);
+  background:
+    linear-gradient(180deg, rgba(31, 37, 46, 0.98), rgba(18, 22, 29, 0.98)),
+    rgba(20, 24, 30, 0.96);
+  color: var(--text);
+  box-shadow: 0 14px 34px rgba(0, 0, 0, 0.34);
+}
+
+html[data-theme="dark"] .flow-step-assistant[data-streaming="true"] .flow-text,
+html[data-theme="dark"] .timeline[data-pending-first="true"] .pending-response,
+html[data-theme="dark"] .running-answer {
+  border-color: rgba(122, 167, 255, 0.26);
+  background:
+    linear-gradient(100deg, rgba(37, 99, 235, 0.12), rgba(45, 212, 191, 0.12), rgba(37, 99, 235, 0.12)),
+    rgba(14, 17, 22, 0.92);
+  color: var(--text);
+}
+
+html[data-theme="dark"] .pending-turn[data-kind="guidance"] .flow-step-user .flow-text,
+html[data-theme="dark"] .guidance-receipt .flow-step-user .flow-text,
+html[data-theme="dark"] .guidance-receipt-note {
+  border-color: rgba(45, 212, 191, 0.3);
+  background: rgba(13, 40, 38, 0.58);
+  color: var(--text);
+  box-shadow: 0 12px 28px rgba(0, 0, 0, 0.28);
+}
+
+html[data-theme="dark"] .pending-turn[data-kind="guidance"] .pending-response,
+html[data-theme="dark"] .pending-response,
+html[data-theme="dark"] .timeline-loading-banner,
+html[data-theme="dark"] .jump-live {
+  border-color: rgba(58, 68, 81, 0.86);
+  background: rgba(17, 20, 24, 0.9);
+  color: var(--text-muted);
+  box-shadow: var(--shadow-soft);
+}
+
+html[data-theme="dark"] .flow-turn-head,
+html[data-theme="dark"] .turn-boundary::after,
+html[data-theme="dark"] .agent-activity::before,
+html[data-theme="dark"] .agent-activity-brief,
+html[data-theme="dark"] .assistant-cluster::before {
+  border-color: rgba(58, 68, 81, 0.72);
+  background-color: rgba(58, 68, 81, 0.72);
+}
+
+html[data-theme="dark"] .turn-boundary small,
+html[data-theme="dark"] .turn-boundary-meta,
+html[data-theme="dark"] .flow-metrics-line,
+html[data-theme="dark"] .work-summary-line,
+html[data-theme="dark"] .agent-activity-head small,
+html[data-theme="dark"] .agent-activity-evidence-chip,
+html[data-theme="dark"] .artifact-pill,
+html[data-theme="dark"] .artifact-pill-action {
+  border-color: rgba(58, 68, 81, 0.82);
+  background: rgba(17, 20, 24, 0.78);
+  color: var(--text-muted);
+}
+
+html[data-theme="dark"] .message-action,
+html[data-theme="dark"] .message-copy-menu .copy-menu-trigger.message-action,
+html[data-theme="dark"] .message-copy-menu-panel,
+html[data-theme="dark"] .agent-activity-copy-menu .copy-menu-trigger,
+html[data-theme="dark"] .agent-activity-copy-menu-panel,
+html[data-theme="dark"] .agent-activity-copy-action,
+html[data-theme="dark"] .agent-activity-digest-action,
+html[data-theme="dark"] .agent-activity-brief-action,
+html[data-theme="dark"] .agent-activity-node-action {
+  border-color: rgba(58, 68, 81, 0.86);
+  background: rgba(17, 20, 24, 0.92);
+  color: var(--text);
+  box-shadow: none;
+}
+
+html[data-theme="dark"] .message-action:hover,
+html[data-theme="dark"] .message-action:focus-visible,
+html[data-theme="dark"] .message-copy-menu[data-open="true"] .copy-menu-trigger.message-action,
+html[data-theme="dark"] .agent-activity-copy-menu .copy-menu-trigger:hover,
+html[data-theme="dark"] .agent-activity-copy-menu .copy-menu-trigger:focus-visible,
+html[data-theme="dark"] .agent-activity-copy-menu[data-open="true"] .copy-menu-trigger,
+html[data-theme="dark"] .agent-activity-copy-action:hover,
+html[data-theme="dark"] .agent-activity-copy-action:focus-visible,
+html[data-theme="dark"] .agent-activity-digest-action:hover,
+html[data-theme="dark"] .agent-activity-digest-action:focus-visible,
+html[data-theme="dark"] .agent-activity-brief-action:hover,
+html[data-theme="dark"] .agent-activity-brief-action:focus-visible,
+html[data-theme="dark"] .agent-activity-node-action:hover,
+html[data-theme="dark"] .agent-activity-node-action:focus-visible,
+html[data-theme="dark"] .artifact-pill:hover,
+html[data-theme="dark"] .artifact-pill-action:hover {
+  border-color: rgba(45, 212, 191, 0.44);
+  background: rgba(45, 212, 191, 0.12);
+  color: var(--text);
+  box-shadow: 0 10px 24px rgba(0, 0, 0, 0.24);
+}
+
+html[data-theme="dark"] .agent-activity-head:hover,
+html[data-theme="dark"] .agent-activity[data-open="true"] .agent-activity-head,
+html[data-theme="dark"] .agent-activity-node[data-open="true"] > .agent-activity-node-row,
+html[data-theme="dark"] .agent-activity-node-row:has(.agent-activity-node-toggle:hover),
+html[data-theme="dark"] .agent-activity-node-row:has(.agent-activity-node-toggle:focus-visible) {
+  background: rgba(17, 20, 24, 0.78);
+}
+
+html[data-theme="dark"] .work-thread {
+  border-left-color: rgba(58, 68, 81, 0.68);
+}
+
+html[data-theme="dark"] .work-thread-head {
+  border-color: rgba(58, 68, 81, 0.84);
+  background: rgba(17, 20, 24, 0.72);
+  color: var(--text-muted);
+}
+
+html[data-theme="dark"] .work-thread-head:hover,
+html[data-theme="dark"] .work-thread[data-status="running"] .work-thread-head {
+  border-color: rgba(45, 212, 191, 0.34);
+  background: rgba(45, 212, 191, 0.1);
+  color: var(--text);
+  box-shadow: 0 12px 28px rgba(0, 0, 0, 0.24);
+}
+
+html[data-theme="dark"] .markdown-text code,
+html[data-theme="dark"] .markdown-text pre,
+html[data-theme="dark"] .markdown-code-block,
+html[data-theme="dark"] .markdown-table-scroll {
+  border-color: rgba(58, 68, 81, 0.84);
+  background: rgba(8, 10, 13, 0.7);
+  color: var(--text);
+}
+
+html[data-theme="dark"] .markdown-code-head,
+html[data-theme="dark"] .markdown-table-head,
+html[data-theme="dark"] .markdown-text th,
+html[data-theme="dark"] .markdown-text td {
+  border-color: rgba(58, 68, 81, 0.78);
+}
+
+html[data-theme="dark"] .markdown-code-head,
+html[data-theme="dark"] .markdown-table-head,
+html[data-theme="dark"] .markdown-text th {
+  background: rgba(17, 20, 24, 0.96);
+}
+
+html[data-theme="dark"] .markdown-code-copy,
+html[data-theme="dark"] .markdown-table-copy {
+  border-color: rgba(58, 68, 81, 0.86);
+  background: rgba(17, 20, 24, 0.86);
+  color: var(--text-muted);
+}
+
+html[data-theme="dark"] .markdown-code-copy:hover,
+html[data-theme="dark"] .markdown-code-copy:focus-visible,
+html[data-theme="dark"] .markdown-table-copy:hover,
+html[data-theme="dark"] .markdown-table-copy:focus-visible {
+  border-color: rgba(45, 212, 191, 0.44);
+  background: rgba(45, 212, 191, 0.12);
+  color: var(--text);
+}
+
 html[data-theme="dark"] .markdown-text th {
   background: rgba(17, 20, 24, 0.96);
 }
