@@ -122,12 +122,12 @@ describe("sessionList view model", () => {
 
     expect(rows.find((row) => row.id === "saved-session-abcdef123456")).toMatchObject({
       title: "Saved chat",
-      meta: ["saved-se...123456", "May 23 18:30 UTC"],
+      meta: ["May 23 18:30 UTC"],
       status: "Saved",
     });
     expect(rows.find((row) => row.id === "live-session-abcdef123456")).toMatchObject({
       title: "Live chat",
-      meta: ["live-ses...123456"],
+      meta: [],
       status: "Live",
     });
     expect(rows.find((row) => row.id === "saved-session-abcdef123456")?.searchText).toContain("saved-session-abcdef123456");
@@ -476,7 +476,7 @@ describe("sessionList view model", () => {
       preview: undefined,
       status: "Live",
     });
-    expect(rows[0].meta).toContain("runtime-...ession");
+    expect(rows[0].meta).toEqual([]);
     expect(rows[0].searchText).toContain("tools are disabled");
   });
 

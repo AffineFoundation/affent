@@ -151,7 +151,7 @@ describe("App", () => {
     expect(latest).not.toHaveTextContent("saved-se...123456");
     expect(within(latest).queryByRole("button", { name: "Use as draft" })).toBeNull();
     expect(within(latest).getByRole("button", { name: /Open latest chat/ })).toBeInTheDocument();
-    expect(screen.getByTestId("session-list")).toHaveTextContent("saved-se...123456");
+    expect(screen.getByTestId("session-list")).not.toHaveTextContent("saved-se...123456");
   });
 
   it("loads every history page before rendering a saved chat", async () => {

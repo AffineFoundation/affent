@@ -72,9 +72,8 @@ export function buildSessionRows(sessions: readonly SessionSummary[]): SessionRo
       detail,
       preview,
       stats,
-      meta: buildRowMeta(session.id, updated, {
+      meta: buildRowMeta(updated, {
         empty: !titleSource && !session.has_conversation && !session.has_events,
-        includeId: !titleSource && shouldShowSessionIdMeta(session),
       }),
       status,
       tone: session.active ? "running" : session.durable ? "saved" : "muted",
@@ -134,7 +133,6 @@ function mergeCurrentSession(row: SessionRowView, session: SessionState | undefi
       ? currentSessionPreview(session, title, detail)
       : row.preview;
   const stats = session ? summarizeSessionStats(currentSessionMetrics(session)) : row.stats;
-  const hasTopicTitle = row.titleSource === "provided" || Boolean(session && conversationTopicFromTurns(session.turns));
   const metrics = session ? currentSessionMetrics(session) : row.metrics;
   const searchMetrics = session ? currentSessionSearchMetrics(session) : row.metrics;
   const chips = session ? mergeChips(row.chips, currentSessionChips(session)) : row.chips;
@@ -150,7 +148,7 @@ function mergeCurrentSession(row: SessionRowView, session: SessionState | undefi
     detail,
     preview,
     stats,
-    meta: buildRowMeta(row.id, updated, { includeId: !hasTopicTitle && !pending }),
+    meta: buildRowMeta(updated),
     status,
     tone: pending ? "running" : session ? currentSessionTone(session, row.tone) : row.tone,
     updated,
@@ -377,15 +375,6 @@ function featureChips(session: SessionSummary): string[] {
   if (session.has_memory) chips.push("memory");
   if (session.has_runtime_skills) chips.push("skills");
   return chips;
-}
-
-function shortenSessionId(id: string): string {
-  if (id.length <= 18) return id;
-  return `${id.slice(0, 8)}...${id.slice(-6)}`;
-}
-
-function shouldShowSessionIdMeta(session: SessionSummary): boolean {
-  return session.has_conversation || session.has_events;
 }
 
 function fallbackSessionTitle(session: SessionSummary): string {
@@ -676,9 +665,8 @@ function normalizeTitlePhrase(text: string): string {
   return prettyTopicName(title);
 }
 
-function buildRowMeta(id: string, updated: string, opts: { empty?: boolean; includeId?: boolean } = {}): string[] {
+function buildRowMeta(updated: string, opts: { empty?: boolean } = {}): string[] {
   const meta: string[] = [];
-  if (opts.includeId) meta.push(shortenSessionId(id));
   if (updated && updated !== noMessagesYet) meta.push(updated);
   if (opts.empty) meta.push(noMessagesYet);
   return meta;

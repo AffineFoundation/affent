@@ -19,9 +19,10 @@ describe("SessionList", () => {
       }),
     ]);
 
-    const row = screen.getByRole("button", { name: /s1/ });
+    const row = screen.getByRole("button", { name: /Live chat/ });
     expect(row).toHaveTextContent("Live chat");
     expect(row).toHaveTextContent("Live");
+    expect(row).not.toHaveTextContent("s1");
     expect(row).not.toHaveTextContent("2 messages");
     expect(row).not.toHaveTextContent("tokens");
     expect(row).not.toHaveTextContent("activity");
