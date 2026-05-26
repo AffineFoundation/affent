@@ -112,6 +112,9 @@ func (l *NetworkEvidenceLog) Search(query string, maxResults int) []NetworkEvide
 	var out []NetworkEvidenceEntry
 	for i := len(l.entries) - 1; i >= 0 && len(out) < maxResults; i-- {
 		entry := l.entries[i]
+		if !networkEntryMatchesPageHost(entry, l.pageHost) {
+			continue
+		}
 		if query == "" || networkEntryMatches(entry, query) {
 			out = append(out, cloneNetworkEntry(entry))
 		}
@@ -128,11 +131,22 @@ func (l *NetworkEvidenceLog) Get(refOrURL string) (NetworkEvidenceEntry, bool) {
 	defer l.mu.Unlock()
 	for i := len(l.entries) - 1; i >= 0; i-- {
 		entry := l.entries[i]
+		if !networkEntryMatchesPageHost(entry, l.pageHost) {
+			continue
+		}
 		if entry.Ref == refOrURL || entry.URL == refOrURL {
 			return cloneNetworkEntry(entry), true
 		}
 	}
 	return NetworkEvidenceEntry{}, false
+}
+
+func networkEntryMatchesPageHost(entry NetworkEvidenceEntry, pageHost string) bool {
+	if pageHost == "" {
+		return true
+	}
+	host := normalizedURLHost(entry.URL)
+	return host != "" && sameSiteOrSubdomain(host, pageHost)
 }
 
 func networkEntryMatches(entry NetworkEvidenceEntry, query string) bool {

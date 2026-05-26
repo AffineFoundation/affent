@@ -36,6 +36,29 @@ func TestNetworkEvidenceLogCapturesSameSiteXHRFetchOnly(t *testing.T) {
 	}
 }
 
+func TestNetworkEvidenceSearchFiltersToCurrentPageHost(t *testing.T) {
+	log := NewNetworkEvidenceLog()
+	log.ObserveResponse("https://taostats.io/subnets/120", proto.NetworkResourceTypeDocument)
+	if _, ok := log.Add("https://taostats.io/api/subnets/120", 200, proto.NetworkResourceTypeFetch, http.Header{"Content-Type": {"application/json"}}, []byte(`{"name":"Affine"}`)); !ok {
+		t.Fatal("taostats response should be captured")
+	}
+
+	log.ObserveResponse("https://metrics.example/dashboard", proto.NetworkResourceTypeDocument)
+	if _, ok := log.Add("https://metrics.example/api/current", 200, proto.NetworkResourceTypeFetch, http.Header{"Content-Type": {"application/json"}}, []byte(`{"name":"Helio"}`)); !ok {
+		t.Fatal("metrics response should be captured")
+	}
+
+	if got := log.Search("", 10); len(got) != 1 || got[0].URL != "https://metrics.example/api/current" {
+		t.Fatalf("Search should expose only current page host responses, got %+v", got)
+	}
+	if _, ok := log.Get("n1"); ok {
+		t.Fatal("old page network refs must not be readable after navigating to a different host")
+	}
+	if got, ok := log.Get("n2"); !ok || got.URL != "https://metrics.example/api/current" {
+		t.Fatalf("current page ref not readable: got=%+v ok=%v", got, ok)
+	}
+}
+
 func TestNetworkEvidenceToolsSearchAndRead(t *testing.T) {
 	log := NewNetworkEvidenceLog()
 	log.ObserveResponse("https://taostats.io/subnets/120", proto.NetworkResourceTypeDocument)

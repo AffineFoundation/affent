@@ -47,6 +47,12 @@ type Snapshot struct {
 	// TruncatedBlocks reports whether the page had more text blocks
 	// than the 200-block cap allowed.
 	TruncatedBlocks bool `json:"truncated_blocks,omitempty"`
+
+	// Network lists a small set of same-site XHR/fetch responses captured
+	// while loading/interacting with the current browser session. Bodies are
+	// intentionally omitted here; the model must use browser_network_read
+	// before citing hidden dashboard values.
+	Network []NetworkEvidenceEntry `json:"network,omitempty"`
 }
 
 // InteractiveElement describes one ref-addressable element.
@@ -71,6 +77,7 @@ const (
 	maxFormattedInteractiveURL = 240
 	maxFormattedValue          = 160
 	maxGroupedTextLine         = 220
+	maxSnapshotNetworkHints    = 5
 )
 
 // snapshotJS runs in the page's JS realm. It:
@@ -217,7 +224,7 @@ const snapshotJS = `() => {
   }
   const emptyMetricCount = emptyMetricCustomElementCount();
   if (emptyMetricCount > 0) {
-    diagnostics.push('empty_dynamic_metric_widgets: ' + emptyMetricCount + ' visible custom metric widget(s) exposed no text value; use API/text/source endpoint or mark those fields unverified');
+    diagnostics.push('empty_dynamic_metric_widgets: ' + emptyMetricCount + ' visible custom metric widget(s) exposed no text value; use browser_network/browser_network_read, API/text/source endpoint, or mark those fields unverified');
   }
 
   // Headings, paragraphs, list items, table cells, blockquote, pre
@@ -294,6 +301,12 @@ func (s *Session) TakeSnapshot(ctx context.Context) (*Snapshot, error) {
 		return nil, fmt.Errorf("decode snapshot: %w (raw=%s)", err, string(raw))
 	}
 	snap.SnapshotID = s.newSnapshotID()
+	if s.network != nil {
+		snap.Network = s.network.Search("", maxSnapshotNetworkHints)
+		for i := range snap.Network {
+			snap.Network[i].Body = nil
+		}
+	}
 	return &snap, nil
 }
 
@@ -349,6 +362,19 @@ func (snap *Snapshot) Format() string {
 			}
 			fmt.Fprintf(&b, "- %s\n", truncateSnapshotField(diagnostic, maxGroupedTextLine))
 		}
+	}
+	if len(snap.Network) > 0 {
+		b.WriteString("CAPTURED NETWORK RESPONSES:\n")
+		for _, entry := range snap.Network {
+			fmt.Fprintf(&b, "- %s status=%d resource=%s content_type=%s url=%s\n",
+				entry.Ref,
+				entry.StatusCode,
+				truncateSnapshotField(entry.Resource, maxGroupedTextLine),
+				truncateSnapshotField(entry.ContentType, maxGroupedTextLine),
+				truncateSnapshotField(entry.URL, maxFormattedInteractiveURL),
+			)
+		}
+		b.WriteString("Next: use browser_network with a specific metric/entity/API-path query, then browser_network_read on the best ref before citing hidden dashboard values.\n")
 	}
 	b.WriteString("\n")
 

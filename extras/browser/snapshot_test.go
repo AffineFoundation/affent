@@ -117,7 +117,7 @@ func TestFormatSnapshotResultSurfacesDynamicMetricDiagnostics(t *testing.T) {
 		URL:        "https://taostats.io/subnets/120",
 		Title:      "0.0631 · SN120 · Affine",
 		Diagnostics: []string{
-			"empty_dynamic_metric_widgets: 3 visible custom metric widget(s) exposed no text value; use API/text/source endpoint or mark those fields unverified",
+			"empty_dynamic_metric_widgets: 3 visible custom metric widget(s) exposed no text value; use browser_network/browser_network_read, API/text/source endpoint, or mark those fields unverified",
 		},
 		TextBlocks: []TextBlock{
 			{Type: "p", Text: "Market Cap"},
@@ -132,11 +132,49 @@ func TestFormatSnapshotResultSurfacesDynamicMetricDiagnostics(t *testing.T) {
 		"page_text_below=verified_page_evidence",
 		"PAGE DIAGNOSTICS:",
 		"empty_dynamic_metric_widgets",
+		"browser_network/browser_network_read",
 		"mark those fields unverified",
 	} {
 		if !strings.Contains(out, want) {
 			t.Fatalf("dynamic metric diagnostic output missing %q:\n%s", want, out)
 		}
+	}
+}
+
+func TestFormatSnapshotResultIncludesNetworkEvidenceHints(t *testing.T) {
+	out, err := formatSnapshotResult(&Snapshot{
+		SnapshotID: 12,
+		URL:        "https://taostats.io/subnets/120",
+		Title:      "Affine SN120 · taostats",
+		TextBlocks: []TextBlock{
+			{Type: "p", Text: "Market Cap"},
+		},
+		Network: []NetworkEvidenceEntry{
+			{
+				Ref:         "n3",
+				URL:         "https://taostats.io/api/subnets/120",
+				StatusCode:  200,
+				Resource:    "fetch",
+				ContentType: "application/json",
+				Body:        []byte(`{"market_cap":"201.04K T"}`),
+			},
+		},
+	})
+	if err != nil {
+		t.Fatalf("snapshot with network hints should not fail: %v", err)
+	}
+	for _, want := range []string{
+		"CAPTURED NETWORK RESPONSES:",
+		"n3 status=200 resource=fetch content_type=application/json url=https://taostats.io/api/subnets/120",
+		"browser_network_read",
+		"before citing hidden dashboard values",
+	} {
+		if !strings.Contains(out, want) {
+			t.Fatalf("snapshot network hint missing %q:\n%s", want, out)
+		}
+	}
+	if strings.Contains(out, `"market_cap"`) {
+		t.Fatalf("snapshot network hints must not expose response bodies before browser_network_read:\n%s", out)
 	}
 }
 
