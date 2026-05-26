@@ -800,6 +800,16 @@ func TestBatchSummaryAggregatesRuntimeMetrics(t *testing.T) {
 			URL:       "https://metrics.example/api.json",
 			JSONPath:  "$.price",
 		}},
+		SessionSearchExamples: []agenteval.SessionSearchExample{{
+			ToolIndex:       2,
+			CallID:          "search-1",
+			Query:           "Alpha Coast",
+			Total:           2,
+			SessionID:       "market-alpha",
+			TurnIdx:         4,
+			MatchedTerms:    []string{"alpha", "coast"},
+			ContextIncluded: true,
+		}},
 		Plan: agenteval.PlanStats{
 			Calls:    1,
 			ByAction: map[string]int{"set": 1},
@@ -980,6 +990,9 @@ func TestBatchSummaryAggregatesRuntimeMetrics(t *testing.T) {
 	if !strings.Contains(out.String(), "session_search=calls:1,results:2,context:1,terms:2") {
 		t.Fatalf("summary output missing session search rollup:\n%s", out.String())
 	}
+	if !strings.Contains(out.String(), `session_search_example: query="Alpha Coast" total=2 session=market-alpha turn=4 terms=alpha,coast context=true`) {
+		t.Fatalf("summary output missing session search example:\n%s", out.String())
+	}
 	if !strings.Contains(out.String(), "runtime_surface=scenarios:2 runtime_capabilities=browser:2,web_fetch:2,web_search:1,workspace_partial:1 runtime_tools=browser_find:2,web_fetch:2,web_search:1") {
 		t.Fatalf("summary output missing runtime surface rollup:\n%s", out.String())
 	}
@@ -1052,6 +1065,11 @@ func TestBatchSummaryAggregatesRuntimeMetrics(t *testing.T) {
 	}
 	if len(summary.SourceAccessExamples) != 1 || summary.SourceAccessExamples[0].CallID != "source-1" {
 		t.Fatalf("SourceAccessExamples = %#v", summary.SourceAccessExamples)
+	}
+	if len(summary.SessionSearchExamples) != 1 ||
+		summary.SessionSearchExamples[0].CallID != "search-1" ||
+		summary.SessionSearchExamples[0].SessionID != "market-alpha" {
+		t.Fatalf("SessionSearchExamples = %#v", summary.SessionSearchExamples)
 	}
 	if len(summary.ToolTruncationExamples) != 1 || summary.ToolTruncationExamples[0].CallID != "trunc-1" {
 		t.Fatalf("ToolTruncationExamples = %#v", summary.ToolTruncationExamples)
@@ -1252,6 +1270,19 @@ func TestPrintBatchResultJSONL(t *testing.T) {
 			Topic:     "markets",
 			Location:  "memory:markets",
 			Preview:   "Prefer browser_network_read evidence for dynamic market pages.",
+		}},
+		SessionSearchExamples: []agenteval.SessionSearchExample{{
+			ToolIndex:       4,
+			CallID:          "search-jsonl-1",
+			Query:           "Alpha Coast",
+			Total:           2,
+			SessionID:       "market-alpha",
+			TurnIdx:         4,
+			Role:            "assistant",
+			Score:           2.5,
+			MatchedTerms:    []string{"alpha", "coast"},
+			ContextIncluded: true,
+			SnippetPreview:  "history marker ALPHA-COAST risk label elevated",
 		}},
 		RuntimeErrorByKind: map[string]int{"llm_incomplete_stream": 1},
 		RuntimeErrorExamples: map[string][]agenteval.RuntimeErrorExample{
@@ -1529,6 +1560,21 @@ func TestPrintBatchResultJSONL(t *testing.T) {
 		memoryUpdateExample["location"] != "memory:markets" ||
 		!strings.Contains(fmt.Sprint(memoryUpdateExample["preview"]), "browser_network_read") {
 		t.Fatalf("memory_update_example = %#v\njson=%s", memoryUpdateExamples[0], out.String())
+	}
+	sessionSearchExamples, ok := got["session_search_examples"].([]any)
+	if !ok || len(sessionSearchExamples) != 1 {
+		t.Fatalf("session_search_examples = %#v\njson=%s", got["session_search_examples"], out.String())
+	}
+	sessionSearchExample, ok := sessionSearchExamples[0].(map[string]any)
+	if !ok ||
+		sessionSearchExample["call_id"] != "search-jsonl-1" ||
+		sessionSearchExample["query"] != "Alpha Coast" ||
+		sessionSearchExample["session_id"] != "market-alpha" ||
+		sessionSearchExample["turn_idx"] != float64(4) ||
+		sessionSearchExample["context_included"] != true ||
+		!jsonArrayContainsString(sessionSearchExample["matched_terms"], "coast") ||
+		!strings.Contains(fmt.Sprint(sessionSearchExample["snippet_preview"]), "risk label") {
+		t.Fatalf("session_search_example = %#v\njson=%s", sessionSearchExamples[0], out.String())
 	}
 	toolTruncationExamples, ok := got["tool_truncation_examples"].([]any)
 	if !ok || len(toolTruncationExamples) != 1 {
@@ -2065,14 +2111,24 @@ func TestPrintBatchSummaryJSONL(t *testing.T) {
 		SessionSearchResults:      2,
 		SessionSearchContextHits:  1,
 		SessionSearchMatchedTerms: 2,
-		ToolDurationMS:            120,
-		ToolContextTruncated:      4,
-		ToolContextOmittedBytes:   12288,
-		ToolArgsTruncated:         1,
-		ToolArgsOmittedBytes:      256,
-		ToolResultsTruncated:      2,
-		ToolResultsOmittedBytes:   4096,
-		ToolResultArtifacts:       2,
+		SessionSearchExamples: []agenteval.SessionSearchExample{{
+			ToolIndex:       3,
+			CallID:          "summary-search-1",
+			Query:           "Alpha Coast",
+			Total:           2,
+			SessionID:       "market-alpha",
+			TurnIdx:         4,
+			MatchedTerms:    []string{"alpha", "coast"},
+			ContextIncluded: true,
+		}},
+		ToolDurationMS:          120,
+		ToolContextTruncated:    4,
+		ToolContextOmittedBytes: 12288,
+		ToolArgsTruncated:       1,
+		ToolArgsOmittedBytes:    256,
+		ToolResultsTruncated:    2,
+		ToolResultsOmittedBytes: 4096,
+		ToolResultArtifacts:     2,
 		ToolTruncationExamples: []agenteval.ToolTruncationExample{{
 			ToolIndex:          4,
 			CallID:             "summary-trunc-1",
@@ -2314,6 +2370,19 @@ func TestPrintBatchSummaryJSONL(t *testing.T) {
 		sourceAccessExample["status"] != "network" ||
 		sourceAccessExample["json_path"] != "$.price" {
 		t.Fatalf("source_access_example = %#v\njson=%s", sourceAccessExamples[0], out.String())
+	}
+	sessionSearchExamples, ok := got["session_search_examples"].([]any)
+	if !ok || len(sessionSearchExamples) != 1 {
+		t.Fatalf("session_search_examples = %#v\njson=%s", got["session_search_examples"], out.String())
+	}
+	sessionSearchExample, ok := sessionSearchExamples[0].(map[string]any)
+	if !ok ||
+		sessionSearchExample["call_id"] != "summary-search-1" ||
+		sessionSearchExample["query"] != "Alpha Coast" ||
+		sessionSearchExample["session_id"] != "market-alpha" ||
+		sessionSearchExample["context_included"] != true ||
+		!jsonArrayContainsString(sessionSearchExample["matched_terms"], "coast") {
+		t.Fatalf("session_search_example = %#v\njson=%s", sessionSearchExamples[0], out.String())
 	}
 	toolTruncationExamples, ok := got["tool_truncation_examples"].([]any)
 	if !ok || len(toolTruncationExamples) != 1 {

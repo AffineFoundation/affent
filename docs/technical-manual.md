@@ -423,10 +423,14 @@ they block a model call before the underlying tool runs. Per-turn stats expose
 `source_access_verified`, `source_access_discovery_only`, and
 `source_access_network`. Durable transcript recall is tracked with
 `session_search_calls`, `session_search_results`,
-`session_search_context_hits`, and `session_search_matched_terms`. Each
-`tool.result` can expose `failure_kind` plus `failure_kinds`, so eval runs and
-UIs can distinguish a useful recovery path from a run that simply accumulated
-failed retrievals, discovery-only pages, empty recall, or policy violations.
+`session_search_context_hits`, and `session_search_matched_terms`. Eval debug
+manifests, timelines, and JSONL records also include bounded
+`session_search_examples` with the query, matched session, turn, matched terms,
+context flag, and compact snippet preview, so poor resume/recovery runs can be
+debugged without opening the full transcript. Each `tool.result` can expose
+`failure_kind` plus `failure_kinds`, so eval runs and UIs can distinguish a
+useful recovery path from a run that simply accumulated failed retrievals,
+discovery-only pages, empty recall, or policy violations.
 Successful-but-no-evidence web results, such as `dynamic_shell`,
 `empty_response`, `non_text`, or `no_results`, contribute to
 `tool_failure_by_kind` even when their `tool.result.exit_code` is `0`;

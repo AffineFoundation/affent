@@ -354,6 +354,21 @@ type SourceAccessExample struct {
 	JSONPath     string `json:"json_path,omitempty"`
 }
 
+type SessionSearchExample struct {
+	ToolIndex       int      `json:"tool_index"`
+	CallID          string   `json:"call_id,omitempty"`
+	Query           string   `json:"query,omitempty"`
+	Total           int      `json:"total,omitempty"`
+	SessionID       string   `json:"session_id,omitempty"`
+	TurnIdx         int      `json:"turn_idx,omitempty"`
+	Role            string   `json:"role,omitempty"`
+	Score           float64  `json:"score,omitempty"`
+	MatchedTerms    []string `json:"matched_terms,omitempty"`
+	ContextIncluded bool     `json:"context_included,omitempty"`
+	SnippetPreview  string   `json:"snippet_preview,omitempty"`
+	Message         string   `json:"message,omitempty"`
+}
+
 type RuntimeErrorExample struct {
 	Kind    string `json:"kind"`
 	Message string `json:"message"`
@@ -525,6 +540,54 @@ func (t Trace) SourceAccessExamples(maxExamples int) []SourceAccessExample {
 			SourceMethod: info.SourceMethod,
 			JSONPath:     info.JSONPath,
 		})
+	}
+	return out
+}
+
+func (t Trace) SessionSearchExamples(maxExamples int) []SessionSearchExample {
+	if maxExamples <= 0 {
+		return nil
+	}
+	var out []SessionSearchExample
+	for i, c := range t.Tools {
+		if len(out) >= maxExamples {
+			break
+		}
+		if c.Tool != agent.SessionSearchToolName || c.ExitCode != 0 || c.IsErr || c.ResultTruncated {
+			continue
+		}
+		var resp agent.SessionSearchResponse
+		if err := json.Unmarshal([]byte(c.Result), &resp); err != nil {
+			continue
+		}
+		if len(resp.Results) == 0 {
+			out = append(out, SessionSearchExample{
+				ToolIndex: i + 1,
+				CallID:    c.CallID,
+				Query:     compactOneLine(resp.Query, 220),
+				Total:     resp.Total,
+				Message:   compactOneLine(resp.Message, 220),
+			})
+			continue
+		}
+		for _, hit := range resp.Results {
+			if len(out) >= maxExamples {
+				break
+			}
+			out = append(out, SessionSearchExample{
+				ToolIndex:       i + 1,
+				CallID:          c.CallID,
+				Query:           compactOneLine(resp.Query, 220),
+				Total:           resp.Total,
+				SessionID:       hit.SessionID,
+				TurnIdx:         hit.TurnIdx,
+				Role:            hit.Role,
+				Score:           hit.Score,
+				MatchedTerms:    append([]string(nil), hit.MatchedTerms...),
+				ContextIncluded: hit.ContextIncluded,
+				SnippetPreview:  compactOneLine(hit.Snippet, 220),
+			})
+		}
 	}
 	return out
 }

@@ -30,6 +30,7 @@ const (
 	maxDebugToolTruncationExamples = 5
 	maxDebugSourceAccessExamples   = 5
 	maxDebugMemoryUpdateExamples   = 5
+	maxDebugSessionSearchExamples  = 5
 	maxDebugChildTranscriptRefs    = 20
 	maxTraceLineBytes              = jsonl.DefaultMaxRecordBytes
 )
@@ -176,6 +177,7 @@ type BatchResult struct {
 	ToolFailureExamples    map[string][]ToolFailureExample
 	SourceAccessExamples   []SourceAccessExample
 	MemoryUpdateExamples   []MemoryUpdateExample
+	SessionSearchExamples  []SessionSearchExample
 	ToolTruncationExamples []ToolTruncationExample
 	ToolTruncation         ToolTruncationStats
 	Usage                  Usage
@@ -225,6 +227,7 @@ type DebugManifest struct {
 	DebugBrief                       *DebugBrief                `json:"debug_brief,omitempty"`
 	SourceAccessExamples             []SourceAccessExample      `json:"source_access_examples,omitempty"`
 	MemoryUpdateExamples             []MemoryUpdateExample      `json:"memory_update_examples,omitempty"`
+	SessionSearchExamples            []SessionSearchExample     `json:"session_search_examples,omitempty"`
 	ToolTruncationExamples           []ToolTruncationExample    `json:"tool_truncation_examples,omitempty"`
 	ContextCompactionExamples        []ContextCompaction        `json:"context_compaction_examples,omitempty"`
 	ChildTranscripts                 []DebugTranscriptRef       `json:"child_transcripts,omitempty"`
@@ -768,6 +771,7 @@ func (r BatchRunner) Run(ctx context.Context, scenario BatchScenario) BatchResul
 		res.ToolFailureExamples = trace.ToolFailureExamples(2)
 		res.SourceAccessExamples = trace.SourceAccessExamples(maxDebugSourceAccessExamples)
 		res.MemoryUpdateExamples = trace.MemoryUpdateExamples(maxDebugMemoryUpdateExamples)
+		res.SessionSearchExamples = trace.SessionSearchExamples(maxDebugSessionSearchExamples)
 		res.ToolTruncationExamples = trace.ToolTruncationExamples(maxDebugToolTruncationExamples)
 		res.ToolTruncation = SummarizeToolTruncation(trace)
 		res.Usage = trace.Usage
@@ -808,6 +812,9 @@ func writeScenarioDebugArtifacts(res *BatchResult, scenario BatchScenario, stdou
 	}
 	if trace != nil && len(res.SourceAccessExamples) == 0 {
 		res.SourceAccessExamples = trace.SourceAccessExamples(maxDebugSourceAccessExamples)
+	}
+	if trace != nil && len(res.SessionSearchExamples) == 0 {
+		res.SessionSearchExamples = trace.SessionSearchExamples(maxDebugSessionSearchExamples)
 	}
 	if trace != nil && len(res.ToolTruncationExamples) == 0 {
 		res.ToolTruncationExamples = trace.ToolTruncationExamples(maxDebugToolTruncationExamples)
@@ -863,6 +870,7 @@ func writeScenarioDebugArtifacts(res *BatchResult, scenario BatchScenario, stdou
 		DebugBrief:                       BuildDebugBrief(*res),
 		SourceAccessExamples:             append([]SourceAccessExample(nil), res.SourceAccessExamples...),
 		MemoryUpdateExamples:             append([]MemoryUpdateExample(nil), res.MemoryUpdateExamples...),
+		SessionSearchExamples:            append([]SessionSearchExample(nil), res.SessionSearchExamples...),
 		ToolTruncationExamples:           append([]ToolTruncationExample(nil), res.ToolTruncationExamples...),
 		ContextCompactionExamples:        append([]ContextCompaction(nil), res.ContextCompactions.Examples...),
 		ChildTranscripts:                 append([]DebugTranscriptRef(nil), res.ChildTranscripts...),

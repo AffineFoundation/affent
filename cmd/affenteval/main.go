@@ -504,6 +504,7 @@ type batchSummary struct {
 	SessionSearchResults                 int
 	SessionSearchContextHits             int
 	SessionSearchMatchedTerms            int
+	SessionSearchExamples                []agenteval.SessionSearchExample
 	ToolDurationMS                       int64
 	ToolContextTruncated                 int
 	ToolContextOmittedBytes              int
@@ -647,6 +648,7 @@ func (s *batchSummary) add(res agenteval.BatchResult) {
 	s.SessionSearchResults += res.ToolStats.SessionSearchResults
 	s.SessionSearchContextHits += res.ToolStats.SessionSearchContextHits
 	s.SessionSearchMatchedTerms += res.ToolStats.SessionSearchMatchedTerms
+	s.SessionSearchExamples = appendSessionSearchExamples(s.SessionSearchExamples, res.SessionSearchExamples, batchSummaryExamplesPerKind)
 	s.ToolDurationMS += res.ToolStats.ToolDurationMS
 	s.ToolContextTruncated += res.ToolStats.ToolContextTruncated
 	s.ToolContextOmittedBytes += res.ToolStats.ToolContextOmittedBytes
@@ -1071,6 +1073,7 @@ func printBatchSummary(w io.Writer, s batchSummary) {
 	printFailureHintLines(w, s.RuntimeErrorByKind, "")
 	printRuntimeErrorExampleLines(w, s.RuntimeErrorExamples, "")
 	printLoopDecisionExampleLines(w, s.LoopDecisionExamples, "")
+	printSessionSearchExampleLines(w, s.SessionSearchExamples, "")
 	printExpectationCapabilityFailureExampleLines(w, s.ExpectationCapabilityFailureExamples, "")
 }
 
@@ -1448,6 +1451,28 @@ func printLoopDecisionExampleLines(w io.Writer, examples []agenteval.LoopDecisio
 	}
 }
 
+func printSessionSearchExampleLines(w io.Writer, examples []agenteval.SessionSearchExample, indent string) {
+	for _, ex := range examples {
+		fmt.Fprintf(w, "%ssession_search_example: query=%q total=%d", indent, ex.Query, ex.Total)
+		if ex.SessionID != "" {
+			fmt.Fprintf(w, " session=%s", ex.SessionID)
+		}
+		if ex.TurnIdx > 0 {
+			fmt.Fprintf(w, " turn=%d", ex.TurnIdx)
+		}
+		if len(ex.MatchedTerms) > 0 {
+			fmt.Fprintf(w, " terms=%s", strings.Join(ex.MatchedTerms, ","))
+		}
+		if ex.ContextIncluded {
+			fmt.Fprintf(w, " context=true")
+		}
+		if ex.Message != "" {
+			fmt.Fprintf(w, " message=%q", ex.Message)
+		}
+		fmt.Fprintln(w)
+	}
+}
+
 func printExpectationCapabilityFailureExampleLines(w io.Writer, examples map[string][]expectationCapabilityFailureExample, indent string) {
 	if len(examples) == 0 {
 		return
@@ -1807,6 +1832,7 @@ type batchResultRecord struct {
 	SessionSearchResults             int                                        `json:"session_search_results,omitempty"`
 	SessionSearchContextHits         int                                        `json:"session_search_context_hits,omitempty"`
 	SessionSearchMatchedTerms        int                                        `json:"session_search_matched_terms,omitempty"`
+	SessionSearchExamples            []agenteval.SessionSearchExample           `json:"session_search_examples,omitempty"`
 	ToolDurationMS                   int64                                      `json:"tool_duration_ms"`
 	ToolContextTruncated             int                                        `json:"tool_context_truncated"`
 	ToolContextOmittedBytes          int                                        `json:"tool_context_omitted_bytes"`
@@ -1926,6 +1952,7 @@ type batchSummaryRecord struct {
 	SessionSearchResults                 int                                              `json:"session_search_results,omitempty"`
 	SessionSearchContextHits             int                                              `json:"session_search_context_hits,omitempty"`
 	SessionSearchMatchedTerms            int                                              `json:"session_search_matched_terms,omitempty"`
+	SessionSearchExamples                []agenteval.SessionSearchExample                 `json:"session_search_examples,omitempty"`
 	ToolDurationMS                       int64                                            `json:"tool_duration_ms"`
 	ToolContextTruncated                 int                                              `json:"tool_context_truncated"`
 	ToolContextOmittedBytes              int                                              `json:"tool_context_omitted_bytes"`
@@ -2072,6 +2099,7 @@ func printBatchResultJSONL(w io.Writer, meta evalJSONLMetadata, res agenteval.Ba
 		SessionSearchResults:             res.ToolStats.SessionSearchResults,
 		SessionSearchContextHits:         res.ToolStats.SessionSearchContextHits,
 		SessionSearchMatchedTerms:        res.ToolStats.SessionSearchMatchedTerms,
+		SessionSearchExamples:            cloneSessionSearchExamples(res.SessionSearchExamples),
 		ToolDurationMS:                   res.ToolStats.ToolDurationMS,
 		ToolContextTruncated:             res.ToolStats.ToolContextTruncated,
 		ToolContextOmittedBytes:          res.ToolStats.ToolContextOmittedBytes,
@@ -2265,6 +2293,7 @@ func printBatchSummaryJSONL(w io.Writer, meta evalJSONLMetadata, s batchSummary,
 		SessionSearchResults:                 s.SessionSearchResults,
 		SessionSearchContextHits:             s.SessionSearchContextHits,
 		SessionSearchMatchedTerms:            s.SessionSearchMatchedTerms,
+		SessionSearchExamples:                cloneSessionSearchExamples(s.SessionSearchExamples),
 		ToolDurationMS:                       s.ToolDurationMS,
 		ToolContextTruncated:                 s.ToolContextTruncated,
 		ToolContextOmittedBytes:              s.ToolContextOmittedBytes,
@@ -2473,6 +2502,20 @@ func cloneMemoryUpdateExamples(in []agenteval.MemoryUpdateExample) []agenteval.M
 	return append([]agenteval.MemoryUpdateExample(nil), in...)
 }
 
+func cloneSessionSearchExamples(in []agenteval.SessionSearchExample) []agenteval.SessionSearchExample {
+	if len(in) == 0 {
+		return nil
+	}
+	out := make([]agenteval.SessionSearchExample, 0, len(in))
+	for _, ex := range in {
+		if len(ex.MatchedTerms) > 0 {
+			ex.MatchedTerms = append([]string(nil), ex.MatchedTerms...)
+		}
+		out = append(out, ex)
+	}
+	return out
+}
+
 func cloneToolTruncationExamples(in []agenteval.ToolTruncationExample) []agenteval.ToolTruncationExample {
 	if len(in) == 0 {
 		return nil
@@ -2514,6 +2557,22 @@ func appendSourceAccessExamples(dst, src []agenteval.SourceAccessExample, limit 
 	for _, ex := range src {
 		if len(dst) >= limit {
 			break
+		}
+		dst = append(dst, ex)
+	}
+	return dst
+}
+
+func appendSessionSearchExamples(dst, src []agenteval.SessionSearchExample, limit int) []agenteval.SessionSearchExample {
+	if limit <= 0 || len(dst) >= limit {
+		return dst
+	}
+	for _, ex := range src {
+		if len(dst) >= limit {
+			break
+		}
+		if len(ex.MatchedTerms) > 0 {
+			ex.MatchedTerms = append([]string(nil), ex.MatchedTerms...)
 		}
 		dst = append(dst, ex)
 	}
@@ -2754,6 +2813,7 @@ func printBatchResult(w io.Writer, res agenteval.BatchResult) {
 	printFailureHintLines(w, res.RuntimeErrorByKind, "  ")
 	printRuntimeErrorExampleLines(w, res.RuntimeErrorExamples, "  ")
 	printLoopDecisionExampleLines(w, res.LoopDecisionStats.Examples, "  ")
+	printSessionSearchExampleLines(w, res.SessionSearchExamples, "  ")
 }
 
 func retainedDebugPath(path string, workspaceRemoved bool) string {

@@ -1239,7 +1239,7 @@ func TestWriteScenarioDebugArtifactsIndexesTraceAndFinalText(t *testing.T) {
 		RunExitCode:      3,
 		TraceDeltas:      true,
 		TurnEndReason:    "completed",
-		ToolCalls:        5,
+		ToolCalls:        6,
 		Repair:           ToolRepairStats{Calls: 1, SucceededCalls: 1, Notes: 2, ByKind: map[string]int{"tool_name": 1, "alias_rename": 1}},
 		ToolFailureExamples: map[string][]ToolFailureExample{
 			"dynamic_shell": {{
@@ -1373,6 +1373,13 @@ func TestWriteScenarioDebugArtifactsIndexesTraceAndFinalText(t *testing.T) {
 				"content": "Record network evidence gaps explicitly.",
 			},
 			Result:   `{"ok":true,"target":"memory","topic":"research","message":"added"}`,
+			ExitCode: 0,
+		}, {
+			TurnID:   "turn-debug",
+			CallID:   "call-6",
+			Tool:     "session_search",
+			Args:     map[string]any{"query": "Alpha Coast", "top_k": 3},
+			Result:   `{"query":"Alpha Coast","total":2,"results":[{"session_id":"market-alpha","turn_idx":4,"role":"assistant","snippet":"history marker ALPHA-COAST risk label elevated","score":2.5,"matched_terms":["alpha","coast"],"context_included":true},{"session_id":"market-beta","turn_idx":2,"role":"user","snippet":"older Alpha note without the current risk label","score":1,"matched_terms":["alpha"],"context_included":false}]}`,
 			ExitCode: 0,
 		}},
 		LoopDecisions: []LoopDecision{{
@@ -1594,6 +1601,17 @@ func TestWriteScenarioDebugArtifactsIndexesTraceAndFinalText(t *testing.T) {
 		manifest.MemoryUpdateExamples[1].Location != "memory:research" {
 		t.Fatalf("manifest memory update examples = %+v", manifest.MemoryUpdateExamples)
 	}
+	if len(manifest.SessionSearchExamples) != 2 ||
+		manifest.SessionSearchExamples[0].ToolIndex != 6 ||
+		manifest.SessionSearchExamples[0].CallID != "call-6" ||
+		manifest.SessionSearchExamples[0].Query != "Alpha Coast" ||
+		manifest.SessionSearchExamples[0].SessionID != "market-alpha" ||
+		manifest.SessionSearchExamples[0].TurnIdx != 4 ||
+		!manifest.SessionSearchExamples[0].ContextIncluded ||
+		!reflect.DeepEqual(manifest.SessionSearchExamples[0].MatchedTerms, []string{"alpha", "coast"}) ||
+		!strings.Contains(manifest.SessionSearchExamples[0].SnippetPreview, "history marker") {
+		t.Fatalf("manifest session search examples = %+v", manifest.SessionSearchExamples)
+	}
 	if len(manifest.ToolTruncationExamples) != 1 ||
 		manifest.ToolTruncationExamples[0].ToolIndex != 1 ||
 		manifest.ToolTruncationExamples[0].CallID != "call-1" ||
@@ -1618,7 +1636,7 @@ func TestWriteScenarioDebugArtifactsIndexesTraceAndFinalText(t *testing.T) {
 		manifest.ChildTranscripts[1].Path != ".affentctl/subagents/debug-session/subagent_beta.jsonl" {
 		t.Fatalf("manifest child transcript refs = %+v", manifest.ChildTranscripts)
 	}
-	if manifest.Metrics.ToolCalls != 5 ||
+	if manifest.Metrics.ToolCalls != 6 ||
 		manifest.Metrics.ToolErrors != 1 ||
 		manifest.Metrics.LoopGuardInterventions != 1 ||
 		manifest.Metrics.SourceAccessResults != 2 ||
@@ -1657,7 +1675,7 @@ func TestWriteScenarioDebugArtifactsIndexesTraceAndFinalText(t *testing.T) {
 	}
 	for _, want := range []string{
 		"# Affent Eval Timeline",
-		"metrics: tools=5 tool_errors=1 repaired=0 canonicalized=0 loop_guard=1 forced_no_tools=0 evidence=1/2_verified,network=1,partial=1,discovery=1 memory_updates=2(add:1,replace:1,remove:0) session_search=calls:1,results:2,context:1,terms:2 tool_context_trunc=2,omitted=8192 compactions=1,reactive=1,removed=12,summary_bytes=512 tokens=100/20",
+		"metrics: tools=6 tool_errors=1 repaired=0 canonicalized=0 loop_guard=1 forced_no_tools=0 evidence=1/2_verified,network=1,partial=1,discovery=1 memory_updates=2(add:1,replace:1,remove:0) session_search=calls:1,results:2,context:1,terms:2 tool_context_trunc=2,omitted=8192 compactions=1,reactive=1,removed=12,summary_bytes=512 tokens=100/20",
 		"## Runtime Surface",
 		"`web_fetch`",
 		"trace_deltas: `true`",
@@ -1719,6 +1737,9 @@ func TestWriteScenarioDebugArtifactsIndexesTraceAndFinalText(t *testing.T) {
 		"Use direct price labels from dynamic dashboards. -> Use browser_network_read json_path before citing dynamic dashboard metrics.",
 		"tool#5 action=`add` location=`memory:research` call_id=`call-5`",
 		"Record network evidence gaps explicitly.",
+		"## Session Search",
+		"tool#6 query=`Alpha Coast` total=`2` session=`market-alpha` turn=`4` role=`assistant` terms=`alpha,coast` context=`true` call_id=`call-6`",
+		"snippet: history marker ALPHA-COAST risk label elevated",
 		"## Tool Truncation",
 		"tool#1 `web_fetch` call_id=`call-1`",
 		"args: truncated=`true` bytes=`70000` omitted=`128` cap=`65536`",

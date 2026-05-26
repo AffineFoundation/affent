@@ -87,6 +87,7 @@ func renderDebugTimeline(res BatchResult, scenario BatchScenario, trace *Trace) 
 	renderTimelineDecisions(&b, trace)
 	renderTimelineSourceEvidence(&b, trace)
 	renderTimelineMemoryUpdates(&b, trace)
+	renderTimelineSessionSearch(&b, trace)
 	renderTimelineToolTruncation(&b, trace)
 	renderTimelineTools(&b, trace)
 	renderTimelineFinal(&b, trace)
@@ -799,6 +800,42 @@ func renderTimelineMemoryUpdates(b *strings.Builder, trace *Trace) {
 		b.WriteByte('\n')
 		if entry.Preview != "" {
 			fmt.Fprintf(b, "   %s\n", timelineInline(entry.Preview, timelineMemoryPreviewBytes))
+		}
+	}
+}
+
+func renderTimelineSessionSearch(b *strings.Builder, trace *Trace) {
+	examples := trace.SessionSearchExamples(len(trace.Tools))
+	if len(examples) == 0 {
+		return
+	}
+	b.WriteString("\n## Session Search\n\n")
+	for i, ex := range examples {
+		fmt.Fprintf(b, "%d. tool#%d query=`%s` total=`%d`", i+1, ex.ToolIndex, timelineInline(ex.Query, 220), ex.Total)
+		if ex.SessionID != "" {
+			fmt.Fprintf(b, " session=`%s`", ex.SessionID)
+		}
+		if ex.TurnIdx > 0 {
+			fmt.Fprintf(b, " turn=`%d`", ex.TurnIdx)
+		}
+		if ex.Role != "" {
+			fmt.Fprintf(b, " role=`%s`", ex.Role)
+		}
+		if len(ex.MatchedTerms) > 0 {
+			fmt.Fprintf(b, " terms=`%s`", strings.Join(ex.MatchedTerms, ","))
+		}
+		if ex.ContextIncluded {
+			fmt.Fprintf(b, " context=`true`")
+		}
+		if ex.CallID != "" {
+			fmt.Fprintf(b, " call_id=`%s`", ex.CallID)
+		}
+		b.WriteByte('\n')
+		if ex.SnippetPreview != "" {
+			fmt.Fprintf(b, "   snippet: %s\n", timelineInline(ex.SnippetPreview, timelineMemoryPreviewBytes))
+		}
+		if ex.Message != "" {
+			fmt.Fprintf(b, "   message: %s\n", timelineInline(ex.Message, timelineMemoryPreviewBytes))
 		}
 	}
 }
