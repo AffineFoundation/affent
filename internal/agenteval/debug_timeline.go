@@ -48,16 +48,7 @@ func renderDebugTimeline(res BatchResult, scenario BatchScenario, trace *Trace) 
 		b.WriteString(timelineBlock(shellQuoteCommand(res.AffentctlCommand), timelineArgsPreviewBytes))
 		b.WriteString("\n  ```\n")
 	}
-	fmt.Fprintf(&b, "- metrics: tools=%d tool_errors=%d repaired=%d canonicalized=%d loop_guard=%d forced_no_tools=%d tokens=%d/%d\n",
-		res.ToolCalls,
-		res.ToolStats.ToolErrors,
-		res.ToolStats.ToolArgsRepaired,
-		res.ToolStats.ToolNameCanonicalized,
-		res.ToolStats.LoopGuardInterventions,
-		res.ToolStats.ForcedNoTools,
-		res.Usage.InputTokens,
-		res.Usage.OutputTokens,
-	)
+	fmt.Fprintf(&b, "- metrics: %s\n", timelineMetricsSummary(res))
 	if len(res.Failures) > 0 {
 		b.WriteString("\n## Failures\n\n")
 		for _, failure := range res.Failures {
@@ -84,6 +75,57 @@ func renderDebugTimeline(res BatchResult, scenario BatchScenario, trace *Trace) 
 	renderTimelineTools(&b, trace)
 	renderTimelineFinal(&b, trace)
 	return b.String()
+}
+
+func timelineMetricsSummary(res BatchResult) string {
+	parts := []string{
+		fmt.Sprintf("tools=%d", res.ToolCalls),
+		fmt.Sprintf("tool_errors=%d", res.ToolStats.ToolErrors),
+		fmt.Sprintf("repaired=%d", res.ToolStats.ToolArgsRepaired),
+		fmt.Sprintf("canonicalized=%d", res.ToolStats.ToolNameCanonicalized),
+		fmt.Sprintf("loop_guard=%d", res.ToolStats.LoopGuardInterventions),
+		fmt.Sprintf("forced_no_tools=%d", res.ToolStats.ForcedNoTools),
+	}
+	if res.ToolStats.SourceAccessResults > 0 ||
+		res.ToolStats.SourceAccessVerified > 0 ||
+		res.ToolStats.SourceAccessNetwork > 0 ||
+		res.ToolStats.SourceAccessDynamicPartial > 0 ||
+		res.ToolStats.SourceAccessDiscoveryOnly > 0 {
+		parts = append(parts, fmt.Sprintf("evidence=%d/%d_verified,network=%d,partial=%d,discovery=%d",
+			res.ToolStats.SourceAccessVerified,
+			res.ToolStats.SourceAccessResults,
+			res.ToolStats.SourceAccessNetwork,
+			res.ToolStats.SourceAccessDynamicPartial,
+			res.ToolStats.SourceAccessDiscoveryOnly,
+		))
+	}
+	if res.ToolStats.MemoryUpdates > 0 ||
+		res.ToolStats.MemoryUpdateAdd > 0 ||
+		res.ToolStats.MemoryUpdateReplace > 0 ||
+		res.ToolStats.MemoryUpdateRemove > 0 {
+		parts = append(parts, fmt.Sprintf("memory_updates=%d(add:%d,replace:%d,remove:%d)",
+			res.ToolStats.MemoryUpdates,
+			res.ToolStats.MemoryUpdateAdd,
+			res.ToolStats.MemoryUpdateReplace,
+			res.ToolStats.MemoryUpdateRemove,
+		))
+	}
+	if res.ToolStats.ToolContextTruncated > 0 || res.ToolStats.ToolContextOmittedBytes > 0 {
+		parts = append(parts, fmt.Sprintf("tool_context_trunc=%d,omitted=%d",
+			res.ToolStats.ToolContextTruncated,
+			res.ToolStats.ToolContextOmittedBytes,
+		))
+	}
+	if res.ContextCompactions.Count > 0 {
+		parts = append(parts, fmt.Sprintf("compactions=%d,reactive=%d,removed=%d,summary_bytes=%d",
+			res.ContextCompactions.Count,
+			res.ContextCompactions.Reactive,
+			res.ContextCompactions.RemovedMessages,
+			res.ContextCompactions.SummaryBytes,
+		))
+	}
+	parts = append(parts, fmt.Sprintf("tokens=%d/%d", res.Usage.InputTokens, res.Usage.OutputTokens))
+	return strings.Join(parts, " ")
 }
 
 func renderTimelineTraceEvents(b *strings.Builder, trace *Trace) {

@@ -1046,15 +1046,19 @@ func TestWriteScenarioDebugArtifactsIndexesTraceAndFinalText(t *testing.T) {
 		ToolCalls:        3,
 		Repair:           ToolRepairStats{Calls: 1, SucceededCalls: 1, Notes: 2, ByKind: map[string]int{"tool_name": 1, "alias_rename": 1}},
 		ToolStats: ToolRuntimeStats{
-			ToolErrors:              1,
-			ToolFailureByKind:       map[string]int{"dynamic_shell": 1},
-			LoopGuardInterventions:  1,
-			SourceAccessResults:     2,
-			SourceAccessVerified:    1,
-			MemoryUpdates:           1,
-			MemoryUpdateAdd:         1,
-			ToolContextTruncated:    2,
-			ToolContextOmittedBytes: 8192,
+			ToolErrors:                 1,
+			ToolFailureByKind:          map[string]int{"dynamic_shell": 1},
+			LoopGuardInterventions:     1,
+			SourceAccessResults:        2,
+			SourceAccessVerified:       1,
+			SourceAccessDiscoveryOnly:  1,
+			SourceAccessNetwork:        1,
+			SourceAccessDynamicPartial: 1,
+			MemoryUpdates:              2,
+			MemoryUpdateAdd:            1,
+			MemoryUpdateReplace:        1,
+			ToolContextTruncated:       2,
+			ToolContextOmittedBytes:    8192,
 		},
 		ContextCompactions: ContextCompactionStats{Count: 1, Reactive: 1, RemovedMessages: 12, SummaryBytes: 512},
 		Usage:              Usage{InputTokens: 100, OutputTokens: 20},
@@ -1155,12 +1159,16 @@ func TestWriteScenarioDebugArtifactsIndexesTraceAndFinalText(t *testing.T) {
 		manifest.Metrics.LoopGuardInterventions != 1 ||
 		manifest.Metrics.SourceAccessResults != 2 ||
 		manifest.Metrics.SourceAccessVerified != 1 ||
+		manifest.Metrics.SourceAccessDiscoveryOnly != 1 ||
+		manifest.Metrics.SourceAccessNetwork != 1 ||
+		manifest.Metrics.SourceAccessDynamicPartial != 1 ||
 		manifest.Metrics.ContextCompactions != 1 ||
 		manifest.Metrics.ReactiveContextCompactions != 1 ||
 		manifest.Metrics.ContextCompactionRemoved != 12 ||
 		manifest.Metrics.ContextCompactionSummary != 512 ||
-		manifest.Metrics.MemoryUpdates != 1 ||
+		manifest.Metrics.MemoryUpdates != 2 ||
 		manifest.Metrics.MemoryUpdateAdd != 1 ||
+		manifest.Metrics.MemoryUpdateReplace != 1 ||
 		manifest.Metrics.ToolContextTruncated != 2 ||
 		manifest.Metrics.ToolContextOmittedBytes != 8192 ||
 		manifest.Metrics.ToolFailureByKind["dynamic_shell"] != 1 ||
@@ -1181,6 +1189,7 @@ func TestWriteScenarioDebugArtifactsIndexesTraceAndFinalText(t *testing.T) {
 	}
 	for _, want := range []string{
 		"# Affent Eval Timeline",
+		"metrics: tools=3 tool_errors=1 repaired=0 canonicalized=0 loop_guard=1 forced_no_tools=0 evidence=1/2_verified,network=1,partial=1,discovery=1 memory_updates=2(add:1,replace:1,remove:0) tool_context_trunc=2,omitted=8192 compactions=1,reactive=1,removed=12,summary_bytes=512 tokens=100/20",
 		"## Runtime Surface",
 		"`web_fetch`",
 		"trace_deltas: `true`",
