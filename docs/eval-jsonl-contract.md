@@ -38,7 +38,8 @@ Shared metadata fields:
   MCP config. The config path itself is not written to JSONL.
 - `timeout_ms`: per-scenario timeout in milliseconds.
 - `min_pass_rate`, `min_completion_rate`,
-  `min_source_access_verified_rate`, `max_tool_error_rate`,
+  `min_source_access_verified_rate`, `max_loop_guard_intervention_rate`,
+  `max_tool_error_rate`,
   `max_tool_context_truncation_rate`, `max_tool_result_truncation_rate`,
   `max_avg_context_compactions`, `max_avg_total_tokens`: optional quality gate
   thresholds configured for the run. Disabled gates are omitted.
@@ -226,7 +227,7 @@ Summary records aggregate all scenario records from the same process:
 
 - `scenarios`, `passed`, `failed`, `duration_ms`.
 - Normalized comparison metrics: `pass_rate`, `completion_rate`,
-  `tool_error_rate` when tool calls were observed,
+  `tool_error_rate` and `loop_guard_intervention_rate` when tool calls were observed,
   `tool_repair_success_rate` when repaired/canonicalized tool calls were
   observed, `verifier_pass_rate` when verifier commands ran,
   `source_access_verified_rate` when source evidence was observed,

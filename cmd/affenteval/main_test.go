@@ -275,6 +275,7 @@ func TestQualityGateFailures(t *testing.T) {
 		EndCompleted:             1,
 		ToolCalls:                5,
 		ToolErrors:               1,
+		LoopGuardInterventions:   2,
 		ToolRepairCalls:          4,
 		ToolRepairSucceeded:      3,
 		VerifierRuns:             2,
@@ -292,6 +293,7 @@ func TestQualityGateFailures(t *testing.T) {
 		MinPassRate:                  ptr(0.75),
 		MinCompletionRate:            ptr(0.75),
 		MinSourceAccessVerifiedRate:  ptr(0.9),
+		MaxLoopGuardInterventionRate: ptr(0.3),
 		MaxToolErrorRate:             ptr(0.1),
 		MaxToolContextTruncationRate: ptr(0.5),
 		MaxToolResultTruncationRate:  ptr(0.4),
@@ -303,6 +305,7 @@ func TestQualityGateFailures(t *testing.T) {
 		"avg_context_compactions 0.500 > max 0.250",
 		"avg_total_tokens 55.000 > max 40.000",
 		"completion_rate 0.500 < min 0.750",
+		"loop_guard_intervention_rate 0.400 > max 0.300",
 		"pass_rate 0.500 < min 0.750",
 		"source_access_verified_rate 0.750 < min 0.900",
 		"tool_context_truncation_rate 0.800 > max 0.500",
@@ -1752,6 +1755,7 @@ func TestPrintBatchSummaryJSONL(t *testing.T) {
 		"pass_rate":                     float64(0.5),
 		"completion_rate":               float64(0.5),
 		"tool_error_rate":               float64(0.2),
+		"loop_guard_intervention_rate":  float64(0.6),
 		"tool_repair_success_rate":      float64(0.75),
 		"verifier_pass_rate":            float64(0.5),
 		"source_access_verified_rate":   float64(0.75),
@@ -1994,22 +1998,24 @@ func TestEvalJSONLMetadataFromConfig(t *testing.T) {
 
 	minPassRate := 0.8
 	minSourceRate := 0.9
+	maxLoopGuardInterventionRate := 0.15
 	maxToolErrorRate := 0.05
 	maxToolResultTruncationRate := 0.2
 	maxAvgContextCompactions := 0.1
 	maxAvgTotalTokens := 120000.0
 	meta = evalJSONLMetadataFromConfig(" custom ", " flag-model ", " flag-provider ", " sandbox ", " 0.4 ", " 0.9 ", " 512 ", " 42 ", true, " readonly_workspace,web ", true, true, true, true, true, " /tmp/mcp.json ", time.Second, qualityGateConfig{
-		MinPassRate:                 &minPassRate,
-		MinSourceAccessVerifiedRate: &minSourceRate,
-		MaxToolErrorRate:            &maxToolErrorRate,
-		MaxToolResultTruncationRate: &maxToolResultTruncationRate,
-		MaxAvgContextCompactions:    &maxAvgContextCompactions,
-		MaxAvgTotalTokens:           &maxAvgTotalTokens,
+		MinPassRate:                  &minPassRate,
+		MinSourceAccessVerifiedRate:  &minSourceRate,
+		MaxLoopGuardInterventionRate: &maxLoopGuardInterventionRate,
+		MaxToolErrorRate:             &maxToolErrorRate,
+		MaxToolResultTruncationRate:  &maxToolResultTruncationRate,
+		MaxAvgContextCompactions:     &maxAvgContextCompactions,
+		MaxAvgTotalTokens:            &maxAvgTotalTokens,
 	})
 	if meta.Model != "flag-model" || meta.ProviderLabel != "flag-provider" || meta.Executor != "sandbox" || meta.Temperature != "0.4" || meta.TopP != "0.9" || meta.MaxTokens != "512" || meta.Seed != "42" || meta.Suite != "custom" || !meta.RuntimeEvalMode || meta.RuntimeTools != "readonly_workspace,web" || !meta.RuntimeAllTools || !meta.RuntimeMemory || !meta.RuntimeWeb || !meta.RuntimeBrowser || !meta.TraceDeltas || !meta.RuntimeMCP || meta.TimeoutMS != 1000 {
 		t.Fatalf("flag metadata not normalized: %+v", meta)
 	}
-	if meta.MinPassRate == nil || *meta.MinPassRate != 0.8 || meta.MinSourceAccessVerifiedRate == nil || *meta.MinSourceAccessVerifiedRate != 0.9 || meta.MaxToolErrorRate == nil || *meta.MaxToolErrorRate != 0.05 || meta.MaxToolResultTruncationRate == nil || *meta.MaxToolResultTruncationRate != 0.2 || meta.MaxAvgContextCompactions == nil || *meta.MaxAvgContextCompactions != 0.1 || meta.MaxAvgTotalTokens == nil || *meta.MaxAvgTotalTokens != 120000 {
+	if meta.MinPassRate == nil || *meta.MinPassRate != 0.8 || meta.MinSourceAccessVerifiedRate == nil || *meta.MinSourceAccessVerifiedRate != 0.9 || meta.MaxLoopGuardInterventionRate == nil || *meta.MaxLoopGuardInterventionRate != 0.15 || meta.MaxToolErrorRate == nil || *meta.MaxToolErrorRate != 0.05 || meta.MaxToolResultTruncationRate == nil || *meta.MaxToolResultTruncationRate != 0.2 || meta.MaxAvgContextCompactions == nil || *meta.MaxAvgContextCompactions != 0.1 || meta.MaxAvgTotalTokens == nil || *meta.MaxAvgTotalTokens != 120000 {
 		t.Fatalf("quality gate metadata not preserved: %+v", meta)
 	}
 	if meta.MinCompletionRate != nil || meta.MaxToolContextTruncationRate != nil {

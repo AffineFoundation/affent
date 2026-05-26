@@ -74,6 +74,7 @@ func run(args []string) int {
 			MinPassRate:                  fs.Float64("min-pass-rate", -1, "optional quality gate: minimum batch pass rate, 0..1"),
 			MinCompletionRate:            fs.Float64("min-completion-rate", -1, "optional quality gate: minimum completed-turn rate, 0..1"),
 			MinSourceAccessVerifiedRate:  fs.Float64("min-source-access-verified-rate", -1, "optional quality gate: minimum verified SourceAccess rate, 0..1"),
+			MaxLoopGuardInterventionRate: fs.Float64("max-loop-guard-intervention-rate", -1, "optional quality gate: maximum loop guard intervention rate per tool call, 0..1"),
 			MaxToolErrorRate:             fs.Float64("max-tool-error-rate", -1, "optional quality gate: maximum tool error rate, 0..1"),
 			MaxToolContextTruncationRate: fs.Float64("max-tool-context-truncation-rate", -1, "optional quality gate: maximum tool-context truncation rate, 0..1"),
 			MaxToolResultTruncationRate:  fs.Float64("max-tool-result-truncation-rate", -1, "optional quality gate: maximum tool-result event truncation rate, 0..1"),
@@ -208,6 +209,7 @@ type qualityGateConfig struct {
 	MinPassRate                  *float64
 	MinCompletionRate            *float64
 	MinSourceAccessVerifiedRate  *float64
+	MaxLoopGuardInterventionRate *float64
 	MaxToolErrorRate             *float64
 	MaxToolContextTruncationRate *float64
 	MaxToolResultTruncationRate  *float64
@@ -747,6 +749,7 @@ func validateQualityGateConfig(g qualityGateConfig) error {
 		{"--min-pass-rate", g.MinPassRate, true},
 		{"--min-completion-rate", g.MinCompletionRate, true},
 		{"--min-source-access-verified-rate", g.MinSourceAccessVerifiedRate, true},
+		{"--max-loop-guard-intervention-rate", g.MaxLoopGuardInterventionRate, true},
 		{"--max-tool-error-rate", g.MaxToolErrorRate, true},
 		{"--max-tool-context-truncation-rate", g.MaxToolContextTruncationRate, true},
 		{"--max-tool-result-truncation-rate", g.MaxToolResultTruncationRate, true},
@@ -800,6 +803,7 @@ func qualityGateFailures(s batchSummary, g qualityGateConfig) []string {
 	checkMin("pass_rate", batchRatio(s.Passed, s.Total), g.MinPassRate, s.Total > 0)
 	checkMin("completion_rate", batchRatio(s.EndCompleted, s.Total), g.MinCompletionRate, s.Total > 0)
 	checkMin("source_access_verified_rate", batchRatio(s.SourceAccessVerified, s.SourceAccessResults), g.MinSourceAccessVerifiedRate, s.SourceAccessResults > 0)
+	checkMax("loop_guard_intervention_rate", batchRatio(s.LoopGuardInterventions, s.ToolCalls), g.MaxLoopGuardInterventionRate, s.ToolCalls > 0)
 	checkMax("tool_error_rate", batchRatio(s.ToolErrors, s.ToolCalls), g.MaxToolErrorRate, s.ToolCalls > 0)
 	checkMax("tool_context_truncation_rate", batchRatio(s.ToolContextTruncated, s.ToolCalls), g.MaxToolContextTruncationRate, s.ToolCalls > 0)
 	checkMax("tool_result_truncation_rate", batchRatio(s.ToolResultsTruncated, s.ToolCalls), g.MaxToolResultTruncationRate, s.ToolCalls > 0)
@@ -1050,6 +1054,7 @@ type evalJSONLMetadata struct {
 	MinPassRate                  *float64 `json:"min_pass_rate,omitempty"`
 	MinCompletionRate            *float64 `json:"min_completion_rate,omitempty"`
 	MinSourceAccessVerifiedRate  *float64 `json:"min_source_access_verified_rate,omitempty"`
+	MaxLoopGuardInterventionRate *float64 `json:"max_loop_guard_intervention_rate,omitempty"`
 	MaxToolErrorRate             *float64 `json:"max_tool_error_rate,omitempty"`
 	MaxToolContextTruncationRate *float64 `json:"max_tool_context_truncation_rate,omitempty"`
 	MaxToolResultTruncationRate  *float64 `json:"max_tool_result_truncation_rate,omitempty"`
@@ -1088,6 +1093,7 @@ func evalJSONLMetadataFromConfig(suite, model, providerLabel, executor, temperat
 		MinPassRate:                  enabledQualityGateValue(gates.MinPassRate),
 		MinCompletionRate:            enabledQualityGateValue(gates.MinCompletionRate),
 		MinSourceAccessVerifiedRate:  enabledQualityGateValue(gates.MinSourceAccessVerifiedRate),
+		MaxLoopGuardInterventionRate: enabledQualityGateValue(gates.MaxLoopGuardInterventionRate),
 		MaxToolErrorRate:             enabledQualityGateValue(gates.MaxToolErrorRate),
 		MaxToolContextTruncationRate: enabledQualityGateValue(gates.MaxToolContextTruncationRate),
 		MaxToolResultTruncationRate:  enabledQualityGateValue(gates.MaxToolResultTruncationRate),
@@ -1229,6 +1235,7 @@ type batchSummaryRecord struct {
 	PassRate                   float64                                    `json:"pass_rate"`
 	CompletionRate             float64                                    `json:"completion_rate"`
 	ToolErrorRate              *float64                                   `json:"tool_error_rate,omitempty"`
+	LoopGuardInterventionRate  *float64                                   `json:"loop_guard_intervention_rate,omitempty"`
 	ToolRepairSuccessRate      *float64                                   `json:"tool_repair_success_rate,omitempty"`
 	VerifierPassRate           *float64                                   `json:"verifier_pass_rate,omitempty"`
 	SourceAccessVerifiedRate   *float64                                   `json:"source_access_verified_rate,omitempty"`
@@ -1533,6 +1540,7 @@ func printBatchSummaryJSONL(w io.Writer, meta evalJSONLMetadata, s batchSummary,
 		PassRate:                   batchRatio(s.Passed, s.Total),
 		CompletionRate:             batchRatio(s.EndCompleted, s.Total),
 		ToolErrorRate:              batchOptionalRatio(s.ToolErrors, s.ToolCalls),
+		LoopGuardInterventionRate:  batchOptionalRatio(s.LoopGuardInterventions, s.ToolCalls),
 		ToolRepairSuccessRate:      batchOptionalRatio(s.ToolRepairSucceeded, s.ToolRepairCalls),
 		VerifierPassRate:           batchOptionalRatio(s.VerifierPassed, s.VerifierRuns),
 		SourceAccessVerifiedRate:   batchOptionalRatio(s.SourceAccessVerified, s.SourceAccessResults),
@@ -1642,6 +1650,7 @@ func hasQualityGateThresholds(meta evalJSONLMetadata) bool {
 	return meta.MinPassRate != nil ||
 		meta.MinCompletionRate != nil ||
 		meta.MinSourceAccessVerifiedRate != nil ||
+		meta.MaxLoopGuardInterventionRate != nil ||
 		meta.MaxToolErrorRate != nil ||
 		meta.MaxToolContextTruncationRate != nil ||
 		meta.MaxToolResultTruncationRate != nil ||
