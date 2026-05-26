@@ -809,6 +809,7 @@ func (l *Loop) runTurn(ctx context.Context, turnID, userText string, opts TurnOp
 	// Mirror the user's text into the event stream so SSE replays show
 	// the full conversation, not just assistant output.
 	l.publish(sse.TypeUserMessage, sse.UserMessagePayload{TurnID: turnID, Text: userText})
+	l.publishRuntimeSurface(turnID, opts)
 
 	totalIn, totalOut := 0, 0
 	endReason := sse.TurnEndCompleted
@@ -1752,6 +1753,76 @@ func (l *Loop) publish(t string, payload any) {
 		// a delta than deadlock.
 		l.Log.Warn().Str("type", t).Msg("event channel full; dropped")
 	}
+}
+
+func (l *Loop) publishRuntimeSurface(turnID string, opts TurnOptions) {
+	tools := l.toolsForTurn(opts)
+	payload := sse.RuntimeSurfacePayload{
+		TurnID:                       turnID,
+		MaxTurnSteps:                 l.maxTurnStepsForSurface(),
+		MaxToolCalls:                 l.maxToolCallsForTurn(opts),
+		ToolResultEventCapBytes:      MaxToolResultBytesInEvent,
+		ToolResultContextMaxBytes:    l.toolResultMaxBytesInContext(),
+		ToolResultContextBudgetBytes: l.toolResultContextBudgetBytes(),
+		ToolResultArtifactPrefix:     l.ToolResultArtifactPathPrefix,
+		TurnToolOverride:             opts.Tools != nil,
+	}
+	if payload.ToolResultArtifactPrefix == "" {
+		payload.ToolResultArtifactPrefix = defaultArtifactPathPrefix
+	}
+	if tools != nil {
+		catalog := tools.Catalog()
+		payload.ToolCount = len(catalog)
+		payload.Tools = make([]sse.RuntimeSurfaceTool, 0, len(catalog))
+		for _, tool := range catalog {
+			payload.Tools = append(payload.Tools, sse.RuntimeSurfaceTool{
+				Name:    tool.Name,
+				RawName: tool.RawName,
+				Group:   tool.Group,
+				Source:  tool.Source,
+			})
+		}
+		payload.Capabilities = runtimeCapabilitiesForRegistry(tools)
+	}
+	l.publish(sse.TypeRuntimeSurface, payload)
+}
+
+func (l *Loop) maxTurnStepsForSurface() int {
+	if l.MaxTurnSteps > 0 {
+		return l.MaxTurnSteps
+	}
+	return DefaultMaxTurnSteps
+}
+
+func runtimeCapabilitiesForRegistry(reg *Registry) sse.RuntimeCapabilities {
+	if reg == nil {
+		return sse.RuntimeCapabilities{}
+	}
+	return sse.RuntimeCapabilities{
+		Builtins:      hasRegisteredTool(reg, "shell") && hasRegisteredTool(reg, "read_file") && hasRegisteredTool(reg, "write_file") && hasRegisteredTool(reg, "edit_file") && hasRegisteredTool(reg, "list_files"),
+		Memory:        hasRegisteredTool(reg, MemoryToolName),
+		Plan:          hasRegisteredTool(reg, PlanToolName),
+		SessionSearch: hasRegisteredTool(reg, SessionSearchToolName),
+		WebFetch:      hasRegisteredTool(reg, "web_fetch"),
+		WebSearch:     hasRegisteredTool(reg, "web_search"),
+		Browser:       hasRegisteredTool(reg, "browser_navigate") || hasRegisteredTool(reg, "browser_snapshot") || hasRegisteredTool(reg, "browser_find") || hasRegisteredTool(reg, "browser_network") || hasRegisteredTool(reg, "browser_network_read"),
+		Subagent:      hasRegisteredTool(reg, SubagentToolName),
+		FocusedTasks:  hasRegisteredTool(reg, FocusedTaskToolName),
+		Skill:         hasRegisteredTool(reg, SkillToolName),
+		MCP:           registryHasMCPTools(reg),
+	}
+}
+
+func registryHasMCPTools(reg *Registry) bool {
+	if reg == nil {
+		return false
+	}
+	for _, tool := range reg.Catalog() {
+		if strings.TrimSpace(tool.Source) != "" {
+			return true
+		}
+	}
+	return false
 }
 
 // ErrTurnInFlight is returned by SendUser when a turn is already

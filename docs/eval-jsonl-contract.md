@@ -46,6 +46,11 @@ Scenario records describe one eval case:
 - `final_text_path`, `stdout_path`, `stderr_path`: retained files containing
   the final assistant text, full `affentctl` stdout, and full `affentctl`
   stderr for local debugging.
+- Retained debug manifests include `runtime_surface` when the trace reached
+  turn start. This block records the effective tool names, broad capabilities
+  such as `web_fetch`, `web_search`, `browser`, `memory`, `subagent`, and key
+  runtime limits so operators can diagnose missing tools without inferring from
+  later model behavior.
 - `run_exit_code`: `affentctl run` exit code for the scenario.
 - `turn_end_reason`: runtime turn end reason, when available.
 - `tool_calls`: number of tool calls in the trace.

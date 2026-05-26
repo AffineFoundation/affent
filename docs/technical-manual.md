@@ -742,7 +742,9 @@ Each run writes a trace JSONL plus retained debug files in the scenario
 workspace: `affenteval-debug.json`, `affenteval-final.txt`,
 `affenteval-stdout.txt`, and `affenteval-stderr.txt`. Failed workspaces are
 kept automatically; `--keep-workspaces` also keeps passing runs for local
-inspection.
+inspection. The trace emits a `runtime.surface` event at turn start, and the
+debug manifest copies the latest surface into `runtime_surface`, including the
+effective tool names, broad capability flags, and key tool-result limits.
 
 Run through Docker:
 

@@ -8,6 +8,8 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/affinefoundation/affent/internal/sse"
 )
 
 func TestTrimOneLine_CompactsWhitespaceAndTruncates(t *testing.T) {
@@ -70,6 +72,7 @@ func TestParseTraceFileReadsToolRequestsAndFinalText(t *testing.T) {
 	tracePath := filepath.Join(dir, "trace.jsonl")
 	body := strings.Join([]string{
 		`{"type":"trace.meta","data":{"schema_version":1}}`,
+		`{"type":"runtime.surface","data":{"turn_id":"t1","tool_count":2,"tools":[{"name":"web_fetch","group":"Web"},{"name":"web_search","group":"Web"}],"capabilities":{"web_fetch":true,"web_search":true},"max_turn_steps":12,"max_tool_calls":7,"tool_result_event_cap_bytes":262144,"tool_result_context_max_bytes":5120,"tool_result_context_budget_bytes":32768,"tool_result_artifact_prefix":".affent/artifacts/tool-results"}}`,
 		`{"type":"tool.request","data":{"call_id":"c1","tool":"shell","args":{"command":"go test ./..."},"args_truncated":true,"args_bytes":70000,"args_omitted_bytes":512,"args_cap_bytes":65536,"original_tool":"Shell","original_args_summary":"{\"cmd\":\"go test ./...\"}","canonicalized":true,"args_repaired":true,"repair_notes":["renamed tool","renamed field"]}}`,
 		`{"type":"tool.result","data":{"call_id":"c1","result":"ok","exit_code":0,"duration_ms":17,"result_truncated":true,"result_bytes":300000,"result_omitted_bytes":4096,"result_cap_bytes":262144,"result_artifact_path":".affent/artifacts/tool-results/000001-c1.txt"}}`,
 		`{"type":"tool.result","data":{"call_id":"guarded","result":"blocked\nFailure: kind=invalid_args","exit_code":1}}`,
@@ -89,6 +92,14 @@ func TestParseTraceFileReadsToolRequestsAndFinalText(t *testing.T) {
 	}
 	if trace.SchemaVersion != 1 {
 		t.Fatalf("SchemaVersion = %d, want 1", trace.SchemaVersion)
+	}
+	if len(trace.RuntimeSurfaces) != 1 ||
+		trace.RuntimeSurfaces[0].ToolCount != 2 ||
+		!trace.RuntimeSurfaces[0].Capabilities.WebFetch ||
+		!trace.RuntimeSurfaces[0].Capabilities.WebSearch ||
+		trace.RuntimeSurfaces[0].Tools[0].Name != "web_fetch" ||
+		trace.RuntimeSurfaces[0].MaxTurnSteps != 12 {
+		t.Fatalf("RuntimeSurfaces = %+v", trace.RuntimeSurfaces)
 	}
 	if len(trace.Tools) != 2 {
 		t.Fatalf("tools = %d, want 2", len(trace.Tools))
@@ -193,6 +204,9 @@ func TestParseTraceFileReadsToolRequestsAndFinalText(t *testing.T) {
 	}
 	if got := trace.RawTypes["loop.decision"]; got != 1 {
 		t.Fatalf("RawTypes[loop.decision] = %d", got)
+	}
+	if got := trace.RawTypes["runtime.surface"]; got != 1 {
+		t.Fatalf("RawTypes[runtime.surface] = %d", got)
 	}
 }
 
@@ -1005,6 +1019,15 @@ func TestWriteScenarioDebugArtifactsIndexesTraceAndFinalText(t *testing.T) {
 		ToolStats:          ToolRuntimeStats{ToolErrors: 1, LoopGuardInterventions: 1, SourceAccessResults: 2, SourceAccessVerified: 1},
 		ContextCompactions: ContextCompactionStats{Count: 1, Reactive: 1, RemovedMessages: 12},
 		Usage:              Usage{InputTokens: 100, OutputTokens: 20},
+		RuntimeSurface: &sse.RuntimeSurfacePayload{
+			TurnID:    "turn-debug",
+			ToolCount: 2,
+			Tools: []sse.RuntimeSurfaceTool{
+				{Name: "web_fetch", Group: "Web"},
+				{Name: "web_search", Group: "Web"},
+			},
+			Capabilities: sse.RuntimeCapabilities{WebFetch: true, WebSearch: true},
+		},
 	}
 	err := writeScenarioDebugArtifacts(&res, BatchScenario{Prompt: "research with evidence"}, "partial answer\n", "runtime log\n")
 	if err != nil {
@@ -1042,6 +1065,13 @@ func TestWriteScenarioDebugArtifactsIndexesTraceAndFinalText(t *testing.T) {
 	}
 	if len(manifest.Failures) != 1 || manifest.Failures[0] != "missing required evidence" {
 		t.Fatalf("manifest failures = %+v", manifest.Failures)
+	}
+	if manifest.RuntimeSurface == nil ||
+		manifest.RuntimeSurface.ToolCount != 2 ||
+		!manifest.RuntimeSurface.Capabilities.WebFetch ||
+		!manifest.RuntimeSurface.Capabilities.WebSearch ||
+		manifest.RuntimeSurface.Tools[0].Name != "web_fetch" {
+		t.Fatalf("manifest runtime surface = %+v", manifest.RuntimeSurface)
 	}
 	if manifest.Metrics.ToolCalls != 3 ||
 		manifest.Metrics.ToolErrors != 1 ||

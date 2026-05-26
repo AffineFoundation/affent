@@ -12,6 +12,7 @@ const (
 	TypeTraceMeta      = "trace.meta"
 	TypeTurnStart      = "turn.start"
 	TypeUserMessage    = "user.message"
+	TypeRuntimeSurface = "runtime.surface"
 	TypeMessageDelta   = "message.delta"
 	TypeMessageDone    = "message.done"
 	TypeThinkingDelta  = "thinking.delta"
@@ -42,6 +43,45 @@ type TurnStartPayload struct {
 type UserMessagePayload struct {
 	TurnID string `json:"turn_id"`
 	Text   string `json:"text"`
+}
+
+// RuntimeSurfacePayload snapshots the effective runtime surface for a turn.
+// It is trace/UI-only metadata: not fed back into the model. Operators use it
+// to debug "why did the agent not use web/browser/memory?" without inferring
+// the registered tools from later model behavior.
+type RuntimeSurfacePayload struct {
+	TurnID                       string               `json:"turn_id"`
+	ToolCount                    int                  `json:"tool_count"`
+	Tools                        []RuntimeSurfaceTool `json:"tools,omitempty"`
+	Capabilities                 RuntimeCapabilities  `json:"capabilities"`
+	MaxTurnSteps                 int                  `json:"max_turn_steps,omitempty"`
+	MaxToolCalls                 int                  `json:"max_tool_calls,omitempty"`
+	ToolResultEventCapBytes      int                  `json:"tool_result_event_cap_bytes,omitempty"`
+	ToolResultContextMaxBytes    int                  `json:"tool_result_context_max_bytes,omitempty"`
+	ToolResultContextBudgetBytes int                  `json:"tool_result_context_budget_bytes,omitempty"`
+	ToolResultArtifactPrefix     string               `json:"tool_result_artifact_prefix,omitempty"`
+	TurnToolOverride             bool                 `json:"turn_tool_override,omitempty"`
+}
+
+type RuntimeSurfaceTool struct {
+	Name    string `json:"name"`
+	RawName string `json:"raw_name,omitempty"`
+	Group   string `json:"group,omitempty"`
+	Source  string `json:"source,omitempty"`
+}
+
+type RuntimeCapabilities struct {
+	Builtins      bool `json:"builtins,omitempty"`
+	Memory        bool `json:"memory,omitempty"`
+	Plan          bool `json:"plan,omitempty"`
+	SessionSearch bool `json:"session_search,omitempty"`
+	WebFetch      bool `json:"web_fetch,omitempty"`
+	WebSearch     bool `json:"web_search,omitempty"`
+	Browser       bool `json:"browser,omitempty"`
+	Subagent      bool `json:"subagent,omitempty"`
+	FocusedTasks  bool `json:"focused_tasks,omitempty"`
+	Skill         bool `json:"skill,omitempty"`
+	MCP           bool `json:"mcp,omitempty"`
 }
 
 type MessageDeltaPayload struct {

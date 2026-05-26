@@ -1266,6 +1266,49 @@ func TestPublish_NilEventsIsSilent(t *testing.T) {
 	}
 }
 
+func TestPublishRuntimeSurfaceCapturesEffectiveTools(t *testing.T) {
+	events := make(chan sse.Event, 1)
+	reg := NewRegistry()
+	reg.Add(&Tool{Name: "read_file", CatalogGroup: "Workspace"})
+	reg.Add(&Tool{Name: "web_fetch", CatalogGroup: "Web"})
+	reg.Add(&Tool{Name: "web_search", CatalogGroup: "Web"})
+	reg.Add(&Tool{Name: MemoryToolName, CatalogGroup: "Memory"})
+	loop := &Loop{
+		Tools:                        reg,
+		Events:                       events,
+		MaxTurnSteps:                 7,
+		MaxToolCalls:                 5,
+		ToolResultMaxBytesInContext:  1234,
+		ToolResultContextBudgetBytes: 5678,
+		ToolResultArtifactPathPrefix: ".affent/custom",
+	}
+	loop.publishRuntimeSurface("turn_surface", TurnOptions{})
+	ev := <-events
+	if ev.Type != sse.TypeRuntimeSurface {
+		t.Fatalf("event type = %q, want %q", ev.Type, sse.TypeRuntimeSurface)
+	}
+	var payload sse.RuntimeSurfacePayload
+	if err := json.Unmarshal(ev.Data, &payload); err != nil {
+		t.Fatalf("decode runtime surface: %v", err)
+	}
+	if payload.TurnID != "turn_surface" || payload.ToolCount != 4 || len(payload.Tools) != 4 {
+		t.Fatalf("payload identity = %+v", payload)
+	}
+	if !payload.Capabilities.WebFetch || !payload.Capabilities.WebSearch || !payload.Capabilities.Memory {
+		t.Fatalf("capabilities missing expected tools: %+v", payload.Capabilities)
+	}
+	if payload.Capabilities.Browser || payload.Capabilities.Plan {
+		t.Fatalf("capabilities should not invent unavailable surfaces: %+v", payload.Capabilities)
+	}
+	if payload.MaxTurnSteps != 7 || payload.MaxToolCalls != 5 ||
+		payload.ToolResultEventCapBytes != MaxToolResultBytesInEvent ||
+		payload.ToolResultContextMaxBytes != 1234 ||
+		payload.ToolResultContextBudgetBytes != 5678 ||
+		payload.ToolResultArtifactPrefix != ".affent/custom" {
+		t.Fatalf("limits = %+v", payload)
+	}
+}
+
 // TestPreviewN_UTF8Safe covers the event-bus preview path the same way.
 func TestPreviewN_UTF8Safe(t *testing.T) {
 	in := "héllo wörld" // 'é' and 'ö' are each 2 bytes

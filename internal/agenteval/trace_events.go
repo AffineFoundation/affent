@@ -22,6 +22,15 @@ func applyTraceEvent(t *Trace, pending map[string]int, typ string, data json.Raw
 			return false, fmt.Errorf("unsupported trace schema_version %d (max %d)", p.SchemaVersion, sse.TraceSchemaVersion)
 		}
 		t.SchemaVersion = p.SchemaVersion
+	case sse.TypeRuntimeSurface:
+		var p sse.RuntimeSurfacePayload
+		if err := json.Unmarshal(data, &p); err != nil {
+			return false, err
+		}
+		if !traceEventMatchesTurn(p.TurnID, turnID) {
+			return false, nil
+		}
+		t.RuntimeSurfaces = append(t.RuntimeSurfaces, p)
 	case sse.TypeMessageDone:
 		var p sse.MessageDonePayload
 		if err := json.Unmarshal(data, &p); err == nil {

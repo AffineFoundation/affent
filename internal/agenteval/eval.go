@@ -18,6 +18,7 @@ import (
 	"time"
 
 	"github.com/affinefoundation/affent/internal/jsonl"
+	"github.com/affinefoundation/affent/internal/sse"
 	"github.com/affinefoundation/affent/internal/textutil"
 )
 
@@ -161,24 +162,28 @@ type BatchResult struct {
 	// repair_notes. Zero-value when no tool repair/canonicalization
 	// occurred.
 	Repair ToolRepairStats
+	// RuntimeSurface is the latest effective tool/runtime surface observed
+	// in the trace. Nil for old traces or runs that failed before turn start.
+	RuntimeSurface *sse.RuntimeSurfacePayload
 }
 
 type DebugManifest struct {
-	SchemaVersion   int          `json:"schema_version"`
-	Scenario        string       `json:"scenario"`
-	OK              bool         `json:"ok"`
-	Workspace       string       `json:"workspace"`
-	TracePath       string       `json:"trace_path"`
-	FinalTextPath   string       `json:"final_text_path,omitempty"`
-	StdoutPath      string       `json:"stdout_path,omitempty"`
-	StderrPath      string       `json:"stderr_path,omitempty"`
-	RunExitCode     int          `json:"run_exit_code"`
-	ConversationDir string       `json:"conversation_dir,omitempty"`
-	ArtifactDir     string       `json:"artifact_dir,omitempty"`
-	Prompt          string       `json:"prompt"`
-	Failures        []string     `json:"failures,omitempty"`
-	Metrics         DebugMetrics `json:"metrics"`
-	GeneratedAt     string       `json:"generated_at"`
+	SchemaVersion   int                        `json:"schema_version"`
+	Scenario        string                     `json:"scenario"`
+	OK              bool                       `json:"ok"`
+	Workspace       string                     `json:"workspace"`
+	TracePath       string                     `json:"trace_path"`
+	FinalTextPath   string                     `json:"final_text_path,omitempty"`
+	StdoutPath      string                     `json:"stdout_path,omitempty"`
+	StderrPath      string                     `json:"stderr_path,omitempty"`
+	RunExitCode     int                        `json:"run_exit_code"`
+	ConversationDir string                     `json:"conversation_dir,omitempty"`
+	ArtifactDir     string                     `json:"artifact_dir,omitempty"`
+	Prompt          string                     `json:"prompt"`
+	Failures        []string                   `json:"failures,omitempty"`
+	Metrics         DebugMetrics               `json:"metrics"`
+	RuntimeSurface  *sse.RuntimeSurfacePayload `json:"runtime_surface,omitempty"`
+	GeneratedAt     string                     `json:"generated_at"`
 }
 
 type DebugMetrics struct {
@@ -417,6 +422,7 @@ func (r BatchRunner) Run(ctx context.Context, scenario BatchScenario) BatchResul
 		res.Delegation = trace.DelegationStats()
 		res.Plan = trace.PlanStats()
 		res.Repair = trace.RepairStats()
+		res.RuntimeSurface = latestRuntimeSurface(trace.RuntimeSurfaces)
 		res.Failures = append(res.Failures, CheckBatchTrace(trace, scenario)...)
 	}
 	if scenario.ExpectedSkill != "" {
@@ -470,6 +476,7 @@ func writeScenarioDebugArtifacts(res *BatchResult, scenario BatchScenario, stdou
 		ArtifactDir:     filepath.Join(res.Workspace, ".affent", "artifacts"),
 		Prompt:          scenario.Prompt,
 		Failures:        append([]string(nil), res.Failures...),
+		RuntimeSurface:  cloneRuntimeSurface(res.RuntimeSurface),
 		Metrics: DebugMetrics{
 			TurnEndReason:              res.TurnEndReason,
 			ToolCalls:                  res.ToolCalls,
@@ -502,6 +509,22 @@ func writeScenarioDebugArtifacts(res *BatchResult, scenario BatchScenario, stdou
 	}
 	res.DebugManifestPath = manifestPath
 	return nil
+}
+
+func latestRuntimeSurface(surfaces []sse.RuntimeSurfacePayload) *sse.RuntimeSurfacePayload {
+	if len(surfaces) == 0 {
+		return nil
+	}
+	return cloneRuntimeSurface(&surfaces[len(surfaces)-1])
+}
+
+func cloneRuntimeSurface(surface *sse.RuntimeSurfacePayload) *sse.RuntimeSurfacePayload {
+	if surface == nil {
+		return nil
+	}
+	out := *surface
+	out.Tools = append([]sse.RuntimeSurfaceTool(nil), surface.Tools...)
+	return &out
 }
 
 func mergeRuntimeDiagnosticsFromFailures(res *BatchResult, maxExamplesPerKind int) {
