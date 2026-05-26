@@ -65,6 +65,7 @@ func renderDebugTimeline(res BatchResult, scenario BatchScenario, trace *Trace) 
 			fmt.Fprintf(&b, "- %s\n", timelineInline(failure, timelineErrorPreviewBytes))
 		}
 	}
+	renderTimelineDebugBrief(&b, res)
 
 	b.WriteString("\n## Prompt\n\n")
 	b.WriteString("```text\n")
@@ -149,6 +150,171 @@ func timelineMetricsSummary(res BatchResult) string {
 	}
 	parts = append(parts, fmt.Sprintf("tokens=%d/%d", res.Usage.InputTokens, res.Usage.OutputTokens))
 	return strings.Join(parts, " ")
+}
+
+func renderTimelineDebugBrief(b *strings.Builder, res BatchResult) {
+	if !hasTimelineDebugBrief(res) {
+		return
+	}
+	b.WriteString("\n## Debug Brief\n\n")
+	if !res.OK {
+		b.WriteString("- outcome: `failed`; inspect the failure list, then the sections named below.\n")
+	}
+	if res.TurnEndReason != "" && res.TurnEndReason != "completed" {
+		fmt.Fprintf(b, "- turn_end: `%s`; inspect Final Message and Tool Timeline before rerunning.\n", res.TurnEndReason)
+	}
+	if len(res.ToolStats.ToolFailureByKind) > 0 {
+		fmt.Fprintf(b, "- tool_failure_by_kind: `%s`; inspect Tool Timeline entries with matching `failure_kinds`.\n", timelineCounts(res.ToolStats.ToolFailureByKind))
+	}
+	for _, line := range timelineToolFailureExampleLines(res.ToolFailureExamples, 2) {
+		fmt.Fprintf(b, "- %s\n", line)
+	}
+	if len(res.RuntimeErrorByKind) > 0 {
+		fmt.Fprintf(b, "- runtime_error_by_kind: `%s`; inspect Runtime Errors and provider/server logs.\n", timelineCounts(res.RuntimeErrorByKind))
+	}
+	for _, line := range timelineRuntimeErrorExampleLines(res.RuntimeErrorExamples, 2) {
+		fmt.Fprintf(b, "- %s\n", line)
+	}
+	if res.ToolStats.LoopGuardInterventions > 0 {
+		fmt.Fprintf(b, "- loop_guard: `%d` intervention(s), `%d` forced no-tools; inspect Loop Decisions and latest tool guidance.\n", res.ToolStats.LoopGuardInterventions, res.ToolStats.ForcedNoTools)
+	}
+	if res.ToolStats.SourceAccessResults > 0 {
+		fmt.Fprintf(b, "- evidence: `%d/%d` verified, network=`%d`, partial=`%d`, discovery=`%d`; inspect Source Evidence before trusting the final answer.\n",
+			res.ToolStats.SourceAccessVerified,
+			res.ToolStats.SourceAccessResults,
+			res.ToolStats.SourceAccessNetwork,
+			res.ToolStats.SourceAccessDynamicPartial,
+			res.ToolStats.SourceAccessDiscoveryOnly,
+		)
+	}
+	if res.ToolStats.SessionSearchCalls > 0 || res.ToolStats.SessionSearchResults > 0 {
+		tone := "recall"
+		if res.ToolStats.SessionSearchCalls > 0 && res.ToolStats.SessionSearchResults == 0 {
+			tone = "empty_recall"
+		}
+		fmt.Fprintf(b, "- %s: calls=`%d`, results=`%d`, context=`%d`, terms=`%d`; inspect session_search results if resume quality is poor.\n",
+			tone,
+			res.ToolStats.SessionSearchCalls,
+			res.ToolStats.SessionSearchResults,
+			res.ToolStats.SessionSearchContextHits,
+			res.ToolStats.SessionSearchMatchedTerms,
+		)
+	}
+	if res.ContextCompactions.Count > 0 {
+		fmt.Fprintf(b, "- context: compactions=`%d`, reactive=`%d`, removed_messages=`%d`, summary_bytes=`%d`; inspect Context Compactions for possible state loss.\n",
+			res.ContextCompactions.Count,
+			res.ContextCompactions.Reactive,
+			res.ContextCompactions.RemovedMessages,
+			res.ContextCompactions.SummaryBytes,
+		)
+	}
+	if hasTimelineTruncation(res) {
+		fmt.Fprintf(b, "- truncation: tool_context=%d omitted_context=%d args=%d args_omitted=%d results=%d results_omitted=%d artifacts=%d; inspect artifacts and capped tool outputs.\n",
+			res.ToolStats.ToolContextTruncated,
+			res.ToolStats.ToolContextOmittedBytes,
+			res.ToolTruncation.ArgsTruncated,
+			res.ToolTruncation.ArgsOmittedBytes,
+			res.ToolTruncation.ResultsTruncated,
+			res.ToolTruncation.ResultsOmittedBytes,
+			res.ToolTruncation.ResultArtifacts,
+		)
+	}
+}
+
+func hasTimelineDebugBrief(res BatchResult) bool {
+	return !res.OK ||
+		(res.TurnEndReason != "" && res.TurnEndReason != "completed") ||
+		len(res.ToolStats.ToolFailureByKind) > 0 ||
+		len(res.ToolFailureExamples) > 0 ||
+		len(res.RuntimeErrorByKind) > 0 ||
+		len(res.RuntimeErrorExamples) > 0 ||
+		res.ToolStats.LoopGuardInterventions > 0 ||
+		res.ToolStats.SourceAccessResults > 0 ||
+		res.ToolStats.SessionSearchCalls > 0 ||
+		res.ToolStats.SessionSearchResults > 0 ||
+		res.ContextCompactions.Count > 0 ||
+		hasTimelineTruncation(res)
+}
+
+func hasTimelineTruncation(res BatchResult) bool {
+	return res.ToolStats.ToolContextTruncated > 0 ||
+		res.ToolStats.ToolContextOmittedBytes > 0 ||
+		res.ToolTruncation.ArgsTruncated > 0 ||
+		res.ToolTruncation.ArgsOmittedBytes > 0 ||
+		res.ToolTruncation.ResultsTruncated > 0 ||
+		res.ToolTruncation.ResultsOmittedBytes > 0 ||
+		res.ToolTruncation.ResultArtifacts > 0
+}
+
+func timelineCounts(counts map[string]int) string {
+	if len(counts) == 0 {
+		return ""
+	}
+	keys := make([]string, 0, len(counts))
+	for key, count := range counts {
+		if key != "" && count > 0 {
+			keys = append(keys, key)
+		}
+	}
+	sort.Strings(keys)
+	parts := make([]string, 0, len(keys))
+	for _, key := range keys {
+		parts = append(parts, fmt.Sprintf("%s=%d", key, counts[key]))
+	}
+	return strings.Join(parts, ",")
+}
+
+func timelineToolFailureExampleLines(examples map[string][]ToolFailureExample, max int) []string {
+	if max <= 0 || len(examples) == 0 {
+		return nil
+	}
+	keys := make([]string, 0, len(examples))
+	for key := range examples {
+		if key != "" && len(examples[key]) > 0 {
+			keys = append(keys, key)
+		}
+	}
+	sort.Strings(keys)
+	var lines []string
+	for _, key := range keys {
+		for _, ex := range examples[key] {
+			if len(lines) >= max {
+				return lines
+			}
+			line := fmt.Sprintf("tool_failure_example[%s]: tool=`%s` exit=`%d`", key, ex.Tool, ex.ExitCode)
+			if ex.ArgsSummary != "" {
+				line += " args=" + timelineInline(ex.ArgsSummary, 240)
+			}
+			if ex.ResultSummary != "" {
+				line += " result=" + timelineInline(ex.ResultSummary, 360)
+			}
+			lines = append(lines, line)
+		}
+	}
+	return lines
+}
+
+func timelineRuntimeErrorExampleLines(examples map[string][]RuntimeErrorExample, max int) []string {
+	if max <= 0 || len(examples) == 0 {
+		return nil
+	}
+	keys := make([]string, 0, len(examples))
+	for key := range examples {
+		if key != "" && len(examples[key]) > 0 {
+			keys = append(keys, key)
+		}
+	}
+	sort.Strings(keys)
+	var lines []string
+	for _, key := range keys {
+		for _, ex := range examples[key] {
+			if len(lines) >= max {
+				return lines
+			}
+			lines = append(lines, fmt.Sprintf("runtime_error_example[%s]: %s", key, timelineInline(ex.Message, 520)))
+		}
+	}
+	return lines
 }
 
 func renderTimelineTraceEvents(b *strings.Builder, trace *Trace) {
