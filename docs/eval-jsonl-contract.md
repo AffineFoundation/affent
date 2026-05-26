@@ -206,6 +206,8 @@ Summary records aggregate all scenario records from the same process:
   `tool_repair_success_rate` when repaired/canonicalized tool calls were
   observed, `verifier_pass_rate` when verifier commands ran,
   `source_access_verified_rate` when source evidence was observed,
+  `avg_context_compactions`, `avg_context_removed_messages`,
+  `tool_context_truncation_rate` when tool calls were observed,
   `avg_input_tokens`, `avg_output_tokens`, and `avg_total_tokens`.
 - Tool totals: `tool_calls`, `tool_errors`, `tool_repaired`,
   `tool_name_canonicalized`, `tool_repair_calls`, `tool_repair_succeeded`,

@@ -626,6 +626,9 @@ func TestBatchSummaryAggregatesRuntimeMetrics(t *testing.T) {
 	if !strings.Contains(out.String(), "rates=pass:50.0%,completed:50.0%,tool_error:20.0%,repair_success:80.0%,verifier_pass:50.0%,evidence_verified:75.0% avg_tokens=45.0/10.0") {
 		t.Fatalf("summary output missing normalized rates:\n%s", out.String())
 	}
+	if !strings.Contains(out.String(), "context_pressure=avg_compactions:0.50,avg_removed:16.0,tool_ctx_trunc:60.0%") {
+		t.Fatalf("summary output missing context pressure rates:\n%s", out.String())
+	}
 	if !strings.Contains(out.String(), "source_access=results:4,verified:3,discovery:0,network:3,dynamic_partial:0") {
 		t.Fatalf("summary output missing source access rollup:\n%s", out.String())
 	}
@@ -1452,6 +1455,8 @@ func TestPrintBatchSummaryJSONL(t *testing.T) {
 		LoopDecisionExamples: []agenteval.LoopDecision{
 			{Kind: "evidence_quality", Decision: "defer", RequiredAction: "read browser network responses"},
 		},
+		ContextCompactions:         1,
+		ContextCompactionRemoved:   32,
 		LoopGuardInterventions:     3,
 		ForcedNoTools:              1,
 		SourceAccessResults:        4,
@@ -1520,6 +1525,9 @@ func TestPrintBatchSummaryJSONL(t *testing.T) {
 		"tool_repair_success_rate":      float64(0.75),
 		"verifier_pass_rate":            float64(0.5),
 		"source_access_verified_rate":   float64(0.75),
+		"avg_context_compactions":       float64(0.5),
+		"avg_context_removed_messages":  float64(16),
+		"tool_context_truncation_rate":  float64(0.8),
 		"duration_ms":                   float64(2500),
 		"tool_calls":                    float64(5),
 		"tool_errors":                   float64(1),

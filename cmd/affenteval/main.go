@@ -496,6 +496,11 @@ func printBatchSummary(w io.Writer, s batchSummary) {
 		batchAverage(s.InputTokens, s.Total),
 		batchAverage(s.OutputTokens, s.Total),
 	)
+	fmt.Fprintf(w, " context_pressure=avg_compactions:%.2f,avg_removed:%.1f,tool_ctx_trunc:%s",
+		batchAverage(s.ContextCompactions, s.Total),
+		batchAverage(s.ContextCompactionRemoved, s.Total),
+		formatOptionalPercent(batchOptionalRatio(s.ToolContextTruncated, s.ToolCalls)),
+	)
 	if hasBatchRepairStats(s) {
 		fmt.Fprintf(w, " repair_calls=%d,ok=%d,failed=%d", s.ToolRepairCalls, s.ToolRepairSucceeded, s.ToolRepairFailed)
 	}
@@ -1082,6 +1087,9 @@ type batchSummaryRecord struct {
 	ToolRepairSuccessRate      *float64                                   `json:"tool_repair_success_rate,omitempty"`
 	VerifierPassRate           *float64                                   `json:"verifier_pass_rate,omitempty"`
 	SourceAccessVerifiedRate   *float64                                   `json:"source_access_verified_rate,omitempty"`
+	AvgContextCompactions      float64                                    `json:"avg_context_compactions"`
+	AvgContextRemovedMessages  float64                                    `json:"avg_context_removed_messages"`
+	ToolContextTruncationRate  *float64                                   `json:"tool_context_truncation_rate,omitempty"`
 	DurationMS                 int64                                      `json:"duration_ms"`
 	ToolCalls                  int                                        `json:"tool_calls"`
 	ToolErrors                 int                                        `json:"tool_errors"`
@@ -1373,6 +1381,9 @@ func printBatchSummaryJSONL(w io.Writer, meta evalJSONLMetadata, s batchSummary)
 		ToolRepairSuccessRate:      batchOptionalRatio(s.ToolRepairSucceeded, s.ToolRepairCalls),
 		VerifierPassRate:           batchOptionalRatio(s.VerifierPassed, s.VerifierRuns),
 		SourceAccessVerifiedRate:   batchOptionalRatio(s.SourceAccessVerified, s.SourceAccessResults),
+		AvgContextCompactions:      batchAverage(s.ContextCompactions, s.Total),
+		AvgContextRemovedMessages:  batchAverage(s.ContextCompactionRemoved, s.Total),
+		ToolContextTruncationRate:  batchOptionalRatio(s.ToolContextTruncated, s.ToolCalls),
 		DurationMS:                 s.Duration.Milliseconds(),
 		ToolCalls:                  s.ToolCalls,
 		ToolErrors:                 s.ToolErrors,
