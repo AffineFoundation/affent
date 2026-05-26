@@ -531,6 +531,19 @@ describe("SessionList", () => {
       session({ id: "memory-two", durable: true, has_memory: true }),
       session({ id: "artifact-three", durable: true, has_artifacts: true }),
       session({ id: "plan-four", durable: true, has_plan: true }),
+      session({
+        id: "evidence-five",
+        durable: true,
+        latest_user_message: "research taostats subnet metrics",
+        tools: {
+          tool_requests: 2,
+          tool_errors: 0,
+          tool_repair_succeeded: 0,
+          tool_repair_failed: 0,
+          source_access_results: 2,
+          source_access_verified: 1,
+        },
+      }),
     ]);
 
     await user.click(screen.getByRole("button", { name: "Search chats" }));
@@ -549,6 +562,11 @@ describe("SessionList", () => {
     await user.click(within(screen.getByRole("group", { name: "Session filter" })).getByRole("button", { name: /Plan/ }));
     expect(screen.getByTestId("session-list")).toHaveTextContent("Planned chat");
     expect(screen.getByTestId("session-list")).not.toHaveTextContent("Memory chat");
+
+    await user.click(within(screen.getByRole("group", { name: "Session filter" })).getByRole("button", { name: /Evidence/ }));
+    expect(screen.getByTestId("session-list")).toHaveTextContent("taostats subnet metrics");
+    expect(screen.getByTestId("session-list")).toHaveTextContent("Evidence 1/2 verified");
+    expect(screen.getByTestId("session-list")).not.toHaveTextContent("Planned chat");
   });
 
   it("renders the offline preview row without live filters or new-chat actions", async () => {

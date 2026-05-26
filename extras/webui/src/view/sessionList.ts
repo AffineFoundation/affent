@@ -17,7 +17,7 @@ const enTitleActions = [
   "improve", "refactor", "implement", "build", "create", "design", "understand",
 ].join("|");
 
-export type SessionListFilter = "all" | "active" | "saved" | "artifacts" | "memory" | "plan";
+export type SessionListFilter = "all" | "active" | "saved" | "artifacts" | "memory" | "plan" | "evidence";
 export type SessionRowTone = "running" | "saved" | "muted" | "error" | "warning";
 type SessionTitleSource = "provided" | "topic" | "fallback";
 
@@ -376,6 +376,7 @@ export function countSessionsByFilter(rows: readonly SessionRowView[]): Record<S
     artifacts: rows.filter((row) => row.chips.includes("files") || row.chips.includes("artifacts")).length,
     memory: rows.filter((row) => row.chips.includes("memory")).length,
     plan: rows.filter((row) => row.chips.includes("plan")).length,
+    evidence: rows.filter(hasEvidenceMetric).length,
   };
 }
 
@@ -386,7 +387,12 @@ function matchesFilter(row: SessionRowView, filter: SessionListFilter): boolean 
   if (filter === "artifacts") return row.chips.includes("files") || row.chips.includes("artifacts");
   if (filter === "memory") return row.chips.includes("memory");
   if (filter === "plan") return row.chips.includes("plan");
+  if (filter === "evidence") return hasEvidenceMetric(row);
   return true;
+}
+
+function hasEvidenceMetric(row: SessionRowView): boolean {
+  return row.metrics.some((metric) => metric.startsWith("Evidence "));
 }
 
 function usageMetrics(session: SessionSummary): string[] {

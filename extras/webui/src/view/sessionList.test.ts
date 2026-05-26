@@ -196,12 +196,25 @@ describe("sessionList view model", () => {
       session({ id: "saved-b", durable: true, has_memory: true }),
       session({ id: "artifact-c", durable: true, has_artifacts: true }),
       session({ id: "planned-d", durable: true, has_plan: true }),
+      session({
+        id: "evidence-e",
+        durable: true,
+        tools: {
+          tool_requests: 2,
+          tool_errors: 0,
+          tool_repair_succeeded: 0,
+          tool_repair_failed: 0,
+          source_access_results: 2,
+          source_access_verified: 1,
+        },
+      }),
     ]);
 
-    expect(countSessionsByFilter(rows)).toMatchObject({ all: 4, active: 1, saved: 3, artifacts: 1, memory: 1, plan: 1 });
+    expect(countSessionsByFilter(rows)).toMatchObject({ all: 5, active: 1, saved: 4, artifacts: 1, memory: 1, plan: 1, evidence: 1 });
     expect(filterSessionRows(rows, "active", "")).toHaveLength(1);
     expect(filterSessionRows(rows, "memory", "")[0].id).toBe("saved-b");
     expect(filterSessionRows(rows, "plan", "")[0].id).toBe("planned-d");
+    expect(filterSessionRows(rows, "evidence", "")[0].id).toBe("evidence-e");
     expect(filterSessionRows(rows, "all", "artifact")[0].id).toBe("artifact-c");
   });
 

@@ -16,6 +16,7 @@ const filters: { mode: SessionListFilter; label: string }[] = [
   { mode: "artifacts", label: "Files" },
   { mode: "memory", label: "Memory" },
   { mode: "plan", label: "Plan" },
+  { mode: "evidence", label: "Evidence" },
 ];
 
 export function SessionList({
