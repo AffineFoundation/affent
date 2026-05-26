@@ -182,9 +182,10 @@ Scenario records describe one eval case:
   `recall:no_context`, `recall:no_matched_terms`,
   `recall:weak_matched_terms`, `delegation_error:focused_task`, `plan_error`,
   `context_compaction:reactive`, `context_compaction:summary_missing`,
-  `context_compaction:summary_empty`, and `truncation`, plus ordered `items` with a
-  severity, message, inspect targets, and relevant counts. This is the compact
-  "what to inspect first" index for long-run batch analysis.
+  `context_compaction:summary_empty`, `truncation`, and
+  `truncation:missing_artifact`, plus ordered `items` with a severity, message,
+  inspect targets, and relevant counts. This is the compact "what to inspect
+  first" index for long-run batch analysis.
 - `loop_guard_interventions`: runtime loop guard intervention count.
 - `forced_no_tools`: count of forced no-tool follow-up requests after repeated
   blocking loop guard interventions. Soft warnings such as

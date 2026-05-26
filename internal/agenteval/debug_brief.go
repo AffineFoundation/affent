@@ -234,15 +234,23 @@ func BuildDebugBrief(res BatchResult) *DebugBrief {
 		}, tags...)
 	}
 	if hasDebugBriefTruncation(res) {
-		add("truncation", "warn", "tool or context output was truncated; inspect examples and artifacts before judging evidence", []string{"tool_truncation_examples", "artifacts", "tool_timeline"}, map[string]int{
-			"tool_context":    res.ToolStats.ToolContextTruncated,
-			"omitted_context": res.ToolStats.ToolContextOmittedBytes,
-			"args":            res.ToolTruncation.ArgsTruncated,
-			"args_omitted":    res.ToolTruncation.ArgsOmittedBytes,
-			"results":         res.ToolTruncation.ResultsTruncated,
-			"results_omitted": res.ToolTruncation.ResultsOmittedBytes,
-			"artifacts":       res.ToolTruncation.ResultArtifacts,
-		}, "truncation")
+		message := "tool or context output was truncated; inspect examples and artifacts before judging evidence"
+		tags := []string{"truncation"}
+		missingArtifacts := res.ToolTruncation.ResultsTruncated - res.ToolTruncation.ResultArtifacts
+		if missingArtifacts > 0 {
+			tags = append(tags, "truncation:missing_artifact")
+			message = "tool results were truncated without matching artifacts; inspect tool timeline before trusting evidence"
+		}
+		add("truncation", "warn", message, []string{"tool_truncation_examples", "artifacts", "tool_timeline"}, map[string]int{
+			"tool_context":      res.ToolStats.ToolContextTruncated,
+			"omitted_context":   res.ToolStats.ToolContextOmittedBytes,
+			"args":              res.ToolTruncation.ArgsTruncated,
+			"args_omitted":      res.ToolTruncation.ArgsOmittedBytes,
+			"results":           res.ToolTruncation.ResultsTruncated,
+			"results_omitted":   res.ToolTruncation.ResultsOmittedBytes,
+			"artifacts":         res.ToolTruncation.ResultArtifacts,
+			"missing_artifacts": missingArtifacts,
+		}, tags...)
 	}
 	if len(items) == 0 {
 		return nil

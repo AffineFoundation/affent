@@ -50,6 +50,7 @@ func TestRunListQualityProfiles(t *testing.T) {
 		"min-source-access-verified-rate=0.900",
 		"max-source-dynamic-partial-rate=0.200",
 		"max-debug-brief-tag-rate=source_dynamic_without_network=0.000",
+		"max-debug-brief-tag-rate=truncation:missing_artifact=0.000",
 	} {
 		if !strings.Contains(out, want) {
 			t.Fatalf("--list-quality-profiles output missing %q:\n%s", want, out)
@@ -628,6 +629,9 @@ func TestApplyQualityGateProfile(t *testing.T) {
 	if gates.MinSourceAccessVerifiedRate != nil && *gates.MinSourceAccessVerifiedRate >= 0 {
 		t.Fatalf("longrun profile should not require source evidence for non-web suites: %#v", gates.MinSourceAccessVerifiedRate)
 	}
+	if gates.MaxDebugBriefTagRates["truncation:missing_artifact"] != 0 {
+		t.Fatalf("longrun debug brief tag gates = %#v, want truncation:missing_artifact=0", gates.MaxDebugBriefTagRates)
+	}
 
 	webGates := qualityGateConfig{MinSourceAccessVerifiedRate: float64Ptr(-1)}
 	if err := applyQualityGateProfile(&webGates, "web-evidence", nil); err != nil {
@@ -648,7 +652,8 @@ func TestApplyQualityGateProfile(t *testing.T) {
 		webGates.MaxDebugBriefTagRates["source_dynamic_without_decision"] != 0 ||
 		webGates.MaxDebugBriefTagRates["source_dynamic_without_network"] != 0 ||
 		webGates.MaxDebugBriefTagRates["source_unverified_all"] != 0 ||
-		webGates.MaxDebugBriefTagRates["source_discovery_only_all"] != 0 {
+		webGates.MaxDebugBriefTagRates["source_discovery_only_all"] != 0 ||
+		webGates.MaxDebugBriefTagRates["truncation:missing_artifact"] != 0 {
 		t.Fatalf("web-evidence gates not applied: %+v", webGates)
 	}
 	if err := applyQualityGateProfile(&qualityGateConfig{}, "unknown", nil); err == nil || !strings.Contains(err.Error(), "--quality-profile") {
@@ -1262,7 +1267,7 @@ func TestBatchSummaryAggregatesRuntimeMetrics(t *testing.T) {
 	if !strings.Contains(out.String(), "source_access=results:4,verified:3,discovery:0,network:3,dynamic_partial:0") {
 		t.Fatalf("summary output missing source access rollup:\n%s", out.String())
 	}
-	if !strings.Contains(out.String(), "debug_brief=context_compaction:1,context_compaction:reactive:1,loop_guard:2,outcome:failed:1,plan:2,plan:set:1,plan:update:1,plan_error:1,recall:1,recall:context:1,runtime_error:1,runtime_error:context_overflow:1,runtime_error:llm_timeout:1,source_access:2,source_network:2,source_unverified:1,tool_failure:1,tool_failure:invalid_args:1,tool_failure:timeout:1,truncation:2,turn_end:max_turns:1") {
+	if !strings.Contains(out.String(), "debug_brief=context_compaction:1,context_compaction:reactive:1,loop_guard:2,outcome:failed:1,plan:2,plan:set:1,plan:update:1,plan_error:1,recall:1,recall:context:1,runtime_error:1,runtime_error:context_overflow:1,runtime_error:llm_timeout:1,source_access:2,source_network:2,source_unverified:1,tool_failure:1,tool_failure:invalid_args:1,tool_failure:timeout:1,truncation:2,truncation:missing_artifact:1,turn_end:max_turns:1") {
 		t.Fatalf("summary output missing debug brief tag rollup:\n%s", out.String())
 	}
 	if !strings.Contains(out.String(), `failure_example[turn_end]: scenario=taostats-rendered failure="turn ended with reason \"max_turns\" (expected completed)"`) ||

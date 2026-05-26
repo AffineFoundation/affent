@@ -407,6 +407,9 @@ func qualityGateProfileDefinitions() []qualityGateProfileDefinition {
 				MaxAvgToolCalls:                      float64Ptr(14),
 				MaxAvgDurationMS:                     float64Ptr(180000),
 				MaxAvgTotalTokens:                    float64Ptr(120000),
+				MaxDebugBriefTagRates: map[string]float64{
+					"truncation:missing_artifact": 0,
+				},
 			},
 		},
 		{
@@ -440,6 +443,7 @@ func qualityGateProfileDefinitions() []qualityGateProfileDefinition {
 					"source_dynamic_without_decision": 0,
 					"source_dynamic_without_network":  0,
 					"source_unverified_all":           0,
+					"truncation:missing_artifact":     0,
 				},
 			},
 		},

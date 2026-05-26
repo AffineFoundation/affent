@@ -262,6 +262,42 @@ func TestBuildDebugBriefClassifiesContextCompactionSummaryQuality(t *testing.T) 
 	}
 }
 
+func TestBuildDebugBriefClassifiesTruncationArtifactQuality(t *testing.T) {
+	brief := BuildDebugBrief(BatchResult{
+		OK: true,
+		ToolTruncation: ToolTruncationStats{
+			ResultsTruncated:    2,
+			ResultsOmittedBytes: 4096,
+			ResultArtifacts:     1,
+		},
+	})
+	item := debugBriefItemByKind(brief, "truncation")
+	if item == nil ||
+		item.Severity != "warn" ||
+		item.Message != "tool results were truncated without matching artifacts; inspect tool timeline before trusting evidence" ||
+		item.Counts["results"] != 2 ||
+		item.Counts["artifacts"] != 1 ||
+		item.Counts["missing_artifacts"] != 1 ||
+		!stringSliceContains(item.Inspect, "tool_truncation_examples") ||
+		!stringSliceContains(brief.Tags, "truncation:missing_artifact") {
+		t.Fatalf("missing-artifact truncation item = %+v tags=%+v", item, brief.Tags)
+	}
+
+	brief = BuildDebugBrief(BatchResult{
+		OK: true,
+		ToolTruncation: ToolTruncationStats{
+			ResultsTruncated: 2,
+			ResultArtifacts:  2,
+		},
+	})
+	item = debugBriefItemByKind(brief, "truncation")
+	if item == nil ||
+		item.Message != "tool or context output was truncated; inspect examples and artifacts before judging evidence" ||
+		stringSliceContains(brief.Tags, "truncation:missing_artifact") {
+		t.Fatalf("artifact-backed truncation item = %+v tags=%+v", item, brief.Tags)
+	}
+}
+
 func debugBriefItemByKind(brief *DebugBrief, kind string) *DebugBriefItem {
 	if brief == nil {
 		return nil
