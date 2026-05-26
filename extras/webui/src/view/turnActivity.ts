@@ -142,6 +142,19 @@ export function buildTurnActivity(turn: TurnState, opts: TurnActivityOptions = {
     });
   }
 
+  const decision = latestVisibleLoopDecision(turn);
+  if (decision) {
+    items.push({
+      id: `${turn.id}:decision:${decision.eventId}`,
+      kind: "attention",
+      label: "Decision",
+      title: loopDecisionTitle(decision),
+      detail: loopDecisionDetail(decision),
+      meta: decision.confidence,
+      tone: loopDecisionTone(decision),
+    });
+  }
+
   if (items.length === 0 && treeNodes.length === 0) return undefined;
 
   const nodes = treeNodes.map((node) => activityNodeFromExecutionNode(turn, node));
@@ -185,6 +198,19 @@ function buildBrief(
   const goal = turn.userText ? summarize(turn.userText, 120) : undefined;
   for (const deviation of constraintDeviations) {
     rows.push({ id: `constraint:${deviation.id}`, label: "Constraint", value: deviation.detail, tone: "warning" });
+  }
+
+  const decision = latestVisibleLoopDecision(turn);
+  if (decision) {
+    rows.push({
+      id: `decision:${decision.eventId}`,
+      label: "Decision",
+      value: loopDecisionBrief(decision),
+      tone: loopDecisionTone(decision),
+      action: decision.required_action
+        ? { label: "Use action", draft: `Continue: ${decision.required_action}`, source: "tool_guidance" }
+        : undefined,
+    });
   }
 
   if (evidence.length > 0) {
@@ -518,7 +544,41 @@ function digestMeta(turn: TurnState, nodes: readonly TurnActivityNode[]): string
   if (tokenCount > 0) meta.push(`${formatTokenCount(tokenCount)} ${pluralize("token", tokenCount)}`);
   if (artifactLabel) meta.push(artifactLabel);
   if (evidenceCount > 0) meta.push(`${evidenceCount} evidence`);
+  const decisionCount = visibleLoopDecisions(turn).length;
+  if (decisionCount > 0) meta.push(`${decisionCount} ${pluralize("decision", decisionCount)}`);
   return meta;
+}
+
+function visibleLoopDecisions(turn: TurnState) {
+  return (turn.loopDecisions ?? []).filter((decision) => decision.visible_in_ui !== false);
+}
+
+function latestVisibleLoopDecision(turn: TurnState) {
+  return visibleLoopDecisions(turn).at(-1);
+}
+
+function loopDecisionTitle(decision: NonNullable<ReturnType<typeof latestVisibleLoopDecision>>): string {
+  const kind = decision.kind ? decision.kind.replace(/_/g, " ") : "runtime";
+  return `${capitalize(kind)}: ${decision.decision || "decision"}`;
+}
+
+function loopDecisionDetail(decision: NonNullable<ReturnType<typeof latestVisibleLoopDecision>>): string | undefined {
+  const parts = [decision.reason, decision.required_action ? `Next: ${decision.required_action}` : undefined].filter(Boolean);
+  return parts.length > 0 ? summarize(parts.join(" "), 180) : undefined;
+}
+
+function loopDecisionBrief(decision: NonNullable<ReturnType<typeof latestVisibleLoopDecision>>): string {
+  const parts = [
+    decision.decision,
+    decision.reason,
+    decision.required_action ? `Next: ${decision.required_action}` : undefined,
+  ].filter(Boolean);
+  return summarize(parts.join(" · "), 150);
+}
+
+function loopDecisionTone(decision: NonNullable<ReturnType<typeof latestVisibleLoopDecision>>): TurnActivityTone {
+  if (decision.decision === "defer" || decision.required_action) return "warning";
+  return "muted";
 }
 
 function formatTokenCount(count: number): string {

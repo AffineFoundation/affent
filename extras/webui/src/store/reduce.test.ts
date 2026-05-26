@@ -264,6 +264,7 @@ describe("reduce — robustness", () => {
         visible_in_ui: true,
       },
     ]);
+    expect(s.turns[0].loopDecisions).toEqual(s.loopDecisions);
   });
 
   it("counts unknown event types without crashing or dropping turns", () => {

@@ -75,6 +75,7 @@ export interface TurnState {
   runtimeSurface?: RuntimeSurfacePayload;
   finishReason?: string;
   toolCalls: ToolCallState[];
+  loopDecisions?: LoopDecisionState[];
   usage?: TurnUsage;
   toolStats?: ToolRuntimeStats;
   endReason?: string;

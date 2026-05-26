@@ -50,6 +50,13 @@ describe("timelineFilter", () => {
     expect(turnMatchesFilter(session.turns[0], session.events, { mode: "evidence", query: "" })).toBe(false);
   });
 
+  it("matches visible loop decision turns in the guard filter", () => {
+    const session = reduceRawEvents(loopDecisionTurn());
+
+    expect(turnMatchesFilter(session.turns[0], session.events, { mode: "guard", query: "" })).toBe(true);
+    expect(turnMatchesFilter(session.turns[0], session.events, { mode: "guard", query: "network responses" })).toBe(true);
+  });
+
   it("counts every filter mode against the current search query", () => {
     const session = reduceRawEvents([...completedTurn, ...namespaceEvents(resultTruncated, "artifact", 100)]);
 
@@ -160,6 +167,27 @@ function loopGuardTurn(): typeof resultTruncated {
         },
       },
     },
+  ];
+}
+
+function loopDecisionTurn(): typeof resultTruncated {
+  return [
+    { id: 0, type: "turn.start", data: { turn_id: "decision_turn" } },
+    { id: 1, type: "user.message", data: { turn_id: "decision_turn", text: "extract hidden metrics" } },
+    {
+      id: 2,
+      type: "loop.decision",
+      data: {
+        turn_id: "decision_turn",
+        kind: "evidence_quality",
+        trigger: "source_access_dynamic_partial",
+        decision: "defer",
+        reason: "Use browser network responses before citing hidden dashboard values.",
+        required_action: "Read browser_network_read output.",
+        visible_in_ui: true,
+      },
+    },
+    { id: 3, type: "turn.end", data: { turn_id: "decision_turn", reason: "completed" } },
   ];
 }
 

@@ -112,6 +112,7 @@ function applyEventPayload(state: SessionState, ev: NormalizedEvent): SessionSta
         assistantText: "",
         messageStreaming: false,
         toolCalls: [],
+        loopDecisions: [],
       };
       return { ...state, turns: [...state.turns, turn], status: "running" };
     }
@@ -229,9 +230,15 @@ function applyEventPayload(state: SessionState, ev: NormalizedEvent): SessionSta
     }
     case EventType.LoopDecision: {
       const p = ev.data as LoopDecisionPayload;
+      const next = p.turn_id
+        ? updateTurn(state, p.turn_id, (t) => ({
+            ...t,
+            loopDecisions: [...(t.loopDecisions ?? []), { ...p, eventId: ev.id }],
+          }))
+        : state;
       return {
-        ...state,
-        loopDecisions: [...state.loopDecisions, { ...p, eventId: ev.id }],
+        ...next,
+        loopDecisions: [...next.loopDecisions, { ...p, eventId: ev.id }],
       };
     }
     case EventType.ContextCompacted: {

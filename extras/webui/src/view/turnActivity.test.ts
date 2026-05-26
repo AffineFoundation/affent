@@ -35,6 +35,51 @@ describe("buildTurnActivity", () => {
     ]);
   });
 
+  it("surfaces visible loop decisions on the owning turn", () => {
+    const turn = reduceRawEvents([
+      { id: 1, type: "turn.start", data: { turn_id: "t1" } },
+      { id: 2, type: "user.message", data: { turn_id: "t1", text: "extract hidden dashboard metrics" } },
+      {
+        id: 3,
+        type: "loop.decision",
+        data: {
+          turn_id: "t1",
+          kind: "evidence_quality",
+          trigger: "source_access_dynamic_partial",
+          decision: "defer",
+          confidence: "high",
+          reason: "Rendered page evidence had empty metric widgets.",
+          required_action: "Read browser network responses before citing metrics.",
+          visible_in_ui: true,
+        },
+      },
+      { id: 4, type: "turn.end", data: { turn_id: "t1", reason: "completed" } },
+    ]).turns[0];
+
+    const activity = buildTurnActivity(turn);
+
+    expect(activity?.digest).toEqual({
+      label: "Decision",
+      summary: "Evidence quality: defer: Rendered page evidence had empty metric widgets. Next: Read browser network responses before citing metrics.",
+      meta: ["1 decision"],
+      tone: "warning",
+    });
+    expect(activity?.brief.rows).toEqual([
+      { id: "goal", label: "Goal", value: "extract hidden dashboard metrics" },
+      {
+        id: "decision:3",
+        label: "Decision",
+        value: "defer · Rendered page evidence had empty metric widgets. · Next: Read browser network responses before citing metrics.",
+        tone: "warning",
+        action: {
+          label: "Use action",
+          draft: "Continue: Read browser network responses before citing metrics.",
+          source: "tool_guidance",
+        },
+      },
+    ]);
+  });
+
   it("keeps completed delegated work folded as a summary", () => {
     const turn = reduceRawEvents(completedSubagentTree).turns[0];
     const activity = buildTurnActivity(turn);
