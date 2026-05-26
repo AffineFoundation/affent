@@ -17,15 +17,20 @@ const (
 )
 
 type Summary struct {
-	Label            string `json:"label"`
-	TotalSteps       int    `json:"total_steps"`
-	CompletedSteps   int    `json:"completed_steps"`
-	Active           bool   `json:"active"`
-	Blocked          bool   `json:"blocked"`
-	Done             bool   `json:"done"`
-	CurrentStep      string `json:"current_step,omitempty"`
-	CurrentStepIndex int    `json:"current_step_index,omitempty"`
-	Error            bool   `json:"error"`
+	Label                  string `json:"label"`
+	TotalSteps             int    `json:"total_steps"`
+	CompletedSteps         int    `json:"completed_steps"`
+	Active                 bool   `json:"active"`
+	Blocked                bool   `json:"blocked"`
+	Done                   bool   `json:"done"`
+	CurrentStep            string `json:"current_step,omitempty"`
+	CurrentStepIndex       int    `json:"current_step_index,omitempty"`
+	CurrentStepStatus      string `json:"current_step_status,omitempty"`
+	LastCompletedStep      string `json:"last_completed_step,omitempty"`
+	LastCompletedStepIndex int    `json:"last_completed_step_index,omitempty"`
+	BlockedStep            string `json:"blocked_step,omitempty"`
+	BlockedStepIndex       int    `json:"blocked_step_index,omitempty"`
+	Error                  bool   `json:"error"`
 }
 
 type summaryState struct {
@@ -57,15 +62,22 @@ func SummarizeJSON(raw json.RawMessage) (Summary, error) {
 		switch status {
 		case "completed":
 			out.CompletedSteps++
+			out.LastCompletedStepIndex = out.TotalSteps
+			out.LastCompletedStep = compactCurrentStep(step.Text)
 		case "in_progress":
 			out.Active = true
 		case "blocked":
 			out.Blocked = true
+			if out.BlockedStepIndex == 0 {
+				out.BlockedStepIndex = out.TotalSteps
+				out.BlockedStep = compactCurrentStep(step.Text)
+			}
 		}
 		if priority := currentStepPriority(status); priority > currentPriority {
 			currentPriority = priority
 			out.CurrentStepIndex = out.TotalSteps
 			out.CurrentStep = compactCurrentStep(step.Text)
+			out.CurrentStepStatus = status
 		}
 	}
 	out.Label = fmt.Sprintf("plan:%d/%d", out.CompletedSteps, out.TotalSteps)
@@ -84,7 +96,11 @@ func SummarizeJSON(raw json.RawMessage) (Summary, error) {
 }
 
 func normalizeStatus(status string) string {
-	return strings.ToLower(strings.TrimSpace(status))
+	status = strings.ToLower(strings.TrimSpace(status))
+	if status == "" {
+		return "pending"
+	}
+	return status
 }
 
 func canonicalStepKey(text, status string) string {

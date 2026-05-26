@@ -15,37 +15,37 @@ func TestSummarizeJSONLabelsPlanProgress(t *testing.T) {
 		{
 			name: "active progress",
 			raw:  `{"steps":[{"text":"done","status":"completed"},{"text":"resume work","status":"in_progress"},{"text":"later","status":"pending"}]}`,
-			want: Summary{Label: "plan:1/3:active", TotalSteps: 3, CompletedSteps: 1, Active: true, CurrentStep: "resume work", CurrentStepIndex: 2},
+			want: Summary{Label: "plan:1/3:active", TotalSteps: 3, CompletedSteps: 1, Active: true, CurrentStep: "resume work", CurrentStepIndex: 2, CurrentStepStatus: "in_progress", LastCompletedStep: "done", LastCompletedStepIndex: 1},
 		},
 		{
 			name: "status is case-insensitive",
 			raw:  `{"steps":[{"text":"done","status":" COMPLETED "},{"text":"resume work","status":" IN_PROGRESS "}]}`,
-			want: Summary{Label: "plan:1/2:active", TotalSteps: 2, CompletedSteps: 1, Active: true, CurrentStep: "resume work", CurrentStepIndex: 2},
+			want: Summary{Label: "plan:1/2:active", TotalSteps: 2, CompletedSteps: 1, Active: true, CurrentStep: "resume work", CurrentStepIndex: 2, CurrentStepStatus: "in_progress", LastCompletedStep: "done", LastCompletedStepIndex: 1},
 		},
 		{
 			name: "blocked progress",
 			raw:  `{"steps":[{"text":"done","status":"completed"},{"text":"need input","status":"blocked"}]}`,
-			want: Summary{Label: "plan:1/2:blocked", TotalSteps: 2, CompletedSteps: 1, Blocked: true, CurrentStep: "need input", CurrentStepIndex: 2},
+			want: Summary{Label: "plan:1/2:blocked", TotalSteps: 2, CompletedSteps: 1, Blocked: true, CurrentStep: "need input", CurrentStepIndex: 2, CurrentStepStatus: "blocked", LastCompletedStep: "done", LastCompletedStepIndex: 1, BlockedStep: "need input", BlockedStepIndex: 2},
 		},
 		{
 			name: "duplicate steps count once",
 			raw:  `{"steps":[{"text":"Run tests","status":"completed"},{"text":" run   TESTS ","status":"completed"},{"text":"ship","status":"in_progress"}]}`,
-			want: Summary{Label: "plan:1/2:active", TotalSteps: 2, CompletedSteps: 1, Active: true, CurrentStep: "ship", CurrentStepIndex: 2},
+			want: Summary{Label: "plan:1/2:active", TotalSteps: 2, CompletedSteps: 1, Active: true, CurrentStep: "ship", CurrentStepIndex: 2, CurrentStepStatus: "in_progress", LastCompletedStep: "Run tests", LastCompletedStepIndex: 1},
 		},
 		{
 			name: "same text with different status remains distinct",
 			raw:  `{"steps":[{"text":"","status":"completed"},{"text":"","status":"blocked"}]}`,
-			want: Summary{Label: "plan:1/2:blocked", TotalSteps: 2, CompletedSteps: 1, Blocked: true, CurrentStepIndex: 2},
+			want: Summary{Label: "plan:1/2:blocked", TotalSteps: 2, CompletedSteps: 1, Blocked: true, CurrentStepIndex: 2, CurrentStepStatus: "blocked", LastCompletedStepIndex: 1, BlockedStepIndex: 2},
 		},
 		{
 			name: "blank status counts as pending",
 			raw:  `{"steps":[{"text":"  next\n\t  step  ","status":"  "}]}`,
-			want: Summary{Label: "plan:0/1", TotalSteps: 1, CurrentStep: "next step", CurrentStepIndex: 1},
+			want: Summary{Label: "plan:0/1", TotalSteps: 1, CurrentStep: "next step", CurrentStepIndex: 1, CurrentStepStatus: "pending"},
 		},
 		{
 			name: "completed plan is done",
 			raw:  `{"steps":[{"text":"done one","status":"completed"},{"text":"done two","status":"completed"}]}`,
-			want: Summary{Label: "plan:2/2:done", TotalSteps: 2, CompletedSteps: 2, Done: true},
+			want: Summary{Label: "plan:2/2:done", TotalSteps: 2, CompletedSteps: 2, Done: true, LastCompletedStep: "done two", LastCompletedStepIndex: 2},
 		},
 		{
 			name: "empty plan",
