@@ -304,6 +304,17 @@ Summary records aggregate all scenario records from the same process:
   samples across the batch.
 - Debug brief tag totals: `debug_brief_by_tag`, counting how many scenarios
   emitted each machine-readable triage tag.
+- Expectation coverage totals:
+  `expectation_scenarios` counts scenarios that carried declarative
+  expectations; `expectation_suites` counts suite markers; `expectation_required_tools`
+  counts tools mentioned by scenario requirements; `expectation_source_access`
+  counts declared source-access statuses such as `network` or `verified`; and
+  `expectation_capabilities` counts broad required capability families such as
+  `workspace`, `memory`, `session_search`, `source_access`, `web`, `browser`,
+  `delegation`, `plan`, `context_compaction`, `verifier`, and `mcp`. These are
+  declaration coverage counters, not observed runtime behavior. Use them with
+  runtime-surface and outcome fields to see which capability classes a batch
+  actually exercised.
 - Quality gate outcome: `quality_profile` identifies any built-in profile used,
   `quality_gates_passed` is present on summary records when at least one quality
   gate threshold was configured, and
