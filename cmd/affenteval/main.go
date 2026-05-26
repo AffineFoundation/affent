@@ -502,6 +502,7 @@ type batchSummary struct {
 	MemoryUpdateAdd                      int
 	MemoryUpdateReplace                  int
 	MemoryUpdateRemove                   int
+	MemoryUpdateExamples                 []agenteval.MemoryUpdateExample
 	SessionSearchCalls                   int
 	SessionSearchResults                 int
 	SessionSearchContextHits             int
@@ -649,6 +650,7 @@ func (s *batchSummary) add(res agenteval.BatchResult) {
 	s.MemoryUpdateAdd += res.ToolStats.MemoryUpdateAdd
 	s.MemoryUpdateReplace += res.ToolStats.MemoryUpdateReplace
 	s.MemoryUpdateRemove += res.ToolStats.MemoryUpdateRemove
+	s.MemoryUpdateExamples = appendMemoryUpdateExamples(s.MemoryUpdateExamples, res.MemoryUpdateExamples, batchSummaryExamplesPerKind)
 	s.SessionSearchCalls += res.ToolStats.SessionSearchCalls
 	s.SessionSearchResults += res.ToolStats.SessionSearchResults
 	s.SessionSearchContextHits += res.ToolStats.SessionSearchContextHits
@@ -1078,11 +1080,14 @@ func printBatchSummary(w io.Writer, s batchSummary) {
 	printToolFailureHintLines(w, s.ToolFailureByKind, "")
 	printToolFailureExampleLines(w, s.ToolFailureExamples, "")
 	printLoopGuardExampleLines(w, s.LoopGuardExamples, "")
+	printSourceAccessExampleLines(w, s.SourceAccessExamples, "")
+	printMemoryUpdateExampleLines(w, s.MemoryUpdateExamples, "")
 	printFailureHintLines(w, s.RuntimeErrorByKind, "")
 	printRuntimeErrorExampleLines(w, s.RuntimeErrorExamples, "")
 	printLoopDecisionExampleLines(w, s.LoopDecisionExamples, "")
 	printSessionSearchExampleLines(w, s.SessionSearchExamples, "")
 	printPlanExampleLines(w, s.PlanExamples, "")
+	printToolTruncationExampleLines(w, s.ToolTruncationExamples, "")
 	printExpectationCapabilityFailureExampleLines(w, s.ExpectationCapabilityFailureExamples, "")
 }
 
@@ -1462,6 +1467,50 @@ func printLoopGuardExampleLines(w io.Writer, examples []agenteval.LoopGuardExamp
 	}
 }
 
+func printSourceAccessExampleLines(w io.Writer, examples []agenteval.SourceAccessExample, indent string) {
+	for _, ex := range examples {
+		fmt.Fprintf(w, "%ssource_access_example: status=%s tool=%s", indent, ex.Status, ex.Tool)
+		if ex.CallID != "" {
+			fmt.Fprintf(w, " call_id=%s", ex.CallID)
+		}
+		if ex.URL != "" {
+			fmt.Fprintf(w, " url=%s", ex.URL)
+		}
+		if ex.RequestedURL != "" {
+			fmt.Fprintf(w, " requested=%s", ex.RequestedURL)
+		}
+		if ex.SourceMethod != "" {
+			fmt.Fprintf(w, " method=%s", ex.SourceMethod)
+		}
+		if ex.JSONPath != "" {
+			fmt.Fprintf(w, " json_path=%s", ex.JSONPath)
+		}
+		fmt.Fprintln(w)
+	}
+}
+
+func printMemoryUpdateExampleLines(w io.Writer, examples []agenteval.MemoryUpdateExample, indent string) {
+	for _, ex := range examples {
+		fmt.Fprintf(w, "%smemory_update_example: action=%s target=%s location=%s", indent, ex.Action, ex.Target, ex.Location)
+		if ex.CallID != "" {
+			fmt.Fprintf(w, " call_id=%s", ex.CallID)
+		}
+		if ex.Topic != "" {
+			fmt.Fprintf(w, " topic=%s", ex.Topic)
+		}
+		if ex.Preview != "" {
+			fmt.Fprintf(w, " preview=%q", ex.Preview)
+		}
+		if ex.PreviousPreview != "" {
+			fmt.Fprintf(w, " previous=%q", ex.PreviousPreview)
+		}
+		if ex.NextPreview != "" {
+			fmt.Fprintf(w, " next=%q", ex.NextPreview)
+		}
+		fmt.Fprintln(w)
+	}
+}
+
 func printRuntimeErrorExampleLines(w io.Writer, examples map[string][]agenteval.RuntimeErrorExample, indent string) {
 	if len(examples) == 0 {
 		return
@@ -1545,6 +1594,28 @@ func printPlanExampleLines(w io.Writer, examples []agenteval.PlanExample, indent
 		}
 		if ex.ResultMessage != "" {
 			fmt.Fprintf(w, " message=%q", ex.ResultMessage)
+		}
+		fmt.Fprintln(w)
+	}
+}
+
+func printToolTruncationExampleLines(w io.Writer, examples []agenteval.ToolTruncationExample, indent string) {
+	for _, ex := range examples {
+		fmt.Fprintf(w, "%stool_truncation_example: tool=%s", indent, ex.Tool)
+		if ex.CallID != "" {
+			fmt.Fprintf(w, " call_id=%s", ex.CallID)
+		}
+		if ex.ArgsTruncated || ex.ArgsOmittedBytes > 0 {
+			fmt.Fprintf(w, " args=truncated:%t,bytes:%d,omitted:%d,cap:%d", ex.ArgsTruncated, ex.ArgsBytes, ex.ArgsOmittedBytes, ex.ArgsCapBytes)
+		}
+		if ex.ResultTruncated || ex.ResultOmittedBytes > 0 {
+			fmt.Fprintf(w, " result=truncated:%t,bytes:%d,omitted:%d,cap:%d", ex.ResultTruncated, ex.ResultBytes, ex.ResultOmittedBytes, ex.ResultCapBytes)
+		}
+		if ex.ContextOmittedBytes > 0 || ex.ContextBytes > 0 || ex.ContextEstimatedTokens > 0 {
+			fmt.Fprintf(w, " context=bytes:%d,omitted:%d,tokens:%d", ex.ContextBytes, ex.ContextOmittedBytes, ex.ContextEstimatedTokens)
+		}
+		if ex.ResultArtifactPath != "" {
+			fmt.Fprintf(w, " artifact=%s", ex.ResultArtifactPath)
 		}
 		fmt.Fprintln(w)
 	}
@@ -2030,6 +2101,7 @@ type batchSummaryRecord struct {
 	MemoryUpdateAdd                      int                                              `json:"memory_update_add"`
 	MemoryUpdateReplace                  int                                              `json:"memory_update_replace"`
 	MemoryUpdateRemove                   int                                              `json:"memory_update_remove"`
+	MemoryUpdateExamples                 []agenteval.MemoryUpdateExample                  `json:"memory_update_examples,omitempty"`
 	SessionSearchCalls                   int                                              `json:"session_search_calls,omitempty"`
 	SessionSearchResults                 int                                              `json:"session_search_results,omitempty"`
 	SessionSearchContextHits             int                                              `json:"session_search_context_hits,omitempty"`
@@ -2377,6 +2449,7 @@ func printBatchSummaryJSONL(w io.Writer, meta evalJSONLMetadata, s batchSummary,
 		MemoryUpdateAdd:                      s.MemoryUpdateAdd,
 		MemoryUpdateReplace:                  s.MemoryUpdateReplace,
 		MemoryUpdateRemove:                   s.MemoryUpdateRemove,
+		MemoryUpdateExamples:                 cloneMemoryUpdateExamples(s.MemoryUpdateExamples),
 		SessionSearchCalls:                   s.SessionSearchCalls,
 		SessionSearchResults:                 s.SessionSearchResults,
 		SessionSearchContextHits:             s.SessionSearchContextHits,
@@ -2722,6 +2795,19 @@ func appendSourceAccessExamples(dst, src []agenteval.SourceAccessExample, limit 
 	return dst
 }
 
+func appendMemoryUpdateExamples(dst, src []agenteval.MemoryUpdateExample, limit int) []agenteval.MemoryUpdateExample {
+	if limit <= 0 || len(dst) >= limit {
+		return dst
+	}
+	for _, ex := range src {
+		if len(dst) >= limit {
+			break
+		}
+		dst = append(dst, ex)
+	}
+	return dst
+}
+
 func appendSessionSearchExamples(dst, src []agenteval.SessionSearchExample, limit int) []agenteval.SessionSearchExample {
 	if limit <= 0 || len(dst) >= limit {
 		return dst
@@ -2987,11 +3073,14 @@ func printBatchResult(w io.Writer, res agenteval.BatchResult) {
 	printToolFailureHintLines(w, res.ToolStats.ToolFailureByKind, "  ")
 	printToolFailureExampleLines(w, res.ToolFailureExamples, "  ")
 	printLoopGuardExampleLines(w, res.LoopGuardExamples, "  ")
+	printSourceAccessExampleLines(w, res.SourceAccessExamples, "  ")
+	printMemoryUpdateExampleLines(w, res.MemoryUpdateExamples, "  ")
 	printFailureHintLines(w, res.RuntimeErrorByKind, "  ")
 	printRuntimeErrorExampleLines(w, res.RuntimeErrorExamples, "  ")
 	printLoopDecisionExampleLines(w, res.LoopDecisionStats.Examples, "  ")
 	printSessionSearchExampleLines(w, res.SessionSearchExamples, "  ")
 	printPlanExampleLines(w, res.PlanExamples, "  ")
+	printToolTruncationExampleLines(w, res.ToolTruncationExamples, "  ")
 }
 
 func retainedDebugPath(path string, workspaceRemoved bool) string {

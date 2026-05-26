@@ -589,6 +589,26 @@ func TestPrintBatchResultIncludesTraceMetrics(t *testing.T) {
 			ResultSummary: "repeated failed input | Next: stop retrying this URL",
 			ExitCode:      1,
 		}},
+		SourceAccessExamples: []agenteval.SourceAccessExample{{
+			ToolIndex:    2,
+			CallID:       "source-print-1",
+			Tool:         "browser_network_read",
+			Status:       "network",
+			URL:          "https://metrics.example/api.json",
+			RequestedURL: "https://metrics.example/dashboard",
+			SourceMethod: "network_xhr_fetch",
+			JSONPath:     "$.price",
+		}},
+		MemoryUpdateExamples: []agenteval.MemoryUpdateExample{{
+			ToolIndex:       3,
+			CallID:          "memory-print-1",
+			Action:          "replace",
+			Target:          "memory",
+			Topic:           "markets",
+			Location:        "memory:markets",
+			PreviousPreview: "old dashboard rule",
+			NextPreview:     "prefer browser_network_read evidence",
+		}},
 		RuntimeErrorByKind: map[string]int{"llm_timeout": 1},
 		RuntimeErrorExamples: map[string][]agenteval.RuntimeErrorExample{
 			"llm_timeout": {
@@ -617,6 +637,23 @@ func TestPrintBatchResultIncludesTraceMetrics(t *testing.T) {
 			ResultsOmittedBytes: 4096,
 			ResultArtifacts:     1,
 		},
+		ToolTruncationExamples: []agenteval.ToolTruncationExample{{
+			ToolIndex:              1,
+			CallID:                 "trunc-print-1",
+			Tool:                   "web_fetch",
+			ArgsTruncated:          true,
+			ArgsBytes:              70000,
+			ArgsOmittedBytes:       512,
+			ArgsCapBytes:           65536,
+			ResultTruncated:        true,
+			ResultBytes:            300000,
+			ResultOmittedBytes:     4096,
+			ResultCapBytes:         262144,
+			ContextBytes:           4096,
+			ContextOmittedBytes:    9216,
+			ContextEstimatedTokens: 1024,
+			ResultArtifactPath:     ".affent/artifacts/tool-results/000001-trunc-print-1.txt",
+		}},
 		Verifier: agenteval.VerifierResult{
 			Command:            "go test ./...",
 			Ran:                true,
@@ -668,10 +705,13 @@ func TestPrintBatchResultIncludesTraceMetrics(t *testing.T) {
 		"invalid arguments",
 		`tool_failure_example[invalid_args]: tool=web_fetch args=url="https://example.com" exit=1 result=url is required | Next: retry with a full URL`,
 		`loop_guard_example[loop_guard_repeated_failed_input]: category=loop_guard tool=web_fetch call_id=guard-print-1 args=url="https://example.com" exit=1 result=repeated failed input | Next: stop retrying this URL`,
+		"source_access_example: status=network tool=browser_network_read call_id=source-print-1 url=https://metrics.example/api.json requested=https://metrics.example/dashboard method=network_xhr_fetch json_path=$.price",
+		`memory_update_example: action=replace target=memory location=memory:markets call_id=memory-print-1 topic=markets previous="old dashboard rule" next="prefer browser_network_read evidence"`,
 		"hint[llm_timeout]",
 		"runtime_error_example[llm_timeout]: LLM llm_stream timed out after 4m0s",
 		"loop_decision_example[evidence_quality]: decision=defer trigger=source_access_dynamic_partial confidence=high reason=dynamic widgets lacked text action=read browser network responses",
 		`plan_example: action=update index=2 status=completed progress=2/3 current=3:pending step="verify browser evidence" evidence=go test ./cmd/affenteval`,
+		"tool_truncation_example: tool=web_fetch call_id=trunc-print-1 args=truncated:true,bytes:70000,omitted:512,cap:65536 result=truncated:true,bytes:300000,omitted:4096,cap:262144 context=bytes:4096,omitted:9216,tokens:1024 artifact=.affent/artifacts/tool-results/000001-trunc-print-1.txt",
 	} {
 		if !strings.Contains(got, want) {
 			t.Fatalf("output missing %q:\n%s", want, got)
@@ -845,6 +885,15 @@ func TestBatchSummaryAggregatesRuntimeMetrics(t *testing.T) {
 			Status:    "network",
 			URL:       "https://metrics.example/api.json",
 			JSONPath:  "$.price",
+		}},
+		MemoryUpdateExamples: []agenteval.MemoryUpdateExample{{
+			ToolIndex:   2,
+			CallID:      "memory-1",
+			Action:      "add",
+			Target:      "memory",
+			Topic:       "markets",
+			Location:    "memory:markets",
+			NextPreview: "Prefer browser_network_read evidence for dynamic dashboards.",
 		}},
 		SessionSearchExamples: []agenteval.SessionSearchExample{{
 			ToolIndex:       2,
@@ -1076,6 +1125,12 @@ func TestBatchSummaryAggregatesRuntimeMetrics(t *testing.T) {
 	if !strings.Contains(out.String(), `loop_guard_example[loop_guard_repeated_failed_input]: category=loop_guard tool=web_fetch call_id=guard-1 args=url="https://loop.example" exit=1 result=repeated failed input | Next: use browser_network_read`) {
 		t.Fatalf("summary output missing loop guard example:\n%s", out.String())
 	}
+	if !strings.Contains(out.String(), "source_access_example: status=network tool=browser_network_read call_id=source-1 url=https://metrics.example/api.json json_path=$.price") {
+		t.Fatalf("summary output missing source access example:\n%s", out.String())
+	}
+	if !strings.Contains(out.String(), `memory_update_example: action=add target=memory location=memory:markets call_id=memory-1 topic=markets next="Prefer browser_network_read evidence for dynamic dashboards."`) {
+		t.Fatalf("summary output missing memory update example:\n%s", out.String())
+	}
 	if !strings.Contains(out.String(), "runtime_error_example[llm_timeout]: LLM llm_stream timed out after 4m0s") {
 		t.Fatalf("summary output missing runtime error example:\n%s", out.String())
 	}
@@ -1093,6 +1148,9 @@ func TestBatchSummaryAggregatesRuntimeMetrics(t *testing.T) {
 	}
 	if !strings.Contains(out.String(), `plan_example: action=update index=2 status=completed progress=2/3 current=3:pending step="verify browser evidence" evidence=go test ./cmd/affenteval`) {
 		t.Fatalf("summary output missing plan example:\n%s", out.String())
+	}
+	if !strings.Contains(out.String(), "tool_truncation_example: tool=web_fetch call_id=trunc-1 args=truncated:true,bytes:0,omitted:128,cap:0 context=bytes:0,omitted:1024,tokens:256") {
+		t.Fatalf("summary output missing tool truncation example:\n%s", out.String())
 	}
 	if summary.TraceSchemaVersions[1] != 2 {
 		t.Fatalf("TraceSchemaVersions = %#v, want version 1 count 2", summary.TraceSchemaVersions)
@@ -1139,6 +1197,9 @@ func TestBatchSummaryAggregatesRuntimeMetrics(t *testing.T) {
 	}
 	if len(summary.SourceAccessExamples) != 1 || summary.SourceAccessExamples[0].CallID != "source-1" {
 		t.Fatalf("SourceAccessExamples = %#v", summary.SourceAccessExamples)
+	}
+	if len(summary.MemoryUpdateExamples) != 1 || summary.MemoryUpdateExamples[0].CallID != "memory-1" {
+		t.Fatalf("MemoryUpdateExamples = %#v", summary.MemoryUpdateExamples)
 	}
 	if len(summary.SessionSearchExamples) != 1 ||
 		summary.SessionSearchExamples[0].CallID != "search-1" ||
@@ -2277,8 +2338,17 @@ func TestPrintBatchSummaryJSONL(t *testing.T) {
 			URL:       "https://metrics.example/api.json",
 			JSONPath:  "$.price",
 		}},
-		MemoryUpdates:             1,
-		MemoryUpdateAdd:           1,
+		MemoryUpdates:   1,
+		MemoryUpdateAdd: 1,
+		MemoryUpdateExamples: []agenteval.MemoryUpdateExample{{
+			ToolIndex:   2,
+			CallID:      "summary-memory-1",
+			Action:      "add",
+			Target:      "memory",
+			Topic:       "markets",
+			Location:    "memory:markets",
+			NextPreview: "Prefer browser_network_read evidence.",
+		}},
 		SessionSearchCalls:        1,
 		SessionSearchResults:      2,
 		SessionSearchContextHits:  1,
@@ -2579,6 +2649,18 @@ func TestPrintBatchSummaryJSONL(t *testing.T) {
 		sourceAccessExample["status"] != "network" ||
 		sourceAccessExample["json_path"] != "$.price" {
 		t.Fatalf("source_access_example = %#v\njson=%s", sourceAccessExamples[0], out.String())
+	}
+	memoryUpdateExamples, ok := got["memory_update_examples"].([]any)
+	if !ok || len(memoryUpdateExamples) != 1 {
+		t.Fatalf("memory_update_examples = %#v\njson=%s", got["memory_update_examples"], out.String())
+	}
+	memoryUpdateExample, ok := memoryUpdateExamples[0].(map[string]any)
+	if !ok ||
+		memoryUpdateExample["call_id"] != "summary-memory-1" ||
+		memoryUpdateExample["action"] != "add" ||
+		memoryUpdateExample["location"] != "memory:markets" ||
+		!strings.Contains(fmt.Sprint(memoryUpdateExample["next_preview"]), "browser_network_read") {
+		t.Fatalf("memory_update_example = %#v\njson=%s", memoryUpdateExamples[0], out.String())
 	}
 	sessionSearchExamples, ok := got["session_search_examples"].([]any)
 	if !ok || len(sessionSearchExamples) != 1 {
