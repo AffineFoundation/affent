@@ -49,6 +49,7 @@ func TestRunListQualityProfiles(t *testing.T) {
 		"min-trace-event-rate=0.900",
 		"min-source-access-verified-rate=0.900",
 		"max-source-dynamic-partial-rate=0.200",
+		"max-debug-brief-tag-rate=recall:weak_context=0.000",
 		"max-debug-brief-tag-rate=source_dynamic_without_network=0.000",
 		"max-debug-brief-tag-rate=truncation:missing_artifact=0.000",
 	} {
@@ -629,8 +630,12 @@ func TestApplyQualityGateProfile(t *testing.T) {
 	if gates.MinSourceAccessVerifiedRate != nil && *gates.MinSourceAccessVerifiedRate >= 0 {
 		t.Fatalf("longrun profile should not require source evidence for non-web suites: %#v", gates.MinSourceAccessVerifiedRate)
 	}
-	if gates.MaxDebugBriefTagRates["truncation:missing_artifact"] != 0 {
-		t.Fatalf("longrun debug brief tag gates = %#v, want truncation:missing_artifact=0", gates.MaxDebugBriefTagRates)
+	if gates.MaxDebugBriefTagRates["truncation:missing_artifact"] != 0 ||
+		gates.MaxDebugBriefTagRates["recall:no_context"] != 0 ||
+		gates.MaxDebugBriefTagRates["recall:no_matched_terms"] != 0 ||
+		gates.MaxDebugBriefTagRates["recall:weak_context"] != 0 ||
+		gates.MaxDebugBriefTagRates["recall:weak_matched_terms"] != 0 {
+		t.Fatalf("longrun debug brief tag gates = %#v, want recall quality and truncation artifact gates", gates.MaxDebugBriefTagRates)
 	}
 
 	webGates := qualityGateConfig{MinSourceAccessVerifiedRate: float64Ptr(-1)}

@@ -65,8 +65,9 @@ Shared metadata fields:
   omitted.
 - `max_debug_brief_tag_rates`: optional map of `debug_brief` tag to maximum
   scenario rate. This lets profiles fail specific triage patterns, such as
-  dynamic web evidence without network-backed reads, without adding a bespoke
-  top-level metric for every future diagnostic tag. CLI overrides use
+  weak session recall context or dynamic web evidence without network-backed
+  reads, without adding a bespoke top-level metric for every future diagnostic
+  tag. CLI overrides use
   `--max-debug-brief-tag-rate tag=rate`; `tag=-1` disables a profile default
   for that tag.
 
