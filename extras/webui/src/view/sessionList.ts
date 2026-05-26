@@ -247,6 +247,7 @@ function currentSessionMetrics(session: SessionState): string[] {
   const priorIssueCount = session.turns.reduce((sum, turn) => sum + (turn !== latestTurn && turn.status !== "max_turns" && turnNeedsAttention(turn) ? 1 : 0), 0);
   const toolIssueCount = session.turns.reduce((sum, turn) => sum + settledToolIssueCount(turn), 0);
   const artifactMetric = currentSessionArtifactMetric(session);
+  const compactionMetric = currentSessionCompactionMetric(session);
   return [summarizeSessionMetrics({
     messages: session.turns.length,
     actions: toolCount,
@@ -254,7 +255,7 @@ function currentSessionMetrics(session: SessionState): string[] {
     continued: continuedCount,
     priorIssues: priorIssueCount,
     toolIssues: toolIssueCount,
-  }), ...(artifactMetric ? [artifactMetric] : [])];
+  }), ...(compactionMetric ? [compactionMetric] : []), ...(artifactMetric ? [artifactMetric] : [])];
 }
 
 function summarizeSessionMetrics({
@@ -300,18 +301,30 @@ function currentSessionSearchMetrics(session: SessionState): string[] {
   const priorIssueCount = session.turns.reduce((sum, turn) => sum + (turn !== latestTurn && turn.status !== "max_turns" && turnNeedsAttention(turn) ? 1 : 0), 0);
   const toolIssueCount = session.turns.reduce((sum, turn) => sum + settledToolIssueCount(turn), 0);
   const artifactMetric = currentSessionArtifactMetric(session);
+  const compactionMetric = currentSessionCompactionMetric(session);
   const metrics = [`${session.turns.length} message${session.turns.length === 1 ? "" : "s"}`];
   if (toolCount > 0) metrics.push(`${toolCount} action${toolCount === 1 ? "" : "s"}`);
   if (currentIssueCount > 0) metrics.push(`${currentIssueCount} issue${currentIssueCount === 1 ? "" : "s"}`);
   if (continuedCount > 0) metrics.push(`${continuedCount} continued`);
   if (priorIssueCount > 0) metrics.push(`${priorIssueCount} prior issue${priorIssueCount === 1 ? "" : "s"}`);
   if (toolIssueCount > 0) metrics.push(`${toolIssueCount} tool issue${toolIssueCount === 1 ? "" : "s"}`);
+  if (compactionMetric) metrics.push(compactionMetric);
   if (artifactMetric) metrics.push(artifactMetric);
   return metrics;
 }
 
 function currentSessionArtifactMetric(session: SessionState): string | undefined {
   return sessionArtifactLabel(session);
+}
+
+function currentSessionCompactionMetric(session: SessionState): string | undefined {
+  const count = session.contextCompactions.length;
+  if (count === 0) return undefined;
+  const latest = session.contextCompactions.at(-1);
+  const parts = [`${count} ${count === 1 ? "compaction" : "compactions"}`];
+  if (latest?.reactive) parts.push("reactive");
+  if (latest?.removed_messages && latest.removed_messages > 0) parts.push(`-${latest.removed_messages} msgs`);
+  return parts.join(", ");
 }
 
 function turnNeedsAttention(turn: SessionState["turns"][number]): boolean {

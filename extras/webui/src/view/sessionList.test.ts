@@ -629,6 +629,36 @@ describe("sessionList view model", () => {
     expect(rows[0].searchText).toContain("1 file (8 kib, 1 mib omitted)");
   });
 
+  it("surfaces context compactions in the selected chat row stats", () => {
+    const rows = mergeCurrentSessionRow(
+      buildSessionRows([session({ id: "s1", durable: true, has_events: true })]),
+      "s1",
+      reduceRawEvents([
+        { id: 1, type: "turn.start", data: { turn_id: "t1" } },
+        { id: 2, type: "user.message", data: { turn_id: "t1", text: "continue long run" } },
+        {
+          id: 3,
+          type: "context.compacted",
+          data: {
+            turn_id: "t1",
+            before_messages: 90,
+            after_messages: 18,
+            removed_messages: 72,
+            reactive: true,
+            reason: "context_overflow",
+            summary_present: true,
+            summary_bytes: 4096,
+          },
+        },
+        { id: 4, type: "turn.end", data: { turn_id: "t1", reason: "completed" } },
+      ]),
+    );
+
+    expect(rows[0].stats).toBe("1 message · 1 compaction, reactive, -72 msgs");
+    expect(rows[0].metrics).toContain("1 compaction, reactive, -72 msgs");
+    expect(rows[0].searchText).toContain("1 compaction, reactive, -72 msgs");
+  });
+
   it("surfaces unknown events as an unclassified chip in the chat list", () => {
     const rows = mergeCurrentSessionRow(
       buildSessionRows([session({ id: "s1", durable: true, has_events: true })]),
