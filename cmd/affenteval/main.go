@@ -247,6 +247,7 @@ type batchSummary struct {
 	EndCancelled               int
 	EndUnknown                 int
 	FailureKinds               map[string]int
+	DebugBriefByTag            map[string]int
 	RemovedWorkspaces          int
 	CleanupErrors              int
 
@@ -440,6 +441,14 @@ func (s *batchSummary) add(res agenteval.BatchResult) {
 			s.FailureKinds = map[string]int{}
 		}
 		s.FailureKinds[failureKind(failure)]++
+	}
+	if brief := agenteval.BuildDebugBrief(res); brief != nil {
+		if s.DebugBriefByTag == nil {
+			s.DebugBriefByTag = map[string]int{}
+		}
+		for _, tag := range brief.Tags {
+			s.DebugBriefByTag[tag]++
+		}
 	}
 }
 
@@ -987,6 +996,7 @@ type batchResultRecord struct {
 	FailureHints               failureHintMap                             `json:"failure_hints,omitempty"`
 	ToolFailureHints           failureHintMap                             `json:"tool_failure_hints,omitempty"`
 	RuntimeErrorHints          failureHintMap                             `json:"runtime_error_hints,omitempty"`
+	DebugBrief                 *agenteval.DebugBrief                      `json:"debug_brief,omitempty"`
 
 	// Per-scenario delegation breakdown. Fields are omitted from the
 	// JSONL when the scenario used no delegation tools, so older
@@ -1078,6 +1088,7 @@ type batchSummaryRecord struct {
 	FailureHints               failureHintMap                             `json:"failure_hints,omitempty"`
 	ToolFailureHints           failureHintMap                             `json:"tool_failure_hints,omitempty"`
 	RuntimeErrorHints          failureHintMap                             `json:"runtime_error_hints,omitempty"`
+	DebugBriefByTag            map[string]int                             `json:"debug_brief_by_tag,omitempty"`
 	RemovedWorkspaces          int                                        `json:"removed_workspaces"`
 	CleanupErrors              int                                        `json:"cleanup_errors"`
 
@@ -1194,6 +1205,7 @@ func printBatchResultJSONL(w io.Writer, meta evalJSONLMetadata, res agenteval.Ba
 		FailureHints:               failureHintsForKinds(failureKinds),
 		ToolFailureHints:           toolFailureHintsForKinds(res.ToolStats.ToolFailureByKind),
 		RuntimeErrorHints:          failureHintsForKinds(res.RuntimeErrorByKind),
+		DebugBrief:                 agenteval.BuildDebugBrief(res),
 		FocusedTaskCalls:           res.Delegation.FocusedTaskCalls,
 		FocusedTaskByType:          res.Delegation.FocusedTaskByType,
 		FocusedTaskErrors:          res.Delegation.FocusedTaskErrors,
@@ -1358,6 +1370,7 @@ func printBatchSummaryJSONL(w io.Writer, meta evalJSONLMetadata, s batchSummary)
 		FailureHints:               failureHintsForKinds(s.FailureKinds),
 		ToolFailureHints:           toolFailureHintsForKinds(s.ToolFailureByKind),
 		RuntimeErrorHints:          failureHintsForKinds(s.RuntimeErrorByKind),
+		DebugBriefByTag:            cloneStringIntMap(s.DebugBriefByTag),
 		RemovedWorkspaces:          s.RemovedWorkspaces,
 		CleanupErrors:              s.CleanupErrors,
 		FocusedTaskCalls:           s.FocusedTaskCalls,

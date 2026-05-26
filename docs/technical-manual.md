@@ -755,17 +755,20 @@ workspace: `affenteval-debug.json`, `affenteval-timeline.md`,
 `affenteval-final.txt`, `affenteval-stdout.txt`, and
 `affenteval-stderr.txt`. Failed workspaces are kept automatically;
 `--keep-workspaces` also keeps passing runs for local inspection. The timeline
-is the human-readable index for debugging: it links the raw trace, shows the
-redacted `affentctl` command argv, trace event type counts, effective runtime
-surface, tool calls with args/result previews, truncation/artifact pointers,
-loop decisions, context compactions, and runtime errors. By default, eval
+is the human-readable index for debugging: it links the raw trace, starts with
+a `Debug Brief` for failed or diagnostic-heavy runs, shows the redacted
+`affentctl` command argv, trace event type counts, effective runtime surface,
+tool calls with args/result previews, truncation/artifact pointers, loop
+decisions, context compactions, and runtime errors. By default, eval
 traces pass `affentctl --trace-skip-deltas` so token
 streaming deltas do not bury the tool timeline; use `--trace-deltas` only for
 deep provider/stream debugging when the raw `message.delta` sequence matters.
 The trace emits a `runtime.surface` event at turn start, and the debug
 manifest copies the latest surface into `runtime_surface`, including the
 effective tool names, broad capability flags, partial workspace tool lists, and
-key tool-result limits.
+key tool-result limits. The manifest and JSONL scenario record also include a
+machine-readable `debug_brief` with stable tags and inspection hints; JSONL
+summary records aggregate these as `debug_brief_by_tag` for batch triage.
 JSONL scenario records also include a compact `runtime_surface` summary so
 batch analysis can group outcomes by actual tool/capability surface. JSONL
 summary records include per-scenario counts for runtime tools and capabilities

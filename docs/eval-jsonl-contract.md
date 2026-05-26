@@ -122,6 +122,13 @@ Scenario records describe one eval case:
   records carry a small cross-scenario sample per kind. These preserve the
   specific timeout, endpoint, or incomplete-stream detail from `error` events
   without requiring operators to inspect the full trace.
+- `debug_brief`: optional machine-readable triage block for failed or
+  diagnostic-heavy scenarios. It contains sorted `tags` such as
+  `outcome:failed`, `tool_failure:blocked`, `runtime_error:llm_timeout`,
+  `source_dynamic_partial`, `empty_recall`, `context_compaction:reactive`, and
+  `truncation`, plus ordered `items` with a severity, message, inspect targets,
+  and relevant counts. This is the compact "what to inspect first" index for
+  long-run batch analysis.
 - `loop_guard_interventions`: runtime loop guard intervention count.
 - `forced_no_tools`: count of forced no-tool follow-up requests after repeated
   blocking loop guard interventions. Soft warnings such as
@@ -224,6 +231,8 @@ Summary records aggregate all scenario records from the same process:
   `tool_failure_hints`, `tool_failure_examples`.
 - Runtime error totals and diagnostics: `runtime_error_by_kind`,
   `runtime_error_hints`, `runtime_error_examples`.
+- Debug brief tag totals: `debug_brief_by_tag`, counting how many scenarios
+  emitted each machine-readable triage tag.
 - Runtime surface totals: `runtime_surface_scenarios`,
   `runtime_surface_tools`, and `runtime_surface_capabilities`. Counts are
   per-scenario surface presence, not model call counts; use them to group pass

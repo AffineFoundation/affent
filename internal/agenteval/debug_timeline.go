@@ -208,7 +208,7 @@ func renderTimelineDebugBrief(b *strings.Builder, res BatchResult) {
 			res.ContextCompactions.SummaryBytes,
 		)
 	}
-	if hasTimelineTruncation(res) {
+	if hasDebugBriefTruncation(res) {
 		fmt.Fprintf(b, "- truncation: tool_context=%d omitted_context=%d args=%d args_omitted=%d results=%d results_omitted=%d artifacts=%d; inspect artifacts and capped tool outputs.\n",
 			res.ToolStats.ToolContextTruncated,
 			res.ToolStats.ToolContextOmittedBytes,
@@ -222,28 +222,9 @@ func renderTimelineDebugBrief(b *strings.Builder, res BatchResult) {
 }
 
 func hasTimelineDebugBrief(res BatchResult) bool {
-	return !res.OK ||
-		(res.TurnEndReason != "" && res.TurnEndReason != "completed") ||
-		len(res.ToolStats.ToolFailureByKind) > 0 ||
+	return BuildDebugBrief(res) != nil ||
 		len(res.ToolFailureExamples) > 0 ||
-		len(res.RuntimeErrorByKind) > 0 ||
-		len(res.RuntimeErrorExamples) > 0 ||
-		res.ToolStats.LoopGuardInterventions > 0 ||
-		res.ToolStats.SourceAccessResults > 0 ||
-		res.ToolStats.SessionSearchCalls > 0 ||
-		res.ToolStats.SessionSearchResults > 0 ||
-		res.ContextCompactions.Count > 0 ||
-		hasTimelineTruncation(res)
-}
-
-func hasTimelineTruncation(res BatchResult) bool {
-	return res.ToolStats.ToolContextTruncated > 0 ||
-		res.ToolStats.ToolContextOmittedBytes > 0 ||
-		res.ToolTruncation.ArgsTruncated > 0 ||
-		res.ToolTruncation.ArgsOmittedBytes > 0 ||
-		res.ToolTruncation.ResultsTruncated > 0 ||
-		res.ToolTruncation.ResultsOmittedBytes > 0 ||
-		res.ToolTruncation.ResultArtifacts > 0
+		len(res.RuntimeErrorExamples) > 0
 }
 
 func timelineCounts(counts map[string]int) string {

@@ -1266,6 +1266,16 @@ func TestWriteScenarioDebugArtifactsIndexesTraceAndFinalText(t *testing.T) {
 	if len(manifest.Failures) != 1 || manifest.Failures[0] != "missing required evidence" {
 		t.Fatalf("manifest failures = %+v", manifest.Failures)
 	}
+	if manifest.DebugBrief == nil || len(manifest.DebugBrief.Tags) == 0 {
+		t.Fatalf("manifest debug brief missing: %+v", manifest.DebugBrief)
+	}
+	if !stringSliceContains(manifest.DebugBrief.Tags, "tool_failure:dynamic_shell") ||
+		!stringSliceContains(manifest.DebugBrief.Tags, "runtime_error:llm_timeout") ||
+		!stringSliceContains(manifest.DebugBrief.Tags, "source_dynamic_partial") ||
+		!stringSliceContains(manifest.DebugBrief.Tags, "context_compaction:reactive") ||
+		!stringSliceContains(manifest.DebugBrief.Tags, "truncation") {
+		t.Fatalf("manifest debug brief tags = %+v", manifest.DebugBrief.Tags)
+	}
 	if manifest.RuntimeSurface == nil ||
 		manifest.RuntimeSurface.ToolCount != 2 ||
 		!manifest.RuntimeSurface.Capabilities.WebFetch ||

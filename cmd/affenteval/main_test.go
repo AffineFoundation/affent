@@ -956,6 +956,22 @@ func TestPrintBatchResultJSONL(t *testing.T) {
 	if !ok || !strings.Contains(fmt.Sprint(incompleteExample["message"]), "incomplete SSE stream") {
 		t.Fatalf("llm_incomplete_stream runtime_error_example = %#v\njson=%s", incompleteExamples[0], out.String())
 	}
+	debugBrief, ok := got["debug_brief"].(map[string]any)
+	if !ok {
+		t.Fatalf("debug_brief missing or wrong type: %#v\njson=%s", got["debug_brief"], out.String())
+	}
+	if !jsonArrayContainsString(debugBrief["tags"], "tool_failure:blocked") ||
+		!jsonArrayContainsString(debugBrief["tags"], "runtime_error:llm_incomplete_stream") ||
+		!jsonArrayContainsString(debugBrief["tags"], "loop_guard") ||
+		!jsonArrayContainsString(debugBrief["tags"], "recall") ||
+		!jsonArrayContainsString(debugBrief["tags"], "context_compaction:reactive") ||
+		!jsonArrayContainsString(debugBrief["tags"], "truncation") {
+		t.Fatalf("debug_brief tags = %#v\njson=%s", debugBrief["tags"], out.String())
+	}
+	items, ok := debugBrief["items"].([]any)
+	if !ok || len(items) == 0 {
+		t.Fatalf("debug_brief items = %#v\njson=%s", debugBrief["items"], out.String())
+	}
 	loopDecisionByKind, ok := got["loop_decision_by_kind"].(map[string]any)
 	if !ok || loopDecisionByKind["evidence_quality"] != float64(1) {
 		t.Fatalf("loop_decision_by_kind = %#v\njson=%s", got["loop_decision_by_kind"], out.String())
@@ -982,6 +998,19 @@ func TestPrintBatchResultJSONL(t *testing.T) {
 	if planByAction["set"] != float64(1) || planByAction["update"] != float64(1) {
 		t.Fatalf("plan_by_action = %#v", planByAction)
 	}
+}
+
+func jsonArrayContainsString(raw any, want string) bool {
+	values, ok := raw.([]any)
+	if !ok {
+		return false
+	}
+	for _, value := range values {
+		if value == want {
+			return true
+		}
+	}
+	return false
 }
 
 func TestPrintBatchResultJSONLIncludesDebugPathsForRetainedWorkspace(t *testing.T) {
@@ -1168,6 +1197,29 @@ func TestBatchSummaryFailureExamplesAreBounded(t *testing.T) {
 	}
 	if strings.Contains(summary.RuntimeErrorExamples["llm_timeout"][1].Message, "3") {
 		t.Fatalf("runtime error examples should keep earliest bounded samples: %#v", summary.RuntimeErrorExamples["llm_timeout"])
+	}
+}
+
+func TestBatchSummaryAggregatesDebugBriefTags(t *testing.T) {
+	var summary batchSummary
+	summary.add(agenteval.BatchResult{
+		OK:                 false,
+		TurnEndReason:      "max_turns",
+		RuntimeErrorByKind: map[string]int{"llm_timeout": 1},
+	})
+	summary.add(agenteval.BatchResult{
+		OK: true,
+		ToolStats: agenteval.ToolRuntimeStats{
+			SessionSearchCalls:   1,
+			SessionSearchResults: 0,
+		},
+	})
+
+	if summary.DebugBriefByTag["outcome:failed"] != 1 ||
+		summary.DebugBriefByTag["turn_end:max_turns"] != 1 ||
+		summary.DebugBriefByTag["runtime_error:llm_timeout"] != 1 ||
+		summary.DebugBriefByTag["empty_recall"] != 1 {
+		t.Fatalf("DebugBriefByTag = %#v", summary.DebugBriefByTag)
 	}
 }
 
@@ -1415,6 +1467,7 @@ func TestPrintBatchSummaryJSONL(t *testing.T) {
 		EndCancelled:               0,
 		EndUnknown:                 0,
 		FailureKinds:               map[string]int{"missing_command": 1, "turn_end": 1},
+		DebugBriefByTag:            map[string]int{"outcome:failed": 1, "tool_failure:blocked": 1, "runtime_error:llm_timeout": 1},
 		RemovedWorkspaces:          1,
 		PlanCalls:                  3,
 		PlanByAction:               map[string]int{"set": 1, "update": 2},
@@ -1537,6 +1590,13 @@ func TestPrintBatchSummaryJSONL(t *testing.T) {
 	runtimeErrorExamples, ok := got["runtime_error_examples"].(map[string]any)
 	if !ok || !strings.Contains(fmt.Sprint(runtimeErrorExamples["llm_timeout"]), "timed out") {
 		t.Fatalf("runtime_error_examples = %#v\njson=%s", got["runtime_error_examples"], out.String())
+	}
+	debugBriefByTag, ok := got["debug_brief_by_tag"].(map[string]any)
+	if !ok ||
+		debugBriefByTag["outcome:failed"] != float64(1) ||
+		debugBriefByTag["tool_failure:blocked"] != float64(1) ||
+		debugBriefByTag["runtime_error:llm_timeout"] != float64(1) {
+		t.Fatalf("debug_brief_by_tag = %#v\njson=%s", got["debug_brief_by_tag"], out.String())
 	}
 	runtimeSurfaceTools, ok := got["runtime_surface_tools"].(map[string]any)
 	if !ok || runtimeSurfaceTools["web_fetch"] != float64(2) || runtimeSurfaceTools["browser_find"] != float64(1) {

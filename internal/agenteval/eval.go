@@ -192,6 +192,7 @@ type DebugManifest struct {
 	TraceDeltas      bool                       `json:"trace_deltas,omitempty"`
 	Prompt           string                     `json:"prompt"`
 	Failures         []string                   `json:"failures,omitempty"`
+	DebugBrief       *DebugBrief                `json:"debug_brief,omitempty"`
 	Metrics          DebugMetrics               `json:"metrics"`
 	RuntimeSurface   *sse.RuntimeSurfacePayload `json:"runtime_surface,omitempty"`
 	GeneratedAt      string                     `json:"generated_at"`
@@ -521,6 +522,7 @@ func writeScenarioDebugArtifacts(res *BatchResult, scenario BatchScenario, stdou
 		TraceDeltas:      res.TraceDeltas,
 		Prompt:           scenario.Prompt,
 		Failures:         append([]string(nil), res.Failures...),
+		DebugBrief:       BuildDebugBrief(*res),
 		RuntimeSurface:   cloneRuntimeSurface(res.RuntimeSurface),
 		Metrics: DebugMetrics{
 			TurnEndReason:              res.TurnEndReason,
