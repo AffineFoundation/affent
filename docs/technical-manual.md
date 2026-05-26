@@ -746,7 +746,9 @@ Quality gate flags are optional and disabled by default. They return exit code
 `1` after the full batch finishes if the aggregate summary violates configured
 thresholds; gate failures are written to stderr, while JSONL records copy the
 enabled thresholds into metadata so result files preserve their pass/fail
-conditions.
+conditions. JSONL summary records also include `quality_gates_passed` when any
+gate is enabled and `quality_gate_failures` when a gate failed, so stored eval
+artifacts can explain CI or model-comparison failures without stderr.
 Use `--min-pass-rate`, `--min-completion-rate`,
 `--min-source-access-verified-rate`, `--max-tool-error-rate`,
 `--max-tool-context-truncation-rate`, and `--max-avg-total-tokens` for CI or

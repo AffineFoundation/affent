@@ -1347,7 +1347,7 @@ func TestBatchSummaryAggregatesDelegationAcrossScenarios(t *testing.T) {
 
 	// Wire-format check: consumers expect one merged object per batch.
 	var out bytes.Buffer
-	printBatchSummaryJSONL(&out, testEvalJSONLMetadata(), summary)
+	printBatchSummaryJSONL(&out, testEvalJSONLMetadata(), summary, nil)
 	var got map[string]any
 	if err := json.Unmarshal(out.Bytes(), &got); err != nil {
 		t.Fatalf("decode summary: %v\n%s", err, out.String())
@@ -1558,7 +1558,7 @@ func TestPrintBatchSummaryJSONL(t *testing.T) {
 		PlanCalls:                  3,
 		PlanByAction:               map[string]int{"set": 1, "update": 2},
 		PlanErrors:                 1,
-	})
+	}, nil)
 
 	var got map[string]any
 	if err := json.Unmarshal(out.Bytes(), &got); err != nil {
@@ -1726,6 +1726,34 @@ func TestPrintBatchSummaryJSONL(t *testing.T) {
 	}
 	if planByAction["set"] != float64(1) || planByAction["update"] != float64(2) {
 		t.Fatalf("plan_by_action = %#v", planByAction)
+	}
+}
+
+func TestPrintBatchSummaryJSONLIncludesQualityGateResult(t *testing.T) {
+	var out bytes.Buffer
+	minPassRate := 0.8
+	meta := testEvalJSONLMetadata()
+	meta.MinPassRate = &minPassRate
+
+	printBatchSummaryJSONL(&out, meta, batchSummary{
+		Total:        2,
+		Passed:       1,
+		EndCompleted: 2,
+	}, []string{"pass_rate 0.500 < min 0.800"})
+
+	var got map[string]any
+	if err := json.Unmarshal(out.Bytes(), &got); err != nil {
+		t.Fatalf("jsonl summary did not decode: %v\n%s", err, out.String())
+	}
+	if got["min_pass_rate"] != float64(0.8) {
+		t.Fatalf("min_pass_rate = %#v\njson=%s", got["min_pass_rate"], out.String())
+	}
+	if got["quality_gates_passed"] != false {
+		t.Fatalf("quality_gates_passed = %#v\njson=%s", got["quality_gates_passed"], out.String())
+	}
+	failures, ok := got["quality_gate_failures"].([]any)
+	if !ok || len(failures) != 1 || failures[0] != "pass_rate 0.500 < min 0.800" {
+		t.Fatalf("quality_gate_failures = %#v\njson=%s", got["quality_gate_failures"], out.String())
 	}
 }
 

@@ -181,12 +181,12 @@ success and trace-level process quality.`)
 			printBatchResult(os.Stdout, res)
 		}
 	}
+	gateFailures := qualityGateFailures(summary, gates)
 	if *jsonl {
-		printBatchSummaryJSONL(os.Stdout, jsonlMeta, summary)
+		printBatchSummaryJSONL(os.Stdout, jsonlMeta, summary, gateFailures)
 	} else {
 		printBatchSummary(os.Stdout, summary)
 	}
-	gateFailures := qualityGateFailures(summary, gates)
 	if len(gateFailures) > 0 {
 		fmt.Fprintln(os.Stderr, "quality gates failed:")
 		for _, failure := range gateFailures {
@@ -1284,6 +1284,8 @@ type batchSummaryRecord struct {
 	ToolFailureHints           failureHintMap                             `json:"tool_failure_hints,omitempty"`
 	RuntimeErrorHints          failureHintMap                             `json:"runtime_error_hints,omitempty"`
 	DebugBriefByTag            map[string]int                             `json:"debug_brief_by_tag,omitempty"`
+	QualityGatesPassed         *bool                                      `json:"quality_gates_passed,omitempty"`
+	QualityGateFailures        []string                                   `json:"quality_gate_failures,omitempty"`
 	RemovedWorkspaces          int                                        `json:"removed_workspaces"`
 	CleanupErrors              int                                        `json:"cleanup_errors"`
 
@@ -1491,7 +1493,7 @@ func runtimeSurfaceCapabilityNames(c sse.RuntimeCapabilities) []string {
 	return out
 }
 
-func printBatchSummaryJSONL(w io.Writer, meta evalJSONLMetadata, s batchSummary) {
+func printBatchSummaryJSONL(w io.Writer, meta evalJSONLMetadata, s batchSummary, gateFailures []string) {
 	writeJSONLine(w, batchSummaryRecord{
 		evalJSONLMetadata:          meta,
 		Type:                       "summary",
@@ -1578,6 +1580,8 @@ func printBatchSummaryJSONL(w io.Writer, meta evalJSONLMetadata, s batchSummary)
 		ToolFailureHints:           toolFailureHintsForKinds(s.ToolFailureByKind),
 		RuntimeErrorHints:          failureHintsForKinds(s.RuntimeErrorByKind),
 		DebugBriefByTag:            cloneStringIntMap(s.DebugBriefByTag),
+		QualityGatesPassed:         qualityGatesPassedForJSONL(meta, gateFailures),
+		QualityGateFailures:        append([]string(nil), gateFailures...),
 		RemovedWorkspaces:          s.RemovedWorkspaces,
 		CleanupErrors:              s.CleanupErrors,
 		FocusedTaskCalls:           s.FocusedTaskCalls,
@@ -1590,6 +1594,23 @@ func printBatchSummaryJSONL(w io.Writer, meta evalJSONLMetadata, s batchSummary)
 		PlanByAction:               cloneStringIntMap(s.PlanByAction),
 		PlanErrors:                 s.PlanErrors,
 	})
+}
+
+func qualityGatesPassedForJSONL(meta evalJSONLMetadata, failures []string) *bool {
+	if !hasQualityGateThresholds(meta) {
+		return nil
+	}
+	passed := len(failures) == 0
+	return &passed
+}
+
+func hasQualityGateThresholds(meta evalJSONLMetadata) bool {
+	return meta.MinPassRate != nil ||
+		meta.MinCompletionRate != nil ||
+		meta.MinSourceAccessVerifiedRate != nil ||
+		meta.MaxToolErrorRate != nil ||
+		meta.MaxToolContextTruncationRate != nil ||
+		meta.MaxAvgTotalTokens != nil
 }
 
 // cloneStringIntMap returns a copy of in or nil if in is empty. Used

@@ -245,6 +245,10 @@ Summary records aggregate all scenario records from the same process:
   `runtime_error_hints`, `runtime_error_examples`.
 - Debug brief tag totals: `debug_brief_by_tag`, counting how many scenarios
   emitted each machine-readable triage tag.
+- Quality gate outcome: `quality_gates_passed` is present on summary records
+  when at least one quality gate threshold was configured, and
+  `quality_gate_failures` lists failed gate comparisons when any thresholds
+  were violated.
 - Runtime surface totals: `runtime_surface_scenarios`,
   `runtime_surface_tools`, and `runtime_surface_capabilities`. Counts are
   per-scenario surface presence, not model call counts; use them to group pass
