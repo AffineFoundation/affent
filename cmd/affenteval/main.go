@@ -37,41 +37,42 @@ func run(args []string) int {
 	fs := flag.NewFlagSet("affenteval", flag.ContinueOnError)
 	fs.SetOutput(os.Stderr)
 	var (
-		list              = fs.Bool("list", false, "list built-in scenarios and exit")
-		listSuites        = fs.Bool("list-suites", false, "list built-in scenario suites and exit")
-		suite             = fs.String("suite", "", "scenario suite to run/list (e.g. small-model-tools)")
-		scenarioCSV       = fs.String("scenario", "", "comma-separated scenario names; empty runs all")
-		prompt            = fs.String("prompt", "", "run one ad-hoc prompt; use '-' for stdin")
-		promptFile        = fs.String("prompt-file", "", "run one ad-hoc prompt read from file")
-		adHocName         = fs.String("name", "adhoc", "scenario name for --prompt/--prompt-file debug runs")
-		adHocSessionID    = fs.String("session-id", "", "session id forwarded to affentctl for --prompt/--prompt-file debug runs")
-		adHocMaxTurns     = fs.Int("max-turns", agenteval.DefaultBatchMaxTurnSteps, "max assistant/tool loop steps for --prompt/--prompt-file debug runs")
-		adHocVerify       = fs.String("verify-command", "", "optional verifier command for --prompt/--prompt-file debug runs")
-		repoRoot          = fs.String("repo-root", ".", "Affent repository root")
-		workRoot          = fs.String("work-root", "", "directory for temporary scenario workspaces; default $TMPDIR/affent-eval")
-		baseURL           = fs.String("base-url", "", "OpenAI-compatible endpoint (env: AFFENTCTL_BASE_URL)")
-		apiKey            = fs.String("api-key", "", "API key (env: AFFENTCTL_API_KEY)")
-		model             = fs.String("model", "", "model id (env: AFFENTCTL_MODEL)")
-		providerLabel     = fs.String("provider-label", "", "provider label written to JSONL for comparisons (env: AFFENTEVAL_PROVIDER_LABEL)")
-		temperature       = fs.String("temperature", "0", "sampling temperature forwarded to affentctl")
-		topP              = fs.String("top-p", "", "top-p sampling forwarded to affentctl; empty keeps provider default")
-		maxTokens         = fs.String("max-tokens", "", "max output tokens forwarded to affentctl; empty keeps provider default")
-		seed              = fs.String("seed", "", "deterministic-sampling seed forwarded to affentctl; empty keeps provider default")
-		executor          = fs.String("executor", "local", "affentctl tool executor for scenario runs: local, sandbox, or docker:<container>")
-		runtimeEvalMode   = fs.Bool("runtime-eval-mode", true, "pass affentctl --eval-mode during scenario runs; default true so evals start with no tools")
-		runtimeTools      = fs.String("runtime-tools", "", "comma-separated affentctl --eval-tools allowlist, e.g. readonly_workspace,web,recall or read_file,shell")
-		runtimeAllTools   = fs.Bool("runtime-all-tools", false, "pass affentctl --eval-all-tools to enable the full tool surface under runtime eval mode")
-		runtimeMemory     = fs.Bool("runtime-memory", false, "pass affentctl --memory=true during scenario runs; useful for memory-only opt-in")
-		runtimeWeb        = fs.Bool("runtime-web", false, "pass affentctl --web --web-search during scenario runs for external retrieval/debug evals")
-		runtimeBrowser    = fs.Bool("runtime-browser", false, "pass affentctl --browser during scenario runs for rendered-page/browser debug evals")
-		runtimeMCPConfig  = fs.String("runtime-mcp-config", "", "pass affentctl --mcp-config PATH during scenario runs; useful to opt into MCP only")
-		traceDeltas       = fs.Bool("trace-deltas", false, "retain streaming message delta events in trace JSONL for deep debugging; default skips deltas to keep traces compact")
-		timeout           = fs.Duration("timeout", 5*time.Minute, "per-scenario timeout")
-		verifierOutputCap = fs.Int("verifier-output-cap", agenteval.DefaultVerifierOutputCapBytes, "maximum verifier output bytes buffered per scenario")
-		jsonl             = fs.Bool("jsonl", false, "emit machine-readable JSONL records instead of text")
-		keepWorkspaces    = fs.Bool("keep-workspaces", false, "keep passing scenario workspaces; failing scenario workspaces are always kept")
-		qualityProfile    = fs.String("quality-profile", "", "predefined quality gate profile: longrun or web-evidence; explicit gate flags override profile thresholds")
-		gates             = qualityGateConfig{
+		list                = fs.Bool("list", false, "list built-in scenarios and exit")
+		listSuites          = fs.Bool("list-suites", false, "list built-in scenario suites and exit")
+		listQualityProfiles = fs.Bool("list-quality-profiles", false, "list built-in quality gate profiles and exit")
+		suite               = fs.String("suite", "", "scenario suite to run/list (e.g. small-model-tools)")
+		scenarioCSV         = fs.String("scenario", "", "comma-separated scenario names; empty runs all")
+		prompt              = fs.String("prompt", "", "run one ad-hoc prompt; use '-' for stdin")
+		promptFile          = fs.String("prompt-file", "", "run one ad-hoc prompt read from file")
+		adHocName           = fs.String("name", "adhoc", "scenario name for --prompt/--prompt-file debug runs")
+		adHocSessionID      = fs.String("session-id", "", "session id forwarded to affentctl for --prompt/--prompt-file debug runs")
+		adHocMaxTurns       = fs.Int("max-turns", agenteval.DefaultBatchMaxTurnSteps, "max assistant/tool loop steps for --prompt/--prompt-file debug runs")
+		adHocVerify         = fs.String("verify-command", "", "optional verifier command for --prompt/--prompt-file debug runs")
+		repoRoot            = fs.String("repo-root", ".", "Affent repository root")
+		workRoot            = fs.String("work-root", "", "directory for temporary scenario workspaces; default $TMPDIR/affent-eval")
+		baseURL             = fs.String("base-url", "", "OpenAI-compatible endpoint (env: AFFENTCTL_BASE_URL)")
+		apiKey              = fs.String("api-key", "", "API key (env: AFFENTCTL_API_KEY)")
+		model               = fs.String("model", "", "model id (env: AFFENTCTL_MODEL)")
+		providerLabel       = fs.String("provider-label", "", "provider label written to JSONL for comparisons (env: AFFENTEVAL_PROVIDER_LABEL)")
+		temperature         = fs.String("temperature", "0", "sampling temperature forwarded to affentctl")
+		topP                = fs.String("top-p", "", "top-p sampling forwarded to affentctl; empty keeps provider default")
+		maxTokens           = fs.String("max-tokens", "", "max output tokens forwarded to affentctl; empty keeps provider default")
+		seed                = fs.String("seed", "", "deterministic-sampling seed forwarded to affentctl; empty keeps provider default")
+		executor            = fs.String("executor", "local", "affentctl tool executor for scenario runs: local, sandbox, or docker:<container>")
+		runtimeEvalMode     = fs.Bool("runtime-eval-mode", true, "pass affentctl --eval-mode during scenario runs; default true so evals start with no tools")
+		runtimeTools        = fs.String("runtime-tools", "", "comma-separated affentctl --eval-tools allowlist, e.g. readonly_workspace,web,recall or read_file,shell")
+		runtimeAllTools     = fs.Bool("runtime-all-tools", false, "pass affentctl --eval-all-tools to enable the full tool surface under runtime eval mode")
+		runtimeMemory       = fs.Bool("runtime-memory", false, "pass affentctl --memory=true during scenario runs; useful for memory-only opt-in")
+		runtimeWeb          = fs.Bool("runtime-web", false, "pass affentctl --web --web-search during scenario runs for external retrieval/debug evals")
+		runtimeBrowser      = fs.Bool("runtime-browser", false, "pass affentctl --browser during scenario runs for rendered-page/browser debug evals")
+		runtimeMCPConfig    = fs.String("runtime-mcp-config", "", "pass affentctl --mcp-config PATH during scenario runs; useful to opt into MCP only")
+		traceDeltas         = fs.Bool("trace-deltas", false, "retain streaming message delta events in trace JSONL for deep debugging; default skips deltas to keep traces compact")
+		timeout             = fs.Duration("timeout", 5*time.Minute, "per-scenario timeout")
+		verifierOutputCap   = fs.Int("verifier-output-cap", agenteval.DefaultVerifierOutputCapBytes, "maximum verifier output bytes buffered per scenario")
+		jsonl               = fs.Bool("jsonl", false, "emit machine-readable JSONL records instead of text")
+		keepWorkspaces      = fs.Bool("keep-workspaces", false, "keep passing scenario workspaces; failing scenario workspaces are always kept")
+		qualityProfile      = fs.String("quality-profile", "", "predefined quality gate profile: longrun or web-evidence; explicit gate flags override profile thresholds")
+		gates               = qualityGateConfig{
 			MinPassRate:                    fs.Float64("min-pass-rate", -1, "optional quality gate: minimum batch pass rate, 0..1"),
 			MinCompletionRate:              fs.Float64("min-completion-rate", -1, "optional quality gate: minimum completed-turn rate, 0..1"),
 			MinMemoryUpdateRate:            fs.Float64("min-memory-update-rate", -1, "optional quality gate: minimum confirmed memory updates per scenario, 0..1"),
@@ -109,6 +110,10 @@ success and trace-level process quality.`)
 			return 0
 		}
 		return 64
+	}
+	if *listQualityProfiles {
+		printQualityGateProfiles(os.Stdout)
+		return 0
 	}
 	if err := applyQualityGateProfile(&gates, *qualityProfile, func(name string) bool {
 		return flagWasSet(fs, name)
@@ -252,6 +257,99 @@ type qualityGateConfig struct {
 	MaxAvgTotalTokens              *float64
 }
 
+type qualityGateProfileDefinition struct {
+	Name        string
+	Description string
+	Gates       qualityGateConfig
+}
+
+func qualityGateProfileDefinitions() []qualityGateProfileDefinition {
+	return []qualityGateProfileDefinition{
+		{
+			Name:        "longrun",
+			Description: "general long-run stability gates for task completion, tool recovery, delegation/plan errors, truncation, runtime errors, and token cost",
+			Gates: qualityGateConfig{
+				MinPassRate:                  float64Ptr(0.80),
+				MinCompletionRate:            float64Ptr(0.90),
+				MinRuntimeSurfaceRate:        float64Ptr(0.90),
+				MaxFocusedTaskErrorRate:      float64Ptr(0.10),
+				MaxForcedNoToolsRate:         float64Ptr(0.10),
+				MaxLoopGuardInterventionRate: float64Ptr(0.20),
+				MaxPlanErrorRate:             float64Ptr(0.05),
+				MaxSubagentErrorRate:         float64Ptr(0.10),
+				MaxToolErrorRate:             float64Ptr(0.08),
+				MaxToolContextTruncationRate: float64Ptr(0.30),
+				MaxToolResultTruncationRate:  float64Ptr(0.20),
+				MaxAvgRuntimeErrors:          float64Ptr(0.20),
+				MaxAvgReactiveCompactions:    float64Ptr(0.50),
+				MaxAvgTotalTokens:            float64Ptr(120000),
+			},
+		},
+		{
+			Name:        "web-evidence",
+			Description: "web and browser evidence gates for current-fact tasks, emphasizing verified SourceAccess, network/API evidence, low discovery-only output, and bounded cost",
+			Gates: qualityGateConfig{
+				MinPassRate:                  float64Ptr(0.80),
+				MinCompletionRate:            float64Ptr(0.90),
+				MinRuntimeSurfaceRate:        float64Ptr(0.90),
+				MinSourceNetworkRate:         float64Ptr(0.50),
+				MinSourceAccessVerifiedRate:  float64Ptr(0.90),
+				MaxForcedNoToolsRate:         float64Ptr(0.10),
+				MaxLoopGuardInterventionRate: float64Ptr(0.25),
+				MaxSourceDiscoveryOnlyRate:   float64Ptr(0.15),
+				MaxSourceDynamicPartialRate:  float64Ptr(0.20),
+				MaxToolErrorRate:             float64Ptr(0.10),
+				MaxToolResultTruncationRate:  float64Ptr(0.25),
+				MaxAvgRuntimeErrors:          float64Ptr(0.20),
+				MaxAvgTotalTokens:            float64Ptr(120000),
+			},
+		},
+	}
+}
+
+func printQualityGateProfiles(w io.Writer) {
+	for _, profile := range qualityGateProfileDefinitions() {
+		fmt.Fprintf(w, "%s\t%s\n", profile.Name, profile.Description)
+		for _, line := range qualityGateConfigLines(profile.Gates) {
+			fmt.Fprintf(w, "  %s\n", line)
+		}
+	}
+}
+
+func qualityGateConfigLines(g qualityGateConfig) []string {
+	var lines []string
+	add := func(name string, value *float64) {
+		if value == nil || *value < 0 {
+			return
+		}
+		lines = append(lines, fmt.Sprintf("%s=%s", name, formatGateFloat(*value)))
+	}
+	add("min-pass-rate", g.MinPassRate)
+	add("min-completion-rate", g.MinCompletionRate)
+	add("min-memory-update-rate", g.MinMemoryUpdateRate)
+	add("min-runtime-surface-rate", g.MinRuntimeSurfaceRate)
+	add("min-source-network-rate", g.MinSourceNetworkRate)
+	add("min-source-access-verified-rate", g.MinSourceAccessVerifiedRate)
+	add("min-session-search-context-hit-rate", g.MinSessionSearchContextHitRate)
+	add("min-tool-repair-success-rate", g.MinToolRepairSuccessRate)
+	add("min-verifier-pass-rate", g.MinVerifierPassRate)
+	add("max-focused-task-error-rate", g.MaxFocusedTaskErrorRate)
+	add("max-forced-no-tools-rate", g.MaxForcedNoToolsRate)
+	add("max-loop-guard-intervention-rate", g.MaxLoopGuardInterventionRate)
+	add("max-plan-error-rate", g.MaxPlanErrorRate)
+	add("max-source-discovery-only-rate", g.MaxSourceDiscoveryOnlyRate)
+	add("max-source-dynamic-partial-rate", g.MaxSourceDynamicPartialRate)
+	add("max-subagent-error-rate", g.MaxSubagentErrorRate)
+	add("max-tool-error-rate", g.MaxToolErrorRate)
+	add("max-tool-context-truncation-rate", g.MaxToolContextTruncationRate)
+	add("max-tool-result-truncation-rate", g.MaxToolResultTruncationRate)
+	add("max-avg-runtime-errors", g.MaxAvgRuntimeErrors)
+	add("max-avg-context-compactions", g.MaxAvgContextCompactions)
+	add("max-avg-reactive-context-compactions", g.MaxAvgReactiveCompactions)
+	add("max-avg-total-tokens", g.MaxAvgTotalTokens)
+	return lines
+}
+
 func applyQualityGateProfile(g *qualityGateConfig, profile string, flagSet func(name string) bool) error {
 	profile = strings.ToLower(strings.TrimSpace(profile))
 	if profile == "" {
@@ -297,43 +395,23 @@ func applyQualityGateProfile(g *qualityGateConfig, profile string, flagSet func(
 }
 
 func qualityGateProfileConfig(profile string) (qualityGateConfig, error) {
-	switch strings.ToLower(strings.TrimSpace(profile)) {
-	case "longrun":
-		return qualityGateConfig{
-			MinPassRate:                  float64Ptr(0.80),
-			MinCompletionRate:            float64Ptr(0.90),
-			MinRuntimeSurfaceRate:        float64Ptr(0.90),
-			MaxFocusedTaskErrorRate:      float64Ptr(0.10),
-			MaxForcedNoToolsRate:         float64Ptr(0.10),
-			MaxLoopGuardInterventionRate: float64Ptr(0.20),
-			MaxPlanErrorRate:             float64Ptr(0.05),
-			MaxSubagentErrorRate:         float64Ptr(0.10),
-			MaxToolErrorRate:             float64Ptr(0.08),
-			MaxToolContextTruncationRate: float64Ptr(0.30),
-			MaxToolResultTruncationRate:  float64Ptr(0.20),
-			MaxAvgRuntimeErrors:          float64Ptr(0.20),
-			MaxAvgReactiveCompactions:    float64Ptr(0.50),
-			MaxAvgTotalTokens:            float64Ptr(120000),
-		}, nil
-	case "web-evidence":
-		return qualityGateConfig{
-			MinPassRate:                  float64Ptr(0.80),
-			MinCompletionRate:            float64Ptr(0.90),
-			MinRuntimeSurfaceRate:        float64Ptr(0.90),
-			MinSourceNetworkRate:         float64Ptr(0.50),
-			MinSourceAccessVerifiedRate:  float64Ptr(0.90),
-			MaxForcedNoToolsRate:         float64Ptr(0.10),
-			MaxLoopGuardInterventionRate: float64Ptr(0.25),
-			MaxSourceDiscoveryOnlyRate:   float64Ptr(0.15),
-			MaxSourceDynamicPartialRate:  float64Ptr(0.20),
-			MaxToolErrorRate:             float64Ptr(0.10),
-			MaxToolResultTruncationRate:  float64Ptr(0.25),
-			MaxAvgRuntimeErrors:          float64Ptr(0.20),
-			MaxAvgTotalTokens:            float64Ptr(120000),
-		}, nil
-	default:
-		return qualityGateConfig{}, fmt.Errorf("--quality-profile must be one of: longrun, web-evidence")
+	profile = strings.ToLower(strings.TrimSpace(profile))
+	for _, def := range qualityGateProfileDefinitions() {
+		if def.Name == profile {
+			return def.Gates, nil
+		}
 	}
+	return qualityGateConfig{}, fmt.Errorf("--quality-profile must be one of: %s", strings.Join(qualityGateProfileNames(), ", "))
+}
+
+func qualityGateProfileNames() []string {
+	defs := qualityGateProfileDefinitions()
+	names := make([]string, 0, len(defs))
+	for _, def := range defs {
+		names = append(names, def.Name)
+	}
+	sort.Strings(names)
+	return names
 }
 
 func float64Ptr(value float64) *float64 {

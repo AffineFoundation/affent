@@ -29,6 +29,27 @@ func TestRunListSuites(t *testing.T) {
 	}
 }
 
+func TestRunListQualityProfiles(t *testing.T) {
+	out, code := captureStdout(t, func() int {
+		return run([]string{"--list-quality-profiles"})
+	})
+	if code != 0 {
+		t.Fatalf("run --list-quality-profiles exit = %d", code)
+	}
+	for _, want := range []string{
+		"longrun",
+		"web-evidence",
+		"min-pass-rate=0.800",
+		"max-avg-total-tokens=120000.000",
+		"min-source-access-verified-rate=0.900",
+		"max-source-dynamic-partial-rate=0.200",
+	} {
+		if !strings.Contains(out, want) {
+			t.Fatalf("--list-quality-profiles output missing %q:\n%s", want, out)
+		}
+	}
+}
+
 func TestRunListSuiteScenarios(t *testing.T) {
 	out, code := captureStdout(t, func() int {
 		return run([]string{"--list", "--suite", "small-model-tools"})
@@ -71,7 +92,7 @@ func TestRunHelpDoesNotLeakEnvSecrets(t *testing.T) {
 			t.Fatalf("--help missing runtime eval flag %q:\n%s", want, help)
 		}
 	}
-	if !strings.Contains(help, "-quality-profile") || !strings.Contains(help, "web-evidence") {
+	if !strings.Contains(help, "-quality-profile") || !strings.Contains(help, "-list-quality-profiles") || !strings.Contains(help, "web-evidence") {
 		t.Fatalf("--help missing quality profile flag:\n%s", help)
 	}
 }

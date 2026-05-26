@@ -37,6 +37,10 @@ Shared metadata fields:
 - `runtime_mcp`: optional boolean, present when the eval runner passed a runtime
   MCP config. The config path itself is not written to JSONL.
 - `timeout_ms`: per-scenario timeout in milliseconds.
+- `quality_profile`: optional string, present when the eval runner expanded a
+  built-in quality gate profile such as `longrun` or `web-evidence`. Profile
+  thresholds are still written as ordinary gate fields, and explicitly supplied
+  gate flags override profile defaults.
 - `min_pass_rate`, `min_completion_rate`, `min_memory_update_rate`,
   `min_runtime_surface_rate`, `min_source_network_rate`,
   `min_source_access_verified_rate`,
@@ -294,8 +298,9 @@ Summary records aggregate all scenario records from the same process:
   samples across the batch.
 - Debug brief tag totals: `debug_brief_by_tag`, counting how many scenarios
   emitted each machine-readable triage tag.
-- Quality gate outcome: `quality_gates_passed` is present on summary records
-  when at least one quality gate threshold was configured, and
+- Quality gate outcome: `quality_profile` identifies any built-in profile used,
+  `quality_gates_passed` is present on summary records when at least one quality
+  gate threshold was configured, and
   `quality_gate_failures` lists failed gate comparisons when any thresholds
   were violated.
 - Runtime surface totals: `runtime_surface_rate`, `runtime_surface_scenarios`,
