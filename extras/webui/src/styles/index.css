@@ -246,10 +246,43 @@ body {
 }
 
 .settings-icon {
-  display: inline-grid;
-  place-items: center;
-  font-size: 13px;
-  line-height: 1;
+  display: grid;
+  gap: 3px;
+  width: 16px;
+  color: currentColor;
+}
+
+.settings-icon span {
+  position: relative;
+  display: block;
+  width: 16px;
+  height: 2px;
+  border-radius: 999px;
+  background: currentColor;
+}
+
+.settings-icon span::after {
+  content: "";
+  position: absolute;
+  top: 50%;
+  width: 5px;
+  height: 5px;
+  border: 1.5px solid currentColor;
+  border-radius: 999px;
+  background: var(--bg-raised);
+  transform: translateY(-50%);
+}
+
+.settings-icon span:nth-child(1)::after {
+  left: 2px;
+}
+
+.settings-icon span:nth-child(2)::after {
+  right: 1px;
+}
+
+.settings-icon span:nth-child(3)::after {
+  left: 7px;
 }
 
 .settings-menu > summary::-webkit-details-marker {
@@ -7522,15 +7555,14 @@ html[data-theme="dark"] ::selection {
   .mobile-chrome-restore {
     align-items: center;
     justify-content: center;
-    width: 30px;
-    height: 30px;
-    border: 1px solid rgba(189, 199, 211, 0.78);
+    width: 32px;
+    height: 32px;
+    border: 1px solid rgba(189, 199, 211, 0.62);
     border-radius: 999px;
-    background: rgba(255, 255, 255, 0.72);
+    background: rgba(255, 255, 255, 0.64);
     color: var(--text-muted);
     padding: 0;
     font: inherit;
-    font-size: 17px;
     font-weight: 700;
     line-height: 1;
     cursor: pointer;
@@ -7563,29 +7595,88 @@ html[data-theme="dark"] ::selection {
   }
   .mobile-chrome-restore {
     display: inline-flex;
-    width: 42px;
-    height: 24px;
+    width: 44px;
+    height: 22px;
     border-radius: 999px;
-    background: rgba(255, 255, 255, 0.84);
+    background: rgba(255, 255, 255, 0.78);
     box-shadow: var(--shadow-soft);
     pointer-events: auto;
+  }
+  .mobile-collapse-icon {
+    position: relative;
+    display: block;
+    width: 16px;
+    height: 14px;
+  }
+  .mobile-collapse-icon::after {
+    content: "";
+    position: absolute;
+    right: 1px;
+    bottom: 2px;
+    left: 1px;
+    height: 2px;
+    border-radius: 999px;
+    background: currentColor;
+    opacity: 0.42;
+  }
+  .mobile-collapse-icon span {
+    position: absolute;
+    top: 4px;
+    width: 9px;
+    height: 2px;
+    border-radius: 999px;
+    background: currentColor;
+  }
+  .mobile-collapse-icon span:first-child {
+    left: 1px;
+    transform: rotate(35deg);
+    transform-origin: right center;
+  }
+  .mobile-collapse-icon span:last-child {
+    right: 1px;
+    transform: rotate(-35deg);
+    transform-origin: left center;
+  }
+  .mobile-restore-grip {
+    display: grid;
+    gap: 4px;
+    justify-items: center;
+    width: 24px;
+  }
+  .mobile-restore-grip span {
+    display: block;
+    height: 2px;
+    border-radius: 999px;
+    background: currentColor;
+  }
+  .mobile-restore-grip span:first-child {
+    width: 18px;
+    opacity: 0.48;
+  }
+  .mobile-restore-grip span:last-child {
+    width: 24px;
+    opacity: 0.78;
   }
   .settings-menu {
     order: 3;
   }
   .settings-menu > summary {
-    width: 30px;
-    min-width: 30px;
-    height: 30px;
+    width: 32px;
+    min-width: 32px;
+    height: 32px;
     border-radius: 999px;
     padding: 0;
-    background: rgba(255, 255, 255, 0.72);
+    background: rgba(255, 255, 255, 0.64);
   }
   .settings-label {
     display: none;
   }
   .settings-icon {
-    font-size: 15px;
+    width: 15px;
+    gap: 3px;
+  }
+  .settings-icon span {
+    width: 15px;
   }
   .settings-panel {
     position: fixed;

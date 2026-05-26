@@ -666,7 +666,10 @@ export function App() {
       {mobileTopbarHidden ? (
         <div className="mobile-chrome-restore-bar">
           <button type="button" className="mobile-chrome-restore" aria-label="Show top controls" onClick={() => setMobileTopbarHidden(false)}>
-            <span aria-hidden="true">⌄</span>
+            <span className="mobile-restore-grip" aria-hidden="true">
+              <span />
+              <span />
+            </span>
           </button>
         </div>
       ) : null}
@@ -678,7 +681,10 @@ export function App() {
           </span>
           <span className="spacer" />
           <button type="button" className="mobile-chrome-toggle" aria-label="Hide top controls" onClick={() => setMobileTopbarHidden(true)}>
-            <span aria-hidden="true">⌃</span>
+            <span className="mobile-collapse-icon" aria-hidden="true">
+              <span />
+              <span />
+            </span>
           </button>
           <div className="theme-switch" role="group" aria-label="Color theme">
             <button type="button" aria-pressed={theme === "light"} onClick={() => setTheme("light")}>
@@ -694,7 +700,11 @@ export function App() {
             onToggle={(event) => setSettingsOpen(event.currentTarget.open)}
           >
             <summary aria-label="Settings">
-              <span className="settings-icon" aria-hidden="true">⚙</span>
+              <span className="settings-icon" aria-hidden="true">
+                <span />
+                <span />
+                <span />
+              </span>
               <span className="settings-label">Settings</span>
             </summary>
             <div className="settings-panel">
