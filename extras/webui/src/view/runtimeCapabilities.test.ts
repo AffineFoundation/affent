@@ -198,6 +198,35 @@ describe("buildRuntimeCapabilityView", () => {
     });
   });
 
+  it("shows partial workspace tools instead of saying files are unavailable", () => {
+    const view = buildRuntimeCapabilityView({
+      eval_mode: true,
+      eval_tools: "read_file,shell",
+      workspace_tools: ["shell", "read_file"],
+      builtins: false,
+      skill_install: false,
+      plan: false,
+      memory: false,
+      session_search: false,
+      symbol_context: false,
+      repo_search: false,
+      browser: false,
+      browser_screenshot: false,
+      web: false,
+      web_search: false,
+      subagent: false,
+      subagent_max_depth: 1,
+      focused_tasks: false,
+    });
+
+    expect(view?.chips).toEqual(expect.arrayContaining([
+      { group: "Files", label: "Partial workspace", detail: "Available: shell, read_file.", tone: "warning" },
+    ]));
+    expect(view?.chips).not.toEqual(expect.arrayContaining([
+      { group: "Files", label: "Unavailable", detail: "Local file and command tools are off.", tone: "muted" },
+    ]));
+  });
+
   it("surfaces no-tool and full-tool eval modes distinctly", () => {
     const base = {
       builtins: false,

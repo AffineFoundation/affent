@@ -44,6 +44,7 @@ func TestHandleSessionCreate_ExplicitIDAndDetail(t *testing.T) {
 	}
 	assertSessionCapabilities(t, created.Session.Capabilities, sessionCapabilities{
 		Builtins:         true,
+		WorkspaceTools:   []string{"shell", "read_file", "file_context", "write_file", "edit_file", "list_files", agent.SymbolContextToolName, "repo_search"},
 		SkillInstall:     true,
 		Plan:             true,
 		Memory:           true,

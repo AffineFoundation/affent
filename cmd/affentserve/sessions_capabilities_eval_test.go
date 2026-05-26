@@ -2,6 +2,7 @@ package main
 
 import (
 	"io"
+	"reflect"
 	"strings"
 	"testing"
 
@@ -39,6 +40,9 @@ func TestSessionCapabilitiesReportsEvalMode(t *testing.T) {
 	}
 	if caps.EvalTools != "read_file,shell" || caps.EvalAllTools {
 		t.Fatalf("active session capabilities should report eval allowlist, got %+v", caps)
+	}
+	if !reflect.DeepEqual(caps.WorkspaceTools, []string{"shell", "read_file"}) {
+		t.Fatalf("active session capabilities should report partial workspace tools, got %+v", caps.WorkspaceTools)
 	}
 	if caps.Builtins || caps.Browser {
 		t.Fatalf("strict eval mode should not report complete builtins or browser for a partial allowlist, got %+v", caps)

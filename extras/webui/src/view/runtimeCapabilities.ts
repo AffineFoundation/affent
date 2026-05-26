@@ -99,9 +99,19 @@ function researchChip(caps: SessionCapabilities): RuntimeCapabilityChip {
 }
 
 function workChip(caps: SessionCapabilities): RuntimeCapabilityChip {
-  return caps.builtins
-    ? { group: "Files", label: "Files + commands", detail: "Can inspect files and run local commands.", tone: "ready" }
-    : { group: "Files", label: "Unavailable", detail: "Local file and command tools are off.", tone: "muted" };
+  if (caps.builtins) {
+    return { group: "Files", label: "Files + commands", detail: "Can inspect files and run local commands.", tone: "ready" };
+  }
+  const workspaceTools = caps.workspace_tools?.filter(Boolean) ?? [];
+  if (workspaceTools.length > 0) {
+    return {
+      group: "Files",
+      label: "Partial workspace",
+      detail: `Available: ${workspaceTools.join(", ")}.`,
+      tone: "warning",
+    };
+  }
+  return { group: "Files", label: "Unavailable", detail: "Local file and command tools are off.", tone: "muted" };
 }
 
 function skillsChip(caps: SessionCapabilities): RuntimeCapabilityChip | undefined {

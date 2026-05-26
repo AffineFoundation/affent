@@ -124,6 +124,7 @@ export interface SessionCapabilities {
   eval_mode: boolean;
   eval_tools?: string;
   eval_all_tools?: boolean;
+  workspace_tools?: string[];
   builtins: boolean;
   skill_install: boolean;
   plan: boolean;
