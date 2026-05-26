@@ -1099,6 +1099,104 @@ describe("App", () => {
     expect(screen.getByTestId("msg-assistant")).toHaveTextContent("hi");
   });
 
+  it("refreshes visible memory state after a live memory update", async () => {
+    const user = userEvent.setup();
+    const live = controllableEventStream();
+    let memoryCalls = 0;
+    const fetchImpl = vi.fn(async (input: RequestInfo | URL) => {
+      const url = String(input);
+      if (url === "/v1/sessions?limit=100") {
+        return jsonResponse({
+          sessions: [{ id: "s1", active: true, durable: true, has_conversation: true, has_events: true, has_artifacts: false, has_memory: false, has_runtime_skills: false }],
+          has_more: false,
+        });
+      }
+      if (url === "/v1/sessions/s1/history?after=-1&limit=500") {
+        return jsonResponse({ session_id: "s1", events: [], next_after: -1, has_more: false, trace_schema_detected: false });
+      }
+      if (url === "/v1/sessions/s1/events") return live.response;
+      if (url === "/v1/skills") {
+        return jsonResponse({ session_id: "account", count: 0, install_enabled: true, skills: [] });
+      }
+      if (url === "/v1/sessions/s1/memory") {
+        memoryCalls += 1;
+        if (memoryCalls === 1) {
+          return jsonResponse({ session_id: "s1", has_memory: false, topics: [] });
+        }
+        return jsonResponse({
+          session_id: "s1",
+          has_memory: true,
+          topics: [
+            {
+              target: "memory",
+              topic: "markets",
+              entries: ["Alpha Coast market reports use marker MEM-STOCK-73."],
+              entry_count: 1,
+              chars_used: 52,
+              chars_limit: 4400,
+              percent: 1,
+            },
+          ],
+        });
+      }
+      return jsonResponse({ error: { message: `unexpected ${url}` } }, 404);
+    });
+    vi.stubGlobal("fetch", fetchImpl);
+
+    render(<App />);
+
+    await waitFor(() => expect(fetchImpl).toHaveBeenCalledWith("/v1/sessions/s1/events", expect.anything()));
+    await user.click(screen.getByLabelText("Settings"));
+    expect(await screen.findByTestId("session-memory-panel")).toHaveTextContent("No durable memory");
+
+    live.send([
+      { id: 1, type: "turn.start", data: { turn_id: "t1" } },
+      { id: 2, type: "user.message", data: { turn_id: "t1", text: "remember market policy" } },
+      {
+        id: 3,
+        type: "tool.request",
+        data: {
+          turn_id: "t1",
+          call_id: "c1",
+          tool: "memory",
+          args: {
+            action: "add",
+            target: "memory",
+            topic: "markets",
+            content: "Alpha Coast market reports use marker MEM-STOCK-73.",
+          },
+          args_truncated: false,
+          args_bytes: 64,
+          args_omitted_bytes: 0,
+          args_cap_bytes: 8192,
+        },
+      },
+      {
+        id: 4,
+        type: "tool.result",
+        data: {
+          turn_id: "t1",
+          call_id: "c1",
+          exit_code: 0,
+          result_summary: "{\"ok\":true,\"target\":\"memory\",\"topic\":\"markets\"}",
+          result: "{\"ok\":true,\"target\":\"memory\",\"topic\":\"markets\"}",
+          result_truncated: false,
+          result_bytes: 48,
+          result_omitted_bytes: 0,
+          result_cap_bytes: 262144,
+        },
+      },
+      { id: 5, type: "turn.end", data: { turn_id: "t1", reason: "completed", tool_stats: { tool_requests: 1, memory_updates: 1, memory_update_add: 1 } } },
+    ]);
+    live.close();
+
+    expect(await screen.findByTestId("memory-update-strip")).toHaveTextContent("MEM-STOCK-73");
+    await waitFor(() => expect(memoryCalls).toBeGreaterThanOrEqual(2));
+    expect(screen.getByTestId("session-memory-panel")).toHaveTextContent("Alpha Coast market reports use marker MEM-STOCK-73.");
+    const row = screen.getByRole("button", { name: /remember market policy/ });
+    expect(within(row).getByTestId("session-chips")).toHaveTextContent("Memory");
+  });
+
   it("moves tool Next guidance into the composer draft", async () => {
     const user = userEvent.setup();
     const fetchImpl = vi.fn(async (input: RequestInfo | URL) => {
@@ -1507,6 +1605,28 @@ function eventStreamResponse(body: string): Response {
     status: 200,
     headers: { "Content-Type": "text/event-stream" },
   });
+}
+
+function controllableEventStream() {
+  const encoder = new TextEncoder();
+  let controller!: ReadableStreamDefaultController<Uint8Array>;
+  const stream = new ReadableStream<Uint8Array>({
+    start(c) {
+      controller = c;
+    },
+  });
+  return {
+    response: new Response(stream, {
+      status: 200,
+      headers: { "Content-Type": "text/event-stream" },
+    }),
+    send(events: { id: number; type: string; data: unknown }[]) {
+      controller.enqueue(encoder.encode(encodeEvents(events)));
+    },
+    close() {
+      controller.close();
+    },
+  };
 }
 
 function encodeEvents(events: { id: number; type: string; data: unknown }[]): string {

@@ -37,6 +37,7 @@ import { buildRuntimeCapabilityView } from "./view/runtimeCapabilities";
 import { buildSessionRows, formatLoadingChatTitle } from "./view/sessionList";
 import { buildSessionOverview, type SessionOverview } from "./view/sessionOverview";
 import { isContinuationPrompt } from "./view/continuationPrompt";
+import { memoryUpdatesForTurn } from "./view/memoryUpdate";
 
 type SurfaceState = "connecting" | "connected" | "live" | "loading" | "demo" | "disconnected" | "error";
 
@@ -130,6 +131,10 @@ export function App() {
   }, [selectedSession]);
   const selectedSessionActive = selectedSession?.active === true;
   const workflow = useMemo(() => deriveWorkflowStatus(session), [session]);
+  const memoryUpdateCount = useMemo(
+    () => session.turns.reduce((sum, turn) => sum + memoryUpdatesForTurn(turn).length, 0),
+    [session.turns],
+  );
   const capabilityView = useMemo(
     () => buildRuntimeCapabilityView(selectedSession?.capabilities, { selectedSessionId }),
     [selectedSession?.capabilities, selectedSessionId],
@@ -228,7 +233,20 @@ export function App() {
         setMemoryState({ state: "error", error: formatError(err) });
       });
     return () => ac.abort();
-  }, [client, demoActive, selectedSessionId, settingsOpen]);
+  }, [client, demoActive, memoryUpdateCount, selectedSessionId, settingsOpen]);
+
+  useEffect(() => {
+    if (!selectedSessionId || memoryUpdateCount <= 0) return;
+    setSessions((current) => {
+      let changed = false;
+      const next = current.map((item) => {
+        if (item.id !== selectedSessionId || item.has_memory) return item;
+        changed = true;
+        return { ...item, has_memory: true };
+      });
+      return changed ? next : current;
+    });
+  }, [memoryUpdateCount, selectedSessionId]);
 
   const handleReadSkill = useCallback(
     async (name: string): Promise<SessionSkillInfo> => {
