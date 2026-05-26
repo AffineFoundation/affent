@@ -347,6 +347,44 @@ describe("eventTrace view model", () => {
     });
   });
 
+  it("keeps requested source provenance visible for network evidence rows", () => {
+    const items = buildEventTraceItems(normalizeEvents([
+      {
+        id: 1,
+        type: "tool.request",
+        data: { turn_id: "t1", call_id: "c1", tool: "browser_network_read" },
+      },
+      {
+        id: 2,
+        type: "tool.result",
+        data: {
+          turn_id: "t1",
+          call_id: "c1",
+          exit_code: 0,
+          duration_ms: 30,
+          result_summary: "SourceAccess: browser_network_url=https://api.taostats.io/subnets/120; requested_url=https://app.taostats.io/subnets/120; source_method=network_xhr_fetch",
+          result: "SourceAccess: browser_network_url=https://api.taostats.io/subnets/120; requested_url=https://app.taostats.io/subnets/120; source_method=network_xhr_fetch\n{\"price\":\"0.06342 T\"}",
+          result_truncated: false,
+        },
+      },
+    ]));
+
+    expect(items[1]).toMatchObject({
+      kind: "event",
+      display: {
+        label: "Action finished",
+        meta: [
+          "browser_network_read",
+          "30 ms",
+          "network source",
+          "https://api.taostats.io/subnets/120",
+          "from https://app.taostats.io/subnets/120",
+        ],
+        badges: ["network"],
+      },
+    });
+  });
+
   it("collapses whitespace and truncates long summaries", () => {
     expect(streamSummary("  line one\n\tline two  ")).toBe("line one line two");
     expect(streamSummary("x".repeat(120))).toBe(`${"x".repeat(95)}...`);

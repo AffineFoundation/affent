@@ -795,9 +795,7 @@ function evidenceFromNode(node: ExecutionTreeNode): TurnActivityEvidence | undef
   if (node.status !== "success") return undefined;
   const sourceAccess = sourceAccessFromNode(node);
   if (sourceAccess) {
-    const displayValue = sourceAccess.jsonPath
-      ? `${readableUrl(sourceAccess.accessedUrl)} · ${sourceAccess.jsonPath}`
-      : readableUrl(sourceAccess.accessedUrl);
+    const displayValue = sourceEvidenceDisplayValue(sourceAccess);
     return {
       label: titleCase(sourceEvidenceLabel(sourceAccess)),
       value: sourceAccess.accessedUrl,
@@ -820,6 +818,14 @@ function evidenceFromNode(node: ExecutionTreeNode): TurnActivityEvidence | undef
 
 function sourceAccessFromNode(node: ExecutionTreeNode) {
   return describeSourceAccess(node.resultText ?? node.resultSummary);
+}
+
+function sourceEvidenceDisplayValue(sourceAccess: NonNullable<ReturnType<typeof sourceAccessFromNode>>): string {
+  return [
+    readableUrl(sourceAccess.accessedUrl),
+    sourceAccess.requestedUrl && sourceAccess.requestedUrl !== sourceAccess.accessedUrl ? `from ${readableUrl(sourceAccess.requestedUrl)}` : undefined,
+    sourceAccess.jsonPath,
+  ].filter(Boolean).join(" · ");
 }
 
 function titleCase(value: string): string {

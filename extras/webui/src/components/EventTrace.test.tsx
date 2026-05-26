@@ -108,8 +108,8 @@ describe("EventTrace", () => {
           turn_id: "t1",
           call_id: "c1",
           exit_code: 0,
-          result_summary: "SourceAccess: browser_network_url=https://taostats.io/api/subnets/120; source_method=network_xhr_fetch",
-          result: "SourceAccess: browser_network_url=https://taostats.io/api/subnets/120; source_method=network_xhr_fetch\n{\"price\":\"0.06342 T\"}",
+          result_summary: "SourceAccess: browser_network_url=https://taostats.io/api/subnets/120; requested_url=https://taostats.io/subnets/120; source_method=network_xhr_fetch",
+          result: "SourceAccess: browser_network_url=https://taostats.io/api/subnets/120; requested_url=https://taostats.io/subnets/120; source_method=network_xhr_fetch\n{\"price\":\"0.06342 T\"}",
           result_truncated: false,
         },
       },
@@ -118,7 +118,7 @@ describe("EventTrace", () => {
     render(<EventTrace events={events} />);
 
     expect(screen.getByText("Action finished")).toBeInTheDocument();
-    expect(screen.getByText("browser_network_read · network source · https://taostats.io/api/subnets/120")).toBeInTheDocument();
+    expect(screen.getByText("browser_network_read · network source · https://taostats.io/api/subnets/120 · from https://taostats.io/subnets/120")).toBeInTheDocument();
     expect(screen.getByText("network")).toBeInTheDocument();
   });
 
