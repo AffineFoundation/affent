@@ -164,7 +164,10 @@ function compactionMetric(runtime?: StatsRuntimeSnapshot): RuntimeMetric | undef
   if ((runtime?.context_compactions_reactive ?? 0) > 0) parts.push(`${runtime?.context_compactions_reactive} reactive`);
   if ((runtime?.context_compaction_removed_messages ?? 0) > 0) parts.push(`-${runtime?.context_compaction_removed_messages} msgs`);
   if ((runtime?.context_compaction_summary_bytes ?? 0) > 0) parts.push(`${formatByteCount(runtime?.context_compaction_summary_bytes ?? 0)} summary`);
-  return { label: "Context", value: parts.join(" · "), tone: (runtime?.context_compactions_reactive ?? 0) > 0 ? "warning" : "ready" };
+  if ((runtime?.context_compaction_summary_missing ?? 0) > 0) parts.push(`${runtime?.context_compaction_summary_missing} missing`);
+  if ((runtime?.context_compaction_summary_empty ?? 0) > 0) parts.push(`${runtime?.context_compaction_summary_empty} empty`);
+  const weakSummaries = (runtime?.context_compaction_summary_missing ?? 0) + (runtime?.context_compaction_summary_empty ?? 0);
+  return { label: "Context", value: parts.join(" · "), tone: weakSummaries > 0 || (runtime?.context_compactions_reactive ?? 0) > 0 ? "warning" : "ready" };
 }
 
 function loopMetric(tools?: StatsToolSnapshot, runtime?: StatsRuntimeSnapshot): RuntimeMetric | undefined {

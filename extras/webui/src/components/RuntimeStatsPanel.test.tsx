@@ -54,6 +54,8 @@ describe("RuntimeStatsPanel", () => {
               context_compactions_reactive: 1,
               context_compaction_removed_messages: 72,
               context_compaction_summary_bytes: 4096,
+              context_compaction_summary_missing: 1,
+              context_compaction_summary_empty: 1,
             },
           },
         }}
@@ -66,7 +68,7 @@ describe("RuntimeStatsPanel", () => {
     expect(screen.getByTestId("runtime-stats-grid")).toHaveTextContent("Evidence2/3 verified · 1 network · 1 partial");
     expect(screen.getByTestId("runtime-stats-grid")).toHaveTextContent("memory (shared user)");
     expect(screen.getByTestId("runtime-stats-grid")).toHaveTextContent("Recall2 hits · 1 context · 3 terms");
-    expect(screen.getByTestId("runtime-stats-grid")).toHaveTextContent("Context1 compaction · 1 reactive · -72 msgs · 4 KiB summary");
+    expect(screen.getByTestId("runtime-stats-grid")).toHaveTextContent("Context1 compaction · 1 reactive · -72 msgs · 4 KiB summary · 1 missing · 1 empty");
     expect(screen.getByTestId("runtime-stats-grid")).toHaveTextContent("Loop1 max-turn · 2 guards · 1 no-tools");
     expect(screen.getByTestId("runtime-stats-grid")).toHaveTextContent("Errors1 tool · 1 runtime");
   });

@@ -59,6 +59,8 @@ export interface StatsRuntimeSnapshot {
   context_compactions_reactive?: number;
   context_compaction_removed_messages?: number;
   context_compaction_summary_bytes?: number;
+  context_compaction_summary_missing?: number;
+  context_compaction_summary_empty?: number;
 }
 
 export interface ServerSessionStats {
