@@ -525,6 +525,88 @@ func ContextCompactionSummaryContains(substr string) Check {
 	}
 }
 
+func SourceAccessMatchAtLeast(status, toolName, urlContains, sourceMethod, jsonPath string, min int) Check {
+	if min <= 0 {
+		min = 1
+	}
+	nameParts := []string{"source_access_match_at_least"}
+	for _, part := range []string{status, toolName, urlContains, sourceMethod, jsonPath, fmt.Sprint(min)} {
+		part = strings.TrimSpace(part)
+		if part == "" {
+			part = "*"
+		}
+		nameParts = append(nameParts, previewSubstr(part, 24))
+	}
+	return Check{
+		Name: strings.Join(nameParts, ":"),
+		Eval: func(t Trace) CheckResult {
+			examples := t.SourceAccessExamples(len(t.Tools))
+			count := 0
+			var matched []string
+			var observed []string
+			for _, ex := range examples {
+				if sourceAccessRequirementMatches(ex, status, toolName, urlContains, sourceMethod, jsonPath) {
+					count++
+					if len(matched) < 5 {
+						matched = append(matched, sourceAccessExampleSummary(ex))
+					}
+					continue
+				}
+				if len(observed) < 5 {
+					observed = append(observed, sourceAccessExampleSummary(ex))
+				}
+			}
+			if count >= min {
+				return CheckResult{Pass: true, Detail: fmt.Sprintf("matched %d source access result(s): %v", count, matched)}
+			}
+			return CheckResult{
+				Pass: false,
+				Detail: fmt.Sprintf(
+					"expected at least %d SourceAccess result(s) matching status=%q tool=%q url_contains=%q source_method=%q json_path=%q, got %d; observed=%v",
+					min, status, toolName, urlContains, sourceMethod, jsonPath, count, observed,
+				),
+			}
+		},
+	}
+}
+
+func sourceAccessRequirementMatches(ex SourceAccessExample, status, toolName, urlContains, sourceMethod, jsonPath string) bool {
+	if status = strings.TrimSpace(status); status != "" && ex.Status != status {
+		return false
+	}
+	if toolName = strings.TrimSpace(toolName); toolName != "" && ex.Tool != toolName {
+		return false
+	}
+	if urlContains = strings.TrimSpace(urlContains); urlContains != "" && !strings.Contains(ex.URL, urlContains) {
+		return false
+	}
+	if sourceMethod = strings.TrimSpace(sourceMethod); sourceMethod != "" && ex.SourceMethod != sourceMethod {
+		return false
+	}
+	if jsonPath = strings.TrimSpace(jsonPath); jsonPath != "" && ex.JSONPath != jsonPath {
+		return false
+	}
+	return true
+}
+
+func sourceAccessExampleSummary(ex SourceAccessExample) string {
+	parts := []string{
+		fmt.Sprintf("tool#%d", ex.ToolIndex),
+		ex.Tool,
+		ex.Status,
+	}
+	if ex.URL != "" {
+		parts = append(parts, "url="+previewSubstr(ex.URL, 80))
+	}
+	if ex.SourceMethod != "" {
+		parts = append(parts, "method="+ex.SourceMethod)
+	}
+	if ex.JSONPath != "" {
+		parts = append(parts, "json_path="+ex.JSONPath)
+	}
+	return strings.Join(parts, " ")
+}
+
 func loopDecisionExamples(decisions []LoopDecision, max int) []string {
 	if max <= 0 || len(decisions) == 0 {
 		return nil

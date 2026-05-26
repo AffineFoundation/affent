@@ -437,6 +437,9 @@ func TestBatchScenarioChecks_UsesSharedCheckLibrary(t *testing.T) {
 		RequiredLoopDecisionMatches: []LoopDecisionRequirement{
 			{Kind: "evidence_quality", Decision: "defer", Trigger: "source_access_dynamic_partial"},
 		},
+		RequiredSourceAccess: []SourceAccessRequirement{
+			{Status: "network", Tool: "browser_network_read", URLContains: "taostats.io", SourceMethod: "network_xhr_fetch"},
+		},
 		RequiredContextCompactions:    1,
 		RequiredReactiveCompactions:   1,
 		RequiredCompactionRemovedMsgs: 20,
@@ -484,6 +487,7 @@ func TestBatchScenarioChecks_UsesSharedCheckLibrary(t *testing.T) {
 		"loop_decision_kind_at_least:evidence_quality:1",
 		"loop_decision_result_at_least:defer:1",
 		"loop_decision_match_at_least:evidence_quality:defer:source_access_dynamic_partial:1",
+		"source_access_match_at_least:network:browser_network_read:taostats.io:network_xhr_fetch:*:1",
 		"context_compactions_at_least:1",
 		"reactive_context_compactions_at_least:1",
 		"context_compaction_removed_messages_at_least:20",
@@ -509,6 +513,20 @@ func TestBatchScenarioChecks_UsesSharedCheckLibrary(t *testing.T) {
 		if !strings.HasPrefix(checks[i].Name, want) {
 			t.Errorf("check[%d].Name = %q, want prefix %q", i, checks[i].Name, want)
 		}
+	}
+}
+
+func TestBatchScenarioChecks_SourceAccessRequirementDefaultsToOne(t *testing.T) {
+	checks := BatchScenarioChecks(BatchScenario{
+		RequiredSourceAccess: []SourceAccessRequirement{
+			{Status: "network", URLContains: "taostats.io"},
+		},
+	})
+	if len(checks) != 2 {
+		t.Fatalf("checks count = %d, want turn-end + source access match: %+v", len(checks), checks)
+	}
+	if !strings.HasPrefix(checks[1].Name, "source_access_match_at_least:network:*:taostats.io:*:*:1") {
+		t.Fatalf("default source access check name = %q", checks[1].Name)
 	}
 }
 
@@ -1012,6 +1030,10 @@ func TestSelectLiveWebSuite(t *testing.T) {
 			t.Fatalf("live-web source access requirements = %#v, want %s=1", scenario.RequiredToolStatsAtLeast, field)
 		}
 	}
+	if len(scenario.RequiredSourceAccess) != 1 ||
+		scenario.RequiredSourceAccess[0] != (SourceAccessRequirement{Status: "network", Tool: "browser_network_read", URLContains: "taostats.io", SourceMethod: "network_xhr_fetch"}) {
+		t.Fatalf("live-web RequiredSourceAccess = %#v", scenario.RequiredSourceAccess)
+	}
 	for _, want := range []string{"SourceAccess:", "browser_network_url=", "source_method=network_xhr_fetch"} {
 		if !stringSliceContains(scenario.RequiredToolResultText["browser_network_read"], want) {
 			t.Fatalf("live-web browser_network_read result requirements = %#v, want %q", scenario.RequiredToolResultText["browser_network_read"], want)
@@ -1386,6 +1408,9 @@ func TestWriteScenarioDebugArtifactsIndexesTraceAndFinalText(t *testing.T) {
 		RequiredToolArgContains: []ToolArgContainsRequirement{
 			{Tool: "browser_network_read", Arg: "json_path", Substring: "$.price"},
 		},
+		RequiredSourceAccess: []SourceAccessRequirement{
+			{Status: "network", Tool: "browser_network_read", URLContains: "taostats.io/api", SourceMethod: "network_xhr_fetch", JSONPath: "$.price"},
+		},
 		RequiredFinalText:             []string{"0.06342 T"},
 		ForbiddenFinalText:            []string{"subnet price $277.32"},
 		RequiredContextCompactions:    1,
@@ -1446,6 +1471,8 @@ func TestWriteScenarioDebugArtifactsIndexesTraceAndFinalText(t *testing.T) {
 		manifest.Expectations.RequiredToolCounts["browser_network_read"] != 1 ||
 		len(manifest.Expectations.RequiredToolArgContains) != 1 ||
 		manifest.Expectations.RequiredToolArgContains[0] != (DebugToolArgContainsRequirement{Tool: "browser_network_read", Arg: "json_path", Substring: "$.price"}) ||
+		len(manifest.Expectations.RequiredSourceAccess) != 1 ||
+		manifest.Expectations.RequiredSourceAccess[0] != (DebugSourceAccessRequirement{Status: "network", Tool: "browser_network_read", URLContains: "taostats.io/api", SourceMethod: "network_xhr_fetch", JSONPath: "$.price"}) ||
 		!stringSliceContains(manifest.Expectations.RequiredFinalText, "0.06342 T") ||
 		!stringSliceContains(manifest.Expectations.ForbiddenFinalText, "subnet price $277.32") ||
 		manifest.Expectations.RequiredContextCompactions != 1 ||
@@ -1575,6 +1602,7 @@ func TestWriteScenarioDebugArtifactsIndexesTraceAndFinalText(t *testing.T) {
 		"required_tools: `web_fetch`, `browser_network_read`",
 		"forbidden_tools: `shell`",
 		"required_tool_counts: `browser_network_read=1`",
+		"required_source_access: `status=network tool=browser_network_read url_contains=taostats.io/api source_method=network_xhr_fetch json_path=$.price min=1`",
 		"required_final_text: `0.06342 T`",
 		"forbidden_final_text: `subnet price $277.32`",
 		"required_tool_arg: `browser_network_read.json_path` contains `$.price` min=`1`",

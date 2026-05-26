@@ -296,6 +296,32 @@ func renderTimelineScenarioExpectations(b *strings.Builder, scenario BatchScenar
 	writeTimelineStringList(b, "forbidden_commands", exp.ForbiddenCommands)
 	writeTimelineCountsLine(b, "required_tool_counts", exp.RequiredToolCounts)
 	writeTimelineCountsLine(b, "required_command_counts", exp.RequiredCommandCounts)
+	if len(exp.RequiredSourceAccess) > 0 {
+		for _, req := range exp.RequiredSourceAccess {
+			min := req.Min
+			if min <= 0 {
+				min = 1
+			}
+			var parts []string
+			if req.Status != "" {
+				parts = append(parts, fmt.Sprintf("status=%s", req.Status))
+			}
+			if req.Tool != "" {
+				parts = append(parts, fmt.Sprintf("tool=%s", req.Tool))
+			}
+			if req.URLContains != "" {
+				parts = append(parts, fmt.Sprintf("url_contains=%s", timelineInline(req.URLContains, 160)))
+			}
+			if req.SourceMethod != "" {
+				parts = append(parts, fmt.Sprintf("source_method=%s", req.SourceMethod))
+			}
+			if req.JSONPath != "" {
+				parts = append(parts, fmt.Sprintf("json_path=%s", timelineInline(req.JSONPath, 160)))
+			}
+			parts = append(parts, fmt.Sprintf("min=%d", min))
+			fmt.Fprintf(b, "- required_source_access: `%s`\n", strings.Join(parts, " "))
+		}
+	}
 	writeTimelineStringList(b, "required_final_text", exp.RequiredFinalText)
 	writeTimelineStringList(b, "forbidden_final_text", exp.ForbiddenFinalText)
 	if len(exp.RequiredToolArgContains) > 0 {
@@ -344,6 +370,7 @@ func hasTimelineScenarioExpectations(exp DebugScenarioExpectations) bool {
 		len(exp.RequiredCommandCounts) > 0 ||
 		len(exp.RequiredToolCounts) > 0 ||
 		len(exp.RequiredToolArgContains) > 0 ||
+		len(exp.RequiredSourceAccess) > 0 ||
 		len(exp.RequiredFinalText) > 0 ||
 		len(exp.ForbiddenFinalText) > 0 ||
 		exp.RequiredContextCompactions > 0 ||

@@ -61,6 +61,17 @@ type LoopDecisionRequirement struct {
 	Min int
 }
 
+type SourceAccessRequirement struct {
+	Status       string
+	Tool         string
+	URLContains  string
+	SourceMethod string
+	JSONPath     string
+	// Min is the required number of matching SourceAccess results. Values
+	// <=0 default to one so scenarios can spell the common case tersely.
+	Min int
+}
+
 type BatchScenario struct {
 	Name                          string
 	Suites                        []string
@@ -81,6 +92,7 @@ type BatchScenario struct {
 	RequiredLoopDecisionKinds     map[string]int
 	RequiredLoopDecisionResults   map[string]int
 	RequiredLoopDecisionMatches   []LoopDecisionRequirement
+	RequiredSourceAccess          []SourceAccessRequirement
 	RequiredContextCompactions    int
 	RequiredReactiveCompactions   int
 	RequiredCompactionRemovedMsgs int
@@ -230,6 +242,7 @@ type DebugScenarioExpectations struct {
 	RequiredCommandCounts         map[string]int                    `json:"required_command_counts,omitempty"`
 	RequiredToolCounts            map[string]int                    `json:"required_tool_counts,omitempty"`
 	RequiredToolArgContains       []DebugToolArgContainsRequirement `json:"required_tool_arg_contains,omitempty"`
+	RequiredSourceAccess          []DebugSourceAccessRequirement    `json:"required_source_access,omitempty"`
 	RequiredFinalText             []string                          `json:"required_final_text,omitempty"`
 	ForbiddenFinalText            []string                          `json:"forbidden_final_text,omitempty"`
 	RequiredContextCompactions    int                               `json:"required_context_compactions,omitempty"`
@@ -248,6 +261,15 @@ type DebugToolArgContainsRequirement struct {
 	Arg       string `json:"arg"`
 	Substring string `json:"substring"`
 	Min       int    `json:"min,omitempty"`
+}
+
+type DebugSourceAccessRequirement struct {
+	Status       string `json:"status,omitempty"`
+	Tool         string `json:"tool,omitempty"`
+	URLContains  string `json:"url_contains,omitempty"`
+	SourceMethod string `json:"source_method,omitempty"`
+	JSONPath     string `json:"json_path,omitempty"`
+	Min          int    `json:"min,omitempty"`
 }
 
 type DebugTranscriptRef struct {
@@ -668,6 +690,17 @@ func debugScenarioExpectations(s BatchScenario) DebugScenarioExpectations {
 			Min:       req.Min,
 		})
 	}
+	sourceReqs := make([]DebugSourceAccessRequirement, 0, len(s.RequiredSourceAccess))
+	for _, req := range s.RequiredSourceAccess {
+		sourceReqs = append(sourceReqs, DebugSourceAccessRequirement{
+			Status:       req.Status,
+			Tool:         req.Tool,
+			URLContains:  req.URLContains,
+			SourceMethod: req.SourceMethod,
+			JSONPath:     req.JSONPath,
+			Min:          req.Min,
+		})
+	}
 	checks := BatchScenarioChecks(s)
 	checkNames := make([]string, 0, len(checks))
 	for _, check := range checks {
@@ -690,6 +723,7 @@ func debugScenarioExpectations(s BatchScenario) DebugScenarioExpectations {
 		RequiredCommandCounts:         cloneStringIntMap(s.RequiredCommandCounts),
 		RequiredToolCounts:            cloneStringIntMap(s.RequiredToolCounts),
 		RequiredToolArgContains:       reqArgs,
+		RequiredSourceAccess:          sourceReqs,
 		RequiredFinalText:             append([]string(nil), s.RequiredFinalText...),
 		ForbiddenFinalText:            append([]string(nil), s.ForbiddenFinalText...),
 		RequiredContextCompactions:    s.RequiredContextCompactions,
@@ -1236,6 +1270,13 @@ func BatchScenarioChecks(scenario BatchScenario) []Check {
 			min = 1
 		}
 		checks = append(checks, LoopDecisionMatchAtLeast(req.Kind, req.Decision, req.Trigger, min))
+	}
+	for _, req := range scenario.RequiredSourceAccess {
+		min := req.Min
+		if min <= 0 {
+			min = 1
+		}
+		checks = append(checks, SourceAccessMatchAtLeast(req.Status, req.Tool, req.URLContains, req.SourceMethod, req.JSONPath, min))
 	}
 	if scenario.RequiredContextCompactions > 0 {
 		checks = append(checks, ContextCompactionsAtLeast(scenario.RequiredContextCompactions))

@@ -1754,6 +1754,14 @@ func liveWebTaostatsDynamicEvidenceScenario() BatchScenario {
 			"source_access_verified": 1,
 			"source_access_network":  1,
 		},
+		RequiredSourceAccess: []SourceAccessRequirement{
+			{
+				Status:       "network",
+				Tool:         "browser_network_read",
+				URLContains:  "taostats.io",
+				SourceMethod: "network_xhr_fetch",
+			},
+		},
 		RequiredToolResultText: map[string][]string{
 			"browser_network_read": {
 				"SourceAccess:",

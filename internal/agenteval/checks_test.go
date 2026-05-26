@@ -442,6 +442,31 @@ func TestToolStatsAtLeast(t *testing.T) {
 	}
 }
 
+func TestSourceAccessMatchAtLeast(t *testing.T) {
+	trace := Trace{Tools: []ToolCall{
+		{
+			CallID: "snap",
+			Tool:   "browser_snapshot",
+			Result: "SourceAccess: browser_rendered_url=https://taostats.io/subnets/120; page_text_below=partial_dynamic_page_evidence; rendered_browser_source_status=partial_dynamic_page_evidence\nPAGE TEXT:\nAffine",
+		},
+		{
+			CallID: "net",
+			Tool:   "browser_network_read",
+			Result: "SourceAccess: browser_network_url=https://taostats.io/api/subnets/120; ref=n1; status=200; content_type=application/json; source_method=network_xhr_fetch\nJSON_PATH: $.market_cap\n\"201.04K T\"",
+		},
+	}}
+
+	if res := SourceAccessMatchAtLeast("network", "browser_network_read", "taostats.io/api", "network_xhr_fetch", "$.market_cap", 1).Eval(trace); !res.Pass {
+		t.Fatalf("expected network source access check to pass: %+v", res)
+	}
+	if res := SourceAccessMatchAtLeast("verified", "browser_network_read", "taostats.io/api", "", "", 1).Eval(trace); res.Pass {
+		t.Fatalf("expected status mismatch to fail: %+v", res)
+	}
+	if res := SourceAccessMatchAtLeast("network", "browser_network_read", "missing.example", "", "", 1).Eval(trace); res.Pass {
+		t.Fatalf("expected URL mismatch to fail: %+v", res)
+	}
+}
+
 func TestToolRepairKindAtLeast(t *testing.T) {
 	t.Run("uses runtime repair stats", func(t *testing.T) {
 		trace := Trace{ToolStats: ToolRuntimeStats{
