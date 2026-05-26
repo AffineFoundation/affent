@@ -75,6 +75,28 @@ describe("sessionList view model", () => {
     expect(rows[0].searchText).toContain("1 network");
   });
 
+  it("surfaces loop guard interventions in row stats and search", () => {
+    const rows = buildSessionRows([
+      session({
+        id: "guard-session",
+        durable: true,
+        latest_user_message: "recover from repeated browser failures",
+        tools: {
+          tool_requests: 5,
+          tool_errors: 2,
+          tool_repair_succeeded: 0,
+          tool_repair_failed: 0,
+          loop_guard_interventions: 2,
+          forced_no_tools: 1,
+        },
+      }),
+    ]);
+
+    expect(rows[0].metrics).toContain("Guard 2, 1 no-tools");
+    expect(rows[0].stats).toBe("5 actions · 2 issues · Guard 2, 1 no-tools");
+    expect(rows[0].searchText).toContain("guard 2, 1 no-tools");
+  });
+
   it("surfaces persisted plan progress in row stats and search", () => {
     const rows = buildSessionRows([
       session({
@@ -214,14 +236,26 @@ describe("sessionList view model", () => {
         latest_user_message: "debug broken browser extraction",
         tools: { tool_requests: 2, tool_errors: 1, tool_repair_succeeded: 0, tool_repair_failed: 0 },
       }),
+      session({
+        id: "guard-g",
+        durable: true,
+        tools: {
+          tool_requests: 3,
+          tool_errors: 1,
+          tool_repair_succeeded: 0,
+          tool_repair_failed: 0,
+          loop_guard_interventions: 1,
+        },
+      }),
     ]);
 
-    expect(countSessionsByFilter(rows)).toMatchObject({ all: 6, active: 1, saved: 5, artifacts: 1, memory: 1, plan: 1, evidence: 1, issues: 1 });
+    expect(countSessionsByFilter(rows)).toMatchObject({ all: 7, active: 1, saved: 6, artifacts: 1, memory: 1, plan: 1, evidence: 1, guard: 1, issues: 2 });
     expect(filterSessionRows(rows, "active", "")).toHaveLength(1);
     expect(filterSessionRows(rows, "memory", "")[0].id).toBe("saved-b");
     expect(filterSessionRows(rows, "plan", "")[0].id).toBe("planned-d");
     expect(filterSessionRows(rows, "evidence", "")[0].id).toBe("evidence-e");
-    expect(filterSessionRows(rows, "issues", "")[0].id).toBe("issue-f");
+    expect(filterSessionRows(rows, "guard", "")[0].id).toBe("guard-g");
+    expect(filterSessionRows(rows, "issues", "").map((row) => row.id).sort()).toEqual(["guard-g", "issue-f"]);
     expect(filterSessionRows(rows, "all", "artifact")[0].id).toBe("artifact-c");
   });
 
@@ -768,6 +802,34 @@ describe("sessionList view model", () => {
 
     expect(rows[0].stats).toBe("1 message · Evidence 1/2 verified, 1 network, 1 partial, 1 discovery");
     expect(rows[0].searchText).toContain("evidence 1/2 verified");
+  });
+
+  it("surfaces live loop guard interventions in the selected chat row stats", () => {
+    const rows = mergeCurrentSessionRow(
+      buildSessionRows([session({ id: "s1", durable: true, has_events: true })]),
+      "s1",
+      reduceRawEvents([
+        { id: 1, type: "turn.start", data: { turn_id: "t1" } },
+        { id: 2, type: "user.message", data: { turn_id: "t1", text: "recover repeated failed calls" } },
+        {
+          id: 3,
+          type: "turn.end",
+          data: {
+            turn_id: "t1",
+            reason: "max_turns",
+            tool_stats: {
+              tool_requests: 3,
+              tool_errors: 1,
+              loop_guard_interventions: 2,
+              forced_no_tools: 1,
+            },
+          },
+        },
+      ]),
+    );
+
+    expect(rows[0].stats).toBe("1 message · 1 issue · Guard 2, 1 no-tools");
+    expect(rows[0].searchText).toContain("guard 2, 1 no-tools");
   });
 
   it("surfaces unknown events as an unclassified chip in the chat list", () => {

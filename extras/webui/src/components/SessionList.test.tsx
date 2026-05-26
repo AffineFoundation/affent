@@ -550,6 +550,18 @@ describe("SessionList", () => {
         latest_user_message: "debug broken browser extraction",
         tools: { tool_requests: 2, tool_errors: 1, tool_repair_succeeded: 0, tool_repair_failed: 0 },
       }),
+      session({
+        id: "guard-seven",
+        durable: true,
+        latest_user_message: "recover repeated web fetch failures",
+        tools: {
+          tool_requests: 3,
+          tool_errors: 1,
+          tool_repair_succeeded: 0,
+          tool_repair_failed: 0,
+          loop_guard_interventions: 1,
+        },
+      }),
     ]);
 
     await user.click(screen.getByRole("button", { name: "Search chats" }));
@@ -573,6 +585,11 @@ describe("SessionList", () => {
     expect(screen.getByTestId("session-list")).toHaveTextContent("taostats subnet metrics");
     expect(screen.getByTestId("session-list")).toHaveTextContent("Evidence 1/2 verified");
     expect(screen.getByTestId("session-list")).not.toHaveTextContent("Planned chat");
+
+    await user.click(within(screen.getByRole("group", { name: "Session filter" })).getByRole("button", { name: /Guard/ }));
+    expect(screen.getByTestId("session-list")).toHaveTextContent("repeated web fetch failures");
+    expect(screen.getByTestId("session-list")).toHaveTextContent("Guard 1");
+    expect(screen.getByTestId("session-list")).not.toHaveTextContent("taostats subnet metrics");
 
     await user.click(within(screen.getByRole("group", { name: "Session filter" })).getByRole("button", { name: /Issues/ }));
     expect(screen.getByTestId("session-list")).toHaveTextContent("broken browser extraction");

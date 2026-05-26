@@ -28,6 +28,8 @@ export interface ToolStatsSnapshot {
   tool_errors: number;
   tool_repair_succeeded: number;
   tool_repair_failed: number;
+  loop_guard_interventions?: number;
+  forced_no_tools?: number;
   source_access_results?: number;
   source_access_verified?: number;
   source_access_discovery_only?: number;

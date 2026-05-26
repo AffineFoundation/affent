@@ -17,7 +17,7 @@ const enTitleActions = [
   "improve", "refactor", "implement", "build", "create", "design", "understand",
 ].join("|");
 
-export type SessionListFilter = "all" | "active" | "saved" | "artifacts" | "memory" | "plan" | "evidence" | "issues";
+export type SessionListFilter = "all" | "active" | "saved" | "artifacts" | "memory" | "plan" | "evidence" | "guard" | "issues";
 export type SessionRowTone = "running" | "saved" | "muted" | "error" | "warning";
 type SessionTitleSource = "provided" | "topic" | "fallback";
 
@@ -246,6 +246,7 @@ function currentSessionMetrics(session: SessionState): string[] {
   const continuedCount = session.turns.reduce((sum, turn) => sum + (turn !== latestTurn && turn.status === "max_turns" ? 1 : 0), 0);
   const priorIssueCount = session.turns.reduce((sum, turn) => sum + (turn !== latestTurn && turn.status !== "max_turns" && turnNeedsAttention(turn) ? 1 : 0), 0);
   const toolIssueCount = session.turns.reduce((sum, turn) => sum + settledToolIssueCount(turn), 0);
+  const guardMetric = loopGuardMetric(currentSessionLoopGuardStats(session));
   const sourceMetric = sourceAccessMetric(currentSessionSourceAccessStats(session));
   const artifactMetric = currentSessionArtifactMetric(session);
   const compactionMetric = currentSessionCompactionMetric(session);
@@ -256,7 +257,7 @@ function currentSessionMetrics(session: SessionState): string[] {
     continued: continuedCount,
     priorIssues: priorIssueCount,
     toolIssues: toolIssueCount,
-  }), ...(sourceMetric ? [sourceMetric] : []), ...(compactionMetric ? [compactionMetric] : []), ...(artifactMetric ? [artifactMetric] : [])];
+  }), ...(guardMetric ? [guardMetric] : []), ...(sourceMetric ? [sourceMetric] : []), ...(compactionMetric ? [compactionMetric] : []), ...(artifactMetric ? [artifactMetric] : [])];
 }
 
 function summarizeSessionMetrics({
@@ -301,6 +302,7 @@ function currentSessionSearchMetrics(session: SessionState): string[] {
   const continuedCount = session.turns.reduce((sum, turn) => sum + (turn !== latestTurn && turn.status === "max_turns" ? 1 : 0), 0);
   const priorIssueCount = session.turns.reduce((sum, turn) => sum + (turn !== latestTurn && turn.status !== "max_turns" && turnNeedsAttention(turn) ? 1 : 0), 0);
   const toolIssueCount = session.turns.reduce((sum, turn) => sum + settledToolIssueCount(turn), 0);
+  const guardMetric = loopGuardMetric(currentSessionLoopGuardStats(session));
   const sourceMetric = sourceAccessMetric(currentSessionSourceAccessStats(session));
   const artifactMetric = currentSessionArtifactMetric(session);
   const compactionMetric = currentSessionCompactionMetric(session);
@@ -310,10 +312,21 @@ function currentSessionSearchMetrics(session: SessionState): string[] {
   if (continuedCount > 0) metrics.push(`${continuedCount} continued`);
   if (priorIssueCount > 0) metrics.push(`${priorIssueCount} prior issue${priorIssueCount === 1 ? "" : "s"}`);
   if (toolIssueCount > 0) metrics.push(`${toolIssueCount} tool issue${toolIssueCount === 1 ? "" : "s"}`);
+  if (guardMetric) metrics.push(guardMetric);
   if (sourceMetric) metrics.push(sourceMetric);
   if (compactionMetric) metrics.push(compactionMetric);
   if (artifactMetric) metrics.push(artifactMetric);
   return metrics;
+}
+
+function currentSessionLoopGuardStats(session: SessionState): Required<LoopGuardStats> {
+  return session.turns.reduce<Required<LoopGuardStats>>((stats, turn) => {
+    const toolStats = turn.toolStats;
+    if (!toolStats) return stats;
+    stats.loop_guard_interventions += toolStats.loop_guard_interventions ?? 0;
+    stats.forced_no_tools += toolStats.forced_no_tools ?? 0;
+    return stats;
+  }, emptyLoopGuardStats());
 }
 
 function currentSessionSourceAccessStats(session: SessionState): Required<SourceAccessStats> {
@@ -377,6 +390,7 @@ export function countSessionsByFilter(rows: readonly SessionRowView[]): Record<S
     memory: rows.filter((row) => row.chips.includes("memory")).length,
     plan: rows.filter((row) => row.chips.includes("plan")).length,
     evidence: rows.filter(hasEvidenceMetric).length,
+    guard: rows.filter(hasGuardMetric).length,
     issues: rows.filter(needsAttention).length,
   };
 }
@@ -389,12 +403,17 @@ function matchesFilter(row: SessionRowView, filter: SessionListFilter): boolean 
   if (filter === "memory") return row.chips.includes("memory");
   if (filter === "plan") return row.chips.includes("plan");
   if (filter === "evidence") return hasEvidenceMetric(row);
+  if (filter === "guard") return hasGuardMetric(row);
   if (filter === "issues") return needsAttention(row);
   return true;
 }
 
 function hasEvidenceMetric(row: SessionRowView): boolean {
   return row.metrics.some((metric) => metric.startsWith("Evidence "));
+}
+
+function hasGuardMetric(row: SessionRowView): boolean {
+  return row.metrics.some((metric) => metric.startsWith("Guard "));
 }
 
 function needsAttention(row: SessionRowView): boolean {
@@ -412,6 +431,8 @@ function usageMetrics(session: SessionSummary): string[] {
   const toolErrors = session.tools?.tool_errors ?? 0;
   if (toolErrors > 0) metrics.push(`${toolErrors} issue${toolErrors === 1 ? "" : "s"}`);
   if (session.browser && session.browser.network_fetch > 0) metrics.push(`${session.browser.network_fetch} web`);
+  const guardMetric = loopGuardMetric(session.tools);
+  if (guardMetric) metrics.push(guardMetric);
   const sourceMetric = sourceAccessMetric(session.tools);
   if (sourceMetric) metrics.push(sourceMetric);
   const contextMetric = sessionContextMetric(session.context);
@@ -421,6 +442,27 @@ function usageMetrics(session: SessionSummary): string[] {
   const planMetric = sessionPlanMetric(session.plan_summary);
   if (planMetric) metrics.push(planMetric);
   return metrics;
+}
+
+interface LoopGuardStats {
+  loop_guard_interventions?: number;
+  forced_no_tools?: number;
+}
+
+function emptyLoopGuardStats(): Required<LoopGuardStats> {
+  return {
+    loop_guard_interventions: 0,
+    forced_no_tools: 0,
+  };
+}
+
+function loopGuardMetric(stats: LoopGuardStats | undefined): string | undefined {
+  const interventions = stats?.loop_guard_interventions ?? 0;
+  if (interventions <= 0) return undefined;
+  const forced = stats?.forced_no_tools ?? 0;
+  const parts = [`Guard ${interventions}`];
+  if (forced > 0) parts.push(`${forced} no-tools`);
+  return parts.join(", ");
 }
 
 interface SourceAccessStats {
