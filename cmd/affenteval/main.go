@@ -73,29 +73,30 @@ func run(args []string) int {
 		keepWorkspaces      = fs.Bool("keep-workspaces", false, "keep passing scenario workspaces; failing scenario workspaces are always kept")
 		qualityProfile      = fs.String("quality-profile", "", "predefined quality gate profile: longrun or web-evidence; explicit gate flags override profile thresholds")
 		gates               = qualityGateConfig{
-			MinPassRate:                    fs.Float64("min-pass-rate", -1, "optional quality gate: minimum batch pass rate, 0..1"),
-			MinCompletionRate:              fs.Float64("min-completion-rate", -1, "optional quality gate: minimum completed-turn rate, 0..1"),
-			MinMemoryUpdateRate:            fs.Float64("min-memory-update-rate", -1, "optional quality gate: minimum confirmed memory updates per scenario, 0..1"),
-			MinRuntimeSurfaceRate:          fs.Float64("min-runtime-surface-rate", -1, "optional quality gate: minimum scenario rate with recorded runtime surface, 0..1"),
-			MinSourceNetworkRate:           fs.Float64("min-source-network-rate", -1, "optional quality gate: minimum network/API source access rate, 0..1"),
-			MinSourceAccessVerifiedRate:    fs.Float64("min-source-access-verified-rate", -1, "optional quality gate: minimum verified SourceAccess rate, 0..1"),
-			MinSessionSearchContextHitRate: fs.Float64("min-session-search-context-hit-rate", -1, "optional quality gate: minimum session_search context-hit rate, 0..1"),
-			MinToolRepairSuccessRate:       fs.Float64("min-tool-repair-success-rate", -1, "optional quality gate: minimum successful tool-call repair rate, 0..1"),
-			MinVerifierPassRate:            fs.Float64("min-verifier-pass-rate", -1, "optional quality gate: minimum verifier pass rate, 0..1"),
-			MaxFocusedTaskErrorRate:        fs.Float64("max-focused-task-error-rate", -1, "optional quality gate: maximum focused-task error rate per focused-task call, 0..1"),
-			MaxForcedNoToolsRate:           fs.Float64("max-forced-no-tools-rate", -1, "optional quality gate: maximum forced no-tool follow-up rate per tool call, 0..1"),
-			MaxLoopGuardInterventionRate:   fs.Float64("max-loop-guard-intervention-rate", -1, "optional quality gate: maximum loop guard intervention rate per tool call, 0..1"),
-			MaxPlanErrorRate:               fs.Float64("max-plan-error-rate", -1, "optional quality gate: maximum plan tool error rate per plan call, 0..1"),
-			MaxSourceDiscoveryOnlyRate:     fs.Float64("max-source-discovery-only-rate", -1, "optional quality gate: maximum discovery-only source access rate, 0..1"),
-			MaxSourceDynamicPartialRate:    fs.Float64("max-source-dynamic-partial-rate", -1, "optional quality gate: maximum dynamic-partial source access rate, 0..1"),
-			MaxSubagentErrorRate:           fs.Float64("max-subagent-error-rate", -1, "optional quality gate: maximum subagent error rate per subagent call, 0..1"),
-			MaxToolErrorRate:               fs.Float64("max-tool-error-rate", -1, "optional quality gate: maximum tool error rate, 0..1"),
-			MaxToolContextTruncationRate:   fs.Float64("max-tool-context-truncation-rate", -1, "optional quality gate: maximum tool-context truncation rate, 0..1"),
-			MaxToolResultTruncationRate:    fs.Float64("max-tool-result-truncation-rate", -1, "optional quality gate: maximum tool-result event truncation rate, 0..1"),
-			MaxAvgRuntimeErrors:            fs.Float64("max-avg-runtime-errors", -1, "optional quality gate: maximum average runtime error events per scenario"),
-			MaxAvgContextCompactions:       fs.Float64("max-avg-context-compactions", -1, "optional quality gate: maximum average context compactions per scenario"),
-			MaxAvgReactiveCompactions:      fs.Float64("max-avg-reactive-context-compactions", -1, "optional quality gate: maximum average reactive context compactions per scenario"),
-			MaxAvgTotalTokens:              fs.Float64("max-avg-total-tokens", -1, "optional quality gate: maximum average total tokens per scenario"),
+			MinPassRate:                      fs.Float64("min-pass-rate", -1, "optional quality gate: minimum batch pass rate, 0..1"),
+			MinCompletionRate:                fs.Float64("min-completion-rate", -1, "optional quality gate: minimum completed-turn rate, 0..1"),
+			MinMemoryUpdateRate:              fs.Float64("min-memory-update-rate", -1, "optional quality gate: minimum confirmed memory updates per scenario, 0..1"),
+			MinRuntimeSurfaceRate:            fs.Float64("min-runtime-surface-rate", -1, "optional quality gate: minimum scenario rate with recorded runtime surface, 0..1"),
+			MinSourceNetworkRate:             fs.Float64("min-source-network-rate", -1, "optional quality gate: minimum network/API source access rate, 0..1"),
+			MinSourceAccessVerifiedRate:      fs.Float64("min-source-access-verified-rate", -1, "optional quality gate: minimum verified SourceAccess rate, 0..1"),
+			MinExpectationCapabilityPassRate: fs.Float64("min-expectation-capability-pass-rate", -1, "optional quality gate: minimum pass rate across declared expectation capability instances, 0..1"),
+			MinSessionSearchContextHitRate:   fs.Float64("min-session-search-context-hit-rate", -1, "optional quality gate: minimum session_search context-hit rate, 0..1"),
+			MinToolRepairSuccessRate:         fs.Float64("min-tool-repair-success-rate", -1, "optional quality gate: minimum successful tool-call repair rate, 0..1"),
+			MinVerifierPassRate:              fs.Float64("min-verifier-pass-rate", -1, "optional quality gate: minimum verifier pass rate, 0..1"),
+			MaxFocusedTaskErrorRate:          fs.Float64("max-focused-task-error-rate", -1, "optional quality gate: maximum focused-task error rate per focused-task call, 0..1"),
+			MaxForcedNoToolsRate:             fs.Float64("max-forced-no-tools-rate", -1, "optional quality gate: maximum forced no-tool follow-up rate per tool call, 0..1"),
+			MaxLoopGuardInterventionRate:     fs.Float64("max-loop-guard-intervention-rate", -1, "optional quality gate: maximum loop guard intervention rate per tool call, 0..1"),
+			MaxPlanErrorRate:                 fs.Float64("max-plan-error-rate", -1, "optional quality gate: maximum plan tool error rate per plan call, 0..1"),
+			MaxSourceDiscoveryOnlyRate:       fs.Float64("max-source-discovery-only-rate", -1, "optional quality gate: maximum discovery-only source access rate, 0..1"),
+			MaxSourceDynamicPartialRate:      fs.Float64("max-source-dynamic-partial-rate", -1, "optional quality gate: maximum dynamic-partial source access rate, 0..1"),
+			MaxSubagentErrorRate:             fs.Float64("max-subagent-error-rate", -1, "optional quality gate: maximum subagent error rate per subagent call, 0..1"),
+			MaxToolErrorRate:                 fs.Float64("max-tool-error-rate", -1, "optional quality gate: maximum tool error rate, 0..1"),
+			MaxToolContextTruncationRate:     fs.Float64("max-tool-context-truncation-rate", -1, "optional quality gate: maximum tool-context truncation rate, 0..1"),
+			MaxToolResultTruncationRate:      fs.Float64("max-tool-result-truncation-rate", -1, "optional quality gate: maximum tool-result event truncation rate, 0..1"),
+			MaxAvgRuntimeErrors:              fs.Float64("max-avg-runtime-errors", -1, "optional quality gate: maximum average runtime error events per scenario"),
+			MaxAvgContextCompactions:         fs.Float64("max-avg-context-compactions", -1, "optional quality gate: maximum average context compactions per scenario"),
+			MaxAvgReactiveCompactions:        fs.Float64("max-avg-reactive-context-compactions", -1, "optional quality gate: maximum average reactive context compactions per scenario"),
+			MaxAvgTotalTokens:                fs.Float64("max-avg-total-tokens", -1, "optional quality gate: maximum average total tokens per scenario"),
 		}
 	)
 	fs.Usage = func() {
@@ -233,29 +234,30 @@ success and trace-level process quality.`)
 }
 
 type qualityGateConfig struct {
-	MinPassRate                    *float64
-	MinCompletionRate              *float64
-	MinMemoryUpdateRate            *float64
-	MinRuntimeSurfaceRate          *float64
-	MinSourceNetworkRate           *float64
-	MinSourceAccessVerifiedRate    *float64
-	MinSessionSearchContextHitRate *float64
-	MinToolRepairSuccessRate       *float64
-	MinVerifierPassRate            *float64
-	MaxFocusedTaskErrorRate        *float64
-	MaxForcedNoToolsRate           *float64
-	MaxLoopGuardInterventionRate   *float64
-	MaxPlanErrorRate               *float64
-	MaxSourceDiscoveryOnlyRate     *float64
-	MaxSourceDynamicPartialRate    *float64
-	MaxSubagentErrorRate           *float64
-	MaxToolErrorRate               *float64
-	MaxToolContextTruncationRate   *float64
-	MaxToolResultTruncationRate    *float64
-	MaxAvgRuntimeErrors            *float64
-	MaxAvgContextCompactions       *float64
-	MaxAvgReactiveCompactions      *float64
-	MaxAvgTotalTokens              *float64
+	MinPassRate                      *float64
+	MinCompletionRate                *float64
+	MinMemoryUpdateRate              *float64
+	MinRuntimeSurfaceRate            *float64
+	MinSourceNetworkRate             *float64
+	MinSourceAccessVerifiedRate      *float64
+	MinExpectationCapabilityPassRate *float64
+	MinSessionSearchContextHitRate   *float64
+	MinToolRepairSuccessRate         *float64
+	MinVerifierPassRate              *float64
+	MaxFocusedTaskErrorRate          *float64
+	MaxForcedNoToolsRate             *float64
+	MaxLoopGuardInterventionRate     *float64
+	MaxPlanErrorRate                 *float64
+	MaxSourceDiscoveryOnlyRate       *float64
+	MaxSourceDynamicPartialRate      *float64
+	MaxSubagentErrorRate             *float64
+	MaxToolErrorRate                 *float64
+	MaxToolContextTruncationRate     *float64
+	MaxToolResultTruncationRate      *float64
+	MaxAvgRuntimeErrors              *float64
+	MaxAvgContextCompactions         *float64
+	MaxAvgReactiveCompactions        *float64
+	MaxAvgTotalTokens                *float64
 }
 
 type qualityGateProfileDefinition struct {
@@ -270,39 +272,41 @@ func qualityGateProfileDefinitions() []qualityGateProfileDefinition {
 			Name:        "longrun",
 			Description: "general long-run stability gates for task completion, tool recovery, delegation/plan errors, truncation, runtime errors, and token cost",
 			Gates: qualityGateConfig{
-				MinPassRate:                  float64Ptr(0.80),
-				MinCompletionRate:            float64Ptr(0.90),
-				MinRuntimeSurfaceRate:        float64Ptr(0.90),
-				MaxFocusedTaskErrorRate:      float64Ptr(0.10),
-				MaxForcedNoToolsRate:         float64Ptr(0.10),
-				MaxLoopGuardInterventionRate: float64Ptr(0.20),
-				MaxPlanErrorRate:             float64Ptr(0.05),
-				MaxSubagentErrorRate:         float64Ptr(0.10),
-				MaxToolErrorRate:             float64Ptr(0.08),
-				MaxToolContextTruncationRate: float64Ptr(0.30),
-				MaxToolResultTruncationRate:  float64Ptr(0.20),
-				MaxAvgRuntimeErrors:          float64Ptr(0.20),
-				MaxAvgReactiveCompactions:    float64Ptr(0.50),
-				MaxAvgTotalTokens:            float64Ptr(120000),
+				MinPassRate:                      float64Ptr(0.80),
+				MinCompletionRate:                float64Ptr(0.90),
+				MinExpectationCapabilityPassRate: float64Ptr(0.80),
+				MinRuntimeSurfaceRate:            float64Ptr(0.90),
+				MaxFocusedTaskErrorRate:          float64Ptr(0.10),
+				MaxForcedNoToolsRate:             float64Ptr(0.10),
+				MaxLoopGuardInterventionRate:     float64Ptr(0.20),
+				MaxPlanErrorRate:                 float64Ptr(0.05),
+				MaxSubagentErrorRate:             float64Ptr(0.10),
+				MaxToolErrorRate:                 float64Ptr(0.08),
+				MaxToolContextTruncationRate:     float64Ptr(0.30),
+				MaxToolResultTruncationRate:      float64Ptr(0.20),
+				MaxAvgRuntimeErrors:              float64Ptr(0.20),
+				MaxAvgReactiveCompactions:        float64Ptr(0.50),
+				MaxAvgTotalTokens:                float64Ptr(120000),
 			},
 		},
 		{
 			Name:        "web-evidence",
 			Description: "web and browser evidence gates for current-fact tasks, emphasizing verified SourceAccess, network/API evidence, low discovery-only output, and bounded cost",
 			Gates: qualityGateConfig{
-				MinPassRate:                  float64Ptr(0.80),
-				MinCompletionRate:            float64Ptr(0.90),
-				MinRuntimeSurfaceRate:        float64Ptr(0.90),
-				MinSourceNetworkRate:         float64Ptr(0.50),
-				MinSourceAccessVerifiedRate:  float64Ptr(0.90),
-				MaxForcedNoToolsRate:         float64Ptr(0.10),
-				MaxLoopGuardInterventionRate: float64Ptr(0.25),
-				MaxSourceDiscoveryOnlyRate:   float64Ptr(0.15),
-				MaxSourceDynamicPartialRate:  float64Ptr(0.20),
-				MaxToolErrorRate:             float64Ptr(0.10),
-				MaxToolResultTruncationRate:  float64Ptr(0.25),
-				MaxAvgRuntimeErrors:          float64Ptr(0.20),
-				MaxAvgTotalTokens:            float64Ptr(120000),
+				MinPassRate:                      float64Ptr(0.80),
+				MinCompletionRate:                float64Ptr(0.90),
+				MinExpectationCapabilityPassRate: float64Ptr(0.80),
+				MinRuntimeSurfaceRate:            float64Ptr(0.90),
+				MinSourceNetworkRate:             float64Ptr(0.50),
+				MinSourceAccessVerifiedRate:      float64Ptr(0.90),
+				MaxForcedNoToolsRate:             float64Ptr(0.10),
+				MaxLoopGuardInterventionRate:     float64Ptr(0.25),
+				MaxSourceDiscoveryOnlyRate:       float64Ptr(0.15),
+				MaxSourceDynamicPartialRate:      float64Ptr(0.20),
+				MaxToolErrorRate:                 float64Ptr(0.10),
+				MaxToolResultTruncationRate:      float64Ptr(0.25),
+				MaxAvgRuntimeErrors:              float64Ptr(0.20),
+				MaxAvgTotalTokens:                float64Ptr(120000),
 			},
 		},
 	}
@@ -331,6 +335,7 @@ func qualityGateConfigLines(g qualityGateConfig) []string {
 	add("min-runtime-surface-rate", g.MinRuntimeSurfaceRate)
 	add("min-source-network-rate", g.MinSourceNetworkRate)
 	add("min-source-access-verified-rate", g.MinSourceAccessVerifiedRate)
+	add("min-expectation-capability-pass-rate", g.MinExpectationCapabilityPassRate)
 	add("min-session-search-context-hit-rate", g.MinSessionSearchContextHitRate)
 	add("min-tool-repair-success-rate", g.MinToolRepairSuccessRate)
 	add("min-verifier-pass-rate", g.MinVerifierPassRate)
@@ -375,6 +380,7 @@ func applyQualityGateProfile(g *qualityGateConfig, profile string, flagSet func(
 	apply("min-runtime-surface-rate", &g.MinRuntimeSurfaceRate, profileConfig.MinRuntimeSurfaceRate)
 	apply("min-source-network-rate", &g.MinSourceNetworkRate, profileConfig.MinSourceNetworkRate)
 	apply("min-source-access-verified-rate", &g.MinSourceAccessVerifiedRate, profileConfig.MinSourceAccessVerifiedRate)
+	apply("min-expectation-capability-pass-rate", &g.MinExpectationCapabilityPassRate, profileConfig.MinExpectationCapabilityPassRate)
 	apply("min-session-search-context-hit-rate", &g.MinSessionSearchContextHitRate, profileConfig.MinSessionSearchContextHitRate)
 	apply("min-tool-repair-success-rate", &g.MinToolRepairSuccessRate, profileConfig.MinToolRepairSuccessRate)
 	apply("min-verifier-pass-rate", &g.MinVerifierPassRate, profileConfig.MinVerifierPassRate)
@@ -1214,6 +1220,7 @@ func validateQualityGateConfig(g qualityGateConfig) error {
 		{"--min-runtime-surface-rate", g.MinRuntimeSurfaceRate, true},
 		{"--min-source-network-rate", g.MinSourceNetworkRate, true},
 		{"--min-source-access-verified-rate", g.MinSourceAccessVerifiedRate, true},
+		{"--min-expectation-capability-pass-rate", g.MinExpectationCapabilityPassRate, true},
 		{"--min-session-search-context-hit-rate", g.MinSessionSearchContextHitRate, true},
 		{"--min-tool-repair-success-rate", g.MinToolRepairSuccessRate, true},
 		{"--min-verifier-pass-rate", g.MinVerifierPassRate, true},
@@ -1282,6 +1289,8 @@ func qualityGateFailures(s batchSummary, g qualityGateConfig) []string {
 	checkMin("runtime_surface_rate", batchRatio(s.RuntimeSurfaceScenarios, s.Total), g.MinRuntimeSurfaceRate, s.Total > 0)
 	checkMin("source_network_rate", batchRatio(s.SourceAccessNetwork, s.SourceAccessResults), g.MinSourceNetworkRate, s.SourceAccessResults > 0)
 	checkMin("source_access_verified_rate", batchRatio(s.SourceAccessVerified, s.SourceAccessResults), g.MinSourceAccessVerifiedRate, s.SourceAccessResults > 0)
+	expectationCapabilityPassed, expectationCapabilityTotal := expectationCapabilityPassTotals(s)
+	checkMin("expectation_capability_pass_rate", batchRatio(expectationCapabilityPassed, expectationCapabilityTotal), g.MinExpectationCapabilityPassRate, expectationCapabilityTotal > 0)
 	checkMin("session_search_context_hit_rate", batchRatio(s.SessionSearchContextHits, s.SessionSearchResults), g.MinSessionSearchContextHitRate, s.SessionSearchResults > 0)
 	checkMin("tool_repair_success_rate", batchRatio(s.ToolRepairSucceeded, s.ToolRepairCalls), g.MinToolRepairSuccessRate, s.ToolRepairCalls > 0)
 	checkMin("verifier_pass_rate", batchRatio(s.VerifierPassed, s.VerifierRuns), g.MinVerifierPassRate, s.VerifierRuns > 0)
@@ -1539,48 +1548,49 @@ func formatPassTotalCounts(passed, total map[string]int) string {
 }
 
 type evalJSONLMetadata struct {
-	SchemaVersion                  int      `json:"schema_version"`
-	Suite                          string   `json:"suite,omitempty"`
-	Model                          string   `json:"model,omitempty"`
-	ProviderLabel                  string   `json:"provider_label,omitempty"`
-	Executor                       string   `json:"executor"`
-	Temperature                    string   `json:"temperature,omitempty"`
-	TopP                           string   `json:"top_p,omitempty"`
-	MaxTokens                      string   `json:"max_tokens,omitempty"`
-	Seed                           string   `json:"seed,omitempty"`
-	RuntimeEvalMode                bool     `json:"runtime_eval_mode,omitempty"`
-	RuntimeTools                   string   `json:"runtime_tools,omitempty"`
-	RuntimeAllTools                bool     `json:"runtime_all_tools,omitempty"`
-	RuntimeMemory                  bool     `json:"runtime_memory,omitempty"`
-	RuntimeWeb                     bool     `json:"runtime_web,omitempty"`
-	RuntimeBrowser                 bool     `json:"runtime_browser,omitempty"`
-	TraceDeltas                    bool     `json:"trace_deltas,omitempty"`
-	RuntimeMCP                     bool     `json:"runtime_mcp,omitempty"`
-	TimeoutMS                      int64    `json:"timeout_ms"`
-	QualityProfile                 string   `json:"quality_profile,omitempty"`
-	MinPassRate                    *float64 `json:"min_pass_rate,omitempty"`
-	MinCompletionRate              *float64 `json:"min_completion_rate,omitempty"`
-	MinMemoryUpdateRate            *float64 `json:"min_memory_update_rate,omitempty"`
-	MinRuntimeSurfaceRate          *float64 `json:"min_runtime_surface_rate,omitempty"`
-	MinSourceNetworkRate           *float64 `json:"min_source_network_rate,omitempty"`
-	MinSourceAccessVerifiedRate    *float64 `json:"min_source_access_verified_rate,omitempty"`
-	MinSessionSearchContextHitRate *float64 `json:"min_session_search_context_hit_rate,omitempty"`
-	MinToolRepairSuccessRate       *float64 `json:"min_tool_repair_success_rate,omitempty"`
-	MinVerifierPassRate            *float64 `json:"min_verifier_pass_rate,omitempty"`
-	MaxFocusedTaskErrorRate        *float64 `json:"max_focused_task_error_rate,omitempty"`
-	MaxForcedNoToolsRate           *float64 `json:"max_forced_no_tools_rate,omitempty"`
-	MaxLoopGuardInterventionRate   *float64 `json:"max_loop_guard_intervention_rate,omitempty"`
-	MaxPlanErrorRate               *float64 `json:"max_plan_error_rate,omitempty"`
-	MaxSourceDiscoveryOnlyRate     *float64 `json:"max_source_discovery_only_rate,omitempty"`
-	MaxSourceDynamicPartialRate    *float64 `json:"max_source_dynamic_partial_rate,omitempty"`
-	MaxSubagentErrorRate           *float64 `json:"max_subagent_error_rate,omitempty"`
-	MaxToolErrorRate               *float64 `json:"max_tool_error_rate,omitempty"`
-	MaxToolContextTruncationRate   *float64 `json:"max_tool_context_truncation_rate,omitempty"`
-	MaxToolResultTruncationRate    *float64 `json:"max_tool_result_truncation_rate,omitempty"`
-	MaxAvgRuntimeErrors            *float64 `json:"max_avg_runtime_errors,omitempty"`
-	MaxAvgContextCompactions       *float64 `json:"max_avg_context_compactions,omitempty"`
-	MaxAvgReactiveCompactions      *float64 `json:"max_avg_reactive_context_compactions,omitempty"`
-	MaxAvgTotalTokens              *float64 `json:"max_avg_total_tokens,omitempty"`
+	SchemaVersion                    int      `json:"schema_version"`
+	Suite                            string   `json:"suite,omitempty"`
+	Model                            string   `json:"model,omitempty"`
+	ProviderLabel                    string   `json:"provider_label,omitempty"`
+	Executor                         string   `json:"executor"`
+	Temperature                      string   `json:"temperature,omitempty"`
+	TopP                             string   `json:"top_p,omitempty"`
+	MaxTokens                        string   `json:"max_tokens,omitempty"`
+	Seed                             string   `json:"seed,omitempty"`
+	RuntimeEvalMode                  bool     `json:"runtime_eval_mode,omitempty"`
+	RuntimeTools                     string   `json:"runtime_tools,omitempty"`
+	RuntimeAllTools                  bool     `json:"runtime_all_tools,omitempty"`
+	RuntimeMemory                    bool     `json:"runtime_memory,omitempty"`
+	RuntimeWeb                       bool     `json:"runtime_web,omitempty"`
+	RuntimeBrowser                   bool     `json:"runtime_browser,omitempty"`
+	TraceDeltas                      bool     `json:"trace_deltas,omitempty"`
+	RuntimeMCP                       bool     `json:"runtime_mcp,omitempty"`
+	TimeoutMS                        int64    `json:"timeout_ms"`
+	QualityProfile                   string   `json:"quality_profile,omitempty"`
+	MinPassRate                      *float64 `json:"min_pass_rate,omitempty"`
+	MinCompletionRate                *float64 `json:"min_completion_rate,omitempty"`
+	MinMemoryUpdateRate              *float64 `json:"min_memory_update_rate,omitempty"`
+	MinRuntimeSurfaceRate            *float64 `json:"min_runtime_surface_rate,omitempty"`
+	MinSourceNetworkRate             *float64 `json:"min_source_network_rate,omitempty"`
+	MinSourceAccessVerifiedRate      *float64 `json:"min_source_access_verified_rate,omitempty"`
+	MinExpectationCapabilityPassRate *float64 `json:"min_expectation_capability_pass_rate,omitempty"`
+	MinSessionSearchContextHitRate   *float64 `json:"min_session_search_context_hit_rate,omitempty"`
+	MinToolRepairSuccessRate         *float64 `json:"min_tool_repair_success_rate,omitempty"`
+	MinVerifierPassRate              *float64 `json:"min_verifier_pass_rate,omitempty"`
+	MaxFocusedTaskErrorRate          *float64 `json:"max_focused_task_error_rate,omitempty"`
+	MaxForcedNoToolsRate             *float64 `json:"max_forced_no_tools_rate,omitempty"`
+	MaxLoopGuardInterventionRate     *float64 `json:"max_loop_guard_intervention_rate,omitempty"`
+	MaxPlanErrorRate                 *float64 `json:"max_plan_error_rate,omitempty"`
+	MaxSourceDiscoveryOnlyRate       *float64 `json:"max_source_discovery_only_rate,omitempty"`
+	MaxSourceDynamicPartialRate      *float64 `json:"max_source_dynamic_partial_rate,omitempty"`
+	MaxSubagentErrorRate             *float64 `json:"max_subagent_error_rate,omitempty"`
+	MaxToolErrorRate                 *float64 `json:"max_tool_error_rate,omitempty"`
+	MaxToolContextTruncationRate     *float64 `json:"max_tool_context_truncation_rate,omitempty"`
+	MaxToolResultTruncationRate      *float64 `json:"max_tool_result_truncation_rate,omitempty"`
+	MaxAvgRuntimeErrors              *float64 `json:"max_avg_runtime_errors,omitempty"`
+	MaxAvgContextCompactions         *float64 `json:"max_avg_context_compactions,omitempty"`
+	MaxAvgReactiveCompactions        *float64 `json:"max_avg_reactive_context_compactions,omitempty"`
+	MaxAvgTotalTokens                *float64 `json:"max_avg_total_tokens,omitempty"`
 }
 
 func evalJSONLMetadataFromConfig(suite, model, providerLabel, executor, temperature, topP, maxTokens, seed string, runtimeEvalMode bool, runtimeTools string, runtimeAllTools, runtimeMemory, runtimeWeb, runtimeBrowser, traceDeltas bool, runtimeMCPConfig string, timeout time.Duration, qualityProfile string, gates qualityGateConfig) evalJSONLMetadata {
@@ -1593,48 +1603,49 @@ func evalJSONLMetadataFromConfig(suite, model, providerLabel, executor, temperat
 		providerLabel = strings.TrimSpace(os.Getenv("AFFENTEVAL_PROVIDER_LABEL"))
 	}
 	return evalJSONLMetadata{
-		SchemaVersion:                  evalJSONLSchemaVersion,
-		Suite:                          strings.TrimSpace(suite),
-		Model:                          model,
-		ProviderLabel:                  providerLabel,
-		Executor:                       normalizedEvalExecutor(executor),
-		Temperature:                    strings.TrimSpace(temperature),
-		TopP:                           strings.TrimSpace(topP),
-		MaxTokens:                      strings.TrimSpace(maxTokens),
-		Seed:                           strings.TrimSpace(seed),
-		RuntimeEvalMode:                runtimeEvalMode,
-		RuntimeTools:                   strings.TrimSpace(runtimeTools),
-		RuntimeAllTools:                runtimeAllTools,
-		RuntimeMemory:                  runtimeMemory,
-		RuntimeWeb:                     runtimeWeb,
-		RuntimeBrowser:                 runtimeBrowser,
-		TraceDeltas:                    traceDeltas,
-		RuntimeMCP:                     strings.TrimSpace(runtimeMCPConfig) != "",
-		TimeoutMS:                      timeout.Milliseconds(),
-		QualityProfile:                 strings.ToLower(strings.TrimSpace(qualityProfile)),
-		MinPassRate:                    enabledQualityGateValue(gates.MinPassRate),
-		MinCompletionRate:              enabledQualityGateValue(gates.MinCompletionRate),
-		MinMemoryUpdateRate:            enabledQualityGateValue(gates.MinMemoryUpdateRate),
-		MinRuntimeSurfaceRate:          enabledQualityGateValue(gates.MinRuntimeSurfaceRate),
-		MinSourceNetworkRate:           enabledQualityGateValue(gates.MinSourceNetworkRate),
-		MinSourceAccessVerifiedRate:    enabledQualityGateValue(gates.MinSourceAccessVerifiedRate),
-		MinSessionSearchContextHitRate: enabledQualityGateValue(gates.MinSessionSearchContextHitRate),
-		MinToolRepairSuccessRate:       enabledQualityGateValue(gates.MinToolRepairSuccessRate),
-		MinVerifierPassRate:            enabledQualityGateValue(gates.MinVerifierPassRate),
-		MaxFocusedTaskErrorRate:        enabledQualityGateValue(gates.MaxFocusedTaskErrorRate),
-		MaxForcedNoToolsRate:           enabledQualityGateValue(gates.MaxForcedNoToolsRate),
-		MaxLoopGuardInterventionRate:   enabledQualityGateValue(gates.MaxLoopGuardInterventionRate),
-		MaxPlanErrorRate:               enabledQualityGateValue(gates.MaxPlanErrorRate),
-		MaxSourceDiscoveryOnlyRate:     enabledQualityGateValue(gates.MaxSourceDiscoveryOnlyRate),
-		MaxSourceDynamicPartialRate:    enabledQualityGateValue(gates.MaxSourceDynamicPartialRate),
-		MaxSubagentErrorRate:           enabledQualityGateValue(gates.MaxSubagentErrorRate),
-		MaxToolErrorRate:               enabledQualityGateValue(gates.MaxToolErrorRate),
-		MaxToolContextTruncationRate:   enabledQualityGateValue(gates.MaxToolContextTruncationRate),
-		MaxToolResultTruncationRate:    enabledQualityGateValue(gates.MaxToolResultTruncationRate),
-		MaxAvgRuntimeErrors:            enabledQualityGateValue(gates.MaxAvgRuntimeErrors),
-		MaxAvgContextCompactions:       enabledQualityGateValue(gates.MaxAvgContextCompactions),
-		MaxAvgReactiveCompactions:      enabledQualityGateValue(gates.MaxAvgReactiveCompactions),
-		MaxAvgTotalTokens:              enabledQualityGateValue(gates.MaxAvgTotalTokens),
+		SchemaVersion:                    evalJSONLSchemaVersion,
+		Suite:                            strings.TrimSpace(suite),
+		Model:                            model,
+		ProviderLabel:                    providerLabel,
+		Executor:                         normalizedEvalExecutor(executor),
+		Temperature:                      strings.TrimSpace(temperature),
+		TopP:                             strings.TrimSpace(topP),
+		MaxTokens:                        strings.TrimSpace(maxTokens),
+		Seed:                             strings.TrimSpace(seed),
+		RuntimeEvalMode:                  runtimeEvalMode,
+		RuntimeTools:                     strings.TrimSpace(runtimeTools),
+		RuntimeAllTools:                  runtimeAllTools,
+		RuntimeMemory:                    runtimeMemory,
+		RuntimeWeb:                       runtimeWeb,
+		RuntimeBrowser:                   runtimeBrowser,
+		TraceDeltas:                      traceDeltas,
+		RuntimeMCP:                       strings.TrimSpace(runtimeMCPConfig) != "",
+		TimeoutMS:                        timeout.Milliseconds(),
+		QualityProfile:                   strings.ToLower(strings.TrimSpace(qualityProfile)),
+		MinPassRate:                      enabledQualityGateValue(gates.MinPassRate),
+		MinCompletionRate:                enabledQualityGateValue(gates.MinCompletionRate),
+		MinMemoryUpdateRate:              enabledQualityGateValue(gates.MinMemoryUpdateRate),
+		MinRuntimeSurfaceRate:            enabledQualityGateValue(gates.MinRuntimeSurfaceRate),
+		MinSourceNetworkRate:             enabledQualityGateValue(gates.MinSourceNetworkRate),
+		MinSourceAccessVerifiedRate:      enabledQualityGateValue(gates.MinSourceAccessVerifiedRate),
+		MinExpectationCapabilityPassRate: enabledQualityGateValue(gates.MinExpectationCapabilityPassRate),
+		MinSessionSearchContextHitRate:   enabledQualityGateValue(gates.MinSessionSearchContextHitRate),
+		MinToolRepairSuccessRate:         enabledQualityGateValue(gates.MinToolRepairSuccessRate),
+		MinVerifierPassRate:              enabledQualityGateValue(gates.MinVerifierPassRate),
+		MaxFocusedTaskErrorRate:          enabledQualityGateValue(gates.MaxFocusedTaskErrorRate),
+		MaxForcedNoToolsRate:             enabledQualityGateValue(gates.MaxForcedNoToolsRate),
+		MaxLoopGuardInterventionRate:     enabledQualityGateValue(gates.MaxLoopGuardInterventionRate),
+		MaxPlanErrorRate:                 enabledQualityGateValue(gates.MaxPlanErrorRate),
+		MaxSourceDiscoveryOnlyRate:       enabledQualityGateValue(gates.MaxSourceDiscoveryOnlyRate),
+		MaxSourceDynamicPartialRate:      enabledQualityGateValue(gates.MaxSourceDynamicPartialRate),
+		MaxSubagentErrorRate:             enabledQualityGateValue(gates.MaxSubagentErrorRate),
+		MaxToolErrorRate:                 enabledQualityGateValue(gates.MaxToolErrorRate),
+		MaxToolContextTruncationRate:     enabledQualityGateValue(gates.MaxToolContextTruncationRate),
+		MaxToolResultTruncationRate:      enabledQualityGateValue(gates.MaxToolResultTruncationRate),
+		MaxAvgRuntimeErrors:              enabledQualityGateValue(gates.MaxAvgRuntimeErrors),
+		MaxAvgContextCompactions:         enabledQualityGateValue(gates.MaxAvgContextCompactions),
+		MaxAvgReactiveCompactions:        enabledQualityGateValue(gates.MaxAvgReactiveCompactions),
+		MaxAvgTotalTokens:                enabledQualityGateValue(gates.MaxAvgTotalTokens),
 	}
 }
 
@@ -2231,6 +2242,7 @@ func hasQualityGateThresholds(meta evalJSONLMetadata) bool {
 		meta.MinRuntimeSurfaceRate != nil ||
 		meta.MinSourceNetworkRate != nil ||
 		meta.MinSourceAccessVerifiedRate != nil ||
+		meta.MinExpectationCapabilityPassRate != nil ||
 		meta.MinSessionSearchContextHitRate != nil ||
 		meta.MinToolRepairSuccessRate != nil ||
 		meta.MinVerifierPassRate != nil ||
@@ -2265,6 +2277,17 @@ func expectationCapabilityPassRates(total, passed map[string]int) map[string]flo
 		return nil
 	}
 	return out
+}
+
+func expectationCapabilityPassTotals(s batchSummary) (passed int, total int) {
+	for cap, count := range s.ExpectationCapabilities {
+		if count <= 0 {
+			continue
+		}
+		total += count
+		passed += s.ExpectationCapabilityPass[cap]
+	}
+	return passed, total
 }
 
 // cloneStringIntMap returns a copy of in or nil if in is empty. Used

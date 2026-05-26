@@ -44,6 +44,7 @@ Shared metadata fields:
 - `min_pass_rate`, `min_completion_rate`, `min_memory_update_rate`,
   `min_runtime_surface_rate`, `min_source_network_rate`,
   `min_source_access_verified_rate`,
+  `min_expectation_capability_pass_rate`,
   `min_session_search_context_hit_rate`,
   `min_tool_repair_success_rate`, `min_verifier_pass_rate`,
   `max_focused_task_error_rate`, `max_forced_no_tools_rate`,

@@ -766,11 +766,13 @@ The default text summary also prints the key normalized rates used for long-run
 debugging, including pass/completion, memory update coverage, runtime-surface
 coverage, tool errors, focused-task/subagent errors, plan errors, repair success, verifier pass rate,
 verified evidence, network/discovery/dynamic-partial source ratios, average
-context compactions, reactive context compactions, and tool-context truncation.
+context compactions, reactive context compactions, expected-capability pass
+rate, and tool-context truncation.
 Use `--min-pass-rate`, `--min-completion-rate`,
 `--min-memory-update-rate`, `--min-runtime-surface-rate`,
 `--min-source-network-rate`,
 `--min-source-access-verified-rate`,
+`--min-expectation-capability-pass-rate`,
 `--min-session-search-context-hit-rate`, `--min-tool-repair-success-rate`,
 `--min-verifier-pass-rate`, `--max-tool-error-rate`,
 `--max-focused-task-error-rate`, `--max-subagent-error-rate`,
