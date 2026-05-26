@@ -158,6 +158,33 @@ func TestSearchAssistantHitCarriesAdjacentUserContext(t *testing.T) {
 	}
 }
 
+func TestSearchMatchesChineseWithoutSpaces(t *testing.T) {
+	dir := t.TempDir()
+	writeSessionLog(t, dir, "stock-cn", []testMessage{
+		{Role: "user", Content: "请分析Alpha Coast股票"},
+		{Role: "assistant", Content: "结论：库存拖累风险，历史标记HIST-CN-88"},
+	})
+	writeSessionLog(t, dir, "noise-cn", []testMessage{
+		{Role: "assistant", Content: "普通项目记录，没有股票结论"},
+	})
+
+	hits, err := Search(context.Background(), dir, "", "股票分析库存风险", 5, 3)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(hits) == 0 {
+		t.Fatal("expected Chinese no-space query to match")
+	}
+	if hits[0].SessionID != "stock-cn" {
+		t.Fatalf("Chinese CJK token overlap should rank stock decision first, got %+v", hits)
+	}
+	for _, want := range []string{"请分析Alpha Coast股票", "库存拖累风险", "HIST-CN-88"} {
+		if !strings.Contains(hits[0].Snippet, want) {
+			t.Fatalf("Chinese contextual snippet missing %q:\n%+v", want, hits[0])
+		}
+	}
+}
+
 func TestSearchSkipsSymlinkSessionLogs(t *testing.T) {
 	dir := t.TempDir()
 	outside := filepath.Join(t.TempDir(), "outside.jsonl")
@@ -368,6 +395,8 @@ func TestTokenize(t *testing.T) {
 		{"привет мир", []string{"привет", "мир"}},
 		{"café naïve résumé", []string{"café", "naïve", "résumé"}},
 		{"What is the secret code", []string{"secret", "code"}},
+		{"股票分析", []string{"股", "票", "分", "析"}},
+		{"Alpha股票Q2", []string{"alpha", "股", "票", "q2"}},
 	}
 	for _, c := range cases {
 		got := Tokenize(c.in)

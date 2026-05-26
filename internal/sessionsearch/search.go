@@ -289,9 +289,11 @@ func hitLess(a, b Hit) bool {
 	return a.TurnIdx < b.TurnIdx
 }
 
-// Tokenize lowercases and splits on non-letter / non-digit runes
-// across scripts. Tokens shorter than 2 bytes and common English
-// stopwords are dropped.
+// Tokenize lowercases and splits on non-letter / non-digit runes across
+// scripts. CJK letters are emitted as individual rune tokens because those
+// languages often have no spaces; other letters/digits keep whole-token
+// matching. Tokens shorter than 2 bytes and common English stopwords are
+// dropped.
 func Tokenize(s string) []string {
 	s = NormalizeQuery(s)
 	s = strings.ToLower(s)
@@ -305,6 +307,11 @@ func Tokenize(s string) []string {
 		}
 	}
 	for _, r := range s {
+		if isCJKLetter(r) {
+			flush()
+			raw = append(raw, string(r))
+			continue
+		}
 		if unicode.IsLetter(r) || unicode.IsDigit(r) {
 			cur.WriteRune(r)
 		} else {
@@ -325,6 +332,13 @@ func Tokenize(s string) []string {
 		}
 	}
 	return out
+}
+
+func isCJKLetter(r rune) bool {
+	return unicode.Is(unicode.Han, r) ||
+		unicode.Is(unicode.Hiragana, r) ||
+		unicode.Is(unicode.Katakana, r) ||
+		unicode.Is(unicode.Hangul, r)
 }
 
 func NormalizeQuery(s string) string {
@@ -379,6 +393,14 @@ func countContentTerms(content string, terms []string) map[string]int {
 		}
 	}
 	for _, r := range content {
+		if isCJKLetter(r) {
+			flush()
+			t := strings.ToLower(string(r))
+			if want[t] {
+				counts[t]++
+			}
+			continue
+		}
 		if unicode.IsLetter(r) || unicode.IsDigit(r) {
 			cur.WriteRune(r)
 		} else {
@@ -475,6 +497,14 @@ func firstTermTokenIndex(content string, terms []string) int {
 		tokenStart = -1
 	}
 	for i, r := range content {
+		if isCJKLetter(r) {
+			flush()
+			t := strings.ToLower(string(r))
+			if want[t] {
+				consider(termHit{start: i, term: t})
+			}
+			continue
+		}
 		if unicode.IsLetter(r) || unicode.IsDigit(r) {
 			if tokenStart < 0 {
 				tokenStart = i
