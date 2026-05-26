@@ -309,6 +309,13 @@ type ToolRuntimeStats struct {
 	MemoryUpdateAdd     int `json:"memory_update_add,omitempty"`
 	MemoryUpdateReplace int `json:"memory_update_replace,omitempty"`
 	MemoryUpdateRemove  int `json:"memory_update_remove,omitempty"`
+	// SessionSearch counters measure durable transcript recall quality.
+	// Calls count dispatched attempts; result/context/term counters are
+	// populated only when the session_search JSON response can be parsed.
+	SessionSearchCalls        int `json:"session_search_calls,omitempty"`
+	SessionSearchResults      int `json:"session_search_results,omitempty"`
+	SessionSearchContextHits  int `json:"session_search_context_hits,omitempty"`
+	SessionSearchMatchedTerms int `json:"session_search_matched_terms,omitempty"`
 	// ToolContextTruncated counts tool results that were shortened before
 	// being appended back into the model conversation. This is separate
 	// from ToolResultPayload.ResultTruncated, which reports event payload

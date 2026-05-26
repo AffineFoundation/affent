@@ -95,6 +95,28 @@ func TestRecordMemoryUpdateStats(t *testing.T) {
 	}
 }
 
+func TestRecordSessionSearchStats(t *testing.T) {
+	var stats sse.ToolRuntimeStats
+	recordSessionSearchStats(&stats, "session_search", `{"query":"Alpha Coast","total":2,"results":[{"session_id":"market-alpha","matched_terms":["alpha","coast"],"context_included":true},{"session_id":"market-beta","matched_terms":["alpha"],"context_included":false}]}`, false)
+	recordSessionSearchStats(&stats, "session_search", `{"query":"empty","total":0,"results":[]}`, false)
+	recordSessionSearchStats(&stats, "session_search", `not json`, false)
+	recordSessionSearchStats(&stats, "session_search", `{"total":1,"results":[{"matched_terms":["ignored"],"context_included":true}]}`, true)
+	recordSessionSearchStats(&stats, "memory", `{"total":1}`, false)
+
+	if stats.SessionSearchCalls != 4 {
+		t.Fatalf("SessionSearchCalls = %d, want 4", stats.SessionSearchCalls)
+	}
+	if stats.SessionSearchResults != 2 {
+		t.Fatalf("SessionSearchResults = %d, want 2", stats.SessionSearchResults)
+	}
+	if stats.SessionSearchContextHits != 1 {
+		t.Fatalf("SessionSearchContextHits = %d, want 1", stats.SessionSearchContextHits)
+	}
+	if stats.SessionSearchMatchedTerms != 2 {
+		t.Fatalf("SessionSearchMatchedTerms = %d, want 2", stats.SessionSearchMatchedTerms)
+	}
+}
+
 func TestToolFailureKindForOutcome(t *testing.T) {
 	if got := toolFailureKindForOutcome("web_fetch", "fetch failed\nFailure: kind=blocked, status=403\nNext: use another source", true); got != "blocked" {
 		t.Fatalf("hard failure kind = %q, want blocked", got)

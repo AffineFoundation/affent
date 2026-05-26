@@ -220,6 +220,10 @@ type DebugMetrics struct {
 	MemoryUpdateAdd            int            `json:"memory_update_add,omitempty"`
 	MemoryUpdateReplace        int            `json:"memory_update_replace,omitempty"`
 	MemoryUpdateRemove         int            `json:"memory_update_remove,omitempty"`
+	SessionSearchCalls         int            `json:"session_search_calls,omitempty"`
+	SessionSearchResults       int            `json:"session_search_results,omitempty"`
+	SessionSearchContextHits   int            `json:"session_search_context_hits,omitempty"`
+	SessionSearchMatchedTerms  int            `json:"session_search_matched_terms,omitempty"`
 	ContextCompactions         int            `json:"context_compactions"`
 	ReactiveContextCompactions int            `json:"reactive_context_compactions"`
 	ContextCompactionRemoved   int            `json:"context_compaction_removed_messages"`
@@ -541,6 +545,10 @@ func writeScenarioDebugArtifacts(res *BatchResult, scenario BatchScenario, stdou
 			MemoryUpdateAdd:            res.ToolStats.MemoryUpdateAdd,
 			MemoryUpdateReplace:        res.ToolStats.MemoryUpdateReplace,
 			MemoryUpdateRemove:         res.ToolStats.MemoryUpdateRemove,
+			SessionSearchCalls:         res.ToolStats.SessionSearchCalls,
+			SessionSearchResults:       res.ToolStats.SessionSearchResults,
+			SessionSearchContextHits:   res.ToolStats.SessionSearchContextHits,
+			SessionSearchMatchedTerms:  res.ToolStats.SessionSearchMatchedTerms,
 			ContextCompactions:         res.ContextCompactions.Count,
 			ReactiveContextCompactions: res.ContextCompactions.Reactive,
 			ContextCompactionRemoved:   res.ContextCompactions.RemovedMessages,

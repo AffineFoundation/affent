@@ -264,6 +264,10 @@ type ToolRuntimeStats struct {
 	MemoryUpdateAdd            int
 	MemoryUpdateReplace        int
 	MemoryUpdateRemove         int
+	SessionSearchCalls         int
+	SessionSearchResults       int
+	SessionSearchContextHits   int
+	SessionSearchMatchedTerms  int
 	ToolContextTruncated       int
 	ToolContextOmittedBytes    int
 }

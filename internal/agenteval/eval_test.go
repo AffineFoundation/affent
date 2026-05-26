@@ -82,7 +82,7 @@ func TestParseTraceFileReadsToolRequestsAndFinalText(t *testing.T) {
 		`{"type":"loop.decision","data":{"turn_id":"t1","decision_id":"d1","kind":"evidence_quality","trigger":"source_access_dynamic_partial","decision":"defer","confidence":"high","reason":"Dynamic widgets had no text values.","required_action":"Read browser network responses before citing metrics.","visible_in_ui":true}}`,
 		`{"type":"context.compacted","data":{"turn_id":"t1","before_messages":50,"after_messages":18,"removed_messages":32,"reactive":true,"reason":"context_overflow","summary_present":true,"summary_bytes":2048}}`,
 		`{"type":"message.done","data":{"text":"Conclusion: green","finish_reason":"stop"}}`,
-		`{"type":"turn.end","data":{"reason":"completed","tool_stats":{"tool_requests":2,"tool_name_canonicalized":1,"tool_args_repaired":1,"tool_repair_calls":1,"tool_repair_succeeded":1,"tool_repair_failed":0,"tool_repair_notes":2,"tool_repair_by_kind":{"tool_name":1,"alias_rename":1},"tool_failure_by_kind":{"invalid_args":1},"tool_errors":1,"tool_duration_ms":17,"loop_guard_interventions":1,"forced_no_tools":1,"source_access_dynamic_partial":1,"memory_updates":2,"memory_update_add":1,"memory_update_replace":1,"tool_context_truncated":2,"tool_context_omitted_bytes":8192}}}`,
+		`{"type":"turn.end","data":{"reason":"completed","tool_stats":{"tool_requests":2,"tool_name_canonicalized":1,"tool_args_repaired":1,"tool_repair_calls":1,"tool_repair_succeeded":1,"tool_repair_failed":0,"tool_repair_notes":2,"tool_repair_by_kind":{"tool_name":1,"alias_rename":1},"tool_failure_by_kind":{"invalid_args":1},"tool_errors":1,"tool_duration_ms":17,"loop_guard_interventions":1,"forced_no_tools":1,"source_access_dynamic_partial":1,"memory_updates":2,"memory_update_add":1,"memory_update_replace":1,"session_search_calls":1,"session_search_results":2,"session_search_context_hits":1,"session_search_matched_terms":2,"tool_context_truncated":2,"tool_context_omitted_bytes":8192}}}`,
 	}, "\n") + "\n"
 	if err := os.WriteFile(tracePath, []byte(body), 0o644); err != nil {
 		t.Fatal(err)
@@ -196,6 +196,9 @@ func TestParseTraceFileReadsToolRequestsAndFinalText(t *testing.T) {
 	}
 	if trace.ToolStats.MemoryUpdates != 2 || trace.ToolStats.MemoryUpdateAdd != 1 || trace.ToolStats.MemoryUpdateReplace != 1 || trace.ToolStats.MemoryUpdateRemove != 0 {
 		t.Fatalf("memory ToolStats = %+v", trace.ToolStats)
+	}
+	if trace.ToolStats.SessionSearchCalls != 1 || trace.ToolStats.SessionSearchResults != 2 || trace.ToolStats.SessionSearchContextHits != 1 || trace.ToolStats.SessionSearchMatchedTerms != 2 {
+		t.Fatalf("session search ToolStats = %+v", trace.ToolStats)
 	}
 	if got := trace.RawTypes["trace.meta"]; got != 1 {
 		t.Fatalf("RawTypes[trace.meta] = %d", got)
@@ -1015,6 +1018,16 @@ func assertSessionSearchDiagnosticsRequired(t *testing.T, scenario BatchScenario
 			t.Fatalf("%s RequiredToolResultText session_search = %#v, want %q", scenario.Name, scenario.RequiredToolResultText, want)
 		}
 	}
+	for field, min := range map[string]int{
+		"session_search_calls":         1,
+		"session_search_results":       1,
+		"session_search_context_hits":  1,
+		"session_search_matched_terms": 2,
+	} {
+		if scenario.RequiredToolStatsAtLeast[field] != min {
+			t.Fatalf("%s RequiredToolStatsAtLeast[%q] = %d, want %d", scenario.Name, field, scenario.RequiredToolStatsAtLeast[field], min)
+		}
+	}
 }
 
 func commandToolOrderContains(values []CommandToolOrderRequirement, want CommandToolOrderRequirement) bool {
@@ -1102,6 +1115,10 @@ func TestWriteScenarioDebugArtifactsIndexesTraceAndFinalText(t *testing.T) {
 			MemoryUpdates:              2,
 			MemoryUpdateAdd:            1,
 			MemoryUpdateReplace:        1,
+			SessionSearchCalls:         1,
+			SessionSearchResults:       2,
+			SessionSearchContextHits:   1,
+			SessionSearchMatchedTerms:  2,
 			ToolContextTruncated:       2,
 			ToolContextOmittedBytes:    8192,
 		},
@@ -1254,6 +1271,10 @@ func TestWriteScenarioDebugArtifactsIndexesTraceAndFinalText(t *testing.T) {
 		manifest.Metrics.MemoryUpdates != 2 ||
 		manifest.Metrics.MemoryUpdateAdd != 1 ||
 		manifest.Metrics.MemoryUpdateReplace != 1 ||
+		manifest.Metrics.SessionSearchCalls != 1 ||
+		manifest.Metrics.SessionSearchResults != 2 ||
+		manifest.Metrics.SessionSearchContextHits != 1 ||
+		manifest.Metrics.SessionSearchMatchedTerms != 2 ||
 		manifest.Metrics.ToolContextTruncated != 2 ||
 		manifest.Metrics.ToolContextOmittedBytes != 8192 ||
 		manifest.Metrics.ToolFailureByKind["dynamic_shell"] != 1 ||
@@ -1274,7 +1295,7 @@ func TestWriteScenarioDebugArtifactsIndexesTraceAndFinalText(t *testing.T) {
 	}
 	for _, want := range []string{
 		"# Affent Eval Timeline",
-		"metrics: tools=5 tool_errors=1 repaired=0 canonicalized=0 loop_guard=1 forced_no_tools=0 evidence=1/2_verified,network=1,partial=1,discovery=1 memory_updates=2(add:1,replace:1,remove:0) tool_context_trunc=2,omitted=8192 compactions=1,reactive=1,removed=12,summary_bytes=512 tokens=100/20",
+		"metrics: tools=5 tool_errors=1 repaired=0 canonicalized=0 loop_guard=1 forced_no_tools=0 evidence=1/2_verified,network=1,partial=1,discovery=1 memory_updates=2(add:1,replace:1,remove:0) session_search=calls:1,results:2,context:1,terms:2 tool_context_trunc=2,omitted=8192 compactions=1,reactive=1,removed=12,summary_bytes=512 tokens=100/20",
 		"## Runtime Surface",
 		"`web_fetch`",
 		"trace_deltas: `true`",

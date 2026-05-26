@@ -612,6 +612,10 @@ var toolStatsAccessors = map[string]func(ToolRuntimeStats) int64{
 	"memory_update_add":             func(s ToolRuntimeStats) int64 { return int64(s.MemoryUpdateAdd) },
 	"memory_update_replace":         func(s ToolRuntimeStats) int64 { return int64(s.MemoryUpdateReplace) },
 	"memory_update_remove":          func(s ToolRuntimeStats) int64 { return int64(s.MemoryUpdateRemove) },
+	"session_search_calls":          func(s ToolRuntimeStats) int64 { return int64(s.SessionSearchCalls) },
+	"session_search_results":        func(s ToolRuntimeStats) int64 { return int64(s.SessionSearchResults) },
+	"session_search_context_hits":   func(s ToolRuntimeStats) int64 { return int64(s.SessionSearchContextHits) },
+	"session_search_matched_terms":  func(s ToolRuntimeStats) int64 { return int64(s.SessionSearchMatchedTerms) },
 }
 
 func toolStatsField(stats ToolRuntimeStats, field string) (int64, bool) {

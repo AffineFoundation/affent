@@ -138,6 +138,13 @@ Scenario records describe one eval case:
   than factual evidence.
 - `source_access_network`: count of `SourceAccess:` results read from captured
   browser XHR/fetch evidence.
+- `session_search_calls`: count of dispatched `session_search` tool calls.
+- `session_search_results`: total prior-session hits reported by parsed
+  `session_search` JSON responses.
+- `session_search_context_hits`: count of `session_search` hits that included
+  adjacent transcript context.
+- `session_search_matched_terms`: count of unique matched query terms reported
+  across parsed `session_search` responses.
 - `tool_context_truncated`: count of tool results shortened before being fed
   back into the model conversation.
 - `tool_context_omitted_bytes`: total bytes omitted from tool results before
@@ -192,7 +199,10 @@ Summary records aggregate all scenario records from the same process:
   `tool_repair_failed`, `tool_repair_notes`, `tool_repair_by_kind`,
   `tool_failure_by_kind`, `loop_guard_interventions`, `forced_no_tools`,
   `source_access_results`, `source_access_verified`,
-  `source_access_discovery_only`, `source_access_network`, `tool_duration_ms`,
+  `source_access_discovery_only`, `source_access_network`,
+  `session_search_calls`, `session_search_results`,
+  `session_search_context_hits`, `session_search_matched_terms`,
+  `tool_duration_ms`,
   `tool_context_truncated`, `tool_context_omitted_bytes`.
 - Truncation totals: `tool_args_truncated`, `tool_args_omitted_bytes`,
   `tool_results_truncated`, `tool_results_omitted_bytes`,

@@ -158,6 +158,10 @@ func applyTraceEvent(t *Trace, pending map[string]int, typ string, data json.Raw
 					MemoryUpdateAdd:            p.ToolStats.MemoryUpdateAdd,
 					MemoryUpdateReplace:        p.ToolStats.MemoryUpdateReplace,
 					MemoryUpdateRemove:         p.ToolStats.MemoryUpdateRemove,
+					SessionSearchCalls:         p.ToolStats.SessionSearchCalls,
+					SessionSearchResults:       p.ToolStats.SessionSearchResults,
+					SessionSearchContextHits:   p.ToolStats.SessionSearchContextHits,
+					SessionSearchMatchedTerms:  p.ToolStats.SessionSearchMatchedTerms,
 					ToolContextTruncated:       p.ToolStats.ToolContextTruncated,
 					ToolContextOmittedBytes:    p.ToolStats.ToolContextOmittedBytes,
 				}

@@ -487,13 +487,17 @@ func TestBatchSummaryAggregatesRuntimeMetrics(t *testing.T) {
 		},
 		TurnEndReason: "completed",
 		ToolStats: agenteval.ToolRuntimeStats{
-			ToolArgsRepaired:        1,
-			ToolNameCanonicalized:   1,
-			ToolErrors:              0,
-			ToolDurationMS:          10,
-			LoopGuardInterventions:  1,
-			ToolContextTruncated:    1,
-			ToolContextOmittedBytes: 1024,
+			ToolArgsRepaired:          1,
+			ToolNameCanonicalized:     1,
+			ToolErrors:                0,
+			ToolDurationMS:            10,
+			LoopGuardInterventions:    1,
+			SessionSearchCalls:        1,
+			SessionSearchResults:      2,
+			SessionSearchContextHits:  1,
+			SessionSearchMatchedTerms: 2,
+			ToolContextTruncated:      1,
+			ToolContextOmittedBytes:   1024,
 		},
 		Repair: agenteval.ToolRepairStats{
 			Calls:          2,
@@ -622,6 +626,9 @@ func TestBatchSummaryAggregatesRuntimeMetrics(t *testing.T) {
 	if !strings.Contains(out.String(), "runtime_error_kinds=context_overflow:1,llm_timeout:2") {
 		t.Fatalf("summary output missing runtime error kind rollup:\n%s", out.String())
 	}
+	if !strings.Contains(out.String(), "session_search=calls:1,results:2,context:1,terms:2") {
+		t.Fatalf("summary output missing session search rollup:\n%s", out.String())
+	}
 	if !strings.Contains(out.String(), "runtime_surface=scenarios:2 runtime_capabilities=browser:2,web_fetch:2,web_search:1,workspace_partial:1 runtime_tools=browser_find:2,web_fetch:2,web_search:1") {
 		t.Fatalf("summary output missing runtime surface rollup:\n%s", out.String())
 	}
@@ -676,6 +683,9 @@ func TestBatchSummaryAggregatesRuntimeMetrics(t *testing.T) {
 	}
 	if !reflect.DeepEqual(summary.RuntimeErrorByKind, map[string]int{"llm_timeout": 2, "context_overflow": 1}) {
 		t.Fatalf("RuntimeErrorByKind = %#v", summary.RuntimeErrorByKind)
+	}
+	if summary.SessionSearchCalls != 1 || summary.SessionSearchResults != 2 || summary.SessionSearchContextHits != 1 || summary.SessionSearchMatchedTerms != 2 {
+		t.Fatalf("session search summary = calls:%d results:%d context:%d terms:%d", summary.SessionSearchCalls, summary.SessionSearchResults, summary.SessionSearchContextHits, summary.SessionSearchMatchedTerms)
 	}
 	if summary.RuntimeSurfaceScenarios != 2 {
 		t.Fatalf("RuntimeSurfaceScenarios = %d, want 2", summary.RuntimeSurfaceScenarios)
@@ -747,15 +757,19 @@ func TestPrintBatchResultJSONL(t *testing.T) {
 		ToolCalls:        4,
 		WorkspaceRemoved: true,
 		ToolStats: agenteval.ToolRuntimeStats{
-			ToolArgsRepaired:        2,
-			ToolNameCanonicalized:   1,
-			ToolErrors:              1,
-			ToolFailureByKind:       map[string]int{"blocked": 1},
-			ToolDurationMS:          75,
-			LoopGuardInterventions:  3,
-			ForcedNoTools:           1,
-			ToolContextTruncated:    2,
-			ToolContextOmittedBytes: 6144,
+			ToolArgsRepaired:          2,
+			ToolNameCanonicalized:     1,
+			ToolErrors:                1,
+			ToolFailureByKind:         map[string]int{"blocked": 1},
+			ToolDurationMS:            75,
+			LoopGuardInterventions:    3,
+			ForcedNoTools:             1,
+			SessionSearchCalls:        1,
+			SessionSearchResults:      2,
+			SessionSearchContextHits:  1,
+			SessionSearchMatchedTerms: 2,
+			ToolContextTruncated:      2,
+			ToolContextOmittedBytes:   6144,
 		},
 		ToolFailureExamples: map[string][]agenteval.ToolFailureExample{
 			"blocked": {
@@ -849,6 +863,10 @@ func TestPrintBatchResultJSONL(t *testing.T) {
 		"tool_repair_notes":                   float64(3),
 		"loop_guard_interventions":            float64(3),
 		"forced_no_tools":                     float64(1),
+		"session_search_calls":                float64(1),
+		"session_search_results":              float64(2),
+		"session_search_context_hits":         float64(1),
+		"session_search_matched_terms":        float64(2),
 		"tool_duration_ms":                    float64(75),
 		"tool_context_truncated":              float64(2),
 		"tool_context_omitted_bytes":          float64(6144),
@@ -1369,6 +1387,10 @@ func TestPrintBatchSummaryJSONL(t *testing.T) {
 		},
 		LoopGuardInterventions:     3,
 		ForcedNoTools:              1,
+		SessionSearchCalls:         1,
+		SessionSearchResults:       2,
+		SessionSearchContextHits:   1,
+		SessionSearchMatchedTerms:  2,
 		ToolDurationMS:             120,
 		ToolContextTruncated:       4,
 		ToolContextOmittedBytes:    12288,
@@ -1431,6 +1453,10 @@ func TestPrintBatchSummaryJSONL(t *testing.T) {
 		"tool_repair_notes":             float64(4),
 		"loop_guard_interventions":      float64(3),
 		"forced_no_tools":               float64(1),
+		"session_search_calls":          float64(1),
+		"session_search_results":        float64(2),
+		"session_search_context_hits":   float64(1),
+		"session_search_matched_terms":  float64(2),
 		"tool_duration_ms":              float64(120),
 		"tool_context_truncated":        float64(4),
 		"tool_context_omitted_bytes":    float64(12288),

@@ -122,6 +122,17 @@ func timelineMetricsSummary(res BatchResult) string {
 			res.ToolStats.MemoryUpdateRemove,
 		))
 	}
+	if res.ToolStats.SessionSearchCalls > 0 ||
+		res.ToolStats.SessionSearchResults > 0 ||
+		res.ToolStats.SessionSearchContextHits > 0 ||
+		res.ToolStats.SessionSearchMatchedTerms > 0 {
+		parts = append(parts, fmt.Sprintf("session_search=calls:%d,results:%d,context:%d,terms:%d",
+			res.ToolStats.SessionSearchCalls,
+			res.ToolStats.SessionSearchResults,
+			res.ToolStats.SessionSearchContextHits,
+			res.ToolStats.SessionSearchMatchedTerms,
+		))
+	}
 	if res.ToolStats.ToolContextTruncated > 0 || res.ToolStats.ToolContextOmittedBytes > 0 {
 		parts = append(parts, fmt.Sprintf("tool_context_trunc=%d,omitted=%d",
 			res.ToolStats.ToolContextTruncated,

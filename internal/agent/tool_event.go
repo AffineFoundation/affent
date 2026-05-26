@@ -118,6 +118,10 @@ func toolRuntimeStatsPtr(stats sse.ToolRuntimeStats) *sse.ToolRuntimeStats {
 		stats.MemoryUpdateAdd == 0 &&
 		stats.MemoryUpdateReplace == 0 &&
 		stats.MemoryUpdateRemove == 0 &&
+		stats.SessionSearchCalls == 0 &&
+		stats.SessionSearchResults == 0 &&
+		stats.SessionSearchContextHits == 0 &&
+		stats.SessionSearchMatchedTerms == 0 &&
 		stats.ToolContextTruncated == 0 &&
 		stats.ToolContextOmittedBytes == 0 {
 		return nil
@@ -201,6 +205,44 @@ func recordMemoryUpdateStats(stats *sse.ToolRuntimeStats, tool string, args json
 	case memoryActionRemove:
 		stats.MemoryUpdateRemove++
 	}
+}
+
+func recordSessionSearchStats(stats *sse.ToolRuntimeStats, tool, result string, isErr bool) {
+	if stats == nil || tool != SessionSearchToolName {
+		return
+	}
+	stats.SessionSearchCalls++
+	if isErr {
+		return
+	}
+	var resp struct {
+		Total   int `json:"total"`
+		Results []struct {
+			MatchedTerms    []string `json:"matched_terms"`
+			ContextIncluded bool     `json:"context_included"`
+		} `json:"results"`
+	}
+	if err := json.Unmarshal([]byte(result), &resp); err != nil {
+		return
+	}
+	results := resp.Total
+	if results <= 0 {
+		results = len(resp.Results)
+	}
+	stats.SessionSearchResults += results
+	matched := map[string]bool{}
+	for _, hit := range resp.Results {
+		if hit.ContextIncluded {
+			stats.SessionSearchContextHits++
+		}
+		for _, term := range hit.MatchedTerms {
+			term = strings.TrimSpace(strings.ToLower(term))
+			if term != "" {
+				matched[term] = true
+			}
+		}
+	}
+	stats.SessionSearchMatchedTerms += len(matched)
 }
 
 func toolFailureKind(result string) string {

@@ -219,6 +219,10 @@ type batchSummary struct {
 	MemoryUpdateAdd            int
 	MemoryUpdateReplace        int
 	MemoryUpdateRemove         int
+	SessionSearchCalls         int
+	SessionSearchResults       int
+	SessionSearchContextHits   int
+	SessionSearchMatchedTerms  int
 	ToolDurationMS             int64
 	ToolContextTruncated       int
 	ToolContextOmittedBytes    int
@@ -344,6 +348,10 @@ func (s *batchSummary) add(res agenteval.BatchResult) {
 	s.MemoryUpdateAdd += res.ToolStats.MemoryUpdateAdd
 	s.MemoryUpdateReplace += res.ToolStats.MemoryUpdateReplace
 	s.MemoryUpdateRemove += res.ToolStats.MemoryUpdateRemove
+	s.SessionSearchCalls += res.ToolStats.SessionSearchCalls
+	s.SessionSearchResults += res.ToolStats.SessionSearchResults
+	s.SessionSearchContextHits += res.ToolStats.SessionSearchContextHits
+	s.SessionSearchMatchedTerms += res.ToolStats.SessionSearchMatchedTerms
 	s.ToolDurationMS += res.ToolStats.ToolDurationMS
 	s.ToolContextTruncated += res.ToolStats.ToolContextTruncated
 	s.ToolContextOmittedBytes += res.ToolStats.ToolContextOmittedBytes
@@ -493,6 +501,14 @@ func printBatchSummary(w io.Writer, s batchSummary) {
 			s.MemoryUpdateAdd,
 			s.MemoryUpdateReplace,
 			s.MemoryUpdateRemove,
+		)
+	}
+	if hasBatchSessionSearchStats(s) {
+		fmt.Fprintf(w, " session_search=calls:%d,results:%d,context:%d,terms:%d",
+			s.SessionSearchCalls,
+			s.SessionSearchResults,
+			s.SessionSearchContextHits,
+			s.SessionSearchMatchedTerms,
 		)
 	}
 	if len(s.RuntimeErrorByKind) > 0 {
@@ -939,6 +955,10 @@ type batchResultRecord struct {
 	MemoryUpdateAdd            int                                        `json:"memory_update_add"`
 	MemoryUpdateReplace        int                                        `json:"memory_update_replace"`
 	MemoryUpdateRemove         int                                        `json:"memory_update_remove"`
+	SessionSearchCalls         int                                        `json:"session_search_calls,omitempty"`
+	SessionSearchResults       int                                        `json:"session_search_results,omitempty"`
+	SessionSearchContextHits   int                                        `json:"session_search_context_hits,omitempty"`
+	SessionSearchMatchedTerms  int                                        `json:"session_search_matched_terms,omitempty"`
 	ToolDurationMS             int64                                      `json:"tool_duration_ms"`
 	ToolContextTruncated       int                                        `json:"tool_context_truncated"`
 	ToolContextOmittedBytes    int                                        `json:"tool_context_omitted_bytes"`
@@ -1027,6 +1047,10 @@ type batchSummaryRecord struct {
 	MemoryUpdateAdd            int                                        `json:"memory_update_add"`
 	MemoryUpdateReplace        int                                        `json:"memory_update_replace"`
 	MemoryUpdateRemove         int                                        `json:"memory_update_remove"`
+	SessionSearchCalls         int                                        `json:"session_search_calls,omitempty"`
+	SessionSearchResults       int                                        `json:"session_search_results,omitempty"`
+	SessionSearchContextHits   int                                        `json:"session_search_context_hits,omitempty"`
+	SessionSearchMatchedTerms  int                                        `json:"session_search_matched_terms,omitempty"`
 	ToolDurationMS             int64                                      `json:"tool_duration_ms"`
 	ToolContextTruncated       int                                        `json:"tool_context_truncated"`
 	ToolContextOmittedBytes    int                                        `json:"tool_context_omitted_bytes"`
@@ -1138,6 +1162,10 @@ func printBatchResultJSONL(w io.Writer, meta evalJSONLMetadata, res agenteval.Ba
 		MemoryUpdateAdd:            res.ToolStats.MemoryUpdateAdd,
 		MemoryUpdateReplace:        res.ToolStats.MemoryUpdateReplace,
 		MemoryUpdateRemove:         res.ToolStats.MemoryUpdateRemove,
+		SessionSearchCalls:         res.ToolStats.SessionSearchCalls,
+		SessionSearchResults:       res.ToolStats.SessionSearchResults,
+		SessionSearchContextHits:   res.ToolStats.SessionSearchContextHits,
+		SessionSearchMatchedTerms:  res.ToolStats.SessionSearchMatchedTerms,
 		ToolDurationMS:             res.ToolStats.ToolDurationMS,
 		ToolContextTruncated:       res.ToolStats.ToolContextTruncated,
 		ToolContextOmittedBytes:    res.ToolStats.ToolContextOmittedBytes,
@@ -1299,6 +1327,10 @@ func printBatchSummaryJSONL(w io.Writer, meta evalJSONLMetadata, s batchSummary)
 		MemoryUpdateAdd:            s.MemoryUpdateAdd,
 		MemoryUpdateReplace:        s.MemoryUpdateReplace,
 		MemoryUpdateRemove:         s.MemoryUpdateRemove,
+		SessionSearchCalls:         s.SessionSearchCalls,
+		SessionSearchResults:       s.SessionSearchResults,
+		SessionSearchContextHits:   s.SessionSearchContextHits,
+		SessionSearchMatchedTerms:  s.SessionSearchMatchedTerms,
 		ToolDurationMS:             s.ToolDurationMS,
 		ToolContextTruncated:       s.ToolContextTruncated,
 		ToolContextOmittedBytes:    s.ToolContextOmittedBytes,
@@ -1629,6 +1661,13 @@ func hasBatchMemoryUpdateStats(stats batchSummary) bool {
 		stats.MemoryUpdateAdd > 0 ||
 		stats.MemoryUpdateReplace > 0 ||
 		stats.MemoryUpdateRemove > 0
+}
+
+func hasBatchSessionSearchStats(stats batchSummary) bool {
+	return stats.SessionSearchCalls > 0 ||
+		stats.SessionSearchResults > 0 ||
+		stats.SessionSearchContextHits > 0 ||
+		stats.SessionSearchMatchedTerms > 0
 }
 
 func failureKind(failure string) string {

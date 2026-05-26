@@ -229,6 +229,13 @@ diagnostics.
 - `source_access_network`: count of `SourceAccess:` results read from captured
   browser XHR/fetch evidence (`browser_network_url` or
   `source_method=network_xhr_fetch`).
+- `session_search_calls`: count of dispatched `session_search` tool calls.
+- `session_search_results`: total prior-session hits reported by parsed
+  `session_search` JSON responses.
+- `session_search_context_hits`: count of `session_search` hits that included
+  adjacent transcript context.
+- `session_search_matched_terms`: count of unique matched query terms reported
+  across parsed `session_search` responses.
 - `tool_context_truncated`: count of tool results shortened before being fed
   back into the model conversation. This is separate from
   `tool.result.result_truncated`, which reports event-payload truncation.

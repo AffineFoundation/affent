@@ -80,6 +80,10 @@ type Session struct {
 	memoryUpdateAdd        atomic.Int64
 	memoryUpdateReplace    atomic.Int64
 	memoryUpdateRemove     atomic.Int64
+	sessionSearchCalls     atomic.Int64
+	sessionSearchResults   atomic.Int64
+	sessionSearchContext   atomic.Int64
+	sessionSearchTerms     atomic.Int64
 	toolContextTruncated   atomic.Int64
 	toolContextOmitted     atomic.Int64
 	toolRepairMu           sync.Mutex
@@ -1457,6 +1461,10 @@ type ToolStatsSnapshot struct {
 	MemoryUpdateAdd        int64            `json:"memory_update_add"`
 	MemoryUpdateReplace    int64            `json:"memory_update_replace"`
 	MemoryUpdateRemove     int64            `json:"memory_update_remove"`
+	SessionSearchCalls     int64            `json:"session_search_calls"`
+	SessionSearchResults   int64            `json:"session_search_results"`
+	SessionSearchContext   int64            `json:"session_search_context_hits"`
+	SessionSearchTerms     int64            `json:"session_search_matched_terms"`
 	ToolContextTruncated   int64            `json:"tool_context_truncated"`
 	ToolContextOmitted     int64            `json:"tool_context_omitted_bytes"`
 }
@@ -1492,6 +1500,10 @@ func (s *Session) ToolStatsSnapshot() ToolStatsSnapshot {
 		MemoryUpdateAdd:        s.memoryUpdateAdd.Load(),
 		MemoryUpdateReplace:    s.memoryUpdateReplace.Load(),
 		MemoryUpdateRemove:     s.memoryUpdateRemove.Load(),
+		SessionSearchCalls:     s.sessionSearchCalls.Load(),
+		SessionSearchResults:   s.sessionSearchResults.Load(),
+		SessionSearchContext:   s.sessionSearchContext.Load(),
+		SessionSearchTerms:     s.sessionSearchTerms.Load(),
 		ToolContextTruncated:   s.toolContextTruncated.Load(),
 		ToolContextOmitted:     s.toolContextOmitted.Load(),
 	}
@@ -1610,6 +1622,10 @@ func (s *Session) addToolStats(stats sse.ToolRuntimeStats) {
 	s.memoryUpdateAdd.Add(int64(stats.MemoryUpdateAdd))
 	s.memoryUpdateReplace.Add(int64(stats.MemoryUpdateReplace))
 	s.memoryUpdateRemove.Add(int64(stats.MemoryUpdateRemove))
+	s.sessionSearchCalls.Add(int64(stats.SessionSearchCalls))
+	s.sessionSearchResults.Add(int64(stats.SessionSearchResults))
+	s.sessionSearchContext.Add(int64(stats.SessionSearchContextHits))
+	s.sessionSearchTerms.Add(int64(stats.SessionSearchMatchedTerms))
 	s.toolContextTruncated.Add(int64(stats.ToolContextTruncated))
 	s.toolContextOmitted.Add(int64(stats.ToolContextOmittedBytes))
 	if len(stats.ToolRepairByKind) > 0 {

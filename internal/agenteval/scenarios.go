@@ -1164,6 +1164,12 @@ func sessionHistoryRecallScenario() BatchScenario {
 				`"coast"`,
 			},
 		},
+		RequiredToolStatsAtLeast: map[string]int{
+			"session_search_calls":         1,
+			"session_search_results":       1,
+			"session_search_context_hits":  1,
+			"session_search_matched_terms": 2,
+		},
 		RequiredFinalText:  []string{"HIST-STOCK-44", "inventory-drag", "market-alpha"},
 		ForbiddenFinalText: []string{"HIST-OLD-00"},
 		ForbiddenTools:     []string{"memory", "read_file", "shell", "write_file", "edit_file"},
