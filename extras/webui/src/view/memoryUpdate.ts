@@ -1,4 +1,4 @@
-import type { ToolCallState } from "../store/sessionState";
+import type { ToolCallState, TurnState } from "../store/sessionState";
 
 export type MemoryUpdateAction = "add" | "replace" | "remove";
 
@@ -35,6 +35,13 @@ export function describeMemoryUpdate(call: ToolCallState): MemoryUpdateSummary |
     location: `${target}:${topic}`,
     preview,
   };
+}
+
+export function memoryUpdatesForTurn(turn: TurnState): MemoryUpdateSummary[] {
+  return turn.toolCalls.flatMap((call) => {
+    const summary = describeMemoryUpdate(call);
+    return summary ? [summary] : [];
+  });
 }
 
 function parseMemoryResponse(raw: string | undefined): { ok?: boolean; target?: string; topic?: string } | undefined {

@@ -9,6 +9,7 @@ import { buildTurnActivity, type TurnActivityBriefRow, type TurnActivityEvidence
 import { buildTurnBoundaryView } from "../view/turnBoundary";
 import { buildTurnWorkSummaryWithOptions, selectHeadlineWorkSummaryItems, type TurnWorkSummary, type WorkSummaryItem } from "../view/turnWorkSummary";
 import { artifactCountLabel, artifactSizeLabel, buildTurnArtifacts, type TurnArtifact } from "../view/turnArtifacts";
+import { memoryUpdatesForTurn, type MemoryUpdateSummary } from "../view/memoryUpdate";
 import { CopyButton } from "./CopyButton";
 import { CopyMenu } from "./CopyMenu";
 import { ExecutionTree } from "./ExecutionTree";
@@ -53,6 +54,7 @@ export function TurnCard({
   const continuedIntoTurnNumber = continuedAfterLimit ? turnNumber + 1 : undefined;
   const workSummary = buildTurnWorkSummaryWithOptions(turn, { continuedAfterLimit });
   const artifacts = buildTurnArtifacts(turn);
+  const memoryUpdates = memoryUpdatesForTurn(turn);
   const activity = buildTurnActivity(turn, { continuedAfterLimit, continuedIntoTurnNumber });
   const fallbackAnswer = buildFallbackAnswer(turn, { continuedAfterLimit });
   const boundary = buildTurnBoundaryView({
@@ -141,6 +143,7 @@ export function TurnCard({
             <RunningAnswerBubble turn={turn} summary={workSummary} />
           ) : null}
           {activity ? <AgentActivity activity={activity} isLatest={isLatest} searchQuery={searchQuery} onUseAsDraft={onUseAsDraft} /> : null}
+          {memoryUpdates.length > 0 ? <MemoryUpdateStrip updates={memoryUpdates} searchQuery={searchQuery} /> : null}
           {fallbackAnswer ? (
             <FallbackAnswerBubble answer={fallbackAnswer} searchQuery={searchQuery} onUseAsDraft={onUseAsDraft} />
           ) : null}
@@ -174,6 +177,22 @@ export function TurnCard({
           {turn.error ? <ErrorBlock error={turn.error} onUseAsDraft={onUseAsDraft} /> : null}
         </div>
       </div>
+    </section>
+  );
+}
+
+function MemoryUpdateStrip({ updates, searchQuery }: { updates: readonly MemoryUpdateSummary[]; searchQuery?: string }) {
+  return (
+    <section className="memory-update-strip" data-testid="memory-update-strip" aria-label="Memory updates">
+      {updates.map((update, index) => (
+        <div className="memory-update-strip-row" key={`${update.action}-${update.location}-${index}`}>
+          <span className="memory-update-strip-label">{update.label}</span>
+          <code>{update.location}</code>
+          <span className="memory-update-strip-preview">
+            <HighlightText text={update.preview} query={searchQuery} />
+          </span>
+        </div>
+      ))}
     </section>
   );
 }

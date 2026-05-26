@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
-import type { ToolCallState } from "../store/sessionState";
-import { describeMemoryUpdate } from "./memoryUpdate";
+import type { ToolCallState, TurnState } from "../store/sessionState";
+import { describeMemoryUpdate, memoryUpdatesForTurn } from "./memoryUpdate";
 
 describe("describeMemoryUpdate", () => {
   it("summarizes memory additions from tool args", () => {
@@ -49,7 +49,30 @@ describe("describeMemoryUpdate", () => {
 
     expect(describeMemoryUpdate(memoryCall({ action: "add", content: "missing result" }, null))).toBeUndefined();
   });
+
+  it("collects every confirmed memory update in a turn", () => {
+    expect(memoryUpdatesForTurn(turn([
+      memoryCall({ action: "add", topic: "markets", content: "Remember market source policy." }, { ok: true, target: "memory", topic: "markets" }),
+      memoryCall({ action: "search", query: "markets" }),
+      memoryCall({ action: "remove", topic: "old", old_text: "stale note" }, { ok: true, target: "memory", topic: "old" }),
+    ])).map((summary) => summary.preview)).toEqual([
+      "Remember market source policy.",
+      "stale note",
+    ]);
+  });
 });
+
+function turn(toolCalls: ToolCallState[]): TurnState {
+  return {
+    id: "t1",
+    status: "completed",
+    thinkingText: "",
+    thinkingStreaming: false,
+    assistantText: "",
+    messageStreaming: false,
+    toolCalls,
+  };
+}
 
 function memoryCall(args: Record<string, unknown>, response: Record<string, unknown> | null = { ok: true }): ToolCallState {
   return {

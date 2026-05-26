@@ -1669,6 +1669,54 @@ describe("Timeline", () => {
     expect(toolDetails).not.toHaveTextContent("2 actions");
   });
 
+  it("keeps confirmed memory update content visible on historical turns", () => {
+    renderTimeline([
+      { id: 0, type: "turn.start", data: { turn_id: "t1" } },
+      { id: 1, type: "user.message", data: { turn_id: "t1", text: "remember the market reporting convention" } },
+      {
+        id: 2,
+        type: "tool.request",
+        data: {
+          turn_id: "t1",
+          call_id: "mem-add",
+          tool: "memory",
+          args: {
+            action: "add",
+            target: "memory",
+            topic: "markets",
+            content: "Market reports must include MEM-STOCK-73 and source-led confidence.",
+          },
+          args_truncated: false,
+          args_bytes: 116,
+          args_omitted_bytes: 0,
+          args_cap_bytes: 8192,
+        },
+      },
+      {
+        id: 3,
+        type: "tool.result",
+        data: {
+          call_id: "mem-add",
+          exit_code: 0,
+          duration_ms: 4,
+          result_summary: "{\"ok\":true,\"target\":\"memory\",\"topic\":\"markets\",\"message\":\"added\"}",
+          result: "{\"ok\":true,\"target\":\"memory\",\"topic\":\"markets\",\"message\":\"added\"}",
+          result_truncated: false,
+          result_bytes: 64,
+          result_omitted_bytes: 0,
+          result_cap_bytes: 8192,
+        },
+      },
+      { id: 4, type: "turn.end", data: { turn_id: "t1", reason: "completed", tool_stats: { tool_requests: 1, memory_updates: 1, memory_update_add: 1 } } },
+      ...messageOnlyTurn,
+    ]);
+
+    expect(screen.queryByTestId("work-thread")).toBeNull();
+    expect(screen.getByTestId("memory-update-strip")).toHaveTextContent("Saved memory");
+    expect(screen.getByTestId("memory-update-strip")).toHaveTextContent("memory:markets");
+    expect(screen.getByTestId("memory-update-strip")).toHaveTextContent("MEM-STOCK-73");
+  });
+
   it("renders compact web evidence while keeping the full source available", () => {
     renderTimeline(webFetchTurn);
 
