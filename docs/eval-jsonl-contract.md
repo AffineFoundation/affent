@@ -232,6 +232,10 @@ Scenario records describe one eval case:
   `clear`, or `unknown`) to call count.
 - `plan_errors`: optional count of plan tool calls whose runtime tool exit code
   was non-zero.
+- `plan_examples`: optional bounded examples of persisted-plan tool activity.
+  Each sample includes tool index, call id, action, updated step index/status,
+  compact step text, evidence refs, note preview, result progress/current step,
+  and a compact error/result message when relevant.
 - `verifier_command`: verifier shell command, when configured.
 - `verifier_ran`: whether a verifier command ran.
 - `verifier_ok`: whether the verifier exited successfully.
@@ -297,9 +301,9 @@ Summary records aggregate all scenario records from the same process:
   `focused_task_errors`, `focused_task_error_rate`, `subagent_calls`,
   `subagent_by_mode`, `subagent_errors`, and `subagent_error_rate`. These
   fields are omitted when no delegated tool calls were observed.
-- Plan totals: `plan_calls`, `plan_by_action`, `plan_errors`, and
-  `plan_error_rate`. These fields are omitted when no plan tool calls were
-  observed.
+- Plan totals: `plan_calls`, `plan_by_action`, `plan_errors`,
+  `plan_examples`, and `plan_error_rate`. These fields are omitted when no plan
+  tool calls were observed.
 - Verifier totals: `verifier_runs`, `verifier_passed`, `verifier_failed`,
   `verifier_output_truncated`, `verifier_output_omitted_bytes`.
 - Trace versions: `trace_schema_versions`.

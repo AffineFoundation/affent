@@ -559,6 +559,7 @@ type batchSummary struct {
 	PlanCalls    int
 	PlanByAction map[string]int
 	PlanErrors   int
+	PlanExamples []agenteval.PlanExample
 }
 
 func (s *batchSummary) add(res agenteval.BatchResult) {
@@ -733,6 +734,7 @@ func (s *batchSummary) add(res agenteval.BatchResult) {
 		}
 		s.PlanByAction[k] += v
 	}
+	s.PlanExamples = appendPlanExamples(s.PlanExamples, res.PlanExamples, batchSummaryExamplesPerKind)
 	for _, failure := range res.Failures {
 		kind := failureKind(failure)
 		if s.FailureKinds == nil {
@@ -1074,6 +1076,7 @@ func printBatchSummary(w io.Writer, s batchSummary) {
 	printRuntimeErrorExampleLines(w, s.RuntimeErrorExamples, "")
 	printLoopDecisionExampleLines(w, s.LoopDecisionExamples, "")
 	printSessionSearchExampleLines(w, s.SessionSearchExamples, "")
+	printPlanExampleLines(w, s.PlanExamples, "")
 	printExpectationCapabilityFailureExampleLines(w, s.ExpectationCapabilityFailureExamples, "")
 }
 
@@ -1468,6 +1471,37 @@ func printSessionSearchExampleLines(w io.Writer, examples []agenteval.SessionSea
 		}
 		if ex.Message != "" {
 			fmt.Fprintf(w, " message=%q", ex.Message)
+		}
+		fmt.Fprintln(w)
+	}
+}
+
+func printPlanExampleLines(w io.Writer, examples []agenteval.PlanExample, indent string) {
+	for _, ex := range examples {
+		fmt.Fprintf(w, "%splan_example: action=%s", indent, ex.Action)
+		if ex.Index > 0 {
+			fmt.Fprintf(w, " index=%d", ex.Index)
+		}
+		if ex.Status != "" {
+			fmt.Fprintf(w, " status=%s", ex.Status)
+		}
+		if ex.TotalSteps > 0 {
+			fmt.Fprintf(w, " progress=%d/%d", ex.CompletedSteps, ex.TotalSteps)
+		}
+		if ex.CurrentStepIndex > 0 {
+			fmt.Fprintf(w, " current=%d:%s", ex.CurrentStepIndex, ex.CurrentStepStatus)
+		}
+		if ex.StepText != "" {
+			fmt.Fprintf(w, " step=%q", ex.StepText)
+		}
+		if len(ex.Evidence) > 0 {
+			fmt.Fprintf(w, " evidence=%s", strings.Join(ex.Evidence, ","))
+		}
+		if ex.Error {
+			fmt.Fprintf(w, " error=true")
+		}
+		if ex.ResultMessage != "" {
+			fmt.Fprintf(w, " message=%q", ex.ResultMessage)
 		}
 		fmt.Fprintln(w)
 	}
@@ -1876,9 +1910,10 @@ type batchResultRecord struct {
 
 	// Per-scenario plan-tool breakdown. Fields are omitted from the
 	// JSONL when the scenario did not call the plan tool.
-	PlanCalls    int            `json:"plan_calls,omitempty"`
-	PlanByAction map[string]int `json:"plan_by_action,omitempty"`
-	PlanErrors   int            `json:"plan_errors,omitempty"`
+	PlanCalls    int                     `json:"plan_calls,omitempty"`
+	PlanByAction map[string]int          `json:"plan_by_action,omitempty"`
+	PlanErrors   int                     `json:"plan_errors,omitempty"`
+	PlanExamples []agenteval.PlanExample `json:"plan_examples,omitempty"`
 }
 
 type batchSummaryRecord struct {
@@ -2015,9 +2050,10 @@ type batchSummaryRecord struct {
 	SubagentErrors    int            `json:"subagent_errors,omitempty"`
 
 	// Per-batch plan-tool aggregates. Omitted when no scenario used plan.
-	PlanCalls    int            `json:"plan_calls,omitempty"`
-	PlanByAction map[string]int `json:"plan_by_action,omitempty"`
-	PlanErrors   int            `json:"plan_errors,omitempty"`
+	PlanCalls    int                     `json:"plan_calls,omitempty"`
+	PlanByAction map[string]int          `json:"plan_by_action,omitempty"`
+	PlanErrors   int                     `json:"plan_errors,omitempty"`
+	PlanExamples []agenteval.PlanExample `json:"plan_examples,omitempty"`
 }
 
 type runtimeSurfaceSummary struct {
@@ -2139,6 +2175,7 @@ func printBatchResultJSONL(w io.Writer, meta evalJSONLMetadata, res agenteval.Ba
 		PlanCalls:                        res.Plan.Calls,
 		PlanByAction:                     cloneStringIntMap(res.Plan.ByAction),
 		PlanErrors:                       res.Plan.Errors,
+		PlanExamples:                     clonePlanExamples(res.PlanExamples),
 	})
 }
 
@@ -2353,6 +2390,7 @@ func printBatchSummaryJSONL(w io.Writer, meta evalJSONLMetadata, s batchSummary,
 		PlanCalls:                            s.PlanCalls,
 		PlanByAction:                         cloneStringIntMap(s.PlanByAction),
 		PlanErrors:                           s.PlanErrors,
+		PlanExamples:                         clonePlanExamples(s.PlanExamples),
 	})
 }
 
@@ -2516,6 +2554,20 @@ func cloneSessionSearchExamples(in []agenteval.SessionSearchExample) []agenteval
 	return out
 }
 
+func clonePlanExamples(in []agenteval.PlanExample) []agenteval.PlanExample {
+	if len(in) == 0 {
+		return nil
+	}
+	out := make([]agenteval.PlanExample, 0, len(in))
+	for _, ex := range in {
+		if len(ex.Evidence) > 0 {
+			ex.Evidence = append([]string(nil), ex.Evidence...)
+		}
+		out = append(out, ex)
+	}
+	return out
+}
+
 func cloneToolTruncationExamples(in []agenteval.ToolTruncationExample) []agenteval.ToolTruncationExample {
 	if len(in) == 0 {
 		return nil
@@ -2573,6 +2625,22 @@ func appendSessionSearchExamples(dst, src []agenteval.SessionSearchExample, limi
 		}
 		if len(ex.MatchedTerms) > 0 {
 			ex.MatchedTerms = append([]string(nil), ex.MatchedTerms...)
+		}
+		dst = append(dst, ex)
+	}
+	return dst
+}
+
+func appendPlanExamples(dst, src []agenteval.PlanExample, limit int) []agenteval.PlanExample {
+	if limit <= 0 || len(dst) >= limit {
+		return dst
+	}
+	for _, ex := range src {
+		if len(dst) >= limit {
+			break
+		}
+		if len(ex.Evidence) > 0 {
+			ex.Evidence = append([]string(nil), ex.Evidence...)
 		}
 		dst = append(dst, ex)
 	}
@@ -2814,6 +2882,7 @@ func printBatchResult(w io.Writer, res agenteval.BatchResult) {
 	printRuntimeErrorExampleLines(w, res.RuntimeErrorExamples, "  ")
 	printLoopDecisionExampleLines(w, res.LoopDecisionStats.Examples, "  ")
 	printSessionSearchExampleLines(w, res.SessionSearchExamples, "  ")
+	printPlanExampleLines(w, res.PlanExamples, "  ")
 }
 
 func retainedDebugPath(path string, workspaceRemoved bool) string {

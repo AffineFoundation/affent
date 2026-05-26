@@ -631,6 +631,19 @@ func TestPrintBatchResultIncludesTraceMetrics(t *testing.T) {
 			ByAction: map[string]int{"set": 1, "update": 2},
 			Errors:   1,
 		},
+		PlanExamples: []agenteval.PlanExample{{
+			ToolIndex:         3,
+			CallID:            "plan-print-1",
+			Action:            "update",
+			Index:             2,
+			Status:            "completed",
+			StepText:          "verify browser evidence",
+			Evidence:          []string{"go test ./cmd/affenteval"},
+			TotalSteps:        3,
+			CompletedSteps:    2,
+			CurrentStepIndex:  3,
+			CurrentStepStatus: "pending",
+		}},
 		Usage: agenteval.Usage{InputTokens: 100, OutputTokens: 25},
 	})
 	got := out.String()
@@ -647,6 +660,7 @@ func TestPrintBatchResultIncludesTraceMetrics(t *testing.T) {
 		"hint[llm_timeout]",
 		"runtime_error_example[llm_timeout]: LLM llm_stream timed out after 4m0s",
 		"loop_decision_example[evidence_quality]: decision=defer trigger=source_access_dynamic_partial confidence=high reason=dynamic widgets lacked text action=read browser network responses",
+		`plan_example: action=update index=2 status=completed progress=2/3 current=3:pending step="verify browser evidence" evidence=go test ./cmd/affenteval`,
 	} {
 		if !strings.Contains(got, want) {
 			t.Fatalf("output missing %q:\n%s", want, got)
@@ -814,6 +828,19 @@ func TestBatchSummaryAggregatesRuntimeMetrics(t *testing.T) {
 			Calls:    1,
 			ByAction: map[string]int{"set": 1},
 		},
+		PlanExamples: []agenteval.PlanExample{{
+			ToolIndex:         2,
+			CallID:            "plan-1",
+			Action:            "update",
+			Index:             2,
+			Status:            "completed",
+			StepText:          "verify browser evidence",
+			Evidence:          []string{"go test ./cmd/affenteval"},
+			TotalSteps:        3,
+			CompletedSteps:    2,
+			CurrentStepIndex:  3,
+			CurrentStepStatus: "pending",
+		}},
 		RuntimeSurface: &sse.RuntimeSurfacePayload{
 			ToolCount: 2,
 			Tools: []sse.RuntimeSurfaceTool{
@@ -1026,6 +1053,9 @@ func TestBatchSummaryAggregatesRuntimeMetrics(t *testing.T) {
 	if !strings.Contains(out.String(), "plan=calls:3,errors:1 plan_by_action=set:1,update:2") {
 		t.Fatalf("summary output missing plan rollup:\n%s", out.String())
 	}
+	if !strings.Contains(out.String(), `plan_example: action=update index=2 status=completed progress=2/3 current=3:pending step="verify browser evidence" evidence=go test ./cmd/affenteval`) {
+		t.Fatalf("summary output missing plan example:\n%s", out.String())
+	}
 	if summary.TraceSchemaVersions[1] != 2 {
 		t.Fatalf("TraceSchemaVersions = %#v, want version 1 count 2", summary.TraceSchemaVersions)
 	}
@@ -1093,6 +1123,9 @@ func TestBatchSummaryAggregatesRuntimeMetrics(t *testing.T) {
 	}
 	if !reflect.DeepEqual(summary.PlanByAction, map[string]int{"set": 1, "update": 2}) {
 		t.Fatalf("PlanByAction = %#v", summary.PlanByAction)
+	}
+	if len(summary.PlanExamples) != 1 || summary.PlanExamples[0].CallID != "plan-1" || summary.PlanExamples[0].StepText != "verify browser evidence" {
+		t.Fatalf("PlanExamples = %#v", summary.PlanExamples)
 	}
 	if summary.ExpectationScenarios != 2 {
 		t.Fatalf("ExpectationScenarios = %d, want 2", summary.ExpectationScenarios)
@@ -1345,6 +1378,19 @@ func TestPrintBatchResultJSONL(t *testing.T) {
 			ByAction: map[string]int{"set": 1, "update": 1},
 			Errors:   1,
 		},
+		PlanExamples: []agenteval.PlanExample{{
+			ToolIndex:         4,
+			CallID:            "plan-jsonl-1",
+			Action:            "update",
+			Index:             2,
+			Status:            "completed",
+			StepText:          "verify browser evidence",
+			Evidence:          []string{"go test ./cmd/affenteval"},
+			TotalSteps:        3,
+			CompletedSteps:    2,
+			CurrentStepIndex:  3,
+			CurrentStepStatus: "pending",
+		}},
 		Verifier: agenteval.VerifierResult{
 			Command:            "go test ./...",
 			Ran:                true,
@@ -1628,6 +1674,20 @@ func TestPrintBatchResultJSONL(t *testing.T) {
 	}
 	if planByAction["set"] != float64(1) || planByAction["update"] != float64(1) {
 		t.Fatalf("plan_by_action = %#v", planByAction)
+	}
+	planExamples, ok := got["plan_examples"].([]any)
+	if !ok || len(planExamples) != 1 {
+		t.Fatalf("plan_examples = %#v\njson=%s", got["plan_examples"], out.String())
+	}
+	planExample, ok := planExamples[0].(map[string]any)
+	if !ok ||
+		planExample["call_id"] != "plan-jsonl-1" ||
+		planExample["action"] != "update" ||
+		planExample["index"] != float64(2) ||
+		planExample["status"] != "completed" ||
+		planExample["step_text"] != "verify browser evidence" ||
+		!jsonArrayContainsString(planExample["evidence"], "go test ./cmd/affenteval") {
+		t.Fatalf("plan_example = %#v\njson=%s", planExamples[0], out.String())
 	}
 }
 
@@ -2187,6 +2247,19 @@ func TestPrintBatchSummaryJSONL(t *testing.T) {
 		PlanCalls:                3,
 		PlanByAction:             map[string]int{"set": 1, "update": 2},
 		PlanErrors:               1,
+		PlanExamples: []agenteval.PlanExample{{
+			ToolIndex:         4,
+			CallID:            "summary-plan-1",
+			Action:            "update",
+			Index:             2,
+			Status:            "completed",
+			StepText:          "verify browser evidence",
+			Evidence:          []string{"go test ./cmd/affenteval"},
+			TotalSteps:        3,
+			CompletedSteps:    2,
+			CurrentStepIndex:  3,
+			CurrentStepStatus: "pending",
+		}},
 	}, nil)
 
 	var got map[string]any
@@ -2509,6 +2582,18 @@ func TestPrintBatchSummaryJSONL(t *testing.T) {
 	}
 	if planByAction["set"] != float64(1) || planByAction["update"] != float64(2) {
 		t.Fatalf("plan_by_action = %#v", planByAction)
+	}
+	planExamples, ok := got["plan_examples"].([]any)
+	if !ok || len(planExamples) != 1 {
+		t.Fatalf("plan_examples = %#v\njson=%s", got["plan_examples"], out.String())
+	}
+	planExample, ok := planExamples[0].(map[string]any)
+	if !ok ||
+		planExample["call_id"] != "summary-plan-1" ||
+		planExample["action"] != "update" ||
+		planExample["step_text"] != "verify browser evidence" ||
+		!jsonArrayContainsString(planExample["evidence"], "go test ./cmd/affenteval") {
+		t.Fatalf("plan_example = %#v\njson=%s", planExamples[0], out.String())
 	}
 }
 

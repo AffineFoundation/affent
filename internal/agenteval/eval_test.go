@@ -1239,7 +1239,7 @@ func TestWriteScenarioDebugArtifactsIndexesTraceAndFinalText(t *testing.T) {
 		RunExitCode:      3,
 		TraceDeltas:      true,
 		TurnEndReason:    "completed",
-		ToolCalls:        6,
+		ToolCalls:        7,
 		Repair:           ToolRepairStats{Calls: 1, SucceededCalls: 1, Notes: 2, ByKind: map[string]int{"tool_name": 1, "alias_rename": 1}},
 		ToolFailureExamples: map[string][]ToolFailureExample{
 			"dynamic_shell": {{
@@ -1380,6 +1380,19 @@ func TestWriteScenarioDebugArtifactsIndexesTraceAndFinalText(t *testing.T) {
 			Tool:     "session_search",
 			Args:     map[string]any{"query": "Alpha Coast", "top_k": 3},
 			Result:   `{"query":"Alpha Coast","total":2,"results":[{"session_id":"market-alpha","turn_idx":4,"role":"assistant","snippet":"history marker ALPHA-COAST risk label elevated","score":2.5,"matched_terms":["alpha","coast"],"context_included":true},{"session_id":"market-beta","turn_idx":2,"role":"user","snippet":"older Alpha note without the current risk label","score":1,"matched_terms":["alpha"],"context_included":false}]}`,
+			ExitCode: 0,
+		}, {
+			TurnID: "turn-debug",
+			CallID: "call-7",
+			Tool:   "plan",
+			Args: map[string]any{
+				"action":   "update",
+				"index":    float64(2),
+				"status":   "completed",
+				"evidence": []any{"go test ./internal/agenteval"},
+				"note":     "verified browser evidence step",
+			},
+			Result:   `{"version":1,"message":"updated step 2","steps":[{"text":"inspect dynamic dashboard","status":"completed"},{"text":"verify browser network evidence","status":"completed","evidence":["go test ./internal/agenteval"],"note":"verified browser evidence step"},{"text":"summarize findings","status":"pending"}]}`,
 			ExitCode: 0,
 		}},
 		LoopDecisions: []LoopDecision{{
@@ -1612,6 +1625,17 @@ func TestWriteScenarioDebugArtifactsIndexesTraceAndFinalText(t *testing.T) {
 		!strings.Contains(manifest.SessionSearchExamples[0].SnippetPreview, "history marker") {
 		t.Fatalf("manifest session search examples = %+v", manifest.SessionSearchExamples)
 	}
+	if len(manifest.PlanExamples) != 1 ||
+		manifest.PlanExamples[0].ToolIndex != 7 ||
+		manifest.PlanExamples[0].CallID != "call-7" ||
+		manifest.PlanExamples[0].Action != "update" ||
+		manifest.PlanExamples[0].Index != 2 ||
+		manifest.PlanExamples[0].Status != "completed" ||
+		manifest.PlanExamples[0].StepText != "verify browser network evidence" ||
+		manifest.PlanExamples[0].CurrentStep != "summarize findings" ||
+		!reflect.DeepEqual(manifest.PlanExamples[0].Evidence, []string{"go test ./internal/agenteval"}) {
+		t.Fatalf("manifest plan examples = %+v", manifest.PlanExamples)
+	}
 	if len(manifest.ToolTruncationExamples) != 1 ||
 		manifest.ToolTruncationExamples[0].ToolIndex != 1 ||
 		manifest.ToolTruncationExamples[0].CallID != "call-1" ||
@@ -1636,7 +1660,7 @@ func TestWriteScenarioDebugArtifactsIndexesTraceAndFinalText(t *testing.T) {
 		manifest.ChildTranscripts[1].Path != ".affentctl/subagents/debug-session/subagent_beta.jsonl" {
 		t.Fatalf("manifest child transcript refs = %+v", manifest.ChildTranscripts)
 	}
-	if manifest.Metrics.ToolCalls != 6 ||
+	if manifest.Metrics.ToolCalls != 7 ||
 		manifest.Metrics.ToolErrors != 1 ||
 		manifest.Metrics.LoopGuardInterventions != 1 ||
 		manifest.Metrics.SourceAccessResults != 2 ||
@@ -1675,7 +1699,7 @@ func TestWriteScenarioDebugArtifactsIndexesTraceAndFinalText(t *testing.T) {
 	}
 	for _, want := range []string{
 		"# Affent Eval Timeline",
-		"metrics: tools=6 tool_errors=1 repaired=0 canonicalized=0 loop_guard=1 forced_no_tools=0 evidence=1/2_verified,network=1,partial=1,discovery=1 memory_updates=2(add:1,replace:1,remove:0) session_search=calls:1,results:2,context:1,terms:2 tool_context_trunc=2,omitted=8192 compactions=1,reactive=1,removed=12,summary_bytes=512 tokens=100/20",
+		"metrics: tools=7 tool_errors=1 repaired=0 canonicalized=0 loop_guard=1 forced_no_tools=0 evidence=1/2_verified,network=1,partial=1,discovery=1 memory_updates=2(add:1,replace:1,remove:0) session_search=calls:1,results:2,context:1,terms:2 tool_context_trunc=2,omitted=8192 compactions=1,reactive=1,removed=12,summary_bytes=512 tokens=100/20",
 		"## Runtime Surface",
 		"`web_fetch`",
 		"trace_deltas: `true`",
@@ -1732,6 +1756,11 @@ func TestWriteScenarioDebugArtifactsIndexesTraceAndFinalText(t *testing.T) {
 		"tool#1 `web_fetch` status=`dynamic_partial` url=`https://taostats.io/subnets/120`",
 		"tool#2 `browser_network_read` status=`network` url=`https://taostats.io/api/subnets/120` json_path=`$.price`",
 		"tool#3 `browser_navigate` status=`discovery_only` url=`https://search.example/?q=affine`",
+		"## Plan Updates",
+		"tool#7 action=`update` index=`2` status=`completed` progress=`2/3` current=`3:pending` call_id=`call-7`",
+		"step: verify browser network evidence",
+		"current_step: summarize findings",
+		"evidence: `go test ./internal/agenteval`",
 		"## Memory Updates",
 		"tool#4 action=`replace` location=`memory:markets` call_id=`call-4`",
 		"Use direct price labels from dynamic dashboards. -> Use browser_network_read json_path before citing dynamic dashboard metrics.",

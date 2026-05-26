@@ -86,6 +86,7 @@ func renderDebugTimeline(res BatchResult, scenario BatchScenario, trace *Trace) 
 	renderTimelineCompactions(&b, trace)
 	renderTimelineDecisions(&b, trace)
 	renderTimelineSourceEvidence(&b, trace)
+	renderTimelinePlan(&b, trace)
 	renderTimelineMemoryUpdates(&b, trace)
 	renderTimelineSessionSearch(&b, trace)
 	renderTimelineToolTruncation(&b, trace)
@@ -774,6 +775,54 @@ func renderTimelineSourceEvidence(b *strings.Builder, trace *Trace) {
 			fmt.Fprintf(b, " call_id=`%s`", entry.Tool.CallID)
 		}
 		b.WriteByte('\n')
+	}
+}
+
+func renderTimelinePlan(b *strings.Builder, trace *Trace) {
+	examples := trace.PlanExamples(len(trace.Tools))
+	if len(examples) == 0 {
+		return
+	}
+	b.WriteString("\n## Plan Updates\n\n")
+	for i, ex := range examples {
+		fmt.Fprintf(b, "%d. tool#%d action=`%s`", i+1, ex.ToolIndex, ex.Action)
+		if ex.Index > 0 {
+			fmt.Fprintf(b, " index=`%d`", ex.Index)
+		}
+		if ex.Status != "" {
+			fmt.Fprintf(b, " status=`%s`", ex.Status)
+		}
+		if ex.TotalSteps > 0 {
+			fmt.Fprintf(b, " progress=`%d/%d`", ex.CompletedSteps, ex.TotalSteps)
+		}
+		if ex.CurrentStepIndex > 0 {
+			fmt.Fprintf(b, " current=`%d:%s`", ex.CurrentStepIndex, ex.CurrentStepStatus)
+		}
+		if ex.CallID != "" {
+			fmt.Fprintf(b, " call_id=`%s`", ex.CallID)
+		}
+		if ex.Error {
+			fmt.Fprintf(b, " error=`true`")
+		}
+		b.WriteByte('\n')
+		if ex.StepText != "" {
+			fmt.Fprintf(b, "   step: %s\n", timelineInline(ex.StepText, timelineMemoryPreviewBytes))
+		}
+		if ex.CurrentStep != "" && ex.CurrentStep != ex.StepText {
+			fmt.Fprintf(b, "   current_step: %s\n", timelineInline(ex.CurrentStep, timelineMemoryPreviewBytes))
+		}
+		if len(ex.Evidence) > 0 {
+			fmt.Fprintf(b, "   evidence: `%s`\n", strings.Join(ex.Evidence, "`, `"))
+		}
+		if ex.NotePreview != "" {
+			fmt.Fprintf(b, "   note: %s\n", timelineInline(ex.NotePreview, timelineMemoryPreviewBytes))
+		}
+		if ex.ResultMessage != "" {
+			fmt.Fprintf(b, "   message: %s\n", timelineInline(ex.ResultMessage, timelineMemoryPreviewBytes))
+		}
+		if ex.ResultSummary != "" {
+			fmt.Fprintf(b, "   result: %s\n", timelineInline(ex.ResultSummary, timelineMemoryPreviewBytes))
+		}
 	}
 }
 
