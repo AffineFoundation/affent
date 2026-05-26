@@ -612,6 +612,7 @@ AFFENTSERVE_BROWSER_SCREENSHOT
 AFFENTSERVE_WEB
 AFFENTSERVE_WEB_SEARCH
 AFFENTSERVE_MEMORY
+AFFENTSERVE_SHARED_USER_MEMORY
 AFFENTSERVE_BUILTINS
 AFFENTSERVE_SUBAGENT
 AFFENTSERVE_SUBAGENT_MAX_DEPTH
@@ -680,6 +681,12 @@ Affent stores durable state as inspectable files:
 `affentctl` stores session state under the configured workspace by default.
 `affentserve` stores per-session durable state under its session state root so
 state survives container restart when backed by a host volume.
+By default `affentserve` scopes both project memory and `target=user` memory to
+the session id, which is the safer default for shared servers. For local
+single-user WebUI deployments, set `--shared-user-memory` or
+`AFFENTSERVE_SHARED_USER_MEMORY=true` to store `target=user` in
+`MemoryRoot/USER.md` and share stable user preferences across sessions while
+keeping project/task memory per session.
 
 Session search and persistent memory are separate features:
 

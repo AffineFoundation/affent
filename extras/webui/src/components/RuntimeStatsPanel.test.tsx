@@ -16,6 +16,7 @@ describe("RuntimeStatsPanel", () => {
           enable_web: true,
           enable_browser: true,
           enable_memory: true,
+          shared_user_memory: true,
           enable_subagent: true,
           enable_focused_tasks: true,
           eval_mode: true,
@@ -63,6 +64,7 @@ describe("RuntimeStatsPanel", () => {
     expect(panel).toHaveTextContent("qwen-small");
     expect(panel).toHaveTextContent("3 sessions · 1 running · eval · workspace,recall · executor local");
     expect(screen.getByTestId("runtime-stats-grid")).toHaveTextContent("Evidence2/3 verified · 1 network · 1 partial");
+    expect(screen.getByTestId("runtime-stats-grid")).toHaveTextContent("memory (shared user)");
     expect(screen.getByTestId("runtime-stats-grid")).toHaveTextContent("Recall2 hits · 1 context · 3 terms");
     expect(screen.getByTestId("runtime-stats-grid")).toHaveTextContent("Context1 compaction · 1 reactive · -72 msgs · 4 KiB summary");
     expect(screen.getByTestId("runtime-stats-grid")).toHaveTextContent("Loop1 max-turn · 2 guards · 1 no-tools");

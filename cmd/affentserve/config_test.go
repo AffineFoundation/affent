@@ -32,6 +32,7 @@ func TestLoadConfig_File(t *testing.T) {
         "session_idle_ttl": "30s",
         "enable_browser": true,
         "enable_memory": false,
+        "shared_user_memory": true,
         "enable_subagent": false,
         "enable_focused_tasks": false,
         "subagent_max_depth": 1
@@ -56,6 +57,9 @@ func TestLoadConfig_File(t *testing.T) {
 	}
 	if cfg.EnableMemory {
 		t.Errorf("EnableMemory should preserve explicit false")
+	}
+	if !cfg.SharedUserMemory {
+		t.Errorf("SharedUserMemory should be true")
 	}
 	if cfg.EnableSubagent {
 		t.Errorf("EnableSubagent should preserve explicit false")
@@ -119,6 +123,17 @@ func TestConfig_Resolve_AppliesDefaults(t *testing.T) {
 	}
 	if ttl != defaultSessionIdleTTL {
 		t.Errorf("IdleTTL default = %s", ttl)
+	}
+}
+
+func TestConfigResolveSharedUserMemoryFromEnv(t *testing.T) {
+	t.Setenv("AFFENTSERVE_SHARED_USER_MEMORY", "true")
+	cfg := Config{BaseURL: "https://example/v1"}
+	if err := cfg.Resolve(); err != nil {
+		t.Fatal(err)
+	}
+	if !cfg.SharedUserMemory {
+		t.Fatal("SharedUserMemory should follow AFFENTSERVE_SHARED_USER_MEMORY")
 	}
 }
 

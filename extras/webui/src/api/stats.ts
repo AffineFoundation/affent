@@ -97,6 +97,7 @@ export interface ServerStatsResponse {
   enable_web?: boolean;
   enable_web_search?: boolean;
   enable_memory?: boolean;
+  shared_user_memory?: boolean;
   enable_builtins?: boolean;
   enable_subagent?: boolean;
   enable_focused_tasks?: boolean;

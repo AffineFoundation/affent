@@ -341,6 +341,86 @@ func TestSessionPool_UserMemoryIsolatedPerSession(t *testing.T) {
 	}
 }
 
+func TestSessionPool_UserMemoryCanBeSharedAcrossSessions(t *testing.T) {
+	cfg := Config{
+		Listen:           "127.0.0.1:0",
+		MaxSessions:      4,
+		SessionIdleTTL:   "5m",
+		WorkspaceRoot:    t.TempDir(),
+		MemoryRoot:       t.TempDir(),
+		EnableMemory:     true,
+		SharedUserMemory: true,
+		BaseURL:          "http://127.0.0.1:0",
+		APIKey:           "test",
+		Model:            "fake",
+	}
+	pool, err := NewSessionPool(cfg, zerolog.New(io.Discard))
+	if err != nil {
+		t.Fatalf("NewSessionPool: %v", err)
+	}
+	t.Cleanup(pool.Shutdown)
+
+	sa, err := pool.GetOrCreate("alpha")
+	if err != nil {
+		t.Fatalf("GetOrCreate alpha: %v", err)
+	}
+	sb, err := pool.GetOrCreate("beta")
+	if err != nil {
+		t.Fatalf("GetOrCreate beta: %v", err)
+	}
+	if sa.loop.Memory == nil || sb.loop.Memory == nil {
+		t.Fatal("both sessions must have a memory store when EnableMemory=true")
+	}
+	if _, err := sa.loop.Memory.Add(memory.TargetUser, "", "shared preference marker"); err != nil {
+		t.Fatalf("alpha Add: %v", err)
+	}
+
+	snapB := sb.loop.Memory.Snapshot()
+	if !strings.Contains(snapB, "shared preference marker") {
+		t.Fatalf("beta should see shared target=user memory:\n%s", snapB)
+	}
+	if _, err := os.Stat(pool.sharedUserMemoryPath()); err != nil {
+		t.Fatalf("shared USER.md missing: %v", err)
+	}
+	if durableStatePathExists(filepath.Join(pool.sessionDirPath("alpha"), "USER.md")) ||
+		durableStatePathExists(filepath.Join(pool.sessionDirPath("beta"), "USER.md")) {
+		t.Fatal("shared user memory should not create per-session USER.md files")
+	}
+}
+
+func TestSessionPool_SharedUserMemoryReservesUserFileSessionID(t *testing.T) {
+	cfg := Config{
+		Listen:           "127.0.0.1:0",
+		MaxSessions:      4,
+		SessionIdleTTL:   "5m",
+		WorkspaceRoot:    t.TempDir(),
+		MemoryRoot:       t.TempDir(),
+		EnableMemory:     true,
+		SharedUserMemory: true,
+		BaseURL:          "http://127.0.0.1:0",
+		APIKey:           "test",
+		Model:            "fake",
+	}
+	pool, err := NewSessionPool(cfg, zerolog.New(io.Discard))
+	if err != nil {
+		t.Fatalf("NewSessionPool: %v", err)
+	}
+	t.Cleanup(pool.Shutdown)
+	if err := os.WriteFile(pool.sharedUserMemoryPath(), []byte("- keep me\n"), 0o644); err != nil {
+		t.Fatalf("write shared user memory: %v", err)
+	}
+
+	if _, err := pool.GetOrCreate(sharedUserMemoryFileName); err == nil || !strings.Contains(err.Error(), "reserved") {
+		t.Fatalf("GetOrCreate reserved shared user memory id err=%v, want reserved", err)
+	}
+	if pool.Delete(sharedUserMemoryFileName) {
+		t.Fatal("Delete should not report an evicted session for the reserved shared user memory id")
+	}
+	if raw, err := os.ReadFile(pool.sharedUserMemoryPath()); err != nil || !strings.Contains(string(raw), "keep me") {
+		t.Fatalf("shared user memory should survive reserved-id delete: raw=%q err=%v", string(raw), err)
+	}
+}
+
 // TestSessionPool_ConversationLogIsDurable pins that the JSONL chat
 // log survives session eviction + recreation under the same id.
 // Without this, the chat handler's design assumption — "we only

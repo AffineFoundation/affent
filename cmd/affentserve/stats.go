@@ -28,6 +28,7 @@ type statsResponse struct {
 	EnableWeb          bool                   `json:"enable_web"`
 	EnableWebSearch    bool                   `json:"enable_web_search"`
 	EnableMemory       bool                   `json:"enable_memory"`
+	SharedUserMemory   bool                   `json:"shared_user_memory"`
 	EnableBuiltins     bool                   `json:"enable_builtins"`
 	EnableSubagent     bool                   `json:"enable_subagent"`
 	EnableFocusedTasks bool                   `json:"enable_focused_tasks"`
@@ -213,6 +214,7 @@ func handleStats(cfg Config, pool *SessionPool) http.HandlerFunc {
 			EnableWeb:          cfg.EnableWeb,
 			EnableWebSearch:    cfg.EnableWebSearch,
 			EnableMemory:       cfg.EnableMemory,
+			SharedUserMemory:   cfg.SharedUserMemory,
 			EnableBuiltins:     cfg.EnableBuiltins,
 			EnableSubagent:     cfg.EnableSubagent,
 			EnableFocusedTasks: cfg.EnableFocusedTasks,

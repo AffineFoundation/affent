@@ -84,6 +84,7 @@ export interface SessionMemoryBucket {
 export interface SessionMemoryResponse {
   session_id: string;
   has_memory: boolean;
+  shared_user_memory?: boolean;
   user?: SessionMemoryBucket;
   core?: SessionMemoryBucket;
   topics?: SessionMemoryBucket[];

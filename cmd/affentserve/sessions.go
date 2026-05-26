@@ -492,16 +492,7 @@ func (p *SessionPool) buildSession(id string) (*Session, error) {
 	if p.cfg.EnableMemory {
 		fms := memory.NewFileMemoryStore(workspace)
 		fms.MemoryDir = sessionDir
-		// Scope the user-profile file under the per-session memory dir
-		// as well. The library default (defaultUserMemoryPath →
-		// ~/.config/affent/USER.md) is correct for affentctl, where
-		// one OS-user spans many workspaces and a shared USER.md is
-		// the intent. In affentserve, distinct session_ids are
-		// distinct tenants — leaving USER.md global would cross-leak
-		// "what you know about the user" across all clients of this
-		// server. Same-session_id round-trips still see the same
-		// profile because sessionDir is stable.
-		fms.UserPath = filepath.Join(sessionDir, "USER.md")
+		fms.UserPath = p.userMemoryPath(sessionDir)
 		memStore = fms
 	}
 	var localExec *executor.LocalExecutor
@@ -854,6 +845,21 @@ func (p *SessionPool) sessionRootPath() string {
 	return root
 }
 
+func (p *SessionPool) userMemoryPath(sessionDir string) string {
+	if p != nil && p.cfg.SharedUserMemory {
+		return p.sharedUserMemoryPath()
+	}
+	return filepath.Join(sessionDir, sharedUserMemoryFileName)
+}
+
+func (p *SessionPool) sharedUserMemoryPath() string {
+	return filepath.Join(p.sessionRootPath(), sharedUserMemoryFileName)
+}
+
+func (p *SessionPool) sessionIDConflictsSharedUserMemory(id string) bool {
+	return p != nil && p.cfg.SharedUserMemory && filepath.Clean(p.sessionDirPath(id)) == filepath.Clean(p.sharedUserMemoryPath())
+}
+
 // allocSessionDir returns the durable per-session-id state dir. Holds
 // the JSONL conversation log, runtime-installed skills, and (when
 // EnableMemory is on) the memory store files. Unlike allocWorkspace,
@@ -864,6 +870,9 @@ func (p *SessionPool) sessionRootPath() string {
 // must have already passed id through agent.ValidateSessionID;
 // buildSession enforces this at the top.
 func (p *SessionPool) allocSessionDir(id string) (string, error) {
+	if p.sessionIDConflictsSharedUserMemory(id) {
+		return "", fmt.Errorf("session id %q is reserved when shared user memory is enabled", id)
+	}
 	dir := p.sessionDirPath(id)
 	if _, found, err := durableSessionDirInfo(dir); err != nil {
 		return "", err
@@ -1028,6 +1037,9 @@ func (p *SessionPool) Delete(id string) bool {
 		// Unknown / unsafe id — nothing to do. Matches the
 		// handler-level contract that DELETE is idempotent and
 		// doesn't 404 on unknown ids.
+		return false
+	}
+	if p.sessionIDConflictsSharedUserMemory(id) {
 		return false
 	}
 	p.mu.Lock()

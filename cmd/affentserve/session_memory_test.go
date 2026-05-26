@@ -50,6 +50,36 @@ func TestHandleSessionMemoryReadsDurableBuckets(t *testing.T) {
 	}
 }
 
+func TestHandleSessionMemoryReadsSharedUserBucket(t *testing.T) {
+	memRoot := t.TempDir()
+	pool := newPoolWithMemoryRoot(t, memRoot)
+	pool.cfg.SharedUserMemory = true
+	createDurableSessionDir(t, pool, "shared-memory-read")
+	store := memory.NewFileMemoryStore("")
+	store.MemoryDir = pool.sessionDirPath("shared-memory-read")
+	store.UserPath = pool.sharedUserMemoryPath()
+	if resp, err := store.Add(memory.TargetUser, "", "shared user preference"); err != nil || !resp.OK {
+		t.Fatalf("add shared user memory: resp=%+v err=%v", resp, err)
+	}
+
+	r := httptest.NewRequest(http.MethodGet, "/v1/sessions/shared-memory-read/memory", nil)
+	w := httptest.NewRecorder()
+	handleSessionRoutes(pool).ServeHTTP(w, r)
+	if got := w.Result().StatusCode; got != http.StatusOK {
+		t.Fatalf("status = %d, want 200; body=%s", got, w.Body.String())
+	}
+	var out sessionMemoryResponse
+	if err := json.Unmarshal(w.Body.Bytes(), &out); err != nil {
+		t.Fatalf("decode response: %v\n%s", err, w.Body.String())
+	}
+	if !out.HasMemory || !out.SharedUserMemory {
+		t.Fatalf("shared memory flags = has:%v shared:%v", out.HasMemory, out.SharedUserMemory)
+	}
+	if out.User == nil || out.User.EntryCount != 1 || out.User.Entries[0] != "shared user preference" {
+		t.Fatalf("shared user bucket = %+v", out.User)
+	}
+}
+
 func TestHandleSessionMemoryMissingSession(t *testing.T) {
 	pool := newPoolWithMemoryRoot(t, t.TempDir())
 	r := httptest.NewRequest(http.MethodGet, "/v1/sessions/missing/memory", nil)

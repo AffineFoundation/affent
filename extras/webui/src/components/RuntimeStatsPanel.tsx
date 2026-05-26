@@ -110,7 +110,7 @@ function toolSurface(stats: ServerStatsResponse): string {
     stats.enable_builtins ? "workspace" : undefined,
     stats.enable_web_search ? "web search" : stats.enable_web ? "web" : undefined,
     stats.enable_browser ? "browser" : undefined,
-    stats.enable_memory ? "memory" : undefined,
+    stats.enable_memory ? (stats.shared_user_memory ? "memory (shared user)" : "memory") : undefined,
     stats.enable_subagent ? "subagent" : undefined,
     stats.enable_focused_tasks ? "focused" : undefined,
   ].filter((item): item is string => !!item);

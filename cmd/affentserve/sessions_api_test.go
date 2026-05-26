@@ -12,6 +12,7 @@ import (
 	"reflect"
 	"strings"
 	"testing"
+	"time"
 	"unicode/utf8"
 
 	agent "github.com/affinefoundation/affent/internal/agent"
@@ -906,6 +907,42 @@ func TestSummarizeDurableSessionIgnoresSymlinkDurableStateMarkers(t *testing.T) 
 	}
 	if summary.HasArtifacts || summary.HasRuntimeSkills || summary.HasMemory {
 		t.Fatalf("symlink state markers must not be reported: %+v", summary)
+	}
+}
+
+func TestSummarizeDurableSessionSharedUserMemoryDoesNotRefreshSession(t *testing.T) {
+	memRoot := t.TempDir()
+	pool := newPoolWithMemoryRoot(t, memRoot)
+	pool.cfg.SharedUserMemory = true
+	createDurableSessionDir(t, pool, "shared-user-old-session")
+	dir := pool.sessionDirPath("shared-user-old-session")
+	if err := os.RemoveAll(filepath.Join(dir, "topics")); err != nil {
+		t.Fatalf("remove topics: %v", err)
+	}
+	oldTime := time.Date(2026, 1, 2, 3, 4, 5, 0, time.UTC)
+	newTime := time.Date(2026, 1, 3, 3, 4, 5, 0, time.UTC)
+	for _, path := range []string{dir, filepath.Join(dir, "conversation.jsonl"), filepath.Join(dir, "events.jsonl")} {
+		if err := os.Chtimes(path, oldTime, oldTime); err != nil {
+			t.Fatalf("chtimes %s: %v", path, err)
+		}
+	}
+	sharedUserPath := pool.sharedUserMemoryPath()
+	if err := os.WriteFile(sharedUserPath, []byte("- shared preference\n"), 0o644); err != nil {
+		t.Fatalf("write shared user memory: %v", err)
+	}
+	if err := os.Chtimes(sharedUserPath, newTime, newTime); err != nil {
+		t.Fatalf("chtimes shared user memory: %v", err)
+	}
+
+	summary, found, err := summarizeDurableSession(pool, "shared-user-old-session")
+	if err != nil {
+		t.Fatalf("summarizeDurableSession: %v", err)
+	}
+	if !found || !summary.HasMemory {
+		t.Fatalf("shared user memory should mark the session as memory-capable: found=%v summary=%+v", found, summary)
+	}
+	if summary.LastUsedAt != formatTime(oldTime) {
+		t.Fatalf("LastUsedAt = %q, want session-local time %q", summary.LastUsedAt, formatTime(oldTime))
 	}
 }
 

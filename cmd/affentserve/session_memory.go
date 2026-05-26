@@ -10,11 +10,12 @@ import (
 )
 
 type sessionMemoryResponse struct {
-	SessionID string                `json:"session_id"`
-	HasMemory bool                  `json:"has_memory"`
-	User      *sessionMemoryBucket  `json:"user,omitempty"`
-	Core      *sessionMemoryBucket  `json:"core,omitempty"`
-	Topics    []sessionMemoryBucket `json:"topics,omitempty"`
+	SessionID        string                `json:"session_id"`
+	HasMemory        bool                  `json:"has_memory"`
+	SharedUserMemory bool                  `json:"shared_user_memory,omitempty"`
+	User             *sessionMemoryBucket  `json:"user,omitempty"`
+	Core             *sessionMemoryBucket  `json:"core,omitempty"`
+	Topics           []sessionMemoryBucket `json:"topics,omitempty"`
 }
 
 type sessionMemoryBucket struct {
@@ -57,12 +58,14 @@ func readSessionMemory(pool *SessionPool, sessionID string) (sessionMemoryRespon
 	}
 	store := memory.NewFileMemoryStore("")
 	store.MemoryDir = dir
-	store.UserPath = filepath.Join(dir, "USER.md")
+	userPath := pool.userMemoryPath(dir)
+	store.UserPath = userPath
 
 	resp := sessionMemoryResponse{
-		SessionID: sessionID,
-		HasMemory: durableMemoryExists(dir),
-		Topics:    []sessionMemoryBucket{},
+		SessionID:        sessionID,
+		HasMemory:        durableMemoryExists(dir, userPath),
+		SharedUserMemory: pool.cfg.SharedUserMemory,
+		Topics:           []sessionMemoryBucket{},
 	}
 	userNewest := ""
 	if userTopics, err := store.ListTopics(memory.TargetUser); err != nil {
@@ -72,7 +75,7 @@ func readSessionMemory(pool *SessionPool, sessionID string) (sessionMemoryRespon
 	}
 	if bucket, ok, err := inspectSessionMemoryBucket(store, memory.TargetUser, "", userNewest); err != nil {
 		return sessionMemoryResponse{}, true, err
-	} else if ok || durableStatePathExists(filepath.Join(dir, "USER.md")) {
+	} else if ok || durableStatePathExists(userPath) {
 		resp.User = &bucket
 	}
 	if bucket, ok, err := inspectSessionMemoryBucket(store, memory.TargetMemory, memory.CoreTopic, ""); err != nil {

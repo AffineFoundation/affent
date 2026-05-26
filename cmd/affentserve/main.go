@@ -76,6 +76,7 @@ func parseFlagsAndConfig(argv []string) (Config, error) {
 		enableWeb          = fs.Bool("web", false, "Register extras/web's web_fetch tool. Env: AFFENTSERVE_WEB.")
 		enableWebSearch    = fs.Bool("web-search", false, "Register web_search alongside web_fetch (requires TAVILY_API_KEY by default). Env: AFFENTSERVE_WEB_SEARCH.")
 		enableMemory       = fs.Bool("memory", true, "Register agent runtime's memory tool.")
+		sharedUserMemory   = fs.Bool("shared-user-memory", false, "Store target=user memory once under MemoryRoot/USER.md so multiple sessions share stable user preferences. Env: AFFENTSERVE_SHARED_USER_MEMORY.")
 		enableBuiltins     = fs.Bool("builtins", false, "Register shell + file builtins (LocalExecutor). DANGEROUS on a shared host — only enable in a sandboxed environment. Env: AFFENTSERVE_BUILTINS.")
 		evalMode           = fs.Bool("eval-mode", false, "Strict benchmark mode: disable all tools by default; opt in with --eval-tools, --eval-all-tools, --builtins=true, --browser=true, --web=true, or --memory=true. Env: AFFENTSERVE_EVAL_MODE.")
 		evalTools          = fs.String("eval-tools", "", "Comma-separated eval tool allowlist; implies --eval-mode. Examples: read_file,shell,repo_search; groups: workspace,readonly_workspace,web,browser,recall,delegation,all. Env: AFFENTSERVE_EVAL_TOOLS.")
@@ -188,6 +189,9 @@ func parseFlagsAndConfig(argv []string) (Config, error) {
 	if setFlags["memory"] {
 		cfg.enableMemorySet = true
 		cfg.EnableMemory = *enableMemory
+	}
+	if setFlags["shared-user-memory"] {
+		cfg.SharedUserMemory = *sharedUserMemory
 	}
 	if setFlags["builtins"] {
 		cfg.enableBuiltinsSet = true
@@ -382,6 +386,7 @@ func logServeStartup(logger zerolog.Logger, cfg Config, sessionStateRoot string)
 		Bool("focused_tasks", cfg.EnableFocusedTasks).
 		Strs("focused_task_profiles", focusedTaskProfilesForLog(cfg)).
 		Bool("memory", cfg.EnableMemory).
+		Bool("shared_user_memory", cfg.SharedUserMemory).
 		Bool("browser", cfg.EnableBrowser).
 		Bool("web", cfg.EnableWeb).
 		Bool("web_search", cfg.EnableWebSearch).

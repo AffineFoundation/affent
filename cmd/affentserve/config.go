@@ -125,6 +125,12 @@ type Config struct {
 	EnableMemory    bool `json:"enable_memory"`
 	enableMemorySet bool
 
+	// SharedUserMemory stores target=user memory once under MemoryRoot/USER.md
+	// instead of under each session directory. This is useful for local
+	// single-user WebUI deployments where multiple sessions should share
+	// stable user preferences. Leave disabled on multi-tenant servers.
+	SharedUserMemory bool `json:"shared_user_memory"`
+
 	// EnableBuiltins registers agent runtime's shell + file tools. Defaults
 	// to false — running shell on behalf of remote callers is
 	// dangerous on a shared host. Operators who want it must opt in
@@ -228,6 +234,7 @@ const (
 	defaultSessionIdleTTL        = 10 * time.Minute
 	defaultBrowserCacheTTL       = 24 * time.Hour
 	minBrowserCacheSweepInterval = 5 * time.Minute
+	sharedUserMemoryFileName     = "USER.md"
 	maxConfigBytes               = 1024 * 1024
 )
 
@@ -373,6 +380,7 @@ func (c *Config) Resolve() error {
 		{"AFFENTSERVE_WEB", &c.EnableWeb},
 		{"AFFENTSERVE_WEB_SEARCH", &c.EnableWebSearch},
 		{"AFFENTSERVE_MEMORY", &c.EnableMemory},
+		{"AFFENTSERVE_SHARED_USER_MEMORY", &c.SharedUserMemory},
 		{"AFFENTSERVE_BUILTINS", &c.EnableBuiltins},
 		{"AFFENTSERVE_EVAL_MODE", &c.EvalMode},
 		{"AFFENTSERVE_EVAL_ALL_TOOLS", &c.EvalAllTools},

@@ -375,20 +375,35 @@ func TestParseFlagsAndConfig_MemoryRootFromCLI(t *testing.T) {
 	}
 }
 
+func TestParseFlagsAndConfigSharedUserMemoryFromCLI(t *testing.T) {
+	cfg, err := parseFlagsAndConfig([]string{
+		"--base-url", "https://example/v1",
+		"--model", "demo",
+		"--shared-user-memory",
+	})
+	if err != nil {
+		t.Fatalf("parseFlagsAndConfig: %v", err)
+	}
+	if !cfg.SharedUserMemory {
+		t.Fatal("--shared-user-memory should enable shared target=user memory")
+	}
+}
+
 func TestLogServeStartupIncludesDurablePathsWithoutSecrets(t *testing.T) {
 	var buf bytes.Buffer
 	cfg := Config{
-		Listen:         "127.0.0.1:7777",
-		BaseURL:        "https://example/v1",
-		APIKey:         "sk-secret-should-not-log",
-		Model:          "demo",
-		AuthToken:      "bearer-secret-should-not-log",
-		WorkspaceRoot:  "/workspace/sessions",
-		MemoryRoot:     "/workspace/session-state",
-		MaxSessions:    8,
-		SessionIdleTTL: "5m",
-		EnableBuiltins: true,
-		EnableMemory:   true,
+		Listen:           "127.0.0.1:7777",
+		BaseURL:          "https://example/v1",
+		APIKey:           "sk-secret-should-not-log",
+		Model:            "demo",
+		AuthToken:        "bearer-secret-should-not-log",
+		WorkspaceRoot:    "/workspace/sessions",
+		MemoryRoot:       "/workspace/session-state",
+		MaxSessions:      8,
+		SessionIdleTTL:   "5m",
+		EnableBuiltins:   true,
+		EnableMemory:     true,
+		SharedUserMemory: true,
 	}
 	logServeStartup(zerolog.New(&buf), cfg, cfg.MemoryRoot)
 	logLine := buf.String()
@@ -398,6 +413,7 @@ func TestLogServeStartupIncludesDurablePathsWithoutSecrets(t *testing.T) {
 		`"session_state_root":"/workspace/session-state"`,
 		`"auth":"on"`,
 		`"builtins":true`,
+		`"shared_user_memory":true`,
 	} {
 		if !strings.Contains(logLine, want) {
 			t.Fatalf("startup log missing %s:\n%s", want, logLine)

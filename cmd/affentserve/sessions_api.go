@@ -638,7 +638,8 @@ func summarizeDurableSession(pool *SessionPool, id string) (sessionSummary, bool
 	summary.HasArtifacts = dirHasAnyEntry(filepath.Join(dir, filepath.FromSlash(artifactPathPrefix)))
 	summary.RuntimeSkillNames = durableRuntimeSkillNames(agent.DefaultWorkspaceSkillDir(dir))
 	summary.HasRuntimeSkills = len(summary.RuntimeSkillNames) > 0
-	summary.HasMemory = durableMemoryExists(dir)
+	userMemoryPath := pool.userMemoryPath(dir)
+	summary.HasMemory = durableMemoryExists(dir, userMemoryPath)
 	if summary.HasArtifacts {
 		_, _ = mergeStat(filepath.Join(dir, filepath.FromSlash(artifactPathPrefix)))
 	}
@@ -646,11 +647,14 @@ func summarizeDurableSession(pool *SessionPool, id string) (sessionSummary, bool
 		_, _ = mergeStat(agent.DefaultWorkspaceSkillDir(dir))
 	}
 	if summary.HasMemory {
-		for _, p := range []string{
-			filepath.Join(dir, "USER.md"),
+		memoryStatPaths := []string{
 			filepath.Join(dir, "core.md"),
 			filepath.Join(dir, "topics"),
-		} {
+		}
+		if !pool.cfg.SharedUserMemory {
+			memoryStatPaths = append(memoryStatPaths, userMemoryPath)
+		}
+		for _, p := range memoryStatPaths {
 			_, _ = mergeStat(p)
 		}
 	}
@@ -1263,9 +1267,9 @@ func durableRegularFileModTime(path string) (bool, time.Time, error) {
 	return true, fi.ModTime(), nil
 }
 
-func durableMemoryExists(sessionDir string) bool {
+func durableMemoryExists(sessionDir, userMemoryPath string) bool {
 	for _, path := range []string{
-		filepath.Join(sessionDir, "USER.md"),
+		userMemoryPath,
 		filepath.Join(sessionDir, "core.md"),
 		filepath.Join(sessionDir, "MEMORY.md"),
 		filepath.Join(sessionDir, "topics"),

@@ -75,6 +75,9 @@ memory. Durable state is stored as ordinary files:
 - Conversations and events use JSONL.
 - Plans use JSON.
 - Memory uses bounded topic files.
+- `affentserve` keeps project/task memory per session by default; local
+  single-user deployments can opt into shared `target=user` memory for stable
+  preferences across sessions.
 - Runtime skills are persisted as manifests and skill bodies.
 - Oversized tool outputs can be stored as artifacts.
 - Child delegation work can be stored as transcripts.

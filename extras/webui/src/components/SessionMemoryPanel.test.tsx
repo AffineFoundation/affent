@@ -12,6 +12,7 @@ describe("SessionMemoryPanel", () => {
         memory={{
           session_id: "s1",
           has_memory: true,
+          shared_user_memory: true,
           user: {
             target: "user",
             topic: "user",
@@ -47,6 +48,7 @@ describe("SessionMemoryPanel", () => {
     );
 
     expect(screen.getByTestId("session-memory-panel")).toHaveTextContent("3 entries");
+    expect(screen.getByTestId("session-memory-panel")).toHaveTextContent("shared user");
     expect(screen.getByTestId("session-memory-list")).toHaveTextContent("User");
     expect(screen.getByTestId("session-memory-list")).toHaveTextContent("Core");
     expect(screen.getByTestId("session-memory-list")).toHaveTextContent("research");

@@ -47,7 +47,7 @@ export function SessionMemoryPanel({
       : error
         ? error
         : memory?.has_memory
-          ? `${topicCount} ${topicCount === 1 ? "topic" : "topics"} · ${totalChars(buckets)} chars`
+          ? `${topicCount} ${topicCount === 1 ? "topic" : "topics"} · ${totalChars(buckets)} chars${memory.shared_user_memory ? " · shared user" : ""}`
           : "No user, core, or topic entries saved.";
 
   return (
