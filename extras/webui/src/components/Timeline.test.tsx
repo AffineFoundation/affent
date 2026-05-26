@@ -1525,6 +1525,42 @@ describe("Timeline", () => {
     expect(screen.getByTestId("memory-update-strip")).toHaveTextContent("MEM-STOCK-73");
   });
 
+  it("shows runtime surface even when the model fails before tools run", () => {
+    renderTimeline([
+      { id: 0, type: "turn.start", data: { turn_id: "t1" } },
+      { id: 1, type: "user.message", data: { turn_id: "t1", text: "research taostats" } },
+      {
+        id: 2,
+        type: "runtime.surface",
+        data: {
+          turn_id: "t1",
+          tool_count: 4,
+          tools: [
+            { name: "web_fetch", group: "Research" },
+            { name: "web_search", group: "Research" },
+            { name: "memory", group: "Memory" },
+            { name: "run_task", group: "Core" },
+          ],
+          capabilities: { web_fetch: true, web_search: true, memory: true, focused_tasks: true },
+          max_turn_steps: 20,
+          tool_result_event_cap_bytes: 262144,
+          tool_result_context_budget_bytes: 32768,
+        },
+      },
+      { id: 3, type: "error", data: { turn_id: "t1", code: "llm_request", message: "connection refused", recoverable: false } },
+    ]);
+
+    const surface = screen.getByTestId("runtime-surface-strip");
+    expect(surface).toHaveTextContent("Runtime surface");
+    expect(surface).toHaveTextContent("4 tools");
+    expect(surface).toHaveTextContent("web search");
+    expect(surface).toHaveTextContent("20 max turns");
+    fireEvent.click(within(surface).getByText("Runtime surface"));
+    expect(surface).toHaveTextContent("web_fetch");
+    expect(surface).toHaveTextContent("web_search");
+    expect(surface).toHaveTextContent("32 KiB context budget");
+  });
+
   it("renders compact web evidence while keeping the full source available", () => {
     renderTimeline(webFetchTurn);
 

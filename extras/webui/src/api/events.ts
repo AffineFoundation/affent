@@ -13,6 +13,7 @@ export const EventType = {
   TraceMeta: "trace.meta",
   TurnStart: "turn.start",
   UserMessage: "user.message",
+  RuntimeSurface: "runtime.surface",
   MessageDelta: "message.delta",
   MessageDone: "message.done",
   ThinkingDelta: "thinking.delta",
@@ -49,6 +50,41 @@ export interface TurnStartPayload {
 export interface UserMessagePayload {
   turn_id: string;
   text: string;
+}
+
+export interface RuntimeSurfacePayload {
+  turn_id: string;
+  tool_count: number;
+  tools?: RuntimeSurfaceTool[];
+  capabilities: RuntimeCapabilities;
+  max_turn_steps?: number;
+  max_tool_calls?: number;
+  tool_result_event_cap_bytes?: number;
+  tool_result_context_max_bytes?: number;
+  tool_result_context_budget_bytes?: number;
+  tool_result_artifact_prefix?: string;
+  turn_tool_override?: boolean;
+}
+
+export interface RuntimeSurfaceTool {
+  name: string;
+  raw_name?: string;
+  group?: string;
+  source?: string;
+}
+
+export interface RuntimeCapabilities {
+  builtins?: boolean;
+  memory?: boolean;
+  plan?: boolean;
+  session_search?: boolean;
+  web_fetch?: boolean;
+  web_search?: boolean;
+  browser?: boolean;
+  subagent?: boolean;
+  focused_tasks?: boolean;
+  skill?: boolean;
+  mcp?: boolean;
 }
 
 export interface MessageDeltaPayload {
@@ -173,6 +209,7 @@ export interface PayloadByType {
   [EventType.TraceMeta]: TraceMetaPayload;
   [EventType.TurnStart]: TurnStartPayload;
   [EventType.UserMessage]: UserMessagePayload;
+  [EventType.RuntimeSurface]: RuntimeSurfacePayload;
   [EventType.MessageDelta]: MessageDeltaPayload;
   [EventType.MessageDone]: MessageDonePayload;
   [EventType.ThinkingDelta]: ThinkingDeltaPayload;

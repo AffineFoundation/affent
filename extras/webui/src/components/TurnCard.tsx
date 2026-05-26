@@ -1,7 +1,8 @@
 import { useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
-import { EventType } from "../api/events";
+import { EventType, type RuntimeCapabilities, type RuntimeSurfacePayload } from "../api/events";
 import type { NormalizedEvent } from "../normalize/normalizeEvent";
 import type { ToolCallState, TurnError, TurnState } from "../store/sessionState";
+import { formatByteCount } from "../view/byteFormat";
 import type { UseAsDraft } from "../view/draftSource";
 import { summarizeUserError } from "../view/errorSummary";
 import { buildExecutionTree, searchableExecutionNodeText } from "../view/executionTree";
@@ -140,6 +141,7 @@ export function TurnCard({
           {turn.status === "running" && !turn.assistantText ? (
             <RunningAnswerBubble turn={turn} summary={workSummary} />
           ) : null}
+          {turn.runtimeSurface ? <RuntimeSurfaceStrip surface={turn.runtimeSurface} searchQuery={searchQuery} /> : null}
           {activity ? <AgentActivity activity={activity} isLatest={isLatest} searchQuery={searchQuery} onUseAsDraft={onUseAsDraft} /> : null}
           {memoryUpdates.length > 0 ? <MemoryUpdateStrip updates={memoryUpdates} searchQuery={searchQuery} /> : null}
           {fallbackAnswer ? (
@@ -193,6 +195,80 @@ function MemoryUpdateStrip({ updates, searchQuery }: { updates: readonly MemoryU
       ))}
     </section>
   );
+}
+
+function RuntimeSurfaceStrip({ surface, searchQuery }: { surface: RuntimeSurfacePayload; searchQuery?: string }) {
+  const summary = runtimeSurfaceSummary(surface);
+  const tools = surface.tools ?? [];
+  return (
+    <details className="runtime-surface-strip" data-testid="runtime-surface-strip">
+      <summary>
+        <span className="runtime-surface-title">Runtime surface</span>
+        <span className="runtime-surface-summary">
+          <HighlightText text={summary} query={searchQuery} />
+        </span>
+      </summary>
+      <div className="runtime-surface-body">
+        <div className="runtime-surface-chip-row" aria-label="Runtime capabilities">
+          {runtimeCapabilityLabels(surface.capabilities).map((label) => (
+            <span className="runtime-surface-chip" key={label}>
+              <HighlightText text={label} query={searchQuery} />
+            </span>
+          ))}
+        </div>
+        <div className="runtime-surface-limits">
+          {runtimeSurfaceLimits(surface).map((line) => (
+            <span key={line}>{line}</span>
+          ))}
+        </div>
+        {tools.length > 0 ? (
+          <div className="runtime-surface-tools" aria-label={`${tools.length} tools`}>
+            {tools.map((tool) => (
+              <code key={`${tool.source ?? ""}:${tool.name}`}>
+                <HighlightText text={tool.name} query={searchQuery} />
+              </code>
+            ))}
+          </div>
+        ) : null}
+      </div>
+    </details>
+  );
+}
+
+function runtimeSurfaceSummary(surface: RuntimeSurfacePayload): string {
+  const caps = runtimeCapabilityLabels(surface.capabilities);
+  const toolCount = surface.tool_count || surface.tools?.length || 0;
+  const parts = [
+    toolCount > 0 ? `${toolCount} tools` : "no tools",
+    caps.length > 0 ? caps.slice(0, 4).join(", ") : undefined,
+    typeof surface.max_turn_steps === "number" ? `${surface.max_turn_steps} max turns` : undefined,
+  ];
+  return parts.filter(Boolean).join(" · ");
+}
+
+function runtimeCapabilityLabels(caps: RuntimeCapabilities): string[] {
+  const labels: string[] = [];
+  if (caps.web_search) labels.push("web search");
+  else if (caps.web_fetch) labels.push("web fetch");
+  if (caps.browser) labels.push("browser");
+  if (caps.memory) labels.push("memory");
+  if (caps.plan) labels.push("plan");
+  if (caps.subagent) labels.push("subagent");
+  if (caps.focused_tasks) labels.push("focused tasks");
+  if (caps.builtins) labels.push("workspace tools");
+  if (caps.session_search) labels.push("session history");
+  if (caps.skill) labels.push("skills");
+  if (caps.mcp) labels.push("mcp");
+  return labels;
+}
+
+function runtimeSurfaceLimits(surface: RuntimeSurfacePayload): string[] {
+  const lines: string[] = [];
+  if (typeof surface.max_tool_calls === "number" && surface.max_tool_calls > 0) lines.push(`${surface.max_tool_calls} tool-call cap`);
+  if (typeof surface.tool_result_context_budget_bytes === "number") lines.push(`${formatByteCount(surface.tool_result_context_budget_bytes)} context budget`);
+  if (typeof surface.tool_result_event_cap_bytes === "number") lines.push(`${formatByteCount(surface.tool_result_event_cap_bytes)} event cap`);
+  if (surface.turn_tool_override) lines.push("turn-local tools");
+  return lines;
 }
 
 function shouldShowReasoningDisclosure(

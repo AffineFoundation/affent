@@ -1,4 +1,4 @@
-import type { ContextCompactedPayload, LoopDecisionPayload, ToolRuntimeStats } from "../api/events";
+import type { ContextCompactedPayload, LoopDecisionPayload, RuntimeSurfacePayload, ToolRuntimeStats } from "../api/events";
 import type { NormalizedEvent } from "../normalize/normalizeEvent";
 
 // The structured view of a session that the reducer builds from the
@@ -65,6 +65,7 @@ export interface TurnState {
   thinkingStreaming: boolean;
   assistantText: string;
   messageStreaming: boolean;
+  runtimeSurface?: RuntimeSurfacePayload;
   finishReason?: string;
   toolCalls: ToolCallState[];
   usage?: TurnUsage;

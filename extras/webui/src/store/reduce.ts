@@ -7,6 +7,7 @@ import {
   type MessageDeltaPayload,
   type MessageDonePayload,
   type RawEvent,
+  type RuntimeSurfacePayload,
   type ThinkingDeltaPayload,
   type ThinkingDonePayload,
   type ToolRequestPayload,
@@ -117,6 +118,10 @@ function applyEventPayload(state: SessionState, ev: NormalizedEvent): SessionSta
     case EventType.UserMessage: {
       const p = ev.data as UserMessagePayload;
       return updateTurn(state, p.turn_id, (t) => ({ ...t, userText: p.text }));
+    }
+    case EventType.RuntimeSurface: {
+      const p = ev.data as RuntimeSurfacePayload;
+      return updateTurn(state, p.turn_id, (t) => ({ ...t, runtimeSurface: p }));
     }
     case EventType.ThinkingDelta: {
       const p = ev.data as ThinkingDeltaPayload;

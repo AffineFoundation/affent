@@ -157,6 +157,31 @@ describe("reduce — terminal statuses", () => {
 });
 
 describe("reduce — robustness", () => {
+  it("records runtime surface on the turn without counting it as unknown", () => {
+    const s = reduceRawEvents([
+      { id: 0, type: "turn.start", data: { turn_id: "t1" } },
+      {
+        id: 1,
+        type: "runtime.surface",
+        data: {
+          turn_id: "t1",
+          tool_count: 3,
+          tools: [{ name: "web_fetch", group: "Research" }, { name: "web_search", group: "Research" }, { name: "memory", group: "Memory" }],
+          capabilities: { web_fetch: true, web_search: true, memory: true },
+          max_turn_steps: 12,
+          tool_result_event_cap_bytes: 262144,
+          tool_result_context_budget_bytes: 32768,
+        },
+      },
+      { id: 2, type: "turn.end", data: { turn_id: "t1", reason: "completed" } },
+    ]);
+
+    expect(s.unknownEventCount).toBe(0);
+    expect(s.turns[0].runtimeSurface?.tool_count).toBe(3);
+    expect(s.turns[0].runtimeSurface?.capabilities.web_search).toBe(true);
+    expect(s.turns[0].runtimeSurface?.tools?.map((tool) => tool.name)).toEqual(["web_fetch", "web_search", "memory"]);
+  });
+
   it("records loop decisions without counting them as unknown", () => {
     const s = reduceRawEvents([
       { id: 0, type: "turn.start", data: { turn_id: "t1" } },

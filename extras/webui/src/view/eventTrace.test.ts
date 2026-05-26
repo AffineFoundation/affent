@@ -36,6 +36,17 @@ describe("eventTrace view model", () => {
       },
       {
         id: 4,
+        type: "runtime.surface",
+        data: {
+          turn_id: "t1",
+          tool_count: 16,
+          capabilities: { web_search: true, memory: true, subagent: true, focused_tasks: true },
+          max_turn_steps: 12,
+          max_tool_calls: 8,
+        },
+      },
+      {
+        id: 5,
         type: "loop.decision",
         data: {
           turn_id: "t1",
@@ -47,7 +58,7 @@ describe("eventTrace view model", () => {
         },
       },
       {
-        id: 5,
+        id: 6,
         type: "context.compacted",
         data: {
           turn_id: "t1",
@@ -60,19 +71,27 @@ describe("eventTrace view model", () => {
           summary_bytes: 2048,
         },
       },
-      { id: 6, type: "turn.end", data: { turn_id: "t1", reason: "max_turns", tool_stats: { tool_requests: 2, tool_errors: 1, source_access_verified: 2, source_access_network: 1, source_access_dynamic_partial: 1, tool_duration_ms: 1200 } } },
+      { id: 7, type: "turn.end", data: { turn_id: "t1", reason: "max_turns", tool_stats: { tool_requests: 2, tool_errors: 1, source_access_verified: 2, source_access_network: 1, source_access_dynamic_partial: 1, tool_duration_ms: 1200 } } },
     ]));
-    const [request, result, decision, compacted, finished] = model.items;
+    const [request, result, surface, decision, compacted, finished] = model.items;
 
     expect(model.metadata).toHaveLength(1);
     expect(model.metadata[0].type).toBe("trace.meta");
-    expect(model.items).toHaveLength(5);
+    expect(model.items).toHaveLength(6);
     expect(request).toMatchObject({
       kind: "event",
       display: {
         label: "Started action",
         meta: ["Request 1", "read_file", "path README.md"],
         badges: ["renamed", "repaired", "truncated"],
+      },
+    });
+    expect(surface).toMatchObject({
+      kind: "event",
+      display: {
+        label: "Runtime surface",
+        meta: ["Request 1", "16 tools", "12 turns", "8 tool cap"],
+        badges: ["web search", "memory", "subagent", "focused tasks"],
       },
     });
     expect(result).toMatchObject({
@@ -135,10 +154,11 @@ describe("eventTrace view model", () => {
     const items = buildEventTraceItems(normalizeEvents([
       { id: 1, type: "turn.start", data: { turn_id: "t1" } },
       { id: 2, type: "user.message", data: { turn_id: "t1", text: "summarize the repo" } },
-      { id: 3, type: "message.delta", data: { turn_id: "t1", delta: "Done" } },
-      { id: 4, type: "usage", data: { turn_id: "t1", input_tokens: 12, output_tokens: 5 } },
-      { id: 5, type: "turn.end", data: { turn_id: "t1", reason: "completed" } },
-      { id: 6, type: "turn.end", data: { turn_id: "single", reason: "completed" } },
+      { id: 3, type: "runtime.surface", data: { turn_id: "t1", tool_count: 3, capabilities: { web_fetch: true } } },
+      { id: 4, type: "message.delta", data: { turn_id: "t1", delta: "Done" } },
+      { id: 5, type: "usage", data: { turn_id: "t1", input_tokens: 12, output_tokens: 5 } },
+      { id: 6, type: "turn.end", data: { turn_id: "t1", reason: "completed" } },
+      { id: 7, type: "turn.end", data: { turn_id: "single", reason: "completed" } },
     ]));
 
     expect(items.map((item) => {
@@ -146,7 +166,7 @@ describe("eventTrace view model", () => {
       if (item.kind === "deltaGroup") return item.label;
       return item.display.label;
     })).toEqual([
-      ["Request trace", ["Request 1", "summarize the repo", "completed", "17 tokens"], [1, 2, 4, 5]],
+      ["Request trace", ["Request 1", "summarize the repo", "completed", "17 tokens"], [1, 2, 3, 5, 6]],
       "Assistant output",
       "Request finished",
     ]);

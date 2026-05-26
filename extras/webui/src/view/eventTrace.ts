@@ -157,11 +157,15 @@ function collectRequestRecordGroups(
 
   const groups = new Map<string, Extract<EventTraceItem, { kind: "eventGroup" }>>();
   for (const [key, groupEvents] of lifecycleEventsByTurn) {
-    if (groupEvents.length < 2) continue;
+    if (groupEvents.length < 2 || !hasRequestBoundary(groupEvents)) continue;
     groups.set(key, requestRecordGroup(key, groupEvents, context));
   }
 
   return groups;
+}
+
+function hasRequestBoundary(events: readonly NormalizedEvent[]): boolean {
+  return events.some((event) => event.type === EventType.TurnStart || event.type === EventType.UserMessage);
 }
 
 function requestRecordGroup(
@@ -195,6 +199,7 @@ function requestRecordKey(event: NormalizedEvent): string | undefined {
   if (
     event.type !== EventType.TurnStart
     && event.type !== EventType.UserMessage
+    && event.type !== EventType.RuntimeSurface
     && event.type !== EventType.Usage
     && event.type !== EventType.TurnEnd
   ) {
@@ -245,6 +250,8 @@ function eventDisplay(event: NormalizedEvent, context: DisplayContext): EventDis
       return { label: "Started request", meta: compact([request]), badges: [] };
     case EventType.UserMessage:
       return { label: "User message", meta: compact([request, streamSummary(readString(event.data, "text") ?? "")]), badges: [] };
+    case EventType.RuntimeSurface:
+      return { label: "Runtime surface", meta: runtimeSurfaceMeta(event, request), badges: runtimeSurfaceBadges(event) };
     case EventType.MessageDone:
       return {
         label: "Assistant answer saved",
@@ -270,6 +277,29 @@ function eventDisplay(event: NormalizedEvent, context: DisplayContext): EventDis
     default:
       return { label: event.type, meta: fallbackMeta(event, context), badges: [] };
   }
+}
+
+function runtimeSurfaceMeta(event: NormalizedEvent, turn: string | undefined): string[] {
+  const toolCount = readNumber(event.data, "tool_count");
+  const maxSteps = readNumber(event.data, "max_turn_steps");
+  const maxCalls = readNumber(event.data, "max_tool_calls");
+  return compact([
+    turn,
+    typeof toolCount === "number" ? `${toolCount} tools` : undefined,
+    typeof maxSteps === "number" ? `${maxSteps} turns` : undefined,
+    typeof maxCalls === "number" && maxCalls > 0 ? `${maxCalls} tool cap` : undefined,
+  ]);
+}
+
+function runtimeSurfaceBadges(event: NormalizedEvent): string[] {
+  const caps = readObject(event.data, "capabilities");
+  return compact([
+    readBoolean(caps, "web_search") ? "web search" : readBoolean(caps, "web_fetch") ? "web fetch" : undefined,
+    readBoolean(caps, "browser") ? "browser" : undefined,
+    readBoolean(caps, "memory") ? "memory" : undefined,
+    readBoolean(caps, "subagent") ? "subagent" : undefined,
+    readBoolean(caps, "focused_tasks") ? "focused tasks" : undefined,
+  ]);
 }
 
 function contextCompactedMeta(event: NormalizedEvent, turn: string | undefined): string[] {
@@ -451,6 +481,12 @@ function readString(data: unknown, key: string): string | undefined {
   if (!data || typeof data !== "object") return undefined;
   const value = (data as Record<string, unknown>)[key];
   return typeof value === "string" && value !== "" ? value : undefined;
+}
+
+function readObject(data: unknown, key: string): Record<string, unknown> | undefined {
+  if (!data || typeof data !== "object") return undefined;
+  const value = (data as Record<string, unknown>)[key];
+  return value && typeof value === "object" && !Array.isArray(value) ? value as Record<string, unknown> : undefined;
 }
 
 function readNumber(data: unknown, key: string): number | undefined {

@@ -30,6 +30,17 @@ describe("normalizeEvent", () => {
     expect(compacted.turnId).toBe("t1");
   });
 
+  it("marks runtime surface events as known", () => {
+    const surface = normalizeEvent({
+      id: 102,
+      type: "runtime.surface",
+      data: { turn_id: "t1", tool_count: 2, capabilities: { web_search: true } },
+    });
+
+    expect(surface.known).toBe(true);
+    expect(surface.turnId).toBe("t1");
+  });
+
   it("extracts turn_id where the payload carries one", () => {
     const turnStart = normalizeEvent(completedTurn[1]);
     expect(turnStart.turnId).toBe("t1");
