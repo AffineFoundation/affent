@@ -815,8 +815,11 @@ machine-readable `debug_brief` with stable tags and inspection hints. Scenario
 JSONL records also include structured `expectations`, so batch-analysis scripts
 can group failures by required tools, evidence checks, plan/delegation
 constraints, and context-compaction requirements without reopening the manifest.
-JSONL summary records aggregate debug brief tags as `debug_brief_by_tag` for
-batch triage.
+Text and JSONL summary records aggregate those declarations as expectation
+coverage counters, including suites, required tools, required source-access
+statuses, and broad capabilities such as memory, browser, delegation, plan,
+and context compaction. JSONL summary records also aggregate debug brief tags
+as `debug_brief_by_tag` for batch triage.
 JSONL scenario records also include a compact `runtime_surface` summary so
 batch analysis can group outcomes by actual tool/capability surface. JSONL
 summary records include per-scenario counts for runtime tools and capabilities

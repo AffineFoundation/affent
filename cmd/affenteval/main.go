@@ -500,6 +500,11 @@ type batchSummary struct {
 	EndUnknown                 int
 	FailureKinds               map[string]int
 	DebugBriefByTag            map[string]int
+	ExpectationScenarios       int
+	ExpectationSuites          map[string]int
+	ExpectationCapabilities    map[string]int
+	ExpectationRequiredTools   map[string]int
+	ExpectationSourceAccess    map[string]int
 	RemovedWorkspaces          int
 	CleanupErrors              int
 
@@ -706,6 +711,198 @@ func (s *batchSummary) add(res agenteval.BatchResult) {
 			s.DebugBriefByTag[tag]++
 		}
 	}
+	if res.Expectations != nil {
+		s.addExpectations(*res.Expectations)
+	}
+}
+
+func (s *batchSummary) addExpectations(exp agenteval.DebugScenarioExpectations) {
+	s.ExpectationScenarios++
+	addCountMapValues(&s.ExpectationSuites, exp.Suites)
+	addCountMapValues(&s.ExpectationRequiredTools, expectationRequiredToolNames(exp))
+	for _, req := range exp.RequiredSourceAccess {
+		status := strings.TrimSpace(req.Status)
+		if status == "" {
+			status = "any"
+		}
+		addCountMapValue(&s.ExpectationSourceAccess, status)
+	}
+	caps := expectationCapabilitySet(exp)
+	keys := make([]string, 0, len(caps))
+	for cap := range caps {
+		keys = append(keys, cap)
+	}
+	sort.Strings(keys)
+	addCountMapValues(&s.ExpectationCapabilities, keys)
+}
+
+func expectationRequiredToolNames(exp agenteval.DebugScenarioExpectations) []string {
+	tools := map[string]bool{}
+	add := func(tool string) {
+		tool = strings.TrimSpace(tool)
+		if tool != "" {
+			tools[tool] = true
+		}
+	}
+	for _, tool := range exp.RequiredTools {
+		add(tool)
+	}
+	for tool := range exp.RequiredToolCounts {
+		add(tool)
+	}
+	for tool := range exp.RequiredToolResultText {
+		add(tool)
+	}
+	for _, req := range exp.RequiredSourceAccess {
+		add(req.Tool)
+	}
+	for _, req := range exp.RequiredToolArgContains {
+		add(req.Tool)
+	}
+	for _, req := range exp.RequiredToolOrder {
+		add(req.Earlier)
+		add(req.Later)
+	}
+	for _, req := range exp.RequiredCommandBeforeTool {
+		add(req.Tool)
+	}
+	for _, req := range exp.RequiredCommandAfterTool {
+		add(req.Tool)
+	}
+	for _, tool := range exp.RequiredTruncatedResults {
+		add(tool)
+	}
+	for _, tool := range exp.RequiredResultArtifacts {
+		add(tool)
+	}
+	for tool := range exp.MaxSuccessfulToolCallsByTool {
+		add(tool)
+	}
+	out := make([]string, 0, len(tools))
+	for tool := range tools {
+		out = append(out, tool)
+	}
+	sort.Strings(out)
+	return out
+}
+
+func addCountMapValues(dst *map[string]int, values []string) {
+	for _, value := range values {
+		addCountMapValue(dst, value)
+	}
+}
+
+func addCountMapValue(dst *map[string]int, value string) {
+	value = strings.TrimSpace(value)
+	if value == "" {
+		return
+	}
+	if *dst == nil {
+		*dst = map[string]int{}
+	}
+	(*dst)[value]++
+}
+
+func expectationCapabilitySet(exp agenteval.DebugScenarioExpectations) map[string]bool {
+	caps := map[string]bool{}
+	if strings.TrimSpace(exp.SessionID) != "" {
+		caps["session"] = true
+	}
+	if exp.ExecutePlan || exp.RequireNoPlanErrors {
+		caps["plan"] = true
+	}
+	if exp.EnableMemory {
+		caps["memory"] = true
+	}
+	if exp.VerifyCommand != "" {
+		caps["verifier"] = true
+	}
+	if len(exp.RequiredSourceAccess) > 0 {
+		caps["source_access"] = true
+	}
+	for _, req := range exp.RequiredSourceAccess {
+		addExpectationToolCapabilities(caps, req.Tool)
+	}
+	if exp.RequiredContextCompactions > 0 ||
+		exp.RequiredReactiveCompactions > 0 ||
+		exp.RequiredCompactionRemovedMsgs > 0 ||
+		len(exp.RequiredContextSummaryText) > 0 {
+		caps["context_compaction"] = true
+	}
+	if len(exp.RequiredFocusedTaskCounts) > 0 ||
+		len(exp.RequiredSubagentModeCounts) > 0 ||
+		exp.RequireNoDelegationErrors {
+		caps["delegation"] = true
+	}
+	for _, tool := range expectationRequiredToolNames(exp) {
+		addExpectationToolCapabilities(caps, tool)
+	}
+	for stat := range exp.RequiredToolStatsAtLeast {
+		addExpectationStatCapabilities(caps, stat)
+	}
+	for range exp.RequiredCommandBeforeTool {
+		caps["workspace"] = true
+	}
+	for range exp.RequiredCommandAfterTool {
+		caps["workspace"] = true
+	}
+	if len(exp.RequiredCommands) > 0 || len(exp.RequiredCommandCounts) > 0 {
+		caps["workspace"] = true
+	}
+	return caps
+}
+
+func addExpectationToolCapabilities(caps map[string]bool, tool string) {
+	tool = strings.TrimSpace(tool)
+	if tool == "" {
+		return
+	}
+	switch {
+	case tool == agent.MemoryToolName:
+		caps["memory"] = true
+	case tool == agent.SessionSearchToolName:
+		caps["session_search"] = true
+	case tool == agent.PlanToolName:
+		caps["plan"] = true
+	case tool == agent.SubagentToolName || tool == agent.FocusedTaskToolName:
+		caps["delegation"] = true
+	case tool == "web_fetch" || tool == "web_search":
+		caps["web"] = true
+		caps["source_access"] = true
+	case strings.HasPrefix(tool, "browser_"):
+		caps["browser"] = true
+		caps["source_access"] = true
+	case tool == "mcp":
+		caps["mcp"] = true
+	default:
+		if isWorkspaceTool(tool) {
+			caps["workspace"] = true
+		}
+	}
+}
+
+func addExpectationStatCapabilities(caps map[string]bool, stat string) {
+	switch {
+	case strings.HasPrefix(stat, "memory_"):
+		caps["memory"] = true
+	case strings.HasPrefix(stat, "session_search_"):
+		caps["session_search"] = true
+	case strings.HasPrefix(stat, "source_access_"):
+		caps["source_access"] = true
+	case strings.Contains(stat, "focused_task") || strings.Contains(stat, "subagent"):
+		caps["delegation"] = true
+	case strings.Contains(stat, "context_compaction"):
+		caps["context_compaction"] = true
+	}
+}
+
+func isWorkspaceTool(tool string) bool {
+	for _, name := range evalWorkspaceToolNames() {
+		if tool == name {
+			return true
+		}
+	}
+	return false
 }
 
 func printBatchSummary(w io.Writer, s batchSummary) {
@@ -840,6 +1037,21 @@ func printBatchSummary(w io.Writer, s batchSummary) {
 	}
 	if len(s.DebugBriefByTag) > 0 {
 		fmt.Fprintf(w, " debug_brief=%s", formatStringIntCounts(s.DebugBriefByTag))
+	}
+	if s.ExpectationScenarios > 0 {
+		fmt.Fprintf(w, " expectations=scenarios:%d", s.ExpectationScenarios)
+		if len(s.ExpectationCapabilities) > 0 {
+			fmt.Fprintf(w, " expectation_capabilities=%s", formatStringIntCounts(s.ExpectationCapabilities))
+		}
+		if len(s.ExpectationRequiredTools) > 0 {
+			fmt.Fprintf(w, " expectation_tools=%s", formatStringIntCounts(s.ExpectationRequiredTools))
+		}
+		if len(s.ExpectationSourceAccess) > 0 {
+			fmt.Fprintf(w, " expectation_source_access=%s", formatStringIntCounts(s.ExpectationSourceAccess))
+		}
+		if len(s.ExpectationSuites) > 0 {
+			fmt.Fprintf(w, " expectation_suites=%s", formatStringIntCounts(s.ExpectationSuites))
+		}
 	}
 	printDelegationRollup(w, s.FocusedTaskCalls, s.FocusedTaskByType, s.FocusedTaskErrors, s.SubagentCalls, s.SubagentByMode, s.SubagentErrors)
 	printPlanRollup(w, s.PlanCalls, s.PlanByAction, s.PlanErrors)
@@ -1630,6 +1842,11 @@ type batchSummaryRecord struct {
 	ToolFailureHints            failureHintMap                             `json:"tool_failure_hints,omitempty"`
 	RuntimeErrorHints           failureHintMap                             `json:"runtime_error_hints,omitempty"`
 	DebugBriefByTag             map[string]int                             `json:"debug_brief_by_tag,omitempty"`
+	ExpectationScenarios        int                                        `json:"expectation_scenarios,omitempty"`
+	ExpectationSuites           map[string]int                             `json:"expectation_suites,omitempty"`
+	ExpectationCapabilities     map[string]int                             `json:"expectation_capabilities,omitempty"`
+	ExpectationRequiredTools    map[string]int                             `json:"expectation_required_tools,omitempty"`
+	ExpectationSourceAccess     map[string]int                             `json:"expectation_source_access,omitempty"`
 	QualityGatesPassed          *bool                                      `json:"quality_gates_passed,omitempty"`
 	QualityGateFailures         []string                                   `json:"quality_gate_failures,omitempty"`
 	RemovedWorkspaces           int                                        `json:"removed_workspaces"`
@@ -1948,6 +2165,11 @@ func printBatchSummaryJSONL(w io.Writer, meta evalJSONLMetadata, s batchSummary,
 		ToolFailureHints:            toolFailureHintsForKinds(s.ToolFailureByKind),
 		RuntimeErrorHints:           failureHintsForKinds(s.RuntimeErrorByKind),
 		DebugBriefByTag:             cloneStringIntMap(s.DebugBriefByTag),
+		ExpectationScenarios:        s.ExpectationScenarios,
+		ExpectationSuites:           cloneStringIntMap(s.ExpectationSuites),
+		ExpectationCapabilities:     cloneStringIntMap(s.ExpectationCapabilities),
+		ExpectationRequiredTools:    cloneStringIntMap(s.ExpectationRequiredTools),
+		ExpectationSourceAccess:     cloneStringIntMap(s.ExpectationSourceAccess),
 		QualityGatesPassed:          qualityGatesPassedForJSONL(meta, gateFailures),
 		QualityGateFailures:         append([]string(nil), gateFailures...),
 		RemovedWorkspaces:           s.RemovedWorkspaces,

@@ -687,6 +687,19 @@ func TestBatchSummaryAggregatesRuntimeMetrics(t *testing.T) {
 			"tool.request":  2,
 			"tool.result":   2,
 		},
+		Expectations: &agenteval.DebugScenarioExpectations{
+			Suites:        []string{"long-run"},
+			SessionID:     "memory-writer",
+			EnableMemory:  true,
+			VerifyCommand: "go test ./...",
+			RequiredTools: []string{"read_file", "repo_search", "memory"},
+			RequiredSourceAccess: []agenteval.DebugSourceAccessRequirement{
+				{Status: "network", Tool: "browser_network_read", URLContains: "metrics.example/api.json"},
+			},
+			RequiredToolStatsAtLeast: map[string]int{
+				"memory_updates": 1,
+			},
+		},
 		TurnEndReason: "completed",
 		ToolStats: agenteval.ToolRuntimeStats{
 			ToolArgsRepaired:          1,
@@ -752,6 +765,23 @@ func TestBatchSummaryAggregatesRuntimeMetrics(t *testing.T) {
 		ToolCalls:          3,
 		TraceSchemaVersion: 1,
 		TurnEndReason:      "max_turns",
+		Expectations: &agenteval.DebugScenarioExpectations{
+			Suites:      []string{"live-web"},
+			SessionID:   "history-reader",
+			ExecutePlan: true,
+			RequiredTools: []string{
+				"web_fetch",
+				"browser_network_read",
+				"session_search",
+				"run_task",
+			},
+			RequiredSourceAccess: []agenteval.DebugSourceAccessRequirement{
+				{Status: "network", Tool: "browser_network_read", URLContains: "taostats.io/api"},
+			},
+			RequiredFocusedTaskCounts:  map[string]int{"explore": 1},
+			RequireNoPlanErrors:        true,
+			RequiredContextCompactions: 1,
+		},
 		Failures: []string{
 			`turn ended with reason "max_turns" (expected completed)`,
 			`missing required command match "go test"; commands=[]`,
@@ -865,6 +895,9 @@ func TestBatchSummaryAggregatesRuntimeMetrics(t *testing.T) {
 	if !strings.Contains(out.String(), "debug_brief=context_compaction:1,context_compaction:reactive:1,loop_guard:2,outcome:failed:1,plan:2,plan:set:1,plan:update:1,plan_error:1,recall:1,runtime_error:1,runtime_error:context_overflow:1,runtime_error:llm_timeout:1,source_access:2,source_network:2,source_unverified:1,tool_failure:1,tool_failure:invalid_args:1,tool_failure:timeout:1,truncation:2,turn_end:max_turns:1") {
 		t.Fatalf("summary output missing debug brief tag rollup:\n%s", out.String())
 	}
+	if !strings.Contains(out.String(), "expectations=scenarios:2 expectation_capabilities=browser:2,context_compaction:1,delegation:1,memory:1,plan:1,session:2,session_search:1,source_access:2,verifier:1,web:1,workspace:1 expectation_tools=browser_network_read:2,memory:1,read_file:1,repo_search:1,run_task:1,session_search:1,web_fetch:1 expectation_source_access=network:2 expectation_suites=live-web:1,long-run:1") {
+		t.Fatalf("summary output missing expectation rollup:\n%s", out.String())
+	}
 	if !strings.Contains(out.String(), "repair_kinds=alias_rename:2,tool_name:1,type_coercion:2") {
 		t.Fatalf("summary output missing repair kind rollup:\n%s", out.String())
 	}
@@ -972,6 +1005,35 @@ func TestBatchSummaryAggregatesRuntimeMetrics(t *testing.T) {
 	}
 	if !reflect.DeepEqual(summary.PlanByAction, map[string]int{"set": 1, "update": 2}) {
 		t.Fatalf("PlanByAction = %#v", summary.PlanByAction)
+	}
+	if summary.ExpectationScenarios != 2 {
+		t.Fatalf("ExpectationScenarios = %d, want 2", summary.ExpectationScenarios)
+	}
+	if !reflect.DeepEqual(summary.ExpectationSuites, map[string]int{"long-run": 1, "live-web": 1}) {
+		t.Fatalf("ExpectationSuites = %#v", summary.ExpectationSuites)
+	}
+	if !reflect.DeepEqual(summary.ExpectationSourceAccess, map[string]int{"network": 2}) {
+		t.Fatalf("ExpectationSourceAccess = %#v", summary.ExpectationSourceAccess)
+	}
+	wantExpectationCaps := map[string]int{
+		"browser":            2,
+		"context_compaction": 1,
+		"delegation":         1,
+		"memory":             1,
+		"plan":               1,
+		"session":            2,
+		"session_search":     1,
+		"source_access":      2,
+		"verifier":           1,
+		"web":                1,
+		"workspace":          1,
+	}
+	if !reflect.DeepEqual(summary.ExpectationCapabilities, wantExpectationCaps) {
+		t.Fatalf("ExpectationCapabilities = %#v, want %#v", summary.ExpectationCapabilities, wantExpectationCaps)
+	}
+	wantExpectationTools := map[string]int{"read_file": 1, "repo_search": 1, "memory": 1, "web_fetch": 1, "browser_network_read": 2, "session_search": 1, "run_task": 1}
+	if !reflect.DeepEqual(summary.ExpectationRequiredTools, wantExpectationTools) {
+		t.Fatalf("ExpectationRequiredTools = %#v, want %#v", summary.ExpectationRequiredTools, wantExpectationTools)
 	}
 }
 
@@ -1928,6 +1990,11 @@ func TestPrintBatchSummaryJSONL(t *testing.T) {
 		EndUnknown:                 0,
 		FailureKinds:               map[string]int{"missing_command": 1, "turn_end": 1},
 		DebugBriefByTag:            map[string]int{"outcome:failed": 1, "tool_failure:blocked": 1, "runtime_error:llm_timeout": 1},
+		ExpectationScenarios:       2,
+		ExpectationSuites:          map[string]int{"long-run": 1, "live-web": 1},
+		ExpectationCapabilities:    map[string]int{"browser": 2, "source_access": 2, "web": 1},
+		ExpectationRequiredTools:   map[string]int{"web_fetch": 1, "browser_network_read": 1},
+		ExpectationSourceAccess:    map[string]int{"network": 2},
 		RemovedWorkspaces:          1,
 		FocusedTaskCalls:           4,
 		FocusedTaskErrors:          1,
@@ -2025,6 +2092,7 @@ func TestPrintBatchSummaryJSONL(t *testing.T) {
 		"end_errors":                      float64(0),
 		"end_cancelled":                   float64(0),
 		"end_unknown":                     float64(0),
+		"expectation_scenarios":           float64(2),
 		"removed_workspaces":              float64(1),
 		"cleanup_errors":                  float64(0),
 		"focused_task_calls":              float64(4),
@@ -2122,6 +2190,27 @@ func TestPrintBatchSummaryJSONL(t *testing.T) {
 		debugBriefByTag["tool_failure:blocked"] != float64(1) ||
 		debugBriefByTag["runtime_error:llm_timeout"] != float64(1) {
 		t.Fatalf("debug_brief_by_tag = %#v\njson=%s", got["debug_brief_by_tag"], out.String())
+	}
+	expectationCapabilities, ok := got["expectation_capabilities"].(map[string]any)
+	if !ok ||
+		expectationCapabilities["browser"] != float64(2) ||
+		expectationCapabilities["source_access"] != float64(2) ||
+		expectationCapabilities["web"] != float64(1) {
+		t.Fatalf("expectation_capabilities = %#v\njson=%s", got["expectation_capabilities"], out.String())
+	}
+	expectationTools, ok := got["expectation_required_tools"].(map[string]any)
+	if !ok ||
+		expectationTools["web_fetch"] != float64(1) ||
+		expectationTools["browser_network_read"] != float64(1) {
+		t.Fatalf("expectation_required_tools = %#v\njson=%s", got["expectation_required_tools"], out.String())
+	}
+	expectationSourceAccess, ok := got["expectation_source_access"].(map[string]any)
+	if !ok || expectationSourceAccess["network"] != float64(2) {
+		t.Fatalf("expectation_source_access = %#v\njson=%s", got["expectation_source_access"], out.String())
+	}
+	expectationSuites, ok := got["expectation_suites"].(map[string]any)
+	if !ok || expectationSuites["long-run"] != float64(1) || expectationSuites["live-web"] != float64(1) {
+		t.Fatalf("expectation_suites = %#v\njson=%s", got["expectation_suites"], out.String())
 	}
 	runtimeSurfaceTools, ok := got["runtime_surface_tools"].(map[string]any)
 	if !ok || runtimeSurfaceTools["web_fetch"] != float64(2) || runtimeSurfaceTools["browser_find"] != float64(1) {
