@@ -664,9 +664,11 @@ export function App() {
       data-testid="app-shell"
     >
       {mobileTopbarHidden ? (
-        <button type="button" className="mobile-chrome-restore" aria-label="Show top controls" onClick={() => setMobileTopbarHidden(false)}>
-          Show
-        </button>
+        <div className="mobile-chrome-restore-bar">
+          <button type="button" className="mobile-chrome-restore" aria-label="Show top controls" onClick={() => setMobileTopbarHidden(false)}>
+            <span aria-hidden="true">⌄</span>
+          </button>
+        </div>
       ) : null}
       <div className="app-topbar">
         <header className="app-header">
@@ -676,7 +678,7 @@ export function App() {
           </span>
           <span className="spacer" />
           <button type="button" className="mobile-chrome-toggle" aria-label="Hide top controls" onClick={() => setMobileTopbarHidden(true)}>
-            Hide
+            <span aria-hidden="true">⌃</span>
           </button>
           <div className="theme-switch" role="group" aria-label="Color theme">
             <button type="button" aria-pressed={theme === "light"} onClick={() => setTheme("light")}>
@@ -738,7 +740,6 @@ export function App() {
               onClick={() => setSessionsCollapsed(false)}
             >
               <span aria-hidden="true">☰</span>
-              <b>Chats</b>
             </button>
           ) : null}
           {showSessionNav && !sessionsCollapsed ? (
