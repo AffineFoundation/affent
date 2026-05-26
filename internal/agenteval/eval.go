@@ -67,11 +67,12 @@ type LoopDecisionRequirement struct {
 }
 
 type SourceAccessRequirement struct {
-	Status       string
-	Tool         string
-	URLContains  string
-	SourceMethod string
-	JSONPath     string
+	Status               string
+	Tool                 string
+	URLContains          string
+	RequestedURLContains string
+	SourceMethod         string
+	JSONPath             string
 	// Min is the required number of matching SourceAccess results. Values
 	// <=0 default to one so scenarios can spell the common case tersely.
 	Min int
@@ -506,12 +507,13 @@ type DebugLoopDecisionRequirement struct {
 }
 
 type DebugSourceAccessRequirement struct {
-	Status       string `json:"status,omitempty"`
-	Tool         string `json:"tool,omitempty"`
-	URLContains  string `json:"url_contains,omitempty"`
-	SourceMethod string `json:"source_method,omitempty"`
-	JSONPath     string `json:"json_path,omitempty"`
-	Min          int    `json:"min,omitempty"`
+	Status               string `json:"status,omitempty"`
+	Tool                 string `json:"tool,omitempty"`
+	URLContains          string `json:"url_contains,omitempty"`
+	RequestedURLContains string `json:"requested_url_contains,omitempty"`
+	SourceMethod         string `json:"source_method,omitempty"`
+	JSONPath             string `json:"json_path,omitempty"`
+	Min                  int    `json:"min,omitempty"`
 }
 
 type DebugTranscriptRef struct {
@@ -965,12 +967,13 @@ func debugScenarioExpectations(s BatchScenario) DebugScenarioExpectations {
 	sourceReqs := make([]DebugSourceAccessRequirement, 0, len(s.RequiredSourceAccess))
 	for _, req := range s.RequiredSourceAccess {
 		sourceReqs = append(sourceReqs, DebugSourceAccessRequirement{
-			Status:       req.Status,
-			Tool:         req.Tool,
-			URLContains:  req.URLContains,
-			SourceMethod: req.SourceMethod,
-			JSONPath:     req.JSONPath,
-			Min:          req.Min,
+			Status:               req.Status,
+			Tool:                 req.Tool,
+			URLContains:          req.URLContains,
+			RequestedURLContains: req.RequestedURLContains,
+			SourceMethod:         req.SourceMethod,
+			JSONPath:             req.JSONPath,
+			Min:                  req.Min,
 		})
 	}
 	loopReqs := make([]DebugLoopDecisionRequirement, 0, len(s.RequiredLoopDecisionMatches))
@@ -1595,7 +1598,7 @@ func BatchScenarioChecks(scenario BatchScenario) []Check {
 		if min <= 0 {
 			min = 1
 		}
-		checks = append(checks, SourceAccessMatchAtLeast(req.Status, req.Tool, req.URLContains, req.SourceMethod, req.JSONPath, min))
+		checks = append(checks, SourceAccessMatchWithRequestedAtLeast(req.Status, req.Tool, req.URLContains, req.RequestedURLContains, req.SourceMethod, req.JSONPath, min))
 	}
 	if scenario.RequiredContextCompactions > 0 {
 		checks = append(checks, ContextCompactionsAtLeast(scenario.RequiredContextCompactions))

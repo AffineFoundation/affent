@@ -438,7 +438,7 @@ func TestBatchScenarioChecks_UsesSharedCheckLibrary(t *testing.T) {
 			{Kind: "evidence_quality", Decision: "defer", Trigger: "source_access_dynamic_partial"},
 		},
 		RequiredSourceAccess: []SourceAccessRequirement{
-			{Status: "network", Tool: "browser_network_read", URLContains: "taostats.io", SourceMethod: "network_xhr_fetch"},
+			{Status: "network", Tool: "browser_network_read", URLContains: "taostats.io", RequestedURLContains: "taostats.io/subnets/120", SourceMethod: "network_xhr_fetch"},
 		},
 		RequiredContextCompactions:    1,
 		RequiredReactiveCompactions:   1,
@@ -487,7 +487,7 @@ func TestBatchScenarioChecks_UsesSharedCheckLibrary(t *testing.T) {
 		"loop_decision_kind_at_least:evidence_quality:1",
 		"loop_decision_result_at_least:defer:1",
 		"loop_decision_match_at_least:evidence_quality:defer:source_access_dynamic_partial:1",
-		"source_access_match_at_least:network:browser_network_read:taostats.io:network_xhr_fetch:*:1",
+		"source_access_match_at_least:network:browser_network_read:taostats.io:requested=taostats.io/subnets/120:network_xhr_fetch:*:1",
 		"context_compactions_at_least:1",
 		"reactive_context_compactions_at_least:1",
 		"context_compaction_removed_messages_at_least:20",
@@ -527,6 +527,20 @@ func TestBatchScenarioChecks_SourceAccessRequirementDefaultsToOne(t *testing.T) 
 	}
 	if !strings.HasPrefix(checks[1].Name, "source_access_match_at_least:network:*:taostats.io:*:*:1") {
 		t.Fatalf("default source access check name = %q", checks[1].Name)
+	}
+}
+
+func TestBatchScenarioChecks_SourceAccessRequirementCanMatchRequestedURL(t *testing.T) {
+	checks := BatchScenarioChecks(BatchScenario{
+		RequiredSourceAccess: []SourceAccessRequirement{
+			{Status: "network", URLContains: "api.taostats.io", RequestedURLContains: "app.taostats.io/subnets/120"},
+		},
+	})
+	if len(checks) != 2 {
+		t.Fatalf("checks count = %d, want turn-end + source access match: %+v", len(checks), checks)
+	}
+	if !strings.HasPrefix(checks[1].Name, "source_access_match_at_least:network:*:api.taostats.io:requested=app.taostats.io/subnets") {
+		t.Fatalf("requested source access check name = %q", checks[1].Name)
 	}
 }
 
@@ -1035,10 +1049,10 @@ func TestSelectLiveWebSuite(t *testing.T) {
 		}
 	}
 	if len(scenario.RequiredSourceAccess) != 1 ||
-		scenario.RequiredSourceAccess[0] != (SourceAccessRequirement{Status: "network", Tool: "browser_network_read", URLContains: "taostats.io", SourceMethod: "network_xhr_fetch"}) {
+		scenario.RequiredSourceAccess[0] != (SourceAccessRequirement{Status: "network", Tool: "browser_network_read", URLContains: "taostats.io", RequestedURLContains: "taostats.io/subnets/120", SourceMethod: "network_xhr_fetch"}) {
 		t.Fatalf("live-web RequiredSourceAccess = %#v", scenario.RequiredSourceAccess)
 	}
-	for _, want := range []string{"SourceAccess:", "browser_network_url=", "source_method=network_xhr_fetch"} {
+	for _, want := range []string{"SourceAccess:", "browser_network_url=", "requested_url=", "source_method=network_xhr_fetch"} {
 		if !stringSliceContains(scenario.RequiredToolResultText["browser_network_read"], want) {
 			t.Fatalf("live-web browser_network_read result requirements = %#v, want %q", scenario.RequiredToolResultText["browser_network_read"], want)
 		}
@@ -1071,7 +1085,7 @@ func TestSelectLiveWebSuite(t *testing.T) {
 		t.Fatalf("live-web recovery tool order = %#v", recovery.RequiredToolOrder)
 	}
 	if len(recovery.RequiredSourceAccess) != 1 ||
-		recovery.RequiredSourceAccess[0] != (SourceAccessRequirement{Status: "network", Tool: "browser_network_read", URLContains: "taostats.io", SourceMethod: "network_xhr_fetch"}) {
+		recovery.RequiredSourceAccess[0] != (SourceAccessRequirement{Status: "network", Tool: "browser_network_read", URLContains: "taostats.io", RequestedURLContains: "taostats.io/subnets/120", SourceMethod: "network_xhr_fetch"}) {
 		t.Fatalf("live-web recovery RequiredSourceAccess = %#v", recovery.RequiredSourceAccess)
 	}
 	for _, want := range []string{"web_fetch", "browser_network_url", "source_method"} {
@@ -1376,7 +1390,7 @@ func TestWriteScenarioDebugArtifactsIndexesTraceAndFinalText(t *testing.T) {
 			CallID:     "call-2",
 			Tool:       "browser_network_read",
 			Args:       map[string]any{"ref": "n1", "json_path": "$.price"},
-			Result:     "SourceAccess: browser_network_url=https://taostats.io/api/subnets/120; source_method=network_xhr_fetch\nJSON_PATH: $.price\n\"0.06342 T\"",
+			Result:     "SourceAccess: browser_network_url=https://taostats.io/api/subnets/120; requested_url=https://taostats.io/subnets/120; source_method=network_xhr_fetch\nJSON_PATH: $.price\n\"0.06342 T\"",
 			ExitCode:   0,
 			DurationMS: 12,
 		}, {
@@ -1481,7 +1495,7 @@ func TestWriteScenarioDebugArtifactsIndexesTraceAndFinalText(t *testing.T) {
 			{Kind: "evidence_quality", Decision: "defer", Trigger: "source_access_dynamic_partial"},
 		},
 		RequiredToolResultText: map[string][]string{
-			"browser_network_read": {"SourceAccess:", "source_method=network_xhr_fetch"},
+			"browser_network_read": {"SourceAccess:", "requested_url=", "source_method=network_xhr_fetch"},
 		},
 		RequiredToolOrder: []ToolOrderRequirement{
 			{Earlier: "web_fetch", Later: "browser_network_read"},
@@ -1504,7 +1518,7 @@ func TestWriteScenarioDebugArtifactsIndexesTraceAndFinalText(t *testing.T) {
 		RequireNoDelegationErrors: true,
 		RequireNoPlanErrors:       true,
 		RequiredSourceAccess: []SourceAccessRequirement{
-			{Status: "network", Tool: "browser_network_read", URLContains: "taostats.io/api", SourceMethod: "network_xhr_fetch", JSONPath: "$.price"},
+			{Status: "network", Tool: "browser_network_read", URLContains: "taostats.io/api", RequestedURLContains: "taostats.io/subnets/120", SourceMethod: "network_xhr_fetch", JSONPath: "$.price"},
 		},
 		RequiredFinalText:             []string{"0.06342 T"},
 		ForbiddenFinalText:            []string{"subnet price $277.32"},
@@ -1590,7 +1604,7 @@ func TestWriteScenarioDebugArtifactsIndexesTraceAndFinalText(t *testing.T) {
 		manifest.Expectations.RequiredLoopDecisionResults["defer"] != 1 ||
 		len(manifest.Expectations.RequiredLoopDecisionMatches) != 1 ||
 		manifest.Expectations.RequiredLoopDecisionMatches[0] != (DebugLoopDecisionRequirement{Kind: "evidence_quality", Decision: "defer", Trigger: "source_access_dynamic_partial"}) ||
-		!reflect.DeepEqual(manifest.Expectations.RequiredToolResultText["browser_network_read"], []string{"SourceAccess:", "source_method=network_xhr_fetch"}) ||
+		!reflect.DeepEqual(manifest.Expectations.RequiredToolResultText["browser_network_read"], []string{"SourceAccess:", "requested_url=", "source_method=network_xhr_fetch"}) ||
 		len(manifest.Expectations.RequiredToolOrder) != 1 ||
 		manifest.Expectations.RequiredToolOrder[0] != (DebugToolOrderRequirement{Earlier: "web_fetch", Later: "browser_network_read"}) ||
 		len(manifest.Expectations.RequiredCommandBeforeTool) != 1 ||
@@ -1604,7 +1618,7 @@ func TestWriteScenarioDebugArtifactsIndexesTraceAndFinalText(t *testing.T) {
 		len(manifest.Expectations.RequiredToolArgContains) != 1 ||
 		manifest.Expectations.RequiredToolArgContains[0] != (DebugToolArgContainsRequirement{Tool: "browser_network_read", Arg: "json_path", Substring: "$.price"}) ||
 		len(manifest.Expectations.RequiredSourceAccess) != 1 ||
-		manifest.Expectations.RequiredSourceAccess[0] != (DebugSourceAccessRequirement{Status: "network", Tool: "browser_network_read", URLContains: "taostats.io/api", SourceMethod: "network_xhr_fetch", JSONPath: "$.price"}) ||
+		manifest.Expectations.RequiredSourceAccess[0] != (DebugSourceAccessRequirement{Status: "network", Tool: "browser_network_read", URLContains: "taostats.io/api", RequestedURLContains: "taostats.io/subnets/120", SourceMethod: "network_xhr_fetch", JSONPath: "$.price"}) ||
 		!stringSliceContains(manifest.Expectations.RequiredFinalText, "0.06342 T") ||
 		!stringSliceContains(manifest.Expectations.ForbiddenFinalText, "subnet price $277.32") ||
 		!reflect.DeepEqual(manifest.Expectations.RequiredTruncatedResults, []string{"web_fetch"}) ||
@@ -1647,6 +1661,7 @@ func TestWriteScenarioDebugArtifactsIndexesTraceAndFinalText(t *testing.T) {
 		manifest.SourceAccessExamples[0].Tool != "web_fetch" ||
 		manifest.SourceAccessExamples[0].Status != "dynamic_partial" ||
 		manifest.SourceAccessExamples[1].Status != "network" ||
+		manifest.SourceAccessExamples[1].RequestedURL != "https://taostats.io/subnets/120" ||
 		manifest.SourceAccessExamples[1].JSONPath != "$.price" ||
 		manifest.SourceAccessExamples[2].Status != "discovery_only" {
 		t.Fatalf("manifest source access examples = %+v", manifest.SourceAccessExamples)
@@ -1796,8 +1811,8 @@ func TestWriteScenarioDebugArtifactsIndexesTraceAndFinalText(t *testing.T) {
 		"required_subagent_mode_counts: `review=1`",
 		"required_no_errors: `delegation plan`",
 		"required_loop_decision: `kind=evidence_quality decision=defer trigger=source_access_dynamic_partial min=1`",
-		"required_tool_result_text[browser_network_read]: `SourceAccess:`, `source_method=network_xhr_fetch`",
-		"required_source_access: `status=network tool=browser_network_read url_contains=taostats.io/api source_method=network_xhr_fetch json_path=$.price min=1`",
+		"required_tool_result_text[browser_network_read]: `SourceAccess:`, `requested_url=`, `source_method=network_xhr_fetch`",
+		"required_source_access: `status=network tool=browser_network_read url_contains=taostats.io/api requested_url_contains=taostats.io/subnets/120 source_method=network_xhr_fetch json_path=$.price min=1`",
 		"required_final_text: `0.06342 T`",
 		"forbidden_final_text: `subnet price $277.32`",
 		"required_truncated_results: `web_fetch`",
@@ -1815,7 +1830,7 @@ func TestWriteScenarioDebugArtifactsIndexesTraceAndFinalText(t *testing.T) {
 		"`message.delta`: `2`",
 		"## Source Evidence",
 		"tool#1 `web_fetch` status=`dynamic_partial` url=`https://taostats.io/subnets/120`",
-		"tool#2 `browser_network_read` status=`network` url=`https://taostats.io/api/subnets/120` json_path=`$.price`",
+		"tool#2 `browser_network_read` status=`network` url=`https://taostats.io/api/subnets/120` requested=`https://taostats.io/subnets/120` json_path=`$.price`",
 		"tool#3 `browser_navigate` status=`discovery_only` url=`https://search.example/?q=affine`",
 		"## Plan Updates",
 		"tool#7 action=`update` index=`2` status=`completed` progress=`2/3` current=`3:pending` call_id=`call-7`",

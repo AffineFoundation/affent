@@ -526,6 +526,10 @@ func ContextCompactionSummaryContains(substr string) Check {
 }
 
 func SourceAccessMatchAtLeast(status, toolName, urlContains, sourceMethod, jsonPath string, min int) Check {
+	return SourceAccessMatchWithRequestedAtLeast(status, toolName, urlContains, "", sourceMethod, jsonPath, min)
+}
+
+func SourceAccessMatchWithRequestedAtLeast(status, toolName, urlContains, requestedURLContains, sourceMethod, jsonPath string, min int) Check {
 	if min <= 0 {
 		min = 1
 	}
@@ -537,6 +541,9 @@ func SourceAccessMatchAtLeast(status, toolName, urlContains, sourceMethod, jsonP
 		}
 		nameParts = append(nameParts, previewSubstr(part, 24))
 	}
+	if strings.TrimSpace(requestedURLContains) != "" {
+		nameParts = append(nameParts[:4], append([]string{"requested=" + previewSubstr(strings.TrimSpace(requestedURLContains), 24)}, nameParts[4:]...)...)
+	}
 	return Check{
 		Name: strings.Join(nameParts, ":"),
 		Eval: func(t Trace) CheckResult {
@@ -545,7 +552,7 @@ func SourceAccessMatchAtLeast(status, toolName, urlContains, sourceMethod, jsonP
 			var matched []string
 			var observed []string
 			for _, ex := range examples {
-				if sourceAccessRequirementMatches(ex, status, toolName, urlContains, sourceMethod, jsonPath) {
+				if sourceAccessRequirementMatches(ex, status, toolName, urlContains, requestedURLContains, sourceMethod, jsonPath) {
 					count++
 					if len(matched) < 5 {
 						matched = append(matched, sourceAccessExampleSummary(ex))
@@ -562,15 +569,15 @@ func SourceAccessMatchAtLeast(status, toolName, urlContains, sourceMethod, jsonP
 			return CheckResult{
 				Pass: false,
 				Detail: fmt.Sprintf(
-					"expected at least %d SourceAccess result(s) matching status=%q tool=%q url_contains=%q source_method=%q json_path=%q, got %d; observed=%v",
-					min, status, toolName, urlContains, sourceMethod, jsonPath, count, observed,
+					"expected at least %d SourceAccess result(s) matching status=%q tool=%q url_contains=%q requested_url_contains=%q source_method=%q json_path=%q, got %d; observed=%v",
+					min, status, toolName, urlContains, requestedURLContains, sourceMethod, jsonPath, count, observed,
 				),
 			}
 		},
 	}
 }
 
-func sourceAccessRequirementMatches(ex SourceAccessExample, status, toolName, urlContains, sourceMethod, jsonPath string) bool {
+func sourceAccessRequirementMatches(ex SourceAccessExample, status, toolName, urlContains, requestedURLContains, sourceMethod, jsonPath string) bool {
 	if status = strings.TrimSpace(status); status != "" && ex.Status != status {
 		return false
 	}
@@ -578,6 +585,9 @@ func sourceAccessRequirementMatches(ex SourceAccessExample, status, toolName, ur
 		return false
 	}
 	if urlContains = strings.TrimSpace(urlContains); urlContains != "" && !strings.Contains(ex.URL, urlContains) {
+		return false
+	}
+	if requestedURLContains = strings.TrimSpace(requestedURLContains); requestedURLContains != "" && !strings.Contains(ex.RequestedURL, requestedURLContains) {
 		return false
 	}
 	if sourceMethod = strings.TrimSpace(sourceMethod); sourceMethod != "" && ex.SourceMethod != sourceMethod {
@@ -597,6 +607,9 @@ func sourceAccessExampleSummary(ex SourceAccessExample) string {
 	}
 	if ex.URL != "" {
 		parts = append(parts, "url="+previewSubstr(ex.URL, 80))
+	}
+	if ex.RequestedURL != "" {
+		parts = append(parts, "requested="+previewSubstr(ex.RequestedURL, 80))
 	}
 	if ex.SourceMethod != "" {
 		parts = append(parts, "method="+ex.SourceMethod)

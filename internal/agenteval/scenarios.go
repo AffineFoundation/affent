@@ -1756,16 +1756,18 @@ func liveWebTaostatsDynamicEvidenceScenario() BatchScenario {
 		},
 		RequiredSourceAccess: []SourceAccessRequirement{
 			{
-				Status:       "network",
-				Tool:         "browser_network_read",
-				URLContains:  "taostats.io",
-				SourceMethod: "network_xhr_fetch",
+				Status:               "network",
+				Tool:                 "browser_network_read",
+				URLContains:          "taostats.io",
+				RequestedURLContains: "taostats.io/subnets/120",
+				SourceMethod:         "network_xhr_fetch",
 			},
 		},
 		RequiredToolResultText: map[string][]string{
 			"browser_network_read": {
 				"SourceAccess:",
 				"browser_network_url=",
+				"requested_url=",
 				"source_method=network_xhr_fetch",
 			},
 		},
@@ -1821,16 +1823,18 @@ func liveWebTaostatsWebFetchRecoveryScenario() BatchScenario {
 		},
 		RequiredSourceAccess: []SourceAccessRequirement{
 			{
-				Status:       "network",
-				Tool:         "browser_network_read",
-				URLContains:  "taostats.io",
-				SourceMethod: "network_xhr_fetch",
+				Status:               "network",
+				Tool:                 "browser_network_read",
+				URLContains:          "taostats.io",
+				RequestedURLContains: "taostats.io/subnets/120",
+				SourceMethod:         "network_xhr_fetch",
 			},
 		},
 		RequiredToolResultText: map[string][]string{
 			"browser_network_read": {
 				"SourceAccess:",
 				"browser_network_url=",
+				"requested_url=",
 				"source_method=network_xhr_fetch",
 			},
 		},

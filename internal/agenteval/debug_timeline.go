@@ -363,6 +363,9 @@ func renderTimelineScenarioExpectations(b *strings.Builder, scenario BatchScenar
 			if req.URLContains != "" {
 				parts = append(parts, fmt.Sprintf("url_contains=%s", timelineInline(req.URLContains, 160)))
 			}
+			if req.RequestedURLContains != "" {
+				parts = append(parts, fmt.Sprintf("requested_url_contains=%s", timelineInline(req.RequestedURLContains, 160)))
+			}
 			if req.SourceMethod != "" {
 				parts = append(parts, fmt.Sprintf("source_method=%s", req.SourceMethod))
 			}

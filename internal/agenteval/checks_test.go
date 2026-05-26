@@ -459,6 +459,12 @@ func TestSourceAccessMatchAtLeast(t *testing.T) {
 	if res := SourceAccessMatchAtLeast("network", "browser_network_read", "taostats.io/api", "network_xhr_fetch", "$.market_cap", 1).Eval(trace); !res.Pass {
 		t.Fatalf("expected network source access check to pass: %+v", res)
 	}
+	if res := SourceAccessMatchWithRequestedAtLeast("network", "browser_network_read", "taostats.io/api", "taostats.io/subnets/120", "network_xhr_fetch", "$.market_cap", 1).Eval(trace); !res.Pass {
+		t.Fatalf("expected network source access requested-url check to pass: %+v", res)
+	}
+	if res := SourceAccessMatchWithRequestedAtLeast("network", "browser_network_read", "taostats.io/api", "taostats.io/subnets/999", "network_xhr_fetch", "$.market_cap", 1).Eval(trace); res.Pass {
+		t.Fatalf("expected requested URL mismatch to fail: %+v", res)
+	}
 	if res := SourceAccessMatchAtLeast("verified", "browser_network_read", "taostats.io/api", "", "", 1).Eval(trace); res.Pass {
 		t.Fatalf("expected status mismatch to fail: %+v", res)
 	}
