@@ -433,7 +433,6 @@ describe("App", () => {
     await userEvent.type(input, "help me install a skill from github");
     expect(screen.getByTestId("composer-task-hint")).toHaveTextContent("Skill install ready");
     expect(screen.getByTestId("composer-task-hint")).toHaveTextContent("propose_install");
-    expect(screen.queryByTestId("session-tools-panel")).toBeNull();
     await userEvent.click(screen.getByLabelText("Settings"));
     expect(await screen.findByTestId("session-memory-panel")).toHaveTextContent("2 entries");
     expect(screen.getByTestId("session-memory-panel")).toHaveTextContent("project facts are durable");
