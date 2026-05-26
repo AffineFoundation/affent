@@ -54,8 +54,6 @@ export function SessionList({
   const toolsExpanded = toolsOpen || toolsActive;
   const compact = demoActive || rows.length <= 1;
   const showTools = !demoActive && rows.length > 1;
-  const selectedRow = rows.find((row) => row.id === selectedId);
-
   useEffect(() => {
     setMobileOpen(false);
   }, [selectedId]);
@@ -76,18 +74,47 @@ export function SessionList({
   }
 
   return (
-    <aside
-      className="session-panel"
-      aria-label="Chats"
-      data-compact={compact}
-      data-mobile-open={mobileOpen ? "true" : "false"}
-      data-has-selection={selectedId ? "true" : "false"}
-    >
+    <>
+      {!demoActive && rows.length > 0 ? (
+        <button
+          type="button"
+          className="mobile-session-launcher"
+          aria-label={mobileOpen ? "Close chats" : "Open chats"}
+          aria-expanded={mobileOpen}
+          onClick={() => setMobileOpen((open) => !open)}
+        >
+          <span>Chats</span>
+          <b>{rows.length}</b>
+        </button>
+      ) : null}
+      {mobileOpen ? (
+        <button
+          type="button"
+          className="mobile-session-backdrop"
+          aria-label="Close chats"
+          onClick={() => setMobileOpen(false)}
+        />
+      ) : null}
+      <aside
+        className="session-panel"
+        aria-label="Chats"
+        data-compact={compact}
+        data-mobile-open={mobileOpen ? "true" : "false"}
+        data-has-selection={selectedId ? "true" : "false"}
+      >
       <div className="panel-head">
         <div>
           <h2>Chats</h2>
           <span>{demoActive ? "Read-only replay" : chatListSummary(rows.length, counts.active)}</span>
         </div>
+        <button
+          type="button"
+          className="mobile-session-close"
+          aria-label="Close chats"
+          onClick={() => setMobileOpen(false)}
+        >
+          Close
+        </button>
         {!demoActive ? (
           <button
             type="button"
@@ -100,21 +127,6 @@ export function SessionList({
           </button>
         ) : null}
       </div>
-      {!demoActive && rows.length > 0 ? (
-        <button
-          type="button"
-          className="mobile-session-toggle"
-          aria-label={mobileOpen ? "Hide chat list" : "Switch chats"}
-          aria-expanded={mobileOpen}
-          onClick={() => setMobileOpen((open) => !open)}
-        >
-          <span>
-            <b>{selectedRow ? selectedRow.title : "Chats"}</b>
-            <small>{selectedRow ? mobileCurrentChatSummary(selectedRow) : chatCountLabel(rows.length)}</small>
-          </span>
-          <strong>{mobileOpen ? "Hide" : "Switch"}</strong>
-        </button>
-      ) : null}
       {showTools ? (
         <div className="session-tools" data-expanded={toolsExpanded ? "true" : "false"} data-testid="session-tools">
           {toolsExpanded ? (
@@ -254,7 +266,8 @@ export function SessionList({
             })
           : null}
       </div>
-    </aside>
+      </aside>
+    </>
   );
 }
 
@@ -271,17 +284,6 @@ function shouldShowRowStatus(status: string): boolean {
 
 function shouldPinRowPreview(tone: string, selected: boolean): boolean {
   return selected || tone === "running" || tone === "error" || tone === "warning";
-}
-
-function mobileCurrentChatSummary(row: { title: string; detail?: string; preview?: string; stats?: string; status: string; updated?: string; meta?: readonly string[] }): string {
-  if (row.status === "Live" && row.detail?.startsWith("Sending")) return row.detail;
-  if (row.preview && row.preview !== "Waiting for the next update.") return row.preview;
-  if (row.detail) return row.detail;
-  if (row.stats) return row.stats;
-  if (row.updated && row.updated !== "No messages yet") return row.updated;
-  const meta = row.meta?.find((value) => value !== row.title && value !== "No messages yet");
-  if (meta) return meta;
-  return row.status;
 }
 
 function chatListSummary(total: number, running: number): string {

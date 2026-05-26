@@ -259,7 +259,7 @@ describe("SessionList", () => {
     expect(onDelete).toHaveBeenCalledWith("s1");
   });
 
-  it("offers a compact mobile chat switcher for selected saved chats", async () => {
+  it("opens saved chats from a compact mobile drawer launcher", async () => {
     const user = userEvent.setup();
     renderList([
       session({ id: "s1", latest_user_message: "current affine research" }),
@@ -267,43 +267,45 @@ describe("SessionList", () => {
     ]);
 
     const panel = screen.getByLabelText("Chats");
-    const toggle = screen.getByRole("button", { name: "Switch chats" });
+    const launcher = screen.getByRole("button", { name: "Open chats" });
 
     expect(panel).toHaveAttribute("data-has-selection", "true");
     expect(panel).toHaveAttribute("data-mobile-open", "false");
-    expect(toggle).not.toHaveTextContent("Current chat");
-    expect(toggle).toHaveTextContent("Affine research");
-    expect(toggle).toHaveTextContent("Switch");
+    expect(launcher).toHaveTextContent("Chats");
+    expect(launcher).toHaveTextContent("2");
+    expect(launcher).not.toHaveTextContent("Affine research");
+    expect(launcher).not.toHaveTextContent("Switch");
 
-    await user.click(toggle);
+    await user.click(launcher);
 
     expect(panel).toHaveAttribute("data-mobile-open", "true");
-    expect(toggle).toHaveAccessibleName("Hide chat list");
-    expect(toggle).toHaveTextContent("Hide");
+    expect(launcher).toHaveAccessibleName("Close chats");
   });
 
-  it("shows the selected chat meta in the mobile switcher when there is no detail", () => {
+  it("keeps selected chat details inside the drawer instead of the mobile launcher", () => {
     renderList([
       session({ id: "saved-empty", durable: true, has_conversation: true, has_events: true, last_used_at: "2026-05-24T17:37:00Z" }),
       session({ id: "saved-recent", durable: true, latest_user_message: "older project review", last_used_at: "2026-05-23T18:30:00Z" }),
     ]);
 
-    const toggle = screen.getByRole("button", { name: "Switch chats" });
-    expect(toggle).toHaveTextContent("Saved chat");
-    expect(toggle).toHaveTextContent("May 24 17:37 UTC");
-    expect(toggle).not.toHaveTextContent("saved-empty");
-    expect(toggle).not.toHaveTextContent("Current chat");
+    const launcher = screen.getByRole("button", { name: "Open chats" });
+    expect(launcher).toHaveTextContent("Chats");
+    expect(launcher).not.toHaveTextContent("Saved chat");
+    expect(launcher).not.toHaveTextContent("May 24 17:37 UTC");
+    expect(launcher).not.toHaveTextContent("saved-empty");
   });
 
-  it("prefers the resolved preview over the original request in the mobile switcher", () => {
+  it("keeps resolved previews in chat rows rather than the mobile launcher", () => {
     renderList([session({ id: "s1", durable: true, has_events: true })], {
       currentSession: reduceRawEvents(completedTurn),
     });
 
-    const toggle = screen.getByRole("button", { name: "Switch chats" });
-    expect(toggle).toHaveTextContent("list the files");
-    expect(toggle).toHaveTextContent("Answer · There are two files.");
-    expect(toggle).not.toHaveTextContent("Latest · list the files");
+    const launcher = screen.getByRole("button", { name: "Open chats" });
+    const row = screen.getByRole("button", { name: /list the files/ });
+    expect(launcher).not.toHaveTextContent("list the files");
+    expect(launcher).not.toHaveTextContent("Answer · There are two files.");
+    expect(row).toHaveTextContent("Answer · There are two files.");
+    expect(row).not.toHaveTextContent("Latest · list the files");
   });
 
   it("uses plain chat counts instead of internal session metrics", () => {
@@ -320,8 +322,8 @@ describe("SessionList", () => {
       />,
     );
 
-    expect(screen.getAllByText("2 chats")).toHaveLength(2);
-    expect(screen.getByRole("button", { name: "Switch chats" })).toHaveTextContent("2 chats");
+    expect(screen.getByText("2 chats")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Open chats" })).toHaveTextContent("2");
     expect(screen.getByLabelText("Chats")).toHaveAttribute("data-mobile-open", "false");
     expect(screen.queryByText(/messages|actions|issues|continued|ephemeral/i)).toBeNull();
   });
@@ -372,7 +374,7 @@ describe("SessionList", () => {
     expect(within(row).getByTestId("session-chips")).not.toHaveTextContent("Files");
   });
 
-  it("shows artifact size in the mobile switcher when the selected chat has output files", () => {
+  it("keeps artifact size in the selected chat row", () => {
     renderList([session({ id: "s1", durable: true, has_events: true })], {
       currentSession: reduceRawEvents([
         { id: 1, type: "turn.start", data: { turn_id: "t1" } },
@@ -411,9 +413,10 @@ describe("SessionList", () => {
       ]),
     });
 
-    const toggle = screen.getByRole("button", { name: "Switch chats" });
-    expect(toggle).toHaveTextContent("1 message · 1 action · 1 file (8 KiB, 1 MiB omitted)");
-    expect(toggle).not.toHaveTextContent("May");
+    const launcher = screen.getByRole("button", { name: "Open chats" });
+    const row = screen.getByRole("button", { name: /Saved chat/ });
+    expect(launcher).not.toHaveTextContent("1 message · 1 action · 1 file (8 KiB, 1 MiB omitted)");
+    expect(row).toHaveTextContent("1 message · 1 action · 1 file (8 KiB, 1 MiB omitted)");
   });
 
   it("shows a pending follow-up in the selected chat row immediately", () => {
@@ -427,7 +430,7 @@ describe("SessionList", () => {
     expect(row).toHaveTextContent("Waiting for the next update.");
     expect(row).toHaveTextContent("Live");
     expect(row).not.toHaveTextContent("There are two files.");
-    expect(screen.getByRole("button", { name: "Switch chats" })).toHaveTextContent("Sending · main.go");
+    expect(screen.getByRole("button", { name: "Open chats" })).not.toHaveTextContent("Sending · main.go");
   });
 
   it("shows the original task topic instead of a continuation prompt", () => {

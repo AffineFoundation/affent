@@ -1678,7 +1678,9 @@ body {
   font-weight: 700;
 }
 
-.mobile-session-toggle {
+.mobile-session-launcher,
+.mobile-session-backdrop,
+.mobile-session-close {
   display: none;
 }
 
@@ -6540,7 +6542,7 @@ html[data-theme="dark"] .theme-switch,
 html[data-theme="dark"] .connection-pill,
 html[data-theme="dark"] .header-new-chat,
 html[data-theme="dark"] .new-chat-action,
-html[data-theme="dark"] .mobile-session-toggle,
+html[data-theme="dark"] .mobile-session-launcher,
 html[data-theme="dark"] .runtime-status-bar,
 html[data-theme="dark"] .session-panel,
 html[data-theme="dark"] .session-search input,
@@ -6652,7 +6654,6 @@ html[data-theme="dark"] .session-panel[data-compact="true"] {
 
 html[data-theme="dark"] .session-tools[data-expanded="true"],
 html[data-theme="dark"] .session-panel[data-mobile-open="false"],
-html[data-theme="dark"] .session-panel[data-mobile-open="true"] .mobile-session-toggle,
 html[data-theme="dark"] .runtime-capability-panel,
 html[data-theme="dark"] .runtime-capability-overflow-body,
 html[data-theme="dark"] .artifact-code[data-view="json"],
@@ -7003,7 +7004,7 @@ html[data-theme="dark"] ::selection {
 @media (max-width: 768px) {
   :root {
     --composer-clearance: clamp(172px, 28vh, 280px);
-    --scroll-safe-top: clamp(188px, 32vh, 280px);
+    --scroll-safe-top: 76px;
   }
   .app-main {
     padding: 10px;
@@ -7019,75 +7020,89 @@ html[data-theme="dark"] ::selection {
     grid-template-columns: minmax(0, 1fr);
   }
   .workspace-shell[data-compact-nav="true"] .session-panel {
-    position: static;
-    width: auto;
+    position: fixed;
+    width: min(320px, calc(100vw - 34px));
   }
   .session-panel {
-    position: static;
-    top: auto;
+    position: fixed;
+    z-index: 86;
+    top: 66px;
+    bottom: 10px;
+    left: 10px;
+    width: min(320px, calc(100vw - 34px));
     max-height: none;
     border-radius: var(--radius);
+    box-shadow: 0 24px 72px rgba(15, 23, 42, 0.24);
+    transform: translateX(calc(-100% - 22px));
+    transition: transform 220ms var(--ease-snap), box-shadow 220ms ease;
   }
-  .session-panel[data-mobile-open="false"] {
-    border-color: rgba(217, 224, 232, 0.82);
-    background: rgba(255, 255, 255, 0.82);
+  .session-panel[data-mobile-open="true"] {
+    transform: translateX(0);
   }
-  .session-panel[data-mobile-open="false"] .session-tools,
-  .session-panel[data-mobile-open="false"] .session-list {
-    display: none;
-  }
-  .session-panel[data-mobile-open="false"] .panel-head {
-    border-bottom-color: transparent;
-    padding-bottom: 6px;
-  }
-  .mobile-session-toggle {
-    display: grid;
-    grid-template-columns: minmax(0, 1fr) auto;
-    gap: 8px;
+  .mobile-session-launcher {
+    position: fixed;
+    z-index: 78;
+    left: 10px;
+    top: 76px;
+    display: inline-flex;
     align-items: center;
-    width: calc(100% - 20px);
-    min-height: 38px;
-    margin: 0 10px 10px;
+    gap: 7px;
+    height: 34px;
     border: 1px solid rgba(189, 199, 211, 0.82);
     border-radius: var(--radius-sm);
-    background: rgba(248, 250, 252, 0.82);
+    background: rgba(255, 255, 255, 0.92);
     color: var(--text);
-    padding: 6px 8px;
+    padding: 0 9px;
     font: inherit;
-    text-align: left;
+    box-shadow: 0 12px 34px rgba(15, 23, 42, 0.13);
+    backdrop-filter: blur(14px);
+    transition: opacity 140ms ease, transform 160ms ease, border-color 140ms ease;
   }
-  .mobile-session-toggle span {
-    display: grid;
-    min-width: 0;
-    gap: 2px;
+  .mobile-session-launcher[aria-expanded="true"] {
+    opacity: 0;
+    pointer-events: none;
+    transform: translateX(-8px);
   }
-  .mobile-session-toggle b {
-    min-width: 0;
-    overflow: hidden;
+  .mobile-session-launcher span {
     color: var(--text);
-    font-size: 12.5px;
-    font-weight: 700;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-  }
-  .mobile-session-toggle small {
-    min-width: 0;
-    overflow: hidden;
-    color: var(--text-muted);
-    font-size: 11.5px;
-    font-weight: 600;
-    text-overflow: ellipsis;
-    white-space: nowrap;
-  }
-  .mobile-session-toggle strong {
-    color: #0f766e;
     font-size: 12px;
-    font-weight: 750;
-    align-self: center;
+    font-weight: 700;
   }
-  .session-panel[data-mobile-open="true"] .mobile-session-toggle {
+  .mobile-session-launcher b {
+    display: inline-grid;
+    place-items: center;
+    min-width: 18px;
+    height: 18px;
+    border-radius: 999px;
     background: var(--accent-soft);
-    border-color: rgba(20, 184, 166, 0.32);
+    color: #0f766e;
+    font-size: 11px;
+    font-weight: 750;
+    font-variant-numeric: tabular-nums;
+  }
+  .mobile-session-backdrop {
+    position: fixed;
+    inset: 0;
+    z-index: 84;
+    display: block;
+    border: 0;
+    background: rgba(15, 23, 42, 0.26);
+    backdrop-filter: blur(1px);
+    cursor: default;
+  }
+  .mobile-session-close {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    height: 28px;
+    border: 1px solid var(--border);
+    border-radius: var(--radius-sm);
+    background: var(--bg-sunken);
+    color: var(--text-muted);
+    padding: 0 8px;
+    font: inherit;
+    font-size: 12px;
+    cursor: pointer;
   }
   .timeline-surface {
     order: 1;
@@ -7099,8 +7114,8 @@ html[data-theme="dark"] ::selection {
     border-right: 0;
   }
   .workspace-shell[data-session-nav="visible"] .timeline-surface {
-    min-height: calc(100svh - 190px);
-    height: calc(100svh - 190px);
+    min-height: calc(100svh - 72px);
+    height: calc(100svh - 72px);
   }
   .surface-context {
     padding: 10px 12px 0;
@@ -7325,10 +7340,6 @@ html[data-theme="dark"] ::selection {
   .action-inspector-facts {
     justify-content: flex-start;
     min-width: 0;
-  }
-  .session-panel {
-    position: static;
-    max-height: 340px;
   }
   .composer {
     grid-template-columns: minmax(0, 1fr) auto;
