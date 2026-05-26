@@ -1,6 +1,7 @@
 // Faithful TypeScript mirror of cmd/affentserve/sessions_api.go and the
 // snapshot types in sessions.go. Source of truth for the session-control
-// surface: GET/POST /v1/sessions, GET/DELETE /v1/sessions/{id}.
+// surface: GET/POST /v1/sessions, GET/DELETE /v1/sessions/{id},
+// plus account-level skill settings at /v1/skills.
 //
 // Kept in parity with the Go json tags; the parity guard covers this too.
 
@@ -234,31 +235,11 @@ export function listSessionTools(
   return client.json<SessionToolsResponse>(`/v1/sessions/${encodeURIComponent(sessionId)}/tools`, { signal });
 }
 
-export function listSessionSkills(
-  client: ApiClient,
-  sessionId: string,
-  signal?: AbortSignal,
-): Promise<SessionSkillsResponse> {
-  return client.json<SessionSkillsResponse>(`/v1/sessions/${encodeURIComponent(sessionId)}/skills`, { signal });
-}
-
 export function listSkills(
   client: ApiClient,
   signal?: AbortSignal,
 ): Promise<SessionSkillsResponse> {
   return client.json<SessionSkillsResponse>("/v1/skills", { signal });
-}
-
-export function readSessionSkill(
-  client: ApiClient,
-  sessionId: string,
-  name: string,
-  signal?: AbortSignal,
-): Promise<SessionSkillResponse> {
-  return client.json<SessionSkillResponse>(
-    `/v1/sessions/${encodeURIComponent(sessionId)}/skills/${encodeURIComponent(name)}`,
-    { signal },
-  );
 }
 
 export function readSkill(
@@ -267,19 +248,6 @@ export function readSkill(
   signal?: AbortSignal,
 ): Promise<SessionSkillResponse> {
   return client.json<SessionSkillResponse>(`/v1/skills/${encodeURIComponent(name)}`, { signal });
-}
-
-export function installSessionSkill(
-  client: ApiClient,
-  sessionId: string,
-  body: SessionSkillInstallRequest,
-  signal?: AbortSignal,
-): Promise<SessionSkillResponse> {
-  return client.json<SessionSkillResponse>(`/v1/sessions/${encodeURIComponent(sessionId)}/skills`, {
-    method: "POST",
-    body,
-    signal,
-  });
 }
 
 export function installSkill(

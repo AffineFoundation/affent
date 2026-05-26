@@ -39,7 +39,6 @@ type Session struct {
 	llm           *agent.LLMClient
 	registry      *agent.Registry
 	skillRegistry *agent.SkillRegistry
-	skillDir      string
 	events        chan sse.Event
 	browser       *affentbrowser.Session
 	workspace     string
@@ -434,14 +433,16 @@ func (p *SessionPool) buildSession(id string) (*Session, error) {
 	}
 	var localExec *executor.LocalExecutor
 	var skillReg *agent.SkillRegistry
-	skillDir := ""
+	sessionSkillDir := ""
+	accountSkillInstallDir := ""
 	planPath := ""
 	if p.cfg.EnableBuiltins {
 		localExec = executor.NewLocalExecutor(id, workspace)
 		if workflowToolsEnabled(p.cfg) {
-			skillDir = agent.DefaultWorkspaceSkillDir(sessionDir)
+			sessionSkillDir = agent.DefaultWorkspaceSkillDir(sessionDir)
+			accountSkillInstallDir = accountSkillDir(p)
 			var skillErr error
-			skillReg, skillErr = sessionRuntimeSkillRegistry(p, skillDir)
+			skillReg, skillErr = sessionRuntimeSkillRegistry(p, sessionSkillDir)
 			if skillErr != nil {
 				_ = os.RemoveAll(workspace)
 				return nil, fmt.Errorf("skills: %w", skillErr)
@@ -456,7 +457,7 @@ func (p *SessionPool) buildSession(id string) (*Session, error) {
 			Memory:           memStore,
 			PlanPath:         planPath,
 			SkillRegistry:    skillReg,
-			SkillDir:         skillDir,
+			SkillDir:         accountSkillInstallDir,
 			SkillInstallConfirmer: func(proposalID string) bool {
 				return agent.UserConfirmedRuntimeSkillProposal(conv, proposalID)
 			},
@@ -663,7 +664,6 @@ func (p *SessionPool) buildSession(id string) (*Session, error) {
 		llm:           llm,
 		registry:      reg,
 		skillRegistry: skillReg,
-		skillDir:      skillDir,
 		events:        events,
 		browser:       browser,
 		workspace:     workspace,

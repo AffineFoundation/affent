@@ -665,9 +665,9 @@ func TestSessionPool_RuntimeSkillsAreDurable(t *testing.T) {
 	if _, err := tool.Execute(context.Background(), args); err != nil {
 		t.Fatalf("install runtime skill: %v", err)
 	}
-	skillPath := filepath.Join(memRoot, "durable-skill-client", ".affent", "skills", "durable_demo", "SKILL.md")
+	skillPath := filepath.Join(accountSkillDir(pool), "durable_demo", "SKILL.md")
 	if _, err := os.Stat(skillPath); err != nil {
-		t.Fatalf("runtime skill should be stored in durable session dir: %v", err)
+		t.Fatalf("runtime skill should be stored in durable account dir: %v", err)
 	}
 	if strings.HasPrefix(skillPath, s1.workspace) {
 		t.Fatalf("runtime skill path %q must not live under ephemeral workspace %q", skillPath, s1.workspace)

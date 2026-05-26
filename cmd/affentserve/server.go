@@ -25,9 +25,6 @@ import (
 //	GET    /v1/sessions/{id}/plan
 //	DELETE /v1/sessions/{id}/plan
 //	GET    /v1/sessions/{id}/tools
-//	GET    /v1/sessions/{id}/skills
-//	GET    /v1/sessions/{id}/skills/{name}
-//	POST   /v1/sessions/{id}/skills
 //	GET    /v1/sessions/{id}/transcripts
 //	GET    /v1/sessions/{id}/transcripts/{path...}
 //	GET    /v1/sessions/{id}/artifacts
@@ -70,9 +67,6 @@ func newRouter(cfg Config, pool *SessionPool, logger zerolog.Logger) http.Handle
 //	GET    /v1/sessions/{id}/plan    → persisted plan snapshot
 //	DELETE /v1/sessions/{id}/plan    → remove persisted plan snapshot
 //	GET    /v1/sessions/{id}/tools   → active session tool catalog
-//	GET    /v1/sessions/{id}/skills  → session skill catalog
-//	GET    /v1/sessions/{id}/skills/{name} → full skill body
-//	POST   /v1/sessions/{id}/skills  → install user-provided runtime skill
 //	GET    /v1/sessions/{id}/transcripts[/path] → child loop transcripts
 //	GET    /v1/sessions/{id}/artifacts[/path] → tool-result artifacts
 //	POST   /v1/sessions/{id}/messages → start async user turn
@@ -106,8 +100,6 @@ func handleSessionRoutes(pool *SessionPool) http.HandlerFunc {
 			handleSessionPlanDelete(pool, sessionID, w, r)
 		case sub == "tools" && r.Method == http.MethodGet:
 			handleSessionTools(pool, sessionID, w, r)
-		case (sub == "skills" || strings.HasPrefix(sub, "skills/")) && (r.Method == http.MethodGet || r.Method == http.MethodPost):
-			handleSessionSkills(pool, sessionID, strings.TrimPrefix(sub, "skills"), w, r)
 		case (sub == "transcripts" || strings.HasPrefix(sub, "transcripts/")) && r.Method == http.MethodGet:
 			handleSessionTranscripts(pool, sessionID, strings.TrimPrefix(sub, "transcripts"), w, r)
 		case (sub == "artifacts" || strings.HasPrefix(sub, "artifacts/")) && r.Method == http.MethodGet:

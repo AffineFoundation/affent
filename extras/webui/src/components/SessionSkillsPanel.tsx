@@ -13,6 +13,7 @@ export function SessionSkillsPanel({
   skills,
   loading = false,
   error,
+  defaultOpen = false,
   installEnabled = false,
   onReadSkill,
   onInstallSkill,
@@ -20,12 +21,14 @@ export function SessionSkillsPanel({
   skills?: readonly SessionSkillInfo[];
   loading?: boolean;
   error?: string;
+  defaultOpen?: boolean;
   installEnabled?: boolean;
   onReadSkill?: (name: string) => Promise<SessionSkillInfo>;
   onInstallSkill?: (request: SessionSkillInstallRequest) => Promise<SessionSkillInfo>;
 }) {
   const [query, setQuery] = useState("");
   const [bodyByName, setBodyByName] = useState<Record<string, SkillBodyState>>({});
+  const [panelOpen, setPanelOpen] = useState(defaultOpen);
   const [showForm, setShowForm] = useState(false);
   const [form, setForm] = useState({ name: "", description: "", triggers: "", body: "" });
   const [installError, setInstallError] = useState<string | undefined>();
@@ -86,14 +89,19 @@ export function SessionSkillsPanel({
   }
 
   return (
-    <details className="session-skills-panel" data-testid="session-skills-panel">
+    <details
+      className="session-skills-panel"
+      data-testid="session-skills-panel"
+      open={panelOpen}
+      onToggle={(event) => setPanelOpen(event.currentTarget.open)}
+    >
       <summary className="session-skills-summary">
         <span className="session-skills-kicker">Skills</span>
         <strong>{summary}</strong>
         <span>{summaryDetail}</span>
       </summary>
       <div className="session-skills-body">
-        {loading ? <div className="session-skills-empty">Loading current session skills...</div> : null}
+        {loading ? <div className="session-skills-empty">Loading account skills...</div> : null}
         {!loading && error ? (
           <div className="session-skills-empty error" role="alert">
             {error}

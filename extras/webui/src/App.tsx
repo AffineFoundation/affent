@@ -656,6 +656,7 @@ export function App() {
                 skills={skillsState.state === "ready" ? skillsState.skills : undefined}
                 loading={skillsState.state === "loading"}
                 error={skillsState.state === "error" ? skillsState.error : undefined}
+                defaultOpen
                 installEnabled={skillsState.state === "ready" ? skillsState.installEnabled : false}
                 onReadSkill={handleReadSkill}
                 onInstallSkill={handleInstallSkill}
