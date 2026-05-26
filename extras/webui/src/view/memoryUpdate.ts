@@ -9,6 +9,8 @@ export interface MemoryUpdateSummary {
   topic: string;
   location: string;
   preview: string;
+  previousPreview?: string;
+  nextPreview?: string;
 }
 
 export function describeMemoryUpdate(call: ToolCallState): MemoryUpdateSummary | undefined {
@@ -22,12 +24,13 @@ export function describeMemoryUpdate(call: ToolCallState): MemoryUpdateSummary |
 
   const target = response.target ?? stringArg(call, "target") ?? "memory";
   const topic = normalizeMemoryTopic(target, response.topic ?? stringArg(call, "topic"));
-  const content = action === "remove"
-    ? stringArg(call, "old_text")
-    : stringArg(call, "content");
-  const preview = summarize(content ?? "No content supplied", 180);
+  const oldText = stringArg(call, "old_text");
+  const newText = stringArg(call, "content");
+  const previousPreview = oldText ? summarize(oldText, 120) : undefined;
+  const nextPreview = newText ? summarize(newText, 120) : undefined;
+  const preview = memoryUpdatePreview(action, previousPreview, nextPreview);
 
-  return {
+  const summary: MemoryUpdateSummary = {
     action,
     label: memoryUpdateLabel(action),
     target,
@@ -35,6 +38,9 @@ export function describeMemoryUpdate(call: ToolCallState): MemoryUpdateSummary |
     location: `${target}:${topic}`,
     preview,
   };
+  if (previousPreview) summary.previousPreview = previousPreview;
+  if (nextPreview) summary.nextPreview = nextPreview;
+  return summary;
 }
 
 export function memoryUpdatesForTurn(turn: TurnState): MemoryUpdateSummary[] {
@@ -68,6 +74,18 @@ function memoryUpdateLabel(action: MemoryUpdateAction): string {
       return "Updated memory";
     case "remove":
       return "Removed memory";
+  }
+}
+
+function memoryUpdatePreview(action: MemoryUpdateAction, previousPreview: string | undefined, nextPreview: string | undefined): string {
+  switch (action) {
+    case "add":
+      return nextPreview ?? "No content supplied";
+    case "replace":
+      if (previousPreview && nextPreview) return `${previousPreview} -> ${nextPreview}`;
+      return nextPreview ?? previousPreview ?? "No content supplied";
+    case "remove":
+      return previousPreview ?? "No content supplied";
   }
 }
 

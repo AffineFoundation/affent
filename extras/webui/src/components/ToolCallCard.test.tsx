@@ -36,6 +36,20 @@ describe("ToolCallCard", () => {
     expect(screen.getByTestId("memory-update-card")).toHaveTextContent("source-led confidence");
   });
 
+  it("shows replacement memory deltas in the collapsed tool row", async () => {
+    const user = userEvent.setup();
+
+    render(<ToolCallCard call={memoryReplaceCall()} events={[]} />);
+
+    const toggle = screen.getByRole("button", { name: /memory/ });
+    expect(toggle).toHaveTextContent("Updated memory");
+    expect(toggle).toHaveTextContent("old deploy rule -> new canary deploy rule");
+
+    await user.click(toggle);
+
+    expect(screen.getByTestId("memory-update-card")).toHaveTextContent("old deploy rule -> new canary deploy rule");
+  });
+
   it("shows structured failure kinds without opening raw trace JSON", async () => {
     const user = userEvent.setup();
     const call = failureKindCall();
@@ -118,6 +132,29 @@ function memoryAddCall(): ToolCallState {
     durationMs: 7,
     resultSummary: "{\"ok\":true,\"target\":\"memory\",\"topic\":\"markets\",\"message\":\"added\"}",
     result: "{\"ok\":true,\"target\":\"memory\",\"topic\":\"markets\",\"message\":\"added\"}",
+    resultTruncated: false,
+  };
+}
+
+function memoryReplaceCall(): ToolCallState {
+  return {
+    callId: "c2b",
+    tool: "memory",
+    args: {
+      action: "replace",
+      target: "memory",
+      topic: "deploy",
+      old_text: "old deploy rule",
+      content: "new canary deploy rule",
+    },
+    argsTruncated: false,
+    argsRepaired: false,
+    canonicalized: false,
+    status: "success",
+    exitCode: 0,
+    durationMs: 9,
+    resultSummary: "{\"ok\":true,\"target\":\"memory\",\"topic\":\"deploy\",\"message\":\"replaced\"}",
+    result: "{\"ok\":true,\"target\":\"memory\",\"topic\":\"deploy\",\"message\":\"replaced\"}",
     resultTruncated: false,
   };
 }

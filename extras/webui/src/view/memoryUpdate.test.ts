@@ -16,6 +16,7 @@ describe("describeMemoryUpdate", () => {
       topic: "markets",
       location: "memory:markets",
       preview: "Alpha Coast market reports use marker MEM-STOCK-73 and source-led confidence.",
+      nextPreview: "Alpha Coast market reports use marker MEM-STOCK-73 and source-led confidence.",
     });
   });
 
@@ -23,14 +24,23 @@ describe("describeMemoryUpdate", () => {
     expect(describeMemoryUpdate(memoryCall({
       action: "replace",
       topic: "deploy",
+      old_text: "Use direct deploys for dashboard refresh changes.",
       content: "Use canary deploys for dashboard refresh changes.",
-    }, { ok: true, target: "memory", topic: "deploy" }))?.label).toBe("Updated memory");
+    }, { ok: true, target: "memory", topic: "deploy" }))).toMatchObject({
+      label: "Updated memory",
+      previousPreview: "Use direct deploys for dashboard refresh changes.",
+      nextPreview: "Use canary deploys for dashboard refresh changes.",
+      preview: "Use direct deploys for dashboard refresh changes. -> Use canary deploys for dashboard refresh changes.",
+    });
 
     expect(describeMemoryUpdate(memoryCall({
       action: "remove",
       topic: "deploy",
       old_text: "stale deploy instruction",
-    }, { ok: true, target: "memory", topic: "deploy" }))?.preview).toBe("stale deploy instruction");
+    }, { ok: true, target: "memory", topic: "deploy" }))).toMatchObject({
+      previousPreview: "stale deploy instruction",
+      preview: "stale deploy instruction",
+    });
 
     expect(describeMemoryUpdate(memoryCall({ action: "search", query: "deploy" }))).toBeUndefined();
   });
