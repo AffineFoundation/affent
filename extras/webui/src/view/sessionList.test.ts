@@ -49,6 +49,35 @@ describe("sessionList view model", () => {
     expect(rows[0].searchText).toContain("1 issue");
   });
 
+  it("surfaces persisted plan progress in row stats and search", () => {
+    const rows = buildSessionRows([
+      session({
+        id: "planned-session",
+        durable: true,
+        has_plan: true,
+        latest_user_message: "continue market analysis",
+        plan_summary: {
+          label: "plan:1/3:active",
+          total_steps: 3,
+          completed_steps: 1,
+          active: true,
+          blocked: false,
+          done: false,
+          current_step: "verify browser evidence",
+          current_step_index: 2,
+          current_step_status: "in_progress",
+          last_completed_step: "inspect plan state",
+          last_completed_step_index: 1,
+          error: false,
+        },
+      }),
+    ]);
+
+    expect(rows[0].metrics).toContain("Plan 1/3, step 2 active");
+    expect(rows[0].stats).toBe("Plan 1/3, step 2 active");
+    expect(rows[0].searchText).toContain("plan 1/3, step 2 active");
+  });
+
   it("filters rows by status, features, and search text", () => {
     const rows = buildSessionRows([
       session({ id: "live-a", active: true, has_events: true }),

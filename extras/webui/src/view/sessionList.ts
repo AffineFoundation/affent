@@ -1,4 +1,4 @@
-import type { SessionSummary } from "../api/sessions";
+import type { SessionPlanSummary, SessionSummary } from "../api/sessions";
 import type { SessionState } from "../store/sessionState";
 import { conversationTopicFromTurns } from "./continuationPrompt";
 import { summarizeUserError } from "./errorSummary";
@@ -368,7 +368,35 @@ function usageMetrics(session: SessionSummary): string[] {
   const toolErrors = session.tools?.tool_errors ?? 0;
   if (toolErrors > 0) metrics.push(`${toolErrors} issue${toolErrors === 1 ? "" : "s"}`);
   if (session.browser && session.browser.network_fetch > 0) metrics.push(`${session.browser.network_fetch} web`);
+  const planMetric = sessionPlanMetric(session.plan_summary);
+  if (planMetric) metrics.push(planMetric);
   return metrics;
+}
+
+function sessionPlanMetric(plan: SessionPlanSummary | undefined): string | undefined {
+  if (!plan) return undefined;
+  if (plan.error) return "Plan unreadable";
+  if (plan.total_steps <= 0) return undefined;
+  const parts = [`Plan ${plan.completed_steps}/${plan.total_steps}`];
+  if (plan.current_step_index && !plan.done) {
+    parts.push(`step ${plan.current_step_index} ${planStatusLabel(plan)}`);
+  } else if (plan.done) {
+    parts.push("done");
+  } else if (plan.last_completed_step_index) {
+    parts.push(`last step ${plan.last_completed_step_index}`);
+  }
+  return parts.join(", ");
+}
+
+function planStatusLabel(plan: SessionPlanSummary): string {
+  const status = plan.current_step_status?.trim();
+  if (status === "in_progress") return "active";
+  if (status === "blocked") return "blocked";
+  if (status === "completed") return "done";
+  if (status === "pending") return "pending";
+  if (plan.active) return "active";
+  if (plan.blocked) return "blocked";
+  return "pending";
 }
 
 function featureChips(session: SessionSummary): string[] {
