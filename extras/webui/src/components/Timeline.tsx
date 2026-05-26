@@ -1,9 +1,22 @@
 import { useEffect, useRef, useState, type CSSProperties, type RefObject } from "react";
 import type { SessionState } from "../store/sessionState";
 import type { UseAsDraft } from "../view/draftSource";
+import { countTurnsByMode, turnMatchesFilter, type TimelineFilterMode } from "../view/timelineFilter";
 import { TurnCard } from "./TurnCard";
 import { CopyButton } from "./CopyButton";
 import { CopyMenu } from "./CopyMenu";
+
+const timelineFilterModes: { mode: TimelineFilterMode; label: string }[] = [
+  { mode: "all", label: "All" },
+  { mode: "tools", label: "Tools" },
+  { mode: "evidence", label: "Evidence" },
+  { mode: "guard", label: "Guard" },
+  { mode: "errors", label: "Issues" },
+  { mode: "artifacts", label: "Files" },
+  { mode: "memory", label: "Memory" },
+  { mode: "truncated", label: "Truncated" },
+  { mode: "repaired", label: "Repaired" },
+];
 
 // The conversation is the primary product surface. Keep the scan path clean:
 // auxiliary traces stay inline with the turns that produced them.
@@ -44,7 +57,14 @@ export function Timeline({
   const touchStartY = useRef<number | undefined>(undefined);
   const [following, setFollowing] = useState(true);
   const [newActivity, setNewActivity] = useState(false);
-  const visibleTurns = session.turns;
+  const [filterMode, setFilterMode] = useState<TimelineFilterMode>("all");
+  const [filterQuery, setFilterQuery] = useState("");
+  const filter = { mode: filterMode, query: filterQuery };
+  const modeCounts = countTurnsByMode(session.turns, session.events, timelineFilterModes.map((item) => item.mode), filterQuery);
+  const showTimelineFilters = shouldShowTimelineFilters(session);
+  const visibleTurns = showTimelineFilters
+    ? session.turns.filter((turn) => turnMatchesFilter(turn, session.events, filter))
+    : session.turns;
   const pendingFollowUp = pendingMessage?.kind === "task" && session.turns.length > 0 ? pendingMessage.text : undefined;
 
   useEffect(() => {
@@ -56,6 +76,8 @@ export function Timeline({
     autoFollowPaused.current = false;
     pointerSelecting.current = false;
     latestAnswerRef.current = null;
+    setFilterMode("all");
+    setFilterQuery("");
     setFollowing(true);
     setNewActivity(false);
   }, [activityCount, initialHistoryFocus, sessionId]);
@@ -237,6 +259,30 @@ export function Timeline({
           Jump to latest
         </button>
       ) : null}
+      {showTimelineFilters ? (
+        <div className="timeline-filter" data-testid="timeline-filter">
+          <div className="timeline-filter-modes" role="group" aria-label="Timeline filter">
+            {timelineFilterModes.map(({ mode, label }) => (
+              <button
+                key={mode}
+                type="button"
+                aria-pressed={filterMode === mode}
+                onClick={() => setFilterMode(mode)}
+              >
+                <span>{label}</span>
+                <small>{modeCounts[mode] ?? 0}</small>
+              </button>
+            ))}
+          </div>
+          <input
+            type="search"
+            aria-label="Search turns"
+            placeholder="Search turns"
+            value={filterQuery}
+            onChange={(event) => setFilterQuery(event.currentTarget.value)}
+          />
+        </div>
+      ) : null}
       <div className="timeline" data-testid="timeline">
         {visibleTurns.length > 0 ? (
           <>
@@ -260,6 +306,7 @@ export function Timeline({
                     isLatest={isLatestTurn}
                     showHeader={false}
                     showBoundary={false}
+                    searchQuery={showTimelineFilters ? filterQuery : undefined}
                     onOpenArtifact={onOpenArtifact}
                     onUseAsDraft={onUseAsDraft}
                   />
@@ -273,7 +320,7 @@ export function Timeline({
           </>
         ) : (
           <div className="timeline-empty filtered" data-testid="timeline-filter-empty">
-            <h3>No messages yet</h3>
+            <h3>No matching turns</h3>
           </div>
         )}
         <div ref={endRef} className="timeline-end" aria-hidden="true" />
@@ -478,6 +525,29 @@ function isForwardOverscrollAtLatest(event: Event, distanceToLatest: number, tou
 function hasActiveTextSelection(): boolean {
   const selection = document.getSelection?.();
   return Boolean(selection && !selection.isCollapsed && selection.toString().trim());
+}
+
+function shouldShowTimelineFilters(session: SessionState): boolean {
+  if (session.turns.length > 2) return true;
+  return session.turns.some((turn) =>
+    turn.status === "error" ||
+    turn.status === "max_turns" ||
+    !!turn.error ||
+    turn.toolCalls.length > 1 ||
+    (turn.toolStats?.loop_guard_interventions ?? 0) > 0 ||
+    (turn.toolStats?.forced_no_tools ?? 0) > 0 ||
+    turn.toolCalls.some((tool) =>
+      tool.status === "error" ||
+      !!tool.resultArtifactPath ||
+      !!tool.argsTruncated ||
+      !!tool.resultTruncated ||
+      !!tool.argsRepaired ||
+      !!tool.canonicalized ||
+      !!tool.originalTool ||
+      !!tool.repairNotes?.length ||
+      (tool.result ?? tool.resultSummary ?? "").includes("SourceAccess:")
+    )
+  );
 }
 
 function summarize(text: string, limit: number): string {

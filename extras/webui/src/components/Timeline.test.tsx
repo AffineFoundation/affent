@@ -81,6 +81,80 @@ describe("Timeline", () => {
     expect(screen.queryByText("0 actions")).toBeNull();
   });
 
+  it("filters long timelines by evidence and loop guard turns", async () => {
+    const user = userEvent.setup();
+    const events: RawEvent[] = [
+      { id: 1, type: "turn.start", data: { turn_id: "source-turn" } },
+      { id: 2, type: "user.message", data: { turn_id: "source-turn", text: "inspect taostats source" } },
+      {
+        id: 3,
+        type: "tool.request",
+        data: {
+          turn_id: "source-turn",
+          call_id: "web-1",
+          tool: "browser_navigate",
+          args: { url: "https://taostats.io/subnets" },
+          args_truncated: false,
+          args_bytes: 36,
+          args_omitted_bytes: 0,
+          args_cap_bytes: 8192,
+        },
+      },
+      {
+        id: 4,
+        type: "tool.result",
+        data: {
+          call_id: "web-1",
+          exit_code: 0,
+          duration_ms: 120,
+          result_summary: "SourceAccess: requested_url=https://taostats.io/subnets; browser_rendered_url=https://taostats.io/subnets; page_text_below=partial_dynamic_page_evidence\nDynamic widgets were incomplete.",
+          result: "SourceAccess: requested_url=https://taostats.io/subnets; browser_rendered_url=https://taostats.io/subnets; page_text_below=partial_dynamic_page_evidence\nDynamic widgets were incomplete.",
+          result_truncated: false,
+          result_bytes: 180,
+          result_omitted_bytes: 0,
+          result_cap_bytes: 8192,
+        },
+      },
+      { id: 5, type: "message.done", data: { turn_id: "source-turn", text: "Taostats needs rendered evidence." } },
+      { id: 6, type: "turn.end", data: { turn_id: "source-turn", reason: "completed" } },
+      { id: 7, type: "turn.start", data: { turn_id: "guard-turn" } },
+      { id: 8, type: "user.message", data: { turn_id: "guard-turn", text: "recover repeated calls" } },
+      { id: 9, type: "message.done", data: { turn_id: "guard-turn", text: "I stopped the repeated loop." } },
+      {
+        id: 10,
+        type: "turn.end",
+        data: {
+          turn_id: "guard-turn",
+          reason: "max_turns",
+          tool_stats: { tool_requests: 2, loop_guard_interventions: 1, forced_no_tools: 1 },
+        },
+      },
+      { id: 11, type: "turn.start", data: { turn_id: "plain-turn" } },
+      { id: 12, type: "user.message", data: { turn_id: "plain-turn", text: "write final note" } },
+      { id: 13, type: "message.done", data: { turn_id: "plain-turn", text: "Plain note." } },
+      { id: 14, type: "turn.end", data: { turn_id: "plain-turn", reason: "completed" } },
+    ];
+    renderTimeline(events);
+
+    const filterBar = screen.getByTestId("timeline-filter");
+    const filterGroup = within(filterBar).getByRole("group", { name: "Timeline filter" });
+    expect(within(filterGroup).getByRole("button", { name: /Evidence\s+1/ })).toBeInTheDocument();
+    expect(within(filterGroup).getByRole("button", { name: /Guard\s+1/ })).toBeInTheDocument();
+    expect(screen.getByTestId("timeline")).toHaveTextContent("inspect taostats source");
+    expect(screen.getByTestId("timeline")).toHaveTextContent("recover repeated calls");
+
+    await user.click(within(filterGroup).getByRole("button", { name: /Evidence/ }));
+
+    expect(screen.getByTestId("timeline")).toHaveTextContent("inspect taostats source");
+    expect(screen.getByTestId("timeline")).not.toHaveTextContent("recover repeated calls");
+    expect(screen.getByTestId("timeline")).not.toHaveTextContent("write final note");
+
+    await user.click(within(filterGroup).getByRole("button", { name: /Guard/ }));
+
+    expect(screen.getByTestId("timeline")).toHaveTextContent("recover repeated calls");
+    expect(screen.getByTestId("timeline")).not.toHaveTextContent("inspect taostats source");
+  });
+
   it("keeps artifact summaries visible in the activity digest when evidence is also present", () => {
     renderTimeline([
       { id: 40, type: "turn.start", data: { turn_id: "t4" } },
