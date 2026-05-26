@@ -149,6 +149,8 @@ function buildMetrics(
   if (artifactMetric) metrics.push(artifactMetric);
   const loopDecisionMetric = buildLoopDecisionMetric(session);
   if (loopDecisionMetric) metrics.push(loopDecisionMetric);
+  const compactMetric = buildContextCompactionMetric(session);
+  if (compactMetric) metrics.push(compactMetric);
   const planMetric = buildPlanMetric(planSummary);
   if (planMetric) metrics.push(planMetric);
   const workMetric = buildWorkMetric(latestTurn, latestActivity, currentIssueCount > 0);
@@ -176,6 +178,17 @@ function buildMetrics(
   if (session.unknownEventCount > 0) metrics.push({ label: "Unclassified", value: String(session.unknownEventCount), tone: "warning" });
 
   return metrics;
+}
+
+function buildContextCompactionMetric(session: SessionState): SessionOverviewMetric | undefined {
+  if (session.contextCompactions.length === 0) return undefined;
+  const latest = session.contextCompactions.at(-1);
+  const suffix = latest?.reactive ? " · reactive" : "";
+  return {
+    label: session.contextCompactions.length === 1 ? "Compaction" : "Compactions",
+    value: `${session.contextCompactions.length}${suffix}`,
+    tone: latest?.reactive ? "warning" : undefined,
+  };
 }
 
 function buildPlanMetric(plan: SessionPlanSummary | undefined): SessionOverviewMetric | undefined {

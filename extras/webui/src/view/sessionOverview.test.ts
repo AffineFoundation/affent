@@ -188,6 +188,37 @@ describe("buildSessionOverview", () => {
     ]));
   });
 
+  it("surfaces context compactions in the session overview", () => {
+    const session = reduceRawEvents([
+      { id: 1, type: "turn.start", data: { turn_id: "t1" } },
+      { id: 2, type: "user.message", data: { turn_id: "t1", text: "continue long run" } },
+      {
+        id: 3,
+        type: "context.compacted",
+        data: {
+          turn_id: "t1",
+          before_messages: 90,
+          after_messages: 18,
+          removed_messages: 72,
+          reactive: true,
+          reason: "context_overflow",
+          summary_present: true,
+          summary_bytes: 4096,
+        },
+      },
+      { id: 4, type: "turn.end", data: { turn_id: "t1", reason: "completed" } },
+    ]);
+    const overview = buildSessionOverview({
+      session,
+      workflow: deriveWorkflowStatus(session),
+      hasSelectedSession: true,
+    });
+
+    expect(overview.metrics).toEqual(expect.arrayContaining([
+      { label: "Compaction", value: "1 · reactive", tone: "warning" },
+    ]));
+  });
+
   it("surfaces the persisted plan step summary in the session overview", () => {
     const session = reduceRawEvents(completedTurn);
     const overview = buildSessionOverview({

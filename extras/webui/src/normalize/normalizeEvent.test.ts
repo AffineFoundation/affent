@@ -19,6 +19,17 @@ describe("normalizeEvent", () => {
     expect(decision.turnId).toBe("t1");
   });
 
+  it("marks context compaction events as known", () => {
+    const compacted = normalizeEvent({
+      id: 101,
+      type: "context.compacted",
+      data: { turn_id: "t1", before_messages: 40, after_messages: 12, removed_messages: 28, reactive: false, reason: "threshold" },
+    });
+
+    expect(compacted.known).toBe(true);
+    expect(compacted.turnId).toBe("t1");
+  });
+
   it("extracts turn_id where the payload carries one", () => {
     const turnStart = normalizeEvent(completedTurn[1]);
     expect(turnStart.turnId).toBe("t1");

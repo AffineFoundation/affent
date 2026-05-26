@@ -2,11 +2,15 @@ package agent
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"net/http"
 	"net/http/httptest"
+	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/affinefoundation/affent/internal/sse"
 )
 
 // TestFormatEvent_Roles pins the per-role rendering the summarizer
@@ -358,6 +362,56 @@ func TestCompact_PreservesHeadAndTail(t *testing.T) {
 		if out[3+i].Content != m.Content {
 			t.Errorf("tail[%d]: got %q, want %q", i, out[3+i].Content, m.Content)
 		}
+	}
+}
+
+func TestLoopMaybeCompactPublishesContextCompacted(t *testing.T) {
+	conv, err := OpenConversationAt(filepath.Join(t.TempDir(), "conversation.jsonl"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	msgs := []ChatMessage{{Role: "system", Content: "sys"}}
+	for i := 0; i < 20; i++ {
+		role := "user"
+		if i%2 == 1 {
+			role = "assistant"
+		}
+		msgs = append(msgs, ChatMessage{Role: role, Content: "msg" + string(rune('a'+i))})
+	}
+	if err := conv.Replace(msgs); err != nil {
+		t.Fatal(err)
+	}
+	events := make(chan sse.Event, 8)
+	loop := &Loop{
+		Conv:   conv,
+		Events: events,
+		Compactor: &stubCompactor{
+			LLMSummaryCompactor: &LLMSummaryCompactor{KeepFirst: 1, KeepLast: 4},
+			summary:             "earlier work",
+		},
+	}
+
+	if !loop.maybeCompact(context.Background(), "turn-1", false) {
+		t.Fatal("maybeCompact should report a successful compaction")
+	}
+
+	var payload sse.ContextCompactPayload
+	select {
+	case ev := <-events:
+		if ev.Type != sse.TypeContextCompact {
+			t.Fatalf("event type = %q, want %q", ev.Type, sse.TypeContextCompact)
+		}
+		if err := json.Unmarshal(ev.Data, &payload); err != nil {
+			t.Fatalf("decode context.compacted: %v", err)
+		}
+	default:
+		t.Fatal("expected context.compacted event")
+	}
+	if payload.TurnID != "turn-1" || payload.BeforeMessages != len(msgs) || payload.AfterMessages >= payload.BeforeMessages || payload.RemovedMessages != payload.BeforeMessages-payload.AfterMessages {
+		t.Fatalf("payload = %+v, want before/after/removal metadata", payload)
+	}
+	if payload.Reactive || payload.Reason != "threshold" || !payload.SummaryPresent || payload.SummaryBytes != len("earlier work") {
+		t.Fatalf("payload = %+v, want proactive threshold summary metadata", payload)
 	}
 }
 

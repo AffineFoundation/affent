@@ -46,13 +46,27 @@ describe("eventTrace view model", () => {
           visible_in_ui: true,
         },
       },
-      { id: 5, type: "turn.end", data: { turn_id: "t1", reason: "max_turns", tool_stats: { tool_requests: 2, tool_errors: 1, source_access_verified: 2, source_access_network: 1, source_access_dynamic_partial: 1, tool_duration_ms: 1200 } } },
+      {
+        id: 5,
+        type: "context.compacted",
+        data: {
+          turn_id: "t1",
+          before_messages: 42,
+          after_messages: 13,
+          removed_messages: 29,
+          reactive: true,
+          reason: "context_overflow",
+          summary_present: true,
+          summary_bytes: 2048,
+        },
+      },
+      { id: 6, type: "turn.end", data: { turn_id: "t1", reason: "max_turns", tool_stats: { tool_requests: 2, tool_errors: 1, source_access_verified: 2, source_access_network: 1, source_access_dynamic_partial: 1, tool_duration_ms: 1200 } } },
     ]));
-    const [request, result, decision, finished] = model.items;
+    const [request, result, decision, compacted, finished] = model.items;
 
     expect(model.metadata).toHaveLength(1);
     expect(model.metadata[0].type).toBe("trace.meta");
-    expect(model.items).toHaveLength(4);
+    expect(model.items).toHaveLength(5);
     expect(request).toMatchObject({
       kind: "event",
       display: {
@@ -75,6 +89,14 @@ describe("eventTrace view model", () => {
         label: "Loop decision",
         meta: ["Request 1", "evidence_quality", "defer", "Dynamic page shell needs network evidence."],
         badges: ["high", "visible"],
+      },
+    });
+    expect(compacted).toMatchObject({
+      kind: "event",
+      display: {
+        label: "Context compacted",
+        meta: ["Request 1", "context_overflow", "42 -> 13 messages", "29 removed", "2 KiB summary"],
+        badges: ["reactive", "summary"],
       },
     });
     expect(finished).toMatchObject({

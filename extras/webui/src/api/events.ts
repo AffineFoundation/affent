@@ -22,6 +22,7 @@ export const EventType = {
   Usage: "usage",
   TurnEnd: "turn.end",
   LoopDecision: "loop.decision",
+  ContextCompacted: "context.compacted",
   Error: "error",
 } as const;
 
@@ -149,6 +150,17 @@ export interface LoopDecisionPayload {
   visible_in_ui?: boolean;
 }
 
+export interface ContextCompactedPayload {
+  turn_id?: string;
+  before_messages: number;
+  after_messages: number;
+  removed_messages: number;
+  reactive: boolean;
+  reason: string;
+  summary_present?: boolean;
+  summary_bytes?: number;
+}
+
 export interface ErrorPayload {
   turn_id: string;
   code: string;
@@ -170,6 +182,7 @@ export interface PayloadByType {
   [EventType.Usage]: UsagePayload;
   [EventType.TurnEnd]: TurnEndPayload;
   [EventType.LoopDecision]: LoopDecisionPayload;
+  [EventType.ContextCompacted]: ContextCompactedPayload;
   [EventType.Error]: ErrorPayload;
 }
 

@@ -1,5 +1,6 @@
 import { EventType } from "../api/events";
 import type { NormalizedEvent } from "../normalize/normalizeEvent";
+import { formatByteCount } from "./byteFormat";
 import { artifactDisplayLabel, artifactName } from "./turnArtifacts";
 
 export type EventTraceItem =
@@ -262,11 +263,34 @@ function eventDisplay(event: NormalizedEvent, context: DisplayContext): EventDis
       return { label: turnEndLabel(event), meta: turnEndMeta(event, request), badges: [] };
     case EventType.LoopDecision:
       return { label: "Loop decision", meta: loopDecisionMeta(event, request), badges: loopDecisionBadges(event) };
+    case EventType.ContextCompacted:
+      return { label: "Context compacted", meta: contextCompactedMeta(event, request), badges: contextCompactedBadges(event) };
     case EventType.Error:
       return { label: "Error", meta: errorMeta(event, request), badges: readBoolean(event.data, "recoverable") ? ["recoverable"] : [] };
     default:
       return { label: event.type, meta: fallbackMeta(event, context), badges: [] };
   }
+}
+
+function contextCompactedMeta(event: NormalizedEvent, turn: string | undefined): string[] {
+  const before = readNumber(event.data, "before_messages");
+  const after = readNumber(event.data, "after_messages");
+  const removed = readNumber(event.data, "removed_messages");
+  const summaryBytes = readNumber(event.data, "summary_bytes");
+  return compact([
+    turn,
+    readString(event.data, "reason"),
+    typeof before === "number" && typeof after === "number" ? `${before} -> ${after} messages` : undefined,
+    typeof removed === "number" ? `${removed} removed` : undefined,
+    typeof summaryBytes === "number" && summaryBytes > 0 ? `${formatByteCount(summaryBytes)} summary` : undefined,
+  ]);
+}
+
+function contextCompactedBadges(event: NormalizedEvent): string[] {
+  return compact([
+    readBoolean(event.data, "reactive") ? "reactive" : "proactive",
+    readBoolean(event.data, "summary_present") ? "summary" : undefined,
+  ]);
 }
 
 function loopDecisionMeta(event: NormalizedEvent, turn: string | undefined): string[] {

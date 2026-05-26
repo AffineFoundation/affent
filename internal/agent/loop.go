@@ -1902,7 +1902,7 @@ func (l *Loop) runStep(ctx context.Context, turnID string, toolDefs []ToolDef) (
 		// Proactive compaction: shrink before the call when the log is
 		// long enough. The Compactor decides if it actually does work
 		// (LLMSummaryCompactor short-circuits below TriggerMsgs).
-		l.maybeCompact(ctx, false)
+		l.maybeCompact(ctx, turnID, false)
 
 		callCtx, callCancel := context.WithTimeout(ctx, timeout)
 		stream, err := l.LLM.Chat(callCtx, l.Conv.Snapshot(), toolDefs)
@@ -1938,7 +1938,7 @@ func (l *Loop) runStep(ctx context.Context, turnID string, toolDefs []ToolDef) (
 		// require sawMessage=false because context-overflow happens
 		// before any tokens stream back.
 		if IsContextOverflow(err) && l.Compactor != nil {
-			if l.maybeCompact(ctx, true) {
+			if l.maybeCompact(ctx, turnID, true) {
 				l.publish(sse.TypeError, sse.ErrorPayload{
 					TurnID:      turnID,
 					Code:        code,
@@ -2004,7 +2004,7 @@ func (l *Loop) runStep(ctx context.Context, turnID string, toolDefs []ToolDef) (
 // LLMSummaryCompactor's keep_last is halved and its trigger threshold
 // is bypassed so we get an emergency-trim even on shorter logs whose
 // individual messages are unusually large. No-op if Compactor is nil.
-func (l *Loop) maybeCompact(ctx context.Context, reactive bool) bool {
+func (l *Loop) maybeCompact(ctx context.Context, turnID string, reactive bool) bool {
 	if l.Compactor == nil {
 		return false
 	}
@@ -2035,12 +2035,37 @@ func (l *Loop) maybeCompact(ctx context.Context, reactive bool) bool {
 		l.Log.Warn().Err(err).Msg("conversation replace failed")
 		return false
 	}
+	l.publishContextCompacted(turnID, len(before), len(after), reactive, after)
 	l.Log.Info().
 		Int("before", len(before)).
 		Int("after", len(after)).
 		Bool("reactive", reactive).
 		Msg("conversation compacted")
 	return true
+}
+
+func (l *Loop) publishContextCompacted(turnID string, before, after int, reactive bool, msgs []ChatMessage) {
+	summaryBytes := 0
+	for _, msg := range msgs {
+		if msg.Role == "user" && strings.HasPrefix(msg.Content, summaryPrefix) {
+			summaryBytes = len(msg.Content) - len(summaryPrefix)
+			break
+		}
+	}
+	reason := "threshold"
+	if reactive {
+		reason = "context_overflow"
+	}
+	l.publish(sse.TypeContextCompact, sse.ContextCompactPayload{
+		TurnID:          turnID,
+		BeforeMessages:  before,
+		AfterMessages:   after,
+		RemovedMessages: before - after,
+		Reactive:        reactive,
+		Reason:          reason,
+		SummaryPresent:  summaryBytes > 0,
+		SummaryBytes:    summaryBytes,
+	})
 }
 
 func (l *Loop) perCallTimeout() time.Duration {

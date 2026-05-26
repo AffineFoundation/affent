@@ -9,19 +9,20 @@ package sse
 // ".end" for stream-completion events — readers misread it as a boundary
 // and fail to wait for the next message.* / tool.* / etc. events.
 const (
-	TypeTraceMeta     = "trace.meta"
-	TypeTurnStart     = "turn.start"
-	TypeUserMessage   = "user.message"
-	TypeMessageDelta  = "message.delta"
-	TypeMessageDone   = "message.done"
-	TypeThinkingDelta = "thinking.delta"
-	TypeThinkingDone  = "thinking.done"
-	TypeToolRequest   = "tool.request"
-	TypeToolResult    = "tool.result"
-	TypeUsage         = "usage"
-	TypeTurnEnd       = "turn.end"
-	TypeLoopDecision  = "loop.decision"
-	TypeError         = "error"
+	TypeTraceMeta      = "trace.meta"
+	TypeTurnStart      = "turn.start"
+	TypeUserMessage    = "user.message"
+	TypeMessageDelta   = "message.delta"
+	TypeMessageDone    = "message.done"
+	TypeThinkingDelta  = "thinking.delta"
+	TypeThinkingDone   = "thinking.done"
+	TypeToolRequest    = "tool.request"
+	TypeToolResult     = "tool.result"
+	TypeUsage          = "usage"
+	TypeTurnEnd        = "turn.end"
+	TypeLoopDecision   = "loop.decision"
+	TypeContextCompact = "context.compacted"
+	TypeError          = "error"
 )
 
 const TraceSchemaVersion = 1
@@ -206,6 +207,21 @@ type LoopDecisionPayload struct {
 	// VisibleInUI is nil by default, which consumers should treat as visible.
 	// Use a pointer so an explicit false still survives JSON omitempty.
 	VisibleInUI *bool `json:"visible_in_ui,omitempty"`
+}
+
+// ContextCompactPayload records when the model conversation was rewritten into
+// a shorter rolling summary. It is intentionally metadata-only: the summary
+// content remains in conversation state, while trace/UI get enough information
+// to explain why older messages are no longer in the model context.
+type ContextCompactPayload struct {
+	TurnID          string `json:"turn_id,omitempty"`
+	BeforeMessages  int    `json:"before_messages"`
+	AfterMessages   int    `json:"after_messages"`
+	RemovedMessages int    `json:"removed_messages"`
+	Reactive        bool   `json:"reactive"`
+	Reason          string `json:"reason"`
+	SummaryPresent  bool   `json:"summary_present,omitempty"`
+	SummaryBytes    int    `json:"summary_bytes,omitempty"`
 }
 
 type ToolRuntimeStats struct {

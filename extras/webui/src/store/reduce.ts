@@ -1,6 +1,7 @@
 import {
   EventType,
   TurnEndReason,
+  type ContextCompactedPayload,
   type ErrorPayload,
   type LoopDecisionPayload,
   type MessageDeltaPayload,
@@ -219,6 +220,13 @@ function applyEventPayload(state: SessionState, ev: NormalizedEvent): SessionSta
       return {
         ...state,
         loopDecisions: [...state.loopDecisions, { ...p, eventId: ev.id }],
+      };
+    }
+    case EventType.ContextCompacted: {
+      const p = ev.data as ContextCompactedPayload;
+      return {
+        ...state,
+        contextCompactions: [...state.contextCompactions, { ...p, eventId: ev.id }],
       };
     }
     case EventType.Error: {
