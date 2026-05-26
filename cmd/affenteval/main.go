@@ -82,6 +82,7 @@ func run(args []string) int {
 			MinVerifierPassRate:            fs.Float64("min-verifier-pass-rate", -1, "optional quality gate: minimum verifier pass rate, 0..1"),
 			MaxForcedNoToolsRate:           fs.Float64("max-forced-no-tools-rate", -1, "optional quality gate: maximum forced no-tool follow-up rate per tool call, 0..1"),
 			MaxLoopGuardInterventionRate:   fs.Float64("max-loop-guard-intervention-rate", -1, "optional quality gate: maximum loop guard intervention rate per tool call, 0..1"),
+			MaxPlanErrorRate:               fs.Float64("max-plan-error-rate", -1, "optional quality gate: maximum plan tool error rate per plan call, 0..1"),
 			MaxSourceDiscoveryOnlyRate:     fs.Float64("max-source-discovery-only-rate", -1, "optional quality gate: maximum discovery-only source access rate, 0..1"),
 			MaxSourceDynamicPartialRate:    fs.Float64("max-source-dynamic-partial-rate", -1, "optional quality gate: maximum dynamic-partial source access rate, 0..1"),
 			MaxToolErrorRate:               fs.Float64("max-tool-error-rate", -1, "optional quality gate: maximum tool error rate, 0..1"),
@@ -227,6 +228,7 @@ type qualityGateConfig struct {
 	MinVerifierPassRate            *float64
 	MaxForcedNoToolsRate           *float64
 	MaxLoopGuardInterventionRate   *float64
+	MaxPlanErrorRate               *float64
 	MaxSourceDiscoveryOnlyRate     *float64
 	MaxSourceDynamicPartialRate    *float64
 	MaxToolErrorRate               *float64
@@ -552,12 +554,13 @@ func printBatchSummary(w io.Writer, s batchSummary) {
 		s.RemovedWorkspaces,
 		s.CleanupErrors,
 	)
-	fmt.Fprintf(w, " rates=pass:%s,completed:%s,memory_update:%s,runtime_surface:%s,tool_error:%s,repair_success:%s,verifier_pass:%s,evidence_verified:%s,source_network:%s,source_discovery:%s,source_dynamic_partial:%s avg_tokens=%.1f/%.1f",
+	fmt.Fprintf(w, " rates=pass:%s,completed:%s,memory_update:%s,runtime_surface:%s,tool_error:%s,plan_error:%s,repair_success:%s,verifier_pass:%s,evidence_verified:%s,source_network:%s,source_discovery:%s,source_dynamic_partial:%s avg_tokens=%.1f/%.1f",
 		formatPercent(batchRatio(s.Passed, s.Total)),
 		formatPercent(batchRatio(s.EndCompleted, s.Total)),
 		formatPercent(batchRatio(s.MemoryUpdates, s.Total)),
 		formatPercent(batchRatio(s.RuntimeSurfaceScenarios, s.Total)),
 		formatOptionalPercent(batchOptionalRatio(s.ToolErrors, s.ToolCalls)),
+		formatOptionalPercent(batchOptionalRatio(s.PlanErrors, s.PlanCalls)),
 		formatOptionalPercent(batchOptionalRatio(s.ToolRepairSucceeded, s.ToolRepairCalls)),
 		formatOptionalPercent(batchOptionalRatio(s.VerifierPassed, s.VerifierRuns)),
 		formatOptionalPercent(batchOptionalRatio(s.SourceAccessVerified, s.SourceAccessResults)),
@@ -784,6 +787,7 @@ func validateQualityGateConfig(g qualityGateConfig) error {
 		{"--min-verifier-pass-rate", g.MinVerifierPassRate, true},
 		{"--max-forced-no-tools-rate", g.MaxForcedNoToolsRate, true},
 		{"--max-loop-guard-intervention-rate", g.MaxLoopGuardInterventionRate, true},
+		{"--max-plan-error-rate", g.MaxPlanErrorRate, true},
 		{"--max-source-discovery-only-rate", g.MaxSourceDiscoveryOnlyRate, true},
 		{"--max-source-dynamic-partial-rate", g.MaxSourceDynamicPartialRate, true},
 		{"--max-tool-error-rate", g.MaxToolErrorRate, true},
@@ -848,6 +852,7 @@ func qualityGateFailures(s batchSummary, g qualityGateConfig) []string {
 	checkMin("verifier_pass_rate", batchRatio(s.VerifierPassed, s.VerifierRuns), g.MinVerifierPassRate, s.VerifierRuns > 0)
 	checkMax("forced_no_tools_rate", batchRatio(s.ForcedNoTools, s.ToolCalls), g.MaxForcedNoToolsRate, s.ToolCalls > 0)
 	checkMax("loop_guard_intervention_rate", batchRatio(s.LoopGuardInterventions, s.ToolCalls), g.MaxLoopGuardInterventionRate, s.ToolCalls > 0)
+	checkMax("plan_error_rate", batchRatio(s.PlanErrors, s.PlanCalls), g.MaxPlanErrorRate, s.PlanCalls > 0)
 	checkMax("source_discovery_only_rate", batchRatio(s.SourceAccessDiscoveryOnly, s.SourceAccessResults), g.MaxSourceDiscoveryOnlyRate, s.SourceAccessResults > 0)
 	checkMax("source_dynamic_partial_rate", batchRatio(s.SourceAccessDynamicPartial, s.SourceAccessResults), g.MaxSourceDynamicPartialRate, s.SourceAccessResults > 0)
 	checkMax("tool_error_rate", batchRatio(s.ToolErrors, s.ToolCalls), g.MaxToolErrorRate, s.ToolCalls > 0)
@@ -1109,6 +1114,7 @@ type evalJSONLMetadata struct {
 	MinVerifierPassRate            *float64 `json:"min_verifier_pass_rate,omitempty"`
 	MaxForcedNoToolsRate           *float64 `json:"max_forced_no_tools_rate,omitempty"`
 	MaxLoopGuardInterventionRate   *float64 `json:"max_loop_guard_intervention_rate,omitempty"`
+	MaxPlanErrorRate               *float64 `json:"max_plan_error_rate,omitempty"`
 	MaxSourceDiscoveryOnlyRate     *float64 `json:"max_source_discovery_only_rate,omitempty"`
 	MaxSourceDynamicPartialRate    *float64 `json:"max_source_dynamic_partial_rate,omitempty"`
 	MaxToolErrorRate               *float64 `json:"max_tool_error_rate,omitempty"`
@@ -1158,6 +1164,7 @@ func evalJSONLMetadataFromConfig(suite, model, providerLabel, executor, temperat
 		MinVerifierPassRate:            enabledQualityGateValue(gates.MinVerifierPassRate),
 		MaxForcedNoToolsRate:           enabledQualityGateValue(gates.MaxForcedNoToolsRate),
 		MaxLoopGuardInterventionRate:   enabledQualityGateValue(gates.MaxLoopGuardInterventionRate),
+		MaxPlanErrorRate:               enabledQualityGateValue(gates.MaxPlanErrorRate),
 		MaxSourceDiscoveryOnlyRate:     enabledQualityGateValue(gates.MaxSourceDiscoveryOnlyRate),
 		MaxSourceDynamicPartialRate:    enabledQualityGateValue(gates.MaxSourceDynamicPartialRate),
 		MaxToolErrorRate:               enabledQualityGateValue(gates.MaxToolErrorRate),
@@ -1305,6 +1312,7 @@ type batchSummaryRecord struct {
 	ToolErrorRate               *float64                                   `json:"tool_error_rate,omitempty"`
 	ForcedNoToolsRate           *float64                                   `json:"forced_no_tools_rate,omitempty"`
 	LoopGuardInterventionRate   *float64                                   `json:"loop_guard_intervention_rate,omitempty"`
+	PlanErrorRate               *float64                                   `json:"plan_error_rate,omitempty"`
 	ToolRepairSuccessRate       *float64                                   `json:"tool_repair_success_rate,omitempty"`
 	VerifierPassRate            *float64                                   `json:"verifier_pass_rate,omitempty"`
 	SourceAccessVerifiedRate    *float64                                   `json:"source_access_verified_rate,omitempty"`
@@ -1618,6 +1626,7 @@ func printBatchSummaryJSONL(w io.Writer, meta evalJSONLMetadata, s batchSummary,
 		ToolErrorRate:               batchOptionalRatio(s.ToolErrors, s.ToolCalls),
 		ForcedNoToolsRate:           batchOptionalRatio(s.ForcedNoTools, s.ToolCalls),
 		LoopGuardInterventionRate:   batchOptionalRatio(s.LoopGuardInterventions, s.ToolCalls),
+		PlanErrorRate:               batchOptionalRatio(s.PlanErrors, s.PlanCalls),
 		ToolRepairSuccessRate:       batchOptionalRatio(s.ToolRepairSucceeded, s.ToolRepairCalls),
 		VerifierPassRate:            batchOptionalRatio(s.VerifierPassed, s.VerifierRuns),
 		SourceAccessVerifiedRate:    batchOptionalRatio(s.SourceAccessVerified, s.SourceAccessResults),
@@ -1741,6 +1750,7 @@ func hasQualityGateThresholds(meta evalJSONLMetadata) bool {
 		meta.MinVerifierPassRate != nil ||
 		meta.MaxForcedNoToolsRate != nil ||
 		meta.MaxLoopGuardInterventionRate != nil ||
+		meta.MaxPlanErrorRate != nil ||
 		meta.MaxSourceDiscoveryOnlyRate != nil ||
 		meta.MaxSourceDynamicPartialRate != nil ||
 		meta.MaxToolErrorRate != nil ||
