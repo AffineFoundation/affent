@@ -120,6 +120,13 @@ After review, execute the unfinished plan:
 Inside `affentctl chat`, use `/plan draft <request>`, `/plan execute [note]`,
 `/plan`, and `/plan clear`.
 
+Active plans are injected back into each turn with completed step details
+omitted, the current unfinished step called out explicitly, and a reminder to
+update that same step with status, evidence, or note after progress. This is a
+bounded execution aid rather than a strict workflow engine: the runtime steers
+the model to execute and update the current step, while loop guards and evals
+track whether the plan tool was used cleanly.
+
 ## Docker Paths
 
 The default Docker path keeps Go builds and test runs inside a memory-limited

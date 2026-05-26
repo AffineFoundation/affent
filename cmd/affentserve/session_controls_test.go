@@ -182,6 +182,10 @@ func TestHandleSessionMessage_ExecutePlanStartsConfirmedPlanTurn(t *testing.T) {
 	if len(msgs) == 0 || !strings.Contains(msgs[len(msgs)-1].Content, "Execute-plan mode is enabled.") || !strings.Contains(msgs[len(msgs)-1].Content, "plan:0/1:active") {
 		t.Fatalf("last conversation message should be execute-plan prompt, got %+v", msgs)
 	}
+	if !strings.Contains(msgs[len(msgs)-1].Content, "Execute only the current unfinished step first") ||
+		!strings.Contains(msgs[len(msgs)-1].Content, "call plan with action=update for that same step") {
+		t.Fatalf("execute-plan prompt should enforce step execution/update discipline, got %q", msgs[len(msgs)-1].Content)
+	}
 }
 
 func TestHandleSessionMessage_BusySessionReturnsConflict(t *testing.T) {

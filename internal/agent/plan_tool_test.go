@@ -467,6 +467,7 @@ func TestWithActivePlanSkillProviderInjectsPersistedPlan(t *testing.T) {
 	for _, want := range []string{
 		"AFFENT ACTIVE PLAN:",
 		"Completed steps: 1 (details omitted from active context).",
+		"Current step: 2. Execute this step before broadening",
 		"2. [in_progress] continue implementation note: resume here",
 		"AFFENT ACTIVE SKILL: demo",
 	} {
@@ -476,6 +477,22 @@ func TestWithActivePlanSkillProviderInjectsPersistedPlan(t *testing.T) {
 	}
 	if strings.Contains(got, "inspect resume state") || strings.Contains(got, "cmd/affentctl/cmd_chat.go") {
 		t.Fatalf("completed step details should be omitted from active context:\n%s", got)
+	}
+}
+
+func TestActivePlanCurrentStepPrefersInProgressThenPending(t *testing.T) {
+	steps := []planStep{
+		{Text: "done", Status: "completed"},
+		{Text: "queued", Status: "pending"},
+		{Text: "active", Status: "in_progress"},
+	}
+	if got, want := activePlanCurrentStepIndex(steps), 3; got != want {
+		t.Fatalf("current step = %d, want %d", got, want)
+	}
+
+	steps[2].Status = "completed"
+	if got, want := activePlanCurrentStepIndex(steps), 2; got != want {
+		t.Fatalf("current step without in_progress = %d, want %d", got, want)
 	}
 }
 

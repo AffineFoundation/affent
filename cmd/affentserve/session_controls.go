@@ -215,7 +215,7 @@ func prepareSessionExecutePlan(pool *SessionPool, sessionID, request string) (st
 func sessionExecutePlanPrompt(request, label string) string {
 	return `Execute-plan mode is enabled.
 
-The user has confirmed execution of this session's persisted task plan (` + strings.TrimSpace(label) + `). Continue from AFFENT ACTIVE PLAN, execute the next concrete step, update the plan as progress changes, and do not restart planning unless the persisted plan is stale or impossible to execute.
+The user has confirmed execution of this session's persisted task plan (` + strings.TrimSpace(label) + `). Continue from AFFENT ACTIVE PLAN. Execute only the current unfinished step first, use the tools needed for that step, then call plan with action=update for that same step before the final answer. Mark the step completed only when its evidence or implementation is actually done; otherwise keep it in_progress or blocked with a short note. Do not restart planning or call action=set unless the persisted plan is stale or impossible to execute.
 
 User confirmation/request:
 ` + strings.TrimSpace(request)

@@ -634,6 +634,9 @@ func activePlanSkillBlock(planPath string) string {
 	if completed > 0 {
 		fmt.Fprintf(&b, "Completed steps: %d (details omitted from active context).\n", completed)
 	}
+	if current := activePlanCurrentStepIndex(st.Steps); current > 0 {
+		fmt.Fprintf(&b, "Current step: %d. Execute this step before broadening; when progress changes, call plan action=update for this step with status, evidence, or note.\n", current)
+	}
 	for i, step := range st.Steps {
 		if planStepCompleted(step) {
 			continue
@@ -641,6 +644,22 @@ func activePlanSkillBlock(planPath string) string {
 		b.WriteString(formatActivePlanStep(i+1, step))
 	}
 	return strings.TrimSpace(b.String())
+}
+
+func activePlanCurrentStepIndex(steps []planStep) int {
+	for _, status := range []string{"in_progress", "pending", "blocked"} {
+		for i, step := range steps {
+			if strings.TrimSpace(step.Status) == status {
+				return i + 1
+			}
+		}
+	}
+	for i, step := range steps {
+		if !planStepCompleted(step) {
+			return i + 1
+		}
+	}
+	return 0
 }
 
 func formatActivePlanStep(index int, step planStep) string {
