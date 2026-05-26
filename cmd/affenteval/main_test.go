@@ -140,6 +140,16 @@ func TestRunRejectsInvalidConfigBeforeScenarios(t *testing.T) {
 			want: "--verifier-output-cap must be positive",
 		},
 		{
+			name: "min pass rate too high",
+			args: []string{"--min-pass-rate=1.1"},
+			want: "--min-pass-rate must be between 0 and 1",
+		},
+		{
+			name: "negative max avg tokens",
+			args: []string{"--max-avg-total-tokens=-2"},
+			want: "--max-avg-total-tokens must be disabled with -1 or set to a non-negative value",
+		},
+		{
 			name: "empty docker executor",
 			args: []string{"--executor=docker:"},
 			want: "requires a container name",
@@ -254,6 +264,58 @@ func TestValidateRuntimeToolSurface(t *testing.T) {
 				t.Fatalf("validateRuntimeToolSurface err=%v, want %q", err, tc.wantErr)
 			}
 		})
+	}
+}
+
+func TestQualityGateFailures(t *testing.T) {
+	ptr := func(v float64) *float64 { return &v }
+	summary := batchSummary{
+		Total:                    2,
+		Passed:                   1,
+		EndCompleted:             1,
+		ToolCalls:                5,
+		ToolErrors:               1,
+		ToolRepairCalls:          4,
+		ToolRepairSucceeded:      3,
+		VerifierRuns:             2,
+		VerifierPassed:           1,
+		SourceAccessResults:      4,
+		SourceAccessVerified:     3,
+		ToolContextTruncated:     4,
+		InputTokens:              90,
+		OutputTokens:             20,
+		ContextCompactions:       1,
+		ContextCompactionRemoved: 32,
+	}
+	failures := qualityGateFailures(summary, qualityGateConfig{
+		MinPassRate:                  ptr(0.75),
+		MinCompletionRate:            ptr(0.75),
+		MinSourceAccessVerifiedRate:  ptr(0.9),
+		MaxToolErrorRate:             ptr(0.1),
+		MaxToolContextTruncationRate: ptr(0.5),
+		MaxAvgTotalTokens:            ptr(40),
+	})
+	got := strings.Join(failures, "\n")
+	for _, want := range []string{
+		"avg_total_tokens 55.000 > max 40.000",
+		"completion_rate 0.500 < min 0.750",
+		"pass_rate 0.500 < min 0.750",
+		"source_access_verified_rate 0.750 < min 0.900",
+		"tool_context_truncation_rate 0.800 > max 0.500",
+		"tool_error_rate 0.200 > max 0.100",
+	} {
+		if !strings.Contains(got, want) {
+			t.Fatalf("quality gate failures missing %q:\n%s", want, got)
+		}
+	}
+	if failures := qualityGateFailures(summary, qualityGateConfig{}); len(failures) != 0 {
+		t.Fatalf("disabled gates should pass, got %#v", failures)
+	}
+	unavailable := qualityGateFailures(batchSummary{Total: 1, Passed: 1, EndCompleted: 1}, qualityGateConfig{
+		MinSourceAccessVerifiedRate: ptr(0.8),
+	})
+	if len(unavailable) != 1 || !strings.Contains(unavailable[0], "source_access_verified_rate unavailable") {
+		t.Fatalf("unavailable source gate failures = %#v", unavailable)
 	}
 }
 

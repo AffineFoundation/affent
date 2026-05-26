@@ -7,6 +7,7 @@ import (
 	"flag"
 	"fmt"
 	"io"
+	"math"
 	"os"
 	"path/filepath"
 	"sort"
@@ -69,6 +70,14 @@ func run(args []string) int {
 		verifierOutputCap = fs.Int("verifier-output-cap", agenteval.DefaultVerifierOutputCapBytes, "maximum verifier output bytes buffered per scenario")
 		jsonl             = fs.Bool("jsonl", false, "emit machine-readable JSONL records instead of text")
 		keepWorkspaces    = fs.Bool("keep-workspaces", false, "keep passing scenario workspaces; failing scenario workspaces are always kept")
+		gates             = qualityGateConfig{
+			MinPassRate:                  fs.Float64("min-pass-rate", -1, "optional quality gate: minimum batch pass rate, 0..1"),
+			MinCompletionRate:            fs.Float64("min-completion-rate", -1, "optional quality gate: minimum completed-turn rate, 0..1"),
+			MinSourceAccessVerifiedRate:  fs.Float64("min-source-access-verified-rate", -1, "optional quality gate: minimum verified SourceAccess rate, 0..1"),
+			MaxToolErrorRate:             fs.Float64("max-tool-error-rate", -1, "optional quality gate: maximum tool error rate, 0..1"),
+			MaxToolContextTruncationRate: fs.Float64("max-tool-context-truncation-rate", -1, "optional quality gate: maximum tool-context truncation rate, 0..1"),
+			MaxAvgTotalTokens:            fs.Float64("max-avg-total-tokens", -1, "optional quality gate: maximum average total tokens per scenario"),
+		}
 	)
 	fs.Usage = func() {
 		fmt.Fprintln(fs.Output(), `usage: affenteval [flags]
@@ -81,6 +90,10 @@ success and trace-level process quality.`)
 		if errors.Is(err, flag.ErrHelp) {
 			return 0
 		}
+		return 64
+	}
+	if err := validateQualityGateConfig(gates); err != nil {
+		fmt.Fprintf(os.Stderr, "config: %v\n", err)
 		return 64
 	}
 	if *listSuites {
@@ -173,10 +186,29 @@ success and trace-level process quality.`)
 	} else {
 		printBatchSummary(os.Stdout, summary)
 	}
+	gateFailures := qualityGateFailures(summary, gates)
+	if len(gateFailures) > 0 {
+		fmt.Fprintln(os.Stderr, "quality gates failed:")
+		for _, failure := range gateFailures {
+			fmt.Fprintf(os.Stderr, "  - %s\n", failure)
+		}
+	}
 	if summary.Failed > 0 {
 		return 1
 	}
+	if len(gateFailures) > 0 {
+		return 1
+	}
 	return 0
+}
+
+type qualityGateConfig struct {
+	MinPassRate                  *float64
+	MinCompletionRate            *float64
+	MinSourceAccessVerifiedRate  *float64
+	MaxToolErrorRate             *float64
+	MaxToolContextTruncationRate *float64
+	MaxAvgTotalTokens            *float64
 }
 
 type batchSummary struct {
@@ -694,6 +726,77 @@ func formatOptionalPercent(value *float64) string {
 		return "n/a"
 	}
 	return formatPercent(*value)
+}
+
+func validateQualityGateConfig(g qualityGateConfig) error {
+	for _, gate := range []struct {
+		name  string
+		value *float64
+		rate  bool
+	}{
+		{"--min-pass-rate", g.MinPassRate, true},
+		{"--min-completion-rate", g.MinCompletionRate, true},
+		{"--min-source-access-verified-rate", g.MinSourceAccessVerifiedRate, true},
+		{"--max-tool-error-rate", g.MaxToolErrorRate, true},
+		{"--max-tool-context-truncation-rate", g.MaxToolContextTruncationRate, true},
+		{"--max-avg-total-tokens", g.MaxAvgTotalTokens, false},
+	} {
+		if gate.value == nil {
+			continue
+		}
+		if math.IsNaN(*gate.value) || math.IsInf(*gate.value, 0) {
+			return fmt.Errorf("%s must be finite", gate.name)
+		}
+		if *gate.value < 0 {
+			if *gate.value == -1 {
+				continue
+			}
+			return fmt.Errorf("%s must be disabled with -1 or set to a non-negative value", gate.name)
+		}
+		if gate.rate && *gate.value > 1 {
+			return fmt.Errorf("%s must be between 0 and 1", gate.name)
+		}
+	}
+	return nil
+}
+
+func qualityGateFailures(s batchSummary, g qualityGateConfig) []string {
+	var failures []string
+	checkMin := func(name string, actual float64, threshold *float64, available bool) {
+		if threshold == nil || *threshold < 0 {
+			return
+		}
+		if !available {
+			failures = append(failures, fmt.Sprintf("%s unavailable, want >= %s", name, formatGateFloat(*threshold)))
+			return
+		}
+		if actual < *threshold {
+			failures = append(failures, fmt.Sprintf("%s %s < min %s", name, formatGateFloat(actual), formatGateFloat(*threshold)))
+		}
+	}
+	checkMax := func(name string, actual float64, threshold *float64, available bool) {
+		if threshold == nil || *threshold < 0 {
+			return
+		}
+		if !available {
+			return
+		}
+		if actual > *threshold {
+			failures = append(failures, fmt.Sprintf("%s %s > max %s", name, formatGateFloat(actual), formatGateFloat(*threshold)))
+		}
+	}
+	checkMin("pass_rate", batchRatio(s.Passed, s.Total), g.MinPassRate, s.Total > 0)
+	checkMin("completion_rate", batchRatio(s.EndCompleted, s.Total), g.MinCompletionRate, s.Total > 0)
+	checkMin("source_access_verified_rate", batchRatio(s.SourceAccessVerified, s.SourceAccessResults), g.MinSourceAccessVerifiedRate, s.SourceAccessResults > 0)
+	checkMax("tool_error_rate", batchRatio(s.ToolErrors, s.ToolCalls), g.MaxToolErrorRate, s.ToolCalls > 0)
+	checkMax("tool_context_truncation_rate", batchRatio(s.ToolContextTruncated, s.ToolCalls), g.MaxToolContextTruncationRate, s.ToolCalls > 0)
+	checkMax("avg_total_tokens", batchAverage(s.InputTokens+s.OutputTokens, s.Total), g.MaxAvgTotalTokens, s.Total > 0)
+	sort.Strings(failures)
+	return failures
+}
+
+func formatGateFloat(value float64) string {
+	return strconv.FormatFloat(value, 'f', 3, 64)
 }
 
 func printFailureHintLines(w io.Writer, counts map[string]int, indent string) {

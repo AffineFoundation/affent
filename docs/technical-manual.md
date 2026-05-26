@@ -739,7 +739,16 @@ go run ./cmd/affenteval --suite long-run --runtime-tools workspace,recall,plan -
 go run ./cmd/affenteval --suite live-web --runtime-web --runtime-browser --temperature 0 --keep-workspaces
 go run ./cmd/affenteval --scenario coding-python-slug --runtime-tools workspace --temperature 0
 go run ./cmd/affenteval --suite small-model-tools --runtime-tools workspace,recall,plan,skill,delegation --jsonl > eval.jsonl
+go run ./cmd/affenteval --suite long-run --runtime-tools workspace,recall,plan --min-pass-rate 0.8 --min-completion-rate 0.9 --max-tool-error-rate 0.05 --max-tool-context-truncation-rate 0.2 --max-avg-total-tokens 120000
 ```
+
+Quality gate flags are optional and disabled by default. They return exit code
+`1` after the full batch finishes if the aggregate summary violates configured
+thresholds; JSONL output remains clean and gate failures are written to stderr.
+Use `--min-pass-rate`, `--min-completion-rate`,
+`--min-source-access-verified-rate`, `--max-tool-error-rate`,
+`--max-tool-context-truncation-rate`, and `--max-avg-total-tokens` for CI or
+model/provider comparison runs.
 
 Run a one-off prompt through the same batch harness:
 
