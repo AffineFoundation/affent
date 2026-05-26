@@ -3,6 +3,7 @@ import { ApiClient } from "./client";
 import {
   cancelSessionTurn,
   createSession,
+  deleteSession,
   getSessionHistory,
   listSessions,
   readSessionArtifact,
@@ -34,11 +35,14 @@ describe("session API helpers", () => {
     await createSession(client, { session_id: "s1" });
     await sendSessionMessage(client, "s1", { content: "hello" });
     await cancelSessionTurn(client, "s1");
+    await deleteSession(client, "s/1");
 
     expect((fetchImpl.mock.calls[0][1] as RequestInit).method).toBe("POST");
     expect((fetchImpl.mock.calls[1][1] as RequestInit).method).toBe("POST");
     expect((fetchImpl.mock.calls[1][1] as RequestInit).body).toBe(JSON.stringify({ content: "hello" }));
     expect((fetchImpl.mock.calls[2][1] as RequestInit).method).toBe("POST");
+    expect(fetchImpl.mock.calls[3][0]).toBe("/v1/sessions/s%2F1");
+    expect((fetchImpl.mock.calls[3][1] as RequestInit).method).toBe("DELETE");
   });
 
   it("streams native affent session events", async () => {

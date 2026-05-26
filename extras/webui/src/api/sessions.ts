@@ -1,6 +1,6 @@
 // Faithful TypeScript mirror of cmd/affentserve/sessions_api.go and the
 // snapshot types in sessions.go. Source of truth for the session-control
-// surface: GET/POST /v1/sessions, GET /v1/sessions/{id}.
+// surface: GET/POST /v1/sessions, GET/DELETE /v1/sessions/{id}.
 //
 // Kept in parity with the Go json tags; the parity guard covers this too.
 
@@ -176,6 +176,14 @@ export function createSession(
   signal?: AbortSignal,
 ): Promise<SessionDetailResponse> {
   return client.json<SessionDetailResponse>("/v1/sessions", { method: "POST", body, signal });
+}
+
+export function deleteSession(
+  client: ApiClient,
+  sessionId: string,
+  signal?: AbortSignal,
+): Promise<void> {
+  return client.json<void>(`/v1/sessions/${encodeURIComponent(sessionId)}`, { method: "DELETE", signal });
 }
 
 export function getSessionHistory(

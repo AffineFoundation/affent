@@ -25,6 +25,8 @@ export function SessionList({
   demoActive,
   onSelect,
   onNew,
+  onDelete,
+  deletingId,
 }: {
   sessions: readonly SessionSummary[];
   selectedId?: string;
@@ -33,11 +35,14 @@ export function SessionList({
   demoActive: boolean;
   onSelect: (id: string) => void;
   onNew: () => void;
+  onDelete?: (id: string) => void | Promise<void>;
+  deletingId?: string;
 }) {
   const [filter, setFilter] = useState<SessionListFilter>("all");
   const [query, setQuery] = useState("");
   const [toolsOpen, setToolsOpen] = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);
+  const [confirmDeleteId, setConfirmDeleteId] = useState<string | undefined>();
   const searchInputRef = useRef<HTMLInputElement | null>(null);
   const rows = useMemo(
     () => mergeCurrentSessionRow(buildSessionRows(sessions), selectedId, currentSession, pendingTask),
@@ -54,6 +59,11 @@ export function SessionList({
   useEffect(() => {
     setMobileOpen(false);
   }, [selectedId]);
+
+  useEffect(() => {
+    if (!confirmDeleteId || rows.some((row) => row.id === confirmDeleteId)) return;
+    setConfirmDeleteId(undefined);
+  }, [confirmDeleteId, rows]);
 
   useEffect(() => {
     if (toolsExpanded) searchInputRef.current?.focus({ preventScroll: true });
@@ -166,47 +176,80 @@ export function SessionList({
               const isSelected = selectedId === row.id;
               const visibleChips = isSelected ? row.chips.filter((chip) => chip !== "files") : [];
               const previewId = row.preview ? `session-preview-${row.id}` : undefined;
+              const confirmingDelete = confirmDeleteId === row.id;
+              const deleting = deletingId === row.id;
               return (
-                <button
-                  key={row.id}
-                  type="button"
-                  className={`session-row${selectedId === row.id ? " is-selected" : ""}`}
-                  data-tone={row.tone}
-                  data-preview={shouldPinRowPreview(row.tone, isSelected) ? "pinned" : "hover"}
-                  aria-describedby={previewId}
-                  onClick={() => onSelect(row.id)}
-                >
-                  <span className="session-row-top">
-                    <span className="pulse-dot" data-status={dotStatus(row.tone)} aria-hidden="true" />
-                    <span className="session-title" title={row.title}>
-                      {row.title}
+                <div key={row.id} className="session-row-shell" data-confirming={confirmingDelete ? "true" : "false"}>
+                  <button
+                    type="button"
+                    className={`session-row${selectedId === row.id ? " is-selected" : ""}`}
+                    data-tone={row.tone}
+                    data-preview={shouldPinRowPreview(row.tone, isSelected) ? "pinned" : "hover"}
+                    aria-describedby={previewId}
+                    onClick={() => onSelect(row.id)}
+                  >
+                    <span className="session-row-top">
+                      <span className="pulse-dot" data-status={dotStatus(row.tone)} aria-hidden="true" />
+                      <span className="session-title" title={row.title}>
+                        {row.title}
+                      </span>
+                      {shouldShowRowStatus(row.status) ? <span className="session-state">{row.status}</span> : null}
                     </span>
-                    {shouldShowRowStatus(row.status) ? <span className="session-state">{row.status}</span> : null}
-                  </span>
-                  {row.detail ? <span className="session-detail">{row.detail}</span> : null}
-                  {row.preview ? (
-                    <span id={previewId} className="session-preview" data-testid="session-preview">
-                      {row.preview}
-                    </span>
+                    {row.detail ? <span className="session-detail">{row.detail}</span> : null}
+                    {row.preview ? (
+                      <span id={previewId} className="session-preview" data-testid="session-preview">
+                        {row.preview}
+                      </span>
+                    ) : null}
+                    {row.stats ? (
+                      <span className="session-stats" data-testid="session-stats">
+                        {row.stats}
+                      </span>
+                    ) : null}
+                    {visibleChips.length > 0 ? (
+                      <span className="session-chips" data-testid="session-chips">
+                        {visibleChips.map(sessionChipLabel).join(" · ")}
+                      </span>
+                    ) : null}
+                    {row.meta.length > 0 ? (
+                      <span className="session-meta">
+                        {row.meta.map((part) => (
+                          <span key={part}>{part}</span>
+                        ))}
+                      </span>
+                    ) : null}
+                  </button>
+                  {onDelete ? (
+                    <button
+                      type="button"
+                      className="session-delete-action"
+                      aria-label="Delete chat"
+                      title={`Delete ${row.title}`}
+                      disabled={deleting}
+                      onClick={() => setConfirmDeleteId(row.id)}
+                    >
+                      {deleting ? "Deleting" : "Delete"}
+                    </button>
                   ) : null}
-                  {row.stats ? (
-                    <span className="session-stats" data-testid="session-stats">
-                      {row.stats}
-                    </span>
+                  {onDelete && confirmingDelete ? (
+                    <div className="session-delete-confirm" role="group" aria-label="Confirm delete chat">
+                      <span>Delete this chat?</span>
+                      <button type="button" onClick={() => setConfirmDeleteId(undefined)} disabled={deleting}>
+                        Cancel
+                      </button>
+                      <button
+                        type="button"
+                        className="danger"
+                        disabled={deleting}
+                        onClick={() => {
+                          void onDelete(row.id);
+                        }}
+                      >
+                        Delete
+                      </button>
+                    </div>
                   ) : null}
-                  {visibleChips.length > 0 ? (
-                    <span className="session-chips" data-testid="session-chips">
-                      {visibleChips.map(sessionChipLabel).join(" · ")}
-                    </span>
-                  ) : null}
-                  {row.meta.length > 0 ? (
-                    <span className="session-meta">
-                      {row.meta.map((part) => (
-                        <span key={part}>{part}</span>
-                      ))}
-                    </span>
-                  ) : null}
-                </button>
+                </div>
               );
             })
           : null}

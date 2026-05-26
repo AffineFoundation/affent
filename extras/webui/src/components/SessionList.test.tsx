@@ -244,6 +244,20 @@ describe("SessionList", () => {
     expect(screen.getByTestId("session-search")).toHaveFocus();
   });
 
+  it("asks for confirmation before deleting a chat", async () => {
+    const user = userEvent.setup();
+    const onDelete = vi.fn();
+    renderList([session({ id: "s1", durable: true, latest_user_message: "clean up stale chat" })], { onDelete });
+
+    await user.click(screen.getByRole("button", { name: "Delete chat" }));
+    const confirm = screen.getByRole("group", { name: "Confirm delete chat" });
+
+    expect(confirm).toHaveTextContent("Delete this chat?");
+    expect(onDelete).not.toHaveBeenCalled();
+    await user.click(within(confirm).getByRole("button", { name: "Delete" }));
+    expect(onDelete).toHaveBeenCalledWith("s1");
+  });
+
   it("offers a compact mobile chat switcher for selected saved chats", async () => {
     const user = userEvent.setup();
     renderList([
@@ -538,7 +552,7 @@ describe("SessionList", () => {
 
 function renderList(
   sessions: SessionSummary[],
-  opts: { currentSession?: ReturnType<typeof reduceRawEvents>; pendingTask?: string } = {},
+  opts: { currentSession?: ReturnType<typeof reduceRawEvents>; pendingTask?: string; onDelete?: (id: string) => void } = {},
 ) {
   return render(
     <SessionList
@@ -549,6 +563,7 @@ function renderList(
       demoActive={false}
       onSelect={vi.fn()}
       onNew={vi.fn()}
+      onDelete={opts.onDelete}
     />,
   );
 }

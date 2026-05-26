@@ -4,6 +4,7 @@ import { ApiClient, ApiError } from "./api/client";
 import {
   cancelSessionTurn,
   createSession,
+  deleteSession,
   getSessionHistory,
   listSessions,
   readSessionArtifact,
@@ -65,6 +66,7 @@ export function App() {
   const [session, setSession] = useState<SessionState>(() => initialSessionState());
   const [actionBusy, setActionBusy] = useState(false);
   const [cancelBusy, setCancelBusy] = useState(false);
+  const [deletingSessionId, setDeletingSessionId] = useState<string | undefined>();
   const [pendingMessage, setPendingMessage] = useState<PendingMessageView | undefined>();
   const [guidanceReceipts, setGuidanceReceipts] = useState<GuidanceReceiptView[]>([]);
   const [composerDraft, setComposerDraft] = useState<ComposerDraft | undefined>();
@@ -389,6 +391,32 @@ export function App() {
     }
   }
 
+  async function handleDeleteSession(sessionId: string): Promise<void> {
+    setDeletingSessionId(sessionId);
+    try {
+      await deleteSession(client, sessionId);
+      setSessions((current) => current.filter((candidate) => candidate.id !== sessionId));
+      if (selectedSessionId === sessionId) {
+        streamClosedRef.current = false;
+        streamSessionIdRef.current = undefined;
+        sendInFlightRef.current = false;
+        sendFailedRef.current = false;
+        setSelectedSessionId(undefined);
+        setSession(initialSessionState());
+        setPendingMessage(undefined);
+        setGuidanceReceipts([]);
+        setArtifact({ state: "idle" });
+        setActionBusy(false);
+        setCancelBusy(false);
+      }
+      setStatus({ state: "connected", label: "Ready", detail: "Chat deleted" });
+    } catch (err) {
+      setStatus({ state: "error", label: "Delete failed", detail: formatError(err) });
+    } finally {
+      setDeletingSessionId(undefined);
+    }
+  }
+
   async function handleSend(content: string) {
     let targetSessionId = selectedSessionId;
     const pendingKind: PendingMessageView["kind"] = targetSessionId && session.status === "running" ? "guidance" : "task";
@@ -590,6 +618,8 @@ export function App() {
               demoActive={demoActive}
               onSelect={(nextSessionId) => resetSessionSurface(nextSessionId, { preserveSession: true })}
               onNew={() => void handleNewSession()}
+              onDelete={(sessionId) => void handleDeleteSession(sessionId)}
+              deletingId={deletingSessionId}
             />
           ) : null}
           <section

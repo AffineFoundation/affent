@@ -149,6 +149,49 @@ describe("App", () => {
     expect(screen.getByTestId("session-list")).not.toHaveTextContent("saved-se...123456");
   });
 
+  it("deletes a saved chat from the sidebar", async () => {
+    const user = userEvent.setup();
+    const fetchImpl = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = String(input);
+      if (url === "/v1/stats") {
+        return jsonResponse({});
+      }
+      if (url === "/v1/sessions?limit=100") {
+        return jsonResponse({
+          sessions: [
+            {
+              id: "delete-me",
+              active: false,
+              durable: true,
+              latest_user_message: "delete this stale experiment",
+              has_conversation: true,
+              has_events: true,
+              has_artifacts: false,
+              has_memory: false,
+              has_runtime_skills: false,
+            },
+          ],
+          has_more: false,
+        });
+      }
+      if (url === "/v1/sessions/delete-me" && init?.method === "DELETE") {
+        return new Response(null, { status: 204 });
+      }
+      return jsonResponse({ error: { message: `unexpected ${url}` } }, 404);
+    });
+    vi.stubGlobal("fetch", fetchImpl);
+
+    render(<App />);
+
+    expect(await screen.findByTestId("session-list")).toHaveTextContent("delete this stale experiment");
+    await user.click(screen.getByRole("button", { name: "Delete chat" }));
+    await user.click(within(screen.getByRole("group", { name: "Confirm delete chat" })).getByRole("button", { name: "Delete" }));
+
+    await waitFor(() => expect(screen.queryByTestId("session-list")).toBeNull());
+    expect(fetchImpl).toHaveBeenCalledWith("/v1/sessions/delete-me", expect.objectContaining({ method: "DELETE" }));
+    expect(screen.getByText("What should we work on?")).toBeVisible();
+  });
+
   it("loads every history page before rendering a saved chat", async () => {
     const user = userEvent.setup();
     const firstPage = completedTurn.slice(0, 4);
