@@ -111,7 +111,25 @@ success and trace-level process quality.`)
 		fmt.Fprintf(os.Stderr, "scenario: %v\n", err)
 		return 64
 	}
-	if err := validateRunConfig(*temperature, *topP, *maxTokens, *seed, *timeout, *executor, len(scenarios), *workRoot, flagWasSet(fs, "work-root"), *verifierOutputCap); err != nil {
+	if err := validateRunConfig(
+		*temperature,
+		*topP,
+		*maxTokens,
+		*seed,
+		*timeout,
+		*executor,
+		scenarios,
+		*workRoot,
+		flagWasSet(fs, "work-root"),
+		*verifierOutputCap,
+		*runtimeEvalMode,
+		*runtimeTools,
+		*runtimeAllTools,
+		*runtimeMemory,
+		*runtimeWeb,
+		*runtimeBrowser,
+		*runtimeMCPConfig,
+	); err != nil {
 		fmt.Fprintf(os.Stderr, "config: %v\n", err)
 		return 64
 	}
@@ -1659,14 +1677,32 @@ func failureKind(failure string) string {
 	}
 }
 
-func validateRunConfig(temperature, topP, maxTokens, seed string, timeout time.Duration, executor string, scenarioCount int, workRoot string, workRootSet bool, verifierOutputCap int) error {
+func validateRunConfig(
+	temperature,
+	topP,
+	maxTokens,
+	seed string,
+	timeout time.Duration,
+	executor string,
+	scenarios []agenteval.BatchScenario,
+	workRoot string,
+	workRootSet bool,
+	verifierOutputCap int,
+	runtimeEvalMode bool,
+	runtimeTools string,
+	runtimeAllTools bool,
+	runtimeMemory bool,
+	runtimeWeb bool,
+	runtimeBrowser bool,
+	runtimeMCPConfig string,
+) error {
 	if timeout <= 0 {
 		return fmt.Errorf("--timeout must be a positive duration")
 	}
 	if verifierOutputCap <= 0 {
 		return fmt.Errorf("--verifier-output-cap must be positive")
 	}
-	if err := validateEvalExecutor(executor, scenarioCount, workRoot, workRootSet); err != nil {
+	if err := validateEvalExecutor(executor, len(scenarios), workRoot, workRootSet); err != nil {
 		return err
 	}
 	sampling, err := parseEvalSampling(temperature, topP, maxTokens, seed)
@@ -1676,7 +1712,131 @@ func validateRunConfig(temperature, topP, maxTokens, seed string, timeout time.D
 	if err := sampling.Validate(); err != nil {
 		return evalSamplingFlagError(err)
 	}
+	if err := validateRuntimeToolSurface(scenarios, runtimeEvalMode, runtimeTools, runtimeAllTools, runtimeMemory, runtimeWeb, runtimeBrowser, runtimeMCPConfig); err != nil {
+		return err
+	}
 	return nil
+}
+
+func validateRuntimeToolSurface(
+	scenarios []agenteval.BatchScenario,
+	runtimeEvalMode bool,
+	runtimeTools string,
+	runtimeAllTools bool,
+	runtimeMemory bool,
+	runtimeWeb bool,
+	runtimeBrowser bool,
+	runtimeMCPConfig string,
+) error {
+	evalMode := runtimeEvalMode || strings.TrimSpace(runtimeTools) != "" || runtimeAllTools
+	if !evalMode {
+		return nil
+	}
+	enabled, all := enabledRuntimeToolSet(runtimeTools, runtimeAllTools, runtimeMemory, runtimeWeb, runtimeBrowser, runtimeMCPConfig)
+	if all {
+		return nil
+	}
+	var missing []string
+	for _, scenario := range scenarios {
+		var scenarioMissing []string
+		for _, tool := range requiredRuntimeTools(scenario) {
+			if enabled[tool] || (tool == "memory" && scenario.EnableMemory) {
+				continue
+			}
+			scenarioMissing = append(scenarioMissing, tool)
+		}
+		if len(scenarioMissing) > 0 {
+			sort.Strings(scenarioMissing)
+			missing = append(missing, fmt.Sprintf("%s missing %s", scenario.Name, strings.Join(scenarioMissing, ", ")))
+		}
+	}
+	if len(missing) == 0 {
+		return nil
+	}
+	sort.Strings(missing)
+	return fmt.Errorf("runtime eval mode starts with no tools; selected scenario(s) require unavailable tools: %s. Enable them with --runtime-tools, --runtime-web, --runtime-browser, --runtime-memory, or --runtime-all-tools", strings.Join(missing, "; "))
+}
+
+func enabledRuntimeToolSet(runtimeTools string, runtimeAllTools, runtimeMemory, runtimeWeb, runtimeBrowser bool, runtimeMCPConfig string) (map[string]bool, bool) {
+	enabled := map[string]bool{}
+	add := func(names ...string) {
+		for _, name := range names {
+			if strings.TrimSpace(name) != "" {
+				enabled[name] = true
+			}
+		}
+	}
+	if runtimeMemory {
+		add("memory")
+	}
+	if runtimeWeb {
+		add("web_fetch", "web_search")
+	}
+	if runtimeBrowser {
+		add(evalBrowserToolNames()...)
+	}
+	if strings.TrimSpace(runtimeMCPConfig) != "" {
+		add("mcp")
+	}
+	if runtimeAllTools {
+		return enabled, true
+	}
+	for _, raw := range strings.FieldsFunc(runtimeTools, func(r rune) bool {
+		return r == ',' || r == ';' || r == ' ' || r == '\n' || r == '\t'
+	}) {
+		switch name := strings.TrimSpace(raw); name {
+		case "", "none":
+			continue
+		case "all":
+			return enabled, true
+		case "workspace":
+			add(evalWorkspaceToolNames()...)
+		case "readonly_workspace":
+			add(evalReadonlyWorkspaceToolNames()...)
+		case "web":
+			add("web_fetch")
+		case "browser":
+			add(evalBrowserToolNames()...)
+		case "delegation":
+			add("subagent_run", "run_task")
+		default:
+			add(name)
+		}
+	}
+	return enabled, false
+}
+
+func requiredRuntimeTools(scenario agenteval.BatchScenario) []string {
+	required := map[string]bool{}
+	for _, tool := range scenario.RequiredTools {
+		if strings.TrimSpace(tool) != "" {
+			required[strings.TrimSpace(tool)] = true
+		}
+	}
+	if len(scenario.RequiredCommands) > 0 ||
+		len(scenario.RequiredCommandCounts) > 0 ||
+		len(scenario.RequiredCommandBeforeTool) > 0 ||
+		len(scenario.RequiredCommandAfterTool) > 0 {
+		required["shell"] = true
+	}
+	out := make([]string, 0, len(required))
+	for tool := range required {
+		out = append(out, tool)
+	}
+	sort.Strings(out)
+	return out
+}
+
+func evalWorkspaceToolNames() []string {
+	return []string{"shell", "read_file", "file_context", "write_file", "edit_file", "list_files", "symbol_context", "repo_search"}
+}
+
+func evalReadonlyWorkspaceToolNames() []string {
+	return []string{"read_file", "file_context", "list_files", "symbol_context", "repo_search"}
+}
+
+func evalBrowserToolNames() []string {
+	return []string{"browser_navigate", "browser_snapshot", "browser_find", "browser_network", "browser_network_read", "browser_click", "browser_scroll", "browser_type", "browser_wait", "browser_screenshot"}
 }
 
 func parseEvalSampling(temperature, topP, maxTokens, seed string) (agent.SamplingDefaults, error) {

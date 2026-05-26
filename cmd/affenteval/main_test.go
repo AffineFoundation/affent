@@ -159,6 +159,11 @@ func TestRunRejectsInvalidConfigBeforeScenarios(t *testing.T) {
 			args: []string{"--executor=sandbox", "--suite=small-model-tools"},
 			want: "--executor sandbox is only supported for one selected scenario",
 		},
+		{
+			name: "runtime eval mode requires explicit scenario tools",
+			args: []string{"--scenario=coding-python-slug"},
+			want: "coding-python-slug missing edit_file, shell",
+		},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -173,6 +178,85 @@ func TestRunRejectsInvalidConfigBeforeScenarios(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestValidateRuntimeToolSurface(t *testing.T) {
+	cases := []struct {
+		name     string
+		runner   BatchRuntimeToolConfig
+		scenario agenteval.BatchScenario
+		wantErr  string
+	}{
+		{
+			name:   "workspace satisfies shell and edit",
+			runner: BatchRuntimeToolConfig{RuntimeEvalMode: true, RuntimeTools: "workspace"},
+			scenario: agenteval.BatchScenario{
+				Name:             "coding",
+				RequiredCommands: []string{"go test"},
+				RequiredTools:    []string{"edit_file"},
+			},
+		},
+		{
+			name:   "readonly workspace does not satisfy shell or edit",
+			runner: BatchRuntimeToolConfig{RuntimeEvalMode: true, RuntimeTools: "readonly_workspace"},
+			scenario: agenteval.BatchScenario{
+				Name:             "coding",
+				RequiredCommands: []string{"go test"},
+				RequiredTools:    []string{"edit_file"},
+			},
+			wantErr: "coding missing edit_file, shell",
+		},
+		{
+			name:   "runtime web satisfies web search",
+			runner: BatchRuntimeToolConfig{RuntimeEvalMode: true, RuntimeWeb: true},
+			scenario: agenteval.BatchScenario{
+				Name:          "live-web",
+				RequiredTools: []string{"web_fetch", "web_search"},
+			},
+		},
+		{
+			name:   "scenario memory flag satisfies memory",
+			runner: BatchRuntimeToolConfig{RuntimeEvalMode: true},
+			scenario: agenteval.BatchScenario{
+				Name:          "memory",
+				EnableMemory:  true,
+				RequiredTools: []string{"memory"},
+			},
+		},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			err := validateRuntimeToolSurface(
+				[]agenteval.BatchScenario{tc.scenario},
+				tc.runner.RuntimeEvalMode,
+				tc.runner.RuntimeTools,
+				tc.runner.RuntimeAllTools,
+				tc.runner.RuntimeMemory,
+				tc.runner.RuntimeWeb,
+				tc.runner.RuntimeBrowser,
+				tc.runner.RuntimeMCPConfig,
+			)
+			if tc.wantErr == "" {
+				if err != nil {
+					t.Fatalf("validateRuntimeToolSurface err=%v", err)
+				}
+				return
+			}
+			if err == nil || !strings.Contains(err.Error(), tc.wantErr) {
+				t.Fatalf("validateRuntimeToolSurface err=%v, want %q", err, tc.wantErr)
+			}
+		})
+	}
+}
+
+type BatchRuntimeToolConfig struct {
+	RuntimeEvalMode  bool
+	RuntimeTools     string
+	RuntimeAllTools  bool
+	RuntimeMemory    bool
+	RuntimeWeb       bool
+	RuntimeBrowser   bool
+	RuntimeMCPConfig string
 }
 
 func TestSelectedEvalScenariosBuildsAdHocPromptScenario(t *testing.T) {
