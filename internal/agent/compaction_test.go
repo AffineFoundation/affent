@@ -185,6 +185,45 @@ func TestFormatEvent_CompactsDelegationToolResults(t *testing.T) {
 			t.Fatalf("compact session_search result should not expose raw JSON scaffolding:\n%s", got)
 		}
 	})
+
+	t.Run("web source result keeps source access and bounded evidence", func(t *testing.T) {
+		raw := "SourceAccess: fetched_url=https://metrics.example/affine; requested_url=https://dashboard.example/affine; linked_urls_in_content=discovered_unverified_until_fetched\n" +
+			"Affine SN120 metrics as of 2026-05-24T12:00:00Z: price $0.0632, market cap $195094, 24h volume $5001.\n" +
+			strings.Repeat("extra market table row ", 240)
+		got := formatEvent(ChatMessage{Role: "tool", Name: "web_fetch", Content: raw})
+		for _, want := range []string{
+			"TOOL_RESULT[web_fetch]",
+			"source_access: fetched_url=https://metrics.example/affine requested_url=https://dashboard.example/affine",
+			"body_preview:",
+			"market cap $195094",
+		} {
+			if !strings.Contains(got, want) {
+				t.Fatalf("compact web_fetch result missing %q:\n%s", want, got)
+			}
+		}
+		if strings.Contains(got, strings.Repeat("extra market table row ", 120)) {
+			t.Fatalf("compact web_fetch result should bound long page text:\n%s", got)
+		}
+	})
+
+	t.Run("browser network read keeps json path source metadata", func(t *testing.T) {
+		raw := "SourceAccess: browser_network_url=https://taostats.io/api/subnets/120; ref=n3; status=200; content_type=application/json; source_method=network_xhr_fetch\n" +
+			"JSON_PATH: $.data.market_cap\n" +
+			"BODY_BYTES: 8\n" +
+			"\"195094\""
+		got := formatEvent(ChatMessage{Role: "tool", Name: "browser_network_read", Content: raw})
+		for _, want := range []string{
+			"source_access: browser_network_url=https://taostats.io/api/subnets/120 source_method=network_xhr_fetch json_path=$.data.market_cap",
+			"body_preview:\n\"195094\"",
+		} {
+			if !strings.Contains(got, want) {
+				t.Fatalf("compact browser_network_read result missing %q:\n%s", want, got)
+			}
+		}
+		if strings.Contains(got, "BODY_BYTES") || strings.Contains(got, "JSON_PATH:") {
+			t.Fatalf("compact browser_network_read result should fold transport headers into metadata:\n%s", got)
+		}
+	})
 }
 
 // TestTruncateChars pins the byte-cap + UTF-8-safe truncation +

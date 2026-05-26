@@ -8,6 +8,7 @@ import (
 	"strings"
 
 	"github.com/affinefoundation/affent/internal/memory"
+	"github.com/affinefoundation/affent/internal/sourceaccess"
 	"github.com/affinefoundation/affent/internal/textutil"
 )
 
@@ -42,12 +43,13 @@ const DefaultSummaryTriggerMsgs = 240
 const DefaultSummaryKeepLast = 10
 
 const (
-	compactReasoningMaxChars = 500
-	compactToolArgsMaxChars  = 300
-	compactDelegationMaxText = 6000
-	compactDelegationMaxList = 8
-	compactMemoryMaxText     = 500
-	compactPlanStepMaxText   = 300
+	compactReasoningMaxChars  = 500
+	compactToolArgsMaxChars   = 300
+	compactDelegationMaxText  = 6000
+	compactDelegationMaxList  = 8
+	compactMemoryMaxText      = 500
+	compactPlanStepMaxText    = 300
+	compactWebEvidenceMaxText = 1800
 )
 
 // LLMSummaryCompactor implements rolling LLM summarization. Layout
@@ -364,6 +366,10 @@ func compactToolResultForSummary(toolName, content string) string {
 		if out, ok := compactSessionSearchResultForSummary(content); ok {
 			return out
 		}
+	case "web_fetch", "browser_snapshot", "browser_find", "browser_network_read":
+		if out, ok := compactSourceAccessResultForSummary(content); ok {
+			return out
+		}
 	}
 	return content
 }
@@ -441,6 +447,57 @@ func compactSessionSearchResultForSummary(content string) (string, bool) {
 		appendCompactSessionSearchHits(&b, resp.Results)
 	}
 	return b.String(), true
+}
+
+func compactSourceAccessResultForSummary(content string) (string, bool) {
+	info, ok := sourceaccess.FirstInfoFromResult(content)
+	if !ok {
+		return "", false
+	}
+	var b strings.Builder
+	fmt.Fprintf(&b, "source_access: %s=%s", info.URLField, textutil.Preview(strings.TrimSpace(info.AccessedURL), 500))
+	if info.RequestedURL != "" && info.RequestedURL != info.AccessedURL {
+		fmt.Fprintf(&b, " requested_url=%s", textutil.Preview(strings.TrimSpace(info.RequestedURL), 500))
+	}
+	if info.PageTextBelow != "" {
+		fmt.Fprintf(&b, " page_text_below=%s", textutil.Preview(strings.TrimSpace(info.PageTextBelow), 120))
+	}
+	if info.RenderedBrowserSourceStatus != "" {
+		fmt.Fprintf(&b, " rendered_status=%s", textutil.Preview(strings.TrimSpace(info.RenderedBrowserSourceStatus), 120))
+	}
+	if info.SourceMethod != "" {
+		fmt.Fprintf(&b, " source_method=%s", textutil.Preview(strings.TrimSpace(info.SourceMethod), 120))
+	}
+	if info.JSONPath != "" {
+		fmt.Fprintf(&b, " json_path=%s", textutil.Preview(strings.TrimSpace(info.JSONPath), 240))
+	}
+	if body := sourceAccessBodyPreview(content); body != "" {
+		b.WriteString("\nbody_preview:\n")
+		b.WriteString(body)
+	}
+	return b.String(), true
+}
+
+func sourceAccessBodyPreview(content string) string {
+	var lines []string
+	for _, line := range strings.Split(content, "\n") {
+		trimmed := strings.TrimSpace(line)
+		if strings.HasPrefix(trimmed, "SourceAccess:") {
+			continue
+		}
+		if strings.HasPrefix(trimmed, "JSON_PATH:") {
+			continue
+		}
+		if strings.HasPrefix(trimmed, "BODY_BYTES:") {
+			continue
+		}
+		lines = append(lines, line)
+	}
+	body := strings.TrimSpace(strings.Join(lines, "\n"))
+	if body == "" {
+		return ""
+	}
+	return textutil.Preview(body, compactWebEvidenceMaxText)
 }
 
 func compactPlanResultForSummary(content string) (string, bool) {
