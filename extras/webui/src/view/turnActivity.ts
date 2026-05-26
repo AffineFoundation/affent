@@ -3,6 +3,7 @@ import { detectConstraintDeviations } from "./constraintDeviation";
 import type { DraftSource } from "./draftSource";
 import { summarizeUserError } from "./errorSummary";
 import { buildExecutionTree, formatTokenUsageCompact, type ExecutionTreeNode } from "./executionTree";
+import { memoryUpdatesForTurn, type MemoryUpdateSummary } from "./memoryUpdate";
 import { describeSourceAccess, sourceEvidenceLabel } from "./sourceAccess";
 import { artifactCountLabel, buildTurnArtifacts } from "./turnArtifacts";
 import { formatByteCount } from "./byteFormat";
@@ -169,6 +170,19 @@ export function buildTurnActivity(turn: TurnState, opts: TurnActivityOptions = {
     });
   }
 
+  const memoryUpdates = memoryUpdatesForTurn(turn);
+  memoryUpdates.forEach((update, index) => {
+    items.push({
+      id: `${turn.id}:memory:${index}:${update.action}:${update.location}`,
+      kind: "attention",
+      label: "Memory",
+      title: update.label,
+      detail: memoryUpdateDetail(update),
+      meta: update.location,
+      tone: memoryUpdateTone(update),
+    });
+  });
+
   if (items.length === 0 && treeNodes.length === 0) return undefined;
 
   const nodes = treeNodes.map((node) => activityNodeFromExecutionNode(turn, node));
@@ -236,6 +250,15 @@ function buildBrief(
       tone: compaction.reactive ? "warning" : "muted",
     });
   }
+
+  memoryUpdatesForTurn(turn).forEach((update, index) => {
+    rows.push({
+      id: `memory:${index}:${update.action}:${update.location}`,
+      label: "Memory",
+      value: memoryUpdateBrief(update),
+      tone: memoryUpdateTone(update),
+    });
+  });
 
   if (evidence.length > 0) {
     rows.push({
@@ -572,6 +595,8 @@ function digestMeta(turn: TurnState, nodes: readonly TurnActivityNode[]): string
   if (decisionCount > 0) meta.push(`${decisionCount} ${pluralize("decision", decisionCount)}`);
   const compactionCount = turn.contextCompactions?.length ?? 0;
   if (compactionCount > 0) meta.push(`${compactionCount} ${pluralize("compaction", compactionCount)}`);
+  const memoryUpdateCount = memoryUpdatesForTurn(turn).length;
+  if (memoryUpdateCount > 0) meta.push(`${memoryUpdateCount} memory ${pluralize("update", memoryUpdateCount)}`);
   return meta;
 }
 
@@ -626,6 +651,18 @@ function contextCompactionBrief(compaction: NonNullable<ReturnType<typeof latest
   const prefix = compaction.reactive ? "reactive" : "scheduled";
   const reason = compaction.reason ? ` · ${compaction.reason}` : "";
   return `${prefix} · ${contextCompactionDetail(compaction)}${reason}`;
+}
+
+function memoryUpdateDetail(update: MemoryUpdateSummary): string {
+  return summarize([update.location, update.preview].filter(Boolean).join(" · "), 180);
+}
+
+function memoryUpdateBrief(update: MemoryUpdateSummary): string {
+  return summarize([update.label, update.location, update.preview].filter(Boolean).join(" · "), 180);
+}
+
+function memoryUpdateTone(update: MemoryUpdateSummary): TurnActivityTone {
+  return update.action === "remove" ? "warning" : "success";
 }
 
 function formatTokenCount(count: number): string {

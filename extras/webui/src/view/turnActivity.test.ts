@@ -121,6 +121,85 @@ describe("buildTurnActivity", () => {
     ]);
   });
 
+  it("surfaces confirmed memory updates on the owning turn", () => {
+    const turn = reduceRawEvents([
+      { id: 1, type: "turn.start", data: { turn_id: "t1" } },
+      { id: 2, type: "user.message", data: { turn_id: "t1", text: "remember market evidence policy" } },
+      {
+        id: 3,
+        type: "tool.request",
+        data: {
+          turn_id: "t1",
+          call_id: "m1",
+          tool: "memory",
+          args: {
+            action: "add",
+            target: "memory",
+            topic: "markets",
+            content: "Stock analysis must keep source-led confidence and marker MEM-HRO-44.",
+          },
+          args_truncated: false,
+          args_bytes: 112,
+          args_omitted_bytes: 0,
+          args_cap_bytes: 8192,
+        },
+      },
+      {
+        id: 4,
+        type: "tool.result",
+        data: {
+          call_id: "m1",
+          exit_code: 0,
+          duration_ms: 12,
+          result_summary: "{\"ok\":true,\"target\":\"memory\",\"topic\":\"markets\"}",
+          result: "{\"ok\":true,\"target\":\"memory\",\"topic\":\"markets\"}",
+          result_truncated: false,
+          result_bytes: 48,
+          result_omitted_bytes: 0,
+          result_cap_bytes: 8192,
+          memory_update: {
+            action: "add",
+            target: "memory",
+            topic: "markets",
+            location: "memory:markets",
+            preview: "Stock analysis must keep source-led confidence and marker MEM-HRO-44.",
+            next_preview: "Stock analysis must keep source-led confidence and marker MEM-HRO-44.",
+          },
+        },
+      },
+      { id: 5, type: "turn.end", data: { turn_id: "t1", reason: "completed" } },
+    ]).turns[0];
+
+    const activity = buildTurnActivity(turn);
+
+    expect(activity?.digest).toEqual({
+      label: "Memory",
+      summary: "Saved memory: memory:markets · Stock analysis must keep source-led confidence and marker MEM-HRO-44.",
+      meta: ["1 step", "1 action", "1 memory update"],
+      tone: "success",
+    });
+    expect(activity?.brief.rows).toEqual([
+      { id: "goal", label: "Goal", value: "remember market evidence policy" },
+      {
+        id: "memory:0:add:memory:markets",
+        label: "Memory",
+        value: "Saved memory · memory:markets · Stock analysis must keep source-led confidence and marker MEM-HRO-44.",
+        tone: "success",
+      },
+    ]);
+    expect(activity?.items).toEqual([
+      {
+        id: "t1:memory:0:add:memory:markets",
+        kind: "attention",
+        label: "Memory",
+        title: "Saved memory",
+        detail: "memory:markets · Stock analysis must keep source-led confidence and marker MEM-HRO-44.",
+        meta: "memory:markets",
+        tone: "success",
+      },
+    ]);
+  });
+
   it("keeps completed delegated work folded as a summary", () => {
     const turn = reduceRawEvents(completedSubagentTree).turns[0];
     const activity = buildTurnActivity(turn);
