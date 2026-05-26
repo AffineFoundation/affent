@@ -2532,6 +2532,158 @@ QUERY: "price market cap fdv volume"
 	}
 }
 
+func TestRunner_EndToEnd_WebSnapshotNetworkEvidenceFlow(t *testing.T) {
+	const snapshot = `SourceAccess: browser_rendered_url=https://taostats.io/subnets/120; snapshot_id=18; page_text_below=verified_page_evidence
+URL: https://taostats.io/subnets/120
+TITLE: Affine SN120 · TaoStats
+PAGE DIAGNOSTICS:
+- empty_dynamic_metric_widgets: 2 visible custom metric widget(s) exposed no text value; use browser_network/browser_network_read, API/text/source endpoint, or mark those fields unverified
+CAPTURED NETWORK RESPONSES:
+- n1 status=200 resource=fetch content_type=application/json url=https://taostats.io/api/subnets/120
+Next: use browser_network with a specific metric/entity/API-path query, then browser_network_read on the best ref before citing hidden dashboard values.
+
+PAGE TEXT:
+p: Affine SN120
+p: Market Cap
+p: 24hr Volume`
+
+	browserNavigate := agent.Tool{
+		Name:        "browser_navigate",
+		Description: "Test-only browser navigate stand-in: returns a dynamic dashboard snapshot with network refs.",
+		Schema: json.RawMessage(`{
+            "type": "object",
+            "required": ["url"],
+            "properties": {
+                "url": {"type": "string"},
+                "wait_until": {"type": "string"}
+            }
+        }`),
+		Execute: func(ctx context.Context, args json.RawMessage) (string, error) {
+			return snapshot, nil
+		},
+	}
+	browserNetwork := agent.Tool{
+		Name:        "browser_network",
+		Description: "Test-only browser network search stand-in.",
+		Schema: json.RawMessage(`{
+            "type": "object",
+            "properties": {
+                "query": {"type": "string"},
+                "max_results": {"type": "integer"}
+            }
+        }`),
+		Execute: func(ctx context.Context, args json.RawMessage) (string, error) {
+			return `BROWSER NETWORK EVIDENCE
+query: "market_cap"
+MATCHES:
+- n1 status=200 resource=fetch content_type=application/json url=https://taostats.io/api/subnets/120
+  preview: {"name":"Affine","netuid":120,"market_cap":"201.04K T","price":"0.06342 T"}
+Next: call browser_network_read with the most relevant ref before citing values.`, nil
+		},
+	}
+	browserNetworkRead := agent.Tool{
+		Name:        "browser_network_read",
+		Description: "Test-only browser network read stand-in.",
+		Schema: json.RawMessage(`{
+            "type": "object",
+            "required": ["ref"],
+            "properties": {
+                "ref": {"type": "string"},
+                "max_bytes": {"type": "integer"}
+            }
+        }`),
+		Execute: func(ctx context.Context, args json.RawMessage) (string, error) {
+			return `SourceAccess: browser_network_url=https://taostats.io/api/subnets/120; ref=n1; status=200; content_type=application/json; source_method=network_xhr_fetch
+BODY_BYTES: 77
+{"name":"Affine","netuid":120,"market_cap":"201.04K T","price":"0.06342 T"}`, nil
+		},
+	}
+
+	turn1 := []string{
+		`{"choices":[{"delta":{"role":"assistant","tool_calls":[{"index":0,"id":"b1","type":"function","function":{"name":"browser_navigate","arguments":"{\"url\":\"https://taostats.io/subnets/120\",\"wait_until\":\"networkidle\"}"}}]},"finish_reason":null}]}`,
+		`{"choices":[{"delta":{},"finish_reason":"tool_calls"}]}`,
+		`[DONE]`,
+	}
+	turn2 := []string{
+		`{"choices":[{"delta":{"role":"assistant","tool_calls":[{"index":0,"id":"n1","type":"function","function":{"name":"browser_network","arguments":"{\"query\":\"market_cap\",\"max_results\":5}"}}]},"finish_reason":null}]}`,
+		`{"choices":[{"delta":{},"finish_reason":"tool_calls"}]}`,
+		`[DONE]`,
+	}
+	turn3 := []string{
+		`{"choices":[{"delta":{"role":"assistant","tool_calls":[{"index":0,"id":"r1","type":"function","function":{"name":"browser_network_read","arguments":"{\"ref\":\"n1\",\"max_bytes\":512}"}}]},"finish_reason":null}]}`,
+		`{"choices":[{"delta":{},"finish_reason":"tool_calls"}]}`,
+		`[DONE]`,
+	}
+	turn4 := []string{
+		`{"choices":[{"delta":{"role":"assistant","content":"The rendered TaoStats page showed Affine SN120 but hid the metric values in dynamic widgets, so I used the captured same-site network response before citing numbers. The network evidence at https://taostats.io/api/subnets/120 reports market cap 201.04K T and price 0.06342 T for Affine netuid 120."},"finish_reason":"stop"}]}`,
+		`[DONE]`,
+	}
+	srv := newScriptedLLM(t, [][]string{turn1, turn2, turn3, turn4})
+	navigateArgs := func(args map[string]any) bool {
+		return args["url"] == "https://taostats.io/subnets/120"
+	}
+	networkArgs := func(args map[string]any) bool {
+		return strings.Contains(fmt.Sprint(args["query"]), "market_cap")
+	}
+	readArgs := func(args map[string]any) bool {
+		return args["ref"] == "n1"
+	}
+
+	scenario := Scenario{
+		Name:         "web_snapshot_network_evidence_flow",
+		Description:  "agent follows browser snapshot network refs and reads XHR evidence before citing hidden dashboard values",
+		Prompt:       "Read the TaoStats Affine SN120 page. If rendered metric values are hidden in dynamic widgets, use captured browser network evidence before reporting market cap and price.",
+		MaxTurnSteps: 6,
+		Checks: []Check{
+			TurnEndedCleanly(),
+			ToolCalled("browser_navigate", navigateArgs),
+			ToolResultContains("browser_navigate", "CAPTURED NETWORK RESPONSES"),
+			ToolCalled("browser_network", networkArgs),
+			ToolCalled("browser_network_read", readArgs),
+			ToolCalledBeforeMatching("browser_navigate", navigateArgs, "browser_network", networkArgs),
+			ToolCalledBeforeMatching("browser_network", networkArgs, "browser_network_read", readArgs),
+			ToolStatsAtLeast("source_access_results", 2),
+			ToolStatsAtLeast("source_access_verified", 1),
+			ToolStatsAtLeast("source_access_network", 1),
+			FinalTextContains("market cap 201.04K T"),
+			FinalTextContains("price 0.06342 T"),
+			FinalTextContains("captured same-site network response"),
+		},
+	}
+
+	runner := &Runner{
+		LLM:            agent.NewLLMClient(srv.URL, "", "fake-model"),
+		MaxTurnSteps:   6,
+		PerCallTimeout: 5 * time.Second,
+		RunTimeout:     20 * time.Second,
+		Log:            zerolog.Nop(),
+		BuildRegistry: func(ctx context.Context, workspaceDir string, exec executor.Executor) (*agent.Registry, error) {
+			_ = ctx
+			_ = workspaceDir
+			_ = exec
+			reg := agent.NewRegistry()
+			reg.Add(&browserNavigate)
+			reg.Add(&browserNetwork)
+			reg.Add(&browserNetworkRead)
+			return reg, nil
+		},
+	}
+
+	out, err := runner.Run(context.Background(), scenario)
+	if err != nil {
+		t.Fatalf("Runner.Run: %v", err)
+	}
+	if !out.Pass {
+		t.Errorf("expected all checks to pass; failed: %v", out.FailedChecks())
+		for _, r := range out.Results {
+			t.Logf("  %s: pass=%v detail=%s", r.Check, r.Pass, r.Detail)
+		}
+	}
+	if len(out.Trace.Tools) != 3 {
+		t.Fatalf("expected navigate + network search + network read; got %+v", out.Trace.Tools)
+	}
+}
+
 // TestRunner_EndToEnd_Browser404DiscoveryOnly keeps the browser 404 / page
 // not found path honest: the model should treat it as a discovery page and use
 // the visible navigation links rather than the body as evidence.
