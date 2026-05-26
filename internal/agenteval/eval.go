@@ -84,6 +84,7 @@ type BatchScenario struct {
 	RequiredContextCompactions    int
 	RequiredReactiveCompactions   int
 	RequiredCompactionRemovedMsgs int
+	RequiredContextSummaryText    []string
 	RequiredCommandBeforeTool     []CommandToolOrderRequirement
 	RequiredCommandAfterTool      []CommandToolOrderRequirement
 	RequiredTools                 []string
@@ -1152,6 +1153,9 @@ func BatchScenarioChecks(scenario BatchScenario) []Check {
 	}
 	if scenario.RequiredCompactionRemovedMsgs > 0 {
 		checks = append(checks, ContextCompactionRemovedMessagesAtLeast(scenario.RequiredCompactionRemovedMsgs))
+	}
+	for _, substr := range scenario.RequiredContextSummaryText {
+		checks = append(checks, ContextCompactionSummaryContains(substr))
 	}
 	for _, taskType := range sortedStringMapKeys(scenario.RequiredFocusedTaskCounts) {
 		checks = append(checks, FocusedTaskCalledAtLeast(taskType, scenario.RequiredFocusedTaskCounts[taskType]))

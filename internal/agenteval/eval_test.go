@@ -440,6 +440,7 @@ func TestBatchScenarioChecks_UsesSharedCheckLibrary(t *testing.T) {
 		RequiredContextCompactions:    1,
 		RequiredReactiveCompactions:   1,
 		RequiredCompactionRemovedMsgs: 20,
+		RequiredContextSummaryText:    []string{"HRO market marker"},
 		RequiredFocusedTaskCounts: map[string]int{
 			"explore": 1,
 		},
@@ -486,6 +487,7 @@ func TestBatchScenarioChecks_UsesSharedCheckLibrary(t *testing.T) {
 		"context_compactions_at_least:1",
 		"reactive_context_compactions_at_least:1",
 		"context_compaction_removed_messages_at_least:20",
+		"context_compaction_summary_contains:HRO market marker",
 		"focused_task_called_at_least:explore:1",
 		"subagent_called_at_least:review:1",
 		"no_delegation_errors",

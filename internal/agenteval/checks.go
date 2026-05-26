@@ -500,6 +500,31 @@ func ContextCompactionRemovedMessagesAtLeast(min int) Check {
 	}
 }
 
+func ContextCompactionSummaryContains(substr string) Check {
+	return Check{
+		Name: fmt.Sprintf("context_compaction_summary_contains:%s", previewSubstr(substr, 32)),
+		Eval: func(t Trace) CheckResult {
+			var previews []string
+			for _, c := range t.ContextCompactions {
+				preview := strings.TrimSpace(c.SummaryPreview)
+				if preview == "" {
+					continue
+				}
+				if strings.Contains(preview, substr) {
+					return CheckResult{Pass: true, Detail: fmt.Sprintf("matched turn_id=%s", c.TurnID)}
+				}
+				if len(previews) < 3 {
+					previews = append(previews, previewSubstr(preview, 120))
+				}
+			}
+			return CheckResult{
+				Pass:   false,
+				Detail: fmt.Sprintf("expected a context summary preview to contain %q; compactions=%d previews=%v", substr, len(t.ContextCompactions), previews),
+			}
+		},
+	}
+}
+
 func loopDecisionExamples(decisions []LoopDecision, max int) []string {
 	if max <= 0 || len(decisions) == 0 {
 		return nil

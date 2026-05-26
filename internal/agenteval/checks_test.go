@@ -609,8 +609,8 @@ func TestLoopDecisionMatchAtLeast(t *testing.T) {
 
 func TestContextCompactionChecks(t *testing.T) {
 	trace := Trace{ContextCompactions: []ContextCompaction{
-		{TurnID: "t1", BeforeMessages: 50, AfterMessages: 20, RemovedMessages: 30, Reactive: false, Reason: "threshold", SummaryPresent: true, SummaryBytes: 1200},
-		{TurnID: "t2", BeforeMessages: 40, AfterMessages: 10, RemovedMessages: 30, Reactive: true, Reason: "context_overflow", SummaryPresent: true, SummaryBytes: 900},
+		{TurnID: "t1", BeforeMessages: 50, AfterMessages: 20, RemovedMessages: 30, Reactive: false, Reason: "threshold", SummaryPresent: true, SummaryBytes: 1200, SummaryPreview: "USER_CONTEXT: keep HRO market marker and source URLs."},
+		{TurnID: "t2", BeforeMessages: 40, AfterMessages: 10, RemovedMessages: 30, Reactive: true, Reason: "context_overflow", SummaryPresent: true, SummaryBytes: 900, SummaryPreview: "TASK_TRACKING: preserve Affine SN120 subnet risks."},
 	}}
 	stats := trace.ContextCompactionStats(1)
 	if stats.Count != 2 || stats.Proactive != 1 || stats.Reactive != 1 || stats.RemovedMessages != 60 || stats.SummaryBytes != 2100 {
@@ -628,12 +628,22 @@ func TestContextCompactionChecks(t *testing.T) {
 	if res := ContextCompactionRemovedMessagesAtLeast(60).Eval(trace); !res.Pass {
 		t.Fatalf("expected removed-message compaction check to pass: %+v", res)
 	}
+	if res := ContextCompactionSummaryContains("Affine SN120").Eval(trace); !res.Pass {
+		t.Fatalf("expected context summary content check to pass: %+v", res)
+	}
 	res := ReactiveContextCompactionsAtLeast(2).Eval(trace)
 	if res.Pass {
 		t.Fatal("expected reactive compaction check to fail")
 	}
 	if !strings.Contains(res.Detail, "reactive_context_compactions=1") || !strings.Contains(res.Detail, "proactive=1") {
 		t.Fatalf("failure detail should include reactive/proactive counts: %s", res.Detail)
+	}
+	res = ContextCompactionSummaryContains("missing marker").Eval(trace)
+	if res.Pass {
+		t.Fatal("expected missing context summary marker to fail")
+	}
+	if !strings.Contains(res.Detail, "missing marker") || !strings.Contains(res.Detail, "HRO market marker") {
+		t.Fatalf("failure detail should include requested marker and observed previews: %s", res.Detail)
 	}
 }
 
