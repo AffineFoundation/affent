@@ -267,6 +267,43 @@ describe("reduce — robustness", () => {
     expect(s.turns[0].loopDecisions).toEqual(s.loopDecisions);
   });
 
+  it("records context compactions on both session and owning turn", () => {
+    const s = reduceRawEvents([
+      { id: 0, type: "turn.start", data: { turn_id: "t1" } },
+      {
+        id: 1,
+        type: "context.compacted",
+        data: {
+          turn_id: "t1",
+          before_messages: 90,
+          after_messages: 18,
+          removed_messages: 72,
+          reactive: true,
+          reason: "context_overflow",
+          summary_present: true,
+          summary_bytes: 4096,
+        },
+      },
+      { id: 2, type: "turn.end", data: { turn_id: "t1", reason: "completed" } },
+    ]);
+
+    expect(s.unknownEventCount).toBe(0);
+    expect(s.contextCompactions).toEqual([
+      {
+        eventId: 1,
+        turn_id: "t1",
+        before_messages: 90,
+        after_messages: 18,
+        removed_messages: 72,
+        reactive: true,
+        reason: "context_overflow",
+        summary_present: true,
+        summary_bytes: 4096,
+      },
+    ]);
+    expect(s.turns[0].contextCompactions).toEqual(s.contextCompactions);
+  });
+
   it("counts unknown event types without crashing or dropping turns", () => {
     const s = reduceRawEvents([
       { id: 0, type: "turn.start", data: { turn_id: "t1" } },

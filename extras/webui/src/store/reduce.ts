@@ -113,6 +113,7 @@ function applyEventPayload(state: SessionState, ev: NormalizedEvent): SessionSta
         messageStreaming: false,
         toolCalls: [],
         loopDecisions: [],
+        contextCompactions: [],
       };
       return { ...state, turns: [...state.turns, turn], status: "running" };
     }
@@ -243,9 +244,15 @@ function applyEventPayload(state: SessionState, ev: NormalizedEvent): SessionSta
     }
     case EventType.ContextCompacted: {
       const p = ev.data as ContextCompactedPayload;
+      const next = p.turn_id
+        ? updateTurn(state, p.turn_id, (t) => ({
+            ...t,
+            contextCompactions: [...(t.contextCompactions ?? []), { ...p, eventId: ev.id }],
+          }))
+        : state;
       return {
-        ...state,
-        contextCompactions: [...state.contextCompactions, { ...p, eventId: ev.id }],
+        ...next,
+        contextCompactions: [...next.contextCompactions, { ...p, eventId: ev.id }],
       };
     }
     case EventType.Error: {

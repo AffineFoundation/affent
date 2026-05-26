@@ -76,6 +76,7 @@ export interface TurnState {
   finishReason?: string;
   toolCalls: ToolCallState[];
   loopDecisions?: LoopDecisionState[];
+  contextCompactions?: ContextCompactionState[];
   usage?: TurnUsage;
   toolStats?: ToolRuntimeStats;
   endReason?: string;

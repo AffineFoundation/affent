@@ -5,6 +5,7 @@ import { summarizeUserError } from "./errorSummary";
 import { buildExecutionTree, formatTokenUsageCompact, type ExecutionTreeNode } from "./executionTree";
 import { describeSourceAccess, sourceEvidenceLabel } from "./sourceAccess";
 import { artifactCountLabel, buildTurnArtifacts } from "./turnArtifacts";
+import { formatByteCount } from "./byteFormat";
 
 export type TurnActivityTone = "running" | "success" | "warning" | "error" | "muted";
 export type TurnActivityKind = "reasoning" | "action" | "result" | "answer" | "attention";
@@ -155,6 +156,19 @@ export function buildTurnActivity(turn: TurnState, opts: TurnActivityOptions = {
     });
   }
 
+  const compaction = latestContextCompaction(turn);
+  if (compaction) {
+    items.push({
+      id: `${turn.id}:compaction:${compaction.eventId}`,
+      kind: "attention",
+      label: "Context",
+      title: compaction.reactive ? "Context compacted reactively" : "Context compacted",
+      detail: contextCompactionDetail(compaction),
+      meta: compaction.reason,
+      tone: compaction.reactive ? "warning" : "muted",
+    });
+  }
+
   if (items.length === 0 && treeNodes.length === 0) return undefined;
 
   const nodes = treeNodes.map((node) => activityNodeFromExecutionNode(turn, node));
@@ -210,6 +224,16 @@ function buildBrief(
       action: decision.required_action
         ? { label: "Use action", draft: `Continue: ${decision.required_action}`, source: "tool_guidance" }
         : undefined,
+    });
+  }
+
+  const compaction = latestContextCompaction(turn);
+  if (compaction) {
+    rows.push({
+      id: `compaction:${compaction.eventId}`,
+      label: "Context",
+      value: contextCompactionBrief(compaction),
+      tone: compaction.reactive ? "warning" : "muted",
     });
   }
 
@@ -546,6 +570,8 @@ function digestMeta(turn: TurnState, nodes: readonly TurnActivityNode[]): string
   if (evidenceCount > 0) meta.push(`${evidenceCount} evidence`);
   const decisionCount = visibleLoopDecisions(turn).length;
   if (decisionCount > 0) meta.push(`${decisionCount} ${pluralize("decision", decisionCount)}`);
+  const compactionCount = turn.contextCompactions?.length ?? 0;
+  if (compactionCount > 0) meta.push(`${compactionCount} ${pluralize("compaction", compactionCount)}`);
   return meta;
 }
 
@@ -579,6 +605,26 @@ function loopDecisionBrief(decision: NonNullable<ReturnType<typeof latestVisible
 function loopDecisionTone(decision: NonNullable<ReturnType<typeof latestVisibleLoopDecision>>): TurnActivityTone {
   if (decision.decision === "defer" || decision.required_action) return "warning";
   return "muted";
+}
+
+function latestContextCompaction(turn: TurnState) {
+  return turn.contextCompactions?.at(-1);
+}
+
+function contextCompactionDetail(compaction: NonNullable<ReturnType<typeof latestContextCompaction>>): string {
+  const parts = [
+    `${compaction.before_messages}->${compaction.after_messages} messages`,
+    compaction.removed_messages > 0 ? `removed ${compaction.removed_messages}` : undefined,
+    compaction.summary_bytes && compaction.summary_bytes > 0 ? `${formatByteCount(compaction.summary_bytes)} summary` : undefined,
+    compaction.summary_present === false ? "summary missing" : undefined,
+  ].filter(Boolean);
+  return parts.join(" · ");
+}
+
+function contextCompactionBrief(compaction: NonNullable<ReturnType<typeof latestContextCompaction>>): string {
+  const prefix = compaction.reactive ? "reactive" : "scheduled";
+  const reason = compaction.reason ? ` · ${compaction.reason}` : "";
+  return `${prefix} · ${contextCompactionDetail(compaction)}${reason}`;
 }
 
 function formatTokenCount(count: number): string {

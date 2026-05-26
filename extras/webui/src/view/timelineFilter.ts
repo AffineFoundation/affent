@@ -11,6 +11,7 @@ export type TimelineFilterMode =
   | "messages"
   | "evidence"
   | "guard"
+  | "context"
   | "artifacts"
   | "memory"
   | "truncated"
@@ -69,6 +70,8 @@ function matchesMode(turn: TurnState, mode: TimelineFilterMode): boolean {
       return (turn.toolStats?.loop_guard_interventions ?? 0) > 0 ||
         (turn.toolStats?.forced_no_tools ?? 0) > 0 ||
         (turn.loopDecisions ?? []).some((decision) => decision.visible_in_ui !== false);
+    case "context":
+      return (turn.contextCompactions?.length ?? 0) > 0;
     case "artifacts":
       return turn.toolCalls.some((tool) => !!tool.resultArtifactPath);
     case "memory":
@@ -92,11 +95,24 @@ function searchableTurnText(turn: TurnState, events: readonly NormalizedEvent[])
     turn.error?.code,
     turn.error?.message,
     ...(turn.loopDecisions ?? []).flatMap(searchableLoopDecisionText),
+    ...(turn.contextCompactions ?? []).flatMap(searchableContextCompactionText),
     ...buildExecutionTree(turn).flatMap(searchableExecutionNodeText),
     ...turn.toolCalls.flatMap(searchableToolText),
     ...events.filter((event) => eventBelongsToTurn(event, turn)).map((event) => JSON.stringify(event.raw)),
   ];
   return normalizeQuery(chunks.filter(Boolean).join("\n"));
+}
+
+function searchableContextCompactionText(compaction: NonNullable<TurnState["contextCompactions"]>[number]): string[] {
+  return [
+    "context",
+    "compaction",
+    compaction.reactive ? "reactive" : "scheduled",
+    compaction.reason,
+    String(compaction.before_messages),
+    String(compaction.after_messages),
+    String(compaction.removed_messages),
+  ].filter((item): item is string => !!item);
 }
 
 function searchableLoopDecisionText(decision: NonNullable<TurnState["loopDecisions"]>[number]): string[] {

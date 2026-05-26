@@ -19,7 +19,7 @@ describe("timelineFilter", () => {
 
   it("does not match specialized runtime filters when a plain turn lacks those states", () => {
     const session = reduceRawEvents(completedTurn);
-    const modes: TimelineFilterMode[] = ["artifacts", "memory", "evidence", "guard", "truncated", "repaired", "errors"];
+    const modes: TimelineFilterMode[] = ["artifacts", "memory", "evidence", "guard", "context", "truncated", "repaired", "errors"];
 
     for (const mode of modes) {
       expect(turnMatchesFilter(session.turns[0], session.events, { mode, query: "" })).toBe(false);
@@ -55,6 +55,14 @@ describe("timelineFilter", () => {
 
     expect(turnMatchesFilter(session.turns[0], session.events, { mode: "guard", query: "" })).toBe(true);
     expect(turnMatchesFilter(session.turns[0], session.events, { mode: "guard", query: "network responses" })).toBe(true);
+  });
+
+  it("matches context compaction turns in the context filter", () => {
+    const session = reduceRawEvents(contextCompactionTurn());
+
+    expect(turnMatchesFilter(session.turns[0], session.events, { mode: "context", query: "" })).toBe(true);
+    expect(turnMatchesFilter(session.turns[0], session.events, { mode: "context", query: "context_overflow" })).toBe(true);
+    expect(turnMatchesFilter(session.turns[0], session.events, { mode: "guard", query: "" })).toBe(false);
   });
 
   it("counts every filter mode against the current search query", () => {
@@ -188,6 +196,28 @@ function loopDecisionTurn(): typeof resultTruncated {
       },
     },
     { id: 3, type: "turn.end", data: { turn_id: "decision_turn", reason: "completed" } },
+  ];
+}
+
+function contextCompactionTurn(): typeof resultTruncated {
+  return [
+    { id: 0, type: "turn.start", data: { turn_id: "context_turn" } },
+    { id: 1, type: "user.message", data: { turn_id: "context_turn", text: "continue long run" } },
+    {
+      id: 2,
+      type: "context.compacted",
+      data: {
+        turn_id: "context_turn",
+        before_messages: 90,
+        after_messages: 18,
+        removed_messages: 72,
+        reactive: true,
+        reason: "context_overflow",
+        summary_present: true,
+        summary_bytes: 4096,
+      },
+    },
+    { id: 3, type: "turn.end", data: { turn_id: "context_turn", reason: "completed" } },
   ];
 }
 

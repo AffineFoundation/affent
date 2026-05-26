@@ -11,6 +11,7 @@ const timelineFilterModes: { mode: TimelineFilterMode; label: string }[] = [
   { mode: "tools", label: "Tools" },
   { mode: "evidence", label: "Evidence" },
   { mode: "guard", label: "Guard" },
+  { mode: "context", label: "Context" },
   { mode: "errors", label: "Issues" },
   { mode: "artifacts", label: "Files" },
   { mode: "memory", label: "Memory" },
@@ -536,6 +537,8 @@ function shouldShowTimelineFilters(session: SessionState): boolean {
     turn.toolCalls.length > 1 ||
     (turn.toolStats?.loop_guard_interventions ?? 0) > 0 ||
     (turn.toolStats?.forced_no_tools ?? 0) > 0 ||
+    (turn.loopDecisions ?? []).some((decision) => decision.visible_in_ui !== false) ||
+    (turn.contextCompactions?.length ?? 0) > 0 ||
     turn.toolCalls.some((tool) =>
       tool.status === "error" ||
       !!tool.resultArtifactPath ||

@@ -80,6 +80,46 @@ describe("buildTurnActivity", () => {
     ]);
   });
 
+  it("surfaces context compactions on the owning turn", () => {
+    const turn = reduceRawEvents([
+      { id: 1, type: "turn.start", data: { turn_id: "t1" } },
+      { id: 2, type: "user.message", data: { turn_id: "t1", text: "continue long run" } },
+      {
+        id: 3,
+        type: "context.compacted",
+        data: {
+          turn_id: "t1",
+          before_messages: 90,
+          after_messages: 18,
+          removed_messages: 72,
+          reactive: true,
+          reason: "context_overflow",
+          summary_present: true,
+          summary_bytes: 4096,
+        },
+      },
+      { id: 4, type: "turn.end", data: { turn_id: "t1", reason: "completed" } },
+    ]).turns[0];
+
+    const activity = buildTurnActivity(turn);
+
+    expect(activity?.digest).toEqual({
+      label: "Context",
+      summary: "Context compacted reactively: 90->18 messages · removed 72 · 4 KiB summary",
+      meta: ["1 compaction"],
+      tone: "warning",
+    });
+    expect(activity?.brief.rows).toEqual([
+      { id: "goal", label: "Goal", value: "continue long run" },
+      {
+        id: "compaction:3",
+        label: "Context",
+        value: "reactive · 90->18 messages · removed 72 · 4 KiB summary · context_overflow",
+        tone: "warning",
+      },
+    ]);
+  });
+
   it("keeps completed delegated work folded as a summary", () => {
     const turn = reduceRawEvents(completedSubagentTree).turns[0];
     const activity = buildTurnActivity(turn);
