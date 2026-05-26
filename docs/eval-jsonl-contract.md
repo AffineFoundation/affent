@@ -47,6 +47,7 @@ Shared metadata fields:
   `min_expectation_capability_pass_rate`,
   `min_each_expectation_capability_pass_rate`,
   `min_session_search_context_hit_rate`,
+  `min_session_search_matched_terms_per_call`,
   `min_tool_repair_success_rate`, `min_verifier_pass_rate`,
   `max_focused_task_error_rate`, `max_forced_no_tools_rate`,
   `max_loop_guard_intervention_rate`, `max_plan_error_rate`,
@@ -299,7 +300,7 @@ Summary records aggregate all scenario records from the same process:
   `source_discovery_only_rate` when source evidence was observed,
   `source_dynamic_partial_rate` when source evidence was observed,
   `session_search_context_hit_rate` when session search returned prior-session
-  hits,
+  hits, `session_search_matched_terms_per_call` when session search was used,
   `avg_runtime_errors`, `avg_context_compactions`,
   `avg_reactive_context_compactions`, `avg_context_removed_messages`,
   `avg_context_summary_bytes`, `avg_context_summary_missing`,

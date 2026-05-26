@@ -100,6 +100,7 @@ func run(args []string) int {
 			MinExpectationCapabilityPassRate:     fs.Float64("min-expectation-capability-pass-rate", -1, "optional quality gate: minimum pass rate across declared expectation capability instances, 0..1"),
 			MinEachExpectationCapabilityPassRate: fs.Float64("min-each-expectation-capability-pass-rate", -1, "optional quality gate: minimum pass rate for each declared expectation capability family, 0..1"),
 			MinSessionSearchContextHitRate:       fs.Float64("min-session-search-context-hit-rate", -1, "optional quality gate: minimum session_search context-hit rate, 0..1"),
+			MinSessionSearchMatchedTermsPerCall:  fs.Float64("min-session-search-matched-terms-per-call", -1, "optional quality gate: minimum average unique matched session_search terms per call"),
 			MinToolRepairSuccessRate:             fs.Float64("min-tool-repair-success-rate", -1, "optional quality gate: minimum successful tool-call repair rate, 0..1"),
 			MinVerifierPassRate:                  fs.Float64("min-verifier-pass-rate", -1, "optional quality gate: minimum verifier pass rate, 0..1"),
 			MaxFocusedTaskErrorRate:              fs.Float64("max-focused-task-error-rate", -1, "optional quality gate: maximum focused-task error rate per focused-task call, 0..1"),
@@ -291,6 +292,7 @@ type qualityGateConfig struct {
 	MinExpectationCapabilityPassRate     *float64
 	MinEachExpectationCapabilityPassRate *float64
 	MinSessionSearchContextHitRate       *float64
+	MinSessionSearchMatchedTermsPerCall  *float64
 	MinToolRepairSuccessRate             *float64
 	MinVerifierPassRate                  *float64
 	MaxFocusedTaskErrorRate              *float64
@@ -333,6 +335,7 @@ func qualityGateProfileDefinitions() []qualityGateProfileDefinition {
 				MinExpectationCapabilityPassRate:     float64Ptr(0.80),
 				MinEachExpectationCapabilityPassRate: float64Ptr(0.50),
 				MinSessionSearchContextHitRate:       float64Ptr(0.75),
+				MinSessionSearchMatchedTermsPerCall:  float64Ptr(1.0),
 				MinRuntimeSurfaceRate:                float64Ptr(0.90),
 				MaxFocusedTaskErrorRate:              float64Ptr(0.10),
 				MaxForcedNoToolsRate:                 float64Ptr(0.10),
@@ -409,6 +412,7 @@ func qualityGateConfigLines(g qualityGateConfig) []string {
 	add("min-expectation-capability-pass-rate", g.MinExpectationCapabilityPassRate)
 	add("min-each-expectation-capability-pass-rate", g.MinEachExpectationCapabilityPassRate)
 	add("min-session-search-context-hit-rate", g.MinSessionSearchContextHitRate)
+	add("min-session-search-matched-terms-per-call", g.MinSessionSearchMatchedTermsPerCall)
 	add("min-tool-repair-success-rate", g.MinToolRepairSuccessRate)
 	add("min-verifier-pass-rate", g.MinVerifierPassRate)
 	add("max-focused-task-error-rate", g.MaxFocusedTaskErrorRate)
@@ -461,6 +465,7 @@ func applyQualityGateProfile(g *qualityGateConfig, profile string, flagSet func(
 	apply("min-expectation-capability-pass-rate", &g.MinExpectationCapabilityPassRate, profileConfig.MinExpectationCapabilityPassRate)
 	apply("min-each-expectation-capability-pass-rate", &g.MinEachExpectationCapabilityPassRate, profileConfig.MinEachExpectationCapabilityPassRate)
 	apply("min-session-search-context-hit-rate", &g.MinSessionSearchContextHitRate, profileConfig.MinSessionSearchContextHitRate)
+	apply("min-session-search-matched-terms-per-call", &g.MinSessionSearchMatchedTermsPerCall, profileConfig.MinSessionSearchMatchedTermsPerCall)
 	apply("min-tool-repair-success-rate", &g.MinToolRepairSuccessRate, profileConfig.MinToolRepairSuccessRate)
 	apply("min-verifier-pass-rate", &g.MinVerifierPassRate, profileConfig.MinVerifierPassRate)
 	apply("max-focused-task-error-rate", &g.MaxFocusedTaskErrorRate, profileConfig.MaxFocusedTaskErrorRate)
@@ -1096,11 +1101,12 @@ func printBatchSummary(w io.Writer, s batchSummary) {
 		)
 	}
 	if hasBatchSessionSearchStats(s) {
-		fmt.Fprintf(w, " session_search=calls:%d,results:%d,context:%d,terms:%d",
+		fmt.Fprintf(w, " session_search=calls:%d,results:%d,context:%d,terms:%d,terms_per_call:%s",
 			s.SessionSearchCalls,
 			s.SessionSearchResults,
 			s.SessionSearchContextHits,
 			s.SessionSearchMatchedTerms,
+			formatOptionalNumber(batchOptionalRatio(s.SessionSearchMatchedTerms, s.SessionSearchCalls)),
 		)
 	}
 	if len(s.RuntimeErrorByKind) > 0 {
@@ -1337,6 +1343,13 @@ func formatOptionalPercent(value *float64) string {
 	return formatPercent(*value)
 }
 
+func formatOptionalNumber(value *float64) string {
+	if value == nil {
+		return "n/a"
+	}
+	return fmt.Sprintf("%.2f", *value)
+}
+
 func validateQualityGateConfig(g qualityGateConfig) error {
 	for _, gate := range []struct {
 		name  string
@@ -1352,6 +1365,7 @@ func validateQualityGateConfig(g qualityGateConfig) error {
 		{"--min-expectation-capability-pass-rate", g.MinExpectationCapabilityPassRate, true},
 		{"--min-each-expectation-capability-pass-rate", g.MinEachExpectationCapabilityPassRate, true},
 		{"--min-session-search-context-hit-rate", g.MinSessionSearchContextHitRate, true},
+		{"--min-session-search-matched-terms-per-call", g.MinSessionSearchMatchedTermsPerCall, false},
 		{"--min-tool-repair-success-rate", g.MinToolRepairSuccessRate, true},
 		{"--min-verifier-pass-rate", g.MinVerifierPassRate, true},
 		{"--max-focused-task-error-rate", g.MaxFocusedTaskErrorRate, true},
@@ -1429,6 +1443,7 @@ func qualityGateFailures(s batchSummary, g qualityGateConfig) []string {
 	checkMin("expectation_capability_pass_rate", batchRatio(expectationCapabilityPassed, expectationCapabilityTotal), g.MinExpectationCapabilityPassRate, expectationCapabilityTotal > 0)
 	failures = append(failures, expectationCapabilityFamilyGateFailures(s, g.MinEachExpectationCapabilityPassRate)...)
 	checkMin("session_search_context_hit_rate", batchRatio(s.SessionSearchContextHits, s.SessionSearchResults), g.MinSessionSearchContextHitRate, s.SessionSearchResults > 0)
+	checkMin("session_search_matched_terms_per_call", batchRatio(s.SessionSearchMatchedTerms, s.SessionSearchCalls), g.MinSessionSearchMatchedTermsPerCall, s.SessionSearchCalls > 0)
 	checkMin("tool_repair_success_rate", batchRatio(s.ToolRepairSucceeded, s.ToolRepairCalls), g.MinToolRepairSuccessRate, s.ToolRepairCalls > 0)
 	checkMin("verifier_pass_rate", batchRatio(s.VerifierPassed, s.VerifierRuns), g.MinVerifierPassRate, s.VerifierRuns > 0)
 	checkMax("focused_task_error_rate", batchRatio(s.FocusedTaskErrors, s.FocusedTaskCalls), g.MaxFocusedTaskErrorRate, s.FocusedTaskCalls > 0)
@@ -1936,6 +1951,7 @@ type evalJSONLMetadata struct {
 	MinExpectationCapabilityPassRate     *float64 `json:"min_expectation_capability_pass_rate,omitempty"`
 	MinEachExpectationCapabilityPassRate *float64 `json:"min_each_expectation_capability_pass_rate,omitempty"`
 	MinSessionSearchContextHitRate       *float64 `json:"min_session_search_context_hit_rate,omitempty"`
+	MinSessionSearchMatchedTermsPerCall  *float64 `json:"min_session_search_matched_terms_per_call,omitempty"`
 	MinToolRepairSuccessRate             *float64 `json:"min_tool_repair_success_rate,omitempty"`
 	MinVerifierPassRate                  *float64 `json:"min_verifier_pass_rate,omitempty"`
 	MaxFocusedTaskErrorRate              *float64 `json:"max_focused_task_error_rate,omitempty"`
@@ -1998,6 +2014,7 @@ func evalJSONLMetadataFromConfig(suite, model, providerLabel, executor, temperat
 		MinExpectationCapabilityPassRate:     enabledQualityGateValue(gates.MinExpectationCapabilityPassRate),
 		MinEachExpectationCapabilityPassRate: enabledQualityGateValue(gates.MinEachExpectationCapabilityPassRate),
 		MinSessionSearchContextHitRate:       enabledQualityGateValue(gates.MinSessionSearchContextHitRate),
+		MinSessionSearchMatchedTermsPerCall:  enabledQualityGateValue(gates.MinSessionSearchMatchedTermsPerCall),
 		MinToolRepairSuccessRate:             enabledQualityGateValue(gates.MinToolRepairSuccessRate),
 		MinVerifierPassRate:                  enabledQualityGateValue(gates.MinVerifierPassRate),
 		MaxFocusedTaskErrorRate:              enabledQualityGateValue(gates.MaxFocusedTaskErrorRate),
@@ -2180,6 +2197,7 @@ type batchSummaryRecord struct {
 	SourceDiscoveryOnlyRate              *float64                                         `json:"source_discovery_only_rate,omitempty"`
 	SourceDynamicPartialRate             *float64                                         `json:"source_dynamic_partial_rate,omitempty"`
 	SessionSearchContextHitRate          *float64                                         `json:"session_search_context_hit_rate,omitempty"`
+	SessionSearchMatchedTermsPerCall     *float64                                         `json:"session_search_matched_terms_per_call,omitempty"`
 	AvgRuntimeErrors                     float64                                          `json:"avg_runtime_errors"`
 	AvgContextCompactions                float64                                          `json:"avg_context_compactions"`
 	AvgReactiveCompactions               float64                                          `json:"avg_reactive_context_compactions"`
@@ -2537,6 +2555,7 @@ func printBatchSummaryJSONL(w io.Writer, meta evalJSONLMetadata, s batchSummary,
 		SourceDiscoveryOnlyRate:              batchOptionalRatio(s.SourceAccessDiscoveryOnly, s.SourceAccessResults),
 		SourceDynamicPartialRate:             batchOptionalRatio(s.SourceAccessDynamicPartial, s.SourceAccessResults),
 		SessionSearchContextHitRate:          batchOptionalRatio(s.SessionSearchContextHits, s.SessionSearchResults),
+		SessionSearchMatchedTermsPerCall:     batchOptionalRatio(s.SessionSearchMatchedTerms, s.SessionSearchCalls),
 		AvgRuntimeErrors:                     batchAverage(s.RuntimeErrors, s.Total),
 		AvgContextCompactions:                batchAverage(s.ContextCompactions, s.Total),
 		AvgReactiveCompactions:               batchAverage(s.ContextCompactionsReactive, s.Total),
@@ -2678,6 +2697,7 @@ func hasQualityGateThresholds(meta evalJSONLMetadata) bool {
 		meta.MinExpectationCapabilityPassRate != nil ||
 		meta.MinEachExpectationCapabilityPassRate != nil ||
 		meta.MinSessionSearchContextHitRate != nil ||
+		meta.MinSessionSearchMatchedTermsPerCall != nil ||
 		meta.MinToolRepairSuccessRate != nil ||
 		meta.MinVerifierPassRate != nil ||
 		meta.MaxFocusedTaskErrorRate != nil ||

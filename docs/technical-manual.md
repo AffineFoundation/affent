@@ -794,15 +794,17 @@ plan errors, repair success, verifier pass rate,
 verified evidence, network/discovery/dynamic-partial source ratios, average
 context compactions, reactive context compactions, aggregate and per-family
 expected-capability pass rates, messages removed by compaction, compaction
-summary size, missing/empty compaction summaries, average tool calls, and
-tool-context truncation.
+summary size, missing/empty compaction summaries, session-search matched terms
+per call, average tool calls, and tool-context truncation.
 Use `--min-pass-rate`, `--min-completion-rate`,
 `--min-memory-update-rate`, `--min-runtime-surface-rate`,
 `--min-source-network-rate`,
 `--min-source-access-verified-rate`,
 `--min-expectation-capability-pass-rate`,
 `--min-each-expectation-capability-pass-rate`,
-`--min-session-search-context-hit-rate`, `--min-tool-repair-success-rate`,
+`--min-session-search-context-hit-rate`,
+`--min-session-search-matched-terms-per-call`,
+`--min-tool-repair-success-rate`,
 `--min-verifier-pass-rate`, `--max-tool-error-rate`,
 `--max-focused-task-error-rate`, `--max-subagent-error-rate`,
 `--max-forced-no-tools-rate`,
