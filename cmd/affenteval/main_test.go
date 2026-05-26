@@ -571,6 +571,12 @@ func TestApplyQualityGateProfile(t *testing.T) {
 	if gates.MinPassRate == nil || *gates.MinPassRate != 0.80 {
 		t.Fatalf("longrun min pass rate = %#v, want 0.80", gates.MinPassRate)
 	}
+	if gates.MinMemoryUpdateRate == nil || *gates.MinMemoryUpdateRate != 0.10 {
+		t.Fatalf("longrun min memory update rate = %#v, want 0.10", gates.MinMemoryUpdateRate)
+	}
+	if gates.MinSessionSearchContextHitRate == nil || *gates.MinSessionSearchContextHitRate != 0.75 {
+		t.Fatalf("longrun min session search context hit rate = %#v, want 0.75", gates.MinSessionSearchContextHitRate)
+	}
 	if gates.MaxToolErrorRate == nil || *gates.MaxToolErrorRate != 0.33 {
 		t.Fatalf("explicit max tool error rate should win, got %#v", gates.MaxToolErrorRate)
 	}

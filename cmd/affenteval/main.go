@@ -325,12 +325,14 @@ func qualityGateProfileDefinitions() []qualityGateProfileDefinition {
 	return []qualityGateProfileDefinition{
 		{
 			Name:        "longrun",
-			Description: "general long-run stability gates for task completion, tool recovery, delegation/plan errors, truncation, runtime errors, and token cost",
+			Description: "general long-run stability gates for task completion, memory/session recovery, tool recovery, delegation/plan errors, truncation, runtime errors, and token cost",
 			Gates: qualityGateConfig{
 				MinPassRate:                          float64Ptr(0.80),
 				MinCompletionRate:                    float64Ptr(0.90),
+				MinMemoryUpdateRate:                  float64Ptr(0.10),
 				MinExpectationCapabilityPassRate:     float64Ptr(0.80),
 				MinEachExpectationCapabilityPassRate: float64Ptr(0.50),
+				MinSessionSearchContextHitRate:       float64Ptr(0.75),
 				MinRuntimeSurfaceRate:                float64Ptr(0.90),
 				MaxFocusedTaskErrorRate:              float64Ptr(0.10),
 				MaxForcedNoToolsRate:                 float64Ptr(0.10),

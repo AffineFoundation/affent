@@ -780,8 +780,10 @@ thresholds. Text summaries print a `QUALITY_GATES` line when any gate is
 enabled, including failed gate names and thresholds; JSONL records copy the
 enabled thresholds into metadata so result files preserve their pass/fail
 conditions. Use `--quality-profile longrun` for general long-run regression
-runs and `--quality-profile web-evidence` for live/current web evidence runs;
-explicit gate flags override the profile defaults. JSONL summary records also
+runs; it includes minimum memory-update and session-search context-hit gates so
+shared memory and cross-session recovery regressions fail the batch. Use
+`--quality-profile web-evidence` for live/current web evidence runs; explicit
+gate flags override the profile defaults. JSONL summary records also
 include `quality_gates_passed` when any gate is enabled and
 `quality_gate_failures` when a gate failed, so stored eval artifacts can explain
 CI or model-comparison failures without stderr.
