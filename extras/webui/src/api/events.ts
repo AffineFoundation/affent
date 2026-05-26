@@ -94,6 +94,16 @@ export interface DelegationMeta {
   mode?: string;
 }
 
+export interface MemoryUpdateMeta {
+  action: "add" | "replace" | "remove";
+  target: string;
+  topic?: string;
+  location: string;
+  preview: string;
+  previous_preview?: string;
+  next_preview?: string;
+}
+
 export interface MessageDeltaPayload {
   turn_id: string;
   delta: string;
@@ -154,6 +164,7 @@ export interface ToolResultPayload {
   /** Workspace-relative path to the complete output when truncated. */
   result_artifact_path?: string;
   delegation?: DelegationMeta;
+  memory_update?: MemoryUpdateMeta;
 }
 
 export interface UsagePayload {

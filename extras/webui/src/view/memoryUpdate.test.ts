@@ -51,6 +51,28 @@ describe("describeMemoryUpdate", () => {
     expect(summary?.location).toBe("memory:general");
   });
 
+  it("prefers structured result metadata when request args are capped", () => {
+    const call = memoryCall({ __affent_truncated: "tool request args exceeded cap" }, { ok: true, target: "memory", topic: "markets" });
+    call.memoryUpdate = {
+      action: "add",
+      target: "memory",
+      topic: "markets",
+      location: "memory:markets",
+      preview: "Alpha Coast reports use marker MEM-STOCK-73.",
+      next_preview: "Alpha Coast reports use marker MEM-STOCK-73.",
+    };
+
+    expect(describeMemoryUpdate(call)).toEqual({
+      action: "add",
+      label: "Saved memory",
+      target: "memory",
+      topic: "markets",
+      location: "memory:markets",
+      preview: "Alpha Coast reports use marker MEM-STOCK-73.",
+      nextPreview: "Alpha Coast reports use marker MEM-STOCK-73.",
+    });
+  });
+
   it("does not surface failed or unconfirmed memory writes as saved updates", () => {
     expect(describeMemoryUpdate(memoryCall(
       { action: "add", content: "blocked content" },

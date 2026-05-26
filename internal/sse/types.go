@@ -212,6 +212,20 @@ type ToolResultPayload struct {
 	// of order) can classify a result without having to JOIN by CallID
 	// against the earlier request event.
 	Delegation *DelegationMeta `json:"delegation,omitempty"`
+	// MemoryUpdate summarizes a confirmed durable memory mutation so trace
+	// consumers and WebUI do not need to recover update content from capped
+	// tool.request args or large memory response JSON.
+	MemoryUpdate *MemoryUpdateMeta `json:"memory_update,omitempty"`
+}
+
+type MemoryUpdateMeta struct {
+	Action          string `json:"action"`
+	Target          string `json:"target"`
+	Topic           string `json:"topic,omitempty"`
+	Location        string `json:"location"`
+	Preview         string `json:"preview"`
+	PreviousPreview string `json:"previous_preview,omitempty"`
+	NextPreview     string `json:"next_preview,omitempty"`
 }
 
 type UsagePayload struct {

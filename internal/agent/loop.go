@@ -1212,6 +1212,7 @@ func (l *Loop) runTurn(ctx context.Context, turnID, userText string, opts TurnOp
 			toolStats.ToolDurationMS += toolDuration.Milliseconds()
 			recordSourceAccessStats(&toolStats, result)
 			recordMemoryUpdateStats(&toolStats, toolName, args, result, isErr)
+			memoryUpdate := memoryUpdateMetaForResult(toolName, args, result, isErr)
 			recordSessionSearchStats(&toolStats, toolName, result, isErr)
 			guardResult, outcomeOK := loopGuard.recordToolResult(toolName, args, result, isErr)
 			if guardResult != "" {
@@ -1232,7 +1233,7 @@ func (l *Loop) runTurn(ctx context.Context, turnID, userText string, opts TurnOp
 					}
 				}
 			}
-			omitted := l.publishAndAppendToolResultWithContext(turnID, callID, toolName, result, isErr, toolDuration, delegation, toolContextBudget)
+			omitted := l.publishAndAppendToolResultWithContextMeta(turnID, callID, toolName, result, isErr, toolDuration, delegation, toolContextBudget, memoryUpdate)
 			recordContextOmission(omitted)
 			toolCallsUsed++
 			recordToolRepairOutcome(&toolStats, repairedToolCall, isErr)
@@ -1513,6 +1514,10 @@ func (l *Loop) publishAndAppendToolResultWithDelegation(turnID, callID, name, re
 }
 
 func (l *Loop) publishAndAppendToolResultWithContext(turnID, callID, name, result string, isErr bool, duration time.Duration, delegation *sse.DelegationMeta, contextBudget *toolResultContextBudget) int {
+	return l.publishAndAppendToolResultWithContextMeta(turnID, callID, name, result, isErr, duration, delegation, contextBudget, nil)
+}
+
+func (l *Loop) publishAndAppendToolResultWithContextMeta(turnID, callID, name, result string, isErr bool, duration time.Duration, delegation *sse.DelegationMeta, contextBudget *toolResultContextBudget, memoryUpdate *sse.MemoryUpdateMeta) int {
 	exit := 0
 	if isErr {
 		exit = 1
@@ -1523,6 +1528,9 @@ func (l *Loop) publishAndAppendToolResultWithContext(turnID, callID, name, resul
 	l.attachToolResultArtifact(&payload, callID, result)
 	if delegation != nil {
 		payload.Delegation = delegation
+	}
+	if memoryUpdate != nil {
+		payload.MemoryUpdate = memoryUpdate
 	}
 	content, omitted := contextBudget.truncateToolResult(name, result, l.toolResultMaxBytesInContextFor(name), payload.ResultArtifactPath)
 	payload.ContextBytes = len(content)

@@ -163,6 +163,55 @@ describe("reduce — truncated result", () => {
     expect(c.contextOmittedBytes).toBe(4096);
     expect(c.contextEstimatedTokens).toBe(1024);
   });
+
+  it("preserves structured memory update metadata from tool results", () => {
+    const s = reduceRawEvents([
+      { id: 0, type: "turn.start", data: { turn_id: "t1" } },
+      {
+        id: 1,
+        type: "tool.request",
+        data: {
+          turn_id: "t1",
+          call_id: "m1",
+          tool: "memory",
+          args: { __affent_truncated: "tool request args exceeded cap" },
+          args_truncated: true,
+          args_bytes: 17000,
+          args_omitted_bytes: 12000,
+          args_cap_bytes: 8192,
+        },
+      },
+      {
+        id: 2,
+        type: "tool.result",
+        data: {
+          turn_id: "t1",
+          call_id: "m1",
+          exit_code: 0,
+          result_summary: "{\"ok\":true}",
+          result: "{\"ok\":true}",
+          result_truncated: false,
+          result_bytes: 11,
+          result_omitted_bytes: 0,
+          result_cap_bytes: 262144,
+          memory_update: {
+            action: "add",
+            target: "memory",
+            topic: "markets",
+            location: "memory:markets",
+            preview: "Alpha Coast reports use marker MEM-STOCK-73.",
+            next_preview: "Alpha Coast reports use marker MEM-STOCK-73.",
+          },
+        },
+      },
+    ]);
+
+    expect(s.turns[0].toolCalls[0].memoryUpdate).toMatchObject({
+      action: "add",
+      location: "memory:markets",
+      preview: "Alpha Coast reports use marker MEM-STOCK-73.",
+    });
+  });
 });
 
 describe("reduce — terminal statuses", () => {

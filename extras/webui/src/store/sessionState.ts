@@ -1,4 +1,4 @@
-import type { ContextCompactedPayload, DelegationMeta, LoopDecisionPayload, RuntimeSurfacePayload, ToolRuntimeStats } from "../api/events";
+import type { ContextCompactedPayload, DelegationMeta, LoopDecisionPayload, MemoryUpdateMeta, RuntimeSurfacePayload, ToolRuntimeStats } from "../api/events";
 import type { NormalizedEvent } from "../normalize/normalizeEvent";
 
 // The structured view of a session that the reducer builds from the
@@ -42,6 +42,7 @@ export interface ToolCallState {
   /** Workspace-relative path to the full output when the result was capped. */
   resultArtifactPath?: string;
   delegation?: DelegationMeta;
+  memoryUpdate?: MemoryUpdateMeta;
 }
 
 export interface TurnError {

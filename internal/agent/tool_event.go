@@ -6,6 +6,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/affinefoundation/affent/internal/memory"
 	"github.com/affinefoundation/affent/internal/sourceaccess"
 	"github.com/affinefoundation/affent/internal/sse"
 	"github.com/affinefoundation/affent/internal/textutil"
@@ -205,6 +206,96 @@ func recordMemoryUpdateStats(stats *sse.ToolRuntimeStats, tool string, args json
 	case memoryActionRemove:
 		stats.MemoryUpdateRemove++
 	}
+}
+
+func memoryUpdateMetaForResult(tool string, args json.RawMessage, result string, isErr bool) *sse.MemoryUpdateMeta {
+	if tool != MemoryToolName || isErr {
+		return nil
+	}
+	var req struct {
+		Action  string `json:"action"`
+		Target  string `json:"target"`
+		Topic   string `json:"topic"`
+		Content string `json:"content"`
+		OldText string `json:"old_text"`
+	}
+	if err := json.Unmarshal(args, &req); err != nil {
+		return nil
+	}
+	action := strings.TrimSpace(strings.ToLower(req.Action))
+	if action != memoryActionAdd && action != memoryActionReplace && action != memoryActionRemove {
+		return nil
+	}
+	var resp struct {
+		OK     bool   `json:"ok"`
+		Target string `json:"target"`
+		Topic  string `json:"topic"`
+	}
+	if err := json.Unmarshal([]byte(result), &resp); err != nil || !resp.OK {
+		return nil
+	}
+	target := strings.TrimSpace(resp.Target)
+	if target == "" {
+		target = strings.TrimSpace(req.Target)
+	}
+	if target == "" {
+		target = string(memory.TargetMemory)
+	}
+	topic := strings.TrimSpace(resp.Topic)
+	if topic == "" {
+		topic = strings.TrimSpace(req.Topic)
+	}
+	if target == string(memory.TargetUser) {
+		topic = "user"
+	} else if topic == "" {
+		topic = "general"
+	}
+	previousPreview := summarizeMemoryUpdateText(req.OldText)
+	nextPreview := summarizeMemoryUpdateText(req.Content)
+	preview := memoryUpdatePreview(action, previousPreview, nextPreview)
+	out := &sse.MemoryUpdateMeta{
+		Action:   action,
+		Target:   target,
+		Topic:    topic,
+		Location: target + ":" + topic,
+		Preview:  preview,
+	}
+	if previousPreview != "" {
+		out.PreviousPreview = previousPreview
+	}
+	if nextPreview != "" {
+		out.NextPreview = nextPreview
+	}
+	return out
+}
+
+func summarizeMemoryUpdateText(text string) string {
+	text = strings.Join(strings.Fields(text), " ")
+	return textutil.Preview(text, 160)
+}
+
+func memoryUpdatePreview(action, previousPreview, nextPreview string) string {
+	switch action {
+	case memoryActionAdd:
+		if nextPreview != "" {
+			return nextPreview
+		}
+	case memoryActionReplace:
+		if previousPreview != "" && nextPreview != "" {
+			return previousPreview + " -> " + nextPreview
+		}
+		if nextPreview != "" {
+			return nextPreview
+		}
+		if previousPreview != "" {
+			return previousPreview
+		}
+	case memoryActionRemove:
+		if previousPreview != "" {
+			return previousPreview
+		}
+	}
+	return "No content supplied"
 }
 
 func recordSessionSearchStats(stats *sse.ToolRuntimeStats, tool, result string, isErr bool) {

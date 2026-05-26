@@ -14,6 +14,7 @@ export interface MemoryUpdateSummary {
 }
 
 export function describeMemoryUpdate(call: ToolCallState): MemoryUpdateSummary | undefined {
+  if (call.memoryUpdate) return summaryFromMeta(call.memoryUpdate);
   if (call.tool !== "memory") return undefined;
   if (call.status !== "success" || call.exitCode !== 0) return undefined;
   const response = parseMemoryResponse(call.result);
@@ -40,6 +41,23 @@ export function describeMemoryUpdate(call: ToolCallState): MemoryUpdateSummary |
   };
   if (previousPreview) summary.previousPreview = previousPreview;
   if (nextPreview) summary.nextPreview = nextPreview;
+  return summary;
+}
+
+function summaryFromMeta(meta: NonNullable<ToolCallState["memoryUpdate"]>): MemoryUpdateSummary | undefined {
+  if (meta.action !== "add" && meta.action !== "replace" && meta.action !== "remove") return undefined;
+  const target = meta.target || "memory";
+  const topic = normalizeMemoryTopic(target, meta.topic);
+  const summary: MemoryUpdateSummary = {
+    action: meta.action,
+    label: memoryUpdateLabel(meta.action),
+    target,
+    topic,
+    location: meta.location || `${target}:${topic}`,
+    preview: meta.preview || "No content supplied",
+  };
+  if (meta.previous_preview) summary.previousPreview = meta.previous_preview;
+  if (meta.next_preview) summary.nextPreview = meta.next_preview;
   return summary;
 }
 

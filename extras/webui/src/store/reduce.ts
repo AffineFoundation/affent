@@ -201,6 +201,7 @@ function applyEventPayload(state: SessionState, ev: NormalizedEvent): SessionSta
         contextEstimatedTokens: p.context_estimated_tokens,
         resultArtifactPath: p.result_artifact_path,
         delegation: p.delegation ?? c.delegation,
+        memoryUpdate: p.memory_update,
       }));
     }
     case EventType.Usage: {

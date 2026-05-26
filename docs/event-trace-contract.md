@@ -164,6 +164,10 @@ diagnostics.
   artifacts survive session workspace eviction and container restart.
 - `delegation`: optional metadata mirroring the matching `tool.request` so
   result-only consumers can classify delegated work without joining events.
+- `memory_update`: optional metadata on confirmed `memory` add/replace/remove
+  results. It includes the action, target/topic location, and bounded previous
+  and next previews so WebUI and trace consumers can show what changed even
+  when request args or memory response bodies are capped.
 
 `delegation` fields:
 

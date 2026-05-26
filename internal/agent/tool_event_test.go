@@ -95,6 +95,44 @@ func TestRecordMemoryUpdateStats(t *testing.T) {
 	}
 }
 
+func TestMemoryUpdateMetaForResult(t *testing.T) {
+	add := memoryUpdateMetaForResult("memory",
+		[]byte(`{"action":"add","target":"memory","topic":"markets","content":"Alpha Coast reports use marker MEM-STOCK-73 for source-led confidence."}`),
+		`{"ok":true,"target":"memory","topic":"markets","message":"added"}`,
+		false,
+	)
+	if add == nil {
+		t.Fatal("add memory update meta missing")
+	}
+	if add.Action != "add" || add.Target != "memory" || add.Topic != "markets" || add.Location != "memory:markets" ||
+		add.Preview != "Alpha Coast reports use marker MEM-STOCK-73 for source-led confidence." ||
+		add.NextPreview != add.Preview {
+		t.Fatalf("add memory update meta = %+v", add)
+	}
+
+	replace := memoryUpdateMetaForResult("memory",
+		[]byte(`{"action":"replace","target":"user","old_text":"prefers terse answers","content":"prefers concise answers with test evidence"}`),
+		`{"ok":true,"target":"user","message":"replaced"}`,
+		false,
+	)
+	if replace == nil || replace.Topic != "user" || replace.Location != "user:user" ||
+		replace.PreviousPreview != "prefers terse answers" ||
+		replace.NextPreview != "prefers concise answers with test evidence" ||
+		replace.Preview != "prefers terse answers -> prefers concise answers with test evidence" {
+		t.Fatalf("replace memory update meta = %+v", replace)
+	}
+
+	if got := memoryUpdateMetaForResult("memory", []byte(`{"action":"search","query":"markets"}`), `{"ok":true}`, false); got != nil {
+		t.Fatalf("search should not produce memory update meta: %+v", got)
+	}
+	if got := memoryUpdateMetaForResult("memory", []byte(`{"action":"add","content":"blocked"}`), `{"ok":false}`, false); got != nil {
+		t.Fatalf("failed memory response should not produce memory update meta: %+v", got)
+	}
+	if got := memoryUpdateMetaForResult("memory", []byte(`{"action":"add","content":"errored"}`), `{"ok":true}`, true); got != nil {
+		t.Fatalf("errored memory tool should not produce memory update meta: %+v", got)
+	}
+}
+
 func TestRecordSessionSearchStats(t *testing.T) {
 	var stats sse.ToolRuntimeStats
 	recordSessionSearchStats(&stats, "session_search", `{"query":"Alpha Coast","total":2,"results":[{"session_id":"market-alpha","matched_terms":["alpha","coast"],"context_included":true},{"session_id":"market-beta","matched_terms":["alpha"],"context_included":false}]}`, false)
