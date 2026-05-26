@@ -729,7 +729,7 @@ Current built-in suites:
 
 - `small-model-tools`: weak-model tool calling, recovery, and compact-context behavior.
 - `hard-agent`: harder local agent tasks such as coding, planning, and subagent workflows.
-- `long-run`: deterministic complex tasks for longer practical runs, currently covering stock synthesis, Bittensor subnet research, code implementation with PR-style reporting, and multi-session task recovery.
+- `long-run`: deterministic complex tasks for longer practical runs, currently covering stock synthesis, Bittensor subnet research, code implementation with PR-style reporting, focused-task recovery, and multi-session task recovery.
 - `live-web`: non-CI live web regressions for JavaScript-heavy pages and
   evidence-quality recovery. These scenarios intentionally depend on public
   sites and should be run with web/browser tools enabled.
@@ -738,11 +738,11 @@ Run scenarios:
 
 ```bash
 go run ./cmd/affenteval --suite small-model-tools --runtime-tools workspace,recall,plan,skill,delegation --temperature 0
-go run ./cmd/affenteval --suite long-run --runtime-tools workspace,recall,plan --temperature 0
+go run ./cmd/affenteval --suite long-run --runtime-tools workspace,recall,plan,delegation --temperature 0
 go run ./cmd/affenteval --suite live-web --runtime-web --runtime-browser --temperature 0 --keep-workspaces
 go run ./cmd/affenteval --scenario coding-python-slug --runtime-tools workspace --temperature 0
 go run ./cmd/affenteval --suite small-model-tools --runtime-tools workspace,recall,plan,skill,delegation --jsonl > eval.jsonl
-go run ./cmd/affenteval --suite long-run --runtime-tools workspace,recall,plan --min-pass-rate 0.8 --min-completion-rate 0.9 --min-memory-update-rate 0.1 --min-runtime-surface-rate 1 --min-source-network-rate 0.2 --min-session-search-context-hit-rate 0.5 --min-tool-repair-success-rate 0.8 --min-verifier-pass-rate 0.8 --max-tool-error-rate 0.05 --max-focused-task-error-rate 0 --max-subagent-error-rate 0 --max-forced-no-tools-rate 0.05 --max-loop-guard-intervention-rate 0.1 --max-plan-error-rate 0 --max-source-discovery-only-rate 0.1 --max-source-dynamic-partial-rate 0.1 --max-tool-context-truncation-rate 0.2 --max-avg-runtime-errors 0 --max-avg-context-compactions 1 --max-avg-total-tokens 120000
+go run ./cmd/affenteval --suite long-run --runtime-tools workspace,recall,plan,delegation --min-pass-rate 0.8 --min-completion-rate 0.9 --min-memory-update-rate 0.1 --min-runtime-surface-rate 1 --min-source-network-rate 0.2 --min-session-search-context-hit-rate 0.5 --min-tool-repair-success-rate 0.8 --min-verifier-pass-rate 0.8 --max-tool-error-rate 0.05 --max-focused-task-error-rate 0 --max-subagent-error-rate 0 --max-forced-no-tools-rate 0.05 --max-loop-guard-intervention-rate 0.1 --max-plan-error-rate 0 --max-source-discovery-only-rate 0.1 --max-source-dynamic-partial-rate 0.1 --max-tool-context-truncation-rate 0.2 --max-avg-runtime-errors 0 --max-avg-context-compactions 1 --max-avg-total-tokens 120000
 ```
 
 Quality gate flags are optional and disabled by default. They return exit code
@@ -810,7 +810,7 @@ Run through Docker:
 
 ```bash
 make eval-container EVAL_RUNTIME_TOOLS=workspace,recall,plan,skill,delegation EVAL_ARGS='--suite small-model-tools --temperature 0'
-make eval-container EVAL_RUNTIME_TOOLS=workspace,recall,plan EVAL_ARGS='--suite long-run --temperature 0'
+make eval-container EVAL_RUNTIME_TOOLS=workspace,recall,plan,delegation EVAL_ARGS='--suite long-run --temperature 0'
 make eval-agent-container EVAL_RUNTIME_TOOLS=workspace EVAL_ARGS='--scenario coding-python-slug --temperature 0'
 make eval-agent-container EVAL_RUNTIME_TOOLS=readonly_workspace EVAL_ARGS='--scenario repo-inspection --temperature 0'
 make eval-agent-container EVAL_RUNTIME_MEMORY=true EVAL_ARGS='--scenario your-memory-scenario --temperature 0'

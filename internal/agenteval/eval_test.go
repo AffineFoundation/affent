@@ -813,8 +813,8 @@ func TestSelectLongRunSuite(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(scenarios) != 8 {
-		t.Fatalf("long-run suite size = %d, want 8", len(scenarios))
+	if len(scenarios) != 9 {
+		t.Fatalf("long-run suite size = %d, want 9", len(scenarios))
 	}
 	seen := map[string]BatchScenario{}
 	for _, scenario := range scenarios {
@@ -936,6 +936,30 @@ func TestSelectLongRunSuite(t *testing.T) {
 	}
 	if memoryWrite.RequiredToolStatsAtLeast["memory_updates"] != 1 || memoryWrite.RequiredToolStatsAtLeast["memory_update_add"] != 1 {
 		t.Fatalf("memory write stats constraints = %#v", memoryWrite.RequiredToolStatsAtLeast)
+	}
+
+	focusedRecovery, ok := seen["longrun-focused-task-recovery-synthesis"]
+	if !ok {
+		t.Fatalf("long-run suite missing focused-task recovery scenario")
+	}
+	if focusedRecovery.RequiredFocusedTaskCounts["explore"] != 1 || !focusedRecovery.RequireNoDelegationErrors {
+		t.Fatalf("focused recovery delegation constraints = counts:%#v no_errors:%v", focusedRecovery.RequiredFocusedTaskCounts, focusedRecovery.RequireNoDelegationErrors)
+	}
+	if focusedRecovery.MaxParentToolCalls != 1 {
+		t.Fatalf("focused recovery MaxParentToolCalls = %d, want 1", focusedRecovery.MaxParentToolCalls)
+	}
+	for _, forbidden := range []string{"read_file", "repo_search", "subagent_run"} {
+		if !stringSliceContains(focusedRecovery.ForbiddenTools, forbidden) {
+			t.Fatalf("focused recovery ForbiddenTools = %#v, want %q", focusedRecovery.ForbiddenTools, forbidden)
+		}
+	}
+	for _, want := range []string{"LOOP-FOCUS-64", "verify inventory trend", "validator concentration", "current/loop-state.md"} {
+		if !stringSliceContains(focusedRecovery.RequiredFinalText, want) {
+			t.Fatalf("focused recovery RequiredFinalText = %#v, want %q", focusedRecovery.RequiredFinalText, want)
+		}
+	}
+	if !stringSliceContains(focusedRecovery.ForbiddenFinalText, "LOOP-OLD-00") {
+		t.Fatalf("focused recovery ForbiddenFinalText = %#v, want stale marker guard", focusedRecovery.ForbiddenFinalText)
 	}
 }
 
