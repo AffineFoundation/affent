@@ -88,6 +88,12 @@ export interface RuntimeCapabilities {
   mcp?: boolean;
 }
 
+export interface DelegationMeta {
+  kind: string;
+  task_type?: string;
+  mode?: string;
+}
+
 export interface MessageDeltaPayload {
   turn_id: string;
   delta: string;
@@ -124,11 +130,15 @@ export interface ToolRequestPayload {
   canonicalized?: boolean;
   args_repaired?: boolean;
   repair_notes?: string[];
+  delegation?: DelegationMeta;
 }
 
 export interface ToolResultPayload {
+  turn_id?: string;
   call_id: string;
   exit_code: number;
+  failure_kind?: string;
+  failure_kinds?: string[];
   duration_ms?: number;
   /** Short UI-friendly preview; may be ellipsis-truncated, NOT JSON-safe. */
   result_summary: string;
@@ -143,6 +153,7 @@ export interface ToolResultPayload {
   context_estimated_tokens?: number;
   /** Workspace-relative path to the complete output when truncated. */
   result_artifact_path?: string;
+  delegation?: DelegationMeta;
 }
 
 export interface UsagePayload {
@@ -155,6 +166,12 @@ export interface ToolRuntimeStats {
   tool_requests?: number;
   tool_name_canonicalized?: number;
   tool_args_repaired?: number;
+  tool_repair_calls?: number;
+  tool_repair_succeeded?: number;
+  tool_repair_failed?: number;
+  tool_repair_notes?: number;
+  tool_repair_by_kind?: Record<string, number>;
+  tool_failure_by_kind?: Record<string, number>;
   tool_errors?: number;
   tool_duration_ms?: number;
   loop_guard_interventions?: number;
@@ -168,6 +185,8 @@ export interface ToolRuntimeStats {
   memory_update_add?: number;
   memory_update_replace?: number;
   memory_update_remove?: number;
+  tool_context_truncated?: number;
+  tool_context_omitted_bytes?: number;
 }
 
 export interface TurnEndPayload {
@@ -205,6 +224,7 @@ export interface ErrorPayload {
   turn_id: string;
   code: string;
   message: string;
+  failure_kind?: string;
   recoverable: boolean;
 }
 

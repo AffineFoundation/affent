@@ -75,6 +75,47 @@ describe("reduce — tool error", () => {
     // A failing tool does not by itself fail the turn.
     expect(s.turns[0].status).toBe("completed");
   });
+
+  it("preserves structured tool failure kinds for replay and filtering", () => {
+    const s = reduceRawEvents([
+      { id: 0, type: "turn.start", data: { turn_id: "t1" } },
+      {
+        id: 1,
+        type: "tool.request",
+        data: {
+          turn_id: "t1",
+          call_id: "c1",
+          tool: "web_fetch",
+          args: { url: "https://taostats.io/subnets/120" },
+          args_truncated: false,
+          args_bytes: 42,
+          args_omitted_bytes: 0,
+          args_cap_bytes: 8192,
+        },
+      },
+      {
+        id: 2,
+        type: "tool.result",
+        data: {
+          turn_id: "t1",
+          call_id: "c1",
+          exit_code: 0,
+          failure_kind: "dynamic_shell",
+          failure_kinds: ["dynamic_shell", "no_verified_source"],
+          result_summary: "Only a dynamic shell was available.",
+          result: "Failure: kind=dynamic_shell",
+          result_truncated: false,
+          result_bytes: 28,
+          result_omitted_bytes: 0,
+          result_cap_bytes: 8192,
+        },
+      },
+    ]);
+
+    const c = s.turns[0].toolCalls[0];
+    expect(c.failureKind).toBe("dynamic_shell");
+    expect(c.failureKinds).toEqual(["dynamic_shell", "no_verified_source"]);
+  });
 });
 
 describe("reduce — repaired args", () => {

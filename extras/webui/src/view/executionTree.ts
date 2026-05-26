@@ -34,6 +34,8 @@ export interface ExecutionTreeNode {
   status: ToolCallStatus;
   callId?: string;
   exitCode?: number;
+  failureKind?: string;
+  failureKinds?: string[];
   durationMs?: number;
   args?: Record<string, unknown>;
   originalTool?: string;
@@ -116,6 +118,8 @@ export function searchableExecutionNodeText(node: ExecutionTreeNode): string[] {
     node.summary,
     node.report,
     node.objective,
+    node.failureKind,
+    ...(node.failureKinds ?? []),
     node.mcpServer,
     node.mcpTool,
     ...node.children.flatMap(searchableExecutionNodeText),
@@ -140,6 +144,8 @@ function nodeFromToolCall(call: ToolCallState, depth: number, id: string): Execu
     status: call.status,
     callId: call.callId,
     exitCode: call.exitCode,
+    failureKind: call.failureKind,
+    failureKinds: call.failureKinds,
     durationMs: call.durationMs,
     args: call.args,
     originalTool: call.originalTool,
@@ -374,10 +380,20 @@ function baseMetrics(call: ToolCallState): ExecutionMetric[] {
   if (call.callId) metrics.push({ label: "request id", value: call.callId });
   if (call.durationMs != null) metrics.push({ label: "duration", value: `${call.durationMs}ms` });
   if (call.exitCode != null) metrics.push({ label: "exit", value: String(call.exitCode) });
+  for (const kind of callFailureKinds(call)) metrics.push({ label: "failure", value: kind });
   if (call.contextEstimatedTokens && call.contextEstimatedTokens > 0) {
     metrics.push({ label: "merged", value: `~${call.contextEstimatedTokens} tokens` });
   }
   return metrics;
+}
+
+function callFailureKinds(call: ToolCallState): string[] {
+  const seen = new Set<string>();
+  return [...(call.failureKinds ?? []), call.failureKind].filter((kind): kind is string => {
+    if (!kind || seen.has(kind)) return false;
+    seen.add(kind);
+    return true;
+  });
 }
 
 function appendStructuredMetrics(node: ExecutionTreeNode, parsed?: JsonObject) {

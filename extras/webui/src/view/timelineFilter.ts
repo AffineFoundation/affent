@@ -95,10 +95,12 @@ function searchableToolText(tool: ToolCallState): string[] {
     tool.tool,
     tool.originalTool,
     tool.originalArgsSummary,
+    tool.failureKind,
     JSON.stringify(tool.args),
     tool.resultSummary,
     tool.result,
     tool.resultArtifactPath,
+    ...(tool.failureKinds ?? []),
     ...(tool.repairNotes ?? []),
   ].filter((item): item is string => !!item);
 }

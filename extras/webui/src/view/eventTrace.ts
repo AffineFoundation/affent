@@ -391,9 +391,22 @@ function toolResultMeta(event: NormalizedEvent, context: DisplayContext): string
 
 function toolResultBadges(event: NormalizedEvent): string[] {
   return compact([
+    ...eventFailureKinds(event),
     readBoolean(event.data, "result_truncated") ? "truncated" : undefined,
     readString(event.data, "result_artifact_path") ? "full output" : undefined,
   ]);
+}
+
+function eventFailureKinds(event: NormalizedEvent): string[] {
+  const seen = new Set<string>();
+  return [
+    ...readStringArray(event.data, "failure_kinds"),
+    readString(event.data, "failure_kind"),
+  ].filter((kind): kind is string => {
+    if (!kind || seen.has(kind)) return false;
+    seen.add(kind);
+    return true;
+  });
 }
 
 function usageMeta(event: NormalizedEvent, turn: string | undefined): string[] {

@@ -18,6 +18,7 @@ export function ToolCallCard({
 }) {
   const [open, setOpen] = useState(false);
   const memoryUpdate = describeMemoryUpdate(call);
+  const failureKinds = callFailureKinds(call);
 
   return (
     <div className="flow-tool" data-status={call.status} data-testid="tool-card">
@@ -43,6 +44,9 @@ export function ToolCallCard({
         {call.resultArtifactPath ? (
           <span className="badge" data-kind="artifact">artifact</span>
         ) : null}
+        {failureKinds.slice(0, 2).map((kind) => (
+          <span className="badge" data-kind="error" key={kind}>{kind}</span>
+        ))}
         {call.status === "error" ? (
           <span className="badge" data-kind="error">exit {call.exitCode}</span>
         ) : null}
@@ -73,6 +77,7 @@ function ToolDetails({
   memoryUpdate?: MemoryUpdateSummary;
 }) {
   const hasResult = call.result != null && call.result !== "";
+  const failureKinds = callFailureKinds(call);
   return (
     <div className="tool-details" data-testid="tool-details">
       {memoryUpdate ? <MemoryUpdateDetails summary={memoryUpdate} /> : null}
@@ -84,6 +89,11 @@ function ToolDetails({
       {call.repairNotes?.length ? (
         <div className="kv">
           <b>repairs</b> {call.repairNotes.join("; ")}
+        </div>
+      ) : null}
+      {failureKinds.length > 0 ? (
+        <div className="kv">
+          <b>failure</b> {failureKinds.join(", ")}
         </div>
       ) : null}
       <div className="kv">
@@ -121,6 +131,15 @@ function MemoryUpdateDetails({ summary }: { summary: MemoryUpdateSummary }) {
       <p>{summary.preview}</p>
     </div>
   );
+}
+
+function callFailureKinds(call: ToolCallState): string[] {
+  const seen = new Set<string>();
+  return [...(call.failureKinds ?? []), call.failureKind].filter((kind): kind is string => {
+    if (!kind || seen.has(kind)) return false;
+    seen.add(kind);
+    return true;
+  });
 }
 
 function artifactSummary(call: ToolCallState): string {

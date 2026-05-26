@@ -35,6 +35,21 @@ describe("ToolCallCard", () => {
     expect(screen.getByTestId("memory-update-card")).toHaveTextContent("Saved memory");
     expect(screen.getByTestId("memory-update-card")).toHaveTextContent("source-led confidence");
   });
+
+  it("shows structured failure kinds without opening raw trace JSON", async () => {
+    const user = userEvent.setup();
+    const call = failureKindCall();
+
+    render(<ToolCallCard call={call} events={[]} />);
+
+    const toggle = screen.getByRole("button", { name: /web_fetch/ });
+    expect(toggle).toHaveTextContent("dynamic_shell");
+
+    await user.click(toggle);
+
+    expect(screen.getByText("failure")).toBeInTheDocument();
+    expect(screen.getByText("dynamic_shell, no_verified_source")).toBeInTheDocument();
+  });
 });
 
 function artifactCall(): ToolCallState {
@@ -76,6 +91,24 @@ function memoryAddCall(): ToolCallState {
     durationMs: 7,
     resultSummary: "{\"ok\":true,\"target\":\"memory\",\"topic\":\"markets\",\"message\":\"added\"}",
     result: "{\"ok\":true,\"target\":\"memory\",\"topic\":\"markets\",\"message\":\"added\"}",
+    resultTruncated: false,
+  };
+}
+
+function failureKindCall(): ToolCallState {
+  return {
+    callId: "c3",
+    tool: "web_fetch",
+    args: { url: "https://taostats.io/subnets/120" },
+    argsTruncated: false,
+    argsRepaired: false,
+    canonicalized: false,
+    status: "success",
+    exitCode: 0,
+    failureKind: "dynamic_shell",
+    failureKinds: ["dynamic_shell", "no_verified_source"],
+    resultSummary: "Only a dynamic shell was available.",
+    result: "Failure: kind=dynamic_shell",
     resultTruncated: false,
   };
 }

@@ -175,6 +175,7 @@ function applyEventPayload(state: SessionState, ev: NormalizedEvent): SessionSta
         repairNotes: p.repair_notes,
         status: "running",
         resultTruncated: false,
+        delegation: p.delegation,
       };
       return updateTurn(state, p.turn_id, (t) => ({ ...t, toolCalls: [...t.toolCalls, call] }));
     }
@@ -184,6 +185,8 @@ function applyEventPayload(state: SessionState, ev: NormalizedEvent): SessionSta
         ...c,
         status: p.exit_code === 0 ? "success" : "error",
         exitCode: p.exit_code,
+        failureKind: p.failure_kind,
+        failureKinds: p.failure_kinds,
         durationMs: p.duration_ms,
         resultSummary: p.result_summary,
         result: p.result,
@@ -195,6 +198,7 @@ function applyEventPayload(state: SessionState, ev: NormalizedEvent): SessionSta
         contextOmittedBytes: p.context_omitted_bytes,
         contextEstimatedTokens: p.context_estimated_tokens,
         resultArtifactPath: p.result_artifact_path,
+        delegation: p.delegation ?? c.delegation,
       }));
     }
     case EventType.Usage: {
@@ -245,7 +249,12 @@ function applyEventPayload(state: SessionState, ev: NormalizedEvent): SessionSta
         status: p.recoverable ? t.status : "error",
         thinkingStreaming: p.recoverable ? t.thinkingStreaming : false,
         messageStreaming: p.recoverable ? t.messageStreaming : false,
-        error: { code: p.code, message: p.message, recoverable: p.recoverable },
+        error: {
+          code: p.code,
+          message: p.message,
+          ...(p.failure_kind ? { failureKind: p.failure_kind } : {}),
+          recoverable: p.recoverable,
+        },
       }));
       return p.recoverable ? next : { ...next, status: deriveSessionStatus(next.turns) };
     }

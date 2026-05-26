@@ -70,6 +70,30 @@ describe("EventTrace", () => {
     expect(screen.queryByText("tool.result")).not.toBeInTheDocument();
   });
 
+  it("surfaces structured tool failure kinds in result rows", () => {
+    const events = normalizeEvents([
+      {
+        id: 5,
+        type: "tool.result",
+        data: {
+          call_id: "c1",
+          exit_code: 0,
+          failure_kind: "dynamic_shell",
+          failure_kinds: ["dynamic_shell", "no_verified_source"],
+          result_summary: "Only a dynamic shell was captured.",
+          result: "Failure: kind=dynamic_shell",
+          result_truncated: false,
+        },
+      },
+    ]);
+
+    render(<EventTrace events={events} />);
+
+    expect(screen.getByText("Action finished")).toBeInTheDocument();
+    expect(screen.getByText("dynamic_shell")).toBeInTheDocument();
+    expect(screen.getByText("no_verified_source")).toBeInTheDocument();
+  });
+
   it("groups request lifecycle events into one readable record", async () => {
     const user = userEvent.setup();
     const raws = [

@@ -1,4 +1,4 @@
-import type { ContextCompactedPayload, LoopDecisionPayload, RuntimeSurfacePayload, ToolRuntimeStats } from "../api/events";
+import type { ContextCompactedPayload, DelegationMeta, LoopDecisionPayload, RuntimeSurfacePayload, ToolRuntimeStats } from "../api/events";
 import type { NormalizedEvent } from "../normalize/normalizeEvent";
 
 // The structured view of a session that the reducer builds from the
@@ -27,6 +27,8 @@ export interface ToolCallState {
   repairNotes?: string[];
   status: ToolCallStatus;
   exitCode?: number;
+  failureKind?: string;
+  failureKinds?: string[];
   durationMs?: number;
   resultSummary?: string;
   result?: string;
@@ -39,11 +41,13 @@ export interface ToolCallState {
   contextEstimatedTokens?: number;
   /** Workspace-relative path to the full output when the result was capped. */
   resultArtifactPath?: string;
+  delegation?: DelegationMeta;
 }
 
 export interface TurnError {
   code: string;
   message: string;
+  failureKind?: string;
   recoverable: boolean;
 }
 

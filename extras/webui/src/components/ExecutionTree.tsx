@@ -137,6 +137,10 @@ function ExecutionNodeView({
         <span className="node-meta">
           <StatusBadge node={node} />
           {node.kind === "mcp" ? <span className="badge" data-kind="mcp">mcp</span> : null}
+          {node.failureKinds?.slice(0, 2).map((kind) => (
+            <span className="badge" data-kind="error" key={kind}>{kind}</span>
+          ))}
+          {!node.failureKinds?.length && node.failureKind ? <span className="badge" data-kind="error">{node.failureKind}</span> : null}
           {node.argsTruncated || node.resultTruncated ? <span className="badge" data-kind="truncation">truncated</span> : null}
           {node.repairNotes?.length || node.originalTool ? <span className="badge" data-kind="repair">repaired</span> : null}
           {node.resultArtifactPath ? <span className="badge" data-kind="artifact">artifact</span> : null}

@@ -695,30 +695,32 @@ function issueContextDraft(evidence: readonly TurnActivityEvidence[]): string {
 }
 
 function issueTargetEvidence(call: ToolCallState): TurnActivityEvidence | undefined {
+  const failureKind = call.failureKind ?? call.failureKinds?.[0];
+  const label = failureKind ? `Failed ${failureKind}` : "Failed";
   const url = typeof call.args.url === "string" ? call.args.url.trim() : undefined;
   if (call.tool === "web_fetch" && url) {
-    return { label: "Failed", value: url, displayValue: readableUrl(url) };
+    return { label, value: url, displayValue: readableUrl(url) };
   }
   const query = typeof call.args.query === "string" ? call.args.query.trim() : undefined;
   if (call.tool === "web_search" && query) {
-    return { label: "Failed", value: query, displayValue: summarize(query, 42) };
+    return { label, value: query, displayValue: summarize(query, 42) };
   }
   const command = typeof call.args.command === "string" ? call.args.command.trim() : undefined;
   if (call.tool === "shell" && command) {
-    return { label: "Failed", value: command, displayValue: summarize(command, 42) };
+    return { label, value: command, displayValue: summarize(command, 42) };
   }
   const task = typeof call.args.task === "string" ? call.args.task.trim() : undefined;
-  if (task) return { label: "Failed", value: task, displayValue: summarize(task, 42) };
+  if (task) return { label, value: task, displayValue: summarize(task, 42) };
   const objective = typeof call.args.objective === "string" ? call.args.objective.trim() : undefined;
-  if (objective) return { label: "Failed", value: objective, displayValue: summarize(objective, 42) };
+  if (objective) return { label, value: objective, displayValue: summarize(objective, 42) };
   const path =
     typeof call.args.path === "string"
       ? call.args.path.trim()
       : typeof call.args.file === "string"
         ? call.args.file.trim()
         : undefined;
-  if (path) return { label: "Failed", value: path, displayValue: summarize(path, 42) };
-  return { label: "Failed", value: call.tool };
+  if (path) return { label, value: path, displayValue: summarize(path, 42) };
+  return { label, value: call.tool };
 }
 
 function readableUrl(value: string): string {
