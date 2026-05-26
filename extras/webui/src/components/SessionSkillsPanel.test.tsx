@@ -40,10 +40,12 @@ describe("SessionSkillsPanel", () => {
     expect(screen.getByTestId("session-skills-panel")).toHaveTextContent("1 triggerable");
     expect(screen.getByTestId("session-skills-list")).toHaveTextContent("2 triggers");
     expect(screen.getByTestId("session-skills-list")).toHaveTextContent("1 tool");
+    expect(screen.getByTestId("session-skills-list")).not.toHaveTextContent("embed:skillembed:skill");
 
     await user.click(screen.getByText("coding_repair_workflow"));
 
     expect(onReadSkill).toHaveBeenCalledWith("coding_repair_workflow");
+    expect(screen.getByTestId("session-skills-list")).toHaveTextContent("Source: embed:skill");
     expect(await screen.findByText(/Reproduce first/)).toBeInTheDocument();
   });
 

@@ -193,7 +193,7 @@ export function SessionSkillsPanel({
                       </summary>
                       <div className="session-skill-detail">
                         <div className="session-skill-meta">
-                          {skill.source ? <span>{skill.source}</span> : null}
+                          {skill.source ? <span>Source: {skill.source}</span> : null}
                           <span>{formatByteCount(skill.body_bytes)}</span>
                           {activationSummary(skill) ? <span>{activationSummary(skill)}</span> : null}
                         </div>
@@ -256,7 +256,6 @@ function skillSummaryTags(skill: SessionSkillInfo): string[] {
   if (triggers.length > 0) tags.push(`${triggers.length} trigger${triggers.length === 1 ? "" : "s"}`);
   const requiredTools = skill.required_tools?.length ?? 0;
   if (requiredTools > 0) tags.push(`${requiredTools} tool${requiredTools === 1 ? "" : "s"}`);
-  if (skill.source) tags.push(skill.source);
   return tags;
 }
 
