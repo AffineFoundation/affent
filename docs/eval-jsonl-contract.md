@@ -140,6 +140,7 @@ Scenario records describe one eval case:
   diagnostic-heavy scenarios. It contains sorted `tags` such as
   `outcome:failed`, `tool_failure:blocked`, `runtime_error:llm_timeout`,
   `source_dynamic_partial`, `memory_update:replace`, `empty_recall`,
+  `delegation_error:focused_task`, `plan_error`,
   `context_compaction:reactive`, and `truncation`, plus ordered `items` with a
   severity, message, inspect targets, and relevant counts. This is the compact
   "what to inspect first" index for long-run batch analysis.

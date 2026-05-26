@@ -179,6 +179,21 @@ func renderTimelineDebugBrief(b *strings.Builder, res BatchResult) {
 	if res.ToolStats.LoopGuardInterventions > 0 {
 		fmt.Fprintf(b, "- loop_guard: `%d` intervention(s), `%d` forced no-tools; inspect Loop Decisions and latest tool guidance.\n", res.ToolStats.LoopGuardInterventions, res.ToolStats.ForcedNoTools)
 	}
+	if res.Delegation.HasAny() {
+		fmt.Fprintf(b, "- delegation: focused_tasks=`%d`, focused_task_errors=`%d`, subagents=`%d`, subagent_errors=`%d`; inspect child transcripts and parent merge quality.\n",
+			res.Delegation.FocusedTaskCalls,
+			res.Delegation.FocusedTaskErrors,
+			res.Delegation.SubagentCalls,
+			res.Delegation.SubagentErrors,
+		)
+	}
+	if res.Plan.HasAny() {
+		fmt.Fprintf(b, "- plan: calls=`%d`, errors=`%d`, actions=`%s`; inspect plan state if resume quality drifted.\n",
+			res.Plan.Calls,
+			res.Plan.Errors,
+			timelineCounts(res.Plan.ByAction),
+		)
+	}
 	if res.ToolStats.SourceAccessResults > 0 {
 		fmt.Fprintf(b, "- evidence: `%d/%d` verified, network=`%d`, partial=`%d`, discovery=`%d`; inspect Source Evidence before trusting the final answer.\n",
 			res.ToolStats.SourceAccessVerified,

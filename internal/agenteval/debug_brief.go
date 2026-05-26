@@ -61,6 +61,60 @@ func BuildDebugBrief(res BatchResult) *DebugBrief {
 			"forced_no_tools": res.ToolStats.ForcedNoTools,
 		}, "loop_guard")
 	}
+	if res.Delegation.HasAny() {
+		severity := "info"
+		message := "delegated child work was used; inspect child reports before trusting merged state"
+		tags := []string{"delegation"}
+		counts := map[string]int{
+			"focused_task_calls":  res.Delegation.FocusedTaskCalls,
+			"focused_task_errors": res.Delegation.FocusedTaskErrors,
+			"subagent_calls":      res.Delegation.SubagentCalls,
+			"subagent_errors":     res.Delegation.SubagentErrors,
+		}
+		for taskType, count := range res.Delegation.FocusedTaskByType {
+			counts["focused_task:"+taskType] = count
+		}
+		for mode, count := range res.Delegation.SubagentByMode {
+			counts["subagent:"+mode] = count
+		}
+		if res.Delegation.FocusedTaskCalls > 0 {
+			tags = append(tags, "delegation:focused_task")
+		}
+		if res.Delegation.SubagentCalls > 0 {
+			tags = append(tags, "delegation:subagent")
+		}
+		if res.Delegation.FocusedTaskErrors > 0 || res.Delegation.SubagentErrors > 0 {
+			severity = "warn"
+			message = "delegated child work had runtime errors; inspect child transcripts before continuing"
+			tags = append(tags, "delegation_error")
+			if res.Delegation.FocusedTaskErrors > 0 {
+				tags = append(tags, "delegation_error:focused_task")
+			}
+			if res.Delegation.SubagentErrors > 0 {
+				tags = append(tags, "delegation_error:subagent")
+			}
+		}
+		add("delegation", severity, message, []string{"tool_timeline", "child_transcripts", "debug_manifest"}, counts, tags...)
+	}
+	if res.Plan.HasAny() {
+		severity := "info"
+		message := "plan tool was used; inspect plan actions if task recovery drifted"
+		tags := []string{"plan"}
+		counts := map[string]int{
+			"calls":  res.Plan.Calls,
+			"errors": res.Plan.Errors,
+		}
+		for action, count := range res.Plan.ByAction {
+			counts["action:"+action] = count
+			tags = append(tags, "plan:"+action)
+		}
+		if res.Plan.Errors > 0 {
+			severity = "warn"
+			message = "plan tool had runtime errors; inspect plan actions before continuing"
+			tags = append(tags, "plan_error")
+		}
+		add("plan", severity, message, []string{"tool_timeline", "plan_calls"}, counts, tags...)
+	}
 	if res.ToolStats.SourceAccessResults > 0 {
 		severity := "info"
 		tags := []string{"source_access"}
