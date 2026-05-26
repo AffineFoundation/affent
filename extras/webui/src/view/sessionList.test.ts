@@ -49,6 +49,32 @@ describe("sessionList view model", () => {
     expect(rows[0].searchText).toContain("1 issue");
   });
 
+  it("surfaces source evidence quality in row stats and search", () => {
+    const rows = buildSessionRows([
+      session({
+        id: "evidence-session",
+        durable: true,
+        latest_user_message: "research taostats subnet metrics",
+        tools: {
+          tool_requests: 4,
+          tool_errors: 0,
+          tool_repair_succeeded: 0,
+          tool_repair_failed: 0,
+          source_access_results: 3,
+          source_access_verified: 2,
+          source_access_discovery_only: 1,
+          source_access_network: 1,
+          source_access_dynamic_partial: 1,
+        },
+      }),
+    ]);
+
+    expect(rows[0].metrics).toContain("Evidence 2/3 verified, 1 network, 1 partial, 1 discovery");
+    expect(rows[0].stats).toBe("4 actions · Evidence 2/3 verified, 1 network, 1 partial, 1 discovery");
+    expect(rows[0].searchText).toContain("evidence 2/3 verified");
+    expect(rows[0].searchText).toContain("1 network");
+  });
+
   it("surfaces persisted plan progress in row stats and search", () => {
     const rows = buildSessionRows([
       session({
@@ -692,6 +718,36 @@ describe("sessionList view model", () => {
     expect(rows[0].stats).toBe("1 message · 1 compaction, reactive, -72 msgs");
     expect(rows[0].metrics).toContain("1 compaction, reactive, -72 msgs");
     expect(rows[0].searchText).toContain("1 compaction, reactive, -72 msgs");
+  });
+
+  it("surfaces live source evidence quality in the selected chat row stats", () => {
+    const rows = mergeCurrentSessionRow(
+      buildSessionRows([session({ id: "s1", durable: true, has_events: true })]),
+      "s1",
+      reduceRawEvents([
+        { id: 1, type: "turn.start", data: { turn_id: "t1" } },
+        { id: 2, type: "user.message", data: { turn_id: "t1", text: "research subnet metrics" } },
+        {
+          id: 3,
+          type: "turn.end",
+          data: {
+            turn_id: "t1",
+            reason: "completed",
+            tool_stats: {
+              tool_requests: 2,
+              source_access_results: 2,
+              source_access_verified: 1,
+              source_access_discovery_only: 1,
+              source_access_network: 1,
+              source_access_dynamic_partial: 1,
+            },
+          },
+        },
+      ]),
+    );
+
+    expect(rows[0].stats).toBe("1 message · Evidence 1/2 verified, 1 network, 1 partial, 1 discovery");
+    expect(rows[0].searchText).toContain("evidence 1/2 verified");
   });
 
   it("surfaces unknown events as an unclassified chip in the chat list", () => {

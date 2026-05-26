@@ -246,6 +246,7 @@ function currentSessionMetrics(session: SessionState): string[] {
   const continuedCount = session.turns.reduce((sum, turn) => sum + (turn !== latestTurn && turn.status === "max_turns" ? 1 : 0), 0);
   const priorIssueCount = session.turns.reduce((sum, turn) => sum + (turn !== latestTurn && turn.status !== "max_turns" && turnNeedsAttention(turn) ? 1 : 0), 0);
   const toolIssueCount = session.turns.reduce((sum, turn) => sum + settledToolIssueCount(turn), 0);
+  const sourceMetric = sourceAccessMetric(currentSessionSourceAccessStats(session));
   const artifactMetric = currentSessionArtifactMetric(session);
   const compactionMetric = currentSessionCompactionMetric(session);
   return [summarizeSessionMetrics({
@@ -255,7 +256,7 @@ function currentSessionMetrics(session: SessionState): string[] {
     continued: continuedCount,
     priorIssues: priorIssueCount,
     toolIssues: toolIssueCount,
-  }), ...(compactionMetric ? [compactionMetric] : []), ...(artifactMetric ? [artifactMetric] : [])];
+  }), ...(sourceMetric ? [sourceMetric] : []), ...(compactionMetric ? [compactionMetric] : []), ...(artifactMetric ? [artifactMetric] : [])];
 }
 
 function summarizeSessionMetrics({
@@ -300,6 +301,7 @@ function currentSessionSearchMetrics(session: SessionState): string[] {
   const continuedCount = session.turns.reduce((sum, turn) => sum + (turn !== latestTurn && turn.status === "max_turns" ? 1 : 0), 0);
   const priorIssueCount = session.turns.reduce((sum, turn) => sum + (turn !== latestTurn && turn.status !== "max_turns" && turnNeedsAttention(turn) ? 1 : 0), 0);
   const toolIssueCount = session.turns.reduce((sum, turn) => sum + settledToolIssueCount(turn), 0);
+  const sourceMetric = sourceAccessMetric(currentSessionSourceAccessStats(session));
   const artifactMetric = currentSessionArtifactMetric(session);
   const compactionMetric = currentSessionCompactionMetric(session);
   const metrics = [`${session.turns.length} message${session.turns.length === 1 ? "" : "s"}`];
@@ -308,9 +310,23 @@ function currentSessionSearchMetrics(session: SessionState): string[] {
   if (continuedCount > 0) metrics.push(`${continuedCount} continued`);
   if (priorIssueCount > 0) metrics.push(`${priorIssueCount} prior issue${priorIssueCount === 1 ? "" : "s"}`);
   if (toolIssueCount > 0) metrics.push(`${toolIssueCount} tool issue${toolIssueCount === 1 ? "" : "s"}`);
+  if (sourceMetric) metrics.push(sourceMetric);
   if (compactionMetric) metrics.push(compactionMetric);
   if (artifactMetric) metrics.push(artifactMetric);
   return metrics;
+}
+
+function currentSessionSourceAccessStats(session: SessionState): Required<SourceAccessStats> {
+  return session.turns.reduce<Required<SourceAccessStats>>((stats, turn) => {
+    const toolStats = turn.toolStats;
+    if (!toolStats) return stats;
+    stats.source_access_results += toolStats.source_access_results ?? 0;
+    stats.source_access_verified += toolStats.source_access_verified ?? 0;
+    stats.source_access_discovery_only += toolStats.source_access_discovery_only ?? 0;
+    stats.source_access_network += toolStats.source_access_network ?? 0;
+    stats.source_access_dynamic_partial += toolStats.source_access_dynamic_partial ?? 0;
+    return stats;
+  }, emptySourceAccessStats());
 }
 
 function currentSessionArtifactMetric(session: SessionState): string | undefined {
@@ -382,6 +398,8 @@ function usageMetrics(session: SessionSummary): string[] {
   const toolErrors = session.tools?.tool_errors ?? 0;
   if (toolErrors > 0) metrics.push(`${toolErrors} issue${toolErrors === 1 ? "" : "s"}`);
   if (session.browser && session.browser.network_fetch > 0) metrics.push(`${session.browser.network_fetch} web`);
+  const sourceMetric = sourceAccessMetric(session.tools);
+  if (sourceMetric) metrics.push(sourceMetric);
   const contextMetric = sessionContextMetric(session.context);
   if (contextMetric) metrics.push(contextMetric);
   const compactionMetric = sessionCompactionMetric(session.context_compactions);
@@ -389,6 +407,38 @@ function usageMetrics(session: SessionSummary): string[] {
   const planMetric = sessionPlanMetric(session.plan_summary);
   if (planMetric) metrics.push(planMetric);
   return metrics;
+}
+
+interface SourceAccessStats {
+  source_access_results?: number;
+  source_access_verified?: number;
+  source_access_discovery_only?: number;
+  source_access_network?: number;
+  source_access_dynamic_partial?: number;
+}
+
+function emptySourceAccessStats(): Required<SourceAccessStats> {
+  return {
+    source_access_results: 0,
+    source_access_verified: 0,
+    source_access_discovery_only: 0,
+    source_access_network: 0,
+    source_access_dynamic_partial: 0,
+  };
+}
+
+function sourceAccessMetric(stats: SourceAccessStats | undefined): string | undefined {
+  const total = stats?.source_access_results ?? 0;
+  if (total <= 0) return undefined;
+  const verified = stats?.source_access_verified ?? 0;
+  const network = stats?.source_access_network ?? 0;
+  const partial = stats?.source_access_dynamic_partial ?? 0;
+  const discovery = stats?.source_access_discovery_only ?? 0;
+  const parts = [`Evidence ${verified}/${total} verified`];
+  if (network > 0) parts.push(`${network} network`);
+  if (partial > 0) parts.push(`${partial} partial`);
+  if (discovery > 0) parts.push(`${discovery} discovery`);
+  return parts.join(", ");
 }
 
 function sessionContextMetric(context: SessionContextSummary | undefined): string | undefined {
