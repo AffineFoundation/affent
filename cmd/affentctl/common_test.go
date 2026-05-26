@@ -439,6 +439,12 @@ func TestTypedEnvConfigRejectsInvalidValues(t *testing.T) {
 			want: "AFFENTCTL_EVAL_MODE=\"sometimes\"",
 		},
 		{
+			name: "eval all tools bool",
+			env:  "AFFENTCTL_EVAL_ALL_TOOLS",
+			val:  "sometimes",
+			want: "AFFENTCTL_EVAL_ALL_TOOLS=\"sometimes\"",
+		},
+		{
 			name: "web bool",
 			env:  "AFFENTCTL_WEB",
 			val:  "sometimes",
@@ -599,11 +605,11 @@ func TestEvalModeEnvAppliesStrictToolSurface(t *testing.T) {
 		t.Fatal("AFFENTCTL_EVAL_MODE=true should enable eval mode")
 	}
 	caps := resolveRuntimeCapabilities(cf)
-	if !caps.Builtins || !caps.MCP {
-		t.Fatalf("eval mode should keep basic tools and allow explicit MCP config, caps=%+v", caps)
+	if caps.Builtins || !caps.MCP {
+		t.Fatalf("eval mode should disable builtins by default and allow explicit MCP config, caps=%+v", caps)
 	}
-	if caps.Memory || caps.Skill || caps.Plan || caps.SessionSearch || caps.ProjectContext || !caps.RepoSearch || caps.WebFetch || caps.WebSearch || caps.Browser || caps.Subagent || caps.FocusedTasks {
-		t.Fatalf("eval mode should default to the minimal benchmark surface, caps=%+v", caps)
+	if caps.Memory || caps.Skill || caps.Plan || caps.SessionSearch || caps.ProjectContext || caps.RepoSearch || caps.SymbolContext || caps.WebFetch || caps.WebSearch || caps.Browser || caps.Subagent || caps.FocusedTasks {
+		t.Fatalf("eval mode should default to a no-tool benchmark surface except explicit MCP config, caps=%+v", caps)
 	}
 	if cf.memoryOnly {
 		t.Fatalf("eval mode should not imply memory-only: memory_only=%t", cf.memoryOnly)
@@ -624,8 +630,8 @@ func TestEvalModeAllowsExplicitMemory(t *testing.T) {
 	if !caps.Memory {
 		t.Fatalf("--eval-mode --memory=true should enable memory, caps=%+v", caps)
 	}
-	if caps.Skill || caps.Plan || caps.SessionSearch || !caps.RepoSearch || caps.WebFetch || caps.WebSearch || caps.Browser || caps.Subagent || caps.FocusedTasks {
-		t.Fatalf("explicit memory must not re-enable non-basic eval surfaces, caps=%+v", caps)
+	if caps.Builtins || caps.Skill || caps.Plan || caps.SessionSearch || caps.RepoSearch || caps.SymbolContext || caps.WebFetch || caps.WebSearch || caps.Browser || caps.Subagent || caps.FocusedTasks {
+		t.Fatalf("explicit memory must not re-enable other eval surfaces, caps=%+v", caps)
 	}
 }
 
@@ -645,6 +651,77 @@ func TestEvalModeAllowsExplicitWeb(t *testing.T) {
 	}
 	if caps.Memory || caps.Skill || caps.Plan || caps.SessionSearch || caps.ProjectContext || caps.Browser || caps.Subagent || caps.FocusedTasks {
 		t.Fatalf("explicit web must not re-enable non-basic eval surfaces, caps=%+v", caps)
+	}
+}
+
+func TestEvalModeAllowsExplicitEvalTools(t *testing.T) {
+	var cf commonFlags
+	fs := flag.NewFlagSet("test", flag.ContinueOnError)
+	cf.bind(fs)
+	if err := fs.Parse([]string{"--eval-mode", "--eval-tools=read_file,shell,web_search"}); err != nil {
+		t.Fatal(err)
+	}
+	if err := applyConfig(&cf, fs); err != nil {
+		t.Fatal(err)
+	}
+	caps := resolveRuntimeCapabilities(cf)
+	if !caps.Builtins || !caps.WebFetch || !caps.WebSearch {
+		t.Fatalf("--eval-tools should enable requested tool families, caps=%+v", caps)
+	}
+	if caps.Memory || caps.Skill || caps.Plan || caps.SessionSearch || caps.ProjectContext || caps.Browser || caps.Subagent || caps.FocusedTasks {
+		t.Fatalf("--eval-tools must not enable unrequested surfaces, caps=%+v", caps)
+	}
+}
+
+func TestEvalToolsRequireEvalMode(t *testing.T) {
+	for _, args := range [][]string{
+		{"--eval-tools=read_file"},
+		{"--eval-all-tools"},
+	} {
+		var cf commonFlags
+		fs := flag.NewFlagSet("test", flag.ContinueOnError)
+		cf.bind(fs)
+		if err := fs.Parse(args); err != nil {
+			t.Fatal(err)
+		}
+		if err := applyConfig(&cf, fs); err == nil || !strings.Contains(err.Error(), "require --eval-mode") {
+			t.Fatalf("applyConfig(%v) err=%v, want require --eval-mode", args, err)
+		}
+	}
+}
+
+func TestEvalModeAllToolsEnablesFullSurface(t *testing.T) {
+	var cf commonFlags
+	fs := flag.NewFlagSet("test", flag.ContinueOnError)
+	cf.bind(fs)
+	if err := fs.Parse([]string{"--eval-mode", "--eval-all-tools", "--mcp-config", "/tmp/mcp.json"}); err != nil {
+		t.Fatal(err)
+	}
+	if err := applyConfig(&cf, fs); err != nil {
+		t.Fatal(err)
+	}
+	caps := resolveRuntimeCapabilities(cf)
+	if !caps.Builtins || !caps.Memory || !caps.MCP || !caps.Skill || !caps.Plan || !caps.SessionSearch || !caps.SymbolContext || !caps.RepoSearch || !caps.WebFetch || !caps.WebSearch || !caps.Browser || !caps.BrowserScreenshot || !caps.Subagent || !caps.FocusedTasks {
+		t.Fatalf("--eval-all-tools should enable the full tool surface, caps=%+v", caps)
+	}
+	if caps.ProjectContext {
+		t.Fatalf("--eval-all-tools should not re-enable project context, caps=%+v", caps)
+	}
+}
+
+func TestEvalToolsAllDoesNotRequireMCPConfig(t *testing.T) {
+	var cf commonFlags
+	fs := flag.NewFlagSet("test", flag.ContinueOnError)
+	cf.bind(fs)
+	if err := fs.Parse([]string{"--eval-mode", "--eval-tools=all"}); err != nil {
+		t.Fatal(err)
+	}
+	if err := applyConfig(&cf, fs); err != nil {
+		t.Fatal(err)
+	}
+	caps := resolveRuntimeCapabilities(cf)
+	if !caps.Builtins || !caps.Memory || caps.MCP || !caps.WebFetch || !caps.WebSearch || !caps.Browser || !caps.Subagent || !caps.FocusedTasks {
+		t.Fatalf("--eval-tools=all should enable built-in available tools without requiring MCP config, caps=%+v", caps)
 	}
 }
 
@@ -970,9 +1047,9 @@ func TestSetupLoop_EvalModeOmitsSkillsDelegationAndSkillProvider(t *testing.T) {
 			t.Fatalf("%s should not be registered in eval mode", name)
 		}
 	}
-	for _, name := range []string{"shell", "read_file"} {
-		if _, ok := b.loop.Tools.Get(name); !ok {
-			t.Fatalf("%s should remain available in eval mode", name)
+	for _, name := range []string{"shell", "read_file", "file_context", "write_file", "edit_file", "list_files", agent.SymbolContextToolName, "repo_search"} {
+		if _, ok := b.loop.Tools.Get(name); ok {
+			t.Fatalf("%s should not be registered by default in eval mode", name)
 		}
 	}
 	if b.loop.FirstToolPolicy != nil || b.loop.PostToolPolicy != nil || len(b.loop.FirstToolPolicies) != 0 || len(b.loop.PostToolPolicies) != 0 {
@@ -994,9 +1071,56 @@ func TestSetupLoop_EvalModeOmitsSkillsDelegationAndSkillProvider(t *testing.T) {
 	if !strings.Contains(msgs[0].Content, "Runtime context:") || !strings.Contains(msgs[0].Content, "Current UTC date:") {
 		t.Fatalf("setupLoop system prompt should include runtime date context:\n%s", msgs[0].Content)
 	}
-	for _, forbidden := range []string{"Subagent delegation:", "Subagent browser delegation:", "Focused tasks (run_task):", "Affent plan tool guidance:", "Memory retrieval:", "Session history retrieval:", "Project context:", "run_task", "subagent_run"} {
+	for _, forbidden := range []string{"Subagent delegation:", "Subagent browser delegation:", "Focused tasks (run_task):", "Affent plan tool guidance:", "Memory retrieval:", "Session history retrieval:", "Project context:", "External research:", "Workspace directory", "run_task", "subagent_run"} {
 		if strings.Contains(msgs[0].Content, forbidden) {
 			t.Fatalf("eval-mode system prompt should not include %q guidance:\n%s", forbidden, msgs[0].Content)
+		}
+	}
+}
+
+func TestSetupLoop_EvalModeAllowsIndividualToolsAndPromptMatchesRegistry(t *testing.T) {
+	var cf commonFlags
+	fs := flag.NewFlagSet("test", flag.ContinueOnError)
+	cf.bind(fs)
+	workspace := t.TempDir()
+	if err := fs.Parse([]string{
+		"--workspace", workspace,
+		"--model", "fake-model",
+		"--base-url", "http://127.0.0.1:1/v1",
+		"--eval-mode",
+		"--eval-tools=read_file,shell",
+		"--quiet",
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if err := applyConfig(&cf, fs); err != nil {
+		t.Fatal(err)
+	}
+	b, code := setupLoop(cf)
+	if code != 0 {
+		t.Fatalf("setupLoop code=%d", code)
+	}
+	defer b.close()
+	for _, name := range []string{"read_file", "shell"} {
+		if _, ok := b.loop.Tools.Get(name); !ok {
+			t.Fatalf("%s should be registered when requested by --eval-tools", name)
+		}
+	}
+	for _, name := range []string{"write_file", "list_files", agent.MemoryToolName, agent.PlanToolName, agent.SubagentToolName, agent.FocusedTaskToolName} {
+		if _, ok := b.loop.Tools.Get(name); ok {
+			t.Fatalf("%s should not be registered when absent from --eval-tools", name)
+		}
+	}
+	msgs := b.loop.Conv.Snapshot()
+	if len(msgs) == 0 {
+		t.Fatal("system prompt missing")
+	}
+	if !strings.Contains(msgs[0].Content, workspace) {
+		t.Fatalf("eval-mode workspace prompt should mention actual workspace when workspace tools are registered:\n%s", msgs[0].Content)
+	}
+	for _, forbidden := range []string{"Memory retrieval:", "Session history retrieval:", "External research:", "Subagent delegation:", "Focused tasks (run_task):", "Affent plan tool guidance:", "write_file", "run_task"} {
+		if strings.Contains(msgs[0].Content, forbidden) {
+			t.Fatalf("eval-mode prompt should not include unregistered %q guidance:\n%s", forbidden, msgs[0].Content)
 		}
 	}
 }
@@ -1257,6 +1381,8 @@ func TestNoEnvVarLeaksIntoFlagDefaults(t *testing.T) {
 		"AFFENTCTL_MCP_CONFIG":         "/sentinel-mcp-XYZ123",
 		"AFFENTCTL_EXECUTOR":           "docker:sentinel-XYZ123",
 		"AFFENTCTL_EVAL_MODE":          "sentinel-eval-mode-XYZ123",
+		"AFFENTCTL_EVAL_TOOLS":         "sentinel-eval-tools-XYZ123",
+		"AFFENTCTL_EVAL_ALL_TOOLS":     "sentinel-eval-all-tools-XYZ123",
 		"AFFENTCTL_SUBAGENT_MAX_DEPTH": "99",
 		"AFFENTCTL_WEB":                "sentinel-web-XYZ123",
 		"AFFENTCTL_WEB_SEARCH":         "sentinel-web-search-XYZ123",
@@ -1287,7 +1413,7 @@ func TestNoEnvVarLeaksIntoFlagDefaults(t *testing.T) {
 			want = "local"
 		} else if name == "workspace" {
 			want = "./affent-workspace"
-		} else if name == "eval-mode" {
+		} else if name == "eval-mode" || name == "eval-all-tools" {
 			want = "false"
 		} else if name == "subagent" {
 			want = "true"

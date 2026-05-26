@@ -10,6 +10,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"sort"
 	"strconv"
 	"strings"
 	"time"
@@ -69,11 +70,12 @@ type commonFlags struct {
 	systemPromptPath string
 	quiet            bool
 	// evalMode freezes the runtime to a strict single-loop benchmark
-	// surface. It disables non-basic surfaces (skills, plan,
-	// session_search, subagent, focused tasks, MCP, project context)
-	// and memory by default. Memory can be enabled explicitly with
-	// --memory=true; MCP can be enabled explicitly with --mcp-config.
-	evalMode bool
+	// surface. It disables all tools by default; opt back in with
+	// --eval-tools, --eval-all-tools, or explicit capability flags
+	// such as --memory=true / --web=true.
+	evalMode     bool
+	evalTools    string
+	evalAllTools bool
 
 	// memoryEnabled composes the MEMORY.md / USER.md snapshot into
 	// the system prompt at session start and registers the `memory`
@@ -157,7 +159,9 @@ func (c *commonFlags) bind(fs *flag.FlagSet) {
 	fs.BoolVar(&c.traceSkipDeltas, "trace-skip-deltas", false, "skip thinking/message deltas in trace (smaller trace, no token-level replay; final text still in message.end)")
 	fs.StringVar(&c.systemPromptPath, "system-prompt", "", "override system prompt; '-' or file path or literal")
 	fs.BoolVar(&c.quiet, "quiet", false, "suppress stderr progress")
-	fs.BoolVar(&c.evalMode, "eval-mode", false, "strict benchmark mode: keep basic shell/file tools, disable skills, plan, session_search, subagent, focused tasks, project context, and memory by default; use --memory=true or --mcp-config to opt those surfaces in (env: AFFENTCTL_EVAL_MODE)")
+	fs.BoolVar(&c.evalMode, "eval-mode", false, "strict benchmark mode: disable all tools by default; opt in with --eval-tools, --eval-all-tools, --memory=true, --web=true, --browser=true, or --mcp-config (env: AFFENTCTL_EVAL_MODE)")
+	fs.StringVar(&c.evalTools, "eval-tools", "", "comma-separated tool allowlist used only with --eval-mode, e.g. read_file,shell,repo_search; groups: workspace,readonly_workspace,web,browser,delegation,mcp (env: AFFENTCTL_EVAL_TOOLS)")
+	fs.BoolVar(&c.evalAllTools, "eval-all-tools", false, "with --eval-mode, enable the full tool surface instead of the default no-tool surface (env: AFFENTCTL_EVAL_ALL_TOOLS)")
 	fs.BoolVar(&c.memoryEnabled, "memory", true, "enable persistent memory: inject MEMORY.md / USER.md snapshot into the system prompt and register the memory tool (env: AFFENTCTL_MEMORY)")
 	fs.BoolVar(&c.memoryOnly, "memory-only", false, "register only the memory tool (no shell/file/MCP) and disable project context; for memory benchmarks. Implies --memory (env: AFFENTCTL_MEMORY_ONLY)")
 	fs.StringVar(&c.memoryWorkspaceStore, "memory-workspace-store", "", "(legacy) path to a pre-v2 single-file MEMORY.md; if set, migration moves it into the v2 topic layout on first access. Prefer --memory-dir for new setups.")
@@ -280,6 +284,8 @@ var flagEnvSources = map[string]string{
 	"mcp-config":         "AFFENTCTL_MCP_CONFIG",
 	"executor":           "AFFENTCTL_EXECUTOR",
 	"eval-mode":          "AFFENTCTL_EVAL_MODE",
+	"eval-tools":         "AFFENTCTL_EVAL_TOOLS",
+	"eval-all-tools":     "AFFENTCTL_EVAL_ALL_TOOLS",
 	"subagent":           "AFFENTCTL_SUBAGENT",
 	"subagent-max-depth": "AFFENTCTL_SUBAGENT_MAX_DEPTH",
 	"focused-tasks":      "AFFENTCTL_FOCUSED_TASKS",
@@ -331,6 +337,8 @@ type fileConfig struct {
 	SystemPrompt    *string `json:"system_prompt"`
 	Quiet           *bool   `json:"quiet"`
 	EvalMode        *bool   `json:"eval_mode"`
+	EvalTools       *string `json:"eval_tools"`
+	EvalAllTools    *bool   `json:"eval_all_tools"`
 	Memory          *struct {
 		Enabled        *bool   `json:"enabled"`
 		Only           *bool   `json:"only"`
@@ -448,6 +456,9 @@ func normalizeRuntimeLimits(c *commonFlags) error {
 	if c.browserScreenshot && !c.browserEnabled {
 		return fmt.Errorf("--browser-screenshot requires --browser")
 	}
+	if !c.evalMode && (strings.TrimSpace(c.evalTools) != "" || c.evalAllTools) {
+		return fmt.Errorf("--eval-tools and --eval-all-tools require --eval-mode")
+	}
 	return nil
 }
 
@@ -536,6 +547,8 @@ func loadConfigFile(c *commonFlags, fs *flag.FlagSet) error {
 	setString("system-prompt", &c.systemPromptPath, cfg.SystemPrompt)
 	setBool("quiet", &c.quiet, cfg.Quiet)
 	setBool("eval-mode", &c.evalMode, cfg.EvalMode)
+	setString("eval-tools", &c.evalTools, cfg.EvalTools)
+	setBool("eval-all-tools", &c.evalAllTools, cfg.EvalAllTools)
 	if cfg.Memory != nil {
 		if cfg.Memory.Enabled != nil {
 			c.memoryExplicit = true
@@ -646,6 +659,7 @@ func applyEnvConfig(c *commonFlags, fs *flag.FlagSet) error {
 	setString("model", "AFFENTCTL_MODEL", &c.model)
 	setString("mcp-config", "AFFENTCTL_MCP_CONFIG", &c.mcpConfigPath)
 	setString("executor", "AFFENTCTL_EXECUTOR", &c.executor)
+	setString("eval-tools", "AFFENTCTL_EVAL_TOOLS", &c.evalTools)
 	setString("temperature", "AFFENTCTL_TEMPERATURE", &c.temperature)
 	setString("top-p", "AFFENTCTL_TOP_P", &c.topP)
 	setString("max-tokens", "AFFENTCTL_MAX_TOKENS", &c.maxTokens)
@@ -670,6 +684,9 @@ func applyEnvConfig(c *commonFlags, fs *flag.FlagSet) error {
 		return err
 	}
 	if err := setBoolStrict("eval-mode", "AFFENTCTL_EVAL_MODE", &c.evalMode); err != nil {
+		return err
+	}
+	if err := setBoolStrict("eval-all-tools", "AFFENTCTL_EVAL_ALL_TOOLS", &c.evalAllTools); err != nil {
 		return err
 	}
 	if err := setBoolStrict("memory", "AFFENTCTL_MEMORY", &c.memoryEnabled); err != nil {
@@ -792,7 +809,7 @@ func resolveRuntimeCapabilities(c commonFlags) runtimeCapabilities {
 	if c.memoryOnly {
 		return runtimeCapabilities{Memory: true}
 	}
-	caps := runtimeCapabilities{
+	defaultCaps := runtimeCapabilities{
 		Builtins:             true,
 		Memory:               c.memoryEnabled,
 		MCP:                  strings.TrimSpace(c.mcpConfigPath) != "",
@@ -810,23 +827,266 @@ func resolveRuntimeCapabilities(c commonFlags) runtimeCapabilities {
 		Subagent:             c.subagentEnabled,
 		FocusedTasks:         c.focusedTasksEnabled,
 	}
+	if c.evalMode && c.evalAllTools {
+		defaultCaps.Builtins = true
+		defaultCaps.Memory = true
+		defaultCaps.Skill = true
+		defaultCaps.BuiltinSkillProvider = true
+		defaultCaps.Plan = true
+		defaultCaps.SessionSearch = true
+		defaultCaps.SymbolContext = true
+		defaultCaps.RepoSearch = true
+		defaultCaps.WebFetch = true
+		defaultCaps.WebSearch = true
+		defaultCaps.Browser = true
+		defaultCaps.BrowserScreenshot = true
+		defaultCaps.Subagent = true
+		defaultCaps.FocusedTasks = true
+		defaultCaps.ProjectContext = false
+		defaultCaps.MCP = strings.TrimSpace(c.mcpConfigPath) != ""
+		return defaultCaps
+	}
+	caps := runtimeCapabilities{
+		Builtins:             defaultCaps.Builtins,
+		Memory:               defaultCaps.Memory,
+		MCP:                  defaultCaps.MCP,
+		Skill:                defaultCaps.Skill,
+		BuiltinSkillProvider: defaultCaps.BuiltinSkillProvider,
+		Plan:                 defaultCaps.Plan,
+		SessionSearch:        defaultCaps.SessionSearch,
+		ProjectContext:       defaultCaps.ProjectContext,
+		SymbolContext:        defaultCaps.SymbolContext,
+		RepoSearch:           defaultCaps.RepoSearch,
+		WebFetch:             defaultCaps.WebFetch,
+		WebSearch:            defaultCaps.WebSearch,
+		Browser:              defaultCaps.Browser,
+		BrowserScreenshot:    defaultCaps.BrowserScreenshot,
+		Subagent:             defaultCaps.Subagent,
+		FocusedTasks:         defaultCaps.FocusedTasks,
+	}
 	if c.evalMode {
-		caps.Memory = c.memoryExplicit && c.memoryEnabled
+		allowed, _ := evalToolAllowlist(c)
+		caps.Builtins = evalAllowlistHasBuiltin(allowed)
+		caps.Memory = (c.memoryExplicit && c.memoryEnabled) || allowed[agent.MemoryToolName]
+		caps.MCP = strings.TrimSpace(c.mcpConfigPath) != "" && (strings.TrimSpace(c.evalTools) == "" || allowed["mcp"] || evalAllowlistHasUnknown(allowed))
 		caps.Skill = false
 		caps.BuiltinSkillProvider = false
+		if allowed[agent.SkillToolName] {
+			caps.Skill = true
+			caps.BuiltinSkillProvider = true
+			caps.Builtins = true
+		}
 		caps.Plan = false
+		if allowed[agent.PlanToolName] {
+			caps.Plan = true
+			caps.Builtins = true
+		}
 		caps.SessionSearch = false
+		if allowed[agent.SessionSearchToolName] {
+			caps.SessionSearch = true
+			caps.Builtins = true
+		}
 		caps.ProjectContext = false
-		caps.SymbolContext = true
-		caps.RepoSearch = true
+		caps.SymbolContext = allowed[agent.SymbolContextToolName]
+		caps.RepoSearch = allowed["repo_search"]
 		caps.WebFetch = c.webEnabled
-		caps.WebSearch = c.webEnabled && c.webSearchEnabled
+		if allowed["web_fetch"] || allowed["web_search"] {
+			caps.WebFetch = true
+		}
+		caps.WebSearch = (c.webEnabled && c.webSearchEnabled) || allowed["web_search"]
 		caps.Browser = c.browserEnabled
-		caps.BrowserScreenshot = c.browserEnabled && c.browserScreenshot
+		if evalAllowlistHasBrowser(allowed) {
+			caps.Browser = true
+		}
+		caps.BrowserScreenshot = (c.browserEnabled && c.browserScreenshot) || allowed["browser_screenshot"]
 		caps.Subagent = false
+		if allowed[agent.SubagentToolName] {
+			caps.Subagent = true
+		}
 		caps.FocusedTasks = false
+		if allowed[agent.FocusedTaskToolName] {
+			caps.FocusedTasks = true
+		}
 	}
 	return caps
+}
+
+func evalToolAllowlist(c commonFlags) (map[string]bool, []string) {
+	allowed := map[string]bool{}
+	var requested []string
+	add := func(name string) {
+		name = strings.TrimSpace(name)
+		if name == "" {
+			return
+		}
+		if !allowed[name] {
+			requested = append(requested, name)
+		}
+		allowed[name] = true
+	}
+	for _, raw := range strings.FieldsFunc(c.evalTools, func(r rune) bool {
+		return r == ',' || r == ';' || r == ' ' || r == '\n' || r == '\t'
+	}) {
+		switch name := strings.TrimSpace(raw); name {
+		case "", "none":
+			continue
+		case "all":
+			for _, n := range evalKnownToolNames() {
+				if n == "mcp" && strings.TrimSpace(c.mcpConfigPath) == "" {
+					continue
+				}
+				add(n)
+			}
+		case "workspace":
+			for _, n := range evalWorkspaceToolNames() {
+				add(n)
+			}
+		case "readonly_workspace":
+			for _, n := range evalReadonlyWorkspaceToolNames() {
+				add(n)
+			}
+		case "web":
+			add("web_fetch")
+		case "browser":
+			for _, n := range evalBrowserToolNames() {
+				add(n)
+			}
+		case "delegation":
+			add(agent.SubagentToolName)
+			add(agent.FocusedTaskToolName)
+		case "mcp":
+			add("mcp")
+		default:
+			add(name)
+		}
+	}
+	return allowed, requested
+}
+
+func evalWorkspaceToolNames() []string {
+	return []string{"shell", "read_file", "file_context", "write_file", "edit_file", "list_files", agent.SymbolContextToolName, "repo_search"}
+}
+
+func evalReadonlyWorkspaceToolNames() []string {
+	return []string{"read_file", "file_context", "list_files", agent.SymbolContextToolName, "repo_search"}
+}
+
+func evalBrowserToolNames() []string {
+	return []string{"browser_navigate", "browser_snapshot", "browser_find", "browser_network", "browser_network_read", "browser_click", "browser_scroll", "browser_type", "browser_wait", "browser_screenshot"}
+}
+
+func evalKnownToolNames() []string {
+	out := append([]string{}, evalWorkspaceToolNames()...)
+	out = append(out, agent.SkillToolName, agent.MemoryToolName, agent.SessionSearchToolName, agent.PlanToolName, agent.SubagentToolName, agent.FocusedTaskToolName, "web_fetch", "web_search", "mcp")
+	out = append(out, evalBrowserToolNames()...)
+	return out
+}
+
+func evalKnownToolSet() map[string]bool {
+	out := map[string]bool{}
+	for _, name := range evalKnownToolNames() {
+		out[name] = true
+	}
+	return out
+}
+
+func evalAllowlistHasUnknown(allowed map[string]bool) bool {
+	known := evalKnownToolSet()
+	for name := range allowed {
+		if !known[name] {
+			return true
+		}
+	}
+	return false
+}
+
+func evalAllowlistHasBuiltin(allowed map[string]bool) bool {
+	for _, name := range append(evalWorkspaceToolNames(), agent.SkillToolName, agent.SessionSearchToolName, agent.PlanToolName) {
+		if allowed[name] {
+			return true
+		}
+	}
+	return false
+}
+
+func evalAllowlistHasBrowser(allowed map[string]bool) bool {
+	for _, name := range evalBrowserToolNames() {
+		if allowed[name] {
+			return true
+		}
+	}
+	return false
+}
+
+func filterEvalModeTools(reg *agent.Registry, c commonFlags, caps runtimeCapabilities) error {
+	if reg == nil {
+		return nil
+	}
+	allowed, requested := evalToolAllowlist(c)
+	if caps.Memory {
+		allowed[agent.MemoryToolName] = true
+	}
+	if c.webEnabled {
+		allowed["web_fetch"] = true
+	}
+	if c.webEnabled && c.webSearchEnabled {
+		allowed["web_search"] = true
+	}
+	if c.browserEnabled {
+		for _, name := range evalBrowserToolNames() {
+			if name == "browser_screenshot" && !caps.BrowserScreenshot {
+				continue
+			}
+			allowed[name] = true
+		}
+	}
+	if caps.BrowserScreenshot {
+		allowed["browser_screenshot"] = true
+	}
+	if caps.MCP && strings.TrimSpace(c.evalTools) == "" {
+		allowed["mcp"] = true
+	}
+	if caps.MCP && allowed["mcp"] {
+		for _, entry := range reg.Catalog() {
+			if strings.TrimSpace(entry.Source) != "" {
+				allowed[entry.Name] = true
+			}
+		}
+	}
+	for _, def := range reg.Defs() {
+		if !allowed[def.Function.Name] {
+			reg.Remove(def.Function.Name)
+		}
+	}
+	var missing []string
+	for _, name := range requested {
+		if name == "mcp" {
+			if !caps.MCP {
+				missing = append(missing, "mcp (requires --mcp-config)")
+			}
+			continue
+		}
+		if _, ok := reg.Get(name); !ok {
+			missing = append(missing, name)
+		}
+	}
+	if len(missing) > 0 {
+		sort.Strings(missing)
+		return fmt.Errorf("--eval-tools requested unavailable tool(s): %s", strings.Join(missing, ", "))
+	}
+	return nil
+}
+
+func registryHasWorkspaceTool(reg *agent.Registry) bool {
+	if reg == nil {
+		return false
+	}
+	for _, name := range evalWorkspaceToolNames() {
+		if _, ok := reg.Get(name); ok {
+			return true
+		}
+	}
+	return false
 }
 
 func (b *loopBundle) close() {
@@ -1019,13 +1279,7 @@ func setupLoop(c commonFlags) (*loopBundle, int) {
 	var conv *agent.Conversation
 	var browser *affentbrowser.Session
 	planPath := ""
-	if !caps.Builtins {
-		if memStore == nil {
-			log.Error().Msg("--memory-only requires a usable memory store; check --memory-workspace-store / --memory-user-store")
-			return nil, exitRuntime
-		}
-		agent.RegisterMemoryOnly(tools, memStore)
-	} else {
+	if caps.Builtins {
 		var execErr error
 		executorSpec := c.executor
 		executorSpec, execErr = maybeStartSandboxExecutor(executorSpec, workspace, osCommandRunner{buildTimeout: sandboxDockerBuildTimeout, stdout: os.Stdout, stderr: os.Stderr, streamBuild: true})
@@ -1069,6 +1323,12 @@ func setupLoop(c commonFlags) (*loopBundle, int) {
 			},
 			DisableSkill: !caps.Skill,
 		})
+	} else if caps.Memory {
+		if memStore == nil {
+			log.Error().Msg("memory tool requires a usable memory store; check --memory-workspace-store / --memory-user-store")
+			return nil, exitRuntime
+		}
+		agent.RegisterMemoryOnly(tools, memStore)
 	}
 	if caps.WebFetch {
 		if caps.Browser {
@@ -1113,7 +1373,6 @@ func setupLoop(c commonFlags) (*loopBundle, int) {
 		mc := mc
 		closers = append(closers, func() { _ = mc.Close() })
 	}
-
 	conv, err = agent.OpenConversationAt(filepath.Join(convDir, sid+".jsonl"))
 	if err != nil {
 		log.Error().Err(err).Msg("conversation")
@@ -1170,6 +1429,19 @@ func setupLoop(c commonFlags) (*loopBundle, int) {
 			RegisterWebTools:     affentctlFocusedTaskWebRegistrar(caps.WebFetch, caps.WebSearch),
 			RegisterBrowserTools: affentctlFocusedTaskBrowserRegistrar(caps.Browser, false, workspace, caps.WebFetch, caps.WebSearch),
 		})
+	}
+	if c.evalMode && !c.evalAllTools {
+		if err := filterEvalModeTools(tools, c, caps); err != nil {
+			log.Error().Err(err).Msg("eval tools")
+			return nil, exitUsage
+		}
+	}
+	if c.evalMode && c.systemPromptPath == "" {
+		systemPrompt = agent.BaseSystemPromptForRegistry(tools)
+		if registryHasWorkspaceTool(tools) && workspace != "/workspace" {
+			systemPrompt += "\n\nYour workspace directory is \"" + workspace +
+				"\". Use this exact path (or a relative path inside it) with registered workspace tools."
+		}
 	}
 	systemPrompt = agent.WithRegistrySystemGuidance(systemPrompt, tools)
 	systemPrompt = agent.WithRuntimeContextSystemGuidance(systemPrompt, time.Now())

@@ -349,15 +349,15 @@ func TestDoctorCapabilitySummaryEvalModeMatchesStrictSurface(t *testing.T) {
 		executor:            "local",
 	})
 	for _, want := range []string{
-		"shell_file=true",
+		"shell_file=false",
 		"skill_install=false",
 		"memory=false",
 		"memory_only=false",
 		"eval_mode=true",
 		"session_search=false",
 		"project_context=false",
-		"symbol_context=true",
-		"repo_search=true",
+		"symbol_context=false",
+		"repo_search=false",
 		"web_fetch=false",
 		"web_search=false",
 		"browser=false",

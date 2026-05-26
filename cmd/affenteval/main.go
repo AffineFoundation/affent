@@ -57,7 +57,9 @@ func run(args []string) int {
 		maxTokens         = fs.String("max-tokens", "", "max output tokens forwarded to affentctl; empty keeps provider default")
 		seed              = fs.String("seed", "", "deterministic-sampling seed forwarded to affentctl; empty keeps provider default")
 		executor          = fs.String("executor", "local", "affentctl tool executor for scenario runs: local, sandbox, or docker:<container>")
-		runtimeEvalMode   = fs.Bool("runtime-eval-mode", false, "pass affentctl --eval-mode to keep only the basic benchmark tool surface during scenario runs")
+		runtimeEvalMode   = fs.Bool("runtime-eval-mode", false, "pass affentctl --eval-mode to disable tools by default during scenario runs")
+		runtimeTools      = fs.String("runtime-tools", "", "comma-separated affentctl --eval-tools allowlist for --runtime-eval-mode, e.g. readonly_workspace,web or read_file,shell")
+		runtimeAllTools   = fs.Bool("runtime-all-tools", false, "pass affentctl --eval-all-tools to enable the full tool surface under --runtime-eval-mode")
 		runtimeMemory     = fs.Bool("runtime-memory", false, "pass affentctl --memory=true during scenario runs; useful with --runtime-eval-mode for memory-only opt-in")
 		runtimeWeb        = fs.Bool("runtime-web", false, "pass affentctl --web --web-search during scenario runs for external retrieval/debug evals")
 		runtimeBrowser    = fs.Bool("runtime-browser", false, "pass affentctl --browser during scenario runs for rendered-page/browser debug evals")
@@ -125,6 +127,8 @@ success and trace-level process quality.`)
 		Seed:                     *seed,
 		Executor:                 *executor,
 		RuntimeEvalMode:          *runtimeEvalMode,
+		RuntimeTools:             *runtimeTools,
+		RuntimeAllTools:          *runtimeAllTools,
 		RuntimeMemory:            *runtimeMemory,
 		RuntimeWeb:               *runtimeWeb,
 		RuntimeBrowser:           *runtimeBrowser,
@@ -134,7 +138,7 @@ success and trace-level process quality.`)
 		VerifierOutputCapBytes:   *verifierOutputCap,
 		CleanupPassingWorkspaces: !*keepWorkspaces,
 	}
-	jsonlMeta := evalJSONLMetadataFromConfig(*suite, *model, *providerLabel, *executor, *temperature, *topP, *maxTokens, *seed, *runtimeEvalMode, *runtimeMemory, *runtimeWeb, *runtimeBrowser, *traceDeltas, *runtimeMCPConfig, *timeout)
+	jsonlMeta := evalJSONLMetadataFromConfig(*suite, *model, *providerLabel, *executor, *temperature, *topP, *maxTokens, *seed, *runtimeEvalMode, *runtimeTools, *runtimeAllTools, *runtimeMemory, *runtimeWeb, *runtimeBrowser, *traceDeltas, *runtimeMCPConfig, *timeout)
 	ctx := context.Background()
 	var summary batchSummary
 	for _, scenario := range scenarios {
@@ -815,6 +819,8 @@ type evalJSONLMetadata struct {
 	MaxTokens       string `json:"max_tokens,omitempty"`
 	Seed            string `json:"seed,omitempty"`
 	RuntimeEvalMode bool   `json:"runtime_eval_mode,omitempty"`
+	RuntimeTools    string `json:"runtime_tools,omitempty"`
+	RuntimeAllTools bool   `json:"runtime_all_tools,omitempty"`
 	RuntimeMemory   bool   `json:"runtime_memory,omitempty"`
 	RuntimeWeb      bool   `json:"runtime_web,omitempty"`
 	RuntimeBrowser  bool   `json:"runtime_browser,omitempty"`
@@ -823,7 +829,7 @@ type evalJSONLMetadata struct {
 	TimeoutMS       int64  `json:"timeout_ms"`
 }
 
-func evalJSONLMetadataFromConfig(suite, model, providerLabel, executor, temperature, topP, maxTokens, seed string, runtimeEvalMode, runtimeMemory, runtimeWeb, runtimeBrowser, traceDeltas bool, runtimeMCPConfig string, timeout time.Duration) evalJSONLMetadata {
+func evalJSONLMetadataFromConfig(suite, model, providerLabel, executor, temperature, topP, maxTokens, seed string, runtimeEvalMode bool, runtimeTools string, runtimeAllTools, runtimeMemory, runtimeWeb, runtimeBrowser, traceDeltas bool, runtimeMCPConfig string, timeout time.Duration) evalJSONLMetadata {
 	model = strings.TrimSpace(model)
 	if model == "" {
 		model = strings.TrimSpace(os.Getenv("AFFENTCTL_MODEL"))
@@ -843,6 +849,8 @@ func evalJSONLMetadataFromConfig(suite, model, providerLabel, executor, temperat
 		MaxTokens:       strings.TrimSpace(maxTokens),
 		Seed:            strings.TrimSpace(seed),
 		RuntimeEvalMode: runtimeEvalMode,
+		RuntimeTools:    strings.TrimSpace(runtimeTools),
+		RuntimeAllTools: runtimeAllTools,
 		RuntimeMemory:   runtimeMemory,
 		RuntimeWeb:      runtimeWeb,
 		RuntimeBrowser:  runtimeBrowser,

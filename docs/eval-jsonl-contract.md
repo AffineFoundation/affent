@@ -21,6 +21,10 @@ Shared metadata fields:
 - `seed`: optional deterministic-sampling seed passed to `affentctl`.
 - `runtime_eval_mode`: optional boolean, present when the eval runner passed
   `affentctl run --eval-mode`.
+- `runtime_tools`: optional comma-separated tool allowlist passed via
+  `--runtime-tools` / `affentctl --eval-tools`.
+- `runtime_all_tools`: optional boolean, present when the eval runner passed
+  `--runtime-all-tools` / `affentctl --eval-all-tools`.
 - `runtime_memory`: optional boolean, present when the eval runner explicitly
   opted memory back into the runtime with `--runtime-memory`.
 - `runtime_web`: optional boolean, present when the eval runner explicitly

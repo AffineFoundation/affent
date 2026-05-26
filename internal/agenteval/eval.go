@@ -114,6 +114,8 @@ type BatchRunner struct {
 	Seed                     string
 	Executor                 string
 	RuntimeEvalMode          bool
+	RuntimeTools             string
+	RuntimeAllTools          bool
 	RuntimeMemory            bool
 	RuntimeWeb               bool
 	RuntimeBrowser           bool
@@ -663,6 +665,10 @@ func (r BatchRunner) affentctlRunArgs(workspace, tracePath string, scenario Batc
 	if r.RuntimeEvalMode {
 		args = append(args, "--eval-mode")
 	}
+	if r.RuntimeAllTools {
+		args = append(args, "--eval-all-tools")
+	}
+	args = appendStringFlag(args, "--eval-tools", r.RuntimeTools)
 	if r.RuntimeMemory || scenario.EnableMemory {
 		args = append(args, "--memory=true")
 	}
