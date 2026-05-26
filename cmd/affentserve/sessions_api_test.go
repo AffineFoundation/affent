@@ -15,6 +15,7 @@ import (
 	"unicode/utf8"
 
 	agent "github.com/affinefoundation/affent/internal/agent"
+	"github.com/affinefoundation/affent/internal/sse"
 	"github.com/rs/zerolog"
 )
 
@@ -264,6 +265,80 @@ func TestUserMessageSummariesFromMessagesKeepStableTopic(t *testing.T) {
 	if topic != "research affine" {
 		t.Fatalf("topic user = %q, want original task", topic)
 	}
+}
+
+func TestSummarizeDurableSessionRestoresTopicFromEventsAfterCompaction(t *testing.T) {
+	memRoot := t.TempDir()
+	pool := newPoolWithMemoryRoot(t, memRoot)
+	createDurableSessionDir(t, pool, "compacted-topic")
+	dir := pool.sessionDirPath("compacted-topic")
+
+	if err := os.WriteFile(filepath.Join(dir, "conversation.jsonl"), []byte(
+		`{"role":"system","content":"base"}`+"\n"+
+			`{"role":"assistant","content":"Previous conversation summary: researched Affine subnet."}`+"\n"+
+			`{"role":"user","content":"请继续同一个任务。基于已有证据输出报告"}`+"\n",
+	), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(filepath.Join(dir, "events.jsonl"), []byte(
+		sessionEventLine(t, sse.TypeUserMessage, sse.UserMessagePayload{TurnID: "t1", Text: "affine 是 Bittensor 的一个子网，请收集信息并向我介绍"})+
+			sessionEventLine(t, sse.TypeContextCompact, sse.ContextCompactPayload{TurnID: "t1", BeforeMessages: 48, AfterMessages: 12, RemovedMessages: 36, Reactive: true, Reason: "context_overflow", SummaryPresent: true, SummaryBytes: 1024})+
+			sessionEventLine(t, sse.TypeUserMessage, sse.UserMessagePayload{TurnID: "t2", Text: "请继续同一个任务。基于已有证据输出报告"}),
+	), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	summary, found, err := summarizeDurableSession(pool, "compacted-topic")
+	if err != nil {
+		t.Fatalf("summarizeDurableSession: %v", err)
+	}
+	if !found {
+		t.Fatal("durable session should be found")
+	}
+	if summary.LatestUserMessage != "请继续同一个任务。基于已有证据输出报告" {
+		t.Fatalf("latest_user_message = %q, want continuation prompt", summary.LatestUserMessage)
+	}
+	if summary.TopicUserMessage != "affine 是 Bittensor 的一个子网，请收集信息并向我介绍" {
+		t.Fatalf("topic_user_message = %q, want original event-stream task", summary.TopicUserMessage)
+	}
+	if summary.SummaryTitle != "Affine（Bittensor 子网）" {
+		t.Fatalf("summary_title = %q, want original task title", summary.SummaryTitle)
+	}
+}
+
+func TestMergeSessionSummariesLetsDurableTopicRepairActiveContinuation(t *testing.T) {
+	got := mergeSessionSummaries(
+		sessionSummary{
+			ID:                "active",
+			Active:            true,
+			LatestUserMessage: "请继续同一个任务。基于已有证据输出报告",
+			TopicUserMessage:  "请继续同一个任务。基于已有证据输出报告",
+		},
+		sessionSummary{
+			ID:               "active",
+			Durable:          true,
+			TopicUserMessage: "affine 是 Bittensor 的一个子网，请收集信息并向我介绍",
+		},
+	)
+	if got.TopicUserMessage != "affine 是 Bittensor 的一个子网，请收集信息并向我介绍" {
+		t.Fatalf("topic_user_message = %q, want durable original task", got.TopicUserMessage)
+	}
+	if got.LatestUserMessage != "请继续同一个任务。基于已有证据输出报告" {
+		t.Fatalf("latest_user_message = %q, want active latest prompt", got.LatestUserMessage)
+	}
+}
+
+func sessionEventLine(t *testing.T, typ string, payload any) string {
+	t.Helper()
+	ev, err := sse.NewEvent(typ, payload)
+	if err != nil {
+		t.Fatalf("build event %s: %v", typ, err)
+	}
+	raw, err := json.Marshal(ev)
+	if err != nil {
+		t.Fatalf("marshal event %s: %v", typ, err)
+	}
+	return string(raw) + "\n"
 }
 
 func TestSummarizeSessionTitleFromUserMessage(t *testing.T) {

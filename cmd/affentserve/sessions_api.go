@@ -17,6 +17,7 @@ import (
 
 	agent "github.com/affinefoundation/affent/internal/agent"
 	"github.com/affinefoundation/affent/internal/jsonl"
+	"github.com/affinefoundation/affent/internal/sse"
 	"github.com/affinefoundation/affent/internal/textutil"
 )
 
@@ -28,6 +29,7 @@ const (
 	maxSessionTaskSummaryChars  = 160
 	maxSessionSummaryLineBytes  = 1024 * 1024
 	maxSessionSummaryTailBytes  = 2 * 1024 * 1024
+	maxSessionEventSummaryHead  = 512 * 1024
 	maxSessionRuntimeSkillNames = 128
 )
 
@@ -536,6 +538,18 @@ func summarizeDurableSession(pool *SessionPool, id string) (sessionSummary, bool
 	if exists && eventMod.After(newest) {
 		newest = eventMod
 	}
+	if exists {
+		latest, topic, err := userMessageSummariesFromEventsFile(filepath.Join(dir, "events.jsonl"))
+		if err != nil {
+			return sessionSummary{}, false, err
+		}
+		if latest != "" {
+			summary.LatestUserMessage = latest
+		}
+		if topic != "" {
+			summary.TopicUserMessage = topic
+		}
+	}
 	var planMod time.Time
 	if exists, planMod, err = durableRegularFileModTime(filepath.Join(dir, "plan.json")); err != nil {
 		return sessionSummary{}, false, err
@@ -582,6 +596,8 @@ func mergeSessionSummaries(a, b sessionSummary) sessionSummary {
 		a.LatestUserMessage = b.LatestUserMessage
 	}
 	if a.TopicUserMessage == "" && b.TopicUserMessage != "" {
+		a.TopicUserMessage = b.TopicUserMessage
+	} else if b.TopicUserMessage != "" && isContinuationSessionPrompt(a.TopicUserMessage) {
 		a.TopicUserMessage = b.TopicUserMessage
 	}
 	if a.SummaryTitle == "" && b.SummaryTitle != "" {
@@ -680,6 +696,81 @@ func userMessageSummariesFromConversationFile(path string) (string, string, erro
 		topic = latest
 	}
 	return latest, topic, nil
+}
+
+type sessionUserMessageScan struct {
+	Latest string
+	Topic  string
+}
+
+func userMessageSummariesFromEventsFile(path string) (string, string, error) {
+	f, err := os.Open(path)
+	if err != nil {
+		if errors.Is(err, os.ErrNotExist) {
+			return "", "", nil
+		}
+		return "", "", err
+	}
+	defer f.Close()
+
+	head, err := scanUserMessagesFromEvents(bufio.NewReaderSize(io.LimitReader(f, maxSessionEventSummaryHead), 64*1024))
+	if err != nil {
+		return "", "", err
+	}
+	if err := seekSessionSummaryTail(f); err != nil {
+		return "", "", err
+	}
+	tail, err := scanUserMessagesFromEvents(bufio.NewReaderSize(f, 64*1024))
+	if err != nil {
+		return "", "", err
+	}
+
+	latest := tail.Latest
+	if latest == "" {
+		latest = head.Latest
+	}
+	topic := tail.Topic
+	if topic == "" {
+		topic = head.Topic
+	}
+	if topic == "" {
+		topic = latest
+	}
+	return latest, topic, nil
+}
+
+func scanUserMessagesFromEvents(r *bufio.Reader) (sessionUserMessageScan, error) {
+	var scan sessionUserMessageScan
+	for {
+		line, tooLong, err := jsonl.ReadBoundedLine(r, maxSessionSummaryLineBytes)
+		if errors.Is(err, io.EOF) {
+			break
+		}
+		if err != nil {
+			return sessionUserMessageScan{}, err
+		}
+		if tooLong {
+			continue
+		}
+		line = bytes.TrimRight(line, "\r\n")
+		var ev sse.Event
+		if err := json.Unmarshal(line, &ev); err != nil || ev.Type != sse.TypeUserMessage {
+			continue
+		}
+		var p sse.UserMessagePayload
+		if err := json.Unmarshal(ev.Data, &p); err != nil {
+			continue
+		}
+		summary := summarizeLatestUserMessage(p.Text)
+		if summary == "" {
+			continue
+		}
+		scan.Latest = summary
+		if !isContinuationSessionPrompt(summary) {
+			scan.Topic = summary
+		}
+	}
+	return scan, nil
 }
 
 func seekSessionSummaryTail(f *os.File) error {
