@@ -211,6 +211,8 @@ type batchSummary struct {
 	VerifierOutputTruncated    int
 	VerifierOutputOmittedBytes int
 	TraceSchemaVersions        map[int]int
+	TraceEvents                int
+	TraceEventTypes            map[string]int
 	InputTokens                int
 	OutputTokens               int
 	EndCompleted               int
@@ -345,6 +347,13 @@ func (s *batchSummary) add(res agenteval.BatchResult) {
 			s.TraceSchemaVersions = map[int]int{}
 		}
 		s.TraceSchemaVersions[res.TraceSchemaVersion]++
+	}
+	s.TraceEvents += res.TraceEvents
+	for k, v := range res.TraceEventTypes {
+		if s.TraceEventTypes == nil {
+			s.TraceEventTypes = map[string]int{}
+		}
+		s.TraceEventTypes[k] += v
 	}
 	s.InputTokens += res.Usage.InputTokens
 	s.OutputTokens += res.Usage.OutputTokens
@@ -492,6 +501,12 @@ func printBatchSummary(w io.Writer, s batchSummary) {
 			s.ContextCompactionRemoved,
 			s.ContextCompactionSummary,
 		)
+	}
+	if s.TraceEvents > 0 {
+		fmt.Fprintf(w, " trace_events=%d", s.TraceEvents)
+		if len(s.TraceEventTypes) > 0 {
+			fmt.Fprintf(w, " trace_event_types=%s", formatStringIntCounts(s.TraceEventTypes))
+		}
 	}
 	if hasBatchToolContextTruncation(s) {
 		fmt.Fprintf(w, " ctx_trunc=%d,omitted=%d", s.ToolContextTruncated, s.ToolContextOmittedBytes)
@@ -914,6 +929,8 @@ type batchResultRecord struct {
 	VerifierOutputTruncated    bool                                       `json:"verifier_output_truncated"`
 	VerifierOutputOmittedBytes int                                        `json:"verifier_output_omitted_bytes"`
 	VerifierOutputCapBytes     int                                        `json:"verifier_output_cap_bytes"`
+	TraceEvents                int                                        `json:"trace_events,omitempty"`
+	TraceEventTypes            map[string]int                             `json:"trace_event_types,omitempty"`
 	InputTokens                int                                        `json:"input_tokens"`
 	OutputTokens               int                                        `json:"output_tokens"`
 	WorkspaceRemoved           bool                                       `json:"workspace_removed,omitempty"`
@@ -997,6 +1014,8 @@ type batchSummaryRecord struct {
 	VerifierOutputTruncated    int                                        `json:"verifier_output_truncated"`
 	VerifierOutputOmittedBytes int                                        `json:"verifier_output_omitted_bytes"`
 	TraceSchemaVersions        map[int]int                                `json:"trace_schema_versions,omitempty"`
+	TraceEvents                int                                        `json:"trace_events,omitempty"`
+	TraceEventTypes            map[string]int                             `json:"trace_event_types,omitempty"`
 	InputTokens                int                                        `json:"input_tokens"`
 	OutputTokens               int                                        `json:"output_tokens"`
 	EndCompleted               int                                        `json:"end_completed"`
@@ -1108,6 +1127,8 @@ func printBatchResultJSONL(w io.Writer, meta evalJSONLMetadata, res agenteval.Ba
 		VerifierOutputTruncated:    res.Verifier.OutputTruncated,
 		VerifierOutputOmittedBytes: res.Verifier.OutputOmittedBytes,
 		VerifierOutputCapBytes:     res.Verifier.OutputCapBytes,
+		TraceEvents:                res.TraceEvents,
+		TraceEventTypes:            cloneStringIntMap(res.TraceEventTypes),
 		InputTokens:                res.Usage.InputTokens,
 		OutputTokens:               res.Usage.OutputTokens,
 		WorkspaceRemoved:           res.WorkspaceRemoved,
@@ -1262,6 +1283,8 @@ func printBatchSummaryJSONL(w io.Writer, meta evalJSONLMetadata, s batchSummary)
 		VerifierOutputTruncated:    s.VerifierOutputTruncated,
 		VerifierOutputOmittedBytes: s.VerifierOutputOmittedBytes,
 		TraceSchemaVersions:        cloneTraceSchemaVersions(s.TraceSchemaVersions),
+		TraceEvents:                s.TraceEvents,
+		TraceEventTypes:            cloneStringIntMap(s.TraceEventTypes),
 		InputTokens:                s.InputTokens,
 		OutputTokens:               s.OutputTokens,
 		EndCompleted:               s.EndCompleted,
@@ -1402,6 +1425,13 @@ func printBatchResult(w io.Writer, res agenteval.BatchResult) {
 	fmt.Fprintf(w, "  trace: %s\n", res.TracePath)
 	if res.TraceDeltas {
 		fmt.Fprintln(w, "  trace_deltas: true")
+	}
+	if res.TraceEvents > 0 {
+		fmt.Fprintf(w, "  trace_events: %d", res.TraceEvents)
+		if len(res.TraceEventTypes) > 0 {
+			fmt.Fprintf(w, " (%s)", formatStringIntCounts(res.TraceEventTypes))
+		}
+		fmt.Fprintln(w)
 	}
 	if path := retainedDebugPath(res.DebugManifestPath, res.WorkspaceRemoved); path != "" {
 		fmt.Fprintf(w, "  debug: %s\n", path)

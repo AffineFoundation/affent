@@ -70,6 +70,7 @@ func renderDebugTimeline(res BatchResult, scenario BatchScenario, trace *Trace) 
 		return b.String()
 	}
 
+	renderTimelineTraceEvents(&b, trace)
 	renderTimelineRuntimeSurface(&b, trace)
 	renderTimelineLoopErrors(&b, trace)
 	renderTimelineCompactions(&b, trace)
@@ -77,6 +78,27 @@ func renderDebugTimeline(res BatchResult, scenario BatchScenario, trace *Trace) 
 	renderTimelineTools(&b, trace)
 	renderTimelineFinal(&b, trace)
 	return b.String()
+}
+
+func renderTimelineTraceEvents(b *strings.Builder, trace *Trace) {
+	if len(trace.RawTypes) == 0 {
+		return
+	}
+	b.WriteString("\n## Trace Events\n\n")
+	keys := make([]string, 0, len(trace.RawTypes))
+	total := 0
+	for typ, count := range trace.RawTypes {
+		if typ == "" || count <= 0 {
+			continue
+		}
+		keys = append(keys, typ)
+		total += count
+	}
+	sort.Strings(keys)
+	fmt.Fprintf(b, "- total: `%d`\n", total)
+	for _, typ := range keys {
+		fmt.Fprintf(b, "- `%s`: `%d`\n", typ, trace.RawTypes[typ])
+	}
 }
 
 func renderTimelineRuntimeSurface(b *strings.Builder, trace *Trace) {

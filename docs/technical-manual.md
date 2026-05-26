@@ -746,7 +746,7 @@ workspace: `affenteval-debug.json`, `affenteval-timeline.md`,
 `affenteval-stderr.txt`. Failed workspaces are kept automatically;
 `--keep-workspaces` also keeps passing runs for local inspection. The timeline
 is the human-readable index for debugging: it links the raw trace, shows the
-effective runtime surface, lists tool calls with args/result previews,
+trace event type counts, effective runtime surface, tool calls with args/result previews,
 truncation/artifact pointers, loop decisions, context compactions, and runtime
 errors. By default, eval traces pass `affentctl --trace-skip-deltas` so token
 streaming deltas do not bury the tool timeline; use `--trace-deltas` only for

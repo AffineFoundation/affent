@@ -649,6 +649,14 @@ func cloneStringIntMap(in map[string]int) map[string]int {
 	return out
 }
 
+func sumStringIntMap(in map[string]int) int {
+	var total int
+	for _, v := range in {
+		total += v
+	}
+	return total
+}
+
 // Usage aggregates per-turn token accounting summed across every LLM
 // call in the run.
 type Usage struct {

@@ -140,6 +140,8 @@ type BatchResult struct {
 	Duration             time.Duration
 	FinalText            string
 	TraceSchemaVersion   int
+	TraceEvents          int
+	TraceEventTypes      map[string]int
 	TurnEndReason        string
 	ToolCalls            int
 	ToolStats            ToolRuntimeStats
@@ -192,24 +194,26 @@ type DebugManifest struct {
 }
 
 type DebugMetrics struct {
-	TurnEndReason              string `json:"turn_end_reason,omitempty"`
-	ToolCalls                  int    `json:"tool_calls"`
-	ToolErrors                 int    `json:"tool_errors"`
-	ToolArgsRepaired           int    `json:"tool_args_repaired"`
-	ToolNameCanonicalized      int    `json:"tool_name_canonicalized"`
-	LoopGuardInterventions     int    `json:"loop_guard_interventions"`
-	ForcedNoTools              int    `json:"forced_no_tools"`
-	SourceAccessResults        int    `json:"source_access_results"`
-	SourceAccessVerified       int    `json:"source_access_verified"`
-	SourceAccessDiscoveryOnly  int    `json:"source_access_discovery_only"`
-	SourceAccessNetwork        int    `json:"source_access_network"`
-	SourceAccessDynamicPartial int    `json:"source_access_dynamic_partial"`
-	MemoryUpdates              int    `json:"memory_updates"`
-	ContextCompactions         int    `json:"context_compactions"`
-	ReactiveContextCompactions int    `json:"reactive_context_compactions"`
-	ContextCompactionRemoved   int    `json:"context_compaction_removed_messages"`
-	InputTokens                int    `json:"input_tokens"`
-	OutputTokens               int    `json:"output_tokens"`
+	TurnEndReason              string         `json:"turn_end_reason,omitempty"`
+	ToolCalls                  int            `json:"tool_calls"`
+	ToolErrors                 int            `json:"tool_errors"`
+	ToolArgsRepaired           int            `json:"tool_args_repaired"`
+	ToolNameCanonicalized      int            `json:"tool_name_canonicalized"`
+	LoopGuardInterventions     int            `json:"loop_guard_interventions"`
+	ForcedNoTools              int            `json:"forced_no_tools"`
+	SourceAccessResults        int            `json:"source_access_results"`
+	SourceAccessVerified       int            `json:"source_access_verified"`
+	SourceAccessDiscoveryOnly  int            `json:"source_access_discovery_only"`
+	SourceAccessNetwork        int            `json:"source_access_network"`
+	SourceAccessDynamicPartial int            `json:"source_access_dynamic_partial"`
+	MemoryUpdates              int            `json:"memory_updates"`
+	ContextCompactions         int            `json:"context_compactions"`
+	ReactiveContextCompactions int            `json:"reactive_context_compactions"`
+	ContextCompactionRemoved   int            `json:"context_compaction_removed_messages"`
+	InputTokens                int            `json:"input_tokens"`
+	OutputTokens               int            `json:"output_tokens"`
+	TraceEvents                int            `json:"trace_events,omitempty"`
+	TraceEventTypes            map[string]int `json:"trace_event_types,omitempty"`
 }
 
 type VerifierResult struct {
@@ -412,6 +416,8 @@ func (r BatchRunner) Run(ctx context.Context, scenario BatchScenario) BatchResul
 		parsedTrace = &trace
 		trace.WorkspaceDir = workspace
 		res.TraceSchemaVersion = trace.SchemaVersion
+		res.TraceEventTypes = cloneStringIntMap(trace.RawTypes)
+		res.TraceEvents = sumStringIntMap(trace.RawTypes)
 		res.TurnEndReason = trace.TurnEndReason
 		res.ToolCalls = len(trace.Tools)
 		res.ToolStats = trace.ToolStats
@@ -448,6 +454,10 @@ func (r BatchRunner) Run(ctx context.Context, scenario BatchScenario) BatchResul
 func writeScenarioDebugArtifacts(res *BatchResult, scenario BatchScenario, stdout, stderr string, trace *Trace) error {
 	if res == nil || strings.TrimSpace(res.Workspace) == "" {
 		return nil
+	}
+	if trace != nil && len(res.TraceEventTypes) == 0 {
+		res.TraceEventTypes = cloneStringIntMap(trace.RawTypes)
+		res.TraceEvents = sumStringIntMap(trace.RawTypes)
 	}
 	finalTextPath := filepath.Join(res.Workspace, "affenteval-final.txt")
 	if err := os.WriteFile(finalTextPath, []byte(res.FinalText), 0o644); err != nil {
@@ -507,6 +517,8 @@ func writeScenarioDebugArtifacts(res *BatchResult, scenario BatchScenario, stdou
 			ContextCompactionRemoved:   res.ContextCompactions.RemovedMessages,
 			InputTokens:                res.Usage.InputTokens,
 			OutputTokens:               res.Usage.OutputTokens,
+			TraceEvents:                res.TraceEvents,
+			TraceEventTypes:            cloneStringIntMap(res.TraceEventTypes),
 		},
 		GeneratedAt: time.Now().UTC().Format(time.RFC3339),
 	}

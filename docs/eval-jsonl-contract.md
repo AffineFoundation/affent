@@ -44,6 +44,9 @@ Scenario records describe one eval case:
 - `workspace`: scenario workspace path.
 - `trace_path`: trace JSONL path.
 - `trace_schema_version`: parsed runtime trace schema version, when available.
+- `trace_events`: total parsed trace events, when a trace was parsed.
+- `trace_event_types`: per-event-type counts from the parsed trace, such as
+  `message.delta`, `tool.request`, `tool.result`, and `runtime.surface`.
 - `debug_manifest_path`: retained debug manifest path, when the workspace was
   not removed.
 - `timeline_path`: retained human-readable timeline path, when the workspace

@@ -1031,6 +1031,12 @@ func TestWriteScenarioDebugArtifactsIndexesTraceAndFinalText(t *testing.T) {
 		},
 	}
 	trace := Trace{
+		RawTypes: map[string]int{
+			"message.delta":   2,
+			"runtime.surface": 1,
+			"tool.request":    1,
+			"tool.result":     1,
+		},
 		RuntimeSurfaces: []sse.RuntimeSurfacePayload{*res.RuntimeSurface},
 		Tools: []ToolCall{{
 			TurnID:       "turn-debug",
@@ -1114,7 +1120,10 @@ func TestWriteScenarioDebugArtifactsIndexesTraceAndFinalText(t *testing.T) {
 		manifest.Metrics.ReactiveContextCompactions != 1 ||
 		manifest.Metrics.ContextCompactionRemoved != 12 ||
 		manifest.Metrics.InputTokens != 100 ||
-		manifest.Metrics.OutputTokens != 20 {
+		manifest.Metrics.OutputTokens != 20 ||
+		manifest.Metrics.TraceEvents != 5 ||
+		manifest.Metrics.TraceEventTypes["message.delta"] != 2 ||
+		manifest.Metrics.TraceEventTypes["tool.result"] != 1 {
 		t.Fatalf("manifest metrics = %+v", manifest.Metrics)
 	}
 	timeline, err := os.ReadFile(res.TimelinePath)
@@ -1126,6 +1135,8 @@ func TestWriteScenarioDebugArtifactsIndexesTraceAndFinalText(t *testing.T) {
 		"## Runtime Surface",
 		"`web_fetch`",
 		"trace_deltas: `true`",
+		"## Trace Events",
+		"`message.delta`: `2`",
 		"## Tool Timeline",
 		"failure_kinds: `dynamic_shell`",
 		"need browser network evidence",

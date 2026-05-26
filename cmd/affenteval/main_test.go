@@ -385,7 +385,13 @@ func TestBatchSummaryAggregatesRuntimeMetrics(t *testing.T) {
 		ToolCalls:          2,
 		WorkspaceRemoved:   true,
 		TraceSchemaVersion: 1,
-		TurnEndReason:      "completed",
+		TraceEvents:        7,
+		TraceEventTypes: map[string]int{
+			"message.delta": 3,
+			"tool.request":  2,
+			"tool.result":   2,
+		},
+		TurnEndReason: "completed",
 		ToolStats: agenteval.ToolRuntimeStats{
 			ToolArgsRepaired:        1,
 			ToolNameCanonicalized:   1,
@@ -531,6 +537,9 @@ func TestBatchSummaryAggregatesRuntimeMetrics(t *testing.T) {
 	if !strings.Contains(out.String(), "compactions=1,reactive=1,removed=32,summary_bytes=2048") {
 		t.Fatalf("summary output missing context compaction rollup:\n%s", out.String())
 	}
+	if !strings.Contains(out.String(), "trace_events=7 trace_event_types=message.delta:3,tool.request:2,tool.result:2") {
+		t.Fatalf("summary output missing trace event rollup:\n%s", out.String())
+	}
 	if !strings.Contains(out.String(), "tool_failure_hint[invalid_args]") || !strings.Contains(out.String(), "tool_failure_hint[timeout]") {
 		t.Fatalf("summary output missing tool failure hints:\n%s", out.String())
 	}
@@ -554,6 +563,9 @@ func TestBatchSummaryAggregatesRuntimeMetrics(t *testing.T) {
 	}
 	if summary.TraceSchemaVersions[1] != 2 {
 		t.Fatalf("TraceSchemaVersions = %#v, want version 1 count 2", summary.TraceSchemaVersions)
+	}
+	if summary.TraceEvents != 7 || !reflect.DeepEqual(summary.TraceEventTypes, map[string]int{"message.delta": 3, "tool.request": 2, "tool.result": 2}) {
+		t.Fatalf("trace events = %d %#v", summary.TraceEvents, summary.TraceEventTypes)
 	}
 	if summary.ToolRepairNotes != 5 {
 		t.Fatalf("ToolRepairNotes = %d, want 5", summary.ToolRepairNotes)
@@ -630,9 +642,15 @@ func TestPrintBatchResultJSONL(t *testing.T) {
 		OK:                 true,
 		Duration:           1500 * time.Millisecond,
 		TraceSchemaVersion: 1,
-		TurnEndReason:      "completed",
-		ToolCalls:          4,
-		WorkspaceRemoved:   true,
+		TraceEvents:        7,
+		TraceEventTypes: map[string]int{
+			"message.delta": 3,
+			"tool.request":  2,
+			"tool.result":   2,
+		},
+		TurnEndReason:    "completed",
+		ToolCalls:        4,
+		WorkspaceRemoved: true,
 		ToolStats: agenteval.ToolRuntimeStats{
 			ToolArgsRepaired:        2,
 			ToolNameCanonicalized:   1,
@@ -724,6 +742,7 @@ func TestPrintBatchResultJSONL(t *testing.T) {
 		"ok":                                  true,
 		"duration_ms":                         float64(1500),
 		"trace_schema_version":                float64(1),
+		"trace_events":                        float64(7),
 		"turn_end_reason":                     "completed",
 		"tool_calls":                          float64(4),
 		"tool_errors":                         float64(1),
@@ -776,6 +795,10 @@ func TestPrintBatchResultJSONL(t *testing.T) {
 	toolFailureKinds, ok := got["tool_failure_by_kind"].(map[string]any)
 	if !ok || toolFailureKinds["blocked"] != float64(1) {
 		t.Fatalf("tool_failure_by_kind = %#v\njson=%s", got["tool_failure_by_kind"], out.String())
+	}
+	traceEventTypes, ok := got["trace_event_types"].(map[string]any)
+	if !ok || traceEventTypes["message.delta"] != float64(3) || traceEventTypes["tool.request"] != float64(2) {
+		t.Fatalf("trace_event_types = %#v\njson=%s", got["trace_event_types"], out.String())
 	}
 	toolFailureHints, ok := got["tool_failure_hints"].(map[string]any)
 	if !ok || !strings.Contains(fmt.Sprint(toolFailureHints["blocked"]), "direct web_fetch") {
@@ -1257,6 +1280,8 @@ func TestPrintBatchSummaryJSONL(t *testing.T) {
 		VerifierOutputTruncated:    1,
 		VerifierOutputOmittedBytes: 1024,
 		TraceSchemaVersions:        map[int]int{1: 2},
+		TraceEvents:                12,
+		TraceEventTypes:            map[string]int{"message.delta": 4, "tool.request": 4, "tool.result": 4},
 		InputTokens:                90,
 		OutputTokens:               20,
 		EndCompleted:               1,
@@ -1316,6 +1341,7 @@ func TestPrintBatchSummaryJSONL(t *testing.T) {
 		"verifier_failed":               float64(1),
 		"verifier_output_truncated":     float64(1),
 		"verifier_output_omitted_bytes": float64(1024),
+		"trace_events":                  float64(12),
 		"input_tokens":                  float64(90),
 		"output_tokens":                 float64(20),
 		"end_completed":                 float64(1),
@@ -1347,6 +1373,10 @@ func TestPrintBatchSummaryJSONL(t *testing.T) {
 	}
 	if traceSchemaVersions["1"] != float64(2) {
 		t.Fatalf("trace_schema_versions = %#v", traceSchemaVersions)
+	}
+	traceEventTypes, ok := got["trace_event_types"].(map[string]any)
+	if !ok || traceEventTypes["message.delta"] != float64(4) || traceEventTypes["tool.result"] != float64(4) {
+		t.Fatalf("trace_event_types = %#v\njson=%s", got["trace_event_types"], out.String())
 	}
 	repairKinds, ok := got["tool_repair_by_kind"].(map[string]any)
 	if !ok {
