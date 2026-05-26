@@ -1154,6 +1154,19 @@ func TestWriteScenarioDebugArtifactsIndexesTraceAndFinalText(t *testing.T) {
 	if err := os.WriteFile(tracePath, []byte(`{"type":"trace.meta","data":{"schema_version":1}}`+"\n"), 0o644); err != nil {
 		t.Fatal(err)
 	}
+	focusedTranscript := filepath.Join(workspace, ".affentctl", "focused-tasks", "debug-session", "focused_alpha.jsonl")
+	subagentTranscript := filepath.Join(workspace, ".affentctl", "subagents", "debug-session", "subagent_beta.jsonl")
+	for path, body := range map[string]string{
+		focusedTranscript:  `{"role":"system","content":"focused child"}` + "\n",
+		subagentTranscript: `{"role":"system","content":"subagent child"}` + "\n",
+	} {
+		if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(path, []byte(body), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
 	res := BatchResult{
 		BatchScenario:    "debug-case",
 		Workspace:        workspace,
@@ -1408,6 +1421,13 @@ func TestWriteScenarioDebugArtifactsIndexesTraceAndFinalText(t *testing.T) {
 		manifest.ContextCompactionExamples[0].Reason != "context_overflow" {
 		t.Fatalf("manifest context compaction examples = %+v", manifest.ContextCompactionExamples)
 	}
+	if len(manifest.ChildTranscripts) != 2 ||
+		manifest.ChildTranscripts[0].Kind != "focused_task" ||
+		manifest.ChildTranscripts[0].Path != ".affentctl/focused-tasks/debug-session/focused_alpha.jsonl" ||
+		manifest.ChildTranscripts[1].Kind != "subagent" ||
+		manifest.ChildTranscripts[1].Path != ".affentctl/subagents/debug-session/subagent_beta.jsonl" {
+		t.Fatalf("manifest child transcript refs = %+v", manifest.ChildTranscripts)
+	}
 	if manifest.Metrics.ToolCalls != 5 ||
 		manifest.Metrics.ToolErrors != 1 ||
 		manifest.Metrics.LoopGuardInterventions != 1 ||
@@ -1460,6 +1480,10 @@ func TestWriteScenarioDebugArtifactsIndexesTraceAndFinalText(t *testing.T) {
 		"runtime_error_by_kind: `llm_timeout=1`",
 		"runtime_error_example[llm_timeout]: llm stream timed out after first token",
 		"loop_guard: `1` intervention(s), `0` forced no-tools",
+		"child_transcripts: `2` indexed",
+		"## Child Transcripts",
+		"kind=`focused_task` path=`.affentctl/focused-tasks/debug-session/focused_alpha.jsonl`",
+		"kind=`subagent` path=`.affentctl/subagents/debug-session/subagent_beta.jsonl`",
 		"evidence: `1/2` verified, network=`1`, partial=`1`, discovery=`1`",
 		"recall: calls=`1`, results=`2`, context=`1`, terms=`2`",
 		"context: compactions=`1`, reactive=`1`, removed_messages=`12`, summary_bytes=`512`",

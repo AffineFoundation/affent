@@ -66,6 +66,7 @@ func renderDebugTimeline(res BatchResult, scenario BatchScenario, trace *Trace) 
 		}
 	}
 	renderTimelineDebugBrief(&b, res)
+	renderTimelineChildTranscripts(&b, res.ChildTranscripts)
 
 	b.WriteString("\n## Prompt\n\n")
 	b.WriteString("```text\n")
@@ -187,6 +188,9 @@ func renderTimelineDebugBrief(b *strings.Builder, res BatchResult) {
 			res.Delegation.SubagentErrors,
 		)
 	}
+	if len(res.ChildTranscripts) > 0 {
+		fmt.Fprintf(b, "- child_transcripts: `%d` indexed; inspect Child Transcripts for isolated child work.\n", len(res.ChildTranscripts))
+	}
 	if res.Plan.HasAny() {
 		fmt.Fprintf(b, "- plan: calls=`%d`, errors=`%d`, actions=`%s`; inspect plan state if resume quality drifted.\n",
 			res.Plan.Calls,
@@ -234,6 +238,16 @@ func renderTimelineDebugBrief(b *strings.Builder, res BatchResult) {
 			res.ToolTruncation.ResultsOmittedBytes,
 			res.ToolTruncation.ResultArtifacts,
 		)
+	}
+}
+
+func renderTimelineChildTranscripts(b *strings.Builder, refs []DebugTranscriptRef) {
+	if len(refs) == 0 {
+		return
+	}
+	b.WriteString("\n## Child Transcripts\n\n")
+	for _, ref := range refs {
+		fmt.Fprintf(b, "- kind=`%s` path=`%s` bytes=`%d`\n", ref.Kind, ref.Path, ref.Bytes)
 	}
 }
 

@@ -706,6 +706,10 @@ When rolling compaction later summarizes the session, `run_task` and
 (`summary`/`findings` or `report` plus bounded metadata and tool-call names)
 instead of raw JSON, so long sessions preserve the evidence the parent acted on
 without paying to re-summarize child transcripts or bulky response metadata.
+Eval debug manifests index the retained child transcript paths and sizes under
+`child_transcripts`, and timelines include a `Child Transcripts` section, so
+operators can jump to isolated child work without pushing transcript contents
+back into the parent model context.
 `web_extract` is the focused-task variant for page-level reading: use it when
 one page or a small bounded set of pages contains too much raw text for the
 parent turn, so the child keeps the evidence compact and the parent only sees
@@ -790,8 +794,9 @@ workspace: `affenteval-debug.json`, `affenteval-timeline.md`,
 is the human-readable index for debugging: it links the raw trace, starts with
 a `Debug Brief` for failed or diagnostic-heavy runs, shows the redacted
 `affentctl` command argv, trace event type counts, effective runtime surface,
-tool calls with args/result previews, truncation/artifact pointers, loop
-decisions, context compactions, and runtime errors. By default, eval
+tool calls with args/result previews, child transcript refs,
+truncation/artifact pointers, loop decisions, context compactions, and runtime
+errors. By default, eval
 traces pass `affentctl --trace-skip-deltas` so token
 streaming deltas do not bury the tool timeline; use `--trace-deltas` only for
 deep provider/stream debugging when the raw `message.delta` sequence matters.

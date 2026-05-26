@@ -29,6 +29,7 @@ const (
 	maxDebugToolTruncationExamples = 5
 	maxDebugSourceAccessExamples   = 5
 	maxDebugMemoryUpdateExamples   = 5
+	maxDebugChildTranscriptRefs    = 20
 	maxTraceLineBytes              = jsonl.DefaultMaxRecordBytes
 )
 
@@ -165,6 +166,7 @@ type BatchResult struct {
 	WorkspaceRemoved       bool
 	CleanupError           string
 	TraceDeltas            bool
+	ChildTranscripts       []DebugTranscriptRef
 	// Delegation aggregates focused-task / subagent calls observed
 	// in the trace. Zero-value when the scenario used no delegation
 	// tool; HasAny() reports whether the block is worth surfacing.
@@ -203,9 +205,16 @@ type DebugManifest struct {
 	MemoryUpdateExamples      []MemoryUpdateExample      `json:"memory_update_examples,omitempty"`
 	ToolTruncationExamples    []ToolTruncationExample    `json:"tool_truncation_examples,omitempty"`
 	ContextCompactionExamples []ContextCompaction        `json:"context_compaction_examples,omitempty"`
+	ChildTranscripts          []DebugTranscriptRef       `json:"child_transcripts,omitempty"`
 	Metrics                   DebugMetrics               `json:"metrics"`
 	RuntimeSurface            *sse.RuntimeSurfacePayload `json:"runtime_surface,omitempty"`
 	GeneratedAt               string                     `json:"generated_at"`
+}
+
+type DebugTranscriptRef struct {
+	Kind  string `json:"kind"`
+	Path  string `json:"path"`
+	Bytes int64  `json:"bytes,omitempty"`
 }
 
 type DebugMetrics struct {
@@ -507,6 +516,9 @@ func writeScenarioDebugArtifacts(res *BatchResult, scenario BatchScenario, stdou
 	if trace != nil && len(res.ToolTruncationExamples) == 0 {
 		res.ToolTruncationExamples = trace.ToolTruncationExamples(maxDebugToolTruncationExamples)
 	}
+	if len(res.ChildTranscripts) == 0 {
+		res.ChildTranscripts = collectDebugChildTranscripts(res.Workspace, maxDebugChildTranscriptRefs)
+	}
 	finalTextPath := filepath.Join(res.Workspace, "affenteval-final.txt")
 	if err := os.WriteFile(finalTextPath, []byte(res.FinalText), 0o644); err != nil {
 		return err
@@ -551,6 +563,7 @@ func writeScenarioDebugArtifacts(res *BatchResult, scenario BatchScenario, stdou
 		MemoryUpdateExamples:      append([]MemoryUpdateExample(nil), res.MemoryUpdateExamples...),
 		ToolTruncationExamples:    append([]ToolTruncationExample(nil), res.ToolTruncationExamples...),
 		ContextCompactionExamples: append([]ContextCompaction(nil), res.ContextCompactions.Examples...),
+		ChildTranscripts:          append([]DebugTranscriptRef(nil), res.ChildTranscripts...),
 		RuntimeSurface:            cloneRuntimeSurface(res.RuntimeSurface),
 		Metrics: DebugMetrics{
 			TurnEndReason:              res.TurnEndReason,
@@ -602,6 +615,53 @@ func writeScenarioDebugArtifacts(res *BatchResult, scenario BatchScenario, stdou
 	}
 	res.DebugManifestPath = manifestPath
 	return nil
+}
+
+func collectDebugChildTranscripts(workspace string, maxRefs int) []DebugTranscriptRef {
+	if strings.TrimSpace(workspace) == "" || maxRefs <= 0 {
+		return nil
+	}
+	var refs []DebugTranscriptRef
+	for _, root := range []struct {
+		kind string
+		path string
+	}{
+		{kind: "focused_task", path: filepath.Join(workspace, ".affentctl", "focused-tasks")},
+		{kind: "subagent", path: filepath.Join(workspace, ".affentctl", "subagents")},
+	} {
+		_ = filepath.WalkDir(root.path, func(path string, d fs.DirEntry, err error) error {
+			if err != nil || d == nil {
+				return nil
+			}
+			if d.IsDir() || !strings.HasSuffix(d.Name(), ".jsonl") {
+				return nil
+			}
+			info, err := d.Info()
+			if err != nil {
+				return nil
+			}
+			rel, err := filepath.Rel(workspace, path)
+			if err != nil {
+				rel = path
+			}
+			refs = append(refs, DebugTranscriptRef{
+				Kind:  root.kind,
+				Path:  filepath.ToSlash(rel),
+				Bytes: info.Size(),
+			})
+			return nil
+		})
+	}
+	sort.Slice(refs, func(i, j int) bool {
+		if refs[i].Kind != refs[j].Kind {
+			return refs[i].Kind < refs[j].Kind
+		}
+		return refs[i].Path < refs[j].Path
+	})
+	if len(refs) > maxRefs {
+		return refs[:maxRefs]
+	}
+	return refs
 }
 
 func latestRuntimeSurface(surfaces []sse.RuntimeSurfacePayload) *sse.RuntimeSurfacePayload {
