@@ -69,6 +69,50 @@ func TestFormatEvent_Roles(t *testing.T) {
 	}
 }
 
+func TestFormatEvent_CompactsDelegationToolResults(t *testing.T) {
+	t.Run("subagent result keeps report and metadata without raw JSON", func(t *testing.T) {
+		raw := `{"report":"Conclusion:\nAffine SN120 evidence found.\nEvidence:\n- metrics/tao-app-snapshot.txt shows Price 0.06342 T.","ok":true,"turn_end_reason":"completed","mode":"research","child_session_id":"subagent_123","depth":1,"max_depth":2,"usage":{"input_tokens":100,"output_tokens":25},"tool_calls":[{"tool":"repo_search","args":{"query":"SN120"}},{"tool":"read_file","args":{"path":"metrics/tao-app-snapshot.txt"}}]}`
+		got := formatEvent(ChatMessage{Role: "tool", Name: SubagentToolName, Content: raw})
+		for _, want := range []string{
+			"TOOL_RESULT[subagent_run]",
+			"ok=true mode=research",
+			"child_session_id=subagent_123",
+			"report:",
+			"Affine SN120 evidence found",
+			"tool_calls:",
+			"repo_search query=SN120",
+			"read_file path=metrics/tao-app-snapshot.txt",
+		} {
+			if !strings.Contains(got, want) {
+				t.Fatalf("compact subagent result missing %q:\n%s", want, got)
+			}
+		}
+		if strings.Contains(got, `"tool_calls"`) || strings.Contains(got, `"report"`) {
+			t.Fatalf("compact subagent result should not expose raw JSON scaffolding:\n%s", got)
+		}
+	})
+
+	t.Run("focused task result keeps summary findings and warnings", func(t *testing.T) {
+		raw := `{"task_type":"web_extract","ok":true,"summary":"extracted subnet snapshot","findings":[{"claim":"Affine is Bittensor SN120","evidence":"page body labels Affine as subnet 120","source":"https://www.tao.app/subnets/120","confidence":"high"},{"claim":"Subnet body price is 0.06342 T","evidence":"body row Price 0.06342 T","source":"https://www.tao.app/subnets/120"}],"warnings":["TAO top-bar price is not the subnet price"],"suggested_next":["verify validator count"],"child_session_id":"focused_123","turn_end_reason":"completed","depth":1,"usage":{"input_tokens":80,"output_tokens":20},"tool_calls":[{"tool":"web_fetch","args":{"url":"https://www.tao.app/subnets/120"}}]}`
+		got := formatEvent(ChatMessage{Role: "tool", Name: FocusedTaskToolName, Content: raw})
+		for _, want := range []string{
+			"TOOL_RESULT[run_task]",
+			"ok=true task_type=web_extract",
+			"summary: extracted subnet snapshot",
+			"Affine is Bittensor SN120 source=https://www.tao.app/subnets/120",
+			"TAO top-bar price is not the subnet price",
+			"web_fetch url=https://www.tao.app/subnets/120",
+		} {
+			if !strings.Contains(got, want) {
+				t.Fatalf("compact focused-task result missing %q:\n%s", want, got)
+			}
+		}
+		if strings.Contains(got, `"findings"`) || strings.Contains(got, `"summary"`) {
+			t.Fatalf("compact focused-task result should not expose raw JSON scaffolding:\n%s", got)
+		}
+	})
+}
+
 // TestTruncateChars pins the byte-cap + UTF-8-safe truncation +
 // "...(truncated)" marker. Called both from formatEvent and from
 // the summarizer prompt body — a regression would silently truncate

@@ -2,6 +2,7 @@ package agent
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"strings"
@@ -42,6 +43,8 @@ const DefaultSummaryKeepLast = 10
 const (
 	compactReasoningMaxChars = 500
 	compactToolArgsMaxChars  = 300
+	compactDelegationMaxText = 6000
+	compactDelegationMaxList = 8
 )
 
 // LLMSummaryCompactor implements rolling LLM summarization. Layout
@@ -329,11 +332,208 @@ func formatEvent(m ChatMessage) string {
 			fmt.Fprintf(&b, "\n  → tool %s args=%s", tc.Function.Name, truncateChars(tc.Function.Arguments, compactToolArgsMaxChars))
 		}
 	case "tool":
-		fmt.Fprintf(&b, "TOOL_RESULT[%s]: %s", m.Name, m.Content)
+		fmt.Fprintf(&b, "TOOL_RESULT[%s]: %s", m.Name, compactToolResultForSummary(m.Name, m.Content))
 	default:
 		fmt.Fprintf(&b, "%s: %s", m.Role, m.Content)
 	}
 	return b.String()
+}
+
+func compactToolResultForSummary(toolName, content string) string {
+	switch toolName {
+	case SubagentToolName:
+		if out, ok := compactSubagentResultForSummary(content); ok {
+			return out
+		}
+	case FocusedTaskToolName:
+		if out, ok := compactFocusedTaskResultForSummary(content); ok {
+			return out
+		}
+	}
+	return content
+}
+
+func compactSubagentResultForSummary(content string) (string, bool) {
+	var resp subagentResponse
+	if err := json.Unmarshal([]byte(content), &resp); err != nil {
+		return "", false
+	}
+	if strings.TrimSpace(resp.Report) == "" && resp.ChildSessionID == "" && resp.Mode == "" {
+		return "", false
+	}
+	var b strings.Builder
+	fmt.Fprintf(&b, "ok=%t", resp.OK)
+	if resp.Mode != "" {
+		fmt.Fprintf(&b, " mode=%s", resp.Mode)
+	}
+	if resp.TurnEndReason != "" {
+		fmt.Fprintf(&b, " turn_end=%s", resp.TurnEndReason)
+	}
+	if resp.ChildSessionID != "" {
+		fmt.Fprintf(&b, " child_session_id=%s", resp.ChildSessionID)
+	}
+	if resp.Depth > 0 || resp.MaxDepth > 0 {
+		fmt.Fprintf(&b, " depth=%d/%d", resp.Depth, resp.MaxDepth)
+	}
+	if resp.Usage.InputTokens > 0 || resp.Usage.OutputTokens > 0 {
+		fmt.Fprintf(&b, " usage=%d/%d", resp.Usage.InputTokens, resp.Usage.OutputTokens)
+	}
+	if strings.TrimSpace(resp.Error) != "" {
+		fmt.Fprintf(&b, "\nerror: %s", textutil.Preview(strings.TrimSpace(resp.Error), 500))
+	}
+	if len(resp.LoopErrors) > 0 {
+		b.WriteString("\nloop_errors:")
+		appendCompactStringList(&b, resp.LoopErrors)
+	}
+	if strings.TrimSpace(resp.Report) != "" {
+		b.WriteString("\nreport:\n")
+		b.WriteString(textutil.Preview(strings.TrimSpace(resp.Report), compactDelegationMaxText))
+	}
+	if len(resp.ToolCalls) > 0 {
+		b.WriteString("\ntool_calls:")
+		appendCompactDelegationToolCalls(&b, resp.ToolCalls)
+	}
+	return b.String(), true
+}
+
+func compactFocusedTaskResultForSummary(content string) (string, bool) {
+	var resp FocusedTaskResult
+	if err := json.Unmarshal([]byte(content), &resp); err != nil {
+		return "", false
+	}
+	if strings.TrimSpace(resp.Summary) == "" && len(resp.Findings) == 0 && resp.ChildSessionID == "" {
+		return "", false
+	}
+	var b strings.Builder
+	fmt.Fprintf(&b, "ok=%t", resp.OK)
+	if resp.TaskType != "" {
+		fmt.Fprintf(&b, " task_type=%s", resp.TaskType)
+	}
+	if resp.TurnEndReason != "" {
+		fmt.Fprintf(&b, " turn_end=%s", resp.TurnEndReason)
+	}
+	if resp.ChildSessionID != "" {
+		fmt.Fprintf(&b, " child_session_id=%s", resp.ChildSessionID)
+	}
+	if resp.Depth > 0 {
+		fmt.Fprintf(&b, " depth=%d", resp.Depth)
+	}
+	if resp.Usage.InputTokens > 0 || resp.Usage.OutputTokens > 0 {
+		fmt.Fprintf(&b, " usage=%d/%d", resp.Usage.InputTokens, resp.Usage.OutputTokens)
+	}
+	if strings.TrimSpace(resp.Error) != "" {
+		fmt.Fprintf(&b, "\nerror: %s", textutil.Preview(strings.TrimSpace(resp.Error), 500))
+	}
+	if strings.TrimSpace(resp.Summary) != "" {
+		fmt.Fprintf(&b, "\nsummary: %s", textutil.Preview(strings.TrimSpace(resp.Summary), compactDelegationMaxText))
+	}
+	if len(resp.Findings) > 0 {
+		b.WriteString("\nfindings:")
+		limit := len(resp.Findings)
+		if limit > compactDelegationMaxList {
+			limit = compactDelegationMaxList
+		}
+		for _, f := range resp.Findings[:limit] {
+			b.WriteString("\n- ")
+			b.WriteString(textutil.Preview(strings.TrimSpace(f.Claim), 500))
+			if f.Source != "" {
+				b.WriteString(" source=")
+				b.WriteString(textutil.Preview(strings.TrimSpace(f.Source), 240))
+			}
+			if f.Evidence != "" {
+				b.WriteString(" evidence=")
+				b.WriteString(textutil.Preview(strings.TrimSpace(f.Evidence), 700))
+			}
+			if f.Confidence != "" {
+				b.WriteString(" confidence=")
+				b.WriteString(strings.TrimSpace(f.Confidence))
+			}
+			if f.Severity != "" {
+				b.WriteString(" severity=")
+				b.WriteString(strings.TrimSpace(f.Severity))
+			}
+		}
+		if len(resp.Findings) > limit {
+			fmt.Fprintf(&b, "\n- ... %d more finding(s)", len(resp.Findings)-limit)
+		}
+	}
+	if len(resp.Warnings) > 0 {
+		b.WriteString("\nwarnings:")
+		appendCompactStringList(&b, resp.Warnings)
+	}
+	if len(resp.NotFound) > 0 {
+		b.WriteString("\nnot_found:")
+		appendCompactStringList(&b, resp.NotFound)
+	}
+	if len(resp.SuggestedNext) > 0 {
+		b.WriteString("\nsuggested_next:")
+		appendCompactStringList(&b, resp.SuggestedNext)
+	}
+	if len(resp.ToolCalls) > 0 {
+		b.WriteString("\ntool_calls:")
+		appendCompactDelegationToolCalls(&b, resp.ToolCalls)
+	}
+	return b.String(), true
+}
+
+func appendCompactStringList(b *strings.Builder, items []string) {
+	limit := len(items)
+	if limit > compactDelegationMaxList {
+		limit = compactDelegationMaxList
+	}
+	for _, item := range items[:limit] {
+		if strings.TrimSpace(item) == "" {
+			continue
+		}
+		b.WriteString("\n- ")
+		b.WriteString(textutil.Preview(strings.TrimSpace(item), 500))
+	}
+	if len(items) > limit {
+		fmt.Fprintf(b, "\n- ... %d more item(s)", len(items)-limit)
+	}
+}
+
+func appendCompactDelegationToolCalls(b *strings.Builder, calls []subagentToolCall) {
+	limit := len(calls)
+	if limit > compactDelegationMaxList {
+		limit = compactDelegationMaxList
+	}
+	for _, call := range calls[:limit] {
+		b.WriteString("\n- ")
+		b.WriteString(call.Tool)
+		if args := compactDelegationArgs(call.Args); args != "" {
+			b.WriteByte(' ')
+			b.WriteString(args)
+		}
+		if call.ExitCode != 0 {
+			fmt.Fprintf(b, " exit=%d", call.ExitCode)
+		}
+	}
+	if len(calls) > limit {
+		fmt.Fprintf(b, "\n- ... %d more tool call(s)", len(calls)-limit)
+	}
+}
+
+func compactDelegationArgs(args map[string]any) string {
+	if len(args) == 0 {
+		return ""
+	}
+	for _, key := range []string{"path", "command", "query", "url", "task_type", "mode", "objective", "task"} {
+		value, ok := args[key]
+		if !ok {
+			continue
+		}
+		s, ok := value.(string)
+		if !ok || strings.TrimSpace(s) == "" {
+			continue
+		}
+		return key + "=" + textutil.Preview(strings.TrimSpace(s), 240)
+	}
+	raw, err := json.Marshal(args)
+	if err != nil {
+		return textutil.Preview(fmt.Sprint(args), 240)
+	}
+	return textutil.Preview(string(raw), 240)
 }
 
 func truncateChars(s string, n int) string {
