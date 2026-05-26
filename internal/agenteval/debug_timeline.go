@@ -376,6 +376,35 @@ func renderTimelineScenarioExpectations(b *strings.Builder, scenario BatchScenar
 			fmt.Fprintf(b, "- required_source_access: `%s`\n", strings.Join(parts, " "))
 		}
 	}
+	if len(exp.RequiredSessionSearch) > 0 {
+		for _, req := range exp.RequiredSessionSearch {
+			min := req.Min
+			if min <= 0 {
+				min = 1
+			}
+			var parts []string
+			if req.QueryContains != "" {
+				parts = append(parts, fmt.Sprintf("query_contains=%s", timelineInline(req.QueryContains, 160)))
+			}
+			if req.SessionID != "" {
+				parts = append(parts, fmt.Sprintf("session=%s", req.SessionID))
+			}
+			if req.SnippetContains != "" {
+				parts = append(parts, fmt.Sprintf("snippet_contains=%s", timelineInline(req.SnippetContains, 160)))
+			}
+			if len(req.MatchedTerms) > 0 {
+				parts = append(parts, fmt.Sprintf("terms=%s", strings.Join(req.MatchedTerms, ",")))
+			}
+			if req.ContextIncluded {
+				parts = append(parts, "context=true")
+			}
+			if req.TurnIdx > 0 {
+				parts = append(parts, fmt.Sprintf("turn=%d", req.TurnIdx))
+			}
+			parts = append(parts, fmt.Sprintf("min=%d", min))
+			fmt.Fprintf(b, "- required_session_search: `%s`\n", strings.Join(parts, " "))
+		}
+	}
 	writeTimelineStringList(b, "required_final_text", exp.RequiredFinalText)
 	writeTimelineStringList(b, "forbidden_final_text", exp.ForbiddenFinalText)
 	writeTimelineStringList(b, "required_truncated_results", exp.RequiredTruncatedResults)

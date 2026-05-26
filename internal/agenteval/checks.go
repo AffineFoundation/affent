@@ -620,6 +620,102 @@ func sourceAccessExampleSummary(ex SourceAccessExample) string {
 	return strings.Join(parts, " ")
 }
 
+func SessionSearchMatchAtLeast(queryContains, sessionID, snippetContains string, matchedTerms []string, contextIncluded bool, turnIdx int, min int) Check {
+	if min <= 0 {
+		min = 1
+	}
+	nameParts := []string{"session_search_match_at_least"}
+	for _, part := range []string{queryContains, sessionID, snippetContains, strings.Join(matchedTerms, ","), fmt.Sprint(contextIncluded), fmt.Sprint(turnIdx), fmt.Sprint(min)} {
+		part = strings.TrimSpace(part)
+		if part == "" {
+			part = "*"
+		}
+		nameParts = append(nameParts, previewSubstr(part, 24))
+	}
+	return Check{
+		Name: strings.Join(nameParts, ":"),
+		Eval: func(t Trace) CheckResult {
+			examples := t.SessionSearchExamples(len(t.Tools))
+			count := 0
+			var matched []string
+			var observed []string
+			for _, ex := range examples {
+				if sessionSearchRequirementMatches(ex, queryContains, sessionID, snippetContains, matchedTerms, contextIncluded, turnIdx) {
+					count++
+					if len(matched) < 5 {
+						matched = append(matched, sessionSearchExampleSummary(ex))
+					}
+					continue
+				}
+				if len(observed) < 5 {
+					observed = append(observed, sessionSearchExampleSummary(ex))
+				}
+			}
+			if count >= min {
+				return CheckResult{Pass: true, Detail: fmt.Sprintf("matched %d session_search hit(s): %v", count, matched)}
+			}
+			return CheckResult{
+				Pass: false,
+				Detail: fmt.Sprintf(
+					"expected at least %d session_search hit(s) matching query_contains=%q session_id=%q snippet_contains=%q matched_terms=%v context_included=%t turn_idx=%d, got %d; observed=%v",
+					min, queryContains, sessionID, snippetContains, matchedTerms, contextIncluded, turnIdx, count, observed,
+				),
+			}
+		},
+	}
+}
+
+func sessionSearchRequirementMatches(ex SessionSearchExample, queryContains, sessionID, snippetContains string, matchedTerms []string, contextIncluded bool, turnIdx int) bool {
+	if queryContains = strings.TrimSpace(queryContains); queryContains != "" && !strings.Contains(ex.Query, queryContains) {
+		return false
+	}
+	if sessionID = strings.TrimSpace(sessionID); sessionID != "" && ex.SessionID != sessionID {
+		return false
+	}
+	if snippetContains = strings.TrimSpace(snippetContains); snippetContains != "" && !strings.Contains(ex.SnippetPreview, snippetContains) {
+		return false
+	}
+	if contextIncluded && !ex.ContextIncluded {
+		return false
+	}
+	if turnIdx > 0 && ex.TurnIdx != turnIdx {
+		return false
+	}
+	for _, term := range matchedTerms {
+		term = strings.TrimSpace(strings.ToLower(term))
+		if term == "" {
+			continue
+		}
+		if !containsString(ex.MatchedTerms, term) {
+			return false
+		}
+	}
+	return true
+}
+
+func sessionSearchExampleSummary(ex SessionSearchExample) string {
+	parts := []string{
+		fmt.Sprintf("tool#%d", ex.ToolIndex),
+		"query=" + previewSubstr(ex.Query, 80),
+	}
+	if ex.SessionID != "" {
+		parts = append(parts, "session="+ex.SessionID)
+	}
+	if ex.TurnIdx > 0 {
+		parts = append(parts, fmt.Sprintf("turn=%d", ex.TurnIdx))
+	}
+	if ex.ContextIncluded {
+		parts = append(parts, "context=true")
+	}
+	if len(ex.MatchedTerms) > 0 {
+		parts = append(parts, "terms="+strings.Join(ex.MatchedTerms, ","))
+	}
+	if ex.SnippetPreview != "" {
+		parts = append(parts, "snippet="+previewSubstr(ex.SnippetPreview, 100))
+	}
+	return strings.Join(parts, " ")
+}
+
 func loopDecisionExamples(decisions []LoopDecision, max int) []string {
 	if max <= 0 || len(decisions) == 0 {
 		return nil

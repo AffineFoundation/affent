@@ -78,6 +78,18 @@ type SourceAccessRequirement struct {
 	Min int
 }
 
+type SessionSearchRequirement struct {
+	QueryContains   string
+	SessionID       string
+	SnippetContains string
+	MatchedTerms    []string
+	ContextIncluded bool
+	TurnIdx         int
+	// Min is the required number of matching session_search hits. Values
+	// <=0 default to one so scenarios can spell the common case tersely.
+	Min int
+}
+
 type BatchScenario struct {
 	Name                          string
 	Suites                        []string
@@ -99,6 +111,7 @@ type BatchScenario struct {
 	RequiredLoopDecisionResults   map[string]int
 	RequiredLoopDecisionMatches   []LoopDecisionRequirement
 	RequiredSourceAccess          []SourceAccessRequirement
+	RequiredSessionSearch         []SessionSearchRequirement
 	RequiredContextCompactions    int
 	RequiredReactiveCompactions   int
 	RequiredCompactionRemovedMsgs int
@@ -268,6 +281,7 @@ type DebugScenarioExpectations struct {
 	RequiredToolResultText        map[string][]string                `json:"required_tool_result_text,omitempty"`
 	RequiredToolArgContains       []DebugToolArgContainsRequirement  `json:"required_tool_arg_contains,omitempty"`
 	RequiredSourceAccess          []DebugSourceAccessRequirement     `json:"required_source_access,omitempty"`
+	RequiredSessionSearch         []DebugSessionSearchRequirement    `json:"required_session_search,omitempty"`
 	RequiredCommandBeforeTool     []DebugCommandToolOrderRequirement `json:"required_command_before_tool,omitempty"`
 	RequiredCommandAfterTool      []DebugCommandToolOrderRequirement `json:"required_command_after_tool,omitempty"`
 	RequiredToolOrder             []DebugToolOrderRequirement        `json:"required_tool_order,omitempty"`
@@ -312,6 +326,9 @@ func ExpectationCapabilityNames(exp DebugScenarioExpectations) []string {
 	}
 	if len(exp.RequiredSourceAccess) > 0 {
 		caps["source_access"] = true
+	}
+	if len(exp.RequiredSessionSearch) > 0 {
+		caps["session_search"] = true
 	}
 	for _, req := range exp.RequiredSourceAccess {
 		addExpectationToolCapabilities(caps, req.Tool)
@@ -396,6 +413,9 @@ func expectationRequiredToolNames(exp DebugScenarioExpectations) []string {
 	}
 	for _, req := range exp.RequiredSourceAccess {
 		add(req.Tool)
+	}
+	if len(exp.RequiredSessionSearch) > 0 {
+		add(agent.SessionSearchToolName)
 	}
 	for _, req := range exp.RequiredToolArgContains {
 		add(req.Tool)
@@ -514,6 +534,16 @@ type DebugSourceAccessRequirement struct {
 	SourceMethod         string `json:"source_method,omitempty"`
 	JSONPath             string `json:"json_path,omitempty"`
 	Min                  int    `json:"min,omitempty"`
+}
+
+type DebugSessionSearchRequirement struct {
+	QueryContains   string   `json:"query_contains,omitempty"`
+	SessionID       string   `json:"session_id,omitempty"`
+	SnippetContains string   `json:"snippet_contains,omitempty"`
+	MatchedTerms    []string `json:"matched_terms,omitempty"`
+	ContextIncluded bool     `json:"context_included,omitempty"`
+	TurnIdx         int      `json:"turn_idx,omitempty"`
+	Min             int      `json:"min,omitempty"`
 }
 
 type DebugTranscriptRef struct {
@@ -976,6 +1006,18 @@ func debugScenarioExpectations(s BatchScenario) DebugScenarioExpectations {
 			Min:                  req.Min,
 		})
 	}
+	sessionSearchReqs := make([]DebugSessionSearchRequirement, 0, len(s.RequiredSessionSearch))
+	for _, req := range s.RequiredSessionSearch {
+		sessionSearchReqs = append(sessionSearchReqs, DebugSessionSearchRequirement{
+			QueryContains:   req.QueryContains,
+			SessionID:       req.SessionID,
+			SnippetContains: req.SnippetContains,
+			MatchedTerms:    append([]string(nil), req.MatchedTerms...),
+			ContextIncluded: req.ContextIncluded,
+			TurnIdx:         req.TurnIdx,
+			Min:             req.Min,
+		})
+	}
 	loopReqs := make([]DebugLoopDecisionRequirement, 0, len(s.RequiredLoopDecisionMatches))
 	for _, req := range s.RequiredLoopDecisionMatches {
 		loopReqs = append(loopReqs, DebugLoopDecisionRequirement{
@@ -1035,6 +1077,7 @@ func debugScenarioExpectations(s BatchScenario) DebugScenarioExpectations {
 		RequiredToolResultText:        cloneStringSliceMap(s.RequiredToolResultText),
 		RequiredToolArgContains:       reqArgs,
 		RequiredSourceAccess:          sourceReqs,
+		RequiredSessionSearch:         sessionSearchReqs,
 		RequiredCommandBeforeTool:     commandBeforeTool,
 		RequiredCommandAfterTool:      commandAfterTool,
 		RequiredToolOrder:             toolOrders,
@@ -1599,6 +1642,13 @@ func BatchScenarioChecks(scenario BatchScenario) []Check {
 			min = 1
 		}
 		checks = append(checks, SourceAccessMatchWithRequestedAtLeast(req.Status, req.Tool, req.URLContains, req.RequestedURLContains, req.SourceMethod, req.JSONPath, min))
+	}
+	for _, req := range scenario.RequiredSessionSearch {
+		min := req.Min
+		if min <= 0 {
+			min = 1
+		}
+		checks = append(checks, SessionSearchMatchAtLeast(req.QueryContains, req.SessionID, req.SnippetContains, req.MatchedTerms, req.ContextIncluded, req.TurnIdx, min))
 	}
 	if scenario.RequiredContextCompactions > 0 {
 		checks = append(checks, ContextCompactionsAtLeast(scenario.RequiredContextCompactions))

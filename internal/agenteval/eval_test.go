@@ -440,6 +440,9 @@ func TestBatchScenarioChecks_UsesSharedCheckLibrary(t *testing.T) {
 		RequiredSourceAccess: []SourceAccessRequirement{
 			{Status: "network", Tool: "browser_network_read", URLContains: "taostats.io", RequestedURLContains: "taostats.io/subnets/120", SourceMethod: "network_xhr_fetch"},
 		},
+		RequiredSessionSearch: []SessionSearchRequirement{
+			{QueryContains: "Alpha Coast", SessionID: "market-alpha", SnippetContains: "HIST-STOCK-44", MatchedTerms: []string{"alpha", "coast"}, ContextIncluded: true},
+		},
 		RequiredContextCompactions:    1,
 		RequiredReactiveCompactions:   1,
 		RequiredCompactionRemovedMsgs: 20,
@@ -488,6 +491,7 @@ func TestBatchScenarioChecks_UsesSharedCheckLibrary(t *testing.T) {
 		"loop_decision_result_at_least:defer:1",
 		"loop_decision_match_at_least:evidence_quality:defer:source_access_dynamic_partial:1",
 		"source_access_match_at_least:network:browser_network_read:taostats.io:requested=taostats.io/subnets/120:network_xhr_fetch:*:1",
+		"session_search_match_at_least:Alpha Coast:market-alpha:HIST-STOCK-44:alpha,coast:true:0:1",
 		"context_compactions_at_least:1",
 		"reactive_context_compactions_at_least:1",
 		"context_compaction_removed_messages_at_least:20",
@@ -1199,6 +1203,19 @@ func assertSessionSearchDiagnosticsRequiredForTerms(t *testing.T, scenario Batch
 			t.Fatalf("%s RequiredToolStatsAtLeast[%q] = %d, want %d", scenario.Name, field, scenario.RequiredToolStatsAtLeast[field], min)
 		}
 	}
+	if len(scenario.RequiredSessionSearch) == 0 {
+		t.Fatalf("%s RequiredSessionSearch missing", scenario.Name)
+	}
+	req := scenario.RequiredSessionSearch[0]
+	if !req.ContextIncluded {
+		t.Fatalf("%s RequiredSessionSearch should require context: %+v", scenario.Name, req)
+	}
+	for _, want := range terms {
+		term := strings.Trim(want, `"`)
+		if !stringSliceContains(req.MatchedTerms, term) {
+			t.Fatalf("%s RequiredSessionSearch matched terms = %#v, want %q", scenario.Name, req.MatchedTerms, term)
+		}
+	}
 }
 
 func commandToolOrderContains(values []CommandToolOrderRequirement, want CommandToolOrderRequirement) bool {
@@ -1520,6 +1537,9 @@ func TestWriteScenarioDebugArtifactsIndexesTraceAndFinalText(t *testing.T) {
 		RequiredSourceAccess: []SourceAccessRequirement{
 			{Status: "network", Tool: "browser_network_read", URLContains: "taostats.io/api", RequestedURLContains: "taostats.io/subnets/120", SourceMethod: "network_xhr_fetch", JSONPath: "$.price"},
 		},
+		RequiredSessionSearch: []SessionSearchRequirement{
+			{QueryContains: "Alpha Coast", SessionID: "market-alpha", SnippetContains: "history marker", MatchedTerms: []string{"alpha", "coast"}, ContextIncluded: true, TurnIdx: 4},
+		},
 		RequiredFinalText:             []string{"0.06342 T"},
 		ForbiddenFinalText:            []string{"subnet price $277.32"},
 		RequiredTruncatedResults:      []string{"web_fetch"},
@@ -1574,7 +1594,7 @@ func TestWriteScenarioDebugArtifactsIndexesTraceAndFinalText(t *testing.T) {
 	if len(manifest.Failures) != 1 || manifest.Failures[0] != "missing required evidence" {
 		t.Fatalf("manifest failures = %+v", manifest.Failures)
 	}
-	wantCapabilities := []string{"browser", "context_compaction", "delegation", "memory", "plan", "source_access", "web", "workspace"}
+	wantCapabilities := []string{"browser", "context_compaction", "delegation", "memory", "plan", "session_search", "source_access", "web", "workspace"}
 	if !reflect.DeepEqual(manifest.ExpectationCapabilityNames, wantCapabilities) ||
 		manifest.ExpectationCapabilityOutcome != "failed" ||
 		len(manifest.ExpectationCapabilityPassedNames) != 0 ||
@@ -1619,6 +1639,8 @@ func TestWriteScenarioDebugArtifactsIndexesTraceAndFinalText(t *testing.T) {
 		manifest.Expectations.RequiredToolArgContains[0] != (DebugToolArgContainsRequirement{Tool: "browser_network_read", Arg: "json_path", Substring: "$.price"}) ||
 		len(manifest.Expectations.RequiredSourceAccess) != 1 ||
 		manifest.Expectations.RequiredSourceAccess[0] != (DebugSourceAccessRequirement{Status: "network", Tool: "browser_network_read", URLContains: "taostats.io/api", RequestedURLContains: "taostats.io/subnets/120", SourceMethod: "network_xhr_fetch", JSONPath: "$.price"}) ||
+		len(manifest.Expectations.RequiredSessionSearch) != 1 ||
+		!reflect.DeepEqual(manifest.Expectations.RequiredSessionSearch[0], DebugSessionSearchRequirement{QueryContains: "Alpha Coast", SessionID: "market-alpha", SnippetContains: "history marker", MatchedTerms: []string{"alpha", "coast"}, ContextIncluded: true, TurnIdx: 4}) ||
 		!stringSliceContains(manifest.Expectations.RequiredFinalText, "0.06342 T") ||
 		!stringSliceContains(manifest.Expectations.ForbiddenFinalText, "subnet price $277.32") ||
 		!reflect.DeepEqual(manifest.Expectations.RequiredTruncatedResults, []string{"web_fetch"}) ||
@@ -1793,7 +1815,7 @@ func TestWriteScenarioDebugArtifactsIndexesTraceAndFinalText(t *testing.T) {
 		"kind=`focused_task` path=`.affentctl/focused-tasks/debug-session/focused_alpha.jsonl`",
 		"kind=`subagent` path=`.affentctl/subagents/debug-session/subagent_beta.jsonl`",
 		"## Scenario Expectations",
-		"expectation_capabilities: `browser`, `context_compaction`, `delegation`, `memory`, `plan`, `source_access`, `web`, `workspace` outcome=`failed`",
+		"expectation_capabilities: `browser`, `context_compaction`, `delegation`, `memory`, `plan`, `session_search`, `source_access`, `web`, `workspace` outcome=`failed`",
 		"suites: `long-run`, `live-web`",
 		"runtime: `max_turns=12 compact_trigger=6 compact_keep_last=3`",
 		"checks: `turn_ended_cleanly`",
@@ -1813,6 +1835,7 @@ func TestWriteScenarioDebugArtifactsIndexesTraceAndFinalText(t *testing.T) {
 		"required_loop_decision: `kind=evidence_quality decision=defer trigger=source_access_dynamic_partial min=1`",
 		"required_tool_result_text[browser_network_read]: `SourceAccess:`, `requested_url=`, `source_method=network_xhr_fetch`",
 		"required_source_access: `status=network tool=browser_network_read url_contains=taostats.io/api requested_url_contains=taostats.io/subnets/120 source_method=network_xhr_fetch json_path=$.price min=1`",
+		"required_session_search: `query_contains=Alpha Coast session=market-alpha snippet_contains=history marker terms=alpha,coast context=true turn=4 min=1`",
 		"required_final_text: `0.06342 T`",
 		"forbidden_final_text: `subnet price $277.32`",
 		"required_truncated_results: `web_fetch`",

@@ -473,6 +473,26 @@ func TestSourceAccessMatchAtLeast(t *testing.T) {
 	}
 }
 
+func TestSessionSearchMatchAtLeast(t *testing.T) {
+	trace := Trace{Tools: []ToolCall{
+		{
+			CallID: "s1",
+			Tool:   "session_search",
+			Result: `{"query":"Northstar Biotech Q3","total":1,"results":[{"session_id":"northstar-q3-current","turn_idx":2,"role":"assistant","snippet":"user: Northstar Biotech Q3 review current recovery handoff\nassistant: current decision: recovery marker RECOVER-NSTAR-58, risk label trial-delay.","score":6.5,"matched_terms":["northstar","biotech","q3"],"context_included":true}]}`,
+		},
+	}}
+
+	if res := SessionSearchMatchAtLeast("Northstar Biotech", "northstar-q3-current", "RECOVER-NSTAR-58", []string{"northstar", "biotech"}, true, 2, 1).Eval(trace); !res.Pass {
+		t.Fatalf("expected session search check to pass: %+v", res)
+	}
+	if res := SessionSearchMatchAtLeast("Northstar Biotech", "northstar-q2-old", "RECOVER-NSTAR-58", []string{"northstar"}, true, 0, 1).Eval(trace); res.Pass {
+		t.Fatalf("expected session id mismatch to fail: %+v", res)
+	}
+	if res := SessionSearchMatchAtLeast("Northstar Biotech", "northstar-q3-current", "RECOVER-NSTAR-58", []string{"missing"}, true, 0, 1).Eval(trace); res.Pass {
+		t.Fatalf("expected missing matched term to fail: %+v", res)
+	}
+}
+
 func TestToolRepairKindAtLeast(t *testing.T) {
 	t.Run("uses runtime repair stats", func(t *testing.T) {
 		trace := Trace{ToolStats: ToolRuntimeStats{
