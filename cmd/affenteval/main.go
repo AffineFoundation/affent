@@ -73,6 +73,7 @@ func run(args []string) int {
 		gates             = qualityGateConfig{
 			MinPassRate:                    fs.Float64("min-pass-rate", -1, "optional quality gate: minimum batch pass rate, 0..1"),
 			MinCompletionRate:              fs.Float64("min-completion-rate", -1, "optional quality gate: minimum completed-turn rate, 0..1"),
+			MinMemoryUpdateRate:            fs.Float64("min-memory-update-rate", -1, "optional quality gate: minimum confirmed memory updates per scenario, 0..1"),
 			MinSourceAccessVerifiedRate:    fs.Float64("min-source-access-verified-rate", -1, "optional quality gate: minimum verified SourceAccess rate, 0..1"),
 			MinSessionSearchContextHitRate: fs.Float64("min-session-search-context-hit-rate", -1, "optional quality gate: minimum session_search context-hit rate, 0..1"),
 			MaxLoopGuardInterventionRate:   fs.Float64("max-loop-guard-intervention-rate", -1, "optional quality gate: maximum loop guard intervention rate per tool call, 0..1"),
@@ -210,6 +211,7 @@ success and trace-level process quality.`)
 type qualityGateConfig struct {
 	MinPassRate                    *float64
 	MinCompletionRate              *float64
+	MinMemoryUpdateRate            *float64
 	MinSourceAccessVerifiedRate    *float64
 	MinSessionSearchContextHitRate *float64
 	MaxLoopGuardInterventionRate   *float64
@@ -754,6 +756,7 @@ func validateQualityGateConfig(g qualityGateConfig) error {
 	}{
 		{"--min-pass-rate", g.MinPassRate, true},
 		{"--min-completion-rate", g.MinCompletionRate, true},
+		{"--min-memory-update-rate", g.MinMemoryUpdateRate, true},
 		{"--min-source-access-verified-rate", g.MinSourceAccessVerifiedRate, true},
 		{"--min-session-search-context-hit-rate", g.MinSessionSearchContextHitRate, true},
 		{"--max-loop-guard-intervention-rate", g.MaxLoopGuardInterventionRate, true},
@@ -810,6 +813,7 @@ func qualityGateFailures(s batchSummary, g qualityGateConfig) []string {
 	}
 	checkMin("pass_rate", batchRatio(s.Passed, s.Total), g.MinPassRate, s.Total > 0)
 	checkMin("completion_rate", batchRatio(s.EndCompleted, s.Total), g.MinCompletionRate, s.Total > 0)
+	checkMin("memory_update_rate", batchRatio(s.MemoryUpdates, s.Total), g.MinMemoryUpdateRate, s.Total > 0)
 	checkMin("source_access_verified_rate", batchRatio(s.SourceAccessVerified, s.SourceAccessResults), g.MinSourceAccessVerifiedRate, s.SourceAccessResults > 0)
 	checkMin("session_search_context_hit_rate", batchRatio(s.SessionSearchContextHits, s.SessionSearchResults), g.MinSessionSearchContextHitRate, s.SessionSearchResults > 0)
 	checkMax("loop_guard_intervention_rate", batchRatio(s.LoopGuardInterventions, s.ToolCalls), g.MaxLoopGuardInterventionRate, s.ToolCalls > 0)
@@ -1063,6 +1067,7 @@ type evalJSONLMetadata struct {
 	TimeoutMS                      int64    `json:"timeout_ms"`
 	MinPassRate                    *float64 `json:"min_pass_rate,omitempty"`
 	MinCompletionRate              *float64 `json:"min_completion_rate,omitempty"`
+	MinMemoryUpdateRate            *float64 `json:"min_memory_update_rate,omitempty"`
 	MinSourceAccessVerifiedRate    *float64 `json:"min_source_access_verified_rate,omitempty"`
 	MinSessionSearchContextHitRate *float64 `json:"min_session_search_context_hit_rate,omitempty"`
 	MaxLoopGuardInterventionRate   *float64 `json:"max_loop_guard_intervention_rate,omitempty"`
@@ -1104,6 +1109,7 @@ func evalJSONLMetadataFromConfig(suite, model, providerLabel, executor, temperat
 		TimeoutMS:                      timeout.Milliseconds(),
 		MinPassRate:                    enabledQualityGateValue(gates.MinPassRate),
 		MinCompletionRate:              enabledQualityGateValue(gates.MinCompletionRate),
+		MinMemoryUpdateRate:            enabledQualityGateValue(gates.MinMemoryUpdateRate),
 		MinSourceAccessVerifiedRate:    enabledQualityGateValue(gates.MinSourceAccessVerifiedRate),
 		MinSessionSearchContextHitRate: enabledQualityGateValue(gates.MinSessionSearchContextHitRate),
 		MaxLoopGuardInterventionRate:   enabledQualityGateValue(gates.MaxLoopGuardInterventionRate),
@@ -1248,6 +1254,7 @@ type batchSummaryRecord struct {
 	Failed                      int                                        `json:"failed"`
 	PassRate                    float64                                    `json:"pass_rate"`
 	CompletionRate              float64                                    `json:"completion_rate"`
+	MemoryUpdateRate            float64                                    `json:"memory_update_rate"`
 	ToolErrorRate               *float64                                   `json:"tool_error_rate,omitempty"`
 	LoopGuardInterventionRate   *float64                                   `json:"loop_guard_intervention_rate,omitempty"`
 	ToolRepairSuccessRate       *float64                                   `json:"tool_repair_success_rate,omitempty"`
@@ -1555,6 +1562,7 @@ func printBatchSummaryJSONL(w io.Writer, meta evalJSONLMetadata, s batchSummary,
 		Failed:                      s.Failed,
 		PassRate:                    batchRatio(s.Passed, s.Total),
 		CompletionRate:              batchRatio(s.EndCompleted, s.Total),
+		MemoryUpdateRate:            batchRatio(s.MemoryUpdates, s.Total),
 		ToolErrorRate:               batchOptionalRatio(s.ToolErrors, s.ToolCalls),
 		LoopGuardInterventionRate:   batchOptionalRatio(s.LoopGuardInterventions, s.ToolCalls),
 		ToolRepairSuccessRate:       batchOptionalRatio(s.ToolRepairSucceeded, s.ToolRepairCalls),
@@ -1667,6 +1675,7 @@ func qualityGatesPassedForJSONL(meta evalJSONLMetadata, failures []string) *bool
 func hasQualityGateThresholds(meta evalJSONLMetadata) bool {
 	return meta.MinPassRate != nil ||
 		meta.MinCompletionRate != nil ||
+		meta.MinMemoryUpdateRate != nil ||
 		meta.MinSourceAccessVerifiedRate != nil ||
 		meta.MinSessionSearchContextHitRate != nil ||
 		meta.MaxLoopGuardInterventionRate != nil ||

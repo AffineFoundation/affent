@@ -37,7 +37,7 @@ Shared metadata fields:
 - `runtime_mcp`: optional boolean, present when the eval runner passed a runtime
   MCP config. The config path itself is not written to JSONL.
 - `timeout_ms`: per-scenario timeout in milliseconds.
-- `min_pass_rate`, `min_completion_rate`,
+- `min_pass_rate`, `min_completion_rate`, `min_memory_update_rate`,
   `min_source_access_verified_rate`,
   `min_session_search_context_hit_rate`, `max_loop_guard_intervention_rate`,
   `max_tool_error_rate`,
@@ -229,6 +229,7 @@ Summary records aggregate all scenario records from the same process:
 
 - `scenarios`, `passed`, `failed`, `duration_ms`.
 - Normalized comparison metrics: `pass_rate`, `completion_rate`,
+  `memory_update_rate`,
   `tool_error_rate` and `loop_guard_intervention_rate` when tool calls were observed,
   `tool_repair_success_rate` when repaired/canonicalized tool calls were
   observed, `verifier_pass_rate` when verifier commands ran,

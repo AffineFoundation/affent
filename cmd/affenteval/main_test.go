@@ -281,6 +281,7 @@ func TestQualityGateFailures(t *testing.T) {
 		VerifierRuns:             2,
 		VerifierPassed:           1,
 		RuntimeErrors:            3,
+		MemoryUpdates:            1,
 		SourceAccessResults:      4,
 		SourceAccessVerified:     3,
 		SessionSearchResults:     2,
@@ -295,6 +296,7 @@ func TestQualityGateFailures(t *testing.T) {
 	failures := qualityGateFailures(summary, qualityGateConfig{
 		MinPassRate:                    ptr(0.75),
 		MinCompletionRate:              ptr(0.75),
+		MinMemoryUpdateRate:            ptr(0.75),
 		MinSourceAccessVerifiedRate:    ptr(0.9),
 		MinSessionSearchContextHitRate: ptr(0.75),
 		MaxLoopGuardInterventionRate:   ptr(0.3),
@@ -312,6 +314,7 @@ func TestQualityGateFailures(t *testing.T) {
 		"avg_total_tokens 55.000 > max 40.000",
 		"completion_rate 0.500 < min 0.750",
 		"loop_guard_intervention_rate 0.400 > max 0.300",
+		"memory_update_rate 0.500 < min 0.750",
 		"pass_rate 0.500 < min 0.750",
 		"session_search_context_hit_rate 0.500 < min 0.750",
 		"source_access_verified_rate 0.750 < min 0.900",
@@ -1699,6 +1702,8 @@ func TestPrintBatchSummaryJSONL(t *testing.T) {
 			URL:       "https://metrics.example/api.json",
 			JSONPath:  "$.price",
 		}},
+		MemoryUpdates:             1,
+		MemoryUpdateAdd:           1,
 		SessionSearchCalls:        1,
 		SessionSearchResults:      2,
 		SessionSearchContextHits:  1,
@@ -1765,6 +1770,7 @@ func TestPrintBatchSummaryJSONL(t *testing.T) {
 		"failed":                          float64(1),
 		"pass_rate":                       float64(0.5),
 		"completion_rate":                 float64(0.5),
+		"memory_update_rate":              float64(0.5),
 		"tool_error_rate":                 float64(0.2),
 		"loop_guard_intervention_rate":    float64(0.6),
 		"tool_repair_success_rate":        float64(0.75),
@@ -1791,6 +1797,8 @@ func TestPrintBatchSummaryJSONL(t *testing.T) {
 		"source_access_verified":          float64(3),
 		"source_access_network":           float64(2),
 		"source_access_dynamic_partial":   float64(1),
+		"memory_updates":                  float64(1),
+		"memory_update_add":               float64(1),
 		"session_search_calls":            float64(1),
 		"session_search_results":          float64(2),
 		"session_search_context_hits":     float64(1),
@@ -2010,6 +2018,7 @@ func TestEvalJSONLMetadataFromConfig(t *testing.T) {
 	}
 
 	minPassRate := 0.8
+	minMemoryUpdateRate := 0.2
 	minSourceRate := 0.9
 	minSessionSearchContextHitRate := 0.75
 	maxLoopGuardInterventionRate := 0.15
@@ -2020,6 +2029,7 @@ func TestEvalJSONLMetadataFromConfig(t *testing.T) {
 	maxAvgTotalTokens := 120000.0
 	meta = evalJSONLMetadataFromConfig(" custom ", " flag-model ", " flag-provider ", " sandbox ", " 0.4 ", " 0.9 ", " 512 ", " 42 ", true, " readonly_workspace,web ", true, true, true, true, true, " /tmp/mcp.json ", time.Second, qualityGateConfig{
 		MinPassRate:                    &minPassRate,
+		MinMemoryUpdateRate:            &minMemoryUpdateRate,
 		MinSourceAccessVerifiedRate:    &minSourceRate,
 		MinSessionSearchContextHitRate: &minSessionSearchContextHitRate,
 		MaxLoopGuardInterventionRate:   &maxLoopGuardInterventionRate,
@@ -2032,7 +2042,7 @@ func TestEvalJSONLMetadataFromConfig(t *testing.T) {
 	if meta.Model != "flag-model" || meta.ProviderLabel != "flag-provider" || meta.Executor != "sandbox" || meta.Temperature != "0.4" || meta.TopP != "0.9" || meta.MaxTokens != "512" || meta.Seed != "42" || meta.Suite != "custom" || !meta.RuntimeEvalMode || meta.RuntimeTools != "readonly_workspace,web" || !meta.RuntimeAllTools || !meta.RuntimeMemory || !meta.RuntimeWeb || !meta.RuntimeBrowser || !meta.TraceDeltas || !meta.RuntimeMCP || meta.TimeoutMS != 1000 {
 		t.Fatalf("flag metadata not normalized: %+v", meta)
 	}
-	if meta.MinPassRate == nil || *meta.MinPassRate != 0.8 || meta.MinSourceAccessVerifiedRate == nil || *meta.MinSourceAccessVerifiedRate != 0.9 || meta.MinSessionSearchContextHitRate == nil || *meta.MinSessionSearchContextHitRate != 0.75 || meta.MaxLoopGuardInterventionRate == nil || *meta.MaxLoopGuardInterventionRate != 0.15 || meta.MaxToolErrorRate == nil || *meta.MaxToolErrorRate != 0.05 || meta.MaxToolResultTruncationRate == nil || *meta.MaxToolResultTruncationRate != 0.2 || meta.MaxAvgRuntimeErrors == nil || *meta.MaxAvgRuntimeErrors != 0.05 || meta.MaxAvgContextCompactions == nil || *meta.MaxAvgContextCompactions != 0.1 || meta.MaxAvgTotalTokens == nil || *meta.MaxAvgTotalTokens != 120000 {
+	if meta.MinPassRate == nil || *meta.MinPassRate != 0.8 || meta.MinMemoryUpdateRate == nil || *meta.MinMemoryUpdateRate != 0.2 || meta.MinSourceAccessVerifiedRate == nil || *meta.MinSourceAccessVerifiedRate != 0.9 || meta.MinSessionSearchContextHitRate == nil || *meta.MinSessionSearchContextHitRate != 0.75 || meta.MaxLoopGuardInterventionRate == nil || *meta.MaxLoopGuardInterventionRate != 0.15 || meta.MaxToolErrorRate == nil || *meta.MaxToolErrorRate != 0.05 || meta.MaxToolResultTruncationRate == nil || *meta.MaxToolResultTruncationRate != 0.2 || meta.MaxAvgRuntimeErrors == nil || *meta.MaxAvgRuntimeErrors != 0.05 || meta.MaxAvgContextCompactions == nil || *meta.MaxAvgContextCompactions != 0.1 || meta.MaxAvgTotalTokens == nil || *meta.MaxAvgTotalTokens != 120000 {
 		t.Fatalf("quality gate metadata not preserved: %+v", meta)
 	}
 	if meta.MinCompletionRate != nil || meta.MaxToolContextTruncationRate != nil {
