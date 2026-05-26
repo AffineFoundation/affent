@@ -801,8 +801,8 @@ func TestSelectLongRunSuite(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(scenarios) != 7 {
-		t.Fatalf("long-run suite size = %d, want 7", len(scenarios))
+	if len(scenarios) != 8 {
+		t.Fatalf("long-run suite size = %d, want 8", len(scenarios))
 	}
 	seen := map[string]BatchScenario{}
 	for _, scenario := range scenarios {
@@ -892,6 +892,28 @@ func TestSelectLongRunSuite(t *testing.T) {
 		t.Fatalf("session history final text constraints = forbidden:%#v", sessionHistory.ForbiddenFinalText)
 	}
 	assertSessionSearchDiagnosticsRequired(t, sessionHistory)
+
+	multiTaskRecovery, ok := seen["longrun-multitask-session-recovery"]
+	if !ok {
+		t.Fatalf("long-run suite missing multi-task session recovery scenario")
+	}
+	if multiTaskRecovery.SessionID != "longrun-recovery-reader" {
+		t.Fatalf("multi-task recovery fields = session:%q", multiTaskRecovery.SessionID)
+	}
+	if multiTaskRecovery.RequiredToolCounts["session_search"] != 1 || multiTaskRecovery.MaxSuccessfulToolCallsByTool["session_search"] != 1 {
+		t.Fatalf("multi-task recovery tool constraints = counts:%#v max:%#v", multiTaskRecovery.RequiredToolCounts, multiTaskRecovery.MaxSuccessfulToolCallsByTool)
+	}
+	for _, want := range []string{"RECOVER-NSTAR-58", "trial-delay", "verify FDA calendar", "northstar-q3-current"} {
+		if !stringSliceContains(multiTaskRecovery.RequiredFinalText, want) {
+			t.Fatalf("multi-task recovery RequiredFinalText = %#v, want %q", multiTaskRecovery.RequiredFinalText, want)
+		}
+	}
+	for _, forbidden := range []string{"RECOVER-OLD-12", "RECOVER-SN120-77", "HIST-STOCK-44"} {
+		if !stringSliceContains(multiTaskRecovery.ForbiddenFinalText, forbidden) {
+			t.Fatalf("multi-task recovery ForbiddenFinalText = %#v, want %q", multiTaskRecovery.ForbiddenFinalText, forbidden)
+		}
+	}
+	assertSessionSearchDiagnosticsRequiredForTerms(t, multiTaskRecovery, []string{`"northstar"`, `"biotech"`})
 
 	memoryWrite, ok := seen["memory-confirmed-write-stats"]
 	if !ok {
@@ -1012,8 +1034,14 @@ func stringSliceContains(values []string, want string) bool {
 
 func assertSessionSearchDiagnosticsRequired(t *testing.T, scenario BatchScenario) {
 	t.Helper()
+	assertSessionSearchDiagnosticsRequiredForTerms(t, scenario, []string{`"alpha"`, `"coast"`})
+}
+
+func assertSessionSearchDiagnosticsRequiredForTerms(t *testing.T, scenario BatchScenario, terms []string) {
+	t.Helper()
 	required := strings.Join(scenario.RequiredToolResultText["session_search"], "\n")
-	for _, want := range []string{`"context_included":true`, `"matched_terms"`, `"alpha"`, `"coast"`} {
+	wants := append([]string{`"context_included":true`, `"matched_terms"`}, terms...)
+	for _, want := range wants {
 		if !strings.Contains(required, want) {
 			t.Fatalf("%s RequiredToolResultText session_search = %#v, want %q", scenario.Name, scenario.RequiredToolResultText, want)
 		}

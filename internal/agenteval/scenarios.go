@@ -1181,6 +1181,81 @@ func sessionHistoryRecallScenario() BatchScenario {
 	}
 }
 
+func longRunMultiTaskSessionRecoveryScenario() BatchScenario {
+	return BatchScenario{
+		Name:      "longrun-multitask-session-recovery",
+		Suites:    []string{longRunSuite},
+		SessionID: "longrun-recovery-reader",
+		Prompt:    "你正在恢复一个长时间运行的多任务研究 session。请只从过去 session 中找 Northstar Biotech Q3 复盘的当前结论，回答 recovery marker、risk label、next action 和证据 session。必须使用 session_search；不要读取文件、运行 shell、使用 memory 或修改文件。注意历史里有同公司旧结论和无关 Bittensor/股票任务，不要混用。",
+		Files: map[string]string{
+			".affentctl/northstar-q3-current.jsonl": `{"role":"user","content":"Northstar Biotech Q3 review current recovery handoff"}
+{"role":"assistant","content":"current decision: recovery marker RECOVER-NSTAR-58, risk label trial-delay, next action verify FDA calendar. Evidence should cite session northstar-q3-current."}
+`,
+			".affentctl/northstar-q2-old.jsonl": `{"role":"user","content":"Northstar Biotech Q2 older draft"}
+{"role":"assistant","content":"outdated decision: recovery marker RECOVER-OLD-12, risk label cash-burn, next action ignore FDA calendar."}
+`,
+			".affentctl/bittensor-affine.jsonl": `{"role":"user","content":"Affine Bittensor SN120 subnet analysis"}
+{"role":"assistant","content":"subnet marker RECOVER-SN120-77 and validator concentration risk belong to Bittensor, not Northstar Biotech."}
+`,
+			".affentctl/helio-stock.jsonl": `{"role":"user","content":"Helio Robotics HRO stock analysis"}
+{"role":"assistant","content":"HRO marker HIST-STOCK-44 uses inventory-drag risk and is unrelated to Northstar."}
+`,
+			"README.md": "# Multi Task Session Recovery Eval\n\nThe answer must come from session_search, not this file.\n",
+		},
+		RequiredTools: []string{"session_search"},
+		RequiredToolCounts: map[string]int{
+			"session_search": 1,
+		},
+		RequiredToolArgContains: []ToolArgContainsRequirement{
+			{Tool: "session_search", Arg: "query", Substring: "Northstar Biotech"},
+			{Tool: "session_search", Arg: "query", Substring: "Q3"},
+		},
+		RequiredToolResultText: map[string][]string{
+			"session_search": {
+				"RECOVER-NSTAR-58",
+				"trial-delay",
+				"northstar-q3-current",
+				`"context_included":true`,
+				`"matched_terms"`,
+				`"northstar"`,
+				`"biotech"`,
+			},
+		},
+		RequiredToolStatsAtLeast: map[string]int{
+			"session_search_calls":         1,
+			"session_search_results":       1,
+			"session_search_context_hits":  1,
+			"session_search_matched_terms": 2,
+		},
+		RequiredFinalText: []string{
+			"RECOVER-NSTAR-58",
+			"trial-delay",
+			"verify FDA calendar",
+			"northstar-q3-current",
+		},
+		ForbiddenFinalText: []string{
+			"RECOVER-OLD-12",
+			"RECOVER-SN120-77",
+			"HIST-STOCK-44",
+			"cash-burn",
+			"validator concentration",
+			"inventory-drag",
+		},
+		ForbiddenTools: []string{"memory", "read_file", "shell", "write_file", "edit_file"},
+		ProtectedFiles: []string{
+			".affentctl/northstar-q3-current.jsonl",
+			".affentctl/northstar-q2-old.jsonl",
+			".affentctl/bittensor-affine.jsonl",
+			".affentctl/helio-stock.jsonl",
+			"README.md",
+		},
+		MaxSuccessfulToolCallsByTool: map[string]int{
+			"session_search": 1,
+		},
+		MaxTurns: 5,
+	}
+}
+
 func memoryConfirmedWriteStatsScenario() BatchScenario {
 	return BatchScenario{
 		Name:         "memory-confirmed-write-stats",
