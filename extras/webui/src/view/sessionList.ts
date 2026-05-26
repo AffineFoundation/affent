@@ -1,5 +1,6 @@
 import type { SessionContextCompactionSummary, SessionContextSummary, SessionPlanSummary, SessionSummary } from "../api/sessions";
 import type { SessionState } from "../store/sessionState";
+import { contextCompactionSummaryLabel } from "./contextCompaction";
 import { conversationTopicFromTurns } from "./continuationPrompt";
 import { summarizeUserError } from "./errorSummary";
 import { sessionArtifactLabel } from "./sessionArtifacts";
@@ -369,6 +370,7 @@ function currentSessionCompactionMetric(session: SessionState): string | undefin
     count,
     latestReactive: latest?.reactive,
     removedMessages: latest?.removed_messages ?? 0,
+    summaryLabel: latest ? contextCompactionSummaryLabel(latest) : undefined,
   });
 }
 
@@ -572,15 +574,18 @@ function formatCompactionMetric({
   latestReactive,
   removedMessages,
   tailOnly,
+  summaryLabel,
 }: {
   count: number;
   latestReactive?: boolean;
   removedMessages?: number;
   tailOnly?: boolean;
+  summaryLabel?: string;
 }): string {
   const parts = [`${tailOnly ? "recent " : ""}${count} ${count === 1 ? "compaction" : "compactions"}`];
   if (latestReactive) parts.push("reactive");
   if (removedMessages && removedMessages > 0) parts.push(`-${removedMessages} msgs`);
+  if (summaryLabel) parts.push(summaryLabel);
   return parts.join(", ");
 }
 

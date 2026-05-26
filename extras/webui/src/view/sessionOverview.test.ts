@@ -260,6 +260,37 @@ describe("buildSessionOverview", () => {
     ]));
   });
 
+  it("surfaces weak context compaction summaries in the session overview", () => {
+    const session = reduceRawEvents([
+      { id: 1, type: "turn.start", data: { turn_id: "t1" } },
+      {
+        id: 2,
+        type: "context.compacted",
+        data: {
+          turn_id: "t1",
+          before_messages: 90,
+          after_messages: 18,
+          removed_messages: 72,
+          reactive: true,
+          reason: "context_overflow",
+          summary_present: false,
+          summary_bytes: 0,
+          summary_preview: "",
+        },
+      },
+      { id: 3, type: "turn.end", data: { turn_id: "t1", reason: "completed" } },
+    ]);
+    const overview = buildSessionOverview({
+      session,
+      workflow: deriveWorkflowStatus(session),
+      hasSelectedSession: true,
+    });
+
+    expect(overview.metrics).toEqual(expect.arrayContaining([
+      { label: "Compaction", value: "1 · reactive · -72 msgs · summary missing", tone: "error" },
+    ]));
+  });
+
   it("surfaces confirmed memory updates in the session overview", () => {
     const session = reduceRawEvents([
       { id: 1, type: "turn.start", data: { turn_id: "t1" } },

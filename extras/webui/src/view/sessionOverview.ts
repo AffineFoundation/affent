@@ -8,6 +8,7 @@ import { summarizeSessionTitle } from "./sessionList";
 import { buildTurnActivity, type TurnActivityView } from "./turnActivity";
 import { sessionArtifactLabel } from "./sessionArtifacts";
 import { summarizeAnswerPreview, summarizePreview } from "./textPreview";
+import { contextCompactionSummaryLabel } from "./contextCompaction";
 
 export type SessionOverviewTone = "ready" | "running" | "success" | "warning" | "error";
 
@@ -204,10 +205,12 @@ function buildContextCompactionMetric(session: SessionState): SessionOverviewMet
   if (latest?.summary_bytes && latest.summary_bytes > 0) {
     parts.push(`${formatBytes(latest.summary_bytes)} summary`);
   }
+  const summaryLabel = latest ? contextCompactionSummaryLabel(latest) : undefined;
+  if (summaryLabel) parts.push(summaryLabel);
   return {
     label: session.contextCompactions.length === 1 ? "Compaction" : "Compactions",
     value: parts.join(" · "),
-    tone: latest?.reactive ? "warning" : undefined,
+    tone: summaryLabel ? "error" : latest?.reactive ? "warning" : undefined,
   };
 }
 

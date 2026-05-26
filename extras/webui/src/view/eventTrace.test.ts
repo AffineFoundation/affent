@@ -203,6 +203,58 @@ describe("eventTrace view model", () => {
     });
   });
 
+  it("surfaces weak context compaction summary states", () => {
+    const model = buildEventTraceModel(normalizeEvents([
+      {
+        id: 1,
+        type: "context.compacted",
+        data: {
+          turn_id: "t1",
+          before_messages: 50,
+          after_messages: 12,
+          removed_messages: 38,
+          reactive: true,
+          reason: "context_overflow",
+          summary_present: false,
+          summary_bytes: 0,
+          summary_preview: "",
+        },
+      },
+      {
+        id: 2,
+        type: "context.compacted",
+        data: {
+          turn_id: "t2",
+          before_messages: 30,
+          after_messages: 14,
+          removed_messages: 16,
+          reactive: false,
+          reason: "threshold",
+          summary_present: true,
+          summary_bytes: 0,
+          summary_preview: "",
+        },
+      },
+    ]));
+
+    expect(model.items[0]).toMatchObject({
+      kind: "event",
+      display: {
+        label: "Context compacted",
+        meta: ["Request 1", "context_overflow", "50 -> 12 messages", "38 removed", "summary missing"],
+        badges: ["reactive", "summary missing"],
+      },
+    });
+    expect(model.items[1]).toMatchObject({
+      kind: "event",
+      display: {
+        label: "Context compacted",
+        meta: ["Request 2", "threshold", "30 -> 14 messages", "16 removed", "summary empty"],
+        badges: ["proactive", "summary empty"],
+      },
+    });
+  });
+
   it("groups interleaved delta events per turn and type", () => {
     const items = buildEventTraceItems(normalizeEvents([
       { id: 1, type: "message.delta", data: { turn_id: "t1", delta: "Hel" } },

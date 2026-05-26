@@ -3,6 +3,7 @@ import type { NormalizedEvent } from "../normalize/normalizeEvent";
 import { formatByteCount } from "./byteFormat";
 import { describeSourceAccess, sourceEvidenceLabel } from "./sourceAccess";
 import { artifactDisplayLabel, artifactName } from "./turnArtifacts";
+import { contextCompactionSummaryLabel } from "./contextCompaction";
 
 export type EventTraceItem =
   | { kind: "event"; event: NormalizedEvent; display: EventDisplay }
@@ -317,6 +318,7 @@ function contextCompactedMeta(event: NormalizedEvent, turn: string | undefined):
     typeof before === "number" && typeof after === "number" ? `${before} -> ${after} messages` : undefined,
     typeof removed === "number" ? `${removed} removed` : undefined,
     typeof summaryBytes === "number" && summaryBytes > 0 ? `${formatByteCount(summaryBytes)} summary` : undefined,
+    contextCompactionSummaryLabel(event.data),
     readString(event.data, "summary_preview") ? `summary: ${streamSummary(readString(event.data, "summary_preview") ?? "")}` : undefined,
   ]);
 }
@@ -324,7 +326,7 @@ function contextCompactedMeta(event: NormalizedEvent, turn: string | undefined):
 function contextCompactedBadges(event: NormalizedEvent): string[] {
   return compact([
     readBoolean(event.data, "reactive") ? "reactive" : "proactive",
-    readBoolean(event.data, "summary_present") ? "summary" : undefined,
+    contextCompactionSummaryLabel(event.data) ?? (readBoolean(event.data, "summary_present") ? "summary" : undefined),
   ]);
 }
 

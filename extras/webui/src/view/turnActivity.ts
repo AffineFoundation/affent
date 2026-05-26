@@ -7,6 +7,7 @@ import { memoryUpdatesForTurn, type MemoryUpdateSummary } from "./memoryUpdate";
 import { describeSourceAccess, sourceEvidenceLabel } from "./sourceAccess";
 import { artifactCountLabel, buildTurnArtifacts } from "./turnArtifacts";
 import { formatByteCount } from "./byteFormat";
+import { contextCompactionSummaryLabel } from "./contextCompaction";
 
 export type TurnActivityTone = "running" | "success" | "warning" | "error" | "muted";
 export type TurnActivityKind = "reasoning" | "action" | "result" | "answer" | "attention";
@@ -642,7 +643,7 @@ function contextCompactionDetail(compaction: NonNullable<ReturnType<typeof lates
     `${compaction.before_messages}->${compaction.after_messages} messages`,
     compaction.removed_messages > 0 ? `removed ${compaction.removed_messages}` : undefined,
     compaction.summary_bytes && compaction.summary_bytes > 0 ? `${formatByteCount(compaction.summary_bytes)} summary` : undefined,
-    compaction.summary_present === false ? "summary missing" : undefined,
+    contextCompactionSummaryLabel(compaction),
     compaction.summary_preview ? `summary: ${summarize(compaction.summary_preview, 180)}` : undefined,
   ].filter(Boolean);
   return parts.join(" · ");

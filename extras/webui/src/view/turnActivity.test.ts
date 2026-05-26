@@ -121,6 +121,39 @@ describe("buildTurnActivity", () => {
     ]);
   });
 
+  it("surfaces empty context compaction summaries on the owning turn", () => {
+    const turn = reduceRawEvents([
+      { id: 1, type: "turn.start", data: { turn_id: "t1" } },
+      { id: 2, type: "user.message", data: { turn_id: "t1", text: "continue long run" } },
+      {
+        id: 3,
+        type: "context.compacted",
+        data: {
+          turn_id: "t1",
+          before_messages: 90,
+          after_messages: 18,
+          removed_messages: 72,
+          reactive: true,
+          reason: "context_overflow",
+          summary_present: true,
+          summary_bytes: 0,
+          summary_preview: "",
+        },
+      },
+      { id: 4, type: "turn.end", data: { turn_id: "t1", reason: "completed" } },
+    ]).turns[0];
+
+    const activity = buildTurnActivity(turn);
+
+    expect(activity?.digest.summary).toBe("Context compacted reactively: 90->18 messages · removed 72 · summary empty");
+    expect(activity?.brief.rows).toContainEqual({
+      id: "compaction:3",
+      label: "Context",
+      value: "reactive · 90->18 messages · removed 72 · summary empty · context_overflow",
+      tone: "warning",
+    });
+  });
+
   it("surfaces confirmed memory updates on the owning turn", () => {
     const turn = reduceRawEvents([
       { id: 1, type: "turn.start", data: { turn_id: "t1" } },

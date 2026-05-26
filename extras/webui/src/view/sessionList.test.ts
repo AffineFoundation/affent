@@ -798,6 +798,36 @@ describe("sessionList view model", () => {
     expect(rows[0].searchText).toContain("1 compaction, reactive, -72 msgs");
   });
 
+  it("surfaces weak context compaction summaries in the selected chat row stats", () => {
+    const rows = mergeCurrentSessionRow(
+      buildSessionRows([session({ id: "s1", durable: true, has_events: true })]),
+      "s1",
+      reduceRawEvents([
+        { id: 1, type: "turn.start", data: { turn_id: "t1" } },
+        {
+          id: 2,
+          type: "context.compacted",
+          data: {
+            turn_id: "t1",
+            before_messages: 90,
+            after_messages: 18,
+            removed_messages: 72,
+            reactive: true,
+            reason: "context_overflow",
+            summary_present: true,
+            summary_bytes: 0,
+            summary_preview: "",
+          },
+        },
+        { id: 3, type: "turn.end", data: { turn_id: "t1", reason: "completed" } },
+      ]),
+    );
+
+    expect(rows[0].stats).toBe("1 message · 1 compaction, reactive, -72 msgs, summary empty");
+    expect(rows[0].metrics).toContain("1 compaction, reactive, -72 msgs, summary empty");
+    expect(rows[0].searchText).toContain("summary empty");
+  });
+
   it("surfaces live source evidence quality in the selected chat row stats", () => {
     const rows = mergeCurrentSessionRow(
       buildSessionRows([session({ id: "s1", durable: true, has_events: true })]),
