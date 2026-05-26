@@ -260,6 +260,57 @@ describe("buildSessionOverview", () => {
     ]));
   });
 
+  it("surfaces confirmed memory updates in the session overview", () => {
+    const session = reduceRawEvents([
+      { id: 1, type: "turn.start", data: { turn_id: "t1" } },
+      { id: 2, type: "user.message", data: { turn_id: "t1", text: "remember market policy" } },
+      {
+        id: 3,
+        type: "tool.request",
+        data: {
+          turn_id: "t1",
+          call_id: "c1",
+          tool: "memory",
+          args: {
+            action: "add",
+            target: "memory",
+            topic: "markets",
+            content: "Alpha Coast market reports use marker MEM-STOCK-73 and source-led confidence.",
+          },
+          args_truncated: false,
+          args_bytes: 64,
+          args_omitted_bytes: 0,
+          args_cap_bytes: 8192,
+        },
+      },
+      {
+        id: 4,
+        type: "tool.result",
+        data: {
+          turn_id: "t1",
+          call_id: "c1",
+          exit_code: 0,
+          result_summary: "{\"ok\":true,\"target\":\"memory\",\"topic\":\"markets\"}",
+          result: "{\"ok\":true,\"target\":\"memory\",\"topic\":\"markets\"}",
+          result_truncated: false,
+          result_bytes: 48,
+          result_omitted_bytes: 0,
+          result_cap_bytes: 262144,
+        },
+      },
+      { id: 5, type: "turn.end", data: { turn_id: "t1", reason: "completed", tool_stats: { tool_requests: 1, memory_updates: 1, memory_update_add: 1 } } },
+    ]);
+    const overview = buildSessionOverview({
+      session,
+      workflow: deriveWorkflowStatus(session),
+      hasSelectedSession: true,
+    });
+
+    expect(overview.metrics).toEqual(expect.arrayContaining([
+      { label: "Memory", value: "1 update · memory:markets: Alpha Coast market reports use marker MEM-STOCK...", tone: "success" },
+    ]));
+  });
+
   it("surfaces the persisted plan step summary in the session overview", () => {
     const session = reduceRawEvents(completedTurn);
     const overview = buildSessionOverview({

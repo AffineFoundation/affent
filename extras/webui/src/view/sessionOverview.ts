@@ -3,6 +3,7 @@ import type { SessionContextSummary, SessionPlanSummary } from "../api/sessions"
 import type { SessionState, TurnState } from "../store/sessionState";
 import type { WorkflowStatus } from "../store/workflowStatus";
 import { conversationTopicFromTurns } from "./continuationPrompt";
+import { memoryUpdatesForTurn } from "./memoryUpdate";
 import { summarizeSessionTitle } from "./sessionList";
 import { buildTurnActivity, type TurnActivityView } from "./turnActivity";
 import { sessionArtifactLabel } from "./sessionArtifacts";
@@ -157,6 +158,8 @@ function buildMetrics(
   if (loopDecisionMetric) metrics.push(loopDecisionMetric);
   const compactMetric = buildContextCompactionMetric(session);
   if (compactMetric) metrics.push(compactMetric);
+  const memoryMetric = buildMemoryUpdateMetric(session);
+  if (memoryMetric) metrics.push(memoryMetric);
   const planMetric = buildPlanMetric(planSummary);
   if (planMetric) metrics.push(planMetric);
   const workMetric = buildWorkMetric(latestTurn, latestActivity, currentIssueCount > 0);
@@ -202,6 +205,17 @@ function buildContextCompactionMetric(session: SessionState): SessionOverviewMet
     value: parts.join(" · "),
     tone: latest?.reactive ? "warning" : undefined,
   };
+}
+
+function buildMemoryUpdateMetric(session: SessionState): SessionOverviewMetric | undefined {
+  const updates = session.turns.flatMap(memoryUpdatesForTurn);
+  if (updates.length === 0) return undefined;
+  const latest = updates.at(-1);
+  const parts = [`${updates.length} ${updates.length === 1 ? "update" : "updates"}`];
+  if (latest) {
+    parts.push(`${latest.location}: ${summarizePreview(latest.preview, 48)}`);
+  }
+  return { label: "Memory", value: parts.join(" · "), tone: "success" };
 }
 
 function buildContextUsageMetric(session: SessionState, context?: SessionContextSummary): SessionOverviewMetric | undefined {

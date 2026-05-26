@@ -41,9 +41,11 @@ export function WorkflowStatus({
 function pinnedWorkflowMetrics(metrics: readonly SessionOverviewMetric[]): SessionOverviewMetric[] {
   const pinned: SessionOverviewMetric[] = [];
   const context = metrics.find((metric) => metric.label === "Context");
+  const memory = metrics.find((metric) => metric.label === "Memory");
   const compaction = metrics.find((metric) => metric.label === "Compaction" || metric.label === "Compactions");
   const artifact = metrics.find((metric) => metric.label === "Artifact" || metric.label === "Artifacts");
   if (context && context.tone) pinned.push(context);
+  if (memory) pinned.push(memory);
   if (compaction) pinned.push(compaction);
   if (artifact) pinned.push(artifact);
   return pinned.slice(0, 2);
