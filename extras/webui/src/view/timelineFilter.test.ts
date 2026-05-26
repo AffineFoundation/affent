@@ -19,7 +19,7 @@ describe("timelineFilter", () => {
 
   it("does not match specialized runtime filters when a plain turn lacks those states", () => {
     const session = reduceRawEvents(completedTurn);
-    const modes: TimelineFilterMode[] = ["artifacts", "memory", "truncated", "repaired", "errors"];
+    const modes: TimelineFilterMode[] = ["artifacts", "memory", "evidence", "guard", "truncated", "repaired", "errors"];
 
     for (const mode of modes) {
       expect(turnMatchesFilter(session.turns[0], session.events, { mode, query: "" })).toBe(false);
@@ -33,6 +33,21 @@ describe("timelineFilter", () => {
     expect(turnMatchesFilter(saved.turns[0], saved.events, { mode: "memory", query: "" })).toBe(true);
     expect(turnMatchesFilter(saved.turns[0], saved.events, { mode: "memory", query: "MEM-STOCK-73" })).toBe(true);
     expect(turnMatchesFilter(rejected.turns[0], rejected.events, { mode: "memory", query: "" })).toBe(false);
+  });
+
+  it("matches source evidence turns and supports evidence status search", () => {
+    const session = reduceRawEvents(sourceEvidenceTurn());
+
+    expect(turnMatchesFilter(session.turns[0], session.events, { mode: "evidence", query: "" })).toBe(true);
+    expect(turnMatchesFilter(session.turns[0], session.events, { mode: "evidence", query: "dynamic_partial" })).toBe(true);
+    expect(turnMatchesFilter(session.turns[0], session.events, { mode: "guard", query: "" })).toBe(false);
+  });
+
+  it("matches loop guard turns from turn stats", () => {
+    const session = reduceRawEvents(loopGuardTurn());
+
+    expect(turnMatchesFilter(session.turns[0], session.events, { mode: "guard", query: "" })).toBe(true);
+    expect(turnMatchesFilter(session.turns[0], session.events, { mode: "evidence", query: "" })).toBe(false);
   });
 
   it("counts every filter mode against the current search query", () => {
@@ -98,6 +113,53 @@ function memoryUpdateTurn(response: Record<string, unknown>): typeof resultTrunc
       },
     },
     { id: 3, type: "turn.end", data: { turn_id: "memory_turn", reason: "completed" } },
+  ];
+}
+
+function sourceEvidenceTurn(): typeof resultTruncated {
+  return [
+    { id: 0, type: "turn.start", data: { turn_id: "source_turn" } },
+    {
+      id: 1,
+      type: "tool.request",
+      data: {
+        turn_id: "source_turn",
+        call_id: "source_call",
+        tool: "browser_navigate",
+        args: { url: "https://taostats.io/subnets/120" },
+      },
+    },
+    {
+      id: 2,
+      type: "tool.result",
+      data: {
+        call_id: "source_call",
+        exit_code: 0,
+        result_summary: "SourceAccess: browser_rendered_url=https://taostats.io/subnets/120; page_text_below=partial_dynamic_page_evidence",
+        result: "SourceAccess: browser_rendered_url=https://taostats.io/subnets/120; page_text_below=partial_dynamic_page_evidence\nPAGE TEXT:\nMarket Cap",
+        result_truncated: false,
+      },
+    },
+    { id: 3, type: "turn.end", data: { turn_id: "source_turn", reason: "completed" } },
+  ];
+}
+
+function loopGuardTurn(): typeof resultTruncated {
+  return [
+    { id: 0, type: "turn.start", data: { turn_id: "guard_turn" } },
+    { id: 1, type: "user.message", data: { turn_id: "guard_turn", text: "recover repeated calls" } },
+    {
+      id: 2,
+      type: "turn.end",
+      data: {
+        turn_id: "guard_turn",
+        reason: "max_turns",
+        tool_stats: {
+          loop_guard_interventions: 2,
+          forced_no_tools: 1,
+        },
+      },
+    },
   ];
 }
 

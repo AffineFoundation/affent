@@ -2,12 +2,15 @@ import type { NormalizedEvent } from "../normalize/normalizeEvent";
 import type { ToolCallState, TurnState } from "../store/sessionState";
 import { buildExecutionTree, searchableExecutionNodeText } from "./executionTree";
 import { describeMemoryUpdate } from "./memoryUpdate";
+import { describeSourceAccess } from "./sourceAccess";
 
 export type TimelineFilterMode =
   | "all"
   | "errors"
   | "tools"
   | "messages"
+  | "evidence"
+  | "guard"
   | "artifacts"
   | "memory"
   | "truncated"
@@ -60,6 +63,10 @@ function matchesMode(turn: TurnState, mode: TimelineFilterMode): boolean {
       return turn.toolCalls.length > 0;
     case "messages":
       return !!(turn.userText || turn.assistantText || turn.thinkingText);
+    case "evidence":
+      return turn.toolCalls.some((tool) => !!describeSourceAccess(tool.result ?? tool.resultSummary));
+    case "guard":
+      return (turn.toolStats?.loop_guard_interventions ?? 0) > 0 || (turn.toolStats?.forced_no_tools ?? 0) > 0;
     case "artifacts":
       return turn.toolCalls.some((tool) => !!tool.resultArtifactPath);
     case "memory":
@@ -99,6 +106,7 @@ function searchableToolText(tool: ToolCallState): string[] {
     JSON.stringify(tool.args),
     tool.resultSummary,
     tool.result,
+    describeSourceAccess(tool.result ?? tool.resultSummary)?.status,
     tool.resultArtifactPath,
     ...(tool.failureKinds ?? []),
     ...(tool.repairNotes ?? []),
