@@ -248,6 +248,7 @@ type batchSummary struct {
 	SourceAccessDiscoveryOnly  int
 	SourceAccessNetwork        int
 	SourceAccessDynamicPartial int
+	SourceAccessExamples       []agenteval.SourceAccessExample
 	MemoryUpdates              int
 	MemoryUpdateAdd            int
 	MemoryUpdateReplace        int
@@ -379,6 +380,7 @@ func (s *batchSummary) add(res agenteval.BatchResult) {
 	s.SourceAccessDiscoveryOnly += res.ToolStats.SourceAccessDiscoveryOnly
 	s.SourceAccessNetwork += res.ToolStats.SourceAccessNetwork
 	s.SourceAccessDynamicPartial += res.ToolStats.SourceAccessDynamicPartial
+	s.SourceAccessExamples = appendSourceAccessExamples(s.SourceAccessExamples, res.SourceAccessExamples, batchSummaryExamplesPerKind)
 	s.MemoryUpdates += res.ToolStats.MemoryUpdates
 	s.MemoryUpdateAdd += res.ToolStats.MemoryUpdateAdd
 	s.MemoryUpdateReplace += res.ToolStats.MemoryUpdateReplace
@@ -1147,6 +1149,7 @@ type batchResultRecord struct {
 	SourceAccessDiscoveryOnly  int                                        `json:"source_access_discovery_only"`
 	SourceAccessNetwork        int                                        `json:"source_access_network"`
 	SourceAccessDynamicPartial int                                        `json:"source_access_dynamic_partial"`
+	SourceAccessExamples       []agenteval.SourceAccessExample            `json:"source_access_examples,omitempty"`
 	MemoryUpdates              int                                        `json:"memory_updates"`
 	MemoryUpdateAdd            int                                        `json:"memory_update_add"`
 	MemoryUpdateReplace        int                                        `json:"memory_update_replace"`
@@ -1250,6 +1253,7 @@ type batchSummaryRecord struct {
 	SourceAccessDiscoveryOnly  int                                        `json:"source_access_discovery_only"`
 	SourceAccessNetwork        int                                        `json:"source_access_network"`
 	SourceAccessDynamicPartial int                                        `json:"source_access_dynamic_partial"`
+	SourceAccessExamples       []agenteval.SourceAccessExample            `json:"source_access_examples,omitempty"`
 	MemoryUpdates              int                                        `json:"memory_updates"`
 	MemoryUpdateAdd            int                                        `json:"memory_update_add"`
 	MemoryUpdateReplace        int                                        `json:"memory_update_replace"`
@@ -1373,6 +1377,7 @@ func printBatchResultJSONL(w io.Writer, meta evalJSONLMetadata, res agenteval.Ba
 		SourceAccessDiscoveryOnly:  res.ToolStats.SourceAccessDiscoveryOnly,
 		SourceAccessNetwork:        res.ToolStats.SourceAccessNetwork,
 		SourceAccessDynamicPartial: res.ToolStats.SourceAccessDynamicPartial,
+		SourceAccessExamples:       cloneSourceAccessExamples(res.SourceAccessExamples),
 		MemoryUpdates:              res.ToolStats.MemoryUpdates,
 		MemoryUpdateAdd:            res.ToolStats.MemoryUpdateAdd,
 		MemoryUpdateReplace:        res.ToolStats.MemoryUpdateReplace,
@@ -1549,6 +1554,7 @@ func printBatchSummaryJSONL(w io.Writer, meta evalJSONLMetadata, s batchSummary,
 		SourceAccessDiscoveryOnly:  s.SourceAccessDiscoveryOnly,
 		SourceAccessNetwork:        s.SourceAccessNetwork,
 		SourceAccessDynamicPartial: s.SourceAccessDynamicPartial,
+		SourceAccessExamples:       cloneSourceAccessExamples(s.SourceAccessExamples),
 		MemoryUpdates:              s.MemoryUpdates,
 		MemoryUpdateAdd:            s.MemoryUpdateAdd,
 		MemoryUpdateReplace:        s.MemoryUpdateReplace,
@@ -1643,6 +1649,13 @@ func cloneRuntimeErrorExamples(in map[string][]agenteval.RuntimeErrorExample) ma
 	return cloneExampleMap(in)
 }
 
+func cloneSourceAccessExamples(in []agenteval.SourceAccessExample) []agenteval.SourceAccessExample {
+	if len(in) == 0 {
+		return nil
+	}
+	return append([]agenteval.SourceAccessExample(nil), in...)
+}
+
 func cloneMemoryUpdateExamples(in []agenteval.MemoryUpdateExample) []agenteval.MemoryUpdateExample {
 	if len(in) == 0 {
 		return nil
@@ -1665,6 +1678,19 @@ func cloneContextCompactionExamples(in []agenteval.ContextCompaction) []agenteva
 }
 
 func appendLoopDecisionExamples(dst, src []agenteval.LoopDecision, limit int) []agenteval.LoopDecision {
+	if limit <= 0 || len(dst) >= limit {
+		return dst
+	}
+	for _, ex := range src {
+		if len(dst) >= limit {
+			break
+		}
+		dst = append(dst, ex)
+	}
+	return dst
+}
+
+func appendSourceAccessExamples(dst, src []agenteval.SourceAccessExample, limit int) []agenteval.SourceAccessExample {
 	if limit <= 0 || len(dst) >= limit {
 		return dst
 	}

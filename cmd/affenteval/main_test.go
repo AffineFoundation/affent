@@ -574,6 +574,14 @@ func TestBatchSummaryAggregatesRuntimeMetrics(t *testing.T) {
 			ArgsTruncated:    1,
 			ArgsOmittedBytes: 128,
 		},
+		SourceAccessExamples: []agenteval.SourceAccessExample{{
+			ToolIndex: 1,
+			CallID:    "source-1",
+			Tool:      "browser_network_read",
+			Status:    "network",
+			URL:       "https://metrics.example/api.json",
+			JSONPath:  "$.price",
+		}},
 		Plan: agenteval.PlanStats{
 			Calls:    1,
 			ByAction: map[string]int{"set": 1},
@@ -786,6 +794,9 @@ func TestBatchSummaryAggregatesRuntimeMetrics(t *testing.T) {
 	if !reflect.DeepEqual(summary.RuntimeSurfaceTools, map[string]int{"web_fetch": 2, "web_search": 1, "browser_find": 2}) {
 		t.Fatalf("RuntimeSurfaceTools = %#v", summary.RuntimeSurfaceTools)
 	}
+	if len(summary.SourceAccessExamples) != 1 || summary.SourceAccessExamples[0].CallID != "source-1" {
+		t.Fatalf("SourceAccessExamples = %#v", summary.SourceAccessExamples)
+	}
 	if got := summary.ToolFailureExamples["timeout"]; len(got) != 1 || got[0].Tool != "web_fetch" {
 		t.Fatalf("ToolFailureExamples[timeout] = %#v", got)
 	}
@@ -857,6 +868,9 @@ func TestPrintBatchResultJSONL(t *testing.T) {
 			ToolDurationMS:            75,
 			LoopGuardInterventions:    3,
 			ForcedNoTools:             1,
+			SourceAccessResults:       1,
+			SourceAccessVerified:      1,
+			SourceAccessNetwork:       1,
 			MemoryUpdates:             1,
 			MemoryUpdateAdd:           1,
 			SessionSearchCalls:        1,
@@ -871,6 +885,16 @@ func TestPrintBatchResultJSONL(t *testing.T) {
 				{Kind: "blocked", Tool: "web_fetch", ArgsSummary: `url="https://blocked.example/metrics"`, ResultSummary: "HTTP 403 | Next: use another source", ExitCode: 1},
 			},
 		},
+		SourceAccessExamples: []agenteval.SourceAccessExample{{
+			ToolIndex:    2,
+			CallID:       "net-1",
+			Tool:         "browser_network_read",
+			Status:       "network",
+			URL:          "https://metrics.example/api.json",
+			URLField:     "browser_network_url",
+			SourceMethod: "network_xhr_fetch",
+			JSONPath:     "$.price",
+		}},
 		MemoryUpdateExamples: []agenteval.MemoryUpdateExample{{
 			ToolIndex: 3,
 			CallID:    "mem-1",
@@ -977,6 +1001,9 @@ func TestPrintBatchResultJSONL(t *testing.T) {
 		"tool_repair_notes":                   float64(3),
 		"loop_guard_interventions":            float64(3),
 		"forced_no_tools":                     float64(1),
+		"source_access_results":               float64(1),
+		"source_access_verified":              float64(1),
+		"source_access_network":               float64(1),
 		"memory_updates":                      float64(1),
 		"memory_update_add":                   float64(1),
 		"session_search_calls":                float64(1),
@@ -1079,6 +1106,7 @@ func TestPrintBatchResultJSONL(t *testing.T) {
 	if !jsonArrayContainsString(debugBrief["tags"], "tool_failure:blocked") ||
 		!jsonArrayContainsString(debugBrief["tags"], "runtime_error:llm_incomplete_stream") ||
 		!jsonArrayContainsString(debugBrief["tags"], "loop_guard") ||
+		!jsonArrayContainsString(debugBrief["tags"], "source_network") ||
 		!jsonArrayContainsString(debugBrief["tags"], "memory_update:add") ||
 		!jsonArrayContainsString(debugBrief["tags"], "recall") ||
 		!jsonArrayContainsString(debugBrief["tags"], "context_compaction:reactive") ||
@@ -1088,6 +1116,18 @@ func TestPrintBatchResultJSONL(t *testing.T) {
 	items, ok := debugBrief["items"].([]any)
 	if !ok || len(items) == 0 {
 		t.Fatalf("debug_brief items = %#v\njson=%s", debugBrief["items"], out.String())
+	}
+	sourceAccessExamples, ok := got["source_access_examples"].([]any)
+	if !ok || len(sourceAccessExamples) != 1 {
+		t.Fatalf("source_access_examples = %#v\njson=%s", got["source_access_examples"], out.String())
+	}
+	sourceAccessExample, ok := sourceAccessExamples[0].(map[string]any)
+	if !ok ||
+		sourceAccessExample["tool"] != "browser_network_read" ||
+		sourceAccessExample["status"] != "network" ||
+		sourceAccessExample["json_path"] != "$.price" ||
+		!strings.Contains(fmt.Sprint(sourceAccessExample["url"]), "metrics.example") {
+		t.Fatalf("source_access_example = %#v\njson=%s", sourceAccessExamples[0], out.String())
 	}
 	memoryUpdateExamples, ok := got["memory_update_examples"].([]any)
 	if !ok || len(memoryUpdateExamples) != 1 {
@@ -1595,6 +1635,14 @@ func TestPrintBatchSummaryJSONL(t *testing.T) {
 		SourceAccessVerified:       3,
 		SourceAccessNetwork:        2,
 		SourceAccessDynamicPartial: 1,
+		SourceAccessExamples: []agenteval.SourceAccessExample{{
+			ToolIndex: 2,
+			CallID:    "summary-source-1",
+			Tool:      "browser_network_read",
+			Status:    "network",
+			URL:       "https://metrics.example/api.json",
+			JSONPath:  "$.price",
+		}},
 		SessionSearchCalls:         1,
 		SessionSearchResults:       2,
 		SessionSearchContextHits:   1,
@@ -1762,6 +1810,17 @@ func TestPrintBatchSummaryJSONL(t *testing.T) {
 	runtimeErrorExamples, ok := got["runtime_error_examples"].(map[string]any)
 	if !ok || !strings.Contains(fmt.Sprint(runtimeErrorExamples["llm_timeout"]), "timed out") {
 		t.Fatalf("runtime_error_examples = %#v\njson=%s", got["runtime_error_examples"], out.String())
+	}
+	sourceAccessExamples, ok := got["source_access_examples"].([]any)
+	if !ok || len(sourceAccessExamples) != 1 {
+		t.Fatalf("source_access_examples = %#v\njson=%s", got["source_access_examples"], out.String())
+	}
+	sourceAccessExample, ok := sourceAccessExamples[0].(map[string]any)
+	if !ok ||
+		sourceAccessExample["call_id"] != "summary-source-1" ||
+		sourceAccessExample["status"] != "network" ||
+		sourceAccessExample["json_path"] != "$.price" {
+		t.Fatalf("source_access_example = %#v\njson=%s", sourceAccessExamples[0], out.String())
 	}
 	debugBriefByTag, ok := got["debug_brief_by_tag"].(map[string]any)
 	if !ok ||

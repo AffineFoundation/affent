@@ -8,6 +8,7 @@ import (
 
 	"github.com/affinefoundation/affent/internal/agent"
 	"github.com/affinefoundation/affent/internal/executor"
+	"github.com/affinefoundation/affent/internal/sourceaccess"
 	"github.com/affinefoundation/affent/internal/sse"
 	"github.com/affinefoundation/affent/internal/textutil"
 	"github.com/affinefoundation/affent/internal/toolfailure"
@@ -317,6 +318,18 @@ type MemoryUpdateExample struct {
 	NextPreview     string `json:"next_preview,omitempty"`
 }
 
+type SourceAccessExample struct {
+	ToolIndex    int    `json:"tool_index"`
+	CallID       string `json:"call_id,omitempty"`
+	Tool         string `json:"tool"`
+	Status       string `json:"status"`
+	URL          string `json:"url,omitempty"`
+	RequestedURL string `json:"requested_url,omitempty"`
+	URLField     string `json:"url_field,omitempty"`
+	SourceMethod string `json:"source_method,omitempty"`
+	JSONPath     string `json:"json_path,omitempty"`
+}
+
 type RuntimeErrorExample struct {
 	Kind    string `json:"kind"`
 	Message string `json:"message"`
@@ -450,6 +463,43 @@ func (t Trace) MemoryUpdateExamples(maxExamples int) []MemoryUpdateExample {
 		if ok {
 			out = append(out, ex)
 		}
+	}
+	return out
+}
+
+func (t Trace) SourceAccessExamples(maxExamples int) []SourceAccessExample {
+	if maxExamples <= 0 {
+		return nil
+	}
+	var out []SourceAccessExample
+	for i, c := range t.Tools {
+		if len(out) >= maxExamples {
+			break
+		}
+		info, ok := sourceaccess.FirstInfoFromResult(c.Result)
+		if !ok {
+			continue
+		}
+		status := "verified"
+		switch {
+		case info.IsNetworkSource():
+			status = "network"
+		case info.IsDynamicPartial() || sourceaccess.HasDynamicPartialEvidence(c.Result):
+			status = "dynamic_partial"
+		case info.IsDiscoveryOnly():
+			status = "discovery_only"
+		}
+		out = append(out, SourceAccessExample{
+			ToolIndex:    i + 1,
+			CallID:       c.CallID,
+			Tool:         c.Tool,
+			Status:       status,
+			URL:          info.AccessedURL,
+			RequestedURL: info.RequestedURL,
+			URLField:     info.URLField,
+			SourceMethod: info.SourceMethod,
+			JSONPath:     info.JSONPath,
+		})
 	}
 	return out
 }

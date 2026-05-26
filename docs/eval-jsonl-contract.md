@@ -149,6 +149,11 @@ Scenario records describe one eval case:
   than factual evidence.
 - `source_access_network`: count of `SourceAccess:` results read from captured
   browser XHR/fetch evidence.
+- `source_access_examples`: optional bounded examples of normalized
+  `SourceAccess:` evidence. Each sample includes tool index, call id, tool
+  name, evidence status (`verified`, `network`, `dynamic_partial`, or
+  `discovery_only`), accessed/requested URLs, URL field, source method, and
+  JSON path when present.
 - `session_search_calls`: count of dispatched `session_search` tool calls.
 - `session_search_results`: total prior-session hits reported by parsed
   `session_search` JSON responses.
@@ -252,6 +257,8 @@ Summary records aggregate all scenario records from the same process:
   `tool_failure_hints`, `tool_failure_examples`.
 - Runtime error totals and diagnostics: `runtime_error_by_kind`,
   `runtime_error_hints`, `runtime_error_examples`.
+- Source evidence examples: `source_access_examples`, the first bounded
+  samples across the batch.
 - Context compaction examples: `context_compaction_examples`, the first bounded
   samples across the batch.
 - Debug brief tag totals: `debug_brief_by_tag`, counting how many scenarios

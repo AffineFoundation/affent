@@ -1327,6 +1327,14 @@ func TestWriteScenarioDebugArtifactsIndexesTraceAndFinalText(t *testing.T) {
 		manifest.RuntimeSurface.Tools[0].Name != "web_fetch" {
 		t.Fatalf("manifest runtime surface = %+v", manifest.RuntimeSurface)
 	}
+	if len(manifest.SourceAccessExamples) != 3 ||
+		manifest.SourceAccessExamples[0].Tool != "web_fetch" ||
+		manifest.SourceAccessExamples[0].Status != "dynamic_partial" ||
+		manifest.SourceAccessExamples[1].Status != "network" ||
+		manifest.SourceAccessExamples[1].JSONPath != "$.price" ||
+		manifest.SourceAccessExamples[2].Status != "discovery_only" {
+		t.Fatalf("manifest source access examples = %+v", manifest.SourceAccessExamples)
+	}
 	if len(manifest.MemoryUpdateExamples) != 2 ||
 		manifest.MemoryUpdateExamples[0].ToolIndex != 4 ||
 		manifest.MemoryUpdateExamples[0].Action != "replace" ||

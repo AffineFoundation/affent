@@ -26,6 +26,7 @@ const (
 	DefaultBatchTimeout           = 5 * time.Minute
 	DefaultBatchMaxTurnSteps      = 10
 	DefaultVerifierOutputCapBytes = 1 * 1024 * 1024
+	maxDebugSourceAccessExamples  = 5
 	maxDebugMemoryUpdateExamples  = 5
 	maxTraceLineBytes             = jsonl.DefaultMaxRecordBytes
 )
@@ -154,6 +155,7 @@ type BatchResult struct {
 	LoopDecisionStats    LoopDecisionStats
 	ContextCompactions   ContextCompactionStats
 	ToolFailureExamples  map[string][]ToolFailureExample
+	SourceAccessExamples []SourceAccessExample
 	MemoryUpdateExamples []MemoryUpdateExample
 	ToolTruncation       ToolTruncationStats
 	Usage                Usage
@@ -195,6 +197,7 @@ type DebugManifest struct {
 	Prompt                    string                     `json:"prompt"`
 	Failures                  []string                   `json:"failures,omitempty"`
 	DebugBrief                *DebugBrief                `json:"debug_brief,omitempty"`
+	SourceAccessExamples      []SourceAccessExample      `json:"source_access_examples,omitempty"`
 	MemoryUpdateExamples      []MemoryUpdateExample      `json:"memory_update_examples,omitempty"`
 	ContextCompactionExamples []ContextCompaction        `json:"context_compaction_examples,omitempty"`
 	Metrics                   DebugMetrics               `json:"metrics"`
@@ -456,6 +459,7 @@ func (r BatchRunner) Run(ctx context.Context, scenario BatchScenario) BatchResul
 		res.LoopDecisionStats = trace.LoopDecisionStats(2)
 		res.ContextCompactions = trace.ContextCompactionStats(2)
 		res.ToolFailureExamples = trace.ToolFailureExamples(2)
+		res.SourceAccessExamples = trace.SourceAccessExamples(maxDebugSourceAccessExamples)
 		res.MemoryUpdateExamples = trace.MemoryUpdateExamples(maxDebugMemoryUpdateExamples)
 		res.ToolTruncation = SummarizeToolTruncation(trace)
 		res.Usage = trace.Usage
@@ -491,6 +495,9 @@ func writeScenarioDebugArtifacts(res *BatchResult, scenario BatchScenario, stdou
 	}
 	if trace != nil && len(res.MemoryUpdateExamples) == 0 {
 		res.MemoryUpdateExamples = trace.MemoryUpdateExamples(maxDebugMemoryUpdateExamples)
+	}
+	if trace != nil && len(res.SourceAccessExamples) == 0 {
+		res.SourceAccessExamples = trace.SourceAccessExamples(maxDebugSourceAccessExamples)
 	}
 	finalTextPath := filepath.Join(res.Workspace, "affenteval-final.txt")
 	if err := os.WriteFile(finalTextPath, []byte(res.FinalText), 0o644); err != nil {
@@ -532,6 +539,7 @@ func writeScenarioDebugArtifacts(res *BatchResult, scenario BatchScenario, stdou
 		Prompt:                    scenario.Prompt,
 		Failures:                  append([]string(nil), res.Failures...),
 		DebugBrief:                BuildDebugBrief(*res),
+		SourceAccessExamples:      append([]SourceAccessExample(nil), res.SourceAccessExamples...),
 		MemoryUpdateExamples:      append([]MemoryUpdateExample(nil), res.MemoryUpdateExamples...),
 		ContextCompactionExamples: append([]ContextCompaction(nil), res.ContextCompactions.Examples...),
 		RuntimeSurface:            cloneRuntimeSurface(res.RuntimeSurface),
