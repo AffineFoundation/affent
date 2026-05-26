@@ -151,7 +151,6 @@ export function App() {
   const showHeaderNewChat = !demoActive && !showSessionNav;
   const showChatContext = !demoActive && (session.turns.length > 0 || !!pendingMessage);
   const showSessionTools = !demoActive && selectedSessionActive && selectedSessionId;
-  const showCapabilityStatus = !demoActive && !!capabilityView && (!showChatContext || capabilityView.tone === "unknown");
   const historyLoading = status.state === "loading" && !!selectedSessionId;
   const showSurfaceContext = !historyLoading && (showChatContext || showWorkflowStatus || showSessionTools);
   const surfaceBusy = actionBusy || session.status === "running" || !!pendingMessage;
@@ -614,9 +613,10 @@ export function App() {
           onOpenProfile={() => setProfileOpen(true)}
         />
       </div>
-      {profileOpen ? <ProfileDialog stats={serverStats} state={serverStatusState} onClose={() => setProfileOpen(false)} /> : null}
+      {profileOpen ? (
+        <ProfileDialog stats={serverStats} state={serverStatusState} capabilityView={capabilityView} onClose={() => setProfileOpen(false)} />
+      ) : null}
       <main className="app-main">
-        {showCapabilityStatus && capabilityView ? <RuntimeStatusBar view={capabilityView} /> : null}
         <div
           className="workspace-shell"
           data-compact-nav={compactNav}
@@ -798,82 +798,6 @@ function compactContextText(text: string, limit: number): string {
   return `${normalized.slice(0, Math.max(0, limit - 3)).trimEnd()}...`;
 }
 
-function RuntimeStatusBar({ view }: { view: RuntimeCapabilityView }) {
-  const [expanded, setExpanded] = useState(false);
-  const hasChips = view.chips.length > 0;
-  const inlineChips = view.chips.slice(0, 2);
-  const overflowChips = view.chips.slice(2);
-
-  const header = (
-    <>
-      <div className="runtime-status-head">
-        <span className="runtime-status-kicker">Capabilities</span>
-        <span className="runtime-capability-title">{view.headline}</span>
-        {!expanded && overflowChips.length > 0 ? <span className="runtime-capability-more">+{overflowChips.length} more</span> : null}
-      </div>
-    </>
-  );
-
-  const panel = (
-    <>
-      <div className="runtime-capability-panel">
-        <p className="runtime-capability-panel-detail">{view.detail}</p>
-        {hasChips ? (
-          <div className="runtime-capability-list">
-            {inlineChips.map((chip) => (
-              <div key={`${chip.group}:${chip.label}`} className="runtime-capability-item" data-tone={chip.tone}>
-                <b>{chip.group}</b>
-                <strong>{chip.label}</strong>
-                <small>{chip.detail}</small>
-              </div>
-            ))}
-            {overflowChips.length > 0 ? (
-              <details className="runtime-capability-overflow">
-                <summary aria-label={`More capabilities: ${overflowChips.length} more`}>
-                  +{overflowChips.length} more
-                </summary>
-                <div className="runtime-capability-overflow-body">
-                  {overflowChips.map((chip) => (
-                    <div key={`${chip.group}:${chip.label}`} className="runtime-capability-item" data-tone={chip.tone}>
-                      <b>{chip.group}</b>
-                      <strong>{chip.label}</strong>
-                      <small>{chip.detail}</small>
-                    </div>
-                  ))}
-                </div>
-              </details>
-            ) : null}
-          </div>
-        ) : null}
-      </div>
-    </>
-  );
-
-  if (!hasChips) {
-    return (
-      <section className="runtime-status-bar" data-tone={view.tone} data-testid="runtime-capabilities" aria-label={`${view.headline}. ${view.detail}`}>
-        {header}
-        {panel}
-      </section>
-    );
-  }
-
-  return (
-    <details
-      className="runtime-status-bar"
-      data-tone={view.tone}
-      data-testid="runtime-capabilities"
-      aria-label={`${view.headline}. ${view.detail}`}
-      onToggle={(event) => setExpanded(event.currentTarget.open)}
-    >
-      <summary>{header}</summary>
-      <div className="runtime-status-expandable">
-        {panel}
-      </div>
-    </details>
-  );
-}
-
 function WorkbenchStatusBar({
   stats,
   state,
@@ -902,7 +826,17 @@ function WorkbenchStatusBar({
   );
 }
 
-function ProfileDialog({ stats, state, onClose }: { stats?: ServerStatsResponse; state: ServerStatusState; onClose: () => void }) {
+function ProfileDialog({
+  stats,
+  state,
+  capabilityView,
+  onClose,
+}: {
+  stats?: ServerStatsResponse;
+  state: ServerStatusState;
+  capabilityView?: RuntimeCapabilityView;
+  onClose: () => void;
+}) {
   const serverHealth =
     state === "loading" ? "Checking connection" : state === "unavailable" ? "Server unavailable" : stats?.shutting_down ? "Shutting down" : "Healthy";
   const tools = [
@@ -923,6 +857,16 @@ function ProfileDialog({ stats, state, onClose }: { stats?: ServerStatsResponse;
     stats?.memory_root ? { label: "Memory store", value: formatServerRoot("Memory", stats.memory_root), title: stats.memory_root } : undefined,
     stats?.server_time ? { label: "Updated", value: formatServerTime(stats.server_time), title: stats.server_time } : undefined,
   ].filter((item): item is ProfileItem => Boolean(item));
+  const capabilities = capabilityView
+    ? [
+        { label: "Current chat", value: capabilityView.headline },
+        { label: "Detail", value: capabilityView.detail },
+        ...capabilityView.chips.map((chip) => ({
+          label: chip.group,
+          value: `${chip.label}: ${chip.detail}`,
+        })),
+      ]
+    : undefined;
 
   return (
     <div className="profile-overlay" role="presentation" onMouseDown={onClose}>
@@ -959,6 +903,7 @@ function ProfileDialog({ stats, state, onClose }: { stats?: ServerStatsResponse;
               { label: "Executor", value: stats?.executor_mode ?? "Not reported" },
             ]}
           />
+          {capabilities ? <ProfileSection title="Current chat capabilities" items={capabilities} /> : null}
           <ProfileSection title="Tools" items={tools.length > 0 ? tools : [{ label: "Capabilities", value: "Not reported" }]} />
           <ProfileSection title="Advanced diagnostics" items={runtime.length > 0 ? runtime : [{ label: "Runtime", value: "Not reported" }]} />
         </div>
