@@ -224,6 +224,83 @@ func TestFormatEvent_CompactsDelegationToolResults(t *testing.T) {
 			t.Fatalf("compact browser_network_read result should fold transport headers into metadata:\n%s", got)
 		}
 	})
+
+	t.Run("file context result keeps file structure without raw JSON", func(t *testing.T) {
+		raw := `{"path":"internal/agent/compaction.go","bytes":12000,"truncated":true,"lines":320,"query":"compact","head":[{"line":1,"text":"package agent"}],"matches":[{"start_line":347,"end_line":352,"hit_line":349,"text":"func compactToolResultForSummary(toolName, content string) string {"}],"tail":[{"line":320,"text":"}"}],"symbols":[{"name":"compactToolResultForSummary","kind":"func","line":347,"signature":"func compactToolResultForSummary(toolName, content string) string"}]}`
+		got := formatEvent(ChatMessage{Role: "tool", Name: "file_context", Content: raw})
+		for _, want := range []string{
+			"TOOL_RESULT[file_context]",
+			"file_context: path=internal/agent/compaction.go bytes=12000 lines=320 truncated=true query=compact",
+			"symbols:",
+			"line=347 kind=func name=compactToolResultForSummary signature=func compactToolResultForSummary(toolName, content string) string",
+			"matches:",
+			"lines=347-352 hit=349 func compactToolResultForSummary",
+			"head:",
+			"L1: package agent",
+			"tail:",
+			"L320: }",
+		} {
+			if !strings.Contains(got, want) {
+				t.Fatalf("compact file_context result missing %q:\n%s", want, got)
+			}
+		}
+		if strings.Contains(got, `"matches"`) || strings.Contains(got, `"head"`) {
+			t.Fatalf("compact file_context result should not expose raw JSON scaffolding:\n%s", got)
+		}
+	})
+
+	t.Run("read file result bounds long file bodies", func(t *testing.T) {
+		raw := "package agent\n" + strings.Repeat("func noisy() {}\n", 300)
+		got := formatEvent(ChatMessage{Role: "tool", Name: "read_file", Content: raw})
+		for _, want := range []string{
+			"TOOL_RESULT[read_file]",
+			"file_body_preview:",
+			"package agent",
+		} {
+			if !strings.Contains(got, want) {
+				t.Fatalf("compact read_file result missing %q:\n%s", want, got)
+			}
+		}
+		if strings.Contains(got, strings.Repeat("func noisy() {}\n", 180)) {
+			t.Fatalf("compact read_file result should bound long file text:\n%s", got)
+		}
+	})
+
+	t.Run("shell result preserves exit status when output is long", func(t *testing.T) {
+		raw := "STDOUT:\n" + strings.Repeat("build log line\n", 240) + "\nSTDERR:\nfailed assertion\n[exit 1]"
+		got := formatEvent(ChatMessage{Role: "tool", Name: "shell", Content: raw})
+		for _, want := range []string{
+			"TOOL_RESULT[shell]",
+			"exit: [exit 1]",
+			"output_preview:",
+			"build log line",
+		} {
+			if !strings.Contains(got, want) {
+				t.Fatalf("compact shell result missing %q:\n%s", want, got)
+			}
+		}
+		if strings.Contains(got, strings.Repeat("build log line\n", 180)) {
+			t.Fatalf("compact shell result should bound long output:\n%s", got)
+		}
+	})
+
+	t.Run("repo search result is bounded text preview", func(t *testing.T) {
+		raw := "found 240 hit(s) in 12 file(s)\n" + strings.Repeat("internal/agent/compaction.go:347: compact helper hit\n", 200)
+		got := formatEvent(ChatMessage{Role: "tool", Name: "repo_search", Content: raw})
+		for _, want := range []string{
+			"TOOL_RESULT[repo_search]",
+			"text_preview:",
+			"found 240 hit(s) in 12 file(s)",
+			"internal/agent/compaction.go:347",
+		} {
+			if !strings.Contains(got, want) {
+				t.Fatalf("compact repo_search result missing %q:\n%s", want, got)
+			}
+		}
+		if strings.Contains(got, strings.Repeat("internal/agent/compaction.go:347: compact helper hit\n", 120)) {
+			t.Fatalf("compact repo_search result should bound long search output:\n%s", got)
+		}
+	})
 }
 
 // TestTruncateChars pins the byte-cap + UTF-8-safe truncation +

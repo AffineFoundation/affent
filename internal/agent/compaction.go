@@ -50,6 +50,8 @@ const (
 	compactMemoryMaxText      = 500
 	compactPlanStepMaxText    = 300
 	compactWebEvidenceMaxText = 1800
+	compactWorkspaceMaxText   = 1800
+	compactWorkspaceLineMax   = 240
 )
 
 // LLMSummaryCompactor implements rolling LLM summarization. Layout
@@ -370,6 +372,22 @@ func compactToolResultForSummary(toolName, content string) string {
 		if out, ok := compactSourceAccessResultForSummary(content); ok {
 			return out
 		}
+	case "file_context":
+		if out, ok := compactFileContextResultForSummary(content); ok {
+			return out
+		}
+	case "read_file":
+		if out, ok := compactReadFileResultForSummary(content); ok {
+			return out
+		}
+	case "shell":
+		if out, ok := compactShellResultForSummary(content); ok {
+			return out
+		}
+	case "repo_search", "symbol_context", "list_files":
+		if out, ok := compactTextToolResultForSummary(content); ok {
+			return out
+		}
 	}
 	return content
 }
@@ -498,6 +516,91 @@ func sourceAccessBodyPreview(content string) string {
 		return ""
 	}
 	return textutil.Preview(body, compactWebEvidenceMaxText)
+}
+
+func compactFileContextResultForSummary(content string) (string, bool) {
+	var resp fileContextResponse
+	if err := json.Unmarshal([]byte(content), &resp); err != nil {
+		return "", false
+	}
+	if resp.Path == "" && resp.Bytes == 0 && resp.Lines == 0 && resp.Warning == "" && len(resp.Head) == 0 && len(resp.Matches) == 0 && len(resp.Tail) == 0 && len(resp.Symbols) == 0 {
+		return "", false
+	}
+	var b strings.Builder
+	if resp.Path != "" {
+		fmt.Fprintf(&b, "file_context: path=%s", textutil.Preview(strings.TrimSpace(resp.Path), 500))
+	} else {
+		b.WriteString("file_context:")
+	}
+	if resp.Bytes > 0 {
+		fmt.Fprintf(&b, " bytes=%d", resp.Bytes)
+	}
+	if resp.Lines > 0 {
+		fmt.Fprintf(&b, " lines=%d", resp.Lines)
+	}
+	if resp.Truncated {
+		b.WriteString(" truncated=true")
+	}
+	if strings.TrimSpace(resp.Query) != "" {
+		fmt.Fprintf(&b, " query=%s", textutil.Preview(strings.TrimSpace(resp.Query), 240))
+	}
+	if strings.TrimSpace(resp.Warning) != "" {
+		fmt.Fprintf(&b, "\nwarning: %s", textutil.Preview(strings.TrimSpace(resp.Warning), compactWorkspaceMaxText))
+	}
+	if len(resp.Symbols) > 0 {
+		b.WriteString("\nsymbols:")
+		appendCompactFileContextSymbols(&b, resp.Symbols)
+	}
+	if len(resp.Matches) > 0 {
+		b.WriteString("\nmatches:")
+		appendCompactFileContextSpans(&b, resp.Matches)
+	}
+	if len(resp.Head) > 0 {
+		b.WriteString("\nhead:")
+		appendCompactFileContextLines(&b, resp.Head)
+	}
+	if len(resp.Tail) > 0 {
+		b.WriteString("\ntail:")
+		appendCompactFileContextLines(&b, resp.Tail)
+	}
+	return b.String(), true
+}
+
+func compactReadFileResultForSummary(content string) (string, bool) {
+	body := strings.TrimSpace(content)
+	if body == "" {
+		return "", false
+	}
+	return "file_body_preview:\n" + textutil.Preview(body, compactWorkspaceMaxText), true
+}
+
+func compactShellResultForSummary(content string) (string, bool) {
+	body := strings.TrimSpace(content)
+	if body == "" {
+		return "", false
+	}
+	exitLine := ""
+	for _, line := range strings.Split(body, "\n") {
+		trimmed := strings.TrimSpace(line)
+		if strings.HasPrefix(trimmed, "[exit ") && strings.HasSuffix(trimmed, "]") {
+			exitLine = trimmed
+		}
+	}
+	var b strings.Builder
+	if exitLine != "" {
+		fmt.Fprintf(&b, "exit: %s\n", exitLine)
+	}
+	b.WriteString("output_preview:\n")
+	b.WriteString(textutil.Preview(body, compactWorkspaceMaxText))
+	return b.String(), true
+}
+
+func compactTextToolResultForSummary(content string) (string, bool) {
+	body := strings.TrimSpace(content)
+	if body == "" {
+		return "", false
+	}
+	return "text_preview:\n" + textutil.Preview(body, compactWorkspaceMaxText), true
 }
 
 func compactPlanResultForSummary(content string) (string, bool) {
@@ -649,6 +752,72 @@ func compactFocusedTaskResultForSummary(content string) (string, bool) {
 		appendCompactDelegationToolCalls(&b, resp.ToolCalls)
 	}
 	return b.String(), true
+}
+
+func appendCompactFileContextSymbols(b *strings.Builder, symbols []fileContextSymbol) {
+	limit := len(symbols)
+	if limit > compactDelegationMaxList {
+		limit = compactDelegationMaxList
+	}
+	for _, sym := range symbols[:limit] {
+		b.WriteString("\n- ")
+		if sym.Line > 0 {
+			fmt.Fprintf(b, "line=%d ", sym.Line)
+		}
+		if sym.Kind != "" {
+			b.WriteString("kind=")
+			b.WriteString(textutil.Preview(strings.TrimSpace(sym.Kind), 80))
+			b.WriteByte(' ')
+		}
+		if sym.Name != "" {
+			b.WriteString("name=")
+			b.WriteString(textutil.Preview(strings.TrimSpace(sym.Name), 160))
+		}
+		if strings.TrimSpace(sym.Signature) != "" {
+			b.WriteString(" signature=")
+			b.WriteString(textutil.Preview(textutil.CompactWhitespace(sym.Signature), compactWorkspaceLineMax))
+		}
+	}
+	if len(symbols) > limit {
+		fmt.Fprintf(b, "\n- ... %d more symbol(s)", len(symbols)-limit)
+	}
+}
+
+func appendCompactFileContextSpans(b *strings.Builder, spans []fileContextSpan) {
+	limit := len(spans)
+	if limit > compactDelegationMaxList {
+		limit = compactDelegationMaxList
+	}
+	for _, span := range spans[:limit] {
+		b.WriteString("\n- ")
+		if span.StartLine > 0 || span.EndLine > 0 {
+			fmt.Fprintf(b, "lines=%d-%d ", span.StartLine, span.EndLine)
+		}
+		if span.HitLine > 0 {
+			fmt.Fprintf(b, "hit=%d ", span.HitLine)
+		}
+		b.WriteString(textutil.Preview(textutil.CompactWhitespace(span.Text), compactWorkspaceLineMax))
+	}
+	if len(spans) > limit {
+		fmt.Fprintf(b, "\n- ... %d more match(es)", len(spans)-limit)
+	}
+}
+
+func appendCompactFileContextLines(b *strings.Builder, lines []fileContextLine) {
+	limit := len(lines)
+	if limit > compactDelegationMaxList {
+		limit = compactDelegationMaxList
+	}
+	for _, line := range lines[:limit] {
+		b.WriteString("\n- ")
+		if line.Line > 0 {
+			fmt.Fprintf(b, "L%d: ", line.Line)
+		}
+		b.WriteString(textutil.Preview(textutil.CompactWhitespace(line.Text), compactWorkspaceLineMax))
+	}
+	if len(lines) > limit {
+		fmt.Fprintf(b, "\n- ... %d more line(s)", len(lines)-limit)
+	}
 }
 
 func appendCompactStringList(b *strings.Builder, items []string) {
