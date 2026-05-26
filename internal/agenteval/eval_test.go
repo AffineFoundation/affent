@@ -1029,11 +1029,40 @@ func TestWriteScenarioDebugArtifactsIndexesTraceAndFinalText(t *testing.T) {
 			Capabilities: sse.RuntimeCapabilities{WebFetch: true, WebSearch: true},
 		},
 	}
-	err := writeScenarioDebugArtifacts(&res, BatchScenario{Prompt: "research with evidence"}, "partial answer\n", "runtime log\n")
+	trace := Trace{
+		RuntimeSurfaces: []sse.RuntimeSurfacePayload{*res.RuntimeSurface},
+		Tools: []ToolCall{{
+			TurnID:       "turn-debug",
+			CallID:       "call-1",
+			Tool:         "web_fetch",
+			Args:         map[string]any{"url": "https://example.test/report"},
+			Result:       "SourceAccess: fetched_url=https://example.test/report; page_text_below=verified_page_evidence\nPAGE TEXT:\nuseful evidence",
+			FailureKinds: []string{"dynamic_shell"},
+			ExitCode:     1,
+			DurationMS:   42,
+		}},
+		LoopDecisions: []LoopDecision{{
+			Kind:     "evidence_quality",
+			Decision: "defer",
+			Reason:   "need browser network evidence",
+		}},
+		ContextCompactions: []ContextCompaction{{
+			TurnID:          "turn-debug",
+			BeforeMessages:  30,
+			AfterMessages:   12,
+			RemovedMessages: 18,
+			Reactive:        true,
+			Reason:          "context_overflow",
+			SummaryBytes:    512,
+		}},
+		FinalText:    "partial answer",
+		FinishReason: "stop",
+	}
+	err := writeScenarioDebugArtifacts(&res, BatchScenario{Prompt: "research with evidence"}, "partial answer\n", "runtime log\n", &trace)
 	if err != nil {
 		t.Fatalf("writeScenarioDebugArtifacts: %v", err)
 	}
-	if res.DebugManifestPath == "" || res.FinalTextPath == "" || res.StdoutPath == "" || res.StderrPath == "" {
+	if res.DebugManifestPath == "" || res.TimelinePath == "" || res.FinalTextPath == "" || res.StdoutPath == "" || res.StderrPath == "" {
 		t.Fatalf("debug paths not populated: %+v", res)
 	}
 	if raw, err := os.ReadFile(res.FinalTextPath); err != nil || string(raw) != "partial answer" {
@@ -1057,6 +1086,7 @@ func TestWriteScenarioDebugArtifactsIndexesTraceAndFinalText(t *testing.T) {
 		t.Fatalf("manifest identity = %+v", manifest)
 	}
 	if manifest.TracePath != tracePath ||
+		manifest.TimelinePath != res.TimelinePath ||
 		manifest.FinalTextPath != res.FinalTextPath ||
 		manifest.StdoutPath != res.StdoutPath ||
 		manifest.StderrPath != res.StderrPath ||
@@ -1084,6 +1114,24 @@ func TestWriteScenarioDebugArtifactsIndexesTraceAndFinalText(t *testing.T) {
 		manifest.Metrics.InputTokens != 100 ||
 		manifest.Metrics.OutputTokens != 20 {
 		t.Fatalf("manifest metrics = %+v", manifest.Metrics)
+	}
+	timeline, err := os.ReadFile(res.TimelinePath)
+	if err != nil {
+		t.Fatalf("read timeline: %v", err)
+	}
+	for _, want := range []string{
+		"# Affent Eval Timeline",
+		"## Runtime Surface",
+		"`web_fetch`",
+		"## Tool Timeline",
+		"failure_kinds: `dynamic_shell`",
+		"need browser network evidence",
+		"Context Compactions",
+		"Final Message",
+	} {
+		if !strings.Contains(string(timeline), want) {
+			t.Fatalf("timeline missing %q:\n%s", want, string(timeline))
+		}
 	}
 }
 

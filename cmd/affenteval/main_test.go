@@ -330,6 +330,7 @@ func TestPrintBatchResultIncludesDebugPathsForRetainedWorkspace(t *testing.T) {
 		Workspace:         "/tmp/ws",
 		TracePath:         "/tmp/ws/trace.jsonl",
 		DebugManifestPath: "/tmp/ws/affenteval-debug.json",
+		TimelinePath:      "/tmp/ws/affenteval-timeline.md",
 		FinalTextPath:     "/tmp/ws/affenteval-final.txt",
 		StdoutPath:        "/tmp/ws/affenteval-stdout.txt",
 		StderrPath:        "/tmp/ws/affenteval-stderr.txt",
@@ -339,6 +340,7 @@ func TestPrintBatchResultIncludesDebugPathsForRetainedWorkspace(t *testing.T) {
 	got := out.String()
 	for _, want := range []string{
 		"debug: /tmp/ws/affenteval-debug.json",
+		"timeline: /tmp/ws/affenteval-timeline.md",
 		"final: /tmp/ws/affenteval-final.txt",
 		"stdout: /tmp/ws/affenteval-stdout.txt",
 		"stderr: /tmp/ws/affenteval-stderr.txt",
@@ -357,6 +359,7 @@ func TestPrintBatchResultOmitsDebugPathsForRemovedWorkspace(t *testing.T) {
 		Workspace:         "/tmp/ws",
 		TracePath:         "/tmp/ws/trace.jsonl",
 		DebugManifestPath: "/tmp/ws/affenteval-debug.json",
+		TimelinePath:      "/tmp/ws/affenteval-timeline.md",
 		FinalTextPath:     "/tmp/ws/affenteval-final.txt",
 		StdoutPath:        "/tmp/ws/affenteval-stdout.txt",
 		StderrPath:        "/tmp/ws/affenteval-stderr.txt",
@@ -365,6 +368,7 @@ func TestPrintBatchResultOmitsDebugPathsForRemovedWorkspace(t *testing.T) {
 	})
 	got := out.String()
 	if strings.Contains(got, "affenteval-debug.json") ||
+		strings.Contains(got, "affenteval-timeline.md") ||
 		strings.Contains(got, "affenteval-final.txt") ||
 		strings.Contains(got, "affenteval-stdout.txt") ||
 		strings.Contains(got, "affenteval-stderr.txt") {
@@ -817,6 +821,7 @@ func TestPrintBatchResultJSONLIncludesDebugPathsForRetainedWorkspace(t *testing.
 		Workspace:         "/tmp/ws",
 		TracePath:         "/tmp/ws/trace.jsonl",
 		DebugManifestPath: "/tmp/ws/affenteval-debug.json",
+		TimelinePath:      "/tmp/ws/affenteval-timeline.md",
 		FinalTextPath:     "/tmp/ws/affenteval-final.txt",
 		StdoutPath:        "/tmp/ws/affenteval-stdout.txt",
 		StderrPath:        "/tmp/ws/affenteval-stderr.txt",
@@ -829,6 +834,9 @@ func TestPrintBatchResultJSONLIncludesDebugPathsForRetainedWorkspace(t *testing.
 	}
 	if got["debug_manifest_path"] != "/tmp/ws/affenteval-debug.json" {
 		t.Fatalf("debug_manifest_path = %#v\njson=%s", got["debug_manifest_path"], out.String())
+	}
+	if got["timeline_path"] != "/tmp/ws/affenteval-timeline.md" {
+		t.Fatalf("timeline_path = %#v\njson=%s", got["timeline_path"], out.String())
 	}
 	if got["final_text_path"] != "/tmp/ws/affenteval-final.txt" {
 		t.Fatalf("final_text_path = %#v\njson=%s", got["final_text_path"], out.String())

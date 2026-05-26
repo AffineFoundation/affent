@@ -43,6 +43,9 @@ Scenario records describe one eval case:
 - `trace_schema_version`: parsed runtime trace schema version, when available.
 - `debug_manifest_path`: retained debug manifest path, when the workspace was
   not removed.
+- `timeline_path`: retained human-readable timeline path, when the workspace
+  was not removed. It summarizes runtime surface, tools, result previews,
+  truncation/artifact pointers, loop decisions, compactions, and errors.
 - `final_text_path`, `stdout_path`, `stderr_path`: retained files containing
   the final assistant text, full `affentctl` stdout, and full `affentctl`
   stderr for local debugging.

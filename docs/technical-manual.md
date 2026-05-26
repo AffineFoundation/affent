@@ -740,11 +740,15 @@ go run ./cmd/affenteval --prompt-file request.md --runtime-web --runtime-browser
 ```
 
 Each run writes a trace JSONL plus retained debug files in the scenario
-workspace: `affenteval-debug.json`, `affenteval-final.txt`,
-`affenteval-stdout.txt`, and `affenteval-stderr.txt`. Failed workspaces are
-kept automatically; `--keep-workspaces` also keeps passing runs for local
-inspection. The trace emits a `runtime.surface` event at turn start, and the
-debug manifest copies the latest surface into `runtime_surface`, including the
+workspace: `affenteval-debug.json`, `affenteval-timeline.md`,
+`affenteval-final.txt`, `affenteval-stdout.txt`, and
+`affenteval-stderr.txt`. Failed workspaces are kept automatically;
+`--keep-workspaces` also keeps passing runs for local inspection. The timeline
+is the human-readable index for debugging: it links the raw trace, shows the
+effective runtime surface, lists tool calls with args/result previews,
+truncation/artifact pointers, loop decisions, context compactions, and runtime
+errors. The trace emits a `runtime.surface` event at turn start, and the debug
+manifest copies the latest surface into `runtime_surface`, including the
 effective tool names, broad capability flags, and key tool-result limits.
 
 Run through Docker:

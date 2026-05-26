@@ -824,6 +824,7 @@ type batchResultRecord struct {
 	Workspace                  string                                     `json:"workspace"`
 	TracePath                  string                                     `json:"trace_path"`
 	DebugManifestPath          string                                     `json:"debug_manifest_path,omitempty"`
+	TimelinePath               string                                     `json:"timeline_path,omitempty"`
 	FinalTextPath              string                                     `json:"final_text_path,omitempty"`
 	StdoutPath                 string                                     `json:"stdout_path,omitempty"`
 	StderrPath                 string                                     `json:"stderr_path,omitempty"`
@@ -1000,6 +1001,7 @@ func printBatchResultJSONL(w io.Writer, meta evalJSONLMetadata, res agenteval.Ba
 		Workspace:                  res.Workspace,
 		TracePath:                  res.TracePath,
 		DebugManifestPath:          retainedDebugPath(res.DebugManifestPath, res.WorkspaceRemoved),
+		TimelinePath:               retainedDebugPath(res.TimelinePath, res.WorkspaceRemoved),
 		FinalTextPath:              retainedDebugPath(res.FinalTextPath, res.WorkspaceRemoved),
 		StdoutPath:                 retainedDebugPath(res.StdoutPath, res.WorkspaceRemoved),
 		StderrPath:                 retainedDebugPath(res.StderrPath, res.WorkspaceRemoved),
@@ -1269,6 +1271,9 @@ func printBatchResult(w io.Writer, res agenteval.BatchResult) {
 	fmt.Fprintf(w, "  trace: %s\n", res.TracePath)
 	if path := retainedDebugPath(res.DebugManifestPath, res.WorkspaceRemoved); path != "" {
 		fmt.Fprintf(w, "  debug: %s\n", path)
+	}
+	if path := retainedDebugPath(res.TimelinePath, res.WorkspaceRemoved); path != "" {
+		fmt.Fprintf(w, "  timeline: %s\n", path)
 	}
 	if path := retainedDebugPath(res.FinalTextPath, res.WorkspaceRemoved); path != "" {
 		fmt.Fprintf(w, "  final: %s\n", path)
