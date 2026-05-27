@@ -399,6 +399,7 @@ type ToolRuntimeStats struct {
 	SessionSearchResults      int `json:"session_search_results,omitempty"`
 	SessionSearchContextHits  int `json:"session_search_context_hits,omitempty"`
 	SessionSearchMatchedTerms int `json:"session_search_matched_terms,omitempty"`
+	SessionSearchRecent       int `json:"session_search_recent_sessions,omitempty"`
 	// ToolContextTruncated counts tool results that were shortened before
 	// being appended back into the model conversation. This is separate
 	// from ToolResultPayload.ResultTruncated, which reports event payload

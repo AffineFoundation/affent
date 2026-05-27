@@ -321,13 +321,16 @@ Scenario records describe one eval case:
   adjacent transcript context.
 - `session_search_matched_terms`: count of unique matched query terms reported
   across parsed `session_search` responses.
+- `session_search_recent_sessions`: count of recent-session recovery anchors
+  returned by parsed no-hit `session_search` responses.
 - `session_search_examples`: optional bounded examples of parsed
   `session_search` responses. Each sample includes tool index, call id, query,
   total result count, matched session id, logical turn index, physical
   `message_idx` when available, role, score, matched terms, context-included
   flag, and a compact snippet/message preview. User-request hits can include
   the adjacent assistant answer so recovery evals can inspect the prior
-  outcome. Summary records include the originating scenario.
+  outcome. No-hit examples can include recent-session anchor previews for the
+  retry path. Summary records include the originating scenario.
 - `memory_update_examples`: optional bounded per-scenario examples of confirmed
   durable memory mutations. Each sample includes the tool index, call id,
   action, target/topic location, and compact previous/next previews when
@@ -463,7 +466,7 @@ Summary records aggregate all scenario records from the same process:
   `memory_update_remove`, `memory_update_examples`,
   `session_search_calls`, `session_search_results`,
   `session_search_context_hits`, `session_search_matched_terms`,
-  `session_search_examples`,
+  `session_search_recent_sessions`, `session_search_examples`,
   `tool_duration_ms`,
   `tool_context_truncated`, `tool_context_omitted_bytes`.
 - Truncation totals: `tool_args_truncated`, `tool_args_omitted_bytes`,

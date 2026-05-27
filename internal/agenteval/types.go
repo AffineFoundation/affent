@@ -308,6 +308,7 @@ type ToolRuntimeStats struct {
 	SessionSearchResults       int
 	SessionSearchContextHits   int
 	SessionSearchMatchedTerms  int
+	SessionSearchRecent        int
 	ToolContextTruncated       int
 	ToolContextOmittedBytes    int
 }
@@ -460,21 +461,26 @@ type BrowserNetworkSearchExample struct {
 }
 
 type SessionSearchExample struct {
-	Scenario        string   `json:"scenario,omitempty"`
-	ToolIndex       int      `json:"tool_index"`
-	CallID          string   `json:"call_id,omitempty"`
-	Query           string   `json:"query,omitempty"`
-	Total           int      `json:"total,omitempty"`
-	SessionID       string   `json:"session_id,omitempty"`
-	TurnIdx         int      `json:"turn_idx,omitempty"`
-	MessageIdx      int      `json:"message_idx,omitempty"`
-	Role            string   `json:"role,omitempty"`
-	Score           float64  `json:"score,omitempty"`
-	ModTime         string   `json:"mod_time,omitempty"`
-	MatchedTerms    []string `json:"matched_terms,omitempty"`
-	ContextIncluded bool     `json:"context_included,omitempty"`
-	SnippetPreview  string   `json:"snippet_preview,omitempty"`
-	Message         string   `json:"message,omitempty"`
+	Scenario               string   `json:"scenario,omitempty"`
+	ToolIndex              int      `json:"tool_index"`
+	CallID                 string   `json:"call_id,omitempty"`
+	Query                  string   `json:"query,omitempty"`
+	Total                  int      `json:"total,omitempty"`
+	RecentSessions         int      `json:"recent_sessions,omitempty"`
+	SessionID              string   `json:"session_id,omitempty"`
+	RecentSessionID        string   `json:"recent_session_id,omitempty"`
+	TurnIdx                int      `json:"turn_idx,omitempty"`
+	MessageIdx             int      `json:"message_idx,omitempty"`
+	Role                   string   `json:"role,omitempty"`
+	Score                  float64  `json:"score,omitempty"`
+	ModTime                string   `json:"mod_time,omitempty"`
+	RecentModTime          string   `json:"recent_mod_time,omitempty"`
+	MatchedTerms           []string `json:"matched_terms,omitempty"`
+	ContextIncluded        bool     `json:"context_included,omitempty"`
+	SnippetPreview         string   `json:"snippet_preview,omitempty"`
+	RecentUserPreview      string   `json:"recent_user_preview,omitempty"`
+	RecentAssistantPreview string   `json:"recent_assistant_preview,omitempty"`
+	Message                string   `json:"message,omitempty"`
 }
 
 type RuntimeErrorExample struct {
@@ -867,13 +873,34 @@ func (t Trace) SessionSearchExamples(maxExamples int) []SessionSearchExample {
 			continue
 		}
 		if len(resp.Results) == 0 {
-			out = append(out, SessionSearchExample{
-				ToolIndex: i + 1,
-				CallID:    c.CallID,
-				Query:     compactOneLine(resp.Query, 220),
-				Total:     resp.Total,
-				Message:   compactOneLine(resp.Message, 220),
-			})
+			if len(resp.RecentSessions) == 0 {
+				out = append(out, SessionSearchExample{
+					ToolIndex:      i + 1,
+					CallID:         c.CallID,
+					Query:          compactOneLine(resp.Query, 220),
+					Total:          resp.Total,
+					RecentSessions: len(resp.RecentSessions),
+					Message:        compactOneLine(resp.Message, 220),
+				})
+				continue
+			}
+			for _, recent := range resp.RecentSessions {
+				if len(out) >= maxExamples {
+					break
+				}
+				out = append(out, SessionSearchExample{
+					ToolIndex:              i + 1,
+					CallID:                 c.CallID,
+					Query:                  compactOneLine(resp.Query, 220),
+					Total:                  resp.Total,
+					RecentSessions:         len(resp.RecentSessions),
+					RecentSessionID:        compactOneLine(recent.SessionID, 120),
+					RecentModTime:          compactOneLine(recent.ModTime, 80),
+					RecentUserPreview:      compactOneLine(recent.LatestUser, 180),
+					RecentAssistantPreview: compactOneLine(recent.LatestAssistant, 180),
+					Message:                compactOneLine(resp.Message, 220),
+				})
+			}
 			continue
 		}
 		for _, hit := range resp.Results {

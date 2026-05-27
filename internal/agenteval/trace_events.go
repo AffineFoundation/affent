@@ -195,6 +195,7 @@ func applyTraceEvent(t *Trace, pending map[string]int, typ string, data json.Raw
 					SessionSearchResults:       p.ToolStats.SessionSearchResults,
 					SessionSearchContextHits:   p.ToolStats.SessionSearchContextHits,
 					SessionSearchMatchedTerms:  p.ToolStats.SessionSearchMatchedTerms,
+					SessionSearchRecent:        p.ToolStats.SessionSearchRecent,
 					ToolContextTruncated:       p.ToolStats.ToolContextTruncated,
 					ToolContextOmittedBytes:    p.ToolStats.ToolContextOmittedBytes,
 				}

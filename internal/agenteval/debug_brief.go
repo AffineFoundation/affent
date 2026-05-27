@@ -307,16 +307,22 @@ func BuildDebugBrief(res BatchResult) *DebugBrief {
 			"no_matches": noMatches,
 		}, tags...)
 	}
-	if res.ToolStats.SessionSearchCalls > 0 || res.ToolStats.SessionSearchResults > 0 {
+	if res.ToolStats.SessionSearchCalls > 0 || res.ToolStats.SessionSearchResults > 0 || res.ToolStats.SessionSearchRecent > 0 {
 		kind := "recall"
 		severity := "info"
 		message := "session recall returned history with adjacent context"
 		tags := []string{"recall", "recall:context"}
 		if res.ToolStats.SessionSearchCalls > 0 && res.ToolStats.SessionSearchResults == 0 {
 			kind = "empty_recall"
-			severity = "warn"
 			tags = []string{"empty_recall"}
-			message = "session recall returned no results"
+			if res.ToolStats.SessionSearchRecent > 0 {
+				severity = "info"
+				tags = append(tags, "empty_recall:recent_sessions")
+				message = "session recall returned no direct hits but exposed recent session anchors for retry"
+			} else {
+				severity = "warn"
+				message = "session recall returned no results"
+			}
 		} else if res.ToolStats.SessionSearchResults > 0 && res.ToolStats.SessionSearchContextHits == 0 {
 			severity = "warn"
 			tags = []string{"recall", "recall:no_context"}
@@ -334,12 +340,16 @@ func BuildDebugBrief(res BatchResult) *DebugBrief {
 			tags = append(tags, "recall:weak_matched_terms")
 			message = "session recall matched fewer query terms than calls; inspect examples for broad or stale recovery"
 		}
-		add(kind, severity, message, []string{"session_search_examples", "session_search_results", "tool_timeline"}, map[string]int{
+		metrics := map[string]int{
 			"calls":         res.ToolStats.SessionSearchCalls,
 			"results":       res.ToolStats.SessionSearchResults,
 			"context_hits":  res.ToolStats.SessionSearchContextHits,
 			"matched_terms": res.ToolStats.SessionSearchMatchedTerms,
-		}, tags...)
+		}
+		if res.ToolStats.SessionSearchRecent > 0 {
+			metrics["recent"] = res.ToolStats.SessionSearchRecent
+		}
+		add(kind, severity, message, []string{"session_search_examples", "session_search_results", "tool_timeline"}, metrics, tags...)
 	}
 	if res.ToolStats.MemoryUpdates > 0 ||
 		res.ToolStats.MemoryUpdateAdd > 0 ||

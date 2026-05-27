@@ -160,6 +160,7 @@ func toolRuntimeStatsPtr(stats sse.ToolRuntimeStats) *sse.ToolRuntimeStats {
 		stats.SessionSearchResults == 0 &&
 		stats.SessionSearchContextHits == 0 &&
 		stats.SessionSearchMatchedTerms == 0 &&
+		stats.SessionSearchRecent == 0 &&
 		stats.ToolContextTruncated == 0 &&
 		stats.ToolContextOmittedBytes == 0 {
 		return nil
@@ -344,7 +345,10 @@ func recordSessionSearchStats(stats *sse.ToolRuntimeStats, tool, result string, 
 		return
 	}
 	var resp struct {
-		Total   int `json:"total"`
+		Total          int `json:"total"`
+		RecentSessions []struct {
+			SessionID string `json:"session_id"`
+		} `json:"recent_sessions"`
 		Results []struct {
 			MatchedTerms    []string `json:"matched_terms"`
 			ContextIncluded bool     `json:"context_included"`
@@ -371,6 +375,7 @@ func recordSessionSearchStats(stats *sse.ToolRuntimeStats, tool, result string, 
 		}
 	}
 	stats.SessionSearchMatchedTerms += len(matched)
+	stats.SessionSearchRecent += len(resp.RecentSessions)
 }
 
 func toolFailureKind(result string) string {

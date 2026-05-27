@@ -170,12 +170,18 @@ func timelineMetricsSummary(res BatchResult) string {
 	if res.ToolStats.SessionSearchCalls > 0 ||
 		res.ToolStats.SessionSearchResults > 0 ||
 		res.ToolStats.SessionSearchContextHits > 0 ||
-		res.ToolStats.SessionSearchMatchedTerms > 0 {
-		parts = append(parts, fmt.Sprintf("session_search=calls:%d,results:%d,context:%d,terms:%d,terms_per_call:%s",
+		res.ToolStats.SessionSearchMatchedTerms > 0 ||
+		res.ToolStats.SessionSearchRecent > 0 {
+		recent := ""
+		if res.ToolStats.SessionSearchRecent > 0 {
+			recent = fmt.Sprintf(",recent:%d", res.ToolStats.SessionSearchRecent)
+		}
+		parts = append(parts, fmt.Sprintf("session_search=calls:%d,results:%d,context:%d,terms:%d%s,terms_per_call:%s",
 			res.ToolStats.SessionSearchCalls,
 			res.ToolStats.SessionSearchResults,
 			res.ToolStats.SessionSearchContextHits,
 			res.ToolStats.SessionSearchMatchedTerms,
+			recent,
 			timelineOptionalNumber(timelineOptionalRatio(res.ToolStats.SessionSearchMatchedTerms, res.ToolStats.SessionSearchCalls)),
 		))
 	}
@@ -267,12 +273,16 @@ func renderTimelineDebugBrief(b *strings.Builder, res BatchResult) {
 			res.ToolStats.SourceAccessDiscoveryOnly,
 		)
 	}
-	if res.ToolStats.SessionSearchCalls > 0 || res.ToolStats.SessionSearchResults > 0 {
+	if res.ToolStats.SessionSearchCalls > 0 || res.ToolStats.SessionSearchResults > 0 || res.ToolStats.SessionSearchRecent > 0 {
 		tone := "recall"
 		guidance := "inspect Session Search examples before trusting recovered state."
 		if res.ToolStats.SessionSearchCalls > 0 && res.ToolStats.SessionSearchResults == 0 {
 			tone = "empty_recall"
-			guidance = "recovery found no prior-session evidence."
+			if res.ToolStats.SessionSearchRecent > 0 {
+				guidance = "no direct prior-session evidence matched; retry from recent Session Search anchors."
+			} else {
+				guidance = "recovery found no prior-session evidence."
+			}
 		} else if res.ToolStats.SessionSearchResults > 0 && res.ToolStats.SessionSearchContextHits == 0 {
 			tone = "recall_no_context"
 			guidance = "hits lacked adjacent context; inspect Session Search examples for stale or shallow recovery."
@@ -283,12 +293,17 @@ func renderTimelineDebugBrief(b *strings.Builder, res BatchResult) {
 			tone = "recall_weak_context"
 			guidance = "only some hits included adjacent context; inspect Session Search examples for incomplete recovery."
 		}
-		fmt.Fprintf(b, "- %s: calls=`%d`, results=`%d`, context=`%d`, terms=`%d`; %s\n",
+		recent := ""
+		if res.ToolStats.SessionSearchRecent > 0 {
+			recent = fmt.Sprintf(", recent=`%d`", res.ToolStats.SessionSearchRecent)
+		}
+		fmt.Fprintf(b, "- %s: calls=`%d`, results=`%d`, context=`%d`, terms=`%d`%s; %s\n",
 			tone,
 			res.ToolStats.SessionSearchCalls,
 			res.ToolStats.SessionSearchResults,
 			res.ToolStats.SessionSearchContextHits,
 			res.ToolStats.SessionSearchMatchedTerms,
+			recent,
 			guidance,
 		)
 	}

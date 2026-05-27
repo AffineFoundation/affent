@@ -286,6 +286,8 @@ external-calibration reminder paired with a `loop.decision`.
   adjacent transcript context.
 - `session_search_matched_terms`: count of unique matched query terms reported
   across parsed `session_search` responses.
+- `session_search_recent_sessions`: count of recent-session recovery anchors
+  returned by parsed no-hit `session_search` responses.
 - `tool_context_truncated`: count of tool results shortened before being fed
   back into the model conversation. This is separate from
   `tool.result.result_truncated`, which reports event-payload truncation.

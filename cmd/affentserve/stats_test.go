@@ -443,6 +443,7 @@ func TestSession_ToolStatsSnapshot_AccumulatesFromTurnEnd(t *testing.T) {
 				SessionSearchResults:       2,
 				SessionSearchContextHits:   1,
 				SessionSearchMatchedTerms:  2,
+				SessionSearchRecent:        1,
 				ToolContextTruncated:       2,
 				ToolContextOmittedBytes:    2048,
 			},
@@ -471,6 +472,7 @@ func TestSession_ToolStatsSnapshot_AccumulatesFromTurnEnd(t *testing.T) {
 				SessionSearchResults:       1,
 				SessionSearchContextHits:   1,
 				SessionSearchMatchedTerms:  1,
+				SessionSearchRecent:        2,
 				ToolContextTruncated:       1,
 				ToolContextOmittedBytes:    512,
 			},
@@ -513,6 +515,7 @@ func TestSession_ToolStatsSnapshot_AccumulatesFromTurnEnd(t *testing.T) {
 			got.SessionSearchResults == 3 &&
 			got.SessionSearchContext == 2 &&
 			got.SessionSearchTerms == 3 &&
+			got.SessionSearchRecent == 3 &&
 			got.ToolContextTruncated == 3 &&
 			got.ToolContextOmitted == 2560 {
 			break
@@ -541,6 +544,7 @@ func TestSession_ToolStatsSnapshot_AccumulatesFromTurnEnd(t *testing.T) {
 		resp.Sessions[0].Tools.MemoryUpdates != 3 || resp.Aggregate.Tools.MemoryUpdateRemove != 1 ||
 		resp.Sessions[0].Tools.SessionSearchCalls != 2 || resp.Aggregate.Tools.SessionSearchResults != 3 ||
 		resp.Aggregate.Tools.SessionSearchContext != 2 || resp.Sessions[0].Tools.SessionSearchTerms != 3 ||
+		resp.Aggregate.Tools.SessionSearchRecent != 3 ||
 		resp.Sessions[0].Tools.ToolContextTruncated != 3 || resp.Aggregate.Tools.ToolContextOmitted != 2560 {
 		t.Fatalf("stats tool snapshots = session:%+v aggregate:%+v", resp.Sessions[0].Tools, resp.Aggregate.Tools)
 	}
@@ -557,6 +561,7 @@ func TestSession_ToolStatsSnapshot_AccumulatesFromTurnEnd(t *testing.T) {
 		summary.Tools.MemoryUpdates != 3 || summary.Tools.MemoryUpdateAdd != 1 ||
 		summary.Tools.SessionSearchCalls != 2 || summary.Tools.SessionSearchResults != 3 ||
 		summary.Tools.SessionSearchContext != 2 || summary.Tools.SessionSearchTerms != 3 ||
+		summary.Tools.SessionSearchRecent != 3 ||
 		summary.Tools.ToolContextTruncated != 3 || summary.Tools.ToolContextOmitted != 2560 {
 		t.Fatalf("active session summary tools = %+v", summary.Tools)
 	}

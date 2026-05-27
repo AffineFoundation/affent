@@ -89,6 +89,7 @@ type Session struct {
 	sessionSearchResults   atomic.Int64
 	sessionSearchContext   atomic.Int64
 	sessionSearchTerms     atomic.Int64
+	sessionSearchRecent    atomic.Int64
 	toolContextTruncated   atomic.Int64
 	toolContextOmitted     atomic.Int64
 	toolRepairMu           sync.Mutex
@@ -1704,6 +1705,7 @@ type ToolStatsSnapshot struct {
 	SessionSearchResults   int64            `json:"session_search_results"`
 	SessionSearchContext   int64            `json:"session_search_context_hits"`
 	SessionSearchTerms     int64            `json:"session_search_matched_terms"`
+	SessionSearchRecent    int64            `json:"session_search_recent_sessions"`
 	ToolContextTruncated   int64            `json:"tool_context_truncated"`
 	ToolContextOmitted     int64            `json:"tool_context_omitted_bytes"`
 }
@@ -1743,6 +1745,7 @@ func (s *Session) ToolStatsSnapshot() ToolStatsSnapshot {
 		SessionSearchResults:   s.sessionSearchResults.Load(),
 		SessionSearchContext:   s.sessionSearchContext.Load(),
 		SessionSearchTerms:     s.sessionSearchTerms.Load(),
+		SessionSearchRecent:    s.sessionSearchRecent.Load(),
 		ToolContextTruncated:   s.toolContextTruncated.Load(),
 		ToolContextOmitted:     s.toolContextOmitted.Load(),
 	}
@@ -1902,6 +1905,7 @@ func (s *Session) addToolStats(stats sse.ToolRuntimeStats) {
 	s.sessionSearchResults.Add(int64(stats.SessionSearchResults))
 	s.sessionSearchContext.Add(int64(stats.SessionSearchContextHits))
 	s.sessionSearchTerms.Add(int64(stats.SessionSearchMatchedTerms))
+	s.sessionSearchRecent.Add(int64(stats.SessionSearchRecent))
 	s.toolContextTruncated.Add(int64(stats.ToolContextTruncated))
 	s.toolContextOmitted.Add(int64(stats.ToolContextOmittedBytes))
 	if len(stats.ToolRepairByKind) > 0 {

@@ -26,6 +26,30 @@ func TestTrimOneLine_CompactsWhitespaceAndTruncates(t *testing.T) {
 	}
 }
 
+func TestSessionSearchExamplesIncludeRecentNoHitAnchors(t *testing.T) {
+	trace := Trace{Tools: []ToolCall{{
+		Tool:     "session_search",
+		CallID:   "search-empty",
+		ExitCode: 0,
+		Result:   `{"query":"missing marker","total":0,"results":[],"message":"no results. Next: retry from anchors.","recent_sessions":[{"session_id":"recent-a","mod_time":"2026-05-27T12:00:00Z","latest_user":"Analyze Alpha Coast recovery","latest_assistant":"final marker HIST-STOCK-44"},{"session_id":"recent-b","latest_user":"Other task"}]}`,
+	}}}
+
+	examples := trace.SessionSearchExamples(5)
+	if len(examples) != 2 {
+		t.Fatalf("SessionSearchExamples len = %d, want 2: %+v", len(examples), examples)
+	}
+	if examples[0].CallID != "search-empty" ||
+		examples[0].Query != "missing marker" ||
+		examples[0].RecentSessions != 2 ||
+		examples[0].RecentSessionID != "recent-a" ||
+		examples[0].RecentModTime != "2026-05-27T12:00:00Z" ||
+		!strings.Contains(examples[0].RecentUserPreview, "Alpha Coast") ||
+		!strings.Contains(examples[0].RecentAssistantPreview, "HIST-STOCK-44") ||
+		!strings.Contains(examples[0].Message, "retry") {
+		t.Fatalf("unexpected recent anchor example: %+v", examples[0])
+	}
+}
+
 func TestCheckTraceFlagsProcessRegressions(t *testing.T) {
 	trace := Trace{Tools: []ToolCall{
 		{Tool: "shell", Args: map[string]any{"command": "python -m pytest 2>&1 | head -80"}},
@@ -113,7 +137,7 @@ func TestParseTraceFileReadsToolRequestsAndFinalText(t *testing.T) {
 		`{"type":"context.compacted","data":{"turn_id":"t1","before_messages":50,"after_messages":18,"removed_messages":32,"reactive":true,"reason":"context_overflow","summary_present":true,"summary_bytes":2048,"summary_preview":"USER_CONTEXT: keep market evidence and exact source URLs","loop_protocol_anchor":"LOOP_PROTOCOL: active path=.affent/loops/longrun/LOOP.md mode=digest feed=4 feeds=4 plan=plan:1/3:active current=2:in_progress"}}`,
 		`{"type":"loop.protocol_feed","data":{"turn_id":"t2","loop_id":"longrun","status":"running","mode":"full","feed_number":5,"protocol_feeds":5,"protocol_path":".affent/loops/longrun/LOOP.md","plan_label":"plan:1/3:active","plan_current_step_index":2,"plan_current_step_status":"in_progress","plan_current_step":"verify browser network evidence"}}`,
 		`{"type":"message.done","data":{"text":"Conclusion: green","finish_reason":"stop"}}`,
-		`{"type":"turn.end","data":{"reason":"completed","tool_stats":{"tool_requests":2,"tool_name_canonicalized":1,"tool_args_repaired":1,"tool_repair_calls":1,"tool_repair_succeeded":1,"tool_repair_failed":0,"tool_repair_notes":2,"tool_repair_by_kind":{"tool_name":1,"alias_rename":1},"tool_failure_by_kind":{"invalid_args":1},"tool_errors":1,"tool_duration_ms":17,"loop_guard_interventions":1,"forced_no_tools":1,"source_access_dynamic_partial":1,"memory_updates":2,"memory_update_add":1,"memory_update_replace":1,"session_search_calls":1,"session_search_results":2,"session_search_context_hits":1,"session_search_matched_terms":2,"tool_context_truncated":2,"tool_context_omitted_bytes":8192}}}`,
+		`{"type":"turn.end","data":{"reason":"completed","tool_stats":{"tool_requests":2,"tool_name_canonicalized":1,"tool_args_repaired":1,"tool_repair_calls":1,"tool_repair_succeeded":1,"tool_repair_failed":0,"tool_repair_notes":2,"tool_repair_by_kind":{"tool_name":1,"alias_rename":1},"tool_failure_by_kind":{"invalid_args":1},"tool_errors":1,"tool_duration_ms":17,"loop_guard_interventions":1,"forced_no_tools":1,"source_access_dynamic_partial":1,"memory_updates":2,"memory_update_add":1,"memory_update_replace":1,"session_search_calls":1,"session_search_results":2,"session_search_context_hits":1,"session_search_matched_terms":2,"session_search_recent_sessions":3,"tool_context_truncated":2,"tool_context_omitted_bytes":8192}}}`,
 	}, "\n") + "\n"
 	if err := os.WriteFile(tracePath, []byte(body), 0o644); err != nil {
 		t.Fatal(err)
@@ -322,7 +346,7 @@ func TestParseTraceFileReadsToolRequestsAndFinalText(t *testing.T) {
 	if trace.ToolStats.MemoryUpdates != 2 || trace.ToolStats.MemoryUpdateAdd != 1 || trace.ToolStats.MemoryUpdateReplace != 1 || trace.ToolStats.MemoryUpdateRemove != 0 {
 		t.Fatalf("memory ToolStats = %+v", trace.ToolStats)
 	}
-	if trace.ToolStats.SessionSearchCalls != 1 || trace.ToolStats.SessionSearchResults != 2 || trace.ToolStats.SessionSearchContextHits != 1 || trace.ToolStats.SessionSearchMatchedTerms != 2 {
+	if trace.ToolStats.SessionSearchCalls != 1 || trace.ToolStats.SessionSearchResults != 2 || trace.ToolStats.SessionSearchContextHits != 1 || trace.ToolStats.SessionSearchMatchedTerms != 2 || trace.ToolStats.SessionSearchRecent != 3 {
 		t.Fatalf("session search ToolStats = %+v", trace.ToolStats)
 	}
 	if got := trace.RawTypes["trace.meta"]; got != 1 {

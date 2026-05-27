@@ -717,6 +717,7 @@ type batchSummary struct {
 	SessionSearchResults                 int
 	SessionSearchContextHits             int
 	SessionSearchMatchedTerms            int
+	SessionSearchRecent                  int
 	SessionSearchExamples                []agenteval.SessionSearchExample
 	ToolDurationMS                       int64
 	ToolContextTruncated                 int
@@ -932,6 +933,7 @@ func (s *batchSummary) add(res agenteval.BatchResult) {
 	s.SessionSearchResults += res.ToolStats.SessionSearchResults
 	s.SessionSearchContextHits += res.ToolStats.SessionSearchContextHits
 	s.SessionSearchMatchedTerms += res.ToolStats.SessionSearchMatchedTerms
+	s.SessionSearchRecent += res.ToolStats.SessionSearchRecent
 	s.SessionSearchExamples = appendSessionSearchExamples(s.SessionSearchExamples, res.SessionSearchExamples, res.BatchScenario, batchSummaryExamplesPerKind)
 	s.ToolDurationMS += res.ToolStats.ToolDurationMS
 	s.ToolContextTruncated += max(res.ToolStats.ToolContextTruncated, res.ToolTruncation.ContextTruncated)
@@ -1333,11 +1335,16 @@ func printBatchSummary(w io.Writer, s batchSummary) {
 		)
 	}
 	if hasBatchSessionSearchStats(s) {
-		fmt.Fprintf(w, " session_search=calls:%d,results:%d,context:%d,terms:%d,terms_per_call:%s",
+		recent := ""
+		if s.SessionSearchRecent > 0 {
+			recent = fmt.Sprintf(",recent:%d", s.SessionSearchRecent)
+		}
+		fmt.Fprintf(w, " session_search=calls:%d,results:%d,context:%d,terms:%d%s,terms_per_call:%s",
 			s.SessionSearchCalls,
 			s.SessionSearchResults,
 			s.SessionSearchContextHits,
 			s.SessionSearchMatchedTerms,
+			recent,
 			formatOptionalNumber(batchOptionalRatio(s.SessionSearchMatchedTerms, s.SessionSearchCalls)),
 		)
 	}
@@ -2229,8 +2236,14 @@ func printSessionSearchExampleLines(w io.Writer, examples []agenteval.SessionSea
 			fmt.Fprintf(w, " scenario=%s", ex.Scenario)
 		}
 		fmt.Fprintf(w, " query=%q total=%d", ex.Query, ex.Total)
+		if ex.RecentSessions > 0 {
+			fmt.Fprintf(w, " recent=%d", ex.RecentSessions)
+		}
 		if ex.SessionID != "" {
 			fmt.Fprintf(w, " session=%s", ex.SessionID)
+		}
+		if ex.RecentSessionID != "" {
+			fmt.Fprintf(w, " recent_session=%s", ex.RecentSessionID)
 		}
 		if ex.TurnIdx > 0 {
 			fmt.Fprintf(w, " turn=%d", ex.TurnIdx)
@@ -2241,6 +2254,9 @@ func printSessionSearchExampleLines(w io.Writer, examples []agenteval.SessionSea
 		if ex.ModTime != "" {
 			fmt.Fprintf(w, " mod_time=%s", ex.ModTime)
 		}
+		if ex.RecentModTime != "" {
+			fmt.Fprintf(w, " recent_mod_time=%s", ex.RecentModTime)
+		}
 		if len(ex.MatchedTerms) > 0 {
 			fmt.Fprintf(w, " terms=%s", strings.Join(ex.MatchedTerms, ","))
 		}
@@ -2249,6 +2265,12 @@ func printSessionSearchExampleLines(w io.Writer, examples []agenteval.SessionSea
 		}
 		if ex.Message != "" {
 			fmt.Fprintf(w, " message=%q", ex.Message)
+		}
+		if ex.RecentUserPreview != "" {
+			fmt.Fprintf(w, " recent_user=%q", textutil.Preview(ex.RecentUserPreview, 120))
+		}
+		if ex.RecentAssistantPreview != "" {
+			fmt.Fprintf(w, " recent_assistant=%q", textutil.Preview(ex.RecentAssistantPreview, 120))
 		}
 		fmt.Fprintln(w)
 	}
@@ -2746,6 +2768,7 @@ type batchResultRecord struct {
 	SessionSearchResults             int                                        `json:"session_search_results,omitempty"`
 	SessionSearchContextHits         int                                        `json:"session_search_context_hits,omitempty"`
 	SessionSearchMatchedTerms        int                                        `json:"session_search_matched_terms,omitempty"`
+	SessionSearchRecent              int                                        `json:"session_search_recent_sessions,omitempty"`
 	SessionSearchExamples            []agenteval.SessionSearchExample           `json:"session_search_examples,omitempty"`
 	ToolDurationMS                   int64                                      `json:"tool_duration_ms"`
 	ToolContextTruncated             int                                        `json:"tool_context_truncated"`
@@ -2905,6 +2928,7 @@ type batchSummaryRecord struct {
 	SessionSearchResults                 int                                              `json:"session_search_results,omitempty"`
 	SessionSearchContextHits             int                                              `json:"session_search_context_hits,omitempty"`
 	SessionSearchMatchedTerms            int                                              `json:"session_search_matched_terms,omitempty"`
+	SessionSearchRecent                  int                                              `json:"session_search_recent_sessions,omitempty"`
 	SessionSearchExamples                []agenteval.SessionSearchExample                 `json:"session_search_examples,omitempty"`
 	ToolDurationMS                       int64                                            `json:"tool_duration_ms"`
 	ToolContextTruncated                 int                                              `json:"tool_context_truncated"`
@@ -3074,6 +3098,7 @@ func printBatchResultJSONL(w io.Writer, meta evalJSONLMetadata, res agenteval.Ba
 		SessionSearchResults:             res.ToolStats.SessionSearchResults,
 		SessionSearchContextHits:         res.ToolStats.SessionSearchContextHits,
 		SessionSearchMatchedTerms:        res.ToolStats.SessionSearchMatchedTerms,
+		SessionSearchRecent:              res.ToolStats.SessionSearchRecent,
 		SessionSearchExamples:            cloneSessionSearchExamples(res.SessionSearchExamples),
 		ToolDurationMS:                   res.ToolStats.ToolDurationMS,
 		ToolContextTruncated:             max(res.ToolStats.ToolContextTruncated, res.ToolTruncation.ContextTruncated),
@@ -3307,6 +3332,7 @@ func printBatchSummaryJSONL(w io.Writer, meta evalJSONLMetadata, s batchSummary,
 		SessionSearchResults:                 s.SessionSearchResults,
 		SessionSearchContextHits:             s.SessionSearchContextHits,
 		SessionSearchMatchedTerms:            s.SessionSearchMatchedTerms,
+		SessionSearchRecent:                  s.SessionSearchRecent,
 		SessionSearchExamples:                cloneSessionSearchExamples(s.SessionSearchExamples),
 		ToolDurationMS:                       s.ToolDurationMS,
 		ToolContextTruncated:                 s.ToolContextTruncated,
@@ -4236,7 +4262,8 @@ func hasBatchSessionSearchStats(stats batchSummary) bool {
 	return stats.SessionSearchCalls > 0 ||
 		stats.SessionSearchResults > 0 ||
 		stats.SessionSearchContextHits > 0 ||
-		stats.SessionSearchMatchedTerms > 0
+		stats.SessionSearchMatchedTerms > 0 ||
+		stats.SessionSearchRecent > 0
 }
 
 func failureKind(failure string) string {

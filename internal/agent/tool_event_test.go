@@ -141,7 +141,7 @@ func TestMemoryUpdateMetaForResult(t *testing.T) {
 func TestRecordSessionSearchStats(t *testing.T) {
 	var stats sse.ToolRuntimeStats
 	recordSessionSearchStats(&stats, "session_search", `{"query":"Alpha Coast","total":2,"results":[{"session_id":"market-alpha","matched_terms":["alpha","coast"],"context_included":true},{"session_id":"market-beta","matched_terms":["alpha"],"context_included":false}]}`, false)
-	recordSessionSearchStats(&stats, "session_search", `{"query":"empty","total":0,"results":[]}`, false)
+	recordSessionSearchStats(&stats, "session_search", `{"query":"empty","total":0,"results":[],"recent_sessions":[{"session_id":"recent-a"},{"session_id":"recent-b"}]}`, false)
 	recordSessionSearchStats(&stats, "session_search", `not json`, false)
 	recordSessionSearchStats(&stats, "session_search", `{"total":1,"results":[{"matched_terms":["ignored"],"context_included":true}]}`, true)
 	recordSessionSearchStats(&stats, "memory", `{"total":1}`, false)
@@ -157,6 +157,9 @@ func TestRecordSessionSearchStats(t *testing.T) {
 	}
 	if stats.SessionSearchMatchedTerms != 2 {
 		t.Fatalf("SessionSearchMatchedTerms = %d, want 2", stats.SessionSearchMatchedTerms)
+	}
+	if stats.SessionSearchRecent != 2 {
+		t.Fatalf("SessionSearchRecent = %d, want 2", stats.SessionSearchRecent)
 	}
 }
 

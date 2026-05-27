@@ -1228,6 +1228,9 @@ var toolStatsAccessors = map[string]func(ToolRuntimeStats) int64{
 	"session_search_results":        func(s ToolRuntimeStats) int64 { return int64(s.SessionSearchResults) },
 	"session_search_context_hits":   func(s ToolRuntimeStats) int64 { return int64(s.SessionSearchContextHits) },
 	"session_search_matched_terms":  func(s ToolRuntimeStats) int64 { return int64(s.SessionSearchMatchedTerms) },
+	"session_search_recent_sessions": func(s ToolRuntimeStats) int64 {
+		return int64(s.SessionSearchRecent)
+	},
 }
 
 func toolStatsField(stats ToolRuntimeStats, field string) (int64, bool) {

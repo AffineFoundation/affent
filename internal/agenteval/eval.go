@@ -695,6 +695,7 @@ type DebugMetrics struct {
 	SessionSearchResults            int            `json:"session_search_results,omitempty"`
 	SessionSearchContextHits        int            `json:"session_search_context_hits,omitempty"`
 	SessionSearchMatchedTerms       int            `json:"session_search_matched_terms,omitempty"`
+	SessionSearchRecent             int            `json:"session_search_recent_sessions,omitempty"`
 	ContextCompactions              int            `json:"context_compactions"`
 	ReactiveContextCompactions      int            `json:"reactive_context_compactions"`
 	ContextCompactionRemoved        int            `json:"context_compaction_removed_messages"`
@@ -1128,6 +1129,7 @@ func writeScenarioDebugArtifacts(res *BatchResult, scenario BatchScenario, stdou
 			SessionSearchResults:            res.ToolStats.SessionSearchResults,
 			SessionSearchContextHits:        res.ToolStats.SessionSearchContextHits,
 			SessionSearchMatchedTerms:       res.ToolStats.SessionSearchMatchedTerms,
+			SessionSearchRecent:             res.ToolStats.SessionSearchRecent,
 			ContextCompactions:              res.ContextCompactions.Count,
 			ReactiveContextCompactions:      res.ContextCompactions.Reactive,
 			ContextCompactionRemoved:        res.ContextCompactions.RemovedMessages,
