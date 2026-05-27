@@ -63,6 +63,8 @@ describe("sessionList view model", () => {
     expect(rows[0].metrics).toContain("Recovery run rg --files config before retrying");
     expect(rows[0].stats).toContain("Recovery run rg --files config before retrying");
     expect(rows[0].searchText).toContain("recovery run rg --files config before retrying");
+    expect(countSessionsByFilter(rows).issues).toBe(1);
+    expect(filterSessionRows(rows, "issues", "").map((row) => row.id)).toEqual(["recovery-session"]);
   });
 
   it("surfaces memory update counters in row stats and search", () => {

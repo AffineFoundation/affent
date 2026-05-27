@@ -483,7 +483,7 @@ function hasGuardMetric(row: SessionRowView): boolean {
 function needsAttention(row: SessionRowView): boolean {
   if (row.tone === "error" || row.tone === "warning") return true;
   if (row.status === "Blocked" || row.status === "Needs final answer") return true;
-  return row.metrics.some((metric) => /\bissues?\b/i.test(metric) || /\btool issues?\b/i.test(metric) || /\bprior issues?\b/i.test(metric));
+  return row.metrics.some((metric) => /\bissues?\b/i.test(metric) || /\btool issues?\b/i.test(metric) || /\bprior issues?\b/i.test(metric) || metric.startsWith("Recovery "));
 }
 
 function usageMetrics(session: SessionSummary): string[] {
