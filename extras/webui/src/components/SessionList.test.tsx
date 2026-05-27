@@ -41,8 +41,10 @@ describe("SessionList", () => {
     ]);
 
     const row = screen.getByRole("button", { name: /WebUI timeline/ });
-    expect(within(row).getByTestId("session-stats")).toHaveTextContent("3 messages · 5 actions · 1 issue");
-    expect(row).toHaveTextContent("3 messages · 5 actions · 1 issue");
+    expect(within(row).getByTestId("session-stats")).toHaveTextContent("1 issue");
+    expect(row).toHaveTextContent("1 issue");
+    expect(row).not.toHaveTextContent("3 messages");
+    expect(row).not.toHaveTextContent("5 actions");
   });
 
   it("uses the latest user task as the row title while keeping the id out of the scan path", () => {
@@ -355,7 +357,7 @@ describe("SessionList", () => {
     expect(row).toHaveTextContent("Done");
     expect(row).toHaveAccessibleDescription("Answer · There are two files.");
     expect(within(row).getByTestId("session-preview")).toHaveTextContent("Answer · There are two files.");
-    expect(within(row).getByTestId("session-stats")).toHaveTextContent("1 message · 1 action");
+    expect(within(row).queryByTestId("session-stats")).toBeNull();
     expect(row).not.toHaveTextContent("No messages yet");
   });
 
@@ -430,7 +432,8 @@ describe("SessionList", () => {
     const launcher = screen.getByRole("button", { name: "Open chats" });
     const row = screen.getByRole("button", { name: /Saved chat/ });
     expect(launcher).not.toHaveTextContent("1 message · 1 action · 1 file (8 KiB, 1 MiB omitted)");
-    expect(row).toHaveTextContent("1 message · 1 action · 1 file (8 KiB, 1 MiB omitted)");
+    expect(row).toHaveTextContent("1 file (8 KiB, 1 MiB omitted)");
+    expect(row).not.toHaveTextContent("1 message · 1 action");
   });
 
   it("shows a pending follow-up in the selected chat row immediately", () => {

@@ -51,7 +51,7 @@ describe("sessionList view model", () => {
     ]);
 
     expect(rows[0].metrics).toEqual(["3 messages", "5 actions", "1 issue"]);
-    expect(rows[0].stats).toBe("3 messages · 5 actions · 1 issue");
+    expect(rows[0].stats).toBe("1 issue");
     expect(rows[0].searchText).toContain("5 actions");
     expect(rows[0].searchText).toContain("1 issue");
   });
@@ -126,7 +126,7 @@ describe("sessionList view model", () => {
     ]);
 
     expect(rows[0].metrics).toContain("Evidence 2/3 verified, 1 network, 1 partial, 1 discovery");
-    expect(rows[0].stats).toBe("4 actions · Evidence 2/3 verified, 1 network, 1 partial, 1 discovery");
+    expect(rows[0].stats).toBe("Evidence 2/3 verified, 1 network, 1 partial, 1 discovery");
     expect(rows[0].searchText).toContain("evidence 2/3 verified");
     expect(rows[0].searchText).toContain("1 network");
   });
@@ -151,7 +151,7 @@ describe("sessionList view model", () => {
     ]);
 
     expect(rows[0].metrics).toContain("Recall 2 hits, 1 context, 3 terms");
-    expect(rows[0].stats).toBe("1 action · Recall 2 hits, 1 context, 3 terms");
+    expect(rows[0].stats).toBe("Recall 2 hits, 1 context, 3 terms");
     expect(rows[0].searchText).toContain("recall 2 hits, 1 context, 3 terms");
   });
 
@@ -173,7 +173,7 @@ describe("sessionList view model", () => {
     ]);
 
     expect(rows[0].metrics).toContain("Guard 2, 1 no-tools");
-    expect(rows[0].stats).toBe("5 actions · 2 issues · Guard 2, 1 no-tools");
+    expect(rows[0].stats).toBe("2 issues · Guard 2, 1 no-tools");
     expect(rows[0].searchText).toContain("guard 2, 1 no-tools");
   });
 
@@ -586,8 +586,9 @@ describe("sessionList view model", () => {
     expect(baseRows[0].stats).toBeUndefined();
 
     const workRows = mergeCurrentSessionRow(baseRows, "simple-chat", reduceRawEvents(completedTurn));
-    expect(workRows[0].stats).toBe("1 message · 1 action");
-    expect(workRows[0].searchText).toContain("1 message · 1 action");
+    expect(workRows[0].stats).toBeUndefined();
+    expect(workRows[0].searchText).toContain("1 message");
+    expect(workRows[0].searchText).toContain("1 action");
   });
 
   it("uses human titles for saved or live chats when the API summary has no latest task", () => {
@@ -1019,7 +1020,7 @@ describe("sessionList view model", () => {
       ]),
     );
 
-    expect(rows[0].stats).toBe("1 message · 1 action · 1 file (8 KiB, 1 MiB omitted)");
+    expect(rows[0].stats).toBe("1 file (8 KiB, 1 MiB omitted)");
     expect(rows[0].searchText).toContain("1 file (8 kib, 1 mib omitted)");
   });
 
@@ -1048,7 +1049,7 @@ describe("sessionList view model", () => {
       ]),
     );
 
-    expect(rows[0].stats).toBe("1 message · 1 compaction, reactive, -72 msgs");
+    expect(rows[0].stats).toBe("1 compaction, reactive, -72 msgs");
     expect(rows[0].metrics).toContain("1 compaction, reactive, -72 msgs");
     expect(rows[0].searchText).toContain("1 compaction, reactive, -72 msgs");
   });
@@ -1078,7 +1079,7 @@ describe("sessionList view model", () => {
       ]),
     );
 
-    expect(rows[0].stats).toBe("1 message · 1 compaction, reactive, -72 msgs, summary empty");
+    expect(rows[0].stats).toBe("1 compaction, reactive, -72 msgs, summary empty");
     expect(rows[0].metrics).toContain("1 compaction, reactive, -72 msgs, summary empty");
     expect(rows[0].searchText).toContain("summary empty");
   });
@@ -1109,7 +1110,7 @@ describe("sessionList view model", () => {
       ]),
     );
 
-    expect(rows[0].stats).toBe("1 message · Evidence 1/2 verified, 1 network, 1 partial, 1 discovery");
+    expect(rows[0].stats).toBe("Evidence 1/2 verified, 1 network, 1 partial, 1 discovery");
     expect(rows[0].searchText).toContain("evidence 1/2 verified");
   });
 
@@ -1137,7 +1138,7 @@ describe("sessionList view model", () => {
       ]),
     );
 
-    expect(rows[0].stats).toBe("1 message · Recall 2 hits, 1 context, 3 terms");
+    expect(rows[0].stats).toBe("Recall 2 hits, 1 context, 3 terms");
     expect(rows[0].searchText).toContain("recall 2 hits, 1 context, 3 terms");
   });
 
@@ -1165,7 +1166,7 @@ describe("sessionList view model", () => {
       ]),
     );
 
-    expect(rows[0].stats).toBe("1 message · 1 issue · Guard 2, 1 no-tools");
+    expect(rows[0].stats).toBe("1 issue · Guard 2, 1 no-tools");
     expect(rows[0].searchText).toContain("guard 2, 1 no-tools");
   });
 

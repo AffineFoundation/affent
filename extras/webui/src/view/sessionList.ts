@@ -321,10 +321,20 @@ function summarizeSessionMetrics({
 }
 
 function summarizeSessionStats(metrics: readonly string[]): string | undefined {
-  const value = metrics.map((metric) => metric.trim()).filter(Boolean).join(" · ");
+  const value = metrics.flatMap(displaySessionStatMetric).join(" · ");
   if (!value) return undefined;
-  if (/^\d+ messages?$/.test(value)) return undefined;
   return value;
+}
+
+function displaySessionStatMetric(metric: string): string[] {
+  return metric
+    .split(" · ")
+    .map((part) => part.trim())
+    .filter((part) => part && !isLowSignalSessionStatPart(part));
+}
+
+function isLowSignalSessionStatPart(part: string): boolean {
+  return /^\d+ messages?$/.test(part) || /^\d+ actions?$/.test(part);
 }
 
 function currentSessionSearchMetrics(session: SessionState): string[] {
