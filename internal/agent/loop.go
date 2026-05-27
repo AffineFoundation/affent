@@ -115,8 +115,9 @@ type Loop struct {
 	// DefaultToolResultContextBudgetBytes. Full tool results still go to SSE.
 	ToolResultContextBudgetBytes int
 	// ToolResultArtifactDir, when set, stores full tool outputs that were
-	// too large for the tool.result event. ToolResultArtifactPathPrefix is
-	// the workspace-relative prefix exposed in the event payload.
+	// too large for the tool.result event or would be shortened before
+	// re-entering model context. ToolResultArtifactPathPrefix is the
+	// workspace-relative prefix exposed in the event payload.
 	ToolResultArtifactDir        string
 	ToolResultArtifactPathPrefix string
 
@@ -1924,7 +1925,9 @@ func (l *Loop) publishAndAppendToolResultWithContextMeta(turnID, callID, name, r
 	payload := toolResultEventPayloadWithDurationForTurn(turnID, callID, exit, result, duration)
 	payload.FailureKind = toolFailureKindForOutcome(name, result, isErr)
 	payload.FailureKinds = toolFailureKindsForOutcome(name, result, isErr)
-	l.attachToolResultArtifact(&payload, callID, result)
+	perToolContextMax := l.toolResultMaxBytesInContextFor(name)
+	contextWillTruncate := contextBudget.willTruncateToolResult(name, result, perToolContextMax)
+	l.attachToolResultArtifact(&payload, callID, result, contextWillTruncate)
 	if delegation != nil {
 		payload.Delegation = delegation
 	}
@@ -1932,7 +1935,7 @@ func (l *Loop) publishAndAppendToolResultWithContextMeta(turnID, callID, name, r
 		payload.MemoryUpdate = memoryUpdate
 	}
 	l.recordLoopMemoryUpdate(turnID, callID, memoryUpdate)
-	content, omitted := contextBudget.truncateToolResult(name, result, l.toolResultMaxBytesInContextFor(name), payload.ResultArtifactPath)
+	content, omitted := contextBudget.truncateToolResult(name, result, perToolContextMax, payload.ResultArtifactPath)
 	payload.ContextBytes = len(content)
 	payload.ContextOmittedBytes = omitted
 	payload.ContextEstimatedTokens = estimateContextTokens(content)
@@ -1992,8 +1995,8 @@ func estimateContextTokens(text string) int {
 	return (len([]rune(text)) + 3) / 4
 }
 
-func (l *Loop) attachToolResultArtifact(payload *sse.ToolResultPayload, callID, result string) {
-	if payload == nil || !payload.ResultTruncated || strings.TrimSpace(l.ToolResultArtifactDir) == "" {
+func (l *Loop) attachToolResultArtifact(payload *sse.ToolResultPayload, callID, result string, force bool) {
+	if payload == nil || (!payload.ResultTruncated && !force) || strings.TrimSpace(l.ToolResultArtifactDir) == "" {
 		return
 	}
 	dir := l.ToolResultArtifactDir

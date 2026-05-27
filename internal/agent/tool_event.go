@@ -537,6 +537,29 @@ func (b *toolResultContextBudget) truncateToolResult(toolName, result string, pe
 	return result[:cut] + marker, omitted
 }
 
+func (b *toolResultContextBudget) willTruncateToolResult(toolName, result string, perToolMax int) bool {
+	if result == "" {
+		return false
+	}
+	if perToolMax <= 0 {
+		perToolMax = MaxToolResultBytesInContext
+	}
+	if b == nil {
+		return toolResultContextOmittedBytes(result, perToolMax) > 0
+	}
+	if b.hasSeenBrowserPageResult(toolName, result) {
+		return false
+	}
+	if b.remaining <= 0 {
+		return true
+	}
+	max := perToolMax
+	if b.remaining < max {
+		max = b.remaining
+	}
+	return len(result) > max
+}
+
 func (b *toolResultContextBudget) recordBrowserPageResult(toolName, result string) bool {
 	if b == nil || !isBrowserPageSnapshotTool(toolName) {
 		return false
@@ -551,6 +574,17 @@ func (b *toolResultContextBudget) recordBrowserPageResult(toolName, result strin
 	seen := b.browserPageURLs[u]
 	b.browserPageURLs[u] = seen + 1
 	return seen > 0
+}
+
+func (b *toolResultContextBudget) hasSeenBrowserPageResult(toolName, result string) bool {
+	if b == nil || !isBrowserPageSnapshotTool(toolName) {
+		return false
+	}
+	u := toolResultBrowserURL(result)
+	if u == "" {
+		return false
+	}
+	return b.browserPageURLs[u] > 0
 }
 
 func (b *toolResultContextBudget) truncateRepeatedBrowserPageResult(toolName, result string, perToolMax int) (string, int) {

@@ -581,6 +581,11 @@ then truncated into the evidence log, so a dashboard API response is not
 dropped merely because it is too large to feed back in full. Use this path for
 dynamic dashboards whose rendered text exposes labels but not the underlying
 metric values.
+When a tool result is too large for either the `tool.result` event payload or
+the next model-context message, the runtime can persist the complete redacted
+output as a tool-result artifact and include a workspace-relative read hint in
+the truncated context. This keeps long runs recoverable without feeding every
+large result back to the model in full.
 
 Session endpoints:
 

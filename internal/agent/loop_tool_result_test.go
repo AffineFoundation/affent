@@ -278,7 +278,7 @@ func TestToolResultArtifactStoresFullTruncatedPayload(t *testing.T) {
 		ToolResultArtifactDir:        t.TempDir(),
 		ToolResultArtifactPathPrefix: ".affent/artifacts/tool-results",
 	}
-	loop.attachToolResultArtifact(&got, "c/../bad\nid", payload)
+	loop.attachToolResultArtifact(&got, "c/../bad\nid", payload, false)
 	if got.ResultArtifactPath == "" {
 		t.Fatal("truncated result should expose an artifact path")
 	}
@@ -294,6 +294,29 @@ func TestToolResultArtifactStoresFullTruncatedPayload(t *testing.T) {
 	}
 	if string(full) != payload {
 		t.Fatalf("artifact did not preserve full payload: got %d bytes, want %d", len(full), len(payload))
+	}
+}
+
+func TestToolResultArtifactStoresContextTruncatedPayload(t *testing.T) {
+	payload := strings.Repeat("X", 1024)
+	got := toolResultEventPayload("c1", 0, payload)
+	loop := &Loop{
+		ToolResultArtifactDir:        t.TempDir(),
+		ToolResultArtifactPathPrefix: ".affent/artifacts/tool-results",
+	}
+	loop.attachToolResultArtifact(&got, "c1", payload, true)
+	if got.ResultTruncated {
+		t.Fatal("ResultTruncated = true for payload under event cap")
+	}
+	if got.ResultArtifactPath == "" {
+		t.Fatal("context-truncated result should expose an artifact path")
+	}
+	full, err := os.ReadFile(filepath.Join(loop.ToolResultArtifactDir, filepath.Base(got.ResultArtifactPath)))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(full) != payload {
+		t.Fatalf("artifact did not preserve full context-truncated payload: got %d bytes, want %d", len(full), len(payload))
 	}
 }
 
@@ -607,6 +630,109 @@ func TestRunTurn_UsesLoopToolResultContextCap(t *testing.T) {
 				t.Fatalf("turn.end should summarize model-context truncation, got %+v", p.ToolStats)
 			}
 			return
+		case <-deadline:
+			t.Fatal("timeout waiting for turn.end")
+		}
+	}
+}
+
+func TestRunTurn_ContextTruncatedToolResultGetsArtifactHint(t *testing.T) {
+	payload := strings.Repeat("A", 1024)
+	var calls int32
+	var secondReq string
+	artifactDir := t.TempDir()
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		body, _ := readReqBody(r)
+		w.Header().Set("Content-Type", "text/event-stream")
+		w.WriteHeader(200)
+		fl := w.(http.Flusher)
+		if atomic.AddInt32(&calls, 1) == 1 {
+			lines := []string{
+				`data: {"choices":[{"delta":{"role":"assistant","tool_calls":[{"index":0,"id":"c1","type":"function","function":{"name":"big","arguments":"{}"}}]},"finish_reason":null}]}`,
+				`data: {"choices":[{"delta":{},"finish_reason":"tool_calls"}]}`,
+				`data: [DONE]`,
+			}
+			for _, l := range lines {
+				w.Write([]byte(l + "\n\n"))
+				fl.Flush()
+			}
+			return
+		}
+		secondReq = body
+		w.Write([]byte("data: {\"choices\":[{\"delta\":{\"role\":\"assistant\",\"content\":\"ok\"},\"finish_reason\":\"stop\"}]}\n\n"))
+		w.Write([]byte("data: [DONE]\n\n"))
+		fl.Flush()
+	}))
+	t.Cleanup(srv.Close)
+
+	conv, err := OpenConversationAt(filepath.Join(t.TempDir(), "sess.jsonl"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	reg := NewRegistry()
+	reg.Add(fakeBigResultTool(payload))
+	events := make(chan sse.Event, 256)
+	loop := &Loop{
+		LLM:                          NewLLMClient(srv.URL, "", "fake-model"),
+		Tools:                        reg,
+		Conv:                         conv,
+		Events:                       events,
+		MaxTurnSteps:                 4,
+		PerCallTimeout:               5 * time.Second,
+		ToolResultMaxBytesInContext:  128,
+		ToolResultArtifactDir:        artifactDir,
+		ToolResultArtifactPathPrefix: ".affent/artifacts/tool-results",
+	}
+	if err := loop.EnsureSystemPrompt("base"); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := loop.SendUser(context.Background(), "go"); err != nil {
+		t.Fatal(err)
+	}
+
+	deadline := time.After(10 * time.Second)
+	var toolResultPath string
+	for {
+		select {
+		case ev, ok := <-events:
+			if !ok {
+				t.Fatal("event channel closed before turn.end")
+			}
+			switch ev.Type {
+			case sse.TypeToolResult:
+				var p sse.ToolResultPayload
+				if err := json.Unmarshal(ev.Data, &p); err != nil {
+					t.Fatalf("decode tool.result: %v", err)
+				}
+				if p.ResultTruncated {
+					t.Fatal("event result should not be truncated")
+				}
+				if p.ContextOmittedBytes != 896 {
+					t.Fatalf("ContextOmittedBytes = %d, want 896", p.ContextOmittedBytes)
+				}
+				if p.ResultArtifactPath == "" {
+					t.Fatal("context-truncated event should include artifact path")
+				}
+				full, err := os.ReadFile(filepath.Join(artifactDir, filepath.Base(p.ResultArtifactPath)))
+				if err != nil {
+					t.Fatal(err)
+				}
+				if string(full) != payload {
+					t.Fatalf("artifact did not preserve full payload: got %d bytes, want %d", len(full), len(payload))
+				}
+				toolResultPath = p.ResultArtifactPath
+			case sse.TypeTurnEnd:
+				if toolResultPath == "" {
+					t.Fatal("missing tool.result before turn.end")
+				}
+				if !strings.Contains(secondReq, toolResultPath) {
+					t.Fatalf("next request missing artifact path hint:\n%s", secondReq)
+				}
+				if !strings.Contains(secondReq, "Use the saved artifact with read_file") {
+					t.Fatalf("next request missing read_file artifact hint:\n%s", secondReq)
+				}
+				return
+			}
 		case <-deadline:
 			t.Fatal("timeout waiting for turn.end")
 		}
