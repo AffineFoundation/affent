@@ -231,7 +231,7 @@ describe("sessionList view model", () => {
       }),
     ]);
 
-    expect(rows[0].metrics).toContain("Loop running, research checkpoint research_checkpoint:trigger");
+    expect(rows[0].metrics).toContain("Loop running, research checkpoint trigger");
     expect(rows[0].chips).toContain("loop");
     expect(rows[0].searchText).toContain("research checkpoint");
   });

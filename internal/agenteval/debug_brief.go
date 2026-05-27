@@ -89,6 +89,11 @@ func BuildDebugBrief(res BatchResult) *DebugBrief {
 			"forced_no_tools": res.ToolStats.ForcedNoTools,
 		}, tags...)
 	}
+	if researchCheckpoints := loopDecisionCountByKind(res.LoopDecisionStats, "research_checkpoint"); researchCheckpoints > 0 {
+		add("research_checkpoint", "info", "loop triggered an external-calibration checkpoint; inspect decision action before changing durable direction", []string{"loop_decision_examples", "timeline", "plan"}, map[string]int{
+			"decisions": researchCheckpoints,
+		}, "research_checkpoint", "loop_decision:research_checkpoint")
+	}
 	if res.Delegation.HasAny() {
 		severity := "info"
 		message := "delegated child work was used; inspect child reports before trusting merged state"
@@ -417,6 +422,19 @@ func hasLoopDecisionStatsMatch(stats LoopDecisionStats, kind, decision, trigger 
 		}
 	}
 	return false
+}
+
+func loopDecisionCountByKind(stats LoopDecisionStats, kind string) int {
+	if stats.ByKind != nil {
+		return stats.ByKind[kind]
+	}
+	count := 0
+	for _, example := range stats.Examples {
+		if example.Kind == kind {
+			count++
+		}
+	}
+	return count
 }
 
 func filteredPositiveCounts(counts map[string]int) map[string]int {

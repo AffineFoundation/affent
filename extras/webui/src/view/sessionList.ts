@@ -660,11 +660,16 @@ function sessionLoopProtocolMetric(session: SessionSummary): string | undefined 
   }
   if (decisions && decisions > 0) {
     const decisionName = lastDecisionKind === "research_checkpoint" ? "research checkpoint" : "decision";
-    parts.push(lastDecisionKind && lastDecision ? `${decisionName} ${lastDecisionKind}:${lastDecision}` : `${decisions} ${decisions === 1 ? decisionName : `${decisionName}s`}`);
+    parts.push(lastDecisionKind && lastDecision ? `${decisionName} ${loopDecisionMetricResult(lastDecisionKind, lastDecision)}` : `${decisions} ${decisions === 1 ? decisionName : `${decisionName}s`}`);
   }
   if (turnReason) parts.push(`last turn ${turnReason}`);
   if (eventSummary) parts.push(eventSummary);
   return parts.join(", ");
+}
+
+function loopDecisionMetricResult(kind: string, decision: string): string {
+  if (kind === "research_checkpoint") return decision;
+  return `${kind}:${decision}`;
 }
 
 function planStatusLabel(plan: SessionPlanSummary): string {

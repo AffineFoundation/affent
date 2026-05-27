@@ -149,6 +149,31 @@ func TestBuildDebugBriefClassifiesForcedNoTools(t *testing.T) {
 	}
 }
 
+func TestBuildDebugBriefClassifiesResearchCheckpoint(t *testing.T) {
+	brief := BuildDebugBrief(BatchResult{
+		OK: true,
+		LoopDecisionStats: LoopDecisionStats{
+			ByKind: map[string]int{"research_checkpoint": 1},
+			Examples: []LoopDecision{{
+				Kind:           "research_checkpoint",
+				Decision:       "trigger",
+				Trigger:        "external_calibration_requested",
+				RequiredAction: "Compare mainstream agent designs before changing durable direction.",
+			}},
+		},
+	})
+	item := debugBriefItemByKind(brief, "research_checkpoint")
+	if item == nil ||
+		item.Severity != "info" ||
+		item.Message != "loop triggered an external-calibration checkpoint; inspect decision action before changing durable direction" ||
+		item.Counts["decisions"] != 1 ||
+		!stringSliceContains(item.Inspect, "loop_decision_examples") ||
+		!stringSliceContains(brief.Tags, "research_checkpoint") ||
+		!stringSliceContains(brief.Tags, "loop_decision:research_checkpoint") {
+		t.Fatalf("research checkpoint debug item = %+v tags=%+v", item, brief.Tags)
+	}
+}
+
 func TestBuildDebugBriefClassifiesSessionRecallQuality(t *testing.T) {
 	brief := BuildDebugBrief(BatchResult{
 		OK: true,
