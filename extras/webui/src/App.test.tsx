@@ -1727,7 +1727,6 @@ describe("App", () => {
     await user.click(screen.getByLabelText("Workbench"));
 
     expect(screen.queryByLabelText("Settings")).toBeNull();
-    expect(screen.getByTestId("workbench-panel")).toHaveTextContent("Current context first");
     const context = screen.getByTestId("workbench-context-panel");
     expect(context).toHaveAttribute("open");
     expect(context).toHaveTextContent("Fresh task");
@@ -1765,7 +1764,7 @@ describe("App", () => {
 
     const more = await screen.findByTestId("workbench-more-panel");
     expect(more).not.toHaveAttribute("open");
-    expect(more).toHaveTextContent("4 tools");
+    expect(more).toHaveTextContent("4 areas");
     expect(more).toHaveTextContent("Runtime, Access, Memory, Skills");
     expect(screen.getByTestId("runtime-stats-panel").closest("[data-testid='workbench-more-panel']")).toBe(more);
     expect(screen.getByTestId("account-settings-panel").closest("[data-testid='workbench-more-panel']")).toBe(more);

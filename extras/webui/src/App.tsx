@@ -1463,7 +1463,6 @@ export function App() {
                   >
                     Close
                   </button>
-                  <span>Current context first; diagnostics, config, memory, and skills stay available below.</span>
                 </div>
                 <WorkbenchContextPanel
                   overview={overview}
@@ -1524,8 +1523,8 @@ export function App() {
                   <details className="session-skills-panel workbench-more-panel" data-testid="workbench-more-panel">
                     <summary className="session-skills-summary">
                       <span className="session-skills-kicker">More</span>
-                      <strong>{hiddenWorkbenchPanels.length} {hiddenWorkbenchPanels.length === 1 ? "tool" : "tools"}</strong>
-                      <span>{hiddenWorkbenchPanels.map((panel) => panel.label).join(", ")} stay folded until they have data or an issue.</span>
+                      <strong>{hiddenWorkbenchPanels.length} {hiddenWorkbenchPanels.length === 1 ? "area" : "areas"}</strong>
+                      <span>{hiddenWorkbenchPanels.map((panel) => panel.label).join(", ")}</span>
                     </summary>
                     <div className="session-skills-body workbench-more-body">
                       {hiddenWorkbenchPanels.map((panel) => (

@@ -359,12 +359,6 @@ body {
   font-size: 14px;
 }
 
-.workbench-panel-head span {
-  grid-column: 1 / -1;
-  color: var(--text-muted);
-  font-size: 12px;
-}
-
 .workbench-close {
   display: inline-flex;
   align-items: center;
