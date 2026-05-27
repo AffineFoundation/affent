@@ -49,6 +49,22 @@ describe("sessionList view model", () => {
     expect(rows[0].searchText).toContain("1 issue");
   });
 
+  it("surfaces durable recovery hints in row stats and search", () => {
+    const rows = buildSessionRows([
+      session({
+        id: "recovery-session",
+        durable: true,
+        latest_user_message: "fix the failed tool call",
+        latest_recovery_hint: "run rg --files config before retrying",
+        tools: { tool_requests: 1, tool_errors: 1, tool_repair_succeeded: 0, tool_repair_failed: 0 },
+      }),
+    ]);
+
+    expect(rows[0].metrics).toContain("Recovery run rg --files config before retrying");
+    expect(rows[0].stats).toContain("Recovery run rg --files config before retrying");
+    expect(rows[0].searchText).toContain("recovery run rg --files config before retrying");
+  });
+
   it("surfaces source evidence quality in row stats and search", () => {
     const rows = buildSessionRows([
       session({
@@ -1045,8 +1061,8 @@ describe("sessionList view model", () => {
             call_id: "c1",
             exit_code: 1,
             duration_ms: 42,
-            result_summary: "DNS failed",
-            result: "DNS failed",
+            result_summary: "DNS failed\nNext: check the network panel before retrying\nFailure: kind=network",
+            result: "DNS failed\nNext: check the network panel before retrying\nFailure: kind=network",
             result_truncated: false,
             result_bytes: 10,
             result_omitted_bytes: 0,
@@ -1061,7 +1077,7 @@ describe("sessionList view model", () => {
     expect(rows[0]).toMatchObject({
       status: "Done",
       tone: "saved",
-      metrics: ["1 message · 1 action · 1 issue"],
+      metrics: ["1 message · 1 action · 1 issue", "Recovery check the network panel before retrying"],
     });
   });
 
@@ -1094,8 +1110,8 @@ describe("sessionList view model", () => {
             call_id: "c1",
             exit_code: 1,
             duration_ms: 42,
-            result_summary: "DNS failed",
-            result: "DNS failed",
+            result_summary: "DNS failed\nNext: check the network panel before retrying\nFailure: kind=network",
+            result: "DNS failed\nNext: check the network panel before retrying\nFailure: kind=network",
             result_truncated: false,
             result_bytes: 10,
             result_omitted_bytes: 0,
@@ -1109,10 +1125,10 @@ describe("sessionList view model", () => {
     expect(rows[0]).toMatchObject({
       status: "Blocked",
       tone: "error",
-      preview: "Issue · DNS failed",
-      metrics: ["1 message · 1 action · 1 issue"],
+      preview: "Issue · DNS failed Next: check the network panel before retrying Failure: kind=network",
+      metrics: ["1 message · 1 action · 1 issue", "Recovery check the network panel before retrying"],
     });
-    expect(rows[0].searchText).toContain("dns failed");
+    expect(rows[0].searchText).toContain("recovery check the network panel before retrying");
   });
 
   it("summarizes action-limit chats as needing a final answer", () => {

@@ -263,14 +263,23 @@ function currentSessionMetrics(session: SessionState): string[] {
   const recallMetric = sessionSearchMetric(currentSessionRecallStats(session));
   const artifactMetric = currentSessionArtifactMetric(session);
   const compactionMetric = currentSessionCompactionMetric(session);
-  return [summarizeSessionMetrics({
-    messages: session.turns.length,
-    actions: toolCount,
-    currentIssues: currentIssueCount,
-    continued: continuedCount,
-    priorIssues: priorIssueCount,
-    toolIssues: toolIssueCount,
-  }), ...(guardMetric ? [guardMetric] : []), ...(sourceMetric ? [sourceMetric] : []), ...(recallMetric ? [recallMetric] : []), ...(compactionMetric ? [compactionMetric] : []), ...(artifactMetric ? [artifactMetric] : [])];
+  const recoveryMetric = currentSessionRecoveryMetric(session);
+  return [
+    summarizeSessionMetrics({
+      messages: session.turns.length,
+      actions: toolCount,
+      currentIssues: currentIssueCount,
+      continued: continuedCount,
+      priorIssues: priorIssueCount,
+      toolIssues: toolIssueCount,
+    }),
+    ...(recoveryMetric ? [recoveryMetric] : []),
+    ...(guardMetric ? [guardMetric] : []),
+    ...(sourceMetric ? [sourceMetric] : []),
+    ...(recallMetric ? [recallMetric] : []),
+    ...(compactionMetric ? [compactionMetric] : []),
+    ...(artifactMetric ? [artifactMetric] : []),
+  ];
 }
 
 function summarizeSessionMetrics({
@@ -320,12 +329,14 @@ function currentSessionSearchMetrics(session: SessionState): string[] {
   const recallMetric = sessionSearchMetric(currentSessionRecallStats(session));
   const artifactMetric = currentSessionArtifactMetric(session);
   const compactionMetric = currentSessionCompactionMetric(session);
+  const recoveryMetric = currentSessionRecoveryMetric(session);
   const metrics = [`${session.turns.length} message${session.turns.length === 1 ? "" : "s"}`];
   if (toolCount > 0) metrics.push(`${toolCount} action${toolCount === 1 ? "" : "s"}`);
   if (currentIssueCount > 0) metrics.push(`${currentIssueCount} issue${currentIssueCount === 1 ? "" : "s"}`);
   if (continuedCount > 0) metrics.push(`${continuedCount} continued`);
   if (priorIssueCount > 0) metrics.push(`${priorIssueCount} prior issue${priorIssueCount === 1 ? "" : "s"}`);
   if (toolIssueCount > 0) metrics.push(`${toolIssueCount} tool issue${toolIssueCount === 1 ? "" : "s"}`);
+  if (recoveryMetric) metrics.push(recoveryMetric);
   if (guardMetric) metrics.push(guardMetric);
   if (sourceMetric) metrics.push(sourceMetric);
   if (recallMetric) metrics.push(recallMetric);
@@ -383,6 +394,30 @@ function currentSessionCompactionMetric(session: SessionState): string | undefin
     removedMessages: latest?.removed_messages ?? 0,
     summaryLabel: latest ? contextCompactionSummaryLabel(latest) : undefined,
   });
+}
+
+function currentSessionRecoveryMetric(session: SessionState): string | undefined {
+  for (const turn of [...session.turns].reverse()) {
+    for (const call of [...turn.toolCalls].reverse()) {
+      const failed = call.status === "error" || (call.exitCode ?? 0) !== 0 || Boolean(call.failureKind) || Boolean(call.failureKinds?.length);
+      if (!failed) continue;
+      const next = toolNextHint(call.resultSummary, call.result);
+      if (next) return recoveryMetric(next);
+    }
+  }
+  return undefined;
+}
+
+function toolNextHint(summary?: string, result?: string): string | undefined {
+  const text = [summary, result && result !== summary ? result : undefined].filter(Boolean).join("\n");
+  const match = text.match(/(?:^|\n)Next:\s*([\s\S]*?)(?:\nFailure:|\n[A-Z][A-Za-z _-]{0,40}:|$)/);
+  const next = match?.[1]?.trim();
+  return next || undefined;
+}
+
+function recoveryMetric(hint: string): string | undefined {
+  const value = hint.replace(/\s+/g, " ").trim();
+  return value ? `Recovery ${summarize(value, 72)}` : undefined;
 }
 
 function turnNeedsAttention(turn: SessionState["turns"][number]): boolean {
@@ -458,6 +493,8 @@ function usageMetrics(session: SessionSummary): string[] {
   if (toolRequests > 0) metrics.push(`${toolRequests} action${toolRequests === 1 ? "" : "s"}`);
   const toolErrors = session.tools?.tool_errors ?? 0;
   if (toolErrors > 0) metrics.push(`${toolErrors} issue${toolErrors === 1 ? "" : "s"}`);
+  const recovery = session.latest_recovery_hint ? recoveryMetric(session.latest_recovery_hint) : undefined;
+  if (recovery) metrics.push(recovery);
   if (session.browser && session.browser.network_fetch > 0) metrics.push(`${session.browser.network_fetch} web`);
   const guardMetric = loopGuardMetric(session.tools);
   if (guardMetric) metrics.push(guardMetric);

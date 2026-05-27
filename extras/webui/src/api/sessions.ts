@@ -394,6 +394,7 @@ export interface SessionSummary {
   capabilities?: SessionCapabilities;
   latest_user_message?: string;
   topic_user_message?: string;
+  latest_recovery_hint?: string;
   has_plan?: boolean;
   plan_summary?: SessionPlanSummary;
   has_conversation: boolean;

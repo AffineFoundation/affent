@@ -32,6 +32,7 @@ const (
 	maxSessionSummaryTailBytes  = 2 * 1024 * 1024
 	maxSessionEventSummaryHead  = 512 * 1024
 	maxSessionRuntimeSkillNames = 128
+	maxSessionRecoveryHintChars = 160
 )
 
 type sessionListResponse struct {
@@ -63,6 +64,7 @@ type sessionSummary struct {
 	HasConversation    bool                             `json:"has_conversation"`
 	LatestUserMessage  string                           `json:"latest_user_message,omitempty"`
 	TopicUserMessage   string                           `json:"topic_user_message,omitempty"`
+	LatestRecoveryHint string                           `json:"latest_recovery_hint,omitempty"`
 	HasEvents          bool                             `json:"has_events"`
 	HasPlan            bool                             `json:"has_plan"`
 	PlanSummary        *sessionPlanSummary              `json:"plan_summary,omitempty"`
@@ -496,6 +498,11 @@ func summarizeActiveSession(s *Session, cfg Config) sessionSummary {
 	if compactions := contextCompactionSummaryFromRuntimeStats(runtime); compactions != nil {
 		summary.ContextCompactions = compactions
 	}
+	if s.loopProtocolPath != "" {
+		if hint, err := latestRecoveryHintFromEventsFile(filepath.Join(filepath.Dir(s.loopProtocolPath), "events.jsonl")); err == nil {
+			summary.LatestRecoveryHint = hint
+		}
+	}
 	populateSessionSummaryTitle(&summary)
 	return summary
 }
@@ -652,6 +659,11 @@ func summarizeDurableSession(pool *SessionPool, id string) (sessionSummary, bool
 			return sessionSummary{}, false, err
 		}
 		summary.ContextCompactions = compactions
+		recovery, err := latestRecoveryHintFromEventsFile(filepath.Join(dir, "events.jsonl"))
+		if err != nil {
+			return sessionSummary{}, false, err
+		}
+		summary.LatestRecoveryHint = recovery
 	}
 	var planMod time.Time
 	if exists, planMod, err = durableRegularFileModTime(filepath.Join(dir, "plan.json")); err != nil {
@@ -745,6 +757,9 @@ func mergeSessionSummaries(a, b sessionSummary) sessionSummary {
 		a.TopicUserMessage = b.TopicUserMessage
 	} else if b.TopicUserMessage != "" && isContinuationSessionPrompt(a.TopicUserMessage) {
 		a.TopicUserMessage = b.TopicUserMessage
+	}
+	if b.LatestRecoveryHint != "" {
+		a.LatestRecoveryHint = b.LatestRecoveryHint
 	}
 	if a.SummaryTitle == "" && b.SummaryTitle != "" {
 		a.SummaryTitle = b.SummaryTitle
@@ -1030,6 +1045,71 @@ func scanContextCompactionsFromEvents(r *bufio.Reader) (sessionContextCompaction
 		summary.LatestSummaryState = state
 	}
 	return summary, nil
+}
+
+var sessionRecoveryNextRe = regexp.MustCompile(`(?m)(?:^|\n)Next:\s*([\s\S]*?)(?:\nFailure:|\n[A-Z][A-Za-z _-]{0,40}:|$)`)
+
+func latestRecoveryHintFromEventsFile(path string) (string, error) {
+	f, err := os.Open(path)
+	if err != nil {
+		if errors.Is(err, os.ErrNotExist) {
+			return "", nil
+		}
+		return "", err
+	}
+	defer f.Close()
+	if err := seekSessionSummaryTail(f); err != nil {
+		return "", err
+	}
+	return scanRecoveryHintsFromEvents(bufio.NewReaderSize(f, 64*1024))
+}
+
+func scanRecoveryHintsFromEvents(r *bufio.Reader) (string, error) {
+	latest := ""
+	for {
+		line, tooLong, err := jsonl.ReadBoundedLine(r, maxSessionSummaryLineBytes)
+		if errors.Is(err, io.EOF) {
+			break
+		}
+		if err != nil {
+			return "", err
+		}
+		if tooLong {
+			continue
+		}
+		line = bytes.TrimRight(line, "\r\n")
+		var ev sse.Event
+		if err := json.Unmarshal(line, &ev); err != nil || ev.Type != sse.TypeToolResult {
+			continue
+		}
+		var p sse.ToolResultPayload
+		if err := json.Unmarshal(ev.Data, &p); err != nil {
+			continue
+		}
+		if p.ExitCode == 0 && p.FailureKind == "" && len(p.FailureKinds) == 0 {
+			continue
+		}
+		hint := recoveryHintFromToolResult(p.ResultSummary, p.Result)
+		if hint != "" {
+			latest = hint
+		}
+	}
+	return latest, nil
+}
+
+func recoveryHintFromToolResult(summary, result string) string {
+	text := summary
+	if result != "" && result != summary {
+		if text != "" {
+			text += "\n"
+		}
+		text += result
+	}
+	match := sessionRecoveryNextRe.FindStringSubmatch(text)
+	if len(match) < 2 {
+		return ""
+	}
+	return textutil.Preview(strings.Join(strings.Fields(match[1]), " "), maxSessionRecoveryHintChars)
 }
 
 func contextCompactSummaryState(summaryPresent bool, summaryBytes int, summaryPreview string, summaryPresentKnown bool) string {
