@@ -45,6 +45,8 @@ describe("buildExecutionTree", () => {
     expect(shell.tool).toBe("shell");
     expect(shell.contextEstimatedTokens).toBe(1024);
     expect(shell.metrics).toContainEqual({ label: "merged", value: "~1024 tokens" });
+    expect(shell.metrics).toContainEqual({ label: "context", value: "4 KiB" });
+    expect(shell.metrics).toContainEqual({ label: "context omitted", value: "4 KiB" });
   });
 
   it("uses plain titles for simple shell directory listings", () => {

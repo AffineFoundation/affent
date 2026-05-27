@@ -31,6 +31,8 @@ describe("eventTrace view model", () => {
           result_omitted_bytes: 3072,
           result_cap_bytes: 1024,
           result_truncated: true,
+          context_bytes: 2048,
+          context_omitted_bytes: 1024,
           result_artifact_path: ".affent/artifacts/c1.txt",
         },
       },
@@ -118,8 +120,8 @@ describe("eventTrace view model", () => {
       kind: "event",
       display: {
         label: "Action failed",
-        meta: ["read_file", "42 ms", "file missing", "artifact c1.txt (1 KiB, 3 KiB omitted)"],
-        badges: ["truncated", "full output"],
+        meta: ["read_file", "42 ms", "file missing", "tool context 2 KiB, 1 KiB omitted", "artifact c1.txt (1 KiB, 3 KiB omitted)"],
+        badges: ["context trimmed", "truncated", "full output"],
       },
     });
     expect(decision).toMatchObject({

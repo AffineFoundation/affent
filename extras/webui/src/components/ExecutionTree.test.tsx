@@ -64,6 +64,19 @@ describe("ExecutionTree", () => {
     await user.click(screen.getByRole("button", { name: /Delegated work Inspect docs/ }));
     expect(screen.getByTestId("action-inspector-summary")).toHaveTextContent("Merged ~360 tokens");
   });
+
+  it("shows when a tool output was trimmed before entering model context", async () => {
+    const user = userEvent.setup();
+    const turn = contextTrimmedTurn();
+
+    render(<ExecutionTree turn={turn} events={[]} />);
+
+    await user.click(screen.getByRole("button", { name: /Command cat big\.log/ }));
+
+    expect(screen.getByText("context trimmed")).toBeInTheDocument();
+    expect(screen.getByTestId("action-inspector-summary")).toHaveTextContent("Tool context 4 KiB · 2 KiB omitted");
+    expect(screen.getByText(/Status done · Exit 0 · Tool context 4 KiB · 2 KiB omitted/)).toBeInTheDocument();
+  });
 });
 
 function runningTurn(): TurnState {
@@ -146,6 +159,36 @@ function delegatedTurn(): TurnState {
         contextBytes: 1440,
         contextOmittedBytes: 0,
         contextEstimatedTokens: 360,
+      },
+    ],
+  };
+}
+
+function contextTrimmedTurn(): TurnState {
+  return {
+    id: "t4",
+    status: "completed",
+    userText: "inspect large output",
+    thinkingText: "",
+    thinkingStreaming: false,
+    assistantText: "",
+    messageStreaming: false,
+    toolCalls: [
+      {
+        callId: "c4",
+        tool: "shell",
+        args: { command: "cat big.log" },
+        argsTruncated: false,
+        argsRepaired: false,
+        canonicalized: false,
+        status: "success",
+        exitCode: 0,
+        result: "large output preview",
+        resultSummary: "large output preview",
+        resultTruncated: false,
+        contextBytes: 4096,
+        contextOmittedBytes: 2048,
+        contextEstimatedTokens: 1024,
       },
     ],
   };

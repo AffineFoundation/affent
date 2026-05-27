@@ -1,4 +1,5 @@
 import type { ToolCallState, ToolCallStatus, TurnState } from "../store/sessionState";
+import { formatByteCount } from "./byteFormat";
 
 export type ExecutionNodeKind = "tool" | "subagent" | "focused_task" | "mcp";
 
@@ -412,6 +413,12 @@ function baseMetrics(call: ToolCallState): ExecutionMetric[] {
   for (const kind of callFailureKinds(call)) metrics.push({ label: "failure", value: kind });
   if (call.contextEstimatedTokens && call.contextEstimatedTokens > 0) {
     metrics.push({ label: "merged", value: `~${call.contextEstimatedTokens} tokens` });
+  }
+  if (call.contextBytes && call.contextBytes > 0) {
+    metrics.push({ label: "context", value: formatByteCount(call.contextBytes) });
+  }
+  if (call.contextOmittedBytes && call.contextOmittedBytes > 0) {
+    metrics.push({ label: "context omitted", value: formatByteCount(call.contextOmittedBytes) });
   }
   return metrics;
 }

@@ -376,6 +376,8 @@ function toolResultMeta(event: NormalizedEvent, context: DisplayContext): string
   const omittedBytes = readNumber(event.data, "result_omitted_bytes");
   const capBytes = readNumber(event.data, "result_cap_bytes");
   const resultTruncated = readBoolean(event.data, "result_truncated");
+  const contextBytes = readNumber(event.data, "context_bytes");
+  const contextOmittedBytes = readNumber(event.data, "context_omitted_bytes");
   const sourceAccess = describeSourceAccess(readString(event.data, "result") ?? readString(event.data, "result_summary"));
   const sessionSearchPayload = tool === "session_search" ? parseJSONRecord(readString(event.data, "result")) : undefined;
   const sessionSearch = sessionSearchPayload ? sessionSearchMeta(sessionSearchPayload) : [];
@@ -393,6 +395,7 @@ function toolResultMeta(event: NormalizedEvent, context: DisplayContext): string
     sourceAccess?.httpStatus ? `http ${sourceAccess.httpStatus}` : undefined,
     sourceAccess?.contentType,
     sourceAccess?.jsonPath ? `json path ${sourceAccess.jsonPath}` : undefined,
+    toolContextMeta(contextBytes, contextOmittedBytes),
     artifactPath
       ? `artifact ${artifactDisplayLabel({
           path: artifactPath,
@@ -407,11 +410,20 @@ function toolResultMeta(event: NormalizedEvent, context: DisplayContext): string
   ]);
 }
 
+function toolContextMeta(contextBytes?: number, contextOmittedBytes?: number): string | undefined {
+  if ((!contextBytes || contextBytes <= 0) && (!contextOmittedBytes || contextOmittedBytes <= 0)) return undefined;
+  const parts: string[] = [];
+  if (contextBytes && contextBytes > 0) parts.push(formatByteCount(contextBytes));
+  if (contextOmittedBytes && contextOmittedBytes > 0) parts.push(`${formatByteCount(contextOmittedBytes)} omitted`);
+  return `tool context ${parts.join(", ")}`;
+}
+
 function toolResultBadges(event: NormalizedEvent): string[] {
   const sourceAccess = describeSourceAccess(readString(event.data, "result") ?? readString(event.data, "result_summary"));
   return compact([
     ...eventFailureKinds(event),
     sourceAccess ? sourceAccess.status : undefined,
+    (readNumber(event.data, "context_omitted_bytes") ?? 0) > 0 ? "context trimmed" : undefined,
     readBoolean(event.data, "result_truncated") ? "truncated" : undefined,
     readString(event.data, "result_artifact_path") ? "full output" : undefined,
   ]);

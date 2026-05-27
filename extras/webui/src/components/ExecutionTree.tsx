@@ -3,7 +3,7 @@ import type { NormalizedEvent } from "../normalize/normalizeEvent";
 import type { ToolCallState, TurnState } from "../store/sessionState";
 import type { UseAsDraft } from "../view/draftSource";
 import { buildExecutionTree, formatTokenUsageCompact, formatTokenUsageDetail, type ExecutionTreeNode } from "../view/executionTree";
-import { formatBytes } from "../view/byteFormat";
+import { formatByteCount, formatBytes } from "../view/byteFormat";
 import { artifactDisplayLabel, artifactName } from "../view/turnArtifacts";
 import { CopyButton } from "./CopyButton";
 import { CopyMenu } from "./CopyMenu";
@@ -142,6 +142,7 @@ function ExecutionNodeView({
           ))}
           {!node.failureKinds?.length && node.failureKind ? <span className="badge" data-kind="error">{node.failureKind}</span> : null}
           {node.argsTruncated || node.resultTruncated ? <span className="badge" data-kind="truncation">truncated</span> : null}
+          {node.contextOmittedBytes && node.contextOmittedBytes > 0 ? <span className="badge" data-kind="truncation">context trimmed</span> : null}
           {node.repairNotes?.length || node.originalTool ? <span className="badge" data-kind="repair">repaired</span> : null}
           {node.resultArtifactPath ? <span className="badge" data-kind="artifact">artifact</span> : null}
           {node.contextEstimatedTokens && (node.kind === "subagent" || node.kind === "focused_task") ? (
@@ -405,6 +406,7 @@ function ActionInspectorSummary({ node, searchQuery }: { node: ExecutionTreeNode
     node.tokenUsage ? { label: "Usage", value: formatTokenUsageDetail(node.tokenUsage) } : undefined,
     node.tokenUsage?.costUsd != null ? { label: "Cost", value: formatCost(node.tokenUsage.costUsd) } : undefined,
     node.resultArtifactPath ? { label: "File", value: artifactSummary(node), tone: "artifact" } : undefined,
+    toolContextSummary(node),
     node.repairNotes?.length || node.originalTool ? { label: "Repair", value: `${node.repairNotes?.length || 1} note${(node.repairNotes?.length || 1) === 1 ? "" : "s"}`, tone: "warning" } : undefined,
     node.resultTruncated || node.argsTruncated ? { label: "Limit", value: "truncated", tone: "warning" } : undefined,
   ]);
@@ -445,6 +447,19 @@ function artifactSummary(node: ExecutionTreeNode): string {
     omittedBytes: node.resultOmittedBytes,
     capBytes: node.resultCapBytes,
   });
+}
+
+function toolContextSummary(node: ExecutionTreeNode): SummaryItem | undefined {
+  if (!node.contextBytes && !node.contextOmittedBytes) return undefined;
+  const parts: string[] = [];
+  if (node.contextBytes && node.contextBytes > 0) parts.push(formatByteCount(node.contextBytes));
+  if (node.contextOmittedBytes && node.contextOmittedBytes > 0) parts.push(`${formatByteCount(node.contextOmittedBytes)} omitted`);
+  if (parts.length === 0) return undefined;
+  return {
+    label: "Tool context",
+    value: parts.join(" · "),
+    tone: node.contextOmittedBytes && node.contextOmittedBytes > 0 ? "warning" : undefined,
+  };
 }
 
 type SummaryTone = "success" | "error" | "running" | "warning" | "artifact";
@@ -501,6 +516,8 @@ function headlineActionScore(item: SummaryItem): number {
   }
   if (item.tone === "error") return 75;
   if (item.tone === "warning") return 70;
+  if (item.label === "Merged") return 68;
+  if (item.label === "Tool context") return 65;
   if (item.label === "Repair") return 60;
   if (item.label === "Limit") return 55;
   if (item.tone === "running") return 50;
@@ -603,6 +620,8 @@ function actionRecordText(node: ExecutionTreeNode, primaryResult?: string): stri
   if (node.mcpServer) lines.push(`MCP server: ${node.mcpServer}`);
   if (node.mcpTool) lines.push(`MCP action: ${node.mcpTool}`);
   if (node.resultArtifactPath) lines.push(`Artifact: ${artifactSummary(node)}`);
+  const context = toolContextSummary(node);
+  if (context) lines.push(`${context.label}: ${context.value}`);
   if (node.nextHint) lines.push(`Next: ${node.nextHint}`);
   if (node.args) lines.push(`Input:\n${JSON.stringify(node.args, null, 2)}`);
   if (primaryResult) lines.push(`Output:\n${summarize(primaryResult, 2000)}`);
