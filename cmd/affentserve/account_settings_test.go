@@ -126,6 +126,10 @@ func TestAccountSettingsSSHKeyGeneratesAndThenShowsExisting(t *testing.T) {
 	if !strings.Contains(gitSSHCommand, privatePath) || !strings.Contains(gitSSHCommand, "IdentitiesOnly=yes") {
 		t.Fatalf("GIT_SSH_COMMAND = %q, want generated private key command", gitSSHCommand)
 	}
+	secrets := pool.accountSecretValues()
+	if !stringSliceContains(secrets, gitSSHCommand) || !stringSliceContains(secrets, privatePath) {
+		t.Fatalf("account secret values = %+v, want generated GIT_SSH_COMMAND and private key path", secrets)
+	}
 }
 
 func TestAccountSettingsEnvOverridesGeneratedGitSSHCommand(t *testing.T) {
@@ -356,4 +360,13 @@ func findEnvPairValue(pairs []string, name string) string {
 		}
 	}
 	return ""
+}
+
+func stringSliceContains(values []string, want string) bool {
+	for _, value := range values {
+		if value == want {
+			return true
+		}
+	}
+	return false
 }

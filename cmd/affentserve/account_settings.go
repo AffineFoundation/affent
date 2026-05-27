@@ -222,12 +222,25 @@ func (p *SessionPool) accountSecretValues() []string {
 		return nil
 	}
 	out := make([]string, 0, len(settings.Env))
-	for _, entry := range settings.Env {
-		value := strings.TrimSpace(entry.Value)
-		if value == "" {
-			continue
+	seen := map[string]bool{}
+	add := func(value string) {
+		value = strings.TrimSpace(value)
+		if value == "" || seen[value] {
+			return
 		}
+		seen[value] = true
 		out = append(out, value)
+	}
+	for _, entry := range settings.Env {
+		add(entry.Value)
+	}
+	add(os.Getenv("GIT_SSH_COMMAND"))
+	if command, ok := accountGitSSHCommand(p); ok {
+		add(command)
+	}
+	privatePath, _ := accountSSHKeyPaths(p)
+	if exists, err := accountPrivateKeyExists(privatePath); err == nil && exists {
+		add(privatePath)
 	}
 	return out
 }
