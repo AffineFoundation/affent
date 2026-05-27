@@ -65,6 +65,7 @@ func renderDebugTimeline(res BatchResult, scenario BatchScenario, trace *Trace) 
 			fmt.Fprintf(&b, "- %s\n", timelineInline(failure, timelineErrorPreviewBytes))
 		}
 	}
+	renderTimelineRecoveryGuide(&b, res)
 	renderTimelineDebugBrief(&b, res)
 	renderTimelineChildTranscripts(&b, res.ChildTranscripts)
 	renderTimelineScenarioExpectations(&b, scenario, res.OK)
@@ -97,6 +98,38 @@ func renderDebugTimeline(res BatchResult, scenario BatchScenario, trace *Trace) 
 	renderTimelineTools(&b, trace)
 	renderTimelineFinal(&b, trace)
 	return b.String()
+}
+
+func renderTimelineRecoveryGuide(b *strings.Builder, res BatchResult) {
+	guide := BuildDebugRecoveryGuide(res)
+	if guide == nil {
+		return
+	}
+	b.WriteString("\n## Recovery Guide\n\n")
+	if guide.Summary != "" {
+		fmt.Fprintf(b, "- summary: %s\n", timelineInline(guide.Summary, timelineErrorPreviewBytes))
+	}
+	if len(guide.Inspect) > 0 {
+		b.WriteString("- inspect_order:\n")
+		for _, item := range guide.Inspect {
+			fmt.Fprintf(b, "  - `%s`\n", timelineInline(item, timelineArgsPreviewBytes))
+		}
+	}
+	if len(guide.ExactRerunCommand) > 0 {
+		b.WriteString("- exact_rerun_command:\n")
+		b.WriteString("  ```text\n")
+		b.WriteString(timelineBlock(shellQuoteCommand(guide.ExactRerunCommand), timelineArgsPreviewBytes))
+		b.WriteString("\n  ```\n")
+	}
+	if len(guide.FullTraceRerunCommand) > 0 {
+		b.WriteString("- full_trace_rerun_command:\n")
+		b.WriteString("  ```text\n")
+		b.WriteString(timelineBlock(shellQuoteCommand(guide.FullTraceRerunCommand), timelineArgsPreviewBytes))
+		b.WriteString("\n  ```\n")
+	}
+	if guide.ContinuePrompt != "" {
+		fmt.Fprintf(b, "- continue_prompt: %s\n", timelineInline(guide.ContinuePrompt, timelineResultPreviewBytes))
+	}
 }
 
 func timelineMetricsSummary(res BatchResult) string {

@@ -986,8 +986,8 @@ gates are enabled, passing workspaces are kept until the batch gate result is
 known; if any gate fails they remain for trace/timeline inspection, otherwise
 they are cleaned unless `--keep-workspaces` is set. `--keep-workspaces` also
 keeps passing runs for local inspection. The timeline is the human-readable
-index for debugging: it links the raw trace, starts with a `Debug Brief` for
-failed or diagnostic-heavy runs, shows the redacted
+index for debugging: it links the raw trace, starts with a `Recovery Guide` and
+`Debug Brief` for failed or diagnostic-heavy runs, shows the redacted
 `affentctl` command argv, trace event type counts, effective runtime surface,
 tool calls with args/result previews, child transcript refs,
 truncation/artifact pointers, loop protocol feeds, loop decisions, context
@@ -1002,11 +1002,15 @@ deep provider/stream debugging when the raw `message.delta` sequence matters.
 The trace emits a `runtime.surface` event at turn start, and the debug
 manifest copies the latest surface into `runtime_surface`, including the
 effective tool names, broad capability flags, partial workspace tool lists, and
-key tool-result limits. The manifest and JSONL scenario record also include a
-machine-readable `debug_brief` with stable tags and inspection hints; loop
-guard hints route first to `loop_guard_examples` so the blocked call, guard
-reason, and suggested next step are visible before opening full traces. The debug
-manifest, timeline, and JSONL scenario record also include structured
+key tool-result limits. The manifest includes `recovery_guide`, which orders
+the files and sections to inspect, keeps the exact redacted rerun command, adds
+a full-trace rerun command when the compact trace skipped streaming deltas, and
+provides a continuation prompt for handing the failure back to an agent. The
+manifest and JSONL scenario record also include a machine-readable
+`debug_brief` with stable tags and inspection hints; loop guard hints route
+first to `loop_guard_examples` so the blocked call, guard reason, and suggested
+next step are visible before opening full traces. The debug manifest, timeline,
+and JSONL scenario record also include structured
 `expectations` plus derived expected capability names/outcome, so
 batch-analysis scripts can group failures by required tools, evidence checks,
 loop protocol feed checkpoints, plan/delegation constraints, and

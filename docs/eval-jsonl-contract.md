@@ -218,6 +218,15 @@ Scenario records describe one eval case:
   Loop-guard items point at `loop_guard_examples` first so operators can see
   the blocked tool, guard reason, and suggested next step before opening the
   full tool timeline.
+- Retained debug manifests include `recovery_guide`, an optional
+  machine-readable next-action block. It includes a concise summary, ordered
+  inspect targets
+  spanning timeline/manifest/trace/final text/stderr/artifacts/child
+  transcripts plus debug-brief sections, the exact redacted `affentctl` rerun
+  command, a full-trace rerun command when the compact trace skipped streaming
+  deltas, and a copyable continuation prompt for handing the failure back to an
+  agent. JSONL scenario records expose the manifest location through
+  `debug_manifest_path`; they do not inline this block.
 - `loop_guard_interventions`: runtime loop guard intervention count.
 - `forced_no_tools`: count of forced no-tool follow-up requests after repeated
   blocking loop guard interventions. Soft warnings such as

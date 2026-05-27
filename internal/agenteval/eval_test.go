@@ -2009,6 +2009,17 @@ func TestWriteScenarioDebugArtifactsIndexesTraceAndFinalText(t *testing.T) {
 	if manifest.DebugBrief == nil || len(manifest.DebugBrief.Tags) == 0 {
 		t.Fatalf("manifest debug brief missing: %+v", manifest.DebugBrief)
 	}
+	if manifest.RecoveryGuide == nil ||
+		!strings.Contains(manifest.RecoveryGuide.Summary, "scenario failed") ||
+		!reflect.DeepEqual(manifest.RecoveryGuide.ExactRerunCommand, res.AffentctlCommand) ||
+		!stringSliceContains(manifest.RecoveryGuide.Inspect, res.TimelinePath) ||
+		!stringSliceContains(manifest.RecoveryGuide.Inspect, res.DebugManifestPath) ||
+		!stringSliceContains(manifest.RecoveryGuide.Inspect, tracePath) ||
+		!stringSliceContains(manifest.RecoveryGuide.Inspect, filepath.Join(workspace, ".affent", "artifacts")) ||
+		!stringSliceContains(manifest.RecoveryGuide.Inspect, filepath.Join(workspace, ".affentctl")) ||
+		!strings.Contains(manifest.RecoveryGuide.ContinuePrompt, "structured failures") {
+		t.Fatalf("manifest recovery guide = %+v", manifest.RecoveryGuide)
+	}
 	if !stringSliceContains(manifest.DebugBrief.Tags, "tool_failure:dynamic_shell") ||
 		!stringSliceContains(manifest.DebugBrief.Tags, "runtime_error:llm_timeout") ||
 		!stringSliceContains(manifest.DebugBrief.Tags, "source_dynamic_partial") ||
@@ -2190,6 +2201,12 @@ func TestWriteScenarioDebugArtifactsIndexesTraceAndFinalText(t *testing.T) {
 		"affentctl_command",
 		"--api-key '<redacted>'",
 		"## Debug Brief",
+		"## Recovery Guide",
+		"summary: scenario failed; inspect the ordered artifacts below before trusting final text or rerunning",
+		"inspect_order:",
+		"affenteval-debug.json",
+		"exact_rerun_command:",
+		"continue_prompt: Investigate this Affent eval failure using the retained debug artifacts before changing code.",
 		"outcome: `failed`; inspect the failure list",
 		"tool_failure_by_kind: `dynamic_shell=1`",
 		"tool_failure_example[dynamic_shell]: tool=`web_fetch` exit=`1` args=url=\"https://example.test/report\"",
@@ -2290,6 +2307,28 @@ func TestWriteScenarioDebugArtifactsIndexesTraceAndFinalText(t *testing.T) {
 		if !strings.Contains(string(timeline), want) {
 			t.Fatalf("timeline missing %q:\n%s", want, string(timeline))
 		}
+	}
+}
+
+func TestBuildDebugRecoveryGuideAddsFullTraceRerunCommand(t *testing.T) {
+	res := BatchResult{
+		Workspace:        "/tmp/affent-eval/debug",
+		TimelinePath:     "/tmp/affent-eval/debug/affenteval-timeline.md",
+		DebugManifestPath: "/tmp/affent-eval/debug/affenteval-debug.json",
+		TracePath:        "/tmp/affent-eval/debug/trace.jsonl",
+		Failures:         []string{"missing browser network evidence"},
+		AffentctlCommand: []string{"go", "run", "./cmd/affentctl", "run", "--trace-skip-deltas", "--prompt", "<prompt>"},
+		TraceDeltas:      false,
+	}
+	guide := BuildDebugRecoveryGuide(res)
+	if guide == nil {
+		t.Fatal("recovery guide missing")
+	}
+	if strings.Join(guide.FullTraceRerunCommand, "\x00") != "go\x00run\x00./cmd/affentctl\x00run\x00--prompt\x00<prompt>" {
+		t.Fatalf("full trace rerun command = %#v", guide.FullTraceRerunCommand)
+	}
+	if !strings.Contains(guide.ContinuePrompt, "missing browser network evidence") && !strings.Contains(guide.ContinuePrompt, "explicit expectation failed") {
+		t.Fatalf("continue prompt = %q, want failure-oriented guidance", guide.ContinuePrompt)
 	}
 }
 

@@ -272,6 +272,7 @@ type DebugManifest struct {
 	ExpectationCapabilityFailedNames       []string                      `json:"expectation_capability_failed_names,omitempty"`
 	Failures                               []string                      `json:"failures,omitempty"`
 	DebugBrief                             *DebugBrief                   `json:"debug_brief,omitempty"`
+	RecoveryGuide                          *DebugRecoveryGuide           `json:"recovery_guide,omitempty"`
 	ToolRepairExamples                     []ToolRepairExample           `json:"tool_repair_examples,omitempty"`
 	LoopGuardExamples                      []LoopGuardExample            `json:"loop_guard_examples,omitempty"`
 	LoopProtocolFeedExamples               []LoopProtocolFeed            `json:"loop_protocol_feed_examples,omitempty"`
@@ -289,6 +290,14 @@ type DebugManifest struct {
 	Metrics                                DebugMetrics                  `json:"metrics"`
 	RuntimeSurface                         *sse.RuntimeSurfacePayload    `json:"runtime_surface,omitempty"`
 	GeneratedAt                            string                        `json:"generated_at"`
+}
+
+type DebugRecoveryGuide struct {
+	Summary               string   `json:"summary,omitempty"`
+	Inspect               []string `json:"inspect,omitempty"`
+	ExactRerunCommand     []string `json:"exact_rerun_command,omitempty"`
+	FullTraceRerunCommand []string `json:"full_trace_rerun_command,omitempty"`
+	ContinuePrompt        string   `json:"continue_prompt,omitempty"`
 }
 
 type DebugScenarioExpectations struct {
@@ -991,13 +1000,14 @@ func writeScenarioDebugArtifacts(res *BatchResult, scenario BatchScenario, stdou
 		return err
 	}
 	res.StderrPath = stderrPath
+	manifestPath := filepath.Join(res.Workspace, "affenteval-debug.json")
 	timelinePath := filepath.Join(res.Workspace, "affenteval-timeline.md")
+	res.DebugManifestPath = manifestPath
+	res.TimelinePath = timelinePath
 	if err := os.WriteFile(timelinePath, []byte(renderDebugTimeline(*res, scenario, trace)), 0o644); err != nil {
 		return err
 	}
-	res.TimelinePath = timelinePath
 
-	manifestPath := filepath.Join(res.Workspace, "affenteval-debug.json")
 	expectationCapabilities := ExpectationCapabilityNames(expectations)
 	manifest := DebugManifest{
 		SchemaVersion:                          1,
@@ -1023,6 +1033,7 @@ func writeScenarioDebugArtifacts(res *BatchResult, scenario BatchScenario, stdou
 		ExpectationCapabilityFailedNames:       ExpectationCapabilityFailedNames(res.OK, expectationCapabilities),
 		Failures:                               append([]string(nil), res.Failures...),
 		DebugBrief:                             BuildDebugBrief(*res),
+		RecoveryGuide:                          BuildDebugRecoveryGuide(*res),
 		ToolRepairExamples:                     append([]ToolRepairExample(nil), res.ToolRepairExamples...),
 		LoopGuardExamples:                      append([]LoopGuardExample(nil), res.LoopGuardExamples...),
 		LoopProtocolFeedExamples:               append([]LoopProtocolFeed(nil), res.LoopProtocolFeeds.Examples...),
@@ -1094,8 +1105,108 @@ func writeScenarioDebugArtifacts(res *BatchResult, scenario BatchScenario, stdou
 	if err := os.WriteFile(manifestPath, raw, 0o644); err != nil {
 		return err
 	}
-	res.DebugManifestPath = manifestPath
 	return nil
+}
+
+func BuildDebugRecoveryGuide(res BatchResult) *DebugRecoveryGuide {
+	if strings.TrimSpace(res.Workspace) == "" && len(res.AffentctlCommand) == 0 && len(res.Failures) == 0 {
+		return nil
+	}
+	brief := BuildDebugBrief(res)
+	if res.OK && res.RunExitCode == 0 && len(brief.Items) == 0 {
+		return nil
+	}
+	guide := &DebugRecoveryGuide{
+		Summary:               debugRecoverySummary(res),
+		Inspect:               debugRecoveryInspect(res, brief),
+		ExactRerunCommand:     append([]string(nil), res.AffentctlCommand...),
+		FullTraceRerunCommand: debugRecoveryFullTraceCommand(res),
+		ContinuePrompt:        debugRecoveryContinuePrompt(res),
+	}
+	if guide.Summary == "" && len(guide.Inspect) == 0 && len(guide.ExactRerunCommand) == 0 && len(guide.FullTraceRerunCommand) == 0 && guide.ContinuePrompt == "" {
+		return nil
+	}
+	return guide
+}
+
+func debugRecoverySummary(res BatchResult) string {
+	if res.OK {
+		return "scenario passed; keep the debug artifacts as baseline evidence before changing related runtime behavior"
+	}
+	if res.TurnEndReason != "" && res.TurnEndReason != "completed" {
+		return fmt.Sprintf("scenario failed after turn ended with %q; inspect timeline, debug brief, and trace before rerunning", res.TurnEndReason)
+	}
+	return "scenario failed; inspect the ordered artifacts below before trusting final text or rerunning"
+}
+
+func debugRecoveryInspect(res BatchResult, brief *DebugBrief) []string {
+	var inspect []string
+	addPath := func(path string) {
+		path = strings.TrimSpace(path)
+		if path != "" && !containsString(inspect, path) {
+			inspect = append(inspect, path)
+		}
+	}
+	addLabel := func(label string, include bool) {
+		label = strings.TrimSpace(label)
+		if include && label != "" && !containsString(inspect, label) {
+			inspect = append(inspect, label)
+		}
+	}
+	addPath(res.TimelinePath)
+	addPath(res.DebugManifestPath)
+	addPath(res.TracePath)
+	addPath(res.FinalTextPath)
+	if !res.OK || res.RunExitCode != 0 {
+		addPath(res.StderrPath)
+		addPath(res.StdoutPath)
+	}
+	addLabel(filepath.Join(res.Workspace, ".affent", "artifacts"), res.ToolTruncation.ResultArtifacts > 0)
+	addLabel(filepath.Join(res.Workspace, ".affentctl"), len(res.ChildTranscripts) > 0 || res.Delegation.HasAny())
+	if brief != nil {
+		for _, item := range brief.Items {
+			for _, target := range item.Inspect {
+				addLabel(target, true)
+			}
+		}
+	}
+	return inspect
+}
+
+func debugRecoveryFullTraceCommand(res BatchResult) []string {
+	if len(res.AffentctlCommand) == 0 || res.TraceDeltas {
+		return nil
+	}
+	out := make([]string, 0, len(res.AffentctlCommand))
+	for _, arg := range res.AffentctlCommand {
+		if arg == "--trace-skip-deltas" {
+			continue
+		}
+		out = append(out, arg)
+	}
+	if len(out) == len(res.AffentctlCommand) {
+		return nil
+	}
+	return out
+}
+
+func debugRecoveryContinuePrompt(res BatchResult) string {
+	var parts []string
+	if res.OK {
+		parts = append(parts, "Use this passing eval as baseline evidence.")
+	} else {
+		parts = append(parts, "Investigate this Affent eval failure using the retained debug artifacts before changing code.")
+	}
+	if res.TimelinePath != "" {
+		parts = append(parts, "Start from "+res.TimelinePath+".")
+	}
+	if res.DebugManifestPath != "" {
+		parts = append(parts, "Use "+res.DebugManifestPath+" for structured failures, debug tags, examples, and rerun commands.")
+	}
+	if len(res.Failures) > 0 {
+		parts = append(parts, "Explain which explicit expectation failed and make the smallest runtime change that improves the real long-run scenario.")
+	}
+	return strings.Join(parts, " ")
 }
 
 func debugScenarioExpectations(s BatchScenario) DebugScenarioExpectations {
