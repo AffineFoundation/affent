@@ -1801,7 +1801,7 @@ describe("App", () => {
     const more = await screen.findByTestId("workbench-more-panel");
     expect(more).not.toHaveAttribute("open");
     expect(more).toHaveTextContent("On demand");
-    expect(more).toHaveTextContent("Open when needed");
+    expect(more).toHaveTextContent("No other items need attention");
     expect(more).toHaveTextContent("Runtime · Access setup · Memory · Skills");
     expect(screen.getByTestId("runtime-stats-panel").closest("[data-testid='workbench-more-panel']")).toBe(more);
     expect(screen.getByTestId("account-settings-panel").closest("[data-testid='workbench-more-panel']")).toBe(more);
