@@ -715,7 +715,7 @@ func (p *SessionPool) buildSession(id string) (*Session, error) {
 		loop.LoopProtocolPath = loopProtocolPath
 		loop.SkillProvider = agent.WithLoopProtocolSkillProviderWithCheckpoint(loopProtocolPath, loopProtocolPlanCheckpointProvider(planPath), loop.SkillProvider)
 	}
-	if p.cfg.EnableBuiltins {
+	if p.cfg.EnableBuiltins && !p.cfg.EvalMode {
 		loop.SkillProvider = p.withAccountAccessSkillProvider(loop.SkillProvider)
 	}
 	if p.cfg.EnableSubagent {

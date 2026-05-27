@@ -1572,6 +1572,39 @@ func TestSessionPool_EvalModeAllowsIndividualToolsAndPromptMatchesRegistry(t *te
 	}
 }
 
+func TestSessionPool_EvalModeDoesNotInjectAccountAccessSkill(t *testing.T) {
+	cfg := Config{
+		Listen:         "127.0.0.1:0",
+		MaxSessions:    4,
+		SessionIdleTTL: "5m",
+		WorkspaceRoot:  t.TempDir(),
+		BaseURL:        "http://127.0.0.1:0",
+		APIKey:         "test",
+		Model:          "fake",
+		EvalMode:       true,
+		EvalTools:      "read_file,shell",
+	}
+	pool, err := NewSessionPool(cfg, zerolog.New(io.Discard))
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(pool.Shutdown)
+	if err := setAccountEnv(pool, "GITHUB_TOKEN", "ghp_eval_secret"); err != nil {
+		t.Fatalf("set env: %v", err)
+	}
+
+	s, err := pool.GetOrCreate("eval-account-access")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if s.loop.SkillProvider == nil {
+		return
+	}
+	if got := s.loop.SkillProvider("clone private repo"); strings.Contains(got, "AFFENT ACCOUNT ACCESS") || strings.Contains(got, "GITHUB_TOKEN") {
+		t.Fatalf("eval-mode skill provider should not inject account access hints:\n%s", got)
+	}
+}
+
 func TestSessionPool_EvalModeAllowsSessionSearchWithoutWorkspaceBuiltins(t *testing.T) {
 	cfg := Config{
 		Listen:         "127.0.0.1:0",
