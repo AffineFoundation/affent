@@ -36,6 +36,7 @@ const (
 	maxSessionEventSummaryHead  = 512 * 1024
 	maxSessionRuntimeSkillNames = 128
 	maxSessionRecoveryHintChars = 160
+	maxSessionMemoryTopics      = 64
 )
 
 type sessionListResponse struct {
@@ -867,36 +868,137 @@ func summarizeSessionArtifactsDir(root string) *sessionArtifactsSummary {
 }
 
 func summarizeSessionMemory(sharedUserMemory bool, sessionDir, userMemoryPath string) *sessionMemorySummary {
-	store := memory.NewFileMemoryStore("")
-	store.MemoryDir = sessionDir
-	store.UserPath = userMemoryPath
-
 	summary := sessionMemorySummary{SharedUserMemory: sharedUserMemory}
-	addTopics := func(target memory.MemoryTarget, resp memory.MemoryResponse) {
-		for _, topic := range resp.Topics {
-			if topic.Entries <= 0 && topic.Chars <= 0 {
-				continue
-			}
-			summary.BucketCount++
-			summary.EntryCount += topic.Entries
-			summary.CharsUsed += topic.Chars
-			if topic.NewestAt != "" && (summary.LatestAt == "" || topic.NewestAt > summary.LatestAt) {
-				summary.LatestAt = topic.NewestAt
-				summary.LatestTarget = string(target)
-				summary.LatestTopic = topic.Topic
-			}
+	memoryBuckets := 0
+	addTopic := func(target memory.MemoryTarget, topic string, path string) {
+		entries, chars, newest := readMemoryBucketSummary(path)
+		if entries <= 0 && chars <= 0 {
+			return
+		}
+		if target == memory.TargetMemory {
+			memoryBuckets++
+		}
+		summary.BucketCount++
+		summary.EntryCount += entries
+		summary.CharsUsed += chars
+		if newest != "" && (summary.LatestAt == "" || newest > summary.LatestAt) {
+			summary.LatestAt = newest
+			summary.LatestTarget = string(target)
+			summary.LatestTopic = topic
 		}
 	}
-	if resp, err := store.ListTopics(memory.TargetUser); err == nil && resp.OK {
-		addTopics(memory.TargetUser, resp)
+	addTopic(memory.TargetUser, "user", userMemoryPath)
+	addTopic(memory.TargetMemory, memory.CoreTopic, filepath.Join(sessionDir, "core.md"))
+	for _, topic := range sessionMemoryTopicFiles(filepath.Join(sessionDir, "topics"), maxSessionMemoryTopics) {
+		addTopic(memory.TargetMemory, strings.TrimSuffix(topic.name, ".md"), topic.path)
 	}
-	if resp, err := store.ListTopics(memory.TargetMemory); err == nil && resp.OK {
-		addTopics(memory.TargetMemory, resp)
+	if memoryBuckets == 0 {
+		addTopic(memory.TargetMemory, memory.DefaultTopic, filepath.Join(sessionDir, "MEMORY.md"))
 	}
 	if summary.BucketCount == 0 {
 		return nil
 	}
 	return &summary
+}
+
+type sessionMemoryTopicFile struct {
+	name string
+	path string
+}
+
+func sessionMemoryTopicFiles(dir string, limit int) []sessionMemoryTopicFile {
+	info, err := os.Lstat(dir)
+	if err != nil || !info.IsDir() || info.Mode()&os.ModeSymlink != 0 {
+		return nil
+	}
+	f, err := os.Open(dir)
+	if err != nil {
+		return nil
+	}
+	defer f.Close()
+	var files []sessionMemoryTopicFile
+	for {
+		entries, err := f.ReadDir(sessionReadDirBatch)
+		if err != nil && !errors.Is(err, io.EOF) {
+			return nil
+		}
+		for _, ent := range entries {
+			if limit > 0 && len(files) >= limit {
+				sort.Slice(files, func(i, j int) bool { return files[i].name < files[j].name })
+				return files
+			}
+			if ent.IsDir() || durableDirEntryIsSymlink(ent) || !strings.HasSuffix(ent.Name(), ".md") {
+				continue
+			}
+			files = append(files, sessionMemoryTopicFile{name: ent.Name(), path: filepath.Join(dir, ent.Name())})
+		}
+		if errors.Is(err, io.EOF) {
+			break
+		}
+	}
+	sort.Slice(files, func(i, j int) bool { return files[i].name < files[j].name })
+	return files
+}
+
+func readMemoryBucketSummary(path string) (entries int, chars int, newest string) {
+	rawEntries := readMemoryEntriesForSummary(path)
+	for _, entry := range rawEntries {
+		ts, content := splitMemoryEntryForSummary(entry)
+		if content == "" {
+			continue
+		}
+		if entries > 0 {
+			chars += len("\n§\n")
+		}
+		entries++
+		chars += len(content)
+		if ts > newest {
+			newest = ts
+		}
+	}
+	return entries, chars, newest
+}
+
+func readMemoryEntriesForSummary(path string) []string {
+	info, err := os.Lstat(path)
+	if err != nil || info.IsDir() || info.Mode()&os.ModeSymlink != 0 {
+		return nil
+	}
+	f, err := os.Open(path)
+	if err != nil {
+		return nil
+	}
+	defer f.Close()
+	raw, err := io.ReadAll(io.LimitReader(f, memory.MaxMemoryFileBytes+1))
+	if err != nil || len(raw) > memory.MaxMemoryFileBytes {
+		return nil
+	}
+	text := strings.TrimSpace(string(raw))
+	if text == "" {
+		return nil
+	}
+	parts := strings.Split(text, "\n§\n")
+	out := make([]string, 0, len(parts))
+	for _, part := range parts {
+		part = strings.TrimSpace(part)
+		if part != "" {
+			out = append(out, part)
+		}
+	}
+	return out
+}
+
+func splitMemoryEntryForSummary(raw string) (string, string) {
+	raw = strings.TrimSpace(raw)
+	if len(raw) >= len("[2006-01-02T15:04:05Z]\n") && strings.HasPrefix(raw, "[") {
+		if end := strings.Index(raw, "]\n"); end > 0 {
+			ts := raw[1:end]
+			if _, err := time.Parse(time.RFC3339, ts); err == nil {
+				return ts, strings.TrimSpace(raw[end+2:])
+			}
+		}
+	}
+	return "", raw
 }
 
 func mergeSessionSummaries(a, b sessionSummary) sessionSummary {

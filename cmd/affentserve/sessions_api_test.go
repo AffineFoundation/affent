@@ -2337,6 +2337,40 @@ func TestSummarizeDurableSessionSharedUserMemoryDoesNotRefreshSession(t *testing
 	}
 }
 
+func TestSummarizeDurableSessionMemorySummaryDoesNotMigrateLegacyMemory(t *testing.T) {
+	memRoot := t.TempDir()
+	pool := newPoolWithMemoryRoot(t, memRoot)
+	createDurableSessionDir(t, pool, "legacy-memory-summary")
+	dir := pool.sessionDirPath("legacy-memory-summary")
+	if err := os.RemoveAll(filepath.Join(dir, "topics")); err != nil {
+		t.Fatalf("remove topics: %v", err)
+	}
+	legacyPath := filepath.Join(dir, "MEMORY.md")
+	if err := os.WriteFile(legacyPath, []byte("legacy fact for recovery\n"), 0o644); err != nil {
+		t.Fatalf("write legacy memory: %v", err)
+	}
+
+	summary, found, err := summarizeDurableSession(pool, "legacy-memory-summary")
+	if err != nil {
+		t.Fatalf("summarizeDurableSession: %v", err)
+	}
+	if !found || !summary.HasMemory || summary.Memory == nil {
+		t.Fatalf("legacy memory summary missing: found=%v summary=%+v", found, summary)
+	}
+	if summary.Memory.BucketCount != 1 ||
+		summary.Memory.EntryCount != 1 ||
+		summary.Memory.LatestTarget != "" ||
+		summary.Memory.LatestTopic != "" {
+		t.Fatalf("legacy unstamped memory summary = %+v, want one undated bucket without latest topic", summary.Memory)
+	}
+	if _, err := os.Stat(legacyPath); err != nil {
+		t.Fatalf("legacy MEMORY.md should remain after read-only summary: %v", err)
+	}
+	if durableStatePathExists(filepath.Join(dir, "topics", "general.md")) {
+		t.Fatal("read-only session summary must not migrate legacy MEMORY.md into topics/general.md")
+	}
+}
+
 func TestSessionCapabilitiesReflectActualRegisteredTools(t *testing.T) {
 	pool := newTestPool(t, 4, "5m")
 	pool.cfg.EnableBuiltins = false
