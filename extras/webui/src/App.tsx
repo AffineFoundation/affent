@@ -4,6 +4,7 @@ import { ApiClient, ApiError } from "./api/client";
 import {
   cancelSessionTurn,
   createSession,
+  deleteSessionLoopProtocol,
   deleteSession,
   getSessionMemory,
   getSessionPlan,
@@ -16,6 +17,7 @@ import {
   sendSessionMessage,
   streamSessionEvents,
   updateSessionLoopProtocol,
+  type SessionLoopProtocolDeleteResponse,
   type SessionLoopProtocolResponse,
   type SessionMemoryResponse,
   type SessionPlanSummary,
@@ -30,6 +32,7 @@ import { Composer, type ComposerDraft } from "./components/Composer";
 import { SessionList } from "./components/SessionList";
 import { SessionMemoryPanel } from "./components/SessionMemoryPanel";
 import { SessionPlanPanel } from "./components/SessionPlanPanel";
+import { SessionLoopPanel } from "./components/SessionLoopPanel";
 import { RuntimeStatsPanel } from "./components/RuntimeStatsPanel";
 import { SessionSkillsPanel } from "./components/SessionSkillsPanel";
 import { Timeline, type GuidanceReceiptView, type PendingMessageView } from "./components/Timeline";
@@ -108,6 +111,7 @@ export function App() {
   const [session, setSession] = useState<SessionState>(() => initialSessionState());
   const [actionBusy, setActionBusy] = useState(false);
   const [cancelBusy, setCancelBusy] = useState(false);
+  const [loopProtocolBusy, setLoopProtocolBusy] = useState(false);
   const [deletingSessionId, setDeletingSessionId] = useState<string | undefined>();
   const [pendingMessage, setPendingMessage] = useState<PendingMessageView | undefined>();
   const [guidanceReceipts, setGuidanceReceipts] = useState<GuidanceReceiptView[]>([]);
@@ -178,6 +182,8 @@ export function App() {
     return row?.title;
   }, [selectedSession]);
   const selectedSessionActive = selectedSession?.active === true;
+  const selectedLoopState = selectedSession?.loop_protocol?.state ?? selectedSession?.loop_state;
+  const showLoopContext = !demoActive && !!selectedSessionId && (selectedSession?.has_loop_protocol || selectedSession?.has_loop_state || !!selectedSession?.loop_protocol || !!selectedSession?.loop_state);
   const workflow = useMemo(() => deriveWorkflowStatus(session), [session]);
   const memoryUpdateCount = useMemo(
     () => session.turns.reduce((sum, turn) => sum + memoryUpdatesForTurn(turn).length, 0),
@@ -221,7 +227,7 @@ export function App() {
   const compactNav = demoActive || !showSessionNav;
   const showHeaderNewChat = !demoActive && !showSessionNav;
   const showChatContext = !demoActive && (session.turns.length > 0 || !!pendingMessage);
-  const showSurfaceContext = showChatContext || showWorkflowStatus;
+  const showSurfaceContext = showChatContext || showWorkflowStatus || showLoopContext;
   const surfaceBusy = actionBusy || session.status === "running" || !!pendingMessage;
   const surfaceMode = session.turns.length === 0 && !pendingMessage ? "empty" : "conversation";
   const composerResumesSavedChat = !!selectedSessionId && !selectedSessionActive && session.turns.length > 0;
@@ -613,6 +619,7 @@ export function App() {
     setArtifact({ state: "idle" });
     setActionBusy(false);
     setCancelBusy(false);
+    setLoopProtocolBusy(false);
     setStatus({ state: "loading", label: "Loading chat", detail: loadingSessionDetail(nextSessionId) });
   }
 
@@ -628,6 +635,7 @@ export function App() {
     setArtifact({ state: "idle" });
     setActionBusy(false);
     setCancelBusy(false);
+    setLoopProtocolBusy(false);
     setComposerDraft(undefined);
     setComposerFocusSignal((current) => current + 1);
     setStatus({ state: "connected", label: "Ready", detail: "Ready to chat" });
@@ -651,12 +659,28 @@ export function App() {
         setArtifact({ state: "idle" });
         setActionBusy(false);
         setCancelBusy(false);
+        setLoopProtocolBusy(false);
       }
       setStatus({ state: "connected", label: "Ready", detail: "Chat deleted" });
     } catch (err) {
       setStatus({ state: "error", label: "Delete failed", detail: formatError(err) });
     } finally {
       setDeletingSessionId(undefined);
+    }
+  }
+
+  async function handleDisableLoopProtocol(): Promise<void> {
+    if (!selectedSessionId || loopProtocolBusy) return;
+    const sessionId = selectedSessionId;
+    setLoopProtocolBusy(true);
+    try {
+      const resp = await deleteSessionLoopProtocol(client, sessionId);
+      markSessionLoopProtocolDisabled(sessionId, resp);
+      setStatus({ state: "connected", label: "Ready", detail: resp.cleared ? "Loop disabled" : "Loop already disabled" });
+    } catch (err) {
+      setStatus({ state: "error", label: "Loop disable failed", detail: formatError(err) });
+    } finally {
+      setLoopProtocolBusy(false);
     }
   }
 
@@ -835,6 +859,19 @@ export function App() {
         ...current,
       ];
     });
+  }
+
+  function markSessionLoopProtocolDisabled(sessionId: string, loopProtocol: SessionLoopProtocolDeleteResponse) {
+    setSessions((current) => current.map((item) => {
+      if (item.id !== sessionId) return item;
+      return {
+        ...item,
+        has_loop_protocol: false,
+        loop_protocol: undefined,
+        has_loop_state: !!loopProtocol.state,
+        loop_state: loopProtocol.state,
+      };
+    }));
   }
 
   async function handleCancel() {
@@ -1037,6 +1074,14 @@ export function App() {
                   loading={planState.state === "loading"}
                   error={planState.state === "error" ? planState.error : undefined}
                 />
+                {showLoopContext ? (
+                  <SessionLoopPanel
+                    summary={selectedSession?.loop_protocol}
+                    state={selectedLoopState}
+                    disabling={loopProtocolBusy}
+                    onDisable={handleDisableLoopProtocol}
+                  />
+                ) : null}
                 {showWorkflowStatus ? <WorkflowStatus overview={overview} /> : null}
               </div>
             ) : null}

@@ -932,6 +932,60 @@ body {
   color: var(--c-error);
 }
 
+.session-loop-body {
+  gap: 10px;
+}
+
+.session-loop-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+  gap: 7px;
+  min-width: 0;
+}
+
+.session-loop-field {
+  min-width: 0;
+  border: 1px solid rgba(217, 224, 232, 0.72);
+  border-radius: calc(var(--radius) - 2px);
+  background: rgba(248, 250, 252, 0.74);
+  padding: 7px 8px;
+}
+
+.session-loop-field span {
+  display: block;
+  margin-bottom: 3px;
+  color: var(--text-faint);
+  font-size: 10.5px;
+  font-weight: 750;
+  letter-spacing: 0;
+  text-transform: uppercase;
+}
+
+.session-loop-field strong,
+.session-loop-field code {
+  display: block;
+  overflow-wrap: anywhere;
+  color: var(--text);
+  font-size: 12px;
+  line-height: 1.35;
+}
+
+.session-loop-field code {
+  font-family: var(--font-mono);
+}
+
+.session-loop-preview {
+  margin: 0;
+  color: var(--text-muted);
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+.session-loop-actions {
+  display: flex;
+  justify-content: flex-end;
+}
+
 .chat-context-bar[data-tone="running"] .chat-context-state {
   border-color: #bfdbfe;
   background: var(--c-running-bg);
@@ -6733,6 +6787,7 @@ html[data-theme="dark"] .mobile-session-launcher,
 html[data-theme="dark"] .runtime-status-bar,
 html[data-theme="dark"] .session-plan-panel,
 html[data-theme="dark"] .session-plan-step,
+html[data-theme="dark"] .session-loop-field,
 html[data-theme="dark"] .session-panel,
 html[data-theme="dark"] .session-skills-panel,
 html[data-theme="dark"] .session-skill-item,

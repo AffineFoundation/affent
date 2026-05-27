@@ -564,6 +564,79 @@ describe("App", () => {
     expect(screen.getByTestId("session-list")).toHaveTextContent("analyze market data");
   });
 
+  it("shows and disables the selected session loop protocol", async () => {
+    const user = userEvent.setup();
+    const fetchImpl = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = String(input);
+      if (url === "/v1/sessions?limit=100") {
+        return jsonResponse({
+          sessions: [
+            {
+              id: "loop-control",
+              active: true,
+              durable: true,
+              has_conversation: false,
+              has_events: false,
+              has_artifacts: false,
+              has_memory: false,
+              has_runtime_skills: false,
+              has_loop_protocol: true,
+              loop_protocol: {
+                path: ".affent/loops/loop-control/LOOP.md",
+                status: "running",
+                bytes: 512,
+                preview: "Keep market evidence recoverable.",
+                state: {
+                  version: 1,
+                  loop_id: "loop-control",
+                  status: "running",
+                  initial_goal_preview: "watch market evidence for several days",
+                  protocol_updates: 1,
+                  protocol_feeds: 2,
+                },
+              },
+            },
+          ],
+          has_more: false,
+        });
+      }
+      if (url === "/v1/sessions/loop-control/history?after=-1&limit=500") {
+        return jsonResponse({ session_id: "loop-control", events: [], next_after: -1, has_more: false });
+      }
+      if (url === "/v1/sessions/loop-control/events") return eventStreamResponse("");
+      if (url === "/v1/sessions/loop-control/loop-protocol" && init?.method === "DELETE") {
+        return jsonResponse({
+          session_id: "loop-control",
+          cleared: true,
+          state: {
+            version: 1,
+            loop_id: "loop-control",
+            status: "disabled",
+            event_count: 2,
+            last_event_summary: "Disabled LOOP.md",
+          },
+          events: [],
+        });
+      }
+      return jsonResponse({ error: { message: `unexpected ${url}` } }, 404);
+    });
+    vi.stubGlobal("fetch", fetchImpl);
+
+    render(<App />);
+
+    const panel = await screen.findByTestId("session-loop-panel");
+    expect(panel).toHaveTextContent("Running");
+    expect(panel).toHaveTextContent("watch market evidence for several days");
+    expect(panel).toHaveTextContent(".affent/loops/loop-control/LOOP.md");
+
+    await user.click(within(panel).getByRole("button", { name: "Disable loop" }));
+
+    await waitFor(() => expect(fetchImpl).toHaveBeenCalledWith("/v1/sessions/loop-control/loop-protocol", expect.objectContaining({ method: "DELETE" })));
+    expect(await screen.findByTestId("session-loop-panel")).toHaveTextContent("Disabled");
+    expect(screen.getByTestId("session-list")).toHaveTextContent("Loop disabled");
+    expect(screen.queryByRole("button", { name: "Disable loop" })).toBeNull();
+  });
+
   it("shows artifact output first in the chat context bar when the latest chat has files", async () => {
     const user = userEvent.setup();
     const fetchImpl = vi.fn(async (input: RequestInfo | URL) => {
