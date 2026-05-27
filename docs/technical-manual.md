@@ -833,7 +833,10 @@ runtime actually registered the required tools.
 Focused tasks and subagents return structured reports to the parent session
 without injecting their full intermediate work into the parent conversation.
 They are bounded by task size, turn count, depth, output caps, and read-only
-tool policies where applicable.
+tool policies where applicable. Focused-task findings must include both
+`source` and `evidence`; if a child claims success but every finding is omitted
+for missing evidence, the runtime downgrades the result to `ok:false` so the
+parent treats it as a gap instead of a verified report.
 When rolling compaction later summarizes the session, `run_task` and
 `subagent_run` tool results are rendered as compact delegation summaries
 (`summary`/`findings` or `report` plus bounded metadata and tool-call names)

@@ -128,6 +128,29 @@ func TestBuildFocusedTaskResult_ModelCanDowngradeOK(t *testing.T) {
 	}
 }
 
+func TestBuildFocusedTaskResult_DowngradesOKWhenFindingsHaveNoEvidence(t *testing.T) {
+	res := childRunResult{
+		Report:        `{"task_type":"explore","ok":true,"summary":"probably found it","findings":[{"claim":"unsupported","source":"notes.md"},{"claim":"unsourced","evidence":"looks plausible"}]}`,
+		TurnEndReason: sse.TurnEndCompleted,
+	}
+	result := buildFocusedTaskResult(exploreProfile(), "inspect claim", "focused_e", 1, res)
+	if result.OK {
+		t.Fatalf("ok=true without evidence-backed findings should be downgraded: %+v", result)
+	}
+	if len(result.Findings) != 0 {
+		t.Fatalf("invalid findings should be omitted: %+v", result.Findings)
+	}
+	for _, want := range []string{
+		"omitted finding without evidence: unsupported",
+		"omitted finding without source: unsourced",
+		"no_valid_evidence_backed_findings",
+	} {
+		if !contains(result.Warnings, want) {
+			t.Fatalf("warnings missing %q: %+v", want, result.Warnings)
+		}
+	}
+}
+
 func TestBuildFocusedTaskResult_ParseFailureFallback(t *testing.T) {
 	res := childRunResult{
 		Report:        "I cannot find a way to format JSON. The answer is YES.",

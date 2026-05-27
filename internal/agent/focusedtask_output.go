@@ -262,6 +262,13 @@ func buildFocusedTaskResult(profile FocusedTaskProfile, objective, childID strin
 	result.NotFound = trimAndCapStringList(parsed.NotFound)
 	result.Warnings = trimAndCapStringList(append(parsed.Warnings, findingWarnings...))
 	result.SuggestedNext = trimAndCapStringList(parsed.SuggestedNext)
+	if result.OK && len(parsed.Findings) > 0 && len(result.Findings) == 0 {
+		result.OK = false
+		result.Warnings = trimAndCapStringList(append(result.Warnings, "no_valid_evidence_backed_findings"))
+		if result.Summary == "" {
+			result.Summary = "focused task returned no valid evidence-backed findings"
+		}
+	}
 	if len(res.LoopErrors) > 0 {
 		result.LoopErrors = trimAndCapStringList(res.LoopErrors)
 	}
