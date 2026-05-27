@@ -505,6 +505,23 @@ func TestBuildDebugBriefClassifiesTruncationArtifactQuality(t *testing.T) {
 		stringSliceContains(brief.Tags, "truncation:missing_artifact") {
 		t.Fatalf("artifact-backed truncation item = %+v tags=%+v", item, brief.Tags)
 	}
+
+	brief = BuildDebugBrief(BatchResult{
+		OK: true,
+		ToolStats: ToolRuntimeStats{
+			ToolContextTruncated:    3,
+			ToolContextOmittedBytes: 9216,
+		},
+	})
+	item = debugBriefItemByKind(brief, "truncation")
+	if item == nil ||
+		item.Message != "tool output was trimmed before entering model context; inspect tool timeline and context omitted bytes" ||
+		item.Counts["tool_context"] != 3 ||
+		item.Counts["omitted_context"] != 9216 ||
+		!stringSliceContains(brief.Tags, "truncation:tool_context") ||
+		stringSliceContains(brief.Tags, "truncation:missing_artifact") {
+		t.Fatalf("tool-context truncation item = %+v tags=%+v", item, brief.Tags)
+	}
 }
 
 func debugBriefItemByKind(brief *DebugBrief, kind string) *DebugBriefItem {

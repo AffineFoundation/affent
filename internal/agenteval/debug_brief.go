@@ -314,6 +314,10 @@ func BuildDebugBrief(res BatchResult) *DebugBrief {
 	if hasDebugBriefTruncation(res) {
 		message := "tool or context output was truncated; inspect examples and artifacts before judging evidence"
 		tags := []string{"truncation"}
+		if res.ToolStats.ToolContextTruncated > 0 || res.ToolStats.ToolContextOmittedBytes > 0 {
+			tags = append(tags, "truncation:tool_context")
+			message = "tool output was trimmed before entering model context; inspect tool timeline and context omitted bytes"
+		}
 		missingArtifacts := res.ToolTruncation.ResultsTruncated - res.ToolTruncation.ResultArtifacts
 		if missingArtifacts > 0 {
 			tags = append(tags, "truncation:missing_artifact")

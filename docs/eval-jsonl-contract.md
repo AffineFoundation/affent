@@ -193,7 +193,7 @@ Scenario records describe one eval case:
   `delegation_error:focused_task`, `plan_error`, `plan:unfinished`,
   `context_compaction:reactive`,
   `context_compaction:summary_missing`, `context_compaction:summary_empty`,
-  `truncation`, and
+  `truncation`, `truncation:tool_context`, and
   `truncation:missing_artifact`, plus ordered `items` with a severity, message,
   inspect targets, and relevant counts. This is the compact "what to inspect
   first" index for long-run batch analysis.
