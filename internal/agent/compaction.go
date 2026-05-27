@@ -100,11 +100,10 @@ type LLMSummaryCompactor struct {
 	SummaryPrompt string
 }
 
-// defaultSummaryPrompt mirrors OpenHands' V1 LLMSummarizingCondenser
-// prompt verbatim (modulo Jinja {% for %} which we render in Go).
-// It's the de-facto standard among open-source SWE agents —
-// structured fields, example-driven, rolling — and avoids
-// reinventing a less-validated alternative.
+// defaultSummaryPrompt keeps the OpenHands V1 LLMSummarizingCondenser
+// shape (modulo Jinja {% for %} which we render in Go), then adds
+// Affent recovery fields for long-running web, memory, loop, and
+// artifact-heavy sessions.
 //
 // Source: github.com/OpenHands/software-agent-sdk
 //
@@ -130,6 +129,11 @@ TASK_TRACKING: {Active tasks, their IDs and statuses - PRESERVE TASK IDs}
 COMPLETED: (Tasks completed so far, with brief results)
 PENDING: (Tasks that still need to be done)
 CURRENT_STATE: (Current variables, data structures, or relevant state)
+SOURCE_EVIDENCE: (Verified sources, exact URLs/refs/json paths, evidence status, and explicit gaps; do not upgrade discovery-only or partial dynamic evidence into verified facts)
+RECOVERY_STATE: (Tool failures, loop guards, blocked/partial sources, the latest actionable Next guidance, and what approach should change)
+MEMORY_AND_RECALL: (Durable memory writes/reads, session_search hits, prior-session markers, and when they should be consulted again)
+ARTIFACT_TRACE: (Important artifact paths, trace/session IDs, screenshots, network refs, or files needed to audit or resume)
+NEXT_ACTION: (The single best next action, required verification, and stop/pause condition)
 
 For code-specific tasks, also include:
 CODE_STATE: {File paths, function signatures, data structures}
@@ -143,6 +147,8 @@ PRIORITIZE:
 2. Capture key user requirements and goals
 3. Distinguish between completed and pending tasks
 4. Keep all sections concise and relevant
+5. Preserve source quality and recovery instructions over narrative detail
+6. Preserve long-run loop protocol anchors, active plan step, memory/session recall markers, artifact paths, and verification commands when present
 
 SKIP: Tracking irrelevant details for the current task type
 
@@ -152,6 +158,11 @@ For code tasks:
 USER_CONTEXT: Fix FITS card float representation issue
 COMPLETED: Modified mod_float() in card.py, all tests passing
 PENDING: Create PR, update documentation
+SOURCE_EVIDENCE: tests/test_card.py::test_format verified by pytest
+RECOVERY_STATE: none
+MEMORY_AND_RECALL: none
+ARTIFACT_TRACE: trace session current; no external artifacts
+NEXT_ACTION: prepare PR summary and stop after user review
 CODE_STATE: mod_float() in card.py updated
 TESTS: test_format() passed
 CHANGES: str(val) replaces f"{val:.16G}"
@@ -162,7 +173,12 @@ For other tasks:
 USER_CONTEXT: Write 20 haikus based on coin flip results
 COMPLETED: 15 haikus written for results [T,H,T,H,T,H,T,T,H,T,H,T,H,T,H]
 PENDING: 5 more haikus needed
-CURRENT_STATE: Last flip: Heads, Haiku count: 15/20`
+CURRENT_STATE: Last flip: Heads, Haiku count: 15/20
+SOURCE_EVIDENCE: user-provided coin flip sequence
+RECOVERY_STATE: no blocker
+MEMORY_AND_RECALL: none
+ARTIFACT_TRACE: none
+NEXT_ACTION: write 5 remaining haikus, then report completion`
 
 // Compact implements Compactor.
 func (c *LLMSummaryCompactor) Compact(ctx context.Context, msgs []ChatMessage) ([]ChatMessage, error) {
@@ -450,7 +466,7 @@ func compactToolResultForSummary(toolName, content string) string {
 		if out, ok := compactBrowserNetworkResultForSummary(content); ok {
 			return out
 		}
-	case "web_fetch", "browser_snapshot", "browser_find", "browser_network_read":
+	case "web_fetch", "browser_snapshot", "browser_find", "browser_scroll", "browser_network_read":
 		if out, ok := compactSourceAccessResultForSummary(content); ok {
 			return out
 		}
@@ -682,6 +698,18 @@ func sourceAccessBodyPreview(content string) string {
 			continue
 		}
 		if strings.HasPrefix(trimmed, "BODY_BYTES:") {
+			continue
+		}
+		if strings.HasPrefix(trimmed, "URL:") {
+			continue
+		}
+		if strings.HasPrefix(trimmed, "TITLE:") {
+			continue
+		}
+		if strings.HasPrefix(trimmed, "SNAPSHOT_ID:") {
+			continue
+		}
+		if trimmed == "PAGE TEXT:" {
 			continue
 		}
 		lines = append(lines, line)

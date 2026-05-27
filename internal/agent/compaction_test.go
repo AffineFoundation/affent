@@ -227,6 +227,36 @@ func TestFormatEvent_CompactsDelegationToolResults(t *testing.T) {
 		}
 	})
 
+	t.Run("browser scroll keeps source access and boundary telemetry compact", func(t *testing.T) {
+		raw := strings.Join([]string{
+			"SourceAccess: browser_rendered_url=https://taostats.io/subnets/120; page_text_below=partial_dynamic_page_evidence; rendered_browser_source_status=partial_dynamic_page_evidence; snapshot_id=8",
+			"URL: https://taostats.io/subnets/120",
+			"TITLE: SN120 Affine",
+			"PAGE TEXT:",
+			"Market Cap",
+			"SCROLL: direction=down before_y=1200 after_y=1200 max_y=1200 movement=none boundary=bottom",
+			"Next: scrolling did not move the page; use browser_network/browser_network_read for hidden XHR/fetch data.",
+		}, "\n")
+		got := formatEvent(ChatMessage{Role: "tool", Name: "browser_scroll", Content: raw})
+		for _, want := range []string{
+			"TOOL_RESULT[browser_scroll]",
+			"source_access: browser_rendered_url=https://taostats.io/subnets/120",
+			"page_text_below=partial_dynamic_page_evidence",
+			"rendered_status=partial_dynamic_page_evidence",
+			"body_preview:",
+			"SCROLL: direction=down",
+			"movement=none",
+			"browser_network/browser_network_read",
+		} {
+			if !strings.Contains(got, want) {
+				t.Fatalf("compact browser_scroll result missing %q:\n%s", want, got)
+			}
+		}
+		if strings.Contains(got, "PAGE TEXT:") || strings.Contains(got, "SourceAccess:") {
+			t.Fatalf("compact browser_scroll result should not expose raw scaffolding:\n%s", got)
+		}
+	})
+
 	t.Run("browser network search keeps no-match recovery state", func(t *testing.T) {
 		raw := "BROWSER NETWORK EVIDENCE\n" +
 			"CURRENT_PAGE: https://taostats.io/subnets/120/statistics\n" +
@@ -920,12 +950,14 @@ func TestIsContextOverflow(t *testing.T) {
 	}
 }
 
-// Defensive: prompt body should match OpenHands' V1 standard verbatim
-// (we deliberately don't fork the wording).
+// Defensive: prompt body keeps the OpenHands V1 base fields plus
+// Affent recovery fields for long-running sessions.
 func TestDefaultSummaryPrompt_StandardFields(t *testing.T) {
 	required := []string{
 		"USER_CONTEXT", "TASK_TRACKING", "COMPLETED", "PENDING",
-		"CURRENT_STATE", "CODE_STATE", "TESTS", "CHANGES", "DEPS",
+		"CURRENT_STATE", "SOURCE_EVIDENCE", "RECOVERY_STATE",
+		"MEMORY_AND_RECALL", "ARTIFACT_TRACE", "NEXT_ACTION",
+		"CODE_STATE", "TESTS", "CHANGES", "DEPS",
 		"VERSION_CONTROL_STATUS", "PRIORITIZE", "SKIP", "Example formats",
 	}
 	for _, kw := range required {
@@ -937,5 +969,15 @@ func TestDefaultSummaryPrompt_StandardFields(t *testing.T) {
 	// accidental drop.
 	if !strings.Contains(defaultSummaryPrompt, "PRESERVE TASK IDs") {
 		t.Error("default prompt missing 'PRESERVE TASK IDs' V1 instruction")
+	}
+	for _, phrase := range []string{
+		"do not upgrade discovery-only or partial dynamic evidence into verified facts",
+		"latest actionable Next guidance",
+		"memory/session recall markers",
+		"verification commands",
+	} {
+		if !strings.Contains(defaultSummaryPrompt, phrase) {
+			t.Fatalf("default prompt missing Affent recovery phrase %q", phrase)
+		}
 	}
 }
