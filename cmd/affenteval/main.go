@@ -3903,6 +3903,12 @@ func requiredRuntimeTools(scenario agenteval.BatchScenario) []string {
 		len(scenario.RequiredCommandAfterTool) > 0 {
 		add("shell")
 	}
+	for _, req := range scenario.RequiredCommandBeforeTool {
+		add(req.Tool)
+	}
+	for _, req := range scenario.RequiredCommandAfterTool {
+		add(req.Tool)
+	}
 	out := make([]string, 0, len(required))
 	for tool := range required {
 		out = append(out, tool)

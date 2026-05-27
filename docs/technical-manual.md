@@ -958,8 +958,9 @@ mode. Use `--eval-all-tools` / `--runtime-all-tools` only for smoke/debug runs
 that intentionally exercise the full surface. Before running, `affenteval`
 also validates scenario-declared tool dependencies from required tool counts,
 orders, argument checks, source-access checks, session recall checks, and
-delegation checks against the selected runtime surface. The eval container does not
-forward host `AFFENTCTL_EVAL_MODE`,
+delegation checks, including command-before/after-tool ordering checks, against
+the selected runtime surface. The eval container does not forward host
+`AFFENTCTL_EVAL_MODE`,
 `AFFENTCTL_EVAL_TOOLS`, `AFFENTCTL_EVAL_ALL_TOOLS`, `AFFENTCTL_SUBAGENT`,
 `AFFENTCTL_FOCUSED_TASKS`, or `AFFENTCTL_PROJECT_CONTEXT`; use the
 `EVAL_RUNTIME_*` knobs above. Use `--runtime-web` when a scenario explicitly

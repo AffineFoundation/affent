@@ -364,6 +364,18 @@ func TestValidateRuntimeToolSurface(t *testing.T) {
 			wantErr: "history missing session_search",
 		},
 		{
+			name:   "command tool order requirements imply ordered tool",
+			runner: BatchRuntimeToolConfig{RuntimeEvalMode: true, RuntimeTools: "shell"},
+			scenario: agenteval.BatchScenario{
+				Name: "verify-edit",
+				RequiredCommandBeforeTool: []agenteval.CommandToolOrderRequirement{{
+					Command: "go test ./...",
+					Tool:    "edit_file",
+				}},
+			},
+			wantErr: "verify-edit missing edit_file",
+		},
+		{
 			name:   "delegation requirements imply child tools",
 			runner: BatchRuntimeToolConfig{RuntimeEvalMode: true, RuntimeTools: "workspace"},
 			scenario: agenteval.BatchScenario{
