@@ -309,11 +309,16 @@ type ToolRuntimeStats struct {
 }
 
 type ToolTruncationStats struct {
-	ArgsTruncated       int
-	ArgsOmittedBytes    int
-	ResultsTruncated    int
-	ResultsOmittedBytes int
-	ResultArtifacts     int
+	ArgsTruncated           int
+	ArgsOmittedBytes        int
+	ResultsTruncated        int
+	ResultsOmittedBytes     int
+	ResultArtifacts         int
+	ResultMissingArtifacts  int
+	ContextTruncated        int
+	ContextOmittedBytes     int
+	ContextArtifacts        int
+	ContextMissingArtifacts int
 }
 
 type ToolTruncationExample struct {

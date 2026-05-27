@@ -199,7 +199,16 @@ func TestParseTraceFileReadsToolRequestsAndFinalText(t *testing.T) {
 		examples[0].ResultArtifactPath != ".affent/artifacts/tool-results/000001-c1.txt" {
 		t.Fatalf("ToolTruncationExamples = %+v", examples)
 	}
-	if stats := SummarizeToolTruncation(trace); stats.ArgsTruncated != 1 || stats.ArgsOmittedBytes != 512 || stats.ResultsTruncated != 1 || stats.ResultsOmittedBytes != 4096 || stats.ResultArtifacts != 1 {
+	if stats := SummarizeToolTruncation(trace); stats.ArgsTruncated != 1 ||
+		stats.ArgsOmittedBytes != 512 ||
+		stats.ResultsTruncated != 1 ||
+		stats.ResultsOmittedBytes != 4096 ||
+		stats.ResultArtifacts != 1 ||
+		stats.ResultMissingArtifacts != 0 ||
+		stats.ContextTruncated != 1 ||
+		stats.ContextOmittedBytes != 8192 ||
+		stats.ContextArtifacts != 1 ||
+		stats.ContextMissingArtifacts != 0 {
 		t.Fatalf("ToolTruncationStats = %+v", stats)
 	}
 	if guarded := trace.Tools[1]; guarded.CallID != "guarded" || !guarded.IsErr || guarded.ExitCode != 1 {
@@ -2346,7 +2355,7 @@ func TestWriteScenarioDebugArtifactsIndexesTraceAndFinalText(t *testing.T) {
 		"evidence: `1/2` verified, network=`1`, partial=`1`, discovery=`1`",
 		"recall_weak_context: calls=`1`, results=`2`, context=`1`, terms=`2`; only some hits included adjacent context; inspect Session Search examples for incomplete recovery.",
 		"context: compactions=`1`, reactive=`1`, removed_messages=`12`, summary_bytes=`512`",
-		"truncation: tool_context=2 omitted_context=8192 args=1 args_omitted=128 results=1 results_omitted=4096 artifacts=1",
+		"truncation: tool_context=2 omitted_context=8192 args=1 args_omitted=128 results=1 results_omitted=4096 artifacts=1 context_artifacts=0 missing_artifacts=0",
 		"## Trace Events",
 		"`message.delta`: `2`",
 		"## Source Evidence",
@@ -2394,13 +2403,13 @@ func TestWriteScenarioDebugArtifactsIndexesTraceAndFinalText(t *testing.T) {
 
 func TestBuildDebugRecoveryGuideAddsFullTraceRerunCommand(t *testing.T) {
 	res := BatchResult{
-		Workspace:        "/tmp/affent-eval/debug",
-		TimelinePath:     "/tmp/affent-eval/debug/affenteval-timeline.md",
+		Workspace:         "/tmp/affent-eval/debug",
+		TimelinePath:      "/tmp/affent-eval/debug/affenteval-timeline.md",
 		DebugManifestPath: "/tmp/affent-eval/debug/affenteval-debug.json",
-		TracePath:        "/tmp/affent-eval/debug/trace.jsonl",
-		Failures:         []string{"missing browser network evidence"},
-		AffentctlCommand: []string{"go", "run", "./cmd/affentctl", "run", "--trace-skip-deltas", "--prompt", "<prompt>"},
-		TraceDeltas:      false,
+		TracePath:         "/tmp/affent-eval/debug/trace.jsonl",
+		Failures:          []string{"missing browser network evidence"},
+		AffentctlCommand:  []string{"go", "run", "./cmd/affentctl", "run", "--trace-skip-deltas", "--prompt", "<prompt>"},
+		TraceDeltas:       false,
 	}
 	guide := BuildDebugRecoveryGuide(res)
 	if guide == nil {

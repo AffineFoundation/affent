@@ -225,8 +225,9 @@ type ToolResultPayload struct {
 	ContextOmittedBytes    int `json:"context_omitted_bytes,omitempty"`
 	ContextEstimatedTokens int `json:"context_estimated_tokens,omitempty"`
 	// ResultArtifactPath is a workspace-relative path to the complete
-	// tool output when ResultTruncated is true and the loop has artifact
-	// persistence configured. Empty means no full artifact is available.
+	// tool output when the event result or model-context result was truncated
+	// and the loop has artifact persistence configured. Empty means no full
+	// artifact is available.
 	ResultArtifactPath string `json:"result_artifact_path,omitempty"`
 	// Delegation mirrors the value on the matching ToolRequestPayload so
 	// trace consumers that subscribe mid-stream (or render events out

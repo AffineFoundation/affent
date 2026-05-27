@@ -367,24 +367,34 @@ func BuildDebugBrief(res BatchResult) *DebugBrief {
 	if hasDebugBriefTruncation(res) {
 		message := "tool or context output was truncated; inspect examples and artifacts before judging evidence"
 		tags := []string{"truncation"}
-		if res.ToolStats.ToolContextTruncated > 0 || res.ToolStats.ToolContextOmittedBytes > 0 {
+		contextTruncated := max(res.ToolStats.ToolContextTruncated, res.ToolTruncation.ContextTruncated)
+		contextOmittedBytes := max(res.ToolStats.ToolContextOmittedBytes, res.ToolTruncation.ContextOmittedBytes)
+		if contextTruncated > 0 || contextOmittedBytes > 0 {
 			tags = append(tags, "truncation:tool_context")
 			message = "tool output was trimmed before entering model context; inspect tool timeline and context omitted bytes"
 		}
-		missingArtifacts := res.ToolTruncation.ResultsTruncated - res.ToolTruncation.ResultArtifacts
+		resultMissingArtifacts := res.ToolTruncation.ResultMissingArtifacts
+		if resultMissingArtifacts == 0 && res.ToolTruncation.ResultsTruncated > res.ToolTruncation.ResultArtifacts {
+			resultMissingArtifacts = res.ToolTruncation.ResultsTruncated - res.ToolTruncation.ResultArtifacts
+		}
+		contextMissingArtifacts := res.ToolTruncation.ContextMissingArtifacts
+		missingArtifacts := resultMissingArtifacts + contextMissingArtifacts
 		if missingArtifacts > 0 {
 			tags = append(tags, "truncation:missing_artifact")
 			message = "tool results were truncated without matching artifacts; inspect tool timeline before trusting evidence"
 		}
 		add("truncation", "warn", message, []string{"tool_truncation_examples", "artifacts", "tool_timeline"}, map[string]int{
-			"tool_context":      res.ToolStats.ToolContextTruncated,
-			"omitted_context":   res.ToolStats.ToolContextOmittedBytes,
-			"args":              res.ToolTruncation.ArgsTruncated,
-			"args_omitted":      res.ToolTruncation.ArgsOmittedBytes,
-			"results":           res.ToolTruncation.ResultsTruncated,
-			"results_omitted":   res.ToolTruncation.ResultsOmittedBytes,
-			"artifacts":         res.ToolTruncation.ResultArtifacts,
-			"missing_artifacts": missingArtifacts,
+			"tool_context":              contextTruncated,
+			"omitted_context":           contextOmittedBytes,
+			"args":                      res.ToolTruncation.ArgsTruncated,
+			"args_omitted":              res.ToolTruncation.ArgsOmittedBytes,
+			"results":                   res.ToolTruncation.ResultsTruncated,
+			"results_omitted":           res.ToolTruncation.ResultsOmittedBytes,
+			"artifacts":                 res.ToolTruncation.ResultArtifacts,
+			"result_missing_artifacts":  resultMissingArtifacts,
+			"context_artifacts":         res.ToolTruncation.ContextArtifacts,
+			"context_missing_artifacts": contextMissingArtifacts,
+			"missing_artifacts":         missingArtifacts,
 		}, tags...)
 	}
 	if len(items) == 0 {
@@ -457,7 +467,12 @@ func hasDebugBriefTruncation(res BatchResult) bool {
 		res.ToolTruncation.ArgsOmittedBytes > 0 ||
 		res.ToolTruncation.ResultsTruncated > 0 ||
 		res.ToolTruncation.ResultsOmittedBytes > 0 ||
-		res.ToolTruncation.ResultArtifacts > 0
+		res.ToolTruncation.ResultArtifacts > 0 ||
+		res.ToolTruncation.ResultMissingArtifacts > 0 ||
+		res.ToolTruncation.ContextTruncated > 0 ||
+		res.ToolTruncation.ContextOmittedBytes > 0 ||
+		res.ToolTruncation.ContextArtifacts > 0 ||
+		res.ToolTruncation.ContextMissingArtifacts > 0
 }
 
 func hasLoopDecisionStatsMatch(stats LoopDecisionStats, kind, decision, trigger string) bool {

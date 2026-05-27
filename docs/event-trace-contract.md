@@ -165,7 +165,8 @@ diagnostics.
 - `result_omitted_bytes`: original result bytes omitted from `result`.
 - `result_cap_bytes`: event cap used for results.
 - `result_artifact_path`: optional workspace-relative path to the complete tool
-  output when `result_truncated` is true and artifact persistence is enabled.
+  output when either `result_truncated` is true or `context_omitted_bytes` is
+  positive and artifact persistence is enabled.
   In `affentserve`, this path is resolved under the durable session state root
   and exposed via `GET /v1/sessions/{id}/artifacts/{result_artifact_path}` so
   artifacts survive session workspace eviction and container restart.

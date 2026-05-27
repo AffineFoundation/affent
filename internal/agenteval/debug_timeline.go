@@ -305,14 +305,22 @@ func renderTimelineDebugBrief(b *strings.Builder, res BatchResult) {
 		)
 	}
 	if hasDebugBriefTruncation(res) {
-		fmt.Fprintf(b, "- truncation: tool_context=%d omitted_context=%d args=%d args_omitted=%d results=%d results_omitted=%d artifacts=%d; inspect Tool Truncation, artifacts, and capped tool outputs.\n",
-			res.ToolStats.ToolContextTruncated,
-			res.ToolStats.ToolContextOmittedBytes,
+		contextTruncated := max(res.ToolStats.ToolContextTruncated, res.ToolTruncation.ContextTruncated)
+		contextOmittedBytes := max(res.ToolStats.ToolContextOmittedBytes, res.ToolTruncation.ContextOmittedBytes)
+		missingArtifacts := res.ToolTruncation.ResultMissingArtifacts + res.ToolTruncation.ContextMissingArtifacts
+		if missingArtifacts == 0 && res.ToolTruncation.ResultsTruncated > res.ToolTruncation.ResultArtifacts {
+			missingArtifacts = res.ToolTruncation.ResultsTruncated - res.ToolTruncation.ResultArtifacts
+		}
+		fmt.Fprintf(b, "- truncation: tool_context=%d omitted_context=%d args=%d args_omitted=%d results=%d results_omitted=%d artifacts=%d context_artifacts=%d missing_artifacts=%d; inspect Tool Truncation, artifacts, and capped tool outputs.\n",
+			contextTruncated,
+			contextOmittedBytes,
 			res.ToolTruncation.ArgsTruncated,
 			res.ToolTruncation.ArgsOmittedBytes,
 			res.ToolTruncation.ResultsTruncated,
 			res.ToolTruncation.ResultsOmittedBytes,
 			res.ToolTruncation.ResultArtifacts,
+			res.ToolTruncation.ContextArtifacts,
+			missingArtifacts,
 		)
 	}
 }

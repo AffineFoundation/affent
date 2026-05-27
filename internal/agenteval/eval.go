@@ -2039,10 +2039,22 @@ func SummarizeToolTruncation(trace Trace) ToolTruncationStats {
 		stats.ArgsOmittedBytes += tool.ArgsOmittedBytes
 		if tool.ResultTruncated {
 			stats.ResultsTruncated++
+			if tool.ResultArtifactPath == "" {
+				stats.ResultMissingArtifacts++
+			}
 		}
 		stats.ResultsOmittedBytes += tool.ResultOmittedBytes
 		if tool.ResultArtifactPath != "" {
 			stats.ResultArtifacts++
+		}
+		if tool.ContextOmittedBytes > 0 {
+			stats.ContextTruncated++
+			stats.ContextOmittedBytes += tool.ContextOmittedBytes
+			if tool.ResultArtifactPath != "" {
+				stats.ContextArtifacts++
+			} else {
+				stats.ContextMissingArtifacts++
+			}
 		}
 	}
 	return stats
