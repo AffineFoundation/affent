@@ -1991,6 +1991,41 @@ func TestSessionRecordsLoopProtocolCalibrationAnswerAfterDraftQuestion(t *testin
 	}
 }
 
+func TestSessionSkipsLoopProtocolCalibrationWithoutRecentLoopQuestion(t *testing.T) {
+	memRoot := t.TempDir()
+	pool := newPoolWithMemoryRoot(t, memRoot)
+	pool.cfg.EnableLoopProtocol = true
+	s, err := pool.GetOrCreate("loop-calibration-strict")
+	if err != nil {
+		t.Fatalf("GetOrCreate: %v", err)
+	}
+	if err := s.ensureLoopProtocolInitialized("Set up long-running subnet analysis."); err != nil {
+		t.Fatalf("ensureLoopProtocolInitialized: %v", err)
+	}
+	if err := s.conv.Append(agent.ChatMessage{Role: "assistant", Content: "I can help with market analysis."}); err != nil {
+		t.Fatalf("append assistant: %v", err)
+	}
+	s.recordLoopProtocolCalibrationAnswerIfReady("Please check whether the subnet page is reachable.")
+	state, found, err := loopstate.ReadState(sessionLoopStatePath(pool, "loop-calibration-strict"))
+	if err != nil || !found {
+		t.Fatalf("ReadState found=%v err=%v", found, err)
+	}
+	if state.CalibrationAnswers != 0 {
+		t.Fatalf("generic assistant message recorded calibration state = %+v", state)
+	}
+	if err := s.conv.Append(agent.ChatMessage{Role: "assistant", Content: "什么条件应该暂停这个 loop？"}); err != nil {
+		t.Fatalf("append calibration assistant: %v", err)
+	}
+	s.recordLoopProtocolCalibrationAnswerIfReady("当网页证据不足或者用户目标改变时暂停。")
+	state, found, err = loopstate.ReadState(sessionLoopStatePath(pool, "loop-calibration-strict"))
+	if err != nil || !found {
+		t.Fatalf("ReadState after calibration found=%v err=%v", found, err)
+	}
+	if state.CalibrationAnswers != 1 || !strings.Contains(state.LastCalibrationAnswer, "网页证据不足") {
+		t.Fatalf("calibration state = %+v", state)
+	}
+}
+
 func TestSessionPool_MaxSessionsEvictsLRU(t *testing.T) {
 	pool := newTestPool(t, 2, "5m")
 	a, _ := pool.GetOrCreate("a")

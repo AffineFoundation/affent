@@ -1470,15 +1470,41 @@ func (s *Session) recordLoopProtocolCalibrationAnswerIfReady(text string) {
 	if err != nil || !found || state.Status != "draft" || state.CalibrationAnswers > 0 {
 		return
 	}
-	if !conversationHasAssistantMessage(s.conv.Snapshot()) {
+	if !conversationHasLoopCalibrationQuestion(s.conv.Snapshot()) {
 		return
 	}
 	_, _, _ = loopstate.RecordProtocolCalibrationAnswer(s.loopProtocolPath, text)
 }
 
-func conversationHasAssistantMessage(messages []agent.ChatMessage) bool {
-	for _, msg := range messages {
+func conversationHasLoopCalibrationQuestion(messages []agent.ChatMessage) bool {
+	for i := len(messages) - 1; i >= 0; i-- {
+		msg := messages[i]
 		if msg.Role == "assistant" && strings.TrimSpace(msg.Content) != "" {
+			return looksLikeLoopCalibrationQuestion(msg.Content)
+		}
+	}
+	return false
+}
+
+func looksLikeLoopCalibrationQuestion(text string) bool {
+	normalized := strings.ToLower(strings.Join(strings.Fields(strings.TrimSpace(text)), " "))
+	if normalized == "" || (!strings.Contains(normalized, "?") && !strings.Contains(normalized, "？")) {
+		return false
+	}
+	loopishMarkers := []string{"loop", "loop.md", "long-run", "long running", "长期", "循环"}
+	if !containsAny(normalized, loopishMarkers) {
+		return false
+	}
+	calibrationMarkers := []string{
+		"calibration", "stop condition", "pause", "stop", "memory", "remember", "recovery", "goal", "objective", "constraint", "success", "timer", "schedule",
+		"校准", "暂停", "停止", "记忆", "恢复", "目标", "约束", "成功", "定时",
+	}
+	return containsAny(normalized, calibrationMarkers)
+}
+
+func containsAny(text string, markers []string) bool {
+	for _, marker := range markers {
+		if strings.Contains(text, marker) {
 			return true
 		}
 	}
