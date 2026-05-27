@@ -792,8 +792,22 @@ func TestHandleSessionSchedules_CreateListDeleteWithoutReopening(t *testing.T) {
 	r = httptest.NewRequest(http.MethodPatch, "/v1/sessions/scheduled/schedules/"+schedule.ID, strings.NewReader(`{"enabled":true}`))
 	w = httptest.NewRecorder()
 	handleSessionRoutes(pool).ServeHTTP(w, r)
+	if got := w.Result().StatusCode; got != http.StatusConflict {
+		t.Fatalf("uncalibrated resume status = %d, want 409; body=%s", got, w.Body.String())
+	}
+	if !strings.Contains(w.Body.String(), "activate LOOP.md") {
+		t.Fatalf("uncalibrated resume body = %s, want activation guidance", w.Body.String())
+	}
+	if activeSessionByID(pool, "scheduled") != nil {
+		t.Fatal("rejected PATCH schedule must not reopen an inactive durable session")
+	}
+
+	writeLoopProtocolStatusFixture(t, pool, "scheduled", "running")
+	r = httptest.NewRequest(http.MethodPatch, "/v1/sessions/scheduled/schedules/"+schedule.ID, strings.NewReader(`{"enabled":true}`))
+	w = httptest.NewRecorder()
+	handleSessionRoutes(pool).ServeHTTP(w, r)
 	if got := w.Result().StatusCode; got != http.StatusOK {
-		t.Fatalf("resume status = %d, want 200; body=%s", got, w.Body.String())
+		t.Fatalf("calibrated resume status = %d, want 200; body=%s", got, w.Body.String())
 	}
 	var resumed sessionSchedulesResponse
 	if err := json.Unmarshal(w.Body.Bytes(), &resumed); err != nil {

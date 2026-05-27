@@ -162,6 +162,10 @@ func handleSessionScheduleUpdate(pool *SessionPool, sessionID, scheduleID string
 		if file.Schedules[i].ID != scheduleID {
 			continue
 		}
+		if *req.Enabled && file.Schedules[i].Kind == sessionScheduleKindLoopTick && !sessionLoopProtocolRunning(pool, sessionID) {
+			writeJSONErrorTyped(w, http.StatusConflict, "loop protocol is not running", errors.New("activate LOOP.md before resuming this loop timer"), "loop_protocol_not_running")
+			return
+		}
 		file.Schedules[i].Enabled = *req.Enabled
 		file.Schedules[i].UpdatedAt = now
 		file.Schedules[i].LastError = ""
