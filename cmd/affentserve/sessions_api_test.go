@@ -1109,11 +1109,27 @@ func TestMergeSessionSummariesCarriesUsageAndPrefersActive(t *testing.T) {
 		sessionSummary{
 			ID:     "active",
 			Active: true,
-			Usage:  &UsageSnapshot{InputTokens: 7, OutputTokens: 3, Turns: 1},
+			Usage:  &UsageSnapshot{InputTokens: 200, OutputTokens: 30, Turns: 3},
 		},
 	)
-	if got.Usage == nil || got.Usage.InputTokens != 7 || got.Usage.OutputTokens != 3 || got.Usage.Turns != 1 {
+	if got.Usage == nil || got.Usage.InputTokens != 200 || got.Usage.OutputTokens != 30 || got.Usage.Turns != 3 {
 		t.Fatalf("merged active usage = %+v, want active usage", got.Usage)
+	}
+
+	got = mergeSessionSummaries(
+		sessionSummary{ID: "active", Active: true, Usage: &UsageSnapshot{}},
+		sessionSummary{ID: "active", Durable: true, Usage: &UsageSnapshot{InputTokens: 100, OutputTokens: 20, Turns: 2}},
+	)
+	if got.Usage == nil || got.Usage.InputTokens != 100 || got.Usage.OutputTokens != 20 || got.Usage.Turns != 2 {
+		t.Fatalf("merged empty-active usage = %+v, want durable usage", got.Usage)
+	}
+
+	got = mergeSessionSummaries(
+		sessionSummary{ID: "active", Active: true, Usage: &UsageSnapshot{InputTokens: 7, OutputTokens: 3, Turns: 1}},
+		sessionSummary{ID: "active", Durable: true, Usage: &UsageSnapshot{InputTokens: 100, OutputTokens: 20, Turns: 2}},
+	)
+	if got.Usage == nil || got.Usage.InputTokens != 100 || got.Usage.OutputTokens != 20 || got.Usage.Turns != 2 {
+		t.Fatalf("merged stronger durable usage = %+v, want durable usage", got.Usage)
 	}
 }
 
@@ -1146,6 +1162,14 @@ func TestMergeSessionSummariesCarriesRuntimeStatsAndPrefersActive(t *testing.T) 
 		got.Runtime.TurnEndByReason[sse.TurnEndCompleted] != 2 ||
 		got.Runtime.TurnEndByReason[sse.TurnEndMaxTurns] != 0 {
 		t.Fatalf("merged active runtime stats = %+v, want active stats", got.Runtime)
+	}
+
+	got = mergeSessionSummaries(
+		sessionSummary{ID: "active", Active: true, Runtime: &RuntimeStatsSnapshot{}},
+		sessionSummary{ID: "active", Durable: true, Runtime: &RuntimeStatsSnapshot{TurnEndByReason: map[string]int64{sse.TurnEndMaxTurns: 1}}},
+	)
+	if got.Runtime == nil || got.Runtime.TurnEndByReason[sse.TurnEndMaxTurns] != 1 {
+		t.Fatalf("merged empty-active runtime stats = %+v, want durable stats", got.Runtime)
 	}
 }
 
@@ -1180,6 +1204,14 @@ func TestMergeSessionSummariesKeepsActiveToolStats(t *testing.T) {
 	)
 	if got.Tools == nil || got.Tools.ToolRequests != 9 || got.Tools.ToolErrors != 1 || got.Tools.LoopGuardInterventions != 0 {
 		t.Fatalf("merged durable-first tool stats = %+v, want active stats", got.Tools)
+	}
+
+	got = mergeSessionSummaries(
+		sessionSummary{ID: "active", Active: true, Tools: &ToolStatsSnapshot{}},
+		sessionSummary{ID: "active", Durable: true, Tools: &ToolStatsSnapshot{ToolRequests: 2, LoopGuardInterventions: 1}},
+	)
+	if got.Tools == nil || got.Tools.ToolRequests != 2 || got.Tools.LoopGuardInterventions != 1 {
+		t.Fatalf("merged empty-active tool stats = %+v, want durable stats", got.Tools)
 	}
 }
 

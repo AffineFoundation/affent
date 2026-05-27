@@ -1093,13 +1093,13 @@ func mergeSessionSummaries(a, b sessionSummary) sessionSummary {
 	if a.LastAgentCWD == "" && b.LastAgentCWD != "" {
 		a.LastAgentCWD = b.LastAgentCWD
 	}
-	if b.Usage != nil && (a.Usage == nil || (b.Active && !aWasActive)) {
+	if shouldReplaceUsageSummary(a.Usage, b.Usage, b.Active, aWasActive) {
 		a.Usage = b.Usage
 	}
-	if b.Tools != nil && (a.Tools == nil || (b.Active && !aWasActive)) {
+	if shouldReplaceToolSummary(a.Tools, b.Tools, b.Active, aWasActive) {
 		a.Tools = b.Tools
 	}
-	if b.Runtime != nil && (a.Runtime == nil || (b.Active && !aWasActive)) {
+	if shouldReplaceRuntimeSummary(a.Runtime, b.Runtime, b.Active, aWasActive) {
 		a.Runtime = b.Runtime
 	}
 	if b.Browser != nil {
@@ -1109,6 +1109,128 @@ func mergeSessionSummaries(a, b sessionSummary) sessionSummary {
 		a.Capabilities = b.Capabilities
 	}
 	return a
+}
+
+func shouldReplaceUsageSummary(existing, incoming *UsageSnapshot, incomingActive bool, existingWasActive bool) bool {
+	if incoming == nil {
+		return false
+	}
+	if existing == nil {
+		return true
+	}
+	return shouldReplaceStatsSnapshot(usageSnapshotEvidence(existing), usageSnapshotEvidence(incoming), incomingActive, existingWasActive)
+}
+
+func shouldReplaceToolSummary(existing, incoming *ToolStatsSnapshot, incomingActive bool, existingWasActive bool) bool {
+	if incoming == nil {
+		return false
+	}
+	if existing == nil {
+		return true
+	}
+	return shouldReplaceStatsSnapshot(toolStatsSnapshotEvidence(existing), toolStatsSnapshotEvidence(incoming), incomingActive, existingWasActive)
+}
+
+func shouldReplaceRuntimeSummary(existing, incoming *RuntimeStatsSnapshot, incomingActive bool, existingWasActive bool) bool {
+	if incoming == nil {
+		return false
+	}
+	if existing == nil {
+		return true
+	}
+	return shouldReplaceStatsSnapshot(runtimeStatsSnapshotEvidence(existing), runtimeStatsSnapshotEvidence(incoming), incomingActive, existingWasActive)
+}
+
+func shouldReplaceStatsSnapshot(existingEvidence, incomingEvidence int64, incomingActive bool, existingWasActive bool) bool {
+	if incomingEvidence > existingEvidence {
+		return true
+	}
+	if incomingEvidence < existingEvidence {
+		return false
+	}
+	return incomingActive && !existingWasActive && incomingEvidence > 0
+}
+
+func usageSnapshotEvidence(s *UsageSnapshot) int64 {
+	if s == nil {
+		return 0
+	}
+	return positiveInt64(s.InputTokens) + positiveInt64(s.OutputTokens) + positiveInt64(s.Turns)
+}
+
+func toolStatsSnapshotEvidence(s *ToolStatsSnapshot) int64 {
+	if s == nil {
+		return 0
+	}
+	total := positiveInt64(s.ToolRequests) +
+		positiveInt64(s.ToolNameCanonicalized) +
+		positiveInt64(s.ToolArgsRepaired) +
+		positiveInt64(s.ToolRepairCalls) +
+		positiveInt64(s.ToolRepairSucceeded) +
+		positiveInt64(s.ToolRepairFailed) +
+		positiveInt64(s.ToolRepairNotes) +
+		positiveInt64(s.ToolErrors) +
+		positiveInt64(s.ToolDurationMS) +
+		positiveInt64(s.LoopGuardInterventions) +
+		positiveInt64(s.ForcedNoTools) +
+		positiveInt64(s.SourceAccessResults) +
+		positiveInt64(s.SourceAccessVerified) +
+		positiveInt64(s.SourceAccessDiscovery) +
+		positiveInt64(s.SourceAccessNetwork) +
+		positiveInt64(s.SourceAccessDynamic) +
+		positiveInt64(s.MemoryUpdates) +
+		positiveInt64(s.MemoryUpdateAdd) +
+		positiveInt64(s.MemoryUpdateReplace) +
+		positiveInt64(s.MemoryUpdateRemove) +
+		positiveInt64(s.MemorySearchCalls) +
+		positiveInt64(s.MemorySearchMisses) +
+		positiveInt64(s.SessionSearchCalls) +
+		positiveInt64(s.SessionSearchResults) +
+		positiveInt64(s.SessionSearchContext) +
+		positiveInt64(s.SessionSearchTerms) +
+		positiveInt64(s.SessionSearchRecent) +
+		positiveInt64(s.ToolContextTruncated) +
+		positiveInt64(s.ToolContextOmitted)
+	for _, count := range s.ToolRepairByKind {
+		total += positiveInt64(count)
+	}
+	for _, count := range s.ToolFailureByKind {
+		total += positiveInt64(count)
+	}
+	return total
+}
+
+func runtimeStatsSnapshotEvidence(s *RuntimeStatsSnapshot) int64 {
+	if s == nil {
+		return 0
+	}
+	total := positiveInt64(s.RuntimeErrors) +
+		positiveInt64(s.ContextCompactions) +
+		positiveInt64(s.ContextCompactionsReactive) +
+		positiveInt64(s.ContextCompactionRemovedMessages) +
+		positiveInt64(s.ContextCompactionSummaryBytes) +
+		positiveInt64(s.ContextCompactionSummaryMissing) +
+		positiveInt64(s.ContextCompactionSummaryEmpty)
+	for _, count := range s.TurnEndByReason {
+		total += positiveInt64(count)
+	}
+	for _, count := range s.RuntimeErrorByKind {
+		total += positiveInt64(count)
+	}
+	if s.ContextCompactionLatestReason != "" {
+		total++
+	}
+	if s.ContextCompactionLatestState != "" {
+		total++
+	}
+	return total
+}
+
+func positiveInt64(v int64) int64 {
+	if v > 0 {
+		return v
+	}
+	return 0
 }
 
 func workspaceLabel(path string) string {
