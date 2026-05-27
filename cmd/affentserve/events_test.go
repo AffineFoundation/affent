@@ -492,6 +492,7 @@ func TestHandleSessionHistorySkipsOversizedJSONLLine(t *testing.T) {
 	body := strings.Join([]string{
 		`{"id":1,"type":"trace.meta","data":{"schema_version":1}}`,
 		strings.Repeat("x", maxHistoryLineBytes+1),
+		`{"id":broken`,
 		`{"id":2,"type":"turn.start","data":{"turn_id":"after-large-line"}}`,
 		"",
 	}, "\n")
@@ -506,8 +507,11 @@ func TestHandleSessionHistorySkipsOversizedJSONLLine(t *testing.T) {
 	if len(resp.Events) != 2 {
 		t.Fatalf("events = %+v, want trace meta and event after oversized line", resp.Events)
 	}
-	if resp.Events[0].ID != 0 || resp.Events[1].ID != 2 || resp.NextAfter != 2 {
-		t.Fatalf("history cursors = ids %d/%d next_after=%d, want 0/2/2", resp.Events[0].ID, resp.Events[1].ID, resp.NextAfter)
+	if resp.Events[0].ID != 0 || resp.Events[1].ID != 3 || resp.NextAfter != 3 {
+		t.Fatalf("history cursors = ids %d/%d next_after=%d, want 0/3/3", resp.Events[0].ID, resp.Events[1].ID, resp.NextAfter)
+	}
+	if resp.SkippedLines != 2 || resp.OversizedLines != 1 || resp.InvalidLines != 1 {
+		t.Fatalf("history skipped counters = skipped:%d oversized:%d invalid:%d, want 2/1/1", resp.SkippedLines, resp.OversizedLines, resp.InvalidLines)
 	}
 	var payload sse.TurnStartPayload
 	if err := json.Unmarshal(resp.Events[1].Data, &payload); err != nil {

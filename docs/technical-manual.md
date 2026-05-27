@@ -660,6 +660,10 @@ Use `GET /v1/sessions/{id}/events` for live SSE. Reconnect with
 durable event log. If `Last-Event-ID` or `history?after=` is ahead of the
 latest durable event cursor, the server returns a `cursor_ahead` conflict
 instead of opening an empty stream that silently skips future live events.
+History responses include `skipped_lines`, `oversized_lines`, and
+`invalid_lines` when malformed or overlarge JSONL records were skipped, so a
+trace UI can explain gaps instead of rendering a mysteriously incomplete
+timeline.
 Session summaries expose `latest_recovery_hint` from recent
 failed tool events, `conversation.repaired` events, visible `loop.decision`
 required actions, runtime `error` events, `turn.end` budget/runtime failures,

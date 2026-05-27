@@ -224,6 +224,9 @@ type sessionHistoryResponse struct {
 	Events              []sse.Event `json:"events"`
 	NextAfter           int64       `json:"next_after"`
 	HasMore             bool        `json:"has_more"`
+	SkippedLines        int         `json:"skipped_lines,omitempty"`
+	OversizedLines      int         `json:"oversized_lines,omitempty"`
+	InvalidLines        int         `json:"invalid_lines,omitempty"`
 	TraceSchemaVersion  int         `json:"trace_schema_version,omitempty"`
 	TraceSchemaDetected bool        `json:"trace_schema_detected"`
 }
@@ -237,6 +240,9 @@ type sessionHistoryPage struct {
 	Records             []sessionHistoryRecord
 	NextAfter           int64
 	HasMore             bool
+	SkippedLines        int
+	OversizedLines      int
+	InvalidLines        int
 	TraceSchemaVersion  int
 	TraceSchemaDetected bool
 }
@@ -327,6 +333,9 @@ func readSessionHistory(sessionDir, sessionID string, after int64, limit int) (s
 		Events:              make([]sse.Event, 0, len(page.Records)),
 		NextAfter:           page.NextAfter,
 		HasMore:             page.HasMore,
+		SkippedLines:        page.SkippedLines,
+		OversizedLines:      page.OversizedLines,
+		InvalidLines:        page.InvalidLines,
 		TraceSchemaVersion:  page.TraceSchemaVersion,
 		TraceSchemaDetected: page.TraceSchemaDetected,
 	}
@@ -370,10 +379,14 @@ func readSessionHistoryPage(sessionDir string, after int64, limit int) (sessionH
 		}
 		lineNo++
 		if overLimit {
+			page.SkippedLines++
+			page.OversizedLines++
 			continue
 		}
 		var ev sse.Event
 		if err := json.Unmarshal(line, &ev); err != nil {
+			page.SkippedLines++
+			page.InvalidLines++
 			continue
 		}
 		if ev.Type == sse.TypeTraceMeta {
