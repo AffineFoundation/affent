@@ -1378,6 +1378,10 @@ func longRunContextCompactionRetentionScenario() BatchScenario {
 		Suites:    []string{longRunSuite},
 		SessionID: "longrun-compaction-retention",
 		Prompt:    "你正在恢复一个会触发上下文压缩的多任务 session。请按顺序读取 current/phase.md、current/stock.md、current/subnet.md、current/pr.md、current/evidence.md，然后只根据这些 current 文件输出 phase marker、stock marker、subnet marker、PR marker、evidence source。不要运行 shell，不要搜索，不要修改文件。最终必须保留 COMPRESS-PHASE-09、COMPRESS-HRO-31、COMPRESS-SN120-42、COMPRESS-PR-77。",
+		Prompts: []string{
+			"你正在恢复一个会触发上下文压缩的多任务 session。请按顺序读取 current/phase.md、current/stock.md、current/subnet.md、current/pr.md、current/evidence.md，然后只根据这些 current 文件输出 phase marker、stock marker、subnet marker、PR marker、evidence source。不要运行 shell，不要搜索，不要修改文件。最终必须保留 COMPRESS-PHASE-09、COMPRESS-HRO-31、COMPRESS-SN120-42、COMPRESS-PR-77。",
+			"继续同一个 session。不要调用任何工具；只根据上一轮压缩后的上下文和恢复协议，再次输出 phase marker、stock marker、subnet marker、PR marker、evidence source。必须保留 COMPRESS-PHASE-09、COMPRESS-HRO-31、COMPRESS-SN120-42、COMPRESS-PR-77、current-evidence-pack-5。",
+		},
 		Files: map[string]string{
 			".affent/loops/longrun-compaction-retention/LOOP.md": "# Loop Protocol\n\n## North Star\nPreserve the active long-run recovery contract through context compaction and keep current/*.md as authoritative handoff state.\n\n## Memory\nProject memory for this scenario lives in the current/*.md handoff files.\n\n## Recovery\nAfter compaction, keep this loop protocol path and loop_id visible before continuing.\n",
 			"current/phase.md":    "Current phase marker: COMPRESS-PHASE-09. Use only current/*.md as authoritative handoff state.\n",
@@ -1409,10 +1413,11 @@ func longRunContextCompactionRetentionScenario() BatchScenario {
 			".affent/loops/longrun-compaction-retention/LOOP.md",
 			"loop_id=longrun-compaction-retention",
 		},
-		RequiredLoopProtocolFeeds: 1,
+		RequiredLoopProtocolFeeds: 2,
 		RequiredLoopProtocolFeedModes: map[string]int{
-			"full": 1,
+			"full": 2,
 		},
+		RequireLoopProtocolFullAfterCompact: true,
 		RequiredFinalText: []string{
 			"COMPRESS-PHASE-09",
 			"COMPRESS-HRO-31",

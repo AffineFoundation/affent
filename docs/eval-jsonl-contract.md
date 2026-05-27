@@ -96,6 +96,11 @@ Scenario records describe one eval case:
   stderr for local debugging.
 - `affentctl_command`: redacted command argv used for the scenario run. API
   keys are replaced with `<redacted>`.
+- `prompt`: the single prompt, or a compact turn-labeled display for multi-turn
+  scenarios.
+- `prompts`: optional ordered prompt list for multi-turn scenarios. These
+  scenarios must use a stable session id so successive `affentctl run` calls
+  append to the same conversation and trace.
 - `expectations`: optional structured copy of the scenario's declarative checks,
   including required/forbidden tools, tool counts, source-access requirements,
   loop-decision requirements, loop protocol feed and active plan checkpoint

@@ -68,6 +68,30 @@ func TestCheckTraceIgnoresGuardRejectedForbiddenCommand(t *testing.T) {
 	}
 }
 
+func TestBatchScenarioPromptHelpers(t *testing.T) {
+	single := BatchScenario{Prompt: "one"}
+	if got := batchScenarioPrompts(single); !reflect.DeepEqual(got, []string{"one"}) {
+		t.Fatalf("single prompts = %#v", got)
+	}
+	multi := BatchScenario{Prompt: "legacy", Prompts: []string{"first", "second"}}
+	if got := batchScenarioPrompts(multi); !reflect.DeepEqual(got, []string{"first", "second"}) {
+		t.Fatalf("multi prompts = %#v", got)
+	}
+	display := batchScenarioPromptDisplay(multi)
+	for _, want := range []string{"Turn 1:", "first", "Turn 2:", "second"} {
+		if !strings.Contains(display, want) {
+			t.Fatalf("prompt display missing %q:\n%s", want, display)
+		}
+	}
+}
+
+func TestBatchRunnerRejectsMultiTurnWithoutSessionID(t *testing.T) {
+	res := (BatchRunner{}).Run(context.Background(), BatchScenario{Name: "multi-no-session", Prompts: []string{"first", "second"}})
+	if res.OK || len(res.Failures) == 0 || !strings.Contains(res.Failures[0], "requires SessionID") {
+		t.Fatalf("multi-turn without session should fail early: %+v", res)
+	}
+}
+
 func TestParseTraceFileReadsToolRequestsAndFinalText(t *testing.T) {
 	dir := t.TempDir()
 	tracePath := filepath.Join(dir, "trace.jsonl")
@@ -1076,6 +1100,9 @@ func TestSelectLongRunSuite(t *testing.T) {
 	if compactionRetention.SessionID != "longrun-compaction-retention" {
 		t.Fatalf("compaction retention SessionID = %q, want longrun-compaction-retention", compactionRetention.SessionID)
 	}
+	if len(compactionRetention.Prompts) != 2 || !strings.Contains(compactionRetention.Prompts[1], "不要调用任何工具") {
+		t.Fatalf("compaction retention Prompts = %#v, want two-turn recovery prompt", compactionRetention.Prompts)
+	}
 	if compactionRetention.RequiredContextCompactions != 1 || compactionRetention.RequiredCompactionRemovedMsgs != 1 {
 		t.Fatalf("compaction retention requirements = compactions:%d removed:%d, want 1/1", compactionRetention.RequiredContextCompactions, compactionRetention.RequiredCompactionRemovedMsgs)
 	}
@@ -1092,7 +1119,9 @@ func TestSelectLongRunSuite(t *testing.T) {
 			t.Fatalf("compaction retention RequiredContextLoopProtocolAnchorText = %#v, want %q", compactionRetention.RequiredContextLoopProtocolAnchorText, want)
 		}
 	}
-	if compactionRetention.RequiredLoopProtocolFeeds != 1 || compactionRetention.RequiredLoopProtocolFeedModes["full"] != 1 {
+	if compactionRetention.RequiredLoopProtocolFeeds != 2 ||
+		compactionRetention.RequiredLoopProtocolFeedModes["full"] != 2 ||
+		!compactionRetention.RequireLoopProtocolFullAfterCompact {
 		t.Fatalf("compaction retention loop protocol constraints = feeds:%d modes:%#v", compactionRetention.RequiredLoopProtocolFeeds, compactionRetention.RequiredLoopProtocolFeedModes)
 	}
 	if _, ok := compactionRetention.Files[".affent/loops/longrun-compaction-retention/LOOP.md"]; !ok {
@@ -2153,7 +2182,7 @@ func TestBatchRunnerAffentctlRunArgsForwardsExecutor(t *testing.T) {
 		MaxTurns:        3,
 		CompactTrigger:  6,
 		CompactKeepLast: 3,
-	})
+	}, "fix it")
 	joined := strings.Join(args, "\x00")
 	for _, want := range []string{
 		"--executor\x00docker:affent-eval",
@@ -2203,7 +2232,7 @@ func TestBatchRunnerAffentctlRunArgsEvalToolFlagsImplyEvalMode(t *testing.T) {
 		},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			args := tc.runner.affentctlRunArgs("/tmp/ws", "/tmp/ws/trace.jsonl", BatchScenario{Prompt: "debug", MaxTurns: 1})
+			args := tc.runner.affentctlRunArgs("/tmp/ws", "/tmp/ws/trace.jsonl", BatchScenario{Prompt: "debug", MaxTurns: 1}, "debug")
 			joined := strings.Join(args, "\x00")
 			if !strings.Contains(joined, "--eval-mode") {
 				t.Fatalf("eval tool flags should imply --eval-mode:\n%q", args)
@@ -2220,7 +2249,7 @@ func TestBatchRunnerAffentctlRunArgsCanKeepTraceDeltas(t *testing.T) {
 		BaseURL:     "https://llm.example/v1",
 		Model:       "model-a",
 		TraceDeltas: true,
-	}).affentctlRunArgs("/tmp/ws", "/tmp/ws/trace.jsonl", BatchScenario{Prompt: "debug stream", MaxTurns: 2})
+	}).affentctlRunArgs("/tmp/ws", "/tmp/ws/trace.jsonl", BatchScenario{Prompt: "debug stream", MaxTurns: 2}, "debug stream")
 	joined := strings.Join(args, "\x00")
 	if !strings.Contains(joined, "--trace\x00/tmp/ws/trace.jsonl") {
 		t.Fatalf("args missing trace path:\n%q", args)

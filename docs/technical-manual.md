@@ -1021,6 +1021,11 @@ eval mode, `affentctl` injects that protocol when present and emits
 `loop.protocol_feed` with the active plan checkpoint. This lets long-run evals
 assert that the loop protocol was actually fed, rather than only checking that
 the file existed in the workspace.
+Batch scenarios can also define multiple ordered prompts. The harness reruns
+`affentctl run` with the same workspace, trace, and explicit session id, so the
+second and later turns exercise real persisted conversation state instead of a
+synthetic fixture. This is used for post-compaction recovery checks such as
+requiring a full `LOOP.md` feed after `context.compacted`.
 
 When project context is enabled in normal runtime mode, Affent also injects a
 small auto-generated repository map alongside user-authored project notes. The

@@ -105,6 +105,7 @@ type BatchScenario struct {
 	Name                                  string
 	Suites                                []string
 	Prompt                                string
+	Prompts                               []string
 	SessionID                             string
 	ExecutePlan                           bool
 	EnableMemory                          bool
@@ -256,6 +257,7 @@ type DebugManifest struct {
 	ArtifactDir                      string                        `json:"artifact_dir,omitempty"`
 	TraceDeltas                      bool                          `json:"trace_deltas,omitempty"`
 	Prompt                           string                        `json:"prompt"`
+	Prompts                          []string                      `json:"prompts,omitempty"`
 	Expectations                     DebugScenarioExpectations     `json:"expectations,omitempty"`
 	ExpectationCapabilityNames       []string                      `json:"expectation_capability_names,omitempty"`
 	ExpectationCapabilityOutcome     string                        `json:"expectation_capability_outcome,omitempty"`
@@ -797,6 +799,9 @@ func (r BatchRunner) Run(ctx context.Context, scenario BatchScenario) BatchResul
 	if scenario.MaxTurns <= 0 {
 		scenario.MaxTurns = DefaultBatchMaxTurnSteps
 	}
+	if len(batchScenarioPrompts(scenario)) > 1 && strings.TrimSpace(scenario.SessionID) == "" {
+		return res.fail("multi-turn batch scenario %q requires SessionID", scenario.Name)
+	}
 	expectations := debugScenarioExpectations(scenario)
 	res.Expectations = &expectations
 	if strings.TrimSpace(r.RepoRoot) == "" {
@@ -984,7 +989,8 @@ func writeScenarioDebugArtifacts(res *BatchResult, scenario BatchScenario, stdou
 		ConversationDir:                  filepath.Join(res.Workspace, ".affentctl"),
 		ArtifactDir:                      filepath.Join(res.Workspace, ".affent", "artifacts"),
 		TraceDeltas:                      res.TraceDeltas,
-		Prompt:                           scenario.Prompt,
+		Prompt:                           batchScenarioPromptDisplay(scenario),
+		Prompts:                          append([]string(nil), scenario.Prompts...),
 		Expectations:                     expectations,
 		ExpectationCapabilityNames:       expectationCapabilities,
 		ExpectationCapabilityOutcome:     ExpectationCapabilityOutcome(res.OK, expectationCapabilities),
@@ -1322,19 +1328,29 @@ func (r BatchRunner) runAffentctl(ctx context.Context, repoRoot, workspace, trac
 	if goBin == "" {
 		goBin = findGo(repoRoot)
 	}
-	args := r.affentctlRunArgs(workspace, tracePath, scenario)
-	redactedCommand := redactedCommandArgv(goBin, args)
-	cmd := exec.CommandContext(ctx, goBin, args...)
-	cmd.Dir = repoRoot
-	cmd.Env = append(os.Environ(), "PATH="+evalPath(repoRoot))
 	var stdout, stderr bytes.Buffer
-	cmd.Stdout = &stdout
-	cmd.Stderr = &stderr
-	err := runEvalCommand(ctx, cmd)
-	return stdout.String(), stderr.String(), exitCodeFromError(err), redactedCommand, err
+	var redactedCommand []string
+	var lastExit int
+	for idx, prompt := range batchScenarioPrompts(scenario) {
+		args := r.affentctlRunArgs(workspace, tracePath, scenario, prompt)
+		if idx == 0 {
+			redactedCommand = redactedCommandArgv(goBin, args)
+		}
+		cmd := exec.CommandContext(ctx, goBin, args...)
+		cmd.Dir = repoRoot
+		cmd.Env = append(os.Environ(), "PATH="+evalPath(repoRoot))
+		cmd.Stdout = &stdout
+		cmd.Stderr = &stderr
+		err := runEvalCommand(ctx, cmd)
+		lastExit = exitCodeFromError(err)
+		if err != nil {
+			return stdout.String(), stderr.String(), lastExit, redactedCommand, err
+		}
+	}
+	return stdout.String(), stderr.String(), lastExit, redactedCommand, nil
 }
 
-func (r BatchRunner) affentctlRunArgs(workspace, tracePath string, scenario BatchScenario) []string {
+func (r BatchRunner) affentctlRunArgs(workspace, tracePath string, scenario BatchScenario, prompt string) []string {
 	executor := strings.TrimSpace(r.Executor)
 	if executor == "" {
 		executor = "local"
@@ -1347,7 +1363,7 @@ func (r BatchRunner) affentctlRunArgs(workspace, tracePath string, scenario Batc
 		"--model", r.Model,
 		"--max-turns", fmt.Sprint(scenario.MaxTurns),
 		"--trace", tracePath,
-		"--prompt", scenario.Prompt,
+		"--prompt", prompt,
 	}
 	if scenario.CompactTrigger > 0 {
 		args = append(args, "--compact-trigger", fmt.Sprint(scenario.CompactTrigger))
@@ -1398,6 +1414,28 @@ func appendStringFlag(args []string, flagName, value string) []string {
 		return args
 	}
 	return append(args, flagName, value)
+}
+
+func batchScenarioPrompts(s BatchScenario) []string {
+	if len(s.Prompts) > 0 {
+		return append([]string(nil), s.Prompts...)
+	}
+	return []string{s.Prompt}
+}
+
+func batchScenarioPromptDisplay(s BatchScenario) string {
+	prompts := batchScenarioPrompts(s)
+	if len(prompts) == 1 {
+		return prompts[0]
+	}
+	var b strings.Builder
+	for i, prompt := range prompts {
+		if i > 0 {
+			b.WriteString("\n\n")
+		}
+		fmt.Fprintf(&b, "Turn %d:\n%s", i+1, prompt)
+	}
+	return b.String()
 }
 
 func redactedCommandArgv(bin string, args []string) []string {
