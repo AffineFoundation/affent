@@ -235,6 +235,65 @@ func loopProtocolPlanCheckpoint(provider LoopProtocolCheckpointProvider) loopsta
 	return provider()
 }
 
+func (l *Loop) recordLoopProtocolCalibrationQuestionIfReady(turnID, text string) {
+	if l == nil {
+		return
+	}
+	path := strings.TrimSpace(l.LoopProtocolPath)
+	question := strings.TrimSpace(text)
+	if path == "" || !looksLikeLoopProtocolCalibrationQuestion(question) {
+		return
+	}
+	state, found, err := loopstate.ReadState(filepath.Join(filepath.Dir(path), loopstate.StateFileName))
+	if err != nil || !found || state.Status != "draft" {
+		return
+	}
+	preview := loopstate.ProtocolCalibrationPreview(question)
+	if state.LastCalibrationQuestion == preview {
+		return
+	}
+	state, event, err := loopstate.RecordProtocolCalibrationQuestion(path, question)
+	if err != nil {
+		l.Log.Warn().Err(err).Msg("record loop protocol calibration question")
+		return
+	}
+	l.publish(sse.TypeLoopCalibrationRequest, sse.LoopProtocolCalibrationPayload{
+		LoopID:                  state.LoopID,
+		Status:                  state.Status,
+		CalibrationQuestions:    state.CalibrationQuestions,
+		LastCalibrationQuestion: state.LastCalibrationQuestion,
+		CalibrationAnswers:      state.CalibrationAnswers,
+		LastCalibrationAnswer:   state.LastCalibrationAnswer,
+		ProtocolPath:            loopstate.ProtocolRelPath(filepath.Base(filepath.Dir(path))),
+		EventSeq:                event.Seq,
+	})
+}
+
+func looksLikeLoopProtocolCalibrationQuestion(text string) bool {
+	normalized := strings.ToLower(strings.Join(strings.Fields(strings.TrimSpace(text)), " "))
+	if normalized == "" || (!strings.Contains(normalized, "?") && !strings.Contains(normalized, "？")) {
+		return false
+	}
+	loopishMarkers := []string{"loop", "loop.md", "long-run", "long running", "长期", "循环"}
+	if !loopProtocolContainsAny(normalized, loopishMarkers) {
+		return false
+	}
+	calibrationMarkers := []string{
+		"calibration", "stop condition", "pause", "stop", "memory", "remember", "recovery", "goal", "objective", "constraint", "success", "timer", "schedule",
+		"校准", "暂停", "停止", "记忆", "恢复", "目标", "约束", "成功", "定时",
+	}
+	return loopProtocolContainsAny(normalized, calibrationMarkers)
+}
+
+func loopProtocolContainsAny(text string, markers []string) bool {
+	for _, marker := range markers {
+		if strings.Contains(text, marker) {
+			return true
+		}
+	}
+	return false
+}
+
 func loopProtocolPlanStateLine(checkpoint loopstate.PlanCheckpoint) string {
 	if !checkpoint.Valid || checkpoint.Label == "" {
 		return ""

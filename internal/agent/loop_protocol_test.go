@@ -128,10 +128,12 @@ func TestRunTurnRejectsUncalibratedLoopProtocolActivation(t *testing.T) {
 
 	deadline := time.After(10 * time.Second)
 	sawActivationError := false
+	sawCalibrationQuestion := false
 	for {
 		select {
 		case ev := <-events:
-			if ev.Type == sse.TypeToolResult {
+			switch ev.Type {
+			case sse.TypeToolResult:
 				var p sse.ToolResultPayload
 				if err := json.Unmarshal(ev.Data, &p); err != nil {
 					t.Fatalf("decode tool.result: %v", err)
@@ -139,10 +141,22 @@ func TestRunTurnRejectsUncalibratedLoopProtocolActivation(t *testing.T) {
 				if p.ExitCode != 0 && strings.Contains(p.Result, "requires a user calibration answer") {
 					sawActivationError = true
 				}
-			}
-			if ev.Type == sse.TypeTurnEnd {
+			case sse.TypeLoopCalibrationRequest:
+				var p sse.LoopProtocolCalibrationPayload
+				if err := json.Unmarshal(ev.Data, &p); err != nil {
+					t.Fatalf("decode loop.protocol_calibration_request: %v", err)
+				}
+				if p.CalibrationQuestions == 1 &&
+					p.ProtocolPath == loopstate.ProtocolRelPath("uncalibrated") &&
+					strings.Contains(p.LastCalibrationQuestion, "stop condition") {
+					sawCalibrationQuestion = true
+				}
+			case sse.TypeTurnEnd:
 				if !sawActivationError {
 					t.Fatal("turn ended without uncalibrated activation tool error")
+				}
+				if !sawCalibrationQuestion {
+					t.Fatal("turn ended without loop calibration question event")
 				}
 				state, found, err := loopstate.ReadState(filepath.Join(filepath.Dir(protocolPath), loopstate.StateFileName))
 				if err != nil || !found {

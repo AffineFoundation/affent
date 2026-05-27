@@ -446,7 +446,7 @@ func TestChatPlanSlashDraftCreatesPlanOnlyTurn(t *testing.T) {
 func TestChatLoopSlashOnCreatesDraftAndActivationPrompt(t *testing.T) {
 	workspace := t.TempDir()
 	b := &loopBundle{
-		loop:      &agent.Loop{},
+		loop:      &agent.Loop{Tools: agent.NewRegistry()},
 		workspace: workspace,
 		sessionID: "loop-draft",
 		planPath:  filepath.Join(workspace, ".affentctl", "loop-draft.plan.json"),
@@ -473,8 +473,11 @@ func TestChatLoopSlashOnCreatesDraftAndActivationPrompt(t *testing.T) {
 		!strings.Contains(content, "analyze a JS-heavy market dashboard") {
 		t.Fatalf("draft protocol missing activation goal/status:\n%s", content)
 	}
-	if b.loop.LoopProtocolPath != "" || b.loopProtocolSkillInstalled {
+	if b.loop.LoopProtocolPath != path || b.loopProtocolSkillInstalled {
 		t.Fatalf("draft protocol must not be active before finalization: path=%q installed=%v", b.loop.LoopProtocolPath, b.loopProtocolSkillInstalled)
+	}
+	if _, ok := b.loop.Tools.Get(agent.LoopProtocolToolName); !ok {
+		t.Fatal("loop_protocol tool should be registered for dynamic draft activation")
 	}
 }
 

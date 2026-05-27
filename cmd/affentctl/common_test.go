@@ -1298,8 +1298,14 @@ func TestSetupLoop_InitializesLoopProtocolWhenFlagSet(t *testing.T) {
 	}
 	defer b.close()
 	protocolPath := loopstate.ProtocolPath(workspace, sessionID)
-	if b.loop.LoopProtocolPath != "" {
-		t.Fatalf("draft protocol must not be active before agent supplementation, LoopProtocolPath = %q", b.loop.LoopProtocolPath)
+	if b.loop.LoopProtocolPath != protocolPath {
+		t.Fatalf("LoopProtocolPath = %q, want %q", b.loop.LoopProtocolPath, protocolPath)
+	}
+	if b.loopProtocolSkillInstalled {
+		t.Fatal("draft protocol must not install active loop protocol feeds before agent supplementation")
+	}
+	if _, ok := b.loop.Tools.Get(agent.LoopProtocolToolName); !ok {
+		t.Fatal("loop_protocol tool should be available to supplement draft protocol")
 	}
 	content, found, err := loopstate.ReadProtocol(protocolPath)
 	if err != nil || !found {

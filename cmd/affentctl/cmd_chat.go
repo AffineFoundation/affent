@@ -535,6 +535,12 @@ func createCurrentSessionLoopDraft(b *loopBundle, goal string) error {
 	if err != nil {
 		return fmt.Errorf("create loop protocol draft: %w", err)
 	}
+	if b.loop != nil {
+		b.loop.LoopProtocolPath = path
+		if b.loop.Tools != nil {
+			agent.RegisterLoopProtocolOnly(b.loop.Tools, path)
+		}
+	}
 	return nil
 }
 

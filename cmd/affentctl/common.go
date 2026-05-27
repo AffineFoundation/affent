@@ -1301,6 +1301,7 @@ func setupLoop(c commonFlags) (*loopBundle, int) {
 	var conv *agent.Conversation
 	var browser *affentbrowser.Session
 	planPath := ""
+	loopProtocolPath := loopstate.ProtocolPath(workspace, sid)
 	if caps.Builtins {
 		var execErr error
 		executorSpec := c.executor
@@ -1327,6 +1328,11 @@ func setupLoop(c commonFlags) (*loopBundle, int) {
 		if caps.Plan {
 			planPath = filepath.Join(convDir, sid+".plan.json")
 		}
+		loopProtocolToolPath := ""
+		loopProtocolExists := affentctlLoopProtocolFileExists(loopProtocolPath)
+		if c.loopProtocol || loopProtocolExists {
+			loopProtocolToolPath = loopProtocolPath
+		}
 		sessionsDir := convDir
 		if !caps.SessionSearch {
 			sessionsDir = ""
@@ -1338,6 +1344,7 @@ func setupLoop(c commonFlags) (*loopBundle, int) {
 			SessionsDir:      sessionsDir,
 			SessionID:        sid,
 			PlanPath:         planPath,
+			LoopProtocolPath: loopProtocolToolPath,
 			SkillRegistry:    skillReg,
 			SkillDir:         skillDir,
 			SkillInstallConfirmer: func(proposalID string) bool {
@@ -1502,7 +1509,6 @@ func setupLoop(c commonFlags) (*loopBundle, int) {
 	if planPath != "" {
 		loop.SkillProvider = agent.WithActivePlanSkillProvider(planPath, loop.SkillProvider)
 	}
-	loopProtocolPath := loopstate.ProtocolPath(workspace, sid)
 	if c.loopProtocol {
 		if created, _, _, err := loopstate.EnsureProtocolTemplate(loopProtocolPath, loopstate.ProtocolTemplateOptions{
 			LoopID:       sid,
@@ -1518,11 +1524,15 @@ func setupLoop(c commonFlags) (*loopBundle, int) {
 			log.Info().Str("session_id", sid).Str("path", loopstate.ProtocolRelPath(sid)).Msg("loop protocol initialized")
 		}
 	}
-	if affentctlLoopProtocolAvailable(loopProtocolPath) {
+	loopProtocolExists := affentctlLoopProtocolFileExists(loopProtocolPath)
+	loopProtocolActive := affentctlLoopProtocolAvailable(loopProtocolPath)
+	if c.loopProtocol || loopProtocolExists || loopProtocolActive {
 		loop.LoopProtocolPath = loopProtocolPath
+	}
+	if loopProtocolActive {
 		loop.SkillProvider = agent.WithLoopProtocolSkillProviderWithCheckpoint(loopProtocolPath, affentctlLoopProtocolPlanCheckpointProvider(planPath), loop.SkillProvider)
 	}
-	loopProtocolSkillInstalled := affentctlLoopProtocolAvailable(loopProtocolPath)
+	loopProtocolSkillInstalled := loopProtocolActive
 	if caps.Subagent {
 		loop.FirstToolPolicy = agent.SubagentFirstToolPolicy()
 		loop.PostToolPolicy = agent.SubagentPostToolPolicy()
@@ -1573,6 +1583,11 @@ func affentctlLoopProtocolAvailable(path string) bool {
 	}
 	status := strings.TrimSpace(strings.ToLower(state.Status))
 	return status == "" || status == "running"
+}
+
+func affentctlLoopProtocolFileExists(path string) bool {
+	content, found, err := loopstate.ReadProtocol(path)
+	return err == nil && found && strings.TrimSpace(content) != ""
 }
 
 func affentctlLoopProtocolPlanCheckpointProvider(planPath string) agent.LoopProtocolCheckpointProvider {
