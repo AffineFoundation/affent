@@ -33,6 +33,9 @@ func TestTrace_DelegationStats_Aggregation(t *testing.T) {
 	if got.FocusedTaskErrors != 2 {
 		t.Errorf("FocusedTaskErrors = %d, want 2 (exit failure plus non-verify ok=false)", got.FocusedTaskErrors)
 	}
+	if got.FocusedTaskIncomplete != 1 {
+		t.Errorf("FocusedTaskIncomplete = %d, want 1 (non-verify ok=false)", got.FocusedTaskIncomplete)
+	}
 	if !reflect.DeepEqual(got.FocusedTaskByType, map[string]int{"recall": 2, "explore": 2, "verify": 1}) {
 		t.Errorf("FocusedTaskByType = %+v", got.FocusedTaskByType)
 	}
@@ -41,6 +44,9 @@ func TestTrace_DelegationStats_Aggregation(t *testing.T) {
 	}
 	if got.SubagentErrors != 1 {
 		t.Errorf("SubagentErrors = %d, want 1 (ok=false partial child report)", got.SubagentErrors)
+	}
+	if got.SubagentIncomplete != 1 {
+		t.Errorf("SubagentIncomplete = %d, want 1 (ok=false partial child report)", got.SubagentIncomplete)
 	}
 	if !reflect.DeepEqual(got.SubagentByMode, map[string]int{"test": 1, "research": 1}) {
 		t.Errorf("SubagentByMode = %+v", got.SubagentByMode)

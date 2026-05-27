@@ -99,10 +99,12 @@ func BuildDebugBrief(res BatchResult) *DebugBrief {
 		message := "delegated child work was used; inspect child reports before trusting merged state"
 		tags := []string{"delegation"}
 		counts := map[string]int{
-			"focused_task_calls":  res.Delegation.FocusedTaskCalls,
-			"focused_task_errors": res.Delegation.FocusedTaskErrors,
-			"subagent_calls":      res.Delegation.SubagentCalls,
-			"subagent_errors":     res.Delegation.SubagentErrors,
+			"focused_task_calls":      res.Delegation.FocusedTaskCalls,
+			"focused_task_errors":     res.Delegation.FocusedTaskErrors,
+			"focused_task_incomplete": res.Delegation.FocusedTaskIncomplete,
+			"subagent_calls":          res.Delegation.SubagentCalls,
+			"subagent_errors":         res.Delegation.SubagentErrors,
+			"subagent_incomplete":     res.Delegation.SubagentIncomplete,
 		}
 		for taskType, count := range res.Delegation.FocusedTaskByType {
 			counts["focused_task:"+taskType] = count
@@ -118,7 +120,7 @@ func BuildDebugBrief(res BatchResult) *DebugBrief {
 		}
 		if res.Delegation.FocusedTaskErrors > 0 || res.Delegation.SubagentErrors > 0 {
 			severity = "warn"
-			message = "delegated child work had runtime errors; inspect child transcripts before continuing"
+			message = "delegated child work had runtime errors or incomplete reports; inspect child transcripts before continuing"
 			tags = append(tags, "delegation_error")
 			if res.Delegation.FocusedTaskErrors > 0 {
 				tags = append(tags, "delegation_error:focused_task")

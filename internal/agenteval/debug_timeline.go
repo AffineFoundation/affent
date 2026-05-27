@@ -238,11 +238,13 @@ func renderTimelineDebugBrief(b *strings.Builder, res BatchResult) {
 		fmt.Fprintf(b, "- loop_guard: `%d` intervention(s), `%d` forced no-tools; inspect Loop Guard, Loop Decisions, and latest tool guidance.\n", res.ToolStats.LoopGuardInterventions, res.ToolStats.ForcedNoTools)
 	}
 	if res.Delegation.HasAny() {
-		fmt.Fprintf(b, "- delegation: focused_tasks=`%d`, focused_task_errors=`%d`, subagents=`%d`, subagent_errors=`%d`; inspect child transcripts and parent merge quality.\n",
+		fmt.Fprintf(b, "- delegation: focused_tasks=`%d`, focused_task_errors=`%d`, focused_task_incomplete=`%d`, subagents=`%d`, subagent_errors=`%d`, subagent_incomplete=`%d`; inspect child transcripts and parent merge quality.\n",
 			res.Delegation.FocusedTaskCalls,
 			res.Delegation.FocusedTaskErrors,
+			res.Delegation.FocusedTaskIncomplete,
 			res.Delegation.SubagentCalls,
 			res.Delegation.SubagentErrors,
+			res.Delegation.SubagentIncomplete,
 		)
 	}
 	if len(res.ChildTranscripts) > 0 {

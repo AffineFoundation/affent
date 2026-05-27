@@ -745,12 +745,14 @@ type batchSummary struct {
 	// scenarios in the batch. Zero-valued when no scenario used a
 	// delegation tool — the JSONL emitter omits empty sub-maps so a
 	// batch with no delegation activity produces a clean record.
-	FocusedTaskCalls  int
-	FocusedTaskByType map[string]int
-	FocusedTaskErrors int
-	SubagentCalls     int
-	SubagentByMode    map[string]int
-	SubagentErrors    int
+	FocusedTaskCalls      int
+	FocusedTaskByType     map[string]int
+	FocusedTaskErrors     int
+	FocusedTaskIncomplete int
+	SubagentCalls         int
+	SubagentByMode        map[string]int
+	SubagentErrors        int
+	SubagentIncomplete    int
 
 	// Plan aggregates persisted-plan tool usage across scenarios.
 	// Zero-valued when no scenario used the plan tool.
@@ -961,6 +963,7 @@ func (s *batchSummary) add(res agenteval.BatchResult) {
 	d := res.Delegation
 	s.FocusedTaskCalls += d.FocusedTaskCalls
 	s.FocusedTaskErrors += d.FocusedTaskErrors
+	s.FocusedTaskIncomplete += d.FocusedTaskIncomplete
 	for k, v := range d.FocusedTaskByType {
 		if s.FocusedTaskByType == nil {
 			s.FocusedTaskByType = map[string]int{}
@@ -969,6 +972,7 @@ func (s *batchSummary) add(res agenteval.BatchResult) {
 	}
 	s.SubagentCalls += d.SubagentCalls
 	s.SubagentErrors += d.SubagentErrors
+	s.SubagentIncomplete += d.SubagentIncomplete
 	for k, v := range d.SubagentByMode {
 		if s.SubagentByMode == nil {
 			s.SubagentByMode = map[string]int{}
@@ -1359,7 +1363,7 @@ func printBatchSummary(w io.Writer, s batchSummary) {
 			fmt.Fprintf(w, " expectation_suites=%s", formatStringIntCounts(s.ExpectationSuites))
 		}
 	}
-	printDelegationRollup(w, s.FocusedTaskCalls, s.FocusedTaskByType, s.FocusedTaskErrors, s.SubagentCalls, s.SubagentByMode, s.SubagentErrors)
+	printDelegationRollup(w, s.FocusedTaskCalls, s.FocusedTaskByType, s.FocusedTaskErrors, s.FocusedTaskIncomplete, s.SubagentCalls, s.SubagentByMode, s.SubagentErrors, s.SubagentIncomplete)
 	printPlanRollup(w, s.PlanCalls, s.PlanByAction, s.PlanErrors)
 	fmt.Fprintln(w)
 	printFailureHintLines(w, s.FailureKinds, "")
@@ -1481,13 +1485,16 @@ func hasBatchSourceAccessStats(s batchSummary) bool {
 		s.SourceAccessDynamicPartial > 0
 }
 
-func printDelegationRollup(w io.Writer, focusedTaskCalls int, focusedTaskByType map[string]int, focusedTaskErrors int, subagentCalls int, subagentByMode map[string]int, subagentErrors int) {
+func printDelegationRollup(w io.Writer, focusedTaskCalls int, focusedTaskByType map[string]int, focusedTaskErrors int, focusedTaskIncomplete int, subagentCalls int, subagentByMode map[string]int, subagentErrors int, subagentIncomplete int) {
 	if focusedTaskCalls == 0 && subagentCalls == 0 {
 		return
 	}
 	fmt.Fprintf(w, " delegation=focused_tasks:%d,subagents:%d", focusedTaskCalls, subagentCalls)
 	if focusedTaskErrors > 0 || subagentErrors > 0 {
 		fmt.Fprintf(w, " delegation_errors=focused_tasks:%d,subagents:%d", focusedTaskErrors, subagentErrors)
+	}
+	if focusedTaskIncomplete > 0 || subagentIncomplete > 0 {
+		fmt.Fprintf(w, " delegation_incomplete=focused_tasks:%d,subagents:%d", focusedTaskIncomplete, subagentIncomplete)
 	}
 	if len(focusedTaskByType) > 0 {
 		fmt.Fprintf(w, " focused_task_by_type=%s", formatStringIntCounts(focusedTaskByType))
@@ -2672,12 +2679,14 @@ type batchResultRecord struct {
 	// Per-scenario delegation breakdown. Fields are omitted from the
 	// JSONL when the scenario used no delegation tools, so older
 	// records and delegation-free runs stay compact and noise-free.
-	FocusedTaskCalls  int            `json:"focused_task_calls,omitempty"`
-	FocusedTaskByType map[string]int `json:"focused_task_by_type,omitempty"`
-	FocusedTaskErrors int            `json:"focused_task_errors,omitempty"`
-	SubagentCalls     int            `json:"subagent_calls,omitempty"`
-	SubagentByMode    map[string]int `json:"subagent_by_mode,omitempty"`
-	SubagentErrors    int            `json:"subagent_errors,omitempty"`
+	FocusedTaskCalls      int            `json:"focused_task_calls,omitempty"`
+	FocusedTaskByType     map[string]int `json:"focused_task_by_type,omitempty"`
+	FocusedTaskErrors     int            `json:"focused_task_errors,omitempty"`
+	FocusedTaskIncomplete int            `json:"focused_task_incomplete,omitempty"`
+	SubagentCalls         int            `json:"subagent_calls,omitempty"`
+	SubagentByMode        map[string]int `json:"subagent_by_mode,omitempty"`
+	SubagentErrors        int            `json:"subagent_errors,omitempty"`
+	SubagentIncomplete    int            `json:"subagent_incomplete,omitempty"`
 
 	// Per-scenario plan-tool breakdown. Fields are omitted from the
 	// JSONL when the scenario did not call the plan tool.
@@ -2841,12 +2850,14 @@ type batchSummaryRecord struct {
 	// Per-batch delegation aggregates. Same omitempty discipline as
 	// the per-scenario record so a batch with zero delegation usage
 	// emits a record without any focused_task_* / subagent_* fields.
-	FocusedTaskCalls  int            `json:"focused_task_calls,omitempty"`
-	FocusedTaskByType map[string]int `json:"focused_task_by_type,omitempty"`
-	FocusedTaskErrors int            `json:"focused_task_errors,omitempty"`
-	SubagentCalls     int            `json:"subagent_calls,omitempty"`
-	SubagentByMode    map[string]int `json:"subagent_by_mode,omitempty"`
-	SubagentErrors    int            `json:"subagent_errors,omitempty"`
+	FocusedTaskCalls      int            `json:"focused_task_calls,omitempty"`
+	FocusedTaskByType     map[string]int `json:"focused_task_by_type,omitempty"`
+	FocusedTaskErrors     int            `json:"focused_task_errors,omitempty"`
+	FocusedTaskIncomplete int            `json:"focused_task_incomplete,omitempty"`
+	SubagentCalls         int            `json:"subagent_calls,omitempty"`
+	SubagentByMode        map[string]int `json:"subagent_by_mode,omitempty"`
+	SubagentErrors        int            `json:"subagent_errors,omitempty"`
+	SubagentIncomplete    int            `json:"subagent_incomplete,omitempty"`
 
 	// Per-batch plan-tool aggregates. Omitted when no scenario used plan.
 	PlanCalls    int                     `json:"plan_calls,omitempty"`
@@ -2982,9 +2993,11 @@ func printBatchResultJSONL(w io.Writer, meta evalJSONLMetadata, res agenteval.Ba
 		FocusedTaskCalls:                 res.Delegation.FocusedTaskCalls,
 		FocusedTaskByType:                res.Delegation.FocusedTaskByType,
 		FocusedTaskErrors:                res.Delegation.FocusedTaskErrors,
+		FocusedTaskIncomplete:            res.Delegation.FocusedTaskIncomplete,
 		SubagentCalls:                    res.Delegation.SubagentCalls,
 		SubagentByMode:                   res.Delegation.SubagentByMode,
 		SubagentErrors:                   res.Delegation.SubagentErrors,
+		SubagentIncomplete:               res.Delegation.SubagentIncomplete,
 		PlanCalls:                        res.Plan.Calls,
 		PlanByAction:                     cloneStringIntMap(res.Plan.ByAction),
 		PlanErrors:                       res.Plan.Errors,
@@ -3225,9 +3238,11 @@ func printBatchSummaryJSONL(w io.Writer, meta evalJSONLMetadata, s batchSummary,
 		FocusedTaskCalls:                     s.FocusedTaskCalls,
 		FocusedTaskByType:                    cloneStringIntMap(s.FocusedTaskByType),
 		FocusedTaskErrors:                    s.FocusedTaskErrors,
+		FocusedTaskIncomplete:                s.FocusedTaskIncomplete,
 		SubagentCalls:                        s.SubagentCalls,
 		SubagentByMode:                       cloneStringIntMap(s.SubagentByMode),
 		SubagentErrors:                       s.SubagentErrors,
+		SubagentIncomplete:                   s.SubagentIncomplete,
 		PlanCalls:                            s.PlanCalls,
 		PlanByAction:                         cloneStringIntMap(s.PlanByAction),
 		PlanErrors:                           s.PlanErrors,
@@ -3934,7 +3949,7 @@ func printBatchResult(w io.Writer, res agenteval.BatchResult) {
 	if brief := agenteval.BuildDebugBrief(res); brief != nil {
 		fmt.Fprintf(w, " debug_brief=%s", formatDebugBriefTags(brief.Tags))
 	}
-	printDelegationRollup(w, res.Delegation.FocusedTaskCalls, res.Delegation.FocusedTaskByType, res.Delegation.FocusedTaskErrors, res.Delegation.SubagentCalls, res.Delegation.SubagentByMode, res.Delegation.SubagentErrors)
+	printDelegationRollup(w, res.Delegation.FocusedTaskCalls, res.Delegation.FocusedTaskByType, res.Delegation.FocusedTaskErrors, res.Delegation.FocusedTaskIncomplete, res.Delegation.SubagentCalls, res.Delegation.SubagentByMode, res.Delegation.SubagentErrors, res.Delegation.SubagentIncomplete)
 	printPlanRollup(w, res.Plan.Calls, res.Plan.ByAction, res.Plan.Errors)
 	if res.TurnEndReason != "" {
 		fmt.Fprintf(w, " end=%s", res.TurnEndReason)

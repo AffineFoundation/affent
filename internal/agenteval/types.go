@@ -1638,6 +1638,10 @@ type DelegationStats struct {
 	// returned ok:false for non-verify task types. Verify tasks may use
 	// ok:false to mean "claim falsified", which is a valid outcome.
 	FocusedTaskErrors int
+	// FocusedTaskIncomplete is the subset of FocusedTaskErrors caused
+	// by a completed run_task result JSON returning ok:false rather
+	// than by transport/runtime failure.
+	FocusedTaskIncomplete int
 	// SubagentCalls is the total number of subagent_run tool calls.
 	SubagentCalls int
 	// SubagentByMode breaks the subagent total down by mode
@@ -1648,6 +1652,9 @@ type DelegationStats struct {
 	// returned ok:false, which means the child report is partial or has
 	// unresolved gaps.
 	SubagentErrors int
+	// SubagentIncomplete is the subset of SubagentErrors caused by an
+	// ok:false child report rather than a tool/runtime failure.
+	SubagentIncomplete int
 }
 
 // HasAny reports whether any delegation calls were observed. Helps
@@ -1669,7 +1676,11 @@ func (t Trace) DelegationStats() DelegationStats {
 		switch c.Delegation.Kind {
 		case agent.DelegationKindFocusedTask:
 			s.FocusedTaskCalls++
-			if c.IsErr || c.ExitCode != 0 || focusedTaskResultCountsAsError(c) {
+			incomplete := focusedTaskResultCountsAsError(c)
+			if incomplete {
+				s.FocusedTaskIncomplete++
+			}
+			if c.IsErr || c.ExitCode != 0 || incomplete {
 				s.FocusedTaskErrors++
 			}
 			if tt := c.Delegation.TaskType; tt != "" {
@@ -1680,7 +1691,11 @@ func (t Trace) DelegationStats() DelegationStats {
 			}
 		case agent.DelegationKindSubagent:
 			s.SubagentCalls++
-			if c.IsErr || c.ExitCode != 0 || subagentResultCountsAsError(c) {
+			incomplete := subagentResultCountsAsError(c)
+			if incomplete {
+				s.SubagentIncomplete++
+			}
+			if c.IsErr || c.ExitCode != 0 || incomplete {
 				s.SubagentErrors++
 			}
 			if m := c.Delegation.Mode; m != "" {

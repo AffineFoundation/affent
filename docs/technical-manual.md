@@ -511,7 +511,10 @@ Eval delegation metrics count runtime failures and unresolved child reports:
 `subagent_run` `ok:false` counts as a subagent error, and `run_task` `ok:false`
 counts as a focused-task error for non-`verify` task types even when the tool
 transport exit code is zero. `verify` may use `ok:false` for a valid
-"claim falsified" result.
+"claim falsified" result. Eval JSONL/text summaries also expose
+`focused_task_incomplete`, `subagent_incomplete`, and
+`delegation_incomplete=...` so operators can distinguish child reports that
+finished with unresolved gaps from transport/runtime failures.
 
 Open gaps are detected conservatively from explicit report sections such as
 `Uncertainties`, `Warnings`, `Limitations`, `Open questions`, or `Gaps`

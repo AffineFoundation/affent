@@ -2835,9 +2835,10 @@ func TestBatchSummaryAggregatesDelegationAcrossScenarios(t *testing.T) {
 		TraceSchemaVersion: 1,
 		TurnEndReason:      "completed",
 		Delegation: agenteval.DelegationStats{
-			FocusedTaskCalls:  2,
-			FocusedTaskByType: map[string]int{"recall": 2},
-			FocusedTaskErrors: 1,
+			FocusedTaskCalls:      2,
+			FocusedTaskByType:     map[string]int{"recall": 2},
+			FocusedTaskErrors:     1,
+			FocusedTaskIncomplete: 1,
 		},
 	})
 	summary.add(agenteval.BatchResult{
@@ -2846,11 +2847,12 @@ func TestBatchSummaryAggregatesDelegationAcrossScenarios(t *testing.T) {
 		TraceSchemaVersion: 1,
 		TurnEndReason:      "completed",
 		Delegation: agenteval.DelegationStats{
-			FocusedTaskCalls:  2,
-			FocusedTaskByType: map[string]int{"recall": 1, "explore": 1},
-			SubagentCalls:     1,
-			SubagentByMode:    map[string]int{"review": 1},
-			SubagentErrors:    1,
+			FocusedTaskCalls:   2,
+			FocusedTaskByType:  map[string]int{"recall": 1, "explore": 1},
+			SubagentCalls:      1,
+			SubagentByMode:     map[string]int{"review": 1},
+			SubagentErrors:     1,
+			SubagentIncomplete: 1,
 		},
 	})
 
@@ -2866,6 +2868,9 @@ func TestBatchSummaryAggregatesDelegationAcrossScenarios(t *testing.T) {
 	if summary.FocusedTaskErrors != 1 || summary.SubagentErrors != 1 {
 		t.Errorf("delegation error aggregates = focused:%d subagent:%d, want 1/1", summary.FocusedTaskErrors, summary.SubagentErrors)
 	}
+	if summary.FocusedTaskIncomplete != 1 || summary.SubagentIncomplete != 1 {
+		t.Errorf("delegation incomplete aggregates = focused:%d subagent:%d, want 1/1", summary.FocusedTaskIncomplete, summary.SubagentIncomplete)
+	}
 
 	// Wire-format check: consumers expect one merged object per batch.
 	var out bytes.Buffer
@@ -2880,8 +2885,14 @@ func TestBatchSummaryAggregatesDelegationAcrossScenarios(t *testing.T) {
 	if got["focused_task_error_rate"] != float64(0.25) {
 		t.Errorf("summary.focused_task_error_rate = %#v, want 0.25", got["focused_task_error_rate"])
 	}
+	if got["focused_task_incomplete"] != float64(1) {
+		t.Errorf("summary.focused_task_incomplete = %#v, want 1", got["focused_task_incomplete"])
+	}
 	if got["subagent_error_rate"] != float64(1) {
 		t.Errorf("summary.subagent_error_rate = %#v, want 1", got["subagent_error_rate"])
+	}
+	if got["subagent_incomplete"] != float64(1) {
+		t.Errorf("summary.subagent_incomplete = %#v, want 1", got["subagent_incomplete"])
 	}
 	byType, ok := got["focused_task_by_type"].(map[string]any)
 	if !ok || byType["recall"] != float64(3) || byType["explore"] != float64(1) {
@@ -2893,6 +2904,7 @@ func TestBatchSummaryAggregatesDelegationAcrossScenarios(t *testing.T) {
 	for _, want := range []string{
 		"delegation=focused_tasks:4,subagents:1",
 		"delegation_errors=focused_tasks:1,subagents:1",
+		"delegation_incomplete=focused_tasks:1,subagents:1",
 		"focused_task_error:25.0%,subagent_error:100.0%",
 		"focused_task_by_type=explore:1,recall:3",
 		"subagent_by_mode=review:1",
