@@ -9,6 +9,7 @@ import (
 	"io"
 	"net/http"
 	"os"
+	"path"
 	"path/filepath"
 	"regexp"
 	"sort"
@@ -83,6 +84,7 @@ type sessionSummary struct {
 	HasSchedules       bool                             `json:"has_schedules"`
 	Schedules          *sessionSchedulesSummary         `json:"schedules,omitempty"`
 	HasArtifacts       bool                             `json:"has_artifacts"`
+	Artifacts          *sessionArtifactsSummary         `json:"artifacts,omitempty"`
 	HasMemory          bool                             `json:"has_memory"`
 	HasRuntimeSkills   bool                             `json:"has_runtime_skills"`
 	RuntimeSkillNames  []string                         `json:"runtime_skill_names,omitempty"`
@@ -112,6 +114,13 @@ type sessionContextCompactionSummary struct {
 	LatestReactive     bool   `json:"latest_reactive,omitempty"`
 	LatestSummaryState string `json:"latest_summary_state,omitempty"`
 	TailOnly           bool   `json:"tail_only,omitempty"`
+}
+
+type sessionArtifactsSummary struct {
+	Count         int    `json:"count"`
+	TotalBytes    int64  `json:"total_bytes"`
+	LatestPath    string `json:"latest_path,omitempty"`
+	LatestModTime string `json:"latest_mod_time,omitempty"`
 }
 
 type sessionCapabilities struct {
@@ -766,13 +775,18 @@ func summarizeDurableSession(pool *SessionPool, id string) (sessionSummary, bool
 	if summary.HasSchedules && schedulesMod.After(newest) {
 		newest = schedulesMod
 	}
-	summary.HasArtifacts = dirHasAnyEntry(filepath.Join(dir, filepath.FromSlash(artifactPathPrefix)))
+	artifactRoot := filepath.Join(dir, filepath.FromSlash(artifactPathPrefix))
+	summary.Artifacts = summarizeSessionArtifactsDir(artifactRoot)
+	summary.HasArtifacts = summary.Artifacts != nil && summary.Artifacts.Count > 0
 	summary.RuntimeSkillNames = durableRuntimeSkillNames(agent.DefaultWorkspaceSkillDir(dir))
 	summary.HasRuntimeSkills = len(summary.RuntimeSkillNames) > 0
 	userMemoryPath := pool.userMemoryPath(dir)
 	summary.HasMemory = durableMemoryExists(dir, userMemoryPath)
 	if summary.HasArtifacts {
-		_, _ = mergeStat(filepath.Join(dir, filepath.FromSlash(artifactPathPrefix)))
+		_, _ = mergeStat(artifactRoot)
+		if parsed, err := time.Parse(time.RFC3339, summary.Artifacts.LatestModTime); err == nil && parsed.After(newest) {
+			newest = parsed
+		}
 	}
 	if summary.HasRuntimeSkills {
 		_, _ = mergeStat(agent.DefaultWorkspaceSkillDir(dir))
@@ -792,6 +806,51 @@ func summarizeDurableSession(pool *SessionPool, id string) (sessionSummary, bool
 	summary.LastUsedAt = formatTime(newest)
 	populateSessionSummaryTitle(&summary)
 	return summary, true, nil
+}
+
+func summarizeSessionArtifactsDir(root string) *sessionArtifactsSummary {
+	info, err := os.Lstat(root)
+	if err != nil || !info.IsDir() || info.Mode()&os.ModeSymlink != 0 {
+		return nil
+	}
+	dir, err := os.Open(root)
+	if err != nil {
+		return nil
+	}
+	defer dir.Close()
+	var summary sessionArtifactsSummary
+	var latest time.Time
+	for {
+		entries, err := dir.ReadDir(artifactReadDirBatch)
+		if err != nil && !errors.Is(err, io.EOF) {
+			return nil
+		}
+		for _, ent := range entries {
+			if ent.IsDir() || durableDirEntryIsSymlink(ent) {
+				continue
+			}
+			info, err := ent.Info()
+			if err != nil || info.IsDir() || info.Mode()&os.ModeSymlink != 0 {
+				continue
+			}
+			rel := path.Join(artifactPathPrefix, ent.Name())
+			summary.Count++
+			summary.TotalBytes += info.Size()
+			mod := info.ModTime()
+			if summary.LatestPath == "" || mod.After(latest) || (mod.Equal(latest) && rel > summary.LatestPath) {
+				latest = mod
+				summary.LatestPath = rel
+				summary.LatestModTime = mod.UTC().Format(time.RFC3339)
+			}
+		}
+		if errors.Is(err, io.EOF) {
+			break
+		}
+	}
+	if summary.Count == 0 {
+		return nil
+	}
+	return &summary
 }
 
 func mergeSessionSummaries(a, b sessionSummary) sessionSummary {
@@ -836,6 +895,9 @@ func mergeSessionSummaries(a, b sessionSummary) sessionSummary {
 		a.Schedules = b.Schedules
 	}
 	a.HasArtifacts = a.HasArtifacts || b.HasArtifacts
+	if b.Artifacts != nil {
+		a.Artifacts = b.Artifacts
+	}
 	a.HasMemory = a.HasMemory || b.HasMemory
 	a.HasRuntimeSkills = a.HasRuntimeSkills || b.HasRuntimeSkills
 	a.RuntimeSkillNames = mergeStringLists(a.RuntimeSkillNames, b.RuntimeSkillNames)

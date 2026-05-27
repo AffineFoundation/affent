@@ -673,6 +673,13 @@ func TestSummarizeDurableSessionRestoresRecoveryHintFromTruncatedArtifact(t *tes
 	if !summary.HasArtifacts {
 		t.Fatal("summary should report saved artifacts")
 	}
+	if summary.Artifacts == nil ||
+		summary.Artifacts.Count != 1 ||
+		summary.Artifacts.TotalBytes != int64(len(strings.Repeat("large output\n", 256))) ||
+		summary.Artifacts.LatestPath != artifactRel ||
+		summary.Artifacts.LatestModTime == "" {
+		t.Fatalf("artifacts summary = %+v, want count/bytes/latest path", summary.Artifacts)
+	}
 	for _, want := range []string{"truncated tool output", artifactRel, "result omitted 4096 bytes", "context omitted 8192 bytes"} {
 		if !strings.Contains(summary.LatestRecoveryHint, want) {
 			t.Fatalf("latest_recovery_hint missing %q: %q", want, summary.LatestRecoveryHint)
