@@ -445,6 +445,7 @@ function toolResultLabel(event: NormalizedEvent): string {
 function toolResultMeta(event: NormalizedEvent, context: DisplayContext): string[] {
   const duration = readNumber(event.data, "duration_ms");
   const tool = context.callTools.get(readString(event.data, "call_id") ?? "");
+  const exitCode = readNumber(event.data, "exit_code");
   const artifactPath = readString(event.data, "result_artifact_path");
   const resultBytes = readNumber(event.data, "result_bytes");
   const omittedBytes = readNumber(event.data, "result_omitted_bytes");
@@ -457,6 +458,7 @@ function toolResultMeta(event: NormalizedEvent, context: DisplayContext): string
   const sessionSearchPayload = tool === "session_search" ? parseJSONRecord(readString(event.data, "result")) : undefined;
   const sessionSearch = sessionSearchPayload ? sessionSearchMeta(sessionSearchPayload) : [];
   const resultText = readString(event.data, "result_summary") ?? readString(event.data, "result") ?? "";
+  const nextHint = typeof exitCode === "number" && exitCode !== 0 ? toolResultNextHint(event) : undefined;
   const loopGuard = loopGuardMeta(event, resultText);
   const resultPreview = sessionSearchPayload
     ? readString(sessionSearchPayload, "message")
@@ -469,6 +471,7 @@ function toolResultMeta(event: NormalizedEvent, context: DisplayContext): string
     ...memoryUpdate,
     ...sessionSearch,
     ...loopGuard,
+    !loopGuard.length && nextHint ? `next ${streamSummary(nextHint)}` : undefined,
     sourceAccess ? sourceEvidenceLabel(sourceAccess) : undefined,
     sourceAccess ? sourceAccess.accessedUrl : !loopGuard.length && resultPreview ? streamSummary(resultPreview) : undefined,
     sourceAccess?.requestedUrl && sourceAccess.requestedUrl !== sourceAccess.accessedUrl ? `from ${sourceAccess.requestedUrl}` : undefined,
@@ -490,6 +493,15 @@ function toolResultMeta(event: NormalizedEvent, context: DisplayContext): string
         })}`
       : undefined,
   ]);
+}
+
+function toolResultNextHint(event: NormalizedEvent): string | undefined {
+  const summary = readString(event.data, "result_summary");
+  const result = readString(event.data, "result");
+  const text = [summary, result && result !== summary ? result : undefined].filter(Boolean).join("\n");
+  const match = text.match(/(?:^|\n)Next:\s*([\s\S]*?)(?:\nFailure:|\n[A-Z][A-Za-z _-]{0,40}:|$)/);
+  const next = match?.[1]?.trim();
+  return next || undefined;
 }
 
 function loopGuardMeta(event: NormalizedEvent, resultText: string): string[] {

@@ -94,6 +94,31 @@ describe("EventTrace", () => {
     expect(screen.getByText("no_verified_source")).toBeInTheDocument();
   });
 
+  it("surfaces failed tool Next guidance in result rows", () => {
+    const events = normalizeEvents([
+      {
+        id: 1,
+        type: "tool.request",
+        data: { turn_id: "t1", call_id: "c1", tool: "read_file" },
+      },
+      {
+        id: 2,
+        type: "tool.result",
+        data: {
+          call_id: "c1",
+          exit_code: 1,
+          failure_kind: "not_found",
+          result_summary: "read failed\nNext: check the path from rg --files before retrying\nFailure: kind=not_found",
+        },
+      },
+    ]);
+
+    render(<EventTrace events={events} />);
+
+    expect(screen.getByText("Action failed")).toBeInTheDocument();
+    expect(screen.getByText(/next check the path from rg --files before retrying/)).toBeInTheDocument();
+  });
+
   it("surfaces source evidence status in tool result rows", () => {
     const events = normalizeEvents([
       {

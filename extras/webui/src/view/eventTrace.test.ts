@@ -295,6 +295,40 @@ describe("eventTrace view model", () => {
     });
   });
 
+  it("surfaces failed tool Next guidance on result rows", () => {
+    const items = buildEventTraceItems(normalizeEvents([
+      {
+        id: 1,
+        type: "tool.request",
+        data: { turn_id: "t1", call_id: "c1", tool: "read_file" },
+      },
+      {
+        id: 2,
+        type: "tool.result",
+        data: {
+          turn_id: "t1",
+          call_id: "c1",
+          exit_code: 1,
+          failure_kind: "not_found",
+          result_summary: "read failed\nNext: check the path from rg --files before retrying\nFailure: kind=not_found",
+        },
+      },
+    ]));
+
+    expect(items[1]).toMatchObject({
+      kind: "event",
+      display: {
+        label: "Action failed",
+        meta: [
+          "read_file",
+          "next check the path from rg --files before retrying",
+          "read failed Next: check the path from rg --files before retrying Failure: kind=not_found",
+        ],
+        badges: ["not_found"],
+      },
+    });
+  });
+
   it("surfaces weak context compaction summary states", () => {
     const model = buildEventTraceModel(normalizeEvents([
       {
