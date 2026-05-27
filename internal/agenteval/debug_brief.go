@@ -188,12 +188,19 @@ func BuildDebugBrief(res BatchResult) *DebugBrief {
 		if res.ToolStats.SourceAccessNetwork > 0 {
 			tags = append(tags, "source_network")
 		}
+		missingResponseDiagnostics := sourceNetworkMissingResponseDiagnostics(res)
+		if missingResponseDiagnostics > 0 {
+			severity = "warn"
+			tags = append(tags, "source_network:missing_response_diagnostics")
+			message = "network source evidence lacked response diagnostics; inspect status/content_type before trusting current facts"
+		}
 		add("source_access", severity, message, []string{"source_evidence"}, map[string]int{
-			"results":         res.ToolStats.SourceAccessResults,
-			"verified":        res.ToolStats.SourceAccessVerified,
-			"network":         res.ToolStats.SourceAccessNetwork,
-			"dynamic_partial": res.ToolStats.SourceAccessDynamicPartial,
-			"discovery_only":  res.ToolStats.SourceAccessDiscoveryOnly,
+			"results":                      res.ToolStats.SourceAccessResults,
+			"verified":                     res.ToolStats.SourceAccessVerified,
+			"network":                      res.ToolStats.SourceAccessNetwork,
+			"dynamic_partial":              res.ToolStats.SourceAccessDynamicPartial,
+			"discovery_only":               res.ToolStats.SourceAccessDiscoveryOnly,
+			"missing_response_diagnostics": missingResponseDiagnostics,
 		}, tags...)
 	}
 	if len(res.BrowserNetworkExamples) > 0 {
@@ -370,6 +377,20 @@ func browserNetworkRefsHaveSourceEvidence(res BatchResult) bool {
 		return true
 	}
 	return res.ToolStats.SourceAccessNetwork > 0
+}
+
+func sourceNetworkMissingResponseDiagnostics(res BatchResult) int {
+	missing := 0
+	for _, ex := range res.SourceAccessExamples {
+		isNetwork := ex.Status == "network" || ex.URLField == "browser_network_url" || ex.SourceMethod == "network_xhr_fetch"
+		if !isNetwork {
+			continue
+		}
+		if strings.TrimSpace(ex.HTTPStatus) == "" || strings.TrimSpace(ex.ContentType) == "" {
+			missing++
+		}
+	}
+	return missing
 }
 
 func hasDebugBriefTruncation(res BatchResult) bool {

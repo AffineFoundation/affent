@@ -333,6 +333,51 @@ func TestBuildDebugBriefClassifiesSourceAccessQuality(t *testing.T) {
 		!stringSliceContains(brief.Tags, "source_network") {
 		t.Fatalf("verified source access item = %+v tags=%+v", item, brief.Tags)
 	}
+
+	brief = BuildDebugBrief(BatchResult{
+		OK: true,
+		ToolStats: ToolRuntimeStats{
+			SourceAccessResults:  1,
+			SourceAccessVerified: 1,
+			SourceAccessNetwork:  1,
+		},
+		SourceAccessExamples: []SourceAccessExample{{
+			Tool:         "browser_network_read",
+			Status:       "network",
+			URLField:     "browser_network_url",
+			SourceMethod: "network_xhr_fetch",
+			Ref:          "n1",
+		}},
+	})
+	item = debugBriefItemByKind(brief, "source_access")
+	if item == nil ||
+		item.Severity != "warn" ||
+		item.Message != "network source evidence lacked response diagnostics; inspect status/content_type before trusting current facts" ||
+		item.Counts["missing_response_diagnostics"] != 1 ||
+		!stringSliceContains(brief.Tags, "source_network:missing_response_diagnostics") {
+		t.Fatalf("network source missing diagnostics item = %+v tags=%+v", item, brief.Tags)
+	}
+
+	brief = BuildDebugBrief(BatchResult{
+		OK: true,
+		ToolStats: ToolRuntimeStats{
+			SourceAccessResults:  1,
+			SourceAccessVerified: 1,
+			SourceAccessNetwork:  1,
+		},
+		SourceAccessExamples: []SourceAccessExample{{
+			Tool:         "browser_network_read",
+			Status:       "network",
+			URLField:     "browser_network_url",
+			SourceMethod: "network_xhr_fetch",
+			Ref:          "n1",
+			HTTPStatus:   "200",
+			ContentType:  "application/json",
+		}},
+	})
+	if stringSliceContains(brief.Tags, "source_network:missing_response_diagnostics") {
+		t.Fatalf("network source with diagnostics should not be tagged: %+v", brief.Tags)
+	}
 }
 
 func TestBuildDebugBriefMatchesBrowserNetworkRefsToSourceEvidence(t *testing.T) {

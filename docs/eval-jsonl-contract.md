@@ -182,6 +182,7 @@ Scenario records describe one eval case:
   `source_dynamic_partial`, `source_dynamic_without_network`,
   `source_dynamic_without_decision`, `source_unverified_all`,
   `source_discovery_only_all`,
+  `source_network:missing_response_diagnostics`,
   `browser_network`, `browser_network:no_matches`,
   `browser_network:unread_refs`, `browser_network:refs`,
   `memory_update:replace`, `empty_recall`,

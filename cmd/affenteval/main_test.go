@@ -53,6 +53,7 @@ func TestRunListQualityProfiles(t *testing.T) {
 		"max-debug-brief-tag-rate=loop_guard:forced_no_tools=0.000",
 		"max-debug-brief-tag-rate=recall:weak_context=0.000",
 		"max-debug-brief-tag-rate=source_dynamic_without_network=0.000",
+		"max-debug-brief-tag-rate=source_network:missing_response_diagnostics=0.000",
 		"max-debug-brief-tag-rate=tool_repair:failed=0.000",
 		"max-debug-brief-tag-rate=truncation:missing_artifact=0.000",
 	} {
@@ -662,6 +663,7 @@ func TestApplyQualityGateProfile(t *testing.T) {
 		webGates.MaxSourceDynamicPartialRate == nil || *webGates.MaxSourceDynamicPartialRate != 0.20 ||
 		webGates.MaxDebugBriefTagRates["source_dynamic_without_decision"] != 0 ||
 		webGates.MaxDebugBriefTagRates["source_dynamic_without_network"] != 0 ||
+		webGates.MaxDebugBriefTagRates["source_network:missing_response_diagnostics"] != 0 ||
 		webGates.MaxDebugBriefTagRates["source_unverified_all"] != 0 ||
 		webGates.MaxDebugBriefTagRates["source_discovery_only_all"] != 0 ||
 		webGates.MaxDebugBriefTagRates["truncation:missing_artifact"] != 0 {
@@ -1103,12 +1105,15 @@ func TestBatchSummaryAggregatesRuntimeMetrics(t *testing.T) {
 			ContextEstimatedTokens: 256,
 		}},
 		SourceAccessExamples: []agenteval.SourceAccessExample{{
-			ToolIndex: 1,
-			CallID:    "source-1",
-			Tool:      "browser_network_read",
-			Status:    "network",
-			URL:       "https://metrics.example/api.json",
-			JSONPath:  "$.price",
+			ToolIndex:    1,
+			CallID:       "source-1",
+			Tool:         "browser_network_read",
+			Status:       "network",
+			URL:          "https://metrics.example/api.json",
+			SourceMethod: "network_xhr_fetch",
+			HTTPStatus:   "200",
+			ContentType:  "application/json",
+			JSONPath:     "$.price",
 		}},
 		BrowserNetworkExamples: []agenteval.BrowserNetworkSearchExample{{
 			ToolIndex:         2,
@@ -1366,7 +1371,7 @@ func TestBatchSummaryAggregatesRuntimeMetrics(t *testing.T) {
 	if !strings.Contains(out.String(), `loop_guard_example[loop_guard_repeated_failed_input]: scenario=sample category=loop_guard tool=web_fetch call_id=guard-1 args=url="https://loop.example" exit=1 result=repeated failed input | Next: use browser_network_read`) {
 		t.Fatalf("summary output missing loop guard example:\n%s", out.String())
 	}
-	if !strings.Contains(out.String(), "source_access_example: scenario=sample status=network tool=browser_network_read call_id=source-1 url=https://metrics.example/api.json json_path=$.price") {
+	if !strings.Contains(out.String(), "source_access_example: scenario=sample status=network tool=browser_network_read call_id=source-1 url=https://metrics.example/api.json method=network_xhr_fetch http_status=200 content_type=application/json json_path=$.price") {
 		t.Fatalf("summary output missing source access example:\n%s", out.String())
 	}
 	if !strings.Contains(out.String(), `browser_network_example: scenario=sample status=matches call_id=browser-network-1 page=https://metrics.example/dashboard query="price" refs=n1 requires_read=true not_citable=true next="call browser_network_read before citing values"`) {
