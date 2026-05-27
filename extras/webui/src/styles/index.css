@@ -460,7 +460,8 @@ body {
 }
 
 .session-files-list,
-.session-changes-list {
+.session-changes-list,
+.session-artifacts-list {
   display: grid;
   gap: 7px;
   min-width: 0;
@@ -480,6 +481,7 @@ body {
 
 .session-files-item,
 .session-changes-item,
+.session-artifacts-item,
 .session-run-item {
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto;
@@ -524,6 +526,7 @@ body {
 
 .session-files-main,
 .session-changes-main,
+.session-artifacts-main,
 .session-run-main {
   display: grid;
   gap: 2px;
@@ -532,6 +535,7 @@ body {
 
 .session-files-main strong,
 .session-changes-main strong,
+.session-artifacts-main strong,
 .session-run-main strong {
   min-width: 0;
   overflow: hidden;
@@ -545,6 +549,8 @@ body {
 .session-files-main small,
 .session-changes-main span,
 .session-changes-main small,
+.session-artifacts-main span,
+.session-artifacts-main small,
 .session-run-main span,
 .session-run-main small {
   min-width: 0;
@@ -7657,6 +7663,7 @@ html[data-theme="dark"] .workbench-attention[data-tone="error"] {
 html[data-theme="dark"] .session-files-item,
 html[data-theme="dark"] .session-changes-item,
 html[data-theme="dark"] .session-run-item,
+html[data-theme="dark"] .session-artifacts-item,
 html[data-theme="dark"] .session-schedule-item {
   border-color: rgba(58, 68, 81, 0.82);
   background: rgba(17, 20, 24, 0.68);
@@ -8571,7 +8578,8 @@ html[data-theme="dark"] ::selection {
     grid-template-columns: minmax(0, 1fr);
   }
   .session-files-item,
-  .session-changes-item {
+  .session-changes-item,
+  .session-artifacts-item {
     grid-template-columns: minmax(0, 1fr);
   }
   .session-run-item {
@@ -8581,6 +8589,7 @@ html[data-theme="dark"] ::selection {
   .session-evidence-actions,
   .session-files-item .ghost-action,
   .session-changes-item .ghost-action,
+  .session-artifacts-item .ghost-action,
   .session-run-item .ghost-action {
     justify-self: start;
   }

@@ -48,6 +48,7 @@ import { Composer, type ComposerDraft } from "./components/Composer";
 import { SessionList } from "./components/SessionList";
 import { SessionMemoryPanel } from "./components/SessionMemoryPanel";
 import { SessionPlanPanel } from "./components/SessionPlanPanel";
+import { SessionArtifactsPanel } from "./components/SessionArtifactsPanel";
 import { SessionAutomationPanel } from "./components/SessionAutomationPanel";
 import { SessionLoopPanel } from "./components/SessionLoopPanel";
 import { SessionSchedulePanel } from "./components/SessionSchedulePanel";
@@ -72,6 +73,7 @@ import { buildSessionOverview, type SessionOverview } from "./view/sessionOvervi
 import { buildSessionFiles } from "./view/sessionFiles";
 import { buildSessionChanges } from "./view/sessionChanges";
 import { buildSessionRun } from "./view/sessionRun";
+import { buildSessionArtifacts } from "./view/sessionArtifacts";
 import { buildWorkbenchAttention } from "./view/workbenchAttention";
 import { isContinuationPrompt } from "./view/continuationPrompt";
 import { memoryUpdatesForTurn } from "./view/memoryUpdate";
@@ -285,6 +287,7 @@ export function App() {
   const sessionFiles = useMemo(() => buildSessionFiles(session), [session]);
   const sessionChanges = useMemo(() => buildSessionChanges(session), [session]);
   const sessionRun = useMemo(() => buildSessionRun(session), [session]);
+  const sessionArtifacts = useMemo(() => buildSessionArtifacts(session), [session]);
   const showWorkflowStatus = overview.tone === "error" || overview.tone === "warning" || hasRecoveryMetric(overview);
   const showSessionNav = !demoActive && sessions.length > 0;
   const compactNav = demoActive || !showSessionNav;
@@ -1417,6 +1420,18 @@ export function App() {
                     run={sessionRun}
                     defaultOpen={workbenchAttention?.target === "run"}
                     onOpenArtifact={(path) => void handleOpenArtifact(path)}
+                    onUseAsDraft={handleUseAsDraft}
+                  />
+                ) : null}
+                {sessionArtifacts.length > 0 ? (
+                  <SessionArtifactsPanel
+                    artifacts={sessionArtifacts}
+                    onOpenArtifact={(path) => void handleOpenArtifact(path)}
+                    downloadHref={
+                      selectedSessionId
+                        ? (path) => client.url(sessionArtifactPath(selectedSessionId, path))
+                        : undefined
+                    }
                     onUseAsDraft={handleUseAsDraft}
                   />
                 ) : null}

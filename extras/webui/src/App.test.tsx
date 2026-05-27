@@ -2597,8 +2597,21 @@ describe("App", () => {
       "Use this file in the next step: .affent/artifacts/tool-results/000001-c1.txt",
     );
     expect(screen.getByTestId("composer-context")).toHaveTextContent("File added to message");
+    expect(screen.queryByTestId("session-artifacts-panel")).toBeNull();
 
-    await user.click(screen.getByRole("button", { name: "Open file" }));
+    await user.click(screen.getByLabelText("Workbench"));
+    const artifacts = await screen.findByTestId("session-artifacts-panel");
+    expect(artifacts).toHaveTextContent("1 artifact");
+    expect(within(artifacts).getByRole("link", { name: "Download" })).toHaveAttribute(
+      "href",
+      "/v1/sessions/s1/artifacts/.affent/artifacts/tool-results/000001-c1.txt",
+    );
+    await user.click(within(artifacts).getByRole("button", { name: "Use" }));
+    expect(screen.getByPlaceholderText("Message Affent...")).toHaveValue(
+      "Use this artifact in the next step: .affent/artifacts/tool-results/000001-c1.txt",
+    );
+
+    await user.click(within(screen.getByTestId("turn-artifacts")).getByRole("button", { name: "Open file" }));
     await user.click(await screen.findByRole("button", { name: "Use text" }));
 
     expect(screen.getByPlaceholderText("Message Affent...")).toHaveValue(
