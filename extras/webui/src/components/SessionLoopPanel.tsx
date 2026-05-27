@@ -1,15 +1,26 @@
 import type { SessionLoopProtocolSummary, SessionLoopState } from "../api/sessions";
+import { CopyButton } from "./CopyButton";
 
 export function SessionLoopPanel({
   summary,
   state,
   disabling = false,
+  protocol,
+  loadingProtocol = false,
+  protocolError,
   onDisable,
+  onLoadProtocol,
+  onUseAsDraft,
 }: {
   summary?: SessionLoopProtocolSummary;
   state?: SessionLoopState;
   disabling?: boolean;
+  protocol?: string;
+  loadingProtocol?: boolean;
+  protocolError?: string;
   onDisable?: () => Promise<void> | void;
+  onLoadProtocol?: () => Promise<void> | void;
+  onUseAsDraft?: () => void;
 }) {
   if (!summary && !state) return null;
   const status = compact(summary?.status) || compact(state?.status) || "unknown";
@@ -42,13 +53,32 @@ export function SessionLoopPanel({
           {event ? <LoopField label="Latest" value={event} /> : null}
         </div>
         {preview ? <p className="session-loop-preview">{preview}</p> : null}
-        {!disabled && onDisable ? (
-          <div className="session-loop-actions">
-            <button type="button" className="ghost-action" disabled={disabling} onClick={() => void onDisable()}>
-              {disabling ? "Disabling loop" : "Disable loop"}
-            </button>
+        {protocol ? (
+          <pre className="session-loop-protocol" data-testid="session-loop-protocol">{protocol}</pre>
+        ) : null}
+        {protocolError ? (
+          <div className="session-plan-empty error" role="alert">
+            {protocolError}
           </div>
         ) : null}
+        <div className="session-loop-actions">
+          {onLoadProtocol ? (
+            <button type="button" className="ghost-action" disabled={loadingProtocol} onClick={() => void onLoadProtocol()}>
+              {loadingProtocol ? "Loading LOOP.md" : protocol ? "Refresh LOOP.md" : "View LOOP.md"}
+            </button>
+          ) : null}
+          {protocol ? <CopyButton label="Copy LOOP.md" value={protocol} className="ghost-action" /> : null}
+          {onUseAsDraft && !disabled ? (
+            <button type="button" className="ghost-action" onClick={onUseAsDraft}>
+              Continue setup
+            </button>
+          ) : null}
+          {!disabled && onDisable ? (
+            <button type="button" className="ghost-action danger-action" disabled={disabling} onClick={() => void onDisable()}>
+              {disabling ? "Disabling loop" : "Disable loop"}
+            </button>
+          ) : null}
+        </div>
       </div>
     </details>
   );

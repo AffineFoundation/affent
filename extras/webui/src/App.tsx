@@ -7,6 +7,7 @@ import {
   deleteSessionLoopProtocol,
   deleteSession,
   getSessionMemory,
+  getSessionLoopProtocol,
   getSessionPlan,
   getSessionHistory,
   installSkill,
@@ -90,6 +91,12 @@ type PlanState =
   | { state: "ready"; plan: unknown; summary?: SessionPlanSummary }
   | { state: "error"; error: string; summary?: SessionPlanSummary };
 
+type LoopProtocolState =
+  | { state: "idle" }
+  | { state: "loading"; sessionId: string }
+  | { state: "ready"; sessionId: string; protocol: SessionLoopProtocolResponse }
+  | { state: "error"; sessionId: string; error: string };
+
 const demoReplayDelayMs = 180;
 const historyPageLimit = 500;
 const maxHistoryPages = 50;
@@ -120,6 +127,7 @@ export function App() {
   const [runtimeStatsState, setRuntimeStatsState] = useState<RuntimeStatsState>({ state: "idle" });
   const [livePlanSummary, setLivePlanSummary] = useState<SessionPlanSummary | undefined>();
   const [planState, setPlanState] = useState<PlanState>({ state: "idle" });
+  const [loopProtocolState, setLoopProtocolState] = useState<LoopProtocolState>({ state: "idle" });
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [sessionsCollapsed, setSessionsCollapsed] = useState(false);
   const [mobileTopbarHidden, setMobileTopbarHidden] = useState(false);
@@ -183,6 +191,9 @@ export function App() {
   }, [selectedSession]);
   const selectedSessionActive = selectedSession?.active === true;
   const selectedLoopState = selectedSession?.loop_protocol?.state ?? selectedSession?.loop_state;
+  const selectedLoopProtocolState = loopProtocolState.state !== "idle" && loopProtocolState.sessionId === selectedSessionId
+    ? loopProtocolState
+    : { state: "idle" as const };
   const showLoopContext = !demoActive && !!selectedSessionId && (selectedSession?.has_loop_protocol || selectedSession?.has_loop_state || !!selectedSession?.loop_protocol || !!selectedSession?.loop_state);
   const workflow = useMemo(() => deriveWorkflowStatus(session), [session]);
   const memoryUpdateCount = useMemo(
@@ -621,6 +632,7 @@ export function App() {
     setCancelBusy(false);
     setLoopProtocolBusy(false);
     setStatus({ state: "loading", label: "Loading chat", detail: loadingSessionDetail(nextSessionId) });
+    setLoopProtocolState({ state: "idle" });
   }
 
   async function handleNewSession(): Promise<string | undefined> {
@@ -639,6 +651,7 @@ export function App() {
     setComposerDraft(undefined);
     setComposerFocusSignal((current) => current + 1);
     setStatus({ state: "connected", label: "Ready", detail: "Ready to chat" });
+    setLoopProtocolState({ state: "idle" });
     return undefined;
   }
 
@@ -660,6 +673,7 @@ export function App() {
         setActionBusy(false);
         setCancelBusy(false);
         setLoopProtocolBusy(false);
+        setLoopProtocolState({ state: "idle" });
       }
       setStatus({ state: "connected", label: "Ready", detail: "Chat deleted" });
     } catch (err) {
@@ -676,12 +690,41 @@ export function App() {
     try {
       const resp = await deleteSessionLoopProtocol(client, sessionId);
       markSessionLoopProtocolDisabled(sessionId, resp);
+      setLoopProtocolState({ state: "idle" });
       setStatus({ state: "connected", label: "Ready", detail: resp.cleared ? "Loop disabled" : "Loop already disabled" });
     } catch (err) {
       setStatus({ state: "error", label: "Loop disable failed", detail: formatError(err) });
     } finally {
       setLoopProtocolBusy(false);
     }
+  }
+
+  async function handleLoadLoopProtocol(): Promise<void> {
+    if (!selectedSessionId || selectedLoopProtocolState.state === "loading") return;
+    const sessionId = selectedSessionId;
+    setLoopProtocolState({ state: "loading", sessionId });
+    try {
+      const protocol = await getSessionLoopProtocol(client, sessionId);
+      setLoopProtocolState({ state: "ready", sessionId, protocol });
+    } catch (err) {
+      setLoopProtocolState({ state: "error", sessionId, error: formatError(err) });
+    }
+  }
+
+  function handleUseLoopProtocolDraft() {
+    const goal = selectedLoopState?.initial_goal_preview?.trim() || selectedSessionTitle || "this long-running session";
+    setComposerDraft({
+      id: Date.now(),
+      source: "starter",
+      content: [
+        `Continue loop protocol setup for: ${goal}`,
+        "",
+        "Read the current LOOP.md with loop_protocol action=read.",
+        "If the protocol is still draft or underspecified, ask one concise calibration question before activation.",
+        "After the user answers, update_draft or complete_activation only when the protocol is fully supplemented.",
+      ].join("\n"),
+    });
+    setComposerFocusSignal((current) => current + 1);
   }
 
   async function handleSend(content: string) {
@@ -1080,6 +1123,11 @@ export function App() {
                     state={selectedLoopState}
                     disabling={loopProtocolBusy}
                     onDisable={handleDisableLoopProtocol}
+                    protocol={selectedLoopProtocolState.state === "ready" ? selectedLoopProtocolState.protocol.protocol : undefined}
+                    loadingProtocol={selectedLoopProtocolState.state === "loading"}
+                    protocolError={selectedLoopProtocolState.state === "error" ? selectedLoopProtocolState.error : undefined}
+                    onLoadProtocol={handleLoadLoopProtocol}
+                    onUseAsDraft={handleUseLoopProtocolDraft}
                   />
                 ) : null}
                 {showWorkflowStatus ? <WorkflowStatus overview={overview} /> : null}

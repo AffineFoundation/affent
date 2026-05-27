@@ -604,6 +604,25 @@ describe("App", () => {
         return jsonResponse({ session_id: "loop-control", events: [], next_after: -1, has_more: false });
       }
       if (url === "/v1/sessions/loop-control/events") return eventStreamResponse("");
+      if (url === "/v1/sessions/loop-control/loop-protocol" && (!init?.method || init.method === "GET")) {
+        return jsonResponse({
+          session_id: "loop-control",
+          protocol: "# Loop Protocol: loop-control\n\n- status: running\n\n## 1. North Star\n\nwatch market evidence",
+          summary: {
+            path: ".affent/loops/loop-control/LOOP.md",
+            status: "running",
+            bytes: 92,
+            preview: "watch market evidence",
+          },
+          state: {
+            version: 1,
+            loop_id: "loop-control",
+            status: "running",
+            initial_goal_preview: "watch market evidence for several days",
+          },
+          events: [],
+        });
+      }
       if (url === "/v1/sessions/loop-control/loop-protocol" && init?.method === "DELETE") {
         return jsonResponse({
           session_id: "loop-control",
@@ -628,6 +647,11 @@ describe("App", () => {
     expect(panel).toHaveTextContent("Running");
     expect(panel).toHaveTextContent("watch market evidence for several days");
     expect(panel).toHaveTextContent(".affent/loops/loop-control/LOOP.md");
+
+    await user.click(within(panel).getByRole("button", { name: "View LOOP.md" }));
+    expect(await screen.findByTestId("session-loop-protocol")).toHaveTextContent("# Loop Protocol: loop-control");
+    await user.click(within(panel).getByRole("button", { name: "Continue setup" }));
+    expect((screen.getByPlaceholderText("Message Affent...") as HTMLTextAreaElement).value).toContain("Continue loop protocol setup");
 
     await user.click(within(panel).getByRole("button", { name: "Disable loop" }));
 
