@@ -27,6 +27,8 @@ type State struct {
 	ProtocolPath           string `json:"protocol_path,omitempty"`
 	CreatedAt              string `json:"created_at,omitempty"`
 	UpdatedAt              string `json:"updated_at,omitempty"`
+	InitialGoalPreview     string `json:"initial_goal_preview,omitempty"`
+	InitialPlanLabel       string `json:"initial_plan_label,omitempty"`
 	LastProtocolUpdateAt   string `json:"last_protocol_update_at,omitempty"`
 	ProtocolUpdates        int    `json:"protocol_updates,omitempty"`
 	ProtocolFeeds          int    `json:"protocol_feeds,omitempty"`

@@ -1291,14 +1291,15 @@ func TestSetupLoop_InitializesLoopProtocolWhenFlagSet(t *testing.T) {
 	if err := applyConfig(&cf, fs); err != nil {
 		t.Fatal(err)
 	}
+	cf.loopProtocolGoal = "Investigate a long-running Bittensor subnet and preserve evidence."
 	b, code := setupLoop(cf)
 	if code != 0 {
 		t.Fatalf("setupLoop code=%d", code)
 	}
 	defer b.close()
 	protocolPath := loopstate.ProtocolPath(workspace, sessionID)
-	if b.loop.LoopProtocolPath != protocolPath {
-		t.Fatalf("LoopProtocolPath = %q, want %q", b.loop.LoopProtocolPath, protocolPath)
+	if b.loop.LoopProtocolPath != "" {
+		t.Fatalf("draft protocol must not be active before agent supplementation, LoopProtocolPath = %q", b.loop.LoopProtocolPath)
 	}
 	content, found, err := loopstate.ReadProtocol(protocolPath)
 	if err != nil || !found {
@@ -1307,8 +1308,10 @@ func TestSetupLoop_InitializesLoopProtocolWhenFlagSet(t *testing.T) {
 	for _, want := range []string{
 		"# Loop Protocol: longrun-init",
 		"- loop_id: longrun-init",
+		"Investigate a long-running Bittensor subnet and preserve evidence.",
 		"North Star",
 		"Self-Attack",
+		"Operational stop conditions:",
 	} {
 		if !strings.Contains(content, want) {
 			t.Fatalf("initialized protocol missing %q:\n%s", want, content)
@@ -1318,12 +1321,8 @@ func TestSetupLoop_InitializesLoopProtocolWhenFlagSet(t *testing.T) {
 	if err != nil || !found {
 		t.Fatalf("ReadState found=%v err=%v", found, err)
 	}
-	if state.LastEventType != "loop.protocol_init" || state.ProtocolUpdates != 1 {
+	if state.Status != "draft" || state.LastEventType != "loop.protocol_init" || state.ProtocolUpdates != 1 || state.InitialGoalPreview != "Investigate a long-running Bittensor subnet and preserve evidence." {
 		t.Fatalf("state = %+v", state)
-	}
-	got := b.loop.SkillProvider("continue")
-	if !strings.Contains(got, "AFFENT LOOP PROTOCOL:") || !strings.Contains(got, "protocol_path=.affent/loops/longrun-init/LOOP.md") {
-		t.Fatalf("initialized loop protocol should be injected:\n%s", got)
 	}
 }
 

@@ -6,6 +6,7 @@ import (
 	"io"
 	"net/http"
 	"os"
+	"path/filepath"
 	"strings"
 	"time"
 
@@ -28,6 +29,8 @@ type sessionLoopProtocolResponse struct {
 
 type sessionLoopProtocolUpdateRequest struct {
 	Protocol        string   `json:"protocol"`
+	Activate        bool     `json:"activate,omitempty"`
+	Goal            string   `json:"goal,omitempty"`
 	Reason          string   `json:"reason,omitempty"`
 	SectionsChanged []string `json:"sections_changed,omitempty"`
 }
@@ -81,7 +84,7 @@ func handleSessionLoopProtocolUpdate(pool *SessionPool, sessionID string, w http
 		writeJSONErrorTyped(w, http.StatusBadRequest, "invalid loop protocol request", err, "bad_request")
 		return
 	}
-	if strings.TrimSpace(req.Protocol) == "" {
+	if !req.Activate && strings.TrimSpace(req.Protocol) == "" {
 		writeJSONErrorTyped(w, http.StatusBadRequest, "loop protocol is required", nil, "bad_request")
 		return
 	}
@@ -174,6 +177,26 @@ func writeSessionLoopProtocol(pool *SessionPool, sessionID string, req sessionLo
 		return "", sessionLoopProtocolSummary{}, loopstate.State{}, nil, err
 	}
 	path := sessionLoopProtocolPath(pool, sessionID)
+	if req.Activate && strings.TrimSpace(req.Protocol) == "" {
+		_, _, _, err := loopstate.EnsureProtocolTemplate(path, loopstate.ProtocolTemplateOptions{
+			LoopID:       sessionID,
+			OwnerSession: sessionID,
+			Goal:         req.Goal,
+			Status:       "draft",
+			Plan:         serveLoopProtocolCurrentPlanCheckpoint(filepath.Join(pool.sessionDirPath(sessionID), "plan.json")),
+		})
+		if err != nil {
+			return "", sessionLoopProtocolSummary{}, loopstate.State{}, nil, err
+		}
+		protocol, summary, statePtr, events, found, err := readSessionLoopProtocol(pool, sessionID)
+		if err != nil {
+			return "", sessionLoopProtocolSummary{}, loopstate.State{}, nil, err
+		}
+		if !found || statePtr == nil {
+			return "", sessionLoopProtocolSummary{}, loopstate.State{}, nil, os.ErrNotExist
+		}
+		return protocol, summary, *statePtr, events, nil
+	}
 	if err := loopstate.WriteProtocol(path, req.Protocol); err != nil {
 		return "", sessionLoopProtocolSummary{}, loopstate.State{}, nil, err
 	}

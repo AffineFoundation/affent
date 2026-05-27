@@ -18,6 +18,7 @@ import (
 
 	agent "github.com/affinefoundation/affent/internal/agent"
 	"github.com/affinefoundation/affent/internal/eventlog"
+	"github.com/affinefoundation/affent/internal/loopstate"
 	"github.com/affinefoundation/affent/internal/planstate"
 	"github.com/affinefoundation/affent/internal/sse"
 	"github.com/affinefoundation/affent/internal/textutil"
@@ -56,6 +57,10 @@ Slash commands inside the REPL:
   /plan execute [request]
               execute the confirmed active plan in this session
   /plan clear remove current session plan
+  /loop       print current session loop protocol, if any
+  /loop on [goal]
+              create a draft LOOP.md and ask the agent to complete activation
+  /loop off   disable current session LOOP.md
   /usage      running token totals for this session (input/output/total)
   /exit       quit (Ctrl+D also works)
   /cancel     interrupt a background turn (e.g. a cron-fired one). To
@@ -132,6 +137,7 @@ Slash commands inside the REPL:
 
 		turnText := line
 		turnOpts := agent.TurnOptions{}
+		loopActivationAttempt := false
 		if strings.HasPrefix(line, "/") {
 			prompt, opts, ok, err := chatPlanSlashTurn(line, b)
 			if err != nil {
@@ -142,11 +148,24 @@ Slash commands inside the REPL:
 				turnText = prompt
 				turnOpts = opts
 			} else {
-				cont, exit := handleSlash(line, b)
-				if !cont {
-					return exit
+				prompt, opts, sendTurn, handled, err := chatLoopSlashTurn(line, b)
+				if err != nil {
+					fmt.Fprintf(os.Stderr, "%v\n", err)
+					continue
 				}
-				continue
+				if sendTurn {
+					turnText = prompt
+					turnOpts = opts
+					loopActivationAttempt = true
+				} else if handled {
+					continue
+				} else {
+					cont, exit := handleSlash(line, b)
+					if !cont {
+						return exit
+					}
+					continue
+				}
 			}
 		}
 
@@ -172,6 +191,9 @@ Slash commands inside the REPL:
 		b.outputTokens += outTok
 		if inTok > 0 || outTok > 0 {
 			b.turnsSeen++
+		}
+		if loopActivationAttempt {
+			finalizeCurrentSessionLoopActivation(b)
 		}
 		emitPlanChange(planBefore, currentSessionPlanSummary(b))
 		cancelTurn()
@@ -368,8 +390,12 @@ func handleSlash(line string, b *loopBundle) (bool, int) {
   /plan draft <request>
                create/update a plan without executing other tools
   /plan execute [request]
-               execute the confirmed active plan in this session
+              execute the confirmed active plan in this session
   /plan clear  remove current session plan
+  /loop       print current session loop protocol, if any
+  /loop on [goal]
+              create/use LOOP.md and ask the agent to refine it
+  /loop off   disable current session LOOP.md
   /usage       running token totals (input/output) for this session
   /cancel      interrupt a background (cron-fired) turn; use Ctrl+C
                to cancel a turn you typed from this prompt
@@ -383,6 +409,12 @@ func handleSlash(line string, b *loopBundle) (bool, int) {
 		return true, 0
 	case "/plan clear":
 		clearCurrentSessionPlan(b)
+		return true, 0
+	case "/loop":
+		printCurrentSessionLoopProtocol(b)
+		return true, 0
+	case "/loop off":
+		clearCurrentSessionLoopProtocol(b)
 		return true, 0
 	case "/usage":
 		fmt.Fprintf(os.Stderr, "session %s — %d turn(s), input=%d output=%d total=%d tokens\n",
@@ -446,6 +478,127 @@ func parsePlanSlash(line string) (subcommand, arg string, ok bool) {
 	}
 }
 
+func chatLoopSlashTurn(line string, b *loopBundle) (string, agent.TurnOptions, bool, bool, error) {
+	sub, arg, ok := parseLoopSlash(line)
+	if !ok {
+		return "", agent.TurnOptions{}, false, false, nil
+	}
+	switch sub {
+	case "on":
+		if b == nil || b.loop == nil {
+			return "", agent.TurnOptions{}, false, true, fmt.Errorf("agent loop is not initialized")
+		}
+		if err := createCurrentSessionLoopDraft(b, arg); err != nil {
+			return "", agent.TurnOptions{}, false, true, err
+		}
+		fmt.Fprintf(os.Stderr, "[loop] draft created at %s; asking agent to complete activation\n", loopstate.ProtocolRelPath(b.sessionID))
+		return loopActivationRefinementPrompt(arg, b.sessionID, loopstate.ProtocolRelPath(b.sessionID)), agent.TurnOptions{}, true, true, nil
+	default:
+		return "", agent.TurnOptions{}, false, false, nil
+	}
+}
+
+func parseLoopSlash(line string) (subcommand, arg string, ok bool) {
+	trimmed := strings.TrimSpace(line)
+	if len(trimmed) < len("/loop") || !strings.EqualFold(trimmed[:len("/loop")], "/loop") {
+		return "", "", false
+	}
+	rest := strings.TrimSpace(trimmed[len("/loop"):])
+	if rest == "" {
+		return "", "", false
+	}
+	sub, arg, _ := strings.Cut(rest, " ")
+	sub = strings.ToLower(strings.TrimSpace(sub))
+	arg = strings.TrimSpace(arg)
+	switch sub {
+	case "on":
+		return sub, arg, true
+	default:
+		return "", "", false
+	}
+}
+
+func createCurrentSessionLoopDraft(b *loopBundle, goal string) error {
+	path := b.loopProtocolPath
+	if strings.TrimSpace(path) == "" {
+		path = loopstate.ProtocolPath(b.workspace, b.sessionID)
+		b.loopProtocolPath = path
+	}
+	_, _, _, err := loopstate.EnsureProtocolTemplate(path, loopstate.ProtocolTemplateOptions{
+		LoopID:       b.sessionID,
+		OwnerSession: b.sessionID,
+		Goal:         goal,
+		Workspace:    b.workspace,
+		Status:       "draft",
+		Plan:         affentctlLoopProtocolCurrentPlanCheckpoint(b.planPath),
+	})
+	if err != nil {
+		return fmt.Errorf("create loop protocol draft: %w", err)
+	}
+	return nil
+}
+
+func finalizeCurrentSessionLoopActivation(b *loopBundle) {
+	if b == nil || strings.TrimSpace(b.loopProtocolPath) == "" {
+		return
+	}
+	content, found, err := loopstate.ReadProtocol(b.loopProtocolPath)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "[loop] activation check failed: %v\n", err)
+		return
+	}
+	if !found || markdownLoopStatus(content) != "running" {
+		fmt.Fprintln(os.Stderr, "[loop] still pending: LOOP.md must be supplemented and metadata status set to running before active loop feeds start")
+		return
+	}
+	if _, _, err := loopstate.RecordProtocolActivation(b.loopProtocolPath, "agent completed loop activation"); err != nil {
+		fmt.Fprintf(os.Stderr, "[loop] activation persist failed: %v\n", err)
+		return
+	}
+	b.loop.LoopProtocolPath = b.loopProtocolPath
+	if !b.loopProtocolSkillInstalled {
+		b.loop.SkillProvider = agent.WithLoopProtocolSkillProviderWithCheckpoint(b.loopProtocolPath, affentctlLoopProtocolPlanCheckpointProvider(b.planPath), b.loop.SkillProvider)
+		b.loopProtocolSkillInstalled = true
+	}
+	fmt.Fprintf(os.Stderr, "[loop] active: %s\n", loopstate.ProtocolRelPath(b.sessionID))
+}
+
+func markdownLoopStatus(content string) string {
+	for _, line := range strings.Split(content, "\n") {
+		line = strings.TrimSpace(strings.TrimPrefix(strings.TrimSpace(line), "-"))
+		key, value, ok := strings.Cut(line, ":")
+		if !ok {
+			continue
+		}
+		if strings.EqualFold(strings.TrimSpace(key), "status") {
+			return strings.ToLower(strings.TrimSpace(value))
+		}
+	}
+	return ""
+}
+
+func loopActivationRefinementPrompt(goal, sessionID, relPath string) string {
+	goal = strings.TrimSpace(goal)
+	if goal == "" {
+		goal = "the user's current long-running objective"
+	}
+	return `Loop protocol activation is pending, not active yet.
+
+Your job is to understand the user's real intention for this long-running loop, ask concise clarification questions if required, and supplement ` + relPath + ` before the loop can be considered active.
+
+Required activation criteria:
+1. Understand and summarize the user's underlying intent in the North Star section.
+2. Add practical stop conditions, memory lookup rules, likely failure modes, and recovery anchors.
+3. Keep task step authority in plan state; do not duplicate a todo list into LOOP.md.
+4. If information is missing, ask at most two specific questions and leave metadata status as draft.
+5. Only when the protocol is sufficiently supplemented, edit LOOP.md metadata to status: running.
+
+Candidate goal:
+` + goal + `
+
+Session: ` + sessionID
+}
+
 func printCurrentSessionPlan(b *loopBundle) {
 	convDir := filepath.Join(b.workspace, ".affentctl")
 	plan, found, err := readLocalSessionPlan(convDir, b.sessionID)
@@ -472,6 +625,50 @@ func clearCurrentSessionPlan(b *loopBundle) {
 		return
 	}
 	fmt.Fprintf(os.Stderr, "cleared plan for session %s\n", b.sessionID)
+}
+
+func printCurrentSessionLoopProtocol(b *loopBundle) {
+	if b == nil {
+		return
+	}
+	path := b.loopProtocolPath
+	if strings.TrimSpace(path) == "" {
+		path = loopstate.ProtocolPath(b.workspace, b.sessionID)
+	}
+	content, found, err := loopstate.ReadProtocol(path)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "read loop protocol: %v\n", err)
+		return
+	}
+	if !found {
+		fmt.Fprintf(os.Stderr, "no loop protocol for session %s\n", b.sessionID)
+		return
+	}
+	fmt.Fprintln(os.Stderr, content)
+}
+
+func clearCurrentSessionLoopProtocol(b *loopBundle) {
+	if b == nil {
+		return
+	}
+	path := b.loopProtocolPath
+	if strings.TrimSpace(path) == "" {
+		path = loopstate.ProtocolPath(b.workspace, b.sessionID)
+	}
+	removed, err := loopstate.RemoveProtocol(path)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "clear loop protocol: %v\n", err)
+		return
+	}
+	b.loopProtocolSkillInstalled = false
+	if b.loop != nil {
+		b.loop.LoopProtocolPath = ""
+	}
+	if !removed {
+		fmt.Fprintf(os.Stderr, "no loop protocol for session %s\n", b.sessionID)
+		return
+	}
+	fmt.Fprintf(os.Stderr, "disabled loop protocol for session %s\n", b.sessionID)
 }
 
 func currentSessionPlanSummary(b *loopBundle) planstate.Summary {

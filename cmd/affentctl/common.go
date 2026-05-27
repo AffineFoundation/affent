@@ -109,7 +109,8 @@ type commonFlags struct {
 	// loopProtocol activates a per-session LOOP.md for long-running
 	// work. Existing protocol files are always honored; this flag
 	// creates the default template when the file is missing.
-	loopProtocol bool
+	loopProtocol     bool
+	loopProtocolGoal string
 
 	mcpConfigPath string // path to MCP server config JSON (optional)
 
@@ -787,6 +788,10 @@ type loopBundle struct {
 	resumed    bool // true if we loaded an existing conversation
 	workspace  string
 	log        zerolog.Logger
+	planPath   string
+
+	loopProtocolPath           string
+	loopProtocolSkillInstalled bool
 
 	// turnsSeen / inputTokens / outputTokens accumulate across every
 	// drain*() pass for this REPL session. drainInteractive bumps them
@@ -1502,7 +1507,10 @@ func setupLoop(c commonFlags) (*loopBundle, int) {
 		if created, _, _, err := loopstate.EnsureProtocolTemplate(loopProtocolPath, loopstate.ProtocolTemplateOptions{
 			LoopID:       sid,
 			OwnerSession: sid,
+			Goal:         c.loopProtocolGoal,
 			Workspace:    workspace,
+			Status:       "draft",
+			Plan:         affentctlLoopProtocolCurrentPlanCheckpoint(planPath),
 		}); err != nil {
 			log.Error().Err(err).Msg("loop protocol")
 			return nil, exitRuntime
@@ -1514,6 +1522,7 @@ func setupLoop(c commonFlags) (*loopBundle, int) {
 		loop.LoopProtocolPath = loopProtocolPath
 		loop.SkillProvider = agent.WithLoopProtocolSkillProviderWithCheckpoint(loopProtocolPath, affentctlLoopProtocolPlanCheckpointProvider(planPath), loop.SkillProvider)
 	}
+	loopProtocolSkillInstalled := affentctlLoopProtocolAvailable(loopProtocolPath)
 	if caps.Subagent {
 		loop.FirstToolPolicy = agent.SubagentFirstToolPolicy()
 		loop.PostToolPolicy = agent.SubagentPostToolPolicy()
@@ -1537,22 +1546,33 @@ func setupLoop(c commonFlags) (*loopBundle, int) {
 
 	success = true
 	return &loopBundle{
-		loop:       loop,
-		events:     events,
-		recorder:   eventlog.NewRecorder(traceWriter, eventlog.Options{SkipDeltas: c.traceSkipDeltas}),
-		traceClose: traceClose,
-		browser:    browser,
-		sessionID:  sid,
-		resumed:    resumed,
-		workspace:  workspace,
-		log:        log,
-		mcpClients: mcpClients,
+		loop:                       loop,
+		events:                     events,
+		recorder:                   eventlog.NewRecorder(traceWriter, eventlog.Options{SkipDeltas: c.traceSkipDeltas}),
+		traceClose:                 traceClose,
+		browser:                    browser,
+		sessionID:                  sid,
+		resumed:                    resumed,
+		workspace:                  workspace,
+		log:                        log,
+		planPath:                   planPath,
+		loopProtocolPath:           loopProtocolPath,
+		loopProtocolSkillInstalled: loopProtocolSkillInstalled,
+		mcpClients:                 mcpClients,
 	}, 0
 }
 
 func affentctlLoopProtocolAvailable(path string) bool {
 	content, found, err := loopstate.ReadProtocol(path)
-	return err == nil && found && strings.TrimSpace(content) != ""
+	if err != nil || !found || strings.TrimSpace(content) == "" {
+		return false
+	}
+	state, stateFound, err := loopstate.ReadState(filepath.Join(filepath.Dir(path), loopstate.StateFileName))
+	if err != nil || !stateFound {
+		return true
+	}
+	status := strings.TrimSpace(strings.ToLower(state.Status))
+	return status == "" || status == "running"
 }
 
 func affentctlLoopProtocolPlanCheckpointProvider(planPath string) agent.LoopProtocolCheckpointProvider {
@@ -1560,20 +1580,27 @@ func affentctlLoopProtocolPlanCheckpointProvider(planPath string) agent.LoopProt
 		return nil
 	}
 	return func() loopstate.PlanCheckpoint {
-		summary, found := planstate.SummarizeFile(planPath)
-		if !found || summary.Done || summary.Label == "" ||
-			summary.Label == planstate.LabelMissing ||
-			summary.Label == planstate.LabelEmpty ||
-			summary.Label == planstate.LabelError {
-			return loopstate.PlanCheckpoint{Valid: true}
-		}
-		return loopstate.PlanCheckpoint{
-			Valid:      true,
-			Label:      summary.Label,
-			StepIndex:  summary.CurrentStepIndex,
-			StepStatus: summary.CurrentStepStatus,
-			Step:       summary.CurrentStep,
-		}
+		return affentctlLoopProtocolCurrentPlanCheckpoint(planPath)
+	}
+}
+
+func affentctlLoopProtocolCurrentPlanCheckpoint(planPath string) loopstate.PlanCheckpoint {
+	if strings.TrimSpace(planPath) == "" {
+		return loopstate.PlanCheckpoint{}
+	}
+	summary, found := planstate.SummarizeFile(planPath)
+	if !found || summary.Done || summary.Label == "" ||
+		summary.Label == planstate.LabelMissing ||
+		summary.Label == planstate.LabelEmpty ||
+		summary.Label == planstate.LabelError {
+		return loopstate.PlanCheckpoint{Valid: true}
+	}
+	return loopstate.PlanCheckpoint{
+		Valid:      true,
+		Label:      summary.Label,
+		StepIndex:  summary.CurrentStepIndex,
+		StepStatus: summary.CurrentStepStatus,
+		Step:       summary.CurrentStep,
 	}
 }
 

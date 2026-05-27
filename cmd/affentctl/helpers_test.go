@@ -14,6 +14,7 @@ import (
 	agent "github.com/affinefoundation/affent/internal/agent"
 	"github.com/affinefoundation/affent/internal/eventlog"
 	"github.com/affinefoundation/affent/internal/executor"
+	"github.com/affinefoundation/affent/internal/loopstate"
 	"github.com/affinefoundation/affent/internal/sse"
 )
 
@@ -439,6 +440,40 @@ func TestChatPlanSlashDraftCreatesPlanOnlyTurn(t *testing.T) {
 	defs := opts.Tools.Defs()
 	if len(defs) != 1 || defs[0].Function.Name != agent.PlanToolName {
 		t.Fatalf("plan draft tools = %+v, want only plan", defs)
+	}
+}
+
+func TestChatLoopSlashOnCreatesDraftAndActivationPrompt(t *testing.T) {
+	workspace := t.TempDir()
+	b := &loopBundle{
+		loop:      &agent.Loop{},
+		workspace: workspace,
+		sessionID: "loop-draft",
+		planPath:  filepath.Join(workspace, ".affentctl", "loop-draft.plan.json"),
+	}
+	prompt, _, sendTurn, handled, err := chatLoopSlashTurn("/loop on analyze a JS-heavy market dashboard", b)
+	if err != nil {
+		t.Fatalf("chatLoopSlashTurn: %v", err)
+	}
+	if !handled || !sendTurn {
+		t.Fatalf("/loop on should be handled and start activation turn, handled=%v send=%v", handled, sendTurn)
+	}
+	if !strings.Contains(prompt, "Loop protocol activation is pending") ||
+		!strings.Contains(prompt, "status: running") ||
+		!strings.Contains(prompt, "analyze a JS-heavy market dashboard") {
+		t.Fatalf("activation prompt missing required guidance:\n%s", prompt)
+	}
+	path := loopstate.ProtocolPath(workspace, "loop-draft")
+	content, found, err := loopstate.ReadProtocol(path)
+	if err != nil || !found {
+		t.Fatalf("ReadProtocol found=%v err=%v", found, err)
+	}
+	if !strings.Contains(content, "- status: draft") ||
+		!strings.Contains(content, "analyze a JS-heavy market dashboard") {
+		t.Fatalf("draft protocol missing activation goal/status:\n%s", content)
+	}
+	if b.loop.LoopProtocolPath != "" || b.loopProtocolSkillInstalled {
+		t.Fatalf("draft protocol must not be active before finalization: path=%q installed=%v", b.loop.LoopProtocolPath, b.loopProtocolSkillInstalled)
 	}
 }
 

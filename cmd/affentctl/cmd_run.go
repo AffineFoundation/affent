@@ -62,6 +62,7 @@ Required: --model. --prompt is required unless --execute-plan is set.`)
 		fmt.Fprintln(os.Stderr, "--prompt is required (use '-' for stdin)")
 		return exitUsage
 	}
+	cf.loopProtocolGoal = prompt
 
 	b, code := setupLoop(cf)
 	if code != 0 {

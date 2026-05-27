@@ -839,6 +839,40 @@ Keep API-created loop state durable.`
 	}
 }
 
+func TestHandleSessionLoopProtocolUpdate_ActivatesDraftTemplateWithoutReopeningSession(t *testing.T) {
+	memRoot := t.TempDir()
+	pool := newPoolWithMemoryRoot(t, memRoot)
+	body := `{"activate":true,"goal":"Understand the user's long-running market analysis intent."}`
+	r := httptest.NewRequest(http.MethodPost, "/v1/sessions/api-loop-draft/loop-protocol", strings.NewReader(body))
+	w := httptest.NewRecorder()
+	handleSessionRoutes(pool).ServeHTTP(w, r)
+	if got := w.Result().StatusCode; got != http.StatusOK {
+		t.Fatalf("status = %d, want 200; body=%s", got, w.Body.String())
+	}
+	if activeSessionByID(pool, "api-loop-draft") != nil {
+		t.Fatal("POST activate loop-protocol must not reopen an inactive durable session")
+	}
+	var resp sessionLoopProtocolResponse
+	if err := json.Unmarshal(w.Body.Bytes(), &resp); err != nil {
+		t.Fatalf("decode: %v", err)
+	}
+	if resp.State == nil || resp.State.Status != "draft" || resp.State.InitialGoalPreview != "Understand the user's long-running market analysis intent." {
+		t.Fatalf("state = %+v", resp.State)
+	}
+	for _, want := range []string{
+		"- status: draft",
+		"Understand the user's long-running market analysis intent.",
+		"Operational stop conditions:",
+	} {
+		if !strings.Contains(resp.Protocol, want) {
+			t.Fatalf("protocol missing %q:\n%s", want, resp.Protocol)
+		}
+	}
+	if len(resp.Events) != 1 || resp.Events[0].Type != "loop.protocol_init" {
+		t.Fatalf("events = %+v", resp.Events)
+	}
+}
+
 func TestHandleSessionLoopProtocolUpdate_RejectsBlankAndUnknownFields(t *testing.T) {
 	pool := newTestPool(t, 4, "5m")
 	cases := []struct {

@@ -627,6 +627,7 @@ function sessionLoopProtocolMetric(session: SessionSummary): string | undefined 
   const status = session.loop_protocol?.status?.trim() ?? state?.status?.trim();
   const updates = state?.protocol_updates;
   const feeds = state?.protocol_feeds;
+  const initialGoal = state?.initial_goal_preview?.trim();
   const plan = state?.last_plan_label?.trim();
   const planStepIndex = state?.last_plan_step_index;
   const planStepStatus = state?.last_plan_step_status?.trim();
@@ -639,6 +640,7 @@ function sessionLoopProtocolMetric(session: SessionSummary): string | undefined 
   const turnReason = state?.last_turn_end_reason?.trim();
   const eventSummary = state?.last_event_summary?.trim();
   const parts = [status ? `Loop ${status}` : "Loop protocol"];
+  if (initialGoal) parts.push(`goal ${initialGoal}`);
   if (updates && updates > 0) parts.push(`${updates} ${updates === 1 ? "update" : "updates"}`);
   if (feeds && feeds > 0) parts.push(`${feeds} ${feeds === 1 ? "feed" : "feeds"}`);
   if (plan) parts.push(planStepIndex ? `${plan} step ${planStepIndex}${planStepStatus ? ` ${planStepStatus}` : ""}` : plan);

@@ -702,13 +702,19 @@ Affent stores durable state as inspectable files:
 - `events.jsonl`: runtime event records for replay and SSE recovery.
 - `plan.json`: persisted plan state.
 - `.affent/loops/<session_id>/LOOP.md`: optional per-session loop protocol.
-  `affentctl --loop-protocol` and `affentserve` with
-  `enable_loop_protocol=true` initialize a default protocol template when the
-  file is missing; existing files are honored without rewriting them. When
-  present, both runtimes inject it with a low-noise feed policy: the first
-  three feeds and every sixth feed use a bounded full copy, while intervening
-  feeds use a smaller digest focused on metadata, north-star, memory, rules,
-  self-checks, stop/recovery, and plan/step anchors.
+  `affentctl --loop-protocol`, `affentctl chat` `/loop on [goal]`, and
+  `POST /v1/sessions/{id}/loop-protocol` with `{"activate":true}` initialize a
+  draft protocol template when the file is missing; existing files are honored
+  without rewriting them. A draft protocol is not treated as an active loop and
+  is not fed into ordinary turns. The activation turn must make the model
+  understand the user's intent, supplement the protocol with stop conditions,
+  memory rules, failure modes, and recovery anchors, then set metadata
+  `status: running`; only then does the runtime record
+  `loop.protocol_activate` and start active loop feeds. Active protocols use a
+  low-noise feed policy: the first three feeds and every sixth feed use a
+  bounded full copy, while intervening feeds use a smaller digest focused on
+  metadata, north-star, memory, rules, self-checks, stop/recovery, and
+  plan/step anchors.
   A successful context compaction marks the loop state so the next feed is
   forced back to full even if the normal cadence would have used a digest.
   Feed metadata also includes compact runtime checkpoints from `state.json`,
@@ -721,12 +727,13 @@ Affent stores durable state as inspectable files:
   `POST /v1/sessions/{id}/loop-protocol` with `{"protocol":"..."}` to create
   or replace it without reopening the session; use `DELETE` to disable it.
 - `.affent/loops/<session_id>/state.json`: machine-readable loop lifecycle
-  state. It records owner, status, protocol update count, protocol feed count,
-  latest feed mode, context compaction count, whether the next protocol feed
-  must be full, the latest active-plan checkpoint observed during a feed, and
-  the latest turn checkpoint: turn id, end reason, token usage, tool/error
-  counts, loop-guard interventions, forced no-tool recoveries, memory updates,
-  and session-search calls. Confirmed memory mutations are also mirrored as a
+  state. It records owner, status, the initial goal preview and initial plan
+  label when available, protocol update count, protocol feed count, latest feed
+  mode, context compaction count, whether the next protocol feed must be full,
+  the latest active-plan checkpoint observed during a feed, and the latest turn
+  checkpoint: turn id, end reason, token usage, tool/error counts, loop-guard
+  interventions, forced no-tool recoveries, memory updates, and session-search
+  calls. Confirmed memory mutations are also mirrored as a
   latest memory-update checkpoint with action, target, topic, location,
   previous/next previews, and a compact display preview. It also records
   loop-decision count and the latest gate decision, including kind, trigger,

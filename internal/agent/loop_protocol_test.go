@@ -70,6 +70,25 @@ func TestWithLoopProtocolSkillProviderSkipsMissingInvalidOrBlankFile(t *testing.
 	}
 }
 
+func TestWithLoopProtocolSkillProviderSkipsDraftProtocol(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "LOOP.md")
+	if err := loopstate.WriteProtocol(path, "# Loop Protocol\n\n## 0. Metadata\n\n- status: draft\n\n## North Star\n\nPending activation."); err != nil {
+		t.Fatal(err)
+	}
+	if err := loopstate.WriteState(filepath.Join(dir, loopstate.StateFileName), loopstate.State{
+		Version: 1,
+		LoopID:  filepath.Base(dir),
+		Status:  "draft",
+	}); err != nil {
+		t.Fatal(err)
+	}
+	got := WithLoopProtocolSkillProvider(path, func(string) string { return "next" })("continue")
+	if got != "next" {
+		t.Fatalf("draft protocol should not be injected as active loop; got:\n%s", got)
+	}
+}
+
 func TestWithLoopProtocolSkillProviderCompactsLargeFile(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "LOOP.md")
 	if err := os.WriteFile(path, []byte(strings.Repeat("x", maxActiveLoopProtocolFullBytes+100)), 0o644); err != nil {

@@ -116,6 +116,8 @@ export interface SessionLoopState {
   protocol_path?: string;
   created_at?: string;
   updated_at?: string;
+  initial_goal_preview?: string;
+  initial_plan_label?: string;
   last_protocol_update_at?: string;
   protocol_updates?: number;
   protocol_feeds?: number;
@@ -215,7 +217,9 @@ export interface SessionLoopProtocolResponse {
 }
 
 export interface SessionLoopProtocolUpdateRequest {
-  protocol: string;
+  protocol?: string;
+  activate?: boolean;
+  goal?: string;
   reason?: string;
   sections_changed?: string[];
 }

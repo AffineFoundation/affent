@@ -51,6 +51,7 @@ describe("session API helpers", () => {
     await cancelSessionTurn(client, "s1");
     await deleteSession(client, "s/1");
     await updateSessionLoopProtocol(client, "s/1", { protocol: "# Loop" });
+    await updateSessionLoopProtocol(client, "s/1", { activate: true, goal: "long run" });
     await deleteSessionLoopProtocol(client, "s/1");
 
     expect((fetchImpl.mock.calls[0][1] as RequestInit).method).toBe("POST");
@@ -63,7 +64,10 @@ describe("session API helpers", () => {
     expect((fetchImpl.mock.calls[4][1] as RequestInit).method).toBe("POST");
     expect((fetchImpl.mock.calls[4][1] as RequestInit).body).toBe(JSON.stringify({ protocol: "# Loop" }));
     expect(fetchImpl.mock.calls[5][0]).toBe("/v1/sessions/s%2F1/loop-protocol");
-    expect((fetchImpl.mock.calls[5][1] as RequestInit).method).toBe("DELETE");
+    expect((fetchImpl.mock.calls[5][1] as RequestInit).method).toBe("POST");
+    expect((fetchImpl.mock.calls[5][1] as RequestInit).body).toBe(JSON.stringify({ activate: true, goal: "long run" }));
+    expect(fetchImpl.mock.calls[6][0]).toBe("/v1/sessions/s%2F1/loop-protocol");
+    expect((fetchImpl.mock.calls[6][1] as RequestInit).method).toBe("DELETE");
   });
 
   it("streams native affent session events", async () => {

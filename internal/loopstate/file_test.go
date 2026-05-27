@@ -165,6 +165,14 @@ func TestEnsureProtocolTemplateCreatesPerSessionLoopProtocol(t *testing.T) {
 		OwnerSession: "session-a",
 		Goal:         "Analyze a JS-heavy market dashboard with durable evidence.",
 		Workspace:    "/workspace/affent",
+		Status:       "draft",
+		Plan: PlanCheckpoint{
+			Valid:      true,
+			Label:      "plan:1/3:active",
+			StepIndex:  2,
+			StepStatus: "in_progress",
+			Step:       "inspect rendered browser evidence",
+		},
 	})
 	if err != nil {
 		t.Fatalf("EnsureProtocolTemplate: %v", err)
@@ -172,10 +180,12 @@ func TestEnsureProtocolTemplateCreatesPerSessionLoopProtocol(t *testing.T) {
 	if !created {
 		t.Fatal("expected protocol to be created")
 	}
-	if state.LoopID != "longrun" || state.OwnerSession != "session-a" || state.Status != "running" || state.ProtocolUpdates != 1 || state.LastEventType != "loop.protocol_init" {
+	if state.LoopID != "longrun" || state.OwnerSession != "session-a" || state.Status != "draft" || state.ProtocolUpdates != 1 || state.LastEventType != "loop.protocol_init" ||
+		state.InitialGoalPreview != "Analyze a JS-heavy market dashboard with durable evidence." || state.InitialPlanLabel != "plan:1/3:active" ||
+		state.LastPlanStep != "inspect rendered browser evidence" {
 		t.Fatalf("state = %+v", state)
 	}
-	if event.Type != "loop.protocol_init" || event.Path != ProtocolRelPath("longrun") {
+	if event.Type != "loop.protocol_init" || event.Path != ProtocolRelPath("longrun") || event.PlanLabel != "plan:1/3:active" || event.PlanStepIndex != 2 {
 		t.Fatalf("event = %+v", event)
 	}
 	content, found, err := ReadProtocol(path)
@@ -185,9 +195,13 @@ func TestEnsureProtocolTemplateCreatesPerSessionLoopProtocol(t *testing.T) {
 	for _, want := range []string{
 		"# Loop Protocol: longrun",
 		"- loop_id: longrun",
+		"- status: draft",
 		"- owner_session: session-a",
 		"Analyze a JS-heavy market dashboard with durable evidence.",
 		"plan/step state remains authoritative",
+		"Operational stop conditions:",
+		"- plan_label: plan:1/3:active",
+		"- active_step: inspect rendered browser evidence",
 		"state.json and events.jsonl",
 	} {
 		if !strings.Contains(content, want) {
@@ -200,6 +214,14 @@ func TestEnsureProtocolTemplateCreatesPerSessionLoopProtocol(t *testing.T) {
 	}
 	if events[0].Type != "loop.protocol_init" {
 		t.Fatalf("events[0] = %+v", events[0])
+	}
+
+	state, event, err = RecordProtocolActivation(path, "agent supplemented protocol")
+	if err != nil {
+		t.Fatalf("RecordProtocolActivation: %v", err)
+	}
+	if state.Status != "running" || state.LastEventType != "loop.protocol_activate" || event.Type != "loop.protocol_activate" || event.Reason != "agent supplemented protocol" {
+		t.Fatalf("activated state=%+v event=%+v", state, event)
 	}
 
 	created, state, event, err = EnsureProtocolTemplate(path, ProtocolTemplateOptions{LoopID: "longrun", OwnerSession: "other"})

@@ -25,6 +25,9 @@ type ProtocolTemplateOptions struct {
 	OwnerSession string
 	Goal         string
 	Workspace    string
+	Status       string
+	Plan         PlanCheckpoint
+	Stop         []string
 	CreatedAt    time.Time
 }
 
@@ -80,13 +83,19 @@ func DefaultProtocolTemplate(opts ProtocolTemplateOptions) string {
 	if workspace == "" {
 		workspace = "not recorded"
 	}
+	status := templateStatus(opts.Status)
+	if status == "" {
+		status = "running"
+	}
+	planBlock := protocolTemplatePlanBlock(opts.Plan)
+	stopBlock := protocolTemplateStopBlock(opts.Stop)
 	return strings.TrimSpace(`# Loop Protocol: ` + templateLine(loopID) + `
 
 ## 0. Metadata
 
 - loop_id: ` + templateLine(loopID) + `
 - owner_session: ` + templateLine(owner) + `
-- status: running
+- status: ` + status + `
 - protocol_version: 1
 - created_at: ` + formatTime(createdAt) + `
 - updated_at: ` + formatTime(createdAt) + `
@@ -105,6 +114,10 @@ Do not:
 1. Change the north star silently.
 2. Duplicate authoritative task state here; plan/step state remains authoritative.
 3. Continue a loop that is completed, unsafe, irrecoverably blocked, or no longer serving the user's objective.
+
+Operational stop conditions:
+
+` + stopBlock + `
 
 ## 2. Evolution Protocol
 
@@ -170,6 +183,10 @@ Authoritative task progress lives outside this file.
 - blocked steps: plan state and loop decisions
 - related trace: session event log and .affent/loops/<loop_id>/events.jsonl
 
+Initialization plan checkpoint:
+
+` + planBlock + `
+
 ## 7. Evidence And Recovery Index
 
 Keep this section short. Store detailed history in artifacts or trace.
@@ -214,12 +231,20 @@ func EnsureProtocolTemplate(path string, opts ProtocolTemplateOptions) (bool, St
 	if err := WriteProtocol(path, DefaultProtocolTemplate(opts)); err != nil {
 		return false, State{}, Event{}, err
 	}
+	status := templateStatus(opts.Status)
+	if status == "" {
+		status = "running"
+	}
 	event, err := AppendEvent(filepath.Join(loopDir, EventsFileName), Event{
-		Type:    "loop.protocol_init",
-		Summary: "Initialized LOOP.md",
-		Reason:  "loop protocol activation",
-		Path:    ProtocolRelPath(loopID),
-		Time:    formatTime(now),
+		Type:           "loop.protocol_init",
+		Summary:        "Initialized LOOP.md",
+		Reason:         "loop protocol activation",
+		Path:           ProtocolRelPath(loopID),
+		Time:           formatTime(now),
+		PlanLabel:      checkpointLabel(opts.Plan),
+		PlanStepIndex:  checkpointStepIndex(opts.Plan),
+		PlanStepStatus: checkpointStepStatus(opts.Plan),
+		PlanStep:       checkpointStep(opts.Plan),
 	})
 	if err != nil {
 		return false, State{}, Event{}, err
@@ -234,7 +259,15 @@ func EnsureProtocolTemplate(path string, opts ProtocolTemplateOptions) (bool, St
 	if state.OwnerSession == "" {
 		state.OwnerSession = loopID
 	}
-	state.Status = "running"
+	state.Status = status
+	state.InitialGoalPreview = templateLine(opts.Goal)
+	if opts.Plan.Valid {
+		state.InitialPlanLabel = strings.TrimSpace(opts.Plan.Label)
+		state.LastPlanLabel = strings.TrimSpace(opts.Plan.Label)
+		state.LastPlanStepIndex = opts.Plan.StepIndex
+		state.LastPlanStepStatus = strings.TrimSpace(opts.Plan.StepStatus)
+		state.LastPlanStep = strings.TrimSpace(opts.Plan.Step)
+	}
 	state.LastProtocolUpdateAt = event.Time
 	state.ProtocolUpdates++
 	state.UpdatedAt = event.Time
@@ -246,6 +279,44 @@ func EnsureProtocolTemplate(path string, opts ProtocolTemplateOptions) (bool, St
 		return false, State{}, Event{}, err
 	}
 	return true, state, event, nil
+}
+
+func RecordProtocolActivation(protocolPath, reason string) (State, Event, error) {
+	loopDir := filepath.Dir(protocolPath)
+	loopID := filepath.Base(loopDir)
+	now := time.Now().UTC()
+	statePath := filepath.Join(loopDir, StateFileName)
+	state, found, err := ReadState(statePath)
+	if err != nil {
+		return State{}, Event{}, err
+	}
+	state = normalizeStateForProtocol(state, found, loopID, now)
+	reason = strings.TrimSpace(reason)
+	if reason == "" {
+		reason = "loop protocol completed"
+	}
+	event, err := AppendEvent(filepath.Join(loopDir, EventsFileName), Event{
+		Type:    "loop.protocol_activate",
+		Summary: "Activated LOOP.md",
+		Reason:  reason,
+		Path:    ProtocolRelPath(loopID),
+		Time:    formatTime(now),
+	})
+	if err != nil {
+		return State{}, Event{}, err
+	}
+	state.Status = "running"
+	state.LastProtocolUpdateAt = event.Time
+	state.ProtocolUpdates++
+	state.UpdatedAt = event.Time
+	state.EventCount = event.Seq
+	state.LastEventType = event.Type
+	state.LastEventSummary = event.Summary
+	state.LastEventAt = event.Time
+	if err := WriteState(statePath, state); err != nil {
+		return State{}, Event{}, err
+	}
+	return state, event, nil
 }
 
 func ReadProtocol(path string) (string, bool, error) {
@@ -437,7 +508,63 @@ func parseMetadataLine(line string) (string, string, bool) {
 func templateLine(s string) string {
 	s = strings.Join(strings.Fields(strings.TrimSpace(s)), " ")
 	s = strings.ReplaceAll(s, "\x00", "")
-	return s
+	return textutil.Preview(s, 1600)
+}
+
+func templateStatus(s string) string {
+	s = strings.ToLower(templateLine(s))
+	switch s {
+	case "draft", "running", "paused", "stopping", "completed", "blocked", "disabled":
+		return s
+	default:
+		return ""
+	}
+}
+
+func protocolTemplatePlanBlock(plan PlanCheckpoint) string {
+	if !plan.Valid || strings.TrimSpace(plan.Label) == "" {
+		return "- plan_label: not available at initialization\n- active_step: not available at initialization"
+	}
+	lines := []string{"- plan_label: " + templateLine(plan.Label)}
+	if plan.StepIndex > 0 {
+		lines = append(lines, fmt.Sprintf("- active_step_index: %d", plan.StepIndex))
+	}
+	if strings.TrimSpace(plan.StepStatus) != "" {
+		lines = append(lines, "- active_step_status: "+templateLine(plan.StepStatus))
+	}
+	if strings.TrimSpace(plan.Step) != "" {
+		lines = append(lines, "- active_step: "+templateLine(plan.Step))
+	}
+	return strings.Join(lines, "\n")
+}
+
+func protocolTemplateStopBlock(stop []string) string {
+	candidates := append([]string{}, stop...)
+	if len(candidates) == 0 {
+		candidates = []string{
+			"The objective is complete and evidence/artifacts are available.",
+			"The loop is blocked on missing user input, credentials, permissions, budget, or external state.",
+			"Repeated retries are no longer changing the failure mode.",
+			"The task no longer serves the north star or has become unsafe.",
+		}
+	}
+	var lines []string
+	seen := map[string]bool{}
+	for _, item := range candidates {
+		item = templateLine(item)
+		if item == "" || seen[item] {
+			continue
+		}
+		seen[item] = true
+		lines = append(lines, "- "+item)
+		if len(lines) >= 8 {
+			break
+		}
+	}
+	if len(lines) == 0 {
+		return "- Stop when the objective is complete, blocked, unsafe, or no longer useful."
+	}
+	return strings.Join(lines, "\n")
 }
 
 func formatTime(t time.Time) string {

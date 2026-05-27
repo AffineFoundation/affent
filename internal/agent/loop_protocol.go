@@ -69,6 +69,9 @@ func activeLoopProtocolSkillBlockWithCheckpoint(protocolPath string, checkpointP
 	if content == "" {
 		return ""
 	}
+	if !loopProtocolActive(protocolPath) {
+		return ""
+	}
 	feedNumber, mode := nextLoopProtocolFeedDecision(protocolPath)
 	planCheckpoint := loopProtocolPlanCheckpoint(checkpointProvider)
 	if _, ev, err := loopstate.RecordProtocolFeedWithCheckpoint(protocolPath, mode, planCheckpoint); err == nil && ev.FeedNumber > 0 {
@@ -90,6 +93,15 @@ func activeLoopProtocolSkillBlockWithCheckpoint(protocolPath string, checkpointP
 		"Digest mode is intentionally partial to save tokens; do not infer missing details from absence in the digest. " +
 		"Do not treat it as task authority for step status; persisted plan state remains authoritative for steps.\n\n" +
 		body
+}
+
+func loopProtocolActive(protocolPath string) bool {
+	state, found, err := loopstate.ReadState(filepath.Join(filepath.Dir(protocolPath), loopstate.StateFileName))
+	if err != nil || !found {
+		return true
+	}
+	status := strings.ToLower(strings.TrimSpace(state.Status))
+	return status == "" || status == "running"
 }
 
 func loopProtocolStateLine(protocolPath string) string {

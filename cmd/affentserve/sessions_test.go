@@ -1779,6 +1779,9 @@ func TestSessionPool_InitializesLoopProtocolWhenEnabled(t *testing.T) {
 	if err != nil {
 		t.Fatalf("GetOrCreate: %v", err)
 	}
+	if err := s.ensureLoopProtocolInitialized("Understand the user's long-run reporting goal."); err != nil {
+		t.Fatalf("ensureLoopProtocolInitialized: %v", err)
+	}
 	path := sessionLoopProtocolPath(pool, "loop-init")
 	if s.loop.LoopProtocolPath != path {
 		t.Fatalf("LoopProtocolPath = %q, want %q", s.loop.LoopProtocolPath, path)
@@ -1790,6 +1793,8 @@ func TestSessionPool_InitializesLoopProtocolWhenEnabled(t *testing.T) {
 	for _, want := range []string{
 		"# Loop Protocol: loop-init",
 		"- loop_id: loop-init",
+		"- status: draft",
+		"Understand the user's long-run reporting goal.",
 		"North Star",
 		"Evidence And Recovery Index",
 	} {
@@ -1801,12 +1806,12 @@ func TestSessionPool_InitializesLoopProtocolWhenEnabled(t *testing.T) {
 	if err != nil || !found {
 		t.Fatalf("ReadState found=%v err=%v", found, err)
 	}
-	if state.LastEventType != "loop.protocol_init" || state.ProtocolUpdates != 1 {
+	if state.Status != "draft" || state.LastEventType != "loop.protocol_init" || state.ProtocolUpdates != 1 {
 		t.Fatalf("state = %+v", state)
 	}
 	got := s.loop.SkillProvider("continue")
-	if !strings.Contains(got, "AFFENT LOOP PROTOCOL:") || !strings.Contains(got, "protocol_path=.affent/loops/loop-init/LOOP.md") {
-		t.Fatalf("initialized loop protocol skill provider missing feed:\n%s", got)
+	if strings.Contains(got, "AFFENT LOOP PROTOCOL:") {
+		t.Fatalf("draft loop protocol must not be injected as active feed:\n%s", got)
 	}
 }
 

@@ -47,6 +47,8 @@ type Session struct {
 	browser          *affentbrowser.Session
 	workspace        string
 	loopProtocolPath string
+	loopProtocolInit bool
+	planPath         string
 	createdAt        time.Time
 	lastUsed         time.Time
 	trace            *eventlog.Recorder
@@ -677,19 +679,6 @@ func (p *SessionPool) buildSession(id string) (*Session, error) {
 		loop.SkillProvider = agent.WithActivePlanSkillProvider(planPath, loop.SkillProvider)
 	}
 	if !p.cfg.EvalMode {
-		if p.cfg.EnableLoopProtocol {
-			if _, _, _, err := loopstate.EnsureProtocolTemplate(loopProtocolPath, loopstate.ProtocolTemplateOptions{
-				LoopID:       id,
-				OwnerSession: id,
-				Workspace:    workspace,
-			}); err != nil {
-				_ = os.RemoveAll(workspace)
-				if browser != nil {
-					_ = browser.Close()
-				}
-				return nil, fmt.Errorf("loop protocol: %w", err)
-			}
-		}
 		loop.LoopProtocolPath = loopProtocolPath
 		loop.SkillProvider = agent.WithLoopProtocolSkillProviderWithCheckpoint(loopProtocolPath, loopProtocolPlanCheckpointProvider(planPath), loop.SkillProvider)
 	}
@@ -772,6 +761,8 @@ func (p *SessionPool) buildSession(id string) (*Session, error) {
 		browser:          browser,
 		workspace:        workspace,
 		loopProtocolPath: loopProtocolPath,
+		loopProtocolInit: p.cfg.EnableLoopProtocol && !p.cfg.EvalMode,
+		planPath:         planPath,
 		createdAt:        time.Now(),
 		lastUsed:         time.Now(),
 		trace:            trace,
@@ -790,20 +781,27 @@ func loopProtocolPlanCheckpointProvider(planPath string) agent.LoopProtocolCheck
 		return nil
 	}
 	return func() loopstate.PlanCheckpoint {
-		summary, found := planstate.SummarizeFile(planPath)
-		if !found || summary.Done || summary.Label == "" ||
-			summary.Label == planstate.LabelMissing ||
-			summary.Label == planstate.LabelEmpty ||
-			summary.Label == planstate.LabelError {
-			return loopstate.PlanCheckpoint{Valid: true}
-		}
-		return loopstate.PlanCheckpoint{
-			Valid:      true,
-			Label:      summary.Label,
-			StepIndex:  summary.CurrentStepIndex,
-			StepStatus: summary.CurrentStepStatus,
-			Step:       summary.CurrentStep,
-		}
+		return serveLoopProtocolCurrentPlanCheckpoint(planPath)
+	}
+}
+
+func serveLoopProtocolCurrentPlanCheckpoint(planPath string) loopstate.PlanCheckpoint {
+	if strings.TrimSpace(planPath) == "" {
+		return loopstate.PlanCheckpoint{}
+	}
+	summary, found := planstate.SummarizeFile(planPath)
+	if !found || summary.Done || summary.Label == "" ||
+		summary.Label == planstate.LabelMissing ||
+		summary.Label == planstate.LabelEmpty ||
+		summary.Label == planstate.LabelError {
+		return loopstate.PlanCheckpoint{Valid: true}
+	}
+	return loopstate.PlanCheckpoint{
+		Valid:      true,
+		Label:      summary.Label,
+		StepIndex:  summary.CurrentStepIndex,
+		StepStatus: summary.CurrentStepStatus,
+		Step:       summary.CurrentStep,
 	}
 }
 
@@ -1405,6 +1403,9 @@ func (s *Session) SendUser(ctx context.Context, text string) (string, error) {
 func (s *Session) SendUserWithOptions(ctx context.Context, text string, opts agent.TurnOptions) (string, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
+	if err := s.ensureLoopProtocolInitialized(text); err != nil {
+		return "", err
+	}
 	s.activeTurns.Add(1)
 	s.lastUsed = time.Now()
 	turnID, err := s.loop.SendUserWithOptions(ctx, text, opts)
@@ -1413,6 +1414,21 @@ func (s *Session) SendUserWithOptions(ctx context.Context, text string, opts age
 		return "", err
 	}
 	return turnID, nil
+}
+
+func (s *Session) ensureLoopProtocolInitialized(goal string) error {
+	if s == nil || !s.loopProtocolInit || strings.TrimSpace(s.loopProtocolPath) == "" {
+		return nil
+	}
+	_, _, _, err := loopstate.EnsureProtocolTemplate(s.loopProtocolPath, loopstate.ProtocolTemplateOptions{
+		LoopID:       s.ID,
+		OwnerSession: s.ID,
+		Goal:         goal,
+		Workspace:    s.workspace,
+		Status:       "draft",
+		Plan:         serveLoopProtocolCurrentPlanCheckpoint(s.planPath),
+	})
+	return err
 }
 
 func (s *Session) isActiveTurn() bool {
