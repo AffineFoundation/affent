@@ -80,20 +80,16 @@ describe("SessionSkillsPanel", () => {
     expect(within(screen.getByTestId("session-skills-list")).queryByText("manual_demo")).toBeNull();
   });
 
-  it("keeps empty skills state factual", async () => {
-    const user = userEvent.setup();
+  it("keeps empty skills state factual and avoids unusable search", () => {
     render(<SessionSkillsPanel skills={[]} defaultOpen />);
 
     const panel = screen.getByTestId("session-skills-panel");
     expect(panel).toHaveTextContent("0 skills");
     expect(panel).toHaveTextContent("No reusable workflows listed.");
     expect(screen.getByTestId("session-skills-list")).toHaveTextContent("No skills listed.");
+    expect(screen.queryByPlaceholderText("Search title or summary")).toBeNull();
     expect(panel).not.toHaveTextContent("Built-in workflows ready");
     expect(panel).not.toHaveTextContent("No matching skills.");
-
-    await user.type(screen.getByPlaceholderText("Search title or summary"), "repair");
-
-    expect(screen.getByTestId("session-skills-list")).toHaveTextContent("No skills listed.");
   });
 
   it("separates empty search results from an empty skills list", async () => {

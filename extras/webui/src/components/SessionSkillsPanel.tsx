@@ -35,6 +35,8 @@ export function SessionSkillsPanel({
   const [installError, setInstallError] = useState<string | undefined>();
   const [installing, setInstalling] = useState(false);
   const allSkills = skills ?? [];
+  const hasSearch = allSkills.length > 0;
+  const canInstall = installEnabled && !!onInstallSkill;
   const filteredSkills = useMemo(() => {
     const search = query.trim().toLowerCase();
     if (!search) return allSkills;
@@ -113,17 +115,21 @@ export function SessionSkillsPanel({
         ) : null}
         {!loading && !error ? (
           <>
-            <div className="session-skills-controls">
-              <label className="session-skills-search">
-                <span>Search skills</span>
-                <input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search title or summary" />
-              </label>
-              {installEnabled && onInstallSkill ? (
-                <button type="button" className="session-skills-add-toggle" onClick={() => setShowForm((open) => !open)}>
-                  {showForm ? "Cancel" : "Add skill"}
-                </button>
-              ) : null}
-            </div>
+            {hasSearch || canInstall ? (
+              <div className="session-skills-controls">
+                {hasSearch ? (
+                  <label className="session-skills-search">
+                    <span>Search skills</span>
+                    <input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search title or summary" />
+                  </label>
+                ) : null}
+                {canInstall ? (
+                  <button type="button" className="session-skills-add-toggle" onClick={() => setShowForm((open) => !open)}>
+                    {showForm ? "Cancel" : "Add skill"}
+                  </button>
+                ) : null}
+              </div>
+            ) : null}
             {showForm ? (
               <form className="session-skill-form" onSubmit={submitSkill}>
                 <label>
