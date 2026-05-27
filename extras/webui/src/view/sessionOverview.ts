@@ -30,6 +30,7 @@ export interface SessionOverview {
 export function displaySessionOverviewMetrics(metrics: readonly SessionOverviewMetric[]): SessionOverviewMetric[] {
   return metrics.filter((metric) => {
     if (metric.label === "Work" && isPlainActionCount(metric.value)) return false;
+    if (metric.label === "Earlier work" && isPlainActionCount(metric.value)) return false;
     if (metric.tone === "error" || metric.tone === "warning" || metric.tone === "running") return true;
     return !lowSignalMetricLabels.has(metric.label);
   });

@@ -116,9 +116,12 @@ describe("buildSessionOverview", () => {
       { label: "Work", value: "1 action", tone: "warning" },
       { label: "Tool issue", value: "1", tone: "warning" },
       { label: "Work", value: "1 action · 1 source" },
+      { label: "Earlier work", value: "2 actions" },
+      { label: "Earlier work", value: "2 actions · 1 source" },
     ])).toEqual([
       { label: "Tool issue", value: "1", tone: "warning" },
       { label: "Work", value: "1 action · 1 source" },
+      { label: "Earlier work", value: "2 actions · 1 source" },
     ]);
   });
 
