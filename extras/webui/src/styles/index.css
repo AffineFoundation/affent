@@ -981,6 +981,46 @@ body {
   line-height: 1.45;
 }
 
+.session-loop-setup {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 8px;
+  align-items: end;
+  min-width: 0;
+}
+
+.session-loop-setup label {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+}
+
+.session-loop-setup label span {
+  color: var(--text-faint);
+  font-size: 10.5px;
+  font-weight: 750;
+  letter-spacing: 0;
+  text-transform: uppercase;
+}
+
+.session-loop-setup input {
+  width: 100%;
+  min-width: 0;
+  border: 1px solid rgba(188, 199, 212, 0.8);
+  border-radius: calc(var(--radius) - 2px);
+  background: var(--bg-surface);
+  color: var(--text);
+  padding: 8px 9px;
+  font: inherit;
+  font-size: 12.5px;
+}
+
+.session-loop-setup input:focus {
+  border-color: var(--c-focus);
+  box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.13);
+  outline: none;
+}
+
 .session-loop-protocol {
   max-height: min(320px, 42vh);
   margin: 0;
@@ -1002,6 +1042,12 @@ body {
   flex-wrap: wrap;
   justify-content: flex-end;
   gap: 6px;
+}
+
+@media (max-width: 640px) {
+  .session-loop-setup {
+    grid-template-columns: minmax(0, 1fr);
+  }
 }
 
 .session-schedule-body {

@@ -564,6 +564,66 @@ describe("App", () => {
     expect(screen.getByTestId("session-list")).toHaveTextContent("analyze market data");
   });
 
+  it("starts loop setup from the selected session control panel", async () => {
+    const user = userEvent.setup();
+    const fetchImpl = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = String(input);
+      if (url === "/v1/sessions?limit=100") {
+        return jsonResponse({
+          sessions: [
+            {
+              id: "loop-panel",
+              active: true,
+              durable: true,
+              topic_user_message: "long running subnet analysis",
+              has_conversation: true,
+              has_events: true,
+              has_artifacts: false,
+              has_memory: false,
+              has_runtime_skills: false,
+            },
+          ],
+          has_more: false,
+        });
+      }
+      if (url === "/v1/sessions/loop-panel/history?after=-1&limit=500") {
+        return jsonResponse({ session_id: "loop-panel", events: [], next_after: -1, has_more: false, trace_schema_detected: false });
+      }
+      if (url === "/v1/sessions/loop-panel/events") return eventStreamResponse("");
+      if (url === "/v1/sessions/loop-panel/loop-protocol" && init?.method === "POST") {
+        return jsonResponse({
+          session_id: "loop-panel",
+          protocol: "# Loop Protocol\n\n- status: draft",
+          summary: { path: ".affent/loops/loop-panel/LOOP.md", status: "draft", bytes: 32 },
+          state: { version: 1, loop_id: "loop-panel", status: "draft", initial_goal_preview: "long running subnet analysis" },
+          events: [],
+        });
+      }
+      if (url === "/v1/sessions/loop-panel/messages" && init?.method === "POST") {
+        return jsonResponse({ session_id: "loop-panel", turn_id: "t1" });
+      }
+      return jsonResponse({ error: { message: `unexpected ${url}` } }, 404);
+    });
+    vi.stubGlobal("fetch", fetchImpl);
+
+    render(<App />);
+
+    const panel = await screen.findByTestId("session-loop-panel");
+    expect(panel).toHaveTextContent("Off");
+    expect(panel).toHaveTextContent("Draft first");
+    expect(within(panel).getByLabelText("Goal")).toHaveValue("long running subnet analysis");
+    await user.click(within(panel).getByRole("button", { name: "Set up loop" }));
+
+    await waitFor(() => expect(fetchImpl).toHaveBeenCalledWith("/v1/sessions/loop-panel/loop-protocol", expect.objectContaining({ method: "POST" })));
+    const loopCall = fetchImpl.mock.calls.find(([url]) => String(url) === "/v1/sessions/loop-panel/loop-protocol");
+    expect((loopCall?.[1] as RequestInit).body).toBe(JSON.stringify({ activate: true, goal: "long running subnet analysis" }));
+    const messageCall = fetchImpl.mock.calls.find(([url]) => String(url) === "/v1/sessions/loop-panel/messages");
+    const sent = JSON.parse(String((messageCall?.[1] as RequestInit).body)) as { content: string };
+    expect(sent.content).toContain("Ask the user at least one concise calibration question");
+    expect(sent.content).toContain("complete_activation");
+    expect(await screen.findByTestId("session-loop-panel")).toHaveTextContent("Draft");
+  });
+
   it("shows and disables the selected session loop protocol", async () => {
     const user = userEvent.setup();
     const fetchImpl = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {

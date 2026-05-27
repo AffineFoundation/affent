@@ -1,3 +1,4 @@
+import { useEffect, useState } from "react";
 import type { SessionLoopProtocolSummary, SessionLoopState } from "../api/sessions";
 import { CopyButton } from "./CopyButton";
 
@@ -8,7 +9,10 @@ export function SessionLoopPanel({
   protocol,
   loadingProtocol = false,
   protocolError,
+  defaultGoal,
+  starting = false,
   onDisable,
+  onStart,
   onLoadProtocol,
   onUseAsDraft,
 }: {
@@ -18,11 +22,53 @@ export function SessionLoopPanel({
   protocol?: string;
   loadingProtocol?: boolean;
   protocolError?: string;
+  defaultGoal?: string;
+  starting?: boolean;
   onDisable?: () => Promise<void> | void;
+  onStart?: (goal: string) => Promise<void> | void;
   onLoadProtocol?: () => Promise<void> | void;
   onUseAsDraft?: () => void;
 }) {
-  if (!summary && !state) return null;
+  const [setupGoal, setSetupGoal] = useState(defaultGoal ?? "");
+  useEffect(() => {
+    if (!summary && !state) setSetupGoal(defaultGoal ?? "");
+  }, [defaultGoal, state, summary]);
+
+  if (!summary && !state) {
+    const goal = compact(setupGoal);
+    return (
+      <details className="session-plan-panel session-loop-panel" data-testid="session-loop-panel" open>
+        <summary className="session-plan-summary">
+          <span className="session-plan-kicker">Loop</span>
+          <strong>Off</strong>
+          <span>Draft first · asks before activation</span>
+        </summary>
+        <div className="session-plan-body session-loop-body">
+          <form
+            className="session-loop-setup"
+            onSubmit={(event) => {
+              event.preventDefault();
+              if (goal && onStart) void onStart(goal);
+            }}
+          >
+            <label>
+              <span>Goal</span>
+              <input
+                value={setupGoal}
+                onChange={(event) => setSetupGoal(event.target.value)}
+                placeholder="Long-running objective"
+                disabled={starting}
+              />
+            </label>
+            <button type="submit" className="secondary-action" disabled={!goal || starting || !onStart}>
+              {starting ? "Starting loop" : "Set up loop"}
+            </button>
+          </form>
+        </div>
+      </details>
+    );
+  }
+
   const status = compact(summary?.status) || compact(state?.status) || "unknown";
   const goal = compact(state?.initial_goal_preview);
   const path = compact(summary?.path) || compact(state?.protocol_path);

@@ -213,7 +213,7 @@ export function App() {
   const selectedScheduleState = scheduleState.state !== "idle" && scheduleState.sessionId === selectedSessionId
     ? scheduleState
     : { state: "idle" as const };
-  const showLoopContext = !demoActive && !!selectedSessionId && (selectedSession?.has_loop_protocol || selectedSession?.has_loop_state || !!selectedSession?.loop_protocol || !!selectedSession?.loop_state);
+  const showLoopContext = !demoActive && !!selectedSessionId;
   const showScheduleContext = !demoActive && !!selectedSessionId;
   const workflow = useMemo(() => deriveWorkflowStatus(session), [session]);
   const memoryUpdateCount = useMemo(
@@ -1229,6 +1229,9 @@ export function App() {
                     summary={selectedSession?.loop_protocol}
                     state={selectedLoopState}
                     disabling={loopProtocolBusy}
+                    defaultGoal={selectedSessionTitle ?? selectedSessionId}
+                    starting={loopProtocolBusy || actionBusy || session.status === "running"}
+                    onStart={handleStartLoop}
                     onDisable={handleDisableLoopProtocol}
                     protocol={selectedLoopProtocolState.state === "ready" ? selectedLoopProtocolState.protocol.protocol : undefined}
                     loadingProtocol={selectedLoopProtocolState.state === "loading"}
