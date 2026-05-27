@@ -1,9 +1,12 @@
 package main
 
 import (
+	"encoding/json"
 	"path/filepath"
 	"testing"
 	"time"
+
+	"github.com/affinefoundation/affent/internal/sse"
 )
 
 func TestSessionPool_RunDueSessionSchedulesOnceFiresOneShot(t *testing.T) {
@@ -36,6 +39,10 @@ func TestSessionPool_RunDueSessionSchedulesOnceFiresOneShot(t *testing.T) {
 	}
 	if schedule.RunCount != 1 || schedule.LastTurnID == "" || schedule.LastRunAt != now.Format(time.RFC3339) || schedule.LastError != "" {
 		t.Fatalf("schedule = %+v, want successful run metadata", schedule)
+	}
+	userMessage := waitScheduleUserMessage(t, pool, "due-one")
+	if userMessage.Source != "schedule" || userMessage.ScheduleID != "sched_due" || userMessage.Text != "Scheduled check-in for session: due-one" {
+		t.Fatalf("user.message = %+v, want schedule metadata", userMessage)
 	}
 }
 
@@ -115,4 +122,29 @@ func writeScheduleFixture(t *testing.T, pool *SessionPool, sessionID string, sch
 	}); err != nil {
 		t.Fatalf("write schedules: %v", err)
 	}
+}
+
+func waitScheduleUserMessage(t *testing.T, pool *SessionPool, sessionID string) sse.UserMessagePayload {
+	t.Helper()
+	deadline := time.Now().Add(2 * time.Second)
+	for time.Now().Before(deadline) {
+		history, err := readSessionHistory(pool.sessionDirPath(sessionID), sessionID, -1, 100)
+		if err == nil {
+			for _, ev := range history.Events {
+				if ev.Type != sse.TypeUserMessage {
+					continue
+				}
+				var payload sse.UserMessagePayload
+				if err := json.Unmarshal(ev.Data, &payload); err != nil {
+					t.Fatalf("decode user.message: %v", err)
+				}
+				if payload.Source == "schedule" {
+					return payload
+				}
+			}
+		}
+		time.Sleep(10 * time.Millisecond)
+	}
+	t.Fatalf("timed out waiting for schedule user.message in %s", sessionID)
+	return sse.UserMessagePayload{}
 }

@@ -42,8 +42,10 @@ type TurnStartPayload struct {
 // event stream means SSE replays show the full conversation, not just
 // assistant output.
 type UserMessagePayload struct {
-	TurnID string `json:"turn_id"`
-	Text   string `json:"text"`
+	TurnID     string `json:"turn_id"`
+	Text       string `json:"text"`
+	Source     string `json:"source,omitempty"`
+	ScheduleID string `json:"schedule_id,omitempty"`
 }
 
 // RuntimeSurfacePayload snapshots the effective runtime surface for a turn.

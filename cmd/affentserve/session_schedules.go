@@ -644,7 +644,10 @@ func (p *SessionPool) executeClaimedSessionSchedule(now time.Time, run sessionSc
 		_ = p.recordSessionScheduleFailure(run, now, err)
 		return err
 	}
-	turnID, err := sess.SendUserWithOptions(context.Background(), run.Prompt, agent.TurnOptions{})
+	turnID, err := sess.SendUserWithOptions(context.Background(), run.Prompt, agent.TurnOptions{
+		UserSource: "schedule",
+		ScheduleID: run.ScheduleID,
+	})
 	if err != nil {
 		_ = p.recordSessionScheduleFailure(run, now, err)
 		return err

@@ -51,6 +51,8 @@ export interface TurnStartPayload {
 export interface UserMessagePayload {
   turn_id: string;
   text: string;
+  source?: string;
+  schedule_id?: string;
 }
 
 export interface RuntimeSurfacePayload {
