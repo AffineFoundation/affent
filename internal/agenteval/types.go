@@ -383,6 +383,7 @@ type SourceAccessExample struct {
 	URLField     string `json:"url_field,omitempty"`
 	SourceMethod string `json:"source_method,omitempty"`
 	JSONPath     string `json:"json_path,omitempty"`
+	Ref          string `json:"ref,omitempty"`
 }
 
 type BrowserNetworkSearchExample struct {
@@ -651,6 +652,7 @@ func (t Trace) SourceAccessExamples(maxExamples int) []SourceAccessExample {
 			URLField:     info.URLField,
 			SourceMethod: info.SourceMethod,
 			JSONPath:     info.JSONPath,
+			Ref:          info.Ref,
 		})
 	}
 	return out

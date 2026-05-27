@@ -3,6 +3,7 @@ package agenteval
 import (
 	"fmt"
 	"sort"
+	"strings"
 )
 
 type DebugBrief struct {
@@ -212,10 +213,11 @@ func BuildDebugBrief(res BatchResult) *DebugBrief {
 			severity = "warn"
 			tags = append(tags, "browser_network:no_matches")
 			message = "browser network searches returned no matches; inspect queries and current pages before trusting hidden dashboard gaps"
-		} else if refs > 0 && res.ToolStats.SourceAccessNetwork == 0 {
+		}
+		if refs > 0 && !browserNetworkRefsHaveSourceEvidence(res) {
 			severity = "warn"
 			tags = append(tags, "browser_network:unread_refs")
-			message = "browser network searches found refs but no network SourceAccess reads; call browser_network_read before citing values"
+			message = "browser network searches found refs without matching network SourceAccess evidence; call browser_network_read before citing values"
 		} else if refs > 0 {
 			tags = append(tags, "browser_network:refs")
 		}
@@ -330,6 +332,44 @@ func BuildDebugBrief(res BatchResult) *DebugBrief {
 	}
 	sort.Strings(tags)
 	return &DebugBrief{Tags: tags, Items: items}
+}
+
+func browserNetworkRefsHaveSourceEvidence(res BatchResult) bool {
+	wantedRefs := map[string]bool{}
+	for _, ex := range res.BrowserNetworkExamples {
+		if ex.Status != "matches" {
+			continue
+		}
+		for _, ref := range ex.Refs {
+			if ref = strings.TrimSpace(ref); ref != "" {
+				wantedRefs[ref] = true
+			}
+		}
+	}
+	sawNetworkSource := false
+	readRefs := map[string]bool{}
+	for _, ex := range res.SourceAccessExamples {
+		isNetwork := ex.Status == "network" || ex.URLField == "browser_network_url" || ex.SourceMethod == "network_xhr_fetch"
+		if !isNetwork {
+			continue
+		}
+		sawNetworkSource = true
+		if ref := strings.TrimSpace(ex.Ref); ref != "" {
+			readRefs[ref] = true
+		}
+	}
+	if len(wantedRefs) > 0 && len(readRefs) > 0 {
+		for ref := range wantedRefs {
+			if readRefs[ref] {
+				return true
+			}
+		}
+		return false
+	}
+	if sawNetworkSource {
+		return true
+	}
+	return res.ToolStats.SourceAccessNetwork > 0
 }
 
 func hasDebugBriefTruncation(res BatchResult) bool {

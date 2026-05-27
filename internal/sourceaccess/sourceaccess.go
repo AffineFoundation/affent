@@ -14,6 +14,7 @@ type Info struct {
 	RenderedBrowserSourceStatus string
 	SourceMethod                string
 	JSONPath                    string
+	Ref                         string
 }
 
 // ParseLine extracts the accessed/requested URLs from a SourceAccess line.
@@ -46,6 +47,8 @@ func ParseLine(line string) Info {
 			info.RenderedBrowserSourceStatus = strings.TrimSpace(strings.TrimPrefix(field, "rendered_browser_source_status="))
 		case strings.HasPrefix(field, "source_method="):
 			info.SourceMethod = strings.TrimSpace(strings.TrimPrefix(field, "source_method="))
+		case strings.HasPrefix(field, "ref="):
+			info.Ref = strings.TrimSpace(strings.TrimPrefix(field, "ref="))
 		}
 	}
 	return info

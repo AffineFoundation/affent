@@ -232,7 +232,9 @@ diagnostics.
   factual evidence.
 - `source_access_network`: count of `SourceAccess:` results read from captured
   browser XHR/fetch evidence (`browser_network_url` or
-  `source_method=network_xhr_fetch`).
+  `source_method=network_xhr_fetch`). Browser network reads may also carry a
+  `ref=...` field linking the source evidence back to a prior
+  `browser_network` result.
 - `session_search_calls`: count of dispatched `session_search` tool calls.
 - `session_search_results`: total prior-session hits reported by parsed
   `session_search` JSON responses.

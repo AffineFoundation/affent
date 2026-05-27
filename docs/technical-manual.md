@@ -557,7 +557,7 @@ Browser sessions also keep a bounded same-site XHR/fetch evidence log.
 refs with the current rendered page context; WebUI activity summaries surface
 that page, query, and match/no-match status so operators can see when a long
 run is cycling through network-evidence searches. `browser_network_read` reads a selected ref with
-`SourceAccess: browser_network_url=...; source_method=network_xhr_fetch`.
+`SourceAccess: browser_network_url=...; ref=...; source_method=network_xhr_fetch`.
 Large JSON/text responses are accepted up to the browser response-cache cap and
 then truncated into the evidence log, so a dashboard API response is not
 dropped merely because it is too large to feed back in full. Use this path for
@@ -784,8 +784,9 @@ Current built-in suites:
   direct-reader recovery, and browser network evidence quality. These scenarios
   intentionally depend on public sites and should be run with web/browser tools
   enabled. Browser network evidence scenarios require final answers to preserve
-  both `browser_network_url` and `requested_url`, so operators can distinguish
-  the response actually read from the user-facing page being verified.
+  `browser_network_url`, `requested_url`, and network refs when available, so
+  operators can distinguish the response actually read from the user-facing
+  page being verified.
 
 Run scenarios:
 

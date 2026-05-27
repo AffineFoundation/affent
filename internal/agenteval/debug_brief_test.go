@@ -335,6 +335,61 @@ func TestBuildDebugBriefClassifiesSourceAccessQuality(t *testing.T) {
 	}
 }
 
+func TestBuildDebugBriefMatchesBrowserNetworkRefsToSourceEvidence(t *testing.T) {
+	brief := BuildDebugBrief(BatchResult{
+		OK: true,
+		ToolStats: ToolRuntimeStats{
+			SourceAccessNetwork: 1,
+		},
+		BrowserNetworkExamples: []BrowserNetworkSearchExample{{
+			Status:       "matches",
+			Refs:         []string{"n1"},
+			RequiresRead: true,
+			NotCitable:   true,
+		}},
+		SourceAccessExamples: []SourceAccessExample{{
+			Status:       "network",
+			URLField:     "browser_network_url",
+			SourceMethod: "network_xhr_fetch",
+			Ref:          "n2",
+		}},
+	})
+	item := debugBriefItemByKind(brief, "browser_network")
+	if item == nil ||
+		item.Severity != "warn" ||
+		item.Message != "browser network searches found refs without matching network SourceAccess evidence; call browser_network_read before citing values" ||
+		!stringSliceContains(brief.Tags, "browser_network:unread_refs") ||
+		stringSliceContains(brief.Tags, "browser_network:refs") {
+		t.Fatalf("unmatched browser network refs item = %+v tags=%+v", item, brief.Tags)
+	}
+
+	brief = BuildDebugBrief(BatchResult{
+		OK: true,
+		ToolStats: ToolRuntimeStats{
+			SourceAccessNetwork: 1,
+		},
+		BrowserNetworkExamples: []BrowserNetworkSearchExample{{
+			Status:       "matches",
+			Refs:         []string{"n1"},
+			RequiresRead: true,
+			NotCitable:   true,
+		}},
+		SourceAccessExamples: []SourceAccessExample{{
+			Status:       "network",
+			URLField:     "browser_network_url",
+			SourceMethod: "network_xhr_fetch",
+			Ref:          "n1",
+		}},
+	})
+	item = debugBriefItemByKind(brief, "browser_network")
+	if item == nil ||
+		item.Severity != "info" ||
+		!stringSliceContains(brief.Tags, "browser_network:refs") ||
+		stringSliceContains(brief.Tags, "browser_network:unread_refs") {
+		t.Fatalf("matched browser network refs item = %+v tags=%+v", item, brief.Tags)
+	}
+}
+
 func TestBuildDebugBriefClassifiesContextCompactionSummaryQuality(t *testing.T) {
 	brief := BuildDebugBrief(BatchResult{
 		OK: true,

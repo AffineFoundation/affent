@@ -47,12 +47,15 @@ func TestFirstInfoFromResult(t *testing.T) {
 }
 
 func TestParseLineNetworkSource(t *testing.T) {
-	info := ParseLine("SourceAccess: browser_network_url=https://example.com/api/data; source_method=network_xhr_fetch")
+	info := ParseLine("SourceAccess: browser_network_url=https://example.com/api/data; ref=n1; source_method=network_xhr_fetch")
 	if got, want := info.URLField, "browser_network_url"; got != want {
 		t.Fatalf("URLField = %q, want %q", got, want)
 	}
 	if got, want := info.AccessedURL, "https://example.com/api/data"; got != want {
 		t.Fatalf("AccessedURL = %q, want %q", got, want)
+	}
+	if got, want := info.Ref, "n1"; got != want {
+		t.Fatalf("Ref = %q, want %q", got, want)
 	}
 	if !info.IsNetworkSource() {
 		t.Fatal("IsNetworkSource = false, want true")
@@ -60,9 +63,12 @@ func TestParseLineNetworkSource(t *testing.T) {
 }
 
 func TestFirstInfoFromResultCapturesNetworkJSONPath(t *testing.T) {
-	info, ok := FirstInfoFromResult("SourceAccess: browser_network_url=https://example.com/api/data; source_method=network_xhr_fetch\nJSON_PATH: $.data.items[0].price\n\"0.06342 T\"")
+	info, ok := FirstInfoFromResult("SourceAccess: browser_network_url=https://example.com/api/data; ref=n1; source_method=network_xhr_fetch\nJSON_PATH: $.data.items[0].price\n\"0.06342 T\"")
 	if !ok {
 		t.Fatal("FirstInfoFromResult() = false, want true")
+	}
+	if got, want := info.Ref, "n1"; got != want {
+		t.Fatalf("Ref = %q, want %q", got, want)
 	}
 	if got, want := info.JSONPath, "$.data.items[0].price"; got != want {
 		t.Fatalf("JSONPath = %q, want %q", got, want)
