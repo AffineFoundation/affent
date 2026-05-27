@@ -5,6 +5,8 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/affinefoundation/affent/internal/loopstate"
 )
 
 func TestWithLoopProtocolSkillProviderInjectsWhenFileExists(t *testing.T) {
@@ -124,5 +126,40 @@ Keep long-run work anchored to evidence.
 	got = provider("continue")
 	if !strings.Contains(got, "feed_mode=full feed_number=6") {
 		t.Fatalf("sixth feed should return to full:\n%s", got)
+	}
+}
+
+func TestWithLoopProtocolSkillProviderPersistsFeedCadenceAcrossProviders(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "LOOP.md")
+	if err := os.WriteFile(path, []byte("# Loop Protocol\n\n## 1. North Star\n\nPersist feed cadence."), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	first := WithLoopProtocolSkillProvider(path, nil)
+	for i := 0; i < 4; i++ {
+		_ = first("continue")
+	}
+	state, found, err := loopstate.ReadState(filepath.Join(dir, loopstate.StateFileName))
+	if err != nil || !found {
+		t.Fatalf("ReadState found=%v err=%v", found, err)
+	}
+	if state.ProtocolFeeds != 4 || state.LastProtocolFeedMode != "digest" || state.LastEventType != "loop.protocol_feed" {
+		t.Fatalf("state after first provider = %+v", state)
+	}
+	events, found, err := loopstate.ReadRecentEvents(filepath.Join(dir, loopstate.EventsFileName), 10)
+	if err != nil || !found || len(events) != 4 {
+		t.Fatalf("events found=%v len=%d err=%v", found, len(events), err)
+	}
+	if events[3].Type != "loop.protocol_feed" || events[3].Mode != "digest" || events[3].FeedNumber != 4 {
+		t.Fatalf("fourth event = %+v", events[3])
+	}
+
+	resumed := WithLoopProtocolSkillProvider(path, nil)
+	got := resumed("continue")
+	if !strings.Contains(got, "feed_mode=digest feed_number=5") {
+		t.Fatalf("resumed provider should continue persisted cadence:\n%s", got)
+	}
+	if !strings.Contains(got, "protocol_feeds=5") || !strings.Contains(got, "last_feed=digest") {
+		t.Fatalf("state line should include persisted feed stats:\n%s", got)
 	}
 }

@@ -118,6 +118,9 @@ export interface SessionLoopState {
   updated_at?: string;
   last_protocol_update_at?: string;
   protocol_updates?: number;
+  protocol_feeds?: number;
+  last_protocol_feed_at?: string;
+  last_protocol_feed_mode?: string;
   event_count?: number;
   last_event_type?: string;
   last_event_summary?: string;
@@ -132,6 +135,8 @@ export interface SessionLoopEvent {
   sections_changed?: string[];
   reason?: string;
   path?: string;
+  mode?: string;
+  feed_number?: number;
 }
 
 export interface SessionLoopProtocolResponse {

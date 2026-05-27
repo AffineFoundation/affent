@@ -28,6 +28,9 @@ type State struct {
 	UpdatedAt            string `json:"updated_at,omitempty"`
 	LastProtocolUpdateAt string `json:"last_protocol_update_at,omitempty"`
 	ProtocolUpdates      int    `json:"protocol_updates,omitempty"`
+	ProtocolFeeds        int    `json:"protocol_feeds,omitempty"`
+	LastProtocolFeedAt   string `json:"last_protocol_feed_at,omitempty"`
+	LastProtocolFeedMode string `json:"last_protocol_feed_mode,omitempty"`
 	EventCount           int    `json:"event_count,omitempty"`
 	LastEventType        string `json:"last_event_type,omitempty"`
 	LastEventSummary     string `json:"last_event_summary,omitempty"`
@@ -42,6 +45,8 @@ type Event struct {
 	SectionsChanged []string `json:"sections_changed,omitempty"`
 	Reason          string   `json:"reason,omitempty"`
 	Path            string   `json:"path,omitempty"`
+	Mode            string   `json:"mode,omitempty"`
+	FeedNumber      int      `json:"feed_number,omitempty"`
 }
 
 func ReadState(path string) (State, bool, error) {
@@ -136,6 +141,71 @@ func WriteState(path string, state State) error {
 	}
 	syncDir(filepath.Dir(path))
 	return nil
+}
+
+func RecordProtocolFeed(protocolPath, mode string) (State, Event, error) {
+	mode = strings.TrimSpace(mode)
+	if mode == "" {
+		mode = "digest"
+	}
+	loopDir := filepath.Dir(protocolPath)
+	loopID := filepath.Base(loopDir)
+	now := time.Now().UTC()
+	statePath := filepath.Join(loopDir, StateFileName)
+	state, found, err := ReadState(statePath)
+	if err != nil {
+		return State{}, Event{}, err
+	}
+	if !found {
+		state = State{
+			Version:      1,
+			LoopID:       loopID,
+			OwnerSession: loopID,
+			Status:       "running",
+			ProtocolPath: ProtocolRelPath(loopID),
+			CreatedAt:    formatTime(now),
+		}
+	}
+	if state.Version == 0 {
+		state.Version = 1
+	}
+	if state.LoopID == "" {
+		state.LoopID = loopID
+	}
+	if state.OwnerSession == "" {
+		state.OwnerSession = loopID
+	}
+	if state.Status == "" {
+		state.Status = "running"
+	}
+	if state.ProtocolPath == "" {
+		state.ProtocolPath = ProtocolRelPath(loopID)
+	}
+	feedNumber := state.ProtocolFeeds + 1
+	event, err := AppendEvent(filepath.Join(loopDir, EventsFileName), Event{
+		Type:       "loop.protocol_feed",
+		Summary:    "Fed LOOP.md " + mode,
+		Reason:     "loop protocol feed policy",
+		Path:       ProtocolRelPath(loopID),
+		Mode:       mode,
+		FeedNumber: feedNumber,
+		Time:       formatTime(now),
+	})
+	if err != nil {
+		return State{}, Event{}, err
+	}
+	state.ProtocolFeeds = feedNumber
+	state.LastProtocolFeedAt = event.Time
+	state.LastProtocolFeedMode = mode
+	state.UpdatedAt = event.Time
+	state.EventCount = event.Seq
+	state.LastEventType = event.Type
+	state.LastEventSummary = event.Summary
+	state.LastEventAt = event.Time
+	if err := WriteState(statePath, state); err != nil {
+		return State{}, Event{}, err
+	}
+	return state, event, nil
 }
 
 func AppendEvent(path string, ev Event) (Event, error) {

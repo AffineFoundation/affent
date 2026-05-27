@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"path/filepath"
 	"strings"
-	"sync"
 
 	"github.com/affinefoundation/affent/internal/loopstate"
 	"github.com/affinefoundation/affent/internal/textutil"
@@ -21,15 +20,9 @@ const (
 // file exists. Missing protocols are a no-op, so runtimes can wire this once
 // and let explicit loop activation decide whether extra context is spent.
 func WithLoopProtocolSkillProvider(protocolPath string, next SkillProvider) SkillProvider {
-	var mu sync.Mutex
-	feedCount := 0
 	return func(userText string) string {
 		parts := make([]string, 0, 2)
-		mu.Lock()
-		feedCount++
-		feedNumber := feedCount
-		mu.Unlock()
-		if block := activeLoopProtocolSkillBlock(protocolPath, loopProtocolFeedMode(feedNumber), feedNumber); block != "" {
+		if block := activeLoopProtocolSkillBlock(protocolPath); block != "" {
 			parts = append(parts, block)
 		}
 		if next != nil {
@@ -51,7 +44,7 @@ func loopProtocolFeedMode(feedNumber int) string {
 	return "digest"
 }
 
-func activeLoopProtocolSkillBlock(protocolPath, mode string, feedNumber int) string {
+func activeLoopProtocolSkillBlock(protocolPath string) string {
 	content, found, err := loopstate.ReadProtocol(protocolPath)
 	if err != nil || !found {
 		return ""
@@ -59,6 +52,12 @@ func activeLoopProtocolSkillBlock(protocolPath, mode string, feedNumber int) str
 	content = strings.TrimSpace(content)
 	if content == "" {
 		return ""
+	}
+	feedNumber := nextLoopProtocolFeedNumber(protocolPath)
+	mode := loopProtocolFeedMode(feedNumber)
+	if _, ev, err := loopstate.RecordProtocolFeed(protocolPath, mode); err == nil && ev.FeedNumber > 0 {
+		feedNumber = ev.FeedNumber
+		mode = ev.Mode
 	}
 	stateLine := loopProtocolStateLine(protocolPath)
 	body := textutil.Preview(content, maxActiveLoopProtocolFullBytes)
@@ -90,6 +89,12 @@ func loopProtocolStateLine(protocolPath string) string {
 	if state.ProtocolUpdates > 0 {
 		parts = append(parts, fmt.Sprintf("protocol_updates=%d", state.ProtocolUpdates))
 	}
+	if state.ProtocolFeeds > 0 {
+		parts = append(parts, fmt.Sprintf("protocol_feeds=%d", state.ProtocolFeeds))
+	}
+	if state.LastProtocolFeedMode != "" {
+		parts = append(parts, "last_feed="+state.LastProtocolFeedMode)
+	}
 	if state.LastEventSummary != "" {
 		parts = append(parts, "last_event="+state.LastEventSummary)
 	}
@@ -97,6 +102,14 @@ func loopProtocolStateLine(protocolPath string) string {
 		return ""
 	}
 	return strings.Join(parts, " ") + "\n"
+}
+
+func nextLoopProtocolFeedNumber(protocolPath string) int {
+	state, found, err := loopstate.ReadState(filepath.Join(filepath.Dir(protocolPath), loopstate.StateFileName))
+	if err != nil || !found {
+		return 1
+	}
+	return state.ProtocolFeeds + 1
 }
 
 func loopProtocolDigest(content string, maxBytes int) string {

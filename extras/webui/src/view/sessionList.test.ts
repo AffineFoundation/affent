@@ -167,6 +167,8 @@ describe("sessionList view model", () => {
             version: 1,
             status: "running",
             protocol_updates: 2,
+            protocol_feeds: 5,
+            last_protocol_feed_mode: "digest",
             event_count: 2,
             last_event_type: "loop.protocol_update",
             last_event_summary: "Updated LOOP.md",
@@ -175,7 +177,7 @@ describe("sessionList view model", () => {
       }),
     ]);
 
-    expect(rows[0].metrics).toContain("Loop running, 2 updates, Updated LOOP.md");
+    expect(rows[0].metrics).toContain("Loop running, 2 updates, 5 feeds, Updated LOOP.md");
     expect(rows[0].chips).toContain("loop");
     expect(rows[0].searchText).toContain("loop running");
   });
@@ -190,6 +192,7 @@ describe("sessionList view model", () => {
           version: 1,
           status: "disabled",
           protocol_updates: 1,
+          protocol_feeds: 3,
           event_count: 2,
           last_event_type: "loop.protocol_delete",
           last_event_summary: "Disabled LOOP.md",
@@ -197,7 +200,7 @@ describe("sessionList view model", () => {
       }),
     ]);
 
-    expect(rows[0].metrics).toContain("Loop disabled, 1 update, Disabled LOOP.md");
+    expect(rows[0].metrics).toContain("Loop disabled, 1 update, 3 feeds, Disabled LOOP.md");
     expect(rows[0].chips).toContain("loop");
     expect(rows[0].searchText).toContain("loop disabled");
   });
