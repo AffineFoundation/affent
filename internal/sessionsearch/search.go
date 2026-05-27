@@ -21,6 +21,7 @@ import (
 type Hit struct {
 	SessionID       string   `json:"session_id"`
 	TurnIdx         int      `json:"turn_idx"`
+	MessageIdx      int      `json:"message_idx,omitempty"`
 	Role            string   `json:"role"`
 	Snippet         string   `json:"snippet"`
 	Score           float64  `json:"score"`
@@ -169,7 +170,8 @@ func scoreFile(ctx context.Context, path, sid string, terms []string, maxPerSess
 	defer f.Close()
 	reader := bufio.NewReaderSize(f, 64*1024)
 	var fileHits []Hit
-	turn := 0
+	messageIdx := 0
+	turnIdx := 0
 	var prev searchableMessage
 	for {
 		line, overLimit, err := jsonl.ReadBoundedLine(reader, maxSessionLogLineBytes)
@@ -182,7 +184,7 @@ func scoreFile(ctx context.Context, path, sid string, terms []string, maxPerSess
 		if err := ctx.Err(); err != nil {
 			return nil, err
 		}
-		turn++
+		messageIdx++
 		if overLimit {
 			prev = searchableMessage{}
 			continue
@@ -199,6 +201,13 @@ func scoreFile(ctx context.Context, path, sid string, terms []string, maxPerSess
 			prev = searchableMessage{}
 			continue
 		}
+		if m.Role == "user" {
+			turnIdx++
+		}
+		hitTurnIdx := turnIdx
+		if hitTurnIdx <= 0 {
+			hitTurnIdx = 1
+		}
 		content := strings.TrimSpace(m.Content)
 		if content == "" {
 			prev = searchableMessage{}
@@ -214,7 +223,8 @@ func scoreFile(ctx context.Context, path, sid string, terms []string, maxPerSess
 		}
 		fileHits = appendBoundedHits(fileHits, Hit{
 			SessionID:       sid,
-			TurnIdx:         turn,
+			TurnIdx:         hitTurnIdx,
+			MessageIdx:      messageIdx,
 			Role:            m.Role,
 			Snippet:         SnippetAround(snippetContent, terms),
 			Score:           score,

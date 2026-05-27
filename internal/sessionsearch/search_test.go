@@ -151,6 +151,9 @@ func TestSearchAssistantHitCarriesAdjacentUserContext(t *testing.T) {
 	if hits[0].SessionID != "market-alpha" || hits[0].Role != "assistant" {
 		t.Fatalf("adjacent context should rank the decision hit first, got %+v", hits)
 	}
+	if hits[0].TurnIdx != 1 || hits[0].MessageIdx != 2 {
+		t.Fatalf("assistant hit indexes = turn %d message %d, want logical turn 1 and message line 2", hits[0].TurnIdx, hits[0].MessageIdx)
+	}
 	if !hits[0].ContextIncluded {
 		t.Fatalf("adjacent context hit should mark context_included: %+v", hits[0])
 	}
@@ -358,8 +361,11 @@ func TestScoreFileSkipsOversizedLines(t *testing.T) {
 	if len(hits) != 2 {
 		t.Fatalf("scoreFile should skip only the oversized line, got %+v", hits)
 	}
-	if hits[0].TurnIdx != 1 || hits[1].TurnIdx != 3 {
-		t.Fatalf("turn indexes = %d/%d, want physical JSONL lines 1/3", hits[0].TurnIdx, hits[1].TurnIdx)
+	if hits[0].TurnIdx != 1 || hits[1].TurnIdx != 1 {
+		t.Fatalf("turn indexes = %d/%d, want logical conversation turn 1", hits[0].TurnIdx, hits[1].TurnIdx)
+	}
+	if hits[0].MessageIdx != 1 || hits[1].MessageIdx != 3 {
+		t.Fatalf("message indexes = %d/%d, want physical JSONL lines 1/3", hits[0].MessageIdx, hits[1].MessageIdx)
 	}
 }
 

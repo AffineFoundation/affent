@@ -414,6 +414,7 @@ type SessionSearchExample struct {
 	Total           int      `json:"total,omitempty"`
 	SessionID       string   `json:"session_id,omitempty"`
 	TurnIdx         int      `json:"turn_idx,omitempty"`
+	MessageIdx      int      `json:"message_idx,omitempty"`
 	Role            string   `json:"role,omitempty"`
 	Score           float64  `json:"score,omitempty"`
 	MatchedTerms    []string `json:"matched_terms,omitempty"`
@@ -721,6 +722,7 @@ func (t Trace) SessionSearchExamples(maxExamples int) []SessionSearchExample {
 				Total:           resp.Total,
 				SessionID:       hit.SessionID,
 				TurnIdx:         hit.TurnIdx,
+				MessageIdx:      hit.MessageIdx,
 				Role:            hit.Role,
 				Score:           hit.Score,
 				MatchedTerms:    append([]string(nil), hit.MatchedTerms...),
