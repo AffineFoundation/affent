@@ -686,7 +686,10 @@ func TestSession_RuntimeStatsSnapshot_AccumulatesTurnReasonsAndErrors(t *testing
 			got.ContextCompactionsReactive == 2 &&
 			got.ContextCompactionRemovedMessages == 96 &&
 			got.ContextCompactionSummaryBytes == 3072 &&
-			got.ContextCompactionSummaryMissing == 1 {
+			got.ContextCompactionSummaryMissing == 1 &&
+			got.ContextCompactionLatestReason == "context_overflow" &&
+			got.ContextCompactionLatestReactive &&
+			got.ContextCompactionLatestState == "missing" {
 			break
 		}
 		if time.Now().After(deadline) {
@@ -713,6 +716,9 @@ func TestSession_RuntimeStatsSnapshot_AccumulatesTurnReasonsAndErrors(t *testing
 		resp.Aggregate.Runtime.RuntimeErrorByKind["llm_timeout"] != 1 ||
 		resp.Aggregate.Runtime.RuntimeErrorByKind["llm_incomplete_stream"] != 1 ||
 		resp.Sessions[0].Runtime.ContextCompactions != 3 ||
+		resp.Sessions[0].Runtime.ContextCompactionLatestReason != "context_overflow" ||
+		!resp.Sessions[0].Runtime.ContextCompactionLatestReactive ||
+		resp.Sessions[0].Runtime.ContextCompactionLatestState != "missing" ||
 		resp.Aggregate.Runtime.ContextCompactionRemovedMessages != 96 ||
 		resp.Aggregate.Runtime.ContextCompactionSummaryMissing != 1 {
 		t.Fatalf("runtime stats = session:%+v aggregate:%+v", resp.Sessions[0].Runtime, resp.Aggregate.Runtime)
@@ -729,7 +735,10 @@ func TestSession_RuntimeStatsSnapshot_AccumulatesTurnReasonsAndErrors(t *testing
 		summary.ContextCompactions.Reactive != 2 ||
 		summary.ContextCompactions.RemovedMessages != 96 ||
 		summary.ContextCompactions.SummaryBytes != 3072 ||
-		summary.ContextCompactions.SummaryMissing != 1 {
+		summary.ContextCompactions.SummaryMissing != 1 ||
+		summary.ContextCompactions.LatestReason != "context_overflow" ||
+		!summary.ContextCompactions.LatestReactive ||
+		summary.ContextCompactions.LatestSummaryState != "missing" {
 		t.Fatalf("active session context compactions = %+v", summary.ContextCompactions)
 	}
 }

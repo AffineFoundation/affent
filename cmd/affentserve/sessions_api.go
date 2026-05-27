@@ -543,12 +543,15 @@ func contextCompactionSummaryFromRuntimeStats(stats RuntimeStatsSnapshot) *sessi
 		return nil
 	}
 	return &sessionContextCompactionSummary{
-		Count:           int(stats.ContextCompactions),
-		Reactive:        int(stats.ContextCompactionsReactive),
-		RemovedMessages: int(stats.ContextCompactionRemovedMessages),
-		SummaryBytes:    int(stats.ContextCompactionSummaryBytes),
-		SummaryMissing:  int(stats.ContextCompactionSummaryMissing),
-		SummaryEmpty:    int(stats.ContextCompactionSummaryEmpty),
+		Count:              int(stats.ContextCompactions),
+		Reactive:           int(stats.ContextCompactionsReactive),
+		RemovedMessages:    int(stats.ContextCompactionRemovedMessages),
+		SummaryBytes:       int(stats.ContextCompactionSummaryBytes),
+		SummaryMissing:     int(stats.ContextCompactionSummaryMissing),
+		SummaryEmpty:       int(stats.ContextCompactionSummaryEmpty),
+		LatestReason:       stats.ContextCompactionLatestReason,
+		LatestReactive:     stats.ContextCompactionLatestReactive,
+		LatestSummaryState: stats.ContextCompactionLatestState,
 	}
 }
 

@@ -66,48 +66,51 @@ type Session struct {
 	outputTokens atomic.Int64
 	turns        atomic.Int64
 
-	toolRequests           atomic.Int64
-	toolNameCanonicalized  atomic.Int64
-	toolArgsRepaired       atomic.Int64
-	toolRepairCalls        atomic.Int64
-	toolRepairSucceeded    atomic.Int64
-	toolRepairFailed       atomic.Int64
-	toolRepairNotes        atomic.Int64
-	toolErrors             atomic.Int64
-	toolDurationMS         atomic.Int64
-	loopGuardInterventions atomic.Int64
-	forcedNoTools          atomic.Int64
-	sourceAccessResults    atomic.Int64
-	sourceAccessVerified   atomic.Int64
-	sourceAccessDiscovery  atomic.Int64
-	sourceAccessNetwork    atomic.Int64
-	sourceAccessDynamic    atomic.Int64
-	memoryUpdates          atomic.Int64
-	memoryUpdateAdd        atomic.Int64
-	memoryUpdateReplace    atomic.Int64
-	memoryUpdateRemove     atomic.Int64
-	memorySearchCalls      atomic.Int64
-	memorySearchMisses     atomic.Int64
-	sessionSearchCalls     atomic.Int64
-	sessionSearchResults   atomic.Int64
-	sessionSearchContext   atomic.Int64
-	sessionSearchTerms     atomic.Int64
-	sessionSearchRecent    atomic.Int64
-	toolContextTruncated   atomic.Int64
-	toolContextOmitted     atomic.Int64
-	toolRepairMu           sync.Mutex
-	toolRepairByKind       map[string]int64
-	toolFailureByKind      map[string]int64
-	runtimeErrors          atomic.Int64
-	contextCompactions     atomic.Int64
-	contextCompactionReact atomic.Int64
-	contextCompactionRmMsg atomic.Int64
-	contextCompactionBytes atomic.Int64
-	contextCompactionMiss  atomic.Int64
-	contextCompactionEmpty atomic.Int64
-	runtimeStatsMu         sync.Mutex
-	turnEndByReason        map[string]int64
-	runtimeErrorByKind     map[string]int64
+	toolRequests                      atomic.Int64
+	toolNameCanonicalized             atomic.Int64
+	toolArgsRepaired                  atomic.Int64
+	toolRepairCalls                   atomic.Int64
+	toolRepairSucceeded               atomic.Int64
+	toolRepairFailed                  atomic.Int64
+	toolRepairNotes                   atomic.Int64
+	toolErrors                        atomic.Int64
+	toolDurationMS                    atomic.Int64
+	loopGuardInterventions            atomic.Int64
+	forcedNoTools                     atomic.Int64
+	sourceAccessResults               atomic.Int64
+	sourceAccessVerified              atomic.Int64
+	sourceAccessDiscovery             atomic.Int64
+	sourceAccessNetwork               atomic.Int64
+	sourceAccessDynamic               atomic.Int64
+	memoryUpdates                     atomic.Int64
+	memoryUpdateAdd                   atomic.Int64
+	memoryUpdateReplace               atomic.Int64
+	memoryUpdateRemove                atomic.Int64
+	memorySearchCalls                 atomic.Int64
+	memorySearchMisses                atomic.Int64
+	sessionSearchCalls                atomic.Int64
+	sessionSearchResults              atomic.Int64
+	sessionSearchContext              atomic.Int64
+	sessionSearchTerms                atomic.Int64
+	sessionSearchRecent               atomic.Int64
+	toolContextTruncated              atomic.Int64
+	toolContextOmitted                atomic.Int64
+	toolRepairMu                      sync.Mutex
+	toolRepairByKind                  map[string]int64
+	toolFailureByKind                 map[string]int64
+	runtimeErrors                     atomic.Int64
+	contextCompactions                atomic.Int64
+	contextCompactionReact            atomic.Int64
+	contextCompactionRmMsg            atomic.Int64
+	contextCompactionBytes            atomic.Int64
+	contextCompactionMiss             atomic.Int64
+	contextCompactionEmpty            atomic.Int64
+	runtimeStatsMu                    sync.Mutex
+	turnEndByReason                   map[string]int64
+	runtimeErrorByKind                map[string]int64
+	contextCompactionLastReason       string
+	contextCompactionLastReactive     bool
+	contextCompactionLastSummaryState string
 
 	// fan-out
 	subsMu  sync.Mutex
@@ -1773,6 +1776,9 @@ type RuntimeStatsSnapshot struct {
 	ContextCompactionSummaryBytes    int64            `json:"context_compaction_summary_bytes,omitempty"`
 	ContextCompactionSummaryMissing  int64            `json:"context_compaction_summary_missing,omitempty"`
 	ContextCompactionSummaryEmpty    int64            `json:"context_compaction_summary_empty,omitempty"`
+	ContextCompactionLatestReason    string           `json:"context_compaction_latest_reason,omitempty"`
+	ContextCompactionLatestReactive  bool             `json:"context_compaction_latest_reactive,omitempty"`
+	ContextCompactionLatestState     string           `json:"context_compaction_latest_summary_state,omitempty"`
 }
 
 func (s *Session) RuntimeStatsSnapshot() RuntimeStatsSnapshot {
@@ -1782,6 +1788,9 @@ func (s *Session) RuntimeStatsSnapshot() RuntimeStatsSnapshot {
 	s.runtimeStatsMu.Lock()
 	turnEndByReason := cloneStringInt64Map(s.turnEndByReason)
 	errorByKind := cloneStringInt64Map(s.runtimeErrorByKind)
+	latestReason := s.contextCompactionLastReason
+	latestReactive := s.contextCompactionLastReactive
+	latestState := s.contextCompactionLastSummaryState
 	s.runtimeStatsMu.Unlock()
 	return RuntimeStatsSnapshot{
 		TurnEndByReason:                  turnEndByReason,
@@ -1793,6 +1802,9 @@ func (s *Session) RuntimeStatsSnapshot() RuntimeStatsSnapshot {
 		ContextCompactionSummaryBytes:    s.contextCompactionBytes.Load(),
 		ContextCompactionSummaryMissing:  s.contextCompactionMiss.Load(),
 		ContextCompactionSummaryEmpty:    s.contextCompactionEmpty.Load(),
+		ContextCompactionLatestReason:    latestReason,
+		ContextCompactionLatestReactive:  latestReactive,
+		ContextCompactionLatestState:     latestState,
 	}
 }
 
@@ -1880,12 +1892,18 @@ func (s *Session) addContextCompaction(p sse.ContextCompactPayload) {
 	if p.SummaryBytes > 0 {
 		s.contextCompactionBytes.Add(int64(p.SummaryBytes))
 	}
-	switch contextCompactSummaryState(p.SummaryPresent, p.SummaryBytes, p.SummaryPreview, true) {
+	state := contextCompactSummaryState(p.SummaryPresent, p.SummaryBytes, p.SummaryPreview, true)
+	switch state {
 	case "missing":
 		s.contextCompactionMiss.Add(1)
 	case "empty":
 		s.contextCompactionEmpty.Add(1)
 	}
+	s.runtimeStatsMu.Lock()
+	s.contextCompactionLastReason = p.Reason
+	s.contextCompactionLastReactive = p.Reactive
+	s.contextCompactionLastSummaryState = state
+	s.runtimeStatsMu.Unlock()
 }
 
 func (s *Session) addToolStats(stats sse.ToolRuntimeStats) {

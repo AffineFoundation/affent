@@ -579,7 +579,8 @@ Operational endpoints:
   `context_compaction_removed_messages`, and
   `context_compaction_summary_bytes`,
   `context_compaction_summary_missing`, and
-  `context_compaction_summary_empty` so long-run operators can see context
+  `context_compaction_summary_empty`, plus the latest compaction reason,
+  reactive flag, and summary state so long-run operators can see context
   pressure and weak compaction summaries without opening the raw trace. Browser stats expose
   `blocked_by_type`, `blocked_by_domain`, and `domain_relaxations` so
   operators can see when the runtime had to temporarily widen the default
