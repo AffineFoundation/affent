@@ -127,6 +127,27 @@ func TestBuildDebugBriefClassifiesToolRepairQuality(t *testing.T) {
 	}
 }
 
+func TestBuildDebugBriefClassifiesForcedNoTools(t *testing.T) {
+	brief := BuildDebugBrief(BatchResult{
+		OK: true,
+		ToolStats: ToolRuntimeStats{
+			LoopGuardInterventions: 2,
+			ForcedNoTools:          1,
+		},
+	})
+	guard := debugBriefItemByKind(brief, "loop_guard")
+	if guard == nil ||
+		guard.Severity != "warn" ||
+		guard.Message != "loop guard forced no-tool continuation; inspect repeated failures before trusting recovery" ||
+		guard.Counts["interventions"] != 2 ||
+		guard.Counts["forced_no_tools"] != 1 ||
+		!stringSliceContains(guard.Inspect, "loop_decisions") ||
+		!stringSliceContains(brief.Tags, "loop_guard") ||
+		!stringSliceContains(brief.Tags, "loop_guard:forced_no_tools") {
+		t.Fatalf("forced no-tools debug item = %+v tags=%+v", guard, brief.Tags)
+	}
+}
+
 func TestBuildDebugBriefClassifiesSessionRecallQuality(t *testing.T) {
 	brief := BuildDebugBrief(BatchResult{
 		OK: true,

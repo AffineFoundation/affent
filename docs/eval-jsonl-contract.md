@@ -180,6 +180,7 @@ Scenario records describe one eval case:
   `source_dynamic_without_decision`, `source_unverified_all`,
   `source_discovery_only_all`,
   `memory_update:replace`, `empty_recall`,
+  `loop_guard:forced_no_tools`,
   `recall:no_context`, `recall:no_matched_terms`,
   `recall:weak_context`, `recall:weak_matched_terms`,
   `tool_repair:failed`, `tool_repair:type_coercion`,

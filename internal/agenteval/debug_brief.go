@@ -76,11 +76,17 @@ func BuildDebugBrief(res BatchResult) *DebugBrief {
 		}
 		add("runtime_error_by_kind", "warn", "runtime errors observed", []string{"runtime_errors", "provider_logs"}, counts, tags...)
 	}
-	if res.ToolStats.LoopGuardInterventions > 0 {
-		add("loop_guard", "warn", "loop guard intervened; inspect repeated tool or evidence patterns", []string{"loop_decisions", "tool_timeline"}, map[string]int{
+	if res.ToolStats.LoopGuardInterventions > 0 || res.ToolStats.ForcedNoTools > 0 {
+		tags := []string{"loop_guard"}
+		message := "loop guard intervened; inspect repeated tool or evidence patterns"
+		if res.ToolStats.ForcedNoTools > 0 {
+			tags = append(tags, "loop_guard:forced_no_tools")
+			message = "loop guard forced no-tool continuation; inspect repeated failures before trusting recovery"
+		}
+		add("loop_guard", "warn", message, []string{"loop_decisions", "tool_timeline"}, map[string]int{
 			"interventions":   res.ToolStats.LoopGuardInterventions,
 			"forced_no_tools": res.ToolStats.ForcedNoTools,
-		}, "loop_guard")
+		}, tags...)
 	}
 	if res.Delegation.HasAny() {
 		severity := "info"

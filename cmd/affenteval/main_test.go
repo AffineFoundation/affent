@@ -49,6 +49,7 @@ func TestRunListQualityProfiles(t *testing.T) {
 		"min-trace-event-rate=0.900",
 		"min-source-access-verified-rate=0.900",
 		"max-source-dynamic-partial-rate=0.200",
+		"max-debug-brief-tag-rate=loop_guard:forced_no_tools=0.000",
 		"max-debug-brief-tag-rate=recall:weak_context=0.000",
 		"max-debug-brief-tag-rate=source_dynamic_without_network=0.000",
 		"max-debug-brief-tag-rate=tool_repair:failed=0.000",
@@ -632,12 +633,13 @@ func TestApplyQualityGateProfile(t *testing.T) {
 		t.Fatalf("longrun profile should not require source evidence for non-web suites: %#v", gates.MinSourceAccessVerifiedRate)
 	}
 	if gates.MaxDebugBriefTagRates["truncation:missing_artifact"] != 0 ||
+		gates.MaxDebugBriefTagRates["loop_guard:forced_no_tools"] != 0 ||
 		gates.MaxDebugBriefTagRates["recall:no_context"] != 0 ||
 		gates.MaxDebugBriefTagRates["recall:no_matched_terms"] != 0 ||
 		gates.MaxDebugBriefTagRates["recall:weak_context"] != 0 ||
 		gates.MaxDebugBriefTagRates["recall:weak_matched_terms"] != 0 ||
 		gates.MaxDebugBriefTagRates["tool_repair:failed"] != 0 {
-		t.Fatalf("longrun debug brief tag gates = %#v, want recall, repair, and truncation artifact gates", gates.MaxDebugBriefTagRates)
+		t.Fatalf("longrun debug brief tag gates = %#v, want loop, recall, repair, and truncation artifact gates", gates.MaxDebugBriefTagRates)
 	}
 
 	webGates := qualityGateConfig{MinSourceAccessVerifiedRate: float64Ptr(-1)}
@@ -903,7 +905,7 @@ func TestPrintBatchResultIncludesTraceMetrics(t *testing.T) {
 		"workspace: /tmp/ws (removed)",
 		"trace: /tmp/ws/trace.jsonl",
 		"command: go run ./cmd/affentctl run --trace /tmp/ws/trace.jsonl",
-		"metrics: tools=3 errors=2 repaired=1 canonicalized=1 loop_guard=2 forced_no_tools=1 tool_ms=45 tokens=100/25 trunc=args:1,results:1,artifacts:1 omitted=512/4096 ctx_trunc=3,omitted=9216 tool_failure_kinds=invalid_args:1 runtime_error_kinds=llm_timeout:1 loop_decisions=1 loop_decision_kinds=evidence_quality:1 loop_decision_results=defer:1 compactions=2,reactive=1,removed=64,summary_bytes=4096,summary_missing=0,summary_empty=0 debug_brief=context_compaction,context_compaction:reactive,delegation,delegation:focused_task,delegation:subagent,delegation_error,delegation_error:focused_task,delegation_error:subagent,loop_guard,plan,plan:set,plan:update,plan_error,runtime_error,runtime_error:llm_timeout,tool_failure,tool_failure:invalid_args,truncation delegation=focused_tasks:2,subagents:1 delegation_errors=focused_tasks:1,subagents:1 focused_task_by_type=explore:1,verify:1 subagent_by_mode=review:1 plan=calls:3,errors:1 plan_by_action=set:1,update:2 end=completed",
+		"metrics: tools=3 errors=2 repaired=1 canonicalized=1 loop_guard=2 forced_no_tools=1 tool_ms=45 tokens=100/25 trunc=args:1,results:1,artifacts:1 omitted=512/4096 ctx_trunc=3,omitted=9216 tool_failure_kinds=invalid_args:1 runtime_error_kinds=llm_timeout:1 loop_decisions=1 loop_decision_kinds=evidence_quality:1 loop_decision_results=defer:1 compactions=2,reactive=1,removed=64,summary_bytes=4096,summary_missing=0,summary_empty=0 debug_brief=context_compaction,context_compaction:reactive,delegation,delegation:focused_task,delegation:subagent,delegation_error,delegation_error:focused_task,delegation_error:subagent,loop_guard,loop_guard:forced_no_tools,plan,plan:set,plan:update,plan_error,runtime_error,runtime_error:llm_timeout,tool_failure,tool_failure:invalid_args,truncation delegation=focused_tasks:2,subagents:1 delegation_errors=focused_tasks:1,subagents:1 focused_task_by_type=explore:1,verify:1 subagent_by_mode=review:1 plan=calls:3,errors:1 plan_by_action=set:1,update:2 end=completed",
 		`verifier: pass exit=0 duration=80ms output=1200 truncated omitted=176 cap=1024 command="go test ./..."`,
 		"tool_failure_hint[invalid_args]",
 		"invalid arguments",
@@ -1274,7 +1276,7 @@ func TestBatchSummaryAggregatesRuntimeMetrics(t *testing.T) {
 	if !strings.Contains(out.String(), "source_access=results:4,verified:3,discovery:0,network:3,dynamic_partial:0") {
 		t.Fatalf("summary output missing source access rollup:\n%s", out.String())
 	}
-	if !strings.Contains(out.String(), "debug_brief=context_compaction:1,context_compaction:reactive:1,loop_guard:2,outcome:failed:1,plan:2,plan:set:1,plan:update:1,plan_error:1,recall:1,recall:context:1,recall:weak_context:1,runtime_error:1,runtime_error:context_overflow:1,runtime_error:llm_timeout:1,source_access:2,source_network:2,source_unverified:1,tool_failure:1,tool_failure:invalid_args:1,tool_failure:timeout:1,tool_repair:2,tool_repair:alias_rename:2,tool_repair:failed:1,tool_repair:tool_name:1,tool_repair:type_coercion:1,truncation:2,truncation:missing_artifact:1,turn_end:max_turns:1") {
+	if !strings.Contains(out.String(), "debug_brief=context_compaction:1,context_compaction:reactive:1,loop_guard:2,loop_guard:forced_no_tools:1,outcome:failed:1,plan:2,plan:set:1,plan:update:1,plan_error:1,recall:1,recall:context:1,recall:weak_context:1,runtime_error:1,runtime_error:context_overflow:1,runtime_error:llm_timeout:1,source_access:2,source_network:2,source_unverified:1,tool_failure:1,tool_failure:invalid_args:1,tool_failure:timeout:1,tool_repair:2,tool_repair:alias_rename:2,tool_repair:failed:1,tool_repair:tool_name:1,tool_repair:type_coercion:1,truncation:2,truncation:missing_artifact:1,turn_end:max_turns:1") {
 		t.Fatalf("summary output missing debug brief tag rollup:\n%s", out.String())
 	}
 	if !strings.Contains(out.String(), `failure_example[turn_end]: scenario=taostats-rendered failure="turn ended with reason \"max_turns\" (expected completed)"`) ||
