@@ -102,7 +102,8 @@ function runtimeMetrics(stats: ServerStatsResponse): RuntimeMetric[] {
   if (errors) metrics.push(errors);
   const browser = browserMetric(aggregate);
   if (browser) metrics.push(browser);
-  if (aggregate && metrics.length > 0) metrics.push({ label: "Tokens", value: tokenSummary(aggregate), tone: "muted" });
+  const tokens = tokenMetric(aggregate);
+  if (tokens && metrics.length > 0) metrics.push(tokens);
   return metrics;
 }
 
@@ -125,12 +126,14 @@ function toolSurface(stats: ServerStatsResponse): string {
   return enabled.length > 0 ? enabled.join(" · ") : "minimal";
 }
 
-function tokenSummary(aggregate: ServerAggregateStats): string {
+function tokenMetric(aggregate?: ServerAggregateStats): RuntimeMetric | undefined {
+  if (!aggregate) return undefined;
   const total = aggregate.input_tokens + aggregate.output_tokens;
+  if (total <= 0) return undefined;
   const turns = aggregate.turns;
   const parts = [formatCount(total)];
   if (turns > 0) parts.push(`${turns} turns`);
-  return parts.join(" · ");
+  return { label: "Tokens", value: parts.join(" · "), tone: "muted" };
 }
 
 function sourceMetric(tools?: StatsToolSnapshot): RuntimeMetric | undefined {

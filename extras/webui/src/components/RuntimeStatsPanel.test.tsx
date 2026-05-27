@@ -74,6 +74,7 @@ describe("RuntimeStatsPanel", () => {
     expect(screen.getByTestId("runtime-stats-grid")).toHaveTextContent("Tool context2 trims · 3 KiB omitted");
     expect(screen.getByTestId("runtime-stats-grid")).toHaveTextContent("Loop1 max-turn · 2 guards · 1 no-tools");
     expect(screen.getByTestId("runtime-stats-grid")).toHaveTextContent("Errors1 tool · 1 runtime");
+    expect(screen.getByTestId("runtime-stats-grid")).toHaveTextContent("Tokens4.0k · 5 turns");
   });
 
   it("shows loading and error states without fake metrics", () => {
@@ -159,6 +160,7 @@ describe("RuntimeStatsPanel", () => {
 
     const grid = screen.getByTestId("runtime-stats-grid");
     expect(grid).toHaveTextContent("Browser1 domain blocks · 2 type blocks · 1 relaxations");
+    expect(grid).not.toHaveTextContent("Tokens");
     expect(within(grid).getByText("Browser").closest(".session-tools-runtime-chip")).toHaveAttribute("data-tone", "warning");
   });
 
