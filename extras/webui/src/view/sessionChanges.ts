@@ -1,0 +1,108 @@
+import type { SessionState, ToolCallState } from "../store/sessionState";
+import { summarizePreview } from "./textPreview";
+
+export type SessionChangeStatus = "running" | "changed" | "failed";
+
+export interface SessionChangedFile {
+  path: string;
+  operation: "write" | "edit";
+  status: SessionChangeStatus;
+  turnNumber: number;
+  actionCount: number;
+  detail?: string;
+  artifactPath?: string;
+}
+
+export interface SessionChangesView {
+  files: SessionChangedFile[];
+  summary: string;
+  detail: string;
+  tone?: "warning" | "error";
+}
+
+export function buildSessionChanges(session: SessionState): SessionChangesView {
+  const byPath = new Map<string, SessionChangedFile>();
+  session.turns.forEach((turn, turnIndex) => {
+    for (const call of turn.toolCalls) {
+      const change = changeFromCall(call, turnIndex + 1);
+      if (!change) continue;
+      const previous = byPath.get(change.path);
+      byPath.set(change.path, previous ? mergeChange(previous, change) : change);
+    }
+  });
+  const files = [...byPath.values()].sort((a, b) => b.turnNumber - a.turnNumber || a.path.localeCompare(b.path));
+  const failed = files.filter((file) => file.status === "failed").length;
+  const running = files.filter((file) => file.status === "running").length;
+  const changed = files.filter((file) => file.status === "changed").length;
+  return {
+    files,
+    summary: changesSummary(files.length, { changed, failed, running }),
+    detail: changesDetail(files.length, { changed, failed, running }),
+    tone: failed > 0 ? "error" : running > 0 ? "warning" : undefined,
+  };
+}
+
+function changeFromCall(call: ToolCallState, turnNumber: number): SessionChangedFile | undefined {
+  const operation = changeOperation(call.tool);
+  if (!operation) return undefined;
+  const path = stringArg(call, "path") ?? stringArg(call, "file") ?? stringArg(call, "filename");
+  if (!path) return undefined;
+  return {
+    path,
+    operation,
+    status: changeStatus(call),
+    turnNumber,
+    actionCount: 1,
+    detail: changeDetail(call),
+    artifactPath: call.resultArtifactPath,
+  };
+}
+
+function mergeChange(previous: SessionChangedFile, next: SessionChangedFile): SessionChangedFile {
+  return {
+    ...next,
+    actionCount: previous.actionCount + 1,
+  };
+}
+
+function changeOperation(tool: string): SessionChangedFile["operation"] | undefined {
+  if (tool === "write_file") return "write";
+  if (tool === "edit_file") return "edit";
+  return undefined;
+}
+
+function changeStatus(call: ToolCallState): SessionChangeStatus {
+  if (call.status === "running") return "running";
+  return call.status === "error" || (call.exitCode != null && call.exitCode !== 0) ? "failed" : "changed";
+}
+
+function changeDetail(call: ToolCallState): string | undefined {
+  const source = call.resultSummary || call.result || call.failureKind;
+  if (!source) return undefined;
+  return summarizePreview(source, 120);
+}
+
+function changesSummary(total: number, counts: { changed: number; failed: number; running: number }): string {
+  if (total === 0) return "No file changes";
+  if (counts.failed > 0) return `${counts.failed} ${plural("file issue", counts.failed)}`;
+  if (counts.running > 0) return `${counts.running} pending ${plural("change", counts.running)}`;
+  return `${total} changed ${plural("file", total)}`;
+}
+
+function changesDetail(total: number, counts: { changed: number; failed: number; running: number }): string {
+  if (total === 0) return "No write or edit actions in this chat.";
+  const parts: string[] = [];
+  if (counts.changed > 0) parts.push(`${counts.changed} changed`);
+  if (counts.running > 0) parts.push(`${counts.running} pending`);
+  if (counts.failed > 0) parts.push(`${counts.failed} failed`);
+  return parts.join(" · ");
+}
+
+function plural(label: string, count: number): string {
+  return count === 1 ? label : `${label}s`;
+}
+
+function stringArg(call: ToolCallState, key: string): string | undefined {
+  const value = call.args[key];
+  return typeof value === "string" && value.trim() ? value.trim() : undefined;
+}

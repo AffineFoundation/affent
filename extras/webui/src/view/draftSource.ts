@@ -2,6 +2,7 @@ export type DraftSource =
   | "answer"
   | "artifact"
   | "artifact_text"
+  | "changed_file"
   | "continuation"
   | "evidence"
   | "error"
@@ -22,6 +23,7 @@ const draftSourceLabels: Record<DraftSource, string> = {
   answer: "Continuing from answer",
   artifact: "File added to message",
   artifact_text: "Using file text",
+  changed_file: "Using changed file",
   continuation: "Requesting final answer",
   evidence: "Using evidence",
   error: "Continuing after error",
@@ -40,6 +42,7 @@ const draftMergeModes: Record<DraftSource, DraftMergeMode> = {
   answer: "append",
   artifact: "append",
   artifact_text: "append",
+  changed_file: "append",
   continuation: "append",
   evidence: "append",
   error: "append",

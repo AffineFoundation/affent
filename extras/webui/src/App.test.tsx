@@ -1730,6 +1730,70 @@ describe("App", () => {
     expect(screen.getByTestId("connection-pill")).not.toHaveTextContent("qwen-small");
   });
 
+  it("surfaces changed files inside Workbench without adding default Chat noise", async () => {
+    const user = userEvent.setup();
+    const fetchImpl = vi.fn(async (input: RequestInfo | URL) => {
+      const url = String(input);
+      if (url === "/v1/sessions?limit=100") {
+        return jsonResponse({
+          sessions: [
+            {
+              id: "changes-1",
+              active: true,
+              durable: true,
+              topic_user_message: "fix checkout tests",
+              has_conversation: true,
+              has_events: true,
+              has_artifacts: false,
+              has_memory: false,
+              has_runtime_skills: false,
+            },
+          ],
+          has_more: false,
+        });
+      }
+      if (url === "/v1/sessions/changes-1/history?after=-1&limit=500") {
+        return jsonResponse({
+          session_id: "changes-1",
+          events: [
+            { id: 1, type: "turn.start", data: { turn_id: "t1" } },
+            { id: 2, type: "user.message", data: { turn_id: "t1", text: "fix checkout tests" } },
+            { id: 3, type: "tool.request", data: { turn_id: "t1", call_id: "edit", tool: "edit_file", args: { path: "src/payments.ts" } } },
+            { id: 4, type: "tool.result", data: { call_id: "edit", exit_code: 0, result_summary: "Updated payment route", result: "Updated payment route" } },
+            { id: 5, type: "message.done", data: { turn_id: "t1", text: "Checkout route fixed.", finish_reason: "stop" } },
+            { id: 6, type: "turn.end", data: { turn_id: "t1", reason: "completed", tool_stats: { tool_requests: 1 } } },
+          ],
+          next_after: 6,
+          has_more: false,
+          trace_schema_detected: true,
+        });
+      }
+      if (url === "/v1/sessions/changes-1/events") return eventStreamResponse("");
+      if (url === "/v1/stats") return jsonResponse({ model: "qwen-small", active_sessions: 1, running_turns: 0 });
+      if (url === "/v1/settings") return jsonResponse({ env: [], ssh: { exists: false } });
+      if (url === "/v1/skills") return jsonResponse({ session_id: "account", count: 0, install_enabled: false, skills: [] });
+      if (url === "/v1/sessions/changes-1/memory") return jsonResponse({ session_id: "changes-1", has_memory: false, topics: [] });
+      return jsonResponse({ error: { message: `unexpected ${url}` } }, 404);
+    });
+    vi.stubGlobal("fetch", fetchImpl);
+
+    render(<App />);
+
+    expect(await screen.findByText("Checkout route fixed.")).toBeVisible();
+    expect(screen.queryByTestId("session-changes-panel")).toBeNull();
+
+    await user.click(screen.getByLabelText("Workbench"));
+
+    const changes = await screen.findByTestId("session-changes-panel");
+    expect(changes).not.toHaveAttribute("open");
+    expect(changes).toHaveTextContent("1 changed file");
+    await user.click(within(changes).getByText("Changes"));
+    expect(screen.getByTestId("session-changes-list")).toHaveTextContent("src/payments.ts");
+    await user.click(within(screen.getByTestId("session-changes-list")).getByRole("button", { name: "Adjust" }));
+    expect(screen.getByTestId("composer-context")).toHaveTextContent("Using changed file");
+    expect(screen.getByPlaceholderText("Message Affent...")).toHaveValue("Review and adjust this changed file: src/payments.ts");
+  });
+
   it("keeps the top bar compact when stats polling would fail", async () => {
     const fetchImpl = vi.fn(async (input: RequestInfo | URL) => {
       const url = String(input);

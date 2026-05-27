@@ -53,6 +53,7 @@ import { RuntimeStatsPanel } from "./components/RuntimeStatsPanel";
 import { SessionSkillsPanel } from "./components/SessionSkillsPanel";
 import { AccountSettingsPanel } from "./components/AccountSettingsPanel";
 import { WorkbenchContextPanel } from "./components/WorkbenchContextPanel";
+import { SessionChangesPanel } from "./components/SessionChangesPanel";
 import { Timeline, type GuidanceReceiptView, type PendingMessageView } from "./components/Timeline";
 import { WorkflowStatus } from "./components/WorkflowStatus";
 import { RunDetails } from "./components/RunDetails";
@@ -64,6 +65,7 @@ import type { DraftSource } from "./view/draftSource";
 import { buildRuntimeCapabilityView } from "./view/runtimeCapabilities";
 import { buildSessionRows, formatLoadingChatTitle } from "./view/sessionList";
 import { buildSessionOverview, type SessionOverview } from "./view/sessionOverview";
+import { buildSessionChanges } from "./view/sessionChanges";
 import { isContinuationPrompt } from "./view/continuationPrompt";
 import { memoryUpdatesForTurn } from "./view/memoryUpdate";
 
@@ -273,6 +275,7 @@ export function App() {
     }),
     [pendingMessage, planPanelSummary, selectedSession?.context, selectedSession?.latest_recovery_hint, selectedSessionId, selectedSessionTitle, session, workflow],
   );
+  const sessionChanges = useMemo(() => buildSessionChanges(session), [session]);
   const showWorkflowStatus = overview.tone === "error" || overview.tone === "warning" || hasRecoveryMetric(overview);
   const showSessionNav = !demoActive && sessions.length > 0;
   const compactNav = demoActive || !showSessionNav;
@@ -1318,6 +1321,9 @@ export function App() {
                   automationDetail={automationContext?.detail}
                   defaultOpen
                 />
+                {sessionChanges.files.length > 0 ? (
+                  <SessionChangesPanel changes={sessionChanges} onUseAsDraft={handleUseAsDraft} />
+                ) : null}
                 <RuntimeStatsPanel
                   stats={runtimeStatsState.state === "ready" ? runtimeStatsState.stats : undefined}
                   loading={runtimeStatsState.state === "loading"}
