@@ -12,7 +12,7 @@ describe("buildWorkbenchAttention", () => {
       files: files(),
       changes: changes({ changed: 2 }),
       run: run({ failed: 1 }),
-    })).toEqual({ label: "1 failed command", detail: "View run", tone: "error", target: "run" });
+    })).toEqual({ label: "1 failed command · View run", detail: "Open command output and recovery actions.", tone: "error", target: "run" });
   });
 
   it("uses recovery when there is no failed Workbench surface", () => {
@@ -21,7 +21,7 @@ describe("buildWorkbenchAttention", () => {
       files: files({ available: 1 }),
       changes: changes({ changed: 2 }),
       run: run(),
-    })).toEqual({ label: "Recovery hint", detail: "rerun tests", tone: "warning", target: "context" });
+    })).toEqual({ label: "Recovery hint · View context", detail: "rerun tests", tone: "warning", target: "context" });
   });
 
   it("opens workspace when the recorded command cwd is outside the session workspace", () => {
@@ -38,7 +38,7 @@ describe("buildWorkbenchAttention", () => {
         issue: "Latest command cwd is outside the session workspace.",
       },
     })).toEqual({
-      label: "Workspace mismatch",
+      label: "Workspace mismatch · View workspace",
       detail: "Latest command cwd is outside the session workspace.",
       tone: "warning",
       target: "workspace",
@@ -51,7 +51,7 @@ describe("buildWorkbenchAttention", () => {
       files: files({ available: 2 }),
       changes: changes({ changed: 3 }),
       run: run(),
-    })).toEqual({ label: "3 changed files", detail: "Review changes", tone: "attention", target: "changes" });
+    })).toEqual({ label: "3 changed files · Review diff", detail: "Open changed file evidence.", tone: "attention", target: "changes" });
 
     expect(buildWorkbenchAttention({
       overview: overview(),
@@ -69,7 +69,7 @@ describe("buildWorkbenchAttention", () => {
       run: run(),
       automation: { title: "Loop waiting · 1 timer pending", detail: "Answer setup question before LOOP.md can run." },
     })).toEqual({
-      label: "Loop waiting · 1 timer pending",
+      label: "Loop waiting · 1 timer pending · Open automation",
       detail: "Answer setup question before LOOP.md can run.",
       tone: "warning",
       target: "automation",

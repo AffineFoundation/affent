@@ -705,7 +705,7 @@ describe("App", () => {
     render(<App />);
 
     expect(screen.queryByTestId("session-automation-panel")).toBeNull();
-    expect(await screen.findByLabelText("Workbench")).toHaveTextContent("Loop review");
+    expect(await screen.findByLabelText("Workbench")).toHaveTextContent("Loop review · Open automation");
     await user.click(screen.getByLabelText("Workbench"));
     expect(await screen.findByTestId("workbench-automation-panel")).toHaveTextContent("Loop review");
     const panel = await screen.findByTestId("session-loop-panel");
@@ -780,7 +780,7 @@ describe("App", () => {
     render(<App />);
 
     expect(screen.queryByTestId("session-automation-panel")).toBeNull();
-    expect(await screen.findByLabelText("Workbench")).toHaveTextContent("Loop waiting");
+    expect(await screen.findByLabelText("Workbench")).toHaveTextContent("Loop waiting · Open automation");
     await user.click(screen.getByLabelText("Workbench"));
     expect(await screen.findByTestId("workbench-automation-panel")).toHaveTextContent("Loop waiting");
     const panel = await screen.findByTestId("session-loop-panel");
@@ -1880,7 +1880,7 @@ describe("App", () => {
 
     expect(await screen.findByText("Checkout route fixed.")).toBeVisible();
     expect(screen.queryByTestId("session-changes-panel")).toBeNull();
-    expect(screen.getByText("1 changed file")).toBeVisible();
+    expect(screen.getByText("1 changed file · Review diff")).toBeVisible();
 
     await user.click(screen.getByLabelText("Workbench"));
 
@@ -2041,7 +2041,7 @@ describe("App", () => {
 
     expect(await screen.findByText("Workspace evidence recorded.")).toBeVisible();
     expect(screen.queryByTestId("session-workspace-panel")).toBeNull();
-    expect(screen.getByText("Workspace mismatch")).toBeVisible();
+    expect(screen.getByText("Workspace mismatch · View workspace")).toBeVisible();
 
     await user.click(screen.getByLabelText("Workbench"));
 
@@ -2128,7 +2128,7 @@ describe("App", () => {
 
     expect((await screen.findAllByText("Checkout test still fails."))[0]).toBeVisible();
     expect(screen.queryByTestId("session-run-panel")).toBeNull();
-    expect(screen.getByText("1 failed command")).toBeVisible();
+    expect(screen.getByText("1 failed command · View run")).toBeVisible();
 
     await user.click(screen.getByLabelText("Workbench"));
 
