@@ -1275,6 +1275,7 @@ func printBatchSummary(w io.Writer, s batchSummary) {
 	printToolFailureExampleLines(w, s.ToolFailureExamples, "")
 	printLoopGuardExampleLines(w, s.LoopGuardExamples, "")
 	printSourceAccessExampleLines(w, s.SourceAccessExamples, "")
+	printBrowserNetworkExampleLines(w, s.BrowserNetworkExamples, "")
 	printMemoryUpdateExampleLines(w, s.MemoryUpdateExamples, "")
 	printFailureHintLines(w, s.RuntimeErrorByKind, "")
 	printRuntimeErrorExampleLines(w, s.RuntimeErrorExamples, "")
@@ -1788,6 +1789,38 @@ func printSourceAccessExampleLines(w io.Writer, examples []agenteval.SourceAcces
 		}
 		if ex.JSONPath != "" {
 			fmt.Fprintf(w, " json_path=%s", ex.JSONPath)
+		}
+		fmt.Fprintln(w)
+	}
+}
+
+func printBrowserNetworkExampleLines(w io.Writer, examples []agenteval.BrowserNetworkSearchExample, indent string) {
+	for _, ex := range examples {
+		fmt.Fprintf(w, "%sbrowser_network_example:", indent)
+		if ex.Scenario != "" {
+			fmt.Fprintf(w, " scenario=%s", ex.Scenario)
+		}
+		fmt.Fprintf(w, " status=%s", ex.Status)
+		if ex.CallID != "" {
+			fmt.Fprintf(w, " call_id=%s", ex.CallID)
+		}
+		if ex.CurrentPageURL != "" {
+			fmt.Fprintf(w, " page=%s", ex.CurrentPageURL)
+		}
+		if ex.Query != "" {
+			fmt.Fprintf(w, " query=%q", ex.Query)
+		}
+		if len(ex.Refs) > 0 {
+			fmt.Fprintf(w, " refs=%s", strings.Join(ex.Refs, ","))
+		}
+		if ex.RequiresRead {
+			fmt.Fprintf(w, " requires_read=true")
+		}
+		if ex.NotCitable {
+			fmt.Fprintf(w, " not_citable=true")
+		}
+		if ex.SuggestedNextStep != "" {
+			fmt.Fprintf(w, " next=%q", ex.SuggestedNextStep)
 		}
 		fmt.Fprintln(w)
 	}
@@ -3552,6 +3585,7 @@ func printBatchResult(w io.Writer, res agenteval.BatchResult) {
 	printToolFailureExampleLines(w, res.ToolFailureExamples, "  ")
 	printLoopGuardExampleLines(w, res.LoopGuardExamples, "  ")
 	printSourceAccessExampleLines(w, res.SourceAccessExamples, "  ")
+	printBrowserNetworkExampleLines(w, res.BrowserNetworkExamples, "  ")
 	printMemoryUpdateExampleLines(w, res.MemoryUpdateExamples, "  ")
 	printFailureHintLines(w, res.RuntimeErrorByKind, "  ")
 	printRuntimeErrorExampleLines(w, res.RuntimeErrorExamples, "  ")

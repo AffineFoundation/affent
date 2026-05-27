@@ -805,6 +805,15 @@ func TestPrintBatchResultIncludesTraceMetrics(t *testing.T) {
 			SourceMethod: "network_xhr_fetch",
 			JSONPath:     "$.price",
 		}},
+		BrowserNetworkExamples: []agenteval.BrowserNetworkSearchExample{{
+			ToolIndex:         2,
+			CallID:            "browser-network-print-1",
+			CurrentPageURL:    "https://metrics.example/dashboard",
+			Query:             "market_cap",
+			Status:            "no_matches",
+			NotCitable:        true,
+			SuggestedNextStep: "adjust query or read available network refs before citing values",
+		}},
 		MemoryUpdateExamples: []agenteval.MemoryUpdateExample{{
 			ToolIndex:       3,
 			CallID:          "memory-print-1",
@@ -905,13 +914,14 @@ func TestPrintBatchResultIncludesTraceMetrics(t *testing.T) {
 		"workspace: /tmp/ws (removed)",
 		"trace: /tmp/ws/trace.jsonl",
 		"command: go run ./cmd/affentctl run --trace /tmp/ws/trace.jsonl",
-		"metrics: tools=3 errors=2 repaired=1 canonicalized=1 loop_guard=2 forced_no_tools=1 tool_ms=45 tokens=100/25 trunc=args:1,results:1,artifacts:1 omitted=512/4096 ctx_trunc=3,omitted=9216 tool_failure_kinds=invalid_args:1 runtime_error_kinds=llm_timeout:1 loop_decisions=1 loop_decision_kinds=evidence_quality:1 loop_decision_results=defer:1 compactions=2,reactive=1,removed=64,summary_bytes=4096,summary_missing=0,summary_empty=0 debug_brief=context_compaction,context_compaction:reactive,delegation,delegation:focused_task,delegation:subagent,delegation_error,delegation_error:focused_task,delegation_error:subagent,loop_guard,loop_guard:forced_no_tools,plan,plan:set,plan:update,plan_error,runtime_error,runtime_error:llm_timeout,tool_failure,tool_failure:invalid_args,truncation delegation=focused_tasks:2,subagents:1 delegation_errors=focused_tasks:1,subagents:1 focused_task_by_type=explore:1,verify:1 subagent_by_mode=review:1 plan=calls:3,errors:1 plan_by_action=set:1,update:2 end=completed",
+		"metrics: tools=3 errors=2 repaired=1 canonicalized=1 loop_guard=2 forced_no_tools=1 tool_ms=45 tokens=100/25 trunc=args:1,results:1,artifacts:1 omitted=512/4096 ctx_trunc=3,omitted=9216 tool_failure_kinds=invalid_args:1 runtime_error_kinds=llm_timeout:1 loop_decisions=1 loop_decision_kinds=evidence_quality:1 loop_decision_results=defer:1 compactions=2,reactive=1,removed=64,summary_bytes=4096,summary_missing=0,summary_empty=0 debug_brief=browser_network,browser_network:no_matches,context_compaction,context_compaction:reactive,delegation,delegation:focused_task,delegation:subagent,delegation_error,delegation_error:focused_task,delegation_error:subagent,loop_guard,loop_guard:forced_no_tools,plan,plan:set,plan:update,plan_error,runtime_error,runtime_error:llm_timeout,tool_failure,tool_failure:invalid_args,truncation delegation=focused_tasks:2,subagents:1 delegation_errors=focused_tasks:1,subagents:1 focused_task_by_type=explore:1,verify:1 subagent_by_mode=review:1 plan=calls:3,errors:1 plan_by_action=set:1,update:2 end=completed",
 		`verifier: pass exit=0 duration=80ms output=1200 truncated omitted=176 cap=1024 command="go test ./..."`,
 		"tool_failure_hint[invalid_args]",
 		"invalid arguments",
 		`tool_failure_example[invalid_args]: tool=web_fetch args=url="https://example.com" exit=1 result=url is required | Next: retry with a full URL`,
 		`loop_guard_example[loop_guard_repeated_failed_input]: category=loop_guard tool=web_fetch call_id=guard-print-1 args=url="https://example.com" exit=1 result=repeated failed input | Next: stop retrying this URL`,
 		"source_access_example: status=network tool=browser_network_read call_id=source-print-1 url=https://metrics.example/api.json requested=https://metrics.example/dashboard method=network_xhr_fetch json_path=$.price",
+		`browser_network_example: status=no_matches call_id=browser-network-print-1 page=https://metrics.example/dashboard query="market_cap" not_citable=true next="adjust query or read available network refs before citing values"`,
 		`memory_update_example: action=replace target=memory location=memory:markets call_id=memory-print-1 topic=markets previous="old dashboard rule" next="prefer browser_network_read evidence"`,
 		"hint[llm_timeout]",
 		"runtime_error_example[llm_timeout]: LLM llm_stream timed out after 4m0s",
@@ -1353,6 +1363,9 @@ func TestBatchSummaryAggregatesRuntimeMetrics(t *testing.T) {
 	}
 	if !strings.Contains(out.String(), "source_access_example: scenario=sample status=network tool=browser_network_read call_id=source-1 url=https://metrics.example/api.json json_path=$.price") {
 		t.Fatalf("summary output missing source access example:\n%s", out.String())
+	}
+	if !strings.Contains(out.String(), `browser_network_example: scenario=sample status=matches call_id=browser-network-1 page=https://metrics.example/dashboard query="price" refs=n1 requires_read=true not_citable=true next="call browser_network_read before citing values"`) {
+		t.Fatalf("summary output missing browser network example:\n%s", out.String())
 	}
 	if !strings.Contains(out.String(), `memory_update_example: scenario=sample action=add target=memory location=memory:markets call_id=memory-1 topic=markets next="Prefer browser_network_read evidence for dynamic dashboards."`) {
 		t.Fatalf("summary output missing memory update example:\n%s", out.String())
