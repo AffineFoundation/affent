@@ -258,6 +258,7 @@ function AgentActivity({
   const showDigestLabel = activity.digest.label !== activity.statusLabel;
   const issueNodes = activityIssueNodes(activity.nodes);
   const evidenceSummaryLabel = activity.evidenceCount === 1 ? "Source" : "Sources";
+  const showStatusLabel = activity.statusLabel !== "Done";
   const seenMotionIds = useRef<Set<string>>(new Set());
   const motionIds = useMemo(() => activityMotionIds(activity), [activity]);
   const newMotionIds = useMemo(
@@ -288,7 +289,7 @@ function AgentActivity({
       <div className="agent-activity-headbar">
         <button type="button" className="agent-activity-head" aria-expanded={open} onClick={toggleOpen}>
           <span>{activity.title}</span>
-          <small>{activity.statusLabel}</small>
+          {showStatusLabel ? <small>{activity.statusLabel}</small> : null}
           <span className="agent-activity-chevron" aria-hidden="true" />
         </button>
         <span className="agent-activity-actions">

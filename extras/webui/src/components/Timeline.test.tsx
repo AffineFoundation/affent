@@ -33,8 +33,10 @@ describe("Timeline", () => {
     expect(screen.getByTestId("agent-activity-digest")).not.toHaveTextContent("138 tokens");
     expect(screen.getByTestId("agent-activity").textContent?.match(/README\.md main\.go/g)).toHaveLength(1);
     expect(screen.queryByTestId("agent-activity-brief")).toBeNull();
-    expect(screen.getByRole("button", { name: /What Affent did/ })).toHaveAttribute("aria-expanded", "false");
-    await user.click(screen.getByRole("button", { name: /What Affent did/ }));
+    const activityHead = screen.getByRole("button", { name: "What Affent did" });
+    expect(activityHead).toHaveAttribute("aria-expanded", "false");
+    expect(activityHead).not.toHaveTextContent("Done");
+    await user.click(activityHead);
     expect(screen.queryByTestId("agent-activity-brief")).toBeNull();
     expect(screen.getByTestId("agent-activity")).not.toHaveTextContent("Goallist the files");
     expect(screen.getByTestId("agent-activity")).not.toHaveTextContent("Working plan");
