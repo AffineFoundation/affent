@@ -486,10 +486,11 @@ session when ordinary transcript terms do not match. Each
 `failure_kind` plus `failure_kinds`, so eval runs and UIs can distinguish a
 useful recovery path from a run that simply accumulated failed retrievals,
 discovery-only pages, empty recall, or policy violations.
-Successful-but-no-evidence web/browser results, such as `dynamic_shell`,
-`empty_response`, `non_text`, `no_results`, or browser-network `no_matches`,
-contribute to `tool_failure_by_kind` even when their `tool.result.exit_code` is
-`0`; `tool_errors` remains reserved for non-zero tool exits.
+Successful-but-no-evidence web results and browser results, such as
+`dynamic_shell`, `empty_response`, `non_text`, `no_results`, or browser-network
+`no_matches`, contribute to
+`tool_failure_by_kind` even when their `tool.result.exit_code` is `0`;
+`tool_errors` remains reserved for non-zero tool exits.
 
 Runtime LLM errors use the same idea on `error.failure_kind` when the loop can
 classify them. Known values include `llm_timeout` for per-call or stream-idle

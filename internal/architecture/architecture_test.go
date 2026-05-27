@@ -73,8 +73,8 @@ var allowedDeps = map[string]map[string]bool{
 	"internal/workspaceignore": {},
 
 	// --- leaf-deps: small packages that legitimately use textutil
-	// for cap-aware string trimming. None of them depend on each
-	// other or on anything heavier than textutil.
+	// for cap-aware string trimming. sessionsearch also reads compact
+	// plan summaries so recall can surface task-state anchors.
 	"internal/memory": {
 		"internal/textutil": true,
 	},
@@ -97,8 +97,9 @@ var allowedDeps = map[string]map[string]bool{
 		"internal/workspaceignore": true,
 	},
 	"internal/sessionsearch": {
-		"internal/jsonl":    true,
-		"internal/textutil": true,
+		"internal/jsonl":     true,
+		"internal/planstate": true,
+		"internal/textutil":  true,
 	},
 
 	// --- exec ---
@@ -146,6 +147,7 @@ var allowedDeps = map[string]map[string]bool{
 		"internal/agent":        true,
 		"internal/executor":     true,
 		"internal/jsonl":        true,
+		"internal/memory":       true,
 		"internal/planstate":    true,
 		"internal/sourceaccess": true,
 		"internal/sse":          true,
