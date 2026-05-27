@@ -9,17 +9,19 @@ export function SessionSchedulePanel({
   deletingId,
   onLoadSchedules,
   onDeleteSchedule,
+  onScheduleLoopTick,
   onScheduleCheckIn,
   onScheduleDaily,
 }: {
   summary?: SessionSchedulesSummary;
   schedules?: SessionSchedule[];
-  busy?: "checkin" | "daily";
+  busy?: "loop" | "checkin" | "daily";
   loading?: boolean;
   error?: string;
   deletingId?: string;
   onLoadSchedules?: () => Promise<void> | void;
   onDeleteSchedule?: (scheduleId: string) => Promise<void> | void;
+  onScheduleLoopTick?: () => Promise<void> | void;
   onScheduleCheckIn?: () => Promise<void> | void;
   onScheduleDaily?: () => Promise<void> | void;
 }) {
@@ -91,6 +93,16 @@ export function SessionSchedulePanel({
               onClick={() => void onScheduleCheckIn()}
             >
               {busy === "checkin" ? "Scheduling" : "1h check-in"}
+            </button>
+          ) : null}
+          {onScheduleLoopTick ? (
+            <button
+              type="button"
+              className="ghost-action"
+              disabled={!!busy}
+              onClick={() => void onScheduleLoopTick()}
+            >
+              {busy === "loop" ? "Scheduling" : "30m loop tick"}
             </button>
           ) : null}
           {onScheduleDaily ? (

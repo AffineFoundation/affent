@@ -132,7 +132,7 @@ export function App() {
   const [actionBusy, setActionBusy] = useState(false);
   const [cancelBusy, setCancelBusy] = useState(false);
   const [loopProtocolBusy, setLoopProtocolBusy] = useState(false);
-  const [scheduleBusy, setScheduleBusy] = useState<"checkin" | "daily" | undefined>();
+  const [scheduleBusy, setScheduleBusy] = useState<"loop" | "checkin" | "daily" | undefined>();
   const [deletingSessionId, setDeletingSessionId] = useState<string | undefined>();
   const [pendingMessage, setPendingMessage] = useState<PendingMessageView | undefined>();
   const [guidanceReceipts, setGuidanceReceipts] = useState<GuidanceReceiptView[]>([]);
@@ -842,22 +842,31 @@ export function App() {
     }
   }
 
-  async function handleCreateSchedule(kind: "checkin" | "daily") {
+  async function handleCreateSchedule(kind: "loop" | "checkin" | "daily") {
     if (!selectedSessionId || scheduleBusy) return;
     const sessionId = selectedSessionId;
+    const loopTick = kind === "loop";
     const daily = kind === "daily";
-    const next = new Date(Date.now() + (daily ? 24 * 60 * 60 * 1000 : 60 * 60 * 1000));
+    const intervalSeconds = loopTick ? 30 * 60 : daily ? 24 * 60 * 60 : undefined;
+    const firstDelayMs = loopTick ? 30 * 60 * 1000 : daily ? 24 * 60 * 60 * 1000 : 60 * 60 * 1000;
+    const next = new Date(Date.now() + firstDelayMs);
     setScheduleBusy(kind);
     try {
       const resp = await createSessionSchedule(client, sessionId, {
-        prompt: webScheduledCheckInPrompt(selectedSessionTitle ?? sessionId),
+        prompt: loopTick
+          ? webScheduledLoopTickPrompt(selectedSessionTitle ?? sessionId)
+          : webScheduledCheckInPrompt(selectedSessionTitle ?? sessionId),
         next_run_at: toRfc3339Seconds(next),
-        repeat_interval_seconds: daily ? 24 * 60 * 60 : undefined,
+        repeat_interval_seconds: intervalSeconds,
         enabled: true,
       });
       markSessionSchedules(sessionId, resp);
       setScheduleState({ state: "ready", sessionId, schedules: resp.schedules });
-      setStatus({ state: "connected", label: "Ready", detail: daily ? "Daily check-in scheduled" : "Check-in scheduled" });
+      setStatus({
+        state: "connected",
+        label: "Ready",
+        detail: loopTick ? "Loop tick scheduled" : daily ? "Daily check-in scheduled" : "Check-in scheduled",
+      });
     } catch (err) {
       setStatus({ state: "error", label: "Schedule failed", detail: formatError(err) });
     } finally {
@@ -1251,6 +1260,7 @@ export function App() {
                     deletingId={deletingScheduleId}
                     onLoadSchedules={handleLoadSchedules}
                     onDeleteSchedule={handleDeleteSchedule}
+                    onScheduleLoopTick={() => handleCreateSchedule("loop")}
                     onScheduleCheckIn={() => handleCreateSchedule("checkin")}
                     onScheduleDaily={() => handleCreateSchedule("daily")}
                   />
@@ -1338,6 +1348,19 @@ function webScheduledCheckInPrompt(sessionTitle: string): string {
     "If LOOP.md exists, read it with loop_protocol action=read before proposing protocol changes.",
     "Update LOOP.md only after the user answers or when the active loop protocol already gives explicit authority.",
     "Keep concrete task steps in plan state rather than duplicating a todo list into LOOP.md.",
+  ].join("\n");
+}
+
+function webScheduledLoopTickPrompt(sessionTitle: string): string {
+  return [
+    `Scheduled loop tick for session: ${sessionTitle}`,
+    "",
+    "This is an autonomous long-run tick, not a new human instruction.",
+    "Read LOOP.md with loop_protocol action=read before continuing.",
+    "If LOOP.md is missing, draft, disabled, underspecified, or the user's intent is unclear, ask one concise calibration question and do not continue autonomous work.",
+    "If LOOP.md is running, inspect only the minimum needed plan state, memory, recent trace, or artifacts, then advance at most one compact high-value step.",
+    "Prefer evidence-backed progress over broad exploration; update plan state for task progress and update LOOP.md only for durable rules, current situation, recovery anchors, or stop conditions.",
+    "End with a concise status, next trigger expectation, and any blocker that should pause future loop ticks.",
   ].join("\n");
 }
 

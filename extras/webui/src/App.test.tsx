@@ -806,6 +806,92 @@ describe("App", () => {
     expect(screen.queryByTestId("session-schedule-list")).toBeNull();
   });
 
+  it("schedules a recurring loop tick from the automation panel", async () => {
+    const user = userEvent.setup();
+    const fetchImpl = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = String(input);
+      if (url === "/v1/sessions?limit=100") {
+        return jsonResponse({
+          sessions: [
+            {
+              id: "loop-timer",
+              active: true,
+              durable: true,
+              topic_user_message: "long running runtime improvement",
+              has_conversation: false,
+              has_events: false,
+              has_artifacts: false,
+              has_memory: false,
+              has_runtime_skills: false,
+              has_loop_protocol: true,
+              loop_protocol: {
+                path: ".affent/loops/loop-timer/LOOP.md",
+                status: "running",
+                bytes: 512,
+                preview: "Improve Affent long-run reliability.",
+                state: {
+                  version: 1,
+                  loop_id: "loop-timer",
+                  status: "running",
+                  initial_goal_preview: "long running runtime improvement",
+                },
+              },
+              has_schedules: false,
+            },
+          ],
+          has_more: false,
+        });
+      }
+      if (url === "/v1/sessions/loop-timer/history?after=-1&limit=500") {
+        return jsonResponse({ session_id: "loop-timer", events: [], next_after: -1, has_more: false });
+      }
+      if (url === "/v1/sessions/loop-timer/events") return eventStreamResponse("");
+      if (url === "/v1/sessions/loop-timer/schedules" && init?.method === "POST") {
+        return jsonResponse({
+          session_id: "loop-timer",
+          schedules: [
+            {
+              id: "sched_loop",
+              prompt: "Scheduled loop tick for session: long running runtime improvement",
+              enabled: true,
+              next_run_at: "2026-05-27T14:00:00Z",
+              repeat_interval_seconds: 1800,
+              created_at: "2026-05-27T13:30:00Z",
+              updated_at: "2026-05-27T13:30:00Z",
+            },
+          ],
+          summary: {
+            count: 1,
+            enabled: 1,
+            next_run_at: "2026-05-27T14:00:00Z",
+            next_schedule_id: "sched_loop",
+            next_prompt_preview: "Scheduled loop tick for session: long running runtime improvement",
+          },
+        });
+      }
+      return jsonResponse({ error: { message: `unexpected ${url}` } }, 404);
+    });
+    vi.stubGlobal("fetch", fetchImpl);
+
+    render(<App />);
+
+    const panel = await screen.findByTestId("session-schedule-panel");
+    await user.click(within(panel).getByRole("button", { name: "30m loop tick" }));
+
+    await waitFor(() => expect(fetchImpl).toHaveBeenCalledWith("/v1/sessions/loop-timer/schedules", expect.objectContaining({ method: "POST" })));
+    const scheduleCall = fetchImpl.mock.calls.find(([url]) => String(url) === "/v1/sessions/loop-timer/schedules");
+    const body = JSON.parse(String((scheduleCall?.[1] as RequestInit).body)) as { prompt: string; repeat_interval_seconds?: number; enabled: boolean };
+    expect(body.prompt).toContain("Scheduled loop tick for session: long running runtime improvement");
+    expect(body.prompt).toContain("autonomous long-run tick");
+    expect(body.prompt).toContain("loop_protocol action=read");
+    expect(body.prompt).toContain("advance at most one compact high-value step");
+    expect(body.repeat_interval_seconds).toBe(1800);
+    expect(body.enabled).toBe(true);
+    expect(await screen.findByTestId("session-schedule-panel")).toHaveTextContent("1 active");
+    expect(screen.getByTestId("session-schedule-list")).toHaveTextContent("Repeats every 30m");
+    expect(screen.getByTestId("session-list")).toHaveTextContent("timers");
+  });
+
   it("shows artifact output first in the chat context bar when the latest chat has files", async () => {
     const user = userEvent.setup();
     const fetchImpl = vi.fn(async (input: RequestInfo | URL) => {
