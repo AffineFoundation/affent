@@ -34,12 +34,14 @@ describe("SessionLoopPanel", () => {
     );
 
     const panel = screen.getByTestId("session-loop-panel");
-    expect(panel).toHaveTextContent("Setup pending");
+    expect(panel).toHaveTextContent("Activation review");
+    expect(panel).toHaveTextContent("Calibration recorded; ready for activation review");
     expect(screen.getByTestId("session-loop-checklist")).toHaveTextContent("LOOP.md exists but is not running yet");
+    expect(screen.getByTestId("session-loop-checklist")).toHaveTextContent("A calibration answer is recorded");
     expect(panel).toHaveTextContent("Calibration");
     expect(panel).toHaveTextContent("1 calibration answer");
     expect(panel).toHaveTextContent("Stop when source evidence is weak.");
-    expect(screen.getByRole("button", { name: "Answer setup in chat" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Continue setup in chat" })).toBeInTheDocument();
   });
 
   it("surfaces the latest loop memory update as recovery context", () => {

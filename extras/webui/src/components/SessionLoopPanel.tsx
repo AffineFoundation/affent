@@ -86,10 +86,13 @@ export function SessionLoopPanel({
   const memory = loopMemoryUpdate(state);
   const compaction = loopCompaction(state);
   const calibration = loopCalibration(state);
+  const calibrationAnswers = state?.calibration_answers ?? 0;
   const disabled = status === "disabled";
   const draft = status === "draft";
   const title = disabled ? "Disabled" : statusLabel(status);
-  const detail = draft ? "Waiting for calibration answer" : loopDetail({ goal, feeds, updates, event });
+  const detail = draft
+    ? calibrationAnswers > 0 ? "Calibration recorded; ready for activation review" : "Waiting for calibration answer"
+    : loopDetail({ goal, feeds, updates, event });
 
   return (
     <details className="session-plan-panel session-loop-panel" data-testid="session-loop-panel" open={!disabled}>
@@ -99,8 +102,8 @@ export function SessionLoopPanel({
         <span>{detail}</span>
       </summary>
       <div className="session-plan-body session-loop-body">
-        <LoopStatusCallout status={disabled ? "disabled" : draft ? "draft" : status === "running" ? "running" : "unknown"} />
-        <LoopActivationChecklist status={disabled ? "disabled" : draft ? "draft" : status === "running" ? "running" : "unknown"} />
+        <LoopStatusCallout status={disabled ? "disabled" : draft ? "draft" : status === "running" ? "running" : "unknown"} calibrationAnswers={calibrationAnswers} />
+        <LoopActivationChecklist status={disabled ? "disabled" : draft ? "draft" : status === "running" ? "running" : "unknown"} calibrationAnswers={calibrationAnswers} />
         <div className="session-loop-grid">
           {goal ? <LoopField label="Goal" value={goal} /> : null}
           {path ? <LoopField label="File" value={path} mono /> : null}
@@ -133,7 +136,7 @@ export function SessionLoopPanel({
           {protocol ? <CopyButton label="Copy LOOP.md" value={protocol} className="ghost-action" /> : null}
           {onUseAsDraft && !disabled ? (
             <button type="button" className="ghost-action" onClick={onUseAsDraft}>
-              {draft ? "Answer setup in chat" : "Update via chat"}
+              {draft ? calibrationAnswers > 0 ? "Continue setup in chat" : "Answer setup in chat" : "Update via chat"}
             </button>
           ) : null}
           {!disabled && onDisable ? (
@@ -147,8 +150,8 @@ export function SessionLoopPanel({
   );
 }
 
-function LoopActivationChecklist({ status }: { status: "off" | "draft" | "running" | "disabled" | "unknown" }) {
-  const steps = loopActivationSteps(status);
+function LoopActivationChecklist({ status, calibrationAnswers = 0 }: { status: "off" | "draft" | "running" | "disabled" | "unknown"; calibrationAnswers?: number }) {
+  const steps = loopActivationSteps(status, calibrationAnswers);
   if (steps.length === 0) return null;
   return (
     <ol className="session-loop-checklist" data-testid="session-loop-checklist" aria-label="Loop activation flow">
@@ -165,7 +168,7 @@ function LoopActivationChecklist({ status }: { status: "off" | "draft" | "runnin
   );
 }
 
-function loopActivationSteps(status: "off" | "draft" | "running" | "disabled" | "unknown") {
+function loopActivationSteps(status: "off" | "draft" | "running" | "disabled" | "unknown", calibrationAnswers = 0) {
   if (status === "disabled") return [];
   if (status === "running") {
     return [
@@ -174,10 +177,11 @@ function loopActivationSteps(status: "off" | "draft" | "running" | "disabled" | 
     ];
   }
   const draft = status === "draft";
+  const answered = draft && calibrationAnswers > 0;
   return [
     { label: "Create draft", detail: draft ? "LOOP.md exists but is not running yet." : "Set up LOOP.md before autonomous work starts.", state: draft ? "done" : "active", icon: draft ? "OK" : "1" },
-    { label: "Ask calibration", detail: "Affent asks for intent, stop conditions, memory policy, and recovery expectations.", state: draft ? "active" : "pending", icon: draft ? "!" : "2" },
-    { label: "Activate after answer", detail: "Only then can the model complete_activation and future timers run.", state: "pending", icon: "3" },
+    { label: "Ask calibration", detail: answered ? "A calibration answer is recorded for this LOOP.md." : "Affent asks for intent, stop conditions, memory policy, and recovery expectations.", state: answered ? "done" : draft ? "active" : "pending", icon: answered ? "OK" : draft ? "!" : "2" },
+    { label: "Activate after answer", detail: "Only then can the model complete_activation and future timers run.", state: answered ? "active" : "pending", icon: answered ? "!" : "3" },
   ];
 }
 
@@ -221,8 +225,8 @@ function loopEventLabel(type: string): string {
   return type;
 }
 
-function LoopStatusCallout({ status }: { status: "off" | "draft" | "running" | "disabled" | "unknown" }) {
-  const copy = loopStatusCopy(status);
+function LoopStatusCallout({ status, calibrationAnswers = 0 }: { status: "off" | "draft" | "running" | "disabled" | "unknown"; calibrationAnswers?: number }) {
+  const copy = loopStatusCopy(status, calibrationAnswers);
   return (
     <div className={`session-loop-callout ${status}`} data-testid="session-loop-callout">
       <strong>{copy.title}</strong>
@@ -231,8 +235,14 @@ function LoopStatusCallout({ status }: { status: "off" | "draft" | "running" | "
   );
 }
 
-function loopStatusCopy(status: "off" | "draft" | "running" | "disabled" | "unknown") {
+function loopStatusCopy(status: "off" | "draft" | "running" | "disabled" | "unknown", calibrationAnswers = 0) {
   if (status === "draft") {
+    if (calibrationAnswers > 0) {
+      return {
+        title: "Activation review",
+        detail: "Affent has your calibration answer and should update LOOP.md before activating.",
+      };
+    }
     return {
       title: "Setup pending",
       detail: "Affent must ask, update LOOP.md, then activate after your answer.",
