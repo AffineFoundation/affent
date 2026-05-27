@@ -242,6 +242,9 @@ func writeSessionLoopProtocol(pool *SessionPool, sessionID string, req sessionLo
 		}
 		return protocol, summary, *statePtr, events, nil
 	}
+	if err := validateNonActivatingLoopProtocolUpdate(path, req.Protocol); err != nil {
+		return "", sessionLoopProtocolSummary{}, loopstate.State{}, nil, sessionLoopProtocolValidationError{err: err}
+	}
 	if err := loopstate.WriteProtocol(path, req.Protocol); err != nil {
 		return "", sessionLoopProtocolSummary{}, loopstate.State{}, nil, err
 	}
@@ -269,6 +272,20 @@ func writeSessionLoopProtocol(pool *SessionPool, sessionID string, req sessionLo
 		return "", sessionLoopProtocolSummary{}, loopstate.State{}, nil, os.ErrNotExist
 	}
 	return protocol, summary, *statePtr, events, nil
+}
+
+func validateNonActivatingLoopProtocolUpdate(path, protocol string) error {
+	if loopstate.ProtocolStatus(protocol) != "running" {
+		return nil
+	}
+	current, found, err := loopstate.ReadProtocol(path)
+	if err != nil {
+		return err
+	}
+	if found && loopstate.ProtocolStatus(current) == "running" {
+		return nil
+	}
+	return errors.New("status: running requires activate=true after loop calibration; ordinary protocol updates cannot activate LOOP.md")
 }
 
 func clearSessionLoopProtocol(pool *SessionPool, sessionID string) (bool, *loopstate.State, []loopstate.Event, error) {

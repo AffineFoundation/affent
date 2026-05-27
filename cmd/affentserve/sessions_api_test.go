@@ -1065,7 +1065,7 @@ func TestHandleSessionLoopProtocolUpdate_WritesDurableProtocolWithoutReopeningSe
 
 - loop_id: api-loop
 - owner_session: api-loop
-- status: running
+- status: draft
 
 ## 1. North Star
 
@@ -1087,10 +1087,10 @@ Keep API-created loop state durable.`
 	if resp.SessionID != "api-loop" || resp.Protocol != protocol {
 		t.Fatalf("response = %+v", resp)
 	}
-	if resp.Summary == nil || resp.Summary.Status != "running" || resp.Summary.Path != loopstate.ProtocolRelPath("api-loop") {
+	if resp.Summary == nil || resp.Summary.Status != "draft" || resp.Summary.Path != loopstate.ProtocolRelPath("api-loop") {
 		t.Fatalf("summary = %+v", resp.Summary)
 	}
-	if resp.State == nil || resp.State.LoopID != "api-loop" || resp.State.Status != "running" || resp.State.ProtocolUpdates != 1 || resp.State.EventCount != 1 {
+	if resp.State == nil || resp.State.LoopID != "api-loop" || resp.State.Status != "draft" || resp.State.ProtocolUpdates != 1 || resp.State.EventCount != 1 {
 		t.Fatalf("state = %+v", resp.State)
 	}
 	if len(resp.Events) != 1 || resp.Events[0].Type != "loop.protocol_update" || resp.Events[0].Reason != "initial long-run protocol" || resp.Events[0].Seq != 1 {
@@ -1113,6 +1113,70 @@ Keep API-created loop state durable.`
 	events, found, err := loopstate.ReadRecentEvents(sessionLoopEventsPath(pool, "api-loop"), 10)
 	if err != nil || !found || len(events) != 1 {
 		t.Fatalf("ReadRecentEvents found=%v len=%d err=%v", found, len(events), err)
+	}
+}
+
+func TestHandleSessionLoopProtocolUpdate_RejectsRunningTransitionWithoutActivation(t *testing.T) {
+	memRoot := t.TempDir()
+	pool := newPoolWithMemoryRoot(t, memRoot)
+	protocol := `# Loop Protocol: API
+
+## 0. Metadata
+
+- loop_id: api-loop-bypass
+- owner_session: api-loop-bypass
+- status: running
+
+## 1. North Star
+
+Keep API-created loop state durable.`
+
+	r := httptest.NewRequest(http.MethodPost, "/v1/sessions/api-loop-bypass/loop-protocol", strings.NewReader(`{"protocol":`+strconv.Quote(protocol)+`,"reason":"bypass activation"}`))
+	w := httptest.NewRecorder()
+	handleSessionRoutes(pool).ServeHTTP(w, r)
+	if got := w.Result().StatusCode; got != http.StatusBadRequest {
+		t.Fatalf("status = %d, want 400; body=%s", got, w.Body.String())
+	}
+	if !strings.Contains(w.Body.String(), "requires activate=true") {
+		t.Fatalf("response missing activation guidance: %s", w.Body.String())
+	}
+	if _, found, err := loopstate.ReadProtocol(sessionLoopProtocolPath(pool, "api-loop-bypass")); err != nil || found {
+		t.Fatalf("rejected update must not write protocol found=%v err=%v", found, err)
+	}
+}
+
+func TestHandleSessionLoopProtocolUpdate_AllowsRunningProtocolMaintenance(t *testing.T) {
+	memRoot := t.TempDir()
+	pool := newPoolWithMemoryRoot(t, memRoot)
+	createDurableSessionDir(t, pool, "api-loop-running")
+	writeLoopProtocolStatusFixture(t, pool, "api-loop-running", "running")
+	protocol := `# Loop Protocol: API
+
+## 0. Metadata
+
+- loop_id: api-loop-running
+- owner_session: api-loop-running
+- status: running
+
+## 1. North Star
+
+Maintain active loop recovery anchors.`
+
+	r := httptest.NewRequest(http.MethodPost, "/v1/sessions/api-loop-running/loop-protocol", strings.NewReader(`{"protocol":`+strconv.Quote(protocol)+`,"reason":"maintain active loop"}`))
+	w := httptest.NewRecorder()
+	handleSessionRoutes(pool).ServeHTTP(w, r)
+	if got := w.Result().StatusCode; got != http.StatusOK {
+		t.Fatalf("status = %d, want 200; body=%s", got, w.Body.String())
+	}
+	var resp sessionLoopProtocolResponse
+	if err := json.Unmarshal(w.Body.Bytes(), &resp); err != nil {
+		t.Fatalf("decode: %v", err)
+	}
+	if resp.Summary == nil || resp.Summary.Status != "running" || resp.State == nil || resp.State.Status != "running" {
+		t.Fatalf("response = %+v, want running protocol maintenance", resp)
+	}
+	if !strings.Contains(resp.Protocol, "Maintain active loop recovery anchors.") {
+		t.Fatalf("protocol not updated:\n%s", resp.Protocol)
 	}
 }
 
@@ -1338,10 +1402,13 @@ func TestHandleSessionLoopProtocolReturnsRuntimeSidecarCheckpoints(t *testing.T)
 	protocol := `# Loop
 
 - status: running`
-	if _, _, _, _, err := writeSessionLoopProtocol(pool, "loop-visible", sessionLoopProtocolUpdateRequest{Protocol: protocol, Reason: "activate"}); err != nil {
+	protocolPath := sessionLoopProtocolPath(pool, "loop-visible")
+	if err := loopstate.WriteProtocol(protocolPath, protocol); err != nil {
 		t.Fatalf("write protocol: %v", err)
 	}
-	protocolPath := sessionLoopProtocolPath(pool, "loop-visible")
+	if _, _, err := loopstate.RecordProtocolUpdate(protocolPath, "activate", nil); err != nil {
+		t.Fatalf("record protocol update: %v", err)
+	}
 	if _, _, err := loopstate.RecordMemoryUpdate(protocolPath, loopstate.MemoryUpdateCheckpoint{
 		TurnID:          "turn_mem",
 		CallID:          "memory-1",
