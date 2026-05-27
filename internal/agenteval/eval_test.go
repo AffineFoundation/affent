@@ -1230,8 +1230,8 @@ func TestSelectLiveWebSuite(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(scenarios) != 2 {
-		t.Fatalf("live-web suite size = %d, want 2", len(scenarios))
+	if len(scenarios) != 3 {
+		t.Fatalf("live-web suite size = %d, want 3", len(scenarios))
 	}
 	seen := map[string]BatchScenario{}
 	for _, scenario := range scenarios {
@@ -1304,6 +1304,51 @@ func TestSelectLiveWebSuite(t *testing.T) {
 	for _, want := range []string{"web_fetch", "browser_network_url", "requested_url", "ref=", "status=", "content_type=", "source_method"} {
 		if !stringSliceContains(recovery.RequiredFinalText, want) {
 			t.Fatalf("live-web recovery RequiredFinalText = %#v, want %q", recovery.RequiredFinalText, want)
+		}
+	}
+
+	scrollRecovery, ok := seen["live-web-taostats-scroll-network-recovery"]
+	if !ok {
+		t.Fatalf("live-web suite missing scroll network recovery scenario")
+	}
+	for _, want := range []string{"browser_navigate", "browser_scroll", "browser_network_read"} {
+		if !stringSliceContains(scrollRecovery.RequiredTools, want) {
+			t.Fatalf("live-web scroll recovery RequiredTools = %#v, want %q", scrollRecovery.RequiredTools, want)
+		}
+	}
+	if scrollRecovery.RequiredToolCounts["browser_scroll"] != 1 || scrollRecovery.RequiredToolCounts["browser_network_read"] != 1 {
+		t.Fatalf("live-web scroll recovery tool counts = %#v, want browser_scroll/browser_network_read once", scrollRecovery.RequiredToolCounts)
+	}
+	for _, want := range []ToolArgContainsRequirement{
+		{Tool: "browser_navigate", Arg: "url", Substring: "taostats.io/subnets/120"},
+		{Tool: "browser_scroll", Arg: "direction", Substring: "down"},
+	} {
+		if !toolArgRequirementContains(scrollRecovery.RequiredToolArgContains, want) {
+			t.Fatalf("live-web scroll recovery RequiredToolArgContains = %#v, want %#v", scrollRecovery.RequiredToolArgContains, want)
+		}
+	}
+	if len(scrollRecovery.RequiredToolOrder) != 2 ||
+		scrollRecovery.RequiredToolOrder[0] != (ToolOrderRequirement{Earlier: "browser_navigate", Later: "browser_scroll"}) ||
+		scrollRecovery.RequiredToolOrder[1] != (ToolOrderRequirement{Earlier: "browser_scroll", Later: "browser_network_read"}) {
+		t.Fatalf("live-web scroll recovery tool order = %#v", scrollRecovery.RequiredToolOrder)
+	}
+	if len(scrollRecovery.RequiredSourceAccess) != 1 ||
+		scrollRecovery.RequiredSourceAccess[0] != (SourceAccessRequirement{Status: "network", Tool: "browser_network_read", URLContains: "taostats.io", RequestedURLContains: "taostats.io/subnets/120", SourceMethod: "network_xhr_fetch"}) {
+		t.Fatalf("live-web scroll recovery RequiredSourceAccess = %#v", scrollRecovery.RequiredSourceAccess)
+	}
+	for _, want := range []string{"SourceAccess:", "SCROLL:"} {
+		if !stringSliceContains(scrollRecovery.RequiredToolResultText["browser_scroll"], want) {
+			t.Fatalf("live-web scroll recovery browser_scroll result requirements = %#v, want %q", scrollRecovery.RequiredToolResultText["browser_scroll"], want)
+		}
+	}
+	for _, want := range []string{"SourceAccess:", "browser_network_url=", "requested_url=", "ref=", "status=", "content_type=", "source_method=network_xhr_fetch"} {
+		if !stringSliceContains(scrollRecovery.RequiredToolResultText["browser_network_read"], want) {
+			t.Fatalf("live-web scroll recovery browser_network_read result requirements = %#v, want %q", scrollRecovery.RequiredToolResultText["browser_network_read"], want)
+		}
+	}
+	for _, want := range []string{"browser_scroll", "browser_network_url", "requested_url", "ref=", "status=", "content_type=", "source_method", "未验证"} {
+		if !stringSliceContains(scrollRecovery.RequiredFinalText, want) {
+			t.Fatalf("live-web scroll recovery RequiredFinalText = %#v, want %q", scrollRecovery.RequiredFinalText, want)
 		}
 	}
 }
