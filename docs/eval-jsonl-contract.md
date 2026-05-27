@@ -99,8 +99,10 @@ Scenario records describe one eval case:
 - `expectations`: optional structured copy of the scenario's declarative checks,
   including required/forbidden tools, tool counts, source-access requirements,
   loop-decision requirements, loop protocol feed and active plan checkpoint
-  requirements, context-compaction requirements, plan/delegation constraints,
-  protected files, and related max-turn/compaction settings. This
+  requirements, context-compaction requirements, optional
+  `required_context_loop_protocol_anchor_text` checks for post-compaction
+  `LOOP.md` recovery anchors, plan/delegation constraints, protected files,
+  and related max-turn/compaction settings. This
   lets batch-analysis scripts inspect why a scenario passed or failed without
   reopening the debug manifest.
 - `expectation_capability_names`, `expectation_capability_outcome`,
@@ -283,7 +285,9 @@ Scenario records describe one eval case:
 - `context_compaction_examples`: optional bounded examples of context
   compaction events. Each sample includes the turn id, before/after message
   counts, removed message count, reactive/proactive flag, reason, and summary
-  byte size. Summary records include the originating scenario.
+  byte size. Samples may also include `loop_protocol_anchor` when compaction
+  preserved a recoverable `LOOP.md` pointer. Summary records include the
+  originating scenario.
 - `context_compactions`, `context_compactions_reactive`,
   `context_compaction_removed_messages`, `context_compaction_summary_bytes`,
   `context_compaction_summary_missing`, and

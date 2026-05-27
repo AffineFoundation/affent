@@ -1374,10 +1374,12 @@ func longRunMultiTaskSessionRecoveryScenario() BatchScenario {
 
 func longRunContextCompactionRetentionScenario() BatchScenario {
 	return BatchScenario{
-		Name:   "longrun-context-compaction-retention",
-		Suites: []string{longRunSuite},
-		Prompt: "你正在恢复一个会触发上下文压缩的多任务 session。请按顺序读取 current/phase.md、current/stock.md、current/subnet.md、current/pr.md、current/evidence.md，然后只根据这些 current 文件输出 phase marker、stock marker、subnet marker、PR marker、evidence source。不要运行 shell，不要搜索，不要修改文件。最终必须保留 COMPRESS-PHASE-09、COMPRESS-HRO-31、COMPRESS-SN120-42、COMPRESS-PR-77。",
+		Name:      "longrun-context-compaction-retention",
+		Suites:    []string{longRunSuite},
+		SessionID: "longrun-compaction-retention",
+		Prompt:    "你正在恢复一个会触发上下文压缩的多任务 session。请按顺序读取 current/phase.md、current/stock.md、current/subnet.md、current/pr.md、current/evidence.md，然后只根据这些 current 文件输出 phase marker、stock marker、subnet marker、PR marker、evidence source。不要运行 shell，不要搜索，不要修改文件。最终必须保留 COMPRESS-PHASE-09、COMPRESS-HRO-31、COMPRESS-SN120-42、COMPRESS-PR-77。",
 		Files: map[string]string{
+			".affent/loops/longrun-compaction-retention/LOOP.md": "# Loop Protocol\n\n## North Star\nPreserve the active long-run recovery contract through context compaction and keep current/*.md as authoritative handoff state.\n\n## Memory\nProject memory for this scenario lives in the current/*.md handoff files.\n\n## Recovery\nAfter compaction, keep this loop protocol path and loop_id visible before continuing.\n",
 			"current/phase.md":    "Current phase marker: COMPRESS-PHASE-09. Use only current/*.md as authoritative handoff state.\n",
 			"current/stock.md":    "Helio Robotics stock marker: COMPRESS-HRO-31. Current risk label: inventory-normalization. Next action: compare Q3 backlog with revenue conversion.\n",
 			"current/subnet.md":   "Bittensor Affine SN120 subnet marker: COMPRESS-SN120-42. Current risk label: validator-concentration. Next action: recheck emissions and miner dispersion.\n",
@@ -1403,6 +1405,14 @@ func longRunContextCompactionRetentionScenario() BatchScenario {
 			"COMPRESS-SN120-42",
 			"COMPRESS-PR-77",
 		},
+		RequiredContextLoopProtocolAnchorText: []string{
+			".affent/loops/longrun-compaction-retention/LOOP.md",
+			"loop_id=longrun-compaction-retention",
+		},
+		RequiredLoopProtocolFeeds: 1,
+		RequiredLoopProtocolFeedModes: map[string]int{
+			"full": 1,
+		},
 		RequiredFinalText: []string{
 			"COMPRESS-PHASE-09",
 			"COMPRESS-HRO-31",
@@ -1417,6 +1427,7 @@ func longRunContextCompactionRetentionScenario() BatchScenario {
 		},
 		ForbiddenTools: []string{"shell", "repo_search", "web_fetch", "web_search", "write_file", "edit_file"},
 		ProtectedFiles: []string{
+			".affent/loops/longrun-compaction-retention/LOOP.md",
 			"current/phase.md",
 			"current/stock.md",
 			"current/subnet.md",

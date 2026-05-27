@@ -466,7 +466,7 @@ func renderTimelineScenarioExpectations(b *strings.Builder, scenario BatchScenar
 			fmt.Fprintf(b, "- required_tool_arg: `%s.%s` contains `%s` min=`%d`\n", req.Tool, req.Arg, timelineInline(req.Substring, 160), min)
 		}
 	}
-	if exp.RequiredContextCompactions > 0 || exp.RequiredReactiveCompactions > 0 || exp.RequiredCompactionRemovedMsgs > 0 || len(exp.RequiredContextSummaryText) > 0 {
+	if exp.RequiredContextCompactions > 0 || exp.RequiredReactiveCompactions > 0 || exp.RequiredCompactionRemovedMsgs > 0 || len(exp.RequiredContextSummaryText) > 0 || len(exp.RequiredContextLoopProtocolAnchorText) > 0 {
 		var parts []string
 		if exp.RequiredContextCompactions > 0 {
 			parts = append(parts, fmt.Sprintf("compactions>=%d", exp.RequiredContextCompactions))
@@ -481,6 +481,7 @@ func renderTimelineScenarioExpectations(b *strings.Builder, scenario BatchScenar
 			fmt.Fprintf(b, "- context_requirements: `%s`\n", strings.Join(parts, " "))
 		}
 		writeTimelineStringList(b, "context_summary_contains", exp.RequiredContextSummaryText)
+		writeTimelineStringList(b, "context_loop_protocol_anchor_contains", exp.RequiredContextLoopProtocolAnchorText)
 	}
 	writeTimelineStringList(b, "protected_files", exp.ProtectedFiles)
 	writeTimelineStringSliceMap(b, "forbidden_file_substrings", exp.ForbiddenFileSubstrings)
@@ -530,6 +531,7 @@ func hasTimelineScenarioExpectations(exp DebugScenarioExpectations) bool {
 		exp.RequiredReactiveCompactions > 0 ||
 		exp.RequiredCompactionRemovedMsgs > 0 ||
 		len(exp.RequiredContextSummaryText) > 0 ||
+		len(exp.RequiredContextLoopProtocolAnchorText) > 0 ||
 		len(exp.ProtectedFiles) > 0 ||
 		len(exp.ForbiddenFileSubstrings) > 0 ||
 		exp.MaxParentToolCalls > 0 ||

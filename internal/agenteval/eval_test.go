@@ -1067,6 +1067,9 @@ func TestSelectLongRunSuite(t *testing.T) {
 	if compactionRetention.CompactTrigger != 6 || compactionRetention.CompactKeepLast != 3 {
 		t.Fatalf("compaction retention settings = trigger:%d keep_last:%d, want 6/3", compactionRetention.CompactTrigger, compactionRetention.CompactKeepLast)
 	}
+	if compactionRetention.SessionID != "longrun-compaction-retention" {
+		t.Fatalf("compaction retention SessionID = %q, want longrun-compaction-retention", compactionRetention.SessionID)
+	}
 	if compactionRetention.RequiredContextCompactions != 1 || compactionRetention.RequiredCompactionRemovedMsgs != 1 {
 		t.Fatalf("compaction retention requirements = compactions:%d removed:%d, want 1/1", compactionRetention.RequiredContextCompactions, compactionRetention.RequiredCompactionRemovedMsgs)
 	}
@@ -1077,6 +1080,20 @@ func TestSelectLongRunSuite(t *testing.T) {
 		if !stringSliceContains(compactionRetention.RequiredContextSummaryText, want) {
 			t.Fatalf("compaction retention RequiredContextSummaryText = %#v, want %q", compactionRetention.RequiredContextSummaryText, want)
 		}
+	}
+	for _, want := range []string{".affent/loops/longrun-compaction-retention/LOOP.md", "loop_id=longrun-compaction-retention"} {
+		if !stringSliceContains(compactionRetention.RequiredContextLoopProtocolAnchorText, want) {
+			t.Fatalf("compaction retention RequiredContextLoopProtocolAnchorText = %#v, want %q", compactionRetention.RequiredContextLoopProtocolAnchorText, want)
+		}
+	}
+	if compactionRetention.RequiredLoopProtocolFeeds != 1 || compactionRetention.RequiredLoopProtocolFeedModes["full"] != 1 {
+		t.Fatalf("compaction retention loop protocol constraints = feeds:%d modes:%#v", compactionRetention.RequiredLoopProtocolFeeds, compactionRetention.RequiredLoopProtocolFeedModes)
+	}
+	if _, ok := compactionRetention.Files[".affent/loops/longrun-compaction-retention/LOOP.md"]; !ok {
+		t.Fatalf("compaction retention missing seeded LOOP.md")
+	}
+	if !stringSliceContains(compactionRetention.ProtectedFiles, ".affent/loops/longrun-compaction-retention/LOOP.md") {
+		t.Fatalf("compaction retention ProtectedFiles = %#v, want LOOP.md", compactionRetention.ProtectedFiles)
 	}
 	if !stringSliceContains(compactionRetention.ForbiddenTools, "shell") {
 		t.Fatalf("compaction retention ForbiddenTools = %#v, want shell", compactionRetention.ForbiddenTools)
@@ -1683,7 +1700,10 @@ func TestWriteScenarioDebugArtifactsIndexesTraceAndFinalText(t *testing.T) {
 		RequiredContextCompactions:    1,
 		RequiredCompactionRemovedMsgs: 12,
 		RequiredContextSummaryText:    []string{"browser network evidence"},
-		ProtectedFiles:                []string{"README.md"},
+		RequiredContextLoopProtocolAnchorText: []string{
+			"path=.affent/loops/debug/LOOP.md",
+		},
+		ProtectedFiles: []string{"README.md"},
 		ForbiddenFileSubstrings: map[string][]string{
 			"notes.md": {"uncited taostats metric"},
 		},
@@ -1748,6 +1768,7 @@ func TestWriteScenarioDebugArtifactsIndexesTraceAndFinalText(t *testing.T) {
 		!stringSliceContains(manifest.Expectations.CheckNames, "turn_ended_cleanly") ||
 		!stringSliceContains(manifest.Expectations.CheckNames, "tool_called:web_fetch") ||
 		!stringSliceContains(manifest.Expectations.CheckNames, "context_compaction_summary_contains:browser network evidence") ||
+		!stringSliceContains(manifest.Expectations.CheckNames, "context_compaction_loop_protocol_anchor_contains:path=.affent/loops/debug/LOOP.md") ||
 		!reflect.DeepEqual(manifest.Expectations.Suites, []string{longRunSuite, liveWebSuite}) ||
 		!reflect.DeepEqual(manifest.Expectations.RequiredTools, []string{"web_fetch", "browser_network_read"}) ||
 		!reflect.DeepEqual(manifest.Expectations.ForbiddenTools, []string{"shell"}) ||
@@ -1788,6 +1809,7 @@ func TestWriteScenarioDebugArtifactsIndexesTraceAndFinalText(t *testing.T) {
 		manifest.Expectations.RequiredContextCompactions != 1 ||
 		manifest.Expectations.RequiredCompactionRemovedMsgs != 12 ||
 		!stringSliceContains(manifest.Expectations.RequiredContextSummaryText, "browser network evidence") ||
+		!stringSliceContains(manifest.Expectations.RequiredContextLoopProtocolAnchorText, "path=.affent/loops/debug/LOOP.md") ||
 		!reflect.DeepEqual(manifest.Expectations.ProtectedFiles, []string{"README.md"}) ||
 		!reflect.DeepEqual(manifest.Expectations.ForbiddenFileSubstrings["notes.md"], []string{"uncited taostats metric"}) {
 		t.Fatalf("manifest expectations = %+v", manifest.Expectations)
@@ -2009,6 +2031,7 @@ func TestWriteScenarioDebugArtifactsIndexesTraceAndFinalText(t *testing.T) {
 		"required_tool_arg: `browser_network_read.json_path` contains `$.price` min=`1`",
 		"context_requirements: `compactions>=1 removed_messages>=12`",
 		"context_summary_contains: `browser network evidence`",
+		"context_loop_protocol_anchor_contains: `path=.affent/loops/debug/LOOP.md`",
 		"protected_files: `README.md`",
 		"forbidden_file_substrings[notes.md]: `uncited taostats metric`",
 		"evidence: `1/2` verified, network=`1`, partial=`1`, discovery=`1`",

@@ -693,7 +693,7 @@ func TestLoopProtocolFeedChecks(t *testing.T) {
 
 func TestContextCompactionChecks(t *testing.T) {
 	trace := Trace{ContextCompactions: []ContextCompaction{
-		{TurnID: "t1", BeforeMessages: 50, AfterMessages: 20, RemovedMessages: 30, Reactive: false, Reason: "threshold", SummaryPresent: true, SummaryBytes: 1200, SummaryPreview: "USER_CONTEXT: keep HRO market marker and source URLs."},
+		{TurnID: "t1", BeforeMessages: 50, AfterMessages: 20, RemovedMessages: 30, Reactive: false, Reason: "threshold", SummaryPresent: true, SummaryBytes: 1200, SummaryPreview: "USER_CONTEXT: keep HRO market marker and source URLs.", LoopProtocolAnchor: "LOOP_PROTOCOL: active path=.affent/loops/longrun/LOOP.md loop_id=longrun mode=digest"},
 		{TurnID: "t2", BeforeMessages: 40, AfterMessages: 10, RemovedMessages: 30, Reactive: true, Reason: "context_overflow", SummaryPresent: true, SummaryBytes: 900, SummaryPreview: "TASK_TRACKING: preserve Affine SN120 subnet risks."},
 	}}
 	stats := trace.ContextCompactionStats(1)
@@ -715,6 +715,9 @@ func TestContextCompactionChecks(t *testing.T) {
 	if res := ContextCompactionSummaryContains("Affine SN120").Eval(trace); !res.Pass {
 		t.Fatalf("expected context summary content check to pass: %+v", res)
 	}
+	if res := ContextCompactionLoopProtocolAnchorContains("loop_id=longrun").Eval(trace); !res.Pass {
+		t.Fatalf("expected context loop anchor content check to pass: %+v", res)
+	}
 	res := ReactiveContextCompactionsAtLeast(2).Eval(trace)
 	if res.Pass {
 		t.Fatal("expected reactive compaction check to fail")
@@ -728,6 +731,13 @@ func TestContextCompactionChecks(t *testing.T) {
 	}
 	if !strings.Contains(res.Detail, "missing marker") || !strings.Contains(res.Detail, "HRO market marker") {
 		t.Fatalf("failure detail should include requested marker and observed previews: %s", res.Detail)
+	}
+	res = ContextCompactionLoopProtocolAnchorContains("missing-loop").Eval(trace)
+	if res.Pass {
+		t.Fatal("expected missing context loop anchor marker to fail")
+	}
+	if !strings.Contains(res.Detail, "missing-loop") || !strings.Contains(res.Detail, ".affent/loops/longrun/LOOP.md") {
+		t.Fatalf("failure detail should include requested marker and observed anchors: %s", res.Detail)
 	}
 }
 

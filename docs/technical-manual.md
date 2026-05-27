@@ -784,6 +784,10 @@ summarizer model omits that detail from its natural-language summary. The
 runtime also mirrors that line into the `context.compacted`
 `loop_protocol_anchor` field so trace, WebUI, and eval tooling can display it
 without relying on the bounded summary preview.
+Long-run eval scenarios can assert required anchor substrings through
+`required_context_loop_protocol_anchor_text`, which catches regressions where
+ordinary compaction still fires but loses the per-session `LOOP.md` recovery
+pointer.
 Eval debug manifests index the retained child transcript paths and sizes under
 `child_transcripts`, and timelines include a `Child Transcripts` section, so
 operators can jump to isolated child work without pushing transcript contents

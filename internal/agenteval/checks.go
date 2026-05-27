@@ -609,6 +609,31 @@ func ContextCompactionSummaryContains(substr string) Check {
 	}
 }
 
+func ContextCompactionLoopProtocolAnchorContains(substr string) Check {
+	return Check{
+		Name: fmt.Sprintf("context_compaction_loop_protocol_anchor_contains:%s", previewSubstr(substr, 32)),
+		Eval: func(t Trace) CheckResult {
+			var anchors []string
+			for _, c := range t.ContextCompactions {
+				anchor := strings.TrimSpace(c.LoopProtocolAnchor)
+				if anchor == "" {
+					continue
+				}
+				if strings.Contains(anchor, substr) {
+					return CheckResult{Pass: true, Detail: fmt.Sprintf("matched turn_id=%s", c.TurnID)}
+				}
+				if len(anchors) < 3 {
+					anchors = append(anchors, previewSubstr(anchor, 160))
+				}
+			}
+			return CheckResult{
+				Pass:   false,
+				Detail: fmt.Sprintf("expected a context compaction loop protocol anchor to contain %q; compactions=%d anchors=%v", substr, len(t.ContextCompactions), anchors),
+			}
+		},
+	}
+}
+
 func SourceAccessMatchAtLeast(status, toolName, urlContains, sourceMethod, jsonPath string, min int) Check {
 	return SourceAccessMatchWithRequestedAtLeast(status, toolName, urlContains, "", sourceMethod, jsonPath, min)
 }
