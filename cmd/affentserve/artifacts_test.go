@@ -71,6 +71,9 @@ func TestHandleSessionArtifacts_ListAndReadChunks(t *testing.T) {
 	if len(list.Artifacts) != 1 || list.Artifacts[0].Path != artifactRel || list.Artifacts[0].Size != 16 {
 		t.Fatalf("artifact list = %+v", list.Artifacts)
 	}
+	if list.Artifacts[0].Preview != "0123456789abcdef" || list.Artifacts[0].PreviewTruncated {
+		t.Fatalf("artifact preview = %q truncated=%v", list.Artifacts[0].Preview, list.Artifacts[0].PreviewTruncated)
+	}
 	if list.HasMore || list.NextAfter != "" {
 		t.Fatalf("single artifact list cursor = has_more:%v next:%q, want false/empty", list.HasMore, list.NextAfter)
 	}
@@ -198,6 +201,44 @@ func TestHandleSessionArtifacts_ListPaginatesByArtifactPath(t *testing.T) {
 	}
 	if page2.HasMore || page2.NextAfter != "" {
 		t.Fatalf("page2 cursor = has_more:%v next:%q, want false/empty", page2.HasMore, page2.NextAfter)
+	}
+}
+
+func TestHandleSessionArtifacts_ListReturnsBoundedPreview(t *testing.T) {
+	memRoot := t.TempDir()
+	pool := artifactTestPool(t, memRoot)
+	sessionID := "artifact-preview"
+	root := filepath.Join(memRoot, sessionID, filepath.FromSlash(artifactPathPrefix))
+	if err := os.MkdirAll(root, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	body := "first line\n\nsecond\tline " + strings.Repeat("x", artifactListPreviewBytes+128)
+	if err := os.WriteFile(filepath.Join(root, "000001-large.txt"), []byte(body), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	r := httptest.NewRequest(http.MethodGet, "/v1/sessions/"+sessionID+"/artifacts", nil)
+	w := httptest.NewRecorder()
+	handleSessionArtifacts(pool, sessionID, "", w, r)
+	if got := w.Result().StatusCode; got != http.StatusOK {
+		t.Fatalf("status = %d: %s", got, w.Body.String())
+	}
+	var list artifactListResponse
+	if err := json.Unmarshal(w.Body.Bytes(), &list); err != nil {
+		t.Fatalf("decode list: %v\n%s", err, w.Body.String())
+	}
+	if len(list.Artifacts) != 1 {
+		t.Fatalf("artifacts = %+v, want one", list.Artifacts)
+	}
+	info := list.Artifacts[0]
+	if !strings.HasPrefix(info.Preview, "first line second line") {
+		t.Fatalf("preview = %q, want compact leading text", info.Preview)
+	}
+	if !info.PreviewTruncated {
+		t.Fatalf("preview_truncated = false, want true for %d-byte artifact", len(body))
+	}
+	if len(info.Preview) > artifactListPreviewChars+8 {
+		t.Fatalf("preview len = %d, want bounded near %d", len(info.Preview), artifactListPreviewChars)
 	}
 }
 

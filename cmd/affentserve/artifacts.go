@@ -15,6 +15,7 @@ import (
 	"time"
 
 	agent "github.com/affinefoundation/affent/internal/agent"
+	"github.com/affinefoundation/affent/internal/textutil"
 )
 
 const (
@@ -24,6 +25,8 @@ const (
 	artifactReadDirBatch     = 128
 	defaultArtifactReadLimit = 64 * 1024
 	maxArtifactReadLimit     = 1024 * 1024
+	artifactListPreviewBytes = 2 * 1024
+	artifactListPreviewChars = 240
 )
 
 type artifactListResponse struct {
@@ -34,9 +37,11 @@ type artifactListResponse struct {
 }
 
 type artifactInfo struct {
-	Path    string `json:"path"`
-	Size    int64  `json:"size"`
-	ModTime string `json:"mod_time,omitempty"`
+	Path             string `json:"path"`
+	Size             int64  `json:"size"`
+	ModTime          string `json:"mod_time,omitempty"`
+	Preview          string `json:"preview,omitempty"`
+	PreviewTruncated bool   `json:"preview_truncated,omitempty"`
 }
 
 func handleSessionArtifacts(pool *SessionPool, sessionID, artifactPath string, w http.ResponseWriter, r *http.Request) {
@@ -90,11 +95,14 @@ func handleSessionArtifactList(sessionDir, sessionID string, w http.ResponseWrit
 		if info.IsDir() || info.Mode()&os.ModeSymlink != 0 {
 			continue
 		}
+		preview, previewTruncated := artifactListPreview(full, info.Size())
 		rel := path.Join(artifactPathPrefix, name)
 		out.Artifacts = append(out.Artifacts, artifactInfo{
-			Path:    rel,
-			Size:    info.Size(),
-			ModTime: info.ModTime().UTC().Format(time.RFC3339),
+			Path:             rel,
+			Size:             info.Size(),
+			ModTime:          info.ModTime().UTC().Format(time.RFC3339),
+			Preview:          preview,
+			PreviewTruncated: previewTruncated,
 		})
 	}
 	if len(out.Artifacts) > 0 && out.HasMore {
@@ -171,6 +179,27 @@ func listArtifactNames(root, after string, limit int) ([]string, bool, error) {
 		names = names[:limit]
 	}
 	return names, hasMore, nil
+}
+
+func artifactListPreview(full string, size int64) (string, bool) {
+	if size <= 0 {
+		return "", false
+	}
+	f, err := os.Open(full)
+	if err != nil {
+		return "", false
+	}
+	defer f.Close()
+	limit := int64(artifactListPreviewBytes)
+	if size < limit {
+		limit = size
+	}
+	raw, err := io.ReadAll(io.LimitReader(f, limit))
+	if err != nil {
+		return "", false
+	}
+	preview := textutil.Preview(textutil.CompactWhitespace(string(raw)), artifactListPreviewChars)
+	return preview, size > int64(len(raw))
 }
 
 func handleSessionArtifactRead(sessionDir, rawPath string, w http.ResponseWriter, r *http.Request) {
