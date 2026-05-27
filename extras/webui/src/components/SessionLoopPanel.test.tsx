@@ -72,7 +72,6 @@ describe("SessionLoopPanel", () => {
     expect(panel).toHaveTextContent("Stop when source evidence is weak.");
     expect(screen.getByTestId("session-loop-next")).toHaveTextContent("Review and activate in chat");
     expect(screen.getByRole("button", { name: "Review in chat" })).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Continue setup in chat" })).toBeInTheDocument();
   });
 
   it("surfaces the latest loop memory update as recovery context", () => {

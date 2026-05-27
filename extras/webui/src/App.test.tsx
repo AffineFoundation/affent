@@ -567,7 +567,8 @@ describe("App", () => {
     expect(sent.content).toContain("Loop protocol activation is pending");
     expect(sent.content).toContain("chat or the WebUI");
     expect(sent.content).toContain("loop_protocol action=read");
-    expect(sent.content).toContain("Ask the user at least one concise calibration question");
+    expect(sent.content).toContain("Ask exactly one concise calibration question now");
+    expect(sent.content).toContain("ask one focused follow-up in a later turn");
     expect(sent.content).toContain("Do not complete activation in the same turn");
     expect(sent.content).toContain("wait for the user's answer");
     expect(sent.content).toContain("complete_activation");
@@ -633,7 +634,8 @@ describe("App", () => {
     expect((loopCall?.[1] as RequestInit).body).toBe(JSON.stringify({ activate: true, goal: "long running subnet analysis" }));
     const messageCall = fetchImpl.mock.calls.find(([url]) => String(url) === "/v1/sessions/loop-panel/messages");
     const sent = JSON.parse(String((messageCall?.[1] as RequestInit).body)) as { content: string };
-    expect(sent.content).toContain("Ask the user at least one concise calibration question");
+    expect(sent.content).toContain("Ask exactly one concise calibration question now");
+    expect(sent.content).toContain("ask one focused follow-up in a later turn");
     expect(sent.content).toContain("Do not complete activation in the same turn");
     expect(sent.content).toContain("complete_activation");
     expect(sent).toMatchObject({ display_text: "Set up loop: long running subnet analysis" });
@@ -701,7 +703,7 @@ describe("App", () => {
 
     const panel = await screen.findByTestId("session-loop-panel");
     expect(panel).toHaveTextContent("Activation review");
-    await user.click(within(panel).getByRole("button", { name: "Continue setup in chat" }));
+    await user.click(within(panel).getByRole("button", { name: "Review in chat" }));
 
     const draft = (screen.getByPlaceholderText("Message Affent...") as HTMLTextAreaElement).value;
     expect(draft).toContain("A calibration answer is already recorded");
@@ -771,7 +773,7 @@ describe("App", () => {
 
     const panel = await screen.findByTestId("session-loop-panel");
     expect(panel).toHaveTextContent("Waiting for your calibration answer");
-    await user.click(within(panel).getByRole("button", { name: "Answer setup in chat" }));
+    await user.click(within(panel).getByRole("button", { name: "Open answer draft" }));
 
     const draft = (screen.getByPlaceholderText("Message Affent...") as HTMLTextAreaElement).value;
     expect(draft).toContain("Loop calibration answer for: long running subnet analysis");
@@ -1002,6 +1004,7 @@ describe("App", () => {
     const sent = JSON.parse(String((messageCall?.[1] as RequestInit).body)) as { content: string; display_text?: string };
     expect(sent.content).toContain("Calibrate scheduled check-in");
     expect(sent.content).toContain("Ask the user one concise question now");
+    expect(sent.content).toContain("ask one focused follow-up in a later turn");
     expect(sent.content).toContain("do not claim the timer is operationally calibrated");
     expect(sent.display_text).toBe("Calibrate check-in timer: long running subnet analysis");
     expect(screen.getByTestId("pending-turn")).toHaveTextContent("Calibrate check-in timer: long running subnet analysis");
@@ -1124,6 +1127,7 @@ describe("App", () => {
     expect(sent.content).toContain("Calibrate recurring loop tick");
     expect(sent.content).toContain("Read LOOP.md with loop_protocol action=read");
     expect(sent.content).toContain("Ask the user one concise question now");
+    expect(sent.content).toContain("ask one focused follow-up in a later turn");
     expect(sent.display_text).toBe("Calibrate loop timer: long running runtime improvement");
     expect(screen.getByTestId("pending-turn")).toHaveTextContent("Calibrate loop timer: long running runtime improvement");
     expect(screen.getByTestId("pending-turn")).not.toHaveTextContent("Ask the user one concise question now");

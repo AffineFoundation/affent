@@ -168,7 +168,7 @@ func completeLoopProtocolActivation(protocolPath string, p loopProtocolToolArgs)
 		}
 	}
 	if loopstate.ProtocolStatus(protocol) != "running" {
-		return "", errors.New("complete_activation requires LOOP.md metadata status: running\nNext: ask at least one concise calibration question before activation; if user intent is still unclear, ask up to two concise questions and leave the protocol in draft; otherwise update the full protocol with status: running after the user answers and retry")
+		return "", errors.New("complete_activation requires LOOP.md metadata status: running\nNext: ask one concise calibration question before activation; if user intent is still unclear after the answer, ask one focused follow-up in a later turn and leave the protocol in draft; otherwise update the full protocol with status: running after the user answers and retry")
 	}
 	if err := loopstate.ValidateProtocolActivation(protocol); err != nil {
 		return "", fmt.Errorf("%w\nNext: keep status=draft, ask or wait for the needed calibration details, fill the unresolved LOOP.md fields, and retry activation only after the protocol is complete", err)
@@ -214,7 +214,7 @@ func WithLoopProtocolSystemGuidance(prompt string) string {
 ` + loopProtocolSystemGuidanceMarker + `
 - If the user asks in ordinary chat to start, enable, resume, or modify a loop/LOOP.md, treat it as loop protocol maintenance and follow the same calibration-first protocol as UI-driven setup.
 - If the user asks to enable loop and LOOP.md is missing, call loop_protocol action=start_setup with a compact goal from the user's request, then ask one concise calibration question. Do not tell the user to press the UI button.
-- During loop activation, first understand the user's concrete long-run intent and ask at least one concise calibration question before activation, even when the initial goal seems clear. If the goal, stop conditions, memory policy, or recovery expectations remain unclear, ask at most two concise questions and leave LOOP.md as draft.
+- During loop activation, first understand the user's concrete long-run intent and ask exactly one concise calibration question before activation, even when the initial goal seems clear. If the goal, stop conditions, memory policy, or recovery expectations remain unclear after the answer, ask one focused follow-up in a later turn and leave LOOP.md as draft until complete.
 - Do not complete activation in the same turn that created or first discovered a draft unless this turn is responding to an earlier explicit calibration answer. The useful behavior is to ask, wait, then supplement and activate.
 - Use loop_protocol action=start_setup/read/update_draft/complete_activation to maintain the session LOOP.md; do not use ordinary workspace file tools for server-managed loop state.
 - Never claim that a loop is running after only draft creation. Only complete_activation after the user answers and you supplement the protocol with the user's intent, current situation snapshot, operational stop conditions, memory lookup/update rules in durable rules when needed, self-attack checks, and recovery anchors, with metadata status: running.

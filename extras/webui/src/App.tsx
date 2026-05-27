@@ -1390,9 +1390,9 @@ function webLoopActivationPrompt(goal: string): string {
     "This setup path may have been started from chat or the WebUI; both require the same calibration-first activation flow.",
     "Understand the user's real long-run intent before enabling the loop.",
     "Use loop_protocol action=read to inspect the draft LOOP.md.",
-    "Ask the user at least one concise calibration question before activation, even when the initial goal seems clear.",
+    "Ask exactly one concise calibration question now before activation, even when the initial goal seems clear.",
     "Do not complete activation in the same turn that created the draft unless this turn is responding to an earlier explicit calibration answer.",
-    "If the goal, stop conditions, memory policy, or recovery expectations are still unclear, ask at most two concise questions and keep status: draft.",
+    "If the goal, stop conditions, memory policy, or recovery expectations are still unclear after the answer, ask one focused follow-up in a later turn; keep status: draft until the protocol is complete.",
     "After asking, wait for the user's answer; do not continue autonomous work or claim the loop is running while LOOP.md is still draft.",
     "Only after the user answers and the protocol is sufficiently supplemented, use loop_protocol action=complete_activation with the full LOOP.md, including metadata status: running, a compact Current Situation snapshot, practical stop conditions, durable rules, self-attack checks, and recovery anchors.",
     "Keep task step authority in plan state; do not duplicate a todo list into LOOP.md.",
@@ -1437,7 +1437,7 @@ function webLoopProtocolDraftPrompt(
     return lines.join("\n");
   }
   lines.push(
-    "Ask one concise calibration question before changing the protocol unless the user's requested change is already explicit.",
+    "Ask one concise calibration question before changing the protocol unless the user's requested change is already explicit; if more is missing, ask one focused follow-up in a later turn.",
     "Use loop_protocol action=update_draft for draft protocols, or complete_activation only after the user answers and the protocol is fully supplemented.",
     "For a running protocol, update only durable rules, current situation, recovery anchors, or stop conditions that materially improve long-run behavior.",
   );
@@ -1481,6 +1481,7 @@ function webScheduleCalibrationPrompt(kind: "loop" | "checkin" | "daily", sessio
     "The timer has been created, but calibration is still required before relying on it.",
     "Read LOOP.md with loop_protocol action=read; if it is draft, disabled, or underspecified, keep it draft.",
     "Ask the user one concise question now to clarify timer purpose, stop conditions, memory expectations, and what should change in LOOP.md.",
+    "If the answer leaves another critical field missing, ask one focused follow-up in a later turn and keep LOOP.md as draft.",
     "Do not complete activation in this same turn unless the user is already answering an earlier calibration question.",
     "Do not run the scheduled work yet, and do not claim the timer is operationally calibrated until the user answers.",
     "After the user answers, update LOOP.md only for durable timer policy, current situation, recovery anchors, or stop conditions; keep concrete task steps in plan state.",

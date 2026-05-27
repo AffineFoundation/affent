@@ -211,7 +211,8 @@ func TestLoopProtocolToolRegistryGuidance(t *testing.T) {
 		!strings.Contains(prompt, "ordinary chat") ||
 		!strings.Contains(prompt, "action=start_setup") ||
 		!strings.Contains(prompt, "Do not tell the user to press the UI button") ||
-		!strings.Contains(prompt, "at least one concise calibration question") ||
+		!strings.Contains(prompt, "exactly one concise calibration question") ||
+		!strings.Contains(prompt, "one focused follow-up in a later turn") ||
 		!strings.Contains(prompt, "Do not complete activation in the same turn") ||
 		!strings.Contains(prompt, "Never claim that a loop is running") ||
 		!strings.Contains(prompt, "complete_activation") {

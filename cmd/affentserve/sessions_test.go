@@ -1826,7 +1826,8 @@ func TestSessionPool_InitializesLoopProtocolWhenEnabled(t *testing.T) {
 	prompt := messages[0].Content
 	if !strings.Contains(prompt, "Loop protocol maintenance:") ||
 		!strings.Contains(prompt, "action=start_setup") ||
-		!strings.Contains(prompt, "at least one concise calibration question") ||
+		!strings.Contains(prompt, "exactly one concise calibration question") ||
+		!strings.Contains(prompt, "one focused follow-up in a later turn") ||
 		!strings.Contains(prompt, "complete_activation") {
 		t.Fatalf("system prompt missing loop protocol guidance:\n%s", prompt)
 	}
@@ -1987,7 +1988,7 @@ func TestSessionRecordsLoopProtocolCalibrationAnswerAfterDraftQuestion(t *testin
 	if err := s.ensureLoopProtocolInitialized("Set up long-running subnet analysis."); err != nil {
 		t.Fatalf("ensureLoopProtocolInitialized: %v", err)
 	}
-	s.recordLoopProtocolCalibrationAnswerIfReady("Loop protocol activation is pending, not active yet. Ask the user at least one concise calibration question.")
+	s.recordLoopProtocolCalibrationAnswerIfReady("Loop protocol activation is pending, not active yet. Ask exactly one concise calibration question now.")
 	state, found, err := loopstate.ReadState(sessionLoopStatePath(pool, "loop-calibration"))
 	if err != nil || !found {
 		t.Fatalf("ReadState found=%v err=%v", found, err)
