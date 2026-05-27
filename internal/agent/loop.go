@@ -891,6 +891,8 @@ func describeContextInjectedSection(section string) (source, title, summary, pre
 			name = "skill"
 		}
 		return "skill", "Active skill injected", "Activated skill: " + name + ".", first, true
+	case strings.HasPrefix(first, researchCheckpointSkillMarker):
+		return "research_checkpoint", "Research checkpoint injected", "A bounded external-calibration reminder was injected before a high-impact loop turn.", safeContextInjectedPreview(section), true
 	default:
 		if first == "" {
 			first = "Dynamic system context"
@@ -973,6 +975,7 @@ func (l *Loop) appendUserMessage(turnID, text string, opts TurnOptions) error {
 		if err := l.Conv.Append(ChatMessage{Role: "system", Content: block}); err != nil {
 			return err
 		}
+		l.publishContextInjected(turnID, block)
 	}
 	return l.Conv.Append(ChatMessage{Role: "user", Content: text})
 }

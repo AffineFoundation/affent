@@ -229,6 +229,7 @@ func TestRunTurn_EmitsResearchCheckpointForHighImpactLoopReview(t *testing.T) {
 
 	deadline := time.After(10 * time.Second)
 	sawDecision := false
+	sawResearchContext := false
 	for {
 		select {
 		case ev, ok := <-events:
@@ -236,6 +237,16 @@ func TestRunTurn_EmitsResearchCheckpointForHighImpactLoopReview(t *testing.T) {
 				t.Fatal("event channel closed before turn.end")
 			}
 			switch ev.Type {
+			case sse.TypeContextInjected:
+				var p sse.ContextInjectedPayload
+				if err := json.Unmarshal(ev.Data, &p); err != nil {
+					t.Fatalf("decode context.injected: %v", err)
+				}
+				if p.Source == "research_checkpoint" &&
+					strings.Contains(p.Preview, researchCheckpointSkillMarker) &&
+					strings.Contains(p.Summary, "external-calibration") {
+					sawResearchContext = true
+				}
 			case sse.TypeLoopDecision:
 				var p sse.LoopDecisionPayload
 				if err := json.Unmarshal(ev.Data, &p); err != nil {
@@ -254,6 +265,9 @@ func TestRunTurn_EmitsResearchCheckpointForHighImpactLoopReview(t *testing.T) {
 			case sse.TypeTurnEnd:
 				if !sawDecision {
 					t.Fatal("expected research checkpoint decision before turn.end")
+				}
+				if !sawResearchContext {
+					t.Fatal("expected research checkpoint context.injected event before turn.end")
 				}
 				var body string
 				select {

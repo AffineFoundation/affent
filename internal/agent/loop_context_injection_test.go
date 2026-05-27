@@ -71,6 +71,19 @@ func TestContextInjectedPayloadSkipsLoopProtocolBlock(t *testing.T) {
 	}
 }
 
+func TestContextInjectedPayloadCapturesResearchCheckpoint(t *testing.T) {
+	payload, ok := contextInjectedPayload("turn_research", researchCheckpointSkillMarker+"\nDo a bounded external calibration before changing durable direction.", nil)
+	if !ok {
+		t.Fatal("research checkpoint should emit context.injected metadata")
+	}
+	if payload.Source != "research_checkpoint" ||
+		payload.Title != "Research checkpoint injected" ||
+		!strings.Contains(payload.Summary, "external-calibration") ||
+		!strings.Contains(payload.Preview, researchCheckpointSkillMarker) {
+		t.Fatalf("research checkpoint payload = %+v", payload)
+	}
+}
+
 func TestAppendUserMessagePublishesLoopFeedWhenOtherContextPrecedesIt(t *testing.T) {
 	conv, err := OpenConversationAt(filepath.Join(t.TempDir(), "session.jsonl"))
 	if err != nil {

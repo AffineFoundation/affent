@@ -105,6 +105,22 @@ window and Affent repaired it before continuing the session.
   tool-result transport and model-context limits.
 - `turn_tool_override`: optional true when the turn used a local tool override.
 
+### `context.injected`
+
+- `turn_id`: runtime turn id.
+- `source`: stable context source, such as `account_access`, `active_plan`,
+  `skill`, `skill_provider`, or `research_checkpoint`.
+- `title`: short UI label.
+- `summary`: bounded human-readable explanation of why the hidden context was
+  injected.
+- `preview`: bounded redacted preview of the injected context.
+- `bytes`, `estimated_tokens`: approximate prompt-pressure diagnostics.
+
+`AFFENT LOOP PROTOCOL` blocks use the dedicated `loop.protocol_feed` event and
+are not duplicated as `context.injected`. Research checkpoint reminders use
+`source=research_checkpoint` so traces can prove the model received the
+external-calibration reminder paired with a `loop.decision`.
+
 ### `message.delta`
 
 - `turn_id`: runtime turn id.
