@@ -233,6 +233,7 @@ describe("sessionList view model", () => {
         schedules: {
           count: 1,
           enabled: 1,
+          pending_loop_ticks: 1,
           next_schedule_kind: "loop_tick",
           next_prompt_preview: "Scheduled loop tick for session: runtime hardening",
         },

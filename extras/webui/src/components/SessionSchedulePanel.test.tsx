@@ -94,7 +94,7 @@ describe("SessionSchedulePanel", () => {
     render(
       <SessionSchedulePanel
         loopStatus="running"
-        summary={{ count: 1, enabled: 1, next_prompt_preview: "Scheduled loop tick for session: runtime" }}
+        summary={{ count: 1, enabled: 1, pending_loop_ticks: 1, next_prompt_preview: "Scheduled loop tick for session: runtime" }}
         schedules={[
           {
             id: "sched_loop",

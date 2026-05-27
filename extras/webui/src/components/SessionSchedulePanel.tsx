@@ -186,8 +186,8 @@ function loopTimerResumeNeedsActivation(schedule: SessionSchedule, loopStatus?: 
 }
 
 function pendingLoopTimerCount(schedules?: SessionSchedule[], summary?: SessionSchedulesSummary, loopStatus?: string): number {
-  if ((summary?.pending_loop_ticks ?? 0) > 0) return summary?.pending_loop_ticks ?? 0;
   if (loopProtocolRunning(loopStatus)) return 0;
+  if ((summary?.pending_loop_ticks ?? 0) > 0) return summary?.pending_loop_ticks ?? 0;
   const visible = schedules?.filter((schedule) => loopTimerPendingCalibration(schedule, loopStatus)).length ?? 0;
   if (visible > 0) return visible;
   if ((summary?.enabled ?? 0) > 0 && summary?.next_schedule_kind === "loop_tick") return summary?.enabled ?? 1;
