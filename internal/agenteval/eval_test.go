@@ -1961,7 +1961,7 @@ func TestWriteScenarioDebugArtifactsIndexesTraceAndFinalText(t *testing.T) {
 		"`message.delta`: `2`",
 		"## Source Evidence",
 		"tool#1 `web_fetch` status=`dynamic_partial` url=`https://taostats.io/subnets/120`",
-		"tool#2 `browser_network_read` status=`network` url=`https://taostats.io/api/subnets/120` requested=`https://taostats.io/subnets/120` json_path=`$.price`",
+		"tool#2 `browser_network_read` status=`network` url=`https://taostats.io/api/subnets/120` requested=`https://taostats.io/subnets/120` ref=`n1` json_path=`$.price`",
 		"tool#3 `browser_navigate` status=`discovery_only` url=`https://search.example/?q=affine`",
 		"## Browser Network Searches",
 		"tool#8 status=`matches` query=`market_cap` page=`https://taostats.io/subnets/120` call_id=`call-8` requires_read=`true` citable=`false`",
