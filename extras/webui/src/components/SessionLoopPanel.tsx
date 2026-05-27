@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import type { SessionLoopProtocolSummary, SessionLoopState } from "../api/sessions";
+import type { SessionLoopEvent, SessionLoopProtocolSummary, SessionLoopState } from "../api/sessions";
 import { CopyButton } from "./CopyButton";
 
 export function SessionLoopPanel({
@@ -7,6 +7,7 @@ export function SessionLoopPanel({
   state,
   disabling = false,
   protocol,
+  events,
   loadingProtocol = false,
   protocolError,
   defaultGoal,
@@ -20,6 +21,7 @@ export function SessionLoopPanel({
   state?: SessionLoopState;
   disabling?: boolean;
   protocol?: string;
+  events?: SessionLoopEvent[];
   loadingProtocol?: boolean;
   protocolError?: string;
   defaultGoal?: string;
@@ -107,6 +109,7 @@ export function SessionLoopPanel({
         {protocol ? (
           <pre className="session-loop-protocol" data-testid="session-loop-protocol">{protocol}</pre>
         ) : null}
+        {events && events.length > 0 ? <LoopEvents events={events} /> : null}
         {protocolError ? (
           <div className="session-plan-empty error" role="alert">
             {protocolError}
@@ -133,6 +136,43 @@ export function SessionLoopPanel({
       </div>
     </details>
   );
+}
+
+function LoopEvents({ events }: { events: SessionLoopEvent[] }) {
+  const recent = events.slice(-5).reverse();
+  return (
+    <ol className="session-loop-events" data-testid="session-loop-events" aria-label="Recent loop protocol events">
+      {recent.map((event) => {
+        const detail = loopEventDetail(event);
+        return (
+          <li key={`${event.seq}:${event.type}`}>
+            <strong>{event.summary || loopEventLabel(event.type)}</strong>
+            {detail ? <span>{detail}</span> : null}
+          </li>
+        );
+      })}
+    </ol>
+  );
+}
+
+function loopEventDetail(event: SessionLoopEvent): string | undefined {
+  const parts = [
+    event.type,
+    event.reason ? `reason ${event.reason}` : undefined,
+    event.sections_changed && event.sections_changed.length > 0 ? `sections ${event.sections_changed.join(", ")}` : undefined,
+    event.memory_preview ? `memory ${event.memory_preview}` : undefined,
+    event.decision ? `decision ${event.decision}` : undefined,
+    event.turn_end_reason ? `turn ${event.turn_end_reason}` : undefined,
+  ].filter(Boolean);
+  return parts.length > 0 ? parts.join(" · ") : undefined;
+}
+
+function loopEventLabel(type: string): string {
+  if (type === "loop.protocol_init") return "Initialized LOOP.md";
+  if (type === "loop.protocol_update") return "Updated LOOP.md";
+  if (type === "loop.protocol_activate") return "Activated LOOP.md";
+  if (type === "loop.protocol_disable") return "Disabled LOOP.md";
+  return type;
 }
 
 function LoopStatusCallout({ status }: { status: "off" | "draft" | "running" | "disabled" | "unknown" }) {

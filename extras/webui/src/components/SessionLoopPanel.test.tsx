@@ -46,4 +46,46 @@ describe("SessionLoopPanel", () => {
 
     expect(screen.getByTestId("session-loop-panel")).toHaveTextContent("2 memory updates");
   });
+
+  it("renders recent loop protocol events returned with LOOP.md", () => {
+    render(
+      <SessionLoopPanel
+        summary={{ path: ".affent/loops/loop-3/LOOP.md", status: "running", bytes: 768 }}
+        state={{ version: 1, loop_id: "loop-3", status: "running" }}
+        protocol="# Loop Protocol: loop-3"
+        events={[
+          {
+            seq: 1,
+            time: "2026-05-27T10:00:00Z",
+            type: "loop.protocol_init",
+            summary: "Initialized LOOP.md",
+            reason: "loop protocol activation",
+          },
+          {
+            seq: 2,
+            time: "2026-05-27T10:05:00Z",
+            type: "loop.protocol_update",
+            summary: "Updated LOOP.md",
+            sections_changed: ["Current Situation", "Rules"],
+            reason: "user clarified stop condition",
+          },
+          {
+            seq: 3,
+            time: "2026-05-27T10:10:00Z",
+            type: "loop.protocol_activate",
+            summary: "Activated LOOP.md",
+            reason: "calibration answered",
+          },
+        ]}
+      />,
+    );
+
+    const events = screen.getByTestId("session-loop-events");
+    expect(events).toHaveTextContent("Activated LOOP.md");
+    expect(events).toHaveTextContent("calibration answered");
+    expect(events).toHaveTextContent("Updated LOOP.md");
+    expect(events).toHaveTextContent("Current Situation, Rules");
+    const text = events.textContent ?? "";
+    expect(text.indexOf("Activated LOOP.md")).toBeLessThan(text.indexOf("Initialized LOOP.md"));
+  });
 });

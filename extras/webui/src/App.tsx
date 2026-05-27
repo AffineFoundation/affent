@@ -1269,6 +1269,7 @@ export function App() {
                     onStart={handleStartLoop}
                     onDisable={handleDisableLoopProtocol}
                     protocol={selectedLoopProtocolState.state === "ready" ? selectedLoopProtocolState.protocol.protocol : undefined}
+                    events={selectedLoopProtocolState.state === "ready" ? selectedLoopProtocolState.protocol.events : undefined}
                     loadingProtocol={selectedLoopProtocolState.state === "loading"}
                     protocolError={selectedLoopProtocolState.state === "error" ? selectedLoopProtocolState.error : undefined}
                     onLoadProtocol={handleLoadLoopProtocol}

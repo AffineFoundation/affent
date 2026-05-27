@@ -1074,6 +1074,37 @@ body {
   overflow-wrap: anywhere;
 }
 
+.session-loop-events {
+  display: grid;
+  gap: 6px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.session-loop-events li {
+  display: grid;
+  gap: 3px;
+  min-width: 0;
+  border: 1px solid rgba(217, 224, 232, 0.74);
+  border-radius: calc(var(--radius) - 2px);
+  background: rgba(248, 250, 252, 0.7);
+  padding: 7px 8px;
+}
+
+.session-loop-events strong {
+  color: var(--text);
+  font-size: 12px;
+  line-height: 1.3;
+}
+
+.session-loop-events span {
+  color: var(--text-muted);
+  font-size: 11.5px;
+  line-height: 1.35;
+  overflow-wrap: anywhere;
+}
+
 .session-loop-actions {
   display: flex;
   flex-wrap: wrap;
@@ -6966,6 +6997,7 @@ html[data-theme="dark"] .session-plan-panel,
 html[data-theme="dark"] .session-plan-step,
 html[data-theme="dark"] .session-loop-callout,
 html[data-theme="dark"] .session-loop-field,
+html[data-theme="dark"] .session-loop-events li,
 html[data-theme="dark"] .session-panel,
 html[data-theme="dark"] .session-skills-panel,
 html[data-theme="dark"] .session-skill-item,
