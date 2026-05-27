@@ -187,12 +187,13 @@ function requestRecordGroup(
     label: "Request trace",
     meta: compact([
       requestLabel(context, turnId),
+      userMessageOriginMeta(userMessage),
       streamSummary(readString(userMessage?.data, "text") ?? ""),
       readString(end?.data, "reason"),
       ...toolRuntimeStatsMeta(readToolStats(end)),
       tokenTotal > 0 ? `${tokenTotal} tokens` : undefined,
     ]),
-    badges: [],
+    badges: userMessageBadges(userMessage),
     events,
   };
 }
@@ -252,7 +253,11 @@ function eventDisplay(event: NormalizedEvent, context: DisplayContext): EventDis
     case EventType.TurnStart:
       return { label: "Started request", meta: compact([request]), badges: [] };
     case EventType.UserMessage:
-      return { label: "User message", meta: compact([request, streamSummary(readString(event.data, "text") ?? "")]), badges: [] };
+      return {
+        label: userMessageLabel(event),
+        meta: compact([request, userMessageOriginMeta(event), streamSummary(readString(event.data, "text") ?? "")]),
+        badges: userMessageBadges(event),
+      };
     case EventType.RuntimeSurface:
       return { label: "Runtime surface", meta: runtimeSurfaceMeta(event, request), badges: runtimeSurfaceBadges(event) };
     case EventType.MessageDone:
@@ -282,6 +287,25 @@ function eventDisplay(event: NormalizedEvent, context: DisplayContext): EventDis
     default:
       return { label: event.type, meta: fallbackMeta(event, context), badges: [] };
   }
+}
+
+function userMessageLabel(event: NormalizedEvent | undefined): string {
+  return readString(event?.data, "source") === "schedule" ? "Scheduled message" : "User message";
+}
+
+function userMessageOriginMeta(event: NormalizedEvent | undefined): string | undefined {
+  const source = readString(event?.data, "source");
+  if (source === "schedule") {
+    const scheduleID = readString(event?.data, "schedule_id");
+    return scheduleID ? `timer ${scheduleID}` : "timer";
+  }
+  return undefined;
+}
+
+function userMessageBadges(event: NormalizedEvent | undefined): string[] {
+  const source = readString(event?.data, "source");
+  if (source === "schedule") return compact(["scheduled", readString(event?.data, "schedule_id")]);
+  return [];
 }
 
 function runtimeSurfaceMeta(event: NormalizedEvent, turn: string | undefined): string[] {

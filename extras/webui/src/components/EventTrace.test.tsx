@@ -150,6 +150,52 @@ describe("EventTrace", () => {
     expect(screen.getByText(/"type": "turn.end"/)).toBeInTheDocument();
   });
 
+  it("surfaces scheduled request origin in collapsed request records", () => {
+    const raws = [
+      { id: 1, type: "turn.start", data: { turn_id: "t1" } },
+      {
+        id: 2,
+        type: "user.message",
+        data: {
+          turn_id: "t1",
+          source: "schedule",
+          schedule_id: "sched_1",
+          text: "Scheduled check-in for session: market monitor",
+        },
+      },
+      { id: 3, type: "turn.end", data: { turn_id: "t1", reason: "completed" } },
+    ];
+
+    render(<EventTrace events={normalizeEvents(raws)} />);
+
+    expect(screen.getByText("Request trace")).toBeInTheDocument();
+    expect(screen.getByText("Request 1 · timer sched_1 · Scheduled check-in for session: market monitor · completed")).toBeInTheDocument();
+    expect(screen.getByText("scheduled")).toBeInTheDocument();
+    expect(screen.getByText("sched_1")).toBeInTheDocument();
+  });
+
+  it("labels standalone scheduled user messages", () => {
+    const raws = [
+      {
+        id: 1,
+        type: "user.message",
+        data: {
+          turn_id: "t1",
+          source: "schedule",
+          schedule_id: "sched_1",
+          text: "Run daily loop calibration",
+        },
+      },
+    ];
+
+    render(<EventTrace events={normalizeEvents(raws)} />);
+
+    expect(screen.getByText("Scheduled message")).toBeInTheDocument();
+    expect(screen.getByText("Request 1 · timer sched_1 · Run daily loop calibration")).toBeInTheDocument();
+    expect(screen.getByText("scheduled")).toBeInTheDocument();
+    expect(screen.getByText("sched_1")).toBeInTheDocument();
+  });
+
   it("surfaces guard and memory update counters in collapsed request records", () => {
     const raws = [
       { id: 1, type: "turn.start", data: { turn_id: "t1" } },
