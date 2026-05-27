@@ -47,7 +47,7 @@ describe("SessionArtifactsPanel", () => {
 
     await user.click(within(list).getByRole("button", { name: "Copy path" }));
     expect(writeText).toHaveBeenCalledWith(".affent/artifacts/tool-results/000001-test.txt");
-    await user.click(within(list).getByRole("button", { name: "Open file" }));
+    await user.click(within(list).getByRole("button", { name: "Open artifact" }));
     expect(onOpenArtifact).toHaveBeenCalledWith(".affent/artifacts/tool-results/000001-test.txt");
     await user.click(within(list).getByRole("button", { name: "Use artifact" }));
     expect(onUseAsDraft).toHaveBeenCalledWith("Use this artifact in the next step: .affent/artifacts/tool-results/000001-test.txt", "artifact");

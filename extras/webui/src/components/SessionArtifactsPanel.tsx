@@ -39,7 +39,7 @@ export function SessionArtifactsPanel({
                     <CopyButton label="Copy path" value={artifact.path} className="ghost-action" />
                     {onOpenArtifact ? (
                       <button type="button" className="ghost-action" onClick={() => onOpenArtifact(artifact.path)}>
-                        Open file
+                        Open artifact
                       </button>
                     ) : null}
                     {downloadUrl ? (
