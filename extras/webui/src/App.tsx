@@ -1522,8 +1522,8 @@ export function App() {
                 {hiddenWorkbenchPanels.length > 0 ? (
                   <details className="session-skills-panel workbench-more-panel" data-testid="workbench-more-panel">
                     <summary className="session-skills-summary">
-                      <span className="session-skills-kicker">More</span>
-                      <strong>{hiddenWorkbenchPanels.length} {hiddenWorkbenchPanels.length === 1 ? "area" : "areas"}</strong>
+                      <span className="session-skills-kicker">Quiet</span>
+                      <strong>No current alerts</strong>
                       <span>{hiddenWorkbenchPanels.map((panel) => panel.label).join(", ")}</span>
                     </summary>
                     <div className="session-skills-body workbench-more-body">
