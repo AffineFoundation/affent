@@ -297,9 +297,12 @@ func TestParseTraceFileDerivesToolFailureExamples(t *testing.T) {
 		t.Fatalf("dynamic_shell examples = %#v", dynamic)
 	}
 	if dynamic[0].Tool != "web_fetch" ||
+		dynamic[0].ToolIndex != 1 ||
+		dynamic[0].CallID != "fetch1" ||
 		!strings.Contains(dynamic[0].ArgsSummary, "dashboard.example") ||
 		!strings.Contains(dynamic[0].ResultSummary, "dynamic page shell") ||
-		!strings.Contains(dynamic[0].ResultSummary, "Next:") {
+		!strings.Contains(dynamic[0].ResultSummary, "Next:") ||
+		!strings.Contains(dynamic[0].SuggestedNextStep, "text/API/source page") {
 		t.Fatalf("dynamic_shell example missing replayed diagnostics: %#v", dynamic[0])
 	}
 	search := examples["no_results"]
@@ -1499,11 +1502,12 @@ func TestWriteScenarioDebugArtifactsIndexesTraceAndFinalText(t *testing.T) {
 		Repair:           ToolRepairStats{Calls: 1, SucceededCalls: 1, Notes: 2, ByKind: map[string]int{"tool_name": 1, "alias_rename": 1}},
 		ToolFailureExamples: map[string][]ToolFailureExample{
 			"dynamic_shell": {{
-				Kind:          "dynamic_shell",
-				Tool:          "web_fetch",
-				ArgsSummary:   `url="https://example.test/report"`,
-				ResultSummary: "dynamic dashboard exposed empty metric widgets; next use browser_network_read",
-				ExitCode:      1,
+				Kind:              "dynamic_shell",
+				Tool:              "web_fetch",
+				ArgsSummary:       `url="https://example.test/report"`,
+				ResultSummary:     "dynamic dashboard exposed empty metric widgets; next use browser_network_read",
+				SuggestedNextStep: "switch to browser_network_read before citing dynamic dashboard metrics",
+				ExitCode:          1,
 			}},
 		},
 		RuntimeErrorByKind: map[string]int{"llm_timeout": 1},
@@ -2050,6 +2054,7 @@ func TestWriteScenarioDebugArtifactsIndexesTraceAndFinalText(t *testing.T) {
 		"outcome: `failed`; inspect the failure list",
 		"tool_failure_by_kind: `dynamic_shell=1`",
 		"tool_failure_example[dynamic_shell]: tool=`web_fetch` exit=`1` args=url=\"https://example.test/report\"",
+		"next=switch to browser_network_read before citing dynamic dashboard metrics",
 		"runtime_error_by_kind: `llm_timeout=1`",
 		"runtime_error_example[llm_timeout]: llm stream timed out after first token",
 		"loop_guard: `1` intervention(s), `0` forced no-tools",

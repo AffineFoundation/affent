@@ -664,6 +664,9 @@ func timelineToolFailureExampleLines(examples map[string][]ToolFailureExample, m
 			if ex.ResultSummary != "" {
 				line += " result=" + timelineInline(ex.ResultSummary, 360)
 			}
+			if ex.SuggestedNextStep != "" {
+				line += " next=" + timelineInline(ex.SuggestedNextStep, 260)
+			}
 			lines = append(lines, line)
 		}
 	}

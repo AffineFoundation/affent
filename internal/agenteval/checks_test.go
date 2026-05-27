@@ -839,11 +839,14 @@ func TestTraceToolFailureExamples(t *testing.T) {
 	if len(dynamic) != 1 {
 		t.Fatalf("dynamic_shell examples = %#v", dynamic)
 	}
-	if dynamic[0].Tool != "web_fetch" || !strings.Contains(dynamic[0].ArgsSummary, "dashboard.example") {
+	if dynamic[0].ToolIndex != 1 || dynamic[0].CallID != "fetch-1" || dynamic[0].Tool != "web_fetch" || !strings.Contains(dynamic[0].ArgsSummary, "dashboard.example") {
 		t.Fatalf("dynamic_shell example lost tool/URL context: %#v", dynamic[0])
 	}
 	if !strings.Contains(dynamic[0].ResultSummary, "dynamic page shell") || !strings.Contains(dynamic[0].ResultSummary, "Next:") {
 		t.Fatalf("dynamic_shell result summary missing reason/Next: %#v", dynamic[0])
+	}
+	if !strings.Contains(dynamic[0].SuggestedNextStep, "text/API/source page") {
+		t.Fatalf("dynamic_shell example missing structured next step: %#v", dynamic[0])
 	}
 	search := examples["no_results"]
 	if len(search) != 1 || !strings.Contains(search[0].ArgsSummary, "rare subnet") {

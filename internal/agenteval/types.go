@@ -352,12 +352,15 @@ type ToolRepairExample struct {
 }
 
 type ToolFailureExample struct {
-	Scenario      string `json:"scenario,omitempty"`
-	Kind          string `json:"kind"`
-	Tool          string `json:"tool"`
-	ArgsSummary   string `json:"args_summary,omitempty"`
-	ResultSummary string `json:"result_summary,omitempty"`
-	ExitCode      int    `json:"exit_code"`
+	Scenario          string `json:"scenario,omitempty"`
+	Kind              string `json:"kind"`
+	ToolIndex         int    `json:"tool_index"`
+	CallID            string `json:"call_id,omitempty"`
+	Tool              string `json:"tool"`
+	ArgsSummary       string `json:"args_summary,omitempty"`
+	ResultSummary     string `json:"result_summary,omitempty"`
+	SuggestedNextStep string `json:"suggested_next_step,omitempty"`
+	ExitCode          int    `json:"exit_code"`
 }
 
 type LoopGuardExample struct {
@@ -604,17 +607,20 @@ func (t Trace) ToolFailureExamples(maxPerKind int) map[string][]ToolFailureExamp
 		return nil
 	}
 	out := map[string][]ToolFailureExample{}
-	for _, c := range t.Tools {
+	for i, c := range t.Tools {
 		for _, kind := range toolFailureKindsForCall(c) {
 			if len(out[kind]) >= maxPerKind {
 				continue
 			}
 			out[kind] = append(out[kind], ToolFailureExample{
-				Kind:          kind,
-				Tool:          c.Tool,
-				ArgsSummary:   summarizeToolCallArgs(c.Args),
-				ResultSummary: summarizeToolFailureResult(c.Result),
-				ExitCode:      c.ExitCode,
+				Kind:              kind,
+				ToolIndex:         i + 1,
+				CallID:            c.CallID,
+				Tool:              c.Tool,
+				ArgsSummary:       summarizeToolCallArgs(c.Args),
+				ResultSummary:     summarizeToolFailureResult(c.Result),
+				SuggestedNextStep: summarizeToolNextStep(c.Result),
+				ExitCode:          c.ExitCode,
 			})
 		}
 	}
@@ -1065,6 +1071,10 @@ func summarizeLoopGuardMessage(result string) string {
 }
 
 func summarizeLoopGuardNextStep(result string) string {
+	return summarizeToolNextStep(result)
+}
+
+func summarizeToolNextStep(result string) string {
 	for _, raw := range strings.Split(result, "\n") {
 		line := strings.TrimSpace(raw)
 		if !strings.HasPrefix(line, "Next:") {
