@@ -86,10 +86,20 @@ describe("SessionSkillsPanel", () => {
     const panel = screen.getByTestId("session-skills-panel");
     expect(panel).toHaveTextContent("0 skills");
     expect(panel).toHaveTextContent("No reusable workflows listed.");
-    expect(screen.getByTestId("session-skills-list")).toHaveTextContent("No skills listed.");
+    expect(screen.getByTestId("session-skills-list")).toHaveTextContent("No skills returned by this runtime.");
     expect(screen.queryByPlaceholderText("Search title or summary")).toBeNull();
     expect(panel).not.toHaveTextContent("Built-in workflows ready");
     expect(panel).not.toHaveTextContent("No matching skills.");
+    expect(panel).not.toHaveTextContent("No skills listed.");
+  });
+
+  it("keeps an empty installable skills state tied to the save action", async () => {
+    const user = userEvent.setup();
+    render(<SessionSkillsPanel skills={[]} defaultOpen installEnabled onReadSkill={vi.fn()} onInstallSkill={vi.fn()} />);
+
+    expect(screen.getByTestId("session-skills-list")).toHaveTextContent("No reusable workflows saved yet.");
+    await user.click(screen.getByRole("button", { name: "Add skill" }));
+    expect(screen.getByLabelText("Name")).toBeVisible();
   });
 
   it("separates empty search results from an empty skills list", async () => {
@@ -113,7 +123,7 @@ describe("SessionSkillsPanel", () => {
     await user.type(screen.getByPlaceholderText("Search title or summary"), "browser");
 
     expect(screen.getByTestId("session-skills-list")).toHaveTextContent("No matching skills.");
-    expect(screen.getByTestId("session-skills-list")).not.toHaveTextContent("No skills listed.");
+    expect(screen.getByTestId("session-skills-list")).not.toHaveTextContent("No skills returned by this runtime.");
   });
 
   it("surfaces a compact API diagnostic in the collapsed summary", async () => {

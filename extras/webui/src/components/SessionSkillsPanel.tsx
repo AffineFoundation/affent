@@ -221,7 +221,7 @@ export function SessionSkillsPanel({
                   );
                 })
               ) : (
-                <div className="session-skills-empty">{allSkills.length > 0 ? "No matching skills." : "No skills listed."}</div>
+                <div className="session-skills-empty">{allSkills.length > 0 ? "No matching skills." : emptySkillsText(canInstall)}</div>
               )}
             </div>
           </>
@@ -237,6 +237,10 @@ function splitList(text: string): string[] | undefined {
     .map((part) => part.trim())
     .filter(Boolean);
   return parts.length > 0 ? parts : undefined;
+}
+
+function emptySkillsText(canInstall: boolean): string {
+  return canInstall ? "No reusable workflows saved yet." : "No skills returned by this runtime.";
 }
 
 function activationSummary(skill: SessionSkillInfo): string {
