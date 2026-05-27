@@ -1251,8 +1251,8 @@ describe("App", () => {
     expect(context).toHaveTextContent("Artifact 1 file (8 KiB, 1 MiB omitted)");
     const details = screen.getByTestId("chat-context-details");
     expect(chatContextMetric(details, "Artifact 1 file")).toBeVisible();
-    expect(within(details).getByLabelText("Session metrics: 1 more metric")).toBeInTheDocument();
-    await user.click(within(details).getByLabelText("Session metrics: 1 more metric"));
+    expect(within(details).getByLabelText("Session metrics: Work 1 action · 1 source")).toBeInTheDocument();
+    await user.click(within(details).getByLabelText("Session metrics: Work 1 action · 1 source"));
     expect(chatContextMetric(details, "Work 1 action · 1 source")).toBeVisible();
     expect(context).toHaveTextContent("Artifact 1 file (8 KiB, 1 MiB omitted)");
   });

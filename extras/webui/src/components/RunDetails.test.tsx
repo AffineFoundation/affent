@@ -24,6 +24,26 @@ describe("RunDetails", () => {
 
     const details = screen.getByTestId("session-metrics");
     expect(within(details).getByText("Artifact 1 file (8 KiB, 1 MiB omitted)")).toBeVisible();
-    expect(within(details).getByLabelText("Session metrics: 2 more metrics")).toBeInTheDocument();
+    expect(within(details).getByText("Work, Tokens")).toBeVisible();
+    expect(within(details).getByLabelText("Session metrics: Work 1 action · 1 source · Tokens 138")).toBeInTheDocument();
+  });
+
+  it("names a single hidden metric instead of showing a generic more label", () => {
+    render(
+      <RunDetails
+        metrics={[
+          { label: "Tool issue", value: "1", tone: "warning" },
+          { label: "Recovery", value: "rerun checkout spec", tone: "warning" },
+        ]}
+        className="chat-context-details"
+        testId="session-metrics"
+        ariaLabel="Session metrics"
+        summaryLabel="Session metrics"
+        inlineLimit={1}
+      />,
+    );
+
+    expect(screen.getByLabelText("Session metrics: Recovery rerun checkout spec")).toBeVisible();
+    expect(screen.queryByText("+1 more")).toBeNull();
   });
 });

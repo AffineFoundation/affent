@@ -973,6 +973,9 @@ body {
   color: var(--text-faint);
   cursor: pointer;
   list-style: none;
+  max-width: min(220px, 42vw);
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .run-detail-overflow summary::-webkit-details-marker {
