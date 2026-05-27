@@ -8,6 +8,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 	"testing"
 )
 
@@ -165,6 +166,45 @@ func TestAccountSettingsSSHKeyDoesNotOverwriteExistingKey(t *testing.T) {
 	}
 	if string(privateRaw) != "existing-private\n" {
 		t.Fatalf("private key was overwritten: %q", string(privateRaw))
+	}
+}
+
+func TestAccountSettingsSSHKeyConcurrentEnsureReusesSingleKey(t *testing.T) {
+	pool := newPoolWithMemoryRoot(t, t.TempDir())
+	const workers = 8
+	results := make([]accountSSHKeyInfo, workers)
+	errs := make([]error, workers)
+	var wg sync.WaitGroup
+	wg.Add(workers)
+	for i := 0; i < workers; i++ {
+		i := i
+		go func() {
+			defer wg.Done()
+			results[i], errs[i] = ensureAccountSSHKey(pool)
+		}()
+	}
+	wg.Wait()
+
+	created := 0
+	publicKey := ""
+	for i := 0; i < workers; i++ {
+		if errs[i] != nil {
+			t.Fatalf("ensure[%d] error: %v", i, errs[i])
+		}
+		if !results[i].Exists || !strings.HasPrefix(results[i].PublicKey, "ssh-ed25519 ") {
+			t.Fatalf("ensure[%d] = %+v, want public key", i, results[i])
+		}
+		if results[i].Created {
+			created++
+		}
+		if publicKey == "" {
+			publicKey = results[i].PublicKey
+		} else if results[i].PublicKey != publicKey {
+			t.Fatalf("ensure[%d] public key changed:\nfirst=%s\nnext=%s", i, publicKey, results[i].PublicKey)
+		}
+	}
+	if created != 1 {
+		t.Fatalf("created count = %d, want exactly one generated key", created)
 	}
 }
 

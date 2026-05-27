@@ -420,6 +420,8 @@ func readAccountSSHKeyInfo(pool *SessionPool) (accountSSHKeyInfo, error) {
 }
 
 func ensureAccountSSHKey(pool *SessionPool) (accountSSHKeyInfo, error) {
+	pool.settingsMu.Lock()
+	defer pool.settingsMu.Unlock()
 	privatePath, publicPath := accountSSHKeyPaths(pool)
 	if pub, err := readAccountPublicKey(publicPath); err != nil {
 		return accountSSHKeyInfo{}, err
