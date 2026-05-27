@@ -299,7 +299,7 @@ describe("eventTrace view model", () => {
           "matched alpha, coast, inventory",
           "adjacent context",
           "snippet user: Alpha Coast assistant: inventory-drag",
-          "1 more history hit",
+          "also 1 unshown history hit",
         ],
       },
     });

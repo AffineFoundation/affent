@@ -963,7 +963,7 @@ function sessionSearchEvidence(node: ExecutionTreeNode): TurnActivityEvidence | 
     const contextIncluded = booleanField(candidate, "context_included");
     const snippet = stringField(candidate, "snippet");
     const total = numberField(payload, "total") ?? results.length;
-    const extra = Math.max(0, total - 1);
+    const additionalHits = sessionSearchAdditionalHits(results, total);
     const value = [sessionId, turnIndex == null ? undefined : `turn-${turnIndex}`].filter(Boolean).join(":");
     const displayValue = [
       total > 1 ? `${total} hits` : undefined,
@@ -973,11 +973,34 @@ function sessionSearchEvidence(node: ExecutionTreeNode): TurnActivityEvidence | 
       matchedTerms.length > 0 ? matchedTerms.join(", ") : undefined,
       contextIncluded ? "context" : undefined,
       snippet ? `snippet ${summarize(snippet, 96)}` : undefined,
-      extra > 0 ? `+${extra} more` : undefined,
+      additionalHits,
     ].filter(Boolean).join(" · ");
     return { label: "History", value, displayValue };
   }
   return undefined;
+}
+
+function sessionSearchAdditionalHits(results: unknown[], total: number): string | undefined {
+  const parts: string[] = [];
+  for (const candidate of results.slice(1, 3)) {
+    if (!isRecord(candidate)) continue;
+    const ref = sessionSearchHitRef(candidate);
+    if (ref) parts.push(`also ${ref}`);
+  }
+  const unseen = Math.max(0, total - 1 - parts.length);
+  if (unseen > 0) parts.push(`${unseen} unshown ${unseen === 1 ? "hit" : "hits"}`);
+  return parts.join(" · ") || undefined;
+}
+
+function sessionSearchHitRef(result: Record<string, unknown>): string | undefined {
+  const sessionId = stringField(result, "session_id");
+  const turnIndex = numberField(result, "turn_idx");
+  const messageIndex = numberField(result, "message_idx");
+  return [
+    sessionId,
+    turnIndex == null ? undefined : `turn ${turnIndex}`,
+    messageIndex == null ? undefined : `message ${messageIndex}`,
+  ].filter(Boolean).join(" ") || undefined;
 }
 
 function browserNetworkEvidence(node: ExecutionTreeNode): TurnActivityEvidence | undefined {

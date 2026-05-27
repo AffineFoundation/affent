@@ -379,7 +379,6 @@ function sessionSearchPreview(parsed?: JsonObject): string | undefined {
   const first = results[0];
   const matchedTerms = readStringList(first, "matched_terms").slice(0, 4);
   const snippet = readString(first, "snippet");
-  const extra = Math.max(0, total - 1);
   const parts = [
     `${total} history ${pluralize("hit", total)}`,
     readString(first, "session_id"),
@@ -388,9 +387,27 @@ function sessionSearchPreview(parsed?: JsonObject): string | undefined {
     matchedTerms.length > 0 ? `matched ${matchedTerms.join(", ")}` : undefined,
     readBoolean(first, "context_included") ? "context" : undefined,
     snippet ? `snippet ${compactLine(snippet, 96)}` : undefined,
-    extra > 0 ? `${extra} more` : undefined,
+    sessionSearchAdditionalHits(results, total),
   ].filter((part): part is string => !!part);
   return compactLine(parts.join(" · "), 132);
+}
+
+function sessionSearchAdditionalHits(results: readonly JsonObject[], total: number): string | undefined {
+  const parts = results.slice(1, 3).map(sessionSearchHitRef).filter((part): part is string => !!part);
+  const unseen = Math.max(0, total - 1 - parts.length);
+  if (unseen > 0) parts.push(`${unseen} unshown ${pluralize("hit", unseen)}`);
+  return parts.length > 0 ? `also ${parts.join("; ")}` : undefined;
+}
+
+function sessionSearchHitRef(result: JsonObject): string | undefined {
+  const sessionId = readString(result, "session_id");
+  const turn = readNumber(result, "turn_idx");
+  const message = readNumber(result, "message_idx");
+  return [
+    sessionId,
+    turn != null ? `turn ${turn}` : undefined,
+    message != null ? `message ${message}` : undefined,
+  ].filter(Boolean).join(" ") || undefined;
 }
 
 function nextHintFrom(text?: string): string | undefined {

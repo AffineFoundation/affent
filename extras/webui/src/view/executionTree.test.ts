@@ -144,6 +144,7 @@ describe("buildExecutionTree", () => {
     expect(search.label).toBe("Search");
     expect(search.title).toBe("Search history Alpha Coast marker");
     expect(search.preview).toBe("2 history hits · market-alpha · turn 4 · message 8 · matched alpha, coast · context · snippet user: Alpha Coast assistant: history ...");
+    expect(search.preview).not.toContain("1 more");
   });
 
   it("previews source evidence body instead of the SourceAccess header", () => {

@@ -720,7 +720,6 @@ function sessionSearchMeta(payload: Record<string, unknown>): string[] {
   const matchedTerms = first ? readStringArray(first, "matched_terms") : [];
   const snippet = first ? readString(first, "snippet") : undefined;
   const visibleTotal = total ?? results.length;
-  const extra = Math.max(0, visibleTotal - 1);
   return compact([
     typeof total === "number" ? `${total} history hit${total === 1 ? "" : "s"}` : undefined,
     first ? readString(first, "session_id") : undefined,
@@ -729,8 +728,26 @@ function sessionSearchMeta(payload: Record<string, unknown>): string[] {
     matchedTerms.length > 0 ? `matched ${matchedTerms.slice(0, 8).join(", ")}` : undefined,
     first && readBoolean(first, "context_included") ? "adjacent context" : undefined,
     snippet ? `snippet ${streamSummary(snippet)}` : undefined,
-    extra > 0 ? `${extra} more history hit${extra === 1 ? "" : "s"}` : undefined,
+    sessionSearchAdditionalHits(results, visibleTotal),
   ]);
+}
+
+function sessionSearchAdditionalHits(results: readonly Record<string, unknown>[], total: number): string | undefined {
+  const parts = results.slice(1, 3).map(sessionSearchHitRef).filter((part): part is string => !!part);
+  const unseen = Math.max(0, total - 1 - parts.length);
+  if (unseen > 0) parts.push(`${unseen} unshown history ${unseen === 1 ? "hit" : "hits"}`);
+  return parts.length > 0 ? `also ${parts.join("; ")}` : undefined;
+}
+
+function sessionSearchHitRef(result: Record<string, unknown>): string | undefined {
+  const sessionId = readString(result, "session_id");
+  const turn = readNumber(result, "turn_idx");
+  const message = readNumber(result, "message_idx");
+  return [
+    sessionId,
+    typeof turn === "number" ? `turn ${turn}` : undefined,
+    typeof message === "number" ? `message ${message}` : undefined,
+  ].filter(Boolean).join(" ") || undefined;
 }
 
 function eventFailureKinds(event: NormalizedEvent): string[] {
