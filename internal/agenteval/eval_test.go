@@ -666,7 +666,7 @@ func TestBatchScenarioChecks_UsesSharedCheckLibrary(t *testing.T) {
 			"digest": 1,
 		},
 		RequiredLoopProtocolFeedMatches: []LoopProtocolFeedRequirement{
-			{Mode: "digest", PlanLabelContains: "market", PlanCurrentStepStatus: "in_progress", PlanCurrentStep: "source review"},
+			{Mode: "digest", PlanLabelContains: "market", PlanCurrentStepStatus: "in_progress", PlanCurrentStep: "source review", LastTurnEndReason: "completed", MinLastTurnMemorySearchCalls: 1},
 		},
 		RequireLoopProtocolFullAfterCompact: true,
 		RequiredSourceAccess: []SourceAccessRequirement{
@@ -726,7 +726,7 @@ func TestBatchScenarioChecks_UsesSharedCheckLibrary(t *testing.T) {
 		"loop_protocol_calibration_requests_at_least:1",
 		"loop_protocol_calibrations_at_least:1",
 		"loop_protocol_feed_mode_at_least:digest:1",
-		"loop_protocol_feed_match_at_least:digest:market:in_progress:source review:1",
+		"loop_protocol_feed_match_at_least:digest:market:in_progress:source review:completed:turn_mem_search>=1:1",
 		"loop_protocol_full_feed_after_compaction",
 		"source_access_match_at_least:network:browser_network_read:taostats.io:requested=taostats.io/subnets/120:network_xhr_fetch:*:1",
 		"session_search_match_at_least:Alpha Coast:market-alpha:HIST-STOCK-44:alpha,coast:true:0:1",
@@ -1383,7 +1383,9 @@ func TestSelectLongRunSuite(t *testing.T) {
 		compactionRetention.RequiredLoopProtocolFeedModes["full"] != 2 ||
 		!compactionRetention.RequireLoopProtocolFullAfterCompact ||
 		len(compactionRetention.RequiredLoopProtocolFeedMatches) != 1 ||
-		!strings.Contains(compactionRetention.RequiredLoopProtocolFeedMatches[0].CurrentSituation, "current/*.md handoff files") {
+		!strings.Contains(compactionRetention.RequiredLoopProtocolFeedMatches[0].CurrentSituation, "current/*.md handoff files") ||
+		compactionRetention.RequiredLoopProtocolFeedMatches[0].LastTurnEndReason != "completed" ||
+		compactionRetention.RequiredLoopProtocolFeedMatches[0].MinLastTurnToolRequests != 5 {
 		t.Fatalf("compaction retention loop protocol constraints = feeds:%d modes:%#v", compactionRetention.RequiredLoopProtocolFeeds, compactionRetention.RequiredLoopProtocolFeedModes)
 	}
 	if _, ok := compactionRetention.Files[".affent/loops/longrun-compaction-retention/LOOP.md"]; !ok {
@@ -2156,7 +2158,7 @@ func TestWriteScenarioDebugArtifactsIndexesTraceAndFinalText(t *testing.T) {
 			"digest": 1,
 		},
 		RequiredLoopProtocolFeedMatches: []LoopProtocolFeedRequirement{
-			{Mode: "digest", PlanLabelContains: "debug", PlanCurrentStepStatus: "in_progress", PlanCurrentStep: "browser network evidence", CurrentSituation: "dynamic source recovery"},
+			{Mode: "digest", PlanLabelContains: "debug", PlanCurrentStepStatus: "in_progress", PlanCurrentStep: "browser network evidence", CurrentSituation: "dynamic source recovery", LastTurnEndReason: "completed", MinLastTurnMemorySearchCalls: 1},
 		},
 		RequireLoopProtocolFullAfterCompact: true,
 		RequiredToolResultText: map[string][]string{
@@ -2285,7 +2287,7 @@ func TestWriteScenarioDebugArtifactsIndexesTraceAndFinalText(t *testing.T) {
 		manifest.Expectations.RequiredLoopProtocolCalibrations != 1 ||
 		manifest.Expectations.RequiredLoopProtocolFeedModes["digest"] != 1 ||
 		len(manifest.Expectations.RequiredLoopProtocolFeedMatches) != 1 ||
-		manifest.Expectations.RequiredLoopProtocolFeedMatches[0] != (DebugLoopProtocolFeedRequirement{Mode: "digest", PlanLabelContains: "debug", PlanCurrentStepStatus: "in_progress", PlanCurrentStep: "browser network evidence", CurrentSituation: "dynamic source recovery"}) ||
+		manifest.Expectations.RequiredLoopProtocolFeedMatches[0] != (DebugLoopProtocolFeedRequirement{Mode: "digest", PlanLabelContains: "debug", PlanCurrentStepStatus: "in_progress", PlanCurrentStep: "browser network evidence", CurrentSituation: "dynamic source recovery", LastTurnEndReason: "completed", MinLastTurnMemorySearchCalls: 1}) ||
 		!manifest.Expectations.RequireLoopProtocolFullAfterCompact ||
 		!reflect.DeepEqual(manifest.Expectations.RequiredToolResultText["browser_network_read"], []string{"SourceAccess:", "requested_url=", "source_method=network_xhr_fetch"}) ||
 		len(manifest.Expectations.RequiredToolOrder) != 1 ||
@@ -2570,7 +2572,7 @@ func TestWriteScenarioDebugArtifactsIndexesTraceAndFinalText(t *testing.T) {
 		"required_subagent_mode_counts: `review=1`",
 		"required_no_errors: `delegation plan`",
 		"required_loop_decision: `kind=evidence_quality decision=defer trigger=source_access_dynamic_partial min=1`",
-		"required_loop_protocol_feed: `mode=digest plan_label_contains=debug plan_current_step_status=in_progress plan_current_step=browser network evidence current_situation=dynamic source recovery min=1`",
+		"required_loop_protocol_feed: `mode=digest plan_label_contains=debug plan_current_step_status=in_progress plan_current_step=browser network evidence current_situation=dynamic source recovery last_turn_end_reason=completed last_turn_memory_search_calls>=1 min=1`",
 		"required_tool_result_text[browser_network_read]: `SourceAccess:`, `requested_url=`, `source_method=network_xhr_fetch`",
 		"required_source_access: `status=network tool=browser_network_read url_contains=taostats.io/api requested_url_contains=taostats.io/subnets/120 source_method=network_xhr_fetch json_path=$.price min=1`",
 		"required_session_search: `query_contains=Alpha Coast session=market-alpha snippet_contains=history marker terms=alpha,coast context=true turn=4 min=1`",

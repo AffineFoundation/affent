@@ -1563,7 +1563,7 @@ func longRunContextCompactionRetentionScenario() BatchScenario {
 			"full": 2,
 		},
 		RequiredLoopProtocolFeedMatches: []LoopProtocolFeedRequirement{
-			{Mode: "full", CurrentSituation: "current/*.md handoff files"},
+			{Mode: "full", CurrentSituation: "current/*.md handoff files", LastTurnEndReason: "completed", MinLastTurnToolRequests: 5},
 		},
 		RequireLoopProtocolFullAfterCompact: true,
 		RequiredFinalText: []string{

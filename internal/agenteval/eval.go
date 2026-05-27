@@ -70,11 +70,18 @@ type LoopDecisionRequirement struct {
 }
 
 type LoopProtocolFeedRequirement struct {
-	Mode                  string
-	PlanLabelContains     string
-	PlanCurrentStepStatus string
-	PlanCurrentStep       string
-	CurrentSituation      string
+	Mode                          string
+	PlanLabelContains             string
+	PlanCurrentStepStatus         string
+	PlanCurrentStep               string
+	CurrentSituation              string
+	LastTurnEndReason             string
+	MinLastTurnToolRequests       int
+	MinLastTurnMemoryUpdates      int
+	MinLastTurnMemorySearchCalls  int
+	MinLastTurnMemorySearchMisses int
+	MinLastTurnSessionSearchCalls int
+	MinLastTurnLoopGuards         int
 	// Min is the required number of matching loop.protocol_feed events.
 	// Values <=0 default to one so scenarios can spell the common case tersely.
 	Min int
@@ -627,12 +634,19 @@ type DebugLoopDecisionRequirement struct {
 }
 
 type DebugLoopProtocolFeedRequirement struct {
-	Mode                  string `json:"mode,omitempty"`
-	PlanLabelContains     string `json:"plan_label_contains,omitempty"`
-	PlanCurrentStepStatus string `json:"plan_current_step_status,omitempty"`
-	PlanCurrentStep       string `json:"plan_current_step,omitempty"`
-	CurrentSituation      string `json:"current_situation,omitempty"`
-	Min                   int    `json:"min,omitempty"`
+	Mode                          string `json:"mode,omitempty"`
+	PlanLabelContains             string `json:"plan_label_contains,omitempty"`
+	PlanCurrentStepStatus         string `json:"plan_current_step_status,omitempty"`
+	PlanCurrentStep               string `json:"plan_current_step,omitempty"`
+	CurrentSituation              string `json:"current_situation,omitempty"`
+	LastTurnEndReason             string `json:"last_turn_end_reason,omitempty"`
+	MinLastTurnToolRequests       int    `json:"min_last_turn_tool_requests,omitempty"`
+	MinLastTurnMemoryUpdates      int    `json:"min_last_turn_memory_updates,omitempty"`
+	MinLastTurnMemorySearchCalls  int    `json:"min_last_turn_memory_search_calls,omitempty"`
+	MinLastTurnMemorySearchMisses int    `json:"min_last_turn_memory_search_misses,omitempty"`
+	MinLastTurnSessionSearchCalls int    `json:"min_last_turn_session_search_calls,omitempty"`
+	MinLastTurnLoopGuards         int    `json:"min_last_turn_loop_guards,omitempty"`
+	Min                           int    `json:"min,omitempty"`
 }
 
 type DebugSourceAccessRequirement struct {
@@ -1315,12 +1329,19 @@ func debugScenarioExpectations(s BatchScenario) DebugScenarioExpectations {
 	loopFeedReqs := make([]DebugLoopProtocolFeedRequirement, 0, len(s.RequiredLoopProtocolFeedMatches))
 	for _, req := range s.RequiredLoopProtocolFeedMatches {
 		loopFeedReqs = append(loopFeedReqs, DebugLoopProtocolFeedRequirement{
-			Mode:                  req.Mode,
-			PlanLabelContains:     req.PlanLabelContains,
-			PlanCurrentStepStatus: req.PlanCurrentStepStatus,
-			PlanCurrentStep:       req.PlanCurrentStep,
-			CurrentSituation:      req.CurrentSituation,
-			Min:                   req.Min,
+			Mode:                          req.Mode,
+			PlanLabelContains:             req.PlanLabelContains,
+			PlanCurrentStepStatus:         req.PlanCurrentStepStatus,
+			PlanCurrentStep:               req.PlanCurrentStep,
+			CurrentSituation:              req.CurrentSituation,
+			LastTurnEndReason:             req.LastTurnEndReason,
+			MinLastTurnToolRequests:       req.MinLastTurnToolRequests,
+			MinLastTurnMemoryUpdates:      req.MinLastTurnMemoryUpdates,
+			MinLastTurnMemorySearchCalls:  req.MinLastTurnMemorySearchCalls,
+			MinLastTurnMemorySearchMisses: req.MinLastTurnMemorySearchMisses,
+			MinLastTurnSessionSearchCalls: req.MinLastTurnSessionSearchCalls,
+			MinLastTurnLoopGuards:         req.MinLastTurnLoopGuards,
+			Min:                           req.Min,
 		})
 	}
 	toolOrders := make([]DebugToolOrderRequirement, 0, len(s.RequiredToolOrder))
@@ -2017,11 +2038,7 @@ func BatchScenarioChecks(scenario BatchScenario) []Check {
 		checks = append(checks, LoopProtocolFeedModeAtLeast(mode, scenario.RequiredLoopProtocolFeedModes[mode]))
 	}
 	for _, req := range scenario.RequiredLoopProtocolFeedMatches {
-		min := req.Min
-		if min <= 0 {
-			min = 1
-		}
-		checks = append(checks, LoopProtocolFeedMatchAtLeast(req.Mode, req.PlanLabelContains, req.PlanCurrentStepStatus, req.PlanCurrentStep, req.CurrentSituation, min))
+		checks = append(checks, LoopProtocolFeedRequirementAtLeast(req))
 	}
 	if scenario.RequireLoopProtocolFullAfterCompact {
 		checks = append(checks, LoopProtocolFullFeedAfterCompaction())

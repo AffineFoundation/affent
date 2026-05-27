@@ -725,7 +725,7 @@ func TestLoopDecisionMatchAtLeast(t *testing.T) {
 
 func TestLoopProtocolFeedChecks(t *testing.T) {
 	trace := Trace{LoopProtocolFeeds: []LoopProtocolFeed{
-		{Mode: "digest", FeedNumber: 1, PlanLabel: "SN120 research", PlanCurrentStepStatus: "in_progress", PlanCurrentStep: "collect rendered page and network evidence", CurrentSituation: "current risk: dashboard values require network evidence"},
+		{Mode: "digest", FeedNumber: 1, PlanLabel: "SN120 research", PlanCurrentStepStatus: "in_progress", PlanCurrentStep: "collect rendered page and network evidence", CurrentSituation: "current risk: dashboard values require network evidence", LastTurnEndReason: "completed", LastTurnToolRequests: 4, LastTurnMemorySearchCalls: 2, LastTurnMemorySearchMisses: 1, LastTurnSessionSearchCalls: 1},
 		{Mode: "full", FeedNumber: 2, PlanLabel: "SN120 research", PlanCurrentStepStatus: "pending", PlanCurrentStep: "write final cited analysis"},
 	}, EventOrder: []TraceEventRef{
 		{Index: 1, Type: sse.TypeLoopProtocolFeed, LoopProtocolMode: "digest", LoopProtocolPath: ".affent/loops/sn120/LOOP.md"},
@@ -749,6 +749,16 @@ func TestLoopProtocolFeedChecks(t *testing.T) {
 	if res := LoopProtocolFeedMatchAtLeast("digest", "SN120", "in_progress", "network evidence", "dashboard values", 1).Eval(trace); !res.Pass {
 		t.Fatalf("expected loop protocol feed checkpoint match to pass: %+v", res)
 	}
+	if res := LoopProtocolFeedRequirementAtLeast(LoopProtocolFeedRequirement{
+		Mode:                          "digest",
+		PlanLabelContains:             "SN120",
+		LastTurnEndReason:             "completed",
+		MinLastTurnMemorySearchCalls:  2,
+		MinLastTurnMemorySearchMisses: 1,
+		MinLastTurnSessionSearchCalls: 1,
+	}).Eval(trace); !res.Pass {
+		t.Fatalf("expected loop protocol last-turn checkpoint match to pass: %+v", res)
+	}
 	if res := LoopProtocolFullFeedAfterCompaction().Eval(trace); !res.Pass {
 		t.Fatalf("expected post-compaction full feed check to pass: %+v", res)
 	}
@@ -757,6 +767,15 @@ func TestLoopProtocolFeedChecks(t *testing.T) {
 		t.Fatal("expected mismatched plan status to fail")
 	}
 	for _, want := range []string{"matched=0", `mode="digest"`, `plan_current_step_status="completed"`, "collect rendered page"} {
+		if !strings.Contains(res.Detail, want) {
+			t.Fatalf("failure detail %q missing %q", res.Detail, want)
+		}
+	}
+	res = LoopProtocolFeedRequirementAtLeast(LoopProtocolFeedRequirement{Mode: "digest", MinLastTurnMemorySearchMisses: 2}).Eval(trace)
+	if res.Pass {
+		t.Fatal("expected mismatched last-turn memory miss requirement to fail")
+	}
+	for _, want := range []string{"matched=0", "last_turn_memory_search_misses>=2", "memory_misses=1"} {
 		if !strings.Contains(res.Detail, want) {
 			t.Fatalf("failure detail %q missing %q", res.Detail, want)
 		}

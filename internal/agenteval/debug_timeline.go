@@ -485,6 +485,20 @@ func renderTimelineScenarioExpectations(b *strings.Builder, scenario BatchScenar
 			if req.CurrentSituation != "" {
 				parts = append(parts, fmt.Sprintf("current_situation=%s", timelineInline(req.CurrentSituation, 160)))
 			}
+			if req.LastTurnEndReason != "" {
+				parts = append(parts, fmt.Sprintf("last_turn_end_reason=%s", req.LastTurnEndReason))
+			}
+			appendMinRequirement := func(name string, value int) {
+				if value > 0 {
+					parts = append(parts, fmt.Sprintf("%s>=%d", name, value))
+				}
+			}
+			appendMinRequirement("last_turn_tool_requests", req.MinLastTurnToolRequests)
+			appendMinRequirement("last_turn_memory_updates", req.MinLastTurnMemoryUpdates)
+			appendMinRequirement("last_turn_memory_search_calls", req.MinLastTurnMemorySearchCalls)
+			appendMinRequirement("last_turn_memory_search_misses", req.MinLastTurnMemorySearchMisses)
+			appendMinRequirement("last_turn_session_search_calls", req.MinLastTurnSessionSearchCalls)
+			appendMinRequirement("last_turn_loop_guards", req.MinLastTurnLoopGuards)
 			parts = append(parts, fmt.Sprintf("min=%d", min))
 			fmt.Fprintf(b, "- required_loop_protocol_feed: `%s`\n", strings.Join(parts, " "))
 		}

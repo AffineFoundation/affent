@@ -631,24 +631,50 @@ func LoopProtocolFeedModeAtLeast(mode string, min int) Check {
 }
 
 func LoopProtocolFeedMatchAtLeast(mode, planLabelContains, planCurrentStepStatus, planCurrentStep, currentSituation string, min int) Check {
+	return LoopProtocolFeedRequirementAtLeast(LoopProtocolFeedRequirement{
+		Mode:                  mode,
+		PlanLabelContains:     planLabelContains,
+		PlanCurrentStepStatus: planCurrentStepStatus,
+		PlanCurrentStep:       planCurrentStep,
+		CurrentSituation:      currentSituation,
+		Min:                   min,
+	})
+}
+
+func LoopProtocolFeedRequirementAtLeast(req LoopProtocolFeedRequirement) Check {
+	min := req.Min
+	if min <= 0 {
+		min = 1
+	}
 	name := fmt.Sprintf(
 		"loop_protocol_feed_match_at_least:%s:%s:%s:%s:%d",
-		checkNamePart(mode),
-		checkNamePart(planLabelContains),
-		checkNamePart(planCurrentStepStatus),
-		checkNamePart(planCurrentStep),
+		checkNamePart(req.Mode),
+		checkNamePart(req.PlanLabelContains),
+		checkNamePart(req.PlanCurrentStepStatus),
+		checkNamePart(req.PlanCurrentStep),
 		min,
 	)
-	if currentSituation != "" {
-		name = fmt.Sprintf(
-			"loop_protocol_feed_match_at_least:%s:%s:%s:%s:%s:%d",
-			checkNamePart(mode),
-			checkNamePart(planLabelContains),
-			checkNamePart(planCurrentStepStatus),
-			checkNamePart(planCurrentStep),
-			checkNamePart(currentSituation),
-			min,
-		)
+	var nameParts []string
+	for _, part := range []string{
+		req.Mode,
+		req.PlanLabelContains,
+		req.PlanCurrentStepStatus,
+		req.PlanCurrentStep,
+		req.CurrentSituation,
+		req.LastTurnEndReason,
+		positiveCheckNamePart("turn_tools", req.MinLastTurnToolRequests),
+		positiveCheckNamePart("turn_mem_updates", req.MinLastTurnMemoryUpdates),
+		positiveCheckNamePart("turn_mem_search", req.MinLastTurnMemorySearchCalls),
+		positiveCheckNamePart("turn_mem_misses", req.MinLastTurnMemorySearchMisses),
+		positiveCheckNamePart("turn_session_search", req.MinLastTurnSessionSearchCalls),
+		positiveCheckNamePart("turn_loop_guards", req.MinLastTurnLoopGuards),
+	} {
+		if part != "" {
+			nameParts = append(nameParts, checkNamePart(part))
+		}
+	}
+	if len(nameParts) > 0 {
+		name = "loop_protocol_feed_match_at_least:" + strings.Join(nameParts, ":") + fmt.Sprintf(":%d", min)
 	}
 	return Check{
 		Name: name,
@@ -656,19 +682,7 @@ func LoopProtocolFeedMatchAtLeast(mode, planLabelContains, planCurrentStepStatus
 			count := 0
 			var examples []string
 			for _, feed := range t.LoopProtocolFeeds {
-				if mode != "" && feed.Mode != mode {
-					continue
-				}
-				if planLabelContains != "" && !strings.Contains(feed.PlanLabel, planLabelContains) {
-					continue
-				}
-				if planCurrentStepStatus != "" && feed.PlanCurrentStepStatus != planCurrentStepStatus {
-					continue
-				}
-				if planCurrentStep != "" && !strings.Contains(feed.PlanCurrentStep, planCurrentStep) {
-					continue
-				}
-				if currentSituation != "" && !strings.Contains(feed.CurrentSituation, currentSituation) {
+				if !loopProtocolFeedMatchesRequirement(feed, req) {
 					continue
 				}
 				count++
@@ -682,19 +696,99 @@ func LoopProtocolFeedMatchAtLeast(mode, planLabelContains, planCurrentStepStatus
 			return CheckResult{
 				Pass: false,
 				Detail: fmt.Sprintf(
-					"matched=%d, want >= %d for mode=%q plan_label_contains=%q plan_current_step_status=%q plan_current_step=%q current_situation=%q; observed=%v",
+					"matched=%d, want >= %d for %s; observed=%v",
 					count,
 					min,
-					mode,
-					planLabelContains,
-					planCurrentStepStatus,
-					planCurrentStep,
-					currentSituation,
+					loopProtocolFeedRequirementSummary(req),
 					loopProtocolFeedExamples(t.LoopProtocolFeeds, 5),
 				),
 			}
 		},
 	}
+}
+
+func loopProtocolFeedMatchesRequirement(feed LoopProtocolFeed, req LoopProtocolFeedRequirement) bool {
+	if req.Mode != "" && feed.Mode != req.Mode {
+		return false
+	}
+	if req.PlanLabelContains != "" && !strings.Contains(feed.PlanLabel, req.PlanLabelContains) {
+		return false
+	}
+	if req.PlanCurrentStepStatus != "" && feed.PlanCurrentStepStatus != req.PlanCurrentStepStatus {
+		return false
+	}
+	if req.PlanCurrentStep != "" && !strings.Contains(feed.PlanCurrentStep, req.PlanCurrentStep) {
+		return false
+	}
+	if req.CurrentSituation != "" && !strings.Contains(feed.CurrentSituation, req.CurrentSituation) {
+		return false
+	}
+	if req.LastTurnEndReason != "" && feed.LastTurnEndReason != req.LastTurnEndReason {
+		return false
+	}
+	if req.MinLastTurnToolRequests > 0 && feed.LastTurnToolRequests < req.MinLastTurnToolRequests {
+		return false
+	}
+	if req.MinLastTurnMemoryUpdates > 0 && feed.LastTurnMemoryUpdates < req.MinLastTurnMemoryUpdates {
+		return false
+	}
+	if req.MinLastTurnMemorySearchCalls > 0 && feed.LastTurnMemorySearchCalls < req.MinLastTurnMemorySearchCalls {
+		return false
+	}
+	if req.MinLastTurnMemorySearchMisses > 0 && feed.LastTurnMemorySearchMisses < req.MinLastTurnMemorySearchMisses {
+		return false
+	}
+	if req.MinLastTurnSessionSearchCalls > 0 && feed.LastTurnSessionSearchCalls < req.MinLastTurnSessionSearchCalls {
+		return false
+	}
+	if req.MinLastTurnLoopGuards > 0 && feed.LastTurnLoopGuards < req.MinLastTurnLoopGuards {
+		return false
+	}
+	return true
+}
+
+func loopProtocolFeedRequirementSummary(req LoopProtocolFeedRequirement) string {
+	var parts []string
+	if req.Mode != "" {
+		parts = append(parts, fmt.Sprintf("mode=%q", req.Mode))
+	}
+	if req.PlanLabelContains != "" {
+		parts = append(parts, fmt.Sprintf("plan_label_contains=%q", req.PlanLabelContains))
+	}
+	if req.PlanCurrentStepStatus != "" {
+		parts = append(parts, fmt.Sprintf("plan_current_step_status=%q", req.PlanCurrentStepStatus))
+	}
+	if req.PlanCurrentStep != "" {
+		parts = append(parts, fmt.Sprintf("plan_current_step=%q", req.PlanCurrentStep))
+	}
+	if req.CurrentSituation != "" {
+		parts = append(parts, fmt.Sprintf("current_situation=%q", req.CurrentSituation))
+	}
+	if req.LastTurnEndReason != "" {
+		parts = append(parts, fmt.Sprintf("last_turn_end_reason=%q", req.LastTurnEndReason))
+	}
+	appendMin := func(name string, value int) {
+		if value > 0 {
+			parts = append(parts, fmt.Sprintf("%s>=%d", name, value))
+		}
+	}
+	appendMin("last_turn_tool_requests", req.MinLastTurnToolRequests)
+	appendMin("last_turn_memory_updates", req.MinLastTurnMemoryUpdates)
+	appendMin("last_turn_memory_search_calls", req.MinLastTurnMemorySearchCalls)
+	appendMin("last_turn_memory_search_misses", req.MinLastTurnMemorySearchMisses)
+	appendMin("last_turn_session_search_calls", req.MinLastTurnSessionSearchCalls)
+	appendMin("last_turn_loop_guards", req.MinLastTurnLoopGuards)
+	if len(parts) == 0 {
+		return "any loop protocol feed"
+	}
+	return strings.Join(parts, " ")
+}
+
+func positiveCheckNamePart(label string, value int) string {
+	if value <= 0 {
+		return ""
+	}
+	return fmt.Sprintf("%s>=%d", label, value)
 }
 
 func LoopProtocolFullFeedAfterCompaction() Check {
