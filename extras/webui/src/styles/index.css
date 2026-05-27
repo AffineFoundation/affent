@@ -1748,6 +1748,51 @@ body {
   padding-left: 2px;
 }
 
+.session-memory-latest {
+  display: grid;
+  gap: 5px;
+  border: 1px solid rgba(20, 184, 166, 0.26);
+  border-radius: var(--radius-sm);
+  background: rgba(240, 253, 250, 0.58);
+  padding: 8px 10px;
+}
+
+.session-memory-latest div {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 7px;
+  min-width: 0;
+}
+
+.session-memory-latest strong {
+  color: var(--text);
+  font-size: 12.5px;
+}
+
+.session-memory-latest span {
+  color: var(--text-muted);
+  font-size: 11.5px;
+  font-weight: 650;
+}
+
+.session-memory-latest code {
+  max-width: 100%;
+  overflow: hidden;
+  color: var(--text-faint);
+  font-size: 11.5px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.session-memory-latest p {
+  margin: 0;
+  color: var(--text-muted);
+  font-size: 12px;
+  line-height: 1.45;
+  overflow-wrap: anywhere;
+}
+
 .session-skill-preview {
   margin: 0;
   color: var(--text-muted);
@@ -7343,6 +7388,11 @@ html[data-theme="dark"] .execution-node[data-status="running"] > .execution-row 
 html[data-theme="dark"] .memory-update-card {
   border-color: rgba(45, 212, 191, 0.32);
   background: rgba(13, 40, 38, 0.52);
+}
+
+html[data-theme="dark"] .session-memory-latest {
+  border-color: rgba(45, 212, 191, 0.32);
+  background: rgba(13, 40, 38, 0.46);
 }
 
 html[data-theme="dark"] .memory-update-strip-row {

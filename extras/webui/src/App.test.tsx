@@ -346,6 +346,13 @@ describe("App", () => {
               has_events: true,
               has_artifacts: false,
               has_memory: false,
+              latest_memory_update: {
+                action: "add",
+                target: "memory",
+                topic: "core",
+                location: "memory:core",
+                preview: "project facts are durable",
+              },
               has_runtime_skills: false,
             },
           ],
@@ -435,6 +442,8 @@ describe("App", () => {
     expect(screen.getByTestId("composer-task-hint")).toHaveTextContent("propose_install");
     await userEvent.click(screen.getByLabelText("Settings"));
     expect(await screen.findByTestId("session-memory-panel")).toHaveTextContent("2 entries");
+    expect(screen.getByTestId("session-memory-latest")).toHaveTextContent("Latest update");
+    expect(screen.getByTestId("session-memory-latest")).toHaveTextContent("memory:core");
     expect(screen.getByTestId("session-memory-panel")).toHaveTextContent("project facts are durable");
     expect(await screen.findByTestId("session-skills-panel")).toHaveTextContent("1 skill");
     expect(screen.getByTestId("session-skills-panel")).toHaveTextContent("coding_repair_workflow");

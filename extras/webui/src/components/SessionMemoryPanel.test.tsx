@@ -9,6 +9,13 @@ describe("SessionMemoryPanel", () => {
     render(
       <SessionMemoryPanel
         defaultOpen
+        latestUpdate={{
+          action: "replace",
+          target: "memory",
+          topic: "research",
+          location: "memory:research",
+          preview: "taostats pages require browser network evidence",
+        }}
         memory={{
           session_id: "s1",
           has_memory: true,
@@ -49,6 +56,10 @@ describe("SessionMemoryPanel", () => {
 
     expect(screen.getByTestId("session-memory-panel")).toHaveTextContent("3 entries");
     expect(screen.getByTestId("session-memory-panel")).toHaveTextContent("shared user");
+    expect(screen.getByTestId("session-memory-latest")).toHaveTextContent("Latest update");
+    expect(screen.getByTestId("session-memory-latest")).toHaveTextContent("Replaced");
+    expect(screen.getByTestId("session-memory-latest")).toHaveTextContent("memory:research");
+    expect(screen.getByTestId("session-memory-latest")).toHaveTextContent("taostats pages require browser network evidence");
     expect(screen.getByTestId("session-memory-list")).toHaveTextContent("User");
     expect(screen.getByTestId("session-memory-list")).toHaveTextContent("Core");
     expect(screen.getByTestId("session-memory-list")).toHaveTextContent("research");

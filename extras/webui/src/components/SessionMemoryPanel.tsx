@@ -1,15 +1,18 @@
 import { useMemo, useState } from "react";
+import type { MemoryUpdateMeta } from "../api/events";
 import type { SessionMemoryBucket, SessionMemoryResponse } from "../api/sessions";
 import { CopyButton } from "./CopyButton";
 
 export function SessionMemoryPanel({
   memory,
+  latestUpdate,
   loading = false,
   error,
   noSession = false,
   defaultOpen = false,
 }: {
   memory?: SessionMemoryResponse;
+  latestUpdate?: MemoryUpdateMeta;
   loading?: boolean;
   error?: string;
   noSession?: boolean;
@@ -72,6 +75,7 @@ export function SessionMemoryPanel({
         {!loading && !error && noSession ? <div className="session-skills-empty">No selected chat.</div> : null}
         {!loading && !error && !noSession ? (
           <>
+            {latestUpdate ? <LatestMemoryUpdate update={latestUpdate} /> : null}
             <div className="session-skills-controls">
               <label className="session-skills-search">
                 <span>Search memory</span>
@@ -120,6 +124,21 @@ export function SessionMemoryPanel({
   );
 }
 
+function LatestMemoryUpdate({ update }: { update: MemoryUpdateMeta }) {
+  const location = update.location || [update.target, update.topic].filter(Boolean).join(":");
+  const preview = update.preview || update.next_preview || update.previous_preview || "";
+  return (
+    <div className="session-memory-latest" data-testid="session-memory-latest">
+      <div>
+        <strong>Latest update</strong>
+        <span>{memoryActionLabel(update.action)}</span>
+        {location ? <code>{location}</code> : null}
+      </div>
+      {preview ? <p>{preview}</p> : null}
+    </div>
+  );
+}
+
 function memoryBuckets(memory?: SessionMemoryResponse): SessionMemoryBucket[] {
   if (!memory) return [];
   const out: SessionMemoryBucket[] = [];
@@ -138,6 +157,13 @@ function bucketLabel(bucket: SessionMemoryBucket): string {
 function bucketUsage(bucket: SessionMemoryBucket): string {
   const base = bucket.chars_limit ? `${bucket.chars_used}/${bucket.chars_limit} chars` : `${bucket.chars_used} chars`;
   return bucket.percent ? `${base} · ${bucket.percent}%` : base;
+}
+
+function memoryActionLabel(action: string): string {
+  if (action === "add") return "Added";
+  if (action === "replace") return "Replaced";
+  if (action === "remove") return "Removed";
+  return action;
 }
 
 function totalChars(buckets: readonly SessionMemoryBucket[]): number {

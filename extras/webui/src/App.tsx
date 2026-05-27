@@ -1214,6 +1214,7 @@ export function App() {
               />
               <SessionMemoryPanel
                 memory={memoryState.state === "ready" ? memoryState.memory : undefined}
+                latestUpdate={selectedSession?.latest_memory_update}
                 loading={memoryState.state === "loading"}
                 error={memoryState.state === "error" ? memoryState.error : undefined}
                 noSession={memoryState.state === "empty"}
