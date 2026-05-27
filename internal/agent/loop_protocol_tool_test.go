@@ -129,6 +129,9 @@ func TestLoopProtocolToolRejectsActivationBeforeCalibrationAnswer(t *testing.T) 
 	if err == nil || !strings.Contains(err.Error(), "requires a user calibration answer") || !strings.Contains(err.Error(), "ask one concise calibration question") {
 		t.Fatalf("complete_activation without calibration err = %v", err)
 	}
+	if !strings.Contains(err.Error(), "Failure: kind=loop_protocol_activation_unready") {
+		t.Fatalf("complete_activation without calibration should include failure kind, err = %v", err)
+	}
 }
 
 func TestLoopProtocolToolRejectsUnresolvedActivationPlaceholders(t *testing.T) {
@@ -155,6 +158,58 @@ func TestLoopProtocolToolRejectsUnresolvedActivationPlaceholders(t *testing.T) {
 	})))
 	if err == nil || !strings.Contains(err.Error(), "unresolved activation placeholder") || !strings.Contains(err.Error(), "keep status=draft") {
 		t.Fatalf("complete_activation unresolved placeholders err = %v", err)
+	}
+	if !strings.Contains(err.Error(), "Failure: kind=loop_protocol_activation_invalid") {
+		t.Fatalf("complete_activation unresolved placeholders should include failure kind, err = %v", err)
+	}
+}
+
+func TestLoopProtocolToolRejectsOversizedCurrentSituationWithFailureKind(t *testing.T) {
+	dir := t.TempDir()
+	path := loopstate.ProtocolPath(dir, "longrun")
+	if _, _, _, err := loopstate.EnsureProtocolTemplate(path, loopstate.ProtocolTemplateOptions{
+		LoopID:       "longrun",
+		OwnerSession: "longrun",
+		Goal:         "Run a long market analysis without losing recovery context.",
+		Status:       "draft",
+	}); err != nil {
+		t.Fatalf("EnsureProtocolTemplate: %v", err)
+	}
+	protocol, found, err := loopstate.ReadProtocol(path)
+	if err != nil || !found {
+		t.Fatalf("ReadProtocol found=%v err=%v", found, err)
+	}
+	for _, replacement := range [][2]string{
+		{"- status: draft", "- status: running"},
+		{"- hard constraints:", "- hard constraints: keep evidence cited and stop on unresolved user intent"},
+		{"- known evidence:", "- known evidence: user requested durable market analysis"},
+		{"- current risk or blocker:", "- current risk or blocker: needs live source verification"},
+		{"- important artifacts:", "- important artifacts: none yet"},
+		{"- important trace spans:", "- important trace spans: loop activation draft"},
+		{"- last known recovery note:", "- last known recovery note: reload LOOP.md and plan state before continuing"},
+	} {
+		protocol = strings.Replace(protocol, replacement[0], replacement[1], 1)
+	}
+	protocol = strings.Replace(
+		protocol,
+		"- next recovery anchor: check plan state, recent trace, memory search/list, and this protocol before continuing",
+		"- next recovery anchor: check plan state, recent trace, memory search/list, and this protocol before continuing\n- overflow: "+strings.Repeat("status ", loopstate.MaxCurrentSituationChars/len("status ")+30),
+		1,
+	)
+	if _, _, err := loopstate.RecordProtocolCalibrationAnswer(path, "Stop if live source quality is too weak."); err != nil {
+		t.Fatalf("RecordProtocolCalibrationAnswer: %v", err)
+	}
+	tool := loopProtocolTool(path)
+	_, err = tool.Execute(context.Background(), json.RawMessage(mustMarshalJSON(t, map[string]any{
+		"action":   "complete_activation",
+		"protocol": protocol,
+		"reason":   "oversized current situation",
+	})))
+	if err == nil ||
+		!strings.Contains(err.Error(), "Current Situation") ||
+		!strings.Contains(err.Error(), "Failure: kind=loop_protocol_activation_invalid") ||
+		!strings.Contains(err.Error(), "keep Current Situation compact") {
+		t.Fatalf("complete_activation oversized current situation err = %v", err)
 	}
 }
 
@@ -194,6 +249,33 @@ func TestLoopProtocolToolDraftUpdateDoesNotActivate(t *testing.T) {
 	})))
 	if err == nil || !strings.Contains(err.Error(), "cannot activate") {
 		t.Fatalf("update_draft running err = %v", err)
+	}
+}
+
+func TestLoopProtocolToolRejectsActivationWithoutRunningStatusFailureKind(t *testing.T) {
+	dir := t.TempDir()
+	path := loopstate.ProtocolPath(dir, "longrun")
+	if _, _, _, err := loopstate.EnsureProtocolTemplate(path, loopstate.ProtocolTemplateOptions{
+		LoopID:       "longrun",
+		OwnerSession: "longrun",
+		Goal:         "Run a long market analysis without losing recovery context.",
+		Status:       "draft",
+	}); err != nil {
+		t.Fatalf("EnsureProtocolTemplate: %v", err)
+	}
+	protocol, found, err := loopstate.ReadProtocol(path)
+	if err != nil || !found {
+		t.Fatalf("ReadProtocol found=%v err=%v", found, err)
+	}
+	tool := loopProtocolTool(path)
+	_, err = tool.Execute(context.Background(), json.RawMessage(mustMarshalJSON(t, map[string]any{
+		"action":   "complete_activation",
+		"protocol": protocol,
+	})))
+	if err == nil ||
+		!strings.Contains(err.Error(), "metadata status: running") ||
+		!strings.Contains(err.Error(), "Failure: kind=loop_protocol_activation_status") {
+		t.Fatalf("complete_activation without running status err = %v", err)
 	}
 }
 

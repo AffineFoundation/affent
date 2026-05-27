@@ -14,11 +14,14 @@ import (
 const (
 	// LoopProtocolToolName is the registry name for the session-scoped
 	// LOOP.md maintenance tool.
-	LoopProtocolToolName        = "loop_protocol"
-	maxLoopProtocolActionBytes  = 32
-	maxLoopProtocolGoalBytes    = 1024
-	maxLoopProtocolReasonBytes  = 1024
-	maxLoopProtocolSectionBytes = 120
+	LoopProtocolToolName                    = "loop_protocol"
+	loopProtocolActivationStatusFailureKind = "loop_protocol_activation_status"
+	loopProtocolActivationInvalidFailureKind = "loop_protocol_activation_invalid"
+	loopProtocolActivationUnreadyFailureKind = "loop_protocol_activation_unready"
+	maxLoopProtocolActionBytes              = 32
+	maxLoopProtocolGoalBytes                = 1024
+	maxLoopProtocolReasonBytes              = 1024
+	maxLoopProtocolSectionBytes             = 120
 )
 
 type loopProtocolToolArgs struct {
@@ -168,13 +171,22 @@ func completeLoopProtocolActivation(protocolPath string, p loopProtocolToolArgs)
 		}
 	}
 	if loopstate.ProtocolStatus(protocol) != "running" {
-		return "", errors.New("complete_activation requires LOOP.md metadata status: running\nNext: ask one concise calibration question before activation; if user intent is still unclear after the answer, ask one focused follow-up in a later turn and leave the protocol in draft; otherwise update the full protocol with status: running after the user answers and retry")
+		return "", loopProtocolFailure(
+			"complete_activation requires LOOP.md metadata status: running\nNext: ask one concise calibration question before activation; if user intent is still unclear after the answer, ask one focused follow-up in a later turn and leave the protocol in draft; otherwise update the full protocol with status: running after the user answers and retry",
+			loopProtocolActivationStatusFailureKind,
+		)
 	}
 	if err := loopstate.ValidateProtocolActivation(protocol); err != nil {
-		return "", fmt.Errorf("%w\nNext: keep status=draft, ask or wait for the needed calibration details, fill the unresolved LOOP.md fields, and retry activation only after the protocol is complete", err)
+		return "", loopProtocolFailure(
+			fmt.Sprintf("%v\nNext: keep status=draft, ask or wait for the needed calibration details, fill the unresolved LOOP.md fields, keep Current Situation compact, and retry activation only after the protocol is complete", err),
+			loopProtocolActivationInvalidFailureKind,
+		)
 	}
 	if err := loopstate.ValidateProtocolActivationReady(protocolPath); err != nil {
-		return "", fmt.Errorf("%w\nNext: ask one concise calibration question, wait for the user's answer, then retry activation after the runtime records that answer", err)
+		return "", loopProtocolFailure(
+			fmt.Sprintf("%v\nNext: ask one concise calibration question, wait for the user's answer, then retry activation after the runtime records that answer", err),
+			loopProtocolActivationUnreadyFailureKind,
+		)
 	}
 	if strings.TrimSpace(p.Protocol) != "" {
 		if err := loopstate.WriteProtocol(protocolPath, protocol); err != nil {
@@ -186,6 +198,18 @@ func completeLoopProtocolActivation(protocolPath string, p loopProtocolToolArgs)
 		return "", err
 	}
 	return fmt.Sprintf("activated LOOP.md status=%s event_seq=%d updates=%d next=active loop protocol will be fed on future turns", state.Status, event.Seq, state.ProtocolUpdates), nil
+}
+
+func loopProtocolFailure(message, kind string) error {
+	message = strings.TrimSpace(message)
+	if message == "" {
+		message = "loop protocol operation failed"
+	}
+	kind = strings.TrimSpace(kind)
+	if kind == "" {
+		return errors.New(message)
+	}
+	return fmt.Errorf("%s\nFailure: kind=%s", message, kind)
 }
 
 func loopIDFromProtocolPath(protocolPath string) string {
