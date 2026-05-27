@@ -208,6 +208,60 @@ func TestWithLoopProtocolSkillProviderPersistsFeedCadenceAcrossProviders(t *test
 	}
 }
 
+func TestWithLoopProtocolSkillProviderIncludesRuntimeCheckpoints(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "LOOP.md")
+	if err := os.WriteFile(path, []byte("# Loop Protocol\n\n## North Star\n\nRecover from recent runtime checkpoints."), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if _, _, err := loopstate.RecordMemoryUpdate(path, loopstate.MemoryUpdateCheckpoint{
+		TurnID:          "turn_mem",
+		CallID:          "memory-1",
+		Action:          "replace",
+		Target:          "memory",
+		Topic:           "markets",
+		Location:        "memory:markets",
+		Preview:         "old dashboard rule -> prefer browser network evidence",
+		PreviousPreview: "old dashboard rule",
+		NextPreview:     "prefer browser network evidence",
+	}); err != nil {
+		t.Fatalf("RecordMemoryUpdate: %v", err)
+	}
+	if _, _, err := loopstate.RecordDecision(path, loopstate.DecisionCheckpoint{
+		DecisionID:     "evidence-quality-dynamic-partial",
+		Kind:           "evidence_quality",
+		Trigger:        "source_access_dynamic_partial",
+		Decision:       "defer",
+		Confidence:     "high",
+		Reason:         "dynamic widgets lacked text",
+		RequiredAction: "read browser network responses",
+	}); err != nil {
+		t.Fatalf("RecordDecision: %v", err)
+	}
+	if _, _, err := loopstate.RecordTurnCheckpoint(path, loopstate.TurnCheckpoint{
+		TurnID:        "turn_done",
+		EndReason:     sse.TurnEndCompleted,
+		InputTokens:   123,
+		OutputTokens:  45,
+		ToolRequests:  2,
+		MemoryUpdates: 1,
+		LoopGuards:    1,
+	}); err != nil {
+		t.Fatalf("RecordTurnCheckpoint: %v", err)
+	}
+
+	got := WithLoopProtocolSkillProvider(path, nil)("continue")
+	for _, want := range []string{
+		"last_turn: id=turn_done reason=completed tokens=123/45 tools=2 memory_updates=1 loop_guards=1",
+		"last_memory_update: action=replace location=memory:markets preview=old dashboard rule -> prefer browser network evidence",
+		"last_decision: kind=evidence_quality trigger=source_access_dynamic_partial decision=defer action=read browser network responses",
+	} {
+		if !strings.Contains(got, want) {
+			t.Fatalf("loop protocol feed missing runtime checkpoint %q:\n%s", want, got)
+		}
+	}
+}
+
 func TestWithLoopProtocolSkillProviderIncludesPlanCheckpoint(t *testing.T) {
 	dir := t.TempDir()
 	path := filepath.Join(dir, "LOOP.md")

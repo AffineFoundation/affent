@@ -131,7 +131,69 @@ func loopProtocolStateLine(protocolPath string) string {
 	if len(parts) == 0 {
 		return ""
 	}
-	return strings.Join(parts, " ") + "\n"
+	var lines []string
+	lines = append(lines, strings.Join(parts, " "))
+	if state.LastTurnID != "" || state.LastTurnEndReason != "" {
+		var turn []string
+		if state.LastTurnID != "" {
+			turn = append(turn, "id="+state.LastTurnID)
+		}
+		if state.LastTurnEndReason != "" {
+			turn = append(turn, "reason="+state.LastTurnEndReason)
+		}
+		if state.LastTurnInputTokens > 0 || state.LastTurnOutputTokens > 0 {
+			turn = append(turn, fmt.Sprintf("tokens=%d/%d", state.LastTurnInputTokens, state.LastTurnOutputTokens))
+		}
+		if state.LastTurnToolRequests > 0 {
+			turn = append(turn, fmt.Sprintf("tools=%d", state.LastTurnToolRequests))
+		}
+		if state.LastTurnMemoryUpdates > 0 {
+			turn = append(turn, fmt.Sprintf("memory_updates=%d", state.LastTurnMemoryUpdates))
+		}
+		if state.LastTurnLoopGuards > 0 {
+			turn = append(turn, fmt.Sprintf("loop_guards=%d", state.LastTurnLoopGuards))
+		}
+		if len(turn) > 0 {
+			lines = append(lines, "last_turn: "+strings.Join(turn, " "))
+		}
+	}
+	if state.LastMemoryUpdateAction != "" || state.LastMemoryUpdateLoc != "" || state.LastMemoryUpdate != "" {
+		lines = append(lines, "last_memory_update: "+loopProtocolInlineFields([]string{
+			"action=" + state.LastMemoryUpdateAction,
+			"location=" + state.LastMemoryUpdateLoc,
+			"preview=" + state.LastMemoryUpdate,
+		}))
+	}
+	if state.LastDecisionKind != "" || state.LastDecision != "" || state.LastDecisionAction != "" {
+		lines = append(lines, "last_decision: "+loopProtocolInlineFields([]string{
+			"kind=" + state.LastDecisionKind,
+			"trigger=" + state.LastDecisionTrigger,
+			"decision=" + state.LastDecision,
+			"action=" + state.LastDecisionAction,
+		}))
+	}
+	return strings.Join(lines, "\n") + "\n"
+}
+
+func loopProtocolInlineFields(fields []string) string {
+	out := make([]string, 0, len(fields))
+	for _, field := range fields {
+		key, value, ok := strings.Cut(field, "=")
+		if !ok {
+			continue
+		}
+		value = strings.TrimSpace(value)
+		if value == "" {
+			continue
+		}
+		out = append(out, key+"="+loopProtocolInlineValue(value))
+	}
+	return strings.Join(out, " ")
+}
+
+func loopProtocolInlineValue(value string) string {
+	value = strings.Join(strings.Fields(value), " ")
+	return textutil.Preview(value, 220)
 }
 
 func nextLoopProtocolFeedDecision(protocolPath string) (int, string) {

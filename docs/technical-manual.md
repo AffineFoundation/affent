@@ -708,6 +708,9 @@ Affent stores durable state as inspectable files:
   north-star, memory, rules, self-checks, stop/recovery, and plan/step anchors.
   A successful context compaction marks the loop state so the next feed is
   forced back to full even if the normal cadence would have used a digest.
+  Feed metadata also includes compact runtime checkpoints from `state.json`,
+  including the latest turn end, memory update, and loop decision, so the model
+  can recover recent durable changes without replaying the full trace.
   `affentctl` resolves the file under the configured workspace and, when a
   persisted `.affentctl/<session_id>.plan.json` exists, includes the current
   plan checkpoint in the feed metadata. Session list/detail responses expose
