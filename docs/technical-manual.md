@@ -865,7 +865,8 @@ Current built-in suites:
 - `hard-agent`: harder local agent tasks such as coding, planning, and subagent workflows.
 - `long-run`: deterministic complex tasks for longer practical runs, currently
   covering stock synthesis, Bittensor subnet research, code implementation with
-  PR-style reporting, focused-task recovery, and multi-session task recovery.
+  PR-style reporting, focused-task recovery, research-checkpoint visibility,
+  and multi-session task recovery.
   The stock and subnet scenarios require reading the explicit evidence files,
   so a run cannot pass by answering only from prompt wording or stale archive
   files. The PR-style coding scenario requires reading the implementation file

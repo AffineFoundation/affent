@@ -1449,6 +1449,64 @@ func longRunContextCompactionRetentionScenario() BatchScenario {
 	}
 }
 
+func longRunResearchCheckpointScenario() BatchScenario {
+	return BatchScenario{
+		Name:      "longrun-research-checkpoint",
+		Suites:    []string{longRunSuite},
+		SessionID: "longrun-research-checkpoint",
+		Prompt:    "你正在维护 Affent 的长期 loop 协议。请从全局角度结合主流 agent、开源项目和论文研究当前 loop protocol 是否合理，并说明是否需要调整路线。不要调用工具，不要修改文件；本场景只验证 runtime 是否触发 research checkpoint。最终回答必须包含 RESEARCH-CHECKPOINT-37。",
+		Files: map[string]string{
+			".affent/loops/longrun-research-checkpoint/LOOP.md": "# Loop Protocol: longrun-research-checkpoint\n\n## 0. Metadata\n\n- loop_id: longrun-research-checkpoint\n- owner_session: longrun-research-checkpoint\n- status: running\n\n## 1. North Star\n\nKeep Affent grounded in external evidence, real evals, and compact durable loop state.\n\n## 2. Current Situation\n\n- The loop protocol is active for a long-run self-review scenario.\n- Research checkpoints should be visible as loop decisions, not hidden prompt nudges.\n\n## 3. Evolution Protocol\n\nUse external calibration only for high-impact route changes, then close the loop through plan, rules, protocol, or eval updates.\n\n## 4. Self-Attack\n\nCheck whether the design is becoming self-confirming or too mechanism-heavy.\n\n## 5. Rules\n\nDo not turn research checkpoints into a permanent controller agent.\n\n## 6. Plan/Step Pointer\n\nNo authoritative task state is stored here.\n\n## 7. Evidence And Recovery Index\n\nTrace loop decisions and protocol feeds are the evidence for this scenario.\n",
+			"README.md": "# Research Checkpoint Eval\n\nThe scenario validates runtime loop decisions, not file evidence.\n",
+		},
+		RequiredLoopDecisionKinds: map[string]int{
+			"research_checkpoint": 1,
+		},
+		RequiredLoopDecisionResults: map[string]int{
+			"trigger": 1,
+		},
+		RequiredLoopDecisionMatches: []LoopDecisionRequirement{
+			{
+				Kind:     "research_checkpoint",
+				Decision: "trigger",
+				Trigger:  "external_calibration_requested",
+			},
+		},
+		RequiredLoopProtocolFeeds: 1,
+		RequiredLoopProtocolFeedModes: map[string]int{
+			"full": 1,
+		},
+		RequiredFinalText: []string{"RESEARCH-CHECKPOINT-37"},
+		ForbiddenTools: []string{
+			"read_file", "repo_search", "shell", "web_fetch", "web_search",
+			"browser_navigate", "browser_snapshot", "browser_find", "browser_network", "browser_network_read",
+			"write_file", "edit_file", "run_task", "subagent_run",
+		},
+		ProtectedFiles: []string{
+			".affent/loops/longrun-research-checkpoint/LOOP.md",
+			"README.md",
+		},
+		MaxSuccessfulToolCallsByTool: map[string]int{
+			"read_file":            0,
+			"repo_search":          0,
+			"shell":                0,
+			"web_fetch":            0,
+			"web_search":           0,
+			"browser_snapshot":     0,
+			"write_file":           0,
+			"edit_file":            0,
+			"run_task":             0,
+			"subagent_run":         0,
+			"browser_navigate":     0,
+			"browser_find":         0,
+			"browser_network":      0,
+			"browser_network_read": 0,
+		},
+		MaxParentToolCalls: 0,
+		MaxTurns:           4,
+	}
+}
+
 func memoryConfirmedWriteStatsScenario() BatchScenario {
 	return BatchScenario{
 		Name:         "memory-confirmed-write-stats",

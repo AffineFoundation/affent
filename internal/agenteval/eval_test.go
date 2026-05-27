@@ -910,8 +910,8 @@ func TestSelectLongRunSuite(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(scenarios) != 11 {
-		t.Fatalf("long-run suite size = %d, want 11", len(scenarios))
+	if len(scenarios) != 12 {
+		t.Fatalf("long-run suite size = %d, want 12", len(scenarios))
 	}
 	seen := map[string]BatchScenario{}
 	for _, scenario := range scenarios {
@@ -1132,6 +1132,32 @@ func TestSelectLongRunSuite(t *testing.T) {
 	}
 	if !stringSliceContains(compactionRetention.ForbiddenTools, "shell") {
 		t.Fatalf("compaction retention ForbiddenTools = %#v, want shell", compactionRetention.ForbiddenTools)
+	}
+
+	researchCheckpoint, ok := seen["longrun-research-checkpoint"]
+	if !ok {
+		t.Fatalf("long-run suite missing research checkpoint scenario")
+	}
+	if researchCheckpoint.SessionID != "longrun-research-checkpoint" {
+		t.Fatalf("research checkpoint SessionID = %q, want longrun-research-checkpoint", researchCheckpoint.SessionID)
+	}
+	if researchCheckpoint.RequiredLoopDecisionKinds["research_checkpoint"] != 1 ||
+		researchCheckpoint.RequiredLoopDecisionResults["trigger"] != 1 ||
+		len(researchCheckpoint.RequiredLoopDecisionMatches) != 1 ||
+		researchCheckpoint.RequiredLoopDecisionMatches[0] != (LoopDecisionRequirement{Kind: "research_checkpoint", Decision: "trigger", Trigger: "external_calibration_requested"}) {
+		t.Fatalf("research checkpoint loop decision constraints = kinds:%#v results:%#v matches:%#v", researchCheckpoint.RequiredLoopDecisionKinds, researchCheckpoint.RequiredLoopDecisionResults, researchCheckpoint.RequiredLoopDecisionMatches)
+	}
+	if researchCheckpoint.RequiredLoopProtocolFeeds != 1 || researchCheckpoint.RequiredLoopProtocolFeedModes["full"] != 1 {
+		t.Fatalf("research checkpoint loop protocol constraints = feeds:%d modes:%#v", researchCheckpoint.RequiredLoopProtocolFeeds, researchCheckpoint.RequiredLoopProtocolFeedModes)
+	}
+	if _, ok := researchCheckpoint.Files[".affent/loops/longrun-research-checkpoint/LOOP.md"]; !ok {
+		t.Fatalf("research checkpoint missing seeded LOOP.md")
+	}
+	if !stringSliceContains(researchCheckpoint.RequiredFinalText, "RESEARCH-CHECKPOINT-37") {
+		t.Fatalf("research checkpoint RequiredFinalText = %#v, want marker", researchCheckpoint.RequiredFinalText)
+	}
+	if !stringSliceContains(researchCheckpoint.ForbiddenTools, "run_task") || !stringSliceContains(researchCheckpoint.ForbiddenTools, "web_fetch") {
+		t.Fatalf("research checkpoint ForbiddenTools = %#v, want no research tools in smoke scenario", researchCheckpoint.ForbiddenTools)
 	}
 
 	memoryWrite, ok := seen["memory-confirmed-write-stats"]
