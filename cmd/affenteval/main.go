@@ -666,6 +666,7 @@ type batchSummary struct {
 	SourceAccessNetwork                  int
 	SourceAccessDynamicPartial           int
 	SourceAccessExamples                 []agenteval.SourceAccessExample
+	BrowserScrollExamples                []agenteval.BrowserScrollExample
 	BrowserNetworkExamples               []agenteval.BrowserNetworkSearchExample
 	MemoryUpdates                        int
 	MemoryUpdateAdd                      int
@@ -850,6 +851,7 @@ func (s *batchSummary) add(res agenteval.BatchResult) {
 	s.SourceAccessNetwork += res.ToolStats.SourceAccessNetwork
 	s.SourceAccessDynamicPartial += res.ToolStats.SourceAccessDynamicPartial
 	s.SourceAccessExamples = appendSourceAccessExamples(s.SourceAccessExamples, res.SourceAccessExamples, res.BatchScenario, batchSummaryExamplesPerKind)
+	s.BrowserScrollExamples = appendBrowserScrollExamples(s.BrowserScrollExamples, res.BrowserScrollExamples, res.BatchScenario, batchSummaryExamplesPerKind)
 	s.BrowserNetworkExamples = appendBrowserNetworkExamples(s.BrowserNetworkExamples, res.BrowserNetworkExamples, res.BatchScenario, batchSummaryExamplesPerKind)
 	s.MemoryUpdates += res.ToolStats.MemoryUpdates
 	s.MemoryUpdateAdd += res.ToolStats.MemoryUpdateAdd
@@ -1320,6 +1322,7 @@ func printBatchSummary(w io.Writer, s batchSummary) {
 	printToolFailureExampleLines(w, s.ToolFailureExamples, "")
 	printLoopGuardExampleLines(w, s.LoopGuardExamples, "")
 	printSourceAccessExampleLines(w, s.SourceAccessExamples, "")
+	printBrowserScrollExampleLines(w, s.BrowserScrollExamples, "")
 	printBrowserNetworkExampleLines(w, s.BrowserNetworkExamples, "")
 	printMemoryUpdateExampleLines(w, s.MemoryUpdateExamples, "")
 	printFailureHintLines(w, s.RuntimeErrorByKind, "")
@@ -1890,6 +1893,41 @@ func printBrowserNetworkExampleLines(w io.Writer, examples []agenteval.BrowserNe
 		}
 		if ex.SuggestedNextStep != "" {
 			fmt.Fprintf(w, " next=%q", ex.SuggestedNextStep)
+		}
+		fmt.Fprintln(w)
+	}
+}
+
+func printBrowserScrollExampleLines(w io.Writer, examples []agenteval.BrowserScrollExample, indent string) {
+	for _, ex := range examples {
+		fmt.Fprintf(w, "%sbrowser_scroll_example:", indent)
+		if ex.Scenario != "" {
+			fmt.Fprintf(w, " scenario=%s", ex.Scenario)
+		}
+		fmt.Fprintf(w, " status=%s", ex.Status)
+		if ex.CallID != "" {
+			fmt.Fprintf(w, " call_id=%s", ex.CallID)
+		}
+		if ex.URL != "" {
+			fmt.Fprintf(w, " url=%s", ex.URL)
+		}
+		if ex.Direction != "" {
+			fmt.Fprintf(w, " direction=%s", ex.Direction)
+		}
+		if ex.Movement != "" {
+			fmt.Fprintf(w, " movement=%s", ex.Movement)
+		}
+		if ex.Boundary != "" {
+			fmt.Fprintf(w, " boundary=%s", ex.Boundary)
+		}
+		if ex.BeforeY != "" || ex.AfterY != "" || ex.MaxY != "" {
+			fmt.Fprintf(w, " y=%s->%s/%s", ex.BeforeY, ex.AfterY, ex.MaxY)
+		}
+		if ex.SuggestedNextStep != "" {
+			fmt.Fprintf(w, " next=%q", ex.SuggestedNextStep)
+		}
+		if ex.ResultPreview != "" {
+			fmt.Fprintf(w, " preview=%q", ex.ResultPreview)
 		}
 		fmt.Fprintln(w)
 	}
@@ -2489,6 +2527,7 @@ type batchResultRecord struct {
 	SourceAccessNetwork              int                                        `json:"source_access_network"`
 	SourceAccessDynamicPartial       int                                        `json:"source_access_dynamic_partial"`
 	SourceAccessExamples             []agenteval.SourceAccessExample            `json:"source_access_examples,omitempty"`
+	BrowserScrollExamples            []agenteval.BrowserScrollExample           `json:"browser_scroll_examples,omitempty"`
 	BrowserNetworkExamples           []agenteval.BrowserNetworkSearchExample    `json:"browser_network_examples,omitempty"`
 	MemoryUpdates                    int                                        `json:"memory_updates"`
 	MemoryUpdateAdd                  int                                        `json:"memory_update_add"`
@@ -2627,6 +2666,7 @@ type batchSummaryRecord struct {
 	SourceAccessNetwork                  int                                              `json:"source_access_network"`
 	SourceAccessDynamicPartial           int                                              `json:"source_access_dynamic_partial"`
 	SourceAccessExamples                 []agenteval.SourceAccessExample                  `json:"source_access_examples,omitempty"`
+	BrowserScrollExamples                []agenteval.BrowserScrollExample                 `json:"browser_scroll_examples,omitempty"`
 	BrowserNetworkExamples               []agenteval.BrowserNetworkSearchExample          `json:"browser_network_examples,omitempty"`
 	MemoryUpdates                        int                                              `json:"memory_updates"`
 	MemoryUpdateAdd                      int                                              `json:"memory_update_add"`
@@ -2785,6 +2825,7 @@ func printBatchResultJSONL(w io.Writer, meta evalJSONLMetadata, res agenteval.Ba
 		SourceAccessNetwork:              res.ToolStats.SourceAccessNetwork,
 		SourceAccessDynamicPartial:       res.ToolStats.SourceAccessDynamicPartial,
 		SourceAccessExamples:             cloneSourceAccessExamples(res.SourceAccessExamples),
+		BrowserScrollExamples:            cloneBrowserScrollExamples(res.BrowserScrollExamples),
 		BrowserNetworkExamples:           cloneBrowserNetworkExamples(res.BrowserNetworkExamples),
 		MemoryUpdates:                    res.ToolStats.MemoryUpdates,
 		MemoryUpdateAdd:                  res.ToolStats.MemoryUpdateAdd,
@@ -2997,6 +3038,7 @@ func printBatchSummaryJSONL(w io.Writer, meta evalJSONLMetadata, s batchSummary,
 		SourceAccessNetwork:                  s.SourceAccessNetwork,
 		SourceAccessDynamicPartial:           s.SourceAccessDynamicPartial,
 		SourceAccessExamples:                 cloneSourceAccessExamples(s.SourceAccessExamples),
+		BrowserScrollExamples:                cloneBrowserScrollExamples(s.BrowserScrollExamples),
 		BrowserNetworkExamples:               cloneBrowserNetworkExamples(s.BrowserNetworkExamples),
 		MemoryUpdates:                        s.MemoryUpdates,
 		MemoryUpdateAdd:                      s.MemoryUpdateAdd,
@@ -3256,6 +3298,13 @@ func cloneSourceAccessExamples(in []agenteval.SourceAccessExample) []agenteval.S
 	return append([]agenteval.SourceAccessExample(nil), in...)
 }
 
+func cloneBrowserScrollExamples(in []agenteval.BrowserScrollExample) []agenteval.BrowserScrollExample {
+	if len(in) == 0 {
+		return nil
+	}
+	return append([]agenteval.BrowserScrollExample(nil), in...)
+}
+
 func cloneBrowserNetworkExamples(in []agenteval.BrowserNetworkSearchExample) []agenteval.BrowserNetworkSearchExample {
 	if len(in) == 0 {
 		return nil
@@ -3407,6 +3456,22 @@ func appendLoopGuardExamples(dst, src []agenteval.LoopGuardExample, scenario str
 }
 
 func appendSourceAccessExamples(dst, src []agenteval.SourceAccessExample, scenario string, limit int) []agenteval.SourceAccessExample {
+	if limit <= 0 || len(dst) >= limit {
+		return dst
+	}
+	for _, ex := range src {
+		if len(dst) >= limit {
+			break
+		}
+		if ex.Scenario == "" {
+			ex.Scenario = scenario
+		}
+		dst = append(dst, ex)
+	}
+	return dst
+}
+
+func appendBrowserScrollExamples(dst, src []agenteval.BrowserScrollExample, scenario string, limit int) []agenteval.BrowserScrollExample {
 	if limit <= 0 || len(dst) >= limit {
 		return dst
 	}
@@ -3746,6 +3811,7 @@ func printBatchResult(w io.Writer, res agenteval.BatchResult) {
 	printToolFailureExampleLines(w, res.ToolFailureExamples, "  ")
 	printLoopGuardExampleLines(w, res.LoopGuardExamples, "  ")
 	printSourceAccessExampleLines(w, res.SourceAccessExamples, "  ")
+	printBrowserScrollExampleLines(w, res.BrowserScrollExamples, "  ")
 	printBrowserNetworkExampleLines(w, res.BrowserNetworkExamples, "  ")
 	printMemoryUpdateExampleLines(w, res.MemoryUpdateExamples, "  ")
 	printFailureHintLines(w, res.RuntimeErrorByKind, "  ")

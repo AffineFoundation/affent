@@ -1092,6 +1092,34 @@ func TestPrintBatchResultIncludesRepairOutcomesWithoutKinds(t *testing.T) {
 	}
 }
 
+func TestPrintBatchResultIncludesBrowserScrollExamples(t *testing.T) {
+	var out bytes.Buffer
+	printBatchResult(&out, agenteval.BatchResult{
+		BatchScenario: "scroll",
+		Workspace:     "/tmp/ws",
+		TracePath:     "/tmp/ws/trace.jsonl",
+		Duration:      10 * time.Millisecond,
+		BrowserScrollExamples: []agenteval.BrowserScrollExample{{
+			ToolIndex:         1,
+			CallID:            "scroll-print-1",
+			URL:               "https://taostats.io/subnets/120",
+			Direction:         "down",
+			BeforeY:           "1200",
+			AfterY:            "1200",
+			MaxY:              "1200",
+			Movement:          "none",
+			Boundary:          "bottom",
+			Status:            "boundary",
+			SuggestedNextStep: "use browser_network_read before citing hidden values",
+			ResultPreview:     "SCROLL: direction=down before_y=1200 after_y=1200 max_y=1200 movement=none boundary=bottom",
+		}},
+	})
+	got := out.String()
+	if !strings.Contains(got, `browser_scroll_example: status=boundary call_id=scroll-print-1 url=https://taostats.io/subnets/120 direction=down movement=none boundary=bottom y=1200->1200/1200 next="use browser_network_read before citing hidden values" preview="SCROLL: direction=down before_y=1200 after_y=1200 max_y=1200 movement=none boundary=bottom"`) {
+		t.Fatalf("output missing browser scroll example:\n%s", got)
+	}
+}
+
 func TestPrintBatchResultIncludesDebugPathsForRetainedWorkspace(t *testing.T) {
 	var out bytes.Buffer
 	printBatchResult(&out, agenteval.BatchResult{
@@ -1246,6 +1274,20 @@ func TestBatchSummaryAggregatesRuntimeMetrics(t *testing.T) {
 			ContentType:   "application/json",
 			JSONPath:      "$.price",
 			ResultPreview: `JSON_PATH: $.price "12.34"`,
+		}},
+		BrowserScrollExamples: []agenteval.BrowserScrollExample{{
+			ToolIndex:         2,
+			CallID:            "browser-scroll-1",
+			URL:               "https://metrics.example/dashboard",
+			Direction:         "down",
+			BeforeY:           "1200",
+			AfterY:            "1200",
+			MaxY:              "1200",
+			Movement:          "none",
+			Boundary:          "bottom",
+			Status:            "boundary",
+			SuggestedNextStep: "use browser_network_read before citing hidden values",
+			ResultPreview:     "SCROLL: direction=down before_y=1200 after_y=1200 max_y=1200 movement=none boundary=bottom",
 		}},
 		BrowserNetworkExamples: []agenteval.BrowserNetworkSearchExample{{
 			ToolIndex:         2,
@@ -1452,7 +1494,7 @@ func TestBatchSummaryAggregatesRuntimeMetrics(t *testing.T) {
 	if !strings.Contains(out.String(), "source_access=results:4,verified:3,discovery:0,network:3,dynamic_partial:0") {
 		t.Fatalf("summary output missing source access rollup:\n%s", out.String())
 	}
-	if !strings.Contains(out.String(), "debug_brief=browser_network:1,browser_network:refs:1,context_compaction:1,context_compaction:reactive:1,loop_guard:2,loop_guard:forced_no_tools:1,outcome:failed:1,plan:2,plan:set:1,plan:update:1,plan_error:1,recall:1,recall:context:1,recall:weak_context:1,runtime_error:1,runtime_error:context_overflow:1,runtime_error:llm_timeout:1,source_access:2,source_network:2,source_unverified:1,tool_failure:1,tool_failure:invalid_args:1,tool_failure:timeout:1,tool_repair:2,tool_repair:alias_rename:2,tool_repair:failed:1,tool_repair:tool_name:1,tool_repair:type_coercion:1,truncation:2,truncation:missing_artifact:1,truncation:tool_context:2,turn_end:max_turns:1") {
+	if !strings.Contains(out.String(), "debug_brief=browser_network:1,browser_network:refs:1,browser_scroll:1,browser_scroll:boundary:1,context_compaction:1,context_compaction:reactive:1,loop_guard:2,loop_guard:forced_no_tools:1,outcome:failed:1,plan:2,plan:set:1,plan:update:1,plan_error:1,recall:1,recall:context:1,recall:weak_context:1,runtime_error:1,runtime_error:context_overflow:1,runtime_error:llm_timeout:1,source_access:2,source_network:2,source_unverified:1,tool_failure:1,tool_failure:invalid_args:1,tool_failure:timeout:1,tool_repair:2,tool_repair:alias_rename:2,tool_repair:failed:1,tool_repair:tool_name:1,tool_repair:type_coercion:1,truncation:2,truncation:missing_artifact:1,truncation:tool_context:2,turn_end:max_turns:1") {
 		t.Fatalf("summary output missing debug brief tag rollup:\n%s", out.String())
 	}
 	if !strings.Contains(out.String(), `failure_example[turn_end]: scenario=taostats-rendered failure="turn ended with reason \"max_turns\" (expected completed)"`) ||
@@ -1518,6 +1560,9 @@ func TestBatchSummaryAggregatesRuntimeMetrics(t *testing.T) {
 	}
 	if !strings.Contains(out.String(), "source_access_example: scenario=sample status=network tool=browser_network_read call_id=source-1 url=https://metrics.example/api.json method=network_xhr_fetch http_status=200 content_type=application/json json_path=$.price preview=\"JSON_PATH: $.price \\\"12.34\\\"\"") {
 		t.Fatalf("summary output missing source access example:\n%s", out.String())
+	}
+	if !strings.Contains(out.String(), `browser_scroll_example: scenario=sample status=boundary call_id=browser-scroll-1 url=https://metrics.example/dashboard direction=down movement=none boundary=bottom y=1200->1200/1200 next="use browser_network_read before citing hidden values" preview="SCROLL: direction=down before_y=1200 after_y=1200 max_y=1200 movement=none boundary=bottom"`) {
+		t.Fatalf("summary output missing browser scroll example:\n%s", out.String())
 	}
 	if !strings.Contains(out.String(), `browser_network_example: scenario=sample status=matches call_id=browser-network-1 page=https://metrics.example/dashboard query="price" refs=n1 previews="{\"price\":\"12.34\"}" requires_read=true not_citable=true next="call browser_network_read before citing values"`) {
 		t.Fatalf("summary output missing browser network example:\n%s", out.String())
@@ -1600,6 +1645,13 @@ func TestBatchSummaryAggregatesRuntimeMetrics(t *testing.T) {
 		summary.SourceAccessExamples[0].CallID != "source-1" ||
 		summary.SourceAccessExamples[0].Scenario != "sample" {
 		t.Fatalf("SourceAccessExamples = %#v", summary.SourceAccessExamples)
+	}
+	if len(summary.BrowserScrollExamples) != 1 ||
+		summary.BrowserScrollExamples[0].CallID != "browser-scroll-1" ||
+		summary.BrowserScrollExamples[0].Scenario != "sample" ||
+		summary.BrowserScrollExamples[0].Status != "boundary" ||
+		summary.BrowserScrollExamples[0].Movement != "none" {
+		t.Fatalf("BrowserScrollExamples = %#v", summary.BrowserScrollExamples)
 	}
 	if len(summary.BrowserNetworkExamples) != 1 ||
 		summary.BrowserNetworkExamples[0].CallID != "browser-network-1" ||
@@ -1869,6 +1921,20 @@ func TestPrintBatchResultJSONL(t *testing.T) {
 			RequiresRead:      true,
 			NotCitable:        true,
 			SuggestedNextStep: "call browser_network_read before citing values",
+		}},
+		BrowserScrollExamples: []agenteval.BrowserScrollExample{{
+			ToolIndex:         2,
+			CallID:            "scroll-jsonl-1",
+			URL:               "https://taostats.io/subnets/120",
+			Direction:         "down",
+			BeforeY:           "1200",
+			AfterY:            "1200",
+			MaxY:              "1200",
+			Movement:          "none",
+			Boundary:          "bottom",
+			Status:            "boundary",
+			SuggestedNextStep: "use browser_network_read before citing hidden values",
+			ResultPreview:     "SCROLL: direction=down before_y=1200 after_y=1200 max_y=1200 movement=none boundary=bottom",
 		}},
 		MemoryUpdateExamples: []agenteval.MemoryUpdateExample{{
 			ToolIndex: 3,
@@ -2189,6 +2255,7 @@ func TestPrintBatchResultJSONL(t *testing.T) {
 		!jsonArrayContainsString(debugBrief["tags"], "runtime_error:llm_incomplete_stream") ||
 		!jsonArrayContainsString(debugBrief["tags"], "loop_guard") ||
 		!jsonArrayContainsString(debugBrief["tags"], "source_network") ||
+		!jsonArrayContainsString(debugBrief["tags"], "browser_scroll:boundary") ||
 		!jsonArrayContainsString(debugBrief["tags"], "browser_network:refs") ||
 		!jsonArrayContainsString(debugBrief["tags"], "memory_update:add") ||
 		!jsonArrayContainsString(debugBrief["tags"], "recall") ||
@@ -2231,6 +2298,24 @@ func TestPrintBatchResultJSONL(t *testing.T) {
 		!jsonArrayContainsString(browserNetworkExample["previews"], `{"market_cap":"201.04K T"}`) ||
 		!strings.Contains(fmt.Sprint(browserNetworkExample["suggested_next_step"]), "browser_network_read") {
 		t.Fatalf("browser_network_example = %#v\njson=%s", browserNetworkExamples[0], out.String())
+	}
+	browserScrollExamples, ok := got["browser_scroll_examples"].([]any)
+	if !ok || len(browserScrollExamples) != 1 {
+		t.Fatalf("browser_scroll_examples = %#v\njson=%s", got["browser_scroll_examples"], out.String())
+	}
+	browserScrollExample, ok := browserScrollExamples[0].(map[string]any)
+	if !ok ||
+		browserScrollExample["call_id"] != "scroll-jsonl-1" ||
+		browserScrollExample["url"] != "https://taostats.io/subnets/120" ||
+		browserScrollExample["direction"] != "down" ||
+		browserScrollExample["before_y"] != "1200" ||
+		browserScrollExample["after_y"] != "1200" ||
+		browserScrollExample["max_y"] != "1200" ||
+		browserScrollExample["movement"] != "none" ||
+		browserScrollExample["boundary"] != "bottom" ||
+		browserScrollExample["status"] != "boundary" ||
+		!strings.Contains(fmt.Sprint(browserScrollExample["suggested_next_step"]), "browser_network_read") {
+		t.Fatalf("browser_scroll_example = %#v\njson=%s", browserScrollExamples[0], out.String())
 	}
 	memoryUpdateExamples, ok := got["memory_update_examples"].([]any)
 	if !ok || len(memoryUpdateExamples) != 1 {
@@ -2361,19 +2446,23 @@ func TestPrintBatchResultJSONL(t *testing.T) {
 	}
 }
 
-func TestEvalJSONLContractDocumentsBrowserNetworkExamples(t *testing.T) {
+func TestEvalJSONLContractDocumentsBrowserDiagnostics(t *testing.T) {
 	raw, err := os.ReadFile(filepath.Join("..", "..", "docs", "eval-jsonl-contract.md"))
 	if err != nil {
 		t.Fatalf("read eval JSONL contract: %v", err)
 	}
 	doc := string(raw)
 	for _, want := range []string{
+		"`browser_scroll_examples`",
+		"`browser_scroll:boundary`",
+		"`browser_scroll:stuck_without_network`",
+		"page-position diagnostics",
 		"`browser_network_examples`",
 		"not citable factual evidence",
 		"`browser_network_read`",
 		"`browser_network:unread_refs`",
 		"`browser_network:refs`",
-		"`source_access_examples`, `browser_network_examples`",
+		"`source_access_examples`, `browser_scroll_examples`",
 	} {
 		if !strings.Contains(doc, want) {
 			t.Fatalf("eval JSONL contract missing %q", want)
@@ -2904,6 +2993,21 @@ func TestPrintBatchSummaryJSONL(t *testing.T) {
 			JSONPath:      "$.price",
 			ResultPreview: `JSON_PATH: $.price "12.34"`,
 		}},
+		BrowserScrollExamples: []agenteval.BrowserScrollExample{{
+			Scenario:          "taostats-rendered",
+			ToolIndex:         2,
+			CallID:            "summary-scroll-1",
+			URL:               "https://taostats.io/subnets/120",
+			Direction:         "down",
+			BeforeY:           "1200",
+			AfterY:            "1200",
+			MaxY:              "1200",
+			Movement:          "none",
+			Boundary:          "bottom",
+			Status:            "boundary",
+			SuggestedNextStep: "use browser_network_read before citing hidden values",
+			ResultPreview:     "SCROLL: direction=down before_y=1200 after_y=1200 max_y=1200 movement=none boundary=bottom",
+		}},
 		BrowserNetworkExamples: []agenteval.BrowserNetworkSearchExample{{
 			Scenario:          "taostats-rendered",
 			ToolIndex:         3,
@@ -3271,6 +3375,21 @@ func TestPrintBatchSummaryJSONL(t *testing.T) {
 		sourceAccessExample["json_path"] != "$.price" ||
 		sourceAccessExample["result_preview"] != `JSON_PATH: $.price "12.34"` {
 		t.Fatalf("source_access_example = %#v\njson=%s", sourceAccessExamples[0], out.String())
+	}
+	browserScrollExamples, ok := got["browser_scroll_examples"].([]any)
+	if !ok || len(browserScrollExamples) != 1 {
+		t.Fatalf("browser_scroll_examples = %#v\njson=%s", got["browser_scroll_examples"], out.String())
+	}
+	browserScrollExample, ok := browserScrollExamples[0].(map[string]any)
+	if !ok ||
+		browserScrollExample["scenario"] != "taostats-rendered" ||
+		browserScrollExample["call_id"] != "summary-scroll-1" ||
+		browserScrollExample["url"] != "https://taostats.io/subnets/120" ||
+		browserScrollExample["status"] != "boundary" ||
+		browserScrollExample["movement"] != "none" ||
+		browserScrollExample["boundary"] != "bottom" ||
+		!strings.Contains(fmt.Sprint(browserScrollExample["suggested_next_step"]), "browser_network_read") {
+		t.Fatalf("browser_scroll_example = %#v\njson=%s", browserScrollExamples[0], out.String())
 	}
 	browserNetworkExamples, ok := got["browser_network_examples"].([]any)
 	if !ok || len(browserNetworkExamples) != 1 {
