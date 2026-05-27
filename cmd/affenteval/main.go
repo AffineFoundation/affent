@@ -3858,16 +3858,50 @@ func enabledRuntimeToolSet(runtimeTools string, runtimeAllTools, runtimeMemory, 
 
 func requiredRuntimeTools(scenario agenteval.BatchScenario) []string {
 	required := map[string]bool{}
-	for _, tool := range scenario.RequiredTools {
-		if strings.TrimSpace(tool) != "" {
-			required[strings.TrimSpace(tool)] = true
+	add := func(tool string) {
+		if tool = strings.TrimSpace(tool); tool != "" {
+			required[tool] = true
 		}
+	}
+	for _, tool := range scenario.RequiredTools {
+		add(tool)
+	}
+	for tool := range scenario.RequiredToolCounts {
+		add(tool)
+	}
+	for tool := range scenario.RequiredToolResultText {
+		add(tool)
+	}
+	for _, req := range scenario.RequiredToolArgContains {
+		add(req.Tool)
+	}
+	for _, tool := range scenario.RequiredTruncatedResults {
+		add(tool)
+	}
+	for _, tool := range scenario.RequiredResultArtifacts {
+		add(tool)
+	}
+	for _, order := range scenario.RequiredToolOrder {
+		add(order.Earlier)
+		add(order.Later)
+	}
+	for _, req := range scenario.RequiredSourceAccess {
+		add(req.Tool)
+	}
+	if len(scenario.RequiredSessionSearch) > 0 {
+		add(agent.SessionSearchToolName)
+	}
+	if len(scenario.RequiredFocusedTaskCounts) > 0 {
+		add(agent.FocusedTaskToolName)
+	}
+	if len(scenario.RequiredSubagentModeCounts) > 0 {
+		add(agent.SubagentToolName)
 	}
 	if len(scenario.RequiredCommands) > 0 ||
 		len(scenario.RequiredCommandCounts) > 0 ||
 		len(scenario.RequiredCommandBeforeTool) > 0 ||
 		len(scenario.RequiredCommandAfterTool) > 0 {
-		required["shell"] = true
+		add("shell")
 	}
 	out := make([]string, 0, len(required))
 	for tool := range required {

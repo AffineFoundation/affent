@@ -955,7 +955,10 @@ them: `--runtime-tools read_file,shell`, `--runtime-tools readonly_workspace,web
 `--runtime-memory`, `--runtime-web`, `--runtime-browser`, `--runtime-mcp-config`,
 or the matching lower-level `affentctl --eval-tools` flags, which imply eval
 mode. Use `--eval-all-tools` / `--runtime-all-tools` only for smoke/debug runs
-that intentionally exercise the full surface. The eval container does not
+that intentionally exercise the full surface. Before running, `affenteval`
+also validates scenario-declared tool dependencies from required tool counts,
+orders, argument checks, source-access checks, session recall checks, and
+delegation checks against the selected runtime surface. The eval container does not
 forward host `AFFENTCTL_EVAL_MODE`,
 `AFFENTCTL_EVAL_TOOLS`, `AFFENTCTL_EVAL_ALL_TOOLS`, `AFFENTCTL_SUBAGENT`,
 `AFFENTCTL_FOCUSED_TASKS`, or `AFFENTCTL_PROJECT_CONTEXT`; use the

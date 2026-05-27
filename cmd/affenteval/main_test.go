@@ -331,6 +331,50 @@ func TestValidateRuntimeToolSurface(t *testing.T) {
 				RequiredTools: []string{"memory", "session_search"},
 			},
 		},
+		{
+			name:   "required tool counts are validated before run",
+			runner: BatchRuntimeToolConfig{RuntimeEvalMode: true, RuntimeTools: "readonly_workspace"},
+			scenario: agenteval.BatchScenario{
+				Name:               "plan-edit",
+				RequiredToolCounts: map[string]int{"plan": 1, "edit_file": 1},
+			},
+			wantErr: "plan-edit missing edit_file, plan",
+		},
+		{
+			name:   "tool order and argument requirements are validated before run",
+			runner: BatchRuntimeToolConfig{RuntimeEvalMode: true, RuntimeTools: "read_file"},
+			scenario: agenteval.BatchScenario{
+				Name:              "edit-flow",
+				RequiredToolOrder: []agenteval.ToolOrderRequirement{{Earlier: "read_file", Later: "edit_file"}},
+				RequiredToolArgContains: []agenteval.ToolArgContainsRequirement{{
+					Tool:      "shell",
+					Arg:       "command",
+					Substring: "go test",
+				}},
+			},
+			wantErr: "edit-flow missing edit_file, shell",
+		},
+		{
+			name:   "session search requirements imply recall tool",
+			runner: BatchRuntimeToolConfig{RuntimeEvalMode: true, RuntimeTools: "workspace"},
+			scenario: agenteval.BatchScenario{
+				Name:                  "history",
+				RequiredSessionSearch: []agenteval.SessionSearchRequirement{{SessionID: "market-alpha"}},
+			},
+			wantErr: "history missing session_search",
+		},
+		{
+			name:   "delegation requirements imply child tools",
+			runner: BatchRuntimeToolConfig{RuntimeEvalMode: true, RuntimeTools: "workspace"},
+			scenario: agenteval.BatchScenario{
+				Name:                      "delegation",
+				RequiredFocusedTaskCounts: map[string]int{"explore": 1},
+				RequiredSubagentModeCounts: map[string]int{
+					"review": 1,
+				},
+			},
+			wantErr: "delegation missing run_task, subagent_run",
+		},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
