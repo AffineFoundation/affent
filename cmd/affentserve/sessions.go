@@ -1473,7 +1473,19 @@ func (s *Session) recordLoopProtocolCalibrationAnswerIfReady(text string) {
 	if !conversationHasLoopCalibrationQuestion(s.conv.Snapshot()) {
 		return
 	}
-	_, _, _ = loopstate.RecordProtocolCalibrationAnswer(s.loopProtocolPath, text)
+	state, event, err := loopstate.RecordProtocolCalibrationAnswer(s.loopProtocolPath, text)
+	if err != nil {
+		s.loop.Log.Warn().Err(err).Str("session_id", s.ID).Msg("record loop protocol calibration")
+		return
+	}
+	s.publishSessionEvent(sse.TypeLoopCalibration, sse.LoopProtocolCalibrationPayload{
+		LoopID:                state.LoopID,
+		Status:                state.Status,
+		CalibrationAnswers:    state.CalibrationAnswers,
+		LastCalibrationAnswer: state.LastCalibrationAnswer,
+		ProtocolPath:          loopstate.ProtocolRelPath(s.ID),
+		EventSeq:              event.Seq,
+	})
 }
 
 func conversationHasLoopCalibrationQuestion(messages []agent.ChatMessage) bool {
@@ -1484,6 +1496,26 @@ func conversationHasLoopCalibrationQuestion(messages []agent.ChatMessage) bool {
 		}
 	}
 	return false
+}
+
+func (s *Session) publishSessionEvent(eventType string, payload any) {
+	if s == nil || s.events == nil {
+		return
+	}
+	ev, err := sse.NewEvent(eventType, payload)
+	if err != nil {
+		if s.loop != nil {
+			s.loop.Log.Warn().Err(err).Str("type", eventType).Msg("encode session event")
+		}
+		return
+	}
+	select {
+	case s.events <- ev:
+	default:
+		if s.loop != nil {
+			s.loop.Log.Warn().Str("type", eventType).Msg("session event channel full; dropped")
+		}
+	}
 }
 
 func looksLikeLoopCalibrationQuestion(text string) bool {

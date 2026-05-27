@@ -302,6 +302,24 @@ loop context pressure
 without separately reading loop files. Plan checkpoint fields are recovery
 pointers only; the persisted plan state remains the step authority.
 
+### `loop.protocol_calibration`
+
+- `loop_id`: optional loop identity, usually the owning session id.
+- `status`: optional loop lifecycle status after the answer is recorded,
+  usually `draft`.
+- `calibration_answers`: durable count of accepted user calibration answers.
+- `last_calibration_answer_preview`: bounded preview of the latest accepted
+  answer.
+- `protocol_path`: optional workspace/session-relative protocol path.
+- `event_seq`: sequence number of the sidecar loop event mirrored into the
+  session trace.
+
+This event is emitted when `affentserve` accepts a human reply as the required
+calibration answer for a draft `LOOP.md`. It mirrors the sidecar
+`.affent/loops/<id>/events.jsonl` calibration record into normal history/SSE so
+WebUI and replay tools can show that activation may proceed without polling the
+loop file directly.
+
 ### `loop.decision`
 
 - `turn_id`: optional runtime turn id.

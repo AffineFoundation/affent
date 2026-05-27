@@ -22,6 +22,7 @@ const (
 	TypeUsage            = "usage"
 	TypeTurnEnd          = "turn.end"
 	TypeLoopProtocolFeed = "loop.protocol_feed"
+	TypeLoopCalibration  = "loop.protocol_calibration"
 	TypeLoopDecision     = "loop.decision"
 	TypeContextCompact   = "context.compacted"
 	TypeError            = "error"
@@ -275,6 +276,18 @@ type LoopProtocolFeedPayload struct {
 	PlanCurrentStepIndex  int    `json:"plan_current_step_index,omitempty"`
 	PlanCurrentStepStatus string `json:"plan_current_step_status,omitempty"`
 	PlanCurrentStep       string `json:"plan_current_step,omitempty"`
+}
+
+// LoopProtocolCalibrationPayload records that a user answer was accepted as
+// the calibration required before a draft LOOP.md can be activated. It mirrors
+// the sidecar loop event into the normal session trace/SSE stream.
+type LoopProtocolCalibrationPayload struct {
+	LoopID                string `json:"loop_id,omitempty"`
+	Status                string `json:"status,omitempty"`
+	CalibrationAnswers    int    `json:"calibration_answers,omitempty"`
+	LastCalibrationAnswer string `json:"last_calibration_answer_preview,omitempty"`
+	ProtocolPath          string `json:"protocol_path,omitempty"`
+	EventSeq              int    `json:"event_seq,omitempty"`
 }
 
 // LoopDecisionPayload records one short protocol decision made outside the

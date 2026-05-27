@@ -57,6 +57,18 @@ describe("eventTrace view model", () => {
       },
       {
         id: 4,
+        type: "loop.protocol_calibration",
+        data: {
+          loop_id: "longrun",
+          status: "draft",
+          calibration_answers: 1,
+          last_calibration_answer_preview: "Stop when source evidence is weak.",
+          protocol_path: ".affent/loops/longrun/LOOP.md",
+          event_seq: 2,
+        },
+      },
+      {
+        id: 5,
         type: "runtime.surface",
         data: {
           turn_id: "t1",
@@ -67,7 +79,7 @@ describe("eventTrace view model", () => {
         },
       },
       {
-        id: 5,
+        id: 6,
         type: "loop.decision",
         data: {
           turn_id: "t1",
@@ -79,7 +91,7 @@ describe("eventTrace view model", () => {
         },
       },
       {
-        id: 6,
+        id: 7,
         type: "context.compacted",
         data: {
           turn_id: "t1",
@@ -94,7 +106,7 @@ describe("eventTrace view model", () => {
         },
       },
       {
-        id: 7,
+        id: 8,
         type: "turn.end",
         data: {
           turn_id: "t1",
@@ -114,11 +126,11 @@ describe("eventTrace view model", () => {
         },
       },
     ]));
-    const [request, result, feed, surface, decision, compacted, finished] = model.items;
+    const [request, result, feed, calibration, surface, decision, compacted, finished] = model.items;
 
     expect(model.metadata).toHaveLength(1);
     expect(model.metadata[0].type).toBe("trace.meta");
-    expect(model.items).toHaveLength(7);
+    expect(model.items).toHaveLength(8);
     expect(request).toMatchObject({
       kind: "event",
       display: {
@@ -149,6 +161,14 @@ describe("eventTrace view model", () => {
         label: "Loop protocol fed",
         meta: ["Request 1", "longrun", "feed 4", "calibration 1 · Stop when source evidence is weak.", "plan plan:1/3:active · step 2 in_progress · verify browser evidence", ".affent/loops/longrun/LOOP.md"],
         badges: ["digest", "running"],
+      },
+    });
+    expect(calibration).toMatchObject({
+      kind: "event",
+      display: {
+        label: "Loop calibration recorded",
+        meta: ["longrun", "calibration 1", "Stop when source evidence is weak.", "event 2", ".affent/loops/longrun/LOOP.md"],
+        badges: ["draft"],
       },
     });
     expect(decision).toMatchObject({

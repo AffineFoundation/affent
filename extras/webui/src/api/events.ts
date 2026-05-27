@@ -23,6 +23,7 @@ export const EventType = {
   Usage: "usage",
   TurnEnd: "turn.end",
   LoopProtocolFeed: "loop.protocol_feed",
+  LoopProtocolCalibration: "loop.protocol_calibration",
   LoopDecision: "loop.decision",
   ContextCompacted: "context.compacted",
   Error: "error",
@@ -231,6 +232,15 @@ export interface LoopProtocolFeedPayload {
   plan_current_step?: string;
 }
 
+export interface LoopProtocolCalibrationPayload {
+  loop_id?: string;
+  status?: string;
+  calibration_answers?: number;
+  last_calibration_answer_preview?: string;
+  protocol_path?: string;
+  event_seq?: number;
+}
+
 export interface LoopDecisionPayload {
   turn_id?: string;
   loop_id?: string;
@@ -280,6 +290,7 @@ export interface PayloadByType {
   [EventType.Usage]: UsagePayload;
   [EventType.TurnEnd]: TurnEndPayload;
   [EventType.LoopProtocolFeed]: LoopProtocolFeedPayload;
+  [EventType.LoopProtocolCalibration]: LoopProtocolCalibrationPayload;
   [EventType.LoopDecision]: LoopDecisionPayload;
   [EventType.ContextCompacted]: ContextCompactedPayload;
   [EventType.Error]: ErrorPayload;

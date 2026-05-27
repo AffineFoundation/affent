@@ -1989,6 +1989,31 @@ func TestSessionRecordsLoopProtocolCalibrationAnswerAfterDraftQuestion(t *testin
 	if state.CalibrationAnswers != 1 || state.LastEventType != "loop.protocol_calibration" || !strings.Contains(state.LastCalibrationAnswer, "Pause if source quality") {
 		t.Fatalf("calibration state = %+v", state)
 	}
+	tracePath := filepath.Join(pool.sessionDirPath("loop-calibration"), "events.jsonl")
+	waitForFileSubstring(t, tracePath, `"type":"loop.protocol_calibration"`)
+	history, err := readSessionHistory(pool.sessionDirPath("loop-calibration"), "loop-calibration", -1, 100)
+	if err != nil {
+		t.Fatalf("read history: %v", err)
+	}
+	var sawCalibration bool
+	for _, ev := range history.Events {
+		if ev.Type != sse.TypeLoopCalibration {
+			continue
+		}
+		var payload sse.LoopProtocolCalibrationPayload
+		if err := json.Unmarshal(ev.Data, &payload); err != nil {
+			t.Fatalf("decode calibration payload: %v", err)
+		}
+		if payload.CalibrationAnswers == 1 &&
+			payload.EventSeq == state.EventCount &&
+			payload.ProtocolPath == loopstate.ProtocolRelPath("loop-calibration") &&
+			strings.Contains(payload.LastCalibrationAnswer, "Pause if source quality") {
+			sawCalibration = true
+		}
+	}
+	if !sawCalibration {
+		t.Fatalf("history missing loop calibration mirror event: %+v", history.Events)
+	}
 }
 
 func TestSessionSkipsLoopProtocolCalibrationWithoutRecentLoopQuestion(t *testing.T) {

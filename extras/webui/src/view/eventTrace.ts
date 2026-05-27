@@ -278,6 +278,8 @@ function eventDisplay(event: NormalizedEvent, context: DisplayContext): EventDis
       return { label: turnEndLabel(event), meta: turnEndMeta(event, request), badges: [] };
     case EventType.LoopProtocolFeed:
       return { label: "Loop protocol fed", meta: loopProtocolFeedMeta(event, request), badges: loopProtocolFeedBadges(event) };
+    case EventType.LoopProtocolCalibration:
+      return { label: "Loop calibration recorded", meta: loopProtocolCalibrationEventMeta(event), badges: loopProtocolCalibrationBadges(event) };
     case EventType.LoopDecision:
       return { label: "Loop decision", meta: loopDecisionMeta(event, request), badges: loopDecisionBadges(event) };
     case EventType.ContextCompacted:
@@ -391,18 +393,37 @@ function loopProtocolFeedMeta(event: NormalizedEvent, turn: string | undefined):
     readString(event.data, "loop_id"),
     feedNumber ? `feed ${feedNumber}` : undefined,
     feeds && feeds !== feedNumber ? `${feeds} total` : undefined,
-    loopProtocolCalibrationMeta(event),
+    loopProtocolFeedCalibrationMeta(event),
     loopProtocolPlanMeta(event),
     readString(event.data, "protocol_path"),
   ]);
 }
 
-function loopProtocolCalibrationMeta(event: NormalizedEvent): string | undefined {
+function loopProtocolFeedCalibrationMeta(event: NormalizedEvent): string | undefined {
   const answers = readNumber(event.data, "calibration_answers");
   const preview = readString(event.data, "last_calibration_answer_preview");
   if (!answers && !preview) return undefined;
   const label = answers ? `calibration ${answers}` : "calibration";
   return preview ? `${label} · ${streamSummary(preview)}` : label;
+}
+
+function loopProtocolCalibrationEventMeta(event: NormalizedEvent): string[] {
+  const answers = readNumber(event.data, "calibration_answers");
+  const preview = readString(event.data, "last_calibration_answer_preview");
+  const seq = readNumber(event.data, "event_seq");
+  return compact([
+    readString(event.data, "loop_id"),
+    answers ? `calibration ${answers}` : "calibration",
+    preview ? streamSummary(preview) : undefined,
+    seq ? `event ${seq}` : undefined,
+    readString(event.data, "protocol_path"),
+  ]);
+}
+
+function loopProtocolCalibrationBadges(event: NormalizedEvent): string[] {
+  return compact([
+    readString(event.data, "status"),
+  ]);
 }
 
 function loopProtocolPlanMeta(event: NormalizedEvent): string | undefined {
