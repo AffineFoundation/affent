@@ -574,6 +574,9 @@ func compactSourceAccessResultForSummary(content string) (string, bool) {
 	if info.SourceMethod != "" {
 		fmt.Fprintf(&b, " source_method=%s", textutil.Preview(strings.TrimSpace(info.SourceMethod), 120))
 	}
+	if info.Ref != "" {
+		fmt.Fprintf(&b, " ref=%s", textutil.Preview(strings.TrimSpace(info.Ref), 120))
+	}
 	if info.JSONPath != "" {
 		fmt.Fprintf(&b, " json_path=%s", textutil.Preview(strings.TrimSpace(info.JSONPath), 240))
 	}
