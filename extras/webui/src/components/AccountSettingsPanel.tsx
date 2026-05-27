@@ -32,7 +32,12 @@ export function AccountSettingsPanel({
   const title = loading ? "Loading" : error ? "Unavailable" : `${envCount} env${envCount === 1 ? "" : "s"}`;
   const detail = error
     ? panelErrorSummary("Access API", error)
-    : hasPublicKey ? "SSH public key ready" : ssh?.exists ? "SSH key found; public key unavailable" : "Generate an SSH key before cloning private repos";
+    : accessDetail(envCount, ssh);
+  const sshDescription = hasPublicKey
+    ? "Use this public key for GitHub or GitLab deploy access. Existing keys are shown, never overwritten."
+    : ssh?.exists
+      ? "A private key exists, but its public key is unavailable."
+      : "Generate an SSH key only when this session needs private Git access.";
   const canSubmit = !!name.trim() && !!onSetEnv && !busy;
 
   async function submitEnv(event: FormEvent) {
@@ -62,7 +67,7 @@ export function AccountSettingsPanel({
             <div className="account-settings-section">
               <div>
                 <strong>SSH key</strong>
-                <span>Use this public key for GitHub or GitLab deploy access. Existing keys are shown, never overwritten.</span>
+                <span>{sshDescription}</span>
               </div>
               {ssh?.public_key ? (
                 <>
@@ -135,4 +140,11 @@ export function AccountSettingsPanel({
       </div>
     </details>
   );
+}
+
+function accessDetail(envCount: number, ssh?: AccountSettingsResponse["ssh"]): string {
+  if (ssh?.public_key) return "SSH public key ready";
+  if (ssh?.exists) return "SSH key found; public key unavailable";
+  if (envCount > 0) return "No SSH key configured";
+  return "No env vars or SSH key configured";
 }

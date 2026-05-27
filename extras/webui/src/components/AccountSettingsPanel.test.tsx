@@ -45,6 +45,7 @@ describe("AccountSettingsPanel", () => {
     await user.type(screen.getByPlaceholderText("Stored server-side"), "gl_secret");
     await user.click(screen.getByRole("button", { name: "Save env" }));
 
+    expect(screen.getByTestId("account-settings-panel")).toHaveTextContent("No SSH key configured");
     expect(onSetEnv).toHaveBeenCalledWith("GITLAB_TOKEN", "gl_secret");
     expect(screen.queryByText("gl_secret")).toBeNull();
     await user.click(within(screen.getByTestId("account-env-list")).getByRole("button", { name: "Delete" }));
@@ -56,6 +57,8 @@ describe("AccountSettingsPanel", () => {
     const onEnsureSSHKey = vi.fn().mockResolvedValue(undefined);
     render(<AccountSettingsPanel settings={{ env: [], ssh: { exists: false } }} onEnsureSSHKey={onEnsureSSHKey} defaultOpen />);
 
+    expect(screen.getByTestId("account-settings-panel")).toHaveTextContent("No env vars or SSH key configured");
+    expect(screen.getByTestId("account-settings-panel")).toHaveTextContent("Generate an SSH key only when this session needs private Git access");
     await user.click(screen.getByRole("button", { name: "Generate SSH key" }));
 
     expect(onEnsureSSHKey).toHaveBeenCalled();
