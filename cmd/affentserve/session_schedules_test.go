@@ -101,6 +101,43 @@ func TestSessionPool_RunDueSessionSchedulesOnceSkipsRecurringLoopTickUntilProtoc
 	}
 }
 
+func TestSessionPool_RunDueSessionSchedulesOnceSkipsLoopTickWhenStateStillDraft(t *testing.T) {
+	memRoot := t.TempDir()
+	pool := newPoolWithMemoryRoot(t, memRoot)
+	createDurableSessionDir(t, pool, "stale-draft-loop")
+	writeLoopProtocolStatusFixture(t, pool, "stale-draft-loop", "running")
+	if err := loopstate.WriteState(sessionLoopStatePath(pool, "stale-draft-loop"), loopstate.State{
+		Version: 1,
+		LoopID:  "stale-draft-loop",
+		Status:  "draft",
+	}); err != nil {
+		t.Fatalf("write loop state: %v", err)
+	}
+	now := time.Date(2026, 5, 27, 14, 0, 0, 0, time.UTC)
+	writeScheduleFixture(t, pool, "stale-draft-loop", sessionSchedule{
+		ID:                    "sched_loop",
+		Kind:                  sessionScheduleKindLoopTick,
+		Prompt:                "Scheduled loop tick for stale draft state",
+		Enabled:               true,
+		NextRunAt:             now.Add(-time.Minute).Format(time.RFC3339),
+		RepeatIntervalSeconds: 1800,
+		CreatedAt:             now.Add(-time.Hour).Format(time.RFC3339),
+		UpdatedAt:             now.Add(-time.Hour).Format(time.RFC3339),
+	})
+
+	if got := pool.runDueSessionSchedulesOnce(now); got != 0 {
+		t.Fatalf("runDueSessionSchedulesOnce = %d, want 0", got)
+	}
+	file, found, err := readSessionSchedulesFile(sessionSchedulesPath(pool, "stale-draft-loop"))
+	if err != nil || !found {
+		t.Fatalf("read schedules found=%v err=%v", found, err)
+	}
+	schedule := file.Schedules[0]
+	if schedule.RunCount != 0 || schedule.LastTurnID != "" || !strings.Contains(schedule.LastError, "LOOP.md not running") {
+		t.Fatalf("schedule = %+v, want skipped loop tick while sidecar state is draft", schedule)
+	}
+}
+
 func TestSessionPool_RunDueSessionSchedulesOncePausesOneShotLoopTickUntilProtocolRuns(t *testing.T) {
 	memRoot := t.TempDir()
 	pool := newPoolWithMemoryRoot(t, memRoot)

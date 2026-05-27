@@ -866,14 +866,26 @@ func sessionLoopProtocolRunning(pool *SessionPool, sessionID string) bool {
 	if pool == nil {
 		return false
 	}
-	return loopstate.ProtocolStatusFromFile(sessionLoopProtocolPath(pool, sessionID)) == "running"
+	return sessionLoopProtocolRunningAtPath(sessionLoopProtocolPath(pool, sessionID))
 }
 
 func sessionLoopProtocolRunningForDir(sessionDir, sessionID string) bool {
 	if strings.TrimSpace(sessionDir) == "" || sessionDir == "." || strings.TrimSpace(sessionID) == "" {
 		return false
 	}
-	return loopstate.ProtocolStatusFromFile(loopstate.ProtocolPath(sessionDir, sessionID)) == "running"
+	return sessionLoopProtocolRunningAtPath(loopstate.ProtocolPath(sessionDir, sessionID))
+}
+
+func sessionLoopProtocolRunningAtPath(protocolPath string) bool {
+	if loopstate.ProtocolStatusFromFile(protocolPath) != "running" {
+		return false
+	}
+	state, found, err := loopstate.ReadState(filepath.Join(filepath.Dir(protocolPath), loopstate.StateFileName))
+	if err != nil || !found {
+		return true
+	}
+	status := strings.TrimSpace(strings.ToLower(state.Status))
+	return status == "" || status == "running"
 }
 
 func (p *SessionPool) executeClaimedSessionSchedule(now time.Time, run sessionScheduleRun) error {

@@ -922,6 +922,13 @@ func TestHandleSessionSchedules_CreateListDeleteWithoutReopening(t *testing.T) {
 	}
 
 	writeLoopProtocolStatusFixture(t, pool, "scheduled", "running")
+	if err := loopstate.WriteState(sessionLoopStatePath(pool, "scheduled"), loopstate.State{
+		Version: 1,
+		LoopID:  "scheduled",
+		Status:  "running",
+	}); err != nil {
+		t.Fatalf("write running loop state: %v", err)
+	}
 	r = httptest.NewRequest(http.MethodPatch, "/v1/sessions/scheduled/schedules/"+schedule.ID, strings.NewReader(`{"enabled":true}`))
 	w = httptest.NewRecorder()
 	handleSessionRoutes(pool).ServeHTTP(w, r)
