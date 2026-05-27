@@ -11,6 +11,7 @@ import {
   listSessions,
   readSessionArtifact,
   sendSessionMessage,
+  sessionArtifactPath,
   streamSessionEvents,
   updateSessionLoopProtocol,
   updateSessionSchedule,
@@ -128,6 +129,9 @@ describe("session API helpers", () => {
       text: "456789",
       hasMore: true,
     });
+    expect(sessionArtifactPath("s/1", ".affent/artifacts/tool-results/000001-c1.txt")).toBe(
+      "/v1/sessions/s%2F1/artifacts/.affent/artifacts/tool-results/000001-c1.txt",
+    );
   });
 });
 

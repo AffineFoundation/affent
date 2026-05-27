@@ -7600,18 +7600,27 @@ html[data-theme="dark"] .session-skill-form textarea,
 html[data-theme="dark"] .session-filter button,
 html[data-theme="dark"] .session-delete-action,
 html[data-theme="dark"] .session-delete-confirm button,
+html[data-theme="dark"] .artifact-viewer,
 html[data-theme="dark"] .artifact-copy-menu-panel,
+html[data-theme="dark"] .artifact-copy-menu .copy-menu-trigger.artifact-copy-trigger,
 html[data-theme="dark"] .artifact-view-toggle,
 html[data-theme="dark"] .artifact-search input,
 html[data-theme="dark"] .artifact-stats span,
 html[data-theme="dark"] .artifact-match-list,
 html[data-theme="dark"] .artifact-match-list button,
+html[data-theme="dark"] .artifact-code,
+html[data-theme="dark"] .artifact-viewer .node-action,
 html[data-theme="dark"] .execution-tree-actions button,
 html[data-theme="dark"] .execution-copy-menu .copy-menu-trigger,
 html[data-theme="dark"] .execution-copy-menu-panel,
 html[data-theme="dark"] .state-pill {
   border-color: rgba(58, 68, 81, 0.82);
   background: rgba(17, 20, 24, 0.78);
+}
+
+html[data-theme="dark"] .artifact-viewer {
+  border-color: rgba(45, 212, 191, 0.28);
+  border-left-color: rgba(45, 212, 191, 0.66);
 }
 
 html[data-theme="dark"] .workbench-panel .session-skills-panel {

@@ -695,7 +695,7 @@ export async function readSessionArtifact(
   if (opts.offset != null) q.set("offset", String(opts.offset));
   if (opts.limit != null) q.set("limit", String(opts.limit));
   const resp = await client.raw(
-    withQuery(`/v1/sessions/${encodeURIComponent(sessionId)}/artifacts/${artifactUrlPath(artifactPath)}`, q),
+    withQuery(sessionArtifactPath(sessionId, artifactPath), q),
     { signal: opts.signal, accept: "application/octet-stream" },
   );
   const text = await resp.text();
@@ -709,6 +709,10 @@ export async function readSessionArtifact(
     text,
     hasMore: offset + text.length < bytes,
   };
+}
+
+export function sessionArtifactPath(sessionId: string, artifactPath: string): string {
+  return `/v1/sessions/${encodeURIComponent(sessionId)}/artifacts/${artifactUrlPath(artifactPath)}`;
 }
 
 function withQuery(path: string, q: URLSearchParams): string {

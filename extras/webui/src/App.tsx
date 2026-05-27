@@ -17,6 +17,7 @@ import {
   listSessions,
   listSkills,
   readSessionArtifact,
+  sessionArtifactPath,
   readSkill,
   sendSessionMessage,
   streamSessionEvents,
@@ -1516,6 +1517,11 @@ export function App() {
                 onSearch={handleArtifactSearch}
                 onLoadMore={() => void handleLoadMoreArtifact()}
                 onUseAsDraft={handleUseAsDraft}
+                artifactDownloadHref={
+                  selectedSessionId && artifact.state === "ready"
+                    ? client.url(sessionArtifactPath(selectedSessionId, artifact.chunk.path))
+                    : undefined
+                }
               />
               <Timeline
                 session={session}

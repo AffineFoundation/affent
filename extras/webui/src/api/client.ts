@@ -107,7 +107,7 @@ export class ApiClient {
     return resp;
   }
 
-  private url(path: string): string {
+  url(path: string): string {
     return `${this.basePath}${path.startsWith("/") ? path : `/${path}`}`;
   }
 }

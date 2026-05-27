@@ -65,6 +65,12 @@ describe("ApiClient", () => {
     expect(headers.get("Accept")).toBe("application/octet-stream");
     expect(headers.get("Authorization")).toBe("Bearer tok");
   });
+
+  it("exposes base-path URL construction for browser-native downloads", () => {
+    const client = new ApiClient({ basePath: "/api/" });
+
+    expect(client.url("/v1/sessions/s1/artifacts/a.txt")).toBe("/api/v1/sessions/s1/artifacts/a.txt");
+  });
 });
 
 function mockFetch(fn: typeof fetch): ReturnType<typeof vi.fn<typeof fetch>> {

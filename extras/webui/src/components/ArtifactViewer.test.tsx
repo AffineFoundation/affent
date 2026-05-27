@@ -29,6 +29,7 @@ describe("ArtifactViewer", () => {
         onSearch={onSearch}
         onLoadMore={onLoadMore}
         onUseAsDraft={onUseAsDraft}
+        artifactDownloadHref="/v1/sessions/s1/artifacts/.affent/artifacts/tool-results/000001-c1.txt"
       />,
     );
 
@@ -41,6 +42,8 @@ describe("ArtifactViewer", () => {
     expect(screen.getByTestId("artifact-viewer")).toHaveTextContent("20 loaded");
     expect(screen.getByTestId("artifact-viewer")).toHaveTextContent("100% loaded");
     expect(screen.getByTestId("artifact-viewer")).toHaveTextContent("1 match");
+    expect(screen.getByRole("link", { name: "Download" })).toHaveAttribute("href", "/v1/sessions/s1/artifacts/.affent/artifacts/tool-results/000001-c1.txt");
+    expect(screen.getByRole("link", { name: "Download" })).toHaveAttribute("download", "000001-c1.txt");
     expect(screen.getByTestId("artifact-match-list")).toHaveTextContent("Line 1");
     expect(screen.getByTestId("artifact-match-list")).toHaveTextContent("hay needle stack");
     expect(screen.getAllByText("needle").every((node) => node.tagName.toLowerCase() === "mark")).toBe(true);

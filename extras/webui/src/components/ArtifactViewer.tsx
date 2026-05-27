@@ -19,12 +19,14 @@ export function ArtifactViewer({
   onSearch,
   onLoadMore,
   onUseAsDraft,
+  artifactDownloadHref,
 }: {
   artifact: ArtifactViewerState;
   onClose: () => void;
   onSearch: (query: string) => void;
   onLoadMore: () => void;
   onUseAsDraft?: UseAsDraft;
+  artifactDownloadHref?: string;
 }) {
   const [viewMode, setViewMode] = useState<"text" | "json">("text");
   if (artifact.state === "idle") return null;
@@ -103,6 +105,11 @@ export function ArtifactViewer({
                   Use text
                 </button>
               </>
+            ) : null}
+            {artifactDownloadHref ? (
+              <a className="node-action" href={artifactDownloadHref} download={displayName(artifact.chunk.path)}>
+                Download
+              </a>
             ) : null}
             <CopyMenu
               label="Copy file"
