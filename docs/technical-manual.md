@@ -702,11 +702,14 @@ Affent stores durable state as inspectable files:
 - `events.jsonl`: runtime event records for replay and SSE recovery.
 - `plan.json`: persisted plan state.
 - `.affent/loops/<session_id>/LOOP.md`: optional per-session loop protocol.
-  When present, affentserve injects it with a low-noise feed policy: the first
-  three feeds and every sixth feed use a bounded full copy, while intervening
-  feeds use a smaller digest focused on metadata, north-star, memory, rules,
-  self-checks, stop/recovery, and plan/step anchors. Session list/detail
-  responses expose its summary. Use
+  When present, both `affentctl` and `affentserve` inject it with a low-noise
+  feed policy: the first three feeds and every sixth feed use a bounded full
+  copy, while intervening feeds use a smaller digest focused on metadata,
+  north-star, memory, rules, self-checks, stop/recovery, and plan/step anchors.
+  `affentctl` resolves the file under the configured workspace and, when a
+  persisted `.affentctl/<session_id>.plan.json` exists, includes the current
+  plan checkpoint in the feed metadata. Session list/detail responses expose
+  its summary for server-backed sessions. Use
   `POST /v1/sessions/{id}/loop-protocol` with `{"protocol":"..."}` to create
   or replace it without reopening the session; use `DELETE` to disable it.
 - `.affent/loops/<session_id>/state.json`: machine-readable loop lifecycle
@@ -993,6 +996,11 @@ captured network evidence. When both runtime flags are set, `web_fetch` can
 fall back through the same session browser for JavaScript-heavy pages.
 Otherwise keep these surfaces off so evals stay on the minimal surface they
 intend to measure.
+Scenario files can seed `.affent/loops/<session_id>/LOOP.md`; even in runtime
+eval mode, `affentctl` injects that protocol when present and emits
+`loop.protocol_feed` with the active plan checkpoint. This lets long-run evals
+assert that the loop protocol was actually fed, rather than only checking that
+the file existed in the workspace.
 
 When project context is enabled in normal runtime mode, Affent also injects a
 small auto-generated repository map alongside user-authored project notes. The

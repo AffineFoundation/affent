@@ -266,11 +266,12 @@ diagnostics.
 - `plan_current_step_status`: optional status for the current plan step.
 - `plan_current_step`: optional compact current plan step text.
 
-This event mirrors the sidecar `.affent/loops/<id>/events.jsonl` feed record
-into the normal session trace/SSE stream, so WebUI, replay, and eval tooling can
-inspect loop context pressure without separately reading loop files. Plan
-checkpoint fields are recovery pointers only; the persisted plan state remains
-the step authority.
+This event is emitted by `affentctl` traces and `affentserve` session streams
+when an active `LOOP.md` is injected. It mirrors the sidecar
+`.affent/loops/<id>/events.jsonl` feed record into the normal session trace/SSE
+stream, so WebUI, replay, and eval tooling can inspect loop context pressure
+without separately reading loop files. Plan checkpoint fields are recovery
+pointers only; the persisted plan state remains the step authority.
 
 ### `error`
 
