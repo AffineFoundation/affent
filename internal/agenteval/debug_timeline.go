@@ -890,6 +890,9 @@ func renderTimelineSourceEvidence(b *strings.Builder, trace *Trace) {
 		if entry.Info.Ref != "" {
 			fmt.Fprintf(b, " ref=`%s`", entry.Info.Ref)
 		}
+		if entry.Info.SourceMethod != "" {
+			fmt.Fprintf(b, " source_method=`%s`", entry.Info.SourceMethod)
+		}
 		if entry.Info.JSONPath != "" {
 			fmt.Fprintf(b, " json_path=`%s`", entry.Info.JSONPath)
 		}
