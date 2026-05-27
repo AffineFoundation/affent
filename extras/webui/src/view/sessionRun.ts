@@ -5,6 +5,7 @@ export type SessionRunStatus = "running" | "passed" | "failed";
 
 export interface SessionRunCommand {
   command: string;
+  cwd?: string;
   status: SessionRunStatus;
   turnNumber: number;
   exitCode?: number;
@@ -21,15 +22,23 @@ export interface SessionRunView {
   tone?: "warning" | "error";
 }
 
+interface SessionRunCommandInternal extends SessionRunCommand {
+  sequence: number;
+}
+
 export function buildSessionRun(session: SessionState): SessionRunView {
-  const commands: SessionRunCommand[] = [];
+  const commands: SessionRunCommandInternal[] = [];
+  let sequence = 0;
   session.turns.forEach((turn, turnIndex) => {
     for (const call of turn.toolCalls) {
-      const command = commandFromCall(call, turnIndex + 1);
+      sequence += 1;
+      const command = commandFromCall(call, turnIndex + 1, sequence);
       if (command) commands.push(command);
     }
   });
-  const sorted = commands.sort((a, b) => b.turnNumber - a.turnNumber);
+  const sorted = commands
+    .sort((a, b) => b.turnNumber - a.turnNumber || b.sequence - a.sequence)
+    .map(({ sequence: _sequence, ...command }) => command);
   const failed = sorted.filter((command) => command.status === "failed").length;
   const running = sorted.filter((command) => command.status === "running").length;
   const passed = sorted.filter((command) => command.status === "passed").length;
@@ -41,15 +50,17 @@ export function buildSessionRun(session: SessionState): SessionRunView {
   };
 }
 
-function commandFromCall(call: ToolCallState, turnNumber: number): SessionRunCommand | undefined {
+function commandFromCall(call: ToolCallState, turnNumber: number, sequence: number): SessionRunCommandInternal | undefined {
   if (call.tool !== "shell") return undefined;
   const command = stringArg(call, "command");
   if (!command) return undefined;
   const detail = commandDetail(call);
   return {
     command,
+    cwd: stringArg(call, "cwd"),
     status: commandStatus(call),
     turnNumber,
+    sequence,
     exitCode: call.exitCode,
     durationMs: call.durationMs,
     detail,

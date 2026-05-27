@@ -18,6 +18,7 @@ describe("SessionRunPanel", () => {
     expect(panel).toHaveTextContent("1 failed command");
     expect(screen.getByTestId("session-run-list")).toHaveTextContent("npm test -- checkout.spec.ts");
     expect(screen.getByTestId("session-run-list")).toHaveTextContent("failed · exit 1 · 1.48s · turn 2");
+    expect(screen.getByTestId("session-run-list")).toHaveTextContent("Cwd: extras/webui");
     expect(screen.getByTestId("session-run-list")).toHaveTextContent("checkout spec failed");
     expect(screen.getByTestId("session-run-list")).toHaveTextContent("Next: update payment route then rerun");
     expect(screen.getByTestId("session-run-list")).toHaveTextContent("Output artifact: .affent/artifacts/tool-results/test.txt");
@@ -31,7 +32,7 @@ describe("SessionRunPanel", () => {
     await user.click(within(screen.getByTestId("session-run-list")).getByRole("button", { name: "Rerun" }));
 
     expect(onUseAsDraft).toHaveBeenCalledWith(
-      "Rerun this command and report the result:\nnpm test -- checkout.spec.ts\nUse this recovery hint: update payment route then rerun",
+      "Rerun this command and report the result:\nnpm test -- checkout.spec.ts\nWorking directory: extras/webui\nUse this recovery hint: update payment route then rerun",
       "run_command",
     );
   });
@@ -50,6 +51,7 @@ const run: SessionRunView = {
   commands: [
     {
       command: "npm test -- checkout.spec.ts",
+      cwd: "extras/webui",
       status: "failed",
       turnNumber: 2,
       exitCode: 1,

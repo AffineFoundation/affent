@@ -28,6 +28,7 @@ export function SessionRunPanel({
                 <div className="session-run-main">
                   <strong title={command.command}>{command.command}</strong>
                   <span>{commandMeta(command)}</span>
+                  {command.cwd ? <small title={command.cwd}>Cwd: {command.cwd}</small> : null}
                   {command.detail ? <small>{command.detail}</small> : null}
                   {command.next ? <small>Next: {command.next}</small> : null}
                   {command.artifactPath ? <small>Output artifact: {command.artifactPath}</small> : null}
@@ -73,8 +74,9 @@ function statusLabel(status: SessionRunCommand["status"]): string {
 }
 
 function runDraft(command: SessionRunCommand): string {
+  const cwd = command.cwd ? `\nWorking directory: ${command.cwd}` : "";
   const next = command.next ? `\nUse this recovery hint: ${command.next}` : "";
-  return `Rerun this command and report the result:\n${command.command}${next}`;
+  return `Rerun this command and report the result:\n${command.command}${cwd}${next}`;
 }
 
 function formatDuration(ms: number): string {
