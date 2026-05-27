@@ -122,7 +122,7 @@ export function SessionSchedulePanel({
               disabled={loading}
               onClick={() => void onLoadSchedules()}
             >
-              {loading ? "Loading timers" : schedules ? "Refresh timers" : "View timers"}
+              {scheduleLoadLabel(loading, !!schedules)}
             </button>
           ) : null}
           {onScheduleCheckIn ? (
@@ -202,6 +202,11 @@ function ScheduleField({ label, value }: { label: string; value: string }) {
       <strong>{value}</strong>
     </div>
   );
+}
+
+function scheduleLoadLabel(loading: boolean, loaded: boolean): string {
+  if (loading) return "Loading schedule details";
+  return loaded ? "Refresh schedule details" : "Load schedule details";
 }
 
 function scheduleMeta(schedule: SessionSchedule, loopStatus?: string): string {

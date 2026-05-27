@@ -159,4 +159,35 @@ describe("SessionSchedulePanel", () => {
     expect(panel).toHaveTextContent("Create a follow-up only when this chat needs one");
     expect(panel).not.toHaveAttribute("open");
   });
+
+  it("loads schedule details without presenting Timers as a separate entry", () => {
+    const onLoadSchedules = () => undefined;
+    const { rerender } = render(<SessionSchedulePanel summary={{ count: 1, enabled: 1 }} defaultOpen onLoadSchedules={onLoadSchedules} />);
+
+    expect(screen.getByRole("button", { name: "Load schedule details" })).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "View timers" })).toBeNull();
+
+    rerender(<SessionSchedulePanel summary={{ count: 1, enabled: 1 }} defaultOpen loading onLoadSchedules={onLoadSchedules} />);
+    expect(screen.getByRole("button", { name: "Loading schedule details" })).toBeDisabled();
+
+    rerender(
+      <SessionSchedulePanel
+        summary={{ count: 1, enabled: 1 }}
+        defaultOpen
+        onLoadSchedules={onLoadSchedules}
+        schedules={[
+          {
+            id: "sched_checkin",
+            kind: "checkin",
+            prompt: "Check runtime health",
+            enabled: true,
+            next_run_at: "2026-05-27T14:00:00Z",
+            created_at: "2026-05-27T13:30:00Z",
+            updated_at: "2026-05-27T13:30:00Z",
+          },
+        ]}
+      />,
+    );
+    expect(screen.getByRole("button", { name: "Refresh schedule details" })).toBeInTheDocument();
+  });
 });
