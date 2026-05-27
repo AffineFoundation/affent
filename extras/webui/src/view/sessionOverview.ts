@@ -294,6 +294,7 @@ function loopProtocolFeedMetric(feeds: SessionState["loopProtocolFeeds"]): strin
     latest.plan_label,
     latest.plan_current_step_index ? `step ${latest.plan_current_step_index}` : undefined,
     latest.plan_current_step_status,
+    latest.current_situation_preview ? `situation ${summarizePreview(latest.current_situation_preview, 48)}` : undefined,
   ].filter(Boolean);
   return checkpoint.length > 0 ? `${count} ${checkpoint.join(" ")}` : count;
 }

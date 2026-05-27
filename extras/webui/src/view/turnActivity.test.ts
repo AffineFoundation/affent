@@ -94,6 +94,7 @@ describe("buildTurnActivity", () => {
           mode: "full",
           feed_number: 1,
           protocol_feeds: 1,
+          current_situation_preview: "current risk: browser values need network refs",
           calibration_answers: 1,
           last_calibration_answer_preview: "Stop when source evidence is weak.",
           protocol_path: ".affent/loops/plan-loop/LOOP.md",
@@ -110,7 +111,7 @@ describe("buildTurnActivity", () => {
 
     expect(activity?.digest).toEqual({
       label: "Loop",
-      summary: "full feed · #1 · .affent/loops/plan-loop/LOOP.md · calibration 1 · Stop when source evidence is weak. · plan:1/3:active · step 2 · in_progress · verify browser network evidence",
+      summary: "full feed · #1 · .affent/loops/plan-loop/LOOP.md · situation: current risk: browser values need network refs · calibration 1 · Stop when source evidence is weak. · plan:1/3:active...",
       meta: ["1 loop feed"],
       tone: "muted",
     });
@@ -119,7 +120,7 @@ describe("buildTurnActivity", () => {
       {
         id: "loop-feed:3",
         label: "Loop",
-        value: "full feed · #1 · calibration 1 · Stop when source evidence is weak. · plan:1/3:active · step 2 · in_progress · verify browser network evidence · .affent/loops/plan-loop/LOOP.md",
+        value: "full feed · #1 · situation: current risk: browser values need network refs · calibration 1 · Stop when source evidence is weak. · plan:1/3:active · step 2 · in_progress · verify b...",
         tone: "muted",
       },
     ]);
@@ -129,7 +130,7 @@ describe("buildTurnActivity", () => {
         kind: "reasoning",
         label: "Loop",
         title: "Loop protocol fed",
-        detail: "full feed · #1 · .affent/loops/plan-loop/LOOP.md · calibration 1 · Stop when source evidence is weak. · plan:1/3:active · step 2 · in_progress · verify browser network evidence",
+        detail: "full feed · #1 · .affent/loops/plan-loop/LOOP.md · situation: current risk: browser values need network refs · calibration 1 · Stop when source evidence is weak. · plan:1/3:active...",
         meta: "full",
         tone: "muted",
       },
@@ -189,6 +190,7 @@ describe("buildTurnActivity", () => {
           turn_id: "t1",
           mode: "digest",
           feed_number: 2,
+          current_situation_preview: "current intent: verify plan-loop evidence",
           protocol_path: ".affent/loops/plan-loop/LOOP.md",
         },
       },
@@ -207,7 +209,7 @@ describe("buildTurnActivity", () => {
     expect(activity?.brief.rows).toContainEqual({
       id: "loop-feed:3",
       label: "Loop",
-      value: "digest feed · #2 · .affent/loops/plan-loop/LOOP.md",
+      value: "digest feed · #2 · situation: current intent: verify plan-loop evidence · .affent/loops/plan-loop/LOOP.md",
       tone: "muted",
     });
   });

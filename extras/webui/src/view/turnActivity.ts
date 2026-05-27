@@ -688,6 +688,7 @@ function loopProtocolFeedDetail(feed: NonNullable<ReturnType<typeof latestLoopPr
     feed.mode ? `${feed.mode} feed` : "feed",
     feed.feed_number > 0 ? `#${feed.feed_number}` : undefined,
     feed.protocol_path,
+    loopProtocolFeedSituation(feed),
     loopProtocolFeedCalibration(feed),
     loopProtocolFeedPlan(feed),
   ].filter(Boolean);
@@ -698,6 +699,7 @@ function loopProtocolFeedBrief(feed: NonNullable<ReturnType<typeof latestLoopPro
   const parts = [
     feed.mode ? `${feed.mode} feed` : "feed",
     feed.feed_number > 0 ? `#${feed.feed_number}` : undefined,
+    loopProtocolFeedSituation(feed),
     loopProtocolFeedCalibration(feed),
     loopProtocolFeedPlan(feed),
     feed.protocol_path,
@@ -711,6 +713,10 @@ function loopProtocolFeedCalibration(feed: NonNullable<ReturnType<typeof latestL
   return feed.last_calibration_answer_preview
     ? `${label} · ${feed.last_calibration_answer_preview}`
     : label;
+}
+
+function loopProtocolFeedSituation(feed: NonNullable<ReturnType<typeof latestLoopProtocolFeed>>): string | undefined {
+  return feed.current_situation_preview ? `situation: ${feed.current_situation_preview}` : undefined;
 }
 
 function loopProtocolFeedPlan(feed: NonNullable<ReturnType<typeof latestLoopProtocolFeed>>): string | undefined {

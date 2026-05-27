@@ -241,6 +241,7 @@ describe("buildSessionOverview", () => {
           mode: "full",
           feed_number: 1,
           protocol_path: ".affent/loops/plan-loop/LOOP.md",
+          current_situation_preview: "current risk: browser values need network refs",
           plan_label: "plan:1/3:active",
           plan_current_step_index: 2,
           plan_current_step_status: "in_progress",
@@ -256,7 +257,7 @@ describe("buildSessionOverview", () => {
     });
 
     expect(overview.metrics).toEqual(expect.arrayContaining([
-      { label: "Loop", value: "1 feed full plan:1/3:active step 2 in_progress", tone: undefined },
+      { label: "Loop", value: "1 feed full plan:1/3:active step 2 in_progress situation current risk: browser values need network refs", tone: undefined },
     ]));
   });
 
