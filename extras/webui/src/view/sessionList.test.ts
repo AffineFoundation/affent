@@ -65,6 +65,29 @@ describe("sessionList view model", () => {
     expect(rows[0].searchText).toContain("recovery run rg --files config before retrying");
   });
 
+  it("surfaces memory update counters in row stats and search", () => {
+    const rows = buildSessionRows([
+      session({
+        id: "memory-update-session",
+        durable: true,
+        latest_user_message: "remember market report rules",
+        tools: {
+          tool_requests: 3,
+          tool_errors: 0,
+          tool_repair_succeeded: 0,
+          tool_repair_failed: 0,
+          memory_updates: 2,
+          memory_update_add: 1,
+          memory_update_replace: 1,
+        },
+      }),
+    ]);
+
+    expect(rows[0].metrics).toContain("Memory 2 updates, 1 add, 1 replace");
+    expect(rows[0].stats).toContain("Memory 2 updates");
+    expect(rows[0].searchText).toContain("memory 2 updates");
+  });
+
   it("surfaces source evidence quality in row stats and search", () => {
     const rows = buildSessionRows([
       session({

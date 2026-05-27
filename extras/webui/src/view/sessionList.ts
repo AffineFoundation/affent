@@ -502,6 +502,8 @@ function usageMetrics(session: SessionSummary): string[] {
   if (sourceMetric) metrics.push(sourceMetric);
   const recallMetric = sessionSearchMetric(session.tools);
   if (recallMetric) metrics.push(recallMetric);
+  const memoryMetric = memoryUpdateMetric(session.tools);
+  if (memoryMetric) metrics.push(memoryMetric);
   const contextMetric = sessionContextMetric(session.context);
   if (contextMetric) metrics.push(contextMetric);
   const compactionMetric = sessionCompactionMetric(session.context_compactions);
@@ -573,6 +575,23 @@ interface SessionSearchStats {
   session_search_results?: number;
   session_search_context_hits?: number;
   session_search_matched_terms?: number;
+}
+
+interface MemoryUpdateStats {
+  memory_updates?: number;
+  memory_update_add?: number;
+  memory_update_replace?: number;
+  memory_update_remove?: number;
+}
+
+function memoryUpdateMetric(stats: MemoryUpdateStats | undefined): string | undefined {
+  const updates = stats?.memory_updates ?? 0;
+  if (updates <= 0) return undefined;
+  const parts = [`Memory ${updates} ${updates === 1 ? "update" : "updates"}`];
+  if ((stats?.memory_update_add ?? 0) > 0) parts.push(`${stats?.memory_update_add} add`);
+  if ((stats?.memory_update_replace ?? 0) > 0) parts.push(`${stats?.memory_update_replace} replace`);
+  if ((stats?.memory_update_remove ?? 0) > 0) parts.push(`${stats?.memory_update_remove} remove`);
+  return parts.join(", ");
 }
 
 function emptySessionSearchStats(): Required<SessionSearchStats> {
