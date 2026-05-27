@@ -197,6 +197,9 @@ Scenario records describe one eval case:
   `truncation:missing_artifact`, plus ordered `items` with a severity, message,
   inspect targets, and relevant counts. This is the compact "what to inspect
   first" index for long-run batch analysis.
+  Loop-guard items point at `loop_guard_examples` first so operators can see
+  the blocked tool, guard reason, and suggested next step before opening the
+  full tool timeline.
 - `loop_guard_interventions`: runtime loop guard intervention count.
 - `forced_no_tools`: count of forced no-tool follow-up requests after repeated
   blocking loop guard interventions. Soft warnings such as

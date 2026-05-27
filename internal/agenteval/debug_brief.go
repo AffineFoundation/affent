@@ -84,7 +84,7 @@ func BuildDebugBrief(res BatchResult) *DebugBrief {
 			tags = append(tags, "loop_guard:forced_no_tools")
 			message = "loop guard forced no-tool continuation; inspect repeated failures before trusting recovery"
 		}
-		add("loop_guard", "warn", message, []string{"loop_decisions", "tool_timeline"}, map[string]int{
+		add("loop_guard", "warn", message, []string{"loop_guard_examples", "loop_decisions", "tool_timeline"}, map[string]int{
 			"interventions":   res.ToolStats.LoopGuardInterventions,
 			"forced_no_tools": res.ToolStats.ForcedNoTools,
 		}, tags...)

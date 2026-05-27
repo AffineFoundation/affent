@@ -141,6 +141,7 @@ func TestBuildDebugBriefClassifiesForcedNoTools(t *testing.T) {
 		guard.Message != "loop guard forced no-tool continuation; inspect repeated failures before trusting recovery" ||
 		guard.Counts["interventions"] != 2 ||
 		guard.Counts["forced_no_tools"] != 1 ||
+		!stringSliceContains(guard.Inspect, "loop_guard_examples") ||
 		!stringSliceContains(guard.Inspect, "loop_decisions") ||
 		!stringSliceContains(brief.Tags, "loop_guard") ||
 		!stringSliceContains(brief.Tags, "loop_guard:forced_no_tools") {
