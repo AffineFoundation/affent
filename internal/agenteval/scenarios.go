@@ -1409,6 +1409,9 @@ func longRunCrashMissingToolResultResumeScenario() BatchScenario {
 				"call-web-crashed",
 			},
 		},
+		RequiredTraceEventCounts: map[string]int{
+			"conversation.repaired": 1,
+		},
 		ForbiddenTools: []string{
 			"read_file",
 			"shell",

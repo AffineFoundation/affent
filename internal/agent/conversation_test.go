@@ -298,6 +298,9 @@ func TestOpenConversationAt_RepairsCrashMidTurnToolCalls(t *testing.T) {
 	if !strings.Contains(snap[4].Content, "do not assume the tool succeeded") {
 		t.Errorf("placeholder content should guide safe recovery; got %q", snap[4].Content)
 	}
+	if stats := c.RepairStats(); stats.MissingToolResults != 1 {
+		t.Fatalf("RepairStats().MissingToolResults = %d, want 1", stats.MissingToolResults)
+	}
 	if snap[5].Role != "user" || snap[5].Content != "next" {
 		t.Errorf("post-window user message should survive intact; got %+v", snap[5])
 	}
@@ -310,6 +313,9 @@ func TestOpenConversationAt_RepairsCrashMidTurnToolCalls(t *testing.T) {
 	}
 	if len(c2.Snapshot()) != 6 {
 		t.Errorf("repaired file should reload to 6 messages, not be repaired again; got %d", len(c2.Snapshot()))
+	}
+	if stats := c2.RepairStats(); stats.MissingToolResults != 0 {
+		t.Fatalf("second RepairStats().MissingToolResults = %d, want 0", stats.MissingToolResults)
 	}
 }
 

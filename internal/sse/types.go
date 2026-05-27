@@ -10,6 +10,7 @@ package sse
 // and fail to wait for the next message.* / tool.* / etc. events.
 const (
 	TypeTraceMeta              = "trace.meta"
+	TypeConversationRepaired   = "conversation.repaired"
 	TypeTurnStart              = "turn.start"
 	TypeUserMessage            = "user.message"
 	TypeRuntimeSurface         = "runtime.surface"
@@ -34,6 +35,13 @@ const TraceSchemaVersion = 1
 
 type TraceMetaPayload struct {
 	SchemaVersion int `json:"schema_version"`
+}
+
+type ConversationRepairedPayload struct {
+	SessionID          string `json:"session_id,omitempty"`
+	MissingToolResults int    `json:"missing_tool_results,omitempty"`
+	FailureKind        string `json:"failure_kind,omitempty"`
+	Next               string `json:"next,omitempty"`
 }
 
 type TurnStartPayload struct {

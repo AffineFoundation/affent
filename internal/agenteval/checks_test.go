@@ -493,6 +493,20 @@ func TestSessionSearchMatchAtLeast(t *testing.T) {
 	}
 }
 
+func TestTraceEventCountAtLeast(t *testing.T) {
+	trace := Trace{RawTypes: map[string]int{"conversation.repaired": 1}}
+	if res := TraceEventCountAtLeast("conversation.repaired", 1).Eval(trace); !res.Pass {
+		t.Fatalf("expected trace event count to pass: %+v", res)
+	}
+	res := TraceEventCountAtLeast("conversation.repaired", 2).Eval(trace)
+	if res.Pass {
+		t.Fatal("expected insufficient trace event count to fail")
+	}
+	if !strings.Contains(res.Detail, "conversation.repaired") {
+		t.Fatalf("failure detail should name event type: %s", res.Detail)
+	}
+}
+
 func TestToolRepairKindAtLeast(t *testing.T) {
 	t.Run("uses runtime repair stats", func(t *testing.T) {
 		trace := Trace{ToolStats: ToolRuntimeStats{

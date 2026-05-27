@@ -26,9 +26,17 @@ Next: do not assume the tool succeeded; continue from available context and reru
 // Persistence is JSONL on the host (under the user's home volume), one
 // message per line, append-only. Reloads when the runtime reattaches.
 type Conversation struct {
-	mu       sync.Mutex
-	messages []ChatMessage
-	path     string // host filesystem path of the JSONL log
+	mu          sync.Mutex
+	messages    []ChatMessage
+	path        string // host filesystem path of the JSONL log
+	repairStats ConversationRepairStats
+}
+
+// ConversationRepairStats reports structural repairs applied while loading a
+// persisted conversation. It is intentionally small: callers use it for trace
+// and UI recovery signals, not for replaying the repair itself.
+type ConversationRepairStats struct {
+	MissingToolResults int
 }
 
 // ValidateSessionID returns nil iff sessionID is safe to use as a
@@ -218,8 +226,15 @@ func (c *Conversation) repairToolCallPairs() error {
 	if inserted == 0 {
 		return nil
 	}
+	c.repairStats.MissingToolResults += inserted
 	log.Printf("affent: conversation %s: repaired %d missing tool result(s) from a prior crashed turn", c.path, inserted)
 	return c.replaceWithoutLock(out)
+}
+
+func (c *Conversation) RepairStats() ConversationRepairStats {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	return c.repairStats
 }
 
 // replaceWithoutLock is Replace's body without c.mu acquisition.

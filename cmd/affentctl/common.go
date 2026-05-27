@@ -779,16 +779,17 @@ func applyEnvConfig(c *commonFlags, fs *flag.FlagSet) error {
 // resolved session id, MCP clients to keep alive, and a closer to call
 // before exit.
 type loopBundle struct {
-	loop       *agent.Loop
-	events     chan sse.Event
-	recorder   *eventlog.Recorder
-	traceClose func() error
-	browser    *affentbrowser.Session
-	sessionID  string
-	resumed    bool // true if we loaded an existing conversation
-	workspace  string
-	log        zerolog.Logger
-	planPath   string
+	loop         *agent.Loop
+	events       chan sse.Event
+	recorder     *eventlog.Recorder
+	traceClose   func() error
+	browser      *affentbrowser.Session
+	sessionID    string
+	resumed      bool // true if we loaded an existing conversation
+	workspace    string
+	log          zerolog.Logger
+	planPath     string
+	resumeRepair *sse.ConversationRepairedPayload
 
 	loopProtocolPath           string
 	loopProtocolSkillInstalled bool
@@ -1123,6 +1124,17 @@ func (b *loopBundle) close() {
 	}
 }
 
+func (b *loopBundle) writeStartupTraceEvents() error {
+	if b == nil || b.recorder == nil || b.resumeRepair == nil {
+		return nil
+	}
+	ev, err := sse.NewEvent(sse.TypeConversationRepaired, *b.resumeRepair)
+	if err != nil {
+		return err
+	}
+	return b.recorder.Write(ev)
+}
+
 func registerAffentctlWebTools(reg *agent.Registry, includeSearch bool) error {
 	if includeSearch {
 		return affentweb.RegisterAll(reg, affentweb.Options{Fetch: affentweb.FetchConfig{}})
@@ -1412,6 +1424,16 @@ func setupLoop(c commonFlags) (*loopBundle, int) {
 		log.Error().Err(err).Msg("conversation")
 		return nil, exitRuntime
 	}
+	repairStats := conv.RepairStats()
+	var resumeRepair *sse.ConversationRepairedPayload
+	if repairStats.MissingToolResults > 0 {
+		resumeRepair = &sse.ConversationRepairedPayload{
+			SessionID:          sid,
+			MissingToolResults: repairStats.MissingToolResults,
+			FailureKind:        "resume_missing_tool_result",
+			Next:               "do not assume the tool succeeded; continue from available context and rerun the missing tool only if its result is still essential and safe to repeat.",
+		}
+	}
 
 	events := make(chan sse.Event, 64)
 	llm := agent.NewLLMClient(c.baseURL, c.apiKey, c.model)
@@ -1566,6 +1588,7 @@ func setupLoop(c commonFlags) (*loopBundle, int) {
 		workspace:                  workspace,
 		log:                        log,
 		planPath:                   planPath,
+		resumeRepair:               resumeRepair,
 		loopProtocolPath:           loopProtocolPath,
 		loopProtocolSkillInstalled: loopProtocolSkillInstalled,
 		mcpClients:                 mcpClients,

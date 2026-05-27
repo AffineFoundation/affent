@@ -99,6 +99,10 @@ Required: --model. --prompt is required unless --execute-plan is set.`)
 		}
 		b.log.Info().Str("session_id", b.sessionID).Msg("new session")
 	}
+	if err := b.writeStartupTraceEvents(); err != nil {
+		b.log.Error().Err(err).Msg("write startup trace events")
+		return exitRuntime
+	}
 
 	turnID, err := b.loop.SendUserWithOptions(ctx, prompt, turnOpts)
 	if err != nil {

@@ -724,7 +724,9 @@ Affent stores durable state as inspectable files:
   Affent repairs missing tool-result pairs left by a mid-turn crash with a
   structured `resume_missing_tool_result` placeholder, keeping strict
   OpenAI-compatible histories valid while telling the model not to assume the
-  missing tool succeeded.
+  missing tool succeeded. When this repair happens, affentctl and affentserve
+  emit a `conversation.repaired` trace event with the missing-result count and
+  recovery guidance.
 - `events.jsonl`: runtime event records for replay and SSE recovery.
 - `plan.json`: persisted plan state.
 - `.affent/loops/<session_id>/LOOP.md`: optional per-session loop protocol.
@@ -919,10 +921,11 @@ Current built-in suites:
   before editing it and naming the changed file in the final PR summary. A
   combined recovery scenario requires joining persistent memory with prior
   session history, covering the shared-memory plus session-search path. Eval
-  scenarios can also require post-run workspace file substrings; the missing
-  tool-result resume scenario uses this to prove `conversation.jsonl` was
-  repaired with the structured recovery placeholder instead of only checking
-  the final answer.
+  scenarios can also require trace event counts and post-run workspace file
+  substrings; the missing tool-result resume scenario uses these to prove
+  `conversation.repaired` was emitted and `conversation.jsonl` was repaired
+  with the structured recovery placeholder instead of only checking the final
+  answer.
 - `live-web`: non-CI live web regressions for JavaScript-heavy pages,
   direct-reader recovery, and browser network evidence quality. These scenarios
   intentionally depend on public sites and should be run with web/browser tools

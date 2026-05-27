@@ -59,6 +59,25 @@ func ToolCalledAtLeast(toolName string, min int) Check {
 	}
 }
 
+func TraceEventCountAtLeast(eventType string, min int) Check {
+	return Check{
+		Name: fmt.Sprintf("trace_event_count_at_least:%s:%d", eventType, min),
+		Eval: func(t Trace) CheckResult {
+			got := 0
+			if t.RawTypes != nil {
+				got = t.RawTypes[eventType]
+			}
+			if got >= min {
+				return CheckResult{Pass: true, Detail: fmt.Sprintf("%s=%d", eventType, got)}
+			}
+			return CheckResult{
+				Pass:   false,
+				Detail: fmt.Sprintf("expected at least %d %q event(s), got %d; observed=%v", min, eventType, got, t.RawTypes),
+			}
+		},
+	}
+}
+
 // ToolArgContainsAtLeast passes when at least min calls to toolName have an
 // argument field whose string representation contains substr. It gives
 // disambiguator-preservation evals a named, diagnostic check instead of hiding

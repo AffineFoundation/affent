@@ -48,6 +48,33 @@ func TestScanLog_CountAndPreview(t *testing.T) {
 	}
 }
 
+func TestLoopBundleWriteStartupTraceEventsPublishesConversationRepair(t *testing.T) {
+	var buf bytes.Buffer
+	b := &loopBundle{
+		recorder: eventlog.NewRecorder(&buf, eventlog.Options{}),
+		resumeRepair: &sse.ConversationRepairedPayload{
+			SessionID:          "resume",
+			MissingToolResults: 1,
+			FailureKind:        "resume_missing_tool_result",
+			Next:               "do not assume the tool succeeded",
+		},
+	}
+	if err := b.writeStartupTraceEvents(); err != nil {
+		t.Fatal(err)
+	}
+	got := buf.String()
+	for _, want := range []string{
+		`"type":"conversation.repaired"`,
+		`"session_id":"resume"`,
+		`"missing_tool_results":1`,
+		`"failure_kind":"resume_missing_tool_result"`,
+	} {
+		if !strings.Contains(got, want) {
+			t.Fatalf("startup trace event missing %s:\n%s", want, got)
+		}
+	}
+}
+
 // TestScanLog_MissingFileReturnsZero pins the silent-fail-on-open
 // behavior — sessionsCmd renders the listing best-effort and
 // shouldn't crash when a file disappears between ReadDir and scan.

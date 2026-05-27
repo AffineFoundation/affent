@@ -99,6 +99,10 @@ Slash commands inside the REPL:
 		}
 		fmt.Fprintf(os.Stderr, "new session %s (workspace %s)\n", b.sessionID, b.workspace)
 	}
+	if err := b.writeStartupTraceEvents(); err != nil {
+		fmt.Fprintf(os.Stderr, "write startup trace events: %v\n", err)
+		return exitRuntime
+	}
 	printStartupPlanSummary(b)
 	fmt.Fprintln(os.Stderr, "type your message; '/help' for commands, '/exit' or Ctrl+D to quit.")
 

@@ -1232,6 +1232,9 @@ func TestSelectLongRunSuite(t *testing.T) {
 			t.Fatalf("crash resume RequiredFileSubstrings = %#v, want %q", crashResume.RequiredFileSubstrings, want)
 		}
 	}
+	if crashResume.RequiredTraceEventCounts["conversation.repaired"] != 1 {
+		t.Fatalf("crash resume RequiredTraceEventCounts = %#v, want conversation.repaired=1", crashResume.RequiredTraceEventCounts)
+	}
 	if stringSliceContains(crashResume.ProtectedFiles, ".affentctl/resume-missing-tool-result.jsonl") {
 		t.Fatalf("crash resume conversation must not be protected because repair rewrites it: %#v", crashResume.ProtectedFiles)
 	}
@@ -2013,6 +2016,9 @@ func TestWriteScenarioDebugArtifactsIndexesTraceAndFinalText(t *testing.T) {
 			"source_access_dynamic_partial": 1,
 			"source_access_network":         1,
 		},
+		RequiredTraceEventCounts: map[string]int{
+			"conversation.repaired": 1,
+		},
 		RequiredLoopDecisionKinds: map[string]int{
 			"evidence_quality": 1,
 		},
@@ -2121,7 +2127,7 @@ func TestWriteScenarioDebugArtifactsIndexesTraceAndFinalText(t *testing.T) {
 	if len(manifest.Failures) != 1 || manifest.Failures[0] != "missing required evidence" {
 		t.Fatalf("manifest failures = %+v", manifest.Failures)
 	}
-	wantCapabilities := []string{"browser", "context_compaction", "delegation", "loop_protocol", "memory", "plan", "session_search", "source_access", "web", "workspace"}
+	wantCapabilities := []string{"browser", "context_compaction", "delegation", "loop_protocol", "memory", "plan", "session_search", "source_access", "trace", "web", "workspace"}
 	if !reflect.DeepEqual(manifest.ExpectationCapabilityNames, wantCapabilities) ||
 		manifest.ExpectationCapabilityOutcome != "failed" ||
 		len(manifest.ExpectationCapabilityPassedNames) != 0 ||
@@ -2148,6 +2154,7 @@ func TestWriteScenarioDebugArtifactsIndexesTraceAndFinalText(t *testing.T) {
 		manifest.Expectations.RequiredToolStatsAtLeast["memory_updates"] != 2 ||
 		manifest.Expectations.RequiredToolStatsAtLeast["source_access_dynamic_partial"] != 1 ||
 		manifest.Expectations.RequiredToolStatsAtLeast["source_access_network"] != 1 ||
+		manifest.Expectations.RequiredTraceEventCounts["conversation.repaired"] != 1 ||
 		manifest.Expectations.RequiredLoopDecisionKinds["evidence_quality"] != 1 ||
 		manifest.Expectations.RequiredLoopDecisionResults["defer"] != 1 ||
 		len(manifest.Expectations.RequiredLoopDecisionMatches) != 1 ||
@@ -2408,7 +2415,7 @@ func TestWriteScenarioDebugArtifactsIndexesTraceAndFinalText(t *testing.T) {
 		"kind=`focused_task` path=`.affentctl/focused-tasks/debug-session/focused_alpha.jsonl`",
 		"kind=`subagent` path=`.affentctl/subagents/debug-session/subagent_beta.jsonl`",
 		"## Scenario Expectations",
-		"expectation_capabilities: `browser`, `context_compaction`, `delegation`, `loop_protocol`, `memory`, `plan`, `session_search`, `source_access`, `web`, `workspace` outcome=`failed`",
+		"expectation_capabilities: `browser`, `context_compaction`, `delegation`, `loop_protocol`, `memory`, `plan`, `session_search`, `source_access`, `trace`, `web`, `workspace` outcome=`failed`",
 		"suites: `long-run`, `live-web`",
 		"runtime: `max_turns=12 compact_trigger=6 compact_keep_last=3`",
 		"checks: `turn_ended_cleanly`",
@@ -2420,6 +2427,7 @@ func TestWriteScenarioDebugArtifactsIndexesTraceAndFinalText(t *testing.T) {
 		"required_command_after_tool: `go test -> edit_file`",
 		"required_tool_failure_kind_counts: `dynamic_shell=1`",
 		"required_tool_stats_at_least: `memory_updates=2,source_access_dynamic_partial=1,source_access_network=1`",
+		"required_trace_event_counts: `conversation.repaired=1`",
 		"required_loop_decision_kinds: `evidence_quality=1`",
 		"required_loop_decision_results: `defer=1`",
 		"required_loop_protocol_feeds: `1`",
