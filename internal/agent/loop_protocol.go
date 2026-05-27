@@ -508,6 +508,9 @@ func loopProtocolFeedPayloadFromBlock(turnID, block string) (sse.LoopProtocolFee
 				payload.LastCalibrationAnswer = textutil.Preview(strings.TrimSpace(answer), 220)
 			}
 		}
+		if turn, ok := strings.CutPrefix(line, "last_turn:"); ok {
+			applyLoopProtocolLastTurnFields(&payload, turn)
+		}
 	}
 	if payload.Mode == "" || payload.FeedNumber <= 0 {
 		return sse.LoopProtocolFeedPayload{}, false
@@ -516,6 +519,36 @@ func loopProtocolFeedPayloadFromBlock(turnID, block string) (sse.LoopProtocolFee
 		payload.ProtocolFeeds = payload.FeedNumber
 	}
 	return payload, true
+}
+
+func applyLoopProtocolLastTurnFields(payload *sse.LoopProtocolFeedPayload, raw string) {
+	if payload == nil {
+		return
+	}
+	for _, field := range strings.Fields(strings.TrimSpace(raw)) {
+		key, value, ok := strings.Cut(field, "=")
+		if !ok || value == "" {
+			continue
+		}
+		switch key {
+		case "id":
+			payload.LastTurnID = value
+		case "reason":
+			payload.LastTurnEndReason = value
+		case "tools":
+			payload.LastTurnToolRequests = parsePositiveInt(value)
+		case "memory_updates":
+			payload.LastTurnMemoryUpdates = parsePositiveInt(value)
+		case "memory_searches":
+			payload.LastTurnMemorySearchCalls = parsePositiveInt(value)
+		case "memory_misses":
+			payload.LastTurnMemorySearchMisses = parsePositiveInt(value)
+		case "session_search":
+			payload.LastTurnSessionSearchCalls = parsePositiveInt(value)
+		case "loop_guards":
+			payload.LastTurnLoopGuards = parsePositiveInt(value)
+		}
+	}
 }
 
 func parsePositiveInt(raw string) int {

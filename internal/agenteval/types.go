@@ -539,21 +539,29 @@ type LoopDecisionStats struct {
 }
 
 type LoopProtocolFeed struct {
-	Scenario              string `json:"scenario,omitempty"`
-	TurnID                string `json:"turn_id,omitempty"`
-	LoopID                string `json:"loop_id,omitempty"`
-	Status                string `json:"status,omitempty"`
-	Mode                  string `json:"mode"`
-	FeedNumber            int    `json:"feed_number"`
-	ProtocolFeeds         int    `json:"protocol_feeds,omitempty"`
-	CalibrationAnswers    int    `json:"calibration_answers,omitempty"`
-	LastCalibrationAnswer string `json:"last_calibration_answer_preview,omitempty"`
-	ProtocolPath          string `json:"protocol_path,omitempty"`
-	CurrentSituation      string `json:"current_situation_preview,omitempty"`
-	PlanLabel             string `json:"plan_label,omitempty"`
-	PlanCurrentStepIndex  int    `json:"plan_current_step_index,omitempty"`
-	PlanCurrentStepStatus string `json:"plan_current_step_status,omitempty"`
-	PlanCurrentStep       string `json:"plan_current_step,omitempty"`
+	Scenario                   string `json:"scenario,omitempty"`
+	TurnID                     string `json:"turn_id,omitempty"`
+	LoopID                     string `json:"loop_id,omitempty"`
+	Status                     string `json:"status,omitempty"`
+	Mode                       string `json:"mode"`
+	FeedNumber                 int    `json:"feed_number"`
+	ProtocolFeeds              int    `json:"protocol_feeds,omitempty"`
+	CalibrationAnswers         int    `json:"calibration_answers,omitempty"`
+	LastCalibrationAnswer      string `json:"last_calibration_answer_preview,omitempty"`
+	ProtocolPath               string `json:"protocol_path,omitempty"`
+	CurrentSituation           string `json:"current_situation_preview,omitempty"`
+	PlanLabel                  string `json:"plan_label,omitempty"`
+	PlanCurrentStepIndex       int    `json:"plan_current_step_index,omitempty"`
+	PlanCurrentStepStatus      string `json:"plan_current_step_status,omitempty"`
+	PlanCurrentStep            string `json:"plan_current_step,omitempty"`
+	LastTurnID                 string `json:"last_turn_id,omitempty"`
+	LastTurnEndReason          string `json:"last_turn_end_reason,omitempty"`
+	LastTurnToolRequests       int    `json:"last_turn_tool_requests,omitempty"`
+	LastTurnMemoryUpdates      int    `json:"last_turn_memory_updates,omitempty"`
+	LastTurnMemorySearchCalls  int    `json:"last_turn_memory_search_calls,omitempty"`
+	LastTurnMemorySearchMisses int    `json:"last_turn_memory_search_misses,omitempty"`
+	LastTurnSessionSearchCalls int    `json:"last_turn_session_search_calls,omitempty"`
+	LastTurnLoopGuards         int    `json:"last_turn_loop_guards,omitempty"`
 }
 
 type LoopProtocolCalibration struct {
@@ -1501,20 +1509,28 @@ func (t Trace) LoopProtocolFeedStats(maxExamples int) LoopProtocolFeedStats {
 			continue
 		}
 		stats.Examples = append(stats.Examples, LoopProtocolFeed{
-			TurnID:                feed.TurnID,
-			LoopID:                feed.LoopID,
-			Status:                feed.Status,
-			Mode:                  feed.Mode,
-			FeedNumber:            feed.FeedNumber,
-			ProtocolFeeds:         feed.ProtocolFeeds,
-			CalibrationAnswers:    feed.CalibrationAnswers,
-			LastCalibrationAnswer: feed.LastCalibrationAnswer,
-			ProtocolPath:          feed.ProtocolPath,
-			CurrentSituation:      feed.CurrentSituation,
-			PlanLabel:             feed.PlanLabel,
-			PlanCurrentStepIndex:  feed.PlanCurrentStepIndex,
-			PlanCurrentStepStatus: feed.PlanCurrentStepStatus,
-			PlanCurrentStep:       feed.PlanCurrentStep,
+			TurnID:                     feed.TurnID,
+			LoopID:                     feed.LoopID,
+			Status:                     feed.Status,
+			Mode:                       feed.Mode,
+			FeedNumber:                 feed.FeedNumber,
+			ProtocolFeeds:              feed.ProtocolFeeds,
+			CalibrationAnswers:         feed.CalibrationAnswers,
+			LastCalibrationAnswer:      feed.LastCalibrationAnswer,
+			ProtocolPath:               feed.ProtocolPath,
+			CurrentSituation:           feed.CurrentSituation,
+			PlanLabel:                  feed.PlanLabel,
+			PlanCurrentStepIndex:       feed.PlanCurrentStepIndex,
+			PlanCurrentStepStatus:      feed.PlanCurrentStepStatus,
+			PlanCurrentStep:            feed.PlanCurrentStep,
+			LastTurnID:                 feed.LastTurnID,
+			LastTurnEndReason:          feed.LastTurnEndReason,
+			LastTurnToolRequests:       feed.LastTurnToolRequests,
+			LastTurnMemoryUpdates:      feed.LastTurnMemoryUpdates,
+			LastTurnMemorySearchCalls:  feed.LastTurnMemorySearchCalls,
+			LastTurnMemorySearchMisses: feed.LastTurnMemorySearchMisses,
+			LastTurnSessionSearchCalls: feed.LastTurnSessionSearchCalls,
+			LastTurnLoopGuards:         feed.LastTurnLoopGuards,
 		})
 	}
 	return stats

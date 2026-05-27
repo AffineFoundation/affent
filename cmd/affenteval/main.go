@@ -2250,8 +2250,40 @@ func printLoopProtocolFeedExampleLines(w io.Writer, examples []agenteval.LoopPro
 		if ex.CurrentSituation != "" {
 			fmt.Fprintf(w, " situation=%q", textutil.Preview(ex.CurrentSituation, 120))
 		}
+		if ex.LastTurnID != "" || ex.LastTurnMemorySearchCalls > 0 || ex.LastTurnSessionSearchCalls > 0 {
+			fmt.Fprintf(w, " last_turn=%q", textutil.Preview(loopProtocolFeedLastTurnSummary(ex), 140))
+		}
 		fmt.Fprintln(w)
 	}
+}
+
+func loopProtocolFeedLastTurnSummary(ex agenteval.LoopProtocolFeed) string {
+	var parts []string
+	if ex.LastTurnID != "" {
+		parts = append(parts, "id="+ex.LastTurnID)
+	}
+	if ex.LastTurnEndReason != "" {
+		parts = append(parts, "reason="+ex.LastTurnEndReason)
+	}
+	if ex.LastTurnToolRequests > 0 {
+		parts = append(parts, fmt.Sprintf("tools=%d", ex.LastTurnToolRequests))
+	}
+	if ex.LastTurnMemoryUpdates > 0 {
+		parts = append(parts, fmt.Sprintf("memory_updates=%d", ex.LastTurnMemoryUpdates))
+	}
+	if ex.LastTurnMemorySearchCalls > 0 {
+		parts = append(parts, fmt.Sprintf("memory_searches=%d", ex.LastTurnMemorySearchCalls))
+	}
+	if ex.LastTurnMemorySearchMisses > 0 {
+		parts = append(parts, fmt.Sprintf("memory_misses=%d", ex.LastTurnMemorySearchMisses))
+	}
+	if ex.LastTurnSessionSearchCalls > 0 {
+		parts = append(parts, fmt.Sprintf("session_search=%d", ex.LastTurnSessionSearchCalls))
+	}
+	if ex.LastTurnLoopGuards > 0 {
+		parts = append(parts, fmt.Sprintf("loop_guards=%d", ex.LastTurnLoopGuards))
+	}
+	return strings.Join(parts, " ")
 }
 
 func printContextInjectionExampleLines(w io.Writer, examples []agenteval.ContextInjection, indent string) {

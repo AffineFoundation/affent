@@ -1089,6 +1089,38 @@ func formatLoopProtocolFeedExample(feed LoopProtocolFeed) string {
 	if feed.CurrentSituation != "" {
 		parts = append(parts, "current_situation="+previewSubstr(feed.CurrentSituation, 120))
 	}
+	if feed.LastTurnID != "" || feed.LastTurnMemorySearchCalls > 0 || feed.LastTurnSessionSearchCalls > 0 {
+		parts = append(parts, "last_turn="+previewSubstr(loopProtocolFeedLastTurnSummary(feed), 140))
+	}
+	return strings.Join(parts, " ")
+}
+
+func loopProtocolFeedLastTurnSummary(feed LoopProtocolFeed) string {
+	var parts []string
+	if feed.LastTurnID != "" {
+		parts = append(parts, "id="+feed.LastTurnID)
+	}
+	if feed.LastTurnEndReason != "" {
+		parts = append(parts, "reason="+feed.LastTurnEndReason)
+	}
+	if feed.LastTurnToolRequests > 0 {
+		parts = append(parts, fmt.Sprintf("tools=%d", feed.LastTurnToolRequests))
+	}
+	if feed.LastTurnMemoryUpdates > 0 {
+		parts = append(parts, fmt.Sprintf("memory_updates=%d", feed.LastTurnMemoryUpdates))
+	}
+	if feed.LastTurnMemorySearchCalls > 0 {
+		parts = append(parts, fmt.Sprintf("memory_searches=%d", feed.LastTurnMemorySearchCalls))
+	}
+	if feed.LastTurnMemorySearchMisses > 0 {
+		parts = append(parts, fmt.Sprintf("memory_misses=%d", feed.LastTurnMemorySearchMisses))
+	}
+	if feed.LastTurnSessionSearchCalls > 0 {
+		parts = append(parts, fmt.Sprintf("session_search=%d", feed.LastTurnSessionSearchCalls))
+	}
+	if feed.LastTurnLoopGuards > 0 {
+		parts = append(parts, fmt.Sprintf("loop_guards=%d", feed.LastTurnLoopGuards))
+	}
 	return strings.Join(parts, " ")
 }
 

@@ -289,20 +289,28 @@ type TurnEndPayload struct {
 // that decision into the normal session trace/SSE stream so WebUI and evals can
 // inspect long-run context pressure without reading sidecar loop files.
 type LoopProtocolFeedPayload struct {
-	TurnID                string `json:"turn_id,omitempty"`
-	LoopID                string `json:"loop_id,omitempty"`
-	Status                string `json:"status,omitempty"`
-	Mode                  string `json:"mode"`
-	FeedNumber            int    `json:"feed_number"`
-	ProtocolFeeds         int    `json:"protocol_feeds,omitempty"`
-	CalibrationAnswers    int    `json:"calibration_answers,omitempty"`
-	LastCalibrationAnswer string `json:"last_calibration_answer_preview,omitempty"`
-	ProtocolPath          string `json:"protocol_path,omitempty"`
-	CurrentSituation      string `json:"current_situation_preview,omitempty"`
-	PlanLabel             string `json:"plan_label,omitempty"`
-	PlanCurrentStepIndex  int    `json:"plan_current_step_index,omitempty"`
-	PlanCurrentStepStatus string `json:"plan_current_step_status,omitempty"`
-	PlanCurrentStep       string `json:"plan_current_step,omitempty"`
+	TurnID                     string `json:"turn_id,omitempty"`
+	LoopID                     string `json:"loop_id,omitempty"`
+	Status                     string `json:"status,omitempty"`
+	Mode                       string `json:"mode"`
+	FeedNumber                 int    `json:"feed_number"`
+	ProtocolFeeds              int    `json:"protocol_feeds,omitempty"`
+	CalibrationAnswers         int    `json:"calibration_answers,omitempty"`
+	LastCalibrationAnswer      string `json:"last_calibration_answer_preview,omitempty"`
+	ProtocolPath               string `json:"protocol_path,omitempty"`
+	CurrentSituation           string `json:"current_situation_preview,omitempty"`
+	PlanLabel                  string `json:"plan_label,omitempty"`
+	PlanCurrentStepIndex       int    `json:"plan_current_step_index,omitempty"`
+	PlanCurrentStepStatus      string `json:"plan_current_step_status,omitempty"`
+	PlanCurrentStep            string `json:"plan_current_step,omitempty"`
+	LastTurnID                 string `json:"last_turn_id,omitempty"`
+	LastTurnEndReason          string `json:"last_turn_end_reason,omitempty"`
+	LastTurnToolRequests       int    `json:"last_turn_tool_requests,omitempty"`
+	LastTurnMemoryUpdates      int    `json:"last_turn_memory_updates,omitempty"`
+	LastTurnMemorySearchCalls  int    `json:"last_turn_memory_search_calls,omitempty"`
+	LastTurnMemorySearchMisses int    `json:"last_turn_memory_search_misses,omitempty"`
+	LastTurnSessionSearchCalls int    `json:"last_turn_session_search_calls,omitempty"`
+	LastTurnLoopGuards         int    `json:"last_turn_loop_guards,omitempty"`
 }
 
 // LoopProtocolCalibrationPayload mirrors draft LOOP.md calibration questions

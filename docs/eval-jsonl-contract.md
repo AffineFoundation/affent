@@ -256,10 +256,14 @@ Scenario records describe one eval case:
   `current_situation_preview` extracted from the LOOP.md Current Situation
   section, and optional active plan checkpoint fields (`plan_label`,
   `plan_current_step_index`, `plan_current_step_status`, and
-  `plan_current_step`). Summary records include the originating scenario. Use
-  these fields to verify that long-running loop sessions actually refreshed
+  `plan_current_step`). Samples may also include the latest turn checkpoint
+  fields (`last_turn_id`, `last_turn_end_reason`, `last_turn_tool_requests`,
+  `last_turn_memory_updates`, `last_turn_memory_search_calls`,
+  `last_turn_memory_search_misses`, `last_turn_session_search_calls`, and
+  `last_turn_loop_guards`). Summary records include the originating scenario.
+  Use these fields to verify that long-running loop sessions actually refreshed
   `LOOP.md` without overfeeding the model context, and that each feed preserved
-  a pointer back to the authoritative plan state.
+  pointers back to authoritative plan and recall state.
 - `loop_protocol_calibration_requests`: optional count of assistant calibration
   questions asked for draft `LOOP.md` activation.
 - `loop_protocol_calibration_request_examples`: optional bounded examples of

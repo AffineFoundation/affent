@@ -634,6 +634,18 @@ func TestAppendUserMessagePublishesLoopProtocolFeedEvent(t *testing.T) {
 	if _, _, err := loopstate.RecordProtocolCalibrationAnswer(path, "Stop when the requested source cannot be verified."); err != nil {
 		t.Fatalf("RecordProtocolCalibrationAnswer: %v", err)
 	}
+	if _, _, err := loopstate.RecordTurnCheckpoint(path, loopstate.TurnCheckpoint{
+		TurnID:             "turn_previous",
+		EndReason:          sse.TurnEndMaxTurns,
+		ToolRequests:       5,
+		MemoryUpdates:      1,
+		MemorySearchCalls:  3,
+		MemorySearchMisses: 2,
+		SessionSearchCalls: 1,
+		LoopGuards:         1,
+	}); err != nil {
+		t.Fatalf("RecordTurnCheckpoint: %v", err)
+	}
 	checkpoint := func() loopstate.PlanCheckpoint {
 		return loopstate.PlanCheckpoint{Valid: true, Label: "plan:0/1:active", StepIndex: 1, StepStatus: "in_progress", Step: "read trace evidence"}
 	}
@@ -669,6 +681,14 @@ func TestAppendUserMessagePublishesLoopProtocolFeedEvent(t *testing.T) {
 			payload.PlanCurrentStepIndex != 1 ||
 			payload.PlanCurrentStepStatus != "in_progress" ||
 			payload.PlanCurrentStep != "read trace evidence" ||
+			payload.LastTurnID != "turn_previous" ||
+			payload.LastTurnEndReason != sse.TurnEndMaxTurns ||
+			payload.LastTurnToolRequests != 5 ||
+			payload.LastTurnMemoryUpdates != 1 ||
+			payload.LastTurnMemorySearchCalls != 3 ||
+			payload.LastTurnMemorySearchMisses != 2 ||
+			payload.LastTurnSessionSearchCalls != 1 ||
+			payload.LastTurnLoopGuards != 1 ||
 			!strings.Contains(payload.CurrentSituation, "recover the long-run trace") ||
 			!strings.Contains(payload.CurrentSituation, "network evidence is not verified yet") ||
 			payload.ProtocolPath != ".affent/loops/"+filepath.Base(dir)+"/LOOP.md" {
