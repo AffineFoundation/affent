@@ -170,7 +170,43 @@ describe("buildExecutionTree", () => {
       },
     ]).turns[0]);
 
-    expect(source.label).toBe("MCP action");
+    expect(source.label).toBe("Browser action");
+    expect(source.subtitle).toBeUndefined();
     expect(source.preview).toBe("JSON_PATH: $.price \"0.06342 T\"");
+  });
+
+  it("does not misclassify underscore-named builtins as MCP tools", () => {
+    const [repoSearch, browserNetwork] = buildExecutionTree(reduceRawEvents([
+      { id: 1, type: "turn.start", data: { turn_id: "t1" } },
+      {
+        id: 2,
+        type: "tool.request",
+        data: {
+          turn_id: "t1",
+          call_id: "c1",
+          tool: "repo_search",
+          args: { query: "SourceAccess" },
+        },
+      },
+      { id: 3, type: "tool.result", data: { call_id: "c1", exit_code: 0, result: "internal/agenteval/types.go" } },
+      {
+        id: 4,
+        type: "tool.request",
+        data: {
+          turn_id: "t1",
+          call_id: "c2",
+          tool: "browser_network",
+          args: { query: "price" },
+        },
+      },
+      { id: 5, type: "tool.result", data: { call_id: "c2", exit_code: 0, result: "MATCHES: none" } },
+    ]).turns[0]);
+
+    expect(repoSearch.kind).toBe("tool");
+    expect(repoSearch.label).toBe("Action");
+    expect(repoSearch.subtitle).toBeUndefined();
+    expect(browserNetwork.kind).toBe("tool");
+    expect(browserNetwork.label).toBe("Browser action");
+    expect(browserNetwork.subtitle).toBeUndefined();
   });
 });
