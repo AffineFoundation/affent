@@ -451,7 +451,7 @@ func (snap *Snapshot) Format() string {
 				truncateSnapshotField(entry.URL, maxFormattedInteractiveURL),
 			)
 		}
-		b.WriteString("Next: use browser_network with a specific metric/entity/API-path query, then browser_network_read on the best ref before citing hidden dashboard values.\n")
+		b.WriteString("Next: call browser_network_read on the relevant ref before citing hidden dashboard values; use browser_network with a specific metric/entity/API-path query only when the best ref is unclear.\n")
 	}
 	b.WriteString("\n")
 

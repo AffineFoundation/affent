@@ -200,7 +200,8 @@ func TestFormatSnapshotResultIncludesNetworkEvidenceHints(t *testing.T) {
 	for _, want := range []string{
 		"CAPTURED NETWORK RESPONSES:",
 		"n3 status=200 resource=fetch content_type=application/json url=https://taostats.io/api/subnets/120",
-		"browser_network_read",
+		"call browser_network_read on the relevant ref",
+		"use browser_network with a specific metric/entity/API-path query only when the best ref is unclear",
 		"before citing hidden dashboard values",
 	} {
 		if !strings.Contains(out, want) {
