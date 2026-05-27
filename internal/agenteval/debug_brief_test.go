@@ -406,6 +406,31 @@ func TestBuildDebugBriefClassifiesSourceAccessQuality(t *testing.T) {
 	}
 }
 
+func TestBuildDebugBriefClassifiesBrowserScrollStuckWithoutNetwork(t *testing.T) {
+	brief := BuildDebugBrief(BatchResult{
+		OK: true,
+		BrowserScrollExamples: []BrowserScrollExample{{
+			Status:            "boundary",
+			Movement:          "none",
+			Boundary:          "bottom",
+			SuggestedNextStep: "use browser_network_read",
+		}},
+	})
+	item := debugBriefItemByKind(brief, "browser_scroll")
+	if item == nil ||
+		item.Severity != "warn" ||
+		item.Message != "browser scroll stalled without network-backed evidence; inspect network captures before trusting hidden dashboard values" ||
+		item.Counts["scrolls"] != 1 ||
+		item.Counts["boundary"] != 1 ||
+		!stringSliceContains(item.Inspect, "browser_scroll_examples") ||
+		!stringSliceContains(item.Inspect, "source_evidence") ||
+		!stringSliceContains(brief.Tags, "browser_scroll") ||
+		!stringSliceContains(brief.Tags, "browser_scroll:boundary") ||
+		!stringSliceContains(brief.Tags, "browser_scroll:stuck_without_network") {
+		t.Fatalf("browser scroll debug item = %+v tags=%+v", item, brief.Tags)
+	}
+}
+
 func TestBuildDebugBriefMatchesBrowserNetworkRefsToSourceEvidence(t *testing.T) {
 	brief := BuildDebugBrief(BatchResult{
 		OK: true,

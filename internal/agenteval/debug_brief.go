@@ -208,6 +208,39 @@ func BuildDebugBrief(res BatchResult) *DebugBrief {
 			"missing_response_diagnostics": missingResponseDiagnostics,
 		}, tags...)
 	}
+	if len(res.BrowserScrollExamples) > 0 {
+		boundary, stuck := 0, 0
+		for _, ex := range res.BrowserScrollExamples {
+			switch ex.Status {
+			case "boundary":
+				boundary++
+			case "stuck":
+				stuck++
+			}
+		}
+		severity := "info"
+		message := "browser scroll telemetry was captured; inspect it when rendered page evidence is thin"
+		tags := []string{"browser_scroll"}
+		if boundary > 0 || stuck > 0 {
+			severity = "warn"
+			message = "browser scroll did not expose new evidence; switch to browser network reads before citing hidden dynamic values"
+			if boundary > 0 {
+				tags = append(tags, "browser_scroll:boundary")
+			}
+			if stuck > 0 {
+				tags = append(tags, "browser_scroll:stuck")
+			}
+			if res.ToolStats.SourceAccessNetwork == 0 {
+				tags = append(tags, "browser_scroll:stuck_without_network")
+				message = "browser scroll stalled without network-backed evidence; inspect network captures before trusting hidden dashboard values"
+			}
+		}
+		add("browser_scroll", severity, message, []string{"browser_scroll_examples", "source_evidence", "tool_timeline"}, map[string]int{
+			"scrolls":  len(res.BrowserScrollExamples),
+			"boundary": boundary,
+			"stuck":    stuck,
+		}, tags...)
+	}
 	if len(res.BrowserNetworkExamples) > 0 {
 		refs, noMatches := 0, 0
 		for _, ex := range res.BrowserNetworkExamples {

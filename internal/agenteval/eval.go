@@ -31,6 +31,7 @@ const (
 	maxDebugLoopGuardExamples      = 5
 	maxDebugToolTruncationExamples = 5
 	maxDebugSourceAccessExamples   = 5
+	maxDebugBrowserScrollExamples  = 5
 	maxDebugBrowserNetworkExamples = 5
 	maxDebugMemoryUpdateExamples   = 5
 	maxDebugSessionSearchExamples  = 5
@@ -217,6 +218,7 @@ type BatchResult struct {
 	ToolFailureExamples             map[string][]ToolFailureExample
 	LoopGuardExamples               []LoopGuardExample
 	SourceAccessExamples            []SourceAccessExample
+	BrowserScrollExamples           []BrowserScrollExample
 	BrowserNetworkExamples          []BrowserNetworkSearchExample
 	MemoryUpdateExamples            []MemoryUpdateExample
 	SessionSearchExamples           []SessionSearchExample
@@ -275,6 +277,7 @@ type DebugManifest struct {
 	LoopProtocolCalibrationRequestExamples []LoopProtocolCalibration     `json:"loop_protocol_calibration_request_examples,omitempty"`
 	LoopProtocolCalibrationExamples        []LoopProtocolCalibration     `json:"loop_protocol_calibration_examples,omitempty"`
 	SourceAccessExamples                   []SourceAccessExample         `json:"source_access_examples,omitempty"`
+	BrowserScrollExamples                  []BrowserScrollExample        `json:"browser_scroll_examples,omitempty"`
 	BrowserNetworkExamples                 []BrowserNetworkSearchExample `json:"browser_network_examples,omitempty"`
 	MemoryUpdateExamples                   []MemoryUpdateExample         `json:"memory_update_examples,omitempty"`
 	SessionSearchExamples                  []SessionSearchExample        `json:"session_search_examples,omitempty"`
@@ -901,6 +904,7 @@ func (r BatchRunner) Run(ctx context.Context, scenario BatchScenario) BatchResul
 		res.ToolFailureExamples = trace.ToolFailureExamples(2)
 		res.LoopGuardExamples = trace.LoopGuardExamples(maxDebugLoopGuardExamples)
 		res.SourceAccessExamples = trace.SourceAccessExamples(maxDebugSourceAccessExamples)
+		res.BrowserScrollExamples = trace.BrowserScrollExamples(maxDebugBrowserScrollExamples)
 		res.BrowserNetworkExamples = trace.BrowserNetworkSearchExamples(maxDebugBrowserNetworkExamples)
 		res.MemoryUpdateExamples = trace.MemoryUpdateExamples(maxDebugMemoryUpdateExamples)
 		res.SessionSearchExamples = trace.SessionSearchExamples(maxDebugSessionSearchExamples)
@@ -951,6 +955,9 @@ func writeScenarioDebugArtifacts(res *BatchResult, scenario BatchScenario, stdou
 	}
 	if trace != nil && len(res.SourceAccessExamples) == 0 {
 		res.SourceAccessExamples = trace.SourceAccessExamples(maxDebugSourceAccessExamples)
+	}
+	if trace != nil && len(res.BrowserScrollExamples) == 0 {
+		res.BrowserScrollExamples = trace.BrowserScrollExamples(maxDebugBrowserScrollExamples)
 	}
 	if trace != nil && len(res.BrowserNetworkExamples) == 0 {
 		res.BrowserNetworkExamples = trace.BrowserNetworkSearchExamples(maxDebugBrowserNetworkExamples)
@@ -1020,6 +1027,7 @@ func writeScenarioDebugArtifacts(res *BatchResult, scenario BatchScenario, stdou
 		LoopProtocolCalibrationRequestExamples: append([]LoopProtocolCalibration(nil), res.LoopProtocolCalibrationRequests.Examples...),
 		LoopProtocolCalibrationExamples:        append([]LoopProtocolCalibration(nil), res.LoopProtocolCalibrations.Examples...),
 		SourceAccessExamples:                   append([]SourceAccessExample(nil), res.SourceAccessExamples...),
+		BrowserScrollExamples:                  append([]BrowserScrollExample(nil), res.BrowserScrollExamples...),
 		BrowserNetworkExamples:                 append([]BrowserNetworkSearchExample(nil), res.BrowserNetworkExamples...),
 		MemoryUpdateExamples:                   append([]MemoryUpdateExample(nil), res.MemoryUpdateExamples...),
 		SessionSearchExamples:                  append([]SessionSearchExample(nil), res.SessionSearchExamples...),

@@ -88,6 +88,7 @@ func renderDebugTimeline(res BatchResult, scenario BatchScenario, trace *Trace) 
 	renderTimelineCompactions(&b, trace)
 	renderTimelineDecisions(&b, trace)
 	renderTimelineSourceEvidence(&b, trace)
+	renderTimelineBrowserScrolls(&b, trace)
 	renderTimelineBrowserNetworkSearches(&b, trace)
 	renderTimelinePlan(&b, trace)
 	renderTimelineMemoryUpdates(&b, trace)
@@ -970,6 +971,43 @@ func renderTimelineSourceEvidence(b *strings.Builder, trace *Trace) {
 		b.WriteByte('\n')
 		if preview := sourceAccessResultPreview(entry.Tool.Result, entry.Tool.ResultSummary); preview != "" {
 			fmt.Fprintf(b, "   preview: %s\n", timelineInline(preview, timelineMemoryPreviewBytes))
+		}
+	}
+}
+
+func renderTimelineBrowserScrolls(b *strings.Builder, trace *Trace) {
+	examples := trace.BrowserScrollExamples(len(trace.Tools))
+	if len(examples) == 0 {
+		return
+	}
+	b.WriteString("\n## Browser Scrolls\n\n")
+	b.WriteString("Scroll telemetry is page-position evidence, not citable factual evidence. If movement is none or a boundary is reached, use browser network reads before citing hidden values.\n\n")
+	for i, ex := range examples {
+		fmt.Fprintf(b, "%d. tool#%d status=`%s`", i+1, ex.ToolIndex, ex.Status)
+		if ex.Direction != "" {
+			fmt.Fprintf(b, " direction=`%s`", timelineInline(ex.Direction, 80))
+		}
+		if ex.URL != "" {
+			fmt.Fprintf(b, " url=`%s`", timelineInline(ex.URL, 300))
+		}
+		if ex.CallID != "" {
+			fmt.Fprintf(b, " call_id=`%s`", ex.CallID)
+		}
+		if ex.Movement != "" {
+			fmt.Fprintf(b, " movement=`%s`", timelineInline(ex.Movement, 80))
+		}
+		if ex.Boundary != "" {
+			fmt.Fprintf(b, " boundary=`%s`", timelineInline(ex.Boundary, 80))
+		}
+		if ex.BeforeY != "" || ex.AfterY != "" || ex.MaxY != "" {
+			fmt.Fprintf(b, " y=`%s->%s/%s`", timelineInline(ex.BeforeY, 80), timelineInline(ex.AfterY, 80), timelineInline(ex.MaxY, 80))
+		}
+		b.WriteByte('\n')
+		if ex.ResultPreview != "" {
+			fmt.Fprintf(b, "   preview: %s\n", timelineInline(ex.ResultPreview, timelineMemoryPreviewBytes))
+		}
+		if ex.SuggestedNextStep != "" {
+			fmt.Fprintf(b, "   next: %s\n", timelineInline(ex.SuggestedNextStep, timelineMemoryPreviewBytes))
 		}
 	}
 }

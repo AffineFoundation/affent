@@ -415,6 +415,22 @@ type SourceAccessExample struct {
 	ResultPreview string `json:"result_preview,omitempty"`
 }
 
+type BrowserScrollExample struct {
+	Scenario          string `json:"scenario,omitempty"`
+	ToolIndex         int    `json:"tool_index"`
+	CallID            string `json:"call_id,omitempty"`
+	URL               string `json:"url,omitempty"`
+	Direction         string `json:"direction,omitempty"`
+	BeforeY           string `json:"before_y,omitempty"`
+	AfterY            string `json:"after_y,omitempty"`
+	MaxY              string `json:"max_y,omitempty"`
+	Movement          string `json:"movement,omitempty"`
+	Boundary          string `json:"boundary,omitempty"`
+	Status            string `json:"status,omitempty"`
+	SuggestedNextStep string `json:"suggested_next_step,omitempty"`
+	ResultPreview     string `json:"result_preview,omitempty"`
+}
+
 type BrowserNetworkSearchExample struct {
 	Scenario          string   `json:"scenario,omitempty"`
 	ToolIndex         int      `json:"tool_index"`
@@ -780,6 +796,23 @@ func (t Trace) BrowserNetworkSearchExamples(maxExamples int) []BrowserNetworkSea
 	return out
 }
 
+func (t Trace) BrowserScrollExamples(maxExamples int) []BrowserScrollExample {
+	if maxExamples <= 0 {
+		return nil
+	}
+	var out []BrowserScrollExample
+	for i, c := range t.Tools {
+		if len(out) >= maxExamples {
+			break
+		}
+		ex, ok := browserScrollExampleForTool(i+1, c)
+		if ok {
+			out = append(out, ex)
+		}
+	}
+	return out
+}
+
 func (t Trace) SessionSearchExamples(maxExamples int) []SessionSearchExample {
 	if maxExamples <= 0 {
 		return nil
@@ -861,6 +894,72 @@ func (t Trace) ToolTruncationExamples(maxExamples int) []ToolTruncationExample {
 		})
 	}
 	return out
+}
+
+func browserScrollExampleForTool(index int, c ToolCall) (BrowserScrollExample, bool) {
+	if c.Tool != "browser_scroll" || c.ExitCode != 0 || c.IsErr {
+		return BrowserScrollExample{}, false
+	}
+	body := strings.TrimSpace(c.Result)
+	if !strings.Contains(body, "SCROLL:") {
+		return BrowserScrollExample{}, false
+	}
+	var ex BrowserScrollExample
+	ex.ToolIndex = index
+	ex.CallID = c.CallID
+	ex.Status = "unknown"
+	if info, ok := sourceaccess.FirstInfoFromResult(c.Result); ok {
+		ex.URL = compactOneLine(info.AccessedURL, 500)
+	}
+	for _, line := range strings.Split(body, "\n") {
+		trimmed := strings.TrimSpace(line)
+		switch {
+		case strings.HasPrefix(trimmed, "SCROLL:"):
+			fields := scrollTelemetryFields(strings.TrimSpace(strings.TrimPrefix(trimmed, "SCROLL:")))
+			ex.Direction = compactOneLine(fields["direction"], 80)
+			ex.BeforeY = compactOneLine(fields["before_y"], 80)
+			ex.AfterY = compactOneLine(fields["after_y"], 80)
+			ex.MaxY = compactOneLine(fields["max_y"], 80)
+			ex.Movement = compactOneLine(fields["movement"], 80)
+			ex.Boundary = compactOneLine(fields["boundary"], 80)
+		case strings.HasPrefix(trimmed, "Next:"):
+			ex.SuggestedNextStep = compactOneLine(strings.TrimSpace(strings.TrimPrefix(trimmed, "Next:")), 320)
+		}
+	}
+	ex.Status = browserScrollStatus(ex)
+	ex.ResultPreview = sourceAccessResultPreview(c.Result, c.ResultSummary)
+	return ex, true
+}
+
+func scrollTelemetryFields(s string) map[string]string {
+	out := map[string]string{}
+	for _, field := range strings.Fields(s) {
+		key, value, ok := strings.Cut(field, "=")
+		if !ok {
+			continue
+		}
+		key = strings.TrimSpace(key)
+		value = strings.Trim(strings.TrimSpace(value), `"`)
+		if key != "" && value != "" {
+			out[key] = value
+		}
+	}
+	return out
+}
+
+func browserScrollStatus(ex BrowserScrollExample) string {
+	movement := strings.ToLower(strings.TrimSpace(ex.Movement))
+	boundary := strings.ToLower(strings.TrimSpace(ex.Boundary))
+	switch {
+	case boundary != "":
+		return "boundary"
+	case movement == "none" || movement == "0" || strings.Contains(movement, "no"):
+		return "stuck"
+	case movement != "":
+		return "moved"
+	default:
+		return "unknown"
+	}
 }
 
 func browserNetworkSearchExampleForTool(index int, c ToolCall) (BrowserNetworkSearchExample, bool) {

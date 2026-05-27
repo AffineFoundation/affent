@@ -145,3 +145,52 @@ func TestTraceBrowserNetworkSearchExamplesAreRefsNotSources(t *testing.T) {
 		}
 	}
 }
+
+func TestTraceBrowserScrollExamplesCaptureBoundaryTelemetry(t *testing.T) {
+	trace := Trace{Tools: []ToolCall{{
+		CallID: "scroll1",
+		Tool:   "browser_scroll",
+		Result: strings.Join([]string{
+			"SourceAccess: browser_rendered_url=https://taostats.io/subnets/120; page_text_below=partial_dynamic_page_evidence; rendered_browser_source_status=partial_dynamic_page_evidence; snapshot_id=8",
+			"PAGE TEXT:",
+			"Market Cap",
+			"SCROLL: direction=down before_y=1200 after_y=1200 max_y=1200 movement=none boundary=bottom",
+			"Next: scrolling did not move the page; use browser_network/browser_network_read for hidden XHR/fetch data.",
+		}, "\n"),
+		ExitCode: 0,
+	}}}
+
+	examples := trace.BrowserScrollExamples(5)
+	if len(examples) != 1 {
+		t.Fatalf("BrowserScrollExamples = %+v", examples)
+	}
+	ex := examples[0]
+	if ex.ToolIndex != 1 ||
+		ex.CallID != "scroll1" ||
+		ex.URL != "https://taostats.io/subnets/120" ||
+		ex.Direction != "down" ||
+		ex.BeforeY != "1200" ||
+		ex.AfterY != "1200" ||
+		ex.MaxY != "1200" ||
+		ex.Movement != "none" ||
+		ex.Boundary != "bottom" ||
+		ex.Status != "boundary" ||
+		!strings.Contains(ex.SuggestedNextStep, "browser_network_read") ||
+		!strings.Contains(ex.ResultPreview, "Market Cap") {
+		t.Fatalf("browser scroll example = %+v", ex)
+	}
+
+	timeline := renderDebugTimeline(BatchResult{BatchScenario: "scroll"}, BatchScenario{Prompt: "scroll"}, &trace)
+	for _, want := range []string{
+		"## Browser Scrolls",
+		"status=`boundary`",
+		"movement=`none`",
+		"boundary=`bottom`",
+		"y=`1200->1200/1200`",
+		"next: scrolling did not move",
+	} {
+		if !strings.Contains(timeline, want) {
+			t.Fatalf("timeline missing %q:\n%s", want, timeline)
+		}
+	}
+}
