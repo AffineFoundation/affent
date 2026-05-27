@@ -128,6 +128,7 @@ export function App() {
   const planFetchKeyRef = useRef("");
   const planFetchInFlightKeyRef = useRef("");
   const conversationScrollRef = useRef<HTMLDivElement | null>(null);
+  const topbarRef = useRef<HTMLDivElement | null>(null);
   const sessionsRef = useRef(sessions);
   useEffect(() => {
     sessionsRef.current = sessions;
@@ -141,6 +142,28 @@ export function App() {
       // Local persistence is best effort; theme switching still works.
     }
   }, [theme]);
+
+  useEffect(() => {
+    const root = document.documentElement;
+    const topbar = topbarRef.current;
+    const viewport = window.visualViewport;
+    const updateViewportVars = () => {
+      root.style.setProperty("--app-viewport-height", `${Math.round(viewport?.height ?? window.innerHeight)}px`);
+      root.style.setProperty("--app-topbar-height", `${Math.round(topbar?.getBoundingClientRect().height ?? 0)}px`);
+    };
+    updateViewportVars();
+    viewport?.addEventListener("resize", updateViewportVars);
+    viewport?.addEventListener("scroll", updateViewportVars);
+    window.addEventListener("resize", updateViewportVars);
+    const observer = typeof ResizeObserver !== "undefined" && topbar ? new ResizeObserver(updateViewportVars) : undefined;
+    if (observer && topbar) observer.observe(topbar);
+    return () => {
+      viewport?.removeEventListener("resize", updateViewportVars);
+      viewport?.removeEventListener("scroll", updateViewportVars);
+      window.removeEventListener("resize", updateViewportVars);
+      observer?.disconnect();
+    };
+  }, []);
 
   const demoActive = status.state === "demo";
   const selectedSession = useMemo(
@@ -815,7 +838,7 @@ export function App() {
           </button>
         </div>
       ) : null}
-      <div className="app-topbar">
+      <div className="app-topbar" ref={topbarRef}>
         <header className="app-header">
           <h1>Affent</h1>
           <span className="connection-pill" data-state={status.state} data-testid="connection-pill" title={status.detail ?? status.label}>

@@ -25,6 +25,8 @@
   --c-muted: #6b7280;
   --accent: #14b8a6;
   --accent-soft: #e8fbf8;
+  --app-viewport-height: 100vh;
+  --app-topbar-height: 0px;
   --composer-clearance: clamp(156px, 24vh, 260px);
   --scroll-safe-top: clamp(176px, 28vh, 260px);
 
@@ -7521,21 +7523,21 @@ html[data-theme="dark"] ::selection {
   }
   .timeline-surface {
     order: 1;
-    min-height: calc(100svh - 72px);
-    height: calc(100svh - 72px);
+    min-height: calc(var(--app-viewport-height, 100svh) - var(--app-topbar-height, 0px) - 22px);
+    height: calc(var(--app-viewport-height, 100svh) - var(--app-topbar-height, 0px) - 22px);
     border-radius: 0;
     margin: 0 -10px;
     border-left: 0;
     border-right: 0;
   }
   .workspace-shell[data-session-nav="visible"] .timeline-surface {
-    min-height: calc(100svh - 72px);
-    height: calc(100svh - 72px);
+    min-height: calc(var(--app-viewport-height, 100svh) - var(--app-topbar-height, 0px) - 22px);
+    height: calc(var(--app-viewport-height, 100svh) - var(--app-topbar-height, 0px) - 22px);
   }
   .app[data-mobile-topbar="hidden"] .timeline-surface,
   .app[data-mobile-topbar="hidden"] .workspace-shell[data-session-nav="visible"] .timeline-surface {
-    min-height: calc(100svh - 20px);
-    height: calc(100svh - 20px);
+    min-height: calc(var(--app-viewport-height, 100svh) - 20px);
+    height: calc(var(--app-viewport-height, 100svh) - 20px);
   }
   .app[data-mobile-topbar="hidden"] .surface-context {
     display: none;
@@ -7740,7 +7742,14 @@ html[data-theme="dark"] ::selection {
   }
   .composer {
     grid-template-columns: minmax(0, 1fr) auto;
-    margin: 0 10px 10px;
+    margin: 0 10px max(10px, env(safe-area-inset-bottom));
+    padding: 8px;
+  }
+  .composer textarea {
+    min-height: 42px;
+    max-height: min(132px, 28svh);
+    padding: 10px;
+    font-size: 16px;
   }
   .composer[data-resume-idle="true"] {
     grid-template-columns: minmax(0, 1fr) auto;
@@ -7766,6 +7775,12 @@ html[data-theme="dark"] ::selection {
   }
   .composer-actions {
     justify-content: flex-end;
+    padding-bottom: 1px;
+  }
+  .primary-action,
+  .secondary-action,
+  .ghost-action {
+    height: 38px;
   }
   .artifact-toolbar {
     grid-template-columns: minmax(0, 1fr);
