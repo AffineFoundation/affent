@@ -1102,6 +1102,11 @@ function issueContextDraft(evidence: readonly TurnActivityEvidence[]): string {
 function issueTargetEvidence(call: ToolCallState): TurnActivityEvidence | undefined {
   const failureKind = call.failureKind ?? call.failureKinds?.[0];
   const label = failureKind ? `Failed ${failureKind}` : "Failed";
+  if (call.tool === "loop_protocol") {
+    const action = typeof call.args.action === "string" ? call.args.action.trim() : "";
+    const value = action ? `loop_protocol action=${action}` : "loop_protocol";
+    return { label, value, displayValue: value };
+  }
   const url = typeof call.args.url === "string" ? call.args.url.trim() : undefined;
   if (call.tool === "web_fetch" && url) {
     return { label, value: url, displayValue: readableUrl(url) };

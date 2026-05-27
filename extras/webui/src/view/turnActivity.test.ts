@@ -1206,6 +1206,58 @@ describe("buildTurnActivity", () => {
     });
   });
 
+  it("names loop protocol action failures in issue context", () => {
+    const turn = reduceRawEvents([
+      { id: 1, type: "turn.start", data: { turn_id: "t1" } },
+      { id: 2, type: "user.message", data: { turn_id: "t1", text: "activate loop" } },
+      {
+        id: 3,
+        type: "tool.request",
+        data: {
+          turn_id: "t1",
+          call_id: "c1",
+          tool: "loop_protocol",
+          args: { action: "complete_activation" },
+          args_truncated: false,
+          args_bytes: 32,
+          args_omitted_bytes: 0,
+          args_cap_bytes: 8192,
+        },
+      },
+      {
+        id: 4,
+        type: "tool.result",
+        data: {
+          call_id: "c1",
+          exit_code: 1,
+          failure_kind: "loop_protocol_activation_invalid",
+          result_summary: "LOOP.md Current Situation section is 1400 characters; keep it at or below 1200 characters\nNext: keep Current Situation compact\nFailure: kind=loop_protocol_activation_invalid",
+          result: "LOOP.md Current Situation section is 1400 characters; keep it at or below 1200 characters\nNext: keep Current Situation compact\nFailure: kind=loop_protocol_activation_invalid",
+        },
+      },
+      { id: 5, type: "message.done", data: { turn_id: "t1", text: "Loop activation needs a compact Current Situation first." } },
+      { id: 6, type: "turn.end", data: { turn_id: "t1", reason: "completed" } },
+    ]).turns[0];
+
+    const activity = buildTurnActivity(turn);
+
+    expect(activity?.brief.rows).toContainEqual({
+      id: "handled",
+      label: "Tool issues",
+      evidence: [{
+        label: "Failed loop_protocol_activation_invalid",
+        value: "loop_protocol action=complete_activation",
+        displayValue: "loop_protocol action=complete_activation",
+      }],
+      tone: "warning",
+      action: {
+        label: "Use issue context",
+        draft: "Use these issue targets in the next step:\n- Failed loop_protocol_activation_invalid loop_protocol action=complete_activation",
+        source: "error",
+      },
+    });
+  });
+
   it("adds a brief warning when tools contradict the user's instruction", () => {
     const turn = reduceRawEvents([
       { id: 1, type: "turn.start", data: { turn_id: "t1" } },
