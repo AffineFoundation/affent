@@ -401,6 +401,47 @@ describe("buildSessionOverview", () => {
     ]));
   });
 
+  it("surfaces tool result context trimming in the session overview", () => {
+    const session = reduceRawEvents([
+      { id: 1, type: "turn.start", data: { turn_id: "t1" } },
+      { id: 2, type: "user.message", data: { turn_id: "t1", text: "inspect large logs" } },
+      {
+        id: 3,
+        type: "turn.end",
+        data: {
+          turn_id: "t1",
+          reason: "completed",
+          tool_stats: {
+            tool_context_truncated: 1,
+            tool_context_omitted_bytes: 2048,
+          },
+        },
+      },
+      { id: 4, type: "turn.start", data: { turn_id: "t2" } },
+      {
+        id: 5,
+        type: "turn.end",
+        data: {
+          turn_id: "t2",
+          reason: "completed",
+          tool_stats: {
+            tool_context_truncated: 2,
+            tool_context_omitted_bytes: 512,
+          },
+        },
+      },
+    ]);
+    const overview = buildSessionOverview({
+      session,
+      workflow: deriveWorkflowStatus(session),
+      hasSelectedSession: true,
+    });
+
+    expect(overview.metrics).toEqual(expect.arrayContaining([
+      { label: "Tool context", value: "3 trims · 3 KiB omitted", tone: "warning" },
+    ]));
+  });
+
   it("surfaces the persisted plan step summary in the session overview", () => {
     const session = reduceRawEvents(completedTurn);
     const overview = buildSessionOverview({

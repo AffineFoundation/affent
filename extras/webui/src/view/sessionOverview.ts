@@ -159,6 +159,8 @@ function buildMetrics(
   if (loopMetric) metrics.push(loopMetric);
   const compactMetric = buildContextCompactionMetric(session);
   if (compactMetric) metrics.push(compactMetric);
+  const toolContextMetric = buildToolContextMetric(session);
+  if (toolContextMetric) metrics.push(toolContextMetric);
   const memoryMetric = buildMemoryUpdateMetric(session);
   if (memoryMetric) metrics.push(memoryMetric);
   const recallMetric = buildSessionRecallMetric(session);
@@ -212,6 +214,18 @@ function buildContextCompactionMetric(session: SessionState): SessionOverviewMet
     value: parts.join(" · "),
     tone: summaryLabel ? "error" : latest?.reactive ? "warning" : undefined,
   };
+}
+
+function buildToolContextMetric(session: SessionState): SessionOverviewMetric | undefined {
+  const stats = session.turns.reduce((acc, turn) => {
+    acc.truncated += turn.toolStats?.tool_context_truncated ?? 0;
+    acc.omittedBytes += turn.toolStats?.tool_context_omitted_bytes ?? 0;
+    return acc;
+  }, { truncated: 0, omittedBytes: 0 });
+  if (stats.truncated <= 0) return undefined;
+  const parts = [`${stats.truncated} ${stats.truncated === 1 ? "trim" : "trims"}`];
+  if (stats.omittedBytes > 0) parts.push(`${formatBytes(stats.omittedBytes)} omitted`);
+  return { label: "Tool context", value: parts.join(" · "), tone: "warning" };
 }
 
 function buildMemoryUpdateMetric(session: SessionState): SessionOverviewMetric | undefined {

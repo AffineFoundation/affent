@@ -46,6 +46,8 @@ describe("RuntimeStatsPanel", () => {
               session_search_results: 2,
               session_search_context_hits: 1,
               session_search_matched_terms: 3,
+              tool_context_truncated: 2,
+              tool_context_omitted_bytes: 3072,
             },
             runtime: {
               turn_end_by_reason: { completed: 4, max_turns: 1 },
@@ -69,6 +71,7 @@ describe("RuntimeStatsPanel", () => {
     expect(screen.getByTestId("runtime-stats-grid")).toHaveTextContent("memory (shared user)");
     expect(screen.getByTestId("runtime-stats-grid")).toHaveTextContent("Recall2 hits · 1 context · 3 terms");
     expect(screen.getByTestId("runtime-stats-grid")).toHaveTextContent("Context1 compaction · 1 reactive · -72 msgs · 4 KiB summary · 1 missing · 1 empty");
+    expect(screen.getByTestId("runtime-stats-grid")).toHaveTextContent("Tool context2 trims · 3 KiB omitted");
     expect(screen.getByTestId("runtime-stats-grid")).toHaveTextContent("Loop1 max-turn · 2 guards · 1 no-tools");
     expect(screen.getByTestId("runtime-stats-grid")).toHaveTextContent("Errors1 tool · 1 runtime");
   });

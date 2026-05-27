@@ -89,6 +89,8 @@ function runtimeMetrics(stats: ServerStatsResponse): RuntimeMetric[] {
   if (memory) metrics.push(memory);
   const compaction = compactionMetric(runtime);
   if (compaction) metrics.push(compaction);
+  const toolContext = toolContextMetric(tools);
+  if (toolContext) metrics.push(toolContext);
   const loop = loopMetric(tools, runtime);
   if (loop) metrics.push(loop);
   const errors = errorMetric(tools, runtime);
@@ -168,6 +170,15 @@ function compactionMetric(runtime?: StatsRuntimeSnapshot): RuntimeMetric | undef
   if ((runtime?.context_compaction_summary_empty ?? 0) > 0) parts.push(`${runtime?.context_compaction_summary_empty} empty`);
   const weakSummaries = (runtime?.context_compaction_summary_missing ?? 0) + (runtime?.context_compaction_summary_empty ?? 0);
   return { label: "Context", value: parts.join(" · "), tone: weakSummaries > 0 || (runtime?.context_compactions_reactive ?? 0) > 0 ? "warning" : "ready" };
+}
+
+function toolContextMetric(tools?: StatsToolSnapshot): RuntimeMetric | undefined {
+  const truncated = tools?.tool_context_truncated ?? 0;
+  if (truncated <= 0) return undefined;
+  const parts = [`${truncated} ${truncated === 1 ? "trim" : "trims"}`];
+  const omitted = tools?.tool_context_omitted_bytes ?? 0;
+  if (omitted > 0) parts.push(`${formatByteCount(omitted)} omitted`);
+  return { label: "Tool context", value: parts.join(" · "), tone: "warning" };
 }
 
 function loopMetric(tools?: StatsToolSnapshot, runtime?: StatsRuntimeSnapshot): RuntimeMetric | undefined {
