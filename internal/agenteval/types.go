@@ -1217,7 +1217,7 @@ func memorySearchMissExampleForTool(index int, c ToolCall) (MemorySearchMissExam
 	if err := json.Unmarshal([]byte(c.Result), &resp); err != nil {
 		return MemorySearchMissExample{}, false
 	}
-	if !resp.OK || len(resp.Results) > 0 || len(resp.Topics) == 0 || !strings.Contains(resp.Message, "no entries matched") {
+	if !resp.OK || len(resp.Results) > 0 || !strings.Contains(resp.Message, "no entries matched") {
 		return MemorySearchMissExample{}, false
 	}
 	topics := make([]string, 0, min(len(resp.Topics), 5))

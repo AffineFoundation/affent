@@ -81,6 +81,35 @@ func TestMemorySearchMissExamplesIncludeTopicAnchors(t *testing.T) {
 	}
 }
 
+func TestMemorySearchMissExamplesIncludeNoAnchorMisses(t *testing.T) {
+	trace := Trace{Tools: []ToolCall{{
+		Tool:     "memory",
+		CallID:   "mem-search-user-empty",
+		ExitCode: 0,
+		Args: map[string]any{
+			"action": "search",
+			"target": "user",
+			"query":  "ssh key preference",
+		},
+		Result: `{"ok":true,"message":"no entries matched. Next: retry with fewer/different keywords, search a specific topic from topics, or use action=list for full topic discovery.","target":"user","results":[]}`,
+	}}}
+
+	examples := trace.MemorySearchMissExamples(5)
+	if len(examples) != 1 {
+		t.Fatalf("MemorySearchMissExamples len = %d, want 1: %+v", len(examples), examples)
+	}
+	ex := examples[0]
+	if ex.ToolIndex != 1 ||
+		ex.CallID != "mem-search-user-empty" ||
+		ex.Target != "user" ||
+		ex.Query != "ssh key preference" ||
+		ex.TopicCount != 0 ||
+		len(ex.Topics) != 0 ||
+		!strings.Contains(ex.Message, "no entries matched") {
+		t.Fatalf("unexpected no-anchor memory search miss example: %+v", ex)
+	}
+}
+
 func TestCheckTraceFlagsProcessRegressions(t *testing.T) {
 	trace := Trace{Tools: []ToolCall{
 		{Tool: "shell", Args: map[string]any{"command": "python -m pytest 2>&1 | head -80"}},

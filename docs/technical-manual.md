@@ -444,9 +444,10 @@ they block a model call before the underlying tool runs. Per-turn stats expose
 `source_access_network`. Memory search attempts are counted as
 `memory_search_calls`; successful searches that return no direct hits are
 counted as `memory_search_misses`. Eval debug manifests, timelines, and JSONL
-records can include bounded `memory_search_miss_examples` with the query, topic
-anchors, and recovery message. This lets long-run recall failures be separated
-from turns where the agent never checked memory at all. Eval debug
+records can include bounded `memory_search_miss_examples` with the query,
+recovery message, and topic anchors when available. This lets long-run recall
+failures be separated from turns where the agent never checked memory at all,
+and from misses where the target/topic/query produced no retry anchors. Eval debug
 manifests, timelines, and JSONL records also include bounded
 `tool_repair_examples`, so repeated small-model tool-name,
 alias, enum, type-coercion, and unknown-field mistakes can be inspected without

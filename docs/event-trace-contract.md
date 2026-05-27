@@ -283,7 +283,7 @@ external-calibration reminder paired with a `loop.decision`.
 - `memory_search_misses`: count of successful memory search calls that returned
   no direct hits. Together with `memory_search_calls`, this separates "the
   agent never checked memory" from "memory was checked but the query missed and
-  should be retried from available anchors".
+  should be inspected or retried from available anchors".
 - `session_search_calls`: count of dispatched `session_search` tool calls.
 - `session_search_results`: total prior-session hits reported by parsed
   `session_search` JSON responses.

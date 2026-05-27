@@ -374,8 +374,12 @@ func BuildDebugBrief(res BatchResult) *DebugBrief {
 	}
 	if res.ToolStats.MemorySearchMisses > 0 || len(res.MemorySearchMissExamples) > 0 {
 		topics := 0
+		anchorExamples := 0
 		for _, ex := range res.MemorySearchMissExamples {
 			topics += ex.TopicCount
+			if ex.TopicCount > 0 || len(ex.Topics) > 0 {
+				anchorExamples++
+			}
 		}
 		misses := res.ToolStats.MemorySearchMisses
 		if misses == 0 {
@@ -385,11 +389,23 @@ func BuildDebugBrief(res BatchResult) *DebugBrief {
 		if calls == 0 {
 			calls = misses
 		}
-		add("memory_search_miss", "info", "memory search returned no direct hits but exposed topic anchors for retry", []string{"memory_search_miss_examples", "tool_timeline"}, map[string]int{
-			"calls":  calls,
-			"misses": misses,
-			"topics": topics,
-		}, "memory_search_miss", "recall:memory_topic_anchors")
+		severity := "info"
+		message := "memory search returned no direct hits; inspect examples or trace before retrying"
+		tags := []string{"memory_search_miss"}
+		if anchorExamples > 0 {
+			message = "memory search returned no direct hits but exposed topic anchors for retry"
+			tags = append(tags, "recall:memory_topic_anchors")
+		} else if len(res.MemorySearchMissExamples) > 0 {
+			severity = "warn"
+			message = "memory search returned no direct hits and no topic anchors; inspect target/topic/query or confirm memory is empty"
+			tags = append(tags, "recall:memory_no_topic_anchors")
+		}
+		add("memory_search_miss", severity, message, []string{"memory_search_miss_examples", "tool_timeline"}, map[string]int{
+			"calls":           calls,
+			"misses":          misses,
+			"topics":          topics,
+			"anchor_examples": anchorExamples,
+		}, tags...)
 	}
 	if res.ContextCompactions.Count > 0 {
 		tags := []string{"context_compaction"}

@@ -651,6 +651,7 @@ func TestBuildDebugBriefClassifiesMemorySearchMissAnchors(t *testing.T) {
 		item.Counts["calls"] != 1 ||
 		item.Counts["misses"] != 1 ||
 		item.Counts["topics"] != 2 ||
+		item.Counts["anchor_examples"] != 1 ||
 		!stringSliceContains(brief.Tags, "memory_search_miss") ||
 		!stringSliceContains(brief.Tags, "recall:memory_topic_anchors") {
 		t.Fatalf("memory search miss item = %+v tags=%+v", item, brief.Tags)
@@ -666,6 +667,30 @@ func TestBuildDebugBriefClassifiesMemorySearchMissAnchors(t *testing.T) {
 	item = debugBriefItemByKind(brief, "memory_search_miss")
 	if item == nil || item.Counts["calls"] != 4 || item.Counts["misses"] != 3 {
 		t.Fatalf("memory search miss stats-only item = %+v tags=%+v", item, brief.Tags)
+	}
+	if stringSliceContains(brief.Tags, "recall:memory_topic_anchors") ||
+		stringSliceContains(brief.Tags, "recall:memory_no_topic_anchors") {
+		t.Fatalf("stats-only memory miss should not infer anchor state: %+v tags=%+v", item, brief.Tags)
+	}
+
+	brief = BuildDebugBrief(BatchResult{
+		OK: true,
+		MemorySearchMissExamples: []MemorySearchMissExample{{
+			CallID: "mem-user-empty",
+			Target: "user",
+			Query:  "ssh key preference",
+		}},
+	})
+	item = debugBriefItemByKind(brief, "memory_search_miss")
+	if item == nil ||
+		item.Severity != "warn" ||
+		item.Counts["calls"] != 1 ||
+		item.Counts["misses"] != 1 ||
+		item.Counts["topics"] != 0 ||
+		item.Counts["anchor_examples"] != 0 ||
+		!stringSliceContains(brief.Tags, "recall:memory_no_topic_anchors") ||
+		stringSliceContains(brief.Tags, "recall:memory_topic_anchors") {
+		t.Fatalf("memory search no-anchor item = %+v tags=%+v", item, brief.Tags)
 	}
 
 	brief = BuildDebugBrief(BatchResult{

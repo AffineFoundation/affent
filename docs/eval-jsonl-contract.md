@@ -345,10 +345,10 @@ Scenario records describe one eval case:
   opening the full trace or markdown timeline. Summary records include the
   originating scenario.
 - `memory_search_miss_examples`: optional bounded per-scenario examples of
-  successful memory searches that returned no direct hits but exposed topic
-  anchors for retry. Each sample includes tool index, call id, target/topic,
-  query, topic count, compact topic names, and the recovery message. Summary
-  records include the originating scenario.
+  successful memory searches that returned no direct hits. Each sample includes
+  tool index, call id, target/topic, query, topic count, compact topic names
+  when topic anchors are available, and the recovery message. Summary records
+  include the originating scenario.
 - `memory_search_calls`: count of dispatched memory search attempts.
 - `memory_search_misses`: count of successful memory search calls that returned
   no direct hits. These counters are emitted in `tool_stats`, scenario JSONL,
