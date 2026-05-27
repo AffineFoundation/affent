@@ -1542,7 +1542,7 @@ func TestSelectLiveWebSuite(t *testing.T) {
 	}
 	for _, want := range []ToolArgContainsRequirement{
 		{Tool: "browser_navigate", Arg: "url", Substring: "taostats.io/subnets/120"},
-		{Tool: "browser_network", Arg: "query", Substring: "market_cap"},
+		{Tool: "browser_network", Arg: "query", Substring: "market cap"},
 	} {
 		if !toolArgRequirementContains(networkSearch.RequiredToolArgContains, want) {
 			t.Fatalf("live-web network search RequiredToolArgContains = %#v, want %#v", networkSearch.RequiredToolArgContains, want)
@@ -1572,7 +1572,7 @@ func TestSelectLiveWebSuite(t *testing.T) {
 			t.Fatalf("live-web network search browser_network_read result requirements = %#v, want %q", networkSearch.RequiredToolResultText["browser_network_read"], want)
 		}
 	}
-	for _, want := range []string{"browser_network", "market_cap", "browser_network_url", "requested_url", "ref=", "status=", "content_type=", "source_method", "未验证"} {
+	for _, want := range []string{"browser_network", "market cap", "browser_network_url", "requested_url", "ref=", "status=", "content_type=", "source_method", "未验证"} {
 		if !stringSliceContains(networkSearch.RequiredFinalText, want) {
 			t.Fatalf("live-web network search RequiredFinalText = %#v, want %q", networkSearch.RequiredFinalText, want)
 		}

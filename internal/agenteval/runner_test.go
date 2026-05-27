@@ -2574,10 +2574,10 @@ p: 24hr Volume`
         }`),
 		Execute: func(ctx context.Context, args json.RawMessage) (string, error) {
 			return `BROWSER NETWORK EVIDENCE
-query: "market_cap"
+query: "market cap"
 MATCHES:
 - n1 status=200 resource=fetch content_type=application/json url=https://api.taostats.io/subnets/120
-  preview: {"name":"Affine","netuid":120,"market_cap":"201.04K T","price":"0.06342 T"}
+  preview: {"name":"Affine","netuid":120,"marketCap":"201.04K T","price":"0.06342 T"}
 Next: call browser_network_read with the most relevant ref before citing values.`, nil
 		},
 	}
@@ -2595,7 +2595,7 @@ Next: call browser_network_read with the most relevant ref before citing values.
 		Execute: func(ctx context.Context, args json.RawMessage) (string, error) {
 			return `SourceAccess: browser_network_url=https://api.taostats.io/subnets/120; requested_url=https://app.taostats.io/subnets/120; ref=n1; status=200; content_type=application/json; source_method=network_xhr_fetch
 BODY_BYTES: 77
-{"name":"Affine","netuid":120,"market_cap":"201.04K T","price":"0.06342 T"}`, nil
+{"name":"Affine","netuid":120,"marketCap":"201.04K T","price":"0.06342 T"}`, nil
 		},
 	}
 
@@ -2605,7 +2605,7 @@ BODY_BYTES: 77
 		`[DONE]`,
 	}
 	turn2 := []string{
-		`{"choices":[{"delta":{"role":"assistant","tool_calls":[{"index":0,"id":"n1","type":"function","function":{"name":"browser_network","arguments":"{\"query\":\"market_cap\",\"max_results\":5}"}}]},"finish_reason":null}]}`,
+		`{"choices":[{"delta":{"role":"assistant","tool_calls":[{"index":0,"id":"n1","type":"function","function":{"name":"browser_network","arguments":"{\"query\":\"market cap\",\"max_results\":5}"}}]},"finish_reason":null}]}`,
 		`{"choices":[{"delta":{},"finish_reason":"tool_calls"}]}`,
 		`[DONE]`,
 	}
@@ -2623,7 +2623,7 @@ BODY_BYTES: 77
 		return args["url"] == "https://app.taostats.io/subnets/120"
 	}
 	networkArgs := func(args map[string]any) bool {
-		return strings.Contains(fmt.Sprint(args["query"]), "market_cap")
+		return strings.Contains(fmt.Sprint(args["query"]), "market cap")
 	}
 	readArgs := func(args map[string]any) bool {
 		return args["ref"] == "n1"

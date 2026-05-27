@@ -2298,7 +2298,7 @@ func liveWebTaostatsNetworkSearchReadScenario() BatchScenario {
 	return BatchScenario{
 		Name:   "live-web-taostats-network-search-read",
 		Suites: []string{liveWebSuite},
-		Prompt: "请核验 taostats.io 的 Affine / Bittensor SN120 页面，并专门测试网络响应发现路径。打开 https://taostats.io/subnets/120 后，不要只靠页面标题、导航、空指标卡、snapshot 文本或未读取的网络 ref；必须先用 browser_network 搜索 market_cap，说明搜索词和候选响应，再选择最相关 ref 用 browser_network_read 读取同源 XHR/JSON 证据。最终回答必须包含 browser_network 的查询词、browser_network_url/ref/status/content_type/source_method、requested_url、已验证字段和未验证缺口；没有读到不要编造价格、市值、排放或验证者数量。",
+		Prompt: "请核验 taostats.io 的 Affine / Bittensor SN120 页面，并专门测试网络响应发现路径。打开 https://taostats.io/subnets/120 后，不要只靠页面标题、导航、空指标卡、snapshot 文本或未读取的网络 ref；必须先用 browser_network 搜索自然语言指标标签 market cap，说明搜索词和候选响应，再选择最相关 ref 用 browser_network_read 读取同源 XHR/JSON 证据。最终回答必须包含 browser_network 的查询词、browser_network_url/ref/status/content_type/source_method、requested_url、已验证字段和未验证缺口；没有读到不要编造价格、市值、排放或验证者数量。",
 		Files: map[string]string{
 			"README.md": "# Live Web Network Discovery Eval\n\nThis scenario checks whether a rendered JavaScript dashboard can discover relevant captured network responses before reading citable network evidence.\n",
 		},
@@ -2313,7 +2313,7 @@ func liveWebTaostatsNetworkSearchReadScenario() BatchScenario {
 		},
 		RequiredToolArgContains: []ToolArgContainsRequirement{
 			{Tool: "browser_navigate", Arg: "url", Substring: "taostats.io/subnets/120"},
-			{Tool: "browser_network", Arg: "query", Substring: "market_cap"},
+			{Tool: "browser_network", Arg: "query", Substring: "market cap"},
 		},
 		RequiredToolOrder: []ToolOrderRequirement{
 			{Earlier: "browser_navigate", Later: "browser_network"},
@@ -2352,7 +2352,7 @@ func liveWebTaostatsNetworkSearchReadScenario() BatchScenario {
 		},
 		RequiredFinalText: []string{
 			"browser_network",
-			"market_cap",
+			"market cap",
 			"browser_network_url",
 			"requested_url",
 			"ref=",
