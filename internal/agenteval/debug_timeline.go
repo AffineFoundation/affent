@@ -406,6 +406,9 @@ func renderTimelineScenarioExpectations(b *strings.Builder, scenario BatchScenar
 			if req.PlanCurrentStep != "" {
 				parts = append(parts, fmt.Sprintf("plan_current_step=%s", timelineInline(req.PlanCurrentStep, 160)))
 			}
+			if req.CurrentSituation != "" {
+				parts = append(parts, fmt.Sprintf("current_situation=%s", timelineInline(req.CurrentSituation, 160)))
+			}
 			parts = append(parts, fmt.Sprintf("min=%d", min))
 			fmt.Fprintf(b, "- required_loop_protocol_feed: `%s`\n", strings.Join(parts, " "))
 		}

@@ -73,6 +73,7 @@ type LoopProtocolFeedRequirement struct {
 	PlanLabelContains     string
 	PlanCurrentStepStatus string
 	PlanCurrentStep       string
+	CurrentSituation      string
 	// Min is the required number of matching loop.protocol_feed events.
 	// Values <=0 default to one so scenarios can spell the common case tersely.
 	Min int
@@ -596,6 +597,7 @@ type DebugLoopProtocolFeedRequirement struct {
 	PlanLabelContains     string `json:"plan_label_contains,omitempty"`
 	PlanCurrentStepStatus string `json:"plan_current_step_status,omitempty"`
 	PlanCurrentStep       string `json:"plan_current_step,omitempty"`
+	CurrentSituation      string `json:"current_situation,omitempty"`
 	Min                   int    `json:"min,omitempty"`
 }
 
@@ -1146,6 +1148,7 @@ func debugScenarioExpectations(s BatchScenario) DebugScenarioExpectations {
 			PlanLabelContains:     req.PlanLabelContains,
 			PlanCurrentStepStatus: req.PlanCurrentStepStatus,
 			PlanCurrentStep:       req.PlanCurrentStep,
+			CurrentSituation:      req.CurrentSituation,
 			Min:                   req.Min,
 		})
 	}
@@ -1815,7 +1818,7 @@ func BatchScenarioChecks(scenario BatchScenario) []Check {
 		if min <= 0 {
 			min = 1
 		}
-		checks = append(checks, LoopProtocolFeedMatchAtLeast(req.Mode, req.PlanLabelContains, req.PlanCurrentStepStatus, req.PlanCurrentStep, min))
+		checks = append(checks, LoopProtocolFeedMatchAtLeast(req.Mode, req.PlanLabelContains, req.PlanCurrentStepStatus, req.PlanCurrentStep, req.CurrentSituation, min))
 	}
 	if scenario.RequireLoopProtocolFullAfterCompact {
 		checks = append(checks, LoopProtocolFullFeedAfterCompaction())

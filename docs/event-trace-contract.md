@@ -285,6 +285,8 @@ diagnostics.
 - `last_calibration_answer_preview`: optional bounded preview of the latest
   calibration answer included in the active protocol state line.
 - `protocol_path`: optional workspace/session-relative protocol path.
+- `current_situation_preview`: optional bounded preview extracted from the
+  active `LOOP.md` Current Situation section when present.
 - `plan_label`: optional active persisted-plan summary label captured at feed
   time, such as `plan:1/3:active`.
 - `plan_current_step_index`: optional 1-based current plan step index captured

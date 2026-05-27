@@ -519,16 +519,28 @@ func LoopProtocolFeedModeAtLeast(mode string, min int) Check {
 	}
 }
 
-func LoopProtocolFeedMatchAtLeast(mode, planLabelContains, planCurrentStepStatus, planCurrentStep string, min int) Check {
-	return Check{
-		Name: fmt.Sprintf(
-			"loop_protocol_feed_match_at_least:%s:%s:%s:%s:%d",
+func LoopProtocolFeedMatchAtLeast(mode, planLabelContains, planCurrentStepStatus, planCurrentStep, currentSituation string, min int) Check {
+	name := fmt.Sprintf(
+		"loop_protocol_feed_match_at_least:%s:%s:%s:%s:%d",
+		checkNamePart(mode),
+		checkNamePart(planLabelContains),
+		checkNamePart(planCurrentStepStatus),
+		checkNamePart(planCurrentStep),
+		min,
+	)
+	if currentSituation != "" {
+		name = fmt.Sprintf(
+			"loop_protocol_feed_match_at_least:%s:%s:%s:%s:%s:%d",
 			checkNamePart(mode),
 			checkNamePart(planLabelContains),
 			checkNamePart(planCurrentStepStatus),
 			checkNamePart(planCurrentStep),
+			checkNamePart(currentSituation),
 			min,
-		),
+		)
+	}
+	return Check{
+		Name: name,
 		Eval: func(t Trace) CheckResult {
 			count := 0
 			var examples []string
@@ -545,6 +557,9 @@ func LoopProtocolFeedMatchAtLeast(mode, planLabelContains, planCurrentStepStatus
 				if planCurrentStep != "" && !strings.Contains(feed.PlanCurrentStep, planCurrentStep) {
 					continue
 				}
+				if currentSituation != "" && !strings.Contains(feed.CurrentSituation, currentSituation) {
+					continue
+				}
 				count++
 				if len(examples) < 3 {
 					examples = append(examples, formatLoopProtocolFeedExample(feed))
@@ -556,13 +571,14 @@ func LoopProtocolFeedMatchAtLeast(mode, planLabelContains, planCurrentStepStatus
 			return CheckResult{
 				Pass: false,
 				Detail: fmt.Sprintf(
-					"matched=%d, want >= %d for mode=%q plan_label_contains=%q plan_current_step_status=%q plan_current_step=%q; observed=%v",
+					"matched=%d, want >= %d for mode=%q plan_label_contains=%q plan_current_step_status=%q plan_current_step=%q current_situation=%q; observed=%v",
 					count,
 					min,
 					mode,
 					planLabelContains,
 					planCurrentStepStatus,
 					planCurrentStep,
+					currentSituation,
 					loopProtocolFeedExamples(t.LoopProtocolFeeds, 5),
 				),
 			}

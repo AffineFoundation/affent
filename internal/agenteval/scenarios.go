@@ -1082,6 +1082,11 @@ func planResumeCurrentStepScenario() BatchScenario {
 ## North Star
 
 Resume only the active persisted plan step and preserve current evidence across long-run recovery.
+
+## Current Situation
+
+- current intent: read current launch evidence from docs/current-plan.md
+- current risk: stale archive/old-plan.md must not override the active plan
 `,
 		},
 		RequiredTools: []string{"read_file", "plan"},
@@ -1093,7 +1098,7 @@ Resume only the active persisted plan step and preserve current evidence across 
 			"full": 1,
 		},
 		RequiredLoopProtocolFeedMatches: []LoopProtocolFeedRequirement{
-			{Mode: "full", PlanLabelContains: "plan:1/3:active", PlanCurrentStepStatus: "in_progress", PlanCurrentStep: "read current launch evidence"},
+			{Mode: "full", PlanLabelContains: "plan:1/3:active", PlanCurrentStepStatus: "in_progress", PlanCurrentStep: "read current launch evidence", CurrentSituation: "docs/current-plan.md"},
 		},
 		RequiredToolArgContains: []ToolArgContainsRequirement{
 			{Tool: "read_file", Arg: "path", Substring: "docs/current-plan.md"},
@@ -1383,7 +1388,7 @@ func longRunContextCompactionRetentionScenario() BatchScenario {
 			"继续同一个 session。不要调用任何工具；只根据上一轮压缩后的上下文和恢复协议，再次输出 phase marker、stock marker、subnet marker、PR marker、evidence source。必须保留 COMPRESS-PHASE-09、COMPRESS-HRO-31、COMPRESS-SN120-42、COMPRESS-PR-77、current-evidence-pack-5。",
 		},
 		Files: map[string]string{
-			".affent/loops/longrun-compaction-retention/LOOP.md": "# Loop Protocol\n\n## North Star\nPreserve the active long-run recovery contract through context compaction and keep current/*.md as authoritative handoff state.\n\n## Memory\nProject memory for this scenario lives in the current/*.md handoff files.\n\n## Recovery\nAfter compaction, keep this loop protocol path and loop_id visible before continuing.\n",
+			".affent/loops/longrun-compaction-retention/LOOP.md": "# Loop Protocol\n\n## North Star\nPreserve the active long-run recovery contract through context compaction and keep current/*.md as authoritative handoff state.\n\n## Current Situation\n- current intent: recover markers from current/*.md handoff files\n- current risk: archive/stale.md contains outdated markers that must remain ignored\n\n## Memory\nProject memory for this scenario lives in the current/*.md handoff files.\n\n## Recovery\nAfter compaction, keep this loop protocol path and loop_id visible before continuing.\n",
 			"current/phase.md":    "Current phase marker: COMPRESS-PHASE-09. Use only current/*.md as authoritative handoff state.\n",
 			"current/stock.md":    "Helio Robotics stock marker: COMPRESS-HRO-31. Current risk label: inventory-normalization. Next action: compare Q3 backlog with revenue conversion.\n",
 			"current/subnet.md":   "Bittensor Affine SN120 subnet marker: COMPRESS-SN120-42. Current risk label: validator-concentration. Next action: recheck emissions and miner dispersion.\n",
@@ -1416,6 +1421,9 @@ func longRunContextCompactionRetentionScenario() BatchScenario {
 		RequiredLoopProtocolFeeds: 2,
 		RequiredLoopProtocolFeedModes: map[string]int{
 			"full": 2,
+		},
+		RequiredLoopProtocolFeedMatches: []LoopProtocolFeedRequirement{
+			{Mode: "full", CurrentSituation: "current/*.md handoff files"},
 		},
 		RequireLoopProtocolFullAfterCompact: true,
 		RequiredFinalText: []string{

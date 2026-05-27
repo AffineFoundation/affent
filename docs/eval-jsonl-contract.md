@@ -104,7 +104,7 @@ Scenario records describe one eval case:
 - `expectations`: optional structured copy of the scenario's declarative checks,
   including required/forbidden tools, tool counts, source-access requirements,
   loop-decision requirements, loop protocol calibration/feed and active plan
-  checkpoint requirements, context-compaction requirements, optional
+  checkpoint/current-situation requirements, context-compaction requirements, optional
   `required_context_loop_protocol_anchor_text` checks for post-compaction
   `LOOP.md` recovery anchors, optional
   `require_loop_protocol_full_after_compaction` sequence checks,

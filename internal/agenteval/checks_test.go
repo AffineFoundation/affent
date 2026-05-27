@@ -681,13 +681,13 @@ func TestLoopProtocolFeedChecks(t *testing.T) {
 	if res := LoopProtocolFeedModeAtLeast("full", 1).Eval(trace); !res.Pass {
 		t.Fatalf("expected loop protocol feed mode check to pass: %+v", res)
 	}
-	if res := LoopProtocolFeedMatchAtLeast("digest", "SN120", "in_progress", "network evidence", 1).Eval(trace); !res.Pass {
+	if res := LoopProtocolFeedMatchAtLeast("digest", "SN120", "in_progress", "network evidence", "dashboard values", 1).Eval(trace); !res.Pass {
 		t.Fatalf("expected loop protocol feed checkpoint match to pass: %+v", res)
 	}
 	if res := LoopProtocolFullFeedAfterCompaction().Eval(trace); !res.Pass {
 		t.Fatalf("expected post-compaction full feed check to pass: %+v", res)
 	}
-	res := LoopProtocolFeedMatchAtLeast("digest", "SN120", "completed", "network evidence", 1).Eval(trace)
+	res := LoopProtocolFeedMatchAtLeast("digest", "SN120", "completed", "network evidence", "dashboard values", 1).Eval(trace)
 	if res.Pass {
 		t.Fatal("expected mismatched plan status to fail")
 	}
