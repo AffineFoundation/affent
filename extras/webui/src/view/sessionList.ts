@@ -123,6 +123,15 @@ export function filterSessionRows(
   return rows.filter((row) => matchesFilter(row, filter) && (!search || row.searchText.includes(search)));
 }
 
+export function displaySessionRowChips(row: SessionRowView, opts: { selected: boolean }): string[] {
+  if (!opts.selected) return [];
+  return row.chips.filter(isDisplaySessionChip);
+}
+
+function isDisplaySessionChip(chip: string): boolean {
+  return chip === "unclassified";
+}
+
 function mergeCurrentSession(row: SessionRowView, session: SessionState | undefined, pendingTask?: string): SessionRowView {
   const latestTurn = session?.turns.at(-1);
   const pending = pendingTask?.replace(/\s+/g, " ").trim();
@@ -726,7 +735,7 @@ function sessionLoopProtocolMetric(session: SessionSummary): string | undefined 
   const lastDecision = state?.last_decision?.trim();
   const turnReason = state?.last_turn_end_reason?.trim();
   const eventSummary = state?.last_event_summary?.trim();
-  const parts = [status ? `Loop ${status}` : "Loop protocol"];
+  const parts = status ? [`Loop ${status}`] : [];
   if (initialGoal) parts.push(`goal ${initialGoal}`);
   if (updates && updates > 0) parts.push(`${updates} ${updates === 1 ? "update" : "updates"}`);
   if (feeds && feeds > 0) parts.push(`${feeds} ${feeds === 1 ? "feed" : "feeds"}`);
@@ -740,6 +749,7 @@ function sessionLoopProtocolMetric(session: SessionSummary): string | undefined 
   }
   if (turnReason) parts.push(`last turn ${turnReason}`);
   if (eventSummary) parts.push(eventSummary);
+  if (parts.length === 0) return undefined;
   return parts.join(", ");
 }
 

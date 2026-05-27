@@ -2,7 +2,14 @@ import { describe, expect, it } from "vitest";
 import type { SessionSummary } from "../api/sessions";
 import { completedTurn } from "../fixtures/completedTurn";
 import { reduceRawEvents } from "../store/reduce";
-import { buildSessionRows, countSessionsByFilter, filterSessionRows, formatLoadingChatTitle, mergeCurrentSessionRow } from "./sessionList";
+import {
+  buildSessionRows,
+  countSessionsByFilter,
+  displaySessionRowChips,
+  filterSessionRows,
+  formatLoadingChatTitle,
+  mergeCurrentSessionRow,
+} from "./sessionList";
 
 describe("sessionList view model", () => {
   it("maps API session summaries into scannable rows", () => {
@@ -219,6 +226,22 @@ describe("sessionList view model", () => {
     expect(rows[0].stats).toContain("Timer 0/1, 1 error");
     expect(rows[0].chips).toContain("timers");
     expect(rows[0].searchText).toContain("loop.md not running");
+  });
+
+  it("does not show LOOP.md as a row stat when only the feature exists", () => {
+    const rows = buildSessionRows([
+      session({
+        id: "empty-loop-protocol",
+        durable: true,
+        latest_user_message: "review the repo",
+        has_loop_protocol: true,
+      }),
+    ]);
+
+    expect(rows[0].metrics).toEqual([]);
+    expect(rows[0].stats).toBeUndefined();
+    expect(rows[0].searchText).toContain("loop");
+    expect(rows[0].searchText).not.toContain("loop protocol");
   });
 
   it("surfaces pending loop timers when LOOP.md is not running", () => {
@@ -1158,6 +1181,36 @@ describe("sessionList view model", () => {
     );
 
     expect(rows[0].chips).toContain("unclassified");
+  });
+
+  it("displays only diagnostic chips in selected chat rows", () => {
+    const [row] = buildSessionRows([
+      session({
+        id: "s1",
+        durable: true,
+        latest_user_message: "review runtime state",
+        has_artifacts: true,
+        has_memory: true,
+        has_plan: true,
+        has_loop_protocol: true,
+        has_schedules: true,
+        has_runtime_skills: true,
+      }),
+    ]);
+
+    expect(row.chips).toEqual(["files", "memory", "plan", "loop", "timers", "skills"]);
+    expect(displaySessionRowChips(row, { selected: true })).toEqual([]);
+
+    const [diagnosticRow] = mergeCurrentSessionRow(
+      [row],
+      "s1",
+      reduceRawEvents([
+        { id: 1, type: "turn.start", data: { turn_id: "t1" } },
+        { id: 2, type: "future.event", data: { turn_id: "t1" } },
+      ]),
+    );
+    expect(displaySessionRowChips(diagnosticRow, { selected: true })).toEqual(["unclassified"]);
+    expect(displaySessionRowChips(diagnosticRow, { selected: false })).toEqual([]);
   });
 
   it("keeps answered tool failures as tool issues instead of an error row", () => {

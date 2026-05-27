@@ -4,6 +4,7 @@ import type { SessionState } from "../store/sessionState";
 import {
   buildSessionRows,
   countSessionsByFilter,
+  displaySessionRowChips,
   filterSessionRows,
   mergeCurrentSessionRow,
   type SessionListFilter,
@@ -202,7 +203,7 @@ export function SessionList({
         {!demoActive
           ? visibleRows.map((row) => {
               const isSelected = selectedId === row.id;
-              const visibleChips = isSelected ? row.chips.filter((chip) => chip !== "files") : [];
+              const visibleChips = displaySessionRowChips(row, { selected: isSelected });
               const previewId = row.preview ? `session-preview-${row.id}` : undefined;
               const confirmingDelete = confirmDeleteId === row.id;
               const deleting = deletingId === row.id;

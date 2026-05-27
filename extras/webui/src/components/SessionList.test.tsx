@@ -359,7 +359,7 @@ describe("SessionList", () => {
     expect(row).not.toHaveTextContent("No messages yet");
   });
 
-  it("shows feature chips for the selected chat without repeating artifact counts", () => {
+  it("keeps capability chips out of the selected chat row", () => {
     render(
       <SessionList
         sessions={[
@@ -381,8 +381,11 @@ describe("SessionList", () => {
     );
 
     const row = screen.getByRole("button", { name: /repo/ });
-    expect(within(row).getByTestId("session-chips")).toHaveTextContent("Memory · Plan · Skills");
-    expect(within(row).getByTestId("session-chips")).not.toHaveTextContent("Files");
+    expect(within(row).queryByTestId("session-chips")).toBeNull();
+    expect(row).not.toHaveTextContent("Memory");
+    expect(row).not.toHaveTextContent("Plan");
+    expect(row).not.toHaveTextContent("Skills");
+    expect(row).not.toHaveTextContent("Files");
   });
 
   it("keeps artifact size in the selected chat row", () => {
