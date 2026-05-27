@@ -7,7 +7,7 @@
 // Kept in parity with the Go json tags; the parity guard covers this too.
 
 import type { ApiClient } from "./client";
-import type { SessionHistoryResponse } from "./events";
+import type { MemoryUpdateMeta, SessionHistoryResponse } from "./events";
 import type { StreamEventsOptions } from "./stream";
 
 export interface UsageSnapshot {
@@ -399,6 +399,7 @@ export interface SessionSummary {
   latest_user_message?: string;
   topic_user_message?: string;
   latest_recovery_hint?: string;
+  latest_memory_update?: MemoryUpdateMeta;
   has_plan?: boolean;
   plan_summary?: SessionPlanSummary;
   has_conversation: boolean;

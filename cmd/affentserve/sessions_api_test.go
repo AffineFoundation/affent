@@ -315,6 +315,14 @@ func TestSummarizeDurableSessionRestoresTopicFromEventsAfterCompaction(t *testin
 			sessionEventLine(t, sse.TypeContextCompact, sse.ContextCompactPayload{TurnID: "t1", BeforeMessages: 48, AfterMessages: 12, RemovedMessages: 36, Reactive: true, Reason: "context_overflow", SummaryPresent: true, SummaryBytes: 1024})+
 			sessionEventLine(t, sse.TypeContextCompact, map[string]any{"turn_id": "t2", "before_messages": 44, "after_messages": 18, "removed_messages": 26, "reactive": false, "reason": "proactive_threshold", "summary_present": false})+
 			sessionEventLine(t, sse.TypeToolResult, sse.ToolResultPayload{TurnID: "t2", CallID: "c1", ExitCode: 1, ResultSummary: toolRecovery, Result: toolRecovery})+
+			sessionEventLine(t, sse.TypeToolResult, sse.ToolResultPayload{TurnID: "t2", CallID: "mem1", ResultSummary: `{"ok":true}`, Result: `{"ok":true}`, MemoryUpdate: &sse.MemoryUpdateMeta{
+				Action:      "replace",
+				Target:      "memory",
+				Topic:       "markets",
+				Location:    "memory:markets",
+				Preview:     "old dashboard rule -> prefer browser network evidence",
+				NextPreview: "prefer browser network evidence",
+			}})+
 			sessionEventLine(t, sse.TypeUserMessage, sse.UserMessagePayload{TurnID: "t2", Text: "请继续同一个任务。基于已有证据输出报告"}),
 	), 0o644); err != nil {
 		t.Fatal(err)
@@ -338,6 +346,12 @@ func TestSummarizeDurableSessionRestoresTopicFromEventsAfterCompaction(t *testin
 	}
 	if summary.LatestRecoveryHint != "run rg --files config before retrying" {
 		t.Fatalf("latest_recovery_hint = %q, want actionable tool recovery hint", summary.LatestRecoveryHint)
+	}
+	if summary.LatestMemoryUpdate == nil ||
+		summary.LatestMemoryUpdate.Action != "replace" ||
+		summary.LatestMemoryUpdate.Location != "memory:markets" ||
+		summary.LatestMemoryUpdate.Preview != "old dashboard rule -> prefer browser network evidence" {
+		t.Fatalf("latest_memory_update = %+v, want durable memory preview", summary.LatestMemoryUpdate)
 	}
 	if summary.ContextCompactions == nil {
 		t.Fatal("context_compactions should be summarized from durable events")

@@ -65,6 +65,7 @@ type sessionSummary struct {
 	LatestUserMessage  string                           `json:"latest_user_message,omitempty"`
 	TopicUserMessage   string                           `json:"topic_user_message,omitempty"`
 	LatestRecoveryHint string                           `json:"latest_recovery_hint,omitempty"`
+	LatestMemoryUpdate *sse.MemoryUpdateMeta            `json:"latest_memory_update,omitempty"`
 	HasEvents          bool                             `json:"has_events"`
 	HasPlan            bool                             `json:"has_plan"`
 	PlanSummary        *sessionPlanSummary              `json:"plan_summary,omitempty"`
@@ -664,6 +665,11 @@ func summarizeDurableSession(pool *SessionPool, id string) (sessionSummary, bool
 			return sessionSummary{}, false, err
 		}
 		summary.LatestRecoveryHint = recovery
+		memoryUpdate, err := latestMemoryUpdateFromEventsFile(filepath.Join(dir, "events.jsonl"))
+		if err != nil {
+			return sessionSummary{}, false, err
+		}
+		summary.LatestMemoryUpdate = memoryUpdate
 	}
 	var planMod time.Time
 	if exists, planMod, err = durableRegularFileModTime(filepath.Join(dir, "plan.json")); err != nil {
@@ -760,6 +766,9 @@ func mergeSessionSummaries(a, b sessionSummary) sessionSummary {
 	}
 	if b.LatestRecoveryHint != "" {
 		a.LatestRecoveryHint = b.LatestRecoveryHint
+	}
+	if b.LatestMemoryUpdate != nil {
+		a.LatestMemoryUpdate = b.LatestMemoryUpdate
 	}
 	if a.SummaryTitle == "" && b.SummaryTitle != "" {
 		a.SummaryTitle = b.SummaryTitle
@@ -1062,6 +1071,49 @@ func latestRecoveryHintFromEventsFile(path string) (string, error) {
 		return "", err
 	}
 	return scanRecoveryHintsFromEvents(bufio.NewReaderSize(f, 64*1024))
+}
+
+func latestMemoryUpdateFromEventsFile(path string) (*sse.MemoryUpdateMeta, error) {
+	f, err := os.Open(path)
+	if err != nil {
+		if errors.Is(err, os.ErrNotExist) {
+			return nil, nil
+		}
+		return nil, err
+	}
+	defer f.Close()
+	if err := seekSessionSummaryTail(f); err != nil {
+		return nil, err
+	}
+	return scanMemoryUpdatesFromEvents(bufio.NewReaderSize(f, 64*1024))
+}
+
+func scanMemoryUpdatesFromEvents(r *bufio.Reader) (*sse.MemoryUpdateMeta, error) {
+	var latest *sse.MemoryUpdateMeta
+	for {
+		line, tooLong, err := jsonl.ReadBoundedLine(r, maxSessionSummaryLineBytes)
+		if errors.Is(err, io.EOF) {
+			break
+		}
+		if err != nil {
+			return nil, err
+		}
+		if tooLong {
+			continue
+		}
+		line = bytes.TrimRight(line, "\r\n")
+		var ev sse.Event
+		if err := json.Unmarshal(line, &ev); err != nil || ev.Type != sse.TypeToolResult {
+			continue
+		}
+		var p sse.ToolResultPayload
+		if err := json.Unmarshal(ev.Data, &p); err != nil || p.MemoryUpdate == nil {
+			continue
+		}
+		update := *p.MemoryUpdate
+		latest = &update
+	}
+	return latest, nil
 }
 
 func scanRecoveryHintsFromEvents(r *bufio.Reader) (string, error) {

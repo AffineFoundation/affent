@@ -80,12 +80,20 @@ describe("sessionList view model", () => {
           memory_update_add: 1,
           memory_update_replace: 1,
         },
+        latest_memory_update: {
+          action: "replace",
+          target: "memory",
+          topic: "markets",
+          location: "memory:markets",
+          preview: "old dashboard rule -> prefer browser_network_read evidence",
+          next_preview: "prefer browser_network_read evidence",
+        },
       }),
     ]);
 
-    expect(rows[0].metrics).toContain("Memory 2 updates, 1 add, 1 replace");
+    expect(rows[0].metrics).toContain("Memory 2 updates, 1 add, 1 replace, replaced memory:markets old dashboard rule -> prefer browser_network_read evidence");
     expect(rows[0].stats).toContain("Memory 2 updates");
-    expect(rows[0].searchText).toContain("memory 2 updates");
+    expect(rows[0].searchText).toContain("prefer browser_network_read evidence");
   });
 
   it("surfaces source evidence quality in row stats and search", () => {

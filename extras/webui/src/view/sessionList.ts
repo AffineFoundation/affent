@@ -1,3 +1,4 @@
+import type { MemoryUpdateMeta } from "../api/events";
 import type { SessionContextCompactionSummary, SessionContextSummary, SessionPlanSummary, SessionSummary } from "../api/sessions";
 import type { SessionState } from "../store/sessionState";
 import { contextCompactionSummaryLabel } from "./contextCompaction";
@@ -502,7 +503,7 @@ function usageMetrics(session: SessionSummary): string[] {
   if (sourceMetric) metrics.push(sourceMetric);
   const recallMetric = sessionSearchMetric(session.tools);
   if (recallMetric) metrics.push(recallMetric);
-  const memoryMetric = memoryUpdateMetric(session.tools);
+  const memoryMetric = memoryUpdateMetric(session.tools, session.latest_memory_update);
   if (memoryMetric) metrics.push(memoryMetric);
   const contextMetric = sessionContextMetric(session.context);
   if (contextMetric) metrics.push(contextMetric);
@@ -584,14 +585,31 @@ interface MemoryUpdateStats {
   memory_update_remove?: number;
 }
 
-function memoryUpdateMetric(stats: MemoryUpdateStats | undefined): string | undefined {
+function memoryUpdateMetric(stats: MemoryUpdateStats | undefined, latest?: MemoryUpdateMeta): string | undefined {
   const updates = stats?.memory_updates ?? 0;
-  if (updates <= 0) return undefined;
-  const parts = [`Memory ${updates} ${updates === 1 ? "update" : "updates"}`];
+  if (updates <= 0 && !latest) return undefined;
+  const parts = [updates > 0 ? `Memory ${updates} ${updates === 1 ? "update" : "updates"}` : "Memory updated"];
   if ((stats?.memory_update_add ?? 0) > 0) parts.push(`${stats?.memory_update_add} add`);
   if ((stats?.memory_update_replace ?? 0) > 0) parts.push(`${stats?.memory_update_replace} replace`);
   if ((stats?.memory_update_remove ?? 0) > 0) parts.push(`${stats?.memory_update_remove} remove`);
+  const detail = latestMemoryUpdateDetail(latest);
+  if (detail) parts.push(detail);
   return parts.join(", ");
+}
+
+function latestMemoryUpdateDetail(update?: MemoryUpdateMeta): string | undefined {
+  if (!update) return undefined;
+  const location = update.location || [update.target, update.topic].filter(Boolean).join(":");
+  const preview = update.preview || update.next_preview || update.previous_preview;
+  const parts = [memoryActionLabel(update.action), location, preview ? summarize(preview, 84) : undefined].filter(Boolean);
+  return parts.join(" ");
+}
+
+function memoryActionLabel(action: string): string {
+  if (action === "add") return "added";
+  if (action === "replace") return "replaced";
+  if (action === "remove") return "removed";
+  return action;
 }
 
 function emptySessionSearchStats(): Required<SessionSearchStats> {
