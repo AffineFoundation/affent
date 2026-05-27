@@ -372,6 +372,12 @@ func TestWithLoopProtocolSkillProviderUsesDigestBetweenFullFeeds(t *testing.T) {
 
 Keep long-run work anchored to evidence.
 
+## 2. Current Situation
+
+- current intent: finish the SN120 evidence audit
+- current risk or blocker: JS dashboard values are partial until network refs are read
+- next recovery anchor: read the latest plan state before continuing
+
 ## Archive
 
 ` + archive
@@ -391,6 +397,15 @@ Keep long-run work anchored to evidence.
 	}
 	if !strings.Contains(got, "Keep long-run work anchored to evidence.") {
 		t.Fatalf("digest missing north star:\n%s", got)
+	}
+	for _, want := range []string{
+		"finish the SN120 evidence audit",
+		"JS dashboard values are partial until network refs are read",
+		"read the latest plan state before continuing",
+	} {
+		if !strings.Contains(got, want) {
+			t.Fatalf("digest missing current situation %q:\n%s", want, got)
+		}
 	}
 	if strings.Contains(got, "old archive detail old archive detail") {
 		t.Fatalf("digest should omit archive detail:\n%s", got)
