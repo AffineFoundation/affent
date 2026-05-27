@@ -40,11 +40,12 @@ describe("WorkbenchContextPanel", () => {
         hasSelectedSession
         overview={overview({ headline: "Runtime monitor", detail: "Loop waits for calibration." })}
         automationTitle="Loop waiting · 1 timer pending"
-        automationDetail="Long-running protocol and timers share one automation surface"
+        automationDetail="Answer setup question before LOOP.md can run."
       />,
     );
 
     expect(screen.getByTestId("workbench-context-automation")).toHaveTextContent("Loop waiting · 1 timer pending");
+    expect(screen.getByTestId("workbench-context-automation")).toHaveTextContent("Answer setup question before LOOP.md can run.");
   });
 
   it("keeps fresh-task Workbench context short and actionable", () => {

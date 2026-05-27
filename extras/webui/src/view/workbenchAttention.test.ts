@@ -67,10 +67,10 @@ describe("buildWorkbenchAttention", () => {
       files: files(),
       changes: changes(),
       run: run(),
-      automation: { title: "Loop waiting · 1 timer pending", detail: "Long-running protocol and timers share one automation surface" },
+      automation: { title: "Loop waiting · 1 timer pending", detail: "Answer setup question before LOOP.md can run." },
     })).toEqual({
       label: "Loop waiting · 1 timer pending",
-      detail: "Long-running protocol and timers share one automation surface",
+      detail: "Answer setup question before LOOP.md can run.",
       tone: "warning",
       target: "automation",
     });
@@ -80,7 +80,7 @@ describe("buildWorkbenchAttention", () => {
       files: files(),
       changes: changes(),
       run: run(),
-      automation: { title: "Loop running · 1 timer active", detail: "Long-running protocol and timers share one automation surface" },
+      automation: { title: "Loop running · 1 timer active", detail: "Next timer May 27, 02:00 PM" },
     })).toBeUndefined();
   });
 });
