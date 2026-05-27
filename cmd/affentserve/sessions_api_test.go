@@ -45,6 +45,12 @@ func TestHandleSessionCreate_ExplicitIDAndDetail(t *testing.T) {
 	if created.Session.ID != "client-one" || !created.Session.Active || !created.Session.Durable {
 		t.Fatalf("created session = %+v, want active durable client-one", created.Session)
 	}
+	if created.Session.WorkspacePath == "" {
+		t.Fatalf("created session missing workspace path: %+v", created.Session)
+	}
+	if created.Session.WorkspaceLabel != filepath.Base(created.Session.WorkspacePath) {
+		t.Fatalf("created workspace label = %q, want basename of %q", created.Session.WorkspaceLabel, created.Session.WorkspacePath)
+	}
 	assertSessionCapabilities(t, created.Session.Capabilities, sessionCapabilities{
 		Builtins:         true,
 		WorkspaceTools:   []string{"shell", "read_file", "file_context", "write_file", "edit_file", "list_files", agent.SymbolContextToolName, "repo_search"},
@@ -87,6 +93,9 @@ func TestHandleSessionCreate_ExplicitIDAndDetail(t *testing.T) {
 	}
 	if detail.Session.ID != "client-one" || !detail.Session.Active || !detail.Session.Durable {
 		t.Fatalf("detail session = %+v, want active durable client-one", detail.Session)
+	}
+	if detail.Session.WorkspacePath != created.Session.WorkspacePath || detail.Session.WorkspaceLabel != created.Session.WorkspaceLabel {
+		t.Fatalf("detail workspace = %q/%q, want %q/%q", detail.Session.WorkspacePath, detail.Session.WorkspaceLabel, created.Session.WorkspacePath, created.Session.WorkspaceLabel)
 	}
 	assertSessionCapabilities(t, detail.Session.Capabilities, *created.Session.Capabilities)
 }
@@ -199,10 +208,40 @@ func TestMergeSessionSummariesKeepsActiveLatestUserMessage(t *testing.T) {
 	if got.Context != context {
 		t.Fatalf("context summary = %+v, want durable context carried over", got.Context)
 	}
+	got = mergeSessionSummaries(
+		sessionSummary{ID: "active", Active: true, WorkspacePath: "/tmp/ws", WorkspaceLabel: "ws"},
+		sessionSummary{ID: "active", Durable: true, LastAgentCWD: "subdir"},
+	)
+	if got.WorkspacePath != "/tmp/ws" || got.WorkspaceLabel != "ws" || got.LastAgentCWD != "subdir" {
+		t.Fatalf("merged workspace evidence = %+v", got)
+	}
 	compactions := &sessionContextCompactionSummary{Count: 1, Reactive: 1, RemovedMessages: 32, SummaryBytes: 2048, LatestReason: "context_overflow", LatestReactive: true}
 	got = mergeSessionSummaries(sessionSummary{ID: "active", Active: true}, sessionSummary{ID: "active", Durable: true, ContextCompactions: compactions})
 	if got.ContextCompactions != compactions {
 		t.Fatalf("context compactions = %+v, want durable compactions carried over", got.ContextCompactions)
+	}
+}
+
+func TestSummarizeDurableSessionIncludesLatestShellCWD(t *testing.T) {
+	pool := newTestPool(t, 4, "5m")
+	createDurableSessionDir(t, pool, "cwd-evidence")
+	if err := os.WriteFile(filepath.Join(pool.sessionDirPath("cwd-evidence"), "events.jsonl"), []byte(
+		`{"id":1,"type":"turn.start","data":{"turn_id":"t1"}}`+"\n"+
+			`{"id":2,"type":"tool.request","data":{"turn_id":"t1","call_id":"one","tool":"shell","args":{"command":"npm test","cwd":"extras/webui"},"args_truncated":false,"args_bytes":52,"args_omitted_bytes":0,"args_cap_bytes":65536}}`+"\n"+
+			`{"id":3,"type":"tool.request","data":{"turn_id":"t1","call_id":"two","tool":"shell","args":{"command":"npm run build","cwd":"."},"args_truncated":false,"args_bytes":48,"args_omitted_bytes":0,"args_cap_bytes":65536}}`+"\n",
+	), 0o644); err != nil {
+		t.Fatalf("write events: %v", err)
+	}
+
+	summary, found, err := summarizeDurableSession(pool, "cwd-evidence")
+	if err != nil {
+		t.Fatalf("summarizeDurableSession: %v", err)
+	}
+	if !found {
+		t.Fatal("summarizeDurableSession found=false")
+	}
+	if summary.LastAgentCWD != "." {
+		t.Fatalf("last_agent_cwd = %q, want latest shell cwd '.'", summary.LastAgentCWD)
 	}
 }
 

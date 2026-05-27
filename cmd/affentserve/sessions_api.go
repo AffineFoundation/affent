@@ -60,6 +60,11 @@ type sessionSummary struct {
 	Durable            bool                             `json:"durable"`
 	CreatedAt          string                           `json:"created_at,omitempty"`
 	LastUsedAt         string                           `json:"last_used_at,omitempty"`
+	WorkspacePath      string                           `json:"workspace_path,omitempty"`
+	WorkspaceLabel     string                           `json:"workspace_label,omitempty"`
+	DefaultBranch      string                           `json:"default_branch,omitempty"`
+	DirtyState         string                           `json:"dirty_state,omitempty"`
+	LastAgentCWD       string                           `json:"last_agent_cwd,omitempty"`
 	Capabilities       *sessionCapabilities             `json:"capabilities,omitempty"`
 	HasConversation    bool                             `json:"has_conversation"`
 	LatestUserMessage  string                           `json:"latest_user_message,omitempty"`
@@ -470,6 +475,8 @@ func summarizeActiveSession(s *Session, cfg Config) sessionSummary {
 		Active:            true,
 		CreatedAt:         formatTime(createdAt),
 		LastUsedAt:        formatTime(lastUsedAt),
+		WorkspacePath:     s.workspace,
+		WorkspaceLabel:    workspaceLabel(s.workspace),
 		LatestUserMessage: latestUser,
 		TopicUserMessage:  topicUser,
 		Capabilities:      &caps,
@@ -500,8 +507,16 @@ func summarizeActiveSession(s *Session, cfg Config) sessionSummary {
 		summary.ContextCompactions = compactions
 	}
 	if s.loopProtocolPath != "" {
-		if hint, err := latestRecoveryHintFromEventsFile(filepath.Join(filepath.Dir(s.loopProtocolPath), "events.jsonl")); err == nil {
+		eventsPath := filepath.Join(filepath.Dir(s.loopProtocolPath), "events.jsonl")
+		if hint, err := latestRecoveryHintFromEventsFile(eventsPath); err == nil {
 			summary.LatestRecoveryHint = hint
+		}
+		if cwd, hasShell, err := latestShellCWDFromEventsFile(eventsPath); err == nil {
+			if cwd != "" {
+				summary.LastAgentCWD = cwd
+			} else if hasShell {
+				summary.LastAgentCWD = s.workspace
+			}
 		}
 	}
 	populateSessionSummaryTitle(&summary)
@@ -677,6 +692,11 @@ func summarizeDurableSession(pool *SessionPool, id string) (sessionSummary, bool
 			return sessionSummary{}, false, err
 		}
 		summary.LatestMemoryUpdate = memoryUpdate
+		cwd, _, err := latestShellCWDFromEventsFile(filepath.Join(dir, "events.jsonl"))
+		if err != nil {
+			return sessionSummary{}, false, err
+		}
+		summary.LastAgentCWD = cwd
 	}
 	var planMod time.Time
 	if exists, planMod, err = durableRegularFileModTime(filepath.Join(dir, "plan.json")); err != nil {
@@ -811,6 +831,21 @@ func mergeSessionSummaries(a, b sessionSummary) sessionSummary {
 		a.CreatedAt = b.CreatedAt
 	}
 	a.LastUsedAt = newerFormattedTime(a.LastUsedAt, b.LastUsedAt)
+	if a.WorkspacePath == "" && b.WorkspacePath != "" {
+		a.WorkspacePath = b.WorkspacePath
+	}
+	if a.WorkspaceLabel == "" && b.WorkspaceLabel != "" {
+		a.WorkspaceLabel = b.WorkspaceLabel
+	}
+	if a.DefaultBranch == "" && b.DefaultBranch != "" {
+		a.DefaultBranch = b.DefaultBranch
+	}
+	if a.DirtyState == "" && b.DirtyState != "" {
+		a.DirtyState = b.DirtyState
+	}
+	if a.LastAgentCWD == "" && b.LastAgentCWD != "" {
+		a.LastAgentCWD = b.LastAgentCWD
+	}
 	if b.Usage != nil {
 		a.Usage = b.Usage
 	}
@@ -824,6 +859,17 @@ func mergeSessionSummaries(a, b sessionSummary) sessionSummary {
 		a.Capabilities = b.Capabilities
 	}
 	return a
+}
+
+func workspaceLabel(path string) string {
+	path = strings.TrimSpace(path)
+	if path == "" {
+		return ""
+	}
+	if base := filepath.Base(path); base != "." && base != string(filepath.Separator) {
+		return base
+	}
+	return path
 }
 
 func sessionContextSnapshot(messageCount int, cfg Config) sessionContextSummary {
@@ -1131,6 +1177,52 @@ func latestMemoryUpdateFromEventsFile(path string) (*sse.MemoryUpdateMeta, error
 		return nil, err
 	}
 	return scanMemoryUpdatesFromEvents(bufio.NewReaderSize(f, 64*1024))
+}
+
+func latestShellCWDFromEventsFile(path string) (string, bool, error) {
+	f, err := os.Open(path)
+	if err != nil {
+		if errors.Is(err, os.ErrNotExist) {
+			return "", false, nil
+		}
+		return "", false, err
+	}
+	defer f.Close()
+	if err := seekSessionSummaryTail(f); err != nil {
+		return "", false, err
+	}
+	return scanShellCWDFromEvents(bufio.NewReaderSize(f, 64*1024))
+}
+
+func scanShellCWDFromEvents(r *bufio.Reader) (string, bool, error) {
+	latest := ""
+	hasShell := false
+	for {
+		line, tooLong, err := jsonl.ReadBoundedLine(r, maxSessionSummaryLineBytes)
+		if errors.Is(err, io.EOF) {
+			break
+		}
+		if err != nil {
+			return "", false, err
+		}
+		if tooLong {
+			continue
+		}
+		line = bytes.TrimRight(line, "\r\n")
+		var ev sse.Event
+		if err := json.Unmarshal(line, &ev); err != nil || ev.Type != sse.TypeToolRequest {
+			continue
+		}
+		var p sse.ToolRequestPayload
+		if err := json.Unmarshal(ev.Data, &p); err != nil || p.Tool != "shell" {
+			continue
+		}
+		hasShell = true
+		if cwd, ok := p.Args["cwd"].(string); ok && strings.TrimSpace(cwd) != "" {
+			latest = strings.TrimSpace(cwd)
+		}
+	}
+	return latest, hasShell, nil
 }
 
 func scanMemoryUpdatesFromEvents(r *bufio.Reader) (*sse.MemoryUpdateMeta, error) {
