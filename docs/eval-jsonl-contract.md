@@ -61,6 +61,8 @@ Shared metadata fields:
   `max_avg_reactive_context_compactions`,
   `max_avg_context_removed_messages`, `max_avg_context_summary_bytes`,
   `max_avg_context_summary_missing`, `max_avg_context_summary_empty`,
+  `max_avg_context_injections`, `max_avg_context_injection_bytes`,
+  `max_avg_context_injection_estimated_tokens`,
   `max_avg_tool_calls`, `max_avg_duration_ms`, `max_avg_total_tokens`:
   optional quality gate thresholds configured for the run. Disabled gates are
   omitted.
@@ -343,6 +345,17 @@ Scenario records describe one eval case:
   `context_compaction_summary_missing`, and
   `context_compaction_summary_empty`: optional context pressure counters
   collected from context compaction trace events.
+- `context_injections`: optional count of hidden system-context blocks injected
+  into model context.
+- `context_injection_by_source`: optional map of injected context source to
+  count. Sources include account access hints, active plan state, active skill
+  state, and other runtime-injected context blocks.
+- `context_injection_bytes` and `context_injection_estimated_tokens`: optional
+  total size/cost counters for injected context.
+- `context_injection_examples`: optional bounded examples of injected context
+  blocks. Each sample includes turn id, source, title, compact summary/preview,
+  byte size, and estimated tokens. Summary records include the originating
+  scenario.
 - `tool_truncation_examples`: optional bounded examples of tool calls whose
   request args, event result, result artifact, or model-context insertion were
   truncated. Each sample includes the tool index, call id, tool name, omitted
@@ -424,7 +437,9 @@ Summary records aggregate all scenario records from the same process:
   `avg_runtime_errors`, `avg_context_compactions`,
   `avg_reactive_context_compactions`, `avg_context_removed_messages`,
   `avg_context_summary_bytes`, `avg_context_summary_missing`,
-  `avg_context_summary_empty`, `avg_tool_calls`,
+  `avg_context_summary_empty`, `avg_context_injections`,
+  `avg_context_injection_bytes`, `avg_context_injection_estimated_tokens`,
+  `avg_tool_calls`,
   `tool_context_truncation_rate` and
   `tool_result_truncation_rate` when tool calls were observed,
   `avg_input_tokens`, `avg_output_tokens`, and `avg_total_tokens`.
@@ -474,7 +489,8 @@ Summary records aggregate all scenario records from the same process:
   `source_access_examples`, `browser_scroll_examples`,
   `browser_network_examples`, `memory_update_examples`,
   `session_search_examples`, `tool_truncation_examples`,
-  `context_compaction_examples`, `loop_decision_examples`,
+  `context_compaction_examples`, `context_injection_examples`,
+  `loop_decision_examples`,
   `loop_protocol_feed_examples`, `loop_protocol_calibration_request_examples`,
   `loop_protocol_calibration_examples`, and `plan_examples` include their
   originating scenario so long-run batch failures can be routed directly to the
@@ -494,6 +510,10 @@ Summary records aggregate all scenario records from the same process:
   `context_compaction_summary_empty`.
 - Context compaction examples: `context_compaction_examples`, the first bounded
   samples across the batch.
+- Context injection totals: `context_injections`,
+  `context_injection_by_source`, `context_injection_bytes`, and
+  `context_injection_estimated_tokens`, plus bounded
+  `context_injection_examples`.
 - Debug brief tag totals: `debug_brief_by_tag`, counting how many scenarios
   emitted each machine-readable triage tag.
 - Expectation coverage totals:

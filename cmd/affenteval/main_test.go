@@ -47,6 +47,9 @@ func TestRunListQualityProfiles(t *testing.T) {
 		"max-avg-total-tokens=120000.000",
 		"max-avg-context-removed-messages=120.000",
 		"max-avg-context-summary-bytes=24000.000",
+		"max-avg-context-injections=8.000",
+		"max-avg-context-injection-bytes=24000.000",
+		"max-avg-context-injection-estimated-tokens=6000.000",
 		"min-trace-event-rate=0.900",
 		"min-source-access-verified-rate=0.900",
 		"max-source-dynamic-partial-rate=0.200",
@@ -227,6 +230,11 @@ func TestRunRejectsInvalidConfigBeforeScenarios(t *testing.T) {
 			name: "negative max avg reactive context compactions",
 			args: []string{"--max-avg-reactive-context-compactions=-2"},
 			want: "--max-avg-reactive-context-compactions must be disabled with -1 or set to a non-negative value",
+		},
+		{
+			name: "negative max avg context injection tokens",
+			args: []string{"--max-avg-context-injection-estimated-tokens=-2"},
+			want: "--max-avg-context-injection-estimated-tokens must be disabled with -1 or set to a non-negative value",
 		},
 		{
 			name: "unknown quality profile",
@@ -547,46 +555,52 @@ func TestQualityGateFailures(t *testing.T) {
 		ContextCompactionSummary:        2048,
 		ContextCompactionSummaryMissing: 1,
 		ContextCompactionSummaryEmpty:   1,
+		ContextInjections:               5,
+		ContextInjectionBytes:           9000,
+		ContextInjectionEstimatedTokens: 2250,
 		ExpectationCapabilities:         map[string]int{"browser": 2, "memory": 1, "web": 1},
 		ExpectationCapabilityPass:       map[string]int{"browser": 1, "memory": 1},
 		DebugBriefByTag:                 map[string]int{"browser_scroll:stuck_without_network": 1, "source_dynamic_without_network": 1},
 	}
 	failures := qualityGateFailures(summary, qualityGateConfig{
-		MinPassRate:                          ptr(0.75),
-		MinCompletionRate:                    ptr(0.75),
-		MinExpectationCapabilityPassRate:     ptr(0.75),
-		MinEachExpectationCapabilityPassRate: ptr(0.75),
-		MinMemoryUpdateRate:                  ptr(0.75),
-		MinLoopProtocolFeedRate:              ptr(0.75),
-		MinRuntimeSurfaceRate:                ptr(0.75),
-		MinTraceEventRate:                    ptr(0.75),
-		MinSourceNetworkRate:                 ptr(0.5),
-		MinSourceAccessVerifiedRate:          ptr(0.9),
-		MinSessionSearchContextHitRate:       ptr(0.75),
-		MinSessionSearchMatchedTermsPerCall:  ptr(2),
-		MinToolRepairSuccessRate:             ptr(0.9),
-		MinVerifierPassRate:                  ptr(0.75),
-		MaxFocusedTaskErrorRate:              ptr(0.25),
-		MaxForcedNoToolsRate:                 ptr(0.1),
-		MaxLoopGuardInterventionRate:         ptr(0.3),
-		MaxPlanErrorRate:                     ptr(0.25),
-		MaxSourceDiscoveryOnlyRate:           ptr(0.1),
-		MaxSourceDynamicPartialRate:          ptr(0.1),
-		MaxSubagentErrorRate:                 ptr(0.25),
-		MaxToolErrorRate:                     ptr(0.1),
-		MaxToolContextTruncationRate:         ptr(0.5),
-		MaxToolResultTruncationRate:          ptr(0.4),
-		MaxAvgRuntimeErrors:                  ptr(1.0),
-		MaxAvgContextCompactions:             ptr(0.25),
-		MaxAvgReactiveCompactions:            ptr(0.25),
-		MaxAvgContextRemovedMessages:         ptr(12),
-		MaxAvgContextSummaryBytes:            ptr(512),
-		MaxAvgContextSummaryMissing:          ptr(0.25),
-		MaxAvgContextSummaryEmpty:            ptr(0.25),
-		MaxAvgToolCalls:                      ptr(2),
-		MaxAvgDurationMS:                     ptr(1000),
-		MaxAvgTotalTokens:                    ptr(40),
-		MaxDebugBriefTagRates:                map[string]float64{"browser_scroll:stuck_without_network": 0, "source_dynamic_without_network": 0},
+		MinPassRate:                           ptr(0.75),
+		MinCompletionRate:                     ptr(0.75),
+		MinExpectationCapabilityPassRate:      ptr(0.75),
+		MinEachExpectationCapabilityPassRate:  ptr(0.75),
+		MinMemoryUpdateRate:                   ptr(0.75),
+		MinLoopProtocolFeedRate:               ptr(0.75),
+		MinRuntimeSurfaceRate:                 ptr(0.75),
+		MinTraceEventRate:                     ptr(0.75),
+		MinSourceNetworkRate:                  ptr(0.5),
+		MinSourceAccessVerifiedRate:           ptr(0.9),
+		MinSessionSearchContextHitRate:        ptr(0.75),
+		MinSessionSearchMatchedTermsPerCall:   ptr(2),
+		MinToolRepairSuccessRate:              ptr(0.9),
+		MinVerifierPassRate:                   ptr(0.75),
+		MaxFocusedTaskErrorRate:               ptr(0.25),
+		MaxForcedNoToolsRate:                  ptr(0.1),
+		MaxLoopGuardInterventionRate:          ptr(0.3),
+		MaxPlanErrorRate:                      ptr(0.25),
+		MaxSourceDiscoveryOnlyRate:            ptr(0.1),
+		MaxSourceDynamicPartialRate:           ptr(0.1),
+		MaxSubagentErrorRate:                  ptr(0.25),
+		MaxToolErrorRate:                      ptr(0.1),
+		MaxToolContextTruncationRate:          ptr(0.5),
+		MaxToolResultTruncationRate:           ptr(0.4),
+		MaxAvgRuntimeErrors:                   ptr(1.0),
+		MaxAvgContextCompactions:              ptr(0.25),
+		MaxAvgReactiveCompactions:             ptr(0.25),
+		MaxAvgContextRemovedMessages:          ptr(12),
+		MaxAvgContextSummaryBytes:             ptr(512),
+		MaxAvgContextSummaryMissing:           ptr(0.25),
+		MaxAvgContextSummaryEmpty:             ptr(0.25),
+		MaxAvgContextInjections:               ptr(2),
+		MaxAvgContextInjectionBytes:           ptr(4000),
+		MaxAvgContextInjectionEstimatedTokens: ptr(1000),
+		MaxAvgToolCalls:                       ptr(2),
+		MaxAvgDurationMS:                      ptr(1000),
+		MaxAvgTotalTokens:                     ptr(40),
+		MaxDebugBriefTagRates:                 map[string]float64{"browser_scroll:stuck_without_network": 0, "source_dynamic_without_network": 0},
 	})
 	got := strings.Join(failures, "\n")
 	for _, want := range []string{
@@ -595,6 +609,9 @@ func TestQualityGateFailures(t *testing.T) {
 		"avg_context_summary_bytes 1024.000 > max 512.000",
 		"avg_context_summary_empty 0.500 > max 0.250",
 		"avg_context_summary_missing 0.500 > max 0.250",
+		"avg_context_injections 2.500 > max 2.000",
+		"avg_context_injection_bytes 4500.000 > max 4000.000",
+		"avg_context_injection_estimated_tokens 1125.000 > max 1000.000",
 		"avg_duration_ms 1250.000 > max 1000.000",
 		"avg_reactive_context_compactions 0.500 > max 0.250",
 		"avg_runtime_errors 1.500 > max 1.000",
@@ -785,6 +802,15 @@ func TestApplyQualityGateProfile(t *testing.T) {
 	if gates.MaxAvgContextSummaryEmpty == nil || *gates.MaxAvgContextSummaryEmpty != 0 {
 		t.Fatalf("longrun max avg context summary empty = %#v, want 0", gates.MaxAvgContextSummaryEmpty)
 	}
+	if gates.MaxAvgContextInjections == nil || *gates.MaxAvgContextInjections != 8 {
+		t.Fatalf("longrun max avg context injections = %#v, want 8", gates.MaxAvgContextInjections)
+	}
+	if gates.MaxAvgContextInjectionBytes == nil || *gates.MaxAvgContextInjectionBytes != 24000 {
+		t.Fatalf("longrun max avg context injection bytes = %#v, want 24000", gates.MaxAvgContextInjectionBytes)
+	}
+	if gates.MaxAvgContextInjectionEstimatedTokens == nil || *gates.MaxAvgContextInjectionEstimatedTokens != 6000 {
+		t.Fatalf("longrun max avg context injection estimated tokens = %#v, want 6000", gates.MaxAvgContextInjectionEstimatedTokens)
+	}
 	if gates.MinExpectationCapabilityPassRate == nil || *gates.MinExpectationCapabilityPassRate != 0.80 {
 		t.Fatalf("longrun min expectation capability pass rate = %#v, want 0.80", gates.MinExpectationCapabilityPassRate)
 	}
@@ -817,6 +843,9 @@ func TestApplyQualityGateProfile(t *testing.T) {
 		webGates.MaxAvgContextSummaryBytes == nil || *webGates.MaxAvgContextSummaryBytes != 20000 ||
 		webGates.MaxAvgContextSummaryMissing == nil || *webGates.MaxAvgContextSummaryMissing != 0 ||
 		webGates.MaxAvgContextSummaryEmpty == nil || *webGates.MaxAvgContextSummaryEmpty != 0 ||
+		webGates.MaxAvgContextInjections == nil || *webGates.MaxAvgContextInjections != 6 ||
+		webGates.MaxAvgContextInjectionBytes == nil || *webGates.MaxAvgContextInjectionBytes != 18000 ||
+		webGates.MaxAvgContextInjectionEstimatedTokens == nil || *webGates.MaxAvgContextInjectionEstimatedTokens != 4500 ||
 		webGates.MaxAvgToolCalls == nil || *webGates.MaxAvgToolCalls != 18 ||
 		webGates.MaxAvgDurationMS == nil || *webGates.MaxAvgDurationMS != 240000 ||
 		webGates.MaxDebugBriefTagRates["browser_network:unread_refs"] != 0 ||
@@ -1025,6 +1054,21 @@ func TestPrintBatchResultIncludesTraceMetrics(t *testing.T) {
 			RemovedMessages: 64,
 			SummaryBytes:    4096,
 		},
+		ContextInjections: agenteval.ContextInjectionStats{
+			Count:           1,
+			BySource:        map[string]int{"account_access": 1},
+			Bytes:           1200,
+			EstimatedTokens: 300,
+			Examples: []agenteval.ContextInjection{{
+				TurnID:          "turn-1",
+				Source:          "account_access",
+				Title:           "Account access context injected",
+				Summary:         "Account-level environment and SSH access hints were made available.",
+				Preview:         "Configured environment variables: GITHUB_TOKEN",
+				Bytes:           1200,
+				EstimatedTokens: 300,
+			}},
+		},
 		ToolTruncation: agenteval.ToolTruncationStats{
 			ArgsTruncated:       1,
 			ArgsOmittedBytes:    512,
@@ -1095,7 +1139,7 @@ func TestPrintBatchResultIncludesTraceMetrics(t *testing.T) {
 		"workspace: /tmp/ws (removed)",
 		"trace: /tmp/ws/trace.jsonl",
 		"command: go run ./cmd/affentctl run --trace /tmp/ws/trace.jsonl",
-		"metrics: tools=3 errors=2 repaired=1 canonicalized=1 loop_guard=2 forced_no_tools=1 tool_ms=45 tokens=100/25 trunc=args:1,results:1,artifacts:1 omitted=512/4096 ctx_trunc=3,omitted=9216 tool_failure_kinds=invalid_args:1 runtime_error_kinds=llm_timeout:1 loop_decisions=1 loop_decision_kinds=evidence_quality:1 loop_decision_results=defer:1 loop_protocol_feeds=2 loop_protocol_feed_modes=digest:1,full:1 compactions=2,reactive=1,removed=64,summary_bytes=4096,summary_missing=0,summary_empty=0 debug_brief=browser_network,browser_network:no_matches,context_compaction,context_compaction:reactive,delegation,delegation:focused_task,delegation:subagent,delegation_error,delegation_error:focused_task,delegation_error:subagent,loop_guard,loop_guard:forced_no_tools,plan,plan:set,plan:update,plan_error,runtime_error,runtime_error:llm_timeout,tool_failure,tool_failure:invalid_args,truncation,truncation:tool_context delegation=focused_tasks:2,subagents:1 delegation_errors=focused_tasks:1,subagents:1 focused_task_by_type=explore:1,verify:1 subagent_by_mode=review:1 plan=calls:3,errors:1 plan_by_action=set:1,update:2 end=completed",
+		"metrics: tools=3 errors=2 repaired=1 canonicalized=1 loop_guard=2 forced_no_tools=1 tool_ms=45 tokens=100/25 trunc=args:1,results:1,artifacts:1 omitted=512/4096 ctx_trunc=3,omitted=9216 tool_failure_kinds=invalid_args:1 runtime_error_kinds=llm_timeout:1 loop_decisions=1 loop_decision_kinds=evidence_quality:1 loop_decision_results=defer:1 loop_protocol_feeds=2 loop_protocol_feed_modes=digest:1,full:1 compactions=2,reactive=1,removed=64,summary_bytes=4096,summary_missing=0,summary_empty=0 context_injections=1,bytes=1200,est_tokens=300 context_injection_sources=account_access:1 debug_brief=browser_network,browser_network:no_matches,context_compaction,context_compaction:reactive,context_injection,context_injection:account_access,delegation,delegation:focused_task,delegation:subagent,delegation_error,delegation_error:focused_task,delegation_error:subagent,loop_guard,loop_guard:forced_no_tools,plan,plan:set,plan:update,plan_error,runtime_error,runtime_error:llm_timeout,tool_failure,tool_failure:invalid_args,truncation,truncation:tool_context delegation=focused_tasks:2,subagents:1 delegation_errors=focused_tasks:1,subagents:1 focused_task_by_type=explore:1,verify:1 subagent_by_mode=review:1 plan=calls:3,errors:1 plan_by_action=set:1,update:2 end=completed",
 		`verifier: pass exit=0 duration=80ms output=1200 truncated omitted=176 cap=1024 command="go test ./..."`,
 		"tool_failure_hint[invalid_args]",
 		"invalid arguments",
@@ -1108,6 +1152,7 @@ func TestPrintBatchResultIncludesTraceMetrics(t *testing.T) {
 		"runtime_error_example[llm_timeout]: LLM llm_stream timed out after 4m0s",
 		"loop_decision_example[evidence_quality]: decision=defer trigger=source_access_dynamic_partial confidence=high reason=dynamic widgets lacked text action=read browser network responses",
 		`loop_protocol_feed_example: loop_id=longrun mode=full feed=1 path=.affent/loops/longrun/LOOP.md plan=plan:1/3:active current=2:in_progress step="verify browser evidence" situation="current risk: dashboard values need network refs"`,
+		`context_injection_example: turn=turn-1 source=account_access bytes=1200 estimated_tokens=300 title="Account access context injected" summary="Account-level environment and SSH access hints were made available." preview="Configured environment variables: GITHUB_TOKEN"`,
 		`plan_example: action=update index=2 status=completed progress=2/3 current=3:pending step="verify browser evidence" evidence=go test ./cmd/affenteval`,
 		`tool_truncation_example: tool=web_fetch call_id=trunc-print-1 args=truncated:true,bytes:70000,omitted:512,cap:65536 result=truncated:true,bytes:300000,omitted:4096,cap:262144 summary="large web_fetch output preview" context=bytes:4096,omitted:9216,tokens:1024 artifact=.affent/artifacts/tool-results/000001-trunc-print-1.txt`,
 	} {
@@ -1535,7 +1580,7 @@ func TestBatchSummaryAggregatesRuntimeMetrics(t *testing.T) {
 	if !strings.Contains(out.String(), "rates=pass:50.0%,completed:50.0%,memory_update:0.0%,loop_protocol_feed:50.0%,runtime_surface:100.0%,tool_error:20.0%,focused_task_error:n/a,subagent_error:n/a,plan_error:33.3%,repair_success:80.0%,verifier_pass:50.0%,evidence_verified:75.0%,source_network:75.0%,source_discovery:0.0%,source_dynamic_partial:0.0% avg_tools=2.5 avg_tokens=45.0/10.0") {
 		t.Fatalf("summary output missing normalized rates:\n%s", out.String())
 	}
-	if !strings.Contains(out.String(), "context_pressure=avg_compactions:0.50,avg_reactive:0.50,avg_removed:16.0,avg_summary_bytes:1024,avg_summary_missing:0.00,avg_summary_empty:0.00,tool_ctx_trunc:60.0%") {
+	if !strings.Contains(out.String(), "context_pressure=avg_compactions:0.50,avg_reactive:0.50,avg_removed:16.0,avg_summary_bytes:1024,avg_summary_missing:0.00,avg_summary_empty:0.00,avg_injections:0.00,avg_injection_bytes:0,avg_injection_tokens:0,tool_ctx_trunc:60.0%") {
 		t.Fatalf("summary output missing context pressure rates:\n%s", out.String())
 	}
 	if !strings.Contains(out.String(), "source_access=results:4,verified:3,discovery:0,network:3,dynamic_partial:0") {
@@ -2047,6 +2092,21 @@ func TestPrintBatchResultJSONL(t *testing.T) {
 				SummaryPreview:  "USER_CONTEXT: keep browser network evidence in summary.",
 			}},
 		},
+		ContextInjections: agenteval.ContextInjectionStats{
+			Count:           2,
+			BySource:        map[string]int{"account_access": 1, "loop_protocol": 1},
+			Bytes:           3200,
+			EstimatedTokens: 800,
+			Examples: []agenteval.ContextInjection{{
+				TurnID:          "turn-jsonl",
+				Source:          "account_access",
+				Title:           "Account access context injected",
+				Summary:         "Account-level access hints were made available.",
+				Preview:         "Configured environment variables: GITHUB_TOKEN",
+				Bytes:           1200,
+				EstimatedTokens: 300,
+			}},
+		},
 		ToolTruncation: agenteval.ToolTruncationStats{
 			ArgsTruncated:       2,
 			ArgsOmittedBytes:    1024,
@@ -2188,6 +2248,9 @@ func TestPrintBatchResultJSONL(t *testing.T) {
 		"context_compaction_summary_bytes":    float64(3072),
 		"context_compaction_summary_missing":  float64(1),
 		"context_compaction_summary_empty":    float64(1),
+		"context_injections":                  float64(2),
+		"context_injection_bytes":             float64(3200),
+		"context_injection_estimated_tokens":  float64(800),
 	} {
 		if got[key] != want {
 			t.Fatalf("%s = %v, want %v\njson=%s", key, got[key], want, out.String())
@@ -2307,6 +2370,8 @@ func TestPrintBatchResultJSONL(t *testing.T) {
 		!jsonArrayContainsString(debugBrief["tags"], "memory_update:add") ||
 		!jsonArrayContainsString(debugBrief["tags"], "recall") ||
 		!jsonArrayContainsString(debugBrief["tags"], "context_compaction:reactive") ||
+		!jsonArrayContainsString(debugBrief["tags"], "context_injection:account_access") ||
+		!jsonArrayContainsString(debugBrief["tags"], "context_injection:loop_protocol") ||
 		!jsonArrayContainsString(debugBrief["tags"], "truncation") {
 		t.Fatalf("debug_brief tags = %#v\njson=%s", debugBrief["tags"], out.String())
 	}
@@ -2449,6 +2514,23 @@ func TestPrintBatchResultJSONL(t *testing.T) {
 		contextCompactionExample["reason"] != "context_overflow" ||
 		!strings.Contains(fmt.Sprint(contextCompactionExample["summary_preview"]), "browser network evidence") {
 		t.Fatalf("context_compaction_example = %#v\njson=%s", contextCompactionExamples[0], out.String())
+	}
+	contextInjectionBySource, ok := got["context_injection_by_source"].(map[string]any)
+	if !ok || contextInjectionBySource["account_access"] != float64(1) || contextInjectionBySource["loop_protocol"] != float64(1) {
+		t.Fatalf("context_injection_by_source = %#v\njson=%s", got["context_injection_by_source"], out.String())
+	}
+	contextInjectionExamples, ok := got["context_injection_examples"].([]any)
+	if !ok || len(contextInjectionExamples) != 1 {
+		t.Fatalf("context_injection_examples = %#v\njson=%s", got["context_injection_examples"], out.String())
+	}
+	contextInjectionExample, ok := contextInjectionExamples[0].(map[string]any)
+	if !ok ||
+		contextInjectionExample["turn_id"] != "turn-jsonl" ||
+		contextInjectionExample["source"] != "account_access" ||
+		contextInjectionExample["bytes"] != float64(1200) ||
+		contextInjectionExample["estimated_tokens"] != float64(300) ||
+		!strings.Contains(fmt.Sprint(contextInjectionExample["preview"]), "GITHUB_TOKEN") {
+		t.Fatalf("context_injection_example = %#v\njson=%s", contextInjectionExamples[0], out.String())
 	}
 	repairKinds, ok := got["tool_repair_by_kind"].(map[string]any)
 	if !ok {
@@ -3021,6 +3103,20 @@ func TestPrintBatchSummaryJSONL(t *testing.T) {
 			SummaryBytes:    2048,
 			SummaryPreview:  "USER_CONTEXT: preserve JSONL summary evidence.",
 		}},
+		ContextInjections:               3,
+		ContextInjectionBySource:        map[string]int{"account_access": 1, "loop_protocol": 2},
+		ContextInjectionBytes:           3600,
+		ContextInjectionEstimatedTokens: 900,
+		ContextInjectionExamples: []agenteval.ContextInjection{{
+			Scenario:        "taostats-rendered",
+			TurnID:          "turn-summary-jsonl",
+			Source:          "loop_protocol",
+			Title:           "Loop protocol context injected",
+			Summary:         "Loop protocol digest was fed into the turn.",
+			Preview:         "North Star: keep evidence quality high.",
+			Bytes:           1600,
+			EstimatedTokens: 400,
+		}},
 		LoopGuardInterventions:     3,
 		ForcedNoTools:              1,
 		SourceAccessResults:        4,
@@ -3185,113 +3281,119 @@ func TestPrintBatchSummaryJSONL(t *testing.T) {
 		t.Fatalf("jsonl summary did not decode: %v\n%s", err, out.String())
 	}
 	for key, want := range map[string]any{
-		"schema_version":                        float64(1),
-		"type":                                  "summary",
-		"suite":                                 "small-model-tools",
-		"model":                                 "eval-model",
-		"provider_label":                        "eval-provider",
-		"executor":                              "docker:affent-eval",
-		"temperature":                           "0.2",
-		"top_p":                                 "0.9",
-		"max_tokens":                            "512",
-		"seed":                                  "42",
-		"runtime_web":                           true,
-		"runtime_browser":                       true,
-		"timeout_ms":                            float64(300000),
-		"scenarios":                             float64(2),
-		"passed":                                float64(1),
-		"failed":                                float64(1),
-		"pass_rate":                             float64(0.5),
-		"completion_rate":                       float64(0.5),
-		"memory_update_rate":                    float64(0.5),
-		"loop_protocol_feed_rate":               float64(0.5),
-		"tool_error_rate":                       float64(0.2),
-		"focused_task_error_rate":               float64(0.25),
-		"subagent_error_rate":                   float64(0.5),
-		"forced_no_tools_rate":                  float64(0.2),
-		"loop_guard_intervention_rate":          float64(0.6),
-		"plan_error_rate":                       float64(1.0 / 3.0),
-		"tool_repair_success_rate":              float64(0.75),
-		"verifier_pass_rate":                    float64(0.5),
-		"source_access_verified_rate":           float64(0.75),
-		"source_network_rate":                   float64(0.5),
-		"source_discovery_only_rate":            float64(0.25),
-		"source_dynamic_partial_rate":           float64(0.25),
-		"session_search_context_hit_rate":       float64(0.5),
-		"session_search_matched_terms_per_call": float64(2),
-		"avg_runtime_errors":                    float64(0.5),
-		"avg_context_compactions":               float64(0.5),
-		"avg_context_removed_messages":          float64(16),
-		"avg_context_summary_bytes":             float64(1024),
-		"avg_context_summary_missing":           float64(0.5),
-		"avg_context_summary_empty":             float64(0.5),
-		"avg_tool_calls":                        float64(2.5),
-		"tool_context_truncation_rate":          float64(0.8),
-		"tool_result_truncation_rate":           float64(0.4),
-		"duration_ms":                           float64(2500),
-		"avg_duration_ms":                       float64(1250),
-		"tool_calls":                            float64(5),
-		"tool_errors":                           float64(1),
-		"tool_repaired":                         float64(3),
-		"tool_name_canonicalized":               float64(2),
-		"tool_repair_calls":                     float64(4),
-		"tool_repair_succeeded":                 float64(3),
-		"tool_repair_failed":                    float64(1),
-		"tool_repair_notes":                     float64(4),
-		"loop_guard_interventions":              float64(3),
-		"forced_no_tools":                       float64(1),
-		"source_access_results":                 float64(4),
-		"source_access_verified":                float64(3),
-		"source_access_network":                 float64(2),
-		"source_access_dynamic_partial":         float64(1),
-		"memory_updates":                        float64(1),
-		"memory_update_add":                     float64(1),
-		"session_search_calls":                  float64(1),
-		"session_search_results":                float64(2),
-		"session_search_context_hits":           float64(1),
-		"session_search_matched_terms":          float64(2),
-		"tool_duration_ms":                      float64(120),
-		"tool_context_truncated":                float64(4),
-		"tool_context_omitted_bytes":            float64(12288),
-		"tool_args_truncated":                   float64(1),
-		"tool_args_omitted_bytes":               float64(256),
-		"tool_results_truncated":                float64(2),
-		"tool_results_omitted_bytes":            float64(4096),
-		"tool_result_artifacts":                 float64(2),
-		"context_compaction_summary_missing":    float64(1),
-		"context_compaction_summary_empty":      float64(1),
-		"verifier_runs":                         float64(2),
-		"verifier_passed":                       float64(1),
-		"verifier_failed":                       float64(1),
-		"verifier_output_truncated":             float64(1),
-		"verifier_output_omitted_bytes":         float64(1024),
-		"trace_event_rate":                      float64(1),
-		"trace_event_scenarios":                 float64(2),
-		"trace_events":                          float64(12),
-		"input_tokens":                          float64(90),
-		"output_tokens":                         float64(20),
-		"avg_input_tokens":                      float64(45),
-		"avg_output_tokens":                     float64(10),
-		"avg_total_tokens":                      float64(55),
-		"end_completed":                         float64(1),
-		"end_max_turns":                         float64(1),
-		"end_errors":                            float64(0),
-		"end_cancelled":                         float64(0),
-		"end_unknown":                           float64(0),
-		"expectation_scenarios":                 float64(2),
-		"removed_workspaces":                    float64(1),
-		"cleanup_errors":                        float64(0),
-		"focused_task_calls":                    float64(4),
-		"focused_task_errors":                   float64(1),
-		"subagent_calls":                        float64(2),
-		"subagent_errors":                       float64(1),
-		"plan_calls":                            float64(3),
-		"plan_errors":                           float64(1),
-		"loop_decisions":                        float64(1),
-		"loop_protocol_feed_scenarios":          float64(1),
-		"loop_protocol_feeds":                   float64(2),
-		"runtime_surface_rate":                  float64(1),
-		"runtime_surface_scenarios":             float64(2),
+		"schema_version":                         float64(1),
+		"type":                                   "summary",
+		"suite":                                  "small-model-tools",
+		"model":                                  "eval-model",
+		"provider_label":                         "eval-provider",
+		"executor":                               "docker:affent-eval",
+		"temperature":                            "0.2",
+		"top_p":                                  "0.9",
+		"max_tokens":                             "512",
+		"seed":                                   "42",
+		"runtime_web":                            true,
+		"runtime_browser":                        true,
+		"timeout_ms":                             float64(300000),
+		"scenarios":                              float64(2),
+		"passed":                                 float64(1),
+		"failed":                                 float64(1),
+		"pass_rate":                              float64(0.5),
+		"completion_rate":                        float64(0.5),
+		"memory_update_rate":                     float64(0.5),
+		"loop_protocol_feed_rate":                float64(0.5),
+		"tool_error_rate":                        float64(0.2),
+		"focused_task_error_rate":                float64(0.25),
+		"subagent_error_rate":                    float64(0.5),
+		"forced_no_tools_rate":                   float64(0.2),
+		"loop_guard_intervention_rate":           float64(0.6),
+		"plan_error_rate":                        float64(1.0 / 3.0),
+		"tool_repair_success_rate":               float64(0.75),
+		"verifier_pass_rate":                     float64(0.5),
+		"source_access_verified_rate":            float64(0.75),
+		"source_network_rate":                    float64(0.5),
+		"source_discovery_only_rate":             float64(0.25),
+		"source_dynamic_partial_rate":            float64(0.25),
+		"session_search_context_hit_rate":        float64(0.5),
+		"session_search_matched_terms_per_call":  float64(2),
+		"avg_runtime_errors":                     float64(0.5),
+		"avg_context_compactions":                float64(0.5),
+		"avg_context_removed_messages":           float64(16),
+		"avg_context_summary_bytes":              float64(1024),
+		"avg_context_summary_missing":            float64(0.5),
+		"avg_context_summary_empty":              float64(0.5),
+		"avg_context_injections":                 float64(1.5),
+		"avg_context_injection_bytes":            float64(1800),
+		"avg_context_injection_estimated_tokens": float64(450),
+		"avg_tool_calls":                         float64(2.5),
+		"tool_context_truncation_rate":           float64(0.8),
+		"tool_result_truncation_rate":            float64(0.4),
+		"duration_ms":                            float64(2500),
+		"avg_duration_ms":                        float64(1250),
+		"tool_calls":                             float64(5),
+		"tool_errors":                            float64(1),
+		"tool_repaired":                          float64(3),
+		"tool_name_canonicalized":                float64(2),
+		"tool_repair_calls":                      float64(4),
+		"tool_repair_succeeded":                  float64(3),
+		"tool_repair_failed":                     float64(1),
+		"tool_repair_notes":                      float64(4),
+		"loop_guard_interventions":               float64(3),
+		"forced_no_tools":                        float64(1),
+		"source_access_results":                  float64(4),
+		"source_access_verified":                 float64(3),
+		"source_access_network":                  float64(2),
+		"source_access_dynamic_partial":          float64(1),
+		"memory_updates":                         float64(1),
+		"memory_update_add":                      float64(1),
+		"session_search_calls":                   float64(1),
+		"session_search_results":                 float64(2),
+		"session_search_context_hits":            float64(1),
+		"session_search_matched_terms":           float64(2),
+		"tool_duration_ms":                       float64(120),
+		"tool_context_truncated":                 float64(4),
+		"tool_context_omitted_bytes":             float64(12288),
+		"tool_args_truncated":                    float64(1),
+		"tool_args_omitted_bytes":                float64(256),
+		"tool_results_truncated":                 float64(2),
+		"tool_results_omitted_bytes":             float64(4096),
+		"tool_result_artifacts":                  float64(2),
+		"context_compaction_summary_missing":     float64(1),
+		"context_compaction_summary_empty":       float64(1),
+		"context_injections":                     float64(3),
+		"context_injection_bytes":                float64(3600),
+		"context_injection_estimated_tokens":     float64(900),
+		"verifier_runs":                          float64(2),
+		"verifier_passed":                        float64(1),
+		"verifier_failed":                        float64(1),
+		"verifier_output_truncated":              float64(1),
+		"verifier_output_omitted_bytes":          float64(1024),
+		"trace_event_rate":                       float64(1),
+		"trace_event_scenarios":                  float64(2),
+		"trace_events":                           float64(12),
+		"input_tokens":                           float64(90),
+		"output_tokens":                          float64(20),
+		"avg_input_tokens":                       float64(45),
+		"avg_output_tokens":                      float64(10),
+		"avg_total_tokens":                       float64(55),
+		"end_completed":                          float64(1),
+		"end_max_turns":                          float64(1),
+		"end_errors":                             float64(0),
+		"end_cancelled":                          float64(0),
+		"end_unknown":                            float64(0),
+		"expectation_scenarios":                  float64(2),
+		"removed_workspaces":                     float64(1),
+		"cleanup_errors":                         float64(0),
+		"focused_task_calls":                     float64(4),
+		"focused_task_errors":                    float64(1),
+		"subagent_calls":                         float64(2),
+		"subagent_errors":                        float64(1),
+		"plan_calls":                             float64(3),
+		"plan_errors":                            float64(1),
+		"loop_decisions":                         float64(1),
+		"loop_protocol_feed_scenarios":           float64(1),
+		"loop_protocol_feeds":                    float64(2),
+		"runtime_surface_rate":                   float64(1),
+		"runtime_surface_scenarios":              float64(2),
 	} {
 		if got[key] != want {
 			t.Fatalf("%s = %v, want %v\njson=%s", key, got[key], want, out.String())
@@ -3626,6 +3728,24 @@ func TestPrintBatchSummaryJSONL(t *testing.T) {
 		!strings.Contains(fmt.Sprint(contextCompactionExample["summary_preview"]), "JSONL summary evidence") {
 		t.Fatalf("context_compaction_example = %#v\njson=%s", contextCompactionExamples[0], out.String())
 	}
+	contextInjectionBySource, ok := got["context_injection_by_source"].(map[string]any)
+	if !ok || contextInjectionBySource["account_access"] != float64(1) || contextInjectionBySource["loop_protocol"] != float64(2) {
+		t.Fatalf("context_injection_by_source = %#v\njson=%s", got["context_injection_by_source"], out.String())
+	}
+	contextInjectionExamples, ok := got["context_injection_examples"].([]any)
+	if !ok || len(contextInjectionExamples) != 1 {
+		t.Fatalf("context_injection_examples = %#v\njson=%s", got["context_injection_examples"], out.String())
+	}
+	contextInjectionExample, ok := contextInjectionExamples[0].(map[string]any)
+	if !ok ||
+		contextInjectionExample["scenario"] != "taostats-rendered" ||
+		contextInjectionExample["turn_id"] != "turn-summary-jsonl" ||
+		contextInjectionExample["source"] != "loop_protocol" ||
+		contextInjectionExample["bytes"] != float64(1600) ||
+		contextInjectionExample["estimated_tokens"] != float64(400) ||
+		!strings.Contains(fmt.Sprint(contextInjectionExample["preview"]), "North Star") {
+		t.Fatalf("context_injection_example = %#v\njson=%s", contextInjectionExamples[0], out.String())
+	}
 	planByAction, ok := got["plan_by_action"].(map[string]any)
 	if !ok {
 		t.Fatalf("plan_by_action missing or wrong type: %#v\njson=%s", got["plan_by_action"], out.String())
@@ -3737,49 +3857,55 @@ func TestEvalJSONLMetadataFromConfig(t *testing.T) {
 	maxAvgContextSummaryBytes := 16000.0
 	maxAvgContextSummaryMissing := 0.0
 	maxAvgContextSummaryEmpty := 0.0
+	maxAvgContextInjections := 4.0
+	maxAvgContextInjectionBytes := 12000.0
+	maxAvgContextInjectionEstimatedTokens := 3000.0
 	maxAvgToolCalls := 12.0
 	maxAvgDurationMS := 90000.0
 	maxAvgTotalTokens := 120000.0
 	maxDebugBriefTagRates := map[string]float64{"source_dynamic_without_network": 0}
 	meta = evalJSONLMetadataFromConfig(" custom ", " flag-model ", " flag-provider ", " sandbox ", " 0.4 ", " 0.9 ", " 512 ", " 42 ", true, " readonly_workspace,web ", true, true, true, true, true, " /tmp/mcp.json ", time.Second, " Web-Evidence ", qualityGateConfig{
-		MinPassRate:                          &minPassRate,
-		MinMemoryUpdateRate:                  &minMemoryUpdateRate,
-		MinLoopProtocolFeedRate:              &minLoopProtocolFeedRate,
-		MinRuntimeSurfaceRate:                &minRuntimeSurfaceRate,
-		MinTraceEventRate:                    &minTraceEventRate,
-		MinSourceNetworkRate:                 &minSourceNetworkRate,
-		MinSourceAccessVerifiedRate:          &minSourceRate,
-		MinExpectationCapabilityPassRate:     &minExpectationCapabilityPassRate,
-		MinEachExpectationCapabilityPassRate: &minEachExpectationCapabilityPassRate,
-		MinSessionSearchContextHitRate:       &minSessionSearchContextHitRate,
-		MinSessionSearchMatchedTermsPerCall:  &minSessionSearchMatchedTermsPerCall,
-		MinToolRepairSuccessRate:             &minToolRepairSuccessRate,
-		MinVerifierPassRate:                  &minVerifierPassRate,
-		MaxFocusedTaskErrorRate:              &maxFocusedTaskErrorRate,
-		MaxForcedNoToolsRate:                 &maxForcedNoToolsRate,
-		MaxLoopGuardInterventionRate:         &maxLoopGuardInterventionRate,
-		MaxPlanErrorRate:                     &maxPlanErrorRate,
-		MaxSourceDiscoveryOnlyRate:           &maxSourceDiscoveryOnlyRate,
-		MaxSourceDynamicPartialRate:          &maxSourceDynamicPartialRate,
-		MaxSubagentErrorRate:                 &maxSubagentErrorRate,
-		MaxToolErrorRate:                     &maxToolErrorRate,
-		MaxToolResultTruncationRate:          &maxToolResultTruncationRate,
-		MaxAvgRuntimeErrors:                  &maxAvgRuntimeErrors,
-		MaxAvgContextCompactions:             &maxAvgContextCompactions,
-		MaxAvgReactiveCompactions:            &maxAvgReactiveContextCompactions,
-		MaxAvgContextRemovedMessages:         &maxAvgContextRemovedMessages,
-		MaxAvgContextSummaryBytes:            &maxAvgContextSummaryBytes,
-		MaxAvgContextSummaryMissing:          &maxAvgContextSummaryMissing,
-		MaxAvgContextSummaryEmpty:            &maxAvgContextSummaryEmpty,
-		MaxAvgToolCalls:                      &maxAvgToolCalls,
-		MaxAvgDurationMS:                     &maxAvgDurationMS,
-		MaxAvgTotalTokens:                    &maxAvgTotalTokens,
-		MaxDebugBriefTagRates:                maxDebugBriefTagRates,
+		MinPassRate:                           &minPassRate,
+		MinMemoryUpdateRate:                   &minMemoryUpdateRate,
+		MinLoopProtocolFeedRate:               &minLoopProtocolFeedRate,
+		MinRuntimeSurfaceRate:                 &minRuntimeSurfaceRate,
+		MinTraceEventRate:                     &minTraceEventRate,
+		MinSourceNetworkRate:                  &minSourceNetworkRate,
+		MinSourceAccessVerifiedRate:           &minSourceRate,
+		MinExpectationCapabilityPassRate:      &minExpectationCapabilityPassRate,
+		MinEachExpectationCapabilityPassRate:  &minEachExpectationCapabilityPassRate,
+		MinSessionSearchContextHitRate:        &minSessionSearchContextHitRate,
+		MinSessionSearchMatchedTermsPerCall:   &minSessionSearchMatchedTermsPerCall,
+		MinToolRepairSuccessRate:              &minToolRepairSuccessRate,
+		MinVerifierPassRate:                   &minVerifierPassRate,
+		MaxFocusedTaskErrorRate:               &maxFocusedTaskErrorRate,
+		MaxForcedNoToolsRate:                  &maxForcedNoToolsRate,
+		MaxLoopGuardInterventionRate:          &maxLoopGuardInterventionRate,
+		MaxPlanErrorRate:                      &maxPlanErrorRate,
+		MaxSourceDiscoveryOnlyRate:            &maxSourceDiscoveryOnlyRate,
+		MaxSourceDynamicPartialRate:           &maxSourceDynamicPartialRate,
+		MaxSubagentErrorRate:                  &maxSubagentErrorRate,
+		MaxToolErrorRate:                      &maxToolErrorRate,
+		MaxToolResultTruncationRate:           &maxToolResultTruncationRate,
+		MaxAvgRuntimeErrors:                   &maxAvgRuntimeErrors,
+		MaxAvgContextCompactions:              &maxAvgContextCompactions,
+		MaxAvgReactiveCompactions:             &maxAvgReactiveContextCompactions,
+		MaxAvgContextRemovedMessages:          &maxAvgContextRemovedMessages,
+		MaxAvgContextSummaryBytes:             &maxAvgContextSummaryBytes,
+		MaxAvgContextSummaryMissing:           &maxAvgContextSummaryMissing,
+		MaxAvgContextSummaryEmpty:             &maxAvgContextSummaryEmpty,
+		MaxAvgContextInjections:               &maxAvgContextInjections,
+		MaxAvgContextInjectionBytes:           &maxAvgContextInjectionBytes,
+		MaxAvgContextInjectionEstimatedTokens: &maxAvgContextInjectionEstimatedTokens,
+		MaxAvgToolCalls:                       &maxAvgToolCalls,
+		MaxAvgDurationMS:                      &maxAvgDurationMS,
+		MaxAvgTotalTokens:                     &maxAvgTotalTokens,
+		MaxDebugBriefTagRates:                 maxDebugBriefTagRates,
 	})
 	if meta.Model != "flag-model" || meta.ProviderLabel != "flag-provider" || meta.Executor != "sandbox" || meta.Temperature != "0.4" || meta.TopP != "0.9" || meta.MaxTokens != "512" || meta.Seed != "42" || meta.Suite != "custom" || !meta.RuntimeEvalMode || meta.RuntimeTools != "readonly_workspace,web" || !meta.RuntimeAllTools || !meta.RuntimeMemory || !meta.RuntimeWeb || !meta.RuntimeBrowser || !meta.TraceDeltas || !meta.RuntimeMCP || meta.TimeoutMS != 1000 || meta.QualityProfile != "web-evidence" {
 		t.Fatalf("flag metadata not normalized: %+v", meta)
 	}
-	if meta.MinPassRate == nil || *meta.MinPassRate != 0.8 || meta.MinMemoryUpdateRate == nil || *meta.MinMemoryUpdateRate != 0.2 || meta.MinLoopProtocolFeedRate == nil || *meta.MinLoopProtocolFeedRate != 0.3 || meta.MinRuntimeSurfaceRate == nil || *meta.MinRuntimeSurfaceRate != 0.9 || meta.MinTraceEventRate == nil || *meta.MinTraceEventRate != 0.95 || meta.MinSourceNetworkRate == nil || *meta.MinSourceNetworkRate != 0.5 || meta.MinSourceAccessVerifiedRate == nil || *meta.MinSourceAccessVerifiedRate != 0.9 || meta.MinExpectationCapabilityPassRate == nil || *meta.MinExpectationCapabilityPassRate != 0.7 || meta.MinEachExpectationCapabilityPassRate == nil || *meta.MinEachExpectationCapabilityPassRate != 0.6 || meta.MinSessionSearchContextHitRate == nil || *meta.MinSessionSearchContextHitRate != 0.75 || meta.MinSessionSearchMatchedTermsPerCall == nil || *meta.MinSessionSearchMatchedTermsPerCall != 1.25 || meta.MinToolRepairSuccessRate == nil || *meta.MinToolRepairSuccessRate != 0.85 || meta.MinVerifierPassRate == nil || *meta.MinVerifierPassRate != 0.9 || meta.MaxFocusedTaskErrorRate == nil || *meta.MaxFocusedTaskErrorRate != 0.07 || meta.MaxForcedNoToolsRate == nil || *meta.MaxForcedNoToolsRate != 0.1 || meta.MaxLoopGuardInterventionRate == nil || *meta.MaxLoopGuardInterventionRate != 0.15 || meta.MaxPlanErrorRate == nil || *meta.MaxPlanErrorRate != 0.05 || meta.MaxSourceDiscoveryOnlyRate == nil || *meta.MaxSourceDiscoveryOnlyRate != 0.1 || meta.MaxSourceDynamicPartialRate == nil || *meta.MaxSourceDynamicPartialRate != 0.1 || meta.MaxSubagentErrorRate == nil || *meta.MaxSubagentErrorRate != 0.08 || meta.MaxToolErrorRate == nil || *meta.MaxToolErrorRate != 0.05 || meta.MaxToolResultTruncationRate == nil || *meta.MaxToolResultTruncationRate != 0.2 || meta.MaxAvgRuntimeErrors == nil || *meta.MaxAvgRuntimeErrors != 0.05 || meta.MaxAvgContextCompactions == nil || *meta.MaxAvgContextCompactions != 0.1 || meta.MaxAvgReactiveCompactions == nil || *meta.MaxAvgReactiveCompactions != 0.2 || meta.MaxAvgContextRemovedMessages == nil || *meta.MaxAvgContextRemovedMessages != 40 || meta.MaxAvgContextSummaryBytes == nil || *meta.MaxAvgContextSummaryBytes != 16000 || meta.MaxAvgContextSummaryMissing == nil || *meta.MaxAvgContextSummaryMissing != 0 || meta.MaxAvgContextSummaryEmpty == nil || *meta.MaxAvgContextSummaryEmpty != 0 || meta.MaxAvgToolCalls == nil || *meta.MaxAvgToolCalls != 12 || meta.MaxAvgDurationMS == nil || *meta.MaxAvgDurationMS != 90000 || meta.MaxAvgTotalTokens == nil || *meta.MaxAvgTotalTokens != 120000 {
+	if meta.MinPassRate == nil || *meta.MinPassRate != 0.8 || meta.MinMemoryUpdateRate == nil || *meta.MinMemoryUpdateRate != 0.2 || meta.MinLoopProtocolFeedRate == nil || *meta.MinLoopProtocolFeedRate != 0.3 || meta.MinRuntimeSurfaceRate == nil || *meta.MinRuntimeSurfaceRate != 0.9 || meta.MinTraceEventRate == nil || *meta.MinTraceEventRate != 0.95 || meta.MinSourceNetworkRate == nil || *meta.MinSourceNetworkRate != 0.5 || meta.MinSourceAccessVerifiedRate == nil || *meta.MinSourceAccessVerifiedRate != 0.9 || meta.MinExpectationCapabilityPassRate == nil || *meta.MinExpectationCapabilityPassRate != 0.7 || meta.MinEachExpectationCapabilityPassRate == nil || *meta.MinEachExpectationCapabilityPassRate != 0.6 || meta.MinSessionSearchContextHitRate == nil || *meta.MinSessionSearchContextHitRate != 0.75 || meta.MinSessionSearchMatchedTermsPerCall == nil || *meta.MinSessionSearchMatchedTermsPerCall != 1.25 || meta.MinToolRepairSuccessRate == nil || *meta.MinToolRepairSuccessRate != 0.85 || meta.MinVerifierPassRate == nil || *meta.MinVerifierPassRate != 0.9 || meta.MaxFocusedTaskErrorRate == nil || *meta.MaxFocusedTaskErrorRate != 0.07 || meta.MaxForcedNoToolsRate == nil || *meta.MaxForcedNoToolsRate != 0.1 || meta.MaxLoopGuardInterventionRate == nil || *meta.MaxLoopGuardInterventionRate != 0.15 || meta.MaxPlanErrorRate == nil || *meta.MaxPlanErrorRate != 0.05 || meta.MaxSourceDiscoveryOnlyRate == nil || *meta.MaxSourceDiscoveryOnlyRate != 0.1 || meta.MaxSourceDynamicPartialRate == nil || *meta.MaxSourceDynamicPartialRate != 0.1 || meta.MaxSubagentErrorRate == nil || *meta.MaxSubagentErrorRate != 0.08 || meta.MaxToolErrorRate == nil || *meta.MaxToolErrorRate != 0.05 || meta.MaxToolResultTruncationRate == nil || *meta.MaxToolResultTruncationRate != 0.2 || meta.MaxAvgRuntimeErrors == nil || *meta.MaxAvgRuntimeErrors != 0.05 || meta.MaxAvgContextCompactions == nil || *meta.MaxAvgContextCompactions != 0.1 || meta.MaxAvgReactiveCompactions == nil || *meta.MaxAvgReactiveCompactions != 0.2 || meta.MaxAvgContextRemovedMessages == nil || *meta.MaxAvgContextRemovedMessages != 40 || meta.MaxAvgContextSummaryBytes == nil || *meta.MaxAvgContextSummaryBytes != 16000 || meta.MaxAvgContextSummaryMissing == nil || *meta.MaxAvgContextSummaryMissing != 0 || meta.MaxAvgContextSummaryEmpty == nil || *meta.MaxAvgContextSummaryEmpty != 0 || meta.MaxAvgContextInjections == nil || *meta.MaxAvgContextInjections != 4 || meta.MaxAvgContextInjectionBytes == nil || *meta.MaxAvgContextInjectionBytes != 12000 || meta.MaxAvgContextInjectionEstimatedTokens == nil || *meta.MaxAvgContextInjectionEstimatedTokens != 3000 || meta.MaxAvgToolCalls == nil || *meta.MaxAvgToolCalls != 12 || meta.MaxAvgDurationMS == nil || *meta.MaxAvgDurationMS != 90000 || meta.MaxAvgTotalTokens == nil || *meta.MaxAvgTotalTokens != 120000 {
 		t.Fatalf("quality gate metadata not preserved: %+v", meta)
 	}
 	if !reflect.DeepEqual(meta.MaxDebugBriefTagRates, maxDebugBriefTagRates) {

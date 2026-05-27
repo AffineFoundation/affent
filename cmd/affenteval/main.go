@@ -137,40 +137,43 @@ func run(args []string) int {
 		keepWorkspaces      = fs.Bool("keep-workspaces", false, "keep passing scenario workspaces; failing scenario workspaces are always kept")
 		qualityProfile      = fs.String("quality-profile", "", "predefined quality gate profile: longrun or web-evidence; explicit gate flags override profile thresholds")
 		gates               = qualityGateConfig{
-			MinPassRate:                          fs.Float64("min-pass-rate", -1, "optional quality gate: minimum batch pass rate, 0..1"),
-			MinCompletionRate:                    fs.Float64("min-completion-rate", -1, "optional quality gate: minimum completed-turn rate, 0..1"),
-			MinMemoryUpdateRate:                  fs.Float64("min-memory-update-rate", -1, "optional quality gate: minimum confirmed memory updates per scenario, 0..1"),
-			MinLoopProtocolFeedRate:              fs.Float64("min-loop-protocol-feed-rate", -1, "optional quality gate: minimum scenario rate with loop protocol feeds, 0..1"),
-			MinRuntimeSurfaceRate:                fs.Float64("min-runtime-surface-rate", -1, "optional quality gate: minimum scenario rate with recorded runtime surface, 0..1"),
-			MinTraceEventRate:                    fs.Float64("min-trace-event-rate", -1, "optional quality gate: minimum scenario rate with parsed trace events, 0..1"),
-			MinSourceNetworkRate:                 fs.Float64("min-source-network-rate", -1, "optional quality gate: minimum network/API source access rate, 0..1"),
-			MinSourceAccessVerifiedRate:          fs.Float64("min-source-access-verified-rate", -1, "optional quality gate: minimum verified SourceAccess rate, 0..1"),
-			MinExpectationCapabilityPassRate:     fs.Float64("min-expectation-capability-pass-rate", -1, "optional quality gate: minimum pass rate across declared expectation capability instances, 0..1"),
-			MinEachExpectationCapabilityPassRate: fs.Float64("min-each-expectation-capability-pass-rate", -1, "optional quality gate: minimum pass rate for each declared expectation capability family, 0..1"),
-			MinSessionSearchContextHitRate:       fs.Float64("min-session-search-context-hit-rate", -1, "optional quality gate: minimum session_search context-hit rate, 0..1"),
-			MinSessionSearchMatchedTermsPerCall:  fs.Float64("min-session-search-matched-terms-per-call", -1, "optional quality gate: minimum average unique matched session_search terms per call"),
-			MinToolRepairSuccessRate:             fs.Float64("min-tool-repair-success-rate", -1, "optional quality gate: minimum successful tool-call repair rate, 0..1"),
-			MinVerifierPassRate:                  fs.Float64("min-verifier-pass-rate", -1, "optional quality gate: minimum verifier pass rate, 0..1"),
-			MaxFocusedTaskErrorRate:              fs.Float64("max-focused-task-error-rate", -1, "optional quality gate: maximum focused-task error rate per focused-task call, 0..1"),
-			MaxForcedNoToolsRate:                 fs.Float64("max-forced-no-tools-rate", -1, "optional quality gate: maximum forced no-tool follow-up rate per tool call, 0..1"),
-			MaxLoopGuardInterventionRate:         fs.Float64("max-loop-guard-intervention-rate", -1, "optional quality gate: maximum loop guard intervention rate per tool call, 0..1"),
-			MaxPlanErrorRate:                     fs.Float64("max-plan-error-rate", -1, "optional quality gate: maximum plan tool error rate per plan call, 0..1"),
-			MaxSourceDiscoveryOnlyRate:           fs.Float64("max-source-discovery-only-rate", -1, "optional quality gate: maximum discovery-only source access rate, 0..1"),
-			MaxSourceDynamicPartialRate:          fs.Float64("max-source-dynamic-partial-rate", -1, "optional quality gate: maximum dynamic-partial source access rate, 0..1"),
-			MaxSubagentErrorRate:                 fs.Float64("max-subagent-error-rate", -1, "optional quality gate: maximum subagent error rate per subagent call, 0..1"),
-			MaxToolErrorRate:                     fs.Float64("max-tool-error-rate", -1, "optional quality gate: maximum tool error rate, 0..1"),
-			MaxToolContextTruncationRate:         fs.Float64("max-tool-context-truncation-rate", -1, "optional quality gate: maximum tool-context truncation rate, 0..1"),
-			MaxToolResultTruncationRate:          fs.Float64("max-tool-result-truncation-rate", -1, "optional quality gate: maximum tool-result event truncation rate, 0..1"),
-			MaxAvgRuntimeErrors:                  fs.Float64("max-avg-runtime-errors", -1, "optional quality gate: maximum average runtime error events per scenario"),
-			MaxAvgContextCompactions:             fs.Float64("max-avg-context-compactions", -1, "optional quality gate: maximum average context compactions per scenario"),
-			MaxAvgReactiveCompactions:            fs.Float64("max-avg-reactive-context-compactions", -1, "optional quality gate: maximum average reactive context compactions per scenario"),
-			MaxAvgContextRemovedMessages:         fs.Float64("max-avg-context-removed-messages", -1, "optional quality gate: maximum average messages removed by context compaction per scenario"),
-			MaxAvgContextSummaryBytes:            fs.Float64("max-avg-context-summary-bytes", -1, "optional quality gate: maximum average context compaction summary bytes per scenario"),
-			MaxAvgContextSummaryMissing:          fs.Float64("max-avg-context-summary-missing", -1, "optional quality gate: maximum average missing context compaction summaries per scenario"),
-			MaxAvgContextSummaryEmpty:            fs.Float64("max-avg-context-summary-empty", -1, "optional quality gate: maximum average empty context compaction summaries per scenario"),
-			MaxAvgToolCalls:                      fs.Float64("max-avg-tool-calls", -1, "optional quality gate: maximum average tool calls per scenario"),
-			MaxAvgDurationMS:                     fs.Float64("max-avg-duration-ms", -1, "optional quality gate: maximum average scenario duration in milliseconds"),
-			MaxAvgTotalTokens:                    fs.Float64("max-avg-total-tokens", -1, "optional quality gate: maximum average total tokens per scenario"),
+			MinPassRate:                           fs.Float64("min-pass-rate", -1, "optional quality gate: minimum batch pass rate, 0..1"),
+			MinCompletionRate:                     fs.Float64("min-completion-rate", -1, "optional quality gate: minimum completed-turn rate, 0..1"),
+			MinMemoryUpdateRate:                   fs.Float64("min-memory-update-rate", -1, "optional quality gate: minimum confirmed memory updates per scenario, 0..1"),
+			MinLoopProtocolFeedRate:               fs.Float64("min-loop-protocol-feed-rate", -1, "optional quality gate: minimum scenario rate with loop protocol feeds, 0..1"),
+			MinRuntimeSurfaceRate:                 fs.Float64("min-runtime-surface-rate", -1, "optional quality gate: minimum scenario rate with recorded runtime surface, 0..1"),
+			MinTraceEventRate:                     fs.Float64("min-trace-event-rate", -1, "optional quality gate: minimum scenario rate with parsed trace events, 0..1"),
+			MinSourceNetworkRate:                  fs.Float64("min-source-network-rate", -1, "optional quality gate: minimum network/API source access rate, 0..1"),
+			MinSourceAccessVerifiedRate:           fs.Float64("min-source-access-verified-rate", -1, "optional quality gate: minimum verified SourceAccess rate, 0..1"),
+			MinExpectationCapabilityPassRate:      fs.Float64("min-expectation-capability-pass-rate", -1, "optional quality gate: minimum pass rate across declared expectation capability instances, 0..1"),
+			MinEachExpectationCapabilityPassRate:  fs.Float64("min-each-expectation-capability-pass-rate", -1, "optional quality gate: minimum pass rate for each declared expectation capability family, 0..1"),
+			MinSessionSearchContextHitRate:        fs.Float64("min-session-search-context-hit-rate", -1, "optional quality gate: minimum session_search context-hit rate, 0..1"),
+			MinSessionSearchMatchedTermsPerCall:   fs.Float64("min-session-search-matched-terms-per-call", -1, "optional quality gate: minimum average unique matched session_search terms per call"),
+			MinToolRepairSuccessRate:              fs.Float64("min-tool-repair-success-rate", -1, "optional quality gate: minimum successful tool-call repair rate, 0..1"),
+			MinVerifierPassRate:                   fs.Float64("min-verifier-pass-rate", -1, "optional quality gate: minimum verifier pass rate, 0..1"),
+			MaxFocusedTaskErrorRate:               fs.Float64("max-focused-task-error-rate", -1, "optional quality gate: maximum focused-task error rate per focused-task call, 0..1"),
+			MaxForcedNoToolsRate:                  fs.Float64("max-forced-no-tools-rate", -1, "optional quality gate: maximum forced no-tool follow-up rate per tool call, 0..1"),
+			MaxLoopGuardInterventionRate:          fs.Float64("max-loop-guard-intervention-rate", -1, "optional quality gate: maximum loop guard intervention rate per tool call, 0..1"),
+			MaxPlanErrorRate:                      fs.Float64("max-plan-error-rate", -1, "optional quality gate: maximum plan tool error rate per plan call, 0..1"),
+			MaxSourceDiscoveryOnlyRate:            fs.Float64("max-source-discovery-only-rate", -1, "optional quality gate: maximum discovery-only source access rate, 0..1"),
+			MaxSourceDynamicPartialRate:           fs.Float64("max-source-dynamic-partial-rate", -1, "optional quality gate: maximum dynamic-partial source access rate, 0..1"),
+			MaxSubagentErrorRate:                  fs.Float64("max-subagent-error-rate", -1, "optional quality gate: maximum subagent error rate per subagent call, 0..1"),
+			MaxToolErrorRate:                      fs.Float64("max-tool-error-rate", -1, "optional quality gate: maximum tool error rate, 0..1"),
+			MaxToolContextTruncationRate:          fs.Float64("max-tool-context-truncation-rate", -1, "optional quality gate: maximum tool-context truncation rate, 0..1"),
+			MaxToolResultTruncationRate:           fs.Float64("max-tool-result-truncation-rate", -1, "optional quality gate: maximum tool-result event truncation rate, 0..1"),
+			MaxAvgRuntimeErrors:                   fs.Float64("max-avg-runtime-errors", -1, "optional quality gate: maximum average runtime error events per scenario"),
+			MaxAvgContextCompactions:              fs.Float64("max-avg-context-compactions", -1, "optional quality gate: maximum average context compactions per scenario"),
+			MaxAvgReactiveCompactions:             fs.Float64("max-avg-reactive-context-compactions", -1, "optional quality gate: maximum average reactive context compactions per scenario"),
+			MaxAvgContextRemovedMessages:          fs.Float64("max-avg-context-removed-messages", -1, "optional quality gate: maximum average messages removed by context compaction per scenario"),
+			MaxAvgContextSummaryBytes:             fs.Float64("max-avg-context-summary-bytes", -1, "optional quality gate: maximum average context compaction summary bytes per scenario"),
+			MaxAvgContextSummaryMissing:           fs.Float64("max-avg-context-summary-missing", -1, "optional quality gate: maximum average missing context compaction summaries per scenario"),
+			MaxAvgContextSummaryEmpty:             fs.Float64("max-avg-context-summary-empty", -1, "optional quality gate: maximum average empty context compaction summaries per scenario"),
+			MaxAvgContextInjections:               fs.Float64("max-avg-context-injections", -1, "optional quality gate: maximum average injected system-context blocks per scenario"),
+			MaxAvgContextInjectionBytes:           fs.Float64("max-avg-context-injection-bytes", -1, "optional quality gate: maximum average injected system-context bytes per scenario"),
+			MaxAvgContextInjectionEstimatedTokens: fs.Float64("max-avg-context-injection-estimated-tokens", -1, "optional quality gate: maximum average estimated injected system-context tokens per scenario"),
+			MaxAvgToolCalls:                       fs.Float64("max-avg-tool-calls", -1, "optional quality gate: maximum average tool calls per scenario"),
+			MaxAvgDurationMS:                      fs.Float64("max-avg-duration-ms", -1, "optional quality gate: maximum average scenario duration in milliseconds"),
+			MaxAvgTotalTokens:                     fs.Float64("max-avg-total-tokens", -1, "optional quality gate: maximum average total tokens per scenario"),
 		}
 	)
 	fs.Var(&debugBriefTagGates, "max-debug-brief-tag-rate", "optional repeatable quality gate: maximum scenario rate for a debug_brief tag, as tag=rate; use tag=-1 to disable a profile default")
@@ -335,41 +338,44 @@ success and trace-level process quality.`)
 }
 
 type qualityGateConfig struct {
-	MinPassRate                          *float64
-	MinCompletionRate                    *float64
-	MinMemoryUpdateRate                  *float64
-	MinLoopProtocolFeedRate              *float64
-	MinRuntimeSurfaceRate                *float64
-	MinTraceEventRate                    *float64
-	MinSourceNetworkRate                 *float64
-	MinSourceAccessVerifiedRate          *float64
-	MinExpectationCapabilityPassRate     *float64
-	MinEachExpectationCapabilityPassRate *float64
-	MinSessionSearchContextHitRate       *float64
-	MinSessionSearchMatchedTermsPerCall  *float64
-	MinToolRepairSuccessRate             *float64
-	MinVerifierPassRate                  *float64
-	MaxFocusedTaskErrorRate              *float64
-	MaxForcedNoToolsRate                 *float64
-	MaxLoopGuardInterventionRate         *float64
-	MaxPlanErrorRate                     *float64
-	MaxSourceDiscoveryOnlyRate           *float64
-	MaxSourceDynamicPartialRate          *float64
-	MaxSubagentErrorRate                 *float64
-	MaxToolErrorRate                     *float64
-	MaxToolContextTruncationRate         *float64
-	MaxToolResultTruncationRate          *float64
-	MaxAvgRuntimeErrors                  *float64
-	MaxAvgContextCompactions             *float64
-	MaxAvgReactiveCompactions            *float64
-	MaxAvgContextRemovedMessages         *float64
-	MaxAvgContextSummaryBytes            *float64
-	MaxAvgContextSummaryMissing          *float64
-	MaxAvgContextSummaryEmpty            *float64
-	MaxAvgToolCalls                      *float64
-	MaxAvgDurationMS                     *float64
-	MaxAvgTotalTokens                    *float64
-	MaxDebugBriefTagRates                map[string]float64
+	MinPassRate                           *float64
+	MinCompletionRate                     *float64
+	MinMemoryUpdateRate                   *float64
+	MinLoopProtocolFeedRate               *float64
+	MinRuntimeSurfaceRate                 *float64
+	MinTraceEventRate                     *float64
+	MinSourceNetworkRate                  *float64
+	MinSourceAccessVerifiedRate           *float64
+	MinExpectationCapabilityPassRate      *float64
+	MinEachExpectationCapabilityPassRate  *float64
+	MinSessionSearchContextHitRate        *float64
+	MinSessionSearchMatchedTermsPerCall   *float64
+	MinToolRepairSuccessRate              *float64
+	MinVerifierPassRate                   *float64
+	MaxFocusedTaskErrorRate               *float64
+	MaxForcedNoToolsRate                  *float64
+	MaxLoopGuardInterventionRate          *float64
+	MaxPlanErrorRate                      *float64
+	MaxSourceDiscoveryOnlyRate            *float64
+	MaxSourceDynamicPartialRate           *float64
+	MaxSubagentErrorRate                  *float64
+	MaxToolErrorRate                      *float64
+	MaxToolContextTruncationRate          *float64
+	MaxToolResultTruncationRate           *float64
+	MaxAvgRuntimeErrors                   *float64
+	MaxAvgContextCompactions              *float64
+	MaxAvgReactiveCompactions             *float64
+	MaxAvgContextRemovedMessages          *float64
+	MaxAvgContextSummaryBytes             *float64
+	MaxAvgContextSummaryMissing           *float64
+	MaxAvgContextSummaryEmpty             *float64
+	MaxAvgContextInjections               *float64
+	MaxAvgContextInjectionBytes           *float64
+	MaxAvgContextInjectionEstimatedTokens *float64
+	MaxAvgToolCalls                       *float64
+	MaxAvgDurationMS                      *float64
+	MaxAvgTotalTokens                     *float64
+	MaxDebugBriefTagRates                 map[string]float64
 }
 
 type qualityGateProfileDefinition struct {
@@ -384,33 +390,36 @@ func qualityGateProfileDefinitions() []qualityGateProfileDefinition {
 			Name:        "longrun",
 			Description: "general long-run stability gates for task completion, memory/session recovery, tool recovery, delegation/plan errors, truncation, runtime errors, and token cost",
 			Gates: qualityGateConfig{
-				MinPassRate:                          float64Ptr(0.80),
-				MinCompletionRate:                    float64Ptr(0.90),
-				MinMemoryUpdateRate:                  float64Ptr(0.10),
-				MinLoopProtocolFeedRate:              float64Ptr(0.05),
-				MinExpectationCapabilityPassRate:     float64Ptr(0.80),
-				MinEachExpectationCapabilityPassRate: float64Ptr(0.50),
-				MinSessionSearchContextHitRate:       float64Ptr(0.75),
-				MinSessionSearchMatchedTermsPerCall:  float64Ptr(1.0),
-				MinRuntimeSurfaceRate:                float64Ptr(0.90),
-				MinTraceEventRate:                    float64Ptr(0.90),
-				MaxFocusedTaskErrorRate:              float64Ptr(0.10),
-				MaxForcedNoToolsRate:                 float64Ptr(0.10),
-				MaxLoopGuardInterventionRate:         float64Ptr(0.20),
-				MaxPlanErrorRate:                     float64Ptr(0.05),
-				MaxSubagentErrorRate:                 float64Ptr(0.10),
-				MaxToolErrorRate:                     float64Ptr(0.08),
-				MaxToolContextTruncationRate:         float64Ptr(0.30),
-				MaxToolResultTruncationRate:          float64Ptr(0.20),
-				MaxAvgRuntimeErrors:                  float64Ptr(0.20),
-				MaxAvgReactiveCompactions:            float64Ptr(0.50),
-				MaxAvgContextRemovedMessages:         float64Ptr(120),
-				MaxAvgContextSummaryBytes:            float64Ptr(24000),
-				MaxAvgContextSummaryMissing:          float64Ptr(0),
-				MaxAvgContextSummaryEmpty:            float64Ptr(0),
-				MaxAvgToolCalls:                      float64Ptr(14),
-				MaxAvgDurationMS:                     float64Ptr(180000),
-				MaxAvgTotalTokens:                    float64Ptr(120000),
+				MinPassRate:                           float64Ptr(0.80),
+				MinCompletionRate:                     float64Ptr(0.90),
+				MinMemoryUpdateRate:                   float64Ptr(0.10),
+				MinLoopProtocolFeedRate:               float64Ptr(0.05),
+				MinExpectationCapabilityPassRate:      float64Ptr(0.80),
+				MinEachExpectationCapabilityPassRate:  float64Ptr(0.50),
+				MinSessionSearchContextHitRate:        float64Ptr(0.75),
+				MinSessionSearchMatchedTermsPerCall:   float64Ptr(1.0),
+				MinRuntimeSurfaceRate:                 float64Ptr(0.90),
+				MinTraceEventRate:                     float64Ptr(0.90),
+				MaxFocusedTaskErrorRate:               float64Ptr(0.10),
+				MaxForcedNoToolsRate:                  float64Ptr(0.10),
+				MaxLoopGuardInterventionRate:          float64Ptr(0.20),
+				MaxPlanErrorRate:                      float64Ptr(0.05),
+				MaxSubagentErrorRate:                  float64Ptr(0.10),
+				MaxToolErrorRate:                      float64Ptr(0.08),
+				MaxToolContextTruncationRate:          float64Ptr(0.30),
+				MaxToolResultTruncationRate:           float64Ptr(0.20),
+				MaxAvgRuntimeErrors:                   float64Ptr(0.20),
+				MaxAvgReactiveCompactions:             float64Ptr(0.50),
+				MaxAvgContextRemovedMessages:          float64Ptr(120),
+				MaxAvgContextSummaryBytes:             float64Ptr(24000),
+				MaxAvgContextSummaryMissing:           float64Ptr(0),
+				MaxAvgContextSummaryEmpty:             float64Ptr(0),
+				MaxAvgContextInjections:               float64Ptr(8),
+				MaxAvgContextInjectionBytes:           float64Ptr(24000),
+				MaxAvgContextInjectionEstimatedTokens: float64Ptr(6000),
+				MaxAvgToolCalls:                       float64Ptr(14),
+				MaxAvgDurationMS:                      float64Ptr(180000),
+				MaxAvgTotalTokens:                     float64Ptr(120000),
 				MaxDebugBriefTagRates: map[string]float64{
 					"loop_guard:forced_no_tools":  0,
 					"recall:no_context":           0,
@@ -426,28 +435,31 @@ func qualityGateProfileDefinitions() []qualityGateProfileDefinition {
 			Name:        "web-evidence",
 			Description: "web and browser evidence gates for current-fact tasks, emphasizing verified SourceAccess, network/API evidence, low discovery-only output, and bounded cost",
 			Gates: qualityGateConfig{
-				MinPassRate:                          float64Ptr(0.80),
-				MinCompletionRate:                    float64Ptr(0.90),
-				MinExpectationCapabilityPassRate:     float64Ptr(0.80),
-				MinEachExpectationCapabilityPassRate: float64Ptr(0.50),
-				MinRuntimeSurfaceRate:                float64Ptr(0.90),
-				MinTraceEventRate:                    float64Ptr(0.90),
-				MinSourceNetworkRate:                 float64Ptr(0.50),
-				MinSourceAccessVerifiedRate:          float64Ptr(0.90),
-				MaxForcedNoToolsRate:                 float64Ptr(0.10),
-				MaxLoopGuardInterventionRate:         float64Ptr(0.25),
-				MaxSourceDiscoveryOnlyRate:           float64Ptr(0.15),
-				MaxSourceDynamicPartialRate:          float64Ptr(0.20),
-				MaxToolErrorRate:                     float64Ptr(0.10),
-				MaxToolResultTruncationRate:          float64Ptr(0.25),
-				MaxAvgRuntimeErrors:                  float64Ptr(0.20),
-				MaxAvgContextRemovedMessages:         float64Ptr(80),
-				MaxAvgContextSummaryBytes:            float64Ptr(20000),
-				MaxAvgContextSummaryMissing:          float64Ptr(0),
-				MaxAvgContextSummaryEmpty:            float64Ptr(0),
-				MaxAvgToolCalls:                      float64Ptr(18),
-				MaxAvgDurationMS:                     float64Ptr(240000),
-				MaxAvgTotalTokens:                    float64Ptr(120000),
+				MinPassRate:                           float64Ptr(0.80),
+				MinCompletionRate:                     float64Ptr(0.90),
+				MinExpectationCapabilityPassRate:      float64Ptr(0.80),
+				MinEachExpectationCapabilityPassRate:  float64Ptr(0.50),
+				MinRuntimeSurfaceRate:                 float64Ptr(0.90),
+				MinTraceEventRate:                     float64Ptr(0.90),
+				MinSourceNetworkRate:                  float64Ptr(0.50),
+				MinSourceAccessVerifiedRate:           float64Ptr(0.90),
+				MaxForcedNoToolsRate:                  float64Ptr(0.10),
+				MaxLoopGuardInterventionRate:          float64Ptr(0.25),
+				MaxSourceDiscoveryOnlyRate:            float64Ptr(0.15),
+				MaxSourceDynamicPartialRate:           float64Ptr(0.20),
+				MaxToolErrorRate:                      float64Ptr(0.10),
+				MaxToolResultTruncationRate:           float64Ptr(0.25),
+				MaxAvgRuntimeErrors:                   float64Ptr(0.20),
+				MaxAvgContextRemovedMessages:          float64Ptr(80),
+				MaxAvgContextSummaryBytes:             float64Ptr(20000),
+				MaxAvgContextSummaryMissing:           float64Ptr(0),
+				MaxAvgContextSummaryEmpty:             float64Ptr(0),
+				MaxAvgContextInjections:               float64Ptr(6),
+				MaxAvgContextInjectionBytes:           float64Ptr(18000),
+				MaxAvgContextInjectionEstimatedTokens: float64Ptr(4500),
+				MaxAvgToolCalls:                       float64Ptr(18),
+				MaxAvgDurationMS:                      float64Ptr(240000),
+				MaxAvgTotalTokens:                     float64Ptr(120000),
 				MaxDebugBriefTagRates: map[string]float64{
 					"browser_network:unread_refs":                 0,
 					"browser_scroll:stuck_without_network":        0,
@@ -511,6 +523,9 @@ func qualityGateConfigLines(g qualityGateConfig) []string {
 	add("max-avg-context-summary-bytes", g.MaxAvgContextSummaryBytes)
 	add("max-avg-context-summary-missing", g.MaxAvgContextSummaryMissing)
 	add("max-avg-context-summary-empty", g.MaxAvgContextSummaryEmpty)
+	add("max-avg-context-injections", g.MaxAvgContextInjections)
+	add("max-avg-context-injection-bytes", g.MaxAvgContextInjectionBytes)
+	add("max-avg-context-injection-estimated-tokens", g.MaxAvgContextInjectionEstimatedTokens)
 	add("max-avg-tool-calls", g.MaxAvgToolCalls)
 	add("max-avg-duration-ms", g.MaxAvgDurationMS)
 	add("max-avg-total-tokens", g.MaxAvgTotalTokens)
@@ -573,6 +588,9 @@ func applyQualityGateProfile(g *qualityGateConfig, profile string, flagSet func(
 	apply("max-avg-context-summary-bytes", &g.MaxAvgContextSummaryBytes, profileConfig.MaxAvgContextSummaryBytes)
 	apply("max-avg-context-summary-missing", &g.MaxAvgContextSummaryMissing, profileConfig.MaxAvgContextSummaryMissing)
 	apply("max-avg-context-summary-empty", &g.MaxAvgContextSummaryEmpty, profileConfig.MaxAvgContextSummaryEmpty)
+	apply("max-avg-context-injections", &g.MaxAvgContextInjections, profileConfig.MaxAvgContextInjections)
+	apply("max-avg-context-injection-bytes", &g.MaxAvgContextInjectionBytes, profileConfig.MaxAvgContextInjectionBytes)
+	apply("max-avg-context-injection-estimated-tokens", &g.MaxAvgContextInjectionEstimatedTokens, profileConfig.MaxAvgContextInjectionEstimatedTokens)
 	apply("max-avg-tool-calls", &g.MaxAvgToolCalls, profileConfig.MaxAvgToolCalls)
 	apply("max-avg-duration-ms", &g.MaxAvgDurationMS, profileConfig.MaxAvgDurationMS)
 	apply("max-avg-total-tokens", &g.MaxAvgTotalTokens, profileConfig.MaxAvgTotalTokens)
@@ -659,6 +677,11 @@ type batchSummary struct {
 	ContextCompactionSummaryMissing      int
 	ContextCompactionSummaryEmpty        int
 	ContextCompactionExamples            []agenteval.ContextCompaction
+	ContextInjections                    int
+	ContextInjectionBySource             map[string]int
+	ContextInjectionBytes                int
+	ContextInjectionEstimatedTokens      int
+	ContextInjectionExamples             []agenteval.ContextInjection
 	LoopGuardInterventions               int
 	ForcedNoTools                        int
 	SourceAccessResults                  int
@@ -844,6 +867,16 @@ func (s *batchSummary) add(res agenteval.BatchResult) {
 	s.ContextCompactionSummaryMissing += res.ContextCompactions.SummaryMissing
 	s.ContextCompactionSummaryEmpty += res.ContextCompactions.SummaryEmpty
 	s.ContextCompactionExamples = appendContextCompactionExamples(s.ContextCompactionExamples, res.ContextCompactions.Examples, res.BatchScenario, batchSummaryExamplesPerKind)
+	s.ContextInjections += res.ContextInjections.Count
+	for k, v := range res.ContextInjections.BySource {
+		if s.ContextInjectionBySource == nil {
+			s.ContextInjectionBySource = map[string]int{}
+		}
+		s.ContextInjectionBySource[k] += v
+	}
+	s.ContextInjectionBytes += res.ContextInjections.Bytes
+	s.ContextInjectionEstimatedTokens += res.ContextInjections.EstimatedTokens
+	s.ContextInjectionExamples = appendContextInjectionExamples(s.ContextInjectionExamples, res.ContextInjections.Examples, res.BatchScenario, batchSummaryExamplesPerKind)
 	s.LoopGuardInterventions += res.ToolStats.LoopGuardInterventions
 	s.ForcedNoTools += res.ToolStats.ForcedNoTools
 	s.SourceAccessResults += res.ToolStats.SourceAccessResults
@@ -1201,13 +1234,16 @@ func printBatchSummary(w io.Writer, s batchSummary) {
 		batchAverage(s.InputTokens, s.Total),
 		batchAverage(s.OutputTokens, s.Total),
 	)
-	fmt.Fprintf(w, " context_pressure=avg_compactions:%.2f,avg_reactive:%.2f,avg_removed:%.1f,avg_summary_bytes:%.0f,avg_summary_missing:%.2f,avg_summary_empty:%.2f,tool_ctx_trunc:%s",
+	fmt.Fprintf(w, " context_pressure=avg_compactions:%.2f,avg_reactive:%.2f,avg_removed:%.1f,avg_summary_bytes:%.0f,avg_summary_missing:%.2f,avg_summary_empty:%.2f,avg_injections:%.2f,avg_injection_bytes:%.0f,avg_injection_tokens:%.0f,tool_ctx_trunc:%s",
 		batchAverage(s.ContextCompactions, s.Total),
 		batchAverage(s.ContextCompactionsReactive, s.Total),
 		batchAverage(s.ContextCompactionRemoved, s.Total),
 		batchAverage(s.ContextCompactionSummary, s.Total),
 		batchAverage(s.ContextCompactionSummaryMissing, s.Total),
 		batchAverage(s.ContextCompactionSummaryEmpty, s.Total),
+		batchAverage(s.ContextInjections, s.Total),
+		batchAverage(s.ContextInjectionBytes, s.Total),
+		batchAverage(s.ContextInjectionEstimatedTokens, s.Total),
 		formatOptionalPercent(batchOptionalRatio(s.ToolContextTruncated, s.ToolCalls)),
 	)
 	if hasBatchRepairStats(s) {
@@ -1282,6 +1318,16 @@ func printBatchSummary(w io.Writer, s batchSummary) {
 			s.ContextCompactionSummaryEmpty,
 		)
 	}
+	if s.ContextInjections > 0 {
+		fmt.Fprintf(w, " context_injections=%d,bytes=%d,est_tokens=%d",
+			s.ContextInjections,
+			s.ContextInjectionBytes,
+			s.ContextInjectionEstimatedTokens,
+		)
+		if len(s.ContextInjectionBySource) > 0 {
+			fmt.Fprintf(w, " context_injection_sources=%s", formatStringIntCounts(s.ContextInjectionBySource))
+		}
+	}
 	if s.TraceEvents > 0 {
 		fmt.Fprintf(w, " trace_events=%d", s.TraceEvents)
 		if len(s.TraceEventTypes) > 0 {
@@ -1330,6 +1376,7 @@ func printBatchSummary(w io.Writer, s batchSummary) {
 	printRuntimeErrorExampleLines(w, s.RuntimeErrorExamples, "")
 	printLoopDecisionExampleLines(w, s.LoopDecisionExamples, "")
 	printLoopProtocolFeedExampleLines(w, s.LoopProtocolFeedExamples, "")
+	printContextInjectionExampleLines(w, s.ContextInjectionExamples, "")
 	printSessionSearchExampleLines(w, s.SessionSearchExamples, "")
 	printPlanExampleLines(w, s.PlanExamples, "")
 	printToolTruncationExampleLines(w, s.ToolTruncationExamples, "")
@@ -1573,6 +1620,9 @@ func validateQualityGateConfig(g qualityGateConfig) error {
 		{"--max-avg-context-summary-bytes", g.MaxAvgContextSummaryBytes, false},
 		{"--max-avg-context-summary-missing", g.MaxAvgContextSummaryMissing, false},
 		{"--max-avg-context-summary-empty", g.MaxAvgContextSummaryEmpty, false},
+		{"--max-avg-context-injections", g.MaxAvgContextInjections, false},
+		{"--max-avg-context-injection-bytes", g.MaxAvgContextInjectionBytes, false},
+		{"--max-avg-context-injection-estimated-tokens", g.MaxAvgContextInjectionEstimatedTokens, false},
 		{"--max-avg-tool-calls", g.MaxAvgToolCalls, false},
 		{"--max-avg-duration-ms", g.MaxAvgDurationMS, false},
 		{"--max-avg-total-tokens", g.MaxAvgTotalTokens, false},
@@ -1670,6 +1720,9 @@ func qualityGateFailures(s batchSummary, g qualityGateConfig) []string {
 	checkMax("avg_context_summary_bytes", batchAverage(s.ContextCompactionSummary, s.Total), g.MaxAvgContextSummaryBytes, s.Total > 0)
 	checkMax("avg_context_summary_missing", batchAverage(s.ContextCompactionSummaryMissing, s.Total), g.MaxAvgContextSummaryMissing, s.Total > 0)
 	checkMax("avg_context_summary_empty", batchAverage(s.ContextCompactionSummaryEmpty, s.Total), g.MaxAvgContextSummaryEmpty, s.Total > 0)
+	checkMax("avg_context_injections", batchAverage(s.ContextInjections, s.Total), g.MaxAvgContextInjections, s.Total > 0)
+	checkMax("avg_context_injection_bytes", batchAverage(s.ContextInjectionBytes, s.Total), g.MaxAvgContextInjectionBytes, s.Total > 0)
+	checkMax("avg_context_injection_estimated_tokens", batchAverage(s.ContextInjectionEstimatedTokens, s.Total), g.MaxAvgContextInjectionEstimatedTokens, s.Total > 0)
 	checkMax("avg_tool_calls", batchAverage(s.ToolCalls, s.Total), g.MaxAvgToolCalls, s.Total > 0)
 	checkMax("avg_duration_ms", batchAverageInt64(s.Duration.Milliseconds(), s.Total), g.MaxAvgDurationMS, s.Total > 0)
 	checkMax("avg_total_tokens", batchAverage(s.InputTokens+s.OutputTokens, s.Total), g.MaxAvgTotalTokens, s.Total > 0)
@@ -2038,6 +2091,29 @@ func printLoopProtocolFeedExampleLines(w io.Writer, examples []agenteval.LoopPro
 	}
 }
 
+func printContextInjectionExampleLines(w io.Writer, examples []agenteval.ContextInjection, indent string) {
+	for _, ex := range examples {
+		fmt.Fprintf(w, "%scontext_injection_example:", indent)
+		if ex.Scenario != "" {
+			fmt.Fprintf(w, " scenario=%s", ex.Scenario)
+		}
+		if ex.TurnID != "" {
+			fmt.Fprintf(w, " turn=%s", ex.TurnID)
+		}
+		fmt.Fprintf(w, " source=%s bytes=%d estimated_tokens=%d", ex.Source, ex.Bytes, ex.EstimatedTokens)
+		if ex.Title != "" {
+			fmt.Fprintf(w, " title=%q", textutil.Preview(ex.Title, 96))
+		}
+		if ex.Summary != "" {
+			fmt.Fprintf(w, " summary=%q", textutil.Preview(ex.Summary, 140))
+		}
+		if ex.Preview != "" {
+			fmt.Fprintf(w, " preview=%q", textutil.Preview(ex.Preview, 160))
+		}
+		fmt.Fprintln(w)
+	}
+}
+
 func printSessionSearchExampleLines(w io.Writer, examples []agenteval.SessionSearchExample, indent string) {
 	for _, ex := range examples {
 		fmt.Fprintf(w, "%ssession_search_example:", indent)
@@ -2321,60 +2397,63 @@ func formatPassTotalCounts(passed, total map[string]int) string {
 }
 
 type evalJSONLMetadata struct {
-	SchemaVersion                        int                `json:"schema_version"`
-	Suite                                string             `json:"suite,omitempty"`
-	Model                                string             `json:"model,omitempty"`
-	ProviderLabel                        string             `json:"provider_label,omitempty"`
-	Executor                             string             `json:"executor"`
-	Temperature                          string             `json:"temperature,omitempty"`
-	TopP                                 string             `json:"top_p,omitempty"`
-	MaxTokens                            string             `json:"max_tokens,omitempty"`
-	Seed                                 string             `json:"seed,omitempty"`
-	RuntimeEvalMode                      bool               `json:"runtime_eval_mode,omitempty"`
-	RuntimeTools                         string             `json:"runtime_tools,omitempty"`
-	RuntimeAllTools                      bool               `json:"runtime_all_tools,omitempty"`
-	RuntimeMemory                        bool               `json:"runtime_memory,omitempty"`
-	RuntimeWeb                           bool               `json:"runtime_web,omitempty"`
-	RuntimeBrowser                       bool               `json:"runtime_browser,omitempty"`
-	TraceDeltas                          bool               `json:"trace_deltas,omitempty"`
-	RuntimeMCP                           bool               `json:"runtime_mcp,omitempty"`
-	TimeoutMS                            int64              `json:"timeout_ms"`
-	QualityProfile                       string             `json:"quality_profile,omitempty"`
-	MinPassRate                          *float64           `json:"min_pass_rate,omitempty"`
-	MinCompletionRate                    *float64           `json:"min_completion_rate,omitempty"`
-	MinMemoryUpdateRate                  *float64           `json:"min_memory_update_rate,omitempty"`
-	MinLoopProtocolFeedRate              *float64           `json:"min_loop_protocol_feed_rate,omitempty"`
-	MinRuntimeSurfaceRate                *float64           `json:"min_runtime_surface_rate,omitempty"`
-	MinTraceEventRate                    *float64           `json:"min_trace_event_rate,omitempty"`
-	MinSourceNetworkRate                 *float64           `json:"min_source_network_rate,omitempty"`
-	MinSourceAccessVerifiedRate          *float64           `json:"min_source_access_verified_rate,omitempty"`
-	MinExpectationCapabilityPassRate     *float64           `json:"min_expectation_capability_pass_rate,omitempty"`
-	MinEachExpectationCapabilityPassRate *float64           `json:"min_each_expectation_capability_pass_rate,omitempty"`
-	MinSessionSearchContextHitRate       *float64           `json:"min_session_search_context_hit_rate,omitempty"`
-	MinSessionSearchMatchedTermsPerCall  *float64           `json:"min_session_search_matched_terms_per_call,omitempty"`
-	MinToolRepairSuccessRate             *float64           `json:"min_tool_repair_success_rate,omitempty"`
-	MinVerifierPassRate                  *float64           `json:"min_verifier_pass_rate,omitempty"`
-	MaxFocusedTaskErrorRate              *float64           `json:"max_focused_task_error_rate,omitempty"`
-	MaxForcedNoToolsRate                 *float64           `json:"max_forced_no_tools_rate,omitempty"`
-	MaxLoopGuardInterventionRate         *float64           `json:"max_loop_guard_intervention_rate,omitempty"`
-	MaxPlanErrorRate                     *float64           `json:"max_plan_error_rate,omitempty"`
-	MaxSourceDiscoveryOnlyRate           *float64           `json:"max_source_discovery_only_rate,omitempty"`
-	MaxSourceDynamicPartialRate          *float64           `json:"max_source_dynamic_partial_rate,omitempty"`
-	MaxSubagentErrorRate                 *float64           `json:"max_subagent_error_rate,omitempty"`
-	MaxToolErrorRate                     *float64           `json:"max_tool_error_rate,omitempty"`
-	MaxToolContextTruncationRate         *float64           `json:"max_tool_context_truncation_rate,omitempty"`
-	MaxToolResultTruncationRate          *float64           `json:"max_tool_result_truncation_rate,omitempty"`
-	MaxAvgRuntimeErrors                  *float64           `json:"max_avg_runtime_errors,omitempty"`
-	MaxAvgContextCompactions             *float64           `json:"max_avg_context_compactions,omitempty"`
-	MaxAvgReactiveCompactions            *float64           `json:"max_avg_reactive_context_compactions,omitempty"`
-	MaxAvgContextRemovedMessages         *float64           `json:"max_avg_context_removed_messages,omitempty"`
-	MaxAvgContextSummaryBytes            *float64           `json:"max_avg_context_summary_bytes,omitempty"`
-	MaxAvgContextSummaryMissing          *float64           `json:"max_avg_context_summary_missing,omitempty"`
-	MaxAvgContextSummaryEmpty            *float64           `json:"max_avg_context_summary_empty,omitempty"`
-	MaxAvgToolCalls                      *float64           `json:"max_avg_tool_calls,omitempty"`
-	MaxAvgDurationMS                     *float64           `json:"max_avg_duration_ms,omitempty"`
-	MaxAvgTotalTokens                    *float64           `json:"max_avg_total_tokens,omitempty"`
-	MaxDebugBriefTagRates                map[string]float64 `json:"max_debug_brief_tag_rates,omitempty"`
+	SchemaVersion                         int                `json:"schema_version"`
+	Suite                                 string             `json:"suite,omitempty"`
+	Model                                 string             `json:"model,omitempty"`
+	ProviderLabel                         string             `json:"provider_label,omitempty"`
+	Executor                              string             `json:"executor"`
+	Temperature                           string             `json:"temperature,omitempty"`
+	TopP                                  string             `json:"top_p,omitempty"`
+	MaxTokens                             string             `json:"max_tokens,omitempty"`
+	Seed                                  string             `json:"seed,omitempty"`
+	RuntimeEvalMode                       bool               `json:"runtime_eval_mode,omitempty"`
+	RuntimeTools                          string             `json:"runtime_tools,omitempty"`
+	RuntimeAllTools                       bool               `json:"runtime_all_tools,omitempty"`
+	RuntimeMemory                         bool               `json:"runtime_memory,omitempty"`
+	RuntimeWeb                            bool               `json:"runtime_web,omitempty"`
+	RuntimeBrowser                        bool               `json:"runtime_browser,omitempty"`
+	TraceDeltas                           bool               `json:"trace_deltas,omitempty"`
+	RuntimeMCP                            bool               `json:"runtime_mcp,omitempty"`
+	TimeoutMS                             int64              `json:"timeout_ms"`
+	QualityProfile                        string             `json:"quality_profile,omitempty"`
+	MinPassRate                           *float64           `json:"min_pass_rate,omitempty"`
+	MinCompletionRate                     *float64           `json:"min_completion_rate,omitempty"`
+	MinMemoryUpdateRate                   *float64           `json:"min_memory_update_rate,omitempty"`
+	MinLoopProtocolFeedRate               *float64           `json:"min_loop_protocol_feed_rate,omitempty"`
+	MinRuntimeSurfaceRate                 *float64           `json:"min_runtime_surface_rate,omitempty"`
+	MinTraceEventRate                     *float64           `json:"min_trace_event_rate,omitempty"`
+	MinSourceNetworkRate                  *float64           `json:"min_source_network_rate,omitempty"`
+	MinSourceAccessVerifiedRate           *float64           `json:"min_source_access_verified_rate,omitempty"`
+	MinExpectationCapabilityPassRate      *float64           `json:"min_expectation_capability_pass_rate,omitempty"`
+	MinEachExpectationCapabilityPassRate  *float64           `json:"min_each_expectation_capability_pass_rate,omitempty"`
+	MinSessionSearchContextHitRate        *float64           `json:"min_session_search_context_hit_rate,omitempty"`
+	MinSessionSearchMatchedTermsPerCall   *float64           `json:"min_session_search_matched_terms_per_call,omitempty"`
+	MinToolRepairSuccessRate              *float64           `json:"min_tool_repair_success_rate,omitempty"`
+	MinVerifierPassRate                   *float64           `json:"min_verifier_pass_rate,omitempty"`
+	MaxFocusedTaskErrorRate               *float64           `json:"max_focused_task_error_rate,omitempty"`
+	MaxForcedNoToolsRate                  *float64           `json:"max_forced_no_tools_rate,omitempty"`
+	MaxLoopGuardInterventionRate          *float64           `json:"max_loop_guard_intervention_rate,omitempty"`
+	MaxPlanErrorRate                      *float64           `json:"max_plan_error_rate,omitempty"`
+	MaxSourceDiscoveryOnlyRate            *float64           `json:"max_source_discovery_only_rate,omitempty"`
+	MaxSourceDynamicPartialRate           *float64           `json:"max_source_dynamic_partial_rate,omitempty"`
+	MaxSubagentErrorRate                  *float64           `json:"max_subagent_error_rate,omitempty"`
+	MaxToolErrorRate                      *float64           `json:"max_tool_error_rate,omitempty"`
+	MaxToolContextTruncationRate          *float64           `json:"max_tool_context_truncation_rate,omitempty"`
+	MaxToolResultTruncationRate           *float64           `json:"max_tool_result_truncation_rate,omitempty"`
+	MaxAvgRuntimeErrors                   *float64           `json:"max_avg_runtime_errors,omitempty"`
+	MaxAvgContextCompactions              *float64           `json:"max_avg_context_compactions,omitempty"`
+	MaxAvgReactiveCompactions             *float64           `json:"max_avg_reactive_context_compactions,omitempty"`
+	MaxAvgContextRemovedMessages          *float64           `json:"max_avg_context_removed_messages,omitempty"`
+	MaxAvgContextSummaryBytes             *float64           `json:"max_avg_context_summary_bytes,omitempty"`
+	MaxAvgContextSummaryMissing           *float64           `json:"max_avg_context_summary_missing,omitempty"`
+	MaxAvgContextSummaryEmpty             *float64           `json:"max_avg_context_summary_empty,omitempty"`
+	MaxAvgContextInjections               *float64           `json:"max_avg_context_injections,omitempty"`
+	MaxAvgContextInjectionBytes           *float64           `json:"max_avg_context_injection_bytes,omitempty"`
+	MaxAvgContextInjectionEstimatedTokens *float64           `json:"max_avg_context_injection_estimated_tokens,omitempty"`
+	MaxAvgToolCalls                       *float64           `json:"max_avg_tool_calls,omitempty"`
+	MaxAvgDurationMS                      *float64           `json:"max_avg_duration_ms,omitempty"`
+	MaxAvgTotalTokens                     *float64           `json:"max_avg_total_tokens,omitempty"`
+	MaxDebugBriefTagRates                 map[string]float64 `json:"max_debug_brief_tag_rates,omitempty"`
 }
 
 func evalJSONLMetadataFromConfig(suite, model, providerLabel, executor, temperature, topP, maxTokens, seed string, runtimeEvalMode bool, runtimeTools string, runtimeAllTools, runtimeMemory, runtimeWeb, runtimeBrowser, traceDeltas bool, runtimeMCPConfig string, timeout time.Duration, qualityProfile string, gates qualityGateConfig) evalJSONLMetadata {
@@ -2387,60 +2466,63 @@ func evalJSONLMetadataFromConfig(suite, model, providerLabel, executor, temperat
 		providerLabel = strings.TrimSpace(os.Getenv("AFFENTEVAL_PROVIDER_LABEL"))
 	}
 	return evalJSONLMetadata{
-		SchemaVersion:                        evalJSONLSchemaVersion,
-		Suite:                                strings.TrimSpace(suite),
-		Model:                                model,
-		ProviderLabel:                        providerLabel,
-		Executor:                             normalizedEvalExecutor(executor),
-		Temperature:                          strings.TrimSpace(temperature),
-		TopP:                                 strings.TrimSpace(topP),
-		MaxTokens:                            strings.TrimSpace(maxTokens),
-		Seed:                                 strings.TrimSpace(seed),
-		RuntimeEvalMode:                      runtimeEvalMode,
-		RuntimeTools:                         strings.TrimSpace(runtimeTools),
-		RuntimeAllTools:                      runtimeAllTools,
-		RuntimeMemory:                        runtimeMemory,
-		RuntimeWeb:                           runtimeWeb,
-		RuntimeBrowser:                       runtimeBrowser,
-		TraceDeltas:                          traceDeltas,
-		RuntimeMCP:                           strings.TrimSpace(runtimeMCPConfig) != "",
-		TimeoutMS:                            timeout.Milliseconds(),
-		QualityProfile:                       strings.ToLower(strings.TrimSpace(qualityProfile)),
-		MinPassRate:                          enabledQualityGateValue(gates.MinPassRate),
-		MinCompletionRate:                    enabledQualityGateValue(gates.MinCompletionRate),
-		MinMemoryUpdateRate:                  enabledQualityGateValue(gates.MinMemoryUpdateRate),
-		MinLoopProtocolFeedRate:              enabledQualityGateValue(gates.MinLoopProtocolFeedRate),
-		MinRuntimeSurfaceRate:                enabledQualityGateValue(gates.MinRuntimeSurfaceRate),
-		MinTraceEventRate:                    enabledQualityGateValue(gates.MinTraceEventRate),
-		MinSourceNetworkRate:                 enabledQualityGateValue(gates.MinSourceNetworkRate),
-		MinSourceAccessVerifiedRate:          enabledQualityGateValue(gates.MinSourceAccessVerifiedRate),
-		MinExpectationCapabilityPassRate:     enabledQualityGateValue(gates.MinExpectationCapabilityPassRate),
-		MinEachExpectationCapabilityPassRate: enabledQualityGateValue(gates.MinEachExpectationCapabilityPassRate),
-		MinSessionSearchContextHitRate:       enabledQualityGateValue(gates.MinSessionSearchContextHitRate),
-		MinSessionSearchMatchedTermsPerCall:  enabledQualityGateValue(gates.MinSessionSearchMatchedTermsPerCall),
-		MinToolRepairSuccessRate:             enabledQualityGateValue(gates.MinToolRepairSuccessRate),
-		MinVerifierPassRate:                  enabledQualityGateValue(gates.MinVerifierPassRate),
-		MaxFocusedTaskErrorRate:              enabledQualityGateValue(gates.MaxFocusedTaskErrorRate),
-		MaxForcedNoToolsRate:                 enabledQualityGateValue(gates.MaxForcedNoToolsRate),
-		MaxLoopGuardInterventionRate:         enabledQualityGateValue(gates.MaxLoopGuardInterventionRate),
-		MaxPlanErrorRate:                     enabledQualityGateValue(gates.MaxPlanErrorRate),
-		MaxSourceDiscoveryOnlyRate:           enabledQualityGateValue(gates.MaxSourceDiscoveryOnlyRate),
-		MaxSourceDynamicPartialRate:          enabledQualityGateValue(gates.MaxSourceDynamicPartialRate),
-		MaxSubagentErrorRate:                 enabledQualityGateValue(gates.MaxSubagentErrorRate),
-		MaxToolErrorRate:                     enabledQualityGateValue(gates.MaxToolErrorRate),
-		MaxToolContextTruncationRate:         enabledQualityGateValue(gates.MaxToolContextTruncationRate),
-		MaxToolResultTruncationRate:          enabledQualityGateValue(gates.MaxToolResultTruncationRate),
-		MaxAvgRuntimeErrors:                  enabledQualityGateValue(gates.MaxAvgRuntimeErrors),
-		MaxAvgContextCompactions:             enabledQualityGateValue(gates.MaxAvgContextCompactions),
-		MaxAvgReactiveCompactions:            enabledQualityGateValue(gates.MaxAvgReactiveCompactions),
-		MaxAvgContextRemovedMessages:         enabledQualityGateValue(gates.MaxAvgContextRemovedMessages),
-		MaxAvgContextSummaryBytes:            enabledQualityGateValue(gates.MaxAvgContextSummaryBytes),
-		MaxAvgContextSummaryMissing:          enabledQualityGateValue(gates.MaxAvgContextSummaryMissing),
-		MaxAvgContextSummaryEmpty:            enabledQualityGateValue(gates.MaxAvgContextSummaryEmpty),
-		MaxAvgToolCalls:                      enabledQualityGateValue(gates.MaxAvgToolCalls),
-		MaxAvgDurationMS:                     enabledQualityGateValue(gates.MaxAvgDurationMS),
-		MaxAvgTotalTokens:                    enabledQualityGateValue(gates.MaxAvgTotalTokens),
-		MaxDebugBriefTagRates:                enabledQualityGateMap(gates.MaxDebugBriefTagRates),
+		SchemaVersion:                         evalJSONLSchemaVersion,
+		Suite:                                 strings.TrimSpace(suite),
+		Model:                                 model,
+		ProviderLabel:                         providerLabel,
+		Executor:                              normalizedEvalExecutor(executor),
+		Temperature:                           strings.TrimSpace(temperature),
+		TopP:                                  strings.TrimSpace(topP),
+		MaxTokens:                             strings.TrimSpace(maxTokens),
+		Seed:                                  strings.TrimSpace(seed),
+		RuntimeEvalMode:                       runtimeEvalMode,
+		RuntimeTools:                          strings.TrimSpace(runtimeTools),
+		RuntimeAllTools:                       runtimeAllTools,
+		RuntimeMemory:                         runtimeMemory,
+		RuntimeWeb:                            runtimeWeb,
+		RuntimeBrowser:                        runtimeBrowser,
+		TraceDeltas:                           traceDeltas,
+		RuntimeMCP:                            strings.TrimSpace(runtimeMCPConfig) != "",
+		TimeoutMS:                             timeout.Milliseconds(),
+		QualityProfile:                        strings.ToLower(strings.TrimSpace(qualityProfile)),
+		MinPassRate:                           enabledQualityGateValue(gates.MinPassRate),
+		MinCompletionRate:                     enabledQualityGateValue(gates.MinCompletionRate),
+		MinMemoryUpdateRate:                   enabledQualityGateValue(gates.MinMemoryUpdateRate),
+		MinLoopProtocolFeedRate:               enabledQualityGateValue(gates.MinLoopProtocolFeedRate),
+		MinRuntimeSurfaceRate:                 enabledQualityGateValue(gates.MinRuntimeSurfaceRate),
+		MinTraceEventRate:                     enabledQualityGateValue(gates.MinTraceEventRate),
+		MinSourceNetworkRate:                  enabledQualityGateValue(gates.MinSourceNetworkRate),
+		MinSourceAccessVerifiedRate:           enabledQualityGateValue(gates.MinSourceAccessVerifiedRate),
+		MinExpectationCapabilityPassRate:      enabledQualityGateValue(gates.MinExpectationCapabilityPassRate),
+		MinEachExpectationCapabilityPassRate:  enabledQualityGateValue(gates.MinEachExpectationCapabilityPassRate),
+		MinSessionSearchContextHitRate:        enabledQualityGateValue(gates.MinSessionSearchContextHitRate),
+		MinSessionSearchMatchedTermsPerCall:   enabledQualityGateValue(gates.MinSessionSearchMatchedTermsPerCall),
+		MinToolRepairSuccessRate:              enabledQualityGateValue(gates.MinToolRepairSuccessRate),
+		MinVerifierPassRate:                   enabledQualityGateValue(gates.MinVerifierPassRate),
+		MaxFocusedTaskErrorRate:               enabledQualityGateValue(gates.MaxFocusedTaskErrorRate),
+		MaxForcedNoToolsRate:                  enabledQualityGateValue(gates.MaxForcedNoToolsRate),
+		MaxLoopGuardInterventionRate:          enabledQualityGateValue(gates.MaxLoopGuardInterventionRate),
+		MaxPlanErrorRate:                      enabledQualityGateValue(gates.MaxPlanErrorRate),
+		MaxSourceDiscoveryOnlyRate:            enabledQualityGateValue(gates.MaxSourceDiscoveryOnlyRate),
+		MaxSourceDynamicPartialRate:           enabledQualityGateValue(gates.MaxSourceDynamicPartialRate),
+		MaxSubagentErrorRate:                  enabledQualityGateValue(gates.MaxSubagentErrorRate),
+		MaxToolErrorRate:                      enabledQualityGateValue(gates.MaxToolErrorRate),
+		MaxToolContextTruncationRate:          enabledQualityGateValue(gates.MaxToolContextTruncationRate),
+		MaxToolResultTruncationRate:           enabledQualityGateValue(gates.MaxToolResultTruncationRate),
+		MaxAvgRuntimeErrors:                   enabledQualityGateValue(gates.MaxAvgRuntimeErrors),
+		MaxAvgContextCompactions:              enabledQualityGateValue(gates.MaxAvgContextCompactions),
+		MaxAvgReactiveCompactions:             enabledQualityGateValue(gates.MaxAvgReactiveCompactions),
+		MaxAvgContextRemovedMessages:          enabledQualityGateValue(gates.MaxAvgContextRemovedMessages),
+		MaxAvgContextSummaryBytes:             enabledQualityGateValue(gates.MaxAvgContextSummaryBytes),
+		MaxAvgContextSummaryMissing:           enabledQualityGateValue(gates.MaxAvgContextSummaryMissing),
+		MaxAvgContextSummaryEmpty:             enabledQualityGateValue(gates.MaxAvgContextSummaryEmpty),
+		MaxAvgContextInjections:               enabledQualityGateValue(gates.MaxAvgContextInjections),
+		MaxAvgContextInjectionBytes:           enabledQualityGateValue(gates.MaxAvgContextInjectionBytes),
+		MaxAvgContextInjectionEstimatedTokens: enabledQualityGateValue(gates.MaxAvgContextInjectionEstimatedTokens),
+		MaxAvgToolCalls:                       enabledQualityGateValue(gates.MaxAvgToolCalls),
+		MaxAvgDurationMS:                      enabledQualityGateValue(gates.MaxAvgDurationMS),
+		MaxAvgTotalTokens:                     enabledQualityGateValue(gates.MaxAvgTotalTokens),
+		MaxDebugBriefTagRates:                 enabledQualityGateMap(gates.MaxDebugBriefTagRates),
 	}
 }
 
@@ -2529,6 +2611,11 @@ type batchResultRecord struct {
 	ContextCompactionSummaryMissing  int                                        `json:"context_compaction_summary_missing,omitempty"`
 	ContextCompactionSummaryEmpty    int                                        `json:"context_compaction_summary_empty,omitempty"`
 	ContextCompactionExamples        []agenteval.ContextCompaction              `json:"context_compaction_examples,omitempty"`
+	ContextInjections                int                                        `json:"context_injections,omitempty"`
+	ContextInjectionBySource         map[string]int                             `json:"context_injection_by_source,omitempty"`
+	ContextInjectionBytes            int                                        `json:"context_injection_bytes,omitempty"`
+	ContextInjectionEstimatedTokens  int                                        `json:"context_injection_estimated_tokens,omitempty"`
+	ContextInjectionExamples         []agenteval.ContextInjection               `json:"context_injection_examples,omitempty"`
 	LoopGuardInterventions           int                                        `json:"loop_guard_interventions"`
 	ForcedNoTools                    int                                        `json:"forced_no_tools"`
 	SourceAccessResults              int                                        `json:"source_access_results"`
@@ -2629,6 +2716,9 @@ type batchSummaryRecord struct {
 	AvgContextSummaryBytes               float64                                          `json:"avg_context_summary_bytes"`
 	AvgContextSummaryMissing             float64                                          `json:"avg_context_summary_missing"`
 	AvgContextSummaryEmpty               float64                                          `json:"avg_context_summary_empty"`
+	AvgContextInjections                 float64                                          `json:"avg_context_injections"`
+	AvgContextInjectionBytes             float64                                          `json:"avg_context_injection_bytes"`
+	AvgContextInjectionEstimatedTokens   float64                                          `json:"avg_context_injection_estimated_tokens"`
 	AvgToolCalls                         float64                                          `json:"avg_tool_calls"`
 	ToolContextTruncationRate            *float64                                         `json:"tool_context_truncation_rate,omitempty"`
 	ToolResultTruncationRate             *float64                                         `json:"tool_result_truncation_rate,omitempty"`
@@ -2668,6 +2758,11 @@ type batchSummaryRecord struct {
 	ContextCompactionSummaryMissing      int                                              `json:"context_compaction_summary_missing,omitempty"`
 	ContextCompactionSummaryEmpty        int                                              `json:"context_compaction_summary_empty,omitempty"`
 	ContextCompactionExamples            []agenteval.ContextCompaction                    `json:"context_compaction_examples,omitempty"`
+	ContextInjections                    int                                              `json:"context_injections,omitempty"`
+	ContextInjectionBySource             map[string]int                                   `json:"context_injection_by_source,omitempty"`
+	ContextInjectionBytes                int                                              `json:"context_injection_bytes,omitempty"`
+	ContextInjectionEstimatedTokens      int                                              `json:"context_injection_estimated_tokens,omitempty"`
+	ContextInjectionExamples             []agenteval.ContextInjection                     `json:"context_injection_examples,omitempty"`
 	LoopGuardInterventions               int                                              `json:"loop_guard_interventions"`
 	ForcedNoTools                        int                                              `json:"forced_no_tools"`
 	SourceAccessResults                  int                                              `json:"source_access_results"`
@@ -2827,6 +2922,11 @@ func printBatchResultJSONL(w io.Writer, meta evalJSONLMetadata, res agenteval.Ba
 		ContextCompactionSummaryMissing:  res.ContextCompactions.SummaryMissing,
 		ContextCompactionSummaryEmpty:    res.ContextCompactions.SummaryEmpty,
 		ContextCompactionExamples:        cloneContextCompactionExamples(res.ContextCompactions.Examples),
+		ContextInjections:                res.ContextInjections.Count,
+		ContextInjectionBySource:         cloneStringIntMap(res.ContextInjections.BySource),
+		ContextInjectionBytes:            res.ContextInjections.Bytes,
+		ContextInjectionEstimatedTokens:  res.ContextInjections.EstimatedTokens,
+		ContextInjectionExamples:         cloneContextInjectionExamples(res.ContextInjections.Examples),
 		LoopGuardInterventions:           res.ToolStats.LoopGuardInterventions,
 		ForcedNoTools:                    res.ToolStats.ForcedNoTools,
 		SourceAccessResults:              res.ToolStats.SourceAccessResults,
@@ -3001,6 +3101,9 @@ func printBatchSummaryJSONL(w io.Writer, meta evalJSONLMetadata, s batchSummary,
 		AvgContextSummaryBytes:               batchAverage(s.ContextCompactionSummary, s.Total),
 		AvgContextSummaryMissing:             batchAverage(s.ContextCompactionSummaryMissing, s.Total),
 		AvgContextSummaryEmpty:               batchAverage(s.ContextCompactionSummaryEmpty, s.Total),
+		AvgContextInjections:                 batchAverage(s.ContextInjections, s.Total),
+		AvgContextInjectionBytes:             batchAverage(s.ContextInjectionBytes, s.Total),
+		AvgContextInjectionEstimatedTokens:   batchAverage(s.ContextInjectionEstimatedTokens, s.Total),
 		AvgToolCalls:                         batchAverage(s.ToolCalls, s.Total),
 		ToolContextTruncationRate:            batchOptionalRatio(s.ToolContextTruncated, s.ToolCalls),
 		ToolResultTruncationRate:             batchOptionalRatio(s.ToolResultsTruncated, s.ToolCalls),
@@ -3040,6 +3143,11 @@ func printBatchSummaryJSONL(w io.Writer, meta evalJSONLMetadata, s batchSummary,
 		ContextCompactionSummaryMissing:      s.ContextCompactionSummaryMissing,
 		ContextCompactionSummaryEmpty:        s.ContextCompactionSummaryEmpty,
 		ContextCompactionExamples:            cloneContextCompactionExamples(s.ContextCompactionExamples),
+		ContextInjections:                    s.ContextInjections,
+		ContextInjectionBySource:             cloneStringIntMap(s.ContextInjectionBySource),
+		ContextInjectionBytes:                s.ContextInjectionBytes,
+		ContextInjectionEstimatedTokens:      s.ContextInjectionEstimatedTokens,
+		ContextInjectionExamples:             cloneContextInjectionExamples(s.ContextInjectionExamples),
 		LoopGuardInterventions:               s.LoopGuardInterventions,
 		ForcedNoTools:                        s.ForcedNoTools,
 		SourceAccessResults:                  s.SourceAccessResults,
@@ -3164,6 +3272,9 @@ func hasQualityGateThresholds(meta evalJSONLMetadata) bool {
 		meta.MaxAvgContextSummaryBytes != nil ||
 		meta.MaxAvgContextSummaryMissing != nil ||
 		meta.MaxAvgContextSummaryEmpty != nil ||
+		meta.MaxAvgContextInjections != nil ||
+		meta.MaxAvgContextInjectionBytes != nil ||
+		meta.MaxAvgContextInjectionEstimatedTokens != nil ||
 		meta.MaxAvgToolCalls != nil ||
 		meta.MaxAvgDurationMS != nil ||
 		meta.MaxAvgTotalTokens != nil ||
@@ -3395,6 +3506,13 @@ func cloneContextCompactionExamples(in []agenteval.ContextCompaction) []agenteva
 	return append([]agenteval.ContextCompaction(nil), in...)
 }
 
+func cloneContextInjectionExamples(in []agenteval.ContextInjection) []agenteval.ContextInjection {
+	if len(in) == 0 {
+		return nil
+	}
+	return append([]agenteval.ContextInjection(nil), in...)
+}
+
 func appendLoopDecisionExamples(dst, src []agenteval.LoopDecision, scenario string, limit int) []agenteval.LoopDecision {
 	if limit <= 0 || len(dst) >= limit {
 		return dst
@@ -3605,6 +3723,22 @@ func appendContextCompactionExamples(dst, src []agenteval.ContextCompaction, sce
 	return dst
 }
 
+func appendContextInjectionExamples(dst, src []agenteval.ContextInjection, scenario string, limit int) []agenteval.ContextInjection {
+	if limit <= 0 || len(dst) >= limit {
+		return dst
+	}
+	for _, ex := range src {
+		if len(dst) >= limit {
+			break
+		}
+		if ex.Scenario == "" {
+			ex.Scenario = scenario
+		}
+		dst = append(dst, ex)
+	}
+	return dst
+}
+
 func cloneExampleMap[T any](in map[string][]T) map[string][]T {
 	if len(in) == 0 {
 		return nil
@@ -3784,6 +3918,16 @@ func printBatchResult(w io.Writer, res agenteval.BatchResult) {
 			res.ContextCompactions.SummaryEmpty,
 		)
 	}
+	if res.ContextInjections.Count > 0 {
+		fmt.Fprintf(w, " context_injections=%d,bytes=%d,est_tokens=%d",
+			res.ContextInjections.Count,
+			res.ContextInjections.Bytes,
+			res.ContextInjections.EstimatedTokens,
+		)
+		if len(res.ContextInjections.BySource) > 0 {
+			fmt.Fprintf(w, " context_injection_sources=%s", formatStringIntCounts(res.ContextInjections.BySource))
+		}
+	}
 	if brief := agenteval.BuildDebugBrief(res); brief != nil {
 		fmt.Fprintf(w, " debug_brief=%s", formatDebugBriefTags(brief.Tags))
 	}
@@ -3828,6 +3972,7 @@ func printBatchResult(w io.Writer, res agenteval.BatchResult) {
 	printRuntimeErrorExampleLines(w, res.RuntimeErrorExamples, "  ")
 	printLoopDecisionExampleLines(w, res.LoopDecisionStats.Examples, "  ")
 	printLoopProtocolFeedExampleLines(w, res.LoopProtocolFeeds.Examples, "  ")
+	printContextInjectionExampleLines(w, res.ContextInjections.Examples, "  ")
 	printSessionSearchExampleLines(w, res.SessionSearchExamples, "  ")
 	printPlanExampleLines(w, res.PlanExamples, "  ")
 	printToolTruncationExampleLines(w, res.ToolTruncationExamples, "  ")

@@ -156,6 +156,19 @@ func BuildDebugBrief(res BatchResult) *DebugBrief {
 		}
 		add("plan", severity, message, []string{"tool_timeline", "plan_calls"}, counts, tags...)
 	}
+	if res.ContextInjections.Count > 0 {
+		tags := []string{"context_injection"}
+		counts := map[string]int{
+			"count":            res.ContextInjections.Count,
+			"bytes":            res.ContextInjections.Bytes,
+			"estimated_tokens": res.ContextInjections.EstimatedTokens,
+		}
+		for source, count := range res.ContextInjections.BySource {
+			counts["source:"+source] = count
+			tags = append(tags, "context_injection:"+source)
+		}
+		add("context_injection", "info", "hidden system context was injected; inspect size and source before tuning long-run prompts", []string{"context_injection_examples", "timeline", "debug_manifest"}, counts, tags...)
+	}
 	if res.ToolStats.SourceAccessResults > 0 {
 		severity := "info"
 		message := "source evidence was captured; inspect evidence before relying on current facts"
