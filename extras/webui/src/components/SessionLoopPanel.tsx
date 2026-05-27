@@ -85,6 +85,7 @@ export function SessionLoopPanel({
   const event = compact(state?.last_event_summary);
   const memory = loopMemoryUpdate(state);
   const compaction = loopCompaction(state);
+  const calibration = loopCalibration(state);
   const disabled = status === "disabled";
   const draft = status === "draft";
   const title = disabled ? "Disabled" : statusLabel(status);
@@ -105,6 +106,7 @@ export function SessionLoopPanel({
           {path ? <LoopField label="File" value={path} mono /> : null}
           {feeds > 0 ? <LoopField label="Feeds" value={String(feeds)} /> : null}
           {updates > 0 ? <LoopField label="Updates" value={String(updates)} /> : null}
+          {calibration ? <LoopField label="Calibration" value={calibration} /> : null}
           {memory ? <LoopField label="Memory" value={memory} /> : null}
           {compaction ? <LoopField label="Compaction" value={compaction} /> : null}
           {compact(state?.last_decision_kind) ? (
@@ -202,6 +204,7 @@ function loopEventDetail(event: SessionLoopEvent): string | undefined {
     event.reactive ? "reactive" : undefined,
     event.reason ? `reason ${event.reason}` : undefined,
     event.sections_changed && event.sections_changed.length > 0 ? `sections ${event.sections_changed.join(", ")}` : undefined,
+    event.calibration_preview ? `calibration ${event.calibration_preview}` : undefined,
     event.memory_preview ? `memory ${event.memory_preview}` : undefined,
     event.decision ? `decision ${event.decision}` : undefined,
     event.turn_end_reason ? `turn ${event.turn_end_reason}` : undefined,
@@ -212,6 +215,7 @@ function loopEventDetail(event: SessionLoopEvent): string | undefined {
 function loopEventLabel(type: string): string {
   if (type === "loop.protocol_init") return "Initialized LOOP.md";
   if (type === "loop.protocol_update") return "Updated LOOP.md";
+  if (type === "loop.protocol_calibration") return "Recorded calibration answer";
   if (type === "loop.protocol_activate") return "Activated LOOP.md";
   if (type === "loop.protocol_disable") return "Disabled LOOP.md";
   return type;
@@ -276,6 +280,15 @@ function loopMemoryUpdate(state?: SessionLoopState): string | undefined {
   if (parts.length > 0) return parts.join(" · ");
   const count = state.memory_update_events ?? 0;
   return count > 0 ? `${count} memory ${count === 1 ? "update" : "updates"}` : undefined;
+}
+
+function loopCalibration(state?: SessionLoopState): string | undefined {
+  if (!state) return undefined;
+  const count = state.calibration_answers ?? 0;
+  const preview = compact(state.last_calibration_answer_preview);
+  if (count <= 0 && !preview) return undefined;
+  const parts = [count > 0 ? `${count} calibration ${count === 1 ? "answer" : "answers"}` : undefined, preview].filter(Boolean);
+  return parts.join(" · ");
 }
 
 function memoryLocation(state: SessionLoopState): string | undefined {

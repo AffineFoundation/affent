@@ -1149,6 +1149,45 @@ func TestHandleSessionLoopProtocolUpdate_RejectsPrematureActivation(t *testing.T
 	}
 }
 
+func TestHandleSessionLoopProtocolUpdate_RejectsActivationBeforeCalibrationAnswer(t *testing.T) {
+	memRoot := t.TempDir()
+	pool := newPoolWithMemoryRoot(t, memRoot)
+	if _, _, _, _, err := writeSessionLoopProtocol(pool, "api-loop-uncalibrated", sessionLoopProtocolUpdateRequest{
+		Activate: true,
+		Goal:     "Understand the user's long-running market analysis intent.",
+	}); err != nil {
+		t.Fatalf("create draft: %v", err)
+	}
+	protocol, found, err := loopstate.ReadProtocol(sessionLoopProtocolPath(pool, "api-loop-uncalibrated"))
+	if err != nil || !found {
+		t.Fatalf("ReadProtocol found=%v err=%v", found, err)
+	}
+	protocol = strings.Replace(protocol, "- status: draft", "- status: running", 1)
+	protocol = strings.Replace(protocol, "- hard constraints:", "- hard constraints: cite evidence and stop on unclear user intent", 1)
+	protocol = strings.Replace(protocol, "- known evidence:", "- known evidence: user wants market analysis", 1)
+	protocol = strings.Replace(protocol, "- current risk or blocker:", "- current risk or blocker: live source quality unknown", 1)
+	protocol = strings.Replace(protocol, "- important artifacts:", "- important artifacts: none yet", 1)
+	protocol = strings.Replace(protocol, "- important trace spans:", "- important trace spans: loop draft", 1)
+	protocol = strings.Replace(protocol, "- last known recovery note:", "- last known recovery note: reload LOOP.md and plan state", 1)
+	body := `{"activate":true,"protocol":` + strconv.Quote(protocol) + `,"reason":"uncalibrated"}`
+	r := httptest.NewRequest(http.MethodPost, "/v1/sessions/api-loop-uncalibrated/loop-protocol", strings.NewReader(body))
+	w := httptest.NewRecorder()
+	handleSessionRoutes(pool).ServeHTTP(w, r)
+	if got := w.Result().StatusCode; got != http.StatusBadRequest {
+		t.Fatalf("status = %d, want 400; body=%s", got, w.Body.String())
+	}
+	if !strings.Contains(w.Body.String(), "requires a user calibration answer") {
+		t.Fatalf("response missing calibration readiness error: %s", w.Body.String())
+	}
+	stillDraft, found, err := loopstate.ReadProtocol(sessionLoopProtocolPath(pool, "api-loop-uncalibrated"))
+	if err != nil || !found {
+		t.Fatalf("ReadProtocol after rejection found=%v err=%v", found, err)
+	}
+	if !strings.Contains(stillDraft, "- status: draft") {
+		t.Fatalf("rejected activation must not overwrite draft protocol:\n%s", stillDraft)
+	}
+}
+
 func TestHandleSessionLoopProtocolUpdate_RejectsBlankAndUnknownFields(t *testing.T) {
 	pool := newTestPool(t, 4, "5m")
 	cases := []struct {

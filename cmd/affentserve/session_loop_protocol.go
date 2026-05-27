@@ -217,15 +217,18 @@ func writeSessionLoopProtocol(pool *SessionPool, sessionID string, req sessionLo
 		}
 		return protocol, summary, *statePtr, events, nil
 	}
-	if err := loopstate.WriteProtocol(path, req.Protocol); err != nil {
-		return "", sessionLoopProtocolSummary{}, loopstate.State{}, nil, err
-	}
 	if req.Activate {
 		if loopstate.ProtocolStatus(req.Protocol) != "running" {
 			return "", sessionLoopProtocolSummary{}, loopstate.State{}, nil, sessionLoopProtocolValidationError{err: errors.New("activate requires LOOP.md metadata status: running")}
 		}
 		if err := loopstate.ValidateProtocolActivation(req.Protocol); err != nil {
 			return "", sessionLoopProtocolSummary{}, loopstate.State{}, nil, sessionLoopProtocolValidationError{err: err}
+		}
+		if err := loopstate.ValidateProtocolActivationReady(path); err != nil {
+			return "", sessionLoopProtocolSummary{}, loopstate.State{}, nil, sessionLoopProtocolValidationError{err: err}
+		}
+		if err := loopstate.WriteProtocol(path, req.Protocol); err != nil {
+			return "", sessionLoopProtocolSummary{}, loopstate.State{}, nil, err
 		}
 		if _, _, err := loopstate.RecordProtocolActivation(path, req.Reason); err != nil {
 			return "", sessionLoopProtocolSummary{}, loopstate.State{}, nil, err
@@ -238,6 +241,9 @@ func writeSessionLoopProtocol(pool *SessionPool, sessionID string, req sessionLo
 			return "", sessionLoopProtocolSummary{}, loopstate.State{}, nil, os.ErrNotExist
 		}
 		return protocol, summary, *statePtr, events, nil
+	}
+	if err := loopstate.WriteProtocol(path, req.Protocol); err != nil {
+		return "", sessionLoopProtocolSummary{}, loopstate.State{}, nil, err
 	}
 	summary, found, err := loopstate.SummarizeFile(path, loopstate.ProtocolRelPath(sessionID))
 	if err != nil {

@@ -20,63 +20,66 @@ const (
 )
 
 type State struct {
-	Version                int    `json:"version"`
-	LoopID                 string `json:"loop_id,omitempty"`
-	OwnerSession           string `json:"owner_session,omitempty"`
-	Status                 string `json:"status,omitempty"`
-	ProtocolPath           string `json:"protocol_path,omitempty"`
-	CreatedAt              string `json:"created_at,omitempty"`
-	UpdatedAt              string `json:"updated_at,omitempty"`
-	InitialGoalPreview     string `json:"initial_goal_preview,omitempty"`
-	InitialPlanLabel       string `json:"initial_plan_label,omitempty"`
-	LastProtocolUpdateAt   string `json:"last_protocol_update_at,omitempty"`
-	ProtocolUpdates        int    `json:"protocol_updates,omitempty"`
-	ProtocolFeeds          int    `json:"protocol_feeds,omitempty"`
-	LastProtocolFeedAt     string `json:"last_protocol_feed_at,omitempty"`
-	LastProtocolFeedMode   string `json:"last_protocol_feed_mode,omitempty"`
-	NeedsFullProtocolFeed  bool   `json:"needs_full_protocol_feed,omitempty"`
-	LastPlanLabel          string `json:"last_plan_label,omitempty"`
-	LastPlanStepIndex      int    `json:"last_plan_step_index,omitempty"`
-	LastPlanStepStatus     string `json:"last_plan_step_status,omitempty"`
-	LastPlanStep           string `json:"last_plan_step,omitempty"`
-	TurnCheckpoints        int    `json:"turn_checkpoints,omitempty"`
-	LastTurnID             string `json:"last_turn_id,omitempty"`
-	LastTurnEndReason      string `json:"last_turn_end_reason,omitempty"`
-	LastTurnAt             string `json:"last_turn_at,omitempty"`
-	LastTurnInputTokens    int    `json:"last_turn_input_tokens,omitempty"`
-	LastTurnOutputTokens   int    `json:"last_turn_output_tokens,omitempty"`
-	LastTurnToolRequests   int    `json:"last_turn_tool_requests,omitempty"`
-	LastTurnToolErrors     int    `json:"last_turn_tool_errors,omitempty"`
-	LastTurnLoopGuards     int    `json:"last_turn_loop_guards,omitempty"`
-	LastTurnForcedNoTools  int    `json:"last_turn_forced_no_tools,omitempty"`
-	LastTurnMemoryUpdates  int    `json:"last_turn_memory_updates,omitempty"`
-	LastTurnSessionSearch  int    `json:"last_turn_session_search_calls,omitempty"`
-	MemoryUpdateEvents     int    `json:"memory_update_events,omitempty"`
-	LastMemoryUpdateAction string `json:"last_memory_update_action,omitempty"`
-	LastMemoryUpdateTarget string `json:"last_memory_update_target,omitempty"`
-	LastMemoryUpdateTopic  string `json:"last_memory_update_topic,omitempty"`
-	LastMemoryUpdateLoc    string `json:"last_memory_update_location,omitempty"`
-	LastMemoryUpdatePrev   string `json:"last_memory_update_previous_preview,omitempty"`
-	LastMemoryUpdateNext   string `json:"last_memory_update_next_preview,omitempty"`
-	LastMemoryUpdate       string `json:"last_memory_update_preview,omitempty"`
-	LastMemoryUpdateAt     string `json:"last_memory_update_at,omitempty"`
-	LoopDecisions          int    `json:"loop_decisions,omitempty"`
-	LastDecisionID         string `json:"last_decision_id,omitempty"`
-	LastDecisionKind       string `json:"last_decision_kind,omitempty"`
-	LastDecisionTrigger    string `json:"last_decision_trigger,omitempty"`
-	LastDecision           string `json:"last_decision,omitempty"`
-	LastDecisionConfidence string `json:"last_decision_confidence,omitempty"`
-	LastDecisionReason     string `json:"last_decision_reason,omitempty"`
-	LastDecisionAction     string `json:"last_decision_required_action,omitempty"`
-	LastDecisionAt         string `json:"last_decision_at,omitempty"`
-	ContextCompactions     int    `json:"context_compactions,omitempty"`
-	LastCompactionAt       string `json:"last_context_compaction_at,omitempty"`
-	LastCompactionReason   string `json:"last_context_compaction_reason,omitempty"`
-	LastCompactionReactive bool   `json:"last_context_compaction_reactive,omitempty"`
-	EventCount             int    `json:"event_count,omitempty"`
-	LastEventType          string `json:"last_event_type,omitempty"`
-	LastEventSummary       string `json:"last_event_summary,omitempty"`
-	LastEventAt            string `json:"last_event_at,omitempty"`
+	Version                 int    `json:"version"`
+	LoopID                  string `json:"loop_id,omitempty"`
+	OwnerSession            string `json:"owner_session,omitempty"`
+	Status                  string `json:"status,omitempty"`
+	ProtocolPath            string `json:"protocol_path,omitempty"`
+	CreatedAt               string `json:"created_at,omitempty"`
+	UpdatedAt               string `json:"updated_at,omitempty"`
+	InitialGoalPreview      string `json:"initial_goal_preview,omitempty"`
+	InitialPlanLabel        string `json:"initial_plan_label,omitempty"`
+	LastProtocolUpdateAt    string `json:"last_protocol_update_at,omitempty"`
+	ProtocolUpdates         int    `json:"protocol_updates,omitempty"`
+	CalibrationAnswers      int    `json:"calibration_answers,omitempty"`
+	LastCalibrationAnswerAt string `json:"last_calibration_answer_at,omitempty"`
+	LastCalibrationAnswer   string `json:"last_calibration_answer_preview,omitempty"`
+	ProtocolFeeds           int    `json:"protocol_feeds,omitempty"`
+	LastProtocolFeedAt      string `json:"last_protocol_feed_at,omitempty"`
+	LastProtocolFeedMode    string `json:"last_protocol_feed_mode,omitempty"`
+	NeedsFullProtocolFeed   bool   `json:"needs_full_protocol_feed,omitempty"`
+	LastPlanLabel           string `json:"last_plan_label,omitempty"`
+	LastPlanStepIndex       int    `json:"last_plan_step_index,omitempty"`
+	LastPlanStepStatus      string `json:"last_plan_step_status,omitempty"`
+	LastPlanStep            string `json:"last_plan_step,omitempty"`
+	TurnCheckpoints         int    `json:"turn_checkpoints,omitempty"`
+	LastTurnID              string `json:"last_turn_id,omitempty"`
+	LastTurnEndReason       string `json:"last_turn_end_reason,omitempty"`
+	LastTurnAt              string `json:"last_turn_at,omitempty"`
+	LastTurnInputTokens     int    `json:"last_turn_input_tokens,omitempty"`
+	LastTurnOutputTokens    int    `json:"last_turn_output_tokens,omitempty"`
+	LastTurnToolRequests    int    `json:"last_turn_tool_requests,omitempty"`
+	LastTurnToolErrors      int    `json:"last_turn_tool_errors,omitempty"`
+	LastTurnLoopGuards      int    `json:"last_turn_loop_guards,omitempty"`
+	LastTurnForcedNoTools   int    `json:"last_turn_forced_no_tools,omitempty"`
+	LastTurnMemoryUpdates   int    `json:"last_turn_memory_updates,omitempty"`
+	LastTurnSessionSearch   int    `json:"last_turn_session_search_calls,omitempty"`
+	MemoryUpdateEvents      int    `json:"memory_update_events,omitempty"`
+	LastMemoryUpdateAction  string `json:"last_memory_update_action,omitempty"`
+	LastMemoryUpdateTarget  string `json:"last_memory_update_target,omitempty"`
+	LastMemoryUpdateTopic   string `json:"last_memory_update_topic,omitempty"`
+	LastMemoryUpdateLoc     string `json:"last_memory_update_location,omitempty"`
+	LastMemoryUpdatePrev    string `json:"last_memory_update_previous_preview,omitempty"`
+	LastMemoryUpdateNext    string `json:"last_memory_update_next_preview,omitempty"`
+	LastMemoryUpdate        string `json:"last_memory_update_preview,omitempty"`
+	LastMemoryUpdateAt      string `json:"last_memory_update_at,omitempty"`
+	LoopDecisions           int    `json:"loop_decisions,omitempty"`
+	LastDecisionID          string `json:"last_decision_id,omitempty"`
+	LastDecisionKind        string `json:"last_decision_kind,omitempty"`
+	LastDecisionTrigger     string `json:"last_decision_trigger,omitempty"`
+	LastDecision            string `json:"last_decision,omitempty"`
+	LastDecisionConfidence  string `json:"last_decision_confidence,omitempty"`
+	LastDecisionReason      string `json:"last_decision_reason,omitempty"`
+	LastDecisionAction      string `json:"last_decision_required_action,omitempty"`
+	LastDecisionAt          string `json:"last_decision_at,omitempty"`
+	ContextCompactions      int    `json:"context_compactions,omitempty"`
+	LastCompactionAt        string `json:"last_context_compaction_at,omitempty"`
+	LastCompactionReason    string `json:"last_context_compaction_reason,omitempty"`
+	LastCompactionReactive  bool   `json:"last_context_compaction_reactive,omitempty"`
+	EventCount              int    `json:"event_count,omitempty"`
+	LastEventType           string `json:"last_event_type,omitempty"`
+	LastEventSummary        string `json:"last_event_summary,omitempty"`
+	LastEventAt             string `json:"last_event_at,omitempty"`
 }
 
 type Event struct {
@@ -118,6 +121,7 @@ type Event struct {
 	MemoryPreview   string   `json:"memory_preview,omitempty"`
 	PreviousPreview string   `json:"previous_preview,omitempty"`
 	NextPreview     string   `json:"next_preview,omitempty"`
+	Calibration     string   `json:"calibration_preview,omitempty"`
 }
 
 type DecisionCheckpoint struct {
@@ -330,11 +334,11 @@ func RecordContextCompaction(protocolPath, reason string, reactive bool) (State,
 		reason = "context_compaction"
 	}
 	event, err := AppendEvent(filepath.Join(loopDir, EventsFileName), Event{
-		Type:    "context.compacted",
-		Summary: "Context compacted; force next LOOP.md full feed",
-		Reason:  reason,
-		Path:    ProtocolRelPath(loopID),
-		Time:    formatTime(now),
+		Type:     "context.compacted",
+		Summary:  "Context compacted; force next LOOP.md full feed",
+		Reason:   reason,
+		Path:     ProtocolRelPath(loopID),
+		Time:     formatTime(now),
 		Reactive: reactive,
 	})
 	if err != nil {

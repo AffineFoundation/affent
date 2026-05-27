@@ -138,6 +138,9 @@ func completeLoopProtocolActivation(protocolPath string, p loopProtocolToolArgs)
 	if err := loopstate.ValidateProtocolActivation(protocol); err != nil {
 		return "", fmt.Errorf("%w\nNext: keep status=draft, ask or wait for the needed calibration details, fill the unresolved LOOP.md fields, and retry activation only after the protocol is complete", err)
 	}
+	if err := loopstate.ValidateProtocolActivationReady(protocolPath); err != nil {
+		return "", fmt.Errorf("%w\nNext: ask one concise calibration question, wait for the user's answer, then retry activation after the runtime records that answer", err)
+	}
 	if strings.TrimSpace(p.Protocol) != "" {
 		if err := loopstate.WriteProtocol(protocolPath, protocol); err != nil {
 			return "", err

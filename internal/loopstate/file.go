@@ -215,6 +215,17 @@ func ValidateProtocolActivation(protocol string) error {
 	return nil
 }
 
+func ValidateProtocolActivationReady(protocolPath string) error {
+	state, found, err := ReadState(filepath.Join(filepath.Dir(protocolPath), StateFileName))
+	if err != nil {
+		return err
+	}
+	if !found || state.CalibrationAnswers <= 0 {
+		return errors.New("LOOP.md activation requires a user calibration answer after draft setup")
+	}
+	return nil
+}
+
 func unresolvedActivationPlaceholders(protocol string) []string {
 	blankMarkers := map[string]bool{
 		"- hard constraints:":         true,
@@ -354,6 +365,42 @@ func RecordProtocolActivation(protocolPath, reason string) (State, Event, error)
 	return state, event, nil
 }
 
+func RecordProtocolCalibrationAnswer(protocolPath, answer string) (State, Event, error) {
+	loopDir := filepath.Dir(protocolPath)
+	loopID := filepath.Base(loopDir)
+	now := time.Now().UTC()
+	statePath := filepath.Join(loopDir, StateFileName)
+	state, found, err := ReadState(statePath)
+	if err != nil {
+		return State{}, Event{}, err
+	}
+	state = normalizeStateForProtocol(state, found, loopID, now)
+	preview := protocolCalibrationPreview(answer)
+	event, err := AppendEvent(filepath.Join(loopDir, EventsFileName), Event{
+		Type:        "loop.protocol_calibration",
+		Summary:     "Recorded loop calibration answer",
+		Reason:      "user answered loop setup calibration",
+		Path:        ProtocolRelPath(loopID),
+		Time:        formatTime(now),
+		Calibration: preview,
+	})
+	if err != nil {
+		return State{}, Event{}, err
+	}
+	state.CalibrationAnswers++
+	state.LastCalibrationAnswerAt = event.Time
+	state.LastCalibrationAnswer = preview
+	state.UpdatedAt = event.Time
+	state.EventCount = event.Seq
+	state.LastEventType = event.Type
+	state.LastEventSummary = event.Summary
+	state.LastEventAt = event.Time
+	if err := WriteState(statePath, state); err != nil {
+		return State{}, Event{}, err
+	}
+	return state, event, nil
+}
+
 func RecordProtocolUpdate(protocolPath, reason string, sectionsChanged []string) (State, Event, error) {
 	loopDir := filepath.Dir(protocolPath)
 	loopID := filepath.Base(loopDir)
@@ -391,6 +438,19 @@ func RecordProtocolUpdate(protocolPath, reason string, sectionsChanged []string)
 		return State{}, Event{}, err
 	}
 	return state, event, nil
+}
+
+func protocolCalibrationPreview(answer string) string {
+	answer = strings.Join(strings.Fields(strings.TrimSpace(answer)), " ")
+	const max = 240
+	if len([]byte(answer)) <= max {
+		return answer
+	}
+	out := answer
+	for len([]byte(out)) > max-3 {
+		out = strings.TrimSpace(out[:len(out)-1])
+	}
+	return out + "..."
 }
 
 func ReadProtocol(path string) (string, bool, error) {

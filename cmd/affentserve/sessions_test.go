@@ -1828,6 +1828,38 @@ func TestSessionPool_InitializesLoopProtocolWhenEnabled(t *testing.T) {
 	}
 }
 
+func TestSessionRecordsLoopProtocolCalibrationAnswerAfterDraftQuestion(t *testing.T) {
+	memRoot := t.TempDir()
+	pool := newPoolWithMemoryRoot(t, memRoot)
+	pool.cfg.EnableLoopProtocol = true
+	s, err := pool.GetOrCreate("loop-calibration")
+	if err != nil {
+		t.Fatalf("GetOrCreate: %v", err)
+	}
+	if err := s.ensureLoopProtocolInitialized("Set up long-running subnet analysis."); err != nil {
+		t.Fatalf("ensureLoopProtocolInitialized: %v", err)
+	}
+	s.recordLoopProtocolCalibrationAnswerIfReady("Loop protocol activation is pending, not active yet. Ask the user at least one concise calibration question.")
+	state, found, err := loopstate.ReadState(sessionLoopStatePath(pool, "loop-calibration"))
+	if err != nil || !found {
+		t.Fatalf("ReadState found=%v err=%v", found, err)
+	}
+	if state.CalibrationAnswers != 0 {
+		t.Fatalf("synthetic setup prompt recorded calibration state = %+v", state)
+	}
+	if err := s.conv.Append(agent.ChatMessage{Role: "assistant", Content: "What stop condition should pause this loop?"}); err != nil {
+		t.Fatalf("append assistant: %v", err)
+	}
+	s.recordLoopProtocolCalibrationAnswerIfReady("Pause if source quality is weak or weekly report is complete.")
+	state, found, err = loopstate.ReadState(sessionLoopStatePath(pool, "loop-calibration"))
+	if err != nil || !found {
+		t.Fatalf("ReadState after calibration found=%v err=%v", found, err)
+	}
+	if state.CalibrationAnswers != 1 || state.LastEventType != "loop.protocol_calibration" || !strings.Contains(state.LastCalibrationAnswer, "Pause if source quality") {
+		t.Fatalf("calibration state = %+v", state)
+	}
+}
+
 func TestSessionPool_MaxSessionsEvictsLRU(t *testing.T) {
 	pool := newTestPool(t, 2, "5m")
 	a, _ := pool.GetOrCreate("a")

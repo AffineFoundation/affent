@@ -1429,8 +1429,12 @@ func (s *Session) SendUser(ctx context.Context, text string) (string, error) {
 func (s *Session) SendUserWithOptions(ctx context.Context, text string, opts agent.TurnOptions) (string, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	if err := s.ensureLoopProtocolInitialized(text); err != nil {
+	createdProtocol, err := s.ensureLoopProtocolInitializedWithCreated(text)
+	if err != nil {
 		return "", err
+	}
+	if !createdProtocol && opts.UserSource == "" {
+		s.recordLoopProtocolCalibrationAnswerIfReady(text)
 	}
 	s.activeTurns.Add(1)
 	s.lastUsed = time.Now()
@@ -1443,10 +1447,15 @@ func (s *Session) SendUserWithOptions(ctx context.Context, text string, opts age
 }
 
 func (s *Session) ensureLoopProtocolInitialized(goal string) error {
+	_, err := s.ensureLoopProtocolInitializedWithCreated(goal)
+	return err
+}
+
+func (s *Session) ensureLoopProtocolInitializedWithCreated(goal string) (bool, error) {
 	if s == nil || !s.loopProtocolInit || strings.TrimSpace(s.loopProtocolPath) == "" {
-		return nil
+		return false, nil
 	}
-	_, _, _, err := loopstate.EnsureProtocolTemplate(s.loopProtocolPath, loopstate.ProtocolTemplateOptions{
+	created, _, _, err := loopstate.EnsureProtocolTemplate(s.loopProtocolPath, loopstate.ProtocolTemplateOptions{
 		LoopID:       s.ID,
 		OwnerSession: s.ID,
 		Goal:         goal,
@@ -1454,7 +1463,48 @@ func (s *Session) ensureLoopProtocolInitialized(goal string) error {
 		Status:       "draft",
 		Plan:         serveLoopProtocolCurrentPlanCheckpoint(s.planPath),
 	})
-	return err
+	return created, err
+}
+
+func (s *Session) recordLoopProtocolCalibrationAnswerIfReady(text string) {
+	if s == nil || strings.TrimSpace(s.loopProtocolPath) == "" || generatedLoopCalibrationPrompt(text) {
+		return
+	}
+	state, found, err := loopstate.ReadState(filepath.Join(filepath.Dir(s.loopProtocolPath), loopstate.StateFileName))
+	if err != nil || !found || state.Status != "draft" || state.CalibrationAnswers > 0 {
+		return
+	}
+	if !conversationHasAssistantMessage(s.conv.Snapshot()) {
+		return
+	}
+	_, _, _ = loopstate.RecordProtocolCalibrationAnswer(s.loopProtocolPath, text)
+}
+
+func conversationHasAssistantMessage(messages []agent.ChatMessage) bool {
+	for _, msg := range messages {
+		if msg.Role == "assistant" && strings.TrimSpace(msg.Content) != "" {
+			return true
+		}
+	}
+	return false
+}
+
+func generatedLoopCalibrationPrompt(text string) bool {
+	normalized := strings.ToLower(strings.Join(strings.Fields(strings.TrimSpace(text)), " "))
+	if normalized == "" {
+		return false
+	}
+	markers := []string{
+		"loop protocol activation is pending, not active yet.",
+		"the timer has been created, but calibration is still required before relying on it.",
+		"this is an autonomous long-run tick, not a new human instruction.",
+	}
+	for _, marker := range markers {
+		if strings.Contains(normalized, marker) {
+			return true
+		}
+	}
+	return false
 }
 
 func (s *Session) isActiveTurn() bool {

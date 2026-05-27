@@ -21,7 +21,14 @@ describe("SessionLoopPanel", () => {
     render(
       <SessionLoopPanel
         summary={{ path: ".affent/loops/loop-draft/LOOP.md", status: "draft", bytes: 128 }}
-        state={{ version: 1, loop_id: "loop-draft", status: "draft", initial_goal_preview: "long running market check" }}
+        state={{
+          version: 1,
+          loop_id: "loop-draft",
+          status: "draft",
+          initial_goal_preview: "long running market check",
+          calibration_answers: 1,
+          last_calibration_answer_preview: "Stop when source evidence is weak.",
+        }}
         onUseAsDraft={() => undefined}
       />,
     );
@@ -29,6 +36,9 @@ describe("SessionLoopPanel", () => {
     const panel = screen.getByTestId("session-loop-panel");
     expect(panel).toHaveTextContent("Setup pending");
     expect(screen.getByTestId("session-loop-checklist")).toHaveTextContent("LOOP.md exists but is not running yet");
+    expect(panel).toHaveTextContent("Calibration");
+    expect(panel).toHaveTextContent("1 calibration answer");
+    expect(panel).toHaveTextContent("Stop when source evidence is weak.");
     expect(screen.getByRole("button", { name: "Answer setup in chat" })).toBeInTheDocument();
   });
 
@@ -115,13 +125,20 @@ describe("SessionLoopPanel", () => {
           {
             seq: 2,
             time: "2026-05-27T10:05:00Z",
+            type: "loop.protocol_calibration",
+            summary: "Recorded loop calibration answer",
+            calibration_preview: "Pause when evidence is weak.",
+          },
+          {
+            seq: 3,
+            time: "2026-05-27T10:06:00Z",
             type: "loop.protocol_update",
             summary: "Updated LOOP.md",
             sections_changed: ["Current Situation", "Rules"],
             reason: "user clarified stop condition",
           },
           {
-            seq: 3,
+            seq: 4,
             time: "2026-05-27T10:10:00Z",
             type: "context.compacted",
             summary: "Context compacted; force next LOOP.md full feed",
@@ -138,6 +155,8 @@ describe("SessionLoopPanel", () => {
     expect(events).toHaveTextContent("context_overflow");
     expect(events).toHaveTextContent("Updated LOOP.md");
     expect(events).toHaveTextContent("Current Situation, Rules");
+    expect(events).toHaveTextContent("Recorded loop calibration answer");
+    expect(events).toHaveTextContent("Pause when evidence is weak.");
     const text = events.textContent ?? "";
     expect(text.indexOf("Context compacted")).toBeLessThan(text.indexOf("Initialized LOOP.md"));
   });

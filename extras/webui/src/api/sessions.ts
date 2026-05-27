@@ -120,6 +120,9 @@ export interface SessionLoopState {
   initial_plan_label?: string;
   last_protocol_update_at?: string;
   protocol_updates?: number;
+  calibration_answers?: number;
+  last_calibration_answer_at?: string;
+  last_calibration_answer_preview?: string;
   protocol_feeds?: number;
   last_protocol_feed_at?: string;
   last_protocol_feed_mode?: string;
@@ -207,6 +210,7 @@ export interface SessionLoopEvent {
   memory_preview?: string;
   previous_preview?: string;
   next_preview?: string;
+  calibration_preview?: string;
 }
 
 export interface SessionLoopProtocolResponse {
