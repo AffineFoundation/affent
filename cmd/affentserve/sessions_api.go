@@ -18,6 +18,7 @@ import (
 	agent "github.com/affinefoundation/affent/internal/agent"
 	"github.com/affinefoundation/affent/internal/jsonl"
 	"github.com/affinefoundation/affent/internal/loopstate"
+	"github.com/affinefoundation/affent/internal/memory"
 	"github.com/affinefoundation/affent/internal/sse"
 	"github.com/affinefoundation/affent/internal/textutil"
 )
@@ -1328,6 +1329,10 @@ func scanRecoveryHintsFromEvents(r *bufio.Reader) (string, error) {
 			setLatest(hint, p.TurnID)
 			continue
 		}
+		if hint := recoveryHintFromMemorySearchMissResult(p.Result); hint != "" {
+			setLatest(hint, p.TurnID)
+			continue
+		}
 		if p.ExitCode == 0 && p.FailureKind == "" && len(p.FailureKinds) == 0 {
 			continue
 		}
@@ -1407,6 +1412,9 @@ func recoveryHintFromToolResult(summary, result string) string {
 		if hint := recoveryHintFromSessionSearchResult(candidate); hint != "" {
 			return hint
 		}
+		if hint := recoveryHintFromMemorySearchMissResult(candidate); hint != "" {
+			return hint
+		}
 	}
 	text := summary
 	if result != "" && result != summary {
@@ -1448,6 +1456,41 @@ func recoveryHintFromSessionSearchResult(text string) string {
 	}
 	if preview != "" {
 		parts = append(parts, "preview: "+preview)
+	}
+	return recoveryHintFromText(strings.Join(parts, "; "))
+}
+
+func recoveryHintFromMemorySearchMissResult(text string) string {
+	text = strings.TrimSpace(text)
+	if text == "" || !strings.HasPrefix(text, "{") || !strings.Contains(text, `"topics"`) || !strings.Contains(text, "no entries matched") {
+		return ""
+	}
+	var resp memory.MemoryResponse
+	if err := json.Unmarshal([]byte(text), &resp); err != nil {
+		return ""
+	}
+	if !resp.OK || len(resp.Results) > 0 || len(resp.Topics) == 0 || !strings.Contains(resp.Message, "no entries matched") {
+		return ""
+	}
+	parts := []string{"memory search found no direct hits"}
+	if resp.Target != "" {
+		parts = append(parts, "target="+string(resp.Target))
+	}
+	topicNames := make([]string, 0, min(len(resp.Topics), 3))
+	for _, topic := range resp.Topics {
+		name := strings.TrimSpace(topic.Topic)
+		if name != "" {
+			topicNames = append(topicNames, name)
+		}
+		if len(topicNames) >= 3 {
+			break
+		}
+	}
+	if len(topicNames) > 0 {
+		parts = append(parts, "retry action=search with a specific topic such as "+topicNames[0])
+		if len(topicNames) > 1 {
+			parts = append(parts, "available topics: "+strings.Join(topicNames, ", "))
+		}
 	}
 	return recoveryHintFromText(strings.Join(parts, "; "))
 }

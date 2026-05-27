@@ -622,6 +622,46 @@ func TestRecoveryHintFromConversationSessionSearchRecentAnchors(t *testing.T) {
 	}
 }
 
+func TestSummarizeDurableSessionRestoresRecoveryHintFromMemorySearchTopicAnchors(t *testing.T) {
+	memRoot := t.TempDir()
+	pool := newPoolWithMemoryRoot(t, memRoot)
+	createDurableSessionDir(t, pool, "memory-miss-anchors")
+	dir := pool.sessionDirPath("memory-miss-anchors")
+
+	result := `{"ok":true,"message":"no entries matched. Next: retry with fewer/different keywords, search a specific topic from topics, or use action=list for full topic discovery.","target":"memory","results":[],"topics":[{"topic":"deploy","entries":2,"chars":120},{"topic":"auth","entries":1,"chars":80}]}`
+	if err := os.WriteFile(filepath.Join(dir, "events.jsonl"), []byte(
+		sessionEventLine(t, sse.TypeToolResult, sse.ToolResultPayload{TurnID: "t1", CallID: "memory-1", ExitCode: 0, ResultSummary: result, Result: result}),
+	), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	summary, found, err := summarizeDurableSession(pool, "memory-miss-anchors")
+	if err != nil {
+		t.Fatalf("summarizeDurableSession: %v", err)
+	}
+	if !found {
+		t.Fatal("durable session should be found")
+	}
+	for _, want := range []string{"memory search found no direct hits", "target=memory", "specific topic such as deploy", "available topics: deploy, auth"} {
+		if !strings.Contains(summary.LatestRecoveryHint, want) {
+			t.Fatalf("latest_recovery_hint missing %q: %q", want, summary.LatestRecoveryHint)
+		}
+	}
+}
+
+func TestRecoveryHintFromConversationMemorySearchTopicAnchors(t *testing.T) {
+	result := `{"ok":true,"message":"no entries matched. Next: retry with fewer/different keywords, search a specific topic from topics, or use action=list for full topic discovery.","target":"memory","results":[],"topics":[{"topic":"markets","entries":2}]}`
+	got := recoveryHintFromConversationMessage(agent.ChatMessage{
+		Role:    "tool",
+		Content: result,
+	})
+	for _, want := range []string{"memory search found no direct hits", "specific topic such as markets"} {
+		if !strings.Contains(got, want) {
+			t.Fatalf("conversation recovery hint missing %q: %q", want, got)
+		}
+	}
+}
+
 func TestSummarizeDurableSessionKeepsSpecificRuntimeErrorRecoveryHint(t *testing.T) {
 	memRoot := t.TempDir()
 	pool := newPoolWithMemoryRoot(t, memRoot)

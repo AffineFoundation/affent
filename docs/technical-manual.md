@@ -636,6 +636,7 @@ durable event log. Session summaries expose `latest_recovery_hint` from recent
 failed tool events, `conversation.repaired` events, visible `loop.decision`
 required actions, runtime `error` events, `turn.end` budget/runtime failures,
 successful no-hit `session_search` results that returned recent-session
+recovery anchors, successful no-hit memory searches that returned topic
 recovery anchors, and, when the event log is missing or incomplete, from
 structured resume repair placeholders and notes in `conversation.jsonl`.
 Artifact list responses include path, size, mod time, and a bounded compact

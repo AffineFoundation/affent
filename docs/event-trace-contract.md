@@ -398,8 +398,8 @@ external calibration. It does not start a separate controller agent.
 
 Session summaries may surface recent `error` events, `turn.end` failures such
 as `reason=max_turns`, and successful no-hit `session_search` results with
-recent-session anchors as `latest_recovery_hint`, preserving specific error
-text when it is available.
+recent-session anchors or no-hit memory search results with topic anchors as
+`latest_recovery_hint`, preserving specific error text when it is available.
 
 ## Compatibility Rules
 
