@@ -8,6 +8,7 @@ export interface SourceAccessInfo {
   renderedBrowserSourceStatus?: string;
   sourceMethod?: string;
   jsonPath?: string;
+  ref?: string;
   status: SourceEvidenceStatus;
 }
 
@@ -25,6 +26,7 @@ export function describeSourceAccess(result: string | undefined): SourceAccessIn
     renderedBrowserSourceStatus: fields.rendered_browser_source_status,
     sourceMethod: fields.source_method,
     jsonPath: firstJSONPathLine(result),
+    ref: fields.ref,
     status: "verified",
   };
   info.status = sourceEvidenceStatus(info, result ?? "");

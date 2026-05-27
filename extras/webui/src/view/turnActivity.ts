@@ -854,10 +854,12 @@ function browserNetworkEvidence(node: ExecutionTreeNode): TurnActivityEvidence |
   const query = firstPrefixedLineValue(result, "query:");
   const value = page || query || "browser_network";
   const matchLabel = browserNetworkMatchLabel(result);
+  const refs = browserNetworkRefs(result);
   const displayParts = [
     page ? readableUrl(page) : undefined,
     query ? query.replace(/^"|"$/g, "") : undefined,
     matchLabel,
+    refs.length > 0 ? `refs ${refs.slice(0, 3).join(", ")}` : undefined,
     browserNetworkEvidenceCaution(matchLabel),
   ].filter((part): part is string => !!part);
   return {
@@ -874,6 +876,15 @@ function browserNetworkMatchLabel(result: string): string | undefined {
     if (trimmed === "MATCHES:") return "matches";
   }
   return undefined;
+}
+
+function browserNetworkRefs(result: string): string[] {
+  const refs: string[] = [];
+  for (const line of result.split(/\r?\n/)) {
+    const match = line.trim().match(/^-\s+([a-z]\d+)\b/i);
+    if (match?.[1] && !refs.includes(match[1])) refs.push(match[1]);
+  }
+  return refs;
 }
 
 function browserNetworkEvidenceCaution(matchLabel: string | undefined): string | undefined {
@@ -929,6 +940,7 @@ function sourceEvidenceDisplayValue(sourceAccess: NonNullable<ReturnType<typeof 
   return [
     readableUrl(sourceAccess.accessedUrl),
     sourceAccess.requestedUrl && sourceAccess.requestedUrl !== sourceAccess.accessedUrl ? `from ${readableUrl(sourceAccess.requestedUrl)}` : undefined,
+    sourceAccess.ref ? `ref ${sourceAccess.ref}` : undefined,
     sourceAccess.jsonPath,
   ].filter(Boolean).join(" · ");
 }
