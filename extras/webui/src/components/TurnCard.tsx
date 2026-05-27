@@ -1209,7 +1209,7 @@ function summarizeHeaderMetrics(
   parts.push(...usefulMeta);
   if (items.length > 0) {
     if (parts.length > 0) {
-      parts.push(`+${items.length} more`);
+      parts.push(summarizeWorkItemOverflow(items));
     } else {
       parts.push(...items.map((item) => item.label));
     }
@@ -1238,9 +1238,17 @@ function summarizeWorkSummary(summary: WorkSummaryDisplay, visibleCount = 3): st
   const visibleItems = selectHeadlineWorkSummaryItems(summary.items, visibleCount);
   parts.push(...visibleItems.map((item) => item.label));
   const displayableItems = summary.items.filter((item) => item.tone !== "muted");
-  const remaining = displayableItems.length - visibleItems.length;
-  if (remaining > 0) parts.push(`+${remaining} more`);
+  const visibleSet = new Set(visibleItems);
+  const hiddenItems = displayableItems.filter((item) => !visibleSet.has(item));
+  if (hiddenItems.length > 0) parts.push(summarizeWorkItemOverflow(hiddenItems));
   return parts.join(" · ");
+}
+
+function summarizeWorkItemOverflow(items: readonly WorkSummaryItem[]): string {
+  if (items.length === 1) return items[0].label;
+  const visible = items.slice(0, 2).map((item) => item.label);
+  const remaining = items.length - visible.length;
+  return remaining > 0 ? `${visible.join(" · ")} · ${remaining} other ${remaining === 1 ? "fact" : "facts"}` : visible.join(" · ");
 }
 
 function workSummaryTone(items: readonly WorkSummaryItem[]): WorkSummaryItem["tone"] | undefined {

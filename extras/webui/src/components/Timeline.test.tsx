@@ -265,7 +265,8 @@ describe("Timeline", () => {
     expect(screen.getByTestId("turn-head")).not.toHaveTextContent("1 action");
     expect(screen.getByTestId("turn-head")).toHaveTextContent("1 file");
     expect(screen.getByTestId("turn-head")).toHaveTextContent("88ms");
-    expect(screen.getByTestId("turn-head")).toHaveTextContent("+2 more");
+    expect(screen.getByTestId("turn-head")).toHaveTextContent("1 truncated");
+    expect(screen.getByTestId("turn-head")).not.toHaveTextContent("+2 more");
     expect(screen.queryByText("0 actions")).toBeNull();
   });
 
@@ -689,7 +690,9 @@ describe("Timeline", () => {
     expect(screen.getByTestId("fallback-answer")).toHaveTextContent("Action output was truncated");
     expect(screen.getByTestId("fallback-answer")).toHaveTextContent("line 1");
     expect(screen.getByTestId("fallback-answer")).toHaveTextContent("Full output is available below.");
-    expect(screen.getByTestId("turn-head")).toHaveTextContent("+2 more");
+    expect(screen.getByTestId("turn-head")).toHaveTextContent("1 truncated");
+    expect(screen.getByTestId("turn-head")).toHaveTextContent("1 file");
+    expect(screen.getByTestId("turn-head")).not.toHaveTextContent("+2 more");
     fireEvent.click(screen.getByRole("button", { name: /Action details|Run summary/ }));
     fireEvent.click(screen.getAllByRole("button", { name: /cat big.log/ })[1]);
     const card = screen.getByTestId("execution-node");
