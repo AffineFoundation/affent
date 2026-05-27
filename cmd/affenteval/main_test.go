@@ -307,6 +307,14 @@ func TestValidateRuntimeToolSurface(t *testing.T) {
 			},
 		},
 		{
+			name:   "runtime tools web group satisfies fetch and search",
+			runner: BatchRuntimeToolConfig{RuntimeEvalMode: true, RuntimeTools: "web"},
+			scenario: agenteval.BatchScenario{
+				Name:          "live-web",
+				RequiredTools: []string{"web_fetch", "web_search"},
+			},
+		},
+		{
 			name:   "scenario memory flag satisfies memory",
 			runner: BatchRuntimeToolConfig{RuntimeEvalMode: true},
 			scenario: agenteval.BatchScenario{

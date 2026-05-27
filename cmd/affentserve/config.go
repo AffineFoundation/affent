@@ -538,6 +538,7 @@ func serveEvalToolAllowlist(c Config) (map[string]bool, []string) {
 			}
 		case "web":
 			add("web_fetch")
+			add("web_search")
 		case "browser":
 			for _, n := range serveEvalBrowserToolNames() {
 				add(n)

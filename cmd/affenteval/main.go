@@ -3824,7 +3824,7 @@ func enabledRuntimeToolSet(runtimeTools string, runtimeAllTools, runtimeMemory, 
 		case "readonly_workspace":
 			add(evalReadonlyWorkspaceToolNames()...)
 		case "web":
-			add("web_fetch")
+			add("web_fetch", "web_search")
 		case "browser":
 			add(evalBrowserToolNames()...)
 		case "recall":

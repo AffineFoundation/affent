@@ -263,6 +263,18 @@ func TestParseFlagsAndConfig_EvalModeDisablesToolsByDefault(t *testing.T) {
 	cfg, err = parseFlagsAndConfig([]string{
 		"--base-url", "https://example/v1",
 		"--model", "demo",
+		"--eval-tools=web",
+	})
+	if err != nil {
+		t.Fatalf("parseFlagsAndConfig eval web group: %v", err)
+	}
+	if !cfg.EvalMode || !cfg.EnableWeb || !cfg.EnableWebSearch {
+		t.Fatalf("--eval-tools=web should enable web_fetch and web_search under eval mode: %+v", cfg)
+	}
+
+	cfg, err = parseFlagsAndConfig([]string{
+		"--base-url", "https://example/v1",
+		"--model", "demo",
 		"--eval-mode",
 		"--eval-tools=read_file,shell",
 	})

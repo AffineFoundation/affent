@@ -654,6 +654,25 @@ func TestEvalModeAllowsExplicitWeb(t *testing.T) {
 	}
 }
 
+func TestEvalToolsWebGroupEnablesFetchAndSearch(t *testing.T) {
+	var cf commonFlags
+	fs := flag.NewFlagSet("test", flag.ContinueOnError)
+	cf.bind(fs)
+	if err := fs.Parse([]string{"--eval-tools=web"}); err != nil {
+		t.Fatal(err)
+	}
+	if err := applyConfig(&cf, fs); err != nil {
+		t.Fatal(err)
+	}
+	caps := resolveRuntimeCapabilities(cf)
+	if !caps.WebFetch || !caps.WebSearch {
+		t.Fatalf("--eval-tools=web should enable both fetch and search, caps=%+v", caps)
+	}
+	if caps.Builtins || caps.Memory || caps.Skill || caps.Plan || caps.SessionSearch || caps.ProjectContext || caps.Browser || caps.Subagent || caps.FocusedTasks {
+		t.Fatalf("--eval-tools=web must not enable unrelated surfaces, caps=%+v", caps)
+	}
+}
+
 func TestEvalModeAllowsExplicitEvalTools(t *testing.T) {
 	var cf commonFlags
 	fs := flag.NewFlagSet("test", flag.ContinueOnError)

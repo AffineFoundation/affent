@@ -322,6 +322,13 @@ func TestResolveServeRuntimeCapabilitiesEvalMode(t *testing.T) {
 		t.Fatalf("eval-mode web opt-in must not imply web_search: %+v", caps)
 	}
 
+	webGroup := base
+	webGroup.EvalTools = "web"
+	caps = resolveServeRuntimeCapabilities(webGroup)
+	if !caps.Web || !caps.WebSearch {
+		t.Fatalf("eval_tools web group should enable both fetch and search: %+v", caps)
+	}
+
 	memory := base
 	memory.enableMemorySet = true
 	caps = resolveServeRuntimeCapabilities(memory)
