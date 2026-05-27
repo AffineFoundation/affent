@@ -273,6 +273,7 @@ type LoopProtocolFeedPayload struct {
 	CalibrationAnswers    int    `json:"calibration_answers,omitempty"`
 	LastCalibrationAnswer string `json:"last_calibration_answer_preview,omitempty"`
 	ProtocolPath          string `json:"protocol_path,omitempty"`
+	CurrentSituation      string `json:"current_situation_preview,omitempty"`
 	PlanLabel             string `json:"plan_label,omitempty"`
 	PlanCurrentStepIndex  int    `json:"plan_current_step_index,omitempty"`
 	PlanCurrentStepStatus string `json:"plan_current_step_status,omitempty"`

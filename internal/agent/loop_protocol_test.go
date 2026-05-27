@@ -599,7 +599,7 @@ func TestWithLoopProtocolSkillProviderIncludesPlanCheckpoint(t *testing.T) {
 func TestAppendUserMessagePublishesLoopProtocolFeedEvent(t *testing.T) {
 	dir := t.TempDir()
 	path := filepath.Join(dir, "LOOP.md")
-	if err := os.WriteFile(path, []byte("# Loop Protocol\n\n## 1. North Star\n\nTrace protocol feeds."), 0o644); err != nil {
+	if err := os.WriteFile(path, []byte("# Loop Protocol\n\n## 1. North Star\n\nTrace protocol feeds.\n\n## 2. Current Situation\n\n- current intent: recover the long-run trace\n- current risk: network evidence is not verified yet"), 0o644); err != nil {
 		t.Fatal(err)
 	}
 	if _, _, err := loopstate.RecordProtocolCalibrationAnswer(path, "Stop when the requested source cannot be verified."); err != nil {
@@ -640,6 +640,8 @@ func TestAppendUserMessagePublishesLoopProtocolFeedEvent(t *testing.T) {
 			payload.PlanCurrentStepIndex != 1 ||
 			payload.PlanCurrentStepStatus != "in_progress" ||
 			payload.PlanCurrentStep != "read trace evidence" ||
+			!strings.Contains(payload.CurrentSituation, "recover the long-run trace") ||
+			!strings.Contains(payload.CurrentSituation, "network evidence is not verified yet") ||
 			payload.ProtocolPath != ".affent/loops/"+filepath.Base(dir)+"/LOOP.md" {
 			t.Fatalf("payload = %+v", payload)
 		}

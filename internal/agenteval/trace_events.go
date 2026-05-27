@@ -214,6 +214,7 @@ func applyTraceEvent(t *Trace, pending map[string]int, typ string, data json.Raw
 			CalibrationAnswers:    p.CalibrationAnswers,
 			LastCalibrationAnswer: p.LastCalibrationAnswer,
 			ProtocolPath:          p.ProtocolPath,
+			CurrentSituation:      p.CurrentSituation,
 			PlanLabel:             p.PlanLabel,
 			PlanCurrentStepIndex:  p.PlanCurrentStepIndex,
 			PlanCurrentStepStatus: p.PlanCurrentStepStatus,

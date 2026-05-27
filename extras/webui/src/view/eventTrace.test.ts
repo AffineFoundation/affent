@@ -49,6 +49,7 @@ describe("eventTrace view model", () => {
           calibration_answers: 1,
           last_calibration_answer_preview: "Stop when source evidence is weak.",
           protocol_path: ".affent/loops/longrun/LOOP.md",
+          current_situation_preview: "current intent: verify browser evidence; current risk: dynamic page needs network refs",
           plan_label: "plan:1/3:active",
           plan_current_step_index: 2,
           plan_current_step_status: "in_progress",
@@ -173,7 +174,7 @@ describe("eventTrace view model", () => {
       kind: "event",
       display: {
         label: "Loop protocol fed",
-        meta: ["Request 1", "longrun", "feed 4", "calibration 1 · Stop when source evidence is weak.", "plan plan:1/3:active · step 2 in_progress · verify browser evidence", ".affent/loops/longrun/LOOP.md"],
+        meta: ["Request 1", "longrun", "feed 4", "calibration 1 · Stop when source evidence is weak.", "situation · current intent: verify browser evidence; current risk: dynamic page needs network refs", "plan plan:1/3:active · step 2 in_progress · verify browser evidence", ".affent/loops/longrun/LOOP.md"],
         badges: ["digest", "running"],
       },
     });

@@ -227,6 +227,7 @@ export interface LoopProtocolFeedPayload {
   calibration_answers?: number;
   last_calibration_answer_preview?: string;
   protocol_path?: string;
+  current_situation_preview?: string;
   plan_label?: string;
   plan_current_step_index?: number;
   plan_current_step_status?: string;

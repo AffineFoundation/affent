@@ -79,6 +79,7 @@ func activeLoopProtocolSkillBlockWithCheckpoint(protocolPath string, checkpointP
 		mode = ev.Mode
 	}
 	stateLine := loopProtocolStateLine(protocolPath)
+	situationLine := loopProtocolCurrentSituationLine(content)
 	planLine := loopProtocolPlanStateLine(planCheckpoint)
 	body := textutil.Preview(content, maxActiveLoopProtocolFullBytes)
 	if mode == "digest" {
@@ -87,6 +88,7 @@ func activeLoopProtocolSkillBlockWithCheckpoint(protocolPath string, checkpointP
 	return "AFFENT LOOP PROTOCOL:\n" +
 		fmt.Sprintf("feed_mode=%s feed_number=%d protocol_path=%s\n", mode, feedNumber, loopstate.ProtocolRelPath(filepath.Base(filepath.Dir(protocolPath)))) +
 		stateLine +
+		situationLine +
 		planLine +
 		"The following is the active long-run loop protocol for this session. " +
 		"Use it to realign with the north-star, current situation, self-checks, stop conditions, and recovery rules before continuing. " +
@@ -233,6 +235,53 @@ func loopProtocolPlanCheckpoint(provider LoopProtocolCheckpointProvider) loopsta
 		return loopstate.PlanCheckpoint{}
 	}
 	return provider()
+}
+
+func loopProtocolCurrentSituationLine(content string) string {
+	if preview := loopProtocolCurrentSituationPreview(content, 360); preview != "" {
+		return "current_situation: " + preview + "\n"
+	}
+	return ""
+}
+
+func loopProtocolCurrentSituationPreview(content string, maxBytes int) string {
+	for _, section := range splitMarkdownSections(content) {
+		if !loopProtocolCurrentSituationHeading(section.heading) {
+			continue
+		}
+		body := markdownSectionBody(section.text)
+		if body == "" {
+			return ""
+		}
+		return textutil.Preview(body, maxBytes)
+	}
+	return ""
+}
+
+func loopProtocolCurrentSituationHeading(heading string) bool {
+	heading = strings.ToLower(strings.TrimSpace(heading))
+	for _, marker := range []string{"current situation", "current state", "现状", "当前状态"} {
+		if strings.Contains(heading, marker) {
+			return true
+		}
+	}
+	return false
+}
+
+func markdownSectionBody(section string) string {
+	lines := strings.Split(section, "\n")
+	if len(lines) > 0 && strings.HasPrefix(strings.TrimSpace(lines[0]), "#") {
+		lines = lines[1:]
+	}
+	var out []string
+	for _, line := range lines {
+		line = strings.TrimSpace(line)
+		if line == "" {
+			continue
+		}
+		out = append(out, line)
+	}
+	return strings.Join(strings.Fields(strings.Join(out, " ")), " ")
 }
 
 func (l *Loop) recordLoopProtocolCalibrationQuestionIfReady(turnID, text string) {
@@ -440,6 +489,9 @@ func loopProtocolFeedPayloadFromBlock(turnID, block string) (sse.LoopProtocolFee
 		}
 		if step, ok := strings.CutPrefix(line, "plan_current_step:"); ok {
 			payload.PlanCurrentStep = strings.TrimSpace(step)
+		}
+		if situation, ok := strings.CutPrefix(line, "current_situation:"); ok {
+			payload.CurrentSituation = textutil.Preview(strings.TrimSpace(situation), 360)
 		}
 		if calibration, ok := strings.CutPrefix(line, "last_calibration:"); ok {
 			calibration = strings.TrimSpace(calibration)

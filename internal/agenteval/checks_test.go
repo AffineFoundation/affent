@@ -660,7 +660,7 @@ func TestLoopDecisionMatchAtLeast(t *testing.T) {
 
 func TestLoopProtocolFeedChecks(t *testing.T) {
 	trace := Trace{LoopProtocolFeeds: []LoopProtocolFeed{
-		{Mode: "digest", FeedNumber: 1, PlanLabel: "SN120 research", PlanCurrentStepStatus: "in_progress", PlanCurrentStep: "collect rendered page and network evidence"},
+		{Mode: "digest", FeedNumber: 1, PlanLabel: "SN120 research", PlanCurrentStepStatus: "in_progress", PlanCurrentStep: "collect rendered page and network evidence", CurrentSituation: "current risk: dashboard values require network evidence"},
 		{Mode: "full", FeedNumber: 2, PlanLabel: "SN120 research", PlanCurrentStepStatus: "pending", PlanCurrentStep: "write final cited analysis"},
 	}, EventOrder: []TraceEventRef{
 		{Index: 1, Type: sse.TypeLoopProtocolFeed, LoopProtocolMode: "digest", LoopProtocolPath: ".affent/loops/sn120/LOOP.md"},
@@ -672,7 +672,7 @@ func TestLoopProtocolFeedChecks(t *testing.T) {
 	if stats.Count != 2 || stats.ByMode["digest"] != 1 || stats.ByMode["full"] != 1 || stats.Latest.FeedNumber != 2 {
 		t.Fatalf("LoopProtocolFeedStats = %+v", stats)
 	}
-	if len(stats.Examples) != 1 || stats.Examples[0].PlanCurrentStep != "collect rendered page and network evidence" {
+	if len(stats.Examples) != 1 || stats.Examples[0].PlanCurrentStep != "collect rendered page and network evidence" || !strings.Contains(stats.Examples[0].CurrentSituation, "dashboard values") {
 		t.Fatalf("LoopProtocolFeedStats examples = %+v", stats.Examples)
 	}
 	if res := LoopProtocolFeedsAtLeast(2).Eval(trace); !res.Pass {

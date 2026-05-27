@@ -396,6 +396,7 @@ function loopProtocolFeedMeta(event: NormalizedEvent, turn: string | undefined):
     feedNumber ? `feed ${feedNumber}` : undefined,
     feeds && feeds !== feedNumber ? `${feeds} total` : undefined,
     loopProtocolFeedCalibrationMeta(event),
+    loopProtocolFeedSituationMeta(event),
     loopProtocolPlanMeta(event),
     readString(event.data, "protocol_path"),
   ]);
@@ -407,6 +408,11 @@ function loopProtocolFeedCalibrationMeta(event: NormalizedEvent): string | undef
   if (!answers && !preview) return undefined;
   const label = answers ? `calibration ${answers}` : "calibration";
   return preview ? `${label} · ${streamSummary(preview)}` : label;
+}
+
+function loopProtocolFeedSituationMeta(event: NormalizedEvent): string | undefined {
+  const situation = readString(event.data, "current_situation_preview");
+  return situation ? `situation · ${streamSummary(situation)}` : undefined;
 }
 
 function loopProtocolCalibrationEventMeta(event: NormalizedEvent): string[] {

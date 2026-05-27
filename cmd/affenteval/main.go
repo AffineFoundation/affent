@@ -2031,6 +2031,9 @@ func printLoopProtocolFeedExampleLines(w io.Writer, examples []agenteval.LoopPro
 		if ex.PlanCurrentStep != "" {
 			fmt.Fprintf(w, " step=%q", textutil.Preview(ex.PlanCurrentStep, 96))
 		}
+		if ex.CurrentSituation != "" {
+			fmt.Fprintf(w, " situation=%q", textutil.Preview(ex.CurrentSituation, 120))
+		}
 		fmt.Fprintln(w)
 	}
 }

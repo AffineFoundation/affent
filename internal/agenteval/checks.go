@@ -956,6 +956,9 @@ func formatLoopProtocolFeedExample(feed LoopProtocolFeed) string {
 	if feed.PlanCurrentStep != "" {
 		parts = append(parts, "plan_current_step="+previewSubstr(feed.PlanCurrentStep, 100))
 	}
+	if feed.CurrentSituation != "" {
+		parts = append(parts, "current_situation="+previewSubstr(feed.CurrentSituation, 120))
+	}
 	return strings.Join(parts, " ")
 }
 

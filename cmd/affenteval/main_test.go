@@ -972,7 +972,7 @@ func TestPrintBatchResultIncludesTraceMetrics(t *testing.T) {
 			ByMode: map[string]int{"digest": 1, "full": 1},
 			Latest: agenteval.LoopProtocolFeed{LoopID: "longrun", Status: "running", Mode: "digest", FeedNumber: 2, ProtocolFeeds: 2, ProtocolPath: ".affent/loops/longrun/LOOP.md"},
 			Examples: []agenteval.LoopProtocolFeed{
-				{LoopID: "longrun", Status: "running", Mode: "full", FeedNumber: 1, ProtocolFeeds: 1, ProtocolPath: ".affent/loops/longrun/LOOP.md", PlanLabel: "plan:1/3:active", PlanCurrentStepIndex: 2, PlanCurrentStepStatus: "in_progress", PlanCurrentStep: "verify browser evidence"},
+				{LoopID: "longrun", Status: "running", Mode: "full", FeedNumber: 1, ProtocolFeeds: 1, ProtocolPath: ".affent/loops/longrun/LOOP.md", CurrentSituation: "current risk: dashboard values need network refs", PlanLabel: "plan:1/3:active", PlanCurrentStepIndex: 2, PlanCurrentStepStatus: "in_progress", PlanCurrentStep: "verify browser evidence"},
 			},
 		},
 		ContextCompactions: agenteval.ContextCompactionStats{
@@ -1064,7 +1064,7 @@ func TestPrintBatchResultIncludesTraceMetrics(t *testing.T) {
 		"hint[llm_timeout]",
 		"runtime_error_example[llm_timeout]: LLM llm_stream timed out after 4m0s",
 		"loop_decision_example[evidence_quality]: decision=defer trigger=source_access_dynamic_partial confidence=high reason=dynamic widgets lacked text action=read browser network responses",
-		`loop_protocol_feed_example: loop_id=longrun mode=full feed=1 path=.affent/loops/longrun/LOOP.md plan=plan:1/3:active current=2:in_progress step="verify browser evidence"`,
+		`loop_protocol_feed_example: loop_id=longrun mode=full feed=1 path=.affent/loops/longrun/LOOP.md plan=plan:1/3:active current=2:in_progress step="verify browser evidence" situation="current risk: dashboard values need network refs"`,
 		`plan_example: action=update index=2 status=completed progress=2/3 current=3:pending step="verify browser evidence" evidence=go test ./cmd/affenteval`,
 		`tool_truncation_example: tool=web_fetch call_id=trunc-print-1 args=truncated:true,bytes:70000,omitted:512,cap:65536 result=truncated:true,bytes:300000,omitted:4096,cap:262144 summary="large web_fetch output preview" context=bytes:4096,omitted:9216,tokens:1024 artifact=.affent/artifacts/tool-results/000001-trunc-print-1.txt`,
 	} {
