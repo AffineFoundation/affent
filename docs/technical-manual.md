@@ -576,8 +576,11 @@ Browser sessions also keep a bounded same-site XHR/fetch evidence log.
 refs with the current rendered page context; WebUI activity summaries surface
 that page, query, and match/no-match status so operators can see when a long
 run is cycling through network-evidence searches. No-match searches include
-`Failure: kind=no_matches` so evals and summaries can count failed evidence
-discovery separately from successful `browser_network_read` source evidence.
+`Failure: kind=no_matches` and, when responses were captured but the query did
+not match, a short `RECENT_CAPTURED_RESPONSES` list so the model can read a
+likely ref instead of blindly repeating searches. Evals and summaries can count
+failed evidence discovery separately from successful `browser_network_read`
+source evidence.
 The search tokenizer handles common API field shapes such as `market_cap`,
 `marketCap`, and `volume24h`, so user-facing metric labels can find hidden JSON
 fields without site-specific scrapers. `browser_network_read` reads a selected ref with

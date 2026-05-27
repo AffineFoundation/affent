@@ -355,6 +355,31 @@ func TestNetworkEvidenceToolsNoMatchesAndMissingRefGuideRecovery(t *testing.T) {
 	}
 }
 
+func TestNetworkEvidenceSearchNoMatchShowsRecentCapturedRefs(t *testing.T) {
+	log := NewNetworkEvidenceLog()
+	log.ObserveResponse("https://taostats.io/subnets/120", proto.NetworkResourceTypeDocument)
+	log.Add("https://taostats.io/api/subnets/120/metrics", 200, proto.NetworkResourceTypeXHR, http.Header{"Content-Type": {"application/json"}}, []byte(`{"netuid":120,"name":"Affine","market_cap":"201.04K T"}`))
+	log.Add("https://taostats.io/api/subnets/120/validators", 200, proto.NetworkResourceTypeFetch, http.Header{"Content-Type": {"application/json"}}, []byte(`{"validators":64}`))
+	s := &Session{network: log}
+
+	searchOut, err := NetworkSearchTool(s).Execute(context.Background(), json.RawMessage(`{"query":"emissions APR", "max_results":2}`))
+	if err != nil {
+		t.Fatalf("browser_network no-match with captured refs should not error: %v", err)
+	}
+	for _, want := range []string{
+		"MATCHES: none",
+		"RECENT_CAPTURED_RESPONSES:",
+		"n2 status=200 resource=fetch content_type=application/json url=https://taostats.io/api/subnets/120/validators",
+		"n1 status=200 resource=xhr content_type=application/json url=https://taostats.io/api/subnets/120/metrics",
+		"Failure: kind=no_matches",
+		"call browser_network_read with one ref before citing values",
+	} {
+		if !strings.Contains(searchOut, want) {
+			t.Fatalf("no-match fallback output missing %q:\n%s", want, searchOut)
+		}
+	}
+}
+
 func TestNetworkEvidenceReadWithoutLogGuidesRecovery(t *testing.T) {
 	_, err := NetworkReadTool(&Session{}).Execute(context.Background(), json.RawMessage(`{"ref":"n1"}`))
 	if err == nil {

@@ -241,6 +241,29 @@ func (l *NetworkEvidenceLog) Search(query string, maxResults int) []NetworkEvide
 	return out
 }
 
+func (l *NetworkEvidenceLog) Recent(maxResults int) []NetworkEvidenceEntry {
+	if l == nil {
+		return nil
+	}
+	if maxResults <= 0 {
+		maxResults = defaultNetworkMaxResults
+	}
+	if maxResults > maxNetworkMaxResults {
+		maxResults = maxNetworkMaxResults
+	}
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	var out []NetworkEvidenceEntry
+	for i := len(l.entries) - 1; i >= 0 && len(out) < maxResults; i-- {
+		entry := l.entries[i]
+		if !networkEntryMatchesPageHost(entry, l.pageHost) {
+			continue
+		}
+		out = append(out, cloneNetworkEntry(entry))
+	}
+	return out
+}
+
 func (l *NetworkEvidenceLog) Get(refOrURL string) (NetworkEvidenceEntry, bool) {
 	if l == nil {
 		return NetworkEvidenceEntry{}, false
@@ -460,10 +483,14 @@ func NetworkSearchTool(s *Session) *agent.Tool {
 				pageURL = s.network.CurrentPageURL()
 			}
 			var entries []NetworkEvidenceEntry
+			var recent []NetworkEvidenceEntry
 			if s != nil && s.network != nil {
 				entries = s.network.Search(query, args.MaxResults)
+				if len(entries) == 0 && query != "" {
+					recent = s.network.Recent(args.MaxResults)
+				}
 			}
-			return formatNetworkSearchResults(query, pageURL, entries), nil
+			return formatNetworkSearchResults(query, pageURL, entries, recent), nil
 		},
 	}
 }
@@ -534,7 +561,7 @@ func NetworkReadTool(s *Session) *agent.Tool {
 	}
 }
 
-func formatNetworkSearchResults(query, pageURL string, entries []NetworkEvidenceEntry) string {
+func formatNetworkSearchResults(query, pageURL string, entries, recent []NetworkEvidenceEntry) string {
 	var b strings.Builder
 	b.WriteString("BROWSER NETWORK EVIDENCE\n")
 	if strings.TrimSpace(pageURL) != "" {
@@ -545,8 +572,14 @@ func formatNetworkSearchResults(query, pageURL string, entries []NetworkEvidence
 	}
 	if len(entries) == 0 {
 		b.WriteString("MATCHES: none\n")
+		if len(recent) > 0 {
+			b.WriteString("RECENT_CAPTURED_RESPONSES:\n")
+			for _, entry := range recent {
+				fmt.Fprintf(&b, "- %s status=%d resource=%s content_type=%s url=%s\n", entry.Ref, entry.StatusCode, entry.Resource, entry.ContentType, entry.URL)
+			}
+		}
 		b.WriteString("Failure: kind=no_matches\n")
-		b.WriteString("Next: wait for the page to load dynamic data, try a shorter label/entity/API-path query, interact with the relevant tab, or mark hidden fields unverified.\n")
+		b.WriteString("Next: if recent captured responses look relevant, call browser_network_read with one ref before citing values; otherwise wait for the page to load dynamic data, try a shorter label/entity/API-path query, interact with the relevant tab, or mark hidden fields unverified.\n")
 		return b.String()
 	}
 	b.WriteString("MATCHES:\n")
