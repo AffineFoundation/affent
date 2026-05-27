@@ -31,6 +31,23 @@ func applyTraceEvent(t *Trace, pending map[string]int, typ string, data json.Raw
 			return false, nil
 		}
 		t.RuntimeSurfaces = append(t.RuntimeSurfaces, p)
+	case sse.TypeContextInjected:
+		var p sse.ContextInjectedPayload
+		if err := json.Unmarshal(data, &p); err != nil {
+			return false, err
+		}
+		if !traceEventMatchesTurn(p.TurnID, turnID) {
+			return false, nil
+		}
+		t.ContextInjections = append(t.ContextInjections, ContextInjection{
+			TurnID:          p.TurnID,
+			Source:          p.Source,
+			Title:           p.Title,
+			Summary:         p.Summary,
+			Preview:         p.Preview,
+			Bytes:           p.Bytes,
+			EstimatedTokens: p.EstimatedTokens,
+		})
 	case sse.TypeMessageDone:
 		var p sse.MessageDonePayload
 		if err := json.Unmarshal(data, &p); err == nil {
@@ -307,6 +324,16 @@ func traceEventRefFromPayload(typ string, data json.RawMessage, turnID string) (
 			TurnID:           p.TurnID,
 			LoopProtocolMode: p.Mode,
 			LoopProtocolPath: p.ProtocolPath,
+		}, true
+	case sse.TypeContextInjected:
+		var p sse.ContextInjectedPayload
+		if err := json.Unmarshal(data, &p); err != nil || !traceEventMatchesTurn(p.TurnID, turnID) {
+			return TraceEventRef{}, false
+		}
+		return TraceEventRef{
+			Type:          typ,
+			TurnID:        p.TurnID,
+			ContextSource: p.Source,
 		}, true
 	case sse.TypeContextCompact:
 		var p sse.ContextCompactPayload

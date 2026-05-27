@@ -98,6 +98,8 @@ func TestParseTraceFileReadsToolRequestsAndFinalText(t *testing.T) {
 	body := strings.Join([]string{
 		`{"type":"trace.meta","data":{"schema_version":1}}`,
 		`{"type":"runtime.surface","data":{"turn_id":"t1","tool_count":2,"tools":[{"name":"web_fetch","group":"Web"},{"name":"web_search","group":"Web"}],"capabilities":{"web_fetch":true,"web_search":true},"max_turn_steps":12,"max_tool_calls":7,"tool_result_event_cap_bytes":262144,"tool_result_context_max_bytes":5120,"tool_result_context_budget_bytes":32768,"tool_result_artifact_prefix":".affent/artifacts/tool-results"}}`,
+		`{"type":"context.injected","data":{"turn_id":"t1","source":"account_access","title":"Account access context injected","summary":"Account-level environment and SSH access hints were made available for this turn.","preview":"Configured environment variables available to shell commands: GITHUB_TOKEN.","bytes":240,"estimated_tokens":60}}`,
+		`{"type":"context.injected","data":{"turn_id":"t1","source":"active_plan","title":"Active plan context injected","summary":"Current step: 2. Execute this step before broadening.","preview":"Current step: 2. Execute this step before broadening. - [ ] verify browser network evidence","bytes":360,"estimated_tokens":90}}`,
 		`{"type":"tool.request","data":{"call_id":"c1","tool":"shell","args":{"command":"go test ./..."},"args_truncated":true,"args_bytes":70000,"args_omitted_bytes":512,"args_cap_bytes":65536,"original_tool":"Shell","original_args_summary":"{\"cmd\":\"go test ./...\"}","canonicalized":true,"args_repaired":true,"repair_notes":["renamed tool","renamed field"]}}`,
 		`{"type":"tool.result","data":{"call_id":"c1","result_summary":"large market report preview","result":"ok","exit_code":0,"duration_ms":17,"result_truncated":true,"result_bytes":300000,"result_omitted_bytes":4096,"result_cap_bytes":262144,"context_bytes":4096,"context_omitted_bytes":8192,"context_estimated_tokens":1024,"result_artifact_path":".affent/artifacts/tool-results/000001-c1.txt"}}`,
 		`{"type":"tool.result","data":{"call_id":"guarded","result":"blocked\nFailure: kind=invalid_args","exit_code":1}}`,
@@ -129,6 +131,32 @@ func TestParseTraceFileReadsToolRequestsAndFinalText(t *testing.T) {
 		trace.RuntimeSurfaces[0].Tools[0].Name != "web_fetch" ||
 		trace.RuntimeSurfaces[0].MaxTurnSteps != 12 {
 		t.Fatalf("RuntimeSurfaces = %+v", trace.RuntimeSurfaces)
+	}
+	contextInjections := trace.ContextInjectionStats(1)
+	if contextInjections.Count != 2 ||
+		contextInjections.BySource["account_access"] != 1 ||
+		contextInjections.BySource["active_plan"] != 1 ||
+		contextInjections.Bytes != 600 ||
+		contextInjections.EstimatedTokens != 150 ||
+		contextInjections.Latest.Source != "active_plan" {
+		t.Fatalf("ContextInjectionStats = %+v", contextInjections)
+	}
+	if len(contextInjections.Examples) != 1 ||
+		contextInjections.Examples[0].Source != "account_access" ||
+		!strings.Contains(contextInjections.Examples[0].Preview, "GITHUB_TOKEN") {
+		t.Fatalf("ContextInjectionStats examples = %+v", contextInjections.Examples)
+	}
+	timeline := renderDebugTimeline(BatchResult{BatchScenario: "trace-parse", ContextInjections: contextInjections}, BatchScenario{Prompt: "inspect"}, &trace)
+	for _, want := range []string{
+		"## Context Injections",
+		"- count: `2`",
+		"- by_source: `account_access=1`, `active_plan=1`",
+		"source=`account_access`",
+		"GITHUB_TOKEN",
+	} {
+		if !strings.Contains(timeline, want) {
+			t.Fatalf("timeline missing %q:\n%s", want, timeline)
+		}
 	}
 	if len(trace.Tools) != 2 {
 		t.Fatalf("tools = %d, want 2", len(trace.Tools))
@@ -292,6 +320,9 @@ func TestParseTraceFileReadsToolRequestsAndFinalText(t *testing.T) {
 	}
 	if got := trace.RawTypes["runtime.surface"]; got != 1 {
 		t.Fatalf("RawTypes[runtime.surface] = %d", got)
+	}
+	if got := trace.RawTypes["context.injected"]; got != 2 {
+		t.Fatalf("RawTypes[context.injected] = %d", got)
 	}
 }
 

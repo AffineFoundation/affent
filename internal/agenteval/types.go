@@ -157,6 +157,11 @@ type Trace struct {
 	// draft LOOP.md activation. These events prove setup progress even before
 	// a later protocol feed exposes calibration counters.
 	LoopProtocolCalibrations []LoopProtocolCalibration
+	// ContextInjections records hidden system-context blocks injected into the
+	// model prompt. These summaries let evals measure prompt pressure from
+	// account access hints, active plans, and auto-activated skills without
+	// exposing the full prompt body.
+	ContextInjections []ContextInjection
 	// ContextCompactions records model-context rewrites produced by the
 	// rolling compactor. The full user-visible trace remains in events.jsonl;
 	// these entries let long-run evals assert that context pressure was handled.
@@ -524,6 +529,7 @@ type TraceEventRef struct {
 	TurnID           string `json:"turn_id,omitempty"`
 	LoopProtocolMode string `json:"loop_protocol_mode,omitempty"`
 	LoopProtocolPath string `json:"loop_protocol_path,omitempty"`
+	ContextSource    string `json:"context_source,omitempty"`
 	ContextReason    string `json:"context_reason,omitempty"`
 	ContextReactive  bool   `json:"context_reactive,omitempty"`
 }
@@ -539,6 +545,26 @@ type LoopProtocolCalibrationStats struct {
 	Count    int
 	Latest   LoopProtocolCalibration
 	Examples []LoopProtocolCalibration
+}
+
+type ContextInjection struct {
+	Scenario        string `json:"scenario,omitempty"`
+	TurnID          string `json:"turn_id,omitempty"`
+	Source          string `json:"source"`
+	Title           string `json:"title"`
+	Summary         string `json:"summary,omitempty"`
+	Preview         string `json:"preview,omitempty"`
+	Bytes           int    `json:"bytes,omitempty"`
+	EstimatedTokens int    `json:"estimated_tokens,omitempty"`
+}
+
+type ContextInjectionStats struct {
+	Count           int
+	BySource        map[string]int
+	Bytes           int
+	EstimatedTokens int
+	Latest          ContextInjection
+	Examples        []ContextInjection
 }
 
 type ContextCompaction struct {
@@ -1366,6 +1392,35 @@ func (t Trace) LoopProtocolCalibrationStats(maxExamples int) LoopProtocolCalibra
 			LastCalibrationAnswer:   calibration.LastCalibrationAnswer,
 			ProtocolPath:            calibration.ProtocolPath,
 			EventSeq:                calibration.EventSeq,
+		})
+	}
+	return stats
+}
+
+func (t Trace) ContextInjectionStats(maxExamples int) ContextInjectionStats {
+	stats := ContextInjectionStats{}
+	for _, injection := range t.ContextInjections {
+		stats.Count++
+		stats.Bytes += injection.Bytes
+		stats.EstimatedTokens += injection.EstimatedTokens
+		if injection.Source != "" {
+			if stats.BySource == nil {
+				stats.BySource = map[string]int{}
+			}
+			stats.BySource[injection.Source]++
+		}
+		stats.Latest = injection
+		if maxExamples <= 0 || len(stats.Examples) >= maxExamples {
+			continue
+		}
+		stats.Examples = append(stats.Examples, ContextInjection{
+			TurnID:          injection.TurnID,
+			Source:          injection.Source,
+			Title:           compactOneLine(injection.Title, 160),
+			Summary:         compactOneLine(injection.Summary, 260),
+			Preview:         compactOneLine(injection.Preview, 360),
+			Bytes:           injection.Bytes,
+			EstimatedTokens: injection.EstimatedTokens,
 		})
 	}
 	return stats

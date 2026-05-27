@@ -214,6 +214,7 @@ type BatchResult struct {
 	LoopProtocolFeeds               LoopProtocolFeedStats
 	LoopProtocolCalibrationRequests LoopProtocolCalibrationStats
 	LoopProtocolCalibrations        LoopProtocolCalibrationStats
+	ContextInjections               ContextInjectionStats
 	ContextCompactions              ContextCompactionStats
 	ToolRepairExamples              []ToolRepairExample
 	ToolFailureExamples             map[string][]ToolFailureExample
@@ -278,6 +279,7 @@ type DebugManifest struct {
 	LoopProtocolFeedExamples               []LoopProtocolFeed            `json:"loop_protocol_feed_examples,omitempty"`
 	LoopProtocolCalibrationRequestExamples []LoopProtocolCalibration     `json:"loop_protocol_calibration_request_examples,omitempty"`
 	LoopProtocolCalibrationExamples        []LoopProtocolCalibration     `json:"loop_protocol_calibration_examples,omitempty"`
+	ContextInjectionExamples               []ContextInjection            `json:"context_injection_examples,omitempty"`
 	SourceAccessExamples                   []SourceAccessExample         `json:"source_access_examples,omitempty"`
 	BrowserScrollExamples                  []BrowserScrollExample        `json:"browser_scroll_examples,omitempty"`
 	BrowserNetworkExamples                 []BrowserNetworkSearchExample `json:"browser_network_examples,omitempty"`
@@ -656,6 +658,10 @@ type DebugMetrics struct {
 	LatestLoopProtocolFeedMode      string         `json:"latest_loop_protocol_feed_mode,omitempty"`
 	LoopProtocolCalibrationRequests int            `json:"loop_protocol_calibration_requests,omitempty"`
 	LoopProtocolCalibrations        int            `json:"loop_protocol_calibrations,omitempty"`
+	ContextInjections               int            `json:"context_injections,omitempty"`
+	ContextInjectionBySource        map[string]int `json:"context_injection_by_source,omitempty"`
+	ContextInjectionBytes           int            `json:"context_injection_bytes,omitempty"`
+	ContextInjectionEstimatedTokens int            `json:"context_injection_estimated_tokens,omitempty"`
 	SourceAccessResults             int            `json:"source_access_results"`
 	SourceAccessVerified            int            `json:"source_access_verified"`
 	SourceAccessDiscoveryOnly       int            `json:"source_access_discovery_only"`
@@ -910,6 +916,7 @@ func (r BatchRunner) Run(ctx context.Context, scenario BatchScenario) BatchResul
 		res.LoopProtocolFeeds = trace.LoopProtocolFeedStats(2)
 		res.LoopProtocolCalibrationRequests = trace.LoopProtocolCalibrationRequestStats(2)
 		res.LoopProtocolCalibrations = trace.LoopProtocolCalibrationStats(2)
+		res.ContextInjections = trace.ContextInjectionStats(2)
 		res.ContextCompactions = trace.ContextCompactionStats(2)
 		res.ToolRepairExamples = trace.ToolRepairExamples(maxDebugToolRepairExamples)
 		res.ToolFailureExamples = trace.ToolFailureExamples(2)
@@ -982,6 +989,12 @@ func writeScenarioDebugArtifacts(res *BatchResult, scenario BatchScenario, stdou
 	if trace != nil && len(res.ToolTruncationExamples) == 0 {
 		res.ToolTruncationExamples = trace.ToolTruncationExamples(maxDebugToolTruncationExamples)
 	}
+	if trace != nil && res.ContextInjections.Count == 0 {
+		res.ContextInjections = trace.ContextInjectionStats(2)
+	}
+	if trace != nil && res.ContextCompactions.Count == 0 {
+		res.ContextCompactions = trace.ContextCompactionStats(2)
+	}
 	if len(res.ChildTranscripts) == 0 {
 		res.ChildTranscripts = collectDebugChildTranscripts(res.Workspace, maxDebugChildTranscriptRefs)
 	}
@@ -1039,6 +1052,7 @@ func writeScenarioDebugArtifacts(res *BatchResult, scenario BatchScenario, stdou
 		LoopProtocolFeedExamples:               append([]LoopProtocolFeed(nil), res.LoopProtocolFeeds.Examples...),
 		LoopProtocolCalibrationRequestExamples: append([]LoopProtocolCalibration(nil), res.LoopProtocolCalibrationRequests.Examples...),
 		LoopProtocolCalibrationExamples:        append([]LoopProtocolCalibration(nil), res.LoopProtocolCalibrations.Examples...),
+		ContextInjectionExamples:               append([]ContextInjection(nil), res.ContextInjections.Examples...),
 		SourceAccessExamples:                   append([]SourceAccessExample(nil), res.SourceAccessExamples...),
 		BrowserScrollExamples:                  append([]BrowserScrollExample(nil), res.BrowserScrollExamples...),
 		BrowserNetworkExamples:                 append([]BrowserNetworkSearchExample(nil), res.BrowserNetworkExamples...),
@@ -1069,6 +1083,10 @@ func writeScenarioDebugArtifacts(res *BatchResult, scenario BatchScenario, stdou
 			LatestLoopProtocolFeedMode:      res.LoopProtocolFeeds.Latest.Mode,
 			LoopProtocolCalibrationRequests: res.LoopProtocolCalibrationRequests.Count,
 			LoopProtocolCalibrations:        res.LoopProtocolCalibrations.Count,
+			ContextInjections:               res.ContextInjections.Count,
+			ContextInjectionBySource:        cloneStringIntMap(res.ContextInjections.BySource),
+			ContextInjectionBytes:           res.ContextInjections.Bytes,
+			ContextInjectionEstimatedTokens: res.ContextInjections.EstimatedTokens,
 			SourceAccessResults:             res.ToolStats.SourceAccessResults,
 			SourceAccessVerified:            res.ToolStats.SourceAccessVerified,
 			SourceAccessDiscoveryOnly:       res.ToolStats.SourceAccessDiscoveryOnly,

@@ -83,6 +83,7 @@ func renderDebugTimeline(res BatchResult, scenario BatchScenario, trace *Trace) 
 
 	renderTimelineTraceEvents(&b, trace)
 	renderTimelineRuntimeSurface(&b, trace)
+	renderTimelineContextInjections(&b, trace)
 	renderTimelineLoopErrors(&b, trace)
 	renderTimelineToolRepair(&b, trace)
 	renderTimelineLoopGuard(&b, trace)
@@ -191,6 +192,13 @@ func timelineMetricsSummary(res BatchResult) string {
 			res.ContextCompactions.SummaryBytes,
 			res.ContextCompactions.SummaryMissing,
 			res.ContextCompactions.SummaryEmpty,
+		))
+	}
+	if res.ContextInjections.Count > 0 {
+		parts = append(parts, fmt.Sprintf("context_injections=%d,bytes=%d,est_tokens=%d",
+			res.ContextInjections.Count,
+			res.ContextInjections.Bytes,
+			res.ContextInjections.EstimatedTokens,
 		))
 	}
 	if res.LoopProtocolCalibrations.Count > 0 {
@@ -815,6 +823,49 @@ func renderTimelineRuntimeSurface(b *strings.Builder, trace *Trace) {
 	}
 	if len(caps) > 0 {
 		fmt.Fprintf(b, "- capabilities: `%s`\n", strings.Join(caps, "`, `"))
+	}
+}
+
+func renderTimelineContextInjections(b *strings.Builder, trace *Trace) {
+	if len(trace.ContextInjections) == 0 {
+		return
+	}
+	stats := trace.ContextInjectionStats(0)
+	b.WriteString("\n## Context Injections\n\n")
+	fmt.Fprintf(b, "- count: `%d`\n", stats.Count)
+	fmt.Fprintf(b, "- bytes: `%d`\n", stats.Bytes)
+	fmt.Fprintf(b, "- estimated_tokens: `%d`\n", stats.EstimatedTokens)
+	if len(stats.BySource) > 0 {
+		keys := make([]string, 0, len(stats.BySource))
+		for source := range stats.BySource {
+			keys = append(keys, source)
+		}
+		sort.Strings(keys)
+		parts := make([]string, 0, len(keys))
+		for _, source := range keys {
+			parts = append(parts, fmt.Sprintf("%s=%d", source, stats.BySource[source]))
+		}
+		fmt.Fprintf(b, "- by_source: `%s`\n", strings.Join(parts, "`, `"))
+	}
+	for i, injection := range trace.ContextInjections {
+		if i >= 8 {
+			fmt.Fprintf(b, "- ... `%d` more context injections omitted\n", len(trace.ContextInjections)-i)
+			break
+		}
+		fmt.Fprintf(b, "%d. turn=`%s` source=`%s` title=%s bytes=%d estimated_tokens=%d\n",
+			i+1,
+			injection.TurnID,
+			injection.Source,
+			timelineInline(injection.Title, 180),
+			injection.Bytes,
+			injection.EstimatedTokens,
+		)
+		if injection.Summary != "" {
+			fmt.Fprintf(b, "   summary: %s\n", timelineInline(injection.Summary, timelineMemoryPreviewBytes))
+		}
+		if injection.Preview != "" {
+			fmt.Fprintf(b, "   preview: %s\n", timelineInline(injection.Preview, timelineArgsPreviewBytes))
+		}
 	}
 }
 

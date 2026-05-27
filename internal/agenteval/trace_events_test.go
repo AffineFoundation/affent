@@ -47,6 +47,31 @@ func TestApplyTraceEventKeepsLegacyToolResultsWithoutTurnID(t *testing.T) {
 	}
 }
 
+func TestApplyTraceEventCapturesContextInjectionMetadata(t *testing.T) {
+	trace := Trace{}
+	pending := map[string]int{}
+
+	if _, err := applyTraceEvent(&trace, pending, sse.TypeContextInjected, json.RawMessage(`{"turn_id":"turn-2","source":"active_plan","title":"wrong turn","bytes":10,"estimated_tokens":3}`), "turn-1"); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := applyTraceEvent(&trace, pending, sse.TypeContextInjected, json.RawMessage(`{"turn_id":"turn-1","source":"account_access","title":"Account access context injected","summary":"Account hints were made available.","preview":"GITHUB_TOKEN","bytes":120,"estimated_tokens":30}`), "turn-1"); err != nil {
+		t.Fatal(err)
+	}
+
+	if len(trace.ContextInjections) != 1 {
+		t.Fatalf("ContextInjections = %+v", trace.ContextInjections)
+	}
+	injection := trace.ContextInjections[0]
+	if injection.TurnID != "turn-1" ||
+		injection.Source != "account_access" ||
+		injection.Title != "Account access context injected" ||
+		injection.Bytes != 120 ||
+		injection.EstimatedTokens != 30 ||
+		injection.Preview != "GITHUB_TOKEN" {
+		t.Fatalf("ContextInjection = %+v", injection)
+	}
+}
+
 func TestApplyTraceEventKeepsMemoryUpdateMetadata(t *testing.T) {
 	trace := Trace{}
 	pending := map[string]int{}
