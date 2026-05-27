@@ -125,6 +125,9 @@ func loopProtocolStateLine(protocolPath string) string {
 	if state.LastProtocolFeedMode != "" {
 		parts = append(parts, "last_feed="+state.LastProtocolFeedMode)
 	}
+	if state.CalibrationAnswers > 0 {
+		parts = append(parts, fmt.Sprintf("calibration_answers=%d", state.CalibrationAnswers))
+	}
 	if state.NeedsFullProtocolFeed {
 		parts = append(parts, "needs_full_feed=true")
 	}
@@ -168,6 +171,11 @@ func loopProtocolStateLine(protocolPath string) string {
 		if len(turn) > 0 {
 			lines = append(lines, "last_turn: "+strings.Join(turn, " "))
 		}
+	}
+	if state.LastCalibrationAnswer != "" {
+		lines = append(lines, "last_calibration: "+loopProtocolInlineFields([]string{
+			"answer=" + state.LastCalibrationAnswer,
+		}))
 	}
 	if state.LastMemoryUpdateAction != "" || state.LastMemoryUpdateLoc != "" || state.LastMemoryUpdate != "" {
 		lines = append(lines, "last_memory_update: "+loopProtocolInlineFields([]string{

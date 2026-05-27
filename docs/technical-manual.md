@@ -719,8 +719,9 @@ Affent stores durable state as inspectable files:
   A successful context compaction marks the loop state so the next feed is
   forced back to full even if the normal cadence would have used a digest.
   Feed metadata also includes compact runtime checkpoints from `state.json`,
-  including the latest turn end, memory update, and loop decision, so the model
-  can recover recent durable changes without replaying the full trace.
+  including the latest calibration answer, turn end, memory update, and loop
+  decision, so the model can recover recent durable changes without replaying
+  the full trace.
   When an active loop turn asks for high-impact runtime, protocol, memory,
   browser, eval, or agent-design changes and the request also asks for
   mainstream/frontier/external calibration, the runtime adds a compact
@@ -745,20 +746,21 @@ Affent stores durable state as inspectable files:
   or replace it without reopening the session; use `DELETE` to disable it.
 - `.affent/loops/<session_id>/state.json`: machine-readable loop lifecycle
   state. It records owner, status, the initial goal preview and initial plan
-  label when available, protocol update count, protocol feed count, latest feed
-  mode, context compaction count, whether the next protocol feed must be full,
-  the latest active-plan checkpoint observed during a feed, and the latest turn
-  checkpoint: turn id, end reason, token usage, tool/error counts, loop-guard
-  interventions, forced no-tool recoveries, memory updates, and session-search
-  calls. Confirmed memory mutations are also mirrored as a
+  label when available, protocol update count, calibration answer count and
+  latest calibration preview, protocol feed count, latest feed mode, context
+  compaction count, whether the next protocol feed must be full, the latest
+  active-plan checkpoint observed during a feed, and the latest turn checkpoint:
+  turn id, end reason, token usage, tool/error counts, loop-guard interventions,
+  forced no-tool recoveries, memory updates, and session-search calls. Confirmed
+  memory mutations are also mirrored as a
   latest memory-update checkpoint with action, target, topic, location,
   previous/next previews, and a compact display preview. It also records
   loop-decision count and the latest gate decision, including kind, trigger,
   decision, confidence, reason, and required action. The latest loop event is
   mirrored so restart/resume code and WebUI do not have to parse Markdown or
   replay the full trace for common status panels. WebUI session rows surface
-  recent memory updates, loop decisions, and last-turn checkpoint state from
-  these fields. Feed count is durable, so
+  recent calibration answers, memory updates, loop decisions, and last-turn
+  checkpoint state from these fields. Feed count is durable, so
   reopening a session continues the
   full/digest cadence instead of restarting from the first full feeds. Session
   list/detail responses expose this as `loop_state`, including after `LOOP.md`

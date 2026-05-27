@@ -497,6 +497,9 @@ func TestWithLoopProtocolSkillProviderIncludesRuntimeCheckpoints(t *testing.T) {
 	}); err != nil {
 		t.Fatalf("RecordDecision: %v", err)
 	}
+	if _, _, err := loopstate.RecordProtocolCalibrationAnswer(path, "Pause if the requested market source cannot be verified."); err != nil {
+		t.Fatalf("RecordProtocolCalibrationAnswer: %v", err)
+	}
 	if _, _, err := loopstate.RecordTurnCheckpoint(path, loopstate.TurnCheckpoint{
 		TurnID:        "turn_done",
 		EndReason:     sse.TurnEndCompleted,
@@ -511,6 +514,8 @@ func TestWithLoopProtocolSkillProviderIncludesRuntimeCheckpoints(t *testing.T) {
 
 	got := WithLoopProtocolSkillProvider(path, nil)("continue")
 	for _, want := range []string{
+		"calibration_answers=1",
+		"last_calibration: answer=Pause if the requested market source cannot be verified.",
 		"last_turn: id=turn_done reason=completed tokens=123/45 tools=2 memory_updates=1 loop_guards=1",
 		"last_memory_update: action=replace location=memory:markets preview=old dashboard rule -> prefer browser network evidence",
 		"last_decision: kind=evidence_quality trigger=source_access_dynamic_partial decision=defer action=read browser network responses",
