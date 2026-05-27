@@ -160,6 +160,7 @@ describe("EventTrace", () => {
           turn_id: "t1",
           source: "schedule",
           schedule_id: "sched_1",
+          schedule_kind: "loop_tick",
           text: "Scheduled check-in for session: market monitor",
         },
       },
@@ -169,8 +170,9 @@ describe("EventTrace", () => {
     render(<EventTrace events={normalizeEvents(raws)} />);
 
     expect(screen.getByText("Request trace")).toBeInTheDocument();
-    expect(screen.getByText("Request 1 · timer sched_1 · Scheduled check-in for session: market monitor · completed")).toBeInTheDocument();
+    expect(screen.getByText("Request 1 · loop tick sched_1 · Scheduled check-in for session: market monitor · completed")).toBeInTheDocument();
     expect(screen.getByText("scheduled")).toBeInTheDocument();
+    expect(screen.getByText("loop_tick")).toBeInTheDocument();
     expect(screen.getByText("sched_1")).toBeInTheDocument();
   });
 

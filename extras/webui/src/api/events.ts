@@ -53,6 +53,7 @@ export interface UserMessagePayload {
   text: string;
   source?: string;
   schedule_id?: string;
+  schedule_kind?: string;
 }
 
 export interface RuntimeSurfacePayload {

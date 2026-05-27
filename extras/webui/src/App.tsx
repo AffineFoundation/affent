@@ -853,6 +853,7 @@ export function App() {
     setScheduleBusy(kind);
     try {
       const resp = await createSessionSchedule(client, sessionId, {
+        kind: loopTick ? "loop_tick" : daily ? "daily_checkin" : "checkin",
         prompt: loopTick
           ? webScheduledLoopTickPrompt(selectedSessionTitle ?? sessionId)
           : webScheduledCheckInPrompt(selectedSessionTitle ?? sessionId),

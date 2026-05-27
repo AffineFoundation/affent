@@ -297,15 +297,24 @@ function userMessageOriginMeta(event: NormalizedEvent | undefined): string | und
   const source = readString(event?.data, "source");
   if (source === "schedule") {
     const scheduleID = readString(event?.data, "schedule_id");
-    return scheduleID ? `timer ${scheduleID}` : "timer";
+    const kind = scheduleKindLabel(readString(event?.data, "schedule_kind"));
+    return compact([kind ?? "timer", scheduleID]).join(" ");
   }
   return undefined;
 }
 
 function userMessageBadges(event: NormalizedEvent | undefined): string[] {
   const source = readString(event?.data, "source");
-  if (source === "schedule") return compact(["scheduled", readString(event?.data, "schedule_id")]);
+  if (source === "schedule") return compact(["scheduled", readString(event?.data, "schedule_kind"), readString(event?.data, "schedule_id")]);
   return [];
+}
+
+function scheduleKindLabel(kind: string | undefined): string | undefined {
+  if (kind === "loop_tick") return "loop tick";
+  if (kind === "daily_checkin") return "daily check-in";
+  if (kind === "checkin") return "check-in";
+  if (kind === "custom") return "timer";
+  return undefined;
 }
 
 function runtimeSurfaceMeta(event: NormalizedEvent, turn: string | undefined): string[] {

@@ -56,7 +56,7 @@ export function SessionSchedulePanel({
             {schedules.map((schedule) => (
               <li key={schedule.id} className="session-schedule-item" data-enabled={schedule.enabled ? "true" : "false"}>
                 <div className="session-schedule-item-main">
-                  <strong>{schedule.enabled ? "Active" : "Paused"} · {formatScheduleTime(schedule.next_run_at)}</strong>
+                  <strong>{scheduleKindLabel(schedule.kind)} · {schedule.enabled ? "Active" : "Paused"} · {formatScheduleTime(schedule.next_run_at)}</strong>
                   <p>{schedule.prompt}</p>
                   <small>{scheduleMeta(schedule)}</small>
                 </div>
@@ -136,6 +136,13 @@ function scheduleMeta(schedule: SessionSchedule): string {
   if (schedule.last_run_at) parts.push(`last ${formatScheduleTime(schedule.last_run_at)}`);
   if (schedule.last_error) parts.push(`error ${schedule.last_error}`);
   return parts.join(" · ");
+}
+
+function scheduleKindLabel(kind: SessionSchedule["kind"]): string {
+  if (kind === "loop_tick") return "Loop tick";
+  if (kind === "daily_checkin") return "Daily check-in";
+  if (kind === "checkin") return "Check-in";
+  return "Timer";
 }
 
 function formatDuration(seconds: number): string {

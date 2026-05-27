@@ -234,6 +234,9 @@ type TurnOptions struct {
 	// ScheduleID identifies the session schedule that fired this turn, when
 	// UserSource == "schedule".
 	ScheduleID string
+	// ScheduleKind carries the scheduler's structured kind for trace/debug UI,
+	// for example "checkin", "daily_checkin", or "loop_tick".
+	ScheduleKind string
 }
 
 type FirstToolPolicy struct {
@@ -839,7 +842,7 @@ func (l *Loop) runTurn(ctx context.Context, turnID, userText string, opts TurnOp
 	l.publish(sse.TypeTurnStart, sse.TurnStartPayload{TurnID: turnID})
 	// Mirror the user's text into the event stream so SSE replays show
 	// the full conversation, not just assistant output.
-	l.publish(sse.TypeUserMessage, sse.UserMessagePayload{TurnID: turnID, Text: userText, Source: opts.UserSource, ScheduleID: opts.ScheduleID})
+	l.publish(sse.TypeUserMessage, sse.UserMessagePayload{TurnID: turnID, Text: userText, Source: opts.UserSource, ScheduleID: opts.ScheduleID, ScheduleKind: opts.ScheduleKind})
 	l.publishRuntimeSurface(turnID, opts)
 	if payload, ok := l.researchCheckpointDecision(userText, opts); ok {
 		payload.TurnID = turnID

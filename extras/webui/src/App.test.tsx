@@ -754,6 +754,7 @@ describe("App", () => {
           schedules: [
             {
               id: "sched_1",
+              kind: "checkin",
               prompt: "Scheduled check-in for session: long running subnet analysis",
               enabled: true,
               next_run_at: "2026-05-27T14:30:00Z",
@@ -790,7 +791,8 @@ describe("App", () => {
 
     await waitFor(() => expect(fetchImpl).toHaveBeenCalledWith("/v1/sessions/timer-control/schedules", expect.objectContaining({ method: "POST" })));
     const scheduleCall = fetchImpl.mock.calls.find(([url]) => String(url) === "/v1/sessions/timer-control/schedules");
-    const body = JSON.parse(String((scheduleCall?.[1] as RequestInit).body)) as { prompt: string; next_run_at: string; enabled: boolean };
+    const body = JSON.parse(String((scheduleCall?.[1] as RequestInit).body)) as { kind?: string; prompt: string; next_run_at: string; enabled: boolean };
+    expect(body.kind).toBe("checkin");
     expect(body.prompt).toContain("Scheduled check-in for session: long running subnet analysis");
     expect(body.prompt).toContain("ask the user one concise question");
     expect(body.prompt).toContain("loop_protocol action=read");
@@ -852,6 +854,7 @@ describe("App", () => {
           schedules: [
             {
               id: "sched_loop",
+              kind: "loop_tick",
               prompt: "Scheduled loop tick for session: long running runtime improvement",
               enabled: true,
               next_run_at: "2026-05-27T14:00:00Z",
@@ -880,7 +883,8 @@ describe("App", () => {
 
     await waitFor(() => expect(fetchImpl).toHaveBeenCalledWith("/v1/sessions/loop-timer/schedules", expect.objectContaining({ method: "POST" })));
     const scheduleCall = fetchImpl.mock.calls.find(([url]) => String(url) === "/v1/sessions/loop-timer/schedules");
-    const body = JSON.parse(String((scheduleCall?.[1] as RequestInit).body)) as { prompt: string; repeat_interval_seconds?: number; enabled: boolean };
+    const body = JSON.parse(String((scheduleCall?.[1] as RequestInit).body)) as { kind?: string; prompt: string; repeat_interval_seconds?: number; enabled: boolean };
+    expect(body.kind).toBe("loop_tick");
     expect(body.prompt).toContain("Scheduled loop tick for session: long running runtime improvement");
     expect(body.prompt).toContain("autonomous long-run tick");
     expect(body.prompt).toContain("loop_protocol action=read");
@@ -888,6 +892,7 @@ describe("App", () => {
     expect(body.repeat_interval_seconds).toBe(1800);
     expect(body.enabled).toBe(true);
     expect(await screen.findByTestId("session-schedule-panel")).toHaveTextContent("1 active");
+    expect(screen.getByTestId("session-schedule-list")).toHaveTextContent("Loop tick");
     expect(screen.getByTestId("session-schedule-list")).toHaveTextContent("Repeats every 30m");
     expect(screen.getByTestId("session-list")).toHaveTextContent("timers");
   });

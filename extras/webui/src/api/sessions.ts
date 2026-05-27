@@ -233,6 +233,7 @@ export interface SessionLoopProtocolDeleteResponse {
 
 export interface SessionSchedule {
   id: string;
+  kind?: "custom" | "checkin" | "daily_checkin" | "loop_tick";
   prompt: string;
   enabled: boolean;
   next_run_at: string;
@@ -250,6 +251,7 @@ export interface SessionSchedulesSummary {
   enabled: number;
   next_run_at?: string;
   next_schedule_id?: string;
+  next_schedule_kind?: "custom" | "checkin" | "daily_checkin" | "loop_tick";
   next_prompt_preview?: string;
 }
 
@@ -260,6 +262,7 @@ export interface SessionSchedulesResponse {
 }
 
 export interface SessionScheduleCreateRequest {
+  kind?: "custom" | "checkin" | "daily_checkin" | "loop_tick";
   prompt: string;
   next_run_at: string;
   repeat_interval_seconds?: number;

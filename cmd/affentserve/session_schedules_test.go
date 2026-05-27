@@ -16,6 +16,7 @@ func TestSessionPool_RunDueSessionSchedulesOnceFiresOneShot(t *testing.T) {
 	now := time.Date(2026, 5, 27, 14, 0, 0, 0, time.UTC)
 	writeScheduleFixture(t, pool, "due-one", sessionSchedule{
 		ID:        "sched_due",
+		Kind:      sessionScheduleKindLoopTick,
 		Prompt:    "Scheduled check-in for session: due-one",
 		Enabled:   true,
 		NextRunAt: now.Add(-time.Minute).Format(time.RFC3339),
@@ -41,7 +42,7 @@ func TestSessionPool_RunDueSessionSchedulesOnceFiresOneShot(t *testing.T) {
 		t.Fatalf("schedule = %+v, want successful run metadata", schedule)
 	}
 	userMessage := waitScheduleUserMessage(t, pool, "due-one")
-	if userMessage.Source != "schedule" || userMessage.ScheduleID != "sched_due" || userMessage.Text != "Scheduled check-in for session: due-one" {
+	if userMessage.Source != "schedule" || userMessage.ScheduleID != "sched_due" || userMessage.ScheduleKind != sessionScheduleKindLoopTick || userMessage.Text != "Scheduled check-in for session: due-one" {
 		t.Fatalf("user.message = %+v, want schedule metadata", userMessage)
 	}
 }

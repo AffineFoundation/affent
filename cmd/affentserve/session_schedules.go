@@ -30,8 +30,16 @@ const (
 	maxSessionScheduleErrorChars = 240
 )
 
+const (
+	sessionScheduleKindCustom       = "custom"
+	sessionScheduleKindCheckIn      = "checkin"
+	sessionScheduleKindDailyCheckIn = "daily_checkin"
+	sessionScheduleKindLoopTick     = "loop_tick"
+)
+
 type sessionSchedule struct {
 	ID                    string `json:"id"`
+	Kind                  string `json:"kind,omitempty"`
 	Prompt                string `json:"prompt"`
 	Enabled               bool   `json:"enabled"`
 	NextRunAt             string `json:"next_run_at"`
@@ -54,6 +62,7 @@ type sessionSchedulesSummary struct {
 	Enabled           int    `json:"enabled"`
 	NextRunAt         string `json:"next_run_at,omitempty"`
 	NextScheduleID    string `json:"next_schedule_id,omitempty"`
+	NextScheduleKind  string `json:"next_schedule_kind,omitempty"`
 	NextPromptPreview string `json:"next_prompt_preview,omitempty"`
 }
 
@@ -64,6 +73,7 @@ type sessionSchedulesResponse struct {
 }
 
 type sessionScheduleCreateRequest struct {
+	Kind                  string `json:"kind,omitempty"`
 	Prompt                string `json:"prompt"`
 	NextRunAt             string `json:"next_run_at"`
 	RepeatIntervalSeconds int64  `json:"repeat_interval_seconds,omitempty"`
@@ -78,9 +88,10 @@ type sessionScheduleDeleteResponse struct {
 }
 
 type sessionScheduleRun struct {
-	SessionID  string
-	ScheduleID string
-	Prompt     string
+	SessionID    string
+	ScheduleID   string
+	ScheduleKind string
+	Prompt       string
 }
 
 func handleSessionSchedules(pool *SessionPool, sessionID string, w http.ResponseWriter, r *http.Request) {
@@ -199,6 +210,11 @@ func createSessionSchedule(pool *SessionPool, sessionID string, w http.ResponseW
 		writeJSONErrorTyped(w, http.StatusRequestEntityTooLarge, "schedule prompt too large", nil, "bad_request")
 		return
 	}
+	kind, err := normalizeSessionScheduleKind(req.Kind)
+	if err != nil {
+		writeJSONErrorTyped(w, http.StatusBadRequest, "invalid schedule kind", err, "bad_request")
+		return
+	}
 	if req.RepeatIntervalSeconds < 0 {
 		writeJSONErrorTyped(w, http.StatusBadRequest, "repeat_interval_seconds must be non-negative", nil, "bad_request")
 		return
@@ -233,6 +249,7 @@ func createSessionSchedule(pool *SessionPool, sessionID string, w http.ResponseW
 	}
 	schedule := sessionSchedule{
 		ID:                    newSessionScheduleID(),
+		Kind:                  kind,
 		Prompt:                prompt,
 		Enabled:               enabled,
 		NextRunAt:             nextRunAt.Format(time.RFC3339),
@@ -320,8 +337,8 @@ func readSessionSchedulesFile(path string) (sessionSchedulesFile, bool, error) {
 	if len(file.Schedules) > maxSessionSchedules {
 		return sessionSchedulesFile{}, false, fmt.Errorf("schedules file exceeds %d schedules", maxSessionSchedules)
 	}
-	for _, schedule := range file.Schedules {
-		if err := validateSessionSchedule(schedule); err != nil {
+	for i := range file.Schedules {
+		if err := normalizeSessionSchedule(&file.Schedules[i]); err != nil {
 			return sessionSchedulesFile{}, false, err
 		}
 	}
@@ -335,8 +352,8 @@ func writeSessionSchedulesFile(path string, file sessionSchedulesFile) error {
 	if len(file.Schedules) > maxSessionSchedules {
 		return fmt.Errorf("schedules file exceeds %d schedules", maxSessionSchedules)
 	}
-	for _, schedule := range file.Schedules {
-		if err := validateSessionSchedule(schedule); err != nil {
+	for i := range file.Schedules {
+		if err := normalizeSessionSchedule(&file.Schedules[i]); err != nil {
 			return err
 		}
 	}
@@ -428,6 +445,7 @@ func summarizeSessionSchedules(schedules []sessionSchedule) *sessionSchedulesSum
 	if next != nil {
 		summary.NextRunAt = next.NextRunAt
 		summary.NextScheduleID = next.ID
+		summary.NextScheduleKind = next.Kind
 		summary.NextPromptPreview = previewSessionSchedulePrompt(next.Prompt)
 	}
 	return summary
@@ -456,7 +474,15 @@ func scheduleTimeBefore(a, b string) bool {
 	return a < b
 }
 
-func validateSessionSchedule(schedule sessionSchedule) error {
+func normalizeSessionSchedule(schedule *sessionSchedule) error {
+	if schedule == nil {
+		return errors.New("schedule is nil")
+	}
+	kind, err := normalizeSessionScheduleKind(schedule.Kind)
+	if err != nil {
+		return err
+	}
+	schedule.Kind = kind
 	if err := validateSessionScheduleID(schedule.ID); err != nil {
 		return err
 	}
@@ -482,6 +508,19 @@ func validateSessionSchedule(schedule sessionSchedule) error {
 		return fmt.Errorf("repeat_interval_seconds must be at least %d", int(minSessionScheduleRepeat.Seconds()))
 	}
 	return nil
+}
+
+func normalizeSessionScheduleKind(kind string) (string, error) {
+	kind = strings.TrimSpace(kind)
+	if kind == "" {
+		return sessionScheduleKindCustom, nil
+	}
+	switch kind {
+	case sessionScheduleKindCustom, sessionScheduleKindCheckIn, sessionScheduleKindDailyCheckIn, sessionScheduleKindLoopTick:
+		return kind, nil
+	default:
+		return "", fmt.Errorf("schedule kind must be one of %s, %s, %s, or %s", sessionScheduleKindCustom, sessionScheduleKindCheckIn, sessionScheduleKindDailyCheckIn, sessionScheduleKindLoopTick)
+	}
 }
 
 func validateSessionScheduleID(id string) error {
@@ -619,9 +658,10 @@ func (p *SessionPool) claimNextDueSessionSchedule(sessionID string, now time.Tim
 			continue
 		}
 		run := sessionScheduleRun{
-			SessionID:  sessionID,
-			ScheduleID: schedule.ID,
-			Prompt:     schedule.Prompt,
+			SessionID:    sessionID,
+			ScheduleID:   schedule.ID,
+			ScheduleKind: schedule.Kind,
+			Prompt:       schedule.Prompt,
 		}
 		schedule.LastError = ""
 		schedule.UpdatedAt = nowStr
@@ -645,8 +685,9 @@ func (p *SessionPool) executeClaimedSessionSchedule(now time.Time, run sessionSc
 		return err
 	}
 	turnID, err := sess.SendUserWithOptions(context.Background(), run.Prompt, agent.TurnOptions{
-		UserSource: "schedule",
-		ScheduleID: run.ScheduleID,
+		UserSource:   "schedule",
+		ScheduleID:   run.ScheduleID,
+		ScheduleKind: run.ScheduleKind,
 	})
 	if err != nil {
 		_ = p.recordSessionScheduleFailure(run, now, err)
