@@ -150,6 +150,7 @@ func TestNetworkEvidenceToolsSearchAndRead(t *testing.T) {
 	for _, want := range []string{
 		"SourceAccess: browser_network_url=https://taostats.io/api/subnets/120",
 		"requested_url=https://taostats.io/subnets/120",
+		"ref=n1",
 		"source_method=network_xhr_fetch",
 		`"market_cap":"201.04K T"`,
 	} {
@@ -172,6 +173,7 @@ func TestNetworkEvidenceReadIncludesPageURLForSiblingAPI(t *testing.T) {
 	for _, want := range []string{
 		"SourceAccess: browser_network_url=https://api.metrics.example.com/v1/current",
 		"requested_url=https://app.metrics.example.com/dashboard",
+		"ref=n1",
 		"source_method=network_xhr_fetch",
 	} {
 		if !strings.Contains(readOut, want) {

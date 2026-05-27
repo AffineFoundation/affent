@@ -351,6 +351,7 @@ func TestSession_NetworkEvidenceCapturesDashboardXHR(t *testing.T) {
 	}
 	for _, want := range []string{
 		"SourceAccess: browser_network_url=" + srv.URL + "/api/metrics",
+		"ref=" + ref,
 		"source_method=network_xhr_fetch",
 		`"market_cap":"201.04K T"`,
 		`"volume_24h":"18.7K T"`,

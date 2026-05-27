@@ -784,7 +784,7 @@ Current built-in suites:
   direct-reader recovery, and browser network evidence quality. These scenarios
   intentionally depend on public sites and should be run with web/browser tools
   enabled. Browser network evidence scenarios require final answers to preserve
-  `browser_network_url`, `requested_url`, and network refs when available, so
+  `browser_network_url`, `requested_url`, and `ref=...`, so
   operators can distinguish the response actually read from the user-facing
   page being verified.
 
