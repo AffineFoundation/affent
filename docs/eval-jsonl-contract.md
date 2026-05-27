@@ -217,7 +217,8 @@ Scenario records describe one eval case:
   `SourceAccess:` evidence. Each sample includes tool index, call id, tool
   name, evidence status (`verified`, `network`, `dynamic_partial`, or
   `discovery_only`), accessed/requested URLs, URL field, source method, and
-  JSON path when present.
+  JSON path when present. Batch summary examples also include the originating
+  scenario name so a failed live-web evidence chain can be traced directly.
 - `session_search_calls`: count of dispatched `session_search` tool calls.
 - `session_search_results`: total prior-session hits reported by parsed
   `session_search` JSON responses.
@@ -366,7 +367,8 @@ Summary records aggregate all scenario records from the same process:
 - Runtime error totals and diagnostics: `runtime_error_by_kind`,
   `runtime_error_hints`, `runtime_error_examples`.
 - Source evidence examples: `source_access_examples`, the first bounded
-  samples across the batch.
+  samples across the batch, including their originating scenario when emitted
+  from the batch summary.
 - Context pressure totals: `context_compactions`,
   `context_compactions_reactive`, `context_compaction_removed_messages`,
   `context_compaction_summary_bytes`, `context_compaction_summary_missing`, and

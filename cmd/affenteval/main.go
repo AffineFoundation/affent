@@ -825,7 +825,7 @@ func (s *batchSummary) add(res agenteval.BatchResult) {
 	s.SourceAccessDiscoveryOnly += res.ToolStats.SourceAccessDiscoveryOnly
 	s.SourceAccessNetwork += res.ToolStats.SourceAccessNetwork
 	s.SourceAccessDynamicPartial += res.ToolStats.SourceAccessDynamicPartial
-	s.SourceAccessExamples = appendSourceAccessExamples(s.SourceAccessExamples, res.SourceAccessExamples, batchSummaryExamplesPerKind)
+	s.SourceAccessExamples = appendSourceAccessExamples(s.SourceAccessExamples, res.SourceAccessExamples, res.BatchScenario, batchSummaryExamplesPerKind)
 	s.MemoryUpdates += res.ToolStats.MemoryUpdates
 	s.MemoryUpdateAdd += res.ToolStats.MemoryUpdateAdd
 	s.MemoryUpdateReplace += res.ToolStats.MemoryUpdateReplace
@@ -1715,7 +1715,11 @@ func printLoopGuardExampleLines(w io.Writer, examples []agenteval.LoopGuardExamp
 
 func printSourceAccessExampleLines(w io.Writer, examples []agenteval.SourceAccessExample, indent string) {
 	for _, ex := range examples {
-		fmt.Fprintf(w, "%ssource_access_example: status=%s tool=%s", indent, ex.Status, ex.Tool)
+		fmt.Fprintf(w, "%ssource_access_example:", indent)
+		if ex.Scenario != "" {
+			fmt.Fprintf(w, " scenario=%s", ex.Scenario)
+		}
+		fmt.Fprintf(w, " status=%s tool=%s", ex.Status, ex.Tool)
 		if ex.CallID != "" {
 			fmt.Fprintf(w, " call_id=%s", ex.CallID)
 		}
@@ -3112,13 +3116,16 @@ func appendLoopGuardExamples(dst, src []agenteval.LoopGuardExample, limit int) [
 	return dst
 }
 
-func appendSourceAccessExamples(dst, src []agenteval.SourceAccessExample, limit int) []agenteval.SourceAccessExample {
+func appendSourceAccessExamples(dst, src []agenteval.SourceAccessExample, scenario string, limit int) []agenteval.SourceAccessExample {
 	if limit <= 0 || len(dst) >= limit {
 		return dst
 	}
 	for _, ex := range src {
 		if len(dst) >= limit {
 			break
+		}
+		if ex.Scenario == "" {
+			ex.Scenario = scenario
 		}
 		dst = append(dst, ex)
 	}

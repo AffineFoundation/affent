@@ -368,6 +368,7 @@ type MemoryUpdateExample struct {
 }
 
 type SourceAccessExample struct {
+	Scenario     string `json:"scenario,omitempty"`
 	ToolIndex    int    `json:"tool_index"`
 	CallID       string `json:"call_id,omitempty"`
 	Tool         string `json:"tool"`

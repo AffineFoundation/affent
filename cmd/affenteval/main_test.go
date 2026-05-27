@@ -1003,6 +1003,7 @@ func TestPrintBatchResultOmitsDebugPathsForRemovedWorkspace(t *testing.T) {
 func TestBatchSummaryAggregatesRuntimeMetrics(t *testing.T) {
 	var summary batchSummary
 	summary.add(agenteval.BatchResult{
+		BatchScenario:      "sample",
 		OK:                 true,
 		Duration:           100 * time.Millisecond,
 		ToolCalls:          2,
@@ -1337,7 +1338,7 @@ func TestBatchSummaryAggregatesRuntimeMetrics(t *testing.T) {
 	if !strings.Contains(out.String(), `loop_guard_example[loop_guard_repeated_failed_input]: category=loop_guard tool=web_fetch call_id=guard-1 args=url="https://loop.example" exit=1 result=repeated failed input | Next: use browser_network_read`) {
 		t.Fatalf("summary output missing loop guard example:\n%s", out.String())
 	}
-	if !strings.Contains(out.String(), "source_access_example: status=network tool=browser_network_read call_id=source-1 url=https://metrics.example/api.json json_path=$.price") {
+	if !strings.Contains(out.String(), "source_access_example: scenario=sample status=network tool=browser_network_read call_id=source-1 url=https://metrics.example/api.json json_path=$.price") {
 		t.Fatalf("summary output missing source access example:\n%s", out.String())
 	}
 	if !strings.Contains(out.String(), `memory_update_example: action=add target=memory location=memory:markets call_id=memory-1 topic=markets next="Prefer browser_network_read evidence for dynamic dashboards."`) {
@@ -1410,7 +1411,9 @@ func TestBatchSummaryAggregatesRuntimeMetrics(t *testing.T) {
 	if !reflect.DeepEqual(summary.RuntimeSurfaceTools, map[string]int{"web_fetch": 2, "web_search": 1, "browser_find": 2}) {
 		t.Fatalf("RuntimeSurfaceTools = %#v", summary.RuntimeSurfaceTools)
 	}
-	if len(summary.SourceAccessExamples) != 1 || summary.SourceAccessExamples[0].CallID != "source-1" {
+	if len(summary.SourceAccessExamples) != 1 ||
+		summary.SourceAccessExamples[0].CallID != "source-1" ||
+		summary.SourceAccessExamples[0].Scenario != "sample" {
 		t.Fatalf("SourceAccessExamples = %#v", summary.SourceAccessExamples)
 	}
 	if len(summary.MemoryUpdateExamples) != 1 || summary.MemoryUpdateExamples[0].CallID != "memory-1" {
@@ -2561,6 +2564,7 @@ func TestPrintBatchSummaryJSONL(t *testing.T) {
 		SourceAccessNetwork:        2,
 		SourceAccessDynamicPartial: 1,
 		SourceAccessExamples: []agenteval.SourceAccessExample{{
+			Scenario:  "taostats-rendered",
 			ToolIndex: 2,
 			CallID:    "summary-source-1",
 			Tool:      "browser_network_read",
@@ -2886,6 +2890,7 @@ func TestPrintBatchSummaryJSONL(t *testing.T) {
 	}
 	sourceAccessExample, ok := sourceAccessExamples[0].(map[string]any)
 	if !ok ||
+		sourceAccessExample["scenario"] != "taostats-rendered" ||
 		sourceAccessExample["call_id"] != "summary-source-1" ||
 		sourceAccessExample["status"] != "network" ||
 		sourceAccessExample["json_path"] != "$.price" {
