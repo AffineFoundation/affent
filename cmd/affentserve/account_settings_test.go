@@ -218,6 +218,66 @@ func TestAccountSettingsSSHKeyDerivesMissingPublicKeyFromExistingPrivate(t *test
 	}
 }
 
+func TestAccountSettingsSSHKeyDerivesMissingPublicKeyFromOpenSSHPrivate(t *testing.T) {
+	pool := newPoolWithMemoryRoot(t, t.TempDir())
+	privatePath, publicPath := accountSSHKeyPaths(pool)
+	if err := os.MkdirAll(filepath.Dir(privatePath), 0o700); err != nil {
+		t.Fatal(err)
+	}
+	privateKey := strings.Join([]string{
+		"-----BEGIN OPENSSH PRIVATE KEY-----",
+		"b3BlbnNzaC1rZXktdjEAAAAABG5vbmUAAAAEbm9uZQAAAAAAAAABAAAAMwAAAAtzc2gtZW",
+		"QyNTUxOQAAACBkz90yP72VBEik3G5JWsnM72CHVKMdepUTDdhM55dekQAAAJi0xYNWtMWD",
+		"VgAAAAtzc2gtZWQyNTUxOQAAACBkz90yP72VBEik3G5JWsnM72CHVKMdepUTDdhM55dekQ",
+		"AAAEB31GgQIq3ctwOPYQHLqfpgCpdVDYxAPXjXgtOV2ZD7x2TP3TI/vZUESKTcbklayczv",
+		"YIdUox16lRMN2Eznl16RAAAADmFmZmVudC1maXh0dXJlAQIDBAUGBw==",
+		"-----END OPENSSH PRIVATE KEY-----",
+		"",
+	}, "\n")
+	if err := os.WriteFile(privatePath, []byte(privateKey), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	wantPublicKey := "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIGTP3TI/vZUESKTcbklayczvYIdUox16lRMN2Eznl16R affentserve"
+
+	r := httptest.NewRequest(http.MethodGet, "/v1/settings", nil)
+	w := httptest.NewRecorder()
+	handleAccountSettings(pool).ServeHTTP(w, r)
+	if got := w.Result().StatusCode; got != http.StatusOK {
+		t.Fatalf("get settings status = %d, want 200; body=%s", got, w.Body.String())
+	}
+	var got accountSettingsResponse
+	if err := json.Unmarshal(w.Body.Bytes(), &got); err != nil {
+		t.Fatalf("decode get settings: %v", err)
+	}
+	if !got.SSH.Exists || got.SSH.PublicKey != wantPublicKey || got.SSH.PublicKeyError != "" {
+		t.Fatalf("get ssh = %+v, want derived public key from OpenSSH private", got.SSH)
+	}
+	if _, err := os.Stat(publicPath); !os.IsNotExist(err) {
+		t.Fatalf("GET settings should not create public key file; stat err=%v", err)
+	}
+
+	r = httptest.NewRequest(http.MethodPost, "/v1/settings/ssh-key", nil)
+	w = httptest.NewRecorder()
+	handleAccountSettingsRoutes(pool).ServeHTTP(w, r)
+	if got := w.Result().StatusCode; got != http.StatusOK {
+		t.Fatalf("ensure settings status = %d, want 200; body=%s", got, w.Body.String())
+	}
+	var ensured accountSettingsResponse
+	if err := json.Unmarshal(w.Body.Bytes(), &ensured); err != nil {
+		t.Fatalf("decode ensure settings: %v", err)
+	}
+	if ensured.SSH.Created || ensured.SSH.PublicKey != wantPublicKey {
+		t.Fatalf("ensured ssh = %+v, want existing OpenSSH public key without private overwrite", ensured.SSH)
+	}
+	raw, err := os.ReadFile(publicPath)
+	if err != nil {
+		t.Fatalf("read derived public key file: %v", err)
+	}
+	if strings.TrimSpace(string(raw)) != wantPublicKey {
+		t.Fatalf("derived public key file = %q, want %q", strings.TrimSpace(string(raw)), wantPublicKey)
+	}
+}
+
 func TestAccountSettingsSSHKeyRefusesPrivateOnlyOverwrite(t *testing.T) {
 	pool := newPoolWithMemoryRoot(t, t.TempDir())
 	privatePath, _ := accountSSHKeyPaths(pool)

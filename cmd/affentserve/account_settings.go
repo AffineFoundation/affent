@@ -534,6 +534,9 @@ func deriveAccountPublicKeyFromPrivate(path string) (string, error) {
 	if block == nil {
 		return "", errors.New("ssh private key is not PEM encoded")
 	}
+	if block.Type == "OPENSSH PRIVATE KEY" {
+		return deriveAccountPublicKeyFromOpenSSHPrivate(block.Bytes)
+	}
 	if block.Type != "PRIVATE KEY" {
 		return "", fmt.Errorf("unsupported private key PEM type %q", block.Type)
 	}
@@ -552,6 +555,54 @@ func deriveAccountPublicKeyFromPrivate(path string) (string, error) {
 	return marshalOpenSSHEd25519PublicKey(publicKey, "affentserve"), nil
 }
 
+func deriveAccountPublicKeyFromOpenSSHPrivate(raw []byte) (string, error) {
+	const magic = "openssh-key-v1\x00"
+	if !bytes.HasPrefix(raw, []byte(magic)) {
+		return "", errors.New("invalid OpenSSH private key header")
+	}
+	rest := raw[len(magic):]
+	_, rest, err := readSSHString(rest)
+	if err != nil {
+		return "", fmt.Errorf("read OpenSSH cipher name: %w", err)
+	}
+	_, rest, err = readSSHString(rest)
+	if err != nil {
+		return "", fmt.Errorf("read OpenSSH kdf name: %w", err)
+	}
+	_, rest, err = readSSHString(rest)
+	if err != nil {
+		return "", fmt.Errorf("read OpenSSH kdf options: %w", err)
+	}
+	if len(rest) < 4 {
+		return "", errors.New("OpenSSH private key missing key count")
+	}
+	keyCount := binary.BigEndian.Uint32(rest[:4])
+	rest = rest[4:]
+	if keyCount != 1 {
+		return "", fmt.Errorf("unsupported OpenSSH private key count %d", keyCount)
+	}
+	publicBlob, _, err := readSSHString(rest)
+	if err != nil {
+		return "", fmt.Errorf("read OpenSSH public key: %w", err)
+	}
+	return marshalOpenSSHPublicKeyBlob(publicBlob, "affentserve")
+}
+
+func marshalOpenSSHPublicKeyBlob(publicBlob []byte, comment string) (string, error) {
+	keyType, _, err := readSSHString(publicBlob)
+	if err != nil {
+		return "", fmt.Errorf("read OpenSSH public key type: %w", err)
+	}
+	if len(keyType) == 0 {
+		return "", errors.New("OpenSSH public key type is empty")
+	}
+	out := string(keyType) + " " + base64.StdEncoding.EncodeToString(publicBlob)
+	if strings.TrimSpace(comment) != "" {
+		out += " " + strings.TrimSpace(comment)
+	}
+	return out, nil
+}
+
 func marshalOpenSSHEd25519PublicKey(pub ed25519.PublicKey, comment string) string {
 	const keyType = "ssh-ed25519"
 	var payload bytes.Buffer
@@ -562,6 +613,18 @@ func marshalOpenSSHEd25519PublicKey(pub ed25519.PublicKey, comment string) strin
 		out += " " + strings.TrimSpace(comment)
 	}
 	return out
+}
+
+func readSSHString(raw []byte) ([]byte, []byte, error) {
+	if len(raw) < 4 {
+		return nil, nil, errors.New("short SSH string length")
+	}
+	length := binary.BigEndian.Uint32(raw[:4])
+	rest := raw[4:]
+	if length > uint32(len(rest)) {
+		return nil, nil, errors.New("SSH string length exceeds remaining data")
+	}
+	return rest[:length], rest[length:], nil
 }
 
 func writeSSHString(buf *bytes.Buffer, value []byte) {
