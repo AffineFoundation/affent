@@ -145,6 +145,27 @@ func TestHandleSessionEvents_RejectsFutureLastEventID(t *testing.T) {
 	}
 }
 
+func TestHandleSessionEvents_RejectsFutureLastEventIDBeforeReopeningDurableSession(t *testing.T) {
+	memRoot := t.TempDir()
+	pool := newPoolWithMemoryRoot(t, memRoot)
+	createDurableSessionDir(t, pool, "future-durable-cursor")
+
+	r := httptest.NewRequest(http.MethodGet, "/v1/sessions/future-durable-cursor/events", nil)
+	r.Header.Set("Last-Event-ID", "99")
+	w := httptest.NewRecorder()
+	handleSessionEvents(pool, "future-durable-cursor", w, r)
+
+	if got := w.Result().StatusCode; got != http.StatusConflict {
+		t.Fatalf("status = %d, want 409: %s", got, w.Body.String())
+	}
+	if !strings.Contains(w.Body.String(), "cursor_ahead") {
+		t.Fatalf("future cursor response should identify cursor_ahead, got: %s", w.Body.String())
+	}
+	if _, err := pool.Get("future-durable-cursor"); !errors.Is(err, ErrSessionNotFound) {
+		t.Fatalf("future Last-Event-ID must not reopen durable session, got err=%v", err)
+	}
+}
+
 // TestHandleSessionEvents_RejectsNonStreamingWriter pins the
 // "streaming unsupported" guard. The handler asserts w to
 // http.Flusher; on any wrapper that doesn't implement it (some

@@ -55,6 +55,20 @@ func handleSessionEvents(pool *SessionPool, sessionID string, w http.ResponseWri
 		writeJSONError(w, http.StatusInternalServerError, "streaming unsupported", nil)
 		return
 	}
+	if replay {
+		if err := agent.ValidateSessionID(sessionID); err != nil {
+			writeJSONErrorTyped(w, http.StatusBadRequest, "invalid session id", err, "bad_request")
+			return
+		}
+		if err := validateExistingSessionReplayCursor(pool, sessionID, lastEventID); err != nil {
+			if errors.Is(err, errEventCursorAhead) {
+				writeJSONErrorTyped(w, http.StatusConflict, "Last-Event-ID is ahead of latest session event", err, "cursor_ahead")
+				return
+			}
+			writeJSONError(w, http.StatusInternalServerError, "validate session event cursor", err)
+			return
+		}
+	}
 	sess, err := sessionForEvents(pool, sessionID)
 	if err != nil {
 		if errors.Is(err, ErrSessionNotFound) {
@@ -162,6 +176,18 @@ func parseLastEventID(raw string) (int64, bool, error) {
 		return 0, false, errors.New("Last-Event-ID must be -1 or greater")
 	}
 	return n, true, nil
+}
+
+func validateExistingSessionReplayCursor(pool *SessionPool, sessionID string, cursor int64) error {
+	if cursor < 0 || pool == nil {
+		return nil
+	}
+	sessionDir := pool.sessionDirPath(sessionID)
+	exists, _, err := durableRegularFileModTime(filepath.Join(sessionDir, "events.jsonl"))
+	if err != nil || !exists {
+		return err
+	}
+	return validateSessionReplayCursor(sessionDir, cursor)
 }
 
 func validateSessionReplayCursor(sessionDir string, cursor int64) error {
