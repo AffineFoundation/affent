@@ -88,6 +88,21 @@ func TestWriteProtocolPersistsAtomicallyAndRejectsUnsafeTargets(t *testing.T) {
 	}
 }
 
+func TestWriteProtocolRejectsOversizedCurrentSituation(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "LOOP.md")
+	protocol := "# Loop\n\n## Current Situation\n\n" + strings.Repeat("evidence ", MaxCurrentSituationChars/len("evidence ")+20)
+	err := WriteProtocol(path, protocol)
+	if err == nil ||
+		!strings.Contains(err.Error(), "Current Situation") ||
+		!strings.Contains(err.Error(), "1200") {
+		t.Fatalf("oversized current situation WriteProtocol err = %v", err)
+	}
+	if _, err := os.Lstat(path); !os.IsNotExist(err) {
+		t.Fatalf("oversized current situation should not be written, stat err=%v", err)
+	}
+}
+
 func TestRemoveProtocolRejectsSymlinkAndRemovesRegularFile(t *testing.T) {
 	dir := t.TempDir()
 	path := filepath.Join(dir, "LOOP.md")

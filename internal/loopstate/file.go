@@ -213,7 +213,11 @@ func ValidateProtocolActivation(protocol string) error {
 	if unresolved := unresolvedActivationPlaceholders(protocol); len(unresolved) > 0 {
 		return fmt.Errorf("LOOP.md has unresolved activation placeholder(s): %s", strings.Join(unresolved, ", "))
 	}
-	if n := protocolSectionCharCount(protocol, "## 2. Current Situation"); n > MaxCurrentSituationChars {
+	return ValidateProtocolMaintenance(protocol)
+}
+
+func ValidateProtocolMaintenance(protocol string) error {
+	if n := currentSituationCharCount(protocol); n > MaxCurrentSituationChars {
 		return fmt.Errorf("LOOP.md Current Situation section is %d characters; keep it at or below %d characters", n, MaxCurrentSituationChars)
 	}
 	return nil
@@ -257,6 +261,22 @@ func protocolSectionCharCount(protocol, heading string) int {
 	return len([]rune(body))
 }
 
+func currentSituationCharCount(protocol string) int {
+	if n := protocolSectionCharCount(protocol, "## 2. Current Situation"); n > 0 {
+		return n
+	}
+	body, ok := protocolSectionBodyByHeadingMarkers(protocol, []string{
+		"current situation",
+		"current state",
+		"现状",
+		"当前状态",
+	})
+	if !ok {
+		return 0
+	}
+	return len([]rune(body))
+}
+
 func protocolSectionBody(protocol, heading string) (string, bool) {
 	start := strings.Index(protocol, heading)
 	if start < 0 {
@@ -267,6 +287,38 @@ func protocolSectionBody(protocol, heading string) (string, bool) {
 		body = body[:next]
 	}
 	return strings.TrimSpace(body), true
+}
+
+func protocolSectionBodyByHeadingMarkers(protocol string, markers []string) (string, bool) {
+	lines := strings.Split(protocol, "\n")
+	start := -1
+	for i, line := range lines {
+		trimmed := strings.TrimSpace(line)
+		if !strings.HasPrefix(trimmed, "##") {
+			continue
+		}
+		heading := strings.ToLower(strings.TrimSpace(strings.TrimLeft(trimmed, "#")))
+		for _, marker := range markers {
+			if strings.Contains(heading, strings.ToLower(marker)) {
+				start = i + 1
+				break
+			}
+		}
+		if start >= 0 {
+			break
+		}
+	}
+	if start < 0 {
+		return "", false
+	}
+	end := len(lines)
+	for i := start; i < len(lines); i++ {
+		if strings.HasPrefix(strings.TrimSpace(lines[i]), "## ") {
+			end = i
+			break
+		}
+	}
+	return strings.TrimSpace(strings.Join(lines[start:end], "\n")), true
 }
 
 func EnsureProtocolTemplate(path string, opts ProtocolTemplateOptions) (bool, State, Event, error) {
@@ -560,6 +612,9 @@ func WriteProtocol(path, content string) error {
 	}
 	if len([]byte(content)) > MaxProtocolBytes {
 		return fmt.Errorf("loop protocol file exceeds %d bytes", MaxProtocolBytes)
+	}
+	if err := ValidateProtocolMaintenance(content); err != nil {
+		return err
 	}
 	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
 		return err

@@ -813,6 +813,9 @@ Affent stores durable state as inspectable files:
   full/digest cadence instead of restarting from the first full feeds. Session
   list/detail responses expose this as `loop_state`, including after `LOOP.md`
   is disabled.
+- LOOP.md writes reject an oversized `Current Situation` section, not just
+  activation attempts. This keeps the protocol useful as a compact long-run
+  attention anchor instead of becoming a second task log.
 - `.affent/loops/<session_id>/events.jsonl`: bounded loop audit events such as
   protocol feeds, memory updates, loop decisions, turn checkpoints, compaction
   marks, updates, and deletes. `GET /v1/sessions/{id}/loop-protocol` returns
