@@ -697,7 +697,7 @@ func TestHandleSessionList_ReportsScheduleSummary(t *testing.T) {
 	if !resp.Sessions[0].HasSchedules || summary == nil {
 		t.Fatalf("session = %+v, want schedule summary", resp.Sessions[0])
 	}
-	if summary.Count != 3 || summary.Enabled != 2 || summary.NextScheduleID != "sched_next" || summary.NextScheduleKind != sessionScheduleKindLoopTick || summary.NextRunAt != now.Add(time.Hour).Format(time.RFC3339) || summary.NextPromptPreview != "ask clarifying questions and update LOOP.md" {
+	if summary.Count != 3 || summary.Enabled != 2 || summary.EnabledLoopTicks != 1 || summary.PendingLoopTicks != 1 || summary.NextScheduleID != "sched_next" || summary.NextScheduleKind != sessionScheduleKindLoopTick || summary.NextRunAt != now.Add(time.Hour).Format(time.RFC3339) || summary.NextPromptPreview != "ask clarifying questions and update LOOP.md" {
 		t.Fatalf("schedule summary = %+v, want next enabled schedule", summary)
 	}
 	if summary.ErrorCount != 1 || summary.LastError != "LOOP.md not running; answer calibration first" {
@@ -751,7 +751,7 @@ func TestHandleSessionSchedules_CreateListDeleteWithoutReopening(t *testing.T) {
 	if schedule.ID == "" || schedule.Kind != sessionScheduleKindLoopTick || schedule.Prompt != "Ask the user two focused questions before enabling loop." || !schedule.Enabled || schedule.NextRunAt != nextRunAt || schedule.RepeatIntervalSeconds != 3600 {
 		t.Fatalf("schedule = %+v, want persisted request fields", schedule)
 	}
-	if created.Summary == nil || created.Summary.Count != 1 || created.Summary.Enabled != 1 || created.Summary.NextScheduleID != schedule.ID {
+	if created.Summary == nil || created.Summary.Count != 1 || created.Summary.Enabled != 1 || created.Summary.EnabledLoopTicks != 1 || created.Summary.PendingLoopTicks != 1 || created.Summary.NextScheduleID != schedule.ID {
 		t.Fatalf("summary = %+v, want one enabled schedule", created.Summary)
 	}
 

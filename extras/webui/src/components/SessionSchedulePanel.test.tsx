@@ -6,10 +6,11 @@ describe("SessionSchedulePanel", () => {
   it("shows enabled loop ticks as pending until LOOP.md is running", () => {
     render(
       <SessionSchedulePanel
-        loopStatus="draft"
         summary={{
           count: 1,
           enabled: 1,
+          enabled_loop_ticks: 1,
+          pending_loop_ticks: 1,
           next_run_at: "2026-05-27T14:00:00Z",
           next_schedule_id: "sched_loop",
           next_prompt_preview: "Scheduled loop tick for session: long running runtime improvement",

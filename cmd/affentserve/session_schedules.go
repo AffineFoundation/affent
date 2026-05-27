@@ -61,6 +61,8 @@ type sessionSchedulesFile struct {
 type sessionSchedulesSummary struct {
 	Count             int    `json:"count"`
 	Enabled           int    `json:"enabled"`
+	EnabledLoopTicks  int    `json:"enabled_loop_ticks,omitempty"`
+	PendingLoopTicks  int    `json:"pending_loop_ticks,omitempty"`
 	ErrorCount        int    `json:"error_count,omitempty"`
 	LastError         string `json:"last_error,omitempty"`
 	NextRunAt         string `json:"next_run_at,omitempty"`
@@ -179,7 +181,7 @@ func handleSessionScheduleUpdate(pool *SessionPool, sessionID, scheduleID string
 	_ = json.NewEncoder(w).Encode(sessionSchedulesResponse{
 		SessionID: sessionID,
 		Schedules: schedules,
-		Summary:   summarizeSessionSchedules(schedules),
+		Summary:   summarizeSessionSchedulesForSession(pool, sessionID, schedules),
 	})
 }
 
@@ -225,7 +227,7 @@ func handleSessionScheduleDelete(pool *SessionPool, sessionID, scheduleID string
 		writeJSONError(w, http.StatusInternalServerError, "write session schedules", err)
 		return
 	}
-	summary := summarizeSessionSchedules(file.Schedules)
+	summary := summarizeSessionSchedulesForSession(pool, sessionID, file.Schedules)
 	w.Header().Set("Content-Type", "application/json")
 	_ = json.NewEncoder(w).Encode(sessionScheduleDeleteResponse{
 		SessionID:  sessionID,
@@ -256,7 +258,7 @@ func listSessionSchedules(pool *SessionPool, sessionID string, w http.ResponseWr
 	_ = json.NewEncoder(w).Encode(sessionSchedulesResponse{
 		SessionID: sessionID,
 		Schedules: schedules,
-		Summary:   summarizeSessionSchedules(schedules),
+		Summary:   summarizeSessionSchedulesForSession(pool, sessionID, schedules),
 	})
 }
 
@@ -338,7 +340,7 @@ func createSessionSchedule(pool *SessionPool, sessionID string, w http.ResponseW
 	_ = json.NewEncoder(w).Encode(sessionSchedulesResponse{
 		SessionID: sessionID,
 		Schedules: schedules,
-		Summary:   summarizeSessionSchedules(schedules),
+		Summary:   summarizeSessionSchedulesForSession(pool, sessionID, schedules),
 	})
 }
 
@@ -497,7 +499,7 @@ func summarizeSessionSchedulesFile(pool *SessionPool, sessionID string) *session
 	if err != nil || !found {
 		return nil
 	}
-	summary := summarizeSessionSchedules(file.Schedules)
+	summary := summarizeSessionSchedulesForSession(pool, sessionID, file.Schedules)
 	if summary.Count == 0 {
 		return nil
 	}
@@ -512,7 +514,7 @@ func summarizeSessionSchedulesFileForDir(sessionDir, sessionID string) *sessionS
 	if err != nil || !found {
 		return nil
 	}
-	summary := summarizeSessionSchedules(file.Schedules)
+	summary := summarizeSessionSchedulesForDir(sessionDir, sessionID, file.Schedules)
 	if summary.Count == 0 {
 		return nil
 	}
@@ -520,6 +522,18 @@ func summarizeSessionSchedulesFileForDir(sessionDir, sessionID string) *sessionS
 }
 
 func summarizeSessionSchedules(schedules []sessionSchedule) *sessionSchedulesSummary {
+	return summarizeSessionSchedulesWithLoopState(schedules, true)
+}
+
+func summarizeSessionSchedulesForSession(pool *SessionPool, sessionID string, schedules []sessionSchedule) *sessionSchedulesSummary {
+	return summarizeSessionSchedulesWithLoopState(schedules, sessionLoopProtocolRunning(pool, sessionID))
+}
+
+func summarizeSessionSchedulesForDir(sessionDir, sessionID string, schedules []sessionSchedule) *sessionSchedulesSummary {
+	return summarizeSessionSchedulesWithLoopState(schedules, sessionLoopProtocolRunningForDir(sessionDir, sessionID))
+}
+
+func summarizeSessionSchedulesWithLoopState(schedules []sessionSchedule, loopProtocolRunning bool) *sessionSchedulesSummary {
 	summary := &sessionSchedulesSummary{Count: len(schedules)}
 	var next *sessionSchedule
 	var latestError *sessionSchedule
@@ -532,6 +546,12 @@ func summarizeSessionSchedules(schedules []sessionSchedule) *sessionSchedulesSum
 		}
 		if schedules[i].Enabled {
 			summary.Enabled++
+			if schedules[i].Kind == sessionScheduleKindLoopTick {
+				summary.EnabledLoopTicks++
+				if !loopProtocolRunning {
+					summary.PendingLoopTicks++
+				}
+			}
 			if next == nil || scheduleTimeBefore(schedules[i].NextRunAt, next.NextRunAt) {
 				next = &schedules[i]
 			}
@@ -790,6 +810,13 @@ func sessionLoopProtocolRunning(pool *SessionPool, sessionID string) bool {
 		return false
 	}
 	return loopstate.ProtocolStatusFromFile(sessionLoopProtocolPath(pool, sessionID)) == "running"
+}
+
+func sessionLoopProtocolRunningForDir(sessionDir, sessionID string) bool {
+	if strings.TrimSpace(sessionDir) == "" || sessionDir == "." || strings.TrimSpace(sessionID) == "" {
+		return false
+	}
+	return loopstate.ProtocolStatusFromFile(loopstate.ProtocolPath(sessionDir, sessionID)) == "running"
 }
 
 func (p *SessionPool) executeClaimedSessionSchedule(now time.Time, run sessionScheduleRun) error {

@@ -93,6 +93,24 @@ func TestSessionPool_RunDueSessionSchedulesOncePausesLoopTickUntilProtocolRuns(t
 	}
 }
 
+func TestSummarizeSessionSchedulesCountsPendingLoopTicks(t *testing.T) {
+	schedules := []sessionSchedule{
+		{ID: "loop", Kind: sessionScheduleKindLoopTick, Enabled: true, NextRunAt: "2026-05-27T10:00:00Z"},
+		{ID: "checkin", Kind: sessionScheduleKindCheckIn, Enabled: true, NextRunAt: "2026-05-27T11:00:00Z"},
+		{ID: "paused-loop", Kind: sessionScheduleKindLoopTick, Enabled: false, NextRunAt: "2026-05-27T09:00:00Z"},
+	}
+
+	draft := summarizeSessionSchedulesWithLoopState(schedules, false)
+	if draft.EnabledLoopTicks != 1 || draft.PendingLoopTicks != 1 {
+		t.Fatalf("draft summary = %+v, want one enabled pending loop tick", draft)
+	}
+
+	running := summarizeSessionSchedulesWithLoopState(schedules, true)
+	if running.EnabledLoopTicks != 1 || running.PendingLoopTicks != 0 {
+		t.Fatalf("running summary = %+v, want enabled loop tick without pending", running)
+	}
+}
+
 func TestSessionPool_RunDueSessionSchedulesOnceAdvancesRecurring(t *testing.T) {
 	memRoot := t.TempDir()
 	pool := newPoolWithMemoryRoot(t, memRoot)

@@ -725,7 +725,9 @@ function sessionScheduleMetric(session: SessionSummary): string | undefined {
 
 function pendingLoopTimerCount(session: SessionSummary): number {
   const summary = session.schedules;
-  if (!summary || summary.enabled <= 0 || loopProtocolRunning(session)) return 0;
+  if (!summary || summary.enabled <= 0) return 0;
+  if ((summary.pending_loop_ticks ?? 0) > 0) return summary.pending_loop_ticks ?? 0;
+  if (loopProtocolRunning(session)) return 0;
   if (summary.next_schedule_kind === "loop_tick") return summary.enabled;
   const preview = summary.next_prompt_preview?.trim().toLowerCase() ?? "";
   if (preview.includes("scheduled loop tick")) return summary.enabled;
