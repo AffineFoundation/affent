@@ -336,6 +336,75 @@ body {
   background: #ffffff;
 }
 
+.workbench-context-status {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 10px;
+  align-items: start;
+  min-width: 0;
+}
+
+.workbench-context-status > div {
+  display: grid;
+  gap: 3px;
+  min-width: 0;
+}
+
+.workbench-context-status strong {
+  min-width: 0;
+  overflow: hidden;
+  color: var(--text);
+  font-size: 13px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.workbench-context-status span:not(.state-pill) {
+  min-width: 0;
+  color: var(--text-muted);
+  font-size: 12px;
+  line-height: 1.35;
+  overflow-wrap: anywhere;
+}
+
+.workbench-context-details {
+  min-width: 0;
+}
+
+.workbench-context-details .run-detail-inline {
+  justify-content: flex-start;
+}
+
+.workbench-context-details .run-detail-line {
+  max-width: 100%;
+  border-radius: var(--radius-sm);
+  white-space: normal;
+  overflow-wrap: anywhere;
+}
+
+.workbench-context-link {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+  border: 1px solid rgba(20, 184, 166, 0.18);
+  border-radius: var(--radius-sm);
+  background: rgba(20, 184, 166, 0.06);
+  padding: 8px 10px;
+}
+
+.workbench-context-link strong {
+  color: var(--text);
+  font-size: 12px;
+}
+
+.workbench-context-link span,
+.workbench-context-link small {
+  min-width: 0;
+  color: var(--text-muted);
+  font-size: 12px;
+  overflow-wrap: anywhere;
+}
+
 .header-new-chat {
   display: inline-flex;
   align-items: center;
@@ -7370,6 +7439,11 @@ html[data-theme="dark"] .workbench-panel .session-skills-panel {
 
 html[data-theme="dark"] .workbench-panel {
   background: #111418;
+}
+
+html[data-theme="dark"] .workbench-context-link {
+  border-color: rgba(45, 212, 191, 0.24);
+  background: rgba(45, 212, 191, 0.08);
 }
 
 html[data-theme="dark"] .timeline-surface {

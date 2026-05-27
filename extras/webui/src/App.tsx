@@ -52,6 +52,7 @@ import { SessionSchedulePanel } from "./components/SessionSchedulePanel";
 import { RuntimeStatsPanel } from "./components/RuntimeStatsPanel";
 import { SessionSkillsPanel } from "./components/SessionSkillsPanel";
 import { AccountSettingsPanel } from "./components/AccountSettingsPanel";
+import { WorkbenchContextPanel } from "./components/WorkbenchContextPanel";
 import { Timeline, type GuidanceReceiptView, type PendingMessageView } from "./components/Timeline";
 import { WorkflowStatus } from "./components/WorkflowStatus";
 import { RunDetails } from "./components/RunDetails";
@@ -1304,45 +1305,51 @@ export function App() {
               </span>
               <span className="workbench-label">Workbench</span>
             </summary>
-            <div className="workbench-panel" data-testid="workbench-panel">
-              <div className="workbench-panel-head">
-                <strong>Workbench</strong>
-                <span>Config, runtime diagnostics, memory, and skills.</span>
+            {workbenchOpen ? (
+              <div className="workbench-panel" data-testid="workbench-panel">
+                <div className="workbench-panel-head">
+                  <strong>Workbench</strong>
+                  <span>Current context first; diagnostics, config, memory, and skills stay available below.</span>
+                </div>
+                <WorkbenchContextPanel
+                  overview={overview}
+                  hasSelectedSession={!!selectedSessionId}
+                  automationTitle={automationContext?.title}
+                  automationDetail={automationContext?.detail}
+                  defaultOpen
+                />
+                <RuntimeStatsPanel
+                  stats={runtimeStatsState.state === "ready" ? runtimeStatsState.stats : undefined}
+                  loading={runtimeStatsState.state === "loading"}
+                  error={runtimeStatsState.state === "error" ? runtimeStatsState.error : undefined}
+                />
+                <AccountSettingsPanel
+                  settings={accountSettingsState.state === "ready" ? accountSettingsState.settings : accountSettingsState.state === "error" ? accountSettingsState.settings : undefined}
+                  loading={accountSettingsState.state === "loading"}
+                  error={accountSettingsState.state === "error" ? accountSettingsState.error : undefined}
+                  busy={accountSettingsBusy}
+                  onRefresh={handleRefreshAccountSettings}
+                  onSetEnv={handleSetAccountEnv}
+                  onDeleteEnv={handleDeleteAccountEnv}
+                  onEnsureSSHKey={handleEnsureAccountSSHKey}
+                />
+                <SessionMemoryPanel
+                  memory={memoryState.state === "ready" ? memoryState.memory : undefined}
+                  latestUpdate={selectedSession?.latest_memory_update}
+                  loading={memoryState.state === "loading"}
+                  error={memoryState.state === "error" ? memoryState.error : undefined}
+                  noSession={memoryState.state === "empty"}
+                />
+                <SessionSkillsPanel
+                  skills={skillsState.state === "ready" ? skillsState.skills : undefined}
+                  loading={skillsState.state === "loading"}
+                  error={skillsState.state === "error" ? skillsState.error : undefined}
+                  installEnabled={skillsState.state === "ready" ? skillsState.installEnabled : false}
+                  onReadSkill={handleReadSkill}
+                  onInstallSkill={handleInstallSkill}
+                />
               </div>
-              <RuntimeStatsPanel
-                stats={runtimeStatsState.state === "ready" ? runtimeStatsState.stats : undefined}
-                loading={runtimeStatsState.state === "loading"}
-                error={runtimeStatsState.state === "error" ? runtimeStatsState.error : undefined}
-                defaultOpen
-              />
-              <AccountSettingsPanel
-                settings={accountSettingsState.state === "ready" ? accountSettingsState.settings : accountSettingsState.state === "error" ? accountSettingsState.settings : undefined}
-                loading={accountSettingsState.state === "loading"}
-                error={accountSettingsState.state === "error" ? accountSettingsState.error : undefined}
-                busy={accountSettingsBusy}
-                defaultOpen
-                onRefresh={handleRefreshAccountSettings}
-                onSetEnv={handleSetAccountEnv}
-                onDeleteEnv={handleDeleteAccountEnv}
-                onEnsureSSHKey={handleEnsureAccountSSHKey}
-              />
-              <SessionMemoryPanel
-                memory={memoryState.state === "ready" ? memoryState.memory : undefined}
-                latestUpdate={selectedSession?.latest_memory_update}
-                loading={memoryState.state === "loading"}
-                error={memoryState.state === "error" ? memoryState.error : undefined}
-                noSession={memoryState.state === "empty"}
-              />
-              <SessionSkillsPanel
-                skills={skillsState.state === "ready" ? skillsState.skills : undefined}
-                loading={skillsState.state === "loading"}
-                error={skillsState.state === "error" ? skillsState.error : undefined}
-                defaultOpen
-                installEnabled={skillsState.state === "ready" ? skillsState.installEnabled : false}
-                onReadSkill={handleReadSkill}
-                onInstallSkill={handleInstallSkill}
-              />
-            </div>
+            ) : null}
           </details>
           {showHeaderNewChat ? (
             <button type="button" className="header-new-chat" disabled={actionBusy} onClick={() => void handleNewSession()}>

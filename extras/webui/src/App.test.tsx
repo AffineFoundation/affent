@@ -1714,7 +1714,13 @@ describe("App", () => {
     await user.click(screen.getByLabelText("Workbench"));
 
     expect(screen.queryByLabelText("Settings")).toBeNull();
-    expect(screen.getByTestId("workbench-panel")).toHaveTextContent("Config, runtime diagnostics, memory, and skills.");
+    expect(screen.getByTestId("workbench-panel")).toHaveTextContent("Current context first");
+    const context = screen.getByTestId("workbench-context-panel");
+    expect(context).toHaveAttribute("open");
+    expect(context).toHaveTextContent("Fresh task");
+    expect(screen.getByTestId("runtime-stats-panel")).not.toHaveAttribute("open");
+    expect(screen.getByTestId("account-settings-panel")).not.toHaveAttribute("open");
+    expect(screen.getByTestId("session-skills-panel")).not.toHaveAttribute("open");
     const runtime = await screen.findByTestId("runtime-stats-panel");
     expect(runtime).toHaveTextContent("qwen-small");
     expect(runtime).toHaveTextContent("2 sessions · 1 running · eval · workspace,recall · executor local");
