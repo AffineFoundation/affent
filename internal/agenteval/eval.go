@@ -212,6 +212,7 @@ type BatchResult struct {
 	ToolStats                       ToolRuntimeStats
 	RuntimeErrorByKind              map[string]int
 	RuntimeErrorExamples            map[string][]RuntimeErrorExample
+	ConversationRepairs             []sse.ConversationRepairedPayload
 	LoopDecisionStats               LoopDecisionStats
 	LoopProtocolFeeds               LoopProtocolFeedStats
 	LoopProtocolCalibrationRequests LoopProtocolCalibrationStats
@@ -252,48 +253,49 @@ type BatchResult struct {
 }
 
 type DebugManifest struct {
-	SchemaVersion                          int                           `json:"schema_version"`
-	Scenario                               string                        `json:"scenario"`
-	OK                                     bool                          `json:"ok"`
-	Workspace                              string                        `json:"workspace"`
-	TracePath                              string                        `json:"trace_path"`
-	TimelinePath                           string                        `json:"timeline_path,omitempty"`
-	FinalTextPath                          string                        `json:"final_text_path,omitempty"`
-	StdoutPath                             string                        `json:"stdout_path,omitempty"`
-	StderrPath                             string                        `json:"stderr_path,omitempty"`
-	AffentctlCommand                       []string                      `json:"affentctl_command,omitempty"`
-	RunExitCode                            int                           `json:"run_exit_code"`
-	ConversationDir                        string                        `json:"conversation_dir,omitempty"`
-	ArtifactDir                            string                        `json:"artifact_dir,omitempty"`
-	TraceDeltas                            bool                          `json:"trace_deltas,omitempty"`
-	Prompt                                 string                        `json:"prompt"`
-	Prompts                                []string                      `json:"prompts,omitempty"`
-	Expectations                           DebugScenarioExpectations     `json:"expectations,omitempty"`
-	ExpectationCapabilityNames             []string                      `json:"expectation_capability_names,omitempty"`
-	ExpectationCapabilityOutcome           string                        `json:"expectation_capability_outcome,omitempty"`
-	ExpectationCapabilityPassedNames       []string                      `json:"expectation_capability_passed_names,omitempty"`
-	ExpectationCapabilityFailedNames       []string                      `json:"expectation_capability_failed_names,omitempty"`
-	Failures                               []string                      `json:"failures,omitempty"`
-	DebugBrief                             *DebugBrief                   `json:"debug_brief,omitempty"`
-	RecoveryGuide                          *DebugRecoveryGuide           `json:"recovery_guide,omitempty"`
-	ToolRepairExamples                     []ToolRepairExample           `json:"tool_repair_examples,omitempty"`
-	LoopGuardExamples                      []LoopGuardExample            `json:"loop_guard_examples,omitempty"`
-	LoopProtocolFeedExamples               []LoopProtocolFeed            `json:"loop_protocol_feed_examples,omitempty"`
-	LoopProtocolCalibrationRequestExamples []LoopProtocolCalibration     `json:"loop_protocol_calibration_request_examples,omitempty"`
-	LoopProtocolCalibrationExamples        []LoopProtocolCalibration     `json:"loop_protocol_calibration_examples,omitempty"`
-	ContextInjectionExamples               []ContextInjection            `json:"context_injection_examples,omitempty"`
-	SourceAccessExamples                   []SourceAccessExample         `json:"source_access_examples,omitempty"`
-	BrowserScrollExamples                  []BrowserScrollExample        `json:"browser_scroll_examples,omitempty"`
-	BrowserNetworkExamples                 []BrowserNetworkSearchExample `json:"browser_network_examples,omitempty"`
-	MemoryUpdateExamples                   []MemoryUpdateExample         `json:"memory_update_examples,omitempty"`
-	SessionSearchExamples                  []SessionSearchExample        `json:"session_search_examples,omitempty"`
-	PlanExamples                           []PlanExample                 `json:"plan_examples,omitempty"`
-	ToolTruncationExamples                 []ToolTruncationExample       `json:"tool_truncation_examples,omitempty"`
-	ContextCompactionExamples              []ContextCompaction           `json:"context_compaction_examples,omitempty"`
-	ChildTranscripts                       []DebugTranscriptRef          `json:"child_transcripts,omitempty"`
-	Metrics                                DebugMetrics                  `json:"metrics"`
-	RuntimeSurface                         *sse.RuntimeSurfacePayload    `json:"runtime_surface,omitempty"`
-	GeneratedAt                            string                        `json:"generated_at"`
+	SchemaVersion                          int                               `json:"schema_version"`
+	Scenario                               string                            `json:"scenario"`
+	OK                                     bool                              `json:"ok"`
+	Workspace                              string                            `json:"workspace"`
+	TracePath                              string                            `json:"trace_path"`
+	TimelinePath                           string                            `json:"timeline_path,omitempty"`
+	FinalTextPath                          string                            `json:"final_text_path,omitempty"`
+	StdoutPath                             string                            `json:"stdout_path,omitempty"`
+	StderrPath                             string                            `json:"stderr_path,omitempty"`
+	AffentctlCommand                       []string                          `json:"affentctl_command,omitempty"`
+	RunExitCode                            int                               `json:"run_exit_code"`
+	ConversationDir                        string                            `json:"conversation_dir,omitempty"`
+	ArtifactDir                            string                            `json:"artifact_dir,omitempty"`
+	TraceDeltas                            bool                              `json:"trace_deltas,omitempty"`
+	Prompt                                 string                            `json:"prompt"`
+	Prompts                                []string                          `json:"prompts,omitempty"`
+	Expectations                           DebugScenarioExpectations         `json:"expectations,omitempty"`
+	ExpectationCapabilityNames             []string                          `json:"expectation_capability_names,omitempty"`
+	ExpectationCapabilityOutcome           string                            `json:"expectation_capability_outcome,omitempty"`
+	ExpectationCapabilityPassedNames       []string                          `json:"expectation_capability_passed_names,omitempty"`
+	ExpectationCapabilityFailedNames       []string                          `json:"expectation_capability_failed_names,omitempty"`
+	Failures                               []string                          `json:"failures,omitempty"`
+	DebugBrief                             *DebugBrief                       `json:"debug_brief,omitempty"`
+	RecoveryGuide                          *DebugRecoveryGuide               `json:"recovery_guide,omitempty"`
+	ToolRepairExamples                     []ToolRepairExample               `json:"tool_repair_examples,omitempty"`
+	ConversationRepairExamples             []sse.ConversationRepairedPayload `json:"conversation_repair_examples,omitempty"`
+	LoopGuardExamples                      []LoopGuardExample                `json:"loop_guard_examples,omitempty"`
+	LoopProtocolFeedExamples               []LoopProtocolFeed                `json:"loop_protocol_feed_examples,omitempty"`
+	LoopProtocolCalibrationRequestExamples []LoopProtocolCalibration         `json:"loop_protocol_calibration_request_examples,omitempty"`
+	LoopProtocolCalibrationExamples        []LoopProtocolCalibration         `json:"loop_protocol_calibration_examples,omitempty"`
+	ContextInjectionExamples               []ContextInjection                `json:"context_injection_examples,omitempty"`
+	SourceAccessExamples                   []SourceAccessExample             `json:"source_access_examples,omitempty"`
+	BrowserScrollExamples                  []BrowserScrollExample            `json:"browser_scroll_examples,omitempty"`
+	BrowserNetworkExamples                 []BrowserNetworkSearchExample     `json:"browser_network_examples,omitempty"`
+	MemoryUpdateExamples                   []MemoryUpdateExample             `json:"memory_update_examples,omitempty"`
+	SessionSearchExamples                  []SessionSearchExample            `json:"session_search_examples,omitempty"`
+	PlanExamples                           []PlanExample                     `json:"plan_examples,omitempty"`
+	ToolTruncationExamples                 []ToolTruncationExample           `json:"tool_truncation_examples,omitempty"`
+	ContextCompactionExamples              []ContextCompaction               `json:"context_compaction_examples,omitempty"`
+	ChildTranscripts                       []DebugTranscriptRef              `json:"child_transcripts,omitempty"`
+	Metrics                                DebugMetrics                      `json:"metrics"`
+	RuntimeSurface                         *sse.RuntimeSurfacePayload        `json:"runtime_surface,omitempty"`
+	GeneratedAt                            string                            `json:"generated_at"`
 }
 
 type DebugRecoveryGuide struct {
@@ -927,6 +929,7 @@ func (r BatchRunner) Run(ctx context.Context, scenario BatchScenario) BatchResul
 		res.ToolStats.ToolFailureByKind = trace.ToolFailureKindCounts()
 		res.RuntimeErrorByKind = trace.LoopErrorKindCounts()
 		res.RuntimeErrorExamples = trace.RuntimeErrorExamples(2)
+		res.ConversationRepairs = append([]sse.ConversationRepairedPayload(nil), trace.ConversationRepairs...)
 		res.LoopDecisionStats = trace.LoopDecisionStats(2)
 		res.LoopProtocolFeeds = trace.LoopProtocolFeedStats(2)
 		res.LoopProtocolCalibrationRequests = trace.LoopProtocolCalibrationRequestStats(2)
@@ -1063,6 +1066,7 @@ func writeScenarioDebugArtifacts(res *BatchResult, scenario BatchScenario, stdou
 		DebugBrief:                             BuildDebugBrief(*res),
 		RecoveryGuide:                          BuildDebugRecoveryGuide(*res),
 		ToolRepairExamples:                     append([]ToolRepairExample(nil), res.ToolRepairExamples...),
+		ConversationRepairExamples:             append([]sse.ConversationRepairedPayload(nil), res.ConversationRepairs...),
 		LoopGuardExamples:                      append([]LoopGuardExample(nil), res.LoopGuardExamples...),
 		LoopProtocolFeedExamples:               append([]LoopProtocolFeed(nil), res.LoopProtocolFeeds.Examples...),
 		LoopProtocolCalibrationRequestExamples: append([]LoopProtocolCalibration(nil), res.LoopProtocolCalibrationRequests.Examples...),

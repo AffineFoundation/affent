@@ -82,6 +82,7 @@ func renderDebugTimeline(res BatchResult, scenario BatchScenario, trace *Trace) 
 	}
 
 	renderTimelineTraceEvents(&b, trace)
+	renderTimelineConversationRepairs(&b, trace)
 	renderTimelineRuntimeSurface(&b, trace)
 	renderTimelineContextInjections(&b, trace)
 	renderTimelineLoopErrors(&b, trace)
@@ -787,6 +788,33 @@ func renderTimelineTraceEvents(b *strings.Builder, trace *Trace) {
 	fmt.Fprintf(b, "- total: `%d`\n", total)
 	for _, typ := range keys {
 		fmt.Fprintf(b, "- `%s`: `%d`\n", typ, trace.RawTypes[typ])
+	}
+}
+
+func renderTimelineConversationRepairs(b *strings.Builder, trace *Trace) {
+	if len(trace.ConversationRepairs) == 0 {
+		return
+	}
+	b.WriteString("\n## Conversation Repairs\n\n")
+	for i, repair := range trace.ConversationRepairs {
+		if i >= 5 {
+			fmt.Fprintf(b, "- ... %d more repair event(s)\n", len(trace.ConversationRepairs)-i)
+			return
+		}
+		var parts []string
+		if repair.SessionID != "" {
+			parts = append(parts, fmt.Sprintf("session=`%s`", repair.SessionID))
+		}
+		if repair.MissingToolResults > 0 {
+			parts = append(parts, fmt.Sprintf("missing_tool_results=`%d`", repair.MissingToolResults))
+		}
+		if repair.FailureKind != "" {
+			parts = append(parts, fmt.Sprintf("failure_kind=`%s`", repair.FailureKind))
+		}
+		if repair.Next != "" {
+			parts = append(parts, fmt.Sprintf("next=%s", timelineInline(repair.Next, 220)))
+		}
+		fmt.Fprintf(b, "- repair#%d %s\n", i+1, strings.Join(parts, " "))
 	}
 }
 

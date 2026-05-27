@@ -97,6 +97,7 @@ func TestParseTraceFileReadsToolRequestsAndFinalText(t *testing.T) {
 	tracePath := filepath.Join(dir, "trace.jsonl")
 	body := strings.Join([]string{
 		`{"type":"trace.meta","data":{"schema_version":1}}`,
+		`{"type":"conversation.repaired","data":{"session_id":"resume","missing_tool_results":1,"failure_kind":"resume_missing_tool_result","next":"do not assume the tool succeeded"}}`,
 		`{"type":"runtime.surface","data":{"turn_id":"t1","tool_count":2,"tools":[{"name":"web_fetch","group":"Web"},{"name":"web_search","group":"Web"}],"capabilities":{"web_fetch":true,"web_search":true},"max_turn_steps":12,"max_tool_calls":7,"tool_result_event_cap_bytes":262144,"tool_result_context_max_bytes":5120,"tool_result_context_budget_bytes":32768,"tool_result_artifact_prefix":".affent/artifacts/tool-results"}}`,
 		`{"type":"context.injected","data":{"turn_id":"t1","source":"account_access","title":"Account access context injected","summary":"Account-level environment and SSH access hints were made available for this turn.","preview":"Configured environment variables available to shell commands: GITHUB_TOKEN.","bytes":240,"estimated_tokens":60}}`,
 		`{"type":"context.injected","data":{"turn_id":"t1","source":"active_plan","title":"Active plan context injected","summary":"Current step: 2. Execute this step before broadening.","preview":"Current step: 2. Execute this step before broadening. - [ ] verify browser network evidence","bytes":360,"estimated_tokens":90}}`,
@@ -123,6 +124,12 @@ func TestParseTraceFileReadsToolRequestsAndFinalText(t *testing.T) {
 	}
 	if trace.SchemaVersion != 1 {
 		t.Fatalf("SchemaVersion = %d, want 1", trace.SchemaVersion)
+	}
+	if len(trace.ConversationRepairs) != 1 ||
+		trace.ConversationRepairs[0].SessionID != "resume" ||
+		trace.ConversationRepairs[0].MissingToolResults != 1 ||
+		trace.ConversationRepairs[0].FailureKind != "resume_missing_tool_result" {
+		t.Fatalf("ConversationRepairs = %+v", trace.ConversationRepairs)
 	}
 	if len(trace.RuntimeSurfaces) != 1 ||
 		trace.RuntimeSurfaces[0].ToolCount != 2 ||
@@ -320,6 +327,9 @@ func TestParseTraceFileReadsToolRequestsAndFinalText(t *testing.T) {
 	}
 	if got := trace.RawTypes["trace.meta"]; got != 1 {
 		t.Fatalf("RawTypes[trace.meta] = %d", got)
+	}
+	if got := trace.RawTypes["conversation.repaired"]; got != 1 {
+		t.Fatalf("RawTypes[conversation.repaired] = %d", got)
 	}
 	if got := trace.RawTypes["tool.request"]; got != 1 {
 		t.Fatalf("RawTypes[tool.request] = %d", got)
@@ -1778,6 +1788,12 @@ func TestWriteScenarioDebugArtifactsIndexesTraceAndFinalText(t *testing.T) {
 				Message: "llm stream timed out after first token",
 			}},
 		},
+		ConversationRepairs: []sse.ConversationRepairedPayload{{
+			SessionID:          "debug-session",
+			MissingToolResults: 1,
+			FailureKind:        "resume_missing_tool_result",
+			Next:               "do not assume the tool succeeded",
+		}},
 		ToolTruncation: ToolTruncationStats{ArgsTruncated: 1, ArgsOmittedBytes: 128, ResultsTruncated: 1, ResultsOmittedBytes: 4096, ResultArtifacts: 1},
 		ToolStats: ToolRuntimeStats{
 			ToolErrors:                 1,
@@ -1870,12 +1886,14 @@ func TestWriteScenarioDebugArtifactsIndexesTraceAndFinalText(t *testing.T) {
 	}
 	trace := Trace{
 		RawTypes: map[string]int{
-			"message.delta":   2,
-			"runtime.surface": 1,
-			"tool.request":    1,
-			"tool.result":     1,
+			"conversation.repaired": 1,
+			"message.delta":         2,
+			"runtime.surface":       1,
+			"tool.request":          1,
+			"tool.result":           1,
 		},
-		RuntimeSurfaces: []sse.RuntimeSurfacePayload{*res.RuntimeSurface},
+		ConversationRepairs: append([]sse.ConversationRepairedPayload(nil), res.ConversationRepairs...),
+		RuntimeSurfaces:     []sse.RuntimeSurfacePayload{*res.RuntimeSurface},
 		Tools: []ToolCall{{
 			TurnID:                 "turn-debug",
 			CallID:                 "call-1",
@@ -2199,6 +2217,12 @@ func TestWriteScenarioDebugArtifactsIndexesTraceAndFinalText(t *testing.T) {
 	if manifest.DebugBrief == nil || len(manifest.DebugBrief.Tags) == 0 {
 		t.Fatalf("manifest debug brief missing: %+v", manifest.DebugBrief)
 	}
+	if len(manifest.ConversationRepairExamples) != 1 ||
+		manifest.ConversationRepairExamples[0].SessionID != "debug-session" ||
+		manifest.ConversationRepairExamples[0].MissingToolResults != 1 ||
+		manifest.ConversationRepairExamples[0].FailureKind != "resume_missing_tool_result" {
+		t.Fatalf("manifest conversation repairs = %+v", manifest.ConversationRepairExamples)
+	}
 	if manifest.RecoveryGuide == nil ||
 		!strings.Contains(manifest.RecoveryGuide.Summary, "scenario failed") ||
 		!reflect.DeepEqual(manifest.RecoveryGuide.ExactRerunCommand, res.AffentctlCommand) ||
@@ -2212,6 +2236,7 @@ func TestWriteScenarioDebugArtifactsIndexesTraceAndFinalText(t *testing.T) {
 	}
 	if !stringSliceContains(manifest.DebugBrief.Tags, "tool_failure:dynamic_shell") ||
 		!stringSliceContains(manifest.DebugBrief.Tags, "runtime_error:llm_timeout") ||
+		!stringSliceContains(manifest.DebugBrief.Tags, "conversation_repair:resume_missing_tool_result") ||
 		!stringSliceContains(manifest.DebugBrief.Tags, "source_dynamic_partial") ||
 		!stringSliceContains(manifest.DebugBrief.Tags, "recall:context") ||
 		!stringSliceContains(manifest.DebugBrief.Tags, "memory_update:replace") ||
@@ -2369,7 +2394,8 @@ func TestWriteScenarioDebugArtifactsIndexesTraceAndFinalText(t *testing.T) {
 		manifest.Metrics.ToolRepairByKind["alias_rename"] != 1 ||
 		manifest.Metrics.InputTokens != 100 ||
 		manifest.Metrics.OutputTokens != 20 ||
-		manifest.Metrics.TraceEvents != 5 ||
+		manifest.Metrics.TraceEvents != 6 ||
+		manifest.Metrics.TraceEventTypes["conversation.repaired"] != 1 ||
 		manifest.Metrics.TraceEventTypes["message.delta"] != 2 ||
 		manifest.Metrics.TraceEventTypes["tool.result"] != 1 ||
 		manifest.Metrics.LoopProtocolCalibrationRequests != 1 ||
@@ -2459,7 +2485,10 @@ func TestWriteScenarioDebugArtifactsIndexesTraceAndFinalText(t *testing.T) {
 		"context: compactions=`1`, reactive=`1`, removed_messages=`12`, summary_bytes=`512`",
 		"truncation: tool_context=2 omitted_context=8192 args=1 args_omitted=128 results=1 results_omitted=4096 artifacts=1 context_artifacts=0 missing_artifacts=0",
 		"## Trace Events",
+		"`conversation.repaired`: `1`",
 		"`message.delta`: `2`",
+		"## Conversation Repairs",
+		"repair#1 session=`debug-session` missing_tool_results=`1` failure_kind=`resume_missing_tool_result` next=do not assume the tool succeeded",
 		"## Source Evidence",
 		"tool#1 `web_fetch` status=`dynamic_partial` url=`https://taostats.io/subnets/120`",
 		"preview: PAGE DIAGNOSTICS: - empty_dynamic_metric_widgets: 2 visible custom metric widget(s) exposed no text value PAGE TEXT: Affine SN120",

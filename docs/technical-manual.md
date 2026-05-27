@@ -925,7 +925,8 @@ Current built-in suites:
   substrings; the missing tool-result resume scenario uses these to prove
   `conversation.repaired` was emitted and `conversation.jsonl` was repaired
   with the structured recovery placeholder instead of only checking the final
-  answer.
+  answer. Eval debug manifests and timelines surface conversation repair
+  examples with the repaired count, failure kind, and next-step guidance.
 - `live-web`: non-CI live web regressions for JavaScript-heavy pages,
   direct-reader recovery, and browser network evidence quality. These scenarios
   intentionally depend on public sites and should be run with web/browser tools

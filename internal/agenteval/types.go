@@ -141,6 +141,10 @@ type Trace struct {
 	// eval reports can show examples without asking operators to open the
 	// full trace.
 	RuntimeErrors []RuntimeErrorExample
+	// ConversationRepairs records startup repairs applied to persisted
+	// conversation logs before the next turn. These are resume/recovery
+	// signals, not model actions.
+	ConversationRepairs []sse.ConversationRepairedPayload
 	// LoopDecisions records structured protocol/runtime decisions such as
 	// evidence_quality defer events. These are separate from assistant text so
 	// evals can measure when guardrails fired and whether they were actionable.

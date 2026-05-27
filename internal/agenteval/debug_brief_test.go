@@ -1,6 +1,10 @@
 package agenteval
 
-import "testing"
+import (
+	"testing"
+
+	"github.com/affinefoundation/affent/internal/sse"
+)
 
 func TestBuildDebugBriefIncludesDelegationAndPlanSignals(t *testing.T) {
 	brief := BuildDebugBrief(BatchResult{
@@ -124,6 +128,25 @@ func TestBuildDebugBriefClassifiesToolRepairQuality(t *testing.T) {
 		!stringSliceContains(brief.Tags, "tool_repair:failed") ||
 		!stringSliceContains(brief.Tags, "tool_repair:malformed_json") {
 		t.Fatalf("failed tool repair debug item = %+v tags=%+v", repair, brief.Tags)
+	}
+}
+
+func TestBuildDebugBriefClassifiesConversationRepair(t *testing.T) {
+	brief := BuildDebugBrief(BatchResult{
+		OK: true,
+		ConversationRepairs: []sse.ConversationRepairedPayload{{
+			MissingToolResults: 2,
+			FailureKind:        "resume_missing_tool_result",
+		}},
+	})
+	item := debugBriefItemByKind(brief, "conversation_repair")
+	if item == nil ||
+		item.Severity != "warn" ||
+		item.Counts["events"] != 1 ||
+		item.Counts["missing_tool_results"] != 2 ||
+		item.Counts["kind:resume_missing_tool_result"] != 1 ||
+		!stringSliceContains(brief.Tags, "conversation_repair:resume_missing_tool_result") {
+		t.Fatalf("conversation repair item = %+v tags=%+v", item, brief.Tags)
 	}
 }
 

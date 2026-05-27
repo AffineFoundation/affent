@@ -77,6 +77,20 @@ func BuildDebugBrief(res BatchResult) *DebugBrief {
 		}
 		add("runtime_error_by_kind", "warn", "runtime errors observed", []string{"runtime_errors", "provider_logs"}, counts, tags...)
 	}
+	if len(res.ConversationRepairs) > 0 {
+		counts := map[string]int{"events": len(res.ConversationRepairs)}
+		tags := []string{"conversation_repair"}
+		for _, repair := range res.ConversationRepairs {
+			if repair.MissingToolResults > 0 {
+				counts["missing_tool_results"] += repair.MissingToolResults
+			}
+			if repair.FailureKind != "" {
+				counts["kind:"+repair.FailureKind]++
+				tags = append(tags, "conversation_repair:"+repair.FailureKind)
+			}
+		}
+		add("conversation_repair", "warn", "conversation log was repaired during resume; inspect repaired history before trusting recovered state", []string{"conversation_repair_examples", "conversation_dir", "trace_events"}, counts, tags...)
+	}
 	if res.ToolStats.LoopGuardInterventions > 0 || res.ToolStats.ForcedNoTools > 0 {
 		tags := []string{"loop_guard"}
 		message := "loop guard intervened; inspect repeated tool or evidence patterns"
