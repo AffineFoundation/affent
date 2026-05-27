@@ -958,6 +958,7 @@ func TestMemorySearchAcrossTopics(t *testing.T) {
 func TestMemorySearchNoResultsSuggestsRecovery(t *testing.T) {
 	s := newTestStore(t)
 	_, _ = s.Add(TargetMemory, "deploy", "deploys go through fly.io")
+	_, _ = s.Add(TargetMemory, "auth", "uses OAuth")
 
 	resp, err := s.Search(TargetMemory, "", "kubernetes helm", 5)
 	if err != nil {
@@ -969,9 +970,21 @@ func TestMemorySearchNoResultsSuggestsRecovery(t *testing.T) {
 	if len(resp.Results) != 0 {
 		t.Fatalf("expected no results, got %+v", resp.Results)
 	}
-	for _, want := range []string{"no entries matched", "Next:", "action=list"} {
+	for _, want := range []string{"no entries matched", "Next:", "specific topic from topics", "action=list"} {
 		if !strings.Contains(resp.Message, want) {
 			t.Fatalf("message missing %q: %q", want, resp.Message)
+		}
+	}
+	if len(resp.Topics) != 2 {
+		t.Fatalf("no-hit search should include topic recovery anchors, got %+v", resp.Topics)
+	}
+	got := map[string]MemoryTopicSummary{}
+	for _, topic := range resp.Topics {
+		got[topic.Topic] = topic
+	}
+	for _, want := range []string{"auth", "deploy"} {
+		if got[want].Entries != 1 {
+			t.Fatalf("topic %q summary missing or wrong: %+v", want, resp.Topics)
 		}
 	}
 }

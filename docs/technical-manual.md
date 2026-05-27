@@ -856,6 +856,9 @@ Session search and persistent memory are separate features:
 
 - Session search recalls snippets from previous conversation logs.
 - Memory stores facts that should survive across sessions.
+- Memory search misses return bounded topic summaries when available, so agents
+  can retry once against a relevant topic before spending another call on full
+  topic discovery.
 
 ## Tools And Capabilities
 

@@ -750,10 +750,19 @@ func (s *FileMemoryStore) Search(target MemoryTarget, topic, query string, topK 
 	}
 
 	var hits []MemorySearchResult
+	var topicSummaries []MemoryTopicSummary
 	for _, b := range buckets {
 		entries, err := readMemoryFile(b.path)
 		if err != nil {
 			continue
+		}
+		if len(entries) > 0 {
+			topicSummaries = append(topicSummaries, MemoryTopicSummary{
+				Topic:    b.topic,
+				Entries:  len(entries),
+				Chars:    joinedLen(entries),
+				NewestAt: newestEntryTimestamp(entries),
+			})
 		}
 		for _, e := range entries {
 			createdAt, body := splitMemoryEntry(e)
@@ -793,8 +802,10 @@ func (s *FileMemoryStore) Search(target MemoryTarget, topic, query string, topK 
 		hits = hits[:topK]
 	}
 	msg := fmt.Sprintf("%d result(s)", len(hits))
+	var topics []MemoryTopicSummary
 	if len(hits) == 0 {
-		msg = "no entries matched. Next: retry with fewer/different keywords, search a specific topic, or use action=list to discover available topics."
+		msg = "no entries matched. Next: retry with fewer/different keywords, search a specific topic from topics, or use action=list for full topic discovery."
+		topics = topicSummaries
 	}
 	return MemoryResponse{
 		OK:      true,
@@ -802,6 +813,7 @@ func (s *FileMemoryStore) Search(target MemoryTarget, topic, query string, topK 
 		Topic:   topic,
 		Message: msg,
 		Results: hits,
+		Topics:  topics,
 	}, nil
 }
 
