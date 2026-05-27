@@ -311,7 +311,7 @@ export function App() {
     }),
     [automationContext, overview, sessionChanges, sessionFiles, sessionRun, sessionWorkspace],
   );
-  const showSurfaceContext = showChatContext || showWorkflowStatus || showAutomationContext;
+  const showSurfaceContext = showChatContext || showWorkflowStatus;
   const surfaceBusy = actionBusy || session.status === "running" || !!pendingMessage;
   const surfaceMode = session.turns.length === 0 && !pendingMessage ? "empty" : "conversation";
   const composerResumesSavedChat = !!selectedSessionId && !selectedSessionActive && session.turns.length > 0;
@@ -1537,7 +1537,6 @@ export function App() {
                   loading={planState.state === "loading"}
                   error={planState.state === "error" ? planState.error : undefined}
                 />
-                {showAutomationContext ? renderAutomationPanel() : null}
                 {showWorkflowStatus ? <WorkflowStatus overview={overview} onUseAsDraft={handleUseAsDraft} /> : null}
               </div>
             ) : null}

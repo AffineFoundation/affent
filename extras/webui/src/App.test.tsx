@@ -642,6 +642,9 @@ describe("App", () => {
     expect(sent).toMatchObject({ display_text: "Set up loop: long running subnet analysis" });
     expect(screen.getByTestId("pending-turn")).toHaveTextContent("Set up loop: long running subnet analysis");
     expect(screen.getByTestId("pending-turn")).not.toHaveTextContent("complete_activation");
+    expect(screen.queryByTestId("session-automation-panel")).toBeNull();
+    await user.click(screen.getByLabelText("Workbench"));
+    expect(await screen.findByTestId("workbench-automation-panel")).toHaveTextContent("Loop waiting");
     expect(await screen.findByTestId("session-loop-panel")).toHaveTextContent("Draft");
     expect(screen.getByTestId("session-loop-panel")).toHaveTextContent("Setup pending");
     expect(screen.getByTestId("session-loop-panel")).toHaveTextContent("activate after your answer");
@@ -702,7 +705,10 @@ describe("App", () => {
 
     render(<App />);
 
-    expect(await screen.findByTestId("session-automation-panel")).toHaveTextContent("Loop review");
+    expect(screen.queryByTestId("session-automation-panel")).toBeNull();
+    expect(await screen.findByLabelText("Workbench")).toHaveTextContent("Loop review");
+    await user.click(screen.getByLabelText("Workbench"));
+    expect(await screen.findByTestId("workbench-automation-panel")).toHaveTextContent("Loop review");
     const panel = await screen.findByTestId("session-loop-panel");
     expect(panel).toHaveTextContent("Activation review");
     await user.click(within(panel).getByRole("button", { name: "Review in chat" }));
@@ -774,7 +780,10 @@ describe("App", () => {
 
     render(<App />);
 
-    expect(await screen.findByTestId("session-automation-panel")).toHaveTextContent("Loop waiting");
+    expect(screen.queryByTestId("session-automation-panel")).toBeNull();
+    expect(await screen.findByLabelText("Workbench")).toHaveTextContent("Loop waiting");
+    await user.click(screen.getByLabelText("Workbench"));
+    expect(await screen.findByTestId("workbench-automation-panel")).toHaveTextContent("Loop waiting");
     const panel = await screen.findByTestId("session-loop-panel");
     expect(panel).toHaveTextContent("Waiting for your calibration answer");
     await user.click(within(panel).getByRole("button", { name: "Open answer draft" }));
@@ -865,7 +874,9 @@ describe("App", () => {
 
     render(<App />);
 
-    expect(await screen.findByTestId("session-automation-panel")).toHaveTextContent("Loop running");
+    expect(screen.queryByTestId("session-automation-panel")).toBeNull();
+    await user.click(screen.getByLabelText("Workbench"));
+    expect(await screen.findByTestId("workbench-automation-panel")).toHaveTextContent("Loop running");
     const panel = await screen.findByTestId("session-loop-panel");
     expect(panel).toHaveTextContent("Running");
     expect(panel).toHaveTextContent("Running protocol");
@@ -880,7 +891,7 @@ describe("App", () => {
     await user.click(within(panel).getByRole("button", { name: "Disable loop" }));
 
     await waitFor(() => expect(fetchImpl).toHaveBeenCalledWith("/v1/sessions/loop-control/loop-protocol", expect.objectContaining({ method: "DELETE" })));
-    expect(await screen.findByTestId("session-automation-panel")).toHaveTextContent("Loop disabled");
+    expect(await screen.findByTestId("workbench-automation-panel")).toHaveTextContent("Loop disabled");
     expect(await screen.findByTestId("session-loop-panel")).toHaveTextContent("Disabled");
     expect(screen.getByTestId("session-list")).toHaveTextContent("Loop disabled");
     expect(screen.queryByRole("button", { name: "Disable loop" })).toBeNull();
@@ -1019,7 +1030,9 @@ describe("App", () => {
     expect(sent.display_text).toBe("Calibrate check-in timer: long running subnet analysis");
     expect(screen.getByTestId("pending-turn")).toHaveTextContent("Calibrate check-in timer: long running subnet analysis");
     expect(screen.getByTestId("pending-turn")).not.toHaveTextContent("do not claim the timer is operationally calibrated");
-    expect(await screen.findByTestId("session-automation-panel")).toHaveTextContent("1 timer active");
+    expect(screen.queryByTestId("session-automation-panel")).toBeNull();
+    await user.click(screen.getByLabelText("Workbench"));
+    expect(await screen.findByTestId("workbench-automation-panel")).toHaveTextContent("1 timer active");
     expect(await screen.findByTestId("session-schedule-panel")).toHaveTextContent("1 active");
     expect(screen.getByTestId("session-schedule-list")).toHaveTextContent("Check in 1h: long running subnet analysis");
     expect(screen.getByTestId("session-schedule-list")).not.toHaveTextContent("ask the user one concise question");
@@ -1118,8 +1131,7 @@ describe("App", () => {
     render(<App />);
 
     await waitFor(() => expect(screen.getByTestId("session-list")).toHaveTextContent("long running runtime improvement"));
-    expect(screen.getByTestId("session-automation-panel")).toHaveTextContent("Loop running");
-    expect(screen.getByTestId("session-loop-panel")).toHaveTextContent("Running");
+    expect(screen.queryByTestId("session-automation-panel")).toBeNull();
     expect(screen.queryByTestId("session-schedule-panel")).toBeNull();
     await user.click(within(screen.getByTestId("composer-automation")).getByText("Automation"));
     await user.click(within(screen.getByTestId("composer-automation")).getByRole("button", { name: "Loop every 30m" }));
@@ -1147,7 +1159,8 @@ describe("App", () => {
     expect(sent.display_text).toBe("Calibrate loop timer: long running runtime improvement");
     expect(screen.getByTestId("pending-turn")).toHaveTextContent("Calibrate loop timer: long running runtime improvement");
     expect(screen.getByTestId("pending-turn")).not.toHaveTextContent("Ask the user one concise question now");
-    expect(await screen.findByTestId("session-automation-panel")).toHaveTextContent("Loop running · 1 timer active");
+    await user.click(screen.getByLabelText("Workbench"));
+    expect(await screen.findByTestId("workbench-automation-panel")).toHaveTextContent("Loop running · 1 timer active");
     expect(await screen.findByTestId("session-schedule-panel")).toHaveTextContent("1 active");
     expect(screen.getByTestId("session-schedule-list")).toHaveTextContent("Loop tick");
     expect(screen.getByTestId("session-schedule-list")).toHaveTextContent("Loop every 30m: long running runtime improvement");
