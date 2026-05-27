@@ -372,7 +372,9 @@ func TestNetworkEvidenceSearchNoMatchShowsRecentCapturedRefs(t *testing.T) {
 		"MATCHES: none",
 		"RECENT_CAPTURED_RESPONSES:",
 		"n2 status=200 resource=fetch content_type=application/json url=https://taostats.io/api/subnets/120/validators",
+		`json_paths: $.validators=64`,
 		"n1 status=200 resource=xhr content_type=application/json url=https://taostats.io/api/subnets/120/metrics",
+		`json_paths: $.market_cap="201.04K T"; $.name="Affine"; $.netuid=120`,
 		"Failure: kind=no_matches",
 		"call browser_network_read with one ref before citing values",
 	} {

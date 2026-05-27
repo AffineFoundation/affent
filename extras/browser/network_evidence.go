@@ -30,6 +30,7 @@ const (
 	maxNetworkQueryBytes        = 512
 	maxNetworkJSONPathBytes     = 512
 	maxNetworkJSONPathHints     = 8
+	maxNetworkRecentPathHints   = 3
 	maxNetworkJSONPathHintValue = 96
 	maxNetworkJSONPathScanNodes = 240
 	defaultNetworkMaxResults    = 8
@@ -577,6 +578,9 @@ func formatNetworkSearchResults(query, pageURL string, entries, recent []Network
 			b.WriteString("RECENT_CAPTURED_RESPONSES:\n")
 			for _, entry := range recent {
 				fmt.Fprintf(&b, "- %s status=%d resource=%s content_type=%s url=%s\n", entry.Ref, entry.StatusCode, entry.Resource, entry.ContentType, entry.URL)
+				if hints := networkRecentJSONPathHints(entry.Body); len(hints) > 0 {
+					fmt.Fprintf(&b, "  json_paths: %s\n", strings.Join(hints, "; "))
+				}
 			}
 		}
 		b.WriteString("Failure: kind=no_matches\n")
@@ -596,6 +600,14 @@ func formatNetworkSearchResults(query, pageURL string, entries, recent []Network
 	}
 	b.WriteString("Next: call browser_network_read with the most relevant ref and json_path before citing values.\n")
 	return b.String()
+}
+
+func networkRecentJSONPathHints(body []byte) []string {
+	hints := networkJSONPathHints(body, "")
+	if len(hints) > maxNetworkRecentPathHints {
+		hints = hints[:maxNetworkRecentPathHints]
+	}
+	return hints
 }
 
 func formatNetworkReadResult(entry NetworkEvidenceEntry, maxBytes int, jsonPath string) (string, error) {
