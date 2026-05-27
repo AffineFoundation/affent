@@ -1406,6 +1406,7 @@ func TestBatchSummaryAggregatesRuntimeMetrics(t *testing.T) {
 			SessionSearchResults:      2,
 			SessionSearchContextHits:  1,
 			SessionSearchMatchedTerms: 2,
+			MemorySearchCalls:         2,
 			MemorySearchMisses:        1,
 			ToolContextTruncated:      1,
 			ToolContextOmittedBytes:   1024,
@@ -1749,7 +1750,7 @@ func TestBatchSummaryAggregatesRuntimeMetrics(t *testing.T) {
 	if !strings.Contains(out.String(), "trace_events=7 trace_event_types=message.delta:3,tool.request:2,tool.result:2") {
 		t.Fatalf("summary output missing trace event rollup:\n%s", out.String())
 	}
-	if !strings.Contains(out.String(), "memory_search_misses=1") {
+	if !strings.Contains(out.String(), "memory_search=calls:2,misses:1") {
 		t.Fatalf("summary output missing memory search miss rollup:\n%s", out.String())
 	}
 	if !strings.Contains(out.String(), "trace_event_scenarios=1,rate=50.0%") {
@@ -2090,6 +2091,7 @@ func TestPrintBatchResultJSONL(t *testing.T) {
 			SourceAccessNetwork:       1,
 			MemoryUpdates:             1,
 			MemoryUpdateAdd:           1,
+			MemorySearchCalls:         2,
 			MemorySearchMisses:        1,
 			SessionSearchCalls:        1,
 			SessionSearchResults:      2,
@@ -2355,6 +2357,7 @@ func TestPrintBatchResultJSONL(t *testing.T) {
 		"source_access_network":               float64(1),
 		"memory_updates":                      float64(1),
 		"memory_update_add":                   float64(1),
+		"memory_search_calls":                 float64(2),
 		"memory_search_misses":                float64(1),
 		"session_search_calls":                float64(1),
 		"session_search_results":              float64(2),
@@ -3340,6 +3343,7 @@ func TestPrintBatchSummaryJSONL(t *testing.T) {
 		}},
 		MemoryUpdates:      1,
 		MemoryUpdateAdd:    1,
+		MemorySearchCalls:  2,
 		MemorySearchMisses: 1,
 		MemoryUpdateExamples: []agenteval.MemoryUpdateExample{{
 			Scenario:    "taostats-rendered",
@@ -3523,6 +3527,7 @@ func TestPrintBatchSummaryJSONL(t *testing.T) {
 		"source_access_dynamic_partial":          float64(1),
 		"memory_updates":                         float64(1),
 		"memory_update_add":                      float64(1),
+		"memory_search_calls":                    float64(2),
 		"memory_search_misses":                   float64(1),
 		"session_search_calls":                   float64(1),
 		"session_search_results":                 float64(2),

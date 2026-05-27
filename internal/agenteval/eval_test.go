@@ -167,7 +167,7 @@ func TestParseTraceFileReadsToolRequestsAndFinalText(t *testing.T) {
 		`{"type":"context.compacted","data":{"turn_id":"t1","before_messages":50,"after_messages":18,"removed_messages":32,"reactive":true,"reason":"context_overflow","summary_present":true,"summary_bytes":2048,"summary_preview":"USER_CONTEXT: keep market evidence and exact source URLs","loop_protocol_anchor":"LOOP_PROTOCOL: active path=.affent/loops/longrun/LOOP.md mode=digest feed=4 feeds=4 plan=plan:1/3:active current=2:in_progress"}}`,
 		`{"type":"loop.protocol_feed","data":{"turn_id":"t2","loop_id":"longrun","status":"running","mode":"full","feed_number":5,"protocol_feeds":5,"protocol_path":".affent/loops/longrun/LOOP.md","plan_label":"plan:1/3:active","plan_current_step_index":2,"plan_current_step_status":"in_progress","plan_current_step":"verify browser network evidence"}}`,
 		`{"type":"message.done","data":{"text":"Conclusion: green","finish_reason":"stop"}}`,
-		`{"type":"turn.end","data":{"reason":"completed","tool_stats":{"tool_requests":2,"tool_name_canonicalized":1,"tool_args_repaired":1,"tool_repair_calls":1,"tool_repair_succeeded":1,"tool_repair_failed":0,"tool_repair_notes":2,"tool_repair_by_kind":{"tool_name":1,"alias_rename":1},"tool_failure_by_kind":{"invalid_args":1},"tool_errors":1,"tool_duration_ms":17,"loop_guard_interventions":1,"forced_no_tools":1,"source_access_dynamic_partial":1,"memory_updates":2,"memory_update_add":1,"memory_update_replace":1,"memory_search_misses":1,"session_search_calls":1,"session_search_results":2,"session_search_context_hits":1,"session_search_matched_terms":2,"session_search_recent_sessions":3,"tool_context_truncated":2,"tool_context_omitted_bytes":8192}}}`,
+		`{"type":"turn.end","data":{"reason":"completed","tool_stats":{"tool_requests":2,"tool_name_canonicalized":1,"tool_args_repaired":1,"tool_repair_calls":1,"tool_repair_succeeded":1,"tool_repair_failed":0,"tool_repair_notes":2,"tool_repair_by_kind":{"tool_name":1,"alias_rename":1},"tool_failure_by_kind":{"invalid_args":1},"tool_errors":1,"tool_duration_ms":17,"loop_guard_interventions":1,"forced_no_tools":1,"source_access_dynamic_partial":1,"memory_updates":2,"memory_update_add":1,"memory_update_replace":1,"memory_search_calls":2,"memory_search_misses":1,"session_search_calls":1,"session_search_results":2,"session_search_context_hits":1,"session_search_matched_terms":2,"session_search_recent_sessions":3,"tool_context_truncated":2,"tool_context_omitted_bytes":8192}}}`,
 	}, "\n") + "\n"
 	if err := os.WriteFile(tracePath, []byte(body), 0o644); err != nil {
 		t.Fatal(err)
@@ -376,7 +376,7 @@ func TestParseTraceFileReadsToolRequestsAndFinalText(t *testing.T) {
 	if trace.ToolStats.MemoryUpdates != 2 || trace.ToolStats.MemoryUpdateAdd != 1 || trace.ToolStats.MemoryUpdateReplace != 1 || trace.ToolStats.MemoryUpdateRemove != 0 {
 		t.Fatalf("memory ToolStats = %+v", trace.ToolStats)
 	}
-	if trace.ToolStats.MemorySearchMisses != 1 {
+	if trace.ToolStats.MemorySearchCalls != 2 || trace.ToolStats.MemorySearchMisses != 1 {
 		t.Fatalf("memory search ToolStats = %+v", trace.ToolStats)
 	}
 	if trace.ToolStats.SessionSearchCalls != 1 || trace.ToolStats.SessionSearchResults != 2 || trace.ToolStats.SessionSearchContextHits != 1 || trace.ToolStats.SessionSearchMatchedTerms != 2 || trace.ToolStats.SessionSearchRecent != 3 {
@@ -1908,6 +1908,8 @@ func TestWriteScenarioDebugArtifactsIndexesTraceAndFinalText(t *testing.T) {
 			MemoryUpdates:              2,
 			MemoryUpdateAdd:            1,
 			MemoryUpdateReplace:        1,
+			MemorySearchCalls:          2,
+			MemorySearchMisses:         1,
 			SessionSearchCalls:         1,
 			SessionSearchResults:       2,
 			SessionSearchContextHits:   1,
@@ -2482,6 +2484,8 @@ func TestWriteScenarioDebugArtifactsIndexesTraceAndFinalText(t *testing.T) {
 		manifest.Metrics.MemoryUpdates != 2 ||
 		manifest.Metrics.MemoryUpdateAdd != 1 ||
 		manifest.Metrics.MemoryUpdateReplace != 1 ||
+		manifest.Metrics.MemorySearchCalls != 2 ||
+		manifest.Metrics.MemorySearchMisses != 1 ||
 		manifest.Metrics.SessionSearchCalls != 1 ||
 		manifest.Metrics.SessionSearchResults != 2 ||
 		manifest.Metrics.SessionSearchContextHits != 1 ||
@@ -2509,7 +2513,7 @@ func TestWriteScenarioDebugArtifactsIndexesTraceAndFinalText(t *testing.T) {
 	}
 	for _, want := range []string{
 		"# Affent Eval Timeline",
-		"metrics: tools=8 tool_errors=1 repaired=0 canonicalized=0 loop_guard=1 forced_no_tools=0 evidence=1/2_verified,network=1,partial=1,discovery=1 memory_updates=2(add:1,replace:1,remove:0) session_search=calls:1,results:2,context:1,terms:2,terms_per_call:2.00 tool_context_trunc=2,omitted=8192 compactions=1,reactive=1,removed=12,summary_bytes=512,summary_missing=0,summary_empty=0 loop_calibrations=1 loop_calibration_requests=1 tokens=100/20",
+		"metrics: tools=8 tool_errors=1 repaired=0 canonicalized=0 loop_guard=1 forced_no_tools=0 evidence=1/2_verified,network=1,partial=1,discovery=1 memory_updates=2(add:1,replace:1,remove:0) memory_search=calls:2,misses:1 session_search=calls:1,results:2,context:1,terms:2,terms_per_call:2.00 tool_context_trunc=2,omitted=8192 compactions=1,reactive=1,removed=12,summary_bytes=512,summary_missing=0,summary_empty=0 loop_calibrations=1 loop_calibration_requests=1 tokens=100/20",
 		"## Runtime Surface",
 		"`web_fetch`",
 		"## Tool Repair",

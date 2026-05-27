@@ -100,7 +100,7 @@ func TestRecordMemoryUpdateStats(t *testing.T) {
 	}
 }
 
-func TestRecordMemorySearchStatsCountsNoHitSearches(t *testing.T) {
+func TestRecordMemorySearchStatsCountsSearchCallsAndNoHitSearches(t *testing.T) {
 	var stats sse.ToolRuntimeStats
 	recordMemorySearchStats(&stats, "memory", []byte(`{"action":"search","query":"helm"}`), `{"ok":true,"target":"memory","results":[],"topics":[{"topic":"deploy","entries":1}]}`, false)
 
@@ -110,6 +110,9 @@ func TestRecordMemorySearchStatsCountsNoHitSearches(t *testing.T) {
 	recordMemorySearchStats(&stats, "memory", []byte(`{"action":"search"}`), `{"ok":true,"results":[]}`, true)
 	recordMemorySearchStats(&stats, "read_file", []byte(`{"action":"search"}`), `{"ok":true,"results":[]}`, false)
 
+	if stats.MemorySearchCalls != 4 {
+		t.Fatalf("MemorySearchCalls = %d, want 4: %+v", stats.MemorySearchCalls, stats)
+	}
 	if stats.MemorySearchMisses != 1 {
 		t.Fatalf("MemorySearchMisses = %d, want 1: %+v", stats.MemorySearchMisses, stats)
 	}

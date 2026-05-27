@@ -279,10 +279,11 @@ external-calibration reminder paired with a `loop.decision`.
   `ref=...` field linking the source evidence back to a prior
   `browser_network` result, plus optional response diagnostics such as
   `status=200` and `content_type=application/json`.
+- `memory_search_calls`: count of dispatched memory search attempts.
 - `memory_search_misses`: count of successful memory search calls that returned
-  no direct hits. This separates "the agent never checked memory" from "memory
-  was checked but the query missed and should be retried from available
-  anchors".
+  no direct hits. Together with `memory_search_calls`, this separates "the
+  agent never checked memory" from "memory was checked but the query missed and
+  should be retried from available anchors".
 - `session_search_calls`: count of dispatched `session_search` tool calls.
 - `session_search_results`: total prior-session hits reported by parsed
   `session_search` JSON responses.

@@ -305,6 +305,7 @@ type ToolRuntimeStats struct {
 	MemoryUpdateAdd            int
 	MemoryUpdateReplace        int
 	MemoryUpdateRemove         int
+	MemorySearchCalls          int
 	MemorySearchMisses         int
 	SessionSearchCalls         int
 	SessionSearchResults       int

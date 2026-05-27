@@ -439,6 +439,7 @@ func TestSession_ToolStatsSnapshot_AccumulatesFromTurnEnd(t *testing.T) {
 				MemoryUpdates:              2,
 				MemoryUpdateAdd:            1,
 				MemoryUpdateReplace:        1,
+				MemorySearchCalls:          2,
 				MemorySearchMisses:         1,
 				SessionSearchCalls:         1,
 				SessionSearchResults:       2,
@@ -469,6 +470,7 @@ func TestSession_ToolStatsSnapshot_AccumulatesFromTurnEnd(t *testing.T) {
 				SourceAccessDynamicPartial: 1,
 				MemoryUpdates:              1,
 				MemoryUpdateRemove:         1,
+				MemorySearchCalls:          3,
 				MemorySearchMisses:         2,
 				SessionSearchCalls:         1,
 				SessionSearchResults:       1,
@@ -513,6 +515,7 @@ func TestSession_ToolStatsSnapshot_AccumulatesFromTurnEnd(t *testing.T) {
 			got.MemoryUpdateAdd == 1 &&
 			got.MemoryUpdateReplace == 1 &&
 			got.MemoryUpdateRemove == 1 &&
+			got.MemorySearchCalls == 5 &&
 			got.MemorySearchMisses == 3 &&
 			got.SessionSearchCalls == 2 &&
 			got.SessionSearchResults == 3 &&
@@ -545,6 +548,7 @@ func TestSession_ToolStatsSnapshot_AccumulatesFromTurnEnd(t *testing.T) {
 		resp.Sessions[0].Tools.SourceAccessVerified != 2 || resp.Aggregate.Tools.SourceAccessNetwork != 1 ||
 		resp.Aggregate.Tools.SourceAccessDynamic != 2 ||
 		resp.Sessions[0].Tools.MemoryUpdates != 3 || resp.Aggregate.Tools.MemoryUpdateRemove != 1 ||
+		resp.Aggregate.Tools.MemorySearchCalls != 5 ||
 		resp.Aggregate.Tools.MemorySearchMisses != 3 ||
 		resp.Sessions[0].Tools.SessionSearchCalls != 2 || resp.Aggregate.Tools.SessionSearchResults != 3 ||
 		resp.Aggregate.Tools.SessionSearchContext != 2 || resp.Sessions[0].Tools.SessionSearchTerms != 3 ||
@@ -563,6 +567,7 @@ func TestSession_ToolStatsSnapshot_AccumulatesFromTurnEnd(t *testing.T) {
 		summary.Tools.SourceAccessResults != 3 || summary.Tools.SourceAccessDiscovery != 1 ||
 		summary.Tools.SourceAccessDynamic != 2 ||
 		summary.Tools.MemoryUpdates != 3 || summary.Tools.MemoryUpdateAdd != 1 ||
+		summary.Tools.MemorySearchCalls != 5 ||
 		summary.Tools.MemorySearchMisses != 3 ||
 		summary.Tools.SessionSearchCalls != 2 || summary.Tools.SessionSearchResults != 3 ||
 		summary.Tools.SessionSearchContext != 2 || summary.Tools.SessionSearchTerms != 3 ||

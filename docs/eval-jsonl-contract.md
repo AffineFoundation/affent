@@ -342,10 +342,12 @@ Scenario records describe one eval case:
   anchors for retry. Each sample includes tool index, call id, target/topic,
   query, topic count, compact topic names, and the recovery message. Summary
   records include the originating scenario.
+- `memory_search_calls`: count of dispatched memory search attempts.
 - `memory_search_misses`: count of successful memory search calls that returned
-  no direct hits. This counter is emitted in `tool_stats`, scenario JSONL, and
-  summary JSONL so long-run recall misses can be trended without opening
-  traces; `memory_search_miss_examples` provide the bounded recovery details.
+  no direct hits. These counters are emitted in `tool_stats`, scenario JSONL,
+  and summary JSONL so long-run recall miss rates can be trended without
+  opening traces; `memory_search_miss_examples` provide the bounded recovery
+  details.
 - `context_compaction_examples`: optional bounded examples of context
   compaction events. Each sample includes the turn id, before/after message
   counts, removed message count, reactive/proactive flag, reason, and summary
@@ -473,7 +475,8 @@ Summary records aggregate all scenario records from the same process:
   `browser_network_examples`,
   `memory_updates`, `memory_update_add`, `memory_update_replace`,
   `memory_update_remove`, `memory_update_examples`,
-  `memory_search_misses`, `memory_search_miss_examples`,
+  `memory_search_calls`, `memory_search_misses`,
+  `memory_search_miss_examples`,
   `session_search_calls`, `session_search_results`,
   `session_search_context_hits`, `session_search_matched_terms`,
   `session_search_recent_sessions`, `session_search_examples`,

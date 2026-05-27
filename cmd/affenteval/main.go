@@ -712,6 +712,7 @@ type batchSummary struct {
 	MemoryUpdateAdd                      int
 	MemoryUpdateReplace                  int
 	MemoryUpdateRemove                   int
+	MemorySearchCalls                    int
 	MemorySearchMisses                   int
 	MemoryUpdateExamples                 []agenteval.MemoryUpdateExample
 	MemorySearchMissExamples             []agenteval.MemorySearchMissExample
@@ -930,6 +931,7 @@ func (s *batchSummary) add(res agenteval.BatchResult) {
 	s.MemoryUpdateAdd += res.ToolStats.MemoryUpdateAdd
 	s.MemoryUpdateReplace += res.ToolStats.MemoryUpdateReplace
 	s.MemoryUpdateRemove += res.ToolStats.MemoryUpdateRemove
+	s.MemorySearchCalls += res.ToolStats.MemorySearchCalls
 	s.MemorySearchMisses += res.ToolStats.MemorySearchMisses
 	s.MemoryUpdateExamples = appendMemoryUpdateExamples(s.MemoryUpdateExamples, res.MemoryUpdateExamples, res.BatchScenario, batchSummaryExamplesPerKind)
 	s.MemorySearchMissExamples = appendMemorySearchMissExamples(s.MemorySearchMissExamples, res.MemorySearchMissExamples, res.BatchScenario, batchSummaryExamplesPerKind)
@@ -1338,8 +1340,8 @@ func printBatchSummary(w io.Writer, s batchSummary) {
 			s.MemoryUpdateRemove,
 		)
 	}
-	if s.MemorySearchMisses > 0 {
-		fmt.Fprintf(w, " memory_search_misses=%d", s.MemorySearchMisses)
+	if s.MemorySearchCalls > 0 || s.MemorySearchMisses > 0 {
+		fmt.Fprintf(w, " memory_search=calls:%d,misses:%d", s.MemorySearchCalls, s.MemorySearchMisses)
 	}
 	if hasBatchSessionSearchStats(s) {
 		recent := ""
@@ -2803,6 +2805,7 @@ type batchResultRecord struct {
 	MemoryUpdateAdd                  int                                        `json:"memory_update_add"`
 	MemoryUpdateReplace              int                                        `json:"memory_update_replace"`
 	MemoryUpdateRemove               int                                        `json:"memory_update_remove"`
+	MemorySearchCalls                int                                        `json:"memory_search_calls,omitempty"`
 	MemorySearchMisses               int                                        `json:"memory_search_misses,omitempty"`
 	MemorySearchMissExamples         []agenteval.MemorySearchMissExample        `json:"memory_search_miss_examples,omitempty"`
 	SessionSearchCalls               int                                        `json:"session_search_calls,omitempty"`
@@ -2964,6 +2967,7 @@ type batchSummaryRecord struct {
 	MemoryUpdateAdd                      int                                              `json:"memory_update_add"`
 	MemoryUpdateReplace                  int                                              `json:"memory_update_replace"`
 	MemoryUpdateRemove                   int                                              `json:"memory_update_remove"`
+	MemorySearchCalls                    int                                              `json:"memory_search_calls,omitempty"`
 	MemorySearchMisses                   int                                              `json:"memory_search_misses,omitempty"`
 	MemoryUpdateExamples                 []agenteval.MemoryUpdateExample                  `json:"memory_update_examples,omitempty"`
 	MemorySearchMissExamples             []agenteval.MemorySearchMissExample              `json:"memory_search_miss_examples,omitempty"`
@@ -3137,6 +3141,7 @@ func printBatchResultJSONL(w io.Writer, meta evalJSONLMetadata, res agenteval.Ba
 		MemoryUpdateAdd:                  res.ToolStats.MemoryUpdateAdd,
 		MemoryUpdateReplace:              res.ToolStats.MemoryUpdateReplace,
 		MemoryUpdateRemove:               res.ToolStats.MemoryUpdateRemove,
+		MemorySearchCalls:                res.ToolStats.MemorySearchCalls,
 		MemorySearchMisses:               res.ToolStats.MemorySearchMisses,
 		MemorySearchMissExamples:         cloneMemorySearchMissExamples(res.MemorySearchMissExamples),
 		SessionSearchCalls:               res.ToolStats.SessionSearchCalls,
@@ -3372,6 +3377,7 @@ func printBatchSummaryJSONL(w io.Writer, meta evalJSONLMetadata, s batchSummary,
 		MemoryUpdateAdd:                      s.MemoryUpdateAdd,
 		MemoryUpdateReplace:                  s.MemoryUpdateReplace,
 		MemoryUpdateRemove:                   s.MemoryUpdateRemove,
+		MemorySearchCalls:                    s.MemorySearchCalls,
 		MemorySearchMisses:                   s.MemorySearchMisses,
 		MemoryUpdateExamples:                 cloneMemoryUpdateExamples(s.MemoryUpdateExamples),
 		MemorySearchMissExamples:             cloneMemorySearchMissExamples(s.MemorySearchMissExamples),
@@ -4197,8 +4203,8 @@ func printBatchResult(w io.Writer, res agenteval.BatchResult) {
 			res.ToolStats.MemoryUpdateRemove,
 		)
 	}
-	if res.ToolStats.MemorySearchMisses > 0 {
-		fmt.Fprintf(w, " memory_search_misses=%d", res.ToolStats.MemorySearchMisses)
+	if res.ToolStats.MemorySearchCalls > 0 || res.ToolStats.MemorySearchMisses > 0 {
+		fmt.Fprintf(w, " memory_search=calls:%d,misses:%d", res.ToolStats.MemorySearchCalls, res.ToolStats.MemorySearchMisses)
 	}
 	if len(res.RuntimeErrorByKind) > 0 {
 		fmt.Fprintf(w, " runtime_error_kinds=%s", formatStringIntCounts(res.RuntimeErrorByKind))
@@ -4601,7 +4607,7 @@ func requiredRuntimeTools(scenario agenteval.BatchScenario) []string {
 func runtimeToolsForRequiredStat(stat string) []string {
 	stat = strings.TrimSpace(stat)
 	switch {
-	case stat == "memory_updates" || strings.HasPrefix(stat, "memory_update_") || stat == "memory_search_misses":
+	case stat == "memory_updates" || strings.HasPrefix(stat, "memory_update_") || stat == "memory_search_calls" || stat == "memory_search_misses":
 		return []string{agent.MemoryToolName}
 	case strings.HasPrefix(stat, "session_search_"):
 		return []string{agent.SessionSearchToolName}
