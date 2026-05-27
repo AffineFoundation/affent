@@ -1268,6 +1268,73 @@ func TestPrintBatchResultOmitsDebugPathsForRemovedWorkspace(t *testing.T) {
 	}
 }
 
+func TestBatchSummaryAggregatesConversationRepairs(t *testing.T) {
+	var summary batchSummary
+	summary.add(agenteval.BatchResult{
+		BatchScenario: "resume-a",
+		ConversationRepairs: []sse.ConversationRepairedPayload{{
+			SessionID:          "resume-session-a",
+			MissingToolResults: 2,
+			FailureKind:        "resume_missing_tool_result",
+			Next:               "do not assume the tool succeeded; rerun only if essential",
+		}},
+	})
+	summary.add(agenteval.BatchResult{
+		BatchScenario: "resume-b",
+		ConversationRepairs: []sse.ConversationRepairedPayload{{
+			SessionID:          "resume-session-b",
+			MissingToolResults: 1,
+			FailureKind:        "resume_missing_tool_result",
+			Next:               "continue from available context",
+		}},
+	})
+	summary.add(agenteval.BatchResult{
+		BatchScenario: "resume-c",
+		ConversationRepairs: []sse.ConversationRepairedPayload{{
+			SessionID:          "resume-session-c",
+			MissingToolResults: 1,
+			FailureKind:        "unknown_repair",
+		}},
+	})
+
+	if summary.ConversationRepairs != 3 ||
+		summary.ConversationRepairMissingToolResults != 4 ||
+		!reflect.DeepEqual(summary.ConversationRepairByKind, map[string]int{"resume_missing_tool_result": 2, "unknown_repair": 1}) {
+		t.Fatalf("conversation repair summary = count:%d missing:%d kinds:%#v", summary.ConversationRepairs, summary.ConversationRepairMissingToolResults, summary.ConversationRepairByKind)
+	}
+	if len(summary.ConversationRepairExamples) != 2 ||
+		summary.ConversationRepairExamples[0].Scenario != "resume-a" ||
+		summary.ConversationRepairExamples[1].Scenario != "resume-b" {
+		t.Fatalf("ConversationRepairExamples = %#v", summary.ConversationRepairExamples)
+	}
+
+	var out bytes.Buffer
+	printBatchSummary(&out, summary)
+	got := out.String()
+	for _, want := range []string{
+		"conversation_repairs=3,missing_tool_results=4 conversation_repair_kinds=resume_missing_tool_result:2,unknown_repair:1",
+		`conversation_repair_example: scenario=resume-a session=resume-session-a missing_tool_results=2 kind=resume_missing_tool_result next="do not assume the tool succeeded; rerun only if essential"`,
+		`conversation_repair_example: scenario=resume-b session=resume-session-b missing_tool_results=1 kind=resume_missing_tool_result next="continue from available context"`,
+	} {
+		if !strings.Contains(got, want) {
+			t.Fatalf("summary output missing %q:\n%s", want, got)
+		}
+	}
+
+	var jsonl bytes.Buffer
+	printBatchSummaryJSONL(&jsonl, evalJSONLMetadata{SchemaVersion: evalJSONLSchemaVersion, Executor: "local"}, summary, nil)
+	var record batchSummaryRecord
+	if err := json.Unmarshal(jsonl.Bytes(), &record); err != nil {
+		t.Fatalf("decode summary jsonl: %v\n%s", err, jsonl.String())
+	}
+	if record.ConversationRepairs != 3 ||
+		record.ConversationRepairMissingToolResults != 4 ||
+		!reflect.DeepEqual(record.ConversationRepairByKind, map[string]int{"resume_missing_tool_result": 2, "unknown_repair": 1}) ||
+		len(record.ConversationRepairExamples) != 2 {
+		t.Fatalf("summary jsonl conversation repairs = %#v", record)
+	}
+}
+
 func TestBatchSummaryAggregatesRuntimeMetrics(t *testing.T) {
 	var summary batchSummary
 	summary.add(agenteval.BatchResult{

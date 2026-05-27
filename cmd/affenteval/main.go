@@ -44,6 +44,14 @@ type batchFailureExample struct {
 	DebugManifestPath string `json:"debug_manifest_path,omitempty"`
 }
 
+type batchConversationRepairExample struct {
+	Scenario           string `json:"scenario"`
+	SessionID          string `json:"session_id,omitempty"`
+	MissingToolResults int    `json:"missing_tool_results,omitempty"`
+	FailureKind        string `json:"failure_kind,omitempty"`
+	Next               string `json:"next,omitempty"`
+}
+
 type stringFloatMapFlag map[string]float64
 
 func (f *stringFloatMapFlag) Set(raw string) error {
@@ -653,6 +661,10 @@ type batchSummary struct {
 	ToolRepairNotes                      int
 	ToolRepairByKind                     map[string]int
 	ToolRepairExamples                   []agenteval.ToolRepairExample
+	ConversationRepairs                  int
+	ConversationRepairMissingToolResults int
+	ConversationRepairByKind             map[string]int
+	ConversationRepairExamples           []batchConversationRepairExample
 	ToolFailureByKind                    map[string]int
 	ToolFailureExamples                  map[string][]agenteval.ToolFailureExample
 	LoopGuardExamples                    []agenteval.LoopGuardExample
@@ -809,6 +821,19 @@ func (s *batchSummary) add(res agenteval.BatchResult) {
 		s.ToolRepairByKind[k] += v
 	}
 	s.ToolRepairExamples = appendToolRepairExamples(s.ToolRepairExamples, res.ToolRepairExamples, res.BatchScenario, batchSummaryExamplesPerKind)
+	s.ConversationRepairs += len(res.ConversationRepairs)
+	for _, repair := range res.ConversationRepairs {
+		s.ConversationRepairMissingToolResults += repair.MissingToolResults
+		kind := strings.TrimSpace(repair.FailureKind)
+		if kind == "" {
+			kind = "unknown"
+		}
+		if s.ConversationRepairByKind == nil {
+			s.ConversationRepairByKind = map[string]int{}
+		}
+		s.ConversationRepairByKind[kind]++
+	}
+	s.ConversationRepairExamples = appendConversationRepairExamples(s.ConversationRepairExamples, res.ConversationRepairs, res.BatchScenario, batchSummaryExamplesPerKind)
 	s.LoopGuardExamples = appendLoopGuardExamples(s.LoopGuardExamples, res.LoopGuardExamples, res.BatchScenario, batchSummaryExamplesPerKind)
 	for k, v := range res.ToolStats.ToolFailureByKind {
 		if s.ToolFailureByKind == nil {
@@ -1269,6 +1294,12 @@ func printBatchSummary(w io.Writer, s batchSummary) {
 	if len(s.ToolRepairByKind) > 0 {
 		fmt.Fprintf(w, " repair_kinds=%s", formatStringIntCounts(s.ToolRepairByKind))
 	}
+	if s.ConversationRepairs > 0 {
+		fmt.Fprintf(w, " conversation_repairs=%d,missing_tool_results=%d", s.ConversationRepairs, s.ConversationRepairMissingToolResults)
+		if len(s.ConversationRepairByKind) > 0 {
+			fmt.Fprintf(w, " conversation_repair_kinds=%s", formatStringIntCounts(s.ConversationRepairByKind))
+		}
+	}
 	if len(s.ToolFailureByKind) > 0 {
 		fmt.Fprintf(w, " tool_failure_kinds=%s", formatStringIntCounts(s.ToolFailureByKind))
 	}
@@ -1382,6 +1413,7 @@ func printBatchSummary(w io.Writer, s batchSummary) {
 	printFailureHintLines(w, s.FailureKinds, "")
 	printFailureExampleLines(w, s.FailureExamples, "")
 	printToolRepairExampleLines(w, s.ToolRepairExamples, "")
+	printConversationRepairExampleLines(w, s.ConversationRepairExamples, "")
 	printToolFailureHintLines(w, s.ToolFailureByKind, "")
 	printToolFailureExampleLines(w, s.ToolFailureExamples, "")
 	printLoopGuardExampleLines(w, s.LoopGuardExamples, "")
@@ -1547,6 +1579,22 @@ func formatDebugBriefTags(tags []string) string {
 	out := append([]string(nil), tags...)
 	sort.Strings(out)
 	return strings.Join(out, ",")
+}
+
+func conversationRepairSummary(repairs []sse.ConversationRepairedPayload) (count int, missingToolResults int, byKind map[string]int) {
+	count = len(repairs)
+	for _, repair := range repairs {
+		missingToolResults += repair.MissingToolResults
+		kind := strings.TrimSpace(repair.FailureKind)
+		if kind == "" {
+			kind = "unknown"
+		}
+		if byKind == nil {
+			byKind = map[string]int{}
+		}
+		byKind[kind]++
+	}
+	return count, missingToolResults, byKind
 }
 
 func batchRatio(numerator, denominator int) float64 {
@@ -1824,6 +1872,26 @@ func printToolRepairExampleLines(w io.Writer, examples []agenteval.ToolRepairExa
 		fmt.Fprintf(w, " canonicalized=%t args_repaired=%t exit=%d", ex.Canonicalized, ex.ArgsRepaired, ex.ExitCode)
 		if len(ex.RepairNotes) > 0 {
 			fmt.Fprintf(w, " note=%q", ex.RepairNotes[0])
+		}
+		fmt.Fprintln(w)
+	}
+}
+
+func printConversationRepairExampleLines(w io.Writer, examples []batchConversationRepairExample, indent string) {
+	for _, ex := range examples {
+		fmt.Fprintf(w, "%sconversation_repair_example:", indent)
+		if ex.Scenario != "" {
+			fmt.Fprintf(w, " scenario=%s", ex.Scenario)
+		}
+		if ex.SessionID != "" {
+			fmt.Fprintf(w, " session=%s", ex.SessionID)
+		}
+		fmt.Fprintf(w, " missing_tool_results=%d", ex.MissingToolResults)
+		if ex.FailureKind != "" {
+			fmt.Fprintf(w, " kind=%s", ex.FailureKind)
+		}
+		if ex.Next != "" {
+			fmt.Fprintf(w, " next=%q", textutil.Preview(ex.Next, 160))
 		}
 		fmt.Fprintln(w)
 	}
@@ -2610,6 +2678,7 @@ type batchResultRecord struct {
 	ToolRepairNotes                  int                                        `json:"tool_repair_notes,omitempty"`
 	ToolRepairByKind                 map[string]int                             `json:"tool_repair_by_kind,omitempty"`
 	ToolRepairExamples               []agenteval.ToolRepairExample              `json:"tool_repair_examples,omitempty"`
+	ConversationRepairs              []sse.ConversationRepairedPayload          `json:"conversation_repairs,omitempty"`
 	ToolFailureByKind                map[string]int                             `json:"tool_failure_by_kind,omitempty"`
 	ToolFailureExamples              map[string][]agenteval.ToolFailureExample  `json:"tool_failure_examples,omitempty"`
 	LoopGuardExamples                []agenteval.LoopGuardExample               `json:"loop_guard_examples,omitempty"`
@@ -2762,6 +2831,10 @@ type batchSummaryRecord struct {
 	ToolRepairNotes                      int                                              `json:"tool_repair_notes,omitempty"`
 	ToolRepairByKind                     map[string]int                                   `json:"tool_repair_by_kind,omitempty"`
 	ToolRepairExamples                   []agenteval.ToolRepairExample                    `json:"tool_repair_examples,omitempty"`
+	ConversationRepairs                  int                                              `json:"conversation_repairs,omitempty"`
+	ConversationRepairMissingToolResults int                                              `json:"conversation_repair_missing_tool_results,omitempty"`
+	ConversationRepairByKind             map[string]int                                   `json:"conversation_repair_by_kind,omitempty"`
+	ConversationRepairExamples           []batchConversationRepairExample                 `json:"conversation_repair_examples,omitempty"`
 	ToolFailureByKind                    map[string]int                                   `json:"tool_failure_by_kind,omitempty"`
 	ToolFailureExamples                  map[string][]agenteval.ToolFailureExample        `json:"tool_failure_examples,omitempty"`
 	LoopGuardExamples                    []agenteval.LoopGuardExample                     `json:"loop_guard_examples,omitempty"`
@@ -2934,6 +3007,7 @@ func printBatchResultJSONL(w io.Writer, meta evalJSONLMetadata, res agenteval.Ba
 		ToolRepairNotes:                  res.Repair.Notes,
 		ToolRepairByKind:                 cloneStringIntMap(res.Repair.ByKind),
 		ToolRepairExamples:               cloneToolRepairExamples(res.ToolRepairExamples),
+		ConversationRepairs:              cloneConversationRepairs(res.ConversationRepairs),
 		ToolFailureByKind:                cloneStringIntMap(res.ToolStats.ToolFailureByKind),
 		ToolFailureExamples:              cloneToolFailureExamples(res.ToolFailureExamples),
 		LoopGuardExamples:                cloneLoopGuardExamples(res.LoopGuardExamples),
@@ -3157,6 +3231,10 @@ func printBatchSummaryJSONL(w io.Writer, meta evalJSONLMetadata, s batchSummary,
 		ToolRepairNotes:                      s.ToolRepairNotes,
 		ToolRepairByKind:                     cloneStringIntMap(s.ToolRepairByKind),
 		ToolRepairExamples:                   cloneToolRepairExamples(s.ToolRepairExamples),
+		ConversationRepairs:                  s.ConversationRepairs,
+		ConversationRepairMissingToolResults: s.ConversationRepairMissingToolResults,
+		ConversationRepairByKind:             cloneStringIntMap(s.ConversationRepairByKind),
+		ConversationRepairExamples:           cloneConversationRepairExamples(s.ConversationRepairExamples),
 		ToolFailureByKind:                    cloneStringIntMap(s.ToolFailureByKind),
 		ToolFailureExamples:                  cloneToolFailureExamples(s.ToolFailureExamples),
 		LoopGuardExamples:                    cloneLoopGuardExamples(s.LoopGuardExamples),
@@ -3535,6 +3613,20 @@ func cloneLoopDecisionExamples(in []agenteval.LoopDecision) []agenteval.LoopDeci
 	return append([]agenteval.LoopDecision(nil), in...)
 }
 
+func cloneConversationRepairs(in []sse.ConversationRepairedPayload) []sse.ConversationRepairedPayload {
+	if len(in) == 0 {
+		return nil
+	}
+	return append([]sse.ConversationRepairedPayload(nil), in...)
+}
+
+func cloneConversationRepairExamples(in []batchConversationRepairExample) []batchConversationRepairExample {
+	if len(in) == 0 {
+		return nil
+	}
+	return append([]batchConversationRepairExample(nil), in...)
+}
+
 func cloneLoopProtocolFeedExamples(in []agenteval.LoopProtocolFeed) []agenteval.LoopProtocolFeed {
 	if len(in) == 0 {
 		return nil
@@ -3606,6 +3698,25 @@ func appendToolRepairExamples(dst, src []agenteval.ToolRepairExample, scenario s
 			ex.Scenario = scenario
 		}
 		dst = append(dst, ex)
+	}
+	return dst
+}
+
+func appendConversationRepairExamples(dst []batchConversationRepairExample, src []sse.ConversationRepairedPayload, scenario string, limit int) []batchConversationRepairExample {
+	if limit <= 0 || len(dst) >= limit {
+		return dst
+	}
+	for _, repair := range src {
+		if len(dst) >= limit {
+			break
+		}
+		dst = append(dst, batchConversationRepairExample{
+			Scenario:           scenario,
+			SessionID:          repair.SessionID,
+			MissingToolResults: repair.MissingToolResults,
+			FailureKind:        repair.FailureKind,
+			Next:               repair.Next,
+		})
 	}
 	return dst
 }
@@ -3921,6 +4032,13 @@ func printBatchResult(w io.Writer, res agenteval.BatchResult) {
 	if len(res.Repair.ByKind) > 0 {
 		fmt.Fprintf(w, " repair_kinds=%s", formatStringIntCounts(res.Repair.ByKind))
 	}
+	if len(res.ConversationRepairs) > 0 {
+		repairs, missing, byKind := conversationRepairSummary(res.ConversationRepairs)
+		fmt.Fprintf(w, " conversation_repairs=%d,missing_tool_results=%d", repairs, missing)
+		if len(byKind) > 0 {
+			fmt.Fprintf(w, " conversation_repair_kinds=%s", formatStringIntCounts(byKind))
+		}
+	}
 	if len(res.ToolStats.ToolFailureByKind) > 0 {
 		fmt.Fprintf(w, " tool_failure_kinds=%s", formatStringIntCounts(res.ToolStats.ToolFailureByKind))
 	}
@@ -4012,6 +4130,7 @@ func printBatchResult(w io.Writer, res agenteval.BatchResult) {
 	}
 	printFailureHintLines(w, failureKindsForResult(res.Failures), "  ")
 	printToolRepairExampleLines(w, res.ToolRepairExamples, "  ")
+	printConversationRepairExampleLines(w, appendConversationRepairExamples(nil, res.ConversationRepairs, res.BatchScenario, len(res.ConversationRepairs)), "  ")
 	printToolFailureHintLines(w, res.ToolStats.ToolFailureByKind, "  ")
 	printToolFailureExampleLines(w, res.ToolFailureExamples, "  ")
 	printLoopGuardExampleLines(w, res.LoopGuardExamples, "  ")
