@@ -1300,9 +1300,8 @@ func (l *Loop) publishEvidenceQualityDecisions(turnID string, stats sse.ToolRunt
 		return
 	}
 	visible := true
-	l.publish(sse.TypeLoopDecision, sse.LoopDecisionPayload{
+	l.publishLoopDecision(sse.LoopDecisionPayload{
 		TurnID:         turnID,
-		LoopID:         l.loopProtocolID(),
 		DecisionID:     "evidence-quality-dynamic-partial",
 		Kind:           "evidence_quality",
 		Trigger:        "source_access_dynamic_partial",
@@ -1312,6 +1311,38 @@ func (l *Loop) publishEvidenceQualityDecisions(turnID string, stats sse.ToolRunt
 		RequiredAction: "Read browser network responses or an official API/source before citing dynamic page metrics.",
 		VisibleInUI:    &visible,
 	})
+}
+
+func (l *Loop) publishLoopDecision(payload sse.LoopDecisionPayload) {
+	if payload.LoopID == "" {
+		payload.LoopID = l.loopProtocolID()
+	}
+	l.publish(sse.TypeLoopDecision, payload)
+	l.recordLoopDecision(payload)
+}
+
+func (l *Loop) recordLoopDecision(payload sse.LoopDecisionPayload) {
+	path := strings.TrimSpace(l.LoopProtocolPath)
+	if path == "" {
+		return
+	}
+	if _, found, err := loopstate.ReadProtocol(path); err != nil {
+		l.Log.Warn().Err(err).Msg("read loop protocol before decision checkpoint failed")
+		return
+	} else if !found {
+		return
+	}
+	if _, _, err := loopstate.RecordDecision(path, loopstate.DecisionCheckpoint{
+		DecisionID:     payload.DecisionID,
+		Kind:           payload.Kind,
+		Trigger:        payload.Trigger,
+		Decision:       payload.Decision,
+		Confidence:     payload.Confidence,
+		Reason:         payload.Reason,
+		RequiredAction: payload.RequiredAction,
+	}); err != nil {
+		l.Log.Warn().Err(err).Msg("record loop decision checkpoint failed")
+	}
 }
 
 func (l *Loop) recordLoopTurnCheckpoint(turnID, endReason string, inputTokens, outputTokens int, stats sse.ToolRuntimeStats) {

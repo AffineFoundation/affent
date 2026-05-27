@@ -298,6 +298,51 @@ func TestRecordTurnCheckpointUpdatesStateAndEvents(t *testing.T) {
 	}
 }
 
+func TestRecordDecisionUpdatesStateAndEvents(t *testing.T) {
+	dir := t.TempDir()
+	protocolPath := ProtocolPath(dir, "market-run")
+	if err := WriteProtocol(protocolPath, "# Loop\n\n## North Star\n\nPersist runtime decisions."); err != nil {
+		t.Fatal(err)
+	}
+	state, event, err := RecordDecision(protocolPath, DecisionCheckpoint{
+		DecisionID:     "evidence-quality-dynamic-partial",
+		Kind:           "evidence_quality",
+		Trigger:        "source_access_dynamic_partial",
+		Decision:       "defer",
+		Confidence:     "high",
+		Reason:         "dynamic widgets lacked text",
+		RequiredAction: "read browser network responses",
+	})
+	if err != nil {
+		t.Fatalf("RecordDecision: %v", err)
+	}
+	if event.Type != "loop.decision" ||
+		event.DecisionID != "evidence-quality-dynamic-partial" ||
+		event.DecisionKind != "evidence_quality" ||
+		event.Trigger != "source_access_dynamic_partial" ||
+		event.Decision != "defer" ||
+		event.Confidence != "high" ||
+		event.Reason != "dynamic widgets lacked text" ||
+		event.RequiredAction != "read browser network responses" ||
+		event.Path != ProtocolRelPath("market-run") {
+		t.Fatalf("event = %+v", event)
+	}
+	if state.LoopDecisions != 1 ||
+		state.LastDecisionID != "evidence-quality-dynamic-partial" ||
+		state.LastDecisionKind != "evidence_quality" ||
+		state.LastDecisionTrigger != "source_access_dynamic_partial" ||
+		state.LastDecision != "defer" ||
+		state.LastDecisionConfidence != "high" ||
+		state.LastDecisionReason != "dynamic widgets lacked text" ||
+		state.LastDecisionAction != "read browser network responses" ||
+		state.LastEventType != "loop.decision" {
+		t.Fatalf("state = %+v", state)
+	}
+	if _, _, err := RecordDecision(protocolPath, DecisionCheckpoint{Kind: "memory_write"}); err == nil || !strings.Contains(err.Error(), "requires kind and decision") {
+		t.Fatalf("missing decision err = %v", err)
+	}
+}
+
 func TestAppendAndReadRecentEventsRejectsUnsafeTargets(t *testing.T) {
 	dir := t.TempDir()
 	path := filepath.Join(dir, ".affent", "loops", "alpha", EventsFileName)

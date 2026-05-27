@@ -337,3 +337,58 @@ func TestRecordLoopTurnCheckpointPersistsRuntimeSummary(t *testing.T) {
 		t.Fatalf("event = %+v", events[0])
 	}
 }
+
+func TestPublishLoopDecisionPersistsSidecarDecision(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "LOOP.md")
+	if err := os.WriteFile(path, []byte("# Loop Protocol\n\n## North Star\n\nAudit gate decisions."), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	events := make(chan sse.Event, 1)
+	loop := &Loop{LoopProtocolPath: path, Events: events}
+	loop.publishLoopDecision(sse.LoopDecisionPayload{
+		TurnID:         "turn_decision",
+		DecisionID:     "decision-1",
+		Kind:           "evidence_quality",
+		Trigger:        "source_access_dynamic_partial",
+		Decision:       "defer",
+		Confidence:     "high",
+		Reason:         "dynamic widgets lacked text",
+		RequiredAction: "read browser network responses",
+	})
+
+	select {
+	case ev := <-events:
+		if ev.Type != sse.TypeLoopDecision {
+			t.Fatalf("event type = %q, want %q", ev.Type, sse.TypeLoopDecision)
+		}
+		var payload sse.LoopDecisionPayload
+		if err := json.Unmarshal(ev.Data, &payload); err != nil {
+			t.Fatalf("decode payload: %v", err)
+		}
+		if payload.LoopID != filepath.Base(dir) || payload.DecisionID != "decision-1" || payload.Decision != "defer" {
+			t.Fatalf("payload = %+v", payload)
+		}
+	default:
+		t.Fatal("expected loop.decision event")
+	}
+
+	state, found, err := loopstate.ReadState(filepath.Join(dir, loopstate.StateFileName))
+	if err != nil || !found {
+		t.Fatalf("ReadState found=%v err=%v", found, err)
+	}
+	if state.LoopDecisions != 1 ||
+		state.LastDecisionID != "decision-1" ||
+		state.LastDecisionKind != "evidence_quality" ||
+		state.LastDecision != "defer" ||
+		state.LastDecisionAction != "read browser network responses" {
+		t.Fatalf("state = %+v", state)
+	}
+	sidecar, found, err := loopstate.ReadRecentEvents(filepath.Join(dir, loopstate.EventsFileName), 1)
+	if err != nil || !found || len(sidecar) != 1 {
+		t.Fatalf("ReadRecentEvents found=%v len=%d err=%v", found, len(sidecar), err)
+	}
+	if sidecar[0].Type != "loop.decision" || sidecar[0].DecisionID != "decision-1" || sidecar[0].RequiredAction != "read browser network responses" {
+		t.Fatalf("sidecar event = %+v", sidecar[0])
+	}
+}

@@ -16,6 +16,7 @@ import (
 const (
 	MaxStateBytes     = 16 * 1024
 	MaxEventLineBytes = 32 * 1024
+	maxDecisionText   = 1024
 )
 
 type State struct {
@@ -48,6 +49,15 @@ type State struct {
 	LastTurnForcedNoTools  int    `json:"last_turn_forced_no_tools,omitempty"`
 	LastTurnMemoryUpdates  int    `json:"last_turn_memory_updates,omitempty"`
 	LastTurnSessionSearch  int    `json:"last_turn_session_search_calls,omitempty"`
+	LoopDecisions          int    `json:"loop_decisions,omitempty"`
+	LastDecisionID         string `json:"last_decision_id,omitempty"`
+	LastDecisionKind       string `json:"last_decision_kind,omitempty"`
+	LastDecisionTrigger    string `json:"last_decision_trigger,omitempty"`
+	LastDecision           string `json:"last_decision,omitempty"`
+	LastDecisionConfidence string `json:"last_decision_confidence,omitempty"`
+	LastDecisionReason     string `json:"last_decision_reason,omitempty"`
+	LastDecisionAction     string `json:"last_decision_required_action,omitempty"`
+	LastDecisionAt         string `json:"last_decision_at,omitempty"`
 	ContextCompactions     int    `json:"context_compactions,omitempty"`
 	LastCompactionAt       string `json:"last_context_compaction_at,omitempty"`
 	LastCompactionReason   string `json:"last_context_compaction_reason,omitempty"`
@@ -82,6 +92,22 @@ type Event struct {
 	ForcedNoTools   int      `json:"forced_no_tools,omitempty"`
 	MemoryUpdates   int      `json:"memory_updates,omitempty"`
 	SessionSearch   int      `json:"session_search_calls,omitempty"`
+	DecisionID      string   `json:"decision_id,omitempty"`
+	DecisionKind    string   `json:"decision_kind,omitempty"`
+	Trigger         string   `json:"trigger,omitempty"`
+	Decision        string   `json:"decision,omitempty"`
+	Confidence      string   `json:"confidence,omitempty"`
+	RequiredAction  string   `json:"required_action,omitempty"`
+}
+
+type DecisionCheckpoint struct {
+	DecisionID     string
+	Kind           string
+	Trigger        string
+	Decision       string
+	Confidence     string
+	Reason         string
+	RequiredAction string
 }
 
 type TurnCheckpoint struct {
@@ -355,6 +381,56 @@ func RecordTurnCheckpoint(protocolPath string, checkpoint TurnCheckpoint) (State
 	return state, event, nil
 }
 
+func RecordDecision(protocolPath string, checkpoint DecisionCheckpoint) (State, Event, error) {
+	loopDir := filepath.Dir(protocolPath)
+	loopID := filepath.Base(loopDir)
+	now := time.Now().UTC()
+	statePath := filepath.Join(loopDir, StateFileName)
+	state, found, err := ReadState(statePath)
+	if err != nil {
+		return State{}, Event{}, err
+	}
+	state = normalizeStateForProtocol(state, found, loopID, now)
+	checkpoint = normalizeDecisionCheckpoint(checkpoint)
+	if checkpoint.Kind == "" || checkpoint.Decision == "" {
+		return State{}, Event{}, errors.New("loop decision requires kind and decision")
+	}
+	event, err := AppendEvent(filepath.Join(loopDir, EventsFileName), Event{
+		Type:           "loop.decision",
+		Summary:        "Decision: " + checkpoint.Kind + "=" + checkpoint.Decision,
+		Reason:         checkpoint.Reason,
+		Path:           ProtocolRelPath(loopID),
+		Time:           formatTime(now),
+		DecisionID:     checkpoint.DecisionID,
+		DecisionKind:   checkpoint.Kind,
+		Trigger:        checkpoint.Trigger,
+		Decision:       checkpoint.Decision,
+		Confidence:     checkpoint.Confidence,
+		RequiredAction: checkpoint.RequiredAction,
+	})
+	if err != nil {
+		return State{}, Event{}, err
+	}
+	state.LoopDecisions++
+	state.LastDecisionID = checkpoint.DecisionID
+	state.LastDecisionKind = checkpoint.Kind
+	state.LastDecisionTrigger = checkpoint.Trigger
+	state.LastDecision = checkpoint.Decision
+	state.LastDecisionConfidence = checkpoint.Confidence
+	state.LastDecisionReason = checkpoint.Reason
+	state.LastDecisionAction = checkpoint.RequiredAction
+	state.LastDecisionAt = event.Time
+	state.UpdatedAt = event.Time
+	state.EventCount = event.Seq
+	state.LastEventType = event.Type
+	state.LastEventSummary = event.Summary
+	state.LastEventAt = event.Time
+	if err := WriteState(statePath, state); err != nil {
+		return State{}, Event{}, err
+	}
+	return state, event, nil
+}
+
 func normalizeStateForProtocol(state State, found bool, loopID string, now time.Time) State {
 	if !found {
 		state = State{
@@ -417,6 +493,36 @@ func clampNonNegative(n int) int {
 		return 0
 	}
 	return n
+}
+
+func normalizeDecisionCheckpoint(in DecisionCheckpoint) DecisionCheckpoint {
+	return DecisionCheckpoint{
+		DecisionID:     trimEventText(in.DecisionID, 160),
+		Kind:           trimEventText(in.Kind, 160),
+		Trigger:        trimEventText(in.Trigger, 240),
+		Decision:       trimEventText(in.Decision, 160),
+		Confidence:     trimEventText(in.Confidence, 80),
+		Reason:         trimEventText(in.Reason, maxDecisionText),
+		RequiredAction: trimEventText(in.RequiredAction, maxDecisionText),
+	}
+}
+
+func trimEventText(s string, maxBytes int) string {
+	s = strings.TrimSpace(s)
+	if maxBytes <= 0 || len([]byte(s)) <= maxBytes {
+		return s
+	}
+	out := make([]rune, 0, maxBytes)
+	bytes := 0
+	for _, r := range s {
+		n := len(string(r))
+		if bytes+n > maxBytes {
+			break
+		}
+		out = append(out, r)
+		bytes += n
+	}
+	return strings.TrimSpace(string(out))
 }
 
 func AppendEvent(path string, ev Event) (Event, error) {
