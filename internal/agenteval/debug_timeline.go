@@ -554,6 +554,7 @@ func renderTimelineScenarioExpectations(b *strings.Builder, scenario BatchScenar
 		writeTimelineStringList(b, "context_loop_protocol_anchor_contains", exp.RequiredContextLoopProtocolAnchorText)
 	}
 	writeTimelineStringList(b, "protected_files", exp.ProtectedFiles)
+	writeTimelineStringSliceMap(b, "required_file_substrings", exp.RequiredFileSubstrings)
 	writeTimelineStringSliceMap(b, "forbidden_file_substrings", exp.ForbiddenFileSubstrings)
 	if exp.MaxParentToolCalls > 0 {
 		fmt.Fprintf(b, "- max_parent_tool_calls: `%d`\n", exp.MaxParentToolCalls)
@@ -606,6 +607,7 @@ func hasTimelineScenarioExpectations(exp DebugScenarioExpectations) bool {
 		len(exp.RequiredContextSummaryText) > 0 ||
 		len(exp.RequiredContextLoopProtocolAnchorText) > 0 ||
 		len(exp.ProtectedFiles) > 0 ||
+		len(exp.RequiredFileSubstrings) > 0 ||
 		len(exp.ForbiddenFileSubstrings) > 0 ||
 		exp.MaxParentToolCalls > 0 ||
 		len(exp.MaxSuccessfulToolCallsByTool) > 0 ||

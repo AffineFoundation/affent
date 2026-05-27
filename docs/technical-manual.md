@@ -918,7 +918,11 @@ Current built-in suites:
   files. The PR-style coding scenario requires reading the implementation file
   before editing it and naming the changed file in the final PR summary. A
   combined recovery scenario requires joining persistent memory with prior
-  session history, covering the shared-memory plus session-search path.
+  session history, covering the shared-memory plus session-search path. Eval
+  scenarios can also require post-run workspace file substrings; the missing
+  tool-result resume scenario uses this to prove `conversation.jsonl` was
+  repaired with the structured recovery placeholder instead of only checking
+  the final answer.
 - `live-web`: non-CI live web regressions for JavaScript-heavy pages,
   direct-reader recovery, and browser network evidence quality. These scenarios
   intentionally depend on public sites and should be run with web/browser tools

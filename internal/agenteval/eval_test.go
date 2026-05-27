@@ -1226,8 +1226,14 @@ func TestSelectLongRunSuite(t *testing.T) {
 			t.Fatalf("crash resume ForbiddenTools = %#v, want %q", crashResume.ForbiddenTools, forbidden)
 		}
 	}
-	if !stringSliceContains(crashResume.ProtectedFiles, ".affentctl/resume-missing-tool-result.jsonl") {
-		t.Fatalf("crash resume ProtectedFiles = %#v, want seeded conversation protected", crashResume.ProtectedFiles)
+	requiredConversation := crashResume.RequiredFileSubstrings[".affentctl/resume-missing-tool-result.jsonl"]
+	for _, want := range []string{"Failure: kind=resume_missing_tool_result", "Next: do not assume the tool succeeded", "safe to repeat", "call-web-crashed"} {
+		if !stringSliceContains(requiredConversation, want) {
+			t.Fatalf("crash resume RequiredFileSubstrings = %#v, want %q", crashResume.RequiredFileSubstrings, want)
+		}
+	}
+	if stringSliceContains(crashResume.ProtectedFiles, ".affentctl/resume-missing-tool-result.jsonl") {
+		t.Fatalf("crash resume conversation must not be protected because repair rewrites it: %#v", crashResume.ProtectedFiles)
 	}
 
 	compactionRetention, ok := seen["longrun-context-compaction-retention"]
@@ -1679,6 +1685,19 @@ func TestProtectedFiles(t *testing.T) {
 	}
 }
 
+func TestRequiredFileSubstrings(t *testing.T) {
+	dir := t.TempDir()
+	if err := writeScenarioFiles(dir, map[string]string{"trace.jsonl": "alpha\nFailure: kind=resume_missing_tool_result\n"}); err != nil {
+		t.Fatal(err)
+	}
+	if err := verifyRequiredFileSubstrings(dir, map[string][]string{"trace.jsonl": {"alpha", "resume_missing_tool_result"}}); err != nil {
+		t.Fatalf("required substrings should pass: %v", err)
+	}
+	if err := verifyRequiredFileSubstrings(dir, map[string][]string{"trace.jsonl": {"missing marker"}}); err == nil || !strings.Contains(err.Error(), "required content") {
+		t.Fatalf("expected missing required content error, got %v", err)
+	}
+}
+
 func TestBatchRunnerCleanupPassingWorkspace(t *testing.T) {
 	dir := t.TempDir()
 	workspace := filepath.Join(dir, "passing")
@@ -2053,6 +2072,9 @@ func TestWriteScenarioDebugArtifactsIndexesTraceAndFinalText(t *testing.T) {
 			"path=.affent/loops/debug/LOOP.md",
 		},
 		ProtectedFiles: []string{"README.md"},
+		RequiredFileSubstrings: map[string][]string{
+			"trace.jsonl": {"resume_missing_tool_result"},
+		},
 		ForbiddenFileSubstrings: map[string][]string{
 			"notes.md": {"uncited taostats metric"},
 		},
@@ -2163,6 +2185,7 @@ func TestWriteScenarioDebugArtifactsIndexesTraceAndFinalText(t *testing.T) {
 		!stringSliceContains(manifest.Expectations.RequiredContextSummaryText, "browser network evidence") ||
 		!stringSliceContains(manifest.Expectations.RequiredContextLoopProtocolAnchorText, "path=.affent/loops/debug/LOOP.md") ||
 		!reflect.DeepEqual(manifest.Expectations.ProtectedFiles, []string{"README.md"}) ||
+		!reflect.DeepEqual(manifest.Expectations.RequiredFileSubstrings["trace.jsonl"], []string{"resume_missing_tool_result"}) ||
 		!reflect.DeepEqual(manifest.Expectations.ForbiddenFileSubstrings["notes.md"], []string{"uncited taostats metric"}) {
 		t.Fatalf("manifest expectations = %+v", manifest.Expectations)
 	}
@@ -2421,6 +2444,7 @@ func TestWriteScenarioDebugArtifactsIndexesTraceAndFinalText(t *testing.T) {
 		"context_summary_contains: `browser network evidence`",
 		"context_loop_protocol_anchor_contains: `path=.affent/loops/debug/LOOP.md`",
 		"protected_files: `README.md`",
+		"required_file_substrings[trace.jsonl]: `resume_missing_tool_result`",
 		"forbidden_file_substrings[notes.md]: `uncited taostats metric`",
 		"evidence: `1/2` verified, network=`1`, partial=`1`, discovery=`1`",
 		"recall_weak_context: calls=`1`, results=`2`, context=`1`, terms=`2`; only some hits included adjacent context; inspect Session Search examples for incomplete recovery.",

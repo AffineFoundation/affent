@@ -1401,6 +1401,14 @@ func longRunCrashMissingToolResultResumeScenario() BatchScenario {
 			"RECOVER-OLD",
 			"WEB-STALE-00",
 		},
+		RequiredFileSubstrings: map[string][]string{
+			".affentctl/resume-missing-tool-result.jsonl": {
+				"Failure: kind=resume_missing_tool_result",
+				"Next: do not assume the tool succeeded",
+				"safe to repeat",
+				"call-web-crashed",
+			},
+		},
 		ForbiddenTools: []string{
 			"read_file",
 			"shell",
@@ -1420,7 +1428,6 @@ func longRunCrashMissingToolResultResumeScenario() BatchScenario {
 			"edit_file",
 		},
 		ProtectedFiles: []string{
-			".affentctl/resume-missing-tool-result.jsonl",
 			"current/recovery.md",
 		},
 		MaxTurns: 4,

@@ -153,6 +153,7 @@ type BatchScenario struct {
 	RequiredResultArtifacts                 []string
 	RequiredToolOrder                       []ToolOrderRequirement
 	ProtectedFiles                          []string
+	RequiredFileSubstrings                  map[string][]string
 	ForbiddenFileSubstrings                 map[string][]string
 	MaxParentToolCalls                      int
 	MaxSuccessfulToolCallsByTool            map[string]int
@@ -348,6 +349,7 @@ type DebugScenarioExpectations struct {
 	RequiredContextSummaryText              []string                           `json:"required_context_summary_text,omitempty"`
 	RequiredContextLoopProtocolAnchorText   []string                           `json:"required_context_loop_protocol_anchor_text,omitempty"`
 	ProtectedFiles                          []string                           `json:"protected_files,omitempty"`
+	RequiredFileSubstrings                  map[string][]string                `json:"required_file_substrings,omitempty"`
 	ForbiddenFileSubstrings                 map[string][]string                `json:"forbidden_file_substrings,omitempty"`
 	MaxParentToolCalls                      int                                `json:"max_parent_tool_calls,omitempty"`
 	MaxSuccessfulToolCallsByTool            map[string]int                     `json:"max_successful_tool_calls_by_tool,omitempty"`
@@ -422,6 +424,9 @@ func ExpectationCapabilityNames(exp DebugScenarioExpectations) []string {
 		caps["workspace"] = true
 	}
 	if len(exp.RequiredCommands) > 0 || len(exp.RequiredCommandCounts) > 0 {
+		caps["workspace"] = true
+	}
+	if len(exp.RequiredFileSubstrings) > 0 || len(exp.ForbiddenFileSubstrings) > 0 || len(exp.ProtectedFiles) > 0 {
 		caps["workspace"] = true
 	}
 	if len(caps) == 0 {
@@ -878,6 +883,9 @@ func (r BatchRunner) Run(ctx context.Context, scenario BatchScenario) BatchResul
 		res.Failures = append(res.Failures, fmt.Sprintf("affentctl run failed: exit=%d err=%v stderr=%s", exitCode, err, trimOneLine(stderr, 800)))
 	}
 	if err := verifyProtectedFiles(workspace, protected); err != nil {
+		res.Failures = append(res.Failures, err.Error())
+	}
+	if err := verifyRequiredFileSubstrings(workspace, scenario.RequiredFileSubstrings); err != nil {
 		res.Failures = append(res.Failures, err.Error())
 	}
 	if err := verifyForbiddenFileSubstrings(workspace, scenario.ForbiddenFileSubstrings); err != nil {
@@ -1357,6 +1365,7 @@ func debugScenarioExpectations(s BatchScenario) DebugScenarioExpectations {
 		RequiredContextSummaryText:              append([]string(nil), s.RequiredContextSummaryText...),
 		RequiredContextLoopProtocolAnchorText:   append([]string(nil), s.RequiredContextLoopProtocolAnchorText...),
 		ProtectedFiles:                          append([]string(nil), s.ProtectedFiles...),
+		RequiredFileSubstrings:                  cloneStringSliceMap(s.RequiredFileSubstrings),
 		ForbiddenFileSubstrings:                 cloneStringSliceMap(s.ForbiddenFileSubstrings),
 		MaxParentToolCalls:                      s.MaxParentToolCalls,
 		MaxSuccessfulToolCallsByTool:            cloneStringIntMap(s.MaxSuccessfulToolCallsByTool),
@@ -1797,6 +1806,25 @@ func verifyProtectedFiles(root string, protected map[string]string) error {
 		}
 		if string(raw) != want {
 			return fmt.Errorf("protected file changed: %s", name)
+		}
+	}
+	return nil
+}
+
+func verifyRequiredFileSubstrings(root string, required map[string][]string) error {
+	for name, substrings := range required {
+		raw, err := os.ReadFile(filepath.Join(root, filepath.FromSlash(name)))
+		if err != nil {
+			return fmt.Errorf("required-content file %s missing: %w", name, err)
+		}
+		body := string(raw)
+		for _, substr := range substrings {
+			if substr == "" {
+				continue
+			}
+			if !strings.Contains(body, substr) {
+				return fmt.Errorf("required content %q missing from %s", substr, name)
+			}
 		}
 	}
 	return nil
