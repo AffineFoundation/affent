@@ -1073,10 +1073,27 @@ func planResumeCurrentStepScenario() BatchScenario {
 `,
 			"docs/current-plan.md": "resume marker: RESUME-CURRENT-42\nlaunch region: us-east\nlaunch count: 7\n",
 			"archive/old-plan.md":  "resume marker: STALE-PLAN-99\nlaunch region: eu-west\nlaunch count: 2\n",
+			".affent/loops/plan-resume/LOOP.md": `# Loop
+
+- loop_id: plan-resume
+- owner_session: plan-resume
+- status: running
+
+## North Star
+
+Resume only the active persisted plan step and preserve current evidence across long-run recovery.
+`,
 		},
 		RequiredTools: []string{"read_file", "plan"},
 		RequiredToolCounts: map[string]int{
 			"plan": 1,
+		},
+		RequiredLoopProtocolFeeds: 1,
+		RequiredLoopProtocolFeedModes: map[string]int{
+			"full": 1,
+		},
+		RequiredLoopProtocolFeedMatches: []LoopProtocolFeedRequirement{
+			{Mode: "full", PlanLabelContains: "plan:1/3:active", PlanCurrentStepStatus: "in_progress", PlanCurrentStep: "read current launch evidence"},
 		},
 		RequiredToolArgContains: []ToolArgContainsRequirement{
 			{Tool: "read_file", Arg: "path", Substring: "docs/current-plan.md"},
@@ -1090,7 +1107,7 @@ func planResumeCurrentStepScenario() BatchScenario {
 		ForbiddenFinalText:  []string{"STALE-PLAN-99", "archive/old-plan.md"},
 		ForbiddenTools:      []string{"shell", "write_file", "edit_file"},
 		RequireNoPlanErrors: true,
-		ProtectedFiles:      []string{"docs/current-plan.md", "archive/old-plan.md"},
+		ProtectedFiles:      []string{"docs/current-plan.md", "archive/old-plan.md", ".affent/loops/plan-resume/LOOP.md"},
 		MaxParentToolCalls:  3,
 		MaxSuccessfulToolCallsByTool: map[string]int{
 			"read_file": 1,

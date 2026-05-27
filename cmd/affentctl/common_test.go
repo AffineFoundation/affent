@@ -13,6 +13,7 @@ import (
 	"unicode/utf8"
 
 	"github.com/affinefoundation/affent/internal/agent"
+	"github.com/affinefoundation/affent/internal/loopstate"
 	"github.com/affinefoundation/affent/internal/mcp"
 )
 
@@ -1199,6 +1200,71 @@ func TestSetupLoop_EvalModeAllowsIndividualToolsAndPromptMatchesRegistry(t *test
 	for _, forbidden := range []string{"Memory retrieval:", "Session history retrieval:", "External research:", "Subagent delegation:", "Focused tasks (run_task):", "Affent plan tool guidance:", "write_file", "run_task"} {
 		if strings.Contains(msgs[0].Content, forbidden) {
 			t.Fatalf("eval-mode prompt should not include unregistered %q guidance:\n%s", forbidden, msgs[0].Content)
+		}
+	}
+}
+
+func TestSetupLoop_InjectsLoopProtocolWhenWorkspaceFileExists(t *testing.T) {
+	workspace := t.TempDir()
+	sessionID := "plan-loop"
+	protocolPath := loopstate.ProtocolPath(workspace, sessionID)
+	if err := os.MkdirAll(filepath.Dir(protocolPath), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.WriteFile(protocolPath, []byte(`# Loop
+
+- loop_id: plan-loop
+- status: running
+- north_star: preserve durable loop protocol state.
+`), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	convDir := filepath.Join(workspace, ".affentctl")
+	if err := os.MkdirAll(convDir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	planPath := filepath.Join(convDir, sessionID+".plan.json")
+	if err := os.WriteFile(planPath, []byte(`{"steps":[{"text":"done","status":"completed"},{"text":"continue active loop evidence","status":"in_progress"}]}`), 0o644); err != nil {
+		t.Fatal(err)
+	}
+
+	var cf commonFlags
+	fs := flag.NewFlagSet("test", flag.ContinueOnError)
+	cf.bind(fs)
+	if err := fs.Parse([]string{
+		"--workspace", workspace,
+		"--session-id", sessionID,
+		"--model", "fake-model",
+		"--base-url", "http://127.0.0.1:1/v1",
+		"--eval-mode",
+		"--eval-tools=plan",
+		"--quiet",
+	}); err != nil {
+		t.Fatal(err)
+	}
+	if err := applyConfig(&cf, fs); err != nil {
+		t.Fatal(err)
+	}
+	b, code := setupLoop(cf)
+	if code != 0 {
+		t.Fatalf("setupLoop code=%d", code)
+	}
+	defer b.close()
+	if b.loop.SkillProvider == nil {
+		t.Fatal("loop protocol file should install a skill provider even in eval mode")
+	}
+	got := b.loop.SkillProvider("continue")
+	for _, want := range []string{
+		"AFFENT LOOP PROTOCOL:",
+		"protocol_path=.affent/loops/plan-loop/LOOP.md",
+		"north_star: preserve durable loop protocol state",
+		"plan_label=plan:1/2:active",
+		"plan_step_index=2",
+		"plan_step_status=in_progress",
+		"continue active loop evidence",
+	} {
+		if !strings.Contains(got, want) {
+			t.Fatalf("loop protocol provider missing %q:\n%s", want, got)
 		}
 	}
 }

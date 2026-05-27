@@ -20,8 +20,10 @@ import (
 	agent "github.com/affinefoundation/affent/internal/agent"
 	"github.com/affinefoundation/affent/internal/eventlog"
 	"github.com/affinefoundation/affent/internal/executor"
+	"github.com/affinefoundation/affent/internal/loopstate"
 	"github.com/affinefoundation/affent/internal/mcp"
 	"github.com/affinefoundation/affent/internal/memory"
+	"github.com/affinefoundation/affent/internal/planstate"
 	"github.com/affinefoundation/affent/internal/sse"
 	"github.com/affinefoundation/affent/internal/textutil"
 	"github.com/google/uuid"
@@ -1483,6 +1485,10 @@ func setupLoop(c commonFlags) (*loopBundle, int) {
 	if planPath != "" {
 		loop.SkillProvider = agent.WithActivePlanSkillProvider(planPath, loop.SkillProvider)
 	}
+	loopProtocolPath := loopstate.ProtocolPath(workspace, sid)
+	if affentctlLoopProtocolAvailable(loopProtocolPath) {
+		loop.SkillProvider = agent.WithLoopProtocolSkillProviderWithCheckpoint(loopProtocolPath, affentctlLoopProtocolPlanCheckpointProvider(planPath), loop.SkillProvider)
+	}
 	if caps.Subagent {
 		loop.FirstToolPolicy = agent.SubagentFirstToolPolicy()
 		loop.PostToolPolicy = agent.SubagentPostToolPolicy()
@@ -1517,6 +1523,33 @@ func setupLoop(c commonFlags) (*loopBundle, int) {
 		log:        log,
 		mcpClients: mcpClients,
 	}, 0
+}
+
+func affentctlLoopProtocolAvailable(path string) bool {
+	content, found, err := loopstate.ReadProtocol(path)
+	return err == nil && found && strings.TrimSpace(content) != ""
+}
+
+func affentctlLoopProtocolPlanCheckpointProvider(planPath string) agent.LoopProtocolCheckpointProvider {
+	if strings.TrimSpace(planPath) == "" {
+		return nil
+	}
+	return func() loopstate.PlanCheckpoint {
+		summary, found := planstate.SummarizeFile(planPath)
+		if !found || summary.Done || summary.Label == "" ||
+			summary.Label == planstate.LabelMissing ||
+			summary.Label == planstate.LabelEmpty ||
+			summary.Label == planstate.LabelError {
+			return loopstate.PlanCheckpoint{Valid: true}
+		}
+		return loopstate.PlanCheckpoint{
+			Valid:      true,
+			Label:      summary.Label,
+			StepIndex:  summary.CurrentStepIndex,
+			StepStatus: summary.CurrentStepStatus,
+			Step:       summary.CurrentStep,
+		}
+	}
 }
 
 func resolveSystemPrompt(c commonFlags, workspace string, caps runtimeCapabilities) (string, int) {

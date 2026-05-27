@@ -977,6 +977,16 @@ func TestSelectLongRunSuite(t *testing.T) {
 	if planResume.RequiredToolCounts["plan"] != 1 || planResume.MaxSuccessfulToolCallsByTool["read_file"] != 1 {
 		t.Fatalf("plan resume tool constraints = counts:%#v max:%#v", planResume.RequiredToolCounts, planResume.MaxSuccessfulToolCallsByTool)
 	}
+	if planResume.RequiredLoopProtocolFeeds != 1 ||
+		planResume.RequiredLoopProtocolFeedModes["full"] != 1 ||
+		len(planResume.RequiredLoopProtocolFeedMatches) != 1 ||
+		planResume.RequiredLoopProtocolFeedMatches[0].PlanCurrentStepStatus != "in_progress" ||
+		!strings.Contains(planResume.RequiredLoopProtocolFeedMatches[0].PlanCurrentStep, "read current launch evidence") {
+		t.Fatalf("plan resume loop protocol constraints = feeds:%d modes:%#v matches:%#v", planResume.RequiredLoopProtocolFeeds, planResume.RequiredLoopProtocolFeedModes, planResume.RequiredLoopProtocolFeedMatches)
+	}
+	if !stringSliceContains(planResume.ProtectedFiles, ".affent/loops/plan-resume/LOOP.md") {
+		t.Fatalf("plan resume ProtectedFiles = %#v, want loop protocol", planResume.ProtectedFiles)
+	}
 
 	memoryRecall, ok := seen["memory-cross-session-recall"]
 	if !ok {
