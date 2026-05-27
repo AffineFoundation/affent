@@ -1145,6 +1145,7 @@ function normalizeSearch(value?: string): string {
 function WorkSummary({ summary }: { summary: WorkSummaryDisplay }) {
   if (!summary.actionLabel && summary.items.length === 0) return null;
   const text = summarizeWorkSummary(summary);
+  if (!text) return null;
   return (
     <div
       className="work-summary"
@@ -1186,7 +1187,8 @@ function summarizeWorkSummary(summary: WorkSummaryDisplay, visibleCount = 3): st
   if (summary.actionLabel) parts.push(summary.actionLabel);
   const visibleItems = selectHeadlineWorkSummaryItems(summary.items, visibleCount);
   parts.push(...visibleItems.map((item) => item.label));
-  const remaining = summary.items.length - visibleItems.length;
+  const displayableItems = summary.items.filter((item) => item.tone !== "muted");
+  const remaining = displayableItems.length - visibleItems.length;
   if (remaining > 0) parts.push(`+${remaining} more`);
   return parts.join(" · ");
 }

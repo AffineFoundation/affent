@@ -49,6 +49,7 @@ describe("Timeline", () => {
     const visibleWorkDetails = toolDetails.textContent?.replace(/\s+/g, " ").trim() ?? "";
     expect(visibleWorkDetails).toContain("Run summary");
     expect(visibleWorkDetails).toContain("List files: .");
+    expect(visibleWorkDetails).not.toContain("+1 more");
     expect(visibleWorkDetails).not.toContain("Action details ·");
     expect(screen.getByTestId("turn-head")).not.toHaveTextContent("138 tokens");
     expect(screen.queryByTestId("turn-runtime-meta")).toBeNull();
