@@ -3,7 +3,7 @@ import { completedTurn } from "../fixtures/completedTurn";
 import { completedSubagentTree, runningSubagent } from "../fixtures/scenarios";
 import { reduceRawEvents } from "../store/reduce";
 import { deriveWorkflowStatus } from "../store/workflowStatus";
-import { buildSessionOverview } from "./sessionOverview";
+import { buildSessionOverview, displaySessionOverviewMetrics } from "./sessionOverview";
 
 describe("buildSessionOverview", () => {
   it("keeps the no-session state task-first", () => {
@@ -107,6 +107,19 @@ describe("buildSessionOverview", () => {
     expect(overview.metrics).toEqual([
       { label: "Work", value: "1 action", tone: undefined },
       { label: "Tokens", value: "138" },
+    ]);
+    expect(displaySessionOverviewMetrics(overview.metrics)).toEqual([
+      { label: "Work", value: "1 action", tone: undefined },
+    ]);
+  });
+
+  it("keeps warning end reasons in display metrics but drops plain token counts", () => {
+    expect(displaySessionOverviewMetrics([
+      { label: "Turn tokens", value: "1.2k" },
+      { label: "Chat tokens", value: "1.7k" },
+      { label: "End", value: "max_turns", tone: "warning" },
+    ])).toEqual([
+      { label: "End", value: "max_turns", tone: "warning" },
     ]);
   });
 

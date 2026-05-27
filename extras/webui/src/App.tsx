@@ -70,7 +70,7 @@ import { deriveWorkflowStatus } from "./store/workflowStatus";
 import type { DraftSource } from "./view/draftSource";
 import { buildRuntimeCapabilityView } from "./view/runtimeCapabilities";
 import { buildSessionRows, formatLoadingChatTitle } from "./view/sessionList";
-import { buildSessionOverview, type SessionOverview } from "./view/sessionOverview";
+import { buildSessionOverview, displaySessionOverviewMetrics, type SessionOverview } from "./view/sessionOverview";
 import { buildSessionFiles } from "./view/sessionFiles";
 import { buildSessionChanges } from "./view/sessionChanges";
 import { buildSessionRun } from "./view/sessionRun";
@@ -1900,6 +1900,7 @@ function scheduleAutomationLabel(
 function ChatContextBar({ overview }: { overview: SessionOverview }) {
   const context = chatContextDisplay(overview);
   const contextLabel = chatContextLabel({ overview, ...context });
+  const metrics = displaySessionOverviewMetrics(overview.metrics);
   return (
     <div className="chat-context-bar" data-tone={overview.tone} data-testid="chat-context-bar" aria-label={contextLabel}>
       <span className="chat-context-state">{overview.stateLabel}</span>
@@ -1918,14 +1919,14 @@ function ChatContextBar({ overview }: { overview: SessionOverview }) {
           </>
         ) : null}
       </span>
-        <RunDetails
-          metrics={overview.metrics}
-          className="chat-context-details"
-          testId="chat-context-details"
-          ariaLabel="Session metrics"
-          summaryLabel="Session metrics"
-          inlineLimit={1}
-        />
+      <RunDetails
+        metrics={metrics}
+        className="chat-context-details"
+        testId="chat-context-details"
+        ariaLabel="Session metrics"
+        summaryLabel="Session metrics"
+        inlineLimit={1}
+      />
     </div>
   );
 }

@@ -144,9 +144,8 @@ describe("App", () => {
     expect(context).toHaveTextContent("README.md main.go");
     const details = screen.getByTestId("chat-context-details");
     expect(chatContextMetric(details, "Work 1 action")).toBeVisible();
-    expect(within(details).getByLabelText("Session metrics: 1 more metric")).toBeInTheDocument();
-    await user.click(within(details).getByLabelText("Session metrics: 1 more metric"));
-    expect(chatContextMetric(details, "Tokens 138")).toBeVisible();
+    expect(within(details).queryByLabelText("Session metrics: 1 more metric")).toBeNull();
+    expect(details).not.toHaveTextContent("Tokens 138");
     const contextText = context.textContent?.replace(/\s+/g, " ").trim();
     expect(contextText).toContain("Result ready · README.md main.go");
     expect(contextText).not.toContain("Task: list the files");

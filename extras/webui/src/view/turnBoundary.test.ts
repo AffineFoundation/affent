@@ -3,7 +3,7 @@ import type { TurnState } from "../store/sessionState";
 import { buildTurnBoundaryView } from "./turnBoundary";
 
 describe("turnBoundary view model", () => {
-  it("summarizes completed turns with action, artifact, duration, and tokens", () => {
+  it("summarizes completed turns with action, artifact, and duration", () => {
     const view = buildTurnBoundaryView({
       turn: turn({
         usage: { inputTokens: 120, outputTokens: 18 },
@@ -30,8 +30,8 @@ describe("turnBoundary view model", () => {
       title: "list the files",
       statusLabel: "Done",
       tone: "success",
-      meta: ["1 action", "1 file (8 KiB, 1 MiB omitted)", "12ms", "138 tokens"],
-      ariaLabel: "Message 2: Done. list the files. 1 action. 1 file (8 KiB, 1 MiB omitted). 12ms. 138 tokens",
+      meta: ["1 action", "1 file (8 KiB, 1 MiB omitted)", "12ms"],
+      ariaLabel: "Message 2: Done. list the files. 1 action. 1 file (8 KiB, 1 MiB omitted). 12ms",
     });
   });
 

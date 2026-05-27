@@ -57,7 +57,6 @@ function boundaryTone(turn: TurnState, opts: { continuedAfterLimit?: boolean } =
 function buildBoundaryMeta(turn: TurnState, artifactCount: number, artifactLabel?: string): string[] {
   const meta: string[] = [];
   const durationMs = turn.toolStats?.tool_duration_ms ?? sumDurations(turn.toolCalls);
-  const tokenCount = turn.usage ? turn.usage.inputTokens + turn.usage.outputTokens : undefined;
   const verifiedSources = turn.toolStats?.source_access_verified ?? 0;
   const networkSources = turn.toolStats?.source_access_network ?? 0;
   const dynamicPartialSources = turn.toolStats?.source_access_dynamic_partial ?? 0;
@@ -71,7 +70,6 @@ function buildBoundaryMeta(turn: TurnState, artifactCount: number, artifactLabel
   if (recallCalls > 0 || recallHits > 0) meta.push(`${recallHits} recall ${pluralize("hit", recallHits)}`);
   if (artifactCount > 0) meta.push(artifactLabel ? artifactLabel : `${artifactCount} ${pluralize("file", artifactCount)}`);
   if (durationMs != null && durationMs > 0) meta.push(formatDuration(durationMs));
-  if (tokenCount != null && tokenCount > 0) meta.push(`${tokenCount} tokens`);
   return meta;
 }
 

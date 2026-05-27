@@ -30,7 +30,7 @@ describe("Timeline", () => {
     expect(screen.getByTestId("agent-activity")).toHaveTextContent("What Affent did");
     expect(screen.getByTestId("agent-activity-digest")).toHaveTextContent("Result");
     expect(screen.getByTestId("agent-activity-digest")).toHaveTextContent("README.md main.go");
-    expect(screen.getByTestId("agent-activity-digest")).toHaveTextContent("138 tokens");
+    expect(screen.getByTestId("agent-activity-digest")).not.toHaveTextContent("138 tokens");
     expect(screen.getByTestId("agent-activity").textContent?.match(/README\.md main\.go/g)).toHaveLength(1);
     expect(screen.queryByTestId("agent-activity-brief")).toBeNull();
     expect(screen.getByRole("button", { name: /What Affent did/ })).toHaveAttribute("aria-expanded", "false");
@@ -49,7 +49,7 @@ describe("Timeline", () => {
     const visibleWorkDetails = toolDetails.textContent?.replace(/\s+/g, " ").trim() ?? "";
     expect(visibleWorkDetails).toContain("Run summary 1 completed action");
     expect(visibleWorkDetails).not.toContain("Action details ·");
-    expect(screen.getByTestId("turn-head")).toHaveTextContent("138 tokens");
+    expect(screen.getByTestId("turn-head")).not.toHaveTextContent("138 tokens");
     expect(screen.queryByTestId("turn-runtime-meta")).toBeNull();
     expect(screen.queryByText("Technical trace")).toBeNull();
   });
@@ -74,7 +74,7 @@ describe("Timeline", () => {
     expect(heads[0]).toHaveTextContent("Done");
     expect(heads[0]).toHaveTextContent("1 action");
     expect(heads[0]).toHaveTextContent("12ms");
-    expect(heads[0]).toHaveTextContent("138 tokens");
+    expect(heads[0]).not.toHaveTextContent("138 tokens");
     expect(heads[1]).not.toHaveTextContent("Message 2");
     expect(heads[1]).toHaveTextContent("message only");
     expect(heads[1]).toHaveTextContent("Done");

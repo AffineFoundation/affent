@@ -630,14 +630,12 @@ function digestMeta(turn: TurnState, nodes: readonly TurnActivityNode[]): string
   const evidenceCount = countEvidence(nodes);
   const artifactLabel = artifactCountLabel(buildTurnArtifacts(turn));
   const delegatedCount = nodes.filter(isDelegatedNode).length;
-  const tokenCount = turn.usage ? turn.usage.inputTokens + turn.usage.outputTokens : 0;
   if (delegatedCount > 0) {
     meta.push(`${delegatedCount} delegated ${pluralize("task", delegatedCount)}`);
   } else if (nodes.length > 0 && actionCount <= 3) {
     meta.push(`${nodes.length} ${pluralize("step", nodes.length)}`);
   }
   if (actionCount > 0) meta.push(`${actionCount} ${pluralize("action", actionCount)}`);
-  if (tokenCount > 0) meta.push(`${formatTokenCount(tokenCount)} ${pluralize("token", tokenCount)}`);
   if (artifactLabel) meta.push(artifactLabel);
   if (evidenceCount > 0) meta.push(`${evidenceCount} evidence`);
   const decisionCount = visibleLoopDecisions(turn).length;
@@ -803,13 +801,6 @@ function memoryUpdateBrief(update: MemoryUpdateSummary): string {
 
 function memoryUpdateTone(update: MemoryUpdateSummary): TurnActivityTone {
   return update.action === "remove" ? "warning" : "success";
-}
-
-function formatTokenCount(count: number): string {
-  if (count < 1000) return String(count);
-  const value = count / 1000;
-  const precision = count < 10000 ? 1 : 0;
-  return `${value.toFixed(precision).replace(/\.0$/, "")}k`;
 }
 
 function isDelegatedNode(node: TurnActivityNode): boolean {

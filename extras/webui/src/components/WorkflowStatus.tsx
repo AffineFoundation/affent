@@ -1,4 +1,4 @@
-import type { SessionOverview, SessionOverviewMetric } from "../view/sessionOverview";
+import { displaySessionOverviewMetrics, type SessionOverview, type SessionOverviewMetric } from "../view/sessionOverview";
 import type { UseAsDraft } from "../view/draftSource";
 import { RunDetails } from "./RunDetails";
 
@@ -9,8 +9,9 @@ export function WorkflowStatus({
   overview: SessionOverview;
   onUseAsDraft?: UseAsDraft;
 }) {
-  const pinnedMetrics = pinnedWorkflowMetrics(overview.metrics);
-  const recoveryMetric = recoveryWorkflowMetric(overview.metrics);
+  const metrics = displaySessionOverviewMetrics(overview.metrics);
+  const pinnedMetrics = pinnedWorkflowMetrics(metrics);
+  const recoveryMetric = recoveryWorkflowMetric(metrics);
   return (
     <details className="workflow-status" data-active={overview.active} data-tone={overview.tone} data-testid="workflow-status">
       <summary className="workflow-line">
@@ -39,7 +40,7 @@ export function WorkflowStatus({
           </button>
         ) : null}
         <RunDetails
-          metrics={overview.metrics}
+          metrics={metrics}
           className="workflow-details"
           testId="workflow-details"
           ariaLabel="Session metrics"

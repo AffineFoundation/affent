@@ -29,11 +29,10 @@ describe("WorkflowStatus", () => {
     expect(details).toBeVisible();
     expect(screen.getByTestId("workflow-status")).toHaveTextContent("README.md main.go");
     expect(metric(details, "Work 1 action")).toBeVisible();
-    expect(within(details).getByText("+1 more")).toBeInTheDocument();
-    expect(within(details).getByLabelText("Work metrics: 1 more metric")).toBeInTheDocument();
+    expect(within(details).queryByText("+1 more")).toBeNull();
+    expect(within(details).queryByLabelText("Work metrics: 1 more metric")).toBeNull();
     expect(within(details).getByText((_, element) => element?.textContent?.includes("Work 1 action") ?? false, { selector: ".run-detail-line" })).toBeInTheDocument();
-    await user.click(within(details).getByLabelText("Work metrics: 1 more metric"));
-    expect(metric(details, "Tokens 138")).toBeVisible();
+    expect(details).not.toHaveTextContent("Tokens 138");
     expect(screen.queryByText("Metrics")).toBeNull();
     expect(screen.queryByText("Run details")).toBeNull();
   });

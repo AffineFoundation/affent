@@ -1,4 +1,4 @@
-import type { SessionOverview, SessionOverviewMetric } from "../view/sessionOverview";
+import { displaySessionOverviewMetrics, type SessionOverview } from "../view/sessionOverview";
 import { RunDetails } from "./RunDetails";
 
 export function WorkbenchContextPanel({
@@ -14,7 +14,7 @@ export function WorkbenchContextPanel({
   automationDetail?: string;
   defaultOpen?: boolean;
 }) {
-  const metrics = workbenchContextMetrics(overview.metrics);
+  const metrics = displaySessionOverviewMetrics(overview.metrics);
   const summary = contextSummary(overview, hasSelectedSession);
   const detail = hasSelectedSession ? overview.headline : "No chat selected";
 
@@ -65,12 +65,3 @@ function contextSummary(overview: SessionOverview, hasSelectedSession: boolean):
   if (overview.tone === "warning") return "Review needed";
   return "Chat ready";
 }
-
-function workbenchContextMetrics(metrics: readonly SessionOverviewMetric[]): SessionOverviewMetric[] {
-  return metrics.filter((metric) => {
-    if (metric.tone === "error" || metric.tone === "warning") return true;
-    return !lowSignalMetricLabels.has(metric.label);
-  });
-}
-
-const lowSignalMetricLabels = new Set(["Tokens", "Turn tokens", "Chat tokens", "End"]);
