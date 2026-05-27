@@ -80,6 +80,7 @@ func applyTraceEvent(t *Trace, pending map[string]int, typ string, data json.Raw
 				t.Tools[idx].TurnID = p.TurnID
 			}
 			t.Tools[idx].Result = p.Result
+			t.Tools[idx].ResultSummary = p.ResultSummary
 			t.Tools[idx].ResultTruncated = p.ResultTruncated
 			t.Tools[idx].ResultBytes = p.ResultBytes
 			t.Tools[idx].ResultOmittedBytes = p.ResultOmittedBytes
@@ -110,6 +111,7 @@ func applyTraceEvent(t *Trace, pending map[string]int, typ string, data json.Raw
 			TurnID:                 p.TurnID,
 			CallID:                 p.CallID,
 			Result:                 p.Result,
+			ResultSummary:          p.ResultSummary,
 			ResultTruncated:        p.ResultTruncated,
 			ResultBytes:            p.ResultBytes,
 			ResultOmittedBytes:     p.ResultOmittedBytes,

@@ -75,7 +75,7 @@ func TestParseTraceFileReadsToolRequestsAndFinalText(t *testing.T) {
 		`{"type":"trace.meta","data":{"schema_version":1}}`,
 		`{"type":"runtime.surface","data":{"turn_id":"t1","tool_count":2,"tools":[{"name":"web_fetch","group":"Web"},{"name":"web_search","group":"Web"}],"capabilities":{"web_fetch":true,"web_search":true},"max_turn_steps":12,"max_tool_calls":7,"tool_result_event_cap_bytes":262144,"tool_result_context_max_bytes":5120,"tool_result_context_budget_bytes":32768,"tool_result_artifact_prefix":".affent/artifacts/tool-results"}}`,
 		`{"type":"tool.request","data":{"call_id":"c1","tool":"shell","args":{"command":"go test ./..."},"args_truncated":true,"args_bytes":70000,"args_omitted_bytes":512,"args_cap_bytes":65536,"original_tool":"Shell","original_args_summary":"{\"cmd\":\"go test ./...\"}","canonicalized":true,"args_repaired":true,"repair_notes":["renamed tool","renamed field"]}}`,
-		`{"type":"tool.result","data":{"call_id":"c1","result":"ok","exit_code":0,"duration_ms":17,"result_truncated":true,"result_bytes":300000,"result_omitted_bytes":4096,"result_cap_bytes":262144,"context_bytes":4096,"context_omitted_bytes":8192,"context_estimated_tokens":1024,"result_artifact_path":".affent/artifacts/tool-results/000001-c1.txt"}}`,
+		`{"type":"tool.result","data":{"call_id":"c1","result_summary":"large market report preview","result":"ok","exit_code":0,"duration_ms":17,"result_truncated":true,"result_bytes":300000,"result_omitted_bytes":4096,"result_cap_bytes":262144,"context_bytes":4096,"context_omitted_bytes":8192,"context_estimated_tokens":1024,"result_artifact_path":".affent/artifacts/tool-results/000001-c1.txt"}}`,
 		`{"type":"tool.result","data":{"call_id":"guarded","result":"blocked\nFailure: kind=invalid_args","exit_code":1}}`,
 		`{"type":"usage","data":{"input_tokens":11,"output_tokens":7}}`,
 		`{"type":"error","data":{"message":"transient stream warning","failure_kind":"llm_timeout"}}`,
@@ -121,6 +121,9 @@ func TestParseTraceFileReadsToolRequestsAndFinalText(t *testing.T) {
 	if tc.DurationMS != 17 {
 		t.Fatalf("tool duration not parsed: %+v", tc)
 	}
+	if tc.ResultSummary != "large market report preview" {
+		t.Fatalf("ResultSummary = %q", tc.ResultSummary)
+	}
 	if !tc.ResultTruncated || tc.ResultBytes != 300000 || tc.ResultOmittedBytes != 4096 || tc.ResultCapBytes != 262144 {
 		t.Fatalf("tool result truncation metadata not parsed: %+v", tc)
 	}
@@ -135,6 +138,7 @@ func TestParseTraceFileReadsToolRequestsAndFinalText(t *testing.T) {
 		examples[0].CallID != "c1" ||
 		!examples[0].ArgsTruncated ||
 		!examples[0].ResultTruncated ||
+		examples[0].ResultSummary != "large market report preview" ||
 		examples[0].ContextOmittedBytes != 8192 ||
 		examples[0].ResultArtifactPath != ".affent/artifacts/tool-results/000001-c1.txt" {
 		t.Fatalf("ToolTruncationExamples = %+v", examples)
@@ -1473,6 +1477,7 @@ func TestWriteScenarioDebugArtifactsIndexesTraceAndFinalText(t *testing.T) {
 			ArgsOmittedBytes:       128,
 			ArgsCapBytes:           65536,
 			Result:                 "SourceAccess: browser_rendered_url=https://taostats.io/subnets/120; page_text_below=partial_dynamic_page_evidence; rendered_browser_source_status=partial_dynamic_page_evidence\nPAGE DIAGNOSTICS:\n- empty_dynamic_metric_widgets: 2 visible custom metric widget(s) exposed no text value\nPAGE TEXT:\nAffine SN120",
+			ResultSummary:          "Rendered page partial dynamic evidence: empty metric widgets",
 			ResultTruncated:        true,
 			ResultBytes:            300000,
 			ResultOmittedBytes:     4096,
@@ -1843,6 +1848,7 @@ func TestWriteScenarioDebugArtifactsIndexesTraceAndFinalText(t *testing.T) {
 		manifest.ToolTruncationExamples[0].CallID != "call-1" ||
 		!manifest.ToolTruncationExamples[0].ArgsTruncated ||
 		!manifest.ToolTruncationExamples[0].ResultTruncated ||
+		manifest.ToolTruncationExamples[0].ResultSummary != "Rendered page partial dynamic evidence: empty metric widgets" ||
 		manifest.ToolTruncationExamples[0].ContextOmittedBytes != 8192 ||
 		manifest.ToolTruncationExamples[0].ResultArtifactPath != ".affent/artifacts/tool-results/000001-call-1.txt" {
 		t.Fatalf("manifest tool truncation examples = %+v", manifest.ToolTruncationExamples)
@@ -1985,6 +1991,7 @@ func TestWriteScenarioDebugArtifactsIndexesTraceAndFinalText(t *testing.T) {
 		"tool#1 `web_fetch` call_id=`call-1`",
 		"args: truncated=`true` bytes=`70000` omitted=`128` cap=`65536`",
 		"result: truncated=`true` bytes=`300000` omitted=`4096` cap=`262144`",
+		"summary: Rendered page partial dynamic evidence: empty metric widgets",
 		"context: bytes=`4096` omitted=`8192` estimated_tokens=`1024`",
 		"artifact: `.affent/artifacts/tool-results/000001-call-1.txt`",
 		"## Tool Timeline",

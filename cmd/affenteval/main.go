@@ -1983,6 +1983,9 @@ func printToolTruncationExampleLines(w io.Writer, examples []agenteval.ToolTrunc
 		if ex.ResultTruncated || ex.ResultOmittedBytes > 0 {
 			fmt.Fprintf(w, " result=truncated:%t,bytes:%d,omitted:%d,cap:%d", ex.ResultTruncated, ex.ResultBytes, ex.ResultOmittedBytes, ex.ResultCapBytes)
 		}
+		if ex.ResultSummary != "" {
+			fmt.Fprintf(w, " summary=%q", ex.ResultSummary)
+		}
 		if ex.ContextOmittedBytes > 0 || ex.ContextBytes > 0 || ex.ContextEstimatedTokens > 0 {
 			fmt.Fprintf(w, " context=bytes:%d,omitted:%d,tokens:%d", ex.ContextBytes, ex.ContextOmittedBytes, ex.ContextEstimatedTokens)
 		}

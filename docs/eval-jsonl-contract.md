@@ -266,9 +266,9 @@ Scenario records describe one eval case:
 - `tool_truncation_examples`: optional bounded examples of tool calls whose
   request args, event result, result artifact, or model-context insertion were
   truncated. Each sample includes the tool index, call id, tool name, omitted
-  byte counts, cap byte counts, artifact path when present, and context bytes
-  omitted before the tool result was fed back to the model. Summary records
-  include the originating scenario.
+  byte counts, cap byte counts, compact `result_summary` preview when present,
+  artifact path when present, and context bytes omitted before the tool result
+  was fed back to the model. Summary records include the originating scenario.
 - `tool_context_truncated`: count of tool results shortened before being fed
   back into the model conversation.
 - `tool_context_omitted_bytes`: total bytes omitted from tool results before

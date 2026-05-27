@@ -1074,6 +1074,9 @@ func renderTimelineToolTruncation(b *strings.Builder, trace *Trace) {
 			fmt.Fprintf(b, "   result: truncated=`%t` bytes=`%d` omitted=`%d` cap=`%d`\n",
 				ex.ResultTruncated, ex.ResultBytes, ex.ResultOmittedBytes, ex.ResultCapBytes)
 		}
+		if ex.ResultSummary != "" {
+			fmt.Fprintf(b, "   summary: %s\n", timelineInline(ex.ResultSummary, timelineMemoryPreviewBytes))
+		}
 		if ex.ContextOmittedBytes > 0 || ex.ContextBytes > 0 || ex.ContextEstimatedTokens > 0 {
 			fmt.Fprintf(b, "   context: bytes=`%d` omitted=`%d` estimated_tokens=`%d`\n",
 				ex.ContextBytes, ex.ContextOmittedBytes, ex.ContextEstimatedTokens)

@@ -207,6 +207,10 @@ type ToolCall struct {
 	// be clipped by the runtime's event cap; inspect ResultTruncated and
 	// the byte counters before treating it as complete.
 	Result string
+	// ResultSummary is the UI-friendly bounded preview emitted alongside
+	// Result. It is useful for diagnostics when Result is too large or
+	// mostly structured boilerplate.
+	ResultSummary string
 	// ResultTruncated reports whether the tool.result event hit its
 	// event transport cap. ResultBytes is the original output byte count;
 	// ResultOmittedBytes is the byte count omitted from Result; and
@@ -301,6 +305,7 @@ type ToolTruncationExample struct {
 	ArgsOmittedBytes       int    `json:"args_omitted_bytes,omitempty"`
 	ArgsCapBytes           int    `json:"args_cap_bytes,omitempty"`
 	ResultTruncated        bool   `json:"result_truncated,omitempty"`
+	ResultSummary          string `json:"result_summary,omitempty"`
 	ResultBytes            int    `json:"result_bytes,omitempty"`
 	ResultOmittedBytes     int    `json:"result_omitted_bytes,omitempty"`
 	ResultCapBytes         int    `json:"result_cap_bytes,omitempty"`
@@ -748,6 +753,7 @@ func (t Trace) ToolTruncationExamples(maxExamples int) []ToolTruncationExample {
 			ArgsOmittedBytes:       c.ArgsOmittedBytes,
 			ArgsCapBytes:           c.ArgsCapBytes,
 			ResultTruncated:        c.ResultTruncated,
+			ResultSummary:          compactOneLine(c.ResultSummary, 260),
 			ResultBytes:            c.ResultBytes,
 			ResultOmittedBytes:     c.ResultOmittedBytes,
 			ResultCapBytes:         c.ResultCapBytes,

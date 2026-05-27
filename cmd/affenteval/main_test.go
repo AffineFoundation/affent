@@ -868,6 +868,7 @@ func TestPrintBatchResultIncludesTraceMetrics(t *testing.T) {
 			ArgsOmittedBytes:       512,
 			ArgsCapBytes:           65536,
 			ResultTruncated:        true,
+			ResultSummary:          "large web_fetch output preview",
 			ResultBytes:            300000,
 			ResultOmittedBytes:     4096,
 			ResultCapBytes:         262144,
@@ -934,7 +935,7 @@ func TestPrintBatchResultIncludesTraceMetrics(t *testing.T) {
 		"runtime_error_example[llm_timeout]: LLM llm_stream timed out after 4m0s",
 		"loop_decision_example[evidence_quality]: decision=defer trigger=source_access_dynamic_partial confidence=high reason=dynamic widgets lacked text action=read browser network responses",
 		`plan_example: action=update index=2 status=completed progress=2/3 current=3:pending step="verify browser evidence" evidence=go test ./cmd/affenteval`,
-		"tool_truncation_example: tool=web_fetch call_id=trunc-print-1 args=truncated:true,bytes:70000,omitted:512,cap:65536 result=truncated:true,bytes:300000,omitted:4096,cap:262144 context=bytes:4096,omitted:9216,tokens:1024 artifact=.affent/artifacts/tool-results/000001-trunc-print-1.txt",
+		`tool_truncation_example: tool=web_fetch call_id=trunc-print-1 args=truncated:true,bytes:70000,omitted:512,cap:65536 result=truncated:true,bytes:300000,omitted:4096,cap:262144 summary="large web_fetch output preview" context=bytes:4096,omitted:9216,tokens:1024 artifact=.affent/artifacts/tool-results/000001-trunc-print-1.txt`,
 	} {
 		if !strings.Contains(got, want) {
 			t.Fatalf("output missing %q:\n%s", want, got)
@@ -1101,6 +1102,7 @@ func TestBatchSummaryAggregatesRuntimeMetrics(t *testing.T) {
 			Tool:                   "web_fetch",
 			ArgsTruncated:          true,
 			ArgsOmittedBytes:       128,
+			ResultSummary:          "history fetch preview",
 			ContextOmittedBytes:    1024,
 			ContextEstimatedTokens: 256,
 		}},
@@ -1398,7 +1400,7 @@ func TestBatchSummaryAggregatesRuntimeMetrics(t *testing.T) {
 	if !strings.Contains(out.String(), `plan_example: scenario=sample action=update index=2 status=completed progress=2/3 current=3:pending step="verify browser evidence" evidence=go test ./cmd/affenteval`) {
 		t.Fatalf("summary output missing plan example:\n%s", out.String())
 	}
-	if !strings.Contains(out.String(), "tool_truncation_example: scenario=sample tool=web_fetch call_id=trunc-1 args=truncated:true,bytes:0,omitted:128,cap:0 context=bytes:0,omitted:1024,tokens:256") {
+	if !strings.Contains(out.String(), `tool_truncation_example: scenario=sample tool=web_fetch call_id=trunc-1 args=truncated:true,bytes:0,omitted:128,cap:0 summary="history fetch preview" context=bytes:0,omitted:1024,tokens:256`) {
 		t.Fatalf("summary output missing tool truncation example:\n%s", out.String())
 	}
 	if summary.TraceSchemaVersions[1] != 2 {
