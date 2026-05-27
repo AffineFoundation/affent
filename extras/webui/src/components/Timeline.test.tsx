@@ -1643,7 +1643,7 @@ describe("Timeline", () => {
     expect(screen.getByTestId("memory-update-strip")).toHaveTextContent("MEM-STOCK-73");
   });
 
-  it("shows runtime surface even when the model fails before tools run", () => {
+  it("keeps runtime surface details out of the default timeline", () => {
     renderTimeline([
       { id: 0, type: "turn.start", data: { turn_id: "t1" } },
       { id: 1, type: "user.message", data: { turn_id: "t1", text: "research taostats" } },
@@ -1668,16 +1668,10 @@ describe("Timeline", () => {
       { id: 3, type: "error", data: { turn_id: "t1", code: "llm_request", message: "connection refused", recoverable: false } },
     ]);
 
-    const surface = screen.getByTestId("runtime-surface-strip");
-    expect(surface).toHaveTextContent("Runtime surface");
-    expect(surface).toHaveTextContent("4 tools");
-    expect(surface).toHaveTextContent("web search");
-    expect(surface).toHaveTextContent("workspace: read_file");
-    expect(surface).toHaveTextContent("20 max turns");
-    fireEvent.click(within(surface).getByText("Runtime surface"));
-    expect(surface).toHaveTextContent("web_fetch");
-    expect(surface).toHaveTextContent("web_search");
-    expect(surface).toHaveTextContent("32 KiB context budget");
+    expect(screen.queryByTestId("runtime-surface-strip")).toBeNull();
+    expect(screen.queryByText("Runtime surface")).toBeNull();
+    expect(screen.queryByText("web_search")).toBeNull();
+    expect(screen.getByTestId("error-card")).toHaveTextContent("connection refused");
   });
 
   it("renders compact web evidence while keeping the full source available", () => {

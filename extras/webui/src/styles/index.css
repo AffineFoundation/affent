@@ -6375,85 +6375,6 @@ a.agent-activity-evidence-chip:focus-visible {
   white-space: nowrap;
 }
 
-.runtime-surface-strip {
-  margin-top: 8px;
-  border: 1px solid rgba(148, 163, 184, 0.28);
-  border-radius: var(--radius-sm);
-  background: rgba(248, 250, 252, 0.72);
-  color: var(--text-muted);
-  font-size: 12.5px;
-}
-
-.runtime-surface-strip summary {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 8px;
-  padding: 7px 10px;
-  cursor: pointer;
-  list-style: none;
-}
-
-.runtime-surface-strip summary::-webkit-details-marker {
-  display: none;
-}
-
-.runtime-surface-strip summary::after {
-  content: "";
-  width: 7px;
-  height: 7px;
-  border-right: 1.5px solid currentColor;
-  border-bottom: 1.5px solid currentColor;
-  transform: rotate(-45deg);
-  margin-left: auto;
-  opacity: 0.75;
-}
-
-.runtime-surface-strip[open] summary::after {
-  transform: rotate(45deg);
-}
-
-.runtime-surface-title {
-  color: var(--text);
-  font-weight: 650;
-  white-space: nowrap;
-}
-
-.runtime-surface-summary {
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.runtime-surface-body {
-  display: grid;
-  gap: 8px;
-  padding: 0 10px 10px;
-}
-
-.runtime-surface-chip-row,
-.runtime-surface-limits,
-.runtime-surface-tools {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 6px;
-}
-
-.runtime-surface-chip,
-.runtime-surface-limits span,
-.runtime-surface-tools code {
-  border: 1px solid var(--border);
-  border-radius: 999px;
-  background: var(--panel);
-  padding: 2px 7px;
-  font-size: 11.5px;
-}
-
-.runtime-surface-tools code {
-  color: var(--text-faint);
-}
-
 .tool-meta {
   color: var(--text-muted);
   font-size: 12px;
@@ -7857,17 +7778,10 @@ html[data-theme="dark"] .session-skill-form,
 html[data-theme="dark"] .runtime-capability-panel,
 html[data-theme="dark"] .runtime-capability-overflow-body,
 html[data-theme="dark"] .artifact-code[data-view="json"],
-html[data-theme="dark"] .runtime-surface-strip,
 html[data-theme="dark"] .session-skill-body,
 html[data-theme="dark"] .session-memory-entries,
 html[data-theme="dark"] .composer-task-hint[data-tone="unknown"] {
   background: rgba(14, 17, 22, 0.78);
-}
-
-html[data-theme="dark"] .runtime-surface-chip,
-html[data-theme="dark"] .runtime-surface-limits span,
-html[data-theme="dark"] .runtime-surface-tools code {
-  background: rgba(19, 24, 30, 0.92);
 }
 
 html[data-theme="dark"] .session-row {
