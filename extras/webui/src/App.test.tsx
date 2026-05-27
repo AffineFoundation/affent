@@ -1794,6 +1794,84 @@ describe("App", () => {
     expect(screen.getByPlaceholderText("Message Affent...")).toHaveValue("Review and adjust this changed file: src/payments.ts");
   });
 
+  it("surfaces command failures inside Workbench without adding default Chat noise", async () => {
+    const user = userEvent.setup();
+    const fetchImpl = vi.fn(async (input: RequestInfo | URL) => {
+      const url = String(input);
+      if (url === "/v1/sessions?limit=100") {
+        return jsonResponse({
+          sessions: [
+            {
+              id: "run-1",
+              active: true,
+              durable: true,
+              topic_user_message: "fix checkout test",
+              has_conversation: true,
+              has_events: true,
+              has_artifacts: false,
+              has_memory: false,
+              has_runtime_skills: false,
+            },
+          ],
+          has_more: false,
+        });
+      }
+      if (url === "/v1/sessions/run-1/history?after=-1&limit=500") {
+        return jsonResponse({
+          session_id: "run-1",
+          events: [
+            { id: 1, type: "turn.start", data: { turn_id: "t1" } },
+            { id: 2, type: "user.message", data: { turn_id: "t1", text: "fix checkout test" } },
+            { id: 3, type: "tool.request", data: { turn_id: "t1", call_id: "test", tool: "shell", args: { command: "npm test -- checkout.spec.ts" } } },
+            {
+              id: 4,
+              type: "tool.result",
+              data: {
+                call_id: "test",
+                exit_code: 1,
+                duration_ms: 1480,
+                result_summary: "checkout spec failed\nNext: update payment route then rerun\nFailure: kind=test_failed",
+                result: "checkout spec failed\nNext: update payment route then rerun\nFailure: kind=test_failed",
+                result_artifact_path: ".affent/artifacts/tool-results/test.txt",
+              },
+            },
+            { id: 5, type: "message.done", data: { turn_id: "t1", text: "Checkout test still fails.", finish_reason: "stop" } },
+            { id: 6, type: "turn.end", data: { turn_id: "t1", reason: "completed", tool_stats: { tool_requests: 1, tool_errors: 1 } } },
+          ],
+          next_after: 6,
+          has_more: false,
+          trace_schema_detected: true,
+        });
+      }
+      if (url === "/v1/sessions/run-1/events") return eventStreamResponse("");
+      if (url === "/v1/stats") return jsonResponse({ model: "qwen-small", active_sessions: 1, running_turns: 0 });
+      if (url === "/v1/settings") return jsonResponse({ env: [], ssh: { exists: false } });
+      if (url === "/v1/skills") return jsonResponse({ session_id: "account", count: 0, install_enabled: false, skills: [] });
+      if (url === "/v1/sessions/run-1/memory") return jsonResponse({ session_id: "run-1", has_memory: false, topics: [] });
+      return jsonResponse({ error: { message: `unexpected ${url}` } }, 404);
+    });
+    vi.stubGlobal("fetch", fetchImpl);
+
+    render(<App />);
+
+    expect((await screen.findAllByText("Checkout test still fails."))[0]).toBeVisible();
+    expect(screen.queryByTestId("session-run-panel")).toBeNull();
+
+    await user.click(screen.getByLabelText("Workbench"));
+
+    const run = await screen.findByTestId("session-run-panel");
+    expect(run).not.toHaveAttribute("open");
+    expect(run).toHaveTextContent("1 failed command");
+    await user.click(within(run).getByText("Run"));
+    expect(screen.getByTestId("session-run-list")).toHaveTextContent("npm test -- checkout.spec.ts");
+    expect(screen.getByTestId("session-run-list")).toHaveTextContent("Next: update payment route then rerun");
+    await user.click(within(screen.getByTestId("session-run-list")).getByRole("button", { name: "Rerun" }));
+    expect(screen.getByTestId("composer-context")).toHaveTextContent("Using command");
+    expect(screen.getByPlaceholderText("Message Affent...")).toHaveValue(
+      "Rerun this command and report the result:\nnpm test -- checkout.spec.ts\nUse this recovery hint: update payment route then rerun",
+    );
+  });
+
   it("keeps the top bar compact when stats polling would fail", async () => {
     const fetchImpl = vi.fn(async (input: RequestInfo | URL) => {
       const url = String(input);
