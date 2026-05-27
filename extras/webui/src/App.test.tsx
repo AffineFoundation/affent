@@ -1908,6 +1908,77 @@ describe("App", () => {
     expect(screen.getByPlaceholderText("Message Affent...")).toHaveValue("Use this file path in the next step: src/payments.ts");
   });
 
+  it("surfaces workspace evidence inside Workbench without adding default Chat noise", async () => {
+    const user = userEvent.setup();
+    const fetchImpl = vi.fn(async (input: RequestInfo | URL) => {
+      const url = String(input);
+      if (url === "/v1/sessions?limit=100") {
+        return jsonResponse({
+          sessions: [
+            {
+              id: "workspace-1",
+              active: true,
+              durable: true,
+              topic_user_message: "verify workspace binding",
+              workspace_path: "/repo/affent",
+              workspace_label: "affent",
+              default_branch: "main",
+              dirty_state: "dirty",
+              last_agent_cwd: "/tmp/outside",
+              has_conversation: true,
+              has_events: true,
+              has_artifacts: false,
+              has_memory: false,
+              has_runtime_skills: false,
+            },
+          ],
+          has_more: false,
+        });
+      }
+      if (url === "/v1/sessions/workspace-1/history?after=-1&limit=500") {
+        return jsonResponse({
+          session_id: "workspace-1",
+          events: [
+            { id: 1, type: "turn.start", data: { turn_id: "t1" } },
+            { id: 2, type: "user.message", data: { turn_id: "t1", text: "verify workspace binding" } },
+            { id: 3, type: "tool.request", data: { turn_id: "t1", call_id: "cwd", tool: "shell", args: { command: "pwd", cwd: "/tmp/outside" } } },
+            { id: 4, type: "tool.result", data: { call_id: "cwd", exit_code: 0, result_summary: "/tmp/outside", result: "/tmp/outside" } },
+            { id: 5, type: "message.done", data: { turn_id: "t1", text: "Workspace evidence recorded.", finish_reason: "stop" } },
+            { id: 6, type: "turn.end", data: { turn_id: "t1", reason: "completed", tool_stats: { tool_requests: 1 } } },
+          ],
+          next_after: 6,
+          has_more: false,
+          trace_schema_detected: true,
+        });
+      }
+      if (url === "/v1/sessions/workspace-1/events") return eventStreamResponse("");
+      if (url === "/v1/stats") return jsonResponse({ model: "qwen-small", active_sessions: 1, running_turns: 0 });
+      if (url === "/v1/settings") return jsonResponse({ env: [], ssh: { exists: false } });
+      if (url === "/v1/skills") return jsonResponse({ session_id: "account", count: 0, install_enabled: false, skills: [] });
+      if (url === "/v1/sessions/workspace-1/memory") return jsonResponse({ session_id: "workspace-1", has_memory: false, topics: [] });
+      return jsonResponse({ error: { message: `unexpected ${url}` } }, 404);
+    });
+    vi.stubGlobal("fetch", fetchImpl);
+
+    render(<App />);
+
+    expect(await screen.findByText("Workspace evidence recorded.")).toBeVisible();
+    expect(screen.queryByTestId("session-workspace-panel")).toBeNull();
+    expect(screen.getByText("Workspace mismatch")).toBeVisible();
+
+    await user.click(screen.getByLabelText("Workbench"));
+
+    const workspace = await screen.findByTestId("session-workspace-panel");
+    expect(workspace).toHaveAttribute("open");
+    expect(workspace).toHaveTextContent("Workspace mismatch");
+    expect(workspace).toHaveTextContent("Latest command cwd is outside the session workspace.");
+    expect(workspace).toHaveTextContent("Label: affent");
+    expect(workspace).toHaveTextContent("Path: /repo/affent");
+    expect(workspace).toHaveTextContent("Last agent cwd: /tmp/outside");
+    expect(workspace).toHaveTextContent("Branch: main");
+    expect(workspace).toHaveTextContent("State: dirty");
+  });
+
   it("surfaces command failures inside Workbench without adding default Chat noise", async () => {
     const user = userEvent.setup();
     const fetchImpl = vi.fn(async (input: RequestInfo | URL) => {
