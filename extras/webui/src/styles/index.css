@@ -554,7 +554,8 @@ body {
   overflow-wrap: anywhere;
 }
 
-.session-files-actions {
+.session-files-actions,
+.session-evidence-actions {
   display: inline-flex;
   flex-wrap: wrap;
   justify-content: flex-end;
@@ -8545,6 +8546,7 @@ html[data-theme="dark"] ::selection {
     grid-template-columns: minmax(0, 1fr);
   }
   .session-files-actions,
+  .session-evidence-actions,
   .session-files-item .ghost-action,
   .session-changes-item .ghost-action,
   .session-run-item .ghost-action {

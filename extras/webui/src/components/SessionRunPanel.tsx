@@ -4,10 +4,12 @@ import type { SessionRunCommand, SessionRunView } from "../view/sessionRun";
 export function SessionRunPanel({
   run,
   defaultOpen = false,
+  onOpenArtifact,
   onUseAsDraft,
 }: {
   run: SessionRunView;
   defaultOpen?: boolean;
+  onOpenArtifact?: (path: string) => void;
   onUseAsDraft?: UseAsDraft;
 }) {
   return (
@@ -29,11 +31,18 @@ export function SessionRunPanel({
                   {command.next ? <small>Next: {command.next}</small> : null}
                   {command.artifactPath ? <small>Output artifact: {command.artifactPath}</small> : null}
                 </div>
-                {onUseAsDraft ? (
-                  <button type="button" className="ghost-action" onClick={() => onUseAsDraft(runDraft(command), "run_command")}>
-                    Rerun
-                  </button>
-                ) : null}
+                <span className="session-evidence-actions">
+                  {command.artifactPath && onOpenArtifact ? (
+                    <button type="button" className="ghost-action" onClick={() => onOpenArtifact(command.artifactPath ?? "")}>
+                      Open output
+                    </button>
+                  ) : null}
+                  {onUseAsDraft ? (
+                    <button type="button" className="ghost-action" onClick={() => onUseAsDraft(runDraft(command), "run_command")}>
+                      Rerun
+                    </button>
+                  ) : null}
+                </span>
               </li>
             ))}
           </ol>

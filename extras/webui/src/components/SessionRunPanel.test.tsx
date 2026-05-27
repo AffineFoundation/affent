@@ -7,8 +7,9 @@ import type { SessionRunView } from "../view/sessionRun";
 describe("SessionRunPanel", () => {
   it("renders command status, recovery, output artifact, and rerun draft", async () => {
     const user = userEvent.setup();
+    const onOpenArtifact = vi.fn();
     const onUseAsDraft = vi.fn();
-    render(<SessionRunPanel defaultOpen run={run} onUseAsDraft={onUseAsDraft} />);
+    render(<SessionRunPanel defaultOpen run={run} onOpenArtifact={onOpenArtifact} onUseAsDraft={onUseAsDraft} />);
 
     const panel = screen.getByTestId("session-run-panel");
     expect(panel).toHaveAttribute("open");
@@ -18,6 +19,9 @@ describe("SessionRunPanel", () => {
     expect(screen.getByTestId("session-run-list")).toHaveTextContent("checkout spec failed");
     expect(screen.getByTestId("session-run-list")).toHaveTextContent("Next: update payment route then rerun");
     expect(screen.getByTestId("session-run-list")).toHaveTextContent("Output artifact: .affent/artifacts/tool-results/test.txt");
+
+    await user.click(within(screen.getByTestId("session-run-list")).getByRole("button", { name: "Open output" }));
+    expect(onOpenArtifact).toHaveBeenCalledWith(".affent/artifacts/tool-results/test.txt");
 
     await user.click(within(screen.getByTestId("session-run-list")).getByRole("button", { name: "Rerun" }));
 

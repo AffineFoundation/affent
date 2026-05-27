@@ -1357,6 +1357,7 @@ export function App() {
                   <SessionChangesPanel
                     changes={sessionChanges}
                     defaultOpen={workbenchAttention?.target === "changes"}
+                    onOpenArtifact={(path) => void handleOpenArtifact(path)}
                     onUseAsDraft={handleUseAsDraft}
                   />
                 ) : null}
@@ -1364,6 +1365,7 @@ export function App() {
                   <SessionRunPanel
                     run={sessionRun}
                     defaultOpen={workbenchAttention?.target === "run"}
+                    onOpenArtifact={(path) => void handleOpenArtifact(path)}
                     onUseAsDraft={handleUseAsDraft}
                   />
                 ) : null}

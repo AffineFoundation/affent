@@ -4,10 +4,12 @@ import type { SessionChangedFile, SessionChangesView } from "../view/sessionChan
 export function SessionChangesPanel({
   changes,
   defaultOpen = false,
+  onOpenArtifact,
   onUseAsDraft,
 }: {
   changes: SessionChangesView;
   defaultOpen?: boolean;
+  onOpenArtifact?: (path: string) => void;
   onUseAsDraft?: UseAsDraft;
 }) {
   return (
@@ -28,11 +30,18 @@ export function SessionChangesPanel({
                   {file.detail ? <small>{file.detail}</small> : null}
                   {file.artifactPath ? <small>Evidence artifact: {file.artifactPath}</small> : null}
                 </div>
-                {onUseAsDraft ? (
-                  <button type="button" className="ghost-action" onClick={() => onUseAsDraft(changeDraft(file), "changed_file")}>
-                    Adjust
-                  </button>
-                ) : null}
+                <span className="session-evidence-actions">
+                  {file.artifactPath && onOpenArtifact ? (
+                    <button type="button" className="ghost-action" onClick={() => onOpenArtifact(file.artifactPath ?? "")}>
+                      Open evidence
+                    </button>
+                  ) : null}
+                  {onUseAsDraft ? (
+                    <button type="button" className="ghost-action" onClick={() => onUseAsDraft(changeDraft(file), "changed_file")}>
+                      Adjust
+                    </button>
+                  ) : null}
+                </span>
               </li>
             ))}
           </ol>

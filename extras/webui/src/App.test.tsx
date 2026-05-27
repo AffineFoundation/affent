@@ -1761,7 +1761,17 @@ describe("App", () => {
             { id: 1, type: "turn.start", data: { turn_id: "t1" } },
             { id: 2, type: "user.message", data: { turn_id: "t1", text: "fix checkout tests" } },
             { id: 3, type: "tool.request", data: { turn_id: "t1", call_id: "edit", tool: "edit_file", args: { path: "src/payments.ts" } } },
-            { id: 4, type: "tool.result", data: { call_id: "edit", exit_code: 0, result_summary: "Updated payment route", result: "Updated payment route" } },
+            {
+              id: 4,
+              type: "tool.result",
+              data: {
+                call_id: "edit",
+                exit_code: 0,
+                result_summary: "Updated payment route",
+                result: "Updated payment route",
+                result_artifact_path: ".affent/artifacts/tool-results/edit.txt",
+              },
+            },
             { id: 5, type: "message.done", data: { turn_id: "t1", text: "Checkout route fixed.", finish_reason: "stop" } },
             { id: 6, type: "turn.end", data: { turn_id: "t1", reason: "completed", tool_stats: { tool_requests: 1 } } },
           ],
@@ -1771,6 +1781,16 @@ describe("App", () => {
         });
       }
       if (url === "/v1/sessions/changes-1/events") return eventStreamResponse("");
+      if (url === "/v1/sessions/changes-1/artifacts/.affent/artifacts/tool-results/edit.txt?offset=0&limit=65536") {
+        return new Response("Updated payment route", {
+          status: 200,
+          headers: {
+            "X-Affent-Artifact-Path": ".affent/artifacts/tool-results/edit.txt",
+            "X-Affent-Artifact-Bytes": "21",
+            "X-Affent-Artifact-Offset": "0",
+          },
+        });
+      }
       if (url === "/v1/stats") return jsonResponse({ model: "qwen-small", active_sessions: 1, running_turns: 0 });
       if (url === "/v1/settings") return jsonResponse({ env: [], ssh: { exists: false } });
       if (url === "/v1/skills") return jsonResponse({ session_id: "account", count: 0, install_enabled: false, skills: [] });
@@ -1791,6 +1811,8 @@ describe("App", () => {
     expect(changes).toHaveAttribute("open");
     expect(changes).toHaveTextContent("1 changed file");
     expect(screen.getByTestId("session-changes-list")).toHaveTextContent("src/payments.ts");
+    await user.click(within(screen.getByTestId("session-changes-list")).getByRole("button", { name: "Open evidence" }));
+    expect(await screen.findByTestId("artifact-viewer")).toHaveTextContent("Updated payment route");
     await user.click(within(screen.getByTestId("session-changes-list")).getByRole("button", { name: "Adjust" }));
     expect(screen.getByTestId("composer-context")).toHaveTextContent("Using changed file");
     expect(screen.getByPlaceholderText("Message Affent...")).toHaveValue("Review and adjust this changed file: src/payments.ts");
@@ -1936,6 +1958,16 @@ describe("App", () => {
         });
       }
       if (url === "/v1/sessions/run-1/events") return eventStreamResponse("");
+      if (url === "/v1/sessions/run-1/artifacts/.affent/artifacts/tool-results/test.txt?offset=0&limit=65536") {
+        return new Response("checkout spec failed\nexpected payment route", {
+          status: 200,
+          headers: {
+            "X-Affent-Artifact-Path": ".affent/artifacts/tool-results/test.txt",
+            "X-Affent-Artifact-Bytes": "43",
+            "X-Affent-Artifact-Offset": "0",
+          },
+        });
+      }
       if (url === "/v1/stats") return jsonResponse({ model: "qwen-small", active_sessions: 1, running_turns: 0 });
       if (url === "/v1/settings") return jsonResponse({ env: [], ssh: { exists: false } });
       if (url === "/v1/skills") return jsonResponse({ session_id: "account", count: 0, install_enabled: false, skills: [] });
@@ -1957,6 +1989,8 @@ describe("App", () => {
     expect(run).toHaveTextContent("1 failed command");
     expect(screen.getByTestId("session-run-list")).toHaveTextContent("npm test -- checkout.spec.ts");
     expect(screen.getByTestId("session-run-list")).toHaveTextContent("Next: update payment route then rerun");
+    await user.click(within(screen.getByTestId("session-run-list")).getByRole("button", { name: "Open output" }));
+    expect(await screen.findByTestId("artifact-viewer")).toHaveTextContent("checkout spec failed");
     await user.click(within(screen.getByTestId("session-run-list")).getByRole("button", { name: "Rerun" }));
     expect(screen.getByTestId("composer-context")).toHaveTextContent("Using command");
     expect(screen.getByPlaceholderText("Message Affent...")).toHaveValue(
