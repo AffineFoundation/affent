@@ -89,6 +89,18 @@ describe("RuntimeStatsPanel", () => {
     expect(screen.queryByTestId("runtime-stats-grid")).toBeNull();
   });
 
+  it("keeps standard idle runtime from inventing ready diagnostics", () => {
+    render(<RuntimeStatsPanel defaultOpen stats={{ model: "qwen-small", active_sessions: 0, running_turns: 0 }} />);
+
+    const panel = screen.getByTestId("runtime-stats-panel");
+    expect(panel).toHaveTextContent("qwen-small");
+    expect(panel).toHaveTextContent("No runtime diagnostics for this chat.");
+    expect(screen.queryByTestId("runtime-stats-grid")).toBeNull();
+    expect(panel).not.toHaveTextContent("Mode");
+    expect(panel).not.toHaveTextContent("Tools");
+    expect(panel).not.toHaveTextContent("standard");
+  });
+
   it("shows browser policy blocks that promote Runtime into Workbench", () => {
     render(
       <RuntimeStatsPanel

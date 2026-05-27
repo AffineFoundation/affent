@@ -32,14 +32,18 @@ export function RuntimeStatsPanel({
           </div>
         ) : null}
         {!loading && !error ? (
-          <div className="runtime-stats-grid" data-testid="runtime-stats-grid">
-            {metrics.map((metric) => (
-              <span key={`${metric.label}:${metric.value}`} className="session-tools-runtime-chip" data-tone={metric.tone}>
-                <strong>{metric.label}</strong>
-                {metric.value}
-              </span>
-            ))}
-          </div>
+          metrics.length > 0 ? (
+            <div className="runtime-stats-grid" data-testid="runtime-stats-grid">
+              {metrics.map((metric) => (
+                <span key={`${metric.label}:${metric.value}`} className="session-tools-runtime-chip" data-tone={metric.tone}>
+                  <strong>{metric.label}</strong>
+                  {metric.value}
+                </span>
+              ))}
+            </div>
+          ) : (
+            <div className="session-skills-empty" data-testid="runtime-stats-empty">No runtime diagnostics for this chat.</div>
+          )
         ) : null}
       </div>
     </details>
@@ -77,10 +81,11 @@ function runtimeMetrics(stats: ServerStatsResponse): RuntimeMetric[] {
   const aggregate = stats.aggregate;
   const tools = aggregate?.tools;
   const runtime = aggregate?.runtime;
-  const metrics: RuntimeMetric[] = [
-    { label: "Mode", value: stats.eval_mode ? evalModeDetail(stats) : "standard", tone: stats.eval_mode ? "warning" : "ready" },
-    { label: "Tools", value: toolSurface(stats), tone: stats.eval_all_tools ? "warning" : "ready" },
-  ];
+  const metrics: RuntimeMetric[] = [];
+  if (stats.eval_mode || stats.eval_all_tools) {
+    metrics.push({ label: "Mode", value: evalModeDetail(stats), tone: "warning" });
+    metrics.push({ label: "Tools", value: toolSurface(stats), tone: stats.eval_all_tools ? "warning" : "muted" });
+  }
   if (aggregate) metrics.push({ label: "Tokens", value: tokenSummary(aggregate), tone: "muted" });
   const source = sourceMetric(tools);
   if (source) metrics.push(source);
