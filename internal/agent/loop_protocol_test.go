@@ -8,6 +8,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -38,6 +39,129 @@ func TestWithLoopProtocolSkillProviderInjectsWhenFileExists(t *testing.T) {
 	} {
 		if !strings.Contains(got, want) {
 			t.Fatalf("loop protocol provider missing %q:\n%s", want, got)
+		}
+	}
+}
+
+func TestRunTurnRejectsUncalibratedLoopProtocolActivation(t *testing.T) {
+	tmp := t.TempDir()
+	protocolPath := loopstate.ProtocolPath(tmp, "uncalibrated")
+	if _, _, _, err := loopstate.EnsureProtocolTemplate(protocolPath, loopstate.ProtocolTemplateOptions{
+		LoopID:       "uncalibrated",
+		OwnerSession: "uncalibrated",
+		Goal:         "Run a long market analysis without losing recovery context.",
+		Status:       "draft",
+	}); err != nil {
+		t.Fatalf("EnsureProtocolTemplate: %v", err)
+	}
+	protocol, found, err := loopstate.ReadProtocol(protocolPath)
+	if err != nil || !found {
+		t.Fatalf("ReadProtocol found=%v err=%v", found, err)
+	}
+	protocol = strings.Replace(protocol, "- status: draft", "- status: running", 1)
+	protocol = strings.Replace(protocol, "- hard constraints:", "- hard constraints: cite evidence and pause on unclear intent", 1)
+	protocol = strings.Replace(protocol, "- known evidence:", "- known evidence: user wants durable market analysis", 1)
+	protocol = strings.Replace(protocol, "- current risk or blocker:", "- current risk or blocker: live source quality unknown", 1)
+	protocol = strings.Replace(protocol, "- important artifacts:", "- important artifacts: none yet", 1)
+	protocol = strings.Replace(protocol, "- important trace spans:", "- important trace spans: initial loop draft", 1)
+	protocol = strings.Replace(protocol, "- last known recovery note:", "- last known recovery note: reload LOOP.md and plan state", 1)
+	args, err := json.Marshal(map[string]any{
+		"action":   "complete_activation",
+		"protocol": protocol,
+		"reason":   "same-turn activation attempt",
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	var calls int32
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		call := atomic.AddInt32(&calls, 1)
+		w.Header().Set("Content-Type", "text/event-stream")
+		w.WriteHeader(200)
+		fl := w.(http.Flusher)
+		if call == 1 {
+			writeSSEData(t, w, map[string]any{
+				"choices": []any{map[string]any{
+					"delta": map[string]any{
+						"role": "assistant",
+						"tool_calls": []any{map[string]any{
+							"index": 0,
+							"id":    "lp1",
+							"type":  "function",
+							"function": map[string]any{
+								"name":      LoopProtocolToolName,
+								"arguments": string(args),
+							},
+						}},
+					},
+					"finish_reason": nil,
+				}},
+			})
+			w.Write([]byte("data: {\"choices\":[{\"delta\":{},\"finish_reason\":\"tool_calls\"}]}\n\n"))
+			w.Write([]byte("data: [DONE]\n\n"))
+			fl.Flush()
+			return
+		}
+		w.Write([]byte("data: {\"choices\":[{\"delta\":{\"role\":\"assistant\",\"content\":\"Before I can activate this loop, what stop condition should pause it?\"},\"finish_reason\":\"stop\"}]}\n\n"))
+		w.Write([]byte("data: [DONE]\n\n"))
+		fl.Flush()
+	}))
+	t.Cleanup(srv.Close)
+
+	conv, err := OpenConversationAt(filepath.Join(tmp, "sess.jsonl"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	reg := NewRegistry()
+	RegisterLoopProtocolOnly(reg, protocolPath)
+	events := make(chan sse.Event, 64)
+	loop := &Loop{
+		LLM: NewLLMClient(srv.URL, "", "fake-model"), Tools: reg, Conv: conv, Events: events,
+		LoopProtocolPath: protocolPath, MaxTurnSteps: 4, PerCallTimeout: 5 * time.Second,
+	}
+	if err := loop.EnsureSystemPrompt("base"); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := loop.SendUser(context.Background(), "Set up a loop for market analysis"); err != nil {
+		t.Fatal(err)
+	}
+
+	deadline := time.After(10 * time.Second)
+	sawActivationError := false
+	for {
+		select {
+		case ev := <-events:
+			if ev.Type == sse.TypeToolResult {
+				var p sse.ToolResultPayload
+				if err := json.Unmarshal(ev.Data, &p); err != nil {
+					t.Fatalf("decode tool.result: %v", err)
+				}
+				if p.ExitCode != 0 && strings.Contains(p.Result, "requires a user calibration answer") {
+					sawActivationError = true
+				}
+			}
+			if ev.Type == sse.TypeTurnEnd {
+				if !sawActivationError {
+					t.Fatal("turn ended without uncalibrated activation tool error")
+				}
+				state, found, err := loopstate.ReadState(filepath.Join(filepath.Dir(protocolPath), loopstate.StateFileName))
+				if err != nil || !found {
+					t.Fatalf("ReadState found=%v err=%v", found, err)
+				}
+				if state.Status != "draft" || state.LastEventType == "loop.protocol_activate" {
+					t.Fatalf("uncalibrated activation must leave draft state: %+v", state)
+				}
+				content, found, err := loopstate.ReadProtocol(protocolPath)
+				if err != nil || !found {
+					t.Fatalf("ReadProtocol after turn found=%v err=%v", found, err)
+				}
+				if !strings.Contains(content, "- status: draft") {
+					t.Fatalf("uncalibrated activation overwrote LOOP.md:\n%s", content)
+				}
+				return
+			}
+		case <-deadline:
+			t.Fatal("timeout waiting for turn.end")
 		}
 	}
 }
@@ -621,5 +745,16 @@ func TestRecordLoopMemoryUpdatePersistsSidecarUpdate(t *testing.T) {
 		sidecar[0].MemoryLocation != "memory:markets" ||
 		sidecar[0].NextPreview != "prefer browser_network_read for dynamic dashboards" {
 		t.Fatalf("sidecar event = %+v", sidecar[0])
+	}
+}
+
+func writeSSEData(t *testing.T, w http.ResponseWriter, payload any) {
+	t.Helper()
+	raw, err := json.Marshal(payload)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, err := w.Write([]byte("data: " + string(raw) + "\n\n")); err != nil {
+		t.Fatal(err)
 	}
 }
