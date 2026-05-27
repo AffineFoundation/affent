@@ -1231,6 +1231,9 @@ func renderTimelineSessionSearch(b *strings.Builder, trace *Trace) {
 		if ex.Role != "" {
 			fmt.Fprintf(b, " role=`%s`", ex.Role)
 		}
+		if ex.ModTime != "" {
+			fmt.Fprintf(b, " mod_time=`%s`", timelineInline(ex.ModTime, 80))
+		}
 		if len(ex.MatchedTerms) > 0 {
 			fmt.Fprintf(b, " terms=`%s`", strings.Join(ex.MatchedTerms, ","))
 		}

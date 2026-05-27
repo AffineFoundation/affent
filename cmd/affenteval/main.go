@@ -2130,6 +2130,9 @@ func printSessionSearchExampleLines(w io.Writer, examples []agenteval.SessionSea
 		if ex.MessageIdx > 0 {
 			fmt.Fprintf(w, " message=%d", ex.MessageIdx)
 		}
+		if ex.ModTime != "" {
+			fmt.Fprintf(w, " mod_time=%s", ex.ModTime)
+		}
 		if len(ex.MatchedTerms) > 0 {
 			fmt.Fprintf(w, " terms=%s", strings.Join(ex.MatchedTerms, ","))
 		}

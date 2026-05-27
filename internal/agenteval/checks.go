@@ -907,6 +907,9 @@ func sessionSearchExampleSummary(ex SessionSearchExample) string {
 	if ex.MessageIdx > 0 {
 		parts = append(parts, fmt.Sprintf("message=%d", ex.MessageIdx))
 	}
+	if ex.ModTime != "" {
+		parts = append(parts, "mod_time="+previewSubstr(ex.ModTime, 80))
+	}
 	if ex.ContextIncluded {
 		parts = append(parts, "context=true")
 	}

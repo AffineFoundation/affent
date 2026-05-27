@@ -461,6 +461,7 @@ type SessionSearchExample struct {
 	MessageIdx      int      `json:"message_idx,omitempty"`
 	Role            string   `json:"role,omitempty"`
 	Score           float64  `json:"score,omitempty"`
+	ModTime         string   `json:"mod_time,omitempty"`
 	MatchedTerms    []string `json:"matched_terms,omitempty"`
 	ContextIncluded bool     `json:"context_included,omitempty"`
 	SnippetPreview  string   `json:"snippet_preview,omitempty"`
@@ -880,6 +881,7 @@ func (t Trace) SessionSearchExamples(maxExamples int) []SessionSearchExample {
 				MessageIdx:      hit.MessageIdx,
 				Role:            hit.Role,
 				Score:           hit.Score,
+				ModTime:         compactOneLine(hit.ModTime, 80),
 				MatchedTerms:    append([]string(nil), hit.MatchedTerms...),
 				ContextIncluded: hit.ContextIncluded,
 				SnippetPreview:  compactOneLine(hit.Snippet, 220),
