@@ -512,11 +512,13 @@ func renderedFallbackResult(ctx context.Context, cfg FetchConfig, requestURL str
 	}
 	renderedStatus := ""
 	if info, ok := sourceaccess.FirstInfoFromResult(out); ok {
-		switch info.PageTextBelow {
-		case "search_results_discovery_only":
-			renderedStatus = "rendered_browser_source_status=search_results_discovery_only"
-		case "not_found_page_discovery_only":
-			renderedStatus = "rendered_browser_source_status=not_found_page_discovery_only"
+		status := info.RenderedBrowserSourceStatus
+		if status == "" {
+			status = info.PageTextBelow
+		}
+		switch status {
+		case "search_results_discovery_only", "not_found_page_discovery_only", "partial_dynamic_page_evidence":
+			renderedStatus = "rendered_browser_source_status=" + status
 		}
 	}
 	prefix := sourceaccess.FormatSourceAccessLine("fetched_url", reason.FinalURL, requestURL, "mode=rendered_browser_fallback", "linked_urls_in_content=discovered_unverified_until_fetched", renderedStatus)

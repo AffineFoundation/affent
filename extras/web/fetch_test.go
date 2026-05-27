@@ -689,6 +689,49 @@ func TestFetchTool_UsesRenderedFallbackForDynamicShell(t *testing.T) {
 	}
 }
 
+func TestFetchTool_UsesRenderedFallbackForDynamicShellNetworkEvidence(t *testing.T) {
+	scripts := strings.Repeat(`<script src="/_next/static/chunks/app.js"></script>`, 10)
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "text/html; charset=utf-8")
+		w.Write([]byte(`<!doctype html><html><head>` + scripts + `</head><body><div id="__next"><main>Loading...</main></div></body></html>`))
+	}))
+	defer srv.Close()
+
+	tool := FetchTool(FetchConfig{
+		AllowPrivateNetwork: true,
+		RenderedFallback: func(_ context.Context, requestURL string, reason FetchFallbackReason) (string, error) {
+			return "SourceAccess: browser_rendered_url=" + requestURL + "; snapshot_id=7; page_text_below=partial_dynamic_page_evidence; rendered_browser_source_status=partial_dynamic_page_evidence; links_in_snapshot=discovered_unverified_until_opened\n" +
+				"URL: " + requestURL + "\nTITLE: Affine\n\n" +
+				"PAGE DIAGNOSTICS:\n" +
+				"- empty_dynamic_metric_widgets: 2 visible custom metric widget(s) exposed no text value; use browser_network/browser_network_read, API/text/source endpoint, or mark those fields unverified\n" +
+				"CAPTURED NETWORK RESPONSES:\n" +
+				"- ref=n1 status=200 resource=xhr content_type=application/json url=https://api.taostats.io/subnets/120\n" +
+				"Next: call browser_network_read on the relevant ref before citing hidden dashboard values.\n" +
+				"\nPAGE TEXT:\nAffine SN120\n", nil
+		},
+	})
+	args, _ := json.Marshal(map[string]string{"url": srv.URL})
+	out, err := tool.Execute(context.Background(), args)
+	if err != nil {
+		t.Fatalf("Execute: %v", err)
+	}
+	for _, want := range []string{
+		"mode=rendered_browser_fallback",
+		"DirectFetchReason=\"dynamic_shell\"",
+		"rendered_browser_source_status=partial_dynamic_page_evidence",
+		"CAPTURED NETWORK RESPONSES:",
+		"ref=n1",
+		"browser_network_read",
+	} {
+		if !strings.Contains(out, want) {
+			t.Fatalf("dynamic rendered fallback network evidence output missing %q:\n%s", want, out)
+		}
+	}
+	if strings.Contains(out, "Failure: kind=dynamic_shell") {
+		t.Fatalf("successful rendered fallback should not be counted as dynamic shell:\n%s", out)
+	}
+}
+
 func TestFetchTool_UsesRenderedFallbackForNotFoundHTML(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "text/html; charset=utf-8")
