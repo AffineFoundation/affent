@@ -426,7 +426,12 @@ routes, while leaving likely API/text/export paths such as `/api/...` or
 guard: after `browser_find` returns no matches on the same rendered page three
 times in one turn, the runtime emits `loop_guard_no_new_evidence` and steers
 the model toward one snapshot inspection, `browser_network`/`browser_network_read`,
-a different source, or a clearly marked gap. Per-turn workflow caps emit
+a different source, or a clearly marked gap. Captured network evidence search
+uses the same pattern: `browser_network` includes the current rendered page in
+its compact output, and repeated no-match searches on that same page trigger
+`loop_guard_no_new_evidence` so the agent waits once, interacts with the
+relevant tab, switches to a known API/text/source endpoint, or marks hidden
+fields unverified instead of cycling through metric synonyms. Per-turn workflow caps emit
 `loop_guard_call_cap`. First-tool and post-tool workflow policies emit
 `tool_policy_first_tool`, `tool_policy_repeat`, or `tool_policy_active` when
 they block a model call before the underlying tool runs. Per-turn stats expose

@@ -22,6 +22,7 @@ const (
 	browserInteractionWarnThreshold = 2
 	browserInteractionHaltThreshold = 5
 	browserFindNoMatchThreshold     = 3
+	browserNetworkNoMatchThreshold  = 3
 
 	loopGuardCallCapKind             = "loop_guard_call_cap"
 	loopGuardHaltedToolKind          = "loop_guard_halted_tool"
@@ -76,10 +77,12 @@ type toolLoopGuard struct {
 	// perToolCounts tracks total per-turn call counts for tools that
 	// appear in perTurnCallCaps. Entries are created lazily so most
 	// turns pay no allocation for this layer.
-	perToolCounts           map[string]int
-	directReaderWarningURLs map[string]bool
-	browserFindNoMatchURL   string
-	browserFindNoMatchCount int
+	perToolCounts              map[string]int
+	directReaderWarningURLs    map[string]bool
+	browserFindNoMatchURL      string
+	browserFindNoMatchCount    int
+	browserNetworkNoMatchPage  string
+	browserNetworkNoMatchCount int
 }
 
 type toolCallKey struct {
@@ -216,6 +219,14 @@ func (g *toolLoopGuard) recordToolResult(tool string, args json.RawMessage, resu
 		}
 		outcomeOK = false
 	}
+	if browserGuard := g.recordBrowserNetworkNoMatch(tool, result, isErr); browserGuard != "" {
+		if guardResult != "" {
+			guardResult += "\n\n" + browserGuard
+		} else {
+			guardResult = browserGuard
+		}
+		outcomeOK = false
+	}
 	return guardResult, outcomeOK
 }
 
@@ -261,6 +272,64 @@ func browserFindNoNewEvidenceMessage(rawURL string, count int) string {
 	}
 	return withLoopGuardFailureKind(
 		fmt.Sprintf("loop_guard: browser_find returned no matches on %s %d times this turn. Repeating page-text searches is unlikely to add evidence.\nNext: inspect the current browser_snapshot once for visible labels, use browser_network/browser_network_read for hidden XHR/fetch data if available, navigate to a different source, or answer that the field is not visible in the inspected page.", source, count),
+		loopGuardNoNewEvidenceKind,
+	)
+}
+
+func (g *toolLoopGuard) recordBrowserNetworkNoMatch(tool, result string, isErr bool) string {
+	if g == nil || tool != "browser_network" || isErr {
+		return ""
+	}
+	page := browserNetworkCurrentPage(result)
+	if page == "" {
+		page = "__unknown_browser_page__"
+	}
+	if !browserNetworkNoMatches(result) {
+		if g.browserNetworkNoMatchPage == page {
+			g.browserNetworkNoMatchCount = 0
+		}
+		return ""
+	}
+	if g.browserNetworkNoMatchPage != page {
+		g.browserNetworkNoMatchPage = page
+		g.browserNetworkNoMatchCount = 0
+	}
+	g.browserNetworkNoMatchCount++
+	if g.browserNetworkNoMatchCount < browserNetworkNoMatchThreshold {
+		return ""
+	}
+	return browserNetworkNoNewEvidenceMessage(page, g.browserNetworkNoMatchCount)
+}
+
+func browserNetworkNoMatches(result string) bool {
+	if !strings.Contains(result, "BROWSER NETWORK EVIDENCE") {
+		return false
+	}
+	for _, line := range strings.Split(result, "\n") {
+		if strings.TrimSpace(line) == "MATCHES: none" {
+			return true
+		}
+	}
+	return false
+}
+
+func browserNetworkCurrentPage(result string) string {
+	for _, line := range strings.Split(result, "\n") {
+		line = strings.TrimSpace(line)
+		if strings.HasPrefix(line, "CURRENT_PAGE:") {
+			return strings.TrimSpace(strings.TrimPrefix(line, "CURRENT_PAGE:"))
+		}
+	}
+	return ""
+}
+
+func browserNetworkNoNewEvidenceMessage(rawURL string, count int) string {
+	source := "the current rendered page"
+	if rawURL != "" && rawURL != "__unknown_browser_page__" {
+		source = fmt.Sprintf("%q", rawURL)
+	}
+	return withLoopGuardFailureKind(
+		fmt.Sprintf("loop_guard: browser_network returned no captured response matches on %s %d times this turn. Repeating network searches is unlikely to add evidence unless the page loads new XHR/fetch responses.\nNext: inspect the current browser_snapshot once for visible labels, interact with the relevant tab or wait once if data has not loaded, use a known API/text/source endpoint, or mark hidden fields unverified.", source, count),
 		loopGuardNoNewEvidenceKind,
 	)
 }

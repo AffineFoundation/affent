@@ -137,6 +137,15 @@ func (l *NetworkEvidenceLog) ObserveResponse(rawURL string, resource proto.Netwo
 	l.mu.Unlock()
 }
 
+func (l *NetworkEvidenceLog) CurrentPageURL() string {
+	if l == nil {
+		return ""
+	}
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	return l.pageURL
+}
+
 func (l *NetworkEvidenceLog) Add(rawURL string, status int, resource proto.NetworkResourceType, headers http.Header, body []byte) (NetworkEvidenceEntry, bool) {
 	if l == nil {
 		return NetworkEvidenceEntry{}, false
@@ -446,8 +455,15 @@ func NetworkSearchTool(s *Session) *agent.Tool {
 			if len(query) > maxNetworkQueryBytes {
 				return "", browserInvalidArgs(fmt.Sprintf("query is %d bytes; browser_network supports queries up to %d bytes", len(query), maxNetworkQueryBytes), "retry with a shorter metric label, entity id, API path, or distinctive value")
 			}
-			entries := s.network.Search(query, args.MaxResults)
-			return formatNetworkSearchResults(query, entries), nil
+			pageURL := ""
+			if s != nil && s.network != nil {
+				pageURL = s.network.CurrentPageURL()
+			}
+			var entries []NetworkEvidenceEntry
+			if s != nil && s.network != nil {
+				entries = s.network.Search(query, args.MaxResults)
+			}
+			return formatNetworkSearchResults(query, pageURL, entries), nil
 		},
 	}
 }
@@ -515,9 +531,12 @@ func NetworkReadTool(s *Session) *agent.Tool {
 	}
 }
 
-func formatNetworkSearchResults(query string, entries []NetworkEvidenceEntry) string {
+func formatNetworkSearchResults(query, pageURL string, entries []NetworkEvidenceEntry) string {
 	var b strings.Builder
 	b.WriteString("BROWSER NETWORK EVIDENCE\n")
+	if strings.TrimSpace(pageURL) != "" {
+		fmt.Fprintf(&b, "CURRENT_PAGE: %s\n", pageURL)
+	}
 	if query != "" {
 		fmt.Fprintf(&b, "query: %q\n", query)
 	}

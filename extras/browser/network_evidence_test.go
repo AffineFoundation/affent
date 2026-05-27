@@ -131,6 +131,7 @@ func TestNetworkEvidenceToolsSearchAndRead(t *testing.T) {
 	}
 	for _, want := range []string{
 		"BROWSER NETWORK EVIDENCE",
+		"CURRENT_PAGE: https://taostats.io/subnets/120",
 		"n1 status=200 resource=xhr content_type=application/json",
 		"market_cap",
 		`json_paths: $.market_cap="201.04K T"`,
@@ -287,12 +288,16 @@ func TestNetworkEvidenceReadJSONPathGuidesMissingPath(t *testing.T) {
 }
 
 func TestNetworkEvidenceToolsNoMatchesAndMissingRefGuideRecovery(t *testing.T) {
-	s := &Session{network: NewNetworkEvidenceLog()}
+	log := NewNetworkEvidenceLog()
+	log.ObserveResponse("https://taostats.io/subnets/120", proto.NetworkResourceTypeDocument)
+	s := &Session{network: log}
 	searchOut, err := NetworkSearchTool(s).Execute(context.Background(), json.RawMessage(`{"query":"Affine"}`))
 	if err != nil {
 		t.Fatalf("browser_network no-match should not error: %v", err)
 	}
-	if !strings.Contains(searchOut, "MATCHES: none") || !strings.Contains(searchOut, "mark hidden fields unverified") {
+	if !strings.Contains(searchOut, "CURRENT_PAGE: https://taostats.io/subnets/120") ||
+		!strings.Contains(searchOut, "MATCHES: none") ||
+		!strings.Contains(searchOut, "mark hidden fields unverified") {
 		t.Fatalf("no-match output missing recovery guidance:\n%s", searchOut)
 	}
 
