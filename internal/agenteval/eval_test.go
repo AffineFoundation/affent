@@ -1215,10 +1215,13 @@ func TestSelectLiveWebSuite(t *testing.T) {
 	if !ok {
 		t.Fatalf("live-web suite missing dynamic evidence scenario")
 	}
-	for _, want := range []string{"browser_navigate", "browser_network", "browser_network_read"} {
+	for _, want := range []string{"browser_navigate", "browser_network_read"} {
 		if !stringSliceContains(scenario.RequiredTools, want) {
 			t.Fatalf("live-web RequiredTools = %#v, want %q", scenario.RequiredTools, want)
 		}
+	}
+	if stringSliceContains(scenario.RequiredTools, "browser_network") {
+		t.Fatalf("live-web RequiredTools = %#v, should allow direct browser_network_read from snapshot refs", scenario.RequiredTools)
 	}
 	for _, field := range []string{"source_access_results", "source_access_verified", "source_access_network"} {
 		if scenario.RequiredToolStatsAtLeast[field] != 1 {
@@ -1247,18 +1250,20 @@ func TestSelectLiveWebSuite(t *testing.T) {
 	if !ok {
 		t.Fatalf("live-web suite missing web_fetch recovery scenario")
 	}
-	for _, want := range []string{"web_fetch", "browser_navigate", "browser_network", "browser_network_read"} {
+	for _, want := range []string{"web_fetch", "browser_navigate", "browser_network_read"} {
 		if !stringSliceContains(recovery.RequiredTools, want) {
 			t.Fatalf("live-web recovery RequiredTools = %#v, want %q", recovery.RequiredTools, want)
 		}
 	}
+	if stringSliceContains(recovery.RequiredTools, "browser_network") {
+		t.Fatalf("live-web recovery RequiredTools = %#v, should allow direct browser_network_read from snapshot refs", recovery.RequiredTools)
+	}
 	if recovery.RequiredToolCounts["web_fetch"] != 1 || recovery.RequiredToolCounts["browser_network_read"] != 1 {
 		t.Fatalf("live-web recovery tool counts = %#v, want web_fetch/browser_network_read once", recovery.RequiredToolCounts)
 	}
-	if len(recovery.RequiredToolOrder) != 3 ||
+	if len(recovery.RequiredToolOrder) != 2 ||
 		recovery.RequiredToolOrder[0] != (ToolOrderRequirement{Earlier: "web_fetch", Later: "browser_navigate"}) ||
-		recovery.RequiredToolOrder[1] != (ToolOrderRequirement{Earlier: "browser_navigate", Later: "browser_network"}) ||
-		recovery.RequiredToolOrder[2] != (ToolOrderRequirement{Earlier: "browser_network", Later: "browser_network_read"}) {
+		recovery.RequiredToolOrder[1] != (ToolOrderRequirement{Earlier: "browser_navigate", Later: "browser_network_read"}) {
 		t.Fatalf("live-web recovery tool order = %#v", recovery.RequiredToolOrder)
 	}
 	if len(recovery.RequiredSourceAccess) != 1 ||

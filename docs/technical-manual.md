@@ -879,7 +879,10 @@ Current built-in suites:
   enabled. Browser network evidence scenarios require final answers to preserve
   `browser_network_url`, `requested_url`, `ref=...`, `status=...`, and
   `content_type=...`, so operators can distinguish the response actually read
-  from the user-facing page being verified and audit response quality.
+  from the user-facing page being verified and audit response quality. They
+  require `browser_network_read` but do not require an extra `browser_network`
+  search when a rendered snapshot already exposes the relevant captured network
+  ref.
 
 Run scenarios:
 
