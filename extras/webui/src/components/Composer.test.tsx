@@ -1,4 +1,4 @@
-import { fireEvent, render, screen } from "@testing-library/react";
+import { fireEvent, render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, it, vi } from "vitest";
 import { Composer } from "./Composer";
@@ -39,11 +39,57 @@ describe("Composer", () => {
   });
 
   it("switches the primary action to Start when no session exists yet", () => {
-    render(<Composer disabled={false} busy={false} hasSession={false} onSubmit={vi.fn()} onCancel={vi.fn()} />);
+    render(<Composer disabled={false} busy={false} hasSession={false} onSubmit={vi.fn()} onCancel={vi.fn()} onStartLoop={vi.fn()} />);
 
     expect(screen.getByPlaceholderText("Message Affent...")).toBeVisible();
     expect(screen.getByTestId("composer-intent")).toHaveTextContent("New task");
     expect(screen.getByRole("button", { name: "Start" })).toBeDisabled();
+    expect(screen.queryByTestId("composer-automation")).toBeNull();
+  });
+
+  it("shows Automation only when at least one automation action is available", async () => {
+    const user = userEvent.setup();
+    const onStartLoop = vi.fn().mockResolvedValue(undefined);
+    const onScheduleCheckIn = vi.fn().mockResolvedValue(undefined);
+    const { rerender } = render(
+      <Composer
+        disabled={false}
+        busy={false}
+        hasSession={false}
+        onSubmit={vi.fn()}
+        onCancel={vi.fn()}
+        onStartLoop={onStartLoop}
+        onScheduleCheckIn={onScheduleCheckIn}
+      />,
+    );
+
+    expect(screen.queryByTestId("composer-automation")).toBeNull();
+
+    await user.type(screen.getByPlaceholderText("Message Affent..."), "long running market monitor");
+
+    expect(within(screen.getByTestId("composer-automation")).getByText("Automation")).toBeVisible();
+    await user.click(within(screen.getByTestId("composer-automation")).getByText("Automation"));
+    expect(within(screen.getByTestId("composer-automation")).queryByRole("button", { name: "Check in 1h" })).toBeNull();
+    await user.click(within(screen.getByTestId("composer-automation")).getByRole("button", { name: "Set up loop" }));
+    expect(onStartLoop).toHaveBeenCalledWith("long running market monitor");
+
+    rerender(
+      <Composer
+        disabled={false}
+        busy={false}
+        hasSession
+        onSubmit={vi.fn()}
+        onCancel={vi.fn()}
+        onStartLoop={onStartLoop}
+        onScheduleCheckIn={onScheduleCheckIn}
+      />,
+    );
+
+    expect(within(screen.getByTestId("composer-automation")).getByText("Automation")).toBeVisible();
+    await user.click(within(screen.getByTestId("composer-automation")).getByText("Automation"));
+    expect(within(screen.getByTestId("composer-automation")).queryByRole("button", { name: "Set up loop" })).toBeNull();
+    await user.click(within(screen.getByTestId("composer-automation")).getByRole("button", { name: "Check in 1h" }));
+    expect(onScheduleCheckIn).toHaveBeenCalled();
   });
 
   it("labels saved history follow-ups as resuming the chat", async () => {
