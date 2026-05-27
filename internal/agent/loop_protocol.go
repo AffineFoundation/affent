@@ -170,6 +170,12 @@ func loopProtocolStateLine(protocolPath string) string {
 		if state.LastTurnMemoryUpdates > 0 {
 			turn = append(turn, fmt.Sprintf("memory_updates=%d", state.LastTurnMemoryUpdates))
 		}
+		if state.LastTurnMemorySearches > 0 {
+			turn = append(turn, fmt.Sprintf("memory_searches=%d memory_misses=%d", state.LastTurnMemorySearches, state.LastTurnMemoryMisses))
+		}
+		if state.LastTurnSessionSearch > 0 {
+			turn = append(turn, fmt.Sprintf("session_search=%d", state.LastTurnSessionSearch))
+		}
 		if state.LastTurnLoopGuards > 0 {
 			turn = append(turn, fmt.Sprintf("loop_guards=%d", state.LastTurnLoopGuards))
 		}

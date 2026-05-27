@@ -556,13 +556,16 @@ func TestWithLoopProtocolSkillProviderIncludesRuntimeCheckpoints(t *testing.T) {
 		t.Fatalf("RecordProtocolCalibrationAnswer: %v", err)
 	}
 	if _, _, err := loopstate.RecordTurnCheckpoint(path, loopstate.TurnCheckpoint{
-		TurnID:        "turn_done",
-		EndReason:     sse.TurnEndCompleted,
-		InputTokens:   123,
-		OutputTokens:  45,
-		ToolRequests:  2,
-		MemoryUpdates: 1,
-		LoopGuards:    1,
+		TurnID:             "turn_done",
+		EndReason:          sse.TurnEndCompleted,
+		InputTokens:        123,
+		OutputTokens:       45,
+		ToolRequests:       2,
+		MemoryUpdates:      1,
+		MemorySearchCalls:  3,
+		MemorySearchMisses: 2,
+		SessionSearchCalls: 1,
+		LoopGuards:         1,
 	}); err != nil {
 		t.Fatalf("RecordTurnCheckpoint: %v", err)
 	}
@@ -571,7 +574,7 @@ func TestWithLoopProtocolSkillProviderIncludesRuntimeCheckpoints(t *testing.T) {
 	for _, want := range []string{
 		"calibration_answers=1",
 		"last_calibration: answer=Pause if the requested market source cannot be verified.",
-		"last_turn: id=turn_done reason=completed tokens=123/45 tools=2 memory_updates=1 loop_guards=1",
+		"last_turn: id=turn_done reason=completed tokens=123/45 tools=2 memory_updates=1 memory_searches=3 memory_misses=2 session_search=1 loop_guards=1",
 		"last_memory_update: action=replace location=memory:markets preview=old dashboard rule -> prefer browser network evidence",
 		"last_decision: kind=evidence_quality trigger=source_access_dynamic_partial decision=defer action=read browser network responses",
 	} {
@@ -689,6 +692,8 @@ func TestRecordLoopTurnCheckpointPersistsRuntimeSummary(t *testing.T) {
 		LoopGuardInterventions: 1,
 		ForcedNoTools:          1,
 		MemoryUpdates:          1,
+		MemorySearchCalls:      4,
+		MemorySearchMisses:     2,
 		SessionSearchCalls:     2,
 	})
 
@@ -706,6 +711,8 @@ func TestRecordLoopTurnCheckpointPersistsRuntimeSummary(t *testing.T) {
 		state.LastTurnLoopGuards != 1 ||
 		state.LastTurnForcedNoTools != 1 ||
 		state.LastTurnMemoryUpdates != 1 ||
+		state.LastTurnMemorySearches != 4 ||
+		state.LastTurnMemoryMisses != 2 ||
 		state.LastTurnSessionSearch != 2 {
 		t.Fatalf("state = %+v", state)
 	}

@@ -1558,6 +1558,8 @@ func (l *Loop) recordLoopTurnCheckpoint(turnID, endReason string, inputTokens, o
 		LoopGuards:         stats.LoopGuardInterventions,
 		ForcedNoTools:      stats.ForcedNoTools,
 		MemoryUpdates:      stats.MemoryUpdates,
+		MemorySearchCalls:  stats.MemorySearchCalls,
+		MemorySearchMisses: stats.MemorySearchMisses,
 		SessionSearchCalls: stats.SessionSearchCalls,
 	}); err != nil {
 		l.Log.Warn().Err(err).Msg("record loop turn checkpoint failed")

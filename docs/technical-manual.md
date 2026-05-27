@@ -818,8 +818,8 @@ Affent stores durable state as inspectable files:
   compaction count, whether the next protocol feed must be full, the latest
   active-plan checkpoint observed during a feed, and the latest turn checkpoint:
   turn id, end reason, token usage, tool/error counts, loop-guard interventions,
-  forced no-tool recoveries, memory updates, and session-search calls. Confirmed
-  memory mutations are also mirrored as a
+  forced no-tool recoveries, memory updates, memory-search calls/misses, and
+  session-search calls. Confirmed memory mutations are also mirrored as a
   latest memory-update checkpoint with action, target, topic, location,
   previous/next previews, and a compact display preview. It also records
   loop-decision count and the latest gate decision, including kind, trigger,

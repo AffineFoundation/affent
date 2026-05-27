@@ -477,6 +477,8 @@ func TestRecordTurnCheckpointUpdatesStateAndEvents(t *testing.T) {
 		LoopGuards:         1,
 		ForcedNoTools:      0,
 		MemoryUpdates:      2,
+		MemorySearchCalls:  3,
+		MemorySearchMisses: 1,
 		SessionSearchCalls: 1,
 	})
 	if err != nil {
@@ -489,6 +491,8 @@ func TestRecordTurnCheckpointUpdatesStateAndEvents(t *testing.T) {
 		event.ToolRequests != 3 ||
 		event.LoopGuards != 1 ||
 		event.MemoryUpdates != 2 ||
+		event.MemorySearches != 3 ||
+		event.MemoryMisses != 1 ||
 		event.SessionSearch != 1 ||
 		event.Path != ProtocolRelPath("market-run") {
 		t.Fatalf("event = %+v", event)
@@ -502,6 +506,8 @@ func TestRecordTurnCheckpointUpdatesStateAndEvents(t *testing.T) {
 		state.LastTurnToolErrors != 1 ||
 		state.LastTurnLoopGuards != 1 ||
 		state.LastTurnMemoryUpdates != 2 ||
+		state.LastTurnMemorySearches != 3 ||
+		state.LastTurnMemoryMisses != 1 ||
 		state.LastTurnSessionSearch != 1 ||
 		state.LastEventType != "loop.turn_checkpoint" {
 		t.Fatalf("state = %+v", state)

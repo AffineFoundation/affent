@@ -56,6 +56,8 @@ type State struct {
 	LastTurnLoopGuards        int    `json:"last_turn_loop_guards,omitempty"`
 	LastTurnForcedNoTools     int    `json:"last_turn_forced_no_tools,omitempty"`
 	LastTurnMemoryUpdates     int    `json:"last_turn_memory_updates,omitempty"`
+	LastTurnMemorySearches    int    `json:"last_turn_memory_search_calls,omitempty"`
+	LastTurnMemoryMisses      int    `json:"last_turn_memory_search_misses,omitempty"`
 	LastTurnSessionSearch     int    `json:"last_turn_session_search_calls,omitempty"`
 	MemoryUpdateEvents        int    `json:"memory_update_events,omitempty"`
 	LastMemoryUpdateAction    string `json:"last_memory_update_action,omitempty"`
@@ -109,6 +111,8 @@ type Event struct {
 	LoopGuards      int      `json:"loop_guards,omitempty"`
 	ForcedNoTools   int      `json:"forced_no_tools,omitempty"`
 	MemoryUpdates   int      `json:"memory_updates,omitempty"`
+	MemorySearches  int      `json:"memory_search_calls,omitempty"`
+	MemoryMisses    int      `json:"memory_search_misses,omitempty"`
 	SessionSearch   int      `json:"session_search_calls,omitempty"`
 	DecisionID      string   `json:"decision_id,omitempty"`
 	DecisionKind    string   `json:"decision_kind,omitempty"`
@@ -147,6 +151,8 @@ type TurnCheckpoint struct {
 	LoopGuards         int
 	ForcedNoTools      int
 	MemoryUpdates      int
+	MemorySearchCalls  int
+	MemorySearchMisses int
 	SessionSearchCalls int
 }
 
@@ -379,21 +385,23 @@ func RecordTurnCheckpoint(protocolPath string, checkpoint TurnCheckpoint) (State
 		checkpoint.EndReason = "unknown"
 	}
 	event, err := AppendEvent(filepath.Join(loopDir, EventsFileName), Event{
-		Type:          "loop.turn_checkpoint",
-		Summary:       "Turn ended: " + checkpoint.EndReason,
-		Reason:        "turn_end",
-		Path:          ProtocolRelPath(loopID),
-		Time:          formatTime(now),
-		TurnID:        checkpoint.TurnID,
-		TurnEndReason: checkpoint.EndReason,
-		InputTokens:   clampNonNegative(checkpoint.InputTokens),
-		OutputTokens:  clampNonNegative(checkpoint.OutputTokens),
-		ToolRequests:  clampNonNegative(checkpoint.ToolRequests),
-		ToolErrors:    clampNonNegative(checkpoint.ToolErrors),
-		LoopGuards:    clampNonNegative(checkpoint.LoopGuards),
-		ForcedNoTools: clampNonNegative(checkpoint.ForcedNoTools),
-		MemoryUpdates: clampNonNegative(checkpoint.MemoryUpdates),
-		SessionSearch: clampNonNegative(checkpoint.SessionSearchCalls),
+		Type:           "loop.turn_checkpoint",
+		Summary:        "Turn ended: " + checkpoint.EndReason,
+		Reason:         "turn_end",
+		Path:           ProtocolRelPath(loopID),
+		Time:           formatTime(now),
+		TurnID:         checkpoint.TurnID,
+		TurnEndReason:  checkpoint.EndReason,
+		InputTokens:    clampNonNegative(checkpoint.InputTokens),
+		OutputTokens:   clampNonNegative(checkpoint.OutputTokens),
+		ToolRequests:   clampNonNegative(checkpoint.ToolRequests),
+		ToolErrors:     clampNonNegative(checkpoint.ToolErrors),
+		LoopGuards:     clampNonNegative(checkpoint.LoopGuards),
+		ForcedNoTools:  clampNonNegative(checkpoint.ForcedNoTools),
+		MemoryUpdates:  clampNonNegative(checkpoint.MemoryUpdates),
+		MemorySearches: clampNonNegative(checkpoint.MemorySearchCalls),
+		MemoryMisses:   clampNonNegative(checkpoint.MemorySearchMisses),
+		SessionSearch:  clampNonNegative(checkpoint.SessionSearchCalls),
 	})
 	if err != nil {
 		return State{}, Event{}, err
@@ -409,6 +417,8 @@ func RecordTurnCheckpoint(protocolPath string, checkpoint TurnCheckpoint) (State
 	state.LastTurnLoopGuards = event.LoopGuards
 	state.LastTurnForcedNoTools = event.ForcedNoTools
 	state.LastTurnMemoryUpdates = event.MemoryUpdates
+	state.LastTurnMemorySearches = event.MemorySearches
+	state.LastTurnMemoryMisses = event.MemoryMisses
 	state.LastTurnSessionSearch = event.SessionSearch
 	state.UpdatedAt = event.Time
 	state.EventCount = event.Seq
