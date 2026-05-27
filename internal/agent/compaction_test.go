@@ -227,6 +227,31 @@ func TestFormatEvent_CompactsDelegationToolResults(t *testing.T) {
 		}
 	})
 
+	t.Run("truncated source result keeps artifact recovery path", func(t *testing.T) {
+		artifactPath := ".affent/artifacts/tool-results/000123-browser-network-read.txt"
+		raw := "SourceAccess: browser_network_url=https://taostats.io/api/subnets/120; requested_url=https://taostats.io/subnets/120; ref=n3; status=200; content_type=application/json; source_method=network_xhr_fetch\n" +
+			"BODY_BYTES: 32000\n" +
+			strings.Repeat("large metric row\n", 400) +
+			"\n\n[... 4096 more bytes truncated from browser_network_read before model context.]\n" +
+			"Use the saved artifact with read_file if you need the complete output: " + artifactPath
+		got := formatEvent(ChatMessage{Role: "tool", Name: "browser_network_read", Content: raw})
+		for _, want := range []string{
+			"TOOL_RESULT[browser_network_read]",
+			"source_access: browser_network_url=https://taostats.io/api/subnets/120",
+			"artifact: " + artifactPath,
+		} {
+			if !strings.Contains(got, want) {
+				t.Fatalf("compact truncated source result missing %q:\n%s", want, got)
+			}
+		}
+		if strings.Count(got, artifactPath) != 1 {
+			t.Fatalf("compact truncated source result should include artifact path once:\n%s", got)
+		}
+		if strings.Contains(got, strings.Repeat("large metric row\n", 160)) {
+			t.Fatalf("compact truncated source result should bound body preview:\n%s", got)
+		}
+	})
+
 	t.Run("browser scroll keeps source access and boundary telemetry compact", func(t *testing.T) {
 		raw := strings.Join([]string{
 			"SourceAccess: browser_rendered_url=https://taostats.io/subnets/120; page_text_below=partial_dynamic_page_evidence; rendered_browser_source_status=partial_dynamic_page_evidence; snapshot_id=8",

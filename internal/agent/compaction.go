@@ -433,11 +433,58 @@ func formatEvent(m ChatMessage) string {
 			fmt.Fprintf(&b, "\n  → tool %s args=%s", tc.Function.Name, truncateChars(tc.Function.Arguments, compactToolArgsMaxChars))
 		}
 	case "tool":
-		fmt.Fprintf(&b, "TOOL_RESULT[%s]: %s", m.Name, compactToolResultForSummary(m.Name, m.Content))
+		fmt.Fprintf(&b, "TOOL_RESULT[%s]: %s", m.Name, compactToolResultSummaryWithArtifacts(m.Name, m.Content))
 	default:
 		fmt.Fprintf(&b, "%s: %s", m.Role, m.Content)
 	}
 	return b.String()
+}
+
+func compactToolResultSummaryWithArtifacts(toolName, content string) string {
+	summary := compactToolResultForSummary(toolName, content)
+	paths := toolResultArtifactPathsFromText(content)
+	if len(paths) == 0 {
+		return summary
+	}
+	var b strings.Builder
+	b.WriteString(summary)
+	for _, path := range paths {
+		if strings.Contains(summary, path) {
+			continue
+		}
+		if b.Len() > 0 {
+			b.WriteByte('\n')
+		}
+		fmt.Fprintf(&b, "artifact: %s", path)
+	}
+	return b.String()
+}
+
+func toolResultArtifactPathsFromText(content string) []string {
+	const marker = "Use the saved artifact with read_file if you need the complete output:"
+	seen := map[string]bool{}
+	var paths []string
+	for _, line := range strings.Split(content, "\n") {
+		idx := strings.Index(line, marker)
+		if idx < 0 {
+			continue
+		}
+		rest := strings.TrimSpace(line[idx+len(marker):])
+		if rest == "" {
+			continue
+		}
+		path := strings.Fields(rest)[0]
+		path = strings.Trim(path, "`'\",;")
+		if path == "" || seen[path] {
+			continue
+		}
+		seen[path] = true
+		paths = append(paths, path)
+		if len(paths) >= compactDelegationMaxList {
+			break
+		}
+	}
+	return paths
 }
 
 func compactToolResultForSummary(toolName, content string) string {
