@@ -123,6 +123,7 @@ type BatchScenario struct {
 	RequiredLoopDecisionResults           map[string]int
 	RequiredLoopDecisionMatches           []LoopDecisionRequirement
 	RequiredLoopProtocolFeeds             int
+	RequiredLoopProtocolCalibrations      int
 	RequiredLoopProtocolFeedModes         map[string]int
 	RequiredLoopProtocolFeedMatches       []LoopProtocolFeedRequirement
 	RequireLoopProtocolFullAfterCompact   bool
@@ -303,6 +304,7 @@ type DebugScenarioExpectations struct {
 	RequiredLoopDecisionResults           map[string]int                     `json:"required_loop_decision_results,omitempty"`
 	RequiredLoopDecisionMatches           []DebugLoopDecisionRequirement     `json:"required_loop_decision_matches,omitempty"`
 	RequiredLoopProtocolFeeds             int                                `json:"required_loop_protocol_feeds,omitempty"`
+	RequiredLoopProtocolCalibrations      int                                `json:"required_loop_protocol_calibrations,omitempty"`
 	RequiredLoopProtocolFeedModes         map[string]int                     `json:"required_loop_protocol_feed_modes,omitempty"`
 	RequiredLoopProtocolFeedMatches       []DebugLoopProtocolFeedRequirement `json:"required_loop_protocol_feed_matches,omitempty"`
 	RequireLoopProtocolFullAfterCompact   bool                               `json:"require_loop_protocol_full_after_compaction,omitempty"`
@@ -370,6 +372,7 @@ func ExpectationCapabilityNames(exp DebugScenarioExpectations) []string {
 		caps["context_compaction"] = true
 	}
 	if exp.RequiredLoopProtocolFeeds > 0 ||
+		exp.RequiredLoopProtocolCalibrations > 0 ||
 		len(exp.RequiredLoopProtocolFeedModes) > 0 ||
 		len(exp.RequiredLoopProtocolFeedMatches) > 0 ||
 		exp.RequireLoopProtocolFullAfterCompact {
@@ -1176,6 +1179,7 @@ func debugScenarioExpectations(s BatchScenario) DebugScenarioExpectations {
 		RequiredLoopDecisionResults:           cloneStringIntMap(s.RequiredLoopDecisionResults),
 		RequiredLoopDecisionMatches:           loopReqs,
 		RequiredLoopProtocolFeeds:             s.RequiredLoopProtocolFeeds,
+		RequiredLoopProtocolCalibrations:      s.RequiredLoopProtocolCalibrations,
 		RequiredLoopProtocolFeedModes:         cloneStringIntMap(s.RequiredLoopProtocolFeedModes),
 		RequiredLoopProtocolFeedMatches:       loopFeedReqs,
 		RequireLoopProtocolFullAfterCompact:   s.RequireLoopProtocolFullAfterCompact,
@@ -1777,6 +1781,9 @@ func BatchScenarioChecks(scenario BatchScenario) []Check {
 	}
 	if scenario.RequiredLoopProtocolFeeds > 0 {
 		checks = append(checks, LoopProtocolFeedsAtLeast(scenario.RequiredLoopProtocolFeeds))
+	}
+	if scenario.RequiredLoopProtocolCalibrations > 0 {
+		checks = append(checks, LoopProtocolCalibrationsAtLeast(scenario.RequiredLoopProtocolCalibrations))
 	}
 	for _, mode := range sortedStringMapKeys(scenario.RequiredLoopProtocolFeedModes) {
 		checks = append(checks, LoopProtocolFeedModeAtLeast(mode, scenario.RequiredLoopProtocolFeedModes[mode]))

@@ -709,6 +709,25 @@ func TestLoopProtocolFeedChecks(t *testing.T) {
 	}
 }
 
+func TestLoopProtocolCalibrationCheck(t *testing.T) {
+	trace := Trace{LoopProtocolCalibrations: []LoopProtocolCalibration{
+		{LoopID: "sn120", Status: "draft", CalibrationAnswers: 1, LastCalibrationAnswer: "stop if network evidence is missing", ProtocolPath: ".affent/loops/sn120/LOOP.md", EventSeq: 7},
+	}}
+
+	if res := LoopProtocolCalibrationsAtLeast(1).Eval(trace); !res.Pass {
+		t.Fatalf("expected loop protocol calibration check to pass: %+v", res)
+	}
+	res := LoopProtocolCalibrationsAtLeast(2).Eval(trace)
+	if res.Pass {
+		t.Fatal("expected missing calibration count to fail")
+	}
+	for _, want := range []string{"loop_protocol_calibrations=1", "want >= 2", "sn120", "network evidence"} {
+		if !strings.Contains(res.Detail, want) {
+			t.Fatalf("failure detail %q missing %q", res.Detail, want)
+		}
+	}
+}
+
 func TestContextCompactionChecks(t *testing.T) {
 	trace := Trace{ContextCompactions: []ContextCompaction{
 		{TurnID: "t1", BeforeMessages: 50, AfterMessages: 20, RemovedMessages: 30, Reactive: false, Reason: "threshold", SummaryPresent: true, SummaryBytes: 1200, SummaryPreview: "USER_CONTEXT: keep HRO market marker and source URLs.", LoopProtocolAnchor: "LOOP_PROTOCOL: active path=.affent/loops/longrun/LOOP.md loop_id=longrun mode=digest"},

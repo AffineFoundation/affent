@@ -470,6 +470,22 @@ func LoopProtocolFeedsAtLeast(min int) Check {
 	}
 }
 
+func LoopProtocolCalibrationsAtLeast(min int) Check {
+	return Check{
+		Name: fmt.Sprintf("loop_protocol_calibrations_at_least:%d", min),
+		Eval: func(t Trace) CheckResult {
+			stats := t.LoopProtocolCalibrationStats(5)
+			if stats.Count >= min {
+				return CheckResult{Pass: true, Detail: fmt.Sprintf("loop_protocol_calibrations=%d examples=%v", stats.Count, loopProtocolCalibrationExamples(stats.Examples, 3))}
+			}
+			return CheckResult{
+				Pass:   false,
+				Detail: fmt.Sprintf("loop_protocol_calibrations=%d, want >= %d; observed=%v", stats.Count, min, loopProtocolCalibrationExamples(t.LoopProtocolCalibrations, 5)),
+			}
+		},
+	}
+}
+
 func LoopProtocolFeedModeAtLeast(mode string, min int) Check {
 	return Check{
 		Name: fmt.Sprintf("loop_protocol_feed_mode_at_least:%s:%d", mode, min),
@@ -923,6 +939,35 @@ func formatLoopProtocolFeedExample(feed LoopProtocolFeed) string {
 	}
 	if feed.PlanCurrentStep != "" {
 		parts = append(parts, "plan_current_step="+previewSubstr(feed.PlanCurrentStep, 100))
+	}
+	return strings.Join(parts, " ")
+}
+
+func loopProtocolCalibrationExamples(calibrations []LoopProtocolCalibration, max int) []string {
+	if max <= 0 || len(calibrations) == 0 {
+		return nil
+	}
+	examples := make([]string, 0, min(max, len(calibrations)))
+	for i, calibration := range calibrations {
+		if i >= max {
+			break
+		}
+		examples = append(examples, formatLoopProtocolCalibrationExample(calibration))
+	}
+	return examples
+}
+
+func formatLoopProtocolCalibrationExample(calibration LoopProtocolCalibration) string {
+	parts := []string{
+		"loop_id=" + calibration.LoopID,
+		"status=" + calibration.Status,
+		fmt.Sprintf("answers=%d", calibration.CalibrationAnswers),
+	}
+	if calibration.ProtocolPath != "" {
+		parts = append(parts, "path="+calibration.ProtocolPath)
+	}
+	if calibration.LastCalibrationAnswer != "" {
+		parts = append(parts, "answer="+previewSubstr(calibration.LastCalibrationAnswer, 100))
 	}
 	return strings.Join(parts, " ")
 }

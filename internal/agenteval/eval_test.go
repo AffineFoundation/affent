@@ -495,7 +495,8 @@ func TestBatchScenarioChecks_UsesSharedCheckLibrary(t *testing.T) {
 		RequiredLoopDecisionMatches: []LoopDecisionRequirement{
 			{Kind: "evidence_quality", Decision: "defer", Trigger: "source_access_dynamic_partial"},
 		},
-		RequiredLoopProtocolFeeds: 1,
+		RequiredLoopProtocolFeeds:        1,
+		RequiredLoopProtocolCalibrations: 1,
 		RequiredLoopProtocolFeedModes: map[string]int{
 			"digest": 1,
 		},
@@ -557,6 +558,7 @@ func TestBatchScenarioChecks_UsesSharedCheckLibrary(t *testing.T) {
 		"loop_decision_result_at_least:defer:1",
 		"loop_decision_match_at_least:evidence_quality:defer:source_access_dynamic_partial:1",
 		"loop_protocol_feeds_at_least:1",
+		"loop_protocol_calibrations_at_least:1",
 		"loop_protocol_feed_mode_at_least:digest:1",
 		"loop_protocol_feed_match_at_least:digest:market:in_progress:source review:1",
 		"loop_protocol_full_feed_after_compaction",
@@ -1757,7 +1759,8 @@ func TestWriteScenarioDebugArtifactsIndexesTraceAndFinalText(t *testing.T) {
 		RequiredLoopDecisionMatches: []LoopDecisionRequirement{
 			{Kind: "evidence_quality", Decision: "defer", Trigger: "source_access_dynamic_partial"},
 		},
-		RequiredLoopProtocolFeeds: 1,
+		RequiredLoopProtocolFeeds:        1,
+		RequiredLoopProtocolCalibrations: 1,
 		RequiredLoopProtocolFeedModes: map[string]int{
 			"digest": 1,
 		},
@@ -1883,6 +1886,7 @@ func TestWriteScenarioDebugArtifactsIndexesTraceAndFinalText(t *testing.T) {
 		len(manifest.Expectations.RequiredLoopDecisionMatches) != 1 ||
 		manifest.Expectations.RequiredLoopDecisionMatches[0] != (DebugLoopDecisionRequirement{Kind: "evidence_quality", Decision: "defer", Trigger: "source_access_dynamic_partial"}) ||
 		manifest.Expectations.RequiredLoopProtocolFeeds != 1 ||
+		manifest.Expectations.RequiredLoopProtocolCalibrations != 1 ||
 		manifest.Expectations.RequiredLoopProtocolFeedModes["digest"] != 1 ||
 		len(manifest.Expectations.RequiredLoopProtocolFeedMatches) != 1 ||
 		manifest.Expectations.RequiredLoopProtocolFeedMatches[0] != (DebugLoopProtocolFeedRequirement{Mode: "digest", PlanLabelContains: "debug", PlanCurrentStepStatus: "in_progress", PlanCurrentStep: "browser network evidence"}) ||
@@ -2126,6 +2130,7 @@ func TestWriteScenarioDebugArtifactsIndexesTraceAndFinalText(t *testing.T) {
 		"required_loop_decision_kinds: `evidence_quality=1`",
 		"required_loop_decision_results: `defer=1`",
 		"required_loop_protocol_feeds: `1`",
+		"required_loop_protocol_calibrations: `1`",
 		"required_loop_protocol_feed_modes: `digest=1`",
 		"required_loop_protocol_full_after_compaction: `true`",
 		"required_focused_task_counts: `research=1`",

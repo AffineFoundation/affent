@@ -103,8 +103,8 @@ Scenario records describe one eval case:
   append to the same conversation and trace.
 - `expectations`: optional structured copy of the scenario's declarative checks,
   including required/forbidden tools, tool counts, source-access requirements,
-  loop-decision requirements, loop protocol feed and active plan checkpoint
-  requirements, context-compaction requirements, optional
+  loop-decision requirements, loop protocol calibration/feed and active plan
+  checkpoint requirements, context-compaction requirements, optional
   `required_context_loop_protocol_anchor_text` checks for post-compaction
   `LOOP.md` recovery anchors, optional
   `require_loop_protocol_full_after_compaction` sequence checks,
@@ -252,6 +252,9 @@ Scenario records describe one eval case:
   count/latest answer preview, protocol path, and the sidecar loop event
   sequence. Use these fields to verify that setup progressed before waiting
   for a later protocol feed.
+- Scenario debug manifests can require these setup events with
+  `required_loop_protocol_calibrations`, which is useful for proving that a
+  loop was calibrated by user input before activation.
 - `tool_duration_ms`: total runtime tool dispatch duration.
 - `source_access_results`: count of tool results with a normalized
   `SourceAccess:` evidence header.
