@@ -1,5 +1,6 @@
 import type { UseAsDraft } from "../view/draftSource";
 import type { SessionFileEvidence, SessionFilesView } from "../view/sessionFiles";
+import { CopyButton } from "./CopyButton";
 
 export function SessionFilesPanel({
   files,
@@ -32,6 +33,7 @@ export function SessionFilesPanel({
                   {item.artifactPath ? <small>Evidence artifact: {item.artifactPath}</small> : null}
                 </div>
                 <span className="session-files-actions">
+                  <CopyButton label="Copy path" value={item.path} className="ghost-action" />
                   {item.artifactPath && onOpenArtifact ? (
                     <button type="button" className="ghost-action" onClick={() => onOpenArtifact(item.artifactPath ?? "")}>
                       Open preview

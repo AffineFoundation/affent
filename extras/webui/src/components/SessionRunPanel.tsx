@@ -1,5 +1,6 @@
 import type { UseAsDraft } from "../view/draftSource";
 import type { SessionRunCommand, SessionRunView } from "../view/sessionRun";
+import { CopyButton } from "./CopyButton";
 
 export function SessionRunPanel({
   run,
@@ -32,6 +33,7 @@ export function SessionRunPanel({
                   {command.artifactPath ? <small>Output artifact: {command.artifactPath}</small> : null}
                 </div>
                 <span className="session-evidence-actions">
+                  <CopyButton label="Copy command" value={command.command} className="ghost-action" />
                   {command.artifactPath && onOpenArtifact ? (
                     <button type="button" className="ghost-action" onClick={() => onOpenArtifact(command.artifactPath ?? "")}>
                       Open output

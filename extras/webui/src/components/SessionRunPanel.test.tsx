@@ -9,6 +9,8 @@ describe("SessionRunPanel", () => {
     const user = userEvent.setup();
     const onOpenArtifact = vi.fn();
     const onUseAsDraft = vi.fn();
+    const writeText = vi.fn().mockResolvedValue(undefined);
+    Object.defineProperty(navigator, "clipboard", { configurable: true, value: { writeText } });
     render(<SessionRunPanel defaultOpen run={run} onOpenArtifact={onOpenArtifact} onUseAsDraft={onUseAsDraft} />);
 
     const panel = screen.getByTestId("session-run-panel");
@@ -19,6 +21,9 @@ describe("SessionRunPanel", () => {
     expect(screen.getByTestId("session-run-list")).toHaveTextContent("checkout spec failed");
     expect(screen.getByTestId("session-run-list")).toHaveTextContent("Next: update payment route then rerun");
     expect(screen.getByTestId("session-run-list")).toHaveTextContent("Output artifact: .affent/artifacts/tool-results/test.txt");
+
+    await user.click(within(screen.getByTestId("session-run-list")).getByRole("button", { name: "Copy command" }));
+    expect(writeText).toHaveBeenCalledWith("npm test -- checkout.spec.ts");
 
     await user.click(within(screen.getByTestId("session-run-list")).getByRole("button", { name: "Open output" }));
     expect(onOpenArtifact).toHaveBeenCalledWith(".affent/artifacts/tool-results/test.txt");

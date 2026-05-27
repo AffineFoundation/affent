@@ -9,6 +9,8 @@ describe("SessionFilesPanel", () => {
     const user = userEvent.setup();
     const onOpenArtifact = vi.fn();
     const onUseAsDraft = vi.fn();
+    const writeText = vi.fn().mockResolvedValue(undefined);
+    Object.defineProperty(navigator, "clipboard", { configurable: true, value: { writeText } });
     render(<SessionFilesPanel defaultOpen files={files} onOpenArtifact={onOpenArtifact} onUseAsDraft={onUseAsDraft} />);
 
     const panel = screen.getByTestId("session-files-panel");
@@ -19,6 +21,9 @@ describe("SessionFilesPanel", () => {
     expect(screen.getByTestId("session-files-list")).toHaveTextContent("Updated payment route");
     expect(screen.getByTestId("session-files-list")).toHaveTextContent("Next: rerun checkout tests");
     expect(screen.getByTestId("session-files-list")).toHaveTextContent("Evidence artifact: .affent/artifacts/tool-results/read.txt");
+
+    await user.click(within(screen.getByTestId("session-files-list")).getAllByRole("button", { name: "Copy path" })[0]);
+    expect(writeText).toHaveBeenCalledWith("src/payments.ts");
 
     await user.click(within(screen.getByTestId("session-files-list")).getByRole("button", { name: "Open preview" }));
     expect(onOpenArtifact).toHaveBeenCalledWith(".affent/artifacts/tool-results/read.txt");

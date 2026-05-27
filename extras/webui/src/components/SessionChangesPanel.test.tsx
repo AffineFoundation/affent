@@ -9,6 +9,8 @@ describe("SessionChangesPanel", () => {
     const user = userEvent.setup();
     const onOpenArtifact = vi.fn();
     const onUseAsDraft = vi.fn();
+    const writeText = vi.fn().mockResolvedValue(undefined);
+    Object.defineProperty(navigator, "clipboard", { configurable: true, value: { writeText } });
     render(<SessionChangesPanel defaultOpen changes={changes} onOpenArtifact={onOpenArtifact} onUseAsDraft={onUseAsDraft} />);
 
     const panel = screen.getByTestId("session-changes-panel");
@@ -18,6 +20,9 @@ describe("SessionChangesPanel", () => {
     expect(screen.getByTestId("session-changes-list")).toHaveTextContent("Edit · changed · turn 2");
     expect(screen.getByTestId("session-changes-list")).toHaveTextContent("Updated payment route");
     expect(screen.getByTestId("session-changes-list")).toHaveTextContent("Evidence artifact: .affent/artifacts/tool-results/edit.txt");
+
+    await user.click(within(screen.getByTestId("session-changes-list")).getAllByRole("button", { name: "Copy path" })[0]);
+    expect(writeText).toHaveBeenCalledWith("src/payments.ts");
 
     await user.click(within(screen.getByTestId("session-changes-list")).getByRole("button", { name: "Open evidence" }));
     expect(onOpenArtifact).toHaveBeenCalledWith(".affent/artifacts/tool-results/edit.txt");

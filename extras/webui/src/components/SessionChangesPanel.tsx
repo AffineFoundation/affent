@@ -1,5 +1,6 @@
 import type { UseAsDraft } from "../view/draftSource";
 import type { SessionChangedFile, SessionChangesView } from "../view/sessionChanges";
+import { CopyButton } from "./CopyButton";
 
 export function SessionChangesPanel({
   changes,
@@ -31,6 +32,7 @@ export function SessionChangesPanel({
                   {file.artifactPath ? <small>Evidence artifact: {file.artifactPath}</small> : null}
                 </div>
                 <span className="session-evidence-actions">
+                  <CopyButton label="Copy path" value={file.path} className="ghost-action" />
                   {file.artifactPath && onOpenArtifact ? (
                     <button type="button" className="ghost-action" onClick={() => onOpenArtifact(file.artifactPath ?? "")}>
                       Open evidence
