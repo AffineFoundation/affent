@@ -720,8 +720,8 @@ func formatNetworkJSONPathHint(path string, value any, query string, queryTerms 
 	if !ok {
 		return "", false
 	}
-	search := strings.ToLower(path + " " + rendered)
-	if query != "" && !strings.Contains(search, query) && !networkTextMatchesAnyTerm(search, queryTerms) {
+	search := path + " " + rendered
+	if query != "" && !strings.Contains(strings.ToLower(search), query) && !networkTextMatchesAnyTerm(search, queryTerms) {
 		return "", false
 	}
 	rendered = textutil.Preview(textutil.CompactWhitespace(rendered), maxNetworkJSONPathHintValue)
@@ -794,22 +794,128 @@ func networkNormalizedTextContainsTerm(normalized, term string) bool {
 }
 
 func normalizeNetworkSearchText(text string) string {
-	text = strings.ToLower(text)
-	var b strings.Builder
-	b.Grow(len(text))
-	lastSpace := true
-	for _, r := range text {
-		if (r >= 'a' && r <= 'z') || (r >= '0' && r <= '9') {
-			b.WriteRune(r)
-			lastSpace = false
-			continue
+	var out []string
+	seen := map[string]bool{}
+	emit := func(token string) {
+		token = strings.ToLower(strings.TrimSpace(token))
+		if token == "" || seen[token] {
+			return
 		}
-		if !lastSpace {
-			b.WriteByte(' ')
-			lastSpace = true
+		seen[token] = true
+		out = append(out, token)
+	}
+	for _, token := range networkAlnumTokens(text) {
+		emit(token)
+		parts := splitNetworkIdentifierToken(token)
+		for i, part := range parts {
+			emit(part)
+			if isNetworkNumericToken(part) && i+1 < len(parts) && len([]rune(parts[i+1])) == 1 && isNetworkAlphaToken(parts[i+1]) {
+				emit(part + parts[i+1])
+			}
 		}
 	}
-	return strings.TrimSpace(b.String())
+	return strings.Join(out, " ")
+}
+
+func networkAlnumTokens(text string) []string {
+	var tokens []string
+	var b strings.Builder
+	flush := func() {
+		if b.Len() == 0 {
+			return
+		}
+		tokens = append(tokens, b.String())
+		b.Reset()
+	}
+	for _, r := range text {
+		if isNetworkAlphaNumRune(r) {
+			b.WriteRune(r)
+			continue
+		}
+		flush()
+	}
+	flush()
+	return tokens
+}
+
+func splitNetworkIdentifierToken(token string) []string {
+	runes := []rune(token)
+	if len(runes) == 0 {
+		return nil
+	}
+	var parts []string
+	start := 0
+	for i := 1; i < len(runes); i++ {
+		prev := runes[i-1]
+		cur := runes[i]
+		var next rune
+		if i+1 < len(runes) {
+			next = runes[i+1]
+		}
+		if networkIdentifierBoundary(prev, cur, next) {
+			parts = append(parts, string(runes[start:i]))
+			start = i
+		}
+	}
+	parts = append(parts, string(runes[start:]))
+	if len(parts) == 1 && strings.EqualFold(parts[0], token) {
+		return nil
+	}
+	return parts
+}
+
+func networkIdentifierBoundary(prev, cur, next rune) bool {
+	if isNetworkLowerAlpha(prev) && isNetworkUpperAlpha(cur) {
+		return true
+	}
+	if isNetworkDigit(prev) != isNetworkDigit(cur) {
+		return true
+	}
+	return isNetworkUpperAlpha(prev) && isNetworkUpperAlpha(cur) && next != 0 && isNetworkLowerAlpha(next)
+}
+
+func isNetworkAlphaNumRune(r rune) bool {
+	return isNetworkAlphaRune(r) || isNetworkDigit(r)
+}
+
+func isNetworkAlphaRune(r rune) bool {
+	return isNetworkLowerAlpha(r) || isNetworkUpperAlpha(r)
+}
+
+func isNetworkLowerAlpha(r rune) bool {
+	return r >= 'a' && r <= 'z'
+}
+
+func isNetworkUpperAlpha(r rune) bool {
+	return r >= 'A' && r <= 'Z'
+}
+
+func isNetworkDigit(r rune) bool {
+	return r >= '0' && r <= '9'
+}
+
+func isNetworkNumericToken(token string) bool {
+	if token == "" {
+		return false
+	}
+	for _, r := range token {
+		if !isNetworkDigit(r) {
+			return false
+		}
+	}
+	return true
+}
+
+func isNetworkAlphaToken(token string) bool {
+	if token == "" {
+		return false
+	}
+	for _, r := range token {
+		if !isNetworkAlphaRune(r) {
+			return false
+		}
+	}
+	return true
 }
 
 func joinNetworkJSONPath(base, key string) (string, bool) {

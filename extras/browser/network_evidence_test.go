@@ -232,6 +232,46 @@ func TestNetworkEvidenceSearchTokenizesMetricLabelQueries(t *testing.T) {
 	}
 }
 
+func TestNormalizeNetworkSearchTextSplitsAPIIdentifierFields(t *testing.T) {
+	got := normalizeNetworkSearchText("$.marketCap $.volume24h $.fdvUsd")
+	for _, want := range []string{"marketcap", "market", "cap", "volume24h", "volume", "24h", "fdvusd", "fdv", "usd"} {
+		if !strings.Contains(" "+got+" ", " "+want+" ") {
+			t.Fatalf("normalizeNetworkSearchText missing token %q in %q", want, got)
+		}
+	}
+	terms := networkQueryTerms("market cap 24h volume FDV USD")
+	for _, text := range []string{"$.marketCap \"201.04K T\"", "$.fdvUsd \"1.32M\"", "$.volume24h \"5.1K T\""} {
+		if !networkTextMatchesAnyTerm(text, terms) {
+			t.Fatalf("networkTextMatchesAnyTerm(%q) failed for terms %v", text, terms)
+		}
+	}
+}
+
+func TestNetworkEvidenceSearchTokenizesCamelCaseMetricFields(t *testing.T) {
+	log := NewNetworkEvidenceLog()
+	log.ObserveResponse("https://taostats.io/subnets/120", proto.NetworkResourceTypeDocument)
+	body := []byte(`{"netuid":120,"subnetName":"Affine","marketCap":"201.04K T","volume24h":"5.1K T","fdvUsd":"1.32M"}`)
+	log.Add("https://api.taostats.io/subnets/120/metrics", 200, proto.NetworkResourceTypeFetch, http.Header{"Content-Type": {"application/json"}}, body)
+	s := &Session{network: log}
+	if got := strings.Join(networkJSONPathHints(body, "market cap 24h volume FDV USD"), "; "); got != `$.fdvUsd="1.32M"; $.marketCap="201.04K T"; $.volume24h="5.1K T"` {
+		t.Fatalf("networkJSONPathHints = %q", got)
+	}
+
+	searchOut, err := NetworkSearchTool(s).Execute(context.Background(), json.RawMessage(`{"query":"market cap 24h volume FDV USD","max_results":3}`))
+	if err != nil {
+		t.Fatalf("browser_network camelCase metric query: %v", err)
+	}
+	for _, want := range []string{
+		"n1 status=200 resource=fetch content_type=application/json",
+		`json_paths: $.fdvUsd="1.32M"; $.marketCap="201.04K T"; $.volume24h="5.1K T"`,
+		"Next: call browser_network_read with the most relevant ref and json_path",
+	} {
+		if !strings.Contains(searchOut, want) {
+			t.Fatalf("camelCase network search missing %q:\n%s", want, searchOut)
+		}
+	}
+}
+
 func TestNetworkEvidenceSearchRanksSpecificMetricResponseBeforeRecentWeakMatch(t *testing.T) {
 	log := NewNetworkEvidenceLog()
 	log.ObserveResponse("https://taostats.io/subnets/120", proto.NetworkResourceTypeDocument)

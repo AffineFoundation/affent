@@ -573,7 +573,10 @@ Browser sessions also keep a bounded same-site XHR/fetch evidence log.
 `browser_network` searches captured JSON/text responses and returns compact
 refs with the current rendered page context; WebUI activity summaries surface
 that page, query, and match/no-match status so operators can see when a long
-run is cycling through network-evidence searches. `browser_network_read` reads a selected ref with
+run is cycling through network-evidence searches. The search tokenizer handles
+common API field shapes such as `market_cap`, `marketCap`, and `volume24h`, so
+user-facing metric labels can find hidden JSON fields without site-specific
+scrapers. `browser_network_read` reads a selected ref with
 `SourceAccess: browser_network_url=...; ref=...; status=200;
 content_type=application/json; source_method=network_xhr_fetch`.
 Large JSON/text responses are accepted up to the browser response-cache cap and
