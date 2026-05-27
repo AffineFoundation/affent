@@ -272,7 +272,7 @@ export function App() {
     }),
     [pendingMessage, planPanelSummary, selectedSession?.context, selectedSession?.latest_recovery_hint, selectedSessionId, selectedSessionTitle, session, workflow],
   );
-  const showWorkflowStatus = overview.tone === "error" || overview.tone === "warning";
+  const showWorkflowStatus = overview.tone === "error" || overview.tone === "warning" || hasRecoveryMetric(overview);
   const showSessionNav = !demoActive && sessions.length > 0;
   const compactNav = demoActive || !showSessionNav;
   const showHeaderNewChat = !demoActive && !showSessionNav;
@@ -1429,7 +1429,7 @@ export function App() {
                     onScheduleDaily={() => handleCreateSchedule("daily")}
                   />
                 ) : null}
-                {showWorkflowStatus ? <WorkflowStatus overview={overview} /> : null}
+                {showWorkflowStatus ? <WorkflowStatus overview={overview} onUseAsDraft={handleUseAsDraft} /> : null}
               </div>
             ) : null}
             <div className="conversation-scroll" ref={conversationScrollRef} data-testid="conversation-scroll">
@@ -1632,6 +1632,10 @@ function isPlanMutationAction(value: unknown): boolean {
 function lastRawEventId(events: readonly RawEvent[]): number {
   const last = events[events.length - 1];
   return typeof last?.id === "number" ? last.id : -1;
+}
+
+function hasRecoveryMetric(overview: SessionOverview): boolean {
+  return overview.metrics.some((metric) => metric.label === "Recovery" && metric.value.trim() !== "");
 }
 
 function ChatContextBar({ overview }: { overview: SessionOverview }) {

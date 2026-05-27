@@ -1,6 +1,6 @@
 import { render, screen, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { completedTurn } from "../fixtures/completedTurn";
 import { reduceRawEvents } from "../store/reduce";
 import { deriveWorkflowStatus } from "../store/workflowStatus";
@@ -322,6 +322,31 @@ describe("WorkflowStatus", () => {
     expect(summary).toHaveTextContent("1 max-turn · 2 guards · 1 no-tools");
     expect(within(summary).getByText("1 max-turn · 2 guards · 1 no-tools")).toHaveAttribute("data-tone", "warning");
     expect(screen.getByTestId("workflow-details")).toHaveTextContent("Loop 1 max-turn · 2 guards · 1 no-tools");
+  });
+
+  it("turns recovery metrics into a draft action", async () => {
+    const session = reduceRawEvents([]);
+    const user = userEvent.setup();
+    const onUseAsDraft = vi.fn();
+    render(<WorkflowStatus
+      overview={buildSessionOverview({
+        session,
+        workflow: deriveWorkflowStatus(session),
+        hasSelectedSession: true,
+        recoveryHint: "check browser network refs before citing taostats values",
+      })}
+      onUseAsDraft={onUseAsDraft}
+    />);
+
+    const summary = screen.getByTestId("workflow-status").querySelector("summary");
+    expect(summary).toBeTruthy();
+    await user.click(summary!);
+    await user.click(screen.getByRole("button", { name: "Use recovery" }));
+
+    expect(onUseAsDraft).toHaveBeenCalledWith(
+      "Continue: check browser network refs before citing taostats values",
+      "tool_guidance",
+    );
   });
 });
 

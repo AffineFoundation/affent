@@ -1,12 +1,16 @@
 import type { SessionOverview, SessionOverviewMetric } from "../view/sessionOverview";
+import type { UseAsDraft } from "../view/draftSource";
 import { RunDetails } from "./RunDetails";
 
 export function WorkflowStatus({
   overview,
+  onUseAsDraft,
 }: {
   overview: SessionOverview;
+  onUseAsDraft?: UseAsDraft;
 }) {
   const pinnedMetrics = pinnedWorkflowMetrics(overview.metrics);
+  const recoveryMetric = recoveryWorkflowMetric(overview.metrics);
   return (
     <details className="workflow-status" data-active={overview.active} data-tone={overview.tone} data-testid="workflow-status">
       <summary className="workflow-line">
@@ -25,6 +29,15 @@ export function WorkflowStatus({
       </summary>
       <div className="workflow-status-body">
         <p>{overview.detail}</p>
+        {recoveryMetric && onUseAsDraft ? (
+          <button
+            type="button"
+            className="secondary-action workflow-recovery-action"
+            onClick={() => onUseAsDraft(recoveryDraft(recoveryMetric), "tool_guidance")}
+          >
+            Use recovery
+          </button>
+        ) : null}
         <RunDetails
           metrics={overview.metrics}
           className="workflow-details"
@@ -36,6 +49,14 @@ export function WorkflowStatus({
       </div>
     </details>
   );
+}
+
+function recoveryWorkflowMetric(metrics: readonly SessionOverviewMetric[]): SessionOverviewMetric | undefined {
+  return metrics.find((metric) => metric.label === "Recovery" && metric.value.trim() !== "");
+}
+
+function recoveryDraft(metric: SessionOverviewMetric): string {
+  return `Continue: ${metric.value.trim()}`;
 }
 
 function pinnedWorkflowMetrics(metrics: readonly SessionOverviewMetric[]): SessionOverviewMetric[] {
