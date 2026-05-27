@@ -731,6 +731,11 @@ func summarizeDurableSession(pool *SessionPool, id string) (sessionSummary, bool
 			return sessionSummary{}, false, err
 		}
 		summary.LatestMemoryUpdate = memoryUpdate
+		usage, err := usageSummaryFromEventsFile(filepath.Join(dir, "events.jsonl"))
+		if err != nil {
+			return sessionSummary{}, false, err
+		}
+		summary.Usage = usage
 		tools, err := toolStatsSummaryFromEventsFile(filepath.Join(dir, "events.jsonl"))
 		if err != nil {
 			return sessionSummary{}, false, err
@@ -1088,7 +1093,7 @@ func mergeSessionSummaries(a, b sessionSummary) sessionSummary {
 	if a.LastAgentCWD == "" && b.LastAgentCWD != "" {
 		a.LastAgentCWD = b.LastAgentCWD
 	}
-	if b.Usage != nil {
+	if b.Usage != nil && (a.Usage == nil || (b.Active && !aWasActive)) {
 		a.Usage = b.Usage
 	}
 	if b.Tools != nil && (a.Tools == nil || (b.Active && !aWasActive)) {
@@ -1437,6 +1442,64 @@ func latestShellCWDFromEventsFile(path string) (string, bool, error) {
 		return "", false, err
 	}
 	return scanShellCWDFromEvents(bufio.NewReaderSize(f, 64*1024))
+}
+
+func usageSummaryFromEventsFile(path string) (*UsageSnapshot, error) {
+	f, err := os.Open(path)
+	if err != nil {
+		if errors.Is(err, os.ErrNotExist) {
+			return nil, nil
+		}
+		return nil, err
+	}
+	defer f.Close()
+	if err := seekSessionSummaryTail(f); err != nil {
+		return nil, err
+	}
+	return scanUsageFromEvents(bufio.NewReaderSize(f, 64*1024))
+}
+
+func scanUsageFromEvents(r *bufio.Reader) (*UsageSnapshot, error) {
+	var summary UsageSnapshot
+	seen := false
+	for {
+		line, tooLong, err := jsonl.ReadBoundedLine(r, maxSessionSummaryLineBytes)
+		if errors.Is(err, io.EOF) {
+			break
+		}
+		if err != nil {
+			return nil, err
+		}
+		if tooLong {
+			continue
+		}
+		line = bytes.TrimRight(line, "\r\n")
+		var ev sse.Event
+		if err := json.Unmarshal(line, &ev); err != nil {
+			continue
+		}
+		switch ev.Type {
+		case sse.TypeUsage:
+			var p sse.UsagePayload
+			if err := json.Unmarshal(ev.Data, &p); err != nil {
+				continue
+			}
+			if p.InputTokens > 0 {
+				summary.InputTokens += int64(p.InputTokens)
+			}
+			if p.OutputTokens > 0 {
+				summary.OutputTokens += int64(p.OutputTokens)
+			}
+			seen = true
+		case sse.TypeTurnEnd:
+			summary.Turns++
+			seen = true
+		}
+	}
+	if !seen {
+		return nil, nil
+	}
+	return &summary, nil
 }
 
 func toolStatsSummaryFromEventsFile(path string) (*ToolStatsSnapshot, error) {

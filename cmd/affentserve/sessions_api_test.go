@@ -1021,7 +1021,9 @@ func TestSummarizeDurableSessionRestoresRuntimeStatsFromEvents(t *testing.T) {
 	createDurableSessionDir(t, pool, "durable-runtime-stats")
 	dir := pool.sessionDirPath("durable-runtime-stats")
 
-	body := sessionEventLine(t, sse.TypeTurnEnd, sse.TurnEndPayload{TurnID: "t1", Reason: sse.TurnEndMaxTurns}) +
+	body := sessionEventLine(t, sse.TypeUsage, sse.UsagePayload{TurnID: "t1", InputTokens: 100, OutputTokens: 20}) +
+		sessionEventLine(t, sse.TypeTurnEnd, sse.TurnEndPayload{TurnID: "t1", Reason: sse.TurnEndMaxTurns}) +
+		sessionEventLine(t, sse.TypeUsage, sse.UsagePayload{TurnID: "t2", InputTokens: 40, OutputTokens: 8}) +
 		sessionEventLine(t, sse.TypeTurnEnd, sse.TurnEndPayload{TurnID: "t2", Reason: sse.TurnEndError}) +
 		sessionEventLine(t, sse.TypeError, sse.ErrorPayload{TurnID: "t2", Code: "llm_timeout", FailureKind: "llm_timeout", Recoverable: true}) +
 		sessionEventLine(t, sse.TypeContextCompact, sse.ContextCompactPayload{
@@ -1043,6 +1045,9 @@ func TestSummarizeDurableSessionRestoresRuntimeStatsFromEvents(t *testing.T) {
 	}
 	if !found || summary.Runtime == nil {
 		t.Fatalf("durable runtime stats missing: found=%v summary=%+v", found, summary)
+	}
+	if summary.Usage == nil || summary.Usage.InputTokens != 140 || summary.Usage.OutputTokens != 28 || summary.Usage.Turns != 2 {
+		t.Fatalf("durable usage = %+v, want token totals and turn count from events", summary.Usage)
 	}
 	if summary.Runtime.TurnEndByReason[sse.TurnEndMaxTurns] != 1 ||
 		summary.Runtime.TurnEndByReason[sse.TurnEndError] != 1 ||
@@ -1079,6 +1084,36 @@ func TestMergeSessionSummariesLetsDurableTopicRepairActiveContinuation(t *testin
 	}
 	if got.LatestUserMessage != "请继续同一个任务。基于已有证据输出报告" {
 		t.Fatalf("latest_user_message = %q, want active latest prompt", got.LatestUserMessage)
+	}
+}
+
+func TestMergeSessionSummariesCarriesUsageAndPrefersActive(t *testing.T) {
+	got := mergeSessionSummaries(
+		sessionSummary{ID: "active"},
+		sessionSummary{
+			ID:      "active",
+			Durable: true,
+			Usage:   &UsageSnapshot{InputTokens: 100, OutputTokens: 20, Turns: 2},
+		},
+	)
+	if got.Usage == nil || got.Usage.InputTokens != 100 || got.Usage.OutputTokens != 20 || got.Usage.Turns != 2 {
+		t.Fatalf("merged durable usage = %+v, want carried over", got.Usage)
+	}
+
+	got = mergeSessionSummaries(
+		sessionSummary{
+			ID:      "active",
+			Durable: true,
+			Usage:   &UsageSnapshot{InputTokens: 100, OutputTokens: 20, Turns: 2},
+		},
+		sessionSummary{
+			ID:     "active",
+			Active: true,
+			Usage:  &UsageSnapshot{InputTokens: 7, OutputTokens: 3, Turns: 1},
+		},
+	)
+	if got.Usage == nil || got.Usage.InputTokens != 7 || got.Usage.OutputTokens != 3 || got.Usage.Turns != 1 {
+		t.Fatalf("merged active usage = %+v, want active usage", got.Usage)
 	}
 }
 
