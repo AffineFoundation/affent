@@ -733,11 +733,13 @@ Affent stores durable state as inspectable files:
   then close the loop through plan/rule/protocol/eval changes only when the
   evidence changes direction.
   When `affentserve` loop protocol support is enabled, the model also sees the
-  narrow `loop_protocol` tool. It can read the draft, write bounded draft
-  updates, or call `complete_activation` with the full supplemented protocol;
+  narrow `loop_protocol` tool. It can initialize a chat-driven draft with
+  `start_setup`, read the draft, write bounded draft updates, or call
+  `complete_activation` with the full supplemented protocol;
   `complete_activation` requires metadata `status: running` and records
-  `loop.protocol_activate`. This avoids asking the model to edit server-managed
-  session state through ordinary workspace file tools.
+  `loop.protocol_activate`. This lets ordinary chat requests and WebUI buttons
+  share the same calibration-first setup path, and avoids asking the model to
+  edit server-managed session state through ordinary workspace file tools.
   `affentctl` resolves the file under the configured workspace and, when a
   persisted `.affentctl/<session_id>.plan.json` exists, includes the current
   plan checkpoint in the feed metadata. Session list/detail responses expose

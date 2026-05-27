@@ -3,12 +3,46 @@ package agent
 import (
 	"context"
 	"encoding/json"
+	"os"
 	"path/filepath"
 	"strings"
 	"testing"
 
 	"github.com/affinefoundation/affent/internal/loopstate"
 )
+
+func TestLoopProtocolToolStartsSetupFromChat(t *testing.T) {
+	dir := t.TempDir()
+	path := loopstate.ProtocolPath(dir, "chat-loop")
+	tool := loopProtocolTool(path)
+	out, err := tool.Execute(context.Background(), json.RawMessage(mustMarshalJSON(t, map[string]any{
+		"action": "start_setup",
+		"goal":   "Run multi-day subnet research with stable recovery context.",
+	})))
+	if err != nil {
+		t.Fatalf("start_setup: %v", err)
+	}
+	if !strings.Contains(out, "initialized LOOP.md draft status=draft") || !strings.Contains(out, "ask one concise calibration question") {
+		t.Fatalf("start_setup output = %q", out)
+	}
+	protocol, found, err := loopstate.ReadProtocol(path)
+	if err != nil || !found {
+		t.Fatalf("ReadProtocol found=%v err=%v", found, err)
+	}
+	if loopstate.ProtocolStatus(protocol) != "draft" || !strings.Contains(protocol, "Run multi-day subnet research") {
+		t.Fatalf("protocol after start_setup:\n%s", protocol)
+	}
+	state, found, err := loopstate.ReadState(filepath.Join(filepath.Dir(path), loopstate.StateFileName))
+	if err != nil || !found {
+		t.Fatalf("ReadState found=%v err=%v", found, err)
+	}
+	if state.Status != "draft" || state.CalibrationAnswers != 0 || state.LastEventType != "loop.protocol_init" {
+		t.Fatalf("state = %+v", state)
+	}
+	if _, err := os.Stat(filepath.Dir(path)); err != nil {
+		t.Fatalf("loop dir not created: %v", err)
+	}
+}
 
 func TestLoopProtocolToolCompletesActivation(t *testing.T) {
 	dir := t.TempDir()
@@ -175,6 +209,8 @@ func TestLoopProtocolToolRegistryGuidance(t *testing.T) {
 	prompt := WithRegistrySystemGuidance(BaseSystemPromptForRegistry(reg), reg)
 	if !strings.Contains(prompt, "Loop protocol maintenance:") ||
 		!strings.Contains(prompt, "ordinary chat") ||
+		!strings.Contains(prompt, "action=start_setup") ||
+		!strings.Contains(prompt, "Do not tell the user to press the UI button") ||
 		!strings.Contains(prompt, "at least one concise calibration question") ||
 		!strings.Contains(prompt, "Do not complete activation in the same turn") ||
 		!strings.Contains(prompt, "Never claim that a loop is running") ||
