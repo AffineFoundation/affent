@@ -33,6 +33,7 @@ export function SessionMemoryPanel({
         .includes(search),
     );
   }, [buckets, query]);
+  const hasSearch = buckets.length > 0;
   const entryCount = buckets.reduce((sum, bucket) => sum + bucket.entry_count, 0);
   const topicCount = memory?.topics?.length ?? 0;
   const summary = noSession
@@ -77,12 +78,14 @@ export function SessionMemoryPanel({
         {!loading && !error && !noSession ? (
           <>
             {latestUpdate ? <LatestMemoryUpdate update={latestUpdate} /> : null}
-            <div className="session-skills-controls">
-              <label className="session-skills-search">
-                <span>Search memory</span>
-                <input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search entries or topics" />
-              </label>
-            </div>
+            {hasSearch ? (
+              <div className="session-skills-controls">
+                <label className="session-skills-search">
+                  <span>Search memory</span>
+                  <input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Search entries or topics" />
+                </label>
+              </div>
+            ) : null}
             <div className="session-skills-list" data-testid="session-memory-list">
               {filtered.length > 0 ? (
                 filtered.map((bucket) => (

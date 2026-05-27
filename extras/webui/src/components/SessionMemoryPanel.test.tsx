@@ -81,6 +81,17 @@ describe("SessionMemoryPanel", () => {
     expect(screen.getByTestId("session-memory-panel")).toHaveTextContent("No selected chat.");
   });
 
+  it("keeps empty memory state factual and avoids unusable search", () => {
+    render(<SessionMemoryPanel defaultOpen memory={{ session_id: "s1", has_memory: false, topics: [] }} />);
+
+    const panel = screen.getByTestId("session-memory-panel");
+    expect(panel).toHaveTextContent("No durable memory");
+    expect(panel).toHaveTextContent("No user, core, or topic entries saved.");
+    expect(screen.getByTestId("session-memory-list")).toHaveTextContent("No memory buckets.");
+    expect(screen.queryByPlaceholderText("Search entries or topics")).toBeNull();
+    expect(panel).not.toHaveTextContent("No matching memory.");
+  });
+
   it("surfaces a compact API diagnostic in the collapsed summary", async () => {
     const diagnostic = "API route /v1/sessions/s1/memory returned the WebUI app shell. The affentserve build may not expose this route. Use the current affentserve build.";
     render(<SessionMemoryPanel error={diagnostic} />);
