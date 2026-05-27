@@ -405,6 +405,7 @@ body {
   overflow-wrap: anywhere;
 }
 
+.session-files-list,
 .session-changes-list {
   display: grid;
   gap: 7px;
@@ -423,6 +424,7 @@ body {
   list-style: none;
 }
 
+.session-files-item,
 .session-changes-item,
 .session-run-item {
   display: grid;
@@ -434,6 +436,16 @@ body {
   border-radius: var(--radius-sm);
   background: rgba(248, 250, 252, 0.72);
   padding: 8px;
+}
+
+.session-files-item[data-status="failed"] {
+  border-color: #fecaca;
+  background: var(--c-error-bg);
+}
+
+.session-files-item[data-status="running"] {
+  border-color: rgba(245, 158, 11, 0.26);
+  background: var(--c-warn-bg);
 }
 
 .session-changes-item[data-status="failed"] {
@@ -456,6 +468,7 @@ body {
   background: var(--c-warn-bg);
 }
 
+.session-files-main,
 .session-changes-main,
 .session-run-main {
   display: grid;
@@ -463,6 +476,7 @@ body {
   min-width: 0;
 }
 
+.session-files-main strong,
 .session-changes-main strong,
 .session-run-main strong {
   min-width: 0;
@@ -473,6 +487,8 @@ body {
   white-space: nowrap;
 }
 
+.session-files-main span,
+.session-files-main small,
 .session-changes-main span,
 .session-changes-main small,
 .session-run-main span,
@@ -7525,6 +7541,7 @@ html[data-theme="dark"] .workbench-context-link {
   background: rgba(45, 212, 191, 0.08);
 }
 
+html[data-theme="dark"] .session-files-item,
 html[data-theme="dark"] .session-changes-item,
 html[data-theme="dark"] .session-run-item {
   border-color: rgba(58, 68, 81, 0.82);
@@ -8431,12 +8448,14 @@ html[data-theme="dark"] ::selection {
   .session-skill-item > summary {
     grid-template-columns: minmax(0, 1fr);
   }
+  .session-files-item,
   .session-changes-item {
     grid-template-columns: minmax(0, 1fr);
   }
   .session-run-item {
     grid-template-columns: minmax(0, 1fr);
   }
+  .session-files-item .ghost-action,
   .session-changes-item .ghost-action,
   .session-run-item .ghost-action {
     justify-self: start;

@@ -53,6 +53,7 @@ import { RuntimeStatsPanel } from "./components/RuntimeStatsPanel";
 import { SessionSkillsPanel } from "./components/SessionSkillsPanel";
 import { AccountSettingsPanel } from "./components/AccountSettingsPanel";
 import { WorkbenchContextPanel } from "./components/WorkbenchContextPanel";
+import { SessionFilesPanel } from "./components/SessionFilesPanel";
 import { SessionChangesPanel } from "./components/SessionChangesPanel";
 import { SessionRunPanel } from "./components/SessionRunPanel";
 import { Timeline, type GuidanceReceiptView, type PendingMessageView } from "./components/Timeline";
@@ -66,6 +67,7 @@ import type { DraftSource } from "./view/draftSource";
 import { buildRuntimeCapabilityView } from "./view/runtimeCapabilities";
 import { buildSessionRows, formatLoadingChatTitle } from "./view/sessionList";
 import { buildSessionOverview, type SessionOverview } from "./view/sessionOverview";
+import { buildSessionFiles } from "./view/sessionFiles";
 import { buildSessionChanges } from "./view/sessionChanges";
 import { buildSessionRun } from "./view/sessionRun";
 import { isContinuationPrompt } from "./view/continuationPrompt";
@@ -277,6 +279,7 @@ export function App() {
     }),
     [pendingMessage, planPanelSummary, selectedSession?.context, selectedSession?.latest_recovery_hint, selectedSessionId, selectedSessionTitle, session, workflow],
   );
+  const sessionFiles = useMemo(() => buildSessionFiles(session), [session]);
   const sessionChanges = useMemo(() => buildSessionChanges(session), [session]);
   const sessionRun = useMemo(() => buildSessionRun(session), [session]);
   const showWorkflowStatus = overview.tone === "error" || overview.tone === "warning" || hasRecoveryMetric(overview);
@@ -1324,6 +1327,9 @@ export function App() {
                   automationDetail={automationContext?.detail}
                   defaultOpen
                 />
+                {sessionFiles.items.length > 0 ? (
+                  <SessionFilesPanel files={sessionFiles} onUseAsDraft={handleUseAsDraft} />
+                ) : null}
                 {sessionChanges.files.length > 0 ? (
                   <SessionChangesPanel changes={sessionChanges} onUseAsDraft={handleUseAsDraft} />
                 ) : null}

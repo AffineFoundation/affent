@@ -6,6 +6,7 @@ export type DraftSource =
   | "continuation"
   | "evidence"
   | "error"
+  | "file_evidence"
   | "guidance_receipt"
   | "previous_message"
   | "recent_chat"
@@ -28,6 +29,7 @@ const draftSourceLabels: Record<DraftSource, string> = {
   continuation: "Requesting final answer",
   evidence: "Using evidence",
   error: "Continuing after error",
+  file_evidence: "Using file evidence",
   guidance_receipt: "Editing sent guidance",
   previous_message: "Editing previous message",
   recent_chat: "Starting from recent chat",
@@ -48,6 +50,7 @@ const draftMergeModes: Record<DraftSource, DraftMergeMode> = {
   continuation: "append",
   evidence: "append",
   error: "append",
+  file_evidence: "append",
   guidance_receipt: "replace",
   previous_message: "replace",
   recent_chat: "replace",

@@ -1794,6 +1794,83 @@ describe("App", () => {
     expect(screen.getByPlaceholderText("Message Affent...")).toHaveValue("Review and adjust this changed file: src/payments.ts");
   });
 
+  it("surfaces session file evidence inside Workbench without adding default Chat noise", async () => {
+    const user = userEvent.setup();
+    const fetchImpl = vi.fn(async (input: RequestInfo | URL) => {
+      const url = String(input);
+      if (url === "/v1/sessions?limit=100") {
+        return jsonResponse({
+          sessions: [
+            {
+              id: "files-1",
+              active: true,
+              durable: true,
+              topic_user_message: "inspect checkout route",
+              has_conversation: true,
+              has_events: true,
+              has_artifacts: false,
+              has_memory: false,
+              has_runtime_skills: false,
+            },
+          ],
+          has_more: false,
+        });
+      }
+      if (url === "/v1/sessions/files-1/history?after=-1&limit=500") {
+        return jsonResponse({
+          session_id: "files-1",
+          events: [
+            { id: 1, type: "turn.start", data: { turn_id: "t1" } },
+            { id: 2, type: "user.message", data: { turn_id: "t1", text: "inspect checkout route" } },
+            { id: 3, type: "tool.request", data: { turn_id: "t1", call_id: "list", tool: "list_files", args: { path: "src" } } },
+            { id: 4, type: "tool.result", data: { call_id: "list", exit_code: 0, result_summary: "src/payments.ts", result: "src/payments.ts" } },
+            { id: 5, type: "tool.request", data: { turn_id: "t1", call_id: "read", tool: "read_file", args: { path: "src/payments.ts" } } },
+            {
+              id: 6,
+              type: "tool.result",
+              data: {
+                call_id: "read",
+                exit_code: 0,
+                result_summary: "checkout route handler",
+                result: "checkout route handler",
+                result_artifact_path: ".affent/artifacts/tool-results/read.txt",
+              },
+            },
+            { id: 7, type: "message.done", data: { turn_id: "t1", text: "Checkout route inspected.", finish_reason: "stop" } },
+            { id: 8, type: "turn.end", data: { turn_id: "t1", reason: "completed", tool_stats: { tool_requests: 2 } } },
+          ],
+          next_after: 8,
+          has_more: false,
+          trace_schema_detected: true,
+        });
+      }
+      if (url === "/v1/sessions/files-1/events") return eventStreamResponse("");
+      if (url === "/v1/stats") return jsonResponse({ model: "qwen-small", active_sessions: 1, running_turns: 0 });
+      if (url === "/v1/settings") return jsonResponse({ env: [], ssh: { exists: false } });
+      if (url === "/v1/skills") return jsonResponse({ session_id: "account", count: 0, install_enabled: false, skills: [] });
+      if (url === "/v1/sessions/files-1/memory") return jsonResponse({ session_id: "files-1", has_memory: false, topics: [] });
+      return jsonResponse({ error: { message: `unexpected ${url}` } }, 404);
+    });
+    vi.stubGlobal("fetch", fetchImpl);
+
+    render(<App />);
+
+    expect(await screen.findByText("Checkout route inspected.")).toBeVisible();
+    expect(screen.queryByTestId("session-files-panel")).toBeNull();
+
+    await user.click(screen.getByLabelText("Workbench"));
+
+    const files = await screen.findByTestId("session-files-panel");
+    expect(files).not.toHaveAttribute("open");
+    expect(files).toHaveTextContent("2 file references");
+    await user.click(within(files).getByText("Files"));
+    expect(screen.getByTestId("session-files-list")).toHaveTextContent("src/payments.ts");
+    expect(screen.getByTestId("session-files-list")).toHaveTextContent("Evidence artifact: .affent/artifacts/tool-results/read.txt");
+    await user.click(within(screen.getByTestId("session-files-list")).getAllByRole("button", { name: "Use" })[0]);
+    expect(screen.getByTestId("composer-context")).toHaveTextContent("Using file evidence");
+    expect(screen.getByPlaceholderText("Message Affent...")).toHaveValue("Use this file path in the next step: src/payments.ts");
+  });
+
   it("surfaces command failures inside Workbench without adding default Chat noise", async () => {
     const user = userEvent.setup();
     const fetchImpl = vi.fn(async (input: RequestInfo | URL) => {
