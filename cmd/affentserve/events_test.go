@@ -663,6 +663,34 @@ func TestHandleSessionHistoryRejectsSymlinkLog(t *testing.T) {
 	}
 }
 
+func TestSessionReopenRejectsSymlinkEventLog(t *testing.T) {
+	memRoot := t.TempDir()
+	pool := newPoolWithMemoryRoot(t, memRoot)
+	createDurableSessionDir(t, pool, "link-events-open")
+	eventsPath := filepath.Join(pool.sessionDirPath("link-events-open"), "events.jsonl")
+	if err := os.Remove(eventsPath); err != nil {
+		t.Fatal(err)
+	}
+	outside := filepath.Join(t.TempDir(), "outside-events.jsonl")
+	if err := os.WriteFile(outside, []byte("outside\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Symlink(outside, eventsPath); err != nil {
+		t.Skipf("symlink unavailable: %v", err)
+	}
+
+	if _, err := pool.GetOrCreate("link-events-open"); err == nil || !strings.Contains(err.Error(), "events path must not be a symlink") {
+		t.Fatalf("GetOrCreate symlink event log err = %v, want symlink rejection", err)
+	}
+	raw, err := os.ReadFile(outside)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(raw) != "outside\n" {
+		t.Fatalf("symlink event log target was modified: %q", string(raw))
+	}
+}
+
 func zerologDiscard() zerolog.Logger {
 	return zerolog.New(io.Discard)
 }

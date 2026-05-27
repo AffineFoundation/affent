@@ -864,6 +864,16 @@ func serveLoopProtocolCurrentPlanCheckpoint(planPath string) loopstate.PlanCheck
 
 func openSessionEventLog(sessionDir string) (*eventlog.Recorder, *os.File, int64, error) {
 	path := filepath.Join(sessionDir, "events.jsonl")
+	if info, err := os.Lstat(path); err == nil {
+		if info.IsDir() {
+			return nil, nil, 0, fmt.Errorf("events path is a directory")
+		}
+		if info.Mode()&os.ModeSymlink != 0 {
+			return nil, nil, 0, fmt.Errorf("events path must not be a symlink")
+		}
+	} else if !errors.Is(err, os.ErrNotExist) {
+		return nil, nil, 0, err
+	}
 	f, err := os.OpenFile(path, os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0o644)
 	if err != nil {
 		return nil, nil, 0, err
