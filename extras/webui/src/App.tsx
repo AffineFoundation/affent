@@ -162,7 +162,7 @@ export function App() {
   const [scheduleState, setScheduleState] = useState<ScheduleState>({ state: "idle" });
   const [deletingScheduleId, setDeletingScheduleId] = useState<string | undefined>();
   const [updatingScheduleId, setUpdatingScheduleId] = useState<string | undefined>();
-  const [settingsOpen, setSettingsOpen] = useState(false);
+  const [workbenchOpen, setWorkbenchOpen] = useState(false);
   const [sessionsCollapsed, setSessionsCollapsed] = useState(false);
   const [mobileTopbarHidden, setMobileTopbarHidden] = useState(false);
   const [composerDraft, setComposerDraft] = useState<ComposerDraft | undefined>();
@@ -316,7 +316,7 @@ export function App() {
   );
 
   useEffect(() => {
-    if (demoActive || !settingsOpen) {
+    if (demoActive || !workbenchOpen) {
       setRuntimeStatsState({ state: "idle" });
       return;
     }
@@ -331,10 +331,10 @@ export function App() {
         setRuntimeStatsState({ state: "error", error: formatError(err) });
       });
     return () => ac.abort();
-  }, [client, demoActive, settingsOpen]);
+  }, [client, demoActive, workbenchOpen]);
 
   useEffect(() => {
-    if (demoActive || !settingsOpen) {
+    if (demoActive || !workbenchOpen) {
       setAccountSettingsState({ state: "idle" });
       return;
     }
@@ -349,10 +349,10 @@ export function App() {
         setAccountSettingsState({ state: "error", error: formatError(err) });
       });
     return () => ac.abort();
-  }, [client, demoActive, settingsOpen]);
+  }, [client, demoActive, workbenchOpen]);
 
   useEffect(() => {
-    if (demoActive || !settingsOpen) {
+    if (demoActive || !workbenchOpen) {
       setSkillsState({ state: "idle" });
       return;
     }
@@ -371,10 +371,10 @@ export function App() {
         setSkillsState({ state: "error", error: formatError(err) });
       });
     return () => ac.abort();
-  }, [client, demoActive, settingsOpen]);
+  }, [client, demoActive, workbenchOpen]);
 
   useEffect(() => {
-    if (demoActive || !settingsOpen) {
+    if (demoActive || !workbenchOpen) {
       setMemoryState({ state: "idle" });
       return;
     }
@@ -393,7 +393,7 @@ export function App() {
         setMemoryState({ state: "error", error: formatError(err) });
       });
     return () => ac.abort();
-  }, [client, demoActive, memoryUpdateCount, selectedSessionId, settingsOpen]);
+  }, [client, demoActive, memoryUpdateCount, selectedSessionId, workbenchOpen]);
 
   useEffect(() => {
     if (!selectedSessionId || memoryUpdateCount <= 0) return;
@@ -1292,22 +1292,22 @@ export function App() {
             </button>
           </div>
           <details
-            className="settings-menu"
-            open={settingsOpen}
-            onToggle={(event) => setSettingsOpen(event.currentTarget.open)}
+            className="workbench-menu"
+            open={workbenchOpen}
+            onToggle={(event) => setWorkbenchOpen(event.currentTarget.open)}
           >
-            <summary aria-label="Settings">
-              <span className="settings-icon" aria-hidden="true">
+            <summary aria-label="Workbench">
+              <span className="workbench-icon" aria-hidden="true">
                 <span />
                 <span />
                 <span />
               </span>
-              <span className="settings-label">Settings</span>
+              <span className="workbench-label">Workbench</span>
             </summary>
-            <div className="settings-panel">
-              <div className="settings-panel-head">
-                <strong>Settings</strong>
-                <span>Skills, memory, and runtime preferences live here.</span>
+            <div className="workbench-panel" data-testid="workbench-panel">
+              <div className="workbench-panel-head">
+                <strong>Workbench</strong>
+                <span>Config, runtime diagnostics, memory, and skills.</span>
               </div>
               <RuntimeStatsPanel
                 stats={runtimeStatsState.state === "ready" ? runtimeStatsState.stats : undefined}

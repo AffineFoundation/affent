@@ -440,7 +440,7 @@ describe("App", () => {
     await userEvent.type(input, "help me install a skill from github");
     expect(screen.getByTestId("composer-task-hint")).toHaveTextContent("Skill install ready");
     expect(screen.getByTestId("composer-task-hint")).toHaveTextContent("propose_install");
-    await userEvent.click(screen.getByLabelText("Settings"));
+    await userEvent.click(screen.getByLabelText("Workbench"));
     expect(await screen.findByTestId("session-memory-panel")).toHaveTextContent("2 entries");
     expect(screen.getByTestId("session-memory-latest")).toHaveTextContent("Latest update");
     expect(screen.getByTestId("session-memory-latest")).toHaveTextContent("memory:core");
@@ -1651,7 +1651,7 @@ describe("App", () => {
     expect(screen.queryByTestId("profile-dialog")).toBeNull();
   });
 
-  it("loads runtime diagnostics inside settings without changing the top strip", async () => {
+  it("loads runtime diagnostics inside Workbench without changing the top strip", async () => {
     const user = userEvent.setup();
     const fetchImpl = vi.fn(async (input: RequestInfo | URL) => {
       const url = String(input);
@@ -1711,8 +1711,10 @@ describe("App", () => {
     expect(await screen.findByTestId("connection-pill")).toHaveTextContent("Connected");
     expect(screen.getByTestId("connection-pill")).not.toHaveTextContent("qwen-small");
 
-    await user.click(screen.getByLabelText("Settings"));
+    await user.click(screen.getByLabelText("Workbench"));
 
+    expect(screen.queryByLabelText("Settings")).toBeNull();
+    expect(screen.getByTestId("workbench-panel")).toHaveTextContent("Config, runtime diagnostics, memory, and skills.");
     const runtime = await screen.findByTestId("runtime-stats-panel");
     expect(runtime).toHaveTextContent("qwen-small");
     expect(runtime).toHaveTextContent("2 sessions · 1 running · eval · workspace,recall · executor local");
@@ -1882,7 +1884,7 @@ describe("App", () => {
     render(<App />);
 
     await waitFor(() => expect(fetchImpl).toHaveBeenCalledWith("/v1/sessions/s1/events", expect.anything()));
-    await user.click(screen.getByLabelText("Settings"));
+    await user.click(screen.getByLabelText("Workbench"));
     expect(await screen.findByTestId("session-memory-panel")).toHaveTextContent("No durable memory");
 
     live.send([

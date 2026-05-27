@@ -61,7 +61,7 @@ function runtimeSummary(stats?: ServerStatsResponse): string {
 }
 
 function runtimeDetail(stats?: ServerStatsResponse): string {
-  if (!stats) return "Open settings while connected to inspect server health.";
+  if (!stats) return "Open Workbench while connected to inspect server health.";
   const parts: string[] = [];
   const sessions = stats.active_sessions ?? stats.sessions?.length ?? 0;
   parts.push(`${sessions} ${sessions === 1 ? "session" : "sessions"}`);

@@ -224,12 +224,12 @@ body {
   display: none;
 }
 
-.settings-menu {
+.workbench-menu {
   position: relative;
   flex: 0 0 auto;
 }
 
-.settings-menu > summary {
+.workbench-menu > summary {
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -247,14 +247,14 @@ body {
   list-style: none;
 }
 
-.settings-icon {
+.workbench-icon {
   display: grid;
   gap: 3px;
   width: 16px;
   color: currentColor;
 }
 
-.settings-icon span {
+.workbench-icon span {
   position: relative;
   display: block;
   width: 16px;
@@ -263,7 +263,7 @@ body {
   background: currentColor;
 }
 
-.settings-icon span::after {
+.workbench-icon span::after {
   content: "";
   position: absolute;
   top: 50%;
@@ -275,32 +275,32 @@ body {
   transform: translateY(-50%);
 }
 
-.settings-icon span:nth-child(1)::after {
+.workbench-icon span:nth-child(1)::after {
   left: 2px;
 }
 
-.settings-icon span:nth-child(2)::after {
+.workbench-icon span:nth-child(2)::after {
   right: 1px;
 }
 
-.settings-icon span:nth-child(3)::after {
+.workbench-icon span:nth-child(3)::after {
   left: 7px;
 }
 
-.settings-menu > summary::-webkit-details-marker {
+.workbench-menu > summary::-webkit-details-marker {
   display: none;
 }
 
-.settings-menu[open] > summary,
-.settings-menu > summary:hover,
-.settings-menu > summary:focus-visible {
+.workbench-menu[open] > summary,
+.workbench-menu > summary:hover,
+.workbench-menu > summary:focus-visible {
   border-color: rgba(20, 184, 166, 0.36);
   background: var(--accent-soft);
   color: var(--text);
   outline: none;
 }
 
-.settings-panel {
+.workbench-panel {
   position: absolute;
   z-index: 130;
   top: calc(100% + 8px);
@@ -312,24 +312,28 @@ body {
   overflow: auto;
   border: 1px solid var(--border);
   border-radius: var(--radius);
-  background: rgba(255, 255, 255, 0.96);
+  background: #ffffff;
   box-shadow: 0 24px 70px rgba(15, 23, 42, 0.18);
   padding: 12px;
 }
 
-.settings-panel-head {
+.workbench-panel-head {
   display: grid;
   gap: 2px;
 }
 
-.settings-panel-head strong {
+.workbench-panel-head strong {
   color: var(--text);
   font-size: 14px;
 }
 
-.settings-panel-head span {
+.workbench-panel-head span {
   color: var(--text-muted);
   font-size: 12px;
+}
+
+.workbench-panel .session-skills-panel {
+  background: #ffffff;
 }
 
 .header-new-chat {
@@ -7318,8 +7322,8 @@ html[data-theme="dark"] .markdown-text hr {
 html[data-theme="dark"] .theme-switch,
 html[data-theme="dark"] .mobile-chrome-toggle,
 html[data-theme="dark"] .mobile-chrome-restore,
-html[data-theme="dark"] .settings-menu > summary,
-html[data-theme="dark"] .settings-panel,
+html[data-theme="dark"] .workbench-menu > summary,
+html[data-theme="dark"] .workbench-panel,
 html[data-theme="dark"] .connection-pill,
 html[data-theme="dark"] .header-new-chat,
 html[data-theme="dark"] .new-chat-action,
@@ -7356,6 +7360,14 @@ html[data-theme="dark"] .execution-copy-menu-panel,
 html[data-theme="dark"] .state-pill {
   border-color: rgba(58, 68, 81, 0.82);
   background: rgba(17, 20, 24, 0.78);
+}
+
+html[data-theme="dark"] .workbench-panel .session-skills-panel {
+  background: #111418;
+}
+
+html[data-theme="dark"] .workbench-panel {
+  background: #111418;
 }
 
 html[data-theme="dark"] .timeline-surface {
@@ -7988,10 +8000,10 @@ html[data-theme="dark"] ::selection {
     width: 24px;
     opacity: 0.78;
   }
-  .settings-menu {
+  .workbench-menu {
     order: 3;
   }
-  .settings-menu > summary {
+  .workbench-menu > summary {
     width: 32px;
     min-width: 32px;
     height: 32px;
@@ -7999,17 +8011,17 @@ html[data-theme="dark"] ::selection {
     padding: 0;
     background: rgba(255, 255, 255, 0.64);
   }
-  .settings-label {
+  .workbench-label {
     display: none;
   }
-  .settings-icon {
+  .workbench-icon {
     width: 15px;
     gap: 3px;
   }
-  .settings-icon span {
+  .workbench-icon span {
     width: 15px;
   }
-  .settings-panel {
+  .workbench-panel {
     position: fixed;
     z-index: 160;
     top: 54px;
