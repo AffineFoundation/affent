@@ -54,9 +54,7 @@ export function WorkbenchContextPanel({
             {automationDetail ? <small>{automationDetail}</small> : null}
           </div>
         ) : null}
-        {!hasSelectedSession && metrics.length === 0 ? (
-          <div className="session-skills-empty">Start a task or open a saved chat to inspect run evidence, changes, memory, and automation.</div>
-        ) : null}
+        {!hasSelectedSession && metrics.length === 0 ? <div className="session-skills-empty">Start a task or open a saved chat before inspecting session evidence.</div> : null}
       </div>
     </details>
   );
