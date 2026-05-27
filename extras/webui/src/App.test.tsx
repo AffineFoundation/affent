@@ -710,8 +710,8 @@ describe("App", () => {
 
     await user.click(within(panel).getByRole("button", { name: "View LOOP.md" }));
     expect(await screen.findByTestId("session-loop-protocol")).toHaveTextContent("# Loop Protocol: loop-control");
-    await user.click(within(panel).getByRole("button", { name: "Continue setup" }));
-    expect((screen.getByPlaceholderText("Message Affent...") as HTMLTextAreaElement).value).toContain("Continue loop protocol setup");
+    await user.click(within(panel).getByRole("button", { name: "Update via chat" }));
+    expect((screen.getByPlaceholderText("Message Affent...") as HTMLTextAreaElement).value).toContain("Review and update LOOP.md");
 
     await user.click(within(panel).getByRole("button", { name: "Disable loop" }));
 

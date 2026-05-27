@@ -743,11 +743,12 @@ export function App() {
       id: Date.now(),
       source: "starter",
       content: [
-        `Continue loop protocol setup for: ${goal}`,
+        `Review and update LOOP.md for: ${goal}`,
         "",
         "Read the current LOOP.md with loop_protocol action=read.",
-        "If the protocol is still draft or underspecified, ask one concise calibration question before activation.",
-        "After the user answers, update_draft or complete_activation only when the protocol is fully supplemented.",
+        "Ask one concise calibration question before changing the protocol unless the user's requested change is already explicit.",
+        "Use loop_protocol action=update_draft for draft protocols, or complete_activation only after the user answers and the protocol is fully supplemented.",
+        "For a running protocol, update only durable rules, current situation, recovery anchors, or stop conditions that materially improve long-run behavior.",
       ].join("\n"),
     });
     setComposerFocusSignal((current) => current + 1);

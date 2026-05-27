@@ -116,7 +116,7 @@ export function SessionLoopPanel({
           {protocol ? <CopyButton label="Copy LOOP.md" value={protocol} className="ghost-action" /> : null}
           {onUseAsDraft && !disabled ? (
             <button type="button" className="ghost-action" onClick={onUseAsDraft}>
-              Continue setup
+              Update via chat
             </button>
           ) : null}
           {!disabled && onDisable ? (
