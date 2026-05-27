@@ -875,6 +875,15 @@ func TestSelectLongRunSuite(t *testing.T) {
 	if !stringSliceContains(stock.RequiredTools, "repo_search") || !stringSliceContains(stock.RequiredTools, "read_file") {
 		t.Fatalf("stock scenario RequiredTools = %#v, want repo_search/read_file", stock.RequiredTools)
 	}
+	for _, want := range []ToolArgContainsRequirement{
+		{Tool: "read_file", Arg: "path", Substring: "data/prices.csv"},
+		{Tool: "read_file", Arg: "path", Substring: "data/analyst-estimates.md"},
+		{Tool: "read_file", Arg: "path", Substring: "filings/2026-q1.md"},
+	} {
+		if !toolArgRequirementContains(stock.RequiredToolArgContains, want) {
+			t.Fatalf("stock scenario RequiredToolArgContains = %#v, want %#v", stock.RequiredToolArgContains, want)
+		}
+	}
 	if len(stock.RequiredToolOrder) != 1 || stock.RequiredToolOrder[0] != (ToolOrderRequirement{Earlier: "repo_search", Later: "read_file"}) {
 		t.Fatalf("stock scenario RequiredToolOrder = %#v, want repo_search before read_file", stock.RequiredToolOrder)
 	}
@@ -885,6 +894,16 @@ func TestSelectLongRunSuite(t *testing.T) {
 	subnet, ok := seen["longrun-bittensor-subnet-synthesis"]
 	if !ok {
 		t.Fatalf("long-run suite missing Bittensor subnet scenario")
+	}
+	for _, want := range []ToolArgContainsRequirement{
+		{Tool: "read_file", Arg: "path", Substring: "official/affine-sn120.md"},
+		{Tool: "read_file", Arg: "path", Substring: "metrics/tao-app-snapshot.txt"},
+		{Tool: "read_file", Arg: "path", Substring: "network/validators.md"},
+		{Tool: "read_file", Arg: "path", Substring: "sentiment/community-notes.md"},
+	} {
+		if !toolArgRequirementContains(subnet.RequiredToolArgContains, want) {
+			t.Fatalf("Bittensor scenario RequiredToolArgContains = %#v, want %#v", subnet.RequiredToolArgContains, want)
+		}
 	}
 	for _, want := range []string{"0.06342 T", "201.04K T", "metrics/tao-app-snapshot.txt"} {
 		if !stringSliceContains(subnet.RequiredFinalText, want) {
@@ -1174,6 +1193,15 @@ func TestRepairScenariosRequireRepeatedVerification(t *testing.T) {
 }
 
 func stringSliceContains(values []string, want string) bool {
+	for _, value := range values {
+		if value == want {
+			return true
+		}
+	}
+	return false
+}
+
+func toolArgRequirementContains(values []ToolArgContainsRequirement, want ToolArgContainsRequirement) bool {
 	for _, value := range values {
 		if value == want {
 			return true

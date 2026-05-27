@@ -756,7 +756,12 @@ Current built-in suites:
 
 - `small-model-tools`: weak-model tool calling, recovery, and compact-context behavior.
 - `hard-agent`: harder local agent tasks such as coding, planning, and subagent workflows.
-- `long-run`: deterministic complex tasks for longer practical runs, currently covering stock synthesis, Bittensor subnet research, code implementation with PR-style reporting, focused-task recovery, and multi-session task recovery.
+- `long-run`: deterministic complex tasks for longer practical runs, currently
+  covering stock synthesis, Bittensor subnet research, code implementation with
+  PR-style reporting, focused-task recovery, and multi-session task recovery.
+  The stock and subnet scenarios require reading the explicit evidence files,
+  so a run cannot pass by answering only from prompt wording or stale archive
+  files.
 - `live-web`: non-CI live web regressions for JavaScript-heavy pages,
   direct-reader recovery, and browser network evidence quality. These scenarios
   intentionally depend on public sites and should be run with web/browser tools
