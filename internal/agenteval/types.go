@@ -901,33 +901,56 @@ func (t Trace) ToolTruncationExamples(maxExamples int) []ToolTruncationExample {
 		return nil
 	}
 	var out []ToolTruncationExample
+	selected := make([]bool, len(t.Tools))
+	for i, c := range t.Tools {
+		if len(out) >= maxExamples {
+			return out
+		}
+		if !toolTruncationMissingArtifact(c) {
+			continue
+		}
+		out = append(out, toolTruncationExample(i, c))
+		selected[i] = true
+	}
 	for i, c := range t.Tools {
 		if len(out) >= maxExamples {
 			break
 		}
-		if !c.ArgsTruncated && !c.ResultTruncated && c.ResultArtifactPath == "" && c.ContextOmittedBytes <= 0 {
+		if selected[i] || !toolTruncationExampleWorthIncluding(c) {
 			continue
 		}
-		out = append(out, ToolTruncationExample{
-			ToolIndex:              i + 1,
-			CallID:                 c.CallID,
-			Tool:                   c.Tool,
-			ArgsTruncated:          c.ArgsTruncated,
-			ArgsBytes:              c.ArgsBytes,
-			ArgsOmittedBytes:       c.ArgsOmittedBytes,
-			ArgsCapBytes:           c.ArgsCapBytes,
-			ResultTruncated:        c.ResultTruncated,
-			ResultSummary:          compactOneLine(c.ResultSummary, 260),
-			ResultBytes:            c.ResultBytes,
-			ResultOmittedBytes:     c.ResultOmittedBytes,
-			ResultCapBytes:         c.ResultCapBytes,
-			ResultArtifactPath:     c.ResultArtifactPath,
-			ContextBytes:           c.ContextBytes,
-			ContextOmittedBytes:    c.ContextOmittedBytes,
-			ContextEstimatedTokens: c.ContextEstimatedTokens,
-		})
+		out = append(out, toolTruncationExample(i, c))
 	}
 	return out
+}
+
+func toolTruncationMissingArtifact(c ToolCall) bool {
+	return c.ResultArtifactPath == "" && (c.ResultTruncated || c.ContextOmittedBytes > 0)
+}
+
+func toolTruncationExampleWorthIncluding(c ToolCall) bool {
+	return c.ArgsTruncated || c.ResultTruncated || c.ResultArtifactPath != "" || c.ContextOmittedBytes > 0
+}
+
+func toolTruncationExample(index int, c ToolCall) ToolTruncationExample {
+	return ToolTruncationExample{
+		ToolIndex:              index + 1,
+		CallID:                 c.CallID,
+		Tool:                   c.Tool,
+		ArgsTruncated:          c.ArgsTruncated,
+		ArgsBytes:              c.ArgsBytes,
+		ArgsOmittedBytes:       c.ArgsOmittedBytes,
+		ArgsCapBytes:           c.ArgsCapBytes,
+		ResultTruncated:        c.ResultTruncated,
+		ResultSummary:          compactOneLine(c.ResultSummary, 260),
+		ResultBytes:            c.ResultBytes,
+		ResultOmittedBytes:     c.ResultOmittedBytes,
+		ResultCapBytes:         c.ResultCapBytes,
+		ResultArtifactPath:     c.ResultArtifactPath,
+		ContextBytes:           c.ContextBytes,
+		ContextOmittedBytes:    c.ContextOmittedBytes,
+		ContextEstimatedTokens: c.ContextEstimatedTokens,
+	}
 }
 
 func browserScrollExampleForTool(index int, c ToolCall) (BrowserScrollExample, bool) {

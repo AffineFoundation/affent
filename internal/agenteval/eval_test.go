@@ -335,6 +335,52 @@ func TestParseTraceFileReadsToolRequestsAndFinalText(t *testing.T) {
 	}
 }
 
+func TestToolTruncationExamplesPrioritizeMissingArtifacts(t *testing.T) {
+	trace := Trace{Tools: []ToolCall{
+		{
+			CallID:             "args-only",
+			Tool:               "read_file",
+			ArgsTruncated:      true,
+			ArgsBytes:          70000,
+			ArgsOmittedBytes:   512,
+			ArgsCapBytes:       65536,
+			ResultArtifactPath: ".affent/artifacts/tool-results/000001-args-only.txt",
+		},
+		{
+			CallID:              "context-missing",
+			Tool:                "web_fetch",
+			ResultSummary:       "large dynamic page",
+			ContextBytes:        1024,
+			ContextOmittedBytes: 4096,
+		},
+		{
+			CallID:             "result-missing",
+			Tool:               "shell",
+			ResultTruncated:    true,
+			ResultBytes:        300000,
+			ResultOmittedBytes: 8192,
+			ResultCapBytes:     262144,
+		},
+		{
+			CallID:             "artifact-backed",
+			Tool:               "browser_snapshot",
+			ResultTruncated:    true,
+			ResultArtifactPath: ".affent/artifacts/tool-results/000004-backed.txt",
+		},
+	}}
+
+	one := trace.ToolTruncationExamples(1)
+	if len(one) != 1 || one[0].CallID != "context-missing" || one[0].ContextOmittedBytes != 4096 {
+		t.Fatalf("ToolTruncationExamples(1) = %+v, want first missing-artifact context truncation", one)
+	}
+	three := trace.ToolTruncationExamples(3)
+	got := []string{three[0].CallID, three[1].CallID, three[2].CallID}
+	want := []string{"context-missing", "result-missing", "args-only"}
+	if !reflect.DeepEqual(got, want) {
+		t.Fatalf("ToolTruncationExamples priority = %#v, want %#v; examples=%+v", got, want, three)
+	}
+}
+
 func TestParseTraceFileDerivesToolFailureExamples(t *testing.T) {
 	dir := t.TempDir()
 	tracePath := filepath.Join(dir, "trace.jsonl")
