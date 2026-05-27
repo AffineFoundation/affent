@@ -287,11 +287,12 @@ func TestFormatEvent_CompactsDelegationToolResults(t *testing.T) {
 			"CURRENT_PAGE: https://taostats.io/subnets/120/statistics\n" +
 			"query: \"market_cap\"\n" +
 			"MATCHES: none\n" +
+			"Failure: kind=no_matches\n" +
 			"Next: wait for the page to load dynamic data, try a shorter label/entity/API-path query, interact with the relevant tab, or mark hidden fields unverified.\n"
 		got := formatEvent(ChatMessage{Role: "tool", Name: "browser_network", Content: raw})
 		for _, want := range []string{
 			"TOOL_RESULT[browser_network]",
-			"browser_network: current_page=https://taostats.io/subnets/120/statistics query=\"market_cap\" match_status=none",
+			"browser_network: current_page=https://taostats.io/subnets/120/statistics query=\"market_cap\" match_status=none failure_kind=no_matches",
 			"Next: wait for the page to load dynamic data",
 			"mark hidden fields unverified",
 		} {

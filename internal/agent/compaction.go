@@ -10,6 +10,7 @@ import (
 	"github.com/affinefoundation/affent/internal/memory"
 	"github.com/affinefoundation/affent/internal/sourceaccess"
 	"github.com/affinefoundation/affent/internal/textutil"
+	"github.com/affinefoundation/affent/internal/toolfailure"
 )
 
 // Compactor shrinks an oversized conversation history before the next LLM
@@ -549,7 +550,7 @@ func compactBrowserNetworkResultForSummary(content string) (string, bool) {
 		jsonPaths string
 	}
 
-	var currentPage, query, next string
+	var currentPage, query, next, failureKind string
 	noMatches := false
 	inMatches := false
 	var matches []networkMatch
@@ -567,6 +568,9 @@ func compactBrowserNetworkResultForSummary(content string) (string, bool) {
 			inMatches = false
 		case trimmed == "MATCHES:":
 			inMatches = true
+		case strings.HasPrefix(trimmed, "Failure:"):
+			failureKind = compactFailureKind(trimmed)
+			inMatches = false
 		case strings.HasPrefix(trimmed, "Next:"):
 			next = strings.TrimSpace(trimmed)
 			inMatches = false
@@ -595,6 +599,9 @@ func compactBrowserNetworkResultForSummary(content string) (string, bool) {
 	case len(matches) > 0:
 		fmt.Fprintf(&b, " matches=%d", len(matches))
 	}
+	if failureKind != "" {
+		fmt.Fprintf(&b, " failure_kind=%s", failureKind)
+	}
 	if len(matches) > 0 {
 		b.WriteString("\nrefs:")
 		for _, match := range matches {
@@ -619,6 +626,10 @@ func compactBrowserNetworkResultForSummary(content string) (string, bool) {
 		b.WriteString(textutil.Preview(body, compactWebEvidenceMaxText))
 	}
 	return b.String(), true
+}
+
+func compactFailureKind(line string) string {
+	return toolfailure.Kind(line)
 }
 
 func compactMemoryResultForSummary(content string) (string, bool) {
