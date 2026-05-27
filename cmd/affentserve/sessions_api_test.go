@@ -1770,6 +1770,8 @@ func TestHandleSessionLoopProtocolReturnsRuntimeSidecarCheckpoints(t *testing.T)
 		OutputTokens:       45,
 		ToolRequests:       2,
 		MemoryUpdates:      1,
+		MemorySearchCalls:  3,
+		MemorySearchMisses: 2,
 		SessionSearchCalls: 1,
 	}); err != nil {
 		t.Fatalf("RecordTurnCheckpoint: %v", err)
@@ -1794,7 +1796,10 @@ func TestHandleSessionLoopProtocolReturnsRuntimeSidecarCheckpoints(t *testing.T)
 		resp.State.LastDecisionAction != "read browser network responses" ||
 		resp.State.TurnCheckpoints != 1 ||
 		resp.State.LastTurnID != "turn_done" ||
-		resp.State.LastTurnMemoryUpdates != 1 {
+		resp.State.LastTurnMemoryUpdates != 1 ||
+		resp.State.LastTurnMemorySearches != 3 ||
+		resp.State.LastTurnMemoryMisses != 2 ||
+		resp.State.LastTurnSessionSearch != 1 {
 		t.Fatalf("state should expose runtime checkpoints for WebUI: %+v", resp.State)
 	}
 	if len(resp.Events) != 4 {
@@ -1812,7 +1817,10 @@ func TestHandleSessionLoopProtocolReturnsRuntimeSidecarCheckpoints(t *testing.T)
 	}
 	if resp.Events[3].Type != "loop.turn_checkpoint" ||
 		resp.Events[3].TurnID != "turn_done" ||
-		resp.Events[3].MemoryUpdates != 1 {
+		resp.Events[3].MemoryUpdates != 1 ||
+		resp.Events[3].MemorySearches != 3 ||
+		resp.Events[3].MemoryMisses != 2 ||
+		resp.Events[3].SessionSearch != 1 {
 		t.Fatalf("turn checkpoint event = %+v", resp.Events[3])
 	}
 
@@ -1824,7 +1832,9 @@ func TestHandleSessionLoopProtocolReturnsRuntimeSidecarCheckpoints(t *testing.T)
 		summary.LoopState == nil ||
 		summary.LoopState.LastMemoryUpdateLoc != "memory:markets" ||
 		summary.LoopState.LastDecisionKind != "evidence_quality" ||
-		summary.LoopState.LastTurnID != "turn_done" {
+		summary.LoopState.LastTurnID != "turn_done" ||
+		summary.LoopState.LastTurnMemorySearches != 3 ||
+		summary.LoopState.LastTurnMemoryMisses != 2 {
 		t.Fatalf("durable session summary loop_state = %+v", summary.LoopState)
 	}
 }
