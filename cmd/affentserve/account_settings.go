@@ -60,7 +60,7 @@ type accountEnvSummary struct {
 type accountSSHKeyInfo struct {
 	Exists         bool   `json:"exists"`
 	PublicKey      string `json:"public_key,omitempty"`
-	PublicKeyPath  string `json:"public_key_path,omitempty"`
+	PublicKeyPath  string `json:"-"`
 	PrivateKeyPath string `json:"-"`
 	Created        bool   `json:"created,omitempty"`
 	PublicKeyError string `json:"public_key_error,omitempty"`

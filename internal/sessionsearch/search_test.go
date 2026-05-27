@@ -8,6 +8,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 	"unicode/utf8"
 )
 
@@ -336,6 +337,71 @@ func TestSearchKeepsGlobalTopKWhileScanning(t *testing.T) {
 		if !gotSessions[want] {
 			t.Fatalf("bounded global aggregation dropped later high-scoring hit %q: %+v", want, hits)
 		}
+	}
+}
+
+func TestSearchPrefersRecentSessionWhenScoresAreClose(t *testing.T) {
+	dir := t.TempDir()
+	writeSessionLog(t, dir, "old-verbose", []testMessage{
+		{Role: "user", Content: "Northstar Biotech Q3 Q3 review"},
+		{Role: "assistant", Content: "outdated draft: recovery marker RECOVER-OLD-12 and risk label cash-burn"},
+	})
+	writeSessionLog(t, dir, "current-concise", []testMessage{
+		{Role: "user", Content: "Northstar Biotech Q3 review"},
+		{Role: "assistant", Content: "current decision: recovery marker RECOVER-NSTAR-58 and risk label trial-delay"},
+	})
+	oldTime := time.Date(2026, 5, 25, 12, 0, 0, 0, time.UTC)
+	newTime := time.Date(2026, 5, 27, 12, 0, 0, 0, time.UTC)
+	if err := os.Chtimes(filepath.Join(dir, "old-verbose.jsonl"), oldTime, oldTime); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Chtimes(filepath.Join(dir, "current-concise.jsonl"), newTime, newTime); err != nil {
+		t.Fatal(err)
+	}
+
+	hits, err := Search(context.Background(), dir, "", "Northstar Biotech Q3 review", 2, 1)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(hits) < 2 {
+		t.Fatalf("expected both current and old hits, got %+v", hits)
+	}
+	if hits[0].SessionID != "current-concise" {
+		t.Fatalf("recent close-score session should rank first for recovery, got %+v", hits)
+	}
+	if !strings.Contains(hits[0].Snippet, "RECOVER-NSTAR-58") {
+		t.Fatalf("top hit should include current recovery answer, got %+v", hits[0])
+	}
+}
+
+func TestSearchKeepsClearlyBetterOlderScoreAheadOfWeakRecentHit(t *testing.T) {
+	dir := t.TempDir()
+	writeSessionLog(t, dir, "old-specific", []testMessage{
+		{Role: "user", Content: "Northstar Biotech Q3 review FDA calendar trial delay backlog conversion"},
+		{Role: "assistant", Content: "decision: recovery marker RECOVER-SPECIFIC-91"},
+	})
+	writeSessionLog(t, dir, "new-weak", []testMessage{
+		{Role: "user", Content: "Northstar note"},
+		{Role: "assistant", Content: "generic update without the requested Q3 trial evidence"},
+	})
+	oldTime := time.Date(2026, 5, 25, 12, 0, 0, 0, time.UTC)
+	newTime := time.Date(2026, 5, 27, 12, 0, 0, 0, time.UTC)
+	if err := os.Chtimes(filepath.Join(dir, "old-specific.jsonl"), oldTime, oldTime); err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Chtimes(filepath.Join(dir, "new-weak.jsonl"), newTime, newTime); err != nil {
+		t.Fatal(err)
+	}
+
+	hits, err := Search(context.Background(), dir, "", "Northstar Biotech Q3 review FDA calendar trial delay", 2, 1)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(hits) < 2 {
+		t.Fatalf("expected both strong and weak hits, got %+v", hits)
+	}
+	if hits[0].SessionID != "old-specific" {
+		t.Fatalf("clearly stronger older hit should stay first, got %+v", hits)
 	}
 }
 

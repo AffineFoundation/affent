@@ -344,6 +344,9 @@ func sortHits(hits []Hit) {
 
 func hitLess(a, b Hit) bool {
 	if a.Score != b.Score {
+		if scoresCloseForRecency(a.Score, b.Score) && a.ModTime != b.ModTime {
+			return a.ModTime > b.ModTime
+		}
 		return a.Score > b.Score
 	}
 	if a.ModTime != b.ModTime {
@@ -353,6 +356,21 @@ func hitLess(a, b Hit) bool {
 		return a.SessionID < b.SessionID
 	}
 	return a.TurnIdx < b.TurnIdx
+}
+
+func scoresCloseForRecency(a, b float64) bool {
+	high := a
+	if b > high {
+		high = b
+	}
+	if high <= 0 {
+		return false
+	}
+	diff := a - b
+	if diff < 0 {
+		diff = -diff
+	}
+	return diff <= high*0.15
 }
 
 // Tokenize lowercases and splits on non-letter / non-digit runes across
