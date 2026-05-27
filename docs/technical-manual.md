@@ -440,8 +440,13 @@ through metric synonyms. Per-turn workflow caps emit
 they block a model call before the underlying tool runs. Per-turn stats expose
 `tool_repair_by_kind`, `tool_failure_by_kind`, plus `source_access_results`,
 `source_access_verified`, `source_access_discovery_only`, and
-`source_access_network`. Eval debug manifests, timelines, and JSONL records
-also include bounded `tool_repair_examples`, so repeated small-model tool-name,
+`source_access_network`. Successful memory searches that return no direct hits
+are counted as `memory_search_misses`, and eval debug manifests, timelines, and
+JSONL records can include bounded `memory_search_miss_examples` with the query,
+topic anchors, and recovery message. This lets long-run recall failures be
+separated from turns where the agent never checked memory at all. Eval debug
+manifests, timelines, and JSONL records also include bounded
+`tool_repair_examples`, so repeated small-model tool-name,
 alias, enum, type-coercion, and unknown-field mistakes can be inspected without
 opening raw trace events. They also include bounded `loop_guard_examples`,
 showing the blocked tool, compact args/result guidance, structured guard

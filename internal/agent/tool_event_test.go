@@ -100,6 +100,21 @@ func TestRecordMemoryUpdateStats(t *testing.T) {
 	}
 }
 
+func TestRecordMemorySearchStatsCountsNoHitSearches(t *testing.T) {
+	var stats sse.ToolRuntimeStats
+	recordMemorySearchStats(&stats, "memory", []byte(`{"action":"search","query":"helm"}`), `{"ok":true,"target":"memory","results":[],"topics":[{"topic":"deploy","entries":1}]}`, false)
+
+	recordMemorySearchStats(&stats, "memory", []byte(`{"action":"search","query":"helm"}`), `{"ok":true,"target":"memory","results":[{"topic":"deploy","snippet":"helm chart","score":1}]}`, false)
+	recordMemorySearchStats(&stats, "memory", []byte(`{"action":"list"}`), `{"ok":true,"topics":[{"topic":"deploy","entries":1}]}`, false)
+	recordMemorySearchStats(&stats, "memory", []byte(`{"action":"search"}`), `{"ok":false,"message":"blocked"}`, false)
+	recordMemorySearchStats(&stats, "memory", []byte(`{"action":"search"}`), `{"ok":true,"results":[]}`, true)
+	recordMemorySearchStats(&stats, "read_file", []byte(`{"action":"search"}`), `{"ok":true,"results":[]}`, false)
+
+	if stats.MemorySearchMisses != 1 {
+		t.Fatalf("MemorySearchMisses = %d, want 1: %+v", stats.MemorySearchMisses, stats)
+	}
+}
+
 func TestMemoryUpdateMetaForResult(t *testing.T) {
 	add := memoryUpdateMetaForResult("memory",
 		[]byte(`{"action":"add","target":"memory","topic":"markets","content":"Alpha Coast reports use marker MEM-STOCK-73 for source-led confidence."}`),

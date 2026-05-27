@@ -694,6 +694,7 @@ type DebugMetrics struct {
 	MemoryUpdateAdd                 int            `json:"memory_update_add,omitempty"`
 	MemoryUpdateReplace             int            `json:"memory_update_replace,omitempty"`
 	MemoryUpdateRemove              int            `json:"memory_update_remove,omitempty"`
+	MemorySearchMisses              int            `json:"memory_search_misses,omitempty"`
 	SessionSearchCalls              int            `json:"session_search_calls,omitempty"`
 	SessionSearchResults            int            `json:"session_search_results,omitempty"`
 	SessionSearchContextHits        int            `json:"session_search_context_hits,omitempty"`
@@ -1133,6 +1134,7 @@ func writeScenarioDebugArtifacts(res *BatchResult, scenario BatchScenario, stdou
 			MemoryUpdateAdd:                 res.ToolStats.MemoryUpdateAdd,
 			MemoryUpdateReplace:             res.ToolStats.MemoryUpdateReplace,
 			MemoryUpdateRemove:              res.ToolStats.MemoryUpdateRemove,
+			MemorySearchMisses:              res.ToolStats.MemorySearchMisses,
 			SessionSearchCalls:              res.ToolStats.SessionSearchCalls,
 			SessionSearchResults:            res.ToolStats.SessionSearchResults,
 			SessionSearchContextHits:        res.ToolStats.SessionSearchContextHits,

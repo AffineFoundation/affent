@@ -392,6 +392,10 @@ type ToolRuntimeStats struct {
 	MemoryUpdateAdd     int `json:"memory_update_add,omitempty"`
 	MemoryUpdateReplace int `json:"memory_update_replace,omitempty"`
 	MemoryUpdateRemove  int `json:"memory_update_remove,omitempty"`
+	// MemorySearchMisses counts successful memory search calls that returned
+	// no direct hits. It helps long-run operators distinguish "never looked"
+	// from "looked, missed, and should retry from available anchors".
+	MemorySearchMisses int `json:"memory_search_misses,omitempty"`
 	// SessionSearch counters measure durable transcript recall quality.
 	// Calls count dispatched attempts; result/context/term counters are
 	// populated only when the session_search JSON response can be parsed.

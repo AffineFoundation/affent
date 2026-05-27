@@ -372,13 +372,17 @@ func BuildDebugBrief(res BatchResult) *DebugBrief {
 			"remove":  res.ToolStats.MemoryUpdateRemove,
 		}, tags...)
 	}
-	if len(res.MemorySearchMissExamples) > 0 {
+	if res.ToolStats.MemorySearchMisses > 0 || len(res.MemorySearchMissExamples) > 0 {
 		topics := 0
 		for _, ex := range res.MemorySearchMissExamples {
 			topics += ex.TopicCount
 		}
+		misses := res.ToolStats.MemorySearchMisses
+		if misses == 0 {
+			misses = len(res.MemorySearchMissExamples)
+		}
 		add("memory_search_miss", "info", "memory search returned no direct hits but exposed topic anchors for retry", []string{"memory_search_miss_examples", "tool_timeline"}, map[string]int{
-			"misses": len(res.MemorySearchMissExamples),
+			"misses": misses,
 			"topics": topics,
 		}, "memory_search_miss", "recall:memory_topic_anchors")
 	}

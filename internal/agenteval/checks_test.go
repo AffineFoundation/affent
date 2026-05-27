@@ -381,6 +381,7 @@ func TestToolStatsAtLeast(t *testing.T) {
 		MemoryUpdates:              2,
 		MemoryUpdateAdd:            1,
 		MemoryUpdateReplace:        1,
+		MemorySearchMisses:         1,
 		SessionSearchCalls:         1,
 		SessionSearchResults:       3,
 		SessionSearchContextHits:   2,
@@ -421,6 +422,9 @@ func TestToolStatsAtLeast(t *testing.T) {
 	}
 	if res := ToolStatsAtLeast("memory_update_replace", 1).Eval(trace); !res.Pass {
 		t.Fatalf("expected memory_update_replace stats check to pass: %+v", res)
+	}
+	if res := ToolStatsAtLeast("memory_search_misses", 1).Eval(trace); !res.Pass {
+		t.Fatalf("expected memory_search_misses stats check to pass: %+v", res)
 	}
 	if res := ToolStatsAtLeast("session_search_calls", 1).Eval(trace); !res.Pass {
 		t.Fatalf("expected session_search_calls stats check to pass: %+v", res)

@@ -654,6 +654,17 @@ func TestBuildDebugBriefClassifiesMemorySearchMissAnchors(t *testing.T) {
 		!stringSliceContains(brief.Tags, "recall:memory_topic_anchors") {
 		t.Fatalf("memory search miss item = %+v tags=%+v", item, brief.Tags)
 	}
+
+	brief = BuildDebugBrief(BatchResult{
+		OK: true,
+		ToolStats: ToolRuntimeStats{
+			MemorySearchMisses: 3,
+		},
+	})
+	item = debugBriefItemByKind(brief, "memory_search_miss")
+	if item == nil || item.Counts["misses"] != 3 {
+		t.Fatalf("memory search miss stats-only item = %+v tags=%+v", item, brief.Tags)
+	}
 }
 
 func debugBriefItemByKind(brief *DebugBrief, kind string) *DebugBriefItem {

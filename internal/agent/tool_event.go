@@ -156,6 +156,7 @@ func toolRuntimeStatsPtr(stats sse.ToolRuntimeStats) *sse.ToolRuntimeStats {
 		stats.MemoryUpdateAdd == 0 &&
 		stats.MemoryUpdateReplace == 0 &&
 		stats.MemoryUpdateRemove == 0 &&
+		stats.MemorySearchMisses == 0 &&
 		stats.SessionSearchCalls == 0 &&
 		stats.SessionSearchResults == 0 &&
 		stats.SessionSearchContextHits == 0 &&
@@ -244,6 +245,23 @@ func recordMemoryUpdateStats(stats *sse.ToolRuntimeStats, tool string, args json
 	case memoryActionRemove:
 		stats.MemoryUpdateRemove++
 	}
+}
+
+func recordMemorySearchStats(stats *sse.ToolRuntimeStats, tool string, args json.RawMessage, result string, isErr bool) {
+	if stats == nil || tool != MemoryToolName || isErr {
+		return
+	}
+	var req struct {
+		Action string `json:"action"`
+	}
+	if err := json.Unmarshal(args, &req); err != nil || strings.TrimSpace(req.Action) != memoryActionSearch {
+		return
+	}
+	var resp memory.MemoryResponse
+	if err := json.Unmarshal([]byte(result), &resp); err != nil || !resp.OK || len(resp.Results) > 0 {
+		return
+	}
+	stats.MemorySearchMisses++
 }
 
 func memoryUpdateMetaForResult(tool string, args json.RawMessage, result string, isErr bool) *sse.MemoryUpdateMeta {

@@ -288,6 +288,7 @@ func addToolStatsSnapshot(dst *ToolStatsSnapshot, src ToolStatsSnapshot) {
 	dst.MemoryUpdateAdd += src.MemoryUpdateAdd
 	dst.MemoryUpdateReplace += src.MemoryUpdateReplace
 	dst.MemoryUpdateRemove += src.MemoryUpdateRemove
+	dst.MemorySearchMisses += src.MemorySearchMisses
 	dst.SessionSearchCalls += src.SessionSearchCalls
 	dst.SessionSearchResults += src.SessionSearchResults
 	dst.SessionSearchContext += src.SessionSearchContext

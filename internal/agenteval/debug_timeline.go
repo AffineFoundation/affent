@@ -167,6 +167,9 @@ func timelineMetricsSummary(res BatchResult) string {
 			res.ToolStats.MemoryUpdateRemove,
 		))
 	}
+	if res.ToolStats.MemorySearchMisses > 0 {
+		parts = append(parts, fmt.Sprintf("memory_search_misses=%d", res.ToolStats.MemorySearchMisses))
+	}
 	if res.ToolStats.SessionSearchCalls > 0 ||
 		res.ToolStats.SessionSearchResults > 0 ||
 		res.ToolStats.SessionSearchContextHits > 0 ||

@@ -85,6 +85,7 @@ type Session struct {
 	memoryUpdateAdd        atomic.Int64
 	memoryUpdateReplace    atomic.Int64
 	memoryUpdateRemove     atomic.Int64
+	memorySearchMisses     atomic.Int64
 	sessionSearchCalls     atomic.Int64
 	sessionSearchResults   atomic.Int64
 	sessionSearchContext   atomic.Int64
@@ -1701,6 +1702,7 @@ type ToolStatsSnapshot struct {
 	MemoryUpdateAdd        int64            `json:"memory_update_add"`
 	MemoryUpdateReplace    int64            `json:"memory_update_replace"`
 	MemoryUpdateRemove     int64            `json:"memory_update_remove"`
+	MemorySearchMisses     int64            `json:"memory_search_misses"`
 	SessionSearchCalls     int64            `json:"session_search_calls"`
 	SessionSearchResults   int64            `json:"session_search_results"`
 	SessionSearchContext   int64            `json:"session_search_context_hits"`
@@ -1741,6 +1743,7 @@ func (s *Session) ToolStatsSnapshot() ToolStatsSnapshot {
 		MemoryUpdateAdd:        s.memoryUpdateAdd.Load(),
 		MemoryUpdateReplace:    s.memoryUpdateReplace.Load(),
 		MemoryUpdateRemove:     s.memoryUpdateRemove.Load(),
+		MemorySearchMisses:     s.memorySearchMisses.Load(),
 		SessionSearchCalls:     s.sessionSearchCalls.Load(),
 		SessionSearchResults:   s.sessionSearchResults.Load(),
 		SessionSearchContext:   s.sessionSearchContext.Load(),
@@ -1901,6 +1904,7 @@ func (s *Session) addToolStats(stats sse.ToolRuntimeStats) {
 	s.memoryUpdateAdd.Add(int64(stats.MemoryUpdateAdd))
 	s.memoryUpdateReplace.Add(int64(stats.MemoryUpdateReplace))
 	s.memoryUpdateRemove.Add(int64(stats.MemoryUpdateRemove))
+	s.memorySearchMisses.Add(int64(stats.MemorySearchMisses))
 	s.sessionSearchCalls.Add(int64(stats.SessionSearchCalls))
 	s.sessionSearchResults.Add(int64(stats.SessionSearchResults))
 	s.sessionSearchContext.Add(int64(stats.SessionSearchContextHits))
