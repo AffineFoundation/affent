@@ -354,6 +354,18 @@ func TestNetworkEvidenceToolsNoMatchesAndMissingRefGuideRecovery(t *testing.T) {
 	}
 }
 
+func TestNetworkEvidenceReadWithoutLogGuidesRecovery(t *testing.T) {
+	_, err := NetworkReadTool(&Session{}).Execute(context.Background(), json.RawMessage(`{"ref":"n1"}`))
+	if err == nil {
+		t.Fatal("browser_network_read without a network log should error")
+	}
+	for _, want := range []string{"Failure: kind=not_found", "no captured network evidence log", "browser_navigate", "browser_network"} {
+		if !strings.Contains(err.Error(), want) {
+			t.Fatalf("missing network log error missing %q: %v", want, err)
+		}
+	}
+}
+
 func TestNetworkEvidenceCandidateFiltersBinaryAndOversizedBodies(t *testing.T) {
 	if !networkEvidenceCandidate("https://example.com/api", 200, proto.NetworkResourceTypeFetch, "application/json", []byte(`{"ok":true}`)) {
 		t.Fatal("JSON fetch should be a candidate")

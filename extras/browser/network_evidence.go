@@ -522,6 +522,9 @@ func NetworkReadTool(s *Session) *agent.Tool {
 			if maxBytes > maxNetworkReadBytes {
 				return "", browserInvalidArgs(fmt.Sprintf("max_bytes %d exceeds browser_network_read cap %d", maxBytes, maxNetworkReadBytes), "retry with a smaller max_bytes value")
 			}
+			if s == nil || s.network == nil {
+				return "", fmt.Errorf("network response %q was not found because this browser session has no captured network evidence log\nFailure: kind=not_found\nNext: call browser_navigate on the target page, wait for the dashboard to load, then call browser_network with a distinctive query before browser_network_read", ref)
+			}
 			entry, ok := s.network.Get(ref)
 			if !ok {
 				return "", fmt.Errorf("network response %q was not found in the current browser session\nFailure: kind=not_found\nNext: call browser_network with a distinctive query from the current page or navigate/wait until the dashboard has loaded its XHR/fetch responses", ref)
